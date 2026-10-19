@@ -4,10 +4,10 @@ Trading journal and analysis workstation for **crypto futures** on **Bitunix**, 
 Runs locally or via Docker — no cloud, no account.
 Vue 3 + Express, SQLite or PostgreSQL.
 
-> **Status:** 4.0.0-alpha — AutarkTrade is being rebuilt from the former Crypto Trading Journal
-> (redesign, own licence). Work orders and their state: [`docs/AUFTRAGSSTAND.md`](docs/AUFTRAGSSTAND.md).
+> **Status:** 4.0.0-alpha — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
+> (redesign, own licence, rebuild finished 19.10.2026). Results and open points:
+> [`docs/AUFTRAGSSTAND.md`](docs/AUFTRAGSSTAND.md); origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
 
-> Available in Linux Mint: **System Settings → Desklets → Download → "Trading Positions"**
 > The user interface is available in **German** (default) and **English**.
 
 ## Screenshots
@@ -317,7 +317,7 @@ presented as a finding — three sessions on a Tuesday are noise.
 - **Privacy Option** — hide P&L dollar amounts, show only percentage
 
 ### KI-Agent (AI Reports & Chat)
-- **Multiple Providers** — Ollama (local), OpenAI, Anthropic, Google Gemini, DeepSeek
+- **Multiple Providers** — Ollama (local), Anthropic, OpenAI, Google Gemini, Mistral, xAI, Qwen, Perplexity, Moonshot, Z.ai, OpenRouter and OpenAI-compatible endpoints, always with your own key; every AI output is labelled "KI-generiert – keine Anlageberatung – Fakten prüfen"
 - **Report Generation** — monthly, weekly, custom date range with preset templates
 - **Trade Review Chat** — per-trade AI follow-up questions in Daily view
 - **Autonomous Agent** — chat agent that queries your journal data on its own, reads the current Marktradar readings, and answers questions about using the app itself (built-in documentation); quick-access button in the top navigation
@@ -348,8 +348,10 @@ presented as a finding — three sessions on a Tuesday are noise.
 Your open positions outside the browser — all three companions live in this repo:
 
 - **Android home-screen widget** ([android-widget/](android-widget/)) — open positions and P&L on your phone, per-exchange KPIs, configurable refresh. Built with Gradle; see its README for the build script.
-- **Linux Mint / Cinnamon desklet** ([desklet/](desklet/)) — positions directly on the desktop. Published in the official [Cinnamon Spices](https://cinnamon-spices.linuxmint.com/desklets) repository: install it from **System Settings → Desklets → Download → "Trading Positions"**. The copy in this repo is the source; `desklet/install.sh` installs it locally for development.
-- **ESP32 hardware displays** ([ESP32-2432S028/](ESP32-2432S028/), [ESP32-Waveshare/](ESP32-Waveshare/)) — a cheap always-on display next to your monitor, fed by a read-only endpoint protected with its own API key (PlatformIO projects).
+- **Linux Mint / Cinnamon desklet** ([desklet/](desklet/), UUID `positionen@autarktrade`, MIT) — positions directly on the desktop. Install it with `desklet/install.sh`. The entry "Trading Positions" in the [Cinnamon Spices](https://cinnamon-spices.linuxmint.com/desklets) repository is the predecessor for the Crypto Trading Journal; `desklet/spices/` holds the renamed copy for a new submission.
+- **ESP32 hardware displays** ([ESP32-2432S028/](ESP32-2432S028/), [ESP32-Waveshare/](ESP32-Waveshare/)) — a cheap always-on display next to your monitor, fed by a read-only endpoint protected with its own API key (PlatformIO projects, `pio run`; MIT, see `LIZENZEN.md` there — the Arduino core is LGPL, so the firmware source stays open for relinking). Setup Wi-Fi: `AutarkTrade-Setup`.
+
+The Android widget (`com.autarktrade.widget`) is part of AutarkTrade and under its licence; its third-party notices ship inside the APK. From 4.0.0 on it is a new app id — uninstall the old "Trading Journal" widget first.
 
 ---
 
@@ -487,9 +489,10 @@ AT_UPDATE_TOKEN=<access token> ./update.sh
 ### Docker Update
 
 ```bash
-git pull
-docker compose up -d --build
+docker compose pull && docker compose up -d
 ```
+
+Images: `ghcr.io/mouses007/autarktrade:latest` (releases), `:x.y.z` (pinned), `:edge` (test builds). Publishing: [`.github/DOCKER-SETUP.md`](.github/DOCKER-SETUP.md).
 
 ### Windows (Manual)
 

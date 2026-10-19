@@ -7,7 +7,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 **Regeln für alle Sitzungen** (Kurzfassung, verbindlich ist der Plan):
 - Arbeitsort `Trading/V2`, jede schreibende Sitzung in ihrem eigenen Worktree. Am Ende
   `npm run test:self` und Golden Master grün, Rebase auf master, `git merge --ff-only`.
-- TradeNote-Dateien (`LIZENZ-PLAN.md`, Abschnitt 1) nach der Clean-Room-Regel ersetzen:
+- Dateien aus dem Ursprungsprojekt (`HERKUNFT.md`, Anhang A) nach der Clean-Room-Regel ersetzen:
   Beschreibung nach `docs/spec/<bereich>.md`, Neubau durch einen frischen Agenten nur aus
   Beschreibung und Golden Master, danach Altdatei löschen.
 - Neue Abhängigkeiten nur MIT/ISC/BSD/Apache-2.0, kein CDN, keine Anzeigepflicht
@@ -32,7 +32,110 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | `claude/s9-geruest-23d7aa` | **fertig** |
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | `claude/s12-quellen-9112f7` | **fertig** |
-| 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | – | wartet auf alle |
+| 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | `claude/s11-herkunft-fa3692` | **fertig** (altes Repo: nur vorbereitet, auf Anweisung) |
+
+## Gesamtfazit (S11, 19.10.2026)
+
+**Erreicht.** Aus dem Crypto Trading Journal ist AutarkTrade 4.0.0-alpha geworden: eigener Name,
+eigenes Gestaltungssystem ohne Bootstrap/CDN, eigene Lizenzbedingungen mit Zustimmungsdialog und
+Offline-Lizenzschlüssel, privater Update-Kanal und private Registry. Der Code des Ursprungsprojekts ist
+nach der Clean-Room-Regel ersetzt und das ist **gemessen**: 1 419 von 129 464 Zeilen (1,10 %) stehen
+noch wörtlich im Vergleichsstand, und jede davon ist eine generische Zeile (CSS-Eigenschaft, Import,
+Vue-/Vite-Gerüst, Bibliotheksoption, Datenbegriff) — `HERKUNFT.md`, Prüfskript
+`scripts/herkunft-pruefen.mjs`. Alle npm-Abhängigkeiten sind MIT/ISC/BSD/Apache (224 Pakete in
+`THIRD-PARTY-NOTICES`), keine LGPL/GPL, keine Linkware, keine Laufzeit-CDN. Rote Datenquellen sind
+entfernt, Marktdaten laufen über eine vom Kunden gewählte Quelle, gelbe nur mit Kundenschlüssel und
+Attribution, jede KI-Ausgabe ist gekennzeichnet (S12, Verkaufs-Prüfung Anhang 1 und 2).
+
+**Rechtlich offen** (vor der ersten Weitergabe an Dritte):
+1. **Anwaltsprüfung** von `LICENSE` (EULA-Entwurf 0.1), `NOTICE.md` und `HERKUNFT.md`, dazu die
+   Fragen F-1 bis F-13 der Verkaufs-Prüfung (v. a. F-6 Anlageberatung, F-7 automatisierter Handel,
+   F-2 Binance-Bedingungen, F-10 Länder).
+2. **Anbieter-Platzhalter** in `LICENSE` (Anbieter, Anschrift, Gerichtsstand, Beta-Ende) und die
+   Anschrift für das Quellenangebot des Container-Images in `NOTICE.md`.
+3. **Anbieteranfragen** (F-14, schriftlich festhalten): **Binance** (Anzeige und Speicherung
+   öffentlicher Marktdaten in verkaufter Software — grösstes Einzelrisiko), **CoinGecko**
+   (Demo-Tarif im verkauften Produkt), dazu Bitunix, Bitget, Bybit, GoPlus, CryptoQuant, RugCheck.
+4. Vertrieb: Händler-Dienst (Merchant of Record) und Kunden-Zugang zur Registry statt
+   GitHub-Token je Kunde (`HERKUNFT.md`, Anhang B).
+
+## S11 Herkunftsnachweis & Freigabe — Ergebnis (19.10.2026)
+
+- **Herkunftsprüfung** `scripts/herkunft-pruefen.mjs` (klont die Vergleichsquelle, Adresse nur in
+  `HERKUNFT.md`; ordnet jeden Treffer einer begründeten Art zu, Code 1 bei ungesichteten Treffern).
+  Vorher 6 438 Zeilen (5,1 %), nach S3–S9 noch 1 744, davon 367 nicht generisch — fast alle
+  übernommene **Bezeichner** des Clean-Room-Neubaus. Darum **107 Bezeichner projektweit umbenannt**
+  (`useMountDashboard` → `starteDashboard`, `useGetFilteredTrades` → `filtereTrades`, `filteredTrades`
+  → `journalTage`, `spinnerLoadingPage` → `seiteLaedt`, `SpinnerLoadingPage.vue` → `SeiteLaedt.vue`,
+  `ReturnToTopButton.vue` → `NachObenKnopf.vue` …), gespeicherte Schlüssel (localStorage,
+  sessionStorage, DB-Spalten, i18n) unverändert; Golden Master mit gleichen Werten, nur die
+  Schlüsselnamen folgen. Neu geschrieben: Startgerüst von `index.mjs`, Profil-Speichern
+  (`LayoutStil.vue`), Quill-Farbregeln. Gelöscht: Weiterleitungen aus S7 (`stores/globals.js`,
+  `utils/{trades,daily,mountOrchestration,utils,formatters,dayjs-setup}.js`), ungenutzte Zustände.
+  **Ergebnis 1 419 / 129 464 (1,10 %), alle generisch.** `LIZENZ-PLAN.md` ist in `HERKUNFT.md`
+  (Anhänge A/B) aufgegangen; das Ursprungsprojekt wird nur noch dort genannt (bewusst gleich
+  bleiben `tradenote.db`, der Schlüssel-Seed und `tn_session_v1`, begründet in `HERKUNFT.md`).
+- **Verkaufs-Prüfung nachgeprüft** (Anhang 2): `package.json` (22 Laufzeitpakete), `index.html` ohne
+  externe Ressource, Dockerfile `node:20-slim` ohne Schriftpakete, `THIRD-PARTY-NOTICES` neu erzeugt
+  (unverändert, 224 Pakete), Inventar aller festen Adressen im Code gegen die Zeilen — keine Adresse
+  ohne Zeile, keine entfernte Quelle mehr im Abruf.
+- **Begleitprogramme**: Android-Widget `com.autarktrade.widget` 4.0.0-20 (neues Logo, Texte,
+  `THIRD-PARTY-NOTICES.txt` in der APK, Build-Skript ohne festen Pfad; **APK gebaut**, Kopie im
+  Notizordner `autarktrade-widget-4.0.0-20-debug.apk`; neue App-ID → alte deinstallieren). ESP32
+  (beide Boards): AP `AutarkTrade-Setup`, Texte, **MIT** + `LIZENZEN.md` (LGPL-Core → Quelltext offen
+  zum Neulinken); **beide mit `pio run` gebaut**. Desklet: UUID `positionen@autarktrade` 2.0.0, MIT,
+  neues Logo, keine Links aufs alte Repo. User-Agent-Kennungen auf AutarkTrade.
+- **CI/Docker**: `docker-publish.yml` nur nach `ghcr.io/mouses007/autarktrade` (privat) — `:edge` von
+  Hand, `:x.y.z`/`:x.y`/`:latest` bei `v*`-Tags (Vorabversionen ohne `:latest`); `.github/DOCKER-SETUP.md`
+  neu. Image lokal gebaut, Testcontainer `autarktrade-v2` (8091) neu gestartet (Testbetrieb, Passwort-Gate
+  der Kopie aktiv, Start ohne Fehler). Durchgeklickt im Prüfcontainer mit Wegwerf-SQLite (gleiches
+  Image, Port 8097, danach entfernt): Rechtliches-Dialog mit neuer NOTICE, Setup, Profilname und
+  -bild speichern (umgeschriebener Pfad), Journal-Seiten ohne JS-Fehler; **43 Routen je Desktop
+  (1440) und Telefon (390)** als Screenshots im Notizordner `s11-screenshots/` (Übersichtsblätter +
+  einzeln). Setup-Texte nennen die Börsen-API statt des entfernten CSV-Uploads.
+- **Geprüft**: `npm run test:self` 144/144 grün (Golden Master unverändert), `npm run build`
+  fehlerfrei, Herkunftsprüfung Code 0.
+
+### Offene Punkte aus S11
+
+- **Altes Projekt privat stellen — auf Anweisung des Nutzers („Wartet noch mit auf Privat stellen
+  des alten repo") NICHT ausgeführt.** Vorbereitet, in dieser Reihenfolge:
+  1. **NAS absichern.** Die NAS (Container Manager, Projekt `tradingjournal`) zieht heute
+     `mouses007/trading-journal:edge` von Docker Hub. Nach dem Umstellen auf privat scheitert dort
+     jedes „Erstellen"/Herunterladen ohne Anmeldung. Zwei Wege, einer genügt:
+     - *Weg A (empfohlen, ohne Registry):* aus dem alten Repo
+       `cd ~/Schreibtisch/Trading/Journal && ./scripts/nas-deploy.sh` — baut lokal, bringt das Image
+       per SSH auf die NAS und benennt es dort auf `mouses007/trading-journal:edge` um; die
+       Projektdatei bleibt unberührt (`scripts/.nas-deploy.env` liegt bereits vor). Danach in DSM nicht
+       mehr „Erstellen" mit Herunterladen drücken.
+     - *Weg B (Registry behalten):* DSM → Container Manager → Registry → Einstellungen → Docker Hub
+       → mit `mouses007` und einem Docker-Hub-Zugriffstoken (nur *Read*) anmelden; dann zieht die
+       NAS auch aus dem privaten Repo.
+     Gegenprobe vor Schritt 2: auf der NAS einmal aktualisieren und die Version in der Seitenleiste
+     prüfen.
+  2. **GitHub-Repo**: `gh repo edit Mouses007/Crypto-Trading-Journal --visibility private
+     --accept-visibility-change-consequences` (Sterne/Beobachter gehen verloren; Forks bleiben
+     öffentlich — wer schon einen Abzug hat, behält ihn, wie gewollt). Nichts löschen.
+  3. **Docker Hub** `mouses007/trading-journal`: hub.docker.com → Repositories →
+     `trading-journal` → Settings → *Visibility settings* → **Make private**. Per API mit dem
+     vorhandenen Login: Token holen (`POST https://hub.docker.com/v2/users/login`) und
+     `PATCH https://hub.docker.com/v2/repositories/mouses007/trading-journal/` mit
+     `{"is_private": true}`. Ein kostenloses Konto hat nur ein privates Repo frei.
+  4. **Altes GHCR-Paket** `ghcr.io/mouses007/crypto-trading-journal` (war öffentlich): GitHub →
+     Profil → Packages → `crypto-trading-journal` → Package settings → Change visibility → Private
+     (der `gh`-Token hier hat kein `read:packages`, deshalb nicht geprüft).
+- **DeepSeek-Suche** (`rechercheDeepseek`, `api.deepseek.com/v1/tools/search` in
+  `server/news-recherche.js`, Zweig `dsWeg = false` in `server/marktradar-news.js`) ist stillgelegt,
+  steht aber noch im Server — vor dem Verkauf samt Selbsttest-Teilen in `__selftest-aufgaben.mjs`
+  entfernen (Verkaufs-Prüfung 89d).
+- Databento/Polygon-Pfad (Exkursionen) lebt clean-room in `utils/journal/import.js` weiter, nur mit
+  Kundenschlüssel (Zeilen 5/6, gelb).
+- Desklet: neuer Eintrag bei Cinnamon Spices nur, wenn er öffentlich sein soll (Spices verlangt
+  Open Source; MIT ist gesetzt). Firmware-Quelltext: ebenso nur bei Weitergabe veröffentlichen.
+- Erster echter Release-Lauf (Tag `v4.0.0`) und Update-Knopf gegen ein privates Release noch nicht
+  durchgespielt.
+- `HERKUNFT.md` liegt nicht im Container-Image (`NOTICE.md` verweist darauf) — bei Bedarf in den
+  Dockerfile-`COPY` aufnehmen.
 
 ## S12 Quellen & Pflichthinweise — Ergebnis (19.10.2026)
 
@@ -425,7 +528,7 @@ Stand im Anhang von `docs/VERKAUFS-PRUEFUNG.md`.
 
 - Anwalt: LICENSE/NOTICE gegenlesen (F-6, F-7, F-10, F-13 aus der Verkaufs-Prüfung),
   Anbieter und Gerichtsstand eintragen, Beta-Ende setzen.
-- **Weitergabe erst nach S11**: Solange TradeNote-Anteile im Code stehen, ist der Stand als
+- **Weitergabe erst nach S11** (erledigt, siehe S11): Solange Anteile des Ursprungsprojekts im Code stehen, ist der Stand als
   Ganzes GPL (NOTICE.md, oben).
 - Update-Pfad mit echtem Release noch nicht durchgespielt (es gibt noch kein Release im
   privaten Repo); geprüft sind Token-Weitergabe an git (gegen das private Repo) und der
@@ -433,7 +536,7 @@ Stand im Anhang von `docs/VERKAUFS-PRUEFUNG.md`.
   Update-Knopf im Container braucht es Release-Tags + passendes Image-Tag (S11, CI).
 - Der Kunden-Zugang ist ein Übergang: `zugang` im Schlüssel bzw. ein GitHub-Token je Kunde.
   Für ghcr.io braucht es einen klassischen Token mit `read:packages`; fein granulierte Tokens
-  können keine Pakete lesen. Ein Shop/Händler-Dienst mit eigener Download-Quelle (LIZENZ-PLAN
+  können keine Pakete lesen. Ein Shop/Händler-Dienst mit eigener Download-Quelle (HERKUNFT.md,
   Abschn. 3) ersetzt das später.
 - markerjs2 (Linkware) ist noch drin, der sichtbare Link fehlt (S8 ersetzt die Annotation).
 - Android-Widget, ESP32-Firmware, Desklet: Lizenzdateien/Offenlegung (S11).
@@ -483,7 +586,7 @@ Stand im Anhang von `docs/VERKAUFS-PRUEFUNG.md`.
   `filterExisting`), der alte Ausführungs-Import (`createTempExecutions`,
   `createExecutions`, `createTrades`, `getOpenPositionsParse` — nie aufgerufen) und die
   davon abhängigen Zweige in `useUploadTrades`. i18n `addTrades.noCsvData`/`noValidBitgetTrades` raus.
-- **`src/utils/journal-alt.js`** (~1000 Z., TradeNote-abgeleitet, unverändert übernommen):
+- **`src/utils/journal-alt.js`** (~1000 Z., aus dem Ursprungsprojekt, unverändert übernommen):
   `useCreateBlotter`/`useCreatePnL` (für `trades.js`), `useGetExistingTradesArray`/
   `useUploadTrades` — **nicht tot**: der Bitunix/Bitget-Knopf „Von API importieren" in
   `AddTrades.vue` speichert darüber (Vorschau → „Absenden") —, dazu `useCreateOHLCV`,
@@ -545,7 +648,7 @@ Stand im Anhang von `docs/VERKAUFS-PRUEFUNG.md`.
 - Android-Widget, ESP32 und Desklet tragen noch den alten Namen (S11).
 - Installations-/Update-Skripte (`install*.sh/.bat`, `update*`, `setup-remote.sh`) zeigen
   noch auf das alte Repo (S10).
-- `LIZENZ-PLAN.md` liegt als Bestandsaufnahme im Repo; `HERKUNFT.md` ist ein Platzhalter bis S11.
+- `HERKUNFT.md` ist seit S11 der Nachweis (die frühere Bestandsaufnahme ist darin aufgegangen).
 - **Fehler (auch im Live-Journal)**: Die Migration „Mail-Versand des Lageberichts übernehmen"
   in `server/database.js` (~Z. 2167) läuft bei JEDEM Start, solange `radarNewsMailAktiv = 0`
   und `benachrichtigungen.lageberichtFertig.email = true` — wer den Versand ausschaltet,

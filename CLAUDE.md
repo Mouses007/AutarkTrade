@@ -4,16 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**AutarkTrade** (4.0.0-alpha, formerly *Crypto Trading Journal*) is a **local single-user** trading journal and analysis workstation for **crypto futures** (Bitunix, Bitget, Pionex). It lets users import trades via the exchange APIs (or enter them manually), view dashboards with analytics/charts, keep a diary, manage playbooks, and store screenshots. Licence: proprietary, `LICENSE` (draft, S10) with `NOTICE.md` and the generated `THIRD-PARTY-NOTICES`; origin of the code base in `HERKUNFT.md`, remaining TradeNote parts in `LIZENZ-PLAN.md`.
+**AutarkTrade** (4.0.0-alpha, formerly *Crypto Trading Journal*) is a **local single-user** trading journal and analysis workstation for **crypto futures** (Bitunix, Bitget, Pionex). It lets users import trades via the exchange APIs (or enter them manually), view dashboards with analytics/charts, keep a diary, manage playbooks, and store screenshots. Licence: proprietary, `LICENSE` (draft, S10) with `NOTICE.md` and the generated `THIRD-PARTY-NOTICES`; origin of the code base and the proof that no inherited expression is left in `HERKUNFT.md` (check: `node scripts/herkunft-pruefen.mjs`, exits 1 on any unreviewed match — run it before a release and after pasting code from elsewhere).
 
-**Rebuild into a product:** the work is split into sessions S1–S11 — state, branches and open points in `docs/AUFTRAGSSTAND.md`. Rules that apply to every session: work in your own worktree, `npm run test:self` and the golden master green, then rebase and `git merge --ff-only` onto master; TradeNote-derived files are replaced clean-room (spec in `docs/spec/`, built by a fresh agent from the spec only); new dependencies only MIT/ISC/BSD/Apache-2.0; `menu.js`, `router/index.js` and `src/assets/design/tokens.css` are changed only by the session that owns them.
+**Rebuild into a product:** done in sessions S1–S12 (completed 19.10.2026) — results and open points (lawyer, vendor placeholders, data-provider requests) in `docs/AUFTRAGSSTAND.md`. Rules that still apply: work in your own worktree, `npm run test:self` and the golden master green, then rebase and `git merge --ff-only` onto master; never copy code from the project the fork started from (`HERKUNFT.md`) — the specs in `docs/spec/` describe behaviour; new dependencies only MIT/ISC/BSD/Apache-2.0; `menu.js`, `router/index.js` and `src/assets/design/tokens.css` are changed only by the session that owns them.
 
 **Key simplifications from the original project:**
 - No cloud login (single user, direct to dashboard); API protected by session cookie
 - SQLite (or optional PostgreSQL) instead of MongoDB/Parse Server (no Docker needed)
 - Bitunix primary; optional Bitget and Pionex brokers (API or manual entry only; the CSV upload tab was removed in v3.0.0, its code in S3)
 - No Stripe payments, no PostHog analytics, no Shepherd tours
-- KI-Agent: AI reports/chat (Ollama, OpenAI, Anthropic, Gemini, DeepSeek)
+- KI-Agent: AI reports/chat (Ollama, Anthropic, OpenAI, Gemini, Mistral, xAI, Qwen, Perplexity, Moonshot, Z.ai, OpenRouter, an own OpenAI-compatible provider and a second OpenAI-compatible endpoint; registry `server/ai-models.js`), every output labelled as AI-generated
 
 README.md and this file are kept in sync for project and architecture description.
 
@@ -37,6 +37,7 @@ npm run test:self    # Run all self-tests (scripts/run-selftests.mjs)
 node scripts/fixtures-auffrischen.mjs   # compare stored API fixtures against live
 node scripts/fixtures-auffrischen.mjs --schreiben   # …and update them
 node scripts/drittlizenzen.mjs          # regenerate THIRD-PARTY-NOTICES after any dependency change
+node scripts/herkunft-pruefen.mjs       # origin check against the fork's source (network; see HERKUNFT.md)
 AT_LIZENZ_PRIVAT=… node scripts/lizenz-ausstellen.mjs --kaeufer "Name"   # issue a licence key (vendor only)
 ```
 
@@ -196,7 +197,7 @@ Not covered: the REST CRUD layer and anything rendered in the frontend.
 
 **Layout system**: `App.vue` renders `<component :is="$route.meta.layout">` — all routes use `layouts/Dashboard.vue` (Kopfleiste, side menu `components/rahmen/Seitenmenue.vue` with `MenueJournalKopf`/`MenueFuss`, title bar `rahmen/Titelzeile.vue`, content). Routes in `src/router/routen.js` (table, all lazy-loaded, catch-all → `/`), guards in `src/router/index.js`; both rebuilt clean-room in S9 from `docs/spec/geruest.md`. Menu entries and their `symbol` come from `src/config/menu.js`. Settings live under `/settings/:bereich?` (`EINSTELLUNGS_BEREICHE` in `routen.js`; unknown → allgemein): `views/Settings.vue` is a shell with tabs, areas and sections under `views/einstellungen/` (shared pieces `gemeinsam/Abschnitt|Feld|Schalter.vue` and composables).
 
-**State management** (`src/stores/app/*` — rahmen, laden, einstellungen — and `src/stores/journal/*` — filter, auswertung, import, tagebuch, kalender, screenshots, offenePositionen; the bundles `stores/{ui,filters,trades,settings}.js` re-export them, `stores/globals.js` is a forwarding file until S11): Uses Vue `ref()` and `reactive()` exports directly — **not Pinia stores**. Components import and mutate these directly. Filter state (selected tags, positions, date ranges, etc.) is persisted to `localStorage`.
+**State management** (`src/stores/app/*` — rahmen, laden, einstellungen — and `src/stores/journal/*` — filter, auswertung, import, tagebuch, kalender, screenshots, offenePositionen; the bundles `stores/{ui,filters,trades,settings}.js` re-export them): Uses Vue `ref()` and `reactive()` exports directly — **not Pinia stores**. Components import and mutate these directly. Filter state (selected tags, positions, date ranges, etc.) is persisted to `localStorage`.
 
 **`currentUser.value`**: Holds app settings loaded from the SQLite `settings` table via `dbGetSettings()`. This is not a user object — it's the single-user settings record.
 
@@ -219,7 +220,7 @@ View initialization follows a pattern in `src/utils/journal/ablauf.js` (a genera
 - `journal/` — the journal core, rebuilt clean-room in S7 from `docs/spec/journal-kern.md`: `laden.js` (load + filter, `filtereTrades`; the pure filter/enrichment in `filtern.js`), `summen.js` (`summiereTrades`, summing via `totals-kern.js`), `gruppieren.js` (`gruppiereTrades`), `gewinnanalyse.js` (`berechneGewinnAnalyse`), `tagesrechnung.js` (blotter/P&L), `kalender.js`, `tagebuch.js` (satisfaction, tags, notes, excursions), `import.js` (import preview/save, OHLCV, MFE), `ablauf.js` (mounts), `app.js` (app init, periods, tabs, popover), `format.js` (formatters), `zeit.js` (the dayjs instance). The deliberate legacy bugs of spec §7 are reproduced and marked in the code; the old paths `utils/{trades,daily,mountOrchestration,formatters,dayjs-setup,utils}.js` are forwarding files until S9
 - `quickImport.js` — the API import (Bitunix/Bitget/Pionex) and manual trade entry: one builder for trade objects (`buildTradeObj`)
 - The CSV import (`brokers.js`, `brokers-kern.js`, CSV parts of `addTrades.js`) and the dead execution-based import flow were deleted in S3
-- `charts.js` — ECharts configuration and rendering
+- `journal/diagramme/` — ECharts configuration and rendering, one module per chart (rebuilt clean-room in S4; `zeichneDiagramme` in `verteiler.js` is the entry)
 
 ### Key Views
 
