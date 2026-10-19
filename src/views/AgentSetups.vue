@@ -10,8 +10,8 @@
 import { ref, computed, onBeforeMount, onBeforeUnmount, nextTick } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
-import { spinnerLoadingPage } from '../stores/ui.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import { seiteLaedt } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import { useSetupChart } from '../utils/journal/diagramme/index.js'
 import { useBotTradeChart } from '../utils/botChart.js'
 import { useXDecCurrencyFormat } from '../utils/journal/format.js'
@@ -80,12 +80,12 @@ async function laden() {
 }
 
 onBeforeMount(async () => {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     try {
         instanzen.value = (await axios.get('/api/strategies/instances')).data
     } catch (e) { /* Filter ist optional */ }
     await laden()
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
     pollTimer = setInterval(laden, 30000)
 })
 
@@ -167,8 +167,8 @@ const gruende = computed(() => {
 </script>
 
 <template>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="setups-seite">
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="setups-seite">
         <div class="setups-inhalt">
 
             <div class="kopfzeile">

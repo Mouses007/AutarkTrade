@@ -7,15 +7,15 @@
  * Mehrere Tageszeilen desselben Tages (verschiedene Börsen) zielen auf
  * dieselbe Element-ID; die zuletzt verarbeitete Zeile bestimmt das Bild.
  */
-import { filteredTrades } from '../../../stores/trades.js'
-import { amountCase } from '../../../stores/filters.js'
-import { useHourMinuteFormat } from '../../formatters.js'
+import { journalTage } from '../../../stores/trades.js'
+import { betragArt } from '../../../stores/filters.js'
+import { useHourMinuteFormat } from '../format.js'
 import { fall, festkomma } from './grundlagen.js'
 import { useDoubleLineChart, usePieChart } from './ring.js'
 
-export function useRenderDoubleLineChart() {
+export function zeichneDoppellinie() {
     const f = fall()
-    for (const zeile of filteredTrades) {
+    for (const zeile of journalTage) {
         const brutto = []
         const netto = []
         const zeiten = []
@@ -31,9 +31,9 @@ export function useRenderDoubleLineChart() {
     return Promise.resolve()
 }
 
-export function useRenderPieChart() {
-    const art = amountCase.value === 'net' ? 'net' : 'gross'
-    for (const zeile of filteredTrades) {
+export function zeichneTorte() {
+    const art = betragArt.value === 'net' ? 'net' : 'gross'
+    for (const zeile of journalTage) {
         const pl = zeile.pAndL || {}
         const anzahl = Number(pl.trades) || 0
         const gewinne = Number(pl[`${art}WinsCount`])

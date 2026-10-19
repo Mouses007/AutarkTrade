@@ -28,14 +28,14 @@ import Karte from '../components/basis/Karte.vue'
 import Knopf from '../components/basis/Knopf.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
-import { spinnerLoadingPage } from '../stores/app/laden.js'
+import { seiteLaedt } from '../stores/app/laden.js'
 import { daysBack, daysMargin } from '../stores/journal/filter.js'
 import { imports } from '../stores/journal/auswertung.js'
 import { excursions } from '../stores/journal/tagebuch.js'
 import { apis } from '../stores/app/einstellungen.js'
-import { useGetAPIS, usePageRedirect } from '../utils/journal/app.js'
-import { useGetTrades } from '../utils/journal/laden.js'
-import { useGetExcursions } from '../utils/journal/tagebuch.js'
+import { ladeApis, usePageRedirect } from '../utils/journal/app.js'
+import { ladeTrades } from '../utils/journal/laden.js'
+import { ladeExkursionen } from '../utils/journal/tagebuch.js'
 import { useGetOHLCV, useGetMFEPrices } from '../utils/journal/import.js'
 import { useDateCalFormat } from '../utils/journal/format.js'
 import { dbCreate } from '../utils/db.js'
@@ -57,9 +57,9 @@ const TAKT_MS = 250
 if (!(Number(daysBack.value) > 0)) daysBack.value = 30
 if (!(Number(daysMargin.value) >= 0) || daysMargin.value === '' || daysMargin.value == null) daysMargin.value = 1
 
-spinnerLoadingPage.value = false
+seiteLaedt.value = false
 
-const apiIndex = ref(-1)
+const boersenIndex = ref(-1)
 const apiQuelle = ref(null)
 const fehlendeTage = ref([])      // dateUnix
 const tradeListe = ref([])
@@ -71,7 +71,7 @@ const laeuft = ref(false)
 const meldungen = ref([])         // { art, text }
 const gespeichertAnzahl = ref(0)
 
-const hatSchluessel = computed(() => apiIndex.value >= 0)
+const hatSchluessel = computed(() => boersenIndex.value >= 0)
 const einstellungsLink = computed(() => `<a href="/settings/journal">${t('nav.settings')}</a>`)
 const pufferWort = computed(() => (Number(daysMargin.value) > 1 ? t('excursions.dayBufferMehr') : t('excursions.dayBuffer')))
 const fehlendeText = computed(() => fehlendeTage.value.map(d => useDateCalFormat(d)).join(', '))
@@ -80,9 +80,9 @@ function waehleApi() {
     const mitSchluessel = (anbieter) => apis.findIndex(a => a.provider === anbieter && a.key)
     const db = mitSchluessel('databento')
     const pg = mitSchluessel('polygon')
-    if (db >= 0) { apiIndex.value = db; apiQuelle.value = 'databento' }
-    else if (pg >= 0) { apiIndex.value = pg; apiQuelle.value = 'polygon' }
-    else { apiIndex.value = -1; apiQuelle.value = null }
+    if (db >= 0) { boersenIndex.value = db; apiQuelle.value = 'databento' }
+    else if (pg >= 0) { boersenIndex.value = pg; apiQuelle.value = 'polygon' }
+    else { boersenIndex.value = -1; apiQuelle.value = null }
 }
 
 /*
@@ -95,7 +95,7 @@ async function pruefeFehlendeTage() {
     const zurueck = Number(daysBack.value)
     if (!(zurueck > 0)) return
     try {
-        await Promise.all([useGetTrades(), useGetExcursions()])
+        await Promise.all([ladeTrades(), ladeExkursionen()])
     } catch (e) {
         console.warn('Exkursionen: Tage nicht lesbar', e)
         return
@@ -133,7 +133,7 @@ async function pruefeFehlendeTage() {
 
 async function start() {
     try {
-        await useGetAPIS()
+        await ladeApis()
     } catch (e) {
         console.warn('Exkursionen: API-Liste nicht lesbar', e)
     }
@@ -162,7 +162,7 @@ async function warteAufAlle(kerzen, symbole, bisMs) {
 }
 
 async function hinzufuegen() {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     laeuft.value = true
     meldungen.value = []
     gespeichertAnzahl.value = 0
@@ -221,7 +221,7 @@ async function hinzufuegen() {
         alleGut = false
         meldungen.value.push({ art: 'fehler', text: t('excursions.fehler') + ' ' + (e?.message || String(e)) })
     } finally {
-        spinnerLoadingPage.value = false
+        seiteLaedt.value = false
         laeuft.value = false
     }
 

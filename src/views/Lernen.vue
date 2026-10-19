@@ -6,8 +6,8 @@ import { dbFind, dbCreate, dbUpdate, dbDelete } from '../utils/db.js'
 import { boxVerteilung, BOX_MIN } from '../../shared/leitner.js'
 import { useLernSitzung, GRADE_BUTTONS } from '../composables/useLernSitzung.js'
 import { werteAus as lernstatistikAuswerten, NIVEAUS as NIVEAU_STUFEN, niveauVerteilung} from '../utils/lernStatistik.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
-import { spinnerLoadingPage } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
+import { seiteLaedt } from '../stores/ui.js'
 import { logWarn } from '../utils/logger.js'
 import Symbol from '@/components/basis/Symbol.vue'
 import Knopf from '@/components/basis/Knopf.vue'
@@ -25,7 +25,7 @@ const fortschritt = ref([])  // quiz_fortschritt
 /**
  * Ladefehler beim Start — sichtbar statt als Dauerspinner.
  *
- * Ohne `finally` blieb `spinnerLoadingPage` bei einer abgelehnten Zusage auf
+ * Ohne `finally` blieb `seiteLaedt` bei einer abgelehnten Zusage auf
  * `true` stehen: die Seite drehte sich für immer, ohne zu sagen warum. Die
  * Schwesterkomponente `KachelQuiz.vue` macht es seit jeher richtig — genau
  * die Art Abweichung, die dieses Audit überall gefunden hat.
@@ -33,7 +33,7 @@ const fortschritt = ref([])  // quiz_fortschritt
 const ladeFehler = ref('')
 
 async function ladeAlles() {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     ladeFehler.value = ''
     try {
         const [k, f] = await Promise.all([
@@ -58,7 +58,7 @@ async function ladeAlles() {
         ladeFehler.value = e?.message || String(e)
         logWarn('lernen', 'Karten laden fehlgeschlagen', e)
     } finally {
-        spinnerLoadingPage.value = false
+        seiteLaedt.value = false
     }
 }
 onMounted(ladeAlles)
@@ -331,9 +331,9 @@ async function aktivUmschalten(karte) {
 
 <template>
     <div class="at-px-3 at-pu-5">
-        <SpinnerLoadingPage />
+        <SeiteLaedt />
 
-        <div v-show="!spinnerLoadingPage">
+        <div v-show="!seiteLaedt">
             <!-- ===== SITZUNG ===== -->
             <template v-if="!reiter">
                 <div v-if="phase === 'start'" class="dailyCard at-p-4 lernen-panel">

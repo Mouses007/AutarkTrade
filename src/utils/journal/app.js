@@ -10,17 +10,17 @@ import dayjs from './zeit.js'
 import i18n from '../../i18n/index.js'
 import { dbGetSettings } from '../db.js'
 import {
-    pageId, currentUser, timeZoneTrade, sideMenuMobileOut, screenType, windowIsScrolled,
+    pageId, currentUser, timeZoneTrade, seitenmenueMobilOffen, screenType, windowIsScrolled,
 } from '../../stores/app/rahmen.js'
 import { apis } from '../../stores/app/einstellungen.js'
 import {
-    periodRange, selectedDashTab, selectedPeriodRange, selectedPositions, selectedTimeFrame, selectedRatio,
-    selectedAccount, selectedGrossNet, selectedPlSatisfaction, selectedBroker, selectedDateRange, selectedMonth,
-    selectedMonthPreset, selectedAccounts, amountCase, selectedTags, selectedTradeTimeframes,
+    zeitraumListe, selectedDashTab, selectedPeriodRange, selectedPositions, selectedTimeFrame, selectedRatio,
+    selectedAccount, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, selectedBroker, selectedDateRange, gewaehlterMonat,
+    selectedMonthPreset, selectedAccounts, betragArt, tagAuswahl, selectedTradeTimeframes,
 } from '../../stores/journal/filter.js'
-import { tags, availableTags } from '../../stores/journal/tagebuch.js'
-import { screenshotsPagination } from '../../stores/journal/screenshots.js'
-import { useGetTags, useGetAvailableTags } from './tagebuch.js'
+import { tags, verfuegbareTags } from '../../stores/journal/tagebuch.js'
+import { bildSeite } from '../../stores/journal/screenshots.js'
+import { ladeTags, ladeVerfuegbareTags } from './tagebuch.js'
 
 const t = (k) => i18n.global.t(k)
 
@@ -50,14 +50,14 @@ export const useInitParse = () => useInitApp()
 export async function useGetCurrentUser() {
     try { currentUser.value = await dbGetSettings() } catch { currentUser.value = {} }
 }
-export const useCheckCurrentUser = () => useGetCurrentUser()
+export const pruefeEinstellungen = () => useGetCurrentUser()
 
-export function useGetTimeZone() {
+export function leseZeitzone() {
     const u = currentUser.value
     timeZoneTrade.value = u && Object.prototype.hasOwnProperty.call(u, 'timeZone') ? u.timeZone : 'America/New_York'
 }
 
-export async function useGetAPIS() {
+export async function ladeApis() {
     const einstellungen = await dbGetSettings()
     apis.length = 0
     for (const a of einstellungen?.apis || []) apis.push(a)
@@ -69,7 +69,7 @@ export async function useGetAPIS() {
 const wochenAnfang = (d) => d.startOf('week').add(1, 'day')
 const wochenEnde = (d) => d.endOf('week').add(1, 'day')
 
-export async function useGetPeriods() {
+export async function ladeZeitraeume() {
     const jetzt = dayjs().tz(timeZoneTrade.value)
     const vorWoche = jetzt.subtract(1, 'week')
     const vorMonat = jetzt.subtract(1, 'month')
@@ -90,18 +90,18 @@ export async function useGetPeriods() {
         ['custom', 'custom', -1, -1],
     ]
     const sek = (x) => (typeof x === 'number' ? x : x.unix())
-    periodRange.length = 0
+    zeitraumListe.length = 0
     for (const [value, label, start, end] of eintraege) {
-        periodRange.push({ value, label: t(`options.${label}`), start: sek(start), end: sek(end) })
+        zeitraumListe.push({ value, label: t(`options.${label}`), start: sek(start), end: sek(end) })
     }
 }
 
 // ── Vorgaben aus localStorage ──────────────────────────────────────────────
 
-const periode = (wert) => periodRange.find(p => p.value === wert)
+const periode = (wert) => zeitraumListe.find(p => p.value === wert)
 const bereichVon = (p) => ({ start: p.start, end: p.end })
 
-export async function useSetValues() {
+export async function setzeFilterwerte() {
     if (lies('selectedDashTab') === null) speichere('selectedDashTab', 'overviewTab')
     selectedDashTab.value = lies('selectedDashTab')
 
@@ -119,10 +119,10 @@ export async function useSetValues() {
     selectedAccount.value = lies('selectedAccount')
 
     if (lies('selectedGrossNet') === null) speichere('selectedGrossNet', 'gross')
-    selectedGrossNet.value = lies('selectedGrossNet')
+    gewaehltBruttoNetto.value = lies('selectedGrossNet')
 
     if (lies('selectedPlSatisfaction') === null) speichere('selectedPlSatisfaction', 'pl')
-    selectedPlSatisfaction.value = lies('selectedPlSatisfaction')
+    gewaehltPlOderZufriedenheit.value = lies('selectedPlSatisfaction')
 
     if (lies('selectedBroker') === null) speichere('selectedBroker', 'bitunix')
     selectedBroker.value = lies('selectedBroker')
@@ -132,7 +132,7 @@ export async function useSetValues() {
 
     if (lies('selectedPeriodRange') === null) {
         const r = selectedDateRange.value
-        const passend = periodRange.find(p => p.start === r.start && p.end === r.end) || periode('custom')
+        const passend = zeitraumListe.find(p => p.start === r.start && p.end === r.end) || periode('custom')
         speichere('selectedPeriodRange', JSON.stringify(passend))
     }
     selectedPeriodRange.value = JSON.parse(lies('selectedPeriodRange'))
@@ -154,15 +154,15 @@ export async function useSetValues() {
     }
 
     if (lies('selectedMonth') === null) speichere('selectedMonth', JSON.stringify(bereichVon(periode('thisMonth'))))
-    selectedMonth.value = JSON.parse(lies('selectedMonth'))
+    gewaehlterMonat.value = JSON.parse(lies('selectedMonth'))
 
     if (lies('selectedMonthPreset') === null) speichere('selectedMonthPreset', 'current')
     selectedMonthPreset.value = lies('selectedMonthPreset')
     if (selectedMonthPreset.value === 'current') {
         const monat = periode('thisMonth')
-        if (monat && (monat.start !== selectedMonth.value?.start || monat.end !== selectedMonth.value?.end)) {
-            selectedMonth.value = bereichVon(monat)
-            speichere('selectedMonth', JSON.stringify(selectedMonth.value))
+        if (monat && (monat.start !== gewaehlterMonat.value?.start || monat.end !== gewaehlterMonat.value?.end)) {
+            gewaehlterMonat.value = bereichVon(monat)
+            speichere('selectedMonth', JSON.stringify(gewaehlterMonat.value))
         }
     }
 
@@ -172,43 +172,43 @@ export async function useSetValues() {
         selectedAccounts.value = lies('selectedAccounts').split(',')
     }
 
-    const tagIds = () => availableTags.flatMap(g => (g.tags || []).map(x => x.id))
+    const tagIds = () => verfuegbareTags.flatMap(g => (g.tags || []).map(x => x.id))
     const gespeicherteTags = lies('selectedTags')
     if (gespeicherteTags === null) {
-        await useGetTags()
+        await ladeTags()
         const neu = ['t000t']
-        await useGetAvailableTags()
+        await ladeVerfuegbareTags()
         neu.push(...tagIds())
         tags.length = 0
-        selectedTags.value = neu
+        tagAuswahl.value = neu
         speichere('selectedTags', neu.join(','))
     } else {
-        await useGetAvailableTags()
+        await ladeVerfuegbareTags()
         const liste = gespeicherteTags.split(',')
         let ergaenzt = false
         for (const id of tagIds()) if (!liste.includes(id)) { liste.push(id); ergaenzt = true }
         if (ergaenzt) {
-            selectedTags.value = liste
+            tagAuswahl.value = liste
             speichere('selectedTags', liste.join(','))
         }
     }
 
-    amountCase.value = lies('selectedGrossNet')
+    betragArt.value = lies('selectedGrossNet')
 }
 
 // ── Fenster, Seite, Menü ───────────────────────────────────────────────────
 
-export function useCheckIfWindowIsScrolled() {
+export function pruefeGescrollt() {
     window.addEventListener('scroll', () => { windowIsScrolled.value = window.scrollY > 100 })
 }
 
 /** Routenname der aktuellen Seite (nur in `setup` aufrufen). */
-export function usePageId() {
+export function setzeSeitenId() {
     pageId.value = useRoute().name
     return pageId.value
 }
 
-export function useScreenType() {
+export function leseBildschirmTyp() {
     const breite = window.innerWidth > 0 ? window.innerWidth : screen.width
     screenType.value = breite >= 992 ? 'computer' : 'mobile'
 }
@@ -218,7 +218,7 @@ export function useEditItem(id) {
     if (pageId.value === 'entries') {
         window.location.href = '/addEntry'
     } else if (pageId.value === 'screenshots') {
-        sessionStorage.setItem('screenshotsPagination', screenshotsPagination.value)
+        sessionStorage.setItem('screenshotsPagination', bildSeite.value)
         sessionStorage.setItem('screenshotIdToEdit', id)
         window.location.href = '/addScreenshot'
     }
@@ -229,18 +229,18 @@ export function usePageRedirect(ziel) {
     if (pageId.value === 'daily') window.location.href = '/daily'
 }
 
-export function useToggleMobileMenu() {
+export function schalteMobilMenue() {
     document.getElementById('sideMenu')?.classList.toggle('toggleSideMenu')
-    sideMenuMobileOut.value = !sideMenuMobileOut.value
+    seitenmenueMobilOffen.value = !seitenmenueMobilOffen.value
 }
 
 export function useCloseMobileMenu() {
-    if (!sideMenuMobileOut.value) return
+    if (!seitenmenueMobilOffen.value) return
     document.getElementById('sideMenu')?.classList.remove('toggleSideMenu')
-    sideMenuMobileOut.value = false
+    seitenmenueMobilOffen.value = false
 }
 
-export function returnToTop() {
+export function scrolleNachOben() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 

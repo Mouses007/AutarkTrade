@@ -81,7 +81,7 @@ re-fetches and reports **disappeared** fields; it is deliberately not part of
 `npm run test:self`, because that must work without network.
 
 `src/utils/__selftest-journal.mjs` is a **golden master** of the journal core,
-the safety net for replacing the TradeNote-derived code (`LIZENZ-PLAN.md`): a
+the safety net under the clean-room rebuild of the journal core (`HERKUNFT.md`): a
 synthetic, seeded data set runs through the real `useQuickApiImport`
 (Bitunix/Bitget/Pionex answers), then filter → totals → groups → profit
 analysis → chart data → calendar, and the result is compared against
@@ -105,7 +105,7 @@ fetching via Polygon and Databento (`useGetOHLCV`, synthetic 1-minute candles
 served through the axios mock — which passes config/body to a response
 function), the MFE price per trade in two trading time zones
 (`useGetMFEPrices`), storing them (`useUpdateMfePrices`), and the preview/save
-of the API import in `AddTrades.vue` (`useCreateBlotter`/`useCreatePnL`/
+of the API import in `AddTrades.vue` (`baueBlotter`/`bauePnL`/
 `useGetExistingTradesArray`/`useUploadTrades`). Stand in
 `src/utils/fixtures/mfe-pfade-golden.json`. Frozen with it: `mfePrices` is a
 module store that is never cleared (a second MFE run in the same session
@@ -210,13 +210,13 @@ All DB operations go through `src/utils/db.js` which calls the Express REST API 
 ### Mount Orchestration
 
 View initialization follows a pattern in `src/utils/journal/ablauf.js` (a generation counter lets a newer mount silently abort an older one):
-- `useMountDashboard()` — sequential + parallel promise chains: fetch data → filter → calculate totals → group → render charts
-- `useMountDaily()`, `useMountCalendar()`, `useMountScreenshots()` — similar patterns per view
-- Each manages spinner state (`spinnerLoadingPage.value`) and mounted flags
+- `starteDashboard()` — sequential + parallel promise chains: fetch data → filter → calculate totals → group → render charts
+- `starteTagesansicht()`, `starteKalender()`, `starteBilder()` — similar patterns per view
+- Each manages spinner state (`seiteLaedt.value`) and mounted flags
 
 ### Business Logic Utils
 
-- `journal/` — the journal core, rebuilt clean-room in S7 from `docs/spec/journal-kern.md`: `laden.js` (load + filter, `useGetFilteredTrades`; the pure filter/enrichment in `filtern.js`), `summen.js` (`useTotalTrades`, summing via `totals-kern.js`), `gruppieren.js` (`useGroupTrades`), `gewinnanalyse.js` (`useCalculateProfitAnalysis`), `tagesrechnung.js` (blotter/P&L), `kalender.js`, `tagebuch.js` (satisfaction, tags, notes, excursions), `import.js` (import preview/save, OHLCV, MFE), `ablauf.js` (mounts), `app.js` (app init, periods, tabs, popover), `format.js` (formatters), `zeit.js` (the dayjs instance). The deliberate legacy bugs of spec §7 are reproduced and marked in the code; the old paths `utils/{trades,daily,mountOrchestration,formatters,dayjs-setup,utils}.js` are forwarding files until S9
+- `journal/` — the journal core, rebuilt clean-room in S7 from `docs/spec/journal-kern.md`: `laden.js` (load + filter, `filtereTrades`; the pure filter/enrichment in `filtern.js`), `summen.js` (`summiereTrades`, summing via `totals-kern.js`), `gruppieren.js` (`gruppiereTrades`), `gewinnanalyse.js` (`berechneGewinnAnalyse`), `tagesrechnung.js` (blotter/P&L), `kalender.js`, `tagebuch.js` (satisfaction, tags, notes, excursions), `import.js` (import preview/save, OHLCV, MFE), `ablauf.js` (mounts), `app.js` (app init, periods, tabs, popover), `format.js` (formatters), `zeit.js` (the dayjs instance). The deliberate legacy bugs of spec §7 are reproduced and marked in the code; the old paths `utils/{trades,daily,mountOrchestration,formatters,dayjs-setup,utils}.js` are forwarding files until S9
 - `quickImport.js` — the API import (Bitunix/Bitget/Pionex) and manual trade entry: one builder for trade objects (`buildTradeObj`)
 - The CSV import (`brokers.js`, `brokers-kern.js`, CSV parts of `addTrades.js`) and the dead execution-based import flow were deleted in S3
 - `charts.js` — ECharts configuration and rendering

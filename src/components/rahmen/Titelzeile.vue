@@ -12,10 +12,10 @@ import { useI18n } from 'vue-i18n'
 import Symbol from '../basis/Symbol.vue'
 import { appMode, pageId, screenType, privacyMode } from '../../stores/ui.js'
 import { currentUser } from '../../stores/settings.js'
-import { selectedPeriodRange, selectedGrossNet, selectedPositions, selectedMonth, selectedDateRange } from '../../stores/filters.js'
-import { filteredTradesTrades } from '../../stores/trades.js'
+import { selectedPeriodRange, gewaehltBruttoNetto, selectedPositions, gewaehlterMonat, selectedDateRange } from '../../stores/filters.js'
+import { gefilterteTradesFlach } from '../../stores/trades.js'
 import { pageById } from '../../config/menu.js'
-import { useToggleMobileMenu, useExport } from '../../utils/journal/app.js'
+import { schalteMobilMenue, useExport } from '../../utils/journal/app.js'
 import { useDateCalFormat } from '../../utils/journal/format.js'
 import dayjs from '../../utils/journal/zeit.js'
 
@@ -39,7 +39,7 @@ function zeitraum() {
     const id = pageId.value
     if (id === 'dashboard' || id === 'auswertung') return selectedPeriodRange.value?.label || ''
     if (id === 'daily' || id === 'calendar') {
-        const start = selectedMonth.value?.start
+        const start = gewaehlterMonat.value?.start
         return start ? dayjs.unix(start).format('MMM YYYY') : ''
     }
     return ''
@@ -48,8 +48,8 @@ function zeitraum() {
 const filterText = computed(() => {
     if (!FILTER_SEITEN.includes(pageId.value)) return ''
     const teile = [zeitraum()]
-    if (selectedGrossNet.value === 'gross') teile.push(t('options.gross'))
-    else if (selectedGrossNet.value === 'net') teile.push(t('options.net'))
+    if (gewaehltBruttoNetto.value === 'gross') teile.push(t('options.gross'))
+    else if (gewaehltBruttoNetto.value === 'net') teile.push(t('options.net'))
     const pos = Array.isArray(selectedPositions.value) ? selectedPositions.value : []
     if (pos.length === 1) teile.push(pos[0] === 'long' ? t('nav.long') : t('nav.short'))
     return teile.filter(Boolean).join(' · ')
@@ -75,7 +75,7 @@ const exportOffen = ref(false)
 const exportEl = ref(null)
 function exportiere(format) {
     exportOffen.value = false
-    useExport(format, useDateCalFormat(selectedDateRange.value?.start), useDateCalFormat(selectedDateRange.value?.end), filteredTradesTrades)
+    useExport(format, useDateCalFormat(selectedDateRange.value?.start), useDateCalFormat(selectedDateRange.value?.end), gefilterteTradesFlach)
 }
 function klickDraussen(e) {
     if (exportOffen.value && exportEl.value && !exportEl.value.contains(e.target)) exportOffen.value = false
@@ -98,7 +98,7 @@ onBeforeUnmount(() => {
     <div class="at-titelzeile">
         <div class="links">
             <button v-if="mobil" type="button" class="mobile-menu-toggle" :aria-label="t('nav.menueOeffnen')"
-                @click="useToggleMobileMenu()">
+                @click="schalteMobilMenue()">
                 <Symbol name="menue" :groesse="22" />
                 <span class="titelblock">
                     <span class="seitentitel">{{ titel }}</span>

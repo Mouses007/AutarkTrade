@@ -13,7 +13,7 @@
  *                        (Exkursionen nachtragen)
  *   - `useGetMFEPrices`  MFE-Preis je Trade aus 1-Minuten-Kerzen
  *   - `useUpdateMfePrices` MFE-Preise als Exkursionszeilen speichern
- *   - `useCreateBlotter`/`useCreatePnL`/`useGetExistingTradesArray`/
+ *   - `baueBlotter`/`bauePnL`/`useGetExistingTradesArray`/
  *     `useUploadTrades` — die Vorschau und das Speichern des API-Imports in
  *     `AddTrades.vue`
  *
@@ -266,28 +266,28 @@ const ergebnis = {}
     const vorhandenTd = Math.floor(ms(`${TAGE[1]}T00:00:00Z`) / 1000)
     globalThis.__journalDaten.trades.push({ objectId: '1', date: TAGE[1], dateUnix: vorhandenTd, broker: 'bitunix', trades: [], executions: [], blotter: {}, pAndL: {}, openPositions: false })
     await alt.useGetExistingTradesArray()
-    const vorhanden = [...st.existingTradesArray]
+    const vorhanden = [...st.vorhandeneTradeTage]
 
     const positionen = Array.from({ length: 14 }, (_, i) => bitunixPosition(i))
     for (const k in st.executions) delete st.executions[k]
     const tage = {}
-    st.existingImports.length = 0
+    st.vorhandeneImporte.length = 0
     positionen.forEach((pos, i) => {
         const t = quick.createBitunixTradeObj(pos, i)
         ;(tage[t.td] ||= []).push(t)
         ;(st.executions[t.td] ||= []).push({ ...t, trade: t.id })
     })
-    const vorhandenSet = new Set(st.existingTradesArray)
+    const vorhandenSet = new Set(st.vorhandeneTradeTage)
     for (const key of Object.keys(tage)) {
         const datum = new Date(Number(key) * 1000).toISOString().slice(0, 10)
-        if (vorhandenSet.has(datum)) { st.existingImports.push(Number(key)); delete tage[key]; delete st.executions[key] }
+        if (vorhandenSet.has(datum)) { st.vorhandeneImporte.push(Number(key)); delete tage[key]; delete st.executions[key] }
     }
     for (const k in st.trades) delete st.trades[k]
     Object.assign(st.trades, tage)
 
-    await alt.useCreateBlotter()
-    await alt.useCreatePnL()
-    const vorschau = sauber({ blotter: st.blotter, pAndL: st.pAndL, existingImports: st.existingImports })
+    await alt.baueBlotter()
+    await alt.bauePnL()
+    const vorschau = sauber({ blotter: st.blotter, pAndL: st.pAndL, vorhandeneImporte: st.vorhandeneImporte })
 
     await alt.useUploadTrades()
     await warte()
@@ -298,11 +298,11 @@ const ergebnis = {}
         weiter: window.location.href,
         exkursionen: globalThis.__journalDaten.excursions.length,
     }
-    // Blotter mit Parameter: aus `filteredTradesTrades` (so ruft trades.js)
-    st.filteredTradesTrades.length = 0
-    st.filteredTradesTrades.push(...Object.values(tage).flat().slice(0, 6))
-    await alt.useCreateBlotter(true)
-    await alt.useCreatePnL()
+    // Blotter mit Parameter: aus `gefilterteTradesFlach` (so ruft trades.js)
+    st.gefilterteTradesFlach.length = 0
+    st.gefilterteTradesFlach.push(...Object.values(tage).flat().slice(0, 6))
+    await alt.baueBlotter(true)
+    await alt.bauePnL()
     ergebnis.vorschauGefiltert = sauber({ blotter: st.blotter, pAndL: st.pAndL })
 }
 
@@ -405,7 +405,7 @@ console.log('MFE-/OHLCV-Pfade (Golden Master)')
 
 pruefe('keine Fehlermeldung während des Laufs', fehlerMeldungen.length === 0, fehlerMeldungen.slice(0, 3).join('\n      '))
 pruefe('Vorschau hat Tage gespeichert', ergebnis.vorschau.gespeichert.length >= 2, `${ergebnis.vorschau.gespeichert.length} Tage`)
-pruefe('Vorschau sortiert den vorhandenen Tag aus', ergebnis.vorschau.existingImports.length === 1)
+pruefe('Vorschau sortiert den vorhandenen Tag aus', ergebnis.vorschau.vorhandeneImporte.length === 1)
 pruefe('Databento-CSV ergibt 40 Kerzen', ergebnis.databentoCsv.ohlcv.length === 40)
 pruefe('Polygon: alle drei Symbole nach dem Warten', ergebnis.ohlcvPolygon.ohlcv.length === 3)
 {

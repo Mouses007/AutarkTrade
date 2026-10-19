@@ -10,14 +10,14 @@ Ordnern; die exportierten Namen sind unverändert (Spezifikation
 | Datei | Inhalt |
 |-------|--------|
 | `app/rahmen.js` | Seite (`pageId`), Einstellungszeile (`currentUser`), Zeitzone, Modus, Menü, Reiterzustand, Abfrage-Limits |
-| `app/laden.js` | Spinner, Mounted-Flags, `renderData`, `barChartNegativeTagGroups` |
-| `app/einstellungen.js` | `renderProfile`, `apis`, `layoutStyle`, KI-Report-Status |
+| `app/laden.js` | Spinner, Mounted-Flags, `zeichenZaehler`, `negativeTagGruppen` |
+| `app/einstellungen.js` | `profilZaehler`, `apis`, `layoutStyle`, KI-Report-Status |
 | `app/ablage.js` | Hilfen zum Lesen aus localStorage/sessionStorage beim Laden (kein Zustand) |
-| `journal/filter.js` | Auswahl der Seitenleiste (`selected*`, `amountCase` …) und Optionslisten |
-| `journal/auswertung.js` | Ergebnis der Kette: `filteredTrades*`, `totals`, `totalsByDate`, `groups`, `profitAnalysis` |
+| `journal/filter.js` | Auswahl der Seitenleiste (`selected*`, `betragArt` …) und Optionslisten |
+| `journal/auswertung.js` | Ergebnis der Kette: `journalTage*`, `totals`, `summenJeTag`, `groups`, `gewinnAnalyse` |
 | `journal/import.js` | Import-Vorschau: `executions`, `trades`, `blotter`, `pAndL`, vorhandene Tage |
 | `journal/tagebuch.js` | Zufriedenheit, Tags, Tag-Katalog, Notizen, Exkursionen, Bearbeitungszustand |
-| `journal/kalender.js` | `calendarData`, `miniCalendarsData`, `tradeAccounts` |
+| `journal/kalender.js` | `kalenderDaten`, `miniKalenderDaten`, `tradeAccounts` |
 | `journal/screenshots.js` | Screenshot-Daten und -Bearbeitung |
 | `journal/offenePositionen.js` | Incoming-Positionen und Bewertungs-Hinweise |
 
@@ -35,7 +35,7 @@ importiert am besten direkt aus `app/*` bzw. `journal/*`:
 
 ```js
 import { pageId, timeZoneTrade } from '@/stores/app/rahmen.js'
-import { selectedTags, selectedRange } from '@/stores/journal/filter.js'
+import { tagAuswahl, gewaehlterBereich } from '@/stores/journal/filter.js'
 ```
 
 `globals.js` ist nur noch eine Weiterleitung für parallele Sitzungen und

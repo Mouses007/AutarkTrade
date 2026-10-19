@@ -9,7 +9,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import dayjs from '../../utils/journal/zeit.js'
 import { timeZoneTrade, scrollToDateUnix } from '../../stores/ui.js'
-import { selectedMonth, selectedMonthPreset } from '../../stores/filters.js'
+import { gewaehlterMonat, selectedMonthPreset } from '../../stores/filters.js'
 import { dauerText } from '../../utils/chart/zeichnungen/geometrie.js'
 import { Symbol, Knopf } from '../basis'
 
@@ -36,10 +36,10 @@ function zumJournal() {
     const tag = tr.value.tag || dayjs(tr.value.ausstieg?.t || tr.value.einstieg.t).tz(tz).startOf('day').unix()
     const start = dayjs.unix(tag).tz(tz).startOf('month').unix()
     const ende = dayjs.unix(tag).tz(tz).endOf('month').unix()
-    selectedMonth.value = { start, end: ende }
+    gewaehlterMonat.value = { start, end: ende }
     selectedMonthPreset.value = 'custom'
     try {
-        localStorage.setItem('selectedMonth', JSON.stringify(selectedMonth.value))
+        localStorage.setItem('selectedMonth', JSON.stringify(gewaehlterMonat.value))
         localStorage.setItem('selectedMonthPreset', 'custom')
     } catch { /* ohne Speicher geht der Sprung trotzdem */ }
     scrollToDateUnix.value = tag

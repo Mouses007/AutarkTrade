@@ -14,8 +14,8 @@ import { ref, computed, onBeforeMount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
-import { spinnerLoadingPage } from '../stores/ui.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import { seiteLaedt } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
 import KiHinweis from '../components/quellen/KiHinweis.vue'
@@ -133,9 +133,9 @@ async function laden() {
 }
 
 onBeforeMount(async () => {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     await laden()
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
 })
 
 function strategieGewechselt() {
@@ -400,8 +400,8 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || 'â
 </script>
 
 <template>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="seite">
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="seite">
         <div class="seiteInnen">
             <h5 class="seitenTitel">{{ t('strategies.labTitle') }}</h5>
             <Hinweis v-if="fehler" art="fehler" class="abstandUnten3">{{ fehler }}</Hinweis>

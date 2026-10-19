@@ -5,8 +5,8 @@
  * ausschliesslich `splitFunding` (src/utils/funding.js). Erhaltenes Funding
  * wird als negativer Balken auf eigenem Stapel gezeigt — es mindert die Kosten.
  */
-import { filteredTradesTrades } from '../../../stores/trades.js'
-import { useTwoDecCurrencyFormat } from '../../formatters.js'
+import { gefilterteTradesFlach } from '../../../stores/trades.js'
+import { useTwoDecCurrencyFormat } from '../format.js'
 import { splitFunding } from '../../funding.js'
 import { festkomma, element, instanzFuer, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
@@ -47,8 +47,8 @@ function sammleGebuehren(trades) {
 
 export function useFeesChart(id) {
     const knoten = element(id)
-    if (!knoten || !filteredTradesTrades.length) return Promise.resolve()
-    const { zeilen, mitFunding, mitErhalt } = sammleGebuehren(filteredTradesTrades)
+    if (!knoten || !gefilterteTradesFlach.length) return Promise.resolve()
+    const { zeilen, mitFunding, mitErhalt } = sammleGebuehren(gefilterteTradesFlach)
     const p = palette()
     const ende = { show: true, position: 'right', color: p.muted, fontSize: 10 }
 

@@ -1791,11 +1791,11 @@ export class HeatmapRenderer {
         // dorthin zu klemmen zeigte die Werte der ältesten Spalte — also Zahlen,
         // die zu einem ganz anderen Zeitpunkt gehören.
         const colFromRight = imFeld ? 0 : achse.jung[px]
-        const hasData = colFromRight >= 0
-        const col = hasData ? ring.colFrom(head, colFromRight) : -1
+        const journalHatDaten = colFromRight >= 0
+        const col = journalHatDaten ? ring.colFrom(head, colFromRight) : -1
         let qty = 0
-        if (hasData) for (let yy = y0; yy < y1; yy++) qty += ring.valueAt(col, view.hi - 1 - yy)
-        const mid = hasData ? (ring.mid[col] || 0) : 0
+        if (journalHatDaten) for (let yy = y0; yy < y1; yy++) qty += ring.valueAt(col, view.hi - 1 - yy)
+        const mid = journalHatDaten ? (ring.mid[col] || 0) : 0
         const decimals = decimalsFor(bucketSize)
 
         ctx.setLineDash([3, 3])
@@ -1807,7 +1807,7 @@ export class HeatmapRenderer {
         ctx.stroke()
         ctx.setLineDash([])
 
-        const lines = hasData
+        const lines = journalHatDaten
             ? [
                 price.toFixed(decimals),
                 `${this.labels.liquidity} ${qty ? formatQty(qty) : '—'}`,

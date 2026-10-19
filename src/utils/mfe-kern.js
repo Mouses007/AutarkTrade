@@ -2,7 +2,7 @@
  * MFE in R — die reine Rechnung, ohne Vue und ohne Netz.
  *
  * Herausgelöst wie `totals-kern.js`, und aus demselben Grund: die Rechnung
- * sass in `useCalculateProfitAnalysis` zwischen Stores und Axios-Aufrufen und
+ * sass in `berechneGewinnAnalyse` zwischen Stores und Axios-Aufrufen und
  * war damit von keinem Selbsttest erreichbar. Sie trägt die
  * Take-Profit-Empfehlung des Journals — die Kennzahl, die monatelang konstant
  * 20,00 anzeigte, weil ein Stückwert durch einen Tradebetrag geteilt wurde.

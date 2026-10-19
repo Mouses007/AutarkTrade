@@ -47,48 +47,48 @@ ist nur ein Sammel-Re-Export aus `src/stores/globals.js`.
 
 | Name | Herkunft | Bedeutung |
 |---|---|---|
-| `pageId` | `stores/ui.js` | Name der aktuellen Route; wird von `usePageId()` gesetzt. Von vielen Journal-Dateien gelesen (SidebarFilters, Calendar, screenshots.js, mountOrchestration.js …). |
-| `screenType` | `stores/ui.js` | `'computer'` ab 992 px Fensterbreite, sonst `'mobile'`; gesetzt von `useScreenType()` (einmalig beim Layout-Mount, kein Resize-Listener). |
-| `sideMenuMobileOut` | `stores/ui.js` | true, solange das Handy-Menü ausgefahren ist. |
+| `pageId` | `stores/ui.js` | Name der aktuellen Route; wird von `setzeSeitenId()` gesetzt. Von vielen Journal-Dateien gelesen (SidebarFilters, Calendar, screenshots.js, mountOrchestration.js …). |
+| `screenType` | `stores/ui.js` | `'computer'` ab 992 px Fensterbreite, sonst `'mobile'`; gesetzt von `leseBildschirmTyp()` (einmalig beim Layout-Mount, kein Resize-Listener). |
+| `seitenmenueMobilOffen` | `stores/ui.js` | true, solange das Handy-Menü ausgefahren ist. |
 | `sideMenuEingeklappt`, `schalteSideMenu()` | `stores/globals.js` | Desktop-Menü eingeklappt (nur Symbole). Liegt im localStorage-Schlüssel `sideMenuEingeklappt` (`'1'`/`'0'`) — Vorliebe des Bildschirms, muss vor dem Laden der Einstellungen feststehen, sonst springt das Layout beim Öffnen auf und zu. |
 | `appMode` | `stores/ui.js` | Aktueller Modus (`journal`, `start`, `live`, `research`, `agent`, `lernen`). Gedächtnis im localStorage-Schlüssel `appMode`. Die Route ist die Wahrheit, dieser Ref nur das Gedächtnis. Hinweis: die Liste `APP_MODES` in globals.js kennt `lernen` nicht — ein gespeichertes `lernen` fällt beim Neuladen auf `journal`, bis der Router-Hook den Modus aus der Route setzt. |
 | `privacyMode` | `stores/ui.js` | Zensur-Modus, localStorage-Schlüssel `privacyMode` (`'1'`/`'0'`). |
 | `currentUser` | `stores/settings.js` | Die Einstellungszeile (kein Benutzerobjekt). `null`/`undefined` solange nicht geladen. |
-| `renderProfile` | `stores/settings.js` | importiert von Nav, aber unbenutzt. |
+| `profilZaehler` | `stores/settings.js` | importiert von Nav, aber unbenutzt. |
 | `selectedBroker`, `brokers`, `selectedTradeCategory`, `BOT_BROKERS` | `stores/filters.js` | Börse (localStorage `selectedBroker`), Börsenliste (bitunix, bitget, pionex), Kategorie `futures`/`bot` (localStorage `selectedTradeCategory`), Börsen mit Bot-API (nur `pionex`). |
-| `selectedDateRange`, `selectedPeriodRange`, `selectedGrossNet`, `selectedPositions`, `selectedMonth` | `stores/filters.js` | Journal-Filter (für Titel-Zusammenfassung und Export). |
-| `filteredTradesTrades` | `stores/trades.js` | gefilterte Trades (Export). |
-| `screenshots`, `selectedScreenshot`, `screenshot` | `stores/trades.js` | Vollbild-Screenshot-Popup. |
+| `selectedDateRange`, `selectedPeriodRange`, `gewaehltBruttoNetto`, `selectedPositions`, `gewaehlterMonat` | `stores/filters.js` | Journal-Filter (für Titel-Zusammenfassung und Export). |
+| `gefilterteTradesFlach` | `stores/trades.js` | gefilterte Trades (Export). |
+| `screenshots`, `gewaehltesBild`, `screenshot` | `stores/trades.js` | Vollbild-Screenshot-Popup. |
 | `selectedScreenshotIndex` | `stores/ui.js` | Index im Screenshot-Karussell. |
-| `getMore` | `stores/filters.js` | lädt gerade weitere Screenshots. |
+| `holtWeitere` | `stores/filters.js` | lädt gerade weitere Screenshots. |
 | `aiReportGenerating`, `aiReportCountBefore`, `aiReportLabel` | `stores/settings.js` | KI-Bericht läuft / Anzahl Berichte vor dem Start / Bezeichnung des Zeitraums. |
 | `testbetrieb`, `ladeSystemModus()` | `stores/system.js` | Testbetrieb-Flag aus `GET /api/system/modus`, einmal geladen. |
 | `hydrateLiveSettings()` | `stores/live.js` | übernimmt Live-Analyse-Einstellungen aus den Settings. |
 
 Hilfsfunktionen (`src/utils/utils.js`, sofern nicht anders genannt):
-`usePageId()`, `useScreenType()`, `useInitParse()` (= `useInitApp()`: lädt
+`setzeSeitenId()`, `leseBildschirmTyp()`, `useInitParse()` (= `useInitApp()`: lädt
 Einstellungen nach `currentUser`, spiegelt `startseiteAn` nach localStorage,
-füllt die Trade-Zeitrahmen), `useGetTimeZone()`, `useGetPeriods()`,
-`useSetValues()`, `useToggleMobileMenu()`, `useCloseMobileMenu()`,
+füllt die Trade-Zeitrahmen), `leseZeitzone()`, `ladeZeitraeume()`,
+`setzeFilterwerte()`, `schalteMobilMenue()`, `useCloseMobileMenu()`,
 `useInitTooltip()`, `useExport(format, start, ende, trades)`;
 `useDateCalFormat` (`utils/formatters.js`); `useSelectedScreenshotFunction`
 (`utils/screenshots`); `useUpdatePendingCounts`, `useStartGlobalPolling`,
-`useStopGlobalPolling` (`utils/incoming.js`); `useGetAvailableTags`
+`useStopGlobalPolling` (`utils/incoming.js`); `ladeVerfuegbareTags`
 (`utils/daily.js`); `requestNotificationPermission`, `sendNotification`
 (`utils/notify`); `logWarn` (`utils/logger.js`); `ebeneAuf`, `ebeneZu`
 (`composables/useZurueckGeste.js`); `useImVollbild`, `useIstTelefon`
 (`utils/geraet.js`); `starteZensur` (`utils/privacy.js`); `setLocale` und
 die i18n-Instanz (`src/i18n`).
 
-**Wichtige DOM-Kopplung:** `useToggleMobileMenu()` und `useCloseMobileMenu()`
+**Wichtige DOM-Kopplung:** `schalteMobilMenue()` und `useCloseMobileMenu()`
 suchen das Element mit der **ID `sideMenu`** und schalten daran die Klasse
 **`toggleSideMenu`** (diese Klasse schiebt das Handy-Menü ins Bild), und sie
-setzen zusätzlich `sideMenuMobileOut`. Der Neubau muss entweder die ID und die
+setzen zusätzlich `seitenmenueMobilOffen`. Der Neubau muss entweder die ID und die
 Klasse beibehalten oder die beiden Funktionen (sie liegen ausserhalb dieser
 vier Dateien) auf rein reaktiven Zustand umstellen. Empfehlung: das Layout
-leitet den Offen-Zustand aus `sideMenuMobileOut` ab und behält die ID
+leitet den Offen-Zustand aus `seitenmenueMobilOffen` ab und behält die ID
 `sideMenu` trotzdem, damit die alten Funktionen nicht ins Leere greifen.
-`useToggleMobileMenu()` wirft heute, wenn kein `#sideMenu` existiert.
+`schalteMobilMenue()` wirft heute, wenn kein `#sideMenu` existiert.
 
 ### 0.3 Seiten- und Modus-Registry `src/config/menu.js`
 
@@ -501,17 +501,17 @@ sondern in der Kopfleiste.
   mit „ · " verbunden, leere ausgelassen:
   1. Zeitraum: auf `dashboard`/`auswertung` die Beschriftung des gewählten
      Zeitraums (`selectedPeriodRange.label`); auf `daily`/`calendar` der
-     gewählte Monat (`selectedMonth.start` als Unix-Sekunden) als „Monat
+     gewählte Monat (`gewaehlterMonat.start` als Unix-Sekunden) als „Monat
      (kurz) Jahr" über das projekteigene dayjs.
   2. Brutto/Netto: `options.gross` bzw. `options.net` je nach
-     `selectedGrossNet`.
+     `gewaehltBruttoNetto`.
   3. Position: nur wenn genau eine Seite gewählt ist → „Long" bzw. „Short"
      (fest).
 - **Desktop** (`screenType` ≠ `mobile`): Titel als Überschrift erster Ordnung
   (Klasse `seitentitel`), Zusammenfassung daneben.
 - **Telefon**: Titel und Zusammenfassung sitzen in einem antippbaren Element
   (Klasse `mobile-menu-toggle`) mit Menü-Symbol (`Symbol name="menue"`)
-  davor; Antippen ruft `useToggleMobileMenu()`. Die Zusammenfassung bricht auf
+  davor; Antippen ruft `schalteMobilMenue()`. Die Zusammenfassung bricht auf
   eine eigene Zeile um.
 
 ### 3.2 Rechte Seite: Knöpfe (rechtsbündig, kleiner Abstand)
@@ -531,7 +531,7 @@ sondern in der Kopfleiste.
 3. **Export** — nur auf `pageId === 'dashboard'`. Ausklappmenü
    „Export" mit den Einträgen „JSON" und „CSV" (fest). Auswahl ruft
    `useExport(<format>, useDateCalFormat(selectedDateRange.start),
-   useDateCalFormat(selectedDateRange.end), filteredTradesTrades)`.
+   useDateCalFormat(selectedDateRange.end), gefilterteTradesFlach)`.
    Heute ein Bootstrap-Dropdown (`data-bs-toggle="dropdown"`).
 
 Beide Symbolknöpfe (1, 2) teilen sich eine Optik (Klasse `privacy-toggle`):
@@ -587,7 +587,7 @@ Wird als `meta.layout` gesetzt und umhüllt jede Seite (Slot). Keine Props.
 
 ### 4.2 Aufbau (von oben)
 
-1. `ReturnToTopButton` (immer; erscheint selbst erst nach Scrollen).
+1. `NachObenKnopf` (immer; erscheint selbst erst nach Scrollen).
 2. `Kopfleiste` — nur wenn nicht `chromeAus`.
 3. `TestbetriebBanner` (immer eingebunden; zeigt sich nur im Testbetrieb —
    also auch im Cockpit/Vollbild).
@@ -604,8 +604,8 @@ Wird als `meta.layout` gesetzt und umhüllt jede Seite (Slot). Keine Props.
      `chromeAus` oder `ohneSeitenmenue`; neben eingeklapptem Desktop-Menü der
      ganze Rest (Klasse `inhaltNebenSchmal`); sonst volle Breite am Telefon und
      10/12 ab „large". Darin:
-     - **Abdunkelung** (Klasse `sideMenuMobileOut`), sichtbar solange
-       `sideMenuMobileOut` true; Antippen ruft `useCloseMobileMenu()`
+     - **Abdunkelung** (Klasse `seitenmenueMobilOffen`), sichtbar solange
+       `seitenmenueMobilOffen` true; Antippen ruft `useCloseMobileMenu()`
        (Tippen neben das ausgefahrene Menü schliesst es).
      - `Nav` — nur wenn weder `chromeAus` noch `ohneSeitenmenue`.
      - `<main>` (Referenz für die Zensur): bei `isAgent` zuerst ein Block mit
@@ -623,12 +623,12 @@ Wird als `meta.layout` gesetzt und umhüllt jede Seite (Slot). Keine Props.
    `data-bs-target="#fullScreenModal"` darauf und setzen vorher über
    `useSelectedScreenshotFunction(index, quelle, daten)` die Auswahl.
    Inhalt: `Screenshot` (Props `index = selectedScreenshotIndex`,
-   `source = "fullScreen"`, `screenshot-data = selectedScreenshot`), nur
-   wenn `selectedScreenshot` nicht leer ist. Fuss: links „zurück" (nur wenn
+   `source = "fullScreen"`, `screenshot-data = gewaehltesBild`), nur
+   wenn `gewaehltesBild` nicht leer ist. Fuss: links „zurück" (nur wenn
    Index − 1 ≥ 0) ruft `useSelectedScreenshotFunction(index − 1,
    'fullScreen')`; rechts „weiter" (nur wenn Index + 1 > 0 und
    `screenshots[index + 1]` existiert) ruft dasselbe mit index + 1, ist
-   während `getMore` gesperrt und zeigt dann einen Spinner. Pfeile heute als
+   während `holtWeitere` gesperrt und zeigt dann einen Spinner. Pfeile heute als
    Font-Awesome-Chevrons.
    **Konflikt für S9:** wird Bootstrap entfernt, müssen Screenshot.vue und
    Daily.vue mitgezogen werden (oder das Modal bleibt bis dahin
@@ -638,18 +638,18 @@ Wird als `meta.layout` gesetzt und umhüllt jede Seite (Slot). Keine Props.
 
 ### 4.3 Initialisierung vor dem Mount (in dieser Reihenfolge)
 
-1. `usePageId()` — `pageId` = aktueller Routenname.
+1. `setzeSeitenId()` — `pageId` = aktueller Routenname.
 2. `ladeSystemModus()` — Testbetrieb-Flag, ohne zu warten.
 3. `useInitParse()` abwarten — Einstellungen laden (`currentUser`).
 4. Sprache aus den Einstellungen übernehmen: `setLocale(currentUser.language
    || 'de')` abwarten (nur Deutsch liegt im Start-Bundle, andere Sprachen
    werden nachgeladen).
-5. `useGetTimeZone()`, `useScreenType()`.
+5. `leseZeitzone()`, `leseBildschirmTyp()`.
 6. `hydrateLiveSettings()` — auch im Journal, weil die Einstellungsseite die
    Live-Werte zeigt.
 7. **Ab hier nur bei isJournal:**
-   - `useGetPeriods()` und `useSetValues()` abwarten.
-   - `useGetAvailableTags()` abwarten (für das Bewertungs-Popup).
+   - `ladeZeitraeume()` und `setzeFilterwerte()` abwarten.
+   - `ladeVerfuegbareTags()` abwarten (für das Bewertungs-Popup).
    - Ist `currentUser.browserNotifications` nicht `0`:
      `requestNotificationPermission()`.
    - Ist `currentUser.showTradePopups` nicht `0`: `useUpdatePendingCounts()`
@@ -692,13 +692,13 @@ Hinweis: `meta.mode === 'uebersicht'` (`/start`) wird hier als Modus geprüft;
 ### 4.6 Zeiträume bei Rückkehr auffrischen
 
 Bei `visibilitychange` (nur wenn sichtbar) und bei Fenster-`focus`: nur bei
-isJournal `useGetPeriods()` + `useSetValues()` neu ausführen, damit ein
+isJournal `ladeZeitraeume()` + `setzeFilterwerte()` neu ausführen, damit ein
 Monatswechsel, während der Tab verborgen war, erkannt wird. Fehler nur als
 Warnung loggen. Listener beim Unmount entfernen.
 
 ### 4.7 Zurück-Geste und Handy-Menü
 
-Wird `sideMenuMobileOut` true → `ebeneAuf(useCloseMobileMenu)`; wird es
+Wird `seitenmenueMobilOffen` true → `ebeneAuf(useCloseMobileMenu)`; wird es
 false → `ebeneZu(useCloseMobileMenu)`. Damit schliesst die Zurück-Geste
 (Android-Knopf, Wischen vom Rand) das ausgefahrene Menü, statt die Seite zu
 verlassen. Am Desktop fährt das Menü nie aus, die Logik läuft dort nie an.
@@ -743,7 +743,7 @@ abgeräumt — der Neubau sollte es mit aufräumen.)
 | `sideMenu` | ID **und** Klasse | ID: `utils.js` (Toggle/Close Handy-Menü). Klasse: style-dark.css, rahmen.css (Menüspalte Desktop: Panel-Fläche, rechte Linie, klebt unter der Kopfleiste, scrollt in sich) |
 | `toggleSideMenu` | Klasse | gesetzt von `utils.js`, Optik in style-dark.css (Handy-Menü eingefahren) |
 | `sideMenuMobile` | Klasse | style-dark.css, rahmen.css (fixes Panel links, über allem ausser Modals, Breite ~260 px, Schatten, volle dynamische Höhe, eingefahren durch negativen Rand mit Übergang) |
-| `sideMenuMobileOut` | Klasse (gleichnamig wie der Store) | style-dark.css (volle Fläche, halbtransparent schwarz, unter dem Menü) |
+| `seitenmenueMobilOffen` | Klasse (gleichnamig wie der Store) | style-dark.css (volle Fläche, halbtransparent schwarz, unter dem Menü) |
 | `sideMenuSchmal`, `menuSchmal`, `inhaltNebenSchmal`, `menuText` | Klassen | style-dark.css (eingeklappter Zustand, 2.5) |
 | `sideMenuDiv`, `sideMenuDivContent` | Klassen | style-dark.css, rahmen.css (Gruppenblock mit Unterlinie; Überschrift klein, fett, gesperrt, Grossbuchstaben, Farbe `--leise`; Links `--muted`, Hover `--panel-soft`/`--text`, Radius `--radius-knopf`) |
 | `activeNavCss` | Klasse | rahmen.css (aktiver Eintrag: Fläche `--accent-flaeche`, Text `--text`, Symbol `--accent`, Akzentstrich links) |
@@ -1002,7 +1002,7 @@ Abschnitt `info.agent` (`info.agent.title`, `.intro`, `.sections`).
 5. KI-Bericht-Polling wird beim Unmount nicht abgeräumt.
 6. Nav hält eine doppelte Seitenliste (Registry genügt) mit totem Eintrag
    `imports`; das berechnete Seitensymbol wird nie angezeigt.
-7. SideMenu enthält zwei ungenutzte Funktionen; `renderProfile` in Nav
+7. SideMenu enthält zwei ungenutzte Funktionen; `profilZaehler` in Nav
    ungenutzt; `ModeSwitcher.vue` nirgends eingebunden.
 8. Handy-Menü hängt per DOM-ID/Klasse an `utils.js`.
 9. Vollbild-Screenshot-Modal, Export-Dropdown und Tooltips hängen an

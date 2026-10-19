@@ -6,7 +6,7 @@
  *
  * Wozu: Der Journal-Kern (Import → Tageszeilen → Filter → Summen → Gruppen →
  * Gewinnanalyse → Diagramm-Daten → Kalender) hatte keinen einzigen Test, und
- * er wird neu geschrieben (LIZENZ-PLAN.md, Pakete A–E). Ein Neubau darf
+ * er wurde neu geschrieben (HERKUNFT.md, Anhang A). Ein Neubau darf
  * anders aussehen, aber er muss dieselben Zahlen liefern. Dieser Test friert
  * ein, was der HEUTIGE Code aus einem festen Datensatz macht, und meldet
  * jede Abweichung mit ihrem Pfad.
@@ -16,7 +16,7 @@
  * wer ihn beim Neubau behebt, schreibt den Stand bewusst neu und sagt im
  * Commit, welche Zahl sich warum geändert hat.
  *
- * Behoben 19.10.2026 (S7): `useGroupTrades` setzte die Tag-Gruppen
+ * Behoben 19.10.2026 (S7): `gruppiereTrades` setzte die Tag-Gruppen
  * (`groups.group_*`) zwischen zwei Läufen nicht zurück — im Szenario
  * „nurAgent" standen 36 bzw. 49 fremde Trades des Vorgängers in
  * group_1/group_2. Die Reihenfolge der Szenarien bleibt trotzdem fest, damit
@@ -59,7 +59,7 @@ globalThis.localStorage = {
 }
 
 // Diagramm-Elemente, wie sie Dashboard.vue anlegt. Sichtbar (clientWidth > 0),
-// sonst überspringt useECharts sie wie einen versteckten Bootstrap-Tab.
+// sonst überspringt zeichneDiagramme sie wie einen versteckten Bootstrap-Tab.
 const DIAGRAMM_IDS = [
     'pieChart1', 'pieChart2', 'pieChart3', 'perfChart1', 'feesChart1', 'symbolChart1', 'weekdayChart1',
     'entryTimeChart1', 'durationChart1', 'positionChart1', 'strategyChart1', 'lineBarChart1',
@@ -432,16 +432,16 @@ function dayjsUnix(iso, plusMonate = 0) {
 function stelleEin(e) {
     ui.pageId.value = e.seite || 'dashboard'
     ui.timeZoneTrade.value = e.zone || 'Europe/Zurich'
-    ui.hasData.value = false
-    filter.selectedRange.value = e.zeitraum || { start: 0, end: 0 }
+    ui.journalHatDaten.value = false
+    filter.gewaehlterBereich.value = e.zeitraum || { start: 0, end: 0 }
     filter.selectedPositions.value = e.richtungen || ['long', 'short']
     filter.selectedAccounts.value = e.konten || []
-    filter.selectedTags.value = e.tags || ALLE_TAGS
+    filter.tagAuswahl.value = e.tags || ALLE_TAGS
     filter.selectedBroker.value = e.boerse ?? ''
     filter.selectedTradeCategory.value = e.kategorie || 'all'
-    filter.amountCase.value = 'net'
+    filter.betragArt.value = 'net'
     st.timeFrame.value = e.zeitrahmen || 15
-    ui.barChartNegativeTagGroups.value = []
+    ui.negativeTagGruppen.value = []
 }
 
 /**
@@ -469,34 +469,34 @@ function kompakt(x, basis = rohTrades) {
 
 async function dashboard(e) {
     stelleEin(e)
-    await Promise.all([tage.useGetExcursions(), tage.useGetSatisfactions(), tage.useGetTags()])
-    await tage.useGetAvailableTags()
-    await kern.useGetFilteredTrades()
-    await kern.useTotalTrades()
-    await kern.useGroupTrades()
-    await kern.useCalculateProfitAnalysis()
-    for (const g of st.availableTags) {
-        if (Object.keys(st.groups).includes(g.id)) ui.barChartNegativeTagGroups.value.push({ id: g.id, name: g.name })
+    await Promise.all([tage.ladeExkursionen(), tage.ladeZufriedenheit(), tage.ladeTags()])
+    await tage.ladeVerfuegbareTags()
+    await kern.filtereTrades()
+    await kern.summiereTrades()
+    await kern.gruppiereTrades()
+    await kern.berechneGewinnAnalyse()
+    for (const g of st.verfuegbareTags) {
+        if (Object.keys(st.groups).includes(g.id)) ui.negativeTagGruppen.value.push({ id: g.id, name: g.name })
     }
     const diagramme = {}
     for (const art of ['net', 'gross']) {
-        filter.amountCase.value = art
+        filter.betragArt.value = art
         globalThis.__journalCharts = {}
-        await charts.useECharts('init')
+        await charts.zeichneDiagramme('init')
         for (const id of ['barChartNegative1', 'barChartNegative2', 'barChartNegative3', 'barChartNegative4', 'barChartNegative7',
             'barChartNegative13', 'barChartNegative16', 'barChartNegative17', 'barChartNegative18']) charts.useBarChartNegative(id)
         diagramme[art] = Object.fromEntries(Object.entries(globalThis.__journalCharts).sort().map(([id, o]) => [id, diagrammDaten(o)]))
     }
     // Gruppen vergleichen gegen den GEFILTERTEN Trade: so bleibt dort nur,
     // was das Gruppieren selbst hinzufügt (tagName, tagGroupName …).
-    const gefiltert = new Map(sauber(st.filteredTradesTrades).map(t => [t.id, t]))
+    const gefiltert = new Map(sauber(st.gefilterteTradesFlach).map(t => [t.id, t]))
     return {
         ...kompakt(sauber({
-            hasData: ui.hasData.value,
-            filteredTrades: st.filteredTrades,
+            journalHatDaten: ui.journalHatDaten.value,
+            journalTage: st.journalTage,
             totals: st.totals,
-            totalsByDate: st.totalsByDate,
-            profitAnalysis: st.profitAnalysis,
+            summenJeTag: st.summenJeTag,
+            gewinnAnalyse: st.gewinnAnalyse,
             diagramme,
         })),
         groups: kompakt(sauber(st.groups), gefiltert),
@@ -519,14 +519,14 @@ for (const [name, e] of Object.entries(SZENARIEN)) ergebnis.dashboard[name] = aw
 
 // --- 4. Tagesansicht ---------------------------------------------------------
 stelleEin({ seite: 'daily', zeitraum: monat('2026-02') })
-await Promise.all([tage.useGetExcursions(), tage.useGetSatisfactions(), tage.useGetTags(), tage.useGetAvailableTags()])
-await kern.useGetFilteredTrades()
+await Promise.all([tage.ladeExkursionen(), tage.ladeZufriedenheit(), tage.ladeTags(), tage.ladeVerfuegbareTags()])
+await kern.filtereTrades()
 globalThis.__journalCharts = {}
-filter.amountCase.value = 'net'
-charts.useRenderDoubleLineChart()
-charts.useRenderPieChart()
+filter.betragArt.value = 'net'
+charts.zeichneDoppellinie()
+charts.zeichneTorte()
 ergebnis.tagesansicht = kompakt(sauber({
-    filteredTrades: st.filteredTrades,
+    journalTage: st.journalTage,
     diagramme: Object.fromEntries(Object.entries(globalThis.__journalCharts).sort().map(([id, o]) => [id, diagrammDaten(o)])),
 }))
 
@@ -535,12 +535,12 @@ ergebnis.kalender = {}
 for (const [name, iso, zone] of [['maerz', '2026-03', 'Europe/Zurich'], ['oktober', '2025-10', 'Europe/Zurich'], ['maerzUSA', '2026-03', 'America/New_York']]) {
     const m = monat(iso)
     stelleEin({ seite: 'calendar', zone })
-    filter.selectedMonth.value = m
-    filter.selectedRange.value = { start: monat(`${iso.slice(0, 4)}-01`).start, end: m.end }
-    await Promise.all([tage.useGetTags(), tage.useGetAvailableTags()])
-    await kern.useGetFilteredTrades()
-    await kalender.useLoadCalendar()
-    ergebnis.kalender[name] = kompakt(sauber({ calendarData: st.calendarData, miniCalendarsData: st.miniCalendarsData }))
+    filter.gewaehlterMonat.value = m
+    filter.gewaehlterBereich.value = { start: monat(`${iso.slice(0, 4)}-01`).start, end: m.end }
+    await Promise.all([tage.ladeTags(), tage.ladeVerfuegbareTags()])
+    await kern.filtereTrades()
+    await kalender.ladeKalender()
+    ergebnis.kalender[name] = kompakt(sauber({ kalenderDaten: st.kalenderDaten, miniKalenderDaten: st.miniKalenderDaten }))
 }
 
 console.log = stilleLog
@@ -568,10 +568,10 @@ pruefe('Import hat Tageszeilen angelegt', ergebnis.import.tageszeilen.length > 5
         `${kennungen.length} Trades, ${new Set(kennungen).size} verschiedene`)
 }
 pruefe('Szenario „alles" hat Trades', ergebnis.dashboard.alles.totals.trades > 100, `totals.trades = ${ergebnis.dashboard.alles.totals.trades}`)
-pruefe('Agent-Trade fehlt in „alles"', !JSON.stringify(ergebnis.dashboard.alles.filteredTrades).includes('_a_1'))
-pruefe('Agent-Trade erscheint nur unter „agent"', JSON.stringify(ergebnis.dashboard.nurAgent.filteredTrades).includes('_a_1'))
+pruefe('Agent-Trade fehlt in „alles"', !JSON.stringify(ergebnis.dashboard.alles.journalTage).includes('_a_1'))
+pruefe('Agent-Trade erscheint nur unter „agent"', JSON.stringify(ergebnis.dashboard.nurAgent.journalTage).includes('_a_1'))
 pruefe('Diagramme wurden gezeichnet', Object.keys(ergebnis.dashboard.alles.diagramme.net).length >= 15, Object.keys(ergebnis.dashboard.alles.diagramme.net).join(', '))
-pruefe('Kalender hat Monatsdaten', Object.keys(ergebnis.kalender.maerz.calendarData).length > 0)
+pruefe('Kalender hat Monatsdaten', Object.keys(ergebnis.kalender.maerz.kalenderDaten).length > 0)
 
 if (SCHREIBEN) {
     mkdirSync(dirname(GOLDEN), { recursive: true })

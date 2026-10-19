@@ -3,7 +3,7 @@
  * Bot-Dashboard — dedizierte Übersicht für Grid-/Bot-Trades (aktuell Pionex).
  *
  * Wird in Dashboard.vue gerendert, wenn der ART-Filter auf "Bot" steht.
- * Konsumiert `filteredTradesTrades` (bereits auf Bots gefiltert via Kategorie-
+ * Konsumiert `gefilterteTradesFlach` (bereits auf Bots gefiltert via Kategorie-
  * Filter in trades.js) und berechnet bot-spezifische KPIs eigenständig —
  * unabhängig von der Futures-Totals-Pipeline.
  *
@@ -16,8 +16,8 @@
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 import axios from 'axios'
-import { filteredTradesTrades } from '../stores/trades.js'
-import { amountCase, selectedBroker } from '../stores/filters.js'
+import { gefilterteTradesFlach } from '../stores/trades.js'
+import { betragArt, selectedBroker } from '../stores/filters.js'
 import {
     useTwoDecCurrencyFormat, useThousandCurrencyFormat, useThousandFormat,
     useXDecFormat, useTwoDecFormat
@@ -97,13 +97,13 @@ const comingSoon = computed(() => {
 const comingSoonLabel = computed(() => BROKER_LABEL[selectedBroker.value] || selectedBroker.value)
 
 // ===== Datenbasis =====
-const allBots = computed(() => filteredTradesTrades.filter(t => t && t.botType))
+const allBots = computed(() => gefilterteTradesFlach.filter(t => t && t.botType))
 // USDT-margined Bots → $-Stats. Coin-M separat (Coin-Einheiten).
 const bots = computed(() => allBots.value.filter(t => !isCoinM(t)))
 const coinMBots = computed(() => allBots.value.filter(t => isCoinM(t)))
 
-// Netto vs. Brutto je nach amountCase-Filter (net/gross)
-const isNet = computed(() => amountCase.value !== 'gross')
+// Netto vs. Brutto je nach betragArt-Filter (net/gross)
+const isNet = computed(() => betragArt.value !== 'gross')
 function pl(t) {
     return isNet.value ? (t.netSharePL ?? 0) : (t.grossSharePL ?? 0)
 }
@@ -383,7 +383,7 @@ onBeforeUnmount(() => {
     if (pollTimer) clearInterval(pollTimer)
     cumChart?.dispose(); symbolChart?.dispose()
 })
-watch([allBots, amountCase], renderAll, { deep: false })
+watch([allBots, betragArt], renderAll, { deep: false })
 </script>
 
 <template>

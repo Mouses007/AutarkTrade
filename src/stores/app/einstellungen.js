@@ -3,7 +3,7 @@
  */
 import { ref, reactive } from 'vue'
 
-export const renderProfile = ref(0)
+export const profilZaehler = ref(0)
 export const apis = reactive([])
 export const layoutStyle = reactive([])
 

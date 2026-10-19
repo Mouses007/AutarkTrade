@@ -9,7 +9,7 @@
  */
 import * as echarts from 'echarts'
 import i18n from '../../../i18n/index.js'
-import { amountCase } from '../../../stores/filters.js'
+import { betragArt } from '../../../stores/filters.js'
 
 export { echarts }
 
@@ -78,7 +78,7 @@ export function sichereGroessenanpassung() {
 
 /** Aktueller Fall: 'net' oder 'gross' (roh aus dem Store). */
 export function fall() {
-    return amountCase.value
+    return betragArt.value
 }
 
 /** Auf n Nachkommastellen über die Festkomma-Darstellung, zurück als Zahl. */

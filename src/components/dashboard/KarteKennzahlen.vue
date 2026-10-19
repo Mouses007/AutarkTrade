@@ -1,11 +1,11 @@
 <script setup>
 /**
- * Karte „Kennzahlen" (Spezifikation B.5.2). F = `amountCase`.
+ * Karte „Kennzahlen" (Spezifikation B.5.2). F = `betragArt`.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { amountCase } from '../../stores/filters.js'
-import { totals, profitAnalysis } from '../../stores/trades.js'
+import { betragArt } from '../../stores/filters.js'
+import { totals, gewinnAnalyse } from '../../stores/trades.js'
 import { useThousandCurrencyFormat, useTwoDecCurrencyFormat, useThousandFormat } from '../../utils/journal/format.js'
 import InfoTipp from '@/components/InfoTipp.vue'
 import TitelKarte from './TitelKarte.vue'
@@ -17,8 +17,8 @@ const props = defineProps({
 })
 const { t } = useI18n()
 
-const F = computed(() => amountCase.value)
-const pa = (feld) => profitAnalysis[F.value + feld]
+const F = computed(() => betragArt.value)
+const pa = (feld) => gewinnAnalyse[F.value + feld]
 
 /** NaN, null und undefined zeigen „-" (null warf früher beim Formatieren). */
 const leer = (x) => x === null || x === undefined || Number.isNaN(Number(x))

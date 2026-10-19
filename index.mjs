@@ -68,8 +68,8 @@ const grosserBody = express.json({ limit: '50mb' })
 app.use((req, res, next) => (hatGueltigeSession(req) ? grosserBody : kleinerBody)(req, res, next))
 
 // Security-Header (ohne zusätzliche Dependency). CSP bleibt bewusst aus, da
-// CDN-Ressourcen + inline-Styles/Skripte genutzt werden; SRI sichert die CDNs ab.
-app.use((req, res, next) => {
+// inline-Styles/Skripte genutzt werden.
+app.use(function sicherheitsKoepfe(req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('X-Frame-Options', 'DENY')
     res.setHeader('Referrer-Policy', 'no-referrer')
@@ -95,15 +95,15 @@ app.use('/api', apiAuthMiddleware)
 
 const port = umgebung('PORT') || process.env.PORT || 8080;
 const host = umgebung('HOST') || '127.0.0.1'; // Default: nur lokal erreichbar
-const PROXY_PORT = 39482;
+const VITE_STANDARDPORT = 39482 // im Entwicklungsbetrieb, überschreibbar mit AT_VITE_PORT
 
 // Wird im Entwicklungsbetrieb gesetzt; der Server unten hängt die
 // WebSocket-Weiterleitung daran, sobald er lauscht.
 let viteProxy = null
 
-const startIndex = async () => {
+async function starteServer() {
     // Initialize database (Knex — SQLite or PostgreSQL)
-    console.log("\nINITIALIZING DATABASE")
+    console.log('[start] Datenbank')
     await initDb()
 
     // Notfall-Reset per AT_RESET_AUTH=1 (vor dem Laden), dann Auth-Konfig laden
@@ -146,7 +146,7 @@ const startIndex = async () => {
     }
 
     // Setup API routes
-    console.log("\nRUNNING SERVER")
+    console.log('[start] Routen')
     setupAuthRoutes(app);
     setupApiRoutes(app);
     setupBitunixRoutes(app);
@@ -266,7 +266,8 @@ const startIndex = async () => {
     // einer arbeitet, sichert die Führungssperre in der Datenbank.
     starteTakte([['Rangliste', startRanglisteTakt]]);
 
-    if (process.env.NODE_ENV == 'dev') {
+    const entwicklung = process.env.NODE_ENV === 'dev'
+    if (entwicklung) {
         // Vite ZUERST starten, dann den Proxy auf den Port richten, den es
         // wirklich bekommen hat.
         //
@@ -277,7 +278,7 @@ const startIndex = async () => {
         // Vite-Instanz aus, samt totem WebSocket und leerem Inhalt. Der Fehler
         // sieht wie ein kaputtes Frontend aus und ist keiner.
         const Vite = await import('vite')
-        const gewuenscht = Number(umgebung('VITE_PORT')) || PROXY_PORT
+        const gewuenscht = Number(umgebung('VITE_PORT')) || VITE_STANDARDPORT
         const vite = await Vite.createServer({ server: { port: gewuenscht } });
         await vite.listen();
         const vitePort = vite.httpServer?.address()?.port || gewuenscht
@@ -287,9 +288,7 @@ const startIndex = async () => {
         console.log(` -> Running vite dev server (Port ${vitePort})`);
 
         const { default: Proxy } = await import('http-proxy')
-        const proxy = new Proxy.createProxyServer({
-            target: { host: 'localhost', port: vitePort },
-        });
+        const proxy = Proxy.createProxyServer({ target: { host: 'localhost', port: vitePort } })
 
         // Inject session cookie into proxied responses (Vite dev server) —
         // außer wenn das Passwort-Gate aktiv ist (dann nur nach Login).
@@ -309,10 +308,10 @@ const startIndex = async () => {
             res.end('Vite dev server nicht erreichbar. Läuft "npm run dev"?')
         })
 
-        app.use((req, res, next) => {
-            if (req.url.startsWith('/api/')) return next();
-            proxy.web(req, res);
-        });
+        app.use(function zuVite(req, res, next) {
+            if (req.url.startsWith('/api/')) next()
+            else proxy.web(req, res)
+        })
 
         // Vites heisses Neuladen läuft über einen WebSocket. Ohne diese
         // Weiterleitung endet er am Express-Server, der Browser meldet
@@ -327,11 +326,11 @@ const startIndex = async () => {
         // Seitenaufruf (max-age=0 → eine 304-Runde je Datei). index.html
         // bleibt bewusst ohne Langzeit-Cache, sonst käme ein Deploy nie an.
         app.use('/assets', express.static('dist/assets', { maxAge: '1y', immutable: true }));
-        app.use(express.static('dist'));
-        app.get('*', (req, res) => {
-            res.sendFile(path.resolve('dist', 'index.html'));
-        });
-        console.log(" -> Running prod server");
+        const einstieg = path.resolve('dist', 'index.html')
+        app.use(express.static('dist'))
+        // Jede andere Adresse gehört dem Router im Browser.
+        app.get('*', (_req, res) => res.sendFile(einstieg))
+        console.log('[start] Oberfläche aus dist/')
     }
 
     // Central error handler — catches unhandled errors from async route handlers
@@ -345,7 +344,7 @@ const startIndex = async () => {
     })
 
     // Start listening
-    console.log("\nSTARTING NODEJS SERVER")
+    console.log('[start] Lauschen')
     await new Promise((resolve, reject) => {
         const server = app.listen(port, host, () => {
             console.log(` -> AutarkTrade started on http://${host}:${port}`)
@@ -440,7 +439,7 @@ const startIndex = async () => {
     console.log("\n AutarkTrade ready!")
 }
 
-startIndex().catch(err => {
+starteServer().catch(err => {
     console.error('\n STARTUP FAILED:', err.message || err)
     process.exit(1)
 })

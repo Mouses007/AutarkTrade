@@ -14,8 +14,8 @@
 import { ref, computed, onBeforeMount, nextTick } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
-import { spinnerLoadingPage } from '../stores/ui.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import { seiteLaedt } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import ZahlOderParam from '../components/ZahlOderParam.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
 import { logError } from '../utils/logger.js'
@@ -223,9 +223,9 @@ async function laden() {
 }
 
 onBeforeMount(async () => {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     await laden()
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
 })
 
 /** Alle Referenzen, die in einem Vergleich stehen dürfen. */
@@ -471,8 +471,8 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
 </script>
 
 <template>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="seite">
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="seite">
         <div class="seiteInnen">
 
             <div class="kopf">

@@ -1,11 +1,11 @@
 <script setup>
 /**
  * Karte mit genau einem ECharts-Diagramm. Die Element-ID ist Schnittstelle:
- * `useECharts` sucht die Knoten per ID-Präfix (Spezifikation B.13), und
+ * `zeichneDiagramme` sucht die Knoten per ID-Präfix (Spezifikation B.13), und
  * `useDisposeJournalCharts` sammelt sie über die Klasse `chartClass`. Der
- * Schlüssel `renderData` erzwingt bei jeder Erhöhung einen frischen Knoten.
+ * Schlüssel `zeichenZaehler` erzwingt bei jeder Erhöhung einen frischen Knoten.
  */
-import { renderData } from '../../stores/ui.js'
+import { zeichenZaehler } from '../../stores/ui.js'
 import TitelKarte from './TitelKarte.vue'
 
 defineProps({

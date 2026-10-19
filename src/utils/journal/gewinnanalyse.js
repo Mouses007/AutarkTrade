@@ -2,7 +2,7 @@
  * Gewinnanalyse: Durchschnitte je Trade, R-Verhältnis und die MFE-basierte
  * Take-Profit-Stufe, die den Erwartungswert über den heutigen hebt.
  */
-import { filteredTrades, totals, profitAnalysis } from '../../stores/journal/auswertung.js'
+import { journalTage, totals, gewinnAnalyse } from '../../stores/journal/auswertung.js'
 import { excursions } from '../../stores/journal/tagebuch.js'
 import { mfeR } from '../mfe-kern.js'
 import { ersetzeObjekt } from './hilfen.js'
@@ -30,10 +30,10 @@ function besteStufe(werte) {
 /** MFE-R je Exkursion, getrennt nach Brutto- und Netto-Durchschnittsverlust. */
 function mfeListen(avLossBrutto, avLossNetto) {
     const brutto = [], netto = []
-    if (filteredTrades.length === 0) return { brutto, netto }
+    if (journalTage.length === 0) return { brutto, netto }
     for (const exk of excursions) {
         // Bewusster Altfehler §7.2: nur die ERSTE Tageskopie dieses dateUnix wird durchsucht.
-        const tag = filteredTrades.find(d => d.dateUnix == exk.dateUnix)
+        const tag = journalTage.find(d => d.dateUnix == exk.dateUnix)
         const trade = tag?.trades.find(t => t.id == exk.tradeId)
         if (!trade) continue
         const rb = mfeR(trade, exk.mfePrice, avLossBrutto)
@@ -44,8 +44,8 @@ function mfeListen(avLossBrutto, avLossNetto) {
     return { brutto, netto }
 }
 
-export async function useCalculateProfitAnalysis(_param) {
-    ersetzeObjekt(profitAnalysis)
+export async function berechneGewinnAnalyse(_param) {
+    ersetzeObjekt(gewinnAnalyse)
     if (Object.keys(totals).length === 0) return
 
     const grossAvWinPerShare = geteilt(totals.grossSharePLWins, totals.grossWinsCount)
@@ -61,7 +61,7 @@ export async function useCalculateProfitAnalysis(_param) {
         return werte.length >= MIN_MESSUNGEN && beste.e > heute ? beste.stufe : null
     }
 
-    Object.assign(profitAnalysis, {
+    Object.assign(gewinnAnalyse, {
         grossAvWinPerShare,
         netAvWinPerShare,
         grossAvLossPerShare,

@@ -7,9 +7,9 @@
 import { computed, ref, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { currentUser } from '../../stores/settings.js'
-import { selectedBroker, amountCase } from '../../stores/filters.js'
-import { renderData, timeZoneTrade } from '../../stores/ui.js'
-import { satisfactionArray, satisfactionTradeArray, profitAnalysis, filteredTradesTrades } from '../../stores/trades.js'
+import { selectedBroker, betragArt } from '../../stores/filters.js'
+import { zeichenZaehler, timeZoneTrade } from '../../stores/ui.js'
+import { zufriedenheitTage, zufriedenheitTrades, gewinnAnalyse, gefilterteTradesFlach } from '../../stores/trades.js'
 import { incomingPositions } from '../../stores/journal/offenePositionen.js'
 import { allTimeNetPnL, allTimeVolume, last30dVolume, displayBonus, syncStartBalanceFromBroker } from '../../stores/accountBalance.js'
 import { useTwoDecCurrencyFormat, useThousandCurrencyFormat } from '../../utils/journal/format.js'
@@ -29,17 +29,17 @@ const stand = computed(() => kontostand({
 }))
 
 /*
- * Die Bedingungen der Ringe 2 und 3 sind dieselben wie in `useECharts`
+ * Die Bedingungen der Ringe 2 und 3 sind dieselben wie in `zeichneDiagramme`
  * (verteiler.js) — weichen sie ab, steht ein leerer Ring da.
  */
-const mitZufriedenheit = computed(() => satisfactionArray.length > 0 || satisfactionTradeArray.length > 0)
+const mitZufriedenheit = computed(() => zufriedenheitTage.length > 0 || zufriedenheitTrades.length > 0)
 const mitRrr = computed(() => {
-    const r = profitAnalysis[`${amountCase.value}R`]
+    const r = gewinnAnalyse[`${betragArt.value}R`]
     return !!r && !Number.isNaN(r) && r > 0
 })
 const ringe = computed(() => 1 + (mitZufriedenheit.value ? 1 : 0) + (mitRrr.value ? 1 : 0))
 
-const heute = computed(() => heuteZaehler(filteredTradesTrades, timeZoneTrade.value))
+const heute = computed(() => heuteZaehler(gefilterteTradesFlach, timeZoneTrade.value))
 
 const vorzeichen = (x) => (x >= 0 ? '+' : '')
 
@@ -112,9 +112,9 @@ onBeforeUnmount(() => clearTimeout(syncTimer))
         </table>
 
         <div class="kb-ringe" :class="'n' + ringe">
-            <div id="pieChart1" :key="'r1-' + renderData" class="chartIdCardClass kb-ring"></div>
-            <div v-if="mitZufriedenheit" id="pieChart2" :key="'r2-' + renderData" class="chartIdCardClass kb-ring"></div>
-            <div v-if="mitRrr" id="pieChart3" :key="'r3-' + renderData" class="chartIdCardClass kb-ring"></div>
+            <div id="pieChart1" :key="'r1-' + zeichenZaehler" class="chartIdCardClass kb-ring"></div>
+            <div v-if="mitZufriedenheit" id="pieChart2" :key="'r2-' + zeichenZaehler" class="chartIdCardClass kb-ring"></div>
+            <div v-if="mitRrr" id="pieChart3" :key="'r3-' + zeichenZaehler" class="chartIdCardClass kb-ring"></div>
         </div>
 
         <div v-if="heute.anzahl > 0" class="kb-heute">

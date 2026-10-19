@@ -4,8 +4,8 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import dayjs from '../utils/journal/zeit.js'
 import { brokers } from '../stores/filters.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
-import { spinnerLoadingPage } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
+import { seiteLaedt } from '../stores/ui.js'
 import { Karte, Knopf, Kreisel, Hinweis, Symbol } from '../components/basis/index.js'
 
 const { t } = useI18n()
@@ -32,7 +32,7 @@ function pct(c) { return totalEquity.value > 0 ? (c.data.totalUsd / totalEquity.
 function fieldLabel(k) { return FIELD_LABELS[k] || k }
 
 async function load() {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     // Konfigurierte Börsen ermitteln (API hinterlegt) — analog Nav.vue
     const configured = []
     for (const b of brokers) {
@@ -42,7 +42,7 @@ async function load() {
         } catch (_) { /* keine Config → überspringen */ }
     }
     cards.value = configured.map(b => ({ broker: b.value, label: b.label, color: colorOf(b.value), loading: true, error: null, data: null }))
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
 
     await Promise.all(cards.value.map(async (card) => {
         try {
@@ -62,9 +62,9 @@ onMounted(load)
 
 <template>
     <div class="acc-seite">
-        <SpinnerLoadingPage />
+        <SeiteLaedt />
 
-        <div v-show="!spinnerLoadingPage">
+        <div v-show="!seiteLaedt">
             <!-- Gesamt-Equity + Allokationsbalken -->
             <Karte class="acc-summary at-mu-3">
                 <div class="at-flex at-verteilt at-unten at-umbruch at-luecke-2">

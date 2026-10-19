@@ -6,8 +6,8 @@
  * — umgestellt wird hier an genau einer Stelle (`zuEcharts`), damit steigende
  * Kerzen auch als steigend gefärbt sind (Spec 6.1).
  */
-import dayjs from '../../dayjs-setup.js'
-import { timeZoneTrade, dailyChartZoom } from '../../../stores/ui.js'
+import dayjs from '../zeit.js'
+import { timeZoneTrade, tagesChartZoom } from '../../../stores/ui.js'
 import { element, instanzFuer, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 
@@ -34,8 +34,8 @@ function istEntsorgt(inst) {
 function ausschnitt(trade, zone) {
     const ein = dayjs.unix(trade.entryTime).tz(zone)
     const aus = dayjs.unix(trade.exitTime).tz(zone)
-    if (dailyChartZoom.value === 1) return [ein.startOf('minute'), aus.endOf('minute')]
-    if (dailyChartZoom.value === 2) {
+    if (tagesChartZoom.value === 1) return [ein.startOf('minute'), aus.endOf('minute')]
+    if (tagesChartZoom.value === 2) {
         // Mitte zwischen Tagesbeginn und Einstieg bzw. Ausstieg und Tagesende
         const von = ein.subtract(Math.floor((trade.entryTime - ein.startOf('day').unix()) / 2), 'second')
         const bis = aus.add(Math.floor((aus.endOf('day').unix() - trade.exitTime) / 2), 'second')

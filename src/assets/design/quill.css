@@ -11,24 +11,15 @@
 li[data-list="bullet"] { list-style-type: disc; }
 .ql-editor li[data-list="bullet"] { list-style-type: none; }
 
-/* Werkzeugleiste: aktiv und unter dem Zeiger in Akzent. */
-.ql-snow .ql-toolbar button:hover,
-.ql-snow .ql-toolbar button.ql-active,
-.ql-snow .ql-picker-label:hover,
+/* Werkzeugleiste: aktiv und unter dem Zeiger in Akzent. Quill setzt die
+   Leiste je nach Version in .ql-snow oder als .ql-snow.ql-toolbar. */
+:is(.ql-snow .ql-toolbar, .ql-toolbar.ql-snow) button:is(:hover, .ql-active),
+.ql-snow :is(.ql-picker-label, .ql-picker-item):hover,
 .ql-snow .ql-picker-label.ql-active,
-.ql-snow .ql-picker-item:hover,
-.ql-snow .ql-picker-item.ql-selected,
-.ql-snow.ql-toolbar button:hover,
-.ql-snow.ql-toolbar button.ql-active { color: var(--accent) !important; }
-.ql-snow .ql-toolbar button:hover .ql-stroke,
-.ql-snow .ql-toolbar button.ql-active .ql-stroke,
-.ql-snow.ql-toolbar button:hover .ql-stroke,
-.ql-snow.ql-toolbar button.ql-active .ql-stroke,
+.ql-snow .ql-picker-item.ql-selected { color: var(--accent) !important; }
+:is(.ql-snow .ql-toolbar, .ql-toolbar.ql-snow) button:is(:hover, .ql-active) .ql-stroke,
 .ql-snow .ql-picker-label:hover .ql-stroke { stroke: var(--accent) !important; }
-.ql-snow .ql-toolbar button:hover .ql-fill,
-.ql-snow .ql-toolbar button.ql-active .ql-fill,
-.ql-snow.ql-toolbar button:hover .ql-fill,
-.ql-snow.ql-toolbar button.ql-active .ql-fill { fill: var(--accent) !important; }
+:is(.ql-snow .ql-toolbar, .ql-toolbar.ql-snow) button:is(:hover, .ql-active) .ql-fill { fill: var(--accent) !important; }
 .ql-snow a, .ql-editor a { color: var(--accent); }
 .ql-editor .ql-color-blue { color: var(--accent); }
 .ql-editor .ql-bg-blue { background-color: var(--accent); }

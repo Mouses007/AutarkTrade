@@ -1,8 +1,8 @@
 <script setup>
 import { ref, reactive, onBeforeMount, onBeforeUnmount, computed, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
-import { spinnerLoadingPage } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
+import { seiteLaedt } from '../stores/ui.js'
 import { aiReportGenerating, aiReportError, aiReportLastSavedId, aiReportLabel, aiReportCountBefore } from '../stores/settings.js'
 import { selectedBroker } from '../stores/filters.js'
 import axios from 'axios'
@@ -32,7 +32,7 @@ const errorMsg = aiReportError
 
 // Zeitraum
 const periodType = ref('month')
-const selectedMonth = ref(dayjs().format('YYYY-MM'))
+const gewaehlterMonat = ref(dayjs().format('YYYY-MM'))
 const selectedWeekStart = ref(dayjs().startOf('week').format('YYYY-MM-DD'))
 const customStart = ref(dayjs().startOf('month').format('YYYY-MM-DD'))
 const customEnd = ref(dayjs().format('YYYY-MM-DD'))
@@ -250,7 +250,7 @@ const dateRange = computed(() => {
             label: t('kiAgent.weekLabel', { range: `${start.format('DD.MM.')} – ${end.format('DD.MM.YYYY')}` })
         }
     } else if (type === 'month') {
-        const start = dayjs(selectedMonth.value + '-01').startOf('day')
+        const start = dayjs(gewaehlterMonat.value + '-01').startOf('day')
         const end = start.endOf('month')
         return {
             startDate: start.unix(),
@@ -648,7 +648,7 @@ const pendingTab = route.query.tab || null
 const pendingSourcePage = route.query.sourcePage || null
 
 onBeforeMount(async () => {
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
 
     // Switch tab immediately if agent prompt is pending
     if (pendingAgentPrompt || pendingTab === 'agent') {
@@ -678,9 +678,9 @@ onBeforeMount(async () => {
 </script>
 
 <template>
-    <SpinnerLoadingPage />
+    <SeiteLaedt />
     <div class="at-mo-2">
-        <div v-show="!spinnerLoadingPage">
+        <div v-show="!seiteLaedt">
 
             <!-- Tab-Switcher -->
             <Reiter v-model="currentTab" class="at-mu-3" :reiter="[

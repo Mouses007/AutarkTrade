@@ -9,15 +9,15 @@
 import { ref, reactive } from 'vue'
 
 /** Tageskopien, absteigend nach `dateUnix`. */
-export const filteredTrades = reactive([])
+export const journalTage = reactive([])
 /** Dieselben Tageskopien in Ladereihenfolge. */
-export const filteredTradesDaily = reactive([])
+export const gefilterteTageAlle = reactive([])
 /** Flache Liste der gefilterten Trades. */
-export const filteredTradesTrades = reactive([])
+export const gefilterteTradesFlach = reactive([])
 export const totals = reactive({})
-export const totalsByDate = reactive({})
+export const summenJeTag = reactive({})
 export const groups = reactive({})
-export const profitAnalysis = reactive({})
+export const gewinnAnalyse = reactive({})
 /** Minuten-Raster der Einstiegszeit-Gruppe. */
 export const timeFrame = ref(60)
 /** Zuletzt geladene Tageszeilen. */

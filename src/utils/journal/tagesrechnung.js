@@ -6,7 +6,7 @@
  * JSON-Rundreise zu null und zählt wie 0. Anders als `totals-kern.js`, das
  * jede Zahl durch `z()` schickt.
  */
-import { filteredTradesTrades } from '../../stores/journal/auswertung.js'
+import { gefilterteTradesFlach } from '../../stores/journal/auswertung.js'
 import { blotter, pAndL, trades } from '../../stores/journal/import.js'
 import { gruppiere, sortiertNach, jsonKopie, ersetzeObjekt } from './hilfen.js'
 
@@ -49,11 +49,11 @@ function blotterPosten(symbol, liste) {
 
 /**
  * Baut `blotter` neu: `td` → Symbol → Posten.
- * @param {boolean} ausGefiltert  true: aus `filteredTradesTrades`, sonst aus dem Import-Store `trades`
+ * @param {boolean} ausGefiltert  true: aus `gefilterteTradesFlach`, sonst aus dem Import-Store `trades`
  */
-export async function useCreateBlotter(ausGefiltert) {
+export async function baueBlotter(ausGefiltert) {
     const jeTag = ausGefiltert
-        ? jsonKopie(gruppiere(sortiertNach([...filteredTradesTrades], t => t.entryTime), t => t.td))
+        ? jsonKopie(gruppiere(sortiertNach([...gefilterteTradesFlach], t => t.entryTime), t => t.td))
         : trades
 
     const neu = {}
@@ -66,7 +66,7 @@ export async function useCreateBlotter(ausGefiltert) {
 }
 
 /** Baut `pAndL` neu: je `td` die Summe über die Symbole des Blotters. */
-export async function useCreatePnL() {
+export async function bauePnL() {
     const neu = {}
     for (const td of Object.keys(blotter)) {
         const p = leererPosten()

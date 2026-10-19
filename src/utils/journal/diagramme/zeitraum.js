@@ -7,10 +7,10 @@
  * Zeitzone des PROZESSES und OHNE Jahr verglichen (bekannte Eigenheit, siehe
  * docs/spec/diagramme.md 6.4). Ohne gültigen Zeitrahmen gibt es keine Einträge.
  */
-import dayjs from '../../dayjs-setup.js'
+import dayjs from '../zeit.js'
 import { selectedTimeFrame, selectedRatio } from '../../../stores/filters.js'
-import { totalsByDate } from '../../../stores/trades.js'
-import { useChartFormat, useThousandCurrencyFormat, useXDecCurrencyFormat, useXDecFormat, useOneDecPercentFormat } from '../../formatters.js'
+import { summenJeTag } from '../../../stores/trades.js'
+import { useChartFormat, useThousandCurrencyFormat, useXDecCurrencyFormat, useXDecFormat, useOneDecPercentFormat } from '../format.js'
 import { fall, kopie, element, instanzFuer } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeichenFarbe, vorzeichenHover } from './gestaltung.js'
 
@@ -63,7 +63,7 @@ function vertikaleOption(p, kategorien, reihen, tooltip) {
 
 export function useLineBarChart(id) {
     try {
-        const tage = kopie(totalsByDate)
+        const tage = kopie(summenJeTag)
         const schluessel = Object.keys(tage)
         const f = fall()
         const p = palette()
@@ -137,7 +137,7 @@ function kennzahlText(wert, verhaeltnis, alsQuote) {
 
 export function useBarChart(id) {
     try {
-        const tage = kopie(totalsByDate)
+        const tage = kopie(summenJeTag)
         const schluessel = Object.keys(tage)
         const f = fall()
         const rahmen = selectedTimeFrame.value

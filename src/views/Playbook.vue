@@ -17,10 +17,10 @@ import Seitenkopf from '@/components/basis/Seitenkopf.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Dialog from '@/components/basis/Dialog.vue'
 import NoData from '@/components/NoData.vue'
-import SpinnerLoadingPage from '@/components/SpinnerLoadingPage.vue'
+import SeiteLaedt from '@/components/SeiteLaedt.vue'
 import PlaybookKarte from '@/components/playbook/PlaybookKarte.vue'
 import { erzeugePlaybook, PLAYBOOK_SCHLUESSEL } from '@/components/playbook/usePlaybook.js'
-import { spinnerLoadingPage } from '@/stores/app/laden.js'
+import { seiteLaedt } from '@/stores/app/laden.js'
 import { useVerlassenSchutz } from '@/composables/useVerlassenSchutz.js'
 
 const { t } = useI18n()
@@ -45,7 +45,7 @@ onBeforeUnmount(() => window.removeEventListener('paste', pb.beiEinfuegen))
 
 <template>
     <div class="playbook">
-        <SpinnerLoadingPage />
+        <SeiteLaedt />
         <Seitenkopf :titel="t('playbook.tradeEvaluations')" />
 
         <Hinweis v-if="pb.nichtGefunden.value" art="warn" :titel="t('playbook.tradeNichtGefunden')" schliessbar
@@ -53,7 +53,7 @@ onBeforeUnmount(() => window.removeEventListener('paste', pb.beiEinfuegen))
             {{ t('playbook.tradeNichtGefundenText', { id: pb.nichtGefunden.value }) }}
         </Hinweis>
 
-        <template v-if="!spinnerLoadingPage">
+        <template v-if="!seiteLaedt">
             <div v-if="pb.eintraege.length" class="liste">
                 <PlaybookKarte v-for="e in pb.eintraege" :key="e.tradeId" :eintrag="e" />
             </div>

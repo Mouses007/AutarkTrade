@@ -6,7 +6,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
-import { availableTags } from '@/stores/journal/tagebuch.js'
+import { verfuegbareTags } from '@/stores/journal/tagebuch.js'
 import { useGetTagInfo } from '@/utils/journal/tagebuch.js'
 
 const props = defineProps({
@@ -22,7 +22,7 @@ function waehle(ereignis) {
     const id = ereignis.target.value
     ereignis.target.value = '' // zurück auf den Platzhalter
     if (!id || vergeben(id)) return
-    for (const g of availableTags) {
+    for (const g of verfuegbareTags) {
         const tag = (g.tags || []).find(x => String(x.id) === id)
         if (tag) {
             props.liste.push({ id: tag.id, name: tag.name, color: g.color })
@@ -47,7 +47,7 @@ function entferne(id) {
         </div>
         <select class="at-feld klein" @change="waehle">
             <option value="">{{ t('incoming.addTag') }}</option>
-            <optgroup v-for="g in availableTags" :key="g.id" :label="g.name">
+            <optgroup v-for="g in verfuegbareTags" :key="g.id" :label="g.name">
                 <option v-for="tag in g.tags || []" :key="tag.id" :value="tag.id" :disabled="vergeben(tag.id)">{{ tag.name }}</option>
             </optgroup>
         </select>

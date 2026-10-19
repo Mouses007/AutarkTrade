@@ -15,7 +15,7 @@ import { ref, computed, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Symbol from './basis/Symbol.vue'
 import { tags } from '../stores/journal/tagebuch.js'
-import { kopiertesBild, selectedItem } from '../stores/app/rahmen.js'
+import { kopiertesBild, markierterEintrag } from '../stores/app/rahmen.js'
 import { useSelectedScreenshotFunction, useSetupMarkerArea, useDeleteScreenshot } from '../utils/screenshots.js'
 import { useCreatedDateFormat, useTimeFormat, useHourMinuteFormat } from '../utils/journal/format.js'
 import { useGetTagInfo } from '../utils/journal/tagebuch.js'
@@ -114,19 +114,19 @@ const fragtLoeschen = ref(false)
 const loescht = ref(false)
 
 function loeschenFragen() {
-    selectedItem.value = d.value.objectId
+    markierterEintrag.value = d.value.objectId
     fragtLoeschen.value = true
 }
 async function loeschenJa() {
     loescht.value = true
-    selectedItem.value = d.value.objectId
+    markierterEintrag.value = d.value.objectId
     try { await useDeleteScreenshot() } finally {
         loescht.value = false
         fragtLoeschen.value = false
     }
 }
 function loeschenNein() {
-    selectedItem.value = null
+    markierterEintrag.value = null
     fragtLoeschen.value = false
 }
 

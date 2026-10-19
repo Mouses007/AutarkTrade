@@ -1,5 +1,5 @@
 /**
- * Lizenzschlüssel (LIZENZ-PLAN.md, Abschnitt 3 „Aktivierung").
+ * Lizenzschlüssel (HERKUNFT.md, Anhang B „Aktivierung").
  *
  * Ein Schlüssel ist ein Ed25519-signiertes Token:
  *

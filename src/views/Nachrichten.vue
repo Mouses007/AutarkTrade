@@ -22,7 +22,7 @@ import { useRouter } from 'vue-router'
 import axios from 'axios'
 import dayjs from '../utils/journal/zeit.js'
 import { timeZoneTrade } from '../stores/ui.js'
-import { spinnerLoadingPage } from '../stores/app/laden.js'
+import { seiteLaedt } from '../stores/app/laden.js'
 import { currentUser } from '../stores/app/rahmen.js'
 import { dbUpdateSettings, dbGetSettings } from '../utils/db.js'
 import { useKostenAnzeige } from '../utils/journal/format.js'
@@ -802,7 +802,7 @@ function bis(ms) {
 }
 
 async function ladeAlles() {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     try {
         const [b, n, alleN, k] = await Promise.allSettled([
             axios.get('/api/marktradar/lagebericht'),
@@ -841,7 +841,7 @@ async function ladeAlles() {
             kalenderInfo.value = k.value.data
         }
     } finally {
-        spinnerLoadingPage.value = false
+        seiteLaedt.value = false
     }
 }
 

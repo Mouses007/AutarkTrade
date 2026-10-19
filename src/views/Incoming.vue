@@ -2,17 +2,17 @@
 import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import NoData from '../components/NoData.vue'
 import PageInfo from '../components/PageInfo.vue'
 import { Knopf, Symbol, Pille, Hinweis, Kreisel } from '../components/basis'
-import { spinnerLoadingPage, timeZoneTrade, expandedId, kopiertesBild } from '../stores/ui.js'
+import { seiteLaedt, timeZoneTrade, expandedId, kopiertesBild } from '../stores/ui.js'
 import { allTradeTimeframes, selectedTradeTimeframes, selectedBroker, selectedTradeCategory, brokers } from '../stores/filters.js'
-import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, availableTags } from '../stores/trades.js'
+import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, verfuegbareTags } from '../stores/trades.js'
 import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
 import { currentUser } from '../stores/settings.js'
 import { useFetchOpenPositions, useGetIncomingPositions, useUpdateIncomingPosition, useDeleteIncomingPosition, useTransferClosingMetadata } from '../utils/incoming'
-import { useGetAvailableTags, useGetTagInfo } from '../utils/journal/tagebuch.js'
+import { ladeVerfuegbareTags, useGetTagInfo } from '../utils/journal/tagebuch.js'
 import { dbCreate, dbUpdate, dbFind, dbGet } from '../utils/db.js'
 import dayjs from '../utils/journal/zeit.js'
 import Quill from 'quill'
@@ -548,15 +548,15 @@ const timeframeOptions = computed(() => {
 
 // Always load from API when entering the page (including first open)
 async function loadPageData() {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     incomingError.value = null
     try {
-        await useGetAvailableTags()
+        await ladeVerfuegbareTags()
         await useFetchOpenPositions()
     } catch (error) {
         incomingError.value = error.response?.data?.error || error.message || t('common.errorLoading')
     }
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
 }
 
 // Load when entering the route (first open + return from another page)
@@ -659,12 +659,12 @@ function initQuillEditor(positionId, type) {
                 toolbar: [
                     [{ header: [1, 2, 3, false] }],
                     ['bold', 'italic', 'underline'],
-                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
                 ]
             },
             theme: 'snow'
         })
-        quill.root.setAttribute('spellcheck', true)
+        quill.root.spellcheck = true
         quillInstances[key] = quill
 
         // Load existing content
@@ -1440,7 +1440,7 @@ function getPositionDate(pos) {
 
 <template>
     <div class="incoming-seite">
-        <div v-show="!spinnerLoadingPage">
+        <div v-show="!seiteLaedt">
             <!-- Header -->
             <div class="incoming-kopf">
                 <div class="incoming-kopf-stand">
@@ -1817,7 +1817,7 @@ function getPositionDate(pos) {
                         <select class="at-feld klein"
                             @change.stop="addTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                             <option selected disabled>{{ t('incoming.addTag') }}</option>
-                            <template v-for="group in availableTags" :key="group.id">
+                            <template v-for="group in verfuegbareTags" :key="group.id">
                                 <optgroup :label="group.name">
                                     <option v-for="tag in group.tags" :key="tag.id"
                                         :value="JSON.stringify({ id: tag.id, name: tag.name })"
@@ -1968,7 +1968,7 @@ function getPositionDate(pos) {
                             <select class="at-feld klein"
                                 @change.stop="addClosingTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                                 <option selected disabled>{{ t('incoming.addTag') }}</option>
-                                <template v-for="group in availableTags" :key="group.id">
+                                <template v-for="group in verfuegbareTags" :key="group.id">
                                     <optgroup :label="group.name">
                                         <option v-for="tag in group.tags" :key="tag.id"
                                             :value="JSON.stringify({ id: tag.id, name: tag.name })"
@@ -2008,7 +2008,7 @@ function getPositionDate(pos) {
                             </Knopf>
                         </div>
 
-                        <!-- Satisfaction -->
+                        <!-- Zufriedenheit -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
                             <div class="zufrieden-reihe">
@@ -2058,7 +2058,7 @@ function getPositionDate(pos) {
                             <select class="at-feld klein"
                                 @change.stop="addTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                                 <option selected disabled>{{ t('incoming.addTag') }}</option>
-                                <template v-for="group in availableTags" :key="group.id">
+                                <template v-for="group in verfuegbareTags" :key="group.id">
                                     <optgroup :label="group.name">
                                         <option v-for="tag in group.tags" :key="tag.id"
                                             :value="JSON.stringify({ id: tag.id, name: tag.name })"
@@ -2098,7 +2098,7 @@ function getPositionDate(pos) {
                             <select class="at-feld klein"
                                 @change.stop="addClosingTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                                 <option selected disabled>{{ t('incoming.addTag') }}</option>
-                                <template v-for="group in availableTags" :key="group.id">
+                                <template v-for="group in verfuegbareTags" :key="group.id">
                                     <optgroup :label="group.name">
                                         <option v-for="tag in group.tags" :key="tag.id"
                                             :value="JSON.stringify({ id: tag.id, name: tag.name })"
@@ -2110,7 +2110,7 @@ function getPositionDate(pos) {
                             </select>
                         </div>
 
-                        <!-- Satisfaction -->
+                        <!-- Zufriedenheit -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
                             <div class="zufrieden-reihe">
@@ -2159,7 +2159,7 @@ function getPositionDate(pos) {
             </template>
         </div>
 
-        <SpinnerLoadingPage />
+        <SeiteLaedt />
     </div>
 </template>
 

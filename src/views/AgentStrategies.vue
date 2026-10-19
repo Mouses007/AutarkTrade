@@ -10,9 +10,9 @@ import { ref, computed, watch, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
-import { spinnerLoadingPage } from '../stores/ui.js'
+import { seiteLaedt } from '../stores/ui.js'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import InfoTipp from '../components/InfoTipp.vue'
 import { useXDecCurrencyFormat } from '../utils/journal/format.js'
 import { logError } from '../utils/logger.js'
@@ -78,9 +78,9 @@ const schwebendHinweis = (s) => t('strategies.unrealizedInstanceHint', {
 })
 
 onBeforeMount(async () => {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     await laden()
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
     pollTimer = setInterval(laden, 30000)
 })
 onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
@@ -448,8 +448,8 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 </script>
 
 <template>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="instanzen-seite">
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="instanzen-seite">
         <div class="instanzen-inhalt">
 
             <!-- Kopfzeile -->

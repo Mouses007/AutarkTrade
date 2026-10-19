@@ -9,39 +9,37 @@ import { ref, reactive } from 'vue'
 import { lokal, lokalSchreiben, sitzung, mitSitzungsspeicher } from './ablage.js'
 
 // ── Seite und Einstellungen ────────────────────────────────────────────────
-/** Routenname der aktuellen Seite (gesetzt von `usePageId`). */
+/** Routenname der aktuellen Seite (gesetzt von `setzeSeitenId`). */
 export const pageId = ref(undefined)
 /** Die Einstellungszeile (`settings`) — kein Benutzerobjekt. */
 export const currentUser = ref(undefined)
 export const timeZones = ref(['America/New_York', 'Asia/Shanghai', 'Europe/Brussels', 'Asia/Tokyo', 'Asia/Hong_Kong', 'Asia/Kolkata', 'Europe/London', 'Asia/Riyadh'])
-/** Handelszeitzone (gesetzt von `useGetTimeZone`). */
+/** Handelszeitzone (gesetzt von `leseZeitzone`). */
 export const timeZoneTrade = ref(undefined)
 
 // ── Abfragen und Listen ────────────────────────────────────────────────────
 export const queryLimit = ref(50000)
-export const queryLimitExistingTrades = ref(50)
-export const endOfList = ref(false)
-export const noData = ref(false)
+export const abfrageGrenzeVorhanden = ref(50)
+export const listeZuEnde = ref(false)
 export const stepper = ref(undefined)
-export const hasData = ref(false)
+export const journalHatDaten = ref(false)
 export const itemToEditId = mitSitzungsspeicher ? ref(sitzung('editItemId')) : ''
 export const currentDate = ref(undefined)
 export const quill = ref(undefined)
-export const saveButton = ref(false)
+export const speichernNoetig = ref(false)
 export const windowIsScrolled = ref(undefined)
-export const selectedItem = ref(undefined)
-export const dailyPagination = ref(0)
-export const dailyQueryLimit = ref(10)
-export const legacy = reactive([])
-export const modalDailyTradeOpen = ref(false)
-export const countdownInterval = ref(null)
-export const countdownSeconds = ref(5)
+export const markierterEintrag = ref(undefined)
+export const tagesSeite = ref(0)
+export const tagesAbfrageGrenze = ref(10)
+export const tradeDetailOffen = ref(false)
+export const countdownTakt = ref(null)
+export const countdownRest = ref(5)
 /** 1 = nah, 3 = ganz weit. */
-export const dailyChartZoom = ref(3)
+export const tagesChartZoom = ref(3)
 export const scrollToDateUnix = ref(null)
 
 // ── Menü und Bildschirm ────────────────────────────────────────────────────
-export const sideMenuMobileOut = ref(false)
+export const seitenmenueMobilOffen = ref(false)
 export const sideMenuEingeklappt = ref(lokal('sideMenuEingeklappt') === '1')
 export function schalteSideMenu() {
     sideMenuEingeklappt.value = !sideMenuEingeklappt.value

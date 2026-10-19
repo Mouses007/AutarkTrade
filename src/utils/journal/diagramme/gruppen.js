@@ -8,8 +8,8 @@
  * gesetzt, mit leerer Reihe und leeren Kategorien.
  */
 import { selectedRatio } from '../../../stores/filters.js'
-import { groups, availableTags } from '../../../stores/trades.js'
-import { useCapitalizeFirstLetter, useXDecCurrencyFormat, useXDecFormat, useThousandCurrencyFormat } from '../../formatters.js'
+import { groups, verfuegbareTags } from '../../../stores/trades.js'
+import { useCapitalizeFirstLetter, useXDecCurrencyFormat, useXDecFormat, useThousandCurrencyFormat } from '../format.js'
 import { fall, festkomma, element, instanzFuer, dauerKlasse, WOCHENTAGE_EN, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeichenFarbe } from './gestaltung.js'
 
@@ -19,7 +19,7 @@ import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeiche
  * Die Einfügereihenfolge von groups.tags bleibt.
  */
 export function strategieTags() {
-    const erste = availableTags[0]
+    const erste = verfuegbareTags[0]
     const alle = groups.tags
     if (!erste || !alle) return alle
     const erlaubt = new Set((erste.tags || []).map(x => x.id))

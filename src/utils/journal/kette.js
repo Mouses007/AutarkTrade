@@ -1,13 +1,13 @@
 /**
  * Zwischenstand der Journal-Kette zwischen den Schritten (Modulzustand).
  *
- * - `tageszeilen`: zuletzt geladene Tageszeilen (`useGetTrades`)
+ * - `tageszeilen`: zuletzt geladene Tageszeilen (`ladeTrades`)
  * - `tradeListe`:  flache Liste aller gefilterten Trades in Tagesreihenfolge
- *                  von `filteredTrades` (L), gebildet von `useTotalTrades`
- * - `tagesSummen`: `td` → Tagessumme, dieselben Objekte wie `totalsByDate`
+ *                  von `journalTage` (L), gebildet von `summiereTrades`
+ * - `tagesSummen`: `td` → Tagessumme, dieselben Objekte wie `summenJeTag`
  *
- * `useGroupTrades` und `useCalculateProfitAnalysis` setzen voraus, dass
- * `useTotalTrades` vorher lief.
+ * `gruppiereTrades` und `berechneGewinnAnalyse` setzen voraus, dass
+ * `summiereTrades` vorher lief.
  */
 export const kette = {
     tageszeilen: [],

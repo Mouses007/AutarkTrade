@@ -266,10 +266,10 @@ Danebentippen bleibt. Am Handy weniger Rand, fast volle Höhe.
 | `pointerClass` | ~32 | Handzeiger | – |
 | `text-blue` | 5 | Akzentfarbe für Text | `--accent` |
 | `txt-small` | 4 | kleine Schrift | – |
-| `blueBtn` | 1 (ReturnToTopButton) | Knopf in Akzent, heller Text, Radius; Hover `--accent-hover` | → Baustein `Knopf art="haupt"` |
+| `blueBtn` | 1 (NachObenKnopf) | Knopf in Akzent, heller Text, Radius; Hover `--accent-hover` | → Baustein `Knopf art="haupt"` |
 | `btn-red` | 1 (Screenshot) | Gefahrenknopf rot gefüllt, Hover dunkler | `--bad` → `Knopf art="gefahr"` |
-| `#btn-return-to-top` | 1 (ReturnToTopButton) | fix unten rechts, über dem Inhalt; am Handy näher am Rand | – |
-| `overlay` | 1 (SpinnerLoadingPage) | Lade-Spinner fix über allem, vertikal etwa mittig | – |
+| `#btn-return-to-top` | 1 (NachObenKnopf) | fix unten rechts, über dem Inhalt; am Handy näher am Rand | – |
+| `overlay` | 1 (SeiteLaedt) | Lade-Spinner fix über allem, vertikal etwa mittig | – |
 | `nav-filter-info`, `mobile-menu-toggle` | 1 (Nav) | siehe geruest.md, Abschnitt 3 | `--muted`, `--panel-soft` |
 | `activeNavCss`, `sideMenu*`, `menuKlappe`, `menuSchmal`, `menuText`, `inhaltNebenSchmal`, `sidebar-footer`, `toggleSideMenu` | Gerüst | siehe geruest.md, Abschnitt 5 | |
 | `tj-censor` (von privacy.js gesetzt) | 1 | Zensur: einzelner Zahlenwert verwischt, nicht markier-/anklickbar, sanfter Übergang | – |
@@ -363,8 +363,8 @@ Diese Regeln wirken auf nichts und müssen **nicht** nachgebaut werden.
   (`.quill h1/h2/h3`, `.quill br`) — keine Datei setzt die Klasse; aber
   siehe 4.1 zur Nebenwirkung auf h2–h4.
 - **Tags alt:** `tag-input-container`, `tags-input`, `container-tags`,
-  `tag-dropdown-menu`, `tag-group-label`, `availableTags`,
-  `availableTagsCard`, `availableTagsCardInputs` (`availableTags` ist nur
+  `tag-dropdown-menu`, `tag-group-label`, `verfuegbareTags`,
+  `availableTagsCard`, `availableTagsCardInputs` (`verfuegbareTags` ist nur
   noch ein Store-Name).
 - **Playbook/Incoming:** `pb-thumbnail`, `pb-thumbnail-wrap`,
   `pb-fullscreen-close`, `eval-position-info`, `incoming-eval-section`,

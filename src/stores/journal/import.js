@@ -12,12 +12,12 @@ export const executions = reactive({})
 export const trades = reactive({})
 /** `td` → Symbol → Blotter-Objekt. */
 export const blotter = reactive({})
-export const tradesData = reactive([])
+export const tradeZeilen = reactive([])
 export const tradeId = ref(undefined)
 /** `td`-Zahlen bereits vorhandener Tage. */
-export const existingImports = reactive([])
+export const vorhandeneImporte = reactive([])
 /** Datumszeichenketten `YYYY-MM-DD`. */
-export const existingTradesArray = reactive([])
-export const gotExistingTradesArray = ref(false)
+export const vorhandeneTradeTage = reactive([])
+export const vorhandeneTradeTageGeladen = ref(false)
 /** Marktschluss in Handelszeitzone (MFE). */
 export const marketCloseTime = ref('16:00:00')

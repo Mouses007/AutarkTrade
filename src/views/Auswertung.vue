@@ -10,14 +10,14 @@
  */
 import { computed, ref, watch, nextTick, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { spinnerLoadingPage, auswertungMounted } from '../stores/ui.js'
-import { amountCase } from '../stores/filters.js'
-import { filteredTrades, auswertungNotes, satisfactionArray, satisfactionTradeArray, tags, availableTags } from '../stores/trades.js'
+import { seiteLaedt, auswertungMounted } from '../stores/ui.js'
+import { betragArt } from '../stores/filters.js'
+import { journalTage, auswertungNotes, zufriedenheitTage, zufriedenheitTrades, tags, verfuegbareTags } from '../stores/trades.js'
 import { useMountAuswertung } from '../utils/journal/ablauf.js'
 import { ladeDiagramme, geladeneDiagramme } from '../utils/journal/diagrammLader.js'
 import { useChartFormat } from '../utils/journal/format.js'
 import { palette, mitDeckkraft } from '../utils/journal/diagramme/gestaltung.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import NoData from '../components/NoData.vue'
 import KartenMenue from '../components/dashboard/KartenMenue.vue'
 import TitelKarte from '../components/dashboard/TitelKarte.vue'
@@ -29,15 +29,15 @@ const { t } = useI18n()
 
 // ── Daten ────────────────────────────────────────────────────────────────
 const b = computed(() => basis({
-    gefilterteTage: filteredTrades,
+    gefilterteTage: journalTage,
     notizen: auswertungNotes,
     tagZeilen: tags,
-    katalog: availableTags,
+    katalog: verfuegbareTags,
 }))
-const fall = computed(() => amountCase.value)
+const fall = computed(() => betragArt.value)
 const mitTrades = computed(() => b.value.trades.length > 0)
 
-const tacho = computed(() => tachos(b.value, fall.value, [...satisfactionArray, ...satisfactionTradeArray]))
+const tacho = computed(() => tachos(b.value, fall.value, [...zufriedenheitTage, ...zufriedenheitTrades]))
 const gruppen = computed(() => tagGruppen(b.value, fall.value))
 const gruppenDiagramme = computed(() => tagGruppenDiagramme(gruppen.value))
 const rahmen = computed(() => zeitrahmen(b.value, fall.value))
@@ -159,8 +159,8 @@ const vorzeichen = (x) => (x >= 0 ? '+' : '')
 
 <template>
     <div ref="wurzel" class="aw">
-        <SpinnerLoadingPage />
-        <div v-show="!spinnerLoadingPage">
+        <SeiteLaedt />
+        <div v-show="!seiteLaedt">
             <NoData v-if="auswertungMounted && !mitTrades" />
 
             <div v-else-if="auswertungMounted" class="aw-seite">

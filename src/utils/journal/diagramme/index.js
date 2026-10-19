@@ -5,7 +5,7 @@
  * Aufbau:
  *   gestaltung.js   Farben/Schrift aus den Design-Tokens, Achsen, Tooltip
  *   grundlagen.js   Instanzen holen/entsorgen, Grössenänderung, Rundung, Fall
- *   verteiler.js    useECharts — zeichnet bzw. leert das Dashboard
+ *   verteiler.js    zeichneDiagramme — zeichnet bzw. leert das Dashboard
  *   ring.js         Ring (Quote) und Doppellinie
  *   tagesansicht.js Tagesansicht: Linien und Ring je Tag
  *   zeitraum.js     Ertrag/Kennzahl je Tag, Woche, Monat
@@ -21,9 +21,9 @@
  * ECharts zieht das ganze Bundle nach: Aufrufer ausserhalb lazy geladener
  * Ansichten laden dieses Modul dynamisch.
  */
-export { useECharts } from './verteiler.js'
+export { zeichneDiagramme } from './verteiler.js'
 export { disposeCharts } from './grundlagen.js'
-export { useRenderDoubleLineChart, useRenderPieChart } from './tagesansicht.js'
+export { zeichneDoppellinie, zeichneTorte } from './tagesansicht.js'
 export { useDoubleLineChart, usePieChart } from './ring.js'
 export { useLineBarChart, useBarChart } from './zeitraum.js'
 export { useBarChartNegative } from './gruppenAlt.js'

@@ -5,10 +5,10 @@
  * gezeichnet wird, sobald die Werteliste überhaupt einen Eintrag hat (auch
  * `undefined`). Leere Liste ⇒ bisherige Option bleibt stehen.
  */
-import { barChartNegativeTagGroups } from '../../../stores/ui.js'
+import { negativeTagGruppen } from '../../../stores/ui.js'
 import { selectedRatio } from '../../../stores/filters.js'
-import { groups, availableTags } from '../../../stores/trades.js'
-import { useCapitalizeFirstLetter, useThousandCurrencyFormat, useXDecCurrencyFormat, useXDecFormat, useTwoDecCurrencyFormat } from '../../formatters.js'
+import { groups, verfuegbareTags } from '../../../stores/trades.js'
+import { useCapitalizeFirstLetter, useThousandCurrencyFormat, useXDecCurrencyFormat, useXDecFormat, useTwoDecCurrencyFormat } from '../format.js'
 import { fall, element, instanzFuer, dauerKlasse, WOCHENTAGE_EN } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeichenFarbe } from './gestaltung.js'
 import { strategieTags } from './gruppen.js'
@@ -28,7 +28,7 @@ const TEILGRUPPE = {
 
 /** Welche Teilgruppe gehört zur ID, und ist es ein Tag-Diagramm? */
 function waehleTeilgruppe(id) {
-    const tagGruppe = (barChartNegativeTagGroups.value || []).find(g => id.includes(g.id))
+    const tagGruppe = (negativeTagGruppen.value || []).find(g => id.includes(g.id))
     if (tagGruppe) return { daten: groups[tagGruppe.id], tags: true }
     if (id === 'barChartNegative18') return { daten: strategieTags(), tags: true }
     return { daten: groups[TEILGRUPPE[id]], tags: false }

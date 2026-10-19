@@ -9,22 +9,22 @@
  */
 import { nextTick } from 'vue'
 import dayjs from './zeit.js'
-import { pageId, timeZoneTrade, hasData, dailyPagination, dailyQueryLimit, endOfList } from '../../stores/app/rahmen.js'
+import { pageId, timeZoneTrade, journalHatDaten, tagesSeite, tagesAbfrageGrenze, listeZuEnde } from '../../stores/app/rahmen.js'
 import {
-    spinnerLoadingPage, dashboardChartsMounted, dashboardIdMounted, barChartNegativeTagGroups, renderData,
-    renderingCharts, spinnerLoadMore, auswertungMounted,
+    seiteLaedt, dashboardDiagrammeBereit, dashboardBereit, negativeTagGruppen, zeichenZaehler,
+    diagrammeImAufbau, ladeMehr, auswertungMounted,
 } from '../../stores/app/laden.js'
-import { selectedRange, selectedDateRange, selectedMonth, selectedPeriodRange } from '../../stores/journal/filter.js'
+import { gewaehlterBereich, selectedDateRange, gewaehlterMonat, selectedPeriodRange } from '../../stores/journal/filter.js'
 import { groups } from '../../stores/journal/auswertung.js'
-import { availableTags } from '../../stores/journal/tagebuch.js'
-import { useGetExcursions, useGetSatisfactions, useGetTags, useGetAvailableTags, useGetNotes, useGetAuswertungNotes } from './tagebuch.js'
-import { useGetFilteredTrades, useGetFilteredTradesForDaily } from './laden.js'
-import { useTotalTrades } from './summen.js'
-import { useGroupTrades } from './gruppieren.js'
-import { useCalculateProfitAnalysis } from './gewinnanalyse.js'
-import { useLoadCalendar } from './kalender.js'
-import { useGetAPIS } from './app.js'
-import { useGetScreenshots, useGetScreenshotsPagination } from '../screenshots.js'
+import { verfuegbareTags } from '../../stores/journal/tagebuch.js'
+import { ladeExkursionen, ladeZufriedenheit, ladeTags, ladeVerfuegbareTags, ladeNotizen, useGetAuswertungNotes } from './tagebuch.js'
+import { filtereTrades, ladeNaechsteTage } from './laden.js'
+import { summiereTrades } from './summen.js'
+import { gruppiereTrades } from './gruppieren.js'
+import { berechneGewinnAnalyse } from './gewinnanalyse.js'
+import { ladeKalender } from './kalender.js'
+import { ladeApis } from './app.js'
+import { ladeBilder, leseBildSeite } from '../screenshots.js'
 import { ladeDiagramme, geladeneDiagramme } from './diagrammLader.js'
 
 let generation = 0
@@ -38,156 +38,156 @@ function neuerLauf() {
 class Ueberholt extends Error {}
 const pruefe = (aktuell) => { if (!aktuell()) throw new Ueberholt() }
 
-/** Bestimmt `selectedRange` je Seite. */
-export async function useGetSelectedRange() {
+/** Bestimmt `gewaehlterBereich` je Seite. */
+export async function bestimmeBereich() {
     const seite = pageId.value
     if (seite === 'dashboard' || seite === 'auswertung') {
-        selectedRange.value = selectedPeriodRange.value?.value === 'all' ? { start: 0, end: 0 } : selectedDateRange.value
+        gewaehlterBereich.value = selectedPeriodRange.value?.value === 'all' ? { start: 0, end: 0 } : selectedDateRange.value
     } else if (seite === 'calendar') {
-        selectedRange.value = {
-            start: dayjs.unix(selectedMonth.value.start).tz(timeZoneTrade.value).startOf('year').unix(),
-            end: selectedMonth.value.end,
+        gewaehlterBereich.value = {
+            start: dayjs.unix(gewaehlterMonat.value.start).tz(timeZoneTrade.value).startOf('year').unix(),
+            end: gewaehlterMonat.value.end,
         }
     } else {
-        selectedRange.value = selectedMonth.value
+        gewaehlterBereich.value = gewaehlterMonat.value
     }
 }
 
-export async function useMountDashboard() {
+export async function starteDashboard() {
     const aktuell = neuerLauf()
     try {
-        spinnerLoadingPage.value = true
-        dashboardChartsMounted.value = false
-        dashboardIdMounted.value = false
-        barChartNegativeTagGroups.value = []
-        await useGetSelectedRange()
-        await Promise.all([useGetExcursions(), useGetSatisfactions(), useGetTags()])
+        seiteLaedt.value = true
+        dashboardDiagrammeBereit.value = false
+        dashboardBereit.value = false
+        negativeTagGruppen.value = []
+        await bestimmeBereich()
+        await Promise.all([ladeExkursionen(), ladeZufriedenheit(), ladeTags()])
         pruefe(aktuell)
-        await useGetFilteredTrades()
+        await filtereTrades()
         pruefe(aktuell)
-        await useTotalTrades()
-        await useGroupTrades()
-        await useCalculateProfitAnalysis()
+        await summiereTrades()
+        await gruppiereTrades()
+        await berechneGewinnAnalyse()
         pruefe(aktuell)
-        spinnerLoadingPage.value = false
-        dashboardIdMounted.value = true
+        seiteLaedt.value = false
+        dashboardBereit.value = true
         // Tag-Gruppen mit Diagramm: Reihenfolge des Katalogs
         const vorhanden = Object.keys(groups)
-        for (const g of availableTags) {
-            if (vorhanden.includes(g.id)) barChartNegativeTagGroups.value.push({ id: g.id, name: g.name })
+        for (const g of verfuegbareTags) {
+            if (vorhanden.includes(g.id)) negativeTagGruppen.value.push({ id: g.id, name: g.name })
         }
-        if (hasData.value && aktuell()) {
-            dashboardChartsMounted.value = true
+        if (journalHatDaten.value && aktuell()) {
+            dashboardDiagrammeBereit.value = true
             useDisposeJournalCharts()
-            renderData.value += 1
+            zeichenZaehler.value += 1
             await nextTick()
             pruefe(aktuell)
-            ;(await ladeDiagramme()).useECharts('init')
+            ;(await ladeDiagramme()).zeichneDiagramme('init')
         }
     } catch (fehler) {
         if (fehler instanceof Ueberholt) return
         console.error('Dashboard laden fehlgeschlagen:', fehler)
-        if (aktuell()) spinnerLoadingPage.value = false
+        if (aktuell()) seiteLaedt.value = false
     }
 }
 
-export async function useMountDaily() {
+export async function starteTagesansicht() {
     const aktuell = neuerLauf()
     try {
-        dailyPagination.value = 0
-        dailyQueryLimit.value = 3
-        endOfList.value = false
-        spinnerLoadingPage.value = true
-        await useGetSelectedRange()
-        await Promise.all([useGetExcursions(), useGetSatisfactions(), useGetTags(), useGetAvailableTags(), useGetNotes(), useGetAPIS()])
+        tagesSeite.value = 0
+        tagesAbfrageGrenze.value = 3
+        listeZuEnde.value = false
+        seiteLaedt.value = true
+        await bestimmeBereich()
+        await Promise.all([ladeExkursionen(), ladeZufriedenheit(), ladeTags(), ladeVerfuegbareTags(), ladeNotizen(), ladeApis()])
         pruefe(aktuell)
-        await useGetFilteredTrades()
+        await filtereTrades()
         pruefe(aktuell)
-        spinnerLoadingPage.value = false
-        ladeDiagramme().then(d => { d.useRenderDoubleLineChart(); d.useRenderPieChart() })
-        useLoadCalendar()
-        useGetScreenshots(true)
-        renderingCharts.value = false
+        seiteLaedt.value = false
+        ladeDiagramme().then(d => { d.zeichneDoppellinie(); d.zeichneTorte() })
+        ladeKalender()
+        ladeBilder(true)
+        diagrammeImAufbau.value = false
     } catch (fehler) {
         if (fehler instanceof Ueberholt) return
         console.error('Tagesansicht laden fehlgeschlagen:', fehler)
-        if (aktuell()) spinnerLoadingPage.value = false
+        if (aktuell()) seiteLaedt.value = false
     }
 }
 
-export async function useMountCalendar(_param) {
+export async function starteKalender(_param) {
     const aktuell = neuerLauf()
     try {
-        spinnerLoadingPage.value = true
-        await useGetSelectedRange()
-        await Promise.all([useGetTags(), useGetAvailableTags()])
+        seiteLaedt.value = true
+        await bestimmeBereich()
+        await Promise.all([ladeTags(), ladeVerfuegbareTags()])
         pruefe(aktuell)
-        await useGetFilteredTrades()
+        await filtereTrades()
         pruefe(aktuell)
-        await useLoadCalendar()
+        await ladeKalender()
     } catch (fehler) {
         if (fehler instanceof Ueberholt) return
         console.error('Kalender laden fehlgeschlagen:', fehler)
     }
-    if (aktuell()) spinnerLoadingPage.value = false
+    if (aktuell()) seiteLaedt.value = false
 }
 
-export async function useMountScreenshots() {
+export async function starteBilder() {
     const aktuell = neuerLauf()
     try {
-        spinnerLoadingPage.value = true
-        useGetScreenshotsPagination()
-        await useGetSelectedRange()
-        await Promise.all([useGetTags(), useGetAvailableTags()])
+        seiteLaedt.value = true
+        leseBildSeite()
+        await bestimmeBereich()
+        await Promise.all([ladeTags(), ladeVerfuegbareTags()])
         pruefe(aktuell)
-        await useGetScreenshots(false)
+        await ladeBilder(false)
     } catch (fehler) {
         if (!(fehler instanceof Ueberholt)) console.error('Screenshots laden fehlgeschlagen:', fehler)
     } finally {
-        if (aktuell()) spinnerLoadingPage.value = false
+        if (aktuell()) seiteLaedt.value = false
     }
 }
 
 export async function useMountAuswertung() {
     const aktuell = neuerLauf()
     try {
-        spinnerLoadingPage.value = true
+        seiteLaedt.value = true
         auswertungMounted.value = false
-        await useGetSelectedRange()
-        await Promise.all([useGetAuswertungNotes(), useGetSatisfactions(), useGetTags()])
+        await bestimmeBereich()
+        await Promise.all([useGetAuswertungNotes(), ladeZufriedenheit(), ladeTags()])
         pruefe(aktuell)
-        await useGetFilteredTrades()
+        await filtereTrades()
         pruefe(aktuell)
-        spinnerLoadingPage.value = false
+        seiteLaedt.value = false
         auswertungMounted.value = true
     } catch (fehler) {
         if (fehler instanceof Ueberholt) return
         console.error('Auswertung laden fehlgeschlagen:', fehler)
-        if (aktuell()) spinnerLoadingPage.value = false
+        if (aktuell()) seiteLaedt.value = false
     }
 }
 
-export function useCheckVisibleScreen() {
-    if (window.innerHeight >= document.documentElement.scrollHeight) useLoadMore()
+export function pruefeSichtbarkeit() {
+    if (window.innerHeight >= document.documentElement.scrollHeight) ladeWeitere()
 }
 
-export async function useLoadMore() {
-    spinnerLoadMore.value = true
+export async function ladeWeitere() {
+    ladeMehr.value = true
     if (pageId.value === 'daily') {
-        useGetFilteredTradesForDaily()
+        ladeNaechsteTage()
         const d = await ladeDiagramme()
-        await Promise.all([d.useRenderDoubleLineChart(), d.useRenderPieChart()])
+        await Promise.all([d.zeichneDoppellinie(), d.zeichneTorte()])
     } else if (pageId.value === 'screenshots') {
-        await useGetScreenshots(false)
+        await ladeBilder(false)
     }
-    spinnerLoadMore.value = false
+    ladeMehr.value = false
 }
 
-export async function useRefreshTrades() {
-    spinnerLoadingPage.value = true
-    if (pageId.value === 'dashboard') await useMountDashboard()
-    else if (pageId.value === 'daily') await useMountDaily()
-    else if (pageId.value === 'calendar') await useMountCalendar()
+export async function ladeTradesNeu() {
+    seiteLaedt.value = true
+    if (pageId.value === 'dashboard') await starteDashboard()
+    else if (pageId.value === 'daily') await starteTagesansicht()
+    else if (pageId.value === 'calendar') await starteKalender()
     else window.location.href = '/dashboard'
 }
 

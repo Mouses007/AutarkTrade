@@ -4,8 +4,8 @@
  * damit ein grosser Trade die kleinen nicht plattdrückt. Tooltip und
  * Achsenbeschriftung rechnen in echte Beträge zurück.
  */
-import { filteredTradesTrades } from '../../../stores/trades.js'
-import { useTwoDecCurrencyFormat, useThousandCurrencyFormat } from '../../formatters.js'
+import { gefilterteTradesFlach } from '../../../stores/trades.js'
+import { useTwoDecCurrencyFormat, useThousandCurrencyFormat } from '../format.js'
 import { fall, festkomma, element, instanzFuer, sichereGroessenanpassung, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft, vorzeichenFarbe, vorzeichenHover } from './gestaltung.js'
 
@@ -21,10 +21,10 @@ export function usePerfChart(id) {
     const knoten = element(id)
     if (!knoten) return Promise.resolve()
     const instanz = instanzFuer(knoten)
-    if (!filteredTradesTrades.length) return Promise.resolve()
+    if (!gefilterteTradesFlach.length) return Promise.resolve()
 
     const f = fall()
-    const trades = [...filteredTradesTrades].sort((a, b) => (a.td - b.td) || ((a.entryTime || 0) - (b.entryTime || 0)))
+    const trades = [...gefilterteTradesFlach].sort((a, b) => (a.td - b.td) || ((a.entryTime || 0) - (b.entryTime || 0)))
     const p = palette()
     const kategorien = [], balken = [], equity = [], hoch = [], abstand = [], echt = []
     let kum = 0

@@ -60,7 +60,7 @@ function gruppiereSortiert(liste, schluesselVon) {
 /**
  * Tag-Einträge: je Trade und Tag ein Eintrag. Setzt `groupName`/`groupId`
  * DIREKT am Tag-Objekt des Trades — bewusster Altfehler §7.3, die Felder
- * erscheinen dadurch auch in `filteredTrades[].trades[].tags[]`.
+ * erscheinen dadurch auch in `journalTage[].trades[].tags[]`.
  */
 function tagEintraege(liste) {
     const eintraege = []
@@ -76,7 +76,7 @@ function tagEintraege(liste) {
     return eintraege
 }
 
-export async function useGroupTrades() {
+export async function gruppiereTrades() {
     const liste = kette.tradeListe
     const dauer = (t) => t.exitTime - t.entryTime
 

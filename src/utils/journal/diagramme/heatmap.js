@@ -6,10 +6,10 @@
  * sich nach dem 80-%-Quantil der |μ|, damit ein einzelner Ausreisser nicht
  * alle anderen Zellen blass macht.
  */
-import dayjs from '../../dayjs-setup.js'
+import dayjs from '../zeit.js'
 import { timeZoneTrade } from '../../../stores/ui.js'
-import { filteredTradesTrades } from '../../../stores/trades.js'
-import { useTwoDecCurrencyFormat } from '../../formatters.js'
+import { gefilterteTradesFlach } from '../../../stores/trades.js'
+import { useTwoDecCurrencyFormat } from '../format.js'
 import { fall, festkomma, element, instanzFuer } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, mische } from './gestaltung.js'
 
@@ -31,13 +31,13 @@ function zellFarbe(mu, s, p) {
 export function useHeatmapChart(id) {
     const knoten = element(id)
     if (!knoten || knoten.clientWidth === 0) return Promise.resolve()
-    if (!filteredTradesTrades.length) return Promise.resolve()
+    if (!gefilterteTradesFlach.length) return Promise.resolve()
 
     const f = fall()
     const zone = timeZoneTrade.value
     // Zelle (Tag d 0 = Montag, Stunde h) → Summe, Anzahl
     const zellen = new Map()
-    for (const tr of filteredTradesTrades) {
+    for (const tr of gefilterteTradesFlach) {
         const z = dayjs.unix(tr.entryTime).tz(zone)
         const d = (z.day() + 6) % 7
         const h = z.hour()

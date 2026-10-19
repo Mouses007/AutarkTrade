@@ -1,21 +1,21 @@
 <script setup>
 /**
  * Monatskalender des Journals (Spezifikation ansichten.md K.2–K.6): Raster
- * aus `calendarData`, gefärbt nach P&L oder Zufriedenheit, Klick auf einen
+ * aus `kalenderDaten`, gefärbt nach P&L oder Zufriedenheit, Klick auf einen
  * Handelstag springt in die Tagesansicht.
  *
  * Ohne Props und Events — die Kalenderseite ist der einzige Ort, der ihn
- * einbindet. Mini-Kalender werden nicht gerendert: `miniCalendarsData`
+ * einbindet. Mini-Kalender werden nicht gerendert: `miniKalenderDaten`
  * bekommt nie Monate (journal-kern.md §7.4), sie erschienen also auch früher
  * nie.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { calendarData } from '../stores/trades.js'
-import { amountCase, selectedPlSatisfaction, selectedMonth, selectedMonthPreset } from '../stores/filters.js'
-import { spinnerLoadingPage, timeZoneTrade, scrollToDateUnix } from '../stores/ui.js'
-import { useMountCalendar } from '../utils/journal/ablauf.js'
+import { kalenderDaten } from '../stores/trades.js'
+import { betragArt, gewaehltPlOderZufriedenheit, gewaehlterMonat, selectedMonthPreset } from '../stores/filters.js'
+import { seiteLaedt, timeZoneTrade, scrollToDateUnix } from '../stores/ui.js'
+import { starteKalender } from '../utils/journal/ablauf.js'
 import { useThousandCurrencyFormat } from '../utils/journal/format.js'
 import dayjs from '../utils/journal/zeit.js'
 import Symbol from '@/components/basis/Symbol.vue'
@@ -24,16 +24,16 @@ const { t } = useI18n()
 const router = useRouter()
 
 const TAGE = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-const wochen = computed(() => Object.keys(calendarData)
+const wochen = computed(() => Object.keys(kalenderDaten)
     .filter(k => /^\d+$/.test(k))
     .sort((a, b) => Number(a) - Number(b))
-    .map(k => calendarData[k]))
+    .map(k => kalenderDaten[k]))
 const titel = computed(() => wochen.value[0]?.[0]?.month || '')
 
-const erloes = (feld) => feld?.pAndL?.[amountCase.value + 'Proceeds']
+const erloes = (feld) => feld?.pAndL?.[betragArt.value + 'Proceeds']
 
 function farbe(feld) {
-    if (selectedPlSatisfaction.value === 'pl') {
+    if (gewaehltPlOderZufriedenheit.value === 'pl') {
         const e = erloes(feld)
         if (e === undefined || e === null) return ''
         return e >= 0 ? 'gruen' : 'rot'
@@ -60,16 +60,16 @@ function oeffne(feld) {
 const ganz = (x) => useThousandCurrencyFormat(Math.trunc(Number(x)))
 
 function wechsle(schritt) {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     const zone = timeZoneTrade.value
-    const anfang = dayjs.unix(selectedMonth.value.start).tz(zone).add(schritt, 'month').startOf('month')
-    selectedMonth.value.start = anfang.unix()
-    selectedMonth.value.end = anfang.endOf('month').unix()
-    try { localStorage.setItem('selectedMonth', JSON.stringify(selectedMonth.value)) } catch { /* privater Modus */ }
+    const anfang = dayjs.unix(gewaehlterMonat.value.start).tz(zone).add(schritt, 'month').startOf('month')
+    gewaehlterMonat.value.start = anfang.unix()
+    gewaehlterMonat.value.end = anfang.endOf('month').unix()
+    try { localStorage.setItem('selectedMonth', JSON.stringify(gewaehlterMonat.value)) } catch { /* privater Modus */ }
     const jetzt = dayjs().tz(zone).startOf('month').unix()
     selectedMonthPreset.value = anfang.unix() === jetzt ? 'current' : 'custom'
     try { localStorage.setItem('selectedMonthPreset', selectedMonthPreset.value) } catch { /* privater Modus */ }
-    useMountCalendar()
+    starteKalender()
 }
 </script>
 

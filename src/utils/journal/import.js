@@ -8,10 +8,10 @@
 import axios from 'axios'
 import dayjs from './zeit.js'
 import { dbFind, dbCreate } from '../db.js'
-import { currentUser, timeZoneTrade, queryLimitExistingTrades } from '../../stores/app/rahmen.js'
-import { spinnerLoadingPage } from '../../stores/app/laden.js'
+import { currentUser, timeZoneTrade, abfrageGrenzeVorhanden } from '../../stores/app/rahmen.js'
+import { seiteLaedt } from '../../stores/app/laden.js'
 import { selectedBroker } from '../../stores/journal/filter.js'
-import { blotter, pAndL, executions, trades, tradeId, existingTradesArray, gotExistingTradesArray, marketCloseTime } from '../../stores/journal/import.js'
+import { blotter, pAndL, executions, trades, tradeId, vorhandeneTradeTage, vorhandeneTradeTageGeladen, marketCloseTime } from '../../stores/journal/import.js'
 import { tradeExcursionId } from '../../stores/journal/tagebuch.js'
 
 const anfrage = { symbole: [], von: undefined, bis: undefined }
@@ -33,11 +33,11 @@ const nieErfuellt = () => new Promise(() => {})
 export function useGetExistingTradesArray(_param99, _param0) {
     // Altfehler §7.6: bei DB-Fehler bleibt das Promise unerfüllt.
     return new Promise((erfuellt) => {
-        existingTradesArray.length = 0
-        dbFind('trades', { descending: 'dateUnix', limit: queryLimitExistingTrades.value })
+        vorhandeneTradeTage.length = 0
+        dbFind('trades', { descending: 'dateUnix', limit: abfrageGrenzeVorhanden.value })
             .then((zeilen) => {
-                for (const z of zeilen) existingTradesArray.push(z.date)
-                gotExistingTradesArray.value = true
+                for (const z of zeilen) vorhandeneTradeTage.push(z.date)
+                vorhandeneTradeTageGeladen.value = true
                 erfuellt()
             })
             .catch((e) => console.warn('Vorhandene Tage nicht lesbar:', e))
@@ -244,7 +244,7 @@ export function useUpdateMfePrices(_param99, _param0, _param2) {
 // ── Speichern der Vorschau ─────────────────────────────────────────────────
 
 export async function useUploadTrades(_param99, _param0) {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     const tage = Object.keys(executions)
     const fehler = []
     let gespeichert = 0

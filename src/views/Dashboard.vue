@@ -2,23 +2,23 @@
 /**
  * Journal-Dashboard (Spezifikation ansichten.md „Dashboard", B.1–B.14).
  *
- * Die Seite lädt nicht selbst: `useMountDashboard` füllt die Stores und
+ * Die Seite lädt nicht selbst: `starteDashboard` füllt die Stores und
  * zeichnet die Diagramme; hier stehen Aufbau, Reiter, Karten-Menü und die
- * Kennzeichen. Gezeichnet wird über Element-IDs — `useECharts` sucht sie per
+ * Kennzeichen. Gezeichnet wird über Element-IDs — `zeichneDiagramme` sucht sie per
  * Präfix und zeichnet nur sichtbare Knoten. Darum nach jedem Reiterwechsel
  * und nach dem Wiedereinblenden einer Karte neu zeichnen.
  */
 import { computed, ref, nextTick, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { spinnerLoadingPage, dashboardIdMounted, renderData, hasData } from '../stores/ui.js'
-import { selectedDashTab, amountCase, amountCapital, selectedTradeCategory, selectedRatio } from '../stores/filters.js'
-import { totals, availableTags, groups, filteredTradesTrades, excursions } from '../stores/trades.js'
+import { seiteLaedt, dashboardBereit, zeichenZaehler, journalHatDaten } from '../stores/ui.js'
+import { selectedDashTab, betragArt, betragGross, selectedTradeCategory, selectedRatio } from '../stores/filters.js'
+import { totals, verfuegbareTags, groups, gefilterteTradesFlach, excursions } from '../stores/trades.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
-import { useMountDashboard, useDisposeJournalCharts } from '../utils/journal/ablauf.js'
+import { starteDashboard, useDisposeJournalCharts } from '../utils/journal/ablauf.js'
 import { ladeDiagramme } from '../utils/journal/diagrammLader.js'
 import { useTwoDecCurrencyFormat, useThousandCurrencyFormat, useThousandFormat, useXDecFormat } from '../utils/journal/format.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import NoData from '../components/NoData.vue'
 import BotDashboard from '../components/BotDashboard.vue'
 import Reiter from '@/components/basis/Reiter.vue'
@@ -33,8 +33,8 @@ import { ratio, mfeAnalyse, typStatistik, strategieStatistik } from '../componen
 
 const { t } = useI18n()
 
-// Einmal beim Anlegen; sonst liest diese Datei amountCapital nicht.
-amountCapital.value = amountCase.value ? amountCase.value.charAt(0).toUpperCase() + amountCase.value.slice(1) : ''
+// Einmal beim Anlegen; sonst liest diese Datei betragGross nicht.
+betragGross.value = betragArt.value ? betragArt.value.charAt(0).toUpperCase() + betragArt.value.slice(1) : ''
 
 // ── Reiter ───────────────────────────────────────────────────────────────
 const REITER = ['overviewTab', 'tradesTab', 'timeTab', 'setupsTab', 'financialsTab']
@@ -53,9 +53,9 @@ async function neuZeichnen() {
     // Alte Instanzen freigeben, solange ihre Knoten noch hängen — der neue
     // Schlüssel ersetzt die Knoten gleich.
     useDisposeJournalCharts()
-    renderData.value += 1
+    zeichenZaehler.value += 1
     await nextTick()
-    ;(await ladeDiagramme()).useECharts('init')
+    ;(await ladeDiagramme()).zeichneDiagramme('init')
 }
 
 async function reiterWechsel(id) {
@@ -110,17 +110,17 @@ const kartenListe = computed(() => [
 
 // ── Kennzeichen und Ratio ────────────────────────────────────────────────
 const kennzeichen = computed(() => {
-    if (amountCase.value === 'gross') return ` (${t('options.gross')})`
-    if (amountCase.value === 'net') return ` (${t('options.net')})`
+    if (betragArt.value === 'gross') return ` (${t('options.gross')})`
+    if (betragArt.value === 'net') return ` (${t('options.net')})`
     return ''
 })
 
 /*
  * Der Store `selectedRatio` statt `localStorage` direkt: gleicher Wert
- * (useSetValues schreibt beide), aber reaktiv.
+ * (setzeFilterwerte schreibt beide), aber reaktiv.
  */
 const ratioAnzeige = computed(() => {
-    const r = ratio(selectedRatio.value, totals, amountCase.value)
+    const r = ratio(selectedRatio.value, totals, betragArt.value)
     if (!r) return {}
     if (r.art === 'appt') {
         return {
@@ -154,9 +154,9 @@ const apptTitel = computed(() => {
 })
 
 // ── Tabellen-Karten ──────────────────────────────────────────────────────
-const mfe = computed(() => mfeAnalyse(filteredTradesTrades, excursions, amountCase.value))
+const mfe = computed(() => mfeAnalyse(gefilterteTradesFlach, excursions, betragArt.value))
 const typZeilen = computed(() => typStatistik(groups.tradeType))
-const strategieZeilen = computed(() => strategieStatistik(availableTags, groups.tags))
+const strategieZeilen = computed(() => strategieStatistik(verfuegbareTags, groups.tags))
 // Die beiden Rentabilitäts-Tabellen rechnen immer netto (Rechenregel B.11);
 // das Kennzeichen sagt deshalb fest „Netto", nicht den gewählten Fall.
 const nettoKennzeichen = computed(() => ` (${t('options.net')})`)
@@ -167,7 +167,7 @@ onBeforeMount(async () => {
     // Nicht abwarten: das unrealisierte P&L soll sofort in den Kontostand,
     // ein Fehler hier holt das globale Polling nach.
     useFetchOpenPositions().catch(() => {})
-    await useMountDashboard()
+    await starteDashboard()
 })
 
 onBeforeUnmount(() => {
@@ -178,9 +178,9 @@ onBeforeUnmount(() => {
 
 <template>
     <div>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="db">
-        <NoData v-if="!hasData" />
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="db">
+        <NoData v-if="!journalHatDaten" />
 
         <BotDashboard v-else-if="selectedTradeCategory === 'bot'" />
 

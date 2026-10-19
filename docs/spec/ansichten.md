@@ -1,7 +1,7 @@
 # Spezifikation Journal-Ansichten (S8, Clean-Room)
 
 Stand: 19.10.2026. Drei Beschreibungs-Agenten (Schritt 1) haben das Verhalten der
-TradeNote-abgeleiteten Ansichten aus dem Code beschrieben; diese Datei ist die
+aus dem Ursprungsprojekt stammenden Ansichten (HERKUNFT.md) aus dem Code beschrieben; diese Datei ist die
 EINZIGE Quelle für den Neubau (Schritt 2). Die Altdateien sind gelöscht und dürfen
 nicht gelesen werden (auch nicht über `git show`/`git log -p`).
 
@@ -109,14 +109,14 @@ nicht nachbauen, sofern nicht anders gesagt.
   Tags, MFE, Notiz, Share-Karte, Navigation innerhalb des Tages,
   Screenshot-Vorschau).
 - Die Filterleiste (`src/components/journal/FilterLeiste.vue`, nicht Teil
-  dieser Ansicht) ruft beim Anwenden auf dieser Seite erneut `useMountDaily()`
-  und danach `useCheckVisibleScreen()` (beide `src/utils/journal/ablauf.js`).
-  Die Ansicht muss also damit leben, dass sich `filteredTrades` jederzeit
+  dieser Ansicht) ruft beim Anwenden auf dieser Seite erneut `starteTagesansicht()`
+  und danach `pruefeSichtbarkeit()` (beide `src/utils/journal/ablauf.js`).
+  Die Ansicht muss also damit leben, dass sich `journalTage` jederzeit
   komplett neu füllt.
 - Von aussen wird die Ansicht über den Store-Wert `scrollToDateUnix`
   angesprungen: `src/components/Calendar.vue` (Klick auf einen Kalendertag mit
   Trades setzt ihn und navigiert bei `pageId === 'calendar'` per Router nach
-  `/daily`) und `src/components/chart/TradeKarte.vue` (setzt `selectedMonth`
+  `/daily`) und `src/components/chart/TradeKarte.vue` (setzt `gewaehlterMonat`
   auf den Monat des Trades, `selectedMonthPreset` auf `'custom'`, schreibt
   beide nach localStorage, setzt `scrollToDateUnix` auf den Tag und navigiert
   nach `/daily`).
@@ -130,24 +130,24 @@ nicht nachbauen, sofern nicht anders gesagt.
 
 | Modul | Benutzte Exporte | Zweck |
 |---|---|---|
-| `src/utils/journal/ablauf.js` | `useMountDaily`, `useGetSelectedRange`, `useDisposeJournalCharts` | Laden der Seite; Zeitraum neu bestimmen nach Exkursion-Speichern; Diagramm-Instanzen beim Verlassen freigeben |
+| `src/utils/journal/ablauf.js` | `starteTagesansicht`, `bestimmeBereich`, `useDisposeJournalCharts` | Laden der Seite; Zeitraum neu bestimmen nach Exkursion-Speichern; Diagramm-Instanzen beim Verlassen freigeben |
 | `src/utils/journal/app.js` | `useInitTooltip`, `useInitTab` | Bootstrap-Tooltips anlegen; Reiter-Klicklogik der Tageskarten (D.5.3) |
-| `src/utils/journal/tagebuch.js` | `useGetExcursions`, `useGetTags`, `useGetAvailableTags`, `useUpdateAvailableTags`, `useUpdateTags`, `useUpdateNote`, `useGetNotes`, `useGetTagInfo`, `useCreateAvailableTagsArray`, `useResetTags` | Begleitdaten laden/speichern, Tag-Farben |
+| `src/utils/journal/tagebuch.js` | `ladeExkursionen`, `ladeTags`, `ladeVerfuegbareTags`, `speichereVerfuegbareTags`, `speichereTags`, `speichereNotiz`, `ladeNotizen`, `useGetTagInfo`, `baueTagListe`, `useResetTags` | Begleitdaten laden/speichern, Tag-Farben |
 | `src/utils/journal/format.js` | `useCreatedDateFormat`, `useTwoDecCurrencyFormat`, `useTimeFormat`, `useTimeDuration`, `useDecimalsArithmetic`, `useDateCalFormat`, `useSwingDuration` | Anzeigeformate (alle in `timeZoneTrade`, Zahlen in de-CH bzw. en-US je `appLanguage`) |
 | `src/utils/journal/zeit.js` | Standardexport `dayjs` (mit `tz`) | Zeitzonen-Rechnung |
 | `src/utils/journal/diagramme/index.js` | `useCandlestickChart` | Kerzenchart im Detailfenster (statisch importiert) |
-| `src/utils/screenshots.js` | `useGetScreenshots`, `useSaveScreenshot`, `useSelectedScreenshotFunction` | Screenshots des Tages laden, geänderten Screenshot speichern, Vollbild auswählen |
+| `src/utils/screenshots.js` | `ladeBilder`, `speichereBild`, `useSelectedScreenshotFunction` | Screenshots des Tages laden, geänderten Screenshot speichern, Vollbild auswählen |
 | `src/utils/db.js` | `dbFirst`, `dbCreate`, `dbUpdate` | Exkursionen direkt schreiben (und tote Zufriedenheit, D.13) |
 | `axios` | `get`, `post` | Kerzen, MFE, Orderbuch-Verfügbarkeit |
 | `vue-router` | `useRouter().push` | KI-Bewertung |
 | `vue-i18n` | `t` | Texte |
-| Komponenten | `SpinnerLoadingPage`, `NoData`, `ShareCardModal` | Ladeanzeige, Leerzustand, Share-Karte |
+| Komponenten | `SeiteLaedt`, `NoData`, `ShareCardModal` | Ladeanzeige, Leerzustand, Share-Karte |
 
 Importiert, aber **[tot]** (nirgends benutzt): Komponente `Screenshot`; Store-Werte
-`spinnerSetupsText`, `endOfList`, `idCurrentType`, `idCurrentNumber`,
-`tabGettingScreenshots`, `selectedGrossNet`, `calendarData`,
-`availableTagsArray`, `satisfactionTradeArray`, `newTradeTags` (nur über
-Hilfsfunktionen indirekt); Funktionen `useLoadMore`, `useCheckVisibleScreen`,
+`spinnerSetupsText`, `listeZuEnde`, `idCurrentType`, `idCurrentNumber`,
+`bilderWerdenGeholt`, `gewaehltBruttoNetto`, `kalenderDaten`,
+`verfuegbareTagListe`, `zufriedenheitTrades`, `neueTradeTags` (nur über
+Hilfsfunktionen indirekt); Funktionen `ladeWeitere`, `pruefeSichtbarkeit`,
 `useSetupImageUpload`, `useFindHighestIdNumber`,
 `useFindHighestIdNumberTradeTags`, `useFilterTags`, `useToggleTagsDropdown`,
 `useDailySatisfactionChange`, `useFilterSuggestions` (nur im toten Tag-Fenster),
@@ -167,38 +167,38 @@ L = gelesen, S = geschrieben.
 
 | Wert | Quelle | L/S | Verwendung |
 |---|---|---|---|
-| `spinnerLoadingPage` | `app/laden.js` | L | Hauptinhalt erst bei `false`; Scroll-Watcher wartet darauf |
-| `hasData` | `app/rahmen.js` | L | `false` → Leerzustand |
-| `spinnerLoadMore` | `app/laden.js` | L | kleiner Ladekreisel unter der Liste |
+| `seiteLaedt` | `app/laden.js` | L | Hauptinhalt erst bei `false`; Scroll-Watcher wartet darauf |
+| `journalHatDaten` | `app/rahmen.js` | L | `false` → Leerzustand |
+| `ladeMehr` | `app/laden.js` | L | kleiner Ladekreisel unter der Liste |
 | `timeZoneTrade` | `app/rahmen.js` | L | alle Zeitanzeigen, `checkDate`, Fill-Gruppierung, Kerzenfenster |
-| `modalDailyTradeOpen` | `app/rahmen.js` | L/S | Detailfenster-Inhalt sichtbar; blendet Karten-Tabellen aus; Watcher Orderbuch; auch von `Screenshot.vue` gelesen |
-| `markerAreaOpen` | `journal/screenshots.js` | L | Sperre: Annotation offen → Navigation verweigert |
-| `spinnerSetups` | `app/laden.js` | L/S | Ladeanzeige im Detailfenster, sperrt Vor/Zurück; Startwert im Store `true` |
-| `saveButton` | `app/rahmen.js` | L/S | Beschriftung „Schließen & Speichern" vs. „Schließen" |
+| `tradeDetailOffen` | `app/rahmen.js` | L/S | Detailfenster-Inhalt sichtbar; blendet Karten-Tabellen aus; Watcher Orderbuch; auch von `Screenshot.vue` gelesen |
+| `markierungOffen` | `journal/screenshots.js` | L | Sperre: Annotation offen → Navigation verweigert |
+| `setupsLaden` | `app/laden.js` | L/S | Ladeanzeige im Detailfenster, sperrt Vor/Zurück; Startwert im Store `true` |
+| `speichernNoetig` | `app/rahmen.js` | L/S | Beschriftung „Schließen & Speichern" vs. „Schließen" |
 | `scrollToDateUnix` | `app/rahmen.js` | L/S | Sprungziel (D.6) |
 | `currentUser` | `app/rahmen.js` | L | `aiEnabled` (KI-/Share-Knöpfe), `enableBinanceChart` (Kerzenchart) |
 | `apis` | `app/einstellungen.js` | L | Liste `{provider, key}`; Databento/Polygon-Schlüssel (D.10) |
-| `amountCase` | `journal/filter.js` | L | `'gross'`/`'net'`, nur für Blotter-Farbe |
-| `selectedTagIndex` | `journal/filter.js` | S | totes Tag-Fenster |
+| `betragArt` | `journal/filter.js` | L | `'gross'`/`'net'`, nur für Blotter-Farbe |
+| `gewaehlterTagIndex` | `journal/filter.js` | S | totes Tag-Fenster |
 | `filteredSuggestions` | `journal/filter.js` | S | totes Tag-Fenster |
-| `filteredTrades` | `journal/auswertung.js` | L (S indirekt) | Liste der Tageskarten; das Trade-Objekt bekommt `_tradingMeta` angehängt (D.10.5) |
+| `journalTage` | `journal/auswertung.js` | L (S indirekt) | Liste der Tageskarten; das Trade-Objekt bekommt `_tradingMeta` angehängt (D.10.5) |
 | `screenshots` | `journal/screenshots.js` | L | volle Screenshots des Tages |
-| `screenshotsInfos` | `journal/screenshots.js` | L | Screenshot-Metadaten des Monats (Bild-Symbol in Trade-Zeile) |
+| `bildInfos` | `journal/screenshots.js` | L | Screenshot-Metadaten des Monats (Bild-Symbol in Trade-Zeile) |
 | `screenshot` | `journal/screenshots.js` | S | aktueller Screenshot im Detailfenster (in place geleert/gefüllt) |
-| `tradeScreenshotChanged` | `journal/tagebuch.js` | L/S | Speichern beim Wechseln/Schliessen |
+| `tradeBildGeaendert` | `journal/tagebuch.js` | L/S | Speichern beim Wechseln/Schliessen |
 | `excursion` | `journal/tagebuch.js` | L/S | `{stopLoss, maePrice, mfePrice}` des offenen Trades |
 | `excursions` | `journal/tagebuch.js` | L | DB-Zeilen der Exkursionen |
-| `tradeExcursionChanged`, `tradeExcursionId`, `tradeExcursionDateUnix` | `journal/tagebuch.js` | L/S | Speicher-Kontext Exkursion |
+| `tradeExkursionGeaendert`, `tradeExcursionId`, `tradeExcursionDateUnix` | `journal/tagebuch.js` | L/S | Speicher-Kontext Exkursion |
 | `tradeId` | `journal/import.js` | S | nach Neuanlage einer Exkursion auf deren Trade-ID gesetzt (sonst ungelesen in dieser Ansicht) |
-| `itemTradeIndex`, `tradeIndex`, `tradeIndexPrevious` | `journal/tagebuch.js` | L/S | Position des offenen Trades: Index der Tageskarte in `filteredTrades`, Index in `trades[]`; `tradeIndexPrevious` wird nur geschrieben |
+| `offenerTagIndex`, `tradeIndexAktiv`, `tradeIndexVorher` | `journal/tagebuch.js` | L/S | Position des offenen Trades: Index der Tageskarte in `journalTage`, Index in `trades[]`; `tradeIndexVorher` wird nur geschrieben |
 | `tags` | `journal/tagebuch.js` | L | Zuordnungen `{tradeId, tags[], dateUnix}` |
-| `availableTags` | `journal/tagebuch.js` | L | Katalog `[{id, name, color, tags:[{id,name}]}]` |
+| `verfuegbareTags` | `journal/tagebuch.js` | L | Katalog `[{id, name, color, tags:[{id,name}]}]` |
 | `tradeTags` | `journal/tagebuch.js` | L/S | Tags des offenen Trades `[{id, name}]` |
-| `tradeTagsChanged`, `tradeTagsId`, `tradeTagsDateUnix` | `journal/tagebuch.js` | L/S | Speicher-Kontext Tags |
+| `tradeTagsGeaendert`, `tradeTagsId`, `tradeTagsDateUnix` | `journal/tagebuch.js` | L/S | Speicher-Kontext Tags |
 | `tagInput`, `showTagsList` | `journal/tagebuch.js` | S | Eingabe/Liste (im Detailfenster nur zurückgesetzt) |
 | `notes` | `journal/tagebuch.js` | L | `{tradeId, note, dateUnix, tradingMetadata, tradeType, closingTradeType}` |
-| `tradeNote`, `tradeNoteChanged`, `tradeNoteId`, `tradeNoteDateUnix` | `journal/tagebuch.js` | L/S | Notiz des offenen Trades (nur Anzeige, D.9.8) |
-| `satisfactionArray` | `journal/tagebuch.js` | L | nur in einem Konsolen-Log |
+| `tradeNotiz`, `tradeNotizGeaendert`, `tradeNoteId`, `tradeNoteDateUnix` | `journal/tagebuch.js` | L/S | Notiz des offenen Trades (nur Anzeige, D.9.8) |
+| `zufriedenheitTage` | `journal/tagebuch.js` | L | nur in einem Konsolen-Log |
 
 Lokaler Zustand der Ansicht (kein Store): Share-Karte offen + Trade-Objekt
 (D.12); Bootstrap-Instanzen der beiden Modals und Flag „Tag-Fenster offen";
@@ -206,14 +206,14 @@ Lokaler Zustand der Ansicht (kein Store): Share-Karte offen + Trade-Objekt
 `closingTradeTypeRef` (Zeichenketten); Menge der aufgeklappten Fill-Gruppen;
 Liste zugeklappter Protokolle; Kerzen-Cache (D.10.4); Liste `ohlcv` **[tot]**
 (nur befüllt, nie gelesen); `replayVerfuegbar`, `replayGeprueft` (D.11);
-`candlestickChartFailureMessage` (Text oder `null`); `apiIndex` (Start −1),
+`candlestickChartFailureMessage` (Text oder `null`); `boersenIndex` (Start −1),
 `apiKey`, `apiSource` (`'binance'`/`'databento'`/`'polygon'`); zwei
 Modul-Flags „Screenshots dieses Fensters schon geladen" (Start falsch) und
 „Kerzenchart beim nächsten Zeichnen neu anlegen" (Start wahr).
 
 localStorage: Die Ansicht selbst liest/schreibt keinen Schlüssel. Indirekt:
-`appLanguage` (Zahlenformat in `format.js`); `selectedMonth`/`selectedMonthPreset`
-werden von Filterleiste/TradeKarte geschrieben und über `useGetSelectedRange`
+`appLanguage` (Zahlenformat in `format.js`); `gewaehlterMonat`/`selectedMonthPreset`
+werden von Filterleiste/TradeKarte geschrieben und über `bestimmeBereich`
 gelesen.
 
 ---
@@ -222,22 +222,22 @@ gelesen.
 
 #### D.4.1 Beim Einhängen (onMounted), streng in dieser Reihenfolge
 
-1. `await useMountDaily()` — setzt `dailyPagination` 0, `dailyQueryLimit` 3,
-   `endOfList` falsch, Spinner an; `useGetSelectedRange()` (auf dieser Seite:
-   `selectedRange = selectedMonth`); parallel `useGetExcursions`,
-   `useGetSatisfactions`, `useGetTags` (auf `daily` auf den Zeitraum
-   begrenzt), `useGetAvailableTags`, `useGetNotes` (Zeitraum), `useGetAPIS`
-   (füllt `apis` aus den Einstellungen); dann `useGetFilteredTrades()` (füllt
-   `filteredTrades` mit ALLEN gefilterten Tagen des Zeitraums, absteigend nach
+1. `await starteTagesansicht()` — setzt `tagesSeite` 0, `tagesAbfrageGrenze` 3,
+   `listeZuEnde` falsch, Spinner an; `bestimmeBereich()` (auf dieser Seite:
+   `gewaehlterBereich = gewaehlterMonat`); parallel `ladeExkursionen`,
+   `ladeZufriedenheit`, `ladeTags` (auf `daily` auf den Zeitraum
+   begrenzt), `ladeVerfuegbareTags`, `ladeNotizen` (Zeitraum), `ladeApis`
+   (füllt `apis` aus den Einstellungen); dann `filtereTrades()` (füllt
+   `journalTage` mit ALLEN gefilterten Tagen des Zeitraums, absteigend nach
    `dateUnix`, hängt `pAndL`/`blotter` an); Spinner aus; `useInitTab('daily')`;
    im Hintergrund (nicht abgewartet) Diagramm-Modul laden und
-   `useRenderDoubleLineChart()` + `useRenderPieChart()`; `useLoadCalendar()`;
-   `useGetScreenshots(true)` (ohne Datum: lädt `screenshotsInfos` des Monats,
+   `zeichneDoppellinie()` + `zeichneTorte()`; `ladeKalender()`;
+   `ladeBilder(true)` (ohne Datum: lädt `bildInfos` des Monats,
    nur Metadaten); `useInitPopover()`. Ein jüngerer Mount-Lauf bricht einen
    älteren still ab.
 2. `await useInitTooltip()` — legt für jedes Element mit Tooltip-Kennzeichnung
    eine Bootstrap-Tooltip-Instanz an.
-3. `useCreateAvailableTagsArray()` — flache Tag-Liste.
+3. `baueTagListe()` — flache Tag-Liste.
 4. Wenn `scrollToDateUnix` gesetzt: einen Render-Takt warten, dann Sprung (D.6).
 5. Einen Render-Takt warten.
 6. Bootstrap prüfen: ist das globale `bootstrap` oder dessen `Modal` nicht
@@ -264,11 +264,11 @@ geladen wurde). Der Neubau muss den Kerzenchart beim Verlassen freigeben.
 
 | Quelle | Bedingung | Wirkung |
 |---|---|---|
-| `scrollToDateUnix` | neuer Wert truthy UND `spinnerLoadingPage` falsch (sonst übernimmt onMounted) | Render-Takt warten, Sprung (D.6) |
-| `[modalDailyTradeOpen, tradeIndex]` | Fenster offen | Orderbuch-Verfügbarkeit prüfen (D.11) |
+| `scrollToDateUnix` | neuer Wert truthy UND `seiteLaedt` falsch (sonst übernimmt onMounted) | Render-Takt warten, Sprung (D.6) |
+| `[tradeDetailOffen, tradeIndexAktiv]` | Fenster offen | Orderbuch-Verfügbarkeit prüfen (D.11) |
 
 Berechnete Werte: `modalTradeObj` und `modalTrade` (beide: der Trade
-`filteredTrades[itemTradeIndex].trades[tradeIndex]` oder `null`; doppelt
+`journalTage[offenerTagIndex].trades[tradeIndexAktiv]` oder `null`; doppelt
 vorhanden, einer genügt), `botBreakdown` (D.9.6), `replayFenster` (D.11).
 
 ---
@@ -277,16 +277,16 @@ vorhanden, einer genügt), `botBreakdown` (D.9.6), `replayFenster` (D.11).
 
 #### D.5.1 Seitenzustände
 
-- Ladekreisel der Seite (`SpinnerLoadingPage`) immer eingebunden.
-- Hauptinhalt nur, wenn `spinnerLoadingPage` falsch.
-- `hasData` falsch → Leerzustand `NoData`; wahr → Kartenliste. (Weil `hasData`
+- Ladekreisel der Seite (`SeiteLaedt`) immer eingebunden.
+- Hauptinhalt nur, wenn `seiteLaedt` falsch.
+- `journalHatDaten` falsch → Leerzustand `NoData`; wahr → Kartenliste. (Weil `journalHatDaten`
   nach journal-kern §7.9 nie zurück auf falsch geht, zeigt ein Filter ohne
   Treffer nach vorherigem Erfolg eine leere Liste statt des Leerzustands —
   **[Altfehler]** des Kerns; Empfehlung: in der Ansicht zusätzlich
-  „`filteredTrades` leer → Leerzustand" zeigen.)
-- Unter der Liste: kleiner Ladekreisel, solange `spinnerLoadMore` wahr.
+  „`journalTage` leer → Leerzustand" zeigen.)
+- Unter der Liste: kleiner Ladekreisel, solange `ladeMehr` wahr.
 
-#### D.5.2 Eine Karte je Element von `filteredTrades`
+#### D.5.2 Eine Karte je Element von `journalTage`
 
 Reihenfolge = Reihenfolge der Liste (absteigend nach Tag). Jede Karte trägt die
 DOM-ID `daily-card-<dateUnix>` (Sprungziel). Zwei Tageszeilen desselben Tages
@@ -306,9 +306,9 @@ DOM-ID `daily-card-<dateUnix>` (Sprungziel). Zwei Tageszeilen desselben Tages
    Datenbankzeilen für diesen Tag" (heute fest deutsch, nicht i18n). Bewusst
    KEINE Null anzeigen. Empfehlung: Text nach i18n verschieben, Verhalten
    behalten.
-3. **Reiterbereich** (nur solange `modalDailyTradeOpen` falsch — während das
+3. **Reiterbereich** (nur solange `tradeDetailOffen` falsch — während das
    Detailfenster offen ist, werden die Tabellen ALLER Karten aus dem DOM
-   entfernt; Grund laut Altkommentar: Indizes in `filteredTrades` sollen sich
+   entfernt; Grund laut Altkommentar: Indizes in `journalTage` sollen sich
    bei offenem Fenster nicht verschieben). Zwei Reiter „Trades" und „Blotter"
    (fest englisch). Der frühere Reiter „Screenshots" ist entfernt.
 
@@ -333,13 +333,13 @@ DOM-ID `daily-card-<dateUnix>` (Sprungziel). Zwei Tageszeilen desselben Tages
   Folge: nach dem ersten Klick ist seitenweit höchstens EIN per Klick
   geöffneter Reiter sichtbar (Akkordeon über alle Karten), plus ggf. der
   Start-Reiter von Karte 0, solange der erste Klick in einer anderen Karte war.
-  Für Reiter-Typ `screenshots` würde zusätzlich `useGetScreenshots(true, tag)`
+  Für Reiter-Typ `screenshots` würde zusätzlich `ladeBilder(true, tag)`
   geladen — dieser Reiter existiert nicht mehr **[tot]**.
-- `useInitTab('daily')` wird gerufen in `useMountDaily`, in `useLoadMore` und
+- `useInitTab('daily')` wird gerufen in `starteTagesansicht`, in `ladeWeitere` und
   beim Schliessen des Detailfensters über „Schließen". Weil die Knöpfe beim
   Schliessen neu entstehen (D.5.2 Punkt 3), ist das nötig.
   **[Altfehler]** Schliessen über das ×-Symbol ruft `useInitTab` NICHT → danach
-  fehlt der Umschalter (Bootstrap-Tab funktioniert weiter). `useLoadMore` hängt
+  fehlt der Umschalter (Bootstrap-Tab funktioniert weiter). `ladeWeitere` hängt
   an bestehende Knöpfe einen zweiten Handler → Umschalter toggelt doppelt.
   Empfehlung: beheben — Reiterzustand je Karte deklarativ in der Komponente
   halten (z. B. `offenerReiter[kartenIndex]`), keine DOM-Handler. Ob das
@@ -362,7 +362,7 @@ Datenattribute):
    Knöpfen; Klicks in dieser Zelle öffnen das Detailfenster NICHT
    (Ereignis-Weitergabe gestoppt):
    - „KI-Bewertung" (`daily.aiReview`, Hirn-Symbol): setzt
-     `itemTradeIndex` = Karten-Index, `tradeIndex` = Trade-Index, dann D.12.1.
+     `offenerTagIndex` = Karten-Index, `tradeIndexAktiv` = Trade-Index, dann D.12.1.
    - Share-Symbol-Knopf: D.12.2 mit (Karten-Index, Trade-Index).
    Ist die KI aus, fehlt die Zelle ganz (Kopf behält trotzdem 9 Spalten —
    **[Altfehler]** kosmetisch, beheben).
@@ -380,8 +380,8 @@ Datenattribute):
 6. PnL/Stk: leer bei `tradesCount == 0`; „-" bei `type == 'forex'`; sonst
    `grossSharePL` als Währung, grün bei ≥ 0.
 7. PnL(n): leer bei `tradesCount == 0`; sonst `netProceeds` als Währung, grün
-   bei ≥ 0. (Immer netto, unabhängig von `amountCase`.)
-8. Bild-Symbol, wenn in `screenshotsInfos` ein Eintrag mit `name == trade.id`
+   bei ≥ 0. (Immer netto, unabhängig von `betragArt`.)
+8. Bild-Symbol, wenn in `bildInfos` ein Eintrag mit `name == trade.id`
    existiert (Screenshots, die nur über den Tag zugeordnet sind, zeigen hier
    kein Symbol).
 
@@ -395,7 +395,7 @@ Werte des Objekts `blotter` (Schlüsselreihenfolge = Einfügereihenfolge).
 - PnL(g): `grossProceeds`, Währung, grün bei ≥ 0.
 - Total Fees: `fees`, Währung.
 - PnL(n): angezeigt wird `netProceeds`, die **Farbe** aber nach
-  `<amountCase>Proceeds` > 0 (strikt). **[Altfehler]**: Bei `amountCase` gross
+  `<betragArt>Proceeds` > 0 (strikt). **[Altfehler]**: Bei `betragArt` gross
   kann eine positive Netto-Zahl rot sein, und 0 ist rot. Empfehlung: beheben
   (Farbe nach dem angezeigten Wert, ≥ 0 grün).
 - Wins `grossWinsCount`, Losses `grossLossCount`, Trades `trades`,
@@ -422,20 +422,20 @@ Weil alle Tage des Monats sofort gerendert werden (D.7), reicht das.
 
 Ist-Zustand:
 
-- Die Ansicht hat KEINEN Scroll-Listener. `useGetFilteredTrades` füllt
-  `filteredTrades` bereits mit allen Tagen des Zeitraums.
-- `useCheckVisibleScreen()` (von der Filterleiste nach dem Mount gerufen) ruft
-  `useLoadMore()`, wenn die Seite nicht höher als das Fenster ist. Auf `daily`
-  hängt `useLoadMore` per `useGetFilteredTradesForDaily()` die nächsten
-  `dailyQueryLimit` (3) Tage aus `filteredTradesDaily` an `filteredTrades` an,
+- Die Ansicht hat KEINEN Scroll-Listener. `filtereTrades` füllt
+  `journalTage` bereits mit allen Tagen des Zeitraums.
+- `pruefeSichtbarkeit()` (von der Filterleiste nach dem Mount gerufen) ruft
+  `ladeWeitere()`, wenn die Seite nicht höher als das Fenster ist. Auf `daily`
+  hängt `ladeWeitere` per `ladeNaechsteTage()` die nächsten
+  `tagesAbfrageGrenze` (3) Tage aus `gefilterteTageAlle` an `journalTage` an,
   sofern deren `dateUnix` noch fehlt — sie sind aber schon alle drin; ab
-  Listenende wird `endOfList` wahr. Danach Tagesdiagramme neu, `useInitTab`.
-  `spinnerLoadMore` ist währenddessen wahr.
+  Listenende wird `listeZuEnde` wahr. Danach Tagesdiagramme neu, `useInitTab`.
+  `ladeMehr` ist währenddessen wahr.
 - Ergebnis: Paginierung ist faktisch **[tot]**; sichtbar ist nur ein kurzer
   Ladekreisel.
 
 Empfehlung: Paginierung nicht nachbauen; alle Tage des gewählten Monats auf
-einmal rendern (wie heute sichtbar). `useLoadMore`/`useCheckVisibleScreen`
+einmal rendern (wie heute sichtbar). `ladeWeitere`/`pruefeSichtbarkeit`
 gehören zu `ablauf.js` und bleiben dort für die Screenshot-Seite. Falls bei
 grossen Monaten Leistung fehlt: echtes Nachladen per IntersectionObserver auf
 einem Sentinel unter der Liste (eigene Entscheidung im Neubau).
@@ -501,7 +501,7 @@ einem Sentinel unter der Liste (eigene Entscheidung im Neubau).
 
 #### D.9.1 Öffnen, Blättern, Schliessen: `clickTradesModal(karte, alt, neu)`
 
-Drei Argumente: Karten-Index in `filteredTrades`; bisheriger Trade-Index;
+Drei Argumente: Karten-Index in `journalTage`; bisheriger Trade-Index;
 neuer Trade-Index. Beim Öffnen sind 2. und 3. gleich, beim Blättern ist der
 3. um ±1 verschoben, beim Schliessen fehlen alle drei.
 
@@ -509,34 +509,34 @@ neuer Trade-Index. Beim Öffnen sind 2. und 3. gleich, beim Blättern ist der
 das Bootstrap-Modal `tradesModal` (statischer Hintergrund: Klick daneben
 schliesst nicht; Tastatur aus: Escape schliesst nicht; Grösse „xl"). Erst nach
 dem Einblend-Ereignis wird `clickTradesModal` mit den Zeilen-Indizes gerufen.
-Der Inhalt des Fensters steht hinter `modalDailyTradeOpen` und erscheint erst,
+Der Inhalt des Fensters steht hinter `tradeDetailOffen` und erscheint erst,
 wenn dieser Wert wahr wird.
 
 Ablauf:
 
-1. Ist `markerAreaOpen` wahr → Browser-`alert` mit `common.screenshotSaveAnnotation`,
+1. Ist `markierungOffen` wahr → Browser-`alert` mit `common.screenshotSaveAnnotation`,
    sonst nichts.
-2. `spinnerSetups` = wahr.
+2. `setupsLaden` = wahr.
 3. **Ausstehendes speichern** (immer zuerst, für den bisher offenen Trade):
-   - `tradeNoteChanged` → `await useUpdateNote()`, dann `await useGetNotes()`.
-   - `tradeExcursionChanged` → Exkursion speichern (D.9.9).
-   - `tradeTagsChanged` → parallel `useUpdateAvailableTags()` und
-     `useUpdateTags()`, dann parallel `useGetTags()` und
-     `useGetAvailableTags()`, dann `useCreateAvailableTagsArray()`.
-   - `tradeScreenshotChanged` → `await useSaveScreenshot()`.
+   - `tradeNotizGeaendert` → `await speichereNotiz()`, dann `await ladeNotizen()`.
+   - `tradeExkursionGeaendert` → Exkursion speichern (D.9.9).
+   - `tradeTagsGeaendert` → parallel `speichereVerfuegbareTags()` und
+     `speichereTags()`, dann parallel `ladeTags()` und
+     `ladeVerfuegbareTags()`, dann `baueTagListe()`.
+   - `tradeBildGeaendert` → `await speichereBild()`.
    Danach alle vier Flags auf falsch, `showTagsList` = ''.
-4. **Schliessen** (keine Argumente): `spinnerSetups` falsch; `itemTradeIndex`,
-   `tradeIndexPrevious`, `tradeIndex` = `undefined`; Flags nochmals falsch;
-   `showTagsList` ''; Bootstrap-Modal ausblenden; `modalDailyTradeOpen` falsch;
+4. **Schliessen** (keine Argumente): `setupsLaden` falsch; `offenerTagIndex`,
+   `tradeIndexVorher`, `tradeIndexAktiv` = `undefined`; Flags nochmals falsch;
+   `showTagsList` ''; Bootstrap-Modal ausblenden; `tradeDetailOffen` falsch;
    `useInitTab('daily')`; Flag „Screenshots geladen" falsch; Flag „Kerzenchart
    neu anlegen" wahr. Ende.
-5. **Öffnen/Blättern**: `itemTradeIndex` = Zahl(karte), `tradeIndexPrevious`
-   = Zahl(alt), `tradeIndex` = Zahl(neu).
+5. **Öffnen/Blättern**: `offenerTagIndex` = Zahl(karte), `tradeIndexVorher`
+   = Zahl(alt), `tradeIndexAktiv` = Zahl(neu).
 6. Kerzenquelle bestimmen (D.10.1).
-7. `modalDailyTradeOpen` = wahr.
+7. `tradeDetailOffen` = wahr.
 8. Screenshots des Tages (nur einmal je Fenster-Sitzung, Flag): Tag =
    `dateUnix` der Karte. Ist `screenshots` leer oder gehört sein erstes
-   Element (`dateUnixDay`) zu einem anderen Tag → `await useGetScreenshots(true, tag)`
+   Element (`dateUnixDay`) zu einem anderen Tag → `await ladeBilder(true, tag)`
    (lädt die vollen Screenshots genau dieses Tages nach `screenshots`, ersetzt
    den Inhalt). Flag setzen.
 9. Trade-ID = `id` des neuen Trades. Parallel: Exkursion zurücksetzen
@@ -544,36 +544,36 @@ Ablauf:
    `mfePrice` = `null`) und `useResetTags()` (leert `tradeTags`).
 10. **Screenshot zuordnen**: zuerst in `screenshots` der mit `name == Trade-ID`,
     sonst der erste mit `dateUnixDay == Tag` (d. h. ein Tages-Screenshot gilt
-    für jeden Trade des Tages). Nichts gefunden, aber `screenshotsInfos` hat
-    einen Eintrag mit diesem `dateUnixDay` → `await useGetScreenshots(true,
+    für jeden Trade des Tages). Nichts gefunden, aber `bildInfos` hat
+    einen Eintrag mit diesem `dateUnixDay` → `await ladeBilder(true,
     dessen dateUnixDay)` und Suche wiederholen. Dann `screenshot` leeren (alle
     Schlüssel löschen) und mit allen Feldern des Fundes füllen; ohne Fund nur
     `side` = `null`, `type` = `null`. Fehlermeldung des Kerzencharts auf `null`.
 11. **Kerzenchart** (D.10).
 12. **Tags des Trades**: Eintrag in `tags` mit `tradeId == Trade-ID`
     (lose Gleichheit); für jede Tag-ID darin, die noch nicht in `tradeTags`
-    ist, im Katalog `availableTags` (Gruppen der Reihe nach) den ersten Tag mit
+    ist, im Katalog `verfuegbareTags` (Gruppen der Reihe nach) den ersten Tag mit
     gleicher `id` suchen und `{id, name}` anhängen. Unbekannte IDs fallen weg.
     (Nur Trade-Tags; Tages-Tags mit `tradeId` = Tageszahl werden hier nicht
     gezeigt.)
-13. **Notiz und Metadaten**: `tradeNote`, `tradingMeta`, `tradeTypeRef`,
+13. **Notiz und Metadaten**: `tradeNotiz`, `tradingMeta`, `tradeTypeRef`,
     `closingTradeTypeRef` zurücksetzen (`null`, `null`, '', ''). Eintrag in
-    `notes` mit `tradeId == Trade-ID`: `tradeNote` = Notiz ohne HTML,
+    `notes` mit `tradeId == Trade-ID`: `tradeNotiz` = Notiz ohne HTML,
     `tradingMeta` = `tradingMetadata` oder `null`, Typen = `tradeType` bzw.
     `closingTradeType` oder ''.
 14. **Exkursion**: erster Eintrag in `excursions` mit `tradeId == Trade-ID`:
     je Feld `stopLoss`, `maePrice`, `mfePrice` übernehmen, wenn nicht
     null/undefined. (Heute doppelt ausgeführt plus ein Konsolen-Log von
-    `satisfactionArray` — beides wirkungslos, nicht nachbauen.)
+    `zufriedenheitTage` — beides wirkungslos, nicht nachbauen.)
 15. **Auto-MFE**: wenn Quelle `binance` UND `currentUser.enableBinanceChart`
     UND `excursion.mfePrice` falsy → MFE berechnen (D.10.6). Ergebnis nicht
     `null`: `excursion.mfePrice` setzen, `tradeExcursionDateUnix` = Tag,
-    `tradeExcursionId` = Trade-ID, `tradeExcursionChanged` = wahr,
-    `saveButton` = wahr.
-16. `spinnerSetups` falsch, `tagInput` = '', **`saveButton` = falsch**,
+    `tradeExcursionId` = Trade-ID, `tradeExkursionGeaendert` = wahr,
+    `speichernNoetig` = wahr.
+16. `setupsLaden` falsch, `tagInput` = '', **`speichernNoetig` = falsch**,
     `useInitTooltip()`.
 
-**[Altfehler] Auto-MFE und Speicherknopf**: Schritt 16 setzt `saveButton` nach
+**[Altfehler] Auto-MFE und Speicherknopf**: Schritt 16 setzt `speichernNoetig` nach
 Schritt 15 wieder auf falsch. Der Knopf heisst dann „Schließen", gespeichert
 wird beim Schliessen/Blättern trotzdem (Flag bleibt wahr). Damit schreibt
 blosses Durchblättern für jeden Trade ohne MFE eine Exkursion in die DB.
@@ -583,12 +583,12 @@ Speichern schreiben. Die Entscheidung, ob still gespeichert werden soll, ist
 offen (D.16).
 
 **[Altfehler] Schliessen über ×**: Das ×-Symbol oben rechts blendet nur das
-Modal aus und setzt `modalDailyTradeOpen` falsch. Es speichert nichts (die
+Modal aus und setzt `tradeDetailOffen` falsch. Es speichert nichts (die
 Flags bleiben gesetzt und werden beim nächsten Öffnen eines Trades für den
 alten Kontext gespeichert), setzt die Indizes nicht zurück, ruft
 `useInitTab` nicht und setzt die Flags „Screenshots geladen" (bleibt wahr →
 beim nächsten Öffnen eines anderen Tages werden nicht dessen volle Screenshots
-geladen, nur der Umweg über `screenshotsInfos` in Schritt 10 greift) und
+geladen, nur der Umweg über `bildInfos` in Schritt 10 greift) und
 „Kerzenchart neu anlegen" (bleibt falsch) nicht zurück. Weil der
 Chart-Container beim Ausblenden aus dem DOM fällt, zeichnet der nächste
 Aufruf vermutlich in eine abgehängte Instanz (leerer Chart; nicht im Browser
@@ -602,14 +602,14 @@ anlegen und beim Schliessen freigeben.
 2. Kerzenchart-Fläche, Element-ID **`candlestickChart`** (diese ID ist
    Vorgabe von `useCandlestickChart` und steht im Selektor von
    `useDisposeJournalCharts`; behalten). Sichtbar, wenn keine Fehlermeldung
-   UND (`currentUser.enableBinanceChart` ODER `apiIndex` ≠ −1). Darunter,
+   UND (`currentUser.enableBinanceChart` ODER `boersenIndex` ≠ −1). Darunter,
    wenn gesetzt, die Fehlermeldung als zentrierter Text.
 3. Orderbuch-Zeile (D.11).
 4. Detailtabelle (D.9.3).
 5. Trade-Typ (D.9.4).
 6. Metadaten-Block (D.9.5).
 7. Bot-Aufschlüsselung (D.9.6).
-8. Eingabe-/Infobereich (D.9.7–D.9.10), ausgeblendet während `spinnerSetups`;
+8. Eingabe-/Infobereich (D.9.7–D.9.10), ausgeblendet während `setupsLaden`;
    stattdessen ein kleiner Ladekreisel.
 9. Trennlinie.
 
@@ -741,7 +741,7 @@ gepflegt.
 - **MFE**: Label `daily.mfePrice` mit Info-Symbol, Tooltip `daily.mfeTooltip`
   (heute über `title` + Tooltip-Kennzeichnung). Zahlenfeld, Platzhalter
   „MFE", Wert = `excursion.mfePrice`.
-  - Klick ins Feld: `tradeExcursionChanged` = wahr, `saveButton` = wahr
+  - Klick ins Feld: `tradeExkursionGeaendert` = wahr, `speichernNoetig` = wahr
     (schon ohne Änderung).
   - Änderung (change-Ereignis): `excursion.mfePrice` = `parseFloat(eingabe)`;
     `tradeExcursionDateUnix` = Tag der Karte; `tradeExcursionId` = ID des
@@ -756,13 +756,13 @@ gepflegt.
     echter Änderung.
   - Geleertes Feld ergibt `NaN` (wird als Wert gespeichert). Empfehlung:
     leer → `null`.
-- **Notiz** (nur wenn `tradeNote` nicht leer): Label `daily.note`, darunter der
+- **Notiz** (nur wenn `tradeNotiz` nicht leer): Label `daily.note`, darunter der
   Text ohne HTML, Zeilenumbrüche erhalten, nur lesen.
 
 #### D.9.9 Exkursion speichern
 
 Nur wenn mindestens einer der drei Werte von `excursion` nicht null/undefined
-ist: `spinnerSetups` wahr; `dbFirst('excursions', {equalTo: {tradeId:
+ist: `setupsLaden` wahr; `dbFirst('excursions', {equalTo: {tradeId:
 tradeExcursionId}})`. Datensatz: je Feld `stopLoss`, `maePrice`, `mfePrice`
 — `null`, wenn null/undefined oder lose gleich '' (Achtung: lose Gleichheit
 macht auch 0 zu `null`), sonst der Wert.
@@ -770,19 +770,19 @@ macht auch 0 zu `null`), sonst der Wert.
 - sonst → `dateUnix` = `tradeExcursionDateUnix`, `tradeId` =
   `tradeExcursionId` ergänzen, `dbCreate('excursions', …)`, danach
   Store `tradeId` = `tradeExcursionId`.
-In beiden Fällen danach `await useGetSelectedRange()` und
-`await useGetExcursions()` (Store `excursions` neu laden). `spinnerSetups`
+In beiden Fällen danach `await bestimmeBereich()` und
+`await ladeExkursionen()` (Store `excursions` neu laden). `setupsLaden`
 setzt der Aufrufer zurück.
 
 #### D.9.10 Share-Knopf, Navigation, Screenshot-Vorschau
 
 - **Share-Karte**: Knopf `daily.shareCard` (Share-Symbol), nur wenn
   `aiEnabled` weder `false` noch `0`; öffnet D.12.3.
-- **Zurück**: sichtbar, wenn im Tag ein Trade mit Index `tradeIndex − 1`
-  existiert; gesperrt während `spinnerSetups`; Klick →
-  `clickTradesModal(itemTradeIndex, tradeIndex, tradeIndex − 1)`.
+- **Zurück**: sichtbar, wenn im Tag ein Trade mit Index `tradeIndexAktiv − 1`
+  existiert; gesperrt während `setupsLaden`; Klick →
+  `clickTradesModal(offenerTagIndex, tradeIndexAktiv, tradeIndexAktiv − 1)`.
   Blättern geht NICHT über Tagesgrenzen.
-- **Mitte**: bei `saveButton` „`daily.closeAndSave`", sonst
+- **Mitte**: bei `speichernNoetig` „`daily.closeAndSave`", sonst
   „`daily.closeModal`"; beide → `clickTradesModal()` (speichern + schliessen).
 - **Vorschau**: wenn `screenshot.annotatedBase64` oder
   `screenshot.originalBase64` vorhanden: Vorschaubild (annotiert bevorzugt),
@@ -790,20 +790,20 @@ setzt der Aufrufer zurück.
   'dailyModal', screenshot)` (Index −1 = einzelnes Bild ohne Blättern;
   Quelle `dailyModal`; Daten = aktueller Screenshot; die Funktion setzt
   `selectedScreenshotIndex`/`selectedScreenshotSource` und kopiert die Daten in
-  `selectedScreenshot`, **ohne es vorher zu leeren** — alte Felder können
+  `gewaehltesBild`, **ohne es vorher zu leeren** — alte Felder können
   stehen bleiben, Sache von `screenshots.js`) und öffnet per
   Bootstrap-Datenattribut das globale Modal `#fullScreenModal` (über dem
   statischen Detailfenster).
-- **Weiter**: wie Zurück mit `tradeIndex + 1`.
+- **Weiter**: wie Zurück mit `tradeIndexAktiv + 1`.
 
 Kein Screenshot-Upload, kein Einfügen, keine Annotation mehr im
 Detailfenster: Es wird keine `Screenshot`-Komponente mit Quelle `dailyModal`
 gerendert, `useSetupImageUpload` wird nicht gerufen. Der Speicherweg
-`tradeScreenshotChanged` → `useSaveScreenshot()` ist damit von dieser Ansicht
+`tradeBildGeaendert` → `speichereBild()` ist damit von dieser Ansicht
 aus praktisch **[tot]** (er wird nur wirksam, wenn ein anderer Teil das Flag
 setzt). Empfehlung: Speicheraufruf im Neubau behalten (billig, schützt, falls
 Upload zurückkommt) oder bewusst streichen — offen (D.16). Die Sperre über
-`markerAreaOpen` (D.9.1 Schritt 1) behalten, weil eine Annotation im
+`markierungOffen` (D.9.1 Schritt 1) behalten, weil eine Annotation im
 Vollbild-Dialog offen sein kann.
 
 ---
@@ -812,17 +812,17 @@ Vollbild-Dialog offen sein kann.
 
 #### D.10.1 Quelle wählen (bei jedem Öffnen/Blättern)
 
-`apiIndex` = −1. Index des Eintrags in `apis` mit `provider == 'databento'`
+`boersenIndex` = −1. Index des Eintrags in `apis` mit `provider == 'databento'`
 und mit `'polygon'`. Hat der Databento-Eintrag einen nicht-leeren `key` →
-`apiIndex` = dessen Index, `apiSource` = `databento`; sonst gleiches für
+`boersenIndex` = dessen Index, `apiSource` = `databento`; sonst gleiches für
 Polygon. Danach (D.9.1 Schritt 11):
 
 - Kerzen-Intervall = `timeframe` aus dem `notes`-Eintrag des Trades, sonst
-  `15m`. (`useGetNotes` übernimmt `timeframe` heute NICHT in den Store —
+  `15m`. (`ladeNotizen` übernimmt `timeframe` heute NICHT in den Store —
   **[Altfehler]**, Folge: immer `15m`. Empfehlung: entscheiden — `timeframe`
-  in `useGetNotes` aufnehmen oder fest 15m; D.16.)
+  in `ladeNotizen` aufnehmen oder fest 15m; D.16.)
 - `currentUser.enableBinanceChart` wahr → `apiSource` = `binance`, laden.
-- sonst `apiIndex` ≠ −1 → `apiKey` = Schlüssel; nicht leer → laden.
+- sonst `boersenIndex` ≠ −1 → `apiKey` = Schlüssel; nicht leer → laden.
 - sonst kein Chart, Fehlermeldung `null`.
 
 #### D.10.2 Binance (der einzig funktionierende Weg)
@@ -878,7 +878,7 @@ Intervall passend wählen); offen (D.16).
 Empfehlung: Databento und Polygon im Neubau **weglassen** (Krypto-Journal,
 Binance ist die Quelle; Einstellungsseite `views/einstellungen/journal/OhlcChart.vue`
 schaltet `enableBinanceChart`). Die Bedingung „Chartfläche sichtbar, wenn
-`apiIndex` ≠ −1" entfällt dann. Falls Polygon bleiben soll, sauber neu bauen.
+`boersenIndex` ≠ −1" entfällt dann. Falls Polygon bleiben soll, sauber neu bauen.
 `ohlcv`-Liste und `useCreateOHLCV`/`useGetMFEPrices`-Importe entfallen.
 
 #### D.10.4 Kerzen-Cache
@@ -895,13 +895,13 @@ Empfehlung: Schlüssel um das Fenster erweitern.)
 #### D.10.5 Zeichnen
 
 Gibt es Zeiten: Hat der `notes`-Eintrag `tradingMetadata`, wird sie als
-`_tradingMeta` **an das Trade-Objekt in `filteredTrades` angehängt** (Mutation
+`_tradingMeta` **an das Trade-Objekt in `journalTage` angehängt** (Mutation
 des Store-Objekts; Empfehlung: Kopie übergeben). Dann
 `await useCandlestickChart(zeiten, preise, volumen, trade, neuAnlegen)` mit
 Element-ID Vorgabe `candlestickChart`, ohne Zonen, ohne Schieberegler.
 `neuAnlegen` = Modul-Flag (wahr beim ersten Zeichnen nach dem Öffnen über
 „Schließen", danach falsch → Instanz wird wiederverwendet). Anfangsausschnitt
-steuert `dailyChartZoom` (Store, Vorgabe 3) in `kerzen.js`.
+steuert `tagesChartZoom` (Store, Vorgabe 3) in `kerzen.js`.
 
 Fehlerbehandlung (Anfrage oder Zeichnen wirft):
 - HTTP 429 → „Zu viele Anfragen, versuche es später erneut";
@@ -959,7 +959,7 @@ gröberes Intervall oder Seitenweise laden.
 
 #### D.12.1 KI-Bewertung (aus der Trade-Zeile)
 
-Mit `itemTradeIndex`/`tradeIndex` (gerade gesetzt): Trade, `dateUnix` und
+Mit `offenerTagIndex`/`tradeIndexAktiv` (gerade gesetzt): Trade, `dateUnix` und
 `date` der Karte (`date` ist nach journal-kern §7.11 die Tageszahl, nicht das
 Datum — **[Altfehler]** des Kerns; Empfehlung: im Prompt das Datum aus
 `dateUnix` formatieren). Richtung „Short" bei `strategy === 'short'`, sonst
@@ -980,7 +980,7 @@ inhaltlich gleich.
 #### D.12.2 Share-Karte aus der Trade-Zeile (Karten-Index, Trade-Index)
 
 Trade fehlt → nichts. Tag-Namen nur aus der **ersten Katalog-Gruppe**
-(`availableTags[0]`, gilt als „Strategie"-Gruppe): Zuordnung in `tags` mit
+(`verfuegbareTags[0]`, gilt als „Strategie"-Gruppe): Zuordnung in `tags` mit
 `tradeId == trade.id`; je Tag-ID, die in der ersten Gruppe vorkommt, Name über
 `useGetTagInfo`; leere Namen fallen weg. Metadaten aus dem `notes`-Eintrag des
 Trades (`tradingMetadata`). Hebel = Metadaten-`leverage` oder Trade-`leverage`
@@ -1013,8 +1013,8 @@ Detailfenster vorher schliessen).
 ### D.13 Tote Teile (nicht nachbauen, sofern nicht anders gesagt)
 
 1. **Tagesdiagramme** `doubleLineChart<dateUnix>` und `pieChart<dateUnix>`:
-   `useMountDaily` und `useLoadMore` rufen `useRenderDoubleLineChart()` und
-   `useRenderPieChart()`, aber die Ansicht rendert keine Elemente mit diesen
+   `starteTagesansicht` und `ladeWeitere` rufen `zeichneDoppellinie()` und
+   `zeichneTorte()`, aber die Ansicht rendert keine Elemente mit diesen
    IDs; die Funktionen finden kein Element und zeichnen still nichts.
    Empfehlung: Aufrufe in `ablauf.js` für `daily` entfernen (Sache des
    Besitzers von `ablauf.js`); die beiden Funktionen bleiben, weil der Golden
@@ -1025,8 +1025,8 @@ Detailfenster vorher schliessen).
    der Karten, Dispose über die Klasse `chartClass`.
 2. **Tag-Fenster** (`tagsModal`, Tages-Tags bearbeiten): vollständig gebaut
    (Chips mit Entfernen, Eingabe mit Vorschlägen, Enter/Tab fügt hinzu,
-   gruppierte Vorschlagsliste, Schliessen/Speichern über `useUpdateAvailableTags`
-   + `useUpdateTags` mit `tradeTagsId` = `null` und `tradeTagsDateUnix` = Tag),
+   gruppierte Vorschlagsliste, Schliessen/Speichern über `speichereVerfuegbareTags`
+   + `speichereTags` mit `tradeTagsId` = `null` und `tradeTagsDateUnix` = Tag),
    aber **kein Element öffnet es** (kein Auslöser mit Ziel `#tagsModal`). Das
    Einblend-Ereignis würde ein auslösendes Element mit Karten-Index erwarten.
    Nicht nachbauen.
@@ -1038,7 +1038,7 @@ Detailfenster vorher schliessen).
 6. Auskommentiertes Löschen eines Setups im Detailfenster.
 7. `ohlcv`-Liste, Databento-Zweig (D.10.3).
 8. Paginierung (D.7).
-9. `tradeIndexPrevious` wird geschrieben, nirgends gelesen.
+9. `tradeIndexVorher` wird geschrieben, nirgends gelesen.
 
 ---
 
@@ -1116,10 +1116,10 @@ aufgezeichnet" + Tooltip; die vier Chart-Fehlermeldungen (D.10.5);
 |---|---|---|---|
 | Modal (Instanz + Datenattribute) | `tradesModal` | Detailfenster öffnen (Zeilenklick über Datenattribut), Einblend-Ereignis liefert die Zeile, `hide()` beim Schliessen; statischer Hintergrund, Escape aus | `basis/Dialog.vue` (nativ `<dialog>`); Zeilenklick ruft direkt „öffnen(karte, trade)"; Escape und ein einziger Schliessweg mit Speichern (D.9.1) |
 | Modal | `tagsModal` | totes Tag-Fenster | entfällt |
-| Modal (Datenattribut) | Vorschaubild → `#fullScreenModal` | Vollbild öffnen | Funktion des neuen Vollbild-Dialogs aufrufen (siehe Kommentar in `ScreenshotVollbild.vue`); muss über dem Detailfenster liegen; `Screenshot.vue` springt beim Schliessen per Datenattribut zurück zu `#tradesModal`, wenn `modalDailyTradeOpen` — mit umstellen |
+| Modal (Datenattribut) | Vorschaubild → `#fullScreenModal` | Vollbild öffnen | Funktion des neuen Vollbild-Dialogs aufrufen (siehe Kommentar in `ScreenshotVollbild.vue`); muss über dem Detailfenster liegen; `Screenshot.vue` springt beim Schliessen per Datenattribut zurück zu `#tradesModal`, wenn `tradeDetailOffen` — mit umstellen |
 | Tab (Datenattribute) | Reiter je Karte | Umschalten Trades/Blotter | `basis/Reiter.vue`, Zustand je Karte (D.5.3) |
 | Tooltip (`useInitTooltip`) | Info-Symbole (Vol, PnL/Stk, Swing-Hinweise mit HTML, MFE) | Erklärtexte | `InfoTipp.vue` für Bedeutung von Zahlen, `title=` nur für Bedienelemente. `useInitTooltip` ist nicht idempotent (jeder Aufruf legt neue Instanzen an; wird bei jedem Trade-Wechsel gerufen) — im Neubau entfällt das |
-| Popover (`useInitPopover`, über `useMountDaily`) | keine Popover-Elemente in der Ansicht | — | nichts |
+| Popover (`useInitPopover`, über `starteTagesansicht`) | keine Popover-Elemente in der Ansicht | — | nichts |
 | Collapse, Dropdown | nicht benutzt | — | — |
 
 Symbole: heute Unicons/Font Awesome (Info, Hirn, Bild-Share, Bild, Warndreieck,
@@ -1183,10 +1183,10 @@ Eigener Code, der bleibt und nur BENUTZT wird: `src/utils/db.js` (`dbFind`,
 `dbFirst`, `dbGet`, `dbCreate`, `dbUpdate`, `dbDelete`), `src/utils/sanitize.js`
 (`sanitizeHtml`), `src/composables/useVerlassenSchutz.js`,
 `src/utils/journal/*` (Journal-Kern aus S7, siehe `docs/spec/journal-kern.md`:
-`useGetTagInfo`, `useGetAvailableTags`, `useUpdateTags`,
-`useUpdateAvailableTags`, `useCreatedDateFormat`, `useTimeFormat`,
-`useHourMinuteFormat`, `useEditItem`, `useInitPopover`, `useLoadMore`,
-`useMountScreenshots`, `useCheckVisibleScreen`, das dayjs-Modul `journal/zeit.js`),
+`useGetTagInfo`, `ladeVerfuegbareTags`, `speichereTags`,
+`speichereVerfuegbareTags`, `useCreatedDateFormat`, `useTimeFormat`,
+`useHourMinuteFormat`, `useEditItem`, `useInitPopover`, `ladeWeitere`,
+`starteBilder`, `pruefeSichtbarkeit`, das dayjs-Modul `journal/zeit.js`),
 die Bausteine unter `src/components/basis/` (`Symbol`, `Knopf`, `Dialog`, …),
 `src/i18n`. Bibliotheken, die bleiben dürfen: `vue`, `vue-router`, `vue-i18n`,
 `dayjs`, `dompurify` (über `sanitize.js`), `quill` 2.0.x (BSD-3) – siehe P.6.
@@ -1247,7 +1247,7 @@ Leser, die keine ID gespeichert haben. Bekannte Formen:
 
 | Form | Erzeuger |
 |---|---|
-| `t<dateUnix>_<symbol>_<side>` | `useSaveScreenshot`, wenn `side` gesetzt ist (Altbestand „Screenshot hinzufügen“ und – Altfehler A-S2 – nach JEDER Markierung auf der Screenshots-Seite) |
+| `t<dateUnix>_<symbol>_<side>` | `speichereBild`, wenn `side` gesetzt ist (Altbestand „Screenshot hinzufügen“ und – Altfehler A-S2 – nach JEDER Markierung auf der Screenshots-Seite) |
 | `<dateUnix>_<symbol>` | dieselbe Funktion ohne `side`; auch `quickImport.js` beim Verknüpfen eines Incoming-Bildes (`<Tagesanfang>_<symbol>`); Cockpit-Foto (`cockpitFoto.js`: `<dateUnix>_<symbol oder COCKPIT>`) |
 | `<tradeId>_entry`, `<tradeId>_trend`, `<tradeId>_closing` | Playbook (P.8). Trade-ID hat die Form `t<td>_<index>_<positionId>` |
 | `incoming_entry_<positionId>`, `incoming_trend_<positionId>`, `incoming_closing_<positionId>`, `incoming_chart_<positionId>` | `Incoming.vue` (nicht Teil dieser Spezifikation) |
@@ -1261,59 +1261,59 @@ Screenshots-Filter, `ollama-api.js`) mitzuziehen.
 Alle aus dem Journal-Kern (`docs/spec/journal-kern.md`, Abschnitt 3), hier nur
 die Bedeutung im Bildzusammenhang. Die Werte leben in
 `stores/journal/screenshots.js`, Re-Exporte über `stores/trades.js`
-(`screenshot`, `screenshots`, `screenshotsInfos`, `selectedScreenshot`) und
+(`screenshot`, `screenshots`, `bildInfos`, `gewaehltesBild`) und
 `stores/ui.js` (Rest).
 
 | Name | Art | Bedeutung |
 |---|---|---|
 | `screenshot` | reactive {} | „Das Bild in Bearbeitung“: Arbeitskopie für Markierung und Speichern; Daily befüllt es je Trade im Modal |
 | `screenshots` | reactive [] | Liste der geladenen Bilder (Screenshots-Seite: wachsend; Daily: Bilder EINES Tages) |
-| `screenshotsInfos` | reactive [] | Daily: leichte Liste `{objectId, dateUnix, dateUnixDay, name}` des Monats |
-| `screenshotsPagination` | ref 0 | Offset (`skip`) des nächsten Nachladens |
-| `screenshotsQueryLimit` | ref | Seitengrösse. Store-Vorgabe 10, aber `screenshots.js` setzt beim LADEN DES MODULS 4 |
-| `selectedScreenshot` | reactive {} | Bild der Vollbildansicht |
+| `bildInfos` | reactive [] | Daily: leichte Liste `{objectId, dateUnix, dateUnixDay, name}` des Monats |
+| `bildSeite` | ref 0 | Offset (`skip`) des nächsten Nachladens |
+| `bildAbfrageGrenze` | ref | Seitengrösse. Store-Vorgabe 10, aber `screenshots.js` setzt beim LADEN DES MODULS 4 |
+| `gewaehltesBild` | reactive {} | Bild der Vollbildansicht |
 | `selectedScreenshotIndex` | ref | Index in `screenshots` für das Blättern; −1 bzw. keine Zahl = ohne Blättern |
 | `selectedScreenshotSource` | ref | Herkunft (`screenshots`, `fullScreen`, `dailyModal`, `dailyTab`) |
-| `markerAreaOpen` | ref false | Markierungseditor offen; blockiert Speichern |
-| `editingScreenshot` | ref false | Altbestand (Bearbeiten-Seite); wird nirgends mehr wahr |
-| `dateScreenshotEdited` | ref | Datum geändert → beim Update `date`/`dateUnix`/`dateUnixDay` mitschreiben |
-| `tradeScreenshotChanged` | ref false | Daily: Bild geändert → beim Speichern des Modals `useSaveScreenshot` |
+| `markierungOffen` | ref false | Markierungseditor offen; blockiert Speichern |
+| `bildInBearbeitung` | ref false | Altbestand (Bearbeiten-Seite); wird nirgends mehr wahr |
+| `tagesBildGeaendert` | ref | Datum geändert → beim Update `date`/`dateUnix`/`dateUnixDay` mitschreiben |
+| `tradeBildGeaendert` | ref false | Daily: Bild geändert → beim Speichern des Modals `speichereBild` |
 | `resizeCompressImg`, `resizeCompressMaxWidth`, `resizeCompressMaxHeight`, `resizeCompressQuality` | ref undefined | Bildverkleinerung. Werden NIRGENDS gesetzt → Kompression ist tot (S.6) |
 | `expandedScreenshot`, `expandedId`, `expandedSource` | ref | Altbestand; nur `expandedScreenshot == null` wird im Endlos-Scroll abgefragt |
-| `endOfList` | ref | Screenshots-Seite: keine weiteren Zeilen in der DB |
-| `spinnerLoadingPage`, `spinnerLoadMore`, `spinnerSetups` | ref | Ladeanzeigen |
-| `saveButton`, `renderData`, `selectedItem`, `modalDailyTradeOpen`, `pageId`, `timeZoneTrade` | ref | wie im Journal-Kern; `selectedItem` = `objectId` des zu löschenden Bildes |
+| `listeZuEnde` | ref | Screenshots-Seite: keine weiteren Zeilen in der DB |
+| `seiteLaedt`, `ladeMehr`, `setupsLaden` | ref | Ladeanzeigen |
+| `speichernNoetig`, `zeichenZaehler`, `markierterEintrag`, `tradeDetailOffen`, `pageId`, `timeZoneTrade` | ref | wie im Journal-Kern; `markierterEintrag` = `objectId` des zu löschenden Bildes |
 | `kopiertesBild` | ref | App-interne Zwischenablage `{objectId, name}` oder null; beim Start aus SS `kopiertesBild` (JSON) gelesen |
-| `selectedMonth` (Filter) | ref `{start,end}` | Monat für `screenshotsInfos` |
-| `selectedTags` (Filter) | ref (Liste von Tag-IDs) | Tag-Filter der Screenshots-Seite; `t000t` = „ohne Tag“ |
+| `gewaehlterMonat` (Filter) | ref `{start,end}` | Monat für `bildInfos` |
+| `tagAuswahl` (Filter) | ref (Liste von Tag-IDs) | Tag-Filter der Screenshots-Seite; `t000t` = „ohne Tag“ |
 | `selectedBroker` (Filter) | ref | Börsenfilter; leer = alle |
 | `tags`, `tradeTags` | reactive [] | Tag-Zeilen `{tradeId, tags:[ids], …}` des Zeitraums bzw. Tags des Bildes in Bearbeitung |
 
-SS-Schlüssel dieses Teils: `screenshotsPagination` (Zahl), `screenshotIdToEdit`
+SS-Schlüssel dieses Teils: `bildSeite` (Zahl), `screenshotIdToEdit`
 (objectId), `editItemId` (objectId, von `useEditItem` geschrieben, hier nicht
 gelesen), `kopiertesBild` (JSON `{objectId, name}`).
 
 ### S.4 `src/utils/screenshots.js` – Exporte
 
-Beim Laden des Moduls: `screenshotsQueryLimit` = 4.
+Beim Laden des Moduls: `bildAbfrageGrenze` = 4.
 
-**`useGetScreenshotsPagination()`** – synchron, keine Rückgabe. Steht in SS
-`screenshotsPagination` ein Wert, wird `screenshotsQueryLimit` auf diese Zahl
+**`leseBildSeite()`** – synchron, keine Rückgabe. Steht in SS
+`bildSeite` ein Wert, wird `bildAbfrageGrenze` auf diese Zahl
 gesetzt und der SS-Eintrag gelöscht. Zweck: Nach „Bearbeiten“ (S.5) die schon
 geladene Anzahl in EINEM Abruf wiederholen, damit zum Bild gescrollt werden
-kann. Aufrufer: `useMountScreenshots` (ablauf.js).
+kann. Aufrufer: `starteBilder` (ablauf.js).
 
-**`useGetScreenshots(nichtSeite, tagUnix)`** → Promise<void>, löst immer auf
+**`ladeBilder(nichtSeite, tagUnix)`** → Promise<void>, löst immer auf
 (auch bei leerem Ergebnis). Drei Betriebsarten:
 
 1. `nichtSeite` falsch/fehlend → Screenshots-Seite: `dbFind('screenshots')`
    absteigend nach `dateUnix`, ohne `original`/`annotated`, `limit` =
-   `screenshotsQueryLimit`, `skip` = `screenshotsPagination`. KEIN Datumsfilter
+   `bildAbfrageGrenze`, `skip` = `bildSeite`. KEIN Datumsfilter
    (alle Zeiten).
 2. `nichtSeite` wahr, `tagUnix` fehlt → Monatsübersicht für Daily: Zeilen mit
-   `selectedMonth.start ≤ dateUnix ≤ selectedMonth.end`, ohne
+   `gewaehlterMonat.start ≤ dateUnix ≤ gewaehlterMonat.end`, ohne
    `original`/`annotated`/`originalBase64`/`annotatedBase64`/`maState`; vorher
-   `screenshotsInfos` leeren.
+   `bildInfos` leeren.
 3. `nichtSeite` wahr, `tagUnix` gesetzt → alle Bilder mit `dateUnixDay` =
    `tagUnix` (volle Daten ausser `original`/`annotated`).
 
@@ -1329,44 +1329,44 @@ Danach:
 - Ist `pageId` = `daily` und es gibt Treffer: `screenshots` leeren.
 - **Tag-Filter** je Bild (gilt NICHT auf Daily): gesucht wird die Tag-Zeile in
   `tags` mit `tradeId` = Bild-`name`. Gefunden und einer der Tags steht in
-  `selectedTags` → aufnehmen. Gefunden ohne Schnittmenge, oder nicht gefunden →
-  nur aufnehmen, wenn `t000t` gewählt ist. Folge: Ist `selectedTags` leer,
+  `tagAuswahl` → aufnehmen. Gefunden ohne Schnittmenge, oder nicht gefunden →
+  nur aufnehmen, wenn `t000t` gewählt ist. Folge: Ist `tagAuswahl` leer,
   erscheint auf der Screenshots-Seite KEIN Bild (Filterleiste wählt beim
   Initialisieren alle Tags plus `t000t`).
 - Aufnehmen heisst: Betriebsart 1 und 3 → ganzes Objekt an `screenshots`
   ANHÄNGEN; Betriebsart 2 → `{objectId, dateUnix, dateUnixDay, name}` an
-  `screenshotsInfos`.
-- Kein DB-Treffer und `pageId` = `screenshots` → `endOfList` = wahr.
-- Immer: `screenshotsPagination += screenshotsQueryLimit` (auch in den
-  Daily-Betriebsarten, bedeutungslos dort); `spinnerSetups` = falsch; ausser auf
-  Daily `spinnerLoadingPage` = falsch.
+  `bildInfos`.
+- Kein DB-Treffer und `pageId` = `screenshots` → `listeZuEnde` = wahr.
+- Immer: `bildSeite += bildAbfrageGrenze` (auch in den
+  Daily-Betriebsarten, bedeutungslos dort); `setupsLaden` = falsch; ausser auf
+  Daily `seiteLaedt` = falsch.
 - Steht SS `screenshotIdToEdit` und `pageId` = `screenshots` →
-  `useScrollToScreenshot()`.
+  `scrolleZuBild()`.
 
 Grenzfälle: `skip`/`limit` wirken VOR Börsen- und Tag-Filter → eine „Seite“ kann
 weniger oder null sichtbare Bilder liefern; das Nachladen geht trotzdem weiter,
 bis die DB leer ist. Der Börsenfilter lädt bei jedem Nachladen erneut alle
 Trades (teuer; Empfehlung: einmal je Seitenaufruf).
 
-Aufrufer: `ablauf.js` (`useMountDaily` Betriebsart 2, `useMountScreenshots`
-Betriebsart 1, `useLoadMore` Betriebsart 1), `app.js` (Daily-Reiter
-„Screenshots“: Betriebsart 3 mit dem `dateUnixDay` aus `screenshotsInfos`),
+Aufrufer: `ablauf.js` (`starteTagesansicht` Betriebsart 2, `starteBilder`
+Betriebsart 1, `ladeWeitere` Betriebsart 1), `app.js` (Daily-Reiter
+„Screenshots“: Betriebsart 3 mit dem `dateUnixDay` aus `bildInfos`),
 `Daily.vue` (Modal öffnen: Betriebsart 3 mit dem Tag des Trades bzw. aus
-`screenshotsInfos`), `useUploadScreenshotToParse` (nach Speichern auf Daily:
+`bildInfos`), `ladeBildHoch` (nach Speichern auf Daily:
 erst 3, dann 2), `useSelectedScreenshotFunction` (Nachladen beim Blättern,
 Betriebsart 1).
 
-**`useScrollToScreenshot()`** – sucht das DOM-Element mit der ID = SS
+**`scrolleZuBild()`** – sucht das DOM-Element mit der ID = SS
 `screenshotIdToEdit` (die Karte trägt die `objectId` als Element-ID), scrollt es
 in Sicht, löscht den SS-Eintrag.
 
 **`useSetupImageFile(datei, dateUnix, symbol, side)`** → Promise. Kern des
 Bild-Einlesens (Datei-Auswahl, Ziehen, Einfügen). Ohne Datei: nichts.
-Setzt `tradeScreenshotChanged` = wahr; auf Daily zusätzlich `saveButton` und
-`dateScreenshotEdited` = wahr und `screenshot.dateUnix/symbol/side` = Argumente.
+Setzt `tradeBildGeaendert` = wahr; auf Daily zusätzlich `speichernNoetig` und
+`tagesBildGeaendert` = wahr und `screenshot.dateUnix/symbol/side` = Argumente.
 Liest die Datei als Daten-URL: `screenshot.originalBase64` UND
 `screenshot.annotatedBase64` = diese URL, `screenshot.extension` = Teil zwischen
-`/` und `;base64` (z. B. `png`, `jpeg`), `renderData` +1. Danach, falls
+`/` und `;base64` (z. B. `png`, `jpeg`), `zeichenZaehler` +1. Danach, falls
 `resizeCompressImg` wahr: `compressImage` auf das Element mit ID
 `screenshotDiv` (existiert nicht mehr – siehe S.6). Aufrufer: nur
 `useSetupImageUpload`.
@@ -1380,71 +1380,71 @@ Datei aus `event.target.files` und ruft `useSetupImageFile`. Aufrufer: wird von
 **`useSetupMarkerArea(quelle, bildDaten)`** – öffnet den Markierungseditor,
 siehe S.8. Aufrufer: `Screenshot.vue` (Werkzeug „Markieren“).
 
-**`useSaveScreenshot()`** → Promise<void>. Ablauf:
+**`speichereBild()`** → Promise<void>. Ablauf:
 
-1. Ist `markerAreaOpen` wahr → Hinweis `common.screenshotSaveAnnotation`
+1. Ist `markierungOffen` wahr → Hinweis `common.screenshotSaveAnnotation`
    (Browser-`alert`) und ABBRUCH – das Promise löst dann NIE auf
    (Altfehler A-S3).
 2. Nur `pageId` = `addScreenshot` (Seite existiert nicht mehr, Route leitet auf
    `/screenshots` um – Zweig ist tot): ohne Symbol → Hinweis
    `common.screenshotAddSymbol`; ohne Bild → `common.screenshotAddImage`;
    Spinner an; `dateUnix` aus `screenshot.date` in der Handelszeitzone.
-3. Ist `editingScreenshot` wahr (nie): `extension` aus `originalBase64` neu.
+3. Ist `bildInBearbeitung` wahr (nie): `extension` aus `originalBase64` neu.
 4. `screenshot.name` NEU setzen: mit `side` → `t<dateUnix>_<symbol>_<side>`,
    ohne → `<dateUnix>_<symbol>` (Altfehler A-S2).
-5. Wenn `editingScreenshot` falsch und `tradeTags` leer → direkt
-   `useUploadScreenshotToParse()`. Sonst zuerst parallel
-   `useUpdateAvailableTags()` und `useUpdateTags()` (Journal-Kern; auf Seite
+5. Wenn `bildInBearbeitung` falsch und `tradeTags` leer → direkt
+   `ladeBildHoch()`. Sonst zuerst parallel
+   `speichereVerfuegbareTags()` und `speichereTags()` (Journal-Kern; auf Seite
    `addScreenshot` mit Schlüssel `screenshot.name`, sonst mit dem Daily-Schlüssel),
-   dann `useUploadScreenshotToParse()`.
+   dann `ladeBildHoch()`.
 
-Aufrufer: `Daily.vue` (Modal speichern, wenn `tradeScreenshotChanged`),
+Aufrufer: `Daily.vue` (Modal speichern, wenn `tradeBildGeaendert`),
 `useSetupMarkerArea` (nach jeder Markierung auf Seite/Daily-Reiter).
 
-**`useUploadScreenshotToParse()`** → Promise. Name historisch, schreibt in die
+**`ladeBildHoch()`** → Promise. Name historisch, schreibt in die
 eigene DB.
 
 - `screenshot.objectId` vorhanden → `dbUpdate('screenshots', id, …)` mit
   `name`, `symbol`, `side`, `originalBase64`, `annotatedBase64`,
-  `markersOnly: true`, `maState`; falls `dateScreenshotEdited` zusätzlich
+  `markersOnly: true`, `maState`; falls `tagesBildGeaendert` zusätzlich
   `date` (Handelszeitzone, Form wie S.1), `dateUnix` (Zahl), `dateUnixDay`
   (Tagesanfang in Handelszeitzone).
 - sonst → `dbCreate` mit allen obigen Feldern inkl. Datum (Datum immer).
 - Danach in beiden Fällen: `pageId` = `addScreenshot` → harte Navigation nach
-  `/screenshots`; `pageId` = `daily` → `useGetScreenshots(true, Tagesanfang)`,
-  dann `useGetScreenshots(true)`, dann den Wert des ersten Elements mit Klasse
+  `/screenshots`; `pageId` = `daily` → `ladeBilder(true, Tagesanfang)`,
+  dann `ladeBilder(true)`, dann den Wert des ersten Elements mit Klasse
   `screenshotFile` (Datei-Eingabe) leeren.
-- Fehler: Konsole, `spinnerLoadingPage` = falsch, Promise löst NICHT auf
+- Fehler: Konsole, `seiteLaedt` = falsch, Promise löst NICHT auf
   (Altfehler A-S3; sichtbar wird der Fehler über den zentralen db.js-Hinweis).
 
-Aufrufer: nur `useSaveScreenshot`.
+Aufrufer: nur `speichereBild`.
 
 **`useDeleteScreenshot()`** → Promise. Argumente werden ignoriert. Löscht
-`dbDelete('screenshots', selectedItem)`. Auf Seite `screenshots`: das Bild aus
+`dbDelete('screenshots', markierterEintrag)`. Auf Seite `screenshots`: das Bild aus
 `screenshots` entfernen (KEIN Neuladen – ein Neuladen setzte früher die
 Paginierung zurück und verlor die Lösch-Bestätigungen der neuen Karten),
-`screenshotsPagination` um 1 verringern (nicht unter 0), `selectedItem` = null.
+`bildSeite` um 1 verringern (nicht unter 0), `markierterEintrag` = null.
 Auf `daily`: im Eintrag von `screenshots` mit dieser `objectId` alle Schlüssel
 löschen (das leere Objekt bleibt in der Liste), `screenshot` leeren,
-`selectedItem` = null. Aufrufer: `app.js` (Lösch-Bestätigung, S.5).
+`markierterEintrag` = null. Aufrufer: `app.js` (Lösch-Bestätigung, S.5).
 
-**`useRefreshScreenshot()`** → Promise. Spinner an, `screenshotsQueryLimit` = 4,
-`screenshotsPagination` = 0, `screenshots` leeren, `useGetScreenshots(false)`,
-`selectedItem` = null. Aufrufer: `FilterLeiste.vue` (Filter anwenden auf Seite
-`screenshots`, danach `useCheckVisibleScreen`).
+**`ladeBilderNeu()`** → Promise. Spinner an, `bildAbfrageGrenze` = 4,
+`bildSeite` = 0, `screenshots` leeren, `ladeBilder(false)`,
+`markierterEintrag` = null. Aufrufer: `FilterLeiste.vue` (Filter anwenden auf Seite
+`screenshots`, danach `pruefeSichtbarkeit`).
 
 **`useSelectedScreenshotFunction(index, quelle, daten)`** – Auswahl für die
 Vollbildansicht.
 
 - `selectedScreenshotIndex` = `index`, `selectedScreenshotSource` = `quelle`.
 - Ist `index` wahrheitswertig (also ≠ 0 und definiert; −1 zählt als wahr) UND
-  `index + 2` = Länge von `screenshots` UND nicht `endOfList` → Nachladen
-  `useGetScreenshots(false)` anstossen (nicht abgewartet). Grenzfälle: beim
+  `index + 2` = Länge von `screenshots` UND nicht `listeZuEnde` → Nachladen
+  `ladeBilder(false)` anstossen (nicht abgewartet). Grenzfälle: beim
   Index 0 wird nie nachgeladen; mit −1 (Daily) wird nachgeladen, wenn
   `screenshots` genau 1 Element hat – im Neubau nur für `index ≥ 1` und nur auf
   der Seite `screenshots` nachladen.
-- `index ≥ 0` → `selectedScreenshot` leeren und mit `screenshots[index]`
-  füllen. Sonst (−1 oder keine Zahl) → `daten` in `selectedScreenshot`
+- `index ≥ 0` → `gewaehltesBild` leeren und mit `screenshots[index]`
+  füllen. Sonst (−1 oder keine Zahl) → `daten` in `gewaehltesBild`
   hineinkopieren OHNE vorher zu leeren (Altfehler A-S4: Schlüssel eines vorher
   gezeigten Bildes bleiben stehen, z. B. `side`).
 
@@ -1465,7 +1465,7 @@ Aufbau von oben nach unten:
 
 1. **Kopfzeile** nur bei `fullScreen` und `screenshots`: Datum
    (`useCreatedDateFormat(dateUnix)`, Form „Wochentag TT Monat JJJJ“). Bei
-   `fullScreen` rechts ein Schliessen-Knopf: ist `modalDailyTradeOpen` wahr,
+   `fullScreen` rechts ein Schliessen-Knopf: ist `tradeDetailOffen` wahr,
    schliesst er das Vollbild UND öffnet das Daily-Trade-Modal (`#tradesModal`)
    wieder; sonst schliesst er nur das Vollbild.
 2. **Infozeile links** (nicht bei `addScreenshot`/`dailyModal`): Symbol; mit
@@ -1482,18 +1482,18 @@ Aufbau von oben nach unten:
    - Markieren: `useSetupMarkerArea(source, screenshotData)`.
    - Kopieren (nur mit `objectId`): siehe unten.
    - Bearbeiten (nur `source` = `screenshots`): `useEditItem(objectId)` – setzt
-     SS `editItemId`, `screenshotsPagination` (aktueller Offset),
+     SS `editItemId`, `bildSeite` (aktueller Offset),
      `screenshotIdToEdit` und navigiert hart nach `/addScreenshot`, das der
      Router auf `/screenshots` umleitet. Effekt heute: Seite lädt neu, lädt die
      bisher geladene Menge auf einmal und scrollt zur Karte. Eine
      Bearbeiten-Maske gibt es nicht (Altfehler A-S5).
    - Löschen (nur mit `objectId`, nicht `addScreenshot`): setzt
-     `selectedItem` = `objectId` und zeigt eine Bestätigung (heute Bootstrap
+     `markierterEintrag` = `objectId` und zeigt eine Bestätigung (heute Bootstrap
      Popover links mit „Are you sure? / Yes / No“, hart englisch;
      `useInitPopover` in `app.js` reagiert auf Klicks auf Elemente mit den
      Klassen `popoverDelete`, `popoverYes`, `popoverNo`; ohne Bootstrap
      `confirm(messages.confirmDelete)`). Ja → `useDeleteScreenshot()`;
-     Nein → `selectedItem` = null.
+     Nein → `markierterEintrag` = null.
 4. **Bild**: zwei übereinanderliegende Bilder gleicher Grösse – unten
    `originalBase64` mit Element-ID `screenshotDiv-<source>-<objectId>` (ohne
    `objectId`: `…-<dateUnix>`; der Markierungseditor sucht genau diese ID),
@@ -1541,16 +1541,16 @@ Route `/screenshots`, Name `screenshots`, Titel-Schlüssel `nav.screenshots`,
 Menü-Eintrag im Modus `journal`, Gruppe `reflect`. `/addScreenshot` leitet
 hierher um.
 
-- **Laden:** beim Einhängen `useMountScreenshots()` (ablauf.js: Spinner,
-  `useGetScreenshotsPagination`, Zeitraum, Tags und Tag-Katalog laden,
-  `useGetScreenshots(false)`, `useInitPopover`), danach Scroll-Beobachter am
-  Fenster anmelden und `useCheckVisibleScreen()` (lädt nach, solange die Seite
+- **Laden:** beim Einhängen `starteBilder()` (ablauf.js: Spinner,
+  `leseBildSeite`, Zeitraum, Tags und Tag-Katalog laden,
+  `ladeBilder(false)`, `useInitPopover`), danach Scroll-Beobachter am
+  Fenster anmelden und `pruefeSichtbarkeit()` (lädt nach, solange die Seite
   nicht scrollbar ist). Beim Aushängen den Beobachter wieder abmelden (benannte
   Funktion – früher stapelte jeder Besuch einen weiteren).
 - **Endlos-Scroll:** Ist der Abstand bis zum Seitenende ≤ 200 px (Fensterhöhe +
-  200 ≥ Restdokument) und weder `spinnerLoadMore` noch `spinnerLoadingPage`
-  noch `endOfList` und `expandedScreenshot` == null → `useLoadMore()`
-  (ablauf.js → `useGetScreenshots(false)` mit `spinnerLoadMore`).
+  200 ≥ Restdokument) und weder `ladeMehr` noch `seiteLaedt`
+  noch `listeZuEnde` und `expandedScreenshot` == null → `ladeWeitere()`
+  (ablauf.js → `ladeBilder(false)` mit `ladeMehr`).
 - **Typ-Filter** (nur clientseitig über die geladene Liste, nicht gespeichert):
   „Alle“ (`common.all`), „Eröffnung“ (`screenshots.opening`): `side` `B` oder
   `SS` und `name` enthält nicht `_closing`; „Abschluss“
@@ -1559,7 +1559,7 @@ hierher um.
   daher NIE unter „Eröffnung“; Cockpit-Fotos (`side` '') auch nicht.
 - **Leer:** Ist die gefilterte Liste leer → Komponente `NoData`.
 - **Raster:** je Bild eine Karte (1 Spalte schmal, 2 mittel, 3 breit); Element-ID
-  der Karte = `objectId` (Ziel von `useScrollToScreenshot`). Inhalt:
+  der Karte = `objectId` (Ziel von `scrolleZuBild`). Inhalt:
   `Screenshot` mit `source` `screenshots` und `index` = Position in der
   UNGEFILTERTEN Liste `screenshots`. Bildbereich in der Kachel höchstens 250 px
   hoch, Überlauf abgeschnitten.
@@ -1569,12 +1569,12 @@ hierher um.
   `<tradeId>_entry` usw. findet das Playbook nichts. Empfehlung: Trade-ID aus
   dem Namen ableiten (Endung `_entry`/`_trend`/`_closing` abschneiden) und den
   Link nur zeigen, wenn eine Trade-ID erkennbar ist.
-- **Nachlade-Kreisel** unten, solange `spinnerLoadMore`.
-- Globale Seitenspinner-Komponente `SpinnerLoadingPage` oben; das Raster ist
-  verborgen, solange `spinnerLoadingPage`.
+- **Nachlade-Kreisel** unten, solange `ladeMehr`.
+- Globale Seitenspinner-Komponente `SeiteLaedt` oben; das Raster ist
+  verborgen, solange `seiteLaedt`.
 
 Monatsfilter: Die Screenshots-Seite filtert NICHT nach Monat/Zeitraum; nur Tags
-und Börse (S.4). Die Filterleiste löst über `useRefreshScreenshot` neu aus.
+und Börse (S.4). Die Filterleiste löst über `ladeBilderNeu` neu aus.
 
 i18n: `common.all`, `screenshots.opening`, `screenshots.closing`,
 `nav.playbook`, `nav.screenshots`; in `screenshots.js`:
@@ -1608,16 +1608,16 @@ i18n: `common.all`, `screenshots.opening`, `screenshots.closing`,
    - nur auf Daily, Quelle `dailyModal`: beim Erzeugen oder Auswählen eines
      Markers das Trade-Modal ausblenden.
    - **render** (Benutzer bestätigt): bei `dailyModal` Modal wieder zeigen und
-     `tradeScreenshotChanged`, `dateScreenshotEdited`, `saveButton` = wahr;
-     `markerAreaOpen` = falsch; `screenshot.annotatedBase64` = gerenderte
+     `tradeBildGeaendert`, `tagesBildGeaendert`, `speichernNoetig` = wahr;
+     `markierungOffen` = falsch; `screenshot.annotatedBase64` = gerenderte
      Daten-URL (nur Markierungen), `screenshot.maState` = Zustand (S.9). Bei
      `dailyTab`/`screenshots`: in `screenshots` den Eintrag mit GLEICHEM
      `dateUnix` suchen (nicht `objectId` – Altfehler A-S8), dort dieselben zwei
-     Felder setzen und sofort `useSaveScreenshot()` (speichert und benennt um,
-     A-S2). `renderData` +1.
+     Felder setzen und sofort `speichereBild()` (speichert und benennt um,
+     A-S2). `zeichenZaehler` +1.
    - **close** (verworfen): bei `dailyModal` Modal wieder zeigen;
-     `markerAreaOpen` = falsch.
-5. Editor anzeigen; ist er offen → `markerAreaOpen` = wahr.
+     `markierungOffen` = falsch.
+5. Editor anzeigen; ist er offen → `markierungOffen` = wahr.
 6. Ist `screenshot.maState` wahr (also auch `{}`), wird er wiederhergestellt.
    Bei `{}` wirft die Bibliothek (kein `markers`-Feld) – Altfehler A-S9: Bilder
    aus Playbook/Incoming (`maState: {}`) lassen sich nur mit Konsolenfehler
@@ -1703,9 +1703,9 @@ eines Markers, Farbe und Strichbreite. Speichern und Verwerfen als ausdrücklich
 Knöpfe; Esc = Verwerfen mit Rückfrage, wenn etwas geändert wurde.
 
 Schnittstelle bleibt: `useSetupMarkerArea(quelle, bildDaten)` öffnet den
-Editor für das Bild; `markerAreaOpen` ist wahr, solange er offen ist; nach
+Editor für das Bild; `markierungOffen` ist wahr, solange er offen ist; nach
 Speichern stehen `annotatedBase64` und `maState` am Bild (in `screenshot` und
-in `screenshots`) und es wird gespeichert; nach Verwerfen `markerAreaOpen` =
+in `screenshots`) und es wird gespeichert; nach Verwerfen `markierungOffen` =
 falsch, nichts geschrieben.
 
 Lesen alter Zustände (Pflicht): Alle 13 `typeName` aus S.9 müssen mindestens
@@ -1735,18 +1735,18 @@ nennen.
 ### S.11 `ScreenshotVollbild.vue` – was sie erwartet (eigener Code, bleibt)
 
 Eingehängt einmal in `layouts/Dashboard.vue`. Liest `selectedScreenshotIndex`,
-`selectedScreenshot`, `screenshots`, `getMore` (Filter-Store; wird von niemandem
+`gewaehltesBild`, `screenshots`, `holtWeitere` (Filter-Store; wird von niemandem
 mehr gesetzt, ist also immer falsch) und ruft
 `useSelectedScreenshotFunction(index ± 1, 'fullScreen')`. Zeigt
 `Screenshot.vue` mit `source` `fullScreen`, `index` und `screenshot-data` =
-`selectedScreenshot`, sobald `selectedScreenshot` Schlüssel hat. Zurück-Knopf,
+`gewaehltesBild`, sobald `gewaehltesBild` Schlüssel hat. Zurück-Knopf,
 wenn der Index eine ganze Zahl ≥ 1 ist; Weiter-Knopf, wenn der Index eine ganze
 Zahl ≥ 0 ist und `screenshots[index+1]` existiert. Geöffnet wird sie heute als
 Bootstrap-Modal mit der festen ID `fullScreenModal` durch data-Attribute an den
 Öffnern (`Screenshot.vue` Vergrössern, Daily-Vorschaubild); geschlossen durch
 den Knopf in der Kopfzeile von `Screenshot.vue`. Für S9: Öffnen/Schliessen wird
 eine Funktion (z. B. Store-Flag), die beide Öffner und der Schliessen-Knopf
-aufrufen; der Rückweg ins Daily-Trade-Modal (wenn `modalDailyTradeOpen`) muss
+aufrufen; der Rückweg ins Daily-Trade-Modal (wenn `tradeDetailOffen`) muss
 erhalten bleiben.
 
 ### S.12 Bootstrap-JS, das in diesem Teil benutzt wird
@@ -1770,14 +1770,14 @@ erhalten bleiben.
   Daily-Vorschaubild, Trade-KI-Bewertung, KI-Berichte, `analyze_screenshot` –
   bekommen dann ein Bild ohne Chart. Empfehlung: eingebranntes Gesamtbild
   speichern (S.10).
-- **A-S2** `useSaveScreenshot` überschreibt `name` bei jeder Markierung mit
+- **A-S2** `speichereBild` überschreibt `name` bei jeder Markierung mit
   `t<dateUnix>_<symbol>_<side>` bzw. `<dateUnix>_<symbol>`. Bilder aus dem
   Playbook (`<tradeId>_entry`) und Incoming verlieren so ihre Namensverknüpfung;
   das Playbook findet sie nur noch, wenn die ID in der Notiz steht.
   Empfehlung: `name` beim Markieren unverändert lassen.
-- **A-S3** `useSaveScreenshot`/`useUploadScreenshotToParse` lösen bei Abbruch
+- **A-S3** `speichereBild`/`ladeBildHoch` lösen bei Abbruch
   oder DB-Fehler nie auf. Empfehlung: immer auflösen (oder ablehnen).
-- **A-S4** Vollbild ohne Index leert `selectedScreenshot` nicht vorher.
+- **A-S4** Vollbild ohne Index leert `gewaehltesBild` nicht vorher.
 - **A-S5** „Bearbeiten“ führt nur zu Neuladen und Scrollen. Empfehlung:
   Symbol weglassen oder echte Bearbeitung (Symbol, Seite, Datum) in einem Dialog.
 - **A-S6** Typ-Filter kennt `long`/`short` nicht (Playbook-Bilder fehlen unter
@@ -1854,14 +1854,14 @@ Daily für die Trade-Tags.
 
 Gelesen ausserdem: Trade-Tageszeilen (`trades`, Feld `trades[]` mit `id`,
 `symbol`, `strategy` (`long`/`short`), `netProceeds`, `grossProceeds`,
-`broker`), Tag-Katalog (`availableTags`: Gruppen `{id, name, color, tags:[{id,
+`broker`), Tag-Katalog (`verfuegbareTags`: Gruppen `{id, name, color, tags:[{id,
 name}]}`), Zeitrahmen (`allTradeTimeframes`, `selectedTradeTimeframes`),
 `selectedBroker`, `timeZoneTrade`, `kopiertesBild`.
 
 ### P.3 Laden (`loadPlaybookEntries`) und Seitenstart
 
-Beim Start (vor dem Einhängen): `spinnerLoadingPage` an,
-`useGetAvailableTags()` (Katalog), Einträge laden, Spinner aus. Danach
+Beim Start (vor dem Einhängen): `seiteLaedt` an,
+`ladeVerfuegbareTags()` (Katalog), Einträge laden, Spinner aus. Danach
 Deep-Link (P.5).
 
 Einträge laden – parallel:
@@ -1938,7 +1938,7 @@ Nach dem Laden, wenn `tradeId` in der Query steht:
    `closingEmotionLevel`, `closingFeelings`, `closingTimeframe`,
    `closingPlaybook`); Einträge neu laden; erneut suchen. Nicht gefunden →
    nichts (kein Hinweis; Altfehler A-P2: z. B. Bildnamen aus S.7).
-3. Gefunden: aufklappen; hat der Eintrag noch keine Daten (P.9 `hasData`) →
+3. Gefunden: aufklappen; hat der Eintrag noch keine Daten (P.9 `journalHatDaten`) →
    direkt in den Bearbeitungsmodus; nach 100 ms die Karte (Element-ID
    `playbook-<tradeId>`) sanft an den oberen Rand scrollen.
 
@@ -2001,7 +2001,7 @@ Kopf (Klick klappt auf/zu, siehe P.9):
 - rechts: Zufriedenheit als Emoji (1 👍, 2 ✊, 0 👎; null nichts), PnL wenn ≠ 0
   mit Vorzeichen „+“ bei ≥ 0, zwei Nachkommastellen, grün/rot (Klassen
   `greenTrade`/`redTrade`), Pfeil auf/ab.
-- **Zusammenfassung im zugeklappten Zustand** (nur wenn `hasData`): Trade-Typ
+- **Zusammenfassung im zugeklappten Zustand** (nur wenn `journalHatDaten`): Trade-Typ
   (bei abweichendem `closingTradeType`: Eröffnungstyp orange → Pfeil →
   Abschlusstyp grün; sonst eine Pille mit `closingTradeType` oder `tradeType`),
   „`incoming.stress` N/10“ wenn Stress > 0, Zeitrahmen, Eröffnungs-Tags (Pille in
@@ -2191,7 +2191,7 @@ aus der Bildliste entfernen. Fehler beim Löschen nur Konsole.
   laufender Bearbeitungsmodus dieser Karte wird abgebrochen). Ist eine ANDERE
   Karte im Bearbeitungsmodus offen → dort abbrechen, dann diese öffnen. Es ist
   immer höchstens eine Karte offen und höchstens eine im Bearbeitungsmodus.
-- **`hasData(eintrag)`** ist wahr bei: Typ, Stress > 0, Emotion > 0,
+- **`journalHatDaten(eintrag)`** ist wahr bei: Typ, Stress > 0, Emotion > 0,
   Zeitrahmen, `feelings`, Eröffnungsnotiz mit Text, Eröffnungs-Tags,
   Zufriedenheit nicht null, `entryNote`, Abschluss-Stress > 0,
   Abschluss-Emotion > 0, `closingTimeframe`, `closingFeelings`,
@@ -2339,15 +2339,15 @@ eigene Stile mit und lässt `uebergang.css` für Incoming unangetastet.
 
 | Export / Ding | Aufrufer | erwartet |
 |---|---|---|
-| `useGetScreenshotsPagination` | `ablauf.js` `useMountScreenshots` | synchron, setzt Limit aus SS |
-| `useGetScreenshots` | `ablauf.js` (3×), `app.js` (Daily-Reiter), `Daily.vue` (2×), intern | Promise, füllt Stores wie S.4 |
-| `useDeleteScreenshot` | `app.js` (Lösch-Bestätigung) | löscht `selectedItem`, Store-Pflege |
-| `useRefreshScreenshot` | `FilterLeiste.vue` | Promise; Liste neu ab Offset 0 |
+| `leseBildSeite` | `ablauf.js` `starteBilder` | synchron, setzt Limit aus SS |
+| `ladeBilder` | `ablauf.js` (3×), `app.js` (Daily-Reiter), `Daily.vue` (2×), intern | Promise, füllt Stores wie S.4 |
+| `useDeleteScreenshot` | `app.js` (Lösch-Bestätigung) | löscht `markierterEintrag`, Store-Pflege |
+| `ladeBilderNeu` | `FilterLeiste.vue` | Promise; Liste neu ab Offset 0 |
 | `useSelectedScreenshotFunction` | `Screenshot.vue`, `Daily.vue`, `ScreenshotVollbild.vue` | synchron; setzt Auswahl |
 | `useSetupMarkerArea` | `Screenshot.vue` | öffnet Editor |
-| `useSaveScreenshot` | `Daily.vue`, intern | Promise |
+| `speichereBild` | `Daily.vue`, intern | Promise |
 | `useSetupImageUpload` | `Daily.vue` (nur Import) | Export muss existieren |
-| `useSetupImageFile`, `compressImage`, `useScrollToScreenshot`, `useUploadScreenshotToParse` | intern | – |
+| `useSetupImageFile`, `compressImage`, `scrolleZuBild`, `ladeBildHoch` | intern | – |
 | `Screenshot.vue` | `Screenshots.vue`, `ScreenshotVollbild.vue` | Props wie S.5 |
 | `ScreenshotVollbild.vue` | `layouts/Dashboard.vue` | ohne Props |
 | `kopiertesBild` (Store) | geschrieben: `Screenshot.vue`, `Livetrading.vue`; gelesen: `Playbook.vue`, `Incoming.vue` | `{objectId, name}` oder null, gespiegelt in SS |
@@ -2373,11 +2373,11 @@ Beschrieben werden
 Eigener Code, der bleibt und nur BENUTZT wird (Schnittstellen in
 `docs/spec/journal-kern.md` und `docs/spec/diagramme.md`):
 
-- Abläufe aus `src/utils/journal/ablauf.js`: `useMountDashboard`,
-  `useMountAuswertung`, `useMountCalendar`, `useMountDaily`,
+- Abläufe aus `src/utils/journal/ablauf.js`: `starteDashboard`,
+  `useMountAuswertung`, `starteKalender`, `starteTagesansicht`,
   `useDisposeJournalCharts`.
 - Diagramme aus `src/utils/journal/diagramme/` (über `index.js` bzw. den
-  Lader `src/utils/journal/diagrammLader.js`): `useECharts`,
+  Lader `src/utils/journal/diagrammLader.js`): `zeichneDiagramme`,
   `useGaugeChart`, `useHorizontalBarChart`, `useSplitBarChart`,
   `useStressLineChart`, `useRadarChart`.
 - Formatierer aus `src/utils/journal/format.js`: `useThousandCurrencyFormat`,
@@ -2387,13 +2387,13 @@ Eigener Code, der bleibt und nur BENUTZT wird (Schnittstellen in
 - `src/utils/journal/zeit.js` (dayjs mit Zeitzonen-Plugins),
   `shared/gewinn.js` (`istGewinn`: Wert ≥ 0 zählt als Gewinn, der Kanon des
   Projekts für Break-even).
-- `src/utils/journal/app.js`: `useInitTab`, `useInitTooltip`, `useGetAPIS`,
+- `src/utils/journal/app.js`: `useInitTab`, `useInitTooltip`, `ladeApis`,
   `usePageRedirect`.
 - `src/utils/journal/import.js`: `useGetExistingTradesArray`,
   `useUploadTrades`, `useGetOHLCV`, `useGetMFEPrices`, `useUpdateMfePrices`.
-- `src/utils/journal/tagesrechnung.js`: `useCreateBlotter`, `useCreatePnL`.
-- `src/utils/journal/laden.js`: `useGetTrades`.
-- `src/utils/journal/tagebuch.js`: `useGetExcursions`.
+- `src/utils/journal/tagesrechnung.js`: `baueBlotter`, `bauePnL`.
+- `src/utils/journal/laden.js`: `ladeTrades`.
+- `src/utils/journal/tagebuch.js`: `ladeExkursionen`.
 - `src/utils/quickImport.js`: `buildTradeObj`, `saveManualTrade`,
   `useQuickApiImport`, `createBitunixTradeObj`, `createBitgetTradeObj`.
 - `src/stores/accountBalance.js`: `allTimeNetPnL`, `allTimeVolume`,
@@ -2402,7 +2402,7 @@ Eigener Code, der bleibt und nur BENUTZT wird (Schnittstellen in
 - `src/utils/incoming.js`: `useFetchOpenPositions`.
 - `src/composables/useVerlassenSchutz.js`, `src/utils/notify.js`
   (`sendNotification`).
-- `src/components/BotDashboard.vue`, `src/components/SpinnerLoadingPage.vue`
+- `src/components/BotDashboard.vue`, `src/components/SeiteLaedt.vue`
   (nicht Teil dieser Spezifikation, werden nur eingebunden).
 
 Stores (alle als `ref`/`reactive`-Exporte, kein Pinia), Bündel-Pfade wie heute:
@@ -2435,15 +2435,15 @@ Route `/dashboard`, Routenname `dashboard` (Seitenkennung `pageId` =
 
 Gelesen:
 
-- `ui.js`: `spinnerLoadingPage`, `dashboardIdMounted`, `renderData`,
-  `hasData`, `barChartNegativeTagGroups`, `timeZoneTrade`
-  (`dashboardChartsMounted` wird importiert, aber nicht benutzt).
-- `filters.js`: `selectedDashTab`, `amountCase` (`'gross'`/`'net'`),
-  `amountCapital`, `selectedBroker`, `selectedTradeCategory`
+- `ui.js`: `seiteLaedt`, `dashboardBereit`, `zeichenZaehler`,
+  `journalHatDaten`, `negativeTagGruppen`, `timeZoneTrade`
+  (`dashboardDiagrammeBereit` wird importiert, aber nicht benutzt).
+- `filters.js`: `selectedDashTab`, `betragArt` (`'gross'`/`'net'`),
+  `betragGross`, `selectedBroker`, `selectedTradeCategory`
   (`selectedRatio` importiert, aber NICHT benutzt — siehe B.6).
-- `trades.js`: `totals`, `profitAnalysis`, `satisfactionArray`,
-  `satisfactionTradeArray`, `availableTags`, `groups`,
-  `filteredTradesTrades`, `excursions`.
+- `trades.js`: `totals`, `gewinnAnalyse`, `zufriedenheitTage`,
+  `zufriedenheitTrades`, `verfuegbareTags`, `groups`,
+  `gefilterteTradesFlach`, `excursions`.
 - `settings.js`: `currentUser` (Felder `balances`, `startBalance`).
 - `accountBalance.js`: `allTimeNetPnL`, `allTimeVolume`, `last30dVolume`,
   `displayBonus`.
@@ -2452,8 +2452,8 @@ Gelesen:
 
 Geschrieben:
 
-- `amountCapital` wird beim Anlegen der Seite einmal gesetzt: `amountCase` mit
-  grossem Anfangsbuchstaben (`'Gross'`/`'Net'`), bei leerem `amountCase` die
+- `betragGross` wird beim Anlegen der Seite einmal gesetzt: `betragArt` mit
+  grossem Anfangsbuchstaben (`'Gross'`/`'Net'`), bei leerem `betragArt` die
   leere Zeichenkette. Wird in dieser Datei sonst nicht gelesen.
 - `localStorage['dashboard_hidden_cards']` (B.4).
 - `selectedDashTab` und `localStorage['selectedDashTab']` über den
@@ -2462,33 +2462,33 @@ Geschrieben:
 ### B.2 Lebenszyklus
 
 1. Beim Anlegen (vor dem Einhängen, asynchron, in dieser Reihenfolge):
-   1. `barChartNegativeTagGroups` „leeren“ — heute auf dem Ref-Objekt statt
+   1. `negativeTagGruppen` „leeren“ — heute auf dem Ref-Objekt statt
       auf seinem Wert, also wirkungslos. **[Altfehler, harmlos]**
-      `useMountDashboard` leert den Wert ohnehin selbst. Neubau: weglassen.
+      `starteDashboard` leert den Wert ohnehin selbst. Neubau: weglassen.
    2. `await refreshAccountBalance({ force: true })`.
    3. `useFetchOpenPositions()` anstossen, NICHT abwarten; Fehler still
       schlucken (das globale Polling versucht es erneut). Zweck: das
       unrealisierte P&L offener Positionen fliesst sofort in den Kontostand.
-   4. `await useMountDashboard()` (lädt Bereich, Exkursionen, Zufriedenheit,
+   4. `await starteDashboard()` (lädt Bereich, Exkursionen, Zufriedenheit,
       Tags, gefilterte Trades, Summen, Gruppen, Gewinnanalyse; schaltet
-      Spinner ab, setzt `dashboardIdMounted`, ruft `useInitTab('dashboard')`
-      und `useInitTooltip()`, füllt `barChartNegativeTagGroups`, erhöht
-      `renderData` und ruft `useECharts('init')`).
+      Spinner ab, setzt `dashboardBereit`, ruft `useInitTab('dashboard')`
+      und `useInitTooltip()`, füllt `negativeTagGruppen`, erhöht
+      `zeichenZaehler` und ruft `zeichneDiagramme('init')`).
 2. Nach dem Einhängen: Klick-Lauscher am Dokument für „Klick ausserhalb
    schliesst das Karten-Menü“ (B.4). Beim Aushängen entfernen.
 3. Vor dem Aushängen: `useDisposeJournalCharts()` — solange die
    Diagrammknoten noch im Dokument hängen.
 
-Ein Filterwechsel in der Filterleiste ruft `useMountDashboard()` erneut auf
+Ein Filterwechsel in der Filterleiste ruft `starteDashboard()` erneut auf
 (nicht diese Seite); die Seite reagiert über die Stores.
 
 ### B.3 Aufbau und Zustände
 
-Oben steht immer `SpinnerLoadingPage`. Darunter, nur sichtbar solange
-`spinnerLoadingPage` falsch ist (sichtbar/unsichtbar, nicht entfernt), genau
+Oben steht immer `SeiteLaedt`. Darunter, nur sichtbar solange
+`seiteLaedt` falsch ist (sichtbar/unsichtbar, nicht entfernt), genau
 EINER dieser drei Zweige (Priorität in dieser Reihenfolge):
 
-1. `hasData` falsch → `NoData`.
+1. `journalHatDaten` falsch → `NoData`.
 2. `selectedTradeCategory` = `'bot'` → `BotDashboard` (ohne Props), sonst
    nichts — keine Reiter, kein Karten-Menü. Der Ladeablauf aus B.2 läuft
    trotzdem vollständig. Auch im Bot-Fall hat „keine Daten“ Vorrang.
@@ -2510,21 +2510,21 @@ Desktopbreite 300 px hoch, die drei Ringe 110 px).
 | `financialsTab` | `dashboard.finances` | B.12 |
 
 - Aktiv ist der Reiter, dessen Kennung in `selectedDashTab` steht
-  (Startwert durch `useSetValues` aus `localStorage['selectedDashTab']`,
+  (Startwert durch `setzeFilterwerte` aus `localStorage['selectedDashTab']`,
   Vorgabe `overviewTab`). Steht dort ein unbekannter Wert, ist kein Reiter
   aktiv und kein Inhalt sichtbar. **[Altfehler]** Empfehlung: auf
   `overviewTab` zurückfallen.
 - Wechsel: `selectedDashTab` = Kennung, `localStorage['selectedDashTab']` =
-  Kennung, `renderData` += 1, nächsten Render-Takt abwarten, dann
-  `useECharts('init')` (über `ladeDiagramme()`). `useECharts` zeichnet nur
+  Kennung, `zeichenZaehler` += 1, nächsten Render-Takt abwarten, dann
+  `zeichneDiagramme('init')` (über `ladeDiagramme()`). `zeichneDiagramme` zeichnet nur
   sichtbare Knoten — deshalb muss nach jedem Wechsel neu gezeichnet werden.
   Heute steckt diese Folge im Tab-Ereignis-Lauscher, den `useInitTab` bei
-  JEDEM `useMountDashboard` erneut an die Knöpfe hängt (bei einem
+  JEDEM `starteDashboard` erneut an die Knöpfe hängt (bei einem
   Filterwechsel auf derselben Seite also mehrfach). **[Altfehler]** Neubau:
   die Folge direkt im Klick-Handler des Reiters, genau einmal.
 - Nicht aktive Reiterinhalte bleiben im DOM, sind aber verborgen
   (Diagramme darin werden nicht gezeichnet).
-- `renderData` dient allen Diagrammknoten als Schlüssel: jede Erhöhung
+- `zeichenZaehler` dient allen Diagrammknoten als Schlüssel: jede Erhöhung
   erzeugt frische Knoten für ECharts.
 
 ### B.4 Karten-Menü (Sichtbarkeit einzelner Karten)
@@ -2562,11 +2562,11 @@ Desktopbreite 300 px hoch, die drei Ringe 110 px).
 - Eine verborgene Karte wird NICHT gerendert (Element fehlt). Wird eine
   Diagrammkarte wieder eingeblendet, bleibt sie leer bis zum nächsten
   Zeichnen (Reiterwechsel, Filterwechsel). **[Altfehler]** Empfehlung: nach
-  dem Einblenden `renderData` erhöhen und `useECharts('init')` aufrufen.
+  dem Einblenden `zeichenZaehler` erhöhen und `zeichneDiagramme('init')` aufrufen.
 
 **Brutto/Netto-Kennzeichen:** An die Titel folgender Karten wird „ (“ +
 `options.gross` + „)“ bzw. „ (“ + `options.net` + „)“ gehängt, je nach
-`amountCase` (anderer Wert: nichts): metrics, cumulativePnl, appt, winRate,
+`betragArt` (anderer Wert: nichts): metrics, cumulativePnl, appt, winRate,
 byWeekday, byEntryTime, byDuration, heatmap, tradingPerformance,
 mfeAnalysis, byPosition, byStrategy, tradeTypeStats, strategyTagStats,
 bySymbol. NICHT an accountBalance, fees, feesBySymbol.
@@ -2578,7 +2578,7 @@ erst nach dem nächsten `useInitTooltip`. Neubau: Text reaktiv.
 
 ### B.5 Reiter „Übersicht“, obere Reihe
 
-Die obere Reihe erscheint erst, wenn `dashboardIdMounted` wahr ist. Drei
+Die obere Reihe erscheint erst, wenn `dashboardBereit` wahr ist. Drei
 Karten nebeneinander (Desktop je ein Drittel, Tablet halbe Breite, Handy
 volle Breite), jede einzeln verbergbar.
 
@@ -2619,17 +2619,17 @@ Darunter, nur wenn `allTimeVolume` > 0, eine Zweizeilen-Tabelle:
 
 Dann Trennlinie und die **drei Ringe** nebeneinander, Element-IDs
 `pieChart1` (Gewinnquote, immer), `pieChart2` (Zufriedenheit, nur wenn
-`satisfactionArray` oder `satisfactionTradeArray` nicht leer), `pieChart3`
-(RRR, nur wenn `profitAnalysis[amountCase + 'R']` vorhanden, keine NaN und
+`zufriedenheitTage` oder `zufriedenheitTrades` nicht leer), `pieChart3`
+(RRR, nur wenn `gewinnAnalyse[betragArt + 'R']` vorhanden, keine NaN und
 > 0). Breite: alle drei → je ein Drittel; zwei → je halb; nur `pieChart1` →
-volle Breite. Gezeichnet von `useECharts` (Formeln: `diagramme.md` §2.1, §3.2).
+volle Breite. Gezeichnet von `zeichneDiagramme` (Formeln: `diagramme.md` §2.1, §3.2).
 Die Sichtbarkeitsbedingungen von `pieChart2`/`pieChart3` müssen exakt die
 Bedingungen aus `diagramme.md` §2.1 sein, sonst steht ein leerer Ring da.
 
 **Heute-Zähler** (nur wenn mindestens ein Trade heute):
 - Heute = Tagesanfang bis Tagesende von „jetzt“ in `timeZoneTrade` (fehlend:
   `'Europe/Brussels'`), Unix-Sekunden.
-- Zählt jeden Trade aus `filteredTradesTrades`, dessen `td` in diesem Fenster
+- Zählt jeden Trade aus `gefilterteTradesFlach`, dessen `td` in diesem Fenster
   liegt (also nur, was der aktuelle Filter enthält). Je Trade: Wert =
   `netProceeds`, sonst `grossProceeds`, sonst 0; P&L-Summe += Wert;
   `istGewinn(Wert)` → Gewinner, sonst Verlierer (Break-even zählt als
@@ -2657,25 +2657,25 @@ Klick während des Laufs wird ignoriert. Ablauf: Rückmeldung löschen,
 #### B.5.2 Karte „Kennzahlen“ (`metrics`)
 
 Titel `dashboard.metrics` + Brutto/Netto-Kennzeichen. Zweispaltige Tabelle
-(Bezeichnung links, Wert rechts, Werte fett wo genannt). F = `amountCase`.
+(Bezeichnung links, Wert rechts, Werte fett wo genannt). F = `betragArt`.
 
 | Zeile | Wert | Bedingung / Format | Info |
 |---|---|---|---|
 | `dashboard.cumulativePnl` | `totals[F+'Proceeds']` | Tausender-Währung, grün ≥ 0 sonst rot | `dashboard.cumulativePnlTooltip` |
 | Ratio-Kurzname (B.6) | Ratio-Wert (B.6) | — | Ratio-Info (B.6) |
-| `dashboard.plRatio` | `profitAnalysis[F+'R']` | 2 Nachkommastellen; „-“ wenn NaN/undefined | `dashboard.plRatioTooltip` |
-| `dashboard.mfePlRatio` | `profitAnalysis[F+'MfeR']` | Zeile nur wenn Wert weder null noch undefined; 2 Nachkommastellen | `dashboard.mfePlRatioTooltip` |
+| `dashboard.plRatio` | `gewinnAnalyse[F+'R']` | 2 Nachkommastellen; „-“ wenn NaN/undefined | `dashboard.plRatioTooltip` |
+| `dashboard.mfePlRatio` | `gewinnAnalyse[F+'MfeR']` | Zeile nur wenn Wert weder null noch undefined; 2 Nachkommastellen | `dashboard.mfePlRatioTooltip` |
 | Trennlinie | | | |
-| `dashboard.avgWinPerTrade` (grün beschriftet) | `profitAnalysis[F+'AvWinPerShare']` | Zweidezimal-Währung; „-“ wenn NaN | |
-| `dashboard.avgLossPerTrade` (rot) | `profitAnalysis[F+'AvLossPerShare']` | ebenso (Wert ist positiv) | |
-| `dashboard.maxWin` (grün) | `profitAnalysis[F+'HighWinPerShare']` | nur > 0, sonst „-“ | |
-| `dashboard.maxLoss` (rot) | `profitAnalysis[F+'HighLossPerShare']` | nur > 0, sonst „-“ (Wert ist positiv) | |
+| `dashboard.avgWinPerTrade` (grün beschriftet) | `gewinnAnalyse[F+'AvWinPerShare']` | Zweidezimal-Währung; „-“ wenn NaN | |
+| `dashboard.avgLossPerTrade` (rot) | `gewinnAnalyse[F+'AvLossPerShare']` | ebenso (Wert ist positiv) | |
+| `dashboard.maxWin` (grün) | `gewinnAnalyse[F+'HighWinPerShare']` | nur > 0, sonst „-“ | |
+| `dashboard.maxLoss` (rot) | `gewinnAnalyse[F+'HighLossPerShare']` | nur > 0, sonst „-“ (Wert ist positiv) | |
 | Trennlinie | | | |
 | `common.trades` | `totals.trades` | Tausenderformat, fett | |
 | `dashboard.winTrades` (grün) | `totals[F+'WinsCount']` | roh | |
 | `dashboard.lossTrades` (rot) | `totals[F+'LossCount']` | roh | |
 
-Grenzfall: ist `profitAnalysis[F+'R']` `null`, gilt es heute nicht als NaN,
+Grenzfall: ist `gewinnAnalyse[F+'R']` `null`, gilt es heute nicht als NaN,
 und die Zweistellen-Formatierung wirft. **[Altfehler]** Empfehlung: null wie
 NaN behandeln („-“).
 
@@ -2721,7 +2721,7 @@ Anzeige:
 ### B.6 Ratio-Auswahl (APPT / Profitfaktor)
 
 Quelle ist heute `localStorage['selectedRatio']` direkt (nicht der Store
-`selectedRatio`; `useSetValues` hat dort `'appt'` vorgegeben und alte
+`selectedRatio`; `setzeFilterwerte` hat dort `'appt'` vorgegeben und alte
 `'apps'` auf `'appt'` umgeschrieben). Die Berechnung läuft neu, sobald sich
 `totals` ändert. **[Altfehler]** Empfehlung: den Store `selectedRatio` lesen
 (gleicher Wert, aber reaktiv).
@@ -2754,19 +2754,19 @@ Store (siehe `diagramme.md`).
 | `appt` | `barChart1` | halb (Desktop) | Ratio-Name; bei Kurzname „APPT“ zusätzlich „ (APPT)“; + Kennzeichen | — |
 | `winRate` | `barChart2` | halb | `dashboard.winRate` + Kennzeichen | `dashboard.winRateTooltip` |
 
-Diese Reihe hängt NICHT an `dashboardIdMounted`. Auskommentiert (nicht
+Diese Reihe hängt NICHT an `dashboardBereit`. Auskommentiert (nicht
 nachbauen): Risk&Reward-Karte `boxPlotChart1`.
 
 ### B.8 Klärung `barChartNegative12` / `barChartNegative14`
 
 Beide IDs (Gruppierung nach Aktien-Float bzw. Marktkapitalisierung) stehen im
 heutigen Dashboard nur in auskommentiertem Template; es gibt KEIN Element.
-`useECharts` sucht Knoten per ID-Präfix und findet sie daher in der App nie.
+`zeichneDiagramme` sucht Knoten per ID-Präfix und findet sie daher in der App nie.
 Nur die Golden-Master-Attrappe liefert diese Knoten (siehe `diagramme.md`
 §5.1, §6.9). Folge für den Neubau: das Dashboard rendert sie NICHT; die
 Diagrammfunktionen bleiben unverändert (der Golden Master prüft sie
 unabhängig von der Ansicht). Ebenso wenig nachbauen: `scatterChart1`/`2`.
-`barChartNegativeTagGroups` wird von `useMountDashboard` gefüllt, aber das
+`negativeTagGruppen` wird von `starteDashboard` gefüllt, aber das
 Dashboard rendert dafür keine Elemente.
 
 ### B.9 Reiter „Zeit & Datum“ (`timeTab`)
@@ -2787,8 +2787,8 @@ Dashboard rendert dafür keine Elemente.
    Zwischengewinn existiert. Titel `dashboard.mfeAnalysis` + Kennzeichen,
    Info `dashboard.mfeAnalysisTooltip`.
 
-**MFE-Rechnung** (F = `amountCase`):
-- Leeres Ergebnis, wenn `filteredTradesTrades` oder `excursions` leer.
+**MFE-Rechnung** (F = `betragArt`):
+- Leeres Ergebnis, wenn `gefilterteTradesFlach` oder `excursions` leer.
 - Nachschlag: `excursions` nach `tradeId` (Einträge ohne `tradeId`
   übergehen; bei Doppelten gewinnt der letzte).
 - Je Trade: Erlös = `trade[F+'Proceeds']` (fehlend 0); Erlös ≥ 0 → kein
@@ -2830,8 +2830,8 @@ Anzeige:
 **Trade-Typ-Statistik** (`tradeTypeStats`, nur wenn mindestens eine Zeile):
 - Quelle `groups.tradeType` (Schlüssel = Typ). Leere Gruppen übergehen.
 - Je Gruppe: Wert je Trade = `netProceeds` (fehlend 0) — IMMER netto, auch
-  bei `amountCase` = `'gross'`, obwohl das Kennzeichen „(Brutto)“ zeigt.
-  **[Altfehler]** Empfehlung: `amountCase` verwenden (oder das Kennzeichen
+  bei `betragArt` = `'gross'`, obwohl das Kennzeichen „(Brutto)“ zeigt.
+  **[Altfehler]** Empfehlung: `betragArt` verwenden (oder das Kennzeichen
   weglassen). `istGewinn` → Gewinner (Summe Gewinne += Wert), sonst Verlierer
   (Summe Verluste += |Wert|). Anzahl, Gewinnquote % = Gewinner/Anzahl × 100,
   Ø = Summe/Anzahl, Profitfaktor = Gewinne/Verluste; Verluste 0 und Gewinne >
@@ -2849,7 +2849,7 @@ Anzeige:
 - Info: `dashboard.tradeTypeStatsTooltip`.
 
 **Strategie-Tag-Statistik** (`strategyTagStats`, nur wenn mindestens eine Zeile):
-- Strategie-Gruppe = ERSTE Gruppe in `availableTags` (Konvention: die erste
+- Strategie-Gruppe = ERSTE Gruppe in `verfuegbareTags` (Konvention: die erste
   Tag-Gruppe ist „Strategie“). Fehlt sie oder `groups.tags` → leer.
 - Je Schlüssel in `groups.tags`, der eine Tag-ID dieser Gruppe ist und Trades
   hat: Name = `tagName` des letzten Trades, der einen trägt, sonst die ID;
@@ -2870,7 +2870,7 @@ Anzeige:
 
 ### B.13 Element-IDs und Klassen
 
-Alle Diagrammelemente tragen als Schlüssel `renderData`. `useDisposeJournalCharts`
+Alle Diagrammelemente tragen als Schlüssel `zeichenZaehler`. `useDisposeJournalCharts`
 sammelt die Knoten über die Klassen `chartClass` und `chartIdCardClass` — der
 Neubau muss diese beiden Klassen (oder eine angepasste Sammellogik) an den
 Diagrammelementen beibehalten: `chartIdCardClass` an `pieChart1`–`3`,
@@ -2935,28 +2935,28 @@ Route `/auswertung`, Routenname `auswertung`, Modus `journal`.
 
 ### W.1 Zustände und Ablauf
 
-Gelesen: `ui.js` `spinnerLoadingPage`, `auswertungMounted`; `filters.js`
-`amountCase`; `trades.js` `filteredTrades`, `auswertungNotes`,
-`satisfactionArray`, `satisfactionTradeArray`, `tags`, `availableTags`;
+Gelesen: `ui.js` `seiteLaedt`, `auswertungMounted`; `filters.js`
+`betragArt`; `trades.js` `journalTage`, `auswertungNotes`,
+`zufriedenheitTage`, `zufriedenheitTrades`, `tags`, `verfuegbareTags`;
 `localStorage['auswertung_hidden_cards']`.
 
 - Vor dem Einhängen: `await useMountAuswertung()` (lädt Bereich,
   Auswertungs-Notizen, Zufriedenheit, Tags, gefilterte Trades; setzt
   `auswertungMounted` erst falsch, dann wahr; ruft `useInitTooltip()`).
-  `useMountAuswertung` lädt den Tag-Katalog `availableTags` NICHT; er kommt
+  `useMountAuswertung` lädt den Tag-Katalog `verfuegbareTags` NICHT; er kommt
   vom Layout (Journal-Start). Kommt er später, greift der Beobachter in W.6.
 - Ein Filterwechsel in der Filterleiste ruft `useMountAuswertung()` erneut.
 - Klick-ausserhalb-Lauscher für das Karten-Menü wie beim Dashboard.
 - Kein Aufräumen der Diagramme beim Aushängen (heute).
 
-Anzeige: `SpinnerLoadingPage`; darunter (nur sichtbar ohne Spinner):
+Anzeige: `SeiteLaedt`; darunter (nur sichtbar ohne Spinner):
 - `auswertungMounted` wahr und keine Trades → `NoData`;
 - `auswertungMounted` wahr und Trades → Seite;
 - sonst nichts.
 
 ### W.2 Basisdaten
 
-- **Alle Trades**: die `trades`-Listen aller Tage in `filteredTrades`,
+- **Alle Trades**: die `trades`-Listen aller Tage in `journalTage`,
   flach, in Tagesreihenfolge.
 - **Notiz je Trade**: aus `auswertungNotes` nach `tradeId` (letzte gewinnt,
   ohne `tradeId` übergehen). Felder einer Notiz (durch `useGetAuswertungNotes`
@@ -2968,9 +2968,9 @@ Anzeige: `SpinnerLoadingPage`; darunter (nur sichtbar ohne Spinner):
 - **Tags je Trade**: aus `tags` nach `tradeId`; `tags` als Liste von
   Tag-IDs, ist es eine Zeichenkette, wird sie als JSON gelesen (Fehler →
   leere Liste); keine Liste → leer.
-- **Tag-Katalog ohne Dubletten**: `availableTags`, eine Gruppe nur einmal je
+- **Tag-Katalog ohne Dubletten**: `verfuegbareTags`, eine Gruppe nur einmal je
   `id` (fehlend: `name`), erste gewinnt.
-- „Gewinner“ heisst in dieser Datei überall: `trade[amountCase+'Wins']` > 0.
+- „Gewinner“ heisst in dieser Datei überall: `trade[betragArt+'Wins']` > 0.
   Break-even zählt damit als Verlierer — anders als auf dem Dashboard
   (`istGewinn`). **[Altfehler]** Empfehlung: auf `istGewinn` umstellen,
   bewusst und benannt.
@@ -3014,7 +3014,7 @@ Jede Karte: Titel mit Info-Symbol, Tacho-Element, darunter Zusatzzeile.
      keinem. Texte „Long“, „Short“, „Win“ fest.
 2. **Zufriedenheit** (`satisfaction`), `gaugeChart2`,
    `auswertung.satisfactionRate`, Info `auswertung.tooltipSatisfaction`.
-   - Liste = `satisfactionArray` gefolgt von `satisfactionTradeArray`; Wert =
+   - Liste = `zufriedenheitTage` gefolgt von `zufriedenheitTrades`; Wert =
      gerundeter Anteil der Einträge, deren `satisfaction` lose gleich `true`
      oder `1` ist (leer → 0). Die Zufriedenheiten sind NICHT nach Broker
      gefiltert (alles im Zeitraum).
@@ -3040,7 +3040,7 @@ Je Gruppe des Katalogs (W.2) mit mindestens einem Tag:
 - je Tag: alle Trades, deren Tag-Liste die Tag-ID enthält; nur Tags mit
   mindestens einem Trade. Gewinner (W.2), Verlierer = Anzahl − Gewinner,
   Quote = gerundet Gewinner/Anzahl × 100, P&L = Summe
-  `trade[amountCase+'Proceeds']` (fehlend 0).
+  `trade[betragArt+'Proceeds']` (fehlend 0).
 - Tags absteigend nach Anzahl. Gruppen ohne Tag-Treffer entfallen.
 - Gruppenfarbe = `color`, fehlend grau.
 
@@ -3120,7 +3120,7 @@ Funktion, Emotion grün; die Mittelwertzahlen orange (Stress) und grün
 - Zweiter Beobachter, tief, auf die Tag-Gruppen-Diagrammdaten: nur wenn
   `auswertungMounted` wahr → einen Render-Takt abwarten → je Gruppe mit
   Kategorien `useSplitBarChart` erneut.
-- Ein Wechsel von `amountCase` ohne Neuladen zeichnet die Diagramme NICHT neu
+- Ein Wechsel von `betragArt` ohne Neuladen zeichnet die Diagramme NICHT neu
   (die Tabellen schon). Nachbilden; ein Filterwechsel lädt ohnehin neu.
 
 ### W.8 i18n-Schlüssel (vollständig)
@@ -3155,14 +3155,14 @@ der Kalenderseite eingebunden).
 
 ### K.1 Seite
 
-- Vor dem Einhängen: `await useMountCalendar()`. Der Ablauf setzt den
+- Vor dem Einhängen: `await starteKalender()`. Der Ablauf setzt den
   Bereich auf „1. Januar des Jahres des gewählten Monats bis Ende des
   gewählten Monats“ (in `timeZoneTrade`), lädt Tags und Tag-Katalog, die
-  gefilterten Trades und baut `calendarData` (`useLoadCalendar`).
-- Anzeige: `SpinnerLoadingPage`; darunter (nur ohne Spinner):
-  `filteredTrades` leer → `NoData`; sonst eine Karte mit dem
+  gefilterten Trades und baut `kalenderDaten` (`ladeKalender`).
+- Anzeige: `SeiteLaedt`; darunter (nur ohne Spinner):
+  `journalTage` leer → `NoData`; sonst eine Karte mit dem
   Kalender-Baustein.
-- **[Altfehler]** Ist `filteredTrades` leer (kein Trade vom Jahresanfang bis
+- **[Altfehler]** Ist `journalTage` leer (kein Trade vom Jahresanfang bis
   zum gewählten Monat), verschwindet auch die Monatsnavigation; zurück geht es
   nur über die Filterleiste. Empfehlung: Navigation auch bei leerem Monat
   zeigen.
@@ -3170,7 +3170,7 @@ der Kalenderseite eingebunden).
 
 ### K.2 Datenform
 
-`calendarData` (aus `trades.js`) ist ein Objekt mit Schlüsseln „0“, „1“, … je
+`kalenderDaten` (aus `trades.js`) ist ein Objekt mit Schlüsseln „0“, „1“, … je
 Woche (Montag zuerst); Wert = Liste von 7 Tagesfeldern
 `{month, day, dateUnix, pAndL, satisfaction?}` (siehe `journal-kern.md`
 §4.4): `month` = Monatstitel („March 2026“-Form), `day` = Tageszahl (0 =
@@ -3189,12 +3189,12 @@ leere Liste, `satisfaction` = Tageszufriedenheit (nur bei Treffer).
 - Tageszahl nur, wenn `day` ≠ 0.
 - Nur auf der Kalenderseite und nur ab Tablet-Breite: „‹`pAndL.trades`›
   `common.trades`“ (nur wenn `trades` wahr) und darunter der Erlös
-  `pAndL[amountCase+'Proceeds']`, auf eine Ganzzahl abgeschnitten (parseInt)
+  `pAndL[betragArt+'Proceeds']`, auf eine Ganzzahl abgeschnitten (parseInt)
   und als Tausender-Währung formatiert (nur wenn der Erlös wahr, also ≠ 0).
   **[Altfehler]** parseInt auf Zahlen in Exponentialschreibweise liefert
   Unsinn (ein Erlös von 1e-7 wird zu 1); Empfehlung: abrunden mit
   `Math.trunc`.
-- Färbung (`selectedPlSatisfaction`):
+- Färbung (`gewaehltPlOderZufriedenheit`):
   - `'pl'`: grün wenn Erlös ≥ 0, rot wenn < 0 — nur Tage mit P&L-Objekt
     (bei leerer Liste ist der Erlös undefiniert → keine Farbe).
   - sonst (Zufriedenheit): grün wenn `satisfaction` lose gleich `true`, rot
@@ -3208,17 +3208,17 @@ leere Liste, `satisfaction` = Tageszufriedenheit (nur bei Treffer).
 ### K.4 Monatswechsel
 
 Pfeil links = −1, rechts = +1:
-1. `spinnerLoadingPage` = wahr.
-2. `selectedMonth.start` = Monatsanfang (in `timeZoneTrade`) von
-   (`start` + Schritt Monate); `selectedMonth.end` = Monatsende (in
+1. `seiteLaedt` = wahr.
+2. `gewaehlterMonat.start` = Monatsanfang (in `timeZoneTrade`) von
+   (`start` + Schritt Monate); `gewaehlterMonat.end` = Monatsende (in
    `timeZoneTrade`) dieses neuen Anfangs. Beides Unix-Sekunden; das Objekt
    wird an Ort und Stelle geändert.
-3. `localStorage['selectedMonth']` = JSON von `selectedMonth`.
+3. `localStorage['selectedMonth']` = JSON von `gewaehlterMonat`.
 4. `selectedMonthPreset` = `'current'`, wenn der neue Anfang dem
    Monatsanfang von „jetzt“ in `timeZoneTrade` entspricht, sonst `'custom'`;
    in `localStorage['selectedMonthPreset']`.
-5. Seite `calendar` → `useMountCalendar()` (nicht abgewartet); Seite `daily`
-   → `useMountDaily()` (toter Zweig, der Baustein steckt heute nicht in der
+5. Seite `calendar` → `starteKalender()` (nicht abgewartet); Seite `daily`
+   → `starteTagesansicht()` (toter Zweig, der Baustein steckt heute nicht in der
    Tagesansicht).
 
 ### K.5 Mini-Kalender (Klärung S7)
@@ -3226,8 +3226,8 @@ Pfeil links = −1, rechts = +1:
 Gedacht war: auf der Kalenderseite unter dem Hauptraster je Monat vom
 gewählten bis Januar ein kleines Raster (Monatstitel, Tagesnamen, gefärbte
 Felder mit Tageszahl, ohne Trades/Erlös, nicht klickbar), drei bis vier je
-Zeile. Quelle `miniCalendarsData`. Weil `miniCalendarsData` ein Objekt ist,
-setzt `useLoadCalendar` darin nur den Schlüssel `length` = 0 und legt nie
+Zeile. Quelle `miniKalenderDaten`. Weil `miniKalenderDaten` ein Objekt ist,
+setzt `ladeKalender` darin nur den Schlüssel `length` = 0 und legt nie
 Monate hinein (`journal-kern.md` §7.4, vom Golden Master eingefroren). Der
 Baustein iteriert die Werte des Objekts, trifft nur die 0 und rendert dafür
 nichts. **Die Mini-Kalender erscheinen also nie.** Neubau: keine
@@ -3253,13 +3253,13 @@ Route `/addTrades`, Routenname `addTrades`, Menütitel `nav.manualImport`.
 
 ### T.1 Grundzustand
 
-- Beim Anlegen: `spinnerLoadingPage` = falsch.
+- Beim Anlegen: `seiteLaedt` = falsch.
 - Broker = `selectedBroker` oder `'bitunix'`; Anzeigename Bitunix / Bitget /
   Pionex (unbekannt → „Bitunix“).
 - Nach dem Einhängen: `await useGetExistingTradesArray()` (füllt
-  `existingTradesArray` mit den `date`-Zeichenketten der neuesten 50
+  `vorhandeneTradeTage` mit den `date`-Zeichenketten der neuesten 50
   Tageszeilen der Tabelle `trades`, ALLER Broker; Limit
-  `queryLimitExistingTrades` = 50; bei DB-Fehler bleibt das Versprechen
+  `abfrageGrenzeVorhanden` = 50; bei DB-Fehler bleibt das Versprechen
   offen — harmlos, nichts wartet darauf).
 - Zwei Reiter (reine Umschaltung, kein Bootstrap-JS): `addTrades.manualTab`
   (Vorgabe) und `addTrades.apiImport`.
@@ -3383,8 +3383,8 @@ Ablauf (Lade-Merker an, Fehlertext leeren):
      eine Seite weniger als 100 liefert; Fehlerprüfung wie Bitget.
 3. Keine Positionen → Fehlertext `addTrades.noPositionsFound`,
    Benachrichtigung „‹Broker› Import“ / `addTrades.noPositionsFound`, Ende.
-4. `spinnerLoadingPage` = wahr. Import-Stores leeren: `executions` (alle
-   Schlüssel löschen), `existingImports`, `tradesData`.
+4. `seiteLaedt` = wahr. Import-Stores leeren: `executions` (alle
+   Schlüssel löschen), `vorhandeneImporte`, `tradeZeilen`.
 5. Je Position (mit Index i): Trade-Objekt =
    `createBitgetTradeObj(Position, i)` bzw. `createBitunixTradeObj(Position,
    i)` — die EINZIGE Rechenvorschrift für Trade-Objekte (gleich wie der
@@ -3392,8 +3392,8 @@ Ablauf (Lade-Merker an, Fehlertext leeren):
    `td` in eine lokale Tagesliste und in `executions[td]` (Kopie des Objekts
    mit zusätzlichem Feld `trade` = `id`).
 6. Bereits importierte Tage aussortieren: je Tag td das UTC-Datum
-   „JJJJ-MM-TT“; steht es in `existingTradesArray` → td (als Zahl) an
-   `existingImports` anhängen, Tag aus lokaler Liste und `executions`
+   „JJJJ-MM-TT“; steht es in `vorhandeneTradeTage` → td (als Zahl) an
+   `vorhandeneImporte` anhängen, Tag aus lokaler Liste und `executions`
    entfernen.
    - **[Altfehler]** Der Abgleich ist TAGESWEISE und über ALLE Broker: ein
      Tag, an dem schon irgendein Broker eine Zeile hat, wird komplett
@@ -3402,15 +3402,15 @@ Ablauf (Lade-Merker an, Fehlertext leeren):
      angelegt. Der Schnellimport (`useQuickApiImport`) gleicht dagegen je
      `positionId` und Broker ab. Empfehlung: diesen Weg auf den
      positionsgenauen Abgleich umstellen (bewusst, eigener Auftrag).
-   - **[Offen]** `existingTradesArray` enthält das `date` der DB-Zeile, das
+   - **[Offen]** `vorhandeneTradeTage` enthält das `date` der DB-Zeile, das
      `useUploadTrades` mit der Browser-Zeitzone aus dateUnix bildet; hier wird
      mit UTC verglichen. Westlich von UTC weichen die Tage um eins ab.
 7. Nichts übrig → Fehlertext `addTrades.allAlreadyImported`,
    Benachrichtigung `messages.noNewTrades`, Spinner aus, Ende.
 8. Den Import-Store `trades` (aus `trades.js`, derselbe den
    `useUploadTrades` liest) vollständig durch die lokale Tagesliste ersetzen.
-   `await useCreateBlotter()` (ohne Argument: aus dem Import-Store),
-   `await useCreatePnL()`.
+   `await baueBlotter()` (ohne Argument: aus dem Import-Store),
+   `await bauePnL()`.
 9. Spinner aus; Benachrichtigung `messages.positionsImported` mit `{count}`
    = Anzahl ALLER geholten Positionen, `{days}` = Anzahl neuer Tage.
 10. Jeder Fehler: Fehlertext = Fehlermeldung oder `addTrades.importFailed`;
@@ -3425,7 +3425,7 @@ Hauptschalter und Ereignis an).
 Fehlertext erscheint als roter Hinweis unter den Feldern.
 
 **Vorschau** (nur im API-Reiter):
-- `existingImports` nicht leer → `addTrades.alreadyImported` + Liste der
+- `vorhandeneImporte` nicht leer → `addTrades.alreadyImported` + Liste der
   Daten (`useDateCalFormat`), durch „, “ getrennt.
 - Wenn `blotter` und `pAndL` nicht leer: je Schlüssel in `executions` mit
   Eintrag in `blotter`: Überschrift `useCreatedDateFormat(Schlüssel)`,
@@ -3488,8 +3488,8 @@ aus. Nachbilden.
 ## Exkursionen
 
 Route `/addExcursions`, Routenname `addExcursions` (Seitenkennung
-`addExcursions` steuert die Abfragen in `useGetTrades` und
-`useGetExcursions`), Menüeintrag ohne Gruppe (`nav.addExcursions`).
+`addExcursions` steuert die Abfragen in `ladeTrades` und
+`ladeExkursionen`), Menüeintrag ohne Gruppe (`nav.addExcursions`).
 
 Zweck: für vergangene Handelstage ohne Exkursionsdaten aus Minutenkerzen
 (Databento oder Polygon) den MFE-Preis je Trade bestimmen und in
@@ -3497,7 +3497,7 @@ Zweck: für vergangene Handelstage ohne Exkursionsdaten aus Minutenkerzen
 
 ### E.1 Zustände
 
-Gelesen/geschrieben: `ui.js` `spinnerLoadingPage`; `filters.js` `daysBack`,
+Gelesen/geschrieben: `ui.js` `seiteLaedt`; `filters.js` `daysBack`,
 `daysMargin` (beide Vorgabe undefiniert, werden nirgends initialisiert);
 `trades.js` `imports`, `excursions`; `settings.js` `apis` (Liste
 `{provider, key, …}`). Seiteneigener Zustand: API-Index (−1 = keiner),
@@ -3506,8 +3506,8 @@ Trade-Liste, Symbol-Liste `{symbol, secType}`, frühester und spätester Tag.
 
 ### E.2 Ablauf beim Anlegen
 
-1. `spinnerLoadingPage` = falsch.
-2. Vor dem Einhängen: `await useGetAPIS()`; API wählen: Eintrag mit
+1. `seiteLaedt` = falsch.
+2. Vor dem Einhängen: `await ladeApis()`; API wählen: Eintrag mit
    `provider` = `'databento'` und nicht leerem `key` hat Vorrang, sonst
    `'polygon'` mit Schlüssel, sonst keiner.
 3. Prüfung fehlender Tage (E.3), nicht abgewartet.
@@ -3515,9 +3515,9 @@ Trade-Liste, Symbol-Liste `{symbol, secType}`, frühester und spätester Tag.
 ### E.3 Fehlende Tage prüfen
 
 Läuft beim Anlegen und bei JEDER Eingabe in die beiden Zahlenfelder.
-1. Parallel `useGetTrades()` (lädt Tageszeilen der letzten `daysBack` Tage bis
+1. Parallel `ladeTrades()` (lädt Tageszeilen der letzten `daysBack` Tage bis
    jetzt, ohne grosse Spalten, aufsteigend, nach `imports`) und
-   `useGetExcursions()` (Exkursionen desselben Fensters).
+   `ladeExkursionen()` (Exkursionen desselben Fensters).
 2. Anzeige-Liste und Trade-Liste leeren. **[Altfehler]** Symbol-Liste und
    frühester/spätester Tag werden NICHT zurückgesetzt und wachsen über alle
    Prüfungen. Empfehlung: mit zurücksetzen.

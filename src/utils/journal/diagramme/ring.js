@@ -3,7 +3,7 @@
  * Doppellinie der Tagesansicht.
  */
 import { pageId } from '../../../stores/ui.js'
-import { useOneDecPercentFormat } from '../../formatters.js'
+import { useOneDecPercentFormat } from '../format.js'
 import { element, instanzFuer } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 

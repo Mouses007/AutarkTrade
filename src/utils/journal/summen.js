@@ -1,8 +1,8 @@
 /**
- * Summen über die gefilterten Trades: `totals` (alles) und `totalsByDate`
+ * Summen über die gefilterten Trades: `totals` (alles) und `summenJeTag`
  * (je Handelstag). Die eigentliche Summierung steht in `totals-kern.js`.
  */
-import { filteredTrades, totals, totalsByDate } from '../../stores/journal/auswertung.js'
+import { journalTage, totals, summenJeTag } from '../../stores/journal/auswertung.js'
 import { neueSummen, summiereTrade, leiteKennzahlenAb } from '../totals-kern.js'
 import { gruppiere, sortiertNach, ersetzeObjekt } from './hilfen.js'
 import { kette } from './kette.js'
@@ -20,14 +20,14 @@ function kassenbuchGebuehren(tage) {
     return { locateFees: locate, softwareFees: software, bankingFees: banking }
 }
 
-export async function useTotalTrades() {
-    // L: Tage in der Reihenfolge von filteredTrades, darin die Trades der Zeile
-    const liste = filteredTrades.flatMap(tag => tag.trades)
+export async function summiereTrades() {
+    // L: Tage in der Reihenfolge von journalTage, darin die Trades der Zeile
+    const liste = journalTage.flatMap(tag => tag.trades)
     kette.tradeListe = liste
 
     const summe = neueSummen()
     for (const trade of liste) summiereTrade(summe, trade)
-    const kasse = kassenbuchGebuehren(filteredTrades)
+    const kasse = kassenbuchGebuehren(journalTage)
     const otherFees = kasse.locateFees + kasse.softwareFees + kasse.bankingFees
 
     ersetzeObjekt(totals, {
@@ -52,6 +52,6 @@ export async function useTotalTrades() {
         s.financials = tradesDesTages[0].financials
         tagesSummen[td] = s
     }
-    ersetzeObjekt(totalsByDate, tagesSummen)
+    ersetzeObjekt(summenJeTag, tagesSummen)
     kette.tagesSummen = tagesSummen
 }

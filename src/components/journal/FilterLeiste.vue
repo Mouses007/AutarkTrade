@@ -10,18 +10,18 @@ import dayjs from '../../utils/journal/zeit.js'
 import Symbol from '../basis/Symbol.vue'
 import Knopf from '../basis/Knopf.vue'
 import InfoTipp from '../InfoTipp.vue'
-import { pageId, timeZoneTrade, hasData } from '../../stores/app/rahmen.js'
+import { pageId, timeZoneTrade, journalHatDaten } from '../../stores/app/rahmen.js'
 import {
-    periodRange, positions, timeFrames, ratios, grossNet, plSatisfaction, selectedPositions, selectedTimeFrame,
-    selectedRatio, selectedAccounts, selectedGrossNet, selectedPlSatisfaction, selectedDateRange, selectedMonth,
-    selectedMonthPreset, selectedPeriodRange, tempSelectedPlSatisfaction, amountCase, amountCapital, selectedTags,
+    zeitraumListe, positions, timeFrames, ratios, grossNet, plSatisfaction, selectedPositions, selectedTimeFrame,
+    selectedRatio, selectedAccounts, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, selectedDateRange, gewaehlterMonat,
+    selectedMonthPreset, selectedPeriodRange, plOderZufriedenheitEntwurf, betragArt, betragGross, tagAuswahl,
 } from '../../stores/journal/filter.js'
-import { availableTags } from '../../stores/journal/tagebuch.js'
+import { verfuegbareTags } from '../../stores/journal/tagebuch.js'
 import { useDateCalFormat, useDateCalFormatMonth, useCapitalizeFirstLetter } from '../../utils/journal/format.js'
-import { useMountCalendar, useMountDashboard, useMountDaily, useMountAuswertung, useCheckVisibleScreen } from '../../utils/journal/ablauf.js'
+import { starteKalender, starteDashboard, starteTagesansicht, useMountAuswertung, pruefeSichtbarkeit } from '../../utils/journal/ablauf.js'
 import { useCloseMobileMenu } from '../../utils/journal/app.js'
 import { ladeDiagramme } from '../../utils/journal/diagrammLader.js'
-import { useRefreshScreenshot } from '../../utils/screenshots.js'
+import { ladeBilderNeu } from '../../utils/screenshots.js'
 
 const { t } = useI18n()
 
@@ -43,15 +43,15 @@ const tagsOffen = ref(false)
 // ── Zeitraum ───────────────────────────────────────────────────────────────
 const periodeWert = computed(() => selectedPeriodRange.value?.value)
 function waehlePeriode(wert) {
-    const p = periodRange.find(x => x.value === wert)
+    const p = zeitraumListe.find(x => x.value === wert)
     if (!p) return
     selectedPeriodRange.value = p
     selectedDateRange.value = { start: p.start, end: p.end }
 }
 function passendePeriode() {
     const r = selectedDateRange.value
-    selectedPeriodRange.value = periodRange.find(p => p.start === r.start && p.end === r.end)
-        || periodRange.find(p => p.value === 'custom')
+    selectedPeriodRange.value = zeitraumListe.find(p => p.start === r.start && p.end === r.end)
+        || zeitraumListe.find(p => p.value === 'custom')
 }
 function setzeStart(datum) {
     if (!datum) return
@@ -65,12 +65,12 @@ function setzeEnde(datum) {
 }
 
 // ── Monat ──────────────────────────────────────────────────────────────────
-const monatWert = computed(() => (selectedMonth.value ? useDateCalFormatMonth(selectedMonth.value.start) : ''))
+const monatWert = computed(() => (gewaehlterMonat.value ? useDateCalFormatMonth(gewaehlterMonat.value.start) : ''))
 function setzeMonat(wert) {
     if (!wert) return
     const tag = dayjs.tz(`${wert}-01`, timeZoneTrade.value)
     const start = tag.startOf('month').unix()
-    selectedMonth.value = { start, end: tag.endOf('month').unix() }
+    gewaehlterMonat.value = { start, end: tag.endOf('month').unix() }
     const jetzt = dayjs().tz(timeZoneTrade.value).startOf('month').unix()
     selectedMonthPreset.value = start === jetzt ? 'current' : 'custom'
 }
@@ -84,28 +84,28 @@ const positionenText = computed(() => {
 })
 
 // ── Tags ───────────────────────────────────────────────────────────────────
-const alleTagIds = computed(() => availableTags.flatMap(g => (g.tags || []).map(x => x.id)))
+const alleTagIds = computed(() => verfuegbareTags.flatMap(g => (g.tags || []).map(x => x.id)))
 /** Dashboard: alles ausser der Gruppe „Trade Abschluss". */
-const angeboteneTags = computed(() => availableTags.filter(g => g.name !== 'Trade Abschluss').flatMap(g => g.tags || []))
+const angeboteneTags = computed(() => verfuegbareTags.filter(g => g.name !== 'Trade Abschluss').flatMap(g => g.tags || []))
 const dashboardTagWert = computed(() => {
-    const gewaehlt = selectedTags.value || []
+    const gewaehlt = tagAuswahl.value || []
     const ids = angeboteneTags.value.map(x => x.id)
     if (ids.length > 0 && gewaehlt.includes(OHNE_TAG) && ids.every(id => gewaehlt.includes(id))) return 'all'
     if (gewaehlt.length === 1) return gewaehlt[0]
     return 'all'
 })
 function waehleDashboardTag(wert) {
-    if (wert === 'all') selectedTags.value = [OHNE_TAG, ...angeboteneTags.value.map(x => x.id)]
-    else selectedTags.value = [wert]
+    if (wert === 'all') tagAuswahl.value = [OHNE_TAG, ...angeboteneTags.value.map(x => x.id)]
+    else tagAuswahl.value = [wert]
 }
 const alleTagsMarkiert = ref(false)
-const markiereAlleTags = () => { alleTagsMarkiert.value = alleTagIds.value.length + 1 === (selectedTags.value || []).length }
+const markiereAlleTags = () => { alleTagsMarkiert.value = alleTagIds.value.length + 1 === (tagAuswahl.value || []).length }
 function schalteAlleTags() {
-    selectedTags.value = []
+    tagAuswahl.value = []
     if (alleTagsMarkiert.value) {
         alleTagsMarkiert.value = false
     } else {
-        selectedTags.value = [OHNE_TAG, ...alleTagIds.value]
+        tagAuswahl.value = [OHNE_TAG, ...alleTagIds.value]
         alleTagsMarkiert.value = true
     }
 }
@@ -123,37 +123,37 @@ async function speichern() {
         return
     }
     speichere('selectedDateRange', JSON.stringify(selectedDateRange.value))
-    if (pageId.value === 'dashboard' && hasData.value) (await ladeDiagramme()).useECharts('clear')
+    if (pageId.value === 'dashboard' && journalHatDaten.value) (await ladeDiagramme()).zeichneDiagramme('clear')
     speichere('selectedPeriodRange', JSON.stringify(selectedPeriodRange.value))
     speichere('selectedAccounts', selectedAccounts.value)
-    speichere('selectedGrossNet', selectedGrossNet.value)
-    amountCase.value = selectedGrossNet.value
-    amountCapital.value = selectedGrossNet.value ? useCapitalizeFirstLetter(selectedGrossNet.value) : selectedGrossNet.value
+    speichere('selectedGrossNet', gewaehltBruttoNetto.value)
+    betragArt.value = gewaehltBruttoNetto.value
+    betragGross.value = gewaehltBruttoNetto.value ? useCapitalizeFirstLetter(gewaehltBruttoNetto.value) : gewaehltBruttoNetto.value
     speichere('selectedPositions', selectedPositions.value)
     speichere('selectedTimeFrame', selectedTimeFrame.value)
     speichere('selectedRatio', selectedRatio.value)
     if (pageId.value === 'daily' || pageId.value === 'calendar') {
-        speichere('selectedMonth', JSON.stringify(selectedMonth.value))
+        speichere('selectedMonth', JSON.stringify(gewaehlterMonat.value))
         speichere('selectedMonthPreset', selectedMonthPreset.value)
     }
-    speichere('selectedTags', selectedTags.value)
+    speichere('selectedTags', tagAuswahl.value)
     markiereAlleTags()
-    if (tempSelectedPlSatisfaction.value != null) {
-        selectedPlSatisfaction.value = tempSelectedPlSatisfaction.value
-        speichere('selectedPlSatisfaction', selectedPlSatisfaction.value)
-        tempSelectedPlSatisfaction.value = null
+    if (plOderZufriedenheitEntwurf.value != null) {
+        gewaehltPlOderZufriedenheit.value = plOderZufriedenheitEntwurf.value
+        speichere('selectedPlSatisfaction', gewaehltPlOderZufriedenheit.value)
+        plOderZufriedenheitEntwurf.value = null
     }
 
     if (pageId.value === 'dashboard') {
-        useMountDashboard()
+        starteDashboard()
     } else if (pageId.value === 'daily') {
-        await useMountDaily()
-        useCheckVisibleScreen()
+        await starteTagesansicht()
+        pruefeSichtbarkeit()
     } else if (pageId.value === 'screenshots') {
-        await useRefreshScreenshot()
-        useCheckVisibleScreen()
+        await ladeBilderNeu()
+        pruefeSichtbarkeit()
     } else if (pageId.value === 'calendar') {
-        useMountCalendar(true)
+        starteKalender(true)
     } else if (pageId.value === 'auswertung') {
         useMountAuswertung()
     }
@@ -187,7 +187,7 @@ onMounted(() => {
             <div v-if="zeigt('periodRange')" class="filterZeile">
                 <div class="filterSteuer">
                     <select class="at-feld klein" :value="periodeWert" @change="waehlePeriode($event.target.value)">
-                        <option v-for="p in periodRange" :key="p.value" :value="p.value">{{ p.label }}</option>
+                        <option v-for="p in zeitraumListe" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
                     <div v-if="periodeWert !== 'all' && selectedDateRange" class="filterDaten">
                         <input type="date" class="at-feld klein" :value="useDateCalFormat(selectedDateRange.start)" @change="setzeStart($event.target.value)">
@@ -252,7 +252,7 @@ onMounted(() => {
             <!-- PnL oder Zufriedenheit -->
             <div v-if="zeigt('plSatisfaction')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select class="at-feld klein" :value="selectedPlSatisfaction" @change="tempSelectedPlSatisfaction = $event.target.value">
+                    <select class="at-feld klein" :value="selectedPlSatisfaction" @change="plOderZufriedenheitEntwurf = $event.target.value">
                         <option v-for="p in plSatisfaction" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
                 </div>
@@ -269,7 +269,7 @@ onMounted(() => {
                     </select>
                     <template v-else>
                         <button type="button" class="at-feld klein filterAufklapp" @click="tagsOffen = !tagsOffen">
-                            <span class="at-kuerzen">Tags ({{ (selectedTags || []).length }})</span><Symbol name="runter" />
+                            <span class="at-kuerzen">Tags ({{ (tagAuswahl || []).length }})</span><Symbol name="runter" />
                         </button>
                         <div v-show="tagsOffen" class="filterListe">
                             <button type="button" class="filterUmschalter" @click="schalteAlleTags">
@@ -279,7 +279,7 @@ onMounted(() => {
                                 <input v-model="selectedTags" type="checkbox" :value="OHNE_TAG">
                                 {{ t('filters.noTag') }}
                             </label>
-                            <div v-for="gruppe in availableTags" :key="gruppe.id" class="filterGruppe">
+                            <div v-for="gruppe in verfuegbareTags" :key="gruppe.id" class="filterGruppe">
                                 <div class="filterGruppenKopf" :style="{ color: gruppe.color }">{{ gruppe.name }}</div>
                                 <label v-for="tag in gruppe.tags || []" :key="tag.id" class="filterHaken">
                                     <input v-model="selectedTags" type="checkbox" :value="tag.id">

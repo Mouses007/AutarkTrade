@@ -10,10 +10,10 @@
 import { scrolleZu } from '../../utils/scrolleZu.js'
 import { reactive, ref, inject, nextTick } from 'vue'
 import { dbFind, dbGet, dbCreate, dbUpdate, dbDelete } from '@/utils/db.js'
-import { useGetAvailableTags, useGetTagInfo } from '@/utils/journal/tagebuch.js'
+import { ladeVerfuegbareTags, useGetTagInfo } from '@/utils/journal/tagebuch.js'
 import { selectedBroker } from '@/stores/journal/filter.js'
 import { kopiertesBild } from '@/stores/app/rahmen.js'
-import { spinnerLoadingPage } from '@/stores/app/laden.js'
+import { seiteLaedt } from '@/stores/app/laden.js'
 import {
     FELDER, ID_FELD, LEERE_NOTIZ, baueEintrag, hatDaten, findeBild,
     darfLoeschen, darfFestschreiben, loeseTags,
@@ -98,12 +98,12 @@ export function erzeugePlaybook() {
     }
 
     async function start(tradeIdAusQuery) {
-        spinnerLoadingPage.value = true
+        seiteLaedt.value = true
         try {
-            await useGetAvailableTags()
+            await ladeVerfuegbareTags()
             await ladeEintraege()
         } finally {
-            spinnerLoadingPage.value = false
+            seiteLaedt.value = false
         }
         if (tradeIdAusQuery) await deepLink(String(tradeIdAusQuery))
     }

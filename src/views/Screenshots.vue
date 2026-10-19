@@ -2,22 +2,22 @@
 /**
  * Seite `/screenshots` (Spec S.7): alle Bilder, neueste zuerst, in Seiten zu
  * vier nachgeladen (Endlos-Scroll), gefiltert nach Tags und Börse (Filterleiste,
- * serverseitig in `useGetScreenshots`) und hier zusätzlich nach Bildtyp.
+ * serverseitig in `ladeBilder`) und hier zusätzlich nach Bildtyp.
  *
  * Kein Monatsfilter: die Seite zeigt alle Zeiten.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Screenshot from '../components/Screenshot.vue'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import Leerzustand from '../components/basis/Leerzustand.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
 import Reiter from '../components/basis/Reiter.vue'
 import Symbol from '../components/basis/Symbol.vue'
-import { spinnerLoadingPage, spinnerLoadMore } from '../stores/app/laden.js'
-import { endOfList } from '../stores/app/rahmen.js'
-import { screenshots, expandedScreenshot, screenshotsPagination, screenshotsQueryLimit } from '../stores/journal/screenshots.js'
-import { useMountScreenshots, useCheckVisibleScreen, useLoadMore } from '../utils/journal/ablauf.js'
+import { seiteLaedt, ladeMehr } from '../stores/app/laden.js'
+import { listeZuEnde } from '../stores/app/rahmen.js'
+import { screenshots, expandedScreenshot, bildSeite, bildAbfrageGrenze } from '../stores/journal/screenshots.js'
+import { starteBilder, pruefeSichtbarkeit, ladeWeitere } from '../utils/journal/ablauf.js'
 
 const { t } = useI18n()
 
@@ -78,21 +78,21 @@ const playbookLink = (b) => {
 function beimScrollen() {
     const rest = document.documentElement.scrollHeight - window.scrollY
     if (window.innerHeight + 200 < rest) return
-    if (spinnerLoadMore.value || spinnerLoadingPage.value || endOfList.value) return
+    if (ladeMehr.value || seiteLaedt.value || listeZuEnde.value) return
     if (expandedScreenshot.value != null) return
-    useLoadMore()
+    ladeWeitere()
 }
 
 onMounted(async () => {
     // Jeder Besuch beginnt vorn — sonst setzte ein zweiter Besuch beim Offset
-    // des ersten fort. Eine gemerkte Menge (SS) setzt useMountScreenshots danach.
-    endOfList.value = false
+    // des ersten fort. Eine gemerkte Menge (SS) setzt starteBilder danach.
+    listeZuEnde.value = false
     screenshots.length = 0
-    screenshotsPagination.value = 0
-    screenshotsQueryLimit.value = 4
-    await useMountScreenshots()
+    bildSeite.value = 0
+    bildAbfrageGrenze.value = 4
+    await starteBilder()
     window.addEventListener('scroll', beimScrollen, { passive: true })
-    useCheckVisibleScreen()
+    pruefeSichtbarkeit()
 })
 
 onBeforeUnmount(() => {
@@ -101,8 +101,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="seite">
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="seite">
         <Reiter v-model="typ" :reiter="TYPEN" class="typen" />
 
         <Leerzustand v-if="sichtbar.length === 0" :titel="t('common.noData')" symbol="bild" />

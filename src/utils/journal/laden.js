@@ -2,8 +2,8 @@
  * Tageszeilen laden, filtern und anreichern — der erste Schritt der
  * Journal-Kette (Spezifikation journal-kern.md §4.1).
  *
- * Ergebnis: `filteredTrades` (Tageskopien, absteigend), `filteredTradesDaily`
- * (dieselben Objekte in Ladereihenfolge), `filteredTradesTrades` (flach),
+ * Ergebnis: `journalTage` (Tageskopien, absteigend), `gefilterteTageAlle`
+ * (dieselben Objekte in Ladereihenfolge), `gefilterteTradesFlach` (flach),
  * dazu Blotter und P&L der gefilterten Trades.
  */
 import axios from 'axios'
@@ -11,13 +11,13 @@ import dayjs from './zeit.js'
 import i18n from '../../i18n/index.js'
 import { dbFind, dbFirst, dbDelete, dbDeleteWhere } from '../db.js'
 import { refreshAccountBalance } from '../../stores/accountBalance.js'
-import { pageId, timeZoneTrade, queryLimit, hasData, dailyPagination, dailyQueryLimit, endOfList, selectedItem } from '../../stores/app/rahmen.js'
-import { selectedRange, selectedPositions, selectedAccounts, selectedTags, selectedBroker, selectedTradeCategory, daysBack } from '../../stores/journal/filter.js'
-import { filteredTrades, filteredTradesDaily, filteredTradesTrades, imports } from '../../stores/journal/auswertung.js'
+import { pageId, timeZoneTrade, queryLimit, journalHatDaten, tagesSeite, tagesAbfrageGrenze, listeZuEnde, markierterEintrag } from '../../stores/app/rahmen.js'
+import { gewaehlterBereich, selectedPositions, selectedAccounts, tagAuswahl, selectedBroker, selectedTradeCategory, daysBack } from '../../stores/journal/filter.js'
+import { journalTage, gefilterteTageAlle, gefilterteTradesFlach, imports } from '../../stores/journal/auswertung.js'
 import { pAndL, blotter } from '../../stores/journal/import.js'
-import { tags, satisfactionArray, satisfactionTradeArray, excursions, availableTags } from '../../stores/journal/tagebuch.js'
+import { tags, zufriedenheitTage, zufriedenheitTrades, excursions, verfuegbareTags } from '../../stores/journal/tagebuch.js'
 import { baueNachschlag, erstelleFilter, reichereAn } from './filtern.js'
-import { useCreateBlotter, useCreatePnL } from './tagesrechnung.js'
+import { baueBlotter, bauePnL } from './tagesrechnung.js'
 import { kette } from './kette.js'
 import { istGanzerZeitraum } from './hilfen.js'
 
@@ -39,7 +39,7 @@ function tageszeilenAbfrage(param) {
             ascending: 'dateUnix',
         }
     }
-    const r = selectedRange.value
+    const r = gewaehlterBereich.value
     if (istGanzerZeitraum(r)) return { exclude: OHNE_GROSSE_SPALTEN, ascending: 'dateUnix', limit: queryLimit.value }
     return {
         exclude: OHNE_GROSSE_SPALTEN,
@@ -51,7 +51,7 @@ function tageszeilenAbfrage(param) {
 }
 
 /** Lädt Tageszeilen in den Kettenzustand und nach `imports`. */
-export async function useGetTrades(param) {
+export async function ladeTrades(param) {
     const zeilen = await dbFind('trades', tageszeilenAbfrage(param))
     if (zeilen.length > 0) {
         kette.tageszeilen = [...zeilen]
@@ -88,30 +88,30 @@ function tageskopie(zeile, n) {
     return kopie
 }
 
-export async function useGetFilteredTrades(_param) {
+export async function filtereTrades(_param) {
     try {
-        await useGetTrades()
-        filteredTrades.length = 0
-        filteredTradesDaily.length = 0
-        filteredTradesTrades.length = 0
+        await ladeTrades()
+        journalTage.length = 0
+        gefilterteTageAlle.length = 0
+        gefilterteTradesFlach.length = 0
 
         const zeilen = kette.tageszeilen
         const n = baueNachschlag({
             tagZeilen: tags,
-            tagesZufriedenheit: satisfactionArray,
-            tradeZufriedenheit: satisfactionTradeArray,
+            tagesZufriedenheit: zufriedenheitTage,
+            tradeZufriedenheit: zufriedenheitTrades,
             exkursionen: excursions,
             notizen: await ladeTradeTypNotizen(zeilen),
-            katalog: availableTags,
+            katalog: verfuegbareTags,
         })
         // Bewusster Altfehler §7.9: nur auf true, nie zurück — auch wenn der Filter alles verwirft.
-        if (zeilen.length > 0) hasData.value = true
+        if (zeilen.length > 0) journalHatDaten.value = true
 
-        const gewaehlt = selectedTags.value
+        const gewaehlt = tagAuswahl.value
         const passt = erstelleFilter({
             boerse: selectedBroker.value,
             kategorie: selectedTradeCategory.value,
-            bereich: selectedRange.value,
+            bereich: gewaehlterBereich.value,
             richtungen: selectedPositions.value,
             konten: selectedAccounts.value,
             gewaehlteTags: gewaehlt,
@@ -124,47 +124,47 @@ export async function useGetFilteredTrades(_param) {
                 if (!passt(trade, n)) continue
                 const gefiltert = reichereAn(trade, n, gewaehlt)
                 kopie.trades.push(gefiltert)
-                filteredTradesTrades.push(gefiltert)
+                gefilterteTradesFlach.push(gefiltert)
             }
             if (kopie.trades.length > 0) {
-                filteredTrades.push(kopie)
-                filteredTradesDaily.push(kopie)
+                journalTage.push(kopie)
+                gefilterteTageAlle.push(kopie)
             }
         }
 
-        await useCreateBlotter(true)
-        await useCreatePnL()
+        await baueBlotter(true)
+        await bauePnL()
 
         // Bewusster Altfehler §7.2: bei mehreren Tageskopien mit gleichem
         // dateUnix (zwei Börsen am selben Tag) bekommt nur die LETZTE P&L und
         // Blotter, obwohl beide über alle Trades des Tages gerechnet sind.
         for (const td of Object.keys(pAndL)) {
-            const ziel = filteredTradesDaily.findLast(d => String(d.dateUnix) === td)
+            const ziel = gefilterteTageAlle.findLast(d => String(d.dateUnix) === td)
             if (!ziel) continue
             ziel.pAndL = pAndL[td]
             ziel.blotter = blotter[td]
         }
 
-        filteredTrades.sort((a, b) => b.dateUnix - a.dateUnix)
+        journalTage.sort((a, b) => b.dateUnix - a.dateUnix)
     } catch (fehler) {
         console.error('Fehler beim Filtern der Trades:', fehler)
     }
 }
 
-/** Hängt die nächste Seite Tage aus `filteredTradesDaily` an `filteredTrades` an. */
-export function useGetFilteredTradesForDaily() {
-    const bis = dailyPagination.value + dailyQueryLimit.value
-    for (let i = dailyPagination.value; i < bis; i++) {
-        const tag = filteredTradesDaily[i]
-        if (!tag) { endOfList.value = true; continue }
-        if (!filteredTrades.some(d => String(d.dateUnix) === String(tag.dateUnix))) filteredTrades.push(tag)
+/** Hängt die nächste Seite Tage aus `gefilterteTageAlle` an `journalTage` an. */
+export function ladeNaechsteTage() {
+    const bis = tagesSeite.value + tagesAbfrageGrenze.value
+    for (let i = tagesSeite.value; i < bis; i++) {
+        const tag = gefilterteTageAlle[i]
+        if (!tag) { listeZuEnde.value = true; continue }
+        if (!journalTage.some(d => String(d.dateUnix) === String(tag.dateUnix))) journalTage.push(tag)
     }
-    dailyPagination.value += dailyQueryLimit.value
+    tagesSeite.value += tagesAbfrageGrenze.value
 }
 
-/** Löscht den Handelstag `selectedItem` samt Notizen, Tags und Zufriedenheit. */
+/** Löscht den Handelstag `markierterEintrag` samt Notizen, Tags und Zufriedenheit. */
 export async function useDeleteTrade() {
-    const tag = selectedItem.value
+    const tag = markierterEintrag.value
     const boerse = selectedBroker.value || 'bitunix'
     const zeile = await dbFirst('trades', { equalTo: { dateUnix: tag, broker: boerse } })
         || await dbFirst('trades', { equalTo: { dateUnix: tag } })
@@ -182,13 +182,13 @@ export async function useDeleteTrade() {
     catch (e) { console.warn('Importstand zurücksetzen fehlgeschlagen:', e) }
     try { await refreshAccountBalance({ broker: zeilenBoerse, force: true }) }
     catch (e) { console.warn('Kontostand aktualisieren fehlgeschlagen:', e) }
-    useGetTrades('imports')
+    ladeTrades('imports')
 }
 
-/** Löscht alle Exkursionen des Handelstags `selectedItem`. */
+/** Löscht alle Exkursionen des Handelstags `markierterEintrag`. */
 export async function useDeleteExcursions() {
     try {
-        await dbDeleteWhere('excursions', { equalTo: { dateUnix: selectedItem.value } })
+        await dbDeleteWhere('excursions', { equalTo: { dateUnix: markierterEintrag.value } })
     } catch (e) {
         alert(t('common.deleteExcursionsFailed'))
         throw e

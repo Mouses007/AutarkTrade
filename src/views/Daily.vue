@@ -24,7 +24,7 @@ function merkeKerzen(schluessel, wert) {
  * MFE, Notiz, Share-Karte, Screenshot-Vorschau).
  *
  * Neubau nach docs/spec/ansichten.md, Teil „Tagesansicht" und Abschnitt 0.
- * Die Rechenwerte kommen fertig aus dem Journal-Kern (`filteredTrades`); diese
+ * Die Rechenwerte kommen fertig aus dem Journal-Kern (`journalTage`); diese
  * Ansicht zeichnet nur und speichert die Begleitdaten des offenen Trades.
  */
 import { scrolleZu } from '../utils/scrolleZu.js'
@@ -42,24 +42,24 @@ import Symbol from '@/components/basis/Symbol.vue'
 import Leerzustand from '@/components/basis/Leerzustand.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import InfoTipp from '@/components/InfoTipp.vue'
-import SpinnerLoadingPage from '@/components/SpinnerLoadingPage.vue'
+import SeiteLaedt from '@/components/SeiteLaedt.vue'
 import ShareCardModal from '@/components/ShareCardModal.vue'
 
-import { spinnerLoadingPage, spinnerLoadMore, spinnerSetups } from '@/stores/app/laden.js'
-import { hasData, timeZoneTrade, modalDailyTradeOpen, saveButton, scrollToDateUnix, currentUser } from '@/stores/app/rahmen.js'
-import { filteredTrades } from '@/stores/journal/auswertung.js'
+import { seiteLaedt, ladeMehr, setupsLaden } from '@/stores/app/laden.js'
+import { journalHatDaten, timeZoneTrade, tradeDetailOffen, speichernNoetig, scrollToDateUnix, currentUser } from '@/stores/app/rahmen.js'
+import { journalTage } from '@/stores/journal/auswertung.js'
 import { tradeId } from '@/stores/journal/import.js'
-import { markerAreaOpen, screenshots, screenshotsInfos, screenshot } from '@/stores/journal/screenshots.js'
+import { markierungOffen, screenshots, bildInfos, screenshot } from '@/stores/journal/screenshots.js'
 import {
-    tradeScreenshotChanged, excursion, excursions, tradeExcursionChanged, tradeExcursionId, tradeExcursionDateUnix,
-    itemTradeIndex, tradeIndex, tradeIndexPrevious, tags, availableTags, tradeTags, tradeTagsChanged,
-    tagInput, showTagsList, notes, tradeNote, tradeNoteChanged,
+    tradeBildGeaendert, excursion, excursions, tradeExkursionGeaendert, tradeExcursionId, tradeExcursionDateUnix,
+    offenerTagIndex, tradeIndexAktiv, tradeIndexVorher, tags, verfuegbareTags, tradeTags, tradeTagsGeaendert,
+    tagInput, showTagsList, notes, tradeNotiz, tradeNotizGeaendert,
 } from '@/stores/journal/tagebuch.js'
 
-import { useMountDaily, useGetSelectedRange, useDisposeJournalCharts } from '@/utils/journal/ablauf.js'
+import { starteTagesansicht, bestimmeBereich, useDisposeJournalCharts } from '@/utils/journal/ablauf.js'
 import {
-    useGetExcursions, useGetTags, useGetAvailableTags, useUpdateAvailableTags, useUpdateTags, useUpdateNote,
-    useGetNotes, useGetTagInfo, useCreateAvailableTagsArray, useResetTags,
+    ladeExkursionen, ladeTags, ladeVerfuegbareTags, speichereVerfuegbareTags, speichereTags, speichereNotiz,
+    ladeNotizen, useGetTagInfo, baueTagListe, useResetTags,
 } from '@/utils/journal/tagebuch.js'
 import {
     useCreatedDateFormat, useTwoDecCurrencyFormat, useXDecCurrencyFormat, useTimeFormat, useTimeDuration,
@@ -67,7 +67,7 @@ import {
 } from '@/utils/journal/format.js'
 import dayjs from '@/utils/journal/zeit.js'
 import { ladeDiagramme, geladeneDiagramme } from '@/utils/journal/diagrammLader.js'
-import { useGetScreenshots, useSaveScreenshot, useSelectedScreenshotFunction } from '@/utils/screenshots.js'
+import { ladeBilder, speichereBild, useSelectedScreenshotFunction } from '@/utils/screenshots.js'
 import { dbFirst, dbCreate, dbUpdate } from '@/utils/db.js'
 
 const { t } = useI18n()
@@ -241,7 +241,7 @@ function gruppiereFills(fills) {
 
 // ── Tageskarten und Reiter ─────────────────────────────────────────────────
 
-const zeigeLeer = computed(() => !hasData.value || filteredTrades.length === 0)
+const zeigeLeer = computed(() => !journalHatDaten.value || journalTage.length === 0)
 
 const REITER = computed(() => [
     { id: 'trades', titel: t('daily.tabTrades') },
@@ -262,7 +262,7 @@ function waehleReiter(karte, id) {
     offenerReiter[karte] = offenerReiter[karte] === id ? '' : id
 }
 
-const hatBild = (trade) => screenshotsInfos.some(s => s.name === trade.id)
+const hatBild = (trade) => bildInfos.some(s => s.name === trade.id)
 
 function einstiegHinweis(trade, tag) {
     if (trade.tradesCount == 0) return ''
@@ -287,17 +287,17 @@ function springeZuTag(tagUnix, versuch = 0) {
 }
 
 watch(scrollToDateUnix, async (neu) => {
-    if (!neu || spinnerLoadingPage.value) return
+    if (!neu || seiteLaedt.value) return
     await nextTick()
     springeZuTag(neu)
 })
 
-// Die Filterleiste füllt `filteredTrades` jederzeit neu — dann gelten die alten Reiter nicht mehr.
-watch(spinnerLoadingPage, (laedt) => { if (!laedt) reiterZuruecksetzen() })
+// Die Filterleiste füllt `journalTage` jederzeit neu — dann gelten die alten Reiter nicht mehr.
+watch(seiteLaedt, (laedt) => { if (!laedt) reiterZuruecksetzen() })
 
 // ── Detailfenster: Zustand ─────────────────────────────────────────────────
 
-/** Sichtbarkeit des <dialog>; getrennt von `modalDailyTradeOpen`, weil das Schliessen erst speichert. */
+/** Sichtbarkeit des <dialog>; getrennt von `tradeDetailOffen`, weil das Schliessen erst speichert. */
 const dialogOffen = ref(false)
 /** Wechselt bei jedem Öffnen — der Kerzenchart bekommt so einen frischen Knoten und eine frische Instanz. */
 const kerzenSchluessel = ref(0)
@@ -318,8 +318,8 @@ const mfeAuto = ref(false)
 /** Screenshots des Tages in dieser Fenster-Sitzung schon geladen. */
 let screenshotsGeladen = false
 
-const offeneKarte = computed(() => (itemTradeIndex.value === undefined ? null : filteredTrades[itemTradeIndex.value] || null))
-const offenerTrade = computed(() => offeneKarte.value?.trades?.[tradeIndex.value] || null)
+const offeneKarte = computed(() => (offenerTagIndex.value === undefined ? null : journalTage[offenerTagIndex.value] || null))
+const offenerTrade = computed(() => offeneKarte.value?.trades?.[tradeIndexAktiv.value] || null)
 
 const dialogTitel = computed(() => {
     const tr = offenerTrade.value
@@ -328,8 +328,8 @@ const dialogTitel = computed(() => {
     return `${tr.symbol || ''} · ${useCreatedDateFormat(k.dateUnix)}`
 })
 
-const hatVorherigen = computed(() => !!offeneKarte.value?.trades?.[tradeIndex.value - 1])
-const hatNaechsten = computed(() => !!offeneKarte.value?.trades?.[tradeIndex.value + 1])
+const hatVorherigen = computed(() => !!offeneKarte.value?.trades?.[tradeIndexAktiv.value - 1])
+const hatNaechsten = computed(() => !!offeneKarte.value?.trades?.[tradeIndexAktiv.value + 1])
 
 const metaSichtbar = computed(() => hatMetadaten(tradingMeta.value))
 const fillListe = computed(() => listeVon(tradingMeta.value?.fills))
@@ -373,7 +373,7 @@ const bildQuelle = computed(() => screenshot.annotatedBase64 || screenshot.origi
 async function speichereExkursion() {
     const felder = ['stopLoss', 'maePrice', 'mfePrice']
     if (!felder.some(f => gesetzt(excursion[f]))) return
-    spinnerSetups.value = true
+    setupsLaden.value = true
     // Leer, NaN oder fehlend wird null — nie NaN in die DB
     const datensatz = {}
     for (const f of felder) datensatz[f] = istZahl(excursion[f]) ? Number(excursion[f]) : null
@@ -384,32 +384,32 @@ async function speichereExkursion() {
         await dbCreate('excursions', { ...datensatz, dateUnix: tradeExcursionDateUnix.value, tradeId: tradeExcursionId.value })
         tradeId.value = tradeExcursionId.value
     }
-    await useGetSelectedRange()
-    await useGetExcursions()
+    await bestimmeBereich()
+    await ladeExkursionen()
 }
 
 function flagsZurueck() {
-    tradeNoteChanged.value = false
-    tradeExcursionChanged.value = false
-    tradeTagsChanged.value = false
-    tradeScreenshotChanged.value = false
+    tradeNotizGeaendert.value = false
+    tradeExkursionGeaendert.value = false
+    tradeTagsGeaendert.value = false
+    tradeBildGeaendert.value = false
     showTagsList.value = ''
 }
 
 /** Was am bisher offenen Trade geändert wurde, wird gespeichert, bevor der nächste kommt. */
 async function speichereAusstehendes() {
     try {
-        if (tradeNoteChanged.value) {
-            await useUpdateNote()
-            await useGetNotes()
+        if (tradeNotizGeaendert.value) {
+            await speichereNotiz()
+            await ladeNotizen()
         }
-        if (tradeExcursionChanged.value) await speichereExkursion()
-        if (tradeTagsChanged.value) {
-            await Promise.all([useUpdateAvailableTags(), useUpdateTags()])
-            await Promise.all([useGetTags(), useGetAvailableTags()])
-            useCreateAvailableTagsArray()
+        if (tradeExkursionGeaendert.value) await speichereExkursion()
+        if (tradeTagsGeaendert.value) {
+            await Promise.all([speichereVerfuegbareTags(), speichereTags()])
+            await Promise.all([ladeTags(), ladeVerfuegbareTags()])
+            baueTagListe()
         }
-        if (tradeScreenshotChanged.value) await useSaveScreenshot()
+        if (tradeBildGeaendert.value) await speichereBild()
     } catch (fehler) {
         // Sichtbar wird der Fehler über den zentralen Hinweis von db.js
         console.error('Tagesansicht: Speichern fehlgeschlagen', fehler)
@@ -482,15 +482,15 @@ async function zeichneKerzen(trade, karte, meta) {
             if (kerzen.zeiten.length) merkeKerzen(schluessel, kerzen)
         }
         // Inzwischen weitergeblättert oder geschlossen → dieses Ergebnis gehört niemandem mehr
-        if (auftrag !== kerzenAuftrag || !modalDailyTradeOpen.value) return
+        if (auftrag !== kerzenAuftrag || !tradeDetailOffen.value) return
         if (!kerzen.zeiten.length) {
             kerzenFehler.value = t('daily.chartNichtVerfuegbar')
             return
         }
         await nextTick()
         const d = await ladeDiagramme()
-        if (auftrag !== kerzenAuftrag || !modalDailyTradeOpen.value) return
-        // Kopie mit Metadaten: das Store-Objekt in filteredTrades bleibt unverändert
+        if (auftrag !== kerzenAuftrag || !tradeDetailOffen.value) return
+        // Kopie mit Metadaten: das Store-Objekt in journalTage bleibt unverändert
         const mitMeta = meta ? { ...trade, _tradingMeta: meta } : { ...trade }
         const instanz = await d.useCandlestickChart(kerzen.zeiten, kerzen.preise, kerzen.volumen, mitMeta, true)
         instanz.resize()
@@ -537,23 +537,23 @@ async function berechneMfe(trade) {
  * bisher offenen Trade geändert wurde.
  */
 async function clickTradesModal(karte, alt, neu) {
-    if (markerAreaOpen.value) {
+    if (markierungOffen.value) {
         alert(t('common.screenshotSaveAnnotation'))
         return false
     }
-    spinnerSetups.value = true
+    setupsLaden.value = true
     await speichereAusstehendes()
 
     if (karte === undefined) {
         entsorgeKerzen()
         kerzenAuftrag++
-        spinnerSetups.value = false
-        itemTradeIndex.value = undefined
-        tradeIndexPrevious.value = undefined
-        tradeIndex.value = undefined
+        setupsLaden.value = false
+        offenerTagIndex.value = undefined
+        tradeIndexVorher.value = undefined
+        tradeIndexAktiv.value = undefined
         flagsZurueck()
-        saveButton.value = false
-        modalDailyTradeOpen.value = false
+        speichernNoetig.value = false
+        tradeDetailOffen.value = false
         dialogOffen.value = false
         screenshotsGeladen = false
         kerzenFehler.value = null
@@ -563,20 +563,20 @@ async function clickTradesModal(karte, alt, neu) {
     }
 
     try {
-        itemTradeIndex.value = Number(karte)
-        tradeIndexPrevious.value = Number(alt)
-        tradeIndex.value = Number(neu)
-        if (!modalDailyTradeOpen.value) kerzenSchluessel.value++
-        modalDailyTradeOpen.value = true
+        offenerTagIndex.value = Number(karte)
+        tradeIndexVorher.value = Number(alt)
+        tradeIndexAktiv.value = Number(neu)
+        if (!tradeDetailOffen.value) kerzenSchluessel.value++
+        tradeDetailOffen.value = true
         dialogOffen.value = true
 
-        const tag = filteredTrades[itemTradeIndex.value]
-        const trade = tag?.trades?.[tradeIndex.value]
+        const tag = journalTage[offenerTagIndex.value]
+        const trade = tag?.trades?.[tradeIndexAktiv.value]
         if (!tag || !trade) return true
 
         // Volle Screenshots genau dieses Tages, einmal je Fenster-Sitzung
         if (!screenshotsGeladen) {
-            if (!screenshots.length || screenshots[0]?.dateUnixDay != tag.dateUnix) await useGetScreenshots(true, tag.dateUnix)
+            if (!screenshots.length || screenshots[0]?.dateUnixDay != tag.dateUnix) await ladeBilder(true, tag.dateUnix)
             screenshotsGeladen = true
         }
 
@@ -596,9 +596,9 @@ async function clickTradesModal(karte, alt, neu) {
         const finde = () => screenshots.find(s => s?.name === id) || screenshots.find(s => s?.dateUnixDay == tag.dateUnix)
         let fund = finde()
         if (!fund) {
-            const info = screenshotsInfos.find(s => s.dateUnixDay == tag.dateUnix)
+            const info = bildInfos.find(s => s.dateUnixDay == tag.dateUnix)
             if (info) {
-                await useGetScreenshots(true, info.dateUnixDay)
+                await ladeBilder(true, info.dateUnixDay)
                 fund = finde()
             }
         }
@@ -611,14 +611,14 @@ async function clickTradesModal(karte, alt, neu) {
         const zuordnung = tags.find(x => x.tradeId == id)
         for (const tagId of listeVon(zuordnung?.tags)) {
             if (tradeTags.some(x => x.id === tagId)) continue
-            for (const gruppe of availableTags) {
+            for (const gruppe of verfuegbareTags) {
                 const gefunden = listeVon(gruppe.tags).find(x => x.id === tagId)
                 if (gefunden) { tradeTags.push({ id: gefunden.id, name: gefunden.name }); break }
             }
         }
 
         // Notiz, Metadaten, Typen
-        tradeNote.value = null
+        tradeNotiz.value = null
         tradingMeta.value = null
         tradeTypeRef.value = ''
         closingTradeTypeRef.value = ''
@@ -626,7 +626,7 @@ async function clickTradesModal(karte, alt, neu) {
         const notiz = notes.find(x => x.tradeId == id)
         if (notiz) {
             notizText.value = notizOhneHtml(notiz.note)
-            tradeNote.value = notizText.value
+            tradeNotiz.value = notizText.value
             tradingMeta.value = notiz.tradingMetadata || null
             tradeTypeRef.value = notiz.tradeType || ''
             closingTradeTypeRef.value = notiz.closingTradeType || ''
@@ -654,22 +654,22 @@ async function clickTradesModal(karte, alt, neu) {
         console.error('Tagesansicht: Trade öffnen', fehler)
         return true
     } finally {
-        if (modalDailyTradeOpen.value) {
-            spinnerSetups.value = false
+        if (tradeDetailOffen.value) {
+            setupsLaden.value = false
             tagInput.value = ''
-            saveButton.value = false
+            speichernNoetig.value = false
         }
     }
 }
 
 function oeffneTrade(karte, trade) {
-    if (spinnerSetups.value && modalDailyTradeOpen.value) return
+    if (setupsLaden.value && tradeDetailOffen.value) return
     clickTradesModal(karte, trade, trade)
 }
 
 function blaettere(schritt) {
-    if (spinnerSetups.value) return
-    clickTradesModal(itemTradeIndex.value, tradeIndex.value, tradeIndex.value + schritt)
+    if (setupsLaden.value) return
+    clickTradesModal(offenerTagIndex.value, tradeIndexAktiv.value, tradeIndexAktiv.value + schritt)
 }
 
 /**
@@ -680,7 +680,7 @@ function blaettere(schritt) {
  */
 async function schliesseTrade() {
     if (!dialogOffen.value) return
-    if (markerAreaOpen.value) {
+    if (markierungOffen.value) {
         alert(t('common.screenshotSaveAnnotation'))
         // Nativ schon geschlossen (Esc)? Dann wieder öffnen.
         dialogOffen.value = false
@@ -697,8 +697,8 @@ async function schliesseTrade() {
 function markiereExkursion() {
     tradeExcursionDateUnix.value = offeneKarte.value?.dateUnix
     tradeExcursionId.value = offenerTrade.value?.id
-    tradeExcursionChanged.value = true
-    saveButton.value = true
+    tradeExkursionGeaendert.value = true
+    speichernNoetig.value = true
     mfeAuto.value = false
 }
 
@@ -730,7 +730,7 @@ async function pruefeReplay() {
     const auftrag = ++replayAuftrag
     replayGeprueft.value = false
     replayVerfuegbar.value = false
-    if (!modalDailyTradeOpen.value) return
+    if (!tradeDetailOffen.value) return
     const f = replayFenster.value
     if (!f) { replayGeprueft.value = true; return }
     let verfuegbar = false
@@ -748,7 +748,7 @@ async function pruefeReplay() {
     replayGeprueft.value = true
 }
 
-watch([modalDailyTradeOpen, tradeIndex, itemTradeIndex], () => { if (modalDailyTradeOpen.value) pruefeReplay() })
+watch([tradeDetailOffen, tradeIndexAktiv, offenerTagIndex], () => { if (tradeDetailOffen.value) pruefeReplay() })
 
 /** Per Router (Abschnitt 0, D.16-8); Liquidity liest die Query beim Einhängen. Vorher speichern und schliessen. */
 async function oeffneOrderbuch() {
@@ -776,7 +776,7 @@ async function oeffneOrderbuch() {
  * dieses Trades als Einzelbild (−1 = ohne Blättern). Es ist wie das
  * Detailfenster ein <dialog> und liegt, später geöffnet, darüber; nach dem
  * Schliessen ist das Detailfenster wieder vorn. Dort kann markiert werden —
- * darum sperrt `markerAreaOpen` das Blättern und Schliessen hier.
+ * darum sperrt `markierungOffen` das Blättern und Schliessen hier.
  */
 function zeigeVollbild() {
     useSelectedScreenshotFunction(-1, 'dailyModal', screenshot)
@@ -785,9 +785,9 @@ function zeigeVollbild() {
 // ── KI-Bewertung und Share-Karte ───────────────────────────────────────────
 
 function kiBewertung(karte, index) {
-    itemTradeIndex.value = karte
-    tradeIndex.value = index
-    const tag = filteredTrades[karte]
+    offenerTagIndex.value = karte
+    tradeIndexAktiv.value = index
+    const tag = journalTage[karte]
     const tr = tag?.trades?.[index]
     if (!tr) return
     const pnl = Number(tr.grossProceeds || tr.grossSharePL || 0)
@@ -808,7 +808,7 @@ const shareOffen = ref(false)
 const shareTrade = ref(null)
 
 /** Tag-IDs der ersten Katalog-Gruppe — sie gilt als „Strategie" auf der Karte. */
-const ersteGruppeIds = () => new Set(listeVon(availableTags[0]?.tags).map(x => x.id))
+const ersteGruppeIds = () => new Set(listeVon(verfuegbareTags[0]?.tags).map(x => x.id))
 
 function shareObjekt(trade, karte, meta, tagNamen) {
     const richtung = trade.strategy || (trade.side === 'SS' || trade.side === 'BC' ? 'short' : 'long')
@@ -831,7 +831,7 @@ function shareObjekt(trade, karte, meta, tagNamen) {
 }
 
 function shareAusZeile(karte, index) {
-    const tag = filteredTrades[karte]
+    const tag = journalTage[karte]
     const tr = tag?.trades?.[index]
     if (!tr) return
     const erste = ersteGruppeIds()
@@ -855,8 +855,8 @@ function shareAusFenster() {
 
 onMounted(async () => {
     reiterZuruecksetzen()
-    await useMountDaily()
-    useCreateAvailableTagsArray()
+    await starteTagesansicht()
+    baueTagListe()
     if (scrollToDateUnix.value) {
         await nextTick()
         springeZuTag(scrollToDateUnix.value)
@@ -865,13 +865,13 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
     // Seite verlassen mit offenem Fenster: Änderungen nicht verlieren, Zustand für andere Seiten aufräumen
-    if (modalDailyTradeOpen.value) {
+    if (tradeDetailOffen.value) {
         speichereAusstehendes()
-        modalDailyTradeOpen.value = false
-        itemTradeIndex.value = undefined
-        tradeIndex.value = undefined
-        tradeIndexPrevious.value = undefined
-        saveButton.value = false
+        tradeDetailOffen.value = false
+        offenerTagIndex.value = undefined
+        tradeIndexAktiv.value = undefined
+        tradeIndexVorher.value = undefined
+        speichernNoetig.value = false
     }
     kerzenAuftrag++
     replayAuftrag++
@@ -881,13 +881,13 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <SpinnerLoadingPage />
+    <SeiteLaedt />
 
-    <div v-if="!spinnerLoadingPage" class="tagesansicht">
+    <div v-if="!seiteLaedt" class="tagesansicht">
         <Leerzustand v-if="zeigeLeer" :titel="t('common.noData')" />
 
         <template v-else>
-            <Karte v-for="(karte, ki) in filteredTrades" :id="`daily-card-${karte.dateUnix}`"
+            <Karte v-for="(karte, ki) in journalTage" :id="`daily-card-${karte.dateUnix}`"
                 :key="`${karte.dateUnix}-${ki}`" class="tageskarte">
                 <header class="kartenkopf">
                     <h3 class="datum">{{ useCreatedDateFormat(karte.dateUnix) }}</h3>
@@ -996,7 +996,7 @@ onBeforeUnmount(() => {
                                 <td class="zahl">{{ useDecimalsArithmetic(b.buyQuantity, b.sellQuantity) }}</td>
                                 <td class="zahl" :class="b.grossProceeds >= 0 ? 'at-gut' : 'at-schlecht'">{{ geld(b.grossProceeds) }}</td>
                                 <td class="zahl">{{ geld(b.fees) }}</td>
-                                <!-- Farbe nach dem angezeigten Netto-Wert, nicht nach amountCase -->
+                                <!-- Farbe nach dem angezeigten Netto-Wert, nicht nach betragArt -->
                                 <td class="zahl" :class="b.netProceeds >= 0 ? 'at-gut' : 'at-schlecht'">{{ geld(b.netProceeds) }}</td>
                                 <td class="zahl">{{ b.grossWinsCount }}</td>
                                 <td class="zahl">{{ b.grossLossCount }}</td>
@@ -1014,7 +1014,7 @@ onBeforeUnmount(() => {
 
     <!-- Trade-Detailfenster -->
     <Dialog :model-value="dialogOffen" :titel="dialogTitel" breite="72rem" :aussen-schliesst="false" @zu="schliesseTrade">
-        <div v-if="modalDailyTradeOpen && offenerTrade" class="detail">
+        <div v-if="tradeDetailOffen && offenerTrade" class="detail">
             <!-- Kerzenchart: frischer Knoten je Öffnen (key), ID ist Vorgabe von useCandlestickChart -->
             <div v-if="binanceChartAn" class="kerzenbereich">
                 <div v-show="!kerzenFehler" id="candlestickChart" :key="kerzenSchluessel" ref="kerzenEl" class="kerzen"></div>
@@ -1280,8 +1280,8 @@ onBeforeUnmount(() => {
                         :disabled="spinnerSetups" @click="blaettere(-1)" />
                     <Knopf v-if="kiAn" symbol="teilen" @click="shareAusFenster">{{ t('daily.shareCard') }}</Knopf>
                 </div>
-                <Knopf :art="saveButton ? 'haupt' : 'normal'" :disabled="spinnerSetups" @click="schliesseTrade">
-                    {{ saveButton ? t('daily.closeAndSave') : t('daily.closeModal') }}
+                <Knopf :art="speichernNoetig ? 'haupt' : 'normal'" :disabled="spinnerSetups" @click="schliesseTrade">
+                    {{ speichernNoetig ? t('daily.closeAndSave') : t('daily.closeModal') }}
                 </Knopf>
                 <div class="fussrechts">
                     <button v-if="bildQuelle" type="button" class="vorschau" :title="t('common.enlarge')" @click="zeigeVollbild">

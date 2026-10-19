@@ -15,8 +15,8 @@ import { ref, computed, onBeforeMount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
-import { spinnerLoadingPage } from '../stores/ui.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import { seiteLaedt } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import { Knopf, Pille, Symbol, Hinweis, Kreisel } from '../components/basis'
@@ -81,9 +81,9 @@ async function laden() {
 }
 
 onBeforeMount(async () => {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     await laden()
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
 })
 
 /** Datei → base64 (ohne den `data:`-Präfix, den die Anbieter nicht wollen). */
@@ -209,8 +209,8 @@ async function entwurfLoeschen(d) {
 </script>
 
 <template>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="builder-seite">
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="builder-seite">
         <div class="builder-inhalt">
 
             <div class="kopfzeile">

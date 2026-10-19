@@ -814,10 +814,10 @@ async function toolComputeStatistics(knex, params) {
         .where('dateUnix', '>=', params.startDate)
         .where('dateUnix', '<=', params.endDate)
     const settingsRow = await knex('settings').select('tags').where('id', 1).first()
-    let availableTags = []
-    try { availableTags = JSON.parse(settingsRow?.tags || '[]') } catch { availableTags = [] }
+    let verfuegbareTags = []
+    try { verfuegbareTags = JSON.parse(settingsRow?.tags || '[]') } catch { verfuegbareTags = [] }
     const tagIdToName = {}
-    for (const group of availableTags) {
+    for (const group of verfuegbareTags) {
         if (group.tags) { for (const tag of group.tags) { tagIdToName[tag.id] = tag.name } }
     }
     const tagUsage = {}

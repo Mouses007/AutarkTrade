@@ -6,7 +6,7 @@
  * setzen, Instanz zurückgeben — oder null ohne Element/Kerzen.
  * Kerzen kommen als [{t (ms), o, h, l, c}] aufsteigend.
  */
-import dayjs from '../../dayjs-setup.js'
+import dayjs from '../zeit.js'
 import { timeZoneTrade } from '../../../stores/ui.js'
 import { element, frischeInstanz, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'

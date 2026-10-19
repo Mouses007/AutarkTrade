@@ -1,5 +1,5 @@
 <script setup>
-import { spinnerLoadingPage, spinnerLoadingPageText } from '../stores/ui.js';
+import { seiteLaedt, seiteLaedtText } from '../stores/ui.js';
 import Kreisel from '@/components/basis/Kreisel.vue'
 </script>
 <template>
@@ -7,7 +7,7 @@ import Kreisel from '@/components/basis/Kreisel.vue'
         <div class="at-flex at-zentriert">
             <Kreisel :groesse="28" />
         </div>
-        {{ spinnerLoadingPageText }}
+        {{ seiteLaedtText }}
     </div>
 </template>
 <style scoped>

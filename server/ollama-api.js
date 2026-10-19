@@ -2253,16 +2253,16 @@ async function collectReportData(knex, startDate, endDate, broker) {
         .where('dateUnix', '<=', endDate)
 
     const settings = await knex('settings').where('id', 1).first()
-    let availableTags = []
+    let verfuegbareTags = []
     try {
-        availableTags = JSON.parse(settings?.tags || '[]')
+        verfuegbareTags = JSON.parse(settings?.tags || '[]')
     } catch (e) {
         logWarn('ollama-api', 'collectReportData: invalid settings.tags JSON, using []', e)
-        availableTags = []
+        verfuegbareTags = []
     }
 
     const tagIdToName = {}
-    for (const group of availableTags) {
+    for (const group of verfuegbareTags) {
         if (group.tags) {
             for (const tag of group.tags) {
                 tagIdToName[tag.id] = tag.name

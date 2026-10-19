@@ -25,8 +25,8 @@ import Kreisel from '../basis/Kreisel.vue'
 import Screenshot from '../Screenshot.vue'
 import BildMarkierung from '../bildmarkierung/BildMarkierung.vue'
 import { selectedScreenshotIndex } from '../../stores/ui.js'
-import { screenshots, selectedScreenshot } from '../../stores/trades.js'
-import { getMore } from '../../stores/filters.js'
+import { screenshots, gewaehltesBild } from '../../stores/trades.js'
+import { holtWeitere } from '../../stores/filters.js'
 import {
     useSelectedScreenshotFunction, screenshotVollbildOffen, useSchliesseScreenshotVollbild,
 } from '../../utils/screenshots.js'
@@ -35,10 +35,10 @@ import { useCreatedDateFormat } from '../../utils/journal/format.js'
 const { t } = useI18n()
 
 const index = computed(() => selectedScreenshotIndex.value)
-const hatBild = computed(() => Object.keys(selectedScreenshot).length > 0)
+const hatBild = computed(() => Object.keys(gewaehltesBild).length > 0)
 const mitZurueck = computed(() => Number.isInteger(index.value) && index.value - 1 >= 0)
 const mitWeiter = computed(() => Number.isInteger(index.value) && index.value + 1 > 0 && !!screenshots[index.value + 1])
-const titel = computed(() => (selectedScreenshot.dateUnix ? useCreatedDateFormat(selectedScreenshot.dateUnix) : t('nav.screenshots')))
+const titel = computed(() => (gewaehltesBild.dateUnix ? useCreatedDateFormat(gewaehltesBild.dateUnix) : t('nav.screenshots')))
 
 function blaettere(schritt) {
     useSelectedScreenshotFunction(index.value + schritt, 'fullScreen')
@@ -51,7 +51,7 @@ function offenSetzen(wert) {
 /** Pfeiltasten blättern, solange das Vollbild den Fokus hat. */
 function taste(e) {
     if (e.key === 'ArrowLeft' && mitZurueck.value) blaettere(-1)
-    else if (e.key === 'ArrowRight' && mitWeiter.value && !getMore.value) blaettere(1)
+    else if (e.key === 'ArrowRight' && mitWeiter.value && !holtWeitere.value) blaettere(1)
 }
 </script>
 

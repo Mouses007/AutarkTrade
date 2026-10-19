@@ -2,9 +2,9 @@
     import { useI18n } from 'vue-i18n'
     import Knopf from './basis/Knopf.vue'
     import { windowIsScrolled } from "../stores/ui.js";
-    import { returnToTop, useCheckIfWindowIsScrolled } from "../utils/journal/app.js";
+    import { scrolleNachOben, pruefeGescrollt } from "../utils/journal/app.js";
     const { t } = useI18n()
-    useCheckIfWindowIsScrolled();
+    pruefeGescrollt();
 </script>
 
 <template>

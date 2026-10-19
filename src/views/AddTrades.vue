@@ -19,12 +19,12 @@ import Knopf from '../components/basis/Knopf.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
 import ImportVorschau from '../components/import/ImportVorschau.vue'
-import { spinnerLoadingPage } from '../stores/app/laden.js'
+import { seiteLaedt } from '../stores/app/laden.js'
 import { selectedBroker } from '../stores/journal/filter.js'
-import { executions, existingImports, existingTradesArray, tradesData, trades, blotter, pAndL } from '../stores/journal/import.js'
+import { executions, vorhandeneImporte, vorhandeneTradeTage, tradeZeilen, trades, blotter, pAndL } from '../stores/journal/import.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { useGetExistingTradesArray, useUploadTrades } from '../utils/journal/import.js'
-import { useCreateBlotter, useCreatePnL } from '../utils/journal/tagesrechnung.js'
+import { baueBlotter, bauePnL } from '../utils/journal/tagesrechnung.js'
 import { ersetzeObjekt } from '../utils/journal/hilfen.js'
 import { useDateCalFormat } from '../utils/journal/format.js'
 import { useQuickApiImport, createBitunixTradeObj, createBitgetTradeObj, buildTradeObj, saveManualTrade } from '../utils/quickImport.js'
@@ -35,7 +35,7 @@ import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
 const { t } = useI18n()
 const router = useRouter()
 
-spinnerLoadingPage.value = false
+seiteLaedt.value = false
 
 const BROKER_NAMEN = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
 const broker = computed(() => selectedBroker.value || 'bitunix')
@@ -272,10 +272,10 @@ async function importiereApi() {
             return
         }
 
-        spinnerLoadingPage.value = true
+        seiteLaedt.value = true
         for (const k of Object.keys(executions)) delete executions[k]
-        existingImports.length = 0
-        tradesData.length = 0
+        vorhandeneImporte.length = 0
+        tradeZeilen.length = 0
 
         const erzeuge = broker.value === 'bitget' ? createBitgetTradeObj : createBitunixTradeObj
         const jeTag = {}
@@ -292,8 +292,8 @@ async function importiereApi() {
          */
         for (const td of Object.keys(jeTag)) {
             const datum = dayjs.unix(Number(td)).utc().format('YYYY-MM-DD')
-            if (existingTradesArray.includes(datum)) {
-                existingImports.push(Number(td))
+            if (vorhandeneTradeTage.includes(datum)) {
+                vorhandeneImporte.push(Number(td))
                 delete jeTag[td]
                 delete executions[td]
             }
@@ -303,26 +303,26 @@ async function importiereApi() {
         if (!neueTage) {
             importFehler.value = t('addTrades.allAlreadyImported')
             melde(t('messages.noNewTrades'))
-            spinnerLoadingPage.value = false
+            seiteLaedt.value = false
             return
         }
 
         ersetzeObjekt(trades, jeTag)
-        await useCreateBlotter()
-        await useCreatePnL()
-        spinnerLoadingPage.value = false
+        await baueBlotter()
+        await bauePnL()
+        seiteLaedt.value = false
         melde(t('messages.positionsImported', { count: positionen.length, days: neueTage }))
     } catch (e) {
         importFehler.value = e?.message || t('addTrades.importFailed')
         melde(t('messages.importFailed') + (e?.message || t('common.error')))
-        spinnerLoadingPage.value = false
+        seiteLaedt.value = false
     } finally {
         importiert.value = false
     }
 }
 
 const hatVorschau = computed(() => Object.keys(executions).length > 0)
-const bereitsImportiert = computed(() => existingImports.map(td => useDateCalFormat(td)).join(', '))
+const bereitsImportiert = computed(() => vorhandeneImporte.map(td => useDateCalFormat(td)).join(', '))
 
 function absenden() {
     // Ohne Argumente: als Ereignis-Handler gebunden landete sonst das Klickereignis darin.
@@ -434,8 +434,8 @@ function abbrechen() {
 
             <div v-if="spinnerLoadingPage" class="laden"><Kreisel :groesse="28" /></div>
 
-            <Karte v-else-if="existingImports.length || hatVorschau" class="at-mo-4">
-                <p v-if="existingImports.length" class="leise">
+            <Karte v-else-if="vorhandeneImporte.length || hatVorschau" class="at-mo-4">
+                <p v-if="vorhandeneImporte.length" class="leise">
                     {{ t('addTrades.alreadyImported') }} {{ bereitsImportiert }}
                 </p>
 

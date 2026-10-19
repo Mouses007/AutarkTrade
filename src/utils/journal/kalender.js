@@ -5,10 +5,10 @@
 import calendarize from 'calendarize'
 import dayjs from './zeit.js'
 import { pageId, timeZoneTrade } from '../../stores/app/rahmen.js'
-import { renderingCharts } from '../../stores/app/laden.js'
-import { selectedMonth } from '../../stores/journal/filter.js'
-import { filteredTrades } from '../../stores/journal/auswertung.js'
-import { calendarData, miniCalendarsData } from '../../stores/journal/kalender.js'
+import { diagrammeImAufbau } from '../../stores/app/laden.js'
+import { gewaehlterMonat } from '../../stores/journal/filter.js'
+import { journalTage } from '../../stores/journal/auswertung.js'
+import { kalenderDaten, miniKalenderDaten } from '../../stores/journal/kalender.js'
 import { ersetzeObjekt } from './hilfen.js'
 
 const zwei = (n) => String(n).padStart(2, '0')
@@ -26,7 +26,7 @@ function monate(start, zone) {
 /** Der LETZTE gefilterte Tag mit diesem Kalenderdatum. */
 function tagMitDatum(tag, monat, jahr) {
     let treffer
-    for (const d of filteredTrades) {
+    for (const d of journalTage) {
         if (d.date == tag && d.month + 1 == monat && d.year == jahr) treffer = d
     }
     return treffer
@@ -63,18 +63,18 @@ function raster(monatsWert, zone) {
     return aus
 }
 
-export async function useLoadCalendar() {
-    renderingCharts.value = true
+export async function ladeKalender() {
+    diagrammeImAufbau.value = true
     try {
-        // Bewusster Altfehler §7.4: miniCalendarsData ist ein Objekt; das hier
+        // Bewusster Altfehler §7.4: miniKalenderDaten ist ein Objekt; das hier
         // legt dort den Schlüssel `length` an, und Mini-Kalender kommen nie hinein.
-        miniCalendarsData.length = 0
+        miniKalenderDaten.length = 0
         const zone = timeZoneTrade.value
-        const start = selectedMonth.value.start
+        const start = gewaehlterMonat.value.start
         const gewaehlt = dayjs.unix(start).tz(zone).startOf('month').unix()
         for (const wert of monate(start, zone)) {
             if (wert !== gewaehlt) continue   // Mini-Kalender: bleiben leer (§7.4)
-            ersetzeObjekt(calendarData, raster(wert, zone))
+            ersetzeObjekt(kalenderDaten, raster(wert, zone))
         }
     } catch (fehler) {
         console.error('Fehler beim Aufbau des Kalenders:', fehler)

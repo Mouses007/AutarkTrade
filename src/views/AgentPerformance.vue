@@ -15,8 +15,8 @@ import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
-import { spinnerLoadingPage } from '../stores/ui.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import { seiteLaedt } from '../stores/ui.js'
+import SeiteLaedt from '../components/SeiteLaedt.vue'
 import { useXDecCurrencyFormat } from '../utils/journal/format.js'
 import { useAgentTimelineChart, cssColor87, cssColor60, cssColor38, blackbg5, greenColor, redColor } from '../utils/journal/diagramme/index.js'
 import { logError } from '../utils/logger.js'
@@ -227,7 +227,7 @@ async function zeitstrahlLaden() {
 }
 
 onBeforeMount(async () => {
-    spinnerLoadingPage.value = true
+    seiteLaedt.value = true
     try {
         instanzen.value = (await axios.get('/api/strategies/instances')).data
     } catch (e) { /* Filterliste ist optional */ }
@@ -238,7 +238,7 @@ onBeforeMount(async () => {
     if (route.query.symbol) filter.value.symbol = String(route.query.symbol).toUpperCase()
     if (TAB_SCHLUESSEL.includes(route.query.tab)) activeTab.value = route.query.tab
     await holen()
-    spinnerLoadingPage.value = false
+    seiteLaedt.value = false
     // Gezeichnet wird noch hinter dem Ladebalken — der Inhalt hängt dort an
     // `v-show`, ist also `display:none`, und ECharts misst dann eine Breite von
     // null. Erst nach dem Einblenden stimmen die Masse.
@@ -348,8 +348,8 @@ const reiterListe = computed(() => [
 </script>
 
 <template>
-    <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="perf-seite">
+    <SeiteLaedt />
+    <div v-show="!seiteLaedt" class="perf-seite">
         <div class="perf-inhalt">
 
             <h5 class="seitentitel">{{ t('strategies.performanceTitle') }}</h5>

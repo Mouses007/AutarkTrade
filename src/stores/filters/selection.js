@@ -1,3 +1,3 @@
 // Filter: ausgewählte Werte.
 // Re-Exporte; die Werte leben in stores/app/* und stores/journal/*.
-export { selectedTags, selectedPositions, selectedTimeFrame, selectedRatio, selectedAccount, selectedAccounts, selectedGrossNet, selectedPlSatisfaction, selectedBroker, selectedTradeCategory, selectedDateRange, selectedMonth, selectedMonthPreset, selectedPeriodRange, selectedDashTab, amountCase, amountCapital, selectedTradeTimeframes, selectedTagIndex, tempSelectedPlSatisfaction } from '../journal/filter.js'
+export { tagAuswahl, selectedPositions, selectedTimeFrame, selectedRatio, selectedAccount, selectedAccounts, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, selectedBroker, selectedTradeCategory, selectedDateRange, gewaehlterMonat, selectedMonthPreset, selectedPeriodRange, selectedDashTab, betragArt, betragGross, selectedTradeTimeframes, gewaehlterTagIndex, plOderZufriedenheitEntwurf } from '../journal/filter.js'

@@ -10,8 +10,8 @@ import { Knopf, Eingabe } from '@/components/basis/index.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
-import { useCheckCurrentUser, useGetPeriods } from '../../../utils/journal/app.js'
-import { currentUser, renderProfile } from '@/stores/settings.js'
+import { pruefeEinstellungen, ladeZeitraeume } from '../../../utils/journal/app.js'
+import { currentUser, profilZaehler } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
 import { merkeErweiterteInfos } from '@/composables/useErweiterteInfos.js'
 import { setLocale } from '@/i18n'
@@ -33,10 +33,9 @@ async function changeLanguage(lang) {
     await setLocale(lang)
     await dbUpdateSettings({ language: lang })
     currentUser.value.language = lang
-    await useGetPeriods()
+    await ladeZeitraeume()
 }
 
-let profileAvatar = null
 let username = ref('')
 // Layout & Stil
 let livetradingMobil = ref(false)    // Live-Trading-Fenster auch am Telefon zeigen
@@ -66,43 +65,41 @@ async function erweiterteInfosSpeichern(an) {
     await kiSpeichern('erweiterteInfos', an ? 1 : 0)
 }
 
-/* PROFILE */
-async function uploadProfileAvatar(event) {
-    const file = event.target.files[0];
-    profileAvatar = file
+/* Profil: Name und Bild. Das Bild wird erst beim Speichern gelesen und als
+   Daten-URL in den Einstellungen abgelegt — ein eigener Upload-Weg wäre für
+   ein einzelnes kleines Bild zu viel. */
+const gewaehltesBild = ref(null)
+
+function bildGewaehlt(ereignis) {
+    gewaehltesBild.value = ereignis.target.files?.[0] || null
+}
+
+function alsDatenUrl(datei) {
+    return new Promise((fertig, fehler) => {
+        const leser = new FileReader()
+        leser.onload = () => fertig(leser.result)
+        leser.onerror = () => fehler(leser.error)
+        leser.readAsDataURL(datei)
+    })
+}
+
+async function profilNeuLaden() {
+    await pruefeEinstellungen()
+    profilZaehler.value += 1
 }
 
 async function deleteAvatar() {
     await dbUpdateSettings({ avatar: '' })
-    profileAvatar = null
-    await useCheckCurrentUser()
-    renderProfile.value += 1
-    console.log(' -> Avatar gelöscht')
+    gewaehltesBild.value = null
+    await profilNeuLaden()
 }
 
-async function updateProfile() {
-    console.log(" update profile")
-    return new Promise(async (resolve, reject) => {
-        console.log("\nUPDATING PROFILE")
-        // Always save username
-        await dbUpdateSettings({ username: username.value || '' })
-
-        if (profileAvatar != null) {
-            const reader = new FileReader()
-            reader.onloadend = async () => {
-                await dbUpdateSettings({ avatar: reader.result })
-                await useCheckCurrentUser()
-                await (renderProfile.value += 1)
-                console.log(" -> Profile updated")
-                resolve()
-            }
-            reader.readAsDataURL(profileAvatar)
-        } else {
-            await useCheckCurrentUser()
-            await (renderProfile.value += 1)
-            resolve()
-        }
-    })
+async function profilSpeichern() {
+    const aenderung = { username: username.value || '' }
+    if (gewaehltesBild.value) aenderung.avatar = await alsDatenUrl(gewaehltesBild.value)
+    await dbUpdateSettings(aenderung)
+    gewaehltesBild.value = null
+    await profilNeuLaden()
 }
 
 /* Stand aus den Einstellungen — Settings.vue hat sie vor dem Mount geladen. */
@@ -136,7 +133,7 @@ ausEinstellungen()
                 <img v-else src="@/assets/icon.png" class="avatar" alt="" />
                 <Knopf v-if="currentUser?.avatar" art="gefahr" klein @click="deleteAvatar">{{ t('common.remove') }}</Knopf>
             </div>
-            <input type="file" class="datei" @change="uploadProfileAvatar" />
+            <input type="file" class="datei" @change="bildGewaehlt" />
         </Feld>
 
         <!-- Erweiterte Infos: das kleine „i" an Werten und Bedienelementen -->
@@ -185,7 +182,7 @@ ausEinstellungen()
         </div>
 
         <div class="fuss">
-            <Knopf art="haupt" @click="updateProfile">{{ t('common.save') }}</Knopf>
+            <Knopf art="haupt" @click="profilSpeichern">{{ t('common.save') }}</Knopf>
         </div>
     </Abschnitt>
 </template>

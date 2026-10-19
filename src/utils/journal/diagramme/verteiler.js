@@ -1,5 +1,5 @@
 /**
- * Verteiler des Journal-Dashboards: `useECharts('init' | 'clear')`.
+ * Verteiler des Journal-Dashboards: `zeichneDiagramme('init' | 'clear')`.
  *
  * Erst die drei Ringe, dann die Familien je ID-Präfix in fester Reihenfolge.
  * Die Reihenfolge zählt, weil spätere Aufrufe frühere am selben Element
@@ -7,7 +7,7 @@
  * die bekommen erst die Form aus useBarChart und dann (wenn es Werte gibt)
  * die aus useBarChartNegative. Diese Überlappung ist gewollt erhalten.
  */
-import { totals, satisfactionArray, satisfactionTradeArray, profitAnalysis } from '../../../stores/trades.js'
+import { totals, zufriedenheitTage, zufriedenheitTrades, gewinnAnalyse } from '../../../stores/trades.js'
 import { fall, element, instanzAn, sichtbar, sichereGroessenanpassung } from './grundlagen.js'
 import { usePieChart } from './ring.js'
 import { usePerfChart } from './performance.js'
@@ -40,7 +40,7 @@ function ringAnteile(id) {
         return n ? [totals[`${f}WinsCount`] / n, totals[`${f}LossCount`] / n] : [0, 0]
     }
     if (id === 'pieChart2') {
-        const liste = [...satisfactionArray, ...satisfactionTradeArray]
+        const liste = [...zufriedenheitTage, ...zufriedenheitTrades]
         if (!liste.length) return null
         /* eslint-disable eqeqeq -- lose Gleichheit ist hier die Regel: 1, true, "1" zufrieden; 0, false, "", "0" nicht */
         const zufrieden = liste.filter(x => x.satisfaction == true || x.satisfaction == 1).length
@@ -48,12 +48,12 @@ function ringAnteile(id) {
         /* eslint-enable eqeqeq */
         return [zufrieden / liste.length, unzufrieden / liste.length]
     }
-    const r = profitAnalysis[`${f}R`]
+    const r = gewinnAnalyse[`${f}R`]
     if (!r || Number.isNaN(r) || !(r > 0)) return null
     return [r / (r + 1), 1 / (r + 1)]
 }
 
-export async function useECharts(param) {
+export async function zeichneDiagramme(param) {
     sichereGroessenanpassung()
 
     for (const id of ['pieChart1', 'pieChart2', 'pieChart3']) {
