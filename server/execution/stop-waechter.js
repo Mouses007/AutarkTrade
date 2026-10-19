@@ -15,10 +15,10 @@
  * Nachsichtfrist: 20 s statt der 120 s der Engine — eine Zwei-Minuten-
  * Übernahmelücke wäre bei diesem Takt eine Zwei-Minuten-Lücke ohne Stop.
  *
- * ── Warum er auch bei CTJ_NO_ENGINE läuft ──────────────────────────────────
+ * ── Warum er auch bei AT_NO_ENGINE läuft ──────────────────────────────────
  * Er eröffnet nichts, er schliesst. Stirbt der NAS-Container, soll der
  * Dev-Rechner nach 20 s übernehmen, statt die Positionen ungesichert stehen zu
- * lassen. Abschalten ausdrücklich über `CTJ_NO_GUARD=1`.
+ * lassen. Abschalten ausdrücklich über `AT_NO_GUARD=1`.
  *
  * ── Der einzige Schutz gegen Doppelausführung ──────────────────────────────
  * Engine-Führung (120 s) und Wächter-Führung (20 s) können bei verschiedenen
@@ -37,6 +37,8 @@ import { holeAdapter, brauchtStopWaechter } from './index.js'
 import { bewerteLiveSchutz } from './stop-regeln.js'
 import { gleicheAb, bucheExternGeschlossen } from './abgleich.js'
 import { logError, logWarn } from '../logger.js'
+import { umgebungAn } from '../umgebung.js'
+import { istTestbetrieb } from '../umgebung.js'
 
 const WAECHTER_MS = 3000
 const FUEHRUNG_KEY = 'stop_waechter'
@@ -386,8 +388,9 @@ async function teilausstieg({ knex, instance, zeile, urteil }) {
 // ── Takt ─────────────────────────────────────────────────────────────────
 
 export function startStopWaechter() {
-    if (process.env.CTJ_NO_GUARD === '1') {
-        logWarn('stop-waechter', 'Durch CTJ_NO_GUARD=1 abgeschaltet — Live-Stops werden hier NICHT überwacht')
+    if (umgebungAn('NO_GUARD') || istTestbetrieb()) {
+        logWarn('stop-waechter', (istTestbetrieb() ? 'Im Testbetrieb' : 'Durch AT_NO_GUARD=1')
+            + ' abgeschaltet — Live-Stops werden hier NICHT überwacht')
         return
     }
     if (timer) return
@@ -417,7 +420,7 @@ export function waechterStatus() {
     return {
         ...stand,
         laeuft: Boolean(timer),
-        abgeschaltet: process.env.CTJ_NO_GUARD === '1',
+        abgeschaltet: umgebungAn('NO_GUARD') || istTestbetrieb(),
         taktMs: WAECHTER_MS,
         alter: stand.letzterSchlag ? Date.now() - stand.letzterSchlag : null,
     }

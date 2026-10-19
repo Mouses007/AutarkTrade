@@ -27,9 +27,9 @@ echo -e "${GREEN}[OK]${RESET} Node.js gefunden"
 # Datenbank-Backup
 echo ""
 echo -e "${CYAN}[1/4]${RESET} Datenbank-Backup..."
-if [ -f "tradenote.db" ]; then
-    cp tradenote.db tradenote.db.backup
-    echo -e "${GREEN}[OK]${RESET} Backup erstellt: tradenote.db.backup"
+if [ -f "autarktrade.db" ]; then
+    cp autarktrade.db autarktrade.db.backup
+    echo -e "${GREEN}[OK]${RESET} Backup erstellt: autarktrade.db.backup"
 else
     echo -e "${YELLOW}[!]${RESET} Keine Datenbank gefunden — Neuinstallation? Kein Backup noetig."
 fi
@@ -92,8 +92,8 @@ echo -e "${GREEN}${BOLD}  Update erfolgreich!                     ${RESET}"
 echo -e "${GREEN}${BOLD}══════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${BOLD}Datenbank:${RESET} Alle Daten erhalten"
-if [ -f "tradenote.db.backup" ]; then
-    echo -e "  ${BOLD}Backup:${RESET}    tradenote.db.backup"
+if [ -f "autarktrade.db.backup" ]; then
+    echo -e "  ${BOLD}Backup:${RESET}    autarktrade.db.backup"
 fi
 echo ""
 echo -e "  ${CYAN}Starte mit: ./start-mac.command${RESET}"

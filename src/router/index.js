@@ -451,11 +451,8 @@ let setupComplete = false
 let updateAssistantPending = false
 
 router.beforeEach(async (to, from, next) => {
-    if (to.meta.titleKey) {
-        document.title = i18n.global.t(to.meta.titleKey)
-    } else if (to.meta.title) {
-        document.title = to.meta.title
-    }
+    const seitenTitel = to.meta.titleKey ? i18n.global.t(to.meta.titleKey) : to.meta.title
+    document.title = seitenTitel ? `${seitenTitel} · AutarkTrade` : 'AutarkTrade'
 
     // Setup-Seite selbst braucht keinen Check
     if (to.meta.skipSetupCheck) {

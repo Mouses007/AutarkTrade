@@ -50,13 +50,13 @@ for (const h of ['0.0.0.0', '192.168.178.100', '::', 'example.com', '', undefine
 console.log('\nCookie-Vergabe ohne Passwortschutz\n')
 
 {
-    const alt = process.env.CTJ_ALLOW_INSECURE
-    delete process.env.CTJ_ALLOW_INSECURE
+    const alt = process.env.AT_ALLOW_INSECURE
+    delete process.env.AT_ALLOW_INSECURE
 
     setzeBindungsModus(true)
     check('lokal gebunden: Betrieb ohne Gate ist erlaubt', offenerBetriebErlaubt() === true)
     const lokal = laufe('/dashboard')
-    check('lokal gebunden: Seitenaufruf bekommt ein Cookie', lokal.cookie.includes('tn_session='), lokal.cookie)
+    check('lokal gebunden: Seitenaufruf bekommt ein Cookie', lokal.cookie.includes('at_session='), lokal.cookie)
     check('Cookie ist httpOnly und SameSite=Strict',
         lokal.cookie.includes('HttpOnly') && lokal.cookie.includes('SameSite=Strict'), lokal.cookie)
     check('API-Aufrufe bekommen nie ein Cookie zugeteilt', laufe('/api/db/trades').cookie === '')
@@ -69,15 +69,15 @@ console.log('\nCookie-Vergabe ohne Passwortschutz\n')
 
     // Der ausdrückliche Übersteuerungs-Schalter muss weiterhin greifen, sonst
     // stünde jemand, der es bewusst so will, plötzlich vor verschlossener Tür.
-    process.env.CTJ_ALLOW_INSECURE = '1'
-    check('CTJ_ALLOW_INSECURE=1 erlaubt den offenen Betrieb wieder', offenerBetriebErlaubt() === true)
-    check('und verteilt dann auch wieder Cookies', laufe('/dashboard').cookie.includes('tn_session='))
+    process.env.AT_ALLOW_INSECURE = '1'
+    check('AT_ALLOW_INSECURE=1 erlaubt den offenen Betrieb wieder', offenerBetriebErlaubt() === true)
+    check('und verteilt dann auch wieder Cookies', laufe('/dashboard').cookie.includes('at_session='))
 
-    process.env.CTJ_ALLOW_INSECURE = '0'
+    process.env.AT_ALLOW_INSECURE = '0'
     check('jeder andere Wert zählt nicht als Freigabe', offenerBetriebErlaubt() === false)
 
-    if (alt === undefined) delete process.env.CTJ_ALLOW_INSECURE
-    else process.env.CTJ_ALLOW_INSECURE = alt
+    if (alt === undefined) delete process.env.AT_ALLOW_INSECURE
+    else process.env.AT_ALLOW_INSECURE = alt
     setzeBindungsModus(true)
 }
 
@@ -108,8 +108,8 @@ console.log('\nErst-Einrichtung (gesperrter Netzbetrieb)\n')
 console.log('\nHost-Header (DNS-Rebinding)\n')
 
 {
-    const altHosts = process.env.CTJ_ALLOWED_HOSTS
-    delete process.env.CTJ_ALLOWED_HOSTS
+    const altHosts = process.env.AT_ALLOWED_HOSTS
+    delete process.env.AT_ALLOWED_HOSTS
 
     // Das, worüber der Dienst wirklich aufgerufen wird, muss durch:
     for (const h of ['localhost:8080', '127.0.0.1:8080', '127.0.0.1', '[::1]:8080',
@@ -124,12 +124,12 @@ console.log('\nHost-Header (DNS-Rebinding)\n')
         check(`„${h}" wird abgewiesen`, istErlaubterHost(h) === false)
     }
 
-    process.env.CTJ_ALLOWED_HOSTS = 'mein-nas.beispiel.de, journal.local'
-    check('CTJ_ALLOWED_HOSTS ergänzt eigene Namen', istErlaubterHost('mein-nas.beispiel.de:8080') === true)
+    process.env.AT_ALLOWED_HOSTS = 'mein-nas.beispiel.de, journal.local'
+    check('AT_ALLOWED_HOSTS ergänzt eigene Namen', istErlaubterHost('mein-nas.beispiel.de:8080') === true)
     check('andere Domains bleiben trotzdem draussen', istErlaubterHost('evil.example') === false)
 
-    if (altHosts === undefined) delete process.env.CTJ_ALLOWED_HOSTS
-    else process.env.CTJ_ALLOWED_HOSTS = altHosts
+    if (altHosts === undefined) delete process.env.AT_ALLOWED_HOSTS
+    else process.env.AT_ALLOWED_HOSTS = altHosts
 }
 
 console.log('\nFrei eingetragene KI-Endpunkte\n')
@@ -160,7 +160,7 @@ console.log('\nFrei eingetragene KI-Endpunkte\n')
 /*
  * Entwertung bestehender Sitzungen.
  *
- * Bis zum Audit vom 28.08.2026 war das Token unveraenderlich aus `CTJ_SECRET`
+ * Bis zum Audit vom 28.08.2026 war das Token unveraenderlich aus `AT_SECRET`
  * abgeleitet: Abmelden loeschte nur das Cookie beim Client, und der
  * Passwortwechsel liess bestehende Sitzungen ausdruecklich weiterlaufen — mit
  * einem Kommentar, der genau das festhielt. Wer sein Passwort wechselt,
@@ -178,7 +178,7 @@ console.log('\nEntwertung von Sitzungen')
     const vorher = tokenAus(getSessionCookieString(req))
     check('ein Cookie wird ueberhaupt ausgestellt', !!vorher && vorher.length > 20, String(vorher).slice(0, 12))
     check('das ausgestellte Cookie gilt',
-        hatGueltigeSession({ headers: { cookie: `tn_session=${vorher}` } }))
+        hatGueltigeSession({ headers: { cookie: `at_session=${vorher}` } }))
 
     await entwerteAlleSitzungen()
 
@@ -186,9 +186,9 @@ console.log('\nEntwertung von Sitzungen')
     check('nach dem Entwerten ist das Token ein anderes', nachher !== vorher,
         `${String(vorher).slice(0, 8)} vs ${String(nachher).slice(0, 8)}`)
     check('das ALTE Cookie gilt nicht mehr',
-        hatGueltigeSession({ headers: { cookie: `tn_session=${vorher}` } }) === false)
+        hatGueltigeSession({ headers: { cookie: `at_session=${vorher}` } }) === false)
     check('das NEUE Cookie gilt',
-        hatGueltigeSession({ headers: { cookie: `tn_session=${nachher}` } }))
+        hatGueltigeSession({ headers: { cookie: `at_session=${nachher}` } }))
 
     // Zweimal entwerten muss zweimal etwas aendern — sonst haengt die
     // Generation und ein zweiter Wechsel waere wirkungslos.
@@ -196,12 +196,12 @@ console.log('\nEntwertung von Sitzungen')
     const drittes = tokenAus(getSessionCookieString(req))
     check('erneutes Entwerten wirkt wieder', drittes !== nachher)
     check('kein altes Cookie ueberlebt',
-        [vorher, nachher].every((t) => hatGueltigeSession({ headers: { cookie: `tn_session=${t}` } }) === false))
+        [vorher, nachher].every((t) => hatGueltigeSession({ headers: { cookie: `at_session=${t}` } }) === false))
 
     check('ein leeres oder falsches Cookie gilt nie',
-        hatGueltigeSession({ headers: { cookie: 'tn_session=' } }) === false
+        hatGueltigeSession({ headers: { cookie: 'at_session=' } }) === false
         && hatGueltigeSession({ headers: {} }) === false
-        && hatGueltigeSession({ headers: { cookie: 'tn_session=abc' } }) === false)
+        && hatGueltigeSession({ headers: { cookie: 'at_session=abc' } }) === false)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

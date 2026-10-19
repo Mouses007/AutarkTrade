@@ -501,7 +501,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                     <span v-if="waechter.unbewacht > 0" class="badge bg-danger">
                         {{ t('strategies.guardStale', { n: waechter.unbewacht }) }}
                     </span>
-                    <span v-if="waechter.abgeschaltet" class="badge bg-danger">CTJ_NO_GUARD=1</span>
+                    <span v-if="waechter.abgeschaltet" class="badge bg-danger">AT_NO_GUARD=1</span>
                 </div>
                 <div v-if="waechterAmpel === 'tot'" class="alert alert-danger py-2 small mt-2 mb-0">
                     <i class="uil uil-exclamation-triangle me-1"></i>{{ t('strategies.guardDangerHint') }}

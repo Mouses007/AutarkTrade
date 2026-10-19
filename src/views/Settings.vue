@@ -5551,7 +5551,7 @@ onBeforeMount(async () => {
                 <div v-show="authExpanded" class="mt-2 ms-3">
                     <p class="fw-lighter">
                         Optionaler Login-Schutz. <strong>Nur nötig, wenn die App im Netzwerk/öffentlich erreichbar ist</strong>
-                        (z. B. <code>CTJ_HOST=0.0.0.0</code> oder Cloud-Server). Für reinen lokalen Betrieb nicht erforderlich.
+                        (z. B. <code>AT_HOST=0.0.0.0</code> oder Cloud-Server). Für reinen lokalen Betrieb nicht erforderlich.
                         Für echten Cloud-Betrieb zusätzlich HTTPS via Reverse-Proxy/VPN verwenden.
                     </p>
 

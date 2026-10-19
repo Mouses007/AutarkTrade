@@ -256,7 +256,7 @@ export function zeitStempel(zeit, zeitzone = '') {
  * @param {string} [opt.symbol]  Sinnbild des Ereignisses
  * @param {string} [opt.ton]     info | gut | warnung | gefahr
  * @param {string} [opt.bereich] Zeile über dem Titel („Handel", „Markt" …)
- * @param {string} [opt.marke]   Absenderzeile, Vorgabe „Crypto Trading Journal"
+ * @param {string} [opt.marke]   Absenderzeile, Vorgabe „AutarkTrade"
  * @param {string} [opt.nutzer]  Zusatz in der Unterzeile (Name aus den Einstellungen)
  * @param {Date}   [opt.zeit]    Zeitstempel der Meldung
  * @param {string} [opt.zeitzone] IANA-Zone für den Stempel, z.B. „Europe/Zurich"
@@ -264,7 +264,7 @@ export function zeitStempel(zeit, zeitzone = '') {
  * @param {string} [opt.groesse] Schriftstufe: normal | gross | sehrGross
  * @returns {{betreff: string, text: string, html: string}}
  */
-export function baueMail({ titel, text, symbol, ton, bereich, marke = 'Crypto Trading Journal',
+export function baueMail({ titel, text, symbol, ton, bereich, marke = 'AutarkTrade',
     nutzer = '', zeit = new Date(), zeitzone = '', mitLogo = true, groesse = STUFE_VORGABE } = {}) {
     const stil = TOENE[ton] || TOENE[VORGABE.ton]
     const g = groessen(groesse)
@@ -305,7 +305,7 @@ export function baueMail({ titel, text, symbol, ton, bereich, marke = 'Crypto Tr
         + `<tr><td style="padding:18px 24px 6px 24px;">${baueKoerper(text, groesse)}</td></tr>`
         + `<tr><td style="border-top:1px solid ${FARBEN.rand};padding:14px 24px 18px 24px;`
         + `color:${FARBEN.sehrLeise};font-size:${g.fuss}px;line-height:1.6;">`
-        + `Automatische Nachricht aus deinem Trading Journal.<br>`
+        + `Automatische Nachricht aus AutarkTrade.<br>`
         + `Welche Ereignisse per Mail kommen, steht unter Einstellungen → Benachrichtigungen.`
         + `</td></tr></table></td></tr></table></body></html>`
 

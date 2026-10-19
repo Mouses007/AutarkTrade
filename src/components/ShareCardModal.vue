@@ -306,14 +306,14 @@ async function shareImage() {
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
                 title: `Share Card: ${symbol} ${dir}`,
-                text: `Meine ${symbol} ${dir} Share Card\nErstellt mit Crypto Trading Journal`,
+                text: `Meine ${symbol} ${dir} Share Card\nErstellt mit AutarkTrade`,
                 files: [file]
             })
         } else {
             downloadImage()
             await new Promise(r => setTimeout(r, 500))
             const subject = encodeURIComponent(`Share Card: ${symbol} ${dir}`)
-            const body = encodeURIComponent(`Meine ${symbol} ${dir} Share Card.\n\n(Bild wurde heruntergeladen — bitte über "Anhängen" einfügen)\n\nErstellt mit Crypto Trading Journal`)
+            const body = encodeURIComponent(`Meine ${symbol} ${dir} Share Card.\n\n(Bild wurde heruntergeladen — bitte über "Anhängen" einfügen)\n\nErstellt mit AutarkTrade`)
             window.open(`mailto:?subject=${subject}&body=${body}`, '_self')
         }
     } catch (e) {

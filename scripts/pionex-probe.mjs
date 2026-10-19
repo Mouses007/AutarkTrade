@@ -1,7 +1,7 @@
 /**
  * Lesende Probe gegen die echte Pionex-API.
  *
- *   CTJ_SECRET=… node scripts/pionex-probe.mjs
+ *   AT_SECRET=… node scripts/pionex-probe.mjs
  *
  * Bewusst KEIN Selbsttest (liegt deshalb nicht unter `server/`, wo
  * `run-selftests.mjs` sucht): die Prüfungen dort müssen ohne Netz laufen.

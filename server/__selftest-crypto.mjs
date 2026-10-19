@@ -4,18 +4,18 @@
  *   node server/__selftest-crypto.mjs
  *
  * Warum das einen Test verdient: hier hängen ALLE Börsen- und KI-Schlüssel
- * dran, und der Fehlermodus ist tückisch. Der Schlüssel wird aus `CTJ_SECRET`
+ * dran, und der Fehlermodus ist tückisch. Der Schlüssel wird aus `AT_SECRET`
  * abgeleitet — startet der Server einmal ohne (oder mit einem anderen), sind
  * die gespeicherten Schlüssel unlesbar, ohne dass irgendwo etwas fehlt. Genau
  * das ist in der Praxis passiert. Der Test hält fest, dass ein falsches
  * Geheimnis zu einem DEFINIERTEN Verhalten führt und nicht zu stillem Müll,
  * der später als „API-Schlüssel ungültig" bei der Börse landet.
  *
- * `CTJ_SECRET` wird hier im Prozess gesetzt, bevor das Modul geladen wird —
+ * `AT_SECRET` wird hier im Prozess gesetzt, bevor das Modul geladen wird —
  * der Läufer startet jede Datei in einem eigenen Prozess, das stört niemanden.
  */
 
-process.env.CTJ_SECRET = 'selftest-geheimnis-1'
+process.env.AT_SECRET = 'selftest-geheimnis-1'
 
 const { encrypt, decrypt } = await import('./crypto.js')
 
@@ -56,7 +56,7 @@ console.log('\nFalsches Geheimnis, kaputte Eingabe')
 
 /*
  * Der eigentliche Grund für diese Datei: Was passiert, wenn der Server mit
- * einem ANDEREN CTJ_SECRET startet? Der Kanon des Moduls hat zwei Zweige, und
+ * einem ANDEREN AT_SECRET startet? Der Kanon des Moduls hat zwei Zweige, und
  * beide gehören festgehalten:
  *
  *  1. Sieht ein Wert verschlüsselt aus (`iv:authTag:daten`, beide Präfixe
@@ -67,7 +67,7 @@ console.log('\nFalsches Geheimnis, kaputte Eingabe')
  *     Verschlüsselung) und zugleich die Falle: ein zerhackter Wert, der die
  *     Form verliert, wandert damit unbemerkt als „Klartext" weiter.
  */
-process.env.CTJ_SECRET = 'ein-ganz-anderes-geheimnis'
+process.env.AT_SECRET = 'ein-ganz-anderes-geheimnis'
 const { decrypt: decryptFremd, isEncrypted } = await import('./crypto.js?fremd=1')
 
 pruefe('Chiffre mit fremdem Geheimnis ergibt LEER, nie einen falschen Text',

@@ -33,6 +33,7 @@ import { beansprucheAufgabe, gibAufgabeFrei, merkeAufgabenFehler } from './db-cl
 import { logWarn, logError } from './logger.js'
 import { empfaengerListe, EMPFAENGER_MAX } from '../shared/empfaenger.js'
 import { baueMail, logoAnhang, STUFEN, STUFE_VORGABE } from './mail-vorlage.js'
+import { versandGesperrt, versandSperrFehler } from './testbetrieb.js'
 
 /**
  * Alle Meldungstypen der App.
@@ -186,13 +187,14 @@ export function mailKonfigVollstaendig(s) {
  * Fassung — und Textleser (oder ein Client, der HTML sperrt) den `text`.
  */
 async function sendeMail(s, { betreff, text, html, anhaenge, an }) {
+    if (versandGesperrt()) throw versandSperrFehler()
     const sicherheit = String(s.mailSicherheit || 'starttls')
     let passwort = ''
     if (s.mailPasswort) {
         try {
             passwort = decrypt(s.mailPasswort)
         } catch (e) {
-            throw new Error(`Passwort nicht entschlüsselbar (CTJ_SECRET geändert?): ${e.message}`)
+            throw new Error(`Passwort nicht entschlüsselbar (AT_SECRET geändert?): ${e.message}`)
         }
     }
 
@@ -220,7 +222,7 @@ async function sendeMail(s, { betreff, text, html, anhaenge, an }) {
         await transport.sendMail({
             // Anzeigename statt nackter Adresse — im Postfach steht dann die
             // App und nicht „noreply@…".
-            from: { name: 'Crypto Trading Journal', address: String(s.mailVon) },
+            from: { name: 'AutarkTrade', address: String(s.mailVon) },
             // "An" bekommt die App selbst, die echten Empfänger stehen in
             // "Bcc" — sonst sähe bei einer Verteilerliste jeder Empfänger die
             // Adressen aller anderen. Ein "Antworten" landet damit bei der
@@ -300,6 +302,7 @@ async function darfNochSenden() {
  */
 export async function melde(id, { betreff, text, schluessel = '', ttlMs = 12 * 60 * 60 * 1000 } = {}) {
     try {
+        if (versandGesperrt()) return false
         if (!NACH_ID.has(id)) {
             logWarn('benachrichtigungen', `Unbekanntes Ereignis "${id}" — nichts verschickt`)
             return false
@@ -667,7 +670,7 @@ export function setupBenachrichtigungsRoutes(app) {
             }
             const logo = logoAnhang(s)
             const mail = baueMail({
-                titel: 'Testmail aus dem Trading Journal',
+                titel: 'Testmail aus AutarkTrade',
                 text: 'Wenn diese Nachricht ankommt, ist der E-Mail-Versand richtig eingerichtet.\n\n'
                     + `SMTP-Server: ${s.mailHost}:${s.mailPort} (${s.mailSicherheit})\n`
                     + `Absender: ${s.mailVon}\nEmpfänger: ${an.join(', ')}\n\n`

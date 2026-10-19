@@ -25,6 +25,8 @@ import { notiereGewicht } from './binance-takt.js'
 import { BYBIT_LIQ_WS, BYBIT_PING_MS, BYBIT_PONG_LIMIT_MS, bybitSubscribeMsg, normalisiereBybitLiq } from './bybit-liq.js'
 import { merkeLiq } from './liq-ticker.js'
 import { beansprucheFuehrung, gibFuehrungFrei } from './db-claim.js'
+import { umgebungAn } from './umgebung.js'
+import { istTestbetrieb } from './umgebung.js'
 
 const gzip = promisify(zlib.gzip)
 const gunzip = promisify(zlib.gunzip)
@@ -1514,7 +1516,7 @@ async function readConfig() {
  */
 const FUEHRUNG_KEY = 'live_recorder'
 /** Prozess zeichnet nie auf und hält nie die Führung (siehe `reconcile`). */
-const RECORDER_AUS = process.env.CTJ_NO_RECORDER === '1'
+const RECORDER_AUS = umgebungAn('NO_RECORDER') || istTestbetrieb()
 const FUEHRUNG_TTL_MS = 3 * RECONCILE_MS
 let hatFuehrung = false
 
@@ -1529,7 +1531,7 @@ async function reconcile() {
     // Führung nur holen (und halten), wenn es Arbeit gibt — sonst blockierte
     // ein Prozess mit abgeschalteter Aufzeichnung den, der sie führen soll.
     //
-    // `CTJ_NO_RECORDER=1` nimmt einen Prozess ganz aus dem Rennen. Gebraucht
+    // `AT_NO_RECORDER=1` nimmt einen Prozess ganz aus dem Rennen. Gebraucht
     // für den lokalen Test-Container: er hängt an derselben PostgreSQL wie die
     // NAS, und wer beim Neustart der NAS zufällig gerade lief, hielt danach
     // die Führung. Die Aufzeichnung in die DB lief dann zwar weiter, aber der
@@ -1550,7 +1552,7 @@ async function reconcile() {
         await gibFuehrungFrei(FUEHRUNG_KEY)
         hatFuehrung = false
     }
-    // Mit CTJ_NO_RECORDER auch nichts selbst starten — wie ein Nicht-Führer.
+    // Mit AT_NO_RECORDER auch nichts selbst starten — wie ein Nicht-Führer.
     if (RECORDER_AUS) config = { ...config, enabled: false, allLiq: false, symbols: [] }
 
     const wanted = new Map()

@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul 2>nul
 echo.
-echo   Crypto Trading Journal wird beendet...
+echo   AutarkTrade wird beendet...
 echo.
 taskkill /f /im node.exe 2>nul
 if %errorlevel% equ 0 (

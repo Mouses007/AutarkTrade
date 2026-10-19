@@ -2,17 +2,17 @@
  * Schlüssel umschlüsseln.
  *
  *   node server/reencrypt-keys.mjs                 # nur anzeigen, nichts ändern
- *   CTJ_SECRET=… node server/reencrypt-keys.mjs --apply
+ *   AT_SECRET=… node server/reencrypt-keys.mjs --apply
  *
  * ── Wozu ────────────────────────────────────────────────────────────────
- * `server/crypto.js` leitet den Schlüssel aus `CTJ_SECRET` ab — fehlt die
+ * `server/crypto.js` leitet den Schlüssel aus `AT_SECRET` ab — fehlt die
  * Variable, aus Rechnername und Benutzer. Wurde dieselbe Datenbank mal mit und
  * mal ohne gesetzte Variable beschrieben, liegen darin Werte unter ZWEI
  * verschiedenen Schlüsseln. Wie man den Dienst auch startet: ein Teil ist
  * unlesbar, und die Oberfläche meldet „nicht konfiguriert", obwohl alles da ist.
  *
  * Dieses Skript liest beide Schlüssel, findet die Werte, die am falschen
- * hängen, und schreibt sie mit dem aktuellen `CTJ_SECRET` neu.
+ * hängen, und schreibt sie mit dem aktuellen `AT_SECRET` neu.
  *
  * ── Was es NICHT anfasst ────────────────────────────────────────────────
  *   - `authPasswordHash` — ein Hash, kein verschlüsselter Wert.
@@ -32,22 +32,24 @@ import os from 'os'
 import fs from 'fs'
 import path from 'path'
 import knexLib from 'knex'
+import { umgebung } from './umgebung.js'
 
 const ANWENDEN = process.argv.includes('--apply')
 const ALGORITHM = 'aes-256-gcm'
 
 // ── Beide Schlüssel ableiten, genau wie crypto.js es tut ────────────────
-const zielSecret = process.env.CTJ_SECRET
+const zielSecret = umgebung('SECRET')
+// Seed-Name bewusst unverändert (siehe server/crypto.js)
 const maschinenSeed = `tradenote-${os.hostname()}-${os.userInfo().username}-v1`
 const schluessel = (seed) => crypto.createHash('sha256').update(seed).digest()
 
 if (!zielSecret) {
-    console.error('CTJ_SECRET ist nicht gesetzt. Ohne Ziel-Schlüssel gibt es nichts umzuschlüsseln.')
-    console.error('Aufruf: CTJ_SECRET=… node server/reencrypt-keys.mjs [--apply]')
+    console.error('AT_SECRET ist nicht gesetzt. Ohne Ziel-Schlüssel gibt es nichts umzuschlüsseln.')
+    console.error('Aufruf: AT_SECRET=… node server/reencrypt-keys.mjs [--apply]')
     process.exit(1)
 }
 if (zielSecret === maschinenSeed) {
-    console.error('CTJ_SECRET entspricht dem Maschinen-Seed — dann sind beide Schlüssel gleich.')
+    console.error('AT_SECRET entspricht dem Maschinen-Seed — dann sind beide Schlüssel gleich.')
     process.exit(1)
 }
 
@@ -109,7 +111,7 @@ function baueKnex() {
     }
     return knexLib({
         client: 'better-sqlite3',
-        connection: { filename: path.resolve('./tradenote.db') },
+        connection: { filename: path.resolve(fs.existsSync('./autarktrade.db') || !fs.existsSync('./tradenote.db') ? './autarktrade.db' : './tradenote.db') },
         useNullAsDefault: true,
     })
 }
@@ -159,7 +161,7 @@ const BESCHRIFTUNG = {
 }
 
 console.log(`\nDatenbank: ${knex.client.config.client}`)
-console.log(`Ziel-Schlüssel: CTJ_SECRET (${zielSecret.slice(0, 6)}…)\n`)
+console.log(`Ziel-Schlüssel: AT_SECRET (${zielSecret.slice(0, 6)}…)\n`)
 
 for (const zustand of ['umzuschluesseln', 'fremd', 'klartext', 'ok']) {
     const treffer = befunde.filter((b) => b.zustand === zustand)

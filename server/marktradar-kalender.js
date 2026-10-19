@@ -24,6 +24,7 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc.js'
 import timezone from 'dayjs/plugin/timezone.js'
 import { holeJson, sendRadarError } from './marktradar-api.js'
+import { istTestbetrieb } from './umgebung.js'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
@@ -293,8 +294,11 @@ export function setupKalenderRoutes(app) {
     // Beim Start einmal, danach alle zwei Stunden nachfassen. Der Anspruch
     // sorgt dafür, dass daraus höchstens alle sechs Stunden ein echter Abruf
     // wird — auch wenn mehrere Instanzen laufen.
-    holeKalender().catch(() => { })
-    takt = setInterval(() => holeKalender().catch(() => { }), 2 * 60 * 60 * 1000)
+    // Im Testbetrieb nur von Hand (Knopf „holen").
+    if (!istTestbetrieb()) {
+        holeKalender().catch(() => { })
+        takt = setInterval(() => holeKalender().catch(() => { }), 2 * 60 * 60 * 1000)
+    }
 
     console.log(' -> Kalender routes initialized')
 }

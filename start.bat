@@ -2,7 +2,7 @@
 chcp 65001 >nul 2>nul
 setlocal EnableDelayedExpansion
 
-title Crypto Trading Journal
+title AutarkTrade
 
 :: Pruefen ob Frontend gebaut wurde
 if not exist "dist\index.html" (
@@ -16,10 +16,10 @@ if not exist "dist\index.html" (
 
 :: Port aus Umgebungsvariable oder Standard
 set "PORT=8080"
-if defined CTJ_PORT set "PORT=!CTJ_PORT!"
+if defined AT_PORT set "PORT=!AT_PORT!"
 
 echo.
-echo   Crypto Trading Journal startet...
+echo   AutarkTrade startet...
 echo.
 echo   Server:   http://localhost:!PORT!
 echo   Beenden:  Strg+C druecken oder Fenster schliessen

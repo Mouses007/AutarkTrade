@@ -3,7 +3,7 @@
 # Zertifikat kommt von mkcert (lokale, selbst verwaltete CA — siehe DOCKER.md),
 # nicht von Let's Encrypt: die NAS hat keinen öffentlichen Hostnamen, nur die
 # private Adresse 192.168.178.100. `:443` statt einer Hostangabe, weil Docker
-# den Host-Port (siehe docker-compose.yml, CTJ_TLS_PORT) ohnehin schon auf
+# den Host-Port (siehe docker-compose.yml, AT_TLS_PORT) ohnehin schon auf
 # diesen Container-Port 443 mappt — ein Host/Port-Filter im Caddyfile würde
 # nur die falsche Fehlerquelle bei einer Portänderung hinzufügen.
 #
@@ -14,5 +14,5 @@
 # unangenehmste Fehler, weil er erst im Browser auffällt.
 :443 {
     tls /certs/nas.pem /certs/nas-key.pem
-    reverse_proxy {$CTJ_UPSTREAM:journal:8080}
+    reverse_proxy {$AT_UPSTREAM:journal:8080}
 }

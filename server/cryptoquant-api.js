@@ -34,6 +34,7 @@ import { logWarn } from './logger.js'
 import { beansprucheAufgabe, meldeFehler } from './db-claim.js'
 import { ausCache, sendeRadar, sendRadarError, verwerfeCache } from './marktradar-api.js'
 import { baueNutzlast, reiheAusAntwort, frischeHinweis } from './etf-fluss.js'
+import { istTestbetrieb } from './umgebung.js'
 
 const CQ_BASE = 'https://api.cryptoquant.com/v1'
 const HTTP_TIMEOUT = 15000
@@ -386,8 +387,10 @@ export function setupCryptoquantRoutes(app) {
     // Beim Start einmal nachsehen, danach halbstündlich — der Anspruch macht
     // daraus höchstens vier echte Abrufe am Tag. Der Versatz von 12 s hält den
     // Serverstart frei; die Fonds werden ohnehin mit Abstand geholt.
-    setTimeout(() => { aktualisiereEtf().catch(() => { }) }, 12000)
-    takt = setInterval(() => { aktualisiereEtf().catch(() => { }) }, 30 * 60 * 1000)
+    if (!istTestbetrieb()) {
+        setTimeout(() => { aktualisiereEtf().catch(() => { }) }, 12000)
+        takt = setInterval(() => { aktualisiereEtf().catch(() => { }) }, 30 * 60 * 1000)
+    }
 
     console.log(' -> CryptoQuant (ETF) routes initialized')
 }

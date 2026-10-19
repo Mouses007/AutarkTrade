@@ -8,17 +8,24 @@ if [ "$DB_TYPE" = "postgresql" ]; then
   "type": "postgresql",
   "host": "${DB_HOST:-localhost}",
   "port": ${DB_PORT:-5432},
-  "user": "${DB_USER:-tradenote}",
+  "user": "${DB_USER:-autarktrade}",
   "password": "${DB_PASSWORD:-}",
-  "database": "${DB_NAME:-tradenote}"
+  "database": "${DB_NAME:-autarktrade}"
 }
 EOF
-    echo "-> PostgreSQL: ${DB_HOST:-localhost}:${DB_PORT:-5432}/${DB_NAME:-tradenote}"
+    echo "-> PostgreSQL: ${DB_HOST:-localhost}:${DB_PORT:-5432}/${DB_NAME:-autarktrade}"
 else
-    echo "-> SQLite: /app/data/tradenote.db"
-    # Symlink damit SQLite in den persistenten Volume-Ordner schreibt
-    if [ ! -f /app/tradenote.db ] && [ -d /app/data ]; then
-        ln -sf /app/data/tradenote.db /app/tradenote.db
+    # Symlink damit SQLite in den persistenten Volume-Ordner schreibt.
+    # Ein Volume aus der Zeit vor AutarkTrade hat noch tradenote.db — dann
+    # bleibt es dabei (server/db-config.js nimmt die alte Datei, wenn nur sie da ist).
+    if [ -f /app/data/tradenote.db ] && [ ! -f /app/data/autarktrade.db ]; then
+        echo "-> SQLite: /app/data/tradenote.db (Altbestand)"
+        [ -e /app/tradenote.db ] || ln -sf /app/data/tradenote.db /app/tradenote.db
+    else
+        echo "-> SQLite: /app/data/autarktrade.db"
+        if [ ! -f /app/autarktrade.db ] && [ -d /app/data ]; then
+            ln -sf /app/data/autarktrade.db /app/autarktrade.db
+        fi
     fi
 fi
 

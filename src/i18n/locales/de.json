@@ -1,4 +1,12 @@
 {
+  "app": {
+    "name": "AutarkTrade",
+    "teil1": "Autark",
+    "teil2": "Trade",
+    "claim": "Dein Trading-Journal, lokal und unabhängig",
+    "testbetrieb": "Testbetrieb",
+    "testbetriebText": "Kopie der Live-Datenbank – keine Hintergrund-Takte, keine Mails, kein Push. Knöpfe funktionieren."
+  },
   "common": {
     "save": "Speichern",
     "cancel": "Abbrechen",
@@ -799,7 +807,7 @@
   },
   "setup": {
     "welcome": "Willkommen!",
-    "welcomeText": "Schön, dass du Crypto Trading Journal nutzt. Dieses Setup hilft dir, die Grundkonfiguration vorzunehmen.",
+    "welcomeText": "Schön, dass du AutarkTrade nutzt. Dieses Setup hilft dir, die Grundkonfiguration vorzunehmen.",
     "chooseDatabase": "Datenbank wählen",
     "chooseDatabaseText": "Wähle, wo deine Daten gespeichert werden sollen.",
     "recommended": "Empfohlen",

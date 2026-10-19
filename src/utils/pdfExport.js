@@ -31,7 +31,7 @@ export function useExportReportPdf(reportText, zeitraum, reportData) {
     doc.setFontSize(22)
     doc.setFont('helvetica', 'bold')
     doc.setTextColor(255, 255, 255)
-    doc.text('Trading Journal', margin, 16)
+    doc.text('AutarkTrade', margin, 16)
 
     // Untertitel
     doc.setFontSize(12)
@@ -250,7 +250,7 @@ export function useExportReportPdf(reportText, zeitraum, reportData) {
         doc.setFontSize(7.5)
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...grayText)
-        doc.text('Trading Journal — KI-Analyse', margin, pageHeight - 9)
+        doc.text('AutarkTrade — KI-Analyse', margin, pageHeight - 9)
 
         // Rechts: Seitenzahl
         doc.text(`Seite ${i} / ${totalPages}`, pageWidth - margin, pageHeight - 9, { align: 'right' })

@@ -3,11 +3,12 @@ import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
 import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText } from './boersen-status.js'
 import { istGewinn } from '../shared/gewinn.js'
+import { umgebungAn } from './umgebung.js'
 
 // Rohantworten der Börsen enthalten Positionen, Kontostände, PnL und IDs.
 // Standardmässig NICHT ins Log — Logs landen in Container-Ausgaben, Backups und
-// Fehlerberichten. Zum Nachstellen: CTJ_DEBUG_BROKER=1 setzen.
-const BROKER_DEBUG = process.env.CTJ_DEBUG_BROKER === '1'
+// Fehlerberichten. Zum Nachstellen: AT_DEBUG_BROKER=1 setzen.
+const BROKER_DEBUG = umgebungAn('DEBUG_BROKER')
 
 const BASE_URL = 'https://fapi.bitunix.com'
 
@@ -638,8 +639,8 @@ export function setupBitunixRoutes(app) {
 
             // Rohantwort nur auf Wunsch: das Live-Trading-Fenster fragt die
             // Positionen im Sekundentakt ab, und diese Zeile ersäufte damit
-            // jedes andere Protokoll. Mit CTJ_DEBUG_BITUNIX=1 kommt sie zurück.
-            if (process.env.CTJ_DEBUG_BITUNIX === '1') {
+            // jedes andere Protokoll. Mit AT_DEBUG_BITUNIX=1 kommt sie zurück.
+            if (umgebungAn('DEBUG_BITUNIX')) {
                 if (BROKER_DEBUG) console.log(' -> Bitunix pending positions raw response:', JSON.stringify(result).substring(0, 500))
             }
 

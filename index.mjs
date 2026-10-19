@@ -49,6 +49,8 @@ import { startStopWaechter, stopStopWaechter } from './server/execution/stop-wae
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
 import { logError } from './server/logger.js'
 import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession } from './server/auth.js'
+import { umgebung, umgebungAn } from './server/umgebung.js'
+import { starteTakte, istTestbetrieb } from './server/testbetrieb.js'
 
 const app = express();
 app.disable('x-powered-by')
@@ -88,8 +90,8 @@ setupEsp32Routes(app)
 app.use(sessionCookieMiddleware)
 app.use('/api', apiAuthMiddleware)
 
-const port = process.env.CTJ_PORT || process.env.PORT || 8080;
-const host = process.env.CTJ_HOST || '127.0.0.1'; // Default: nur lokal erreichbar
+const port = umgebung('PORT') || process.env.PORT || 8080;
+const host = umgebung('HOST') || '127.0.0.1'; // Default: nur lokal erreichbar
 const PROXY_PORT = 39482;
 
 // Wird im Entwicklungsbetrieb gesetzt; der Server unten hängt die
@@ -101,7 +103,7 @@ const startIndex = async () => {
     console.log("\nINITIALIZING DATABASE")
     await initDb()
 
-    // Notfall-Reset per CTJ_RESET_AUTH=1 (vor dem Laden), dann Auth-Konfig laden
+    // Notfall-Reset per AT_RESET_AUTH=1 (vor dem Laden), dann Auth-Konfig laden
     await maybeResetAuthFromEnv()
     await loadAuthConfig()
 
@@ -110,7 +112,7 @@ const startIndex = async () => {
     // Backup und Update-Knopf. Das war bisher nur eine Warnung im Log, die man
     // im Container-Betrieb nie sieht — deshalb jetzt Abbruch.
     //
-    // Der Container zählt dabei NICHT als „lokal": CTJ_HOST=0.0.0.0 ist dort
+    // Der Container zählt dabei NICHT als „lokal": AT_HOST=0.0.0.0 ist dort
     // zwar Voraussetzung fürs Port-Mapping, aber das Compose-Default published
     // den Port auf allen Host-Interfaces — jeder im LAN wäre drin. Abbrechen
     // darf der Container trotzdem nicht (eine frische Installation könnte das
@@ -120,22 +122,22 @@ const startIndex = async () => {
     // 401, und das Frontend verlangt zuerst „Passwort festlegen"
     // (setupRequired in /api/auth/status; das erste Passwort darf ohne Session
     // gesetzt werden). Bestehende Geräte bleiben angemeldet, weil das Token
-    // aus CTJ_SECRET abgeleitet ist. Wer bewusst offen fahren will:
-    // CTJ_ALLOW_INSECURE=1.
+    // aus AT_SECRET abgeleitet ist. Wer bewusst offen fahren will:
+    // AT_ALLOW_INSECURE=1.
     const inDocker = existsSync('/.dockerenv')
     setzeBindungsModus(istLoopbackHost(host))
-    if (!istLoopbackHost(host) && !isAuthEnabled() && process.env.CTJ_ALLOW_INSECURE !== '1') {
+    if (!istLoopbackHost(host) && !isAuthEnabled() && !umgebungAn('ALLOW_INSECURE')) {
         if (inDocker) {
             console.warn('\n  ⚠️  Netzbindung ohne Passwortschutz (Container).')
             console.warn('      Der Dienst startet GESPERRT: erst nach „Passwort festlegen" im')
-            console.warn('      Browser ist die API nutzbar. Bewusst offen: CTJ_ALLOW_INSECURE=1\n')
+            console.warn('      Browser ist die API nutzbar. Bewusst offen: AT_ALLOW_INSECURE=1\n')
         } else {
-            console.error('\n  ⛔  ABBRUCH: Der Dienst soll im Netzwerk lauschen (CTJ_HOST=' + host + '),')
+            console.error('\n  ⛔  ABBRUCH: Der Dienst soll im Netzwerk lauschen (AT_HOST=' + host + '),')
             console.error('      aber der Passwortschutz ist nicht aktiv. Dann hätte jeder im Netz')
             console.error('      vollen Zugriff auf API-Schlüssel, Handel und Backup.')
             console.error('      → Passwortschutz in den Einstellungen aktivieren (dazu einmal lokal')
-            console.error('        starten: CTJ_HOST=127.0.0.1), oder')
-            console.error('      → bewusst offen betreiben: CTJ_ALLOW_INSECURE=1\n')
+            console.error('        starten: AT_HOST=127.0.0.1), oder')
+            console.error('      → bewusst offen betreiben: AT_ALLOW_INSECURE=1\n')
             process.exit(1)
         }
     }
@@ -172,25 +174,10 @@ const startIndex = async () => {
     setupHandelslageRoutes(app);
     setupNewsRoutes(app);
     setupNewsProfilRoutes(app);
-    startNewsTakt();
     // ETF-Bestände: eigene Datei, weil sie als einzige Radar-Quelle einen
     // Schlüssel braucht — und nach dem Marktradar, dessen Cache sie mitbenutzt.
     setupCryptoquantRoutes(app);
-    startHypeTakt();
-    startWachhundTakt();
-    startFruehTakt();
-    startBoersenTakt();
-    startCoinRadarTakt();
-    startErgebnisTakt();
-    startAbverkaufTakt();
-    // 1-Minuten-Open-Interest für die Liquidationskarte — Binance bietet kein
-    // 1m-OI, die feinste Historie ist 5m; deshalb pollt der Takt selbst.
-    startOiArchivTakt();
-    // Chart-Alarme: prüft nur, wenn es aktive gibt, und nur in einem Prozess
-    // (Führung über db-claim) — NAS und Testcontainer teilen eine Datenbank.
-    startChartAlarmTakt();
     setupBenachrichtigungsRoutes(app);
-    startBenachrichtigungsTakt();
     setupOllamaRoutes(app);
     setupAiModelRoutes(app);
     setupAgentRoutes(app);
@@ -199,6 +186,10 @@ const startIndex = async () => {
     setupCoinRadarRoutes(app);
     setupUpdateRoutes(app);
     setupSpeicherRoutes(app);
+    // Betriebsart für die Oberfläche (Banner „Testbetrieb", gesperrte Automatiken)
+    app.get('/api/system/modus', (req, res) => {
+        res.json({ testbetrieb: istTestbetrieb() })
+    });
     setupBackupRoutes(app);
     await setupFluxRoutes(app);
     setupLiveRecorder(app);
@@ -214,23 +205,44 @@ const startIndex = async () => {
     await ladeAlleRegelStrategien();
     console.log(" -> API routes initialized")
 
+    // Hintergrund-Takte. Im Testbetrieb (AT_TESTBETRIEB=1, server/testbetrieb.js)
+    // startet KEINER davon — die Testinstanz läuft gegen eine Kopie der
+    // Live-DB und wäre dort der einzige Bewerber um jede Führung.
+    starteTakte([
+        ['News', startNewsTakt],
+        ['Hype', startHypeTakt],
+        ['Wachhund', startWachhundTakt],
+        ['Frühphase', startFruehTakt],
+        ['Börsenwacht', startBoersenTakt],
+        ['Coin-Radar', startCoinRadarTakt],
+        ['Ergebnis', startErgebnisTakt],
+        ['Abverkauf', startAbverkaufTakt],
+        // 1-Minuten-Open-Interest für die Liquidationskarte — Binance bietet kein
+        // 1m-OI, die feinste Historie ist 5m; deshalb pollt der Takt selbst.
+        ['OI-Archiv', startOiArchivTakt],
+        // Chart-Alarme: prüft nur, wenn es aktive gibt, und nur in einem Prozess
+        // (Führung über db-claim) — NAS und Testcontainer teilen eine Datenbank.
+        ['Chart-Alarm', startChartAlarmTakt],
+        ['Benachrichtigungen', startBenachrichtigungsTakt],
+    ]);
+
     // Strategie-Engine: der Takt läuft immer, gearbeitet wird nur für Instanzen,
     // die in der DB als aktiv markiert sind. Ein Neustart nimmt den Betrieb
     // damit genau dort wieder auf, wo er unterbrochen wurde.
     //
-    // ABSCHALTBAR mit CTJ_NO_ENGINE=1. Nötig, weil der Guard gegen doppelte
+    // ABSCHALTBAR mit AT_NO_ENGINE=1. Nötig, weil der Guard gegen doppelte
     // Läufe prozesslokal ist: zeigen zwei Prozesse auf dieselbe Datenbank —
     // etwa ein Entwicklungsserver neben dem Produktivcontainer — takten BEIDE
     // dieselben Instanzen und können dasselbe Setup gleichzeitig ausführen.
     // Für Oberflächenarbeit an einer laufenden Papier-Datenbank ist das der
     // sichere Weg. (Die dauerhafte Lösung wäre eine Sperre in der Datenbank.)
-    if (process.env.CTJ_NO_ENGINE === '1') {
-        console.log(" -> Strategie-Engine deaktiviert (CTJ_NO_ENGINE=1)")
+    if (umgebungAn('NO_ENGINE') || istTestbetrieb()) {
+        console.log(" -> Strategie-Engine deaktiviert (" + (istTestbetrieb() ? 'Testbetrieb' : 'AT_NO_ENGINE=1') + ")")
     } else {
         startStrategyEngine();
     }
 
-    // Der Stop-Wächter läuft AUCH mit CTJ_NO_ENGINE=1 — und das ist Absicht.
+    // Der Stop-Wächter läuft AUCH mit AT_NO_ENGINE=1 — und das ist Absicht.
     //
     // Er eröffnet nichts, er schliesst. Auf Börsen ohne Stop-Order (Pionex)
     // ist er der einzige Stop, den eine Live-Position hat; stirbt der
@@ -238,14 +250,15 @@ const startIndex = async () => {
     // statt die Positionen ungesichert stehen zu lassen. Dass trotzdem nur
     // einer wacht, sichert die Führungssperre in der Datenbank.
     //
-    // Ausdrücklich abschaltbar mit CTJ_NO_GUARD=1.
+    // Ausdrücklich abschaltbar mit AT_NO_GUARD=1; im Testbetrieb immer aus
+    // (die Prüfung steckt in startStopWaechter selbst).
     startStopWaechter();
 
-    // Der Takt der Coin-Rangliste läuft AUCH mit CTJ_NO_ENGINE=1: er handelt
+    // Der Takt der Coin-Rangliste läuft AUCH mit AT_NO_ENGINE=1: er handelt
     // nicht, sondern rechnet nur — und der Entwicklungsrechner ist genau die
     // Maschine, an der jemand sitzt und einen Lauf startet. Dass trotzdem nur
     // einer arbeitet, sichert die Führungssperre in der Datenbank.
-    startRanglisteTakt();
+    starteTakte([['Rangliste', startRanglisteTakt]]);
 
     if (process.env.NODE_ENV == 'dev') {
         // Vite ZUERST starten, dann den Proxy auf den Port richten, den es
@@ -258,7 +271,7 @@ const startIndex = async () => {
         // Vite-Instanz aus, samt totem WebSocket und leerem Inhalt. Der Fehler
         // sieht wie ein kaputtes Frontend aus und ist keiner.
         const Vite = await import('vite')
-        const gewuenscht = Number(process.env.CTJ_VITE_PORT) || PROXY_PORT
+        const gewuenscht = Number(umgebung('VITE_PORT')) || PROXY_PORT
         const vite = await Vite.createServer({ server: { port: gewuenscht } });
         await vite.listen();
         const vitePort = vite.httpServer?.address()?.port || gewuenscht
@@ -329,14 +342,14 @@ const startIndex = async () => {
     console.log("\nSTARTING NODEJS SERVER")
     await new Promise((resolve, reject) => {
         const server = app.listen(port, host, () => {
-            console.log(` -> Crypto Trading Journal started on http://${host}:${port}`)
+            console.log(` -> AutarkTrade started on http://${host}:${port}`)
             if (istLoopbackHost(host)) {
-                console.log(' -> Server is only accessible locally (set CTJ_HOST=0.0.0.0 to allow network access)')
+                console.log(' -> Server is only accessible locally (set AT_HOST=0.0.0.0 to allow network access)')
             } else if (!isAuthEnabled()) {
                 // Hierher kommt man nur im Container (Erreichbarkeit regelt
-                // dort das Port-Mapping) oder mit CTJ_ALLOW_INSECURE=1 — der
+                // dort das Port-Mapping) oder mit AT_ALLOW_INSECURE=1 — der
                 // Startcheck oben bricht sonst ab.
-                console.warn('\n  ⚠️  WARNUNG: Server ist im Netzwerk erreichbar (CTJ_HOST=' + host + '),')
+                console.warn('\n  ⚠️  WARNUNG: Server ist im Netzwerk erreichbar (AT_HOST=' + host + '),')
                 console.warn('      aber das Passwort-Gate ist NICHT aktiv. Jeder, der den Port erreicht,')
                 console.warn('      hat vollen Zugriff auf Schlüssel, Handel und Backup.')
                 console.warn('      → Passwortschutz in den Einstellungen aktivieren.\n')
@@ -418,7 +431,7 @@ const startIndex = async () => {
         fahreHerunter('uncaughtException', 1)
     })
 
-    console.log("\n Crypto Trading Journal ready!")
+    console.log("\n AutarkTrade ready!")
 }
 
 startIndex().catch(err => {

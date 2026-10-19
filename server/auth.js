@@ -9,14 +9,15 @@
  * Optionales Passwort-Gate (authEnabled=true): Der Server stellt das Cookie
  * NICHT mehr automatisch aus. Der Nutzer muss sich per POST /api/login mit
  * Passwort anmelden. Gedacht für Betrieb hinter öffentlicher Bindung
- * (CTJ_HOST=0.0.0.0). Zusätzlich wird HTTPS via Reverse-Proxy empfohlen.
+ * (AT_HOST=0.0.0.0). Zusätzlich wird HTTPS via Reverse-Proxy empfohlen.
  *
- * Das Token überlebt einen Neustart, WENN `CTJ_SECRET` gesetzt ist — siehe unten.
+ * Das Token überlebt einen Neustart, WENN `AT_SECRET` gesetzt ist — siehe unten.
  */
 import crypto from 'crypto'
 import { getKnex } from './database.js'
 import { isLocalRequest } from './update-api.js'
 import { logWarn } from './logger.js'
+import { umgebung, umgebungAn } from './umgebung.js'
 
 /**
  * Sitzungs-Token.
@@ -27,24 +28,24 @@ import { logWarn } from './logger.js'
  * gleichzeitig. Ein Update ist kein Sicherheitsereignis, das rechtfertigt das
  * nicht.
  *
- * Ist `CTJ_SECRET` gesetzt, wird das Token daraus ABGELEITET statt gewürfelt.
+ * Ist `AT_SECRET` gesetzt, wird das Token daraus ABGELEITET statt gewürfelt.
  * Damit überlebt die Anmeldung einen Neustart. Die Angriffsfläche wächst
- * dadurch nicht: `CTJ_SECRET` ist ohnehin das Hauptgeheimnis der Installation,
+ * dadurch nicht: `AT_SECRET` ist ohnehin das Hauptgeheimnis der Installation,
  * aus ihm werden bereits die API-Schlüssel entschlüsselt.
  *
  * Der Preis, bewusst in Kauf genommen: ein einmal abgegriffenes Cookie bleibt
- * gültig, bis `CTJ_SECRET` gewechselt wird — vorher half ein Neustart. Wer ein
- * Token für verbrannt hält, ändert `CTJ_SECRET` (oder setzt es ab, dann wird
+ * gültig, bis `AT_SECRET` gewechselt wird — vorher half ein Neustart. Wer ein
+ * Token für verbrannt hält, ändert `AT_SECRET` (oder setzt es ab, dann wird
  * wieder gewürfelt).
  *
- * Ohne `CTJ_SECRET` bleibt es beim alten Verhalten: zufällig je Start. Ein aus
+ * Ohne `AT_SECRET` bleibt es beim alten Verhalten: zufällig je Start. Ein aus
  * dem Maschinennamen abgeleiteter Ersatz wäre erratbar und damit schlechter als
  * eine lästige Neuanmeldung.
  */
 /**
  * Generation des Sitzungs-Tokens.
  *
- * Bis zum Audit vom 28.08.2026 war das Token allein aus `CTJ_SECRET`
+ * Bis zum Audit vom 28.08.2026 war das Token allein aus `AT_SECRET`
  * abgeleitet und damit unveraenderlich: Abmelden loeschte nur das Cookie beim
  * Client, und ein Passwortwechsel liess bestehende Sitzungen ausdruecklich
  * weiterlaufen. Wer sein Passwort wechselt, tut das aber meistens, WEIL er
@@ -53,7 +54,7 @@ import { logWarn } from './logger.js'
  *
  * Die Generation liegt in den Einstellungen und geht in die Ableitung ein.
  * Sie erhoehen entwertet jedes ausgestellte Cookie auf einen Schlag, ohne dass
- * jemand `CTJ_SECRET` anfassen muss. Der uebrige Preis bleibt bewusst bestehen
+ * jemand `AT_SECRET` anfassen muss. Der uebrige Preis bleibt bewusst bestehen
  * (siehe Kopf): das Token ueberlebt einen Neustart, damit ein Container-Update
  * nicht alle Geraete abmeldet.
  */
@@ -63,13 +64,13 @@ function leiteTokenAb(generation) {
     /*
      * Die Generation geht in BEIDE Faelle ein.
      *
-     * Erster Entwurf gab ohne `CTJ_SECRET` einfach `zufallsToken` zurueck —
+     * Erster Entwurf gab ohne `AT_SECRET` einfach `zufallsToken` zurueck —
      * dann waere der Passwortwechsel dort wirkungslos gewesen, und zwar
      * lautlos. Der Selbsttest hat genau das gefangen. Ohne Secret ist die
      * Basis der Zufallswert des Prozesses statt des Hauptgeheimnisses; die
      * Rotation funktioniert in beiden Faellen gleich.
      */
-    const basis = process.env.CTJ_SECRET ? String(process.env.CTJ_SECRET) : zufallsToken
+    const basis = umgebung('SECRET') ? String(umgebung('SECRET')) : zufallsToken
     /*
      * Generation 0 ergibt GENAU das alte Token.
      *
@@ -80,12 +81,15 @@ function leiteTokenAb(generation) {
      * rechtfertigt das nicht." Entwertet wird erst, wenn jemand sein Passwort
      * wechselt — dann ab Generation 1.
      */
+    // Der Zweck-Text 'tn_session_v1' bleibt trotz Umbenennung zu AutarkTrade:
+    // er geht in das Token ein, ein neuer Text meldete jedes Gerät ab und
+    // machte die Shell-Token der Diagnose-Skripte ungültig.
     const zweck = generation > 0 ? `tn_session_v1:${generation}` : 'tn_session_v1'
     return crypto.createHmac('sha256', basis).update(zweck).digest('hex')
 }
 
 /*
- * Ohne `CTJ_SECRET` bleibt es beim alten Verhalten: zufaellig je Start. Der
+ * Ohne `AT_SECRET` bleibt es beim alten Verhalten: zufaellig je Start. Der
  * Wert wird EINMAL gewuerfelt, sonst wechselte das Token bei jedem Aufruf und
  * niemand koennte angemeldet bleiben.
  */
@@ -123,7 +127,7 @@ export async function entwerteAlleSitzungen() {
         logWarn('auth', 'Sitzungs-Generation konnte nicht gespeichert werden', e)
     }
 }
-const COOKIE_NAME = 'tn_session'
+const COOKIE_NAME = 'at_session'
 const COOKIE_MAX_AGE = 30 * 24 * 60 * 60 // 30 Tage in Sekunden
 
 // In-memory Auth-Konfiguration (aus settings geladen)
@@ -148,10 +152,10 @@ export function setzeBindungsModus(nurLokal) {
 
 /**
  * Darf der Dienst ohne Passwort-Gate betrieben werden? Nur lokal — oder wenn
- * der Betreiber es mit CTJ_ALLOW_INSECURE=1 ausdrücklich in Kauf nimmt.
+ * der Betreiber es mit AT_ALLOW_INSECURE=1 ausdrücklich in Kauf nimmt.
  */
 export function offenerBetriebErlaubt() {
-    return bindNurLokal || process.env.CTJ_ALLOW_INSECURE === '1'
+    return bindNurLokal || umgebungAn('ALLOW_INSECURE')
 }
 
 // Routen, die ohne gültige Session erreichbar sein müssen (Login-Flow +
@@ -190,19 +194,19 @@ export function isAuthEnabled() {
 }
 
 /**
- * Notfall-Reset per Umgebungsvariable: Wird der Server mit CTJ_RESET_AUTH=1
+ * Notfall-Reset per Umgebungsvariable: Wird der Server mit AT_RESET_AUTH=1
  * gestartet, wird der Passwortschutz einmalig deaktiviert (für den Fall, dass
  * das Passwort verloren ging und kein localhost-Zugriff möglich ist).
  * Beim Start VOR loadAuthConfig aufrufen. Danach Env-Variable wieder entfernen.
  */
 export async function maybeResetAuthFromEnv() {
-    if (process.env.CTJ_RESET_AUTH !== '1') return
+    if (!umgebungAn('RESET_AUTH')) return
     try {
         const knex = getKnex()
         await knex('settings').where('id', 1).update({ authEnabled: 0, authPasswordHash: '', updatedAt: knex.fn.now() })
-        console.warn('[AUTH] Passwortschutz via CTJ_RESET_AUTH zurückgesetzt. Bitte CTJ_RESET_AUTH wieder entfernen.')
+        console.warn('[AUTH] Passwortschutz via AT_RESET_AUTH zurückgesetzt. Bitte AT_RESET_AUTH wieder entfernen.')
     } catch (e) {
-        console.error('[AUTH] CTJ_RESET_AUTH Reset fehlgeschlagen:', e.message)
+        console.error('[AUTH] AT_RESET_AUTH Reset fehlgeschlagen:', e.message)
     }
 }
 
@@ -256,7 +260,7 @@ const PRIVATE_V4 = [
 
 /** Zusätzlich erlaubte Namen aus der Umgebung (Komma-getrennt). */
 function zusatzHosts() {
-    return String(process.env.CTJ_ALLOWED_HOSTS || '')
+    return String(umgebung('ALLOWED_HOSTS') || '')
         .split(',')
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean)
@@ -265,7 +269,7 @@ function zusatzHosts() {
 /**
  * Darf unter diesem Host-Header zugegriffen werden?
  *
- * Erlaubt sind Loopback, private IP-Adressen und was in CTJ_ALLOWED_HOSTS
+ * Erlaubt sind Loopback, private IP-Adressen und was in AT_ALLOWED_HOSTS
  * steht. Registrierbare Domains sind es nicht — genau die braucht ein
  * Rebinding-Angriff.
  *
@@ -298,7 +302,7 @@ export function hostGuardMiddleware(req, res, next) {
     if (istErlaubterHost(req.headers?.host)) return next()
     res.status(421).type('text/plain').send(
         'Unbekannter Host. Der Dienst ist nur über localhost oder eine private '
-        + 'Netzadresse erreichbar (sonst CTJ_ALLOWED_HOSTS setzen).'
+        + 'Netzadresse erreichbar (sonst AT_ALLOWED_HOSTS setzen).'
     )
 }
 
@@ -405,13 +409,13 @@ function clientIp(req) {
      * Hinter dem hauseigenen Reverse-Proxy (Caddy) tragen ALLE Klienten
      * dieselbe Peer-IP — der Fehlversuchs-Zähler kollabierte zu einem
      * einzigen Eimer, und fünf fremde Fehlversuche sperrten auch den
-     * Eigentümer aus. CTJ_TRUST_PROXY=1 lässt NUR diesen Zähler die vom
+     * Eigentümer aus. AT_TRUST_PROXY=1 lässt NUR diesen Zähler die vom
      * unmittelbaren Proxy angehängte Adresse lesen (letzter Eintrag in
      * X-Forwarded-For — den setzt der eigene Proxy, alles davor ist
      * Klienten-Behauptung). isLocalRequest bleibt bewusst bei der Peer-IP:
      * dort wäre ein gefälschter Header eine Rechteausweitung.
      */
-    if (process.env.CTJ_TRUST_PROXY === '1') {
+    if (umgebungAn('TRUST_PROXY')) {
         const xff = String(req.headers['x-forwarded-for'] || '')
         const letzte = xff.split(',').map((s) => s.trim()).filter(Boolean).pop()
         if (letzte) return letzte.replace('::ffff:', '')
@@ -465,7 +469,7 @@ export function setupAuthRoutes(app) {
         // setupRequired: netzgebunden (oder Container) ohne Passwort — der
         // Server verteilt dann keine Cookies, das Frontend muss zuerst ein
         // Passwort setzen lassen. Wer schon ein gültiges Cookie trägt (Token
-        // überlebt via CTJ_SECRET), arbeitet normal weiter.
+        // überlebt via AT_SECRET), arbeitet normal weiter.
         const setupRequired = !authConfig.enabled && !offenerBetriebErlaubt()
             && !isValidSessionToken(parseCookieToken(req))
         res.json({ authEnabled: authConfig.enabled, loggedIn, setupRequired })
@@ -569,10 +573,10 @@ export function setupAuthRoutes(app) {
         try {
             // Im Netzbetrieb wäre das Abschalten gleichbedeutend mit „Tür auf
             // für alle im LAN". Wer das wirklich will, startet mit
-            // CTJ_ALLOW_INSECURE=1 — dann greift diese Sperre nicht.
+            // AT_ALLOW_INSECURE=1 — dann greift diese Sperre nicht.
             if (!offenerBetriebErlaubt()) {
                 return res.status(403).json({
-                    error: 'Der Dienst ist im Netzwerk erreichbar. Ohne Passwortschutz hätte dann jeder im Netz vollen Zugriff. Zum Abschalten den Dienst nur lokal binden (CTJ_HOST=127.0.0.1) oder mit CTJ_ALLOW_INSECURE=1 starten.'
+                    error: 'Der Dienst ist im Netzwerk erreichbar. Ohne Passwortschutz hätte dann jeder im Netz vollen Zugriff. Zum Abschalten den Dienst nur lokal binden (AT_HOST=127.0.0.1) oder mit AT_ALLOW_INSECURE=1 starten.'
                 })
             }
             if (authConfig.enabled) {

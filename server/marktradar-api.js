@@ -31,6 +31,7 @@ import {
 } from './makro.js'
 import { ladeLlmConfig, ladeLlmConfigFuerAufgabe, callLLMJson } from './llm.js'
 import { parseWalBeitrag } from './wal-parser.js'
+import { istTestbetrieb } from './umgebung.js'
 
 const HTTP_TIMEOUT = 10000
 
@@ -2263,8 +2264,11 @@ export function setupMarktradarRoutes(app) {
     }, 4000)
 
     // Erster Schnappschuss beim Start, danach halbstündlich nachfassen
-    schreibeSchnappschuss()
-    snapTimer = setInterval(schreibeSchnappschuss, 30 * 60 * 1000)
+    // (im Testbetrieb nicht — die Kopie der Live-DB soll keine Messreihe fortschreiben)
+    if (!istTestbetrieb()) {
+        schreibeSchnappschuss()
+        snapTimer = setInterval(schreibeSchnappschuss, 30 * 60 * 1000)
+    }
 
     console.log(' -> Marktradar routes initialized')
 }

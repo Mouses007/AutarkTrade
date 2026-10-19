@@ -12,11 +12,15 @@ import os from 'os'
 import https from 'https'
 import http from 'http'
 import { fileURLToPath } from 'url'
+import { umgebung } from './umgebung.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-const GITHUB_REPO = 'Mouses007/Crypto-Trading-Journal'
+// Neue, private Quelle. Bis S10 die Aktualisierung umstellt (Anmeldung an der
+// privaten Quelle), läuft die Prüfung hier ins Leere — gewollt: gegen das alte
+// Repo würde sie 3.x als „neuer" melden und per git reset den alten Stand holen.
+const GITHUB_REPO = 'Mouses007/AutarkTrade'
 const PROJECT_ROOT = path.resolve(__dirname, '..')
 const IS_WINDOWS = os.platform() === 'win32'
 const IS_DOCKER = existsSync('/.dockerenv')
@@ -130,7 +134,7 @@ async function installDockerUpdate(res) {
     }
 
     const steps = []
-    let selfName = process.env.HOSTNAME || 'crypto-trading-journal'
+    let selfName = process.env.HOSTNAME || 'autarktrade'
 
     // 1. Eigene Config lesen (hostname inside docker == container short-id)
     let self
@@ -139,26 +143,26 @@ async function installDockerUpdate(res) {
     } catch (e) {
         // Fallback: try by known container_name from compose
         try {
-            self = await dockerApi('GET', `/containers/crypto-trading-journal/json`)
-            selfName = 'crypto-trading-journal'
+            self = await dockerApi('GET', `/containers/autarktrade/json`)
+            selfName = 'autarktrade'
         } catch (e2) {
             return res.status(500).json({ ok: false, error: 'Kann eigenen Container nicht identifizieren: ' + e.message })
         }
     }
-    const imageName = self.Config?.Image || 'mouses007/trading-journal:latest'
+    const imageName = self.Config?.Image || 'autarktrade:latest'
     const labels = self.Config?.Labels || {}
-    // HOST-Pfad bevorzugt aus CTJ_HOST_COMPOSE_DIR (.env) — der ist stabil.
+    // HOST-Pfad bevorzugt aus AT_HOST_COMPOSE_DIR (.env) — der ist stabil.
     // Der compose-Label 'working_dir' wird von compose bei jedem Recreate
     // auf den CWD gesetzt und damit pollutet, wenn compose aus einem
     // Helfer-Container heraus laeuft. Env-Var aus .env bleibt unveraendert.
-    const composeWorkingDir = process.env.CTJ_HOST_COMPOSE_DIR || labels['com.docker.compose.project.working_dir']
+    const composeWorkingDir = umgebung('HOST_COMPOSE_DIR') || labels['com.docker.compose.project.working_dir']
     const composeService = labels['com.docker.compose.service']
     const composeProject = labels['com.docker.compose.project']
 
     if (!composeWorkingDir || !composeService) {
         return res.status(400).json({
             ok: false,
-            error: 'Container wurde nicht mit docker-compose gestartet oder CTJ_HOST_COMPOSE_DIR fehlt in .env. Update manuell: docker pull ' + imageName + ' && docker compose up -d'
+            error: 'Container wurde nicht mit docker-compose gestartet oder AT_HOST_COMPOSE_DIR fehlt in .env. Update manuell: docker pull ' + imageName + ' && docker compose up -d'
         })
     }
     steps.push({ step: 'self config', output: `image=${imageName} service=${composeService} project=${composeProject} cwd=${composeWorkingDir}` })
@@ -238,7 +242,7 @@ function spawnWindowsUpdateScript(commands, label) {
 chcp 65001 >nul
 echo.
 echo ========================================
-echo   Crypto Trading Journal - ${label}
+echo   AutarkTrade - ${label}
 echo ========================================
 echo.
 echo Warte auf Server-Beendigung...
@@ -432,8 +436,8 @@ export function setupUpdateRoutes(app) {
                 return res.status(400).json({
                     ok: false,
                     error: 'Git-Repository nicht gefunden. Bitte fuehre im Installationsordner aus:\n' +
-                        'git init && git remote add origin https://github.com/Mouses007/Crypto-Trading-Journal.git && git fetch origin master\n' +
-                        'Oder installiere neu mit: git clone https://github.com/Mouses007/Crypto-Trading-Journal.git'
+                        'git init && git remote add origin https://github.com/Mouses007/AutarkTrade.git && git fetch origin master\n' +
+                        'Oder installiere neu mit: git clone https://github.com/Mouses007/AutarkTrade.git'
                 })
             }
 
@@ -594,7 +598,7 @@ export function setupUpdateRoutes(app) {
         // Pruefen ob Git-Repository vorhanden ist
         if (!existsSync(path.join(PROJECT_ROOT, '.git'))) {
             console.log(' -> Kein Git-Repository gefunden — Auto-Updates nicht verfuegbar')
-            console.log('    Tipp: git init && git remote add origin https://github.com/Mouses007/Crypto-Trading-Journal.git && git fetch origin master')
+            console.log('    Tipp: git init && git remote add origin https://github.com/Mouses007/AutarkTrade.git && git fetch origin master')
             return
         }
 

@@ -15,6 +15,7 @@
  */
 
 import { logWarn } from '../logger.js'
+import { versandGesperrt, versandSperrFehler } from '../testbetrieb.js'
 
 const ABRUF_TIMEOUT_MS = 10000
 const RANG = { info: 0, warnung: 1, kritisch: 2 }
@@ -35,6 +36,7 @@ const wiederholbar = (status) => status === undefined || status === 429 || statu
  * ntfy-Servers verschluckte damit einen kritischen Alarm für eine Stunde.
  */
 async function post(url, { kopf = {}, body }) {
+    if (versandGesperrt()) throw versandSperrFehler()
     let letzter
     for (let versuch = 0; versuch < 2; versuch++) {
         const abbruch = new AbortController()

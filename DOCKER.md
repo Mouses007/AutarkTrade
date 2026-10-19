@@ -1,4 +1,4 @@
-# Docker-Installation — Crypto Trading Journal
+# Docker-Installation — AutarkTrade
 
 ## Voraussetzungen
 
@@ -21,7 +21,7 @@ cp .env.example .env
 Passe die `.env` an deine PostgreSQL-Zugangsdaten an:
 
 ```env
-CTJ_PORT=8080
+AT_PORT=8080
 DB_TYPE=postgresql
 DB_HOST=192.168.178.100
 DB_PORT=5433
@@ -72,7 +72,7 @@ Das baut das Image mit dem neuen Code neu und startet den Container. Die Datenba
 ## Hinweise
 
 - Der Container bindet auf `0.0.0.0`, ist also im Netzwerk erreichbar
-- Über `CTJ_PORT` in der `.env` kann der Port geändert werden
+- Über `AT_PORT` in der `.env` kann der Port geändert werden
 - Die `.env`-Datei ist in `.gitignore` und wird nicht committed
 - Wenn `DB_TYPE` nicht gesetzt oder leer ist, verwendet der Container SQLite (lokal im Container — nur für Tests geeignet)
 
@@ -125,6 +125,6 @@ Das startet nur den neu hinzugekommenen `caddy`-Container — der laufende
 
 ### 3. Port
 
-Caddy hört standardmässig auf `8443` (`CTJ_TLS_PORT` in der `.env`), NICHT auf
+Caddy hört standardmässig auf `8443` (`AT_TLS_PORT` in der `.env`), NICHT auf
 443 — die Synology-DSM belegt 443 (und 80) bereits selbst mit ihrem eigenen
 nginx. Das Journal ist danach unter `https://<nas-ip>:8443` erreichbar.

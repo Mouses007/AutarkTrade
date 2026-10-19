@@ -1,10 +1,11 @@
-# Crypto Trading Journal
+# AutarkTrade
 
-A **free**, self-hosted, open-source trading journal for **crypto futures** on **Bitunix**, **Bitget** and **Pionex**.
-Runs locally or via Docker — no cloud, no account, no subscription.
-Vue 3 + Express, SQLite or PostgreSQL, GPL-3.0.
+Trading journal and analysis workstation for **crypto futures** on **Bitunix**, **Bitget** and **Pionex**.
+Runs locally or via Docker — no cloud, no account.
+Vue 3 + Express, SQLite or PostgreSQL.
 
-![GitHub release](https://img.shields.io/github/v/release/Mouses007/Crypto-Trading-Journal) ![License](https://img.shields.io/github/license/Mouses007/Crypto-Trading-Journal) ![Last commit](https://img.shields.io/github/last-commit/Mouses007/Crypto-Trading-Journal)
+> **Status:** 4.0.0-alpha — AutarkTrade is being rebuilt from the former Crypto Trading Journal
+> (redesign, own licence). Work orders and their state: [`docs/AUFTRAGSSTAND.md`](docs/AUFTRAGSSTAND.md).
 
 > Available in Linux Mint: **System Settings → Desklets → Download → "Trading Positions"**
 > The user interface is available in **German** (default) and **English**.
@@ -378,8 +379,8 @@ Your open positions outside the browser — all three companions live in this re
 #### Linux / macOS
 
 ```bash
-git clone https://github.com/Mouses007/Crypto-Trading-Journal.git
-cd Crypto-Trading-Journal
+git clone https://github.com/Mouses007/AutarkTrade.git
+cd AutarkTrade
 chmod +x install.sh
 ./install.sh
 npm start
@@ -417,16 +418,16 @@ Open `http://localhost:8080` in your browser.
 #### Quick Start (with external PostgreSQL)
 
 ```bash
-git clone https://github.com/Mouses007/Crypto-Trading-Journal.git
-cd Crypto-Trading-Journal
+git clone https://github.com/Mouses007/AutarkTrade.git
+cd AutarkTrade
 cp .env.example .env
 ```
 
 Edit `.env` with your database credentials:
 
 ```env
-CTJ_PORT=8080
-CTJ_SECRET=           # optional: openssl rand -hex 32 (for shared encryption across instances)
+AT_PORT=8080
+AT_SECRET=           # optional: openssl rand -hex 32 (for shared encryption across instances)
 DB_TYPE=postgresql
 DB_HOST=192.168.178.100
 DB_PORT=5432
@@ -502,13 +503,13 @@ Double-click **`update.bat`** — creates a backup and updates automatically.
 Default: port `8080`, bound to `127.0.0.1` (local only).
 
 ```bash
-CTJ_PORT=3000 npm start                  # Different port
-CTJ_HOST=0.0.0.0 npm start               # Network access
+AT_PORT=3000 npm start                  # Different port
+AT_HOST=0.0.0.0 npm start               # Network access
 ```
 
 ### Database
 
-**SQLite** (default): No configuration needed. Database file `tradenote.db` in project root.
+**SQLite** (default): No configuration needed. Database file `autarktrade.db` in project root (an existing `tradenote.db` keeps being used if it is the only one).
 
 **PostgreSQL**: Create a `db-config.json` in the project root:
 
@@ -525,22 +526,22 @@ CTJ_HOST=0.0.0.0 npm start               # Network access
 
 For Docker, configure via `.env` instead (see Installation > Docker).
 
-### Encryption (CTJ_SECRET)
+### Encryption (AT_SECRET)
 
-By default, API keys are encrypted with a machine-specific seed. If you run multiple instances (e.g., local + Docker) sharing the same database, set `CTJ_SECRET` so all instances use the same encryption key:
+By default, API keys are encrypted with a machine-specific seed. If you run multiple instances (e.g., local + Docker) sharing the same database, set `AT_SECRET` so all instances use the same encryption key:
 
 ```bash
 # Generate a secret
 openssl rand -hex 32
 
 # Set it as environment variable
-export CTJ_SECRET=your_generated_secret
+export AT_SECRET=your_generated_secret
 
 # Or add to .env (for Docker and server_neustart.sh)
-CTJ_SECRET=your_generated_secret
+AT_SECRET=your_generated_secret
 ```
 
-> **Important**: After setting CTJ_SECRET for the first time, re-enter your broker API keys in Settings — the old keys were encrypted with the previous machine seed.
+> **Important**: After setting AT_SECRET for the first time, re-enter your broker API keys in Settings — the old keys were encrypted with the previous machine seed.
 
 ### Development
 
@@ -563,16 +564,11 @@ Starts the Vite dev server with Hot Module Replacement on port 39482, proxied th
 
 ---
 
-## Attribution
+## Third-party components
 
-Based on [TradeNote](https://github.com/Eleven-Trading/TradeNote) by eleven.trading, substantially modified:
-
-- Replaced MongoDB/Parse Server with SQLite/PostgreSQL (Knex)
-- Removed cloud auth, payments, analytics; simplified to single-user
-- Multi-broker support (Bitunix + Bitget) with encrypted API key storage
 - Chart workspace on [Lightweight Charts](https://github.com/tradingview/lightweight-charts) by TradingView (Apache-2.0; the TradingView attribution logo stays visible in every chart)
-- Added: KI-Agent, Share Cards, Incoming Positions, Performance Heatmap, Trade-Type Statistics, Backup/Restore, Auto-Update, Docker support, and more
+- Origin of the code base: see [`HERKUNFT.md`](HERKUNFT.md)
 
 ## License
 
-GPL-3.0 — see [LICENSE](LICENSE) file.
+Proprietary — licence text in preparation (work order S10). Until then: all rights reserved.

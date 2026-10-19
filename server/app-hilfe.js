@@ -16,7 +16,7 @@
 export const HILFE_THEMEN = {
     ueberblick: {
         titel: 'Überblick & Navigation',
-        text: `Das Crypto Trading Journal ist eine lokale Einzelnutzer-App für Bitunix-Futures-Trading (zusätzlich werden Bitget und Pionex unterstützt). Es läuft auf dem eigenen Rechner oder NAS — keine Cloud, kein fremder Server; die Daten liegen in einer lokalen Datenbank.
+        text: `AutarkTrade ist eine lokale Einzelnutzer-App für Bitunix-Futures-Trading (zusätzlich werden Bitget und Pionex unterstützt). Es läuft auf dem eigenen Rechner oder NAS — keine Cloud, kein fremder Server; die Daten liegen in einer lokalen Datenbank.
 
 Oben in der Leiste wird zwischen den Modi umgeschaltet:
 - **Chart** — Landing-Page: ein Chart-Arbeitsplatz im Stil von TradingView mit Watchlist, mehreren Charts nebeneinander und gespeicherten Layouts; links steht dasselbe Seitenmenü wie im Journal. Er ersetzt seit Oktober 2026 die frühere Übersicht (deren Marktkacheln stehen im Marktradar). Siehe Thema "chart".

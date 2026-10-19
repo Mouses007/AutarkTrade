@@ -5,12 +5,12 @@
  *
  * Läuft als ECHTER HTTP-Server auf einem freien Port: die Whitelists, das
  * objectId-Mapping und der JSON-Roundtrip sind Express-Middleware-Verhalten,
- * das man nicht sinnvoll „trocken" prüfen kann. `CTJ_DB_FILE=:memory:` sorgt
+ * das man nicht sinnvoll „trocken" prüfen kann. `AT_DB_FILE=:memory:` sorgt
  * dafür, dass NIE die konfigurierte echte Datenbank angefasst wird — der
  * Umweg über die Umgebungsvariable MUSS vor dem ersten DB-Import stehen.
  */
 
-process.env.CTJ_DB_FILE = ':memory:'
+process.env.AT_DB_FILE = ':memory:'
 
 const { initDb } = await import('./database.js')
 const { setupApiRoutes } = await import('./api-routes.js')

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Crypto Trading Journal — Server neu starten
+# AutarkTrade — Server neu starten
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
@@ -11,7 +11,7 @@ if [ -n "$PID" ]; then
     sleep 1
 fi
 
-# .env laden falls vorhanden (enthält CTJ_SECRET, DB-Zugangsdaten etc.)
+# .env laden falls vorhanden (enthält AT_SECRET, DB-Zugangsdaten etc.)
 if [ -f .env ]; then
     set -a
     source .env

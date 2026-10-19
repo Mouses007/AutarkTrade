@@ -1,8 +1,13 @@
 import crypto from 'crypto'
 import os from 'os'
+import { umgebung } from './umgebung.js'
 
 // Verschlüsselungs-Key: bevorzugt aus ENV, Fallback auf maschinenspezifischen Seed
-const ENV_SECRET = process.env.CTJ_SECRET
+const ENV_SECRET = umgebung('SECRET')
+// NICHT umbenennen: Aus diesem Seed (und aus dem Secret) entsteht der Schlüssel,
+// mit dem die Börsen- und KI-Schlüssel in der DB verschlüsselt sind. Der Name
+// stammt aus der Zeit vor AutarkTrade; ein neuer Name machte jeden gespeicherten
+// Schlüssel unlesbar. Ebenso bleibt 'tn_session_v1' in auth.js stehen.
 const MACHINE_SEED = `tradenote-${os.hostname()}-${os.userInfo().username}-v1`
 const ALGORITHM = 'aes-256-gcm'
 
@@ -10,9 +15,9 @@ if (!ENV_SECRET) {
     // In Produktion ist ein vorhersehbarer Maschinen-Seed nicht akzeptabel:
     // harter Abbruch statt unsicherem Fallback.
     if (process.env.NODE_ENV === 'production') {
-        throw new Error('[CRYPTO] CTJ_SECRET ist in Produktion erforderlich (NODE_ENV=production). Setze CTJ_SECRET als Umgebungsvariable.')
+        throw new Error('[CRYPTO] AT_SECRET ist in Produktion erforderlich (NODE_ENV=production). Setze AT_SECRET als Umgebungsvariable.')
     }
-    console.warn('[CRYPTO] Kein CTJ_SECRET gesetzt – verwende maschinenspezifischen Schlüssel. Für höhere Sicherheit CTJ_SECRET als Umgebungsvariable setzen.')
+    console.warn('[CRYPTO] Kein AT_SECRET gesetzt – verwende maschinenspezifischen Schlüssel. Für höhere Sicherheit AT_SECRET als Umgebungsvariable setzen.')
 }
 
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(ENV_SECRET || MACHINE_SEED).digest()

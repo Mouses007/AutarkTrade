@@ -1,5 +1,5 @@
 #!/bin/bash
-# Crypto Trading Journal — Server starten und Browser öffnen
+# AutarkTrade — Server starten und Browser öffnen
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 

@@ -2,11 +2,12 @@ import crypto from 'crypto'
 import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
 import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText } from './boersen-status.js'
+import { umgebungAn } from './umgebung.js'
 
 // Rohantworten der Börsen enthalten Positionen, Kontostände, PnL und IDs.
 // Standardmässig NICHT ins Log — Logs landen in Container-Ausgaben, Backups und
-// Fehlerberichten. Zum Nachstellen: CTJ_DEBUG_BROKER=1 setzen.
-const BROKER_DEBUG = process.env.CTJ_DEBUG_BROKER === '1'
+// Fehlerberichten. Zum Nachstellen: AT_DEBUG_BROKER=1 setzen.
+const BROKER_DEBUG = umgebungAn('DEBUG_BROKER')
 
 const BASE_URL = 'https://api.bitget.com'
 

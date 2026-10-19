@@ -1,9 +1,9 @@
 {
-  "name": "crypto-trading-journal",
-  "version": "3.14.1",
-  "description": "Local, privacy-focused crypto futures trading journal. Bitunix + Bitget support, SQLite/PostgreSQL, AI reports, auto-update.",
+  "name": "autarktrade",
+  "version": "4.0.0-alpha.0",
+  "description": "AutarkTrade – lokales Trading-Journal und Analyse-Arbeitsplatz für Krypto-Futures (Bitunix, Bitget, Pionex), SQLite/PostgreSQL, KI-Auswertungen.",
   "author": "Mouses007",
-  "license": "GPL-3.0-or-later",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
@@ -42,5 +42,6 @@
     "@vitejs/plugin-vue": "^6.0.7",
     "vite": "^8.1.0"
   },
-  "main": "index.mjs"
+  "main": "index.mjs",
+  "private": true
 }

@@ -74,7 +74,7 @@ async function forgotPassword() {
 <template>
     <div class="login-gate">
         <div class="login-card">
-            <h3 class="mb-1">Crypto Trading Journal</h3>
+            <h3 class="mb-1">AutarkTrade</h3>
             <p v-if="setup" class="login-sub">Der Dienst ist im Netzwerk erreichbar — lege zuerst ein Passwort fest.</p>
             <p v-else class="login-sub">Passwortgeschützt</p>
             <form @submit.prevent="submit">

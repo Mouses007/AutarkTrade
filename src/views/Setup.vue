@@ -145,8 +145,8 @@ async function restartServer() {
         <div class="setup-card">
             <!-- Header -->
             <div class="setup-header">
-                <img src="@/assets/icon.png" alt="Crypto Trading Journal" class="setup-logo" onerror="this.style.display='none'" />
-                <h2>Crypto Trading Journal</h2>
+                <img src="@/assets/icon.png" alt="AutarkTrade" class="setup-logo" onerror="this.style.display='none'" />
+                <h2>AutarkTrade</h2>
                 <!-- Step indicator -->
                 <div class="step-indicator">
                     <div class="step-dot" :class="{ active: step >= 1, done: step > 1 }">1</div>

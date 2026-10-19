@@ -20,9 +20,9 @@ echo   [OK] Node.js gefunden
 echo.
 echo   [1/4] Datenbank-Backup...
 
-if exist "tradenote.db" (
-    copy /Y "tradenote.db" "tradenote.db.backup" >nul
-    echo   [OK] Backup erstellt: tradenote.db.backup
+if exist "autarktrade.db" (
+    copy /Y "autarktrade.db" "autarktrade.db.backup" >nul
+    echo   [OK] Backup erstellt: autarktrade.db.backup
 ) else (
     echo   [!] Keine Datenbank gefunden -- Neuinstallation? Kein Backup noetig.
 )
@@ -39,7 +39,7 @@ if errorlevel 1 (
     echo     1. Lade das neueste Release herunter:
     echo        https://github.com/Mouses007/Crypto-Trading-Journal/releases
     echo     2. Entpacke die Dateien in diesen Ordner
-    echo     3. WICHTIG: tradenote.db NICHT ueberschreiben!
+    echo     3. WICHTIG: autarktrade.db NICHT ueberschreiben!
     echo     4. Druecke eine Taste um mit npm install fortzufahren...
     echo.
     pause >nul
@@ -94,8 +94,8 @@ echo     Update erfolgreich!
 echo   ==============================================
 echo.
 echo   Datenbank: Alle Daten erhalten
-if exist "tradenote.db.backup" (
-    echo   Backup:    tradenote.db.backup
+if exist "autarktrade.db.backup" (
+    echo   Backup:    autarktrade.db.backup
 )
 echo.
 echo   Starte mit: start.bat
@@ -107,8 +107,8 @@ exit /b 0
 :error
 echo.
 echo   Update abgebrochen. Deine Daten sind nicht betroffen.
-if exist "tradenote.db.backup" (
-    echo   Backup vorhanden: tradenote.db.backup
+if exist "autarktrade.db.backup" (
+    echo   Backup vorhanden: autarktrade.db.backup
 )
 echo.
 pause

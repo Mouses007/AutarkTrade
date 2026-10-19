@@ -34,6 +34,8 @@ import { holeAdapter } from './execution/index.js'
 import { plantHebel } from './execution/margen-netz.js'
 import { beansprucheFuehrung, verlaengereFuehrung, gibFuehrungFrei } from './db-claim.js'
 import { wartungsmargePctFuer } from './margin-rates.js'
+import { umgebungAn } from './umgebung.js'
+import { istTestbetrieb } from './umgebung.js'
 
 const TICK_MS = 15000          // Prüfintervall; gearbeitet wird nur bei neuem Kerzenschluss
 const MAX_SYMBOLS = 20         // Deckel je Instanz, damit ein Tippfehler den Server nicht flutet
@@ -1036,7 +1038,7 @@ export function engineStatus() {
         running: !engineStopped && Boolean(tickTimer),
         // Damit niemand rätselt, warum eine aktive Instanz nichts tut: der
         // Schalter steht in der Umgebung des Prozesses, nicht in der Datenbank.
-        abgeschaltet: process.env.CTJ_NO_ENGINE === '1',
+        abgeschaltet: umgebungAn('NO_ENGINE') || istTestbetrieb(),
         // Zweiter Grund für „läuft, tut aber nichts": ein anderer Prozess führt.
         fuehrung: hatFuehrung,
         aktiveLaeufe: [...running.keys()],

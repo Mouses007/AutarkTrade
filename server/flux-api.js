@@ -136,8 +136,8 @@ function buildOverlaySvg(trade, displayName, avatarDataUrl, width, height, opts 
   <image href="${logo}" x="${logoX}" y="${logoY}" width="${logoSize}" height="${logoSize}" clip-path="url(#logoClip)" preserveAspectRatio="xMidYMid slice" />
   <circle cx="${logoX + logoSize / 2}" cy="${logoY + logoSize / 2}" r="${logoSize / 2}" fill="none" stroke="rgba(255,255,255,0.25)" stroke-width="2.5" />` : ''
 
-    // Bottom left: "by CRYPTO TRADING JOURNAL"
-    const byLine = 'by CRYPTO TRADING JOURNAL'
+    // Bottom left: "by AUTARKTRADE"
+    const byLine = 'by AUTARKTRADE'
 
     // Escape XML/SVG entities to prevent SVG injection / Defacement
     const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -232,7 +232,7 @@ function buildOverlaySvg(trade, displayName, avatarDataUrl, width, height, opts 
 
 ${commentSvg}
 
-  <!-- Bottom left: "by CRYPTO TRADING JOURNAL" -->
+  <!-- Bottom left: "by AUTARKTRADE" -->
   <text x="60" y="${height * 0.97}" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="22" fill="#888888">${byLine}</text>
   <!-- Bottom right: Date -->
   <text x="${width - 60}" y="${height * 0.97}" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="22" fill="#888888" text-anchor="end">${dateStr}</text>

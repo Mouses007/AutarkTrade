@@ -1,13 +1,13 @@
 #!/bin/bash
-# Crypto Trading Journal — Server starten und Browser oeffnen (macOS)
+# AutarkTrade — Server starten und Browser oeffnen (macOS)
 DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$DIR"
 
-PORT="${CTJ_PORT:-8080}"
+PORT="${AT_PORT:-8080}"
 
 # Pruefen ob bereits laeuft
 if curl -s "http://localhost:$PORT" > /dev/null 2>&1; then
-    echo "Crypto Trading Journal laeuft bereits auf http://localhost:$PORT"
+    echo "AutarkTrade laeuft bereits auf http://localhost:$PORT"
     open "http://localhost:$PORT"
     exit 0
 fi
@@ -19,7 +19,7 @@ if [ ! -f "dist/index.html" ]; then
 fi
 
 echo ""
-echo "  Crypto Trading Journal startet..."
+echo "  AutarkTrade startet..."
 echo ""
 echo "  Server:   http://localhost:$PORT"
 echo "  Beenden:  Ctrl+C oder Fenster schliessen"

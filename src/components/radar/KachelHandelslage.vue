@@ -23,6 +23,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { liveSymbol } from '../../stores/live.js'
 import { aktiveSitzung } from '../../stores/livetrading.js'
+import { testbetrieb } from '../../stores/system.js'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -122,6 +123,7 @@ const autoHinweis = computed(() => {
  */
 function autoFaellig() {
     if (props.gross) return false          // die zweite Instanz zahlt nicht mit
+    if (testbetrieb.value) return false    // Testbetrieb: keine bezahlte Automatik
     if (!autoMin.value || deckelErreicht.value) return false
     if (!sitzungLaeuft.value) return false
     if (laedt.value) return false

@@ -1,22 +1,14 @@
 name: Docker publish
 
-# Baut und veröffentlicht das Container-Image.
+# Baut das Container-Image von AutarkTrade.
 #
-#   Tag "v*" gepusht  → Release-Build: :3.8.0, :3.8, :3, :latest — und :edge
-#   Manuell gestartet → Testlauf: nur :edge, rührt :latest NICHT an
-#
-# :edge zeigt bewusst IMMER auf den neuesten Build, Zwischenstand wie
-# Release. Ein Gerät, das dauerhaft darauf steht, bekommt sonst zwar jeden
-# Testlauf, aber ausgerechnet die Veröffentlichung nicht — und fällt beim
-# nächsten Tag stillschweigend hinter :latest zurück.
-#
-# Die Versions-Tags sind der eigentliche Zweck: CasaOS verbietet ":latest"
-# ausdrücklich, Unraid und Umbrel wollen einen stabilen Tag mit Digest.
+# Übergangsstand (S2 „Fundament V2"): NUR von Hand startbar und NUR in die
+# GitHub-Registry (ghcr.io, bei einem privaten Repo privat). Das alte Projekt
+# veröffentlichte bei jedem v*-Tag auch auf dem öffentlichen Docker Hub — für
+# ein Produkt unter eigener Lizenz wäre das eine ungewollte Veröffentlichung.
+# Die endgültige Registry richtet S11 „Herkunftsnachweis & Freigabe" ein.
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 permissions:
@@ -30,52 +22,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Docker Hub nur bespielen, wenn das Token hinterlegt ist. Ohne Token
-      # läuft der Build trotzdem durch und landet in der GitHub-Registry —
-      # besser als ein roter Lauf, bei dem gar nichts entsteht.
-      - name: Ziel-Registries bestimmen
-        id: ziele
-        env:
-          HUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-        run: |
-          if [ -n "$HUB_TOKEN" ]; then
-            echo "images=mouses007/trading-journal,ghcr.io/mouses007/crypto-trading-journal" >> "$GITHUB_OUTPUT"
-            echo "hub=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "images=ghcr.io/mouses007/crypto-trading-journal" >> "$GITHUB_OUTPUT"
-            echo "hub=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::DOCKERHUB_TOKEN fehlt — es wird nur nach ghcr.io veröffentlicht."
-          fi
-
       - name: Tags und Beschriftungen ableiten
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.ziele.outputs.images }}
+          images: ghcr.io/mouses007/autarktrade
           flavor: latest=false
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=raw,value=edge
           labels: |
-            org.opencontainers.image.title=Crypto Trading Journal
-            org.opencontainers.image.description=Self-hosted trading journal for crypto futures (Bitunix, Bitget, Pionex)
-            org.opencontainers.image.licenses=GPL-3.0
+            org.opencontainers.image.title=AutarkTrade
+            org.opencontainers.image.description=AutarkTrade – Trading-Journal und Analyse-Arbeitsplatz für Krypto-Futures
+            org.opencontainers.image.licenses=LicenseRef-AutarkTrade-proprietary
 
-      # arm64 wird emuliert. Läuft der Schritt "Bauen" länger als ~25 Minuten,
-      # lohnt der Umbau auf native ARM-Runner (ubuntu-24.04-arm) — siehe
-      # DOCKER-SETUP.md. Vorher nicht optimieren, erst messen.
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-
-      - name: Bei Docker Hub anmelden
-        if: steps.ziele.outputs.hub == 'true'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Bei GitHub-Registry anmelden
         uses: docker/login-action@v3
@@ -94,32 +55,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # Die Docker-Hub-Seite wird von Suchmaschinen indexiert — sie soll
-      # denselben Einstiegstext tragen wie das README, nicht leer bleiben.
-      #
-      # `continue-on-error`, weil dieser Schritt NICHT über den Erfolg des
-      # Release entscheidet. Beim ersten Tag-Lauf (v3.9.0) schlug er mit
-      # "Forbidden" fehl und meldete den ganzen Lauf rot — obwohl Bauen und
-      # Veröffentlichen sauber durchgelaufen waren und die Images auf Docker Hub
-      # lagen. Ein roter Haken, der eine funktionierende Veröffentlichung
-      # meldet, ist schlimmer als eine nicht abgeglichene Beschreibung.
-      #
-      # Grund für "Forbidden": Die Beschreibungs-API von Docker Hub verlangt
-      # mehr als das Push-Recht. Ein gewöhnliches Zugriffstoken darf Images
-      # hochladen, aber die Repository-Beschreibung nicht ändern. Damit dieser
-      # Schritt wirklich durchläuft, muss DOCKERHUB_TOKEN ein Token mit
-      # Read/Write/Delete-Umfang sein (oder das Kontopasswort).
-      #
-      # Der Schritt lief bis v3.9.0 nie: er hängt an `refs/tags/v`, und alle
-      # vorherigen Läufe waren manuell auf master gestartet.
-      - name: Docker-Hub-Beschreibung abgleichen
-        if: steps.ziele.outputs.hub == 'true' && startsWith(github.ref, 'refs/tags/v')
-        continue-on-error: true
-        uses: peter-evans/dockerhub-description@v4
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: mouses007/trading-journal
-          short-description: Self-hosted trading journal for crypto futures — Bitunix, Bitget, Pionex. No cloud, no account.
-          readme-filepath: ./README.md

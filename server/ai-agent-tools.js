@@ -187,7 +187,7 @@ export const AGENT_TOOLS = [
     },
     {
         name: 'query_app_help',
-        description: 'Read the built-in documentation of THIS software (Crypto Trading Journal). Use this for any question about how to use the app: where a setting lives, what a page or tile does, how import/export works, what the Live-Analyse, Livetrading or Strategien mode offers. Without a topic it returns the list of available topics. Answer software questions ONLY from this documentation, never from general knowledge.',
+        description: 'Read the built-in documentation of THIS software (AutarkTrade). Use this for any question about how to use the app: where a setting lives, what a page or tile does, how import/export works, what the Live-Analyse, Livetrading or Strategien mode offers. Without a topic it returns the list of available topics. Answer software questions ONLY from this documentation, never from general knowledge.',
         parameters: {
             type: 'object',
             properties: {
