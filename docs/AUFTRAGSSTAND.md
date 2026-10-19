@@ -27,7 +27,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 1 | S4 Diagramme neu | `charts.js` clean-room in `src/utils/journal/diagramme/` | `claude/s4-diagramme-3c7cc1` | **fertig** |
 | 1 | S5 Redesign Handel | Chart, Live-Trading, Sessions, Incoming, Agent-Seiten | `claude/s5-redesign-handel-51c2a6` | **fertig** |
 | 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | `claude/s6-redesign-analyse-3fe1f2` | **fertig** |
-| 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | – | wartet auf S3 |
+| 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | `claude/s7-journal-kern-a3e03e` | **fertig** |
 | 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | – | wartet auf S7 + S4 |
 | 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | `claude/s9-geruest-23d7aa` | Teil 1 auf master; Teil 2 (Entfernen) wartet auf S8 |
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
@@ -61,6 +61,47 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
   nachgebaut: globaler h2–h4-Abstand, `.tags`-Hintergrund, grössere Grundschrift.
 - **Prüf-Server**: `.claude/launch.json` → `s9-pruef` (Port 8097, Testbetrieb, Wegwerf-SQLite,
   dient `dist/`).
+
+## S7 Journal-Kern neu — Ergebnis (19.10.2026)
+
+- **Clean-Room**: Unteragent A beschrieb `trades.js`, `daily.js`, `mountOrchestration.js`,
+  `calendar.js`, `formatters.js`, `dayjs-setup.js`, `utils.js`, `journal-alt.js`, den Store
+  `globals.js` und `SidebarFilters.vue` in `docs/spec/journal-kern.md` (1932 Z., Prosa/Tabellen,
+  15 eingefrorene Altfehler in §7, Aufrufer-Landkarte §9). Ein frischer Unteragent B baute
+  nur daraus und aus den Golden Mastern neu (eine grep-Ausgabe zeigte ihm einmal drei
+  Import-/Kommentarzeilen aus `trades.js`; nichts davon verwendet).
+- **Neu**: `src/utils/journal/` — `laden`, `filtern`, `summen`, `gruppieren`, `gewinnanalyse`,
+  `tagesrechnung` (Blotter/P&L), `kalender`, `tagebuch` (Zufriedenheit, Tags, Notizen,
+  Exkursionen), `import` (Vorschau/Speichern des API-Imports, OHLCV, MFE), `ablauf` (Mounts),
+  `app` (App-Start, Perioden, Reiter), `format`, `zeit` (dayjs), `kette`, `hilfen`,
+  `diagrammLader` (lädt `journal/diagramme/` von S4). Stores neu geschnitten:
+  `src/stores/app/{rahmen,laden,einstellungen,ablage}.js`, `src/stores/journal/{filter,
+  auswertung,import,tagebuch,kalender,screenshots,offenePositionen}.js`; die Bündel
+  `stores/{ui,filters,trades,settings}.js` re-exportieren sie. Filterleiste:
+  `src/components/journal/FilterLeiste.vue` (eingebunden in `rahmen/MenueJournalKopf.vue`).
+- **Gelöscht**: `calendar.js`, `journal-alt.js`, `SidebarFilters.vue`. **Reine Weiterleitungen**
+  (nur `export … from`, für parallele Sitzungen, in S9/S11 löschen): `stores/globals.js`,
+  `utils/{trades,daily,mountOrchestration,formatters,dayjs-setup,utils}.js`. In `src/` importiert
+  sie niemand mehr.
+- **Bewusste Korrektur 1 — Tag-Gruppen**: `groups.group_*` wird vor jedem Lauf geleert; vorher
+  zeigten die Tag-Diagramme nach einem Filterwechsel den alten Filter. Golden Master neu: nur
+  „nurAgent" und „ohneTagsNurUngetaggt" verlieren die fremden group_1/group_2 (36/49 Trades).
+- **Bewusste Korrektur 2 — Datenmodell**: `sec`/`taf`/`nscc`/`nasdaq` (immer 0) und ihre Summe
+  `otherCommission` aus Trade-, Blotter- und P&L-Objekten entfernt (`buildTradeObj`,
+  `incoming.js`, `journal-bridge.js`, `totals-kern.js`), Dashboard-Zeile „regulatoryFees" raus.
+  **SCHEMA_VERSION 28**: Migration streicht die Schlüssel aus gespeicherten Tageszeilen
+  (gegen Wegwerf-SQLite geprüft). Golden Master neu, Gegenprobe: alter Stand minus die
+  Schlüssel == neuer Stand, keine Zahl ändert sich.
+- **Geprüft**: `npm run test:self` 139/139 grün, `npm run build` fehlerfrei; Prüf-Instanz
+  (Port 8098, `AT_ALLOW_INSECURE=1 AT_TESTBETRIEB=1 AT_BEDINGUNGEN=aus`, Wegwerf-SQLite mit
+  40 Test-Trades über `journal-bridge.alsJournalTrade`): Dashboard (Übersicht, Performance,
+  Setups), Tagesansicht mit Blotter, Kalender, Filterleiste im S9-Seitenmenü — ohne JS-Fehler.
+- **Für S8**: Die §7-Altfehler 7.2–7.15 sind im neuen Code nachgebildet und markiert (u. a.
+  `pAndL`/`blotter` nur an der letzten Tageskopie bei zwei Börsen am selben Tag,
+  `miniCalendarsData` als Objekt → nie Mini-Kalender, `mfePrices`-Modulspeicher,
+  `useGetOHLCV` löst nach dem ersten Symbol auf). Die Ansichten (Daily, Dashboard, Kalender,
+  AddTrades, AddExcursions) lesen weiter dieselben Store-Namen. i18n-Schlüssel
+  `dashboard.regulatoryFees` ist jetzt unbenutzt.
 
 ## S5 Redesign Handel — Ergebnis (19.10.2026)
 
