@@ -298,7 +298,8 @@ onBeforeUnmount(() => {
 /* In der Kopfleiste: eine Zeile, rechtsbündig, kein eigener Abstand. */
 .at-titelzeile.in-kopf {
     padding: 0;
-    gap: var(--abstand-2);
+    /* Titel und Knöpfe deutlich trennen — mit der Knopf-Lücke klebten sie aneinander. */
+    gap: var(--abstand-5);
     min-width: 0;
     flex: 0 1 auto;
 }
