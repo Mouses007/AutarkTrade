@@ -89,7 +89,12 @@ is right — a deliberate change is re-frozen with
 the commit. DB, axios, ECharts, account balance and i18n are swapped by a load
 hook (`__journal-attrappen.mjs`); `process.env.TZ` is pinned because the
 grouping uses the process time zone. Integers (timestamps, counts) compare
-exactly, floats at 1e-9 relative.
+exactly, floats at 1e-9 relative. Re-frozen twice in S7 (19.10.2026): the tag
+groups `groups.group_*` are now cleared before each run (they used to carry
+the previous filter's trades into the tag charts), and the stock-exchange fee
+fields `sec`/`taf`/`nscc`/`nasdaq` plus their sum `otherCommission` (always 0)
+are gone from trade, blotter and P&L objects (`fees` = `commission`; DB
+migration v28 strips them from stored rows).
 
 `src/utils/__selftest-mfe-pfade.mjs` is the second golden master, same
 technique and the same `JOURNAL_GOLDEN_SCHREIBEN=1` switch, for what lives in
@@ -226,7 +231,7 @@ View initialization follows a pattern in `src/utils/journal/ablauf.js` (a genera
 
 ### Key Components
 
-- `InfoTipp.vue` — the one way to attach an inline explanation to a single element: a small "i" that shows text on hover (tap on phones), globally switchable via the `erweiterteInfos` setting (default on, mirrored to `localStorage` so nothing flashes before settings load). Deliberately **not** a Bootstrap tooltip: those are imperative instances that a `v-if` would orphan, `useInitTooltip()` in `utils.js` is not idempotent (unlike `useInitPopover()` right above it), and Bootstrap comes from a CDN — help text that vanishes offline is the wrong failure mode. Positioning is `Teleport to="body"` + fixed coords from `getBoundingClientRect()`, the same pattern and the same reason as `PageInfo.vue`/`RadarOverlay.vue` (tile heads clip overflow). `te()` before `t()` is mandatory: a missing key renders **nothing** rather than the raw key — the bug that made `info.coinRadar.caveat` show up literally for months. Boundary: `title=` says what a control **is**, `InfoTipp` says what a number **means**, so the existing `title=` attributes on bare icon buttons stay. Tile-level texts attach through `infoKey` on the registry entries, derived in `kachel-registry.js` as `<raum>.title` → `<raum>.info` (two Live-Trading tiles hang on `nav.liquidity`/`nav.liquidations` and carry an explicit `infoKey`) — ~29 texts cover their placements across Marktradar and Live-Trading.
+- `InfoTipp.vue` — the one way to attach an inline explanation to a single element: a small "i" that shows text on hover (tap on phones), globally switchable via the `erweiterteInfos` setting (default on, mirrored to `localStorage` so nothing flashes before settings load). Deliberately **not** a Bootstrap tooltip: those are imperative instances that a `v-if` would orphan, `useInitTooltip()` in `utils/journal/app.js` is not idempotent (unlike `useInitPopover()` right above it), and Bootstrap comes from a CDN — help text that vanishes offline is the wrong failure mode. Positioning is `Teleport to="body"` + fixed coords from `getBoundingClientRect()`, the same pattern and the same reason as `PageInfo.vue`/`RadarOverlay.vue` (tile heads clip overflow). `te()` before `t()` is mandatory: a missing key renders **nothing** rather than the raw key — the bug that made `info.coinRadar.caveat` show up literally for months. Boundary: `title=` says what a control **is**, `InfoTipp` says what a number **means**, so the existing `title=` attributes on bare icon buttons stay. Tile-level texts attach through `infoKey` on the registry entries, derived in `kachel-registry.js` as `<raum>.title` → `<raum>.info` (two Live-Trading tiles hang on `nav.liquidity`/`nav.liquidations` and carry an explicit `infoKey`) — ~29 texts cover their placements across Marktradar and Live-Trading.
 - `ShareCardModal.vue` — Trade share card generator (FLUX.2 AI image + SVG overlay via `flux-api.js`)
 - `TradeEvalPopup.vue` — Trade evaluation/rating popup (SL/TP, RRR, etc.)
 - `journal/FilterLeiste.vue` — Global filter panel in the side menu (tags, date range, position type); state in `stores/journal/filter.js`

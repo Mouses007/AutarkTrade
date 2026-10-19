@@ -59,7 +59,7 @@ Links im Seitenmenü: Börsen-Umschalter (Bitunix/Bitget/Pionex), Pille „Konto
     },
     journal: {
         titel: 'Journal: Dashboard, Tages-Ansicht, Kalender, Playbook, Auswertung, Screenshots',
-        text: `- **Dashboard** — Kennzahlen und Charts über den gewählten Zeitraum: P&L, Win-Rate, Profit Factor, Verteilungen, Symbole. Oben rechts ein Export-Knopf (JSON/CSV der gefilterten Trades). Der Filter (Zeitraum, Tags, Long/Short, Brutto/Netto) sitzt in der Seitenleiste und wirkt auf Dashboard, Tages-Ansicht, Kalender, Screenshots und Auswertung. Achtung: ein vergessener Filter ist die häufigste Ursache für „es fehlen Trades".
+        text: `- **Dashboard** — Kennzahlen und Charts über den gewählten Zeitraum: P&L, Win-Rate, Profit Factor, Verteilungen, Symbole. Oben rechts ein Export-Knopf (JSON/CSV der gefilterten Trades). Der Filter (Zeitraum, Tags, Long/Short, Brutto/Netto) sitzt in der Seitenleiste und wirkt auf Dashboard, Tages-Ansicht, Kalender, Screenshots und Auswertung. Auch die Tag-Diagramme (je Tag-Gruppe, z. B. Strategie oder Fehler) folgen dem Filter: eine Gruppe, deren Tags im gefilterten Zeitraum nicht vorkommen, erscheint gar nicht. Als Gebühren zählen die Handelsgebühren der Börse; Funding wird getrennt ausgewiesen (gezahlt und erhalten). Achtung: ein vergessener Filter ist die häufigste Ursache für „es fehlen Trades".
 - **Tages-Ansicht** — alle Trades eines Tages mit Notizen, Tags, Stress-/Emotionswerten, Screenshots und Trade-Bewertung (SL/TP-Verlauf, RRR). Hier wird das eigentliche Journal geführt.
 - **Kalender** — Monatsraster mit Tages-P&L auf einen Blick.
 - **Playbook** — eigene Setups/Strategien als Playbook-Einträge definieren; Trades lassen sich ihnen zuordnen, die Auswertung rechnet je Playbook.
