@@ -210,7 +210,7 @@ onBeforeUnmount(() => {
 
 <template>
     <NachObenKnopf />
-    <Kopfleiste v-if="!ohneRahmen" />
+    <Kopfleiste v-if="!ohneRahmen" :mit-titel="mitMenue && desktop" />
 
     <div class="at-rahmen" :class="{ 'ohne-menue': !mitMenue }" v-cloak>
         <!-- id="sideMenu": utils.js (schalteMobilMenue/useCloseMobileMenu) sucht diese ID. -->
@@ -223,7 +223,8 @@ onBeforeUnmount(() => {
             <div v-if="mitMenue && !desktop && seitenmenueMobilOffen" class="at-abdunkelung" aria-hidden="true"
                 @click="useCloseMobileMenu()"></div>
 
-            <Titelzeile v-if="mitMenue" />
+            <!-- Desktop: Titel sitzt rechts in der Kopfleiste; sonst eigene Zeile (Telefon: öffnet das Menü). -->
+            <Titelzeile v-if="mitMenue && !desktop" />
 
             <main ref="hauptEl">
                 <!--

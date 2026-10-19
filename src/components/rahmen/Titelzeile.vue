@@ -5,6 +5,9 @@
  *
  * Die Modi stehen nicht hier, sondern in der Kopfleiste. Am Telefon ist der
  * Titel zugleich der Knopf, der das Seitenmenü ausfährt.
+ *
+ * `inKopf`: auf dem Desktop sitzt die ganze Zeile rechts in der Kopfleiste
+ * (kompakt, ohne eigenen Abstand); dort gibt es kein Menü-Ausklappen.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -19,11 +22,15 @@ import { schalteMobilMenue, useExport } from '../../utils/journal/app.js'
 import { useDateCalFormat } from '../../utils/journal/format.js'
 import dayjs from '../../utils/journal/zeit.js'
 
+const props = defineProps({
+    inKopf: { type: Boolean, default: false },
+})
+
 const { t, te } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const mobil = computed(() => screenType.value === 'mobile')
+const mobil = computed(() => !props.inKopf && screenType.value === 'mobile')
 
 /** Titel: Registry, sonst Routen-Meta, sonst leer — darf nie werfen. */
 const titel = computed(() => {
@@ -95,7 +102,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="at-titelzeile">
+    <div class="at-titelzeile" :class="{ 'in-kopf': inKopf }">
         <div class="links">
             <button v-if="mobil" type="button" class="mobile-menu-toggle" :aria-label="t('nav.menueOeffnen')"
                 @click="schalteMobilMenue()">
@@ -106,7 +113,7 @@ onBeforeUnmount(() => {
                 </span>
             </button>
             <template v-else>
-                <h1 class="seitentitel">{{ titel }}</h1>
+                <h1 class="seitentitel" :title="titel">{{ titel }}</h1>
                 <span v-if="filterText" class="nav-filter-info">{{ filterText }}</span>
             </template>
         </div>
@@ -285,6 +292,51 @@ onBeforeUnmount(() => {
     .at-titelzeile {
         padding-top: var(--abstand-3);
         align-items: flex-start;
+    }
+}
+
+/* In der Kopfleiste: eine Zeile, rechtsbündig, kein eigener Abstand. */
+.at-titelzeile.in-kopf {
+    padding: 0;
+    gap: var(--abstand-2);
+    min-width: 0;
+    flex: 0 1 auto;
+}
+
+.in-kopf .links {
+    flex-wrap: nowrap;
+    align-items: baseline;
+    min-width: 0;
+}
+
+.in-kopf .seitentitel {
+    font-size: 1.02rem;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 22vw;
+}
+
+.in-kopf .nav-filter-info {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 18vw;
+}
+
+.in-kopf .symbolknopf,
+.in-kopf .exportknopf {
+    height: 32px;
+}
+
+.in-kopf .symbolknopf {
+    width: 32px;
+}
+
+@media (max-width: 1279.98px) {
+    .in-kopf .nav-filter-info {
+        display: none;
     }
 }
 </style>

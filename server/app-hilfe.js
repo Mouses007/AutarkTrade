@@ -27,7 +27,7 @@ Oben in der Leiste wird zwischen den Modi umgeschaltet:
 
 Jeder Modus ausser dem Journal lässt sich einzeln abschalten (Einstellungen → Allgemein → Layout & Stil → „Modi ein-/ausblenden"). Abgeschaltet heisst wirklich aus: der Tab verschwindet, das Seitenmenü zeigt nichts mehr, und auch ein direkt aufgerufener Link führt zurück ins Journal. Das Journal selbst hat keinen Schalter. Wer also nach einem Bereich fragt, den es hier nicht gibt, hat ihn möglicherweise abgeschaltet.
 
-Links im Seitenmenü: Börsen-Umschalter (Bitunix/Bitget/Pionex), Pille „Kontoübersicht", darunter die Seiten des aktiven Modus. Die Einstellungen sind modusübergreifend immer erreichbar. Oben rechts sitzt der Augen-Button (Zensur-Modus: verbirgt Kontostände und Beträge, z.B. für Screenshots) und daneben der Roboter-Button als Schnellzugriff auf den KI-Agenten.`,
+Links im Seitenmenü: Börsen-Umschalter (Bitunix/Bitget/Pionex), Pille „Kontoübersicht", darunter die Seiten des aktiven Modus. Oben rechts in der Kopfleiste stehen der Seitentitel (im Journal mit dem gewählten Zeitraum), der Augen-Button (Zensur-Modus: verbirgt Kontostände und Beträge, z.B. für Screenshots), der Roboter-Button als Schnellzugriff auf den KI-Agenten, im Dashboard „Export", dann das Zahnrad für die Einstellungen (modusübergreifend immer erreichbar) und „Abmelden" (nur wenn ein Passwort gesetzt ist). Am Telefon steht der Titel in einer eigenen Zeile und öffnet das Seitenmenü.`,
     },
     chart: {
         titel: 'Chart-Arbeitsplatz',

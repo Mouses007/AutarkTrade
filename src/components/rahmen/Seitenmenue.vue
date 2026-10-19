@@ -3,7 +3,8 @@
  * Seitenmenü von AutarkTrade (Inhalt der Menüspalte im Layout).
  *
  * Von oben: Nutzername, Klappknopf (nur Desktop), das Menü des aktuellen
- * Modus, „Verwaltung" (immer), Fuss mit Version und Update.
+ * Modus, Fuss mit Version und Update. Einstellungen und Abmelden stehen
+ * rechts oben in der Kopfleiste.
  *
  * Alle Modus-Menüs kommen aus der Registry `config/menu.js`. Das Journal hat
  * oben zusätzlich Börse, Kategorie und Filter (`MenueJournalKopf.vue`) und
@@ -14,10 +15,9 @@
  * Initialisierung des Layouts (Journal-Daten für genau eine Auswahl), und offene
  * WebSockets der Live-Ansichten enden damit sicher.
  */
-import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
+import { computed, defineAsyncComponent } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import axios from 'axios'
 import Symbol from '../basis/Symbol.vue'
 import MenueJournalKopf from './MenueJournalKopf.vue'
 import MenueFuss from './MenueFuss.vue'
@@ -99,20 +99,6 @@ const symbolVon = (seite) => seite.menuSymbol || seite.symbol || 'info'
 /** Seiten mit Symbolwähler — alle drei teilen sich denselben Symbolblock. */
 const WAEHLER = { liquidity: 'bookmap', liquidations: 'levmap', openinterest: 'oi' }
 const waehlerVariante = computed(() => (menueModus.value === 'live' ? WAEHLER[pageId.value] || null : null))
-
-// Abmelden gibt es nur, wenn das Passwort-Gate aktiv ist.
-const mitAnmeldung = ref(false)
-async function abmelden() {
-    try { await axios.post('/api/logout') } catch { /* egal — neu laden zeigt das Gate */ }
-    window.location.reload()
-}
-
-onMounted(async () => {
-    try {
-        const { data } = await axios.get('/api/auth/status')
-        mitAnmeldung.value = !!data?.authEnabled
-    } catch { /* still */ }
-})
 </script>
 
 <template>
@@ -146,18 +132,6 @@ onMounted(async () => {
                 <LiveSymbolPicker :variant="waehlerVariante" />
             </section>
 
-            <section class="at-menue-block">
-                <div v-if="!schmal" class="at-menue-ueberschrift">{{ t('nav.manage') }}</div>
-                <a href="/settings" class="eintrag" :class="{ aktiv: pageId === 'settings' }"
-                    :aria-current="pageId === 'settings' ? 'page' : undefined" :title="t('nav.settings')">
-                    <Symbol name="einstellungen" :groesse="schmal ? 20 : 17" />
-                    <span v-if="!schmal" class="text">{{ t('nav.settings') }}</span>
-                </a>
-                <button v-if="mitAnmeldung" type="button" class="eintrag" :title="t('nav.abmelden')" @click="abmelden">
-                    <Symbol name="abmelden" :groesse="schmal ? 20 : 17" />
-                    <span v-if="!schmal" class="text">{{ t('nav.abmelden') }}</span>
-                </button>
-            </section>
         </nav>
 
         <MenueFuss v-if="!schmal" />

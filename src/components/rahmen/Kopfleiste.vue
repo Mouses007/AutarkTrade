@@ -1,21 +1,33 @@
 <script setup>
 /**
  * Kopfleiste von AutarkTrade: Logo links, Modi als Navigation (Unterstrich in
- * Akzentfarbe wie bei AutarkDarts), rechts Einstellungen.
+ * Akzentfarbe wie bei AutarkDarts), rechts der Seitentitel (Desktop, mit den
+ * Knöpfen der Titelzeile), Einstellungen und Abmelden.
+ *
+ * Der Titel stand bis 19.10.2026 in einer eigenen Zeile über dem Inhalt — eine
+ * ganze Zeile Höhe für ein Wort. Am Telefon bleibt diese Zeile, weil ihr Titel
+ * dort zugleich das Seitenmenü öffnet; dann ist `mitTitel` aus.
  *
  * Hat den früheren Modus-Umschalter unter dem Seitentitel (ModeSwitcher.vue,
  * in S9 entfernt) abgelöst und dessen Logik übernommen: nur
  * eingeschaltete Modi (`istModusAn`), Wechsel per vollem Seitenaufruf, damit
  * offene WebSockets und Timer der Live-Ansicht sicher enden.
  */
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import axios from 'axios'
 import Logo from '../basis/Logo.vue'
 import Symbol from '../basis/Symbol.vue'
+import Titelzeile from './Titelzeile.vue'
 import { appMode, pageId, screenType } from '../../stores/ui.js'
 import { currentUser } from '../../stores/settings.js'
 import { MODES, modeHome, pageById, istModusAn } from '../../config/menu.js'
+
+defineProps({
+    /** Seitentitel samt Titelzeilen-Knöpfen rechts einblenden (Desktop mit Menü). */
+    mitTitel: { type: Boolean, default: false },
+})
 
 const { t } = useI18n()
 
@@ -40,6 +52,20 @@ function wechsle(m, e) {
     appMode.value = m.id
     // Kein preventDefault: der Link lädt die Seite voll neu.
 }
+
+// Abmelden gibt es nur, wenn das Passwort-Gate aktiv ist.
+const mitAnmeldung = ref(false)
+async function abmelden() {
+    try { await axios.post('/api/logout') } catch { /* egal — neu laden zeigt das Gate */ }
+    window.location.reload()
+}
+
+onMounted(async () => {
+    try {
+        const { data } = await axios.get('/api/auth/status')
+        mitAnmeldung.value = !!data?.authEnabled
+    } catch { /* still */ }
+})
 </script>
 
 <template>
@@ -49,18 +75,24 @@ function wechsle(m, e) {
         </a>
         <nav class="modi" :aria-label="t('app.modi')">
             <a v-for="m in modi" :key="m.id" :href="modeHome(m.id)" :class="{ aktiv: aktiverModus === m.id }"
-                :aria-current="aktiverModus === m.id ? 'page' : undefined"
-                :title="m.beta ? t(m.betaHintKey || 'modes.betaHint') : undefined" @click="wechsle(m, $event)">
+                :aria-current="aktiverModus === m.id ? 'page' : undefined" :aria-label="beschriftung(m)"
+                :title="m.beta ? beschriftung(m) + ' — ' + t(m.betaHintKey || 'modes.betaHint') : beschriftung(m)" @click="wechsle(m, $event)">
                 <Symbol :name="SYMBOL[m.id] || 'info'" />
-                <span>{{ beschriftung(m) }}</span>
+                <span class="name">{{ beschriftung(m) }}</span>
                 <span v-if="m.beta" class="beta">Beta</span>
             </a>
         </nav>
         <div class="rechts">
+            <Titelzeile v-if="mitTitel" in-kopf />
+            <span v-if="mitTitel" class="trenner" aria-hidden="true"></span>
             <a class="knopf" href="/settings" :class="{ aktiv: pageId === 'settings' }" :title="t('nav.settings')"
                 :aria-label="t('nav.settings')">
                 <Symbol name="einstellungen" :groesse="20" />
             </a>
+            <button v-if="mitAnmeldung" type="button" class="knopf" :title="t('nav.abmelden')"
+                :aria-label="t('nav.abmelden')" @click="abmelden">
+                <Symbol name="abmelden" :groesse="20" />
+            </button>
         </div>
     </header>
 </template>
@@ -145,11 +177,37 @@ function wechsle(m, e) {
     flex: 0 0 auto;
 }
 
+/*
+ * Schmaler Desktop: Titel und Knöpfe rechts haben Vorrang — die Modi zeigen
+ * nur noch ihr Symbol (Name als Tooltip über `title`/`aria-label`).
+ */
+@media (min-width: 768px) and (max-width: 1279.98px) {
+    .modi {
+        gap: 0.9rem;
+    }
+
+    .modi a .name,
+    .modi a .beta {
+        display: none;
+    }
+}
+
+.trenner {
+    width: 1px;
+    height: 22px;
+    background: var(--line);
+    flex: 0 0 auto;
+}
+
 .knopf {
     display: inline-flex;
     padding: 0.45rem;
+    border: 0;
     border-radius: var(--radius-knopf);
+    background: transparent;
     color: var(--muted);
+    cursor: pointer;
+    flex: 0 0 auto;
 }
 
 .knopf:hover,
@@ -186,11 +244,6 @@ function wechsle(m, e) {
 
     .modi a {
         font-size: 0.85rem;
-    }
-
-    /* Das Banner darunter sagt es schon — oben wäre es doppelt. */
-    .rechts .at-pille {
-        display: none;
     }
 }
 </style>
