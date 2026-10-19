@@ -94,7 +94,7 @@ onMounted(laden)
         <Hinweis v-if="stand?.modus === 'ungueltig'" art="fehler">{{ t('lizenz.fehler_' + (stand.fehler || 'format')) }}</Hinweis>
 
         <div v-if="eingabeOffen" class="eingabe">
-            <Eingabe v-model="eingabe" art="text" :zeilen="4" :label="t('lizenz.eingabeLabel')"
+            <Eingabe v-model="eingabe" art="mehrzeilig" :zeilen="4" :label="t('lizenz.eingabeLabel')"
                 :hilfe="t('lizenz.eingabeHilfe')" :fehler="fehler" platzhalter="AT1.…" />
             <div class="knoepfe">
                 <Knopf art="haupt" :disabled="!eingabe.trim()" :laedt="beschaeftigt" @click="speichern">{{ t('lizenz.speichern') }}</Knopf>

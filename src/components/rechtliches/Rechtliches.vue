@@ -2,7 +2,7 @@
 /**
  * Dialog „Rechtliches" (Auftrag S10, Muster AutarkDarts `Lizenzbedingungen.svelte`).
  *
- * Hängt einmal im Layout. Von sich aus erscheint er nur, wenn der Server `noetig`
+ * Hängt einmal in `App.vue` (auch über dem Setup-Assistenten, der kein Layout hat). Von sich aus erscheint er nur, wenn der Server `noetig`
  * meldet — beim ersten Start und bei jeder neuen Fassung von LICENSE
  * (`server/rechtliches.js`). Dann liegt er über jeder Seite, ohne Schliessen-Knopf
  * und ohne Esc, bis zugestimmt ist. Zum Nachlesen öffnen ihn Seitenmenü und
@@ -146,6 +146,9 @@ onMounted(async () => {
     inset: 0;
     z-index: 3000; /* über Bootstrap-Modals (1055) und dem Testbetrieb-Banner */
     display: grid;
+    /* minmax(0, 1fr): sonst wächst die Spalte auf die längste Textzeile, und am
+       Telefon ragt der Kasten über den Rand. */
+    grid-template-columns: minmax(0, 1fr);
     place-items: center;
     padding: 1rem;
     background: rgba(2, 4, 5, 0.78);
@@ -200,10 +203,15 @@ h2 {
     font-size: 0.93rem;
 }
 
+/* Nur der Text darf schrumpfen und rollen — sonst drückt Flex die Reiterleiste platt. */
+.kasten > * {
+    flex-shrink: 0;
+}
+
 /* Die Texte sind als Klartext gesetzt (Absätze, eingerückte Ziffern) — so bleiben sie. */
-.text {
+.kasten > .text {
     flex: 1 1 auto;
-    min-height: 10rem;
+    min-height: 8rem;
     overflow-y: auto;
     padding: 0.8rem;
     border: 1px solid var(--line);

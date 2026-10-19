@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import LoginGate from './components/LoginGate.vue'
+import Rechtliches from './components/rechtliches/Rechtliches.vue'
 
 const authChecked = ref(false)
 const needsLogin = ref(false)
@@ -27,4 +28,7 @@ onMounted(async () => {
     <component v-else-if="authChecked" :is="$route.meta.layout || 'div'">
         <RouterView />
     </component>
+    <!-- Zustimmung zu den Lizenzbedingungen: hier und nicht im Layout, weil der
+         Setup-Assistent beim ersten Start ohne Layout läuft (S10). -->
+    <Rechtliches v-if="authChecked && !needsLogin" />
 </template>

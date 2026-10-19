@@ -25,7 +25,6 @@ import { useImVollbild } from '../utils/geraet.js'
 import BetaHinweis from '../components/BetaHinweis.vue'
 import Kopfleiste from '../components/rahmen/Kopfleiste.vue'
 import TestbetriebBanner from '../components/rahmen/TestbetriebBanner.vue'
-import Rechtliches from '../components/rechtliches/Rechtliches.vue'
 import { ladeSystemModus } from '../stores/system.js'
 import PageInfo from '../components/PageInfo.vue'
 import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
@@ -245,7 +244,6 @@ watch([aiReportGenerating, pageId], ([generating, page]) => {
   <ReturnToTopButton />
   <Kopfleiste v-if="!chromeAus" />
   <TestbetriebBanner />
-  <Rechtliches />
   <div v-cloak class="container-fluid g-0 at-rahmen">
     <div class="row g-0">
       <div v-if="!chromeAus && !ohneSeitenmenue" id="sideMenu" v-bind:class="'min-vh-100 ' +

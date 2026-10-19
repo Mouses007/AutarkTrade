@@ -30,7 +30,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | – | wartet auf S3 |
 | 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | – | wartet auf S7 + S4 |
 | 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | – | frei für alles ausser dem Entfernen (wartet auf S5, S6, S8) |
-| 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | – | frei |
+| 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | – | wartet auf S5 + S6 |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | – | wartet auf alle |
 
@@ -138,6 +138,79 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 - `CoinRadar.vue`: `<tr>` direkt in `<table>` (Vue-Warnung beim Kompilieren) — alt.
 - Für S12: `Quellenhinweis` an jede Kachel/Seite hängen; die KI-Texte (Gesamtlage,
   Lagebericht, Hype-Bericht, Einordnung, KI-Coach) mit `art: 'ki'` kennzeichnen.
+## S10 Lizenz & Vertrieb — Ergebnis (19.10.2026)
+
+- **`LICENSE`**: Entwurf „AutarkTrade Lizenzbedingungen" Fassung 0.1 nach dem Muster
+  AutarkDarts 1.3 — Schweizer Recht, Beta-Hinweis nach Art. 4 Abs. 3 CRA, keine
+  Anlageberatung (Ziff. 6), keine Haftung für Orders/Verluste/Fehlausführungen/Daten
+  Dritter (Ziff. 7, 8, 15), Kundenschlüssel und eigene Verträge mit Börsen und
+  KI-Anbietern, Länderhinweise Bitget/Bitunix/Pionex (Ziff. 9), LGPL/GPL-Ausnahme inkl.
+  Reverse Engineering nach LGPLv3 §4 für Betriebssystem-Teile im Image (Ziff. 13).
+  **Anbieter, Gerichtsstand und Beta-Ende sind Platzhalter**; „ENTWURF, nicht anwaltlich
+  geprüft" steht oben. `package.json`: `"license": "SEE LICENSE IN LICENSE"`, `private`.
+- **`NOTICE.md`** (Herkunft, fremde Software, sharp-Entscheidung, Quellenangebot für das
+  Container-Image, Begleitprogramme, Marken) und **`THIRD-PARTY-NOTICES`** (227 Pakete,
+  316 KB) aus `scripts/drittlizenzen.mjs` — Produktionspakete aus `package-lock.json`,
+  Lizenz-/NOTICE-Dateien, ECharts-NOTICE und d3-Lizenz, Lightweight-Charts-NOTICE
+  nachgetragen. Läuft auch im Docker-Build; `server/__selftest-rechtliches.mjs` schlägt an,
+  wenn die Datei nicht mehr zum Lockfile passt. **Nach jeder Abhängigkeitsänderung
+  `node scripts/drittlizenzen.mjs`.**
+- **Dialog „Rechtliches"** (`src/components/rechtliches/Rechtliches.vue`, Server
+  `server/rechtliches.js`): erscheint beim ersten Start und bei neuer Fassung (Zeile 2 von
+  LICENSE) über jeder Seite, ohne Schliessen/Esc, bis zugestimmt ist; Reiter Lizenz /
+  NOTICE / Fremde Software (darin der Lightweight-Charts-NOTICE-Text — erfüllt die
+  „Über-/Lizenzen-Seite"). Zustimmung mit Prüfsummen und Verlauf in
+  `settings.rechtlichesZustimmung`. Eingehängt in **`App.vue`**, nicht im Layout: der
+  Setup-Assistent beim ersten Start hat keins. Zum Nachlesen: Link „Rechtliches" unten im
+  Seitenmenü und Einstellungen › Allgemein › Lizenz. `AT_BEDINGUNGEN=aus` schaltet die
+  Pflicht ab. Bewusst keine API-Sperre (träfe den Stop-Wächter).
+- **Lizenzschlüssel** `server/lizenz.js`: `AT1.<Inhalt>.<Ed25519-Signatur>`, offline gegen
+  den eingebauten öffentlichen Schlüssel geprüft; Käufer, Edition (standard/test),
+  `updatesBis`, bei Test `gueltigBis`, optional `zugang` (Zugangsdaten zur Paketquelle).
+  Ohne gültigen Schlüssel Testmodus: alles nutzbar, Hinweis sichtbar, nur keine Updates
+  über den Knopf. Selbsttest `server/__selftest-lizenz.mjs` (36 Prüfungen, inkl. „kein
+  privater Schlüssel im Repo"). Ausstellen: `scripts/lizenz-ausstellen.mjs`, privater
+  Schlüssel über `AT_LIZENZ_PRIVAT`. **Das Schlüsselpaar wurde am 19.10.2026 erzeugt; der
+  private Schlüssel liegt auf dem Entwicklungsrechner unter
+  `~/.config/autarktrade/lizenz-signatur.pem` (0600) — sichern, nie ins Repo.** Eingabe:
+  `LizenzEinstellung.vue` (Settings.vue: nur Import + eine Zeile).
+- **Update-Kanal**: `update-api.js` fragt die Releases des privaten Repos (Token aus
+  `AT_UPDATE_TOKEN` oder Lizenz-`zugang`), zieht per `git fetch <url> master` bzw.
+  `docker pull ghcr.io/mouses007/autarktrade` mit `X-Registry-Auth`, Token nie auf der
+  Befehlszeile oder in `.git/config`. Installiert wird nur ein Release, das an oder vor
+  `updatesBis` erschienen ist; sonst zeigt das Seitenmenü „Lizenz nötig". `install*`,
+  `update*`, `setup-remote.sh` über `scripts/paketquelle.sh`/`.bat` aufs neue Repo
+  umgestellt (stellen alte Installationen um), Namen auf AutarkTrade. Spenden-Rest
+  `nav.donate` und README-Erwähnung entfernt.
+- **sharp ersetzt**: Share-Card wird im Browser zusammengesetzt
+  (`src/utils/shareCardBild.js`); 9 Pakete mit LGPL-Anteil und die Schriftpakete im Image
+  sind weg. Begründung in NOTICE.md.
+- Geprüft: `npm run test:self` grün, Build fehlerfrei, Docker-Image gebaut und im
+  Prüf-Container (Wegwerf-SQLite, Testbetrieb, `AT_ALLOW_INSECURE=1`) angesehen: Dialog beim
+  ersten Start über dem Setup, Esc wirkungslos, Zustimmung gespeichert, neue Fassung
+  (0.1 → 0.2) fragt erneut, Lesemodus aus dem Seitenmenü, Lizenzkarte im Test- und
+  Vollmodus, falscher Schlüssel überschreibt den gültigen nicht, Telefonbreite ohne
+  Querscrollen.
+
+### Offene Punkte aus S10
+
+- Anwalt: LICENSE/NOTICE gegenlesen (F-6, F-7, F-10, F-13 aus der Verkaufs-Prüfung),
+  Anbieter und Gerichtsstand eintragen, Beta-Ende setzen.
+- **Weitergabe erst nach S11**: Solange TradeNote-Anteile im Code stehen, ist der Stand als
+  Ganzes GPL (NOTICE.md, oben).
+- Update-Pfad mit echtem Release noch nicht durchgespielt (es gibt noch kein Release im
+  privaten Repo); geprüft sind Token-Weitergabe an git (gegen das private Repo) und der
+  Lizenz-Gate im Selbsttest. Der Docker-Workflow veröffentlicht nur `edge` — für den
+  Update-Knopf im Container braucht es Release-Tags + passendes Image-Tag (S11, CI).
+- Der Kunden-Zugang ist ein Übergang: `zugang` im Schlüssel bzw. ein GitHub-Token je Kunde.
+  Für ghcr.io braucht es einen klassischen Token mit `read:packages`; fein granulierte Tokens
+  können keine Pakete lesen. Ein Shop/Händler-Dienst mit eigener Download-Quelle (LIZENZ-PLAN
+  Abschn. 3) ersetzt das später.
+- markerjs2 (Linkware) ist noch drin, der sichtbare Link fehlt (S8 ersetzt die Annotation).
+- Android-Widget, ESP32-Firmware, Desklet: Lizenzdateien/Offenlegung (S11).
+- Prüf-Container im Browser über `127.0.0.1` öffnen, nicht `localhost`: das Cookie
+  `at_session` gilt pro Host, nicht pro Port, und andere Sitzungen auf `localhost:8091`
+  überschreiben es (Folge: 401 und Neuladen bei jedem Schreibzugriff).
 
 ## S3 Aufräumen — Ergebnis (19.10.2026)
 
