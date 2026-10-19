@@ -2185,6 +2185,11 @@ function getPositionDate(pos) {
     gap: var(--abstand-2);
     flex: 0 0 auto;
 }
+/* Der Vue-Compiler schluckt das Leerzeichen zwischen Titel und Zusatz. */
+.incoming-hinweis strong + span {
+    margin-left: 0.3em;
+}
+
 .incoming-hinweis {
     margin-bottom: var(--abstand-2);
 }

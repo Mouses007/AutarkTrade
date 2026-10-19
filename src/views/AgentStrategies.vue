@@ -455,10 +455,10 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
             <!-- Kopfzeile -->
             <div class="kopfzeile">
                 <h5 class="seitentitel">{{ t('strategies.title') }}</h5>
-                <Pille v-if="engine.killSwitch" ton="schlecht" symbol="stopp">
+                <Pille v-if="engine.killSwitch" ton="schlecht" symbol="stopp" class="satzPille">
                     {{ t('strategies.killSwitchActive') }}
                 </Pille>
-                <Pille v-if="!engine.liveEnabled" ton="neutral">{{ t('strategies.liveOffGlobal') }}</Pille>
+                <Pille v-if="!engine.liveEnabled" ton="neutral" class="satzPille">{{ t('strategies.liveOffGlobal') }}</Pille>
                 <button type="button" class="ctl-pill" @click="jetztPruefen">
                     <Symbol name="aktualisieren" class="vor" />{{ t('strategies.runNow') }}
                 </button>
@@ -847,6 +847,12 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 </template>
 
 <style scoped>
+/* Pillen mit ganzem Satz dürfen umbrechen, sonst sprengen sie am Telefon die Breite. */
+.satzPille {
+    white-space: normal;
+    max-width: 100%;
+}
+
 .instanzen-seite {
     padding: var(--abstand-4) var(--abstand-4) 0;
 }
