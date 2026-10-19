@@ -25,7 +25,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 0 | S2 Fundament V2 | Repo, Umbenennung, Testbetrieb, DB-Kopie, Container, Gestaltungssystem, Rahmen | master | **fertig** (siehe unten) |
 | 1 | S3 Aufräumen | CSV-Pfad und toten Import-Code löschen, `journal-alt.js`, zweiter Golden Master (MFE/OHLCV) | `claude/s3-aufraeumen-919210` | **fertig** |
 | 1 | S4 Diagramme neu | `charts.js` clean-room in `src/utils/journal/diagramme/` | – | offen, frei |
-| 1 | S5 Redesign Handel | Chart, Live-Trading, Sessions, Incoming, Agent-Seiten | – | offen, frei |
+| 1 | S5 Redesign Handel | Chart, Live-Trading, Sessions, Incoming, Agent-Seiten | `claude/s5-redesign-handel-51c2a6` | **fertig** |
 | 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | `claude/s6-redesign-analyse-3fe1f2` | **fertig** |
 | 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | – | wartet auf S3 |
 | 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | – | wartet auf S7 + S4 |
@@ -33,6 +33,50 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | – | frei |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | – | wartet auf S5 + S6 |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | – | wartet auf alle |
+
+## S5 Redesign Handel — Ergebnis (19.10.2026)
+
+- **Bereich frei von Bootstrap-Klassen/-JS, Font Awesome und Unicons**: Chart-Arbeitsplatz
+  (`Chart.vue`, alle `components/chart/*`), Live-Trading (`Livetrading.vue`,
+  `components/livetrading/**`, `LiveSymbolPicker.vue`, Bookmap-Statusleiste in
+  `LiquidityHeatmap.vue`), `LiveSessions.vue`, `LiveAuswertung.vue`, `Incoming.vue`, alle
+  Agent-Seiten (`AgentStrategies/Setups/Performance/Editor/Builder/Lab`, `CoinRangliste`,
+  `StrategyParamForm`, `ZahlOderParam`). Ersetzt durch `Knopf`, `Pille`, `Hinweis`, `Reiter`,
+  `Kreisel`, `Symbol` und scoped CSS mit Token; die Pill-Tabs mit `data-bs-toggle` in den
+  Strategie-Instanzen laufen jetzt über `Reiter` + `v-show`. Alte Farbwerte und
+  `--white-*`/`--blue-color` in diesen Dateien auf Token umgestellt.
+- **Gemeinsame Bausteine (von S6 übernommen)**: `basis/Kreisel.vue`; Block „S5 Handel" in
+  `Symbol.vue` (≈ 90 Symbole, Prop `gefuellt`); in `basis.css` die Klassen `at-feld`
+  (+ `klein`), `at-label`, `at-check`, `at-tabelle` (+ `dicht`, `at-tabelle-huelle`),
+  `at-gut`/`at-schlecht`/`at-warn`. `config/livetrading.js` und `config/pult.js` tragen
+  Symbol-Namen. Die mit dem Marktradar geteilten Live-Kacheln, `RadarKachel`,
+  `RadarOverlay` und `PultRahmen` stehen im Stand von S6.
+- **Verhalten unverändert**, TradingView-Logo im Chart bleibt an (`attributionLogo: true`).
+  Bewusst geblieben: App-eigene Alt-Klassen aus `style-dark.css` (`ctl-pill`, `dailyCard`,
+  `stress-dot`, `card-config-*` …, gehen mit S9), Farbwerte im Chart-/ECharts-JS, die
+  eigene Dialoghülle von Alarm- und Indikatordialog (Esc wird in der Capture-Phase
+  abgefangen, damit die Chart-Tastatur es nicht sieht — ein natives `<dialog>` würde das
+  ändern).
+- **Geprüft**: `npm run test:self` 137/137 grün, `vite build` ok. Prüf-Server mit
+  Wegwerf-SQLite (Testbetrieb, Port 8095), alle Seiten im eingebauten Browser Desktop
+  (1440/1800) und Telefon (375), ohne horizontalen Überlauf; Pendente Trades mit zwei
+  Testpositionen, Labor mit echtem Backtest. Screenshots im Notizordner der Sitzungsgruppe
+  (`s5-screenshots/`).
+
+### Offene Punkte aus S5
+
+- `utils/chart/overlays/liste.js` und `utils/chart/zeichnungen/werkzeuge.js` tragen noch
+  `icon: 'uil …'`-Felder, die nicht mehr gelesen werden (Zuordnung zu Symbol-Namen steht
+  in `ChartKopfleiste.vue`/`Zeichenleiste.vue`) — beim Aufräumen entfernen (S9).
+- **Fehler (alt)**: `AgentPerformance.vue` ruft `apiFehlerText` auf, ohne es zu importieren —
+  beim Fehlschlag von „Spiegeln"/„Entfernen" gibt es einen ReferenceError statt einer Meldung.
+- Live-Trading-Kopf: Die mittig absolut gesetzte Symbolwahl überdeckt unter ~1600 px Breite
+  (mit Seitenmenü) den Umschalter Raster/Pult — so schon vorher, im Cockpit-Fenster ohne
+  Menü passt es.
+- Prüfumgebung: Das Session-Cookie `at_session` gilt pro Host, nicht pro Port. Wer im selben
+  Browser `localhost:8091` (Testcontainer) und einen lokalen Prüf-Server auf `localhost`
+  öffnet, bekommt 401 — den Prüf-Server über `127.0.0.1` aufrufen.
+- Seitenmenü und `ReturnToTopButton` tragen noch Unicons (Bereich S9).
 
 ## S6 Redesign Analyse — Ergebnis (19.10.2026)
 
