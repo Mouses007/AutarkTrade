@@ -82,4 +82,4 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
   Prüf-Container, nicht gegen den alten Stand verglichen) — Bereich S6.
 - Screenshots mit echten Daten: 8091 steht hinter dem Passwort-Gate der Kopie; geprüft
   wurde die Oberfläche im Prüf-Container mit leerer SQLite, die Daten über die API.
-- Privates GitHub-Repo „AutarkTrade": erst nach Bestätigung des Nutzers.
+- Privates GitHub-Repo: https://github.com/Mouses007/AutarkTrade (angelegt 19.10.2026, privat).
