@@ -1,0 +1,17 @@
+# Vue-Compiler: Vorlagen-Bezeichner ohne Bindung (_ctx.X) in <script setup>-SFCs
+## alt
+src/views/Settings.vue: navigator×1
+-- 1 Dateien mit ungebundenen Vorlagen-Bezeichnern
+## neu
+src/components/NachObenKnopf.vue: returnToTop×1
+src/components/SeiteLaedt.vue: spinnerLoadingPage×1
+src/components/dashboard/DiagrammKarte.vue: renderData×1
+src/components/journal/FilterLeiste.vue: selectedGrossNet×2, selectedPlSatisfaction×1, selectedTags×4
+src/components/rahmen/ScreenshotVollbild.vue: selectedScreenshot×1, getMore×2
+src/views/AddExcursions.vue: spinnerLoadingPage×1
+src/views/AddTrades.vue: spinnerLoadingPage×1
+src/views/Daily.vue: spinnerLoadMore×1, spinnerSetups×4
+src/views/Dashboard.vue: dashboardIdMounted×1
+src/views/KiAgent.vue: selectedMonth×2
+src/views/Screenshots.vue: spinnerLoadMore×1
+-- 11 Dateien mit ungebundenen Vorlagen-Bezeichnern
