@@ -71,7 +71,7 @@ onMounted(async () => {
 <template>
     <header class="at-kopfleiste">
         <a class="marke" href="/start" :title="t('app.name')">
-            <Logo :groesse="34" />
+            <Logo :groesse="42" />
         </a>
         <nav class="modi" :aria-label="t('app.modi')">
             <a v-for="m in modi" :key="m.id" :href="modeHome(m.id)" :class="{ aktiv: aktiverModus === m.id }"
@@ -181,7 +181,7 @@ onMounted(async () => {
  * Schmaler Desktop: Titel und Knöpfe rechts haben Vorrang — die Modi zeigen
  * nur noch ihr Symbol (Name als Tooltip über `title`/`aria-label`).
  */
-@media (min-width: 768px) and (max-width: 1279.98px) {
+@media (min-width: 768px) and (max-width: 1499.98px) {
     .modi {
         gap: 0.9rem;
     }
