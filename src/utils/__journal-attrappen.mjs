@@ -91,14 +91,16 @@ const ATTRAPPEN = {
     `,
     // Antworten kommen aus globalThis.__journalNetz[url] — alles andere wirft,
     // damit ein neuer Netzaufruf im getesteten Pfad auffällt statt still zu fehlen.
+    // Eine Funktion bekommt die übrigen Argumente (Konfiguration bzw. Rumpf),
+    // damit eine Antwort vom Symbol in den Parametern abhängen kann.
     'attrappe:axios': `
-        const antwort = async (url) => {
+        const antwort = async (url, ...rest) => {
             const tabelle = globalThis.__journalNetz || {}
             if (!(url in tabelle)) throw new Error('Attrappe: axios-Aufruf ' + url + ' ist im Test nicht vorgesehen')
-            return { data: typeof tabelle[url] === 'function' ? tabelle[url]() : tabelle[url] }
+            return { data: typeof tabelle[url] === 'function' ? tabelle[url](...rest) : tabelle[url] }
         }
         const axios = { get: antwort, post: antwort, put: antwort, delete: antwort, create: () => axios,
-            interceptors: { request: { use() {} }, response: { use() {} } }, defaults: { headers: { common: {} } } }
+            interceptors: { request: { use() {}, eject() {} }, response: { use() {}, eject() {} } }, defaults: { headers: { common: {} } } }
         export default axios
     `,
     // ECharts zeichnet nicht, es merkt sich je Element-ID die letzte Option.
