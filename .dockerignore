@@ -22,6 +22,7 @@ REFACTORING-ANALYSE.md
 docs/
 ANLEITUNG-INSTALLATION.txt
 _ctj_update.bat
+_autarktrade_update.bat
 server_neustart.sh
 
 # Interne Audits/Berichte gehoeren nicht in den Build-Kontext
@@ -42,3 +43,7 @@ scripts/.nas-deploy.env
 _levmap-*.mjs
 _themen-probe.mjs
 scripts/.v2-container.env
+
+# Private Schlüssel (Lizenz-Signatur u. a.) gehören nie ins Repo oder Image
+*.pem
+*.key

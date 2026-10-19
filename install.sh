@@ -1,5 +1,5 @@
 #!/bin/bash
-# Crypto Trading Journal - Installer for Linux (Ubuntu/Mint/Debian/Fedora/Arch)
+# AutarkTrade - Installer for Linux (Ubuntu/Mint/Debian/Fedora/Arch)
 # Ausfuehren: chmod +x install.sh && ./install.sh
 
 set -e
@@ -18,7 +18,7 @@ MANDATORY_MISSING=0
 
 echo ""
 echo -e "  ${CYAN}${BOLD}══════════════════════════════════════════${RESET}"
-echo -e "  ${CYAN}${BOLD}     Crypto Trading Journal - Installer       ${RESET}"
+echo -e "  ${CYAN}${BOLD}     AutarkTrade - Installer       ${RESET}"
 echo -e "  ${CYAN}${BOLD}══════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  ${GRAY}Pruefe System-Voraussetzungen...${RESET}"
@@ -390,13 +390,15 @@ fi
 if [ ! -d ".git" ]; then
     if [ "$GIT_OK" = "1" ]; then
         echo -e "  ${CYAN}Git-Repository initialisieren (fuer Auto-Updates)...${RESET}"
-        git init >/dev/null 2>&1
-        git remote add origin https://github.com/Mouses007/Crypto-Trading-Journal.git >/dev/null 2>&1
-        if git fetch origin master >/dev/null 2>&1; then
+        . ./scripts/paketquelle.sh
+        paketquelle_einrichten >/dev/null 2>&1
+        # Ohne Zugangsschlüssel nicht nach Passwort fragen — Updates gehen dann über den Knopf
+        # in der Software, sobald ein Lizenzschlüssel eingetragen ist.
+        if GIT_TERMINAL_PROMPT=0 git fetch origin master >/dev/null 2>&1; then
             echo -e "  ${GREEN}[OK]${RESET}  Git-Repository     Initialisiert"
         else
-            echo -e "  ${YELLOW}[!]${RESET}   Git-Repository     Konnte nicht initialisiert werden"
-            echo -e "  ${GRAY}       Auto-Updates sind moeglicherweise nicht verfuegbar${RESET}"
+            echo -e "  ${YELLOW}[!]${RESET}   Paketquelle        Noch kein Zugang (privat)"
+            echo -e "  ${GRAY}       Updates gibt es mit Lizenzschluessel ueber den Knopf in der Software${RESET}"
         fi
         echo ""
     else
@@ -461,9 +463,9 @@ if [ -z "$DESKTOP_DIR" ] || [ ! -d "$DESKTOP_DIR" ]; then
 fi
 
 # .desktop Datei aus Template erstellen
-DESKTOP_FILE="$DESKTOP_DIR/Crypto-Trading-Journal.desktop"
-if [ -f "$INSTALL_DIR/Crypto-Trading-Journal.desktop" ]; then
-    sed "s|INSTALL_PATH|$INSTALL_DIR|g" "$INSTALL_DIR/Crypto-Trading-Journal.desktop" > "$DESKTOP_FILE"
+DESKTOP_FILE="$DESKTOP_DIR/AutarkTrade.desktop"
+if [ -f "$INSTALL_DIR/AutarkTrade.desktop" ]; then
+    sed "s|INSTALL_PATH|$INSTALL_DIR|g" "$INSTALL_DIR/AutarkTrade.desktop" > "$DESKTOP_FILE"
     chmod +x "$DESKTOP_FILE"
     # GNOME: als vertrauenswuerdig markieren
     if command -v gio &>/dev/null; then
@@ -474,8 +476,8 @@ else
     # Fallback: .desktop-Datei direkt erstellen
     cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
-Name=Crypto Trading Journal
-Comment=Trading Journal starten
+Name=AutarkTrade
+Comment=AutarkTrade starten
 Exec=bash -c 'cd "$INSTALL_DIR" && ./start-linux.sh'
 Icon=$INSTALL_DIR/src/assets/icon.png
 Terminal=true
@@ -497,7 +499,7 @@ echo -e "  ${GREEN}════════════════════�
 echo -e "  ${GREEN}${BOLD}  Installation erfolgreich abgeschlossen!${RESET}"
 echo -e "  ${GREEN}══════════════════════════════════════════${RESET}"
 echo ""
-echo -e "  ${BOLD}Starten:${RESET}   Doppelklick auf 'Crypto Trading Journal' am Desktop"
+echo -e "  ${BOLD}Starten:${RESET}   Doppelklick auf 'AutarkTrade' am Desktop"
 echo -e "  ${BOLD}Oder:${RESET}      ./start-linux.sh"
 echo -e "  ${BOLD}Browser:${RESET}   http://localhost:8080"
 echo ""

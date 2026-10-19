@@ -1,12 +1,19 @@
 /**
  * Share Card API — FLUX.2 (Black Forest Labs) + Google Gemini (Nano Banana).
  * Generates stylized trade share images with AI backgrounds + SVG text overlay.
+ *
+ * Zusammengesetzt wird das Bild im BROWSER (`src/utils/shareCardBild.js`, Canvas):
+ * der Server liefert Hintergrund (`hintergrund`, Daten-URL) und Text-Ebene
+ * (`overlay`, SVG). Bis 19.10.2026 tat das `sharp` — über libvips mit
+ * LGPL-3.0-Bestandteilen, deren Pflichten (Quellenangebot, Reverse-Engineering-
+ * Ausnahme in der EULA) für ein verkauftes Produkt mehr kosten als die Umstellung
+ * (S10, NOTICE.md). Nebeneffekt: der Browser hat die Schriften, die das SVG nennt;
+ * das Container-Image brauchte dafür eigens DejaVu/Liberation.
  */
 import { getKnex } from './database.js'
 import { encrypt, decrypt } from './crypto.js'
 import { merkeVerbrauch } from './ai-usage.js'
 import { schaetzeBildKosten } from './ai-preise.js'
-import sharp from 'sharp'
 import { readFile } from 'fs/promises'
 import { fileURLToPath } from 'url'
 import path from 'path'
@@ -14,7 +21,8 @@ import { darfLaufen, sendeZuFrueh } from './drossel.js'
 
 const BFL_API_BASE = 'https://api.bfl.ai/v1'
 
-// Default avatar: app logo resized to 64x64 PNG, cached as base64 data URL
+// Default avatar: das App-Logo (256 px, 25 KB) als Daten-URL. Verkleinert wird es
+// nicht mehr — das SVG zeichnet es ohnehin auf 140 px.
 let defaultAvatarDataUrl = ''
 
 async function initDefaultAvatar() {
@@ -22,14 +30,28 @@ async function initDefaultAvatar() {
         const __dirname = path.dirname(fileURLToPath(import.meta.url))
         const logoPath = path.join(__dirname, '..', 'src', 'assets', 'icon.png')
         const logoBuf = await readFile(logoPath)
-        const resized = await sharp(logoBuf)
-            .resize(64, 64, { fit: 'cover' })
-            .png()
-            .toBuffer()
-        defaultAvatarDataUrl = `data:image/png;base64,${resized.toString('base64')}`
+        defaultAvatarDataUrl = datenUrl(logoBuf)
     } catch (e) {
         console.warn(' -> FLUX: Could not load default avatar logo:', e.message)
     }
+}
+
+/**
+ * Bildbytes → Daten-URL mit dem Typ, den die Bytes WIRKLICH haben. FLUX liefert
+ * JPEG, Gemini PNG, gespeicherte Vorlagen das, was beim Speichern kam — ein
+ * pauschales `image/png` ginge im <img> durch (Browser schnüffeln), ist aber falsch.
+ */
+export function bildTyp(buf) {
+    if (!buf || buf.length < 12) return 'application/octet-stream'
+    if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png'
+    if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg'
+    if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp'
+    if (buf.toString('ascii', 0, 3) === 'GIF') return 'image/gif'
+    return 'application/octet-stream'
+}
+
+export function datenUrl(buf) {
+    return `data:${bildTyp(buf)};base64,${buf.toString('base64')}`
 }
 
 // ============================================================
@@ -556,26 +578,19 @@ export async function setupFluxRoutes(app) {
             // 1. Generate background via selected provider
             const imgBuffer = await generateBackgroundImage(provider, settings, prompt)
 
-            // 1b. Keep raw background for template saving (before overlay)
-            const bgResized = await sharp(imgBuffer).resize(1080, 1080).png().toBuffer()
-            const backgroundBase64 = bgResized.toString('base64')
-
             // 2. Build SVG overlay
             const svgOverlay = buildOverlaySvg(tradeData, displayName, avatarDataUrl, 1080, 1080, { hidePnlAmount, showTags, showRrr, comment })
 
-            // 3. Composite with sharp
-            const composited = await sharp(bgResized)
-                .composite([{ input: Buffer.from(svgOverlay), top: 0, left: 0 }])
-                .png({ quality: 90 })
-                .toBuffer()
-
-            const base64 = composited.toString('base64')
-            const dataUrl = `data:image/png;base64,${base64}`
-
             const providerLabel = provider === 'gemini' ? 'Gemini' : 'FLUX.2'
             console.log(` -> ${providerLabel} share card generated successfully`)
-            // Return composited image + raw background (for template saving)
-            res.json({ image: dataUrl, prompt, backgroundImage: backgroundBase64 })
+            // Hintergrund + Text-Ebene; der Browser setzt sie zusammen (1080×1080, „cover").
+            // `backgroundImage` bleibt der rohe Hintergrund fürs Speichern als Vorlage.
+            res.json({
+                hintergrund: datenUrl(imgBuffer),
+                overlay: svgOverlay,
+                prompt,
+                backgroundImage: imgBuffer.toString('base64'),
+            })
         } catch (e) {
             console.error('Share card generate error:', e)
             res.status(500).json({ error: 'Interner Serverfehler' })
@@ -615,18 +630,8 @@ export async function setupFluxRoutes(app) {
                 comment: comment || ''
             })
 
-            // Composite
-            const composited = await sharp(bgBuffer)
-                .resize(1080, 1080)
-                .composite([{ input: Buffer.from(svgOverlay), top: 0, left: 0 }])
-                .png({ quality: 90 })
-                .toBuffer()
-
-            const base64 = composited.toString('base64')
-            const dataUrl = `data:image/png;base64,${base64}`
-
             console.log(` -> Share card from template "${template.name}" generated (no API call)`)
-            res.json({ image: dataUrl, prompt: template.prompt, fromTemplate: true })
+            res.json({ hintergrund: datenUrl(bgBuffer), overlay: svgOverlay, prompt: template.prompt, fromTemplate: true })
         } catch (e) {
             console.error('Generate from template error:', e)
             res.status(500).json({ error: 'Interner Serverfehler' })

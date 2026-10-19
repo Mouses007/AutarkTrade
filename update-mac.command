@@ -1,5 +1,5 @@
 #!/bin/bash
-# Crypto Trading Journal — Update (macOS)
+# AutarkTrade — Update (macOS)
 set -e
 cd "$(dirname "$0")"
 
@@ -13,7 +13,7 @@ RESET='\033[0m'
 
 echo ""
 echo -e "${CYAN}${BOLD}══════════════════════════════════════════${RESET}"
-echo -e "${CYAN}${BOLD}  Crypto Trading Journal — Update             ${RESET}"
+echo -e "${CYAN}${BOLD}  AutarkTrade — Update             ${RESET}"
 echo -e "${CYAN}${BOLD}══════════════════════════════════════════${RESET}"
 echo ""
 
@@ -38,11 +38,13 @@ fi
 echo ""
 echo -e "${CYAN}[2/4]${RESET} Code aktualisieren..."
 if command -v git &>/dev/null; then
+    . ./scripts/paketquelle.sh
+    paketquelle_einrichten
     echo -e "${GRAY}  git fetch origin master...${RESET}"
-    git fetch origin master
-    if [ $? -ne 0 ]; then
+    if ! git fetch origin master; then
         echo -e "${RED}[X] Git fetch fehlgeschlagen!${RESET}"
-        echo -e "${YELLOW}  Tipp: Keine Internetverbindung? Remote korrekt konfiguriert?${RESET}"
+        echo -e "${YELLOW}  Tipp: Keine Internetverbindung? Zugang zur Paketquelle?${RESET}"
+        paketquelle_hinweis
         exit 1
     fi
     echo -e "${GRAY}  git reset --hard origin/master...${RESET}"

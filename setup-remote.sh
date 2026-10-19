@@ -1,6 +1,6 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════╗
-# ║  Crypto Trading Journal - Komplette Einrichtung             ║
+# ║  AutarkTrade - Komplette Einrichtung             ║
 # ║  Fuer Ubuntu / Debian / Linux Mint                          ║
 # ║                                                              ║
 # ║  Dieses Script:                                              ║
@@ -25,12 +25,12 @@ BOLD='\033[1m'
 RESET='\033[0m'
 
 # Zielverzeichnis
-INSTALL_DIR="$HOME/Crypto-Trading-Journal"
-REPO_URL="https://github.com/Mouses007/Crypto-Trading-Journal.git"
+INSTALL_DIR="$HOME/AutarkTrade"
+REPO_URL="https://github.com/Mouses007/AutarkTrade.git"
 
 echo ""
 echo -e "  ${CYAN}${BOLD}══════════════════════════════════════════════════${RESET}"
-echo -e "  ${CYAN}${BOLD}   Crypto Trading Journal - Komplette Einrichtung  ${RESET}"
+echo -e "  ${CYAN}${BOLD}   AutarkTrade - Komplette Einrichtung  ${RESET}"
 echo -e "  ${CYAN}${BOLD}══════════════════════════════════════════════════${RESET}"
 echo ""
 
@@ -95,10 +95,20 @@ echo ""
 echo -e "  ${BOLD}[2/5] Lade Projekt herunter...${RESET}"
 echo ""
 
+# Die Paketquelle ist privat: Zugangsschlüssel aus der Lizenz-Mail als AT_UPDATE_TOKEN
+# übergeben (AT_UPDATE_TOKEN=… ./setup-remote.sh), sonst fragt git nach Benutzer/Passwort.
+# Gleiches Verfahren wie scripts/paketquelle.sh — das gibt es vor dem Klonen noch nicht.
+if [ -n "${AT_UPDATE_TOKEN:-}" ]; then
+    export GIT_CONFIG_COUNT=1
+    export GIT_CONFIG_KEY_0="http.https://github.com/.extraheader"
+    export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf '%s:%s' "${AT_UPDATE_BENUTZER:-x-access-token}" "$AT_UPDATE_TOKEN" | base64 | tr -d '\n')"
+fi
+
 if [ -d "$INSTALL_DIR" ]; then
     echo -e "  ${YELLOW}Ordner existiert bereits: $INSTALL_DIR${RESET}"
     echo -e "  ${CYAN}→ Aktualisiere mit git fetch + reset...${RESET}"
     cd "$INSTALL_DIR"
+    git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL"
     git fetch origin master
     git reset --hard origin/master
 else
@@ -150,7 +160,7 @@ cat > "$INSTALL_DIR/start.sh" << 'STARTEOF'
 #!/bin/bash
 cd "$(dirname "$0")"
 echo ""
-echo "  Starte Crypto Trading Journal..."
+echo "  Starte AutarkTrade..."
 echo "  Oeffne http://localhost:8080 im Browser"
 echo ""
 echo "  Zum Beenden: Ctrl+C"
@@ -179,11 +189,11 @@ if [ -z "$DESKTOP_DIR" ] || [ ! -d "$DESKTOP_DIR" ]; then
 fi
 
 # .desktop Datei erstellen
-DESKTOP_FILE="$DESKTOP_DIR/Crypto-Trading-Journal.desktop"
+DESKTOP_FILE="$DESKTOP_DIR/AutarkTrade.desktop"
 cat > "$DESKTOP_FILE" << EOF
 [Desktop Entry]
-Name=Crypto Trading Journal
-Comment=Trading Journal starten
+Name=AutarkTrade
+Comment=AutarkTrade starten
 Exec=bash -c 'cd "$INSTALL_DIR" && ./start.sh'
 Icon=$INSTALL_DIR/src/assets/icon.png
 Terminal=true
@@ -208,9 +218,9 @@ echo -e "  ${GREEN}════════════════════�
 echo -e "  ${GREEN}${BOLD}    Installation erfolgreich abgeschlossen!        ${RESET}"
 echo -e "  ${GREEN}══════════════════════════════════════════════════${RESET}"
 echo ""
-echo -e "  ${BOLD}So startest du das Trading Journal:${RESET}"
+echo -e "  ${BOLD}So startest du AutarkTrade:${RESET}"
 echo ""
-echo -e "    ${CYAN}Option 1:${RESET} Doppelklick auf '${BOLD}Crypto Trading Journal${RESET}' am Desktop"
+echo -e "    ${CYAN}Option 1:${RESET} Doppelklick auf '${BOLD}AutarkTrade${RESET}' am Desktop"
 echo -e "    ${CYAN}Option 2:${RESET} Im Terminal: ${BOLD}cd $INSTALL_DIR && ./start.sh${RESET}"
 echo ""
 echo -e "  ${BOLD}Dann im Browser oeffnen:${RESET} ${CYAN}http://localhost:8080${RESET}"
@@ -221,7 +231,7 @@ echo -e "  ${GRAY}Erster Start: Gehe zu Einstellungen und richte deine Boerse ei
 echo ""
 
 # Fragen ob direkt starten
-echo -en "  ${BOLD}Moechtest du das Trading Journal jetzt starten? [J/n]:${RESET} "
+echo -en "  ${BOLD}Moechtest du AutarkTrade jetzt starten? [J/n]:${RESET} "
 read -r START_NOW
 echo ""
 

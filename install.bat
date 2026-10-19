@@ -15,7 +15,7 @@ set "MANDATORY_MISSING=0"
 
 echo.
 echo   ==============================================
-echo      Crypto Trading Journal - Installer
+echo      AutarkTrade - Installer
 echo   ==============================================
 echo.
 echo   Pruefe System-Voraussetzungen...
@@ -475,15 +475,16 @@ if "!OLLAMA_OK!"=="0" (
 REM Git-Repository initialisieren (fuer Auto-Updates)
 if not exist ".git\" (
     echo   Git-Repository initialisieren ^(fuer Auto-Updates^)...
-    git init >nul 2>nul
-    git remote add origin https://github.com/Mouses007/Crypto-Trading-Journal.git >nul 2>nul
+    call scripts\paketquelle.bat >nul 2>nul
+    set "GIT_TERMINAL_PROMPT=0"
     git fetch origin master >nul 2>nul
     if !errorlevel! equ 0 (
         echo   [OK]  Git-Repository     Initialisiert
     ) else (
-        echo   [!]   Git-Repository     Konnte nicht initialisiert werden
-        echo                             Auto-Updates sind moeglicherweise nicht verfuegbar
+        echo   [!]   Paketquelle        Noch kein Zugang ^(privat^)
+        echo                             Updates gibt es mit Lizenzschluessel ueber den Knopf in der Software
     )
+    set "GIT_TERMINAL_PROMPT="
     echo.
 ) else (
     echo   [OK]  Git-Repository     Vorhanden
@@ -530,10 +531,10 @@ echo.
 echo   Erstelle Desktop-Verknuepfung...
 
 set "DESKTOP=%USERPROFILE%\Desktop"
-set "SHORTCUT=%DESKTOP%\Crypto Trading Journal.lnk"
+set "SHORTCUT=%DESKTOP%\AutarkTrade.lnk"
 set "INSTALL_DIR=%CD%"
 
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = 'wscript.exe'; $s.Arguments = '\"\"\"' + '%INSTALL_DIR%\start-hidden.vbs' + '\"\"\"'; $s.WorkingDirectory = '%INSTALL_DIR%'; $s.IconLocation = '%INSTALL_DIR%\src\assets\icon.ico,0'; $s.Description = 'Crypto Trading Journal starten'; $s.Save()" 2>nul
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = 'wscript.exe'; $s.Arguments = '\"\"\"' + '%INSTALL_DIR%\start-hidden.vbs' + '\"\"\"'; $s.WorkingDirectory = '%INSTALL_DIR%'; $s.IconLocation = '%INSTALL_DIR%\src\assets\icon.ico,0'; $s.Description = 'AutarkTrade starten'; $s.Save()" 2>nul
 
 if exist "%SHORTCUT%" (
     echo   [OK] Desktop-Verknuepfung erstellt
@@ -547,7 +548,7 @@ echo   ==============================================
 echo     Installation erfolgreich abgeschlossen!
 echo   ==============================================
 echo.
-echo   Starten:   Doppelklick auf "Crypto Trading Journal" am Desktop
+echo   Starten:   Doppelklick auf "AutarkTrade" am Desktop
 echo   Oder:      start.bat doppelklicken
 echo   Browser:   http://localhost:8080
 echo.

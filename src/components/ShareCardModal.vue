@@ -1,4 +1,5 @@
 <script setup>
+import { zeichneShareCard } from '../utils/shareCardBild.js'
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -146,7 +147,7 @@ watch(selectedTemplateId, async (id) => {
             showRrr: showRrr.value,
             comment: commentText.value
         })
-        generatedImage.value = res.data.image
+        generatedImage.value = await zeichneShareCard(res.data)
         lastBackgroundBase64.value = '' // template BG already saved
     } catch (e) {
         error.value = e.response?.data?.error || e.message
@@ -230,7 +231,7 @@ async function generateShareCard() {
             showRrr: showRrr.value,
             comment: commentText.value
         })
-        generatedImage.value = res.data.image
+        generatedImage.value = await zeichneShareCard(res.data)
         // Store raw background for template saving
         lastBackgroundBase64.value = res.data.backgroundImage || ''
     } catch (e) {

@@ -1,8 +1,19 @@
 /**
- * Update API — checks GitHub for new releases, performs one-click updates.
+ * Update API — prüft die private Paketquelle auf neue Fassungen und installiert sie.
  *
- * GET  /api/update/check   → compare local version with latest GitHub release
- * POST /api/update/install  → git fetch + reset + npm install + signal restart
+ * GET  /api/update/check    → lokale Fassung gegen das neueste Release vergleichen
+ * POST /api/update/install  → git fetch + reset + npm install (bzw. docker pull) + Neustart
+ *
+ * Kanal (S10 „Lizenz & Vertrieb"): das private Repo `Mouses007/AutarkTrade` (Releases
+ * und Quelltext) bzw. das private Image `ghcr.io/mouses007/autarktrade`. Beides
+ * braucht Zugangsdaten: `AT_UPDATE_TOKEN` (+ `AT_UPDATE_BENUTZER`) oder das Feld
+ * `zugang` im Lizenzschlüssel (`server/lizenz.js`). Ohne Zugang meldet die Prüfung
+ * `kanal: 'keinZugang'` statt eines Fehlers.
+ *
+ * Ob ein Update INSTALLIERT werden darf, sagt der Lizenzschlüssel: das Release muss
+ * an oder vor `updatesBis` erschienen sein (`updateErlaubt`). Im Testmodus (kein
+ * Schlüssel) zeigt die Prüfung neue Fassungen an, installiert sie aber nicht —
+ * die installierte Fassung läuft unverändert weiter (Ziffer 7 der Bedingungen).
  */
 import { execSync, spawn } from 'child_process'
 import crypto from 'crypto'
@@ -13,14 +24,16 @@ import https from 'https'
 import http from 'http'
 import { fileURLToPath } from 'url'
 import { umgebung } from './umgebung.js'
+import { ladeLizenz, updateZugang, updateErlaubt } from './lizenz.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 
-// Neue, private Quelle. Bis S10 die Aktualisierung umstellt (Anmeldung an der
-// privaten Quelle), läuft die Prüfung hier ins Leere — gewollt: gegen das alte
-// Repo würde sie 3.x als „neuer" melden und per git reset den alten Stand holen.
-const GITHUB_REPO = 'Mouses007/AutarkTrade'
+// Private Quelle. Das alte, öffentliche Repo (GPL, 3.x) ist bewusst KEIN Kanal mehr:
+// gegen es würde die Prüfung 3.x als „neuer" melden und per git reset den alten Stand holen.
+export const GITHUB_REPO = 'Mouses007/AutarkTrade'
+export const GIT_URL = `https://github.com/${GITHUB_REPO}.git`
+export const IMAGE = 'ghcr.io/mouses007/autarktrade'
 const PROJECT_ROOT = path.resolve(__dirname, '..')
 const IS_WINDOWS = os.platform() === 'win32'
 const IS_DOCKER = existsSync('/.dockerenv')
@@ -123,7 +136,7 @@ function effectiveIsDocker(req) {
  *    `docker compose -f <compose> up -d --force-recreate --no-deps journal` ausfuehrt
  * 5. Antworte dem Client, sterbe kurz danach — der Helfer ersetzt uns
  */
-async function installDockerUpdate(res) {
+async function installDockerUpdate(res, zugang) {
     if (!HAS_DOCKER_SOCK) {
         return res.status(400).json({
             ok: false,
@@ -149,7 +162,7 @@ async function installDockerUpdate(res) {
             return res.status(500).json({ ok: false, error: 'Kann eigenen Container nicht identifizieren: ' + e.message })
         }
     }
-    const imageName = self.Config?.Image || 'autarktrade:latest'
+    const imageName = self.Config?.Image || `${IMAGE}:latest`
     const labels = self.Config?.Labels || {}
     // HOST-Pfad bevorzugt aus AT_HOST_COMPOSE_DIR (.env) — der ist stabil.
     // Der compose-Label 'working_dir' wird von compose bei jedem Recreate
@@ -176,6 +189,12 @@ async function installDockerUpdate(res) {
                 path: `/images/create?fromImage=${encodeURIComponent(imageName)}`,
                 headers: { 'Host': 'docker' }
             }
+            // Private Registry: Anmeldung je Pull, nichts bleibt im Docker-Daemon gespeichert.
+            if (zugang && imageName.startsWith('ghcr.io/')) {
+                opts.headers['X-Registry-Auth'] = Buffer.from(JSON.stringify({
+                    username: zugang.benutzer, password: zugang.token, serveraddress: 'ghcr.io'
+                })).toString('base64url')
+            }
             const req = http.request(opts, (pullRes) => {
                 pullRes.on('data', () => {}) // verbrauchen
                 pullRes.on('end', () => pullRes.statusCode < 400 ? resolve() : reject(new Error('Pull fehlgeschlagen: HTTP ' + pullRes.statusCode)))
@@ -196,7 +215,7 @@ async function installDockerUpdate(res) {
     //   "/compose"-Label-Pollution die beim Pfad-Remapping auftritt.
     // - AutoRemove loescht den Helfer nach Abschluss
     // - Das Skript wartet 3s, damit unsere Response den Client erreicht
-    const helperName = `ctj-updater-${Date.now()}`
+    const helperName = `autarktrade-updater-${Date.now()}`
     const helperConfig = {
         Image: 'docker:cli',
         Cmd: ['sh', '-c',
@@ -237,7 +256,7 @@ async function installDockerUpdate(res) {
  * Das Script wartet bis der Server beendet ist, dann: npm install + build + Neustart.
  */
 function spawnWindowsUpdateScript(commands, label) {
-    const scriptPath = path.join(PROJECT_ROOT, '_ctj_update.bat')
+    const scriptPath = path.join(PROJECT_ROOT, '_autarktrade_update.bat')
     const script = `@echo off
 chcp 65001 >nul
 echo.
@@ -259,32 +278,61 @@ node index.mjs
 `
     writeFileSync(scriptPath, script, 'utf8')
 
-    spawn('cmd.exe', ['/c', 'start', `"CTJ ${label}"`, 'cmd.exe', '/k', scriptPath], {
+    spawn('cmd.exe', ['/c', 'start', `"AutarkTrade ${label}"`, 'cmd.exe', '/k', scriptPath], {
         detached: true,
         stdio: 'ignore',
         cwd: PROJECT_ROOT
     }).unref()
 }
 
-// Simple HTTPS GET returning JSON
-function httpsGetJson(url) {
+// HTTPS GET mit JSON-Antwort. Der Token geht nur an api.github.com — eine
+// Weiterleitung auf einen anderen Host bekommt ihn nicht mit.
+function httpsGetJson(url, token) {
     return new Promise((resolve, reject) => {
-        const options = {
-            headers: { 'User-Agent': 'CryptoTradingJournal' }
-        }
-        https.get(url, options, (res) => {
-            // Follow redirects
+        const headers = { 'User-Agent': 'AutarkTrade', 'Accept': 'application/vnd.github+json' }
+        if (token && new URL(url).host === 'api.github.com') headers.Authorization = `Bearer ${token}`
+        https.get(url, { headers, timeout: 15000 }, (res) => {
             if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                return httpsGetJson(res.headers.location).then(resolve).catch(reject)
+                res.resume()
+                return httpsGetJson(new URL(res.headers.location, url).href, token).then(resolve).catch(reject)
             }
             let data = ''
             res.on('data', chunk => data += chunk)
             res.on('end', () => {
+                if (res.statusCode === 404) return reject(Object.assign(new Error('Not Found'), { status: 404 }))
+                if (res.statusCode === 401 || res.statusCode === 403) {
+                    return reject(Object.assign(new Error(`Zugang zur Paketquelle abgelehnt (HTTP ${res.statusCode})`), { status: res.statusCode }))
+                }
                 try { resolve(JSON.parse(data)) }
                 catch (e) { reject(new Error('Invalid JSON: ' + data.substring(0, 200))) }
             })
-        }).on('error', reject)
+        }).on('timeout', function () { this.destroy(new Error('Zeitüberschreitung')) }).on('error', reject)
     })
+}
+
+/**
+ * Umgebung für git mit Anmeldung — über GIT_CONFIG_* statt `-c` auf der
+ * Befehlszeile, damit der Token nicht in der Prozessliste steht, und ohne ihn in
+ * `.git/config` zu schreiben.
+ */
+function gitUmgebung(zugang) {
+    const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    if (!zugang) return env
+    const basic = Buffer.from(`${zugang.benutzer}:${zugang.token}`).toString('base64')
+    return {
+        ...env,
+        GIT_CONFIG_COUNT: '1',
+        GIT_CONFIG_KEY_0: 'http.https://github.com/.extraheader',
+        GIT_CONFIG_VALUE_0: `AUTHORIZATION: basic ${basic}`,
+    }
+}
+
+/** Texte für die Gründe aus `updateErlaubt` — die Oberfläche zeigt sie, wie sie kommen. */
+const GRUND_TEXT = {
+    keinSchluessel: 'Updates gibt es mit einem Lizenzschlüssel (Einstellungen › Lizenz). Die installierte Fassung läuft unverändert weiter.',
+    keineGueltigeLizenz: 'Der eingetragene Lizenzschlüssel ist ungültig oder abgelaufen (Einstellungen › Lizenz).',
+    updatesAbgelaufen: 'Diese Fassung ist nach dem Ende deiner Update-Berechtigung erschienen. Die installierte Fassung läuft weiter; für neuere braucht es eine Verlängerung.',
+    datumUnbekannt: 'Das Erscheinungsdatum der neuen Fassung ist unbekannt — Update nicht möglich.',
 }
 
 // Get local version from package.json. Cached: an update always ends in
@@ -370,36 +418,51 @@ export async function pruefeAufUpdate(forceRefresh = false) {
     if (!forceRefresh && lastCheck && (now - lastCheckTime) < CHECK_CACHE_MS) return lastCheck
 
     const localVersion = getLocalVersion()
+    const lizenz = await ladeLizenz()
+    const zugang = await updateZugang()
+    const basis = {
+        ok: true,
+        localVersion,
+        remoteVersion: localVersion,
+        updateAvailable: false,
+        releaseName: '',
+        releaseNotes: '',
+        releaseUrl: '',
+        publishedAt: '',
+        kanal: zugang ? 'privat' : 'keinZugang',
+        lizenz: { modus: lizenz.modus, updatesBis: lizenz.updatesBis ?? null },
+        berechtigt: false,
+        grund: null,
+    }
+    if (!zugang) {
+        // Ohne Zugangsdaten antwortet das private Repo mit 404 — das ist kein Fehler
+        // der Prüfung, sondern ein fehlender Schlüssel. Nichts abfragen.
+        lastCheck = { ...basis, grund: lizenz.modus === 'voll' ? 'keinZugang' : 'keinSchluessel' }
+        lastCheckTime = now
+        return lastCheck
+    }
     try {
-        const release = await httpsGetJson(
-            `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
-        )
-        const remoteVersion = (release.tag_name || '').replace(/^v/, '')
+        const release = await httpsGetJson(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, zugang.token)
+        const remoteVersion = (release.tag_name || '').replace(/^v/, '') || localVersion
+        const erlaubt = updateErlaubt(lizenz, release.published_at)
         lastCheck = {
-            ok: true,
-            localVersion,
+            ...basis,
             remoteVersion,
             updateAvailable: compareSemver(remoteVersion, localVersion) > 0,
             releaseName: release.name || '',
             releaseNotes: release.body || '',
             releaseUrl: release.html_url || '',
-            publishedAt: release.published_at || ''
+            publishedAt: release.published_at || '',
+            berechtigt: erlaubt.erlaubt,
+            grund: erlaubt.erlaubt ? null : erlaubt.grund,
+            grundText: erlaubt.erlaubt ? '' : GRUND_TEXT[erlaubt.grund] || '',
         }
         lastCheckTime = now
         return lastCheck
     } catch (err) {
         // Noch kein Release veröffentlicht ist kein Fehler
-        if (err.message && err.message.includes('Not Found')) {
-            lastCheck = {
-                ok: true,
-                localVersion,
-                remoteVersion: localVersion,
-                updateAvailable: false,
-                releaseName: '',
-                releaseNotes: '',
-                releaseUrl: '',
-                publishedAt: ''
-            }
+        if (err.status === 404) {
+            lastCheck = basis
             lastCheckTime = Date.now()
             return lastCheck
         }
@@ -426,18 +489,28 @@ export function setupUpdateRoutes(app) {
             // Hartes Gate: localhost + gültiges Bestätigungs-Token
             if (!guardDestructiveUpdate(req, res)) return
 
+            // Lizenz-Gate: frisch prüfen, nicht aus dem Zwischenspeicher — zwischen
+            // Anzeige und Klick kann der Schlüssel entfernt worden sein.
+            const stand = await pruefeAufUpdate(true)
+            if (!stand.updateAvailable) {
+                return res.status(400).json({ ok: false, error: 'Kein neueres Release in der Paketquelle.' })
+            }
+            if (!stand.berechtigt) {
+                return res.status(403).json({ ok: false, grund: stand.grund, error: stand.grundText || GRUND_TEXT[stand.grund] || 'Update nicht berechtigt.' })
+            }
+            const zugang = await updateZugang()
+
             // Docker-Modus: neues Image pullen und Container via Helfer neu erstellen
             if (IS_DOCKER) {
-                return await installDockerUpdate(res)
+                return await installDockerUpdate(res, zugang)
             }
 
             // Pruefen ob Git-Repository vorhanden ist
             if (!existsSync(path.join(PROJECT_ROOT, '.git'))) {
                 return res.status(400).json({
                     ok: false,
-                    error: 'Git-Repository nicht gefunden. Bitte fuehre im Installationsordner aus:\n' +
-                        'git init && git remote add origin https://github.com/Mouses007/AutarkTrade.git && git fetch origin master\n' +
-                        'Oder installiere neu mit: git clone https://github.com/Mouses007/AutarkTrade.git'
+                    error: 'Git-Repository nicht gefunden. Bitte im Installationsordner einmal ./update.sh ' +
+                        '(Windows: update.bat, macOS: update-mac.command) ausführen — es richtet die Paketquelle ein.'
                 })
             }
 
@@ -458,15 +531,18 @@ export function setupUpdateRoutes(app) {
                 steps.push({ step: 'save rollback point', output: 'Kein bisheriger Commit (frische Installation) — Rollback nicht verfügbar' })
             }
 
-            // 1. git fetch + reset statt pull (funktioniert auch ohne HEAD/Commits)
-            const fetchOutput = execSync('git fetch origin master', {
+            // 1. git fetch + reset statt pull (funktioniert auch ohne HEAD/Commits).
+            // Die URL steht hier fest statt `origin`: so zieht auch eine Installation,
+            // deren origin noch auf das alte, öffentliche Repo zeigt, aus dem neuen Kanal.
+            const fetchOutput = execSync(`git fetch ${GIT_URL} master`, {
                 cwd: PROJECT_ROOT,
                 encoding: 'utf8',
-                timeout: 60000
+                timeout: 60000,
+                env: gitUmgebung(zugang)
             }).trim()
             steps.push({ step: 'git fetch', output: fetchOutput || 'OK' })
 
-            const pullOutput = execSync('git reset --hard origin/master', {
+            const pullOutput = execSync('git reset --hard FETCH_HEAD', {
                 cwd: PROJECT_ROOT,
                 encoding: 'utf8',
                 timeout: 60000
@@ -595,43 +671,18 @@ export function setupUpdateRoutes(app) {
 
     // ── Startup check (non-blocking) ───────────────────────────────
     setTimeout(async () => {
-        // Pruefen ob Git-Repository vorhanden ist
-        if (!existsSync(path.join(PROJECT_ROOT, '.git'))) {
-            console.log(' -> Kein Git-Repository gefunden — Auto-Updates nicht verfuegbar')
-            console.log('    Tipp: git init && git remote add origin https://github.com/Mouses007/AutarkTrade.git && git fetch origin master')
-            return
-        }
-
         try {
-            const localVersion = getLocalVersion()
-            const release = await httpsGetJson(
-                `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`
-            )
-            const remoteVersion = (release.tag_name || '').replace(/^v/, '')
-            const updateAvailable = compareSemver(remoteVersion, localVersion) > 0
-
-            lastCheck = {
-                ok: true,
-                localVersion,
-                remoteVersion,
-                updateAvailable,
-                releaseName: release.name || '',
-                releaseNotes: release.body || '',
-                releaseUrl: release.html_url || '',
-                publishedAt: release.published_at || ''
-            }
-            lastCheckTime = Date.now()
-
-            if (updateAvailable) {
-                console.log(`\n🆕 Update verfügbar: v${localVersion} → v${remoteVersion}`)
+            const stand = await pruefeAufUpdate(true)
+            if (stand.kanal === 'keinZugang') {
+                console.log(' -> Update-Prüfung: keine Zugangsdaten zur Paketquelle (Lizenzschlüssel oder AT_UPDATE_TOKEN)')
+            } else if (stand.updateAvailable) {
+                console.log(`\n🆕 Update verfügbar: v${stand.localVersion} → v${stand.remoteVersion}` +
+                    (stand.berechtigt ? '' : ` (nicht installierbar: ${stand.grund})`))
             } else {
-                console.log(` -> Version v${localVersion} ist aktuell`)
+                console.log(` -> Version v${stand.localVersion} ist aktuell`)
             }
         } catch (err) {
-            // Silent fail on startup — no release yet is fine
-            if (!err.message?.includes('Not Found')) {
-                console.log(' -> Update-Check fehlgeschlagen:', err.message)
-            }
+            console.log(' -> Update-Check fehlgeschlagen:', err.message)
         }
     }, 3000)
 }

@@ -3483,6 +3483,17 @@ async function runMigrations(knex, client) {
         console.log(' -> Created table: chart_vorlagen')
     }
 
+    // ── Lizenz & Rechtliches (S10) ─────────────────────────────────────
+    /*
+     * Lizenzschlüssel (`server/lizenz.js`, Ed25519-Token, nur über /api/lizenz
+     * geschrieben) und die Zustimmung zu den Lizenzbedingungen
+     * (`server/rechtliches.js`: zugestimmte Fassung, Zeit, Prüfsummen, Verlauf).
+     * Rein additiv, deshalb ohne neue SCHEMA_VERSION: ein älterer Codestand
+     * kennt die Spalten nicht und fasst sie nicht an.
+     */
+    await addColumnIfNotExists('settings', 'lizenzSchluessel', (t) => t.text('lizenzSchluessel').defaultTo(''))
+    await addColumnIfNotExists('settings', 'rechtlichesZustimmung', (t) => t.text('rechtlichesZustimmung').defaultTo(''))
+
     // ==================== SCHEMA-ANKER ====================
     // Ganz am Ende, damit die Version erst steht, wenn alle Checks durch sind.
     await addColumnIfNotExists('settings', 'schemaVersion', (t) => t.integer('schemaVersion').defaultTo(0))

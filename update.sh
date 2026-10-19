@@ -1,6 +1,7 @@
 #!/bin/bash
-# Crypto Trading Journal - Manuelles Update
-# Bei Update-Problemen: Diese Datei in den Installationsordner legen und ausfuehren:
+# AutarkTrade - Manuelles Update
+# Der Update-Knopf in der Software prueft die Update-Berechtigung deines Lizenzschluessels;
+# dieses Skript ist der Weg fuer den Notfall. Bei Update-Problemen im Installationsordner:
 #   chmod +x update.sh && ./update.sh
 
 set -e
@@ -14,7 +15,7 @@ RESET='\033[0m'
 
 echo ""
 echo -e "  ${CYAN}${BOLD}══════════════════════════════════════════${RESET}"
-echo -e "  ${CYAN}${BOLD}   Crypto Trading Journal - Update        ${RESET}"
+echo -e "  ${CYAN}${BOLD}   AutarkTrade - Update        ${RESET}"
 echo -e "  ${CYAN}${BOLD}══════════════════════════════════════════${RESET}"
 echo ""
 
@@ -30,16 +31,17 @@ OLD_VERSION=$(node -e "console.log(JSON.parse(require('fs').readFileSync('packag
 echo -e "  Aktuelle Version: ${BOLD}v${OLD_VERSION}${RESET}"
 echo ""
 
-# Git-Repository pruefen / einrichten
-if [ ! -d ".git" ]; then
-    echo -e "  ${CYAN}Git-Repository wird eingerichtet...${RESET}"
-    git init
-    git remote add origin https://github.com/Mouses007/Crypto-Trading-Journal.git
-fi
+# Paketquelle einrichten (stellt auch eine alte Installation vom öffentlichen Repo um)
+. ./scripts/paketquelle.sh
+paketquelle_einrichten
 
 # Update holen
 echo -e "  ${CYAN}[1/4] Lade neueste Version...${RESET}"
-git fetch origin master
+if ! git fetch origin master; then
+    echo -e "  ${RED}FEHLER: Paketquelle nicht erreichbar oder Zugang abgelehnt.${RESET}"
+    paketquelle_hinweis
+    exit 1
+fi
 
 echo -e "  ${CYAN}[2/4] Installiere neueste Version...${RESET}"
 git reset --hard origin/master

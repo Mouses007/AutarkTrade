@@ -8,6 +8,7 @@ import { currentUser } from "../stores/settings.js"
 import { useIstTelefon } from '../utils/geraet.js'
 import { selectedBroker, brokers, selectedTradeCategory, BOT_BROKERS } from "../stores/filters.js"
 import { PAGES, pagesForMode, istModusAn } from '../config/menu.js'
+import { oeffneRechtliches } from '../stores/rechtliches.js'
 import SidebarFilters from './SidebarFilters.vue'
 import LiveSymbolPicker from './LiveSymbolPicker.vue'
 
@@ -491,10 +492,15 @@ function goToDashboard() {
                 :title="'Update v' + updateInfo?.remoteVersion + ' — wird automatisch via Watchtower installiert'">
                 <i class="uil uil-docker me-1"></i>Update v{{ updateInfo?.remoteVersion }}
             </a>
-            <!-- Non-Docker: normaler Install-Button -->
-            <a v-if="updateAvailable && !isDocker && !updateInstalling" class="footer-update" @click.prevent="installUpdate">
+            <!-- Non-Docker: normaler Install-Button — nur mit Update-Berechtigung aus dem
+                 Lizenzschlüssel; sonst ein Hinweis, der zu Einstellungen › Lizenz führt. -->
+            <a v-if="updateAvailable && !isDocker && !updateInstalling && updateInfo?.berechtigt" class="footer-update" @click.prevent="installUpdate">
                 <i class="uil uil-download-alt me-1"></i>Update v{{ updateInfo?.remoteVersion }}
             </a>
+            <router-link v-if="updateAvailable && !isDocker && !updateInstalling && !updateInfo?.berechtigt"
+                to="/settings" class="footer-rollback" :title="updateInfo?.grundText || ''">
+                <i class="uil uil-lock me-1"></i>v{{ updateInfo?.remoteVersion }} · {{ t('lizenz.updateGesperrt') }}
+            </router-link>
             <span v-if="updateInstalling" class="footer-update installing">
                 <span class="spinner-border spinner-border-sm me-1"></span>{{ t('nav.installing') }}
             </span>
@@ -505,6 +511,7 @@ function goToDashboard() {
                 <span class="spinner-border spinner-border-sm me-1"></span>{{ t('nav.rollback') }}
             </span>
             <span v-if="updateError" class="footer-update-error">{{ updateError }}</span>
+            <a class="footer-rollback" href="#" @click.prevent="oeffneRechtliches()">{{ t('rechtliches.titel') }}</a>
         </div>
     </div>
 

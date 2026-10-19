@@ -3,7 +3,7 @@
   "version": "4.0.0-alpha.0",
   "description": "AutarkTrade – lokales Trading-Journal und Analyse-Arbeitsplatz für Krypto-Futures (Bitunix, Bitget, Pionex), SQLite/PostgreSQL, KI-Auswertungen.",
   "author": "Mouses007",
-  "license": "UNLICENSED",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "scripts": {
     "start": "node index.mjs",
@@ -33,7 +33,6 @@
     "papaparse": "^5.5.4",
     "pg": "^8.22.0",
     "quill": "^2.0.2",
-    "sharp": "^0.35.4",
     "sortablejs": "^1.15.2",
     "vue": "^3.5.39",
     "vue-i18n": "^9.14.5",

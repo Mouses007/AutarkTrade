@@ -4,7 +4,7 @@ setlocal EnableDelayedExpansion
 
 echo.
 echo   ==============================================
-echo     Crypto Trading Journal - Update
+echo     AutarkTrade - Update
 echo   ==============================================
 echo.
 
@@ -36,8 +36,7 @@ if errorlevel 1 (
     echo   [!] Git nicht installiert -- automatisches Update nicht moeglich.
     echo.
     echo   Manuelles Update:
-    echo     1. Lade das neueste Release herunter:
-    echo        https://github.com/Mouses007/Crypto-Trading-Journal/releases
+    echo     1. Lade das neueste Paket ueber den Link aus deiner Lizenz-Mail herunter
     echo     2. Entpacke die Dateien in diesen Ordner
     echo     3. WICHTIG: autarktrade.db NICHT ueberschreiben!
     echo     4. Druecke eine Taste um mit npm install fortzufahren...
@@ -47,11 +46,14 @@ if errorlevel 1 (
 )
 
 :: Git fetch + reset (funktioniert auch bei frischer Installation ohne Commits)
+call scripts\paketquelle.bat
 echo     git fetch origin master...
 git fetch origin master
 if errorlevel 1 (
     echo   [X] Git fetch fehlgeschlagen!
-    echo     Tipp: Keine Internetverbindung? Remote korrekt konfiguriert?
+    echo     Tipp: Keine Internetverbindung? Zugang zur Paketquelle?
+    echo     Die Paketquelle ist privat: set AT_UPDATE_TOKEN=^<Zugangsschluessel aus der Lizenz-Mail^>
+    echo     und update.bat erneut starten, oder git fragt nach Benutzername und Passwort.
     goto :error
 )
 echo     git reset --hard origin/master...

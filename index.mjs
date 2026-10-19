@@ -35,6 +35,8 @@ import { startErgebnisTakt } from './server/radar-ergebnisse.js'
 import { startAbverkaufTakt } from './server/coin-radar/abverkauf.js'
 import { startOiArchivTakt, stopOiArchivTakt } from './server/oi-archiv.js'
 import { setupUpdateRoutes } from './server/update-api.js'
+import { setupLizenzRoutes } from './server/lizenz.js'
+import { setupRechtlichesRoutes } from './server/rechtliches.js'
 import { setupSpeicherRoutes } from './server/speicher-api.js'
 import { setupBackupRoutes } from './server/backup-api.js'
 import { setupFluxRoutes } from './server/flux-api.js'
@@ -185,6 +187,8 @@ const startIndex = async () => {
     setupHypeRadarRoutes(app);
     setupCoinRadarRoutes(app);
     setupUpdateRoutes(app);
+    setupLizenzRoutes(app);
+    setupRechtlichesRoutes(app);
     setupSpeicherRoutes(app);
     // Betriebsart für die Oberfläche (Banner „Testbetrieb", gesperrte Automatiken)
     app.get('/api/system/modus', (req, res) => {

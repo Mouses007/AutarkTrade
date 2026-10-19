@@ -43,7 +43,10 @@ export const SETTINGS_SENSITIVE_FIELDS = [
      * Werkzeug, um sich selbst oder andere auszusperren — und beim Auslesen
      * verriete sie, wie oft rotiert wurde.
      */
-    'sessionGeneration'
+    'sessionGeneration',
+    // Lizenzschlüssel: kann Zugangsdaten zur Paketquelle tragen, geschrieben nur über
+    // /api/lizenz (prüft die Signatur); die Oberfläche bekommt den Stand, nie den Text.
+    'lizenzSchluessel'
 ]
 
 /** Strip sensitive fields from a settings row, exposing only `${field}Set` presence flags. */

@@ -33,6 +33,7 @@ internal/
 _audit-*.md
 ANLEITUNG-INSTALLATION.txt
 _ctj_update.bat
+_autarktrade_update.bat
 
 # PlatformIO build artifacts
 ESP32-Waveshare/.pio/
@@ -48,3 +49,7 @@ scripts/.nas-deploy.env
 # maschinenspezifisch, gehört nie ins Repository
 certs/
 scripts/.v2-container.env
+
+# Private Schlüssel (Lizenz-Signatur u. a.) gehören nie ins Repo oder Image
+*.pem
+*.key

@@ -18,15 +18,15 @@
  *   server/templates/win-short-2.png — Bear (Short Win) template 2
  *   server/templates/win-short-3.png — Panda (Short Win) template 3
  *
- * Images are resized to 1080x1080 and stored as base64 in the DB.
+ * Images are stored as base64 in the DB as they are; the browser scales them
+ * to 1080x1080 ("cover") when it draws the card (`src/utils/shareCardBild.js`).
+ * Until 19.10.2026 `sharp` resized them here — it is gone (LGPL via libvips, S10).
  */
-import sharp from 'sharp'
 import { readFile } from 'fs/promises'
 import { existsSync } from 'fs'
 import { fileURLToPath } from 'url'
 import path from 'path'
 
-const SIZE = 1080
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const TEMPLATES_DIR = path.join(__dirname, 'templates')
 
@@ -72,8 +72,7 @@ async function ladeVorlagenBild(tpl) {
     const actualPath = findeDatei(tpl)
     if (!actualPath) return null
     const imgBuf = await readFile(actualPath)
-    const resized = await sharp(imgBuf).resize(SIZE, SIZE, { fit: 'cover' }).png().toBuffer()
-    return resized.toString('base64')
+    return imgBuf.toString('base64')
 }
 
 // ============================================================

@@ -10,6 +10,7 @@ import SchrittMailKonfiguration from '../components/onboarding/SchrittMailKonfig
 import { useCheckCurrentUser, useInitTooltip } from '../utils/utils';
 import { allTradeTimeframes, selectedTradeTimeframes, selectedBroker } from '../stores/filters.js';
 import { currentUser, renderProfile } from '../stores/settings.js';
+import LizenzEinstellung from '../components/rechtliches/LizenzEinstellung.vue'
 import { dbUpdateSettings, dbGetSettings, dbFind, dbFirst, dbDelete, dbDeleteWhere } from '../utils/db.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import axios from 'axios'
@@ -2905,6 +2906,7 @@ onBeforeMount(async () => {
                 </ul>
                 <!--=============== Layout & Style ===============-->
                 <div v-show="bereich === 'allgemein'">
+                <LizenzEinstellung />
                 <div class="d-flex align-items-center pointerClass" @click="layoutExpanded = !layoutExpanded">
                     <i class="uil me-2" :class="layoutExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
                     <p class="fs-5 fw-bold mb-0">{{ t('settings.layoutAndStyle') }}</p>
