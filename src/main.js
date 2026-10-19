@@ -16,6 +16,7 @@ window.bootstrap = bootstrap
 import './assets/design/tokens.css'
 import './assets/style-dark.css'
 import './assets/design/basis.css'
+import './assets/design/hilfen.css'
 import './assets/design/rahmen.css'
 
 const app = createApp(App)

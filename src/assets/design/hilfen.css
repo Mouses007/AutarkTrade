@@ -1,0 +1,182 @@
+/*
+ * Hilfsklassen von AutarkTrade — der Ersatz für Bootstraps Utilities.
+ *
+ * Bewusst klein: Anordnung (Flex), Abstände, Schriftauszeichnung. Alles, was
+ * ein Aussehen hat (Knopf, Pille, Hinweis, Kreisel …), ist ein Baustein in
+ * `src/components/basis/`, kein Klassenbündel. Abstände folgen derselben
+ * Treppe wie Bootstrap (1 = .25rem, 2 = .5rem, 3 = 1rem, 4 = 1.5rem,
+ * 5 = 3rem), damit das Umstellen nichts verschiebt.
+ *
+ * Namen: `at-` + deutsches Wort; Ränder o/u/l/r/x/y (oben, unten, links,
+ * rechts, waagrecht, senkrecht) — m = Aussenabstand, p = Innenabstand.
+ *   <div class="at-flex at-mitte at-luecke-2 at-mu-3">…</div>
+ *
+ * Angelegt von S6 (Redesign Analyse); wird nach S9 der einzige Satz sein.
+ */
+
+/* ── Anordnung ─────────────────────────────────────────────── */
+.at-flex { display: flex; }
+.at-iflex { display: inline-flex; }
+.at-block { display: block; }
+.at-iblock { display: inline-block; }
+.at-aus { display: none !important; }
+.at-spalte { flex-direction: column; }
+.at-umbruch { flex-wrap: wrap; }
+.at-wachsen { flex: 1 1 auto; min-width: 0; }
+.at-fest { flex-shrink: 0; }
+.at-mitte { align-items: center; }
+.at-oben { align-items: flex-start; }
+.at-unten { align-items: flex-end; }
+.at-grundlinie { align-items: baseline; }
+.at-verteilt { justify-content: space-between; }
+.at-zentriert { justify-content: center; }
+.at-ende { justify-content: flex-end; }
+.at-relativ { position: relative; }
+.at-voll { width: 100%; }
+.at-scroll { overflow: auto; }
+
+.at-luecke-1 { gap: 0.25rem; }
+.at-luecke-2 { gap: 0.5rem; }
+.at-luecke-3 { gap: 1rem; }
+.at-luecke-4 { gap: 1.5rem; }
+.at-luecke-5 { gap: 3rem; }
+
+/*
+ * Formularraster: Felder nebeneinander, die auf schmalen Schirmen umbrechen.
+ * Ersetzt `row g-3` + `col-md-3`/`col-auto`. Die Kinder bekommen ihre Breite
+ * über `at-feldbreite-*`; ohne Angabe nehmen sie, was sie brauchen.
+ */
+.at-formzeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.75rem 1rem;
+}
+.at-formzeile.eng { gap: 0.5rem; }
+.at-formzeile > * { min-width: 0; }
+.at-feldbreite-s { flex: 1 1 9rem; max-width: 14rem; }
+.at-feldbreite-m { flex: 1 1 12rem; max-width: 22rem; }
+.at-feldbreite-l { flex: 2 1 18rem; }
+.at-feldbreite-voll { flex: 1 1 100%; }
+
+/* ── Abstände ──────────────────────────────────────────────── */
+.at-m-0 { margin: 0 !important; }
+.at-mo-0 { margin-top: 0 !important; }
+.at-mo-1 { margin-top: 0.25rem !important; }
+.at-mo-2 { margin-top: 0.5rem !important; }
+.at-mo-3 { margin-top: 1rem !important; }
+.at-mo-4 { margin-top: 1.5rem !important; }
+.at-mo-auto { margin-top: auto !important; }
+.at-mu-0 { margin-bottom: 0 !important; }
+.at-mu-1 { margin-bottom: 0.25rem !important; }
+.at-mu-2 { margin-bottom: 0.5rem !important; }
+.at-mu-3 { margin-bottom: 1rem !important; }
+.at-mu-4 { margin-bottom: 1.5rem !important; }
+.at-ml-1 { margin-left: 0.25rem !important; }
+.at-ml-2 { margin-left: 0.5rem !important; }
+.at-ml-3 { margin-left: 1rem !important; }
+.at-ml-auto { margin-left: auto !important; }
+.at-mr-1 { margin-right: 0.25rem !important; }
+.at-mr-2 { margin-right: 0.5rem !important; }
+.at-mr-3 { margin-right: 1rem !important; }
+
+.at-p-2 { padding: 0.5rem !important; }
+.at-p-3 { padding: 1rem !important; }
+.at-p-4 { padding: 1.5rem !important; }
+.at-py-0 { padding-top: 0 !important; padding-bottom: 0 !important; }
+.at-py-1 { padding-top: 0.25rem !important; padding-bottom: 0.25rem !important; }
+.at-py-2 { padding-top: 0.5rem !important; padding-bottom: 0.5rem !important; }
+.at-py-3 { padding-top: 1rem !important; padding-bottom: 1rem !important; }
+.at-py-4 { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; }
+.at-py-5 { padding-top: 3rem !important; padding-bottom: 3rem !important; }
+.at-px-2 { padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+.at-px-3 { padding-left: 1rem !important; padding-right: 1rem !important; }
+.at-po-2 { padding-top: 0.5rem !important; }
+.at-po-3 { padding-top: 1rem !important; }
+.at-pu-5 { padding-bottom: 3rem !important; }
+
+/* ── Schrift ───────────────────────────────────────────────── */
+.at-klein { font-size: 0.875em; }
+.at-fett { font-weight: 700 !important; }
+.at-halbfett { font-weight: 600 !important; }
+.at-rechtsbuendig { text-align: right !important; }
+.at-mittig { text-align: center !important; }
+.at-nowrap { white-space: nowrap !important; }
+.at-kuerzen {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.at-hilfe {
+    margin-top: 0.25rem;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
+/* Nur für Screenreader. */
+.at-unsichtbar {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+/* ── Formular-Ergänzungen zu `.at-feld`/`.at-check` (basis.css) ─ */
+
+/* Kippschalter: `<label class="at-check schalter"><input type="checkbox"> Text</label>`. */
+.at-check.schalter input[type='checkbox'] {
+    appearance: none;
+    position: relative;
+    width: 2rem;
+    height: 1.1rem;
+    flex: 0 0 auto;
+    border-radius: var(--radius-pille);
+    border: 1px solid var(--line-stark);
+    background: var(--bg);
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.at-check.schalter input[type='checkbox']::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0.15rem;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    background: var(--muted);
+    transform: translateY(-50%);
+    transition: left 0.15s, background 0.15s;
+}
+
+.at-check.schalter input[type='checkbox']:checked {
+    background: var(--accent-flaeche);
+    border-color: var(--accent);
+}
+
+.at-check.schalter input[type='checkbox']:checked::after {
+    left: calc(100% - 0.9rem);
+    background: var(--accent);
+}
+
+.at-check input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.at-check input:disabled,
+.at-check input:disabled + * {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Schieberegler in Akzentfarbe. */
+.at-regler {
+    width: 100%;
+    accent-color: var(--accent);
+}

@@ -90,3 +90,149 @@ hr {
 .at-akzent {
     color: var(--accent);
 }
+
+/*
+ * Formularfelder und Tabellen ohne Baustein (S5).
+ *
+ * Für Stellen, an denen `Eingabe.vue` nicht passt: `v-model.number`/`.lazy`,
+ * Felder mitten in einer Tabellenzeile, Auswahl mit <optgroup>. Ersetzt
+ * Bootstraps `form-control`, `form-select`, `form-check` und `table`.
+ *
+ *   <input class="at-feld" v-model.number="x">       <select class="at-feld klein">
+ *   <label class="at-check"><input type="checkbox" v-model="an"> Text</label>
+ *   <label class="at-label">Titel</label>             <table class="at-tabelle">
+ */
+.at-feld {
+    width: 100%;
+    min-width: 0;
+    padding: 0.5rem 0.7rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    font: inherit;
+    font-size: 0.9rem;
+    line-height: 1.3;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+select.at-feld {
+    appearance: none;
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238ea5af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 14px;
+}
+
+select.at-feld option,
+select.at-feld optgroup {
+    background: var(--panel);
+    color: var(--text);
+}
+
+textarea.at-feld {
+    resize: vertical;
+}
+
+.at-feld:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-flaeche);
+}
+
+.at-feld:disabled {
+    opacity: 0.55;
+}
+
+.at-feld::placeholder {
+    color: var(--leise);
+}
+
+.at-feld.klein {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.82rem;
+    border-radius: 8px;
+}
+
+select.at-feld.klein {
+    padding-right: 1.6rem;
+    background-position: right 0.4rem center;
+    background-size: 12px;
+}
+
+.at-label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.at-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: var(--text);
+}
+
+.at-check input[type='checkbox'],
+.at-check input[type='radio'] {
+    width: 1rem;
+    height: 1rem;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.at-tabelle {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    color: var(--text);
+}
+
+.at-tabelle th {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--line-stark);
+    color: var(--muted);
+    font-size: 0.74rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.at-tabelle td {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+}
+
+.at-tabelle.dicht th,
+.at-tabelle.dicht td {
+    padding: 0.32rem 0.5rem;
+}
+
+.at-tabelle tbody tr:hover {
+    background: var(--panel-soft);
+}
+
+.at-tabelle .zahl,
+.at-tabelle th.zahl {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Tabellen scrollen in sich, nie die Seite. */
+.at-tabelle-huelle {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.at-gut { color: var(--good); }
+.at-schlecht { color: var(--bad); }
+.at-warn { color: var(--warn); }
