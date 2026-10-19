@@ -23,7 +23,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import dayjs from '../../utils/dayjs-setup.js'
+import dayjs from '../../utils/journal/zeit.js'
 import Symbol from '../basis/Symbol.vue'
 import { oeffneLivetradingFenster } from '../../utils/livetradingFenster.js'
 import { useVerlassenSchutz } from '../../composables/useVerlassenSchutz.js'

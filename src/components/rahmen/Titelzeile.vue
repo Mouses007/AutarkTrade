@@ -15,9 +15,9 @@ import { currentUser } from '../../stores/settings.js'
 import { selectedPeriodRange, selectedGrossNet, selectedPositions, selectedMonth, selectedDateRange } from '../../stores/filters.js'
 import { filteredTradesTrades } from '../../stores/trades.js'
 import { pageById } from '../../config/menu.js'
-import { useToggleMobileMenu, useInitTooltip, useExport } from '../../utils/utils.js'
-import { useDateCalFormat } from '../../utils/formatters.js'
-import dayjs from '../../utils/dayjs-setup.js'
+import { useToggleMobileMenu, useInitTooltip, useExport } from '../../utils/journal/app.js'
+import { useDateCalFormat } from '../../utils/journal/format.js'
+import dayjs from '../../utils/journal/zeit.js'
 
 const { t, te } = useI18n()
 const route = useRoute()

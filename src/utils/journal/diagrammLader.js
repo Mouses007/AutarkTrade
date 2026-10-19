@@ -6,7 +6,7 @@
 let modul = null
 
 export async function ladeDiagramme() {
-    if (!modul) modul = await import('../charts.js')
+    if (!modul) modul = await import('./diagramme/index.js')
     return modul
 }
 

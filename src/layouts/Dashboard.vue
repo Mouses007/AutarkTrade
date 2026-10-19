@@ -31,15 +31,13 @@ import PageInfo from '../components/PageInfo.vue'
 import BetaHinweis from '../components/BetaHinweis.vue'
 
 import { pageId, screenType, sideMenuMobileOut, appMode, privacyMode } from '../stores/ui.js'
-import { sideMenuEingeklappt } from '../stores/globals.js'
+import { sideMenuEingeklappt } from '../stores/app/rahmen.js'
 import { currentUser } from '../stores/settings.js'
 import { ladeSystemModus } from '../stores/system.js'
 import { hydrateLiveSettings } from '../stores/live.js'
 import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
-import {
-    useInitParse, useGetTimeZone, useScreenType, useGetPeriods, useSetValues, useCloseMobileMenu,
-} from '../utils/utils.js'
-import { useGetAvailableTags } from '../utils/daily.js'
+import { useInitParse, useGetTimeZone, useScreenType, useGetPeriods, useSetValues, useCloseMobileMenu } from '../utils/journal/app.js'
+import { useGetAvailableTags } from '../utils/journal/tagebuch.js'
 import { useUpdatePendingCounts, useStartGlobalPolling, useStopGlobalPolling } from '../utils/incoming.js'
 import { requestNotificationPermission } from '../utils/notify.js'
 import { logWarn } from '../utils/logger.js'

@@ -17,10 +17,10 @@ import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import { spinnerLoadingPage } from '../stores/ui.js'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
-import { useXDecCurrencyFormat } from '../utils/formatters.js'
+import { useXDecCurrencyFormat } from '../utils/journal/format.js'
 import { useAgentTimelineChart, cssColor87, cssColor60, cssColor38, blackbg5, greenColor, redColor } from '../utils/journal/diagramme/index.js'
 import { logError } from '../utils/logger.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 import { Knopf, Pille, Symbol, Reiter } from '../components/basis'
 
 const { t } = useI18n()

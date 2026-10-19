@@ -21,7 +21,7 @@ import { useI18n } from 'vue-i18n'
 import { liveSymbol, FAVORITE_SYMBOLS } from '../../stores/live.js'
 import { loadSymbolMeta } from '../../utils/liveSymbols.js'
 import { boerseUrl, aktivierteBoersen, BOERSE_NAME } from '../../utils/boersenLinks.js'
-import { currentUser } from '../../stores/globals.js'
+import { currentUser } from '../../stores/app/rahmen.js'
 import Symbol from '../basis/Symbol.vue'
 
 const { t } = useI18n()

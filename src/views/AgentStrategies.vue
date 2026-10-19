@@ -14,10 +14,10 @@ import { spinnerLoadingPage } from '../stores/ui.js'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import InfoTipp from '../components/InfoTipp.vue'
-import { useXDecCurrencyFormat } from '../utils/formatters.js'
+import { useXDecCurrencyFormat } from '../utils/journal/format.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 import { Knopf, Pille, Symbol, Hinweis, Kreisel, Reiter } from '../components/basis'
 
 const { t } = useI18n()

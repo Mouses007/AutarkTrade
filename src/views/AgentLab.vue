@@ -18,10 +18,10 @@ import { spinnerLoadingPage } from '../stores/ui.js'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
-import { useXDecCurrencyFormat } from '../utils/formatters.js'
+import { useXDecCurrencyFormat } from '../utils/journal/format.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 
 const { t, te } = useI18n()
 const router = useRouter()

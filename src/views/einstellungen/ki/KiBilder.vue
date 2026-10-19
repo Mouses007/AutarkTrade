@@ -8,7 +8,7 @@ import Pille from '@/components/basis/Pille.vue'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import ModelManager from '@/components/ModelManager.vue'
-import { useVorlagenKategorieLabel } from '@/utils/formatters.js'
+import { useVorlagenKategorieLabel } from '../../../utils/journal/format.js'
 import { useShareCard } from '../gemeinsam/useShareCard.js'
 
 const { t } = useI18n()

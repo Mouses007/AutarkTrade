@@ -16,7 +16,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageInfo from '../components/PageInfo.vue'
 import { Symbol, Kreisel } from '../components/basis'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 import { dbFind, dbUpdate, dbDelete } from '../utils/db.js'
 
 const { t } = useI18n()

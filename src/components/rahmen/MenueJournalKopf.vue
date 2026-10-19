@@ -20,7 +20,7 @@ import { selectedBroker, brokers, selectedTradeCategory, BOT_BROKERS } from '../
 
 // Das Filterpanel zieht viel Journal-Code nach sich; geladen wird es erst,
 // wenn das Journal-Menü wirklich erscheint.
-const SidebarFilters = defineAsyncComponent(() => import('../SidebarFilters.vue'))
+const SidebarFilters = defineAsyncComponent(() => import('../journal/FilterLeiste.vue'))
 
 const props = defineProps({
     /** Menü eingeklappt (nur Symbole): Pillen und Filter fallen weg. */

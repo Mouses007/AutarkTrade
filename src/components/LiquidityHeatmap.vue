@@ -28,7 +28,7 @@ import {
     liveMode, replayFrom, replayTo, livePrefillMin, VIEW_PCT_OPTIONS, spannenOptionen, historieFuer,
     replayEntry, replayExit, replayFokus, replayZoom,
 } from '../stores/live.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 import Symbol from './basis/Symbol.vue'
 import Kreisel from './basis/Kreisel.vue'
 
