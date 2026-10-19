@@ -2,10 +2,10 @@
  * App-Rahmen von AutarkTrade: Seitenmenü und Inhaltsfläche unter der
  * Kopfleiste (components/rahmen/Kopfleiste.vue).
  *
- * Überschreibt die alten Regeln aus style-dark.css („NAV BAR AND SIDE MENU"),
- * ohne SideMenu.vue umzubauen — dessen Funktionen (Börsen- und Kategorie-
+ * Überschreibt die alten Seitenmenü-Regeln (früher style-dark.css, heute
+ * design/uebergang.css), ohne SideMenu.vue umzubauen — dessen Funktionen (Börsen- und Kategorie-
  * Pillen, Filter, Einklappen, Update-Knopf) bleiben unberührt. Wenn S9 das
- * Seitenmenü neu schreibt, fällt diese Datei mit style-dark.css weg.
+ * Seitenmenü neu schreibt, fällt diese Datei mit uebergang.css weg.
  */
 
 /* Desktop: Menü klebt unter der Kopfleiste und scrollt in sich. */

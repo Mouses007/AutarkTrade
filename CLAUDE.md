@@ -22,7 +22,7 @@ README.md and this file are kept in sync for project and architecture descriptio
 - **Frontend**: Vue 3 (Composition API with `<script setup>`), Vue Router, Vite; state via `ref()`-Exporte in `src/stores/` (kein Pinia)
 - **Backend**: Express.js with Knex (SQLite default, optional PostgreSQL)
 - **Charts**: Apache ECharts; the chart workspace (`/chart`) uses Lightweight Charts 5 (TradingView, Apache-2.0 — the attribution logo must stay on)
-- **Styling**: own design system (`src/assets/design/tokens.css`, `basis.css`, `rahmen.css`; building blocks in `src/components/basis/`), Bootstrap 5 bundled via npm as a transition (to be removed in S9); legacy dark theme `src/assets/style-dark.css` maps its variables onto the tokens
+- **Styling**: own design system (`src/assets/design/tokens.css`, `basis.css`, `rahmen.css`; building blocks in `src/components/basis/`), Bootstrap 5 bundled via npm as a transition (to be removed in S9); transition layer `src/assets/design/uebergang.css` (replaced `style-dark.css` in S9 part 1) maps the old variable names onto the tokens
 - **Other key libs**: dayjs (dates/timezones), PapaParse (only the Databento OHLCV CSV in `journal-alt.js`), Quill (rich text), markerjs2 (screenshot annotation), lodash, axios
 
 ## Commands
@@ -235,11 +235,11 @@ View initialization follows a pattern in `src/utils/mountOrchestration.js`:
 
 Design system after AutarkDarts (sister product): black ground, turquoise as the only signal colour, green/red only for profit/loss, system font (no web fonts).
 - **Tokens** in `src/assets/design/tokens.css` — the ONLY place with colour values: `--bg`, `--panel`, `--panel-soft`, `--line`, `--text`, `--muted`, `--accent`, `--accent-schwach`, `--on-accent`, `--good`/`--bad`/`--warn`, `--radius` (14px), `--radius-knopf` (10px), `--radius-pille`, `--schrift`.
-- `basis.css` (elements), `rahmen.css` (side menu/content under the header, Bootstrap variables onto tokens). Load order in `src/main.js`: Bootstrap → tokens → style-dark → basis → rahmen.
+- `basis.css` (elements), `rahmen.css` (side menu/content under the header, Bootstrap variables onto tokens). Load order in `src/main.js`: Bootstrap → tokens → uebergang → basis → rahmen.
 - **Building blocks** `src/components/basis/`: `Knopf`, `Karte`, `Pille`, `Reiter`, `Tabelle`, `Eingabe`, `Dialog` (native `<dialog>`), `Seitenkopf`, `Hinweis`, `Leerzustand`, `Logo`, and `Symbol.vue` — own SVG icon set (24 grid, 1.8 stroke, `currentColor`) that replaces Font Awesome/Unicons; both still come from the CDN in `index.html` until S9 (Unicons' licence does not cover redistribution, so it is deliberately not bundled).
 - **Logo**: blossom in a ring of candles, drawn by `scripts/logo-zeichnen.mjs` (writes `src/assets/design/logo-zeichen.svg`, `public/favicon.svg`, the PNG icons, `src/assets/icon.png`).
 - **Frame**: `components/rahmen/Kopfleiste.vue` (logo → `/start`, modes with accent underline, settings), `TestbetriebBanner.vue`; `views/Start.vue` (`/start`, logo + mode tiles; `/` still lands on the chart).
-- Legacy: `src/assets/style-dark.css` keeps its old variable names (`--blue-color`, `--black-bg-*`, `--white-*`) but points them at the tokens; utility classes `.greenTrade`, `.redTrade`, `.dailyCard`, `.chartClass`. Goes away in S9.
+- Legacy: `src/assets/design/uebergang.css` is the thin transition layer that replaced `style-dark.css` (clean-room, spec `docs/spec/stil.md`): old variable names (`--blue-color`, `--black-bg-*`, `--white-*`) as aliases on the tokens, the Bootstrap dark adjustments rahmen.css does not cover, shared chrome (`.ctl-pill`, `.liveHeader`/`.liveDot`, `.radarGrid`/`.radarCard`, `.radarOverlay*`, `.card-config-*`, `.greenTrade`/`.redTrade`, `.dailyCard`, `.chartClass`) and page-specific leftovers grouped by file. Dissolved in S9 part 2 (Bootstrap removal). `src/assets/base.css` was dead and is gone.
 
 ### Environment Variables
 

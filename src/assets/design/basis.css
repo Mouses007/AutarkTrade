@@ -1,7 +1,7 @@
 /*
  * Grundlage für alle Seiten: Elemente ohne Klasse.
  *
- * Wird NACH Bootstrap und NACH style-dark.css geladen (src/main.js) und gewinnt
+ * Wird NACH Bootstrap und NACH design/uebergang.css geladen (src/main.js) und gewinnt
  * damit bei gleicher Spezifität. Bewusst nur Elemente und wenige Hilfsklassen —
  * Bauteile bringen ihr Aussehen in `src/components/basis/` selbst mit.
  */
@@ -15,7 +15,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* style-dark.css setzte die Schrift über `*` — das schlägt jede Vererbung.
+/* Die alte style-dark.css setzte die Schrift über `*` — das schlägt jede Vererbung.
    Hier dieselbe Breite, damit nirgends Nunito übrig bleibt. Formularfelder
    und Knöpfe erben sonst die Browser-Schrift. */
 * {
