@@ -26,13 +26,74 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 1 | S3 Aufräumen | CSV-Pfad und toten Import-Code löschen, `journal-alt.js`, zweiter Golden Master (MFE/OHLCV) | `claude/s3-aufraeumen-919210` | **fertig** |
 | 1 | S4 Diagramme neu | `charts.js` clean-room in `src/utils/journal/diagramme/` | – | offen, frei |
 | 1 | S5 Redesign Handel | Chart, Live-Trading, Sessions, Incoming, Agent-Seiten | – | offen, frei |
-| 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | – | offen, frei |
+| 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | `claude/s6-redesign-analyse-3fe1f2` | **fertig** |
 | 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | – | wartet auf S3 |
 | 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | – | wartet auf S7 + S4 |
 | 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | – | frei für alles ausser dem Entfernen (wartet auf S5, S6, S8) |
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | – | frei |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | – | wartet auf S5 + S6 |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | – | wartet auf alle |
+
+## S6 Redesign Analyse — Ergebnis (19.10.2026)
+
+- **Bereich frei von Bootstrap, Font Awesome und Unicons**: Marktradar (Raster und Pult,
+  alle Kacheln unter `components/radar/` inkl. derer, die das Live-Fenster einbindet),
+  Nachrichten, Hype-Radar (Übersicht, Frühphase, Börsen, Berichte, Projektprüfung,
+  Tiefensuche), Coin-Radar (Analyse, Verlauf, Abverkauf), KI-Coach (`KiAgent.vue`),
+  Lernen; dazu `RadarKachel`, `RadarOverlay`, `PageInfo`, `InfoTipp`, `AnbieterWahl`,
+  `SpinnerLoadingPage`. Knöpfe → `Knopf`, Ladekreisel → `Kreisel`, Marken → `Pille`,
+  Meldungen → `Hinweis`, Reiter → `Reiter`, Formfelder → `.at-feld`/`.at-check`
+  (aus S5), Rasterzeilen → `.at-formzeile` bzw. eigene CSS-Grids. Kein Verhalten
+  geändert; Selbsttests 137/137, Build grün.
+- **Neue Bausteine**:
+  - `src/assets/design/hilfen.css` (in `main.js` nach `basis.css`): eigene Hilfsklassen
+    statt Bootstrap-Utilities — `at-flex/at-mitte/at-verteilt/at-luecke-N`, Abstände
+    `at-mo/mu/ml/mr-N`, `at-py/px/p-N`, `at-klein/at-fett/at-rechtsbuendig/at-mittig`,
+    `at-formzeile` + `at-feldbreite-*`, Kippschalter `<label|div class="at-check schalter">`,
+    `at-regler`, `at-unsichtbar`. Gleiche Abstandstreppe wie Bootstrap, also ohne
+    Verschiebung. Für S8/S9 mitbenutzbar.
+  - `src/components/basis/Quellenhinweis.vue` — **für S12**: `:quellen="[{ name, url?,
+    art: 'daten'|'quelle'|'powered'|'ki' }]"` ergibt „Daten: …", „Quelle: …",
+    „Powered by …", „KI-generiert · …" (Links ohne Referrer, nie ausgeblendet).
+    Hängt schon in `RadarOverlay` (Fusszeile der Gross-Ansicht); dessen Prop `quelle`
+    nimmt jetzt Text ODER eine Quellenliste — S12 kann `quelle` in
+    `config/marktradar.js` direkt auf Objekte umstellen.
+  - Symbole: `src/components/basis/symbole/analyse.js` (37 neue, keine Markenzeichen:
+    YouTube → `video`, X → `nachricht`, Telegram → `senden`, GitHub → `code`, Bitcoin →
+    `muenzen`), per `Object.assign` in `Symbol.vue` — weitere Bereiche legen eine eigene
+    Datei in `symbole/` an statt in die gemeinsame Liste zu schreiben.
+  - `src/components/basis/symbole/unicons.js`: Übergangstabelle Unicons-Name →
+    Symbolname plus `symbolName()`; `RadarKachel` und `PultRahmen` nehmen damit beides
+    (die Live-Registry von S5 lief unverändert weiter). Fällt in S9 weg.
+- **Pult am Telefon** (offener Punkt S2): `Stimmungsband` und `Zyklusband` hatten feste
+  Spalten (2 × 170 px bzw. 210 px) — die Skalen bekamen null Breite und ihr Text lief
+  übereinander; `PultRahmen` hatte feste Höhe mit `overflow: hidden` und zwei Spalten.
+  Jetzt unter 768 px gestapelt (Bühne mit eigener Höhe, die Seite scrollt), Bänder
+  zwei- bzw. einspaltig.
+- **Nebenbei behoben**: `.at-tabelle th/td` (basis.css) wirkte als Nachfahren-Selektor
+  auch auf Detailtabellen in aufgeklappten Zeilen (Coin-Radar: Spalten liefen
+  ineinander) — Rücksetzung in `hilfen.css`. Marktradar-Kopf: die absolut zentrierte
+  Symbolwahl überdeckte im Raster bei 1440 px den Knopf „Raster" — fliesst jetzt unter
+  1600 px, Börsenlinks inline.
+- **Tokens**: kein Bedarf.
+- **Geprüft**: Prüfserver mit Wegwerf-SQLite (`AT_DB_FILE`, Testbetrieb, eigener
+  Vite-Port), Marktradar Raster/Pult/Gross-Ansicht, Nachrichten, Hype-Radar inkl.
+  Einstellungen, Coin-Radar mit echtem Messlauf und aufgeklappter Zeile, KI-Coach,
+  Lernen — je Desktop 1440 und Telefon 375. Nicht geprüft mit echten Daten: Hype-Scan
+  und KI-Texte (keine Schlüssel in der Wegwerf-DB), Börsen-Ansicht befüllt.
+
+### Offene Punkte aus S6
+
+- **Für S9**: Der Bereich benutzt noch eigene Altklassen aus `style-dark.css`
+  (`ctl-pill` ~70×, `dailyCard`, `liveHeader/liveDot/liveActions`, `radarCard*`,
+  `radarOverlay*`, `card-config-*`, `greenTrade/redTrade`, `pointerClass`, `chat-*`).
+  Das ist kein Bootstrap und trägt die Token-Farben, muss aber vor dem Löschen von
+  `style-dark.css` nach `hilfen.css`/Bausteine wandern (gemeinsam mit dem Live-Fenster).
+- `KiAgent.vue` und `Lernen.vue` haben noch harte Farbwerte in ihren `<style>`-Blöcken
+  (`#a78bfa`, `#34d399`, `var(--blue-color)`) — Feinschliff, kein Bootstrap.
+- `CoinRadar.vue`: `<tr>` direkt in `<table>` (Vue-Warnung beim Kompilieren) — alt.
+- Für S12: `Quellenhinweis` an jede Kachel/Seite hängen; die KI-Texte (Gesamtlage,
+  Lagebericht, Hype-Bericht, Einordnung, KI-Coach) mit `art: 'ki'` kennzeichnen.
 
 ## S3 Aufräumen — Ergebnis (19.10.2026)
 
@@ -109,8 +170,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
   und `benachrichtigungen.lageberichtFertig.email = true` — wer den Versand ausschaltet,
   hat ihn nach dem nächsten Neustart wieder an. In der Kopie behoben durch Entfernen der
   alten Mail-Wahl; der Code braucht einen Merker „übernommen".
-- Marktradar, Ansicht „Pult": am Telefon überlappen die oberen Kacheln (gesehen im
-  Prüf-Container, nicht gegen den alten Stand verglichen) — Bereich S6.
+- ~~Marktradar, Ansicht „Pult": am Telefon überlappen die oberen Kacheln~~ — behoben in S6.
 - Screenshots mit echten Daten: 8091 steht hinter dem Passwort-Gate der Kopie; geprüft
   wurde die Oberfläche im Prüf-Container mit leerer SQLite, die Daten über die API.
 - Privates GitHub-Repo: https://github.com/Mouses007/AutarkTrade (angelegt 19.10.2026, privat).
