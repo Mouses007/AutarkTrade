@@ -83,7 +83,7 @@ export function usePerfChart(id) {
             wertAchse(p, { name: t('charts.tradePnlDollar'), nameTextStyle: { color: p.muted, fontSize: 10 }, splitLine: { show: false }, axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => useThousandCurrencyFormat(ausLog(v)) } }),
         ],
         series: [
-            { name: namen[0], type: 'bar', yAxisIndex: 1, barMaxWidth: 10, data: balken },
+            { name: namen[0], type: 'bar', yAxisIndex: 1, barMaxWidth: 10, itemStyle: { color: p.good }, data: balken },
             { name: namen[1], type: 'line', yAxisIndex: 0, showSymbol: false, lineStyle: { color: p.accent, width: 2 }, itemStyle: { color: p.accent }, data: equity },
             { name: namen[2], type: 'line', yAxisIndex: 0, showSymbol: false, lineStyle: { color: p.muted, width: 1, type: 'dashed' }, itemStyle: { color: p.muted }, data: hoch },
             { name: namen[3], type: 'line', yAxisIndex: 0, showSymbol: false, lineStyle: { color: mitDeckkraft(p.bad, 0.8), width: 1 }, itemStyle: { color: p.bad }, areaStyle: { color: mitDeckkraft(p.bad, 0.12) }, data: abstand },

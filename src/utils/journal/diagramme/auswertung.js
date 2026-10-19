@@ -31,8 +31,8 @@ export function useGaugeChart(id, wert, titel, farbstopps) {
                 color: p.muted, fontSize: 10, distance: -30,
                 formatter: (v) => (v === 0 || v === 50 || v === 100 ? String(v) : ''),
             },
-            title: { offsetCenter: [0, '28%'], color: p.muted, fontSize: 11, fontFamily: p.schrift },
-            detail: { offsetCenter: [0, '-12%'], color: p.text, fontSize: 18, fontWeight: 600, fontFamily: p.schrift, formatter: (v) => `${Math.round(v)}%` },
+            title: { offsetCenter: [0, '38%'], color: p.muted, fontSize: 11, fontFamily: p.schrift },
+            detail: { offsetCenter: [0, '16%'], color: p.text, fontSize: 18, fontWeight: 600, fontFamily: p.schrift, formatter: (v) => `${Math.round(v)}%` },
             data: [{ value: Math.round(Number(wert) * 10) / 10, name: titel }],
         }],
     })
