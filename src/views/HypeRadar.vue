@@ -8,7 +8,12 @@
                  sah zuerst fünfzig Alarme und musste nach dem Radar suchen. -->
             <div v-if="reiter === 'dashboard'" class="hypLage">
                 <span class="hypLageLauf">
-                    <template v-if="laufZeit">
+                    <template v-if="ladeStand.kandidaten === 'fehler'">
+                        <span class="at-warn">{{ t('hype.lageLadeFehler') }}</span>
+                        <button type="button" class="hypMehr" @click="jetztNeuLaden">{{ t('hype.lageNeuLaden') }}</button>
+                    </template>
+                    <template v-else-if="ladeStand.kandidaten === 'laedt'"><Kreisel still /></template>
+                    <template v-else-if="laufZeit">
                         {{ t('hype.lageLauf', { z: zeitpunkt(laufZeit) }) }}
                         <span class="hypLageLeise">({{ vorZeit(laufZeit) }}<template v-if="laufDauerMs"> · {{ t('hype.lageDauer', { d: dauerText(laufDauerMs) }) }}</template>)</span>
                     </template>
@@ -575,6 +580,13 @@
                 </button>
             </div>
 
+            <!-- Alarme oder Favoriten nicht geladen: sagen statt leer lassen. -->
+            <Hinweis v-if="ladeStand.kandidaten !== 'fehler' && (ladeStand.alarme === 'fehler' || ladeStand.favoriten === 'fehler')"
+                art="warn" class="at-mu-2">
+                {{ t('hype.alarmeLadeFehler') }}
+                <button type="button" class="hypMehr" @click="jetztNeuLaden">{{ t('hype.lageNeuLaden') }}</button>
+            </Hinweis>
+
             <!-- ── Alarme ────────────────────────────────────────── -->
             <!-- S14: eingeklappt auf die neuesten drei, eine Zeile je Alarm.
                  Fünfzig Zeilen (~950 px) standen vorher über dem Radar und
@@ -763,10 +775,16 @@
                 <!-- Leer, weil nichts die Schwelle erreicht hat — das ist eine
                      Aussage über den Lauf, kein „noch kein Lauf". -->
                 <div v-if="!gefiltert.length" class="hypLeer">
-                    <template v-if="!kandidaten.length">{{ t('hype.nochKeinScan') }}</template>
+                    <template v-if="ladeStand.kandidaten === 'fehler'">
+                        {{ t('hype.lageLadeFehler') }}
+                        <button type="button" class="hypMehr" @click="jetztNeuLaden">{{ t('hype.lageNeuLaden') }}</button>
+                    </template>
+                    <template v-else-if="ladeStand.kandidaten === 'laedt'"><Kreisel still /></template>
+                    <template v-else-if="!kandidaten.length">{{ t('hype.nochKeinScan') }}</template>
                     <template v-else-if="filterStatus === 'geprueft' && !(bestanden.length + verworfen.length)">
-                        {{ t('hype.keinerGeprueft', { n: nurBewertet.length }) }}
+                        <strong>{{ t('hype.keinerGeprueftKurz', { n: nurBewertet.length }) }}</strong>
                         <button type="button" class="hypMehr" @click="filterStatus = 'alle'">{{ t('hype.unterSchwelleZeigen') }}</button>
+                        <div class="at-klein at-mo-1">{{ t('hype.keinerGeprueft', { n: nurBewertet.length }) }}</div>
                     </template>
                     <template v-else>{{ t('hype.keineImFilter') }}</template>
                 </div>
@@ -1106,7 +1124,7 @@ import Symbol from '@/components/basis/Symbol.vue'
  * nicht zeigt. Die Farbe ist die Sicherheitsnote, damit ein auffälliger
  * Kandidat nicht allein wegen seiner Lage interessant aussieht.
  */
-import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { sichereUrl } from '../utils/sanitize.js'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -1254,8 +1272,10 @@ const istFav = (k) => favNach.value.has(favSchluessel(k))
 async function ladeFavoriten() {
     try {
         const r = await axios.get('/api/hype-radar/favoriten')
-        favoriten.value = r.data || []
+        favoriten.value = Array.isArray(r.data) ? r.data : []
+        ladeStand.favoriten = 'ok'
     } catch (e) {
+        ladeStand.favoriten = 'fehler'
         logWarn('hype-radar', 'Favoriten konnten nicht geladen werden', e)
     }
 }
@@ -1428,8 +1448,10 @@ const sichtbareAlarme = computed(() =>
 async function ladeAlarme() {
     try {
         const r = await axios.get('/api/hype-radar/alarme')
-        alarme.value = r.data || []
+        alarme.value = Array.isArray(r.data) ? r.data : []
+        ladeStand.alarme = 'ok'
     } catch (e) {
+        ladeStand.alarme = 'fehler'
         logWarn('hype-radar', 'Alarme konnten nicht geladen werden', e)
     }
 }
@@ -1807,6 +1829,41 @@ const dauerText = (ms) => (ms < 60000 ? `${Math.round(ms / 1000)} s`
 
 // ── Anzeige der Fundtabelle (S14) ───────────────────────────────────────
 /** Alle Zeilen eines Laufs tragen denselben Zeitstempel (siehe Kandidaten-Route). */
+/*
+ * Ladezustand der drei Listen der Übersicht. Bis S14-Nachtrag (19.10.2026)
+ * schluckten die Ladefunktionen jeden Fehler still: Lief die Seite während
+ * eines Container-Neustarts an, blieben Funde, Alarme und Favoriten leer, und
+ * die Lagezeile behauptete „Noch kein Lauf" — obwohl die Daten da waren und
+ * nur der Abruf scheiterte. „Leer" und „nicht geladen" sind verschieden.
+ */
+const ladeStand = reactive({ kandidaten: 'laedt', alarme: 'laedt', favoriten: 'laedt', einstellungen: 'laedt' })
+const ladeFehler = computed(() => Object.values(ladeStand).includes('fehler'))
+let nachladeTakt = null
+let nachladeVersuche = 0
+
+/** Was scheiterte, nachholen — alle 5 s, höchstens zwei Minuten lang. */
+function planeNachladen() {
+    if (nachladeTakt || abgebaut) return
+    nachladeTakt = setTimeout(async () => {
+        nachladeTakt = null
+        nachladeVersuche += 1
+        await neuLaden()
+        if (ladeFehler.value && nachladeVersuche < 24) planeNachladen()
+    }, 5000)
+}
+async function neuLaden() {
+    const auftraege = []
+    if (ladeStand.kandidaten === 'fehler') auftraege.push(ladeKandidaten())
+    if (ladeStand.alarme === 'fehler') auftraege.push(ladeAlarme())
+    if (ladeStand.favoriten === 'fehler') auftraege.push(ladeFavoriten())
+    if (ladeStand.einstellungen === 'fehler') auftraege.push(ladeEinstellungen())
+    await Promise.all(auftraege)
+}
+function jetztNeuLaden() {
+    nachladeVersuche = 0
+    neuLaden().then(() => { if (ladeFehler.value) planeNachladen() })
+}
+
 const laufZeit = computed(() => kandidaten.value.reduce((m, k) => Math.max(m, Number(k.erstelltAm) || 0), 0))
 const laufDauerMs = ref(0)
 let laufBeginn = 0
@@ -1898,10 +1955,12 @@ function sortiere(feld) {
 async function ladeKandidaten() {
     try {
         const r = await axios.get('/api/hype-radar/kandidaten')
-        kandidaten.value = r.data || []
+        kandidaten.value = Array.isArray(r.data) ? r.data : []
+        ladeStand.kandidaten = 'ok'
         await nextTick()
         zeichne()
     } catch (e) {
+        ladeStand.kandidaten = 'fehler'
         logWarn('hype-radar', 'Kandidaten konnten nicht geladen werden', e)
     }
 }
@@ -1979,9 +2038,11 @@ async function ladeEinstellungen() {
         const r = await axios.get(`/api/hype-radar/einstellungen?ordnung=${ordnung.value}`)
         const { stufen: st, fehlendeSchluessel: fs, ...rest } = r.data
         einst.value = rest
+        ladeStand.einstellungen = 'ok'
         stufen.value = st || []
         fehlendeSchluessel.value = fs || []
     } catch (e) {
+        ladeStand.einstellungen = 'fehler'
         logWarn('hype-radar', 'Einstellungen konnten nicht geladen werden', e)
     }
 }
@@ -2421,7 +2482,13 @@ let uhrTakt = null
 onMounted(async () => {
     window.addEventListener('resize', beiGroesse)
     if (wurzel.value && typeof ResizeObserver !== 'undefined') {
-        breitenBeobachter = new ResizeObserver(([e]) => { inhaltBreite.value = e.contentRect.width })
+        // Auch der Quadrant zieht mit: Auf- und Zuklappen des Seitenmenüs
+        // ändert die Inhaltsbreite ohne `resize` des Fensters, und ECharts
+        // behielte seine alte Breite (gemessen: 1116 px in 779 px Platz).
+        breitenBeobachter = new ResizeObserver(([e]) => {
+            inhaltBreite.value = e.contentRect.width
+            diagramm?.resize()
+        })
         breitenBeobachter.observe(wurzel.value)
     }
     uhrTakt = setInterval(() => { jetztMs.value = Date.now() }, 60000)
@@ -2435,6 +2502,7 @@ onMounted(async () => {
     // Moduswächter im Layout leitet einen kalten Direktaufruf um) — sonst
     // fragte ein verwaister Takt ewig weiter.
     if (abgebaut) return
+    if (ladeFehler.value) planeNachladen()
     alarmTakt = setInterval(ladeAlarme, 60000)
 })
 
@@ -2445,6 +2513,7 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', beiGroesse)
     breitenBeobachter?.disconnect()
     if (uhrTakt) clearInterval(uhrTakt)
+    if (nachladeTakt) clearTimeout(nachladeTakt)
     strom?.abort()
     diagramm?.dispose()
     // Die Takte dürfen die Seite nicht überleben.

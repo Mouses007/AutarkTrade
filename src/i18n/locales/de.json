@@ -1473,15 +1473,19 @@
     "filterGeprueft": "Geprüft ({n})",
     "unterSchwelleUmschalten": "+ {n} unter der Schwelle",
     "unterSchwelleHilfe": "Funde, deren Hype-Note unter der Schwelle blieb. Sie wurden nicht auf Sicherheit geprüft — ihre Sicherheitsnote ist unbekannt, nicht 0.",
-    "keinerGeprueft": "Im letzten Lauf hat kein Fund die Hype-Schwelle erreicht — geprüft wurde deshalb keiner. {n} Funde blieben darunter.",
-    "unterSchwelleZeigen": "trotzdem anzeigen",
+    "keinerGeprueft": "Im letzten Lauf hat kein Fund die Hype-Schwelle erreicht, deshalb wurde keiner auf Sicherheit geprüft.",
+    "unterSchwelleZeigen": "anzeigen",
     "keineImFilter": "Kein Fund passt zu diesem Filter.",
     "kartenGedeckelt": "Die ersten {n} von {m} — die Filter oben engen die Liste ein.",
     "nichtGeprueft": "nicht geprüft",
     "sicherheitVerworfen": "verworfen — Grund in der Statusspalte",
     "nichtGeprueftLang": "Nicht sicherheitsgeprüft: die Hype-Note blieb unter der Schwelle.",
     "tvImDetail": "TradingView: Link im Detail",
-    "quadrantNurUnter": "Kein Fund hat die Schwelle erreicht — es stehen nur die {n} grauen Punkte unter der Schwelle im Bild."
+    "quadrantNurUnter": "Kein Fund hat die Schwelle erreicht — es stehen nur die {n} grauen Punkte unter der Schwelle im Bild.",
+    "lageLadeFehler": "Die Daten des Hype-Radars konnten nicht geladen werden (Server nicht erreichbar oder gerade neu gestartet) — neuer Versuch alle 5 s.",
+    "lageNeuLaden": "jetzt neu laden",
+    "alarmeLadeFehler": "Alarme oder Favoriten konnten nicht geladen werden — neuer Versuch alle 5 s.",
+    "keinerGeprueftKurz": "{n} Funde unter der Schwelle —"
   },
   "kiUebersicht": {
     "laedt": "Übersicht wird geladen …",

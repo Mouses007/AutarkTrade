@@ -86,6 +86,13 @@ Schwelle; 50 Alarme) bei 1400, 820 und 375 px gegen master.
   nur bei bestandenen/verworfenen Funden gezeichnet wurde; jetzt zeichnet er jeden Lauf und sagt,
   wenn nur graue Punkte unter der Schwelle im Bild stehen.
 - Frühphase/Börsen/Berichte: nicht angefasst (Berichte teilt die Datei, nur gegengeprüft).
+- **Nachtrag (Leitstand-Befund):** Im Container erschien nach dem Neustart eine fast leere Seite mit
+  „Noch kein Lauf". Ursache: Die Seite lud, während der Container neu startete; die Ladefunktionen
+  schluckten jeden Fehler still, und leere Listen lasen sich wie „kein Lauf". Jetzt gibt es je Liste
+  (Funde, Alarme, Favoriten, Einstellungen) einen Ladezustand: Ein Ladefehler wird benannt, alle 5 s
+  (höchstens 2 min) erneut versucht, „jetzt neu laden" holt sofort nach. Bei 0 geprüften Funden steht
+  „36 Funde unter der Schwelle — anzeigen". Der Quadrant zieht seine Breite per ResizeObserver nach
+  (Seitenmenü auf/zu änderte die Inhaltsbreite ohne Fenster-`resize`).
 
 ## S13 Scharfen Handel auslagern — Ergebnis (19.10.2026)
 

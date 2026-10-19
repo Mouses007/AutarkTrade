@@ -1473,15 +1473,19 @@
     "filterGeprueft": "Checked ({n})",
     "unterSchwelleUmschalten": "+ {n} below threshold",
     "unterSchwelleHilfe": "Finds whose hype score stayed below the threshold. They were not safety-checked — their safety score is unknown, not 0.",
-    "keinerGeprueft": "No find reached the hype threshold in the last run, so none was checked. {n} finds stayed below it.",
-    "unterSchwelleZeigen": "show anyway",
+    "keinerGeprueft": "No find reached the hype threshold in the last run, so none was safety-checked.",
+    "unterSchwelleZeigen": "show",
     "keineImFilter": "No find matches this filter.",
     "kartenGedeckelt": "First {n} of {m} — the filters above narrow the list.",
     "nichtGeprueft": "not checked",
     "sicherheitVerworfen": "rejected — reason in the status column",
     "nichtGeprueftLang": "Not safety-checked: the hype score stayed below the threshold.",
     "tvImDetail": "TradingView: link in the details",
-    "quadrantNurUnter": "No find reached the threshold — only the {n} grey points below it are shown."
+    "quadrantNurUnter": "No find reached the threshold — only the {n} grey points below it are shown.",
+    "lageLadeFehler": "The Hype Radar data could not be loaded (server unreachable or restarting) — retrying every 5 s.",
+    "lageNeuLaden": "reload now",
+    "alarmeLadeFehler": "Alerts or favourites could not be loaded — retrying every 5 s.",
+    "keinerGeprueftKurz": "{n} finds below the threshold —"
   },
   "kiUebersicht": {
     "laedt": "Loading overview …",
