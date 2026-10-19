@@ -29,10 +29,38 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | `claude/s6-redesign-analyse-3fe1f2` | **fertig** |
 | 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | – | wartet auf S3 |
 | 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | – | wartet auf S7 + S4 |
-| 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | – | frei für alles ausser dem Entfernen (wartet auf S5, S6, S8) |
+| 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | `claude/s9-geruest-23d7aa` | Teil 1 auf master; Teil 2 (Entfernen) wartet auf S8 |
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | – | wartet auf S5 + S6 |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | – | wartet auf alle |
+
+## S9 Gerüst & Einstellungen — Teil 1 (19.10.2026)
+
+- **Clean-Room**: `docs/spec/geruest.md` und `docs/spec/stil.md` (Unteragent A), Neubau durch
+  frische Agenten ohne Blick in die Altdateien. Altdateien gelöscht: `router/index.js` (neu:
+  `router/index.js` + `routen.js`), `SideMenu.vue`, `Nav.vue`, `layouts/Dashboard.vue`,
+  `assets/style-dark.css`, `assets/base.css` (war tot).
+- **Gerüst** unter `components/rahmen/`: `Seitenmenue`, `MenueJournalKopf`, `MenueFuss`
+  (Update nur mit Lizenzberechtigung, Einstieg „Rechtliches" — S10 übernommen),
+  `Titelzeile` (Export-Menü ohne Bootstrap), `ScreenshotVollbild` (`#fullScreenModal`,
+  noch Bootstrap-Modal — `S9-Teil2:`). Menü aus der Registry; `menu.js` trägt je Seite und
+  Modus `symbol` (Symbol.vue-Name), `icon` bleibt bis Teil 2. Behoben: Catch-all-Route,
+  `pageId` folgt jeder Navigation, `screenType` reagiert auf Fenstergrösse, KI-Bericht-Polling
+  wird abgeräumt (`composables/useKiBerichtWache.js`), `APP_MODES` kennt `lernen`.
+- **Einstellungen**: Route `/settings/:bereich?` (allgemein, journal, live, ki,
+  benachrichtigungen, lizenz, rechtliches; unbekannt → allgemein). `Settings.vue` ist eine
+  Hülle, Bereiche und Sektionen unter `views/einstellungen/` (Bausteine `gemeinsam/Abschnitt`,
+  `Feld`, `Schalter`), komplett ohne Bootstrap-Markup und Icon-Fonts. Lizenz-Reiter =
+  `LizenzEinstellung` (S10), Rechtliches-Reiter öffnet den S10-Dialog je Reiter. Behoben:
+  ESP32-Kopierknopf warf (`navigator` im Template), `kiEmpfehlungenAn` wurde nie geladen.
+  Verweise (`Nachrichten`, `KiAgent`, Kacheln, `AddExcursions`, `apiDescription`) zeigen auf
+  `/settings/<bereich>`.
+- **Stil**: `src/assets/design/uebergang.css` (~960 Z.) statt `style-dark.css`: alte
+  Variablen als Token-Aliase, Bootstrap-Dunkelanpassungen, nur benutzte Altklassen
+  (u. a. `ctl-pill`, `dailyCard`, `card-config-*`, Kachel/Overlay, `greenTrade`). Nicht
+  nachgebaut: globaler h2–h4-Abstand, `.tags`-Hintergrund, grössere Grundschrift.
+- **Prüf-Server**: `.claude/launch.json` → `s9-pruef` (Port 8097, Testbetrieb, Wegwerf-SQLite,
+  dient `dist/`).
 
 ## S5 Redesign Handel — Ergebnis (19.10.2026)
 

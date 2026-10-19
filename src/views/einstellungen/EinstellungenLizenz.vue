@@ -1,13 +1,12 @@
 <script setup>
 /**
- * Bereich „Lizenz" — Einhängepunkt für Sitzung S10 (Lizenz & Vertrieb).
- *
- * S10 setzt hier die Lizenzeingabe ein (Schlüssel eingeben, Stand und
- * Laufzeit anzeigen). Bis dahin nur Kopf und Hinweis, damit der Reiter und
- * die Route `/settings/lizenz` schon stehen.
+ * Bereich „Lizenz": Stand des Lizenzschlüssels, neuen Schlüssel eingeben,
+ * Laufzeit der Update-Berechtigung. Der Inhalt ist S10s `LizenzEinstellung`
+ * (`server/lizenz.js`); der Menüfuss verweist bei gesperrtem Update hierher.
  */
 import { useI18n } from 'vue-i18n'
-import { Seitenkopf, Hinweis } from '@/components/basis/index.js'
+import { Seitenkopf } from '@/components/basis/index.js'
+import LizenzEinstellung from '@/components/rechtliches/LizenzEinstellung.vue'
 
 const { t } = useI18n()
 </script>
@@ -15,6 +14,6 @@ const { t } = useI18n()
 <template>
     <div>
         <Seitenkopf :titel="t('settings.area_lizenz')" :unter="t('settings.lizenzUnter')" />
-        <Hinweis art="info">{{ t('settings.folgtMitS10') }}</Hinweis>
+        <LizenzEinstellung />
     </div>
 </template>
