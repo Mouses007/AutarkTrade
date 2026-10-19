@@ -23,6 +23,7 @@ import { BUEHNEN, LEISTE } from '../../config/pult.js'
 
 const props = defineProps({
     daten: { type: Object, required: true },
+    aus: { type: Object, default: () => ({}) },
     zustand: { type: Object, required: true },
     stand: { type: Object, required: true },
     kachelParams: { type: Object, default: () => ({}) },
@@ -40,7 +41,7 @@ const EIGENE = { funding: InstrumentFunding }
 </script>
 
 <template>
-    <PultRahmen :daten="daten" :zustand="zustand" :stand="stand" :kachel-params="kachelParams"
+    <PultRahmen :aus="aus" :daten="daten" :zustand="zustand" :stand="stand" :kachel-params="kachelParams"
         :komponenten="komponenten" :buehnen="BUEHNEN" :leiste="LEISTE"
         :eigene-komponenten="EIGENE" :kontext="{ symbol }"
         speicher="livetrading_pult_buehne"

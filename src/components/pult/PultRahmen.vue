@@ -41,6 +41,7 @@
  * Umschalten — sichtbar am Zustandspunkt, und das ist die ehrlichere Anzeige.
  */
 import { ref, onMounted, onBeforeUnmount } from 'vue'
+import QuelleAus from '../quellen/QuelleAus.vue'
 import { useI18n } from 'vue-i18n'
 import InfoTipp from '../InfoTipp.vue'
 import Symbol from '@/components/basis/Symbol.vue'
@@ -49,6 +50,8 @@ import { symbolName } from '@/components/basis/symbole/unicons.js'
 const props = defineProps({
     /** Nutzlasten aller Kacheln, id-indiziert. */
     daten: { type: Object, required: true },
+    /** id → `{ aus: true, grund, … }` (S12): Quelle aus — statt der Kachel steht der Grund. */
+    aus: { type: Object, default: () => ({}) },
     zustand: { type: Object, required: true },
     stand: { type: Object, required: true },
     kachelParams: { type: Object, default: () => ({}) },
@@ -153,7 +156,8 @@ defineExpose({ jetzt })
 
                 <!-- Genau eine Instanz. Siehe Kopfkommentar. -->
                 <div class="pBuehneKoerper">
-                    <component :is="komponenten[buehne]" :key="buehne" :daten="daten[buehne]" :gross="true"
+                    <QuelleAus v-if="aus[buehne]" :aus="aus[buehne]" />
+                    <component v-else :is="komponenten[buehne]" :key="buehne" :daten="daten[buehne]" :gross="true"
                         :params="kachelParams[buehne] || {}"
                         @params="emit('params', buehne, $event)"
                         @anzeige="emit('anzeige', buehne, $event)"
@@ -175,7 +179,8 @@ defineExpose({ jetzt })
                     </header>
                     <div class="pInstKoerper">
                         <!-- Verdichtete Fassung, wo die Kachel zu gross ist -->
-                        <component v-if="inst.eigen" :is="eigeneKomponenten[inst.eigen]"
+                        <QuelleAus v-if="aus[inst.id]" :aus="aus[inst.id]" klein />
+                        <component v-else-if="inst.eigen" :is="eigeneKomponenten[inst.eigen]"
                             :daten="daten[inst.id]" :jetzt="jetzt" v-bind="kontext" />
                         <!-- Sonst dieselbe Kachel wie im Raster, nur ohne Rahmen -->
                         <component v-else :is="komponenten[inst.id]" :daten="daten[inst.id]" :gross="false"
@@ -183,7 +188,7 @@ defineExpose({ jetzt })
                             @params="emit('params', inst.id, $event)"
                             @anzeige="emit('anzeige', inst.id, $event)"
                             @neuladen="emit('neuladen', inst.id)" />
-                        <div v-if="!daten[inst.id] && zustand[inst.id] === 'error'" class="pInstFehler">
+                        <div v-if="!aus[inst.id] && !daten[inst.id] && zustand[inst.id] === 'error'" class="pInstFehler">
                             {{ t('marktradar.status_error') }}
                         </div>
                     </div>

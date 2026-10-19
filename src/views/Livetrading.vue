@@ -457,7 +457,7 @@ const interaktiv = (kachel) => kachel.gross === false
             Zustand. Der Preis ist ein Verbindungsaufbau beim Umschalten — er
             steht am Zustandspunkt, und das ist die ehrlichere Anzeige.
         -->
-        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :zustand="zustand" :stand="stand" :quellen="quellenGeladen"
+        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :aus="aus" :zustand="zustand" :stand="stand" :quellen="quellenGeladen"
             :kachel-params="kachelParams" :komponenten="KOMPONENTEN" :symbol="liveSymbol"
             @params="setzeParams" @anzeige="setzeAnzeige"
             @zustand="(id, z, extra) => setzeKachelZustand(id, z, extra)"

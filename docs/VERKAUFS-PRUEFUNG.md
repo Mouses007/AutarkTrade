@@ -313,3 +313,95 @@ Was bleibt, ist nur MIT, ISC, BSD oder Apache. Die einzige sichtbare Pflicht ist
 | Verlags-RSS-Bedingungen | einzeln nicht gelesen |
 
 Alle übrigen Fundstellen wurden am 19.10.2026 direkt gelesen.
+
+---
+
+## Anhang: Umsetzungsstand nach S12 „Quellen & Pflichthinweise“ (19.10.2026)
+
+Umgesetzt sind die Massnahmen 1–6 und 9 sowie die Quellen-Teile von 10 (Lizenztexte/EULA: S10; Icons/markerjs2: S8/S9).
+Die Ampel der Tabelle oben beschreibt die **Bedingungen der Anbieter** und ändert sich durch Code nicht; diese Spalte sagt, was
+der Code heute tut. „KS“ = nur mit Kundenschlüssel. Grundlage für alle Marktdaten-Zeilen ist die neue Einstellung
+**Einstellungen › Datenquellen › Marktdatenquelle** (`binance` | `bitget` | `aus`, `server/marktdaten/`) mit dem Hinweis, dass der
+Kunde die Nutzung der gewählten Quelle selbst prüft und verantwortet. Fehlt der Quelle eine Fähigkeit, zeigt die Funktion
+„nicht verfügbar“ mit Grund (`QuelleAus`), statt kaputt auszusehen.
+
+| # | Stand nach S12 |
+|---|---|
+| 1–4 | unverändert (KS, Kontofunktionen). Länderhinweise: EULA (S10). |
+| 5, 6 | unverändert (Excursions/OHLCV, kein Schlüssel ab Werk). |
+| 7 | Update-Kanal: S10. |
+| 8, 9 | unverändert. |
+| 10 | **umgesetzt:** Kerzen, Ticker, Watchlist und laufende Kerze des Charts über die gewählte Marktdatenquelle; Binance-REST/-WebSocket nur bei Wahl Binance. Keine Binance-Adresse mehr ausserhalb von `server/marktdaten/binance.js` (Selbsttest prüft das). Gespeicherte Binance-Panels werden bei anderer Wahl umgestellt (mit Hinweis). |
+| 11, 12 | unverändert wählbar (Bitunix/Bitget-Chartquellen); Bitget ist zugleich zweite Marktdatenquelle, Bitunix Vorgabe des Charts bei `aus`. Anfragen bei den Börsen offen (F-14). |
+| 13 | **umgesetzt:** nur Text-Kürzel und Links; Links zu Upbit, OKX, MEXC, Alpha entfallen. |
+| 14 | unverändert. |
+| 15 | **umgesetzt:** Chart-KI und Chart-Chat mit Label „KI-generiert – keine Anlageberatung – Fakten prüfen“, `data-ki-generiert`, `kiGeneriert` in der API; `kiEmpfehlungenAn` entfernt, Prognose-Prüfung immer an. |
+| 16 | **umgesetzt:** Chart-Alarme auf Preisen der Marktdatenquelle; ohne Ticker ruht der Takt, neue Alarme werden abgelehnt. |
+| 17 | **umgesetzt:** Funding über die Marktdatenquelle; Hebelzonen nur mit Binance, sonst „nicht verfügbar“. |
+| 18 | unverändert. |
+| 19 | **umgesetzt:** „Quelle: Alternative.me“ mit Link direkt an der Kachel (klein, gross, Pult) und im Strategie-Layer. |
+| 20 | **umgesetzt:** CoinMarketCap-Import entfernt. Dominanz-Kurve nur aus eigenen täglichen Schnappschüssen über CoinGecko `/global` (KS); CMC-Altbestand bleibt ungezeigt in der DB. |
+| 21 | **umgesetzt:** Dominanz und Marktübersicht nur mit CoinGecko-Kundenschlüssel (Einstellungen › Datenquellen, Demo/Pro), „Powered by CoinGecko“ mit Link, ohne Schlüssel aus mit Begründung. Bestätigung des Demo-Tarifs durch CoinGecko offen. |
+| 22–24 | **umgesetzt:** Funding, Long/Short + OI, RSI, Altseason, Trades × Regime über die Marktdatenquelle (Long/Short und OI-Historie nur Binance); Herkunft dynamisch „Daten: <Quelle>“. Bitget-Aktien-/Rohstoff-Kontrakte (`isRwa`) ausgefiltert. Bybit-Funding-Spalte bleibt (gelb). |
+| 25 | **umgesetzt:** blockchain.info entfernt; Rainbow und Pi-Cycle aus BTCUSDT-Spot-Tageskerzen der Marktdatenquelle ab 2017 (Rainbow neu kalibriert, Steigung 4,40 statt 4,95; Pi-Cycle ohne die Kreuzungen 2013/2017). Rückfalldatei gelöscht. |
+| 26, 44 | **umgesetzt:** Rekorder (Orderbuch, forceOrder, aggTrade) startet nur mit Fähigkeit `streams` (Binance); Bybit-Strom `liqB` bleibt. Speicherfrage F-3 offen. |
+| 27 | über die Marktdatenquelle; Bybit bleibt (gelb). |
+| 28, 39 | **umgesetzt:** Yahoo Finance entfernt. Makro-Kachel ohne ES/NQ/RTY/DXY (sagt es), Indizes-Kachel „nicht mehr angebunden“. Databento/Massive geprüft und verworfen (Massive §1 schliesst Apps für andere Endnutzer aus; Databento-Terms nicht lesbar, CME-Lizenzen). |
+| 29 | **umgesetzt:** Stablecoin-Menge nur mit CoinGecko-KS und Attribution. |
+| 30 | **umgesetzt:** „Daten: CryptoQuant“ an der ETF-Kachel; Anfrage bei CryptoQuant offen. |
+| 31 | **umgesetzt:** Wal-Kachel entfernt („nicht mehr angebunden“), kein Telegram-Abruf. |
+| 32, 42 | **umgesetzt:** Gesamtlage und Handelslage ohne Yahoo/ForexFactory, ausgefallene Quellen fallen weg; KI-Label und `kiGeneriert`; Verbot von Einstiegen/Kurszielen fest. |
+| 33 | **umgesetzt:** Hebelkarte und Liq-Kalibrierung nur mit Binance, sonst „nicht verfügbar“. |
+| 34 | **umgesetzt:** undokumentierter `bapi`-Brackets-Endpunkt entfernt; Wartungsmarge aus Bybit-Risikolimit, sonst feste Vorgabe 0,004 mit Hinweis (Einstellung `binance` → `bybit` migriert). |
+| 35 | unverändert (Bybit, gelb). |
+| 36 | **umgesetzt:** Bookmap verbindet nur bei Wahl Binance, sonst „nicht verfügbar“. Replay spielt eigene Aufzeichnungen (F-3). |
+| 37 | Bybit-Vergleich bleibt, für neue Installationen aus. |
+| 38 | **umgesetzt:** OKX-Spalte entfernt. |
+| 40, 47, 48 | **umgesetzt:** ForexFactory entfernt. Kalender aus amtlichen Quellen: Federal Reserve (`calendar.json`, ohne 7-Tage-Grenze), BEA (ICS, 17 U.S.C. §105) und Eurostat (ICS, Euro-Indikatoren, Wiederverwendung mit Quellenangabe und Bearbeitungshinweis); je „Quelle: …“ mit Link. BLS (HTTP 403 für Skripte) und EZB (nur HTML) nicht eingebaut — US-CPI und Arbeitsmarktbericht fehlen. Altzeilen bleiben, fallen aus dem Fenster. Länder-Vorgabe `USD,EUR`. |
+| 41 | über die Marktdatenquelle (`getClosedCandles`); Spot/Futures-Verhältnis nur, wo die Quelle beides hat. |
+| 43 | unverändert. |
+| 45 | **umgesetzt:** Lagebericht, Zwischenmeldungen, Archiv, Punkte, Video-Stichpunkte mit Label; API `kiGeneriert`; Mail mit Label-Zeile und Kopf `X-AI-Generated: true`. |
+| 46, 53 | **umgesetzt:** keine vorbelegten News-Quellen mehr (Seed-Liste leer, Onboarding ohne Vorschläge, ohne Telegram/Truth Social). Bestehende, selbst angelegte Quellen bleiben. TDM-Opt-out-Prüfung und F-4 offen. |
+| 49 | unverändert (YouTube-RSS, gelb) — Umstellung auf YouTube Data API mit KS offen. |
+| 50, 51 | unverändert (KS). |
+| 52, 63 | **umgesetzt:** Telegram-Scraping entfernt (News und Frühphase); bestehende Telegram-Quellen per Migration abgeschaltet und markiert, nicht gelöscht; neue nicht anlegbar. |
+| 54 | unverändert. |
+| 55 | **umgesetzt:** CoinGecko-Trending und Tiefensuche nach Symbol nur mit KS, „Powered by CoinGecko“. |
+| 56 | **umgesetzt:** CoinPaprika entfernt. |
+| 57 | **umgesetzt:** „Daten: DexScreener“ mit Link an allen Hype-Ansichten. |
+| 58 | **umgesetzt:** keine Token-/Coin-Logos mehr, Platzhalter mit Ticker-Initialen (`TickerZeichen.vue`). |
+| 59 | **umgesetzt:** alle GeckoTerminal-Abrufe über die CoinGecko-`/onchain`-Endpunkte mit KS; ohne Schlüssel aus, mit Attribution. |
+| 60 | **umgesetzt:** pump.fun-API vollständig entfernt (Listen, Coin, King of the Hill, Kommentare, Ersteller-Bilanz, Messung); Kurve/Graduierung aus DexScreener. Die Frühphase sieht Token erst ab dem ersten Pool (in UI und Hilfe gesagt). Reine Links auf pump.fun-Seiten bleiben. |
+| 61 | **umgesetzt:** Reddit-RSS entfernt; Sozial-Teilnote ohne Signal unbekannt statt 0. |
+| 62 | **umgesetzt:** „Quelle: 4chan /biz/“ mit Link. |
+| 64 | unverändert (KS, gelb). |
+| 65 | **umgesetzt:** „Powered by GoPlus Security“ mit Link an Sicherheits- und Projektanzeigen (Logo nicht eingebaut; geltende Vertragsfassung bei GoPlus anfragen). |
+| 66 | **umgesetzt:** Schalter „RugCheck nutzen“ mit Hinweis auf ungeklärte Bedingungen; ab Werk aus, bestehende Installation per Migration an. |
+| 67 | **umgesetzt:** öffentlicher Solana-Knoten keine Vorgabe mehr; Smart Money nur mit eigener RPC-Adresse, sonst aus mit Grund. |
+| 68–71 | unverändert. |
+| 72 | **umgesetzt:** Hype-KI-Bericht mit Label, `data-ki-generiert`, `kiGeneriert` (Route und Rückgabe). Günstiges Hype-Profil von DeepSeek auf Qwen umgestellt. |
+| 73, 74 | unverändert. |
+| 75 | **umgesetzt:** Binance im Börsen-Beobachter über die Marktdatenquelle (Fähigkeit `listungen`), sonst „aus“ mit Grund. |
+| 76, 78, 82 | **umgesetzt:** Binance Alpha, Upbit, MEXC entfernt (zwischengespeicherte Listen per Migration gelöscht). |
+| 77, 79–81 | **umgesetzt:** Coinbase, Kraken, KuCoin, Gate ab Werk aus, Schalter je Börse; bestehende Wahl bleibt. |
+| 83 | **umgesetzt:** OKX entfernt; Bybit und Bitget bleiben an (gelb, Anfrage offen). |
+| 84 | **umgesetzt:** Rangliste, Einzelprüfung, Watchdog über die Marktdatenquelle (Bitget: ein `tickers`-Abruf). Ohne Marktdaten antworten die Routen „aus“. |
+| 85 | unverändert (Bitunix/Bitget öffentlich). |
+| 86 | **umgesetzt:** Abverkauf-Wache nur mit Binance, sonst ruht sie und die Seite sagt es. |
+| 87 | **umgesetzt:** Coin-Info und Tiefensuche über CoinGecko nur mit KS; Attribution CoinGecko, GoPlus, RugCheck, DexScreener; keine Bilder. |
+| 88 | **umgesetzt:** Coin-Radar-Einordnung mit Label, `kiGeneriert` bis in die Lauf-Antwort. |
+| 89a, 89b, 89j | **umgesetzt:** Label an allen KI-Ausgaben, keine Empfehlungen, kein Schalter, keine Anbieter-Logos. |
+| 89c | **umgesetzt:** Gemini-Hinweis (in EWR/CH/UK nur Bezahl-Schlüssel, Training im Gratis-Tarif) bei Schlüssel, Anbieterwahl, Onboarding, Bild-Anbieter. Altersangabe: EULA (S10). |
+| 89d | **umgesetzt:** DeepSeek nur noch als neutraler „OpenAI-kompatibler Endpunkt 2“ mit selbst eingetragener Basis-URL und Hinweis zur Übermittlung (ggf. Drittstaat); Bestand per Migration lauffähig. DeepSeek-Suche (Recherche-Weg) entfernt, gespeicherte Wahl fällt auf Perplexity zurück. |
+| 89e–89i, 89l | unverändert (KS). |
+| 89k | **umgesetzt:** MiniMax aus der Auswahl (abgekündigt, Bestand läuft mit Hinweis). |
+| 89m | **umgesetzt:** Ollama-Hinweis „Lizenz des geladenen Modells beachten“. |
+| 90 | **umgesetzt:** FLUX-Trainingshinweis; Share-Bild mit sichtbarem Label und PNG-Metadaten (tEXt `AI-Generated`, XMP/IPTC `compositeWithTrainedAlgorithmicMedia`). Das C2PA-Manifest des Anbieters geht beim Zusammensetzen im Browser verloren (im Code dokumentiert; Umkopieren wäre eine gebrochene Signatur). |
+| 91 | **umgesetzt:** Backtests, Detektoren, Engine über die Marktdatenquelle; mit Bitget kürzere Historie (Hinweis im Log, Freigaben beruhen auf Binance-Historie). |
+| 92 | **umgesetzt:** Strategie-Builder und KI-Vorschläge im Labor mit Label. |
+
+**Abschnitt 3.3 (sichtbare Pflichten):** Punkt 1 (TradingView-Logo) seit S2/S5 an, NOTICE in S10. Punkt 2: Alternative.me,
+CoinGecko, Federal Reserve (dazu BEA, Eurostat), 4chan /biz/, GoPlus, CryptoQuant, DexScreener eingebaut. Punkt 3: KI-Label an
+jedem KI-Text, Chat und Bild.
+
+**Weiter offen (nicht Code):** Anfrage Binance (F-2) und die Anbieteranfragen aus F-14; Anwaltsfragen F-1 bis F-13.

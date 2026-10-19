@@ -331,7 +331,7 @@ watch(() => daten.funding, (d) => {
              als im Live-Fenster hängt hier keine Kachel an einem WebSocket, eine
              zweite Instanz kostet also nichts ausser Platz. Der Lage-Fuss
              braucht sie, um den ganzen Bericht zu zeigen. -->
-        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :zustand="zustand" :stand="stand" :quellen="quellenGeladen"
+        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :aus="aus" :zustand="zustand" :stand="stand" :quellen="quellenGeladen"
             :kachel-params="kachelParams" :komponenten="KOMPONENTEN" :symbol="liveSymbol"
             @params="setzeParams" @anzeige="setzeAnzeige"
             @zustand="(id, z, extra) => setzeKachelZustand(id, z, extra)"

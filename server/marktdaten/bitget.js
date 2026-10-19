@@ -97,10 +97,21 @@ export async function kerzen(symbol, interval, { markt: m, limit = 500, start, e
     const basis = mk === 'spot' ? '/api/v2/spot/market' : '/api/v2/mix/market'
     const fest = mk === 'spot' ? { symbol, granularity: gran } : { symbol, productType: PRODUKT, granularity: gran }
 
+    let nurLetzte = 0
     if (start === undefined) {
         const params = { ...fest, limit: Math.min(limit, KERZEN_MAX[mk]) }
         if (ende !== undefined) params.endTime = ende
-        return kerzenAus(await hole(`${basis}/candles`, params), intervalMs)
+        const jung = kerzenAus(await hole(`${basis}/candles`, params), intervalMs)
+        /*
+         * `candles` reicht je Zeiteinheit nur begrenzt zurück (1D: 90 Kerzen,
+         * gemessen 19.10.2026) — eine Anfrage über 92 Tageskerzen kam mit 90
+         * zurück, und der Altcoin-Saison-Index meldete „BTC-Kerzen
+         * unvollständig". Fehlt etwas, wird der Rest rückwärts über
+         * `history-candles` nachgeholt (Fensterweg unten).
+         */
+        if (jung.length >= limit || !jung.length || !intervalMs) return jung
+        start = (ende ?? Date.now()) - (limit + 1) * intervalMs
+        nurLetzte = limit
     }
 
     const alle = new Map()
@@ -118,7 +129,8 @@ export async function kerzen(symbol, interval, { markt: m, limit = 500, start, e
         bis = aeltest
         if (alle.size >= limit) break
     }
-    return [...alle.values()].sort((a, b) => a.t - b.t)
+    const sortiert = [...alle.values()].sort((a, b) => a.t - b.t)
+    return nurLetzte ? sortiert.slice(-nurLetzte) : sortiert
 }
 
 async function tickerRoh(m) {
@@ -162,8 +174,28 @@ export function tickerAus(z) {
 }
 
 /** 24h-Ticker aller Symbole in der gemeinsamen Form. */
+/*
+ * Tokenisierte Wertpapiere und Rohstoffe (Aktien, ETFs, Gold) stehen bei
+ * Bitget in derselben Futures-Liste wie die Kryptowährungen — 376 von 842
+ * Kontrakten am 19.10.2026, kenntlich an `isRwa: "YES"`. Binance trennt sie
+ * über `underlyingType`; ohne Filter standen SOXS und MINIMAX in Funding- und
+ * RSI-Kacheln. Die Liste kommt aus `contracts` und wird 6 h gehalten.
+ */
+let rwaGemerkt = { ts: 0, menge: null }
+async function rwaSymbole() {
+    if (rwaGemerkt.menge && Date.now() - rwaGemerkt.ts < 6 * 3600e3) return rwaGemerkt.menge
+    const d = await hole('/api/v2/mix/market/contracts', { productType: PRODUKT }, { timeout: 15000 })
+    const menge = new Set((d || []).filter((c) => c.isRwa === 'YES').map((c) => c.symbol))
+    rwaGemerkt = { ts: Date.now(), menge }
+    return menge
+}
+
 export async function ticker24h({ markt: m } = {}) {
-    return ((await tickerRoh(m)) || []).map(tickerAus)
+    const zeilen = ((await tickerRoh(m)) || []).map(tickerAus)
+    if (markt(m) === 'spot') return zeilen
+    let rwa = new Set()
+    try { rwa = await rwaSymbole() } catch { /* ohne Liste lieber ungefiltert als gar nichts */ }
+    return zeilen.filter((z) => !rwa.has(z.symbol))
 }
 
 /** 24h-Ticker EINES Symbols (Watchlist). */
@@ -227,6 +259,7 @@ export async function symbole({ markt: m } = {}) {
     }
     for (const s of (await hole('/api/v2/mix/market/contracts', { productType: PRODUKT }, { timeout: 15000 })) || []) {
         if (s.symbolStatus !== 'normal') continue
+        if (s.isRwa === 'YES') continue   // Aktien/Rohstoffe, siehe rwaSymbole
         map.set(s.symbol, {
             symbol: s.symbol, basis: s.baseCoin, quote: s.quoteCoin,
             tickSize: Number(s.priceEndStep || 1) * 10 ** -Number(s.pricePlace || 0),

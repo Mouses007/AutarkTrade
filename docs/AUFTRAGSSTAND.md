@@ -31,8 +31,59 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | – | wartet auf S7 + S4 |
 | 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | `claude/s9-geruest-23d7aa` | Teil 1 auf master; Teil 2 (Entfernen) wartet auf S8 |
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
-| 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | – | wartet auf S5 + S6 |
+| 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | `claude/s12-quellen-9112f7` | **fertig** |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | – | wartet auf alle |
+
+## S12 Quellen & Pflichthinweise — Ergebnis (19.10.2026)
+
+Umgesetzt: Massnahmen 1–6 und 9 der Verkaufs-Prüfung und die Quellen-Teile von 10. Je Zeile der Prüfung steht der neue
+Stand im Anhang von `docs/VERKAUFS-PRUEFUNG.md`.
+
+- **Marktdatenquelle** (`server/marktdaten/`): Binance | Bitget | aus, Einstellung unter Einstellungen › Datenquellen
+  (`src/views/einstellungen/EinstellungenDatenquellen.vue`) mit dem Hinweis, dass der Kunde die Nutzung selbst verantwortet.
+  Funktionen fragen nach Fähigkeiten; was die Quelle nicht kann (Bookmap, Rekorder, Liquidationen, OI-Historie,
+  Long/Short, Abverkauf-Wache, Hebelkarte bei Bitget), zeigt `QuelleAus` statt Fehler. Keine Binance-URL mehr
+  ausserhalb von `server/marktdaten/binance.js` (Selbsttest). Bitget live geprüft (Kerzen rückwärts über
+  `history-candles`, Aktien-Kontrakte `isRwa` ausgefiltert). `bapi`-Brackets und OKX-Fremdbuch entfernt.
+- **Rote Quellen raus**: Yahoo (Makro ohne Indizes, Indizes-Kachel aus), ForexFactory (Kalender jetzt Fed + BEA +
+  Eurostat, BLS/EZB nicht maschinenlesbar zugänglich), CoinMarketCap-Import, blockchain.info (Rainbow/Pi-Cycle aus
+  Tageskerzen ab 2017, neu kalibriert), pump.fun, Telegram (News, Frühphase, Wal-Kachel), Reddit, CoinPaprika,
+  Upbit, MEXC, OKX, Binance Alpha. Gelbe Börsen im Börsenwächter und RugCheck ab Werk aus.
+- **Kundenschlüssel**: CoinGecko (inkl. GeckoTerminal über `/onchain`) nur mit eigenem Schlüssel (`server/quellen/coingecko.js`,
+  Demo/Pro), Solana-RPC ohne öffentliche Vorgabe. Keine Token-Logos (Ticker-Initialen).
+- **Attributionen** über `Quellenhinweis` an Kacheln (auch klein und im Pult), Hype-/Coin-Radar, Kalender.
+- **KI**: Label „KI-generiert – keine Anlageberatung – Fakten prüfen“ (`KiHinweis.vue`) an jeder KI-Ausgabe,
+  `data-ki-generiert`, `kiGeneriert` in der API, Mail-Kopf `X-AI-Generated`, PNG-/PDF-Metadaten; `kiEmpfehlungenAn`
+  entfernt; Gemini-, Ollama-, FLUX-Hinweise; DeepSeek nur als „OpenAI-kompatibler Endpunkt 2“, DeepSeek-Suche und
+  DeepSeek-Preset entfernt, MiniMax abgekündigt.
+- **News**: keine vorbelegten Quellen mehr (Seed, Onboarding).
+- **Migrationen** (`server/migrationen/s12*.js`, idempotent): gegen die DB-Kopie gelaufen (Testcontainer
+  `autarktrade-v2-s12`, Port 8096, Testbetrieb): 5 Telegram-Quellen abgeschaltet (nicht gelöscht), Kalender-Länder
+  `USD,JPY` → `USD,EUR`, Hype-Wahl (RugCheck, Coinbase/Kraken/KuCoin/Gate) übernommen, Endpunkt 2 (früher DeepSeek)
+  übernommen, Wartungsmarge `binance` → `bybit`; zweiter Start ohne Änderung.
+- **Geprüft**: `npm run test:self` 142/142 grün, `npm run build` fehlerfrei. Oberfläche im Prüf-Server (Wegwerf-SQLite,
+  Testbetrieb) mit Wahl Bitget: Einstellungen › Datenquellen (auch 375 px), Marktradar Raster und Pult (QuelleAus,
+  Attributionen), Chart auf Bitget mit Umstell-Hinweis, Live-Trading (Bookmap „nicht verfügbar“), Hype-Scan ohne
+  CoinGecko-Schlüssel, Kalender aus Fed/BEA/Eurostat. Die DB-Kopie selbst steht hinter dem Passwort des Nutzers —
+  dort nur Start und Migrationen über die Logs geprüft. KI-Texte nicht live erzeugt (keine Schlüssel in der Wegwerf-DB).
+
+### Offene Punkte aus S12
+
+- **S9-Struktur**: S12 kam nach S9 Teil 1 auf master. Der Bereich „Datenquellen“ hängt in der neuen Einstellungs-Hülle
+  (`BEREICHE` in `Settings.vue`, Symbol `datenbank`); dafür steht `datenquellen` jetzt in `EINSTELLUNGS_BEREICHE`
+  (`src/router/routen.js`, S9-Datei — sonst leitete der Wächter auf „Allgemein“ um). Schalter `kiEmpfehlungenAn`,
+  DeepSeek-Suche und DeepSeek-Kostenzeile sind aus `ki/KiZugang.vue`, `ki/KiNewsBericht.vue`, `ki/KiAgent.vue` und
+  `gemeinsam/useRadarEinstellungen.js` entfernt, Endpunkt-2-URL und Anbieterhinweise in `gemeinsam/useKiAnbieter.js`
+  bzw. `ki/KiZugang.vue` ergänzt.
+- Seiten mit `/api/binance/klines` (Daily, AgentSetups/Lab/Editor/Performance) bekommen bei fehlender Fähigkeit
+  `{aus}` statt Kerzen und fangen das ab, nennen aber keinen Grund (S8/S9).
+- Im Pult zeigen Stimmungs- und Zyklusband bei fehlender Quelle nur „—“ (Grund steht in der Kachel/Rasteransicht).
+- Hype-Noten ohne Sozialsignal liegen durch die neue Normierung etwas höher (Sozial fällt aus dem Nenner) —
+  nach den ersten Läufen beobachten.
+- Nicht live geprüft: CoinGecko-`/onchain`-Pfade mit echtem Schlüssel, pump.fun-Kurve aus dem DexScreener-Paar.
+- `KachelIndizes.vue`/`KachelWal.vue` sind nur noch Anzeigepfade für „entfernt“ und können weg.
+- Settings: Antwort von „Anweisung prüfen“ (Lagebericht) trägt noch kein KI-Label.
+- Anbieteranfragen (Binance, CoinGecko-Demo, GoPlus, CryptoQuant, Bybit/Bitget …) und Anwaltsfragen bleiben offen.
 
 ## S9 Gerüst & Einstellungen — Teil 1 (19.10.2026)
 

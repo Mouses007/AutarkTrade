@@ -53,28 +53,31 @@ A TradingView-style chart workspace built on TradingView's free [Lightweight Cha
 ### Nachrichten (Live-Analyse)
 
 - **AI briefing**: one German report from all sources — not one summary per post, styled like a newspaper article with a chapter per selected topic (crypto / finance / tech), selectable length (short/medium/long) and a daily, weekly (weekday selectable) or manual-only rhythm. During the day it can be followed by one or two **interim notes** at hours you pick: the AI searches your sources and the web for what has come in since the briefing — news, figures, decisions, dates relevant to crypto and trading — and reports only that, shorter than the briefing and without repeating it. The crypto chapter opens with the journal's own Marktradar measurements (Fear & Greed, dominance, funding, long/short). Written by your configured provider; YouTube videos are watched by Gemini first (the only provider that opens a video URL) and summarized as bullet points; with a Perplexity key the report additionally researches each topic on the web, with an xAI key X accounts are fetched via Grok. Every point opens up to the posts it is based on, so nothing is unverifiable. Reports are archived — browse, reopen and delete old ones.
-- **Sources**: YouTube channels, RSS feeds (e.g. Yahoo Finance), public Telegram channels and X accounts (via Grok). "Temporär ausschliessen" hides sources you marked — and does not even fetch them. The keyword-based "Ruhe-Filter" additionally drops Truth Social automatically plus any post containing your keywords (e.g. a person's name), from both the list and the briefing.
-- **Economic calendar**: adjustable range, impact and currency areas. ForexFactory covers the current week; the Fed's own calendar adds its meeting dates months ahead.
+- **Sources**: YouTube channels, RSS feeds and X accounts (via Grok) — nothing is pre-set, you add the sources yourself (and are responsible for their terms). Telegram channels are no longer read (Telegram's terms forbid scraping public channels for AI use). "Temporär ausschliessen" hides sources you marked — and does not even fetch them. The keyword-based "Ruhe-Filter" additionally drops Truth Social automatically plus any post containing your keywords (e.g. a person's name), from both the list and the briefing.
+- **Economic calendar**: adjustable range, impact and currency areas, from official sources only — Federal Reserve (FOMC, Beige Book, months ahead), U.S. Bureau of Economic Analysis (GDP, PCE, trade) and Eurostat (euro-area indicators), each credited. US CPI and payrolls (BLS) are not included.
 - Costs are shown before you press: the briefing estimates its own price from your settings.
 
 ### Marktradar (Live-Analyse)
 
 - Tile grid with the market situation at a glance — show/hide, drag to reorder, drag the corner to resize, click to enlarge (all stored per device)
-- **Fear & Greed** with full history, **BTC dominance** (TradingView chart + own daily recording), **funding rates** (your markets first), **long/short + open interest**, **RSI scatter** over the top 10/50/100 markets or your own traded symbols
-- **Market overview** as bubbles or treemap, **rainbow chart** with self-computed regression bands, **Pi Cycle Top** with an adjustable alarm (on the crossing itself, or already at a set distance)
+- **Fear & Greed** with full history (source: Alternative.me), **BTC dominance** (CoinGecko with your own key + own daily recording), **funding rates** (your markets first), **long/short + open interest**, **RSI scatter** over the top 10/50/100 markets or your own traded symbols
+- **Market overview** as bubbles or treemap (CoinGecko, your own key), **rainbow chart** with self-computed regression bands on daily candles from 2017, **Pi Cycle Top** with an adjustable alarm (on the crossing itself, or already at a set distance)
 - **24h liquidations** from the journal's own recording — no paid third party involved
 - **Your trades × market regime**: your win rate and P&L grouped by the Fear & Greed value of each entry day
-- **BTC dominance** with six years of history for Bitcoin, Ethereum and everything else — from our own stored data, no third-party embed
+- **BTC dominance** for Bitcoin, Ethereum and everything else — drawn from your own daily recordings (history starts at installation)
 - **Overall picture (AI)**: one button turns everything the other tiles currently show into a five-line read — a market state, three to four points, the contradictions between the tiles and what to watch. The AI only ever sees the readings from the tiles (they are listed under "Basis" in the enlarged view), it looks nothing up and gives no trading recommendation. Nothing is generated without pressing the button.
-- Only crypto: Binance perpetuals are filtered to actual coins, so tokenised equities and commodities never show up
+- Only crypto: perpetuals are filtered to actual coins (Binance `underlyingType`, Bitget `isRwa`), so tokenised equities and commodities never show up
+- **Your choice of market data**: exchange data (candles, tickers, order books, funding, streams) comes from the source you pick under Settings › Data sources — Binance (full scope), Bitget (basics; Bookmap, recorder, liquidations and open-interest history stay off) or none. The data goes straight from the exchange to your computer; whether its terms cover your use is yours to check. Sources that need a key (CoinGecko) run only with your own; a tile without its source says why instead of staying empty.
+- Every AI text, chat answer and share image is labelled „KI-generiert – keine Anlageberatung – Fakten prüfen" (also machine-readable)
 
 ### Hype-Radar and Coin-Radar (Entdecken)
 
 Two radars asking opposite questions, sharing one watchlist.
 
 **Hype-Radar — what is new out there, and what of it has substance?** Collects young
-coin projects from CoinGecko, DexScreener and GeckoTerminal, scores them from five
-sub-scores, then filters hard for scam patterns (GoPlus, RugCheck on Solana:
+coin projects from DexScreener and — with your own CoinGecko key — CoinGecko trending
+and GeckoTerminal pools, scores them from five sub-scores (token logos are not
+loaded; ticker initials instead), then filters hard for scam patterns (GoPlus, optionally RugCheck on Solana:
 honeypot, mint and freeze authority, hidden or reclaimable ownership, modifiable
 balances or taxes, unverified source, holder concentration) *before* an AI writes a report about
 the few survivors. The number of independent sources weighs heaviest — a paid
@@ -86,9 +89,7 @@ would hide it. Searching is free; the report costs a few cents to about a franc.
 at what stands behind a token: the website (roadmap/tokenomics/team sections, does
 it show the right contract address, placeholder text, site builder), the domain
 age via RDAP, the GitHub account (maintained repo, earlier projects with stars)
-and, for pump.fun tokens, the creator wallet's other coins — creators who got one
-through the bonding curve before succeed far more often than the ~1 % base rate,
-serial launchers produce mass goods. The result is a **substance score** shown
+The result is a **substance score** shown
 next to hype and safety, never merged with either. No keys; cached 24 h.
 The website has to be the token's *own*: a tweet, a TikTok video, somebody
 else's GitHub repository or a trading/explorer page counts as "no own website";
@@ -110,10 +111,10 @@ a local DNS filter answering 0.0.0.0 cost nothing.
 
 **Early phase.** The main check only sees tokens from 12 h pair age and USD 50k
 liquidity. A separate lane runs before that (off by default, every 15 min when on):
-new tokens from pump.fun (newest launches and what is trading on the bonding curve
-right now), DexScreener profiles/takeovers, GeckoTerminal new pools
-(with *distinct* buyer counts), the 4chan /biz/ catalog, configured public
-Telegram channels and optionally Reddit. Each token gets a snapshot history, and
+DexScreener profiles/takeovers, new pools (with *distinct* buyer counts — via your
+CoinGecko key, GeckoTerminal data) and the 4chan /biz/ catalog. It sees a token
+from its first trading pool on; pump.fun, Telegram and Reddit are no longer read
+(their terms forbid it). Each token gets a snapshot history, and
 the score measures **acceleration** against that history — trading surge, distinct
 buyers, mentions across platforms, project substance, momentum — with deductions
 for one-sided buying, circular trading, volume without price movement, serial
@@ -139,9 +140,8 @@ For the best tokens of each run the early phase also checks the contract and the
 holder picture (RugCheck, else GoPlus: mint/freeze authority and Token-2022
 extensions that let the issuer freeze or move balances, insider share and linked
 insider networks, top-10 share *excluding the bonding curve and known pools*,
-creator share, holder count and its growth), counts pump.fun "King of the Hill" as
-momentum for three hours, and optionally watches **smart-money wallets** you enter
-(Solana RPC, public node or your own Helius address; only signed purchases paying
+creator share, holder count and its growth; RugCheck only if you switch it on), and optionally watches **smart-money wallets** you enter
+(your own Solana RPC address, e.g. Helius — the public node is not a default; only signed purchases paying
 at least 0.005 SOL beyond fee and account rent count, a wallet that sells half of
 it again within the window no longer counts, and two watched wallets on one token
 secure it a slot and trigger an alert once its contract is checked).
@@ -153,14 +153,15 @@ are compared with the exact McNemar test; a verdict needs ten complete pairs and
 p < 0.05. A random sample of all newly seen tokens is shown as the base rate.
 
 **Exchange watcher.** Young projects rarely start on a centralized exchange; they
-climb a ladder — DEX, then Binance Alpha or mid-sized exchanges (KuCoin, Gate,
-MEXC, Bitget), then the large ones (Binance, Coinbase, Upbit, OKX, Bybit, Kraken).
+climb a ladder — DEX, then mid-sized exchanges (KuCoin, Gate, Bitget), then the
+large ones (Binance, Coinbase, Bybit, Kraken). Coinbase, Kraken, KuCoin and Gate are
+off by default (their terms on third-party use are unclear — switch them on per
+exchange if you accept that); Binance follows your market-data source.
 The goal is to be in *before* the big listing. The watcher compares those public
 market lists (no keys), detects new listings, and checks against the radar's
-memory whether the token was *flagged* before and how many days ahead. Alpha names
-the contract, so matching is certain; ticker matches only count from USD 5 M
-valuation (otherwise a namesake). "On the way up" lists flagged radar tokens that
-are on Alpha or mid-sized exchanges but not yet on a large one.
+memory whether the token was *flagged* before and how many days ahead. Ticker
+matches only count from USD 5 M valuation (otherwise a namesake). "On the way up"
+lists flagged radar tokens that are on mid-sized exchanges but not yet on a large one.
 
 **Coin-Radar — which of the tradable coins can be traded best right now?** Walks the
 ~500 pairs that are tradable on Bitunix and measurable on Binance and ranks them by
