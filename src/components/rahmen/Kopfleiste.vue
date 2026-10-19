@@ -71,13 +71,13 @@ onMounted(async () => {
 <template>
     <header class="at-kopfleiste">
         <a class="marke" href="/start" :title="t('app.name')">
-            <Logo :groesse="30" />
+            <Logo :groesse="34" />
         </a>
         <nav class="modi" :aria-label="t('app.modi')">
             <a v-for="m in modi" :key="m.id" :href="modeHome(m.id)" :class="{ aktiv: aktiverModus === m.id }"
                 :aria-current="aktiverModus === m.id ? 'page' : undefined" :aria-label="beschriftung(m)"
                 :title="m.beta ? beschriftung(m) + ' — ' + t(m.betaHintKey || 'modes.betaHint') : beschriftung(m)" @click="wechsle(m, $event)">
-                <Symbol :name="SYMBOL[m.id] || 'info'" />
+                <Symbol :name="SYMBOL[m.id] || 'info'" :groesse="18" />
                 <span class="name">{{ beschriftung(m) }}</span>
                 <span v-if="m.beta" class="beta">Beta</span>
             </a>
@@ -139,7 +139,7 @@ onMounted(async () => {
     gap: 0.4rem;
     color: var(--muted);
     text-decoration: none;
-    font-size: 0.92rem;
+    font-size: 1.02rem;
     white-space: nowrap;
     border-bottom: 2px solid transparent;
     padding-top: 2px;
@@ -160,7 +160,7 @@ onMounted(async () => {
 }
 
 .beta {
-    font-size: 0.62rem;
+    font-size: 0.68rem;
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;

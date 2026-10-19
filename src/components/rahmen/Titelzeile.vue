@@ -311,7 +311,7 @@ onBeforeUnmount(() => {
 }
 
 .in-kopf .seitentitel {
-    font-size: 1.02rem;
+    font-size: 1.15rem;
     font-weight: 700;
     white-space: nowrap;
     overflow: hidden;
@@ -320,6 +320,7 @@ onBeforeUnmount(() => {
 }
 
 .in-kopf .nav-filter-info {
+    font-size: 0.9rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
