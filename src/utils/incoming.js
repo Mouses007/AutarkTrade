@@ -1,0 +1,1029 @@
+import axios from 'axios'
+import dayjs from './dayjs-setup.js'
+import { dbFind, dbFirst, dbCreate, dbUpdate, dbDelete, dbFindTradeIdByPositionId } from './db.js'
+import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, pendingOpeningCount, pendingClosingCount, pendingOpeningByBroker, pendingClosingByBroker, evalNotificationShown, evalNotificationDismissed, evalNeu, getNotifiedPositionIds, addNotifiedPositionIds, removeNotifiedPositionIds } from '../stores/trades.js'
+import { expandedId } from '../stores/ui.js'
+import { currentUser } from '../stores/settings.js'
+import { selectedBroker, brokers } from '../stores/filters.js'
+import { refreshAccountBalance } from '../stores/accountBalance.js'
+import { istGewinn } from '../../shared/gewinn.js'
+import i18n from '../i18n'
+
+let globalPollingInterval = null
+
+/**
+ * Update the pending evaluation counters from the database.
+ * Called after each sync cycle and on page load.
+ */
+export async function useUpdatePendingCounts() {
+    try {
+        const openPositions = await dbFind('incoming_positions', { equalTo: { status: 'open', openingEvalDone: 0 } })
+        const pendingPositions = await dbFind('incoming_positions', { equalTo: { status: 'pending_evaluation' } })
+
+        pendingOpeningCount.value = openPositions.length
+        pendingClosingCount.value = pendingPositions.length
+
+        // Aufschlüsselung je Börse (für das Bewertungs-Popup)
+        const byBroker = (list) => list.reduce((acc, p) => {
+            const b = p.broker || 'unbekannt'
+            acc[b] = (acc[b] || 0) + 1
+            return acc
+        }, {})
+        pendingOpeningByBroker.value = byBroker(openPositions)
+        pendingClosingByBroker.value = byBroker(pendingPositions)
+
+        // Collect all current position IDs that need evaluation
+        const currentIds = new Set([
+            ...openPositions.map(p => 'open_' + p.positionId),
+            ...pendingPositions.map(p => 'close_' + p.positionId),
+        ])
+
+        // Compare with already-notified IDs from localStorage
+        const alreadyNotified = getNotifiedPositionIds()
+        const brandNewIds = [...currentIds].filter(id => !alreadyNotified.has(id))
+
+        // Clean up notified IDs that are no longer pending (position was evaluated/deleted)
+        const staleIds = [...alreadyNotified].filter(id => !currentIds.has(id))
+        if (staleIds.length > 0) {
+            removeNotifiedPositionIds(staleIds)
+        }
+
+        // Only show popup if there are truly new (never-before-notified) positions
+        if (brandNewIds.length > 0) {
+            // Mark them as notified so popup won't fire again for these
+            addNotifiedPositionIds(brandNewIds)
+            const neu = new Set(brandNewIds)
+            const neuOffen = openPositions.filter(p => neu.has('open_' + p.positionId))
+            const neuSchluss = pendingPositions.filter(p => neu.has('close_' + p.positionId))
+            evalNeu.value = {
+                oeffnung: { anzahl: neuOffen.length, jeBroker: byBroker(neuOffen) },
+                schluss: { anzahl: neuSchluss.length, jeBroker: byBroker(neuSchluss) },
+            }
+            evalNotificationShown.value = true
+            evalNotificationDismissed.value = false
+        }
+    } catch (error) {
+        console.error(' -> Fehler beim Aktualisieren der Zähler:', error)
+    }
+}
+
+/**
+ * Determine which brokers have an API configured (analog Nav.vue:loadConfiguredBrokers).
+ * Returns an array of broker value strings. Falls back to the currently selected
+ * broker if no API config is found (fresh install).
+ */
+async function getActiveBrokers() {
+    const result = []
+    for (const b of brokers) {
+        try {
+            const { data } = await axios.get(`/api/${b.value}/config`)
+            if (data && (data.apiKey || data.hasSecret)) result.push(b.value)
+        } catch (_) { /* Broker ohne Config-Endpoint/Key → überspringen */ }
+    }
+    return result.length ? result : [selectedBroker.value || 'bitunix']
+}
+
+/**
+ * Fetch open positions from ALL configured exchanges, sync with local DB,
+ * detect closed positions and create trade records. The "Pendente Trades"
+ * view shows every broker at once (grouped per exchange), so we no longer
+ * limit this to selectedBroker.
+ */
+export async function useFetchOpenPositions() {
+    const activeBrokers = await getActiveBrokers()
+    console.log(` -> Fetching open positions from: ${activeBrokers.join(', ')}`)
+    incomingPollingActive.value = true
+
+    const errors = []
+    try {
+        for (const broker of activeBrokers) {
+            try {
+                const response = await axios.get(`/api/${broker}/open-positions`)
+
+                if (!response.data.ok) {
+                    throw new Error(response.data.error || i18n.global.t('incoming.errorFetchingPositions'))
+                }
+
+                const apiPositions = response.data.positions || []
+                console.log(` -> ${apiPositions.length} offene Positionen von ${broker} erhalten`)
+
+                /*
+                 * `unvollstaendig` heisst: Ein Teil der Börse antwortete nicht
+                 * (bei Pionex etwa die Bots, während Futures durchkam). Die Liste
+                 * ist dann eine Teilmenge — und eine Teilmenge sieht für die
+                 * Schliess-Erkennung genauso aus wie „geschlossen“. Ohne diesen
+                 * Durchgriff würde ein Aussetzer Trades ins Journal schreiben,
+                 * die nie stattgefunden haben.
+                 */
+                await syncPositionsWithDb(apiPositions, broker, { vollstaendig: !response.data.unvollstaendig })
+                await fetchRecentlyClosed(broker)
+
+                if (response.data.unvollstaendig) {
+                    errors.push({ broker, error: new Error(response.data.warnung || 'Teilausfall'), teilweise: true })
+                }
+            } catch (error) {
+                console.warn(` -> Abrufen von ${broker} fehlgeschlagen:`, error?.message || error)
+                errors.push({ broker, error })
+            }
+        }
+
+        /*
+         * Jeder gescheiterte Abruf wird sichtbar — nicht erst, wenn alle
+         * scheitern. Die Liste trägt die Seite; geworfen wird weiterhin nur beim
+         * Totalausfall, damit der bestehende Fehlerkasten seine Rolle behält.
+         */
+        incomingBrokerFehler.value = errors.map(e => ({
+            broker: e.broker,
+            meldung: e.error?.response?.data?.error || e.error?.message || String(e.error || ''),
+            teilweise: !!e.teilweise,
+        }))
+
+        // Wenn ALLE Börsen fehlschlugen, Fehler werfen, damit die Seite ihn anzeigt.
+        if (errors.length === activeBrokers.length && errors.every(e => !e.teilweise)) {
+            throw errors[0].error
+        }
+
+        await loadIncomingPositions()
+
+        // Update counters after sync
+        await useUpdatePendingCounts()
+
+        incomingLastFetched.value = new Date()
+    } finally {
+        incomingPollingActive.value = false
+    }
+}
+
+/**
+ * Sync API positions with the incoming_positions table:
+ * - New positions → create rows
+ * - Existing positions → update unrealizedPNL, markPrice
+ * - Missing positions → closed → handle transition to trades
+ */
+async function syncPositionsWithDb(apiPositions, broker, { vollstaendig = true } = {}) {
+    // Normalize positionId to string everywhere (API may return number)
+    const normalizeId = (p) => String(p?.positionId ?? p?.position_id ?? '')
+
+    const dbPositions = await dbFind('incoming_positions', { equalTo: { status: 'open', broker: broker } })
+    const dbMap = new Map(dbPositions.map(p => [String(p.positionId), p]))
+    const apiIds = new Set(apiPositions.map(p => normalizeId(p)).filter(Boolean))
+
+    // 1. Detect closed positions (in DB but not in API)
+    // Nur bei vollständiger Auskunft: „nicht in der Antwort“ heisst sonst
+    // „nicht abgefragt“, nicht „geschlossen“.
+    const closedPositions = vollstaendig
+        ? dbPositions.filter(p => !apiIds.has(String(p.positionId)))
+        : []
+    if (!vollstaendig && dbPositions.length) {
+        console.warn(` -> ${broker}: Teilausfall — Schliess-Erkennung übersprungen`)
+    }
+    if (closedPositions.length > 0) {
+        console.log(` -> ${closedPositions.length} Positionen geschlossen erkannt`)
+        await handleClosedPositions(closedPositions, broker)
+    }
+
+    // 2. Update existing / create new
+    for (const apiPos of apiPositions) {
+        const posId = normalizeId(apiPos)
+        if (!posId) {
+            console.warn(' -> Position ohne positionId übersprungen:', apiPos)
+            continue
+        }
+        const existing = dbMap.get(posId)
+
+        if (existing) {
+            // Update unrealizedPNL, markPrice, bitunixData
+            const rawSide = apiPos.side || (apiPos.holdSide || '').toUpperCase() || ''
+            const normSide = (rawSide === 'BUY' || rawSide === 'LONG') ? 'LONG' : (rawSide === 'SELL' || rawSide === 'SHORT') ? 'SHORT' : rawSide
+            await dbUpdate('incoming_positions', existing.objectId, {
+                unrealizedPNL: parseFloat(apiPos.unrealizedPNL ?? apiPos.unrealized_pnl ?? 0),
+                // Mark price first, liquidation as fallback (was reversed before — caused mark
+                // price field to be populated with the liquidation price).
+                markPrice: parseFloat(apiPos.markPrice ?? apiPos.mark_price ?? apiPos.liqPrice ?? apiPos.liq_price ?? 0),
+                quantity: parseFloat(apiPos.qty ?? apiPos.maxQty ?? apiPos.quantity ?? existing.quantity ?? 0),
+                entryPrice: parseFloat(apiPos.avgOpenPrice ?? apiPos.entryPrice ?? apiPos.avg_open_price ?? 0),
+                // symbol/side/leverage aktuell halten (z.B. nach Normalisierungs-Fix)
+                symbol: String(apiPos.symbol ?? apiPos.symbolName ?? existing.symbol ?? ''),
+                side: normSide || existing.side,
+                leverage: parseFloat(apiPos.leverage ?? existing.leverage ?? 0),
+                bitunixData: apiPos
+            })
+        } else {
+            // Support Bitunix (BUY/SELL/LONG/SHORT) and Bitget (holdSide: long/short, side: LONG/SHORT)
+            const rawSide = apiPos.side || (apiPos.holdSide || '').toUpperCase() || ''
+            const normalizedSide = (rawSide === 'BUY' || rawSide === 'LONG') ? 'LONG' : (rawSide === 'SELL' || rawSide === 'SHORT') ? 'SHORT' : rawSide
+            try {
+                await dbCreate('incoming_positions', {
+                    positionId: posId,
+                    symbol: String(apiPos.symbol ?? apiPos.symbolName ?? ''),
+                    side: normalizedSide,
+                    entryPrice: parseFloat(apiPos.avgOpenPrice ?? apiPos.entryPrice ?? apiPos.avg_open_price ?? 0),
+                    leverage: parseFloat(apiPos.leverage ?? 0),
+                    quantity: parseFloat(apiPos.qty ?? apiPos.maxQty ?? apiPos.quantity ?? 0),
+                    unrealizedPNL: parseFloat(apiPos.unrealizedPNL ?? apiPos.unrealized_pnl ?? apiPos.unrealizedPL ?? 0),
+                    // Mark-Preis zuerst — wie beim Aktualisieren oben. Hier stand
+                    // die Reihenfolge noch verkehrt, und eine neue Position trug
+                    // bis zum ersten Update ihren Liquidationspreis als Mark.
+                    markPrice: parseFloat(apiPos.markPrice ?? apiPos.mark_price ?? apiPos.liqPrice ?? apiPos.liq_price ?? 0),
+                    status: 'open',
+                    broker: broker,
+                    bitunixData: apiPos
+                })
+                console.log(` -> Neue Position in Pendente Trades: ${apiPos.symbol ?? apiPos.symbolName ?? ''} ${normalizedSide}`)
+            } catch (err) {
+                console.error(' -> Fehler beim Anlegen der Position in Pendente Trades:', err?.response?.data ?? err?.message ?? err)
+            }
+        }
+    }
+}
+
+/**
+ * Handle positions that have been closed on exchange.
+ * For each: fetch history data → create trade record → link metadata → remove from incoming.
+ */
+async function handleClosedPositions(closedPositions, broker) {
+    const popupsEnabled = currentUser.value?.showTradePopups !== 0
+
+    for (const incoming of closedPositions) {
+        try {
+            // Fetch history data for the closed position
+            const histResponse = await axios.get(`/api/${broker}/position-history/${incoming.positionId}`)
+
+            if (!histResponse.data.ok || !histResponse.data.position) {
+                console.log(` -> History für ${incoming.symbol} noch nicht verfügbar, wird übersprungen`)
+                continue
+            }
+
+            const histPos = histResponse.data.position
+
+            // Create trade record (skip metadata transfer if popups enabled — pending evaluation handles it)
+            await createTradeFromClosedPosition(histPos, incoming, popupsEnabled, incoming.broker || broker)
+
+            if (incoming.skipEvaluation === 1) {
+                // Skip evaluation: just delete the incoming position, no notes/tags transfer
+                // Trade stays "unbewertet" in Settings and won't appear in Playbook
+                await dbDelete('incoming_positions', incoming.objectId)
+                await useUpdatePendingCounts()
+                console.log(` -> Position ${incoming.symbol} geschlossen — Bewertung übersprungen`)
+            } else if (popupsEnabled) {
+                // Keep position as pending_evaluation, store historyData
+                await dbUpdate('incoming_positions', incoming.objectId, {
+                    status: 'pending_evaluation',
+                    historyData: histPos
+                })
+                console.log(` -> Position ${incoming.symbol} geschlossen — Abschlussbewertung ausstehend`)
+            } else {
+                // No popups: auto-detect trade type based on duration, transfer metadata and delete
+                const openTime = parseInt(histPos.ctime || histPos.cTime || 0)
+                const closeTime = parseInt(histPos.mtime || histPos.uTime || 0)
+                if (openTime && closeTime && closeTime > openTime) {
+                    const durationMin = (closeTime - openTime) / (1000 * 60)
+                    const scalpMax = currentUser.value?.scalpMaxMinutes ?? 15
+                    const daytradeMaxMin = (currentUser.value?.daytradeMaxHours ?? 24) * 60
+                    if (durationMin <= scalpMax) incoming.closingTradeType = 'scalp'
+                    else if (durationMin <= daytradeMaxMin) incoming.closingTradeType = 'day'
+                    else incoming.closingTradeType = 'swing'
+                }
+                await dbDelete('incoming_positions', incoming.objectId)
+                console.log(` -> Position ${incoming.symbol} geschlossen und als Trade übernommen`)
+            }
+        } catch (error) {
+            console.error(` -> Fehler beim Verarbeiten geschlossener Position ${incoming.symbol}:`, error)
+        }
+    }
+}
+
+/**
+ * Fetch recently closed positions from exchange history API
+ * and create incoming_positions + trade records for any that are new.
+ * This catches positions that closed while the app was not monitoring.
+ */
+async function fetchRecentlyClosed(broker) {
+    try {
+        const response = await axios.get(`/api/${broker}/recent-closed`)
+
+        if (!response.data.ok || !response.data.positions?.length) {
+            return
+        }
+
+        const positions = response.data.positions
+        console.log(` -> ${positions.length} kürzlich geschlossene Positionen aus History`)
+
+        const popupsEnabled = currentUser.value?.showTradePopups !== 0
+
+        for (const histPos of positions) {
+            const positionId = String(histPos.positionId || '')
+            if (!positionId) continue
+
+            // Dedup 1: Check incoming_positions table
+            const existingIncoming = await dbFirst('incoming_positions', {
+                equalTo: { positionId: positionId }
+            })
+            if (existingIncoming) continue
+
+            /*
+             * Dedup 2: steht die Position schon im Journal?
+             *
+             * Zwei Fallen, beide real aufgetreten:
+             *
+             * 1. `dbFirst` OHNE `broker` liefert die erste Tageszeile — und es
+             *    gibt eine pro Broker. An einem Tag mit Bitunix- UND
+             *    Bitget-Trades wurde die Bitget-positionId also in der
+             *    Bitunix-Zeile gesucht, nie gefunden, und die längst
+             *    verbuchte Position landete erneut in den pendenten Trades.
+             *    `createTradeFromClosedPosition` filtert weiter unten längst
+             *    richtig (`{dateUnix, broker}`) — deshalb entstanden keine
+             *    doppelten Journaleinträge, sondern nur Karteileichen.
+             *
+             * 2. Der Eintrag kann unter dem ERÖFFNUNGSTAG liegen. Bis zur
+             *    Normalisierung in `bitget-api.js` las der Import bei Bitget
+             *    `ctime` statt `utime`; ein Trade über Mitternacht steht im
+             *    Altbestand deshalb unter einem anderen Datum als dem, das
+             *    jetzt berechnet wird. Beide Kandidatentage prüfen kostet eine
+             *    Abfrage und macht den Abgleich unabhängig davon, welcher
+             *    Codestand den Eintrag angelegt hat.
+             */
+            const closeTime = parseInt(histPos.mtime || histPos.uTime || histPos.ctime || histPos.cTime)
+            const openTime = parseInt(histPos.ctime || histPos.cTime || closeTime)
+            const kandidatenTage = [...new Set([
+                dayjs(closeTime).utc().startOf('day').unix(),
+                dayjs(openTime).utc().startOf('day').unix(),
+            ])]
+
+            let schonImJournal = false
+            for (const tag of kandidatenTage) {
+                const dayRecord = await dbFirst('trades', { equalTo: { dateUnix: tag, broker: broker } })
+                if (!dayRecord) continue
+                const dayTrades = Array.isArray(dayRecord.trades) ? dayRecord.trades : []
+                // Trade-ID hat das Format t{date}_{idx}_{positionId}
+                if (dayTrades.some(t => t.id && String(t.id).endsWith('_' + positionId))) {
+                    schonImJournal = true
+                    break
+                }
+            }
+            if (schonImJournal) continue
+
+            // New closed position: create trade record
+            // Support both Bitunix (side: LONG/SHORT/BUY/SELL) and Bitget (holdSide: long/short)
+            const rawSide = histPos.side || (histPos.holdSide || '').toUpperCase() || ''
+            const normalizedSide = (rawSide === 'LONG' || rawSide === 'BUY') ? 'LONG' : 'SHORT'
+
+            const incomingStub = {
+                positionId: positionId,
+                symbol: histPos.symbol || '',
+                side: normalizedSide,
+                entryPrice: parseFloat(histPos.entryPrice || histPos.openAvgPrice || 0),
+                leverage: parseFloat(histPos.leverage || 0),
+                quantity: parseFloat(histPos.maxQty || histPos.closeTotalPos || histPos.openTotalPos || 0),
+            }
+
+            // Create trade record (skipMetadata = true — no opening metadata yet)
+            await createTradeFromClosedPosition(histPos, incomingStub, true, broker)
+
+            if (popupsEnabled) {
+                try {
+                    await dbCreate('incoming_positions', {
+                        positionId: positionId,
+                        symbol: histPos.symbol || '',
+                        side: normalizedSide,
+                        entryPrice: parseFloat(histPos.entryPrice || histPos.openAvgPrice || 0),
+                        leverage: parseFloat(histPos.leverage || 0),
+                        quantity: parseFloat(histPos.maxQty || histPos.closeTotalPos || histPos.openTotalPos || 0),
+                        unrealizedPNL: 0,
+                        markPrice: 0,
+                        status: 'pending_evaluation',
+                        broker: broker,
+                        historyData: histPos,
+                        bitunixData: histPos
+                    })
+                    console.log(` -> Neue geschlossene Position in Pendente Trades: ${histPos.symbol} ${normalizedSide}`)
+                } catch (err) {
+                    if (!err?.message?.includes('UNIQUE') && err?.response?.status !== 500) {
+                        console.error(' -> Fehler beim Anlegen der geschlossenen Position:', err?.response?.data ?? err?.message ?? err)
+                    }
+                }
+            } else {
+                console.log(` -> Geschlossene Position ${histPos.symbol} als Trade importiert (Popups deaktiviert)`)
+            }
+        }
+    } catch (error) {
+        console.log(' -> History-Scan fehlgeschlagen:', error.message)
+    }
+}
+
+/**
+ * Create a trade record from a closed position.
+ * Uses the exact same ~40-field trade object format as quickImport.js.
+ * Links metadata (playbook → notes, screenshotId → screenshot name).
+ */
+async function createTradeFromClosedPosition(histPos, incoming, skipMetadata = false, broker = null) {
+    broker = broker || incoming?.broker || selectedBroker.value || 'bitunix'
+    const isBitget = broker === 'bitget'
+    const isPionex = broker === 'pionex'
+
+    // PnL- und Fee-Logik MUSS identisch zu quickImport.js sein, sonst weichen
+    // live-importierte Trades von CSV-/manuell-importierten ab und der
+    // Dashboard-Kontostand stimmt nicht mehr mit dem Broker-Wallet ueberein.
+    //
+    // Bitunix:  API `realizedPNL` ist bereits der FINALE Wallet-Delta
+    //           (inkl. Trading-Fee UND Funding — wie Bitunix-UI "Realisierter G/V"
+    //           anzeigt). Verifiziert via /futures/position/get_history_positions.
+    //           → netPL = realizedPNL (kein zusaetzliches Funding abziehen!)
+    //           → grossPL = realizedPNL + tradingFee − fundingFee
+    //           → commission = tradingFee (Funding separat in fundingFee tracken)
+    // Bitget:   pnl ist BRUTTO. fee = openFee + closeFee + funding (signed),
+    //           netPL bevorzugt netProfit, sonst pnl - fee
+    let grossPL, fee, tradingFee, fundingFee, netPL
+    if (isPionex) {
+        // Pionex Bot/Futures: totalRealizedProfit = NETTO-Wallet-Delta (live
+        // verifiziert), analog Bitunix realizedPNL. grossPL rekonstruiert.
+        const netRaw = histPos.totalRealizedProfit ?? histPos.realizedPnl ?? histPos.amountSettled ?? histPos.gridProfit ?? histPos.pnl ?? 0
+        netPL = parseFloat(netRaw || 0)
+        tradingFee = Math.abs(parseFloat(histPos.totalFee ?? histPos.fee ?? histPos.tradingFee ?? 0))
+        fundingFee = parseFloat(histPos.totalFundingFee ?? histPos.fundingFee ?? histPos.funding ?? 0)
+        grossPL = netPL + tradingFee - fundingFee
+        fee = tradingFee
+    } else if (isBitget) {
+        grossPL = parseFloat(histPos.pnl || 0)            // Bitget pnl = BRUTTO (vor Gebuehren)
+        const openFee = Math.abs(parseFloat(histPos.openFee || 0))
+        const closeFee = Math.abs(parseFloat(histPos.closeFee || 0))
+        tradingFee = openFee + closeFee
+        fundingFee = parseFloat(histPos.totalFunding || 0)  // signiert: + erhalten / − bezahlt
+        // commission = NUR Trading-Fee (Funding separat in fundingFee), identisch
+        // zur Bitunix-Semantik. Frueher: tradingFee + fundingFee → verfaelschte
+        // die Gebuehren-Summe je nach Funding-Vorzeichen.
+        fee = tradingFee
+        // netProfit ist Bitgets echter Wallet-Delta (nach Fee & Funding). Auch 0
+        // ist ein gueltiger Break-even-Wert und darf NICHT in den Fallback laufen.
+        const rawNet = histPos.netProfit
+        const hasNet = rawNet !== undefined && rawNet !== null && rawNet !== ''
+        netPL = hasNet ? parseFloat(rawNet) : (grossPL - tradingFee + fundingFee)
+    } else {
+        const realizedPNL = parseFloat(histPos.realizedPNL || 0)
+        tradingFee = Math.abs(parseFloat(histPos.fee || 0))
+        fundingFee = parseFloat(histPos.funding || 0)  // Vorzeichen beibehalten
+        netPL = realizedPNL                                       // Wallet-Delta direkt
+        grossPL = realizedPNL + tradingFee - fundingFee           // reine Trade-PnL
+        fee = tradingFee                                          // commission = trading fee
+    }
+    // Bitunix: mtime/ctime; Bitget: uTime/cTime; Pionex-Futures: updateTime/createTime; Bot: closeTime/createTime
+    const closeTime = parseInt(histPos.mtime || histPos.uTime || histPos.updateTime || histPos.closeTime || histPos.ctime || histPos.cTime || 0)
+    const openTime = parseInt(histPos.ctime || histPos.cTime || histPos.createTime || histPos.openTime || closeTime)
+    const dateUnix = dayjs(closeTime).utc().startOf('day').unix()
+
+    // Bitunix: side LONG/SHORT/BUY/SELL; Bitget: holdSide; Pionex-Futures: positionSide.
+    // Grid-Bots sind richtungslos → aus Open/Close-Preis ableiten.
+    const rawSide = (histPos.side || histPos.positionSide || histPos.holdSide || '').toString().toUpperCase()
+    let side
+    if (rawSide === 'LONG' || rawSide === 'BUY') side = 'B'
+    else if (rawSide === 'SHORT' || rawSide === 'SELL') side = 'SS'
+    else {
+        const op = parseFloat(histPos.positionOpenPrice || histPos.entryPrice || histPos.openAvgPrice || 0)
+        const cp = parseFloat(histPos.closedPrice || histPos.closePrice || histPos.closeAvgPrice || 0)
+        side = (cp >= op) ? 'B' : 'SS'
+    }
+    const isGrossWin = istGewinn(grossPL)
+    const isNetWin = istGewinn(netPL)
+    const quantity = Math.abs(parseFloat(histPos.maxQty || histPos.closeTotalPos || histPos.openTotalPos || histPos.totalVolume || histPos.sizeLong || histPos.sizeShort || histPos.netSize || 1))
+    const entryTime = dayjs(openTime).utc().unix()
+    const exitTime = dayjs(closeTime).utc().unix()
+
+    const tradeId = `t${dateUnix}_0_${histPos.positionId}`
+
+    const tradeObj = {
+        id: tradeId,
+        account: broker,
+        broker: broker,
+        td: dateUnix,
+        currency: 'USDT',
+        type: 'futures',
+        side: side,
+        strategy: side === 'B' ? 'long' : 'short',
+        symbol: histPos.symbol || 'FUTURES',
+        buyQuantity: quantity,
+        sellQuantity: quantity,
+        entryPrice: parseFloat(histPos.entryPrice || histPos.openAvgPrice || histPos.avgEntryPrice || histPos.avgPrice || histPos.positionOpenPrice || 0),
+        exitPrice: parseFloat(histPos.closePrice || histPos.closeAvgPrice || histPos.avgClosePrice || histPos.closedPrice || 0),
+        entryTime: entryTime,
+        exitTime: exitTime,
+        grossProceeds: grossPL,
+        netProceeds: netPL,
+        commission: fee,
+        tradingFee: tradingFee || 0,
+        fundingFee: fundingFee || 0,
+        sec: 0, taf: 0, nscc: 0, nasdaq: 0,
+        grossSharePL: grossPL,
+        netSharePL: netPL,
+        grossWins: isGrossWin ? grossPL : 0,
+        grossLoss: isGrossWin ? 0 : grossPL,
+        netWins: isNetWin ? netPL : 0,
+        netLoss: isNetWin ? 0 : netPL,
+        grossWinsCount: isGrossWin ? 1 : 0,
+        grossLossCount: isGrossWin ? 0 : 1,
+        netWinsCount: isNetWin ? 1 : 0,
+        netLossCount: isNetWin ? 0 : 1,
+        grossWinsQuantity: isGrossWin ? quantity : 0,
+        grossLossQuantity: isGrossWin ? 0 : quantity,
+        netWinsQuantity: isNetWin ? quantity : 0,
+        netLossQuantity: isNetWin ? 0 : quantity,
+        grossSharePLWins: isGrossWin ? grossPL : 0,
+        grossSharePLLoss: isGrossWin ? 0 : grossPL,
+        netSharePLWins: isNetWin ? netPL : 0,
+        netSharePLLoss: isNetWin ? 0 : netPL,
+        highGrossSharePLWin: isGrossWin ? grossPL : 0,
+        highGrossSharePLLoss: isGrossWin ? 0 : grossPL,
+        highNetSharePLWin: isNetWin ? netPL : 0,
+        highNetSharePLLoss: isNetWin ? 0 : netPL,
+        executionsCount: 1,
+        tradesCount: 1,
+        openPosition: false,
+    }
+
+    // Bot- vs. Futures-Kategorie (für den Futures/Bot-Filter). Pionex-Bots
+    // liefern botType; alles andere ist "futures".
+    if (isPionex && histPos.botType) {
+        tradeObj.botType = histPos.botType
+        tradeObj.category = 'bot'
+        if (histPos.setLeverage) tradeObj.leverage = parseFloat(histPos.setLeverage)
+        if (histPos.initQuoteInvestment) tradeObj.investment = parseFloat(histPos.initQuoteInvestment)
+    } else {
+        tradeObj.category = 'futures'
+    }
+
+    const execution = { ...tradeObj, trade: tradeId }
+
+    // Check if a trade record for this day already exists (same broker only!)
+    const existingDay = await dbFirst('trades', { equalTo: { dateUnix: dateUnix, broker: broker } })
+
+    if (existingDay) {
+        // Merge into existing day: append trade and execution
+        const existingTrades = Array.isArray(existingDay.trades) ? existingDay.trades : []
+        const existingExecs = Array.isArray(existingDay.executions) ? existingDay.executions : []
+
+        // Idempotency-Guard: positionId darf nicht doppelt im Tag landen.
+        // Race-Bedingung zwischen syncPositionsWithDb→handleClosedPositions
+        // und fetchRecentlyClosed kann sonst denselben just-geschlossenen
+        // Trade zweimal anhängen (Duplikat → falscher Tageskontostand).
+        const posIdSuffix = '_' + histPos.positionId
+        const alreadyPresent = existingTrades.some(t => t && t.id && String(t.id).endsWith(posIdSuffix))
+            || existingExecs.some(e => e && e.id && String(e.id).endsWith(posIdSuffix))
+        if (alreadyPresent) {
+            console.log(` -> Trade für positionId ${histPos.positionId} bereits vorhanden — Duplikat verhindert`)
+            return
+        }
+
+        existingTrades.push(tradeObj)
+        existingExecs.push(execution)
+
+        // Rebuild blotter
+        const blotterMap = {}
+        existingTrades.forEach(t => {
+            if (!blotterMap[t.symbol]) {
+                blotterMap[t.symbol] = { symbol: t.symbol, grossProceeds: 0, netProceeds: 0, fees: 0, grossWinsCount: 0, grossLossCount: 0, trades: 0 }
+            }
+            const b = blotterMap[t.symbol]
+            b.grossProceeds += t.grossProceeds
+            b.netProceeds += t.netProceeds
+            b.fees += t.commission
+            b.grossWinsCount += t.grossWinsCount
+            b.grossLossCount += t.grossLossCount
+            b.trades += 1
+        })
+
+        // Rebuild P&L
+        let totalGross = 0, totalNet = 0, totalFees = 0, gwc = 0, glc = 0, tc = 0
+        existingTrades.forEach(t => {
+            totalGross += t.grossProceeds
+            totalNet += t.netProceeds
+            totalFees += t.commission
+            gwc += t.grossWinsCount
+            glc += t.grossLossCount
+            tc += 1
+        })
+
+        await dbUpdate('trades', existingDay.objectId, {
+            trades: existingTrades,
+            executions: existingExecs,
+            blotter: Object.values(blotterMap),
+            pAndL: { grossProceeds: totalGross, netProceeds: totalNet, fees: totalFees, grossWinsCount: gwc, grossLossCount: glc, trades: tc }
+        })
+    } else {
+        // Create new day
+        const blotter = [{
+            symbol: tradeObj.symbol,
+            grossProceeds: tradeObj.grossProceeds,
+            netProceeds: tradeObj.netProceeds,
+            fees: tradeObj.commission,
+            grossWinsCount: tradeObj.grossWinsCount,
+            grossLossCount: tradeObj.grossLossCount,
+            trades: 1
+        }]
+
+        const pAndL = {
+            grossProceeds: grossPL,
+            netProceeds: netPL,
+            fees: fee,
+            grossWinsCount: isGrossWin ? 1 : 0,
+            grossLossCount: isGrossWin ? 0 : 1,
+            trades: 1
+        }
+
+        await dbCreate('trades', {
+            date: dayjs.unix(dateUnix).format('YYYY-MM-DD'),
+            dateUnix: Number(dateUnix),
+            broker: broker,
+            executions: [execution],
+            trades: [tradeObj],
+            blotter: blotter,
+            pAndL: pAndL,
+            openPositions: false
+        })
+    }
+
+    // Skip metadata transfer if pending evaluation will handle it
+    if (!skipMetadata) {
+        // Link metadata: playbook → notes table
+        if (incoming.playbook && incoming.playbook.trim()) {
+            let noteText = incoming.playbook
+            if (incoming.stressLevel) {
+                noteText = `<p><strong>Stresslevel: ${incoming.stressLevel}/10</strong></p>` + noteText
+            }
+            if (incoming.feelings && incoming.feelings.trim()) {
+                noteText = `<p><em>${incoming.feelings}</em></p>` + noteText
+            }
+            await dbCreate('notes', {
+                dateUnix: dateUnix,
+                tradeId: tradeId,
+                note: noteText
+            })
+        } else if (incoming.feelings || incoming.stressLevel) {
+            let noteText = ''
+            if (incoming.stressLevel) {
+                noteText += `<p><strong>Stresslevel: ${incoming.stressLevel}/10</strong></p>`
+            }
+            if (incoming.feelings && incoming.feelings.trim()) {
+                noteText += `<p><em>${incoming.feelings}</em></p>`
+            }
+            if (noteText) {
+                await dbCreate('notes', {
+                    dateUnix: dateUnix,
+                    tradeId: tradeId,
+                    note: noteText
+                })
+            }
+        }
+
+        // Link metadata: entryScreenshotId → update screenshot name for trade linking
+        if (incoming.entryScreenshotId || incoming.screenshotId) {
+            const ssId = incoming.entryScreenshotId || incoming.screenshotId
+            try {
+                await dbUpdate('screenshots', ssId, {
+                    name: `${dateUnix}_${histPos.symbol}`,
+                    dateUnixDay: dateUnix
+                })
+            } catch (e) {
+                console.log(' -> Screenshot-Verknüpfung fehlgeschlagen:', e)
+            }
+        }
+
+        // Link metadata: tags → tags table
+        if (incoming.tags && Array.isArray(incoming.tags) && incoming.tags.length > 0) {
+            try {
+                await dbCreate('tags', {
+                    dateUnix: dateUnix,
+                    tradeId: tradeId,
+                    tags: incoming.tags.map(t => typeof t === 'object' ? t.id : t)
+                })
+            } catch (e) {
+                console.log(' -> Tag-Verknüpfung fehlgeschlagen:', e)
+            }
+        }
+    }
+
+    // Trade-Tabelle hat sich geaendert → Kontostand-Cache fuer diesen Broker
+    // invalidieren + neu laden. Sorgt dafuer, dass das Dashboard den
+    // Kontostand sofort korrekt zeigt, ohne dass ein Reload noetig ist.
+    try {
+        await refreshAccountBalance({ broker, force: true })
+    } catch (e) {
+        console.log(' -> refreshAccountBalance nach Trade-Insert fehlgeschlagen:', e?.message)
+    }
+}
+
+/**
+ * Load all incoming positions from local DB into reactive state.
+ * Ensures tags and closingTags are always independent deep-copied arrays.
+ */
+// Metadata fields that the user edits locally (preserve during polling reload)
+const LOCAL_EDIT_FIELDS = [
+    'feelings', 'stressLevel', 'emotionLevel', 'entryTimeframe', 'tradeType',
+    'closingTradeType', 'tags', 'closingTags', 'skipEvaluation', 'satisfaction',
+    'strategyFollowed', 'closingStressLevel', 'closingEmotionLevel', 'closingFeelings',
+    'closingTimeframe', 'playbook', 'closingPlaybook', 'entryNote', 'closingNote',
+    'entryScreenshotId', 'closingScreenshotId', 'trendScreenshotId'
+]
+
+async function loadIncomingPositions() {
+    // Load both open and pending_evaluation positions across ALL brokers —
+    // the Pendente-Trades view groups them per exchange (jede Position trägt
+    // ihr eigenes broker-Feld).
+    const openResults = await dbFind('incoming_positions', {
+        equalTo: { status: 'open' },
+        descending: 'id'
+    })
+    const pendingResults = await dbFind('incoming_positions', {
+        equalTo: { status: 'pending_evaluation' },
+        descending: 'id'
+    })
+
+    // Preserve local state of the expanded (currently edited) position
+    let preservedLocal = null
+    if (expandedId.value) {
+        const expandedPos = incomingPositions.find(p => p.positionId === expandedId.value)
+        if (expandedPos) {
+            preservedLocal = { positionId: expandedPos.positionId }
+            LOCAL_EDIT_FIELDS.forEach(field => {
+                const val = expandedPos[field]
+                if (val !== undefined && val !== null) {
+                    preservedLocal[field] = (Array.isArray(val) || typeof val === 'object')
+                        ? JSON.parse(JSON.stringify(val))
+                        : val
+                }
+            })
+        }
+    }
+
+    incomingPositions.length = 0
+
+    // Ensure tags and closingTags are independent deep-copied arrays (never shared reference)
+    const normalizePosition = (pos) => {
+        pos.tags = Array.isArray(pos.tags) ? JSON.parse(JSON.stringify(pos.tags)) : []
+        pos.closingTags = Array.isArray(pos.closingTags) ? JSON.parse(JSON.stringify(pos.closingTags)) : []
+        if (pos.tags === pos.closingTags) pos.closingTags = []
+
+        // "Börsen-Wahrheit" aus dem live gespeicherten API-Objekt übernehmen:
+        // symbol/side/leverage in der DB-Zeile können veraltet sein (z.B. nach einer
+        // Normalisierungs-Änderung wird beim Update nur PnL/markPrice aktualisiert).
+        // coinM/marginCoin sind keine DB-Spalten und kommen ausschließlich von hier.
+        const bd = pos.bitunixData
+        if (bd && typeof bd === 'object') {
+            if (bd.symbol) pos.symbol = bd.symbol
+            if (bd.side) pos.side = bd.side
+            if (bd.leverage != null && bd.leverage !== '') pos.leverage = bd.leverage
+            pos.coinM = !!bd.coinM
+            pos.marginCoin = bd.marginCoin || 'USDT'
+        }
+
+        // Restore local edits for the expanded position
+        if (preservedLocal && String(pos.positionId) === String(preservedLocal.positionId)) {
+            LOCAL_EDIT_FIELDS.forEach(field => {
+                if (preservedLocal[field] !== undefined) {
+                    pos[field] = (Array.isArray(preservedLocal[field]) || typeof preservedLocal[field] === 'object')
+                        ? JSON.parse(JSON.stringify(preservedLocal[field]))
+                        : preservedLocal[field]
+                }
+            })
+        }
+        return pos
+    }
+
+    // Open positions first, then pending evaluation
+    openResults.forEach(r => incomingPositions.push(normalizePosition(r)))
+    pendingResults.forEach(r => incomingPositions.push(normalizePosition(r)))
+}
+
+/**
+ * Get incoming positions (for initial page load).
+ */
+export async function useGetIncomingPositions() {
+    await loadIncomingPositions()
+}
+
+/**
+ * Update metadata on an incoming position.
+ * Deep-copies tags/closingTags to prevent shared references.
+ */
+export async function useUpdateIncomingPosition(objectId, data) {
+    await dbUpdate('incoming_positions', objectId, data)
+    // Update local state with deep-copied tag arrays
+    const idx = incomingPositions.findIndex(p => p.objectId === objectId)
+    if (idx !== -1) {
+        const safeCopy = { ...data }
+        if (safeCopy.tags !== undefined) {
+            safeCopy.tags = JSON.parse(JSON.stringify(safeCopy.tags || []))
+        }
+        if (safeCopy.closingTags !== undefined) {
+            safeCopy.closingTags = JSON.parse(JSON.stringify(safeCopy.closingTags || []))
+        }
+        Object.assign(incomingPositions[idx], safeCopy)
+    }
+}
+
+/**
+ * Delete an incoming position manually.
+ */
+export async function useDeleteIncomingPosition(objectId) {
+    await dbDelete('incoming_positions', objectId)
+    const idx = incomingPositions.findIndex(p => p.objectId === objectId)
+    if (idx !== -1) {
+        incomingPositions.splice(idx, 1)
+    }
+}
+
+/**
+ * Start global polling for position changes (used in DashboardLayout).
+ * Runs every 60 seconds. Detects new/closed positions and updates counters.
+ * Only active when showTradePopups is enabled.
+ */
+export function useStartGlobalPolling() {
+    if (globalPollingInterval) {
+        clearInterval(globalPollingInterval)
+        globalPollingInterval = null
+    }
+
+    if (currentUser.value?.showTradePopups === 0) return
+
+    console.log(' -> Globales Positions-Polling gestartet (60s)')
+
+    globalPollingInterval = setInterval(async () => {
+        // Don't poll if already polling (e.g., from Incoming.vue)
+        if (incomingPollingActive.value) return
+
+        try {
+            await useFetchOpenPositions()
+        } catch (error) {
+            // Silent fail — don't spam console on network errors
+            console.log(' -> Globales Polling fehlgeschlagen:', error.message)
+        }
+    }, 60000)
+}
+
+/**
+ * Stop global polling (cleanup).
+ */
+export function useStopGlobalPolling() {
+    if (globalPollingInterval) {
+        clearInterval(globalPollingInterval)
+        globalPollingInterval = null
+        console.log(' -> Globales Positions-Polling gestoppt')
+    }
+}
+
+/**
+ * Transfer metadata from closing evaluation to the trade record.
+ * Called when user completes closing evaluation on the Pendente Trades page.
+ * Includes both opening and closing metadata fields.
+ */
+export async function useTransferClosingMetadata(incoming, histPos, {
+    note = '',
+    tags = [],
+    satisfaction = null,
+    stressLevel = 0,
+    tradeType = '',
+    closingTradeType = '',
+    strategyFollowed = -1,
+    closingNote = '',
+    closingStressLevel = 0,
+    closingEmotionLevel = 0,
+    closingFeelings = '',
+    closingTimeframe = '',
+    closingPlaybook = '',
+    closingScreenshotId = '',
+    closingTags = [],
+    tradingMetadata = null,
+}) {
+    // Support Bitunix (mtime/ctime), Bitget (uTime/cTime), Pionex-Futures
+    // (updateTime/createTime) und Pionex-Bots (closeTime/createTime).
+    // Schließzeit-Felder zuerst, Öffnungszeit (createTime) nur als letzter Fallback.
+    const closeTime = parseInt(
+        histPos.mtime || histPos.uTime || histPos.updateTime ||
+        histPos.closeTime || histPos.ctime || histPos.cTime || histPos.createTime
+    )
+    if (!closeTime || isNaN(closeTime)) {
+        console.error(' -> useTransferClosingMetadata: Kein gültiger Zeitstempel in histPos', histPos)
+        throw new Error('Kein gültiger Zeitstempel für die geschlossene Position')
+    }
+    const dateUnix = dayjs(closeTime).utc().startOf('day').unix()
+    const tradeId = await dbFindTradeIdByPositionId(dateUnix, histPos.positionId)
+
+    // Build combined note HTML for backwards compatibility
+    let noteText = ''
+    if (incoming.playbook && incoming.playbook.trim()) {
+        noteText += incoming.playbook
+    }
+    if (note && note.trim()) {
+        noteText += `<p>${note}</p>`
+    }
+    if (!noteText.trim()) {
+        noteText = '<p>-</p>'
+    }
+
+    // Save note with structured metadata fields (opening + closing)
+    await dbCreate('notes', {
+        dateUnix: dateUnix,
+        tradeId: tradeId,
+        note: noteText,
+        // Opening fields
+        tradeType: tradeType || incoming.tradeType || '',
+        closingTradeType: closingTradeType || incoming.closingTradeType || '',
+        entryStressLevel: incoming.stressLevel || 0,
+        emotionLevel: incoming.emotionLevel || 0,
+        entryNote: incoming.entryNote || '',
+        feelings: incoming.feelings || '',
+        playbook: incoming.playbook || '',
+        timeframe: incoming.entryTimeframe || '',
+        screenshotId: incoming.entryScreenshotId || incoming.screenshotId || '',
+        trendScreenshotId: incoming.trendScreenshotId || '',
+        // Closing fields
+        strategyFollowed: strategyFollowed != null ? strategyFollowed : (incoming.strategyFollowed != null ? incoming.strategyFollowed : -1),
+        closingNote: closingNote || incoming.closingNote || '',
+        closingStressLevel: closingStressLevel,
+        closingEmotionLevel: closingEmotionLevel,
+        closingFeelings: closingFeelings,
+        closingTimeframe: closingTimeframe,
+        closingPlaybook: closingPlaybook,
+        closingScreenshotId: closingScreenshotId,
+        tradingMetadata: tradingMetadata || null,
+    })
+
+    // Save satisfaction (only if user actually set a value, -1 = not set)
+    if (satisfaction !== null && satisfaction !== undefined && satisfaction >= 0) {
+        await dbCreate('satisfactions', {
+            dateUnix: dateUnix,
+            tradeId: tradeId,
+            satisfaction: satisfaction
+        })
+    }
+
+    // Save tags (combined opening + closing tags)
+    const allTags = [
+        ...(tags || []).map(t => typeof t === 'object' ? t.id : t),
+        ...(closingTags || []).map(t => typeof t === 'object' ? t.id : t),
+    ]
+    // Deduplicate
+    const uniqueTags = [...new Set(allTags)]
+    if (uniqueTags.length > 0) {
+        await dbCreate('tags', {
+            dateUnix: dateUnix,
+            tradeId: tradeId,
+            tags: uniqueTags
+        })
+    }
+
+    // Link entry screenshot if present
+    const entryScreenshotId = incoming.entryScreenshotId || incoming.screenshotId
+    if (entryScreenshotId) {
+        try {
+            await dbUpdate('screenshots', entryScreenshotId, {
+                name: `${dateUnix}_${histPos.symbol}_entry`,
+                dateUnixDay: dateUnix
+            })
+        } catch (e) {
+            console.log(' -> Entry-Screenshot-Verknüpfung fehlgeschlagen:', e)
+        }
+    }
+
+    // Link trend screenshot if present
+    const trendScreenshotId = incoming.trendScreenshotId
+    if (trendScreenshotId) {
+        try {
+            await dbUpdate('screenshots', trendScreenshotId, {
+                name: `${dateUnix}_${histPos.symbol}_trend`,
+                dateUnixDay: dateUnix
+            })
+        } catch (e) {
+            console.log(' -> Trend-Screenshot-Verknüpfung fehlgeschlagen:', e)
+        }
+    }
+
+    // Link closing screenshot if present
+    if (closingScreenshotId) {
+        try {
+            await dbUpdate('screenshots', closingScreenshotId, {
+                name: `${dateUnix}_${histPos.symbol}_closing`,
+                dateUnixDay: dateUnix
+            })
+        } catch (e) {
+            console.log(' -> Closing-Screenshot-Verknüpfung fehlgeschlagen:', e)
+        }
+    }
+
+    // Delete incoming position (evaluation complete)
+    await dbDelete('incoming_positions', incoming.objectId)
+
+    // Update counters
+    await useUpdatePendingCounts()
+
+    // Defensive: Kontostand-Cache aktualisieren. Der Trade selbst wurde
+    // schon bei Schluss-Erkennung erstellt; dieser Call faengt Faelle ab,
+    // in denen der Cache zwischendurch stale geworden ist (Browser-Tab
+    // lange offen, Broker-Wechsel, etc.).
+    try {
+        const broker = incoming.broker || selectedBroker.value || 'bitunix'
+        await refreshAccountBalance({ broker, force: true })
+    } catch (e) {
+        console.log(' -> refreshAccountBalance nach Bewertung fehlgeschlagen:', e?.message)
+    }
+
+    console.log(` -> Bewertung abgeschlossen für ${incoming.symbol}`)
+}

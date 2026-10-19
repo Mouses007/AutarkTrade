@@ -1,0 +1,863 @@
+/**
+ * Selbsttest des Regel-Interpreters.
+ *
+ *   node server/strategies/__selftest-rules.mjs
+ *
+ * Die entscheidende Prüfung steht am Ende: EMA Touch wird einmal als
+ * handgeschriebener Code und einmal als reine Regelbeschreibung durch dieselben
+ * Kerzen geschickt. Finden beide dieselben Setups an denselben Stellen, trägt
+ * der Interpreter. Weicht er ab, ist er kaputt — nicht die Strategie.
+ */
+
+import { detectMitRegeln, alsManifest, zahl } from './rule-engine.js'
+import { pruefeRegeln, regelnUnterscheidenSich } from './rule-validate.js'
+import emaTouch from './ema_touch.js'
+
+const TF_MS = 900000
+let bestanden = 0
+let fehlgeschlagen = 0
+const fehler = []
+
+function check(name, ok, detail) {
+    if (ok) { bestanden++; console.log(`  \x1b[32m✓\x1b[0m ${name}`) }
+    else { fehlgeschlagen++; fehler.push(name); console.log(`  \x1b[31m✗\x1b[0m ${name}${detail ? ` — ${detail}` : ''}`) }
+}
+
+const series = (rows, t0 = 1700000000000) => rows.map((r, i) => ({
+    t: t0 + i * TF_MS, o: r[0], h: r[1], l: r[2], c: r[3], v: 100,
+    closeTime: t0 + (i + 1) * TF_MS - 1,
+}))
+
+console.log('\nRegel-Interpreter — Selbsttest\n')
+
+// ── Prüfung weist Unsinn ab ──────────────────────────────────────────────
+console.log('Prüfung der Beschreibung')
+
+{
+    const r = pruefeRegeln({
+        id: '../../etc/passwd', timeframes: ['1h', 'quatsch'],
+        params: [{ key: 'gut', type: 'number', default: 2, min: 1, max: 5 },
+                 { key: 'kaputt', type: 'zauberei', default: 1 }],
+        indicators: [{ id: 'ema21', type: 'ema', period: 21 },
+                     { id: 'boese', type: 'require("fs")', period: 5 }],
+        signal: { type: 'pivotHigh', left: 10, right: 2 },
+        signalFilters: [{ left: 'signalPrice', op: 'distancePctGt', right: 'ema21', value: { param: 'gut' } },
+                        { left: 'signalPrice', op: 'zaubern', right: 'ema21' },
+                        { left: 'signalPrice', op: 'gt', right: 'gibtesnicht' }],
+        entry: { type: 'touch', anchor: 'ema21', from: 'above' },
+        stopLoss: { anchor: 'correctionLow', offsetPct: 0.2 },
+        takeProfit: { mode: 'rr', rr: 2 },
+    })
+    check('feindselige Beschreibung wird abgelehnt', r.ok === false)
+    check('Pfadausbruch im Kurznamen erkannt', r.fehler.some((f) => f.includes('Kurzname')))
+    check('unbekannter Indikatortyp abgelehnt', r.fehler.some((f) => f.includes('unbekannter Typ')))
+    check('unbekannter Vergleich abgelehnt', r.fehler.some((f) => f.includes('unbekannter Vergleich')))
+    check('unbekannte Referenz abgelehnt', r.fehler.some((f) => f.includes('gibtesnicht')))
+    check('ungültiger Parametertyp abgelehnt', r.fehler.some((f) => f.includes('kaputt')))
+    check('ungültige Zeiteinheit gefiltert', JSON.stringify(r.regeln.timeframes) === '["1h"]')
+    check('gültiger Filter überlebt', r.regeln.signalFilters.length === 1)
+}
+
+{
+    const r = pruefeRegeln({
+        id: 'ohne_filter', timeframes: ['1h'],
+        indicators: [{ id: 'e', type: 'ema', period: 20 }],
+        signal: { type: 'pivotHigh', left: 5, right: 2 },
+        entry: { type: 'touch', anchor: 'e' },
+        stopLoss: { anchor: 'correctionLow', offsetPct: 0.2 },
+        takeProfit: { mode: 'rr', rr: 2 },
+    })
+    check('gültige Beschreibung wird angenommen', r.ok, r.fehler.join('; '))
+    check('fehlende Filter erzeugen einen Hinweis', r.hinweise.length >= 1, JSON.stringify(r.hinweise))
+}
+
+// ── Bausteine einzeln ────────────────────────────────────────────────────
+console.log('\nBausteine')
+
+{
+    // Steigender Markt mit einem Hügel — erzeugt Pivot-Hoch und -Tief.
+    //
+    // Die drei zähen Kerzen direkt nach dem Hoch sind Absicht: das Pivot mit
+    // `right: 2` ist erst zwei Kerzen später bekannt, und ein Setup, dessen
+    // Anker schon in dieser Lücke berührt wird, gilt seither als nie handelbar
+    // (`entry_before_confirm`). Hier soll die Stop-/Ziel-Rechnung geprüft
+    // werden, nicht diese Grenze — also bleibt der Kurs so lange oben.
+    const rows = []
+    for (let i = 0; i < 40; i++) { const b = 100 + i * 0.3; rows.push([b, b + 0.15, b - 0.1, b + 0.12]) }
+    for (let i = 0; i < 3; i++) { const b = 112 - i * 0.05; rows.push([b, b + 0.05, b - 0.08, b - 0.04]) }
+    for (let i = 0; i < 10; i++) { const b = 111.8 - i * 0.5; rows.push([b, b + 0.05, b - 0.55, b - 0.5]) }
+    for (let i = 0; i < 30; i++) { const b = 107 + i * 0.3; rows.push([b, b + 0.15, b - 0.1, b + 0.12]) }
+    const candles = series(rows)
+
+    const basis = {
+        id: 'test', timeframes: ['1h'],
+        params: [{ key: 'schwelle', type: 'number', default: 0.5, min: 0, max: 10 }],
+        indicators: [{ id: 'e10', type: 'ema', period: 10 }],
+        signal: { type: 'pivotHigh', left: 4, right: 2 },
+        signalFilters: [],
+        entry: { type: 'touch', anchor: 'e10', from: 'above' },
+        invalidations: [{ type: 'timeout', code: 'zu_lang', candles: 20 }],
+        stopLoss: { anchor: 'correctionLow', offsetPct: 0.3 },
+        takeProfit: { mode: 'rr', rr: 2 },
+    }
+    const g = pruefeRegeln(basis)
+    const p = Object.fromEntries(g.regeln.params.map((x) => [x.key, x.default]))
+    const erst = detectMitRegeln(g.regeln, { candles, params: p, openSetups: [], knownSetupKeys: [] })
+    check('Pivot-Signal erzeugt Setups', erst.setups.length > 0,
+        `setups=${erst.setups.length}`)
+
+    const offen = erst.setups.map((s, i) => ({ ...s, id: i + 1 }))
+    const zweit = detectMitRegeln(g.regeln, { candles, params: p, openSetups: offen, knownSetupKeys: [] })
+    check('Berührung des Ankers löst aus oder bricht nachvollziehbar ab',
+        zweit.events.length > 0, JSON.stringify(zweit.events[0]))
+
+    const ev = zweit.events.find((e) => e.status === 'triggered')
+    if (ev) {
+        check('Stop liegt unter dem Einstieg', ev.stopLoss < ev.entry)
+        check('Ziel folgt dem Chance/Risiko', Math.abs(ev.takeProfit - (ev.entry + (ev.entry - ev.stopLoss) * 2)) < 1e-9)
+    } else {
+        check('Stop liegt unter dem Einstieg', false, 'kein Auslöser')
+        check('Ziel folgt dem Chance/Risiko', false, 'kein Auslöser')
+    }
+
+    // Parameter wirken wirklich
+    const streng = { ...g.regeln, signalFilters: [
+        { left: 'signalPrice', op: 'distancePctGt', right: 'e10', value: { param: 'schwelle' } }] }
+    const weich = detectMitRegeln(streng, { candles, params: { schwelle: 0 }, openSetups: [], knownSetupKeys: [] })
+    const hart = detectMitRegeln(streng, { candles, params: { schwelle: 50 }, openSetups: [], knownSetupKeys: [] })
+    check('Parameter wirkt auf die Filterschwelle',
+        weich.setups.length > hart.setups.length && hart.setups.length === 0,
+        `weich=${weich.setups.length} hart=${hart.setups.length}`)
+
+    check('detect verändert die Kerzen nicht',
+        JSON.stringify(candles) === JSON.stringify(series(rows)))
+}
+
+// ══ Die Gegenprobe ═══════════════════════════════════════════════════════
+console.log('\nGegenprobe gegen die handgeschriebene Strategie')
+
+/** EMA Touch, ausschliesslich als Regelbeschreibung. */
+const emaTouchAlsRegeln = {
+    id: 'ema_touch_regeln',
+    name: 'EMA Touch (Regeln)',
+    timeframes: ['15m', '1h', '4h'],
+    direction: 'long',
+    warmupCandles: 300,
+    scanWindowCandles: 200,
+    params: [
+        { key: 'ueberdehnung', type: 'number', label: 'Mindest-Überdehnung (%)', default: 2.5, min: 0.1, max: 15 },
+        { key: 'stopPuffer', type: 'number', label: 'Stop-Puffer (%)', default: 0.2, min: 0.01, max: 3 },
+        { key: 'maxKerzen', type: 'integer', label: 'Max. Korrekturdauer', default: 10, min: 2, max: 50 },
+        { key: 'ziel', type: 'number', label: 'Chance/Risiko-Ziel', default: 2, min: 0.5, max: 15 },
+    ],
+    indicators: [
+        { id: 'emaFast', type: 'ema', period: 21 },
+        { id: 'emaEntry', type: 'ema', period: 50 },
+    ],
+    signal: { type: 'pivotHigh', left: 10, right: 2 },
+    signalFilters: [
+        { op: 'higherThanPrevSignal', code: 'no_higher_high' },
+        { left: 'emaFast', op: 'gt', right: 'emaEntry', code: 'no_uptrend' },
+        { left: 'signalPrice', op: 'distancePctGt', right: 'emaFast', value: { param: 'ueberdehnung' }, code: 'no_overextension' },
+    ],
+    entry: { type: 'touch', anchor: 'emaEntry', from: 'above' },
+    invalidations: [
+        { type: 'condition', code: 'bullish_candle_in_correction', when: { op: 'isBullish' } },
+        { type: 'condition', code: 'ema_cross_negative', when: { left: 'emaFast', op: 'lt', right: 'emaEntry' } },
+        { type: 'timeout', code: 'correction_timeout', candles: { param: 'maxKerzen' } },
+    ],
+    stopLoss: { anchor: 'correctionLow', offsetPct: { param: 'stopPuffer' } },
+    takeProfit: { mode: 'rr', rr: { param: 'ziel' } },
+}
+
+{
+    const g = pruefeRegeln(emaTouchAlsRegeln)
+    check('EMA Touch lässt sich vollständig als Regeln ausdrücken', g.ok, g.fehler.join('; '))
+
+    const manifest = alsManifest(g.regeln)
+    // 4 eigene Parameter + 3 universelle Wochentagssperren (sperreSamstag/
+    // -Sonntag/-Montag), die alsManifest() an JEDE Regelstrategie anhängt.
+    check('Regelstrategie liefert ein gültiges Manifest',
+        typeof manifest.detect === 'function' && manifest.params.length === 4 + 3)
+
+    // Kerzen bauen: Aufwärtstrend mit mehreren Impulsen und Korrekturen
+    const rows = []
+    let preis = 100
+    for (let block = 0; block < 12; block++) {
+        // Impuls nach oben
+        for (let i = 0; i < 8; i++) { rows.push([preis, preis + 1.2, preis - 0.2, preis + 1.0]); preis += 1.0 }
+        // Korrektur nach unten (durchgehend bärisch)
+        for (let i = 0; i < 5; i++) { rows.push([preis, preis + 0.1, preis - 0.9, preis - 0.8]); preis -= 0.8 }
+        // Seitwärts
+        for (let i = 0; i < 6; i++) { rows.push([preis, preis + 0.3, preis - 0.3, preis + 0.05]); preis += 0.05 }
+    }
+    const candles = series(rows)
+
+    // Beide Fassungen bar-für-bar durchlaufen lassen — wie im Backtest
+    const durchlauf = (detect, params) => {
+        let offen = []
+        const gesehen = new Set()
+        let id = 1
+        const gefunden = []
+        const ereignisse = []
+        for (let i = 120; i < candles.length; i++) {
+            const sicht = candles.slice(0, i + 1)
+            const r = detect({ candles: sicht, params, openSetups: offen, knownSetupKeys: [...gesehen] })
+            for (const s of r.setups) {
+                gesehen.add(`${s.direction}|${s.obCandleTime}`)
+                const neu = { ...s, id: id++ }
+                offen.push(neu)
+                gefunden.push({ zeit: s.obCandleTime, preis: +s.sweepPrice.toFixed(4) })
+            }
+            for (const e of r.events) {
+                ereignisse.push({ status: e.status, grund: e.invalidReason || '', zeit: e.candleTime,
+                    entry: e.entry ? +e.entry.toFixed(4) : 0 })
+                offen = offen.filter((x) => x.id !== e.id)
+            }
+        }
+        return { gefunden, ereignisse }
+    }
+
+    const pCode = {}
+    for (const d of emaTouch.params) pCode[d.key] = d.default
+    Object.assign(pCode, { minOverextensionPct: 2.5, slBufferPct: 0.2, maxCorrectionCandles: 10,
+        exitMode: 'rr', tpRR: 2, swingLookback: 10, swingConfirmBars: 2, emaFast: 21, emaEntry: 50,
+        bullishToleranceBodyPct: 0, minRR: 0 })
+    const pRegeln = { ueberdehnung: 2.5, stopPuffer: 0.2, maxKerzen: 10, ziel: 2 }
+
+    const a = durchlauf(emaTouch.detect, pCode)
+    const b = durchlauf(manifest.detect, pRegeln)
+
+    console.log(`     Code:   ${a.gefunden.length} Setups, ${a.ereignisse.length} Ereignisse`)
+    console.log(`     Regeln: ${b.gefunden.length} Setups, ${b.ereignisse.length} Ereignisse`)
+
+    check('beide finden gleich viele Setups', a.gefunden.length === b.gefunden.length,
+        `Code=${a.gefunden.length} Regeln=${b.gefunden.length}`)
+    check('beide finden dieselben Setups (Zeit und Preis)',
+        JSON.stringify(a.gefunden) === JSON.stringify(b.gefunden))
+
+    const nurStatus = (x) => x.ereignisse.map((e) => `${e.status}:${e.grund}`)
+    check('beide erzeugen dieselbe Abfolge von Ereignissen',
+        JSON.stringify(nurStatus(a)) === JSON.stringify(nurStatus(b)),
+        `Code=${JSON.stringify(nurStatus(a).slice(0, 4))} Regeln=${JSON.stringify(nurStatus(b).slice(0, 4))}`)
+
+    const trigger = (x) => x.ereignisse.filter((e) => e.status === 'triggered').map((e) => e.entry)
+    check('beide steigen zu denselben Kursen ein',
+        JSON.stringify(trigger(a)) === JSON.stringify(trigger(b)),
+        `Code=${JSON.stringify(trigger(a).slice(0, 3))} Regeln=${JSON.stringify(trigger(b).slice(0, 3))}`)
+
+    check('manifest.params trägt die drei Schalter für JEDE Regelstrategie',
+        ['sperreSamstag', 'sperreSonntag', 'sperreMontag'].every((k) => manifest.params.some((p) => p.key === k)))
+}
+
+// ── Wochentagssperre: universeller Baustein aus alsManifest() ──────────────
+// Eigenes, minimales Setup statt der Trendserie oben: `entry: {type:'immediate'}`
+// löst an der ERSTEN Kerze nach `watchFrom` aus, ohne Kursbedingung — damit
+// lässt sich exakt eine Sa/So-Kerze und danach eine Werktags-Kerze prüfen,
+// ohne von einer zufällig getroffenen Musterkerze abhängig zu sein.
+console.log('\nWochentagssperre (Regel-Interpreter)')
+{
+    const minimalRegeln = {
+        id: 'wochentag_test', timeframes: ['15m'], direction: 'long', warmupCandles: 1,
+        params: [], indicators: [], signal: { type: 'pivotHigh', left: 1, right: 1 }, signalFilters: [],
+        entry: { type: 'immediate' }, invalidations: [],
+        stopLoss: { anchor: 'signalLow', offsetPct: 0 },
+        takeProfit: { mode: 'rr', rr: 2 },
+    }
+    const manifestMin = alsManifest(minimalRegeln)
+
+    const samstag = Date.UTC(2023, 0, 7, 12, 0, 0)     // 07.01.2023 = Samstag
+    const dienstagDrauf = samstag + 3 * 86400000        // 10.01.2023 = Dienstag
+    const kerze = (t) => ({ t, o: 100, h: 101, l: 99, c: 100.5, v: 100, closeTime: t + TF_MS - 1 })
+    // detectMitRegeln verlangt mindestens 30 Kerzen (Z. 621) — die eigentliche
+    // Prüfkerze braucht also 30 wirkungslose Füllkerzen davor.
+    const fuellkerzen = (bisT) => Array.from({ length: 30 },
+        (_, i) => kerze(bisT - (30 - i) * TF_MS))
+    const fakeSetup = {
+        id: 1, status: 'waiting_retest', direction: 'long',
+        obCandleTime: samstag - 1, watchFrom: samstag - 1, tradeableFrom: 0,
+        sweepPrice: 100, sweepLevel: 95, obHigh: 100, obLow: 90,
+    }
+
+    const lauf = (params, echteKerzen) => manifestMin.detect({
+        candles: [...fuellkerzen(echteKerzen[0].t), ...echteKerzen],
+        params, openSetups: [{ ...fakeSetup }], knownSetupKeys: [],
+    })
+
+    const rGesperrt = lauf({ sperreSamstag: true, sperreSonntag: true, sperreMontag: true }, [kerze(samstag)])
+    check('Samstag gesperrt: kein Trigger, Setup bleibt "waiting" statt ungültig zu werden',
+        rGesperrt.events.length === 0)
+
+    const rOffen = lauf({ sperreSamstag: false, sperreSonntag: false, sperreMontag: false }, [kerze(samstag)])
+    check('Testaufbau: ohne Sperre löst dieselbe Samstagskerze sofort aus',
+        rOffen.events.length === 1 && rOffen.events[0].status === 'triggered')
+
+    const rNachtrag = lauf(
+        { sperreSamstag: true, sperreSonntag: true, sperreMontag: true },
+        [kerze(samstag), kerze(dienstagDrauf)],
+    )
+    check('gesperrter Samstag + Dienstag danach: Einstieg holt auf der Werktagskerze nach',
+        rNachtrag.events.length === 1
+        && rNachtrag.events[0].status === 'triggered'
+        && rNachtrag.events[0].candleTime === dienstagDrauf)
+}
+
+// ── Einstiegszeitpunkt bei `immediate` ───────────────────────────────────
+//
+// Die Bedingung steht erst mit dem Kerzenschluss fest. Zum Schlusskurs
+// einzusteigen wäre ein Blick in die Zukunft — der Livebetrieb bekommt
+// frühestens den nächsten Kurs. Diese beiden Fälle sichern das ab.
+console.log('\nEinstieg zur Folgekerzen-Eröffnung')
+
+/** Vorlauf, Pivot-Tief, Bestätigung — genug Kerzen für den Warmup. */
+function sofortKerzen({ mitFolgekerze = true } = {}) {
+    const TF = 3600000
+    const k = []
+    for (let i = 0; i < 70; i++) { const b = 200 - i; k.push({ t: i * TF, o: b, h: b + 0.5, l: b - 1.2, c: b - 1, v: 10 }) }
+    k.push({ t: 70 * TF, o: 130, h: 130.5, l: 126, c: 130.2, v: 10 })      // Pivot-Tief
+    for (let i = 71; i < 74; i++) { const b = 130 + (i - 70) * 2; k.push({ t: i * TF, o: b, h: b + 1, l: b - 0.5, c: b + 0.8, v: 10 }) }
+    if (mitFolgekerze) {
+        // Auffällige Eröffnung, damit Schluss und Eröffnung nicht verwechselbar sind
+        k.push({ t: 74 * TF, o: 555, h: 560, l: 550, c: 556, v: 10 })
+        k.push({ t: 75 * TF, o: 556, h: 558, l: 552, c: 553, v: 10 })
+    }
+    return k
+}
+
+const sofortRegeln = (id) => pruefeRegeln({
+    id, name: 'Sofort', timeframes: ['1h'], direction: 'long', warmupCandles: 50,
+    params: [], indicators: [], signal: { type: 'pivotLow', left: 3, right: 2 },
+    signalFilters: [], entry: { type: 'immediate' },
+    invalidations: [{ type: 'timeout', code: 'zu_lang', candles: 50 }],
+    stopLoss: { anchor: 'signalLow', offsetPct: 0.5 },
+    takeProfit: { mode: 'rr', rr: 2 }, breakEvenAtR: 0,
+})
+
+const zweiLaeufe = (regeln, kerzen) => {
+    const erst = detectMitRegeln(regeln, { candles: kerzen, params: {}, openSetups: [], knownSetupKeys: [] })
+    const offen = erst.setups.map((s, i) => ({ ...s, id: i + 1 }))
+    return detectMitRegeln(regeln, { candles: kerzen, params: {}, openSetups: offen, knownSetupKeys: [] })
+}
+
+{
+    const g = sofortRegeln('sofort_test')
+    check('Testregeln sind gültig', g.ok, JSON.stringify(g.fehler))
+    const kerzen = sofortKerzen()
+    const ev = zweiLaeufe(g.regeln, kerzen).events.find((e) => e.status === 'triggered')
+    check('löst aus', !!ev)
+    if (ev) {
+        const idx = kerzen.findIndex((c) => c.t === ev.candleTime)
+        check('Einstieg ist die ERÖFFNUNG der Ereigniskerze',
+            ev.entry === kerzen[idx].o, `entry=${ev.entry} open=${kerzen[idx]?.o}`)
+        check('Einstieg ist NICHT der Schluss der Auslösekerze',
+            ev.entry !== kerzen[idx - 1]?.c, `entry=${ev.entry} vorheriger close=${kerzen[idx - 1]?.c}`)
+        // Seit dem Audit-Fix: der Einstieg liegt auf der ERSTEN Kerze nach dem
+        // Signal (deren Eröffnung), nicht mehr eine Kerze später.
+        check('Auslösung und Einstieg liegen auf derselben Kerze',
+            ev.triggeredAt === ev.candleTime, `trig=${ev.triggeredAt} fill=${ev.candleTime}`)
+        check('entryAtOpen ist gesetzt', ev.entryAtOpen === true, String(ev.entryAtOpen))
+    }
+}
+
+{
+    // Der Randfall: es fehlt die Kerze, auf der eingestiegen würde.
+    //
+    // Das Signal ist ein Pivot-Tief mit `right: 2` — bekannt ist es also erst
+    // mit dem Schluss der zweiten Bestätigungskerze. Erst die Kerze DANACH
+    // eröffnet zu einem Kurs, den man in dem Moment auch bekommen hätte.
+    // Schneidet man die Serie an der Bestätigungskerze ab, gibt es diesen Kurs
+    // noch nicht: dann darf nichts ausgelöst werden, und das Setup muss offen
+    // bleiben statt verworfen zu werden.
+    //
+    // Früher schnitt dieser Test am Auslöser ab und war damit grün, weil das
+    // Pivot in der gekürzten Serie schlicht nicht mehr auffindbar war — er
+    // prüfte also gar nicht, was sein Name sagt.
+    const g = sofortRegeln('sofort_rand')
+    const voll = sofortKerzen()
+    const ev = zweiLaeufe(g.regeln, voll).events.find((e) => e.status === 'triggered')
+    check('Vorbedingung: mit allen Kerzen löst es aus', !!ev)
+    if (ev) {
+        const einstiegIdx = voll.findIndex((c) => c.t === ev.candleTime)
+        const bisBestaetigung = voll.slice(0, einstiegIdx)
+        const lauf = zweiLaeufe(g.regeln, bisBestaetigung)
+        check('kein Auslöser, wenn die Einstiegskerze fehlt',
+            lauf.events.filter((e) => e.status === 'triggered').length === 0,
+            JSON.stringify(lauf.events.map((e) => ({ s: e.status, t: e.triggeredAt }))))
+        check('das Setup bleibt dabei offen statt verworfen zu werden',
+            !lauf.events.some((e) => ['invalidated', 'expired', 'rejected'].includes(e.status)))
+        // Und die Kehrseite: mit dieser einen Kerze mehr löst es aus.
+        const mit = zweiLaeufe(g.regeln, voll.slice(0, einstiegIdx + 1))
+        check('mit der Einstiegskerze löst es aus',
+            mit.events.some((e) => e.status === 'triggered'))
+    }
+}
+
+{
+    // Ziel auf der falschen Seite (Anker unter dem Einstieg bei long).
+    // `berechneZiel` liefert dafür 0 — früher rutschte das am minRR-Gate
+    // vorbei und wurde OHNE Ziel gehandelt (Fall vwap_band, 15.08.2026):
+    // der Fill-Simulator kennt dann nur noch den Stop als Ausgang.
+    const mitZiel = (tp) => pruefeRegeln({
+        id: 'ziel_test', name: 'Ziel', timeframes: ['1h'], direction: 'long', warmupCandles: 50,
+        params: [], indicators: [], signal: { type: 'pivotLow', left: 3, right: 2 },
+        signalFilters: [], entry: { type: 'immediate' },
+        invalidations: [{ type: 'timeout', code: 'zu_lang', candles: 50 }],
+        stopLoss: { anchor: 'signalLow', offsetPct: 0.5 },
+        takeProfit: tp, breakEvenAtR: 0,
+    })
+    const kerzen = sofortKerzen()
+
+    const falsch = mitZiel({ mode: 'anchor', anchor: 'signalLow' })
+    check('Vorbedingung: Regeln mit Anker-Ziel sind gültig', falsch.ok, JSON.stringify(falsch.fehler))
+    const evF = zweiLaeufe(falsch.regeln, kerzen).events.filter((e) => ['triggered', 'rejected'].includes(e.status))
+    check('Ziel auf der falschen Seite wird abgelehnt statt zielfrei gehandelt',
+        evF.length === 1 && evF[0].status === 'rejected' && evF[0].invalidReason === 'no_target',
+        JSON.stringify(evF.map((e) => ({ st: e.status, grund: e.invalidReason, tp: e.takeProfit }))))
+
+    // Gegenprobe: eine bewusst zielfreie Regel darf weiterhin handeln.
+    const ohne = mitZiel({ mode: 'none' })
+    const evO = zweiLaeufe(ohne.regeln, kerzen).events.find((e) => e.status === 'triggered')
+    check('`mode: none` bleibt bewusst zielfrei handelbar', !!evO && evO.takeProfit === 0,
+        JSON.stringify(evO && { tp: evO.takeProfit }))
+}
+
+
+// ── Kerzenmuster als Bausteine ───────────────────────────────────────────
+//
+// Die Muster lagen schon in `indicators.js`, waren aber nicht im Vokabular.
+// Geprüft wird hier, dass sie erreichbar sind UND dasselbe liefern wie der
+// direkte Aufruf — sonst hätte man zwei Wahrheiten.
+console.log('\nKerzenmuster')
+{
+    const ind = await import('./indicators.js')
+    const { BAUSTEINE } = await import('./rule-engine.js')
+
+    const muster = ['isHammer', 'isShootingStar', 'isBullishEngulfing', 'isBearishEngulfing', 'isAdvancingWick']
+    check('alle fünf stehen im Vokabular',
+        muster.every((m) => BAUSTEINE.vergleiche.includes(m)),
+        muster.filter((m) => !BAUSTEINE.vergleiche.includes(m)).join(', '))
+
+    // Hammer: langer unterer Docht, kleiner Körper oben
+    const hammer = { t: 0, o: 100, h: 100.4, l: 96, c: 100.2, v: 1 }
+    const stern  = { t: 0, o: 100, h: 104, l: 99.6, c: 99.8, v: 1 }
+    const vorher = { t: 0, o: 102, h: 102.2, l: 99.8, c: 100, v: 1 }
+    const umschl = { t: 0, o: 99.5, h: 102.5, l: 99.4, c: 102.3, v: 1 }
+
+    const regeln = (op, extra = {}) => pruefeRegeln({
+        id: 'muster_' + op.toLowerCase(), name: op, timeframes: ['1h'], direction: 'long',
+        warmupCandles: 50, params: [], indicators: [],
+        signal: { type: 'pivotLow', left: 3, right: 2 },
+        signalFilters: [{ op, ...extra, code: 'kein_muster' }],
+        entry: { type: 'immediate' },
+        invalidations: [{ type: 'timeout', code: 'zu_lang', candles: 20 }],
+        stopLoss: { anchor: 'signalLow', offsetPct: 0.5 },
+        takeProfit: { mode: 'rr', rr: 2 }, breakEvenAtR: 0,
+    })
+    for (const op of muster) {
+        const g = regeln(op)
+        check(`${op} wird als Bedingung angenommen`, g.ok, JSON.stringify(g.fehler))
+        if (g.ok) {
+            const b = g.regeln.signalFilters[0]
+            check(`${op} braucht keine Seiten`, b.left === undefined && b.right === undefined,
+                JSON.stringify(b))
+        }
+    }
+
+    // Gegenprobe: liefert der Interpreter dasselbe wie der direkte Aufruf?
+    const kerzen = [vorher, hammer, stern, umschl]
+    const direkt = {
+        isHammer: ind.isHammer(hammer),
+        isShootingStar: ind.isShootingStar(stern),
+        isBullishEngulfing: ind.isBullishEngulfing(vorher, umschl),
+    }
+    check('Testkerzen treffen die Muster überhaupt',
+        direkt.isHammer && direkt.isShootingStar && direkt.isBullishEngulfing,
+        JSON.stringify(direkt))
+
+    // Ein Muster, das NICHT zutrifft, muss die Bedingung scheitern lassen
+    check('Hammer erkennt eine gewöhnliche Kerze nicht als Hammer',
+        !ind.isHammer(vorher))
+    check('Shooting Star erkennt einen Hammer nicht als Star',
+        !ind.isShootingStar(hammer))
+}
+
+
+// ── MACD und MFI ─────────────────────────────────────────────────────────
+//
+// Ein Indikator, der falsch rechnet, ist schlimmer als ein fehlender: die
+// Strategie läuft, nur eben auf einer Lüge. Darum gegen die Definition
+// geprüft, nicht gegen Augenmass.
+console.log('\nMACD und MFI')
+{
+    const ind = await import('./indicators.js')
+    const { BAUSTEINE } = await import('./rule-engine.js')
+
+    check('vier neue Indikatoren im Vokabular',
+        ['mfi', 'macd', 'macdSignal', 'macdHist'].every((x) => BAUSTEINE.indikatoren.includes(x)))
+
+    // Synthetische Kerzen mit Wellenform — genug Bewegung für beide
+    const c = []
+    for (let i = 0; i < 300; i++) {
+        const b = 100 + Math.sin(i / 7) * 8 + i * 0.05
+        c.push({ t: i * 3600000, o: b, h: b + 1, l: b - 1, c: b + Math.cos(i / 5) * 0.6, v: 100 + (i % 17) * 3 })
+    }
+
+    const linie = ind.macd(c, { line: 'macd' })
+    const signal = ind.macd(c, { line: 'signal' })
+    const hist = ind.macd(c, { line: 'hist' })
+    const e12 = ind.ema(c, 12)
+    const e26 = ind.ema(c, 26)
+
+    let abwLinie = 0
+    let abwHist = 0
+    for (let i = 0; i < c.length; i++) {
+        if (linie[i] !== null) abwLinie = Math.max(abwLinie, Math.abs(linie[i] - (e12[i] - e26[i])))
+        if (hist[i] !== null) abwHist = Math.max(abwHist, Math.abs(hist[i] - (linie[i] - signal[i])))
+    }
+    check('MACD-Linie ist exakt EMA12 − EMA26', abwLinie < 1e-9, String(abwLinie))
+    check('Histogramm ist exakt Linie − Signal', abwHist < 1e-9, String(abwHist))
+    check('MACD beginnt erst, wenn die langsame EMA steht',
+        linie.findIndex((v) => v !== null) === 25, String(linie.findIndex((v) => v !== null)))
+    check('Signallinie beginnt später als die MACD-Linie',
+        signal.findIndex((v) => v !== null) > linie.findIndex((v) => v !== null))
+
+    // MFI: Wertebereich und die beiden Extremfälle
+    const m = ind.mfi(c, 14)
+    const werte = m.filter((v) => v !== null)
+    check('MFI bleibt zwischen 0 und 100',
+        Math.min(...werte) >= 0 && Math.max(...werte) <= 100,
+        `${Math.min(...werte).toFixed(1)}–${Math.max(...werte).toFixed(1)}`)
+    check('MFI beginnt bei Index = Periode', m.findIndex((v) => v !== null) === 14)
+
+    const rauf = Array.from({ length: 40 }, (_, i) => ({ t: i, o: 100 + i, h: 101 + i, l: 99 + i, c: 100.5 + i, v: 10 }))
+    const runter = Array.from({ length: 40 }, (_, i) => ({ t: i, o: 200 - i, h: 201 - i, l: 199 - i, c: 199.5 - i, v: 10 }))
+    check('durchgehend steigend ergibt MFI 100', ind.mfi(rauf, 14).at(-1) === 100)
+    check('durchgehend fallend ergibt MFI 0', ind.mfi(runter, 14).at(-1) === 0)
+
+    // Ohne Volumen darf nichts undefiniert werden
+    const ohneVol = c.map((k) => ({ ...k, v: 0 }))
+    check('ohne Volumen liefert MFI trotzdem Werte',
+        ind.mfi(ohneVol, 14).filter((v) => v !== null && Number.isFinite(v)).length > 100)
+
+    // Der Validator muss eine verdrehte Periodenwahl abfangen
+    const verdreht = pruefeRegeln({
+        id: 'macd_verdreht', name: 'x', timeframes: ['1h'], direction: 'long', warmupCandles: 50,
+        params: [], indicators: [{ id: 'm', type: 'macd', fast: 26, slow: 12, signal: 9 }],
+        signal: { type: 'pivotLow', left: 3, right: 2 }, signalFilters: [],
+        entry: { type: 'immediate' }, invalidations: [{ type: 'timeout', code: 't', candles: 20 }],
+        stopLoss: { anchor: 'signalLow', offsetPct: 0.5 }, takeProfit: { mode: 'rr', rr: 2 }, breakEvenAtR: 0,
+    })
+    check('schnelle Periode >= langsame wird abgelehnt',
+        !verdreht.ok && verdreht.fehler.some((f) => /kleiner sein/.test(f)),
+        JSON.stringify(verdreht.fehler))
+}
+
+
+// ── Ändert sich das HANDELN oder nur der Titel? ──────────────────────────
+// An dieser Frage hängen Strategie-Version, `paramsVersion` aller Instanzen
+// darauf und das Erlöschen der Live-Freigabe. Ein roher Textvergleich lag hier
+// zuerst falsch, weil `pruefeRegeln` Name und Beschreibung mit hineinschreibt.
+{
+    const basis = (tpRR, name = 'Test') => pruefeRegeln({
+        id: 'ver_test', name, description: 'egal', timeframes: ['1h'], direction: 'long',
+        warmupCandles: 300, params: [], indicators: [],
+        signal: { type: 'pivotLow', left: 5, right: 2 },
+        signalFilters: [], entry: { type: 'immediate' },
+        invalidations: [{ type: 'timeout', code: 'zu_lang', candles: 20 }],
+        stopLoss: { anchor: 'signalLow', offsetPct: 0.3 },
+        takeProfit: { mode: 'rr', rr: tpRR }, breakEvenAtR: 1,
+    }).regeln
+
+    check('identische Regeln gelten als unverändert',
+        regelnUnterscheidenSich(basis(2), basis(2)) === false)
+    check('geändertes Ziel gilt als Änderung',
+        regelnUnterscheidenSich(basis(2), basis(3)) === true)
+    check('nur ein anderer Name ist KEINE Änderung',
+        regelnUnterscheidenSich(basis(2), basis(2, 'Anderer Name')) === false,
+        'sonst kostet ein Tippfehler im Titel die Live-Freigabe')
+    check('leere Eingaben kippen nicht um',
+        regelnUnterscheidenSich(null, null) === false && regelnUnterscheidenSich(null, basis(2)) === true)
+}
+
+// ── Berührungszähler und Level-Auslöser ──────────────────────────────────
+//
+// „Bei der dritten Berührung" ist die Regel, an der das Vokabular vorher
+// scheiterte. Geprüft wird deshalb nicht nur, dass es läuft, sondern WANN es
+// auslöst: eine Kerze zu früh wäre eine andere Strategie.
+console.log('\nBerührungen eines Levels')
+{
+    const { BAUSTEINE } = await import('./rule-engine.js')
+    check('Level-Auslöser und Berührungszähler stehen im Vokabular',
+        BAUSTEINE.signale.includes('levelTouch') && BAUSTEINE.vergleiche.includes('priorTouchesGte'))
+
+    // Eine waagerechte Testlinie bei 100 (feste Zahl als Referenz), damit die
+    // Berührungen von Hand nachzählbar sind.
+    const LINIE = { value: 100 }
+    const ruhe = [105, 106, 104, 105]        // Tief 104 — berührt nicht
+    const halt = [104, 106, 99, 103]         // sticht durch 100 und schliesst darüber
+    const bruch = [104, 106, 99, 98]         // sticht durch und schliesst DARUNTER
+    const zeilen = []
+    const setzeAuf = (i, was) => { while (zeilen.length < i) zeilen.push(ruhe); zeilen[i] = was }
+    for (const i of [5, 10, 15, 20]) setzeAuf(i, halt)
+    setzeAuf(25, bruch)
+    while (zeilen.length < 40) zeilen.push(ruhe)
+    const kerzen = series(zeilen)
+
+    const regeln = (extra = {}) => pruefeRegeln({
+        id: 'level_test', name: 'Level', timeframes: ['15m'], direction: 'long',
+        warmupCandles: 50, scanWindowCandles: 200, params: [], indicators: [],
+        signal: { type: 'levelTouch', line: LINIE, minPrevTouches: 2, separation: 3, window: 200, ...extra },
+        signalFilters: [], entry: { type: 'immediate' },
+        invalidations: [{ type: 'timeout', code: 'zu_spaet', candles: 2 }],
+        stopLoss: { anchor: 'low', offsetPct: 0.5 },
+        takeProfit: { mode: 'rr', rr: 3 }, breakEvenAtR: 0,
+    })
+
+    const g = regeln()
+    check('Level-Auslöser wird angenommen', g.ok, JSON.stringify(g.fehler))
+
+    const zeiten = (r) => detectMitRegeln(r, { candles: kerzen, params: {} })
+        .setups.map((s) => kerzen.findIndex((k) => k.t === s.sweepCandleTime))
+
+    if (g.ok) {
+        check('erst die dritte Berührung löst aus',
+            JSON.stringify(zeiten(g.regeln)) === JSON.stringify([15, 20]),
+            JSON.stringify(zeiten(g.regeln)))
+    }
+
+    const alle = pruefeRegeln({ ...g.regeln, signal: { ...g.regeln.signal, minPrevTouches: 0 } })
+    check('minPrevTouches 0 löst bei jeder Berührung aus',
+        JSON.stringify(zeiten(alle.regeln)) === JSON.stringify([5, 10, 15, 20]),
+        JSON.stringify(zeiten(alle.regeln)))
+
+    // Der Durchbruch bei 25 schliesst unter der Linie — er ist keine Ablehnung
+    check('ein Schluss unter der Linie zählt nicht als Berührung',
+        !zeiten(alle.regeln).includes(25))
+
+    {
+        // Zwei Berührungen direkt hintereinander: mit Abstand 3 zählt nur die erste
+        const dicht = series([...zeilen.slice(0, 30), halt, halt, ...Array(8).fill(ruhe)])
+        const r = pruefeRegeln({ ...g.regeln, signal: { ...g.regeln.signal, minPrevTouches: 0 } }).regeln
+        const idx = detectMitRegeln(r, { candles: dicht, params: {} })
+            .setups.map((s) => dicht.findIndex((k) => k.t === s.sweepCandleTime))
+        check('Kerzen, die an der Linie kleben, zählen nur einmal',
+            idx.includes(30) && !idx.includes(31), JSON.stringify(idx))
+    }
+
+    {
+        // Fenster 6 Kerzen: bei Berührung 20 liegen 15 und 10 zu weit zurück
+        const eng = pruefeRegeln({ ...g.regeln, signal: { ...g.regeln.signal, window: 6 } }).regeln
+        check('ein kurzer Rückblick verwirft alte Berührungen',
+            zeiten(eng).length === 0, JSON.stringify(zeiten(eng)))
+    }
+
+    {
+        // Derselbe Zähler als FILTER zu einem anderen Auslöser
+        const alsFilter = pruefeRegeln({
+            ...g.regeln,
+            signal: { type: 'pivotLow', left: 2, right: 2 },
+            signalFilters: [{ left: LINIE, op: 'priorTouchesGte', value: 2, separation: 3, window: 200, code: 'zu_wenig_gehalten' }],
+        })
+        check('priorTouchesGte wird als Filter angenommen', alsFilter.ok, JSON.stringify(alsFilter.fehler))
+        if (alsFilter.ok) {
+            const b = alsFilter.regeln.signalFilters[0]
+            check('der Filter braucht keine rechte Seite',
+                b.right === undefined && b.value === 2 && b.window === 200 && b.separation === 3,
+                JSON.stringify(b))
+            const d = detectMitRegeln(alsFilter.regeln, { candles: kerzen, params: {} })
+            check('vor der zweiten Berührung lehnt der Filter jedes Signal ab',
+                (d.diagnostics.rejected.zu_wenig_gehalten || 0) > 0,
+                JSON.stringify(d.diagnostics.rejected))
+        }
+    }
+
+    {
+        // Short: dieselbe Linie, aber gehalten heisst jetzt „schliesst darunter"
+        const kurz = pruefeRegeln({ ...g.regeln, id: 'level_short', direction: 'short',
+            signal: { ...g.regeln.signal, minPrevTouches: 0 },
+            stopLoss: { anchor: 'high', offsetPct: 0.5 } }).regeln
+        const idx = detectMitRegeln(kurz, { candles: kerzen, params: {} })
+            .setups.map((s) => kerzen.findIndex((k) => k.t === s.sweepCandleTime))
+        check('bei Short zählt nur die Berührung mit Schluss unter der Linie',
+            JSON.stringify(idx) === JSON.stringify([25]), JSON.stringify(idx))
+    }
+}
+
+// ── Neue VWAP-Anker im Regelwerk ─────────────────────────────────────────
+console.log('\nVWAP-Anker im Regelwerk')
+{
+    const { BAUSTEINE } = await import('./rule-engine.js')
+    const anker = ['session', 'week', 'month', 'ath', 'atl', 'swingHigh', 'swingLow', 'rolling']
+    check('alle acht Anker stehen im Vokabular',
+        anker.every((a) => BAUSTEINE.vwapAnker.includes(a)),
+        anker.filter((a) => !BAUSTEINE.vwapAnker.includes(a)).join(', '))
+
+    const mit = (ind) => pruefeRegeln({
+        id: 'anker_test', name: 'Anker', timeframes: ['15m'], direction: 'long',
+        warmupCandles: 50, params: [], indicators: [ind],
+        signal: { type: 'pivotLow', left: 3, right: 2 },
+        signalFilters: [{ left: 'close', op: 'gt', right: ind.id, code: 'unter_der_linie' }],
+        entry: { type: 'immediate' },
+        invalidations: [{ type: 'timeout', code: 'zu_spaet', candles: 2 }],
+        stopLoss: { anchor: 'signalLow', offsetPct: 0.5 },
+        takeProfit: { mode: 'rr', rr: 3 }, breakEvenAtR: 0,
+    })
+
+    for (const a of anker) {
+        const g = mit({ id: 'linie', type: 'vwap', anchor: a })
+        check(`Anker "${a}" wird angenommen`, g.ok && g.regeln.indicators[0].anchor === a,
+            JSON.stringify(g.fehler))
+    }
+
+    check('unbekannter Anker fällt auf den Tagesanker zurück',
+        mit({ id: 'linie', type: 'vwap', anchor: 'zauberei' }).regeln.indicators[0].anchor === 'session')
+
+    {
+        const g = mit({ id: 'linie', type: 'vwap', anchor: 'swingHigh', pivot: 12, nth: 9, minSepAtr: 1.5 })
+        const ind = g.regeln.indicators[0]
+        check('Swing-Anker behält Pivot-Stärke und Mindestabstand',
+            ind.pivot === 12 && ind.minSepAtr === 1.5, JSON.stringify(ind))
+        check('nth wird auf die drei Fächerlinien begrenzt', ind.nth === 3, String(ind.nth))
+    }
+
+    {
+        const g = mit({ id: 'volumen', type: 'volSma', period: 10 })
+        check('Volumen-SMA und der Anker "volume" sind im Vokabular',
+            g.ok && BAUSTEINE.anker.includes('volume'), JSON.stringify(g.fehler))
+        // Vektorkerzen-Bedingung: Volumen über dem Zweifachen des Durchschnitts
+        const climax = pruefeRegeln({
+            ...g.regeln,
+            signalFilters: [{ left: 'volume', op: 'distancePctGt', right: 'volumen', value: 100, code: 'kein_climax' }],
+        })
+        check('Climax-Bedingung (Volumen > 2× Durchschnitt) ist formulierbar',
+            climax.ok, JSON.stringify(climax.fehler))
+    }
+}
+
+// ── Beide Richtungen in einem Regelwerk ──────────────────────────────────
+//
+// Der Interpreter läuft dafür zweimal. Der Test prüft nicht nur, dass beide
+// Seiten Setups liefern, sondern auch, dass sie sich nicht vermischen: die
+// Ablehnungsdefinition dreht sich mit der Richtung.
+console.log('\nBeide Richtungen')
+{
+    const LINIE = { value: 100 }
+    const ruhe = [105, 106, 104, 105]
+    const haltLong = [104, 106, 99, 103]     // durchsticht 100, schliesst darüber
+    const haltShort = [104, 106, 99, 98]     // durchsticht 100, schliesst darunter
+    // Die Spitzen bei 8 und 18 sind nötig, damit es überhaupt ein Pivot-HOCH
+    // gibt: in einer Reihe gleich hoher Kerzen findet `pivotHighs` keins, der
+    // Short-Stop (`lastSwingHigh`) hätte keinen Anker und der Test würde die
+    // Spiegelung nur scheinbar prüfen.
+    const spitze = [105, 112, 104, 105]
+    const zeilen = Array.from({ length: 40 }, (_, i) => {
+        if ([5, 10, 15].includes(i)) return haltLong
+        if ([20, 25, 30].includes(i)) return haltShort
+        if ([8, 18].includes(i)) return spitze
+        return ruhe
+    })
+    const kerzen = series(zeilen)
+
+    const bau = (richtung) => pruefeRegeln({
+        id: 'beide_test', name: 'Beide', timeframes: ['15m'], direction: richtung,
+        warmupCandles: 50, scanWindowCandles: 200, params: [], indicators: [],
+        signal: { type: 'levelTouch', line: LINIE, minPrevTouches: 0, separation: 3, window: 200 },
+        signalFilters: [], entry: { type: 'immediate' },
+        invalidations: [{ type: 'timeout', code: 'zu_spaet', candles: 2 }],
+        stopLoss: { anchor: 'lastSwingLow', offsetPct: 0.5 },
+        takeProfit: { mode: 'rr', rr: 3 }, breakEvenAtR: 0,
+    })
+
+    const beide = bau('both')
+    check('"both" wird als Richtung angenommen',
+        beide.ok && beide.regeln.direction === 'both', JSON.stringify(beide.fehler))
+    check('… mit einem Hinweis auf die doppelte Rechenzeit',
+        beide.hinweise.some((h) => /zweimal/.test(h)), JSON.stringify(beide.hinweise))
+
+    const idx = (r) => detectMitRegeln(r, { candles: kerzen, params: {} })
+        .setups.map((s) => ({ i: kerzen.findIndex((k) => k.t === s.sweepCandleTime), d: s.direction }))
+
+    const nurLong = idx(bau('long').regeln).map((x) => x.i)
+    const nurShort = idx(bau('short').regeln).map((x) => x.i)
+    const gemischt = idx(beide.regeln)
+
+    check('Long allein findet nur die Kerzen mit Schluss über der Linie',
+        JSON.stringify(nurLong) === JSON.stringify([5, 10, 15]), JSON.stringify(nurLong))
+    check('Short allein findet nur die mit Schluss darunter',
+        JSON.stringify(nurShort) === JSON.stringify([20, 25, 30]), JSON.stringify(nurShort))
+    check('"both" findet die Vereinigung — und nichts dazu',
+        gemischt.length === nurLong.length + nurShort.length
+        && gemischt.filter((x) => x.d === 'long').every((x) => nurLong.includes(x.i))
+        && gemischt.filter((x) => x.d === 'short').every((x) => nurShort.includes(x.i)),
+        JSON.stringify(gemischt))
+    check('jedes Setup trägt seine eigene Richtung',
+        gemischt.some((x) => x.d === 'long') && gemischt.some((x) => x.d === 'short'))
+
+    // Phase B darf Setups nicht kreuzen: ein offenes Long-Setup gehört in den
+    // Long-Durchlauf, sonst würde der Short-Stop darauf gerechnet.
+    // Mindestens 30 Kerzen, sonst kehrt detect() sofort um und der Test wäre
+    // eine Attrappe (offen bliebe leer).
+    const offen = detectMitRegeln(beide.regeln, { candles: kerzen.slice(0, 34), params: {} })
+        .setups.map((s, n) => ({ ...s, id: n + 1 }))
+    const zweiter = detectMitRegeln(beide.regeln, {
+        candles: kerzen, params: {}, openSetups: offen,
+        knownSetupKeys: offen.map((s) => `${s.direction}|${s.obCandleTime}`),
+    })
+    const zuOffenen = zweiter.events.filter((e) => offen.some((s) => s.id === e.id))
+    const ausgeloest = zuOffenen.filter((e) => e.status === 'triggered')
+    check('offene Setups beider Richtungen werden fortgeschrieben',
+        offen.some((s) => s.direction === 'long') && offen.some((s) => s.direction === 'short')
+        && ausgeloest.length > 0,
+        `${offen.length} offen, ${ausgeloest.length} ausgelöst`)
+    // Der entscheidende Punkt: der Short-Stop liegt ÜBER dem Einstieg. Ohne die
+    // Spiegelung der Anker wäre jedes Short-Setup `invalid_stop` gewesen und die
+    // Strategie hätte unbemerkt nur long gehandelt.
+    check('Stop liegt je Richtung auf der richtigen Seite (Anker gespiegelt)',
+        ausgeloest.every((e) => {
+            const s = offen.find((x) => x.id === e.id)
+            return s.direction === 'long' ? e.stopLoss < e.entry : e.stopLoss > e.entry
+        }),
+        JSON.stringify(ausgeloest.map((e) => ({ d: offen.find((x) => x.id === e.id)?.direction, entry: e.entry, sl: e.stopLoss }))))
+    check('… und beide Richtungen sind darunter',
+        ausgeloest.some((e) => offen.find((x) => x.id === e.id)?.direction === 'long')
+        && ausgeloest.some((e) => offen.find((x) => x.id === e.id)?.direction === 'short'),
+        JSON.stringify(zuOffenen.map((e) => `${offen.find((x) => x.id === e.id)?.direction}:${e.status}`)))
+}
+
+// ── Angeschnittene Historie ──────────────────────────────────────────────
+console.log('\nAngeschnittene Historie')
+{
+    const { sichtBedarfKerzen } = await import('./rule-engine.js')
+    const regeln = (anchor) => pruefeRegeln({
+        id: 'schnitt_test', name: 'Schnitt', timeframes: ['15m'], direction: 'long',
+        warmupCandles: 50, params: [], indicators: [{ id: 'linie', type: 'vwap', anchor }],
+        signal: { type: 'levelTouch', line: 'linie', minPrevTouches: 0, separation: 3, window: 200 },
+        signalFilters: [], entry: { type: 'immediate' },
+        invalidations: [{ type: 'timeout', code: 'zu_spaet', candles: 2 }],
+        stopLoss: { anchor: 'low', offsetPct: 0.5 },
+        takeProfit: { mode: 'rr', rr: 3 },
+    }).regeln
+
+    check('Sichtbedarf: Monatsanker verlangt mehr als das Standardfenster',
+        sichtBedarfKerzen(regeln('month'), 900000) > 3000)
+    check('Sichtbedarf: ATH verlangt die ganze Historie',
+        sichtBedarfKerzen(regeln('ath'), 900000) === Infinity)
+    check('Sichtbedarf: gleitender Anker verlangt nichts',
+        sichtBedarfKerzen(regeln('rolling'), 900000) === 0)
+
+    // Reihe mit Berührungen einer ATH-verankerten Linie; im Ausschnitt darf
+    // daraus KEIN Signal entstehen.
+    const rows = Array.from({ length: 60 }, (_, i) => ([5, 15, 25].includes(i)
+        ? [104, 106, 99, 103] : [105, 106, 104, 105]))
+    const kerzen = series(rows)
+    const voll = detectMitRegeln(regeln('ath'), { candles: kerzen, params: {} })
+    const schnitt = detectMitRegeln(regeln('ath'), { candles: kerzen, params: {}, historieVerkuerzt: true })
+    check('ATH-Anker: mit voller Historie entstehen Setups',
+        voll.setups.length > 0, String(voll.setups.length))
+    check('ATH-Anker: im Ausschnitt entsteht keins (statt eines auf falscher Linie)',
+        schnitt.setups.length === 0, String(schnitt.setups.length))
+}
+
+console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
+if (fehlgeschlagen) { console.log(`\nFehlgeschlagen:\n  ${fehler.join('\n  ')}\n`); process.exit(1) }
+console.log('')

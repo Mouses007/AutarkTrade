@@ -1,0 +1,49 @@
+.env
+vendor
+node_modules
+.DS_Store
+dist
+.vscode
+logs
+.idea/
+tradenote.db
+autarktrade.db
+autarktrade.db-wal
+autarktrade.db-shm
+tradenote.db-wal
+tradenote.db-shm
+*.db-journal
+*.csv
+*.backup
+*.backup-*
+*.json.bak
+db-config.json
+tradejournal-backup-*.json
+# Schlüssel-Sicherungen der Umschlüsselung: enthalten API-Keys im Klartext bzw.
+# unter altem Schlüssel — dürfen NIEMALS ins Repository (es ist öffentlich).
+_schluessel-sicherung-*.json
+# Analyse-/Prüfskripte, die gegen die Live-DB oder Live-APIs laufen
+_levmap-*.mjs
+Screenshots/
+.claude/*
+!.claude/launch.json
+REFACTORING-ANALYSE.md
+# Interne Audits/Berichte — nie ins öffentliche Repo
+internal/
+_audit-*.md
+ANLEITUNG-INSTALLATION.txt
+_ctj_update.bat
+
+# PlatformIO build artifacts
+ESP32-Waveshare/.pio/
+ESP32-2432S028/.pio/
+
+# Erzeugte Share-Cards (die gepflegten Vorlagen heissen loss-*/win-*)
+server/templates/sharecard-*.png
+
+# Persönliche NAS-Zugangsdaten für scripts/nas-deploy.sh
+scripts/.nas-deploy.env
+
+# mkcert-Zertifikat + privater Schlüssel für den Caddy-HTTPS-Zugang (DOCKER.md) —
+# maschinenspezifisch, gehört nie ins Repository
+certs/

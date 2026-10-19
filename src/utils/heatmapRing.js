@@ -1,0 +1,136 @@
+/**
+ * Ringpuffer für die Heatmap-Historie.
+ *
+ * Eine Spalte = ein Zeitfenster (Frame), eine Zeile = ein Preis-Bucket.
+ *
+ * Der Trick gegen Preisdrift: jede Spalte merkt sich in `base[c]` den absoluten
+ * Bucket-Index ihrer Zeile 0. Zelle (c, r) bedeutet damit immer den absoluten
+ * Bucket `base[c] + r` — läuft der Preis weg, wird nichts umindiziert oder
+ * verschoben, der Renderer rechnet beim Zeichnen einfach `r = abs - base[c]`.
+ *
+ * Alles vorab allokiert (TypedArrays): kein GC-Druck im laufenden Betrieb.
+ * Diese Objekte dürfen NIE in ref()/reactive() landen — Vue würde Proxies um
+ * die TypedArrays legen und der Hot Path bräche zusammen.
+ */
+
+/**
+ * Bits in `flags[col]`.
+ *
+ * Die beiden sagen NICHT dasselbe, und der Unterschied ist der Grund für die
+ * Trennung: `LUECKE` heisst „für diesen Takt fehlt Zeit" (Tab war im
+ * Hintergrund) — die Spalte kann trotzdem ein vollständiges Buch tragen.
+ * `OHNE_BUCH` heisst „für diesen Takt fehlt das Buch" (kein oder gekreuztes
+ * Mid) — die Zellen sind alle 0. Wer beides über `flags[col] !== 0` prüft,
+ * verwirft nach jeder Hintergrundpause eine brauchbare Spalte; wer nur auf
+ * Bit 0 prüft, hält eine leere Spalte für gültige Daten. Beides ist schon
+ * passiert.
+ */
+export const FLAG_LUECKE = 1
+export const FLAG_OHNE_BUCH = 2
+
+export class HeatmapRing {
+    /**
+     * @param {number} cap    Anzahl Spalten (Frames) — 3600 @ 500 ms = 30 min
+     * @param {number} rows   Zeilen pro Spalte (erfasstes Preisband)
+     * @param {number} bucketSize  Preisbreite eines Buckets
+     */
+    constructor({ cap = 3600, rows = 600, bucketSize = 1 }) {
+        this.cap = cap
+        this.rows = rows
+        this.bucketSize = bucketSize
+        this.data = new Float32Array(cap * rows)   // Mengen je Zelle
+        this.base = new Int32Array(cap)            // absoluter Bucket-Index von Zeile 0
+        this.mid = new Float64Array(cap)
+        this.ts = new Float64Array(cap)
+        this.flags = new Uint8Array(cap)           // siehe FLAG_LUECKE / FLAG_OHNE_BUCH
+        this.head = 0                              // nächste zu schreibende Spalte
+        this.count = 0
+    }
+
+    clear() {
+        this.data.fill(0)
+        this.base.fill(0)
+        this.mid.fill(0)
+        this.ts.fill(0)
+        this.flags.fill(0)
+        this.head = 0
+        this.count = 0
+    }
+
+    /**
+     * Schreibt den aktuellen Buchzustand als neue Spalte.
+     * @param {OrderBook} book
+     * @param {number} ts    Zeitstempel des Frames (ms)
+     * @param {boolean} isGap
+     * @returns {number} mid
+     */
+    commit(book, ts, isGap = false) {
+        const col = this.head
+        const offset = col * this.rows
+        const bs = this.bucketSize
+        this.data.fill(0, offset, offset + this.rows)
+
+        const { mid } = book.bestPrices()
+
+        /*
+         * Kein gültiges Mid — leere Seite oder gekreuztes Buch (seit der
+         * Prüfung in `bestPrices` liefert auch Letzteres 0). Dann darf der Ring
+         * NICHT um den Preis 0 aufgebaut werden: die Spalte bekäme eine Achse,
+         * die mit dem Markt nichts zu tun hat, und die Ansicht würde springen.
+         * Stattdessen die letzte gültige Achse beibehalten und die Spalte als
+         * Lücke führen — dieselbe Behandlung wie ein Aussetzer im Feed, denn
+         * fachlich ist es dasselbe: für diesen Takt gibt es kein Bild.
+         */
+        const letzterMid = this.count ? this.mid[this.colFrom(this.head, 0)] : 0
+        const achsenMid = mid > 0 ? mid : letzterMid
+        const luecke = isGap || mid <= 0
+
+        const midBucket = Math.round(achsenMid / bs)
+        const base = midBucket - (this.rows >> 1)   // Zeile 0 = unterster erfasster Bucket
+
+        if (mid > 0) {
+            for (const [price, qty] of book.bids) {
+                const r = Math.round(price / bs) - base
+                if (r >= 0 && r < this.rows) this.data[offset + r] += qty
+            }
+            for (const [price, qty] of book.asks) {
+                const r = Math.round(price / bs) - base
+                if (r >= 0 && r < this.rows) this.data[offset + r] += qty
+            }
+        }
+
+        this.base[col] = base
+        this.mid[col] = achsenMid
+        this.ts[col] = ts
+        this.flags[col] = (luecke ? FLAG_LUECKE : 0) | (mid > 0 ? 0 : FLAG_OHNE_BUCH)
+        this.head = (col + 1) % this.cap
+        if (this.count < this.cap) this.count++
+        return mid
+    }
+
+    /**
+     * Spaltenindex der i-ten Spalte links von `head` (0 = die zuletzt vor head
+     * geschriebene). Ein eigener Anker erlaubt es, die Ansicht einzufrieren,
+     * während der Ring im Hintergrund weiterläuft.
+     */
+    colFrom(head, i) {
+        return (head - 1 - i + this.cap * 2) % this.cap
+    }
+
+    /** Spaltenindex der i-ten Spalte von rechts (0 = neueste). */
+    colFromRight(i) {
+        return this.colFrom(this.head, i)
+    }
+
+    /** Trägt die Spalte einen Buchzustand? (Nur dann sind ihre Zellen aussagekräftig.) */
+    hatBuch(col) {
+        return (this.flags[col] & FLAG_OHNE_BUCH) === 0
+    }
+
+    /** Menge in Spalte `col` beim absoluten Bucket `absBucket` (0, wenn ausserhalb). */
+    valueAt(col, absBucket) {
+        const r = absBucket - this.base[col]
+        if (r < 0 || r >= this.rows) return 0
+        return this.data[col * this.rows + r]
+    }
+}

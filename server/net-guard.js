@@ -1,0 +1,276 @@
+/**
+ * Schutzwall für Abrufe an URLs, die der NUTZER einträgt.
+ *
+ * Das Projekt hat bereits `isAllowedOllamaUrl` und `isAllowedDbHost` — beide
+ * lassen NUR lokale und private Ziele zu. Hier ist es genau umgekehrt: Feeds
+ * liegen im Internet, und alles Interne ist verboten. Ohne diese Prüfung wäre
+ * das Eintragen einer Feed-Adresse ein bequemer Weg, den Server als Sonde ins
+ * eigene Netz zu schicken — inklusive der Metadaten-Adresse von Cloud-Anbietern
+ * (169.254.169.254), die dort Zugangsdaten herausgibt.
+ *
+ * Bewusst nicht gelöst: DNS-Rebinding. Zwischen Prüfung und Abruf könnte sich
+ * die Auflösung ändern. Dagegen hülfe nur ein eigener Agent mit `lookup`-Haken.
+ * Bei einer lokalen Einzelnutzer-Anwendung, in der derselbe Mensch die URL
+ * einträgt und den Server betreibt, ist das vertretbar — es hier zu
+ * verschweigen wäre es nicht.
+ */
+
+import dns from 'dns'
+import { logWarn } from './logger.js'
+
+/*
+ * Fehler mit Kennung: `art` (gesperrt, dns, netz, zeit, zuGross, umleitung),
+ * dazu `code` und `adresse` wo bekannt. Der Text bleibt, wie er war — er
+ * landet in der Oberfläche; die Kennung braucht, wer Fehler EINORDNEN muss
+ * (Projektprüfung: ist die Seite tot oder nur von hier aus nicht lesbar?).
+ */
+const fehlerMit = (text, felder) => Object.assign(new Error(text), felder)
+
+const HTTP_TIMEOUT = 10000
+const MAX_BYTES = 2 * 1024 * 1024
+const MAX_UMLEITUNGEN = 3
+
+/** Eigene Quellen — fest verdrahtet, brauchen keine Namensauflösung. */
+export const FESTE_HOSTS = new Set([
+    'api.alternative.me',
+    'api.coingecko.com',
+    'api.blockchain.info',
+    'nfs.faireconomy.media',
+    'fapi.binance.com',
+    'api.binance.com',
+    'www.youtube.com',
+])
+
+/** Netzbereiche, die niemals Ziel eines Abrufs sein dürfen. */
+export function istPrivatV4(ip) {
+    const t = ip.split('.').map(Number)
+    if (t.length !== 4 || t.some(n => !Number.isInteger(n) || n < 0 || n > 255)) return true
+    const [a, b, c] = t
+    if (a === 0 || a === 10 || a === 127) return true
+    if (a === 169 && b === 254) return true          // Cloud-Metadaten
+    if (a === 172 && b >= 16 && b <= 31) return true
+    if (a === 192 && b === 168) return true
+    // 192.0.0.0/24 sind die IETF-Protokollzuweisungen, 192.0.2.0/24 ist
+    // TEST-NET-1 — beide je ein /24, NICHT das ganze 192.0.0.0/16. Vorher stand
+    // hier `b === 0` ohne dritten Block und sperrte damit 254 reguläre
+    // öffentliche Netze mit: `192.0.66.0/24` gehört Automattic und beherbergt
+    // TechCrunch samt allem, was auf WordPress.com VIP liegt. Der Abruf schlug
+    // mit „zeigt auf eine interne Adresse" fehl, was die Fehlersuche in die
+    // völlig falsche Richtung schickte.
+    if (a === 192 && b === 0 && (c === 0 || c === 2)) return true
+    if (a === 100 && b >= 64 && b <= 127) return true // CGNAT / Tailscale
+    if (a === 198 && (b === 18 || b === 19)) return true
+    if (a >= 224) return true                         // Multicast und reserviert
+    return false
+}
+
+export function istPrivatV6(ip) {
+    const s = ip.toLowerCase()
+    if (s === '::' || s === '::1') return true
+    // In IPv6 eingebettete IPv4-Adresse mitprüfen
+    const v4 = s.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+    if (v4) return istPrivatV4(v4[1])
+    const kopf = parseInt(s.split(':')[0] || '0', 16)
+    if ((kopf & 0xfe00) === 0xfc00) return true       // fc00::/7 eindeutig lokal
+    if ((kopf & 0xffc0) === 0xfe80) return true       // fe80::/10 verbindungslokal
+    return false
+}
+
+const VERBOTENE_ENDUNGEN = ['.local', '.internal', '.home.arpa', '.lan', '.localdomain']
+
+/**
+ * Prüft eine vom Nutzer eingetragene URL. Wirft mit klartextlicher Begründung —
+ * die Meldung landet in der Oberfläche, also soll sie erklären statt abweisen.
+ */
+export async function pruefeOeffentlicheUrl(rawUrl) {
+    let url
+    try {
+        url = new URL(String(rawUrl || '').trim())
+    } catch {
+        throw fehlerMit('Keine gültige Adresse', { art: 'gesperrt' })
+    }
+
+    if (!['http:', 'https:'].includes(url.protocol)) {
+        throw fehlerMit(`Nur http und https sind erlaubt (nicht ${url.protocol.replace(':', '')})`, { art: 'gesperrt' })
+    }
+    if (url.username || url.password) {
+        throw fehlerMit('Zugangsdaten in der Adresse sind nicht erlaubt', { art: 'gesperrt' })
+    }
+    if (url.port && !['80', '443'].includes(url.port)) {
+        // Ein freier Port machte den Server zum Portscanner im eigenen Netz
+        throw fehlerMit(`Nur Port 80 und 443 sind erlaubt (nicht ${url.port})`, { art: 'gesperrt' })
+    }
+
+    // IPv6 steht in der URL in eckigen Klammern — die muss der Namensauflöser
+    // nicht sehen, sonst scheitert er mit „nicht auflösbar" statt die Adresse
+    // als intern zu erkennen.
+    const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '')
+    if (host === 'localhost' || VERBOTENE_ENDUNGEN.some(e => host.endsWith(e))) {
+        throw fehlerMit(`„${host}" zeigt ins eigene Netz`, { art: 'gesperrt' })
+    }
+
+    if (FESTE_HOSTS.has(host)) return { ok: true, host, adressen: [] }
+
+    let adressen
+    try {
+        adressen = await dns.promises.lookup(host, { all: true })
+    } catch (e) {
+        // ENOTFOUND heisst „Name gibt es nicht", EAI_AGAIN „Namensdienst gerade nicht
+        // erreichbar" — für den Aufrufer ein Unterschied zwischen tot und unbekannt.
+        throw fehlerMit(`Name „${host}" nicht auflösbar`, { art: 'dns', code: e.code })
+    }
+    if (!adressen.length) throw fehlerMit(`Name „${host}" liefert keine Adresse`, { art: 'dns', code: 'ENODATA' })
+
+    // JEDE Adresse prüfen: ein Name kann auf mehrere zeigen, und es genügt
+    // eine interne, um den Abruf zum Einfallstor zu machen.
+    for (const { address, family } of adressen) {
+        const privat = family === 6 ? istPrivatV6(address) : istPrivatV4(address)
+        if (privat) throw fehlerMit(`„${host}" zeigt auf eine interne Adresse (${address})`, { art: 'gesperrt', adresse: address })
+    }
+
+    return { ok: true, host, adressen: adressen.map(a => a.address) }
+}
+
+/**
+ * Antwortstatus, bei denen sich ein zweiter Anlauf lohnt.
+ *
+ * Dass hier **404** steht, sieht falsch aus und ist es nicht: YouTube liefert
+ * für `feeds/videos.xml` in etwa der Hälfte aller Abrufe einen 404, dessen
+ * Rumpf Googles allgemeine Fehlerseite mit dem Titel „Error 500 (Server
+ * Error)" enthält — ein Fehler ihrer Zustellschicht, kein „gibt es nicht".
+ * Gemessen am 19.08.2026: zehn Abrufe desselben, gültigen Kanals ergaben
+ * 200/500/200/404/404/404/200/200/200/404, unabhängig vom User-Agent.
+ * Ein einzelner Anlauf liess deshalb reihum Quellen als kaputt erscheinen,
+ * die es nicht sind.
+ *
+ * Nicht dabei sind 401/403/410: ein fehlender Zugang oder eine gelöschte
+ * Adresse wird durch Wiederholen nicht besser, sie kostet nur Zeit.
+ */
+const WIEDERHOLBAR = new Set([404, 408, 425, 429, 500, 502, 503, 504])
+
+/**
+ * Wartezeiten zwischen den Anläufen; der letzte Wert gilt für alle weiteren.
+ *
+ * Nicht kürzer: die Fehlschläge kommen in Serie, nicht unabhängig voneinander
+ * (vermutlich derselbe Endpunkt über dieselbe offene Verbindung). Gemessen am
+ * YouTube-Feed bei 50 % Fehlerquote je Einzelabruf — mit 400/1200 ms kamen
+ * 18 von 22 Abrufen durch, mit längeren Pausen 12 von 12. Beide Stichproben
+ * sind klein; deshalb die Mitte statt der Bestwert-Einstellung.
+ */
+const WARTEN_MS = [800, 2500]
+
+/**
+ * Text abrufen — mit Prüfung, eigener Umleitungsverfolgung und Grössengrenze.
+ *
+ * Vorübergehende Fehler werden bis zu `versuche` Mal wiederholt (siehe
+ * `WIEDERHOLBAR`). Endgültiges — gesperrtes Ziel, zu grosse Antwort, 403 —
+ * fliegt sofort, ohne zweiten Anlauf.
+ */
+export async function holeText(rawUrl, { timeout = HTTP_TIMEOUT, versuche = 3 } = {}) {
+    const anlaeufe = Math.max(1, Number(versuche) || 1)
+    let letzter
+    for (let versuch = 0; versuch < anlaeufe; versuch++) {
+        if (versuch) {
+            const warten = WARTEN_MS[versuch - 1] ?? WARTEN_MS[WARTEN_MS.length - 1]
+            await new Promise(r => setTimeout(r, warten))
+        }
+        try {
+            return await einAbruf(rawUrl, timeout)
+        } catch (e) {
+            if (!e.wiederholbar) throw e
+            letzter = e
+        }
+    }
+    throw letzter
+}
+
+/**
+ * Ein einzelner Anlauf.
+ *
+ * Die Umleitungen werden selbst verfolgt, weil `fetch` sonst still einer
+ * Weiterleitung auf 127.0.0.1 folgen würde und die Prüfung damit umgangen wäre.
+ */
+async function einAbruf(rawUrl, timeout) {
+    let ziel = String(rawUrl || '').trim()
+
+    for (let sprung = 0; sprung <= MAX_UMLEITUNGEN; sprung++) {
+        await pruefeOeffentlicheUrl(ziel)
+
+        const ctrl = new AbortController()
+        const timer = setTimeout(() => ctrl.abort(), timeout)
+        let antwort
+        try {
+            antwort = await fetch(ziel, {
+                signal: ctrl.signal,
+                redirect: 'manual',
+                headers: {
+                    'User-Agent': 'CryptoTradingJournal (Marktradar)',
+                    Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+                },
+            })
+        } catch (e) {
+            // Abbruch durch die Zeitgrenze und Netzfehler sind beide
+            // vorübergehend — der nächste Anlauf darf sie sehen.
+            e.wiederholbar = true
+            e.art = e.name === 'AbortError' ? 'zeit' : 'netz'
+            // Der Abbruch ist eine DOMException, deren `code` nur einen Getter
+            // hat — eine Zuweisung würfe hier einen NEUEN Fehler, ohne `wiederholbar`.
+            if (e.code === undefined && e.cause?.code) {
+                try { e.code = e.cause.code } catch { /* nur lesbar */ }
+            }
+            throw e
+        } finally {
+            clearTimeout(timer)
+        }
+
+        if ([301, 302, 303, 307, 308].includes(antwort.status)) {
+            const ort = antwort.headers.get('location')
+            if (!ort) throw fehlerMit(`Umleitung ohne Ziel (HTTP ${antwort.status})`, { art: 'umleitung' })
+            ziel = new URL(ort, ziel).toString()
+            continue
+        }
+
+        if (!antwort.ok) {
+            const e = new Error(`HTTP ${antwort.status}`)
+            e.status = antwort.status
+            e.wiederholbar = WIEDERHOLBAR.has(antwort.status)
+            throw e
+        }
+
+        const laenge = Number(antwort.headers.get('content-length') || 0)
+        if (laenge > MAX_BYTES) throw fehlerMit(`Antwort zu gross (${Math.round(laenge / 1024)} kB)`, { art: 'zuGross' })
+
+        /*
+         * Strömend lesen und beim Überschreiten abbrechen.
+         *
+         * Der `content-length`-Kopf allein genügt nicht: bei chunked Transfer
+         * fehlt er, und `antwort.text()` liest dann ERST alles in den Speicher
+         * und prüft danach. Ein bösartiger Feed-Host kann in den zehn Sekunden
+         * Zeitgrenze hunderte MB schicken — auf dem NAS-Container reicht das
+         * für einen Speicher-Engpass.
+         */
+        if (!antwort.body) return ''
+        const leser = antwort.body.getReader()
+        const dekoder = new TextDecoder('utf-8')
+        let text = ''
+        let bytes = 0
+        try {
+            for (;;) {
+                const { done, value } = await leser.read()
+                if (done) break
+                bytes += value.byteLength
+                if (bytes > MAX_BYTES) {
+                    throw fehlerMit(`Antwort zu gross (über ${Math.round(MAX_BYTES / 1024)} kB)`, { art: 'zuGross' })
+                }
+                text += dekoder.decode(value, { stream: true })
+            }
+        } finally {
+            try { await leser.cancel() } catch { /* Strom schon zu */ }
+        }
+        text += dekoder.decode()
+        return text
+    }
+
+    throw fehlerMit(`Mehr als ${MAX_UMLEITUNGEN} Umleitungen`, { art: 'umleitung' })
+}
+

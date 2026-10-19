@@ -1,0 +1,2268 @@
+<script setup>
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import NoData from '../components/NoData.vue'
+import PageInfo from '../components/PageInfo.vue'
+import { spinnerLoadingPage, timeZoneTrade, expandedId, kopiertesBild } from '../stores/ui.js'
+import { allTradeTimeframes, selectedTradeTimeframes, selectedBroker, selectedTradeCategory, brokers } from '../stores/filters.js'
+import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, availableTags } from '../stores/trades.js'
+import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
+import { currentUser } from '../stores/settings.js'
+import { useFetchOpenPositions, useGetIncomingPositions, useUpdateIncomingPosition, useDeleteIncomingPosition, useTransferClosingMetadata } from '../utils/incoming'
+import { useGetAvailableTags, useGetTagInfo } from '../utils/daily.js'
+import { dbCreate, dbUpdate, dbFind, dbGet } from '../utils/db.js'
+import dayjs from '../utils/dayjs-setup.js'
+import Quill from 'quill'
+import { sanitizeHtml } from '../utils/sanitize'
+import { sendNotification } from '../utils/notify.js'
+
+const route = useRoute()
+const { t } = useI18n()
+
+let pollingInterval = null
+const quillInstances = {} // key: positionId_opening / positionId_closing
+const incomingError = ref(null)
+const savingId = ref(null)
+
+/*
+ * Verlassen-Schutz: Incoming ist der textreichste Eingabeort der App (/diary
+ * leitet hierhin um), gespeichert wird nur über den Knopf — genau der Fall,
+ * für den useVerlassenSchutz gebaut wurde; die Schwesterseite Playbook hat
+ * ihn, hier fehlte er. Schmutzig ist die Seite, wenn die aufgeklappte
+ * Position Quill-Text trägt, der vom gespeicherten Stand abweicht — blosses
+ * Aufklappen fragt nicht nach.
+ */
+useVerlassenSchutz(() => {
+    const id = expandedId.value
+    if (!id) return false
+    const pos = incomingPositions.find((p) => p.positionId === id)
+    if (!pos) return false
+    for (const art of ['opening', 'closing']) {
+        const quill = quillInstances[`${id}_${art}`]
+        if (!quill) continue
+        const aktuell = quill.root.innerHTML
+        const gespeichert = pos[art === 'opening' ? 'playbook' : 'closingPlaybook'] || ''
+        const leer = aktuell === '' || aktuell === '<p><br></p>'
+        if (leer ? (gespeichert !== '' && gespeichert !== '<p><br></p>') : aktuell !== gespeichert) return true
+    }
+    return false
+}, () => t('common.unsavedLeave'))
+
+// ===== COMPOUND/FILLS TRACKING =====
+import axios from 'axios'
+import { holeTpSlOrders, aggregiereTpSl } from '../utils/positionTpsl.js'
+import { erzeugeChartBild, chartZeiteinheit, strategieAusTags } from '../utils/chart/tradeBild.js'
+const positionFills = ref({}) // Map: positionId → { loading, trades[], error }
+
+async function fetchPositionFills(positionId, force = false, broker = 'bitunix', symbol = '', openTime = null, posSide = '') {
+    if (!positionId) return
+    if (!force && positionFills.value[positionId]?.trades) return // cached
+    positionFills.value[positionId] = { loading: true, trades: [], error: null }
+    try {
+        let url, data
+        if (broker === 'bitget') {
+            // Bitget-Fills sind symbol-basiert (nicht positionsgebunden). Ohne
+            // Zeitgrenze würden Fills FRÜHERER, bereits geschlossener Positionen
+            // desselben Symbols mit reingemischt → falsche „Nachkäufe"/⌀-Einstieg.
+            // Darum ab der Öffnungszeit der aktuellen Position laden (60s Puffer
+            // gegen Clock-Skew zwischen Fill- und Positions-Timestamp).
+            let params = ''
+            const ot = parseInt(openTime || 0)
+            if (ot > 0) params = `?startTime=${ot - 60000}`
+            const resp = await axios.get(`/api/bitget/position-trades/${encodeURIComponent(symbol)}${params}`)
+            data = resp.data
+            // Map Bitget fill fields to unified format
+            if (data.ok && data.trades) {
+                data.trades = data.trades.map(f => ({
+                    tradeId: f.tradeId,
+                    orderId: f.orderId,
+                    symbol: f.symbol,
+                    side: f.side === 'buy' ? 'BUY' : 'SELL',
+                    price: f.price,
+                    qty: f.baseVolume || f.size,
+                    // Bitget v2 liefert die Gebühr in feeDetail[].totalFee (signiert,
+                    // negativ = gezahlt) — NICHT in f.fee. Summe über alle Einträge.
+                    fee: Array.isArray(f.feeDetail)
+                        ? f.feeDetail.reduce((s, d) => s + Math.abs(parseFloat(d.totalFee || 0)), 0)
+                        : Math.abs(parseFloat(f.fee || 0)),
+                    ctime: f.cTime,
+                    // reduceOnly = Schließung. Hedge-Modus liefert tradeSide
+                    // 'close'/'reduce_close_*'. One-Way-Modus liefert nur
+                    // 'buy_single'/'sell_single' → dort ist die GEGEN-Richtung zur
+                    // Position eine Schließung (Long → sell schließt, Short → buy).
+                    reduceOnly: f.tradeSide === 'close' || f.tradeSide === 'reduce_close_short' || f.tradeSide === 'reduce_close_long'
+                        || (posSide === 'LONG' && f.side === 'sell')
+                        || (posSide === 'SHORT' && f.side === 'buy'),
+                }))
+            }
+        } else {
+            const resp = await axios.get(`/api/bitunix/position-trades/${positionId}`)
+            data = resp.data
+        }
+        if (data.ok && data.trades) {
+            const trades = data.trades.sort((a, b) => parseInt(a.ctime || a.cTime || 0) - parseInt(b.ctime || b.cTime || 0))
+            positionFills.value[positionId] = { loading: false, trades, error: null }
+        } else {
+            positionFills.value[positionId] = { loading: false, trades: [], error: data.error || 'No data' }
+        }
+    } catch (err) {
+        positionFills.value[positionId] = { loading: false, trades: [], error: err.message }
+    }
+}
+
+function getFillsForPosition(positionId) {
+    return positionFills.value[positionId] || { loading: false, trades: [], error: null }
+}
+
+function getEntryFills(positionId, side) {
+    const fills = getFillsForPosition(positionId)
+    // Entry fills: same side as position and not reduceOnly
+    const entrySide = side === 'LONG' ? 'BUY' : 'SELL'
+    return fills.trades.filter(t => t.side === entrySide && !t.reduceOnly)
+}
+
+function getAvgEntryPrice(positionId, side) {
+    const entries = getEntryFills(positionId, side)
+    if (entries.length === 0) return 0
+    let totalValue = 0, totalQty = 0
+    for (const e of entries) {
+        const qty = parseFloat(e.qty || 0)
+        const price = parseFloat(e.price || 0)
+        totalValue += qty * price
+        totalQty += qty
+    }
+    return totalQty > 0 ? totalValue / totalQty : 0
+}
+
+// Side einheitlich als LONG/SHORT/NEUTRAL anzeigen (nicht BUY/SELL). Nur fürs Label
+// + Farbe — die rohe pos.side bleibt für die Logik (Fills/BE) unverändert.
+function displaySide(s) {
+    const u = (s || '').toString().toUpperCase()
+    if (u === 'BUY' || u === 'LONG') return 'LONG'
+    if (u === 'SELL' || u === 'SHORT') return 'SHORT'
+    return u || '—'
+}
+
+function getBreakevenPrice(positionId, side) {
+    const fillData = getFillsForPosition(positionId)
+    if (!fillData.trades || fillData.trades.length === 0) return 0
+
+    const isShort = side === 'SHORT' || side === 'SELL'
+    const entrySide = isShort ? 'SELL' : 'BUY'
+    const closeSide = isShort ? 'BUY' : 'SELL'
+
+    let entryValue = 0, entryQty = 0
+    let closeValue = 0, closeQty = 0
+    let totalFees = 0
+
+    for (const f of fillData.trades) {
+        const qty = parseFloat(f.qty || 0)
+        const price = parseFloat(f.price || 0)
+        const fee = parseFloat(f.fee || 0)
+        totalFees += fee
+
+        if (f.side === entrySide && !f.reduceOnly) {
+            entryValue += qty * price
+            entryQty += qty
+        } else if (f.reduceOnly || f.side === closeSide) {
+            closeValue += qty * price
+            closeQty += qty
+        }
+    }
+
+    const remainingQty = entryQty - closeQty
+    if (remainingQty <= 0) return 0
+
+    if (isShort) {
+        // SHORT: breakeven = (entryValue - closeValue - totalFees) / remainingQty
+        return (entryValue - closeValue - totalFees) / remainingQty
+    } else {
+        // LONG: breakeven = (entryValue - closeValue + totalFees) / remainingQty
+        return (entryValue - closeValue + totalFees) / remainingQty
+    }
+}
+
+/**
+ * Liegen Stop und Ziel überhaupt auf der richtigen Seite des Einstiegs?
+ *
+ * Ohne diese Prüfung liefert `Math.abs` auch für einen Stop auf der GEWINN-
+ * seite ein plausibles „RRR 1:x" — die Zahl sieht dann gesund aus, obwohl die
+ * Positionierung Unsinn ist. Die Backtest-Seite prüft das seit jeher
+ * (`server/risk-engine.js`), die Anzeige der offenen Positionen nicht.
+ */
+function levelsPlausibel(entry, sl, tp, side) {
+    const isShort = side === 'SHORT' || side === 'SELL'
+    const slOk = isShort ? sl > entry : sl < entry
+    const tpOk = isShort ? tp < entry : tp > entry
+    return slOk && tpOk
+}
+
+function getRRR(positionId, side) {
+    const tpsl = getTpSlForPosition(positionId)
+    if (!tpsl.sl || !tpsl.tp) return null
+    const entry = getAvgEntryPrice(positionId, side)
+    if (entry <= 0) return null
+    const sl = parseFloat(tpsl.sl)
+    const tp = parseFloat(tpsl.tp)
+    if (!levelsPlausibel(entry, sl, tp, side)) return null
+    const riskDist = Math.abs(entry - sl)
+    const rewardDist = Math.abs(entry - tp)
+    if (riskDist <= 0) return null
+    return (rewardDist / riskDist).toFixed(1)
+}
+
+function isSLAboveBreakeven(positionId, side) {
+    const tpsl = getTpSlForPosition(positionId)
+    if (!tpsl.sl) return false
+    const be = getBreakevenPrice(positionId, side)
+    if (be <= 0) return false
+    const isShort = side === 'SHORT' || side === 'SELL'
+    // SHORT: SL is "above BE" (safe) when SL price is BELOW BE (closer to profit)
+    // LONG: SL is "above BE" (safe) when SL price is ABOVE BE (closer to profit)
+    if (isShort) return tpsl.sl < be
+    return tpsl.sl > be
+}
+
+function formatFillTime(ctime) {
+    return dayjs(parseInt(ctime)).tz(timeZoneTrade.value).format('DD.MM. HH:mm')
+}
+
+function getIncomingFillBadgeType(fill, idx, allFills) {
+    if (fill.reduceOnly) {
+        const openQty = allFills.filter(f => !f.reduceOnly).reduce((sum, f) => sum + parseFloat(f.qty || 0), 0)
+        const totalClosedQty = allFills.filter(f => f.reduceOnly).reduce((sum, f) => sum + parseFloat(f.qty || 0), 0)
+        return totalClosedQty >= openQty ? 'close' : 'partialClose'
+    }
+    if (idx === 0 || allFills.slice(0, idx).every(f => f.reduceOnly)) return 'initial'
+    return 'compound'
+}
+
+function groupFillsByMinute(fills, timeField = 'time') {
+    if (!fills || fills.length === 0) return []
+    const groups = []
+    let current = null
+    for (let i = 0; i < fills.length; i++) {
+        const fill = fills[i]
+        const minute = dayjs(parseInt(fill[timeField])).tz(timeZoneTrade.value).format('YYYY-MM-DD HH:mm')
+        const key = minute + '_' + (fill.reduceOnly ? '1' : '0')
+        if (current && current.key === key) {
+            current.fills.push(fill)
+        } else {
+            current = { key, fills: [fill], time: fill[timeField], reduceOnly: fill.reduceOnly }
+            groups.push(current)
+        }
+    }
+    return groups.map(g => {
+        const totalQty = g.fills.reduce((s, f) => s + parseFloat(f.qty || 0), 0)
+        const totalValue = g.fills.reduce((s, f) => s + parseFloat(f.qty || 0) * parseFloat(f.price || 0), 0)
+        const totalFee = g.fills.reduce((s, f) => s + parseFloat(f.fee || 0), 0)
+        return {
+            ...g,
+            totalQty,
+            avgPrice: totalQty > 0 ? totalValue / totalQty : 0,
+            totalValue,
+            totalFee,
+            isGroup: g.fills.length > 1,
+            firstFillIdx: fills.indexOf(g.fills[0])
+        }
+    })
+}
+
+const expandedFillGroups = ref(new Set())
+function toggleFillGroup(key) {
+    if (expandedFillGroups.value.has(key)) {
+        expandedFillGroups.value.delete(key)
+    } else {
+        expandedFillGroups.value.add(key)
+    }
+}
+
+// ===== TP/SL TRACKING =====
+const positionTpSl = ref({}) // Map: positionId → { loading, orders[], error }
+const tpSlHistory = ref({}) // Map: positionId → [{ time, type, oldVal, newVal }]
+
+// Load history from localStorage
+function loadTpSlHistory(positionId) {
+    if (tpSlHistory.value[positionId]) return tpSlHistory.value[positionId]
+    try {
+        // 1. Try localStorage (fast, same-origin cache)
+        const stored = localStorage.getItem(`tpsl_history_${positionId}`)
+        let history = stored ? JSON.parse(stored) : []
+
+        // 2. DB fallback — if localStorage empty, load from incoming_positions.tpslHistory
+        if (history.length === 0) {
+            const pos = incomingPositions.find(p => p.positionId === positionId)
+            const dbHistory = pos?.tpslHistory
+            if (Array.isArray(dbHistory) && dbHistory.length > 0) {
+                history = dbHistory
+                // Sync back to localStorage for fast access
+                localStorage.setItem(`tpsl_history_${positionId}`, JSON.stringify(history))
+            }
+        }
+
+        // Deduplicate: per type, skip entries with same action+oldVal+newVal as previous of same type
+        const norm = v => (v === undefined || v === null || v === '' || v === 0) ? null : String(v)
+        if (history.length > 1) {
+            const clean = []
+            const lastByType = {}
+            for (const curr of history) {
+                const key = curr.type
+                const prev = lastByType[key]
+                if (prev && curr.action === prev.action &&
+                    norm(curr.oldVal) === norm(prev.oldVal) &&
+                    norm(curr.newVal) === norm(prev.newVal)) {
+                    continue
+                }
+                clean.push(curr)
+                lastByType[key] = { action: curr.action, oldVal: curr.oldVal, newVal: curr.newVal }
+            }
+            if (clean.length !== history.length) {
+                history = clean
+                localStorage.setItem(`tpsl_history_${positionId}`, JSON.stringify(history))
+            }
+        }
+        tpSlHistory.value[positionId] = history
+        return history
+    } catch { return [] }
+}
+
+function saveTpSlHistory(positionId, history) {
+    // Always dedup before saving
+    const norm = v => (v === undefined || v === null || v === '' || v === 0) ? null : String(v)
+    const clean = []
+    const lastByType = {}
+    for (const curr of history) {
+        const prev = lastByType[curr.type]
+        if (prev && curr.action === prev.action &&
+            norm(curr.oldVal) === norm(prev.oldVal) &&
+            norm(curr.newVal) === norm(prev.newVal)) {
+            continue
+        }
+        clean.push(curr)
+        lastByType[curr.type] = { action: curr.action, oldVal: curr.oldVal, newVal: curr.newVal }
+    }
+    tpSlHistory.value[positionId] = clean
+    localStorage.setItem(`tpsl_history_${positionId}`, JSON.stringify(clean))
+
+    // Persist to DB (non-blocking) — ensures history survives browser/port switches
+    const pos = incomingPositions.find(p => p.positionId === positionId)
+    if (pos?.objectId) {
+        dbUpdate('incoming_positions', pos.objectId, { tpslHistory: clean })
+            .catch(err => console.warn('tpslHistory DB save failed:', err.message))
+    }
+}
+
+/**
+ * Ausgelöst oder von Hand entfernt? Zwei Belege, einer reicht:
+ *  - ein reduzierender Fill nahe am Preis SEIT die Marke zuletzt gesehen wurde
+ *    (bis 19.10.2026 nur „in den letzten 5 Minuten" — ein TP, der über Nacht
+ *    bei geschlossener Seite auslöste, stand am Morgen als „entfernt" da);
+ *  - die Position ist seitdem um die Menge der Marke geschrumpft (bzw. bei
+ *    einer Marke über die ganze Position: überhaupt geschrumpft).
+ */
+function wasTpSlTriggered(positionId, type, oldPrice, letzter = null, posQtyJetzt = 0) {
+    const seit = (letzter?.time || 0) - 60_000
+    const fillData = getFillsForPosition(positionId)
+    const perFill = (fillData.trades || []).some(f => {
+        if (!f.reduceOnly) return false
+        const fillTime = parseInt(f.ctime || 0)
+        if (fillTime < seit) return false
+        const fillPrice = parseFloat(f.price || 0)
+        // Price within 0.5% of target = triggered
+        return Math.abs(fillPrice - oldPrice) / oldPrice < 0.005
+    })
+    if (perFill) return true
+    const vorher = parseFloat(letzter?.posQty || 0), jetzt = parseFloat(posQtyJetzt || 0), menge = parseFloat(letzter?.qty || 0)
+    if (!(vorher > 0) || !(jetzt < vorher * 0.999)) return false
+    const weg = vorher - jetzt
+    return menge > 0 && menge < vorher * 0.999 ? Math.abs(weg - menge) <= menge * 0.02 : true
+}
+
+function trackTpSlChanges(positionId, newSl, newTp, slQty = 0, tpQty = 0, posQty = 0, side = '') {
+    const history = loadTpSlHistory(positionId)
+    const now = Date.now()
+
+    // Normalize values for consistent comparison
+    const norm = v => (v === undefined || v === null || v === '' || v === 0) ? null : String(v)
+    newSl = norm(newSl)
+    newTp = norm(newTp)
+
+    // Helper: find last entry of given type
+    function lastOfType(type) {
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].type === type) return { val: norm(history[i].newVal), entry: history[i] }
+        }
+        return { val: null, entry: null }
+    }
+
+    // Calculate current RRR after this change
+    function calcCurrentRRR() {
+        // Determine effective SL/TP after this change
+        const effectiveSl = newSl ? parseFloat(newSl) : null
+        const effectiveTp = newTp ? parseFloat(newTp) : null
+        if (!effectiveSl || !effectiveTp) return null
+        const entry = getAvgEntryPrice(positionId, side)
+        if (entry <= 0) return null
+        // Gleiche Seitenprüfung wie in getRRR: eine Kennzahl aus vertauschten
+        // Marken ist schlimmer als gar keine.
+        if (!levelsPlausibel(entry, effectiveSl, effectiveTp, side)) return null
+        const riskDist = Math.abs(entry - effectiveSl)
+        const rewardDist = Math.abs(entry - effectiveTp)
+        if (riskDist <= 0) return null
+        return parseFloat((rewardDist / riskDist).toFixed(2))
+    }
+
+    // Helper: prevent duplicate — only push if last entry of same type differs
+    function safePush(entry) {
+        const last = lastOfType(entry.type)
+        if (last.entry &&
+            last.entry.action === entry.action &&
+            norm(last.entry.oldVal) === norm(entry.oldVal) &&
+            norm(last.entry.newVal) === norm(entry.newVal)) {
+            return false // duplicate, skip
+        }
+        // Attach current RRR to every entry
+        entry.rrr = calcCurrentRRR()
+        history.push(entry)
+        return true
+    }
+
+    let changed = false
+    const lastSlInfo = lastOfType('SL')
+    const lastTpInfo = lastOfType('TP')
+
+    // Track SL changes
+    if (newSl !== lastSlInfo.val) {
+        if (lastSlInfo.val === null && newSl !== null) {
+            changed = safePush({ time: now, type: 'SL', oldVal: null, newVal: newSl, qty: slQty || 0, posQty, action: 'set' }) || changed
+        } else if (lastSlInfo.val !== null && newSl === null) {
+            const triggered = wasTpSlTriggered(positionId, 'SL', lastSlInfo.val, lastSlInfo.entry, posQty)
+            changed = safePush({ time: now, type: 'SL', oldVal: lastSlInfo.val, newVal: null, qty: 0, posQty, action: triggered ? 'triggered' : 'removed' }) || changed
+        } else if (newSl !== null) {
+            changed = safePush({ time: now, type: 'SL', oldVal: lastSlInfo.val, newVal: newSl, qty: slQty || 0, posQty, action: 'moved' }) || changed
+        }
+    }
+
+    // Track TP changes
+    if (newTp !== lastTpInfo.val) {
+        if (lastTpInfo.val === null && newTp !== null) {
+            changed = safePush({ time: now, type: 'TP', oldVal: null, newVal: newTp, qty: tpQty || 0, posQty, action: 'set' }) || changed
+        } else if (lastTpInfo.val !== null && newTp === null) {
+            const triggered = wasTpSlTriggered(positionId, 'TP', lastTpInfo.val, lastTpInfo.entry, posQty)
+            changed = safePush({ time: now, type: 'TP', oldVal: lastTpInfo.val, newVal: null, qty: 0, posQty, action: triggered ? 'triggered' : 'removed' }) || changed
+        } else if (newTp !== null) {
+            changed = safePush({ time: now, type: 'TP', oldVal: lastTpInfo.val, newVal: newTp, qty: tpQty || 0, posQty, action: 'moved' }) || changed
+        }
+    }
+
+    if (changed) saveTpSlHistory(positionId, history)
+}
+
+function getTpSlHistoryForPosition(positionId) {
+    return loadTpSlHistory(positionId)
+}
+
+/**
+ * Get position quantity at a given timestamp by reconstructing from fills.
+ * Used as fallback for old tpslHistory entries that don't have posQty stored.
+ */
+function getPosQtyAtTime(positionId, side, timestamp) {
+    const fillData = getFillsForPosition(positionId)
+    if (!fillData.trades || fillData.trades.length === 0) return 0
+    const isShort = side === 'SHORT' || side === 'SELL'
+    const entrySide = isShort ? 'SELL' : 'BUY'
+    let entryQty = 0, closeQty = 0
+    for (const f of fillData.trades) {
+        const fTime = parseInt(f.ctime || f.cTime || 0)
+        if (fTime > timestamp) break // fills are sorted by time
+        const qty = parseFloat(f.qty || 0)
+        if (f.side === entrySide && !f.reduceOnly) {
+            entryQty += qty
+        } else if (f.reduceOnly || f.side !== entrySide) {
+            closeQty += qty
+        }
+    }
+    return Math.max(0, entryQty - closeQty)
+}
+
+/**
+ * Calculate display qty + percentage for an SL/TP history entry.
+ * Always relative to CURRENT remaining position. If SL/TP qty exceeds remaining
+ * (e.g. not adjusted after partial close), caps to remaining qty and 100%.
+ */
+function getTpSlEntryDisplay(entry, currentQty) {
+    if (!entry.qty) return null
+    const refQty = parseFloat(currentQty) || 0
+    if (refQty <= 0) return { qty: entry.qty, pct: '?' }
+    const effectiveQty = Math.min(entry.qty, refQty)
+    const pct = Math.min(100, Math.round(entry.qty / refQty * 100))
+    return { qty: effectiveQty, pct }
+}
+
+async function fetchPositionTpSl(positionId, force = false, broker = 'bitunix', symbol = '') {
+    if (!positionId) return
+    if (!force && positionTpSl.value[positionId]?.orders) return // cached
+    positionTpSl.value[positionId] = { loading: true, orders: [], error: null }
+    try {
+        const orders = await holeTpSlOrders(broker, positionId, symbol)
+        if (orders.length) {
+            positionTpSl.value[positionId] = { loading: false, orders, error: null }
+            // Track changes — pass current position quantity for accurate % display
+            const current = getTpSlForPosition(positionId)
+            const pos = incomingPositions.find(p => p.positionId === positionId)
+            const posQty = pos ? parseFloat(pos.quantity || 0) : 0
+            const posSide = pos?.side || ''
+            trackTpSlChanges(positionId, current.sl, current.tp, current.slQty, current.tpQty, posQty, posSide)
+        } else {
+            positionTpSl.value[positionId] = { loading: false, orders: [], error: null }
+            const pos2 = incomingPositions.find(p => p.positionId === positionId)
+            trackTpSlChanges(positionId, null, null, 0, 0, 0, pos2?.side || '')
+        }
+    } catch (err) {
+        positionTpSl.value[positionId] = { loading: false, orders: [], error: err.message }
+    }
+}
+
+// Abruf und Verdichtung leben in `src/utils/positionTpsl.js` — der Chart
+// zeichnet Stop und Ziel offener Positionen mit derselben Antwort.
+function getTpSlForPosition(positionId) {
+    return aggregiereTpSl(positionTpSl.value[positionId]?.orders, positionId)
+}
+
+// Screenshot upload state — separate previews for trend, entry and closing
+const trendScreenshotPreviews = ref({}) // positionId → base64
+const entryScreenshotPreviews = ref({}) // positionId → base64
+const closingScreenshotPreviews = ref({}) // positionId → base64
+
+// Timeframes from settings (or fallback to all)
+const timeframeOptions = computed(() => {
+    if (selectedTradeTimeframes.length > 0) {
+        return allTradeTimeframes.value.filter(tf => selectedTradeTimeframes.includes(tf.value))
+    }
+    return allTradeTimeframes.value
+})
+
+// Always load from API when entering the page (including first open)
+async function loadPageData() {
+    spinnerLoadingPage.value = true
+    incomingError.value = null
+    try {
+        await useGetAvailableTags()
+        await useFetchOpenPositions()
+    } catch (error) {
+        incomingError.value = error.response?.data?.error || error.message || t('common.errorLoading')
+    }
+    spinnerLoadingPage.value = false
+}
+
+// Load when entering the route (first open + return from another page)
+watch(() => route.name, (name) => {
+    if (name === 'incoming') {
+        loadPageData()
+    }
+}, { immediate: true })
+
+onMounted(() => {
+    // Polling every 60 seconds
+    pollingInterval = setInterval(async () => {
+        try {
+            await useFetchOpenPositions()
+            incomingError.value = null
+        } catch (error) {
+            console.error(' -> Polling error:', error)
+        }
+    }, 60000)
+})
+
+onBeforeUnmount(() => {
+    if (pollingInterval) {
+        clearInterval(pollingInterval)
+        pollingInterval = null
+    }
+    // Destroy all Quill instances
+    Object.keys(quillInstances).forEach(key => {
+        delete quillInstances[key]
+    })
+    expandedId.value = null
+})
+
+async function manualRefresh() {
+    incomingError.value = null
+    try {
+        await useFetchOpenPositions()
+        // Re-fetch fills and TP/SL for expanded position
+        if (expandedId.value) {
+            const expandPos = incomingPositions.find(p => p.positionId === expandedId.value)
+            if (expandPos) {
+                fetchPositionFills(expandedId.value, true, expandPos.broker, expandPos.symbol, expandPos.bitunixData?.ctime, expandPos.side)
+                fetchPositionTpSl(expandedId.value, true, expandPos.broker, expandPos.symbol)
+                // If position transitioned to pending_evaluation, init closing Quill
+                if (expandPos.status === 'pending_evaluation') {
+                    await nextTick()
+                    initQuillEditor(expandedId.value, 'closing')
+                    autoDetectAndSetTradeType(expandPos)
+                }
+            }
+        }
+    } catch (error) {
+        incomingError.value = error.response?.data?.error || error.message || t('incoming.errorUpdatingCounters')
+    }
+}
+
+async function toggleExpand(positionId) {
+    // Close current: clean up Quill instances
+    if (expandedId.value && expandedId.value !== positionId) {
+        delete quillInstances[expandedId.value + '_opening']
+        delete quillInstances[expandedId.value + '_closing']
+    }
+
+    if (expandedId.value === positionId) {
+        delete quillInstances[positionId + '_opening']
+        delete quillInstances[positionId + '_closing']
+        expandedId.value = null
+        return
+    }
+
+    expandedId.value = positionId
+
+    // Fetch fills and TP/SL for open and pending_evaluation positions (Bitunix + Bitget)
+    const expandPos = incomingPositions.find(p => p.positionId === positionId)
+    // Screenshot-Previews aus DB laden
+    if (expandPos) loadScreenshotPreviews(expandPos)
+    if (expandPos && (expandPos.status === 'open' || expandPos.status === 'pending_evaluation') && (expandPos.broker === 'bitunix' || expandPos.broker === 'bitget')) {
+        fetchPositionFills(positionId, false, expandPos.broker, expandPos.symbol, expandPos.bitunixData?.ctime, expandPos.side)
+        fetchPositionTpSl(positionId, false, expandPos.broker, expandPos.symbol)
+    }
+
+    // Initialize Quill editors after DOM renders
+    await nextTick()
+    initQuillEditor(positionId, 'opening')
+    // Only init closing Quill if position is pending evaluation
+    if (expandPos && expandPos.status === 'pending_evaluation') {
+        initQuillEditor(positionId, 'closing')
+        autoDetectAndSetTradeType(expandPos)
+    }
+}
+
+function initQuillEditor(positionId, type) {
+    const editorId = `quillIncoming-${positionId}-${type}`
+    const key = `${positionId}_${type}`
+    const editorEl = document.getElementById(editorId)
+
+    if (editorEl && !quillInstances[key]) {
+        const quill = new Quill(editorEl, {
+            modules: {
+                toolbar: [
+                    [{ header: [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline'],
+                    [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+                ]
+            },
+            theme: 'snow'
+        })
+        quill.root.setAttribute('spellcheck', true)
+        quillInstances[key] = quill
+
+        // Load existing content
+        const pos = incomingPositions.find(p => p.positionId === positionId)
+        if (pos) {
+            if (type === 'opening' && pos.playbook) {
+                quill.root.innerHTML = sanitizeHtml(pos.playbook)
+            } else if (type === 'closing' && pos.closingPlaybook) {
+                quill.root.innerHTML = sanitizeHtml(pos.closingPlaybook)
+            }
+        }
+    }
+}
+
+// ===== TRADE TYPE HANDLER =====
+
+const tradeTypeOptions = [
+    { value: 'scalp', labelKey: 'incoming.scalptrade' },
+    { value: 'day', labelKey: 'incoming.daytrade' },
+    { value: 'swing', labelKey: 'incoming.swingtrade' },
+]
+
+function updateTradeType(pos, value) {
+    const newValue = pos.tradeType === value ? '' : value
+    pos.tradeType = newValue
+    useUpdateIncomingPosition(pos.objectId, { tradeType: newValue })
+}
+
+function updateClosingTradeType(pos, value) {
+    const newValue = pos.closingTradeType === value ? '' : value
+    pos.closingTradeType = newValue
+    useUpdateIncomingPosition(pos.objectId, { closingTradeType: newValue })
+    // Mark as manually overridden so auto-detect doesn't re-apply
+    autoDetectedTradeType.value[pos.positionId] = false
+}
+
+// ===== TRADE TYPE AUTO-DETECTION =====
+
+const autoDetectedTradeType = ref({}) // positionId → true (auto) / false (manual override)
+const tpslCollapsedIds = ref([])
+
+function toggleTpSlHistory(positionId) {
+    const idx = tpslCollapsedIds.value.indexOf(positionId)
+    if (idx >= 0) {
+        tpslCollapsedIds.value.splice(idx, 1)
+    } else {
+        tpslCollapsedIds.value.push(positionId)
+    }
+}
+
+function getTradeDurationMinutes(pos) {
+    let hd = pos.historyData
+    if (!hd) return null
+    if (typeof hd === 'string') { try { hd = JSON.parse(hd) } catch { return null } }
+    const openTime = parseInt(hd.ctime || hd.cTime || 0)
+    const closeTime = parseInt(hd.mtime || hd.uTime || 0)
+    if (!openTime || !closeTime || closeTime <= openTime) return null
+    return (closeTime - openTime) / (1000 * 60)
+}
+
+function detectTradeType(durationMinutes) {
+    const scalpMax = currentUser.value?.scalpMaxMinutes ?? 15
+    const daytradeMaxMinutes = (currentUser.value?.daytradeMaxHours ?? 24) * 60
+    if (durationMinutes <= scalpMax) return 'scalp'
+    if (durationMinutes <= daytradeMaxMinutes) return 'day'
+    return 'swing'
+}
+
+function autoDetectAndSetTradeType(pos) {
+    if (pos.status !== 'pending_evaluation') return
+    if (!pos.historyData) return
+    if (autoDetectedTradeType.value[pos.positionId] === false) return // manual override
+
+    const durationMin = getTradeDurationMinutes(pos)
+    if (durationMin === null) return
+
+    const detected = detectTradeType(durationMin)
+    if (pos.closingTradeType !== detected) {
+        pos.closingTradeType = detected
+        useUpdateIncomingPosition(pos.objectId, { closingTradeType: detected })
+    }
+    if (autoDetectedTradeType.value[pos.positionId] === undefined) {
+        autoDetectedTradeType.value[pos.positionId] = true
+    }
+}
+
+function formatDuration(minutes) {
+    if (minutes === null || minutes === undefined) return ''
+    if (minutes < 60) return `${Math.round(minutes)}m`
+    if (minutes < 1440) return `${Math.floor(minutes / 60)}h ${Math.round(minutes % 60)}m`
+    const days = Math.floor(minutes / 1440)
+    const hours = Math.floor((minutes % 1440) / 60)
+    return `${days}d ${hours}h`
+}
+
+// ===== OPENING FIELD HANDLERS =====
+
+function updateStress(pos, level) {
+    const newLevel = pos.stressLevel === level ? 0 : level
+    pos.stressLevel = newLevel
+    useUpdateIncomingPosition(pos.objectId, { stressLevel: newLevel })
+}
+
+function updateEmotionLevel(pos, level) {
+    const newLevel = pos.emotionLevel === level ? 0 : level
+    pos.emotionLevel = newLevel
+    useUpdateIncomingPosition(pos.objectId, { emotionLevel: newLevel })
+}
+
+function updateTimeframe(pos, value) {
+    const newValue = pos.entryTimeframe === value ? '' : value
+    pos.entryTimeframe = newValue
+    useUpdateIncomingPosition(pos.objectId, { entryTimeframe: newValue })
+    // Zeiteinheit gewählt → Chartbild automatisch (ersetzt nur ein selbst erzeugtes, nie ein hochgeladenes)
+    if (newValue) chartBildErzeugen(pos, { auto: true })
+}
+
+// ===== CHARTBILD (automatisch) =====
+/*
+ * Bei der Einstiegsbewertung holt das System den Chart der gewählten
+ * Zeiteinheit selbst — mit Einstieg, Stop, Ziel und, wenn ein Strategie-Tag
+ * gesetzt ist (LSOB / GUSS), deren Setups samt Order Block. Das Bild liegt in
+ * einem der beiden Screenshot-Felder und geht beim Abschluss wie ein
+ * hochgeladenes mit ins Journal.
+ * `autoBild` merkt sich je Position, welches Feld das selbst erzeugte Bild hält
+ * (Name `incoming_chart_<positionId>` in der DB) — nur dieses wird ersetzt.
+ */
+const autoBild = ref({})       // positionId → 'entry' | 'trend'
+const chartBildStand = ref({})  // positionId → { laeuft, fehler }
+
+function einstiegsZeit(pos) {
+    const d = pos.bitunixData || {}
+    const t = Number(d.ctime ?? d.cTime ?? d.createTime ?? d.openTime)
+    if (Number.isFinite(t) && t > 0) return t < 1e12 ? t * 1000 : t
+    return pos.createdAt ? dayjs(pos.createdAt).valueOf() : Date.now()
+}
+
+async function autoSlotErmitteln(pos) {
+    if (autoBild.value[pos.positionId]) return autoBild.value[pos.positionId]
+    // Nach einem Neuladen: am Namen erkennen, ob ein Feld schon ein selbst erzeugtes Bild hält
+    for (const [slot, id] of [['entry', pos.entryScreenshotId], ['trend', pos.trendScreenshotId]]) {
+        if (!id) continue
+        try { const sc = await dbGet('screenshots', id); if (sc?.name === `incoming_chart_${pos.positionId}`) return slot } catch { /* weg */ }
+    }
+    return null
+}
+
+async function chartBildErzeugen(pos, { auto = false } = {}) {
+    if (!pos || isBotPosition(pos)) return
+    const tf = chartZeiteinheit(pos.entryTimeframe)
+    if (!tf) { if (!auto) chartBildStand.value[pos.positionId] = { fehler: t('incoming.chartBildTf') }; return }
+    if (chartBildStand.value[pos.positionId]?.laeuft) return
+    let slot = await autoSlotErmitteln(pos)
+    if (!slot) slot = !pos.entryScreenshotId ? 'entry' : !pos.trendScreenshotId ? 'trend' : null
+    if (!slot) { if (!auto) chartBildStand.value[pos.positionId] = { fehler: t('incoming.chartBildVoll') }; return }
+    chartBildStand.value[pos.positionId] = { laeuft: true }
+    try {
+        await fetchPositionTpSl(pos.positionId, true, pos.broker, pos.symbol).catch(() => {})
+        const { sl, tp } = getTpSlForPosition(pos.positionId)
+        const strategie = strategieAusTags(pos.tags)
+        const bild = await erzeugeChartBild({
+            symbol: pos.symbol, interval: tf, richtung: pos.side === 'SHORT' ? 'short' : 'long',
+            einstiegT: einstiegsZeit(pos), einstiegP: parseFloat(pos.entryPrice),
+            sl: parseFloat(sl) || null, tp: parseFloat(tp) || null, strategie,
+        })
+        const sc = await dbCreate('screenshots', {
+            name: `incoming_chart_${pos.positionId}`,
+            symbol: pos.symbol,
+            side: pos.side === 'LONG' ? 'B' : 'SS',
+            broker: pos.broker || selectedBroker.value || 'bitunix',
+            originalBase64: bild, annotatedBase64: '', markersOnly: 1, maState: {},
+            dateUnix: Math.floor(einstiegsZeit(pos) / 1000),
+            dateUnixDay: dayjs(einstiegsZeit(pos)).utc().startOf('day').unix(),
+        })
+        const feld = slot === 'entry' ? 'entryScreenshotId' : 'trendScreenshotId'
+        await useUpdateIncomingPosition(pos.objectId, { [feld]: sc.objectId })
+        pos[feld] = sc.objectId
+        ;(slot === 'entry' ? entryScreenshotPreviews : trendScreenshotPreviews).value[pos.positionId] = bild
+        autoBild.value[pos.positionId] = slot
+        chartBildStand.value[pos.positionId] = { laeuft: false, fehler: '' }
+    } catch (e) {
+        chartBildStand.value[pos.positionId] = { laeuft: false, fehler: e.response?.data?.error || e.message }
+    }
+}
+
+// ===== CLOSING FIELD HANDLERS =====
+
+function updateStrategyFollowed(pos, value) {
+    const newValue = pos.strategyFollowed === value ? -1 : value
+    pos.strategyFollowed = newValue
+    useUpdateIncomingPosition(pos.objectId, { strategyFollowed: newValue })
+}
+
+function updateClosingStress(pos, level) {
+    const newLevel = (pos.closingStressLevel || 0) === level ? 0 : level
+    pos.closingStressLevel = newLevel
+    useUpdateIncomingPosition(pos.objectId, { closingStressLevel: newLevel })
+}
+
+function updateClosingEmotionLevel(pos, level) {
+    const newLevel = (pos.closingEmotionLevel || 0) === level ? 0 : level
+    pos.closingEmotionLevel = newLevel
+    useUpdateIncomingPosition(pos.objectId, { closingEmotionLevel: newLevel })
+}
+
+function updateClosingTimeframe(pos, value) {
+    const newValue = (pos.closingTimeframe || '') === value ? '' : value
+    pos.closingTimeframe = newValue
+    useUpdateIncomingPosition(pos.objectId, { closingTimeframe: newValue })
+}
+
+// ===== BOT DETECTION =====
+// Pionex-Bots tragen botType in historyData (normalizeBotOrder) bzw. isBot/botType
+// im live bitunixData (normalizeRunningBot). Für sie wird eine schlankere
+// Bewertungsmaske gezeigt (langfristige, automatisierte Bots).
+function isBotPosition(pos) {
+    return !!(pos?.historyData?.botType || pos?.bitunixData?.isBot || pos?.bitunixData?.botType)
+}
+
+// Pendente Trades zeigen ALLE Börsen gleichzeitig, gruppiert je Börse mit
+// Futures zuerst, dann Bots — unabhängig vom Futures/Bot-Filter
+// (selectedTradeCategory wird hier bewusst ignoriert).
+const BROKER_ORDER = ['bitunix', 'bitget', 'pionex']
+const orderedPositions = computed(() => {
+    const present = [...new Set(incomingPositions.map(p => p.broker || 'unbekannt'))]
+    const ordered = [
+        ...BROKER_ORDER.filter(b => present.includes(b)),
+        ...present.filter(b => !BROKER_ORDER.includes(b)),
+    ]
+    const out = []
+    for (const b of ordered) {
+        const ofBroker = incomingPositions.filter(p => (p.broker || 'unbekannt') === b)
+        out.push(...ofBroker.filter(p => !isBotPosition(p)))   // Futures zuerst
+        out.push(...ofBroker.filter(p => isBotPosition(p)))    // dann Bots
+    }
+    return out
+})
+
+// Überschriften an Gruppengrenzen: vergleiche aktuelles mit vorherigem Element.
+function brokerLabelOf(b) { return brokers.find(x => x.value === b)?.label || b || 'Unbekannt' }
+
+/*
+ * Börsen, die beim letzten Abruf nichts lieferten.
+ *
+ * Der Hinweis steht hier und nicht im bestehenden Fehlerkasten, weil der nur
+ * beim Totalausfall erscheint. Der gefährlichere Fall ist der einzelne:
+ * Eine von drei Börsen antwortet nicht, die Seite füllt sich mit den anderen
+ * beiden, und dass etwas fehlt, sieht man an nichts.
+ */
+const brokerFehler = computed(() => incomingBrokerFehler.value.map(f => ({
+    ...f,
+    name: brokerLabelOf(f.broker),
+})))
+
+/*
+ * Einmal auch als Browser-Meldung — die erreicht den Nutzer, während die Seite
+ * offen, aber nicht im Blick ist. Entprellt über localStorage und je Börse,
+ * sonst meldet sich der Minutentakt sechzigmal in der Stunde.
+ */
+const MELDE_ABSTAND_MS = 6 * 60 * 60 * 1000
+watch(brokerFehler, (liste) => {
+    for (const f of liste) {
+        const schluessel = 'incoming_boerse_notif_' + f.broker
+        const zuletzt = Number(localStorage.getItem(schluessel)) || 0
+        if (Date.now() - zuletzt < MELDE_ABSTAND_MS) continue
+        localStorage.setItem(schluessel, String(Date.now()))
+        sendNotification('boerseKeinZugang', t('incoming.brokerAusfall', { boerse: f.name }), f.meldung)
+    }
+})
+function brokerHeaderAt(idx) {
+    const cur = orderedPositions.value[idx], prev = orderedPositions.value[idx - 1]
+    if (!cur) return null
+    return (!prev || (prev.broker || '') !== (cur.broker || '')) ? brokerLabelOf(cur.broker) : null
+}
+function sectionHeaderAt(idx) {
+    const cur = orderedPositions.value[idx], prev = orderedPositions.value[idx - 1]
+    if (!cur) return null
+    const curSec = isBotPosition(cur) ? 'bot' : 'futures'
+    const same = prev && (prev.broker || '') === (cur.broker || '') && (isBotPosition(prev) ? 'bot' : 'futures') === curSec
+    return same ? null : (curSec === 'bot' ? t('incoming.botsSection') : t('incoming.futuresSection'))
+}
+
+// Realisierter PnL einer geschlossenen Position für den Karten-Header.
+// Bots liefern kein realizedPNL (normalizeBotOrder) → Fallback auf
+// totalRealizedProfit / gridProfit.
+function closedPnL(pos) {
+    const hd = pos?.historyData
+    if (!hd) return null
+    const v = hd.realizedPNL ?? hd.totalRealizedProfit ?? hd.gridProfit
+    return (v === null || v === undefined || v === '') ? null : v
+}
+
+// ===== TAG HANDLERS =====
+
+function addTag(pos, tag) {
+    // Ensure opening and closing tags don't share the same reference
+    if (pos.tags === pos.closingTags) pos.closingTags = Array.isArray(pos.closingTags) ? JSON.parse(JSON.stringify(pos.closingTags)) : []
+    if (!Array.isArray(pos.tags)) pos.tags = []
+    if (pos.tags.some(t => t.id === tag.id)) return
+    const vorher = strategieAusTags(pos.tags)
+    pos.tags.push({ id: tag.id, name: tag.name })
+    // Strategie-Tag (LSOB/GUSS) dazu → Chartbild mit deren Setups neu, wenn eine Zeiteinheit steht
+    if (strategieAusTags(pos.tags) !== vorher && pos.entryTimeframe) chartBildErzeugen(pos, { auto: true })
+}
+
+function removeTag(pos, idx) {
+    if (!pos.tags) return
+    pos.tags.splice(idx, 1)
+}
+
+function addClosingTag(pos, tag) {
+    // Ensure opening and closing tags don't share the same reference
+    if (pos.closingTags === pos.tags) pos.tags = Array.isArray(pos.tags) ? JSON.parse(JSON.stringify(pos.tags)) : []
+    if (!Array.isArray(pos.closingTags)) pos.closingTags = []
+    if (pos.closingTags.some(t => t.id === tag.id)) return
+    pos.closingTags.push({ id: tag.id, name: tag.name })
+}
+
+function removeClosingTag(pos, idx) {
+    if (!pos.closingTags) return
+    pos.closingTags.splice(idx, 1)
+}
+
+function getTagColor(tagId) {
+    const info = useGetTagInfo(tagId)
+    return info?.groupColor || '#6c757d'
+}
+
+// ===== SATISFACTION HANDLER =====
+
+function updateSatisfaction(pos, val) {
+    pos.satisfaction = pos.satisfaction === val ? null : val
+    useUpdateIncomingPosition(pos.objectId, { satisfaction: pos.satisfaction })
+}
+
+// ===== SCREENSHOT HANDLERS =====
+
+// Nimmt ein Input-Event ODER direkt eine Datei (Drag&Drop / Zwischenablage).
+function dateiAus(evtOderDatei) {
+    return evtOderDatei?.target?.files ? evtOderDatei.target.files[0] : evtOderDatei
+}
+function ersteBilddatei(list) {
+    return [...(list || [])].find(f => f && f.type && f.type.startsWith('image/')) || null
+}
+// Base64-Daten-URL → File, damit die Upload-Handler sie annehmen.
+function dataUrlZuDatei(dataUrl, name) {
+    const [meta, b64] = String(dataUrl).split(',')
+    const mime = (meta.match(/:(.*?);/) || [, 'image/png'])[1]
+    const bin = atob(b64)
+    const arr = new Uint8Array(bin.length)
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i)
+    return new File([arr], (name || 'screenshot') + '.png', { type: mime })
+}
+// Legt die Datei in den passenden Handler je Feld (entry/trend/closing).
+function screenshotAusDatei(file, pos, slot) {
+    if (!file || !pos) return
+    if (slot === 'entry') handleEntryScreenshotUpload(file, pos)
+    else if (slot === 'trend') handleTrendScreenshotUpload(file, pos)
+    else if (slot === 'closing') handleClosingScreenshotUpload(file, pos)
+}
+const dragSlot = ref('')  // '<positionId>:<slot>' der überzogenen Zone
+function onDropScreenshot(e, pos, slot) {
+    dragSlot.value = ''
+    screenshotAusDatei(ersteBilddatei(e.dataTransfer?.files), pos, slot)
+}
+// „Kopiertes Bild einfügen": holt das auf der Screenshots-Seite kopierte Bild
+// frisch aus der DB (gemerkt ist nur die ID) und legt es ins Feld.
+async function kopiertesBildEinfuegen(pos, slot) {
+    const merk = kopiertesBild.value
+    if (!merk?.objectId) return
+    let b64 = ''
+    try {
+        const src = await dbGet('screenshots', merk.objectId)
+        b64 = src?.annotatedBase64 || src?.originalBase64 || ''
+    } catch (e) { /* nicht gefunden */ }
+    if (!b64) return
+    screenshotAusDatei(dataUrlZuDatei(b64, merk.name), pos, slot)
+}
+// Einfügen (Strg/Cmd+V): geht an die gerade aufgeklappte Position, erstes freies
+// Feld (Einstieg → Trend → Abschluss).
+function onPasteIncoming(e) {
+    if (!expandedId.value) return
+    const imgItem = [...(e.clipboardData?.items || [])].find(it => it.type && it.type.startsWith('image/'))
+    if (!imgItem) return
+    const file = imgItem.getAsFile()
+    if (!file) return
+    const pos = incomingPositions.find(p => p.positionId === expandedId.value)
+    if (!pos) return
+    e.preventDefault()
+    if (!pos.entryScreenshotId) screenshotAusDatei(file, pos, 'entry')
+    else if (!pos.trendScreenshotId) screenshotAusDatei(file, pos, 'trend')
+    else if (!pos.closingScreenshotId) screenshotAusDatei(file, pos, 'closing')
+}
+onMounted(() => { window.addEventListener('paste', onPasteIncoming) })
+onBeforeUnmount(() => { window.removeEventListener('paste', onPasteIncoming) })
+
+async function handleEntryScreenshotUpload(event, pos) {
+    const file = dateiAus(event)
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+        const base64 = reader.result
+
+        const screenshot = await dbCreate('screenshots', {
+            name: `incoming_entry_${pos.positionId}`,
+            symbol: pos.symbol,
+            side: pos.side === 'LONG' ? 'B' : 'SS',
+            broker: pos.broker || selectedBroker.value || 'bitunix',
+            originalBase64: base64,
+            annotatedBase64: '',
+            markersOnly: 1,
+            maState: {},
+            dateUnix: dayjs().unix(),
+            dateUnixDay: dayjs().utc().startOf('day').unix()
+        })
+
+        await useUpdateIncomingPosition(pos.objectId, { entryScreenshotId: screenshot.objectId })
+        pos.entryScreenshotId = screenshot.objectId
+        entryScreenshotPreviews.value[pos.positionId] = base64
+    }
+    reader.readAsDataURL(file)
+}
+
+async function removeEntryScreenshot(pos) {
+    if (pos.entryScreenshotId) {
+        await useUpdateIncomingPosition(pos.objectId, { entryScreenshotId: '' })
+        pos.entryScreenshotId = ''
+        delete entryScreenshotPreviews.value[pos.positionId]
+    }
+}
+
+async function handleTrendScreenshotUpload(event, pos) {
+    const file = dateiAus(event)
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+        const base64 = reader.result
+
+        const screenshot = await dbCreate('screenshots', {
+            name: `incoming_trend_${pos.positionId}`,
+            symbol: pos.symbol,
+            side: pos.side === 'LONG' ? 'B' : 'SS',
+            broker: pos.broker || selectedBroker.value || 'bitunix',
+            originalBase64: base64,
+            annotatedBase64: '',
+            markersOnly: 1,
+            maState: {},
+            dateUnix: dayjs().unix(),
+            dateUnixDay: dayjs().utc().startOf('day').unix()
+        })
+
+        await useUpdateIncomingPosition(pos.objectId, { trendScreenshotId: screenshot.objectId })
+        pos.trendScreenshotId = screenshot.objectId
+        trendScreenshotPreviews.value[pos.positionId] = base64
+    }
+    reader.readAsDataURL(file)
+}
+
+async function removeTrendScreenshot(pos) {
+    if (pos.trendScreenshotId) {
+        await useUpdateIncomingPosition(pos.objectId, { trendScreenshotId: '' })
+        pos.trendScreenshotId = ''
+        delete trendScreenshotPreviews.value[pos.positionId]
+    }
+}
+
+async function loadScreenshotPreviews(pos) {
+    // Entry-Screenshot laden
+    if (pos.entryScreenshotId && !entryScreenshotPreviews.value[pos.positionId]) {
+        try {
+            const result = await dbGet('screenshots', pos.entryScreenshotId)
+            if (result) entryScreenshotPreviews.value[pos.positionId] = result.annotatedBase64 || result.originalBase64
+        } catch (e) { console.log('Screenshot-Load fehlgeschlagen:', e) }
+    }
+    // Trend-Screenshot laden
+    if (pos.trendScreenshotId && !trendScreenshotPreviews.value[pos.positionId]) {
+        try {
+            const result = await dbGet('screenshots', pos.trendScreenshotId)
+            if (result) trendScreenshotPreviews.value[pos.positionId] = result.annotatedBase64 || result.originalBase64
+        } catch (e) { console.log('Screenshot-Load fehlgeschlagen:', e) }
+    }
+    // Closing-Screenshot laden
+    if (pos.closingScreenshotId && !closingScreenshotPreviews.value[pos.positionId]) {
+        try {
+            const result = await dbGet('screenshots', pos.closingScreenshotId)
+            if (result) closingScreenshotPreviews.value[pos.positionId] = result.annotatedBase64 || result.originalBase64
+        } catch (e) { console.log('Screenshot-Load fehlgeschlagen:', e) }
+    }
+}
+
+async function handleClosingScreenshotUpload(event, pos) {
+    const file = dateiAus(event)
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onloadend = async () => {
+        const base64 = reader.result
+
+        const screenshot = await dbCreate('screenshots', {
+            name: `incoming_closing_${pos.positionId}`,
+            symbol: pos.symbol,
+            side: pos.side === 'LONG' ? 'B' : 'SS',
+            broker: pos.broker || selectedBroker.value || 'bitunix',
+            originalBase64: base64,
+            annotatedBase64: '',
+            markersOnly: 1,
+            maState: {},
+            dateUnix: dayjs().unix(),
+            dateUnixDay: dayjs().utc().startOf('day').unix()
+        })
+
+        await useUpdateIncomingPosition(pos.objectId, { closingScreenshotId: screenshot.objectId })
+        pos.closingScreenshotId = screenshot.objectId
+        closingScreenshotPreviews.value[pos.positionId] = base64
+    }
+    reader.readAsDataURL(file)
+}
+
+async function removeClosingScreenshot(pos) {
+    if (pos.closingScreenshotId) {
+        await useUpdateIncomingPosition(pos.objectId, { closingScreenshotId: '' })
+        pos.closingScreenshotId = ''
+        delete closingScreenshotPreviews.value[pos.positionId]
+    }
+}
+
+// ===== SAVE / COMPLETE =====
+
+async function saveMetadata(pos) {
+    savingId.value = pos.objectId
+    const data = {
+        feelings: pos.feelings || '',
+        stressLevel: pos.stressLevel || 0,
+        emotionLevel: pos.emotionLevel || 0,
+        entryTimeframe: pos.entryTimeframe || '',
+        tradeType: pos.tradeType || '',
+        closingTradeType: pos.closingTradeType || '',
+        tags: JSON.parse(JSON.stringify(pos.tags || [])),
+        skipEvaluation: pos.skipEvaluation || 0,
+        satisfaction: pos.satisfaction != null ? pos.satisfaction : null,
+        // Closing fields
+        strategyFollowed: pos.strategyFollowed != null ? pos.strategyFollowed : -1,
+        closingStressLevel: pos.closingStressLevel || 0,
+        closingEmotionLevel: pos.closingEmotionLevel || 0,
+        closingFeelings: pos.closingFeelings || '',
+        closingTimeframe: pos.closingTimeframe || '',
+        closingTags: JSON.parse(JSON.stringify(pos.closingTags || [])),
+    }
+
+    // Get opening Quill content
+    const openingKey = pos.positionId + '_opening'
+    if (quillInstances[openingKey]) {
+        data.playbook = quillInstances[openingKey].root.innerHTML
+    }
+
+    // Get closing Quill content
+    const closingKey = pos.positionId + '_closing'
+    if (quillInstances[closingKey]) {
+        data.closingPlaybook = quillInstances[closingKey].root.innerHTML
+    }
+
+    try {
+        await useUpdateIncomingPosition(pos.objectId, data)
+    } catch (error) {
+        // Sichtbar wird der Fehler zentral (db.js-Hinweis). Hier zählt der
+        // Zustand: savingId muss zurück, sonst bleibt der Knopf bis zum
+        // Neuladen auf «Speichert»; Editor und Quill-Inhalte bleiben stehen.
+        console.error(' -> Incoming saveMetadata Fehler:', error)
+        savingId.value = null
+        return
+    }
+
+    // Save Quill content to pos
+    if (data.playbook) pos.playbook = data.playbook
+    if (data.closingPlaybook) pos.closingPlaybook = data.closingPlaybook
+
+    // If "Trade nicht bewerten" is checked and position is pending_evaluation,
+    // just delete the incoming position — NO notes/satisfactions/tags transfer,
+    // so the trade stays "unbewertet" in Settings and won't appear in Playbook.
+    if (pos.skipEvaluation === 1 && pos.status === 'pending_evaluation') {
+        try {
+            await useDeleteIncomingPosition(pos.objectId)
+        } catch (error) {
+            console.error('Error skipping evaluation:', error)
+        }
+    }
+
+    savingId.value = null
+    delete quillInstances[openingKey]
+    delete quillInstances[closingKey]
+    expandedId.value = null
+}
+
+const closingId = ref(null)
+
+async function completeClosingEvaluation(pos) {
+    if (!pos.historyData || pos.status !== 'pending_evaluation') return
+
+    closingId.value = pos.objectId
+
+    try {
+        // First save any unsaved metadata (deep-copy tags to prevent shared references)
+        const data = {
+            feelings: pos.feelings || '',
+            stressLevel: pos.stressLevel || 0,
+            emotionLevel: pos.emotionLevel || 0,
+            entryTimeframe: pos.entryTimeframe || '',
+            tradeType: pos.tradeType || '',
+            closingTradeType: pos.closingTradeType || '',
+            tags: JSON.parse(JSON.stringify(pos.tags || [])),
+            satisfaction: pos.satisfaction != null ? pos.satisfaction : null,
+            strategyFollowed: pos.strategyFollowed != null ? pos.strategyFollowed : -1,
+            closingStressLevel: pos.closingStressLevel || 0,
+            closingEmotionLevel: pos.closingEmotionLevel || 0,
+            closingFeelings: pos.closingFeelings || '',
+            closingTimeframe: pos.closingTimeframe || '',
+            closingTags: JSON.parse(JSON.stringify(pos.closingTags || [])),
+        }
+        const openingKey = pos.positionId + '_opening'
+        const closingKey = pos.positionId + '_closing'
+        if (quillInstances[openingKey]) {
+            data.playbook = quillInstances[openingKey].root.innerHTML
+            pos.playbook = data.playbook
+        }
+        if (quillInstances[closingKey]) {
+            data.closingPlaybook = quillInstances[closingKey].root.innerHTML
+            pos.closingPlaybook = data.closingPlaybook
+        }
+        await useUpdateIncomingPosition(pos.objectId, data)
+
+        // Bots: keine SL/TP/RRR/Fill-Metadaten (automatisiert, langfristig) → überspringen.
+        const isBot = isBotPosition(pos)
+        let tradingMeta = null
+        if (!isBot) {
+
+        // Ensure fills are loaded before building metadata
+        if (!positionFills.value[pos.positionId]?.trades?.length) {
+            await fetchPositionFills(pos.positionId, true, pos.broker || 'bitunix', pos.symbol || '')
+        }
+
+        // Build trading metadata for AI review
+        const tpsl = getTpSlForPosition(pos.positionId)
+        const fillData = getFillsForPosition(pos.positionId)
+        const bePrice = getBreakevenPrice(pos.positionId, pos.side)
+        const slAboveBe = isSLAboveBreakeven(pos.positionId, pos.side)
+        const margin = parseFloat(pos.bitunixData?.margin || 0)
+        const leverage = parseFloat(pos.leverage || 1)
+        const tpslHistory = getTpSlHistoryForPosition(pos.positionId)
+
+        const rrr = getRRR(pos.positionId, pos.side)
+
+        tradingMeta = {
+            sl: tpsl.sl || null,
+            tp: tpsl.tp || null,
+            slQty: tpsl.slQty || null,
+            tpQty: tpsl.tpQty || null,
+            breakeven: bePrice > 0 ? parseFloat(bePrice.toFixed(5)) : null,
+            slAboveBreakeven: slAboveBe,
+            rrr: rrr ? parseFloat(rrr) : null,
+            margin: margin,
+            leverage: leverage,
+            positionSize: parseFloat((margin * leverage).toFixed(2)),
+            fills: (fillData.trades || []).map(f => ({
+                time: f.ctime,
+                qty: parseFloat(f.qty || 0),
+                price: parseFloat(f.price || 0),
+                fee: parseFloat(f.fee || 0),
+                reduceOnly: !!f.reduceOnly,
+                side: f.side
+            })),
+            tpslHistory: (() => {
+                // Filter out entries recorded after the last fill (position close artifacts)
+                const fills = (fillData.trades || [])
+                const lastFillTime = fills.length > 0
+                    ? Math.max(...fills.map(f => parseInt(f.ctime || 0)))
+                    : 0
+                const cutoff = lastFillTime ? lastFillTime + 60000 : Infinity
+                return tpslHistory
+                    .filter(h => h.time <= cutoff)
+                    .map(h => ({
+                        time: h.time,
+                        type: h.type,
+                        action: h.action,
+                        oldVal: h.oldVal,
+                        newVal: h.newVal,
+                        qty: h.qty || 0,
+                        posQty: h.posQty || 0,
+                        rrr: h.rrr || null
+                    }))
+            })()
+        }
+        } // /if (!isBot)
+
+        // Transfer metadata to trade record and delete incoming position
+        await useTransferClosingMetadata(
+            pos,
+            pos.historyData,
+            {
+                note: '',
+                tags: JSON.parse(JSON.stringify(pos.tags || [])),
+                satisfaction: pos.satisfaction != null ? pos.satisfaction : null,
+                stressLevel: pos.stressLevel || 0,
+                tradeType: pos.tradeType || '',
+                closingTradeType: pos.closingTradeType || '',
+                strategyFollowed: pos.strategyFollowed != null ? pos.strategyFollowed : -1,
+                closingNote: pos.closingPlaybook || '',
+                closingStressLevel: pos.closingStressLevel || 0,
+                closingEmotionLevel: pos.closingEmotionLevel || 0,
+                closingFeelings: pos.closingFeelings || '',
+                closingTimeframe: pos.closingTimeframe || '',
+                closingPlaybook: pos.closingPlaybook || '',
+                closingScreenshotId: pos.closingScreenshotId || '',
+                closingTags: JSON.parse(JSON.stringify(pos.closingTags || [])),
+                tradingMetadata: tradingMeta,
+            }
+        )
+
+        // Remove from local list
+        const idx = incomingPositions.findIndex(p => p.objectId === pos.objectId)
+        if (idx !== -1) {
+            incomingPositions.splice(idx, 1)
+        }
+
+        delete quillInstances[openingKey]
+        delete quillInstances[closingKey]
+        expandedId.value = null
+    } catch (error) {
+        console.error('Error completing evaluation:', error)
+        alert(t('common.errorPrefix') + (error?.response?.data?.error || error.message || t('common.error')))
+    } finally {
+        closingId.value = null
+    }
+}
+
+// ===== FORMATTING =====
+
+function formatCurrency(val, unit = 'USDT') {
+    const num = parseFloat(val || 0)
+    // Coin-M-Bots werden in der Margin-Münze (z.B. SOL) mit mehr Nachkommastellen
+    // angezeigt; USDT bleibt bei 2.
+    const dec = unit && unit !== 'USDT' ? 4 : 2
+    return (num >= 0 ? '+' : '') + num.toFixed(dec) + ' ' + unit
+}
+
+// Realized PnL for an open position (already booked via partial TPs).
+// Reads directly from broker raw data (no extra fetch needed).
+function getOpenRealizedPnL(pos) {
+    const d = pos?.bitunixData || {}
+    const raw = d.realizedPNL ?? d.realized_pnl ?? d.realizedPnl ?? d.realizedPL ?? d.achievedProfits ?? 0
+    const num = parseFloat(raw)
+    return Number.isFinite(num) ? num : 0
+}
+
+function formatTime(date) {
+    if (!date) return ''
+    return dayjs(date).tz(timeZoneTrade.value).format('HH:mm:ss')
+}
+
+function getPositionDate(pos) {
+    const ctime = pos.bitunixData?.ctime
+    if (ctime) {
+        return dayjs(parseInt(ctime)).tz(timeZoneTrade.value).format('DD.MM.YYYY')
+    }
+    if (pos.createdAt) {
+        return dayjs(pos.createdAt).format('DD.MM.YYYY')
+    }
+    return ''
+}
+</script>
+
+<template>
+    <div class="row mt-2">
+        <div v-show="!spinnerLoadingPage">
+            <!-- Header -->
+            <div class="row mb-3 align-items-center">
+                <div class="col">
+                    <small v-if="incomingLastFetched" class="text-muted">
+                        {{ t('incoming.lastUpdated') }} {{ formatTime(incomingLastFetched) }}
+                        <span v-if="incomingPollingActive" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                    </small>
+                </div>
+                <div class="col-auto d-flex align-items-center gap-2">
+                    <button class="btn btn-sm btn-outline-primary" @click="manualRefresh" :disabled="incomingPollingActive">
+                        <i class="uil uil-sync me-1"></i>{{ t('incoming.refresh') }}
+                    </button>
+                    <PageInfo section="info.pendente" />
+                </div>
+            </div>
+
+            <!-- Error — beim Börsenausfall übernimmt der Kasten darunter, sonst
+                 stünde dieselbe Meldung zweimal da (einmal rot, einmal gelb). -->
+            <div v-if="incomingError && !brokerFehler.length" class="alert alert-danger">{{ incomingError }}</div>
+
+            <!-- Börse antwortet nicht: je Börse eine Zeile, solange es anhält -->
+            <div v-for="f in brokerFehler" :key="'boerse_' + f.broker" class="alert alert-warning py-2 px-3 mb-2">
+                <i class="uil uil-exclamation-triangle me-1"></i>
+                <strong>{{ t('incoming.brokerAusfall', { boerse: f.name }) }}</strong>
+                <span v-if="f.teilweise"> {{ t('incoming.brokerTeilausfall') }}</span>
+                <div class="small mt-1 opacity-75">{{ f.meldung }}</div>
+                <div class="small mt-1">{{ t('incoming.brokerAusfallHinweis') }}</div>
+            </div>
+
+            <!-- No positions -->
+            <NoData v-if="orderedPositions.length === 0 && !incomingError && !brokerFehler.length" />
+
+            <!-- Position cards: gruppiert je Börse (Titel) → Futures, dann Bots -->
+            <template v-for="(pos, idx) in orderedPositions" :key="(pos.broker || '') + '_' + pos.positionId">
+            <h4 v-if="brokerHeaderAt(idx)" class="incoming-broker-title">{{ brokerHeaderAt(idx) }}</h4>
+            <h6 v-if="sectionHeaderAt(idx)" class="incoming-section-title">{{ sectionHeaderAt(idx) }}</h6>
+            <div class="dailyCard incoming-card mb-2 p-2">
+                <!-- Card header -->
+                <div class="row align-items-center pointerClass" @click="toggleExpand(pos.positionId)">
+                    <div class="col-auto">
+                        <strong class="fs-5">{{ pos.symbol }}</strong>
+                        <span class="ms-2 fw-bold" :class="displaySide(pos.side) === 'LONG' ? 'greenTrade' : (displaySide(pos.side) === 'NEUTRAL' ? 'text-muted' : 'redTrade')">
+                            {{ displaySide(pos.side) }}
+                        </span>
+                        <span class="ms-2 incoming-info">{{ pos.leverage }}x</span>
+                        <span v-if="pos.coinM" class="badge ms-2" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-size:0.6rem;">COIN-M</span>
+                        <span v-if="pos.status === 'pending_evaluation'" class="badge bg-warning text-dark ms-2">{{ t('incoming.closed') }}</span>
+                    </div>
+                    <div class="col text-end">
+                        <span v-if="pos.status === 'pending_evaluation' && closedPnL(pos) != null"
+                            class="incoming-pnl fw-bold"
+                            :class="parseFloat(closedPnL(pos)) >= 0 ? 'greenTrade' : 'redTrade'">
+                            {{ formatCurrency(closedPnL(pos)) }}
+                        </span>
+                        <template v-else>
+                            <span class="incoming-pnl" :class="parseFloat(pos.unrealizedPNL || 0) >= 0 ? 'greenTrade' : 'redTrade'">
+                                {{ formatCurrency(pos.unrealizedPNL, pos.marginCoin) }}
+                            </span>
+                            <div v-if="getOpenRealizedPnL(pos) !== 0" class="small mt-1"
+                                :class="getOpenRealizedPnL(pos) >= 0 ? 'greenTrade' : 'redTrade'"
+                                style="opacity: 0.85;">
+                                <span class="text-muted me-1">{{ t('incoming.realized') }}</span>{{ formatCurrency(getOpenRealizedPnL(pos)) }}
+                            </div>
+                        </template>
+                    </div>
+                    <div class="col-auto">
+                        <i :class="expandedId === pos.positionId ? 'uil-angle-up' : 'uil-angle-down'" class="uil fs-4"></i>
+                    </div>
+                </div>
+
+                <!-- Trade info line -->
+                <div class="row mt-1">
+                    <div class="col">
+                        <small class="incoming-info">
+                            {{ t('incoming.entry') }}
+                            <!-- Bots: Startpreis (Bot-Start) + Ø Haltepreis (driftet). Futures: bisher. -->
+                            <template v-if="isBotPosition(pos)">
+                                <span v-if="parseFloat(pos.bitunixData?.startPrice) > 0">Start {{ parseFloat(pos.bitunixData.startPrice).toFixed(2) }} · </span>Ø {{ parseFloat(pos.entryPrice || 0).toFixed(2) }}
+                            </template>
+                            <template v-else-if="getEntryFills(pos.positionId, pos.side).length > 1">
+                                Ø {{ getAvgEntryPrice(pos.positionId, pos.side).toFixed(5) }} ({{ getEntryFills(pos.positionId, pos.side).length }}×)
+                            </template>
+                            <template v-else>
+                                {{ parseFloat(pos.entryPrice || 0).toFixed(2) }}
+                            </template>
+                            <template v-if="getBreakevenPrice(pos.positionId, pos.side) > 0">
+                                | <span class="text-muted">BE: {{ getBreakevenPrice(pos.positionId, pos.side).toFixed(2) }}</span>
+                            </template>
+                            <template v-if="getTpSlForPosition(pos.positionId).sl">
+                                | <span :style="isSLAboveBreakeven(pos.positionId, pos.side) ? 'color: #86efac' : ''" :class="!isSLAboveBreakeven(pos.positionId, pos.side) ? 'text-danger' : ''">SL: {{ getTpSlForPosition(pos.positionId).sl }}</span>
+                            </template>
+                            <template v-if="getTpSlForPosition(pos.positionId).tp">
+                                | <span style="color: #f59e0b;">TP: {{ getTpSlForPosition(pos.positionId).tp }}</span>
+                            </template>
+                            <!-- Bots: echte Liquidation + Investment in Margin-Münze (coin-M: z.B. SOL);
+                                 Futures: bisheriges Verhalten (markPrice als Liq, Marge in USDT). -->
+                            <template v-if="isBotPosition(pos)">
+                                <span v-if="parseFloat(pos.bitunixData?.liqPrice) > 0"> | {{ t('incoming.liquidation') }} {{ parseFloat(pos.bitunixData.liqPrice).toFixed(2) }}</span>
+                                <span v-if="parseFloat(pos.bitunixData?.margin) > 0"> | {{ t('incoming.margin') }} {{ parseFloat(pos.bitunixData.margin).toFixed(pos.coinM ? 4 : 2) }} {{ pos.marginCoin || 'USDT' }}</span>
+                                <span v-if="parseFloat(pos.markPrice) > 0"> | {{ t('incoming.marketPrice') }} {{ parseFloat(pos.markPrice).toFixed(2) }}</span>
+                            </template>
+                            <template v-else>
+                                <span v-if="pos.markPrice"> | {{ t('incoming.liquidation') }} {{ parseFloat(pos.markPrice || 0).toFixed(2) }}</span>
+                                | {{ t('incoming.margin') }} {{ parseFloat(pos.bitunixData?.margin || 0).toFixed(2) }} USDT
+                            </template>
+                            <span v-if="getPositionDate(pos)"> | {{ getPositionDate(pos) }}</span>
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Stress level indicator (always visible if set) -->
+                <div v-if="pos.stressLevel > 0 && expandedId !== pos.positionId" class="mt-1">
+                    <small class="incoming-info">{{ t('incoming.stress') }} </small>
+                    <template v-for="n in 10" :key="n">
+                        <span class="stress-dot" :class="n <= pos.stressLevel ? 'active' : 'inactive'">
+                            <span class="stress-number">{{ n }}</span>&#x25CF;
+                        </span>
+                        <span v-if="n < 10" class="stress-dot stress-spacer" :class="n <= pos.stressLevel ? 'active' : 'inactive'">
+                            <span class="stress-number">&nbsp;</span>&#x25CF;
+                        </span>
+                    </template>
+                </div>
+
+                <!-- ===== EXPANDED DETAIL SECTION ===== -->
+                <div v-if="expandedId === pos.positionId" class="mt-2 incoming-meta-section">
+
+                    <!-- ========== FILLS / COMPOUND TRACKING ========== -->
+                    <div v-if="pos.status === 'open' && (pos.broker === 'bitunix' || pos.broker === 'bitget')" class="fills-section p-3 mb-2">
+                        <div class="d-flex align-items-center justify-content-between mb-2">
+                            <span class="fw-bold" style="font-size: 0.95rem;">
+                                <i class="uil uil-layers me-1"></i>
+                                {{ t('incoming.fills') }}
+                                <span v-if="getEntryFills(pos.positionId, pos.side).length > 1"
+                                    class="text-muted ms-1">({{ getEntryFills(pos.positionId, pos.side).length }} {{ t('incoming.fillEntries') }})</span>
+                            </span>
+                            <span v-if="getEntryFills(pos.positionId, pos.side).length > 0" class="fw-bold" style="font-size: 0.85rem;">
+                                {{ t('incoming.fillAvgPrice') }}: {{ getAvgEntryPrice(pos.positionId, pos.side).toFixed(5) }}
+                            </span>
+                        </div>
+
+                        <!-- Loading -->
+                        <div v-if="getFillsForPosition(pos.positionId).loading" class="text-muted small">
+                            <span class="spinner-border spinner-border-sm me-1" style="width: 0.7rem; height: 0.7rem;"></span>
+                            Loading...
+                        </div>
+
+                        <!-- Error -->
+                        <div v-else-if="getFillsForPosition(pos.positionId).error" class="text-danger small">
+                            {{ getFillsForPosition(pos.positionId).error }}
+                        </div>
+
+                        <!-- Fills table -->
+                        <div v-else-if="getFillsForPosition(pos.positionId).trades.length > 0">
+                            <table class="table table-sm table-borderless mb-1" style="font-size: 0.8rem; color: var(--white-80);">
+                                <tbody>
+                                    <template v-for="(group, gIdx) in groupFillsByMinute(getFillsForPosition(pos.positionId).trades, 'ctime')" :key="group.key">
+                                        <tr :class="group.reduceOnly ? 'text-danger' : ''"
+                                            :style="group.isGroup ? 'cursor: pointer;' : ''"
+                                            @click="group.isGroup && toggleFillGroup(group.key)">
+                                            <td class="text-muted ps-0" style="width: 100px;">
+                                                <span v-if="group.isGroup" style="font-size: 0.6rem; margin-right: 2px;">{{ expandedFillGroups.has(group.key) ? '▼' : '▶' }}</span>
+                                                {{ formatFillTime(group.time) }}
+                                            </td>
+                                            <td style="width: 80px;" class="text-end">{{ group.totalQty }}</td>
+                                            <td class="text-muted px-1">×</td>
+                                            <td style="width: 90px;">{{ group.isGroup ? group.avgPrice.toFixed(5) : parseFloat(group.fills[0].price) }}</td>
+                                            <td class="text-muted px-1">=</td>
+                                            <td class="text-end" style="width: 90px;">{{ group.totalValue.toFixed(2) }}</td>
+                                            <td>
+                                                <span v-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'close'"
+                                                    class="badge bg-danger" style="font-size: 0.65rem;">{{ t('incoming.fillClose') }}</span>
+                                                <span v-else-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'partialClose'"
+                                                    class="badge bg-warning text-dark" style="font-size: 0.65rem;">{{ t('incoming.fillPartialClose') }}</span>
+                                                <span v-else-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'initial'"
+                                                    class="badge bg-secondary" style="font-size: 0.65rem;">{{ t('incoming.fillInitial') }}</span>
+                                                <span v-else class="badge bg-info" style="font-size: 0.65rem;">{{ t('incoming.fillCompound') }}</span>
+                                                <span v-if="group.isGroup" class="text-muted ms-1" style="font-size: 0.6rem;">({{ group.fills.length }})</span>
+                                            </td>
+                                            <td class="text-end text-muted pe-0" style="width: 90px;">{{ t('incoming.fillFee') }}: {{ group.totalFee.toFixed(4) }}</td>
+                                        </tr>
+                                        <template v-if="group.isGroup && expandedFillGroups.has(group.key)">
+                                            <tr v-for="(fill, fIdx) in group.fills" :key="group.key + '_' + fIdx"
+                                                :class="fill.reduceOnly ? 'text-danger' : ''" style="opacity: 0.6; font-size: 0.7rem;">
+                                                <td class="ps-0" style="width: 100px;"></td>
+                                                <td style="width: 80px;" class="text-end">{{ parseFloat(fill.qty) }}</td>
+                                                <td class="text-muted px-1">×</td>
+                                                <td style="width: 90px;">{{ parseFloat(fill.price) }}</td>
+                                                <td class="text-muted px-1">=</td>
+                                                <td class="text-end" style="width: 90px;">{{ (parseFloat(fill.qty) * parseFloat(fill.price)).toFixed(2) }}</td>
+                                                <td></td>
+                                                <td class="text-end text-muted pe-0" style="width: 90px;">{{ t('incoming.fillFee') }}: {{ parseFloat(fill.fee || 0).toFixed(4) }}</td>
+                                            </tr>
+                                        </template>
+                                    </template>
+                                </tbody>
+                            </table>
+                            <!-- Totals row -->
+                            <div v-if="getFillsForPosition(pos.positionId).trades.length > 0"
+                                class="d-flex justify-content-between border-top pt-1 mt-1" style="font-size: 0.8rem; border-color: var(--white-20) !important;">
+                                <span class="text-muted">
+                                    {{ t('incoming.fillTotal') }}:
+                                    <strong class="text-white">{{ getEntryFills(pos.positionId, pos.side).reduce((sum, f) => sum + parseFloat(f.qty || 0), 0) }}</strong>
+                                </span>
+                                <span class="text-muted">
+                                    {{ t('incoming.fillFee') }}:
+                                    <strong class="text-white">{{ getFillsForPosition(pos.positionId).trades.reduce((sum, f) => sum + parseFloat(f.fee || 0), 0).toFixed(4) }}</strong>
+                                </span>
+                            </div>
+                            <!-- Position Size: Marge × Hebel -->
+                            <div class="d-flex justify-content-between border-top pt-1 mt-1" style="font-size: 0.8rem; border-color: var(--white-20) !important;">
+                                <span class="text-muted">
+                                    {{ t('incoming.positionSize') }}:
+                                    <span class="text-white">{{ parseFloat(pos.bitunixData?.margin || 0).toFixed(2) }}</span>
+                                    <span class="text-muted"> × </span>
+                                    <span class="text-white">{{ pos.leverage }}x</span>
+                                    <span class="text-muted"> = </span>
+                                    <strong class="text-white">{{ (parseFloat(pos.bitunixData?.margin || 0) * parseFloat(pos.leverage || 1)).toFixed(2) }} USDT</strong>
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- TP/SL Orders + BE -->
+                        <div v-if="getTpSlForPosition(pos.positionId).sl || getTpSlForPosition(pos.positionId).tp || getBreakevenPrice(pos.positionId, pos.side) > 0"
+                            class="d-flex gap-3 mt-2 pt-2 border-top" style="font-size: 0.8rem; border-color: var(--white-20) !important;">
+                            <span v-if="getTpSlForPosition(pos.positionId).sl">
+                                <span class="fw-bold" :class="!isSLAboveBreakeven(pos.positionId, pos.side) ? 'text-danger' : ''" :style="isSLAboveBreakeven(pos.positionId, pos.side) ? 'color: #86efac' : ''">SL: {{ getTpSlForPosition(pos.positionId).sl }}</span>
+                                <span class="text-muted ms-1">({{ getTpSlForPosition(pos.positionId).slQty }})</span>
+                            </span>
+                            <span v-if="getBreakevenPrice(pos.positionId, pos.side) > 0">
+                                <span class="text-muted fw-bold">BE: {{ getBreakevenPrice(pos.positionId, pos.side).toFixed(2) }}</span>
+                            </span>
+                            <span v-if="getTpSlForPosition(pos.positionId).tp">
+                                <span class="fw-bold" style="color: #f59e0b;">TP: {{ getTpSlForPosition(pos.positionId).tp }}</span>
+                                <span class="text-muted ms-1">({{ getTpSlForPosition(pos.positionId).tpQty }})</span>
+                            </span>
+                            <span v-if="getRRR(pos.positionId, pos.side)" class="ms-auto">
+                                <span class="fw-bold" style="color: #a78bfa;">RRR 1:{{ getRRR(pos.positionId, pos.side) }}</span>
+                            </span>
+                        </div>
+
+                        <!-- TP/SL Change History -->
+                        <div v-if="getTpSlHistoryForPosition(pos.positionId).length > 0"
+                            class="mt-2 pt-2 border-top" style="font-size: 0.75rem; border-color: var(--white-20) !important;">
+                            <div class="text-muted mb-1 pointerClass" @click.stop="toggleTpSlHistory(pos.positionId)">
+                                <i class="uil uil-history me-1"></i>SL/TP Protokoll
+                                <i :class="tpslCollapsedIds.includes(pos.positionId) ? 'uil-angle-down' : 'uil-angle-up'" class="uil ms-1" style="font-size: 1.3rem; vertical-align: middle;"></i>
+                            </div>
+                            <template v-if="!tpslCollapsedIds.includes(pos.positionId)">
+                                <div v-for="(entry, idx) in getTpSlHistoryForPosition(pos.positionId)" :key="idx"
+                                    class="d-flex align-items-center gap-2 mb-1">
+                                    <span class="text-muted" style="width: 90px;">{{ dayjs(entry.time).tz(timeZoneTrade.value).format('DD.MM. HH:mm') }}</span>
+                                    <span :class="entry.type === 'SL' ? (isSLAboveBreakeven(pos.positionId, pos.side) ? '' : 'text-danger') : (entry.action === 'triggered' ? 'text-success fw-bold' : '')"
+                                        :style="entry.type === 'SL' && isSLAboveBreakeven(pos.positionId, pos.side) ? 'color: #86efac' : (entry.type === 'TP' && entry.action !== 'triggered' ? 'color: #f59e0b' : '')">
+                                        {{ entry.type }}
+                                    </span>
+                                    <template v-if="entry.action === 'set'">
+                                        <span class="text-muted">→</span>
+                                        <span class="text-white">{{ entry.newVal }}</span>
+                                        <span v-if="entry.qty && getTpSlEntryDisplay(entry, pos.quantity)" class="text-muted">({{ getTpSlEntryDisplay(entry, pos.quantity).qty }} · {{ getTpSlEntryDisplay(entry, pos.quantity).pct }}%)</span>
+                                        <span class="badge bg-secondary" style="font-size: 0.6rem;">Gesetzt</span>
+                                    </template>
+                                    <template v-else-if="entry.action === 'moved'">
+                                        <span class="text-muted" style="text-decoration: line-through;">{{ entry.oldVal }}</span>
+                                        <span class="text-muted">→</span>
+                                        <span class="text-white">{{ entry.newVal }}</span>
+                                        <span v-if="entry.qty && getTpSlEntryDisplay(entry, pos.quantity)" class="text-muted">({{ getTpSlEntryDisplay(entry, pos.quantity).qty }} · {{ getTpSlEntryDisplay(entry, pos.quantity).pct }}%)</span>
+                                        <span class="badge bg-warning text-dark" style="font-size: 0.6rem;">Verschoben</span>
+                                    </template>
+                                    <template v-else-if="entry.action === 'triggered'">
+                                        <span class="text-success" style="text-decoration: line-through;">{{ entry.oldVal }}</span>
+                                        <span class="text-success">→</span>
+                                        <span class="text-success fw-bold">Ausgelöst ✓</span>
+                                    </template>
+                                    <template v-else-if="entry.action === 'removed'">
+                                        <span class="text-muted" style="text-decoration: line-through;">{{ entry.oldVal }}</span>
+                                        <span class="text-muted">→ entfernt</span>
+                                    </template>
+                                    <span v-if="entry.rrr" class="ms-auto" style="color: #a78bfa; font-weight: 600;">1:{{ entry.rrr }}</span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- ========== OPENING EVALUATION (nur Futures, nicht für Bots) ========== -->
+                    <div v-if="!isBotPosition(pos)" class="opening-eval-section p-3 mb-2">
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="uil uil-unlock-alt me-2" style="color: var(--green-color, #10b981); font-size: 1.1rem;"></i>
+                        <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.openingEvaluation') }}</span>
+                    </div>
+
+                    <!-- Trade-Typ -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.tradeType') }}</label>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button v-for="tt in tradeTypeOptions" :key="tt.value"
+                                class="btn btn-sm py-0 px-2"
+                                :class="pos.tradeType === tt.value ? 'btn-primary' : 'btn-outline-secondary'"
+                                @click.stop="updateTradeType(pos, tt.value)">
+                                {{ t(tt.labelKey) }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Timeframe -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.timeframe') }}</label>
+                        <div class="d-flex flex-wrap gap-1">
+                            <button v-for="tf in timeframeOptions" :key="tf.value"
+                                class="btn btn-sm py-0 px-2"
+                                :class="pos.entryTimeframe === tf.value ? 'btn-primary' : 'btn-outline-secondary'"
+                                @click.stop="updateTimeframe(pos, tf.value)">
+                                {{ tf.label }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Stresslevel -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.stressLevel') }}</label>
+                        <div class="d-flex align-items-end flex-wrap">
+                            <template v-for="n in 10" :key="'os'+n">
+                                <span @click.stop="updateStress(pos, n)"
+                                    class="stress-dot pointerClass"
+                                    :class="n <= pos.stressLevel ? 'active' : 'inactive'">
+                                    <span class="stress-number">{{ n }}</span>&#x25CF;
+                                </span>
+                                <span v-if="n < 10" class="stress-dot stress-spacer"
+                                    :class="n <= pos.stressLevel ? 'active' : 'inactive'">
+                                    <span class="stress-number">&nbsp;</span>&#x25CF;
+                                </span>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Emotionslevel -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.emotionLevel') }}</label>
+                        <div class="d-flex align-items-end flex-wrap">
+                            <template v-for="n in 10" :key="'oe'+n">
+                                <span @click.stop="updateEmotionLevel(pos, n)"
+                                    class="stress-dot pointerClass"
+                                    :class="n <= pos.emotionLevel ? 'active' : 'inactive'">
+                                    <span class="stress-number">{{ n }}</span>&#x25CF;
+                                </span>
+                                <span v-if="n < 10" class="stress-dot stress-spacer"
+                                    :class="n <= pos.emotionLevel ? 'active' : 'inactive'">
+                                    <span class="stress-number">&nbsp;</span>&#x25CF;
+                                </span>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Emotionen -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.emotions') }}</label>
+                        <textarea class="form-control form-control-sm" v-model="pos.feelings"
+                            :placeholder="t('incoming.emotionsPlaceholder')" rows="2"></textarea>
+                    </div>
+
+                    <!-- Notiz (Quill Editor) -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.note') }}</label>
+                        <div :id="'quillIncoming-' + pos.positionId + '-opening'" class="quill-incoming"></div>
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
+                        <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                            <span v-for="(tag, idx) in (pos.tags || [])" :key="tag.id"
+                                class="badge me-1 pointerClass"
+                                :style="{ backgroundColor: getTagColor(tag.id) }"
+                                @click.stop="removeTag(pos, idx)">
+                                {{ tag.name }} <span class="ms-1">&times;</span>
+                            </span>
+                        </div>
+                        <select class="form-select form-select-sm"
+                            @change.stop="addTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
+                            <option selected disabled>{{ t('incoming.addTag') }}</option>
+                            <template v-for="group in availableTags" :key="group.id">
+                                <optgroup :label="group.name">
+                                    <option v-for="tag in group.tags" :key="tag.id"
+                                        :value="JSON.stringify({ id: tag.id, name: tag.name })"
+                                        :disabled="(pos.tags || []).some(t => t.id === tag.id)">
+                                        {{ tag.name }}
+                                    </option>
+                                </optgroup>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- Screenshots (max 2) -->
+                    <div class="pb-edit-section">
+                        <label class="pb-edit-label">{{ t('incoming.screenshot') }}</label>
+                        <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
+                            <!-- Erster Screenshot (Thumbnail) -->
+                            <div v-if="pos.entryScreenshotId" class="position-relative screenshot-thumb">
+                                <img v-if="entryScreenshotPreviews[pos.positionId]"
+                                    :src="entryScreenshotPreviews[pos.positionId]"
+                                    class="rounded" style="max-height: 120px; max-width: 200px; object-fit: contain;" />
+                                <span v-else class="badge bg-secondary"><i class="uil uil-image me-1"></i>1</span>
+                                <i class="uil uil-times-circle screenshot-remove" @click.stop="removeEntryScreenshot(pos)"></i>
+                            </div>
+                            <!-- Zweiter Screenshot (Thumbnail) -->
+                            <div v-if="pos.trendScreenshotId" class="position-relative screenshot-thumb">
+                                <img v-if="trendScreenshotPreviews[pos.positionId]"
+                                    :src="trendScreenshotPreviews[pos.positionId]"
+                                    class="rounded" style="max-height: 120px; max-width: 200px; object-fit: contain;" />
+                                <span v-else class="badge bg-secondary"><i class="uil uil-image me-1"></i>2</span>
+                                <i class="uil uil-times-circle screenshot-remove" @click.stop="removeTrendScreenshot(pos)"></i>
+                            </div>
+                        </div>
+                        <!-- Upload (sichtbar solange weniger als 2 Screenshots) —
+                             jetzt auch Drag&Drop und Einfügen (Strg/Cmd+V). -->
+                        <label v-if="!pos.entryScreenshotId || !pos.trendScreenshotId"
+                            class="pb-drop" :class="{ 'pb-drop-over': dragSlot === pos.positionId + ':open' }"
+                            @dragover.prevent="dragSlot = pos.positionId + ':open'" @dragenter.prevent="dragSlot = pos.positionId + ':open'"
+                            @dragleave.prevent="dragSlot = ''"
+                            @drop.prevent="onDropScreenshot($event, pos, pos.entryScreenshotId ? 'trend' : 'entry')">
+                            <input type="file" accept="image/*" class="pb-drop-input"
+                                @change="!pos.entryScreenshotId ? handleEntryScreenshotUpload($event, pos) : handleTrendScreenshotUpload($event, pos)" />
+                            <i class="uil uil-image-plus me-1"></i>Bild wählen, hierher ziehen oder einfügen (Strg/Cmd+V)
+                        </label>
+                        <button v-if="kopiertesBild && (!pos.entryScreenshotId || !pos.trendScreenshotId)"
+                            type="button" class="btn btn-sm btn-outline-primary mt-2"
+                            @click.stop="kopiertesBildEinfuegen(pos, pos.entryScreenshotId ? 'trend' : 'entry')">
+                            <i class="uil uil-clipboard-notes me-1"></i>Kopiertes Bild einfügen
+                        </button>
+                        <!-- Chartbild: Einstieg/Stop/Ziel + Strategie-Setups (LSOB/GUSS-Tag) automatisch -->
+                        <div class="d-flex align-items-center gap-2 mt-2">
+                            <button type="button" class="btn btn-sm btn-outline-info" :disabled="chartBildStand[pos.positionId]?.laeuft"
+                                :title="t('incoming.chartBildTipp')" @click.stop="chartBildErzeugen(pos)">
+                                <span v-if="chartBildStand[pos.positionId]?.laeuft" class="spinner-border spinner-border-sm me-1"></span>
+                                <i v-else class="uil uil-chart me-1"></i>{{ t('incoming.chartBild') }}
+                            </button>
+                            <small v-if="chartBildStand[pos.positionId]?.fehler" class="text-warning">{{ chartBildStand[pos.positionId].fehler }}</small>
+                            <small v-else class="text-muted">{{ t('incoming.chartBildHinweis') }}</small>
+                        </div>
+                    </div>
+
+                    </div><!-- /opening-eval-section -->
+
+                    <!-- ========== CLOSING EVALUATION (Futures) ========== -->
+                    <div v-if="pos.status === 'pending_evaluation' && !isBotPosition(pos)" class="closing-eval-section mt-3 p-3">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="uil uil-lock-alt me-2" style="color: var(--blue-color); font-size: 1.1rem;"></i>
+                            <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.closingEvaluation') }}</span>
+                        </div>
+
+                        <!-- Strategie eingehalten? (oberster Punkt) -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.strategyFollowed') }}</label>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm px-3"
+                                    :class="pos.strategyFollowed === 1 ? 'btn-success' : 'btn-outline-secondary'"
+                                    @click.stop="updateStrategyFollowed(pos, 1)">
+                                    {{ t('incoming.strategyYes') }}
+                                </button>
+                                <button class="btn btn-sm px-3"
+                                    :class="pos.strategyFollowed === 0 ? 'btn-danger' : 'btn-outline-secondary'"
+                                    @click.stop="updateStrategyFollowed(pos, 0)">
+                                    {{ t('incoming.strategyNo') }}
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Trade-Typ (auto-erkannt, manuell überschreibbar) -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">
+                                {{ t('incoming.tradeType') }}
+                                <small v-if="autoDetectedTradeType[pos.positionId] === true" class="text-muted ms-1">{{ t('incoming.autoDetected') }}</small>
+                            </label>
+                            <div class="d-flex flex-wrap gap-1 align-items-center">
+                                <button v-for="tt in tradeTypeOptions" :key="tt.value"
+                                    class="btn btn-sm py-0 px-2"
+                                    :class="pos.closingTradeType === tt.value ? 'btn-primary' : 'btn-outline-secondary'"
+                                    @click.stop="updateClosingTradeType(pos, tt.value)">
+                                    {{ t(tt.labelKey) }}
+                                </button>
+                                <small v-if="getTradeDurationMinutes(pos)" class="text-muted ms-2">
+                                    {{ t('incoming.holdDuration') }}: {{ formatDuration(getTradeDurationMinutes(pos)) }}
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Emotionslevel (Abschluss) -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.closingEmotionLevel') }}</label>
+                            <div class="d-flex align-items-end flex-wrap">
+                                <template v-for="n in 10" :key="'ce'+n">
+                                    <span @click.stop="updateClosingEmotionLevel(pos, n)"
+                                        class="stress-dot pointerClass"
+                                        :class="n <= (pos.closingEmotionLevel || 0) ? 'active' : 'inactive'">
+                                        <span class="stress-number">{{ n }}</span>&#x25CF;
+                                    </span>
+                                    <span v-if="n < 10" class="stress-dot stress-spacer"
+                                        :class="n <= (pos.closingEmotionLevel || 0) ? 'active' : 'inactive'">
+                                        <span class="stress-number">&nbsp;</span>&#x25CF;
+                                    </span>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Emotionen (Abschluss) -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.closingEmotions') }}</label>
+                            <textarea class="form-control form-control-sm" v-model="pos.closingFeelings"
+                                :placeholder="t('incoming.closingEmotionsPlaceholder')" rows="2"></textarea>
+                        </div>
+
+                        <!-- Notiz (Quill Editor) -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.note') }}</label>
+                            <div :id="'quillIncoming-' + pos.positionId + '-closing'" class="quill-incoming"></div>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
+                            <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                <span v-for="(tag, idx) in (pos.closingTags || [])" :key="tag.id"
+                                    class="badge me-1 pointerClass"
+                                    :style="{ backgroundColor: getTagColor(tag.id) }"
+                                    @click.stop="removeClosingTag(pos, idx)">
+                                    {{ tag.name }} <span class="ms-1">&times;</span>
+                                </span>
+                            </div>
+                            <select class="form-select form-select-sm"
+                                @change.stop="addClosingTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
+                                <option selected disabled>{{ t('incoming.addTag') }}</option>
+                                <template v-for="group in availableTags" :key="group.id">
+                                    <optgroup :label="group.name">
+                                        <option v-for="tag in group.tags" :key="tag.id"
+                                            :value="JSON.stringify({ id: tag.id, name: tag.name })"
+                                            :disabled="(pos.closingTags || []).some(t => t.id === tag.id)">
+                                            {{ tag.name }}
+                                        </option>
+                                    </optgroup>
+                                </template>
+                            </select>
+                        </div>
+
+                        <!-- Closing Screenshot -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.screenshot') }}</label>
+                            <div v-if="pos.closingScreenshotId" class="d-flex align-items-start gap-2 mb-2">
+                                <div class="position-relative screenshot-thumb">
+                                    <img v-if="closingScreenshotPreviews[pos.positionId]"
+                                        :src="closingScreenshotPreviews[pos.positionId]"
+                                        class="rounded" style="max-height: 120px; max-width: 200px; object-fit: contain;" />
+                                    <span v-else class="badge bg-secondary"><i class="uil uil-image me-1"></i>1</span>
+                                    <i class="uil uil-times-circle screenshot-remove" @click.stop="removeClosingScreenshot(pos)"></i>
+                                </div>
+                            </div>
+                            <label v-else class="pb-drop"
+                                :class="{ 'pb-drop-over': dragSlot === pos.positionId + ':closing' }"
+                                @dragover.prevent="dragSlot = pos.positionId + ':closing'" @dragenter.prevent="dragSlot = pos.positionId + ':closing'"
+                                @dragleave.prevent="dragSlot = ''"
+                                @drop.prevent="onDropScreenshot($event, pos, 'closing')">
+                                <input type="file" accept="image/*" class="pb-drop-input"
+                                    @change="handleClosingScreenshotUpload($event, pos)" />
+                                <i class="uil uil-image-plus me-1"></i>Bild wählen, hierher ziehen oder einfügen (Strg/Cmd+V)
+                            </label>
+                            <button v-if="kopiertesBild && !pos.closingScreenshotId"
+                                type="button" class="btn btn-sm btn-outline-primary mt-2"
+                                @click.stop="kopiertesBildEinfuegen(pos, 'closing')">
+                                <i class="uil uil-clipboard-notes me-1"></i>Kopiertes Bild einfügen
+                            </button>
+                        </div>
+
+                        <!-- Satisfaction -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
+                            <div class="d-flex gap-3">
+                                <span class="pointerClass fs-4"
+                                    :style="pos.satisfaction === 1 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                    @click.stop="updateSatisfaction(pos, 1)">
+                                    👍
+                                </span>
+                                <span class="pointerClass fs-4"
+                                    :style="pos.satisfaction === 2 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                    @click.stop="updateSatisfaction(pos, 2)">
+                                    ✊
+                                </span>
+                                <span class="pointerClass fs-4"
+                                    :style="pos.satisfaction === 0 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                    @click.stop="updateSatisfaction(pos, 0)">
+                                    👎
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========== BOT NOTIZ (laufend, schlank) ========== -->
+                    <div v-if="pos.status !== 'pending_evaluation' && isBotPosition(pos)" class="opening-eval-section p-3 mb-2">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="uil uil-robot me-2" style="color: var(--blue-color); font-size: 1.1rem;"></i>
+                            <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.botEvaluation') }}</span>
+                        </div>
+
+                        <!-- Notiz (Quill Editor) -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.note') }}</label>
+                            <div :id="'quillIncoming-' + pos.positionId + '-opening'" class="quill-incoming"></div>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
+                            <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                <span v-for="(tag, idx) in (pos.tags || [])" :key="tag.id"
+                                    class="badge me-1 pointerClass"
+                                    :style="{ backgroundColor: getTagColor(tag.id) }"
+                                    @click.stop="removeTag(pos, idx)">
+                                    {{ tag.name }} <span class="ms-1">&times;</span>
+                                </span>
+                            </div>
+                            <select class="form-select form-select-sm"
+                                @change.stop="addTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
+                                <option selected disabled>{{ t('incoming.addTag') }}</option>
+                                <template v-for="group in availableTags" :key="group.id">
+                                    <optgroup :label="group.name">
+                                        <option v-for="tag in group.tags" :key="tag.id"
+                                            :value="JSON.stringify({ id: tag.id, name: tag.name })"
+                                            :disabled="(pos.tags || []).some(t => t.id === tag.id)">
+                                            {{ tag.name }}
+                                        </option>
+                                    </optgroup>
+                                </template>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- ========== BOT EVALUATION (schlank) ========== -->
+                    <div v-if="pos.status === 'pending_evaluation' && isBotPosition(pos)" class="closing-eval-section mt-3 p-3">
+                        <div class="d-flex align-items-center mb-3">
+                            <i class="uil uil-robot me-2" style="color: var(--blue-color); font-size: 1.1rem;"></i>
+                            <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.botEvaluation') }}</span>
+                        </div>
+
+                        <!-- Notiz (Quill Editor) -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.note') }}</label>
+                            <div :id="'quillIncoming-' + pos.positionId + '-closing'" class="quill-incoming"></div>
+                        </div>
+
+                        <!-- Tags -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
+                            <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                <span v-for="(tag, idx) in (pos.closingTags || [])" :key="tag.id"
+                                    class="badge me-1 pointerClass"
+                                    :style="{ backgroundColor: getTagColor(tag.id) }"
+                                    @click.stop="removeClosingTag(pos, idx)">
+                                    {{ tag.name }} <span class="ms-1">&times;</span>
+                                </span>
+                            </div>
+                            <select class="form-select form-select-sm"
+                                @change.stop="addClosingTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
+                                <option selected disabled>{{ t('incoming.addTag') }}</option>
+                                <template v-for="group in availableTags" :key="group.id">
+                                    <optgroup :label="group.name">
+                                        <option v-for="tag in group.tags" :key="tag.id"
+                                            :value="JSON.stringify({ id: tag.id, name: tag.name })"
+                                            :disabled="(pos.closingTags || []).some(t => t.id === tag.id)">
+                                            {{ tag.name }}
+                                        </option>
+                                    </optgroup>
+                                </template>
+                            </select>
+                        </div>
+
+                        <!-- Satisfaction -->
+                        <div class="pb-edit-section">
+                            <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
+                            <div class="d-flex gap-3">
+                                <span class="pointerClass fs-4"
+                                    :style="pos.satisfaction === 1 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                    @click.stop="updateSatisfaction(pos, 1)">
+                                    👍
+                                </span>
+                                <span class="pointerClass fs-4"
+                                    :style="pos.satisfaction === 2 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                    @click.stop="updateSatisfaction(pos, 2)">
+                                    ✊
+                                </span>
+                                <span class="pointerClass fs-4"
+                                    :style="pos.satisfaction === 0 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                    @click.stop="updateSatisfaction(pos, 0)">
+                                    👎
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ===== SAVE / COMPLETE BUTTONS ===== -->
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <div class="form-check mb-0">
+                            <input type="checkbox" class="form-check-input" :id="'skipEval-' + pos.positionId"
+                                v-model="pos.skipEvaluation" :true-value="1" :false-value="0"
+                                @click.stop>
+                            <label class="form-check-label small text-muted" :for="'skipEval-' + pos.positionId">
+                                {{ t('incoming.skipEvaluation') }}
+                            </label>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <button v-if="pos.status === 'pending_evaluation'"
+                                class="btn btn-primary btn-sm"
+                                @click.stop="completeClosingEvaluation(pos)"
+                                :disabled="closingId === pos.objectId">
+                                <span v-if="closingId === pos.objectId">
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                </span>
+                                <span v-else><i class="uil uil-check-circle me-1"></i></span>
+                                {{ t('incoming.completeEvaluation') }}
+                            </button>
+                            <button class="btn btn-success btn-sm" @click.stop="saveMetadata(pos)" :disabled="savingId === pos.objectId">
+                                <span v-if="savingId === pos.objectId">
+                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                </span>
+                                <span v-else><i class="uil uil-check me-1"></i></span>
+                                {{ t('common.save') }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            </template>
+        </div>
+
+        <SpinnerLoadingPage />
+    </div>
+</template>
+
+<style scoped>
+/* Gruppen-Überschriften der pendenten Trades (je Börse + Futures/Bots) */
+.incoming-broker-title {
+    margin: 1.4rem 0 0.35rem;
+    font-weight: 700;
+    font-size: 1.25rem;
+    color: var(--white-87, rgba(255,255,255,0.87));
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--white-10, rgba(255,255,255,0.08));
+}
+.incoming-broker-title:first-child {
+    margin-top: 0;
+}
+.incoming-section-title {
+    margin: 0.6rem 0 0.45rem;
+    font-weight: 600;
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--grey-color, rgba(255,255,255,0.5));
+}
+
+.opening-eval-section {
+    background: var(--black-bg-3, #1a1a2e);
+    border: 1px solid var(--white-10, rgba(255,255,255,0.06));
+    border-left: 3px solid var(--green-color, #10b981);
+    border-radius: var(--border-radius, 6px);
+}
+.closing-eval-section {
+    background: var(--black-bg-3, #1a1a2e);
+    border: 1px solid var(--white-10, rgba(255,255,255,0.06));
+    border-left: 3px solid var(--blue-color, #3b82f6);
+    border-radius: var(--border-radius, 6px);
+}
+.fills-section {
+    background: var(--black-bg-3, #1a1a2e);
+    border: 1px solid var(--white-10, rgba(255,255,255,0.06));
+    border-left: 3px solid var(--grey-color, #6b7280);
+    border-radius: var(--border-radius, 6px);
+}
+.fills-section .table {
+    margin-bottom: 0;
+}
+.fills-section .table td {
+    padding: 0.15rem 0.3rem;
+    vertical-align: middle;
+    border: none;
+}
+.screenshot-thumb {
+    display: inline-block;
+}
+.screenshot-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    color: var(--red-color, #ff6960);
+    background: var(--black-bg-3, #1a1a2e);
+    border-radius: 50%;
+    font-size: 1.2rem;
+    cursor: pointer;
+    line-height: 1;
+}
+.screenshot-remove:hover {
+    color: #ff4040;
+}
+
+/* Drag&Drop-Zone für Screenshots (Klick öffnet Dateiwahl). */
+.pb-drop {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    border: 1.5px dashed var(--white-18, rgba(255, 255, 255, 0.2));
+    border-radius: 8px;
+    background: var(--black-bg-7, rgba(255, 255, 255, 0.03));
+    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    font-size: 0.78rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.pb-drop:hover {
+    border-color: var(--white-38, rgba(255, 255, 255, 0.38));
+    color: var(--white-87, rgba(255, 255, 255, 0.87));
+}
+.pb-drop-over {
+    border-color: var(--blue-color, #01B4FF);
+    background: rgba(1, 180, 255, 0.08);
+    color: var(--white-87, rgba(255, 255, 255, 0.87));
+}
+.pb-drop-input { display: none; }
+</style>

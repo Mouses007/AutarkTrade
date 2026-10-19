@@ -1,0 +1,776 @@
+import crypto from 'crypto'
+import { getKnex } from './database.js'
+import { loadDbConfig, saveDbConfig } from './db-config.js'
+import { setupEsp32AdminRoutes } from './esp32-api.js'
+import { encrypt, maskKey } from './crypto.js'
+import { isLocalRequest, getLocalVersion, compareSemver } from './update-api.js'
+import { logError } from './logger.js'
+
+const VALID_TABLES = [
+    'trades', 'diaries', 'screenshots', 'satisfactions', 'tags', 'notes', 'excursions',
+    'incoming_positions', 'share_card_templates', 'live_sessions',
+    // Lern-Karteikasten (Leitner-Prinzip)
+    'quiz_karten', 'quiz_fortschritt',
+    // Strategie-Agenten: nur lesend über die generische Route (siehe READ_ONLY_TABLES)
+    'strategy_instances', 'strategy_setups', 'strategy_runs', 'strategy_positions',
+    'strategy_trades', 'strategy_backtests', 'strategy_suggestions', 'strategy_drafts', 'rule_strategies',
+]
+
+// Tabellen, die über die generische Route ausschliesslich GELESEN werden dürfen.
+// Geschrieben wird nur über /api/strategies/* — dort werden Parameter gegen das
+// Manifest-Schema validiert und paramsVersion gepflegt. Ohne diese Sperre könnte
+// die UI Instanzen mit ungültigen Parametern anlegen.
+const READ_ONLY_TABLES = [
+    'strategy_instances', 'strategy_setups', 'strategy_runs', 'strategy_positions',
+    'strategy_trades', 'strategy_backtests', 'strategy_suggestions', 'strategy_drafts', 'rule_strategies',
+]
+
+// Sensitive fields to strip from settings responses (encrypted API keys etc.).
+// These are written ONLY via dedicated, encrypting endpoints (/api/ai/settings,
+// /api/flux/settings, /api/esp32/*, /api/auth/set-password) — never via the
+// generic settings PUT below.
+export const SETTINGS_SENSITIVE_FIELDS = [
+    'aiApiKey', 'aiKeyOpenai', 'aiKeyAnthropic', 'aiKeyGemini', 'aiKeyDeepseek',
+    'aiKeyMistral', 'aiKeyXai', 'aiKeyQwen', 'aiKeyPerplexity',
+    'fluxApiKey', 'geminiImageApiKey', 'esp32ApiKey', 'authPasswordHash', 'aiKeyCustom',
+    // CryptoQuant (ETF-Kachel): geschrieben nur über /api/cryptoquant/settings
+    'cryptoquantApiKey',
+    // SMTP-Passwort: geschrieben nur über /api/mail/settings (verschlüsselt)
+    'mailPasswort',
+    /*
+     * Generation des Sitzungs-Tokens: geschrieben NUR von `auth.js` beim
+     * Entwerten. Über die generische Settings-Route setzbar waere sie ein
+     * Werkzeug, um sich selbst oder andere auszusperren — und beim Auslesen
+     * verriete sie, wie oft rotiert wurde.
+     */
+    'sessionGeneration'
+]
+
+/** Strip sensitive fields from a settings row, exposing only `${field}Set` presence flags. */
+function redactSettings(parsed) {
+    if (!parsed) return parsed
+    const safe = { ...parsed }
+    for (const field of SETTINGS_SENSITIVE_FIELDS) {
+        if (safe[field]) {
+            safe[`${field}Set`] = true
+        }
+        delete safe[field]
+    }
+    return safe
+}
+
+// Whitelist of allowed settings keys (from schema + migrations)
+export const VALID_SETTINGS_KEYS = [
+    'timeZone', 'waehrungCode', 'waehrungFaktor', 'accounts', 'tags', 'apis', 'layoutStyle', 'avatar',
+    'showTradePopups', 'username', 'startBalance', 'startBalanceDate', 'currentBalance',
+    'tradeTimeframes', 'customTimeframes', 'enableBinanceChart',
+    'aiProvider', 'aiModel', 'aiApiKey', 'aiTemperature', 'aiMaxTokens', 'aiOllamaUrl',
+    'aiScreenshots', 'aiKeyOpenai', 'aiKeyAnthropic', 'aiKeyGemini', 'aiKeyDeepseek',
+    'aiKeyMistral', 'aiKeyXai', 'aiKeyQwen', 'aiQwenUrl',
+    'aiEnabled', 'aiReportPrompt', 'aiChatEnabled', 'browserNotifications', 'setupComplete', 'balances', 'language',
+    'fluxApiKey', 'fluxModel', 'fluxDisplayName', 'fluxAvatar', 'fluxUseCustomAvatar',
+    'shareCardProvider', 'geminiImageApiKey', 'geminiImageModel',
+    'esp32ApiKey', 'esp32Filter',
+    'liveSymbol', 'liveMarket', 'liveViewPct', 'liveFrameMs', 'liveHistoryMin', 'liveRamp',
+    'liveShowProfile', 'livePauseInBackground', 'liveColorMode', 'liveColorRef', 'liveAutoFollow',
+    'liveThreshold', 'liveShowLiquidations', 'livePrefillMin', 'liveDotStep', 'liveProfileW', 'liveShowVolumeBars',
+    'levMapTier', 'levMapHours', 'levMapSpanPct', 'levMapMmr', 'levMapMmrQuelle', 'levMapWeights', 'levMapView', 'levMapThreshold', 'levMapProfileW',
+    'liveRecordEnabled', 'liveRecordSymbols', 'liveRecordDays', 'liveRecordFrameMs',
+    'liveRecordRows', 'liveRecordRangePct', 'liveRecordAllLiq',
+    'scalpMaxMinutes', 'daytradeMaxHours', 'feeFixMigrated',
+    'strategyLiveEnabled', 'strategyKillSwitch', 'strategyMaxLeverage', 'strategyHiddenTemplates',
+    'strategyMinPaperTrades', 'strategyLlmBudgetUsd', 'aiModels', 'aiCustomUrl', 'aiKeyCustom',
+    'aiKeyOpenrouter', 'aiOpenrouterCatalog', 'aiTaskProviders',
+    'radarRsiSymbols', 'radarRsiTfs', 'radarKalenderLaender', 'radarKalenderImpact', 'radarNewsQuellenAusschluss', 'radarNewsAuto', 'radarNewsStunde', 'radarNewsVideos', 'radarNewsModel', 'radarNewsAufloesung', 'radarNewsBerichtProvider', 'radarNewsBerichtModell', 'radarPicycleAlarm', 'radarPicycleSchwelle', 'radarFundingDivergenz', 'radarDivergenzSymbole', 'boersenLinks',
+    'radarNewsRhythmus', 'radarNewsWochentag', 'radarNewsThemen', 'radarNewsLaenge', 'radarNewsRuheAn', 'radarNewsRuheWoerter', 'radarNewsXModell',
+    'radarNewsUpdates', 'radarNewsUpdateStunden', 'radarNewsMailVoll', 'radarNewsMailInhalt', 'radarNewsMailAktiv', 'radarNewsMailAn',
+    'radarNewsBerichtAufbewahrung', 'radarNewsChartFrische',
+    'radarNewsRechercheModell',
+    'radarNewsTokenBudget', 'radarNewsPunkte', 'radarNewsMeldungsTiefe', 'radarNewsVideoTiefe', 'radarNewsVideoTokens', 'radarNewsLayout',
+    'radarNewsLagenAn', 'radarNewsLagenSymbol', 'kiEmpfehlungenAn',
+    'radarNewsPromptZusatz', 'radarNewsFokusAn', 'radarNewsFokusWoerter', 'radarNewsAktivesProfil',
+    'livetradingAn', 'betaAusblenden', 'livetradingMobil', 'startseiteAn',
+    'erweiterteInfos', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
+    // Anbieter/Modell je KI-Funktion; leer = global
+    'aiBerichtProvider', 'aiBerichtModell', 'aiAgentProvider', 'aiAgentModell',
+    'aiAgentTokenBudget',
+    'aiStrategieProvider', 'aiStrategieModell',
+    // Kanalwahl je Meldungstyp. Der SMTP-Zugang läuft NICHT hierüber, sondern
+    // über /api/mail/settings — dort wird das Passwort verschlüsselt.
+    'benachrichtigungen'
+]
+
+// Bekannte Spalten pro Tabelle (Whitelist gegen SQL-Injection); ergänzt um Migrations-Spalten
+const TABLE_COLUMNS = {
+    trades: ['id', 'dateUnix', 'date', 'broker', 'executions', 'trades', 'blotter', 'pAndL', 'cashJournal', 'openPositions', 'video', 'createdAt', 'updatedAt'],
+    diaries: ['id', 'dateUnix', 'date', 'diary', 'createdAt', 'updatedAt'],
+    screenshots: ['id', 'name', 'symbol', 'side', 'broker', 'originalBase64', 'annotatedBase64', 'original', 'annotated', 'markersOnly', 'maState', 'date', 'dateUnix', 'dateUnixDay', 'aiReview', 'aiReviewProvider', 'aiReviewModel', 'aiReviewPromptTokens', 'aiReviewCompletionTokens', 'aiReviewTotalTokens', 'createdAt', 'updatedAt'],
+    satisfactions: ['id', 'dateUnix', 'tradeId', 'satisfaction', 'createdAt', 'updatedAt'],
+    tags: ['id', 'dateUnix', 'tradeId', 'tags', 'closingTags', 'createdAt', 'updatedAt'],
+    notes: ['id', 'dateUnix', 'tradeId', 'note', 'title', 'entryStressLevel', 'exitStressLevel', 'entryNote', 'feelings', 'playbook', 'timeframe', 'screenshotId', 'trendScreenshotId', 'emotionLevel', 'closingNote', 'closingScreenshotId', 'closingStressLevel', 'closingEmotionLevel', 'closingFeelings', 'closingTimeframe', 'closingPlaybook', 'tradeType', 'closingTradeType', 'strategyFollowed', 'tradingMetadata', 'aiReview', 'aiReviewProvider', 'aiReviewModel', 'aiReviewPromptTokens', 'aiReviewCompletionTokens', 'aiReviewTotalTokens', 'createdAt', 'updatedAt'],
+    excursions: ['id', 'dateUnix', 'tradeId', 'stopLoss', 'maePrice', 'mfePrice', 'createdAt', 'updatedAt'],
+    incoming_positions: ['id', 'positionId', 'symbol', 'side', 'entryPrice', 'leverage', 'quantity', 'unrealizedPNL', 'markPrice', 'playbook', 'stressLevel', 'feelings', 'screenshotId', 'status', 'bitunixData', 'createdAt', 'updatedAt', 'tags', 'entryNote', 'historyData', 'openingEvalDone', 'entryTimeframe', 'emotionLevel', 'closingNote', 'satisfaction', 'skipEvaluation', 'closingStressLevel', 'closingEmotionLevel', 'closingFeelings', 'closingTimeframe', 'closingTags', 'closingScreenshotId', 'closingPlaybook', 'entryScreenshotId', 'broker', 'tradeType', 'closingTradeType', 'strategyFollowed', 'trendScreenshotId', 'tpslHistory'],
+    share_card_templates: ['id', 'name', 'prompt', 'imageBase64', 'category', 'createdAt', 'updatedAt'],
+    quiz_karten: ['id', 'schluessel', 'frage', 'antwort', 'erklaerung', 'bild', 'bildEcht', 'kategorie', 'herkunft', 'aktiv', 'niveau', 'createdAt', 'updatedAt'],
+    quiz_fortschritt: ['id', 'kartenId', 'box', 'faelligAm', 'zuletztGesehenAm', 'richtigStreak', 'gesamtRichtig', 'gesamtSchwer', 'gesamtFalsch', 'historie', 'createdAt', 'updatedAt'],
+    live_sessions: ['id', 'startUnix', 'endUnix', 'symbol', 'market', 'status', 'planMaxVerlustUsd', 'planMaxTrades', 'planNotiz', 'notizen', 'fazit', 'protokoll', 'kacheln', 'trades', 'pnlUsd', 'gebuehrenUsd', 'fundingUsd', 'tradeAnzahl', 'planVerletzt', 'archiviert', 'createdAt', 'updatedAt'],
+    strategy_instances: ['id', 'strategyId', 'name', 'enabled', 'mode', 'broker', 'market', 'symbols', 'timeframe', 'timeframes', 'params', 'risk', 'agents', 'paramsVersion', 'liveApprovedAt', 'lastRunAt', 'lastError', 'createdAt', 'updatedAt'],
+    strategy_setups: ['id', 'instanceId', 'strategyId', 'symbol', 'timeframe', 'direction', 'status', 'sweepLevel', 'sweepPrice', 'sweepCandleTime', 'obHigh', 'obLow', 'obCandleTime', 'watchFrom', 'tradeableFrom', 'impulseExtreme', 'entry', 'stopLoss', 'takeProfit', 'rr', 'confirmations', 'invalidReason', 'rejectReason', 'triggeredAt', 'paramsVersion', 'detectorVersion', 'createdAt', 'updatedAt'],
+    strategy_runs: ['id', 'instanceId', 'setupId', 'sentimentOutput', 'portfolioOutput', 'riskOutput', 'executionOutput', 'finalAction', 'reason', 'provider', 'model', 'totalTokens', 'costUsd', 'createdAt'],
+    strategy_positions: ['id', 'instanceId', 'setupId', 'mode', 'broker', 'symbol', 'timeframe', 'direction', 'qty', 'initialQty', 'entryPrice', 'entryTime', 'stopLoss', 'initialStopLoss', 'takeProfit', 'leverage', 'notionalUsdt', 'marginUsdt', 'feeOpen', 'clientOrderId', 'externalOrderId', 'externalPositionId', 'externalTpOrderId', 'maePrice', 'mfePrice', 'lastCandleTime', 'breakEvenDone', 'partialDone', 'partialQty', 'partialPrice', 'partialGross', 'partialFee', 'liqPrice', 'netzModus', 'netzVerlustR', 'guardAt', 'exitGrund', 'status', 'createdAt', 'updatedAt'],
+    strategy_trades: ['id', 'instanceId', 'setupId', 'positionId', 'strategyId', 'mode', 'broker', 'symbol', 'timeframe', 'direction', 'qty', 'notionalUsdt', 'leverage', 'entryPrice', 'entryTime', 'exitPrice', 'exitTime', 'stopLoss', 'takeProfit', 'grossPnl', 'fees', 'funding', 'netPnl', 'rMultiple', 'exitReason', 'maeR', 'mfeR', 'holdingMinutes', 'paramsVersion', 'journalTradeId', 'createdAt'],
+    strategy_backtests: ['id', 'strategyId', 'instanceId', 'label', 'symbol', 'timeframe', 'market', 'fromTs', 'toTs', 'params', 'stats', 'trades', 'createdAt'],
+    strategy_suggestions: ['id', 'instanceId', 'source', 'title', 'rationale', 'proposedParams', 'backtestId', 'status', 'decidedAt', 'createdAt'],
+    rule_strategies: ['id', 'strategyId', 'name', 'description', 'enabled', 'rules', 'source', 'createdAt', 'updatedAt'],
+    strategy_drafts: ['id', 'title', 'slug', 'sourceName', 'status', 'spec', 'messages', 'generatedPath', 'provider', 'model', 'costUsd', 'createdAt', 'updatedAt'],
+}
+
+// JSON columns per table that should be parsed on read and stringified on write
+const JSON_COLUMNS = {
+    trades: ['executions', 'trades', 'blotter', 'pAndL', 'cashJournal'],
+    screenshots: ['maState'],
+    tags: ['tags', 'closingTags'],
+    settings: ['accounts', 'tags', 'apis', 'layoutStyle', 'tradeTimeframes', 'customTimeframes', 'balances', 'strategyHiddenTemplates', 'benachrichtigungen'],
+    incoming_positions: ['bitunixData', 'tags', 'closingTags', 'historyData', 'tpslHistory'],
+    notes: ['tradingMetadata'],
+    quiz_fortschritt: ['historie'],
+    strategy_instances: ['symbols', 'timeframes', 'params', 'risk', 'agents'],
+    strategy_setups: ['confirmations'],
+    strategy_runs: ['sentimentOutput', 'portfolioOutput', 'riskOutput', 'executionOutput'],
+    strategy_backtests: ['params', 'stats', 'trades'],
+    strategy_suggestions: ['proposedParams'],
+    strategy_drafts: ['spec', 'messages'],
+    rule_strategies: ['rules'],
+    live_sessions: ['protokoll', 'kacheln', 'trades'],
+}
+
+function parseJsonColumns(tableName, row) {
+    if (!row) return row
+    const cols = JSON_COLUMNS[tableName] || []
+    const parsed = { ...row }
+    if (parsed.id !== undefined) {
+        parsed.objectId = String(parsed.id)
+    }
+    for (const col of cols) {
+        if (parsed[col] && typeof parsed[col] === 'string') {
+            try {
+                parsed[col] = JSON.parse(parsed[col])
+            } catch (e) {
+                // keep as string if parse fails
+            }
+        }
+    }
+    return parsed
+}
+
+function stringifyJsonColumns(tableName, data) {
+    const cols = JSON_COLUMNS[tableName] || []
+    const result = { ...data }
+    for (const col of cols) {
+        if (result[col] !== undefined && typeof result[col] !== 'string') {
+            result[col] = JSON.stringify(result[col])
+        }
+    }
+    const jsonColSet = new Set(cols)
+    for (const key of Object.keys(result)) {
+        if (jsonColSet.has(key)) continue // Bereits oben behandelt
+        const val = result[key]
+        if (typeof val === 'boolean') {
+            result[key] = val ? 1 : 0
+        } else if (val !== null && val !== undefined && typeof val === 'object' && !Buffer.isBuffer(val)) {
+            result[key] = JSON.stringify(val)
+        } else if (val === undefined) {
+            result[key] = null
+        }
+    }
+    return result
+}
+
+/** Nur erlaubte Spaltennamen (Whitelist) – verhindert SQL-Injection. */
+function allowedColumn(table, column) {
+    const allowed = TABLE_COLUMNS[table]
+    return allowed && typeof column === 'string' && allowed.includes(column)
+}
+
+/** Query-Parameter sicher parsen (JSON); bei Fehler null. */
+function safeParseQuery(value) {
+    if (value == null) return null
+    if (typeof value === 'object') return value
+    try {
+        return JSON.parse(value)
+    } catch {
+        return null
+    }
+}
+
+/**
+ * SSRF-Schutz für DB-Verbindungstests/-konfiguration: nur lokale/private Hosts.
+ * Verhindert Missbrauch als interner Port-Scanner. Deckt loopback + RFC1918 ab.
+ */
+function isAllowedDbHost(host) {
+    const h = String(host || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
+    if (!h) return false
+    if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(h)) return true
+    return h.startsWith('192.168.') || h.startsWith('10.') || /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+}
+
+export function setupApiRoutes(app) {
+    const knex = getKnex()
+
+    // ==================== SETTINGS ====================
+    app.get('/api/db/settings', async (req, res) => {
+        try {
+            const row = await knex('settings').where('id', 1).first()
+            res.json(redactSettings(parseJsonColumns('settings', row)))
+        } catch (error) {
+            console.error('Settings read error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.put('/api/db/settings', async (req, res) => {
+        try {
+            const data = stringifyJsonColumns('settings', req.body)
+            // Only allow known settings keys (whitelist), and NEVER accept sensitive
+            // secrets here — those go through dedicated, encrypting endpoints.
+            const blocked = new Set(SETTINGS_SENSITIVE_FIELDS)
+            const updateData = {}
+            for (const key of VALID_SETTINGS_KEYS) {
+                if (!blocked.has(key) && data[key] !== undefined) updateData[key] = data[key]
+            }
+            if (Object.keys(updateData).length === 0) return res.json({ ok: true })
+
+            updateData.updatedAt = knex.fn.now()
+            await knex('settings').where('id', 1).update(updateData)
+            const row = await knex('settings').where('id', 1).first()
+            res.json(redactSettings(parseJsonColumns('settings', row)))
+        } catch (error) {
+            console.error('Settings update error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    // ==================== SETUP (Installationsassistent) ====================
+
+    /*
+     * Bis zu welcher Version der Update-Assistent NEUE Inhalte hat.
+     *
+     * Vorher öffnete er sich bei JEDER Versionsänderung (`gesehen !==
+     * aktuell`) — auch bei Patch-Releases ohne einen einzigen neuen Schritt:
+     * v3.10.1 zeigte exakt dieselben Seiten wie v3.10.0 noch einmal. Diese
+     * Konstante wird nur dann angehoben, wenn der Assistent (OnboardingAssistent.vue)
+     * wirklich neue Standards oder Schritte bekommt; alles darunter läuft
+     * ohne Unterbrechung durch. „Was ist neu" steht ohnehin in den
+     * Release-Notes des Update-Dialogs.
+     */
+    const ASSISTENT_INHALT_STAND = '3.10.0'
+
+    app.get('/api/setup/status', async (req, res) => {
+        try {
+            const row = await knex('settings').where('id', 1)
+                .select('setupComplete', 'zuletztGeseheneVersion').first()
+            const setupComplete = row?.setupComplete === 1
+            // Nur für Bestandsinstallationen relevant — der Setup-Wizard
+            // selbst markiert den Assistenten beim Abschluss als gesehen.
+            // Leere Spalte = Installation von vor dem Assistenten → zeigen.
+            const gesehen = row?.zuletztGeseheneVersion || '0.0.0'
+            res.json({
+                setupComplete,
+                updateAssistantPending: setupComplete
+                    && compareSemver(gesehen, ASSISTENT_INHALT_STAND) < 0,
+            })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.post('/api/setup/complete', async (req, res) => {
+        try {
+            /*
+             * `zuletztGeseheneVersion` hier gleich mitsetzen: Setup.vue navigiert
+             * danach selbst explizit zu `/update-assistent?kontext=setup`. Bliebe
+             * die Spalte leer, würde ein abgebrochener Übergang (Tab zu, Reload)
+             * den Router-Guard beim nächsten Laden ohne Query-String auf
+             * `/update-assistent` umleiten — der Assistent zeigt dann fälschlich
+             * die Update-Rahmung ("Neu seit deinem letzten Besuch") samt
+             * Release-Notes-Abruf für eine Installation, die nie ein "letztes
+             * Mal" hatte. Mit der Version schon hier gesetzt bleibt der Weg zum
+             * Assistenten ausschliesslich Setup.vues eigener expliziter Link.
+             */
+            await knex('settings').where('id', 1)
+                .update({ setupComplete: 1, zuletztGeseheneVersion: getLocalVersion(), updatedAt: knex.fn.now() })
+            res.json({ ok: true })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    // Onboarding-/Update-Assistent als "gesehen" markieren (egal ob mit
+    // "Übernehmen" oder "Später" verlassen) — verhindert, dass er bei jedem
+    // Reload erneut aufploppt. Manueller Wiederaufruf bleibt über die eigene
+    // Route jederzeit möglich, unabhängig von diesem Stand.
+    app.post('/api/setup/update-assistent/gesehen', async (req, res) => {
+        try {
+            await knex('settings').where('id', 1)
+                .update({ zuletztGeseheneVersion: getLocalVersion(), updatedAt: knex.fn.now() })
+            res.json({ ok: true })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    // ==================== BITUNIX CONFIG ====================
+    // Hinweis: Bitunix-Keys werden über /api/bitunix/* (bitunix-api.js) mit Verschlüsselung verwaltet.
+    // Diese Endpoints werden vom Frontend nicht genutzt; Antwort ohne Secret-Key.
+    app.get('/api/db/bitunix_config', async (req, res) => {
+        try {
+            const row = await knex('bitunix_config').where('id', 1).first()
+            if (!row) return res.json({})
+            // Weder secretKey noch apiKey im Klartext (bzw. als Geheimtext)
+            // ausliefern — genau wie /api/bitunix/config, das hier maskiert.
+            const { secretKey, apiKey, ...safe } = row
+            res.json({ ...safe, apiKey: maskKey(apiKey), hasSecret: !!secretKey })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.put('/api/db/bitunix_config', async (req, res) => {
+        try {
+            const updateData = { updatedAt: knex.fn.now() }
+            // Only update keys if explicitly provided (avoid accidental deletion).
+            // Encrypt secrets at rest — analog zu bitunix-api.js.
+            // Ein maskierter Wert kommt aus der eigenen GET-Antwort zurück und
+            // darf den echten Schlüssel nicht überschreiben (wie in bitunix-api.js).
+            if (req.body.apiKey !== undefined && !String(req.body.apiKey).includes('•')) {
+                updateData.apiKey = req.body.apiKey ? encrypt(req.body.apiKey) : ''
+            }
+            // Die GET-Antwort liefert den secretKey zwar nicht maskiert aus
+            // (nur hasSecret), aber die Maskenprüfung gehört trotzdem an beide
+            // Schlüssel — ein Client, der ein maskiertes Secret zurückschreibt,
+            // würde sonst den echten Schlüssel überschreiben.
+            if (req.body.secretKey !== undefined && !String(req.body.secretKey).includes('•')) {
+                updateData.secretKey = req.body.secretKey ? encrypt(req.body.secretKey) : ''
+            }
+            // Allow updating other safe fields
+            if (req.body.lastHistoryScan !== undefined) updateData.lastHistoryScan = req.body.lastHistoryScan
+            if (req.body.lastApiImport !== undefined) updateData.lastApiImport = req.body.lastApiImport
+            if (req.body.apiImportStartDate !== undefined) updateData.apiImportStartDate = req.body.apiImportStartDate
+
+            await knex('bitunix_config').where('id', 1).update(updateData)
+            const row = await knex('bitunix_config').where('id', 1).first()
+            const { secretKey: _s, apiKey: _a, ...safe } = row || {}
+            res.json({ ...safe, apiKey: maskKey(_a), hasSecret: !!_s })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    // ==================== DB CONFIG ====================
+    app.get('/api/db-config', async (req, res) => {
+        try {
+            const config = loadDbConfig()
+            const type = config.client === 'pg' ? 'postgresql' : 'sqlite'
+            if (type === 'postgresql') {
+                const conn = config.connection || {}
+                res.json({
+                    type: 'postgresql',
+                    host: conn.host || 'localhost',
+                    port: conn.port || 5432,
+                    user: conn.user || '',
+                    database: conn.database || '',
+                    hasPassword: !!conn.password
+                })
+            } else {
+                res.json({ type: 'sqlite' })
+            }
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.put('/api/db-config', async (req, res) => {
+        try {
+            const { type, host, port, user, password, database } = req.body
+            if (type === 'postgresql') {
+                // Strip http:// or https:// from host if present
+                const cleanHost = (host || 'localhost').replace(/^https?:\/\//, '').replace(/\/+$/, '')
+
+                // SSRF-Schutz: nur lokale/private DB-Hosts zulassen
+                if (!isAllowedDbHost(cleanHost)) {
+                    return res.status(400).json({ error: 'Ungültiger DB-Host (nur lokale/private Adressen erlaubt).' })
+                }
+
+                // If no new password provided, keep the saved one
+                let savePassword = password || ''
+                if (!savePassword) {
+                    const savedConfig = loadDbConfig()
+                    if (savedConfig.client === 'pg' && savedConfig.connection?.password) {
+                        savePassword = savedConfig.connection.password
+                    }
+                }
+
+                saveDbConfig({
+                    type: 'postgresql',
+                    host: cleanHost,
+                    port: parseInt(port) || 5432,
+                    user: user || '',
+                    password: savePassword,
+                    database: database || ''
+                })
+            } else {
+                saveDbConfig({ type: 'sqlite' })
+            }
+            res.json({ ok: true, message: 'Konfiguration gespeichert. Bitte Server neu starten.' })
+        } catch (error) {
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.post('/api/db-config/test', async (req, res) => {
+        try {
+            const { host, port, user, password, database } = req.body
+            // Strip http:// or https:// from host if present
+            const cleanHost = (host || 'localhost').replace(/^https?:\/\//, '').replace(/\/+$/, '')
+
+            // SSRF-Schutz: nur lokale/private DB-Hosts testen lassen
+            if (!isAllowedDbHost(cleanHost)) {
+                return res.status(400).json({ ok: false, message: 'Ungültiger DB-Host (nur lokale/private Adressen erlaubt).' })
+            }
+
+            // If no password provided, use the saved one from db-config.json
+            let testPassword = password || ''
+            if (!testPassword) {
+                const savedConfig = loadDbConfig()
+                if (savedConfig.client === 'pg' && savedConfig.connection?.password) {
+                    testPassword = savedConfig.connection.password
+                }
+            }
+
+            const knexTest = (await import('knex')).default({
+                client: 'pg',
+                connection: {
+                    host: cleanHost,
+                    port: parseInt(port) || 5432,
+                    user: user || '',
+                    password: testPassword,
+                    database: database || ''
+                },
+                pool: { min: 0, max: 1 },
+                acquireConnectionTimeout: 5000
+            })
+
+            await knexTest.raw('SELECT 1')
+            await knexTest.destroy()
+            res.json({ ok: true, message: 'Verbindung erfolgreich!' })
+        } catch (error) {
+            logError('api-routes', 'DB-Verbindungstest fehlgeschlagen', error)
+            res.json({ ok: false, message: 'Verbindung fehlgeschlagen. Details siehe Server-Log.' })
+        }
+    })
+
+    // ==================== SERVER RESTART ====================
+    // Destruktiv (process.exit) → wie die Update-Routen mit localhost + Einmal-Token
+    // abgesichert. Verhindert DoS durch wiederholte Neustarts über eine Session/CSRF.
+    let restartToken = null
+    let restartTokenExpires = 0
+
+    app.get('/api/restart/token', (req, res) => {
+        if (!isLocalRequest(req)) {
+            return res.status(403).json({ error: 'Neustart nur von localhost erlaubt.' })
+        }
+        restartToken = crypto.randomBytes(16).toString('hex')
+        restartTokenExpires = Date.now() + 2 * 60 * 1000 // 2 min
+        res.json({ token: restartToken })
+    })
+
+    app.post('/api/restart', async (req, res) => {
+        if (!isLocalRequest(req)) {
+            return res.status(403).json({ ok: false, error: 'Neustart nur von localhost erlaubt.' })
+        }
+        const token = req.body && req.body.confirmToken
+        if (!token || token !== restartToken || Date.now() > restartTokenExpires) {
+            return res.status(403).json({ ok: false, error: 'Ungültiges oder abgelaufenes Bestätigungs-Token.' })
+        }
+        restartToken = null
+        restartTokenExpires = 0
+
+        res.json({ ok: true, message: 'Server wird neu gestartet...' })
+        // Give the response time to be sent, then exit.
+        // systemd / process manager will restart the process automatically.
+        setTimeout(() => {
+            console.log(' -> Server restart requested via API')
+            process.exit(0)
+        }, 500)
+    })
+
+    // ==================== GENERIC CRUD ====================
+
+    app.get('/api/db/:table', async (req, res) => {
+        const { table } = req.params
+        if (!VALID_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Bad request' })
+        }
+
+        try {
+            let query = knex(table)
+
+            const eq = safeParseQuery(req.query.equalTo)
+            if (eq && typeof eq === 'object') {
+                for (const [key, val] of Object.entries(eq)) {
+                    if (!allowedColumn(table, key)) continue
+                    const v = typeof val === 'boolean' ? (val ? 1 : 0) : val
+                    query = query.where(key, v)
+                }
+            }
+
+            const gte = safeParseQuery(req.query.gte)
+            if (gte && typeof gte === 'object') {
+                for (const [key, val] of Object.entries(gte)) {
+                    if (!allowedColumn(table, key)) continue
+                    const n = Number(val)
+                    if (!Number.isNaN(n)) query = query.where(key, '>=', n)
+                }
+            }
+
+            const lt = safeParseQuery(req.query.lt)
+            if (lt && typeof lt === 'object') {
+                for (const [key, val] of Object.entries(lt)) {
+                    if (!allowedColumn(table, key)) continue
+                    const n = Number(val)
+                    if (!Number.isNaN(n)) query = query.where(key, '<', n)
+                }
+            }
+
+            const lte = safeParseQuery(req.query.lte)
+            if (lte && typeof lte === 'object') {
+                for (const [key, val] of Object.entries(lte)) {
+                    if (!allowedColumn(table, key)) continue
+                    const n = Number(val)
+                    if (!Number.isNaN(n)) query = query.where(key, '<=', n)
+                }
+            }
+
+            const doesNotExist = req.query.doesNotExist
+            if (doesNotExist) {
+                const fields = Array.isArray(doesNotExist) ? doesNotExist : [doesNotExist]
+                for (const field of fields) {
+                    if (!allowedColumn(table, field)) continue
+                    query = query.where(function () {
+                        // Kein `orWhere(field, '0')`: bei einer Zahlenspalte
+                        // gälte damit der Wert null als „fehlt". Fehlend ist
+                        // NULL oder leerer Text, nicht die Zahl 0.
+                        this.whereNull(field).orWhere(field, '')
+                    })
+                }
+            }
+
+            const columns = TABLE_COLUMNS[table]
+            if (req.query.exclude && columns) {
+                const excludeList = Array.isArray(req.query.exclude) ? req.query.exclude : String(req.query.exclude).split(',')
+                const selectCols = columns.filter(c => !excludeList.includes(c))
+                if (selectCols.length > 0) query = query.select(selectCols)
+            }
+
+            const orderCol = req.query.descending || req.query.ascending
+            if (orderCol && allowedColumn(table, orderCol)) {
+                query = req.query.descending ? query.orderBy(orderCol, 'desc') : query.orderBy(orderCol, 'asc')
+            }
+
+            /*
+             * Ohne Angabe wurde bisher die GANZE Tabelle geliefert. Ein Default
+             * bremst das ab, ist aber bewusst so hoch gewählt wie das Limit, das
+             * das Frontend ohnehin mitschickt (queryLimit) — ein kleinerer Wert
+             * würde Dashboards still um Trades kürzen statt sie zu schützen.
+             *
+             * Das Limit zählt ZEILEN, und das ist bei `screenshots` das falsche
+             * Mass: 134 Zeilen sind dort 71 MB, weil die Bilder als Base64 in
+             * der Zeile stehen. Das Frontend schliesst sie über `exclude` aus —
+             * ein Abruf ohne beides zöge sie alle. Deshalb ein eigener,
+             * niedriger Vorgabewert für die schweren Tabellen; wer mehr will,
+             * fragt ausdrücklich danach.
+             */
+            const DEFAULT_API_LIMIT = 50000
+            const DEFAULT_JE_TABELLE = { screenshots: 500 }
+            const MAX_API_LIMIT = 100000
+            const vorgabe = DEFAULT_JE_TABELLE[table] ?? DEFAULT_API_LIMIT
+            const limit = parseInt(req.query.limit, 10)
+            query = (Number.isInteger(limit) && limit > 0)
+                ? query.limit(Math.min(limit, MAX_API_LIMIT))
+                : query.limit(vorgabe)
+            const skip = parseInt(req.query.skip, 10)
+            if (Number.isInteger(skip) && skip >= 0) query = query.offset(skip)
+
+            const rows = await query
+            res.json(rows.map(r => parseJsonColumns(table, r)))
+        } catch (error) {
+            console.error('DB query error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+/**
+ * Numerische Id aus dem Pfad prüfen.
+ *
+ * Unter PostgreSQL bricht `where('id', 'abc')` mit einem Cast-Fehler ab und
+ * die Route antwortet 500 — ein Serverfehler für eine kaputte Eingabe. SQLite
+ * schluckt es still und liefert nichts. Beide sollen 400 sagen.
+ */
+function numerischeId(id) {
+    const n = Number(id)
+    return Number.isInteger(n) && n > 0 ? n : null
+}
+
+    app.get('/api/db/:table/:id', async (req, res) => {
+        const { table, id } = req.params
+        if (!VALID_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Bad request' })
+        }
+        const nr = numerischeId(id)
+        if (!nr) return res.status(400).json({ error: 'Invalid id' })
+        try {
+            const row = await knex(table).where('id', nr).first()
+            if (!row) return res.status(404).json({ error: 'Not found' })
+            res.json(parseJsonColumns(table, row))
+        } catch (error) {
+            console.error('DB read error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.post('/api/db/:table', async (req, res) => {
+        const { table } = req.params
+        if (!VALID_TABLES.includes(table) || READ_ONLY_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Bad request' })
+        }
+        const columns = TABLE_COLUMNS[table]
+        if (!columns) return res.status(400).json({ error: 'Invalid table' })
+
+        try {
+            let data = stringifyJsonColumns(table, req.body)
+            delete data.objectId
+            delete data.id
+            // Nur erlaubte Spalten übernehmen (Schutz vor SQL-Injection)
+            data = columns.reduce((acc, col) => {
+                if (data[col] !== undefined) acc[col] = data[col]
+                return acc
+            }, {})
+            if (Object.keys(data).length === 0) {
+                return res.status(400).json({ error: 'No data provided' })
+            }
+
+            const isPg = knex.client.config.client === 'pg'
+            const id = isPg
+                ? (await knex(table).insert(data).returning('id'))[0]?.id
+                : (await knex(table).insert(data))[0]
+            const row = await knex(table).where('id', id).first()
+            res.status(201).json(parseJsonColumns(table, row))
+        } catch (error) {
+            console.error('DB insert error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.put('/api/db/:table/:id', async (req, res) => {
+        const { table, id } = req.params
+        if (!VALID_TABLES.includes(table) || READ_ONLY_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Bad request' })
+        }
+        const nr = numerischeId(id)
+        if (!nr) return res.status(400).json({ error: 'Invalid id' })
+        const columns = TABLE_COLUMNS[table]
+        if (!columns) return res.status(400).json({ error: 'Invalid table' })
+
+        try {
+            let data = stringifyJsonColumns(table, req.body)
+            delete data.objectId
+            delete data.id
+            data = columns.reduce((acc, col) => {
+                if (data[col] !== undefined) acc[col] = data[col]
+                return acc
+            }, {})
+            if (Object.keys(data).length === 0) {
+                return res.status(400).json({ error: 'No data provided' })
+            }
+            data.updatedAt = knex.fn.now()
+            const count = await knex(table).where('id', nr).update(data)
+            if (count === 0) return res.status(404).json({ error: 'Not found' })
+            const row = await knex(table).where('id', nr).first()
+            res.json(parseJsonColumns(table, row))
+        } catch (error) {
+            console.error('DB update error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.delete('/api/db/:table/:id', async (req, res) => {
+        const { table, id } = req.params
+        if (!VALID_TABLES.includes(table) || READ_ONLY_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Bad request' })
+        }
+        const nr = numerischeId(id)
+        if (!nr) return res.status(400).json({ error: 'Invalid id' })
+        try {
+            const count = await knex(table).where('id', nr).delete()
+            if (count === 0) return res.status(404).json({ error: 'Not found' })
+            res.json({ ok: true, deleted: id })
+        } catch (error) {
+            console.error('DB delete error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.delete('/api/db/:table', async (req, res) => {
+        const { table } = req.params
+        if (!VALID_TABLES.includes(table) || READ_ONLY_TABLES.includes(table)) {
+            return res.status(400).json({ error: 'Bad request' })
+        }
+        try {
+            let query = knex(table)
+            let hasFilter = false
+
+            const eq = safeParseQuery(req.query.equalTo)
+            if (eq && typeof eq === 'object') {
+                for (const [key, val] of Object.entries(eq)) {
+                    if (!allowedColumn(table, key)) continue
+                    query = query.where(key, val)
+                    hasFilter = true
+                }
+            }
+            const gte = safeParseQuery(req.query.gte)
+            if (gte && typeof gte === 'object') {
+                for (const [key, val] of Object.entries(gte)) {
+                    if (!allowedColumn(table, key)) continue
+                    const n = Number(val)
+                    if (!Number.isNaN(n)) {
+                        query = query.where(key, '>=', n)
+                        hasFilter = true
+                    }
+                }
+            }
+            const lt = safeParseQuery(req.query.lt)
+            if (lt && typeof lt === 'object') {
+                for (const [key, val] of Object.entries(lt)) {
+                    if (!allowedColumn(table, key)) continue
+                    const n = Number(val)
+                    if (!Number.isNaN(n)) {
+                        query = query.where(key, '<', n)
+                        hasFilter = true
+                    }
+                }
+            }
+            if (!hasFilter) {
+                return res.status(400).json({ error: 'Filters required for bulk delete' })
+            }
+
+            const count = await query.delete()
+            res.json({ ok: true, deleted: count })
+        } catch (error) {
+            console.error('DB bulk delete error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    setupEsp32AdminRoutes(app)
+    console.log(' -> API routes initialized')
+}

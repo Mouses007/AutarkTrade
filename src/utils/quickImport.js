@@ -1,0 +1,608 @@
+import axios from 'axios'
+import dayjs from './dayjs-setup.js'
+import { dbCreate, dbFind, dbDelete, dbUpdate as dbUpdateRecord, dbFindTradeIdByPositionId } from './db.js'
+import { dbUpdateSettings } from './db.js'
+import { currentUser } from '../stores/settings.js'
+import { selectedBroker } from '../stores/filters.js'
+import { refreshAccountBalance } from '../stores/accountBalance.js'
+import { logWarn } from './logger.js'
+import { istGewinn } from '../../shared/gewinn.js'
+import i18n from '../i18n'
+
+/**
+ * Quick API Import: Fetches trades from exchange API since last import,
+ * creates trade objects, filters duplicates, saves to DB.
+ * Works for both Bitunix and Bitget based on selectedBroker.
+ * Returns { success, message, count }
+ */
+export async function useQuickApiImport(explicitBroker) {
+    const broker = explicitBroker || selectedBroker.value || 'bitunix'
+    console.log(` -> Starting quick API import for ${broker}`)
+
+    // 1. Call server endpoint that fetches positions and updates lastApiImport
+    const response = await axios.post(`/api/${broker}/quick-import`)
+
+    if (!response.data.ok) {
+        throw new Error(response.data.error || i18n.global.t('messages.importFailed'))
+    }
+
+    const allPositions = response.data.positions || []
+    if (allPositions.length === 0) {
+        return { success: true, message: i18n.global.t('messages.noNewPositions'), count: 0 }
+    }
+
+    // 2. Build set of already-imported positionIds (for same broker)
+    const existingTrades = await dbFind('trades', { equalTo: { broker }, descending: 'dateUnix', limit: 10000 })
+    const existingPositionIds = new Set()
+    for (const record of existingTrades) {
+        const dayTrades = Array.isArray(record.trades) ? record.trades : []
+        for (const t of dayTrades) {
+            // Trade-ID-Format: t{dateUnix}_{index}_{positionId}
+            if (t.id) {
+                const parts = t.id.split('_')
+                if (parts.length >= 3) {
+                    existingPositionIds.add(parts.slice(2).join('_'))
+                }
+            }
+        }
+    }
+
+    // 3. Filter out already imported positions (Position-ID-Ebene statt Tagesebene)
+    const newPositions = allPositions.filter(pos => {
+        const posId = String(pos.positionId || '')
+        return posId && !existingPositionIds.has(posId)
+    })
+
+    // 3b. Backfill bestehender Pionex-Bot-Trades um den PnL-Breakdown
+    // (gridProfit/coinM/marginCoin). Der Re-Import überspringt bekannte Bots
+    // (Dedup oben), daher hier direkt aus den bereits geladenen Bot-Rohdaten
+    // nachrüsten — läuft auch, wenn es keine neuen Positionen gibt.
+    if (broker === 'pionex') {
+        const botRaw = new Map()
+        for (const pos of allPositions) {
+            const id = String(pos.buOrderId ?? pos.positionId ?? '')
+            if (id && (pos.botType !== undefined || pos.buOrderId !== undefined)) botRaw.set(id, pos)
+        }
+        let patchedDays = 0
+        for (const record of existingTrades) {
+            const dayTrades = Array.isArray(record.trades) ? record.trades : []
+            let changed = false
+            for (const t of dayTrades) {
+                if (!t.id) continue
+                const suffix = t.id.split('_').slice(2).join('_')
+                const raw = botRaw.get(suffix)
+                if (!raw) continue
+                // Patchen, wenn Breakdown- ODER USDT-Felder fehlen (neue Felder
+                // nachrüsten, auch bei bereits gridProfit-gepatchten Trades).
+                if (t.gridProfit !== undefined && t.pnlUsdt !== undefined) continue
+                t.gridProfit = parseFloat(raw.gridProfit ?? 0)
+                t.coinM = !!raw.coinM
+                t.marginCoin = raw.marginCoin || 'USDT'
+                t.pnlUsdt = parseFloat(raw.pnlUsdt ?? 0)
+                t.investUsdt = parseFloat(raw.investUsdt ?? 0)
+                t.quoteCloseP = parseFloat(raw.quoteCloseP ?? 0)
+                // Richtung korrigieren (Coin-M war fälschlich invertiert)
+                if (raw.side) {
+                    t.strategy = raw.side === 'LONG' ? 'long' : 'short'
+                    t.side = raw.side === 'LONG' ? 'B' : 'SS'
+                }
+                if (!t.botType) t.botType = raw.botType || 'grid'
+                if (t.category === undefined) t.category = 'bot'
+                changed = true
+            }
+            if (changed) {
+                await dbUpdateRecord('trades', record.objectId, { trades: dayTrades })
+                patchedDays++
+            }
+        }
+        if (patchedDays > 0) console.log(` -> gridProfit-Backfill: ${patchedDays} Tag(e) aktualisiert`)
+    }
+
+    if (newPositions.length === 0) {
+        return { success: true, message: i18n.global.t('messages.allTradesImported'), count: 0 }
+    }
+
+    // 4. Convert new positions to trade objects grouped by day
+    const tradesByDay = {}
+    const executionsByDay = {}
+
+    newPositions.forEach((pos, i) => {
+        let tradeObj
+
+        if (broker === 'bitget') {
+            tradeObj = createBitgetTradeObj(pos, i)
+        } else if (broker === 'pionex') {
+            tradeObj = createPionexTradeObj(pos, i)
+        } else {
+            tradeObj = createBitunixTradeObj(pos, i)
+        }
+
+        const dateUnix = tradeObj.td
+        if (!tradesByDay[dateUnix]) tradesByDay[dateUnix] = []
+        if (!executionsByDay[dateUnix]) executionsByDay[dateUnix] = []
+
+        tradesByDay[dateUnix].push(tradeObj)
+        executionsByDay[dateUnix].push({ ...tradeObj, trade: tradeObj.id })
+    })
+
+    const newDays = Object.keys(tradesByDay)
+
+    // 5. Für jeden Tag: existierenden Record mergen oder neuen anlegen
+    // Index der existierenden Records für schnellen Lookup
+    const existingByDate = {}
+    for (const record of existingTrades) {
+        existingByDate[record.dateUnix] = record
+    }
+
+    let savedCount = 0
+    for (const dateUnix of newDays) {
+        const dayTrades = tradesByDay[dateUnix]
+        const dayExecutions = executionsByDay[dateUnix]
+        const existingRecord = existingByDate[dateUnix]
+
+        // Merge mit existierendem Tag-Record falls vorhanden
+        let allDayTrades = dayTrades
+        let allDayExecutions = dayExecutions
+        if (existingRecord) {
+            const prevTrades = Array.isArray(existingRecord.trades) ? existingRecord.trades : []
+            const prevExec = Array.isArray(existingRecord.executions) ? existingRecord.executions : []
+            allDayTrades = [...prevTrades, ...dayTrades]
+            allDayExecutions = [...prevExec, ...dayExecutions]
+        }
+
+        // Build blotter (grouped by symbol) — über ALLE Trades des Tages
+        const blotterMap = {}
+        allDayTrades.forEach(t => {
+            if (!blotterMap[t.symbol]) {
+                blotterMap[t.symbol] = {
+                    symbol: t.symbol,
+                    grossProceeds: 0, netProceeds: 0, fees: 0,
+                    grossWinsCount: 0, grossLossCount: 0, trades: 0
+                }
+            }
+            const b = blotterMap[t.symbol]
+            b.grossProceeds += t.grossProceeds
+            b.netProceeds += t.netProceeds
+            b.fees += t.commission
+            b.grossWinsCount += t.grossWinsCount
+            b.grossLossCount += t.grossLossCount
+            b.trades += 1
+        })
+        const blotter = Object.values(blotterMap)
+
+        // Build P&L summary — über ALLE Trades des Tages
+        let totalGross = 0, totalNet = 0, totalFees = 0
+        let grossWinsCount = 0, grossLossCount = 0, netWinsCount = 0, netLossCount = 0, totalTrades = 0
+        allDayTrades.forEach(t => {
+            totalGross += t.grossProceeds
+            totalNet += t.netProceeds
+            totalFees += t.commission
+            grossWinsCount += t.grossWinsCount
+            grossLossCount += t.grossLossCount
+            netWinsCount += t.netWinsCount
+            netLossCount += t.netLossCount
+            totalTrades += 1
+        })
+        const pAndL = {
+            grossProceeds: totalGross,
+            netProceeds: totalNet,
+            fees: totalFees,
+            grossWinsCount,
+            grossLossCount,
+            netWinsCount,
+            netLossCount,
+            trades: totalTrades
+        }
+
+        if (existingRecord) {
+            // Tag existiert → Merge: neue Trades anhängen, Blotter/P&L neu berechnen
+            await dbUpdateRecord('trades', existingRecord.objectId, {
+                executions: allDayExecutions,
+                trades: allDayTrades,
+                blotter: blotter,
+                pAndL: pAndL,
+            })
+            console.log(` -> Merged ${dayTrades.length} new trade(s) into existing day ${dayjs.unix(dateUnix).format('YYYY-MM-DD')}`)
+        } else {
+            // Neuer Tag → Create
+            await dbCreate('trades', {
+                date: dayjs.unix(dateUnix).format('YYYY-MM-DD'),
+                dateUnix: Number(dateUnix),
+                broker: broker,
+                executions: allDayExecutions,
+                trades: allDayTrades,
+                blotter: blotter,
+                pAndL: pAndL,
+                openPositions: false
+            })
+            console.log(' -> Saved trades for ' + dayjs.unix(dateUnix).format('YYYY-MM-DD'))
+        }
+        savedCount += dayTrades.length
+    }
+
+    // 6. Ensure broker account exists in settings
+    if (currentUser.value && currentUser.value.accounts) {
+        const hasAccount = currentUser.value.accounts.find(a => a.value === broker)
+        if (!hasAccount) {
+            const accounts = [...currentUser.value.accounts, { value: broker, label: broker }]
+            await dbUpdateSettings({ accounts })
+            currentUser.value.accounts = accounts
+            // Also update localStorage
+            const selected = localStorage.getItem('selectedAccounts')
+            if (selected) {
+                localStorage.setItem('selectedAccounts', selected + ',' + broker)
+            } else {
+                localStorage.setItem('selectedAccounts', broker)
+            }
+        }
+    }
+
+    // 7. Check incoming positions — link metadata for positions that were just imported
+    try {
+        const openIncoming = await dbFind('incoming_positions', { equalTo: { status: 'open' } })
+        let linkedCount = 0
+
+        for (const incoming of openIncoming) {
+            const wasImported = allPositions.find(p =>
+                String(p.positionId) === String(incoming.positionId)
+            )
+            if (wasImported) {
+                const closeTime = parseInt(
+                    wasImported.mtime || wasImported.uTime || wasImported.ctime || wasImported.cTime
+                )
+                const dateUnix = dayjs(closeTime).utc().startOf('day').unix()
+                const tradeId = await dbFindTradeIdByPositionId(dateUnix, wasImported.positionId)
+
+                // Link playbook/feelings/stress as note
+                if (incoming.playbook || incoming.feelings || incoming.stressLevel) {
+                    let noteText = ''
+                    if (incoming.stressLevel) {
+                        noteText += `<p><strong>Stresslevel: ${incoming.stressLevel}/5</strong></p>`
+                    }
+                    if (incoming.feelings) {
+                        noteText += `<p><em>${incoming.feelings}</em></p>`
+                    }
+                    if (incoming.playbook) {
+                        noteText += incoming.playbook
+                    }
+                    if (noteText) {
+                        await dbCreate('notes', { dateUnix, tradeId, note: noteText })
+                    }
+                }
+
+                // Link screenshot
+                if (incoming.screenshotId) {
+                    try {
+                        await dbUpdateRecord('screenshots', incoming.screenshotId, {
+                            name: `${dateUnix}_${wasImported.symbol || wasImported.symbolName}`,
+                            dateUnixDay: dateUnix
+                        })
+                    } catch (e) {
+                        logWarn('quick-import', `Screenshot-Linking fehlgeschlagen (incoming=${incoming.objectId}, screenshot=${incoming.screenshotId})`, e)
+                    }
+                }
+
+                // Remove from incoming
+                await dbDelete('incoming_positions', incoming.objectId)
+                linkedCount++
+                console.log(` -> Incoming ${incoming.symbol} mit importiertem Trade verknüpft`)
+            }
+        }
+
+        if (linkedCount > 0) {
+            console.log(` -> ${linkedCount} Incoming-Positionen mit Trades verknüpft`)
+        }
+    } catch (e) {
+        console.log(' -> Incoming-Verknüpfung übersprungen:', e.message)
+    }
+
+    // Kontostand-Cache invalidieren + neu laden, damit das Dashboard den
+    // Effekt der frisch importierten Trades sofort anzeigt.
+    try {
+        await refreshAccountBalance({ broker, force: true })
+    } catch (e) {
+        logWarn('quick-import', 'refreshAccountBalance nach Import fehlgeschlagen', e)
+    }
+
+    return {
+        success: true,
+        message: i18n.global.t('messages.positionsImported', { count: newPositions.length, days: newDays.length }),
+        count: savedCount
+    }
+}
+
+/**
+ * Create a trade object from a Bitunix API position.
+ */
+export function createBitunixTradeObj(pos, i) {
+    // Bitunix API: `realizedPNL` ist bereits der FINALE Wallet-Delta
+    // (inkl. Trading-Fee UND Funding — verifiziert gegen Bitunix-UI
+    // "Realisierter Gewinn/Verlust"). Daher:
+    //   netPL    = realizedPNL                               (Wallet-Delta)
+    //   grossPL  = realizedPNL + tradingFee − fundingFee     (reine Trade-PnL)
+    //   commission = tradingFee  (Funding separat in fundingFee)
+    const realizedPNL = parseFloat(pos.realizedPNL || 0)
+    const tradingFee = Math.abs(parseFloat(pos.fee || 0))
+    const fundingFee = parseFloat(pos.funding || 0)  // signed: + erhalten, − bezahlt
+    const netPL = realizedPNL
+    const grossPL = realizedPNL + tradingFee - fundingFee
+    const fee = tradingFee
+    const closeTime = parseInt(pos.mtime || pos.ctime)
+    const openTime = parseInt(pos.ctime)
+    const dateUnix = dayjs(closeTime).utc().startOf('day').unix()
+
+    // Bitunix API: Pending uses 'BUY'/'SELL', History uses 'LONG'/'SHORT' — accept both
+    const side = (pos.side === 'LONG' || pos.side === 'BUY') ? 'B' : 'SS'
+    const isGrossWin = istGewinn(grossPL)
+    const isNetWin = istGewinn(netPL)
+    const quantity = parseFloat(pos.maxQty || 1)
+    const entryTime = dayjs(openTime).utc().unix()
+    const exitTime = dayjs(closeTime).utc().unix()
+
+    return buildTradeObj({
+        id: `t${dateUnix}_${i}_${pos.positionId || i}`,
+        broker: 'bitunix',
+        td: dateUnix,
+        side, quantity, entryTime, exitTime,
+        entryPrice: parseFloat(pos.entryPrice || 0),
+        exitPrice: parseFloat(pos.closePrice || 0),
+        symbol: pos.symbol || 'FUTURES',
+        grossPL, netPL, fee, tradingFee, fundingFee, isGrossWin, isNetWin
+    })
+}
+
+/**
+ * Create a trade object from a Bitget API position.
+ * Bitget fields: positionId, symbol, holdSide, openAvgPrice, closeAvgPrice,
+ *                openTotalPos, closeTotalPos, pnl, netProfit, openFee, closeFee,
+ *                totalFunding, cTime, uTime
+ */
+export function createBitgetTradeObj(pos, i) {
+    const grossPL = parseFloat(pos.pnl || 0)            // Bitget pnl = BRUTTO (vor Gebuehren)
+    const openFee = Math.abs(parseFloat(pos.openFee || 0))
+    const closeFee = Math.abs(parseFloat(pos.closeFee || 0))
+    const tradingFee = openFee + closeFee
+    const fundingFee = parseFloat(pos.totalFunding || 0)  // signiert: + erhalten / − bezahlt
+    // commission = NUR Trading-Fee (Funding wird separat in fundingFee getrackt),
+    // identisch zur Bitunix-Semantik. Frueher: tradingFee + fundingFee — das
+    // verfaelschte die Gebuehren-Summe je nach Funding-Vorzeichen (erhaltenes
+    // Funding bläht die Fees auf, bezahltes reduziert sie faelschlich).
+    const fee = tradingFee
+    const closeTime = parseInt(pos.utime || pos.uTime || pos.ctime || pos.cTime)
+    const openTime = parseInt(pos.ctime || pos.cTime)
+    const dateUnix = dayjs(closeTime).utc().startOf('day').unix()
+
+    // Bitget holdSide: 'long' or 'short'
+    const holdSide = (pos.holdSide || '').toLowerCase()
+    const side = holdSide === 'long' ? 'B' : 'SS'
+    // netProfit ist Bitgets echter Wallet-Delta (nach Fee & Funding). Auch 0 ist
+    // ein gueltiger Break-even-Wert und darf NICHT in den Fallback laufen
+    // (frueher: `parseFloat(netProfit||0) || (gross-fee)` → 0 ist falsy → Fallback).
+    const rawNet = pos.netProfit
+    const hasNet = rawNet !== undefined && rawNet !== null && rawNet !== ''
+    const netPL = hasNet ? parseFloat(rawNet) : (grossPL - tradingFee + fundingFee)
+    const isGrossWin = istGewinn(grossPL)
+    const isNetWin = istGewinn(netPL)
+    const quantity = parseFloat(pos.closeTotalPos || pos.openTotalPos || 1)
+    const entryTime = dayjs(openTime).utc().unix()
+    const exitTime = dayjs(closeTime).utc().unix()
+
+    return buildTradeObj({
+        id: `t${dateUnix}_${i}_${pos.positionId || i}`,
+        broker: 'bitget',
+        td: dateUnix,
+        side, quantity, entryTime, exitTime,
+        entryPrice: parseFloat(pos.openAvgPrice || 0),
+        exitPrice: parseFloat(pos.closeAvgPrice || 0),
+        symbol: pos.symbol || 'FUTURES',
+        grossPL, netPL, fee, tradingFee, fundingFee, isGrossWin, isNetWin
+    })
+}
+
+/**
+ * Create a trade object from a Pionex item — unterstützt zwei Quellen:
+ *  1) Bot-Order (Grid-Bot): Server liefert normalisierte Felder aus
+ *     /api/v1/bot/orders → totalRealizedProfit (NETTO-Wallet-Delta, verifiziert),
+ *     totalFee, totalFundingFee, totalVolume, setLeverage, positionOpenPrice,
+ *     closedPrice, botType (futures_grid/spot_grid), buOrderId.
+ *  2) Reguläre Futures-Position (historyPositions) — falls der Nutzer künftig
+ *     manuell Futures tradet.
+ *
+ * netPL = totalRealizedProfit ist bereits der finale Wallet-Delta (wie Bitunix
+ * realizedPNL). grossPL = netPL + tradingFee − fundingFee (reine Strategie-PnL).
+ */
+function createPionexTradeObj(pos, i) {
+    const isBot = pos.botType !== undefined || pos.totalRealizedProfit !== undefined || pos.buOrderId !== undefined
+
+    // Spot-Grid hat ein eigenes Layout: Profit = gridProfit + realizedProfit,
+    // Gebühren in totalFeeInQuote (USDT), KEIN Funding, kein Hebel.
+    const isSpot = !!pos.spotGrid || /spot|token_grid/i.test(pos.botType || '')
+
+    let netPL, tradingFee, fundingFee, grossPL, fee
+    if (isSpot) {
+        // gridProfit ist bereits netto (nach Gebühren); grossPL rekonstruiert.
+        netPL = parseFloat(pos.gridProfit ?? 0) + parseFloat(pos.realizedProfit ?? 0)
+        tradingFee = Math.abs(parseFloat(pos.totalFeeInQuote ?? pos.totalFee ?? 0))
+        fundingFee = 0
+        grossPL = netPL + tradingFee
+        fee = tradingFee
+    } else {
+        // NETTO-Wallet-Delta: futures_grid → totalRealizedProfit; Futures → amountSettled/realizedPnl.
+        const netRaw = pos.totalRealizedProfit ?? pos.realizedPnl ?? pos.amountSettled ?? pos.gridProfit ?? pos.pnl ?? 0
+        netPL = parseFloat(netRaw || 0)
+        tradingFee = Math.abs(parseFloat(pos.totalFee ?? pos.fee ?? pos.tradingFee ?? 0))
+        fundingFee = parseFloat(pos.totalFundingFee ?? pos.fundingFee ?? pos.funding ?? 0)  // signiert
+        grossPL = netPL + tradingFee - fundingFee
+        fee = tradingFee
+    }
+
+    const closeTime = parseInt(pos.closeTime ?? pos.updateTime ?? pos.uTime ?? Date.now())
+    const openTime = parseInt(pos.createTime ?? pos.openTime ?? pos.cTime ?? closeTime)
+    const dateUnix = dayjs(closeTime).utc().startOf('day').unix()
+
+    // Grid-Bots sind nicht gerichtet → Richtung aus Open/Close-Preis ableiten
+    // (Long, wenn der Bot von steigenden Kursen profitiert hätte). Reguläre
+    // Futures: positionSide.
+    let side
+    if (isSpot) {
+        side = 'B'   // Spot-Grid ist immer long (kauft tief / verkauft hoch)
+    } else {
+        const sideRaw = String(pos.positionSide ?? pos.side ?? '').toUpperCase()
+        if (sideRaw === 'LONG' || sideRaw === 'SHORT') {
+            side = sideRaw === 'LONG' ? 'B' : 'SS'
+        } else {
+            const op = parseFloat(pos.positionOpenPrice ?? pos.avgEntryPrice ?? pos.entryPrice ?? 0)
+            const cp = parseFloat(pos.closedPrice ?? pos.avgClosePrice ?? pos.closePrice ?? 0)
+            side = (cp >= op) ? 'B' : 'SS'
+        }
+    }
+
+    // Spot-Grid hat kein totalVolume → USDT-Investment als Volumen-Proxy.
+    const quantity = isSpot
+        ? Math.abs(parseFloat(pos.usdtInvestment ?? pos.totalVolume ?? 1))
+        : Math.abs(parseFloat(pos.totalVolume ?? pos.netSize ?? pos.sizeLong ?? pos.sizeShort ?? pos.size ?? 1))
+    const isGrossWin = istGewinn(grossPL)
+    const isNetWin = istGewinn(netPL)
+    const entryTime = dayjs(openTime).utc().unix()
+    const exitTime = dayjs(closeTime).utc().unix()
+    const idSuffix = pos.buOrderId ?? pos.positionId ?? i
+
+    const obj = buildTradeObj({
+        id: `t${dateUnix}_${i}_${idSuffix}`,
+        broker: 'pionex',
+        td: dateUnix,
+        side, quantity, entryTime, exitTime,
+        entryPrice: parseFloat(pos.positionOpenPrice ?? pos.avgEntryPrice ?? pos.entryPrice ?? pos.avgPrice ?? 0),
+        exitPrice: parseFloat(pos.closedPrice ?? pos.avgClosePrice ?? pos.closePrice ?? pos.exitPrice ?? 0),
+        symbol: pos.symbol || 'FUTURES',
+        grossPL, netPL, fee, tradingFee, fundingFee, isGrossWin, isNetWin
+    })
+    // Bot-Metadaten anhängen (für Anzeige/Filter). NICHT `tradeType` nutzen —
+    // das ist für Scalp/Day/Swing belegt. `botType` ist das Bot-Kennzeichen.
+    if (isBot) {
+        obj.botType = pos.botType || 'grid'
+        obj.category = 'bot'
+        obj.leverage = parseFloat(pos.setLeverage || 0)
+        obj.investment = parseFloat(pos.initQuoteInvestment ?? pos.usdtInvestment ?? 0)
+        // PnL-Breakdown (wie Pionex): Grid-Gewinn separat; Trend-PnL wird im
+        // Frontend abgeleitet (netPL − gridProfit − fundingFee). coinM/marginCoin
+        // für korrekte Einheit (Coin-M: PnL in der Coin, z.B. SOL).
+        obj.gridProfit = parseFloat(pos.gridProfit ?? 0)
+        obj.coinM = !!pos.coinM
+        obj.marginCoin = pos.marginCoin || 'USDT'
+        // USDT-Sekundärwerte (Coin-M: invers gerechneter echter USD-PnL; sonst == netPL)
+        obj.pnlUsdt = parseFloat(pos.pnlUsdt ?? 0)
+        obj.investUsdt = parseFloat(pos.investUsdt ?? 0)
+        obj.quoteCloseP = parseFloat(pos.quoteCloseP ?? 0)   // Schlusskurs für SOL→USD
+    } else {
+        obj.category = 'futures'
+    }
+    return obj
+}
+
+/**
+ * Build a standardized trade object from normalized fields.
+ */
+export function buildTradeObj({ id, broker, td, side, quantity, entryTime, exitTime,
+    entryPrice, exitPrice, symbol, grossPL, netPL, fee, tradingFee, fundingFee, isGrossWin, isNetWin }) {
+    return {
+        id,
+        account: broker,
+        broker: broker,
+        td,
+        currency: 'USDT',
+        type: 'futures',
+        side,
+        strategy: side === 'B' ? 'long' : 'short',
+        symbol,
+        buyQuantity: quantity,
+        sellQuantity: quantity,
+        entryPrice,
+        exitPrice,
+        entryTime,
+        exitTime,
+        grossProceeds: grossPL,
+        netProceeds: netPL,
+        commission: fee,
+        tradingFee: tradingFee || 0,
+        fundingFee: fundingFee || 0,
+        sec: 0, taf: 0, nscc: 0, nasdaq: 0,
+        grossSharePL: grossPL,
+        netSharePL: netPL,
+        grossWins: isGrossWin ? grossPL : 0,
+        grossLoss: isGrossWin ? 0 : grossPL,
+        netWins: isNetWin ? netPL : 0,
+        netLoss: isNetWin ? 0 : netPL,
+        grossWinsCount: isGrossWin ? 1 : 0,
+        grossLossCount: isGrossWin ? 0 : 1,
+        netWinsCount: isNetWin ? 1 : 0,
+        netLossCount: isNetWin ? 0 : 1,
+        grossWinsQuantity: isGrossWin ? quantity : 0,
+        grossLossQuantity: isGrossWin ? 0 : quantity,
+        netWinsQuantity: isNetWin ? quantity : 0,
+        netLossQuantity: isNetWin ? 0 : quantity,
+        grossSharePLWins: isGrossWin ? grossPL : 0,
+        grossSharePLLoss: isGrossWin ? 0 : grossPL,
+        netSharePLWins: isNetWin ? netPL : 0,
+        netSharePLLoss: isNetWin ? 0 : netPL,
+        highGrossSharePLWin: isGrossWin ? grossPL : 0,
+        highGrossSharePLLoss: isGrossWin ? 0 : grossPL,
+        highNetSharePLWin: isNetWin ? netPL : 0,
+        highNetSharePLLoss: isNetWin ? 0 : netPL,
+        executionsCount: 1,
+        tradesCount: 1,
+        openPosition: false,
+    }
+}
+
+/**
+ * Speichert EINEN manuell erfassten Trade merge-sicher: hängt ihn an den
+ * bestehenden Tages-Record an (oder legt einen neuen Tag an) und berechnet
+ * Blotter/P&L neu — analog zur Import-Logik, aber für einen Einzel-Trade.
+ * tradeObj sollte via buildTradeObj() erzeugt sein (enthält td, broker, symbol,
+ * grossProceeds/netProceeds/commission und alle Win/Loss-Felder).
+ */
+export async function saveManualTrade(tradeObj) {
+    const broker = tradeObj.broker
+    const dateUnix = Number(tradeObj.td)
+
+    const existing = await dbFind('trades', { equalTo: { broker, dateUnix }, limit: 1 })
+    const existingRecord = Array.isArray(existing) ? existing[0] : null
+
+    const execObj = { ...tradeObj, trade: tradeObj.id }
+    const prevTrades = existingRecord && Array.isArray(existingRecord.trades) ? existingRecord.trades : []
+    const prevExec = existingRecord && Array.isArray(existingRecord.executions) ? existingRecord.executions : []
+    const allTrades = [...prevTrades, tradeObj]
+    const allExec = [...prevExec, execObj]
+
+    // Blotter (je Symbol) + P&L über alle Trades des Tages neu berechnen
+    const blotterMap = {}
+    let gross = 0, net = 0, fees = 0, gWins = 0, gLoss = 0, nWins = 0, nLoss = 0, count = 0
+    for (const t of allTrades) {
+        if (!blotterMap[t.symbol]) {
+            blotterMap[t.symbol] = { symbol: t.symbol, grossProceeds: 0, netProceeds: 0, fees: 0, grossWinsCount: 0, grossLossCount: 0, trades: 0 }
+        }
+        const b = blotterMap[t.symbol]
+        b.grossProceeds += t.grossProceeds || 0
+        b.netProceeds += t.netProceeds || 0
+        b.fees += t.commission || 0
+        b.grossWinsCount += t.grossWinsCount || 0
+        b.grossLossCount += t.grossLossCount || 0
+        b.trades += 1
+        gross += t.grossProceeds || 0; net += t.netProceeds || 0; fees += t.commission || 0
+        gWins += t.grossWinsCount || 0; gLoss += t.grossLossCount || 0
+        nWins += t.netWinsCount || 0; nLoss += t.netLossCount || 0; count += 1
+    }
+    const blotter = Object.values(blotterMap)
+    const pAndL = { grossProceeds: gross, netProceeds: net, fees, grossWinsCount: gWins, grossLossCount: gLoss, netWinsCount: nWins, netLossCount: nLoss, trades: count }
+
+    if (existingRecord) {
+        await dbUpdateRecord('trades', existingRecord.objectId, { executions: allExec, trades: allTrades, blotter, pAndL })
+    } else {
+        await dbCreate('trades', {
+            date: dayjs.unix(dateUnix).format('YYYY-MM-DD'),
+            dateUnix, broker, executions: allExec, trades: allTrades, blotter, pAndL, openPositions: false
+        })
+    }
+    return true
+}

@@ -1,0 +1,612 @@
+<script setup>
+/**
+ * Live-Trading-Fenster — der Arbeitsplatz für die Stunden, in denen tatsächlich
+ * gehandelt wird.
+ *
+ * Gleiche Aufgabenteilung wie im Marktradar: **die Seite holt, die Kachel
+ * zeichnet** — beide benutzen dafür dasselbe Composable. Eigen ist nur, WAS
+ * hier steht und wie schnell: eigene Registry (`src/config/livetrading.js`),
+ * eigener localStorage-Schlüssel, und ein Prüftakt von drei statt dreissig
+ * Sekunden, damit auch eine Kachel mit fünf Sekunden Intervall pünktlich
+ * nachlädt. Teuer wird das nicht — der Takt prüft nur, geholt wird weiterhin
+ * erst, wenn das `intervallMs` der einzelnen Kachel abgelaufen ist.
+ *
+ * Die Seite lässt sich in den Einstellungen abschalten (`livetradingAn`). Die
+ * Prüfung sitzt bewusst hier und nicht im Router: beim ersten Aufruf eines
+ * Deep-Links sind die Einstellungen unter Umständen noch nicht geladen, und
+ * ein Router-Guard würde dann fälschlich umleiten.
+ */
+import { ref, computed, watch, watchEffect } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import PageInfo from '../components/PageInfo.vue'
+import RadarKachel from '../components/RadarKachel.vue'
+import RadarOverlay from '../components/RadarOverlay.vue'
+import SitzungsLeiste from '../components/livetrading/SitzungsLeiste.vue'
+import SymbolWahl from '../components/livetrading/SymbolWahl.vue'
+import KartenEinstellungen from '../components/livetrading/KartenEinstellungen.vue'
+import KachelHandelszeiten from '../components/radar/KachelHandelszeiten.vue'
+import KachelMechanik from '../components/radar/KachelMechanik.vue'
+import KachelLiqTicker from '../components/radar/KachelLiqTicker.vue'
+import KachelPositionen from '../components/radar/KachelPositionen.vue'
+import KachelKalenderCountdown from '../components/radar/KachelKalenderCountdown.vue'
+import KachelIndizes from '../components/radar/KachelIndizes.vue'
+import KachelFunding from '../components/radar/KachelFunding.vue'
+import KachelLsOi from '../components/radar/KachelLsOi.vue'
+import KachelMakro from '../components/radar/KachelMakro.vue'
+import KachelBookmap from '../components/radar/KachelBookmap.vue'
+import KachelHebelkarte from '../components/radar/KachelHebelkarte.vue'
+import KachelLage from '../components/radar/KachelLage.vue'
+import KachelHandelslage from '../components/radar/KachelHandelslage.vue'
+import KachelCoinRadar from '../components/radar/KachelCoinRadar.vue'
+import KachelKompakt from '../components/radar/KachelKompakt.vue'
+import KachelMomentum from '../components/radar/KachelMomentum.vue'
+import BookmapKopf from '../components/radar/kopf/BookmapKopf.vue'
+import LiqkarteKopf from '../components/radar/kopf/LiqkarteKopf.vue'
+import { liveSymbol } from '../stores/live.js'
+import { currentUser } from '../stores/globals.js'
+import { useIstTelefon, useImVollbild } from '../utils/geraet.js'
+import { oeffneLivetradingFenster } from '../utils/livetradingFenster.js'
+import { speichereCockpitFoto } from '../utils/cockpitFoto.js'
+import { kopiertesBild } from '../stores/ui.js'
+import { aktiveSitzung, merkeSymbol, protokolliere } from '../stores/livetrading.js'
+import PultAnsicht from '../components/livetrading/PultAnsicht.vue'
+import { KACHELN, sortiereKacheln, KOMPAKT_QUELLEN, KOMPAKT_AUSGEBLENDET } from '../config/livetrading.js'
+import { PULT_KACHELN } from '../config/pult.js'
+import { useKachelRaster } from '../composables/useKachelRaster.js'
+
+const { t } = useI18n()
+const router = useRouter()
+
+/**
+ * Einstellungsfenster für Bookmap und Liquidationskarte. Im Cockpit gibt es
+ * kein Seitenmenü, und die Kopfzeilen der beiden Kacheln tragen bewusst nur
+ * die drei Handgriffe für den Handel — für alles Übrige war bisher der Umweg
+ * über die eigene Seite nötig. Siehe `KartenEinstellungen.vue`.
+ */
+const kartenOffen = ref(false)
+
+/** Kachel-Id → Komponente. Neue Kacheln werden hier eingehängt. */
+const KOMPONENTEN = {
+    handelszeiten: KachelHandelszeiten,
+    mechanik: KachelMechanik,
+    liqticker: KachelLiqTicker,
+    positionen: KachelPositionen,
+    kalender: KachelKalenderCountdown,
+    indizes: KachelIndizes,
+    funding: KachelFunding,
+    coinradar: KachelCoinRadar,
+    kompakt: KachelKompakt,
+    momentum: KachelMomentum,
+    lsoi: KachelLsOi,
+    makro: KachelMakro,
+    bookmap: KachelBookmap,
+    hebelkarte: KachelHebelkarte,
+    lage: KachelLage,
+    handelslage: KachelHandelslage,
+}
+
+/**
+ * Kachel-Id → Bedienung in der KOPFZEILE (Slot `steuerung` von `RadarKachel`).
+ *
+ * Nur für die beiden Arbeitsflächen: sie lassen sich nicht vergrössern
+ * (`gross: false`, sonst zweiter Datenstrom) und haben ihre Regler deshalb
+ * sonst nur auf der eigenen Seite — ein Seitenwechsel mitten in der Sitzung.
+ * Die übrigen Kacheln bedienen sich im Körper oder brauchen nichts.
+ */
+const KOPF_STEUERUNG = {
+    bookmap: BookmapKopf,
+    hebelkarte: LiqkarteKopf,
+}
+
+/**
+ * Abrufparameter, die vom Zustand der Seite abhängen.
+ *
+ * Die Positionen-Kachel braucht den Zeitraum und die Plangrenzen der laufenden
+ * Sitzung. Läuft keine, wird der heutige Tagesbeginn genommen — offene
+ * Positionen und das Tagesergebnis will man auch dann sehen, wenn man noch
+ * keine Sitzung gestartet hat. Der Tagesbeginn kommt bewusst aus dem Browser:
+ * der kennt die Zeitzone des Nutzers, der Server müsste sie erst nachschlagen.
+ */
+function zusatzParams(kachel) {
+    if (!kachel.sitzungAbhaengig) return null
+    const s = aktiveSitzung.value
+    if (s) {
+        return {
+            von: Number(s.startUnix),
+            maxVerlust: Number(s.planMaxVerlustUsd) || 0,
+            maxTrades: Number(s.planMaxTrades) || 0,
+        }
+    }
+    const tagesbeginn = new Date()
+    tagesbeginn.setHours(0, 0, 0, 0)
+    return { von: tagesbeginn.getTime() }
+}
+
+/**
+ * Welche der beiden Darstellungen läuft.
+ *
+ * Raster = Werkstatt (alles gleichrangig, alles verstellbar), Pult = Gerät
+ * (feste Rangfolge, nichts verstellbar). Zwei Formen derselben Daten, nicht
+ * zwei Seiten: beide hängen an derselben `useKachelRaster`-Instanz, ein Wechsel
+ * kostet keinen Abruf.
+ *
+ * Gemerkt wird pro Gerät in `localStorage` und NICHT in den Einstellungen: der
+ * Wechsel ist auch mitten in einer Sitzung sinnvoll, und was man während der
+ * Arbeit umschaltet, gehört an die Seite. (Die Vorlage dafür ist
+ * `radarNewsLayout` — dort gilt bewusst das Gegenteil, weil man ein
+ * Nachrichten-Layout nicht zwischen zwei Berichten umwerfen soll.)
+ */
+const ANSICHT_KEY = 'livetrading_ansicht'
+const ansicht = ref(localStorage.getItem(ANSICHT_KEY) === 'pult' ? 'pult' : 'raster')
+
+function waehleAnsicht(wert) {
+    ansicht.value = wert
+    localStorage.setItem(ANSICHT_KEY, wert)
+}
+
+/*
+ * Das Pult hat feste Instrumente und kennt das Ausblenden nicht. Ohne diese
+ * Liste entschiede das Raster mit, was das Pult sehen darf — wer dort die
+ * Makro-Kachel ausblendet, bekäme hier ein leeres Instrument ohne Hinweis auf
+ * den Grund. Im Raster bleibt die Liste leer, damit ausgeblendete Kacheln wie
+ * bisher gar nicht erst geholt werden.
+ */
+/*
+ * Die Kompakt-Kachel zeichnet die Daten der Kacheln, die sie zusammenfasst —
+ * die müssen also geholt werden, auch wenn sie selbst ausgeblendet sind.
+ * `kompaktSichtbar` wird erst nach dem Composable gesetzt (dort entsteht
+ * `isVisible`), deshalb hier ein eigener Ref statt eines direkten Aufrufs.
+ */
+const kompaktSichtbar = ref(false)
+const immerLaden = computed(() => {
+    if (ansicht.value === 'pult') return PULT_KACHELN
+    return kompaktSichtbar.value ? KOMPAKT_QUELLEN : []
+})
+
+/*
+ * Einmalige Umstellung auf die Kompakt-Kachel: die zusammengefassten Kacheln
+ * werden ausgeblendet, die beiden neuen sichtbar. Läuft genau einmal je Gerät
+ * (Merker in localStorage) und VOR dem Composable, das die Sichtbarkeit beim
+ * Start liest. Alles bleibt im Kachel-Menü einzeln zuschaltbar — wer eine
+ * Kachel danach wieder einblendet, behält sie.
+ */
+const KOMPAKT_MERKER = 'livetrading_kompakt_v1'
+try {
+    if (!localStorage.getItem(KOMPAKT_MERKER)) {
+        const roh = JSON.parse(localStorage.getItem('livetrading_hidden_cards') || 'null')
+        const versteckt = new Set(Array.isArray(roh) ? roh : ['lage'])
+        for (const id of KOMPAKT_AUSGEBLENDET) versteckt.add(id)
+        versteckt.delete('kompakt')
+        versteckt.delete('momentum')
+        localStorage.setItem('livetrading_hidden_cards', JSON.stringify([...versteckt]))
+        localStorage.setItem(KOMPAKT_MERKER, '1')
+    }
+} catch { /* gesperrter Speicher: dann eben die bisherige Aufstellung */ }
+
+const {
+    gridEl, daten, zustand, stand, fehler, kachelParams,
+    alleKacheln, sichtbareKacheln, gesamtZustand,
+    offeneKachel, offeneDefinition, showConfigDropdown, configRef,
+    ladeKachel, beiUmschalten, isVisible, setzeKachelZustand,
+    setzeParams, setzeAnzeige, stilFuer, starteGroesse, setzeGroesseZurueck,
+} = useKachelRaster({
+    storageKey: 'livetrading_hidden_cards',
+    paramKey: 'livetrading_params',
+    kacheln: KACHELN,
+    sortiere: sortiereKacheln,
+    symbolRef: liveSymbol,
+    zusatzParams,
+    taktMs: 3000,
+    /*
+     * Die Gesamtlage startet hier ausgeblendet — sie bleibt im Zahnrad
+     * zuschaltbar, steht aber nicht mehr von sich aus im Raster.
+     *
+     * Grund: Seit es die Handelslage gibt, stehen zwei KI-Kacheln nebeneinander,
+     * die verschiedene Fragen beantworten (Zyklus gegen Handelstag) und beide
+     * je Druck Geld kosten. Wer während einer Sitzung schnell etwas drückt,
+     * erwischt sonst leicht die falsche — und bezahlt eine Einordnung über
+     * Regenbogen-Bänder und Altcoin-Saison für die nächsten drei Stunden.
+     *
+     * Greift ausschliesslich beim ERSTSTART (siehe `useHiddenCards`): wer hier
+     * schon einmal etwas ein- oder ausgeblendet hat, behält sein Layout
+     * unverändert.
+     */
+    standardVersteckt: ['lage'],
+    immerLaden,
+})
+
+watchEffect(() => { kompaktSichtbar.value = isVisible('kompakt') })
+
+/**
+ * Aktualisieren im Kachelkopf. Die Kompakt-Kachel hat keinen eigenen Abruf —
+ * bei ihr heisst „aktualisieren", alle zusammengefassten Quellen neu zu holen.
+ */
+function neuLaden(id) {
+    if (id !== 'kompakt') return ladeKachel(id, true)
+    for (const q of KOMPAKT_QUELLEN) ladeKachel(q, true)
+}
+
+/** Zeile der Kompakt-Kachel angeklickt → die volle Kachel gross zeigen. */
+function oeffneQuelle(id) {
+    offeneKachel.value = id
+    if (!daten[id]) ladeKachel(id, true)
+}
+
+/**
+ * Startet oder endet eine Sitzung, muss die Positionen-Kachel sofort neu
+ * rechnen — sonst zeigte sie bis zum nächsten Takt noch den Tagesbeginn als
+ * Bezug, obwohl gerade eine Sitzung begonnen hat.
+ */
+watch(() => aktiveSitzung.value?.objectId, () => ladeKachel('positionen', true))
+
+/**
+ * Symbolwechsel während einer laufenden Sitzung festhalten.
+ *
+ * Eine Sitzung ist ein Zeitraum, kein Markt — man sieht sich mehrere Münzen an.
+ * Damit sie hinterher trotzdem nachvollziehbar und nachspielbar bleibt, wandert
+ * jeder Wechsel ins Protokoll, und `symbol` folgt der zuletzt gewählten.
+ */
+watch(liveSymbol, (s) => merkeSymbol(s))
+
+/**
+ * Abschalter. `immediate` deckt den Fall ab, dass die Einstellungen schon da
+ * sind; der Watch den Fall, dass sie erst nachträglich eintreffen. Solange
+ * `currentUser` null ist, wird NICHT umgeleitet — Unwissen ist kein Nein.
+ */
+watch(currentUser, (u) => {
+    if (u && Number(u.livetradingAn ?? 1) === 0) router.replace('/marktradar')
+}, { immediate: true })
+
+/**
+ * Am Telefon gibt es diese Seite nicht.
+ *
+ * Kein Geschmacksurteil: zwölf Kacheln, ein Orderbuch und ein Kerzenchart
+ * lassen sich auf 375 Pixeln nicht bedienen. Ein Werkzeug, das dort nur halb
+ * funktioniert, führt zu Entscheidungen auf halber Information — und das ist
+ * beim Handeln teurer als kein Werkzeug. Wer trotzdem den Direktlink aufruft,
+ * landet auf dem Marktradar, der für kleine Geräte gebaut ist.
+ *
+ * Bewusst NICHT an `screenType`: das misst nur die Breite, und ein
+ * Desktop-Browser in einem halb breiten Fenster wäre damit ein Telefon. Beim
+ * Entwickeln hat genau das einen frisch geöffneten, noch nicht vermessenen Tab
+ * hinausgeworfen. `useIstTelefon` verlangt zusätzlich einen groben Zeiger.
+ */
+const istTelefon = useIstTelefon()
+watch(istTelefon, (ja) => {
+    if (ja) router.replace('/marktradar')
+}, { immediate: true })
+
+// ── Cockpit: eigenes Fenster ohne Menü und Navigation ───────────────────
+const route = useRoute()
+const istCockpit = computed(() => String(route.query?.cockpit || '') === '1')
+const imVollbild = useImVollbild()
+
+/**
+ * Kahler Zustand: Kopfzeile und Sitzungsleiste fahren nach oben aus dem Bild
+ * und kommen bei Mauskontakt am oberen Rand zurück.
+ *
+ * Gilt für BEIDE Wege in die freie Fläche — Vollbild **und** eigenes Fenster.
+ * Das hing zuerst nur am Vollbild, und dadurch sah das Fenster nach dem
+ * Sitzungsstart aus wie vorher: Menü und Navigation waren weg, aber die
+ * Kopfzeile stand weiter da. Ein eigenes Fenster kann sich nicht selbst ins
+ * Vollbild schalten (die Fullscreen-API verlangt eine Geste in genau diesem
+ * Dokument), also muss es ohne Vollbild schon aufgeräumt aussehen.
+ */
+const kahl = computed(() => imVollbild.value || istCockpit.value)
+
+/**
+ * Der Knopf oben öffnet dasselbe Fenster wie der Sitzungsstart.
+ *
+ * Er rief vorher die Fullscreen-API auf — das war der falsche Weg. Gewollt ist
+ * das aufgeräumte eigene Fenster ohne Seitenmenü, Navigation und obere Leisten,
+ * und dafür braucht es kein Vollbild des Browsers. Der Weg ist damit für beide
+ * Auslöser derselbe, und was der Browser mit der Fullscreen-API erlaubt oder
+ * ablehnt, spielt keine Rolle mehr.
+ */
+const oeffneFenster = () => oeffneLivetradingFenster()
+
+// ── Cockpit-Schnappschuss: ein Frame des Fensters ins Journal ────────────
+//
+// Der Browser fragt einmal, welches Fenster geteilt wird — danach liegt das
+// Bild als Screenshot (Symbol + Zeitstempel) in der Setup-Galerie und in der
+// Tagesansicht, am selben Tag wie der später importierte Trade. Läuft gerade
+// eine Sitzung, wandert die Aufnahme zusätzlich ins Sitzungsprotokoll.
+const fotoZustand = ref('')   // '' | 'laeuft' | 'ok' | 'fehler'
+const fotoMeldung = ref('')
+
+async function cockpitFoto() {
+    if (fotoZustand.value === 'laeuft') return
+    fotoZustand.value = 'laeuft'
+    fotoMeldung.value = ''
+    try {
+        const { objectId, name } = await speichereCockpitFoto(liveSymbol.value)
+        protokolliere('foto', name)
+        // Direkt in die interne Zwischenablage legen: so kann man ohne Umweg über
+        // die Galerie gleich zu „Pendente Trades" gehen und „Kopiertes Bild
+        // einfügen" drücken.
+        if (objectId) {
+            const merk = { objectId, name }
+            kopiertesBild.value = merk
+            try { sessionStorage.setItem('kopiertesBild', JSON.stringify(merk)) } catch (e) { /* ignore */ }
+        }
+        fotoZustand.value = 'ok'
+        setTimeout(() => { if (fotoZustand.value === 'ok') fotoZustand.value = '' }, 2500)
+    } catch (e) {
+        // Den Auswahldialog wegzuklicken ist eine Entscheidung, kein Fehler.
+        if (e?.name === 'NotAllowedError') { fotoZustand.value = ''; return }
+        fotoZustand.value = 'fehler'
+        fotoMeldung.value = e?.response?.data?.error || e?.message || t('livetrading.foto.fehler')
+    }
+}
+
+/** Kacheln, die sich selbst versorgen, haben nie eine `daten`-Nutzlast. */
+const eigenstaendig = (kachel) => !kachel.endpunkt
+
+/**
+ * Kacheln, deren Inhalt bedient wird: kein Klick-zum-Vergrössern, keine Lupe.
+ * `gross: false` in der Registry bedeutet genau das — die Gross-Ansicht wäre
+ * eine zweite Instanz und damit eine zweite Datenverbindung.
+ */
+const interaktiv = (kachel) => kachel.gross === false
+</script>
+
+<template>
+    <div class="radarWrap" :class="{ vollbildKahl: kahl }">
+        <!-- Im Vollbild fährt dieser Block nach oben aus dem Bild und kommt
+             zurück, sobald die Maus den oberen Rand berührt. Wegwerfen kann man
+             ihn nicht: hier hängen Symbolwahl, Sitzungsstart und der Weg aus dem
+             Vollbild heraus. -->
+        <div class="ltKopf">
+        <div class="liveHeader">
+            <div class="liveTitle">
+                <span class="liveSymbol">{{ t('livetrading.title') }}</span>
+                <span :class="['liveDot', 'dot-' + gesamtZustand]"></span>
+                <span class="liveState">{{ t('marktradar.status_' + gesamtZustand) }}</span>
+            </div>
+
+            <!-- Mittig, weil das Symbol die ganze Seite steuert: Bookmap,
+                 Hebelkarte, Mechanik, Long/Short und die KI-Lage hängen daran.
+                 Im eigenen Fenster gibt es kein Seitenmenü, in dem es sonst
+                 stünde. -->
+            <div class="ltSymbolMitte">
+                <SymbolWahl />
+            </div>
+            <div class="liveActions">
+                <!-- Zwei Formen derselben Daten. Der Umschalter steht ganz
+                     links in der Knopfreihe, weil er die Bedeutung aller
+                     folgenden Knöpfe verändert. -->
+                <div class="ltAnsicht">
+                    <button type="button" :class="['ctl-pill', ansicht === 'raster' ? 'active' : '']"
+                        :title="t('livetrading.ansicht.rasterSub')" @click="waehleAnsicht('raster')">
+                        <i class="uil uil-apps"></i>{{ t('livetrading.ansicht.raster') }}
+                    </button>
+                    <button type="button" :class="['ctl-pill', ansicht === 'pult' ? 'active' : '']"
+                        :title="t('livetrading.ansicht.pultSub')" @click="waehleAnsicht('pult')">
+                        <i class="uil uil-sliders-v-alt"></i>{{ t('livetrading.ansicht.pult') }}
+                    </button>
+                </div>
+                <span class="ctl-sep"></span>
+                <!-- Sichtbarkeit ist eine Rasterfrage: das Pult hat feste
+                     Instrumente und kennt kein Ausblenden. -->
+                <div v-if="ansicht === 'raster'" ref="configRef" class="position-relative">
+                    <button type="button" class="ctl-pill" @click="showConfigDropdown = !showConfigDropdown">
+                        <i class="uil uil-apps"></i>{{ t('marktradar.cards') }}
+                    </button>
+                    <div v-if="showConfigDropdown" class="card-config-dropdown">
+                        <div class="card-config-title">{{ t('auswertung.visibleCards') }}</div>
+                        <div v-for="kachel in alleKacheln" :key="kachel.id" class="card-config-item"
+                            @click="beiUmschalten(kachel.id)">
+                            <i class="uil me-2"
+                                :class="isVisible(kachel.id) ? 'uil-check-square text-success' : 'uil-square-full text-muted'"></i>
+                            {{ t(kachel.titleKey) }}
+                        </div>
+                    </div>
+                </div>
+                <!-- Regler beider Canvas-Karten, die nicht in deren Kopfzeile
+                     passen — in beiden Ansichten, die Werte gelten für Raster
+                     und Pult gleichermassen. -->
+                <button type="button" class="ctl-pill" :title="t('livetrading.karten.hinweisKnopf')"
+                    @click="kartenOffen = true">
+                    <i class="uil uil-setting"></i>{{ t('livetrading.karten.knopf') }}
+                </button>
+                <!-- „Alle aktualisieren" gibt es hier bewusst NICHT (im
+                     Marktradar schon). Der Prüftakt liegt bei 3 s statt 30 s,
+                     und acht der elf abrufenden Kacheln laden von selbst im
+                     5- bis 60-Sekunden-Rhythmus; für Bookmap, Hebelkarte und
+                     Handelszeiten täte der Knopf ohnehin nichts. Er hätte nur
+                     die vier 5-Minuten-Kacheln vorgezogen — zu wenig für einen
+                     Dauerplatz in einer Leiste, die im Handelsfenster ohnehin
+                     zu eng wird. -->
+                <button type="button" class="ctl-pill" :class="{ fotoOk: fotoZustand === 'ok' }"
+                    :disabled="fotoZustand === 'laeuft'" :title="t('livetrading.foto.hinweis')"
+                    @click="cockpitFoto">
+                    <i class="uil" :class="fotoZustand === 'ok' ? 'uil-check' : 'uil-camera'"></i>
+                    {{ fotoZustand === 'ok' ? t('livetrading.foto.gespeichert') : t('livetrading.foto.knopf') }}
+                </button>
+                <!-- Nur ausserhalb des eigenen Fensters: dort ist man schon. -->
+                <button v-if="!istCockpit" type="button" class="ctl-pill" @click="oeffneFenster">
+                    <i class="uil uil-expand-arrows-alt"></i>{{ t('livetrading.vollbild') }}
+                </button>
+                <a v-if="istCockpit" class="ctl-pill" href="/marktradar">
+                    <i class="uil uil-arrow-left"></i>{{ t('livetrading.zumJournal') }}
+                </a>
+                <span class="ctl-sep"></span>
+                <PageInfo section="info.livetrading" />
+            </div>
+        </div>
+
+        <KartenEinstellungen v-if="kartenOffen" @schliessen="kartenOffen = false" />
+
+        <div v-if="fotoZustand === 'fehler'" class="fotoFehler">
+            <i class="uil uil-exclamation-triangle"></i>{{ fotoMeldung }}
+            <button type="button" class="radarCardBtn" @click="fotoZustand = ''; fotoMeldung = ''">
+                <i class="uil uil-times"></i>
+            </button>
+        </div>
+
+        <SitzungsLeiste />
+        </div>
+
+        <!--
+            `v-if` und nicht `v-show`: Bookmap und Hebelkarte hängen an eigenen
+            WebSockets mit einem Modul-Singleton für den Einfrier-Zustand. Zwei
+            gleichzeitig lebende Instanzen wären zwei Verbindungen auf denselben
+            Zustand. Der Preis ist ein Verbindungsaufbau beim Umschalten — er
+            steht am Zustandspunkt, und das ist die ehrlichere Anzeige.
+        -->
+        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :zustand="zustand" :stand="stand"
+            :kachel-params="kachelParams" :komponenten="KOMPONENTEN" :symbol="liveSymbol"
+            @params="setzeParams" @anzeige="setzeAnzeige"
+            @zustand="(id, z, extra) => setzeKachelZustand(id, z, extra)"
+            @neuladen="(id) => ladeKachel(id, true)" />
+
+        <div v-else ref="gridEl" class="radarGrid">
+            <div v-for="kachel in sichtbareKacheln" :key="kachel.id" :data-kachel="kachel.id"
+                :style="stilFuer(kachel)">
+                <RadarKachel :titel="t(kachel.titleKey)" :icon="kachel.icon" :info-key="kachel.infoKey" :zustand="zustand[kachel.id] || 'idle'"
+                    :stand="stand[kachel.id] || 0" :fehler="fehler[kachel.id] || ''" :hat-daten="!!daten[kachel.id]"
+                    :eigenstaendig="eigenstaendig(kachel)" :interaktiv="interaktiv(kachel)"
+                    @gross="offeneKachel = kachel.id" @neuladen="neuLaden(kachel.id)"
+                    @groesse-start="starteGroesse(kachel, $event)" @groesse-zurueck="setzeGroesseZurueck(kachel)">
+                    <!-- Regler in der Kopfzeile: dieselben `params` wie der
+                         Körper, damit beide Seiten denselben Wert sehen. -->
+                    <template v-if="KOPF_STEUERUNG[kachel.id]" #steuerung>
+                        <component :is="KOPF_STEUERUNG[kachel.id]" :params="kachelParams[kachel.id] || {}"
+                            @params="setzeParams(kachel.id, $event)" />
+                    </template>
+                    <!-- `neuladen` aus der Kachel heraus: die KI-Lage erzeugt
+                         ihren Text selbst per POST und will danach den frischen
+                         Stand sehen. -->
+                    <component :is="KOMPONENTEN[kachel.id]" :daten="daten[kachel.id]" :gross="false"
+                        :params="kachelParams[kachel.id] || {}"
+                        v-bind="kachel.id === 'kompakt' ? { quellen: daten } : {}"
+                        @oeffne="oeffneQuelle"
+                        @params="setzeParams(kachel.id, $event)"
+                        @anzeige="setzeAnzeige(kachel.id, $event)"
+                        @zustand="(z, extra) => setzeKachelZustand(kachel.id, z, extra)"
+                        @neuladen="ladeKachel(kachel.id, true)" />
+                </RadarKachel>
+            </div>
+        </div>
+
+        <div v-if="ansicht === 'raster' && !sichtbareKacheln.length" class="radarLeer">
+            {{ t('marktradar.allHidden') }}
+        </div>
+
+        <!-- Gross: dieselbe Komponente, dieselben Daten, nur mit mehr Platz -->
+        <RadarOverlay v-if="ansicht === 'raster' && offeneKachel && (daten[offeneKachel] || !offeneDefinition?.endpunkt)"
+            :titel="t(offeneDefinition.titleKey)"
+            :info-key="offeneDefinition.infoKey" :quelle="offeneDefinition.quelle" @schliessen="offeneKachel = null">
+            <component :is="KOMPONENTEN[offeneKachel]" :daten="daten[offeneKachel]" :gross="true"
+                :params="kachelParams[offeneKachel] || {}"
+                @params="setzeParams(offeneKachel, $event)"
+                @anzeige="setzeAnzeige(offeneKachel, $event)"
+                @neuladen="ladeKachel(offeneKachel, true)" />
+        </RadarOverlay>
+    </div>
+</template>
+
+<style scoped>
+.radarWrap {
+    display: flex;
+    flex-direction: column;
+    /* Wie der Marktradar: keine feste Höhe, das Raster darf wachsen. */
+    min-height: 300px;
+}
+
+/*
+ * Vollbild: Kopfzeile und Sitzungsleiste fahren nach oben aus dem Bild.
+ *
+ * Wegwerfen wäre falsch — dort hängen Symbolwahl, Sitzungsstart und der Weg aus
+ * dem Vollbild heraus. Stattdessen bleibt ein schmaler Streifen stehen; berührt
+ * die Maus ihn, kommt der ganze Block zurück. Dasselbe Verhalten kennt man von
+ * Videoplayern und Editoren im Vollbild.
+ *
+ * Der Streifen ist bewusst 6 px hoch und nicht 0: ein Block, der vollständig
+ * verschwindet, ist mit der Maus nicht mehr zu treffen, und dann käme man ohne
+ * Tastatur nicht mehr an die Bedienung.
+ */
+.vollbildKahl .ltKopf {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 40;
+    padding: 0 0.6rem 0.4rem;
+    background: var(--black-bg, #0d0d14);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    transform: translateY(calc(-100% + 6px));
+    transition: transform 0.18s ease;
+}
+
+.vollbildKahl .ltKopf:hover,
+.vollbildKahl .ltKopf:focus-within {
+    transform: translateY(0);
+}
+
+/* Ohne diesen Ausgleich läge die erste Kachelreihe unter dem Streifen. */
+.vollbildKahl .radarGrid {
+    margin-top: 8px;
+}
+
+/*
+ * Im kahlen Zustand ist die Kopfzeile ausgefahren — das Pult darf den Platz
+ * haben. Die Höhe steht hier und nicht in der Komponente, weil nur die Seite
+ * weiss, wie viel über ihr steht: mit Kopfzeile und Sitzungsleiste sind es
+ * rund 190 px, im eigenen Fenster nur der 6-px-Streifen.
+ */
+.vollbildKahl .pult {
+    margin-top: 8px;
+    height: calc(100dvh - 24px);
+}
+
+/* Die beiden Ansichtsknöpfe rücken zusammen: sie sind eine Entscheidung, nicht
+   zwei Befehle. */
+/* Eigener Flex-Container in der Knopfreihe: die globale Regel fasst nur die
+   direkten Kinder von `.liveActions`, die beiden Pillen hier drin brauchen sie
+   noch einmal. */
+.ltAnsicht {
+    display: flex;
+    gap: 0.15rem;
+    flex: 0 0 auto;
+}
+
+.ltAnsicht > .ctl-pill {
+    flex: 0 0 auto;
+}
+
+.fotoOk { color: #4ec9a0; }
+
+.fotoFehler {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    color: #ff6b7a;
+    padding: 0.3rem 0.5rem;
+    margin-bottom: 0.4rem;
+    border-radius: var(--border-radius);
+    background: rgba(220, 53, 69, 0.12);
+}
+
+.fotoFehler .radarCardBtn { margin-left: auto; }
+
+/* Absolut zentriert statt per Flex: die Kopfzeile hat links den Titel und
+   rechts die Knöpfe, und die sind verschieden breit — mit `flex: 1` sässe das
+   Symbol optisch daneben, nicht in der Mitte. */
+.ltSymbolMitte {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+}
+
+@media (max-width: 991.98px) {
+    /* Kein Platz für drei Blöcke nebeneinander — dann läuft es mit. */
+    .ltSymbolMitte {
+        position: static;
+        transform: none;
+    }
+}
+</style>

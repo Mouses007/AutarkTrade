@@ -1,0 +1,1162 @@
+<script setup>
+/**
+ * Vue-Hülle um LiveFeed (Daten) und HeatmapRenderer (Zeichnen).
+ *
+ * Bewusst KEINE Reaktivität auf Ring, Orderbuch oder Renderer: Vue würde
+ * Proxies um die TypedArrays legen und der Hot Path bräche zusammen. Reaktiv
+ * sind nur Skalare für die Statusanzeige.
+ *
+ * Einstellungen kommen direkt aus dem Live-Store (wie SidebarFilters die
+ * Journal-Filter liest), nicht über Props — die Bedienelemente sitzen im
+ * Seitenmenü und in der Kopfzeile, also in ganz anderen Komponenten.
+ */
+import axios from 'axios'
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { LiveFeed } from '../utils/liveFeed.js'
+import { HeatmapRenderer } from '../utils/heatmapRenderer.js'
+import { loadReplay, loadReplayLiquidations, loadReplayTrades } from '../utils/replaySource.js'
+import { TradeRing } from '../utils/tradeRing.js'
+import { followMid } from '../../shared/priceBins.js'
+import { timeZoneTrade } from '../stores/ui.js'
+import {
+    liveSymbol, liveMarket, liveViewPct, liveSpanneMin, livePreisFaltung, liveFrameMs, liveHistoryMin, liveRamp,
+    liveShowProfile, livePauseInBackground, liveColorMode, liveColorRef, liveSaettigung, liveProPixel, liveBucketSize, liveAbdeckungMin,
+    liveShowBuch, liveBuchW, liveFremdBuch,
+    liveAutoFollow, liveFrozen, liveAutoRefValue, liveThreshold, liveShowLiquidations, liveDotStep, liveProfileW, liveShowVolumeBars,
+    liveShowDelta, liveShowAbsorption,
+    liveMode, replayFrom, replayTo, livePrefillMin, VIEW_PCT_OPTIONS, spannenOptionen, historieFuer,
+    replayEntry, replayExit, replayFokus, replayZoom,
+} from '../stores/live.js'
+import dayjs from '../utils/dayjs-setup.js'
+
+const emit = defineEmits(['status'])
+
+const { t, locale } = useI18n()
+
+/**
+ * Der Renderer ist Vue-frei und kann kein useI18n(). Die Canvas-Texte werden
+ * ihm deshalb hier übersetzt übergeben — einmal beim Einhängen und erneut,
+ * wenn die Sprache wechselt.
+ */
+const canvasLabels = () => ({
+    coverage: t('live.coverage'), traded: t('live.traded'), max: t('live.max'),
+    liquidity: t('live.liquidity'), toMid: t('live.toMid'),
+    noRecording: t('live.noRecording'), volumePer: t('live.volumePer', { n: '{n}' }),
+    bought: t('live.bought'), sold: t('live.sold'), sum: t('live.sum'),
+    buyerShare: t('live.buyerShare'),
+    book: t('live.bookLane'), bid: t('live.bid'), ask: t('live.ask'),
+    otherVenues: t('live.otherVenues'), share: t('live.shareBinance'),
+})
+
+/*
+ * Fremde Bücher, alle paar Sekunden nachgeladen.
+ *
+ * Bewusst REST und nicht drei weitere Dauerverbindungen: die Frage „steht die
+ * Wand auch anderswo" ändert ihre Antwort nicht im Halbsekundentakt, und drei
+ * offene Sockets mit je eigenem Sync-Verfahren wären drei neue Fehlerquellen
+ * für eine Nebenauskunft. Der Server bündelt und puffert (5 s).
+ */
+let fremdBuecher = null
+let fremdTimer = null
+let fremdLaeuft = false
+
+/**
+ * Preisbereich, in dem der Vergleich überhaupt zulässig ist: der Schnitt aller
+ * beteiligten Bücher.
+ *
+ * Ohne diese Klemme vergleicht man Ungleiches, und zwar systematisch zugunsten
+ * von Binance: unser Binance-Buch wird LIVE mitgeführt und sammelt über die
+ * ganze Sitzung alles, was der Diff-Strom bis ±3 % liefert. Die fremden Bücher
+ * sind frische Snapshots mit 500 bzw. 400 Stufen und reichen entsprechend
+ * kurz. Gemessen am 08.09.2026: über das Sichtfenster gerechnet kam ein
+ * Binance-Anteil von 72 % heraus, im gemeinsamen Bereich waren es 32 %.
+ *
+ * Der Schnitt der Snapshot-Reichweiten ist eng (gemessen ±0,07 %) — das ist
+ * die ehrliche Antwort, keine bequeme. Ein Anteil über einen Bereich, in dem
+ * zwei der drei Börsen gar nichts melden, ist keine Aussage über den Markt,
+ * sondern über die API-Grenzen.
+ */
+function fremdBereich() {
+    if (!fremdBuecher?.length) return null
+    let lo = -Infinity
+    let hi = Infinity
+    for (const b of fremdBuecher) {
+        if (!(b.reichweite?.lo > 0) || !(b.reichweite?.hi > 0)) return null
+        lo = Math.max(lo, b.reichweite.lo)
+        hi = Math.min(hi, b.reichweite.hi)
+    }
+    // Binance ist ausserhalb seines eigenen Snapshots ebenfalls nur teilweise
+    // bekannt — mit hineinschneiden, sonst hinkt der Vergleich andersherum.
+    const cov = feed?.book
+    if (cov?.coverLo > 0 && cov?.coverHi > 0) {
+        lo = Math.max(lo, cov.coverLo)
+        hi = Math.min(hi, cov.coverHi)
+    }
+    return hi > lo ? { lo, hi } : null
+}
+
+async function ladeFremdbuecher() {
+    if (fremdLaeuft || !liveFremdBuch.value || !liveShowBuch.value || isReplay()) return
+    const mid = feed?.book ? feed.book.bestPrices().mid : 0
+    if (!mid) return
+    fremdLaeuft = true
+    try {
+        const { data } = await axios.get('/api/live/fremdbuch', {
+            params: { symbol: liveSymbol.value, market: liveMarket.value, mid: Math.round(mid) },
+            timeout: 8000,
+        })
+        fremdBuecher = data?.boersen?.length ? data.boersen : null
+        dirtyOverlay = true
+    } catch {
+        // Eine fremde Börse ist eine Zugabe. Fällt sie aus, verschwindet der
+        // blasse Balken — die eigene Karte darf davon nichts merken.
+        fremdBuecher = null
+    } finally {
+        fremdLaeuft = false
+    }
+}
+
+const wrapEl = ref(null)
+const heatEl = ref(null)
+const overlayEl = ref(null)
+const uiEl = ref(null)
+
+const status = ref('idle')
+const statusDetail = ref('')
+/** Wie weit horizontal zurückgezogen wurde, in ms — nur fürs Badge, siehe colOffset. */
+const panMs = ref(0)
+/** Scrub-Position in der Wiedergabe: 0 = Anfang, 1 = Ende des Zeitfensters. */
+const replayPos = ref(1)
+const replayCols = ref(0)
+const replayTimeLabel = ref('')
+/** Auflösung der geladenen Wiedergabe, für die Beschriftung in der Kopfzeile. */
+const replayAufloesung = ref('')
+/**
+ * Tatsächlich geladener Ausschnitt. Nicht dasselbe wie replayFrom/replayTo —
+ * beim Zoomen auf Ein- oder Ausstieg ist er ein Teilstück davon, und die
+ * Kopfzeile soll zeigen, was man sieht.
+ */
+const replayFensterLabel = ref('')
+/** Kauf-/Verkaufsvolumen nahe am Mid — { bidQty, askQty, buyShare } oder null. */
+const bookImbalance = ref(null)
+
+defineExpose({ replayPos, replayCols, replayTimeLabel, replayAufloesung, replayFensterLabel, bookImbalance })
+
+// Nicht-reaktiver Zustand
+let feed = null
+let replay = null          // { ring, frameMs, cols } im Wiedergabe-Modus
+let replayLiqRing = null   // aufgezeichnete Liquidationen zum selben Fenster
+let replayTradeRing = null // aufgezeichnete aggTrades zum selben Fenster
+let replayLauf = 0         // Zähler gegen verspätete Antworten alter Läufe
+let replayBreite = 0       // Plotbreite, mit der die Wiedergabe geladen wurde
+// Zuletzt angefragte Kombination. Beim Einstieg aus dem Journal laufen Mount,
+// Watcher und die erste Grössenmessung fast gleichzeitig los — ohne diesen
+// Schlüssel holt jede davon dieselben (grossen) Daten erneut.
+let replaySchluessel = ''
+// Takt der Aufzeichnung (nicht der Live-Einstellung). Erst nach dem ersten
+// Laden sicher bekannt, der Standard der Aufzeichnung ist 1 s.
+let quellTaktMs = 1000
+let emptyTrades = new TradeRing(1)
+let renderer = null
+let ro = null
+let raf = null
+let resizeTimer = null
+let normTimer = null
+let view = null            // { lo, hi } in absoluten Bucket-Indizes
+let cursor = null
+// Basiswährung fürs Etikett im Profil-Tooltip: BTCUSDT → BTC. Die Mengen aus
+// dem Trade-Stream sind in dieser Einheit, nicht in USDT.
+const baseAsset = computed(
+    () => (liveSymbol.value || '').replace(/(USDT|USDC|BUSD|USD)$/, '') || '')
+let drag = null            // { y, lo, hi, x, colOffset0, zukunft0, axis } während des Ziehens
+let frozenHead = null      // Ring-Position, an der die Ansicht eingefroren wurde
+let framesSinceFreeze = 0
+// Spalten, um die der Anker gegenüber frozenHead/Live-Kopf zurückversetzt ist —
+// wächst beim horizontalen Ziehen, um ältere Wände in der Heatmap zu zeigen.
+let colOffset = 0
+/*
+ * Breite des freien Feldes rechts, in Spalten (= Pixeln).
+ *
+ * Zieht man den Chart nach LINKS über die Gegenwart hinaus, entsteht dort
+ * Platz, in den das aktuelle Buch als waagerechte Linien gezeichnet wird —
+ * dieselbe Ansicht wie in Bookmap. In der Historie sind dieselben Orders über
+ * die Zeitachse verschmiert; im freien Feld sieht man auf einen Blick, wo die
+ * Wände liegen.
+ *
+ * Getrennt von `colOffset`, weil es zwei verschiedene Dinge sind:
+ * `colOffset` blättert in der Vergangenheit, `zukunftCols` schafft Platz für
+ * die Gegenwart. Beides in einer Zahl unterzubringen (negativer colOffset)
+ * hätte den Anker in einen Bereich gerechnet, den der Ring nicht hat.
+ */
+let zukunftCols = 0
+let dirtyHeat = false
+let dirtyOverlay = false
+let dirtyUi = false
+
+const formatTime = (ms) => dayjs(ms).tz(timeZoneTrade.value || dayjs.tz.guess()).format('HH:mm:ss')
+/** "12:34 zurück" fürs Badge — nur wenn per Zeitachse zurückgezogen wurde. */
+const panLabel = computed(() => {
+    if (!panMs.value) return ''
+    const total = Math.round(panMs.value / 1000)
+    const m = Math.floor(total / 60)
+    const s = total % 60
+    return `${m}:${String(s).padStart(2, '0')}`
+})
+
+// Live-Feed und Wiedergabe füllen denselben Ringtyp — der Renderer bekommt
+// deshalb in beiden Fällen dieselben Argumente.
+const isReplay = () => liveMode.value === 'replay'
+/**
+ * Das Volumenprofil speist sich aus aggTrades. Seit der Recorder Trades
+ * mitschneidet (10.10.2026), gibt es die Spur auch in der Wiedergabe — aber
+ * nur, wenn zum Fenster tatsächlich Trades geladen wurden; für ältere
+ * Aufzeichnungen reservierte sie sonst Plotbreite für eine leere Fläche.
+ */
+const profilAktiv = () => liveShowProfile.value && (!isReplay() || !!replayTradeRing)
+const currentRing = () => (isReplay() ? replay?.ring : feed?.ring)
+const currentTrades = () => (isReplay() ? (replayTradeRing || emptyTrades) : feed?.trades)
+// Liquidationen und aggTrades liegen als eigene Sorten in der Aufzeichnung
+// und werden zum Fenster nachgeladen.
+const currentLiquidations = () => (isReplay() ? (replayLiqRing || emptyTrades) : feed?.liquidations)
+const currentFrameMs = () => (isReplay() ? (replay?.frameMs || liveFrameMs.value) : liveFrameMs.value)
+
+/*
+ * Sichtbare Zeitspanne für den Renderer.
+ *
+ * In der Wiedergabe bleibt sie 0: dort faltet bereits der Server (`sliceRange`
+ * / `verdichtet`), die Ringspalten sind also schon auf die Plotbreite
+ * gerechnet und `replay.frameMs` ist die gefaltete Taktbreite. Ein zweites Mal
+ * zu falten würde die Zeitleiste doppelt stauchen.
+ */
+const spanneMs = () => (isReplay() ? 0 : liveSpanneMin.value * 60000)
+
+/**
+ * Ringlänge: aus der Spanne abgeleitet, sofern in den Einstellungen keine
+ * feste steht. Zwei Regler für „was sehe ich" und „was hebt der Ring auf"
+ * waren einer zu viel — siehe `historieFuer` in stores/live.js.
+ */
+const histMin = computed(() => historieFuer(liveSpanneMin.value, liveHistoryMin.value))
+
+/** Ringspalten je Pixel — bei nativer Auflösung 1. */
+const proPixel = () => renderer?.spaltenProPixel(currentFrameMs()) ?? 1
+
+/**
+ * Bezugspunkt zum Zeichnen. Live: eingefroren der gemerkte Head, sonst der
+ * aktuelle. Wiedergabe: die Scrub-Position auf der Zeitleiste.
+ */
+const anchor = () => {
+    if (isReplay()) {
+        const ring = replay?.ring
+        if (!ring) return null
+        return Math.max(1, Math.min(ring.cap, Math.round(replayPos.value * ring.cap)))
+    }
+    const base = liveFrozen.value && frozenHead !== null ? frozenHead : null
+    const ring = feed?.ring
+    if (!colOffset || !ring) return base
+    // Bewusst NICHT über colFrom() verkettet: dessen i=0 meint bereits "eine
+    // Spalte vor head" (head ist der nächste Schreibplatz, keine Datenspalte).
+    // Das Ergebnis von colFrom als neuen head weiterzureichen verschöbe die
+    // Ansicht um eine zusätzliche Spalte. Direkt vom head-Zeiger subtrahieren
+    // trifft genau die gewünschten colOffset Spalten.
+    const head = base ?? ring.head
+    return (((head - colOffset) % ring.cap) + ring.cap) % ring.cap
+}
+
+/**
+ * Anker auf das jüngste bekannte Buch — unabhängig davon, wie weit in der
+ * Historie zurückgeblättert wurde.
+ *
+ * Bei eingefrorener Ansicht ist das der eingefrorene Kopf: Wer anhält, will
+ * das Bild von damals festhalten, auch rechts.
+ */
+const jetztAnchor = () => {
+    if (isReplay()) return anchor()
+    return liveFrozen.value && frozenHead !== null ? frozenHead : (feed?.ring?.head ?? null)
+}
+
+/**
+ * Wie weit lässt sich der Anker noch zurückversetzen, ohne dass hinter ihm
+ * weniger als eine volle Bildschirmbreite an aufgezeichneten Spalten übrig
+ * bliebe — dafür müsste der Renderer sonst mit teils leeren Spalten umgehen.
+ *
+ * Vor dem ersten vollen Umlauf (count < cap) sind nur die Spalten VOR dem
+ * jeweiligen Anker beschrieben, nicht ring.count Spalten insgesamt — sonst
+ * würde man bei einem früh eingefrorenen, seither im Hintergrund
+ * weitergelaufenen Ring über den Anfang der Aufzeichnung hinaus in
+ * unbeschriebene (leere) Spalten ziehen können.
+ */
+function maxColOffset() {
+    const ring = feed?.ring
+    if (!ring || !renderer) return 0
+    const head = liveFrozen.value && frozenHead !== null ? frozenHead : ring.head
+    const available = ring.count >= ring.cap ? ring.cap : head
+    // Nicht `renderer.cols`: bei gefalteter Zeitachse deckt das Bild ein
+    // Vielfaches davon ab, und der Anker dürfte sonst so weit zurück, dass
+    // links unbeschriebene Spalten ins Bild kämen.
+    return Math.max(0, available - renderer.sichtbareSpalten(currentFrameMs()))
+}
+
+/**
+ * Wiedergabe: nur Spalten bis zum Scrub-Punkt gelten als vorhanden.
+ *
+ * Der Replay-Ring wird linear befüllt (head = 0), `count` ist also frei
+ * verfügbar, um das Ende der „bekannten" Daten zu markieren. Ohne diese
+ * Klemme rechnet colFrom() modulo über den ganzen Ring und holt beim
+ * Zurückspulen Spalten von NACH dem gewählten Zeitpunkt links ins Bild —
+ * Lookahead-Bias: bei Anker 2 und fünf sichtbaren Spalten erschienen die
+ * Ringindizes [7,8,9,0,1] statt nur [0,1].
+ */
+function syncReplayCount() {
+    const ring = replay?.ring
+    if (!ring) return
+    ring.count = anchor() ?? ring.cap
+}
+
+/**
+ * Mid an der aktuellen Position. In einer Aufzeichnung können Spalten leer sein
+ * (Recorder war aus) — dann rückwärts bis zur letzten belegten Spalte suchen,
+ * statt das Sichtfenster gar nicht erst zu setzen.
+ */
+function midAtAnchor(ring) {
+    const head = anchor() ?? ring.head
+    const grenze = Math.min(ring.count, ring.cap)
+    for (let i = 0; i < grenze; i++) {
+        const mid = ring.mid[ring.colFrom(head, i)]
+        if (mid) return mid
+    }
+    return 0
+}
+
+/** Letzte Spalte mit Daten — Startpunkt der Zeitleiste. */
+function letzteDatenSpalte(ring) {
+    for (let c = ring.cap - 1; c >= 0; c--) if (ring.mid[c]) return c
+    return -1
+}
+
+function setStatus(state, detail) {
+    status.value = state
+    statusDetail.value = detail || ''
+    emit('status', { state, detail })
+}
+
+/** Sichtfenster nachführen; liefert true, wenn die Heatmap neu gezeichnet werden muss. */
+function updateView(force = false) {
+    const ring = currentRing()
+    if (!ring) return false
+    const mid = midAtAnchor(ring)
+    if (!mid) return false
+
+    const wanted = Math.round((mid * (liveViewPct.value / 100) * 2) / ring.bucketSize)
+    const rowsView = Math.max(20, Math.min(wanted, ring.rows))
+    const midBucket = Math.round(mid / ring.bucketSize)
+
+    if (!view || force) {
+        const half = rowsView >> 1
+        view = { lo: midBucket - half, hi: midBucket + (rowsView - half) }
+        return true
+    }
+    if ((view.hi - view.lo) !== rowsView) {
+        // Zoom: Mitte des aktuellen Ausschnitts halten, nicht auf den Mid springen
+        const center = Math.round((view.lo + view.hi) / 2)
+        const half = rowsView >> 1
+        view = { lo: center - half, hi: center + (rowsView - half) }
+        return true
+    }
+    if (!liveAutoFollow.value) return false
+
+    const next = followMid(view, midBucket, rowsView)
+    view = { lo: next.lo, hi: next.hi }
+    return next.shifted
+}
+
+function loop() {
+    raf = requestAnimationFrame(loop)
+    const ring = currentRing()
+    if (document.hidden || !renderer || !ring || !view) return
+    const head = anchor()
+    const frameMs = currentFrameMs()
+    // Nur live bekannt — in der Aufzeichnung ist die Reichweite nicht mitgespeichert
+    const coverage = !isReplay() && feed?.book?.coverLo
+        ? { lo: feed.book.coverLo, hi: feed.book.coverHi }
+        : null
+    if (dirtyHeat) {
+        /*
+         * Zweiter Anker fürs freie Feld: dort steht immer das JÜNGSTE bekannte
+         * Buch, auch wenn man in der Historie zurückgeblättert hat. Sonst
+         * stünde rechts eine zweite Vergangenheit, und die Linien beantworteten
+         * die Frage nicht mehr, für die sie da sind.
+         */
+        renderer.drawHeat(ring, view, head, jetztAnchor(), { frameMs, coverage })
+        dirtyHeat = false
+        dirtyOverlay = true
+    }
+    if (dirtyOverlay) {
+        renderer.drawOverlay({
+            ring, trades: currentTrades(), liquidations: currentLiquidations(),
+            view, anchor: head, frameMs, bucketSize: ring.bucketSize,
+            formatTime, showProfile: profilAktiv(),
+            showLiquidations: liveShowLiquidations.value,
+            coverage,
+            // Nur live: in der Wiedergabe gibt es kein aktuelles Buch, und ein
+            // altes als „jetzt" auszugeben wäre die schlimmere Antwort als eine
+            // leere Spur.
+            buch: !isReplay() && feed?.book
+                ? { bids: feed.book.bids, asks: feed.book.asks, fremd: fremdBuecher, fremdBereich: fremdBereich() }
+                : null,
+        })
+        dirtyOverlay = false
+        dirtyUi = true
+    }
+    if (dirtyUi) {
+        renderer.drawUi(cursor, {
+            ring, view, anchor: head, bucketSize: ring.bucketSize, frameMs, formatTime,
+            baseLabel: baseAsset.value,
+        })
+        dirtyUi = false
+    }
+}
+
+function applySize() {
+    if (!wrapEl.value || !renderer) return
+    const rect = wrapEl.value.getBoundingClientRect()
+    if (rect.width < 10 || rect.height < 10) return
+    renderer.resize(rect.width, rect.height)
+    // Der Renderer klemmt das freie Feld auf ein Drittel der neuen Breite —
+    // den geklemmten Wert zurückholen, sonst rechnet der nächste Zug mit einem
+    // Startwert, den es nicht mehr gibt.
+    zukunftCols = renderer.zukunft
+    dirtyHeat = true
+    // Die Verdichtung der Wiedergabe hängt an der Plotbreite — die steht beim
+    // ersten Laden noch nicht immer fest (Layout, ausgeklapptes Seitenmenü).
+    // Neu geholt wird nur, wenn der Plot WÄCHST (sonst bliebe rechts
+    // Leerfläche bzw. die Karte gröber als der Platz hergibt). Beim
+    // Schrumpfen zeigt die Ansicht schlicht die neuesten Spalten — kein
+    // Datenfehler. Totzone 90 statt 40: das Ein-/Ausblenden der Profilspur
+    // (74 px) beim asynchronen Trades-Laden darf keinen zweiten Voll-Abruf
+    // auslösen — in KEINE Richtung (Fenster mit Trades → ohne wuchs der Plot
+    // sonst um genau 74 > 40). Echte Layoutwechsel (Seitenmenü ~200 px,
+    // Fenstergrösse) liegen weit darüber.
+    if (isReplay() && renderer.cols && renderer.cols - replayBreite > 90) startReplay()
+}
+
+/**
+ * Zeitfenster der Wiedergabe: das Basisfenster (ganzer Trade plus Puffer),
+ * zugeschnitten auf Fokus und Zoomstufe.
+ *
+ * Die Stufen sind Bruchteile der Gesamtspanne, keine festen Minutenwerte —
+ * der Server verdichtet auf die Plotbreite, also füllt jede Stufe das Bild.
+ * Die feinste sinnvolle Stufe ist genau eine Quellspalte je Pixel; enger
+ * gefasst bliebe nur Leerfläche am Rand übrig.
+ */
+function replayFenster() {
+    const von = replayFrom.value
+    const bis = replayTo.value
+    const spanne = bis - von
+    if (!(spanne > 0)) return { von, bis }
+
+    const feinste = (renderer?.cols || 1200) * quellTaktMs
+    const wunsch = replayZoom.value > 0
+        ? Math.max(feinste, Math.round(spanne * replayZoom.value))
+        : feinste
+    // Auf ganze Quellspalten runden. Ohne das ragt ein angebrochener Takt über
+    // die Spaltengrenze hinaus, der Server muss zwei Spalten falten und die
+    // feinste Stufe wäre plötzlich halb so fein.
+    const laenge = Math.max(quellTaktMs, Math.floor(Math.min(spanne, wunsch) / quellTaktMs) * quellTaktMs)
+    if (laenge >= spanne) return { von, bis }
+
+    const fokus = replayFokus.value === 'entry' ? replayEntry.value
+        : replayFokus.value === 'exit' ? replayExit.value
+            : 0
+    const mitte = fokus || (von + spanne / 2)
+    // Am Rand nicht über das Basisfenster hinauslaufen
+    const start = Math.max(von, Math.min(Math.round(mitte - laenge / 2), bis - laenge))
+    // Auch der Anfang muss auf einem Takt sitzen, sonst zählt der Server eine
+    // angebrochene Spalte am Rand mit.
+    const ausgerichtet = Math.floor(start / quellTaktMs) * quellTaktMs
+    return { von: ausgerichtet, bis: ausgerichtet + laenge }
+}
+
+/** „49 s / Spalte (verdichtet aus 1 s)" für die Kopfzeile. */
+function beschreibeAufloesung({ frameMs, quellFrameMs, verdichtet }) {
+    const takt = (ms) => (ms >= 1000 ? `${Math.round(ms / 1000)} s` : `${ms} ms`)
+    if (!verdichtet || verdichtet <= 1) return `${takt(frameMs)} / Spalte`
+    return `${takt(frameMs)} / Spalte (verdichtet aus ${takt(quellFrameMs)})`
+}
+
+/** Wiedergabe: Zeitraum laden, Ring füllen, ans Ende springen. */
+async function startReplay() {
+    // Erst prüfen, dann verwerfen: die Wächter unten dürfen keinen bereits
+    // geladenen Zustand hinterlassen haben, sonst bliebe die Karte leer.
+    const { von, bis } = replayFenster()
+    // Symbol und Markt einmal festhalten: zwischen den beiden Abrufen liegt ein
+    // await, und die Einstellungen können in der Zwischenzeit hydrieren.
+    const symbol = liveSymbol.value
+    const market = liveMarket.value
+    // Mehr Spalten als Pixel kann die Anzeige nicht zeigen; der Server faltet
+    // die Aufzeichnung auf genau diese Breite zusammen. Steht die Breite noch
+    // nicht fest, wird nicht auf Verdacht geladen — applySize() holt nach,
+    // sobald gemessen ist. Sonst ginge der erste (grosse) Abruf ins Leere.
+    if (renderer && !renderer.cols) return
+    const breite = renderer?.cols || 0
+
+    const schluessel = `${symbol}|${market}|${von}|${bis}|${breite}`
+    if (schluessel === replaySchluessel) return
+
+    // Anderes Zeitfenster = anderer Datenbestand → Farb-Bezug sofort neu
+    // setzen. NACH dem Schlüssel-Wächter: Watcher-Aufrufe ohne effektive
+    // Fensteränderung dürfen den EMA-Zustand nicht entwerten.
+    renderer?.resetNorm()
+    // Tooltip-Bins des alten Fensters sofort entwerten — die Nullung in den
+    // Zeichenroutinen greift nur, wenn die Spur noch einmal zeichnet.
+    renderer?.resetTradeBins()
+    stopFeed()
+    replay = null
+    replayLiqRing = null
+    replayTradeRing = null
+    view = null
+    replayCols.value = 0
+    replayAufloesung.value = ''
+    replayFensterLabel.value = ''
+    setStatus('loading')
+    if (!(bis > von)) { setStatus('empty', 'Kein gültiges Zeitfenster'); return }
+    replaySchluessel = schluessel
+    replayBreite = breite
+    const tag = dayjs(von).tz(timeZoneTrade.value || dayjs.tz.guess()).format('DD.MM.')
+    replayFensterLabel.value = `${tag} ${formatTime(von)} – ${formatTime(bis)}`
+    // Späte Antworten eines vorherigen Laufs dürfen den aktuellen nicht
+    // überschreiben — beim Durchklicken der Stufen passiert genau das sonst.
+    const lauf = ++replayLauf
+    try {
+        const result = await loadReplay({
+            symbol, market, from: von, to: bis,
+            maxCols: replayBreite || undefined,
+        })
+        if (lauf !== replayLauf) return
+        if (!result.ring) {
+            setStatus('empty', result.hinweis)
+            return
+        }
+        replay = result
+        replayCols.value = result.cols
+        quellTaktMs = result.quellFrameMs || quellTaktMs
+        replayAufloesung.value = beschreibeAufloesung(result)
+
+        // Liquidationen und Trades zum selben Fenster nachladen. Beides ist
+        // Beiwerk — ein Fehler hier darf die Heatmap nicht mitreissen.
+        loadReplayLiquidations({ symbol, market, from: von, to: bis })
+            .then((ring) => {
+                if (lauf !== replayLauf) return
+                replayLiqRing = ring
+                dirtyOverlay = true
+            })
+            .catch(() => {})
+        loadReplayTrades({ symbol, market, from: von, to: bis })
+            .then((ring) => {
+                if (lauf !== replayLauf) return
+                replayTradeRing = ring
+                // Trades speisen Punkte, Profil UND Volumenspur — die
+                // Profilspur wird erst jetzt sichtbar (profilAktiv) und
+                // braucht Platz, also Layout neu messen.
+                renderer?.setProfileVisible(profilAktiv())
+                dirtyOverlay = true
+                applySize()
+            })
+            .catch(() => {
+                // Auch im Fehlerfall die Spur dem Zustand angleichen: ohne
+                // Trades (replayTradeRing bleibt null) darf keine leere,
+                // reservierte Profilspur des VORHERIGEN Fensters stehen.
+                if (lauf !== replayLauf) return
+                renderer?.setProfileVisible(profilAktiv())
+                dirtyOverlay = true
+            })
+        // Ans Ende der tatsächlich vorhandenen Daten springen, nicht ans Ende
+        // des angefragten Fensters — das kann grösstenteils leer sein.
+        const letzte = letzteDatenSpalte(result.ring)
+        if (letzte < 0) {
+            setStatus('empty', 'Der Zeitraum enthält keine aufgezeichneten Spalten')
+            return
+        }
+        replayPos.value = Math.min(1, (letzte + 1) / result.ring.cap)
+        syncReplayCount()
+        updateView(true)
+        // Hart setzen statt nachziehen: die geglättete Skala käme sonst vom
+        // vorherigen Symbol bzw. Zeitraum und kröche sekundenlang hinterher.
+        if (view) renderer?.recalcNorm(replay.ring, view, anchor(), { sofort: true })
+        updateReplayLabel()
+        dirtyHeat = true
+        setStatus('replay', result.hinweis)
+    } catch (error) {
+        // Schlüssel freigeben, sonst blockiert der Wächter jeden neuen Versuch
+        // mit denselben Werten.
+        replaySchluessel = ''
+        setStatus('error', error.response?.data?.error || error.message)
+    }
+}
+
+function updateReplayLabel() {
+    const ring = replay?.ring
+    if (!ring) { replayTimeLabel.value = ''; return }
+    const col = ring.colFrom(anchor(), 0)
+    replayTimeLabel.value = ring.ts[col] ? formatTime(ring.ts[col]) : ''
+}
+
+async function startFeed() {
+    stopFeed()
+    // Laufende Replay-Ladungen entwerten: ohne das besteht eine späte
+    // loadReplay-Antwort den lauf-Wächter und überschreibt im Live-Modus
+    // Status, Ringe und den Farb-Bezug mit Replay-Daten.
+    replayLauf++
+    // Neuer Datenbestand → Farb-Bezug sofort neu setzen statt vom alten
+    // Symbol herüberzugleiten (Grössenordnungen!)
+    renderer?.resetNorm()
+    renderer?.resetTradeBins()
+    replay = null
+    replayLiqRing = null
+    replayTradeRing = null
+    // Beim Verlassen der Wiedergabe vergessen, damit ein erneuter Einstieg in
+    // dasselbe Fenster wieder lädt.
+    replaySchluessel = ''
+    view = null
+    frozenHead = null
+    liveFrozen.value = false
+    colOffset = 0
+    zukunftCols = 0
+    renderer?.setZukunft(0)
+    renderer?.resetNorm()
+    // Fremdbücher gehören zum alten Symbol — sofort verwerfen, nicht bis zum
+    // nächsten Takt stehen lassen.
+    fremdBuecher = null
+    panMs.value = 0
+    feed = new LiveFeed({
+        symbol: liveSymbol.value,
+        market: liveMarket.value,
+        frameMs: liveFrameMs.value,
+        historyMin: histMin.value,
+        pauseInBackground: livePauseInBackground.value,
+        /*
+         * Vorlauf füllt den GANZEN Ring, nicht nur die Voreinstellung.
+         *
+         * Zwei Gründe, beide gemessen am 07.09.2026:
+         *
+         * 1. `_prefill` läuft nur bei leerem Ring, also genau einmal beim
+         *    Verbinden. Die Spanne später auf 30 Minuten zu stellen holte
+         *    deshalb NICHTS nach — man wählte 30 und sah weiter die 15, die
+         *    beim Öffnen geladen worden waren. Genau die schwarze Fläche links.
+         * 2. Der Server faltet die Antwort ohnehin auf ~900 Spalten (gemessen:
+         *    30 Minuten → 900 Spalten à 2 s). 15 oder 30 Minuten zu holen ist
+         *    derselbe Abruf und dieselbe Datenmenge — die Einstellung sparte
+         *    also nichts, kostete aber die halbe Ansicht.
+         *
+         * Die Einstellung bleibt als Schalter (0 = leer starten) und als
+         * Untergrenze für den Fall, dass jemand mehr will als der Ring hält.
+         */
+        prefillMin: livePrefillMin.value > 0
+            ? Math.max(livePrefillMin.value, histMin.value)
+            : 0,
+        onStatus: (state, detail) => setStatus(state, detail),
+        onFrame: () => {
+            if (liveFrozen.value) {
+                // Der Ring läuft weiter — irgendwann überschreibt er den
+                // eingefrorenen Ausschnitt. Vorher selbst auftauen. Mit
+                // Zeitversatz (zurückgezogene Ansicht) reicht der sichtbare
+                // Ausschnitt colOffset Spalten weiter zurück — die Marge
+                // schrumpft entsprechend, sonst zeigt eine lange eingefrorene,
+                // weit zurückgezogene Ansicht irgendwann überschriebene Daten.
+                framesSinceFreeze++
+                const sichtbar = renderer?.sichtbareSpalten(currentFrameMs()) ?? renderer.cols
+                if (framesSinceFreeze > feed.ring.cap - sichtbar - colOffset - 10) unfreeze()
+                return
+            }
+            const shifted = updateView()
+            dirtyHeat = true
+            if (shifted) renderer?.recalcNorm(feed.ring, view, anchor())
+        },
+    })
+    await feed.start()
+}
+
+function stopFeed() {
+    feed?.stop()
+    feed = null
+}
+
+function unfreeze() {
+    liveFrozen.value = false
+    frozenHead = null
+    framesSinceFreeze = 0
+    colOffset = 0
+    panMs.value = 0
+    updateView()
+    dirtyHeat = true
+}
+
+// ── Interaktion ─────────────────────────────────────────────
+
+/**
+ * Bedient wird mit Zeiger-Ereignissen statt Maus-Ereignissen: dieselbe Logik
+ * trägt Maus, Stift und Finger. Auf dem Handy gibt es kein Hover und kein
+ * Mausrad — dort ersetzen ein Finger (Schieben + Fadenkreuz), zwei Finger
+ * (Zoom) und Doppeltippen (Auto-Achse) die Maus.
+ *
+ * Der eine Finger bedient zwei Achsen: hoch/runter verschiebt wie bisher die
+ * Preisachse, links/rechts (nur live, nicht in der Wiedergabe — die hat ihre
+ * eigene Scrub-Leiste) blättert in der bereits gepufferten Vergangenheit der
+ * Heatmap zurück. Welche Achse gemeint ist, entscheidet erst die Bewegung
+ * nach dem Ansetzen (grösserer Ausschlag gewinnt), nicht der Startpunkt.
+ */
+const zeiger = new Map()   // pointerId → {x, y} in Bildschirmkoordinaten
+let pinch = null           // { dist, index } beim Ansetzen des zweiten Fingers
+let letzterTipp = 0
+
+const fingerAbstand = () => {
+    const [a, b] = [...zeiger.values()]
+    return Math.hypot(a.x - b.x, a.y - b.y)
+}
+
+const viewPctIndex = () => {
+    const index = VIEW_PCT_OPTIONS.indexOf(liveViewPct.value)
+    if (index >= 0) return index
+    // Gespeicherte Werte oberhalb der grössten Stufe (z.B. das frühere „2 %")
+    // fallen auf die letzte Stufe statt auf -1.
+    const naechster = VIEW_PCT_OPTIONS.findIndex(v => v >= liveViewPct.value)
+    return naechster >= 0 ? naechster : VIEW_PCT_OPTIONS.length - 1
+}
+
+function setViewPctIndex(index) {
+    const next = Math.max(0, Math.min(VIEW_PCT_OPTIONS.length - 1, index))
+    liveViewPct.value = VIEW_PCT_OPTIONS[next]
+}
+
+function onPointerMove(event) {
+    if (!wrapEl.value) return
+    if (zeiger.has(event.pointerId)) zeiger.set(event.pointerId, { x: event.clientX, y: event.clientY })
+
+    // Zwei Finger: Auseinanderziehen holt das Preisband enger heran
+    if (pinch && zeiger.size >= 2) {
+        const ratio = fingerAbstand() / pinch.dist
+        if (ratio > 0) setViewPctIndex(pinch.index - Math.round(Math.log2(ratio) * 2))
+        return
+    }
+
+    // getBoundingClientRect statt offsetX: bleibt bei Transformationen korrekt
+    const rect = wrapEl.value.getBoundingClientRect()
+    const x = event.clientX - rect.left
+    const y = event.clientY - rect.top
+
+    // currentRing() statt feed: in der Wiedergabe gibt es keinen Feed, geschoben
+    // werden darf dort trotzdem
+    if (drag && currentRing() && view && renderer) {
+        // Erst ab ein paar Pixeln wird aus dem Antippen ein Schieben — sonst
+        // schaltet schon ein Tipp aufs Fadenkreuz die Auto-Achse ab.
+        if (!drag.aktiv) {
+            const dx = x - drag.x
+            const dy = y - drag.y
+            if (Math.max(Math.abs(dx), Math.abs(dy)) < 4) { cursor = { x, y }; dirtyUi = true; return }
+            drag.aktiv = true
+            drag.axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
+            if (drag.axis === 'y') {
+                // Ziehen heisst: der Nutzer will selbst bestimmen, wo die Achse steht
+                if (liveAutoFollow.value) liveAutoFollow.value = false
+            }
+            /*
+             * Früher wurde hier pauschal eingefroren, sobald die Achse 'x' war.
+             * Das ist nur für das ZURÜCKBLÄTTERN richtig — beim Platzschaffen
+             * fürs aktuelle Buch wäre es falsch: Dort will man ja gerade
+             * zusehen, wie sich die Wände verschieben. Das Einfrieren passiert
+             * jetzt unten, wenn `colOffset` tatsächlich über null geht.
+             */
+        }
+        if (drag.axis === 'x') {
+            if (isReplay()) return
+            /*
+             * Der Zug wird von rechts nach links auf eine durchgehende Achse
+             * gelegt: Erst wird das freie Feld aufgebraucht, dann beginnt das
+             * Zurückblättern. So fühlt sich das Ziehen wie EINE Bewegung an,
+             * obwohl dahinter zwei verschiedene Grössen stehen.
+             */
+            /*
+             * EINE Achse für zwei Grössen, Vorzeichen ist hier alles:
+             *   nach RECHTS ziehen (dx > 0) → in der Historie zurückblättern
+             *   nach LINKS ziehen  (dx < 0) → Platz fürs aktuelle Buch schaffen
+             * Das entspricht der Leserichtung: Die Vergangenheit liegt links,
+             * man holt sie sich nach rechts ins Bild; das freie Feld gehört
+             * rechts hin, also schiebt man die Historie nach links weg.
+             */
+            /*
+             * Gerechnet wird in PIXELN, nicht in Ringspalten. Bei gefalteter
+             * Zeitachse sind das zwei verschiedene Grössen — vorher waren sie
+             * per Zufall gleich (eine Spalte = ein Pixel), und ein Zug hätte
+             * sich sonst um genau den Faltungsfaktor zu langsam angefühlt.
+             * `zukunftCols` ist ohnehin eine Pixelbreite.
+             */
+            const k = proPixel()
+            const roh = drag.colOffset0 / k - drag.zukunft0 + Math.round(x - drag.x)
+            if (roh >= 0) {
+                colOffset = Math.min(maxColOffset(), Math.round(roh * k))
+                zukunftCols = 0
+                // Erst hier einfrieren: sonst rutscht der Ausschnitt unter dem
+                // Finger weg, weil der Live-Rand weiterläuft.
+                if (colOffset > 0 && !isReplay() && !liveFrozen.value) liveFrozen.value = true
+            } else {
+                colOffset = 0
+                zukunftCols = Math.round(-roh)
+            }
+            renderer?.setZukunft(zukunftCols)
+            panMs.value = colOffset * currentFrameMs()
+            dirtyHeat = true
+            return
+        }
+        const rowsView = view.hi - view.lo
+        const rowH = renderer.plotH / rowsView
+        const shift = Math.round((y - drag.y) / rowH)
+        view = { lo: drag.lo + shift, hi: drag.hi + shift }
+        dirtyHeat = true
+        return
+    }
+    cursor = { x, y }
+    dirtyUi = true
+}
+
+function onPointerDown(event) {
+    if (event.pointerType === 'mouse' && event.button !== 0) return
+    zeiger.set(event.pointerId, { x: event.clientX, y: event.clientY })
+    // Zeiger einfangen, damit Schieben auch ausserhalb der Fläche weiterläuft
+    try { wrapEl.value?.setPointerCapture(event.pointerId) } catch { /* egal */ }
+
+    if (zeiger.size === 2) {
+        drag = null
+        pinch = { dist: fingerAbstand(), index: viewPctIndex() }
+        return
+    }
+    if (!view) return
+    const rect = wrapEl.value.getBoundingClientRect()
+    drag = {
+        y: event.clientY - rect.top, lo: view.lo, hi: view.hi,
+        x: event.clientX - rect.left, colOffset0: colOffset, zukunft0: zukunftCols,
+        aktiv: false, axis: null,
+    }
+    // Ohne Hover braucht der Finger sofort ein Fadenkreuz
+    cursor = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+    dirtyUi = true
+}
+
+function onPointerUp(event) {
+    if (event?.pointerId !== undefined) zeiger.delete(event.pointerId)
+    else zeiger.clear()
+    if (zeiger.size < 2) pinch = null
+
+    // Doppeltippen ersetzt den Doppelklick — der wird auf Touch nicht überall
+    // erzeugt, und ohne ihn käme man aus der festen Preisachse nicht heraus.
+    if (event?.pointerType && event.pointerType !== 'mouse' && drag && !drag.aktiv) {
+        const jetzt = Date.now()
+        if (jetzt - letzterTipp < 320) { onDoubleClick(); letzterTipp = 0 }
+        else letzterTipp = jetzt
+    }
+    drag = null
+}
+
+function onPointerLeave(event) {
+    // Beim Loslassen eines Fingers meldet der Browser ebenfalls „leave" —
+    // dann ist der Zustand schon in onPointerUp aufgeräumt.
+    if (event?.pointerType === 'mouse') drag = null
+    cursor = null
+    dirtyUi = true
+}
+
+/**
+ * Zeitspannen fürs Rad — ohne „nativ".
+ *
+ * „nativ" hat keine feste Länge (sie hängt an der Fensterbreite) und liesse
+ * sich deshalb nicht in eine Reihenfolge einsortieren, durch die man stufenweise
+ * dreht. Über die Auswahlliste bleibt es erreichbar.
+ */
+const spannenStufen = () => spannenOptionen(liveHistoryMin.value).filter(m => m > 0)
+
+
+function spanneIndex() {
+    const stufen = spannenStufen()
+    const i = stufen.indexOf(liveSpanneMin.value)
+    if (i >= 0) return i
+    // Bei „nativ" dort einsteigen, wo die tatsächlich sichtbare Spanne liegt —
+    // sonst springt die erste Radbewegung von 6 Minuten auf 1 oder auf 30.
+    const jetzt = renderer ? (renderer.histCols * currentFrameMs()) / 60000 : 0
+    const nah = stufen.findIndex(m => m >= jetzt)
+    return nah >= 0 ? nah : stufen.length - 1
+}
+
+function setSpanneIndex(next) {
+    const stufen = spannenStufen()
+    if (!stufen.length) return
+    liveSpanneMin.value = stufen[Math.max(0, Math.min(stufen.length - 1, next))]
+}
+
+/**
+ * Das Rad bedient beide Achsen — welche, entscheidet der Ort des Zeigers.
+ *
+ * Unter dem Plot liegen Zeitachse und Volumenspuren, also ist dort die ZEIT
+ * gemeint; überall sonst der Preis, wie bisher. Zusätzlich Shift als
+ * Abkürzung, damit man die Hand nicht bewegen muss — dieselbe Zuordnung wie
+ * in gängigen Chartprogrammen.
+ *
+ * In der Wiedergabe bleibt die Zeitachse in Ruhe: dort faltet der Server, und
+ * die Spanne kommt aus der Scrub-Leiste.
+ */
+function onWheel(event) {
+    event.preventDefault()
+    const runter = event.deltaY > 0
+    const rect = wrapEl.value?.getBoundingClientRect()
+    const y = rect ? event.clientY - rect.top : 0
+    const zeitachse = renderer && y > renderer.plotH
+    if (!isReplay() && (event.shiftKey || zeitachse)) {
+        setSpanneIndex(spanneIndex() + (runter ? 1 : -1))
+        return
+    }
+    setViewPctIndex(viewPctIndex() + (runter ? 1 : -1))
+}
+
+function onDoubleClick() {
+    liveAutoFollow.value = true
+    if (liveFrozen.value) unfreeze()
+    colOffset = 0
+    // Doppelklick ist die Geste für „alles auf Anfang" — dazu gehört das freie
+    // Feld rechts. Beim blossen Auftauen bleibt es dagegen stehen: Es ist eine
+    // Ansichtseinstellung wie eine Zoomstufe, kein Zeitversatz.
+    zukunftCols = 0
+    renderer?.setZukunft(0)
+    panMs.value = 0
+    updateView(true)
+    dirtyHeat = true
+}
+
+// ── Lebenszyklus ────────────────────────────────────────────
+
+onMounted(async () => {
+    renderer = new HeatmapRenderer({ heat: heatEl.value, overlay: overlayEl.value, ui: uiEl.value })
+    renderer.setRamp(liveRamp.value)
+    renderer.setSpanne(spanneMs())
+    renderer.setPreisFaltung(livePreisFaltung.value)
+    renderer.setColorScale(liveColorMode.value, liveColorRef.value)
+    renderer.setThreshold(liveThreshold.value)
+    renderer.setSaturationMult(liveSaettigung.value)
+    renderer.setDotStep(liveDotStep.value)
+    renderer.setLabels(canvasLabels())
+    renderer.setProfileWidth(liveProfileW.value)
+    renderer.setBuchWidth(liveBuchW.value)
+    renderer.setBuchVisible(liveShowBuch.value && !isReplay())
+    renderer.setVolumeBarsVisible(liveShowVolumeBars.value)
+    renderer.setDeltaVisible(liveShowDelta.value)
+    renderer.setAbsorptionVisible(liveShowAbsorption.value)
+    renderer.setProfileVisible(profilAktiv())
+    await nextTick()
+    applySize()
+
+    ro = new ResizeObserver(() => {
+        // Während des Ziehens feuert der Observer sehr oft — die Reallokation
+        // des Offscreen-Canvas deshalb entprellen.
+        clearTimeout(resizeTimer)
+        resizeTimer = setTimeout(applySize, 100)
+    })
+    ro.observe(wrapEl.value)
+
+    fremdTimer = setInterval(ladeFremdbuecher, 5000)
+    ladeFremdbuecher()
+
+    normTimer = setInterval(() => {
+        const ring = currentRing()
+        if (!ring || !view || !renderer) return
+        renderer?.recalcNorm(ring, view, anchor())
+        // Vorschlagswert für „Auto-Wert übernehmen" in den Einstellungen
+        liveAutoRefValue.value = renderer.currentRef
+        // Faltungsfaktor melden, damit die Einstellungen die Zeit je Blase
+        // ausrechnen können — sie kennen die Plotbreite nicht.
+        liveProPixel.value = renderer.spaltenProPixel(currentFrameMs())
+        liveBucketSize.value = ring.bucketSize || 0
+        liveAbdeckungMin.value = renderer.abdeckungMs(currentFrameMs()) / 60000
+        // Orderbuch-Tiefe wird nicht aufgezeichnet — in der Wiedergabe bleibt
+        // die Anzeige deshalb leer statt einen alten Stand vorzutäuschen.
+        bookImbalance.value = isReplay() ? null : (feed?.book?.topImbalance() ?? null)
+    }, 1000)
+
+    window.addEventListener('pointerup', onPointerUp)
+    loop()
+    await (isReplay() ? startReplay() : startFeed())
+})
+
+onBeforeUnmount(() => {
+    cancelAnimationFrame(raf)
+    raf = null
+    ro?.disconnect()
+    ro = null
+    clearTimeout(resizeTimer)
+    clearInterval(normTimer)
+    clearInterval(fremdTimer)
+    fremdTimer = null
+    fremdBuecher = null
+    window.removeEventListener('pointerup', onPointerUp)
+    stopFeed()
+    renderer = null
+    view = null
+})
+
+watch([liveSymbol, liveMarket, liveFrameMs, histMin], () => {
+    if (!isReplay()) startFeed()
+})
+watch([liveMode, replayFrom, replayTo], () => {
+    renderer?.setProfileVisible(profilAktiv())
+    isReplay() ? startReplay() : startFeed()
+})
+// Fokus und Zoomstufe ändern das angefragte Fenster — die Auflösung entsteht
+// im Server, es muss also neu geladen werden.
+watch([replayFokus, replayZoom], () => { if (isReplay()) startReplay() })
+watch(replayPos, () => {
+    syncReplayCount()
+    updateView()
+    updateReplayLabel()
+    dirtyHeat = true
+})
+watch(liveRamp, (name) => { renderer?.setRamp(name); dirtyHeat = true })
+watch([liveColorMode, liveColorRef], ([mode, value]) => {
+    renderer?.setColorScale(mode, value)
+    dirtyHeat = true
+})
+watch(liveThreshold, (value) => { renderer?.setThreshold(value); dirtyHeat = true })
+watch(liveSaettigung, (value) => { renderer?.setSaturationMult(value); dirtyHeat = true })
+watch(liveShowBuch, (v) => { renderer?.setBuchVisible(v && !isReplay()); applySize(); dirtyHeat = true })
+watch(liveFremdBuch, (v) => {
+    if (v) ladeFremdbuecher()
+    else { fremdBuecher = null; dirtyOverlay = true }
+})
+watch(liveBuchW, (v) => { renderer?.setBuchWidth(v); applySize(); dirtyHeat = true })
+// Punkte liegen auf der Overlay-Ebene — die Heatmap muss dafür nicht neu
+watch(liveDotStep, (value) => { renderer?.setDotStep(value); dirtyOverlay = true })
+watch(locale, () => { renderer?.setLabels(canvasLabels()); dirtyOverlay = true })
+// Breite ändert die Plotbreite → Heatmap muss komplett neu
+watch(liveProfileW, (value) => { renderer?.setProfileWidth(value); dirtyHeat = true })
+// Säulen nehmen Höhe vom Chart → Heatmap muss neu
+watch(liveShowVolumeBars, (v) => { renderer?.setVolumeBarsVisible(v); dirtyHeat = true })
+// Delta-Spur nimmt ebenfalls Höhe vom Chart → Heatmap muss neu
+watch(liveShowDelta, (v) => { renderer?.setDeltaVisible(v); dirtyHeat = true })
+// Absorption ist reine Overlay-Zeichnung ohne Höhenänderung
+watch(liveShowAbsorption, (v) => { renderer?.setAbsorptionVisible(v); dirtyOverlay = true })
+watch(liveViewPct, () => { updateView(); dirtyHeat = true })
+watch(liveSpanneMin, () => { renderer?.setSpanne(spanneMs()); dirtyHeat = true })
+watch(livePreisFaltung, (n) => {
+    renderer?.setPreisFaltung(n)
+    // Der Bezugswert der Farbskala misst über die GRUPPEN — bei geänderter
+    // Faltung ist der alte um genau diesen Faktor daneben, also neu einrasten
+    // statt sekundenlang nachkriechen zu lassen.
+    if (view) renderer?.recalcNorm(currentRing(), view, anchor(), { sofort: true })
+    dirtyHeat = true
+})
+watch(liveShowProfile, () => {
+    // Die Spur ändert die Plotbreite → Heatmap muss komplett neu gezeichnet
+    // werden.
+    renderer?.setProfileVisible(profilAktiv())
+    dirtyHeat = true
+    // Bewusste Nutzeraktion im Replay: Breite exakt nachziehen. Die
+    // automatische Totzone in applySize (90 px) ignoriert die 74-px-Änderung
+    // der Spur absichtlich — hier will der Nutzer sie aber, sonst bleibt beim
+    // Ausblenden Leerfläche stehen. Schlüssel leeren, damit der Wächter den
+    // Neuladen-Lauf nicht als Duplikat verwirft.
+    if (isReplay()) { replaySchluessel = ''; startReplay() }
+})
+watch(liveShowLiquidations, () => { dirtyOverlay = true })
+watch(liveAutoFollow, (on) => { if (on) { updateView(true); dirtyHeat = true } })
+watch(liveFrozen, (frozen) => {
+    if (frozen) {
+        frozenHead = feed?.ring?.head ?? null
+        framesSinceFreeze = 0
+    } else {
+        frozenHead = null
+        framesSinceFreeze = 0
+        // Auch beim manuellen "Weiter"-Knopf (Liquidity.vue) und nicht nur
+        // über unfreeze() hier drin: der Zeitversatz muss immer mit dem
+        // Auftauen enden, egal woher es ausgelöst wurde.
+        colOffset = 0
+        panMs.value = 0
+        updateView()
+    }
+    dirtyHeat = true
+})
+</script>
+
+<template>
+    <div ref="wrapEl" class="heatWrap" @pointermove="onPointerMove" @pointerdown="onPointerDown"
+        @pointerup="onPointerUp" @pointercancel="onPointerUp" @pointerleave="onPointerLeave"
+        @wheel="onWheel" @dblclick="onDoubleClick"
+        :class="{ dragging: !!drag }">
+        <canvas ref="heatEl" class="layer layerHeat"></canvas>
+        <canvas ref="overlayEl" class="layer layerOverlay"></canvas>
+        <canvas ref="uiEl" class="layer layerUi"></canvas>
+
+        <div v-if="status !== 'live' && status !== 'replay'" class="heatBadge">
+            <span v-if="status === 'error'" class="text-danger">{{ statusDetail || 'Fehler' }}</span>
+            <span v-else-if="status === 'empty'" class="text-warning">
+                <i class="uil uil-info-circle me-1"></i>{{ statusDetail || 'Keine Aufzeichnung' }}
+            </span>
+            <span v-else>
+                <span class="spinner-border spinner-border-sm me-2"></span>
+                <span v-if="status === 'connecting'">Verbinde…</span>
+                <span v-else-if="status === 'syncing'">Synchronisiere Orderbuch…</span>
+                <span v-else-if="status === 'reconnecting'">Verbindung verloren — neuer Versuch…</span>
+                <span v-else-if="status === 'paused'">Pausiert (Tab im Hintergrund)</span>
+                <span v-else-if="status === 'loading'">Lade Aufzeichnung…</span>
+                <span v-else>Starte…</span>
+            </span>
+        </div>
+        <div v-if="liveFrozen" class="heatBadge frozen">
+            <i class="uil uil-pause me-1"></i>Eingefroren — Aufzeichnung läuft weiter
+            <span v-if="panLabel"> · vor {{ panLabel }} Min</span>
+        </div>
+        <div v-else-if="!liveAutoFollow" class="heatBadge manual">
+            <i class="uil uil-lock me-1"></i>Feste Preisachse — Doppelklick für Auto
+        </div>
+    </div>
+</template>
+
+<style scoped>
+.heatWrap {
+    position: absolute;
+    inset: 0;
+    cursor: crosshair;
+    /* Der Finger schiebt die Preisachse und zoomt — die Geste darf nicht
+       vorher als Seitenscroll oder Browser-Zoom abgefangen werden. */
+    touch-action: none;
+}
+
+.heatWrap.dragging {
+    cursor: grabbing;
+}
+
+.layer {
+    position: absolute;
+    inset: 0;
+    display: block;
+}
+
+.layerHeat { z-index: 1; }
+.layerOverlay { z-index: 2; }
+.layerUi { z-index: 3; }
+
+.heatBadge {
+    position: absolute;
+    top: 0.6rem;
+    left: 0.7rem;
+    z-index: 4;
+    font-size: 0.78rem;
+    color: var(--white-70);
+    background: rgba(0, 0, 0, 0.55);
+    border-radius: 999px;
+    padding: 0.2rem 0.7rem;
+    pointer-events: none;
+}
+
+.heatBadge.frozen {
+    color: #ffc107;
+}
+
+.heatBadge.manual {
+    color: var(--white-60);
+}
+</style>

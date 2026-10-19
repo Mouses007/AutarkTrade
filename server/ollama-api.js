@@ -1,0 +1,2393 @@
+import { getKnex } from './database.js'
+import { encrypt, decrypt } from './crypto.js'
+import { logWarn, logError } from './logger.js'
+import { isAllowedOllamaUrl, pruefeKiEndpunkt } from './ollama-url.js'
+import {
+    samplingFelder, aufwandFelder, basisUrl, GEMINI_STANDARDMODELL,
+    ANBIETER_REG, KEY_SPALTEN, KI_URL_SPALTEN,
+    keySpalte, istOpenAiKompatibel, kannBilder, standardModell,
+    anbieterBasis, chatEndpunkt,
+} from './ai-models.js'
+
+// Kreis-Import mit llm.js (llm.js holt sich hier den SSRF-Schutz) — unkritisch,
+// weil beide Seiten nur Funktionen zur Laufzeit aufrufen, nichts beim Laden.
+import {
+    istGuthabenFehler, merkeKiGuthaben, istVermerkVeraltet, loescheKiGuthabenVermerk,
+} from './llm.js'
+import { anbieterBereiche, nachrichtenAnbieter } from './ki-funktionen.js'
+import { merkeVerbrauch, verbrauchJeFunktion } from './ai-usage.js'
+import { PREISE, BILD_PREISE } from './ai-preise.js'
+import { aufgabenWahl } from './ai-task-config.js'
+
+const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
+
+/**
+ * Guthaben-Fehler im Routen-Catch vermerken.
+ *
+ * Der Anbieter wird über `waehleAnbieter` bestimmt und nicht mehr stur aus
+ * `aiProvider` gelesen: Beide Aufrufer — der Bericht und der Coach-Chat —
+ * arbeiten mit der Rolle „Bericht", und wer dort einen eigenen Anbieter
+ * eingestellt hat, bekam den Vermerk bisher beim FALSCHEN. Der echte blieb
+ * scheinbar in Ordnung, während er der einzige war, der scheiterte.
+ */
+async function merkeGuthabenAusFehler(e) {
+    if (!istGuthabenFehler(e?.message)) return false
+    try {
+        const s = await getKnex()('settings')
+            .select('aiProvider', 'aiModel', 'aiBerichtProvider', 'aiBerichtModell')
+            .where('id', 1).first()
+        const { provider } = waehleAnbieter(s || {}, 'Bericht')
+        if (provider) await merkeKiGuthaben(provider, e.message)
+    } catch { /* Status ist kein Blocker */ }
+    return true
+}
+
+/**
+ * Zeitgrenze für Anbieter-Aufrufe. Grosszügig, weil ein ausführlicher Bericht
+ * mit Bildern und langem Kontext dauern darf — aber endlich, damit ein
+ * hängender Fremdhost die Anfrage nicht unbegrenzt blockiert.
+ */
+const ANFRAGE_TIMEOUT_MS = 180000
+
+// Der SSRF-Schutz liegt in `ollama-url.js` und wird hier nur weitergereicht:
+// bestehende Importeure (`llm.js`, `index.mjs`) sollen sich nicht ändern müssen.
+export { isAllowedOllamaUrl, assertAllowedOllamaUrl } from './ollama-url.js'
+
+/** Parse and validate a numeric ID from request params. Returns the integer or sends 400 and returns null. */
+function parseId(param, res, paramName = 'id') {
+    const id = parseInt(param, 10)
+    if (!Number.isInteger(id) || id < 1) {
+        res.status(400).json({ error: `Ungültige ${paramName}` })
+        return null
+    }
+    return id
+}
+
+// Prompt-Presets (muss mit Settings.vue synchron sein)
+const PROMPT_PRESETS = {
+    'Halte den Bericht kurz und prägnant. Maximal 3-4 Sätze pro Abschnitt. Fokussiere dich auf die wichtigsten Erkenntnisse.': 'Kurz & knapp',
+    'Erstelle einen ausgewogenen Trading-Bericht mit allen wichtigen Kennzahlen, Stärken, Schwächen und konkreten Verbesserungsvorschlägen. Nutze eine sachliche, professionelle Sprache.': 'Standard',
+    'Sei sehr direkt und kritisch. Beschönige nichts. Sprich Schwächen und Fehler klar an. Gib konkrete Verbesserungsvorschläge wie ein strenger Trading-Coach.': 'Strenger Coach',
+    'Lege besonderen Fokus auf die psychologischen Aspekte: Stress, Emotionen, Disziplin, Overtrading. Analysiere Verhaltensmuster und emotionale Trigger.': 'Psychologie-Fokus',
+}
+
+/**
+ * Alle KI-Spalten in einem Rutsch.
+ *
+ * Vorher pflegte jede der sechs Routen ihre eigene `select`-Liste — wer einen
+ * Anbieter ergänzte, vergaß zuverlässig eine davon, und der Schlüssel war dann
+ * still leer. Eine Obermenge zu lesen kostet nichts: es ist dieselbe eine Zeile.
+ */
+const KI_SPALTEN = [
+    'aiProvider', 'aiModel', 'aiApiKey', 'aiTemperature', 'aiMaxTokens',
+    'aiOllamaUrl', 'aiScreenshots', 'aiReportPrompt', 'aiChatEnabled',
+    'aiBerichtProvider', 'aiBerichtModell', 'aiAgentProvider', 'aiAgentModell',
+    'aiStrategieProvider', 'aiStrategieModell',
+    // Fehlte bis 18.10.2026 — die Zeile „trade-analyse" der Aufgaben-Tabelle
+    // wurde darum nie gelesen, egal was dort stand.
+    'aiTaskProviders',
+    ...KEY_SPALTEN, ...KI_URL_SPALTEN,
+]
+
+/**
+ * Anbieter und Modell für eine bestimmte KI-Funktion.
+ *
+ * Jede Funktion darf ihren eigenen Anbieter haben; leer heisst „nimm den
+ * global eingestellten". Ein Modell ohne Anbieter zu übernehmen wäre falsch —
+ * `claude-sonnet-5` bei Perplexity gibt es nicht —, deshalb zählt das Modell
+ * nur, wenn auch ein eigener Anbieter dasteht.
+ *
+ * @param {object} settings  Zeile aus `settings` (mindestens KI_SPALTEN)
+ * @param {string} bereich   '' = global, sonst 'Bericht' | 'Agent' | 'Strategie'
+ */
+export function waehleAnbieter(settings, bereich = '') {
+    const eigen = bereich ? String(settings?.[`ai${bereich}Provider`] || '').trim() : ''
+    if (!eigen) {
+        return {
+            provider: settings?.aiProvider || 'ollama',
+            model: settings?.aiModel || '',
+        }
+    }
+    return {
+        provider: eigen,
+        model: String(settings?.[`ai${bereich}Modell`] || '').trim() || standardModell(eigen) || '',
+    }
+}
+
+/**
+ * Fehlertext eines Anbieters herausziehen.
+ *
+ * Jeder verpackt ihn anders: OpenAI `{error:{message}}`, xAI `{error:"…"}`,
+ * Mistral `{detail:"…"}`. Ohne diese Fallunterscheidung steht in der
+ * Oberfläche nur „Antwort 400" — und der Nutzer sucht den Fehler bei sich.
+ */
+function anbieterFehlertext(err) {
+    if (!err) return ''
+    if (typeof err.error === 'string') return err.error
+    if (err.error?.message) return err.error.message
+    if (typeof err.detail === 'string') return err.detail
+    if (Array.isArray(err.detail)) return err.detail.map((d) => d?.msg || '').filter(Boolean).join('; ')
+    return err.message || ''
+}
+
+// Hilfsfunktion: API-Key für den aktuellen Provider lesen (entschlüsselt)
+function getApiKeyForProvider(settings, provider) {
+    const col = keySpalte(provider)
+    if (col && settings[col]) {
+        return decrypt(settings[col])
+    }
+    // Der alte Sammelschlüssel `aiApiKey` enthielt einen OpenAI-Schlüssel und
+    // darf nur dort einspringen — sonst ginge er an fremde Hosts.
+    if (provider === 'openai' && settings.aiApiKey) return decrypt(settings.aiApiKey)
+    return ''
+}
+
+/** Basis-URL eines Anbieters aus den gespeicherten Einstellungen. */
+async function anbieterBasisAusDb(provider) {
+    try {
+        const row = await getKnex()('settings').select(KI_URL_SPALTEN).where('id', 1).first()
+        return anbieterBasis(provider, row || {})
+    } catch { return '' }
+}
+
+async function getOllamaUrl() {
+    try {
+        const knex = getKnex()
+        const settings = await knex('settings').select('aiOllamaUrl').where('id', 1).first()
+        return settings?.aiOllamaUrl || DEFAULT_OLLAMA_URL
+    } catch (e) {
+        logWarn('ollama-api', 'Could not load Ollama URL from settings, using default URL', e)
+        return DEFAULT_OLLAMA_URL
+    }
+}
+
+export function setupOllamaRoutes(app) {
+    // KI Status prüfen (basierend auf gespeichertem Provider)
+    app.get('/api/ai/status', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const settings = await knex('settings')
+                .select(KI_SPALTEN)
+                .where('id', 1).first()
+            const provider = settings?.aiProvider || 'ollama'
+            const model = settings?.aiModel || ''
+            const apiKey = getApiKeyForProvider(settings, provider)
+
+            if (provider === 'ollama') {
+                return await checkOllamaStatus(res, settings?.aiOllamaUrl, model)
+            } else if (provider === 'anthropic') {
+                return await checkAnthropicStatus(apiKey, res, model)
+            } else if (provider === 'gemini') {
+                return await checkGeminiStatus(apiKey, res, model)
+            } else if (istOpenAiKompatibel(provider)) {
+                // openai, mistral, xai, qwen, custom — und deepseek aus dem Altbestand
+                const basis = req.query.customUrl
+                    ? basisUrl(req.query.customUrl)
+                    : anbieterBasis(provider, settings)
+                return await checkOpenAiKompatibelStatus(apiKey, res, model, provider, basis)
+            }
+            res.json({ online: false, provider, model })
+        } catch (e) {
+            res.json({ online: false, provider: 'ollama', model: '' })
+        }
+    })
+
+    // Legacy Ollama status endpoint (für Abwärtskompatibilität + Modelle laden)
+    app.get('/api/ollama/status', async (req, res) => {
+        let url = req.query.url || await getOllamaUrl()
+        if (!isAllowedOllamaUrl(url)) {
+            return res.status(400).json({ error: 'Nur lokale/private Hosts erlaubt' })
+        }
+        await checkOllamaStatus(res, url)
+    })
+
+    // KI Verbindung testen
+    app.post('/api/ai/test', async (req, res) => {
+        let { provider, apiKey, model, ollamaUrl } = req.body
+
+        // Wenn Key maskiert ist (·), den gespeicherten Key aus DB verwenden
+        if (apiKey && apiKey.includes('•')) {
+            try {
+                const knex = getKnex()
+                const settings = await knex('settings')
+                    .select(KI_SPALTEN)
+                    .where('id', 1).first()
+                apiKey = getApiKeyForProvider(settings, provider)
+            } catch (e) {
+                apiKey = ''
+            }
+        }
+
+        try {
+            if (provider === 'ollama') {
+                const url = ollamaUrl || await getOllamaUrl()
+                if (!isAllowedOllamaUrl(url)) {
+                    return res.json({ success: false, message: 'Nur lokale/private Hosts erlaubt für Ollama-URL' })
+                }
+                const response = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(5000) })
+                if (response.ok) {
+                    return res.json({ success: true, message: 'Ollama ist erreichbar' })
+                }
+                return res.json({ success: false, message: 'Ollama nicht erreichbar unter ' + url })
+            } else if (provider === 'anthropic') {
+                if (!apiKey) return res.json({ success: false, message: 'API-Key fehlt' })
+                const response = await fetch('https://api.anthropic.com/v1/messages', {
+                    method: 'POST',
+                    headers: {
+                        'x-api-key': apiKey,
+                        'anthropic-version': '2023-06-01',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: model || standardModell('anthropic'),
+                        // 10 reichte, solange Modelle nicht vor der Antwort
+                        // dachten; bei den 5.5ern frisst das Denken den Deckel.
+                        // Für den Verbindungstest egal (200 bleibt 200), aber
+                        // so kommt auch Text zurück.
+                        max_tokens: 64,
+                        ...aufwandFelder(model || standardModell('anthropic'), 64, 'low'),
+                        messages: [{ role: 'user', content: 'Hi' }]
+                    }),
+                    signal: AbortSignal.timeout(10000)
+                })
+                if (response.ok) {
+                    return res.json({ success: true, message: 'Anthropic Verbindung erfolgreich' })
+                }
+                const err = await response.json().catch(() => ({}))
+                return res.json({ success: false, message: err.error?.message || 'Anthropic Fehler' })
+            } else if (provider === 'gemini') {
+                if (!apiKey) return res.json({ success: false, message: 'API-Key fehlt' })
+                const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+                    headers: { 'x-goog-api-key': apiKey },
+                    signal: AbortSignal.timeout(10000)
+                })
+                if (response.ok) {
+                    return res.json({ success: true, message: 'Google Gemini Verbindung erfolgreich' })
+                }
+                const err = await response.json().catch(() => ({}))
+                return res.json({ success: false, message: err.error?.message || 'Gemini Fehler' })
+            } else if (istOpenAiKompatibel(provider)) {
+                // openai, mistral, xai, qwen, perplexity, custom
+                const name = ANBIETER_REG[provider]?.name || provider
+                // `basisUrl` aus dem Rumpf erlaubt den Test einer noch nicht
+                // gespeicherten Adresse (Qwen-Arbeitsbereich, eigener Anbieter).
+                const roh = req.body.basisUrl || req.body.customUrl
+                const basis = roh ? basisUrl(roh) : await anbieterBasisAusDb(provider)
+                if (!basis) return res.json({ success: false, message: 'Basis-URL fehlt oder ist ungültig' })
+                if (!apiKey) return res.json({ success: false, message: 'API-Key fehlt' })
+
+                /**
+                 * Zwei Prüfwege, weil „OpenAI-kompatibel" nur den Chat meint.
+                 *
+                 * Der Katalog (`/models`) ist der billigere Test — er kostet
+                 * nichts. Aber nicht jeder Anbieter hat einen: Perplexity
+                 * antwortet dort mit 404 (sein Katalog liegt unter `/v1/models`,
+                 * der Chat dagegen unter `/chat/completions` — eine gemeinsame
+                 * Basis-URL gibt es also nicht), Qwen führt gar keinen. Der Test
+                 * meldete deshalb „Antwort 404" bei völlig gesundem Schlüssel
+                 * und schickte die Fehlersuche zum Schlüssel statt zum Pfad.
+                 *
+                 * Wo `katalog: false` steht, wird stattdessen der Chat selbst
+                 * angeklopft — mit dem eingestellten Modell, denn ein Tippfehler
+                 * darin soll hier auffallen und nicht erst beim ersten Bericht.
+                 * Das kostet den Bruchteil eines Rappens und passiert nur auf
+                 * ausdrücklichen Knopfdruck. Ein 404 aus dem Katalog fällt
+                 * ebenfalls auf diesen Weg zurück: verschwindet er still, soll
+                 * der Test trotzdem die Wahrheit sagen.
+                 */
+                const kannKatalog = ANBIETER_REG[provider]?.katalog !== false
+                let response = kannKatalog
+                    ? await fetch(`${basis}/models`, {
+                        headers: { Authorization: `Bearer ${apiKey}` },
+                        signal: AbortSignal.timeout(15000),
+                    })
+                    : null
+
+                if (!response || response.status === 404) {
+                    response = await fetch(`${basis}/chat/completions`, {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            // 16 statt 1: Perplexity lehnt kleinere Werte mit
+                            // „max_tokens must be at least 16" ab — und ein
+                            // Test, der an der eigenen Sparsamkeit scheitert,
+                            // meldet einen Fehler, den es gar nicht gibt.
+                            model: model || standardModell(provider),
+                            max_tokens: 16,
+                            messages: [{ role: 'user', content: 'Hi' }],
+                        }),
+                        signal: AbortSignal.timeout(20000),
+                    })
+                }
+
+                if (response.ok) {
+                    return res.json({ success: true, message: `${name} Verbindung erfolgreich` })
+                }
+                const err = await response.json().catch(() => ({}))
+                const text = anbieterFehlertext(err)
+                return res.json({ success: false, message: text || `${name}: Antwort ${response.status}` })
+            }
+            res.json({ success: false, message: 'Unbekannter Anbieter' })
+        } catch (e) {
+            res.json({ success: false, message: 'Verbindungstest fehlgeschlagen' })
+        }
+    })
+
+    // Bericht generieren (alle Provider)
+    app.post('/api/ai/report', async (req, res) => {
+        const { startDate, endDate, broker, promptOverride } = req.body
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'startDate und endDate erforderlich' })
+        }
+
+        try {
+            const knex = getKnex()
+            const settings = await knex('settings')
+                .select(KI_SPALTEN)
+                .where('id', 1).first()
+            // Eigener Anbieter für Berichte/Bewertungen; leer = global
+            const { provider, model } = waehleAnbieter(settings, 'Bericht')
+            const temperature = settings?.aiTemperature ?? 0.7
+            const maxTokens = settings?.aiMaxTokens || 1500
+            const ollamaUrl = settings?.aiOllamaUrl || DEFAULT_OLLAMA_URL
+            const screenshotsEnabled = settings?.aiScreenshots === 1
+            // promptOverride from quick-selection takes priority over DB setting
+            const customPrompt = promptOverride || settings?.aiReportPrompt || ''
+            const apiKey = getApiKeyForProvider(settings, provider)
+
+            const reportData = await collectReportData(knex, startDate, endDate, broker || null)
+
+            if (reportData.tradeCount === 0) {
+                return res.json({ report: 'Keine Trades im gewählten Zeitraum gefunden.', provider })
+            }
+
+            // Screenshots sammeln (nur für Online-Provider wenn aktiviert)
+            let screenshots = []
+            if (screenshotsEnabled && provider !== 'ollama' && kannBilder(provider)) {
+                screenshots = await collectScreenshots(knex, startDate, endDate, 4)
+                reportData.screenshots = screenshots // Für Prompt-Hinweis
+            }
+
+            const prompt = buildPrompt(reportData, customPrompt)
+            let report = ''
+            let tokenUsage = null
+
+            if (provider === 'ollama') {
+                const result = await generateOllama(prompt, model || 'llama3.2:latest', temperature, maxTokens, ollamaUrl)
+                report = result.text
+                tokenUsage = result.usage
+            } else if (provider === 'anthropic') {
+                const result = await generateAnthropic(prompt, apiKey, model || standardModell('anthropic'), temperature, maxTokens, screenshots)
+                report = result.text
+                tokenUsage = result.usage
+            } else if (provider === 'gemini') {
+                const result = await generateGemini(prompt, apiKey, model || GEMINI_STANDARDMODELL, temperature, maxTokens, screenshots)
+                report = result.text
+                tokenUsage = result.usage
+            } else if (istOpenAiKompatibel(provider)) {
+                // openai, mistral, xai, qwen, custom — und deepseek aus dem Altbestand
+                const endpunkt = chatEndpunkt(provider, settings)
+                if (!endpunkt) return res.status(400).json({ error: `Keine Basis-URL für ${provider}` })
+                const result = await generateOpenAI(prompt, apiKey, model || standardModell(provider),
+                    temperature, maxTokens, screenshots, endpunkt)
+                report = result.text
+                tokenUsage = result.usage
+            } else {
+                return res.status(400).json({ error: 'Unbekannter KI-Anbieter: ' + provider })
+            }
+
+            // Auto-save: Bericht direkt serverseitig speichern (damit Tab-Wechsel kein Problem ist)
+            const label = req.body.label || ''
+            const promptPreset = PROMPT_PRESETS[customPrompt] || (customPrompt ? 'Eigener Prompt' : 'Standard')
+            let savedId = null
+            try {
+                const [inserted] = await knex('ai_reports').insert({
+                    label,
+                    startDate: startDate || 0,
+                    endDate: endDate || 0,
+                    provider: provider || '',
+                    model: model || provider,
+                    report,
+                    reportData: JSON.stringify(reportData || {}),
+                    promptTokens: tokenUsage?.promptTokens || 0,
+                    completionTokens: tokenUsage?.completionTokens || 0,
+                    totalTokens: tokenUsage?.totalTokens || 0,
+                    promptPreset,
+                    broker: broker || ''
+                }).returning('id')
+                savedId = typeof inserted === 'object' ? inserted.id : inserted
+            } catch (saveErr) {
+                console.error('Auto-save report error:', saveErr)
+            }
+
+            // Immer verbucht — auch wenn das Speichern oben scheiterte: bezahlt
+            // ist der Lauf so oder so.
+            merkeVerbrauch({
+                funktion: 'bericht', ausloeser: 'manuell',
+                provider, modell: model || provider,
+                usage: tokenUsage, bezug: { typ: 'bericht', id: savedId },
+            })
+
+            res.json({ report, provider, model: model || provider, data: reportData, tokenUsage, savedId })
+        } catch (e) {
+            console.error('AI report error:', e)
+            const guthabenLeer = await merkeGuthabenAusFehler(e)
+            res.status(500).json({
+                error: guthabenLeer
+                    ? 'Bericht-Generierung fehlgeschlagen: das Guthaben des KI-Anbieters ist aufgebraucht.'
+                    : 'Bericht-Generierung fehlgeschlagen',
+            })
+        }
+    })
+
+    // Legacy report endpoint
+    app.post('/api/ollama/report', async (req, res) => {
+        const { startDate, endDate, model, broker } = req.body
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'startDate und endDate erforderlich' })
+        }
+
+        try {
+            const knex = getKnex()
+            const reportData = await collectReportData(knex, startDate, endDate, broker || null)
+
+            if (reportData.tradeCount === 0) {
+                return res.json({ report: 'Keine Trades im gewählten Zeitraum gefunden.' })
+            }
+
+            const prompt = buildPrompt(reportData)
+            const ollamaModel = model || 'llama3.2:latest'
+            const result = await generateOllama(prompt, ollamaModel, 0.7, 1500, await getOllamaUrl())
+            res.json({ report: result.text, model: ollamaModel, data: reportData })
+        } catch (e) {
+            console.error('Ollama report error:', e)
+            res.status(500).json({ error: 'Bericht-Generierung fehlgeschlagen' })
+        }
+    })
+
+    // --- Per-Trade KI-Bewertung ---
+    app.post('/api/ai/trade-review', async (req, res) => {
+        const { tradeId, dateUnix, tradeData } = req.body
+        if (!tradeId || !tradeData) {
+            return res.status(400).json({ error: 'tradeId und tradeData erforderlich' })
+        }
+
+        try {
+            const knex = getKnex()
+
+            // KI-Settings + Trade-Metadaten parallel laden (4 unabhängige Queries)
+            const [settings, noteRecord, satRecord, tagRecord] = await Promise.all([
+                knex('settings')
+                    .select(KI_SPALTEN)
+                    .where('id', 1).first(),
+                knex('notes').where('tradeId', tradeId).first(),
+                knex('satisfactions').where('tradeId', tradeId).first(),
+                knex('tags').where('tradeId', tradeId).first(),
+            ])
+
+            // Aufgaben-Zeile „trade-analyse" → Berichts-Anbieter → global
+            let { provider, model } = aufgabenWahl(settings.aiTaskProviders, 'trade-analyse') || {}
+
+            if (!provider) {
+                // Fallback zu globalem Anbieter (für Berichte ist meist gute Wahl)
+                ({ provider, model } = waehleAnbieter(settings, 'Bericht'))
+            }
+            const temperature = settings?.aiTemperature ?? 0.7
+            const maxTokens = settings?.aiMaxTokens || 1500
+            const ollamaUrl = settings?.aiOllamaUrl || DEFAULT_OLLAMA_URL
+            const apiKey = getApiKeyForProvider(settings, provider)
+
+            const userNote = noteRecord?.note || ''
+            const entryNote = noteRecord?.entryNote || ''
+            const closingNote = noteRecord?.closingNote || ''
+            const feelings = noteRecord?.feelings || ''
+            const playbook = noteRecord?.playbook || ''
+
+            const satisfaction = satRecord ? (satRecord.satisfaction === 1 ? 'Zufrieden' : satRecord.satisfaction === 0 ? 'Unzufrieden' : 'Neutral') : 'Nicht bewertet'
+
+            let tradeTags = ''
+            if (tagRecord?.tags) {
+                try {
+                    const parsed = JSON.parse(tagRecord.tags)
+                    tradeTags = parsed.map(t => t.name || t).join(', ')
+                } catch (e) { /* ignore */ }
+            }
+
+            // Screenshot laden (falls vorhanden) — mehrere Suchstrategien
+            let screenshotData = []
+            const symbol = tradeData.symbol || ''
+            const tradeSide = tradeData.side === 'B' ? 'Long' : 'Short'
+            const tradeSideShort = tradeData.side === 'B' ? 'B' : 'S'
+
+            // Strategie 1: Direkt per name = tradeId
+            let screenshotRecord = await knex('screenshots').where('name', tradeId).first()
+
+            // Strategie 2: Per dateUnixDay (gleicher Tag)
+            if (!screenshotRecord && dateUnix) {
+                screenshotRecord = await knex('screenshots')
+                    .where('dateUnixDay', dateUnix)
+                    .andWhere('symbol', symbol)
+                    .first()
+            }
+
+            // Strategie 3: Per name-Pattern "t{dateUnix}_{symbol}_{side}"
+            if (!screenshotRecord && dateUnix && symbol) {
+                const namePattern = 't' + dateUnix + '_' + symbol + '_' + tradeSideShort
+                screenshotRecord = await knex('screenshots').where('name', namePattern).first()
+            }
+
+            // Strategie 4: Nur per dateUnixDay (irgendein Screenshot vom gleichen Tag)
+            if (!screenshotRecord && dateUnix) {
+                screenshotRecord = await knex('screenshots').where('dateUnixDay', dateUnix).first()
+            }
+            if (screenshotRecord) {
+                const base64 = screenshotRecord.annotatedBase64 || screenshotRecord.originalBase64
+                if (base64 && base64.length > 100) {
+                    const cleanBase64 = base64.replace(/^data:image\/[^;]+;base64,/, '')
+                    const mimeMatch = base64.match(/^data:(image\/[^;]+);base64,/)
+                    const mimeType = mimeMatch ? mimeMatch[1] : 'image/png'
+                    screenshotData.push({
+                        symbol: screenshotRecord.symbol || '',
+                        side: screenshotRecord.side || '',
+                        timeframe: '',
+                        base64: cleanBase64,
+                        mimeType
+                    })
+                }
+            }
+
+            const hasScreenshot = screenshotData.length > 0 && provider !== 'ollama' && kannBilder(provider)
+
+            // Trading-Metadaten laden (SL/TP, Fills, BE etc.)
+            let tradingMeta = null
+            if (noteRecord?.tradingMetadata) {
+                try {
+                    tradingMeta = typeof noteRecord.tradingMetadata === 'string'
+                        ? JSON.parse(noteRecord.tradingMetadata)
+                        : noteRecord.tradingMetadata
+                } catch (e) { /* ignore parse errors */ }
+            }
+
+            // Trade-Daten aufbereiten
+            const t = tradeData
+            const side = t.side === 'B' ? 'Long' : 'Short'
+            const pnl = t.netProceeds || 0
+            const pnlFormatted = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`
+            const volume = (t.buyQuantity || 0) + (t.sellQuantity || 0)
+            const tradeType = noteRecord?.tradeType || ''
+            const entryStress = noteRecord?.entryStressLevel || 0
+            const closingStress = noteRecord?.closingStressLevel || 0
+
+            // Prompt zusammenbauen
+            let reviewPrompt = `Du bist ein erfahrener Crypto-Trading-Coach. Analysiere diesen Trade und gib eine detaillierte, aber kompakte Bewertung.
+
+TRADE-DATEN:
+- Symbol: ${t.symbol || 'Unknown'}
+- Position: ${side}
+- Volumen: ${volume}
+- Einstiegspreis: ${t.entryPrice ? '$' + t.entryPrice.toFixed(4) : 'N/A'}
+- Ausstiegspreis: ${t.exitPrice ? '$' + t.exitPrice.toFixed(4) : 'N/A'}
+- PnL: ${pnlFormatted}
+- PnL/Vol: ${t.grossSharePL ? '$' + t.grossSharePL.toFixed(4) : 'N/A'}
+- Ergebnis: ${pnl >= 0 ? 'Gewinn' : 'Verlust'}
+- Selbstbewertung: ${satisfaction}`
+
+            // Trade-Typ
+            if (tradeType) {
+                reviewPrompt += `\n- Trade-Typ: ${tradeType}`
+            }
+
+            // Stress-Level
+            if (entryStress > 0 || closingStress > 0) {
+                reviewPrompt += `\n- Stress bei Eröffnung: ${entryStress}/10${closingStress > 0 ? `, bei Schließung: ${closingStress}/10` : ''}`
+            }
+
+            // Trading-Metadaten (SL/TP, Fills, Positionsgröße, BE)
+            if (tradingMeta) {
+                reviewPrompt += `\n\nRISIKOMANAGEMENT & POSITIONSDATEN:`
+
+                if (tradingMeta.margin && tradingMeta.leverage) {
+                    reviewPrompt += `\n- Marge: $${tradingMeta.margin.toFixed(2)} × ${tradingMeta.leverage}x Hebel = Positionsgröße $${tradingMeta.positionSize?.toFixed(2) || 'N/A'}`
+                }
+
+                if (tradingMeta.sl) {
+                    reviewPrompt += `\n- Stop-Loss: $${tradingMeta.sl}`
+                }
+                if (tradingMeta.tp) {
+                    reviewPrompt += `\n- Take-Profit: $${tradingMeta.tp}`
+                }
+                if (tradingMeta.breakeven) {
+                    reviewPrompt += `\n- Breakeven: $${tradingMeta.breakeven}`
+                }
+                if (tradingMeta.slAboveBreakeven !== undefined) {
+                    reviewPrompt += `\n- SL über Breakeven: ${tradingMeta.slAboveBreakeven ? 'Ja (abgesichert)' : 'Nein (in Verlustzone)'}`
+                }
+
+                // RRR berechnen
+                if (tradingMeta.sl && tradingMeta.tp && t.entryPrice) {
+                    const entry = t.entryPrice
+                    const sl = parseFloat(tradingMeta.sl)
+                    const tp = parseFloat(tradingMeta.tp)
+                    const riskDist = Math.abs(entry - sl)
+                    const rewardDist = Math.abs(entry - tp)
+                    if (riskDist > 0) {
+                        const rrr = (rewardDist / riskDist).toFixed(2)
+                        reviewPrompt += `\n- Risk/Reward Ratio (RRR): 1:${rrr}`
+                    }
+                }
+
+                // Fills (Nachkäufe, Teilschließungen)
+                if (tradingMeta.fills && tradingMeta.fills.length > 1) {
+                    const entries = tradingMeta.fills.filter(f => !f.reduceOnly)
+                    const closes = tradingMeta.fills.filter(f => f.reduceOnly)
+
+                    if (entries.length > 1) {
+                        reviewPrompt += `\n- Positionsaufbau: ${entries.length} Einstiege (Nachkäufe)`
+                        entries.forEach((f, i) => {
+                            reviewPrompt += `\n  ${i + 1}. ${f.qty} × $${f.price}`
+                        })
+                    }
+                    if (closes.length > 0) {
+                        reviewPrompt += `\n- Teilschließungen: ${closes.length}`
+                        closes.forEach((f, i) => {
+                            reviewPrompt += `\n  ${i + 1}. ${f.qty} × $${f.price}`
+                        })
+                    }
+                }
+
+                // SL/TP Verschiebungen (filter out post-close artifacts)
+                if (tradingMeta.tpslHistory && tradingMeta.tpslHistory.length > 0) {
+                    const lastFillTime = tradingMeta.fills?.length > 0
+                        ? Math.max(...tradingMeta.fills.map(f => parseInt(f.time || 0)))
+                        : 0
+                    const cutoff = lastFillTime ? lastFillTime + 60000 : Infinity
+                    const filteredTpsl = tradingMeta.tpslHistory.filter(h => h.time <= cutoff)
+                    reviewPrompt += `\n\nSL/TP PROTOKOLL (Verschiebungen):`
+                    filteredTpsl.forEach(h => {
+                        const timeStr = new Date(h.time).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                        if (h.action === 'set') {
+                            reviewPrompt += `\n- ${timeStr}: ${h.type} gesetzt auf $${h.newVal}`
+                        } else if (h.action === 'moved') {
+                            reviewPrompt += `\n- ${timeStr}: ${h.type} verschoben $${h.oldVal} → $${h.newVal}`
+                        } else if (h.action === 'triggered') {
+                            reviewPrompt += `\n- ${timeStr}: ${h.type} ausgelöst bei $${h.oldVal}`
+                        } else if (h.action === 'removed') {
+                            reviewPrompt += `\n- ${timeStr}: ${h.type} entfernt (war $${h.oldVal})`
+                        }
+                    })
+                }
+            }
+
+            if (tradeTags) {
+                reviewPrompt += `\n- Tags/Strategie: ${tradeTags}`
+            }
+            if (playbook) {
+                reviewPrompt += `\n- Playbook: ${playbook}`
+            }
+
+            // User-Notizen und Überlegungen einbeziehen
+            const userContext = [userNote, entryNote, closingNote].filter(Boolean).join('\n')
+            if (userContext) {
+                reviewPrompt += `\n\nNOTIZEN DES TRADERS (seine Überlegungen und Einschätzung):\n${userContext}`
+            }
+            if (feelings) {
+                reviewPrompt += `\n\nEmotionaler Zustand: ${feelings}`
+            }
+
+            if (hasScreenshot) {
+                reviewPrompt += `\n\nCHART-SCREENSHOT ANALYSE:
+Der beigefügte Screenshot zeigt den TradingView-Chart dieses Trades. Die SL/TP-Daten oben (RISIKOMANAGEMENT & POSITIONSDATEN + SL/TP PROTOKOLL) sind die primaere Quelle — der Chart dient zur visuellen Bestätigung und Chartanalyse.
+
+**Chart-Elemente erkennen:**
+- Kerzenmuster (Doji, Hammer, Engulfing etc.) am Entry/Exit
+- Trendlinien, Support/Resistance (horizontale Linien)
+- Gleitende Durchschnitte (gelbe/orange/weisse Linien = MAs)
+- Indikatoren: GUSS, LSOB, VRVP falls im Chart-Header sichtbar
+- Marktstruktur: Higher Highs/Lows, Lower Highs/Lows, Konsolidierung
+- Labels im Chart wie "GUSS Start", "GUSS Entry" = Indikator-Signale
+- Farbige Rechtecke koennen SL/TP-Zonen visuell markieren (Rot = SL, Gruen = TP)
+
+**Bewerte im Screenshot:**
+- War der Entry an einer sinnvollen Stelle (Support/Resistance, Trendwende, Indikator-Signal)?
+- Passt die SL/TP-Platzierung zur Chartstruktur (ueber/unter Support/Resistance)?
+- Gab es Warnsignale im Chart die gegen den Trade sprachen?`
+            }
+
+            reviewPrompt += `\n\nBewerte folgende Punkte:
+1. **Trade-Analyse**: War der Einstieg/Ausstieg gut gewaehlt? Passte die Positionsgroesse?${hasScreenshot ? ' Nutze den Chart zur Bewertung der Entry-Qualitaet (Marktstruktur, Indikatoren).' : ''}
+2. **Risikomanagement**: ${tradingMeta ? 'Bewerte SL/TP-Platzierung anhand der strukturierten Daten oben, RRR, Positionsgroesse relativ zur Marge, und ob der SL ueber Breakeven gezogen wurde. Waren die SL/TP-Verschiebungen im Protokoll sinnvoll?' : 'Wurde ein SL/TP gesetzt? War das Risiko kontrolliert?'}${hasScreenshot ? ' Prüfe im Chart ob SL/TP zur Marktstruktur passt.' : ''}
+3. **Positionsaufbau**: ${tradingMeta?.fills?.length > 1 ? 'Bewerte die Nachkaeufe und Teilschliessungen. War der Positionsaufbau sinnvoll? Wurde richtig skaliert?' : 'War der Einstieg in einem Schritt oder gestaffelt?'}
+4. **Ueberlegungen des Traders**: Waren die Gedanken/Ueberlegungen nachvollziehbar?
+5. **Fehler & Verbesserungen**: Was haette besser sein koennen?
+6. **Konkrete Tipps**: 1-2 spezifische Verbesserungsvorschlaege.
+7. **Gesamtnote**: Note von 1-10 (10 = perfekt).
+
+Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
+
+            const screenshots = hasScreenshot ? screenshotData : []
+
+            let result
+            if (provider === 'ollama') {
+                result = await generateOllama(reviewPrompt, model || 'llama3.2:latest', temperature, maxTokens, ollamaUrl)
+            } else if (provider === 'anthropic') {
+                result = await generateAnthropic(reviewPrompt, apiKey, model || standardModell('anthropic'), temperature, maxTokens, screenshots)
+            } else if (provider === 'gemini') {
+                result = await generateGemini(reviewPrompt, apiKey, model || GEMINI_STANDARDMODELL, temperature, maxTokens, screenshots)
+            } else if (istOpenAiKompatibel(provider)) {
+                const endpunkt = chatEndpunkt(provider, settings)
+                if (!endpunkt) return res.status(400).json({ error: `Keine Basis-URL für ${provider}` })
+                result = await generateOpenAI(reviewPrompt, apiKey, model || standardModell(provider),
+                    temperature, maxTokens, screenshots, endpunkt)
+            } else {
+                return res.status(400).json({ error: 'Unbekannter KI-Anbieter: ' + provider })
+            }
+
+            // Bewertung in notes speichern (upsert)
+            const tokenData = {
+                aiReview: result.text,
+                aiReviewProvider: provider,
+                aiReviewModel: model || provider,
+                aiReviewPromptTokens: result.usage?.promptTokens || 0,
+                aiReviewCompletionTokens: result.usage?.completionTokens || 0,
+                aiReviewTotalTokens: result.usage?.totalTokens || 0
+            }
+            if (noteRecord) {
+                await knex('notes').where('tradeId', tradeId).update({
+                    ...tokenData,
+                    updatedAt: knex.fn.now()
+                })
+            } else {
+                await knex('notes').insert({
+                    tradeId,
+                    dateUnix: dateUnix || 0,
+                    note: '',
+                    ...tokenData
+                })
+            }
+
+            merkeVerbrauch({
+                funktion: 'trade-analyse', ausloeser: 'manuell',
+                provider, modell: model || provider,
+                usage: result.usage, bezug: { typ: 'trade', id: tradeId },
+            })
+
+            res.json({
+                review: result.text,
+                provider,
+                model: model || provider,
+                tokenUsage: result.usage
+            })
+        } catch (e) {
+            console.error('Trade review error:', e)
+            res.status(500).json({ error: 'Trade-Bewertung fehlgeschlagen' })
+        }
+    })
+
+    // --- Trade-Review laden ---
+    app.get('/api/ai/trade-review/:tradeId', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const note = await knex('notes').where('tradeId', req.params.tradeId).first()
+            if (note?.aiReview) {
+                res.json({
+                    review: note.aiReview,
+                    provider: note.aiReviewProvider || '',
+                    model: note.aiReviewModel || ''
+                })
+            } else {
+                res.json({ review: '', provider: '', model: '' })
+            }
+        } catch (e) {
+            console.error('Load trade review error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // --- Trade-Review Chat (Rückfragen zur Einzeltrade-Bewertung) ---
+
+    // Chat-Verlauf laden
+    app.get('/api/ai/trade-review/:tradeId/messages', async (req, res) => {
+        const tradeId = req.params.tradeId
+        try {
+            const knex = getKnex()
+            const messages = await knex('ai_trade_messages')
+                .where('tradeId', tradeId)
+                .orderBy('id', 'asc')
+            res.json(messages)
+        } catch (e) {
+            res.json([])
+        }
+    })
+
+    // Chat-Verlauf löschen
+    app.delete('/api/ai/trade-review/:tradeId/messages', async (req, res) => {
+        const tradeId = req.params.tradeId
+        try {
+            const knex = getKnex()
+            await knex('ai_trade_messages').where('tradeId', tradeId).del()
+            res.json({ success: true })
+        } catch (e) {
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // Rückfrage zur Trade-Bewertung senden
+    app.post('/api/ai/trade-review/:tradeId/chat', async (req, res) => {
+        const tradeId = req.params.tradeId
+        const { message } = req.body
+        if (!message || !message.trim()) {
+            return res.status(400).json({ error: 'Nachricht darf nicht leer sein' })
+        }
+
+        try {
+            const knex = getKnex()
+
+            // Review aus notes laden
+            const note = await knex('notes').where('tradeId', tradeId).first()
+            if (!note?.aiReview) {
+                return res.status(404).json({ error: 'Keine KI-Bewertung für diesen Trade vorhanden' })
+            }
+
+            // KI-Settings laden
+            const settings = await knex('settings')
+                .select(KI_SPALTEN)
+                .where('id', 1).first()
+            // Eigener Anbieter für Berichte/Bewertungen; leer = global
+            const { provider, model } = waehleAnbieter(settings, 'Bericht')
+            const temperature = settings?.aiTemperature ?? 0.7
+            const maxTokens = settings?.aiMaxTokens || 1500
+            const ollamaUrl = settings?.aiOllamaUrl || DEFAULT_OLLAMA_URL
+            const apiKey = getApiKeyForProvider(settings, provider)
+
+            // Bisherige Chat-Nachrichten laden
+            const chatHistory = await knex('ai_trade_messages')
+                .where('tradeId', tradeId)
+                .orderBy('id', 'asc')
+
+            // Konversation aufbauen
+            const systemMsg = 'Du bist ein erfahrener Trading-Coach. Du hast die folgende Trade-Bewertung erstellt. Beantworte Rückfragen des Nutzers basierend auf dieser Bewertung und den Trade-Daten. Antworte auf Deutsch. Verwende Markdown-Formatierung. Sei konkret und praxisnah.'
+            const messages = [
+                { role: 'assistant', content: note.aiReview }
+            ]
+            for (const msg of chatHistory) {
+                messages.push({ role: msg.role, content: msg.content })
+            }
+            messages.push({ role: 'user', content: message.trim() })
+
+            // An Provider senden
+            let result
+            if (provider === 'ollama') {
+                result = await chatOllama(systemMsg, messages, model || 'llama3.2:latest', temperature, maxTokens, ollamaUrl)
+            } else if (provider === 'anthropic') {
+                result = await chatAnthropic(systemMsg, messages, apiKey, model || standardModell('anthropic'), temperature, maxTokens)
+            } else if (provider === 'gemini') {
+                result = await chatGemini(systemMsg, messages, apiKey, model || GEMINI_STANDARDMODELL, temperature, maxTokens)
+            } else if (istOpenAiKompatibel(provider)) {
+                const endpunkt = chatEndpunkt(provider, settings)
+                if (!endpunkt) return res.status(400).json({ error: `Keine Basis-URL für ${provider}` })
+                result = await chatOpenAI(systemMsg, messages, apiKey, model || standardModell(provider), temperature, maxTokens, endpunkt)
+            } else {
+                return res.status(400).json({ error: 'Unbekannter KI-Anbieter: ' + provider })
+            }
+
+            // User-Frage speichern
+            await knex('ai_trade_messages').insert({
+                tradeId,
+                role: 'user',
+                content: message.trim(),
+                provider,
+                model: model || '',
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0
+            })
+
+            // KI-Antwort speichern
+            await knex('ai_trade_messages').insert({
+                tradeId,
+                role: 'assistant',
+                content: result.text,
+                provider,
+                model: model || '',
+                promptTokens: result.usage?.promptTokens || 0,
+                completionTokens: result.usage?.completionTokens || 0,
+                totalTokens: result.usage?.totalTokens || 0
+            })
+
+            merkeVerbrauch({
+                funktion: 'trade-chat', ausloeser: 'manuell',
+                provider, modell: model || '',
+                usage: result.usage, bezug: { typ: 'trade', id: tradeId },
+            })
+
+            res.json({
+                reply: result.text,
+                tokenUsage: result.usage
+            })
+        } catch (e) {
+            console.error('Trade review chat error:', e)
+            res.status(500).json({ error: 'Chat-Anfrage fehlgeschlagen' })
+        }
+    })
+
+    /**
+     * Die Preisliste, damit die Oberfläche nicht ihre eigene führen muss.
+     *
+     * Genau dafür gab es sie vorher zweimal — im Frontend mit anderen Zahlen
+     * für DeepSeek und Grok als hier. Wer eine Kostenanzeige baut, holt sie
+     * ab hier.
+     */
+    app.get('/api/ai/preise', (req, res) => {
+        res.json({ preise: PREISE, bildPreise: BILD_PREISE })
+    })
+
+    // --- Aggregierte Token-Statistiken ---
+    app.get('/api/ai/token-stats', async (req, res) => {
+        try {
+            const knex = getKnex()
+
+            // Jede Quelle einzeln abfragen (falls Spalten noch nicht existieren)
+            let reports = []
+            try {
+                reports = await knex('ai_reports')
+                    .select('provider', 'model', 'promptTokens', 'completionTokens', 'totalTokens')
+                    .where('totalTokens', '>', 0)
+            } catch (e) { /* Spalten fehlen noch */ }
+
+            let messages = []
+            try {
+                messages = await knex('ai_report_messages')
+                    .select('provider', 'model', 'promptTokens', 'completionTokens', 'totalTokens')
+                    .where('role', 'assistant')
+                    .andWhere('totalTokens', '>', 0)
+            } catch (e) { /* provider/model Spalten fehlen evtl. */ }
+
+            let reviews = []
+            try {
+                const reviewsRaw = await knex('notes')
+                    .select('aiReviewProvider', 'aiReviewModel', 'aiReviewPromptTokens', 'aiReviewCompletionTokens', 'aiReviewTotalTokens')
+                    .where('aiReviewTotalTokens', '>', 0)
+                reviews = reviewsRaw.map(r => ({
+                    provider: r.aiReviewProvider, model: r.aiReviewModel,
+                    promptTokens: r.aiReviewPromptTokens, completionTokens: r.aiReviewCompletionTokens, totalTokens: r.aiReviewTotalTokens
+                }))
+            } catch (e) { /* Spalten fehlen noch */ }
+
+            /*
+             * `screenshots.aiReview*` wurde hier früher mitgelesen. Die Spalten
+             * gibt es, geschrieben hat sie nie jemand: eine Einzelbewertung je
+             * Screenshot ist nie gebaut worden — Screenshots gehen als Anhang
+             * in die Trade-Analyse, und deren Verbrauch steht bei `notes`.
+             * Die Abfrage lieferte damit garantiert nichts und behauptete eine
+             * Quelle, die es nicht gibt. Die Spalten bleiben unangetastet,
+             * falls die Bewertung je kommt.
+             */
+
+            // 5. ai_trade_messages (Trade-Review Chat)
+            let tradeChat = []
+            try {
+                tradeChat = await knex('ai_trade_messages')
+                    .select('provider', 'model', 'promptTokens', 'completionTokens', 'totalTokens')
+                    .where('role', 'assistant')
+                    .andWhere('totalTokens', '>', 0)
+            } catch (e) { /* Tabelle existiert evtl. noch nicht */ }
+
+            // 6. ai_agent_messages (Agent-Gespräche — per Message für genaue prompt/completion-Aufteilung)
+            let agentSessions = []
+            try {
+                // Hole die tatsächlichen promptTokens/completionTokens aus den Messages
+                // und den Provider/Model aus der zugehörigen Session
+                const agentMsgs = await knex('ai_agent_messages as m')
+                    .join('ai_agent_sessions as s', 'm.sessionId', 's.id')
+                    .select('s.provider', 's.model', 'm.promptTokens', 'm.completionTokens')
+                    .where('m.role', 'assistant')
+                    .andWhere(function() {
+                        this.where('m.promptTokens', '>', 0).orWhere('m.completionTokens', '>', 0)
+                    })
+                agentSessions = agentMsgs.map(m => ({
+                    provider: m.provider, model: m.model,
+                    promptTokens: m.promptTokens || 0,
+                    completionTokens: m.completionTokens || 0,
+                    totalTokens: (m.promptTokens || 0) + (m.completionTokens || 0)
+                }))
+            } catch (e) {
+                // Fallback: Wenn JOIN fehlschlägt (z.B. Tabelle fehlt), Session-Tabelle mit Schätzung
+                try {
+                    const sessions = await knex('ai_agent_sessions')
+                        .select('provider', 'model', 'totalTokens')
+                        .where('totalTokens', '>', 0)
+                    agentSessions = sessions.map(s => ({
+                        provider: s.provider, model: s.model,
+                        promptTokens: Math.round((s.totalTokens || 0) * 0.4),
+                        completionTokens: Math.round((s.totalTokens || 0) * 0.6),
+                        totalTokens: s.totalTokens || 0
+                    }))
+                } catch (e2) { /* Tabellen existieren evtl. noch nicht */ }
+            }
+
+            // 7. news_digests (Lagebericht) — fehlte bisher komplett. Ein
+            //    täglicher Bericht ist der regelmässigste KI-Verbraucher
+            //    überhaupt; ihn nicht mitzuzählen liess die Übersicht kleiner
+            //    aussehen als die tatsächliche Rechnung.
+            let lageberichte = []
+            try {
+                const roh = await knex('news_digests')
+                    .select('provider', 'modell', 'tokens')
+                    .where('tokens', '>', 0)
+                lageberichte = roh.map(d => ({
+                    provider: d.provider, model: d.modell,
+                    // `news_digests` führt nur die Summe — die Aufteilung wäre
+                    // erfunden, deshalb steht sie ehrlich nur im Gesamtwert.
+                    promptTokens: 0, completionTokens: 0, totalTokens: d.tokens || 0,
+                }))
+            } catch (e) { /* Tabelle existiert evtl. noch nicht */ }
+
+            // 8. strategy_runs (Veto-Agenten der Strategien)
+            let strategieLaeufe = []
+            try {
+                const roh = await knex('strategy_runs')
+                    .select('provider', 'model', 'totalTokens')
+                    .where('totalTokens', '>', 0)
+                strategieLaeufe = roh.map(r => ({
+                    provider: r.provider, model: r.model,
+                    promptTokens: 0, completionTokens: 0, totalTokens: r.totalTokens || 0,
+                }))
+            } catch (e) { /* Tabelle existiert evtl. noch nicht */ }
+
+            // Aggregieren
+            const byProvider = {}
+            let totalPrompt = 0, totalCompletion = 0, totalAll = 0
+
+            const allEntries = [...reports, ...messages, ...reviews,
+                ...tradeChat, ...agentSessions, ...lageberichte, ...strategieLaeufe]
+            for (const entry of allEntries) {
+                const p = entry.provider || 'unknown'
+                const pt = entry.promptTokens || 0
+                const ct = entry.completionTokens || 0
+                const tt = entry.totalTokens || 0
+
+                if (!byProvider[p]) {
+                    byProvider[p] = { promptTokens: 0, completionTokens: 0, totalTokens: 0, models: {} }
+                }
+                byProvider[p].promptTokens += pt
+                byProvider[p].completionTokens += ct
+                byProvider[p].totalTokens += tt
+
+                const m = entry.model || 'unknown'
+                if (!byProvider[p].models[m]) {
+                    byProvider[p].models[m] = { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+                }
+                byProvider[p].models[m].promptTokens += pt
+                byProvider[p].models[m].completionTokens += ct
+                byProvider[p].models[m].totalTokens += tt
+
+                totalPrompt += pt
+                totalCompletion += ct
+                totalAll += tt
+            }
+
+            res.json({
+                total: { promptTokens: totalPrompt, completionTokens: totalCompletion, totalTokens: totalAll },
+                byProvider,
+                counts: {
+                    reports: reports.length,
+                    chatMessages: messages.length,
+                    tradeReviews: reviews.length,
+                    agentSessions: agentSessions.length,
+                    lageberichte: lageberichte.length,
+                    strategieLaeufe: strategieLaeufe.length
+                }
+            })
+        } catch (e) {
+            console.error('Token stats error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // --- KI-Einstellungen mit Verschlüsselung ---
+
+    // KI-Settings speichern (verschlüsselt die API-Keys)
+    app.post('/api/ai/settings', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const { aiProvider, aiModel, aiOllamaUrl, aiCustomUrl, aiQwenUrl, aiTemperature, aiMaxTokens, aiScreenshots, aiReportPrompt, aiChatEnabled, keys } = req.body
+
+            // SSRF-Schutz: Ollama-URL validieren bevor sie in die DB geht
+            const sanitizedOllamaUrl = aiOllamaUrl || 'http://localhost:11434'
+            if (!isAllowedOllamaUrl(sanitizedOllamaUrl)) {
+                return res.status(400).json({ error: 'Nur lokale/private Hosts erlaubt für Ollama-URL' })
+            }
+
+            // Basis-Settings
+            // Eigener Endpunkt: nur http(s) und normalisiert ablegen
+            const sauberCustom = basisUrl(aiCustomUrl)
+            if (aiCustomUrl && !sauberCustom) {
+                return res.status(400).json({ error: 'Die Basis-URL des eigenen Anbieters ist ungültig (nur http/https).' })
+            }
+            const sauberQwen = basisUrl(aiQwenUrl)
+            if (aiQwenUrl && !sauberQwen) {
+                return res.status(400).json({ error: 'Die Qwen-Basis-URL ist ungültig (nur http/https).' })
+            }
+            // Über das Protokoll hinaus: keine Zugangsdaten in der Adresse und
+            // kein Metadaten-Dienst als „Modell-Endpunkt". Ein Ziel im eigenen
+            // Netz bleibt erlaubt — dafür sind diese Felder da.
+            for (const [feld, wert] of [['Die Basis-URL des eigenen Anbieters', sauberCustom], ['Die Qwen-Basis-URL', sauberQwen]]) {
+                if (!wert) continue
+                try {
+                    await pruefeKiEndpunkt(wert)
+                } catch (e) {
+                    return res.status(400).json({ error: `${feld} wurde abgelehnt: ${e.message}` })
+                }
+            }
+
+            await knex('settings').where('id', 1).update({
+                aiProvider: aiProvider || 'ollama',
+                aiModel: aiModel || '',
+                aiOllamaUrl: sanitizedOllamaUrl,
+                aiCustomUrl: sauberCustom,
+                ...(aiQwenUrl !== undefined ? { aiQwenUrl: sauberQwen } : {}),
+                aiTemperature: aiTemperature ?? 0.7,
+                aiMaxTokens: aiMaxTokens || 1500,
+                aiScreenshots: aiScreenshots ? 1 : 0,
+                aiReportPrompt: aiReportPrompt || '',
+                aiChatEnabled: aiChatEnabled !== undefined ? (aiChatEnabled ? 1 : 0) : 1
+            })
+
+            // API-Keys verschlüsselt speichern (nur wenn nicht maskiert).
+            // Über die Registry statt fester Zweige: ein neuer Anbieter wird
+            // damit automatisch mitgespeichert.
+            if (keys) {
+                const aenderungen = {}
+                const neueSchluessel = []
+                for (const [id, reg] of Object.entries(ANBIETER_REG)) {
+                    const wert = keys[id]
+                    if (!reg.keySpalte || wert === undefined || wert.includes('•')) continue
+                    aenderungen[reg.keySpalte] = wert ? encrypt(wert) : ''
+                    if (wert) neueSchluessel.push(id)
+                }
+                if (Object.keys(aenderungen).length) {
+                    await knex('settings').where('id', 1).update(aenderungen)
+                }
+                /*
+                 * Ein neuer Schlüssel hebt den Guthaben-Vermerk auf.
+                 *
+                 * „credit balance is too low" ist eine Aussage über das Konto
+                 * hinter dem ALTEN Schlüssel — für einen neu eingetragenen kann
+                 * sie gar nicht mehr gelten. Bisher blieb der Vermerk stehen,
+                 * bis zufällig ein Aufruf gelang; wer nachgeladen hatte, sah
+                 * die Warnung trotzdem weiter. Geleerte Felder bleiben
+                 * unberührt — der Anbieter verschwindet ohnehin per `keySet`.
+                 */
+                for (const id of neueSchluessel) await loescheKiGuthabenVermerk(id)
+            }
+
+            res.json({ success: true })
+        } catch (e) {
+            console.error('Save AI settings error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // KI-Settings laden (Keys maskiert zurückgeben)
+    app.get('/api/ai/settings', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const settings = await knex('settings')
+                .select(KI_SPALTEN)
+                .where('id', 1).first()
+
+            // Keys maskieren: "sk-abc...xyz" → "sk-a•••xyz"
+            function maskKey(encryptedKey) {
+                if (!encryptedKey) return ''
+                const key = decrypt(encryptedKey)
+                if (!key) return ''
+                if (key.length <= 8) return '•'.repeat(key.length)
+                return key.slice(0, 4) + '•'.repeat(Math.min(key.length - 8, 20)) + key.slice(-4)
+            }
+
+            res.json({
+                aiProvider: settings?.aiProvider || 'ollama',
+                aiModel: settings?.aiModel || '',
+                aiOllamaUrl: settings?.aiOllamaUrl || 'http://localhost:11434',
+                aiCustomUrl: settings?.aiCustomUrl || '',
+                aiQwenUrl: settings?.aiQwenUrl || '',
+                aiTemperature: settings?.aiTemperature ?? 0.7,
+                aiMaxTokens: settings?.aiMaxTokens || 1500,
+                aiScreenshots: settings?.aiScreenshots === 1,
+                aiReportPrompt: settings?.aiReportPrompt || '',
+                aiChatEnabled: settings?.aiChatEnabled !== 0,
+                // Maskiert je Anbieter aus der Registry — inklusive der
+                // abgekündigten, damit ein Altbestand sichtbar bleibt.
+                keys: Object.fromEntries(Object.entries(ANBIETER_REG)
+                    .filter(([, reg]) => reg.keySpalte)
+                    .map(([id, reg]) => [id, maskKey(settings?.[reg.keySpalte])])),
+            })
+        } catch (e) {
+            console.error('Load AI settings error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // --- Gespeicherte Berichte ---
+
+    // Bericht speichern
+    app.post('/api/ai/reports/save', async (req, res) => {
+        const { label, startDate, endDate, provider, model, report, reportData, tokenUsage } = req.body
+        if (!report) return res.status(400).json({ error: 'Kein Bericht zum Speichern' })
+        try {
+            const knex = getKnex()
+            const tokens = tokenUsage || {}
+            const [inserted] = await knex('ai_reports').insert({
+                label: label || '',
+                startDate: startDate || 0,
+                endDate: endDate || 0,
+                provider: provider || '',
+                model: model || '',
+                report,
+                reportData: JSON.stringify(reportData || {}),
+                promptTokens: tokens.promptTokens || 0,
+                completionTokens: tokens.completionTokens || 0,
+                totalTokens: tokens.totalTokens || 0
+            }).returning('id')
+            const id = typeof inserted === 'object' ? inserted.id : inserted
+            res.json({ success: true, id })
+        } catch (e) {
+            console.error('Save report error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // Alle Berichte laden (neueste zuerst, optional nach Broker gefiltert)
+    app.get('/api/ai/reports', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const broker = req.query.broker || ''
+            let query = knex('ai_reports')
+            if (broker) {
+                query = query.where('broker', broker)
+            }
+            const reports = await query.orderBy('id', 'desc')
+            // reportData JSON parsen
+            for (const r of reports) {
+                try {
+                    r.reportData = JSON.parse(r.reportData || '{}')
+                } catch (e) {
+                    logWarn('ollama-api', `Invalid reportData JSON for ai_reports.id=${r.id}, using fallback object`, e)
+                    r.reportData = {}
+                }
+            }
+            res.json(reports)
+        } catch (e) {
+            logError('ollama-api', 'Load reports error', e)
+            res.json([])
+        }
+    })
+
+    // Bericht löschen
+    app.delete('/api/ai/reports/:id', async (req, res) => {
+        const id = parseId(req.params.id, res)
+        if (id === null) return
+        try {
+            const knex = getKnex()
+            await knex('ai_reports').where('id', id).del()
+            // Chat-Nachrichten mitlöschen
+            await knex('ai_report_messages').where('reportId', id).del()
+            res.json({ success: true })
+        } catch (e) {
+            console.error('Delete report error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // --- Chat/Rückfragen zu Berichten ---
+
+    // Chat-Verlauf laden
+    app.get('/api/ai/reports/:reportId/messages', async (req, res) => {
+        const reportId = parseId(req.params.reportId, res, 'reportId')
+        if (reportId === null) return
+        try {
+            const knex = getKnex()
+            const messages = await knex('ai_report_messages')
+                .where('reportId', reportId)
+                .orderBy('id', 'asc')
+            res.json(messages)
+        } catch (e) {
+            console.error('Load chat messages error:', e)
+            res.json([])
+        }
+    })
+
+    // Chat-Verlauf löschen
+    app.delete('/api/ai/reports/:reportId/messages', async (req, res) => {
+        const reportId = parseId(req.params.reportId, res, 'reportId')
+        if (reportId === null) return
+        try {
+            const knex = getKnex()
+            await knex('ai_report_messages').where('reportId', reportId).del()
+            res.json({ success: true })
+        } catch (e) {
+            console.error('Delete chat messages error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    // Rückfrage an KI senden
+    app.post('/api/ai/reports/:reportId/chat', async (req, res) => {
+        const reportId = parseId(req.params.reportId, res, 'reportId')
+        if (reportId === null) return
+        const { message } = req.body
+        if (!message || !message.trim()) {
+            return res.status(400).json({ error: 'Nachricht darf nicht leer sein' })
+        }
+
+        try {
+            const knex = getKnex()
+
+            // Report laden
+            const report = await knex('ai_reports').where('id', reportId).first()
+            if (!report) {
+                return res.status(404).json({ error: 'Bericht nicht gefunden' })
+            }
+
+            // KI-Settings laden
+            const settings = await knex('settings')
+                .select(KI_SPALTEN)
+                .where('id', 1).first()
+            // Eigener Anbieter für Berichte/Bewertungen; leer = global
+            const { provider, model } = waehleAnbieter(settings, 'Bericht')
+            const temperature = settings?.aiTemperature ?? 0.7
+            const maxTokens = settings?.aiMaxTokens || 1500
+            const ollamaUrl = settings?.aiOllamaUrl || DEFAULT_OLLAMA_URL
+            const apiKey = getApiKeyForProvider(settings, provider)
+
+            // Bisherige Chat-Nachrichten laden
+            const chatHistory = await knex('ai_report_messages')
+                .where('reportId', reportId)
+                .orderBy('id', 'asc')
+
+            // Konversation aufbauen
+            const systemMsg = 'Du bist ein erfahrener Trading-Analyst und Coach. Du hast den folgenden Bericht erstellt. Beantworte Rückfragen des Nutzers basierend auf diesem Bericht und den zugrunde liegenden Daten. Antworte auf Deutsch. Verwende Markdown-Formatierung.'
+            const messages = [
+                { role: 'assistant', content: report.report }
+            ]
+            for (const msg of chatHistory) {
+                messages.push({ role: msg.role, content: msg.content })
+            }
+            messages.push({ role: 'user', content: message.trim() })
+
+            // An Provider senden
+            let result
+            if (provider === 'ollama') {
+                result = await chatOllama(systemMsg, messages, model || 'llama3.2:latest', temperature, maxTokens, ollamaUrl)
+            } else if (provider === 'anthropic') {
+                result = await chatAnthropic(systemMsg, messages, apiKey, model || standardModell('anthropic'), temperature, maxTokens)
+            } else if (provider === 'gemini') {
+                result = await chatGemini(systemMsg, messages, apiKey, model || GEMINI_STANDARDMODELL, temperature, maxTokens)
+            } else if (istOpenAiKompatibel(provider)) {
+                const endpunkt = chatEndpunkt(provider, settings)
+                if (!endpunkt) return res.status(400).json({ error: `Keine Basis-URL für ${provider}` })
+                result = await chatOpenAI(systemMsg, messages, apiKey, model || standardModell(provider), temperature, maxTokens, endpunkt)
+            } else {
+                return res.status(400).json({ error: 'Unbekannter KI-Anbieter: ' + provider })
+            }
+
+            // User-Frage speichern
+            await knex('ai_report_messages').insert({
+                reportId: reportId,
+                role: 'user',
+                content: message.trim(),
+                provider,
+                model: model || '',
+                promptTokens: 0,
+                completionTokens: 0,
+                totalTokens: 0
+            })
+
+            // KI-Antwort speichern
+            await knex('ai_report_messages').insert({
+                reportId: reportId,
+                role: 'assistant',
+                content: result.text,
+                provider,
+                model: model || '',
+                promptTokens: result.usage?.promptTokens || 0,
+                completionTokens: result.usage?.completionTokens || 0,
+                totalTokens: result.usage?.totalTokens || 0
+            })
+
+            merkeVerbrauch({
+                funktion: 'coach-chat', ausloeser: 'manuell',
+                provider, modell: model || '',
+                usage: result.usage, bezug: { typ: 'bericht', id: reportId },
+            })
+
+            res.json({
+                reply: result.text,
+                tokenUsage: result.usage
+            })
+        } catch (e) {
+            console.error('Chat error:', e)
+            const guthabenLeer = await merkeGuthabenAusFehler(e)
+            res.status(500).json({
+                error: guthabenLeer
+                    ? 'Chat-Anfrage fehlgeschlagen: das Guthaben des KI-Anbieters ist aufgebraucht.'
+                    : 'Chat-Anfrage fehlgeschlagen',
+            })
+        }
+    })
+
+    /**
+     * Guthaben-Übersicht je Anbieter.
+     *
+     * Ehrlichkeit vor Schein-Genauigkeit: Kein grosser Anbieter verrät sein
+     * Restguthaben über den normalen API-Key (xAI nur per separatem
+     * Management-Key, Perplexity/OpenAI/Anthropic/Gemini gar nicht). Gezeigt
+     * wird deshalb, was der Server WEISS: ob ein Schlüssel hinterlegt ist, ob
+     * der letzte Aufruf an fehlendem Guthaben scheiterte (mit Meldung und
+     * Zeitpunkt) und wann zuletzt einer gelang.
+     */
+    app.get('/api/ai/guthaben', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const s = await knex('settings').where('id', 1).first()
+            let status = {}
+            try { status = JSON.parse(s?.aiQuotaStatus || '{}') } catch { /* Altbestand */ }
+
+            /*
+             * Wer benutzt diesen Anbieter überhaupt?
+             *
+             * Ohne diese Auskunft konnte die Nachrichten-Seite nur „irgendein
+             * Anbieter mit Schlüssel ist leer" melden — und warnte damit vor
+             * Anthropic, während das in Wahrheit den Strategie-Baukasten
+             * betraf. Abgeleitet aus der Funktions-Registry statt aus einer
+             * zweiten, handgepflegten Liste.
+             */
+            const bereicheJeAnbieter = anbieterBereiche(s)
+            const news = nachrichtenAnbieter(s)
+
+            const anbieter = Object.entries(ANBIETER_REG)
+                // Abgekündigte nur zeigen, wenn noch ein Schlüssel liegt
+                .filter(([, reg]) => !reg.abgekuendigt || (reg.keySpalte && s?.[reg.keySpalte]))
+                .map(([id, reg]) => {
+                    const st = status[id] || {}
+                    const keySet = !reg.keySpalte || Boolean(s?.[reg.keySpalte])
+                    return {
+                        id,
+                        name: reg.name,
+                        keySet,
+                        keyUrl: reg.keyUrl || '',
+                        aktiv: s?.aiProvider === id,
+                        leer: Boolean(st.leer),
+                        meldung: st.meldung || '',
+                        seit: st.seit || null,
+                        okSeit: st.okSeit || null,
+                        // Die Frist rechnet der Server, nicht die zwei
+                        // Oberflächen: `seit` stammt von der Server-Uhr, und
+                        // eine doppelte Arithmetik in beiden Ansichten liefe
+                        // beim ersten Nachjustieren auseinander.
+                        veraltet: Boolean(st.leer) && istVermerkVeraltet(st.seit),
+                        bereiche: [...(bereicheJeAnbieter.get(id) || [])].sort(),
+                        fuerNachrichten: news.has(id),
+                    }
+                })
+            res.json({ anbieter })
+        } catch (e) {
+            logError('ai-guthaben', e.message)
+            res.status(500).json({ error: 'Guthaben-Status nicht lesbar' })
+        }
+    })
+
+    /*
+     * Vermerk von Hand verwerfen.
+     *
+     * Bisher gab es keinen Weg zurück ausser einem gelungenen Aufruf beim
+     * betroffenen Anbieter — bei einem, den man nicht mehr benutzt, also gar
+     * keinen. POST und nicht DELETE, weil nichts Adressierbares verschwindet:
+     * Der Vermerk ist ein Feld in einem JSON-Blob innerhalb der einen
+     * Einstellungszeile.
+     */
+    app.post('/api/ai/guthaben/zuruecksetzen', async (req, res) => {
+        try {
+            const provider = String(req.body?.provider || '').trim()
+            if (!provider || !ANBIETER_REG[provider]) {
+                return res.status(400).json({ error: 'Unbekannter Anbieter' })
+            }
+            const geloescht = await loescheKiGuthabenVermerk(provider)
+            res.json({ ok: true, geloescht })
+        } catch (e) {
+            logError('ai-guthaben-reset', e.message)
+            res.status(500).json({ error: 'Vermerk nicht zurückgesetzt' })
+        }
+    })
+}
+
+// --- Provider-spezifische Generate-Funktionen ---
+
+async function generateOllama(prompt, model, temperature, maxTokens, ollamaUrl) {
+    const url = ollamaUrl || await getOllamaUrl()
+
+    // SSRF-Schutz
+    if (!isAllowedOllamaUrl(url)) {
+        throw new Error('Nur lokale/private Hosts erlaubt für Ollama-URL')
+    }
+
+    // Verwende http/https direkt statt fetch(), da Node.js fetch (undici)
+    // einen headersTimeout von 300s hat, der bei großen Modellen (7B+) nicht reicht.
+    const { URL } = await import('url')
+    const parsedUrl = new URL(`${url}/api/generate`)
+    const httpModule = parsedUrl.protocol === 'https:' ? await import('https') : await import('http')
+
+    const postData = JSON.stringify({
+        model,
+        prompt,
+        stream: false,
+        options: { temperature, num_predict: maxTokens }
+    })
+
+    return new Promise((resolve, reject) => {
+        const req = httpModule.request({
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port,
+            path: parsedUrl.pathname,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            },
+            timeout: 600000 // 10 Min Timeout für große Modelle (14B+)
+        }, (res) => {
+            let body = ''
+            res.on('data', chunk => body += chunk)
+            res.on('end', () => {
+                if (res.statusCode !== 200) {
+                    return reject(new Error('Ollama-Fehler: ' + body))
+                }
+                try {
+                    const data = JSON.parse(body)
+                    resolve({
+                        text: data.response,
+                        usage: {
+                            promptTokens: data.prompt_eval_count || 0,
+                            completionTokens: data.eval_count || 0,
+                            totalTokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
+                        }
+                    })
+                } catch (e) {
+                    reject(new Error('Ollama-Antwort ungültig: ' + e.message))
+                }
+            })
+        })
+
+        req.on('timeout', () => {
+            req.destroy()
+            reject(new Error('Ollama Timeout: Modell braucht zu lange (>10 Min)'))
+        })
+        req.on('error', (e) => reject(new Error('Ollama nicht erreichbar: ' + e.message)))
+
+        req.write(postData)
+        req.end()
+    })
+}
+
+async function generateOpenAI(prompt, apiKey, model, temperature, maxTokens, screenshots = [],
+    endpoint = 'https://api.openai.com/v1/chat/completions') {
+    // Multimodal content aufbauen
+    const userContent = []
+
+    // Screenshots als Bilder hinzufügen
+    for (const s of screenshots) {
+        userContent.push({
+            type: 'image_url',
+            image_url: {
+                url: `data:${s.mimeType};base64,${s.base64}`,
+                detail: 'low'  // Kosten sparen
+            }
+        })
+        userContent.push({
+            type: 'text',
+            text: `[Chart: ${s.symbol} ${s.side}${s.timeframe ? ' TF:' + s.timeframe : ''}]`
+        })
+    }
+
+    // Prompt als Text
+    userContent.push({ type: 'text', text: prompt })
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                { role: 'system', content: 'Du bist ein erfahrener Trading-Analyst und Coach. Antworte auf Deutsch. Verwende Markdown-Formatierung.' },
+                { role: 'user', content: screenshots.length > 0 ? userContent : prompt }
+            ],
+            ...samplingFelder(model, temperature),
+            max_tokens: maxTokens
+        }),
+        // Ohne Zeitgrenze hängt die Anfrage unbegrenzt, wenn der Anbieter
+        // nicht antwortet — bei fremden Hosts keine theoretische Sorge.
+        signal: AbortSignal.timeout(ANFRAGE_TIMEOUT_MS)
+    })
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error('OpenAI-Fehler: ' + (err.error?.message || response.statusText))
+    }
+
+    const data = await response.json()
+    return {
+        text: data.choices?.[0]?.message?.content || '',
+        usage: {
+            promptTokens: data.usage?.prompt_tokens || 0,
+            completionTokens: data.usage?.completion_tokens || 0,
+            totalTokens: data.usage?.total_tokens || 0
+        }
+    }
+}
+
+/**
+ * Text aus einer Anthropic-Antwort ziehen — ALLE Text-Blöcke, nicht content[0].
+ *
+ * Die Claude-5-Modelle denken standardmässig (adaptives Thinking, auch ohne
+ * `thinking`-Parameter): der erste Content-Block ist dann ein thinking-Block,
+ * und `content[0].text` wäre leer, obwohl die Antwort dahinter steht.
+ */
+function anthropicText(data) {
+    return (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n')
+}
+
+/**
+ * `max_tokens` deckelt bei den Claude-5-Modellen Denken UND Antwort zusammen.
+ * Ist das Budget zu knapp, frisst der Denkschritt alles auf und es kommt kein
+ * einziger Text-Block — bezahlt und trotzdem leer (so entstand am 19.08. ein
+ * Bericht ohne Text bei exakt 3000 Antwort-Tokens). Deshalb: bei leerem Text
+ * mit stop_reason max_tokens EINMAL mit deutlich mehr Budget nachlegen.
+ */
+function anthropicNachschlag(maxTokens) {
+    return Math.max(maxTokens * 2, 8000)
+}
+
+async function generateAnthropic(prompt, apiKey, model, temperature, maxTokens, screenshots = []) {
+    // Multimodal content aufbauen
+    const userContent = []
+
+    // Screenshots als Bilder hinzufügen
+    for (const s of screenshots) {
+        userContent.push({
+            type: 'image',
+            source: {
+                type: 'base64',
+                media_type: s.mimeType,
+                data: s.base64
+            }
+        })
+        userContent.push({
+            type: 'text',
+            text: `[Chart: ${s.symbol} ${s.side}${s.timeframe ? ' TF:' + s.timeframe : ''}]`
+        })
+    }
+
+    // Prompt als Text
+    userContent.push({ type: 'text', text: prompt })
+
+    const anfrage = async (budget) => {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model,
+                max_tokens: budget,
+                system: 'Du bist ein erfahrener Trading-Analyst und Coach. Antworte auf Deutsch. Verwende Markdown-Formatierung.',
+                messages: [{ role: 'user', content: screenshots.length > 0 ? userContent : prompt }],
+                // Neuere Modelle lehnen Sampling-Parameter mit 400 ab
+                ...samplingFelder(model, temperature),
+                ...aufwandFelder(model, budget)
+            })
+        })
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}))
+            throw new Error('Anthropic-Fehler: ' + (err.error?.message || response.statusText))
+        }
+        return response.json()
+    }
+
+    let data = await anfrage(maxTokens)
+    let text = anthropicText(data)
+    // Der erste Lauf ist bezahlt, auch wenn er nur Denk-Blöcke lieferte —
+    // seine Token gehören in die Abrechnung, sonst zeigt die Verbrauchsanzeige
+    // weniger an, als auf der Rechnung steht.
+    let promptTokens = data.usage?.input_tokens || 0
+    let completionTokens = data.usage?.output_tokens || 0
+    if (!text && data.stop_reason === 'max_tokens') {
+        logWarn('ollama-api', `Anthropic-Antwort ohne Text (max_tokens ${maxTokens} im Denkschritt erreicht) — wiederhole mit ${anthropicNachschlag(maxTokens)}`)
+        data = await anfrage(anthropicNachschlag(maxTokens))
+        text = anthropicText(data)
+        promptTokens += data.usage?.input_tokens || 0
+        completionTokens += data.usage?.output_tokens || 0
+        if (!text) {
+            throw new Error(`Die Antwort bestand nur aus Denk-Blöcken — max_tokens (${anthropicNachschlag(maxTokens)}) reichte nicht für Text. „Max Tokens" in den KI-Einstellungen erhöhen.`)
+        }
+    }
+    return {
+        text,
+        usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens }
+    }
+}
+
+async function generateGemini(prompt, apiKey, model, temperature, maxTokens, screenshots = []) {
+    // Gemini API: multimodal content aufbauen
+    const parts = []
+
+    // System-Instruktion als ersten Text-Part
+    parts.push({ text: 'Du bist ein erfahrener Trading-Analyst und Coach. Antworte auf Deutsch. Verwende Markdown-Formatierung.' })
+
+    // Screenshots als inline_data hinzufügen
+    for (const s of screenshots) {
+        parts.push({
+            inline_data: {
+                mime_type: s.mimeType,
+                data: s.base64
+            }
+        })
+        parts.push({ text: `[Chart: ${s.symbol} ${s.side}${s.timeframe ? ' TF:' + s.timeframe : ''}]` })
+    }
+
+    // Prompt als Text
+    parts.push({ text: prompt })
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+                temperature,
+                maxOutputTokens: maxTokens
+            }
+        })
+    })
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error('Gemini-Fehler: ' + (err.error?.message || response.statusText))
+    }
+
+    const data = await response.json()
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const usageMeta = data.usageMetadata || {}
+    return {
+        text,
+        usage: {
+            promptTokens: usageMeta.promptTokenCount || 0,
+            completionTokens: usageMeta.candidatesTokenCount || 0,
+            totalTokens: usageMeta.totalTokenCount || 0
+        }
+    }
+}
+
+// --- Chat-Funktionen (Multi-Turn Konversation) ---
+
+async function chatOllama(systemMsg, messages, model, temperature, maxTokens, ollamaUrl) {
+    const url = ollamaUrl || await getOllamaUrl()
+
+    // SSRF-Schutz
+    assertAllowedOllamaUrl(url)
+
+    // Ollama /api/chat Format: messages array mit role/content
+    const ollamaMessages = [
+        { role: 'system', content: systemMsg },
+        ...messages
+    ]
+
+    const { URL } = await import('url')
+    const parsedUrl = new URL(`${url}/api/chat`)
+    const httpModule = parsedUrl.protocol === 'https:' ? await import('https') : await import('http')
+
+    const postData = JSON.stringify({
+        model,
+        messages: ollamaMessages,
+        stream: false,
+        options: { temperature, num_predict: maxTokens }
+    })
+
+    return new Promise((resolve, reject) => {
+        const req = httpModule.request({
+            hostname: parsedUrl.hostname,
+            port: parsedUrl.port,
+            path: parsedUrl.pathname,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            },
+            timeout: 600000
+        }, (res) => {
+            let body = ''
+            res.on('data', chunk => body += chunk)
+            res.on('end', () => {
+                if (res.statusCode !== 200) {
+                    return reject(new Error('Ollama-Chat-Fehler: ' + body))
+                }
+                try {
+                    const data = JSON.parse(body)
+                    resolve({
+                        text: data.message?.content || '',
+                        usage: {
+                            promptTokens: data.prompt_eval_count || 0,
+                            completionTokens: data.eval_count || 0,
+                            totalTokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
+                        }
+                    })
+                } catch (e) {
+                    reject(new Error('Ollama-Chat-Antwort ungültig: ' + e.message))
+                }
+            })
+        })
+
+        req.on('timeout', () => {
+            req.destroy()
+            reject(new Error('Ollama Chat Timeout (>10 Min)'))
+        })
+        req.on('error', (e) => reject(new Error('Ollama nicht erreichbar: ' + e.message)))
+
+        req.write(postData)
+        req.end()
+    })
+}
+
+async function chatOpenAI(systemMsg, messages, apiKey, model, temperature, maxTokens, endpoint = 'https://api.openai.com/v1/chat/completions') {
+    // OpenAI/DeepSeek Chat: messages array
+    const apiMessages = [
+        { role: 'system', content: systemMsg },
+        ...messages
+    ]
+
+    const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            model,
+            messages: apiMessages,
+            ...samplingFelder(model, temperature),
+            max_tokens: maxTokens
+        }),
+        signal: AbortSignal.timeout(ANFRAGE_TIMEOUT_MS)
+    })
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error('Chat-Fehler: ' + (err.error?.message || response.statusText))
+    }
+
+    const data = await response.json()
+    return {
+        text: data.choices?.[0]?.message?.content || '',
+        usage: {
+            promptTokens: data.usage?.prompt_tokens || 0,
+            completionTokens: data.usage?.completion_tokens || 0,
+            totalTokens: data.usage?.total_tokens || 0
+        }
+    }
+}
+
+async function chatAnthropic(systemMsg, messages, apiKey, model, temperature, maxTokens) {
+    // Anthropic: system als separater Parameter, messages array
+    const anfrage = async (budget) => {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'x-api-key': apiKey,
+                'anthropic-version': '2023-06-01',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                model,
+                max_tokens: budget,
+                system: systemMsg,
+                messages,
+                ...samplingFelder(model, temperature),
+                ...aufwandFelder(model, budget)
+            })
+        })
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}))
+            throw new Error('Chat-Fehler: ' + (err.error?.message || response.statusText))
+        }
+        return response.json()
+    }
+
+    let data = await anfrage(maxTokens)
+    let text = anthropicText(data)
+    // Erster Lauf ist bezahlt — Token mitzählen (siehe generateAnthropic)
+    let ersterPrompt = data.usage?.input_tokens || 0
+    let ersterCompletion = data.usage?.output_tokens || 0
+    if (!text && data.stop_reason === 'max_tokens') {
+        logWarn('ollama-api', `Anthropic-Chat ohne Text (max_tokens ${maxTokens} im Denkschritt erreicht) — wiederhole mit ${anthropicNachschlag(maxTokens)}`)
+        data = await anfrage(anthropicNachschlag(maxTokens))
+        text = anthropicText(data)
+        if (!text) {
+            throw new Error(`Die Antwort bestand nur aus Denk-Blöcken — max_tokens (${anthropicNachschlag(maxTokens)}) reichte nicht für Text. „Max Tokens" in den KI-Einstellungen erhöhen.`)
+        }
+    } else {
+        ersterPrompt = 0
+        ersterCompletion = 0
+    }
+    return {
+        text,
+        usage: {
+            promptTokens: ersterPrompt + (data.usage?.input_tokens || 0),
+            completionTokens: ersterCompletion + (data.usage?.output_tokens || 0),
+            totalTokens: ersterPrompt + ersterCompletion + (data.usage?.input_tokens || 0) + (data.usage?.output_tokens || 0)
+        }
+    }
+}
+
+async function chatGemini(systemMsg, messages, apiKey, model, temperature, maxTokens) {
+    // Gemini: contents array mit parts
+    const contents = []
+
+    for (const msg of messages) {
+        contents.push({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }]
+        })
+    }
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': apiKey
+        },
+        body: JSON.stringify({
+            systemInstruction: { parts: [{ text: systemMsg }] },
+            contents,
+            generationConfig: {
+                temperature,
+                maxOutputTokens: maxTokens
+            }
+        })
+    })
+
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error('Chat-Fehler: ' + (err.error?.message || response.statusText))
+    }
+
+    const data = await response.json()
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    const usageMeta = data.usageMetadata || {}
+    return {
+        text,
+        usage: {
+            promptTokens: usageMeta.promptTokenCount || 0,
+            completionTokens: usageMeta.candidatesTokenCount || 0,
+            totalTokens: usageMeta.totalTokenCount || 0
+        }
+    }
+}
+
+// --- Ollama Status Check ---
+
+async function checkOllamaStatus(res, ollamaUrl, model = '') {
+    const url = ollamaUrl || await getOllamaUrl()
+    // SSRF-Schutz: ungültige/externe URL → offline melden statt zu fetchen
+    if (!isAllowedOllamaUrl(url)) {
+        return res.json({ online: false, provider: 'ollama', model, models: [] })
+    }
+    try {
+        const response = await fetch(`${url}/api/tags`, { signal: AbortSignal.timeout(3000) })
+        if (response.ok) {
+            const data = await response.json()
+            const models = data.models || []
+            return res.json({ online: true, provider: 'ollama', model, models: models.map(m => m.name) })
+        }
+        return res.json({ online: false, provider: 'ollama', model, models: [] })
+    } catch (e) {
+        return res.json({ online: false, provider: 'ollama', model, models: [] })
+    }
+}
+
+/** Status aller OpenAI-kompatiblen Anbieter — sie alle führen `GET /models`. */
+async function checkOpenAiKompatibelStatus(apiKey, res, model, provider, basis) {
+    if (!apiKey) return res.json({ online: false, provider, model, message: 'Kein API-Key konfiguriert' })
+    if (!basis) return res.json({ online: false, provider, model, error: 'Keine Basis-URL' })
+    try {
+        const response = await fetch(`${basis}/models`, {
+            headers: { 'Authorization': `Bearer ${apiKey}` },
+            signal: AbortSignal.timeout(5000)
+        })
+        return res.json({ online: response.ok, provider, model })
+    } catch (e) {
+        return res.json({ online: false, provider, model, error: e.message })
+    }
+}
+
+async function checkAnthropicStatus(apiKey, res, model = '') {
+    if (!apiKey) return res.json({ online: false, provider: 'anthropic', model, message: 'Kein API-Key konfiguriert' })
+    return res.json({ online: true, provider: 'anthropic', model })
+}
+
+async function checkGeminiStatus(apiKey, res, model = '') {
+    if (!apiKey) return res.json({ online: false, provider: 'gemini', model, message: 'Kein API-Key konfiguriert' })
+    try {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models', {
+            headers: { 'x-goog-api-key': apiKey },
+            signal: AbortSignal.timeout(5000)
+        })
+        return res.json({ online: response.ok, provider: 'gemini', model })
+    } catch (e) {
+        return res.json({ online: false, provider: 'gemini', model })
+    }
+}
+
+// --- Screenshot-Sammlung für Chart-Analyse ---
+
+async function collectScreenshots(knex, startDate, endDate, maxCount = 4) {
+    // Sammle Screenshots aus dem Zeitraum — priorisiere die mit den größten Trades
+    try {
+        const screenshots = await knex('screenshots as s')
+            .leftJoin('notes as n', function () {
+                this.on('n.screenshotId', '=', knex.raw('CAST(s.id AS TEXT)'))
+            })
+            .select('s.id', 's.symbol', 's.side', 's.annotatedBase64', 's.originalBase64', 's.dateUnix', 'n.tradeId', 'n.timeframe')
+            .where('s.dateUnix', '>=', startDate)
+            .where('s.dateUnix', '<=', endDate)
+            .where(function () {
+                this.where('s.annotatedBase64', '!=', '').orWhere('s.originalBase64', '!=', '')
+            })
+            .orderBy('s.dateUnix', 'desc')
+            .limit(maxCount)
+
+        return screenshots.map(s => {
+            // Bevorzuge annotated (mit Markierungen), dann original
+            const base64 = s.annotatedBase64 || s.originalBase64
+            // Entferne data:image/...;base64, prefix falls vorhanden
+            const cleanBase64 = base64.replace(/^data:image\/[^;]+;base64,/, '')
+            // Bestimme den MIME type
+            const mimeMatch = base64.match(/^data:(image\/[^;]+);base64,/)
+            const mimeType = mimeMatch ? mimeMatch[1] : 'image/png'
+            return {
+                symbol: s.symbol || 'Unknown',
+                side: s.side === 'B' ? 'Long' : s.side === 'SS' ? 'Short' : s.side,
+                timeframe: s.timeframe || '',
+                base64: cleanBase64,
+                mimeType,
+                dateUnix: s.dateUnix
+            }
+        }).filter(s => s.base64.length > 100) // Filter leere/kaputte
+    } catch (e) {
+        console.error('Screenshot collection error:', e)
+        return []
+    }
+}
+
+// --- Daten-Sammlung und Prompt-Bau ---
+
+async function collectReportData(knex, startDate, endDate, broker) {
+    const trades = await knex('trades')
+        .where('dateUnix', '>=', startDate)
+        .where('dateUnix', '<=', endDate)
+
+    let allTrades = []
+    let totalGrossProceeds = 0
+    let totalNetProceeds = 0
+    let totalFees = 0
+    let totalGrossWins = 0
+    let totalGrossLoss = 0
+    let wins = 0
+    let losses = 0
+    let bestTradePnl = -Infinity
+    let worstTradePnl = Infinity
+    let bestDay = { dateUnix: 0, pnl: -Infinity }
+    let worstDay = { dateUnix: 0, pnl: Infinity }
+
+    for (const row of trades) {
+        let tradesArr = []
+        try {
+            tradesArr = JSON.parse(row.trades || '[]')
+        } catch (e) {
+            logWarn('ollama-api', `collectReportData: invalid trades JSON for dateUnix=${row.dateUnix}, using []`, e)
+            tradesArr = []
+        }
+
+        // Filter trades by broker if specified
+        if (broker) {
+            tradesArr = tradesArr.filter(t => t.broker === broker)
+            if (tradesArr.length === 0) continue
+        }
+
+        let pAndL = {}
+        try {
+            pAndL = JSON.parse(row.pAndL || '{}')
+        } catch (e) {
+            logWarn('ollama-api', `collectReportData: invalid pAndL JSON for dateUnix=${row.dateUnix}, using {}`, e)
+            pAndL = {}
+        }
+
+        // Recalculate day PnL from filtered trades (broker-specific)
+        let dayPnl = 0
+        if (broker) {
+            dayPnl = tradesArr.reduce((sum, t) => sum + (t.grossProceeds || 0), 0)
+        } else {
+            dayPnl = pAndL.grossProceeds || 0
+        }
+        if (dayPnl > bestDay.pnl) bestDay = { dateUnix: row.dateUnix, pnl: dayPnl }
+        if (dayPnl < worstDay.pnl) worstDay = { dateUnix: row.dateUnix, pnl: dayPnl }
+
+        for (const t of tradesArr) {
+            allTrades.push(t)
+            const gp = t.grossProceeds || 0
+            const np = t.netProceeds || 0
+            const fee = (t.commission || 0) + (t.fees || 0)
+
+            totalGrossProceeds += gp
+            totalNetProceeds += np
+            totalFees += fee
+
+            if (gp > 0) {
+                wins++
+                totalGrossWins += gp
+            } else {
+                losses++
+                totalGrossLoss += Math.abs(gp)
+            }
+
+            if (gp > bestTradePnl) bestTradePnl = gp
+            if (gp < worstTradePnl) worstTradePnl = gp
+        }
+    }
+
+    const tradeCount = allTrades.length
+    const winRate = tradeCount > 0 ? ((wins / tradeCount) * 100).toFixed(1) : 0
+    const profitFactor = totalGrossLoss > 0 ? (totalGrossWins / totalGrossLoss).toFixed(2) : 'N/A'
+    const appt = tradeCount > 0 ? (totalGrossProceeds / tradeCount).toFixed(2) : 0
+    const tradingDays = trades.length
+
+    const longTrades = allTrades.filter(t => t.strategy === 'long')
+    const shortTrades = allTrades.filter(t => t.strategy === 'short')
+
+    // Long/Short detaillierte Stats
+    let longWins = 0, longLosses = 0, longPnl = 0
+    for (const t of longTrades) {
+        const gp = t.grossProceeds || 0
+        if (gp > 0) longWins++; else longLosses++
+        longPnl += gp
+    }
+    let shortWins = 0, shortLosses = 0, shortPnl = 0
+    for (const t of shortTrades) {
+        const gp = t.grossProceeds || 0
+        if (gp > 0) shortWins++; else shortLosses++
+        shortPnl += gp
+    }
+
+    const symbolMap = {}
+    for (const t of allTrades) {
+        const sym = t.symbol || 'Unknown'
+        if (!symbolMap[sym]) symbolMap[sym] = { count: 0, pnl: 0 }
+        symbolMap[sym].count++
+        symbolMap[sym].pnl += (t.grossProceeds || 0)
+    }
+    const topSymbols = Object.entries(symbolMap)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 5)
+
+    const notes = await knex('notes')
+        .where('dateUnix', '>=', startDate)
+        .where('dateUnix', '<=', endDate)
+
+    let stressSum = 0, stressCount = 0
+    let emotionSum = 0, emotionCount = 0
+    let notesCount = 0
+
+    for (const n of notes) {
+        if (n.entryStressLevel > 0) { stressSum += n.entryStressLevel; stressCount++ }
+        if (n.emotionLevel > 0) { emotionSum += n.emotionLevel; emotionCount++ }
+        if (n.entryNote || n.note || n.playbook) notesCount++
+    }
+
+    const avgStress = stressCount > 0 ? (stressSum / stressCount).toFixed(1) : 'N/A'
+    const avgEmotion = emotionCount > 0 ? (emotionSum / emotionCount).toFixed(1) : 'N/A'
+
+    const satisfactions = await knex('satisfactions')
+        .where('dateUnix', '>=', startDate)
+        .where('dateUnix', '<=', endDate)
+    const satisfiedCount = satisfactions.filter(s => s.satisfaction === 1).length
+    const satisfactionRate = satisfactions.length > 0
+        ? ((satisfiedCount / satisfactions.length) * 100).toFixed(0) : 'N/A'
+
+    const tagsRows = await knex('tags')
+        .where('dateUnix', '>=', startDate)
+        .where('dateUnix', '<=', endDate)
+
+    const settings = await knex('settings').where('id', 1).first()
+    let availableTags = []
+    try {
+        availableTags = JSON.parse(settings?.tags || '[]')
+    } catch (e) {
+        logWarn('ollama-api', 'collectReportData: invalid settings.tags JSON, using []', e)
+        availableTags = []
+    }
+
+    const tagIdToName = {}
+    for (const group of availableTags) {
+        if (group.tags) {
+            for (const tag of group.tags) {
+                tagIdToName[tag.id] = tag.name
+            }
+        }
+    }
+
+    const tagUsage = {}
+    for (const row of tagsRows) {
+        let tagIds = []
+        try {
+            tagIds = JSON.parse(row.tags || '[]')
+        } catch (e) {
+            logWarn('ollama-api', `collectReportData: invalid tags row JSON for tags.id=${row.id || 'unknown'}, using []`, e)
+            tagIds = []
+        }
+        for (const id of tagIds) {
+            const name = tagIdToName[id] || id
+            if (!tagUsage[name]) tagUsage[name] = 0
+            tagUsage[name]++
+        }
+    }
+
+    const journalCompleteness = tradeCount > 0
+        ? ((notesCount / tradeCount) * 100).toFixed(0) : 'N/A'
+
+    return {
+        startDate, endDate, tradeCount, tradingDays,
+        wins, losses, winRate,
+        totalGrossProceeds: totalGrossProceeds.toFixed(2),
+        totalNetProceeds: totalNetProceeds.toFixed(2),
+        totalFees: totalFees.toFixed(2),
+        profitFactor, appt,
+        bestTradePnl: bestTradePnl === -Infinity ? 'N/A' : bestTradePnl.toFixed(2),
+        worstTradePnl: worstTradePnl === Infinity ? 'N/A' : worstTradePnl.toFixed(2),
+        bestDay, worstDay,
+        longCount: longTrades.length,
+        shortCount: shortTrades.length,
+        longWins, longLosses, longPnl,
+        shortWins, shortLosses, shortPnl,
+        topSymbols,
+        avgStress, avgEmotion,
+        satisfactionRate, journalCompleteness,
+        tagUsage
+    }
+}
+
+function buildPrompt(data, customPrompt = '') {
+    const startDt = new Date(data.startDate * 1000)
+    const endDt = new Date(data.endDate * 1000)
+    const zeitraum = `${startDt.toLocaleDateString('de-DE')} – ${endDt.toLocaleDateString('de-DE')}`
+
+    const bestDayDt = data.bestDay.dateUnix ? new Date(data.bestDay.dateUnix * 1000).toLocaleDateString('de-DE') : 'N/A'
+    const worstDayDt = data.worstDay.dateUnix ? new Date(data.worstDay.dateUnix * 1000).toLocaleDateString('de-DE') : 'N/A'
+
+    const tagLines = Object.entries(data.tagUsage)
+        .sort((a, b) => b[1] - a[1])
+        .map(([name, count]) => `- ${name}: ${count} Trades`)
+        .join('\n') || '- Keine Tags vergeben'
+
+    const symbolLines = data.topSymbols
+        .map(([sym, d]) => `- ${sym}: ${d.count} Trades, PnL: ${d.pnl.toFixed(2)} USDT`)
+        .join('\n') || '- Keine Symbole'
+
+    // Long/Short Performance berechnen
+    const longWins = data.longWins || 0
+    const longLosses = data.longLosses || 0
+    const shortWins = data.shortWins || 0
+    const shortLosses = data.shortLosses || 0
+    const longPnl = data.longPnl || 0
+    const shortPnl = data.shortPnl || 0
+
+    // Screenshot-Hinweis
+    const screenshotHint = data.screenshots && data.screenshots.length > 0
+        ? `\n\nCHART-SCREENSHOTS:\nEs wurden ${data.screenshots.length} Chart-Screenshots beigefügt. Analysiere die Charts und beziehe deine Beobachtungen in die Analyse ein (z.B. Einstiegspunkte, Trendrichtung, Unterstützungs-/Widerstandslinien, Kerzenmuster). Beachte den angegebenen Timeframe (TF) — der Screenshot kann auf einem anderen Timeframe aufgenommen worden sein als der tatsächliche Trade-Timeframe.`
+        : ''
+
+    return `Du bist ein erfahrener Trading-Analyst und Coach. Analysiere AUSSCHLIESSLICH die folgenden Daten aus dem Zeitraum ${zeitraum}.
+Beziehe dich NUR auf diesen Zeitraum. Erfinde keine Daten.
+Verwende Markdown-Formatierung (##, **, Listen).
+Schreibe auf Deutsch.
+
+ZEITRAUM: ${zeitraum}
+HANDELSTAGE: ${data.tradingDays}
+
+PERFORMANCE-DATEN:
+- Trades gesamt: ${data.tradeCount} (Wins: ${data.wins}, Losses: ${data.losses})
+- Win Rate: ${data.winRate}%
+- Brutto PnL: ${data.totalGrossProceeds} USDT
+- Netto PnL: ${data.totalNetProceeds} USDT
+- Gebühren: ${data.totalFees} USDT
+- Profit Factor: ${data.profitFactor}
+- APPT (Durchschnittlicher Gewinn pro Trade): ${data.appt} USDT
+- Bester Trade: ${data.bestTradePnl} USDT
+- Schlechtester Trade: ${data.worstTradePnl} USDT
+- Bester Tag: ${bestDayDt} (${data.bestDay.pnl !== -Infinity ? data.bestDay.pnl.toFixed(2) : 'N/A'} USDT)
+- Schlechtester Tag: ${worstDayDt} (${data.worstDay.pnl !== Infinity ? data.worstDay.pnl.toFixed(2) : 'N/A'} USDT)
+
+LONG vs. SHORT:
+- Long: ${data.longCount} Trades (Wins: ${longWins}, Losses: ${longLosses}, PnL: ${longPnl.toFixed(2)} USDT)
+- Short: ${data.shortCount} Trades (Wins: ${shortWins}, Losses: ${shortLosses}, PnL: ${shortPnl.toFixed(2)} USDT)
+
+TOP SYMBOLE:
+${symbolLines}
+
+PSYCHOLOGIE-DATEN:
+- Ø Stresslevel: ${data.avgStress}/5
+- Ø Emotionslevel: ${data.avgEmotion}/10
+- Zufriedenheitsrate: ${data.satisfactionRate}%
+- Journal-Vollständigkeit: ${data.journalCompleteness}%
+
+TAG-ANALYSE:
+${tagLines}${screenshotHint}
+
+Erstelle den Bericht mit diesen Abschnitten. Jeder Abschnitt MUSS konkrete Zahlen und Interpretationen enthalten — nicht nur die Daten wiederholen:
+
+## Zusammenfassung
+Fasse den Zeitraum ${zeitraum} in 3–4 Sätzen zusammen: Gesamtergebnis, wichtigste Kennzahl, größte Auffälligkeit.
+
+## Performance-Analyse
+Interpretiere die Zahlen: Ist die Win Rate gut genug für den Profit Factor? Wie hoch ist der Anteil der Gebühren am Brutto-PnL? Vergleiche Long vs. Short Performance. Welche Seite war profitabler und warum?
+
+## Psychologische Auswertung
+Was sagen Stress- und Emotionslevel über das Trading-Verhalten? Korreliert hoher Stress mit Verlusten? Wie ist die Zufriedenheit im Verhältnis zur Win Rate? Was bedeutet die Journal-Vollständigkeit für die Selbstreflexion?
+
+## Top Symbole & Strategien
+Welche Symbole waren am profitabelsten, welche haben Verluste verursacht? Gibt es eine Überkonzentration auf bestimmte Assets? Empfehlung zur Diversifikation.
+
+## Stärken
+Was hat der Trader gut gemacht? Sei spezifisch — nenne konkrete Zahlen als Beleg.
+
+## Schwächen & Risiken
+Was muss verbessert werden? Sei direkt und ehrlich. Nenne konkrete Probleme mit Zahlen.
+
+## Empfehlungen für den nächsten Zeitraum
+Gib 3–5 konkrete, umsetzbare Empfehlungen. Keine allgemeinen Floskeln — beziehe dich auf die spezifischen Schwächen aus den Daten.
+
+WICHTIG: Dieser Bericht bezieht sich ausschließlich auf den Zeitraum ${zeitraum} (${data.tradeCount} Trades, ${data.tradingDays} Handelstage). Beschreibe nur die oben genannten Daten.${customPrompt ? `
+
+ZUSÄTZLICHE ANWEISUNGEN DES NUTZERS:
+${customPrompt}` : ''}`
+}

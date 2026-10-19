@@ -1,0 +1,411 @@
+<script setup>
+/**
+ * Kachel „Indizes (Intraday)".
+ *
+ * ES, NQ, RTY und der Dollar-Index als Fünf-Minuten-Kerzen. Krypto läuft rund um die
+ * Uhr, aber der Takt kommt von hier: dreht der Nasdaq-Future, dreht Bitcoin
+ * meistens mit — und die Bewegung beginnt dort, nicht hier.
+ *
+ * Bewusst FUTURES statt Kassa-Indizes (ES=F, NQ=F, RTY=F): der Kassa-Index steht
+ * ausserhalb der Börsenzeiten still, und genau dann handelt man Krypto. Die
+ * Begründung steht ausführlich in `server/makro.js`.
+ *
+ * Die senkrechte Linie markiert die US-Kassaeröffnung. Sie ist der wichtigste
+ * Punkt des Tages: davor ist der Future dünn, danach kommt das Volumen.
+ */
+import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+import * as echarts from 'echarts'
+import dayjs from '../../utils/dayjs-setup.js'
+import { lageZu } from '../../../shared/handelszeiten.js'
+
+const props = defineProps({
+    daten: { type: Object, default: null },
+    gross: { type: Boolean, default: false },
+    params: { type: Object, default: () => ({}) },
+})
+
+const emit = defineEmits(['params', 'anzeige'])
+
+const { t } = useI18n()
+const chartEl = ref(null)
+let chart = null
+let ro = null
+
+const MAERKTE = [
+    { id: 'nasdaq', kurz: 'NQ' },
+    { id: 'sp500', kurz: 'ES' },
+    { id: 'russell', kurz: 'RTY' },
+    { id: 'dxy', kurz: 'DXY' },
+]
+
+/**
+ * Fensterstufen. Die Auflösung hängt mit dran, und zwar so, dass immer
+ * ungefähr gleich viele Kerzen entstehen (~100–150).
+ *
+ * Das ist der Kern der Sache: Yahoos `range=1d` gab für einen Future gerade
+ * zehn Kerzen zurück (gemessen 27.08.2026, `NQ=F` um 06:30 MESZ) — auf einer
+ * grossen Fläche fünf riesige Klötze, an denen man eine Bewegung zwar sieht,
+ * aber nicht einordnen kann. Ein Chart wird nicht dadurch lesbar, dass er
+ * einen langen Zeitraum abdeckt, sondern durch eine sinnvolle Zahl an Kerzen
+ * darin. Der Server holt deshalb immer fünf Tage und schneidet auf `stunden`.
+ */
+const FENSTER = [
+    { h: 6, interval: '5m', label: '6 h' },
+    { h: 12, interval: '5m', label: '12 h' },
+    { h: 24, interval: '15m', label: '24 h' },
+    { h: 72, interval: '30m', label: '3 T' },
+]
+
+/** Welcher Markt gezeichnet wird — die anderen stehen als Zahl daneben. */
+const markt = ref(props.params.markt || 'nasdaq')
+
+/** Aktives Fenster: was der Server geliefert hat, sonst die Vorgabe. */
+const fenster = computed(() => Number(props.daten?.stunden) || 12)
+
+function waehleFenster(f) {
+    // Anders als der Marktwechsel BRAUCHT das einen neuen Abruf: der Server
+    // schneidet die Kerzen zu, der Browser hat die übrigen gar nicht.
+    emit('params', { stunden: f.h, interval: f.interval })
+}
+
+const gewaehlt = computed(() => props.daten?.maerkte?.[markt.value] || null)
+const kerzen = computed(() => gewaehlt.value?.kerzen || [])
+
+/**
+ * Wie alt der angezeigte Kurs WIRKLICH ist.
+ *
+ * Yahoo gibt CME rund 10 und ICE rund 30 Minuten verzögert aus. Der Kachelkopf
+ * zeigte trotzdem die Abrufzeit — ein frischer HTTP-Abruf sah damit aus wie ein
+ * frischer Kurs. Gerechnet wird aus `quellenStand` (Yahoos
+ * `regularMarketTime`), also gemessen und nicht aus der bekannten Verzögerung
+ * behauptet; die dient nur als Beschriftung, wenn der Zeitstempel fehlt.
+ *
+ * Eigene Uhr statt des Servers `alterMinuten`: die Kachel holt einmal pro
+ * Minute, die Zahl soll dazwischen nicht stehenbleiben.
+ */
+const jetzt = ref(Date.now())
+let uhr = null
+
+const alterText = computed(() => {
+    const m = gewaehlt.value
+    if (!m) return ''
+    const quelle = Number(m.quellenStand)
+    if (!Number.isFinite(quelle) || quelle <= 0) {
+        // Kein Zeitstempel: die dokumentierte Verzögerung als Richtwert, klar
+        // als solcher beschriftet. Lieber ein „ca." als eine erfundene Minute.
+        return m.erwartetMin ? t('livetrading.indizes.verzoegertCa', { min: m.erwartetMin }) : ''
+    }
+    const min = Math.max(0, Math.round((jetzt.value - quelle) / 60000))
+    return t('livetrading.indizes.alt', { min })
+})
+
+/** Über der erwarteten Verzögerung: die Zahl wird eingefärbt, nicht versteckt. */
+const alterAuffaellig = computed(() => {
+    const m = gewaehlt.value
+    const quelle = Number(m?.quellenStand)
+    if (!Number.isFinite(quelle) || quelle <= 0) return false
+    return (jetzt.value - quelle) / 60000 > (Number(m.erwartetMin) || 0) + 5
+})
+
+/** Prozentabstand zum Vortagesschluss — die Zahl, auf die alle schauen. */
+function delta(m) {
+    if (!m?.preis || !m?.vorherClose) return null
+    return ((m.preis - m.vorherClose) / m.vorherClose) * 100
+}
+
+const farbeFuer = (d) => d == null ? 'var(--white-60)' : (d >= 0 ? '#4ec9a0' : '#ff6b7a')
+
+/**
+ * Zeitpunkt der US-Kassaeröffnung im dargestellten Zeitraum.
+ *
+ * Kommt aus `shared/handelszeiten.js` statt aus einer festen Uhrzeit — sonst
+ * läge die Linie in den Sommerzeit-Lücken eine Stunde falsch.
+ */
+const eroeffnung = computed(() => {
+    if (!kerzen.value.length) return null
+    const letzte = kerzen.value[kerzen.value.length - 1].t
+    const lage = lageZu(letzte)
+    // Die Marke kann heute schon vorbei oder noch nicht gekommen sein — beides
+    // liefert `phasenHeute`, also dort nach der Kassasitzung fragen
+    const kassa = lage.phasenHeute.find(p => p.id === 'usKassa')
+    if (!kassa) return null
+    const erste = kerzen.value[0].t
+    return kassa.von >= erste && kassa.von <= letzte ? kassa.von : null
+})
+
+const proz = (v) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)} %`
+
+function zeichne() {
+    if (!chart || !kerzen.value.length) return
+    const k = kerzen.value
+    const zeiten = k.map(c => c.t)
+    // ECharts-Kerzen erwarten [open, close, low, high] — in genau dieser Folge
+    const werte = k.map(c => [c.o, c.c, c.l, c.h])
+    const vorher = gewaehlt.value?.vorherClose
+
+    chart.setOption({
+        backgroundColor: 'transparent',
+        animation: false,
+        grid: props.gross
+            ? { left: 58, right: 14, top: 18, bottom: 30 }
+            : { left: 44, right: 6, top: 10, bottom: 20 },
+        tooltip: {
+            trigger: 'axis',
+            axisPointer: { type: 'cross' },
+            backgroundColor: 'rgba(20,20,24,0.94)',
+            borderWidth: 0,
+            textStyle: { color: 'rgba(255,255,255,0.87)', fontSize: 11 },
+            formatter: (p) => {
+                const a = Array.isArray(p) ? p[0] : p
+                const i = a?.dataIndex
+                if (i == null || !k[i]) return ''
+                const c = k[i]
+                return [
+                    dayjs(c.t).format('HH:mm'),
+                    `O ${c.o}  H ${c.h}`,
+                    `L ${c.l}  C ${c.c}`,
+                    c.v ? `Vol ${c.v}` : '',
+                ].filter(Boolean).join('<br>')
+            },
+        },
+        xAxis: {
+            type: 'category',
+            data: zeiten.map(t => dayjs(t).format('HH:mm')),
+            axisLabel: {
+                color: 'rgba(255,255,255,0.6)',
+                fontSize: props.gross ? 11 : 9,
+                // Bei 120 Kerzen wäre jede Marke Brei
+                interval: Math.max(1, Math.floor(k.length / (props.gross ? 10 : 5))),
+            },
+            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.14)' } },
+            axisTick: { show: false },
+        },
+        yAxis: {
+            type: 'value',
+            scale: true,
+            position: 'left',
+            axisLabel: { color: 'rgba(255,255,255,0.6)', fontSize: props.gross ? 11 : 9 },
+            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+        },
+        series: [{
+            type: 'candlestick',
+            data: werte,
+            itemStyle: {
+                color: '#4ec9a0', color0: '#ff6b7a',
+                borderColor: '#4ec9a0', borderColor0: '#ff6b7a',
+                borderWidth: 1,
+            },
+            markLine: {
+                silent: true,
+                symbol: 'none',
+                animation: false,
+                data: [
+                    // Vortagesschluss: die Nulllinie des Tages
+                    ...(vorher ? [{
+                        yAxis: vorher,
+                        lineStyle: { color: 'rgba(255,255,255,0.35)', type: 'dashed', width: 1 },
+                        label: {
+                            show: props.gross, position: 'insideEndTop',
+                            formatter: t('livetrading.indizes.vortag'),
+                            color: 'rgba(255,255,255,0.6)', fontSize: 10,
+                        },
+                    }] : []),
+                    // US-Kassaeröffnung
+                    ...(eroeffnung.value ? [{
+                        xAxis: dayjs(eroeffnung.value).format('HH:mm'),
+                        lineStyle: { color: '#ffc93c', type: 'solid', width: 1 },
+                        label: {
+                            show: props.gross, position: 'insideEndBottom',
+                            formatter: t('livetrading.indizes.eroeffnung'),
+                            color: '#ffc93c', fontSize: 10,
+                        },
+                    }] : []),
+                ],
+            },
+        }],
+    }, true)
+}
+
+function waehle(id) {
+    markt.value = id
+    // Nur Anzeige: alle Märkte stecken schon in derselben Nutzlast, ein
+    // Umschalten darf keinen neuen Abruf auslösen.
+    emit('anzeige', { markt: id })
+    nextTick(zeichne)
+}
+
+onMounted(async () => {
+    await nextTick()
+    if (!chartEl.value) return
+    chart = echarts.init(chartEl.value)
+    ro = new ResizeObserver(() => chart?.resize())
+    ro.observe(chartEl.value)
+    zeichne()
+    requestAnimationFrame(() => chart?.resize())
+    // 15 s reichen für eine Minutenangabe und kosten nichts — die Kachel selbst
+    // holt nur einmal pro Minute neu, das Alter soll dazwischen weiterlaufen.
+    uhr = setInterval(() => { jetzt.value = Date.now() }, 15000)
+})
+
+onBeforeUnmount(() => {
+    ro?.disconnect()
+    ro = null
+    chart?.dispose()
+    chart = null
+    clearInterval(uhr)
+    uhr = null
+})
+
+watch(() => props.daten, zeichne)
+</script>
+
+<template>
+    <div v-if="daten" class="ixWrap" :class="{ gross }">
+        <div class="ixKopf">
+            <button v-for="m in MAERKTE" :key="m.id" type="button"
+                :class="['ixPille', markt === m.id ? 'active' : '']"
+                @click.stop="waehle(m.id)">
+                <span class="ixKurz">{{ m.kurz }}</span>
+                <span v-if="daten.maerkte?.[m.id]" class="ixDelta"
+                    :style="{ color: farbeFuer(delta(daten.maerkte[m.id])) }">
+                    {{ proz(delta(daten.maerkte[m.id])) }}
+                </span>
+                <span v-else class="ixDelta ixFehlt">—</span>
+            </button>
+
+            <span class="ixFenster">
+                <button v-for="f in FENSTER" :key="f.h" type="button"
+                    :class="['ctl-pill', fenster === f.h ? 'active' : '']"
+                    @click.stop="waehleFenster(f)">{{ f.label }}</button>
+            </span>
+        </div>
+
+        <div v-if="gewaehlt" class="ixPreis">
+            <b>{{ gewaehlt.preis?.toLocaleString(undefined, { maximumFractionDigits: 3 }) }}</b>
+            <span class="ixName">{{ gewaehlt.name }}</span>
+            <!-- Marktzeit, nicht Abrufzeit: die Uhrzeit ist die des Kurses,
+                 daneben steht sein Alter. Beides zusammen, weil eine Uhrzeit
+                 allein nicht verrät, dass sie zehn Minuten zurückliegt. -->
+            <span v-if="gewaehlt.quellenStand" class="ixZeit">
+                {{ dayjs(gewaehlt.quellenStand).format('HH:mm') }}
+            </span>
+            <span v-if="alterText" class="ixAlter" :class="{ ixAltertAuf: alterAuffaellig }">{{ alterText }}</span>
+        </div>
+
+        <div ref="chartEl" class="ixChart"></div>
+
+        <div v-if="!kerzen.length" class="radarLeer">{{ t('livetrading.indizes.keineKerzen') }}</div>
+        <div v-if="daten.hinweis" class="ixHinweis">{{ daten.hinweis }}</div>
+    </div>
+</template>
+
+<style scoped>
+/* Rechtsbündig abgesetzt: die Marktpillen wählen WAS gezeichnet wird, diese
+   hier WIE WEIT zurück — zwei verschiedene Fragen, also zwei Gruppen. */
+.ixFenster {
+    margin-left: auto;
+    display: inline-flex;
+    gap: 0.15rem;
+}
+
+.ixFenster .ctl-pill {
+    padding: 0.05rem 0.4rem;
+    font-size: 0.7rem;
+}
+
+.ixWrap {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    gap: 0.25rem;
+}
+
+.ixKopf {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.ixPille {
+    display: flex;
+    align-items: baseline;
+    gap: 0.3rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid transparent;
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    font-size: 0.76rem;
+    color: var(--white-60);
+    cursor: pointer;
+}
+
+.ixPille.active {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: var(--white-87);
+}
+
+.ixKurz { font-weight: 700; }
+.ixDelta { font-variant-numeric: tabular-nums; }
+.ixFehlt { opacity: 0.4; }
+
+.ixPreis {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.ixPreis b {
+    font-size: 1.05rem;
+    color: var(--white-87);
+}
+
+.ixName {
+    font-size: 0.72rem;
+    color: var(--white-60);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ixZeit {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--white-60);
+}
+
+/* Das Alter steht direkt neben der Marktzeit und darf sie nicht überstrahlen —
+   auffällig wird es erst, wenn es die erwartete Verzögerung überschreitet. */
+.ixAlter {
+    font-size: 0.68rem;
+    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    white-space: nowrap;
+}
+
+.ixAlter.ixAltertAuf {
+    color: #e8b04b;
+}
+
+/* Der Chart nimmt den Rest — `min-height: 0` ist Pflicht, sonst sprengt der
+   Canvas in einem Flex-Container die Kachelhöhe. */
+.ixChart {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+}
+
+/* Gross-Ansicht: der Overlay-Körper hat KEINE feste Höhe (er wächst mit dem
+   Inhalt), damit kollabiert `flex: 1` auf 0 und der Chart verschwand komplett.
+   Eigene Mindesthöhe wie bei den anderen Chart-Kacheln (KachelLsOi: 44vh). */
+.ixWrap.gross .ixChart {
+    min-height: 52vh;
+}
+
+.ixHinweis {
+    font-size: 0.7rem;
+    color: #ffc93c;
+}
+</style>

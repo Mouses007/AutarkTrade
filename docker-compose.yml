@@ -1,0 +1,78 @@
+services:
+  journal:
+    image: mouses007/trading-journal:latest
+    container_name: crypto-trading-journal
+    ports:
+      # ACHTUNG: ohne "127.0.0.1:"-Präfix ist der Port im ganzen LAN erreichbar.
+      # Das ist eine bewusste Freigabe und setzt das Passwort-Gate voraus —
+      # ohne Passwort startet der Container gesperrt (erst „Passwort festlegen"
+      # im Browser schaltet die API frei; bewusst offen: CTJ_ALLOW_INSECURE=1).
+      # Nur lokal am Host: - "127.0.0.1:${CTJ_PORT:-8080}:8080"
+      - "${CTJ_PORT:-8080}:8080"
+    environment:
+      - CTJ_SECRET=${CTJ_SECRET}
+      - DB_TYPE=${DB_TYPE:-postgresql}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      # Absoluter Host-Pfad zum Projekt-Dir (muss in .env gesetzt sein).
+      # Der App-Update-Button im Docker-Modus uebergibt diesen Pfad an
+      # den Helfer-Container, damit compose das richtige Projekt findet.
+      - CTJ_HOST_COMPOSE_DIR=${CTJ_HOST_COMPOSE_DIR}
+      # Hinter Caddy tragen alle Klienten dieselbe Peer-IP — der Login-
+      # Fehlversuchs-Zähler würde zu EINEM Eimer kollabieren und fremde
+      # Fehlversuche sperrten den Eigentümer aus. Mit =1 liest NUR dieser
+      # Zähler die vom Proxy angehängte X-Forwarded-For-Adresse; alle
+      # anderen Prüfungen (isLocalRequest) bleiben bei der Peer-IP.
+      - CTJ_TRUST_PROXY=${CTJ_TRUST_PROXY:-1}
+    volumes:
+      # Docker-Socket — ermoeglicht Klick-Update aus der App heraus. Der Mount
+      # ist NICHT read-only (das Update startet einen Helper-Container) und
+      # damit Root-aequivalent auf dem Host. Entferne den Mount, wenn du
+      # Updates nur manuell via "docker compose pull && docker compose up -d"
+      # machen willst.
+      - /var/run/docker.sock:/var/run/docker.sock
+    env_file:
+      - .env
+    restart: unless-stopped
+
+  # TLS-Termination für den LAN-Zugriff (siehe Caddyfile + DOCKER.md). Rein
+  # additiv: "journal" bleibt unverändert per HTTP auf CTJ_PORT erreichbar
+  # (u.a. für das ESP32-Display, das kein TLS spricht) — Caddy kommt als
+  # zweiter, unabhängiger Eingang dazu, erreicht "journal" über den internen
+  # Compose-Netzwerknamen.
+  caddy:
+    image: caddy:2-alpine
+    container_name: crypto-trading-journal-caddy
+    ports:
+      # 443 ist auf der NAS bereits durch die DSM (nginx) belegt, deshalb ein
+      # eigener Port statt des HTTPS-Standardports.
+      - "${CTJ_TLS_PORT:-8443}:443"
+    environment:
+      # Wohin Caddy weiterreicht. Hier heisst der Service "journal"; im Projekt
+      # des Synology Container Managers heisst er "trading-journal" — dort also
+      # CTJ_UPSTREAM=trading-journal:8080 setzen.
+      - CTJ_UPSTREAM=${CTJ_UPSTREAM:-journal:8080}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+    depends_on:
+      - journal
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+
+# Auto-Updates (Watchtower) sind bewusst NICHT Teil dieses Compose-Files.
+# Fuer lokalen Klick-Update-Betrieb reicht der Socket-Mount oben + der
+# Update-Button in der App (Docker-Mode erkannt -> App startet Helper-
+# Container, der "docker compose pull + up -d" gegen diesen Compose-File
+# ausfuehrt).
+# Wer einen Background-Poller will, kann Watchtower separat starten:
+#   docker run -d --name watchtower-journal \
+#     -v /var/run/docker.sock:/var/run/docker.sock \
+#     -e WATCHTOWER_POLL_INTERVAL=3600 -e WATCHTOWER_CLEANUP=true \
+#     containrrr/watchtower crypto-trading-journal

@@ -1,0 +1,604 @@
+/**
+ * Orchestriert die Live-Datenschicht der Heatmap:
+ * WebSocket + Orderbuch-Sync + Frame-Takt + Ringpuffer.
+ *
+ * Bewusst frei von Vue: der Hot Path fasst nur TypedArrays und Maps an. Die
+ * View bekommt Zustandswechsel über `onStatus` und neue Spalten über `onFrame`.
+ */
+
+import axios from 'axios'
+import { OrderBook } from '../../shared/orderbook.js'
+import { BinanceStream, buildStreamUrl, buildLiquidationUrl } from './binanceStream.js'
+import { HeatmapRing, FLAG_LUECKE, FLAG_OHNE_BUCH } from './heatmapRing.js'
+import { TradeRing } from './tradeRing.js'
+import { pickBucketSize, inferTickSize } from '../../shared/priceBins.js'
+import { tickSizeFor } from './liveSymbols.js'
+import { loadReplay } from './replaySource.js'
+
+/*
+ * Zeilen und erfasstes Band des Rings.
+ *
+ * Beides zusammen bestimmt über `pickBucketSize` die Preisauflösung. Bis zum
+ * 07.09.2026 standen hier 600 Zeilen über ±1,5 %, was bei BTC einen Bucket von
+ * 4 USD ergab — bei der Vorgabe-Ansicht knapp 100 Zeilen auf 1000 Pixel, also
+ * fingerdicke Balken. Gemessen: 900 Zeilen über ±0,8 % ergeben 2 USD und damit
+ * rund 200 Zeilen im Bild.
+ *
+ * Das erfasste Band schrumpft dabei von ±1,5 % auf ±1,14 % (900 × 2 USD) —
+ * bewusst, denn der Binance-Snapshot deckt gemessen nur ±0,17 % ab. Was
+ * darüber hinausgeht, ist ohnehin nur, was der Diff-Strom zufällig liefert.
+ *
+ * Der Speicherdeckel greift bei langer Historie: der Ring belegt cap × rows × 4
+ * Byte, und bei 120 Minuten wären 900 Zeilen 52 MB. Dann wird das Raster
+ * gröber statt der Speicher grösser — eine lange Historie kostet Auflösung,
+ * nicht Arbeitsspeicher.
+ */
+const RING_ROWS_WUNSCH = 900
+const RING_ROWS_MIN = 300
+const RING_BUDGET_BYTES = 32 * 1024 * 1024
+
+/** Zeilenzahl für `cap` Spalten unter dem Speicherdeckel. */
+function zeilenFuerRing(cap) {
+    const ausBudget = Math.floor(RING_BUDGET_BYTES / 4 / Math.max(1, cap))
+    return Math.max(RING_ROWS_MIN, Math.min(RING_ROWS_WUNSCH, ausBudget))
+}
+
+const PRUNE_INTERVAL_MS = 30000
+// Mindestabstand zwischen zwei Resyncs wegen gekreuztem Buch
+const KREUZ_RESYNC_ABSTAND_MS = 10000
+// Soviele Takte darf der Schreiber höchstens nachholen. Darüber wird eine
+// Lücke markiert statt das aktuelle Buch rückwirkend zu vervielfachen.
+const MAX_NACHHOLEN = 3
+const MAX_SNAPSHOT_RETRIES = 5
+
+export class LiveFeed {
+    /**
+     * @param {object} opts
+     * @param {string} opts.symbol       z.B. 'BTCUSDT'
+     * @param {'futures'|'spot'} opts.market
+     * @param {number} [opts.frameMs]    Spaltentakt (Default 500 ms)
+     * @param {number} [opts.rows]       erfasste Preis-Buckets
+     * @param {number} [opts.rangePct]   erfasstes Band um den Mid, einseitig in %
+     * @param {number} [opts.historyMin] Historienlänge in Minuten
+     * @param {boolean} [opts.pauseInBackground]
+     * @param {function} [opts.onStatus] (state, detail) => void
+     * @param {function} [opts.onFrame]  (ts) => void
+     */
+    constructor(opts) {
+        this.symbol = opts.symbol
+        this.market = opts.market || 'futures'
+        this.frameMs = opts.frameMs || 500
+        // Feste Vorgabe von aussen (Tests) schlägt den Speicherdeckel
+        this.rowsFest = opts.rows || 0
+        this.rows = this.rowsFest || RING_ROWS_WUNSCH
+        this.rangePct = opts.rangePct ?? 0.8
+        this.historyMin = opts.historyMin || 30
+        this.pauseInBackground = opts.pauseInBackground !== false
+        // Vorlauf aus der eigenen Aufzeichnung, 0 = aus
+        this.prefillMs = Math.max(0, (opts.prefillMin || 0) * 60000)
+        this.onStatus = opts.onStatus
+        this.onFrame = opts.onFrame
+
+        this.book = new OrderBook()
+        this.ring = null           // erst nach dem ersten Snapshot (bucketSize!)
+        // 100k statt 20k: bei BTC unter Last (@trade, einzelne Fills) waren
+        // 20k Events in wenigen Minuten voll — Blasen und Volumenprofil
+        // deckten dann stillschweigend weniger Historie ab als die Heatmap
+        // zeigt. 100k ≈ 2 MB, das trägt auch 120-Minuten-Fenster.
+        this.trades = new TradeRing(100000)
+        // Liquidationen sind selten (einzelne pro Symbol und Stunde) — ein
+        // kleiner Ring reicht, und er lebt getrennt vom Orderbuch.
+        this.liquidations = new TradeRing(2000)
+        this.stream = null
+        this.liqStream = null
+
+        this.tickSize = null
+        this.bucketSize = null
+        this.state = 'idle'
+        this.pending = []          // gepufferte Diffs bis der Snapshot da ist
+        this.buffering = true
+        this.snapshotTries = 0
+        this.gapPending = false
+
+        this.frameTimer = null
+        this.pruneTimer = null
+        this.snapshotTimer = null
+        this.syncWatchdog = null
+        this.nextSlot = 0
+        this.kreuzTakte = 0        // Takte in Folge ohne gültiges Mid
+        this.letzteKreuzung = 0    // Zeitpunkt des letzten deswegen ausgelösten Resyncs
+        this.stopped = false
+        this.prefilling = false    // Ticker pausiert, solange der Vorlauf lädt
+        this._onVisibility = this._onVisibility.bind(this)
+    }
+
+    get isFutures() { return this.market === 'futures' }
+
+    async start() {
+        this.stopped = false
+        this._setState('connecting')
+        document.addEventListener('visibilitychange', this._onVisibility)
+        await this._loadTickSize()
+        // Während des Awaits kann stop() gelaufen sein (schneller
+        // Symbolwechsel) — ohne diese Prüfung liefen WebSocket und Timer
+        // eines toten Feeds verwaist weiter.
+        if (this.stopped) return
+        this._openStream()
+        this._startFrameTicker()
+        this.pruneTimer = setInterval(() => {
+            const { mid } = this.book.bestPrices()
+            this.book.prune(mid)
+            // Huckepack auf demselben Takt: unabhängige Gegenprobe des Buchs
+            this._selbstkontrolle().catch(() => { /* nächster Takt */ })
+        }, PRUNE_INTERVAL_MS)
+    }
+
+    /**
+     * Selbstkontrolle gegen stille Drift: ein Mini-Snapshot (limit=5, Weight 2)
+     * ist eine vom WebSocket unabhängige zweite Quelle für das Top-of-Book.
+     * Weicht unser Buch dort in zwei Takten hintereinander um mehr als 10 bp
+     * ab, ist es kaputt, egal was die pu-Kette sagt (der Klassiker wären
+     * doppelt angewandte Diffs) — dann voller Neuaufbau. Zwei Takte statt
+     * einem: ein einzelner Treffer kann ein heftiger Move zwischen Snapshot-
+     * Aufnahme und Vergleich sein.
+     */
+    async _selbstkontrolle() {
+        if (this.stopped || this.buffering || this.prefilling || !this.book.synced) return
+        if (typeof document !== 'undefined' && document.hidden) return
+        const { data } = await axios.get('/api/binance/depth', {
+            params: { symbol: this.symbol, market: this.market, limit: 5 },
+            timeout: 5000,
+        })
+        if (this.stopped || this.buffering || !this.book.synced) return
+        const eigen = this.book.bestPrices()
+        const snapBid = Number(data.bids?.[0]?.[0])
+        const snapAsk = Number(data.asks?.[0]?.[0])
+        if (!eigen.mid || !Number.isFinite(snapBid) || !Number.isFinite(snapAsk)) return
+        const abweichung = Math.max(
+            Math.abs(eigen.bestBid - snapBid),
+            Math.abs(eigen.bestAsk - snapAsk)
+        ) / eigen.mid
+        if (abweichung > 0.001) {
+            this._kontrolleTreffer = (this._kontrolleTreffer || 0) + 1
+            if (this._kontrolleTreffer >= 2) {
+                this._kontrolleTreffer = 0
+                this._resync(`Selbstkontrolle: Top-of-Book weicht ${(abweichung * 10000).toFixed(1)} bp vom Snapshot ab`)
+            }
+        } else {
+            this._kontrolleTreffer = 0
+        }
+    }
+
+    stop() {
+        this.stopped = true
+        document.removeEventListener('visibilitychange', this._onVisibility)
+        this.stream?.stop()
+        this.stream = null
+        this.liqStream?.stop()
+        this.liqStream = null
+        clearInterval(this.frameTimer)
+        clearInterval(this.pruneTimer)
+        clearTimeout(this.snapshotTimer)
+        clearTimeout(this.syncWatchdog)
+        // Die laufende Snapshot-Anfrage mitnehmen: `stopped` verhindert nur die
+        // Auswertung, die HTTP-Verbindung selbst bliebe sonst offen stehen.
+        this._snapshotAbbruch?.abort()
+        this._snapshotAbbruch = null
+        this.frameTimer = this.pruneTimer = this.snapshotTimer = this.syncWatchdog = null
+        this._setState('idle')
+    }
+
+    // ── Verbindung ──────────────────────────────────────────
+
+    _openStream() {
+        if (this.stopped) return
+        this.stream?.stop()
+        this.snapshotTries = 0
+        this.stream = new BinanceStream({
+            url: buildStreamUrl(this.symbol, this.market),
+            onMessage: (msg) => this._onMessage(msg),
+            // Reihenfolge ist entscheidend: erst puffern, dann Snapshot holen.
+            // Eine frische Verbindung ist ein frischer Versuch: ohne den Reset
+            // blieb der Feed nach 5 Fehlversuchen (Proxy kurz weg) dauerhaft im
+            // Fehlerzustand, weil der nächste Reconnect mit verbrauchtem Budget
+            // startete — Erholung gab es nur über Symbolwechsel oder Reload.
+            onOpen: () => { this.snapshotTries = 0; this._beginSync() },
+            onStatus: (s) => {
+                if (s === 'closed' || s === 'connecting') {
+                    this.buffering = true
+                    this.gapPending = true
+                    if (s === 'closed') this._setState('reconnecting')
+                }
+            },
+        })
+        this.stream.connect()
+        this._openLiquidationStream()
+    }
+
+    /**
+     * Zweiter, entkoppelter Socket für Zwangsliquidationen (`/market`-Route).
+     * Fällt er aus, läuft die Heatmap unverändert weiter — deshalb kein
+     * gemeinsamer Status und kein Resync.
+     */
+    _openLiquidationStream() {
+        if (this.stopped) return
+        this.liqStream?.stop()
+        this.liqStream = null
+        const url = buildLiquidationUrl(this.symbol, this.market)
+        if (!url) return
+        this.liqStream = new BinanceStream({
+            url,
+            silenceLimitMs: 0,   // Stille ist hier normal, siehe BinanceStream
+            onMessage: (msg) => {
+                const data = msg.data || msg
+                if (data.e !== 'forceOrder' || !data.o) return
+                const order = data.o
+                // S = Seite der Liquidations-ORDER: 'SELL' schliesst eine Long-
+                // Position, 'BUY' eine Short-Position.
+                // +ap statt (ap || p): der String "0" ist truthy — eine
+                // ungefüllte Order (ap="0", l="0") landete sonst bei Preis
+                // UND Menge 0 statt beim Orderpreis/der Ordermenge.
+                this.liquidations.push(
+                    order.T,
+                    +order.ap || +order.p,
+                    +order.l || +order.q,
+                    order.S === 'BUY'
+                )
+            },
+        })
+        this.liqStream.connect()
+    }
+
+    _beginSync(verzoegerung = 200) {
+        this.book.reset()
+        this.pending.length = 0
+        this.buffering = true
+        this._setState('syncing')
+        // Kurz warten, damit garantiert Diffs im Puffer liegen, die den
+        // Snapshot überlappen.
+        clearTimeout(this.snapshotTimer)
+        clearTimeout(this.syncWatchdog)
+        this.snapshotTimer = setTimeout(() => this._fetchSnapshot(), verzoegerung)
+    }
+
+    async _fetchSnapshot() {
+        if (this.stopped) return
+        /*
+         * Timeout und Abbruch sind hier keine Feinheit, sondern der Unterschied
+         * zwischen „kaputt" und „kaputt und still". Axios wartet ohne `timeout`
+         * unbegrenzt. Hängt der Depth-Proxy, kommt der Snapshot nie an — und
+         * weil der Sync-Wächter erst NACH einem eingetroffenen Snapshot scharf
+         * wird, greift auch der nicht. Der Zustand bleibt `syncing`, der
+         * Diff-Puffer läuft bis 5000 Ereignisse voll und rotiert.
+         *
+         * Die Heatmap zeigt dann ein totes Buch, ohne es zu sagen. Der Recorder
+         * auf dem Server macht es seit je richtig (`timeout: 10000`).
+         */
+        this._snapshotAbbruch?.abort()
+        this._snapshotAbbruch = typeof AbortController !== 'undefined' ? new AbortController() : null
+        try {
+            const { data } = await axios.get('/api/binance/depth', {
+                params: { symbol: this.symbol, market: this.market, limit: 1000 },
+                timeout: 8000,
+                signal: this._snapshotAbbruch?.signal,
+            })
+            if (this.stopped) return
+
+            this.book.applySnapshot(data)
+            if (!this.tickSize) {
+                const { mid } = this.book.bestPrices()
+                this.tickSize = inferTickSize(data) || (mid ? mid * 1e-5 : 0.01)
+            }
+            console.log(`[live] Snapshot lastUpdateId=${data.lastUpdateId}, Puffer=${this.pending.length} Events`)
+
+            let applied = 0
+            for (const event of this.pending) {
+                const result = this.book.applyDiff(event, this.isFutures)
+                if (result === 'ok') applied++
+                else if (result === 'resync') { this._resync('Lücke im Puffer'); return }
+            }
+            this.pending.length = 0
+
+            this._ensureRing()
+            // Ab hier laufen Diffs direkt ins Buch. Der Snapshot wird IMMER nach
+            // den gepufferten Events geholt, deshalb überlappt ihn meist erst
+            // das nächste eintreffende Event — darauf warten statt einen neuen
+            // Snapshot zu ziehen (das erzeugte sonst eine Endlosschleife).
+            this.buffering = false
+
+            if (this.book.synced) {
+                this.snapshotTries = 0
+                console.log(`[live] synchronisiert nach ${applied} Events`)
+                this._setState('live')
+            } else {
+                this._armSyncWatchdog()
+            }
+
+        } catch (error) {
+            if (this.stopped) return
+            // Ein selbst ausgelöster Abbruch (Symbolwechsel, stop()) ist kein
+            // Fehlversuch — sonst verbraucht ein Klick das Wiederholbudget.
+            if (error.code === 'ERR_CANCELED' || error.name === 'CanceledError') return
+            const message = error.response?.data?.error || error.message
+            if (++this.snapshotTries >= MAX_SNAPSHOT_RETRIES) {
+                this._setState('error', message)
+                return
+            }
+            // Steigend statt starr: hängt der Proxy, hämmert der Browser sonst
+            // fünfmal im Sekundentakt gegen dieselbe tote Verbindung.
+            const wartezeit = Math.min(1000 * 2 ** (this.snapshotTries - 1), 15000)
+            this.snapshotTimer = setTimeout(() => this._fetchSnapshot(), wartezeit)
+        }
+    }
+
+    /**
+     * Fällt der erste passende Diff aus (dürfte nicht vorkommen), wird nach 5 s
+     * doch ein frischer Snapshot gezogen — so bleibt kein toter Zustand stehen.
+     */
+    _armSyncWatchdog() {
+        clearTimeout(this.syncWatchdog)
+        this.syncWatchdog = setTimeout(() => {
+            if (this.stopped || this.book.synced) return
+            if (++this.snapshotTries >= MAX_SNAPSHOT_RETRIES) {
+                this._setState('error', 'Orderbuch konnte nicht synchronisiert werden')
+                return
+            }
+            this._resync('kein überlappendes Event nach 5 s')
+        }, 5000)
+    }
+
+    _resync(reason) {
+        console.log(`[live] RESYNC: ${reason}`)
+        this.gapPending = true
+        // Bremse statt Budget: reisst die pu-Kette wiederholt kurz nacheinander,
+        // liegt es nicht am Einzelfall, sondern am Stream — dann im Sekundentakt
+        // weiterzuprobieren zöge pro Zyklus einen Snapshot (Weight 20) und
+        // brächte doch nichts. Das 60-s-Fenster leert sich von selbst wieder.
+        const now = Date.now()
+        this._resyncZeiten = (this._resyncZeiten || []).filter(t => now - t < 60000)
+        this._resyncZeiten.push(now)
+        this._beginSync(this._resyncZeiten.length > 3 ? 5000 : undefined)
+    }
+
+    _onMessage(msg) {
+        const stream = msg.stream || ''
+        const data = msg.data || msg
+        if (data.e === 'trade' || data.e === 'aggTrade') {
+            this.trades.pushBinanceTrade(data)
+            return
+        }
+        if (!(stream.includes('@depth') || data.e === 'depthUpdate')) return
+
+        if (this.buffering) {
+            this.pending.push(data)
+            // Schutz gegen unbegrenztes Wachstum, falls der Snapshot nie kommt
+            if (this.pending.length > 5000) this.pending.splice(0, this.pending.length - 5000)
+            return
+        }
+        const result = this.book.applyDiff(data, this.isFutures)
+        if (result === 'resync') {
+            this._resync(`Lücke erkannt (pu=${data.pu}, erwartet ${this.book.prevU})`)
+        } else if (result === 'ok' && this.state !== 'live') {
+            clearTimeout(this.syncWatchdog)
+            this.snapshotTries = 0
+            console.log('[live] synchronisiert')
+            this._setState('live')
+        }
+    }
+
+    // ── Frames ──────────────────────────────────────────────
+
+    _ensureRing() {
+        const { mid } = this.book.bestPrices()
+        if (!mid) return
+        const cap = Math.ceil((this.historyMin * 60 * 1000) / this.frameMs)
+        const rows = this.rowsFest || zeilenFuerRing(cap)
+        const bucketSize = pickBucketSize(this.tickSize, mid, this.rangePct, rows)
+        if (this.ring && this.bucketSize === bucketSize && this.rows === rows) return
+        this.rows = rows
+        this.bucketSize = bucketSize
+        this.ring = new HeatmapRing({ cap, rows, bucketSize })
+        console.log(`[live] Ring: ${cap} Spalten × ${rows} Zeilen, Bucket ${bucketSize}`)
+        // Historie gibt es nur aus der eigenen Aufzeichnung — Binance liefert
+        // keine vergangene Orderbuch-Tiefe. Läuft der Recorder für dieses
+        // Symbol, wird der Ring damit vorbelegt und der Live-Betrieb schliesst
+        // nahtlos an.
+        //
+        // Solange der Vorlauf lädt, schreibt der Ticker NICHT (siehe _tick):
+        // beide teilen sich denselben Ring, und der fertig geladene Vorlauf
+        // setzte früher head/count/nextSlot zurück — während des HTTP-Abrufs
+        // geschriebene Live-Spalten wurden dabei überschrieben bzw. mit
+        // Aufzeichnungsdaten vermischt.
+        if (this.prefillMs > 0) {
+            this.prefilling = true
+            this._prefill()
+                .catch(() => { /* ohne Vorlauf weiter */ })
+                .finally(() => { this.prefilling = false })
+        }
+    }
+
+    /**
+     * Füllt den Ring mit den letzten `prefillMs` aus der Aufzeichnung.
+     *
+     * Aufzeichnung und Live-Ansicht laufen auf unterschiedlichen Rastern
+     * (Recorder z.B. 1 s / 200 Zeilen, live 500 ms / 600 Zeilen), deshalb wird
+     * in Zeit UND Preis umgerechnet — massenerhaltend, damit die Farbskala
+     * über die Nahtstelle hinweg dieselbe Bedeutung behält.
+     */
+    async _prefill() {
+        const ring = this.ring
+        if (!ring || ring.count) return
+
+        const frameMs = this.frameMs
+        const letzterSlot = Math.floor(Date.now() / frameMs) * frameMs
+        const spalten = Math.min(Math.floor(this.prefillMs / frameMs), ring.cap - 2)
+        if (spalten < 2) return
+        const ersterSlot = letzterSlot - spalten * frameMs
+
+        const rec = await loadReplay({
+            symbol: this.symbol, market: this.market,
+            from: ersterSlot, to: letzterSlot,
+        })
+        if (this.stopped || !rec?.ring || !rec.cols) return
+
+        const src = rec.ring
+        const verhaeltnis = ring.bucketSize / src.bucketSize
+        let gefuellt = 0
+
+        for (let i = 0; i < spalten; i++) {
+            const ts = ersterSlot + i * frameMs
+            const srcCol = Math.floor((ts - rec.startTs) / rec.frameMs)
+            if (srcCol < 0 || srcCol >= src.cap || !src.mid[srcCol]) {
+                // Keine Aufzeichnung für diesen Moment → Lücke, nicht erfinden
+                ring.ts[i] = ts
+                ring.flags[i] = FLAG_LUECKE | FLAG_OHNE_BUCH
+                continue
+            }
+
+            const mid = src.mid[srcCol]
+            const base = Math.round(mid / ring.bucketSize) - (ring.rows >> 1)
+            const ziel = i * ring.rows
+            const quelle = srcCol * src.rows
+
+            if (verhaeltnis >= 1) {
+                // Live-Raster gröber: mehrere Quellzeilen fallen in eine Zielzeile
+                for (let sr = 0; sr < src.rows; sr++) {
+                    const wert = src.data[quelle + sr]
+                    if (!wert) continue
+                    const preis = (src.base[srcCol] + sr) * src.bucketSize
+                    const r = Math.round(preis / ring.bucketSize) - base
+                    if (r >= 0 && r < ring.rows) ring.data[ziel + r] += wert
+                }
+            } else {
+                // Live-Raster feiner: eine Quellzeile verteilt sich anteilig
+                for (let r = 0; r < ring.rows; r++) {
+                    const preis = (base + r) * ring.bucketSize
+                    const sr = Math.round(preis / src.bucketSize) - src.base[srcCol]
+                    if (sr < 0 || sr >= src.rows) continue
+                    const wert = src.data[quelle + sr]
+                    if (wert) ring.data[ziel + r] = wert * verhaeltnis
+                }
+            }
+
+            ring.base[i] = base
+            ring.mid[i] = mid
+            ring.ts[i] = ts
+            ring.flags[i] = 0
+            gefuellt++
+        }
+
+        if (!gefuellt) return
+
+        ring.head = spalten % ring.cap
+        ring.count = spalten
+        // Der Live-Betrieb setzt genau hinter dem Vorlauf an
+        this.nextSlot = letzterSlot
+        console.log(`[live] Vorlauf: ${gefuellt}/${spalten} Spalten aus der Aufzeichnung (${(spalten * frameMs / 60000).toFixed(1)} min)`)
+        this.onFrame?.(letzterSlot)
+    }
+
+    _startFrameTicker() {
+        clearInterval(this.frameTimer)
+        this.nextSlot = Math.ceil(Date.now() / this.frameMs) * this.frameMs
+        // Oversampling (halber Takt) macht den Slot-Abgleich robust gegen Drift
+        this.frameTimer = setInterval(() => this._tick(), Math.max(50, this.frameMs / 2))
+    }
+
+    _tick() {
+        // Erst schreiben, wenn das Buch nachweislich am Stream hängt — ein noch
+        // nicht synchronisiertes Buch würde eine falsche Spalte hinterlassen.
+        if (this.stopped || !this.ring || this.buffering || this.prefilling || !this.book.synced) {
+            // Slots weiterschieben, damit nach dem Sync keine Nachhol-Lawine kommt
+            const now = Date.now()
+            if (this.nextSlot < now - this.frameMs) {
+                this.nextSlot = Math.ceil(now / this.frameMs) * this.frameMs
+                this.gapPending = true
+            }
+            return
+        }
+        const now = Date.now()
+
+        // Wie viele Takte sind wir hinterher? Im Normalbetrieb null oder eins —
+        // der Ticker läuft mit dem halben Takt, ein Ausreisser ist normal.
+        // Ein grosser Rückstand heisst dagegen: der Browser hat gedrosselt,
+        // typisch für einen Tab im Hintergrund.
+        const rueckstand = Math.floor((now - this.nextSlot) / this.frameMs)
+
+        if (rueckstand > MAX_NACHHOLEN) {
+            // NICHT nachschreiben. Für die verpasste Zeit gibt es kein
+            // historisches Orderbuch — die Zwischenzustände wurden nie erfasst.
+            // Vierzig Kopien des aktuellen Buchs zu setzen sähe aus wie Daten,
+            // wäre aber erfunden: eine Minute Hintergrund würde zu einer Minute
+            // scheinbar ruhigem Markt. Eine sichtbare Lücke ist die ehrliche
+            // Antwort; echte Historie liefert nur der serverseitige Recorder.
+            this.nextSlot = Math.ceil(now / this.frameMs) * this.frameMs
+            this.gapPending = true
+            return
+        }
+
+        let written = 0
+        let letzterMid = 0
+        while (this.nextSlot <= now && written <= MAX_NACHHOLEN) {
+            letzterMid = this.ring.commit(this.book, this.nextSlot, this.gapPending)
+            this.gapPending = false
+            this.nextSlot += this.frameMs
+            written++
+        }
+        if (written) {
+            this._pruefeKreuzung(letzterMid, now)
+            this.onFrame?.(now)
+        }
+    }
+
+    /**
+     * Kein Mid heisst: leeres oder GEKREUZTES Buch (Gebot über Brief).
+     *
+     * `bestPrices()` liefert dafür bewusst 0, weil der Mittelwert plausibel
+     * aussähe und falsch wäre. Bisher wertete das niemand aus — die Spalte
+     * blieb leer, die Ansicht zeigte einen Ausfall, und das Buch lief in
+     * genau dem Zustand weiter, der ihn verursacht: Snapshot und Diffs sind
+     * auseinandergelaufen. Von allein heilt das nicht.
+     *
+     * Zwei Takte Toleranz, weil eine Kreuzung über eine Paketgrenze hinweg
+     * normal ist und sich im nächsten Diff auflöst. Danach Abstand halten,
+     * sonst zieht ein dauerhaft kaputter Zustand den Snapshot im Sekundentakt.
+     */
+    _pruefeKreuzung(mid, now) {
+        if (mid > 0) { this.kreuzTakte = 0; return }
+        if (++this.kreuzTakte < 2) return
+        if (now - this.letzteKreuzung < KREUZ_RESYNC_ABSTAND_MS) return
+        this.letzteKreuzung = now
+        this.kreuzTakte = 0
+        this._resync('Buch gekreuzt oder leer')
+    }
+
+    // ── Sonstiges ───────────────────────────────────────────
+
+    async _loadTickSize() {
+        // Fällt das aus, leitet der erste Snapshot die tickSize selbst ab
+        this.tickSize = await tickSizeFor(this.symbol, this.market)
+    }
+
+    _onVisibility() {
+        if (!this.pauseInBackground || this.stopped) return
+        if (document.hidden) {
+            // Im Hintergrund drosselt der Browser die Timer — statt eine verzerrte
+            // Zeitachse zu schreiben, wird die Verbindung getrennt.
+            this.stream?.stop()
+            this.stream = null
+            this.liqStream?.stop()
+            this.liqStream = null
+            this.buffering = true
+            this.gapPending = true
+            this._setState('paused')
+        } else if (!this.stream) {
+            this._openStream()
+        }
+    }
+
+    _setState(state, detail) {
+        if (this.state === state) return
+        this.state = state
+        this.onStatus?.(state, detail)
+    }
+}
