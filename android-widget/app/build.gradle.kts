@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.tradingjournal.widget"
+    namespace = "com.autarktrade.widget"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.tradingjournal.widget"
+        applicationId = "com.autarktrade.widget"
         minSdk = 31
         targetSdk = 35
-        versionCode = 19
-        versionName = "3.3.5-19"
+        versionCode = 20
+        versionName = "4.0.0-20"
     }
 
     buildTypes {

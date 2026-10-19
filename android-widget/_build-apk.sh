@@ -4,7 +4,7 @@ set -euo pipefail
 
 BUILD="$HOME/android-build"
 SDK="$HOME/Android/Sdk"
-PROJ="$HOME/Schreibtisch/Trading/Journal/android-widget"
+PROJ="$(cd "$(dirname "$0")" && pwd)"
 mkdir -p "$BUILD" "$SDK"
 
 log(){ echo "==> $*"; }

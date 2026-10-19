@@ -1,21 +1,21 @@
-# Trading Widget (Android)
+# AutarkTrade-Widget (Android)
 
-A native Android home-screen widget for the **Crypto Trading Journal**. It shows your
+A native Android home-screen widget for **AutarkTrade**. It shows your
 open Bitunix/Bitget futures positions **and** running Pionex bots with live PnL, plus a
 KPI strip (balance, today's PnL, total PnL, win rate).
 
-It reads the journal's read-only `GET /api/esp32/display` endpoint using the static
+It reads AutarkTrade's read-only `GET /api/esp32/display` endpoint using the static
 `X-ESP32-Key` header — the same data source as the ESP32 displays and the Cinnamon
 desklet. No login/session is involved, so it keeps working even if you enable the
-journal's optional password gate.
+app's optional password gate.
 
 ## Prerequisites
 
 1. **Android Studio** (latest stable) — bundles the JDK, Android SDK and Gradle. Nothing
    else needs to be installed on the build machine.
-2. An **ESP32 API key**: in the journal open **Einstellungen → ESP32 Display →
+2. An **ESP32 API key**: in AutarkTrade open **Einstellungen → Externe Anzeigen →
    „Key generieren"** and copy the key (shown once).
-3. The journal must be reachable from the phone. Your phone's VPN is always on when off
+3. AutarkTrade must be reachable from the phone. Your phone's VPN is always on when off
    Wi-Fi, so `http://<server-ip>:8080` is reachable everywhere — use that host/port.
 
 ## Build & install
@@ -32,7 +32,7 @@ journal's optional password gate.
 
 ## Add & configure the widget
 
-1. Long-press the home screen → **Widgets** → **Trading Widget** → drag it out.
+1. Long-press the home screen → **Widgets** → **AutarkTrade** → drag it out.
 2. The config screen opens: enter **Host** (e.g. `192.168.178.100`), **Port** (`8080`),
    the **ESP32 key**, and a **time range**. Tap **Verbindung testen** to verify, then
    **Speichern**.
@@ -63,4 +63,14 @@ journal's optional password gate.
 
 ## Versioning
 
-`versionName` tracks the journal app version (currently **3.3.0**).
+`versionName` tracks the AutarkTrade version (currently **4.0.0**).
+
+## Licence
+
+The widget is part of AutarkTrade and covered by its licence (`LICENSE` in the main
+program). The third-party libraries it bundles (AndroidX, Kotlin, OkHttp/Okio — Apache-2.0;
+the Public Suffix List inside OkHttp — MPL-2.0) are listed with their texts in
+`app/src/main/assets/THIRD-PARTY-NOTICES.txt`, which ships inside the APK.
+
+Since 4.0.0 the application id is `com.autarktrade.widget` (before: `com.tradingjournal.widget`).
+Android treats it as a new app: uninstall the old widget, install the new APK and set it up again.

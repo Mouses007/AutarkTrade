@@ -405,3 +405,75 @@ CoinGecko, Federal Reserve (dazu BEA, Eurostat), 4chan /biz/, GoPlus, CryptoQuan
 jedem KI-Text, Chat und Bild.
 
 **Weiter offen (nicht Code):** Anfrage Binance (F-2) und die Anbieteranfragen aus F-14; Anwaltsfragen F-1 bis F-13.
+
+---
+
+## Anhang 2: Nachprüfung gegen den Endstand (S11, 19.10.2026)
+
+Geprüft gegen master nach S3–S10 und S12 (vor dem S11-Merge). Die Ampel oben bleibt die der Anbieterbedingungen; hier
+steht, ob die Zeilen und Abschnitt 3 noch zum Code passen.
+
+### Abhängigkeiten
+
+- **`package.json`**: 22 Laufzeitpakete (axios, better-sqlite3, calendarize, dayjs, dompurify, echarts, express,
+  html2canvas, http-proxy, jspdf, knex, lightweight-charts 5.2.1, lodash, nodemailer, papaparse, pg, quill, sortablejs, vue,
+  vue-i18n, vue-router, ws), Build-Werkzeuge nur vite und @vitejs/plugin-vue. `"private": true`,
+  `"license": "SEE LICENSE IN LICENSE"`. Gegenüber Abschnitt 3.1 **entfallen**: sharp/@img (LGPL, S10), markerjs2
+  (Linkware, S8), Bootstrap/Popper (S9), Font Awesome und Unicons (S9).
+- **Produktionsbaum**: 224 Pakete — 195 MIT, 10 ISC, 6 BSD-3, 5 Apache-2.0, 1 BSD-2, DOMPurify (MPL-2.0 OR Apache-2.0),
+  pako (MIT AND Zlib) und einige Doppellizenzen mit MIT-Wahl. Keine LGPL/GPL, keine Linkware.
+- **`index.html`**: keine externe Ressource mehr (kein CDN, keine Google Fonts; Selbsttest `__selftest-ohne-bootstrap.mjs`).
+- **Dockerfile**: Basis `node:20-slim` in beiden Stufen, **keine Schriftpakete mehr** (fonts-dejavu/liberation entfallen
+  mit sharp). `LICENSE`, `NOTICE.md`, `THIRD-PARTY-NOTICES` unter `/app/`, OCI-Label
+  `org.opencontainers.image.licenses=LicenseRef-AutarkTrade-proprietary`. Das Debian-Quellenangebot steht in NOTICE.md.
+- **`THIRD-PARTY-NOTICES`**: mit `node scripts/drittlizenzen.mjs` neu erzeugt — **unverändert**, also aktuell (224 Pakete,
+  312 KB). Sieben Pakete haben keine Lizenzdatei, nur die Angabe in `package.json` (@vue/devtools-api, agent-base,
+  cookie-signature, fancy-canvas, https-proxy-agent, pg-types, pgpass); das Skript setzt dann den Standardtext der
+  angegebenen Lizenz ein.
+
+Abschnitt 3.1 ist damit erledigt bis auf die Zeilen, die nicht zum npm-Baum gehören: Docker-Basis (Quellenangebot steht),
+Android-Widget, ESP32, Desklet (siehe unten).
+
+### Fremdquellen im Code
+
+Inventar aller festen Adressen in `server/`, `shared/`, `src/` und `index.mjs` (ohne Selbsttests und Fixtures). Jede ist
+einer Zeile von Abschnitt 2 zugeordnet:
+
+| Adressen | Zeile(n) | Stand |
+|---|---|---|
+| fapi.bitunix.com, api.bitget.com, api.pionex.com | 1–4, 11, 12, 85 | KS bzw. öffentliche Kerzen, wie Anhang 1 |
+| fapi/api.binance.com, fstream/stream.binance.com | 10, 16, 17, 22–27, 33, 36, 41, 44, 75, 84, 86, 91 | nur in `server/marktdaten/binance.js`, nur bei Wahl Binance |
+| api.bybit.com, stream.bybit.com | 22, 26, 27, 34, 35, 37, 83 | gelb, wie Anhang 1 |
+| api.coingecko.com, pro-api.coingecko.com (inkl. `/onchain`) | 20, 21, 29, 55, 59, 87 | nur KS, Attribution |
+| api.alternative.me | 19 | Attribution |
+| www.federalreserve.gov, www.bea.gov, ec.europa.eu | 40, 47, 48 | amtlich, Attribution |
+| api.cryptoquant.com | 30 | KS, Attribution |
+| api.dexscreener.com | 57, 60 | Attribution |
+| api.gopluslabs.io, api.rugcheck.xyz | 65, 66 | Attribution; RugCheck ab Werk aus |
+| a.4cdn.org | 62 | Attribution |
+| rdap.org, dns.google, cloudflare-dns.com, api.github.com | 69, 70, 71 | grün |
+| api.telegram.org (Bot des Kunden), ntfy/Webhook (Adresse des Kunden) | 74 | KS |
+| api.coinbase/kraken/kucoin/gateio | 77, 79–81 | ab Werk aus |
+| api.anthropic.com, api.openai.com, generativelanguage.googleapis.com, api.x.ai, api.perplexity.ai, api.mistral.ai, api.groq.com, openrouter.ai, api.moonshot.ai, api.z.ai, dashscope-intl.aliyuncs.com, api.minimax.io, api.bfl.ai | 89a–m, 90 | KS, Label |
+| api.polygon.io, hist.databento.com | 5, 6 | KS, kein Schlüssel ab Werk |
+| api.github.com (Releases des privaten Repos) | 7 | private Quelle (S10) |
+| reine Links: tradingview.com, Börsen-Handelsseiten, dexscreener.com, geckoterminal.com, pump.fun, x.com, t.me, youtube.com, coingecko.com, Neon/Supabase/Aiven (Datenbank-Einstellungen), aistudio.google.com | 13, 14, 60 u. a. | Links, keine Daten, keine Logos |
+
+Keine Adresse ohne Zeile; keine der in Anhang 1 entfernten Quellen (Yahoo, ForexFactory, CoinMarketCap, blockchain.info,
+pump.fun-API, Telegram t.me/s, Reddit, CoinPaprika, Upbit, MEXC, OKX, Binance Alpha/`bapi`) wird noch abgerufen.
+
+**Abweichungen, die Zeilen betreffen:**
+
+- **Zeile 6 / 5 (Databento, Polygon):** Der „Altcode" ist nicht gelöscht, sondern in S7 clean-room nach
+  `src/utils/journal/import.js` (`useGetOHLCV`) und `views/AddExcursions.vue` übernommen worden (der Golden Master
+  `__selftest-mfe-pfade.mjs` deckt ihn ab). Er läuft nur mit einem vom Kunden eingetragenen Schlüssel. Urteil bleibt gelb (KS).
+- **Zeile 89d (DeepSeek):** Die Oberfläche bietet DeepSeek nicht mehr an, und der Recherche-Weg ist stillgelegt
+  (`dsWeg = false` in `server/marktradar-news.js`). Der Code (`rechercheDeepseek`, die Adresse `api.deepseek.com/v1/tools/search`
+  in `server/news-recherche.js`) und die Migrations-Konstante `api.deepseek.com/v1` in `server/migrationen/s12-ki.js` stehen
+  aber noch im ausgelieferten Server. Kein Abruf, aber der Name steht im Code — **vor dem Verkauf entfernen** (offener Punkt).
+- **Zeile 89k (MiniMax):** in `server/ai-models.js` weiter als Eintrag für Bestandskonfigurationen, nicht mehr wählbar.
+- **Zeile 7 (Update):** das Repo heisst `Mouses007/AutarkTrade` und ist privat; die Zeile oben nennt noch das alte.
+
+### Begleitprogramme
+
+Stand nach S11: siehe NOTICE.md („Begleitprogramme") und `docs/AUFTRAGSSTAND.md`, Abschnitt S11.

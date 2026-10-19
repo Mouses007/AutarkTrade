@@ -206,7 +206,7 @@ async function einAbruf(rawUrl, timeout) {
                 signal: ctrl.signal,
                 redirect: 'manual',
                 headers: {
-                    'User-Agent': 'CryptoTradingJournal (Marktradar)',
+                    'User-Agent': 'AutarkTrade (Marktradar)',
                     Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
                 },
             })

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Trading Positions Desklet – Installations-Skript
+# AutarkTrade-Desklet (Positionen) – Installations-Skript
 # Kopiert den Desklet in das Cinnamon-Desklet-Verzeichnis und aktiviert ihn.
 
 set -euo pipefail
 
-DESKLET_UUID="trading-positions@trading-journal"
+DESKLET_UUID="positionen@autarktrade"
 DESKLET_SRC="$(cd "$(dirname "$0")" && pwd)/${DESKLET_UUID}"
 DESKLET_DIR="${HOME}/.local/share/cinnamon/desklets"
 DEST="${DESKLET_DIR}/${DESKLET_UUID}"
 
-echo "==> Trading Positions Desklet installieren"
+echo "==> AutarkTrade-Desklet (Positionen) installieren"
 echo "    Quelle: ${DESKLET_SRC}"
 echo "    Ziel:   ${DEST}"
 

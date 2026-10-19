@@ -119,7 +119,7 @@ async function cqHole(pfad, params, schluessel) {
             headers: {
                 Authorization: `Bearer ${schluessel}`,
                 Accept: 'application/json',
-                'User-Agent': 'CryptoTradingJournal',
+                'User-Agent': 'AutarkTrade',
             },
         })
         if (!r.ok) {

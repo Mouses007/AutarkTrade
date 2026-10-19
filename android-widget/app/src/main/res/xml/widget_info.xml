@@ -6,7 +6,7 @@
     android:targetCellHeight="3"
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_main"
-    android:configure="com.tradingjournal.widget.WidgetConfigActivity"
+    android:configure="com.autarktrade.widget.WidgetConfigActivity"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:previewImage="@drawable/widget_preview"

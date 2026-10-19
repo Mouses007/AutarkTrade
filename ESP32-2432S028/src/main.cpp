@@ -23,7 +23,7 @@ XPT2046_Touchscreen ts(TOUCH_CS_PIN, TOUCH_IRQ_PIN);
 
 // ── Konstanten ───────────────────────────────────────────
 
-#define AP_SSID             "TradingJournal-Setup"
+#define AP_SSID             "AutarkTrade-Setup"
 #define ACTIVE_INTERVAL     10        // Sekunden zwischen Updates wenn aktiv
 #define STANDBY_TIMEOUT     30        // Sekunden ohne Touch → Backlight aus
 #define LIGHT_SLEEP_TIMEOUT 60        // Sekunden ohne Touch → Light Sleep + WiFi aus
@@ -34,7 +34,7 @@ XPT2046_Touchscreen ts(TOUCH_CS_PIN, TOUCH_IRQ_PIN);
 #define TFT_BL_PIN          21        // Backlight-Pin ESP32-2432S028 (CYD)
 #define FW_VERSION          "3.3.0-CYD"
 
-// ── Farben RGB565 — Journal-Farbschema (ILI9341, korrektes Gamma) ────────
+// ── Farben RGB565 — AutarkTrade-Farbschema (ILI9341, korrektes Gamma) ────────
 #define COLOR_BG         0x0000   // #000000
 #define COLOR_CARD       0x1082   // #101010  dark grey card
 #define COLOR_GREEN      0x064E   // #00CA73
@@ -236,7 +236,7 @@ void drawNavBar() {
   const int ny = 207, nh = 33;
 
   tft.fillRect(0, ny, 320, nh, COLOR_NAV_BG);
-  // Blauer Trennstrich oben (Journal-Stil)
+  // Blauer Trennstrich oben (App-Stil)
   tft.drawFastHLine(0, ny, 320, COLOR_BLUE_NAV);
   tft.drawFastVLine(107, ny+1, nh-1, COLOR_GREY_DARK);
   tft.drawFastVLine(214, ny+1, nh-1, COLOR_GREY_DARK);
@@ -443,7 +443,7 @@ void drawScreen2() {
   tft.setTextColor(COLOR_BLUE, COLOR_HEADER_BG);
   tft.setTextSize(1);
   tft.setCursor(8, 5);
-  tft.print("Trading Journal");
+  tft.print("AutarkTrade");
   tft.setTextColor(COLOR_GREY, COLOR_HEADER_BG);
   tft.setCursor(8, 16);
   tft.print("Offene Positionen & Bots");
@@ -625,12 +625,12 @@ void drawScreen3() {
   tft.setCursor(18, 54);
   tft.print(fLabel);
 
-  // Hinweis: Einstellung im Journal
+  // Hinweis: Einstellung in der App
   fillCard(6, 92, 308, 40);
   tft.setTextColor(COLOR_GREY, COLOR_CARD);
   tft.setTextSize(1);
   tft.setCursor(18, 102);
-  tft.print("Aendern: Journal");
+  tft.print("Aendern: App");
   tft.setTextColor(COLOR_WHITE_DIM, COLOR_CARD);
   tft.setCursor(18, 115);
   tft.print("Einstellungen > ESP32 Display > Zeitraum");
@@ -717,7 +717,7 @@ const char CONFIG_HTML[] PROGMEM = R"rawliteral(
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Trading Journal Setup</title>
+<title>AutarkTrade Setup</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0d1117; color: #e6edf3; font-family: -apple-system, sans-serif; padding: 20px; }
@@ -746,7 +746,7 @@ const char CONFIG_HTML[] PROGMEM = R"rawliteral(
 </style>
 </head>
 <body>
-<h1>Trading Journal</h1>
+<h1>AutarkTrade</h1>
 <p class="sub">ESP32-2432S028 CYD Setup</p>
 
 <form action="/save" method="POST">
@@ -761,7 +761,7 @@ const char CONFIG_HTML[] PROGMEM = R"rawliteral(
     <input name="pass" id="pass" type="password" value="%PASS%" autocomplete="off">
   </div>
   <div class="card">
-    <h2>Trading Journal API</h2>
+    <h2>AutarkTrade API</h2>
     <div class="info">Settings &rarr; ESP32 Display &rarr; API-Key kopieren</div>
     <label>Host (IP des NAS)</label>
     <input name="host" type="text" value="%HOST%" placeholder="192.168.178.100" required>
@@ -929,7 +929,7 @@ bool fetchData() {
   data.volume30d   = doc["volume30d"]   | 0L;
   data.volumeTotal = doc["volumeTotal"] | 0L;
 
-  // Server-Filter syncen (Filter wird im Journal gesetzt, ESP32 folgt)
+  // Server-Filter syncen (Filter wird in der App gesetzt, ESP32 folgt)
   const char* srvFilter = doc["filter"] | "";
   if (strlen(srvFilter) > 0) {
     String newFilter = String(srvFilter);
@@ -1027,7 +1027,7 @@ void setup() {
     tft.setCursor(172, 74); tft.print("192.168.4.1");
     tft.drawFastHLine(0, 207, 320, COLOR_GREY_DARK);
     tft.setTextColor(COLOR_GREY, COLOR_BG);
-    tft.setCursor(10, 217); tft.print("Trading Journal ESP32 v" FW_VERSION);
+    tft.setCursor(10, 217); tft.print("AutarkTrade ESP32 v" FW_VERSION);
     return;
   }
 

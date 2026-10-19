@@ -128,7 +128,7 @@ export async function holeJson(url, { timeout = ABRUF_TIMEOUT_MS, kopf = {} } = 
                 signal: abbruch.signal,
                 headers: {
                     // Eigene Kennung: manche Anbieter weisen anonyme Anfragen ab.
-                    'User-Agent': 'CryptoTradingJournal/1.0 (Hype-Radar)',
+                    'User-Agent': 'AutarkTrade/4 (Hype-Radar)',
                     Accept: 'application/json',
                     ...kopf,
                 },

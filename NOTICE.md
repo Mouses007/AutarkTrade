@@ -5,12 +5,7 @@ Stand vom 19. Oktober 2026
 > ⚠ ENTWURF, nicht anwaltlich geprüft (am 19. Oktober 2026 mit dem Code, `package-lock.json`
 > und `docs/VERKAUFS-PRUEFUNG.md` abgeglichen). Offen vor der ersten Weitergabe an Dritte:
 >
-> - Die TradeNote-Anteile (Abschnitt „Herkunft") sind noch nicht ersetzt. **Solange sie im
->   Code stehen, darf der Stand nicht unter `LICENSE` weitergegeben werden** — er ist als
->   Ganzes noch ein Werk unter GPL-3.0. Den Nachweis, dass nichts übrig ist, liefert S11
->   (`HERKUNFT.md`).
-> - Die CDN-Einbindungen von Font Awesome und Unicons sind noch drin (Abschnitt „Fremde
->   Software", Ablösung in S9). markerjs2 ist seit S8 durch eine eigene Bildmarkierung ersetzt.
+> - Anwaltliche Prüfung von `LICENSE`, dieser Datei und `HERKUNFT.md`.
 > - Das Quellenangebot für das Container-Image (Abschnitt „Container-Image") braucht eine
 >   Anschrift des Anbieters.
 
@@ -26,19 +21,13 @@ Software im Testmodus; Daten werden nie gesperrt.
 
 ## Herkunft
 
-AutarkTrade ist aus dem **Crypto Trading Journal** (Mouses007) hervorgegangen, das als Fork
-von [TradeNote](https://github.com/Eleven-Trading/TradeNote) (Eleven-Trading, GPL-3.0)
-begann. Gemessen am 19. Oktober 2026 stammen rund 5 % der Codezeilen wörtlich aus TradeNote,
-fast alle im alten Journal-Kern; die Liste der Dateien steht in `LIZENZ-PLAN.md`, Abschnitt 1.
-Sie werden nach der Clean-Room-Regel neu geschrieben (Beschreibung in `docs/spec/`, Neubau nur
-aus der Beschreibung, `docs/AUFTRAGSSTAND.md`).
+Woher der Code stammt, wie geprüft wurde, dass kein übernommener Ausdruck mehr darin
+steht, und welche Namen aus Verträglichkeit gleich bleiben: `HERKUNFT.md`
+(Prüfskript `scripts/herkunft-pruefen.mjs`, Stand 19. Oktober 2026).
 
 - Die bis Version 3.x veröffentlichten Fassungen des Crypto Trading Journal bleiben unter
-  GPL-3.0 und im alten, öffentlichen Repository erhältlich. Die Software holt Updates
-  **nicht** mehr von dort (`server/update-api.js`).
-- Bewusst unverändert und kein schützbarer Ausdruck: der Dateiname `tradenote.db` als
-  Rückfall, der Schlüssel-Seed in `server/crypto.js` und der Token-Zweck `tn_session_v1` in
-  `server/auth.js` (sonst wären gespeicherte Schlüssel bzw. Sitzungen ungültig).
+  ihrer damaligen Lizenz bei denen, die sie haben. Die Software holt Updates **nicht** mehr
+  von dort (`server/update-api.js`).
 
 ## Fremde Software
 
@@ -47,7 +36,7 @@ für diesen Teil vor (Ziffer 12 der Lizenzbedingungen).
 
 | Was | Wo aufgeführt |
 |---|---|
-| npm-Pakete im Server und im gebauten Frontend (227 am 19.10.2026: MIT, ISC, BSD, Apache-2.0, MPL-2.0/Apache-2.0 bei DOMPurify, Zlib bei pako) | `THIRD-PARTY-NOTICES`, erzeugt von `scripts/drittlizenzen.mjs` aus `package-lock.json` und den Lizenzdateien der Pakete (auch im Docker-Build). `server/__selftest-rechtliches.mjs` schlägt an, wenn ein Paket fehlt. |
+| npm-Pakete im Server und im gebauten Frontend (224 am 19.10.2026: MIT, ISC, BSD, Apache-2.0, MPL-2.0/Apache-2.0 bei DOMPurify, Zlib bei pako) | `THIRD-PARTY-NOTICES`, erzeugt von `scripts/drittlizenzen.mjs` aus `package-lock.json` und den Lizenzdateien der Pakete (auch im Docker-Build). `server/__selftest-rechtliches.mjs` schlägt an, wenn ein Paket fehlt. |
 | NOTICE-Texte nach Apache-2.0 §4(d) | Apache ECharts (Datei `NOTICE` im Paket) und TradingView Lightweight Charts (nur im README des Pakets, deshalb von `drittlizenzen.mjs` nachgetragen) in `THIRD-PARTY-NOTICES` |
 
 Sichtbare Pflichten in der Oberfläche:
@@ -57,9 +46,9 @@ Sichtbare Pflichten in der Oberfläche:
   (`attributionLogo: true`) und verlinkt auf TradingView; dieser Hinweis steht unter
   Rechtliches.
 
-Nicht mitgeliefert, sondern zur Laufzeit von einem CDN geladen (bis S9): Font Awesome 4.7
-(Schrift OFL-1.1, CSS MIT) und Iconscout Unicons (IconScout Simple License). Sie werden durch
-das eigene Symbolset (`src/components/basis/Symbol.vue`) ersetzt.
+Zur Laufzeit wird nichts von einem CDN geladen; Font Awesome, Unicons, Bootstrap und markerjs2
+sind seit S8/S9 durch eigenen Code ersetzt (eigenes Symbolset `src/components/basis/Symbol.vue`,
+eigene Bildmarkierung).
 
 ### sharp ersetzt (19. Oktober 2026)
 
@@ -91,11 +80,15 @@ letzten Auslieferung des Images auf einem üblichen Datenträger zum Selbstkoste
 
 ## Begleitprogramme
 
-| Programm | Fremde Teile | Stand |
+| Programm | Lizenz | Fremde Teile |
 |---|---|---|
-| Android-Widget (`android-widget/`) | AndroidX, Kotlin, OkHttp/Okio (Apache-2.0; OkHttp mit `publicsuffixes.gz` unter MPL-2.0 und eigener NOTICE) | Lizenzdatei in der App fehlt noch (S11) |
-| Anzeige-Firmware ESP32 (`ESP32-*`) | Arduino-ESP32-Core (**LGPL-2.1-or-later**, statisch gelinkt), TFT_eSPI (FreeBSD/BSD/MIT), ArduinoJson (MIT), XPT2046_Touchscreen (MIT, mit „development funding notice") | Plan: Firmware-Quelltext separat unter MIT offenlegen, damit neu gelinkt werden kann (S11) |
-| Cinnamon-Desklet (`desklet/`) | – | Lizenzangabe fehlt; separat unter MIT veröffentlichen (S11) |
+| Android-Widget (`android-widget/`, `com.autarktrade.widget`) | wie AutarkTrade (`LICENSE`) | AndroidX, Kotlin, OkHttp/Okio (Apache-2.0; OkHttp mit `publicsuffixes.gz` unter MPL-2.0). Liste und Texte in der APK: `app/src/main/assets/THIRD-PARTY-NOTICES.txt` |
+| Anzeige-Firmware ESP32 (`ESP32-2432S028/`, `ESP32-Waveshare/`) | **MIT** (`LICENSE` im Verzeichnis) | Arduino-ESP32-Core (**LGPL-2.1-or-later**, statisch gelinkt — deshalb ist der Firmware-Quelltext offen, damit neu gelinkt werden kann), TFT_eSPI (FreeBSD/BSD/MIT), ArduinoJson (MIT), XPT2046_Touchscreen (MIT, mit „development funding notice"); Einzelheiten in `LIZENZEN.md` des Verzeichnisses |
+| Cinnamon-Desklet (`desklet/`, `positionen@autarktrade`) | **MIT** (`LICENSE` im Desklet-Verzeichnis) | – |
+
+Firmware und Desklet sind eigenständige Programme, die nur den lesenden Endpunkt
+`/api/esp32/display` abfragen. Dass ihr Quelltext unter MIT steht, ändert nichts an den
+Lizenzbedingungen von AutarkTrade selbst.
 
 ## Namen und Marken
 

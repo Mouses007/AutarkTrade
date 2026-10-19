@@ -77,8 +77,8 @@ function pruefe(name, bedingung, detail = '') {
 
 // ── Verlinkung ───────────────────────────────────────────────────────────
 {
-    const html = baueKoerper('Siehe https://github.com/Mouses007/Crypto-Trading-Journal/releases sowie danach.')
-    pruefe('URL wird Link', html.includes('<a href="https://github.com/Mouses007/Crypto-Trading-Journal/releases"'))
+    const html = baueKoerper('Siehe https://github.com/Mouses007/AutarkTrade/releases sowie danach.')
+    pruefe('URL wird Link', html.includes('<a href="https://github.com/Mouses007/AutarkTrade/releases"'))
     pruefe('Satzzeichen nicht im Link', !html.includes('releases sowie'))
 }
 

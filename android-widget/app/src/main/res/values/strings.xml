@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Trading Journal</string>
-    <string name="widget_description">Offene Positionen &amp; Bots aus dem Crypto Trading Journal</string>
+    <string name="app_name">AutarkTrade</string>
+    <string name="widget_description">Offene Positionen &amp; Bots aus AutarkTrade</string>
 
     <!-- Config screen -->
-    <string name="cfg_title">Trading Journal — Einstellungen</string>
+    <string name="cfg_title">AutarkTrade-Widget — Einstellungen</string>
     <string name="cfg_host">Server-Host / IP</string>
     <string name="cfg_host_hint">z.B. 192.168.178.100</string>
     <string name="cfg_port">Port</string>
     <string name="cfg_key">ESP32-API-Key</string>
-    <string name="cfg_key_hint">aus Journal → Einstellungen → ESP32 Display</string>
+    <string name="cfg_key_hint">aus AutarkTrade → Einstellungen → Externe Anzeigen</string>
     <string name="cfg_filter">Zeitraum (für „Heute/Gesamt")</string>
     <string name="cfg_default_broker">Standard-Börse oben (nach Aktualisieren)</string>
     <string name="cfg_test">Verbindung testen</string>

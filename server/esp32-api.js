@@ -2,7 +2,7 @@
  * ESP32 Display API
  *
  * Provides a read-only endpoint for the ESP32-2432S028 (CYD) to display
- * trading journal data on its TFT screen.
+ * AutarkTrade data on its TFT screen.
  *
  * Auth: Static API key stored encrypted in settings.esp32ApiKey
  * Header: X-ESP32-Key: <plaintext-key>

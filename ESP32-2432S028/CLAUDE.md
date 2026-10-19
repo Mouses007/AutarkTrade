@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ESP32 firmware for the **ESP32-2432S028 (CYD — Cheap Yellow Display)** board that functions as a cryptocurrency trading dashboard. It fetches data from a backend Trading Journal API and displays metrics on a 240×320 ILI9341 touchscreen.
+ESP32 firmware for the **ESP32-2432S028 (CYD — Cheap Yellow Display)** board that functions as a cryptocurrency trading dashboard. It fetches data from a backend AutarkTrade API and displays metrics on a 240×320 ILI9341 touchscreen.
 
 ## Build System
 
@@ -60,7 +60,7 @@ Display runs in landscape rotation 3 (320×240 effective).
 
 ### Filter (Server-Controlled)
 
-Filter (`month`/`week`/`year`/`all`) is **set in the Journal Web UI**, not on the device. The device receives the active filter via the `filter` field in the JSON response and syncs `cfgFilter` accordingly. Screen 3 is now an info/status screen (no buttons) — tap returns to Dashboard.
+Filter (`month`/`week`/`year`/`all`) is **set in the AutarkTrade web UI**, not on the device. The device receives the active filter via the `filter` field in the JSON response and syncs `cfgFilter` accordingly. Screen 3 is now an info/status screen (no buttons) — tap returns to Dashboard.
 
 ### Key Constants
 

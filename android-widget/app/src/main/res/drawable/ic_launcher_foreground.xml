@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Journal-Logo als Adaptive-Icon-Vordergrund. ~15% Inset, damit das runde
-     TJ-Emblem komplett innerhalb der Safe-Zone liegt (Rund-/Squircle-Mask). -->
+<!-- AutarkTrade-Logo als Adaptive-Icon-Vordergrund. ~15% Inset, damit das runde
+     Emblem komplett innerhalb der Safe-Zone liegt (Rund-/Squircle-Mask). -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_logo"
     android:inset="15%" />

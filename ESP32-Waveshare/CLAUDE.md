@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ESP32 firmware for the **Waveshare ESP32-S3-Touch-LCD-2.8** board that functions as a cryptocurrency trading dashboard. It fetches data from a backend Trading Journal API and displays metrics on a 240×320 ST7789T3 touchscreen.
+ESP32 firmware for the **Waveshare ESP32-S3-Touch-LCD-2.8** board that functions as a cryptocurrency trading dashboard. It fetches data from a backend AutarkTrade API and displays metrics on a 240×320 ST7789T3 touchscreen.
 
 ## Build System
 
@@ -44,7 +44,7 @@ All application logic lives in a **single file**: `src/main.cpp`.
 
 ### Boot Sequence
 
-1. **First boot / no config**: Device starts a WiFi AP (`TradingJournal-Setup` at `192.168.4.1`) and serves a web portal for configuration (WiFi credentials, API host/port/key).
+1. **First boot / no config**: Device starts a WiFi AP (`AutarkTrade-Setup` at `192.168.4.1`) and serves a web portal for configuration (WiFi credentials, API host/port/key).
 2. **Normal boot**: Loads config from NVS flash (via `Preferences`), connects to WiFi, fetches data, enters the main loop.
 
 ### Main Loop (loop())
@@ -110,7 +110,7 @@ Display runs in landscape rotation 3 (320×240 effective).
 #define LIGHT_SLEEP_TIMEOUT 60        // seconds without touch → light sleep + WiFi off
 #define BOOT_GRACE_MS       300000    // 5 min after boot: no light sleep (so flashing works)
 #define WIFI_TIMEOUT_MS     12000
-#define AP_SSID             "TradingJournal-Setup"
+#define AP_SSID             "AutarkTrade-Setup"
 #define TFT_BL_PIN          5
 ```
 

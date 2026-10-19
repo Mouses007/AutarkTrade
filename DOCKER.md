@@ -11,8 +11,8 @@ Wenn du bereits eine PostgreSQL-Datenbank hast (z.B. auf dem NAS), verbindet sic
 
 ```bash
 # 1. Repository klonen
-git clone <repo-url> crypto-trading-journal
-cd crypto-trading-journal
+git clone <repo-url> autarktrade
+cd autarktrade
 
 # 2. Konfiguration anlegen
 cp .env.example .env

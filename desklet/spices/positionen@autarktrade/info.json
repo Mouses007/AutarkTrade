@@ -1,0 +1,7 @@
+{
+  "author": "Mouses007",
+  "name": "AutarkTrade Positionen",
+  "description": "Desktop widget for AutarkTrade. Shows open Bitunix/Bitget futures positions and running Pionex bots with real-time PnL updates. Requires a running AutarkTrade instance.",
+  "version": "2.0.0",
+  "comments": "Displays open trading positions fetched from the AutarkTrade API. Configurable refresh interval, font sizes, and appearance."
+}
