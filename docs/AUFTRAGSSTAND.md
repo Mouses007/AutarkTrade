@@ -34,6 +34,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | `claude/s12-quellen-9112f7` | **fertig** |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | `claude/s11-herkunft-fa3692` | **fertig** (altes Repo: nur vorbereitet, auf Anweisung) |
 | 4 | S13 Scharfen Handel auslagern | Orders, Stop-Wächter, Margen-Netz, Abgleich, Live-Freigabe ausbauen; aufbewahren auf `spaeter/scharfer-handel`; Migration live → Papier | `claude/s13-handel-auslagern-f7e9fe` | **fertig** → `docs/SPAETER-SCHARFER-HANDEL.md` |
+| 5 | S14 Hype-Radar übersichtlich | Übersicht: Lagezeile, Alarme eingeklappt mit Art-Filter, Funde „geprüft“ als Vorgabe, einzeilige Tabelle/Karten, Quadrant einklappbar — nur Darstellung | `claude/s14-hype-uebersicht-7eb497` | **fertig** |
 
 ## Gesamtfazit (S11, 19.10.2026)
 
@@ -59,6 +60,32 @@ Attribution, jede KI-Ausgabe ist gekennzeichnet (S12, Verkaufs-Prüfung Anhang 1
    (Demo-Tarif im verkauften Produkt), dazu Bitunix, Bitget, Bybit, GoPlus, CryptoQuant, RugCheck.
 4. Vertrieb: Händler-Dienst (Merchant of Record) und Kunden-Zugang zur Registry statt
    GitHub-Token je Kunde (`HERKUNFT.md`, Anhang B).
+
+## S14 Hype-Radar übersichtlich — Ergebnis (19.10.2026)
+
+Nur Darstellung in `src/views/HypeRadar.vue` (+ i18n `hype.*`), keine Logik, keine Daten. Geprüft mit
+einer Kopie der Hype-Radar-Zeilen aus der Test-DB (letzter Lauf 13.10.: 36 Funde, alle unter der
+Schwelle; 50 Alarme) bei 1400, 820 und 375 px gegen master.
+
+- **Lagezeile** oben statt vier Kennzahl-Kacheln unter der Alarmliste: letzter Lauf (Zeit, „vor x"),
+  Funde / bestanden / verworfen / unter der Schwelle / heissestes Thema, daneben „Nur suchen" und
+  „Suchen & Bericht". Die Laufdauer speichert der Server nicht — sie steht nur nach einem Lauf, den
+  die Seite selbst gestartet hat.
+- **Alarme**: die neuesten drei, eine Zeile je Alarm (Schwere-Marke i/!/!!, Art, gekürzter Text,
+  Klick klappt auf und bietet „Coin öffnen"), Filter nach Art (Hype, Abverkauf, Preis, Liquidität,
+  Sicherheit, nur vorhandene) und „ungelesen", „alle n anzeigen". Ungelesene als Zahl im Kopf.
+- **Funde**: Vorgabe „Geprüft" (bestanden + verworfen); „+ n unter der Schwelle" als Umschalter. Wenn
+  kein Fund die Schwelle erreicht hat, sagt die Liste genau das (vorher: 36 Zeilen mit roter 0).
+  Sicherheit/Substanz ungeprüfter Funde sind ein graues „—" mit Tooltip „nicht geprüft", nie eine
+  Zahl; Spalten, die in der gezeigten Liste überall leer wären, entfallen.
+- **Tabelle einzeilig** (35 px je Zeile statt bis zu 80): Stern vor dem Symbol, Chain als Kürzel
+  (ETH/SOL/BSC…), Alter kompakt (34 h, 15 T, 5,4 J), Handelsplätze als ein Kürzel je Börse mit F/S;
+  DEX-Name und TradingView im Tooltip bzw. Detail. Unter 860 px INHALTSbreite (gemessen per
+  ResizeObserver, nicht am Gerät) Karten statt Tabelle — kein waagerechter Überlauf mehr bei 820 px.
+- **Quadrant** unter der Tabelle, einklappbar (Zustand im Gerät). Er sagte „Noch kein Lauf", weil er
+  nur bei bestandenen/verworfenen Funden gezeichnet wurde; jetzt zeichnet er jeden Lauf und sagt,
+  wenn nur graue Punkte unter der Schwelle im Bild stehen.
+- Frühphase/Börsen/Berichte: nicht angefasst (Berichte teilt die Datei, nur gegengeprüft).
 
 ## S13 Scharfen Handel auslagern — Ergebnis (19.10.2026)
 

@@ -1,7 +1,29 @@
 <template>
-    <div class="hyp">
+    <div ref="wurzel" class="hyp">
         <!-- ── Kopf ──────────────────────────────────────────────────── -->
-        <div class="hypKopf">
+        <div class="hypKopf" :class="{ mitLage: reiter === 'dashboard' }">
+            <!-- Lagezeile der Übersicht (S14): letzter Lauf und seine Zahlen in
+                 EINER Zeile neben den Knöpfen. Vorher standen die Kennzahlen
+                 als vier Kacheln unter der Alarmliste — wer die Seite öffnete,
+                 sah zuerst fünfzig Alarme und musste nach dem Radar suchen. -->
+            <div v-if="reiter === 'dashboard'" class="hypLage">
+                <span class="hypLageLauf">
+                    <template v-if="laufZeit">
+                        {{ t('hype.lageLauf', { z: zeitpunkt(laufZeit) }) }}
+                        <span class="hypLageLeise">({{ vorZeit(laufZeit) }}<template v-if="laufDauerMs"> · {{ t('hype.lageDauer', { d: dauerText(laufDauerMs) }) }}</template>)</span>
+                    </template>
+                    <template v-else>{{ t('hype.lageKeinLauf') }}</template>
+                </span>
+                <span v-if="laufZeit" class="hypLageZahlen">
+                    <span><b>{{ kandidaten.length }}</b> {{ t('hype.kandidaten') }}</span>
+                    <span><b class="at-gut">{{ bestanden.length }}</b> {{ t('hype.bestanden') }}</span>
+                    <span><b :class="verworfen.length ? 'at-schlecht' : ''">{{ verworfen.length }}</b> {{ t('hype.verworfen') }}</span>
+                    <span class="hypLageLeise"><b>{{ nurBewertet.length }}</b> {{ t('hype.unterSchwelle') }}</span>
+                    <span v-if="heissestesNarrativ" :title="t('hype.heissestesNarrativ')">
+                        <Symbol name="feuer" class="hypLageSymbol" />{{ heissestesNarrativ }}
+                    </span>
+                </span>
+            </div>
             <!-- Übersicht und Berichte stehen als eigene Einträge im
                  Seitenmenü. Was bleibt, sind die Einstellungen — und die
                  verhalten sich wie in den Nachrichten: ein Zahnrad und eine
@@ -554,44 +576,58 @@
             </div>
 
             <!-- ── Alarme ────────────────────────────────────────── -->
-            <div v-if="alarme.length" class="hypBlock">
-                <div class="at-flex at-mitte at-luecke-2 at-mu-2">
+            <!-- S14: eingeklappt auf die neuesten drei, eine Zeile je Alarm.
+                 Fünfzig Zeilen (~950 px) standen vorher über dem Radar und
+                 mischten Abverkaufs-Warnungen des Coin-Radars, Preis-Infos und
+                 kritische Liquiditätsalarme — die Art ist jetzt ein Filter,
+                 die Schwere eine farbige Marke. -->
+            <div v-if="alarme.length" class="hypBlock hypAlarme">
+                <div class="hypAlarmKopf">
                     <h6 class="hypTitel at-mu-0">
                         <Symbol name="glocke" class="at-mr-1" />{{ t('hype.alarmeTitel') }}
-                        <Pille ton="schlecht" class="hypBadge at-ml-1" v-if="ungeleseneAlarme.length">{{ ungeleseneAlarme.length }}</Pille>
+                        <span v-if="ungeleseneAlarme.length" class="hypAlarmZahl"
+                            :title="t('hype.alarmeUngelesenN', { n: ungeleseneAlarme.length })">{{ ungeleseneAlarme.length }}</span>
                     </h6>
-                    <Knopf klein class="at-ml-auto" v-if="ungeleseneAlarme.length"
+                    <span v-for="art in alarmArtenInDaten" :key="art" class="hypChip"
+                        :class="{ aktiv: alarmArt === art }"
+                        @click="alarmArt = alarmArt === art ? '' : art">{{ t('hype.alarmArt_' + art) }} {{ alarmZahlJeArt[art] }}</span>
+                    <span v-if="ungeleseneAlarme.length" class="hypChip" :class="{ aktiv: alarmNurUngelesen }"
+                        @click="alarmNurUngelesen = !alarmNurUngelesen">{{ t('hype.alarmeNurUngelesen') }}</span>
+                    <span class="at-ml-auto"></span>
+                    <Knopf klein v-if="ungeleseneAlarme.length"
                         @click="alarmeGelesen">{{ t('hype.alleGelesen') }}</Knopf>
-                    <Knopf klein
-                        :class="[ungeleseneAlarme.length ? '' : 'at-ml-auto', { hypScharf: alarmAlleScharf }]"
+                    <Knopf klein :class="{ hypScharf: alarmAlleScharf }"
                         :title="t('hype.loeschen')" @click="alarmeAlleLoeschen">
                         {{ alarmAlleScharf ? t('hype.alarmeAlleLoeschenScharf') : t('hype.alarmeAlleLoeschen') }}
                     </Knopf>
                 </div>
                 <div class="hypAlarmListe">
                     <div v-for="a in sichtbareAlarme" :key="a.id" class="hypAlarm"
-                        :class="[a.schwere, { gelesen: a.gelesen }]">
-                        <span class="hypAlarmSchwere">{{ t('hype.schwere_' + a.schwere) }}</span>
-                        <span v-if="alarmZiel(a)" class="hypAlarmText hypAlarmLink" role="button" tabindex="0"
-                            :title="t('hype.alarmOeffnen')" @click="alarmOeffnen(a)" @keydown.enter.prevent="alarmOeffnen(a)">{{ a.meldung }}</span>
-                        <span v-else class="hypAlarmText">{{ a.meldung }}</span>
+                        :class="[a.schwere, { gelesen: a.gelesen, offen: alarmOffen === a.id }]"
+                        role="button" tabindex="0" :aria-expanded="alarmOffen === a.id"
+                        @click="alarmOffen = alarmOffen === a.id ? null : a.id"
+                        @keydown.enter.self.prevent="alarmOffen = alarmOffen === a.id ? null : a.id">
+                        <span class="hypAlarmMarke" :title="t('hype.schwere_' + a.schwere)">{{ t('hype.schwereKurz_' + a.schwere) }}</span>
+                        <span class="hypAlarmArt">{{ t('hype.alarmArt_' + alarmArtVon(a)) }}</span>
+                        <span class="hypAlarmText">{{ a.meldung }}</span>
                         <span class="hypAlarmZeit">{{ zeitpunkt(a.erstelltAm) }}</span>
                         <span role="button" tabindex="0" class="hypAlarmWeg" :class="{ scharf: alarmLoeschId === a.id }"
                             :title="t('hype.loeschen')" @keydown.enter.stop.prevent="alarmLoeschen(a.id)" @keydown.space.stop.prevent="alarmLoeschen(a.id)" @click.stop="alarmLoeschen(a.id)">
                             <Symbol name="muell" />
                         </span>
+                        <div v-if="alarmOffen === a.id && alarmZiel(a)" class="hypAlarmAktion" @click.stop>
+                            <Knopf klein @click="alarmOeffnen(a)">{{ t('hype.alarmOeffnen') }}</Knopf>
+                        </div>
                     </div>
+                    <p v-if="!sichtbareAlarme.length" class="at-gedaempft at-klein at-mu-0">{{ t('hype.alarmeKeineImFilter') }}</p>
                 </div>
-                <!-- Die älteren sind geladen, nur nicht gezeigt: vorher waren
-                     sie hart abgeschnitten und der Zähler oben zählte trotzdem
-                     mit — man sah eine Zahl ohne die zugehörige Zeile. -->
-                <Knopf v-if="alarme.length > ALARM_SICHTBAR" klein class="at-mo-2"
+                <!-- Die älteren sind geladen, nur nicht gezeigt. -->
+                <button v-if="gefilterteAlarme.length > ALARM_SICHTBAR" type="button" class="hypMehr"
                     @click="alarmeAlleZeigen = !alarmeAlleZeigen">
                     {{ alarmeAlleZeigen ? t('hype.alarmeWeniger')
-                        : t('hype.alarmeMehr', { n: alarme.length - ALARM_SICHTBAR }) }}
-                </Knopf>
+                        : t('hype.alarmeAlleAnzeigen', { n: gefilterteAlarme.length }) }}
+                </button>
             </div>
-
             <!-- Kachel-Detail eines Favoriten: Livedaten -->
             <div v-if="liveOffen" class="hypLive">
                 <div class="hypLiveKopf">
@@ -681,39 +717,27 @@
                 </div>
             </div>
 
-            <div class="hypKennzahlen">
-                <div class="hypZelle">
-                    <div class="hypWert">{{ kandidaten.length }}</div>
-                    <div class="hypLabel">{{ t('hype.kandidaten') }}</div>
-                </div>
-                <div class="hypZelle">
-                    <div class="hypWert at-gut">{{ bestanden.length }}</div>
-                    <div class="hypLabel">{{ t('hype.bestanden') }}</div>
-                </div>
-                <div class="hypZelle">
-                    <div class="hypWert at-schlecht">{{ verworfen.length }}</div>
-                    <div class="hypLabel">{{ t('hype.verworfen') }}</div>
-                    <div class="hypLabel hypKlein">{{ t('hype.unterSchwelleN', { n: nurBewertet.length }) }}</div>
-                </div>
-                <div class="hypZelle">
-                    <div class="hypWert">{{ heissestesNarrativ || '—' }}</div>
-                    <div class="hypLabel">{{ t('hype.heissestesNarrativ') }}</div>
-                </div>
-            </div>
-
-            <!-- Divergenz-Quadrant — nur wo Breite da ist. Auf 375 px bliebe
-                 ein Diagramm übrig, aus dem sich nichts ablesen lässt. -->
-            <div v-if="!istTelefon" class="hypBlock">
-                <h6 class="hypTitel">{{ t('hype.quadrantTitel') }}</h6>
-                <p class="hypHinweis">{{ t('hype.quadrantHinweis') }}</p>
-                <div v-if="bestanden.length || verworfen.length" ref="quadrantEl" class="hypQuadrant"></div>
-                <p v-else class="at-gedaempft at-klein">{{ t('hype.nochKeinScan') }}</p>
-            </div>
-
             <!-- Kandidatentabelle -->
             <div class="hypBlock">
-                <div class="at-flex at-umbruch at-mitte at-luecke-2 at-mu-2">
+                <div class="hypFundKopf">
                     <h6 class="hypTitel at-mu-0 at-mr-2">{{ t('hype.tabelleTitel') }}</h6>
+                    <!-- Vorgabe „geprüft" (S14): „unter Schwelle" heisst nie
+                         sicherheitsgeprüft — 51 solcher Zeilen über den zwei
+                         geprüften machten die Liste zu einer Suche. Sie bleiben
+                         eine Zahl mit Umschalter, nicht versteckt. -->
+                    <select v-model="filterStatus" class="at-feld klein hypAuswahl">
+                        <option value="geprueft">{{ t('hype.filterGeprueft', { n: bestanden.length + verworfen.length }) }}</option>
+                        <option value="bestanden">{{ t('hype.bestanden') }} ({{ bestanden.length }})</option>
+                        <option value="verworfen">{{ t('hype.verworfen') }} ({{ verworfen.length }})</option>
+                        <option value="bewertet">{{ t('hype.unterSchwelle') }} ({{ nurBewertet.length }})</option>
+                        <option value="alle">{{ t('hype.alleStatus') }} ({{ kandidaten.length }})</option>
+                    </select>
+                    <span v-if="nurBewertet.length && (filterStatus === 'geprueft' || filterStatus === 'alle')"
+                        class="hypChip" :class="{ aktiv: filterStatus === 'alle' }"
+                        :title="t('hype.unterSchwelleHilfe')"
+                        @click="filterStatus = filterStatus === 'alle' ? 'geprueft' : 'alle'">
+                        {{ t('hype.unterSchwelleUmschalten', { n: nurBewertet.length }) }}
+                    </span>
                     <span v-for="n in narrativeInDaten" :key="n"
                         class="hypChip" :class="{ aktiv: filterNarrativ === n }"
                         @click="filterNarrativ = filterNarrativ === n ? '' : n">{{ n }}</span>
@@ -734,52 +758,59 @@
                         :class="{ aktiv: boersenFilter.has(b) }"
                         :title="t('hype.boersenFilterChip', { b: boerseName(b) })"
                         @click="boerseUmschalten(b)">{{ BOERSEN_KUERZEL[b] }}</span>
-                    <select v-model="filterStatus" class="at-feld klein hypAuswahl at-ml-auto">
-                        <option value="">{{ t('hype.alleStatus') }}</option>
-                        <option value="bestanden">{{ t('hype.bestanden') }}</option>
-                        <option value="verworfen">{{ t('hype.verworfen') }}</option>
-                        <option value="bewertet">{{ t('hype.unterSchwelle') }}</option>
-                    </select>
                 </div>
 
-                <!-- Am Telefon eine Karte je Fund: neun Spalten auf 375 px
-                     wären eine waagerechte Rollleiste, in der man mehr sucht
-                     als liest. Gezeigt wird, was die Entscheidung trägt —
-                     Noten, Thema, Liquidität, Ausgang. -->
-                <div v-if="istTelefon" class="hypKarten">
-                    <div v-for="k in gefiltert.slice(0, 40)" :key="k.id" class="hypKarte"
+                <!-- Leer, weil nichts die Schwelle erreicht hat — das ist eine
+                     Aussage über den Lauf, kein „noch kein Lauf". -->
+                <div v-if="!gefiltert.length" class="hypLeer">
+                    <template v-if="!kandidaten.length">{{ t('hype.nochKeinScan') }}</template>
+                    <template v-else-if="filterStatus === 'geprueft' && !(bestanden.length + verworfen.length)">
+                        {{ t('hype.keinerGeprueft', { n: nurBewertet.length }) }}
+                        <button type="button" class="hypMehr" @click="filterStatus = 'alle'">{{ t('hype.unterSchwelleZeigen') }}</button>
+                    </template>
+                    <template v-else>{{ t('hype.keineImFilter') }}</template>
+                </div>
+
+                <!-- Karten, sobald der Platz nicht für eine einzeilige Tabelle
+                     reicht (S14: gemessen an der Breite des Inhalts, nicht am
+                     Gerät — vorher griff die Karte erst am Telefon, und ein
+                     820 px breites Fenster bekam eine gequetschte Tabelle mit
+                     abgeschnittener Statusspalte). -->
+                <div v-else-if="kartenAnsicht" class="hypKarten">
+                    <div v-for="k in gefiltert.slice(0, 60)" :key="k.id" class="hypKarte"
                         @click="offen = offen === k.id ? null : k.id">
                         <div class="hypKarteKopf">
-                            <Symbol class="hypStern" :name="istFav(k) ? 'stern' : 'stern'" :gefuellt="istFav(k)" :class="istFav(k) ? 'aktiv' : ''"
+                            <Symbol class="hypStern" name="stern" :gefuellt="istFav(k)" :class="istFav(k) ? 'aktiv' : ''"
+                                :titel="istFav(k) ? t('hype.favEntfernen') : t('hype.favHinzu')"
                                 @click.stop="favUmschalten(k)" />
                             <strong>{{ k.symbol }}</strong>
-                            <span class="hypKette">{{ k.chain }}</span>
+                            <span class="hypKette" :title="k.chain">{{ ketteKurz(k.chain) }}</span>
                             <span v-if="trittbrett(k)" class="hypTritt"
                                 :title="t('hype.trittbrettHilfeEinzeln', { v: k.sozialDaten.trittbrett.vorbild })">
                                 <Symbol name="kopieren" /></span>
                             <span class="at-ml-auto hypKarteNoten">
                                 {{ k.hypeScore }}<span class="hypLiveTrenn"> / </span>
-                                <span :class="k.safetyScore >= 70 ? 'at-gut' : 'at-warn'">
-                                    {{ k.status === 'verworfen' ? '—' : k.safetyScore }}
-                                </span>
+                                <span :class="sicherheit(k).klasse" :title="sicherheit(k).titel">{{ sicherheit(k).text }}</span>
                             </span>
                         </div>
                         <div class="hypKarteZeile">
-                            <span v-if="k.narrative" class="hypChip klein">{{ k.narrative }}</span>
-                            <span class="hypKarteWert">{{ geld(k.marktDaten?.liquiditaetUsd) }} USD</span>
-                            <span class="hypKarteWert">{{ alter(k.marktDaten?.paarAlterStunden) }}</span>
-                            <a v-for="(l, i) in boersenLinksVon(k.marktDaten?.listungen)" :key="i"
-                                class="hypBoerse" :href="listungHref(l, k.symbol)" target="_blank"
-                                rel="noopener noreferrer" @click.stop :title="linkText(l)">{{ linkKuerzel(l) }}</a>
-                            <span v-for="(l, i) in k.marktDaten?.listungNamensgleich || []" :key="'n' + i"
-                                class="hypBoerse namensgleich" :title="t('hype.namensgleichTitel', { b: linkText(l) })">{{ linkKuerzel(l) }}?</span>
-                        </div>
-                        <div class="hypKarteZeile">
-                            <Pille ton="schlecht" class="hypBadge" v-if="k.status === 'verworfen'">
-                                {{ grundText(k.verworfenGrund) }}
-                            </Pille>
+                            <Pille ton="schlecht" class="hypBadge" v-if="k.status === 'verworfen'"
+                                :title="k.verworfenGrund">{{ grundText(k.verworfenGrund) }}</Pille>
+                            <Pille ton="akzent" class="hypBadge" v-else-if="k.status === 'berichtet'">{{ t('hype.imBericht') }}</Pille>
                             <Pille ton="neutral" class="hypBadge" v-else-if="k.status === 'bewertet'">{{ t('hype.unterSchwelle') }}</Pille>
                             <Pille ton="gut" class="hypBadge" v-else>{{ t('hype.bestanden') }}</Pille>
+                            <span v-if="k.narrative" class="hypChip klein">{{ k.narrative }}</span>
+                            <span v-if="geld(k.marktDaten?.liquiditaetUsd) !== '—'" class="hypKarteWert"
+                                :title="t('hype.spalteLiq')">{{ geld(k.marktDaten.liquiditaetUsd) }} USD</span>
+                            <span v-if="alter(k.marktDaten?.paarAlterStunden) !== '—'" class="hypKarteWert"
+                                :title="t('hype.spalteAlter')">{{ alter(k.marktDaten.paarAlterStunden) }}</span>
+                            <span class="hypPlaetze" :title="plaetzeTitel(k)">
+                                <a v-for="(l, i) in eigeneListungen(k)" :key="i" class="hypBoerse"
+                                    :href="listungHref(l, k.symbol)" target="_blank" rel="noopener noreferrer"
+                                    @click.stop>{{ boerseKurz(l) }}<span v-if="boerseArt(l)" class="hypBoerseArt">{{ boerseArt(l) }}</span></a>
+                                <span v-for="(l, i) in k.marktDaten?.listungNamensgleich || []" :key="'n' + i"
+                                    class="hypBoerse namensgleich">{{ boerseKurz(l) }}?</span>
+                            </span>
                         </div>
                         <div v-if="offen === k.id && k.sicherheitsDaten?.hinweise?.length" class="hypKarteHinweise">
                             {{ k.sicherheitsDaten.hinweise.join(' · ') }}
@@ -790,8 +821,8 @@
                                 @geprueft="e => { k.projektDaten = e; k.projektNote = e.note }" />
                         </div>
                     </div>
-                    <p v-if="!gefiltert.length" class="at-gedaempft at-klein at-mittig at-py-3 at-mu-0">
-                        {{ t('hype.nochKeinScan') }}
+                    <p v-if="gefiltert.length > 60" class="at-gedaempft at-klein at-mu-0">
+                        {{ t('hype.kartenGedeckelt', { n: 60, m: gefiltert.length }) }}
                     </p>
                 </div>
 
@@ -801,12 +832,12 @@
                             <tr>
                                 <th @click="sortiere('symbol')">{{ t('hype.spalteSymbol') }}</th>
                                 <th @click="sortiere('hypeScore')" class="at-rechtsbuendig">{{ t('hype.spalteHype') }}</th>
-                                <th @click="sortiere('safetyScore')" class="at-rechtsbuendig">{{ t('hype.spalteSafety') }}</th>
-                                <th @click="sortiere('projektNote')" class="at-rechtsbuendig" :title="t('hype.spalteSubstanzTitel')">{{ t('hype.spalteSubstanz') }}</th>
-                                <th>{{ t('hype.spalteNarrativ') }}</th>
-                                <th class="at-rechtsbuendig">{{ t('hype.spalteLiq') }}</th>
-                                <th class="at-rechtsbuendig">{{ t('hype.spalteAlter') }}</th>
-                                <th>{{ t('hype.spalteHandelbar') }}</th>
+                                <th v-if="spalten.sicherheit" @click="sortiere('safetyScore')" class="at-rechtsbuendig">{{ t('hype.spalteSafety') }}</th>
+                                <th v-if="spalten.substanz" @click="sortiere('projektNote')" class="at-rechtsbuendig" :title="t('hype.spalteSubstanzTitel')">{{ t('hype.spalteSubstanz') }}</th>
+                                <th v-if="spalten.narrativ">{{ t('hype.spalteNarrativ') }}</th>
+                                <th v-if="spalten.liq" class="at-rechtsbuendig">{{ t('hype.spalteLiq') }}</th>
+                                <th v-if="spalten.alter" class="at-rechtsbuendig">{{ t('hype.spalteAlter') }}</th>
+                                <th v-if="spalten.plaetze">{{ t('hype.spalteHandelbar') }}</th>
                                 <th>{{ t('hype.spalteStatus') }}</th>
                                 <th></th>
                             </tr>
@@ -814,39 +845,38 @@
                         <tbody>
                             <template v-for="k in gefiltert" :key="k.id">
                                 <tr class="hypZeile" @click="offen = offen === k.id ? null : k.id">
-                                    <td>
-                                        <Symbol class="hypStern" :name="istFav(k) ? 'stern' : 'stern'" :gefuellt="istFav(k)" :class="istFav(k) ? 'aktiv' : ''"
+                                    <td class="hypSymbolZelle">
+                                        <Symbol class="hypStern" name="stern" :gefuellt="istFav(k)" :class="istFav(k) ? 'aktiv' : ''"
                                             :titel="istFav(k) ? t('hype.favEntfernen') : t('hype.favHinzu')"
                                             @click.stop="favUmschalten(k)" />
                                         <strong>{{ k.symbol }}</strong>
-                                        <span class="hypKette">{{ k.chain }}</span>
+                                        <span class="hypKette" :title="k.chain">{{ ketteKurz(k.chain) }}</span>
                                         <span v-if="trittbrett(k)" class="hypTritt"
                                             :title="t('hype.trittbrettHilfeEinzeln', { v: k.sozialDaten.trittbrett.vorbild })">
                                             <Symbol name="kopieren" /></span>
                                     </td>
                                     <td class="at-rechtsbuendig">{{ k.hypeScore }}</td>
-                                    <td class="at-rechtsbuendig">
-                                        <span :class="k.safetyScore >= 70 ? 'at-gut' : (k.safetyScore >= 40 ? 'at-warn' : 'at-schlecht')">
-                                            {{ k.status === 'verworfen' ? '—' : k.safetyScore }}
-                                        </span>
+                                    <td v-if="spalten.sicherheit" class="at-rechtsbuendig">
+                                        <span :class="sicherheit(k).klasse" :title="sicherheit(k).titel">{{ sicherheit(k).text }}</span>
                                     </td>
-                                    <td class="at-rechtsbuendig">
+                                    <td v-if="spalten.substanz" class="at-rechtsbuendig">
                                         <span v-if="k.projektNote !== null && k.projektNote !== undefined"
                                             :class="k.projektNote >= 65 ? 'at-gut' : (k.projektNote >= 40 ? 'at-warn' : 'at-schlecht')">{{ k.projektNote }}</span>
-                                        <span v-else class="at-gedaempft">—</span>
+                                        <span v-else class="at-gedaempft" :title="t('hype.nichtGeprueft')">—</span>
                                     </td>
-                                    <td><span v-if="k.narrative" class="hypChip klein">{{ k.narrative }}</span></td>
-                                    <td class="at-rechtsbuendig">{{ geld(k.marktDaten?.liquiditaetUsd) }}</td>
-                                    <td class="at-rechtsbuendig">{{ alter(k.marktDaten?.paarAlterStunden) }}</td>
-                                    <td>
-                                        <span v-if="k.marktDaten?.dex" class="hypDex">{{ k.marktDaten.dex }}</span>
-                                        <a v-for="(l, i) in boersenLinksVon(k.marktDaten?.listungen)" :key="i"
-                                            class="hypBoerse" :href="listungHref(l, k.symbol)" target="_blank"
-                                            rel="noopener noreferrer" @click.stop :title="linkText(l)">{{ linkKuerzel(l) }}</a>
-                                        <span v-for="(l, i) in k.marktDaten?.listungNamensgleich || []" :key="'n' + i"
-                                            class="hypBoerse namensgleich" :title="t('hype.namensgleichTitel', { b: linkText(l) })">{{ linkKuerzel(l) }}?</span>
-                                        <span v-if="!k.marktDaten?.dex && !boersenLinksVon(k.marktDaten?.listungen).length"
-                                            class="at-gedaempft">—</span>
+                                    <td v-if="spalten.narrativ"><span v-if="k.narrative" class="hypChip klein">{{ k.narrative }}</span></td>
+                                    <td v-if="spalten.liq" class="at-rechtsbuendig">{{ geld(k.marktDaten?.liquiditaetUsd) }}</td>
+                                    <td v-if="spalten.alter" class="at-rechtsbuendig">{{ alter(k.marktDaten?.paarAlterStunden) }}</td>
+                                    <td v-if="spalten.plaetze">
+                                        <span class="hypPlaetze" :title="plaetzeTitel(k)">
+                                            <a v-for="(l, i) in eigeneListungen(k)" :key="i" class="hypBoerse"
+                                                :href="listungHref(l, k.symbol)" target="_blank" rel="noopener noreferrer"
+                                                @click.stop>{{ boerseKurz(l) }}<span v-if="boerseArt(l)" class="hypBoerseArt">{{ boerseArt(l) }}</span></a>
+                                            <span v-for="(l, i) in k.marktDaten?.listungNamensgleich || []" :key="'n' + i"
+                                                class="hypBoerse namensgleich">{{ boerseKurz(l) }}?</span>
+                                            <span v-if="!eigeneListungen(k).length && !(k.marktDaten?.listungNamensgleich || []).length"
+                                                class="hypDex">{{ k.marktDaten?.dex ? 'DEX' : '—' }}</span>
+                                        </span>
                                     </td>
                                     <td>
                                         <Pille ton="schlecht" class="hypBadge" v-if="k.status === 'verworfen'"
@@ -860,7 +890,7 @@
                                     </td>
                                 </tr>
                                 <tr v-if="offen === k.id" :key="k.id + '-d'">
-                                    <td colspan="10" class="hypDetail">
+                                    <td :colspan="spaltenZahl" class="hypDetail">
                                         <div class="hypDetailGrid">
                                             <div>
                                                 <div class="hypDetailTitel">{{ t('hype.teilnoten') }}</div>
@@ -877,17 +907,22 @@
                                             </div>
                                             <div>
                                                 <div class="hypDetailTitel">{{ t('hype.sicherheitsbefunde') }}</div>
-                                                <ul v-if="k.sicherheitsDaten?.hinweise?.length" class="hypListe">
+                                                <p v-if="k.status === 'bewertet'" class="at-gedaempft at-klein at-mu-1">{{ t('hype.nichtGeprueftLang') }}</p>
+                                                <ul v-else-if="k.sicherheitsDaten?.hinweise?.length" class="hypListe">
                                                     <li v-for="(h, i) in k.sicherheitsDaten.hinweise" :key="i">{{ h }}</li>
                                                 </ul>
                                                 <p v-else class="at-gedaempft at-klein at-mu-1">{{ t('hype.keineBefunde') }}</p>
-                                                <div class="at-mo-2">
+                                                <div class="at-mo-2 hypDetailLinks">
+                                                    <span v-if="k.marktDaten?.dex" class="hypDex">{{ k.marktDaten.dex }}</span>
                                                     <a v-if="k.contractAddress" class="hypLink"
                                                         :href="'https://dexscreener.com/' + k.chain + '/' + k.contractAddress"
                                                         target="_blank" rel="noopener noreferrer">DexScreener ↗</a>
-                                                    <a v-if="k.contractAddress" class="hypLink at-ml-2"
+                                                    <a v-if="k.contractAddress" class="hypLink"
                                                         :href="'https://www.geckoterminal.com/' + k.chain + '/pools/' + (k.pairAddress || k.contractAddress)"
                                                         target="_blank" rel="noopener noreferrer">GeckoTerminal ↗</a>
+                                                    <a v-if="mitTradingView(k)" class="hypLink"
+                                                        :href="listungHref('tradingview', k.symbol)"
+                                                        target="_blank" rel="noopener noreferrer">TradingView ↗</a>
                                                 </div>
                                             </div>
                                             <div>
@@ -899,14 +934,27 @@
                                     </td>
                                 </tr>
                             </template>
-                            <tr v-if="!gefiltert.length">
-                                <td colspan="10" class="at-mittig at-gedaempft at-py-3">{{ t('hype.nochKeinScan') }}</td>
-                            </tr>
                         </tbody>
                     </table>
                 </div>
                 <!-- Pflicht-Attributionen (S12): woher Markt-, Trend- und Sicherheitsdaten stammen. -->
                 <RadarQuellen :quellen="uebersichtQuellen" />
+            </div>
+
+            <!-- Divergenz-Quadrant — unter der Tabelle und einklappbar (S14).
+                 Vorher stand er über ihr und sagte „Noch kein Lauf", sobald
+                 nichts bestanden oder verworfen war, obwohl die Tabelle darunter
+                 die Funde dieses Laufs zeigte: die unter der Schwelle waren nie
+                 mitgezählt. Am Telefon entfällt er weiterhin. -->
+            <div v-if="!istTelefon && kandidaten.length" class="hypBlock">
+                <button type="button" class="hypAufklapp" :aria-expanded="quadrantOffen" @click="quadrantUmschalten">
+                    <Symbol :name="quadrantOffen ? 'runter' : 'pfeilRechts'" class="at-mr-1" />{{ t('hype.quadrantTitel') }}
+                </button>
+                <template v-if="quadrantOffen">
+                    <p class="hypHinweis at-mo-1">{{ t('hype.quadrantHinweis') }}</p>
+                    <p v-if="!(bestanden.length + verworfen.length)" class="hypHinweis">{{ t('hype.quadrantNurUnter', { n: nurBewertet.length }) }}</p>
+                    <div ref="quadrantEl" class="hypQuadrant"></div>
+                </template>
             </div>
         </div>
 
@@ -1327,11 +1375,11 @@ const ungelesenJeFavorit = computed(() => {
  * Ansicht — ausgeklappt steht alles da.
  */
 const FAV_SICHTBAR = 8
-const ALARM_SICHTBAR = 12
+const ALARM_SICHTBAR = 3
 
 // Die Leiste gehört zum Gerät (kleiner Bildschirm = eher zugeklappt), deshalb
 // localStorage. Die Alarmliste dagegen ist ein Blick auf „was gerade war" und
-// startet bewusst jedes Mal bei den neuesten zwölf.
+// startet bewusst jedes Mal bei den neuesten drei.
 const favAlleZeigen = ref(localStorage.getItem('hypeFavAlle') === '1')
 const alarmeAlleZeigen = ref(false)
 
@@ -1347,8 +1395,35 @@ const versteckteFavoriten = computed(() => Math.max(0, favoriten.value.length - 
 const verstecktUngelesen = computed(() => favoriten.value.slice(FAV_SICHTBAR)
     .reduce((n, f) => n + (ungelesenJeFavorit.value[f.id] || 0), 0))
 
+/*
+ * Alarmart für Filter und Marke (S14). Die Liste mischt Funde aus vier
+ * Quellen — Hype-Radar (Frühphase, Smart Money, Listungen), Coin-Radar
+ * (Abverkauf) und den Wachhund der Favoriten (Preis, Liquidität, Sicherheit).
+ * Unbekannte Regeln landen unter „sonstige" statt zu verschwinden.
+ */
+const ALARM_ARTEN = {
+    fruehsignal: 'hype', smartmoney: 'hype', listung: 'hype', alpha: 'hype',
+    abverkauf: 'abverkauf',
+    preisSprung: 'preis', preis24h: 'preis', fundingExtrem: 'preis',
+    liqAbfluss: 'liquiditaet', umsatzEinbruch: 'liquiditaet', spreadWeit: 'liquiditaet',
+    sicherheit: 'sicherheit',
+}
+const ALARM_ART_FOLGE = ['hype', 'abverkauf', 'preis', 'liquiditaet', 'sicherheit', 'sonstige']
+const alarmArtVon = (a) => ALARM_ARTEN[a.regel] || 'sonstige'
+const alarmArt = ref('')
+const alarmNurUngelesen = ref(false)
+const alarmOffen = ref(null)
+
+const alarmZahlJeArt = computed(() => {
+    const z = {}
+    for (const a of alarme.value) { const art = alarmArtVon(a); z[art] = (z[art] || 0) + 1 }
+    return z
+})
+const alarmArtenInDaten = computed(() => ALARM_ART_FOLGE.filter((a) => alarmZahlJeArt.value[a]))
+const gefilterteAlarme = computed(() => alarme.value.filter((a) =>
+    (!alarmArt.value || alarmArtVon(a) === alarmArt.value) && (!alarmNurUngelesen.value || !a.gelesen)))
 const sichtbareAlarme = computed(() =>
-    (alarmeAlleZeigen.value ? alarme.value : alarme.value.slice(0, ALARM_SICHTBAR)))
+    (alarmeAlleZeigen.value ? gefilterteAlarme.value : gefilterteAlarme.value.slice(0, ALARM_SICHTBAR)))
 
 async function ladeAlarme() {
     try {
@@ -1612,7 +1687,7 @@ const fortschritt = ref(null)
 const offen = ref(null)
 const loeschId = ref(null)
 const filterNarrativ = ref('')
-const filterStatus = ref('')
+const filterStatus = ref('geprueft')
 const sortFeld = ref('hypeScore')
 const sortAb = ref(true)
 
@@ -1658,7 +1733,7 @@ const gefiltert = computed(() => {
     else if (filterStatus.value === 'bewertet') liste = liste.filter((k) => k.status === 'bewertet')
     else if (filterStatus.value === 'bestanden') {
         liste = liste.filter((k) => k.status === 'bestanden' || k.status === 'berichtet')
-    }
+    } else if (filterStatus.value === 'geprueft') liste = liste.filter((k) => k.status !== 'bewertet')
     liste = liste.filter(passtBoersenfilter)
 
     const f = sortFeld.value
@@ -1711,8 +1786,103 @@ const alter = (stunden) => {
     if (fehlt(stunden)) return '—'
     const h = Number(stunden)
     if (!Number.isFinite(h)) return '—'
+    // Kompakt und ohne Umbruch (S14): „1986 d" brach in der Spalte um.
+    const en = locale.value === 'en'
     if (h < 48) return `${Math.round(h)} h`
-    return `${Math.round(h / 24)} d`
+    const tage = h / 24
+    if (tage < 365) return `${Math.round(tage)} ${en ? 'd' : 'T'}`
+    const jahre = (tage / 365.25).toFixed(1)
+    return `${en ? jahre : jahre.replace('.', ',')} ${en ? 'y' : 'J'}`
+}
+
+/** „vor 3 h" — wie alt der letzte Lauf ist, ohne dass man die Uhr vergleichen muss. */
+function vorZeit(ms) {
+    const min = Math.max(0, Math.round((jetztMs.value - Number(ms)) / 60000))
+    if (min < 60) return t('hype.vorMin', { n: min })
+    if (min < 48 * 60) return t('hype.vorStd', { n: Math.round(min / 60) })
+    return t('hype.vorTagen', { n: Math.round(min / 1440) })
+}
+const dauerText = (ms) => (ms < 60000 ? `${Math.round(ms / 1000)} s`
+    : `${Math.floor(ms / 60000)} min ${Math.round((ms % 60000) / 1000)} s`)
+
+// ── Anzeige der Fundtabelle (S14) ───────────────────────────────────────
+/** Alle Zeilen eines Laufs tragen denselben Zeitstempel (siehe Kandidaten-Route). */
+const laufZeit = computed(() => kandidaten.value.reduce((m, k) => Math.max(m, Number(k.erstelltAm) || 0), 0))
+const laufDauerMs = ref(0)
+let laufBeginn = 0
+const jetztMs = ref(Date.now())
+
+/*
+ * Sicherheitsnote: nur, wer geprüft UND nicht verworfen wurde, hat eine.
+ * „Unter Schwelle" wurde nie sicherheitsgeprüft — die gespeicherte 0 dort
+ * ist „unbekannt" und stand bis S14 als ROTE 0 in der Tabelle.
+ */
+function sicherheit(k) {
+    if (k.status === 'bewertet') return { text: '—', klasse: 'at-gedaempft', titel: t('hype.nichtGeprueft') }
+    if (k.status === 'verworfen' || k.safetyScore === null || k.safetyScore === undefined) {
+        return { text: '—', klasse: 'at-gedaempft', titel: k.status === 'verworfen' ? t('hype.sicherheitVerworfen') : t('hype.nichtGeprueft') }
+    }
+    const s = Number(k.safetyScore)
+    return { text: String(s), klasse: s >= 70 ? 'at-gut' : (s >= 40 ? 'at-warn' : 'at-schlecht'), titel: '' }
+}
+
+const KETTEN_KURZ = {
+    solana: 'SOL', ethereum: 'ETH', eth: 'ETH', base: 'BASE', bsc: 'BSC', arbitrum: 'ARB',
+    polygon: 'POL', avalanche: 'AVAX', optimism: 'OP', tron: 'TRX', sui: 'SUI', ton: 'TON',
+}
+const ketteKurz = (c) => (c ? (KETTEN_KURZ[String(c).toLowerCase()] || String(c).slice(0, 4).toUpperCase()) : '')
+
+/** Eigene Börsen ohne TradingView — TV steht im Detail, das Kürzel kostete eine Spalte Breite. */
+const eigeneListungen = (k) => boersenLinksVon(k.marktDaten?.listungen).filter((l) => l !== 'tradingview')
+const mitTradingView = (k) => boersenLinksVon(k.marktDaten?.listungen).includes('tradingview')
+const boerseKurz = (l) => BOERSEN_KUERZEL[listungBoerse(l)] || listungBoerse(l)
+const boerseArt = (l) => (typeof l === 'string' ? '' : (l.futures ? 'F' : '') + (l.spot ? 'S' : ''))
+function plaetzeTitel(k) {
+    const zeilen = eigeneListungen(k).map(linkText)
+    for (const l of k.marktDaten?.listungNamensgleich || []) zeilen.push(t('hype.namensgleichTitel', { b: linkText(l) }))
+    if (k.marktDaten?.dex) zeilen.push(`DEX: ${k.marktDaten.dex}`)
+    if (mitTradingView(k)) zeilen.push(t('hype.tvImDetail'))
+    return zeilen.join('\n')
+}
+
+/*
+ * Spalten, in denen in der gezeigten Liste ÜBERALL „—" stünde, entfallen.
+ * Die Sicherheit hat nur, wer bestanden hat; die Substanz nur, wer eine
+ * Projektprüfung bekam.
+ */
+const spalten = computed(() => {
+    const l = gefiltert.value
+    const da = (v) => v !== null && v !== undefined && v !== ''
+    return {
+        sicherheit: l.some((k) => k.status === 'bestanden' || k.status === 'berichtet'),
+        substanz: l.some((k) => da(k.projektNote)),
+        narrativ: l.some((k) => k.narrative),
+        liq: l.some((k) => da(k.marktDaten?.liquiditaetUsd)),
+        alter: l.some((k) => da(k.marktDaten?.paarAlterStunden)),
+        plaetze: l.some((k) => k.marktDaten?.dex || boersenLinksVon(k.marktDaten?.listungen).length
+            || (k.marktDaten?.listungNamensgleich || []).length),
+    }
+})
+const spaltenZahl = computed(() => 3 + Object.values(spalten.value).filter(Boolean).length)
+
+/*
+ * Karten statt Tabelle, sobald der INHALT schmaler ist als eine einzeilige
+ * Tabelle braucht. Gemessen am Element, nicht am Fenster: das Seitenmenü
+ * nimmt je nach Zustand unterschiedlich viel weg.
+ */
+const KARTEN_UNTER_PX = 860
+const wurzel = ref(null)
+const inhaltBreite = ref(9999)
+let breitenBeobachter = null
+const kartenAnsicht = computed(() => istTelefon.value || inhaltBreite.value < KARTEN_UNTER_PX)
+
+// Quadrant ein- und ausgeklappt — gehört zum Gerät, wie die Einstellungszeile.
+const quadrantOffen = ref(localStorage.getItem('hypeQuadrantOffen') === '1')
+function quadrantUmschalten() {
+    quadrantOffen.value = !quadrantOffen.value
+    try { localStorage.setItem('hypeQuadrantOffen', quadrantOffen.value ? '1' : '0') } catch (_) { /* privater Modus */ }
+    if (quadrantOffen.value) nextTick(zeichne)
+    else { diagramm?.dispose(); diagramm = null }
 }
 
 const zeitpunkt = (ms) => (!(Number(ms) > 0) ? '—' : new Date(Number(ms)).toLocaleString(
@@ -1897,6 +2067,7 @@ async function starte(mitBericht) {
     meldung.value = ''
     meldungFehler.value = false
     fortschritt.value = { schritt: 'sammeln' }
+    laufBeginn = Date.now()
 
     strom = new AbortController()
     try {
@@ -1948,6 +2119,9 @@ function verarbeite(e, mitBericht) {
         return
     }
     if (e.type !== 'fertig') return
+    // Die Dauer speichert der Server nicht — sie ist nur für einen Lauf
+    // bekannt, den diese Seite selbst angestossen hat.
+    if (laufBeginn) laufDauerMs.value = Date.now() - laufBeginn
 
     // „aus" (kein Schlüssel, abgeschaltet) ist kein Ausfall — eigens benannt.
     const ausgefallen = Object.entries(e.quellenStand || {})
@@ -2242,8 +2416,15 @@ function zeichne() {
 
 const beiGroesse = () => diagramm?.resize()
 
+let uhrTakt = null
+
 onMounted(async () => {
     window.addEventListener('resize', beiGroesse)
+    if (wurzel.value && typeof ResizeObserver !== 'undefined') {
+        breitenBeobachter = new ResizeObserver(([e]) => { inhaltBreite.value = e.contentRect.width })
+        breitenBeobachter.observe(wurzel.value)
+    }
+    uhrTakt = setInterval(() => { jetztMs.value = Date.now() }, 60000)
     await Promise.all([
         ladeKandidaten(), ladeBerichte(), ladeGuete(), ladeEinstellungen(),
         ladeFavoriten(), ladeAlarme(), ladeKiQuellen(),
@@ -2262,6 +2443,8 @@ let abgebaut = false
 onBeforeUnmount(() => {
     abgebaut = true
     window.removeEventListener('resize', beiGroesse)
+    breitenBeobachter?.disconnect()
+    if (uhrTakt) clearInterval(uhrTakt)
     strom?.abort()
     diagramm?.dispose()
     // Die Takte dürfen die Seite nicht überleben.
@@ -2315,34 +2498,10 @@ watch(locale, () => zeichne())
     color: var(--leise);
 }
 
-.hypKennzahlen {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-    gap: .75rem;
-    margin-bottom: 1.25rem;
-}
 
-.hypZelle {
-    background: var(--bg);
-    border-radius: var(--radius);
-    padding: .7rem .85rem;
-}
 
-.hypWert {
-    font-size: 1.495rem;
-    font-weight: 600;
-    line-height: 1.2;
-}
 
-.hypLabel {
-    font-size: .874rem;
-    color: var(--leise);
-}
 
-.hypKlein {
-    font-size: .782rem;
-    opacity: .75;
-}
 
 .hypBlock {
     margin-bottom: 1.75rem;
@@ -2664,21 +2823,8 @@ watch(locale, () => zeichne())
 .hypAlarm.warnung { border-left-color: var(--warn); }
 .hypAlarm.kritisch { border-left-color: var(--bad); }
 .hypAlarm.gelesen { opacity: .55; }
-.hypAlarmLink { cursor: pointer; }
-.hypAlarmLink:hover { text-decoration: underline; color: var(--accent); }
 
-.hypAlarmSchwere {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: .736rem;
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    color: var(--leise);
-    flex: none;
-    width: 4.5rem;
-}
 
-.hypAlarm.kritisch .hypAlarmSchwere { color: var(--bad); }
-.hypAlarm.warnung .hypAlarmSchwere { color: var(--warn); }
 
 .hypAlarmText { flex: 1; }
 
@@ -3177,5 +3323,183 @@ watch(locale, () => zeichne())
     gap: .5rem;
     font-size: .943rem;
     margin-bottom: .2rem;
+}
+
+/* ── Lagezeile (S14) ────────────────────────────────────── */
+.hypKopf.mitLage .hypLage { order: 1; flex: 1 1 24rem; min-width: 0; }
+.hypKopf.mitLage .hypKnoepfe { order: 2; }
+.hypKopf.mitLage .hypEinstKopf { order: 3; flex-basis: 100%; padding-bottom: 0; }
+
+.hypLage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .25rem 1.1rem;
+    padding: .55rem .85rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: .35rem;
+}
+
+.hypLageLauf { font-weight: 600; }
+.hypLageLeise { color: var(--muted); font-weight: 400; }
+
+.hypLageZahlen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .2rem .9rem;
+    font-size: .92rem;
+}
+
+.hypLageZahlen b {
+    font-variant-numeric: tabular-nums;
+    margin-right: .15rem;
+}
+
+.hypLageSymbol { color: var(--warn); margin-right: .2rem; }
+
+/* ── Alarme, kompakt (S14) ──────────────────────────────── */
+.hypAlarmKopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: .5rem;
+}
+
+.hypAlarmKopf .hypTitel { margin-right: .4rem; }
+
+.hypAlarm {
+    flex-wrap: wrap;
+    align-items: center;
+    cursor: pointer;
+    /* Grid-Eintrag: ohne das wüchse die Zeile mit dem ungekürzten Text mit. */
+    min-width: 0;
+}
+
+.hypAlarm:hover { background: var(--panel-soft); }
+
+.hypAlarmMarke {
+    flex: none;
+    width: 1.35rem;
+    text-align: center;
+    font-size: .7rem;
+    font-weight: 700;
+    border-radius: 4px;
+    padding: .05rem 0;
+    background: color-mix(in srgb, var(--muted) 25%, transparent);
+    color: var(--text);
+}
+
+.hypAlarm.warnung .hypAlarmMarke { background: var(--warn); color: var(--bg); }
+.hypAlarm.kritisch .hypAlarmMarke { background: var(--bad); color: #fff; }
+
+.hypAlarmArt {
+    flex: none;
+    width: 5.6rem;
+    font-size: .76rem;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Eine Zeile je Alarm; der Klick klappt den ganzen Text auf. */
+.hypAlarmText {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.hypAlarm.offen .hypAlarmText { white-space: normal; }
+
+.hypAlarmAktion {
+    flex-basis: 100%;
+    padding-left: 1.95rem;
+    padding-top: .25rem;
+}
+
+.hypMehr {
+    background: none;
+    border: 0;
+    padding: .35rem 0 0;
+    color: var(--accent);
+    font: inherit;
+    font-size: .85rem;
+    cursor: pointer;
+}
+
+.hypMehr:hover { text-decoration: underline; }
+
+/* ── Funde (S14) ────────────────────────────────────────── */
+.hypFundKopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem;
+    margin-bottom: .6rem;
+}
+
+.hypLeer {
+    padding: 1rem .85rem;
+    background: var(--panel);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-size: .9rem;
+}
+
+.hypLeer .hypMehr { padding: 0 0 0 .4rem; }
+
+/* Einzeilig: keine Zelle bricht um. */
+.hypTabelle td { white-space: nowrap; }
+.hypTabelle td.hypDetail { white-space: normal; }
+
+.hypSymbolZelle .hypStern { vertical-align: -.1em; }
+
+.hypSymbolZelle .hypKette {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: .7rem;
+}
+
+.hypPlaetze { white-space: nowrap; }
+
+.hypBoerseArt {
+    font-size: .6rem;
+    font-weight: 700;
+    opacity: .8;
+    margin-left: .12rem;
+}
+
+.hypDetailLinks {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .3rem .8rem;
+}
+
+.hypAufklapp {
+    display: inline-flex;
+    align-items: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--text);
+    font: inherit;
+    font-size: 1.092rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.hypAufklapp:hover { color: var(--accent); }
+
+/* Telefon: Marke, Art und Zeit oben, der Text darunter in eigener Zeile —
+   neben der Zeit blieben sonst zehn Zeichen. */
+@media (max-width: 600px) {
+    .hypAlarmArt { flex: 1 1 auto; width: auto; }
+    .hypAlarmText { order: 5; flex-basis: 100%; padding-left: 1.95rem; }
+    .hypAlarmAktion { order: 6; }
 }
 </style>
