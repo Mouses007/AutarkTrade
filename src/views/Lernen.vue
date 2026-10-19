@@ -512,27 +512,27 @@ async function aktivUmschalten(karte) {
 
                 <div v-if="formOffen" class="dailyCard at-p-3 at-mu-3">
                     <div class="at-mu-2">
-                        <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.frage') }}</label>
+                        <label class="at-label">{{ t('lernen.karten.frage') }}</label>
                         <textarea class="at-feld" rows="2" v-model="formFrage"></textarea>
                     </div>
                     <div class="at-mu-2">
-                        <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.antwort') }}</label>
+                        <label class="at-label">{{ t('lernen.karten.antwort') }}</label>
                         <textarea class="at-feld" rows="3" v-model="formAntwort"></textarea>
                     </div>
                     <div class="at-mu-2">
-                        <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.erklaerung') }}</label>
+                        <label class="at-label">{{ t('lernen.karten.erklaerung') }}</label>
                         <textarea class="at-feld" rows="2" v-model="formErklaerung"
                             :placeholder="t('lernen.karten.erklaerungHinweis')"></textarea>
                     </div>
                     <div class="lernenFormZeile at-mu-3">
                         <div>
-                            <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.kategorieLabel') }}</label>
+                            <label class="at-label">{{ t('lernen.karten.kategorieLabel') }}</label>
                             <select class="at-feld" v-model="formKategorie">
                                 <option v-for="k in KATEGORIEN" :key="k" :value="k">{{ kategorieLabel(k) }}</option>
                             </select>
                         </div>
                         <div>
-                            <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.niveauLabel') }}</label>
+                            <label class="at-label">{{ t('lernen.karten.niveauLabel') }}</label>
                             <select class="at-feld" v-model.number="formNiveau">
                                 <option v-for="n in NIVEAUS" :key="n" :value="n">{{ t('lernen.niveau', { n }) }}</option>
                             </select>

@@ -299,4 +299,24 @@ const vzProz = (v, n = 2) => v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math
 
 .gut { color: #26be96; }
 .schlecht { color: #ff5f56; }
+
+/*
+ * Schmale Schirme. Vier Spalten nebeneinander (zwei davon fest 170 px) liessen
+ * den Skalen am Telefon null Breite — ihr Text lief übereinander (Fehler aus
+ * dem S2-Containertest). Erst zwei Spalten, am Telefon die Skalen über die
+ * volle Breite und die beiden Zahlen darunter nebeneinander.
+ */
+@media (max-width: 900px) {
+    .sBand { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sFeld + .sFeld { border-left: 0; }
+    .sFeld:nth-child(even) { border-left: 1px solid var(--pTrenn); }
+    .sFeld:nth-child(n + 3) { border-top: 1px solid var(--pTrenn); }
+}
+
+@media (max-width: 560px) {
+    .sFeld:not(.sSchmal) { grid-column: 1 / -1; border-left: 0; }
+    .sFeld:nth-child(2) { border-top: 1px solid var(--pTrenn); }
+    .sSchmal + .sSchmal { border-left: 1px solid var(--pTrenn); }
+    .sFeld.sSchmal:nth-child(3) { border-left: 0; }
+}
 </style>

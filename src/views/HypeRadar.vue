@@ -60,7 +60,7 @@
 
                 <div class="at-formzeile at-mu-3">
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.intervall') }}</label>
+                        <label class="at-label">{{ t('hype.intervall') }}</label>
                         <select v-model.number="einst.intervallStunden" class="at-feld klein"
                             @change="speichern">
                             <option :value="1">{{ t('hype.stunde1') }}</option>
@@ -71,12 +71,12 @@
                         </select>
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.minHype') }}</label>
+                        <label class="at-label">{{ t('hype.minHype') }}</label>
                         <input v-model.number="einst.minHypeScore" type="number" min="0" max="100"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.topN') }}</label>
+                        <label class="at-label">{{ t('hype.topN') }}</label>
                         <input v-model.number="einst.berichtTopN" type="number" min="1" max="20"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
@@ -103,22 +103,22 @@
                 <p class="hypHinweis">{{ t('hype.sicherheitHinweis') }}</p>
                 <div class="at-formzeile">
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.minLiq') }}</label>
+                        <label class="at-label">{{ t('hype.minLiq') }}</label>
                         <input v-model.number="einst.sicherheit.minLiquiditaetUsd" type="number"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.maxTop10') }}</label>
+                        <label class="at-label">{{ t('hype.maxTop10') }}</label>
                         <input v-model.number="einst.sicherheit.maxTop10Prozent" type="number"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.minAlter') }}</label>
+                        <label class="at-label">{{ t('hype.minAlter') }}</label>
                         <input v-model.number="einst.sicherheit.minPaarAlterStunden" type="number"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.maxSteuer') }}</label>
+                        <label class="at-label">{{ t('hype.maxSteuer') }}</label>
                         <input v-model.number="einst.sicherheit.maxVerkaufssteuerProzent" type="number"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
@@ -169,7 +169,7 @@
                      Feld mit Maske überschreibt beim Speichern nichts. -->
                 <div class="hypSchluessel at-mo-3">
                     <div v-for="(info, q) in SCHLUESSEL_QUELLEN" :key="q" class="hypSchluesselZeile">
-                        <label class="at-label at-klein at-mu-1">
+                        <label class="at-label at-mu-1">
                             {{ q }}
                             <span class="hypHinweisKlein">{{ info.optional ? t('hype.keyOptional') : t('hype.keyNoetig') }}</span>
                         </label>
@@ -204,7 +204,7 @@
                         </div>
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.projektMax') }}</label>
+                        <label class="at-label">{{ t('hype.projektMax') }}</label>
                         <input v-model.number="einst.projektMax" type="number" min="0" max="40"
                             class="at-feld klein hypZahl" :disabled="!einst.projektPruefung" @change="speichern">
                     </div>
@@ -223,7 +223,7 @@
                 </div>
                 <div class="at-formzeile">
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.fruehTakt') }}</label>
+                        <label class="at-label">{{ t('hype.fruehTakt') }}</label>
                         <select v-model.number="einst.fruehIntervallMin" class="at-feld klein" @change="speichern">
                             <option :value="5">5 min</option>
                             <option :value="15">15 min</option>
@@ -232,12 +232,12 @@
                         </select>
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.fruehKandidatAb') }}</label>
+                        <label class="at-label">{{ t('hype.fruehKandidatAb') }}</label>
                         <input v-model.number="einst.fruehKandidatAb" type="number" min="1" max="100"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.fruehAlarmAb') }}</label>
+                        <label class="at-label">{{ t('hype.fruehAlarmAb') }}</label>
                         <input v-model.number="einst.fruehAlarmAb" type="number" min="0" max="100"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
@@ -254,7 +254,7 @@
                 <!-- X kostet je Abfrage — deshalb ein eigener, längerer Takt. -->
                 <div v-if="einst.fruehQuellen?.x" class="at-formzeile at-mo-1">
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.fruehXTakt') }}</label>
+                        <label class="at-label">{{ t('hype.fruehXTakt') }}</label>
                         <select v-model.number="einst.fruehXIntervallMin" class="at-feld klein" @change="speichern">
                             <option :value="30">30 min</option>
                             <option :value="60">60 min</option>
@@ -264,7 +264,7 @@
                     </div>
                     <div class="at-wachsen hypHinweis at-mu-0">{{ t('hype.fruehXHinweis') }}</div>
                 </div>
-                <label class="at-label at-klein at-mo-2" for="hypFruehTg">{{ t('hype.fruehTelegram') }}</label>
+                <label class="at-label at-mo-2" for="hypFruehTg">{{ t('hype.fruehTelegram') }}</label>
                 <textarea id="hypFruehTg" class="at-feld klein hypTgListe" rows="2"
                     :value="(einst.fruehTelegram || []).join('\n')"
                     :placeholder="t('hype.fruehTelegramPlatzhalter')"
@@ -274,14 +274,14 @@
                 <!-- Smart Money: Wallet-Liste, Takt und RPC-Adresse — nur, wenn
                      die Quelle eingeschaltet ist. -->
                 <template v-if="einst.fruehQuellen?.smartmoney">
-                    <label class="at-label at-klein at-mo-2" for="hypSmartW">{{ t('hype.smartWallets') }}</label>
+                    <label class="at-label at-mo-2" for="hypSmartW">{{ t('hype.smartWallets') }}</label>
                     <textarea id="hypSmartW" class="at-feld klein hypTgListe" rows="3"
                         :value="(einst.smartWallets || []).map((w) => (w.adresse + ' ' + (w.name || '')).trim()).join('\n')"
                         :placeholder="t('hype.smartWalletsPlatzhalter')"
                         @change="smartWalletsGeaendert"></textarea>
                     <div class="at-formzeile at-mo-1">
                         <div>
-                            <label class="at-label at-klein">{{ t('hype.smartTakt') }}</label>
+                            <label class="at-label">{{ t('hype.smartTakt') }}</label>
                             <select v-model.number="einst.smartIntervallMin" class="at-feld klein" @change="speichern">
                                 <option :value="15">15 min</option>
                                 <option :value="30">30 min</option>
@@ -289,7 +289,7 @@
                             </select>
                         </div>
                         <div class="at-wachsen">
-                            <label class="at-label at-klein">{{ t('hype.smartRpc') }}</label>
+                            <label class="at-label">{{ t('hype.smartRpc') }}</label>
                             <input v-model="einst.schluessel.solanaRpc" type="password" class="at-feld klein"
                                 :placeholder="schluesselDa('solanaRpc') ? einst.schluessel.solanaRpc : t('hype.smartRpcPlatzhalter')"
                                 @change="speichern">
@@ -311,7 +311,7 @@
                         </div>
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.boersenwachtTakt') }}</label>
+                        <label class="at-label">{{ t('hype.boersenwachtTakt') }}</label>
                         <select v-model.number="einst.boersenwachtIntervallMin" class="at-feld klein" @change="speichern">
                             <option :value="15">15 min</option>
                             <option :value="30">30 min</option>
@@ -336,7 +336,7 @@
                 </p>
                 <div class="at-formzeile">
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.wachhundTakt') }}</label>
+                        <label class="at-label">{{ t('hype.wachhundTakt') }}</label>
                         <select v-model.number="einst.wachhundIntervallMin" class="at-feld klein"
                             @change="speichern">
                             <!-- „Aus" als eigener Wert. Bis zum 21.08.2026 liess sich der
@@ -350,17 +350,17 @@
                         </select>
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.regelPreisSprung') }}</label>
+                        <label class="at-label">{{ t('hype.regelPreisSprung') }}</label>
                         <input v-model.number="einst.alarmRegeln.preisSprungPct" type="number" min="1"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.regelPreis24h') }}</label>
+                        <label class="at-label">{{ t('hype.regelPreis24h') }}</label>
                         <input v-model.number="einst.alarmRegeln.preisSturz24hPct" type="number" min="1"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.regelLiqAbfluss') }}</label>
+                        <label class="at-label">{{ t('hype.regelLiqAbfluss') }}</label>
                         <input v-model.number="einst.alarmRegeln.liqAbflussPct" type="number" min="1"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
@@ -372,17 +372,17 @@
                 <p class="hypHinweis at-mo-3 at-mu-1">{{ t('hype.regelnBoerse') }}</p>
                 <div class="at-formzeile">
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.regelUmsatzEinbruch') }}</label>
+                        <label class="at-label">{{ t('hype.regelUmsatzEinbruch') }}</label>
                         <input v-model.number="einst.alarmRegeln.umsatzEinbruchPct" type="number" min="1"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.regelSpreadWarn') }}</label>
+                        <label class="at-label">{{ t('hype.regelSpreadWarn') }}</label>
                         <input v-model.number="einst.alarmRegeln.spreadWarnBp" type="number" min="1" step="0.5"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>
                     <div>
-                        <label class="at-label at-klein">{{ t('hype.regelFundingExtrem') }}</label>
+                        <label class="at-label">{{ t('hype.regelFundingExtrem') }}</label>
                         <input v-model.number="einst.alarmRegeln.fundingExtremPct" type="number" min="1"
                             class="at-feld klein hypZahl" @change="speichern">
                     </div>

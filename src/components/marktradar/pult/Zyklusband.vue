@@ -255,4 +255,15 @@ const piNah = computed(() => abstand.value !== null && abstand.value > -10)
     color: var(--white-38);
     margin-top: 0.2rem;
 }
+
+/* Telefon: Preis und Regenbogen in einer Zeile, Pi-Cycle darunter über die
+   volle Breite — 210 px fest liessen dem Regenbogen sonst keinen Platz. */
+@media (max-width: 700px) {
+    .zyBand { grid-template-columns: auto minmax(0, 1fr); }
+    .zyPi {
+        grid-column: 1 / -1;
+        border-left: 0;
+        border-top: 1px solid var(--pTrenn);
+    }
+}
 </style>

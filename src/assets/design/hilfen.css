@@ -191,3 +191,26 @@ div.at-check {
 div.at-check > :not(input):not(label) {
     flex-basis: 100%;
 }
+
+div.at-check > label {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+/*
+ * Tabellen in Tabellen (aufgeklappte Detailzeilen). `.at-tabelle th/td` aus
+ * basis.css greift als Nachfahren-Selektor auch dort und machte die kleinen
+ * Detailtabellen breit und versal — sie liefen ineinander. Bootstrap hatte
+ * das über Kind-Selektoren vermieden; hier wird zurückgesetzt. Die doppelte
+ * Klasse hebt die Regel über `.at-tabelle.dicht th` und über Seitenregeln wie
+ * `.crTabelle th { white-space: nowrap }`, die sonst ebenfalls durchschlagen.
+ */
+.at-tabelle.at-tabelle table th,
+.at-tabelle.at-tabelle table td {
+    padding: 0.15rem 0.4rem;
+    border-bottom: 0;
+    white-space: normal;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: inherit;
+}

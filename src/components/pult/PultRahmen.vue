@@ -399,4 +399,41 @@ defineExpose({ jetzt })
     background: transparent;
     min-height: 0;
 }
+
+/*
+ * Telefon und schmales Tablet (nur das Marktradar-Pult; das Live-Fenster ist
+ * reiner Desktop). Zwei Spalten nebeneinander liessen der Bühne am Telefon
+ * kaum 70 px, und die feste Höhe mit `overflow: hidden` schob Bänder, Reiter
+ * und Instrumente übereinander. Hier stapelt sich alles: Bänder, Bühne mit
+ * eigener Höhe (Diagramme brauchen eine), darunter die Instrumente — die Seite
+ * scrollt, nicht das Pult.
+ */
+@media (max-width: 767.98px) {
+    .pult {
+        height: auto;
+        min-height: 0;
+        overflow: visible;
+    }
+
+    .pMitte {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pBuehne {
+        border-right: 0;
+        border-bottom: 1px solid var(--pTrenn);
+    }
+
+    .pBuehneKopf {
+        flex-wrap: wrap;
+    }
+
+    .pBuehneKoerper {
+        height: min(70dvh, 520px);
+    }
+
+    .pLeiste {
+        overflow: visible;
+    }
+}
 </style>

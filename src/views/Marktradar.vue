@@ -395,9 +395,26 @@ watch(() => daten.funding, (d) => {
     z-index: 5;
 }
 
-@media (max-width: 991.98px) {
-    /* Kein Platz für drei Blöcke nebeneinander — dann läuft es mit. */
+/* Kein Platz für drei Blöcke nebeneinander — dann läuft es mit. Die Grenze
+   liegt höher als im Live-Fenster: im Raster stehen rechts zwei Knöpfe mehr
+   (Kacheln, Live-Trading), und bei 1440 px überdeckte das Symbol „Raster". */
+@media (max-width: 1599.98px) {
     .ltSymbolMitte {
+        position: static;
+        transform: none;
+    }
+
+    /* Die Börsenlinks hängen in `SymbolWahl` absolut LINKS am Symbol — in
+       fliessender Lage ragten sie in den Titel. Dieselbe Umstellung, die die
+       Komponente selbst erst unter 992 px macht. */
+    .ltSymbolMitte :deep(.swWrap) {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        flex-direction: row-reverse;
+    }
+
+    .ltSymbolMitte :deep(.swOeffnen) {
         position: static;
         transform: none;
     }

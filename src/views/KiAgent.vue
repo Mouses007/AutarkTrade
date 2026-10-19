@@ -731,7 +731,7 @@ onBeforeMount(async () => {
 
                     <!-- Zeitraum-Typ -->
                     <div>
-                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.period') }}</label>
+                        <label class="at-label">{{ t('kiAgent.period') }}</label>
                         <select v-model="periodType" class="at-feld klein">
                             <option value="week">{{ t('kiAgent.periodWeek') }}</option>
                             <option value="month">{{ t('kiAgent.periodMonth') }}</option>
@@ -743,23 +743,23 @@ onBeforeMount(async () => {
 
                     <!-- Woche -->
                     <div v-if="periodType === 'week'">
-                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.weekOf') }}</label>
+                        <label class="at-label">{{ t('kiAgent.weekOf') }}</label>
                         <input type="date" v-model="selectedWeekStart" class="at-feld klein">
                     </div>
 
                     <!-- Monat -->
                     <div v-if="periodType === 'month'">
-                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.periodMonth') }}</label>
+                        <label class="at-label">{{ t('kiAgent.periodMonth') }}</label>
                         <input type="month" v-model="selectedMonth" class="at-feld klein">
                     </div>
 
                     <!-- Custom Range -->
                     <div v-if="periodType === 'custom'">
-                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.from') }}</label>
+                        <label class="at-label">{{ t('kiAgent.from') }}</label>
                         <input type="date" v-model="customStart" class="at-feld klein">
                     </div>
                     <div v-if="periodType === 'custom'">
-                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.to') }}</label>
+                        <label class="at-label">{{ t('kiAgent.to') }}</label>
                         <input type="date" v-model="customEnd" class="at-feld klein">
                     </div>
 

@@ -12,14 +12,20 @@ import { useI18n } from 'vue-i18n'
 import { ebeneAuf, ebeneZu } from '../composables/useZurueckGeste.js'
 import InfoTipp from './InfoTipp.vue'
 import Symbol from '@/components/basis/Symbol.vue'
+import Quellenhinweis from '@/components/basis/Quellenhinweis.vue'
 
 defineProps({
     titel: { type: String, default: '' },
     /** Erklärtext-Schlüssel wie bei `RadarKachel` — sonst wäre ausgerechnet
      *  die Gross-Ansicht die einzige Stelle ohne Erklärung. */
     infoKey: { type: String, default: '' },
-    /** Herkunft der Daten, klein in der Fusszeile */
-    quelle: { type: String, default: '' },
+    /**
+     * Herkunft der Daten, klein in der Fusszeile. Heute ein Text aus der
+     * Registry; S12 kann Quellen-Objekte (`[{ name, url, art }]`, siehe
+     * `basis/Quellenhinweis.vue`) übergeben, dann stehen Pflicht-Attributionen
+     * mit Link und vorgegebenem Wortlaut da.
+     */
+    quelle: { type: [String, Array], default: '' },
 })
 
 const emit = defineEmits(['schliessen'])
@@ -63,7 +69,9 @@ onBeforeUnmount(() => ebeneZu(schliesseDurchGeste))
                     <slot></slot>
                 </div>
 
-                <div v-if="quelle" class="radarOverlayFuss">{{ quelle }}</div>
+                <div v-if="quelle && quelle.length" class="radarOverlayFuss">
+                    <Quellenhinweis :quellen="Array.isArray(quelle) ? quelle : [{ name: quelle }]" class="at-m-0" />
+                </div>
             </div>
         </div>
     </Teleport>
