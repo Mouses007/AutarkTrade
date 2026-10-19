@@ -21,12 +21,12 @@
  * Marktradar-/Lagebericht-Felder, Benachrichtigungen und Mail-Zugang), wird
  * deshalb hier geladen — bevor irgendein Bereich gemountet ist.
  */
-import { onBeforeMount, onMounted, ref, computed, watch } from 'vue'
+import { onBeforeMount, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { useInitTooltip } from '../utils/utils'
 import { currentUser } from '../stores/settings.js'
 import { dbGetSettings } from '../utils/db.js'
+import { Reiter } from '@/components/basis/index.js'
 import { ladeModi } from './einstellungen/gemeinsam/useModi.js'
 import { useRadarEinstellungen } from './einstellungen/gemeinsam/useRadarEinstellungen.js'
 import { ladeBrowserNotifications, ladeBenachrichtigungen } from './einstellungen/gemeinsam/useBenachrichtigungen.js'
@@ -49,14 +49,14 @@ const { loadRadarSettings } = useRadarEinstellungen()
  * im localStorage, damit man nach dem Speichern nicht wieder oben landet.
  */
 const BEREICHE = [
-    { id: 'allgemein', icon: 'uil uil-setting', komponente: EinstellungenAllgemein },
-    { id: 'journal', icon: 'uil uil-book-alt', komponente: EinstellungenJournal },
-    { id: 'live', icon: 'uil uil-chart-line', komponente: EinstellungenLive },
-    { id: 'ki', icon: 'uil uil-brain', komponente: EinstellungenKi },
-    { id: 'benachrichtigungen', icon: 'uil uil-bell', komponente: EinstellungenBenachrichtigungen },
+    { id: 'allgemein', symbol: 'einstellungen', komponente: EinstellungenAllgemein },
+    { id: 'journal', symbol: 'journal', komponente: EinstellungenJournal },
+    { id: 'live', symbol: 'live', komponente: EinstellungenLive },
+    { id: 'ki', symbol: 'ki', komponente: EinstellungenKi },
+    { id: 'benachrichtigungen', symbol: 'glocke', komponente: EinstellungenBenachrichtigungen },
     // Einhängepunkte für S10 (Lizenz & Vertrieb)
-    { id: 'lizenz', icon: 'uil uil-key-skeleton-alt', komponente: EinstellungenLizenz },
-    { id: 'rechtliches', icon: 'uil uil-file-contract', komponente: EinstellungenRechtliches },
+    { id: 'lizenz', symbol: 'schluessel', komponente: EinstellungenLizenz },
+    { id: 'rechtliches', symbol: 'waage', komponente: EinstellungenRechtliches },
 ]
 const gueltig = (id) => (BEREICHE.some(b => b.id === id) ? id : null)
 
@@ -76,6 +76,8 @@ function ausRoute() {
 }
 
 const bereich = ref(ausRoute() || gueltig(gemerkterBereich()) || 'allgemein')
+/** Reiter für die Leiste — Titel folgen der Sprache. */
+const reiter = computed(() => BEREICHE.map(b => ({ id: b.id, titel: t('settings.area_' + b.id), symbol: b.symbol })))
 const aktiv = computed(() => BEREICHE.find(b => b.id === bereich.value)?.komponente || EinstellungenAllgemein)
 
 // Zurück/Vor im Browser oder ein Link auf /settings/<bereich>
@@ -127,33 +129,29 @@ onBeforeMount(async () => {
     geladen.value = true
     await ladeBenachrichtigungen()
 })
-
-onMounted(async () => {
-    await useInitTooltip()
-})
 </script>
 
 <template>
-    <div class="row mt-2">
-        <div class="row">
-            <div class="col-12 col-md-10" style="padding-left: 2rem;">
+    <div class="einstellungen">
+        <!-- Bereiche: die Seite ist zu lang, um sie am Stück zu lesen -->
+        <Reiter class="bereiche" :model-value="bereich" :reiter="reiter" @update:model-value="bereichWechseln" />
 
-                <!-- Bereiche: die Seite ist zu lang, um sie am Stück zu lesen -->
-                <ul class="nav nav-tabs settings-nav mb-3">
-                    <li v-for="b in BEREICHE" :key="b.id" class="nav-item">
-                        <a class="nav-link" :class="{ active: bereich === b.id }"
-                            href="#" @click.prevent="bereichWechseln(b.id)">
-                            <i :class="b.icon" class="me-1"></i>{{ t('settings.area_' + b.id) }}
-                        </a>
-                    </li>
-                </ul>
-
-                <KeepAlive>
-                    <component :is="aktiv" v-if="geladen" :key="bereich" />
-                </KeepAlive>
-
-            </div>
-        </div>
-
+        <KeepAlive>
+            <component :is="aktiv" v-if="geladen" :key="bereich" />
+        </KeepAlive>
     </div>
 </template>
+
+<style scoped>
+.einstellungen {
+    max-width: 64rem;
+    padding: var(--abstand-3) var(--abstand-4) var(--abstand-6);
+    min-width: 0;
+}
+.bereiche {
+    margin-bottom: var(--abstand-4);
+}
+@media (max-width: 767.98px) {
+    .einstellungen { padding: var(--abstand-2) var(--abstand-3) var(--abstand-5); }
+}
+</style>

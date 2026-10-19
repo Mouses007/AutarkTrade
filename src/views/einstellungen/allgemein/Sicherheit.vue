@@ -1,7 +1,13 @@
 <script setup>
 /** Allgemein → Sicherheit: optionales Passwort-Gate und Abmelden. */
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import { Knopf, Pille } from '@/components/basis/index.js'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
+
+const { t } = useI18n()
 
 // ── Sicherheit: optionales Passwort-Gate ──
 let authExpanded = ref(false)
@@ -24,11 +30,11 @@ async function loadAuthStatus() {
 async function saveAuthPassword() {
     authSaveResult.value = null
     if (authNewPassword.value.length < 6) {
-        authSaveResult.value = { success: false, message: 'Passwort muss mindestens 6 Zeichen haben.' }
+        authSaveResult.value = { success: false, message: t('settings.sicherheit.zuKurz') }
         return
     }
     if (authNewPassword.value !== authNewPassword2.value) {
-        authSaveResult.value = { success: false, message: 'Passwörter stimmen nicht überein.' }
+        authSaveResult.value = { success: false, message: t('settings.sicherheit.ungleich') }
         return
     }
     authSaveLoading.value = true
@@ -41,7 +47,7 @@ async function saveAuthPassword() {
         authCurrentPassword.value = ''
         authNewPassword.value = ''
         authNewPassword2.value = ''
-        authSaveResult.value = { success: true, message: 'Passwortschutz aktiv.' }
+        authSaveResult.value = { success: true, message: t('settings.sicherheit.istAktiv') }
         setTimeout(() => authSaveResult.value = null, 5000)
     } catch (e) {
         authSaveResult.value = { success: false, message: e.response?.data?.error || e.message }
@@ -58,13 +64,13 @@ async function logout() {
 
 async function disableAuth() {
     authSaveResult.value = null
-    if (!confirm('Passwortschutz wirklich deaktivieren? Danach hat jeder mit Zugriff aufs Netzwerk vollen Zugang.')) return
+    if (!confirm(t('settings.sicherheit.deaktivierenFrage'))) return
     authSaveLoading.value = true
     try {
         await axios.post('/api/auth/disable', { currentPassword: authCurrentPassword.value })
         authEnabled.value = false
         authCurrentPassword.value = ''
-        authSaveResult.value = { success: true, message: 'Passwortschutz deaktiviert.' }
+        authSaveResult.value = { success: true, message: t('settings.sicherheit.istDeaktiviert') }
         setTimeout(() => authSaveResult.value = null, 5000)
     } catch (e) {
         authSaveResult.value = { success: false, message: e.response?.data?.error || e.message }
@@ -76,67 +82,83 @@ onMounted(loadAuthStatus)
 </script>
 
 <template>
-    <div>
-        <hr />
+    <!--=============== SICHERHEIT / PASSWORT-GATE ===============-->
+    <Abschnitt v-model:offen="authExpanded" :titel="t('settings.sicherheit.titel')" symbol="schloss">
+        <template #kopf>
+            <Pille :ton="authEnabled ? 'gut' : 'neutral'">
+                {{ authEnabled ? t('settings.sicherheit.aktiv') : t('settings.sicherheit.aus') }}
+            </Pille>
+        </template>
 
-        <!--=============== SICHERHEIT / PASSWORT-GATE ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="authExpanded = !authExpanded">
-            <i class="uil me-2" :class="authExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">Sicherheit · Passwortschutz</p>
-            <span class="badge ms-2" :class="authEnabled ? 'bg-success' : 'bg-secondary'">
-                {{ authEnabled ? 'aktiv' : 'aus' }}
-            </span>
-        </div>
-        <div v-show="authExpanded" class="mt-2 ms-3">
-            <p class="fw-lighter">
-                Optionaler Login-Schutz. <strong>Nur nötig, wenn die App im Netzwerk/öffentlich erreichbar ist</strong>
-                (z. B. <code>AT_HOST=0.0.0.0</code> oder Cloud-Server). Für reinen lokalen Betrieb nicht erforderlich.
-                Für echten Cloud-Betrieb zusätzlich HTTPS via Reverse-Proxy/VPN verwenden.
-            </p>
+        <p class="hinweis">
+            {{ t('settings.sicherheit.einleitung') }} <strong>{{ t('settings.sicherheit.nurNoetig') }}</strong>
+            {{ t('settings.sicherheit.beispielVor') }}<code>AT_HOST=0.0.0.0</code>{{ t('settings.sicherheit.beispielNach') }}
+        </p>
 
-            <div v-if="authEnabled" class="row mt-2">
-                <div class="col-12 col-md-4">Aktuelles Passwort</div>
-                <div class="col-12 col-md-8">
-                    <input type="password" class="form-control" v-model="authCurrentPassword"
-                        autocomplete="current-password" placeholder="(zum Ändern/Deaktivieren)" />
-                </div>
-            </div>
+        <Feld v-if="authEnabled" :label="t('settings.sicherheit.aktuell')" fuer="auth-aktuell">
+            <input id="auth-aktuell" type="password" class="eingabe" v-model="authCurrentPassword"
+                autocomplete="current-password" :placeholder="t('settings.sicherheit.aktuellPlatzhalter')" />
+        </Feld>
+        <Feld :label="authEnabled ? t('settings.sicherheit.neu') : t('settings.sicherheit.passwort')" fuer="auth-neu">
+            <input id="auth-neu" type="password" class="eingabe" v-model="authNewPassword"
+                autocomplete="new-password" :placeholder="t('settings.sicherheit.neuPlatzhalter')" />
+        </Feld>
+        <Feld :label="t('settings.sicherheit.bestaetigen')" fuer="auth-neu2">
+            <input id="auth-neu2" type="password" class="eingabe" v-model="authNewPassword2"
+                autocomplete="new-password" :placeholder="t('settings.sicherheit.bestaetigenPlatzhalter')" />
+        </Feld>
 
-            <div class="row mt-2">
-                <div class="col-12 col-md-4">{{ authEnabled ? 'Neues Passwort' : 'Passwort' }}</div>
-                <div class="col-12 col-md-8">
-                    <input type="password" class="form-control" v-model="authNewPassword"
-                        autocomplete="new-password" placeholder="mindestens 6 Zeichen" />
-                </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-12 col-md-4">Passwort bestätigen</div>
-                <div class="col-12 col-md-8">
-                    <input type="password" class="form-control" v-model="authNewPassword2"
-                        autocomplete="new-password" placeholder="Passwort wiederholen" />
-                </div>
-            </div>
-
-            <div class="mt-3 d-flex gap-2">
-                <button class="btn btn-primary" @click="saveAuthPassword" :disabled="authSaveLoading">
-                    <span v-if="authSaveLoading" class="spinner-border spinner-border-sm me-1"></span>
-                    {{ authEnabled ? 'Passwort ändern' : 'Passwortschutz aktivieren' }}
-                </button>
-                <button v-if="authEnabled" class="btn btn-outline-danger" @click="disableAuth" :disabled="authSaveLoading">
-                    Deaktivieren
-                </button>
-                <button v-if="authEnabled" class="btn btn-outline-secondary ms-auto" @click="logout">
-                    <i class="uil uil-signout me-1"></i>Abmelden
-                </button>
-            </div>
-
-            <div v-if="authSaveResult" class="mt-2">
-                <small :class="authSaveResult.success ? 'text-success' : 'text-danger'">
-                    <i class="uil me-1" :class="authSaveResult.success ? 'uil-check' : 'uil-exclamation-triangle'"></i>
-                    {{ authSaveResult.message }}
-                </small>
-            </div>
+        <div class="knoepfe">
+            <Knopf art="haupt" :laedt="authSaveLoading" @click="saveAuthPassword">
+                {{ authEnabled ? t('settings.sicherheit.aendern') : t('settings.sicherheit.aktivieren') }}
+            </Knopf>
+            <Knopf v-if="authEnabled" art="gefahr" :disabled="authSaveLoading" @click="disableAuth">
+                {{ t('settings.sicherheit.deaktivieren') }}
+            </Knopf>
+            <Knopf v-if="authEnabled" class="rechts" symbol="abmelden" @click="logout">
+                {{ t('settings.sicherheit.abmelden') }}
+            </Knopf>
         </div>
 
-    </div>
+        <p v-if="authSaveResult" class="meldung" :class="authSaveResult.success ? 'gut' : 'schlecht'">
+            {{ authSaveResult.message }}
+        </p>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.hinweis {
+    margin: 0 0 var(--abstand-2);
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+.hinweis strong { color: var(--text); }
+.eingabe {
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    font: inherit;
+    font-size: 0.92rem;
+}
+.eingabe:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-flaeche);
+}
+.knoepfe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-3);
+}
+.knoepfe .rechts { margin-left: auto; }
+.meldung {
+    margin: var(--abstand-2) 0 0;
+    font-size: 0.85rem;
+}
+.meldung.gut { color: var(--good); }
+.meldung.schlecht { color: var(--bad); }
+</style>

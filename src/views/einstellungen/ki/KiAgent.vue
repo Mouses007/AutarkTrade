@@ -2,6 +2,9 @@
 /** KI → Agent: Anbieter/Modell und Token-Budget des KI-Agenten, Wahl je Aufgabe. */
 import { useI18n } from 'vue-i18n'
 import AnbieterWahl from '@/components/AnbieterWahl.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Symbol from '@/components/basis/Symbol.vue'
+import Feld from '../gemeinsam/Feld.vue'
 import { kiSpeichern } from '../gemeinsam/speichern.js'
 import { useKiAnbieter } from '../gemeinsam/useKiAnbieter.js'
 
@@ -65,108 +68,102 @@ async function runModelAnalysisAgent() {
 
 <template>
     <div>
-            <p class="fs-5 fw-bold mb-1">{{ t('settings.ki.tab_agent') }}</p>
-            <p class="fw-lighter">{{ t('settings.ki.agentHint') }}</p>
+        <h3 class="zwischentitel oben">{{ t('settings.ki.tab_agent') }}</h3>
+        <p class="einleitung">{{ t('settings.ki.agentHint') }}</p>
 
-            <div class="row mt-3">
-                <div class="col-12 col-md-4">
-                    {{ t('settings.ki.providerFor') }}
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        {{ t('settings.ki.agentProviderHint') }}
-                    </small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <AnbieterWahl :provider="aiAgentProvider" :modell="aiAgentModell"
-                        :modell-listen="modellListen" :global-provider="aiProvider" :global-modell="aiModel"
-                        @update:provider="w => { aiAgentProvider = w; aiAgentModell = ''; kiSpeichern('aiAgentProvider', w); kiSpeichern('aiAgentModell', '') }"
-                        @update:modell="w => { aiAgentModell = w; kiSpeichern('aiAgentModell', w) }" />
-                    <router-link to="/ki-agent" class="btn btn-outline-secondary btn-sm mt-2">
-                        <i class="uil uil-robot me-1"></i>{{ t('settings.ki.openAgent') }}
-                    </router-link>
+        <Feld :label="t('settings.ki.providerFor')" :hilfe="t('settings.ki.agentProviderHint')">
+            <div class="stapel">
+                <AnbieterWahl :provider="aiAgentProvider" :modell="aiAgentModell"
+                    :modell-listen="modellListen" :global-provider="aiProvider" :global-modell="aiModel"
+                    @update:provider="w => { aiAgentProvider = w; aiAgentModell = ''; kiSpeichern('aiAgentProvider', w); kiSpeichern('aiAgentModell', '') }"
+                    @update:modell="w => { aiAgentModell = w; kiSpeichern('aiAgentModell', w) }" />
+                <div>
+                    <Knopf to="/ki-agent" symbol="agent" klein>{{ t('settings.ki.openAgent') }}</Knopf>
                 </div>
             </div>
+        </Feld>
 
-            <div class="row mt-3">
-                <div class="col-12 col-md-4">
-                    {{ t('settings.ki.agentBudget') }}
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        {{ t('settings.ki.agentBudgetHint') }}
-                    </small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <input type="number" class="form-control" style="max-width: 180px;"
-                        min="10000" step="10000" v-model.number="aiAgentTokenBudget"
-                        @change="kiSpeichern('aiAgentTokenBudget', Math.max(10000, Number(aiAgentTokenBudget) || 80000))" />
-                </div>
-            </div>
+        <Feld :label="t('settings.ki.agentBudget')" :hilfe="t('settings.ki.agentBudgetHint')" fuer="kiAgentBudget">
+            <input id="kiAgentBudget" type="number" class="mittel"
+                min="10000" step="10000" v-model.number="aiAgentTokenBudget"
+                @change="kiSpeichern('aiAgentTokenBudget', Math.max(10000, Number(aiAgentTokenBudget) || 80000))" />
+        </Feld>
 
-            <div class="row mt-3">
-                <div class="col-12 col-md-4">
-                    {{ t('settings.ki.modelOptimization') }}
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        OpenRouter-Modelle pro Aufgabe optimieren
-                    </small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <button type="button" @click="runModelAnalysisAgent" class="btn btn-outline-info btn-sm me-2">
-                        <i class="uil uil-robot me-1"></i>Agent-Analyse starten
-                    </button>
-                    <small v-if="modelAnalysisRunning" class="text-warning">
-                        <i class="uil uil-spinner-alt spinner-animate me-1"></i>Analysiere Modelle...
-                    </small>
-                    <small v-else-if="modelAnalysisResult" class="text-success">
-                        ✓ {{ modelAnalysisResult.count }} Empfehlungen generiert
-                    </small>
-                </div>
+        <Feld :label="t('settings.ki.modelOptimization')" :hilfe="t('settings.ki.modelOptimizationHint')">
+            <div class="reihe">
+                <Knopf symbol="agent" klein :laedt="modelAnalysisRunning" @click="runModelAnalysisAgent">
+                    {{ t('settings.ki.analysisStart') }}
+                </Knopf>
+                <span v-if="modelAnalysisRunning" class="leise">{{ t('settings.ki.analysisRunning') }}</span>
+                <span v-else-if="modelAnalysisResult?.error" class="leise schlecht">{{ modelAnalysisResult.error }}</span>
+                <span v-else-if="modelAnalysisResult" class="leise gut">
+                    <Symbol name="haken" :groesse="14" />
+                    {{ t('settings.ki.analysisDone', { n: modelAnalysisResult.count }) }}
+                </span>
             </div>
+        </Feld>
 
-            <div class="row mt-4">
-                <div class="col-12">
-                    <p class="fs-6 fw-bold">Aufgaben-spezifische Modelle</p>
-                    <small class="text-muted d-block mb-2">
-                        Format <code>anbieter/modell</code> (z.&nbsp;B. <code>anthropic/claude-haiku-5-5</code>,
-                        <code>openrouter/anthropic/claude-opus-5.5</code>) oder nur <code>anbieter</code> für dessen Standardmodell.
-                        Eine Zeile hier schlägt das Einzelfeld der Funktion; leer = Einzelfeld, sonst das globale Modell.
-                        Der grau vorgeschlagene Wert ist die Empfehlung.
-                    </small>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-borderless">
-                            <thead style="border-bottom: 1px solid var(--grey-color);">
-                                <tr>
-                                    <th>Aufgabe</th>
-                                    <th>Aktuell</th>
-                                    <th>Ändern</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="a in aufgabenListe" :key="a.id">
-                                    <td><small :title="a.beschreibung">{{ a.name }}</small>
-                                        <small v-if="a.nur && a.nur.length === 1" class="text-muted"> · nur {{ a.nur[0] }}</small></td>
-                                    <td><code style="font-size:0.8rem;">{{ aiTaskProviders[a.id] || (a.rueckfall ? '(' + a.rueckfall + ')' : '(global)') }}</code></td>
-                                    <td>
-                                        <input type="text" class="form-control form-control-sm" style="max-width: 260px; font-size:0.8rem;"
-                                            :placeholder="a.empfohlen || 'anbieter/modell'" v-model="aiTaskProviders[a.id]"
-                                            @blur="kiSpeichern('aiTaskProviders', JSON.stringify(aiTaskProviders))" />
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+        <h3 class="zwischentitel">{{ t('settings.ki.taskModelsTitle') }}</h3>
+        <p class="leise">{{ t('settings.ki.taskModelsHint') }}</p>
+        <div class="liste">
+            <div class="liste-zeile kopfzeile">
+                <span class="liste-name">{{ t('settings.ki.taskCol') }}</span>
+                <span class="liste-mitte">{{ t('settings.ki.taskCurrentCol') }}</span>
+                <span class="aendern">{{ t('settings.ki.taskChangeCol') }}</span>
             </div>
+            <div v-for="a in aufgabenListe" :key="a.id" class="liste-zeile">
+                <span class="liste-name">
+                    <span :title="a.beschreibung">{{ a.name }}</span>
+                    <span v-if="a.nur && a.nur.length === 1" class="leise">· {{ t('settings.ki.taskOnly', { was: a.nur[0] }) }}</span>
+                </span>
+                <span class="liste-mitte"><code>{{ aiTaskProviders[a.id] || (a.rueckfall ? '(' + a.rueckfall + ')' : '(global)') }}</code></span>
+                <span class="aendern">
+                    <input type="text" :aria-label="t('settings.ki.taskChangeCol') + ': ' + a.name"
+                        :placeholder="a.empfohlen || 'anbieter/modell'" v-model="aiTaskProviders[a.id]"
+                        @blur="kiSpeichern('aiTaskProviders', JSON.stringify(aiTaskProviders))" />
+                </span>
+            </div>
+        </div>
 
-            <div class="row mt-4 p-3" style="background-color: rgba(100, 150, 255, 0.05); border-radius: var(--border-radius);">
-                <div class="col-12">
-                    <p class="fs-6 fw-bold">Kosten-Übersicht</p>
-                    <p class="small mb-2">
-                        <strong>Geschätzte monatliche Kosten:</strong><br/>
-                        <code>Claude Opus: $50–150</code> | <code>GPT-4o: $30–100</code> | <code>Llama 70B: $5–20</code> | <code>DeepSeek: $5–15</code>
-                    </p>
-                    <p class="small">
-                        <i class="uil uil-info-circle me-1"></i>
-                        Nutze die <strong>Agent-Analyse</strong> oben, um optimale Modelle pro Aufgabe zu finden und Kosten zu sparen.
-                    </p>
-                </div>
-            </div>
+        <div class="flaeche kosten">
+            <h3 class="zwischentitel oben">{{ t('settings.ki.costTitle') }}</h3>
+            <p class="leise">
+                <strong>{{ t('settings.ki.costEstimate') }}</strong><br />
+                <code>Claude Opus: $50–150</code> · <code>GPT-4o: $30–100</code> · <code>Llama 70B: $5–20</code> · <code>DeepSeek: $5–15</code>
+            </p>
+            <p class="leise hinweiszeile">
+                <Symbol name="info" :groesse="14" />
+                <span>{{ t('settings.ki.costHint') }}</span>
+            </p>
+        </div>
     </div>
 </template>
+
+<style scoped src="./ki-formular.css"></style>
+<style scoped>
+.oben { margin-top: 0; }
+.kopfzeile {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: var(--panel-soft);
+}
+.liste-zeile { font-size: 0.85rem; }
+.aendern {
+    flex: 0 1 16rem;
+    min-width: 0;
+}
+.aendern input { font-size: 0.82rem; padding: 0.3rem 0.55rem; }
+@media (max-width: 575.98px) {
+    .kopfzeile { display: none; }
+    .aendern { flex-basis: 100%; }
+}
+.kosten { margin-top: var(--abstand-5); }
+.hinweiszeile {
+    display: flex;
+    gap: var(--abstand-1);
+    align-items: flex-start;
+    margin-bottom: 0;
+}
+.hinweiszeile :deep(svg) { flex: none; margin-top: 0.15rem; }
+</style>

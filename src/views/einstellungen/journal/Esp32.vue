@@ -1,9 +1,18 @@
 <script setup>
 /** Journal → ESP32-Display: API-Schlüssel und Zeitraum-Filter der Anzeige. */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { currentUser } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Tabelle from '@/components/basis/Tabelle.vue'
+import Symbol from '@/components/basis/Symbol.vue'
+
+const { t } = useI18n()
 
 /* ESP32 DISPLAY SETTINGS */
 let esp32Expanded = ref(false)
@@ -12,6 +21,22 @@ let esp32ApiKeyDisplay = ref('')
 let esp32SaveLoading = ref(false)
 let esp32SaveResult = ref(null)
 let esp32Filter = ref('month')
+
+/* Unterstützte Boards — Firmware liegt im Repo. */
+const boardSpalten = computed(() => [
+    { schluessel: 'board', titel: t('settings.esp32SpalteBoard') },
+    { schluessel: 'display', titel: t('settings.esp32SpalteDisplay') },
+    { schluessel: 'touch', titel: t('settings.esp32SpalteTouch') },
+    { schluessel: 'mcu', titel: t('settings.esp32SpalteMcu') },
+    { schluessel: 'ordner', titel: t('settings.esp32SpalteOrdner') },
+])
+const boardZeilen = computed(() => [
+    { board: 'ESP32-2432S028', zusatz: 'Cheap Yellow Display', display: 'ILI9341 2.8"', touch: t('settings.esp32Resistiv') + ' (XPT2046)', mcu: 'ESP32', ordner: 'ESP32-2432S028/' },
+    { board: 'Waveshare ESP32-S3', zusatz: 'Touch-LCD-2.8', display: 'ST7789T3 2.8"', touch: t('settings.esp32Kapazitiv') + ' (CST328)', mcu: 'ESP32-S3', ordner: 'ESP32-Waveshare/' },
+])
+
+/* Klartext-Key ist nur direkt nach dem Erzeugen sichtbar, sonst Punkte. */
+const keySichtbar = computed(() => !!esp32ApiKeyDisplay.value && !esp32ApiKeyDisplay.value.startsWith('•'))
 
 async function loadEsp32Settings() {
     try {
@@ -28,7 +53,7 @@ async function loadEsp32Settings() {
 async function saveEsp32Filter() {
     try {
         await dbUpdateSettings({ esp32Filter: esp32Filter.value })
-        esp32SaveResult.value = { success: true, message: 'Filter gespeichert — Anzeigen übernehmen beim nächsten Abruf.' }
+        esp32SaveResult.value = { success: true, message: t('settings.esp32FilterGespeichert') }
         setTimeout(() => esp32SaveResult.value = null, 5000)
     } catch (e) {
         esp32SaveResult.value = { success: false, message: e.message }
@@ -42,12 +67,23 @@ async function generateEsp32Key() {
         const res = await axios.post('/api/esp32/settings', { regenerate: true })
         esp32ApiKeyDisplay.value = res.data.plainKey || ''
         esp32KeySet.value = true
-        esp32SaveResult.value = { success: true, message: 'Neuer Key generiert — einmalig sichtbar. Jetzt kopieren!' }
+        esp32SaveResult.value = { success: true, message: t('settings.esp32KeyNeuHinweis') }
         setTimeout(() => esp32SaveResult.value = null, 10000)
     } catch (e) {
         esp32SaveResult.value = { success: false, message: e.message }
     }
     esp32SaveLoading.value = false
+}
+
+/* Im Template ist `navigator` kein erlaubtes Global — deshalb hier. */
+async function kopiereKey() {
+    try {
+        await navigator.clipboard.writeText(esp32ApiKeyDisplay.value)
+        esp32SaveResult.value = { success: true, message: t('settings.esp32Kopiert') }
+        setTimeout(() => esp32SaveResult.value = null, 3000)
+    } catch (e) {
+        esp32SaveResult.value = { success: false, message: e.message }
+    }
 }
 
 async function clearEsp32Key() {
@@ -65,123 +101,147 @@ onMounted(loadEsp32Settings)
 </script>
 
 <template>
-    <div>
-        <hr />
+    <Abschnitt :titel="t('settings.esp32Titel')" symbol="bildschirm" v-model:offen="esp32Expanded">
+        <template #kopf>
+            <Pille v-if="esp32KeySet" ton="gut">{{ t('settings.esp32Aktiv') }}</Pille>
+        </template>
 
-        <!--=============== ESP32 DISPLAY ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="esp32Expanded = !esp32Expanded">
-            <i class="uil me-2" :class="esp32Expanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">Externe Anzeigen · ESP32 / Widget / Desklet</p>
-            <span v-if="esp32KeySet" class="badge bg-success ms-2">aktiv</span>
-        </div>
-        <div v-show="esp32Expanded" class="mt-2 ms-3">
-            <p class="fw-lighter">Zeige deine Trading-Daten auf externen Anzeigen: ESP32-TFT-Displays, dem Android-Homescreen-Widget und dem Linux-Desklet. Alle nutzen denselben read-only Endpoint mit dem API-Key unten — sie funktionieren auch bei aktivem Passwortschutz.</p>
+        <p class="beschreibung">{{ t('settings.esp32Beschreibung') }}</p>
 
-            <!-- Hardware-Übersicht -->
-            <div class="mb-3 p-2" style="background: var(--black-bg-3, #1a1a2e); border-radius: var(--border-radius, 6px); font-size: 0.85rem;">
-                <div class="fw-semibold mb-2" style="color: var(--white-75);">ESP32-Boards (Firmware im Repo)</div>
-                <table class="table table-dark table-sm mb-0" style="font-size:0.8rem;">
-                    <thead>
-                        <tr>
-                            <th>Board</th>
-                            <th>Display</th>
-                            <th>Touch</th>
-                            <th>MCU</th>
-                            <th>Firmware-Ordner</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td><strong>ESP32-2432S028</strong><br><small class="text-muted">Cheap Yellow Display</small></td>
-                            <td>ILI9341 2.8"</td>
-                            <td>Resistiv (XPT2046)</td>
-                            <td>ESP32</td>
-                            <td><code>ESP32-2432S028/</code></td>
-                        </tr>
-                        <tr>
-                            <td><strong>Waveshare ESP32-S3</strong><br><small class="text-muted">Touch-LCD-2.8</small></td>
-                            <td>ST7789T3 2.8"</td>
-                            <td>Kapazitiv (CST328)</td>
-                            <td>ESP32-S3</td>
-                            <td><code>ESP32-Waveshare/</code></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="mt-2" style="color: var(--white-50);">
-                    Flash-Anleitung: <code>cd &lt;firmware-ordner&gt;</code> → <code>pio run -e esp32dev --target upload</code>
-                </div>
-                <div class="mt-2 pt-2" style="color: var(--white-75); border-top: 1px solid var(--black-bg-1, #2a2a3e);">
-                    Weitere Clients (gleicher Key):
-                    <span class="d-block mt-1" style="color: var(--white-50);">
-                        · <strong>Android-Widget</strong> — Homescreen-Widget (<code>android-widget/</code>)<br>
-                        · <strong>Linux-Desklet</strong> — Cinnamon-Desklet (<code>desklet/</code>)
-                    </span>
-                </div>
-            </div>
-
-            <!-- API-Info -->
-            <div class="mb-3 p-2" style="background: var(--black-bg-3, #1a1a2e); border-radius: var(--border-radius, 6px); font-size: 0.85rem;">
-                <div><span style="color: var(--white-50);">Endpoint:</span> <code>GET /api/esp32/display</code></div>
-                <div><span style="color: var(--white-50);">Header:</span> <code>X-ESP32-Key: &lt;key&gt;</code></div>
-                <div class="mt-1" style="color: var(--white-50);">Liefert: heutiger PnL, Gesamt-PnL, Win-Rate, offene Positionen, laufende Bots</div>
-            </div>
-
-            <div class="row align-items-center mt-2">
-                <div class="col-12 col-md-4">API-Key</div>
-                <div class="col-12 col-md-8">
-                    <div class="input-group">
-                        <input type="text" class="form-control font-monospace"
-                            :value="esp32ApiKeyDisplay"
-                            readonly
-                            :placeholder="esp32KeySet ? '(gesetzt — neu generieren zum Anzeigen)' : '(kein Key gesetzt)'" />
-                        <button v-if="esp32ApiKeyDisplay && !esp32ApiKeyDisplay.startsWith('•')"
-                            class="btn btn-outline-secondary" type="button"
-                            @click="navigator.clipboard.writeText(esp32ApiKeyDisplay)"
-                            title="Kopieren">
-                            <i class="uil uil-copy"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Zeitraum-Filter -->
-            <div class="row align-items-center mt-2">
-                <div class="col-12 col-md-4">
-                    Zeitraum
-                    <small class="d-block text-muted" style="font-size:0.78rem;">Anzeigen übernehmen automatisch</small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <div class="input-group">
-                        <select class="form-select" v-model="esp32Filter">
-                            <option value="month">Aktueller Monat</option>
-                            <option value="week">Aktuelle Woche</option>
-                            <option value="year">Aktuelles Jahr</option>
-                            <option value="all">Gesamtzeitraum</option>
-                        </select>
-                        <button class="btn btn-outline-primary" type="button" @click="saveEsp32Filter">
-                            Speichern
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-3 d-flex gap-2">
-                <button class="btn btn-primary" @click="generateEsp32Key" :disabled="esp32SaveLoading">
-                    <span v-if="esp32SaveLoading" class="spinner-border spinner-border-sm me-1"></span>
-                    {{ esp32KeySet ? 'Key neu generieren' : 'Key generieren' }}
-                </button>
-                <button v-if="esp32KeySet" class="btn btn-outline-danger" @click="clearEsp32Key">
-                    Key löschen
-                </button>
-            </div>
-
-            <div v-if="esp32SaveResult" class="mt-2">
-                <small :class="esp32SaveResult.success ? 'text-success' : 'text-danger'">
-                    <i class="uil me-1" :class="esp32SaveResult.success ? 'uil-check' : 'uil-exclamation-triangle'"></i>
-                    {{ esp32SaveResult.message }}
-                </small>
+        <!-- Hardware-Übersicht -->
+        <div class="kasten">
+            <h4 class="kasten-titel">{{ t('settings.esp32Boards') }}</h4>
+            <Tabelle :spalten="boardSpalten" :zeilen="boardZeilen" schluessel-feld="board" dicht>
+                <template #zelle-board="{ zeile }">
+                    <strong>{{ zeile.board }}</strong>
+                    <span class="zusatz">{{ zeile.zusatz }}</span>
+                </template>
+                <template #zelle-ordner="{ wert }"><code>{{ wert }}</code></template>
+            </Tabelle>
+            <p class="leise">
+                {{ t('settings.esp32Flash') }}
+                <code>cd &lt;firmware-ordner&gt;</code> → <code>pio run -e esp32dev --target upload</code>
+            </p>
+            <div class="clients">
+                <p class="clients-titel">{{ t('settings.esp32WeitereClients') }}</p>
+                <ul>
+                    <li><strong>Android-Widget</strong> — {{ t('settings.esp32AndroidWidget') }} (<code>android-widget/</code>)</li>
+                    <li><strong>Linux-Desklet</strong> — {{ t('settings.esp32Desklet') }} (<code>desklet/</code>)</li>
+                </ul>
             </div>
         </div>
 
-    </div>
+        <!-- API-Info -->
+        <dl class="kasten api-info">
+            <dt>Endpoint</dt><dd><code>GET /api/esp32/display</code></dd>
+            <dt>Header</dt><dd><code>X-ESP32-Key: &lt;key&gt;</code></dd>
+            <dt>{{ t('settings.esp32LiefertTitel') }}</dt><dd>{{ t('settings.esp32Liefert') }}</dd>
+        </dl>
+
+        <Feld :label="t('settings.apiKeyLabel')" fuer="esp32-key">
+            <div class="reihe">
+                <input id="esp32-key" type="text" class="eingabe mono"
+                    :value="esp32ApiKeyDisplay"
+                    readonly
+                    :placeholder="esp32KeySet ? t('settings.esp32KeyGesetzt') : t('settings.esp32KeinKey')" />
+                <Knopf v-if="keySichtbar" @click="kopiereKey">{{ t('settings.esp32Kopieren') }}</Knopf>
+            </div>
+        </Feld>
+
+        <!-- Zeitraum-Filter -->
+        <Feld :label="t('settings.esp32Zeitraum')" :hilfe="t('settings.esp32ZeitraumHilfe')" fuer="esp32-filter">
+            <div class="reihe">
+                <select id="esp32-filter" class="eingabe" v-model="esp32Filter">
+                    <option value="month">{{ t('settings.esp32Monat') }}</option>
+                    <option value="week">{{ t('settings.esp32Woche') }}</option>
+                    <option value="year">{{ t('settings.esp32Jahr') }}</option>
+                    <option value="all">{{ t('settings.esp32Gesamt') }}</option>
+                </select>
+                <Knopf @click="saveEsp32Filter">{{ t('common.save') }}</Knopf>
+            </div>
+        </Feld>
+
+        <div class="aktionen">
+            <Knopf art="haupt" :laedt="esp32SaveLoading" @click="generateEsp32Key">
+                {{ esp32KeySet ? t('settings.esp32KeyNeu') : t('settings.esp32KeyErzeugen') }}
+            </Knopf>
+            <Knopf v-if="esp32KeySet" art="gefahr" @click="clearEsp32Key">{{ t('settings.esp32KeyLoeschen') }}</Knopf>
+        </div>
+
+        <p v-if="esp32SaveResult" :class="['ergebnis', esp32SaveResult.success ? 'gut' : 'schlecht']" role="status">
+            <Symbol :name="esp32SaveResult.success ? 'haken' : 'warnung'" :groesse="16" />
+            {{ esp32SaveResult.message }}
+        </p>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.beschreibung { color: var(--muted); margin: 0 0 var(--abstand-3); }
+.kasten {
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-3);
+    margin: 0 0 var(--abstand-3);
+    font-size: 0.85rem;
+}
+.kasten-titel {
+    margin: 0 0 var(--abstand-2);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+}
+.zusatz { display: block; color: var(--muted); font-size: 0.78rem; }
+.leise { color: var(--muted); margin: var(--abstand-2) 0 0; overflow-wrap: anywhere; }
+.clients {
+    margin-top: var(--abstand-2);
+    padding-top: var(--abstand-2);
+    border-top: 1px solid var(--line);
+}
+.clients-titel { margin: 0 0 0.25rem; color: var(--text); }
+.clients ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
+.api-info {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.25rem var(--abstand-3);
+}
+.api-info dt { color: var(--muted); font-weight: 400; }
+.api-info dd { margin: 0; overflow-wrap: anywhere; }
+.reihe {
+    display: flex;
+    gap: var(--abstand-2);
+    align-items: center;
+}
+.eingabe {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0.55rem 0.75rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    font: inherit;
+    font-size: 0.92rem;
+}
+.eingabe:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-flaeche);
+}
+.mono { font-family: var(--schrift-mono); }
+.aktionen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-3);
+}
+.ergebnis {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: var(--abstand-2) 0 0;
+    font-size: 0.85rem;
+}
+.ergebnis.gut { color: var(--good); }
+.ergebnis.schlecht { color: var(--bad); }
+</style>

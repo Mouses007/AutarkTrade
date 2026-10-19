@@ -6,7 +6,10 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import InfoTipp from '@/components/InfoTipp.vue'
+import { Knopf, Eingabe } from '@/components/basis/index.js'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
+import Schalter from '../gemeinsam/Schalter.vue'
 import { useCheckCurrentUser, useGetPeriods } from '@/utils/utils.js'
 import { currentUser, renderProfile } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
@@ -23,6 +26,7 @@ const router = useRouter()
 let layoutExpanded = ref(false)
 
 let selectedLanguage = ref('de')
+const SPRACHEN = [{ wert: 'de', text: 'Deutsch' }, { wert: 'en', text: 'English' }]
 
 async function changeLanguage(lang) {
     // `setLocale` laedt die Sprachdatei bei Bedarf nach und ist deshalb async.
@@ -114,125 +118,123 @@ ausEinstellungen()
 </script>
 
 <template>
-    <div>
-        <div class="d-flex align-items-center pointerClass" @click="layoutExpanded = !layoutExpanded">
-            <i class="uil me-2" :class="layoutExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.layoutAndStyle') }}</p>
+    <Abschnitt v-model:offen="layoutExpanded" :titel="t('settings.layoutAndStyle')" symbol="raster">
+
+        <!-- Sprache / Language -->
+        <Feld :label="t('settings.languageLabel')">
+            <Eingabe v-model="selectedLanguage" art="auswahl" :optionen="SPRACHEN"
+                @update:model-value="changeLanguage" />
+        </Feld>
+
+        <Feld :label="t('settings.username')">
+            <Eingabe v-model="username" :platzhalter="t('settings.usernamePlaceholder')" />
+        </Feld>
+
+        <Feld :label="t('settings.profilePicture')">
+            <div class="avatar-zeile">
+                <img v-if="currentUser?.avatar" :src="currentUser.avatar" class="avatar" alt="" />
+                <img v-else src="@/assets/icon.png" class="avatar" alt="" />
+                <Knopf v-if="currentUser?.avatar" art="gefahr" klein @click="deleteAvatar">{{ t('common.remove') }}</Knopf>
+            </div>
+            <input type="file" class="datei" @change="uploadProfileAvatar" />
+        </Feld>
+
+        <!-- Erweiterte Infos: das kleine „i" an Werten und Bedienelementen -->
+        <div class="block">
+            <Schalter v-model="erweiterteInfosAn" :label="t('settings.erweiterteInfos')"
+                info="settings.erweiterteInfosInfo" :hilfe="t('settings.erweiterteInfosHint')"
+                @change="erweiterteInfosSpeichern" />
         </div>
 
-        <div v-show="layoutExpanded" class="row align-items-center mt-2 ms-3">
-
-            <!-- Sprache / Language -->
-            <div class="col-12 col-md-4">
-                {{ t('settings.languageLabel') }}
-            </div>
-            <div class="col-12 col-md-8">
-                <select class="form-select" v-model="selectedLanguage" @change="changeLanguage(selectedLanguage)">
-                    <option value="de">Deutsch</option>
-                    <option value="en">English</option>
-                </select>
-            </div>
-
-            <!-- Username -->
-            <div class="col-12 col-md-4 mt-2">
-                {{ t('settings.username') }}
-            </div>
-            <div class="col-12 col-md-8">
-                <input type="text" class="form-control" v-model="username" :placeholder="t('settings.usernamePlaceholder')" />
-            </div>
-
-            <!-- Profile Picture -->
-            <div class="col-12 col-md-4 mt-2">
-                {{ t('settings.profilePicture') }}
-            </div>
-            <div class="col-12 col-md-8 mt-2">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <img v-if="currentUser?.avatar" :src="currentUser.avatar" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" />
-                    <img v-else src="@/assets/icon.png" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" />
-                    <button v-if="currentUser?.avatar" type="button" class="btn btn-outline-danger btn-sm" @click="deleteAvatar">
-                        <i class="uil uil-trash-alt me-1"></i>{{ t('common.remove') }}
-                    </button>
-                </div>
-                <input type="file" @change="uploadProfileAvatar" />
-            </div>
-
-            <!-- Erweiterte Infos: das kleine „i" an Werten und Bedienelementen -->
-            <div class="col-12 mt-4">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="erweiterteInfosToggle"
-                        v-model="erweiterteInfosAn" @change="erweiterteInfosSpeichern(erweiterteInfosAn)">
-                    <label class="form-check-label" for="erweiterteInfosToggle">{{ t('settings.erweiterteInfos') }}</label>
-                    <InfoTipp schluessel="settings.erweiterteInfosInfo" />
-                </div>
-                <p class="fw-lighter small mb-0">{{ t('settings.erweiterteInfosHint') }}</p>
-            </div>
-
-            <!-- Manueller Wiederaufruf des Onboarding-Assistenten — unabhängig
-                 vom Versionsabgleich, z.B. um eine Nachrichtenquelle
-                 nachzutragen, die man beim ersten Mal übersprungen hat. -->
-            <div class="col-12 mt-4">
-                <button type="button" class="btn btn-outline-secondary btn-sm"
-                    @click="router.push({ path: '/update-assistent', query: { kontext: 'manuell', rueckkehr: '/settings' } })">
-                    <i class="uil uil-magic me-1"></i>{{ t('onboarding.reopenButton') }}
-                </button>
-            </div>
-
-            <!-- Modi ein-/ausblenden. Journal fehlt bewusst: nicht abschaltbar. -->
-            <div class="col-12 mt-4">
-                <h6 class="mb-1">{{ t('settings.modesTitle') }}</h6>
-                <p class="fw-lighter small mb-2">{{ t('settings.modesHint') }}</p>
-
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="startseiteAnToggle"
-                        v-model="startseiteAn" @change="startseiteSpeichern(startseiteAn)">
-                    <label class="form-check-label" for="startseiteAnToggle">{{ t('modes.start') }}</label>
-                    <InfoTipp schluessel="settings.startpageOnHint" />
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="modusLiveAnToggle"
-                        v-model="modusLiveAn" @change="modusSpeichern('modusLiveAn', modusLiveAn)">
-                    <label class="form-check-label" for="modusLiveAnToggle">{{ t('modes.live') }}</label>
-                    <InfoTipp schluessel="settings.modeLiveInfo" />
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="modusResearchAnToggle"
-                        v-model="modusResearchAn" @change="modusSpeichern('modusResearchAn', modusResearchAn)">
-                    <label class="form-check-label" for="modusResearchAnToggle">{{ t('modes.research') }}</label>
-                    <InfoTipp schluessel="settings.modeResearchInfo" />
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="modusStrategieAnToggle"
-                        v-model="modusStrategieAn" @change="modusSpeichern('modusStrategieAn', modusStrategieAn)">
-                    <label class="form-check-label" for="modusStrategieAnToggle">{{ t('modes.agent') }}</label>
-                    <InfoTipp schluessel="settings.modeStrategyInfo" />
-                </div>
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="modusLernenAnToggle"
-                        v-model="modusLernenAn" @change="modusSpeichern('modusLernenAn', modusLernenAn)">
-                    <label class="form-check-label" for="modusLernenAnToggle">{{ t('modes.lernen') }}</label>
-                    <InfoTipp schluessel="settings.modeLernenInfo" />
-                </div>
-                <p class="fw-lighter small mb-0 mt-2">{{ t('settings.modesJournalFix') }}</p>
-            </div>
-
-            <!-- Live-Trading-Fenster auf dem Handy zeigen -->
-            <div class="col-12 mt-3">
-                <div class="form-check form-switch">
-                    <input class="form-check-input" type="checkbox" id="livetradingMobilToggle"
-                        :disabled="!modusLiveAn"
-                        v-model="livetradingMobil" @change="kiSpeichern('livetradingMobil', livetradingMobil ? 1 : 0)">
-                    <label class="form-check-label" for="livetradingMobilToggle">{{ t('settings.livetradingMobile') }}</label>
-                </div>
-                <p class="fw-lighter small mb-0">{{ t('settings.livetradingMobileHint') }}</p>
-                <!-- Ausgrauen statt verstecken: ein verschwundener Schalter lässt
-                     offen, ob die Einstellung überlebt hat. -->
-                <p v-if="!modusLiveAn" class="fw-lighter small mb-0 text-warning">{{ t('settings.livetradingModeOffHint') }}</p>
-            </div>
-
-            <div class="col-12 mt-3 mb-3">
-                <button type="button" v-on:click="updateProfile" class="btn btn-success">{{ t('common.save') }}</button>
-            </div>
+        <!-- Manueller Wiederaufruf des Onboarding-Assistenten — unabhängig
+             vom Versionsabgleich, z.B. um eine Nachrichtenquelle
+             nachzutragen, die man beim ersten Mal übersprungen hat. -->
+        <div class="block">
+            <Knopf klein symbol="rakete"
+                @click="router.push({ path: '/update-assistent', query: { kontext: 'manuell', rueckkehr: '/settings' } })">
+                {{ t('onboarding.reopenButton') }}
+            </Knopf>
         </div>
 
-    </div>
+        <!-- Modi ein-/ausblenden. Journal fehlt bewusst: nicht abschaltbar. -->
+        <div class="block">
+            <h3 class="zwischentitel">{{ t('settings.modesTitle') }}</h3>
+            <p class="hinweis">{{ t('settings.modesHint') }}</p>
+
+            <Schalter v-model="startseiteAn" :label="t('modes.start')" info="settings.startpageOnHint"
+                @change="startseiteSpeichern" />
+            <Schalter v-model="modusLiveAn" :label="t('modes.live')" info="settings.modeLiveInfo"
+                @change="(v) => modusSpeichern('modusLiveAn', v)" />
+            <Schalter v-model="modusResearchAn" :label="t('modes.research')" info="settings.modeResearchInfo"
+                @change="(v) => modusSpeichern('modusResearchAn', v)" />
+            <Schalter v-model="modusStrategieAn" :label="t('modes.agent')" info="settings.modeStrategyInfo"
+                @change="(v) => modusSpeichern('modusStrategieAn', v)" />
+            <Schalter v-model="modusLernenAn" :label="t('modes.lernen')" info="settings.modeLernenInfo"
+                @change="(v) => modusSpeichern('modusLernenAn', v)" />
+            <p class="hinweis">{{ t('settings.modesJournalFix') }}</p>
+        </div>
+
+        <!-- Live-Trading-Fenster auf dem Handy zeigen -->
+        <div class="block">
+            <Schalter v-model="livetradingMobil" :disabled="!modusLiveAn" :label="t('settings.livetradingMobile')"
+                :hilfe="t('settings.livetradingMobileHint')"
+                @change="(v) => kiSpeichern('livetradingMobil', v ? 1 : 0)" />
+            <!-- Ausgrauen statt verstecken: ein verschwundener Schalter lässt
+                 offen, ob die Einstellung überlebt hat. -->
+            <p v-if="!modusLiveAn" class="hinweis warn">{{ t('settings.livetradingModeOffHint') }}</p>
+        </div>
+
+        <div class="fuss">
+            <Knopf art="haupt" @click="updateProfile">{{ t('common.save') }}</Knopf>
+        </div>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.avatar-zeile {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
+}
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--line);
+}
+.datei {
+    max-width: 100%;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+.datei::file-selector-button {
+    margin-right: var(--abstand-2);
+    padding: 0.35rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+}
+.datei::file-selector-button:hover { background: var(--panel-hoch); }
+.block {
+    margin-top: var(--abstand-4);
+}
+.zwischentitel {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+.hinweis {
+    margin: 0.2rem 0 var(--abstand-2);
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+.hinweis.warn { color: var(--warn); }
+.fuss {
+    margin-top: var(--abstand-4);
+}
+</style>

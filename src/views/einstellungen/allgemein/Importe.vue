@@ -9,6 +9,8 @@ import { selectedBroker } from '@/stores/filters.js'
 import { dbFind, dbFirst, dbDelete, dbDeleteWhere } from '@/utils/db.js'
 import { refreshAccountBalance } from '@/stores/accountBalance.js'
 import { logWarn } from '@/utils/logger.js'
+import { Knopf, Pille, Symbol } from '@/components/basis/index.js'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
 
 const { t } = useI18n()
 
@@ -150,7 +152,7 @@ async function executeDeleteImport(dateUnix) {
         deleteConfirm.value = null
         await loadImports()
     } catch (error) {
-        alert('Fehler beim Löschen: ' + error.message)
+        alert(t('settings.importLoeschFehler') + error.message)
     }
 }
 
@@ -158,104 +160,169 @@ onMounted(loadImports)
 </script>
 
 <template>
-    <div>
-        <hr />
+    <!--=============== IMPORTE ===============-->
+    <Abschnitt v-model:offen="importsExpanded" :titel="t('settings.imports')" symbol="eingang">
+        <template #kopf>
+            <Pille ton="neutral">{{ importsList.length }}</Pille>
+        </template>
 
-        <!--=============== IMPORTE ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="importsExpanded = !importsExpanded">
-            <i class="uil me-2" :class="importsExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.imports') }}</p>
-            <span class="badge bg-secondary ms-2">{{ importsList.length }}</span>
-        </div>
-        <div v-show="importsExpanded" class="mt-2 ms-3">
-            <p class="fw-lighter">{{ t('settings.importsDescription') }}</p>
+        <p class="hinweis">{{ t('settings.importsDescription') }}</p>
 
-            <div>
-                <div v-if="importsLoading" class="text-center">
-                    <div class="spinner-border spinner-border-sm" role="status"></div>
-                </div>
+        <div v-if="importsLoading" class="laedt"><span class="kreisel" role="status"></span></div>
 
-                <div v-else-if="importsList.length === 0">
-                    <p class="text-muted">{{ t('settings.noImports') }}</p>
-                </div>
+        <p v-else-if="importsList.length === 0" class="gedaempft">{{ t('settings.noImports') }}</p>
 
-                <div v-else>
-                    <!-- Monat-Gruppen -->
-                    <div v-for="month in importsGroupedByMonth" :key="month.key" class="mb-2">
-                        <!-- Monats-Header -->
-                        <div class="d-flex align-items-center gap-2 p-2 pointerClass"
-                            style="background: var(--black-bg-5, #141422); border-radius: var(--border-radius, 6px);"
-                            @click="toggleMonth(month.key)">
-                            <i class="uil" :class="expandedMonths.has(month.key) ? 'uil-angle-down' : 'uil-angle-right'"></i>
-                            <span class="fw-bold">{{ month.label }}</span>
-                            <span class="badge bg-secondary">{{ month.days.length }} {{ month.days.length === 1 ? t('settings.dayLabel') : t('settings.daysLabel') }}</span>
-                            <span class="badge bg-secondary">{{ month.tradeCount }} {{ t('common.trades') }}</span>
-                            <span v-if="month.evaluatedCount === month.tradeCount && month.tradeCount > 0"
-                                class="badge bg-success">{{ t('settings.allEvaluated') }}</span>
-                            <span v-else-if="month.evaluatedCount > 0"
-                                class="badge bg-warning text-dark">{{ month.evaluatedCount }}/{{ month.tradeCount }}</span>
+        <div v-else>
+            <!-- Monat-Gruppen -->
+            <div v-for="month in importsGroupedByMonth" :key="month.key" class="monat">
+                <!-- Monats-Header -->
+                <button type="button" class="kopfzeile monat-kopf" :aria-expanded="expandedMonths.has(month.key)"
+                    @click="toggleMonth(month.key)">
+                    <Symbol :name="expandedMonths.has(month.key) ? 'runter' : 'ausklappen'" :groesse="16" class="pfeil" />
+                    <span class="fett">{{ month.label }}</span>
+                    <Pille ton="neutral">{{ month.days.length }} {{ month.days.length === 1 ? t('settings.dayLabel') : t('settings.daysLabel') }}</Pille>
+                    <Pille ton="neutral">{{ month.tradeCount }} {{ t('common.trades') }}</Pille>
+                    <Pille v-if="month.evaluatedCount === month.tradeCount && month.tradeCount > 0"
+                        ton="gut">{{ t('settings.allEvaluated') }}</Pille>
+                    <Pille v-else-if="month.evaluatedCount > 0" ton="warn">{{ month.evaluatedCount }}/{{ month.tradeCount }}</Pille>
+                </button>
+
+                <!-- Tage innerhalb des Monats -->
+                <div v-show="expandedMonths.has(month.key)" class="tage">
+                    <div v-for="data in month.days" :key="data.dateUnix" class="import-tag">
+                        <!-- Import Day Header -->
+                        <div class="tag-kopf">
+                            <button type="button" class="kopfzeile" :aria-expanded="expandedImport === data.dateUnix"
+                                @click="toggleImportExpand(data.dateUnix)">
+                                <Symbol :name="expandedImport === data.dateUnix ? 'runter' : 'ausklappen'" :groesse="16" class="pfeil" />
+                                <span class="fett">{{ useDateCalFormat(data.dateUnix) }}</span>
+                                <Pille ton="neutral">{{ getTradeCount(data) }} {{ t('common.trades') }}</Pille>
+                                <Pille v-if="getEvaluatedCount(data) === getTradeCount(data) && getTradeCount(data) > 0"
+                                    ton="gut">{{ t('settings.allEvaluated') }}</Pille>
+                                <Pille v-else-if="getEvaluatedCount(data) > 0" ton="warn">
+                                    {{ t('settings.xOfYEvaluated', { x: getEvaluatedCount(data), y: getTradeCount(data) }) }}</Pille>
+                                <Pille v-else-if="getTradeCount(data) > 0" ton="neutral" class="blass">{{ t('settings.notEvaluated') }}</Pille>
+                            </button>
+                            <div class="loeschen">
+                                <template v-if="deleteConfirm === data.dateUnix">
+                                    <span class="frage">{{ t('settings.sure') }}</span>
+                                    <Knopf art="gefahr" klein @click="executeDeleteImport(data.dateUnix)">{{ t('common.yes') }}</Knopf>
+                                    <Knopf klein @click="cancelDeleteImport">{{ t('common.no') }}</Knopf>
+                                </template>
+                                <Knopf v-else art="leise" klein nur-symbol symbol="papierkorb" class="weg"
+                                    :titel="t('common.delete')" @click="confirmDeleteImport(data.dateUnix)" />
+                            </div>
                         </div>
 
-                        <!-- Tage innerhalb des Monats -->
-                        <div v-show="expandedMonths.has(month.key)" class="ps-3 mt-1">
-                            <div v-for="data in month.days" :key="data.dateUnix" class="import-row mb-1">
-                                <!-- Import Day Header -->
-                                <div class="d-flex align-items-center justify-content-between p-2 pointerClass"
-                                    style="background: var(--black-bg-3, #1a1a2e); border-radius: var(--border-radius, 6px);"
-                                    @click="toggleImportExpand(data.dateUnix)">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <i class="uil" :class="expandedImport === data.dateUnix ? 'uil-angle-down' : 'uil-angle-right'"></i>
-                                        <span class="fw-bold">{{ useDateCalFormat(data.dateUnix) }}</span>
-                                        <span class="badge bg-secondary">{{ getTradeCount(data) }} {{ t('common.trades') }}</span>
-                                        <span v-if="getEvaluatedCount(data) === getTradeCount(data) && getTradeCount(data) > 0"
-                                            class="badge bg-success">{{ t('settings.allEvaluated') }}</span>
-                                        <span v-else-if="getEvaluatedCount(data) > 0"
-                                            class="badge bg-warning text-dark">{{ t('settings.xOfYEvaluated', { x: getEvaluatedCount(data), y: getTradeCount(data) }) }}</span>
-                                        <span v-else-if="getTradeCount(data) > 0"
-                                            class="badge bg-secondary" style="opacity: 0.6;">{{ t('settings.notEvaluated') }}</span>
-                                    </div>
-                                    <div>
-                                        <span v-if="deleteConfirm === data.dateUnix" @click.stop>
-                                            <span class="me-2 small">{{ t('settings.sure') }}</span>
-                                            <button class="btn btn-danger btn-sm me-1" @click.stop="executeDeleteImport(data.dateUnix)">{{ t('common.yes') }}</button>
-                                            <button class="btn btn-outline-secondary btn-sm" @click.stop="cancelDeleteImport">{{ t('common.no') }}</button>
-                                        </span>
-                                        <i v-else class="uil uil-trash-alt pointerClass text-danger" @click.stop="confirmDeleteImport(data.dateUnix)"></i>
-                                    </div>
+                        <!-- Expanded: Individual Trades -->
+                        <div v-if="expandedImport === data.dateUnix" class="trades">
+                            <div v-for="trade in getTradesForDay(data)" :key="trade.id" class="trade">
+                                <div class="trade-links">
+                                    <strong>{{ trade.symbol }}</strong>
+                                    <Pille ton="neutral">{{ formatTradeSide(trade) }}</Pille>
+                                    <span class="fett zahl" :class="parseFloat(trade.netProceeds || trade.grossProceeds || 0) >= 0 ? 'gewinn' : 'verlust'">
+                                        {{ formatTradePnl(trade) }} USDT
+                                    </span>
                                 </div>
-
-                                <!-- Expanded: Individual Trades -->
-                                <div v-if="expandedImport === data.dateUnix" class="ps-4 pe-2 py-2">
-                                    <div v-for="trade in getTradesForDay(data)" :key="trade.id"
-                                        class="d-flex align-items-center justify-content-between py-1"
-                                        style="border-bottom: 1px solid var(--white-10, rgba(255,255,255,0.05));">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <strong>{{ trade.symbol }}</strong>
-                                            <span class="badge" :class="trade.strategy === 'long' || trade.side === 'B' ? 'bg-success' : 'bg-danger'">
-                                                {{ formatTradeSide(trade) }}
-                                            </span>
-                                            <span class="fw-bold" :class="parseFloat(trade.netProceeds || trade.grossProceeds || 0) >= 0 ? 'greenTrade' : 'redTrade'">
-                                                {{ formatTradePnl(trade) }} USDT
-                                            </span>
-                                        </div>
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span v-if="isTradeEvaluated(trade.id)" class="badge bg-success">
-                                                <i class="uil uil-check me-1"></i>{{ t('settings.importEvaluatedBadge') }}
-                                            </span>
-                                            <a v-else :href="'/playbook?tradeId=' + trade.id" class="btn btn-sm btn-outline-primary py-0 px-2">
-                                                <i class="uil uil-pen me-1"></i>{{ t('settings.importEvaluateLink') }}
-                                            </a>
-                                        </div>
-                                    </div>
-                                    <div v-if="getTradesForDay(data).length === 0" class="text-muted small py-1">
-                                        {{ t('settings.importNoTradesFound') }}
-                                    </div>
-                                </div>
+                                <Pille v-if="isTradeEvaluated(trade.id)" ton="gut" symbol="haken">{{ t('settings.importEvaluatedBadge') }}</Pille>
+                                <Knopf v-else klein :href="'/playbook?tradeId=' + trade.id">{{ t('settings.importEvaluateLink') }}</Knopf>
                             </div>
+                            <p v-if="getTradesForDay(data).length === 0" class="gedaempft klein">
+                                {{ t('settings.importNoTradesFound') }}
+                            </p>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.hinweis {
+    margin: 0 0 var(--abstand-2);
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+.gedaempft { color: var(--muted); }
+.klein { font-size: 0.82rem; margin: 0.3rem 0; }
+.fett { font-weight: 600; }
+.laedt { text-align: center; color: var(--muted); padding: var(--abstand-2) 0; }
+.kreisel {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    animation: dreh 0.8s linear infinite;
+}
+@keyframes dreh { to { transform: rotate(360deg); } }
+.monat { margin-bottom: var(--abstand-2); }
+.kopfzeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    flex: 1;
+    min-width: 0;
+    padding: 0.5rem 0.6rem;
+    background: none;
+    border: 0;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.monat-kopf {
+    width: 100%;
+    background: var(--panel-soft);
+    border-radius: var(--radius-knopf);
+}
+.monat-kopf:hover { background: var(--panel-hoch); }
+.pfeil { flex: none; color: var(--muted); }
+.tage { padding-left: var(--abstand-3); margin-top: 0.25rem; }
+.import-tag { margin-bottom: 0.25rem; }
+.tag-kopf {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding-right: 0.4rem;
+}
+.tag-kopf:hover { border-color: var(--line-stark); }
+.blass { opacity: 0.6; }
+.loeschen {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    flex: none;
+}
+.frage { font-size: 0.82rem; margin-right: 0.2rem; }
+.weg:hover { color: var(--bad); }
+.trades { padding: var(--abstand-2) 0.5rem var(--abstand-2) var(--abstand-5); }
+.trade {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--abstand-2);
+    padding: 0.3rem 0;
+    border-bottom: 1px solid var(--line);
+}
+.trade-links {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+.zahl { font-variant-numeric: tabular-nums; }
+.gewinn { color: var(--good); }
+.verlust { color: var(--bad); }
+@media (max-width: 575.98px) {
+    .tage { padding-left: 0; }
+    .trades { padding-left: var(--abstand-2); }
+}
+</style>

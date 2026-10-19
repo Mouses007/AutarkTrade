@@ -16,20 +16,21 @@ const { t } = useI18n()
 
 <template>
     <div>
-        <p class="fw-lighter">{{ t('settings.ki.nachrichtenHint') }}</p>
+        <p class="einleitung">{{ t('settings.ki.nachrichtenHint') }}</p>
         <!--=============== LAGEBERICHT ===============-->
-        <hr class="mt-4" />
-        <p class="fw-bold mb-1">{{ t('settings.ki.news.title') }}</p>
-        <p class="fw-lighter">{{ t('settings.ki.news.intro1') }}</p>
-        <p class="fw-lighter">
+        <h3 class="zwischentitel">{{ t('settings.ki.news.title') }}</h3>
+        <p class="einleitung">{{ t('settings.ki.news.intro1') }}</p>
+        <p class="einleitung">
             {{ t('settings.ki.news.intro2') }}
             <code>{{ radarNewsBerichtProvider || currentUser?.aiProvider || '—' }} / {{ radarNewsBerichtModell || currentUser?.aiModel || '—' }}</code>
             {{ t('settings.ki.news.intro2b') }}
         </p>
-        <p class="fw-lighter">{{ t('settings.ki.news.intro3') }}</p>
+        <p class="einleitung">{{ t('settings.ki.news.intro3') }}</p>
 
         <KiNewsQuellen />
 
         <KiNewsBericht />
     </div>
 </template>
+
+<style scoped src="./ki-formular.css"></style>

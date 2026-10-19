@@ -3,6 +3,11 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import InfoTipp from '@/components/InfoTipp.vue'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Schalter from '../gemeinsam/Schalter.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Symbol from '@/components/basis/Symbol.vue'
 import { allTradeTimeframes, selectedTradeTimeframes } from '@/stores/filters.js'
 import { currentUser } from '@/stores/settings.js'
 import { dbUpdateSettings, dbGetSettings } from '@/utils/db.js'
@@ -233,153 +238,280 @@ onMounted(loadTags)
 </script>
 
 <template>
-    <div>
-        <hr />
+    <Abschnitt :titel="t('settings.evaluation')" symbol="liste" v-model:offen="bewertungExpanded">
 
-        <!--=============== BEWERTUNG ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="bewertungExpanded = !bewertungExpanded">
-            <i class="uil me-2" :class="bewertungExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.evaluation') }}</p>
-        </div>
-        <div v-show="bewertungExpanded" class="mt-2 ms-3">
+        <!-- Tags: Gruppen mit eigener Farbe, darin die einzelnen Tags. Die
+             erste Gruppe (Strategie) ist Pflicht und bleibt unveränderbar. -->
+        <Abschnitt :titel="t('settings.tagsSection')" unter v-model:offen="subTagsExpanded">
+            <p class="beschreibung">{{ t('settings.tagsDescription') }}</p>
 
-            <!--=============== TAGS (Unterabschnitt) ===============-->
-            <div class="d-flex align-items-center pointerClass mb-1" @click="subTagsExpanded = !subTagsExpanded">
-                <i class="uil me-1" :class="subTagsExpanded ? 'uil-angle-down' : 'uil-angle-right'" style="font-size: 1.1rem;"></i>
-                <p class="fs-6 fw-bold mb-0">{{ t('settings.tagsSection') }}</p>
-            </div>
-            <div v-show="subTagsExpanded">
-            <p class="fw-lighter">{{ t('settings.tagsDescription') }}</p>
+            <ul class="gruppen">
+                <li v-for="(group, gi) in tagGroups" :key="group.id" class="gruppe" :style="{ '--gruppe': group.color }">
+                    <div v-if="editingGroup === group.id" class="gruppe-kopf">
+                        <input type="text" class="eingabe schmal" v-model="editGroupName"
+                            :aria-label="t('common.edit')" @keyup.enter="saveEditGroup(group)" />
+                        <input type="color" class="farbe" v-model="editGroupColor" :aria-label="t('common.edit')" />
+                        <Knopf art="haupt" klein symbol="haken" nurSymbol :titel="t('common.save')" @click="saveEditGroup(group)" />
+                        <Knopf art="leise" klein symbol="schliessen" nurSymbol :titel="t('common.cancel')" @click="cancelEditGroup" />
+                    </div>
+                    <div v-else class="gruppe-kopf">
+                        <span class="punkt" aria-hidden="true"></span>
+                        <span class="gruppe-name">{{ group.name }}</span>
+                        <Pille ton="neutral">{{ group.tags.length }} {{ t('settings.tagsCountSuffix') }}</Pille>
+                        <span class="gruppe-aktionen">
+                            <template v-if="gi !== 0">
+                                <Knopf art="leise" klein @click="startEditGroup(group)">{{ t('common.edit') }}</Knopf>
+                                <Knopf art="gefahr" klein @click="removeGroup(group.id)">{{ t('common.delete') }}</Knopf>
+                            </template>
+                            <Pille v-else ton="neutral">{{ t('common.mandatory') }}</Pille>
+                        </span>
+                    </div>
 
-            <!-- Existing groups -->
-            <div v-for="group in tagGroups" :key="group.id" class="mb-3 p-3" :style="{ borderLeft: '4px solid ' + group.color, background: 'var(--bg-card)' }">
-                <!-- Group header -->
-                <div class="d-flex align-items-center mb-2">
-                    <template v-if="editingGroup === group.id">
-                        <input type="text" class="form-control form-control-sm me-2" style="max-width: 200px;" v-model="editGroupName" @keyup.enter="saveEditGroup(group)" />
-                        <input type="color" class="form-control form-control-color form-control-sm me-2" v-model="editGroupColor" />
-                        <button class="btn btn-success btn-sm me-1" @click="saveEditGroup(group)"><i class="uil uil-check"></i></button>
-                        <button class="btn btn-outline-secondary btn-sm" @click="cancelEditGroup"><i class="uil uil-times"></i></button>
-                    </template>
-                    <template v-else>
-                        <span class="fw-bold me-2">{{ group.name }}</span>
-                        <span class="badge me-2" :style="{ backgroundColor: group.color }">{{ group.tags.length }} {{ t('settings.tagsCountSuffix') }}</span>
-                        <button v-if="tagGroups.indexOf(group) !== 0" class="btn btn-outline-secondary btn-sm me-1" @click="startEditGroup(group)"><i class="uil uil-pen"></i></button>
-                        <button v-if="tagGroups.indexOf(group) !== 0" class="btn btn-outline-danger btn-sm" @click="removeGroup(group.id)"><i class="uil uil-trash-alt"></i></button>
-                        <span v-else class="badge bg-secondary ms-1" style="font-size: 0.65rem;"><i class="uil uil-lock-alt me-1"></i>{{ t('common.mandatory') }}</span>
-                    </template>
-                </div>
+                    <ul v-if="group.tags.length" class="tags">
+                        <li v-for="tag in group.tags" :key="tag.id" class="tag">
+                            <span>{{ tag.name }}</span>
+                            <button type="button" class="tag-weg" :title="t('common.remove')" :aria-label="t('common.remove') + ': ' + tag.name"
+                                @click="removeTag(group, tag.id)">
+                                <Symbol name="schliessen" :groesse="12" />
+                            </button>
+                        </li>
+                    </ul>
 
-                <!-- Tags in group -->
-                <div class="d-flex flex-wrap gap-1 mb-2">
-                    <span v-for="tag in group.tags" :key="tag.id" class="badge d-flex align-items-center" :style="{ backgroundColor: group.color }">
-                        {{ tag.name }}
-                        <i class="uil uil-times ms-1 pointerClass" @click="removeTag(group, tag.id)"></i>
+                    <form class="neu" @submit.prevent="addTag(group)">
+                        <input type="text" class="eingabe schmal" v-model="newTagName[group.id]"
+                            :placeholder="t('settings.newTagPlaceholder')" :aria-label="t('settings.newTagPlaceholder')" />
+                        <Knopf type="submit" klein symbol="plus">{{ t('settings.addTagBtn') }}</Knopf>
+                    </form>
+                </li>
+            </ul>
+
+            <form class="neue-gruppe" @submit.prevent="addGroup">
+                <input type="text" class="eingabe schmal" v-model="newGroupName"
+                    :placeholder="t('settings.newGroupPlaceholder')" :aria-label="t('settings.newGroupPlaceholder')" />
+                <input type="color" class="farbe" v-model="newGroupColor" :aria-label="t('settings.newGroupPlaceholder')" />
+                <Knopf type="submit" klein symbol="plus">{{ t('settings.addGroupBtn') }}</Knopf>
+            </form>
+        </Abschnitt>
+
+        <!-- Timeframes: Auswahl als Umschalt-Pillen, je Gruppe eine Zeile. -->
+        <Abschnitt :titel="t('settings.timeframesSection')" unter v-model:offen="subTimeframesExpanded">
+            <p class="beschreibung">{{ t('settings.timeframesDescription') }}</p>
+
+            <fieldset v-for="group in timeframeGroups" :key="group" class="tf-gruppe">
+                <legend>{{ group }}</legend>
+                <div class="tf-liste">
+                    <span v-for="tf in timeframesByGroup(group)" :key="tf.value" class="tf">
+                        <button type="button" :class="['tf-wahl', { gewaehlt: localTimeframes.has(tf.value) }]"
+                            :aria-pressed="localTimeframes.has(tf.value)" @click="toggleTimeframe(tf.value)">{{ tf.label }}</button>
+                        <button v-if="group === t('timeframes.custom')" type="button" class="tf-weg"
+                            :title="t('common.remove')" :aria-label="t('common.remove') + ': ' + tf.label"
+                            @click="removeCustomTimeframe(tf)">
+                            <Symbol name="schliessen" :groesse="12" />
+                        </button>
                     </span>
                 </div>
+            </fieldset>
 
-                <!-- Add tag input -->
-                <div class="d-flex">
-                    <input type="text" class="form-control form-control-sm me-2" style="max-width: 200px;" :placeholder="t('settings.newTagPlaceholder')" v-model="newTagName[group.id]" @keyup.enter="addTag(group)" />
-                    <button class="btn btn-outline-primary btn-sm" @click="addTag(group)">{{ t('settings.addTagBtn') }}</button>
-                </div>
-            </div>
-
-            <!-- Add new group -->
-            <div class="mt-3 p-3" style="border: 1px dashed var(--border-color); background: var(--bg-card);">
-                <div class="d-flex align-items-center">
-                    <input type="text" class="form-control form-control-sm me-2" style="max-width: 200px;" :placeholder="t('settings.newGroupPlaceholder')" v-model="newGroupName" @keyup.enter="addGroup" />
-                    <input type="color" class="form-control form-control-color form-control-sm me-2" v-model="newGroupColor" />
-                    <button class="btn btn-outline-success btn-sm" @click="addGroup">{{ t('settings.addGroupBtn') }}</button>
-                </div>
-            </div>
-
-            </div><!-- /subTagsExpanded -->
-
-            <hr />
-
-            <!--=============== TIMEFRAMES (Unterabschnitt) ===============-->
-            <div class="d-flex align-items-center pointerClass mb-1" @click="subTimeframesExpanded = !subTimeframesExpanded">
-                <i class="uil me-1" :class="subTimeframesExpanded ? 'uil-angle-down' : 'uil-angle-right'" style="font-size: 1.1rem;"></i>
-                <p class="fs-6 fw-bold mb-0">{{ t('settings.timeframesSection') }}</p>
-            </div>
-            <div v-show="subTimeframesExpanded">
-            <p class="fw-lighter">{{ t('settings.timeframesDescription') }}</p>
-            <div v-for="group in timeframeGroups" :key="group" class="mb-2">
-                <label class="fw-lighter text-uppercase small mb-1">{{ group }}</label>
-                <div class="d-flex flex-wrap gap-1">
-                    <template v-if="group === t('timeframes.custom')">
-                        <span v-for="tf in timeframesByGroup(group)" :key="tf.value"
-                            class="tag-badge d-flex align-items-center" :class="{ active: localTimeframes.has(tf.value) }"
-                            v-on:click="toggleTimeframe(tf.value)">{{ tf.label }}
-                            <i class="uil uil-times ms-1" style="font-size: 0.75rem; cursor: pointer;" @click.stop="removeCustomTimeframe(tf)"></i>
-                        </span>
-                    </template>
-                    <template v-else>
-                        <span v-for="tf in timeframesByGroup(group)" :key="tf.value"
-                            class="tag-badge" :class="{ active: localTimeframes.has(tf.value) }"
-                            v-on:click="toggleTimeframe(tf.value)">{{ tf.label }}</span>
-                    </template>
-                </div>
-            </div>
-            <!-- Eigenen Timeframe hinzufügen -->
-            <div class="d-flex mt-2 mb-2">
-                <input type="text" class="form-control form-control-sm me-2" style="max-width: 200px;" :placeholder="t('timeframes.egCustom')" v-model="newCustomTf" @keyup.enter="addCustomTimeframe" />
-                <button class="btn btn-outline-primary btn-sm" @click="addCustomTimeframe">{{ t('timeframes.addCustom') }}</button>
+            <form class="neu" @submit.prevent="addCustomTimeframe">
+                <input type="text" class="eingabe schmal" v-model="newCustomTf"
+                    :placeholder="t('timeframes.egCustom')" :aria-label="t('timeframes.addCustom')" />
+                <Knopf type="submit" klein symbol="plus">{{ t('timeframes.addCustom') }}</Knopf>
                 <InfoTipp schluessel="settings.info.customTimeframe" />
+            </form>
+            <div class="aktionen">
+                <Knopf art="haupt" @click="saveTimeframes">{{ t('common.save') }}</Knopf>
             </div>
-            <div class="mt-3 mb-3">
-                <button type="button" v-on:click="saveTimeframes" class="btn btn-success">{{ t('common.save') }}</button>
+        </Abschnitt>
+
+        <!-- Trade-Typ: Haltedauer-Grenzen für Scalp und Daytrade. -->
+        <Abschnitt :titel="t('settings.tradeTypeAutoDetection')" unter v-model:offen="subTradeTypeExpanded">
+            <p class="beschreibung">{{ t('settings.tradeTypeAutoDetectionDescription') }}</p>
+            <div class="schwellen">
+                <label class="schwelle">
+                    <span>{{ t('settings.scalpMaxMinutes') }}</span>
+                    <input type="number" class="eingabe zahl" v-model.number="scalpMaxMinutes" min="1" max="1440" />
+                </label>
+                <label class="schwelle">
+                    <span>{{ t('settings.daytradeMaxHours') }}</span>
+                    <input type="number" class="eingabe zahl" v-model.number="daytradeMaxHours" min="1" max="720" />
+                </label>
+                <Knopf art="haupt" @click="saveTradeTypeThresholds">{{ t('common.save') }}</Knopf>
             </div>
+            <p class="notiz">{{ t('settings.tradeTypeThresholdHint') }}</p>
+        </Abschnitt>
 
-            </div><!-- /subTimeframesExpanded -->
-
-            <hr />
-
-            <!--=============== TRADE-TYP AUTO-ERKENNUNG (Unterabschnitt) ===============-->
-            <div class="d-flex align-items-center pointerClass mb-1" @click="subTradeTypeExpanded = !subTradeTypeExpanded">
-                <i class="uil me-1" :class="subTradeTypeExpanded ? 'uil-angle-down' : 'uil-angle-right'" style="font-size: 1.1rem;"></i>
-                <p class="fs-6 fw-bold mb-0">{{ t('settings.tradeTypeAutoDetection') }}</p>
-            </div>
-            <div v-show="subTradeTypeExpanded">
-            <p class="fw-lighter">{{ t('settings.tradeTypeAutoDetectionDescription') }}</p>
-            <div class="row g-2 align-items-end">
-                <div class="col-auto">
-                    <label class="form-label small mb-0">{{ t('settings.scalpMaxMinutes') }}</label>
-                    <input type="number" class="form-control form-control-sm" style="max-width: 100px;"
-                        v-model.number="scalpMaxMinutes" min="1" max="1440" />
-                </div>
-                <div class="col-auto">
-                    <label class="form-label small mb-0">{{ t('settings.daytradeMaxHours') }}</label>
-                    <input type="number" class="form-control form-control-sm" style="max-width: 100px;"
-                        v-model.number="daytradeMaxHours" min="1" max="720" />
-                </div>
-                <div class="col-auto">
-                    <button class="btn btn-success btn-sm" @click="saveTradeTypeThresholds">{{ t('common.save') }}</button>
-                </div>
-            </div>
-            <small class="text-muted">{{ t('settings.tradeTypeThresholdHint') }}</small>
-
-            </div><!-- /subTradeTypeExpanded -->
-
-            <hr />
-
-            <!--=============== POPUPS (Unterabschnitt) ===============-->
-            <div class="d-flex align-items-center pointerClass mb-1" @click="subPopupsExpanded = !subPopupsExpanded">
-                <i class="uil me-1" :class="subPopupsExpanded ? 'uil-angle-down' : 'uil-angle-right'" style="font-size: 1.1rem;"></i>
-                <p class="fs-6 fw-bold mb-0">{{ t('settings.popupsAndNotifications') }}</p>
-            </div>
-            <div v-show="subPopupsExpanded">
-            <p class="fw-lighter">{{ t('settings.popupsDescription') }}</p>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="popupToggle" v-model="showTradePopups" @change="savePopupSetting">
-                <label class="form-check-label" for="popupToggle">{{ t('settings.enablePopups') }}</label>
-            </div>
-            <!-- Der Hauptschalter für Benachrichtigungen steht jetzt im
-                 eigenen Bereich „Benachrichtigungen", zusammen mit der
-                 Kanalwahl je Ereignis und dem E-Mail-Versand. -->
-            </div><!-- /subPopupsExpanded -->
-        </div>
-
-    </div>
+        <!-- Popups. Der Hauptschalter für Benachrichtigungen steht im eigenen
+             Bereich „Benachrichtigungen", zusammen mit der Kanalwahl je
+             Ereignis und dem E-Mail-Versand. -->
+        <Abschnitt :titel="t('settings.popupsAndNotifications')" unter v-model:offen="subPopupsExpanded">
+            <p class="beschreibung">{{ t('settings.popupsDescription') }}</p>
+            <Schalter v-model="showTradePopups" :label="t('settings.enablePopups')" @change="savePopupSetting" />
+        </Abschnitt>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.beschreibung { color: var(--muted); margin: 0 0 var(--abstand-3); }
+.notiz { margin: var(--abstand-2) 0 0; color: var(--muted); font-size: 0.82rem; }
+.aktionen { margin-top: var(--abstand-3); }
+
+/* Eingaben (nativ, weil Farbwähler und Enter-zum-Hinzufügen gebraucht werden) */
+.eingabe {
+    min-width: 0;
+    padding: 0.4rem 0.65rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    font: inherit;
+    font-size: 0.88rem;
+}
+.eingabe:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-flaeche);
+}
+.eingabe.schmal { flex: 1 1 8rem; max-width: 14rem; }
+.eingabe.zahl { width: 7rem; font-variant-numeric: tabular-nums; }
+.farbe {
+    flex: none;
+    width: 2.2rem;
+    height: 2rem;
+    padding: 0.15rem;
+    background: var(--bg);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
+    cursor: pointer;
+}
+
+/* Tag-Gruppen */
+.gruppen, .tags { list-style: none; margin: 0; padding: 0; }
+.gruppe {
+    position: relative;
+    margin-bottom: var(--abstand-3);
+    padding: var(--abstand-3);
+    padding-left: calc(var(--abstand-3) + 4px);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    overflow: hidden;
+}
+.gruppe::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: var(--gruppe);
+}
+.gruppe-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+.punkt {
+    flex: none;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    background: var(--gruppe);
+}
+.gruppe-name { font-weight: 600; overflow-wrap: anywhere; }
+.gruppe-aktionen {
+    display: inline-flex;
+    gap: var(--abstand-1);
+    margin-left: auto;
+}
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
+    margin-top: var(--abstand-2);
+}
+.tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.15rem 0.25rem 0.15rem 0.6rem;
+    border: 1px solid var(--gruppe);
+    border-radius: var(--radius-pille);
+    background: var(--panel-soft);
+    font-size: 0.82rem;
+}
+.tag-weg, .tf-weg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 50%;
+    color: var(--muted);
+    cursor: pointer;
+}
+.tag-weg:hover, .tf-weg:hover { color: var(--bad); background: var(--bad-flaeche); }
+.neu, .neue-gruppe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-2);
+}
+.neue-gruppe {
+    padding: var(--abstand-3);
+    border: 1px dashed var(--line-stark);
+    border-radius: var(--radius-knopf);
+}
+
+/* Timeframes */
+.tf-gruppe {
+    margin: 0 0 var(--abstand-3);
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+.tf-gruppe legend {
+    margin-bottom: 0.35rem;
+    padding: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.tf-liste { display: flex; flex-wrap: wrap; gap: var(--abstand-1); }
+.tf { display: inline-flex; align-items: center; }
+.tf-wahl {
+    padding: 0.2rem 0.7rem;
+    background: transparent;
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-pille);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+.tf-wahl:hover { color: var(--text); }
+.tf-wahl.gewaehlt {
+    background: var(--accent-flaeche);
+    border-color: var(--accent-rand);
+    color: var(--accent);
+}
+.tf-wahl:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Trade-Typ-Schwellen */
+.schwellen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--abstand-3);
+}
+.schwelle {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+</style>

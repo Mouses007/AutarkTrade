@@ -15,16 +15,17 @@ import { ref } from 'vue'
  * Jetzt: ein Ort, darin je Funktion ein Reiter. Der frühere obere Reiter
  * „Agent" ist deshalb entfallen.
  */
+// `symbol` = Name in components/basis/Symbol.vue.
 export const KI_BEREICHE = [
     // Ganz vorn: die Frage „was läuft hier eigentlich und was kostet es" kommt
     // vor jeder einzelnen Einstellung.
-    { id: 'uebersicht', icon: 'uil uil-eye' },
-    { id: 'allgemein', icon: 'uil uil-key-skeleton' },
-    { id: 'berichte', icon: 'uil uil-file-alt' },
-    { id: 'nachrichten', icon: 'uil uil-newspaper' },
-    { id: 'agent', icon: 'uil uil-robot' },
-    { id: 'strategie', icon: 'uil uil-chart-line' },
-    { id: 'bilder', icon: 'uil uil-image' },
+    { id: 'uebersicht', symbol: 'auge' },
+    { id: 'allgemein', symbol: 'schluessel' },
+    { id: 'berichte', symbol: 'dokument' },
+    { id: 'nachrichten', symbol: 'zeitung' },
+    { id: 'agent', symbol: 'agent' },
+    { id: 'strategie', symbol: 'chart' },
+    { id: 'bilder', symbol: 'bild' },
 ]
 export const kiBereich = ref(localStorage.getItem('settingsKiBereich') || 'allgemein')
 export function kiBereichWechseln(id) {

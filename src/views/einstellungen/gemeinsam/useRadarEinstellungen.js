@@ -194,6 +194,7 @@ export function useRadarEinstellungen() {
         radarNewsMeldungsTiefe.value = ['knapp', 'normal', 'ausfuehrlich'].includes(s.radarNewsMeldungsTiefe)
             ? s.radarNewsMeldungsTiefe : 'knapp'
         radarNewsLagenAn.value = Number(s.radarNewsLagenAn ?? 1) === 1
+        kiEmpfehlungenAn.value = Number(s.kiEmpfehlungenAn ?? 0) === 1
         radarNewsLagenSymbol.value = s.radarNewsLagenSymbol || 'BTCUSDT'
         pruefeLagenSymbol()
         radarNewsTokenBudget.value = Math.max(0, Math.min(60000, Number(s.radarNewsTokenBudget) || 0))

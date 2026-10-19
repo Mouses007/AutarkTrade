@@ -10,6 +10,7 @@
  */
 import { computed, onBeforeMount } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Reiter from '@/components/basis/Reiter.vue'
 import KiUebersicht from '@/components/ki/KiUebersicht.vue'
 import { KI_BEREICHE, kiBereich, kiBereichWechseln } from './gemeinsam/useKiBereich.js'
 import { useKiAnbieter } from './gemeinsam/useKiAnbieter.js'
@@ -33,6 +34,9 @@ const KI_KOMPONENTEN = {
     strategie: KiStrategie,
     bilder: KiBilder,
 }
+const kiReiter = computed(() => KI_BEREICHE.map(b => ({
+    id: b.id, titel: t('settings.ki.tab_' + b.id), symbol: b.symbol,
+})))
 const kiKomponente = computed(() => KI_KOMPONENTEN[kiBereich.value] || null)
 
 onBeforeMount(async () => {
@@ -46,14 +50,8 @@ onBeforeMount(async () => {
 
         <!-- Zweite Reiter-Ebene: je KI-Funktion ein Bereich. Vorher lag
              das über drei obere Reiter verstreut. -->
-        <ul class="nav nav-tabs settings-nav mb-3">
-            <li v-for="b in KI_BEREICHE" :key="b.id" class="nav-item">
-                <a class="nav-link" :class="{ active: kiBereich === b.id }"
-                    href="#" @click.prevent="kiBereichWechseln(b.id)">
-                    <i :class="b.icon" class="me-1"></i>{{ t('settings.ki.tab_' + b.id) }}
-                </a>
-            </li>
-        </ul>
+        <Reiter class="ki-reiter" :model-value="kiBereich" :reiter="kiReiter"
+            @update:model-value="kiBereichWechseln" />
 
         <!--=============== ÜBERSICHT ===============-->
         <div v-show="kiBereich === 'uebersicht'">
@@ -65,3 +63,9 @@ onBeforeMount(async () => {
         </KeepAlive>
     </div>
 </template>
+
+<style scoped>
+.ki-reiter {
+    margin-bottom: var(--abstand-4);
+}
+</style>

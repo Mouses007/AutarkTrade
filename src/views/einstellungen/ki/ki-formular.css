@@ -1,0 +1,207 @@
+/*
+ * Gemeinsamer Stil der KI-Unter-Reiter (einstellungen/ki/*).
+ * Eingebunden als `<style scoped src="./ki-formular.css">` — scoped, damit
+ * nichts davon in eingebettete Fremdkomponenten (AnbieterWahl, ModelManager …)
+ * durchschlägt. Nur Tokens, keine festen Farben.
+ */
+
+/* Native Felder im Ton von Eingabe.vue. */
+/* :where() hält die Spezifität niedrig, damit Breitenklassen (.schmal …) greifen. */
+:where(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file'])),
+select,
+textarea {
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    font: inherit;
+    font-size: 0.9rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-flaeche);
+}
+input:disabled,
+select:disabled,
+textarea:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+input[type='checkbox'],
+input[type='radio'],
+input[type='range'] {
+    accent-color: var(--accent);
+}
+input[type='range'] {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+input[type='file'] {
+    min-width: 0;
+    max-width: 100%;
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+textarea {
+    resize: vertical;
+}
+
+/* Feste Breiten für kurze Felder; am Telefon volle Breite. */
+.schmal { max-width: 7rem; }
+.mittel { max-width: 12rem; }
+.breit { max-width: 26rem; }
+@media (max-width: 575.98px) {
+    .schmal, .mittel, .breit { max-width: 100%; }
+}
+
+/* Mehrere Bedienelemente nebeneinander, umbrechend. */
+.reihe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    min-width: 0;
+}
+.reihe > :where(select, input:not([type='checkbox']):not([type='radio']):not([type='range'])) {
+    width: auto;
+    flex: 0 1 auto;
+}
+.stapel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--abstand-2);
+    min-width: 0;
+}
+
+/* Texte */
+.einleitung {
+    margin: 0 0 var(--abstand-3);
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+.zwischentitel {
+    margin: var(--abstand-5) 0 var(--abstand-1);
+    color: var(--text);
+    font-size: 1rem;
+    font-weight: 600;
+}
+.leise {
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+.block { display: block; }
+.gut { color: var(--good); }
+.schlecht { color: var(--bad); }
+.warn { color: var(--warn); }
+.meldung {
+    margin: var(--abstand-2) 0 0;
+    font-size: 0.85rem;
+}
+code {
+    font-size: 0.82rem;
+    color: var(--text);
+    background: var(--panel-soft);
+    border-radius: var(--radius-klein);
+    padding: 0.05rem 0.3rem;
+    overflow-wrap: anywhere;
+}
+
+/* Knopfleiste am Ende eines Abschnitts */
+.knoepfe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-4);
+}
+
+/* Schlichte Listen (Schlüssel, Guthaben, Profile …) statt Tabellen:
+   am Telefon brechen die Zellen untereinander um. */
+.liste {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    overflow: hidden;
+}
+.liste-zeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2) var(--abstand-3);
+    padding: var(--abstand-2) var(--abstand-3);
+}
+.liste-zeile + .liste-zeile {
+    border-top: 1px solid var(--line);
+}
+.liste-name {
+    flex: 0 0 11rem;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-1);
+}
+.liste-mitte {
+    flex: 1 1 12rem;
+    min-width: 0;
+}
+.liste-ende {
+    margin-left: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--abstand-2);
+}
+@media (max-width: 575.98px) {
+    .liste-name { flex-basis: 100%; }
+    .liste-ende { margin-left: 0; justify-content: flex-start; }
+}
+
+/* Feld mit „Leeren"-Knopf daneben */
+.mit-knopf {
+    display: flex;
+    gap: var(--abstand-1);
+    align-items: center;
+    min-width: 0;
+}
+.mit-knopf > input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Rahmenfläche für zusammengehörige Teile */
+.flaeche {
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-3);
+    margin: var(--abstand-3) 0;
+}
+
+.trenner {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: var(--abstand-4) 0;
+}
+
+/* Kreisende Ladeanzeige für Knöpfe */
+.dreht {
+    display: inline-block;
+    width: 0.9em;
+    height: 0.9em;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: ki-drehen 0.75s linear infinite;
+    vertical-align: -0.1em;
+}
+@keyframes ki-drehen {
+    to { transform: rotate(360deg); }
+}

@@ -3,6 +3,12 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AnbieterWahl from '@/components/AnbieterWahl.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
+import Schalter from '../gemeinsam/Schalter.vue'
 import { currentUser } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
 import { kiSpeichern } from '../gemeinsam/speichern.js'
@@ -62,107 +68,65 @@ loadAgentSettings()
 <template>
     <div>
 
-        <div class="row mb-3">
-            <div class="col-12 col-md-4">
-                {{ t('settings.ki.providerFor') }}
-                <small class="d-block text-muted" style="font-size:0.78rem;">
-                    {{ t('settings.ki.strategieProviderHint') }}
-                </small>
-            </div>
-            <div class="col-12 col-md-8">
-                <AnbieterWahl :provider="aiStrategieProvider" :modell="aiStrategieModell"
-                    :modell-listen="modellListen" :global-provider="aiProvider" :global-modell="aiModel"
-                    @update:provider="w => { aiStrategieProvider = w; aiStrategieModell = ''; kiSpeichern('aiStrategieProvider', w); kiSpeichern('aiStrategieModell', '') }"
-                    @update:modell="w => { aiStrategieModell = w; kiSpeichern('aiStrategieModell', w) }" />
-            </div>
-        </div>
+        <Feld :label="t('settings.ki.providerFor')" :hilfe="t('settings.ki.strategieProviderHint')">
+            <AnbieterWahl :provider="aiStrategieProvider" :modell="aiStrategieModell"
+                :modell-listen="modellListen" :global-provider="aiProvider" :global-modell="aiModel"
+                @update:provider="w => { aiStrategieProvider = w; aiStrategieModell = ''; kiSpeichern('aiStrategieProvider', w); kiSpeichern('aiStrategieModell', '') }"
+                @update:modell="w => { aiStrategieModell = w; kiSpeichern('aiStrategieModell', w) }" />
+        </Feld>
 
         <!--=============== STRATEGIE-AGENTEN ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="agentExpanded = !agentExpanded">
-            <i class="uil me-2" :class="agentExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.ki.strat.title') }}</p>
-            <span v-if="agentKillSwitch" class="ms-2 badge bg-danger" style="font-size: 0.65rem;">{{ t('settings.ki.strat.killActive') }}</span>
-            <span v-else-if="agentLiveEnabled" class="ms-2 badge bg-warning text-dark" style="font-size: 0.65rem;">{{ t('settings.ki.strat.liveOn') }}</span>
-        </div>
-        <div v-show="agentExpanded" class="mt-2 ms-3">
-            <p class="fw-lighter">
+        <Abschnitt class="abstand-oben" :titel="t('settings.ki.strat.title')" symbol="agent" v-model:offen="agentExpanded">
+            <template #kopf>
+                <Pille v-if="agentKillSwitch" ton="schlecht">{{ t('settings.ki.strat.killActive') }}</Pille>
+                <Pille v-else-if="agentLiveEnabled" ton="warn">{{ t('settings.ki.strat.liveOn') }}</Pille>
+            </template>
+
+            <p class="einleitung">
                 <!-- Link nur, wenn der Strategien-Modus an ist — sonst führt er auf
                      eine Route, die die Wache im Layout sofort wieder abprallen lässt. -->
                 {{ t('settings.ki.strat.intro') }} <a v-if="modusStrategieAn" href="/agent/strategies">{{ t('settings.ki.strat.link') }}</a><span v-else>{{ t('settings.ki.strat.link') }}</span>. {{ t('settings.ki.strat.intro2') }}
             </p>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">{{ t('settings.ki.strat.kill') }}</div>
-                <div class="col-12 col-md-8">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" v-model="agentKillSwitch" />
-                    </div>
-                    <small class="text-muted">{{ t('settings.ki.strat.killHint') }}</small>
-                </div>
-            </div>
+            <Feld :label="t('settings.ki.strat.kill')">
+                <Schalter v-model="agentKillSwitch" :hilfe="t('settings.ki.strat.killHint')" />
+            </Feld>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">{{ t('settings.ki.strat.allowLive') }}</div>
-                <div class="col-12 col-md-8">
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" v-model="agentLiveEnabled" />
-                    </div>
-                    <small class="text-muted">
-                        {{ t('settings.ki.strat.allowLiveHint') }}
-                    </small>
-                </div>
-            </div>
+            <Feld :label="t('settings.ki.strat.allowLive')">
+                <Schalter v-model="agentLiveEnabled" :hilfe="t('settings.ki.strat.allowLiveHint')" />
+            </Feld>
 
-            <div v-if="agentLiveEnabled" class="alert alert-danger py-2 mt-2">
-                <i class="uil uil-exclamation-triangle me-1"></i>
-                {{ t('settings.ki.strat.liveWarn') }}
-            </div>
+            <Hinweis v-if="agentLiveEnabled" art="warn">{{ t('settings.ki.strat.liveWarn') }}</Hinweis>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">{{ t('settings.ki.strat.maxLev') }}</div>
-                <div class="col-12 col-md-8">
-                    <input type="number" min="1" max="125" class="form-control" style="max-width: 10rem;"
-                        v-model.number="agentMaxLeverage" />
-                    <small class="text-muted">
-                        {{ t('settings.ki.strat.maxLevHint') }}
-                    </small>
-                </div>
-            </div>
+            <Feld :label="t('settings.ki.strat.maxLev')" :hilfe="t('settings.ki.strat.maxLevHint')" fuer="kiStratHebel">
+                <input id="kiStratHebel" type="number" min="1" max="125" class="schmal"
+                    v-model.number="agentMaxLeverage" />
+            </Feld>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">{{ t('settings.ki.strat.minPaper') }}</div>
-                <div class="col-12 col-md-8">
-                    <input type="number" min="0" max="1000" class="form-control" style="max-width: 10rem;"
-                        v-model.number="agentMinPaperTrades" />
-                    <small class="text-muted">
-                        {{ t('settings.ki.strat.minPaperHint') }}
-                    </small>
-                </div>
-            </div>
+            <Feld :label="t('settings.ki.strat.minPaper')" :hilfe="t('settings.ki.strat.minPaperHint')" fuer="kiStratPaper">
+                <input id="kiStratPaper" type="number" min="0" max="1000" class="schmal"
+                    v-model.number="agentMinPaperTrades" />
+            </Feld>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">{{ t('settings.ki.strat.budget') }}</div>
-                <div class="col-12 col-md-8">
-                    <input type="number" min="0" step="0.1" class="form-control" style="max-width: 10rem;"
-                        v-model.number="agentLlmBudget" />
-                    <small class="text-muted">
-                        {{ t('settings.ki.strat.budgetHint') }}
-                    </small>
-                </div>
-            </div>
+            <Feld :label="t('settings.ki.strat.budget')" :hilfe="t('settings.ki.strat.budgetHint')" fuer="kiStratBudget">
+                <input id="kiStratBudget" type="number" min="0" step="0.1" class="schmal"
+                    v-model.number="agentLlmBudget" />
+            </Feld>
 
-            <div class="row mt-3">
-                <div class="col-12">
-                    <button class="btn btn-success" :disabled="agentSaving" @click="saveAgentSettings">
-                        {{ t('common.save') }}
-                    </button>
-                    <span v-if="agentResult" class="ms-3"
-                        :class="agentResult.success ? 'text-success' : 'text-danger'">
-                        {{ agentResult.message }}
-                    </span>
-                </div>
+            <div class="knoepfe">
+                <Knopf art="haupt" :laedt="agentSaving" @click="saveAgentSettings">
+                    {{ t('common.save') }}
+                </Knopf>
+                <span v-if="agentResult" :class="agentResult.success ? 'gut' : 'schlecht'">
+                    {{ agentResult.message }}
+                </span>
             </div>
-        </div>
+        </Abschnitt>
 
     </div>
 </template>
+
+<style scoped src="./ki-formular.css"></style>
+<style scoped>
+.abstand-oben { margin-top: var(--abstand-4); }
+</style>

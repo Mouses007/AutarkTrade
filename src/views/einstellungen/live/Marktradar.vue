@@ -8,6 +8,9 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import dayjs from 'dayjs'
 import InfoTipp from '@/components/InfoTipp.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
 import {
     radarRsiSymbols, boersenLinks, radarKalenderLaender, radarKalenderImpact, useRadarEinstellungen,
 } from '../gemeinsam/useRadarEinstellungen.js'
@@ -17,6 +20,13 @@ const { radarSpeichern } = useRadarEinstellungen()
 
 let radarExpanded = ref(false)
 let radarHolt = ref(false)
+
+const BOERSEN = [
+    { key: 'bitunix', label: 'Bitunix' },
+    { key: 'bitget', label: 'Bitget' },
+    { key: 'pionex', label: 'Pionex' },
+    { key: 'tradingview', label: 'TradingView' },
+]
 /* Stand des Kalenderabrufs. Der Abruf laeuft von selbst (Serverstart, danach
    alle zwei Stunden, gedrosselt auf hoechstens alle sechs) — hier steht
    deshalb, WANN er zuletzt lief, nicht ein Knopf, der so tut, als muesste man
@@ -171,170 +181,196 @@ onMounted(cqLaden)
 </script>
 
 <template>
-    <div>
-        <hr />
+    <Abschnitt titel="Marktradar · Kacheln" symbol="raster" v-model:offen="radarExpanded">
+        <p class="einleitung">Betrifft die Kacheln auf der Seite „Marktradar". Was sichtbar ist, wie gross und in welcher Reihenfolge, stellst du direkt dort ein — das bleibt je Gerät gespeichert.</p>
 
-        <!--=============== MARKTRADAR ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="radarExpanded = !radarExpanded">
-            <i class="uil me-2" :class="radarExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">Marktradar · Kacheln</p>
-        </div>
-        <div v-show="radarExpanded" class="mt-2 ms-3">
-            <p class="fw-lighter">Betrifft die Kacheln auf der Seite „Marktradar". Was sichtbar ist, wie gross und in welcher Reihenfolge, stellst du direkt dort ein — das bleibt je Gerät gespeichert.</p>
+        <Feld label="RSI-Symbole">
+            <template #label>
+                <p class="hilfe">
+                    Leer lassen: die Kachel nimmt die umsatzstärksten Märkte oder deine eigenen Trades.
+                    Eine Liste hier (z.B. <code>BTCUSDT, ETHUSDT</code>) sticht beides.
+                </p>
+            </template>
+            <input type="text" class="eingabe" v-model="radarRsiSymbols"
+                placeholder="BTCUSDT, ETHUSDT, SOLUSDT" @change="radarSpeichern('radarRsiSymbols')" />
+        </Feld>
 
-            <div class="row align-items-center mt-2">
-                <div class="col-12 col-md-4">
-                    RSI-Symbole
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        Leer lassen: die Kachel nimmt die umsatzstärksten Märkte oder deine eigenen Trades.
-                        Eine Liste hier (z.B. <code>BTCUSDT, ETHUSDT</code>) sticht beides.
-                    </small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <input type="text" class="form-control" v-model="radarRsiSymbols"
-                        placeholder="BTCUSDT, ETHUSDT, SOLUSDT" @change="radarSpeichern('radarRsiSymbols')" />
-                </div>
+        <Feld hilfe="Welche Handelsseiten neben einem Coin angezeigt werden — in Coin-Radar, Hype-Radar und den Marktradar-Kacheln RSI/Marktübersicht.">
+            <template #label><span class="beschriftung">Börsen-Verlinkung<InfoTipp schluessel="settings.info.boersenLinks" /></span></template>
+            <div class="haken-liste">
+                <label v-for="b in BOERSEN" :key="b.key" class="haken">
+                    <input type="checkbox" :value="b.key" v-model="boersenLinks"
+                        @change="radarSpeichern('boersenLinks')">
+                    <span>{{ b.label }}</span>
+                </label>
             </div>
+        </Feld>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">
-                    Börsen-Verlinkung<InfoTipp schluessel="settings.info.boersenLinks" />
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        Welche Handelsseiten neben einem Coin angezeigt werden — in Coin-Radar, Hype-Radar und den Marktradar-Kacheln RSI/Marktübersicht.
-                    </small>
-                </div>
-                <div class="col-12 col-md-8 d-flex flex-wrap gap-3">
-                    <label v-for="b in [
-                        { key: 'bitunix', label: 'Bitunix' },
-                        { key: 'bitget', label: 'Bitget' },
-                        { key: 'pionex', label: 'Pionex' },
-                        { key: 'tradingview', label: 'TradingView' },
-                    ]" :key="b.key" class="d-flex align-items-center gap-1 mb-0">
-                        <input type="checkbox" :value="b.key" v-model="boersenLinks"
-                            @change="radarSpeichern('boersenLinks')">
-                        <span>{{ b.label }}</span>
-                    </label>
-                </div>
-            </div>
+        <!-- Pi-Cycle- und Funding-Divergenz-Alarm stehen jetzt unter
+             Einstellungen → Benachrichtigungen, zusammen mit allen
+             übrigen Meldungen und der Wahl zwischen Browser und E-Mail. -->
 
-            <!-- Pi-Cycle- und Funding-Divergenz-Alarm stehen jetzt unter
-                 Einstellungen → Benachrichtigungen, zusammen mit allen
-                 übrigen Meldungen und der Wahl zwischen Browser und E-Mail. -->
+        <Feld label="Kalender · Länder">
+            <template #label>
+                <p class="hilfe">Währungskürzel des Wirtschaftskalenders, z.B. <code>USD, JPY, EUR</code>.</p>
+            </template>
+            <input type="text" class="eingabe" v-model="radarKalenderLaender"
+                placeholder="USD, JPY" @change="radarSpeichern('radarKalenderLaender')" />
+        </Feld>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">
-                    Kalender · Länder
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        Währungskürzel des Wirtschaftskalenders, z.B. <code>USD, JPY, EUR</code>.
-                    </small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <input type="text" class="form-control" v-model="radarKalenderLaender"
-                        placeholder="USD, JPY" @change="radarSpeichern('radarKalenderLaender')" />
-                </div>
-            </div>
+        <Feld label="Kalender · ab welcher Wirkung" hilfe='„Mittel" schliesst hohe Wirkung mit ein — es ist eine Untergrenze.'>
+            <select class="eingabe" v-model="radarKalenderImpact" @change="radarSpeichern('radarKalenderImpact')">
+                <option value="all">Alle Termine</option>
+                <option value="medium">Mittel und hoch</option>
+                <option value="high">Nur hohe Wirkung</option>
+            </select>
+        </Feld>
 
-            <div class="row align-items-center mt-3">
-                <div class="col-12 col-md-4">
-                    Kalender · ab welcher Wirkung
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        „Mittel" schliesst hohe Wirkung mit ein — es ist eine Untergrenze.
-                    </small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <select class="form-select" v-model="radarKalenderImpact" @change="radarSpeichern('radarKalenderImpact')">
-                        <option value="all">Alle Termine</option>
-                        <option value="medium">Mittel und hoch</option>
-                        <option value="high">Nur hohe Wirkung</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Kein „jetzt holen" als Hauptsache: der Kalender wird ohnehin
-                 regelmässig nachgeführt. Die Zeile sagt, ob das geklappt hat;
-                 der Knopf ist der Ausweg, wenn nicht. -->
-            <div class="mt-3 small text-muted">
+        <!-- Kein „jetzt holen" als Hauptsache: der Kalender wird ohnehin
+             regelmässig nachgeführt. Die Zeile sagt, ob das geklappt hat;
+             der Knopf ist der Ausweg, wenn nicht. -->
+        <div class="kalender-stand">
+            <div class="zeile">
                 <span v-if="kalenderStand">
                     Zuletzt geholt:
                     {{ kalenderStand.letzterAbruf ? dayjs(kalenderStand.letzterAbruf).format('DD.MM. HH:mm') : 'noch nie' }}
                     · {{ kalenderStand.gesamt }} Termine im Bestand (−3 bis +14 Tage)
                 </span>
                 <span v-else>Stand wird geladen …</span>
-                <button class="btn btn-outline-secondary btn-sm ms-2" :disabled="radarHolt" @click="kalenderHolen">
-                    <span v-if="radarHolt" class="spinner-border spinner-border-sm me-2"></span>
-                    Erneut holen
-                </button>
-                <div v-if="kalenderStand && kalenderStand.letzterFehler" class="mt-1" style="color:rgb(250,190,60);">
-                    Letzter Fehler: {{ kalenderStand.letzterFehler }}
-                </div>
-                <div v-if="kalenderMeldung" class="mt-1">{{ kalenderMeldung }}</div>
+                <Knopf klein symbol="aktualisieren" :laedt="radarHolt" @click="kalenderHolen">Erneut holen</Knopf>
             </div>
-
-            <!--=============== ETF-KACHEL (CRYPTOQUANT) ===============-->
-            <hr class="mt-4" />
-            <p class="fw-bold mb-1">ETF-Fluss · CryptoQuant-Schlüssel</p>
-            <p class="fw-lighter">
-                Für die Kachel „ETF-Fluss": wie viele Bitcoin die Spot-ETFs halten und wie sich das
-                täglich ändert. Den <strong>Gratis-Tarif</strong> („Basic") reicht dafür — die Fondsdaten
-                zählen bei CryptoQuant als Marktdaten und sind auf jedem Tarif offen. Schlüssel holen
-                unter <code>cryptoquant.com/settings/api</code>.
-            </p>
-            <p class="fw-lighter" style="font-size:0.82rem;">
-                Der Gratis-Tarif gibt nur <strong>30 Tage</strong> Rückblick her und erlaubt 10 Anfragen je
-                Minute. Geholt wird deshalb im Hintergrund, höchstens alle sechs Stunden, und alles
-                Geholte bleibt hier gespeichert — die Kurve wächst mit der Zeit über die 30 Tage hinaus.
-                Die Kachel selbst fragt nie bei CryptoQuant nach, sie liest nur den eigenen Bestand.
-            </p>
-
-            <div class="row align-items-center mt-2">
-                <div class="col-12 col-md-4">
-                    API-Schlüssel
-                    <small class="d-block text-muted" style="font-size:0.78rem;">
-                        Verschlüsselt gespeichert. Angezeigt wird nur, ob einer hinterlegt ist.
-                    </small>
-                </div>
-                <div class="col-12 col-md-8">
-                    <input type="password" class="form-control" v-model="cqKey"
-                        placeholder="CryptoQuant API Key" autocomplete="off" />
-                </div>
+            <div v-if="kalenderStand && kalenderStand.letzterFehler" class="warnung">
+                Letzter Fehler: {{ kalenderStand.letzterFehler }}
             </div>
-
-            <div class="mt-2">
-                <button class="btn btn-outline-primary btn-sm me-2" :disabled="cqLaeuft" @click="cqSpeichern">
-                    <span v-if="cqLaeuft" class="spinner-border spinner-border-sm me-2"></span>
-                    Speichern
-                </button>
-                <button class="btn btn-outline-secondary btn-sm me-2" :disabled="cqLaeuft" @click="cqPruefen">
-                    Schlüssel prüfen
-                </button>
-                <button class="btn btn-outline-secondary btn-sm" :disabled="cqLaeuft || !cqStatus?.schluesselGesetzt"
-                    @click="cqHolen">
-                    <span v-if="cqStatus?.laeuft" class="spinner-border spinner-border-sm me-2"></span>
-                    <template v-if="cqStatus?.fortschritt">
-                        {{ cqStatus.fortschritt.fertig }} von {{ cqStatus.fortschritt.gesamt }} Fonds
-                    </template>
-                    <template v-else>Jetzt nachführen</template>
-                </button>
-                <span v-if="cqMeldung" class="ms-2 small" :class="cqMeldung.ok ? 'text-success' : 'text-danger'">
-                    {{ cqMeldung.text }}
-                </span>
-            </div>
-
-            <p v-if="cqStatus" class="fw-lighter mt-2 mb-0" style="font-size:0.82rem;">
-                <template v-if="cqStatus.tage">
-                    {{ cqStatus.tage }} Tage eingelagert, letzter Stand
-                    {{ cqStatus.letzterTag ? dayjs(cqStatus.letzterTag).format('DD.MM.YYYY') : '—' }}.
-                </template>
-                <template v-else-if="cqStatus.schluesselGesetzt">
-                    Noch nichts eingelagert — der erste Lauf holt 30 Tage.
-                </template>
-                <template v-else>Kein Schlüssel hinterlegt, die Kachel bleibt leer.</template>
-                <span v-if="cqStatus.fehler" class="text-danger ms-1">
-                    Letzter Fehler ({{ cqStatus.fehler.fonds }}): {{ cqStatus.fehler.text }}
-                </span>
-            </p>
-
+            <div v-if="kalenderMeldung">{{ kalenderMeldung }}</div>
         </div>
 
-    </div>
+        <!--=============== ETF-KACHEL (CRYPTOQUANT) ===============-->
+        <h4 class="unterkopf">ETF-Fluss · CryptoQuant-Schlüssel</h4>
+        <p class="einleitung">
+            Für die Kachel „ETF-Fluss": wie viele Bitcoin die Spot-ETFs halten und wie sich das
+            täglich ändert. Den <strong>Gratis-Tarif</strong> („Basic") reicht dafür — die Fondsdaten
+            zählen bei CryptoQuant als Marktdaten und sind auf jedem Tarif offen. Schlüssel holen
+            unter <code>cryptoquant.com/settings/api</code>.
+        </p>
+        <p class="einleitung klein">
+            Der Gratis-Tarif gibt nur <strong>30 Tage</strong> Rückblick her und erlaubt 10 Anfragen je
+            Minute. Geholt wird deshalb im Hintergrund, höchstens alle sechs Stunden, und alles
+            Geholte bleibt hier gespeichert — die Kurve wächst mit der Zeit über die 30 Tage hinaus.
+            Die Kachel selbst fragt nie bei CryptoQuant nach, sie liest nur den eigenen Bestand.
+        </p>
+
+        <Feld label="API-Schlüssel" hilfe="Verschlüsselt gespeichert. Angezeigt wird nur, ob einer hinterlegt ist.">
+            <input type="password" class="eingabe" v-model="cqKey"
+                placeholder="CryptoQuant API Key" autocomplete="off" />
+        </Feld>
+
+        <div class="knopfzeile">
+            <Knopf art="haupt" klein :laedt="cqLaeuft" @click="cqSpeichern">Speichern</Knopf>
+            <Knopf klein :disabled="cqLaeuft" @click="cqPruefen">Schlüssel prüfen</Knopf>
+            <Knopf klein :laedt="!!cqStatus?.laeuft" :disabled="cqLaeuft || !cqStatus?.schluesselGesetzt"
+                @click="cqHolen">
+                <template v-if="cqStatus?.fortschritt">
+                    {{ cqStatus.fortschritt.fertig }} von {{ cqStatus.fortschritt.gesamt }} Fonds
+                </template>
+                <template v-else>Jetzt nachführen</template>
+            </Knopf>
+            <span v-if="cqMeldung" :class="['meldung', cqMeldung.ok ? 'gut' : 'schlecht']">
+                {{ cqMeldung.text }}
+            </span>
+        </div>
+
+        <p v-if="cqStatus" class="einleitung klein stand">
+            <template v-if="cqStatus.tage">
+                {{ cqStatus.tage }} Tage eingelagert, letzter Stand
+                {{ cqStatus.letzterTag ? dayjs(cqStatus.letzterTag).format('DD.MM.YYYY') : '—' }}.
+            </template>
+            <template v-else-if="cqStatus.schluesselGesetzt">
+                Noch nichts eingelagert — der erste Lauf holt 30 Tage.
+            </template>
+            <template v-else>Kein Schlüssel hinterlegt, die Kachel bleibt leer.</template>
+            <span v-if="cqStatus.fehler" class="schlecht">
+                Letzter Fehler ({{ cqStatus.fehler.fonds }}): {{ cqStatus.fehler.text }}
+            </span>
+        </p>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.einleitung {
+    color: var(--muted);
+    margin: 0 0 var(--abstand-3);
+}
+.einleitung.klein { font-size: 0.82rem; }
+.beschriftung { color: var(--text); }
+.hilfe {
+    margin: 0.15rem 0 0;
+    color: var(--muted);
+    font-size: 0.82rem;
+}
+.eingabe {
+    width: 100%;
+    min-width: 0;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    font: inherit;
+    font-size: 0.92rem;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.eingabe:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-flaeche);
+}
+.haken-liste {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2) var(--abstand-4);
+}
+.haken {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--abstand-1);
+    margin: 0;
+    cursor: pointer;
+}
+.haken input { accent-color: var(--accent); }
+.kalender-stand {
+    margin-top: var(--abstand-3);
+    color: var(--muted);
+    font-size: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: var(--abstand-1);
+}
+.kalender-stand .zeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+.warnung { color: var(--warn); }
+.unterkopf {
+    margin: var(--abstand-5) 0 var(--abstand-2);
+    padding-top: var(--abstand-4);
+    border-top: 1px solid var(--line);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+}
+.knopfzeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-2);
+}
+.meldung { font-size: 0.85rem; }
+.gut { color: var(--good); }
+.schlecht { color: var(--bad); }
+.stand { margin: var(--abstand-2) 0 0; }
+.stand .schlecht { margin-left: var(--abstand-1); }
+</style>

@@ -6,6 +6,9 @@ import axios from 'axios'
 import { selectedBroker } from '@/stores/filters.js'
 import { currentUser } from '@/stores/settings.js'
 import { dbUpdateSettings, dbFind } from '@/utils/db.js'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
+import Knopf from '@/components/basis/Knopf.vue'
 
 const { t } = useI18n()
 
@@ -96,34 +99,50 @@ ausEinstellungen()
 </script>
 
 <template>
-    <div>
-        <hr />
+    <Abschnitt :titel="t('settings.balance')" symbol="geldboerse" v-model:offen="balanceExpanded">
+        <p class="beschreibung" v-html="t('settings.balanceDescription', { broker: (selectedBroker || 'bitunix').charAt(0).toUpperCase() + (selectedBroker || 'bitunix').slice(1) })"></p>
 
-        <!--=============== KONTOSTAND ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="balanceExpanded = !balanceExpanded">
-            <i class="uil me-2" :class="balanceExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.balance') }}</p>
-        </div>
-        <div v-show="balanceExpanded" class="mt-2 ms-3 row align-items-center">
-            <p class="fw-lighter" v-html="t('settings.balanceDescription', { broker: (selectedBroker || 'bitunix').charAt(0).toUpperCase() + (selectedBroker || 'bitunix').slice(1) })"></p>
-            <div class="row mt-2">
-                <div class="col-12 col-md-4">{{ t('settings.startDeposit') }}</div>
-                <div class="col-12 col-md-8">
-                    <div class="input-group">
-                        <input type="number" class="form-control" v-model="startBalance" :placeholder="t('settings.startDepositPlaceholder')" step="0.01" />
-                        <button type="button" class="btn btn-outline-primary" @click="loadBalanceFromApi" :disabled="balanceLoading">
-                            <span v-if="balanceLoading" class="spinner-border spinner-border-sm" style="width: 0.7rem; height: 0.7rem;"></span>
-                            <span v-else><i class="uil uil-cloud-download me-1"></i>{{ t('settings.calculateFromApi') }}</span>
-                        </button>
-                    </div>
-                    <small v-if="apiBalanceValue !== null" class="text-success">{{ t('settings.apiBalance', { value: apiBalanceValue.toFixed(2) }) }}</small>
-                    <small v-else class="text-muted">{{ t('settings.manualOrApi') }}</small>
-                </div>
+        <Feld :label="t('settings.startDeposit')" fuer="kontostand-start">
+            <div class="reihe">
+                <input id="kontostand-start" type="number" class="eingabe" v-model="startBalance"
+                    :placeholder="t('settings.startDepositPlaceholder')" step="0.01" />
+                <Knopf symbol="download" :laedt="balanceLoading" @click="loadBalanceFromApi">{{ t('settings.calculateFromApi') }}</Knopf>
             </div>
-            <div class="mt-3 mb-3">
-                <button type="button" v-on:click="saveBalances" class="btn btn-success">{{ t('common.save') }}</button>
-            </div>
-        </div>
+            <p v-if="apiBalanceValue !== null" class="notiz gut">{{ t('settings.apiBalance', { value: apiBalanceValue.toFixed(2) }) }}</p>
+            <p v-else class="notiz">{{ t('settings.manualOrApi') }}</p>
+        </Feld>
 
-    </div>
+        <div class="aktionen">
+            <Knopf art="haupt" @click="saveBalances">{{ t('common.save') }}</Knopf>
+        </div>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.beschreibung { color: var(--muted); margin: 0 0 var(--abstand-2); }
+.reihe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    align-items: center;
+}
+.eingabe {
+    flex: 1 1 10rem;
+    min-width: 0;
+    padding: 0.55rem 0.75rem;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    font: inherit;
+    font-size: 0.92rem;
+}
+.eingabe:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-flaeche);
+}
+.notiz { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.82rem; }
+.notiz.gut { color: var(--good); }
+.aktionen { margin-top: var(--abstand-3); }
+</style>

@@ -7,6 +7,12 @@ import dayjs from 'dayjs'
 import { currentUser } from '@/stores/settings.js'
 import { useQuickApiImport } from '@/utils/quickImport.js'
 import { sendNotification } from '@/utils/notify.js'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
+import Eingabe from '@/components/basis/Eingabe.vue'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const { t } = useI18n()
 
@@ -253,187 +259,134 @@ onMounted(async () => {
 </script>
 
 <template>
-    <div>
-        <hr />
+    <Abschnitt :titel="t('settings.apiConnection')" symbol="gebaeude" v-model:offen="apiExpanded">
+        <p class="beschreibung">{{ t('settings.apiConnectionDescription') }}</p>
 
-        <!--=============== API ANBINDUNG ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="apiExpanded = !apiExpanded">
-            <i class="uil me-2" :class="apiExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.apiConnection') }}</p>
-        </div>
-        <div v-show="apiExpanded" class="mt-2 ms-3">
-            <p class="fw-lighter">{{ t('settings.apiConnectionDescription') }}</p>
+        <!-- Zugang abgelehnt: der Server merkt es beim Abrufen, die Meldung
+             gehört dorthin, wo der neue Schlüssel eingetragen wird. -->
+        <Hinweis v-for="z in boersenZugangKaputt" :key="'zugang_' + z.broker" art="warn"
+            :titel="t('settings.zugangAbgelehnt', { boerse: z.name })" class="zugang">
+            <span class="zugang-meldung">{{ z.meldung }}</span>
+            <span class="zugang-seit">{{ t('settings.zugangSeit', { zeit: z.seitText }) }}</span>
+        </Hinweis>
 
-            <!-- Zugang abgelehnt: der Server merkt es beim Abrufen, die Meldung
-                 gehört dorthin, wo der neue Schlüssel eingetragen wird. -->
-            <div v-for="z in boersenZugangKaputt" :key="'zugang_' + z.broker"
-                 class="alert alert-warning py-2 px-3">
-                <i class="uil uil-key-skeleton me-1"></i>
-                <strong>{{ t('settings.zugangAbgelehnt', { boerse: z.name }) }}</strong>
-                <div class="small mt-1 opacity-75">{{ z.meldung }}</div>
-                <div class="small">{{ t('settings.zugangSeit', { zeit: z.seitText }) }}</div>
+        <!-- BITUNIX -->
+        <Abschnitt titel="Bitunix" unter v-model:offen="bitunixSubExpanded">
+            <template #kopf>
+                <Pille v-if="bitunixApiKey" ton="gut">{{ t('common.configured') }}</Pille>
+            </template>
+            <div class="felder">
+                <Eingabe v-model="bitunixApiKey" :label="t('settings.apiKeyLabel')" :platzhalter="t('settings.apiKeyPlaceholder')" />
+                <Eingabe v-model="bitunixSecretKey" art="password" :label="t('settings.secretKeyLabel')" :platzhalter="t('settings.secretKeyPlaceholder')" />
+                <Eingabe v-model="bitunixImportStartDate" art="date" :label="t('settings.importFromDate')" :hilfe="t('settings.importFromDateHint')" />
             </div>
-
-            <!-- BITUNIX -->
-            <div class="mb-3" style="border: var(--border-subtle); border-radius: var(--border-radius); overflow: hidden;">
-                <div class="d-flex align-items-center pointerClass px-3 py-2" @click="bitunixSubExpanded = !bitunixSubExpanded"
-                    style="background-color: var(--black-bg-5);">
-                    <i class="uil me-2" :class="bitunixSubExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-                    <strong>Bitunix</strong>
-                    <span v-if="bitunixApiKey" class="ms-2 badge bg-success" style="font-size: 0.65rem;">{{ t('common.configured') }}</span>
-                </div>
-                <div v-show="bitunixSubExpanded" class="row align-items-center px-3 py-3">
-                    <div class="row mt-1">
-                        <div class="col-12 col-md-4">{{ t('settings.apiKeyLabel') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="text" class="form-control" v-model="bitunixApiKey" :placeholder="t('settings.apiKeyPlaceholder')" />
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-12 col-md-4">{{ t('settings.secretKeyLabel') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="password" class="form-control" v-model="bitunixSecretKey" :placeholder="t('settings.secretKeyPlaceholder')" />
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-12 col-md-4">{{ t('settings.importFromDate') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="date" class="form-control" v-model="bitunixImportStartDate" />
-                            <small class="text-muted">{{ t('settings.importFromDateHint') }}</small>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button type="button" v-on:click="saveBitunixConfig" class="btn btn-success me-2">{{ t('common.save') }}</button>
-                        <button type="button" v-on:click="testBitunixConnection" class="btn btn-outline-primary" :disabled="bitunixTestLoading">
-                            <span v-if="bitunixTestLoading">{{ t('common.testing') }}</span>
-                            <span v-else>{{ t('common.testConnection') }}</span>
-                        </button>
-                        <span v-if="bitunixTestResult === 'success'" class="ms-2 text-success">{{ t('common.connected') }}</span>
-                        <span v-if="bitunixTestResult === 'error'" class="ms-2 text-danger">{{ t('common.connectionFailed') }}</span>
-                    </div>
-                </div>
+            <div class="aktionen">
+                <Knopf art="haupt" @click="saveBitunixConfig">{{ t('common.save') }}</Knopf>
+                <Knopf :laedt="bitunixTestLoading" @click="testBitunixConnection">
+                    {{ bitunixTestLoading ? t('common.testing') : t('common.testConnection') }}
+                </Knopf>
+                <span v-if="bitunixTestResult === 'success'" class="ergebnis gut"><Symbol name="haken" :groesse="16" /> {{ t('common.connected') }}</span>
+                <span v-if="bitunixTestResult === 'error'" class="ergebnis schlecht"><Symbol name="fehler" :groesse="16" /> {{ t('common.connectionFailed') }}</span>
             </div>
+        </Abschnitt>
 
-            <!-- BITGET -->
-            <div class="mb-3" style="border: var(--border-subtle); border-radius: var(--border-radius); overflow: hidden;">
-                <div class="d-flex align-items-center pointerClass px-3 py-2" @click="bitgetSubExpanded = !bitgetSubExpanded"
-                    style="background-color: var(--black-bg-5);">
-                    <i class="uil me-2" :class="bitgetSubExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-                    <strong>Bitget</strong>
-                    <span v-if="bitgetApiKey" class="ms-2 badge bg-success" style="font-size: 0.65rem;">{{ t('common.configured') }}</span>
-                </div>
-                <div v-show="bitgetSubExpanded" class="row align-items-center px-3 py-3">
-                    <div class="row mt-1">
-                        <div class="col-12 col-md-4">{{ t('settings.apiKeyLabel') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="text" class="form-control" v-model="bitgetApiKey" :placeholder="t('settings.apiKeyPlaceholder')" />
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-12 col-md-4">{{ t('settings.secretKeyLabel') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="password" class="form-control" v-model="bitgetSecretKey" :placeholder="t('settings.secretKeyPlaceholder')" />
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-12 col-md-4">{{ t('settings.passphrase') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="password" class="form-control" v-model="bitgetPassphrase" :placeholder="t('settings.passphrasePlaceholder')" />
-                            <small class="text-muted">{{ t('settings.passphraseHint') }}</small>
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-12 col-md-4">{{ t('settings.importFromDate') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="date" class="form-control" v-model="bitgetImportStartDate" />
-                            <small class="text-muted">{{ t('settings.importFromDateHint') }}</small>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button type="button" v-on:click="saveBitgetConfig" class="btn btn-success me-2" :disabled="bitgetImporting">
-                            <span v-if="bitgetImporting" class="spinner-border spinner-border-sm me-1" style="width: 0.7rem; height: 0.7rem;"></span>
-                            {{ bitgetImporting ? t('common.importing') : t('common.save') }}
-                        </button>
-                        <button type="button" v-on:click="testBitgetConnection" class="btn btn-outline-primary" :disabled="bitgetTestLoading">
-                            <span v-if="bitgetTestLoading">{{ t('common.testing') }}</span>
-                            <span v-else>{{ t('common.testConnection') }}</span>
-                        </button>
-                        <span v-if="bitgetTestResult === 'success'" class="ms-2 text-success"><i class="uil uil-check-circle"></i> {{ t('common.connected') }}</span>
-                        <span v-if="bitgetTestResult === 'error'" class="ms-2 text-danger"><i class="uil uil-exclamation-triangle"></i> {{ t('common.failed') }}</span>
-                    </div>
-                    <div v-if="bitgetTestResult === 'error' && bitgetTestError" class="mt-2">
-                        <div class="p-2" style="background: rgba(255,0,0,0.1); border-radius: var(--border-radius); font-size: 0.85rem;">
-                            <strong>{{ t('common.error') }}:</strong> {{ bitgetTestError }}
-                            <div v-if="bitgetTestError.includes('40012')" class="mt-2 text-muted" style="font-size: 0.8rem;">
-                                <strong>{{ t('settings.possibleCausesLabel') }}</strong>
-                                <ul class="mb-0 mt-1">
-                                    <li>{{ t('settings.bitgetCauseWrongKeys') }}</li>
-                                    <li>{{ t('settings.bitgetCauseIpWhitelist') }}</li>
-                                    <li>{{ t('settings.bitgetCauseKeyType') }}</li>
-                                    <li>{{ t('settings.bitgetCausePermissions') }}</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+        <!-- BITGET -->
+        <Abschnitt titel="Bitget" unter v-model:offen="bitgetSubExpanded">
+            <template #kopf>
+                <Pille v-if="bitgetApiKey" ton="gut">{{ t('common.configured') }}</Pille>
+            </template>
+            <div class="felder">
+                <Eingabe v-model="bitgetApiKey" :label="t('settings.apiKeyLabel')" :platzhalter="t('settings.apiKeyPlaceholder')" />
+                <Eingabe v-model="bitgetSecretKey" art="password" :label="t('settings.secretKeyLabel')" :platzhalter="t('settings.secretKeyPlaceholder')" />
+                <Eingabe v-model="bitgetPassphrase" art="password" :label="t('settings.passphrase')" :platzhalter="t('settings.passphrasePlaceholder')" :hilfe="t('settings.passphraseHint')" />
+                <Eingabe v-model="bitgetImportStartDate" art="date" :label="t('settings.importFromDate')" :hilfe="t('settings.importFromDateHint')" />
             </div>
-
-            <!-- PIONEX -->
-            <div class="mb-3" style="border: var(--border-subtle); border-radius: var(--border-radius); overflow: hidden;">
-                <div class="d-flex align-items-center pointerClass px-3 py-2" @click="pionexSubExpanded = !pionexSubExpanded"
-                    style="background-color: var(--black-bg-5);">
-                    <i class="uil me-2" :class="pionexSubExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-                    <strong>Pionex</strong>
-                    <span v-if="pionexApiKey" class="ms-2 badge bg-success" style="font-size: 0.65rem;">{{ t('common.configured') }}</span>
-                </div>
-                <div v-show="pionexSubExpanded" class="row align-items-center px-3 py-3">
-                    <div class="row mt-1">
-                        <div class="col-12 col-md-4">{{ t('settings.apiKeyLabel') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="text" class="form-control" v-model="pionexApiKey" :placeholder="t('settings.apiKeyPlaceholder')" />
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-12 col-md-4">{{ t('settings.secretKeyLabel') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="password" class="form-control" v-model="pionexSecretKey" :placeholder="t('settings.secretKeyPlaceholder')" />
-                        </div>
-                    </div>
-                    <div class="row mt-2">
-                        <div class="col-12 col-md-4">{{ t('settings.importFromDate') }}</div>
-                        <div class="col-12 col-md-8">
-                            <input type="date" class="form-control" v-model="pionexImportStartDate" />
-                            <small class="text-muted">{{ t('settings.importFromDateHint') }}</small>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        <button type="button" v-on:click="savePionexConfig" class="btn btn-success me-2" :disabled="pionexImporting">
-                            <span v-if="pionexImporting" class="spinner-border spinner-border-sm me-1" style="width: 0.7rem; height: 0.7rem;"></span>
-                            {{ pionexImporting ? t('common.importing') : t('common.save') }}
-                        </button>
-                        <button type="button" v-on:click="testPionexConnection" class="btn btn-outline-primary" :disabled="pionexTestLoading">
-                            <span v-if="pionexTestLoading">{{ t('common.testing') }}</span>
-                            <span v-else>{{ t('common.testConnection') }}</span>
-                        </button>
-                        <span v-if="pionexTestResult === 'success'" class="ms-2 text-success"><i class="uil uil-check-circle"></i> {{ t('common.connected') }}</span>
-                        <span v-if="pionexTestResult === 'error'" class="ms-2 text-danger"><i class="uil uil-exclamation-triangle"></i> {{ t('common.failed') }}</span>
-                    </div>
-                    <div v-if="pionexTestResult === 'error' && pionexTestError" class="mt-2">
-                        <div class="p-2" style="background: rgba(255,0,0,0.1); border-radius: var(--border-radius); font-size: 0.85rem;">
-                            <strong>{{ t('common.error') }}:</strong> {{ pionexTestError }}
-                            <div class="mt-2 text-muted" style="font-size: 0.8rem;">
-                                <strong>{{ t('settings.possibleCausesLabel') }}</strong>
-                                <ul class="mb-0 mt-1">
-                                    <li>{{ t('settings.pionexCauseWrongKeys') }}</li>
-                                    <li>{{ t('settings.pionexCauseIpWhitelist') }}</li>
-                                    <li>{{ t('settings.pionexCausePermissions') }}</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div class="aktionen">
+                <Knopf art="haupt" :laedt="bitgetImporting" @click="saveBitgetConfig">
+                    {{ bitgetImporting ? t('common.importing') : t('common.save') }}
+                </Knopf>
+                <Knopf :laedt="bitgetTestLoading" @click="testBitgetConnection">
+                    {{ bitgetTestLoading ? t('common.testing') : t('common.testConnection') }}
+                </Knopf>
+                <span v-if="bitgetTestResult === 'success'" class="ergebnis gut"><Symbol name="haken" :groesse="16" /> {{ t('common.connected') }}</span>
+                <span v-if="bitgetTestResult === 'error'" class="ergebnis schlecht"><Symbol name="fehler" :groesse="16" /> {{ t('common.failed') }}</span>
             </div>
-        </div>
+            <Hinweis v-if="bitgetTestResult === 'error' && bitgetTestError" art="fehler" :titel="t('common.error')" class="fehlerbox">
+                <span class="fehlertext">{{ bitgetTestError }}</span>
+                <div v-if="bitgetTestError.includes('40012')" class="ursachen">
+                    <strong>{{ t('settings.possibleCausesLabel') }}</strong>
+                    <ul>
+                        <li>{{ t('settings.bitgetCauseWrongKeys') }}</li>
+                        <li>{{ t('settings.bitgetCauseIpWhitelist') }}</li>
+                        <li>{{ t('settings.bitgetCauseKeyType') }}</li>
+                        <li>{{ t('settings.bitgetCausePermissions') }}</li>
+                    </ul>
+                </div>
+            </Hinweis>
+        </Abschnitt>
 
-    </div>
+        <!-- PIONEX -->
+        <Abschnitt titel="Pionex" unter v-model:offen="pionexSubExpanded">
+            <template #kopf>
+                <Pille v-if="pionexApiKey" ton="gut">{{ t('common.configured') }}</Pille>
+            </template>
+            <div class="felder">
+                <Eingabe v-model="pionexApiKey" :label="t('settings.apiKeyLabel')" :platzhalter="t('settings.apiKeyPlaceholder')" />
+                <Eingabe v-model="pionexSecretKey" art="password" :label="t('settings.secretKeyLabel')" :platzhalter="t('settings.secretKeyPlaceholder')" />
+                <Eingabe v-model="pionexImportStartDate" art="date" :label="t('settings.importFromDate')" :hilfe="t('settings.importFromDateHint')" />
+            </div>
+            <div class="aktionen">
+                <Knopf art="haupt" :laedt="pionexImporting" @click="savePionexConfig">
+                    {{ pionexImporting ? t('common.importing') : t('common.save') }}
+                </Knopf>
+                <Knopf :laedt="pionexTestLoading" @click="testPionexConnection">
+                    {{ pionexTestLoading ? t('common.testing') : t('common.testConnection') }}
+                </Knopf>
+                <span v-if="pionexTestResult === 'success'" class="ergebnis gut"><Symbol name="haken" :groesse="16" /> {{ t('common.connected') }}</span>
+                <span v-if="pionexTestResult === 'error'" class="ergebnis schlecht"><Symbol name="fehler" :groesse="16" /> {{ t('common.failed') }}</span>
+            </div>
+            <Hinweis v-if="pionexTestResult === 'error' && pionexTestError" art="fehler" :titel="t('common.error')" class="fehlerbox">
+                <span class="fehlertext">{{ pionexTestError }}</span>
+                <div class="ursachen">
+                    <strong>{{ t('settings.possibleCausesLabel') }}</strong>
+                    <ul>
+                        <li>{{ t('settings.pionexCauseWrongKeys') }}</li>
+                        <li>{{ t('settings.pionexCauseIpWhitelist') }}</li>
+                        <li>{{ t('settings.pionexCausePermissions') }}</li>
+                    </ul>
+                </div>
+            </Hinweis>
+        </Abschnitt>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.beschreibung { color: var(--muted); margin: 0 0 var(--abstand-3); }
+.zugang { margin-bottom: var(--abstand-3); }
+.zugang-meldung, .zugang-seit { display: block; font-size: 0.85rem; }
+.zugang-meldung { color: var(--muted); margin-top: 0.2rem; overflow-wrap: anywhere; }
+.felder {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+    gap: var(--abstand-3);
+}
+.aktionen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-3);
+}
+.ergebnis {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.88rem;
+}
+.ergebnis.gut { color: var(--good); }
+.ergebnis.schlecht { color: var(--bad); }
+.fehlerbox { margin-top: var(--abstand-3); font-size: 0.85rem; }
+.fehlertext { overflow-wrap: anywhere; }
+.ursachen { margin-top: var(--abstand-2); color: var(--muted); font-size: 0.8rem; }
+.ursachen ul { margin: 0.25rem 0 0; padding-left: 1.1rem; }
+</style>

@@ -1,14 +1,34 @@
 <script setup>
 /** Allgemein → Datenbank: SQLite/PostgreSQL, Neustart, Export und Import. */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import InfoTipp from '@/components/InfoTipp.vue'
+import { Knopf, Pille, Eingabe, Tabelle, Symbol } from '@/components/basis/index.js'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
 
 const { t } = useI18n()
 
 let dbExpanded = ref(false)
 let pgProvidersExpanded = ref(false)
+
+const DB_TYPEN = computed(() => [
+    { wert: 'sqlite', text: t('settings.sqliteLocal') },
+    { wert: 'postgresql', text: t('settings.postgresRemote') },
+])
+
+/* Anbieter mit kostenlosem PostgreSQL — nur zur Orientierung. */
+const pgSpalten = computed(() => [
+    { schluessel: 'name', titel: t('settings.pgProvider') },
+    { schluessel: 'frei', titel: t('settings.freeTierCol') },
+    { schluessel: 'merkmal', titel: t('settings.pgFeature') },
+])
+const pgAnbieter = computed(() => [
+    { name: 'Neon', url: 'https://neon.tech', frei: '512 MB', merkmal: 'Branching, Autoscaling' },
+    { name: 'Supabase', url: 'https://supabase.com', frei: '500 MB', merkmal: 'Auth, API, Realtime' },
+    { name: 'Aiven', url: 'https://aiven.io', frei: '1 GB', merkmal: t('settings.pgAivenFeature') },
+])
 
 /* DATENBANK-KONFIGURATION */
 let dbType = ref('sqlite')
@@ -89,7 +109,7 @@ async function restartServer() {
         // 403 = nicht von localhost: Neustart muss lokal auf dem Server erfolgen.
         if (e.response?.status === 403) {
             dbRestartLoading.value = false
-            dbSaveResult.value = { ok: false, message: 'Neustart nur direkt auf dem Server (localhost) möglich.' }
+            dbSaveResult.value = { ok: false, message: t('settings.neustartNurLokal') }
             return
         }
     }
@@ -163,151 +183,130 @@ onMounted(loadDbConfig)
 </script>
 
 <template>
-    <div>
-        <hr />
-
-        <!--=============== DATENBANK ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="dbExpanded = !dbExpanded">
-            <i class="uil me-2" :class="dbExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.database') }}</p>
-            <span class="badge ms-2" :class="dbType === 'postgresql' ? 'bg-primary' : 'bg-secondary'">
+    <!--=============== DATENBANK ===============-->
+    <Abschnitt v-model:offen="dbExpanded" :titel="t('settings.database')" symbol="ebenen">
+        <template #kopf>
+            <Pille :ton="dbType === 'postgresql' ? 'akzent' : 'neutral'">
                 {{ dbType === 'postgresql' ? 'PostgreSQL' : 'SQLite' }}
+            </Pille>
+        </template>
+
+        <p class="hinweis">{{ t('settings.dbDescription') }}</p>
+
+        <Feld :label="t('settings.dbType')">
+            <Eingabe v-model="dbType" art="auswahl" :optionen="DB_TYPEN" />
+        </Feld>
+
+        <!-- PostgreSQL Provider-Info -->
+        <Abschnitt v-if="dbType === 'postgresql'" v-model:offen="pgProvidersExpanded" unter
+            :titel="t('settings.pgProviderTitle')" symbol="info">
+            <p class="hinweis">{{ t('settings.pgProviderDesc') }}</p>
+            <Tabelle :spalten="pgSpalten" :zeilen="pgAnbieter" schluessel-feld="name" dicht>
+                <template #zelle-name="{ zeile }">
+                    <a :href="zeile.url" target="_blank" rel="noopener" class="anbieter">
+                        {{ zeile.name }} <Symbol name="extern" :groesse="12" />
+                    </a>
+                </template>
+            </Tabelle>
+        </Abschnitt>
+
+        <!-- PostgreSQL-Felder -->
+        <template v-if="dbType === 'postgresql'">
+            <Feld :label="t('settings.hostLabel')">
+                <Eingabe v-model="dbHost" :platzhalter="t('settings.hostPlaceholder')" />
+            </Feld>
+            <Feld>
+                <template #label>
+                    <span class="label">{{ t('settings.portLabel') }}<InfoTipp schluessel="settings.info.dbPort" /></span>
+                </template>
+                <Eingabe v-model="dbPort" art="number" platzhalter="5432" />
+            </Feld>
+            <Feld :label="t('settings.user')">
+                <Eingabe v-model="dbUser" platzhalter="tradejournal" />
+            </Feld>
+            <Feld :label="t('settings.password')">
+                <Eingabe v-model="dbPassword" art="password"
+                    :platzhalter="dbHasPassword ? t('settings.passwordSaved') : t('settings.password')" />
+            </Feld>
+            <Feld :label="t('settings.databaseName')">
+                <Eingabe v-model="dbDatabase" platzhalter="tradejournal" />
+            </Feld>
+        </template>
+
+        <!-- Buttons -->
+        <div class="knoepfe">
+            <Knopf art="haupt" @click="saveDbConfig">{{ t('common.save') }}</Knopf>
+            <Knopf v-if="dbType === 'postgresql'" :laedt="dbTestLoading" @click="testDbConnection">
+                {{ dbTestLoading ? t('common.testing') : t('common.testConnection') }}
+            </Knopf>
+            <span v-if="dbTestResult" class="meldung" :class="dbTestResult.ok ? 'gut' : 'schlecht'">
+                {{ dbTestResult.message }}
+            </span>
+            <span v-if="dbSaveResult" class="meldung" :class="dbSaveResult.ok ? 'gut' : 'schlecht'">
+                {{ dbSaveResult.message }}
             </span>
         </div>
-        <div v-show="dbExpanded" class="mt-2 ms-3">
-            <p class="fw-lighter">{{ t('settings.dbDescription') }}</p>
 
-            <!-- DB-Typ -->
-            <div class="row mt-2">
-                <div class="col-12 col-md-4">{{ t('settings.dbType') }}</div>
-                <div class="col-12 col-md-8">
-                    <select class="form-select" v-model="dbType">
-                        <option value="sqlite">{{ t('settings.sqliteLocal') }}</option>
-                        <option value="postgresql">{{ t('settings.postgresRemote') }}</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- PostgreSQL Provider-Info -->
-            <div v-if="dbType === 'postgresql'" class="mt-3 p-3" style="background: var(--black-bg-2); border-radius: var(--border-radius); border: 1px solid var(--white-10);">
-                <div class="d-flex align-items-center pointerClass" @click="pgProvidersExpanded = !pgProvidersExpanded">
-                    <i class="uil me-1" :class="pgProvidersExpanded ? 'uil-angle-down' : 'uil-angle-right'" style="font-size: 1.1rem;"></i>
-                    <span class="fw-bold small"><i class="uil uil-info-circle me-1"></i>{{ t('settings.pgProviderTitle') }}</span>
-                </div>
-                <div v-show="pgProvidersExpanded" class="mt-2">
-                    <p class="fw-lighter small mb-2">{{ t('settings.pgProviderDesc') }}</p>
-                    <table class="table table-sm table-borderless mb-0" style="font-size: 0.82rem;">
-                        <thead>
-                            <tr style="color: var(--white-50);">
-                                <th>{{ t('settings.pgProvider') }}</th>
-                                <th>{{ t('settings.freeTierCol') }}</th>
-                                <th>{{ t('settings.pgFeature') }}</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                                <td><a href="https://neon.tech" target="_blank" class="text-decoration-none">Neon <i class="uil uil-external-link-alt" style="font-size: 0.75rem;"></i></a></td>
-                                <td>512 MB</td>
-                                <td>Branching, Autoscaling</td>
-                            </tr>
-                            <tr>
-                                <td><a href="https://supabase.com" target="_blank" class="text-decoration-none">Supabase <i class="uil uil-external-link-alt" style="font-size: 0.75rem;"></i></a></td>
-                                <td>500 MB</td>
-                                <td>Auth, API, Realtime</td>
-                            </tr>
-                            <tr>
-                                <td><a href="https://aiven.io" target="_blank" class="text-decoration-none">Aiven <i class="uil uil-external-link-alt" style="font-size: 0.75rem;"></i></a></td>
-                                <td>1 GB</td>
-                                <td>{{ t('settings.pgAivenFeature') }}</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- PostgreSQL-Felder -->
-            <template v-if="dbType === 'postgresql'">
-                <div class="row mt-2">
-                    <div class="col-12 col-md-4">{{ t('settings.hostLabel') }}</div>
-                    <div class="col-12 col-md-8">
-                        <input type="text" class="form-control" v-model="dbHost" :placeholder="t('settings.hostPlaceholder')" />
-                    </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12 col-md-4">{{ t('settings.portLabel') }}<InfoTipp schluessel="settings.info.dbPort" /></div>
-                    <div class="col-12 col-md-8">
-                        <input type="number" class="form-control" v-model="dbPort" placeholder="5432" />
-                    </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12 col-md-4">{{ t('settings.user') }}</div>
-                    <div class="col-12 col-md-8">
-                        <input type="text" class="form-control" v-model="dbUser" placeholder="tradejournal" />
-                    </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12 col-md-4">{{ t('settings.password') }}</div>
-                    <div class="col-12 col-md-8">
-                        <input type="password" class="form-control" v-model="dbPassword" :placeholder="dbHasPassword ? t('settings.passwordSaved') : t('settings.password')" />
-                    </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12 col-md-4">{{ t('settings.databaseName') }}</div>
-                    <div class="col-12 col-md-8">
-                        <input type="text" class="form-control" v-model="dbDatabase" placeholder="tradejournal" />
-                    </div>
-                </div>
-            </template>
-
-            <!-- Buttons -->
-            <div class="mt-3 mb-3">
-                <button type="button" @click="saveDbConfig" class="btn btn-success me-2">{{ t('common.save') }}</button>
-                <button v-if="dbType === 'postgresql'" type="button" @click="testDbConnection" class="btn btn-outline-primary" :disabled="dbTestLoading">
-                    <span v-if="dbTestLoading">
-                        <span class="spinner-border spinner-border-sm me-1"></span>{{ t('common.testing') }}
-                    </span>
-                    <span v-else>{{ t('common.testConnection') }}</span>
-                </button>
-                <span v-if="dbTestResult" class="ms-2" :class="dbTestResult.ok ? 'text-success' : 'text-danger'">
-                    {{ dbTestResult.message }}
-                </span>
-                <span v-if="dbSaveResult" class="ms-2" :class="dbSaveResult.ok ? 'text-success' : 'text-danger'">
-                    {{ dbSaveResult.message }}
-                </span>
-            </div>
-
-            <div v-if="dbSaveResult?.ok" class="mt-2">
-                <button type="button" @click="restartServer" class="btn btn-warning btn-sm" :disabled="dbRestartLoading">
-                    <span v-if="dbRestartLoading">
-                        <span class="spinner-border spinner-border-sm me-1"></span>{{ t('settings.serverRestarting') }}
-                    </span>
-                    <span v-else><i class="uil uil-redo me-1"></i>{{ t('settings.restartServerBtn') }}</span>
-                </button>
-            </div>
-
-            <!-- Export / Import -->
-            <div class="mt-3 pt-3" style="border-top: 1px solid var(--white-10);">
-                <p class="fw-bold mb-2">{{ t('settings.backup') }}</p>
-                <p class="fw-lighter small">{{ t('settings.backupDescription') }}</p>
-                <div class="d-flex align-items-center gap-2">
-                    <button type="button" @click="exportDb" class="btn btn-outline-primary btn-sm" :disabled="dbExportLoading">
-                        <span v-if="dbExportLoading">
-                            <span class="spinner-border spinner-border-sm me-1"></span>{{ t('settings.exporting') }}
-                        </span>
-                        <span v-else><i class="uil uil-export me-1"></i>{{ t('settings.export') }}</span>
-                    </button>
-                    <button type="button" @click="importDb" class="btn btn-outline-warning btn-sm" :disabled="dbImportLoading">
-                        <span v-if="dbImportLoading">
-                            <span class="spinner-border spinner-border-sm me-1"></span>{{ t('settings.importingData') }}
-                        </span>
-                        <span v-else><i class="uil uil-import me-1"></i>{{ t('settings.import') }}</span>
-                    </button>
-                </div>
-                <span v-if="dbMigrationResult" class="small mt-1 d-block" :class="dbMigrationResult.ok ? 'text-success' : 'text-danger'">
-                    {{ dbMigrationResult.message }}
-                </span>
-            </div>
+        <div v-if="dbSaveResult?.ok" class="knoepfe">
+            <Knopf klein symbol="aktualisieren" :laedt="dbRestartLoading" @click="restartServer">
+                {{ dbRestartLoading ? t('settings.serverRestarting') : t('settings.restartServerBtn') }}
+            </Knopf>
         </div>
 
-    </div>
+        <!-- Export / Import -->
+        <div class="sicherung">
+            <h3 class="zwischentitel">{{ t('settings.backup') }}</h3>
+            <p class="hinweis">{{ t('settings.backupDescription') }}</p>
+            <div class="knoepfe">
+                <Knopf klein symbol="download" :laedt="dbExportLoading" @click="exportDb">
+                    {{ dbExportLoading ? t('settings.exporting') : t('settings.export') }}
+                </Knopf>
+                <Knopf klein symbol="eingang" :laedt="dbImportLoading" @click="importDb">
+                    {{ dbImportLoading ? t('settings.importingData') : t('settings.import') }}
+                </Knopf>
+            </div>
+            <p v-if="dbMigrationResult" class="meldung" :class="dbMigrationResult.ok ? 'gut' : 'schlecht'">
+                {{ dbMigrationResult.message }}
+            </p>
+        </div>
+    </Abschnitt>
 </template>
+
+<style scoped>
+.hinweis {
+    margin: 0 0 var(--abstand-2);
+    color: var(--muted);
+    font-size: 0.88rem;
+}
+.label { color: var(--text); }
+.anbieter {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    text-decoration: none;
+}
+.knoepfe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-3);
+}
+.meldung {
+    margin: var(--abstand-2) 0 0;
+    font-size: 0.85rem;
+}
+.knoepfe .meldung { margin: 0; }
+.meldung.gut { color: var(--good); }
+.meldung.schlecht { color: var(--bad); }
+.sicherung {
+    margin-top: var(--abstand-4);
+    padding-top: var(--abstand-3);
+    border-top: 1px solid var(--line);
+}
+.zwischentitel {
+    margin: 0 0 0.2rem;
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+</style>

@@ -3,6 +3,10 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import InfoTipp from '@/components/InfoTipp.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
+import Feld from '../gemeinsam/Feld.vue'
 import ModelManager from '@/components/ModelManager.vue'
 import { useVorlagenKategorieLabel } from '@/utils/formatters.js'
 import { useShareCard } from '../gemeinsam/useShareCard.js'
@@ -23,144 +27,115 @@ const {
 
 <template>
     <div>
-        <hr />
-
         <!--=============== SHARE CARDS (FLUX.2 + Gemini) ===============-->
-        <div class="d-flex align-items-center pointerClass" @click="fluxExpanded = !fluxExpanded">
-            <i class="uil me-2" :class="fluxExpanded ? 'uil-angle-down' : 'uil-angle-right'"></i>
-            <p class="fs-5 fw-bold mb-0">{{ t('settings.shareCardsTitle') }}</p>
-        </div>
-        <div v-show="fluxExpanded" class="mt-2 ms-3">
-            <p class="fw-lighter">{{ t('settings.shareCardsDescription') }}</p>
+        <Abschnitt :titel="t('settings.shareCardsTitle')" symbol="bild" v-model:offen="fluxExpanded">
+            <p class="einleitung">{{ t('settings.shareCardsDescription') }}</p>
 
             <!-- Provider Selection -->
-            <div class="row mt-2">
-                <div class="col-12 col-md-4">{{ t('settings.imageProviderLabel') }}</div>
-                <div class="col-12 col-md-8">
-                    <div class="d-flex gap-4">
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" id="provFlux" value="flux" v-model="shareCardProvider" />
-                            <label class="form-check-label" for="provFlux">FLUX.2 <small class="text-muted">(Black Forest Labs)</small></label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" id="provGemini" value="gemini" v-model="shareCardProvider" />
-                            <label class="form-check-label" for="provGemini">Google Gemini <small class="text-muted">(Nano Banana)</small></label>
-                        </div>
-                    </div>
+            <Feld :label="t('settings.imageProviderLabel')">
+                <div class="reihe auswahl" role="radiogroup" :aria-label="t('settings.imageProviderLabel')">
+                    <label>
+                        <input type="radio" value="flux" v-model="shareCardProvider" />
+                        <span>FLUX.2 <span class="leise">(Black Forest Labs)</span></span>
+                    </label>
+                    <label>
+                        <input type="radio" value="gemini" v-model="shareCardProvider" />
+                        <span>Google Gemini <span class="leise">(Nano Banana)</span></span>
+                    </label>
                 </div>
-            </div>
+            </Feld>
 
             <!-- FLUX-specific settings -->
             <div v-show="shareCardProvider === 'flux'">
-                <div class="row mt-3">
-                    <div class="col-12 col-md-4">{{ t('settings.fluxApiKey') }}</div>
-                    <div class="col-12 col-md-8">
-                        <div class="input-group">
-                            <input type="password" class="form-control" v-model="fluxApiKey" placeholder="bfl-..."
-                                   @focus="e => { if (fluxApiKey.includes('•')) e.target.select() }" />
-                            <button v-if="fluxApiKey" class="btn btn-outline-secondary" type="button"
-                                    @click="fluxApiKey = ''">
-                                <i class="uil uil-times"></i>
-                            </button>
-                        </div>
-                        <small class="text-muted">
-                            <i class="uil uil-lock me-1"></i>{{ t('settings.encryptedStored') }}
-                            — <a href="https://api.bfl.ai" target="_blank" rel="noopener" class="text-info">api.bfl.ai</a>
-                        </small>
+                <Feld :label="t('settings.fluxApiKey')" fuer="kiFluxKey">
+                    <div class="mit-knopf">
+                        <input id="kiFluxKey" type="password" v-model="fluxApiKey" placeholder="bfl-..."
+                            @focus="e => { if (fluxApiKey.includes('•')) e.target.select() }" />
+                        <Knopf v-if="fluxApiKey" art="leise" symbol="schliessen" nur-symbol klein
+                            :titel="t('settings.deleteKey')" @click="fluxApiKey = ''" />
                     </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12 col-md-4">{{ t('settings.fluxModel') }}<InfoTipp schluessel="settings.info.fluxModel" /></div>
-                    <div class="col-12 col-md-8">
-                        <select class="form-select" v-model="fluxModel">
+                    <p class="leise schluessel-hinweis">
+                        {{ t('settings.encryptedStored') }}
+                        — <a href="https://api.bfl.ai" target="_blank" rel="noopener">api.bfl.ai</a>
+                    </p>
+                </Feld>
+                <Feld fuer="kiFluxModell">
+                    <template #label>
+                        <label for="kiFluxModell">{{ t('settings.fluxModel') }}</label><InfoTipp schluessel="settings.info.fluxModel" />
+                    </template>
+                    <div class="stapel">
+                        <select id="kiFluxModell" v-model="fluxModel">
                             <option v-for="m in fluxModels" :key="m.value" :value="m.value">{{ m.label }}</option>
                         </select>
                         <ModelManager provider="flux" @geaendert="fluxModelleGeaendert" />
                     </div>
-                </div>
+                </Feld>
             </div>
 
             <!-- Gemini-specific settings -->
             <div v-show="shareCardProvider === 'gemini'">
-                <div class="row mt-3">
-                    <div class="col-12 col-md-4">{{ t('settings.geminiApiKeyLabel') }}</div>
-                    <div class="col-12 col-md-8">
-                        <div class="input-group">
-                            <input type="password" class="form-control" v-model="geminiImageApiKey" placeholder="AIza..."
-                                   @focus="e => { if (geminiImageApiKey.includes('•')) e.target.select() }" />
-                            <button v-if="geminiImageApiKey" class="btn btn-outline-secondary" type="button"
-                                    @click="geminiImageApiKey = ''">
-                                <i class="uil uil-times"></i>
-                            </button>
-                        </div>
-                        <small class="text-muted">
-                            <i class="uil uil-lock me-1"></i>{{ t('settings.encryptedStored') }}
-                            — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="text-info">aistudio.google.com</a>
-                        </small>
+                <Feld :label="t('settings.geminiApiKeyLabel')" fuer="kiGeminiBildKey">
+                    <div class="mit-knopf">
+                        <input id="kiGeminiBildKey" type="password" v-model="geminiImageApiKey" placeholder="AIza..."
+                            @focus="e => { if (geminiImageApiKey.includes('•')) e.target.select() }" />
+                        <Knopf v-if="geminiImageApiKey" art="leise" symbol="schliessen" nur-symbol klein
+                            :titel="t('settings.deleteKey')" @click="geminiImageApiKey = ''" />
                     </div>
-                </div>
-                <div class="row mt-2">
-                    <div class="col-12 col-md-4">{{ t('settings.geminiModelLabel') }}<InfoTipp schluessel="settings.info.geminiImageModel" /></div>
-                    <div class="col-12 col-md-8">
-                        <select class="form-select" v-model="geminiImageModel">
+                    <p class="leise schluessel-hinweis">
+                        {{ t('settings.encryptedStored') }}
+                        — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">aistudio.google.com</a>
+                    </p>
+                </Feld>
+                <Feld>
+                    <template #label>
+                        <label for="kiGeminiBildModell">{{ t('settings.geminiModelLabel') }}</label><InfoTipp schluessel="settings.info.geminiImageModel" />
+                    </template>
+                    <div class="stapel">
+                        <select id="kiGeminiBildModell" v-model="geminiImageModel">
                             <option v-for="m in geminiImageModels" :key="m.value" :value="m.value">{{ m.label }}</option>
                         </select>
                         <ModelManager provider="geminiBild" @geaendert="geminiBildModelleGeaendert" />
                     </div>
-                </div>
+                </Feld>
             </div>
 
             <!-- Shared settings (always visible) -->
-            <hr class="my-3" />
+            <hr class="trenner" />
 
             <!-- Display Name -->
-            <div class="row mt-2">
-                <div class="col-12 col-md-4">{{ t('settings.fluxDisplayName') }}</div>
-                <div class="col-12 col-md-8">
-                    <input type="text" class="form-control" v-model="fluxDisplayName" :placeholder="t('settings.usernamePlaceholder')" />
-                    <small class="text-muted">{{ t('settings.fluxDisplayNameHint') }}</small>
-                </div>
-            </div>
+            <Feld :label="t('settings.fluxDisplayName')" :hilfe="t('settings.fluxDisplayNameHint')" fuer="kiFluxName">
+                <input id="kiFluxName" type="text" v-model="fluxDisplayName" :placeholder="t('settings.usernamePlaceholder')" />
+            </Feld>
 
             <!-- Avatar -->
-            <div class="row mt-2">
-                <div class="col-12 col-md-4">{{ t('settings.fluxAvatar') }}</div>
-                <div class="col-12 col-md-8">
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="fluxUseCustomAvatarCheck" v-model="fluxUseCustomAvatar" />
-                        <label class="form-check-label" for="fluxUseCustomAvatarCheck">{{ t('settings.fluxUseCustomAvatar') }}</label>
-                    </div>
-                    <div v-if="fluxUseCustomAvatar" class="mt-2">
-                        <div class="d-flex align-items-center gap-2">
-                            <img v-if="fluxAvatar" :src="fluxAvatar" class="rounded-circle" style="width: 40px; height: 40px; object-fit: cover;" />
-                            <input type="file" class="form-control form-control-sm" accept="image/*" @change="onFluxAvatarUpload" />
-                            <button v-if="fluxAvatar" class="btn btn-outline-secondary btn-sm" @click="fluxAvatar = ''">
-                                <i class="uil uil-times"></i>
-                            </button>
-                        </div>
+            <Feld :label="t('settings.fluxAvatar')">
+                <div class="stapel">
+                    <label class="reihe ankreuzen">
+                        <input type="checkbox" v-model="fluxUseCustomAvatar" />
+                        <span>{{ t('settings.fluxUseCustomAvatar') }}</span>
+                    </label>
+                    <div v-if="fluxUseCustomAvatar" class="reihe">
+                        <img v-if="fluxAvatar" :src="fluxAvatar" class="avatar" alt="" />
+                        <input type="file" accept="image/*" @change="onFluxAvatarUpload" />
+                        <Knopf v-if="fluxAvatar" art="leise" symbol="schliessen" nur-symbol klein
+                            :titel="t('common.remove')" @click="fluxAvatar = ''" />
                     </div>
                 </div>
-            </div>
+            </Feld>
 
             <!-- Buttons -->
-            <div class="mt-3 mb-3">
-                <button type="button" @click="saveFluxSettings" class="btn btn-success me-2">{{ t('common.save') }}</button>
-                <button v-if="shareCardProvider === 'flux'" type="button" @click="testFluxConnection" class="btn btn-outline-primary" :disabled="fluxTestLoading">
-                    <span v-if="fluxTestLoading">
-                        <span class="spinner-border spinner-border-sm me-1"></span>{{ t('common.testing') }}
-                    </span>
-                    <span v-else>{{ t('common.testConnection') }}</span>
-                </button>
-                <button v-if="shareCardProvider === 'gemini'" type="button" @click="testGeminiConnection" class="btn btn-outline-primary" :disabled="geminiTestLoading">
-                    <span v-if="geminiTestLoading">
-                        <span class="spinner-border spinner-border-sm me-1"></span>{{ t('common.testing') }}
-                    </span>
-                    <span v-else>{{ t('common.testConnection') }}</span>
-                </button>
-                <span v-if="shareCardProvider === 'flux' && fluxTestResult" class="ms-2" :class="fluxTestResult.success ? 'text-success' : 'text-danger'">
+            <div class="knoepfe">
+                <Knopf art="haupt" @click="saveFluxSettings">{{ t('common.save') }}</Knopf>
+                <Knopf v-if="shareCardProvider === 'flux'" :laedt="fluxTestLoading" @click="testFluxConnection">
+                    {{ fluxTestLoading ? t('common.testing') : t('common.testConnection') }}
+                </Knopf>
+                <Knopf v-if="shareCardProvider === 'gemini'" :laedt="geminiTestLoading" @click="testGeminiConnection">
+                    {{ geminiTestLoading ? t('common.testing') : t('common.testConnection') }}
+                </Knopf>
+                <span v-if="shareCardProvider === 'flux' && fluxTestResult" :class="fluxTestResult.success ? 'gut' : 'schlecht'">
                     {{ fluxTestResult.message }}
                 </span>
-                <span v-if="shareCardProvider === 'gemini' && geminiTestResult" class="ms-2" :class="geminiTestResult.success ? 'text-success' : 'text-danger'">
+                <span v-if="shareCardProvider === 'gemini' && geminiTestResult" :class="geminiTestResult.success ? 'gut' : 'schlecht'">
                     {{ geminiTestResult.message }}
                 </span>
             </div>
@@ -168,71 +143,84 @@ const {
             <!-- Prompt-Vorlagen: anlegen/anwenden geschieht im Trade-Modal
                  (ShareCardModal.vue) beim Erzeugen einer Share-Karte;
                  hier — zentral in den Einstellungen — lassen sie sich
-                 benennen, der Prompt-Text bearbeiten und löschen. -->
-            <hr class="my-3" />
-            <p class="fs-6 fw-bold mb-1">{{ t('settings.shareCardTemplatesTitle') }}</p>
-            <p class="fw-lighter">{{ t('settings.shareCardTemplatesHint') }}</p>
-            <div v-if="templatesLoading" class="text-muted small">{{ t('common.loading') }}</div>
-            <div v-else-if="!shareCardTemplates.length" class="text-muted small">
+                 benennen und löschen. -->
+            <hr class="trenner" />
+            <h3 class="zwischentitel oben">{{ t('settings.shareCardTemplatesTitle') }}</h3>
+            <p class="einleitung">{{ t('settings.shareCardTemplatesHint') }}</p>
+            <p v-if="templatesLoading" class="leise">{{ t('common.loading') }}</p>
+            <p v-else-if="!shareCardTemplates.length" class="leise">
                 {{ t('settings.shareCardTemplatesEmpty') }}
-            </div>
-            <!-- Bootstraps `.list-group-item` legt eine eigene (helle-Theme-)
-                 Textfarbe fest, die die geerbte `body`-Farbe überstimmt — auf
-                 dunklem Grund praktisch unlesbar. Deshalb einfache divs statt
-                 `list-group`, Farbe kommt von den App-eigenen CSS-Variablen. -->
-            <div v-else class="shareCardVorlagen">
-                <div v-for="tpl in shareCardTemplates" :key="tpl.id" class="shareCardVorlagenZeile">
-                    <div v-if="editingTemplateId !== tpl.id" class="d-flex align-items-center gap-2">
+            </p>
+            <div v-else class="liste">
+                <div v-for="tpl in shareCardTemplates" :key="tpl.id" class="liste-zeile">
+                    <template v-if="editingTemplateId !== tpl.id">
                         <img v-if="tpl.imageBase64" :src="'data:image/png;base64,' + tpl.imageBase64"
-                             class="rounded" style="width: 36px; height: 36px; object-fit: cover; flex-shrink: 0;" />
-                        <div class="flex-grow-1" style="min-width: 0;">
-                            <div class="fw-bold text-truncate">
-                                {{ tpl.name }}
-                                <span v-if="tpl.category" class="badge ms-1"
-                                      :class="tpl.category === 'win' ? 'bg-success' : 'bg-danger'">{{ useVorlagenKategorieLabel(tpl.category) }}</span>
-                            </div>
-                        </div>
-                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="startEditTemplate(tpl)">
-                            <i class="uil uil-edit-alt"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-danger" :disabled="deletingTemplateId === tpl.id"
-                                @click="deleteShareCardTemplate(tpl.id)">
-                            <i class="uil uil-trash-alt"></i>
-                        </button>
-                    </div>
-                    <div v-else class="d-flex flex-column gap-2">
+                            class="vorschau" alt="" />
+                        <span class="vorlage-name">
+                            <strong>{{ tpl.name }}</strong>
+                            <Pille v-if="tpl.category" :ton="tpl.category === 'win' ? 'gut' : 'schlecht'">
+                                {{ useVorlagenKategorieLabel(tpl.category) }}
+                            </Pille>
+                        </span>
+                        <span class="liste-ende">
+                            <Knopf klein @click="startEditTemplate(tpl)">{{ t('common.edit') }}</Knopf>
+                            <Knopf klein art="gefahr" :disabled="deletingTemplateId === tpl.id"
+                                @click="deleteShareCardTemplate(tpl.id)">{{ t('common.delete') }}</Knopf>
+                        </span>
+                    </template>
+                    <div v-else class="stapel volle-breite">
                         <!-- Nur der Name ist hier bearbeitbar. Der Prompt-Text
                              hat mit dem gespeicherten Bild nichts zu tun — die App
                              kann kein Bild nachträglich bearbeiten, „Text ändern"
                              hätte also nie etwas am Bild bewirkt. Ein frei
                              eintragbares Feld suggerierte genau das fälschlich. -->
-                        <input type="text" class="form-control form-control-sm" v-model="editTemplateName" />
-                        <div>
-                            <button type="button" class="btn btn-sm btn-success me-2" :disabled="savingTemplateEdit || !editTemplateName.trim()"
-                                    @click="saveTemplateEdit">{{ t('common.save') }}</button>
-                            <button type="button" class="btn btn-sm btn-outline-secondary" @click="cancelEditTemplate">{{ t('common.cancel') }}</button>
+                        <input type="text" v-model="editTemplateName" :aria-label="t('common.edit')" />
+                        <div class="reihe">
+                            <Knopf art="haupt" klein :disabled="savingTemplateEdit || !editTemplateName.trim()"
+                                @click="saveTemplateEdit">{{ t('common.save') }}</Knopf>
+                            <Knopf klein art="leise" @click="cancelEditTemplate">{{ t('common.cancel') }}</Knopf>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-
+        </Abschnitt>
     </div>
 </template>
 
+<style scoped src="./ki-formular.css"></style>
 <style scoped>
-/* Prompt-Vorlagen der Share-Karten. Bewusst kein Bootstrap `.list-group-item`:
-   das legt eine eigene (helle-Theme-)Textfarbe fest, die die geerbte
-   `body`-Farbe überstimmt und auf dunklem Grund unlesbar wird. */
-.shareCardVorlagen {
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
-    border-radius: var(--border-radius, 0.5rem);
+.oben { margin-top: 0; }
+.auswahl { gap: var(--abstand-2) var(--abstand-5); }
+.auswahl label,
+.ankreuzen {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    cursor: pointer;
 }
-.shareCardVorlagenZeile {
-    padding: 0.5rem 0.75rem;
-    color: var(--white-87);
+.schluessel-hinweis { margin: var(--abstand-1) 0 0; }
+.avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex: none;
 }
-.shareCardVorlagenZeile + .shareCardVorlagenZeile {
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+.vorschau {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-klein);
+    object-fit: cover;
+    flex: none;
 }
+.vorlage-name {
+    flex: 1 1 10rem;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    overflow-wrap: anywhere;
+}
+.volle-breite { flex: 1 1 100%; }
 </style>

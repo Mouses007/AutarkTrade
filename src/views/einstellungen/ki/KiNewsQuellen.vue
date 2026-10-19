@@ -4,6 +4,9 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import InfoTipp from '@/components/InfoTipp.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Feld from '../gemeinsam/Feld.vue'
+import Schalter from '../gemeinsam/Schalter.vue'
 import SchrittNewsQuellen from '@/components/onboarding/SchrittNewsQuellen.vue'
 import { currentUser } from '@/stores/settings.js'
 import { dbGetSettings } from '@/utils/db.js'
@@ -133,185 +136,145 @@ async function profilLoeschen(p) {
              schnappt einfach ein, was hier gerade eingestellt ist —
              kein zweites Formular, das dieselben ~30 Felder noch
              einmal abfragt. -->
-        <div class="mb-3 p-2 rounded" style="background: rgba(255,255,255,.03);">
-            <p class="fw-bold mb-1" style="font-size:0.9rem;">
+        <div class="flaeche">
+            <h4 class="profil-titel">
                 {{ t('settings.ki.news.profilesTitle') }}
                 <InfoTipp schluessel="settings.info.newsProfile" />
-            </p>
-            <p class="fw-lighter" style="font-size:0.8rem;">
-                {{ t('settings.ki.news.profilesDescription') }}
-            </p>
-            <table class="table table-sm align-middle mb-2" v-if="newsProfile.length">
-                <tbody>
-                    <tr v-for="p in newsProfile" :key="p.id">
-                        <td>
-                            <input v-if="profilUmbenennen === p.id" class="form-control form-control-sm"
-                                style="max-width:14rem;" v-model="profilUmbenennenName"
-                                @keyup.enter="profilNameSpeichern(p)" @keyup.esc="profilUmbenennen = null">
-                            <span v-else>{{ p.name }}</span>
-                        </td>
-                        <td class="text-muted small">
-                            {{ new Date(Number(p.aktualisiertAm)).toLocaleString() }}
-                        </td>
-                        <td class="text-end">
-                            <template v-if="profilUmbenennen === p.id">
-                                <button class="btn btn-success btn-sm me-1" @click="profilNameSpeichern(p)">
-                                    <i class="uil uil-check"></i>
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm" @click="profilUmbenennen = null">
-                                    <i class="uil uil-times"></i>
-                                </button>
+            </h4>
+            <p class="leise">{{ t('settings.ki.news.profilesDescription') }}</p>
+            <div v-if="newsProfile.length" class="liste profile">
+                <div v-for="p in newsProfile" :key="p.id" class="liste-zeile">
+                    <span class="liste-name profil-name">
+                        <input v-if="profilUmbenennen === p.id" class="mittel" v-model="profilUmbenennenName"
+                            :aria-label="t('settings.ki.news.renameTitle')"
+                            @keyup.enter="profilNameSpeichern(p)" @keyup.esc="profilUmbenennen = null">
+                        <span v-else>{{ p.name }}</span>
+                    </span>
+                    <span class="liste-mitte leise">
+                        {{ new Date(Number(p.aktualisiertAm)).toLocaleString() }}
+                    </span>
+                    <span class="liste-ende">
+                        <template v-if="profilUmbenennen === p.id">
+                            <Knopf art="haupt" klein symbol="haken" nur-symbol :titel="t('common.save')"
+                                @click="profilNameSpeichern(p)" />
+                            <Knopf klein art="leise" symbol="schliessen" nur-symbol :titel="t('common.cancel')"
+                                @click="profilUmbenennen = null" />
+                        </template>
+                        <template v-else>
+                            <Knopf klein art="leise" :titel="t('settings.ki.news.renameTitle')"
+                                @click="profilUmbenennen = p.id; profilUmbenennenName = p.name">
+                                {{ t('common.edit') }}
+                            </Knopf>
+                            <Knopf klein @click="profilAnwenden(p)">{{ t('common.apply') }}</Knopf>
+                            <Knopf klein :titel="t('settings.ki.news.updateProfileTitle')" @click="profilAktualisieren(p)">
+                                {{ t('settings.ki.news.updateProfileBtn') }}
+                            </Knopf>
+                            <template v-if="profilLoeschBestaetigung === p.id">
+                                <Knopf klein art="gefahr" @click="profilLoeschen(p)">{{ t('common.yes') }}</Knopf>
+                                <Knopf klein art="leise" @click="profilLoeschBestaetigung = null">{{ t('common.no') }}</Knopf>
                             </template>
-                            <template v-else>
-                                <button class="btn btn-outline-secondary btn-sm me-1" :title="t('settings.ki.news.renameTitle')"
-                                    @click="profilUmbenennen = p.id; profilUmbenennenName = p.name">
-                                    <i class="uil uil-edit-alt"></i>
-                                </button>
-                                <button class="btn btn-outline-primary btn-sm me-1" @click="profilAnwenden(p)">
-                                    {{ t('common.apply') }}
-                                </button>
-                                <button class="btn btn-outline-secondary btn-sm me-1" @click="profilAktualisieren(p)"
-                                    :title="t('settings.ki.news.updateProfileTitle')">
-                                    {{ t('settings.ki.news.updateProfileBtn') }}
-                                </button>
-                                <template v-if="profilLoeschBestaetigung === p.id">
-                                    <button class="btn btn-danger btn-sm me-1" @click="profilLoeschen(p)">{{ t('common.yes') }}</button>
-                                    <button class="btn btn-outline-secondary btn-sm" @click="profilLoeschBestaetigung = null">{{ t('common.no') }}</button>
-                                </template>
-                                <button v-else class="btn btn-outline-danger btn-sm" @click="profilLoeschBestaetigung = p.id">
-                                    <i class="uil uil-trash-alt"></i>
-                                </button>
-                            </template>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            <p v-else class="small text-muted">{{ t('settings.ki.news.noProfiles') }}</p>
-            <div class="d-flex gap-2 align-items-center">
-                <input class="form-control form-control-sm" style="max-width:16rem;"
-                    v-model="neuesProfilName" :placeholder="t('settings.ki.news.newProfileNamePlaceholder')"
+                            <Knopf v-else klein art="gefahr" @click="profilLoeschBestaetigung = p.id">
+                                {{ t('common.delete') }}
+                            </Knopf>
+                        </template>
+                    </span>
+                </div>
+            </div>
+            <p v-else class="leise">{{ t('settings.ki.news.noProfiles') }}</p>
+            <div class="reihe neu">
+                <input class="mittel" v-model="neuesProfilName"
+                    :placeholder="t('settings.ki.news.newProfileNamePlaceholder')"
+                    :aria-label="t('settings.ki.news.newProfileNamePlaceholder')"
                     @keyup.enter="profilAnlegen">
-                <button class="btn btn-outline-primary btn-sm" :disabled="!neuesProfilName.trim()" @click="profilAnlegen">
+                <Knopf klein :disabled="!neuesProfilName.trim()" @click="profilAnlegen">
                     {{ t('settings.ki.news.saveAsProfileBtn') }}
-                </button>
+                </Knopf>
             </div>
-            <div v-if="profilMeldung" class="small mt-2" :class="profilFehler ? 'text-danger' : 'text-muted'">
+            <p v-if="profilMeldung" class="meldung" :class="profilFehler ? 'schlecht' : 'leise'">
                 {{ profilMeldung }}
-            </div>
+            </p>
         </div>
 
         <!--=============== NACHRICHTENQUELLEN ===============-->
-        <hr class="mt-4" />
-        <p class="fw-bold mb-1">{{ t('settings.ki.news.sourcesTitle') }}</p>
-        <p class="fw-lighter">
-            {{ t('settings.ki.news.sourcesDescription') }}
-        </p>
-        <p class="fw-lighter" style="font-size:0.82rem;">
-            {{ t('settings.ki.news.xSourceHint') }}
-        </p>
+        <h3 class="zwischentitel">{{ t('settings.ki.news.sourcesTitle') }}</h3>
+        <p class="einleitung">{{ t('settings.ki.news.sourcesDescription') }}</p>
+        <p class="leise">{{ t('settings.ki.news.xSourceHint') }}</p>
 
-        <div class="row align-items-center mb-2">
-            <div class="col-12 col-md-3">
-                <label class="fw-lighter">{{ t('settings.ki.news.tempExcludeLabel') }}<InfoTipp schluessel="settings.info.laermfilter" /></label>
-            </div>
-            <div class="col-12 col-md-9">
-                <label class="switch">
-                    <input type="checkbox" v-model="radarNewsQuellenAusschluss" @change="radarSpeichern('radarNewsQuellenAusschluss')">
-                    <span class="slider round"></span>
-                </label>
-                <span class="ms-2 small text-muted">
-                    {{ radarNewsQuellenAusschluss ? t('settings.ki.news.tempExcludeOn') : t('settings.ki.news.tempExcludeOff') }}
-                </span>
-            </div>
-        </div>
+        <Feld>
+            <template #label>
+                <span>{{ t('settings.ki.news.tempExcludeLabel') }}</span><InfoTipp schluessel="settings.info.laermfilter" />
+            </template>
+            <Schalter v-model="radarNewsQuellenAusschluss"
+                :label="radarNewsQuellenAusschluss ? t('settings.ki.news.tempExcludeOn') : t('settings.ki.news.tempExcludeOff')"
+                @change="radarSpeichern('radarNewsQuellenAusschluss')" />
+        </Feld>
 
         <!-- Der NEUE Ruhe-Filter: automatisch Truth Social, dazu
              Stichwörter. Wirkt auf Liste UND Berichtsgrundlage —
              gespeichert bleibt alles, eine geänderte Liste greift
              also auch rückwirkend. -->
-        <div class="row mb-2">
-            <div class="col-12 col-md-3">
-                <label class="fw-lighter">{{ t('settings.ki.news.quietFilterLabel') }}<InfoTipp schluessel="settings.info.wortfilter" /></label>
-                <small class="d-block text-muted" style="font-size:0.78rem;">
-                    {{ t('settings.ki.news.quietFilterHint') }}
-                </small>
-            </div>
-            <div class="col-12 col-md-9">
-                <label class="switch">
-                    <input type="checkbox" v-model="radarNewsRuheAn" @change="radarSpeichern('radarNewsRuheAn')">
-                    <span class="slider round"></span>
-                </label>
-                <textarea class="form-control form-control-sm mt-2" rows="3" style="max-width:26rem;"
+        <Feld :hilfe="t('settings.ki.news.quietFilterHint')">
+            <template #label>
+                <span>{{ t('settings.ki.news.quietFilterLabel') }}</span><InfoTipp schluessel="settings.info.wortfilter" />
+            </template>
+            <div class="stapel">
+                <Schalter v-model="radarNewsRuheAn" @change="radarSpeichern('radarNewsRuheAn')" />
+                <textarea class="breit" rows="3"
                     v-model="radarNewsRuheWoerter" :disabled="!radarNewsRuheAn"
+                    :aria-label="t('settings.ki.news.quietFilterLabel')"
                     placeholder="Donald Trump&#10;Michael Saylor"
                     @change="radarSpeichern('radarNewsRuheWoerter')"></textarea>
             </div>
-        </div>
+        </Feld>
 
         <!-- Fokus-Filter: das Gegenstück. Wer ihn anschaltet, will
              NUR NOCH Beiträge zu seinen Stichwörtern sehen — sonst
              genau wie der Ruhe-Filter aufgebaut. -->
-        <div class="row mb-2">
-            <div class="col-12 col-md-3">
-                <label class="fw-lighter">{{ t('settings.ki.news.focusFilterLabel') }}<InfoTipp schluessel="settings.info.fokusfilter" /></label>
-                <small class="d-block text-muted" style="font-size:0.78rem;">
-                    {{ t('settings.ki.news.focusFilterHint') }}
-                </small>
-            </div>
-            <div class="col-12 col-md-9">
-                <label class="switch">
-                    <input type="checkbox" v-model="radarNewsFokusAn" @change="radarSpeichern('radarNewsFokusAn')">
-                    <span class="slider round"></span>
-                </label>
-                <textarea class="form-control form-control-sm mt-2" rows="3" style="max-width:26rem;"
+        <Feld :hilfe="t('settings.ki.news.focusFilterHint')">
+            <template #label>
+                <span>{{ t('settings.ki.news.focusFilterLabel') }}</span><InfoTipp schluessel="settings.info.fokusfilter" />
+            </template>
+            <div class="stapel">
+                <Schalter v-model="radarNewsFokusAn" @change="radarSpeichern('radarNewsFokusAn')" />
+                <textarea class="breit" rows="3"
                     v-model="radarNewsFokusWoerter" :disabled="!radarNewsFokusAn"
+                    :aria-label="t('settings.ki.news.focusFilterLabel')"
                     placeholder="Bitcoin&#10;BTC"
                     @change="radarSpeichern('radarNewsFokusWoerter')"></textarea>
             </div>
-        </div>
+        </Feld>
 
         <SchrittNewsQuellen :key="newsQuellenKey" />
 
-        <div class="row align-items-center mt-2">
-            <div class="col-12 col-md-4">
-                {{ t('settings.ki.news.autoLabel') }}
-                <small class="d-block text-muted" style="font-size:0.78rem;">
-                    {{ t('settings.ki.news.autoHint') }}
-                </small>
-            </div>
-            <div class="col-12 col-md-8 d-flex align-items-center gap-2 flex-wrap">
-                <!-- Bootstrap-Schalter wie im Rest der KI-Sektion; der
-                     eigene `.switch` bleibt dem Marktradar vorbehalten. -->
-                <div class="form-check form-switch mb-0">
-                    <input class="form-check-input" type="checkbox" id="radarNewsAutoToggle"
-                        v-model="radarNewsAuto" @change="radarSpeichern('radarNewsAuto')">
-                </div>
-                <select class="form-select form-select-sm" style="max-width:8.5rem;"
-                    v-model="radarNewsRhythmus" :disabled="!radarNewsAuto" @change="radarSpeichern('radarNewsRhythmus')">
+        <Feld :label="t('settings.ki.news.autoLabel')" :hilfe="t('settings.ki.news.autoHint')">
+            <div class="reihe">
+                <Schalter v-model="radarNewsAuto" @change="radarSpeichern('radarNewsAuto')" />
+                <select v-model="radarNewsRhythmus" :disabled="!radarNewsAuto"
+                    :aria-label="t('settings.ki.news.autoLabel')" @change="radarSpeichern('radarNewsRhythmus')">
                     <option value="taeglich">{{ t('settings.ki.news.daily') }}</option>
                     <option value="woechentlich">{{ t('settings.ki.news.weekly') }}</option>
                     <option value="manuell">{{ t('settings.ki.news.manual') }}</option>
                 </select>
                 <InfoTipp schluessel="settings.info.newsRhythmus" />
-                <select v-if="radarNewsRhythmus === 'woechentlich'" class="form-select form-select-sm" style="max-width:8.5rem;"
+                <select v-if="radarNewsRhythmus === 'woechentlich'"
                     v-model.number="radarNewsWochentag" :disabled="!radarNewsAuto" @change="radarSpeichern('radarNewsWochentag')">
                     <option v-for="(tag, i) in wochentagNamen" :key="i" :value="i + 1">{{ tag }}</option>
                 </select>
                 <!-- Bei „nur manuell" gibt es keine Stunde: Der Takt
                      erzeugt nichts, ein Uhrzeitfeld daneben würde
                      etwas anderes behaupten. -->
-                <select v-if="radarNewsRhythmus !== 'manuell'" class="form-select form-select-sm" style="max-width:8rem;"
+                <select v-if="radarNewsRhythmus !== 'manuell'"
                     v-model.number="radarNewsStunde" :disabled="!radarNewsAuto" @change="radarSpeichern('radarNewsStunde')">
                     <option v-for="h in 24" :key="h - 1" :value="h - 1">
-                        {{ String(h - 1).padStart(2, '0') }}:00
-                    </option>
+                            {{ String(h - 1).padStart(2, '0') }}:00
+                        </option>
                 </select>
-                <span v-if="radarNewsRhythmus !== 'manuell'" class="small text-muted">
+                <span v-if="radarNewsRhythmus !== 'manuell'" class="leise">
                     {{ currentUser?.timeZone || t('settings.ki.news.localTime') }}
                 </span>
-                <span v-else class="small text-muted">{{ t('settings.ki.news.manualHint') }}</span>
+                <span v-else class="leise">{{ t('settings.ki.news.manualHint') }}</span>
             </div>
-        </div>
+        </Feld>
 
         <!-- Zwischenmeldungen. Sie setzen auf dem Bericht des Tages auf —
              nicht um ihn umzuschreiben, sondern um zu melden, was
@@ -319,39 +282,47 @@ async function profilLoeschen(p) {
              automatischen Bericht gibt es nichts, worauf sie
              aufsetzen könnten. Von Hand geht es weiterhin über den
              Knopf auf der Nachrichtenseite. -->
-        <div v-if="radarNewsRhythmus !== 'manuell'" class="row align-items-center mt-3">
-            <div class="col-12 col-md-4">
-                {{ t('settings.ki.news.updatesLabel') }}
-                <small class="d-block text-muted" style="font-size:0.78rem;">
-                    {{ t('settings.ki.news.updatesHint') }}
-                </small>
-            </div>
-            <div class="col-12 col-md-8 d-flex align-items-center gap-2 flex-wrap">
-                <select class="form-select form-select-sm" style="max-width:9.5rem;"
-                    v-model.number="radarNewsUpdates" :disabled="!radarNewsAuto"
+        <Feld v-if="radarNewsRhythmus !== 'manuell'" :label="t('settings.ki.news.updatesLabel')"
+            :hilfe="t('settings.ki.news.updatesHint')">
+            <div class="reihe">
+                <select v-model.number="radarNewsUpdates" :disabled="!radarNewsAuto"
+                    :aria-label="t('settings.ki.news.updatesLabel')"
                     @change="radarSpeichern('radarNewsUpdates')">
                     <option :value="0">{{ t('settings.ki.news.updates0') }}</option>
                     <option :value="1">{{ t('settings.ki.news.updates1') }}</option>
                     <option :value="2">{{ t('settings.ki.news.updates2') }}</option>
                 </select>
-                <select v-if="radarNewsUpdates >= 1" class="form-select form-select-sm" style="max-width:8rem;"
+                <select v-if="radarNewsUpdates >= 1"
                     v-model.number="radarNewsUpdateStunde1" :disabled="!radarNewsAuto"
                     @change="radarSpeichern('radarNewsUpdateStunden')">
                     <option v-for="h in 24" :key="h - 1" :value="h - 1">
-                        {{ String(h - 1).padStart(2, '0') }}:00
-                    </option>
+                            {{ String(h - 1).padStart(2, '0') }}:00
+                        </option>
                 </select>
-                <select v-if="radarNewsUpdates >= 2" class="form-select form-select-sm" style="max-width:8rem;"
+                <select v-if="radarNewsUpdates >= 2"
                     v-model.number="radarNewsUpdateStunde2" :disabled="!radarNewsAuto"
                     @change="radarSpeichern('radarNewsUpdateStunden')">
                     <option v-for="h in 24" :key="h - 1" :value="h - 1">
-                        {{ String(h - 1).padStart(2, '0') }}:00
-                    </option>
+                            {{ String(h - 1).padStart(2, '0') }}:00
+                        </option>
                 </select>
-                <span v-if="radarNewsUpdates" class="small text-muted">
+                <span v-if="radarNewsUpdates" class="leise">
                     {{ t('settings.ki.news.updatesCost') }}
                 </span>
             </div>
-        </div>
+        </Feld>
     </div>
 </template>
+
+<style scoped src="./ki-formular.css"></style>
+<style scoped>
+.profil-titel {
+    margin: 0 0 var(--abstand-1);
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+}
+.profile { margin-bottom: var(--abstand-3); background: var(--panel); }
+.profil-name { flex-basis: 14rem; }
+.neu { margin-top: var(--abstand-2); }
+</style>
