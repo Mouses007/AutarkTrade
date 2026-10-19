@@ -1,4 +1,5 @@
 <script setup>
+import Symbol from '@/components/basis/Symbol.vue'
 /**
  * Bedienung der Bookmap-Kachel in ihrer Kopfzeile.
  *
@@ -53,7 +54,7 @@ function spanneLabel(min) {
     <button type="button" :class="['radarCardCtl', liveFrozen ? 'warn' : '']"
         :title="liveFrozen ? t('livetrading.bookmapKopf.weiterTitel') : t('livetrading.bookmapKopf.pauseTitel')"
         @click="liveFrozen = !liveFrozen">
-        <i :class="liveFrozen ? 'uil uil-play' : 'uil uil-pause'"></i>
+        <Symbol :name="liveFrozen ? 'play' : 'pause'" />
         {{ liveFrozen ? t('livetrading.bookmapKopf.weiter') : t('livetrading.bookmapKopf.pause') }}
     </button>
 </template>

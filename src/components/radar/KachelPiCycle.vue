@@ -15,6 +15,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import dayjs from '../../utils/dayjs-setup.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -121,7 +122,7 @@ watch(() => props.daten, zeichne)
         <!-- Der Alarm ist der Zweck dieser Kachel: eine frische Kreuzung darf
              man nicht übersehen, alles andere ist Beiwerk. -->
         <div v-if="daten.frisch" class="pcAlarm">
-            <i class="uil uil-exclamation-octagon"></i>
+            <Symbol name="stopp" />
             {{ t('marktradar.picycle.alarm', { datum: dayjs(daten.letzteKreuzung.t).format('DD.MM.YYYY') }) }}
         </div>
 

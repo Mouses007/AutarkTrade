@@ -18,6 +18,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -67,14 +68,14 @@ const ersterSatz = computed(() => {
             </span>
             <span class="lfText">{{ ersterSatz }}</span>
             <button type="button" class="lfMehr" @click="emit('oeffnen')">
-                {{ t('marktradar.pult.ganzerText') }}<i class="uil uil-angle-right"></i>
+                {{ t('marktradar.pult.ganzerText') }}<Symbol name="ausklappen" />
             </button>
         </template>
 
         <template v-else>
             <span class="lfLeer">{{ t('marktradar.pult.lageLeer') }}</span>
             <button type="button" class="lfMehr" @click="emit('oeffnen')">
-                {{ t('marktradar.pult.lageErzeugen') }}<i class="uil uil-angle-right"></i>
+                {{ t('marktradar.pult.lageErzeugen') }}<Symbol name="ausklappen" />
             </button>
         </template>
     </div>

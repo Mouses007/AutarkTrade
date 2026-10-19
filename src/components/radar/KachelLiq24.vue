@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import dayjs from '../../utils/dayjs-setup.js'
 import { liveSymbol } from '../../stores/live.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -132,7 +133,7 @@ watch(() => props.daten, zeichne)
         <!-- Aufzeichnung aus: das ist kein Fehler und auch keine Null, sondern
              eine Einstellung. Entsprechend steht hier ein Weg, kein Balken. -->
         <div v-if="!daten.aktiv" class="lqAus">
-            <i class="uil uil-record-audio"></i>
+            <Symbol name="aufnahme" />
             <p>{{ t('marktradar.liq.inactive') }}</p>
             <a href="/settings" class="ctl-pill">{{ t('marktradar.liq.activate') }}</a>
         </div>

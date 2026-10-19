@@ -11,9 +11,13 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from '../utils/dayjs-setup.js'
 import InfoTipp from './InfoTipp.vue'
+import Symbol from '@/components/basis/Symbol.vue'
+import Kreisel from '@/components/basis/Kreisel.vue'
+import { symbolName } from '@/components/basis/symbole/unicons.js'
 
 const props = defineProps({
     titel: { type: String, required: true },
+    /** Symbolname; eine alte Unicons-Angabe (`'uil uil-…'`) wird noch übersetzt. */
     icon: { type: String, default: '' },
     /** 'idle' | 'loading' | 'ready' | 'veraltet' | 'error' */
     zustand: { type: String, default: 'idle' },
@@ -60,8 +64,8 @@ const standText = computed(() => {
     <div class="radarCard" :class="{ 'radarCard--fehler': zustand === 'error' }">
         <div class="radarCardHead">
             <!-- Eigener Griff: auf dem Handy dürfen sich Ziehen und Antippen nicht beissen -->
-            <span class="radarGriff" :title="t('marktradar.drag')"><i class="uil uil-draggabledots"></i></span>
-            <i v-if="icon" :class="[icon, 'radarCardIcon']"></i>
+            <span class="radarGriff" :title="t('marktradar.drag')"><Symbol name="ziehgriff" /></span>
+            <Symbol v-if="icon" :name="symbolName(icon)" class="radarCardIcon" />
             <span class="radarCardTitle">{{ titel }}</span>
             <InfoTipp v-if="infoKey" :schluessel="infoKey" />
             <span :class="['liveDot', 'dot-' + zustand]" :title="t('marktradar.status_' + zustand)"></span>
@@ -82,11 +86,11 @@ const standText = computed(() => {
             <span v-if="!eigenstaendig" class="radarCardStand">{{ standText }}</span>
             <span v-else class="radarCardStand"></span>
             <button type="button" class="radarCardBtn" :title="t('marktradar.refresh')" @click="emit('neuladen')">
-                <i class="uil uil-sync"></i>
+                <Symbol name="aktualisieren" />
             </button>
             <button v-if="!interaktiv" type="button" class="radarCardBtn" :title="t('marktradar.enlarge')"
                 @click="emit('gross')">
-                <i class="uil uil-expand-arrows-alt"></i>
+                <Symbol name="vergroessern" />
             </button>
         </div>
 
@@ -94,15 +98,15 @@ const standText = computed(() => {
             <slot v-if="hatDaten || eigenstaendig"></slot>
 
             <div v-else-if="zustand === 'error'" class="radarLeer">
-                <i class="uil uil-exclamation-triangle mb-1"></i>
+                <Symbol name="warnung" class="at-mu-1" />
                 <span>{{ fehler || t('marktradar.status_error') }}</span>
-                <button type="button" class="ctl-pill mt-2" @click.stop="emit('neuladen')">
+                <button type="button" class="ctl-pill at-mo-2" @click.stop="emit('neuladen')">
                     {{ t('marktradar.retry') }}
                 </button>
             </div>
 
             <div v-else class="radarLeer">
-                <span class="spinner-border spinner-border-sm"></span>
+                <Kreisel />
             </div>
         </div>
 

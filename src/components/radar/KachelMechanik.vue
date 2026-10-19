@@ -13,6 +13,7 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -140,7 +141,7 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
             <div class="mxKi">
                 <button v-if="!erklaerung && !erklaerungLaedt" type="button" class="ctl-pill"
                     @click.stop="holeErklaerung">
-                    <i class="uil uil-robot"></i> {{ t('marktradar.mechanik.erklaeren') }}
+                    <Symbol name="ki" /> {{ t('marktradar.mechanik.erklaeren') }}
                 </button>
                 <p v-if="erklaerungLaedt" class="mxKiStatus">{{ t('marktradar.mechanik.erklaerungLaedt') }}</p>
                 <p v-if="erklaerungFehler" class="mxKiFehler">{{ erklaerungFehler }}</p>

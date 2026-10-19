@@ -14,7 +14,7 @@
                     :aria-expanded="einstOffen"
                     :title="einstOffen ? t('coinradar.eZu') : t('coinradar.eAuf')"
                     @click="einstUmschalten">
-                    <i class="uil" :class="einstOffen ? 'uil-angle-down' : 'uil-setting'"></i>
+                    <Symbol :name="einstOffen ? 'runter' : 'einstellungen'" />
                 </button>
                 <span v-if="!einstOffen" class="crEinstZeile" @click="einstUmschalten">
                     {{ einstZusammenfassung }}
@@ -23,33 +23,33 @@
             <div class="crKnoepfe">
                 <span v-if="laeuft" class="crFortschritt">{{ fortschrittText }}</span>
                 <button type="button" class="ctl-pill accent" :disabled="laeuft" @click="starte">
-                    <span v-if="laeuft" class="spinner-border spinner-border-sm me-1"></span>
-                    <i v-else class="uil uil-sync me-1"></i>{{ t('coinradar.jetztMessen') }}
+                    <Kreisel still class="at-mr-1" v-if="laeuft" />
+                    <Symbol v-else name="aktualisieren" class="at-mr-1" />{{ t('coinradar.jetztMessen') }}
                 </button>
                 <PageInfo section="info.coinRadar" />
             </div>
         </div>
 
         <!-- ══ Einstellungen ═════════════════════════════════════════ -->
-        <div v-if="einstOffen && reiter !== 'abverkauf'" class="mt-3 crEinst">
+        <div v-if="einstOffen && reiter !== 'abverkauf'" class="at-mo-3 crEinst">
             <div class="crBlock">
                 <h6 class="crTitel">{{ t('coinradar.eAutomatik') }}</h6>
-                <div class="form-check form-switch">
-                    <input id="crAktiv" class="form-check-input" type="checkbox"
+                <div class="at-check schalter">
+                    <input id="crAktiv" type="checkbox"
                         v-model="einst.aktiv" @change="speichern">
-                    <label class="form-check-label" for="crAktiv">{{ t('coinradar.eAktiv') }}</label>
+                    <label for="crAktiv">{{ t('coinradar.eAktiv') }}</label>
                 </div>
                 <p class="crHinweis">{{ t('coinradar.eAktivHinweis') }}</p>
                 <label class="crFeld">
                     <span>{{ t('coinradar.eIntervall') }}</span>
-                    <input class="form-control form-control-sm crZahlFeld" type="number" min="1" max="24"
+                    <input class="at-feld klein crZahlFeld" type="number" min="1" max="24"
                         v-model.number="einst.intervallStunden" @change="speichern">
                     <span class="crEinheit">{{ t('coinradar.stunden') }}</span>
                 </label>
-                <div class="form-check form-switch mt-3">
-                    <input id="crEinordnung" class="form-check-input" type="checkbox"
+                <div class="at-check schalter at-mo-3">
+                    <input id="crEinordnung" type="checkbox"
                         v-model="einst.einordnungAn" @change="speichern">
-                    <label class="form-check-label" for="crEinordnung">{{ t('coinradar.eEinordnung') }}</label>
+                    <label for="crEinordnung">{{ t('coinradar.eEinordnung') }}</label>
                 </div>
                 <p class="crHinweis">{{ t('coinradar.eEinordnungHinweis') }}</p>
             </div>
@@ -59,23 +59,23 @@
                 <p class="crHinweis">{{ t('coinradar.eHuerdenHinweis') }}</p>
                 <label class="crFeld">
                     <span>{{ t('coinradar.eMinUmsatz') }}</span>
-                    <input class="form-control form-control-sm crZahlFeld" type="number" min="0" step="1"
+                    <input class="at-feld klein crZahlFeld" type="number" min="0" step="1"
                         v-model.number="umsatzMio" @change="speichern">
                     <span class="crEinheit">{{ t('coinradar.mioUsd') }}</span>
                 </label>
                 <label class="crFeld">
                     <span>{{ t('coinradar.eMaxSpread') }}</span>
-                    <input class="form-control form-control-sm crZahlFeld" type="number" min="0.1" step="0.1"
+                    <input class="at-feld klein crZahlFeld" type="number" min="0.1" step="0.1"
                         v-model.number="einst.huerden.maxSpreadBp" @change="speichern">
                     <span class="crEinheit">bp</span>
                 </label>
                 <label class="crFeld">
                     <span>{{ t('coinradar.eMinTiefe') }}</span>
-                    <input class="form-control form-control-sm crZahlFeld" type="number" min="0" step="50"
+                    <input class="at-feld klein crZahlFeld" type="number" min="0" step="50"
                         v-model.number="einst.huerden.minTiefeUsd" @change="speichern">
                     <span class="crEinheit">USD</span>
                 </label>
-                <p class="crHinweis mt-2">{{ t('coinradar.eTiefeHinweis') }}</p>
+                <p class="crHinweis at-mo-2">{{ t('coinradar.eTiefeHinweis') }}</p>
             </div>
 
             <div class="crBlock">
@@ -83,7 +83,7 @@
                 <p class="crHinweis">{{ t('coinradar.eGewichteHinweis') }}</p>
                 <div v-for="feld in GEWICHT_FELDER" :key="feld" class="crRegler">
                     <span class="crReglerName">{{ t('coinradar.note_' + feld) }}</span>
-                    <input class="form-range" type="range" min="0" max="60" step="5"
+                    <input class="at-regler" type="range" min="0" max="60" step="5"
                         v-model.number="einst.gewichte[feld]" @change="speichern">
                     <span class="crReglerWert">{{ einst.gewichte[feld] }}</span>
                 </div>
@@ -102,15 +102,15 @@
                         {{ ze }}
                     </button>
                 </div>
-                <p class="crHinweis mt-2">
+                <p class="crHinweis at-mo-2">
                     {{ t('coinradar.eHauptZe', { ze: einst.zeiteinheiten[0] || '—' }) }}
                 </p>
             </div>
         </div>
 
-        <div v-if="meldung" class="alert py-2 small mt-2" :class="meldungFehler ? 'alert-danger' : 'alert-info'">
+        <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">
             {{ meldung }}
-        </div>
+        </Hinweis>
 
         <!-- ══ Einzelprüfung ═════════════════════════════════════════
              Die Rangliste misst eine Schnittmenge und siebt sie nach Umsatz.
@@ -119,9 +119,9 @@
              — 291 der 790 Bitunix-Perpetuals führt Binance gar nicht, und
              von den übrigen bleibt nach der Umsatzhürde rund ein Fünftel.
              Deshalb hier dasselbe Messwerk auf Zuruf, für ein Symbol. -->
-        <div v-show="reiter === 'rangliste'" class="crEinzel mt-3">
+        <div v-show="reiter === 'rangliste'" class="crEinzel at-mo-3">
             <form class="crEinzelKopf" @submit.prevent="epMessen">
-                <i class="uil uil-search crEinzelLupe"></i>
+                <Symbol name="suche" class="crEinzelLupe" />
                 <!-- Die Eingabetaste ausdrücklich am Feld, nicht nur über die
                      implizite Absendung des Formulars: Letztere hängt am
                      Zeichenereignis und ist damit nicht in jeder Umgebung
@@ -132,12 +132,12 @@
                     spellcheck="false" autocomplete="off"
                     @keydown.enter.prevent="epMessen">
                 <button type="submit" class="ctl-pill accent" :disabled="epLaeuft || !epEingabe.trim()">
-                    <span v-if="epLaeuft" class="spinner-border spinner-border-sm me-1"></span>
-                    <i v-else class="uil uil-search-alt me-1"></i>{{ t('coinradar.epMessen') }}
+                    <Kreisel still class="at-mr-1" v-if="epLaeuft" />
+                    <Symbol v-else name="suche" class="at-mr-1" />{{ t('coinradar.epMessen') }}
                 </button>
                 <button v-if="ep || epFehler" type="button" class="ctl-pill klein"
                     :title="t('coinradar.epSchliessen')" @click="epZuruecksetzen">
-                    <i class="uil uil-times"></i>
+                    <Symbol name="schliessen" />
                 </button>
                 <span class="crEinzelWink">{{ t('coinradar.epWink') }}</span>
             </form>
@@ -161,7 +161,7 @@
                         {{ ep.note }}
                     </span>
                     <span class="crEinzelPreis">{{ epPreis }}</span>
-                    <span class="ms-auto crEinzelQuelle" :class="{ fremd: !ep.vergleichbar }"
+                    <span class="at-ml-auto crEinzelQuelle" :class="{ fremd: !ep.vergleichbar }"
                         :title="ep.vergleichbar ? t('coinradar.epQuelleBinanceHilfe') : t('coinradar.epQuelleBitunixHilfe')">
                         {{ ep.vergleichbar ? t('coinradar.epQuelleBinance') : t('coinradar.epQuelleBitunix') }}
                     </span>
@@ -189,7 +189,7 @@
                 <!-- Zu jung für eine Bewertung: Klartext statt einer Note aus
                      zu wenigen Kerzen. -->
                 <div v-if="ep.status !== 'bewertet'" class="crEinzelLeer">
-                    <i class="uil uil-hourglass"></i>
+                    <Symbol name="sanduhr" />
                     <div>
                         <div>{{ t('coinradar.epZuJung', { n: ep.kerzenAnzahl, ze: ep.haupt, min: ep.mindestKerzen }) }}</div>
                         <div class="crHinweise">{{ t('coinradar.epZuJungHinweis') }}</div>
@@ -241,7 +241,7 @@
                                 <span class="crBalken"><i :style="{ width: Math.round(wert) + '%' }"></i></span>
                                 <span class="crNoteWert">{{ Math.round(wert) }}</span>
                             </div>
-                            <p v-if="ep.hinweise?.length" class="crHinweise mb-0 mt-2">
+                            <p v-if="ep.hinweise?.length" class="crHinweise at-mu-0 at-mo-2">
                                 {{ ep.hinweise.join(' · ') }}
                             </p>
                         </div>
@@ -281,9 +281,9 @@
                                     <td>{{ geld(v.tiefe25Bp) }}</td>
                                 </tr>
                             </table>
-                            <p class="crHinweise mb-0 mt-2">
+                            <p class="crHinweise at-mu-0 at-mo-2">
                                 <template v-for="(v, b) in epBoersen" :key="b + 'p'">
-                                    <span v-if="!v.passt5k" class="d-block">
+                                    <span v-if="!v.passt5k" class="at-block">
                                         {{ t('coinradar.passtNicht', { b: boerseName(b) }) }}
                                     </span>
                                 </template>
@@ -293,13 +293,13 @@
                         <div>
                             <div class="crDetailTitel">
                                 {{ t('coinradar.btcTitel', { ze: ep.btc?.zeiteinheit || konst.btcZeiteinheit }) }}
-                                <i class="uil uil-info-circle crInfoWink"
-                                    :title="t('coinradar.btcNichtInNote')"></i>
+                                <Symbol
+                                    :titel="t('coinradar.btcNichtInNote')" name="info" class="crInfoWink" />
                             </div>
                             <table v-if="ep.btc" class="crZeTabelle">
                                 <tr>
                                     <td>{{ t('coinradar.btcKopplung') }}</td>
-                                    <td class="text-end">
+                                    <td class="at-rechtsbuendig">
                                         <b>{{ Math.round(ep.btc.korrelation * 100) }} %</b>
                                         <span class="crHinweisWort">
                                             {{ t('coinradar.kopplung_' + deuteKopplung(epAlsZeile)) }}
@@ -308,14 +308,14 @@
                                 </tr>
                                 <tr>
                                     <td>{{ t('coinradar.spalteBeta') }}</td>
-                                    <td class="text-end"><b>{{ n(ep.btc.beta, 2) }}</b></td>
+                                    <td class="at-rechtsbuendig"><b>{{ n(ep.btc.beta, 2) }}</b></td>
                                 </tr>
                                 <tr>
                                     <td>{{ t('coinradar.btcPunkte') }}</td>
-                                    <td class="text-end">{{ ep.btc.punkte }}</td>
+                                    <td class="at-rechtsbuendig">{{ ep.btc.punkte }}</td>
                                 </tr>
                             </table>
-                            <p v-else class="crHinweise mb-0">
+                            <p v-else class="crHinweise at-mu-0">
                                 {{ t('coinradar.epBtc_' + (ep.btcGrund || 'nicht_messbar'), { n: ep.btcKerzen ?? 0 }) }}
                             </p>
                         </div>
@@ -341,25 +341,25 @@
                          wie in der Frühphase, nur ohne deren Beschleunigungs-Note. -->
                     <div class="crTiefe">
                         <button type="button" class="ctl-pill klein" :disabled="tsLaeuft" @click="tiefensucheStarten">
-                            <span v-if="tsLaeuft" class="spinner-border spinner-border-sm me-1"></span>
-                            <i v-else class="uil uil-search-plus me-1"></i>{{ t('coinradar.tsKnopf') }}
+                            <Kreisel still class="at-mr-1" v-if="tsLaeuft" />
+                            <Symbol v-else name="lupePlus" class="at-mr-1" />{{ t('coinradar.tsKnopf') }}
                         </button>
                         <span class="crTiefeHinweis">{{ t('coinradar.tsHinweis') }}</span>
                     </div>
-                    <p v-if="tsFehler" class="small text-warning mb-0">{{ tsFehler }}</p>
+                    <p v-if="tsFehler" class="at-klein at-warn at-mu-0">{{ tsFehler }}</p>
                     <TiefensucheErgebnis v-if="tsDaten" :daten="tsDaten" />
                 </template>
             </div>
         </div>
 
         <!-- ══ Rangliste ═════════════════════════════════════════════ -->
-        <div v-show="reiter === 'rangliste'" class="mt-3">
+        <div v-show="reiter === 'rangliste'" class="at-mo-3">
 
-            <div v-if="ladeFehler" class="alert alert-warning py-2 small">{{ ladeFehler }}</div>
-            <div v-if="!lauf && !laeuft && !ladeFehler" class="text-center text-muted py-5">
-                <i class="uil uil-chart-line crLeerIcon"></i>
-                <p class="mb-1">{{ t('coinradar.nochNichts') }}</p>
-                <p class="small mb-0">{{ t('coinradar.nochNichtsHinweis') }}</p>
+            <Hinweis v-if="ladeFehler" art="warn">{{ ladeFehler }}</Hinweis>
+            <div v-if="!lauf && !laeuft && !ladeFehler" class="at-mittig at-gedaempft at-py-5">
+                <Symbol name="linie" class="crLeerIcon" />
+                <p class="at-mu-1">{{ t('coinradar.nochNichts') }}</p>
+                <p class="at-klein at-mu-0">{{ t('coinradar.nochNichtsHinweis') }}</p>
             </div>
 
             <template v-if="lauf">
@@ -406,9 +406,9 @@
 
                 <!-- KI-Einordnung -->
                 <div v-if="lauf.einordnung" class="crEinordnung">
-                    <i class="uil uil-comment-alt-lines me-2"></i>
+                    <Symbol name="nachricht" class="at-mr-2" />
                     <div>
-                        <p class="mb-0">{{ lauf.einordnung }}</p>
+                        <p class="at-mu-0">{{ lauf.einordnung }}</p>
                         <span class="crQuelle">{{ t('coinradar.einordnungQuelle') }}</span>
                     </div>
                 </div>
@@ -434,14 +434,14 @@
                         @click="boerseUmschalten(b)">
                         {{ boerseKurz(b) }}
                     </button>
-                    <span class="ms-auto"></span>
+                    <span class="at-ml-auto"></span>
                     <button class="crChip" :class="{ aktiv: zeigeHuerden }" @click="huerdenUmschalten">
-                        <i class="uil uil-filter me-1"></i>{{ t('coinradar.zeigeHuerden', { n: lauf.verworfenHuerde }) }}
+                        <Symbol name="filter" class="at-mr-1" />{{ t('coinradar.zeigeHuerden', { n: lauf.verworfenHuerde }) }}
                     </button>
                 </div>
                 <!-- Der Server liefert höchstens 300 abgelehnte Zeilen; mehr
                      wären es, ohne dass es jemand merkte. -->
-                <p v-if="zeigeHuerden && lauf.verworfenHuerde > zeilen.length" class="crHinweis mt-2">
+                <p v-if="zeigeHuerden && lauf.verworfenHuerde > zeilen.length" class="crHinweis at-mo-2">
                     {{ t('coinradar.huerdenGekappt', { n: zeilen.length, m: lauf.verworfenHuerde }) }}
                 </p>
 
@@ -455,19 +455,19 @@
                             <span v-if="z.status === 'bewertet'" class="crRang">{{ z.rang }}</span>
                             <!-- role/tabindex/keydown: ein klickbares <i> ist per Tastatur
                                  nicht erreichbar und fuer Screenreader kein Bedienelement. -->
-                            <i class="uil crStern" :class="istFav(z) ? 'uil-favorite aktiv' : 'uil-star'"
+                            <Symbol class="crStern" :name="istFav(z) ? 'stern' : 'stern'" :gefuellt="istFav(z)" :class="istFav(z) ? 'aktiv' : ''"
                                 role="button" tabindex="0"
                                 :aria-pressed="istFav(z) ? 'true' : 'false'"
-                                :title="istFav(z) ? t('coinradar.favEntfernen') : t('coinradar.favHinzu')"
+                                :titel="istFav(z) ? t('coinradar.favEntfernen') : t('coinradar.favHinzu')"
                                 @click.stop="favUmschalten(z)"
                                 @keydown.enter.stop.prevent="favUmschalten(z)"
-                                @keydown.space.stop.prevent="favUmschalten(z)"></i>
+                                @keydown.space.stop.prevent="favUmschalten(z)" />
                             <strong>{{ kurz(z.symbol) }}</strong>
                             <span v-if="bestaetigt(z)" class="crBestaetigt" :title="t('coinradar.bestaetigtHilfe')">
-                                <i class="uil uil-check-circle"></i>
+                                <Symbol name="hakenKreis" />
                             </span>
-                            <span v-if="z.status === 'bewertet'" class="ms-auto crNote" :class="noteKlasse(z.note)">{{ z.note }}</span>
-                            <span v-else class="ms-auto badge bg-secondary crBadge">{{ grundText(z.huerdeGrund) }}</span>
+                            <span v-if="z.status === 'bewertet'" class="at-ml-auto crNote" :class="noteKlasse(z.note)">{{ z.note }}</span>
+                            <Pille ton="neutral" class="at-ml-auto crBadge" v-else>{{ grundText(z.huerdeGrund) }}</Pille>
                         </div>
                         <!-- Ein an der Hürde gescheiterter Coin hat keine Kennzahlen — sie
                              wurden nie gerechnet. Vier Nullen hinzuschreiben sähe aus wie
@@ -501,7 +501,7 @@
                         <div v-if="z.status === 'bewertet' && !ohneWert(z.btcKorrelation)" class="crKarteZeile">
                             <span class="crPaar" :class="kopplungKlasse(z)">
                                 <b>BTC</b> {{ btcProzent(z) }} %
-                                <i v-if="zerfallen(z)" class="uil uil-exclamation-triangle crWarnZerfall"></i>
+                                <Symbol v-if="zerfallen(z)" name="warnung" class="crWarnZerfall" />
                             </span>
                             <span class="crPaar"><b>β</b> {{ n(z.btcBeta, 2) }}</span>
                             <!-- Wie auf dem Desktop klickbar zur Handelsseite — hier ist es
@@ -520,13 +520,13 @@
                                 <span class="crBalken"><i :style="{ width: Math.round(wert) + '%' }"></i></span>
                                 <span class="crNoteWert">{{ Math.round(wert) }}</span>
                             </div>
-                            <p v-if="hinweise(z).length" class="crHinweise mb-0">{{ hinweise(z).join(' · ') }}</p>
+                            <p v-if="hinweise(z).length" class="crHinweise at-mu-0">{{ hinweise(z).join(' · ') }}</p>
                         </div>
                     </div>
                 </div>
 
-                <div v-else class="table-responsive">
-                    <table class="table table-sm align-middle crTabelle">
+                <div v-else class="at-tabelle-huelle">
+                    <table class="at-tabelle dicht crTabelle">
                         <thead>
                             <!-- Zwei Ansichten, zwei Spaltensätze: Ein gescheiterter Coin
                                  hat keine Kennzahlen, und ein bewerteter braucht die
@@ -536,15 +536,15 @@
                                 <th class="crSchmal"></th>
                                 <th @click="sortiere('symbol')">{{ t('coinradar.spalteSymbol') }}</th>
                                 <th>{{ t('coinradar.spalteGrund') }}</th>
-                                <th class="text-end" @click="sortiere('umsatz24h')">{{ t('coinradar.spalteUmsatz') }}</th>
-                                <th class="text-end" @click="sortiere('spreadBp')">{{ t('coinradar.spalteSpread') }}</th>
-                                <th class="text-end" @click="sortiere('tiefeUsd')">{{ t('coinradar.spalteTiefe') }}</th>
+                                <th class="at-rechtsbuendig" @click="sortiere('umsatz24h')">{{ t('coinradar.spalteUmsatz') }}</th>
+                                <th class="at-rechtsbuendig" @click="sortiere('spreadBp')">{{ t('coinradar.spalteSpread') }}</th>
+                                <th class="at-rechtsbuendig" @click="sortiere('tiefeUsd')">{{ t('coinradar.spalteTiefe') }}</th>
                             </tr>
                             <tr v-else>
                                 <!-- Die Rangspalte ist klickbar wie jede andere: Sie ist die
                                      Vorgabe-Sortierung, und ohne Handler kam man nach einem
                                      Ausflug in eine andere Spalte nicht mehr zurück. -->
-                                <th class="text-end crSchmal" @click="sortiere('rang')">
+                                <th class="at-rechtsbuendig crSchmal" @click="sortiere('rang')">
                                     #<InfoTipp schluessel="coinradar.spalteRangHilfe" />
                                 </th>
                                 <th @click="sortiere('symbol')">{{ t('coinradar.spalteSymbol') }}</th>
@@ -552,41 +552,41 @@
                                      verrechnet: „bewegt sich viel", „lässt sich günstig
                                      handeln" und „folgt BTC" sind drei Fragen, deren
                                      Antworten sich oft widersprechen. -->
-                                <th class="text-end" @click="sortiere('note')">
+                                <th class="at-rechtsbuendig" @click="sortiere('note')">
                                     {{ t('coinradar.spalteNote') }}<InfoTipp schluessel="coinradar.spalteNoteHilfe" />
                                 </th>
-                                <th class="text-end" @click="sortiere('noteAusfuehrung')">
+                                <th class="at-rechtsbuendig" @click="sortiere('noteAusfuehrung')">
                                     {{ t('coinradar.spalteAusfuehrung') }}<InfoTipp schluessel="coinradar.spalteAusfuehrungHilfe" />
                                 </th>
-                                <th class="text-end" @click="sortiere('atrPct')">
+                                <th class="at-rechtsbuendig" @click="sortiere('atrPct')">
                                     {{ t('coinradar.spalteAtr') }}<InfoTipp schluessel="coinradar.spalteAtrHilfe" />
                                 </th>
-                                <th class="text-end" @click="sortiere('rvol')">
+                                <th class="at-rechtsbuendig" @click="sortiere('rvol')">
                                     {{ t('coinradar.spalteRvol') }}<InfoTipp schluessel="coinradar.spalteRvolHilfe" />
                                 </th>
-                                <th class="text-end" @click="sortiere('adx')">
+                                <th class="at-rechtsbuendig" @click="sortiere('adx')">
                                     {{ t('coinradar.spalteAdx') }}<InfoTipp schluessel="coinradar.spalteAdxHilfe" />
                                 </th>
                                 <!-- Dritte Achse: hängt der Coin an Bitcoin? Beide Spalten
                                      gehen NICHT in die Note ein — „bewegt sich viel",
                                      „lässt sich günstig handeln" und „folgt BTC" sind drei
                                      Fragen, und die Antworten widersprechen sich oft. -->
-                                <th class="text-end" @click="sortiere('btcKorrelation')">
+                                <th class="at-rechtsbuendig" @click="sortiere('btcKorrelation')">
                                     {{ t('coinradar.spalteBtc') }}<InfoTipp schluessel="coinradar.spalteBtcHilfe" />
                                 </th>
-                                <th class="text-end" @click="sortiere('btcBeta')">
+                                <th class="at-rechtsbuendig" @click="sortiere('btcBeta')">
                                     {{ t('coinradar.spalteBeta') }}<InfoTipp schluessel="coinradar.spalteBetaHilfe" />
                                 </th>
                                 <!-- Rundlauf statt Spread: Der Spread ist darin enthalten,
                                      aber allein sagt er nichts über eine Order, die tiefer
                                      ins Buch greift. -->
-                                <th class="text-end" @click="sortiere('rundlaufBp')">
+                                <th class="at-rechtsbuendig" @click="sortiere('rundlaufBp')">
                                     {{ t('coinradar.spalteRundlauf') }}<InfoTipp schluessel="coinradar.spalteRundlaufHilfe" />
                                 </th>
-                                <th class="text-end" @click="sortiere('fundingJahresRate')">
+                                <th class="at-rechtsbuendig" @click="sortiere('fundingJahresRate')">
                                     {{ t('coinradar.spalteFunding') }}<InfoTipp schluessel="coinradar.spalteFundingHilfe" />
                                 </th>
-                                <th class="text-end" @click="sortiere('umsatz24h')">
+                                <th class="at-rechtsbuendig" @click="sortiere('umsatz24h')">
                                     {{ t('coinradar.spalteUmsatz') }}<InfoTipp schluessel="coinradar.spalteUmsatzHilfe" />
                                 </th>
                                 <th></th>
@@ -597,33 +597,33 @@
                                 <tr v-if="zeigeHuerden" class="crZeile">
                                     <td></td>
                                     <td>
-                                        <i class="uil crStern" :class="istFav(z) ? 'uil-favorite aktiv' : 'uil-star'"
+                                        <Symbol class="crStern" :name="istFav(z) ? 'stern' : 'stern'" :gefuellt="istFav(z)" :class="istFav(z) ? 'aktiv' : ''"
                                             role="button" tabindex="0"
                                             :aria-pressed="istFav(z) ? 'true' : 'false'"
-                                            :title="istFav(z) ? t('coinradar.favEntfernen') : t('coinradar.favHinzu')"
+                                            :titel="istFav(z) ? t('coinradar.favEntfernen') : t('coinradar.favHinzu')"
                                             @click.stop="favUmschalten(z)"
                                             @keydown.enter.stop.prevent="favUmschalten(z)"
-                                            @keydown.space.stop.prevent="favUmschalten(z)"></i>
+                                            @keydown.space.stop.prevent="favUmschalten(z)" />
                                         <strong>{{ kurz(z.symbol) }}</strong>
                                     </td>
-                                    <td><span class="badge bg-secondary crBadge">{{ grundText(z.huerdeGrund) }}</span></td>
-                                    <td class="text-end crZahl">{{ mio(z.umsatz24h) }}</td>
-                                    <td class="text-end crZahl">{{ n(z.spreadBp, 2) }}</td>
-                                    <td class="text-end crZahl">{{ n(z.tiefeUsd, 0) }}</td>
+                                    <td><Pille ton="neutral" class="crBadge">{{ grundText(z.huerdeGrund) }}</Pille></td>
+                                    <td class="at-rechtsbuendig crZahl">{{ mio(z.umsatz24h) }}</td>
+                                    <td class="at-rechtsbuendig crZahl">{{ n(z.spreadBp, 2) }}</td>
+                                    <td class="at-rechtsbuendig crZahl">{{ n(z.tiefeUsd, 0) }}</td>
                                 </tr>
                                 <tr v-else class="crZeile" @click="zeileGeklickt(z)">
-                                    <td class="text-end crRangZelle">{{ z.rang || '—' }}</td>
+                                    <td class="at-rechtsbuendig crRangZelle">{{ z.rang || '—' }}</td>
                                     <td>
-                                        <i class="uil crStern" :class="istFav(z) ? 'uil-favorite aktiv' : 'uil-star'"
+                                        <Symbol class="crStern" :name="istFav(z) ? 'stern' : 'stern'" :gefuellt="istFav(z)" :class="istFav(z) ? 'aktiv' : ''"
                                             role="button" tabindex="0"
                                             :aria-pressed="istFav(z) ? 'true' : 'false'"
-                                            :title="istFav(z) ? t('coinradar.favEntfernen') : t('coinradar.favHinzu')"
+                                            :titel="istFav(z) ? t('coinradar.favEntfernen') : t('coinradar.favHinzu')"
                                             @click.stop="favUmschalten(z)"
                                             @keydown.enter.stop.prevent="favUmschalten(z)"
-                                            @keydown.space.stop.prevent="favUmschalten(z)"></i>
+                                            @keydown.space.stop.prevent="favUmschalten(z)" />
                                         <strong>{{ kurz(z.symbol) }}</strong>
                                         <span v-if="bestaetigt(z)" class="crBestaetigt"
-                                            :title="t('coinradar.bestaetigtHilfe')"><i class="uil uil-check-circle"></i></span>
+                                            :title="t('coinradar.bestaetigtHilfe')"><Symbol name="hakenKreis" /></span>
                                         <!-- Wo es den Coin überhaupt gibt. Leise gesetzt: eine
                                              Randnotiz, bis jemand danach filtert. Klickbar direkt
                                              auf die Handelsseite der jeweiligen Börse. -->
@@ -636,40 +636,40 @@
                                         <span v-if="boersenUnbekannt(z).length" class="crBoersePunkt crUnbekannt"
                                             :title="t('coinradar.listungUnbekannt', { b: boersenUnbekannt(z).map(boerseName).join(', ') })">?</span>
                                     </td>
-                                    <td class="text-end">
+                                    <td class="at-rechtsbuendig">
                                         <span class="crNote" :class="noteKlasse(z.note)">{{ z.note }}</span>
                                     </td>
-                                    <td class="text-end">
+                                    <td class="at-rechtsbuendig">
                                         <span v-if="!fehlt(z.noteAusfuehrung)" class="crNote"
                                             :class="noteKlasse(z.noteAusfuehrung)">{{ z.noteAusfuehrung }}</span>
-                                        <span v-else class="text-muted">—</span>
+                                        <span v-else class="at-gedaempft">—</span>
                                         <!-- Wo es günstiger ist. Die Unterschiede sind gross
                                              genug, dass die Börse an die Zeile gehört und
                                              nicht ins Aufklappen. -->
                                         <span v-if="z.besteBoerse" class="crBoerse"
                                             :title="t('coinradar.besteBoerseHilfe', { b: boerseName(z.besteBoerse) })">{{ boerseKurz(z.besteBoerse) }}</span>
                                     </td>
-                                    <td class="text-end crZahl">{{ n(z.atrPct, 2) }}</td>
-                                    <td class="text-end crZahl" :class="{ 'crStark': istImSpiel(z) }">{{ n(z.rvol, 2) }}</td>
-                                    <td class="text-end crZahl" :class="{ 'crStark': istTrendend(z) }">{{ n(z.adx, 0) }}</td>
-                                    <td class="text-end crZahl" :class="kopplungKlasse(z)">
+                                    <td class="at-rechtsbuendig crZahl">{{ n(z.atrPct, 2) }}</td>
+                                    <td class="at-rechtsbuendig crZahl" :class="{ 'crStark': istImSpiel(z) }">{{ n(z.rvol, 2) }}</td>
+                                    <td class="at-rechtsbuendig crZahl" :class="{ 'crStark': istTrendend(z) }">{{ n(z.adx, 0) }}</td>
+                                    <td class="at-rechtsbuendig crZahl" :class="kopplungKlasse(z)">
                                         {{ btcProzent(z) }}<span v-if="!ohneWert(z.btcKorrelation)"> %</span>
                                         <!-- Der Gleichlauf ist im Zeitraum zerbrochen: Die
                                              Zahl links stimmt als Durchschnitt und taugt
                                              trotzdem nicht als Grundlage. -->
-                                        <i v-if="zerfallen(z)" class="uil uil-exclamation-triangle crWarnZerfall"
-                                            :title="t('coinradar.zerfallHilfe', {
+                                        <Symbol v-if="zerfallen(z)"
+                                            :titel="t('coinradar.zerfallHilfe', {
                                                 a: Math.round(z.btcKorrelationH1 * 100),
-                                                b: Math.round(z.btcKorrelationH2 * 100) })"></i>
+                                                b: Math.round(z.btcKorrelationH2 * 100) })" name="warnung" class="crWarnZerfall" />
                                     </td>
-                                    <td class="text-end crZahl">{{ n(z.btcBeta, 2) }}</td>
-                                    <td class="text-end crZahl" :class="rundlaufKlasse(z.rundlaufBp)">{{ n(z.rundlaufBp, 1) }}</td>
-                                    <td class="text-end crZahl" :class="fundingKlasse(z.fundingJahresRate)">
+                                    <td class="at-rechtsbuendig crZahl">{{ n(z.btcBeta, 2) }}</td>
+                                    <td class="at-rechtsbuendig crZahl" :class="rundlaufKlasse(z.rundlaufBp)">{{ n(z.rundlaufBp, 1) }}</td>
+                                    <td class="at-rechtsbuendig crZahl" :class="fundingKlasse(z.fundingJahresRate)">
                                         {{ n(z.fundingJahresRate, 1) }}
                                     </td>
-                                    <td class="text-end crZahl">{{ mio(z.umsatz24h) }}</td>
-                                    <td class="text-end">
-                                        <i class="uil" :class="offen === z.id ? 'uil-angle-up' : 'uil-angle-down'"></i>
+                                    <td class="at-rechtsbuendig crZahl">{{ mio(z.umsatz24h) }}</td>
+                                    <td class="at-rechtsbuendig">
+                                        <Symbol :name="offen === z.id ? 'hoch' : 'runter'" />
                                     </td>
                                 </tr>
                                 <tr v-if="offen === z.id && !zeigeHuerden" :key="z.id + '-d'">
@@ -697,7 +697,7 @@
                                                         <td>{{ m.kerzen }}</td>
                                                     </tr>
                                                 </table>
-                                                <p v-if="hinweise(z).length" class="crHinweise mb-0 mt-2">
+                                                <p v-if="hinweise(z).length" class="crHinweise at-mu-0 at-mo-2">
                                                     {{ hinweise(z).join(' · ') }}
                                                 </p>
                                             </div>
@@ -724,9 +724,9 @@
                                                         <td>{{ geld(v.tiefe25Bp) }}</td>
                                                     </tr>
                                                 </table>
-                                                <p class="crHinweise mb-0 mt-2">
+                                                <p class="crHinweise at-mu-0 at-mo-2">
                                                     <template v-for="(v, b) in jeBoerse(z)" :key="b + 'p'">
-                                                        <span v-if="!v.passt5k" class="d-block">
+                                                        <span v-if="!v.passt5k" class="at-block">
                                                             {{ t('coinradar.passtNicht', { b: boerseName(b) }) }}
                                                         </span>
                                                     </template>
@@ -744,13 +744,13 @@
                                                          und stünde bei jedem aufgeklappten Coin erneut da.
                                                          Als Zeichen zum Darüberfahren bleibt er greifbar,
                                                          ohne den Platz zu nehmen, den die Zahlen brauchen. -->
-                                                    <i class="uil uil-info-circle crInfoWink"
-                                                        :title="t('coinradar.btcNichtInNote')"></i>
+                                                    <Symbol
+                                                        :titel="t('coinradar.btcNichtInNote')" name="info" class="crInfoWink" />
                                                 </div>
                                                 <table class="crZeTabelle">
                                                     <tr>
                                                         <td>{{ t('coinradar.btcKopplung') }}</td>
-                                                        <td class="text-end">
+                                                        <td class="at-rechtsbuendig">
                                                             <b>{{ btcProzent(z) }} %</b>
                                                             <span class="crHinweisWort">
                                                                 {{ t('coinradar.kopplung_' + deuteKopplung(z)) }}
@@ -759,7 +759,7 @@
                                                     </tr>
                                                     <tr>
                                                         <td>{{ t('coinradar.spalteBeta') }}</td>
-                                                        <td class="text-end"><b>{{ n(z.btcBeta, 2) }}</b>
+                                                        <td class="at-rechtsbuendig"><b>{{ n(z.btcBeta, 2) }}</b>
                                                             <span class="crHinweisWort">
                                                                 {{ t('coinradar.betaSatz', { p: n(z.btcBeta, 2) }) }}
                                                             </span>
@@ -767,23 +767,23 @@
                                                     </tr>
                                                     <tr>
                                                         <td>{{ t('coinradar.btcErklaert') }}</td>
-                                                        <td class="text-end">
+                                                        <td class="at-rechtsbuendig">
                                                             {{ Math.round(z.btcKorrelation * z.btcKorrelation * 100) }} %
                                                         </td>
                                                     </tr>
                                                     <tr v-if="!ohneWert(z.btcKorrelationH1)">
                                                         <td>{{ t('coinradar.btcHaelften') }}</td>
-                                                        <td class="text-end" :class="{ crWarnZerfall: zerfallen(z) }">
+                                                        <td class="at-rechtsbuendig" :class="{ crWarnZerfall: zerfallen(z) }">
                                                             {{ Math.round(z.btcKorrelationH1 * 100) }} %
                                                             → {{ Math.round(z.btcKorrelationH2 * 100) }} %
                                                         </td>
                                                     </tr>
                                                     <tr>
                                                         <td>{{ t('coinradar.btcPunkte') }}</td>
-                                                        <td class="text-end">{{ z.btcPunkte ?? '—' }}</td>
+                                                        <td class="at-rechtsbuendig">{{ z.btcPunkte ?? '—' }}</td>
                                                     </tr>
                                                 </table>
-                                                <p v-if="zerfallen(z)" class="crHinweise mb-0 mt-2 crWarnZerfall">
+                                                <p v-if="zerfallen(z)" class="crHinweise at-mu-0 at-mo-2 crWarnZerfall">
                                                     {{ t('coinradar.zerfallSatz') }}
                                                 </p>
                                             </div>
@@ -792,7 +792,7 @@
                                 </tr>
                             </template>
                             <tr v-if="!gefiltert.length">
-                                <td :colspan="zeigeHuerden ? 6 : 13" class="text-center text-muted py-3">
+                                <td :colspan="zeigeHuerden ? 6 : 13" class="at-mittig at-gedaempft at-py-3">
                                     {{ t('coinradar.keineTreffer') }}
                                 </td>
                             </tr>
@@ -803,12 +803,12 @@
         </div>
 
         <!-- ══ Abverkauf ═════════════════════════════════════════════ -->
-        <div v-if="reiter === 'abverkauf'" class="mt-3">
+        <div v-if="reiter === 'abverkauf'" class="at-mo-3">
             <AbverkaufAnsicht :aktiv="reiter === 'abverkauf'" />
         </div>
 
         <!-- ══ Verlauf ═══════════════════════════════════════════════ -->
-        <div v-show="reiter === 'verlauf'" class="mt-3">
+        <div v-show="reiter === 'verlauf'" class="at-mo-3">
             <p class="crHinweis">{{ t('coinradar.verlaufHinweis') }}</p>
 
             <!-- Wer hält sich oben: die Frage, die eine einzelne Rangliste
@@ -817,7 +817,7 @@
                  sichtbaren paar: seit der Lauf automatisch alle paar Stunden
                  startet, wäre eine Begrenzung auf die letzten fünf nur noch
                  ein Tagesausschnitt. -->
-            <div v-if="dauerhaft.length" class="crBlock mb-4">
+            <div v-if="dauerhaft.length" class="crBlock at-mu-4">
                 <h6 class="crTitel">{{ t('coinradar.dauerhaftTitel') }}</h6>
                 <p class="crHinweis">{{ t('coinradar.dauerhaftHinweis', { n: dauerhaftMoeglich }) }}</p>
                 <div class="crDauerLayout" :class="{ mitInfo: coinInfoSymbol }">
@@ -836,13 +836,13 @@
                          der Hinweis unten statt einer erfundenen Ja/Nein-Zeile. -->
                     <div v-if="coinInfoSymbol" class="crCoinInfo">
                         <button type="button" class="crCoinInfoZu" @click="coinInfoSymbol = ''">
-                            <i class="uil uil-times"></i>
+                            <Symbol name="schliessen" />
                         </button>
-                        <div v-if="coinInfoLaedt" class="text-center py-3">
-                            <span class="spinner-border spinner-border-sm"></span>
+                        <div v-if="coinInfoLaedt" class="at-mittig at-py-3">
+                            <Kreisel still />
                         </div>
-                        <p v-else-if="coinInfoFehler" class="text-muted small mb-0">{{ coinInfoFehler }}</p>
-                        <p v-else-if="coinInfo === null" class="text-muted small mb-0">
+                        <p v-else-if="coinInfoFehler" class="at-gedaempft at-klein at-mu-0">{{ coinInfoFehler }}</p>
+                        <p v-else-if="coinInfo === null" class="at-gedaempft at-klein at-mu-0">
                             {{ t('coinradar.coinInfoKeineDaten', { symbol: kurz(coinInfoSymbol) }) }}
                         </p>
                         <template v-else-if="coinInfo">
@@ -870,19 +870,19 @@
                                  https:// zusammengesetzt und sind schemasicher. -->
                             <div class="crCoinInfoLinks">
                                 <a v-if="sichereUrl(coinInfo.homepage)" :href="sichereUrl(coinInfo.homepage)" target="_blank" rel="noopener">
-                                    <i class="uil uil-globe"></i>{{ t('coinradar.coinInfoWebsite') }}</a>
+                                    <Symbol name="globus" />{{ t('coinradar.coinInfoWebsite') }}</a>
                                 <a v-if="sichereUrl(coinInfo.whitepaper)" :href="sichereUrl(coinInfo.whitepaper)" target="_blank" rel="noopener">
-                                    <i class="uil uil-file-alt"></i>Whitepaper</a>
+                                    <Symbol name="dokument" />Whitepaper</a>
                                 <a v-if="coinInfo.twitter" :href="coinInfo.twitter" target="_blank" rel="noopener">
-                                    <i class="uil uil-twitter"></i>X</a>
+                                    <Symbol name="nachricht" />X</a>
                                 <a v-if="coinInfo.telegram" :href="coinInfo.telegram" target="_blank" rel="noopener">
-                                    <i class="uil uil-telegram"></i>Telegram</a>
+                                    <Symbol name="senden" />Telegram</a>
                                 <a v-if="sichereUrl(coinInfo.github)" :href="sichereUrl(coinInfo.github)" target="_blank" rel="noopener">
-                                    <i class="uil uil-github"></i>GitHub</a>
+                                    <Symbol name="code" />GitHub</a>
                                 <a v-if="sichereUrl(coinInfo.explorer)" :href="sichereUrl(coinInfo.explorer)" target="_blank" rel="noopener">
-                                    <i class="uil uil-search"></i>Explorer</a>
+                                    <Symbol name="suche" />Explorer</a>
                                 <a :href="coinInfo.coingeckoUrl" target="_blank" rel="noopener">
-                                    <i class="uil uil-external-link-alt"></i>CoinGecko</a>
+                                    <Symbol name="extern" />CoinGecko</a>
                             </div>
                             <p class="crCoinInfoFuss">{{ coinInfoSichtbarkeitText }}</p>
                         </template>
@@ -896,43 +896,43 @@
                  Je Horizont: Spitze gegen eine Kontrollgruppe aus der unteren
                  Hälfte desselben Laufs, und die Note gegen eine Rangfolge nur
                  nach ATR%. -->
-            <div class="crBlock mb-4">
+            <div class="crBlock at-mu-4">
                 <h6 class="crTitel">{{ t('coinradar.gueteTitel') }}</h6>
                 <p class="crHinweis">{{ t('coinradar.gueteHinweis') }}</p>
-                <div v-if="gueteFehler" class="text-muted small">{{ gueteFehler }}</div>
-                <div v-else-if="!guete" class="text-muted small"><span class="spinner-border spinner-border-sm"></span></div>
-                <div v-else-if="!guete.jeHorizont.length" class="text-muted small">{{ t('coinradar.gueteLeer') }}</div>
+                <div v-if="gueteFehler" class="at-gedaempft at-klein">{{ gueteFehler }}</div>
+                <div v-else-if="!guete" class="at-gedaempft at-klein"><Kreisel still /></div>
+                <div v-else-if="!guete.jeHorizont.length" class="at-gedaempft at-klein">{{ t('coinradar.gueteLeer') }}</div>
                 <template v-else>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle crTabelle">
+                    <div class="at-tabelle-huelle">
+                        <table class="at-tabelle dicht crTabelle">
                             <thead>
                                 <tr>
                                     <th>{{ t('coinradar.gueteHorizont') }}</th>
-                                    <th class="text-end" :title="t('coinradar.gueteLaeufeTitel')">{{ t('coinradar.gueteLaeufe') }}</th>
-                                    <th class="text-end" :title="t('coinradar.guetePrecisionTitel')">Precision@10</th>
-                                    <th class="text-end" :title="t('coinradar.gueteSpanneTitel')">{{ t('coinradar.gueteSpanne') }}</th>
-                                    <th class="text-end" :title="t('coinradar.gueteVorneTitel')">{{ t('coinradar.gueteVorne') }}</th>
-                                    <th class="text-end" :title="t('coinradar.gueteRhoTitel')">{{ t('coinradar.gueteRho') }}</th>
+                                    <th class="at-rechtsbuendig" :title="t('coinradar.gueteLaeufeTitel')">{{ t('coinradar.gueteLaeufe') }}</th>
+                                    <th class="at-rechtsbuendig" :title="t('coinradar.guetePrecisionTitel')">Precision@10</th>
+                                    <th class="at-rechtsbuendig" :title="t('coinradar.gueteSpanneTitel')">{{ t('coinradar.gueteSpanne') }}</th>
+                                    <th class="at-rechtsbuendig" :title="t('coinradar.gueteVorneTitel')">{{ t('coinradar.gueteVorne') }}</th>
+                                    <th class="at-rechtsbuendig" :title="t('coinradar.gueteRhoTitel')">{{ t('coinradar.gueteRho') }}</th>
                                     <th>{{ t('coinradar.gueteUrteil') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="h in guete.jeHorizont" :key="h.horizont">
                                     <td>{{ h.horizont }} <span class="crKlein">≥ {{ n(h.schwellePct, 1) }} %</span></td>
-                                    <td class="text-end crZahl">{{ h.laeufeMitKontrolle }} / {{ h.laeufe }}</td>
-                                    <td class="text-end crZahl">{{ prozentAnteil(h.precision10) }}</td>
-                                    <td class="text-end crZahl">{{ n(h.medianSpanneOben, 2) }} / {{ n(h.medianSpanneKontrolle, 2) }} %</td>
-                                    <td class="text-end crZahl">
+                                    <td class="at-rechtsbuendig crZahl">{{ h.laeufeMitKontrolle }} / {{ h.laeufe }}</td>
+                                    <td class="at-rechtsbuendig crZahl">{{ prozentAnteil(h.precision10) }}</td>
+                                    <td class="at-rechtsbuendig crZahl">{{ n(h.medianSpanneOben, 2) }} / {{ n(h.medianSpanneKontrolle, 2) }} %</td>
+                                    <td class="at-rechtsbuendig crZahl">
                                         {{ prozentAnteil(h.obenVorneAnteil) }}
                                         <span v-if="h.vorzeichenP !== null" class="crKlein">p {{ n(h.vorzeichenP, 3) }}</span>
                                     </td>
-                                    <td class="text-end crZahl">{{ n(h.rangKorrelation, 2) }} / {{ n(h.atrKorrelation, 2) }}</td>
+                                    <td class="at-rechtsbuendig crZahl">{{ n(h.rangKorrelation, 2) }} / {{ n(h.atrKorrelation, 2) }}</td>
                                     <td :class="gueteKlasse(h.urteil)">{{ t('coinradar.guete_' + h.urteil) }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <p class="crKlein mb-0">{{ t('coinradar.gueteFuss', {
+                    <p class="crKlein at-mu-0">{{ t('coinradar.gueteFuss', {
                         tage: guete.tage,
                         offen: guete.jeHorizont.reduce((a, h) => a + h.offen, 0),
                         fehl: guete.jeHorizont.reduce((a, h) => a + h.fehlgeschlagen, 0),
@@ -940,17 +940,17 @@
                 </template>
             </div>
 
-            <div v-if="!laeufe.length" class="text-muted small py-3">{{ t('coinradar.keineLaeufe') }}</div>
-            <div v-else class="table-responsive">
-                <table class="table table-sm align-middle crTabelle">
+            <div v-if="!laeufe.length" class="at-gedaempft at-klein at-py-3">{{ t('coinradar.keineLaeufe') }}</div>
+            <div v-else class="at-tabelle-huelle">
+                <table class="at-tabelle dicht crTabelle">
                     <thead>
                         <tr>
                             <th>{{ t('coinradar.spalteZeit') }}</th>
                             <th>{{ t('coinradar.spalteStatus') }}</th>
-                            <th class="text-end">{{ t('coinradar.spalteBewertet') }}</th>
-                            <th class="text-end">{{ t('coinradar.spalteVerworfen') }}</th>
-                            <th class="text-end">{{ t('coinradar.spalteBeharrlich') }}</th>
-                            <th class="text-end">{{ t('coinradar.spalteKosten') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('coinradar.spalteBewertet') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('coinradar.spalteVerworfen') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('coinradar.spalteBeharrlich') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('coinradar.spalteKosten') }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -959,17 +959,17 @@
                             :class="{ aktiv: lauf && l.id === lauf.id }" @click="laufOeffnen(l)">
                             <td>{{ zeitpunkt(l.erstelltAm) }}</td>
                             <td>
-                                <span class="badge crBadge" :class="statusKlasse(l.status)">{{ t('coinradar.status_' + l.status) }}</span>
-                                <span class="crKlein ms-1">{{ t('coinradar.ausloeser_' + (l.ausloeser || 'auto')) }}</span>
+                                <Pille class="crBadge" :ton="statusTon(l.status)">{{ t('coinradar.status_' + l.status) }}</Pille>
+                                <span class="crKlein at-ml-1">{{ t('coinradar.ausloeser_' + (l.ausloeser || 'auto')) }}</span>
                             </td>
-                            <td class="text-end crZahl">{{ l.gesamt }}</td>
-                            <td class="text-end crZahl">{{ l.verworfenHuerde }}</td>
-                            <td class="text-end crZahl">
+                            <td class="at-rechtsbuendig crZahl">{{ l.gesamt }}</td>
+                            <td class="at-rechtsbuendig crZahl">{{ l.verworfenHuerde }}</td>
+                            <td class="at-rechtsbuendig crZahl">
                                 <span v-if="l.vergleichslauf">{{ n(l.rangkorrelation, 2) }}</span>
-                                <span v-else class="text-muted">—</span>
+                                <span v-else class="at-gedaempft">—</span>
                             </td>
-                            <td class="text-end crZahl">{{ l.kostenUsd ? useKostenAnzeige(l.kostenUsd, 3) : '—' }}</td>
-                            <td class="text-end"><i class="uil uil-angle-right"></i></td>
+                            <td class="at-rechtsbuendig crZahl">{{ l.kostenUsd ? useKostenAnzeige(l.kostenUsd, 3) : '—' }}</td>
+                            <td class="at-rechtsbuendig"><Symbol name="ausklappen" /></td>
                         </tr>
                     </tbody>
                 </table>
@@ -977,11 +977,11 @@
 
             <!-- Ältere Läufe bleiben eingeklappt: die Liste wächst mit jedem
                  Lauf, gebraucht werden fast immer nur die letzten paar. -->
-            <div v-if="laeufe.length > VERLAUF_SICHTBAR" class="text-center">
-                <button class="btn btn-sm crMehr" @click="verlaufOffen = !verlaufOffen">
-                    <i class="uil" :class="verlaufOffen ? 'uil-angle-up' : 'uil-angle-down'"></i>
+            <div v-if="laeufe.length > VERLAUF_SICHTBAR" class="at-mittig">
+                <Knopf klein class="crMehr" @click="verlaufOffen = !verlaufOffen">
+                    <Symbol :name="verlaufOffen ? 'hoch' : 'runter'" />
                     {{ verlaufOffen ? t('coinradar.verlaufWeniger') : t('coinradar.verlaufMehr', { n: laeufe.length - VERLAUF_SICHTBAR }) }}
-                </button>
+                </Knopf>
             </div>
         </div>
 
@@ -989,6 +989,7 @@
 </template>
 
 <script setup>
+import Symbol from '@/components/basis/Symbol.vue'
 /**
  * Coin-Radar — welche der handelbaren Coins sich gerade handeln lassen.
  *
@@ -1028,6 +1029,10 @@ import {
     BOERSE_KURZ as BOERSE_LINK_KURZ, BOERSE_NAME as BOERSE_LINK_NAME,
     boerseUrl, boersenLinksVon as boersenLinksAus,
 } from '../utils/boersenLinks.js'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Kreisel from '@/components/basis/Kreisel.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
 
 const { t } = useI18n()
 const istTelefon = useIstTelefon()
@@ -1183,19 +1188,20 @@ const rundlaufKlasse = (w) => {
     const x = Number(w)
     if (!Number.isFinite(x) || fehlt(w)) return ''
     if (x <= 5) return 'crStark'
-    if (x >= 30) return 'text-danger'
-    if (x >= 15) return 'text-warning'
+    if (x >= 30) return 'at-schlecht'
+    if (x >= 15) return 'at-warn'
     return ''
 }
 const fundingKlasse = (w) => {
     const z = Number(w)
     if (!Number.isFinite(z) || Math.abs(z) < 25) return ''
-    return Math.abs(z) >= 50 ? 'text-danger' : 'text-warning'
+    return Math.abs(z) >= 50 ? 'at-schlecht' : 'at-warn'
 }
-const statusKlasse = (s) => ({
-    fertig: 'bg-success', laeuft: 'bg-primary',
-    abgebrochen: 'bg-secondary', fehler: 'bg-danger',
-}[s] || 'bg-secondary')
+/** Ton der Status-Pille (`Pille.vue`). */
+const statusTon = (s) => ({
+    fertig: 'gut', laeuft: 'akzent',
+    abgebrochen: 'neutral', fehler: 'schlecht',
+}[s] || 'neutral')
 
 const grundText = (g) => {
     const s = t('coinradar.grund_' + g)
@@ -1680,8 +1686,8 @@ async function ladeGuete() {
 const prozentAnteil = (w) => (w === null || w === undefined || !Number.isFinite(Number(w))
     ? '—' : `${Math.round(Number(w) * 100)} %`)
 
-const gueteKlasse = (urteil) => (urteil === 'traegt' ? 'text-success'
-    : (urteil === 'zuWenig' ? 'text-muted' : 'text-warning'))
+const gueteKlasse = (urteil) => (urteil === 'traegt' ? 'at-gut'
+    : (urteil === 'zuWenig' ? 'at-gedaempft' : 'at-warn'))
 
 async function rechneDauerhaft() {
     // Server rechnet über ALLE fertigen Läufe in einer Abfrage — Vorgänger
@@ -2660,7 +2666,7 @@ a.crBoerse:hover, a.crBoerse:active {
     font-size: .966rem;
 }
 
-.crRegler .form-range {
+.crRegler .at-regler {
     flex: 1;
 }
 
@@ -2902,7 +2908,7 @@ a.crBoerse:hover, a.crBoerse:active {
         padding-top: .5rem;
     }
 
-    .crKnoepfe .btn {
+    .crKnoepfe .at-knopf {
         flex: 1;
     }
 

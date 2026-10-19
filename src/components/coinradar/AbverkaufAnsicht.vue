@@ -2,18 +2,18 @@
     <div class="av">
         <div class="avKopf">
             <div class="avStand">
-                <span v-if="!einst.an" class="avAus"><i class="uil uil-pause-circle me-1"></i>{{ t('abverkauf.aus') }}</span>
+                <span v-if="!einst.an" class="avAus"><Symbol name="pauseKreis" class="at-mr-1" />{{ t('abverkauf.aus') }}</span>
                 <span v-else>{{ t('abverkauf.an', { n: einst.intervallMin }) }}</span>
                 <span v-if="daten?.stand?.letzter?.am"> · {{ t('abverkauf.letzter', { z: zeitpunkt(daten.stand.letzter.am) }) }}</span>
                 <span v-if="daten?.stand?.letzter?.angesehen !== undefined"> · {{ t('abverkauf.angesehen', { n: daten.stand.letzter.angesehen }) }}</span>
-                <span v-if="daten?.stand?.letzter?.fehler" class="text-danger"> · {{ daten.stand.letzter.fehler }}</span>
+                <span v-if="daten?.stand?.letzter?.fehler" class="at-schlecht"> · {{ daten.stand.letzter.fehler }}</span>
             </div>
-            <button type="button" class="ctl-pill ms-auto" @click="einstOffen = !einstOffen">
-                <i class="uil uil-setting me-1"></i>{{ t('abverkauf.einstellungen') }}
+            <button type="button" class="ctl-pill at-ml-auto" @click="einstOffen = !einstOffen">
+                <Symbol name="einstellungen" class="at-mr-1" />{{ t('abverkauf.einstellungen') }}
             </button>
             <button type="button" class="ctl-pill" :disabled="laeuft" @click="pruefen">
-                <span v-if="laeuft" class="spinner-border spinner-border-sm me-1"></span>
-                <i v-else class="uil uil-sync me-1"></i>{{ laeuft ? t('abverkauf.laeuft') : t('abverkauf.jetzt') }}
+                <Kreisel still class="at-mr-1" v-if="laeuft" />
+                <Symbol v-else name="aktualisieren" class="at-mr-1" />{{ laeuft ? t('abverkauf.laeuft') : t('abverkauf.jetzt') }}
             </button>
         </div>
 
@@ -21,30 +21,30 @@
         <div v-if="einstOffen" class="avEinst">
             <label class="avSchalter"><input type="checkbox" v-model="form.an"> {{ t('abverkauf.e_an') }}</label>
             <label class="avSchalter" :title="t('abverkauf.e_vorwarnungTitel')"><input type="checkbox" v-model="form.vorwarnung"> {{ t('abverkauf.e_vorwarnung') }}</label>
-            <label>{{ t('abverkauf.e_intervall') }} <input v-model.number="form.intervallMin" type="number" min="5" max="120" class="form-control form-control-sm"></label>
-            <label :title="t('abverkauf.e_anstiegTitel')">{{ t('abverkauf.e_anstieg') }} <input v-model.number="form.minAnstieg" type="number" min="5" max="500" class="form-control form-control-sm"></label>
-            <label :title="t('abverkauf.e_umsatzTitel')">{{ t('abverkauf.e_umsatz') }} <input v-model.number="form.minUmsatzMio" type="number" min="0" step="1" class="form-control form-control-sm"></label>
-            <label :title="t('abverkauf.e_schwelleTitel')">{{ t('abverkauf.e_schwelle') }} <input v-model.number="form.schwelle" type="number" min="10" max="100" class="form-control form-control-sm"></label>
+            <label>{{ t('abverkauf.e_intervall') }} <input v-model.number="form.intervallMin" type="number" min="5" max="120" class="at-feld klein"></label>
+            <label :title="t('abverkauf.e_anstiegTitel')">{{ t('abverkauf.e_anstieg') }} <input v-model.number="form.minAnstieg" type="number" min="5" max="500" class="at-feld klein"></label>
+            <label :title="t('abverkauf.e_umsatzTitel')">{{ t('abverkauf.e_umsatz') }} <input v-model.number="form.minUmsatzMio" type="number" min="0" step="1" class="at-feld klein"></label>
+            <label :title="t('abverkauf.e_schwelleTitel')">{{ t('abverkauf.e_schwelle') }} <input v-model.number="form.schwelle" type="number" min="10" max="100" class="at-feld klein"></label>
             <button type="button" class="ctl-pill active" :disabled="speichert" @click="speichern">{{ t('abverkauf.e_speichern') }}</button>
-            <span v-if="einstMeldung" class="small" :class="einstFehler ? 'text-danger' : 'avGrau'">{{ einstMeldung }}</span>
+            <span v-if="einstMeldung" class="at-klein" :class="einstFehler ? 'at-schlecht' : 'avGrau'">{{ einstMeldung }}</span>
         </div>
 
-        <div v-if="meldung" class="alert py-2 small mt-2" :class="meldungFehler ? 'alert-danger' : 'alert-info'">{{ meldung }}</div>
-        <div v-if="ladeFehler" class="text-danger small mt-2">{{ ladeFehler }}</div>
+        <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">{{ meldung }}</Hinweis>
+        <div v-if="ladeFehler" class="at-schlecht at-klein at-mo-2">{{ ladeFehler }}</div>
 
         <p class="avHinweis">{{ t('abverkauf.erklaerung') }}</p>
 
-        <div v-if="daten === null && !ladeFehler" class="text-muted small"><span class="spinner-border spinner-border-sm"></span></div>
+        <div v-if="daten === null && !ladeFehler" class="at-gedaempft at-klein"><Kreisel still /></div>
         <template v-else-if="daten">
-            <p v-if="!wichtige.length" class="avGrau small">{{ t('abverkauf.leer') }}</p>
+            <p v-if="!wichtige.length" class="avGrau at-klein">{{ t('abverkauf.leer') }}</p>
             <div class="avKarten">
                 <div v-for="c in wichtige" :key="c.symbol" class="avKarte" :class="c.phase">
                     <div class="avKarteKopf">
                         <strong class="avName">{{ kurzSymbol(c.symbol) }}</strong>
                         <span class="avPhase" :class="c.phase">{{ t('abverkauf.phase_' + c.phase) }}</span>
-                        <span class="avGrau small">{{ t('abverkauf.seit', { z: dauer(Date.now() - c.phaseSeit) }) }}</span>
+                        <span class="avGrau at-klein">{{ t('abverkauf.seit', { z: dauer(Date.now() - c.phaseSeit) }) }}</span>
                         <span class="avNote" :title="t('abverkauf.noteTitel')">{{ t('abverkauf.treibstoff') }} <b>{{ c.note }}</b></span>
-                        <span class="ms-auto avLinks">
+                        <span class="at-ml-auto avLinks">
                             <a v-for="l in links(c)" :key="l.boerse" :href="l.url" target="_blank" rel="noopener noreferrer" class="avLink"
                                 :title="l.name">{{ l.kurz }}</a>
                         </span>
@@ -67,18 +67,18 @@
                         <div>
                             <div class="avTitel">{{ t('abverkauf.titelTreibstoff') }}</div>
                             <ul class="avListe"><li v-for="x in c.treibstoff" :key="x.schluessel" class="plus">+ {{ x.text }}</li></ul>
-                            <p v-if="!c.treibstoff?.length" class="avGrau small mb-0">—</p>
+                            <p v-if="!c.treibstoff?.length" class="avGrau at-klein at-mu-0">—</p>
                         </div>
                         <div>
                             <div class="avTitel">{{ t('abverkauf.titelKippen') }}</div>
                             <ul class="avListe"><li v-for="x in c.kippen" :key="x.schluessel" class="kipp">↘ {{ x.text }}</li></ul>
-                            <p v-if="!c.kippen?.length" class="avGrau small mb-0">{{ t('abverkauf.nochKeine') }}</p>
+                            <p v-if="!c.kippen?.length" class="avGrau at-klein at-mu-0">{{ t('abverkauf.nochKeine') }}</p>
                         </div>
                         <div>
                             <div class="avTitel">{{ t('abverkauf.titelGegen') }}</div>
                             <ul class="avListe"><li v-for="x in c.gegen" :key="x.schluessel" :class="x.sperrt ? 'sperrt' : 'gegen'">{{ x.sperrt ? '⛔' : '!' }} {{ x.text }}</li></ul>
-                            <p v-if="!c.gegen?.length" class="avGrau small mb-0">—</p>
-                            <p v-if="c.fehlend?.length" class="avGrau small mt-1 mb-0">{{ t('abverkauf.fehlend', { f: c.fehlend.map((f) => t('abverkauf.quelle_' + f)).join(', ') }) }}</p>
+                            <p v-if="!c.gegen?.length" class="avGrau at-klein at-mu-0">—</p>
+                            <p v-if="c.fehlend?.length" class="avGrau at-klein at-mo-1 at-mu-0">{{ t('abverkauf.fehlend', { f: c.fehlend.map((f) => t('abverkauf.quelle_' + f)).join(', ') }) }}</p>
                         </div>
                     </div>
                 </div>
@@ -87,15 +87,15 @@
             <!-- Angesehen, aber ohne Befund -->
             <div v-if="uebrige.length" class="avAbschnitt">
                 <button type="button" class="ctl-pill" @click="uebrigeOffen = !uebrigeOffen">
-                    <i class="uil me-1" :class="uebrigeOffen ? 'uil-angle-up' : 'uil-angle-down'"></i>{{ t('abverkauf.uebrige', { n: uebrige.length }) }}
+                    <Symbol class="at-mr-1" :name="uebrigeOffen ? 'hoch' : 'runter'" />{{ t('abverkauf.uebrige', { n: uebrige.length }) }}
                 </button>
-                <table v-if="uebrigeOffen" class="table table-sm align-middle avTabelle mt-2">
+                <table v-if="uebrigeOffen" class="at-tabelle dicht avTabelle at-mo-2">
                     <tbody>
                         <tr v-for="c in uebrige" :key="c.symbol">
                             <td><strong>{{ kurzSymbol(c.symbol) }}</strong></td>
-                            <td class="text-end">{{ prozent(c.kennzahlen?.anstieg24h) }}</td>
-                            <td class="text-end">{{ t('abverkauf.treibstoff') }} {{ c.note }}</td>
-                            <td class="avGrau small">{{ (c.treibstoff || []).map((x) => x.text).join(' · ') }}</td>
+                            <td class="at-rechtsbuendig">{{ prozent(c.kennzahlen?.anstieg24h) }}</td>
+                            <td class="at-rechtsbuendig">{{ t('abverkauf.treibstoff') }} {{ c.note }}</td>
+                            <td class="avGrau at-klein">{{ (c.treibstoff || []).map((x) => x.text).join(' · ') }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -104,17 +104,17 @@
             <!-- Erfolgskontrolle -->
             <div class="avAbschnitt">
                 <div class="avTitelGross">{{ t('abverkauf.gueteTitel') }}</div>
-                <p class="avGrau small mb-1">{{ t('abverkauf.gueteHinweis') }}</p>
-                <p v-if="!Object.keys(daten.guete || {}).length" class="avGrau small">{{ t('abverkauf.gueteLeer', { n: daten.offen || 0 }) }}</p>
-                <table v-else class="table table-sm align-middle avTabelle">
+                <p class="avGrau at-klein at-mu-1">{{ t('abverkauf.gueteHinweis') }}</p>
+                <p v-if="!Object.keys(daten.guete || {}).length" class="avGrau at-klein">{{ t('abverkauf.gueteLeer', { n: daten.offen || 0 }) }}</p>
+                <table v-else class="at-tabelle dicht avTabelle">
                     <thead>
                         <tr>
                             <th>{{ t('abverkauf.gHorizont') }}</th>
                             <th>{{ t('abverkauf.gGruppe') }}</th>
-                            <th class="text-end">n</th>
-                            <th class="text-end" :title="t('abverkauf.gRenditeTitel')">{{ t('abverkauf.gRendite') }}</th>
-                            <th class="text-end">{{ t('abverkauf.gFall') }}</th>
-                            <th class="text-end" :title="t('abverkauf.gHochTitel')">{{ t('abverkauf.gHoch') }}</th>
+                            <th class="at-rechtsbuendig">n</th>
+                            <th class="at-rechtsbuendig" :title="t('abverkauf.gRenditeTitel')">{{ t('abverkauf.gRendite') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('abverkauf.gFall') }}</th>
+                            <th class="at-rechtsbuendig" :title="t('abverkauf.gHochTitel')">{{ t('abverkauf.gHoch') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -122,21 +122,22 @@
                             <tr v-for="g in ['spitze', 'kontrolle']" v-show="daten.guete[h]" :key="h + g">
                                 <td>{{ g === 'spitze' ? h : '' }}</td>
                                 <td>{{ t('abverkauf.g_' + g) }}</td>
-                                <td class="text-end">{{ daten.guete[h]?.[g]?.n ?? 0 }}</td>
-                                <td class="text-end" :class="vz(-(daten.guete[h]?.[g]?.medianRendite ?? 0))">{{ prozent(daten.guete[h]?.[g]?.medianRendite) }}</td>
-                                <td class="text-end">{{ daten.guete[h]?.[g]?.anteilFall ?? '—' }}{{ daten.guete[h]?.[g]?.anteilFall !== null && daten.guete[h]?.[g]?.anteilFall !== undefined ? ' %' : '' }}</td>
-                                <td class="text-end">{{ prozent(daten.guete[h]?.[g]?.medianHoch) }}</td>
+                                <td class="at-rechtsbuendig">{{ daten.guete[h]?.[g]?.n ?? 0 }}</td>
+                                <td class="at-rechtsbuendig" :class="vz(-(daten.guete[h]?.[g]?.medianRendite ?? 0))">{{ prozent(daten.guete[h]?.[g]?.medianRendite) }}</td>
+                                <td class="at-rechtsbuendig">{{ daten.guete[h]?.[g]?.anteilFall ?? '—' }}{{ daten.guete[h]?.[g]?.anteilFall !== null && daten.guete[h]?.[g]?.anteilFall !== undefined ? ' %' : '' }}</td>
+                                <td class="at-rechtsbuendig">{{ prozent(daten.guete[h]?.[g]?.medianHoch) }}</td>
                             </tr>
                         </template>
                     </tbody>
                 </table>
-                <p v-if="Object.keys(daten.guete || {}).length && daten.offen" class="avGrau small">{{ t('abverkauf.gueteOffen', { n: daten.offen }) }}</p>
+                <p v-if="Object.keys(daten.guete || {}).length && daten.offen" class="avGrau at-klein">{{ t('abverkauf.gueteOffen', { n: daten.offen }) }}</p>
             </div>
         </template>
     </div>
 </template>
 
 <script setup>
+import Symbol from '@/components/basis/Symbol.vue'
 /**
  * Coin-Radar → Abverkauf.
  *
@@ -150,6 +151,8 @@ import axios from 'axios'
 import { boerseUrl, BOERSE_KURZ, BOERSE_NAME, aktivierteBoersen } from '../../utils/boersenLinks.js'
 import { currentUser } from '../../stores/globals.js'
 import { logWarn } from '../../utils/logger.js'
+import Kreisel from '@/components/basis/Kreisel.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
 
 const props = defineProps({ aktiv: { type: Boolean, default: false } })
 const { t, locale } = useI18n()
@@ -251,7 +254,7 @@ const uebrigeOffen = ref(false)
 const kurzSymbol = (s) => String(s || '').replace(/USDT$/, '')
 const ok = (x) => typeof x === 'number' && Number.isFinite(x)
 const prozent = (x) => (ok(x) ? `${x > 0 ? '+' : ''}${x} %` : '—')
-const vz = (x) => (!ok(x) || x === 0 ? '' : x > 0 ? 'text-success' : 'text-danger')
+const vz = (x) => (!ok(x) || x === 0 ? '' : x > 0 ? 'at-gut' : 'at-schlecht')
 const kurs = (x) => (!ok(x) ? '—' : x >= 1000 ? Math.round(x).toLocaleString('de-CH') : x.toPrecision(5))
 
 /** Links zu den Börsen, auf denen das Perpetual handelt — plus TradingView. */
@@ -304,8 +307,8 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
 .avLink { font-size: .74rem; padding: .02rem .4rem; border-radius: 4px; background: var(--white-10, rgba(255, 255, 255, .08)); text-decoration: none; }
 .avKz { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .82rem; color: var(--grey-color, #9aa0a6); margin: .45rem 0; }
 .avKz b { color: var(--white-87, #e8eaed); font-weight: 600; }
-.avKz b.text-success { color: #4caf50; }
-.avKz b.text-danger { color: #ef5350; }
+.avKz b.at-gut { color: var(--good); }
+.avKz b.at-schlecht { color: var(--bad); }
 .avSpalten { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .75rem; }
 .avTitel { font-size: .74rem; letter-spacing: .05em; text-transform: uppercase; color: var(--grey-color, #9aa0a6); margin-bottom: .2rem; }
 .avTitelGross { font-size: .95rem; font-weight: 600; margin-bottom: .2rem; }

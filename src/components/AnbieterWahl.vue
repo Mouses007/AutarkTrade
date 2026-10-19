@@ -56,14 +56,14 @@ function setzeAnbieter(wert) {
 </script>
 
 <template>
-    <div class="d-flex gap-2 flex-wrap align-items-center">
-        <select class="form-select form-select-sm" style="max-width:12rem;" :disabled="disabled"
+    <div class="at-flex at-luecke-2 at-umbruch at-mitte">
+        <select class="at-feld klein" style="max-width:12rem;" :disabled="disabled"
             :value="provider" @change="setzeAnbieter($event.target.value)">
             <option v-if="erlaubeGlobal" value="">{{ t('settings.ki.useGlobal') }}</option>
             <option v-for="a in anbieter" :key="a" :value="a">{{ a }}</option>
         </select>
 
-        <select class="form-select form-select-sm" style="max-width:16rem;"
+        <select class="at-feld klein" style="max-width:16rem;"
             :disabled="disabled || (!provider && erlaubeGlobal)"
             :value="modell" @change="emit('update:modell', $event.target.value)">
             <option value="">{{ t('settings.ki.defaultModel') }}</option>
@@ -72,7 +72,7 @@ function setzeAnbieter(wert) {
 
         <!-- Was tatsächlich greift. Ohne diese Zeile ist „Global" eine
              Behauptung, die man nur durch Ausprobieren prüfen kann. -->
-        <small v-if="!provider && erlaubeGlobal" class="text-muted">
+        <small v-if="!provider && erlaubeGlobal" class="at-gedaempft">
             {{ t('settings.ki.currentlyGlobal', {
                 anbieter: globalProvider || '—',
                 modell: globalModell || t('settings.ki.defaultModel'),

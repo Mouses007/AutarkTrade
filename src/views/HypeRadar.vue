@@ -12,7 +12,7 @@
                     :aria-expanded="einstOffen"
                     :title="einstOffen ? t('hype.eZu') : t('hype.eAuf')"
                     @click="einstUmschalten">
-                    <i class="uil" :class="einstOffen ? 'uil-angle-down' : 'uil-setting'"></i>
+                    <Symbol :name="einstOffen ? 'runter' : 'einstellungen'" />
                 </button>
                 <span v-if="!einstOffen" class="hypEinstZeile" @click="einstUmschalten">
                     {{ einstZusammenfassung }}
@@ -25,44 +25,43 @@
                 <template v-if="!eigeneAnsicht">
                 <span v-if="laeuft" class="hypFortschritt">{{ fortschrittText }}</span>
                 <button type="button" class="ctl-pill" :disabled="laeuft" @click="starte(false)">
-                    <i class="uil uil-search me-1"></i>{{ t('hype.nurScannen') }}
+                    <Symbol name="suche" class="at-mr-1" />{{ t('hype.nurScannen') }}
                 </button>
                 <button type="button" class="ctl-pill accent" :disabled="laeuft || fehlendeSchluessel.length"
                     :title="fehlendeSchluessel.length ? t('hype.schluesselFehlt', { anbieter: fehlendeSchluessel.join(', ') }) : ''"
                     @click="starte(true)">
-                    <span v-if="laeuft" class="spinner-border spinner-border-sm me-1"></span>
-                    <i v-else class="uil uil-file-alt me-1"></i>{{ t('hype.scannenUndBericht') }}
+                    <Kreisel still class="at-mr-1" v-if="laeuft" />
+                    <Symbol v-else name="dokument" class="at-mr-1" />{{ t('hype.scannenUndBericht') }}
                 </button>
                 </template>
                 <PageInfo :section="infoAbschnitt" />
             </div>
         </div>
 
-        <div v-if="meldung" class="alert py-2 small mt-2" :class="meldungFehler ? 'alert-danger' : 'alert-info'">
+        <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">
             {{ meldung }}
-        </div>
+        </Hinweis>
         <!-- Fehlende KI-Schlüssel betreffen nur den Bericht — die Frühphase
              ruft kein Sprachmodell. -->
-        <div v-if="fehlendeSchluessel.length && !eigeneAnsicht" class="alert alert-warning py-2 small mt-2">
-            <i class="uil uil-exclamation-triangle me-1"></i>
+        <Hinweis v-if="fehlendeSchluessel.length && !eigeneAnsicht" class="at-mo-2" art="warn">
             {{ t('hype.schluesselFehlt', { anbieter: fehlendeSchluessel.join(', ') }) }}
-        </div>
+        </Hinweis>
 
         <!-- ══ Einstellungen ═════════════════════════════════════════ -->
-        <div v-if="einstOffen" class="mt-3">
+        <div v-if="einstOffen" class="at-mo-3">
             <div v-if="einst" class="hypEinst">
                 <div class="hypEinstTeil" :style="teilStil('haupt')" v-show="teilSichtbar('haupt')">
-                <div class="form-check form-switch mb-3">
-                    <input id="hypAktiv" class="form-check-input" type="checkbox"
+                <div class="at-check schalter at-mu-3">
+                    <input id="hypAktiv" type="checkbox"
                         v-model="einst.aktiv" @change="speichern">
-                    <label class="form-check-label" for="hypAktiv">{{ t('hype.autoAn') }}</label>
+                    <label for="hypAktiv">{{ t('hype.autoAn') }}</label>
                     <div class="hypHinweis">{{ t('hype.autoHinweis') }}</div>
                 </div>
 
-                <div class="row g-3 mb-3">
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.intervall') }}</label>
-                        <select v-model.number="einst.intervallStunden" class="form-select form-select-sm"
+                <div class="at-formzeile at-mu-3">
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.intervall') }}</label>
+                        <select v-model.number="einst.intervallStunden" class="at-feld klein"
                             @change="speichern">
                             <option :value="1">{{ t('hype.stunde1') }}</option>
                             <option :value="3">{{ t('hype.stundeN', { n: 3 }) }}</option>
@@ -71,15 +70,15 @@
                             <option :value="24">{{ t('hype.taeglich') }}</option>
                         </select>
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.minHype') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.minHype') }}</label>
                         <input v-model.number="einst.minHypeScore" type="number" min="0" max="100"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.topN') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.topN') }}</label>
                         <input v-model.number="einst.berichtTopN" type="number" min="1" max="20"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
                 </div>
 
@@ -90,7 +89,7 @@
                     <div v-for="(_, feld) in einst.gewichte" :key="feld" class="hypReglerZeile">
                         <label>{{ t('hype.note_' + feld) }}</label>
                         <input type="range" min="0" max="50" v-model.number="einst.gewichte[feld]"
-                            class="form-range" @change="speichern">
+                            class="at-regler" @change="speichern">
                         <span class="hypReglerWert">{{ einst.gewichte[feld] }}</span>
                     </div>
                     <div class="hypSumme" :class="{ falsch: gewichtSumme !== 100 }">
@@ -100,56 +99,56 @@
                 </div>
 
                 <!-- Sicherheit -->
-                <h6 class="hypTitel mt-4">{{ t('hype.sicherheitTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.sicherheitTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.sicherheitHinweis') }}</p>
-                <div class="row g-3">
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.minLiq') }}</label>
+                <div class="at-formzeile">
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.minLiq') }}</label>
                         <input v-model.number="einst.sicherheit.minLiquiditaetUsd" type="number"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.maxTop10') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.maxTop10') }}</label>
                         <input v-model.number="einst.sicherheit.maxTop10Prozent" type="number"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.minAlter') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.minAlter') }}</label>
                         <input v-model.number="einst.sicherheit.minPaarAlterStunden" type="number"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.maxSteuer') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.maxSteuer') }}</label>
                         <input v-model.number="einst.sicherheit.maxVerkaufssteuerProzent" type="number"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
                 </div>
-                <div class="form-check form-switch mt-2">
-                    <input id="hypLp" class="form-check-input" type="checkbox"
+                <div class="at-check schalter at-mo-2">
+                    <input id="hypLp" type="checkbox"
                         v-model="einst.sicherheit.lpMussGesperrtSein" @change="speichern">
-                    <label class="form-check-label small" for="hypLp">{{ t('hype.lpPflicht') }}</label>
+                    <label class="at-klein" for="hypLp">{{ t('hype.lpPflicht') }}</label>
                 </div>
 
                 <!-- Börsenfilter -->
-                <h6 class="hypTitel mt-4">{{ t('hype.boersenTitel') }}</h6>
-                <div class="form-check form-switch">
-                    <input id="hypBoersen" class="form-check-input" type="checkbox"
+                <h6 class="hypTitel at-mo-4">{{ t('hype.boersenTitel') }}</h6>
+                <div class="at-check schalter">
+                    <input id="hypBoersen" type="checkbox"
                         v-model="einst.nurBoersen" @change="speichern">
-                    <label class="form-check-label small" for="hypBoersen">{{ t('hype.nurBoersen') }}</label>
+                    <label class="at-klein" for="hypBoersen">{{ t('hype.nurBoersen') }}</label>
                     <div class="hypHinweis">{{ t('hype.nurBoersenHinweis') }}</div>
                 </div>
 
                 <!-- Quellen -->
-                <h6 class="hypTitel mt-4">{{ t('hype.quellenTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.quellenTitel') }}</h6>
                 <div class="hypQuellen">
                     <!-- Alle verbliebenen Quellen laufen ohne Schlüssel. Die drei
                          früheren Zusatzquellen sind am 21.08.2026 entfernt worden,
                          weil keine davon nutzbar war — Begründung im Kopf von
                          `quellen.js`. -->
-                    <div v-for="(_, q) in einst.quellen" :key="q" class="form-check form-switch">
-                        <input :id="'hypQ' + q" class="form-check-input" type="checkbox"
+                    <div v-for="(_, q) in einst.quellen" :key="q" class="at-check schalter">
+                        <input :id="'hypQ' + q" type="checkbox"
                             v-model="einst.quellen[q]" @change="speichern">
-                        <label class="form-check-label small" :for="'hypQ' + q">
+                        <label class="at-klein" :for="'hypQ' + q">
                             {{ q }}
                             <!-- CoinGecko läuft auch ohne Schlüssel, nur mit
                                  engem Limit — „braucht einen Schlüssel" wäre
@@ -168,20 +167,20 @@
                      der Lauf meldete „kein Schlüssel hinterlegt". Gespeichert
                      wird verschlüsselt; zurück kommt nur eine Maske, und ein
                      Feld mit Maske überschreibt beim Speichern nichts. -->
-                <div class="hypSchluessel mt-3">
+                <div class="hypSchluessel at-mo-3">
                     <div v-for="(info, q) in SCHLUESSEL_QUELLEN" :key="q" class="hypSchluesselZeile">
-                        <label class="form-label small mb-1">
+                        <label class="at-label at-klein at-mu-1">
                             {{ q }}
                             <span class="hypHinweisKlein">{{ info.optional ? t('hype.keyOptional') : t('hype.keyNoetig') }}</span>
                         </label>
                         <div class="hypSchluesselFeld">
                             <input v-model="einst.schluessel[q]" type="password"
-                                class="form-control form-control-sm"
+                                class="at-feld klein"
                                 :placeholder="schluesselDa(q) ? einst.schluessel[q] : t('hype.keyPlatzhalter')"
                                 @change="speichern">
                             <a :href="info.url" target="_blank" rel="noopener"
                                 class="ctl-pill klein" :title="info.url">
-                                <i class="uil uil-external-link-alt"></i>{{ t('hype.keyHolen') }}
+                                <Symbol name="extern" />{{ t('hype.keyHolen') }}
                             </a>
                         </div>
                         <div class="hypHinweis">{{ t('hype.keyHinweis.' + q) }}</div>
@@ -194,20 +193,20 @@
                 <!-- Projektprüfung: Webseite, Domain-Alter, GitHub, Ersteller.
                      Kostet keinen Schlüssel, aber Fremdabrufe je Fund —
                      deshalb gedeckelt. -->
-                <h6 class="hypTitel mt-4">{{ t('hype.projektTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.projektTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.projektHinweis') }}</p>
-                <div class="row g-3 align-items-end">
-                    <div class="col-auto">
-                        <div class="form-check form-switch">
-                            <input id="hypProjekt" class="form-check-input" type="checkbox"
+                <div class="at-formzeile">
+                    <div>
+                        <div class="at-check schalter">
+                            <input id="hypProjekt" type="checkbox"
                                 v-model="einst.projektPruefung" @change="speichern">
-                            <label class="form-check-label small" for="hypProjekt">{{ t('hype.projektAn') }}</label>
+                            <label class="at-klein" for="hypProjekt">{{ t('hype.projektAn') }}</label>
                         </div>
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.projektMax') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.projektMax') }}</label>
                         <input v-model.number="einst.projektMax" type="number" min="0" max="40"
-                            class="form-control form-control-sm hypZahl" :disabled="!einst.projektPruefung" @change="speichern">
+                            class="at-feld klein hypZahl" :disabled="!einst.projektPruefung" @change="speichern">
                     </div>
                 </div>
                 </div>
@@ -215,58 +214,58 @@
                 <div class="hypEinstTeil" :style="teilStil('frueh')" v-show="teilSichtbar('frueh')">
                 <!-- Frühphase: die Spur VOR der Hauptprüfung. Eigener Takt,
                      eigene Quellen, eigene Alarmschwelle. -->
-                <h6 class="hypTitel mt-4">{{ t('hype.fruehTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.fruehTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.fruehHinweis') }}</p>
-                <div class="form-check form-switch mb-2">
-                    <input id="hypFrueh" class="form-check-input" type="checkbox"
+                <div class="at-check schalter at-mu-2">
+                    <input id="hypFrueh" type="checkbox"
                         v-model="einst.fruehAktiv" @change="speichern">
-                    <label class="form-check-label small" for="hypFrueh">{{ t('hype.fruehAn') }}</label>
+                    <label class="at-klein" for="hypFrueh">{{ t('hype.fruehAn') }}</label>
                 </div>
-                <div class="row g-3">
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.fruehTakt') }}</label>
-                        <select v-model.number="einst.fruehIntervallMin" class="form-select form-select-sm" @change="speichern">
+                <div class="at-formzeile">
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.fruehTakt') }}</label>
+                        <select v-model.number="einst.fruehIntervallMin" class="at-feld klein" @change="speichern">
                             <option :value="5">5 min</option>
                             <option :value="15">15 min</option>
                             <option :value="30">30 min</option>
                             <option :value="60">60 min</option>
                         </select>
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.fruehKandidatAb') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.fruehKandidatAb') }}</label>
                         <input v-model.number="einst.fruehKandidatAb" type="number" min="1" max="100"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.fruehAlarmAb') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.fruehAlarmAb') }}</label>
                         <input v-model.number="einst.fruehAlarmAb" type="number" min="0" max="100"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
                 </div>
-                <div class="hypHinweisKlein mt-1">{{ t('hype.fruehKandidatHinweis') }}</div>
-                <div class="hypHinweisKlein mt-1">{{ t('hype.fruehAlarmHinweis') }}</div>
-                <div class="hypQuellen mt-2">
-                    <div v-for="(_, q) in einst.fruehQuellen" :key="q" class="form-check form-switch">
-                        <input :id="'hypFQ' + q" class="form-check-input" type="checkbox"
+                <div class="hypHinweisKlein at-mo-1">{{ t('hype.fruehKandidatHinweis') }}</div>
+                <div class="hypHinweisKlein at-mo-1">{{ t('hype.fruehAlarmHinweis') }}</div>
+                <div class="hypQuellen at-mo-2">
+                    <div v-for="(_, q) in einst.fruehQuellen" :key="q" class="at-check schalter">
+                        <input :id="'hypFQ' + q" type="checkbox"
                             v-model="einst.fruehQuellen[q]" @change="speichern">
-                        <label class="form-check-label small" :for="'hypFQ' + q">{{ t('hype.fruehQuelle_' + q) }}</label>
+                        <label class="at-klein" :for="'hypFQ' + q">{{ t('hype.fruehQuelle_' + q) }}</label>
                     </div>
                 </div>
                 <!-- X kostet je Abfrage — deshalb ein eigener, längerer Takt. -->
-                <div v-if="einst.fruehQuellen?.x" class="row g-3 mt-1 align-items-end">
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.fruehXTakt') }}</label>
-                        <select v-model.number="einst.fruehXIntervallMin" class="form-select form-select-sm" @change="speichern">
+                <div v-if="einst.fruehQuellen?.x" class="at-formzeile at-mo-1">
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.fruehXTakt') }}</label>
+                        <select v-model.number="einst.fruehXIntervallMin" class="at-feld klein" @change="speichern">
                             <option :value="30">30 min</option>
                             <option :value="60">60 min</option>
                             <option :value="120">2 h</option>
                             <option :value="240">4 h</option>
                         </select>
                     </div>
-                    <div class="col hypHinweis mb-0">{{ t('hype.fruehXHinweis') }}</div>
+                    <div class="at-wachsen hypHinweis at-mu-0">{{ t('hype.fruehXHinweis') }}</div>
                 </div>
-                <label class="form-label small mt-2" for="hypFruehTg">{{ t('hype.fruehTelegram') }}</label>
-                <textarea id="hypFruehTg" class="form-control form-control-sm hypTgListe" rows="2"
+                <label class="at-label at-klein at-mo-2" for="hypFruehTg">{{ t('hype.fruehTelegram') }}</label>
+                <textarea id="hypFruehTg" class="at-feld klein hypTgListe" rows="2"
                     :value="(einst.fruehTelegram || []).join('\n')"
                     :placeholder="t('hype.fruehTelegramPlatzhalter')"
                     @change="fruehTelegramGeaendert"></textarea>
@@ -275,23 +274,23 @@
                 <!-- Smart Money: Wallet-Liste, Takt und RPC-Adresse — nur, wenn
                      die Quelle eingeschaltet ist. -->
                 <template v-if="einst.fruehQuellen?.smartmoney">
-                    <label class="form-label small mt-2" for="hypSmartW">{{ t('hype.smartWallets') }}</label>
-                    <textarea id="hypSmartW" class="form-control form-control-sm hypTgListe" rows="3"
+                    <label class="at-label at-klein at-mo-2" for="hypSmartW">{{ t('hype.smartWallets') }}</label>
+                    <textarea id="hypSmartW" class="at-feld klein hypTgListe" rows="3"
                         :value="(einst.smartWallets || []).map((w) => (w.adresse + ' ' + (w.name || '')).trim()).join('\n')"
                         :placeholder="t('hype.smartWalletsPlatzhalter')"
                         @change="smartWalletsGeaendert"></textarea>
-                    <div class="row g-3 mt-1 align-items-end">
-                        <div class="col-auto">
-                            <label class="form-label small">{{ t('hype.smartTakt') }}</label>
-                            <select v-model.number="einst.smartIntervallMin" class="form-select form-select-sm" @change="speichern">
+                    <div class="at-formzeile at-mo-1">
+                        <div>
+                            <label class="at-label at-klein">{{ t('hype.smartTakt') }}</label>
+                            <select v-model.number="einst.smartIntervallMin" class="at-feld klein" @change="speichern">
                                 <option :value="15">15 min</option>
                                 <option :value="30">30 min</option>
                                 <option :value="60">60 min</option>
                             </select>
                         </div>
-                        <div class="col">
-                            <label class="form-label small">{{ t('hype.smartRpc') }}</label>
-                            <input v-model="einst.schluessel.solanaRpc" type="password" class="form-control form-control-sm"
+                        <div class="at-wachsen">
+                            <label class="at-label at-klein">{{ t('hype.smartRpc') }}</label>
+                            <input v-model="einst.schluessel.solanaRpc" type="password" class="at-feld klein"
                                 :placeholder="schluesselDa('solanaRpc') ? einst.schluessel.solanaRpc : t('hype.smartRpcPlatzhalter')"
                                 @change="speichern">
                         </div>
@@ -302,27 +301,27 @@
 
                 <div class="hypEinstTeil" :style="teilStil('boersen')" v-show="teilSichtbar('boersen')">
                 <!-- Börsen-Beobachter -->
-                <h6 class="hypTitel mt-4">{{ t('hype.boersenwachtTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.boersenwachtTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.boersenwachtHinweis') }}</p>
-                <div class="row g-3 align-items-end">
-                    <div class="col-auto">
-                        <div class="form-check form-switch">
-                            <input id="hypBw" class="form-check-input" type="checkbox" v-model="einst.boersenwachtAn" @change="speichern">
-                            <label class="form-check-label small" for="hypBw">{{ t('hype.boersenwachtAn') }}</label>
+                <div class="at-formzeile">
+                    <div>
+                        <div class="at-check schalter">
+                            <input id="hypBw" type="checkbox" v-model="einst.boersenwachtAn" @change="speichern">
+                            <label class="at-klein" for="hypBw">{{ t('hype.boersenwachtAn') }}</label>
                         </div>
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.boersenwachtTakt') }}</label>
-                        <select v-model.number="einst.boersenwachtIntervallMin" class="form-select form-select-sm" @change="speichern">
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.boersenwachtTakt') }}</label>
+                        <select v-model.number="einst.boersenwachtIntervallMin" class="at-feld klein" @change="speichern">
                             <option :value="15">15 min</option>
                             <option :value="30">30 min</option>
                             <option :value="60">60 min</option>
                         </select>
                     </div>
-                    <div class="col-auto">
-                        <div class="form-check form-switch">
-                            <input id="hypBwAlle" class="form-check-input" type="checkbox" v-model="einst.boersenAlleMelden" @change="speichern">
-                            <label class="form-check-label small" for="hypBwAlle">{{ t('hype.boersenAlleMelden') }}</label>
+                    <div>
+                        <div class="at-check schalter">
+                            <input id="hypBwAlle" type="checkbox" v-model="einst.boersenAlleMelden" @change="speichern">
+                            <label class="at-klein" for="hypBwAlle">{{ t('hype.boersenAlleMelden') }}</label>
                         </div>
                     </div>
                 </div>
@@ -330,15 +329,15 @@
 
                 <div class="hypEinstTeil" :style="teilStil('wachhund')" v-show="teilSichtbar('wachhund')">
                 <!-- Wachhund & Alarme -->
-                <h6 class="hypTitel mt-4">{{ t('hype.wachhundTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.wachhundTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.wachhundHinweis') }}</p>
                 <p v-if="einst.wachhundIntervallMin === 0" class="hypHinweis hypAus">
                     {{ t('hype.wachhundAusHinweis') }}
                 </p>
-                <div class="row g-3">
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.wachhundTakt') }}</label>
-                        <select v-model.number="einst.wachhundIntervallMin" class="form-select form-select-sm"
+                <div class="at-formzeile">
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.wachhundTakt') }}</label>
+                        <select v-model.number="einst.wachhundIntervallMin" class="at-feld klein"
                             @change="speichern">
                             <!-- „Aus" als eigener Wert. Bis zum 21.08.2026 liess sich der
                                  Wachhund nur stilllegen, indem man alle Sterne entfernte —
@@ -350,65 +349,65 @@
                             <option :value="60">60 min</option>
                         </select>
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.regelPreisSprung') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.regelPreisSprung') }}</label>
                         <input v-model.number="einst.alarmRegeln.preisSprungPct" type="number" min="1"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.regelPreis24h') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.regelPreis24h') }}</label>
                         <input v-model.number="einst.alarmRegeln.preisSturz24hPct" type="number" min="1"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.regelLiqAbfluss') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.regelLiqAbfluss') }}</label>
                         <input v-model.number="einst.alarmRegeln.liqAbflussPct" type="number" min="1"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
                 </div>
 
                 <!-- Börsen-Favoriten: eigene Schwellen, weil sie eigene Grössen
                      messen. Ein Bitunix-Perp hat keinen Liquiditätspool, der
                      abfliessen könnte — dort zählen Umsatz, Spread und Funding. -->
-                <p class="hypHinweis mt-3 mb-1">{{ t('hype.regelnBoerse') }}</p>
-                <div class="row g-3">
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.regelUmsatzEinbruch') }}</label>
+                <p class="hypHinweis at-mo-3 at-mu-1">{{ t('hype.regelnBoerse') }}</p>
+                <div class="at-formzeile">
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.regelUmsatzEinbruch') }}</label>
                         <input v-model.number="einst.alarmRegeln.umsatzEinbruchPct" type="number" min="1"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.regelSpreadWarn') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.regelSpreadWarn') }}</label>
                         <input v-model.number="einst.alarmRegeln.spreadWarnBp" type="number" min="1" step="0.5"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
-                    <div class="col-auto">
-                        <label class="form-label small">{{ t('hype.regelFundingExtrem') }}</label>
+                    <div>
+                        <label class="at-label at-klein">{{ t('hype.regelFundingExtrem') }}</label>
                         <input v-model.number="einst.alarmRegeln.fundingExtremPct" type="number" min="1"
-                            class="form-control form-control-sm hypZahl" @change="speichern">
+                            class="at-feld klein hypZahl" @change="speichern">
                     </div>
                 </div>
                 </div>
 
                 <div class="hypEinstTeil" :style="teilStil('kanaele')" v-show="teilSichtbar('kanaele')">
                 <!-- Zustellkanäle -->
-                <h6 class="hypTitel mt-4">{{ t('hype.kanaeleTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.kanaeleTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.kanaeleHinweis') }}</p>
 
                 <div class="hypKanal">
-                    <div class="form-check form-switch">
-                        <input id="hypKanNtfy" class="form-check-input" type="checkbox"
+                    <div class="at-check schalter">
+                        <input id="hypKanNtfy" type="checkbox"
                             v-model="einst.alarmKanaele.ntfy.an" @change="speichern">
-                        <label class="form-check-label" for="hypKanNtfy"><strong>ntfy</strong></label>
+                        <label for="hypKanNtfy"><strong>ntfy</strong></label>
                     </div>
                     <div v-if="einst.alarmKanaele.ntfy.an" class="hypKanalFelder">
-                        <input v-model="einst.alarmKanaele.ntfy.url" class="form-control form-control-sm"
+                        <input v-model="einst.alarmKanaele.ntfy.url" class="at-feld klein"
                             :placeholder="t('hype.ntfyUrl')" @change="speichern">
-                        <input v-model="einst.alarmKanaele.ntfy.topic" class="form-control form-control-sm"
+                        <input v-model="einst.alarmKanaele.ntfy.topic" class="at-feld klein"
                             placeholder="Topic" @change="speichern">
-                        <input v-model="einst.schluessel.ntfyToken" type="password" class="form-control form-control-sm"
+                        <input v-model="einst.schluessel.ntfyToken" type="password" class="at-feld klein"
                             :placeholder="t('hype.tokenOptional')" @change="speichern">
-                        <select v-model="einst.alarmKanaele.ntfy.minSchwere" class="form-select form-select-sm"
+                        <select v-model="einst.alarmKanaele.ntfy.minSchwere" class="at-feld klein"
                             @change="speichern">
                             <option value="info">{{ t('hype.abInfo') }}</option>
                             <option value="warnung">{{ t('hype.abWarnung') }}</option>
@@ -418,17 +417,17 @@
                 </div>
 
                 <div class="hypKanal">
-                    <div class="form-check form-switch">
-                        <input id="hypKanTg" class="form-check-input" type="checkbox"
+                    <div class="at-check schalter">
+                        <input id="hypKanTg" type="checkbox"
                             v-model="einst.alarmKanaele.telegram.an" @change="speichern">
-                        <label class="form-check-label" for="hypKanTg"><strong>Telegram</strong></label>
+                        <label for="hypKanTg"><strong>Telegram</strong></label>
                     </div>
                     <div v-if="einst.alarmKanaele.telegram.an" class="hypKanalFelder">
-                        <input v-model="einst.schluessel.telegramToken" type="password" class="form-control form-control-sm"
+                        <input v-model="einst.schluessel.telegramToken" type="password" class="at-feld klein"
                             :placeholder="t('hype.botToken')" @change="speichern">
-                        <input v-model="einst.alarmKanaele.telegram.chatId" class="form-control form-control-sm"
+                        <input v-model="einst.alarmKanaele.telegram.chatId" class="at-feld klein"
                             placeholder="Chat-ID" @change="speichern">
-                        <select v-model="einst.alarmKanaele.telegram.minSchwere" class="form-select form-select-sm"
+                        <select v-model="einst.alarmKanaele.telegram.minSchwere" class="at-feld klein"
                             @change="speichern">
                             <option value="info">{{ t('hype.abInfo') }}</option>
                             <option value="warnung">{{ t('hype.abWarnung') }}</option>
@@ -438,43 +437,43 @@
                 </div>
 
                 <div class="hypKanal">
-                    <div class="form-check form-switch">
-                        <input id="hypKanWh" class="form-check-input" type="checkbox"
+                    <div class="at-check schalter">
+                        <input id="hypKanWh" type="checkbox"
                             v-model="einst.alarmKanaele.webhook.an" @change="speichern">
-                        <label class="form-check-label" for="hypKanWh">
+                        <label for="hypKanWh">
                             <strong>Webhook</strong>
                             <span class="hypHinweisKlein">{{ t('hype.webhookHa') }}</span>
                         </label>
                     </div>
                     <div v-if="einst.alarmKanaele.webhook.an" class="hypKanalFelder">
-                        <input v-model="einst.schluessel.webhookUrl" type="password" class="form-control form-control-sm hypBreit"
+                        <input v-model="einst.schluessel.webhookUrl" type="password" class="at-feld klein hypBreit"
                             :placeholder="t('hype.webhookUrl')" @change="speichern">
-                        <select v-model="einst.alarmKanaele.webhook.minSchwere" class="form-select form-select-sm"
+                        <select v-model="einst.alarmKanaele.webhook.minSchwere" class="at-feld klein"
                             @change="speichern">
                             <option value="info">{{ t('hype.abInfo') }}</option>
                             <option value="warnung">{{ t('hype.abWarnung') }}</option>
                             <option value="kritisch">{{ t('hype.abKritisch') }}</option>
                         </select>
-                        <div class="hypHinweis mb-0" style="flex-basis: 100%">{{ t('hype.webhookPayload') }}</div>
+                        <div class="hypHinweis at-mu-0" style="flex-basis: 100%">{{ t('hype.webhookPayload') }}</div>
                     </div>
                 </div>
 
-                <button class="btn btn-sm btn-outline-secondary mt-2" :disabled="testLaeuft" @click="kanaeleTesten">
-                    <span v-if="testLaeuft" class="spinner-border spinner-border-sm me-1"></span>
+                <Knopf klein class="at-mo-2" :disabled="testLaeuft" @click="kanaeleTesten">
+                    <Kreisel still class="at-mr-1" v-if="testLaeuft" />
                     {{ t('hype.kanaeleTesten') }}
-                </button>
-                <span v-if="testErgebnis" class="ms-2 small">{{ testErgebnis }}</span>
+                </Knopf>
+                <span v-if="testErgebnis" class="at-ml-2 at-klein">{{ testErgebnis }}</span>
                 </div>
 
                 <div class="hypEinstTeil" :style="teilStil('ki')" v-show="teilSichtbar('ki')">
                 <!-- KI-Stufe -->
-                <h6 class="hypTitel mt-4">{{ t('hype.kiTitel') }}</h6>
+                <h6 class="hypTitel at-mo-4">{{ t('hype.kiTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.kiHinweis') }}</p>
-                <div class="btn-group btn-group-sm mb-2">
-                    <button class="btn" :class="ordnung === 'preis' ? 'btn-primary' : 'btn-outline-secondary'"
-                        @click="ordnungWechseln('preis')">{{ t('hype.nachPreis') }}</button>
-                    <button class="btn" :class="ordnung === 'guete' ? 'btn-primary' : 'btn-outline-secondary'"
-                        @click="ordnungWechseln('guete')">{{ t('hype.nachGuete') }}</button>
+                <div class="at-flex at-luecke-1 at-mu-2">
+                    <Knopf klein :art="ordnung === 'preis' ? 'haupt' : 'normal'"
+                        @click="ordnungWechseln('preis')">{{ t('hype.nachPreis') }}</Knopf>
+                    <Knopf klein :art="ordnung === 'guete' ? 'haupt' : 'normal'"
+                        @click="ordnungWechseln('guete')">{{ t('hype.nachGuete') }}</Knopf>
                 </div>
                 <div class="hypStufen">
                     <label v-for="s in stufen" :key="s.id" class="hypStufe"
@@ -488,8 +487,8 @@
                             @change="stufeGewaehlt(s)">
                         <div class="hypStufeKopf">
                             <strong>{{ t('hype.modus_' + s.modus) }} · {{ t('hype.profil_' + s.profil) }}</strong>
-                            <span v-if="s.empfohlen" class="badge bg-primary hypBadge ms-2">{{ t('hype.empfohlen') }}</span>
-                            <span class="ms-auto hypStufePreis">~{{ s.usdProMonat[0] }}–{{ s.usdProMonat[1] }} $/{{ t('hype.monat') }}</span>
+                            <Pille ton="akzent" class="hypBadge at-ml-2" v-if="s.empfohlen">{{ t('hype.empfohlen') }}</Pille>
+                            <span class="at-ml-auto hypStufePreis">~{{ s.usdProMonat[0] }}–{{ s.usdProMonat[1] }} $/{{ t('hype.monat') }}</span>
                         </div>
                         <div class="hypStufeModelle">
                             {{ t('hype.recherche') }}: {{ s.rollen.research.provider }}/{{ s.rollen.research.modell }}
@@ -502,7 +501,7 @@
                         <input type="radio" name="hypStufe" :checked="manuell" @change="manuellWaehlen">
                         <div class="hypStufeKopf">
                             <strong>{{ t('hype.manuell') }}</strong>
-                            <span class="ms-auto hypStufePreis">{{ t('hype.manuellPreis') }}</span>
+                            <span class="at-ml-auto hypStufePreis">{{ t('hype.manuellPreis') }}</span>
                         </div>
                         <div class="hypStufeModelle">{{ t('hype.manuellHinweis') }}</div>
                     </label>
@@ -523,8 +522,8 @@
                             @update:provider="w => rolleSetzen(r.id, 'provider', w)"
                             @update:modell="w => rolleSetzen(r.id, 'modell', w)" />
                     </div>
-                    <p v-if="fehlendeSchluessel.length" class="hypHinweis mb-0 mt-2 text-warning">
-                        <i class="uil uil-exclamation-triangle me-1"></i>
+                    <p v-if="fehlendeSchluessel.length" class="hypHinweis at-mu-0 at-mo-2 at-warn">
+                        <Symbol name="warnung" class="at-mr-1" />
                         {{ t('hype.schluesselFehlt', { anbieter: fehlendeSchluessel.join(', ') }) }}
                     </p>
                 </div>
@@ -533,15 +532,15 @@
         </div>
 
         <!-- ══ Dashboard ═════════════════════════════════════════════ -->
-        <div v-show="reiter === 'dashboard'" class="mt-3">
+        <div v-show="reiter === 'dashboard'" class="at-mo-3">
 
             <!-- ── Favoriten ─────────────────────────────────────── -->
             <div v-if="favoriten.length" class="hypFavLeiste">
-                <span class="hypFavTitel"><i class="uil uil-star me-1"></i>{{ t('hype.favoriten') }}</span>
+                <span class="hypFavTitel"><Symbol name="stern" class="at-mr-1" />{{ t('hype.favoriten') }}</span>
                 <button v-for="f in sichtbareFavoriten" :key="f.id" class="hypFavChip"
                     :class="{ aktiv: liveOffen?.favorit?.id === f.id, stumm: f.stumm }"
                     @click="liveOeffnen(f)">
-                    <i v-if="f.stumm" class="uil uil-bell-slash me-1"></i>{{ f.symbol }}<span class="hypFavKette">{{ f.chain }}</span>
+                    <Symbol v-if="f.stumm" name="glockeAus" class="at-mr-1" />{{ f.symbol }}<span class="hypFavKette">{{ f.chain }}</span>
                     <span v-if="ungelesenJeFavorit[f.id]" class="hypAlarmZahl">{{ ungelesenJeFavorit[f.id] }}</span>
                 </button>
                 <!-- Der Rest steckt hinter einem Knopf. Die Zahl darauf ist
@@ -555,18 +554,18 @@
 
             <!-- ── Alarme ────────────────────────────────────────── -->
             <div v-if="alarme.length" class="hypBlock">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                    <h6 class="hypTitel mb-0">
-                        <i class="uil uil-bell me-1"></i>{{ t('hype.alarmeTitel') }}
-                        <span v-if="ungeleseneAlarme.length" class="badge bg-danger hypBadge ms-1">{{ ungeleseneAlarme.length }}</span>
+                <div class="at-flex at-mitte at-luecke-2 at-mu-2">
+                    <h6 class="hypTitel at-mu-0">
+                        <Symbol name="glocke" class="at-mr-1" />{{ t('hype.alarmeTitel') }}
+                        <Pille ton="schlecht" class="hypBadge at-ml-1" v-if="ungeleseneAlarme.length">{{ ungeleseneAlarme.length }}</Pille>
                     </h6>
-                    <button v-if="ungeleseneAlarme.length" class="btn btn-sm btn-outline-secondary py-0 ms-auto"
-                        @click="alarmeGelesen">{{ t('hype.alleGelesen') }}</button>
-                    <button class="btn btn-sm btn-outline-secondary py-0"
-                        :class="[ungeleseneAlarme.length ? '' : 'ms-auto', { hypScharf: alarmAlleScharf }]"
+                    <Knopf klein class="at-ml-auto" v-if="ungeleseneAlarme.length"
+                        @click="alarmeGelesen">{{ t('hype.alleGelesen') }}</Knopf>
+                    <Knopf klein
+                        :class="[ungeleseneAlarme.length ? '' : 'at-ml-auto', { hypScharf: alarmAlleScharf }]"
                         :title="t('hype.loeschen')" @click="alarmeAlleLoeschen">
                         {{ alarmAlleScharf ? t('hype.alarmeAlleLoeschenScharf') : t('hype.alarmeAlleLoeschen') }}
-                    </button>
+                    </Knopf>
                 </div>
                 <div class="hypAlarmListe">
                     <div v-for="a in sichtbareAlarme" :key="a.id" class="hypAlarm"
@@ -578,18 +577,18 @@
                         <span class="hypAlarmZeit">{{ zeitpunkt(a.erstelltAm) }}</span>
                         <span role="button" tabindex="0" class="hypAlarmWeg" :class="{ scharf: alarmLoeschId === a.id }"
                             :title="t('hype.loeschen')" @keydown.enter.stop.prevent="alarmLoeschen(a.id)" @keydown.space.stop.prevent="alarmLoeschen(a.id)" @click.stop="alarmLoeschen(a.id)">
-                            <i class="uil uil-trash-alt"></i>
+                            <Symbol name="muell" />
                         </span>
                     </div>
                 </div>
                 <!-- Die älteren sind geladen, nur nicht gezeigt: vorher waren
                      sie hart abgeschnitten und der Zähler oben zählte trotzdem
                      mit — man sah eine Zahl ohne die zugehörige Zeile. -->
-                <button v-if="alarme.length > ALARM_SICHTBAR" class="btn btn-sm btn-outline-secondary py-0 mt-2"
+                <Knopf v-if="alarme.length > ALARM_SICHTBAR" klein class="at-mo-2"
                     @click="alarmeAlleZeigen = !alarmeAlleZeigen">
                     {{ alarmeAlleZeigen ? t('hype.alarmeWeniger')
                         : t('hype.alarmeMehr', { n: alarme.length - ALARM_SICHTBAR }) }}
-                </button>
+                </Knopf>
             </div>
 
             <!-- Kachel-Detail eines Favoriten: Livedaten -->
@@ -598,31 +597,31 @@
                     <strong>{{ liveOffen.favorit.symbol }}</strong>
                     <span v-if="liveOffen.favorit.name" class="hypKandidatName">{{ liveOffen.favorit.name }}</span>
                     <span class="hypKette">{{ liveOffen.favorit.chain }}</span>
-                    <span v-if="liveLaedt" class="spinner-border spinner-border-sm ms-2"></span>
-                    <span v-else-if="liveOffen.fehler" class="hypLiveStand text-warning">{{ t('hype.liveFehler') }}</span>
+                    <Kreisel still class="at-ml-2" v-if="liveLaedt" />
+                    <span v-else-if="liveOffen.fehler" class="hypLiveStand at-warn">{{ t('hype.liveFehler') }}</span>
                     <span v-else class="hypLiveStand">{{ t('hype.liveStand', { z: zeitpunkt(liveOffen.stand) }) }}</span>
-                    <span class="ms-auto"></span>
-                    <a v-if="liveOffen.dexUrl" class="hypLink me-3" :href="liveOffen.dexUrl"
+                    <span class="at-ml-auto"></span>
+                    <a v-if="liveOffen.dexUrl" class="hypLink at-mr-3" :href="liveOffen.dexUrl"
                         target="_blank" rel="noopener noreferrer">DexScreener ↗</a>
-                    <button class="btn btn-sm py-0 me-2"
-                        :class="liveOffen.favorit.stumm ? 'btn-warning' : 'btn-outline-secondary'"
+                    <Knopf klein class="at-mr-2"
+                        :class="{ hypStumm: liveOffen.favorit.stumm }"
                         :title="t('hype.stummHinweis')" @click="stummUmschalten(liveOffen.favorit)">
-                        <i class="uil" :class="liveOffen.favorit.stumm ? 'uil-bell-slash' : 'uil-bell'"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-danger py-0 me-2"
+                        <Symbol :name="liveOffen.favorit.stumm ? 'glockeAus' : 'glocke'" />
+                    </Knopf>
+                    <Knopf art="gefahr" klein class="at-mr-2"
                         :title="t('hype.favEntfernen')" @click="favEntfernen(liveOffen.favorit)">
-                        <i class="uil uil-star-half-alt"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary py-0" @click="liveSchliessen">
-                        <i class="uil uil-times"></i>
-                    </button>
+                        <Symbol name="sternHalb" />
+                    </Knopf>
+                    <Knopf klein  @click="liveSchliessen">
+                        <Symbol name="schliessen" />
+                    </Knopf>
                 </div>
 
                 <div class="hypLiveGrid">
                     <div class="hypLiveKachel">
                         <div class="hypLiveWert">{{ preis(liveOffen.markt?.preisUsd) }}</div>
                         <div class="hypLiveLabel">{{ t('hype.livePreis') }}</div>
-                        <div class="hypLiveExtra" :class="(liveOffen.markt?.aenderung24h ?? 0) >= 0 ? 'text-success' : 'text-danger'"
+                        <div class="hypLiveExtra" :class="(liveOffen.markt?.aenderung24h ?? 0) >= 0 ? 'at-gut' : 'at-schlecht'"
                             v-if="liveOffen.markt?.aenderung24h != null">
                             {{ liveOffen.markt.aenderung24h >= 0 ? '+' : '' }}{{ liveOffen.markt.aenderung24h.toFixed(1) }} % / 24h
                         </div>
@@ -657,7 +656,7 @@
                                     :href="listungHref(l, liveOffen.favorit.symbol)" target="_blank" rel="noopener noreferrer"
                                     :title="linkText(l)">{{ linkKuerzel(l) }}</a>
                             </template>
-                            <span v-else class="text-muted">—</span>
+                            <span v-else class="at-gedaempft">—</span>
                         </div>
                         <div class="hypLiveLabel">{{ t('hype.spalteHandelbar') }}</div>
                         <div class="hypLiveExtra" v-if="liveOffen.listungUnbekannt?.length">
@@ -668,7 +667,7 @@
                         <div class="hypLiveWert">
                             {{ liveOffen.letzterLauf.hypeScore }}
                             <span class="hypLiveTrenn">/</span>
-                            <span :class="liveOffen.letzterLauf.safetyScore >= 70 ? 'text-success' : 'text-warning'">
+                            <span :class="liveOffen.letzterLauf.safetyScore >= 70 ? 'at-gut' : 'at-warn'">
                                 {{ liveOffen.letzterLauf.status === 'verworfen' ? '—' : liveOffen.letzterLauf.safetyScore }}
                             </span>
                         </div>
@@ -677,7 +676,7 @@
                     </div>
                 </div>
                 <div v-if="liveOffen.letzterLauf?.hinweise?.length" class="hypLiveHinweise">
-                    <i class="uil uil-shield-exclamation me-1"></i>{{ liveOffen.letzterLauf.hinweise.join(' · ') }}
+                    <Symbol name="schildWarnung" class="at-mr-1" />{{ liveOffen.letzterLauf.hinweise.join(' · ') }}
                 </div>
             </div>
 
@@ -687,11 +686,11 @@
                     <div class="hypLabel">{{ t('hype.kandidaten') }}</div>
                 </div>
                 <div class="hypZelle">
-                    <div class="hypWert text-success">{{ bestanden.length }}</div>
+                    <div class="hypWert at-gut">{{ bestanden.length }}</div>
                     <div class="hypLabel">{{ t('hype.bestanden') }}</div>
                 </div>
                 <div class="hypZelle">
-                    <div class="hypWert text-danger">{{ verworfen.length }}</div>
+                    <div class="hypWert at-schlecht">{{ verworfen.length }}</div>
                     <div class="hypLabel">{{ t('hype.verworfen') }}</div>
                     <div class="hypLabel hypKlein">{{ t('hype.unterSchwelleN', { n: nurBewertet.length }) }}</div>
                 </div>
@@ -707,13 +706,13 @@
                 <h6 class="hypTitel">{{ t('hype.quadrantTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.quadrantHinweis') }}</p>
                 <div v-if="bestanden.length || verworfen.length" ref="quadrantEl" class="hypQuadrant"></div>
-                <p v-else class="text-muted small">{{ t('hype.nochKeinScan') }}</p>
+                <p v-else class="at-gedaempft at-klein">{{ t('hype.nochKeinScan') }}</p>
             </div>
 
             <!-- Kandidatentabelle -->
             <div class="hypBlock">
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
-                    <h6 class="hypTitel mb-0 me-2">{{ t('hype.tabelleTitel') }}</h6>
+                <div class="at-flex at-umbruch at-mitte at-luecke-2 at-mu-2">
+                    <h6 class="hypTitel at-mu-0 at-mr-2">{{ t('hype.tabelleTitel') }}</h6>
                     <span v-for="n in narrativeInDaten" :key="n"
                         class="hypChip" :class="{ aktiv: filterNarrativ === n }"
                         @click="filterNarrativ = filterNarrativ === n ? '' : n">{{ n }}</span>
@@ -723,7 +722,7 @@
                     <span v-if="trittbrettAnzahl" class="hypChip" :class="{ aktiv: ohneTrittbrett }"
                         :title="t('hype.trittbrettHilfe')"
                         @click="ohneTrittbrett = !ohneTrittbrett">
-                        <i class="uil uil-copy me-1"></i>{{ t('hype.trittbrettAus', { n: trittbrettAnzahl }) }}
+                        <Symbol name="kopieren" class="at-mr-1" />{{ t('hype.trittbrettAus', { n: trittbrettAnzahl }) }}
                     </span>
                     <!-- Börsenfilter, gleiche Bedeutung wie im Coin-Radar: ODER über
                          die gewählten Börsen. Der Schalter in den Einstellungen
@@ -734,7 +733,7 @@
                         :class="{ aktiv: boersenFilter.has(b) }"
                         :title="t('hype.boersenFilterChip', { b: boerseName(b) })"
                         @click="boerseUmschalten(b)">{{ BOERSEN_KUERZEL[b] }}</span>
-                    <select v-model="filterStatus" class="form-select form-select-sm hypAuswahl ms-auto">
+                    <select v-model="filterStatus" class="at-feld klein hypAuswahl at-ml-auto">
                         <option value="">{{ t('hype.alleStatus') }}</option>
                         <option value="bestanden">{{ t('hype.bestanden') }}</option>
                         <option value="verworfen">{{ t('hype.verworfen') }}</option>
@@ -750,16 +749,16 @@
                     <div v-for="k in gefiltert.slice(0, 40)" :key="k.id" class="hypKarte"
                         @click="offen = offen === k.id ? null : k.id">
                         <div class="hypKarteKopf">
-                            <i class="uil hypStern" :class="istFav(k) ? 'uil-favorite aktiv' : 'uil-star'"
-                                @click.stop="favUmschalten(k)"></i>
+                            <Symbol class="hypStern" :name="istFav(k) ? 'stern' : 'stern'" :gefuellt="istFav(k)" :class="istFav(k) ? 'aktiv' : ''"
+                                @click.stop="favUmschalten(k)" />
                             <strong>{{ k.symbol }}</strong>
                             <span class="hypKette">{{ k.chain }}</span>
                             <span v-if="trittbrett(k)" class="hypTritt"
                                 :title="t('hype.trittbrettHilfeEinzeln', { v: k.sozialDaten.trittbrett.vorbild })">
-                                <i class="uil uil-copy"></i></span>
-                            <span class="ms-auto hypKarteNoten">
+                                <Symbol name="kopieren" /></span>
+                            <span class="at-ml-auto hypKarteNoten">
                                 {{ k.hypeScore }}<span class="hypLiveTrenn"> / </span>
-                                <span :class="k.safetyScore >= 70 ? 'text-success' : 'text-warning'">
+                                <span :class="k.safetyScore >= 70 ? 'at-gut' : 'at-warn'">
                                     {{ k.status === 'verworfen' ? '—' : k.safetyScore }}
                                 </span>
                             </span>
@@ -775,11 +774,11 @@
                                 class="hypBoerse namensgleich" :title="t('hype.namensgleichTitel', { b: linkText(l) })">{{ linkKuerzel(l) }}?</span>
                         </div>
                         <div class="hypKarteZeile">
-                            <span v-if="k.status === 'verworfen'" class="badge bg-danger hypBadge">
+                            <Pille ton="schlecht" class="hypBadge" v-if="k.status === 'verworfen'">
                                 {{ grundText(k.verworfenGrund) }}
-                            </span>
-                            <span v-else-if="k.status === 'bewertet'" class="badge bg-secondary hypBadge">{{ t('hype.unterSchwelle') }}</span>
-                            <span v-else class="badge bg-success hypBadge">{{ t('hype.bestanden') }}</span>
+                            </Pille>
+                            <Pille ton="neutral" class="hypBadge" v-else-if="k.status === 'bewertet'">{{ t('hype.unterSchwelle') }}</Pille>
+                            <Pille ton="gut" class="hypBadge" v-else>{{ t('hype.bestanden') }}</Pille>
                         </div>
                         <div v-if="offen === k.id && k.sicherheitsDaten?.hinweise?.length" class="hypKarteHinweise">
                             {{ k.sicherheitsDaten.hinweise.join(' · ') }}
@@ -790,22 +789,22 @@
                                 @geprueft="e => { k.projektDaten = e; k.projektNote = e.note }" />
                         </div>
                     </div>
-                    <p v-if="!gefiltert.length" class="text-muted small text-center py-3 mb-0">
+                    <p v-if="!gefiltert.length" class="at-gedaempft at-klein at-mittig at-py-3 at-mu-0">
                         {{ t('hype.nochKeinScan') }}
                     </p>
                 </div>
 
-                <div v-else class="table-responsive">
-                    <table class="table table-sm align-middle hypTabelle">
+                <div v-else class="at-tabelle-huelle">
+                    <table class="at-tabelle dicht hypTabelle">
                         <thead>
                             <tr>
                                 <th @click="sortiere('symbol')">{{ t('hype.spalteSymbol') }}</th>
-                                <th @click="sortiere('hypeScore')" class="text-end">{{ t('hype.spalteHype') }}</th>
-                                <th @click="sortiere('safetyScore')" class="text-end">{{ t('hype.spalteSafety') }}</th>
-                                <th @click="sortiere('projektNote')" class="text-end" :title="t('hype.spalteSubstanzTitel')">{{ t('hype.spalteSubstanz') }}</th>
+                                <th @click="sortiere('hypeScore')" class="at-rechtsbuendig">{{ t('hype.spalteHype') }}</th>
+                                <th @click="sortiere('safetyScore')" class="at-rechtsbuendig">{{ t('hype.spalteSafety') }}</th>
+                                <th @click="sortiere('projektNote')" class="at-rechtsbuendig" :title="t('hype.spalteSubstanzTitel')">{{ t('hype.spalteSubstanz') }}</th>
                                 <th>{{ t('hype.spalteNarrativ') }}</th>
-                                <th class="text-end">{{ t('hype.spalteLiq') }}</th>
-                                <th class="text-end">{{ t('hype.spalteAlter') }}</th>
+                                <th class="at-rechtsbuendig">{{ t('hype.spalteLiq') }}</th>
+                                <th class="at-rechtsbuendig">{{ t('hype.spalteAlter') }}</th>
                                 <th>{{ t('hype.spalteHandelbar') }}</th>
                                 <th>{{ t('hype.spalteStatus') }}</th>
                                 <th></th>
@@ -815,29 +814,29 @@
                             <template v-for="k in gefiltert" :key="k.id">
                                 <tr class="hypZeile" @click="offen = offen === k.id ? null : k.id">
                                     <td>
-                                        <i class="uil hypStern" :class="istFav(k) ? 'uil-favorite aktiv' : 'uil-star'"
-                                            :title="istFav(k) ? t('hype.favEntfernen') : t('hype.favHinzu')"
-                                            @click.stop="favUmschalten(k)"></i>
+                                        <Symbol class="hypStern" :name="istFav(k) ? 'stern' : 'stern'" :gefuellt="istFav(k)" :class="istFav(k) ? 'aktiv' : ''"
+                                            :titel="istFav(k) ? t('hype.favEntfernen') : t('hype.favHinzu')"
+                                            @click.stop="favUmschalten(k)" />
                                         <strong>{{ k.symbol }}</strong>
                                         <span class="hypKette">{{ k.chain }}</span>
                                         <span v-if="trittbrett(k)" class="hypTritt"
                                             :title="t('hype.trittbrettHilfeEinzeln', { v: k.sozialDaten.trittbrett.vorbild })">
-                                            <i class="uil uil-copy"></i></span>
+                                            <Symbol name="kopieren" /></span>
                                     </td>
-                                    <td class="text-end">{{ k.hypeScore }}</td>
-                                    <td class="text-end">
-                                        <span :class="k.safetyScore >= 70 ? 'text-success' : (k.safetyScore >= 40 ? 'text-warning' : 'text-danger')">
+                                    <td class="at-rechtsbuendig">{{ k.hypeScore }}</td>
+                                    <td class="at-rechtsbuendig">
+                                        <span :class="k.safetyScore >= 70 ? 'at-gut' : (k.safetyScore >= 40 ? 'at-warn' : 'at-schlecht')">
                                             {{ k.status === 'verworfen' ? '—' : k.safetyScore }}
                                         </span>
                                     </td>
-                                    <td class="text-end">
+                                    <td class="at-rechtsbuendig">
                                         <span v-if="k.projektNote !== null && k.projektNote !== undefined"
-                                            :class="k.projektNote >= 65 ? 'text-success' : (k.projektNote >= 40 ? 'text-warning' : 'text-danger')">{{ k.projektNote }}</span>
-                                        <span v-else class="text-muted">—</span>
+                                            :class="k.projektNote >= 65 ? 'at-gut' : (k.projektNote >= 40 ? 'at-warn' : 'at-schlecht')">{{ k.projektNote }}</span>
+                                        <span v-else class="at-gedaempft">—</span>
                                     </td>
                                     <td><span v-if="k.narrative" class="hypChip klein">{{ k.narrative }}</span></td>
-                                    <td class="text-end">{{ geld(k.marktDaten?.liquiditaetUsd) }}</td>
-                                    <td class="text-end">{{ alter(k.marktDaten?.paarAlterStunden) }}</td>
+                                    <td class="at-rechtsbuendig">{{ geld(k.marktDaten?.liquiditaetUsd) }}</td>
+                                    <td class="at-rechtsbuendig">{{ alter(k.marktDaten?.paarAlterStunden) }}</td>
                                     <td>
                                         <span v-if="k.marktDaten?.dex" class="hypDex">{{ k.marktDaten.dex }}</span>
                                         <a v-for="(l, i) in boersenLinksVon(k.marktDaten?.listungen)" :key="i"
@@ -846,17 +845,17 @@
                                         <span v-for="(l, i) in k.marktDaten?.listungNamensgleich || []" :key="'n' + i"
                                             class="hypBoerse namensgleich" :title="t('hype.namensgleichTitel', { b: linkText(l) })">{{ linkKuerzel(l) }}?</span>
                                         <span v-if="!k.marktDaten?.dex && !boersenLinksVon(k.marktDaten?.listungen).length"
-                                            class="text-muted">—</span>
+                                            class="at-gedaempft">—</span>
                                     </td>
                                     <td>
-                                        <span v-if="k.status === 'verworfen'" class="badge bg-danger hypBadge"
-                                            :title="k.verworfenGrund">{{ grundText(k.verworfenGrund) }}</span>
-                                        <span v-else-if="k.status === 'berichtet'" class="badge bg-primary hypBadge">{{ t('hype.imBericht') }}</span>
-                                        <span v-else-if="k.status === 'bewertet'" class="badge bg-secondary hypBadge">{{ t('hype.unterSchwelle') }}</span>
-                                        <span v-else class="badge bg-success hypBadge">{{ t('hype.bestanden') }}</span>
+                                        <Pille ton="schlecht" class="hypBadge" v-if="k.status === 'verworfen'"
+                                            :title="k.verworfenGrund">{{ grundText(k.verworfenGrund) }}</Pille>
+                                        <Pille ton="akzent" class="hypBadge" v-else-if="k.status === 'berichtet'">{{ t('hype.imBericht') }}</Pille>
+                                        <Pille ton="neutral" class="hypBadge" v-else-if="k.status === 'bewertet'">{{ t('hype.unterSchwelle') }}</Pille>
+                                        <Pille ton="gut" class="hypBadge" v-else>{{ t('hype.bestanden') }}</Pille>
                                     </td>
-                                    <td class="text-end">
-                                        <i class="uil" :class="offen === k.id ? 'uil-angle-up' : 'uil-angle-down'"></i>
+                                    <td class="at-rechtsbuendig">
+                                        <Symbol :name="offen === k.id ? 'hoch' : 'runter'" />
                                     </td>
                                 </tr>
                                 <tr v-if="offen === k.id" :key="k.id + '-d'">
@@ -869,7 +868,7 @@
                                                     <span class="hypBalken"><i :style="{ width: Math.round(wert) + '%' }"></i></span>
                                                     <span class="hypNoteWert">{{ Math.round(wert) }}</span>
                                                 </div>
-                                                <div class="hypNoteName mt-1">
+                                                <div class="hypNoteName at-mo-1">
                                                     {{ t('hype.quellenAnzahl', { n: k.sozialDaten?.quellenAnzahl || 0 }) }}:
                                                     {{ (k.quellen || []).map(q => q.quelle).join(', ') }}
                                                 </div>
@@ -879,12 +878,12 @@
                                                 <ul v-if="k.sicherheitsDaten?.hinweise?.length" class="hypListe">
                                                     <li v-for="(h, i) in k.sicherheitsDaten.hinweise" :key="i">{{ h }}</li>
                                                 </ul>
-                                                <p v-else class="text-muted small mb-1">{{ t('hype.keineBefunde') }}</p>
-                                                <div class="mt-2">
+                                                <p v-else class="at-gedaempft at-klein at-mu-1">{{ t('hype.keineBefunde') }}</p>
+                                                <div class="at-mo-2">
                                                     <a v-if="k.contractAddress" class="hypLink"
                                                         :href="'https://dexscreener.com/' + k.chain + '/' + k.contractAddress"
                                                         target="_blank" rel="noopener noreferrer">DexScreener ↗</a>
-                                                    <a v-if="k.contractAddress" class="hypLink ms-2"
+                                                    <a v-if="k.contractAddress" class="hypLink at-ml-2"
                                                         :href="'https://www.geckoterminal.com/' + k.chain + '/pools/' + (k.pairAddress || k.contractAddress)"
                                                         target="_blank" rel="noopener noreferrer">GeckoTerminal ↗</a>
                                                 </div>
@@ -899,7 +898,7 @@
                                 </tr>
                             </template>
                             <tr v-if="!gefiltert.length">
-                                <td colspan="10" class="text-center text-muted py-3">{{ t('hype.nochKeinScan') }}</td>
+                                <td colspan="10" class="at-mittig at-gedaempft at-py-3">{{ t('hype.nochKeinScan') }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -908,18 +907,18 @@
         </div>
 
         <!-- ══ Frühphase ═════════════════════════════════════════════ -->
-        <div v-show="reiter === 'fruehphase'" class="mt-3">
+        <div v-show="reiter === 'fruehphase'" class="at-mo-3">
             <FruehphaseAnsicht :aktiv="reiter === 'fruehphase'" :einst="einst" :fokus="String(route.query.token || '')" @favoriten="ladeFavoriten" />
         </div>
 
         <!-- ══ Börsen ═══════════════════════════════════════════════ -->
-        <div v-show="reiter === 'boersen'" class="mt-3">
+        <div v-show="reiter === 'boersen'" class="at-mo-3">
             <BoersenAnsicht :aktiv="reiter === 'boersen'" :einst="einst" />
         </div>
 
         <!-- ══ Berichte ══════════════════════════════════════════════ -->
-        <div v-show="reiter === 'berichte'" class="mt-3">
-            <div v-if="!berichte.length" class="text-muted small">{{ t('hype.keineBerichte') }}</div>
+        <div v-show="reiter === 'berichte'" class="at-mo-3">
+            <div v-if="!berichte.length" class="at-gedaempft at-klein">{{ t('hype.keineBerichte') }}</div>
             <div class="hypBerichtListe">
                 <div v-for="b in berichte" :key="b.id" class="hypBerichtKarte"
                     :class="{ aktiv: offenerBericht?.id === b.id }" @click="berichtOeffnen(b.id)">
@@ -931,7 +930,7 @@
                     </div>
                     <span class="hypLoeschen" :class="{ scharf: loeschId === b.id }"
                         :title="t('hype.loeschen')" @click.stop="berichtLoeschen(b.id)">
-                        <i class="uil uil-trash-alt"></i>
+                        <Symbol name="muell" />
                     </span>
                 </div>
             </div>
@@ -945,13 +944,13 @@
                         <strong>{{ k.symbol }}</strong>
                         <span v-if="k.name" class="hypKandidatName">{{ k.name }}</span>
                         <span class="hypKette">{{ k.chain }}</span>
-                        <span class="ms-auto hypNoten">
+                        <span class="at-ml-auto hypNoten">
                             {{ t('hype.spalteHype') }} {{ k.hypeScore }} · {{ t('hype.spalteSafety') }} {{ k.safetyScore }}
                         </span>
-                        <span class="badge hypBadge ms-2"
-                            :class="{ 'bg-success': k.vertrauen === 'hoch', 'bg-secondary': k.vertrauen === 'mittel', 'bg-warning text-dark': k.vertrauen === 'niedrig' }">
+                        <Pille class="hypBadge at-ml-2"
+                            :ton="{ hoch: 'gut', mittel: 'neutral', niedrig: 'warn' }[k.vertrauen] || 'neutral'">
                             {{ t('hype.vertrauen_' + k.vertrauen) }}
-                        </span>
+                        </Pille>
                     </div>
                     <dl class="hypAbschnitte">
                         <dt>{{ t('hype.einordnung') }}</dt><dd>{{ k.einordnung }}</dd>
@@ -975,7 +974,7 @@
 
                 <div v-if="offenerBericht.aussortiert?.length" class="hypAussortiert">
                     <h6 class="hypTitel">{{ t('hype.aussortiertTitel') }}</h6>
-                    <table class="table table-sm hypTabelle">
+                    <table class="at-tabelle dicht hypTabelle">
                         <tbody>
                             <tr v-for="(a, i) in offenerBericht.aussortiert" :key="i">
                                 <td style="width: 8rem"><strong>{{ a.symbol }}</strong></td>
@@ -993,39 +992,39 @@
                  (Spitze gegen Verworfene) und die Hype-Note (Spitze gegen das
                  Feld unter der Schwelle). Ohne die Vergleichsgruppen hiesse
                  „30 % leben noch" gar nichts. -->
-            <div class="hypGuete mt-4">
+            <div class="hypGuete at-mo-4">
                 <h6 class="hypTitel">{{ t('hype.gueteTitel') }}</h6>
                 <p class="hypHinweis">{{ t('hype.gueteHinweis') }}</p>
-                <div v-if="gueteFehler" class="text-muted small">{{ gueteFehler }}</div>
-                <div v-else-if="!guete" class="text-muted small"><span class="spinner-border spinner-border-sm"></span></div>
-                <div v-else-if="!guete.jeHorizont.length" class="text-muted small">{{ t('hype.gueteLeer') }}</div>
+                <div v-if="gueteFehler" class="at-gedaempft at-klein">{{ gueteFehler }}</div>
+                <div v-else-if="!guete" class="at-gedaempft at-klein"><Kreisel still /></div>
+                <div v-else-if="!guete.jeHorizont.length" class="at-gedaempft at-klein">{{ t('hype.gueteLeer') }}</div>
                 <template v-else>
-                    <div v-for="h in guete.jeHorizont" :key="h.horizont" class="mb-3">
+                    <div v-for="h in guete.jeHorizont" :key="h.horizont" class="at-mu-3">
                         <div class="hypGueteKopf">
                             <strong>{{ h.horizont }}</strong>
                             <span v-for="u in h.urteil" :key="u" class="hypGueteUrteil"
                                 :class="gueteKlasse(u)">{{ t('hype.guete_' + u) }}</span>
                         </div>
-                        <div class="table-responsive">
-                            <table class="table table-sm hypTabelle mb-1">
+                        <div class="at-tabelle-huelle">
+                            <table class="at-tabelle dicht hypTabelle at-mu-1">
                                 <thead>
                                     <tr>
                                         <th>{{ t('hype.gueteGruppe') }}</th>
-                                        <th class="text-end">n</th>
-                                        <th class="text-end">{{ t('hype.gueteUeberlebt') }}</th>
-                                        <th class="text-end">{{ t('hype.gueteRendite') }}</th>
-                                        <th class="text-end">{{ t('hype.gueteImPlus') }}</th>
-                                        <th class="text-end">{{ t('hype.gueteLiquiditaet') }}</th>
+                                        <th class="at-rechtsbuendig">n</th>
+                                        <th class="at-rechtsbuendig">{{ t('hype.gueteUeberlebt') }}</th>
+                                        <th class="at-rechtsbuendig">{{ t('hype.gueteRendite') }}</th>
+                                        <th class="at-rechtsbuendig">{{ t('hype.gueteImPlus') }}</th>
+                                        <th class="at-rechtsbuendig">{{ t('hype.gueteLiquiditaet') }}</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="g in ['spitze', 'verworfen', 'feld']" :key="g">
                                         <td>{{ t('hype.gueteGruppe_' + g) }}</td>
-                                        <td class="text-end">{{ h[g].n }}</td>
-                                        <td class="text-end">{{ anteilKnText(h[g].ueberlebtAnteil, h[g].ueberlebt) }}</td>
-                                        <td class="text-end">{{ prozentText(h[g].medianRendite) }}</td>
-                                        <td class="text-end">{{ anteilKnText(h[g].imPlus, h[g].imPlusAnteil) }}</td>
-                                        <td class="text-end">{{ prozentText(h[g].medianLiquiditaetAenderung) }}</td>
+                                        <td class="at-rechtsbuendig">{{ h[g].n }}</td>
+                                        <td class="at-rechtsbuendig">{{ anteilKnText(h[g].ueberlebtAnteil, h[g].ueberlebt) }}</td>
+                                        <td class="at-rechtsbuendig">{{ prozentText(h[g].medianRendite) }}</td>
+                                        <td class="at-rechtsbuendig">{{ anteilKnText(h[g].imPlus, h[g].imPlusAnteil) }}</td>
+                                        <td class="at-rechtsbuendig">{{ prozentText(h[g].medianLiquiditaetAenderung) }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1040,6 +1039,7 @@
 </template>
 
 <script setup>
+import Symbol from '@/components/basis/Symbol.vue'
 /**
  * Hype-Radar.
  *
@@ -1071,6 +1071,10 @@ import {
     BOERSE_KURZ as BOERSE_LINK_KURZ, BOERSE_NAME as BOERSE_LINK_NAME,
     boerseUrl, aktivierteBoersen,
 } from '../utils/boersenLinks.js'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Kreisel from '@/components/basis/Kreisel.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
 
 const { t, te, locale } = useI18n()
 
@@ -2597,7 +2601,7 @@ watch(locale, () => zeichne())
         padding-top: .5rem;
     }
 
-    .hypKnoepfe .btn {
+    .hypKnoepfe .at-knopf {
         flex: 1;
     }
 
@@ -2607,8 +2611,7 @@ watch(locale, () => zeichne())
         padding-left: 0;
     }
 
-    .hypKanalFelder .form-control,
-    .hypKanalFelder .form-select,
+    .hypKanalFelder .at-feld,
     .hypKanalFelder .hypBreit {
         width: 100%;
         min-width: 0;
@@ -2694,9 +2697,15 @@ watch(locale, () => zeichne())
 }
 
 /* Geschärfter Sammelknopf: der zweite Klick löscht wirklich alles. */
-.btn.hypScharf {
-    color: var(--red-color, #e06c75);
-    border-color: var(--red-color, #e06c75);
+.at-knopf.hypScharf {
+    color: var(--bad);
+    border-color: var(--bad);
+}
+
+/* Stummgeschalteter Favorit: Glocke in Warnfarbe. */
+.at-knopf.hypStumm {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 45%, transparent);
 }
 
 .hypKanal {
@@ -2712,8 +2721,7 @@ watch(locale, () => zeichne())
     padding-left: 2.4rem;
 }
 
-.hypKanalFelder .form-control,
-.hypKanalFelder .form-select {
+.hypKanalFelder .at-feld {
     width: auto;
     min-width: 9rem;
 }

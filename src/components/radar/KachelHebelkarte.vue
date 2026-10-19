@@ -15,6 +15,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import HebelkartenCanvas from '../HebelkartenCanvas.vue'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -81,7 +82,7 @@ const stunden = computed(() => Number(props.params?.stunden) || DAYTRADING_STUND
             <HebelkartenCanvas ref="karte" :stunden="stunden" :spanne-pct="DAYTRADING_SPANNE" />
         </div>
         <a class="hkGanzeSeite" href="/liquidations" @click.stop>
-            <i class="uil uil-expand-arrows-alt"></i>{{ t('livetrading.ganzeSeite') }}
+            <Symbol name="vergroessern" />{{ t('livetrading.ganzeSeite') }}
         </a>
     </div>
 </template>

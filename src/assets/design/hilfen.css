@@ -180,3 +180,14 @@
     width: 100%;
     accent-color: var(--accent);
 }
+
+/* Als Block (`<div class="at-check">` mit Eingabe, Beschriftung und Hinweis):
+   Schalter und Text in einer Zeile, alles Weitere darunter. */
+div.at-check {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+div.at-check > :not(input):not(label) {
+    flex-basis: 100%;
+}

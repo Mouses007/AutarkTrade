@@ -20,6 +20,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import dayjs from '../../utils/dayjs-setup.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -191,7 +192,7 @@ watch(() => props.daten, zeichne)
         <template v-if="!gross">
             <div v-if="historie.length >= 2" ref="chartEl" class="domSpark"></div>
             <div v-else class="domLeer">
-                <i class="uil uil-chart-line"></i>
+                <Symbol name="linie" />
                 <span>{{ t('marktradar.dom.noHistory') }}</span>
             </div>
         </template>

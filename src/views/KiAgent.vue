@@ -12,6 +12,12 @@ import { logError, logWarn } from '../utils/logger.js'
 import dayjs from '../utils/dayjs-setup.js'
 import { sendNotification } from '../utils/notify'
 import { useI18n } from 'vue-i18n'
+import Symbol from '@/components/basis/Symbol.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Kreisel from '@/components/basis/Kreisel.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
+import Reiter from '@/components/basis/Reiter.vue'
 
 const { t } = useI18n()
 
@@ -40,10 +46,10 @@ const currentTab = ref('reports') // 'reports' | 'agent'
 
 // Report-Stil Quick-Selection (alle außer 'custom')
 const reportStylePresets = [
-    { value: 'kurz', icon: 'uil-bolt', prompt: 'Halte den Bericht kurz und prägnant. Maximal 3-4 Sätze pro Abschnitt. Fokussiere dich auf die wichtigsten Erkenntnisse.' },
-    { value: 'standard', icon: 'uil-file-alt', prompt: 'Erstelle einen ausgewogenen Trading-Bericht mit allen wichtigen Kennzahlen, Stärken, Schwächen und konkreten Verbesserungsvorschlägen. Nutze eine sachliche, professionelle Sprache.' },
-    { value: 'coach', icon: 'uil-shield-exclamation', prompt: 'Sei sehr direkt und kritisch. Beschönige nichts. Sprich Schwächen und Fehler klar an. Gib konkrete Verbesserungsvorschläge wie ein strenger Trading-Coach.' },
-    { value: 'psychologie', icon: 'uil-brain', prompt: 'Lege besonderen Fokus auf die psychologischen Aspekte: Stress, Emotionen, Disziplin, Overtrading. Analysiere Verhaltensmuster und emotionale Trigger.' }
+    { value: 'kurz', icon: 'blitz', prompt: 'Halte den Bericht kurz und prägnant. Maximal 3-4 Sätze pro Abschnitt. Fokussiere dich auf die wichtigsten Erkenntnisse.' },
+    { value: 'standard', icon: 'dokument', prompt: 'Erstelle einen ausgewogenen Trading-Bericht mit allen wichtigen Kennzahlen, Stärken, Schwächen und konkreten Verbesserungsvorschlägen. Nutze eine sachliche, professionelle Sprache.' },
+    { value: 'coach', icon: 'schildWarnung', prompt: 'Sei sehr direkt und kritisch. Beschönige nichts. Sprich Schwächen und Fehler klar an. Gib konkrete Verbesserungsvorschläge wie ein strenger Trading-Coach.' },
+    { value: 'psychologie', icon: 'gehirn', prompt: 'Lege besonderen Fokus auf die psychologischen Aspekte: Stress, Emotionen, Disziplin, Overtrading. Analysiere Verhaltensmuster und emotionale Trigger.' }
 ]
 const selectedReportStyle = ref('standard')
 
@@ -454,14 +460,14 @@ async function loadChatSetting() {
 function markdownToHtml(md) {
     if (!md) return ''
     let html = md
-        .replace(/^### (.+)$/gm, '<h5 class="mt-2 mb-1">$1</h5>')
-        .replace(/^## (.+)$/gm, '<h4 class="report-section-title mt-3 mb-1">$1</h4>')
-        .replace(/^# (.+)$/gm, '<h3 class="mt-3 mb-2">$1</h3>')
+        .replace(/^### (.+)$/gm, '<h5 class="at-mo-2 at-mu-1">$1</h5>')
+        .replace(/^## (.+)$/gm, '<h4 class="report-section-title at-mo-3 at-mu-1">$1</h4>')
+        .replace(/^# (.+)$/gm, '<h3 class="at-mo-3 at-mu-2">$1</h3>')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
         .replace(/^- (.+)$/gm, '<li>$1</li>')
         .replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>')
-        .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul class="mb-1">${match}</ul>`)
+        .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul class="at-mu-1">${match}</ul>`)
 
     // Absätze (leere Blöcke filtern)
     html = html.split('\n\n').map(p => {
@@ -674,67 +680,59 @@ onBeforeMount(async () => {
 
 <template>
     <SpinnerLoadingPage />
-    <div class="row mt-2">
+    <div class="at-mo-2">
         <div v-show="!spinnerLoadingPage">
 
             <!-- Tab-Switcher -->
-            <ul class="nav nav-pills mb-3" style="gap: 0.3rem;">
-                <li class="nav-item">
-                    <a class="nav-link" :class="{ active: currentTab === 'reports' }" href="#" @click.prevent="currentTab = 'reports'">
-                        <i class="uil uil-file-alt me-1"></i>{{ t('kiAgent.tabReports') }}
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" :class="{ active: currentTab === 'agent' }" href="#" @click.prevent="currentTab = 'agent'">
-                        <i class="uil uil-brain me-1"></i>{{ t('kiAgent.tabAgent') }}
-                    </a>
-                </li>
-            </ul>
+            <Reiter v-model="currentTab" class="at-mu-3" :reiter="[
+                { id: 'reports', titel: t('kiAgent.tabReports'), symbol: 'dokument' },
+                { id: 'agent', titel: t('kiAgent.tabAgent'), symbol: 'gehirn' },
+            ]" />
 
             <!-- ==================== REPORTS TAB ==================== -->
             <div v-show="currentTab === 'reports'">
 
             <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">
-                    <i class="uil uil-file-alt me-2"></i>{{ t('kiAgent.createReport') }}
+            <div class="at-flex at-verteilt at-mitte at-mu-3">
+                <h5 class="at-mu-0">
+                    <Symbol name="dokument" class="at-mr-2" />{{ t('kiAgent.createReport') }}
                 </h5>
-                <div class="d-flex align-items-center gap-2">
-                    <span class="text-muted small" :title="t('kiAgent.totalTokensHint')">
-                        <i class="uil uil-processor me-1"></i>{{ (globalTokenStats?.total?.totalTokens || Object.values(tokensByProvider).reduce((s, v) => s + v, 0) || 0).toLocaleString() }} {{ t('kiAgent.tokens') }}
+                <div class="at-flex at-mitte at-luecke-2">
+                    <span class="at-gedaempft at-klein" :title="t('kiAgent.totalTokensHint')">
+                        <Symbol name="prozessor" class="at-mr-1" />{{ (globalTokenStats?.total?.totalTokens || Object.values(tokensByProvider).reduce((s, v) => s + v, 0) || 0).toLocaleString() }} {{ t('kiAgent.tokens') }}
                     </span>
                     <span v-if="totalEstimatedCost > 0" class="ki-cost-badge" :title="t('kiAgent.estimatedCostTitle', { cost: totalEstimatedCost.toFixed(4) })">
-                        <i class="uil uil-dollar-sign"></i>~{{ totalEstimatedCost < 0.01 ? totalEstimatedCost.toFixed(4) : totalEstimatedCost.toFixed(2) }}
+                        <Symbol name="dollar" />~{{ totalEstimatedCost < 0.01 ? totalEstimatedCost.toFixed(4) : totalEstimatedCost.toFixed(2) }}
                         <span class="ki-cost-hint">{{ t('kiAgent.estimated') }}</span>
                     </span>
-                    <span class="badge" :class="aiOnline ? 'bg-success' : 'bg-danger'">
+                    <Pille :ton="aiOnline ? 'gut' : 'schlecht'">
                         {{ aiOnline ? modelLabel + ' ' + t('kiAgent.online') : providerLabel + ' ' + t('kiAgent.offline') }}
-                    </span>
-                    <button class="btn btn-sm btn-outline-secondary" @click="checkStatus" :title="t('kiAgent.checkStatus')">
-                        <i class="uil uil-sync"></i>
-                    </button>
+                    </Pille>
+                    <Knopf klein @click="checkStatus" :title="t('kiAgent.checkStatus')">
+                        <Symbol name="aktualisieren" />
+                    </Knopf>
                 </div>
             </div>
 
             <!-- Offline Warnung -->
-            <div v-if="!aiOnline" class="dailyCard text-center py-4 mb-3">
-                <i class="uil uil-exclamation-triangle text-warning" style="font-size: 2rem;"></i>
-                <p class="mt-2 mb-1">{{ t('kiAgent.providerNotReachable') }}</p>
-                <small v-if="aiProvider === 'ollama'" class="text-muted">
+            <div v-if="!aiOnline" class="dailyCard at-mittig at-py-4 at-mu-3">
+                <Symbol style="font-size: 2rem;" name="warnung" class="at-warn" />
+                <p class="at-mo-2 at-mu-1">{{ t('kiAgent.providerNotReachable') }}</p>
+                <small v-if="aiProvider === 'ollama'" class="at-gedaempft">
                     {{ t('kiAgent.ollamaDockerHint') }} <code>docker start ollama</code>
                 </small>
-                <small v-else class="text-muted" v-html="t('kiAgent.checkApiKey', { link: '<a href=\'/settings\'>' + t('nav.settings') + '</a>' })">
+                <small v-else class="at-gedaempft" v-html="t('kiAgent.checkApiKey', { link: '<a href=\'/settings\'>' + t('nav.settings') + '</a>' })">
                 </small>
             </div>
 
             <!-- Konfiguration -->
-            <div v-if="aiOnline" class="dailyCard mb-3" style="height: auto; padding: 0.6em 1em;">
-                <div class="row align-items-end g-2">
+            <div v-if="aiOnline" class="dailyCard at-mu-3" style="height: auto; padding: 0.6em 1em;">
+                <div class="at-formzeile eng">
 
                     <!-- Zeitraum-Typ -->
-                    <div class="col-auto">
-                        <label class="form-label small text-muted">{{ t('kiAgent.period') }}</label>
-                        <select v-model="periodType" class="form-select form-select-sm">
+                    <div>
+                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.period') }}</label>
+                        <select v-model="periodType" class="at-feld klein">
                             <option value="week">{{ t('kiAgent.periodWeek') }}</option>
                             <option value="month">{{ t('kiAgent.periodMonth') }}</option>
                             <option value="halfyear">{{ t('kiAgent.periodHalfYear') }}</option>
@@ -744,99 +742,95 @@ onBeforeMount(async () => {
                     </div>
 
                     <!-- Woche -->
-                    <div v-if="periodType === 'week'" class="col-auto">
-                        <label class="form-label small text-muted">{{ t('kiAgent.weekOf') }}</label>
-                        <input type="date" v-model="selectedWeekStart" class="form-control form-control-sm">
+                    <div v-if="periodType === 'week'">
+                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.weekOf') }}</label>
+                        <input type="date" v-model="selectedWeekStart" class="at-feld klein">
                     </div>
 
                     <!-- Monat -->
-                    <div v-if="periodType === 'month'" class="col-auto">
-                        <label class="form-label small text-muted">{{ t('kiAgent.periodMonth') }}</label>
-                        <input type="month" v-model="selectedMonth" class="form-control form-control-sm">
+                    <div v-if="periodType === 'month'">
+                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.periodMonth') }}</label>
+                        <input type="month" v-model="selectedMonth" class="at-feld klein">
                     </div>
 
                     <!-- Custom Range -->
-                    <div v-if="periodType === 'custom'" class="col-auto">
-                        <label class="form-label small text-muted">{{ t('kiAgent.from') }}</label>
-                        <input type="date" v-model="customStart" class="form-control form-control-sm">
+                    <div v-if="periodType === 'custom'">
+                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.from') }}</label>
+                        <input type="date" v-model="customStart" class="at-feld klein">
                     </div>
-                    <div v-if="periodType === 'custom'" class="col-auto">
-                        <label class="form-label small text-muted">{{ t('kiAgent.to') }}</label>
-                        <input type="date" v-model="customEnd" class="form-control form-control-sm">
+                    <div v-if="periodType === 'custom'">
+                        <label class="at-label at-klein at-gedaempft">{{ t('kiAgent.to') }}</label>
+                        <input type="date" v-model="customEnd" class="at-feld klein">
                     </div>
 
                     <!-- Button -->
-                    <div class="col-auto">
-                        <button class="btn btn-sm btn-primary" @click="generateReport" :disabled="loading">
-                            <span v-if="loading" class="spinner-border spinner-border-sm me-1"></span>
-                            <i v-else class="uil uil-file-alt me-1"></i>
+                    <div>
+                        <Knopf art="haupt" klein symbol="dokument" :laedt="loading" @click="generateReport">
                             {{ loading ? t('kiAgent.generating') : t('kiAgent.generate') }}
-                        </button>
+                        </Knopf>
                     </div>
                 </div>
 
                 <!-- Stil Quick-Selection -->
-                <div class="d-flex align-items-center gap-2 mt-2 pt-2" style="border-top: 1px solid var(--white-18, rgba(255,255,255,0.08));">
-                    <span class="text-muted small me-1"><i class="uil uil-palette me-1"></i>{{ t('kiAgent.reportStyle') }}:</span>
+                <div class="at-flex at-mitte at-luecke-2 at-mo-2 at-po-2" style="border-top: 1px solid var(--white-18, rgba(255,255,255,0.08));">
+                    <span class="at-gedaempft at-klein at-mr-1"><Symbol name="palette" class="at-mr-1" />{{ t('kiAgent.reportStyle') }}:</span>
                     <button v-for="preset in reportStylePresets" :key="preset.value"
                         class="report-style-btn"
                         :class="{ active: selectedReportStyle === preset.value }"
                         @click="selectedReportStyle = preset.value"
                         :disabled="loading">
-                        <i class="uil me-1" :class="preset.icon"></i>{{ t('settings.prompt_' + preset.value) }}
+                        <Symbol class="at-mr-1" :name="preset.icon" />{{ t('settings.prompt_' + preset.value) }}
                     </button>
                 </div>
             </div>
 
             <!-- Lade-Animation -->
-            <div v-if="loading" class="dailyCard text-center py-5">
-                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
-                    <span class="visually-hidden">{{ t('common.loading') }}</span>
-                </div>
-                <p class="text-muted">{{ t('kiAgent.analyzing') }}</p>
-                <small class="text-muted">{{ t('kiAgent.analyzeHint') }}</small>
+            <div v-if="loading" class="dailyCard at-mittig at-py-5">
+                <Kreisel :groesse="48" class="at-mu-3" />
+                <p class="at-gedaempft">{{ t('kiAgent.analyzing') }}</p>
+                <small class="at-gedaempft">{{ t('kiAgent.analyzeHint') }}</small>
             </div>
 
             <!-- Fehler -->
-            <div v-if="errorMsg" class="alert alert-danger">
-                <i class="uil uil-exclamation-circle me-1"></i>{{ errorMsg }}
-            </div>
+            <Hinweis v-if="errorMsg" art="fehler">
+                {{ errorMsg }}
+            </Hinweis>
 
             <!-- Gespeicherte Berichte -->
-            <div v-if="savedReports.length === 0 && !loading" class="dailyCard text-center py-4">
-                <i class="uil uil-file-search-alt text-muted" style="font-size: 2rem;"></i>
-                <p class="text-muted mt-2 mb-0">{{ t('kiAgent.noReports') }}</p>
+            <div v-if="savedReports.length === 0 && !loading" class="dailyCard at-mittig at-py-4">
+                <Symbol style="font-size: 2rem;" name="dokumentSuche" class="at-gedaempft" />
+                <p class="at-gedaempft at-mo-2 at-mu-0">{{ t('kiAgent.noReports') }}</p>
             </div>
 
-            <div v-for="report in savedReports" :key="report.id" class="dailyCard mb-2" style="height: auto;">
+            <div v-for="report in savedReports" :key="report.id" class="dailyCard at-mu-2" style="height: auto;">
                 <!-- Klickbarer Header -->
-                <div class="d-flex justify-content-between align-items-center pointerClass" @click="toggleReport(report.id)">
-                    <div class="d-flex align-items-center">
-                        <i class="uil me-1" :class="expandedReports.has(report.id) ? 'uil-angle-down' : 'uil-angle-right'"></i>
-                        <i class="uil uil-file-check-alt me-1"></i>
-                        <span class="fw-bold me-2">{{ report.label }}</span>
-                        <span class="badge bg-secondary me-2" style="font-size: 0.7rem;">{{ report.provider }}</span>
-                        <span v-if="report.promptPreset" class="badge me-2" style="font-size: 0.65rem; background-color: var(--blue-color, #4a90d9); opacity: 0.8;">{{ report.promptPreset }}</span>
-                        <span class="text-muted small">{{ formatDate(report.createdAt) }}</span>
+                <div class="at-flex at-verteilt at-mitte pointerClass" @click="toggleReport(report.id)">
+                    <div class="at-flex at-mitte">
+                        <Symbol class="at-mr-1" :name="expandedReports.has(report.id) ? 'runter' : 'ausklappen'" />
+                        <Symbol name="dokumentHaken" class="at-mr-1" />
+                        <span class="at-fett at-mr-2">{{ report.label }}</span>
+                        <Pille ton="neutral" class="at-mr-2" style="font-size: 0.7rem;">{{ report.provider }}</Pille>
+                        <Pille class="at-mr-2" v-if="report.promptPreset" style="font-size: 0.65rem; background-color: var(--blue-color, #4a90d9); opacity: 0.8;">{{ report.promptPreset }}</Pille>
+                        <span class="at-gedaempft at-klein">{{ formatDate(report.createdAt) }}</span>
                     </div>
-                    <div class="d-flex align-items-center gap-1">
+                    <div class="at-flex at-mitte at-luecke-1">
                         <!-- Kompakte Stats wenn zugeklappt -->
-                        <span v-if="report.reportData && !expandedReports.has(report.id)" class="text-muted small me-2 d-none d-md-inline">
+                        <span v-if="report.reportData && !expandedReports.has(report.id)" class="at-gedaempft at-klein at-mr-2 kiNurBreit">
                             {{ report.reportData.tradeCount }} {{ t('common.trades') }} · {{ report.reportData.winRate }}% WR ·
                             <span :class="parseFloat(report.reportData.totalNetProceeds) >= 0 ? 'greenTrade' : 'redTrade'">
                                 {{ report.reportData.totalNetProceeds }} USDT
                             </span>
                         </span>
-                        <button class="btn btn-sm btn-outline-light" @click.stop="downloadPdf(report)" title="PDF">
-                            <i class="uil uil-file-download"></i>
-                        </button>
+                        <Knopf klein @click.stop="downloadPdf(report)" title="PDF">
+                            <Symbol name="herunterladen" />
+                        </Knopf>
                         <!-- Löschen -->
-                        <button v-if="deleteConfirmId !== report.id" class="btn btn-sm btn-outline-danger" @click.stop="deleteConfirmId = report.id" :title="t('kiAgent.deleteReport')">
-                            <i class="uil uil-trash-alt"></i>
-                        </button>
-                        <span v-else class="d-flex align-items-center gap-1" @click.stop>
-                            <button class="btn btn-sm btn-danger" @click="deleteReport(report.id)">{{ t('common.yes') }}</button>
-                            <button class="btn btn-sm btn-outline-secondary" @click="deleteConfirmId = null">{{ t('common.no') }}</button>
+                        <Knopf art="gefahr" klein v-if="deleteConfirmId !== report.id" @click.stop="deleteConfirmId = report.id" :title="t('kiAgent.deleteReport')">
+                            <Symbol name="muell" />
+                        </Knopf>
+                        <span v-else class="at-flex at-mitte at-luecke-1" @click.stop>
+                            <Knopf art="gefahr" klein @click="deleteReport(report.id)">{{ t('common.yes') }}</Knopf>
+                            <Knopf klein @click="deleteConfirmId = null">{{ t('common.no') }}</Knopf>
                         </span>
                     </div>
                 </div>
@@ -844,24 +838,24 @@ onBeforeMount(async () => {
                 <!-- Ausklappbarer Inhalt -->
                 <div v-show="expandedReports.has(report.id)">
                     <!-- Datenbasis -->
-                    <div v-if="report.reportData && report.reportData.tradeCount" class="row mt-2 mb-2 py-2" style="border-top: 1px solid var(--border-color, #333); border-bottom: 1px solid var(--border-color, #333);">
-                        <div class="col-6 col-md-3 text-center">
-                            <div class="text-muted small">{{ t('common.trades') }}</div>
-                            <div class="fw-bold">{{ report.reportData.tradeCount }}</div>
+                    <div v-if="report.reportData && report.reportData.tradeCount" class="kiKennzahlen at-mo-2 at-mu-2 at-py-2">
+                        <div class="at-mittig">
+                            <div class="at-gedaempft at-klein">{{ t('common.trades') }}</div>
+                            <div class="at-fett">{{ report.reportData.tradeCount }}</div>
                         </div>
-                        <div class="col-6 col-md-3 text-center">
-                            <div class="text-muted small">{{ t('dashboard.winRate') }}</div>
-                            <div class="fw-bold">{{ report.reportData.winRate }}%</div>
+                        <div class="at-mittig">
+                            <div class="at-gedaempft at-klein">{{ t('dashboard.winRate') }}</div>
+                            <div class="at-fett">{{ report.reportData.winRate }}%</div>
                         </div>
-                        <div class="col-6 col-md-3 text-center">
-                            <div class="text-muted small">{{ t('dashboard.netPnl') }}</div>
-                            <div class="fw-bold" :class="parseFloat(report.reportData.totalNetProceeds) >= 0 ? 'greenTrade' : 'redTrade'">
+                        <div class="at-mittig">
+                            <div class="at-gedaempft at-klein">{{ t('dashboard.netPnl') }}</div>
+                            <div class="at-fett" :class="parseFloat(report.reportData.totalNetProceeds) >= 0 ? 'greenTrade' : 'redTrade'">
                                 {{ report.reportData.totalNetProceeds }} USDT
                             </div>
                         </div>
-                        <div class="col-6 col-md-3 text-center">
-                            <div class="text-muted small">{{ t('options.profitFactor') }}</div>
-                            <div class="fw-bold">{{ report.reportData.profitFactor }}</div>
+                        <div class="at-mittig">
+                            <div class="at-gedaempft at-klein">{{ t('options.profitFactor') }}</div>
+                            <div class="at-fett">{{ report.reportData.profitFactor }}</div>
                         </div>
                     </div>
 
@@ -869,30 +863,30 @@ onBeforeMount(async () => {
                     <div class="report-content" v-html="markdownToHtml(report.report)"></div>
 
                     <!-- Token-Verbrauch -->
-                    <div class="d-flex align-items-center gap-3 mt-2 pt-2 text-muted small" style="border-top: 1px solid var(--border-color, #333);">
-                        <span><i class="uil uil-processor me-1"></i>{{ report.model || '—' }}</span>
+                    <div class="at-flex at-mitte at-luecke-3 at-mo-2 at-po-2 at-gedaempft at-klein" style="border-top: 1px solid var(--border-color, #333);">
+                        <span><Symbol name="prozessor" class="at-mr-1" />{{ report.model || '—' }}</span>
                         <span>{{ t('kiAgent.prompt') }}: {{ report.totalTokens > 0 ? report.promptTokens?.toLocaleString() : '—' }}</span>
                         <span>{{ t('kiAgent.response') }}: {{ report.totalTokens > 0 ? report.completionTokens?.toLocaleString() : '—' }}</span>
-                        <span class="fw-bold">{{ t('kiAgent.total') }}: {{ report.totalTokens > 0 ? report.totalTokens?.toLocaleString() + ' ' + t('kiAgent.tokens') : '—' }}</span>
+                        <span class="at-fett">{{ t('kiAgent.total') }}: {{ report.totalTokens > 0 ? report.totalTokens?.toLocaleString() + ' ' + t('kiAgent.tokens') : '—' }}</span>
                     </div>
 
                     <!-- Chat / Rückfragen -->
-                    <div v-if="chatEnabled && aiOnline" class="chat-section mt-3 pt-3" style="border-top: 1px solid var(--border-color, #333);">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small fw-bold"><i class="uil uil-comment-dots me-1"></i>{{ t('kiAgent.followUp') }}</span>
-                            <button v-if="chatMessages[report.id]?.length > 0" class="btn btn-sm btn-outline-secondary" @click="clearChat(report.id)" :title="t('kiAgent.clearChat')">
-                                <i class="uil uil-trash-alt me-1"></i>{{ t('kiAgent.clearChat') }}
-                            </button>
+                    <div v-if="chatEnabled && aiOnline" class="chat-section at-mo-3 at-po-3" style="border-top: 1px solid var(--border-color, #333);">
+                        <div class="at-flex at-verteilt at-mitte at-mu-2">
+                            <span class="at-klein at-fett"><Symbol name="nachricht" class="at-mr-1" />{{ t('kiAgent.followUp') }}</span>
+                            <Knopf v-if="chatMessages[report.id]?.length > 0" klein symbol="muell" @click="clearChat(report.id)" :title="t('kiAgent.clearChat')">
+                                {{ t('kiAgent.clearChat') }}
+                            </Knopf>
                         </div>
 
                         <!-- Chat-Verlauf -->
-                        <div v-if="chatMessages[report.id]?.length > 0" class="chat-messages mb-2">
-                            <div v-for="msg in chatMessages[report.id]" :key="msg.id" class="chat-msg mb-2" :class="'chat-msg-' + msg.role">
-                                <div class="d-flex align-items-center gap-1 mb-1">
-                                    <i class="uil" :class="msg.role === 'user' ? 'uil-user' : 'uil-robot'"></i>
-                                    <span class="small fw-bold">{{ msg.role === 'user' ? t('kiAgent.you') : t('kiAgent.ai') }}</span>
-                                    <span class="text-muted small ms-1">{{ formatDate(msg.createdAt) }}</span>
-                                    <span v-if="msg.role === 'assistant' && msg.totalTokens > 0" class="text-muted small ms-auto">{{ msg.totalTokens }} {{ t('kiAgent.tokens') }}</span>
+                        <div v-if="chatMessages[report.id]?.length > 0" class="chat-messages at-mu-2">
+                            <div v-for="msg in chatMessages[report.id]" :key="msg.id" class="chat-msg at-mu-2" :class="'chat-msg-' + msg.role">
+                                <div class="at-flex at-mitte at-luecke-1 at-mu-1">
+                                    <Symbol :name="msg.role === 'user' ? 'person' : 'ki'" />
+                                    <span class="at-klein at-fett">{{ msg.role === 'user' ? t('kiAgent.you') : t('kiAgent.ai') }}</span>
+                                    <span class="at-gedaempft at-klein at-ml-1">{{ formatDate(msg.createdAt) }}</span>
+                                    <span v-if="msg.role === 'assistant' && msg.totalTokens > 0" class="at-gedaempft at-klein at-ml-auto">{{ msg.totalTokens }} {{ t('kiAgent.tokens') }}</span>
                                 </div>
                                 <div v-if="msg.role === 'user'" class="chat-bubble chat-bubble-user">{{ msg.content }}</div>
                                 <div v-else class="chat-bubble chat-bubble-ai report-content" v-html="markdownToHtml(msg.content)"></div>
@@ -900,27 +894,27 @@ onBeforeMount(async () => {
                         </div>
 
                         <!-- Loading -->
-                        <div v-if="chatLoading[report.id]" class="text-center py-3">
-                            <span class="spinner-border spinner-border-sm me-1"></span>
-                            <span class="text-muted small">{{ t('kiAgent.aiThinking') }}</span>
+                        <div v-if="chatLoading[report.id]" class="at-mittig at-py-3">
+                            <Kreisel still class="at-mr-1" />
+                            <span class="at-gedaempft at-klein">{{ t('kiAgent.aiThinking') }}</span>
                         </div>
 
                         <!-- Error -->
-                        <div v-if="chatError[report.id]" class="alert alert-danger py-1 px-2 small mb-2">
+                        <Hinweis v-if="chatError[report.id]" class="at-mu-2" art="fehler">
                             {{ chatError[report.id] }}
-                        </div>
+                        </Hinweis>
 
                         <!-- Input -->
-                        <div class="d-flex gap-2 align-items-end">
-                            <textarea class="form-control form-control-sm chat-input" rows="3" :placeholder="t('kiAgent.askFollowUp')"
+                        <div class="at-flex at-luecke-2 at-unten">
+                            <textarea class="at-feld klein chat-input" rows="3" :placeholder="t('kiAgent.askFollowUp')"
                                 v-model="chatInput[report.id]"
                                 @keydown.enter.exact.prevent="sendChatMessage(report.id)"
                                 :disabled="chatLoading[report.id]"></textarea>
-                            <button class="btn btn-sm btn-primary" style="height: 2.4rem;" @click="sendChatMessage(report.id)" :disabled="chatLoading[report.id] || !(chatInput[report.id] || '').trim()">
-                                <i class="uil uil-message"></i>
-                            </button>
+                            <Knopf art="haupt" klein style="height: 2.4rem;" @click="sendChatMessage(report.id)" :disabled="chatLoading[report.id] || !(chatInput[report.id] || '').trim()">
+                                <Symbol name="nachricht" />
+                            </Knopf>
                         </div>
-                        <small class="text-muted mt-1">{{ t('kiAgent.chatInputHint') }}</small>
+                        <small class="at-gedaempft at-mo-1">{{ t('kiAgent.chatInputHint') }}</small>
                     </div>
                 </div>
             </div>
@@ -931,173 +925,173 @@ onBeforeMount(async () => {
             <div v-show="currentTab === 'agent'">
 
                 <!-- Header -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">
-                        <i class="uil uil-brain me-2"></i>{{ t('kiAgent.agentTitle') }}
+                <div class="at-flex at-verteilt at-mitte at-mu-3">
+                    <h5 class="at-mu-0">
+                        <Symbol name="gehirn" class="at-mr-2" />{{ t('kiAgent.agentTitle') }}
                     </h5>
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge" :class="aiOnline ? 'bg-success' : 'bg-danger'">
+                    <div class="at-flex at-mitte at-luecke-2">
+                        <Pille :ton="aiOnline ? 'gut' : 'schlecht'">
                             {{ aiOnline ? modelLabel + ' ' + t('kiAgent.online') : providerLabel + ' ' + t('kiAgent.offline') }}
-                        </span>
-                        <button class="btn btn-sm btn-outline-primary" @click="startNewAgentSession" :title="t('kiAgent.newSession')">
-                            <i class="uil uil-plus me-1"></i>{{ t('kiAgent.newSession') }}
-                        </button>
+                        </Pille>
+                        <Knopf klein @click="startNewAgentSession" :title="t('kiAgent.newSession')">
+                            <Symbol name="plus" class="at-mr-1" />{{ t('kiAgent.newSession') }}
+                        </Knopf>
                     </div>
                 </div>
 
                 <!-- Offline -->
-                <div v-if="!aiOnline" class="dailyCard text-center py-4 mb-3">
-                    <i class="uil uil-exclamation-triangle text-warning" style="font-size: 2rem;"></i>
-                    <p class="mt-2 mb-1">{{ t('kiAgent.providerNotReachable') }}</p>
+                <div v-if="!aiOnline" class="dailyCard at-mittig at-py-4 at-mu-3">
+                    <Symbol style="font-size: 2rem;" name="warnung" class="at-warn" />
+                    <p class="at-mo-2 at-mu-1">{{ t('kiAgent.providerNotReachable') }}</p>
                 </div>
 
-                <div v-if="aiOnline" class="row">
+                <div v-if="aiOnline" class="kiAgentRaster">
                     <!-- Session-Liste (links) -->
-                    <div class="col-12 col-md-3 mb-3">
+                    <div>
                         <div class="dailyCard" style="height: auto; max-height: 70vh; overflow-y: auto; padding: 0.5em;">
-                            <div class="d-flex align-items-center justify-content-between mb-2">
-                                <div class="small fw-bold"><i class="uil uil-history me-1"></i>{{ t('kiAgent.sessions') }}</div>
-                                <div class="d-flex gap-1">
+                            <div class="at-flex at-mitte at-verteilt at-mu-2">
+                                <div class="at-klein at-fett"><Symbol name="verlauf" class="at-mr-1" />{{ t('kiAgent.sessions') }}</div>
+                                <div class="at-flex at-luecke-1">
                                     <span class="agent-list-btn" :class="{ active: auswahlModus }"
                                         :title="t('kiAgent.auswahl')" @click="toggleAuswahlModus">
-                                        <i class="uil uil-check-square"></i>
+                                        <Symbol name="hakenKasten" />
                                     </span>
                                     <span class="agent-list-btn" :class="{ active: zeigeArchiv }"
                                         :title="t('kiAgent.archivAnzeigen')" @click="wechsleArchivAnsicht">
-                                        <i class="uil uil-archive"></i>
+                                        <Symbol name="archiv" />
                                     </span>
                                 </div>
                             </div>
-                            <div v-if="sichtbareSessions.length === 0" class="text-muted small text-center py-2">
+                            <div v-if="sichtbareSessions.length === 0" class="at-gedaempft at-klein at-mittig at-py-2">
                                 {{ zeigeArchiv ? t('kiAgent.archivLeer') : t('kiAgent.noSessions') }}
                             </div>
                             <div v-for="s in sichtbareSessions" :key="s.id"
-                                class="agent-session-item p-2 mb-1 rounded pointerClass"
+                                class="agent-session-item at-p-2 at-mu-1 pointerClass"
                                 :class="{ 'agent-session-active': agentCurrentSessionId === s.id }"
                                 @click="auswahlModus ? toggleAuswahl(s.id) : loadAgentSession(s.id)">
-                                <div class="d-flex align-items-center gap-2">
-                                    <input v-if="auswahlModus" type="checkbox" class="form-check-input mt-0 flex-shrink-0"
+                                <div class="at-flex at-mitte at-luecke-2">
+                                    <input v-if="auswahlModus" type="checkbox" class="at-mo-0 at-fest"
                                         :checked="ausgewaehlteSessions.has(s.id)" @click.stop="toggleAuswahl(s.id)" />
-                                    <div class="small fw-bold text-truncate" style="min-width: 0;">{{ s.title || 'Session ' + s.id }}</div>
+                                    <div class="at-klein at-fett at-kuerzen" style="min-width: 0;">{{ s.title || 'Session ' + s.id }}</div>
                                 </div>
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <span class="text-muted" style="font-size: 0.65rem;">{{ formatDate(s.updatedAt || s.createdAt) }}</span>
+                                <div class="at-flex at-verteilt at-mitte">
+                                    <span class="at-gedaempft" style="font-size: 0.65rem;">{{ formatDate(s.updatedAt || s.createdAt) }}</span>
                                     <template v-if="!auswahlModus">
                                         <span v-if="agentDeleteConfirmId !== s.id"
-                                            class="text-danger" style="font-size: 0.7rem; cursor: pointer;"
+                                            class="at-schlecht" style="font-size: 0.7rem; cursor: pointer;"
                                             @click.stop="agentDeleteConfirmId = s.id">
-                                            <i class="uil uil-trash-alt"></i>
+                                            <Symbol name="muell" />
                                         </span>
-                                        <span v-else class="d-flex gap-1" @click.stop>
-                                            <button class="btn btn-danger" style="font-size: 0.6rem; padding: 0 0.3rem;" @click="deleteAgentSession(s.id)">{{ t('common.yes') }}</button>
-                                            <button class="btn btn-outline-secondary" style="font-size: 0.6rem; padding: 0 0.3rem;" @click="agentDeleteConfirmId = null">{{ t('common.no') }}</button>
+                                        <span v-else class="at-flex at-luecke-1" @click.stop>
+                                            <Knopf art="gefahr" style="font-size: 0.6rem; padding: 0 0.3rem;" @click="deleteAgentSession(s.id)">{{ t('common.yes') }}</Knopf>
+                                            <Knopf style="font-size: 0.6rem; padding: 0 0.3rem;" @click="agentDeleteConfirmId = null">{{ t('common.no') }}</Knopf>
                                         </span>
                                     </template>
                                 </div>
                             </div>
                             <!-- Aktionen auf die Auswahl -->
-                            <div v-if="auswahlModus" class="d-flex flex-column gap-1 mt-2">
-                                <button class="btn btn-sm btn-outline-secondary" :disabled="ausgewaehlteSessions.size === 0"
+                            <div v-if="auswahlModus" class="at-flex at-spalte at-luecke-1 at-mo-2">
+                                <Knopf klein :disabled="ausgewaehlteSessions.size === 0"
                                     @click="archiviereAusgewaehlte">
-                                    <i class="uil uil-archive me-1"></i>{{ zeigeArchiv ? t('kiAgent.wiederherstellen') : t('kiAgent.archivieren') }} ({{ ausgewaehlteSessions.size }})
-                                </button>
-                                <button class="btn btn-sm" :class="bulkLoeschBestaetigung ? 'btn-danger' : 'btn-outline-danger'"
+                                    <Symbol name="archiv" class="at-mr-1" />{{ zeigeArchiv ? t('kiAgent.wiederherstellen') : t('kiAgent.archivieren') }} ({{ ausgewaehlteSessions.size }})
+                                </Knopf>
+                                <Knopf klein art="gefahr"
                                     :disabled="ausgewaehlteSessions.size === 0" @click="loescheAusgewaehlte">
-                                    <i class="uil uil-trash-alt me-1"></i>{{ bulkLoeschBestaetigung ? t('kiAgent.wirklichLoeschen') : t('kiAgent.loeschen') }} ({{ ausgewaehlteSessions.size }})
-                                </button>
+                                    <Symbol name="muell" class="at-mr-1" />{{ bulkLoeschBestaetigung ? t('kiAgent.wirklichLoeschen') : t('kiAgent.loeschen') }} ({{ ausgewaehlteSessions.size }})
+                                </Knopf>
                             </div>
                         </div>
                     </div>
 
                     <!-- Chat-Bereich (rechts) -->
-                    <div class="col-12 col-md-9">
+                    <div class="kiAgentChat">
                         <div class="dailyCard" style="height: auto; min-height: 50vh; display: flex; flex-direction: column; padding: 0.8em;">
 
                             <!-- Chat-Verlauf -->
-                            <div ref="agentChatEl" class="agent-chat-messages flex-grow-1 mb-3" style="overflow-y: auto; max-height: 60vh;">
-                                <div v-if="agentMessages.length === 0 && !agentLoading" class="text-center text-muted py-5">
-                                    <i class="uil uil-brain" style="font-size: 3rem; opacity: 0.3;"></i>
-                                    <p class="mt-2 mb-0">{{ t('kiAgent.agentWelcome') }}</p>
+                            <div ref="agentChatEl" class="agent-chat-messages at-wachsen at-mu-3" style="overflow-y: auto; max-height: 60vh;">
+                                <div v-if="agentMessages.length === 0 && !agentLoading" class="at-mittig at-gedaempft at-py-5">
+                                    <Symbol style="font-size: 3rem; opacity: 0.3;" name="gehirn" />
+                                    <p class="at-mo-2 at-mu-0">{{ t('kiAgent.agentWelcome') }}</p>
                                     <small>{{ t('kiAgent.agentHint') }}</small>
                                 </div>
 
                                 <template v-for="(msg, idx) in agentMessages" :key="idx">
                                     <!-- User Message -->
-                                    <div v-if="msg.role === 'user'" class="chat-msg mb-2">
-                                        <div class="d-flex align-items-center gap-1 mb-1">
-                                            <i class="uil uil-user"></i>
-                                            <span class="small fw-bold">{{ t('kiAgent.you') }}</span>
+                                    <div v-if="msg.role === 'user'" class="chat-msg at-mu-2">
+                                        <div class="at-flex at-mitte at-luecke-1 at-mu-1">
+                                            <Symbol name="person" />
+                                            <span class="at-klein at-fett">{{ t('kiAgent.you') }}</span>
                                         </div>
                                         <div class="chat-bubble chat-bubble-user">{{ msg.content }}</div>
                                     </div>
 
                                     <!-- Tool Messages -->
-                                    <div v-if="msg.role === 'tool'" class="agent-tool-step mb-1 ms-3">
-                                        <div class="d-flex align-items-center gap-1 pointerClass" @click="toggleAgentTool(idx)">
-                                            <i class="uil uil-cog" style="color: #a78bfa;"></i>
-                                            <span class="small" style="color: #a78bfa;">{{ msg.toolName }}</span>
-                                            <i class="uil" :class="agentExpandedTools.has(idx) ? 'uil-angle-down' : 'uil-angle-right'" style="font-size: 0.7rem;"></i>
+                                    <div v-if="msg.role === 'tool'" class="agent-tool-step at-mu-1 at-ml-3">
+                                        <div class="at-flex at-mitte at-luecke-1 pointerClass" @click="toggleAgentTool(idx)">
+                                            <Symbol style="color: #a78bfa;" name="einstellungen" />
+                                            <span class="at-klein" style="color: #a78bfa;">{{ msg.toolName }}</span>
+                                            <Symbol :name="agentExpandedTools.has(idx) ? 'runter' : 'ausklappen'" style="font-size: 0.7rem;" />
                                         </div>
-                                        <div v-if="agentExpandedTools.has(idx)" class="agent-tool-detail mt-1 p-2 rounded" style="background: rgba(167, 139, 250, 0.08); font-size: 0.75rem; max-height: 200px; overflow-y: auto;">
+                                        <div v-if="agentExpandedTools.has(idx)" class="agent-tool-detail at-mo-1 at-p-2" style="background: rgba(167, 139, 250, 0.08); font-size: 0.75rem; max-height: 200px; overflow-y: auto;">
                                             <pre style="white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--white-60);">{{ msg.content?.substring(0, 2000) }}</pre>
                                         </div>
                                     </div>
 
                                     <!-- Assistant Message -->
-                                    <div v-if="msg.role === 'assistant'" class="chat-msg mb-2">
-                                        <div class="d-flex align-items-center gap-1 mb-1">
-                                            <i class="uil uil-robot"></i>
-                                            <span class="small fw-bold">{{ t('kiAgent.agent') }}</span>
+                                    <div v-if="msg.role === 'assistant'" class="chat-msg at-mu-2">
+                                        <div class="at-flex at-mitte at-luecke-1 at-mu-1">
+                                            <Symbol name="ki" />
+                                            <span class="at-klein at-fett">{{ t('kiAgent.agent') }}</span>
                                         </div>
                                         <div class="chat-bubble chat-bubble-ai report-content" v-html="markdownToHtml(msg.content)"></div>
                                     </div>
                                 </template>
 
                                 <!-- Live Steps (during agent run) -->
-                                <div v-if="agentLoading" class="ms-3 mb-2">
-                                    <div v-for="(step, si) in agentSteps" :key="si" class="agent-live-step mb-1">
+                                <div v-if="agentLoading" class="at-ml-3 at-mu-2">
+                                    <div v-for="(step, si) in agentSteps" :key="si" class="agent-live-step at-mu-1">
                                         <template v-if="step.type === 'thinking'">
-                                            <span class="spinner-border spinner-border-sm me-1" style="width: 0.7rem; height: 0.7rem;"></span>
-                                            <span class="text-muted small">{{ t('kiAgent.agentThinking') }} ({{ step.iteration }})</span>
+                                            <Kreisel still class="at-mr-1" groesse="0.7rem" />
+                                            <span class="at-gedaempft at-klein">{{ t('kiAgent.agentThinking') }} ({{ step.iteration }})</span>
                                         </template>
                                         <template v-if="step.type === 'tool_call'">
-                                            <i class="uil uil-cog me-1" style="color: #a78bfa;"></i>
-                                            <span class="small" style="color: #a78bfa;">{{ step.name }}</span>
-                                            <span class="text-muted small ms-1">({{ formatToolParams(step.params) }})</span>
+                                            <Symbol style="color: #a78bfa;" name="einstellungen" class="at-mr-1" />
+                                            <span class="at-klein" style="color: #a78bfa;">{{ step.name }}</span>
+                                            <span class="at-gedaempft at-klein at-ml-1">({{ formatToolParams(step.params) }})</span>
                                         </template>
                                         <template v-if="step.type === 'tool_result'">
-                                            <i class="uil uil-check-circle me-1" style="color: #34d399;"></i>
-                                            <span class="small" style="color: #34d399;">{{ step.name }}: {{ step.resultPreview }}</span>
+                                            <Symbol style="color: #34d399;" name="hakenKreis" class="at-mr-1" />
+                                            <span class="at-klein" style="color: #34d399;">{{ step.name }}: {{ step.resultPreview }}</span>
                                         </template>
                                         <template v-if="step.type === 'warning'">
-                                            <i class="uil uil-exclamation-triangle me-1 text-warning"></i>
-                                            <span class="small text-warning">{{ step.content }}</span>
+                                            <Symbol name="warnung" class="at-mr-1 at-warn" />
+                                            <span class="at-klein at-warn">{{ step.content }}</span>
                                         </template>
                                     </div>
-                                    <div class="text-center py-2">
-                                        <span class="spinner-border spinner-border-sm me-1"></span>
-                                        <span class="text-muted small">{{ t('kiAgent.agentWorking') }}</span>
+                                    <div class="at-mittig at-py-2">
+                                        <Kreisel still class="at-mr-1" />
+                                        <span class="at-gedaempft at-klein">{{ t('kiAgent.agentWorking') }}</span>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Error -->
-                            <div v-if="agentError" class="alert alert-danger py-1 px-2 small mb-2">
+                            <Hinweis v-if="agentError" class="at-mu-2" art="fehler">
                                 {{ agentError }}
-                            </div>
+                            </Hinweis>
 
                             <!-- Input -->
-                            <div class="d-flex gap-2 align-items-end mt-auto">
-                                <textarea class="form-control form-control-sm chat-input" rows="2"
+                            <div class="at-flex at-luecke-2 at-unten at-mo-auto">
+                                <textarea class="at-feld klein chat-input" rows="2"
                                     :placeholder="t('kiAgent.agentPlaceholder')"
                                     v-model="agentInput"
                                     @keydown.enter.exact.prevent="sendAgentMessage"
                                     :disabled="agentLoading || !aiOnline"></textarea>
-                                <button class="btn btn-sm btn-primary" style="height: 2.4rem;"
+                                <Knopf art="haupt" klein style="height: 2.4rem;"
                                     @click="sendAgentMessage"
                                     :disabled="agentLoading || !agentInput.trim() || !aiOnline">
-                                    <i class="uil uil-message"></i>
-                                </button>
+                                    <Symbol name="nachricht" />
+                                </Knopf>
                             </div>
                         </div>
                     </div>
@@ -1109,6 +1103,41 @@ onBeforeMount(async () => {
 </template>
 
 <style scoped>
+/* Kennzahlen eines Berichts: zwei Spalten am Telefon, vier ab Tablet. */
+.kiKennzahlen {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+}
+
+@media (min-width: 768px) {
+    .kiKennzahlen { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* Kurzwerte im zugeklappten Bericht nur, wo Platz ist. */
+.kiNurBreit { display: none; }
+
+@media (min-width: 768px) {
+    .kiNurBreit { display: inline; }
+}
+
+/* Agent: Sitzungsliste links (ein Viertel), Chat rechts; am Telefon untereinander. */
+.kiAgentRaster {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+}
+
+@media (min-width: 768px) {
+    .kiAgentRaster { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); }
+}
+
+.agent-session-item {
+    border-radius: var(--radius-klein);
+}
+
 /* Report-Style Quick-Selection */
 .report-style-btn {
     display: inline-flex;
@@ -1203,19 +1232,6 @@ onBeforeMount(async () => {
 /* Chat-CSS ist in style-dark.css global */
 
 /* Tab-Styling */
-.nav-pills .nav-link {
-    color: var(--white-60);
-    background: transparent;
-    border: 1px solid var(--border-color, #333);
-    font-size: 0.85rem;
-    padding: 0.3rem 0.8rem;
-}
-.nav-pills .nav-link.active {
-    color: #fff;
-    background: var(--blue-color, #4a90d9);
-    border-color: var(--blue-color, #4a90d9);
-}
-
 /* Agent Session List */
 .agent-session-item {
     border: 1px solid transparent;

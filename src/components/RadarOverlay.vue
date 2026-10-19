@@ -11,6 +11,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ebeneAuf, ebeneZu } from '../composables/useZurueckGeste.js'
 import InfoTipp from './InfoTipp.vue'
+import Symbol from '@/components/basis/Symbol.vue'
 
 defineProps({
     titel: { type: String, default: '' },
@@ -54,7 +55,7 @@ onBeforeUnmount(() => ebeneZu(schliesseDurchGeste))
                     <h5>{{ titel }}<InfoTipp v-if="infoKey" :schluessel="infoKey" /></h5>
                     <button type="button" class="radarOverlayClose" :title="t('common.close')"
                         @click="emit('schliessen')">
-                        <i class="uil uil-times"></i>
+                        <Symbol name="schliessen" />
                     </button>
                 </div>
 

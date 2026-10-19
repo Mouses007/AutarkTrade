@@ -12,6 +12,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/dayjs-setup.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -35,7 +36,7 @@ function setzeFenster(stunden) {
 const geld = (v) => (v >= 1e9 ? `${(v / 1e9).toFixed(2)} Mrd` : v >= 1e6 ? `${(v / 1e6).toFixed(1)} Mio` : `${Math.round(v / 1000)}k`)
 
 const richtungFarbe = (r) => (r === 'ein' ? ROT : r === 'aus' ? GRUEN : 'var(--white-60)')
-const richtungIcon = (r) => (r === 'ein' ? 'uil-arrow-circle-right' : r === 'aus' ? 'uil-arrow-circle-left' : 'uil-question-circle')
+const richtungIcon = (r) => (r === 'ein' ? 'pfeilKreisRechts' : r === 'aus' ? 'pfeilKreisLinks' : 'frage')
 const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
 </script>
 
@@ -45,7 +46,7 @@ const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
              die Kachel liest nur mit, was unter Einstellungen → Nachrichten
              aktiv ist. -->
         <div v-if="!daten.aktiveQuellen" class="walAus">
-            <i class="uil uil-anchor"></i>
+            <Symbol name="anker" />
             <p>{{ t('marktradar.wal.inactive') }}</p>
             <router-link to="/settings" class="ctl-pill">{{ t('marktradar.wal.toSettings') }}</router-link>
         </div>
@@ -65,15 +66,15 @@ const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
 
             <div v-else class="walListe">
                 <div v-for="(tx, i) in angezeigt" :key="i" class="walZeile">
-                    <i class="uil" :class="richtungIcon(tx.richtung)" :style="{ color: richtungFarbe(tx.richtung) }"
-                        :title="richtungTitel(tx.richtung)"></i>
+                    <Symbol :name="richtungIcon(tx.richtung)" :style="{ color: richtungFarbe(tx.richtung) }"
+                        :titel="richtungTitel(tx.richtung)" />
                     <span class="walSymbol">{{ tx.symbol }}</span>
                     <span class="walUsd">{{ geld(tx.usdWert) }} $</span>
                     <span class="walGegenpartei">{{ tx.gegenpartei || '—' }}</span>
                     <span class="walZeit">{{ dayjs(tx.zeit).format('DD.MM. HH:mm') }}</span>
                     <a v-if="tx.url" :href="tx.url" target="_blank" rel="noopener noreferrer" class="walLink"
                         :title="tx.quelle" @click.stop>
-                        <i class="uil uil-external-link-alt"></i>
+                        <Symbol name="extern" />
                     </a>
                 </div>
             </div>

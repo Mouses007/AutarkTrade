@@ -42,6 +42,7 @@ import { KACHELN, sortiereKacheln } from '../config/marktradar.js'
 import PultAnsicht from '../components/marktradar/PultAnsicht.vue'
 import { PULT_KACHELN } from '../config/marktradar-pult.js'
 import { useKachelRaster } from '../composables/useKachelRaster.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const { t } = useI18n()
 
@@ -288,37 +289,37 @@ watch(() => daten.funding, (d) => {
                 <div class="ltAnsicht">
                     <button type="button" :class="['ctl-pill', ansicht === 'raster' ? 'active' : '']"
                         :title="t('livetrading.ansicht.rasterSub')" @click="waehleAnsicht('raster')">
-                        <i class="uil uil-apps"></i>{{ t('livetrading.ansicht.raster') }}
+                        <Symbol name="raster" />{{ t('livetrading.ansicht.raster') }}
                     </button>
                     <button type="button" :class="['ctl-pill', ansicht === 'pult' ? 'active' : '']"
                         :title="t('livetrading.ansicht.pultSub')" @click="waehleAnsicht('pult')">
-                        <i class="uil uil-sliders-v-alt"></i>{{ t('livetrading.ansicht.pult') }}
+                        <Symbol name="regler" />{{ t('livetrading.ansicht.pult') }}
                     </button>
                 </div>
                 <span class="ctl-sep"></span>
                 <!-- Sichtbarkeit ist eine Rasterfrage: das Pult hat feste
                      Instrumente und kennt kein Ausblenden. -->
-                <div v-if="ansicht === 'raster'" ref="configRef" class="position-relative">
+                <div v-if="ansicht === 'raster'" ref="configRef" class="at-relativ">
                     <button type="button" class="ctl-pill" @click="showConfigDropdown = !showConfigDropdown">
-                        <i class="uil uil-apps"></i>{{ t('marktradar.cards') }}
+                        <Symbol name="raster" />{{ t('marktradar.cards') }}
                     </button>
                     <div v-if="showConfigDropdown" class="card-config-dropdown">
                         <div class="card-config-title">{{ t('auswertung.visibleCards') }}</div>
                         <div v-for="kachel in alleKacheln" :key="kachel.id" class="card-config-item"
                             @click="beiUmschalten(kachel.id)">
-                            <i class="uil me-2"
-                                :class="isVisible(kachel.id) ? 'uil-check-square text-success' : 'uil-square-full text-muted'"></i>
+                            <Symbol class="at-mr-2"
+                                :name="isVisible(kachel.id) ? 'hakenKasten' : 'quadrat'" :class="isVisible(kachel.id) ? 'at-gut' : 'at-gedaempft'" />
                             {{ t(kachel.titleKey) }}
                         </div>
                     </div>
                 </div>
                 <button type="button" class="ctl-pill" @click="ladeFaellige(true)">
-                    <i class="uil uil-sync"></i>{{ t('marktradar.refreshAll') }}
+                    <Symbol name="aktualisieren" />{{ t('marktradar.refreshAll') }}
                 </button>
                 <!-- Öffnet ein eigenes Fenster (siehe `oeffneLivetrading`).
                      Nur am Desktop: der Arbeitsplatz braucht Platz. -->
                 <button v-if="livetradingSichtbar" type="button" class="ctl-pill" @click="oeffneLivetrading">
-                    <i class="uil uil-crosshairs"></i>{{ t('livetrading.start') }}
+                    <Symbol name="fadenkreuz" />{{ t('livetrading.start') }}
                 </button>
                 <span class="ctl-sep"></span>
                 <PageInfo section="info.marktradar" />

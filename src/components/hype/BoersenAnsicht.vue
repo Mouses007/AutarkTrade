@@ -3,15 +3,15 @@
         <div class="bwKopf">
             <div class="bwStand">
                 <span v-if="!einst?.boersenwachtAn" class="bwAus">
-                    <i class="uil uil-pause-circle me-1"></i>{{ t('hypeBoersen.aus') }}
+                    <Symbol name="pauseKreis" class="at-mr-1" />{{ t('hypeBoersen.aus') }}
                 </span>
                 <span v-else>{{ t('hypeBoersen.an', { n: einst.boersenwachtIntervallMin || 30 }) }}</span>
                 <span v-if="daten?.stand?.letzter?.am"> · {{ t('hypeBoersen.letzter', { z: zeitpunkt(daten.stand.letzter.am) }) }}</span>
-                <span v-if="daten?.stand?.letzter?.fehler" class="text-danger"> · {{ daten.stand.letzter.fehler }}</span>
+                <span v-if="daten?.stand?.letzter?.fehler" class="at-schlecht"> · {{ daten.stand.letzter.fehler }}</span>
             </div>
-            <button type="button" class="ctl-pill ms-auto" :disabled="laeuft" @click="abgleichen">
-                <span v-if="laeuft" class="spinner-border spinner-border-sm me-1"></span>
-                <i v-else class="uil uil-sync me-1"></i>{{ laeuft ? t('hypeBoersen.laeuft') : t('hypeBoersen.jetzt') }}
+            <button type="button" class="ctl-pill at-ml-auto" :disabled="laeuft" @click="abgleichen">
+                <Kreisel still class="at-mr-1" v-if="laeuft" />
+                <Symbol v-else name="aktualisieren" class="at-mr-1" />{{ laeuft ? t('hypeBoersen.laeuft') : t('hypeBoersen.jetzt') }}
             </button>
         </div>
 
@@ -23,8 +23,8 @@
             </span>
         </div>
 
-        <div v-if="meldung" class="alert py-2 small mt-2" :class="meldungFehler ? 'alert-danger' : 'alert-info'">{{ meldung }}</div>
-        <div v-if="ladeFehler" class="text-danger small mt-2">{{ ladeFehler }}</div>
+        <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">{{ meldung }}</Hinweis>
+        <div v-if="ladeFehler" class="at-schlecht at-klein at-mo-2">{{ ladeFehler }}</div>
 
         <p class="bwHinweis">{{ t('hypeBoersen.erklaerung') }}</p>
 
@@ -33,7 +33,7 @@
             <div v-for="s in ['alpha', 'mittel', 'gross']" :key="s" class="bwKachel">
                 <div class="bwKachelTitel">{{ t('hypeBoersen.stufe_' + s) }}</div>
                 <div class="bwKachelZahl">{{ daten.statistik[s].erkannt }} / {{ daten.statistik[s].neu }}</div>
-                <div class="bwGrau small">
+                <div class="bwGrau at-klein">
                     {{ t('hypeBoersen.erkannt') }}<template v-if="daten.statistik[s].medianVorlaufTage !== null">
                         · {{ t('hypeBoersen.vorlauf', { n: tageText(daten.statistik[s].medianVorlaufTage) }) }}</template>
                 </div>
@@ -43,14 +43,14 @@
         <!-- Auf dem Weg nach oben: Radar-Token auf Alpha oder mittleren Börsen. -->
         <div class="bwAbschnitt">
             <div class="bwTitel">{{ t('hypeBoersen.leiterTitel') }}</div>
-            <p class="bwGrau small mb-1">{{ t('hypeBoersen.leiterHinweis') }}</p>
-            <p v-if="!daten?.leiter?.length" class="bwGrau small">{{ t('hypeBoersen.leiterLeer') }}</p>
-            <div v-else class="table-responsive">
-                <table class="table table-sm align-middle bwTabelle">
+            <p class="bwGrau at-klein at-mu-1">{{ t('hypeBoersen.leiterHinweis') }}</p>
+            <p v-if="!daten?.leiter?.length" class="bwGrau at-klein">{{ t('hypeBoersen.leiterLeer') }}</p>
+            <div v-else class="at-tabelle-huelle">
+                <table class="at-tabelle dicht bwTabelle">
                     <thead>
                         <tr>
                             <th>{{ t('hypeBoersen.spalteToken') }}</th>
-                            <th class="text-end">{{ t('hypeBoersen.spalteBewertung') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('hypeBoersen.spalteBewertung') }}</th>
                             <th>{{ t('hypeBoersen.spalteGemeldet') }}</th>
                             <th>{{ t('hypeBoersen.spalteBoersen') }}</th>
                         </tr>
@@ -60,9 +60,9 @@
                             <td>
                                 <strong>{{ l.symbol || kurz(l.contract) }}</strong>
                                 <span class="bwKette">{{ l.chain }}</span>
-                                <a :href="dexLink(l)" target="_blank" rel="noopener noreferrer" class="ms-1 small">↗</a>
+                                <a :href="dexLink(l)" target="_blank" rel="noopener noreferrer" class="at-ml-1 at-klein">↗</a>
                             </td>
-                            <td class="text-end">{{ geld(l.bewertungUsd) }}</td>
+                            <td class="at-rechtsbuendig">{{ geld(l.bewertungUsd) }}</td>
                             <td>{{ l.radarSeit ? t('hypeBoersen.vorTagen', { n: tageText((Date.now() - l.radarSeit) / 86400e3) }) : '—' }}</td>
                             <td>
                                 <span v-if="l.alpha" class="bwStufe alpha">Alpha</span>
@@ -78,10 +78,10 @@
         <!-- Angekündigt: angelegt, aber noch nicht offen — mit Startzeit, wo die Börse sie nennt. -->
         <div class="bwAbschnitt">
             <div class="bwTitel">{{ t('hypeBoersen.angekuendigtTitel') }}</div>
-            <p class="bwGrau small mb-1">{{ t('hypeBoersen.angekuendigtHinweis') }}</p>
-            <p v-if="!daten?.angekuendigt?.length" class="bwGrau small">{{ t('hypeBoersen.angekuendigtLeer') }}</p>
-            <div v-else class="table-responsive">
-                <table class="table table-sm align-middle bwTabelle">
+            <p class="bwGrau at-klein at-mu-1">{{ t('hypeBoersen.angekuendigtHinweis') }}</p>
+            <p v-if="!daten?.angekuendigt?.length" class="bwGrau at-klein">{{ t('hypeBoersen.angekuendigtLeer') }}</p>
+            <div v-else class="at-tabelle-huelle">
+                <table class="at-tabelle dicht bwTabelle">
                     <thead>
                         <tr>
                             <th>{{ t('hypeBoersen.spalteStart') }}</th>
@@ -95,7 +95,7 @@
                     <tbody>
                         <template v-for="a in daten.angekuendigt" :key="a.boerse + a.symbol">
                         <tr>
-                            <td class="text-nowrap">
+                            <td class="at-nowrap">
                                 <template v-if="a.start">{{ zeitpunkt(a.start) }} <span class="bwGrau">· {{ bisDahin(a.start) }}</span></template>
                                 <span v-else class="bwGrau">{{ t('hypeBoersen.startOffen') }}</span>
                             </td>
@@ -104,12 +104,12 @@
                             <td><AuchAuf :liste="a.auchAuf" :symbol="a.symbol" /></td>
                             <td :title="a.treffer === 'kuerzel' ? t('hypeBoersen.kuerzelTitel') : ''">
                                 <template v-if="istTreffer(a) && a.radarSeit">
-                                    <i class="uil uil-check-circle text-success me-1"></i>{{ t('hypeBoersen.gemeldetVor', { n: tageText((Date.now() - a.radarSeit) / 86400e3) }) }}
+                                    <Symbol name="hakenKreis" class="at-gut at-mr-1" />{{ t('hypeBoersen.gemeldetVor', { n: tageText((Date.now() - a.radarSeit) / 86400e3) }) }}
                                 </template>
                                 <span v-else-if="a.treffer === 'namensgleich'" class="bwGrau">{{ t('hypeBoersen.namensvetter') }}</span>
                                 <span v-else class="bwGrau">—</span>
                             </td>
-                            <td class="text-end"><TiefeKnopf :z="a" /></td>
+                            <td class="at-rechtsbuendig"><TiefeKnopf :z="a" /></td>
                         </tr>
                         <tr v-if="tiefeOffen === tiefeSchluessel(a)" class="bwTiefeZeile">
                             <td colspan="6"><TiefeInhalt :z="a" /></td>
@@ -123,9 +123,9 @@
         <!-- Neue Listungen der letzten Wochen. -->
         <div class="bwAbschnitt">
             <div class="bwTitel">{{ t('hypeBoersen.neuTitel') }}</div>
-            <p v-if="!daten?.listungen?.length" class="bwGrau small">{{ t('hypeBoersen.neuLeer') }}</p>
-            <div v-else class="table-responsive">
-                <table class="table table-sm align-middle bwTabelle">
+            <p v-if="!daten?.listungen?.length" class="bwGrau at-klein">{{ t('hypeBoersen.neuLeer') }}</p>
+            <div v-else class="at-tabelle-huelle">
+                <table class="at-tabelle dicht bwTabelle">
                     <thead>
                         <tr>
                             <th>{{ t('hypeBoersen.spalteDatum') }}</th>
@@ -140,21 +140,21 @@
                     <tbody>
                         <template v-for="z in daten.listungen" :key="z.id">
                         <tr :class="{ blass: !istTreffer(z) && tiefeOffen !== tiefeSchluessel(z) }">
-                            <td class="text-nowrap">{{ zeitpunkt(z.gesehenAm) }}</td>
-                            <td class="text-nowrap">{{ z.handelsStart ? zeitpunkt(z.handelsStart) : '—' }}</td>
+                            <td class="at-nowrap">{{ zeitpunkt(z.gesehenAm) }}</td>
+                            <td class="at-nowrap">{{ z.handelsStart ? zeitpunkt(z.handelsStart) : '—' }}</td>
                             <td><span class="bwStufe" :class="stufeVon(z.boerse)">{{ boerseName(z.boerse) }}</span></td>
                             <td><TokenZelle :z="z" /></td>
                             <td><AuchAuf :liste="z.auchAuf" :symbol="z.symbol" /></td>
                             <td :title="z.treffer === 'kuerzel' ? t('hypeBoersen.kuerzelTitel') : ''">
                                 <template v-if="istTreffer(z) && z.radarSeit">
-                                    <i class="uil uil-check-circle text-success me-1"></i>{{ t('hypeBoersen.vorher', { n: tageText((z.gesehenAm - z.radarSeit) / 86400e3) }) }}
+                                    <Symbol name="hakenKreis" class="at-gut at-mr-1" />{{ t('hypeBoersen.vorher', { n: tageText((z.gesehenAm - z.radarSeit) / 86400e3) }) }}
                                     <span v-if="z.treffer === 'kuerzel'" class="bwGrau">({{ t('hypeBoersen.ueberKuerzel') }})</span>
                                 </template>
                                 <span v-else-if="z.treffer === 'namensgleich'" class="bwGrau">{{ t('hypeBoersen.namensvetter') }}</span>
                                 <span v-else-if="z.radarGesehen" class="bwGrau">{{ t('hypeBoersen.nurGesehen') }}</span>
                                 <span v-else class="bwGrau">—</span>
                             </td>
-                            <td class="text-end"><TiefeKnopf :z="z" /></td>
+                            <td class="at-rechtsbuendig"><TiefeKnopf :z="z" /></td>
                         </tr>
                         <tr v-if="tiefeOffen === tiefeSchluessel(z)" class="bwTiefeZeile">
                             <td colspan="7"><TiefeInhalt :z="z" /></td>
@@ -168,6 +168,8 @@
 </template>
 
 <script setup>
+import Symbol from '@/components/basis/Symbol.vue'
+import Kreisel from '@/components/basis/Kreisel.vue'
 /**
  * Hype-Radar → Börsen.
  *
@@ -187,6 +189,7 @@ import axios from 'axios'
 import { logWarn } from '../../utils/logger.js'
 import { listungUrl, coingeckoSuche } from '../../utils/boersenLinks.js'
 import TiefensucheErgebnis from './TiefensucheErgebnis.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
 
 const props = defineProps({
     aktiv: { type: Boolean, default: false },
@@ -322,7 +325,7 @@ const TiefeKnopf = defineComponent({
             const offen = tiefeOffen.value === k
             return h('button', { type: 'button', class: ['ctl-pill', 'klein', { active: offen }], title: t('hypeBoersen.tiefeTitel'),
                 onClick: () => tiefensuche(p.z) }, [
-                tiefen[k]?.laeuft ? h('span', { class: 'spinner-border spinner-border-sm me-1' }) : h('i', { class: 'uil uil-search-plus me-1' }),
+                tiefen[k]?.laeuft ? h(Kreisel, { still: true, class: 'at-mr-1' }) : h(Symbol, { name: 'lupePlus', class: 'at-mr-1' }),
                 t('coinradar.tsKnopf'),
             ])
         }
@@ -333,8 +336,8 @@ const TiefeInhalt = defineComponent({
     setup(p) {
         return () => {
             const e = tiefen[tiefeSchluessel(p.z)]
-            if (!e || e.laeuft) return h('div', { class: 'bwGrau small' }, [h('span', { class: 'spinner-border spinner-border-sm me-1' }), t('hypeBoersen.tiefeLaeuft')])
-            if (e.fehler) return h('div', { class: 'text-warning small' }, e.fehler)
+            if (!e || e.laeuft) return h('div', { class: 'bwGrau at-klein' }, [h(Kreisel, { still: true, class: 'at-mr-1' }), t('hypeBoersen.tiefeLaeuft')])
+            if (e.fehler) return h('div', { class: 'at-warn at-klein' }, e.fehler)
             return h(TiefensucheErgebnis, { daten: e.daten, mitKopf: true })
         }
     },

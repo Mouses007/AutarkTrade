@@ -16,6 +16,7 @@ import * as echarts from 'echarts'
 import { liveSymbol } from '../../stores/live.js'
 import { currentUser } from '../../stores/globals.js'
 import { BOERSE_NAME, boerseUrl, aktivierteBoersen } from '../../utils/boersenLinks.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -311,11 +312,11 @@ watch([() => props.daten, ansicht, fenster, flaeche], zeichne)
 
             <button type="button" :class="['ctl-pill', ansicht === 'blasen' ? 'active' : '']"
                 @click.stop="ansicht = 'blasen'; emit('anzeige', { ansicht: 'blasen' })">
-                <i class="uil uil-circle"></i>{{ t('marktradar.markt.bubbles') }}
+                <Symbol name="kreis" />{{ t('marktradar.markt.bubbles') }}
             </button>
             <button type="button" :class="['ctl-pill', ansicht === 'kacheln' ? 'active' : '']"
                 @click.stop="ansicht = 'kacheln'; emit('anzeige', { ansicht: 'kacheln' })">
-                <i class="uil uil-web-grid"></i>{{ t('marktradar.markt.tiles') }}
+                <Symbol name="raster" />{{ t('marktradar.markt.tiles') }}
             </button>
 
             <span class="ctl-sep"></span>

@@ -43,6 +43,8 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import InfoTipp from '../InfoTipp.vue'
+import Symbol from '@/components/basis/Symbol.vue'
+import { symbolName } from '@/components/basis/symbole/unicons.js'
 
 const props = defineProps({
     /** Nutzlasten aller Kacheln, id-indiziert. */
@@ -141,7 +143,7 @@ defineExpose({ jetzt })
                     <button v-for="b in buehnen" :key="b.id" type="button"
                         :class="['ctl-pill', buehne === b.id ? 'active' : '']"
                         @click="waehleBuehne(b.id)">
-                        <i v-if="b.icon" :class="b.icon"></i>{{ t(b.titleKey) }}
+                        <Symbol v-if="b.icon" :name="symbolName(b.icon)" />{{ t(b.titleKey) }}
                     </button>
                     <span class="pBuehneStand">
                         <span :class="['liveDot', 'dot-' + (zustand[buehne] || 'idle')]"></span>

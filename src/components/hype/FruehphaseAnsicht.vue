@@ -4,19 +4,19 @@
         <div class="fpKopf">
             <div class="fpStand">
                 <span v-if="!einst?.fruehAktiv" class="fpAus">
-                    <i class="uil uil-pause-circle me-1"></i>{{ t('hypeFrueh.taktAus') }}
+                    <Symbol name="pauseKreis" class="at-mr-1" />{{ t('hypeFrueh.taktAus') }}
                 </span>
                 <span v-else>{{ t('hypeFrueh.taktAn', { n: einst.fruehIntervallMin || 15 }) }}</span>
                 <span v-if="stand?.letzter?.am"> · {{ t('hypeFrueh.letzter', { z: zeitpunkt(stand.letzter.am) }) }}</span>
                 <span v-if="stand?.letzter && !stand.letzter.fehler">
                     · {{ t('hypeFrueh.letzterErgebnis', { b: stand.letzter.beobachtet ?? 0, n: stand.letzter.neu ?? 0, a: stand.letzter.alarme ?? 0 }) }}
                 </span>
-                <span v-if="stand?.letzter?.fehler" class="text-danger"> · {{ stand.letzter.fehler }}</span>
+                <span v-if="stand?.letzter?.fehler" class="at-schlecht"> · {{ stand.letzter.fehler }}</span>
             </div>
             <div class="fpKnoepfe">
                 <button type="button" class="ctl-pill" :disabled="laeuft" @click="durchgang">
-                    <span v-if="laeuft" class="spinner-border spinner-border-sm me-1"></span>
-                    <i v-else class="uil uil-bolt-alt me-1"></i>{{ laeuft ? t('hypeFrueh.laeuft') : t('hypeFrueh.jetzt') }}
+                    <Kreisel still class="at-mr-1" v-if="laeuft" />
+                    <Symbol v-else name="blitz" class="at-mr-1" />{{ laeuft ? t('hypeFrueh.laeuft') : t('hypeFrueh.jetzt') }}
                 </button>
             </div>
         </div>
@@ -35,24 +35,24 @@
                         target="_blank" rel="noopener noreferrer">pump.fun ↗</a>
                 </span>
                 <button type="button" class="fpFokusZu" :title="t('hypeFrueh.fokusSchliessen')" @click="fokusFehlt = null; tiefe = null">
-                    <i class="uil uil-times"></i>
+                    <Symbol name="schliessen" />
                 </button>
             </div>
-            <p class="fpGrau small mb-2">{{ t('hypeFrueh.fokusFehlt') }}</p>
+            <p class="fpGrau at-klein at-mu-2">{{ t('hypeFrueh.fokusFehlt') }}</p>
             <!-- Tiefensuche: Vertrag, Halter und Projekt des vergessenen Tokens,
                  frisch geprüft — die Frühphase hat davon nichts mehr gespeichert. -->
             <div class="fpTiefe">
                 <button type="button" class="ctl-pill klein" :disabled="tiefeLaeuft" @click="tiefensuche">
-                    <span v-if="tiefeLaeuft" class="spinner-border spinner-border-sm me-1"></span>
-                    <i v-else class="uil uil-search-plus me-1"></i>{{ t('coinradar.tsKnopf') }}
+                    <Kreisel still class="at-mr-1" v-if="tiefeLaeuft" />
+                    <Symbol v-else name="lupePlus" class="at-mr-1" />{{ t('coinradar.tsKnopf') }}
                 </button>
-                <span class="fpGrau small">{{ t('hypeFrueh.tiefeHinweis') }}</span>
+                <span class="fpGrau at-klein">{{ t('hypeFrueh.tiefeHinweis') }}</span>
             </div>
-            <p v-if="tiefeFehler" class="small text-warning mb-0">{{ tiefeFehler }}</p>
-            <TiefensucheErgebnis v-if="tiefe && tiefe.contract === fokusFehlt.contract" :daten="tiefe.daten" class="mb-2" />
+            <p v-if="tiefeFehler" class="at-klein at-warn at-mu-0">{{ tiefeFehler }}</p>
+            <TiefensucheErgebnis v-if="tiefe && tiefe.contract === fokusFehlt.contract" :daten="tiefe.daten" class="at-mu-2" />
 
-            <div v-if="fokusInfo === null" class="text-muted small"><span class="spinner-border spinner-border-sm"></span></div>
-            <p v-else-if="fokusInfo.fehler" class="text-danger small">{{ fokusInfo.fehler }}</p>
+            <div v-if="fokusInfo === null" class="at-gedaempft at-klein"><Kreisel still /></div>
+            <p v-else-if="fokusInfo.fehler" class="at-schlecht at-klein">{{ fokusInfo.fehler }}</p>
             <div v-else class="fpFokusRaster">
                 <!-- Damals: was der Radar wusste -->
                 <div class="fpFokusSpalte">
@@ -75,12 +75,12 @@
                 <!-- Jetzt: DexScreener live -->
                 <div class="fpFokusSpalte">
                     <div class="fpFokusTitel">{{ t('hypeFrueh.fokusJetzt') }}</div>
-                    <p v-if="fokusInfo.marktFehler" class="text-danger small">{{ t('hypeFrueh.fokusMarktFehler', { f: fokusInfo.marktFehler }) }}</p>
-                    <p v-else-if="!fokusInfo.markt" class="fpGrau small">{{ t('hypeFrueh.fokusUnbekannt') }}</p>
+                    <p v-if="fokusInfo.marktFehler" class="at-schlecht at-klein">{{ t('hypeFrueh.fokusMarktFehler', { f: fokusInfo.marktFehler }) }}</p>
+                    <p v-else-if="!fokusInfo.markt" class="fpGrau at-klein">{{ t('hypeFrueh.fokusUnbekannt') }}</p>
                     <template v-else>
                         <div class="fpFokusZeile">
                             <span class="fpGrau">{{ t('hypeFrueh.fokusBewertung') }}</span> <b>{{ geld(fokusInfo.markt.bewertungUsd) }}</b>
-                            <span v-if="fokusSeitDamals !== null" :class="fokusSeitDamals >= 0 ? 'text-success' : 'text-danger'">
+                            <span v-if="fokusSeitDamals !== null" :class="fokusSeitDamals >= 0 ? 'at-gut' : 'at-schlecht'">
                                 {{ prozent(fokusSeitDamals) }} {{ t('hypeFrueh.fokusSeitMeldung') }}
                             </span>
                         </div>
@@ -125,44 +125,44 @@
         <div v-if="quellen.length" class="fpQuellen">
             <span v-for="q in quellen" :key="q.name" class="fpQuelle" :class="{ aus: !q.ok, teils: q.ok && q.fehler }"
                 :title="q.fehler">
-                <i class="uil" :class="q.ok ? 'uil-check' : 'uil-times'"></i> {{ q.text }}
+                <Symbol :name="q.ok ? 'haken' : 'schliessen'" /> {{ q.text }}
             </span>
         </div>
 
-        <div v-if="meldung" class="alert py-2 small mt-2" :class="meldungFehler ? 'alert-danger' : 'alert-info'">{{ meldung }}</div>
+        <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">{{ meldung }}</Hinweis>
 
         <p class="fpHinweis">{{ t('hypeFrueh.erklaerung') }}</p>
 
-        <div v-if="ladeFehler" class="text-danger small">{{ ladeFehler }}</div>
-        <div v-else-if="daten === null" class="text-muted small"><span class="spinner-border spinner-border-sm"></span></div>
+        <div v-if="ladeFehler" class="at-schlecht at-klein">{{ ladeFehler }}</div>
+        <div v-else-if="daten === null" class="at-gedaempft at-klein"><Kreisel still /></div>
         <template v-else>
             <!-- ── Kandidaten: nur, was alle Bedingungen erfüllt ─────────────── -->
             <section class="fpBlock">
                 <div class="fpBlockKopf">
-                    <span class="fpBlockTitel"><i class="uil uil-bullseye me-1"></i>{{ t('hypeFrueh.kandidatenTitel') }}</span>
+                    <span class="fpBlockTitel"><Symbol name="ziel" class="at-mr-1" />{{ t('hypeFrueh.kandidatenTitel') }}</span>
                     <span class="fpZahl">{{ daten.kandidaten.length }}</span>
-                    <span class="fpGrau small">{{ t('hypeFrueh.kandidatenRegel', { n: daten.schwelle }) }}</span>
-                    <button v-if="ausgeblendetZahl" type="button" class="ctl-pill klein ms-auto" @click="ausgeblendetZeigen">
-                        <i class="uil uil-eye me-1"></i>{{ t('hypeFrueh.ausgeblendetZeigen', { n: ausgeblendetZahl }) }}
+                    <span class="fpGrau at-klein">{{ t('hypeFrueh.kandidatenRegel', { n: daten.schwelle }) }}</span>
+                    <button v-if="ausgeblendetZahl" type="button" class="ctl-pill klein at-ml-auto" @click="ausgeblendetZeigen">
+                        <Symbol name="auge" class="at-mr-1" />{{ t('hypeFrueh.ausgeblendetZeigen', { n: ausgeblendetZahl }) }}
                     </button>
                 </div>
-                <p v-if="!daten.kandidaten.length" class="fpGrau small mb-1">{{ t('hypeFrueh.kandidatenLeer') }}</p>
+                <p v-if="!daten.kandidaten.length" class="fpGrau at-klein at-mu-1">{{ t('hypeFrueh.kandidatenLeer') }}</p>
                 <div v-else-if="sichtbareKandidaten.length" class="fpKandidaten">
                     <FruehKarte v-for="z in sichtbareKandidaten" :key="'k' + z.id" :z="z" :zu="istZu(z.id)" schliessbar
                         @stern="sternUmschalten" @zu="zuUmschalten(z.id)" @weg="ausblenden(z)" />
                 </div>
-                <p v-else class="fpGrau small mb-1">{{ t('hypeFrueh.alleAusgeblendet') }}</p>
+                <p v-else class="fpGrau at-klein at-mu-1">{{ t('hypeFrueh.alleAusgeblendet') }}</p>
                 <!-- Warum die Liste so kurz ist: die erste Bedingung, an der jeder Token scheitert. -->
-                <p v-if="trichterText" class="fpGrau small mt-2 mb-0">{{ trichterText }}</p>
+                <p v-if="trichterText" class="fpGrau at-klein at-mo-2 at-mu-0">{{ trichterText }}</p>
             </section>
 
             <!-- ── Beobachtungsliste: die Favoriten mit Stern ──────────────── -->
             <section class="fpBlock">
                 <div class="fpBlockKopf">
-                    <span class="fpBlockTitel"><i class="uil uil-star me-1"></i>{{ t('hypeFrueh.beobachtungTitel') }}</span>
+                    <span class="fpBlockTitel"><Symbol name="stern" class="at-mr-1" />{{ t('hypeFrueh.beobachtungTitel') }}</span>
                     <span class="fpZahl">{{ daten.beobachtung.length }}</span>
                 </div>
-                <p v-if="!daten.beobachtung.length" class="fpGrau small mb-0">{{ t('hypeFrueh.beobachtungLeer') }}</p>
+                <p v-if="!daten.beobachtung.length" class="fpGrau at-klein at-mu-0">{{ t('hypeFrueh.beobachtungLeer') }}</p>
                 <div v-else class="fpKandidaten">
                     <template v-for="b in daten.beobachtung" :key="'f' + b.favorit.id">
                         <FruehKarte v-if="b.zeile" :z="b.zeile" :zu="istZu(b.zeile.id)" @stern="sternUmschalten" @zu="zuUmschalten(b.zeile.id)" />
@@ -175,17 +175,17 @@
             <section class="fpBlock">
                 <div class="fpBlockKopf">
                     <button type="button" class="ctl-pill" @click="rohUmschalten">
-                        <i class="uil me-1" :class="rohOffen ? 'uil-angle-up' : 'uil-list-ul'"></i>
+                        <Symbol class="at-mr-1" :name="rohOffen ? 'hoch' : 'liste'" />
                         {{ rohOffen ? t('hypeFrueh.alleVerbergen') : t('hypeFrueh.alleZeigen', { n: daten.beobachtet }) }}
                     </button>
-                    <label v-if="rohOffen" class="fpSchalter ms-auto">
+                    <label v-if="rohOffen" class="fpSchalter at-ml-auto">
                         <input type="checkbox" v-model="mitVerworfenen" @change="lade"> {{ t('hypeFrueh.verworfeneZeigen') }}
                     </label>
                 </div>
                 <template v-if="rohOffen">
-                    <p class="fpGrau small mt-2">{{ t('hypeFrueh.alleHinweis') }}</p>
-                    <div v-if="zeilen === null" class="text-muted small"><span class="spinner-border spinner-border-sm"></span></div>
-                    <p v-else-if="!zeilen.length" class="text-muted small">{{ t('hypeFrueh.leer') }}</p>
+                    <p class="fpGrau at-klein at-mo-2">{{ t('hypeFrueh.alleHinweis') }}</p>
+                    <div v-if="zeilen === null" class="at-gedaempft at-klein"><Kreisel still /></div>
+                    <p v-else-if="!zeilen.length" class="at-gedaempft at-klein">{{ t('hypeFrueh.leer') }}</p>
 
                     <!-- Telefon: Karten -->
                     <div v-else-if="istTelefon" class="fpListe">
@@ -195,15 +195,15 @@
                                 <strong>{{ z.symbol || kurz(z.contract) }}</strong>
                                 <span class="fpKette">{{ z.chain }}</span>
                                 <FruehSignale :z="z" />
-                                <span class="ms-auto fpNote" :class="notenKlasse(z.note)">{{ z.note }}</span>
-                                <i class="uil fpTrend" :class="trendIcon(z.stand?.trend)"></i>
+                                <span class="at-ml-auto fpNote" :class="notenKlasse(z.note)">{{ z.note }}</span>
+                                <Symbol class="fpTrend" :name="trendIcon(z.stand?.trend)" :class="trendKlasse(z.stand?.trend)" />
                             </div>
                             <div class="fpKarteZeile fpGrau">
                                 <span>{{ geld(z.stand?.mcap) }} MC</span>
                                 <span v-if="halterVon(z) !== null">{{ halterVon(z) }} {{ t('hypeFrueh.halterKurz') }}</span>
                                 <span>{{ alter(z.stand?.alterStunden) }}</span>
                                 <span v-if="z.projektNote !== null && z.projektNote !== undefined">{{ t('hypeFrueh.substanzKurz') }} {{ z.projektNote }}</span>
-                                <span class="badge hypBadge ms-auto" :class="statusKlasse(z.status, z.kandidat?.ja)" :title="warumNicht(z)">{{ statusText(z) }}</span>
+                                <Pille class="hypBadge at-ml-auto" :ton="statusTon(z.status, z.kandidat?.ja)" :title="warumNicht(z)">{{ statusText(z) }}</Pille>
                             </div>
                             <div v-if="offen === z.id" class="fpDetailKarte" @click.stop>
                                 <FruehDetail :z="z" />
@@ -212,19 +212,19 @@
                     </div>
 
                     <!-- Desktop: Tabelle -->
-                    <div v-else class="table-responsive">
-                        <table class="table table-sm align-middle fpTabelle">
+                    <div v-else class="at-tabelle-huelle">
+                        <table class="at-tabelle dicht fpTabelle">
                             <thead>
                                 <tr>
                                     <th>{{ t('hypeFrueh.spalteToken') }}</th>
-                                    <th class="text-end">{{ t('hypeFrueh.spalteNote') }}</th>
+                                    <th class="at-rechtsbuendig">{{ t('hypeFrueh.spalteNote') }}</th>
                                     <th>{{ t('hypeFrueh.spalteVerlauf') }}</th>
-                                    <th class="text-end">{{ t('hypeFrueh.spalteSubstanz') }}</th>
-                                    <th class="text-end">{{ t('hypeFrueh.spalteMcap') }}</th>
-                                    <th class="text-end" :title="t('hypeFrueh.spalteHalterTitel')">{{ t('hypeFrueh.spalteHalter') }}</th>
-                                    <th class="text-end">{{ t('hypeFrueh.spalteAlter') }}</th>
-                                    <th class="text-end" :title="t('hypeFrueh.spalteHandelTitel')">{{ t('hypeFrueh.spalteHandel') }}</th>
-                                    <th class="text-end">{{ t('hypeFrueh.spalteSozial') }}</th>
+                                    <th class="at-rechtsbuendig">{{ t('hypeFrueh.spalteSubstanz') }}</th>
+                                    <th class="at-rechtsbuendig">{{ t('hypeFrueh.spalteMcap') }}</th>
+                                    <th class="at-rechtsbuendig" :title="t('hypeFrueh.spalteHalterTitel')">{{ t('hypeFrueh.spalteHalter') }}</th>
+                                    <th class="at-rechtsbuendig">{{ t('hypeFrueh.spalteAlter') }}</th>
+                                    <th class="at-rechtsbuendig" :title="t('hypeFrueh.spalteHandelTitel')">{{ t('hypeFrueh.spalteHandel') }}</th>
+                                    <th class="at-rechtsbuendig">{{ t('hypeFrueh.spalteSozial') }}</th>
                                     <th>{{ t('hypeFrueh.spalteStatus') }}</th>
                                     <th></th>
                                 </tr>
@@ -237,25 +237,25 @@
                                             <strong>{{ z.symbol || kurz(z.contract) }}</strong>
                                             <span class="fpKette">{{ z.chain }}</span>
                                             <span v-if="z.stand?.aufKurve" class="fpKurve" :title="t('hypeFrueh.kurveTitel')">
-                                                <i class="uil uil-chart-growth"></i></span>
+                                                <Symbol name="wachstum" /></span>
                                             <FruehSignale :z="z" />
                                         </td>
-                                        <td class="text-end">
+                                        <td class="at-rechtsbuendig">
                                             <span class="fpNote" :class="notenKlasse(z.note)">{{ z.note }}</span>
-                                            <i class="uil fpTrend" :class="trendIcon(z.stand?.trend)" :title="t('hypeFrueh.trend_' + (z.stand?.trend || 'neu'))"></i>
+                                            <Symbol class="fpTrend" :name="trendIcon(z.stand?.trend)" :class="trendKlasse(z.stand?.trend)" :titel="t('hypeFrueh.trend_' + (z.stand?.trend || 'neu'))" />
                                         </td>
                                         <td><svg v-if="linie(z)" class="fpLinie" viewBox="0 0 60 18" preserveAspectRatio="none"><polyline :points="linie(z)" /></svg></td>
-                                        <td class="text-end">
+                                        <td class="at-rechtsbuendig">
                                             <span v-if="z.projektNote !== null && z.projektNote !== undefined" :class="notenKlasse(z.projektNote)">{{ z.projektNote }}</span>
                                             <span v-else class="fpGrau">—</span>
                                         </td>
-                                        <td class="text-end">{{ geld(z.stand?.mcap) }}</td>
-                                        <td class="text-end">{{ halterVon(z) ?? '—' }}</td>
-                                        <td class="text-end">{{ alter(z.stand?.alterStunden) }}</td>
-                                        <td class="text-end">{{ kaeuferText(z.stand) }}</td>
-                                        <td class="text-end" :title="sozialTitel(z)">{{ sozialText(z) }}</td>
-                                        <td><span class="badge hypBadge" :class="statusKlasse(z.status, z.kandidat?.ja)" :title="warumNicht(z)">{{ statusText(z) }}</span></td>
-                                        <td class="text-end"><i class="uil" :class="offen === z.id ? 'uil-angle-up' : 'uil-angle-down'"></i></td>
+                                        <td class="at-rechtsbuendig">{{ geld(z.stand?.mcap) }}</td>
+                                        <td class="at-rechtsbuendig">{{ halterVon(z) ?? '—' }}</td>
+                                        <td class="at-rechtsbuendig">{{ alter(z.stand?.alterStunden) }}</td>
+                                        <td class="at-rechtsbuendig">{{ kaeuferText(z.stand) }}</td>
+                                        <td class="at-rechtsbuendig" :title="sozialTitel(z)">{{ sozialText(z) }}</td>
+                                        <td><Pille class="hypBadge" :ton="statusTon(z.status, z.kandidat?.ja)" :title="warumNicht(z)">{{ statusText(z) }}</Pille></td>
+                                        <td class="at-rechtsbuendig"><Symbol :name="offen === z.id ? 'hoch' : 'runter'" /></td>
                                     </tr>
                                     <tr v-if="offen === z.id" :key="z.id + '-d'">
                                         <td colspan="11" class="fpDetail"><FruehDetail :z="z" /></td>
@@ -274,21 +274,21 @@
              Alter); das Feld ist die Grundrate. Jeder Anteil mit Nenner. -->
         <div class="fpGuete">
             <div class="fpDetailTitel">{{ t('hypeFrueh.gueteTitel') }}</div>
-            <p class="fpGrau small mb-1">{{ t('hypeFrueh.gueteHinweis') }}</p>
+            <p class="fpGrau at-klein at-mu-1">{{ t('hypeFrueh.gueteHinweis') }}</p>
             <!-- Ohne eine einzige Messung keine leere Tabelle, sondern ein Satz. -->
-            <p v-if="!gueteGemessen" class="fpGrau small mb-0">
+            <p v-if="!gueteGemessen" class="fpGrau at-klein at-mu-0">
                 <!-- Das Leerzeichen in der Interpolation: am Anfang eines <template> verschluckt Vue es. -->
                 {{ t('hypeFrueh.gueteLeer') }}{{ gueteOffen ? ` ${t('hypeFrueh.gueteOffen', { n: gueteOffen })}.` : '' }}
             </p>
-            <div v-else class="table-responsive">
-                <table class="table table-sm fpTabelle mb-1">
+            <div v-else class="at-tabelle-huelle">
+                <table class="at-tabelle dicht fpTabelle at-mu-1">
                     <thead>
                         <tr>
-                            <th></th><th>{{ t('hypeFrueh.gueteGruppe') }}</th><th class="text-end">n</th>
-                            <th class="text-end">{{ t('hypeFrueh.gueteVerdoppelt') }}</th>
-                            <th class="text-end">{{ t('hypeFrueh.gueteLebt') }}</th>
-                            <th class="text-end">{{ t('hypeFrueh.gueteKurve') }}</th>
-                            <th class="text-end">{{ t('hypeFrueh.gueteRendite') }}</th>
+                            <th></th><th>{{ t('hypeFrueh.gueteGruppe') }}</th><th class="at-rechtsbuendig">n</th>
+                            <th class="at-rechtsbuendig">{{ t('hypeFrueh.gueteVerdoppelt') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('hypeFrueh.gueteLebt') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('hypeFrueh.gueteKurve') }}</th>
+                            <th class="at-rechtsbuendig">{{ t('hypeFrueh.gueteRendite') }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -296,15 +296,15 @@
                             <tr v-for="(g, i) in ['spitze', 'kontrolle', 'feld']" :key="hz.horizont + g">
                                 <td><strong v-if="!i">{{ hz.horizont }}</strong></td>
                                 <td>{{ t('hypeFrueh.gueteGruppe_' + g) }}</td>
-                                <td class="text-end">{{ hz[g]?.n ?? 0 }}</td>
-                                <td class="text-end">{{ anteilKn(hz[g]?.verdoppelt) }}</td>
-                                <td class="text-end">{{ anteilKn(hz[g]?.lebt) }}</td>
-                                <td class="text-end">{{ anteilKn(hz[g]?.kurve) }}</td>
-                                <td class="text-end">{{ prozent(hz[g]?.medianRendite) }}<span v-if="hz[g]?.nRendite" class="fpGrau"> ({{ hz[g].nRendite }})</span></td>
+                                <td class="at-rechtsbuendig">{{ hz[g]?.n ?? 0 }}</td>
+                                <td class="at-rechtsbuendig">{{ anteilKn(hz[g]?.verdoppelt) }}</td>
+                                <td class="at-rechtsbuendig">{{ anteilKn(hz[g]?.lebt) }}</td>
+                                <td class="at-rechtsbuendig">{{ anteilKn(hz[g]?.kurve) }}</td>
+                                <td class="at-rechtsbuendig">{{ prozent(hz[g]?.medianRendite) }}<span v-if="hz[g]?.nRendite" class="fpGrau"> ({{ hz[g].nRendite }})</span></td>
                             </tr>
                             <tr>
                                 <td></td>
-                                <td colspan="6" class="fpGrau small">
+                                <td colspan="6" class="fpGrau at-klein">
                                     <span v-for="(z, j) in urteilZeilen(hz)" :key="j">{{ j ? ' · ' : '' }}{{ z }}</span>
                                     · {{ t('hypeFrueh.guetePaare', { n: hz.paare || 0 }) }}
                                     · {{ t('hypeFrueh.gueteOffen', { n: hz.offen }) }}{{ hz.altbestand ? ` · ${t('hypeFrueh.gueteAltbestand', { n: hz.altbestand })}` : '' }}
@@ -319,6 +319,7 @@
 </template>
 
 <script setup>
+import Symbol from '@/components/basis/Symbol.vue'
 /**
  * Hype-Radar → Frühphase.
  *
@@ -347,6 +348,9 @@ import ProjektPruefung from './ProjektPruefung.vue'
 import TiefensucheErgebnis from './TiefensucheErgebnis.vue'
 import { useIstTelefon } from '../../utils/geraet.js'
 import { logWarn } from '../../utils/logger.js'
+import Kreisel from '@/components/basis/Kreisel.vue'
+import Pille from '@/components/basis/Pille.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
 
 const props = defineProps({
     /** Ist die Ansicht gerade sichtbar? Nur dann wird geladen und getaktet. */
@@ -668,7 +672,7 @@ const fokusErgebnisse = computed(() => {
         .sort((a, b) => (GRUPPEN_RANG[a.gruppe] ?? 9) - (GRUPPEN_RANG[b.gruppe] ?? 9))
         .map(g => ({ ...g, zeilen: g.zeilen.sort((a, b) => (HORIZONT_RANG[a.horizont] ?? 9) - (HORIZONT_RANG[b.horizont] ?? 9)) }))
 })
-const farbeVz = (w) => (!hatZahl(w) || Number(w) === 0 ? '' : Number(w) > 0 ? 'text-success' : 'text-danger')
+const farbeVz = (w) => (!hatZahl(w) || Number(w) === 0 ? '' : Number(w) > 0 ? 'at-gut' : 'at-schlecht')
 
 // ── Darstellung ─────────────────────────────────────────────────────────
 const hatZahl = (w) => w !== null && w !== undefined && w !== '' && Number.isFinite(Number(w))
@@ -706,13 +710,16 @@ function notenKlasse(n) {
     return 'schwach'
 }
 
-const trendIcon = (tr) => ({ steigt: 'uil-arrow-up-right steigt', faellt: 'uil-arrow-down-right faellt', gleich: 'uil-arrow-right' }[tr] || 'uil-star')
+/** Trendpfeil: Symbolname und Farbklasse getrennt, weil das Symbol ein Baustein ist. */
+const trendIcon = (tr) => ({ steigt: 'pfeilHochRechts', faellt: 'pfeilRunterRechts', gleich: 'pfeilRechts' }[tr] || 'stern')
+const trendKlasse = (tr) => ({ steigt: 'steigt', faellt: 'faellt' }[tr] || '')
 
-function statusKlasse(s, kandidat = false) {
-    if (s === 'verworfen') return 'bg-danger'
-    if (kandidat) return 'bg-primary'
-    if (s === 'reif') return 'bg-success'
-    return 'bg-secondary'
+/** Ton der Status-Pille (`Pille.vue`). */
+function statusTon(s, kandidat = false) {
+    if (s === 'verworfen') return 'schlecht'
+    if (kandidat) return 'akzent'
+    if (s === 'reif') return 'gut'
+    return 'neutral'
 }
 
 function statusText(z) {
@@ -781,16 +788,16 @@ const FruehSignale = defineComponent({
             const z = p.z
             const teile = []
             if (hatZahl(z.stand?.kothMin)) {
-                teile.push(h('i', { class: 'uil uil-crown fpSignal koth', title: t('hypeFrueh.signalKoth', { m: Math.max(1, Math.round(z.stand.kothMin)) }) }))
+                teile.push(h(Symbol, { name: 'krone', class: 'fpSignal koth', titel: t('hypeFrueh.signalKoth', { m: Math.max(1, Math.round(z.stand.kothMin)) }) }))
             }
             if (z.stand?.smart?.wallets > 0) {
                 teile.push(h('span', { class: 'fpSignal smart', title: t('hypeFrueh.signalSmart', { n: z.stand.smart.wallets, namen: (z.stand.smart.namen || []).join(', ') }) },
-                    [h('i', { class: 'uil uil-wallet' }), String(z.stand.smart.wallets)]))
+                    [h(Symbol, { name: 'geldbeutel' }), String(z.stand.smart.wallets)]))
             }
             const l = z.leiter || {}
             const boersen = [...(l.alpha ? ['Binance Alpha'] : []), ...(l.mittel || []), ...(l.gross || [])]
             if (boersen.length) {
-                teile.push(h('i', { class: 'uil uil-building fpSignal boerse', title: t('hypeFrueh.signalBoerse', { b: boersen.join(', ') }) }))
+                teile.push(h(Symbol, { name: 'gebaeude', class: 'fpSignal boerse', titel: t('hypeFrueh.signalBoerse', { b: boersen.join(', ') }) }))
             }
             return teile.length ? h('span', { class: 'fpSignale' }, teile) : null
         }
@@ -807,7 +814,7 @@ const SternKnopf = defineComponent({
             title: p.z.favoritId ? t('hypeFrueh.sternAus') : t('hypeFrueh.sternAn'),
             'aria-label': p.z.favoritId ? t('hypeFrueh.sternAus') : t('hypeFrueh.sternAn'),
             onClick: (ev) => { ev.stopPropagation(); sende('stern', p.z) },
-        }, [h('i', { class: ['uil', p.z.favoritId ? 'uil-favorite aktiv' : 'uil-star'] })])
+        }, [h(Symbol, { name: 'stern', gefuellt: !!p.z.favoritId, class: { aktiv: !!p.z.favoritId } })])
     },
 })
 
@@ -822,7 +829,7 @@ const VerlaufDiagramm = defineComponent({
     setup(p) {
         return () => {
             const v = (p.verlauf || []).filter((x) => hatZahl(x.ts)).sort((a, b) => a.ts - b.ts)
-            if (v.length < 2) return h('div', { class: 'fpGrau small' }, t('hypeFrueh.verlaufEinzeln'))
+            if (v.length < 2) return h('div', { class: 'fpGrau at-klein' }, t('hypeFrueh.verlaufEinzeln'))
             const B = 300
             const H = 70
             const t0 = Number(v[0].ts)
@@ -849,7 +856,7 @@ const VerlaufDiagramm = defineComponent({
                     h('span', [h('i', { class: 'fpStrich note' }), ` ${t('hypeFrueh.verlaufNote', { a: noten[0]?.note ?? '—', b: noten[noten.length - 1]?.note ?? '—' })}`]),
                     mc.length ? h('span', [h('i', { class: 'fpStrich mc' }),
                         ` ${t('hypeFrueh.verlaufMcap', { a: geld(mcErst), b: geld(mcLetzt) })}${mcAend !== null ? ` (${mcAend > 0 ? '+' : ''}${mcAend} %)` : ''}`]) : null,
-                    h('span', { class: 'ms-auto' }, t('hypeFrueh.verlaufSpanne', { n: v.length, d: dauer(t1 - t0) })),
+                    h('span', { class: 'at-ml-auto' }, t('hypeFrueh.verlaufSpanne', { n: v.length, d: dauer(t1 - t0) })),
                 ]),
             ])
         }
@@ -869,9 +876,9 @@ const FruehDetail = defineComponent({
             const teil = z.stand?.teilnoten || {}
             // Webseite und Kanäle zeigt die Projektprüfung — hier nur, wo gehandelt wird.
             const markt = [
-                h('a', { href: dexLink(z.chain, z.contract), target: '_blank', rel: 'noopener noreferrer', class: 'me-2' }, 'DexScreener ↗'),
+                h('a', { href: dexLink(z.chain, z.contract), target: '_blank', rel: 'noopener noreferrer', class: 'at-mr-2' }, 'DexScreener ↗'),
             ]
-            if (istPump(z)) markt.push(h('a', { href: `https://pump.fun/coin/${encodeURIComponent(z.contract)}`, target: '_blank', rel: 'noopener noreferrer', class: 'me-2' }, 'pump.fun ↗'))
+            if (istPump(z)) markt.push(h('a', { href: `https://pump.fun/coin/${encodeURIComponent(z.contract)}`, target: '_blank', rel: 'noopener noreferrer', class: 'at-mr-2' }, 'pump.fun ↗'))
 
             return h('div', { class: 'fpDetailGrid' }, [
                 h('div', [
@@ -881,16 +888,16 @@ const FruehDetail = defineComponent({
                         h('span', { class: 'fpBalken' }, [h('i', { style: { width: `${Math.round(Number(teil[f]) || 0)}%` } })]),
                         h('span', { class: 'fpTeilWert' }, hatZahl(teil[f]) ? String(Math.round(teil[f])) : '—'),
                     ])),
-                    h('div', { class: 'fpGrau mt-1' }, kennzahlen(z)),
+                    h('div', { class: 'fpGrau at-mo-1' }, kennzahlen(z)),
                     h('div', { class: 'fpGrau' }, `${t('hypeFrueh.quellen')}: ${(z.quellen || []).join(', ') || '—'}`),
                     h('div', { class: 'fpGrau' }, t('hypeFrueh.beobachtetSeit', { z: zeitpunkt(z.ersterBlick) })),
-                    h('div', { class: 'mt-2' }, markt),
+                    h('div', { class: 'at-mo-2' }, markt),
                     // X-Belege: die Posts, auf denen die Zählung beruht — zum Nachsehen,
                     // ob da Menschen reden oder ein Ring.
-                    z.stand?.x?.belege?.length ? h('div', { class: 'fpGrau mt-1' }, [
+                    z.stand?.x?.belege?.length ? h('div', { class: 'fpGrau at-mo-1' }, [
                         t('hypeFrueh.xAutoren', { n: z.stand.x.autoren }) + ' ',
                         ...z.stand.x.belege.filter((u) => /^https:\/\/(x|twitter)\.com\//i.test(u)).map((u, i) =>
-                            h('a', { href: u, target: '_blank', rel: 'noopener noreferrer nofollow', class: 'me-2' }, `${i + 1} ↗`)),
+                            h('a', { href: u, target: '_blank', rel: 'noopener noreferrer nofollow', class: 'at-mr-2' }, `${i + 1} ↗`)),
                     ]) : null,
                     h('div', { class: 'fpGrau fpVertrag', title: z.contract }, z.contract),
                 ]),
@@ -947,25 +954,25 @@ const FruehKarte = defineComponent({
             const knopf = (icon, titel, ereignis) => h('button', {
                 type: 'button', class: 'fpKartenKnopf', title: titel, 'aria-label': titel,
                 onClick: (ev) => { ev.stopPropagation(); sende(ereignis) },
-            }, [h('i', { class: ['uil', icon] })])
+            }, [h(Symbol, { name: icon })])
             return h('div', { class: ['fpKandidat', { fpDuenn: z.duenn && !z.kandidat?.ja, fpZu: p.zu }] }, [
                 h('div', { class: 'fpKandidatKopf' }, [
                     h(SternKnopf, { z, onStern: (x) => sende('stern', x) }),
                     h('strong', { class: 'fpKandidatName' }, z.symbol || kurz(z.contract)),
                     h('span', { class: 'fpKette' }, z.chain),
                     z.name && z.name !== z.symbol ? h('span', { class: 'fpGrau fpLangName' }, z.name) : null,
-                    s.aufKurve ? h('span', { class: 'fpKurve', title: t('hypeFrueh.kurveTitel') }, [h('i', { class: 'uil uil-chart-growth' })]) : null,
+                    s.aufKurve ? h('span', { class: 'fpKurve', title: t('hypeFrueh.kurveTitel') }, [h(Symbol, { name: 'wachstum' })]) : null,
                     h(FruehSignale, { z }),
-                    h('span', { class: ['badge hypBadge', statusKlasse(z.status, z.kandidat?.ja)], title: warumNicht(z) }, statusText(z)),
+                    h(Pille, { class: 'hypBadge', ton: statusTon(z.status, z.kandidat?.ja), title: warumNicht(z) }, () => statusText(z)),
                     h('span', { class: 'fpKandidatNote', title: t('hypeFrueh.trend_' + (s.trend || 'neu')) }, [
                         h('span', { class: ['fpNote', notenKlasse(z.note)] }, String(z.note)),
-                        h('i', { class: ['uil fpTrend', trendIcon(s.trend)] }),
+                        h(Symbol, { name: trendIcon(s.trend), class: ['fpTrend', trendKlasse(s.trend)] }),
                     ]),
-                    knopf(p.zu ? 'uil-angle-down' : 'uil-angle-up', p.zu ? t('hypeFrueh.karteAuf') : t('hypeFrueh.karteZu'), 'zu'),
-                    p.schliessbar ? knopf('uil-times', t('hypeFrueh.karteWeg'), 'weg') : null,
+                    knopf(p.zu ? 'runter' : 'hoch', p.zu ? t('hypeFrueh.karteAuf') : t('hypeFrueh.karteZu'), 'zu'),
+                    p.schliessbar ? knopf('schliessen', t('hypeFrueh.karteWeg'), 'weg') : null,
                 ]),
                 // Nicht (mehr) Kandidat — z. B. in der Beobachtungsliste: warum.
-                !z.kandidat?.ja && warumNicht(z) ? h('div', { class: 'fpGrau small' }, warumNicht(z)) : null,
+                !z.kandidat?.ja && warumNicht(z) ? h('div', { class: 'fpGrau at-klein' }, warumNicht(z)) : null,
                 h('div', { class: 'fpKennzahlen' }, kennzahlKacheln(z)),
                 p.zu ? null : h(VerlaufDiagramm, { verlauf: z.verlauf }),
                 p.zu ? null : h(FruehDetail, { z }),
@@ -987,20 +994,20 @@ const FavoritKarte = defineComponent({
                     h('button', {
                         type: 'button', class: 'fpSternKnopf', title: t('hypeFrueh.sternAus'), 'aria-label': t('hypeFrueh.sternAus'),
                         onClick: () => sende('stern', f),
-                    }, [h('i', { class: 'uil uil-favorite aktiv' })]),
+                    }, [h(Symbol, { name: 'stern', gefuellt: true, class: 'aktiv' })]),
                     h('strong', { class: 'fpKandidatName' }, f.symbol || kurz(f.contractAddress)),
                     h('span', { class: 'fpKette' }, f.chain),
                     f.name && f.name !== f.symbol ? h('span', { class: 'fpGrau fpLangName' }, f.name) : null,
-                    f.contractAddress ? h('a', { href: dexLink(f.chain, f.contractAddress), target: '_blank', rel: 'noopener noreferrer', class: 'ms-auto small' }, 'DexScreener ↗') : null,
+                    f.contractAddress ? h('a', { href: dexLink(f.chain, f.contractAddress), target: '_blank', rel: 'noopener noreferrer', class: 'at-ml-auto at-klein' }, 'DexScreener ↗') : null,
                 ]),
-                h('div', { class: 'fpGrau small' }, t('hypeFrueh.beobachtungNichtMehr')),
+                h('div', { class: 'fpGrau at-klein' }, t('hypeFrueh.beobachtungNichtMehr')),
                 hatZahl(d.ts) ? h('div', { class: 'fpKennzahlen' }, [
                     [t('hypeFrueh.kzPreis'), hatZahl(d.preis) ? `${Number(d.preis).toPrecision(3)} USD` : '—'],
                     [t('hypeFrueh.kzLiquiditaet'), hatZahl(d.liq) ? `${geld(d.liq)} USD` : '—'],
                     [t('hypeFrueh.kzKurs24h'), hatZahl(d.aenderung24h) ? `${d.aenderung24h > 0 ? '+' : ''}${Math.round(d.aenderung24h)} %` : '—'],
                     [t('hypeFrueh.kzStand'), zeitpunkt(d.ts)],
                 ].map(([name, wert]) => h('div', { class: 'fpKz' }, [h('span', { class: 'fpKzWert' }, wert), h('span', { class: 'fpKzName' }, name)])))
-                    : h('div', { class: 'fpGrau small' }, t('hypeFrueh.beobachtungNochKeinStand')),
+                    : h('div', { class: 'fpGrau at-klein' }, t('hypeFrueh.beobachtungNochKeinStand')),
             ])
         }
     },

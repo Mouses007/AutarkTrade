@@ -9,6 +9,9 @@ import { werteAus as lernstatistikAuswerten, NIVEAUS as NIVEAU_STUFEN, niveauVer
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import { spinnerLoadingPage } from '../stores/ui.js'
 import { logWarn } from '../utils/logger.js'
+import Symbol from '@/components/basis/Symbol.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Hinweis from '@/components/basis/Hinweis.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -327,31 +330,31 @@ async function aktivUmschalten(karte) {
 </script>
 
 <template>
-    <div class="px-3 px-md-4 pb-5">
+    <div class="at-px-3 at-px-3 at-pu-5">
         <SpinnerLoadingPage />
 
         <div v-show="!spinnerLoadingPage">
             <!-- ===== SITZUNG ===== -->
             <template v-if="!reiter">
-                <div v-if="phase === 'start'" class="dailyCard p-4 lernen-panel">
+                <div v-if="phase === 'start'" class="dailyCard at-p-4 lernen-panel">
                     <!-- Ein gescheiterter Abruf sah vorher aus wie „keine Karten
                          vorhanden" — oder die Seite drehte sich fuer immer. -->
-                    <div v-if="ladeFehler" class="alert alert-warning py-2 px-3 mb-3 small">
+                    <Hinweis v-if="ladeFehler" class="at-mu-3" art="warn">
                         {{ t('lernen.ladeFehler') }}
-                        <button type="button" class="btn btn-sm btn-outline-secondary ms-2 py-0"
-                            @click="ladeAlles">{{ t('common.retry') }}</button>
-                    </div>
-                    <h5 class="mb-1">{{ t('lernen.start.faelligTitel') }}</h5>
-                    <div class="lernen-faellig-count mb-3">{{ faelligeEintraege.length }}</div>
+                        <Knopf klein class="at-ml-2 at-py-0"
+                            @click="ladeAlles">{{ t('common.retry') }}</Knopf>
+                    </Hinweis>
+                    <h5 class="at-mu-1">{{ t('lernen.start.faelligTitel') }}</h5>
+                    <div class="lernen-faellig-count at-mu-3">{{ faelligeEintraege.length }}</div>
 
                     <template v-if="karten.length">
-                        <div class="lernen-box-bar mb-2">
+                        <div class="lernen-box-bar at-mu-2">
                             <div v-for="n in [1, 2, 3, 4]" :key="n" class="lernen-box-seg" :class="'box-' + n"
                                 :style="{ flex: (Math.max(boxen[n] || 0, 0.001)) + ' 1 0' }">
                                 <span v-if="boxen[n]">{{ boxen[n] }}</span>
                             </div>
                         </div>
-                        <div class="lernen-box-legend mb-4">
+                        <div class="lernen-box-legend at-mu-4">
                             <span v-for="n in [1, 2, 3, 4]" :key="n" class="lernen-box-legend-item">
                                 <span class="lernen-dot" :class="'box-' + n"></span>{{ t('lernen.start.box', { n }) }}: {{ boxen[n] || 0 }}
                             </span>
@@ -360,7 +363,7 @@ async function aktivUmschalten(karte) {
                         <!-- Stufenwahl fuer die Runde. Ohne die Zahl daneben waehlt
                              man blind: „Level 3" ist an manchen Tagen eine Sitzung
                              von zwei Karten. -->
-                        <div v-if="faelligeEintraege.length" class="lernen-niveauwahl mb-3">
+                        <div v-if="faelligeEintraege.length" class="lernen-niveauwahl at-mu-3">
                             <span class="lernen-niveauwahl-titel">{{ t('lernen.start.niveauWahl') }}</span>
                             <button v-for="n in NIVEAU_STUFEN" :key="n" type="button"
                                 class="ctl-pill klein"
@@ -375,17 +378,17 @@ async function aktivUmschalten(karte) {
                             </span>
                         </div>
 
-                        <button v-if="faelligeEintraege.length" class="btn btn-primary"
+                        <Knopf art="haupt" v-if="faelligeEintraege.length"
                             :disabled="!sitzungAnzahl" @click="rundeStarten">
                             {{ t('lernen.start.starten') }}
-                        </button>
-                        <p v-else class="text-muted mb-0">{{ t('lernen.start.faelligNone') }}</p>
+                        </Knopf>
+                        <p v-else class="at-gedaempft at-mu-0">{{ t('lernen.start.faelligNone') }}</p>
                     </template>
                     <template v-else>
-                        <p class="text-muted">{{ t('lernen.start.keineKarten') }}</p>
-                        <button class="btn btn-outline-primary btn-sm" @click="neueKarteStarten">
+                        <p class="at-gedaempft">{{ t('lernen.start.keineKarten') }}</p>
+                        <Knopf klein @click="neueKarteStarten">
                             {{ t('lernen.start.karteAnlegen') }}
-                        </button>
+                        </Knopf>
                     </template>
                 </div>
 
@@ -406,7 +409,7 @@ async function aktivUmschalten(karte) {
                                  zu sehen gibt. -->
                             <button class="lernen-statusleiste-btn" :title="t('lernen.review.ausblendenHint')"
                                 @click="karteAusblenden">
-                                <i class="uil uil-eye-slash me-1"></i>{{ t('lernen.review.ausblenden') }}
+                                <Symbol name="augeAus" class="at-mr-1" />{{ t('lernen.review.ausblenden') }}
                             </button>
                             <button class="lernen-statusleiste-btn" @click="sitzungBeenden">
                                 {{ t('lernen.review.abbrechen') }}
@@ -458,7 +461,7 @@ async function aktivUmschalten(karte) {
 
                                 <button v-if="hatErklaerung" type="button" class="lernen-erklaerung-knopf"
                                     :aria-expanded="erklaerungOffen" @click="erklaerungUmschalten">
-                                    <i class="uil" :class="erklaerungOffen ? 'uil-angle-up' : 'uil-info-circle'"></i>
+                                    <Symbol :name="erklaerungOffen ? 'hoch' : 'info'" />
                                     {{ erklaerungOffen ? t('lernen.review.erklaerungZu') : t('lernen.review.erklaerungAuf') }}
                                 </button>
                                 <div v-if="hatErklaerung && erklaerungOffen" class="lernen-erklaerung">
@@ -474,12 +477,12 @@ async function aktivUmschalten(karte) {
                     </div>
                 </div>
 
-                <div v-else-if="phase === 'summary'" class="dailyCard p-4 lernen-panel text-center">
-                    <h5 class="mb-3">{{ t('lernen.summary.titel') }}</h5>
-                    <div class="d-flex justify-content-center gap-5 mb-4">
+                <div v-else-if="phase === 'summary'" class="dailyCard at-p-4 lernen-panel at-mittig">
+                    <h5 class="at-mu-3">{{ t('lernen.summary.titel') }}</h5>
+                    <div class="at-flex at-zentriert at-luecke-5 at-mu-4">
                         <div>
                             <div class="greenTrade lernen-summary-value">{{ sitzungRichtig }}</div>
-                            <div class="text-muted small">{{ t('lernen.summary.richtig') }}</div>
+                            <div class="at-gedaempft at-klein">{{ t('lernen.summary.richtig') }}</div>
                         </div>
                         <!-- „Schwer" hat eine eigene Spalte: es unter „richtig"
                              zu verbuchen machte die Trefferquote systematisch
@@ -487,109 +490,109 @@ async function aktivUmschalten(karte) {
                              nicht sitzen. -->
                         <div v-if="sitzungSchwer">
                             <div class="lernen-summary-value lernen-summary-schwer">{{ sitzungSchwer }}</div>
-                            <div class="text-muted small">{{ t('lernen.summary.schwer') }}</div>
+                            <div class="at-gedaempft at-klein">{{ t('lernen.summary.schwer') }}</div>
                         </div>
                         <div>
                             <div class="redTrade lernen-summary-value">{{ sitzungFalsch }}</div>
-                            <div class="text-muted small">{{ t('lernen.summary.falsch') }}</div>
+                            <div class="at-gedaempft at-klein">{{ t('lernen.summary.falsch') }}</div>
                         </div>
                     </div>
-                    <button class="btn btn-primary" @click="sitzungZurueck">{{ t('lernen.summary.fertig') }}</button>
+                    <Knopf art="haupt" @click="sitzungZurueck">{{ t('lernen.summary.fertig') }}</Knopf>
                 </div>
             </template>
 
             <!-- ===== KARTENVERWALTUNG ===== -->
             <template v-else-if="reiter === 'karten'">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="mb-0">{{ t('lernen.karten.eigene') }}</h5>
-                    <button class="btn btn-sm btn-primary" @click="formOeffnen()">
-                        <i class="uil uil-plus me-1"></i>{{ t('lernen.karten.neueKarte') }}
-                    </button>
+                <div class="at-flex at-verteilt at-mitte at-mu-3">
+                    <h5 class="at-mu-0">{{ t('lernen.karten.eigene') }}</h5>
+                    <Knopf art="haupt" klein @click="formOeffnen()">
+                        <Symbol name="plus" class="at-mr-1" />{{ t('lernen.karten.neueKarte') }}
+                    </Knopf>
                 </div>
 
-                <div v-if="formOffen" class="dailyCard p-3 mb-3">
-                    <div class="mb-2">
-                        <label class="form-label small text-muted">{{ t('lernen.karten.frage') }}</label>
-                        <textarea class="form-control" rows="2" v-model="formFrage"></textarea>
+                <div v-if="formOffen" class="dailyCard at-p-3 at-mu-3">
+                    <div class="at-mu-2">
+                        <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.frage') }}</label>
+                        <textarea class="at-feld" rows="2" v-model="formFrage"></textarea>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small text-muted">{{ t('lernen.karten.antwort') }}</label>
-                        <textarea class="form-control" rows="3" v-model="formAntwort"></textarea>
+                    <div class="at-mu-2">
+                        <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.antwort') }}</label>
+                        <textarea class="at-feld" rows="3" v-model="formAntwort"></textarea>
                     </div>
-                    <div class="mb-2">
-                        <label class="form-label small text-muted">{{ t('lernen.karten.erklaerung') }}</label>
-                        <textarea class="form-control" rows="2" v-model="formErklaerung"
+                    <div class="at-mu-2">
+                        <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.erklaerung') }}</label>
+                        <textarea class="at-feld" rows="2" v-model="formErklaerung"
                             :placeholder="t('lernen.karten.erklaerungHinweis')"></textarea>
                     </div>
-                    <div class="row g-2 mb-3">
-                        <div class="col-12 col-sm-8">
-                            <label class="form-label small text-muted">{{ t('lernen.karten.kategorieLabel') }}</label>
-                            <select class="form-select" v-model="formKategorie">
+                    <div class="lernenFormZeile at-mu-3">
+                        <div>
+                            <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.kategorieLabel') }}</label>
+                            <select class="at-feld" v-model="formKategorie">
                                 <option v-for="k in KATEGORIEN" :key="k" :value="k">{{ kategorieLabel(k) }}</option>
                             </select>
                         </div>
-                        <div class="col-12 col-sm-4">
-                            <label class="form-label small text-muted">{{ t('lernen.karten.niveauLabel') }}</label>
-                            <select class="form-select" v-model.number="formNiveau">
+                        <div>
+                            <label class="at-label at-klein at-gedaempft">{{ t('lernen.karten.niveauLabel') }}</label>
+                            <select class="at-feld" v-model.number="formNiveau">
                                 <option v-for="n in NIVEAUS" :key="n" :value="n">{{ t('lernen.niveau', { n }) }}</option>
                             </select>
                         </div>
                     </div>
-                    <div class="d-flex gap-2">
+                    <div class="at-flex at-luecke-2">
                         <!-- :disabled statt stillem return: der Zustand erklärt sich selbst -->
-                        <button class="btn btn-primary btn-sm" :disabled="!formFrage.trim() || !formAntwort.trim()"
-                            @click="formSpeichern">{{ t('lernen.karten.speichern') }}</button>
-                        <button class="btn btn-outline-secondary btn-sm" @click="formSchliessen">{{ t('lernen.karten.abbrechen') }}</button>
+                        <Knopf art="haupt" klein :disabled="!formFrage.trim() || !formAntwort.trim()"
+                            @click="formSpeichern">{{ t('lernen.karten.speichern') }}</Knopf>
+                        <Knopf klein @click="formSchliessen">{{ t('lernen.karten.abbrechen') }}</Knopf>
                     </div>
                 </div>
 
-                <p v-if="!eigeneKarten.length" class="text-muted small mb-4">{{ t('lernen.karten.keineEigenen') }}</p>
-                <div v-else class="row g-2 mb-4">
-                    <div v-for="k in eigeneKarten" :key="k.objectId" class="col-12">
-                        <div class="dailyCard p-3 d-flex justify-content-between align-items-start gap-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
+                <p v-if="!eigeneKarten.length" class="at-gedaempft at-klein at-mu-4">{{ t('lernen.karten.keineEigenen') }}</p>
+                <div v-else class="at-flex at-spalte at-luecke-2 at-mu-4">
+                    <div v-for="k in eigeneKarten" :key="k.objectId">
+                        <div class="dailyCard at-p-3 at-flex at-verteilt at-oben at-luecke-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
                             <div class="lernen-karte-text">
-                                <div class="fw-semibold">{{ k.frage }}</div>
-                                <div class="text-muted small">{{ k.antwort }}</div>
-                                <div class="text-muted small mt-1">
+                                <div class="at-halbfett">{{ k.frage }}</div>
+                                <div class="at-gedaempft at-klein">{{ k.antwort }}</div>
+                                <div class="at-gedaempft at-klein at-mo-1">
                                     {{ t('lernen.niveau', { n: niveauVonKarte(k) }) }} · {{ kategorieLabel(k.kategorie) }} · {{ t('lernen.karten.box', { n: boxVonKarte(k.objectId) }) }}
                                 </div>
                             </div>
                             <!-- Ausblenden gibt es auch für eigene Karten: ihr Lernfortschritt ist
                                  genauso wenig ersetzbar wie der einer mitgelieferten, Löschen nimmt ihn mit. -->
-                            <div class="d-flex align-items-center gap-1 flex-shrink-0">
-                                <div class="form-check form-switch me-1 mb-0" :title="t('lernen.karten.aktivHint')">
-                                    <input class="form-check-input" type="checkbox" :checked="Number(k.aktiv) === 1" @change="aktivUmschalten(k)">
+                            <div class="at-flex at-mitte at-luecke-1 at-fest">
+                                <div class="at-check schalter at-mr-1 at-mu-0" :title="t('lernen.karten.aktivHint')">
+                                    <input type="checkbox" :checked="Number(k.aktiv) === 1" @change="aktivUmschalten(k)">
                                 </div>
-                                <button class="btn btn-sm btn-outline-secondary" :title="t('lernen.karten.bearbeiten')" @click="formOeffnen(k)">
-                                    <i class="uil uil-edit"></i>
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger" :title="t('lernen.karten.loeschen')" @click="karteLoeschen(k)">
-                                    <i class="uil uil-trash-alt"></i>
-                                </button>
+                                <Knopf klein :title="t('lernen.karten.bearbeiten')" @click="formOeffnen(k)">
+                                    <Symbol name="stift" />
+                                </Knopf>
+                                <Knopf art="gefahr" klein :title="t('lernen.karten.loeschen')" @click="karteLoeschen(k)">
+                                    <Symbol name="muell" />
+                                </Knopf>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                    <h5 class="mb-0">{{ t('lernen.karten.vorgegeben') }}</h5>
+                <div class="at-flex at-verteilt at-mitte at-mu-3 at-umbruch at-luecke-2">
+                    <h5 class="at-mu-0">{{ t('lernen.karten.vorgegeben') }}</h5>
                     <div class="lernen-niveau-filter">
-                        <button type="button" class="btn btn-sm" :class="niveauFilter === 'alle' ? 'btn-secondary' : 'btn-outline-secondary'" @click="niveauFilter = 'alle'">{{ t('lernen.karten.filterAlle') }}</button>
-                        <button v-for="n in NIVEAUS" :key="n" type="button" class="btn btn-sm" :class="niveauFilter === n ? 'btn-secondary' : 'btn-outline-secondary'" @click="niveauFilter = n">{{ t('lernen.niveau', { n }) }}</button>
+                        <Knopf klein :art="niveauFilter === 'alle' ? 'haupt' : 'normal'" @click="niveauFilter = 'alle'">{{ t('lernen.karten.filterAlle') }}</Knopf>
+                        <Knopf klein v-for="n in NIVEAUS" :key="n" :art="niveauFilter === n ? 'haupt' : 'normal'" @click="niveauFilter = n">{{ t('lernen.niveau', { n }) }}</Knopf>
                     </div>
                 </div>
-                <div class="row g-2">
-                    <div v-for="k in builtinKarten" :key="k.objectId" class="col-12">
-                        <div class="dailyCard p-3 d-flex justify-content-between align-items-start gap-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
+                <div class="at-flex at-spalte at-luecke-2">
+                    <div v-for="k in builtinKarten" :key="k.objectId">
+                        <div class="dailyCard at-p-3 at-flex at-verteilt at-oben at-luecke-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
                             <div class="lernen-karte-text">
-                                <div class="fw-semibold">{{ k.frage }}</div>
-                                <div class="text-muted small">{{ k.antwort }}</div>
-                                <div class="text-muted small mt-1">
+                                <div class="at-halbfett">{{ k.frage }}</div>
+                                <div class="at-gedaempft at-klein">{{ k.antwort }}</div>
+                                <div class="at-gedaempft at-klein at-mo-1">
                                     {{ t('lernen.niveau', { n: niveauVonKarte(k) }) }} · {{ kategorieLabel(k.kategorie) }} · {{ t('lernen.karten.box', { n: boxVonKarte(k.objectId) }) }}
                                 </div>
                             </div>
-                            <div class="form-check form-switch mt-1 flex-shrink-0" :title="t('lernen.karten.aktivHint')">
-                                <input class="form-check-input" type="checkbox" :checked="Number(k.aktiv) === 1" @change="aktivUmschalten(k)">
+                            <div class="at-check schalter at-mo-1 at-fest" :title="t('lernen.karten.aktivHint')">
+                                <input type="checkbox" :checked="Number(k.aktiv) === 1" @change="aktivUmschalten(k)">
                             </div>
                         </div>
                     </div>
@@ -598,43 +601,43 @@ async function aktivUmschalten(karte) {
 
             <!-- ===== STATISTIK ===== -->
             <template v-else-if="reiter === 'statistik'">
-                <div v-if="!statistik.uebersicht.bewertungenGesamt" class="text-muted text-center py-5">
+                <div v-if="!statistik.uebersicht.bewertungenGesamt" class="at-gedaempft at-mittig at-py-5">
                     {{ t('lernen.statistik.keineDaten') }}
                 </div>
                 <template v-else>
-                    <div class="row g-3 mb-4">
-                        <div class="col-6 col-md-3">
-                            <div class="dailyCard p-3 text-center">
+                    <div class="lernenKennzahlen at-mu-4">
+                        <div>
+                            <div class="dailyCard at-p-3 at-mittig">
                                 <div class="lernen-stat-value">{{ statistik.uebersicht.gesamt }}</div>
-                                <div class="text-muted small">{{ t('lernen.statistik.gesamtKarten') }}</div>
+                                <div class="at-gedaempft at-klein">{{ t('lernen.statistik.gesamtKarten') }}</div>
                             </div>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="dailyCard p-3 text-center">
+                        <div>
+                            <div class="dailyCard at-p-3 at-mittig">
                                 <div class="lernen-stat-value">{{ statistik.uebersicht.gemeistert }}</div>
-                                <div class="text-muted small">{{ t('lernen.statistik.gemeistert') }}</div>
+                                <div class="at-gedaempft at-klein">{{ t('lernen.statistik.gemeistert') }}</div>
                             </div>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="dailyCard p-3 text-center">
+                        <div>
+                            <div class="dailyCard at-p-3 at-mittig">
                                 <div class="lernen-stat-value">
                                     {{ statistik.uebersicht.erfolgsquote !== null ? Math.round(statistik.uebersicht.erfolgsquote * 100) + '%' : t('lernen.statistik.erfolgsquoteLeer') }}
                                 </div>
-                                <div class="text-muted small">{{ t('lernen.statistik.erfolgsquote') }}</div>
+                                <div class="at-gedaempft at-klein">{{ t('lernen.statistik.erfolgsquote') }}</div>
                             </div>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <div class="dailyCard p-3 text-center">
+                        <div>
+                            <div class="dailyCard at-p-3 at-mittig">
                                 <div class="lernen-stat-value">{{ statistik.serie }}</div>
-                                <div class="text-muted small">
+                                <div class="at-gedaempft at-klein">
                                     {{ statistik.serie ? t('lernen.statistik.serieTage', { n: statistik.serie }) : t('lernen.statistik.serieTitel') }}
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="dailyCard p-3 mb-4">
-                        <h6 class="mb-3">{{ t('lernen.statistik.proTagTitel') }}</h6>
+                    <div class="dailyCard at-p-3 at-mu-4">
+                        <h6 class="at-mu-3">{{ t('lernen.statistik.proTagTitel') }}</h6>
                         <div class="lernen-tage-chart">
                             <div v-for="d in statistik.proTag" :key="d.tag" class="lernen-tage-balken-wrap" :title="d.tag + ': ' + d.anzahl">
                                 <div class="lernen-tage-balken" :style="{ height: (6 + (d.anzahl / proTagMax) * 60) + 'px' }"></div>
@@ -642,9 +645,9 @@ async function aktivUmschalten(karte) {
                         </div>
                     </div>
 
-                    <div class="dailyCard p-3">
-                        <h6 class="mb-3">{{ t('lernen.statistik.kategorieTitel') }}</h6>
-                        <p v-if="!statistik.kategorien.length" class="text-muted small mb-0">{{ t('lernen.statistik.kategorieLeer') }}</p>
+                    <div class="dailyCard at-p-3">
+                        <h6 class="at-mu-3">{{ t('lernen.statistik.kategorieTitel') }}</h6>
+                        <p v-if="!statistik.kategorien.length" class="at-gedaempft at-klein at-mu-0">{{ t('lernen.statistik.kategorieLeer') }}</p>
                         <div v-else>
                             <div v-for="k in statistik.kategorien" :key="k.kategorie" class="lernen-kategorie-zeile" :class="{ 'lernen-inaktiv': k.duenn }">
                                 <span class="lernen-kategorie-name">{{ kategorieLabel(k.kategorie) }}</span>
@@ -665,6 +668,26 @@ async function aktivUmschalten(karte) {
 </template>
 
 <style scoped>
+.lernenFormZeile {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+}
+
+@media (min-width: 576px) {
+    .lernenFormZeile { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+}
+
+.lernenKennzahlen {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+@media (min-width: 768px) {
+    .lernenKennzahlen { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 /* Skizze zur Karte: volle Breite, aber nie hoeher als ein Drittel des Bildes —
    sie erklaert die Antwort, sie ersetzt sie nicht. */
 .lernen-skizze {

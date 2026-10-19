@@ -25,6 +25,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import dayjs from '../../utils/dayjs-setup.js'
 import { lageZu } from '../../../shared/handelszeiten.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -129,7 +130,7 @@ const band = computed(() => lage.value.phasenHeute
     <div class="hzWrap" :class="['ampel-' + ampel, { gross }]">
         <!-- Warnband: im Handelsfenster die wichtigste Zeile der Seite -->
         <div v-if="warnung" class="hzWarn" :class="'stufe-' + warnung.stufe">
-            <i class="uil uil-exclamation-triangle"></i>
+            <Symbol name="warnung" />
             <span class="hzWarnText">{{ t('livetrading.handelszeiten.warn_' + warnung.id) }}</span>
             <span class="hzWarnBis">{{ t('livetrading.handelszeiten.bis', { zeit: uhr(warnung.bisMs) }) }}</span>
         </div>

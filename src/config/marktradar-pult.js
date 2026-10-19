@@ -21,10 +21,10 @@
  * (rainbow).
  */
 export const BUEHNEN = [
-    { id: 'markt', titleKey: 'marktradar.markt.title', icon: 'uil uil-web-grid' },
-    { id: 'rsi', titleKey: 'marktradar.rsi.title', icon: 'uil uil-temperature-half' },
-    { id: 'dom', titleKey: 'marktradar.dom.title', icon: 'uil uil-chart-pie' },
-    { id: 'rainbow', titleKey: 'marktradar.rainbow.title', icon: 'uil uil-rainbow' },
+    { id: 'markt', titleKey: 'marktradar.markt.title', icon: 'raster' },
+    { id: 'rsi', titleKey: 'marktradar.rsi.title', icon: 'thermometer' },
+    { id: 'dom', titleKey: 'marktradar.dom.title', icon: 'torte' },
+    { id: 'rainbow', titleKey: 'marktradar.rainbow.title', icon: 'regenbogen' },
 ]
 
 /**

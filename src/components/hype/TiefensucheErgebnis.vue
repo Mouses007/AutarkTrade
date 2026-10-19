@@ -26,7 +26,7 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
 
 <template>
     <div class="tsErgebnis">
-        <p v-if="!daten.gefunden" class="small mb-0">{{ t('coinradar.tsNichtGefunden') }}</p>
+        <p v-if="!daten.gefunden" class="at-klein at-mu-0">{{ t('coinradar.tsNichtGefunden') }}</p>
         <template v-else>
             <!-- Welcher Coin gefunden wurde: bei Suche über das Kürzel kann es ein anderer sein als gemeint. -->
             <div v-if="mitKopf && (daten.coin?.name || daten.coin?.symbol)" class="tsKopf">
@@ -38,7 +38,7 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
             </div>
             <div class="tsBlock">
                 <div class="tsTitel">{{ t('coinradar.tsVertrag') }}</div>
-                <div v-if="!daten.gewaehlt" class="small">{{ t('coinradar.tsNichtPruefbar') }}</div>
+                <div v-if="!daten.gewaehlt" class="at-klein">{{ t('coinradar.tsNichtPruefbar') }}</div>
                 <div v-for="v in daten.vertraege" :key="v.chain + v.contract" class="tsZeile"
                     :class="{ gewaehlt: daten.gewaehlt && v.contract === daten.gewaehlt.contract }">
                     <span class="tsKette">{{ v.chain }}</span>
@@ -50,12 +50,12 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
             </div>
             <div v-if="daten.gewaehlt" class="tsBlock">
                 <div class="tsTitel">{{ t('coinradar.tsRisiko') }}</div>
-                <p v-if="daten.risikoFehler" class="small mb-1">{{ daten.risikoFehler }}</p>
+                <p v-if="daten.risikoFehler" class="at-klein at-mu-1">{{ daten.risikoFehler }}</p>
                 <template v-else-if="daten.risiko">
-                    <p class="small mb-1" :class="daten.risiko.ko ? 'text-danger' : 'tsGut'">
+                    <p class="at-klein at-mu-1" :class="daten.risiko.ko ? 'at-schlecht' : 'tsGut'">
                         {{ daten.risiko.ko ? t('coinradar.tsKo', { g: daten.risiko.ko.text }) : t('coinradar.tsOk') }}
                     </p>
-                    <p class="small mb-1 tsGrau">
+                    <p class="at-klein at-mu-1 tsGrau">
                         {{ t('coinradar.tsHalter') }} {{ zahlKurz(daten.risiko.halter) }}
                         · {{ t('coinradar.tsTop10') }} {{ pct(daten.risiko.top10Pct) }}
                         · {{ t('coinradar.tsInsider') }} {{ pct(daten.risiko.insiderPct) }}
@@ -69,7 +69,7 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
             <div class="tsBlock">
                 <div class="tsTitel">{{ t('coinradar.tsProjekt') }}</div>
                 <ProjektPruefung v-if="daten.projekt" :projekt="daten.projekt" />
-                <p v-else class="small mb-0">—</p>
+                <p v-else class="at-klein at-mu-0">—</p>
             </div>
         </template>
     </div>

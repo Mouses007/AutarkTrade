@@ -25,6 +25,7 @@
  */
 import { useI18n } from 'vue-i18n'
 import LiquidityHeatmap from '../LiquidityHeatmap.vue'
+import Symbol from '@/components/basis/Symbol.vue'
 
 defineProps({
     daten: { type: Object, default: null },
@@ -52,7 +53,7 @@ const { t } = useI18n()
         </div>
         <!-- router-link statt <a href>: der harte Link lud die ganze SPA neu -->
         <router-link class="bmGanzeSeite" to="/liquidity" @click.stop>
-            <i class="uil uil-expand-arrows-alt"></i>{{ t('livetrading.ganzeSeite') }}
+            <Symbol name="vergroessern" />{{ t('livetrading.ganzeSeite') }}
         </router-link>
     </div>
 </template>

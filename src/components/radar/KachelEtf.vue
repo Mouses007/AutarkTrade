@@ -18,6 +18,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import dayjs from '../../utils/dayjs-setup.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -144,7 +145,7 @@ watch(() => props.daten, zeichne)
         <!-- Kein Schlüssel ist kein Fehler, sondern der Auslieferungszustand.
              Deshalb ein Weg statt einer Fehlermeldung. -->
         <div v-if="leer" class="etfLeer">
-            <i class="uil" :class="daten.ohneSchluessel ? 'uil-key-skeleton' : 'uil-clock-three'"></i>
+            <Symbol :name="daten.ohneSchluessel ? 'schluessel' : 'uhr'" />
             <p v-if="daten.ohneSchluessel">
                 {{ t('marktradar.etf.keinSchluessel') }}
                 <router-link to="/settings" class="etfLink">{{ t('marktradar.etf.zuEinstellungen') }}</router-link>
@@ -164,13 +165,13 @@ watch(() => props.daten, zeichne)
             <div class="etfZeile">
                 <span>{{ t('marktradar.etf.woche') }}</span>
                 <b :class="klasse(gesamt?.fluss7?.summe)">{{ woche.text }}</b>
-                <i v-if="woche.luecke" class="uil uil-exclamation-circle etfLuecke"
-                    :title="t('marktradar.etf.unvollstaendig')"></i>
+                <Symbol v-if="woche.luecke"
+                    :titel="t('marktradar.etf.unvollstaendig')" name="hinweisKreis" class="etfLuecke" />
                 <span class="etfTrenner">·</span>
                 <span>{{ t('marktradar.etf.monat') }}</span>
                 <b :class="klasse(gesamt?.fluss30?.summe)">{{ monat.text }}</b>
-                <i v-if="monat.luecke" class="uil uil-exclamation-circle etfLuecke"
-                    :title="t('marktradar.etf.unvollstaendig')"></i>
+                <Symbol v-if="monat.luecke"
+                    :titel="t('marktradar.etf.unvollstaendig')" name="hinweisKreis" class="etfLuecke" />
             </div>
 
             <div ref="chartEl" class="etfChart"></div>

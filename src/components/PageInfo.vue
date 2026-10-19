@@ -12,6 +12,7 @@
  */
 import { ref, computed, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     /** Schlüsselpräfix, z.B. 'info.bookmap' */
@@ -55,7 +56,7 @@ function schliessenBeiEsc(e) {
 <template>
     <button type="button" class="ctl-pill infoBtn" :title="t('info.buttonTitle')"
         @click="oeffnen">
-        <i class="uil uil-info-circle"></i>{{ t('info.button') }}
+        <Symbol name="info" />{{ t('info.button') }}
     </button>
 
     <Teleport to="body">
@@ -66,7 +67,7 @@ function schliessenBeiEsc(e) {
                     <h5>{{ t(`${section}.title`) }}</h5>
                     <button type="button" class="infoClose" :title="t('common.close')"
                         @click="offen = false">
-                        <i class="uil uil-times"></i>
+                        <Symbol name="schliessen" />
                     </button>
                 </div>
 

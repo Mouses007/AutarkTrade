@@ -29,6 +29,7 @@ import { sendNotification } from '../utils/notify.js'
 // Dasselbe Overlay wie im Marktradar — ein Muster für beide Seiten
 import RadarOverlay from '../components/RadarOverlay.vue'
 import PageInfo from '../components/PageInfo.vue'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -196,9 +197,9 @@ const LAYOUTS = ['dossier', 'kombiniert', 'artikel', 'kacheln']
 const LAYOUT_VORGABE = 'dossier'
 /** Sinnbild je Spalte der Abwägung — Richtung, nicht Wertung. */
 const WAAGE_ICON = {
-    dafuer: 'uil-arrow-growth',
-    dagegen: 'uil-chart-down',
-    offen: 'uil-question-circle',
+    dafuer: 'wachstum',
+    dagegen: 'abwaerts',
+    offen: 'frage',
 }
 
 const layoutModus = computed(() => {
@@ -661,7 +662,7 @@ const holt = ref(false)
 const meldung = ref('')
 const fehler = ref(false)
 
-const ART_ICON = { youtube: 'uil uil-youtube', truth: 'uil uil-megaphone', x: 'uil uil-twitter', rss: 'uil uil-rss' }
+const ART_ICON = { youtube: 'video', truth: 'megafon', x: 'nachricht', rss: 'rss' }
 const IMPACT_FARBE = { high: '#ff5f56', medium: '#e8a33d', low: '#9aa0aa', holiday: '#6b7280' }
 
 const zone = () => timeZoneTrade.value || dayjs.tz.guess()
@@ -1087,7 +1088,7 @@ onBeforeUnmount(() => {
             </div>
             <div class="liveActions">
                 <button type="button" class="ctl-pill" :disabled="holt" @click="beitraegeHolen">
-                    <i class="uil uil-sync"></i>{{ holt ? t('common.loading') : t('news.fetchNow') }}
+                    <Symbol name="aktualisieren" />{{ holt ? t('common.loading') : t('news.fetchNow') }}
                 </button>
                 <!-- Aktualisieren steht vor „Neu erzeugen": Es ist der
                      häufigere und der billigere Weg — was der Bericht schon
@@ -1095,10 +1096,10 @@ onBeforeUnmount(() => {
                      bestehenden Bericht gibt es nichts fortzuschreiben. -->
                 <button v-if="bericht" type="button" class="ctl-pill" :disabled="laeuft"
                     :title="t('news.updateHint')" @click="berichtErzeugen(true)">
-                    <i class="uil uil-sync-exclamation"></i>{{ t('news.updateDigest') }}
+                    <Symbol name="aktualisieren" />{{ t('news.updateDigest') }}
                 </button>
                 <button type="button" class="ctl-pill accent" :disabled="laeuft" @click="berichtErzeugen(false)">
-                    <i class="uil uil-robot"></i>{{ laeuft ? t('news.working') : t('news.makeDigest') }}
+                    <Symbol name="ki" />{{ laeuft ? t('news.working') : t('news.makeDigest') }}
                 </button>
                 <span class="ctl-sep"></span>
                 <!-- Schriftgrösse nur dieser Seite — gelesen wird hier viel,
@@ -1127,7 +1128,7 @@ onBeforeUnmount(() => {
              den tatsächlich aktiven Stand, egal ob er aus einem Profil oder
              einer manuellen Änderung in den Einstellungen stammt. -->
         <div class="nwSchnellKopf">
-            <select class="form-select form-select-sm nwProfilAuswahl"
+            <select class="at-feld klein nwProfilAuswahl"
                 :value="currentUser?.radarNewsAktivesProfil || ''"
                 :title="t('news.quickHint')"
                 @change="profilAnwenden($event.target.value)">
@@ -1136,7 +1137,7 @@ onBeforeUnmount(() => {
             </select>
             <button type="button" class="ctl-pill klein" :title="t('news.toSettings')"
                 @click="zuDenEinstellungen">
-                <i class="uil uil-sliders-v-alt"></i>{{ t('news.manageProfiles') }}
+                <Symbol name="regler" />{{ t('news.manageProfiles') }}
             </button>
             <span class="nwSchnellZeile">{{ schnellZusammenfassung }}</span>
         </div>
@@ -1149,10 +1150,10 @@ onBeforeUnmount(() => {
              Anbieter-Kombination: läuft ein WEITERER Anbieter leer, ist das
              eine neue Information und der Hinweis kommt zurück. -->
         <p v-if="guthabenLeer.length && guthabenBannerAn" class="nwWarnung nwGuthaben">
-            <i class="uil uil-exclamation-triangle"></i>
+            <Symbol name="warnung" />
             {{ t('news.quotaEmpty', { liste: guthabenLeer.map(a => a.name).join(', ') }) }}
             <button type="button" class="nwGuthabenZu" :title="t('common.close')" @click="guthabenAusblenden">
-                <i class="uil uil-times"></i>
+                <Symbol name="schliessen" />
             </button>
         </p>
 
@@ -1160,14 +1161,14 @@ onBeforeUnmount(() => {
              mehr bestätigt oder widerlegt. Das ist ein Hinweis, keine Warnung —
              deshalb ohne Warndreieck und ohne Wegklicken, es drängt ja nichts. -->
         <p v-if="guthabenAlt.length" class="nwMeldung nwGuthabenAlt">
-            <i class="uil uil-info-circle"></i>
+            <Symbol name="info" />
             {{ t('news.quotaStale', { liste: guthabenAlt.map(a => a.name).join(', ') }) }}
         </p>
 
         <!-- Gescheiterter Berichtslauf. Vorher stand so etwas nur im Serverlog —
              ein ausgefallener Tagesbericht sah aus wie „heute nichts passiert". -->
         <p v-if="letzterFehlschlag" class="nwWarnung nwGuthaben">
-            <i class="uil uil-exclamation-triangle"></i>
+            <Symbol name="warnung" />
             {{ t('news.lastFailure', {
                 zeit: dayjs(letzterFehlschlag.zeit).tz(zone()).format('DD.MM. HH:mm'),
                 text: letzterFehlschlag.text,
@@ -1181,11 +1182,11 @@ onBeforeUnmount(() => {
              archiviert, aber die Zeilen bleiben erreichbar. -->
         <div v-if="ketteZeilen.length > 1 || vorTag" class="nwKette">
             <p v-if="vorTag" class="nwKetteHinweis">
-                <i class="uil uil-archive"></i>{{ t('news.archivedAtMidnight') }}
+                <Symbol name="archiv" />{{ t('news.archivedAtMidnight') }}
             </p>
             <button v-for="z in ketteZeilen" :key="z.id" type="button"
                 class="nwKetteZeile" :class="{ offen: z.offen }" @click="ketteUmschalten(z)">
-                <i class="uil" :class="z.offen ? 'uil-angle-down' : 'uil-angle-right'"></i>
+                <Symbol :name="z.offen ? 'runter' : 'ausklappen'" />
                 <span class="nwKetteZeit">{{ dayjs(z.erstelltAm).format('HH:mm') }}</span>
                 <span class="nwKetteName" :class="{ update: z.art === 'update' }">{{ ketteName(z) }}</span>
                 <span class="nwKetteTitel">{{ z.ueberschrift || '—' }}</span>
@@ -1209,22 +1210,22 @@ onBeforeUnmount(() => {
                          Sprung wäre er für den Leser verschwunden. -->
                     <button v-if="bericht.art === 'update' && bericht.basisId" type="button"
                         class="ctl-pill klein" @click="oeffneAusArchiv(bericht.basisId)">
-                        <i class="uil uil-newspaper"></i>{{ t('news.toBase') }}
+                        <Symbol name="zeitung" />{{ t('news.toBase') }}
                     </button>
                     <span v-for="th in String(bericht.themen || '').split(',').filter(Boolean)"
                         :key="th" class="nwThema">{{ THEMA_NAME[th] || th }}</span>
                     <span v-if="zeigtArchiv" class="nwArchivMarke">{{ t('news.fromArchive') }}</span>
                     <button v-if="zeigtArchiv" type="button" class="ctl-pill klein" style="margin-left:auto;"
                         @click="zurueckZumAktuellen">
-                        <i class="uil uil-arrow-left"></i>{{ t('news.backToCurrent') }}
+                        <Symbol name="pfeilLinks" />{{ t('news.backToCurrent') }}
                     </button>
                     <button type="button" class="ctl-pill klein" :style="zeigtArchiv ? {} : { marginLeft: 'auto' }"
                         :class="{ active: archivOffen }" @click="archivOffen = !archivOffen">
-                        <i class="uil uil-archive"></i>{{ t('news.archive') }}
+                        <Symbol name="archiv" />{{ t('news.archive') }}
                         <span class="nwAnzahl">{{ verlauf.length }}</span>
                     </button>
                     <button type="button" class="nwLoeschen" :title="t('news.delete')" @click="berichtLoeschen">
-                        <i class="uil uil-trash-alt"></i>
+                        <Symbol name="muell" />
                     </button>
                 </div>
 
@@ -1243,7 +1244,7 @@ onBeforeUnmount(() => {
                         </span>
                         <span class="nwArchivLoeschen" :class="{ scharf: archivLoeschId === v.id }"
                             :title="t('news.delete')" @click.stop="archivLoeschen(v.id)">
-                            <i class="uil" :class="archivLoeschId === v.id ? 'uil-question-circle' : 'uil-trash-alt'"></i>
+                            <Symbol :name="archivLoeschId === v.id ? 'frage' : 'muell'" />
                             <template v-if="archivLoeschId === v.id">{{ t('news.confirmDelete') }}</template>
                         </span>
                     </button>
@@ -1262,7 +1263,7 @@ onBeforeUnmount(() => {
                 <section v-if="bericht.lagen" class="nwLagen">
                     <article v-if="bericht.lagen.gesamt" class="nwLageKarte">
                         <header class="nwLageKopf">
-                            <i class="uil uil-robot"></i>
+                            <Symbol name="ki" />
                             <span class="nwLageWas">{{ t('news.lagen.gesamt') }}</span>
                             <span class="nwLageMarke">{{ t('marktradar.lage.stimmung_' + bericht.lagen.gesamt.stimmung) }}</span>
                         </header>
@@ -1276,7 +1277,7 @@ onBeforeUnmount(() => {
 
                     <article v-if="bericht.lagen.handel" class="nwLageKarte">
                         <header class="nwLageKopf">
-                            <i class="uil uil-compass"></i>
+                            <Symbol name="kompass" />
                             <span class="nwLageWas">
                                 {{ t('news.lagen.handel', { symbol: (bericht.lagen.handel.symbol || '').replace(/USDT$/, '') }) }}
                             </span>
@@ -1325,7 +1326,7 @@ onBeforeUnmount(() => {
                 <section v-if="lagebild" class="nwWaage">
                     <div v-for="sp in lagebild" :key="sp.key" class="nwWaageSpalte" :class="sp.key">
                         <h3 class="nwWaageKopf">
-                            <i class="uil" :class="WAAGE_ICON[sp.key]"></i>{{ t('news.balance.' + sp.key) }}
+                            <Symbol :name="WAAGE_ICON[sp.key]" />{{ t('news.balance.' + sp.key) }}
                         </h3>
                         <ul class="nwWaageListe">
                             <li v-for="(e, ei) in sp.eintraege" :key="ei">
@@ -1350,7 +1351,7 @@ onBeforeUnmount(() => {
                              statt hier die Zahlen von heute zu zeigen. -->
                         <section v-if="bericht.markt && bericht.markt.length" class="nwDoBlock">
                             <h3 class="nwDoTitel">
-                                <i class="uil uil-chart-line"></i>{{ t('news.marketState') }}
+                                <Symbol name="linie" />{{ t('news.marketState') }}
                             </h3>
                             <table class="nwDoTab">
                                 <thead>
@@ -1381,7 +1382,7 @@ onBeforeUnmount(() => {
                              Steht nichts an, faellt der ganze Kasten weg. -->
                         <section v-if="naechsteTermine.liste.length" class="nwDoBlock">
                             <h3 class="nwDoTitel">
-                                <i class="uil uil-calendar-alt"></i>{{ t('news.upcoming') }}
+                                <Symbol name="kalender" />{{ t('news.upcoming') }}
                             </h3>
                             <table class="nwDoTab">
                                 <thead>
@@ -1469,7 +1470,7 @@ onBeforeUnmount(() => {
                                     <span v-for="(z, zi) in (p.kennzahlen || []).slice(0, 3)" :key="zi"
                                         class="nwZahl"><b>{{ z.wert }}</b><span>{{ z.was }}</span></span>
                                     <span v-if="p.belege && p.belege.length" class="nwBelegZahl">
-                                        <i class="uil uil-link"></i>{{ p.belege.length }}
+                                        <Symbol name="verknuepfung" />{{ p.belege.length }}
                                     </span>
                                 </p>
                             </div>
@@ -1526,9 +1527,9 @@ onBeforeUnmount(() => {
                             <span class="nwPunktFuss">
                                 <span class="nwPunktQuelle">{{ p.quelle }}</span>
                                 <span v-if="p.belege && p.belege.length" class="nwBelegZahl">
-                                    <i class="uil uil-link"></i>{{ p.belege.length }}
+                                    <Symbol name="verknuepfung" />{{ p.belege.length }}
                                 </span>
-                                <i class="uil uil-expand-arrows-alt"></i>
+                                <Symbol name="vergroessern" />
                             </span>
                         </button>
                     </article>
@@ -1566,7 +1567,7 @@ onBeforeUnmount(() => {
                         <p class="nwArtikelFuss">
                             <span class="nwPunktQuelle">{{ p.quelle }}</span>
                             <span v-if="p.belege && p.belege.length" class="nwBelegZahl">
-                                <i class="uil uil-link"></i>{{ p.belege.length }}
+                                <Symbol name="verknuepfung" />{{ p.belege.length }}
                             </span>
                         </p>
                     </article>
@@ -1608,14 +1609,14 @@ onBeforeUnmount(() => {
                 <div v-if="sichtbareVideos.length" class="nwVideos">
                     <button type="button" class="nwVideosKopf" :aria-expanded="videosOffen"
                         @click="videosUmschalten">
-                        <i class="uil" :class="videosOffen ? 'uil-angle-down' : 'uil-angle-right'"></i>
+                        <Symbol :name="videosOffen ? 'runter' : 'ausklappen'" />
                         {{ t('news.videosHeader') }}
                         <span class="nwVideosZahl">{{ sichtbareVideos.length }}</span>
                     </button>
                     <div v-for="(vi, k) in (videosOffen ? sichtbareVideos : [])" :key="k"
                         class="nwVideoEintrag">
                         <a class="nwVideo" :href="sichereUrl(vi.url) || undefined" target="_blank" rel="noopener noreferrer">
-                            <i class="uil uil-youtube"></i>
+                            <Symbol name="video" />
                             <span class="nwBelegQuelle">{{ vi.quelle }}</span>
                             <span class="nwBelegTitel">{{ vi.titel }}</span>
                             <!-- Drei Zustände, die man auseinanderhalten muss:
@@ -1643,7 +1644,7 @@ onBeforeUnmount(() => {
                 <p v-else-if="!bericht.videos" class="nwHinweis">{{ t('news.noVideos') }}</p>
 
                 <p v-if="bericht.hinweis" class="nwWarnung">
-                    <i class="uil uil-exclamation-triangle"></i>{{ bericht.hinweis }}
+                    <Symbol name="warnung" />{{ bericht.hinweis }}
                 </p>
 
                 <p class="nwFuss">
@@ -1657,7 +1658,7 @@ onBeforeUnmount(() => {
             </template>
 
             <div v-else class="nwLeer">
-                <i class="uil uil-newspaper"></i>
+                <Symbol name="zeitung" />
                 <span>{{ ketteZeilen.length ? t('news.pickFromChain') : t('news.noDigest') }}</span>
             </div>
         </section>
@@ -1695,10 +1696,10 @@ onBeforeUnmount(() => {
                          statt einen `javascript:`-Klick anzubieten. -->
                     <a v-for="(b, j) in belegeZumPunkt.liste" :key="j" class="nwBeleg"
                         :href="sichereUrl(b.url) || undefined" target="_blank" rel="noopener noreferrer">
-                        <i :class="ART_ICON[b.art] || ART_ICON.rss"></i>
+                        <Symbol :name="ART_ICON[b.art] || ART_ICON.rss" />
                         <span class="nwBelegQuelle">{{ b.quelle }}</span>
                         <span class="nwBelegTitel">{{ b.titel }}</span>
-                        <i class="uil uil-external-link-alt"></i>
+                        <Symbol name="extern" />
                     </a>
                 </template>
                 <p v-else class="nwOhneBeleg">
@@ -1712,7 +1713,7 @@ onBeforeUnmount(() => {
             <!--=============== TERMINE ===============-->
             <section class="nwKarte">
                 <h3 class="nwAbschnitt">
-                    <i class="uil uil-calendar-alt"></i>{{ t('news.calendar') }}
+                    <Symbol name="kalender" />{{ t('news.calendar') }}
                     <span v-if="naechsterTermin" class="nwCountdown">
                         {{ t('news.nextIn', { zeit: bis(naechsterTermin.dateUnix) }) }}
                     </span>
@@ -1796,7 +1797,7 @@ onBeforeUnmount(() => {
             <!--=============== BEITRÄGE ===============-->
             <section class="nwKarte">
                 <h3 class="nwAbschnitt">
-                    <i class="uil uil-rss"></i>{{ t('news.posts') }}
+                    <Symbol name="rss" />{{ t('news.posts') }}
                     <span v-if="newsInfo.ausgeblendet && newsInfo.filterAn" class="nwCountdown">
                         {{ t('news.hidden', { n: newsInfo.ausgeblendet }) }}
                     </span>
@@ -1841,7 +1842,7 @@ onBeforeUnmount(() => {
                         :loading="sichtbareBeitraege.indexOf(b) < 8 ? 'eager' : 'lazy'"
                         @error="$event.target.style.display = 'none'" />
                     <div class="nwBeitragKopf">
-                        <i :class="ART_ICON[b.art] || ART_ICON.rss"></i>
+                        <Symbol :name="ART_ICON[b.art] || ART_ICON.rss" />
                         <span class="nwQuelle">{{ b.quelle }}</span>
                         <span v-if="b.art === 'youtube'" class="nwVideoMarke">{{ t('news.video') }}</span>
                         <span class="nwZeit">{{ dayjs(b.publishedAt).tz(zone()).format('DD.MM. HH:mm') }}</span>
@@ -1858,7 +1859,7 @@ onBeforeUnmount(() => {
                     <div v-else-if="b.auszug" class="nwVorschau">{{ b.auszug }}</div>
                     <button v-if="b.zusammenfassung && b.zusammenfassung.length > 120" type="button"
                         class="nwKlappe" @click.prevent="klappeUm(b.id)">
-                        <i class="uil" :class="aufgeklappt.includes(b.id) ? 'uil-angle-up' : 'uil-angle-down'"></i>
+                        <Symbol :name="aufgeklappt.includes(b.id) ? 'hoch' : 'runter'" />
                         {{ aufgeklappt.includes(b.id) ? t('news.collapse') : t('news.expand') }}
                     </button>
                 </a>
@@ -1876,7 +1877,7 @@ onBeforeUnmount(() => {
         <Teleport to="body">
             <div v-if="grossesBild" class="nwBildOverlay" @click.self="grossesBild = null">
                 <button type="button" class="nwBildZu" @click="grossesBild = null">
-                    <i class="uil uil-times"></i>
+                    <Symbol name="schliessen" />
                 </button>
                 <img :src="grossesBild.url" referrerpolicy="no-referrer" @click.stop />
                 <div v-if="grossesBild.titel || grossesBild.text || grossesBild.beschreibung" class="nwBildText" @click.stop>
@@ -1888,7 +1889,7 @@ onBeforeUnmount(() => {
                 </div>
                 <a v-if="grossesBild.quelle" class="nwBildQuelle" :href="sichereUrl(grossesBild.quelle) || undefined"
                     target="_blank" rel="noopener" @click.stop>
-                    <i class="uil uil-external-link-alt"></i>
+                    <Symbol name="extern" />
                     {{ grossesBild.quelle.replace(/^https?:\/\//, '').split('/')[0] }} — {{ t('news.openArticle') }}
                 </a>
             </div>

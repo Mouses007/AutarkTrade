@@ -9,7 +9,7 @@
  * Felder:
  *   id          — Schlüssel in Sichtbarkeit, Reihenfolge und Datenspeicher
  *   titleKey    — i18n-Schlüssel der Überschrift
- *   icon        — Unicons-Klasse
+ *   icon        — Symbolname (`src/components/basis/Symbol.vue`)
  *   endpunkt    — Server-Endpunkt; null = Kachel rechnet ohne eigenen Abruf
  *   intervallMs — wie oft nachgeladen wird, solange die Kachel sichtbar ist
  *   spalten     — Breite im Raster (1 = normal, 2 = doppelt)
@@ -41,7 +41,7 @@ const DEFINITIONEN = [
     {
         id: 'fng',
         titleKey: 'marktradar.fng.title',
-        icon: 'uil uil-heart-rate',
+        icon: 'puls',
         endpunkt: '/api/marktradar/fear-greed',
         params: { tage: 365 },
         // Der Wert wechselt einmal täglich — häufiger nachfragen wäre reine Fremdlast
@@ -52,7 +52,7 @@ const DEFINITIONEN = [
     {
         id: 'dom',
         titleKey: 'marktradar.dom.title',
-        icon: 'uil uil-bitcoin-circle',
+        icon: 'muenzen',
         endpunkt: '/api/marktradar/btc-dominanz',
         intervallMs: 3 * 60 * 1000,
         spalten: 1,
@@ -62,7 +62,7 @@ const DEFINITIONEN = [
     {
         id: 'funding',
         titleKey: 'marktradar.funding.title',
-        icon: 'uil uil-percentage',
+        icon: 'prozent',
         endpunkt: '/api/marktradar/funding',
         params: { n: 50 },
         intervallMs: 60 * 1000,
@@ -72,7 +72,7 @@ const DEFINITIONEN = [
     {
         id: 'lsoi',
         titleKey: 'marktradar.lsoi.title',
-        icon: 'uil uil-balance-scale',
+        icon: 'waage',
         endpunkt: '/api/marktradar/ls-oi',
         params: { stunden: 48 },
         // Folgt der Symbolwahl im Seitenmenü, damit sie überall dieselbe ist
@@ -84,7 +84,7 @@ const DEFINITIONEN = [
     {
         id: 'mechanik',
         titleKey: 'marktradar.mechanik.title',
-        icon: 'uil uil-processor',
+        icon: 'prozessor',
         endpunkt: '/api/marktradar/mechanik',
         params: { fenster: '1h' },
         // Folgt der Symbolwahl im Seitenmenü wie die Long/Short-Kachel
@@ -96,7 +96,7 @@ const DEFINITIONEN = [
     {
         id: 'liq24',
         titleKey: 'marktradar.liq.title',
-        icon: 'uil uil-fire',
+        icon: 'feuer',
         endpunkt: '/api/marktradar/liquidationen',
         params: { stunden: 24 },
         intervallMs: 60 * 1000,
@@ -106,7 +106,7 @@ const DEFINITIONEN = [
     {
         id: 'makro',
         titleKey: 'marktradar.makro.title',
-        icon: 'uil uil-globe',
+        icon: 'globus',
         endpunkt: '/api/marktradar/makro',
         // Futures laufen fast durch, aber ein Minutentakt brächte nichts —
         // die Kopplung ändert sich in Tagen, nicht in Minuten
@@ -117,7 +117,7 @@ const DEFINITIONEN = [
     {
         id: 'picycle',
         titleKey: 'marktradar.picycle.title',
-        icon: 'uil uil-chart-growth',
+        icon: 'wachstum',
         endpunkt: '/api/marktradar/picycle',
         // Tageskerzen — häufiger nachzufragen ändert nichts
         intervallMs: 12 * 60 * 60 * 1000,
@@ -127,7 +127,7 @@ const DEFINITIONEN = [
     {
         id: 'altseason',
         titleKey: 'marktradar.altseason.title',
-        icon: 'uil uil-exchange',
+        icon: 'tausch',
         endpunkt: '/api/marktradar/altseason',
         params: { tage: 90 },
         intervallMs: 30 * 60 * 1000,
@@ -137,7 +137,7 @@ const DEFINITIONEN = [
     {
         id: 'markt',
         titleKey: 'marktradar.markt.title',
-        icon: 'uil uil-circle-layer',
+        icon: 'ebenen',
         endpunkt: '/api/marktradar/markt',
         params: { n: 50 },
         intervallMs: 5 * 60 * 1000,
@@ -149,7 +149,7 @@ const DEFINITIONEN = [
     {
         id: 'rainbow',
         titleKey: 'marktradar.rainbow.title',
-        icon: 'uil uil-rainbow',
+        icon: 'regenbogen',
         endpunkt: '/api/marktradar/rainbow',
         // Wochenkerzen — häufiger nachzufragen wäre sinnlos
         intervallMs: 12 * 60 * 60 * 1000,
@@ -160,7 +160,7 @@ const DEFINITIONEN = [
     {
         id: 'regime',
         titleKey: 'marktradar.regime.title',
-        icon: 'uil uil-analysis',
+        icon: 'analyse',
         endpunkt: '/api/marktradar/regime',
         params: { tage: 365 },
         intervallMs: 5 * 60 * 1000,
@@ -170,7 +170,7 @@ const DEFINITIONEN = [
     {
         id: 'lage',
         titleKey: 'marktradar.lage.title',
-        icon: 'uil uil-robot',
+        icon: 'ki',
         // Der Endpunkt LIEST nur, was schon erzeugt wurde — erzeugt wird per
         // Knopf in der Kachel (POST). Sonst würde „Alle aktualisieren" jedes
         // Mal eine KI-Anfrage bezahlen.
@@ -186,7 +186,7 @@ const DEFINITIONEN = [
     {
         id: 'etf',
         titleKey: 'marktradar.etf.title',
-        icon: 'uil uil-university',
+        icon: 'gebaeude',
         endpunkt: '/api/marktradar/etf',
         // Der Endpunkt liest nur den eigenen Bestand — der Abruf bei
         // CryptoQuant läuft im Hintergrundtakt, höchstens alle sechs Stunden.
@@ -199,7 +199,7 @@ const DEFINITIONEN = [
     {
         id: 'wal',
         titleKey: 'marktradar.wal.title',
-        icon: 'uil uil-anchor',
+        icon: 'anker',
         endpunkt: '/api/marktradar/wale',
         // Nur eigene, schon gesammelte Telegram-Beiträge — kein Netzabruf,
         // daher darf hier häufiger nachgesehen werden als bei den News selbst
@@ -211,7 +211,7 @@ const DEFINITIONEN = [
     {
         id: 'rsi',
         titleKey: 'marktradar.rsi.title',
-        icon: 'uil uil-table',
+        icon: 'tabelle',
         endpunkt: '/api/marktradar/rsi',
         params: { n: 50 },
         intervallMs: 60 * 1000,

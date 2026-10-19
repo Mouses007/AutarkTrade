@@ -7,10 +7,10 @@
             <span v-else-if="daten" class="ppNote leer" :title="t('hypeProjekt.keineNoteTitel')">—</span>
             <InfoTipp schluessel="hypeProjekt.info" breit />
             <span v-if="daten?.geprueftAm" class="ppZeit">{{ t('hypeProjekt.geprueftAm', { z: zeitpunkt(daten.geprueftAm) }) }}</span>
-            <button v-if="kandidat?.contract || kandidat?.symbol" type="button" class="ctl-pill klein ms-auto"
+            <button v-if="kandidat?.contract || kandidat?.symbol" type="button" class="ctl-pill klein at-ml-auto"
                 :disabled="laedt" @click.stop="pruefen(Boolean(daten))">
-                <span v-if="laedt" class="spinner-border spinner-border-sm me-1"></span>
-                <i v-else class="uil uil-search-alt me-1"></i>{{ daten ? t('hypeProjekt.neuPruefen') : t('hypeProjekt.pruefen') }}
+                <Kreisel still class="at-mr-1" v-if="laedt" />
+                <Symbol v-else name="suche" class="at-mr-1" />{{ daten ? t('hypeProjekt.neuPruefen') : t('hypeProjekt.pruefen') }}
             </button>
         </div>
 
@@ -36,6 +36,7 @@
 </template>
 
 <script setup>
+import Symbol from '@/components/basis/Symbol.vue'
 /**
  * Projektprüfung eines Hype-Radar-Funds: Webseite, Domain-Alter, GitHub,
  * Ersteller-Vorgeschichte — und eine Substanz-Note daraus.
@@ -53,6 +54,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import InfoTipp from '../InfoTipp.vue'
 import { sichereUrl } from '../../utils/sanitize.js'
+import Kreisel from '@/components/basis/Kreisel.vue'
 
 const props = defineProps({
     /** Kurzfassung einer gespeicherten Prüfung, oder null. */

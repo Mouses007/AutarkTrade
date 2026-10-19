@@ -25,6 +25,7 @@ import { lageZu } from '../../../shared/handelszeiten.js'
 import { liveSymbol } from '../../stores/live.js'
 import { currentUser } from '../../stores/globals.js'
 import { boerseUrl, boersenLinksVon, BOERSE_KURZ, BOERSE_NAME } from '../../utils/boersenLinks.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -162,7 +163,7 @@ function waehle(symbol) { liveSymbol.value = symbol }
         <div class="kpZeile" @click="emit('oeffne', 'handelszeiten')">
             <span class="kpLabel">{{ t('livetrading.kompakt.zeit') }}</span>
             <span v-if="zeit.warn" class="kpWert" :class="zeit.warn.stufe === 'hoch' ? 'kpMinus' : 'kpGelb'">
-                <i class="uil uil-exclamation-triangle"></i>
+                <Symbol name="warnung" />
                 {{ t('livetrading.handelszeiten.warn_' + zeit.warn.id) }}
                 <span class="kpNeben">{{ t('livetrading.handelszeiten.bis', { zeit: dayjs(zeit.warn.bisMs).format('HH:mm') }) }}</span>
             </span>

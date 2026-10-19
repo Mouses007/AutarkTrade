@@ -24,6 +24,8 @@ import axios from 'axios'
 import { liveSymbol } from '../../stores/live.js'
 import { aktiveSitzung } from '../../stores/livetrading.js'
 import { testbetrieb } from '../../stores/system.js'
+import Symbol from '@/components/basis/Symbol.vue'
+import Kreisel from '@/components/basis/Kreisel.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -213,16 +215,16 @@ async function erzeuge(erzwingen = false, auto = false) {
     <div class="hlWrap" :class="{ gross }">
         <!-- Noch keine Einordnung: ein Knopf und der Satz, was er tut -->
         <div v-if="!hat && !laedt" class="hlLeer">
-            <i class="uil uil-compass hlLeerIcon"></i>
+            <Symbol name="kompass" class="hlLeerIcon" />
             <p class="hlLeerText">{{ t('livetrading.handelslage.leerHinweis') }}</p>
             <button type="button" class="ctl-pill hlKnopf" @click.stop="erzeuge(false)">
-                <i class="uil uil-bolt-alt"></i> {{ t('livetrading.handelslage.erzeugen') }}
+                <Symbol name="blitz" /> {{ t('livetrading.handelslage.erzeugen') }}
             </button>
             <p v-if="fehler" class="hlFehler">{{ fehler }}</p>
         </div>
 
         <div v-else-if="laedt" class="hlLeer">
-            <span class="spinner-border spinner-border-sm mb-2"></span>
+            <Kreisel still class="at-mu-2" />
             <p class="hlLeerText">{{ t('livetrading.handelslage.laedt') }}</p>
         </div>
 
@@ -236,7 +238,7 @@ async function erzeuge(erzwingen = false, auto = false) {
                 </span>
                 <button type="button" class="hlErneut" :title="t('livetrading.handelslage.erneut')"
                     @click.stop="erzeuge(true)">
-                    <i class="uil uil-sync"></i>
+                    <Symbol name="aktualisieren" />
                 </button>
             </div>
 

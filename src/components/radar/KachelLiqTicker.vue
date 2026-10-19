@@ -22,6 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/dayjs-setup.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -78,7 +79,7 @@ function geld(v) {
 
         <!-- Aufzeichnung aus: das MUSS dastehen, sonst liest man Stille als Ruhe -->
         <div v-if="stumm" class="ltWarn">
-            <i class="uil uil-exclamation-triangle"></i>
+            <Symbol name="warnung" />
             {{ t('livetrading.liq.aufzeichnungAus') }}
         </div>
         <div v-else-if="ohneSammelstrom" class="ltHinweis">

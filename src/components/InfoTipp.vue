@@ -51,6 +51,7 @@ import { useI18n } from 'vue-i18n'
 import { erweiterteInfos } from '../composables/useErweiterteInfos.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { ebeneAuf, ebeneZu } from '../composables/useZurueckGeste.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const props = defineProps({
     /** i18n-Schlüssel des Erklärtexts. */
@@ -159,7 +160,7 @@ onBeforeUnmount(() => {
     <span v-if="zeigen" ref="ausloeser" class="infoTipp" tabindex="0" role="note"
         @mouseenter="betreten" @mouseleave="verlassen" @focus="auf" @blur="zu"
         @click.stop="tippen" @keydown.esc="zu">
-        <i class="uil uil-info-circle"></i>
+        <Symbol name="info" />
 
         <Teleport to="body">
             <span v-if="offen" class="infoTippBox" :class="{ 'infoTippBox--breit': breit, 'infoTippBox--unten': pos.kippt }"
