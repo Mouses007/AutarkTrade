@@ -16,6 +16,11 @@
  */
 import { computed } from 'vue'
 import { SYMBOLE_ANALYSE } from './symbole/analyse.js'
+import { SYMBOLE_DAILY } from './symbole/journal-daily.js'
+import { SYMBOLE_SCREENSHOTS } from './symbole/journal-screenshots.js'
+import { SYMBOLE_PLAYBOOK } from './symbole/journal-playbook.js'
+import { SYMBOLE_DASHBOARD } from './symbole/journal-dashboard.js'
+import { SYMBOLE_IMPORT } from './symbole/journal-import.js'
 
 const props = defineProps({
     name: { type: String, required: true },
@@ -160,6 +165,11 @@ const PFADE = {
 // Weitere Sätze je Bereich in `./symbole/` (eigene Datei, damit parallele
 // Sitzungen nicht in derselben Liste schreiben).
 Object.assign(PFADE, SYMBOLE_ANALYSE)
+Object.assign(PFADE, SYMBOLE_DAILY)
+Object.assign(PFADE, SYMBOLE_SCREENSHOTS)
+Object.assign(PFADE, SYMBOLE_PLAYBOOK)
+Object.assign(PFADE, SYMBOLE_DASHBOARD)
+Object.assign(PFADE, SYMBOLE_IMPORT)
 
 const pfade = computed(() => PFADE[props.name] || PFADE.info)
 const masse = computed(() => (typeof props.groesse === 'number' ? `${props.groesse}px` : props.groesse))

@@ -1,11 +1,26 @@
 <script setup>
+/**
+ * Share-Karte eines Trades: KI-Hintergrund (FLUX.2) oder gespeicherte Vorlage
+ * plus Overlay, zum Herunterladen oder Teilen.
+ *
+ * Ein nativer <dialog> (`basis/Dialog`): geöffnet aus dem Trade-Detailfenster
+ * der Tagesansicht, das selbst ein <dialog> ist — der später geöffnete liegt
+ * im Top-Layer oben, ein Teleport an `body` ist nicht mehr nötig.
+ * Props (`trade`, `visible`) und Ereignis (`close`) sind unverändert.
+ */
 import { zeichneShareCard } from '../utils/shareCardBild.js'
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { useVorlagenKategorieLabel } from '../utils/journal/format.js'
-import { currentUser } from '../stores/globals.js'
+import Dialog from './basis/Dialog.vue'
+import Knopf from './basis/Knopf.vue'
+import Pille from './basis/Pille.vue'
+import Symbol from './basis/Symbol.vue'
+import Hinweis from './basis/Hinweis.vue'
+import Kreisel from './basis/Kreisel.vue'
 import KiHinweis from './quellen/KiHinweis.vue'
+import { currentUser } from '../stores/app/rahmen.js'
 
 const { t } = useI18n()
 
@@ -55,6 +70,9 @@ watch(hgOffen, async (offen) => {
 /** Pfeiltasten wandern zwischen den Zeilen, Escape schliesst und gibt den Fokus zurück. */
 function hgWahlKeydown(event) {
     if (event.key === 'Escape') {
+        // Nur die Liste schliessen, nicht den ganzen <dialog> (Esc schliesst ihn sonst nativ)
+        event.preventDefault()
+        event.stopPropagation()
         hgOffen.value = false
         hgKnopfEl.value?.focus()
         return
@@ -247,7 +265,7 @@ async function generateShareCard() {
 async function saveAsTemplate() {
     if (!templateName.value.trim()) return
     if (!lastBackgroundBase64.value) {
-        error.value = 'Kein Hintergrundbild zum Speichern vorhanden'
+        error.value = t('daily.shareCardKeinHintergrund')
         return
     }
 
@@ -272,7 +290,7 @@ async function saveAsTemplate() {
 
 // Delete a template
 async function deleteTemplate(id) {
-    if (!confirm('Vorlage wirklich löschen?')) return
+    if (!confirm(t('daily.shareCardVorlageLoeschenFrage'))) return
     deletingTemplateId.value = id
     try {
         await axios.delete(`/api/db/share_card_templates/${id}`)
@@ -308,15 +326,15 @@ async function shareImage() {
 
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
             await navigator.share({
-                title: `Share Card: ${symbol} ${dir}`,
-                text: `Meine ${symbol} ${dir} Share Card\nErstellt mit AutarkTrade`,
+                title: t('daily.shareCardTeilenTitel', { symbol, dir }),
+                text: t('daily.shareCardTeilenText', { symbol, dir }),
                 files: [file]
             })
         } else {
             downloadImage()
             await new Promise(r => setTimeout(r, 500))
-            const subject = encodeURIComponent(`Share Card: ${symbol} ${dir}`)
-            const body = encodeURIComponent(`Meine ${symbol} ${dir} Share Card.\n\n(Bild wurde heruntergeladen — bitte über "Anhängen" einfügen)\n\nErstellt mit AutarkTrade`)
+            const subject = encodeURIComponent(t('daily.shareCardTeilenTitel', { symbol, dir }))
+            const body = encodeURIComponent(t('daily.shareCardMailText', { symbol, dir }))
             window.open(`mailto:?subject=${subject}&body=${body}`, '_self')
         }
     } catch (e) {
@@ -325,6 +343,8 @@ async function shareImage() {
 }
 
 function closeModal() {
+    // Der <dialog> meldet sein Schliessen ein zweites Mal, nachdem der Aufrufer `visible` schon auf falsch gesetzt hat
+    if (!props.visible) return
     generatedImage.value = null
     error.value = ''
     showSaveForm.value = false
@@ -333,235 +353,344 @@ function closeModal() {
 </script>
 
 <template>
-    <div v-if="visible" class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,0.7); z-index: 1070;" @click.self="closeModal" @focusin.stop @mousedown.stop>
-        <div class="modal-dialog modal-lg modal-dialog-centered">
-            <div class="modal-content share-card-modal">
-                <div class="modal-header border-0">
-                    <h5 class="modal-title">
-                        <i class="uil uil-image-share me-2"></i>{{ t('daily.shareCard') }}
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" @click="closeModal"></button>
+    <Dialog :model-value="visible" :titel="t('daily.shareCard')" breite="48rem" @zu="closeModal">
+        <div class="share">
+            <!-- Trade-Zusammenfassung -->
+            <div class="zusammenfassung">
+                <div class="kopfzeile">
+                    <span class="symbol">{{ tradeSummary.symbol }}</span>
+                    <Pille :ton="tradeSummary.isLong ? 'gut' : 'schlecht'">{{ tradeSummary.direction }}</Pille>
+                    <Pille v-if="tradeSummary.leverage" ton="neutral">{{ tradeSummary.leverage }}</Pille>
+                    <Pille v-if="tradeSummary.rrr && showRrr" ton="akzent">RRR 1:{{ tradeSummary.rrr }}</Pille>
                 </div>
-                <div class="modal-body">
-                    <!-- Trade Summary -->
-                    <div class="share-card-summary mb-3">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <span class="fw-bold fs-5">{{ tradeSummary.symbol }}</span>
-                            <span class="badge" :class="tradeSummary.isLong ? 'bg-success' : 'bg-danger'">
-                                {{ tradeSummary.direction }}
-                            </span>
-                            <span v-if="tradeSummary.leverage" class="badge bg-secondary">{{ tradeSummary.leverage }}</span>
-                            <span v-if="tradeSummary.rrr && showRrr" class="badge" style="background: #7c3aed;">RRR 1:{{ tradeSummary.rrr }}</span>
-                        </div>
-                        <!-- Tags -->
-                        <div v-if="tradeSummary.tagNames?.length && showTags" class="mb-2 d-flex gap-1 flex-wrap">
-                            <span v-for="(tag, i) in tradeSummary.tagNames" :key="i" class="badge bg-info text-dark small">{{ tag }}</span>
-                        </div>
-                        <div class="d-flex gap-4 align-items-start">
-                            <div>
-                                <small class="text-muted">PnL</small>
-                                <div class="fw-bold" :class="tradeSummary.isWin ? 'text-success' : 'text-danger'">
-                                    {{ tradeSummary.pnlPercent }}
-                                </div>
-                                <div class="small" :class="tradeSummary.isWin ? 'text-success' : 'text-danger'">
-                                    {{ tradeSummary.pnlAmount }}
-                                </div>
-                            </div>
-                            <div>
-                                <small class="text-muted">Entry</small>
-                                <div>{{ tradeSummary.entryPrice }}</div>
-                            </div>
-                            <div>
-                                <small class="text-muted">Exit</small>
-                                <div>{{ tradeSummary.exitPrice }}</div>
-                            </div>
-                            <div v-if="tradeSummary.leverage" class="ms-auto text-center">
-                                <small class="text-muted">Leverage</small>
-                                <div class="fw-bold">{{ tradeSummary.leverage }}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- ====== TEMPLATE SELECTOR ====== -->
-                    <div v-if="templates.length > 0" class="mb-3">
-                        <label class="form-label small fw-bold">
-                            <i class="uil uil-layers me-1"></i>Hintergrund
-                        </label>
-                        <div class="d-flex gap-2 align-items-center position-relative">
-                            <!-- Eigenes Dropdown statt <select>: native <option>s
-                                 können kein farbiges Long/Short-Badge tragen. Die
-                                 Tastatursteuerung, die ein <select> kostenlos
-                                 mitbringt, muss dafür von Hand nachgebaut werden
-                                 (Pfeiltasten, Enter/Leertaste, Escape) — sonst ist
-                                 die Auswahl für Tastatur-/Screenreader-Nutzer
-                                 unerreichbar. -->
-                            <button type="button" class="form-select form-select-sm text-start hgKnopf" ref="hgKnopfEl"
-                                :disabled="generating" aria-haspopup="listbox" :aria-expanded="hgOffen"
-                                @click="hgOffen = !hgOffen" style="max-width: 350px;">
-                                <template v-if="selectedTemplate">
-                                    {{ selectedTemplate.name }}
-                                    <span v-if="selectedTemplate.category" class="badge ms-1"
-                                          :class="selectedTemplate.category === 'win' ? 'bg-success' : 'bg-danger'">{{ useVorlagenKategorieLabel(selectedTemplate.category) }}</span>
-                                </template>
-                                <template v-else>Neu generieren (KI)</template>
-                            </button>
-                            <template v-if="hgOffen">
-                                <div class="hgHinter" @click="hgOffen = false"></div>
-                                <div class="hgWahl floatDropdown" role="listbox" ref="hgWahlEl" @keydown="hgWahlKeydown">
-                                    <div class="hgZeile floatDropdownZeile" role="option" tabindex="0" :aria-selected="!selectedTemplateId"
-                                         :class="{ hgAktiv: !selectedTemplateId }"
-                                         @click="hgWaehlen(null)" @keydown.enter.prevent="hgWaehlen(null)" @keydown.space.prevent="hgWaehlen(null)">
-                                        Neu generieren (KI)
-                                    </div>
-                                    <div v-for="tpl in filteredTemplates" :key="tpl.id" class="hgZeile floatDropdownZeile" role="option" tabindex="0"
-                                         :aria-selected="String(selectedTemplateId) === String(tpl.id)"
-                                         :class="{ hgAktiv: String(selectedTemplateId) === String(tpl.id) }"
-                                         @click="hgWaehlen(tpl.id)" @keydown.enter.prevent="hgWaehlen(tpl.id)" @keydown.space.prevent="hgWaehlen(tpl.id)">
-                                        {{ tpl.name }}
-                                        <span v-if="tpl.category" class="badge ms-1"
-                                              :class="tpl.category === 'win' ? 'bg-success' : 'bg-danger'">{{ useVorlagenKategorieLabel(tpl.category) }}</span>
-                                    </div>
-                                </div>
-                            </template>
-                            <button v-if="selectedTemplateId" class="btn btn-sm btn-outline-danger" @click="deleteTemplate(selectedTemplateId)"
-                                :disabled="deletingTemplateId === selectedTemplateId" title="Vorlage löschen">
-                                <i class="uil uil-trash-alt"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Options row -->
-                    <div class="d-flex align-items-center gap-3 mb-3 flex-wrap">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="hidePnlCheck" v-model="hidePnlAmount" :disabled="generating" />
-                            <label class="form-check-label small" for="hidePnlCheck">{{ t('daily.shareCardHidePrices') }}</label>
-                        </div>
-                        <div v-if="tradeSummary.tagNames?.length" class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="showTagsCheck" v-model="showTags" :disabled="generating" />
-                            <label class="form-check-label small" for="showTagsCheck">{{ t('daily.shareCardShowTags') }}</label>
-                        </div>
-                        <div v-if="tradeSummary.rrr" class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="showRrrCheck" v-model="showRrr" :disabled="generating" />
-                            <label class="form-check-label small" for="showRrrCheck">RRR</label>
-                        </div>
-                    </div>
-
-                    <!-- Prompt (only when "Neu generieren" is selected) -->
-                    <div v-if="!selectedTemplateId" class="mb-3">
-                        <label class="form-label small fw-bold mb-0">
-                            <i class="uil uil-pen me-1"></i>{{ t('daily.shareCardPrompt') }}
-                        </label>
-                        <textarea class="form-control share-card-prompt" rows="5" v-model="promptText"
-                            :disabled="generating" style="resize: vertical; min-height: 100px;"></textarea>
-                    </div>
-
-                    <!-- Comment -->
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">
-                            <i class="uil uil-comment-alt-message me-1"></i>{{ t('daily.shareCardComment') }}
-                        </label>
-                        <input type="text" class="form-control share-card-prompt" v-model="commentText"
-                            :disabled="generating" maxlength="130" :placeholder="t('daily.shareCardCommentHint')" />
-                    </div>
-
-                    <!-- Error -->
-                    <div v-if="error" class="alert alert-danger py-2 small">
-                        <i class="uil uil-exclamation-triangle me-1"></i>{{ error }}
-                    </div>
-
-                    <!-- Generating spinner -->
-                    <div v-if="generating" class="share-card-generating text-center py-5">
-                        <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
-                        <p class="text-muted">{{ t('daily.shareCardGenerating') }}</p>
-                        <small class="text-muted">~10-30s</small>
-                    </div>
-
-                    <!-- Generated Image Preview -->
-                    <div v-if="generatedImage && !generating" class="share-card-preview text-center" data-ki-generiert="true">
-                        <img :src="generatedImage" class="img-fluid rounded" style="max-height: 500px;" :alt="t('kiHinweis.bild')" />
-                        <!-- S12: das Label steht auch IM Bild und in den PNG-Metadaten (shareCardBild.js). -->
-                        <KiHinweis />
-                    </div>
-
-                    <!-- ====== SAVE AS TEMPLATE (after generation, only for new images) ====== -->
-                    <div v-if="generatedImage && !generating && lastBackgroundBase64 && !selectedTemplateId" class="mt-3">
-                        <div v-if="!showSaveForm">
-                            <button class="btn btn-sm btn-outline-warning" @click="showSaveForm = true">
-                                <i class="uil uil-save me-1"></i>Als Vorlage speichern
-                            </button>
-                        </div>
-                        <div v-else class="d-flex gap-2 align-items-center">
-                            <input type="text" class="form-control form-control-sm" v-model="templateName"
-                                placeholder="Vorlagen-Name (z.B. Cyberpunk Bull)" style="max-width: 300px;"
-                                @keyup.enter="saveAsTemplate" />
-                            <button class="btn btn-sm btn-warning" @click="saveAsTemplate" :disabled="savingTemplate || !templateName.trim()">
-                                <span v-if="savingTemplate" class="spinner-border spinner-border-sm me-1"></span>
-                                <i v-else class="uil uil-save me-1"></i>Speichern
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary" @click="showSaveForm = false">
-                                <i class="uil uil-times"></i>
-                            </button>
-                        </div>
-                    </div>
+                <div v-if="tradeSummary.tagNames?.length && showTags" class="tags">
+                    <Pille v-for="(tag, i) in tradeSummary.tagNames" :key="i" ton="neutral">{{ tag }}</Pille>
                 </div>
-                <!-- S12: Pflichthinweis zum Bild-Anbieter (Texte aus kiHinweis.anbieter, wie in den Einstellungen). -->
-                <p v-if="!selectedTemplateId" class="small text-muted px-3 mb-0">
-                    {{ t(currentUser?.shareCardProvider === 'gemini' ? 'kiHinweis.anbieter.gemini' : 'kiHinweis.anbieter.flux') }}
-                </p>
-                <div class="modal-footer border-0 d-flex justify-content-between">
-                    <button class="btn btn-outline-secondary" @click="closeModal">
-                        {{ t('common.close') }}
-                    </button>
-                    <div class="d-flex gap-2">
-                        <button v-if="!selectedTemplateId" class="btn btn-primary" @click="generateShareCard" :disabled="generating">
-                            <span v-if="generating">
-                                <span class="spinner-border spinner-border-sm me-1"></span>
-                            </span>
-                            <i v-else class="uil uil-image me-1"></i>
-                            {{ generating ? t('daily.shareCardGenerating') : t('daily.shareCardGenerate') }}
-                        </button>
-                        <button v-if="generatedImage && !generating" class="btn btn-outline-info" @click="shareImage" :title="t('daily.shareCardEmail')">
-                            <i class="uil uil-share-alt"></i>
-                        </button>
-                        <button v-if="generatedImage && !generating" class="btn btn-success" @click="downloadImage">
-                            <i class="uil uil-download-alt me-1"></i>{{ t('daily.shareCardDownload') }}
-                        </button>
+                <div class="werte">
+                    <div>
+                        <span class="name">PnL</span>
+                        <span :class="['at-fett', tradeSummary.isWin ? 'at-gut' : 'at-schlecht']">{{ tradeSummary.pnlPercent }}</span>
+                        <span :class="['klein', tradeSummary.isWin ? 'at-gut' : 'at-schlecht']">{{ tradeSummary.pnlAmount }}</span>
+                    </div>
+                    <div>
+                        <span class="name">{{ t('daily.entry') }}</span>
+                        <span>{{ tradeSummary.entryPrice }}</span>
+                    </div>
+                    <div>
+                        <span class="name">{{ t('daily.colExit') }}</span>
+                        <span>{{ tradeSummary.exitPrice }}</span>
+                    </div>
+                    <div v-if="tradeSummary.leverage" class="hebel">
+                        <span class="name">{{ t('daily.leverage') }}</span>
+                        <span class="at-fett">{{ tradeSummary.leverage }}</span>
                     </div>
                 </div>
             </div>
+
+            <!-- Hintergrund-Auswahl -->
+            <div v-if="templates.length > 0" class="feld">
+                <span class="at-label"><Symbol name="ebenen" /> {{ t('daily.shareCardHintergrund') }}</span>
+                <div class="hgReihe">
+                    <!-- Eigenes Dropdown statt <select>: native <option>s können kein
+                         farbiges Gewinn/Verlust-Abzeichen tragen. Die Tastatursteuerung,
+                         die ein <select> kostenlos mitbringt, ist deshalb von Hand
+                         nachgebaut (Pfeiltasten, Enter/Leertaste, Escape). -->
+                    <button ref="hgKnopfEl" type="button" class="at-feld hgKnopf" :disabled="generating"
+                        aria-haspopup="listbox" :aria-expanded="hgOffen" @click="hgOffen = !hgOffen">
+                        <template v-if="selectedTemplate">
+                            <span class="at-kuerzen">{{ selectedTemplate.name }}</span>
+                            <Pille v-if="selectedTemplate.category" :ton="selectedTemplate.category === 'win' ? 'gut' : 'schlecht'">
+                                {{ useVorlagenKategorieLabel(selectedTemplate.category) }}
+                            </Pille>
+                        </template>
+                        <span v-else>{{ t('daily.shareCardNeu') }}</span>
+                        <Symbol name="runter" class="pfeil" />
+                    </button>
+                    <template v-if="hgOffen">
+                        <div class="hgHinter" @click="hgOffen = false"></div>
+                        <div ref="hgWahlEl" class="hgWahl" role="listbox" @keydown="hgWahlKeydown">
+                            <div class="hgZeile" role="option" tabindex="0" :aria-selected="!selectedTemplateId"
+                                :class="{ hgAktiv: !selectedTemplateId }"
+                                @click="hgWaehlen(null)" @keydown.enter.prevent="hgWaehlen(null)" @keydown.space.prevent="hgWaehlen(null)">
+                                {{ t('daily.shareCardNeu') }}
+                            </div>
+                            <div v-for="tpl in filteredTemplates" :key="tpl.id" class="hgZeile" role="option" tabindex="0"
+                                :aria-selected="String(selectedTemplateId) === String(tpl.id)"
+                                :class="{ hgAktiv: String(selectedTemplateId) === String(tpl.id) }"
+                                @click="hgWaehlen(tpl.id)" @keydown.enter.prevent="hgWaehlen(tpl.id)" @keydown.space.prevent="hgWaehlen(tpl.id)">
+                                <span class="at-kuerzen">{{ tpl.name }}</span>
+                                <Pille v-if="tpl.category" :ton="tpl.category === 'win' ? 'gut' : 'schlecht'">{{ useVorlagenKategorieLabel(tpl.category) }}</Pille>
+                            </div>
+                        </div>
+                    </template>
+                    <Knopf v-if="selectedTemplateId" art="gefahr" klein nur-symbol symbol="papierkorb"
+                        :titel="t('daily.shareCardVorlageLoeschen')" :disabled="deletingTemplateId === selectedTemplateId"
+                        @click="deleteTemplate(selectedTemplateId)" />
+                </div>
+            </div>
+
+            <!-- Optionen -->
+            <div class="optionen">
+                <label class="at-check schalter">
+                    <input v-model="hidePnlAmount" type="checkbox" :disabled="generating" /> {{ t('daily.shareCardHidePrices') }}
+                </label>
+                <label v-if="tradeSummary.tagNames?.length" class="at-check schalter">
+                    <input v-model="showTags" type="checkbox" :disabled="generating" /> {{ t('daily.shareCardShowTags') }}
+                </label>
+                <label v-if="tradeSummary.rrr" class="at-check schalter">
+                    <input v-model="showRrr" type="checkbox" :disabled="generating" /> RRR
+                </label>
+            </div>
+
+            <!-- Prompt (nur bei „Neu generieren") -->
+            <div v-if="!selectedTemplateId" class="feld">
+                <label class="at-label" for="share-prompt"><Symbol name="stift" /> {{ t('daily.shareCardPrompt') }}</label>
+                <textarea id="share-prompt" v-model="promptText" class="at-feld prompt" rows="5" :disabled="generating"></textarea>
+            </div>
+
+            <!-- Kommentar -->
+            <div class="feld">
+                <label class="at-label" for="share-kommentar"><Symbol name="nachricht" /> {{ t('daily.shareCardComment') }}</label>
+                <input id="share-kommentar" v-model="commentText" type="text" class="at-feld" :disabled="generating"
+                    maxlength="130" :placeholder="t('daily.shareCardCommentHint')" />
+            </div>
+
+            <Hinweis v-if="error" art="fehler">{{ error }}</Hinweis>
+
+            <div v-if="generating" class="erzeugt">
+                <Kreisel :groesse="40" />
+                <p class="at-gedaempft">{{ t('daily.shareCardGenerating') }}</p>
+                <small class="at-gedaempft">~10–30 s</small>
+            </div>
+
+            <div v-if="generatedImage && !generating" class="vorschau" data-ki-generiert="true">
+                <img :src="generatedImage" :alt="t('kiHinweis.bild')" />
+                <!-- S12: das Label steht auch IM Bild und in den PNG-Metadaten (shareCardBild.js). -->
+                <KiHinweis />
+            </div>
+
+            <!-- Als Vorlage speichern (nur nach neu erzeugtem Bild) -->
+            <div v-if="generatedImage && !generating && lastBackgroundBase64 && !selectedTemplateId">
+                <Knopf v-if="!showSaveForm" klein symbol="speichern" @click="showSaveForm = true">{{ t('daily.shareCardAlsVorlage') }}</Knopf>
+                <div v-else class="vorlageForm">
+                    <input v-model="templateName" type="text" class="at-feld" :placeholder="t('daily.shareCardVorlageName')"
+                        @keyup.enter="saveAsTemplate" />
+                    <Knopf art="haupt" klein symbol="speichern" :laedt="savingTemplate" :disabled="!templateName.trim()"
+                        @click="saveAsTemplate">{{ t('common.save') }}</Knopf>
+                    <Knopf art="leise" klein nur-symbol symbol="schliessen" :titel="t('common.close')" @click="showSaveForm = false" />
+                </div>
+            </div>
+            <!-- S12: Pflichthinweis zum Bild-Anbieter (Texte aus kiHinweis.anbieter, wie in den Einstellungen). -->
+            <p v-if="!selectedTemplateId" class="at-klein anbieterHinweis">
+                {{ t(currentUser?.shareCardProvider === 'gemini' ? 'kiHinweis.anbieter.gemini' : 'kiHinweis.anbieter.flux') }}
+            </p>
         </div>
-    </div>
+
+        <template #fuss>
+            <div class="fuss">
+                <Knopf @click="closeModal">{{ t('common.close') }}</Knopf>
+                <div class="fussRechts">
+                    <Knopf v-if="!selectedTemplateId" art="haupt" symbol="bild" :laedt="generating" @click="generateShareCard">
+                        {{ generating ? t('daily.shareCardGenerating') : t('daily.shareCardGenerate') }}
+                    </Knopf>
+                    <Knopf v-if="generatedImage && !generating" nur-symbol symbol="teilen" :titel="t('daily.shareCardEmail')" @click="shareImage" />
+                    <Knopf v-if="generatedImage && !generating" symbol="herunterladen" @click="downloadImage">{{ t('daily.shareCardDownload') }}</Knopf>
+                </div>
+            </div>
+        </template>
+    </Dialog>
 </template>
 
 <style scoped>
-/* Eigenes Hintergrund-Dropdown, gleiche Machart wie `.divWahl*` in
-   Settings.vue: die Modal-Box selbst hat z-index 1070, deshalb hier höher.
-   Kasten- und Zeilen-Optik kommen aus den geteilten `.floatDropdown*`-Klassen
-   in style-dark.css — hier nur, was an DIESER Stelle abweicht: Position und
-   Grösse hängen vom umgebenden Modal ab, nicht vom Dropdown-Inhalt. */
-.hgKnopf {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.share {
+    display: flex;
+    flex-direction: column;
+    gap: var(--abstand-4);
+    min-width: 0;
 }
 
+.zusammenfassung {
+    display: flex;
+    flex-direction: column;
+    gap: var(--abstand-2);
+    padding: var(--abstand-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+}
+
+.kopfzeile,
+.tags {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.symbol {
+    font-size: 1.15rem;
+    font-weight: 700;
+}
+
+.werte {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-3) var(--abstand-5);
+}
+
+.werte > div {
+    display: flex;
+    flex-direction: column;
+    font-variant-numeric: tabular-nums;
+}
+
+.werte .hebel {
+    margin-left: auto;
+    text-align: center;
+}
+
+.name {
+    font-size: 0.75rem;
+    color: var(--muted);
+}
+
+.klein {
+    font-size: 0.82rem;
+}
+
+.feld {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.at-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.hgReihe {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.hgKnopf {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    max-width: 22rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.hgKnopf .pfeil {
+    margin-left: auto;
+    color: var(--muted);
+}
+
+/* Fangfläche für den Klick daneben; innerhalb des <dialog> genügt ein lokaler Stapel */
 .hgHinter {
     position: fixed;
     inset: 0;
-    z-index: 1080;
+    z-index: 1;
 }
 
 .hgWahl {
     position: absolute;
-    z-index: 1090;
+    z-index: 2;
     top: calc(100% + 0.25rem);
     left: 0;
     width: 100%;
-    max-width: 350px;
+    max-width: 22rem;
+    max-height: 16rem;
+    overflow-y: auto;
+    padding: 0.25rem;
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    background: var(--panel);
+    box-shadow: var(--schatten);
+}
+
+.hgZeile {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--radius-klein);
+    cursor: pointer;
+}
+
+.hgZeile:hover,
+.hgZeile:focus-visible {
+    outline: none;
+    background: var(--panel-soft);
 }
 
 .hgZeile.hgAktiv {
-    background: var(--blue-color, #4da3ff);
-    color: white;
+    background: var(--accent-flaeche);
+    color: var(--accent);
 }
+
+.optionen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2) var(--abstand-4);
+}
+
+.prompt {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.erzeugt {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--abstand-2);
+    padding: var(--abstand-6) 0;
+}
+
+.erzeugt p {
+    margin: 0;
+}
+
+.vorschau {
+    text-align: center;
+}
+
+.vorschau img {
+    max-width: 100%;
+    max-height: 500px;
+    border-radius: var(--radius-knopf);
+}
+
+.vorlageForm {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.vorlageForm .at-feld {
+    flex: 1 1 12rem;
+    max-width: 20rem;
+}
+
+.fuss {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--abstand-2);
+}
+
+.fussRechts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+}
+.anbieterHinweis { color: var(--muted); margin: 0; }
 </style>

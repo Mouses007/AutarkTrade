@@ -1,163 +1,339 @@
 <script setup>
-import { selectedItem, modalDailyTradeOpen, pageId, kopiertesBild } from '../stores/ui.js';
-import { tags } from '../stores/trades.js';
-import { useSetupMarkerArea, useSelectedScreenshotFunction } from '../utils/screenshots';
-import { useHourMinuteFormat, useTimeFormat, useCreatedDateFormat } from '../utils/journal/format.js';
-import { useEditItem } from '../utils/journal/app.js';
-import { useGetTagInfo } from '../utils/journal/tagebuch.js';
-
-
-import { ref } from 'vue'
+/**
+ * Bildkarte eines Screenshots (Spec S.5): Kopf, Infozeile mit Tags,
+ * Werkzeuge (Vergrössern, Markieren, Kopieren, Löschen) und das Bild.
+ *
+ * Anzeige: `annotatedBase64` ist seit dem Neubau das vollständige Bild
+ * (Original + eingebrannte Markierung). Altzeilen, deren `annotatedBase64` nur
+ * die transparente Markierungsebene von markerjs2 enthält (`markersOnly` = 1
+ * und vom Original verschieden), zeigt die Karte weiter als Original + Ebene,
+ * bis sie neu markiert und damit eingebrannt werden.
+ *
+ * „Bearbeiten“ gibt es nicht mehr (A-S5): es lud nur die Seite neu.
+ */
+import { ref, computed, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
+import Symbol from './basis/Symbol.vue'
+import { tags } from '../stores/journal/tagebuch.js'
+import { kopiertesBild, selectedItem } from '../stores/app/rahmen.js'
+import { useSelectedScreenshotFunction, useSetupMarkerArea, useDeleteScreenshot } from '../utils/screenshots.js'
+import { useCreatedDateFormat, useTimeFormat, useHourMinuteFormat } from '../utils/journal/format.js'
+import { useGetTagInfo } from '../utils/journal/tagebuch.js'
+import { ladeBild } from '../utils/bildmarkierung.js'
 
 const props = defineProps({
-    screenshotData: Object,
-    showTitle: Boolean,
-    source: String,
-    index: Number
+    screenshotData: { type: Object, default: () => ({}) },
+    /** Altbestand, ungenutzt — bleibt, weil Aufrufer es setzen dürfen. */
+    showTitle: { type: Boolean, default: false },
+    source: { type: String, default: 'screenshots' },
+    index: { type: Number, default: undefined },
 })
 
-// Kopieren/Speichern: das (annotierte) Bild als Datei bzw. in die Zwischenablage,
-// damit man es in der Trade-Bewertung (Playbook) per Strg/Cmd+V einfügen kann.
-const kopierStatus = ref('')  // '' | 'ok' | 'fehler'
+const { t } = useI18n()
 
-function bildDatenUrl() {
-    return props.screenshotData?.annotatedBase64 || props.screenshotData?.originalBase64 || ''
+const d = computed(() => props.screenshotData || {})
+const hatId = computed(() => d.value.objectId != null && d.value.objectId !== '')
+const bildId = computed(() => `screenshotDiv-${props.source}-${hatId.value ? d.value.objectId : d.value.dateUnix}`)
+
+/** Alte Markierungsebene über dem Original? (siehe Kopfkommentar) */
+const istEbene = computed(() => {
+    const x = d.value
+    const alt = x.markersOnly === 1 || x.markersOnly === true || x.markersOnly === '1'
+    return alt && !!x.originalBase64 && !!x.annotatedBase64 && x.annotatedBase64 !== x.originalBase64
+})
+const grundbild = computed(() => (istEbene.value ? d.value.originalBase64 : (d.value.annotatedBase64 || d.value.originalBase64 || '')))
+
+const mitInfo = computed(() => !['addScreenshot', 'dailyModal'].includes(props.source))
+const mitWerkzeug = computed(() => props.source !== 'fullScreen')
+const kurz = computed(() => d.value.side === 'SS' || d.value.side === 'BC' || d.value.side === 'short')
+const zeit = computed(() => {
+    if (d.value.dateUnix == null) return ''
+    return d.value.side ? useTimeFormat(d.value.dateUnix) : useHourMinuteFormat(d.value.dateUnix)
+})
+
+const bildTags = computed(() => {
+    const zeile = tags.find(x => x.tradeId === d.value.name)
+    const ids = Array.isArray(zeile?.tags) ? zeile.tags : []
+    return {
+        sichtbar: ids.slice(0, 2).map(id => {
+            const info = useGetTagInfo(id)
+            return { id, name: info.tagName, farbe: info.groupColor }
+        }),
+        mehr: Math.max(0, ids.length - 2),
+    }
+})
+
+// ── Werkzeuge ──
+
+function vergroessern() {
+    if (!hatId.value || props.source === 'addScreenshot') return
+    useSelectedScreenshotFunction(props.index, props.source, d.value)
 }
 
-// Data-URL (auch JPEG) über ein Canvas nach PNG wandeln — die Zwischenablage
-// akzeptiert bei Bildern nur PNG.
-function alsPngBlob(dataUrl) {
-    return new Promise((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => {
-            const c = document.createElement('canvas')
-            c.width = img.naturalWidth
-            c.height = img.naturalHeight
-            c.getContext('2d').drawImage(img, 0, 0)
-            c.toBlob(b => b ? resolve(b) : reject(new Error('toBlob leer')), 'image/png')
-        }
-        img.onerror = reject
-        img.src = dataUrl
-    })
+function markieren() {
+    useSetupMarkerArea(props.source, d.value)
 }
 
-async function inZwischenablage() {
-    const url = bildDatenUrl()
-    if (!url) return
-    // App-interne Zwischenablage füllen — funktioniert IMMER (auch über HTTP).
-    // Nur die ID merken (+ sessionStorage, übersteht den Seitenwechsel); das
-    // Bild holt das Playbook beim Einfügen frisch aus der DB.
-    const merk = { objectId: props.screenshotData?.objectId, name: props.screenshotData?.name || 'screenshot' }
+// Kopieren
+const kopierStatus = ref('') // '' | 'ok'
+let kopierUhr = null
+
+/** Bilder übereinander in ein PNG — die System-Zwischenablage nimmt nur PNG. */
+async function alsPng(urls) {
+    const bilder = []
+    for (const url of urls) bilder.push(await ladeBild(url))
+    const canvas = document.createElement('canvas')
+    canvas.width = bilder[0].naturalWidth
+    canvas.height = bilder[0].naturalHeight
+    const ctx = canvas.getContext('2d')
+    for (const b of bilder) ctx.drawImage(b, 0, 0, canvas.width, canvas.height)
+    return new Promise((ok, fehler) => canvas.toBlob(b => (b ? ok(b) : fehler(new Error('PNG fehlgeschlagen'))), 'image/png'))
+}
+
+async function kopieren() {
+    const quelle = d.value.annotatedBase64 || d.value.originalBase64
+    if (!quelle) return
+    // App-interne Ablage: nur die Kennung; wer einfügt, holt das Bild frisch aus der DB.
+    const merk = { objectId: d.value.objectId, name: d.value.name || 'screenshot' }
     kopiertesBild.value = merk
-    try { sessionStorage.setItem('kopiertesBild', JSON.stringify(merk)) } catch (e) { /* ignore */ }
+    try { sessionStorage.setItem('kopiertesBild', JSON.stringify(merk)) } catch { /* egal */ }
     kopierStatus.value = 'ok'
-    // Bonus: zusätzlich die Browser-Zwischenablage versuchen (nur HTTPS/localhost).
-    try {
-        if (navigator.clipboard && window.ClipboardItem && window.isSecureContext) {
-            const blob = await alsPngBlob(url)
+    clearTimeout(kopierUhr)
+    kopierUhr = setTimeout(() => { kopierStatus.value = '' }, 1500)
+    if (typeof navigator !== 'undefined' && navigator.clipboard && typeof ClipboardItem !== 'undefined' && window.isSecureContext) {
+        try {
+            const urls = istEbene.value ? [d.value.originalBase64, d.value.annotatedBase64] : [quelle]
+            const blob = await alsPng(urls)
             await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })])
-        }
-    } catch (e) { /* egal — die App-interne Ablage reicht */ }
-    setTimeout(() => { kopierStatus.value = '' }, 1500)
+        } catch { /* System-Zwischenablage ist eine Zugabe — still */ }
+    }
 }
 
+// Löschen mit Rückfrage an Ort und Stelle (ersetzt das Bootstrap-Popover).
+const fragtLoeschen = ref(false)
+const loescht = ref(false)
+
+function loeschenFragen() {
+    selectedItem.value = d.value.objectId
+    fragtLoeschen.value = true
+}
+async function loeschenJa() {
+    loescht.value = true
+    selectedItem.value = d.value.objectId
+    try { await useDeleteScreenshot() } finally {
+        loescht.value = false
+        fragtLoeschen.value = false
+    }
+}
+function loeschenNein() {
+    selectedItem.value = null
+    fragtLoeschen.value = false
+}
+
+onBeforeUnmount(() => clearTimeout(kopierUhr))
 </script>
 
 <template>
-    <div class="row">
-        <!-- HEADER / DATE & INFO -->
-        <div v-if="props.source == 'fullScreen' || props.source == 'screenshots'" class="col-12 cardFirstLine">
-            <div class="row">
-                <div class="col">
-                    <h5>{{ useCreatedDateFormat(props.screenshotData.dateUnix) }}</h5>
-                </div>
-                <div v-if="props.source == 'fullScreen'" class="col me-auto text-end" data-bs-theme="dark">
-                    <button v-if="!modalDailyTradeOpen" type="button" class="btn-close" data-bs-dismiss="modal"
-                        aria-label="Close"></button>
-                    <button v-if="modalDailyTradeOpen" type="button" class="btn-close" data-bs-target="#tradesModal"
-                        data-bs-toggle="modal"></button>
+    <div class="sk" :class="'q-' + source">
+        <div v-if="source === 'screenshots' && d.dateUnix != null" class="kopf">
+            {{ useCreatedDateFormat(d.dateUnix) }}
+        </div>
+
+        <div v-if="mitInfo || mitWerkzeug" class="zeile">
+            <div v-if="mitInfo" class="info">
+                <span class="symbol">{{ d.symbol }}</span>
+                <span v-if="d.side" class="seite" :class="kurz ? 'at-schlecht' : 'at-gut'">{{ kurz ? t('nav.short') : t('nav.long') }}</span>
+                <span v-if="zeit" class="at-gedaempft">{{ zeit }}</span>
+                <span v-for="tag in bildTags.sichtbar" :key="tag.id" class="tag" :style="{ '--tagfarbe': tag.farbe }">{{ tag.name }}</span>
+                <span v-if="bildTags.mehr" class="tag mehr">+{{ bildTags.mehr }}</span>
+            </div>
+
+            <div v-if="mitWerkzeug" class="werkzeuge">
+                <template v-if="!fragtLoeschen">
+                    <button v-if="hatId && source !== 'addScreenshot'" type="button" class="wz" :title="t('common.enlarge')"
+                        :aria-label="t('common.enlarge')" @click="vergroessern">
+                        <Symbol name="vergroessern" :groesse="17" />
+                    </button>
+                    <button type="button" class="wz" :title="t('screenshots.markieren')" :aria-label="t('screenshots.markieren')" @click="markieren">
+                        <Symbol name="stift" :groesse="17" />
+                    </button>
+                    <button v-if="hatId" type="button" class="wz" :class="{ ok: kopierStatus === 'ok' }"
+                        :title="kopierStatus === 'ok' ? t('screenshots.kopiert') : t('screenshots.kopieren')"
+                        :aria-label="kopierStatus === 'ok' ? t('screenshots.kopiert') : t('screenshots.kopieren')" @click="kopieren">
+                        <Symbol :name="kopierStatus === 'ok' ? 'haken' : 'kopieren'" :groesse="17" />
+                    </button>
+                    <button v-if="hatId && source !== 'addScreenshot'" type="button" class="wz gefahr" :title="t('screenshots.loeschen')"
+                        :aria-label="t('screenshots.loeschen')" @click="loeschenFragen">
+                        <Symbol name="papierkorb" :groesse="17" />
+                    </button>
+                </template>
+                <div v-else class="frage" role="alertdialog" :aria-label="t('screenshots.loeschenFrage')">
+                    <span class="at-klein">{{ t('screenshots.loeschenFrage') }}</span>
+                    <button type="button" class="antwort ja" :disabled="loescht" @click="loeschenJa">{{ t('screenshots.ja') }}</button>
+                    <button type="button" class="antwort" :disabled="loescht" @click="loeschenNein">{{ t('screenshots.nein') }}</button>
                 </div>
             </div>
         </div>
 
-        <!-- SUB HEADER -->
-        <div class="col-12 mt-2">
-            <div class="row">
-
-                <!-- Left: info -->
-                <div v-if="props.source != 'addScreenshot' && props.source != 'dailyModal'" class="col-6">
-                    <span>{{ props.screenshotData.symbol }}</span><span v-if="props.screenshotData.side"
-                        class="col mt-1">
-                        | {{ props.screenshotData.side == 'SS' || props.screenshotData.side == 'BC' ? 'Short' :
-            'Long' }}
-                        | {{ useTimeFormat(props.screenshotData.dateUnix) }}</span>
-                    <span v-else class="col mb-2"> | {{
-            useHourMinuteFormat(props.screenshotData.dateUnix)
-        }}</span>
-
-
-                    <span v-for="tags in tags.filter(obj => obj.tradeId == props.screenshotData.name)"><span
-                            v-if="tags.tags.length > 0"> | <span v-for="tag in tags.tags.slice(0, 2)"
-                                class="tag txt-small" :style="{ 'background-color': useGetTagInfo(tag).groupColor }">{{
-            useGetTagInfo(tag).tagName }}
-                            </span>
-                            <span v-show="tags.tags.length > 2">+{{
-            tags.tags.length
-            - 2 }}</span></span></span>
-
-                </div>
-
-                <!-- Right: tools -->
-                <div v-if="props.source != 'fullScreen'"
-                    :class="[props.source == 'addScreenshot' || props.source == 'dailyModal' ? 'offset-6' : '', 'col-6 text-end']">
-
-                    <!-- Expand / fullScreen screen -->
-                    <i v-if="props.screenshotData.objectId && props.source != 'addScreenshot'"
-                        class="uil uil-expand-arrows-alt pointerClass me-3" data-bs-toggle="modal"
-                        data-bs-target="#fullScreenModal"
-                        v-on:click="useSelectedScreenshotFunction(props.index, props.source, props.screenshotData)"></i>
-
-                    <!-- Annotate -->
-                    <i class="uil uil-image-edit pointerClass me-3"
-                        v-on:click="useSetupMarkerArea(props.source, props.screenshotData)"></i>
-
-                    <!-- In Zwischenablage kopieren (zum Einfügen in die Trade-Bewertung) -->
-                    <i v-if="props.screenshotData.objectId"
-                        :class="['uil', 'pointerClass', 'me-3', kopierStatus === 'ok' ? 'uil-check text-success' : kopierStatus === 'fehler' ? 'uil-times text-danger' : 'uil-copy']"
-                        :title="kopierStatus === 'ok' ? 'Kopiert!' : 'In Zwischenablage kopieren'"
-                        v-on:click="inZwischenablage()"></i>
-
-                    <!-- Edit -->
-                    <i v-if="props.source == 'screenshots'" class="uil uil-edit-alt pointerClass me-4"
-                        v-on:click="useEditItem(props.screenshotData.objectId)"></i>
-
-                    <!-- Delete -->
-                    <i v-if="props.screenshotData.objectId && props.source != 'addScreenshot'"
-                        v-on:click="selectedItem = props.screenshotData.objectId"
-                        class="ps-2 uil uil-trash-alt popoverDelete pointerClass" data-bs-html="true"
-                        data-bs-content="<div>Are you sure?</div><div class='text-center'><a type='button' class='btn btn-red btn-sm popoverYes'>Yes</a><a type='button' class='btn btn-outline-secondary btn-sm ms-2 popoverNo'>No</a></div>"
-                        data-bs-toggle="popover" data-bs-placement="left"></i>
-                </div>
-            </div>
+        <div class="bild" :class="{ klickbar: source === 'screenshots' && hatId }" @click="source === 'screenshots' && vergroessern()">
+            <img v-if="grundbild" :id="bildId" :src="grundbild" :alt="d.symbol || t('nav.screenshots')" loading="lazy" />
+            <img v-if="istEbene" class="ebene" :src="d.annotatedBase64" alt="" aria-hidden="true" />
         </div>
-
-    </div>
-
-    <!-- SCREENSHOTS -->
-    <div :class="[pageId === 'addScreenshot' ? 'imgContainerAddScreenshot' : 'imgContainer']">
-        <img :id="props.screenshotData.objectId ? 'screenshotDiv-' + props.source + '-' + props.screenshotData.objectId : 'screenshotDiv-' + props.source + '-' + props.screenshotData.dateUnix"
-            class="screenshotImg mt-3 img-fluid" v-bind:src="props.screenshotData.originalBase64" />
-        <img class="overlayImg screenshotImg mt-3 img-fluid" v-bind:src="props.screenshotData.annotatedBase64" />
-
-        <!--<img v-if="props.screenshotData.markersOnly" :id="props.screenshotData.objectId ? 'screenshotDiv-' + props.source + '-' + props.screenshotData.objectId : 'screenshotDiv-' + props.source + '-' + props.screenshotData.dateUnix" class="screenshotImg mt-3 img-fluid" v-bind:src="props.screenshotData.originalBase64" />
-
-        <img :id="!props.screenshotData.markersOnly ? props.screenshotData.objectId ? 'screenshotDiv-' + props.source + '-' + props.screenshotData.objectId : 'screenshotDiv-' + props.source + '-' + props.screenshotData.dateUnix : ''"
-            v-bind:class="[props.screenshotData.markersOnly ? 'overlayImg' : '', 'screenshotImg mt-3 img-fluid']"
-            v-bind:src="props.screenshotData.annotatedBase64" />-->
-
-        <!--<img v-if="props.screenshotData.markersOnly" class="screenshotImg mt-3 img-fluid"
-            v-bind:src="props.screenshotData.originalBase64" />
-        <img v-bind:class="[props.screenshotData.markersOnly ? 'overlayImg' : '', 'screenshotImg mt-3 img-fluid']"
-            v-bind:src="props.screenshotData.annotatedBase64" />-->
     </div>
 </template>
+
+<style scoped>
+.sk {
+    display: flex;
+    flex-direction: column;
+    gap: var(--abstand-2);
+    min-width: 0;
+}
+
+.kopf {
+    font-weight: 600;
+    color: var(--text);
+}
+
+.zeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--abstand-2);
+}
+
+.info {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-1) var(--abstand-2);
+    min-width: 0;
+    font-size: 0.9rem;
+}
+
+.symbol {
+    font-weight: 600;
+}
+
+.tag {
+    padding: 0.05rem 0.5rem;
+    border-radius: var(--radius-pille);
+    background: var(--tagfarbe, var(--panel-hoch));
+    color: var(--text);
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+.tag.mehr {
+    background: var(--panel-hoch);
+    color: var(--muted);
+}
+
+.werkzeuge {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-1);
+    margin-left: auto;
+}
+
+.wz {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: 1px solid transparent;
+    border-radius: var(--radius-knopf);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.wz:hover {
+    color: var(--accent);
+    border-color: var(--line);
+    background: var(--panel-soft);
+}
+
+.wz.ok {
+    color: var(--good);
+}
+
+.wz.gefahr:hover {
+    color: var(--bad);
+}
+
+.frage {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.antwort {
+    padding: 0.2rem 0.7rem;
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.antwort.ja {
+    border-color: var(--bad);
+    color: var(--bad);
+}
+
+.antwort:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.bild {
+    position: relative;
+    line-height: 0;
+    border-radius: var(--radius-klein);
+    overflow: hidden;
+}
+
+.bild img {
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+.bild .ebene {
+    /* Gleiche Grössenregeln wie das Grundbild (gleiches Seitenverhältnis) → deckungsgleich. */
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+/* Kachel auf der Seite: Bildbereich höchstens 250 px, Überlauf abgeschnitten. */
+.q-screenshots .bild {
+    max-height: 250px;
+}
+
+.klickbar {
+    cursor: zoom-in;
+}
+
+/* Vollbild: ganzes Bild, so gross wie das Fenster erlaubt. */
+.q-fullScreen .bild {
+    display: flex;
+    justify-content: center;
+    background: var(--bg);
+}
+
+.q-fullScreen .bild img {
+    width: auto;
+    max-width: 100%;
+    max-height: calc(100dvh - 12rem);
+}
+
+.q-fullScreen .bild .ebene {
+    left: 50%;
+    transform: translateX(-50%);
+}
+</style>

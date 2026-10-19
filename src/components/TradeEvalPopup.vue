@@ -1,147 +1,151 @@
-<template>
-    <div class="modal fade" id="evalPopupModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
-            <div class="modal-content">
-
-                <!-- Header -->
-                <div class="modal-header border-bottom-0 pb-1">
-                    <h5 class="modal-title">
-                        <i class="uil uil-bell me-2"></i>{{ t('incoming.newTradeEvals') }}
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" @click="dismissPopup"
-                        :aria-label="t('common.close')"></button>
-                </div>
-
-                <!-- Body -->
-                <div class="modal-body pt-1">
-                    <div class="eval-counts">
-                        <div v-if="evalNeu.oeffnung.anzahl > 0" class="mb-2">
-                            <div class="d-flex align-items-center mb-1">
-                                <span class="eval-dot eval-dot-opening me-2"></span>
-                                <span>{{ evalNeu.oeffnung.anzahl }} {{ evalNeu.oeffnung.anzahl > 1 ? t('incoming.openingEvaluations') : t('incoming.openingEvaluation') }}</span>
-                            </div>
-                            <div class="broker-breakdown">
-                                <span v-for="(cnt, broker) in evalNeu.oeffnung.jeBroker" :key="'o_' + broker" class="broker-chip">
-                                    {{ brokerLabel(broker) }} <strong>{{ cnt }}</strong>
-                                </span>
-                            </div>
-                        </div>
-                        <div v-if="evalNeu.schluss.anzahl > 0" class="mb-2">
-                            <div class="d-flex align-items-center mb-1">
-                                <span class="eval-dot eval-dot-closing me-2"></span>
-                                <span>{{ evalNeu.schluss.anzahl }} {{ evalNeu.schluss.anzahl > 1 ? t('incoming.closingEvaluations') : t('incoming.closingEvaluation') }}</span>
-                            </div>
-                            <div class="broker-breakdown">
-                                <span v-for="(cnt, broker) in evalNeu.schluss.jeBroker" :key="'c_' + broker" class="broker-chip">
-                                    {{ brokerLabel(broker) }} <strong>{{ cnt }}</strong>
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Footer -->
-                <div class="modal-footer border-top-0 pt-0">
-                    <button type="button" class="btn btn-primary btn-sm w-100" @click="goToIncoming">
-                        <i class="uil uil-arrow-circle-down me-1"></i>{{ t('incoming.goToPendingTrades') }}
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script setup>
-import { watch, onMounted, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+/**
+ * Hinweis auf neue Trade-Bewertungen (Spezifikation ansichten.md X.1–X.4).
+ *
+ * `utils/incoming.js` füllt `evalNeu` mit den noch nie gemeldeten Positionen
+ * und setzt `evalNotificationShown`/`evalNotificationDismissed`. Früher hing
+ * das Öffnen allein am Wechsel von `evalNotificationShown` — das wird aber nie
+ * wieder falsch, also erschien nach dem ersten Popup einer Seitenlebenszeit
+ * keins mehr. Jetzt wird auf „nicht verworfen UND etwas Neues" beobachtet;
+ * jede neue Meldung bringt ein neues `evalNeu`-Objekt und damit ein neues
+ * Popup.
+ *
+ * Nativer <dialog> über den Baustein `Dialog` — kein Bootstrap-Objekt, das
+ * ohne CDN fehlte und das Einhängen werfen liess.
+ */
+import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { evalNeu, evalNotificationShown, evalNotificationDismissed } from '../stores/trades.js'
+import Dialog from '@/components/basis/Dialog.vue'
+import Knopf from '@/components/basis/Knopf.vue'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 
-const BROKER_LABELS = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
-function brokerLabel(b) {
-    return BROKER_LABELS[b] || (b ? b.charAt(0).toUpperCase() + b.slice(1) : '—')
-}
-let modalInstance = null
+const offen = ref(false)
 
-onMounted(() => {
-    modalInstance = new bootstrap.Modal('#evalPopupModal')
+const oeffnung = computed(() => evalNeu.value?.oeffnung || { anzahl: 0, jeBroker: {} })
+const schluss = computed(() => evalNeu.value?.schluss || { anzahl: 0, jeBroker: {} })
+const etwasNeues = computed(() => oeffnung.value.anzahl > 0 || schluss.value.anzahl > 0)
 
-    // When modal is hidden externally (e.g., backdrop click), mark as dismissed
-    document.getElementById('evalPopupModal').addEventListener('hidden.bs.modal', () => {
-        evalNotificationDismissed.value = true
-    })
-
-    // If notification already pending on mount, show it
-    if (evalNotificationShown.value && !evalNotificationDismissed.value && (evalNeu.value.oeffnung.anzahl > 0 || evalNeu.value.schluss.anzahl > 0)) {
-        nextTick(() => {
-            if (modalInstance) modalInstance.show()
-        })
-    }
-})
-
-// Watch for notification flag changes
-watch(evalNotificationShown, (shown) => {
-    if (shown && !evalNotificationDismissed.value && modalInstance) {
-        nextTick(() => {
-            modalInstance.show()
-        })
-    }
-})
-
-function dismissPopup() {
-    evalNotificationDismissed.value = true
-    if (modalInstance) modalInstance.hide()
+const NAMEN = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
+function brokerName(b) {
+    if (!b) return '—'
+    return NAMEN[b] || b.charAt(0).toUpperCase() + b.slice(1)
 }
 
-function goToIncoming() {
+watch([evalNotificationShown, evalNotificationDismissed, evalNeu], async () => {
+    if (evalNotificationShown.value && !evalNotificationDismissed.value && etwasNeues.value) {
+        await nextTick()
+        offen.value = true
+    }
+}, { immediate: true })
+
+/** Jede Art zu schliessen (×, Esc, Hintergrund) verwirft die Meldung. */
+function verworfen() {
     evalNotificationDismissed.value = true
-    if (modalInstance) modalInstance.hide()
+    offen.value = false
+}
+
+function zuDenTrades() {
+    verworfen()
     router.push('/incoming')
 }
 </script>
 
+<template>
+    <Dialog v-model="offen" :titel="t('incoming.newTradeEvals')" breite="26rem" @zu="verworfen">
+        <div class="te">
+            <div class="te-glocke"><Symbol name="glocke" :groesse="22" /></div>
+
+            <div v-if="oeffnung.anzahl > 0" class="te-block">
+                <div class="te-zeile">
+                    <span class="te-punkt akzent"></span>
+                    <span>{{ oeffnung.anzahl }} {{ oeffnung.anzahl > 1 ? t('incoming.openingEvaluations') : t('incoming.openingEvaluation') }}</span>
+                </div>
+                <div class="te-broker">
+                    <span v-for="(n, b) in oeffnung.jeBroker" :key="b" class="te-pille">{{ brokerName(b) }} <b>{{ n }}</b></span>
+                </div>
+            </div>
+
+            <div v-if="schluss.anzahl > 0" class="te-block">
+                <div class="te-zeile">
+                    <span class="te-punkt warn"></span>
+                    <span>{{ schluss.anzahl }} {{ schluss.anzahl > 1 ? t('incoming.closingEvaluations') : t('incoming.closingEvaluation') }}</span>
+                </div>
+                <div class="te-broker">
+                    <span v-for="(n, b) in schluss.jeBroker" :key="b" class="te-pille">{{ brokerName(b) }} <b>{{ n }}</b></span>
+                </div>
+            </div>
+        </div>
+        <template #fuss>
+            <Knopf art="haupt" symbol="pfeilRechts" class="te-knopf" @click="zuDenTrades">{{ t('incoming.goToPendingTrades') }}</Knopf>
+        </template>
+    </Dialog>
+</template>
+
 <style scoped>
-.eval-dot {
-    width: 10px;
-    height: 10px;
+.te {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+}
+
+.te-glocke {
+    display: inline-flex;
+    align-self: center;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
+    background: var(--accent-flaeche);
+    color: var(--accent);
 }
 
-.eval-dot-opening {
-    background-color: var(--blue-color, #4a9eff);
+.te-zeile {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
 }
 
-.eval-dot-closing {
-    background-color: #f0ad4e;
+.te-punkt {
+    width: 0.55rem;
+    height: 0.55rem;
+    border-radius: 50%;
+    flex: 0 0 auto;
 }
 
-.eval-counts {
-    font-size: 0.95rem;
-}
+.te-punkt.akzent { background: var(--accent); }
+.te-punkt.warn { background: var(--warn); }
 
-.broker-breakdown {
+.te-broker {
     display: flex;
     flex-wrap: wrap;
     gap: 0.35rem;
-    padding-left: 1.4rem;
+    margin: 0.4rem 0 0 1.05rem;
 }
 
-.broker-chip {
-    font-size: 0.78rem;
-    padding: 0.1rem 0.55rem;
-    border-radius: 999px;
-    background: var(--white-10, rgba(255, 255, 255, 0.08));
-    color: var(--white-70, rgba(255, 255, 255, 0.75));
-    border: 1px solid var(--white-10, rgba(255, 255, 255, 0.1));
+.te-pille {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pille);
+    background: var(--panel-soft);
+    color: var(--muted);
+    font-size: 0.8rem;
 }
 
-.broker-chip strong {
-    color: var(--white-87, rgba(255, 255, 255, 0.95));
-    margin-left: 0.15rem;
+.te-pille b {
+    color: var(--text);
+}
+
+.te-knopf {
+    width: 100%;
 }
 </style>

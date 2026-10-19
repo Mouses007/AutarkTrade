@@ -106,8 +106,14 @@ function messen() {
     pos.value = { top: kippt ? r.bottom + 8 : r.top - 8, left, kippt }
 }
 
+// Ein offenes natives <dialog> liegt in der obersten Ebene des Browsers —
+// eine an <body> gehängte Box läge darunter, egal welcher z-index. Liegt das
+// Symbol in einem Dialog, hängt die Box deshalb dort an (S8, Trade-Detail).
+const ziel = ref('body')
+
 function auf() {
     if (!zeigen.value) return
+    ziel.value = ausloeser.value?.closest('dialog[open]') || 'body'
     messen()
     offen.value = true
     // Eine feste Position, die beim Öffnen berechnet wurde, wandert mit, wenn
@@ -162,7 +168,7 @@ onBeforeUnmount(() => {
         @click.stop="tippen" @keydown.esc="zu">
         <Symbol name="info" />
 
-        <Teleport to="body">
+        <Teleport :to="ziel">
             <span v-if="offen" class="infoTippBox" :class="{ 'infoTippBox--breit': breit, 'infoTippBox--unten': pos.kippt }"
                 :style="{ top: pos.top + 'px', left: pos.left + 'px' }">{{ inhalt }}</span>
         </Teleport>

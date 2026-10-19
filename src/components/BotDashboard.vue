@@ -23,6 +23,12 @@ import {
     useXDecFormat, useTwoDecFormat
 } from '../utils/journal/format.js'
 import dayjs from '../utils/journal/zeit.js'
+import { useI18n } from 'vue-i18n'
+import { palette, mitDeckkraft, tooltipStil, schrift } from '../utils/journal/diagramme/gestaltung.js'
+import Karte from '@/components/basis/Karte.vue'
+import Symbol from '@/components/basis/Symbol.vue'
+
+const { t } = useI18n()
 
 // ===== Helpers =====
 
@@ -279,30 +285,35 @@ function renderCumChart() {
         acc += plUsd(t)
         return [dayjs.unix(t.exitTime || t.td).valueOf(), +acc.toFixed(2)]
     })
+    // Farben aus den Token (tokens.css), nicht als Literale: so trägt das
+    // Diagramm dieselbe Signalfarbe wie der Rest der Seite.
+    const p = palette()
     cumChart.setOption({
         backgroundColor: 'transparent',
+        textStyle: { fontFamily: p.schrift },
         grid: { left: 55, right: 20, top: 20, bottom: 30 },
         tooltip: {
             trigger: 'axis',
+            ...tooltipStil(p),
             valueFormatter: v => useTwoDecCurrencyFormat(v),
         },
         xAxis: {
             type: 'time',
-            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
-            axisLabel: { color: 'rgba(255,255,255,0.6)' },
+            axisLine: { lineStyle: { color: p.line } },
+            axisLabel: { ...schrift(p) },
         },
         yAxis: {
             type: 'value',
-            axisLabel: { color: 'rgba(255,255,255,0.6)', formatter: v => useThousandFormat(v) },
-            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+            axisLabel: { ...schrift(p), formatter: v => useThousandFormat(v) },
+            splitLine: { lineStyle: { color: p.gitter, type: 'dashed' } },
         },
         series: [{
             type: 'line', data, showSymbol: false, smooth: true,
-            lineStyle: { width: 2, color: '#3b82f6' },
+            lineStyle: { width: 2, color: p.accent },
             areaStyle: {
                 color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                    { offset: 0, color: 'rgba(59,130,246,0.35)' },
-                    { offset: 1, color: 'rgba(59,130,246,0.02)' },
+                    { offset: 0, color: mitDeckkraft(p.accent, 0.3) },
+                    { offset: 1, color: mitDeckkraft(p.accent, 0.02) },
                 ])
             },
         }],
@@ -313,27 +324,29 @@ function renderSymbolChart() {
     if (!symbolChartEl.value) return
     if (!symbolChart) symbolChart = echarts.init(symbolChartEl.value)
     const top = bySymbol.value.slice(0, 12)
+    const p = palette()
     symbolChart.setOption({
         backgroundColor: 'transparent',
+        textStyle: { fontFamily: p.schrift },
         grid: { left: 80, right: 20, top: 10, bottom: 25 },
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: v => useTwoDecCurrencyFormat(v) },
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...tooltipStil(p), valueFormatter: v => useTwoDecCurrencyFormat(v) },
         xAxis: {
             type: 'value',
-            axisLabel: { color: 'rgba(255,255,255,0.6)', formatter: v => useThousandFormat(v) },
-            splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+            axisLabel: { ...schrift(p), formatter: v => useThousandFormat(v) },
+            splitLine: { lineStyle: { color: p.gitter, type: 'dashed' } },
         },
         yAxis: {
             type: 'category',
             inverse: true,
             data: top.map(s => s.symbol),
-            axisLabel: { color: 'rgba(255,255,255,0.7)' },
-            axisLine: { lineStyle: { color: 'rgba(255,255,255,0.2)' } },
+            axisLabel: { ...schrift(p), color: p.text },
+            axisLine: { lineStyle: { color: p.line } },
         },
         series: [{
             type: 'bar',
             data: top.map(s => ({
                 value: +s.profit.toFixed(2),
-                itemStyle: { color: s.profit >= 0 ? '#22c55e' : '#ef4444', borderRadius: 3 },
+                itemStyle: { color: s.profit >= 0 ? p.goodBalken : p.badBalken, borderRadius: 3 },
             })),
             barMaxWidth: 18,
         }],
@@ -374,373 +387,469 @@ watch([allBots, amountCase], renderAll, { deep: false })
 </script>
 
 <template>
-    <div class="bot-dashboard">
-        <!-- Börse ohne Bot-Unterstützung → Coming soon -->
-        <div v-if="comingSoon" class="dailyCard text-center py-5">
-            <i class="uil uil-robot" style="font-size:2.5rem;opacity:0.4;"></i>
-            <div class="mt-2"><strong>Bot-Tracking für {{ comingSoonLabel }} kommt bald</strong></div>
-            <div class="text-muted small mt-1">Aktuell werden Trading-Bots nur für Pionex unterstützt.</div>
-            <span class="coinm-badge mt-2 d-inline-block" style="background:rgba(59,130,246,0.18);color:#3b82f6;">COMING SOON</span>
-        </div>
+    <div class="bot">
+        <!-- Börse ohne Bot-Unterstützung → kommt bald -->
+        <Karte v-if="comingSoon" class="bot-leer">
+            <Symbol name="agent" :groesse="36" class="bot-leer-symbol" />
+            <div class="bot-leer-titel">{{ t('dashboard.bot.comingSoon', { broker: comingSoonLabel }) }}</div>
+            <div class="bot-leise">{{ t('dashboard.bot.nurPionex') }}</div>
+            <span class="bot-marke akzent">{{ t('dashboard.bot.comingSoonMarke') }}</span>
+        </Karte>
 
-        <div v-else-if="stats.count === 0 && coinMGroups.length === 0" class="dailyCard text-center py-5">
-            <i class="uil uil-robot" style="font-size:2.5rem;opacity:0.4;"></i>
-            <div class="mt-2 text-muted">Keine Bot-Trades im gewählten Zeitraum.</div>
-        </div>
+        <Karte v-else-if="stats.count === 0 && coinMGroups.length === 0" class="bot-leer">
+            <Symbol name="agent" :groesse="36" class="bot-leer-symbol" />
+            <div class="bot-leise">{{ t('dashboard.bot.keine') }}</div>
+        </Karte>
 
         <template v-else>
-            <!-- ===== KPI-Kacheln ===== -->
-            <div class="row g-3 mb-3">
-                <div class="col-6 col-md-3">
-                    <div class="dailyCard h-100 kpi">
-                        <div class="kpi-label">{{ isNet ? 'Netto-Profit' : 'Brutto-Profit' }}</div>
-                        <div class="kpi-value" :class="stats.profit >= 0 ? 'greenTrade' : 'redTrade'">
-                            {{ useTwoDecCurrencyFormat(stats.profit) }}
-                        </div>
-                        <div class="kpi-sub">{{ stats.count }} Bots · {{ stats.symbols }} Symbole</div>
+            <!-- ===== Kennzahlen-Kacheln ===== -->
+            <div class="bot-raster">
+                <Karte dicht class="viertel bot-kpi">
+                    <div class="bot-kpi-titel">{{ isNet ? t('dashboard.bot.nettoProfit') : t('dashboard.bot.bruttoProfit') }}</div>
+                    <div class="bot-kpi-wert zahl" :class="stats.profit >= 0 ? 'at-gut' : 'at-schlecht'">
+                        {{ useTwoDecCurrencyFormat(stats.profit) }}
                     </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="dailyCard h-100 kpi">
-                        <div class="kpi-label">ROI (auf Investment)</div>
-                        <div class="kpi-value" :class="stats.roi >= 0 ? 'greenTrade' : 'redTrade'">
-                            {{ useTwoDecFormat(stats.roi) }}%
-                        </div>
-                        <div class="kpi-sub">Investment {{ useThousandCurrencyFormat(stats.investment) }}</div>
+                    <div class="bot-kpi-unter">{{ t('dashboard.bot.botsSymbole', { bots: stats.count, symbole: stats.symbols }) }}</div>
+                </Karte>
+                <Karte dicht class="viertel bot-kpi">
+                    <div class="bot-kpi-titel">{{ t('dashboard.bot.roi') }}</div>
+                    <div class="bot-kpi-wert zahl" :class="stats.roi >= 0 ? 'at-gut' : 'at-schlecht'">
+                        {{ useTwoDecFormat(stats.roi) }}%
                     </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="dailyCard h-100 kpi">
-                        <div class="kpi-label">Win-Rate (Bots)</div>
-                        <div class="kpi-value">{{ useTwoDecFormat(stats.winRate) }}%</div>
-                        <div class="kpi-sub greenTrade d-inline">{{ stats.wins }}W</div>
-                        <span class="kpi-sub"> / </span>
-                        <span class="kpi-sub redTrade">{{ stats.losses }}L</span>
-                    </div>
-                </div>
-                <div class="col-6 col-md-3">
-                    <div class="dailyCard h-100 kpi">
-                        <div class="kpi-label">⌀ Hebel / Laufzeit</div>
-                        <div class="kpi-value">{{ useXDecFormat(stats.avgLeverage, 1) }}×</div>
-                        <div class="kpi-sub">⌀ Laufzeit {{ fmtDuration(stats.avgDuration) }}</div>
-                    </div>
-                </div>
-            </div>
+                    <div class="bot-kpi-unter">{{ t('dashboard.bot.investment') }} {{ useThousandCurrencyFormat(stats.investment) }}</div>
+                </Karte>
+                <Karte dicht class="viertel bot-kpi">
+                    <div class="bot-kpi-titel">{{ t('dashboard.bot.winRate') }}</div>
+                    <div class="bot-kpi-wert zahl">{{ useTwoDecFormat(stats.winRate) }}%</div>
+                    <div class="bot-kpi-unter"><span class="at-gut">{{ stats.wins }}W</span> / <span class="at-schlecht">{{ stats.losses }}L</span></div>
+                </Karte>
+                <Karte dicht class="viertel bot-kpi">
+                    <div class="bot-kpi-titel">{{ t('dashboard.bot.hebelLaufzeit') }}</div>
+                    <div class="bot-kpi-wert zahl">{{ useXDecFormat(stats.avgLeverage, 1) }}×</div>
+                    <div class="bot-kpi-unter">{{ t('dashboard.bot.laufzeitSchnitt', { dauer: fmtDuration(stats.avgDuration) }) }}</div>
+                </Karte>
 
-            <div class="row g-3 mb-3">
                 <!-- ===== Profit-Aufschlüsselung ===== -->
-                <div class="col-12 col-lg-4">
-                    <div class="dailyCard h-100">
-                        <div class="card-title-sm">Profit-Aufschlüsselung</div>
-                        <table class="table-bot">
-                            <tbody>
-                                <tr>
-                                    <td>Grid-Profit (Brutto)</td>
-                                    <td class="text-end" :class="stats.gross >= 0 ? 'greenTrade' : 'redTrade'">
-                                        {{ useTwoDecCurrencyFormat(stats.gross) }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Trading-Gebühren</td>
-                                    <td class="text-end redTrade">−{{ useTwoDecCurrencyFormat(stats.tradingFee) }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Funding erhalten</td>
-                                    <td class="text-end greenTrade">{{ useTwoDecCurrencyFormat(stats.fundingReceived) }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Funding bezahlt</td>
-                                    <td class="text-end redTrade">{{ useTwoDecCurrencyFormat(stats.fundingPaid) }}</td>
-                                </tr>
-                                <tr class="border-top-row">
-                                    <td><strong>Netto-Profit</strong></td>
-                                    <td class="text-end" :class="stats.net >= 0 ? 'greenTrade' : 'redTrade'">
-                                        <strong>{{ useTwoDecCurrencyFormat(stats.net) }}</strong></td>
-                                </tr>
-                                <tr>
-                                    <td>⌀ pro Bot</td>
-                                    <td class="text-end" :class="stats.avgProfit >= 0 ? 'greenTrade' : 'redTrade'">
-                                        {{ useTwoDecCurrencyFormat(stats.avgProfit) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <div v-if="stats.best || stats.worst" class="mt-2 pt-2 best-worst">
-                            <div v-if="stats.best" class="d-flex justify-content-between small">
-                                <span class="text-muted">Bester Bot</span>
-                                <span><strong>{{ displaySymbol(stats.best.symbol) }}</strong>
-                                    <span class="greenTrade ms-1">{{ useTwoDecCurrencyFormat(plUsd(stats.best)) }}</span></span>
-                            </div>
-                            <div v-if="stats.worst" class="d-flex justify-content-between small mt-1">
-                                <span class="text-muted">Schlechtester Bot</span>
-                                <span><strong>{{ displaySymbol(stats.worst.symbol) }}</strong>
-                                    <span class="redTrade ms-1">{{ useTwoDecCurrencyFormat(plUsd(stats.worst)) }}</span></span>
-                            </div>
+                <Karte dicht class="drittel" :titel="t('dashboard.bot.aufschluesselung')">
+                    <table class="bot-tabelle">
+                        <tbody>
+                            <tr>
+                                <td>{{ t('dashboard.bot.gridBrutto') }}</td>
+                                <td class="zahl" :class="stats.gross >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(stats.gross) }}</td>
+                            </tr>
+                            <tr>
+                                <td>{{ t('dashboard.bot.tradingGebuehren') }}</td>
+                                <td class="zahl at-schlecht">−{{ useTwoDecCurrencyFormat(stats.tradingFee) }}</td>
+                            </tr>
+                            <tr>
+                                <td>{{ t('dashboard.bot.fundingErhalten') }}</td>
+                                <td class="zahl at-gut">{{ useTwoDecCurrencyFormat(stats.fundingReceived) }}</td>
+                            </tr>
+                            <tr>
+                                <td>{{ t('dashboard.bot.fundingBezahlt') }}</td>
+                                <td class="zahl at-schlecht">{{ useTwoDecCurrencyFormat(stats.fundingPaid) }}</td>
+                            </tr>
+                            <tr class="summe">
+                                <td><strong>{{ t('dashboard.bot.nettoProfit') }}</strong></td>
+                                <td class="zahl" :class="stats.net >= 0 ? 'at-gut' : 'at-schlecht'"><strong>{{ useTwoDecCurrencyFormat(stats.net) }}</strong></td>
+                            </tr>
+                            <tr>
+                                <td>{{ t('dashboard.bot.proBot') }}</td>
+                                <td class="zahl" :class="stats.avgProfit >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(stats.avgProfit) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div v-if="stats.best || stats.worst" class="bot-bestwert">
+                        <div v-if="stats.best" class="bot-bestwert-zeile">
+                            <span class="at-gedaempft">{{ t('dashboard.bot.besterBot') }}</span>
+                            <span><strong>{{ displaySymbol(stats.best.symbol) }}</strong>
+                                <span class="at-gut"> {{ useTwoDecCurrencyFormat(plUsd(stats.best)) }}</span></span>
+                        </div>
+                        <div v-if="stats.worst" class="bot-bestwert-zeile">
+                            <span class="at-gedaempft">{{ t('dashboard.bot.schlechtesterBot') }}</span>
+                            <span><strong>{{ displaySymbol(stats.worst.symbol) }}</strong>
+                                <span class="at-schlecht"> {{ useTwoDecCurrencyFormat(plUsd(stats.worst)) }}</span></span>
                         </div>
                     </div>
-                </div>
+                </Karte>
 
                 <!-- ===== Nach Bot-Typ ===== -->
-                <div class="col-12 col-lg-4">
-                    <div class="dailyCard h-100">
-                        <div class="card-title-sm">Nach Bot-Typ</div>
-                        <table class="table-bot">
-                            <thead>
-                                <tr><th>Typ</th><th class="text-end">Anz.</th><th class="text-end">Profit</th></tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="row in byType" :key="row.key">
-                                    <td>{{ row.label }}
-                                        <span v-if="row.coinM" class="coinm-badge">COIN-M</span>
-                                    </td>
-                                    <td class="text-end">{{ row.count }}</td>
-                                    <td class="text-end" :class="row.profit >= 0 ? 'greenTrade' : 'redTrade'">
-                                        {{ row.unit === 'USDT' ? useTwoDecCurrencyFormat(row.profit) : fmtCoin(row.profit, row.unit) }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <Karte dicht class="drittel" :titel="t('dashboard.bot.nachTyp')">
+                    <table class="bot-tabelle">
+                        <thead>
+                            <tr><th>{{ t('dashboard.bot.typ') }}</th><th class="zahl">{{ t('dashboard.bot.anz') }}</th><th class="zahl">{{ t('dashboard.bot.profit') }}</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="row in byType" :key="row.key">
+                                <td>{{ row.label }}
+                                    <span v-if="row.coinM" class="bot-marke warn">COIN-M</span>
+                                </td>
+                                <td class="zahl">{{ row.count }}</td>
+                                <td class="zahl" :class="row.profit >= 0 ? 'at-gut' : 'at-schlecht'">
+                                    {{ row.unit === 'USDT' ? useTwoDecCurrencyFormat(row.profit) : fmtCoin(row.profit, row.unit) }}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </Karte>
 
                 <!-- ===== Laufende Bots ===== -->
-                <div class="col-12 col-lg-4">
-                    <div class="dailyCard h-100">
-                        <div class="card-title-sm">Laufende Bots <span class="text-muted">({{ runningBots.length }})</span></div>
-                        <div v-if="runningBots.length === 0" class="text-muted small py-2">Keine laufenden Bots.</div>
-                        <table v-else class="table-bot">
+                <Karte dicht class="drittel" :titel="`${t('dashboard.bot.laufend')} (${runningBots.length})`">
+                    <div v-if="runningBots.length === 0" class="bot-leise">{{ t('dashboard.bot.keineLaufend') }}</div>
+                    <div v-else class="at-tabelle-huelle">
+                        <table class="bot-tabelle">
                             <thead>
-                                <tr><th>Symbol</th><th class="text-end">Hebel</th><th class="text-end">Markt</th><th class="text-end">PnL</th></tr>
+                                <tr><th>{{ t('dashboard.bot.symbol') }}</th><th class="zahl">{{ t('dashboard.bot.hebel') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.markt') }}</th><th class="zahl">{{ t('dashboard.bot.pnl') }}</th></tr>
                             </thead>
                             <tbody>
                                 <tr v-for="p in runningBots" :key="p.positionId">
                                     <td>{{ displaySymbol(p.symbol) }}
-                                        <span v-if="p.coinM" class="coinm-badge">COIN-M</span>
-                                        <span class="text-muted d-block" style="font-size:0.7rem;">{{ botTypeLabel(p.botType) }} · {{ p.side }}</span>
+                                        <span v-if="p.coinM" class="bot-marke warn">COIN-M</span>
+                                        <span class="bot-unterzeile">{{ botTypeLabel(p.botType) }} · {{ p.side }}</span>
                                     </td>
-                                    <td class="text-end">{{ p.leverage ? useXDecFormat(p.leverage, 0) + '×' : '—' }}</td>
-                                    <td class="text-end text-muted">{{ p.markPrice ? useXDecFormat(p.markPrice, p.markPrice < 1 ? 4 : 2) : '—' }}</td>
-                                    <td class="text-end" :class="(p.unrealizedPNL || 0) >= 0 ? 'greenTrade' : 'redTrade'">
-                                        {{ fmtBotPnL(p) }}</td>
+                                    <td class="zahl">{{ p.leverage ? useXDecFormat(p.leverage, 0) + '×' : '—' }}</td>
+                                    <td class="zahl at-gedaempft">{{ p.markPrice ? useXDecFormat(p.markPrice, p.markPrice < 1 ? 4 : 2) : '—' }}</td>
+                                    <td class="zahl" :class="(p.unrealizedPNL || 0) >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtBotPnL(p) }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
+                </Karte>
 
-            <!-- ===== Coin-M Bots (Coin-margined, PnL in Coin-Einheiten) ===== -->
-            <div v-if="coinMGroups.length" class="row g-3 mb-3">
-                <div class="col-12">
-                    <div class="dailyCard">
-                        <div class="card-title-sm">
-                            Coin-M Bots <span class="coinm-badge">COIN-M</span>
-                            <span class="text-muted ms-1" style="font-size:0.78rem;font-weight:400;">— margined &amp; abgerechnet in der Coin (USDT-Wert sekundär, ≈ zum jeweiligen Schlusskurs)</span>
-                        </div>
-                        <table class="table-bot">
+                <!-- ===== Coin-M Bots (Coin-margined, PnL in Coin-Einheiten) ===== -->
+                <Karte v-if="coinMGroups.length" dicht class="voll">
+                    <div class="bot-titel">
+                        {{ t('dashboard.bot.coinMTitel') }} <span class="bot-marke warn">COIN-M</span>
+                        <span class="bot-titel-hinweis">{{ t('dashboard.bot.coinMHinweis') }}</span>
+                    </div>
+                    <div class="at-tabelle-huelle">
+                        <table class="bot-tabelle">
                             <thead>
                                 <tr>
-                                    <th>Coin</th>
-                                    <th class="text-end">Bots</th>
-                                    <th class="text-end">W/L</th>
-                                    <th class="text-end">Grid (Brutto)</th>
-                                    <th class="text-end">Gebühren</th>
-                                    <th class="text-end">Funding</th>
-                                    <th class="text-end">Netto</th>
-                                    <th class="text-end">≈ Netto (USD)</th>
+                                    <th>{{ t('dashboard.bot.coin') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.bots') }}</th>
+                                    <th class="zahl">W/L</th>
+                                    <th class="zahl">{{ t('dashboard.bot.grid') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.gebuehren') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.funding') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.netto') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.nettoUsd') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="g in coinMGroups" :key="g.coin">
                                     <td><strong>{{ g.coin }}</strong></td>
-                                    <td class="text-end">{{ g.count }}</td>
-                                    <td class="text-end"><span class="greenTrade">{{ g.wins }}</span>/<span class="redTrade">{{ g.losses }}</span></td>
-                                    <td class="text-end" :class="g.gross >= 0 ? 'greenTrade' : 'redTrade'">{{ fmtCoin(g.gross, g.coin) }}</td>
-                                    <td class="text-end text-muted">{{ fmtCoin(-Math.abs(g.fees), g.coin) }}</td>
-                                    <td class="text-end" :class="g.funding >= 0 ? 'greenTrade' : 'redTrade'">{{ fmtCoin(g.funding, g.coin) }}</td>
-                                    <td class="text-end" :class="g.net >= 0 ? 'greenTrade' : 'redTrade'"><strong>{{ fmtCoin(g.net, g.coin) }}</strong></td>
-                                    <td class="text-end text-muted">{{ useTwoDecCurrencyFormat(g.usdt) }}</td>
+                                    <td class="zahl">{{ g.count }}</td>
+                                    <td class="zahl"><span class="at-gut">{{ g.wins }}</span>/<span class="at-schlecht">{{ g.losses }}</span></td>
+                                    <td class="zahl" :class="g.gross >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtCoin(g.gross, g.coin) }}</td>
+                                    <td class="zahl at-gedaempft">{{ fmtCoin(-Math.abs(g.fees), g.coin) }}</td>
+                                    <td class="zahl" :class="g.funding >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtCoin(g.funding, g.coin) }}</td>
+                                    <td class="zahl" :class="g.net >= 0 ? 'at-gut' : 'at-schlecht'"><strong>{{ fmtCoin(g.net, g.coin) }}</strong></td>
+                                    <td class="zahl at-gedaempft">{{ useTwoDecCurrencyFormat(g.usdt) }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                </div>
-            </div>
+                </Karte>
 
-            <!-- ===== Kumulierter Profit ===== -->
-            <div class="row g-3 mb-3">
-                <div class="col-12">
-                    <div class="dailyCard">
-                        <div class="card-title-sm">Kumulierter {{ isNet ? 'Netto' : 'Brutto' }}-Profit</div>
-                        <div ref="cumChartEl" class="chart-box" style="height:300px;"></div>
-                    </div>
-                </div>
-            </div>
+                <!-- ===== Kumulierter Profit ===== -->
+                <Karte dicht class="voll" :titel="t('dashboard.bot.kumuliert', { art: isNet ? t('dashboard.bot.artNetto') : t('dashboard.bot.artBrutto') })">
+                    <div ref="cumChartEl" class="bot-diagramm" style="height:300px;"></div>
+                </Karte>
 
-            <!-- ===== Profit je Symbol ===== -->
-            <div class="row g-3 mb-3">
-                <div class="col-12 col-lg-6">
-                    <div class="dailyCard h-100">
-                        <div class="card-title-sm">Profit je Symbol (Top 12)</div>
-                        <div ref="symbolChartEl" class="chart-box" style="height:340px;"></div>
+                <!-- ===== Profit je Symbol ===== -->
+                <Karte dicht class="halb" :titel="t('dashboard.bot.jeSymbol')">
+                    <div ref="symbolChartEl" class="bot-diagramm" style="height:340px;"></div>
+                </Karte>
+                <Karte dicht class="halb" :titel="t('dashboard.bot.symbolDetails')">
+                    <div class="bot-scroll">
+                        <table class="bot-tabelle">
+                            <thead>
+                                <tr><th>{{ t('dashboard.bot.symbol') }}</th><th class="zahl">{{ t('dashboard.bot.bots') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.profit') }}</th>
+                                    <th class="zahl">{{ t('dashboard.bot.gebuehren') }}</th><th class="zahl">{{ t('dashboard.bot.funding') }}</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="s in bySymbol" :key="s.symbol">
+                                    <td>{{ s.symbol }}</td>
+                                    <td class="zahl">{{ s.count }}</td>
+                                    <td class="zahl" :class="s.profit >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(s.profit) }}</td>
+                                    <td class="zahl at-gedaempft">{{ useTwoDecCurrencyFormat(s.fees) }}</td>
+                                    <td class="zahl" :class="s.funding >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(s.funding) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-                <div class="col-12 col-lg-6">
-                    <div class="dailyCard h-100">
-                        <div class="card-title-sm">Symbol-Details</div>
-                        <div class="table-scroll">
-                            <table class="table-bot">
-                                <thead>
-                                    <tr><th>Symbol</th><th class="text-end">Bots</th><th class="text-end">Profit</th>
-                                        <th class="text-end">Gebühren</th><th class="text-end">Funding</th></tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="s in bySymbol" :key="s.symbol">
-                                        <td>{{ s.symbol }}</td>
-                                        <td class="text-end">{{ s.count }}</td>
-                                        <td class="text-end" :class="s.profit >= 0 ? 'greenTrade' : 'redTrade'">
-                                            {{ useTwoDecCurrencyFormat(s.profit) }}</td>
-                                        <td class="text-end text-muted">{{ useTwoDecCurrencyFormat(s.fees) }}</td>
-                                        <td class="text-end" :class="s.funding >= 0 ? 'greenTrade' : 'redTrade'">
-                                            {{ useTwoDecCurrencyFormat(s.funding) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                </Karte>
 
-            <!-- ===== Geschlossene Bots: Einzelliste mit PnL-Breakdown ===== -->
-            <div class="row g-3 mt-0" v-if="closedBotsList.length">
-                <div class="col-12">
-                    <div class="dailyCard">
-                        <div class="card-title-sm">Geschlossene Bots ({{ closedBotsList.length }})</div>
-                        <div class="closed-bots">
-                            <div v-for="b in closedBotsList" :key="b.id" class="cbot">
-                                <div class="cbot-head" @click="toggleBotExpand(b.id)">
-                                    <i class="uil" :class="expandedBotIds.has(b.id) ? 'uil-angle-down' : 'uil-angle-right'"></i>
-                                    <span class="cbot-sym">{{ b.symbol }}</span>
-                                    <span class="cbot-type">{{ b.typeLabel }}</span>
-                                    <span v-if="b.leverage" class="cbot-lev">{{ b.leverage }}x</span>
-                                    <span v-if="b.unit !== 'USDT'" class="cbot-coinm">COIN-M</span>
-                                    <span class="cbot-pnl ms-auto" :class="b.net >= 0 ? 'greenTrade' : 'redTrade'">{{ fmtBotAmt(b.net, b.unit) }}</span>
-                                    <span v-if="b.showUsdt" class="text-muted" style="font-size:0.78rem;">(≈ {{ useTwoDecCurrencyFormat(b.pnlUsdt) }})</span>
-                                </div>
-                                <div v-if="expandedBotIds.has(b.id)" class="cbot-body">
-                                    <template v-if="b.hasGrid">
-                                        <div class="cbot-cell"><span class="cbot-lbl">Trend-PnL</span><span :class="b.trend >= 0 ? 'greenTrade' : 'redTrade'">{{ fmtBotAmt(b.trend, b.unit) }}</span></div>
-                                        <div class="cbot-cell"><span class="cbot-lbl">Grid-Gewinn</span><span :class="b.grid >= 0 ? 'greenTrade' : 'redTrade'">{{ fmtBotAmt(b.grid, b.unit) }}</span></div>
-                                    </template>
-                                    <div class="cbot-cell"><span class="cbot-lbl">Funding</span><span :class="b.funding >= 0 ? 'greenTrade' : 'redTrade'">{{ fmtBotAmt(b.funding, b.unit) }}</span></div>
-                                    <div class="cbot-cell"><span class="cbot-lbl">Trading-Gebühr</span><span class="text-muted">{{ fmtBotAmt(b.tradingFee, b.unit) }}</span></div>
-                                    <div class="cbot-cell" v-if="b.investment"><span class="cbot-lbl">Investment</span><span>{{ fmtBotAmt(b.investment, b.unit) }}</span></div>
-                                    <div class="cbot-cell"><span class="cbot-lbl">Laufzeit</span><span>{{ b.runtime }}</span></div>
-                                    <div v-if="!b.hasGrid" class="cbot-hint">Grid/Trend erst nach einem erneuten Import verfügbar.</div>
-                                </div>
+                <!-- ===== Geschlossene Bots: Einzelliste mit PnL-Aufschlüsselung ===== -->
+                <Karte v-if="closedBotsList.length" dicht class="voll" :titel="t('dashboard.bot.geschlossen', { n: closedBotsList.length })">
+                    <div class="cbot-liste">
+                        <div v-for="b in closedBotsList" :key="b.id" class="cbot">
+                            <button type="button" class="cbot-kopf" :aria-expanded="expandedBotIds.has(b.id)" @click="toggleBotExpand(b.id)">
+                                <Symbol :name="expandedBotIds.has(b.id) ? 'runter' : 'ausklappen'" />
+                                <span class="cbot-sym">{{ b.symbol }}</span>
+                                <span class="cbot-neben">{{ b.typeLabel }}</span>
+                                <span v-if="b.leverage" class="cbot-neben">{{ b.leverage }}x</span>
+                                <span v-if="b.unit !== 'USDT'" class="bot-marke warn">COIN-M</span>
+                                <span class="cbot-pnl zahl" :class="b.net >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtBotAmt(b.net, b.unit) }}</span>
+                                <span v-if="b.showUsdt" class="cbot-neben">(≈ {{ useTwoDecCurrencyFormat(b.pnlUsdt) }})</span>
+                            </button>
+                            <div v-if="expandedBotIds.has(b.id)" class="cbot-rumpf">
+                                <template v-if="b.hasGrid">
+                                    <div class="cbot-zelle"><span class="cbot-lbl">{{ t('dashboard.bot.trendPnl') }}</span><span :class="b.trend >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtBotAmt(b.trend, b.unit) }}</span></div>
+                                    <div class="cbot-zelle"><span class="cbot-lbl">{{ t('dashboard.bot.gridGewinn') }}</span><span :class="b.grid >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtBotAmt(b.grid, b.unit) }}</span></div>
+                                </template>
+                                <div class="cbot-zelle"><span class="cbot-lbl">{{ t('dashboard.bot.funding') }}</span><span :class="b.funding >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtBotAmt(b.funding, b.unit) }}</span></div>
+                                <div class="cbot-zelle"><span class="cbot-lbl">{{ t('dashboard.bot.tradingGebuehr') }}</span><span class="at-gedaempft">{{ fmtBotAmt(b.tradingFee, b.unit) }}</span></div>
+                                <div v-if="b.investment" class="cbot-zelle"><span class="cbot-lbl">{{ t('dashboard.bot.investment') }}</span><span>{{ fmtBotAmt(b.investment, b.unit) }}</span></div>
+                                <div class="cbot-zelle"><span class="cbot-lbl">{{ t('dashboard.bot.laufzeit') }}</span><span>{{ b.runtime }}</span></div>
+                                <div v-if="!b.hasGrid" class="cbot-hinweis">{{ t('dashboard.bot.gridSpaeter') }}</div>
                             </div>
                         </div>
                     </div>
-                </div>
+                </Karte>
             </div>
         </template>
     </div>
 </template>
 
 <style scoped>
-/* Geschlossene Bots — Einzelliste mit Breakdown */
-.cbot {
-    border: 1px solid var(--white-10, rgba(255,255,255,0.08));
-    border-radius: 8px;
-    margin-bottom: 0.5rem;
-    overflow: hidden;
+.bot-raster {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 0.75rem;
 }
-.cbot-head {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.55rem 0.75rem;
-    cursor: pointer;
-}
-.cbot-head:hover { background: var(--white-10, rgba(255,255,255,0.04)); }
-.cbot-sym { font-weight: 700; }
-.cbot-type { font-size: 0.72rem; color: var(--white-60, rgba(255,255,255,0.6)); }
-.cbot-lev { font-size: 0.72rem; color: var(--white-60, rgba(255,255,255,0.6)); }
-.cbot-coinm {
-    font-size: 0.6rem; padding: 0.05rem 0.4rem; border-radius: 999px;
-    background: rgba(245,158,11,0.18); color: #f59e0b;
-}
-.cbot-pnl { font-weight: 700; }
-.cbot-body {
-    display: flex; flex-wrap: wrap; gap: 0.5rem;
-    padding: 0.6rem 0.75rem;
-    border-top: 1px solid var(--white-10, rgba(255,255,255,0.08));
-}
-.cbot-cell {
-    display: flex; flex-direction: column;
-    min-width: 110px;
-    background: var(--white-10, rgba(255,255,255,0.04));
-    border-radius: 6px; padding: 0.35rem 0.55rem; font-size: 0.85rem;
-}
-.cbot-lbl { font-size: 0.68rem; color: var(--white-60, rgba(255,255,255,0.6)); }
-.cbot-hint { flex-basis: 100%; font-size: 0.7rem; color: var(--white-60, rgba(255,255,255,0.6)); }
 
-.kpi-label {
-    font-size: 0.78rem;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+.bot-raster > * {
+    grid-column: span 12;
+    min-width: 0;
+}
+
+.bot-raster > .viertel { grid-column: span 6; }
+
+@media (min-width: 768px) {
+    .bot-raster > .viertel { grid-column: span 3; }
+}
+
+@media (min-width: 992px) {
+    .bot-raster > .drittel { grid-column: span 4; }
+    .bot-raster > .halb { grid-column: span 6; }
+}
+
+.bot-leer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 2.5rem 1rem;
+    text-align: center;
+}
+
+.bot-leer-symbol {
+    color: var(--leise);
+}
+
+.bot-leer-titel {
+    font-weight: 700;
+}
+
+.bot-leise {
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.bot-marke {
+    display: inline-block;
+    margin-left: 0.3rem;
+    padding: 0.05rem 0.4rem;
+    border-radius: var(--radius-pille);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    vertical-align: middle;
+}
+
+.bot-marke.warn {
+    background: var(--warn-flaeche);
+    color: var(--warn);
+}
+
+.bot-marke.akzent {
+    margin-top: 0.4rem;
+    background: var(--accent-flaeche);
+    color: var(--accent);
+}
+
+.bot-kpi-titel {
+    font-size: 0.74rem;
+    color: var(--muted);
     margin-bottom: 0.25rem;
 }
-.kpi-value {
-    font-size: 1.5rem;
+
+.bot-kpi-wert {
+    font-size: 1.45rem;
     font-weight: 700;
     line-height: 1.1;
 }
-.kpi-sub {
+
+.bot-kpi-unter {
+    margin-top: 0.15rem;
     font-size: 0.72rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
-.card-title-sm {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-bottom: 0.75rem;
-}
-.table-bot {
-    width: 100%;
-    font-size: 0.83rem;
-    border-collapse: collapse;
-}
-.table-bot th {
-    font-size: 0.72rem;
+
+.bot-titel {
+    margin-bottom: 0.7rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
-    font-weight: 600;
+    color: var(--muted);
+}
+
+.bot-titel-hinweis {
+    margin-left: 0.3rem;
+    font-size: 0.76rem;
+    font-weight: 400;
+    letter-spacing: normal;
+    text-transform: none;
+    color: var(--leise);
+}
+
+.bot-tabelle {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.83rem;
+}
+
+.bot-tabelle th {
     padding-bottom: 0.35rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    color: var(--muted);
+    white-space: nowrap;
 }
-.table-bot td {
+
+.bot-tabelle td {
     padding: 0.28rem 0;
-    border-bottom: 1px solid var(--white-06, rgba(255, 255, 255, 0.05));
+    border-bottom: 1px solid var(--line);
 }
-.border-top-row td {
-    border-top: 1px solid var(--white-10, rgba(255, 255, 255, 0.15));
+
+.bot-tabelle .zahl,
+.bot-tabelle th.zahl {
+    text-align: right;
+    padding-left: 0.5rem;
+    white-space: nowrap;
+}
+
+.bot-tabelle .summe td {
+    border-top: 1px solid var(--line-stark);
     padding-top: 0.5rem;
 }
-.best-worst {
-    border-top: 1px solid var(--white-10, rgba(255, 255, 255, 0.1));
+
+.bot-unterzeile {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
 }
-.table-scroll {
+
+.bot-bestwert {
+    margin-top: 0.6rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--line);
+    font-size: 0.82rem;
+}
+
+.bot-bestwert-zeile {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.bot-bestwert-zeile + .bot-bestwert-zeile {
+    margin-top: 0.25rem;
+}
+
+.bot-scroll {
     max-height: 340px;
-    overflow-y: auto;
+    overflow: auto;
 }
-.coinm-badge {
-    display: inline-block;
-    font-size: 0.6rem;
-    font-weight: 700;
-    letter-spacing: 0.03em;
-    padding: 0.05rem 0.3rem;
-    margin-left: 0.35rem;
-    border-radius: 4px;
-    background: rgba(245, 158, 11, 0.18);
-    color: #f59e0b;
-    vertical-align: middle;
-}
-.chart-box {
+
+.bot-diagramm {
     width: 100%;
+}
+
+/* Geschlossene Bots — Einzelliste mit Aufschlüsselung */
+.cbot {
+    margin-bottom: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    overflow: hidden;
+}
+
+.cbot-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.55rem 0.75rem;
+    border: none;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+.cbot-kopf:hover {
+    background: var(--panel-soft);
+}
+
+.cbot-sym {
+    font-weight: 700;
+}
+
+.cbot-neben {
+    font-size: 0.74rem;
+    color: var(--muted);
+}
+
+.cbot-pnl {
+    margin-left: auto;
+    font-weight: 700;
+}
+
+.cbot-rumpf {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-top: 1px solid var(--line);
+}
+
+.cbot-zelle {
+    display: flex;
+    flex-direction: column;
+    min-width: 110px;
+    padding: 0.35rem 0.55rem;
+    border-radius: var(--radius-klein);
+    background: var(--panel-soft);
+    font-size: 0.85rem;
+}
+
+.cbot-lbl {
+    font-size: 0.68rem;
+    color: var(--muted);
+}
+
+.cbot-hinweis {
+    flex-basis: 100%;
+    font-size: 0.72rem;
+    color: var(--muted);
 }
 </style>

@@ -289,7 +289,7 @@ presented as a finding — three sessions on a Tuesday are noise.
 ### Playbook (Trade Journal)
 - **Trade Evaluation** — tags, stress level (1–10), emotion level (1–10), notes
 - **Rich Text Notes** — Quill editor for detailed trade analysis
-- **Screenshots** — entry, exit, and trend screenshots with annotation support (MarkerJS2)
+- **Screenshots** — entry, exit, and trend screenshots with annotation support (own image markup)
 - **Fill History** — minute-grouped executions with closing/partial/entry badges
 - **SL/TP Protocol** — stop loss and take profit tracking with quantity display
 - **Auto Trade-Type Detection** — automatic Scalp/Day/Swing classification based on duration
@@ -361,7 +361,7 @@ Your open positions outside the browser — all three companions live in this re
 | Backend | Express.js, Knex.js |
 | Database | SQLite (default) or PostgreSQL (optional) |
 | Rich Text | Quill |
-| Annotations | MarkerJS2 |
+| Annotations | own SVG/canvas markup |
 | Dates | Day.js |
 | AI Image | FLUX.2, Google Gemini |
 

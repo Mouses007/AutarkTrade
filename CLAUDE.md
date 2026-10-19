@@ -24,7 +24,7 @@ README.md and this file are kept in sync for project and architecture descriptio
 - **Market data**: public exchange data only through `server/marktdaten/` (customer-chosen source Binance/Bitget/off, see Architecture); third-party sources that need it run only with the customer's key (`server/quellen/`)
 - **Charts**: Apache ECharts; the chart workspace (`/chart`) uses Lightweight Charts 5 (TradingView, Apache-2.0 — the attribution logo must stay on)
 - **Styling**: own design system (`src/assets/design/tokens.css`, `basis.css`, `rahmen.css`; building blocks in `src/components/basis/`), Bootstrap 5 bundled via npm as a transition (to be removed in S9); transition layer `src/assets/design/uebergang.css` (replaced `style-dark.css` in S9 part 1) maps the old variable names onto the tokens
-- **Other key libs**: dayjs (dates/timezones), PapaParse (only the Databento OHLCV CSV in `utils/journal/import.js`), Quill (rich text), markerjs2 (screenshot annotation), lodash, axios
+- **Other key libs**: dayjs (dates/timezones), PapaParse (only the Databento OHLCV CSV in `utils/journal/import.js`), Quill (rich text, Playbook and Incoming only, bundled via npm), lodash, axios. Screenshot annotation is our own (`src/utils/bildmarkierung.js` + `components/bildmarkierung/BildMarkierung.vue`, state `maState` v2 in relative coordinates; stored markerjs2 states are read and migrated on save)
 
 ## Commands
 

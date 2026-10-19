@@ -1,109 +1,219 @@
 <script setup>
+/**
+ * Monatskalender des Journals (Spezifikation ansichten.md K.2–K.6): Raster
+ * aus `calendarData`, gefärbt nach P&L oder Zufriedenheit, Klick auf einen
+ * Handelstag springt in die Tagesansicht.
+ *
+ * Ohne Props und Events — die Kalenderseite ist der einzige Ort, der ihn
+ * einbindet. Mini-Kalender werden nicht gerendert: `miniCalendarsData`
+ * bekommt nie Monate (journal-kern.md §7.4), sie erschienen also auch früher
+ * nie.
+ */
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { pageId, timeZoneTrade, spinnerLoadingPage, scrollToDateUnix } from '../stores/ui.js';
-import { selectedMonth, selectedMonthPreset, selectedPlSatisfaction, amountCase } from '../stores/filters.js';
-import { calendarData, miniCalendarsData } from '../stores/trades.js';
-import { useThousandCurrencyFormat } from '../utils/journal/format.js';
-import { useMountCalendar, useMountDaily } from '../utils/journal/ablauf.js';
+import { useRouter } from 'vue-router'
+import { calendarData } from '../stores/trades.js'
+import { amountCase, selectedPlSatisfaction, selectedMonth, selectedMonthPreset } from '../stores/filters.js'
+import { spinnerLoadingPage, timeZoneTrade, scrollToDateUnix } from '../stores/ui.js'
+import { useMountCalendar } from '../utils/journal/ablauf.js'
+import { useThousandCurrencyFormat } from '../utils/journal/format.js'
+import dayjs from '../utils/journal/zeit.js'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const { t } = useI18n()
 const router = useRouter()
-import dayjs from '../utils/journal/zeit.js'
 
+const TAGE = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+const wochen = computed(() => Object.keys(calendarData)
+    .filter(k => /^\d+$/.test(k))
+    .sort((a, b) => Number(a) - Number(b))
+    .map(k => calendarData[k]))
+const titel = computed(() => wochen.value[0]?.[0]?.month || '')
 
-const days = computed(() => [t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), t('calendar.thu'), t('calendar.fri'), t('calendar.sat'), t('calendar.sun')])
+const erloes = (feld) => feld?.pAndL?.[amountCase.value + 'Proceeds']
 
-//console.log("perdio range "+JSON.stringify(periodRange))
-
-function scrollToDay(dayData) {
-    if (dayData.dateUnix && dayData.pAndL && dayData.pAndL.trades) {
-        scrollToDateUnix.value = dayData.dateUnix
-        if (pageId.value === 'calendar') {
-            router.push('/daily')
-        }
+function farbe(feld) {
+    if (selectedPlSatisfaction.value === 'pl') {
+        const e = erloes(feld)
+        if (e === undefined || e === null) return ''
+        return e >= 0 ? 'gruen' : 'rot'
     }
+    /* eslint-disable eqeqeq -- lose Gleichheit wie gespeichert: 1/true, 0/false */
+    if (feld?.satisfaction == true) return 'gruen'
+    if (feld?.satisfaction == false) return 'rot'   // null/undefined sind nicht == false
+    /* eslint-enable eqeqeq */
+    return ''
 }
 
-async function monthLastNext(param) {
-    await (spinnerLoadingPage.value = true)
-    selectedMonth.value.start = dayjs.tz(selectedMonth.value.start * 1000, timeZoneTrade.value).add(param, 'month').startOf('month').unix()
-    /* reuse just created .start because we only show one month at a time */
-    selectedMonth.value.end = dayjs.tz(selectedMonth.value.start * 1000, timeZoneTrade.value).endOf('month').unix()
-    //console.log("selectedMonth.value.start " + selectedMonth.value.start+" selectedMonth.value.end " + selectedMonth.value.end)
-    localStorage.setItem('selectedMonth', JSON.stringify(selectedMonth.value))
-    const thisMonthStart = dayjs().tz(timeZoneTrade.value).startOf('month').unix()
-    selectedMonthPreset.value = selectedMonth.value.start === thisMonthStart ? 'current' : 'custom'
-    localStorage.setItem('selectedMonthPreset', selectedMonthPreset.value)
-    
-    if (pageId.value == "calendar") {
-        useMountCalendar()
-    }
+const klickbar = (feld) => !!feld?.pAndL?.trades
 
-    if (pageId.value == "daily") {
-        useMountDaily()
-    }
+function oeffne(feld) {
+    if (!(feld?.dateUnix && feld.pAndL && feld.pAndL.trades)) return
+    scrollToDateUnix.value = feld.dateUnix
+    router.push('/daily')
+}
+
+/**
+ * Erlös als ganze Zahl: abgeschnitten mit Math.trunc. parseInt machte aus
+ * einer Zahl in Exponentialschreibweise Unsinn (1e-7 wurde zu 1).
+ */
+const ganz = (x) => useThousandCurrencyFormat(Math.trunc(Number(x)))
+
+function wechsle(schritt) {
+    spinnerLoadingPage.value = true
+    const zone = timeZoneTrade.value
+    const anfang = dayjs.unix(selectedMonth.value.start).tz(zone).add(schritt, 'month').startOf('month')
+    selectedMonth.value.start = anfang.unix()
+    selectedMonth.value.end = anfang.endOf('month').unix()
+    try { localStorage.setItem('selectedMonth', JSON.stringify(selectedMonth.value)) } catch { /* privater Modus */ }
+    const jetzt = dayjs().tz(zone).startOf('month').unix()
+    selectedMonthPreset.value = anfang.unix() === jetzt ? 'current' : 'custom'
+    try { localStorage.setItem('selectedMonthPreset', selectedMonthPreset.value) } catch { /* privater Modus */ }
+    useMountCalendar()
 }
 </script>
+
 <template>
-    <div class="col-12">
-        <div v-bind:class="[pageId === 'calendar' ? 'justify-content-center' : '', 'row']">
-            <div v-bind:class="[pageId === 'calendar' ? 'col-md-9 col-xl-6' : '', 'col-12']">
-                <div class="row">
-                    <div class="col-2">
-                        <i class="uil uil-angle-left-b pointerClass" v-on:click="monthLastNext(-1)"></i>
-                    </div>
-                    <div class="col-8">
-                        <span v-if="calendarData[0] && calendarData[0][0]">{{ calendarData[0][0].month }}</span>
-                    </div>
-                    <div class="col-2">
-                        <i class="uil uil-angle-right-b pointerClass" v-on:click="monthLastNext(1)"></i>
-                    </div>
-                </div>
-            </div>
+    <div class="kal">
+        <div class="kal-kopf">
+            <button type="button" class="kal-pfeil" :title="t('calendar.prevMonth')" :aria-label="t('calendar.prevMonth')" @click="wechsle(-1)">
+                <Symbol name="einklappen" />
+            </button>
+            <div class="kal-titel">{{ titel }}</div>
+            <button type="button" class="kal-pfeil" :title="t('calendar.nextMonth')" :aria-label="t('calendar.nextMonth')" @click="wechsle(1)">
+                <Symbol name="ausklappen" />
+            </button>
         </div>
-    </div>
-    <div v-bind:class="[pageId === 'calendar' ? 'col-md-10 col-xl-9 col-xxl-6 mb-5' : '', 'col-12']">
-        <div class="row">
-            <div class="col" v-for="(day, index) in days">
-                <div>{{ day }}</div>
-                <div v-for="line in calendarData">
-                    <div class="row">
-                        <div v-show="line[index] != 0"
-                            v-bind:class="[{ 'greenTradeDiv': selectedPlSatisfaction == 'pl' ? line[index].pAndL[amountCase + 'Proceeds'] >= 0 : line[index].satisfaction == true, 'redTradeDiv': selectedPlSatisfaction == 'pl' ? line[index].pAndL[amountCase + 'Proceeds'] < 0 : line[index].satisfaction == false, 'calDivDay': pageId == 'daily', 'calDivDash': pageId == 'calendar' }, 'col', (pageId == 'daily' || pageId == 'calendar') && line[index].pAndL && line[index].pAndL.trades ? 'pointerClass' : '']"
-                            @click="scrollToDay(line[index])">
-                            <p class="mb-1 dayNumber" v-show="line[index].day != 0">{{ line[index].day }}</p>
-                            <div v-if="pageId == 'calendar'" class="d-none d-md-block">
-                                <p v-show="line[index].pAndL.trades">{{ line[index].pAndL.trades }} {{ t('common.trades') }}</p>
-                                <p v-show="line[index].pAndL[amountCase + 'Proceeds']">
-                                    {{ useThousandCurrencyFormat(parseInt(line[index].pAndL[amountCase + 'Proceeds'])) }}
-                                </p>
-                            </div>
-                        </div>
+
+        <div class="kal-raster">
+            <div v-for="tg in TAGE" :key="tg" class="kal-name">{{ t('calendar.' + tg) }}</div>
+            <template v-for="(woche, w) in wochen" :key="'w' + w">
+                <div v-for="(feld, i) in woche" :key="w + '-' + i"
+                    :class="['kal-feld', farbe(feld), { klickbar: klickbar(feld), fuell: !feld.day }]"
+                    :role="klickbar(feld) ? 'button' : undefined" :tabindex="klickbar(feld) ? 0 : undefined"
+                    @click="oeffne(feld)" @keydown.enter="oeffne(feld)">
+                    <div v-if="feld.day" class="kal-tag">{{ feld.day }}</div>
+                    <div class="kal-werte">
+                        <div v-if="feld.pAndL?.trades" class="kal-trades">{{ feld.pAndL.trades }} {{ t('common.trades') }}</div>
+                        <div v-if="erloes(feld)" class="kal-erloes zahl">{{ ganz(erloes(feld)) }}</div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div v-show="pageId == 'calendar'" class="col-12">
-        <div class="row">
-            <div class="col-12 col-md-4 col-xl-3 mb-3" v-for="(calData, index) in miniCalendarsData">
-                <div v-if="calData && calData[0] && calData[0][0]" class="row me-2">
-                    <div>{{ calData[0][0].month }}</div>
-                    <div class="col miniCalBox" v-for="(day, index) in days">
-                        <div>{{ day }}</div>
-                        <div v-for="line in calData">
-                            <div class="row">
-                                <div v-show="line[index] != 0"
-                                    v-bind:class="[{ 'greenTradeDiv': selectedPlSatisfaction == 'pl' ? line[index].pAndL[amountCase + 'Proceeds'] >= 0 : line[index].satisfaction == true, 'redTradeDiv': selectedPlSatisfaction == 'pl' ? line[index].pAndL[amountCase + 'Proceeds'] < 0 : line[index].satisfaction == false }, 'calDivMini', 'col']">
-                                    <p class="mb-1 dayNumber" v-show="line[index].day != 0">{{ line[index].day }}</p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </template>
         </div>
     </div>
 </template>
+
+<style scoped>
+.kal-kopf {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    max-width: 22rem;
+    margin: 0 auto 0.8rem;
+}
+
+.kal-titel {
+    font-weight: 700;
+    font-size: 1.05rem;
+    text-align: center;
+}
+
+.kal-pfeil {
+    display: inline-flex;
+    padding: 0.4rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.kal-pfeil:hover {
+    color: var(--accent);
+    border-color: var(--accent-rand);
+}
+
+.kal-raster {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 0.3rem;
+}
+
+.kal-name {
+    padding: 0.2rem 0;
+    text-align: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.kal-feld {
+    min-height: 3rem;
+    padding: 0.3rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    background: var(--panel-soft);
+    min-width: 0;
+    overflow: hidden;
+}
+
+.kal-feld.fuell {
+    background: transparent;
+    border-color: transparent;
+}
+
+.kal-feld.gruen {
+    background: var(--good-flaeche);
+    border-color: color-mix(in srgb, var(--good) 40%, transparent);
+}
+
+.kal-feld.rot {
+    background: var(--bad-flaeche);
+    border-color: color-mix(in srgb, var(--bad) 40%, transparent);
+}
+
+.kal-feld.klickbar {
+    cursor: pointer;
+}
+
+.kal-feld.klickbar:hover,
+.kal-feld.klickbar:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.kal-tag {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Trades und Erlös erst ab Tablet-Breite — auf dem Telefon reicht die Farbe. */
+.kal-werte {
+    display: none;
+}
+
+@media (min-width: 768px) {
+    .kal-feld {
+        min-height: 5rem;
+        padding: 0.45rem;
+    }
+
+    .kal-werte {
+        display: block;
+        margin-top: 0.25rem;
+        font-size: 0.78rem;
+    }
+
+    .kal-trades {
+        color: var(--muted);
+    }
+
+    .kal-erloes {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+    }
+}
+</style>

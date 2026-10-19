@@ -1,595 +1,492 @@
-import { pageId, dateScreenshotEdited, renderData, markerAreaOpen, spinnerLoadingPage, spinnerSetups, editingScreenshot, timeZoneTrade, endOfList, screenshotsPagination, screenshotsQueryLimit, selectedItem, saveButton, selectedScreenshotIndex, selectedScreenshotSource, resizeCompressImg, resizeCompressMaxWidth, resizeCompressMaxHeight, resizeCompressQuality, expandedScreenshot, expandedId, expandedSource } from '../stores/ui.js'
-import { selectedMonth, selectedTags, selectedBroker } from '../stores/filters.js'
-import { screenshots, screenshot, tradeScreenshotChanged, selectedScreenshot, tags, tradeTags, screenshotsInfos } from '../stores/trades.js'
-/* useLoadMore removed — inlined below to break circular dependency */
-import { useUpdateTags, useUpdateAvailableTags} from './journal/tagebuch.js';
-import { dbFind, dbFirst, dbCreate, dbUpdate, dbDelete } from './db.js'
-
-/* MODULES */
+/**
+ * Screenshots: Laden, Einlesen, Markieren, Speichern, Löschen, Vollbild.
+ *
+ * Clean-Room-Neubau nach docs/spec/ansichten.md, Teil „Screenshots und
+ * Bildmarkierung“ (S.4). Die Exportnamen sind Schnittstelle — Journal-Kern
+ * (`ablauf.js`, `app.js`), Filterleiste, Daily, Playbook und das Vollbild
+ * importieren sie.
+ *
+ * Bewusste Änderungen gegenüber dem Altverhalten (Abschnitt 0 der Spec):
+ * - `annotatedBase64` ist nach dem Markieren das EINGEBRANNTE Gesamtbild
+ *   (Original + Markierung), `markersOnly` = 0 (A-S1). Altzeilen mit
+ *   `markersOnly` = 1 zeigt die Karte weiter als Original + Ebene.
+ * - `name` bleibt beim Markieren unverändert (A-S2); gesetzt wird er nur,
+ *   wenn ein neues Bild noch keinen hat.
+ * - Alle Promises lösen auf — mit `false`, wenn nichts gespeichert wurde (A-S3).
+ * - Die Markierung wird dem Listeneintrag über `objectId` zugeordnet (A-S8).
+ * - Das Vollbild wird nicht mehr per Bootstrap-Datenattribut geöffnet, sondern
+ *   über `screenshotVollbildOffen`; `useSelectedScreenshotFunction` öffnet es
+ *   gleich mit, weil jeder ihrer Aufrufer genau das will.
+ */
+import { scrolleZu } from './scrolleZu.js'
+import { ref, shallowRef } from 'vue'
 import dayjs from './journal/zeit.js'
 import i18n from '../i18n/index.js'
-import * as markerjs2 from 'markerjs2';
+import { dbFind, dbCreate, dbUpdate, dbDelete } from './db.js'
+import {
+    pageId, timeZoneTrade, endOfList, selectedItem, saveButton,
+} from '../stores/app/rahmen.js'
+import { spinnerLoadingPage, renderData, spinnerSetups } from '../stores/app/laden.js'
+import { selectedBroker, selectedTags, selectedMonth } from '../stores/journal/filter.js'
+import { tags, tradeTags, tradeScreenshotChanged } from '../stores/journal/tagebuch.js'
+import {
+    screenshot, screenshots, screenshotsInfos, screenshotsPagination, screenshotsQueryLimit,
+    selectedScreenshot, selectedScreenshotIndex, selectedScreenshotSource, markerAreaOpen, editingScreenshot,
+    dateScreenshotEdited, resizeCompressImg, resizeCompressMaxWidth, resizeCompressMaxHeight, resizeCompressQuality,
+} from '../stores/journal/screenshots.js'
+import { useUpdateAvailableTags, useUpdateTags } from './journal/tagebuch.js'
+import { leseZustand, zumSpeichern, brenneEin, ladeBild, klon } from './bildmarkierung.js'
 
+const t = (k) => i18n.global.t(k)
 
+/** Spalten aus der Parse-Zeit — nie geschrieben, nie gebraucht. */
+const ALTSPALTEN = ['original', 'annotated']
+/** Ohne Bilddaten: für die Monatsübersicht in Daily. */
+const NUR_INFO = [...ALTSPALTEN, 'originalBase64', 'annotatedBase64', 'maState']
+/** Kennung „ohne Tag“ im Tag-Filter. */
+const OHNE_TAG = 't000t'
+
+// Seitengrösse der Screenshots-Seite: 4 Bilder je Abruf (Bilder sind gross).
 screenshotsQueryLimit.value = 4
 
+const leere = (obj) => { for (const k of Object.keys(obj)) delete obj[k] }
+const sitzungLesen = (k) => { try { return sessionStorage.getItem(k) } catch { return null } }
+const sitzungLoeschen = (k) => { try { sessionStorage.removeItem(k) } catch { /* egal */ } }
+const tagesanfang = (sek) => dayjs.unix(sek).tz(timeZoneTrade.value).startOf('day').unix()
+const datumText = (sek) => dayjs.unix(sek).tz(timeZoneTrade.value).format('YYYY-MM-DDTHH:mm:ss')
+
+// ── Vollbild ───────────────────────────────────────────────────────────────
+
+/** Offen-Zustand des globalen Vollbilds (`components/rahmen/ScreenshotVollbild.vue`). */
+export const screenshotVollbildOffen = ref(false)
+
+export function useOeffneScreenshotVollbild() {
+    screenshotVollbildOffen.value = true
+}
+
+/**
+ * Schliesst das Vollbild. Der Rückweg ins Daily-Detailfenster braucht keinen
+ * eigenen Schritt mehr: beide sind native Dialoge in der obersten Ebene, das
+ * Detailfenster bleibt darunter offen und ist nach dem Schliessen wieder vorn.
+ */
+export function useSchliesseScreenshotVollbild() {
+    screenshotVollbildOffen.value = false
+}
+
+// ── Laden ──────────────────────────────────────────────────────────────────
+
+/**
+ * Nach einem Neuladen mit gemerkter Position: die schon geladene Anzahl in
+ * EINEM Abruf wiederholen, damit zur Karte gescrollt werden kann.
+ */
 export function useGetScreenshotsPagination() {
-    if (sessionStorage.getItem('screenshotsPagination')) {
-        screenshotsQueryLimit.value = Number(sessionStorage.getItem('screenshotsPagination'))
-        sessionStorage.removeItem('screenshotsPagination');
+    const gemerkt = sitzungLesen('screenshotsPagination')
+    if (gemerkt != null && gemerkt !== '') {
+        const n = Number(gemerkt)
+        if (Number.isFinite(n) && n > 0) screenshotsQueryLimit.value = n
+        sitzungLoeschen('screenshotsPagination')
     }
 }
 
-export async function useGetScreenshots(param1, param2) {
-    //param1 : true if page != screenshots and false if page == screenshots
-    //param2 : if exists, it's the the unixDate of the day on daily when either clicked on Screenshots Tab or to open modal
-    console.log("\nGETTING SCREENSHOTS")
-
-    return new Promise(async (resolve, reject) => {
-        let options = {
-            descending: "dateUnix",
-            exclude: ["original", "annotated"]
-        }
-
-        if (param1) { // if param1 == true then we're not on screenshots page
-            if(!param2){
-                console.log("  --> Getting Screenshots Infos")
-                screenshotsInfos.length = 0
-                options.greaterThanOrEqualTo = { dateUnix: selectedMonth.value.start }
-                options.lessThanOrEqualTo = { dateUnix: selectedMonth.value.end }
-                options.exclude = ["original", "annotated", "originalBase64", "annotatedBase64", "maState"]
-            }else{
-                console.log("  --> Getting full Screenshots data")
-                options.equalTo = { dateUnixDay: param2 }
+/**
+ * Trade-IDs und Handelstage der gewählten Börse. Einmal je Seitenaufruf und
+ * Börse statt bei jedem Nachladen (A-S10: lud jedes Mal ALLE Trades).
+ */
+let boersenCache = null
+async function boersenZuordnung(boerse) {
+    if (boersenCache?.boerse === boerse) return boersenCache
+    const zeilen = await dbFind('trades', { descending: 'dateUnix', limit: 10000, exclude: ['executions', 'blotter', 'pAndL'] })
+    const ids = new Set()
+    const tage = new Set()
+    for (const zeile of zeilen || []) {
+        const liste = Array.isArray(zeile.trades) ? zeile.trades : []
+        for (const tr of liste) {
+            if (tr?.broker === boerse) {
+                if (tr.id != null) ids.add(String(tr.id))
+                tage.add(Number(zeile.dateUnix))
             }
         }
+    }
+    boersenCache = { boerse, ids, tage }
+    return boersenCache
+}
 
-        // if param1 inexistant or = false then we're on screenshots page
-        else {
-            options.limit = screenshotsQueryLimit.value
-            options.skip = screenshotsPagination.value
+function passtZurBoerse(bild, zuordnung, boerse) {
+    if (!bild.broker) return true // Bilder ohne Börse dürfen nicht verschwinden
+    if (bild.broker === boerse) return true
+    if (zuordnung.ids.has(String(bild.name))) return true
+    return zuordnung.tage.has(Number(bild.dateUnixDay))
+}
+
+function passtZuTags(bild) {
+    const gewaehlt = Array.isArray(selectedTags.value) ? selectedTags.value : []
+    const zeile = tags.find(x => x.tradeId === bild.name)
+    if (zeile && Array.isArray(zeile.tags) && zeile.tags.some(id => gewaehlt.includes(id))) return true
+    return gewaehlt.includes(OHNE_TAG)
+}
+
+/**
+ * Drei Betriebsarten:
+ *  1. `nichtSeite` falsch → Screenshots-Seite, eine Seite (skip/limit), neueste zuerst;
+ *  2. `nichtSeite` wahr ohne `tagUnix` → leichte Monatsliste für Daily (`screenshotsInfos`);
+ *  3. `nichtSeite` wahr mit `tagUnix` → alle Bilder dieses Tages.
+ * Löst immer auf, auch bei Fehlern.
+ */
+export async function useGetScreenshots(nichtSeite, tagUnix) {
+    const aufSeite = pageId.value === 'screenshots'
+    const aufDaily = pageId.value === 'daily'
+    const monatsliste = !!nichtSeite && (tagUnix === undefined || tagUnix === null)
+    try {
+        let treffer
+        if (!nichtSeite) {
+            // Neue Liste ab dem Anfang = neuer Seitenaufruf: Börsenzuordnung neu holen.
+            if (screenshotsPagination.value === 0) boersenCache = null
+            treffer = await dbFind('screenshots', {
+                descending: 'dateUnix', exclude: ALTSPALTEN,
+                limit: screenshotsQueryLimit.value, skip: screenshotsPagination.value,
+            })
+        } else if (monatsliste) {
+            screenshotsInfos.length = 0
+            const monat = selectedMonth.value || {}
+            treffer = await dbFind('screenshots', {
+                descending: 'dateUnix', exclude: NUR_INFO,
+                greaterThanOrEqualTo: { dateUnix: monat.start }, lessThanOrEqualTo: { dateUnix: monat.end },
+            })
+        } else {
+            treffer = await dbFind('screenshots', { descending: 'dateUnix', exclude: ALTSPALTEN, equalTo: { dateUnixDay: tagUnix } })
         }
+        treffer = Array.isArray(treffer) ? treffer : []
 
-        const results = await dbFind("screenshots", options)
-
-        // Broker filter: build set of tradeIds and dateUnix days for selected broker
-        let brokerTradeIds = null
-        let brokerDateUnixDays = null
-        const broker = selectedBroker.value
-        if (broker && pageId.value === 'screenshots') {
-            const allTrades = await dbFind('trades', { descending: 'dateUnix', limit: 10000, exclude: ['executions', 'blotter', 'pAndL'] })
-            brokerTradeIds = new Set()
-            brokerDateUnixDays = new Set()
-            for (const day of allTrades) {
-                if (day.trades && Array.isArray(day.trades)) {
-                    for (const t of day.trades) {
-                        if (t.broker === broker) {
-                            brokerTradeIds.add(t.id)
-                            brokerDateUnixDays.add(day.dateUnix)
-                        }
-                    }
-                }
+        if (treffer.length === 0) {
+            if (aufSeite) endOfList.value = true
+        } else {
+            let liste = treffer
+            const boerse = selectedBroker.value
+            if (boerse && aufSeite) {
+                const zuordnung = await boersenZuordnung(boerse)
+                liste = liste.filter(b => passtZurBoerse(b, zuordnung, boerse))
+            }
+            // Daily zeigt die Bilder EINES Tages: vor dem Füllen leeren. Die
+            // Monatsliste (Betriebsart 2) füllt `screenshotsInfos` und lässt sie stehen.
+            if (aufDaily && !monatsliste) screenshots.length = 0
+            if (!aufDaily) liste = liste.filter(passtZuTags)
+            for (const bild of liste) {
+                if (monatsliste) screenshotsInfos.push({ objectId: bild.objectId, dateUnix: bild.dateUnix, dateUnixDay: bild.dateUnixDay, name: bild.name })
+                else screenshots.push(bild)
             }
         }
+    } catch (fehler) {
+        console.error('Screenshots laden fehlgeschlagen:', fehler)
+    } finally {
+        screenshotsPagination.value += Number(screenshotsQueryLimit.value) || 0
+        spinnerSetups.value = false
+        if (!aufDaily) spinnerLoadingPage.value = false
+    }
+    if (sitzungLesen('screenshotIdToEdit') && aufSeite) useScrollToScreenshot()
+}
 
-        await (async () => {
-            //console.log("results " + JSON.stringify(results))
-            if (results.length > 0) {
-                let parsedResult = JSON.parse(JSON.stringify(results))
-
-                // Filter screenshots by broker if applicable
-                if (brokerTradeIds) {
-                    parsedResult = parsedResult.filter(el => {
-                        // Match by tradeId (screenshot name === trade id)
-                        if (el.name && brokerTradeIds.has(el.name)) return true
-                        // Match by dateUnixDay (screenshot belongs to a day with broker trades)
-                        if (el.dateUnixDay && brokerDateUnixDays.has(el.dateUnixDay)) return true
-                        // Explizit dieser Börse zugeordnet.
-                        if (el.broker && el.broker === broker) return true
-                        // Roh-Schnappschüsse (kein Broker, keine Trade-Zuordnung) gehören
-                        // keiner Börse — z.B. Live-Analyse-Aufnahmen an Tagen ohne Trade.
-                        // Sie dürfen nicht durch den Broker-Filter verschwinden.
-                        if (!el.broker) return true
-                        return false
-                    })
-                }
-
-                //console.log(" parsedResult "+JSON.stringify(parsedResult))
-                if (pageId.value == "daily") {
-                    //on daily page, when need to reset setups or else after new screenshot is added, it apreaeed double. 
-                    //However, on screenshots page, we need to add to setups on new image / page load on scroll
-                    screenshots.length = 0
-                }
-
-                parsedResult.forEach(element => {
-                    //console.log(" element " + JSON.stringify(element.objectId))
-                    let tradeTagsSelected = false
-                    let selectedTagsArray = Object.values(selectedTags.value)
-                    let index = tags.findIndex(obj => obj.tradeId == element.name)
-                    if (index != -1) {
-                        //console.log(" -> Screenshot id in tags...")
-                        //console.log(" -> selected tags "+Object.values(selectedTags.value))
-                        //console.log(" -> trade tags "+JSON.stringify(tags[index].tags))
-                        //console.log(" includes ? "+selectedTagsArray.some(value => tags[index].tags.find(obj => obj.id === value)))
-                        if (selectedTagsArray.some(value => tags[index].tags.find(obj => obj === value))) {
-                            //console.log(" and with selected tags")
-                            tradeTagsSelected = true
-                        } else {
-                            //console.log(" but with tags array length 0")
-                            if (selectedTagsArray.includes("t000t")) {
-                                //console.log(" but 'No Tags' is selected so we include the screenshot anyway")
-                                tradeTagsSelected = true
-                            } else {
-                                //console.log(" but with no selected tags")
-                            }
-                        }
-                    } else {
-                        //console.log(" -> Screenshot not in tags...")
-                        if (selectedTagsArray.includes("t000t")) {
-                            //console.log(" but 'No Tags' is selected so we include the screenshot anyway")
-                            tradeTagsSelected = true
-                        }
-                    }
-
-                    const pushScreenshots = () => {
-                        //console.log(" screenshot element " + JSON.stringify(element))
-                        if (!param1 || param2) {
-                            screenshots.push(element)
-                            //console.log(" pushing screenshots")
-                            //console.log(" screenshots "+JSON.stringify(screenshots))
-                        }
-
-                        else{
-                            let temp = {}
-                            temp.objectId = element.objectId
-                            temp.dateUnix = element.dateUnix
-                            temp.dateUnixDay = element.dateUnixDay
-                            temp.name = element.name
-                            screenshotsInfos.push(temp)
-                            //console.log(" screenshotsInfos "+JSON.stringify(screenshotsInfos))
-                        }
-                    }
-
-                    if (pageId.value == "daily") {
-                        pushScreenshots()
-                    } else {
-                        if (tradeTagsSelected) {
-                            pushScreenshots()
-                        }
-                    }
-                })
-
-            } else {
-                if (pageId.value == "screenshots") {
-                    endOfList.value = true
-                }
-            }
-
-
-            //console.log(" -> Screenshots " + JSON.stringify(screenshots))
-            screenshotsPagination.value = screenshotsPagination.value + screenshotsQueryLimit.value
-
-            spinnerSetups.value = false //spinner for trades in daily
-            //spinnerLoadMore.value = false
-            if (pageId.value != "daily") {
-                await (spinnerLoadingPage.value = false) // need await or else scroll to screenshot doesn't work
-            }
-
-        })()
-
-        if (sessionStorage.getItem('screenshotIdToEdit') && pageId.value == "screenshots") useScrollToScreenshot()
-        resolve()
-
+/** Scrollt zur Karte mit der gemerkten `objectId` (SS `screenshotIdToEdit`). */
+export function useScrollToScreenshot() {
+    const id = sitzungLesen('screenshotIdToEdit')
+    if (!id) return
+    // Die Karten stehen erst nach dem nächsten Zeichnen im DOM.
+    requestAnimationFrame(() => {
+        scrolleZu(document.getElementById(id), 'center')
+        sitzungLoeschen('screenshotIdToEdit')
     })
 }
 
-export function useScrollToScreenshot() {
-    let element = document.getElementById(sessionStorage.getItem('screenshotIdToEdit'))
-    if (element) {
-        element.scrollIntoView()
-    }
-    sessionStorage.removeItem('screenshotIdToEdit');
-}
+// ── Einlesen ───────────────────────────────────────────────────────────────
 
-async function imgFileReader(param) {
-    return new Promise(async (resolve, reject) => {
-        let reader = new FileReader();
-        reader.readAsDataURL(param);
-        reader.onloadend = () => {
-            let base64data = reader.result
-            console.log("  --> Img size " + parseFloat(((base64data.length * 6) / 8) / 1000).toFixed(2) + " KB")
-            screenshot.originalBase64 = base64data
-            screenshot.annotatedBase64 = base64data
-            screenshot.extension = base64data.substring(base64data.indexOf('/') + 1, base64data.indexOf(';base64'))
-            renderData.value += 1
-            resolve()
-            //console.log("original " + screenshot.annotatedBase64)
-        }
+function alsDatenUrl(datei) {
+    return new Promise((ok, fehler) => {
+        const leser = new FileReader()
+        leser.onload = () => ok(leser.result)
+        leser.onerror = () => fehler(leser.error)
+        leser.readAsDataURL(datei)
     })
 }
 
 /**
- * Verarbeitet EINE Bilddatei (aus Datei-Auswahl, Drag&Drop oder Zwischenablage).
- * Der eigentliche Kern; `useSetupImageUpload` ist nur noch der Event-Adapter.
+ * Liest eine Bilddatei in `screenshot` ein (Original und Anzeigebild gleich).
+ * Ohne Datei: nichts.
  */
-export async function useSetupImageFile(file, param1, param2, param3) {
-    if (!file) return
+export async function useSetupImageFile(datei, dateUnix, symbol, side) {
+    if (!datei) return
     tradeScreenshotChanged.value = true
-    if (pageId.value == "daily") {
+    if (pageId.value === 'daily') {
         saveButton.value = true
         dateScreenshotEdited.value = true
-
-        screenshot.dateUnix = param1
-        screenshot.symbol = param2
-        screenshot.side = param3
-
+        screenshot.dateUnix = dateUnix
+        screenshot.symbol = symbol
+        screenshot.side = side
     }
-    /* We convert to base64 so we can read src in markerArea */
-    await imgFileReader(file).then(() => {
-        if (resizeCompressImg.value) {
-            const originalImage = document.querySelector("#screenshotDiv");
-            compressImage(originalImage);
-        }
-    })
+    const url = await alsDatenUrl(datei)
+    screenshot.originalBase64 = url
+    screenshot.annotatedBase64 = url
+    screenshot.extension = String(url).substring(String(url).indexOf('/') + 1, String(url).indexOf(';base64'))
+    renderData.value += 1
+    if (resizeCompressImg.value) await compressImage(url)
 }
 
-export async function useSetupImageUpload(event, param1, param2, param3) {
-    const file = event.target.files[0];
-    await useSetupImageFile(file, param1, param2, param3)
+/** Erste Datei aus einem `<input type="file">`-Ereignis einlesen. */
+export function useSetupImageUpload(event, dateUnix, symbol, side) {
+    const datei = event?.target?.files?.[0]
+    return useSetupImageFile(datei, dateUnix, symbol, side)
 }
 
-let originalWidth
-let originalHeight
-let newWidth
-let newHeight
-
-export async function compressImage(imgToCompress) {
-    console.log("\nRESIZING AND COMPRESSING IMAGE")
-    //https://img.ly/blog/how-to-compress-an-image-before-uploading-it-in-javascript/
-    // resizing the image
-    originalWidth = imgToCompress.naturalWidth
-    originalHeight = imgToCompress.naturalHeight
-    console.log("  --> Original width " + originalWidth)
-    console.log("  --> Original height " + originalHeight)
-
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    if (originalWidth > originalHeight) {
-        if (originalWidth > resizeCompressMaxWidth.value) {
-            newHeight = originalHeight * (resizeCompressMaxWidth.value / originalWidth);
-            newWidth = resizeCompressMaxWidth.value;
-        }
-    } else {
-        if (originalHeight > resizeCompressMaxHeight.value) {
-            newWidth = originalWidth * (resizeCompressMaxHeight.value / originalHeight);
-            newHeight = resizeCompressMaxHeight.value;
-        }
-    }
-    canvas.width = Math.floor(newWidth * window.devicePixelRatio);
-    canvas.height = Math.floor(newHeight * window.devicePixelRatio);
-    console.log("canvas.width " + canvas.width)
-    console.log("canvas.height " + canvas.height)
-    context.scale(window.devicePixelRatio, window.devicePixelRatio);
-
-    console.log(" -> Resizing")
-    context.drawImage(
-        imgToCompress,
-        0,
-        0,
-        newWidth,
-        newHeight
-    );
-
-    // reducing the quality of the image
-    console.log(" -> Compressing")
-    canvas.toBlob(
-        (blob) => {
-            if (blob) {
-
-                // showing the compressed image
-                //resizedImage.src = URL.createObjectURL(resizedImageBlob);
-                imgFileReader(blob)
-            }
-        },
-        "image/png",
-        resizeCompressQuality.value
-    );
+/**
+ * Verkleinert ein Bild über ein Canvas, wenn Höchstmasse gesetzt sind
+ * (`resizeCompress*`). Heute setzt sie niemand — dann tut die Funktion nichts
+ * und liefert `null` (A-S11; die Altfassung rechnete mit Massen des vorigen
+ * Aufrufs weiter und suchte ein Element, das es nicht gab).
+ * Nimmt eine Daten-URL oder ein `<img>`; schreibt das Ergebnis in `screenshot`.
+ */
+export async function compressImage(bildOderUrl) {
+    const maxB = Number(resizeCompressMaxWidth.value)
+    const maxH = Number(resizeCompressMaxHeight.value)
+    if (!(maxB > 0) && !(maxH > 0)) return null
+    const url = typeof bildOderUrl === 'string' ? bildOderUrl : bildOderUrl?.src
+    if (!url) return null
+    const bild = await ladeBild(url)
+    const W = bild.naturalWidth, H = bild.naturalHeight
+    let faktor = 1
+    if (maxB > 0 && W > maxB) faktor = Math.min(faktor, maxB / W)
+    if (maxH > 0 && H > maxH) faktor = Math.min(faktor, maxH / H)
+    if (faktor >= 1) return null
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(W * faktor)
+    canvas.height = Math.round(H * faktor)
+    canvas.getContext('2d').drawImage(bild, 0, 0, canvas.width, canvas.height)
+    const qualitaet = Number(resizeCompressQuality.value)
+    const neu = canvas.toDataURL('image/jpeg', qualitaet > 0 && qualitaet <= 1 ? qualitaet : 0.85)
+    screenshot.originalBase64 = neu
+    screenshot.annotatedBase64 = neu
+    screenshot.extension = 'jpeg'
+    renderData.value += 1
+    return neu
 }
 
-export function useSetupMarkerArea(param1, param2) {
-    //https://github.com/ailon/markerjs2#readme
-    let elId
+// ── Markieren ──────────────────────────────────────────────────────────────
 
-    if (param1 == "dailyTab" || param1 == "screenshots") { // case where multiple screenshots
-        for (let key in screenshot) delete screenshot[key]
-        Object.assign(screenshot, JSON.parse(JSON.stringify(param2)))
+/**
+ * Laufender Markierungsauftrag für den Editor
+ * (`components/bildmarkierung/BildMarkierung.vue`, eingehängt im Vollbild-Rahmen):
+ * `{ quelle, bild, zustand, objectId, fertig }` oder null.
+ */
+export const markierAuftrag = shallowRef(null)
+
+/**
+ * Öffnet den Markierungseditor für ein Bild. Liefert ein Promise, das mit
+ * `true` (gespeichert) oder `false` (verworfen) auflöst.
+ */
+export function useSetupMarkerArea(quelle, bildDaten) {
+    if (quelle === 'dailyTab' || quelle === 'screenshots') {
+        leere(screenshot)
+        Object.assign(screenshot, klon(bildDaten || {}))
     }
-
-    //console.log("screenshot " + JSON.stringify(screenshot))
-    screenshot.objectId ? elId = "screenshotDiv-" + param1 + '-' + screenshot.objectId : elId = "screenshotDiv-" + param1 + '-' + screenshot.dateUnix
-
-    let markerAreaId = document.getElementById(elId);
-    console.log("elId " + elId)
-    console.log("  --> Width " + markerAreaId.naturalWidth)
-    console.log("  --> Height " + markerAreaId.naturalHeight)
-
-    const markerArea = new markerjs2.MarkerArea(markerAreaId);
-    markerArea.renderAtNaturalSize = true;
-    markerArea.renderImageQuality = 1;
-    markerArea.renderMarkersOnly = true
-    //markerArea.targetRoot = markerAreaId.parentElement
-    markerArea.settings.displayMode = 'popup';
-
-    markerArea.availableMarkerTypes = markerArea.ALL_MARKER_TYPES;
-    markerArea.settings.defaultFillColor = "#ffffffde" //note background
-    markerArea.settings.defaultStrokeColor = "black" //font color
-    markerArea.settings.defaultColorsFollowCurrentColors = true
-    markerArea.settings.defaultStrokeWidth = 2
-    markerArea.settings.defaultColor = "white"
-
-    if (pageId.value == "daily") {
-        markerArea.addEventListener('markercreating', event => {
-            if (param1 == "dailyModal") {
-                document.getElementById("tradesModal").style.display = "none";
-            }
-        })
-
-        markerArea.addEventListener('markerselect', event => {
-            if (param1 == "dailyModal") {
-                document.getElementById("tradesModal").style.display = "none";
-            }
-        })
-    }
-
-    markerArea.addEventListener('render', event => {
-        console.log("render")
-        if (param1 == "dailyModal") {
-            document.getElementById("tradesModal").style.display = "block";
-            tradeScreenshotChanged.value = true
-            dateScreenshotEdited.value = true
-            saveButton.value = true
-
+    // Grundlage ist immer das unmarkierte Original — die Markierung wird beim
+    // Speichern neu eingebrannt, nie auf ein schon markiertes Bild.
+    const bild = screenshot.originalBase64 || screenshot.annotatedBase64
+    if (!bild) return Promise.resolve(false)
+    return new Promise((fertig) => {
+        markierAuftrag.value = {
+            quelle,
+            bild,
+            zustand: leseZustand(screenshot.maState),
+            objectId: screenshot.objectId,
+            fertig,
         }
-
-        console.log("  --> Marker img size " + parseFloat(((event.dataUrl.length * 6) / 8) / 1000).toFixed(2) + " KB")
-
-        //console.log("  --> Width "+markerAreaId.naturalWidth)
-        //console.log("state " + JSON.stringify(screenshot.maState))
-        markerAreaOpen.value = false
-
-
-        screenshot.annotatedBase64 = event.dataUrl
-        screenshot.maState = event.state
-
-        if (param1 == "dailyTab" || param1 == "screenshots") {
-            //in case of annotation in screenshot, we update the current page + we use screenshot. in useSaveScreenshot
-            let index = screenshots.findIndex(obj => obj.dateUnix == screenshot.dateUnix)
-            //console.log("index " + index)
-            screenshots[index].annotatedBase64 = event.dataUrl
-            screenshots[index].maState = event.state
-            useSaveScreenshot()
-        }
-
-        renderData.value += 1
-    })
-
-    markerArea.addEventListener('close', event => {
-        if (param1 == "dailyModal") {
-            document.getElementById("tradesModal").style.display = "block";
-        }
-        markerAreaOpen.value = false
-    })
-
-    markerArea.show();
-    if (markerArea.isOpen) {
         markerAreaOpen.value = true
-    }
-
-    if (screenshot.maState) {
-        markerArea.restoreState(screenshot.maState)
-    }
+    })
 }
 
+/**
+ * Vom Editor gerufen: Markierung übernehmen. Brennt sie ins Original ein,
+ * setzt `annotatedBase64`/`maState` am Bild in Bearbeitung und am Listeneintrag
+ * und speichert. Wirft, wenn das Einbrennen scheitert (der Editor bleibt dann offen).
+ */
+export async function useMarkierungUebernehmen(zustand) {
+    const auftrag = markierAuftrag.value
+    if (!auftrag) return false
+    const gespeichert = zumSpeichern(zustand)
+    const eingebrannt = await brenneEin(auftrag.bild, gespeichert)
+    const felder = { annotatedBase64: eingebrannt, maState: gespeichert, markersOnly: 0 }
 
+    // Vor dem Speichern schliessen — offen blockiert `useSaveScreenshot`.
+    markerAreaOpen.value = false
+    markierAuftrag.value = null
+    Object.assign(screenshot, klon(felder))
+
+    let ok = true
+    if (auftrag.quelle === 'dailyModal') {
+        tradeScreenshotChanged.value = true
+        dateScreenshotEdited.value = true
+        saveButton.value = true
+    } else {
+        // Über die objectId, nicht über dateUnix (A-S8: gleiche Sekunde → falsches Bild).
+        if (auftrag.objectId != null) {
+            const eintrag = screenshots.find(s => s && String(s.objectId) === String(auftrag.objectId))
+            if (eintrag) Object.assign(eintrag, klon(felder))
+            if (String(selectedScreenshot.objectId) === String(auftrag.objectId)) Object.assign(selectedScreenshot, klon(felder))
+        }
+        ok = await useSaveScreenshot()
+    }
+    renderData.value += 1
+    auftrag.fertig(ok)
+    return ok
+}
+
+/** Vom Editor gerufen: verwerfen, nichts schreiben. */
+export function useMarkierungVerwerfen() {
+    const auftrag = markierAuftrag.value
+    markerAreaOpen.value = false
+    markierAuftrag.value = null
+    auftrag?.fertig(false)
+}
+
+// ── Speichern ──────────────────────────────────────────────────────────────
+
+/**
+ * Speichert `screenshot`. Löst mit `false` auf, wenn abgebrochen wurde
+ * (Markierung offen, Pflichtangaben fehlen, DB-Fehler).
+ */
 export async function useSaveScreenshot() {
-    console.log("\nSAVING SCREENSHOT")
-    //console.log(" -> Setup to save " + JSON.stringify(screenshot))
-    return new Promise(async (resolve, reject) => {
-
-        /**
-         * CHECKS
-         * **/
-        if (markerAreaOpen.value == true) {
-            alert(i18n.global.t('common.screenshotSaveAnnotation'))
-            return
-        }
-
-        if (pageId.value == "addScreenshot") {
-            if (screenshot.symbol == undefined) {
-                alert(i18n.global.t('common.screenshotAddSymbol'))
-                return
-            }
-            if (!editingScreenshot.value && tradeScreenshotChanged.value == false) {
-                alert(i18n.global.t('common.screenshotAddImage'))
-                return
-            }
-        }
-
-        if (pageId.value == "addScreenshot") {
-            spinnerLoadingPage.value = true
-            //spinnerLoadingPageText.value = "Uploading screenshot ..."
-            if (!editingScreenshot.value || (editingScreenshot.value && dateScreenshotEdited.value)) {
-                screenshot.dateUnix = dayjs.tz(screenshot.date, timeZoneTrade.value).unix()
-            }
-        }
-
-        if (editingScreenshot.value && !dateScreenshotEdited.value) {
-            //we do nothing
-        }
-
-        //extension is created during setupImageUpload. So when edit, must create it here before upload
-        if (editingScreenshot.value) {
-            screenshot.extension = screenshot.originalBase64.substring(screenshot.originalBase64.indexOf('/') + 1, screenshot.originalBase64.indexOf(';base64'))
-        }
-
-        //console.log(" -> dateUnix " + screenshot.dateUnix)
-
-
-        screenshot.side ? screenshot.name = "t" + screenshot.dateUnix + "_" + screenshot.symbol + "_" + screenshot.side : screenshot.name = screenshot.dateUnix + "_" + screenshot.symbol
-        //console.log("name " + screenshot.name)
-
-
-        /* UPLOAD SCREENSHOT */
-        //in case it's the first time and no tags, we do not save tags
-        console.log(" tradeTags " + JSON.stringify(tradeTags))
-        if (!editingScreenshot.value && tradeTags.length == 0) {
-            //console.log(" first time no tags")
-            await useUploadScreenshotToParse()
-        } else {
-            //console.log("tags")
-            await Promise.all([useUpdateAvailableTags(), useUpdateTags()])
-            await useUploadScreenshotToParse()
-        }
-
-        resolve()
-    })
+    if (markerAreaOpen.value) {
+        alert(t('common.screenshotSaveAnnotation'))
+        return false
+    }
+    if (pageId.value === 'addScreenshot') {
+        // Seite gibt es nicht mehr (Route leitet um); Prüfungen bleiben harmlos.
+        if (!screenshot.symbol) { alert(t('common.screenshotAddSymbol')); return false }
+        if (!screenshot.originalBase64) { alert(t('common.screenshotAddImage')); return false }
+        spinnerLoadingPage.value = true
+        if (screenshot.date) screenshot.dateUnix = dayjs.tz(screenshot.date, timeZoneTrade.value).unix()
+    }
+    if (editingScreenshot.value && screenshot.originalBase64) {
+        const url = String(screenshot.originalBase64)
+        screenshot.extension = url.substring(url.indexOf('/') + 1, url.indexOf(';base64'))
+    }
+    // Name nur für ein neues Bild ohne Namen bilden — ein vorhandener Name ist
+    // der Verknüpfungsschlüssel zu Trade/Playbook/Incoming (A-S2).
+    if (!screenshot.name && screenshot.dateUnix != null) {
+        screenshot.name = screenshot.side
+            ? `t${screenshot.dateUnix}_${screenshot.symbol}_${screenshot.side}`
+            : `${screenshot.dateUnix}_${screenshot.symbol}`
+    }
+    try {
+        if (!editingScreenshot.value && tradeTags.length === 0) return await useUploadScreenshotToParse()
+        await Promise.all([useUpdateAvailableTags(), useUpdateTags()])
+        return await useUploadScreenshotToParse()
+    } catch (fehler) {
+        console.error('Screenshot speichern fehlgeschlagen:', fehler)
+        spinnerLoadingPage.value = false
+        return false
+    }
 }
 
+/** Schreibt `screenshot` in die eigene DB (Name historisch). Löst immer auf. */
 export async function useUploadScreenshotToParse() {
-    return new Promise(async (resolve, reject) => {
-        console.log(" -> Uploading to database")
-
+    const daten = {
+        name: screenshot.name || '',
+        symbol: screenshot.symbol || '',
+        side: screenshot.side || '',
+        originalBase64: screenshot.originalBase64 || '',
+        annotatedBase64: screenshot.annotatedBase64 || screenshot.originalBase64 || '',
+        // Anzeigebild ist jetzt immer ein vollständiges Bild, keine Ebene (A-S1).
+        markersOnly: 0,
+        maState: screenshot.maState ?? {},
+    }
+    const mitDatum = () => {
+        const sek = Number(screenshot.dateUnix)
+        if (!Number.isFinite(sek)) return
+        daten.date = datumText(sek)
+        daten.dateUnix = sek
+        daten.dateUnixDay = tagesanfang(sek)
+    }
+    try {
         if (screenshot.objectId) {
-            console.log(" -> Updating")
-            let updateData = {
-                name: screenshot.name,
-                symbol: screenshot.symbol,
-                side: screenshot.side,
-                originalBase64: screenshot.originalBase64,
-                annotatedBase64: screenshot.annotatedBase64,
-                markersOnly: true,
-                maState: screenshot.maState
-            }
-            if (dateScreenshotEdited.value) {
-                updateData.date = dayjs.unix(screenshot.dateUnix).tz(timeZoneTrade.value).format("YYYY-MM-DDTHH:mm:ss")
-                updateData.dateUnix = Number(screenshot.dateUnix)
-                updateData.dateUnixDay = dayjs(screenshot.dateUnix * 1000).tz(timeZoneTrade.value).startOf("day").unix()
-            }
-            try {
-                await dbUpdate("screenshots", screenshot.objectId, updateData)
-                console.log(' -> Updated screenshot with id ' + screenshot.objectId)
-                if (pageId.value == "addScreenshot") {
-                    window.location.href = "/screenshots"
-                }
-                if (pageId.value == "daily") {
-                    await useGetScreenshots(true, dayjs(screenshot.dateUnix * 1000).tz(timeZoneTrade.value).startOf("day").unix())
-                    await useGetScreenshots(true)
-                    const file = document.querySelector('.screenshotFile');
-                    if (file) file.value = '';
-                }
-                resolve()
-            } catch (error) {
-                console.log('Failed to update object: ' + error.message);
-                spinnerLoadingPage.value = false
-            }
-
+            if (dateScreenshotEdited.value) mitDatum()
+            await dbUpdate('screenshots', screenshot.objectId, daten)
         } else {
-            console.log(" -> Saving")
-            try {
-                const result = await dbCreate("screenshots", {
-                    name: screenshot.name,
-                    symbol: screenshot.symbol,
-                    side: screenshot.side,
-                    originalBase64: screenshot.originalBase64,
-                    annotatedBase64: screenshot.annotatedBase64,
-                    markersOnly: true,
-                    maState: screenshot.maState,
-                    date: dayjs.unix(screenshot.dateUnix).tz(timeZoneTrade.value).format("YYYY-MM-DDTHH:mm:ss"),
-                    dateUnix: Number(screenshot.dateUnix),
-                    dateUnixDay: dayjs(screenshot.dateUnix * 1000).tz(timeZoneTrade.value).startOf("day").unix()
-                })
-                console.log('  --> Added new screenshot with id ' + result.objectId)
-                if (pageId.value == "addScreenshot") {
-                    window.location.href = "/screenshots"
-                }
-                if (pageId.value == "daily") {
-                    await useGetScreenshots(true, dayjs(screenshot.dateUnix * 1000).tz(timeZoneTrade.value).startOf("day").unix())
-                    await useGetScreenshots(true)
-                    const file = document.querySelector('.screenshotFile');
-                    if (file) file.value = '';
-                }
-                resolve()
-            } catch (error) {
-                console.log('Failed to create new object: ' + error.message);
-                spinnerLoadingPage.value = false
-            }
+            mitDatum()
+            const neu = await dbCreate('screenshots', daten)
+            if (neu?.objectId) screenshot.objectId = neu.objectId
         }
-    })
+    } catch (fehler) {
+        console.error('Screenshot schreiben fehlgeschlagen:', fehler)
+        spinnerLoadingPage.value = false
+        return false
+    }
+    if (pageId.value === 'addScreenshot') {
+        window.location.href = '/screenshots'
+    } else if (pageId.value === 'daily') {
+        const tag = tagesanfang(Number(screenshot.dateUnix))
+        await useGetScreenshots(true, tag)
+        await useGetScreenshots(true)
+        const eingabe = document.querySelector('.screenshotFile')
+        if (eingabe) eingabe.value = ''
+    }
+    return true
 }
 
-export async function useDeleteScreenshot(param1, param2) {
-    console.log(" -> Selected item " + selectedItem.value)
+// ── Löschen, Neu laden ─────────────────────────────────────────────────────
 
-    await dbDelete("screenshots", selectedItem.value)
-    console.log('  --> Deleted screenshot with id ' + selectedItem.value)
-    if (pageId.value == 'screenshots') {
-        // Nur das gelöschte Bild aus der Liste nehmen — NICHT die ganze Seite
-        // neu laden. Der frühere Reload (useRefreshScreenshot) setzte die
-        // Paginierung auf die ersten 4 zurück (der Rest verschwand) UND die neu
-        // gerenderten Karten hatten kein initialisiertes Lösch-Popover mehr,
-        // sodass sich danach nichts mehr löschen liess.
-        const idx = screenshots.findIndex(o => o.objectId == selectedItem.value)
-        if (idx !== -1) screenshots.splice(idx, 1)
-        // Skip mitziehen, damit der nächste Nachlade-Schritt kein Bild überspringt.
-        if (screenshotsPagination.value > 0) screenshotsPagination.value = Math.max(0, screenshotsPagination.value - 1)
-        selectedItem.value = null
+/** Löscht das Bild mit der `objectId` in `selectedItem`. Argumente werden ignoriert. */
+export async function useDeleteScreenshot() {
+    const id = selectedItem.value
+    if (id == null) return
+    try {
+        await dbDelete('screenshots', id)
+    } catch (fehler) {
+        console.error('Screenshot löschen fehlgeschlagen:', fehler)
+        return
     }
-    if (pageId.value == 'daily') {
-        let index = screenshots.findIndex(obj => obj.objectId == selectedItem.value)
-        for (let key in screenshots[index]) delete screenshots[index][key]
-        for (let key in screenshot) delete screenshot[key]
+    if (pageId.value === 'screenshots') {
+        // Kein Neuladen: das setzte die Paginierung zurück.
+        const i = screenshots.findIndex(s => String(s?.objectId) === String(id))
+        if (i >= 0) screenshots.splice(i, 1)
+        screenshotsPagination.value = Math.max(0, screenshotsPagination.value - 1)
+        selectedItem.value = null
+    } else if (pageId.value === 'daily') {
+        const eintrag = screenshots.find(s => String(s?.objectId) === String(id))
+        if (eintrag) leere(eintrag)
+        leere(screenshot)
         selectedItem.value = null
     }
 }
 
+/** Liste neu aufbauen (Filter angewendet). */
 export async function useRefreshScreenshot() {
-    return new Promise(async (resolve, reject) => {
-        await (spinnerLoadingPage.value = true)
-        screenshotsQueryLimit.value = 4
-        screenshotsPagination.value = 0
-        screenshots.length = 0
-        await useGetScreenshots(false)
-        selectedItem.value = null
-        //await useInitPopover()
-        resolve()
-    })
+    spinnerLoadingPage.value = true
+    screenshotsQueryLimit.value = 4
+    screenshotsPagination.value = 0
+    endOfList.value = false
+    boersenCache = null
+    screenshots.length = 0
+    await useGetScreenshots(false)
+    selectedItem.value = null
 }
 
-export async function useSelectedScreenshotFunction(param1, param2, param3) {
-    //console.log("Index "+param1)
-    selectedScreenshotIndex.value = param1
-    selectedScreenshotSource.value = param2
-    //console.log("selectedScreenshotIndex " + selectedScreenshotIndex.value)
-    //console.log("screenshots length "+screenshots.length)
-    //console.log("selectedScreenshotSource " + selectedScreenshotSource.value)
-    //Case where there is index (so screenshots) and we get to end array on screenshots page
-    if (param1 && ((param1 + 2) == screenshots.length) && !endOfList.value) {
-        // Inline: trigger screenshot loading (was useLoadMore() — inlined to avoid circular dep)
+// ── Auswahl für das Vollbild ───────────────────────────────────────────────
+
+/**
+ * Wählt das Bild für das Vollbild und öffnet es.
+ * `index` ≥ 0: Eintrag aus `screenshots` (mit Blättern); −1 oder keine Zahl:
+ * `daten` als Einzelbild.
+ */
+export function useSelectedScreenshotFunction(index, quelle, daten) {
+    selectedScreenshotIndex.value = index
+    selectedScreenshotSource.value = quelle
+    // Zwei vor dem Ende nachladen — nur auf der Seite, und nie für Einzelbilder.
+    if (Number.isInteger(index) && index >= 1 && index + 2 === screenshots.length && !endOfList.value && pageId.value === 'screenshots') {
         useGetScreenshots(false)
     }
-
-
-    //Case where param3 exists, index exists / and click on next (pages: screenshots, daily in tab)
-    if (param1 >= 0) {
-        for (let key in selectedScreenshot) delete selectedScreenshot[key]
-        Object.assign(selectedScreenshot, screenshots[param1])
-        //console.log("screenshots length "+screenshots.length)
-    }
-    //case where no index, so simple full screen without "carousel"
-    else {
-        //console.log("Object id " + param3.objectId)
-        Object.assign(selectedScreenshot, param3)
-    }
-
-    //console.log("selectedScreenshot id  " + selectedScreenshot.objectId)
+    // Vorher leeren, sonst bleiben Felder des vorigen Bildes stehen (A-S4).
+    // Kopie zuerst: wer `selectedScreenshot` selbst übergibt, verlöre sonst alles.
+    const neu = Number.isInteger(index) && index >= 0 ? screenshots[index] : daten
+    const kopie = { ...(neu || {}) }
+    leere(selectedScreenshot)
+    Object.assign(selectedScreenshot, kopie)
+    useOeffneScreenshotVollbild()
 }

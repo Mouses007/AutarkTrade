@@ -1,162 +1,186 @@
 <script setup>
-import { ref, reactive, computed, onBeforeMount, onMounted, onBeforeUnmount } from 'vue'
-import NoData from '../components/NoData.vue';
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue';
-import Screenshot from '../components/Screenshot.vue';
-import { spinnerLoadMore, spinnerLoadingPage, expandedScreenshot } from '../stores/ui.js';
-import { screenshots } from '../stores/trades.js';
-import { useMountScreenshots, useCheckVisibleScreen, useLoadMore } from '../utils/journal/ablauf.js';
-import { endOfList } from '../stores/ui.js';
-import { sanitizeHtml } from '../utils/sanitize';
+/**
+ * Seite `/screenshots` (Spec S.7): alle Bilder, neueste zuerst, in Seiten zu
+ * vier nachgeladen (Endlos-Scroll), gefiltert nach Tags und Börse (Filterleiste,
+ * serverseitig in `useGetScreenshots`) und hier zusätzlich nach Bildtyp.
+ *
+ * Kein Monatsfilter: die Seite zeigt alle Zeiten.
+ */
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Screenshot from '../components/Screenshot.vue'
+import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
+import Leerzustand from '../components/basis/Leerzustand.vue'
+import Kreisel from '../components/basis/Kreisel.vue'
+import Reiter from '../components/basis/Reiter.vue'
+import Symbol from '../components/basis/Symbol.vue'
+import { spinnerLoadingPage, spinnerLoadMore } from '../stores/app/laden.js'
+import { endOfList } from '../stores/app/rahmen.js'
+import { screenshots, expandedScreenshot, screenshotsPagination, screenshotsQueryLimit } from '../stores/journal/screenshots.js'
+import { useMountScreenshots, useCheckVisibleScreen, useLoadMore } from '../utils/journal/ablauf.js'
+
 const { t } = useI18n()
 
-// Screenshot-Filter: 'alle' | 'entry' | 'closing'
-const screenshotFilter = ref('alle')
+// ── Typ-Filter (nur über die geladene Liste, nicht gespeichert) ──
 
-const filteredScreenshots = computed(() => {
-    if (screenshotFilter.value === 'alle') return screenshots
-    return screenshots.filter(s => {
-        const side = s.side || ''
-        const name = s.name || ''
-        if (screenshotFilter.value === 'entry') {
-            // Eröffnung: B (Long Buy) oder SS (Short Sell), aber NICHT _closing im Namen
-            return (side === 'B' || side === 'SS') && !name.includes('_closing')
-        } else if (screenshotFilter.value === 'closing') {
-            // Abschluss: BC (Buy Cover) oder Name enthält _closing
-            return side === 'BC' || name.includes('_closing')
-        }
-        return true
-    })
-})
+const typ = ref('alle')
+const TYPEN = computed(() => [
+    { id: 'alle', titel: t('common.all') },
+    { id: 'eroeffnung', titel: t('screenshots.opening') },
+    { id: 'abschluss', titel: t('screenshots.closing') },
+])
 
+const EROEFFNUNG_SEITEN = ['B', 'SS', 'long', 'short']
+const name = (b) => String(b?.name || '')
 
-onBeforeMount(async () => {
-
-})
-
-/*
- * Benannt statt anonym — siehe Diary.vue. Ohne Abmeldung stapelte jeder Besuch
- * der Seite einen weiteren Endlos-Scroll am `window`.
+/**
+ * Abschluss: Seite `BC` oder Namensendung `_closing`. Eröffnung: Long/Short in
+ * beiden Schreibweisen (`B`/`SS` vom Journal, `long`/`short` vom Playbook) oder
+ * Endung `_entry`/`_trend` — die Altregel kannte `long`/`short` nicht, und
+ * Playbook-Bilder fehlten unter „Eröffnung“ (A-S6).
  */
-function beiScrollNachladen() {
-    const scrollFromTop = window.scrollY
-    const visibleScreen = (window.innerHeight + 200) // 200 Puffer: lädt schon vor dem Ende
-    const documentHeight = document.documentElement.scrollHeight
-    const difference = documentHeight - (scrollFromTop + visibleScreen)
-    if (difference > 0) return
-    if (!spinnerLoadMore.value && !spinnerLoadingPage.value && !endOfList.value && expandedScreenshot.value == null) {
-        useLoadMore()
-    }
+function istAbschluss(b) {
+    return b.side === 'BC' || name(b).includes('_closing')
+}
+function istEroeffnung(b) {
+    if (istAbschluss(b)) return false
+    return EROEFFNUNG_SEITEN.includes(b.side) || /_(entry|trend)$/.test(name(b))
+}
+
+/** Gefiltert, aber mit dem Index in der UNGEFILTERTEN Liste — das Vollbild blättert dort. */
+const sichtbar = computed(() => {
+    const aus = []
+    screenshots.forEach((b, index) => {
+        if (!b || b.objectId == null) return
+        if (typ.value === 'eroeffnung' && !istEroeffnung(b)) return
+        if (typ.value === 'abschluss' && !istAbschluss(b)) return
+        aus.push({ b, index })
+    })
+    return aus
+})
+
+/**
+ * Trade-ID aus dem Bildnamen für den Playbook-Link: Endungen
+ * `_entry`/`_trend`/`_closing` abschneiden; ohne erkennbare Trade-ID
+ * (`t<Tag>_<Index>_<Position>`) kein Link (A-S7).
+ */
+function tradeIdAus(n) {
+    const ohne = String(n || '').replace(/_(entry|trend|closing)$/, '')
+    return /^t\d+_\d+_.+/.test(ohne) ? ohne : ''
+}
+const playbookLink = (b) => {
+    const id = tradeIdAus(b.name)
+    return id ? `/playbook?tradeId=${encodeURIComponent(id)}` : ''
+}
+
+// ── Endlos-Scroll ──
+
+function beimScrollen() {
+    const rest = document.documentElement.scrollHeight - window.scrollY
+    if (window.innerHeight + 200 < rest) return
+    if (spinnerLoadMore.value || spinnerLoadingPage.value || endOfList.value) return
+    if (expandedScreenshot.value != null) return
+    useLoadMore()
 }
 
 onMounted(async () => {
+    // Jeder Besuch beginnt vorn — sonst setzte ein zweiter Besuch beim Offset
+    // des ersten fort. Eine gemerkte Menge (SS) setzt useMountScreenshots danach.
+    endOfList.value = false
+    screenshots.length = 0
+    screenshotsPagination.value = 0
+    screenshotsQueryLimit.value = 4
     await useMountScreenshots()
-    window.addEventListener('scroll', beiScrollNachladen, { passive: true })
+    window.addEventListener('scroll', beimScrollen, { passive: true })
     useCheckVisibleScreen()
 })
 
-onBeforeUnmount(() => window.removeEventListener('scroll', beiScrollNachladen))
-
+onBeforeUnmount(() => {
+    window.removeEventListener('scroll', beimScrollen)
+})
 </script>
 
 <template>
     <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="screenshots-grid mt-2 mb-2">
+    <div v-show="!spinnerLoadingPage" class="seite">
+        <Reiter v-model="typ" :reiter="TYPEN" class="typen" />
 
-        <!-- Screenshot-Typ Filter -->
-        <div class="ss-filter-bar mb-2">
-            <button :class="['ss-filter-btn', screenshotFilter === 'alle' && 'active']"
-                @click="screenshotFilter = 'alle'">
-                {{ t('common.all') }}
-            </button>
-            <button :class="['ss-filter-btn', screenshotFilter === 'entry' && 'active']"
-                @click="screenshotFilter = 'entry'">
-                <i class="uil uil-arrow-up-right me-1"></i>{{ t('screenshots.opening') }}
-            </button>
-            <button :class="['ss-filter-btn', screenshotFilter === 'closing' && 'active']"
-                @click="screenshotFilter = 'closing'">
-                <i class="uil uil-arrow-down-left me-1"></i>{{ t('screenshots.closing') }}
-            </button>
+        <Leerzustand v-if="sichtbar.length === 0" :titel="t('common.noData')" symbol="bild" />
+
+        <div v-else class="raster">
+            <article v-for="{ b, index } in sichtbar" :id="String(b.objectId)" :key="b.objectId" class="karte">
+                <Screenshot :screenshot-data="b" source="screenshots" :index="index" />
+                <router-link v-if="playbookLink(b)" :to="playbookLink(b)" class="playbook at-klein">
+                    <Symbol name="buch" :groesse="15" />{{ t('nav.playbook') }}
+                </router-link>
+            </article>
         </div>
 
-        <div v-if="filteredScreenshots.length == 0">
-            <NoData />
-        </div>
-        <div class="row">
-            <div v-for="(itemScreenshot, index) in filteredScreenshots" class="col-12 col-md-6 col-xl-4 mt-2">
-                <div class="dailyCard" v-bind:id="itemScreenshot.objectId">
-                    <div class="row">
-                        <Screenshot :screenshot-data="itemScreenshot" show-title source="screenshots" :index="screenshots.indexOf(itemScreenshot)"/>
-                    </div>
-
-                    <!-- Playbook Link -->
-                    <div v-if="itemScreenshot.name" class="px-2 pb-2 pt-1">
-                        <a :href="'/playbook?tradeId=' + encodeURIComponent(itemScreenshot.name)"
-                            class="playbook-link-btn">
-                            <i class="uil uil-compass me-1"></i>{{ t('nav.playbook') }}
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Load more spinner -->
-        <div v-if="spinnerLoadMore" class="d-flex justify-content-center mt-3">
-            <div class="spinner-border text-blue" role="status"></div>
+        <div v-if="spinnerLoadMore" class="nachladen">
+            <Kreisel :groesse="22" />
         </div>
     </div>
 </template>
 
 <style scoped>
-/* Screenshot-Typ Filter */
-.ss-filter-bar {
+.seite {
     display: flex;
-    gap: 0.4rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: var(--abstand-4);
+    min-width: 0;
 }
 
-.ss-filter-btn {
+.typen {
+    align-self: flex-start;
+    max-width: 100%;
+}
+
+.raster {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--abstand-4);
+}
+
+@media (min-width: 768px) {
+    .raster {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 1200px) {
+    .raster {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.karte {
+    display: flex;
+    flex-direction: column;
+    gap: var(--abstand-2);
+    min-width: 0;
+    padding: var(--abstand-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--panel);
+    scroll-margin-top: calc(var(--kopf-hoehe) + var(--abstand-4));
+}
+
+.playbook {
     display: inline-flex;
     align-items: center;
-    font-size: 0.78rem;
-    padding: 0.3rem 0.7rem;
-    border: 1px solid var(--white-18);
-    border-radius: 6px;
-    color: var(--white-60);
-    background: transparent;
-    cursor: pointer;
-    transition: all 0.15s;
+    gap: var(--abstand-1);
+    align-self: flex-start;
+    color: var(--accent);
+    text-decoration: none;
 }
 
-.ss-filter-btn:hover {
-    border-color: var(--white-38);
-    color: var(--white-87);
+.playbook:hover {
+    color: var(--accent-hover);
 }
 
-.ss-filter-btn.active {
-    border-color: var(--blue-color, #6cb4ee);
-    color: var(--blue-color, #6cb4ee);
-    background: rgba(108, 180, 238, 0.1);
+.nachladen {
+    display: flex;
+    justify-content: center;
+    padding: var(--abstand-4) 0;
 }
-
-/* Kompaktere Karten im Screenshots-Grid */
-.screenshots-grid :deep(.cardFirstLine) h5 {
-    font-size: 0.85rem;
-    margin-bottom: 0;
-}
-
-.screenshots-grid :deep(.col-12.mt-2 span) {
-    font-size: 0.78rem;
-}
-
-.screenshots-grid :deep(.imgContainer) {
-    max-height: 250px;
-    overflow: hidden;
-}
-
-.screenshots-grid :deep(.uil) {
-    font-size: 0.95rem;
-}
-
 </style>

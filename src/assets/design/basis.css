@@ -227,8 +227,12 @@ select.at-feld.klein {
     font-variant-numeric: tabular-nums;
 }
 
-/* Tabellen scrollen in sich, nie die Seite. */
+/* Tabellen scrollen in sich, nie die Seite. `position: relative`, damit
+   absolut gesetzte Kinder (z. B. `.at-unsichtbar` in einem Spaltenkopf) in der
+   Hülle bleiben — sonst hängen sie am Inhaltsbereich und schieben die Seite am
+   Telefon in die Breite (Tagesansicht, 19.10.2026: 574 statt 375 px). */
 .at-tabelle-huelle {
+    position: relative;
     width: 100%;
     overflow-x: auto;
 }

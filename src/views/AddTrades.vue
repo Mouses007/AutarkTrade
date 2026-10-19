@@ -1,500 +1,486 @@
 <script setup>
-import { onMounted, ref, computed } from 'vue';
+/**
+ * Trades hinzufügen (`/addTrades`): ein einzelner Futures-Trade von Hand oder
+ * ein API-Import über einen Zeitraum mit Vorschau vor dem Speichern.
+ *
+ * Rechnen tut diese Ansicht fast nichts selbst: Trade-Objekte kommen aus
+ * `quickImport.js` (die EINZIGE Rechenvorschrift, gleich wie der Schnell-
+ * import), Blotter/P&L und das Speichern aus `utils/journal/`. Hier leben nur
+ * Eingabe, Prüfung und Ablauf.
+ */
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { spinnerLoadingPage } from '../stores/ui.js';
-import { executions, existingImports, blotter, pAndL, tradesData, existingTradesArray, trades as globalTrades } from '../stores/trades.js';
-import { selectedBroker } from '../stores/filters.js';
-import { useCreatedDateFormat, useDateCalFormat } from '../utils/journal/format.js';
-import { useUploadTrades, useGetExistingTradesArray } from '../utils/journal/import.js'
-import { useCreateBlotter, useCreatePnL } from '../utils/journal/tagesrechnung.js'
-import { buildTradeObj, saveManualTrade, useQuickApiImport, createBitunixTradeObj, createBitgetTradeObj } from '../utils/quickImport.js'
-import { refreshAccountBalance } from '../stores/accountBalance.js'
-import { istGewinn } from '../../shared/gewinn.js'
-import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue';
+import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import dayjs from '../utils/journal/zeit.js'
+import Reiter from '../components/basis/Reiter.vue'
+import Karte from '../components/basis/Karte.vue'
+import Knopf from '../components/basis/Knopf.vue'
+import Hinweis from '../components/basis/Hinweis.vue'
+import Kreisel from '../components/basis/Kreisel.vue'
+import ImportVorschau from '../components/import/ImportVorschau.vue'
+import { spinnerLoadingPage } from '../stores/app/laden.js'
+import { selectedBroker } from '../stores/journal/filter.js'
+import { executions, existingImports, existingTradesArray, tradesData, trades, blotter, pAndL } from '../stores/journal/import.js'
+import { refreshAccountBalance } from '../stores/accountBalance.js'
+import { useGetExistingTradesArray, useUploadTrades } from '../utils/journal/import.js'
+import { useCreateBlotter, useCreatePnL } from '../utils/journal/tagesrechnung.js'
+import { ersetzeObjekt } from '../utils/journal/hilfen.js'
+import { useDateCalFormat } from '../utils/journal/format.js'
+import { useQuickApiImport, createBitunixTradeObj, createBitgetTradeObj, buildTradeObj, saveManualTrade } from '../utils/quickImport.js'
+import { istGewinn } from '../../shared/gewinn.js'
 import { sendNotification } from '../utils/notify.js'
-import { useI18n } from 'vue-i18n'
-
-const router = useRouter()
+import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
 
 const { t } = useI18n()
+const router = useRouter()
 
 spinnerLoadingPage.value = false
 
-const importMode = ref('manual')
-
-// ===== Manuelle Futures-Trade-Eingabe =====
-const manual = ref({
-    symbol: '', side: 'B', date: dayjs().format('YYYY-MM-DD'), entryDate: '',
-    entryPrice: '', exitPrice: '', qty: '', netPL: '', fee: '', leverage: ''
-})
-const manualSaving = ref(false)
-const manualMsg = ref(null)   // { ok, text }
-
-/*
- * Symbol und Datum bleiben nach dem Speichern absichtlich stehen (schnelle
- * Mehrfacheingabe) — sie zählen deshalb NICHT als ungespeicherte Eingabe.
- * Alles andere schon: wer Preise und PnL getippt hat und wegnavigiert, hat die
- * Arbeit verloren.
- */
-useVerlassenSchutz(() => ['entryPrice', 'exitPrice', 'qty', 'netPL', 'fee', 'leverage']
-    .some((f) => String(manual.value[f] ?? '').trim() !== ''),
-    () => t('common.unsavedLeave'))
-
-/*
- * Ein leeres Feld ist keine Null.
- *
- * Vorher lief jede Zahl durch `parseFloat(x || 0) || 0` bzw. `|| 1`. Eine
- * vergessene Gebühr wurde damit stillschweigend zu 0, eine vergessene Menge zu
- * 1 — und der Trade wurde mit grüner Erfolgsmeldung gespeichert. Der Fehler
- * fiel erst Wochen später in der Auswertung auf, wenn überhaupt.
- *
- * Leer bleibt erlaubt (nicht jedes Feld ist bekannt), aber etwas Getipptes,
- * das keine Zahl ergibt, ist ab jetzt ein Fehler und keine Null.
- *
- * Die Felder im Template sind bewusst type="text" mit inputmode="decimal":
- * ein type="number"-Feld liefert bei «12,50» je nach Browser (badInput) den
- * LEEREN String über v-model — die Komma-Ersetzung hier wäre unerreichbar und
- * die getippte Gebühr würde still als «leer gelassen» → 0 gespeichert.
- *
- * @returns {number|null} null = leer gelassen
- */
-function zahlOderNull(wert, feldName, fehler) {
-    const roh = String(wert ?? '').trim()
-    if (roh === '') return null
-    const n = Number(roh.replace(',', '.'))   // Komma-Eingabe ist gemeint, nicht verworfen
-    if (!Number.isFinite(n)) { fehler.push(t('addTrades.manualNotANumber', { feld: feldName })); return null }
-    return n
-}
-
-async function addManualTrade() {
-    manualMsg.value = null
-    const sym = (manual.value.symbol || '').trim().toUpperCase()
-    if (!sym) { manualMsg.value = { ok: false, text: t('addTrades.manualSymbolMissing') }; return }
-
-    const fehler = []
-    const netPLRoh = zahlOderNull(manual.value.netPL, t('addTrades.manualFieldNetPL'), fehler)
-    if (netPLRoh === null && !fehler.length) fehler.push(t('addTrades.manualNetPLMissing'))
-
-    const feeRoh = zahlOderNull(manual.value.fee, t('addTrades.manualFieldFee'), fehler)
-    const qtyRoh = zahlOderNull(manual.value.qty, t('addTrades.manualFieldQty'), fehler)
-    const einRoh = zahlOderNull(manual.value.entryPrice, t('addTrades.manualFieldEntry'), fehler)
-    const ausRoh = zahlOderNull(manual.value.exitPrice, t('addTrades.manualFieldExit'), fehler)
-    const hebelRoh = zahlOderNull(manual.value.leverage, t('addTrades.manualFieldLeverage'), fehler)
-
-    if (qtyRoh !== null && qtyRoh <= 0) fehler.push(t('addTrades.manualQtyPositive'))
-    if (einRoh !== null && einRoh < 0) fehler.push(t('addTrades.manualPricePositive'))
-    if (ausRoh !== null && ausRoh < 0) fehler.push(t('addTrades.manualPricePositive'))
-    if (hebelRoh !== null && hebelRoh <= 0) fehler.push(t('addTrades.manualLeveragePositive'))
-
-    // Ein Abschluss in der Zukunft ist immer ein Tippfehler im Datumsfeld.
-    const abschluss = dayjs.utc(manual.value.date)
-    if (!abschluss.isValid()) fehler.push(t('addTrades.manualDateInvalid'))
-    else if (abschluss.startOf('day').isAfter(dayjs.utc().startOf('day'))) fehler.push(t('addTrades.manualDateFuture'))
-
-    if (manual.value.entryDate) {
-        const ein = dayjs.utc(manual.value.entryDate)
-        if (!ein.isValid()) fehler.push(t('addTrades.manualEntryDateInvalid'))
-        else if (abschluss.isValid() && ein.startOf('day').isAfter(abschluss.startOf('day'))) {
-            fehler.push(t('addTrades.manualEntryAfterExit'))
-        }
-    }
-
-    if (fehler.length) { manualMsg.value = { ok: false, text: fehler.join(' · ') }; return }
-
-    /*
-     * Plausibilität nur als WARNUNG, nicht als Sperre: bei Teilausstiegen,
-     * nachgezogenen Stopps oder Gebührenrabatten kann das Vorzeichen des PnL
-     * der reinen Preisrichtung echt widersprechen. Wer das weiss, soll
-     * speichern können — er soll es nur einmal gesehen haben.
-     */
-    let warnung = ''
-    if (einRoh !== null && ausRoh !== null && einRoh > 0 && ausRoh > 0 && netPLRoh !== null && netPLRoh !== 0) {
-        const richtungLong = manual.value.side === 'B'
-        const preisGewinn = richtungLong ? (ausRoh > einRoh) : (ausRoh < einRoh)
-        if (preisGewinn !== (netPLRoh > 0)) warnung = ' — ' + t('addTrades.manualPnlMismatch')
-    }
-
-    manualSaving.value = true
-    try {
-        const fee = feeRoh === null ? 0 : Math.abs(feeRoh)
-        const netPL = netPLRoh
-        const grossPL = netPL + fee   // Brutto = Netto + Gebühren
-        const qty = qtyRoh === null ? 1 : qtyRoh
-        const closeDay = dayjs.utc(manual.value.date)
-        const dateUnix = closeDay.startOf('day').unix()
-        const exitTime = closeDay.hour(12).minute(0).second(0).unix()
-        const entryTime = manual.value.entryDate
-            ? dayjs.utc(manual.value.entryDate).hour(12).minute(0).second(0).unix()
-            : exitTime
-
-        const tradeObj = buildTradeObj({
-            id: `t${dateUnix}_0_manual${Date.now()}`,
-            broker: broker.value, td: dateUnix, side: manual.value.side, quantity: qty,
-            entryTime, exitTime,
-            entryPrice: einRoh === null ? 0 : einRoh,
-            exitPrice: ausRoh === null ? 0 : ausRoh,
-            symbol: sym, grossPL, netPL, fee, tradingFee: fee, fundingFee: 0,
-            isGrossWin: istGewinn(grossPL), isNetWin: istGewinn(netPL),
-        })
-        if (hebelRoh !== null) tradeObj.leverage = hebelRoh
-
-        await saveManualTrade(tradeObj)
-        try { await refreshAccountBalance({ broker: broker.value, force: true }) } catch (_) { /* egal */ }
-
-        manualMsg.value = {
-            ok: true,
-            text: t('addTrades.manualSaved', {
-                symbol: sym,
-                seite: manual.value.side === 'B' ? t('addTrades.manualLong') : t('addTrades.manualShort'),
-                pnl: `${netPL >= 0 ? '+' : ''}${netPL}`,
-                datum: manual.value.date,
-            }) + warnung,
-        }
-        // PnL-bezogene Felder zurücksetzen, Symbol/Datum für schnelle Mehrfacheingabe behalten
-        manual.value.netPL = ''; manual.value.fee = ''; manual.value.entryPrice = ''; manual.value.exitPrice = ''; manual.value.qty = ''
-    } catch (e) {
-        manualMsg.value = { ok: false, text: t('addTrades.manualSaveFailed') + ' ' + (e?.message || e) }
-    }
-    manualSaving.value = false
-}
-const apiStartDate = ref(dayjs().subtract(7, 'day').format('YYYY-MM-DD'))
-const apiEndDate = ref(dayjs().format('YYYY-MM-DD'))
-const apiImportLoading = ref(false)
-const apiImportError = ref('')
-
+const BROKER_NAMEN = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
 const broker = computed(() => selectedBroker.value || 'bitunix')
-const isBitget = computed(() => broker.value === 'bitget')
-const isPionex = computed(() => broker.value === 'pionex')
-const BROKER_LABEL = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
-const brokerLabel = computed(() => BROKER_LABEL[broker.value] || 'Bitunix')
+const brokerName = computed(() => BROKER_NAMEN[broker.value] || 'Bitunix')
 
-onMounted(async () => {
-    await useGetExistingTradesArray()
+const reiter = ref('manuell')
+const reiterListe = computed(() => [
+    { id: 'manuell', titel: t('addTrades.manualTab') },
+    { id: 'api', titel: t('addTrades.apiImport') },
+])
+
+onMounted(() => {
+    // Nicht abwarten: bei einem DB-Fehler bleibt das Versprechen offen, und
+    // nichts in dieser Ansicht braucht die Liste vor dem ersten API-Import.
+    useGetExistingTradesArray()
 })
 
-async function importFromApi() {
-    apiImportLoading.value = true
-    apiImportError.value = ''
+// ── Manuelle Eingabe ───────────────────────────────────────────────────────
 
-    // Pionex: Bots werden über useQuickApiImport importiert (inkl. PnL-Breakdown-
-    // Backfill bestehender Bots). Datumsfelder sind hier irrelevant — der Server
-    // nutzt lastApiImport / apiImportStartDate.
-    if (isPionex.value) {
-        try {
-            const result = await useQuickApiImport('pionex')
-            sendNotification('importFertig', 'Pionex Import', result.message || t('messages.importCount', { count: result.count || 0 }))
-        } catch (error) {
-            apiImportError.value = error.response?.data?.error || error.message || t('addTrades.importFailed')
-            sendNotification('importFertig', 'Pionex Import', t('messages.importFailed') + (error.message || ''))
-        }
-        apiImportLoading.value = false
+const heute = () => dayjs().format('YYYY-MM-DD')
+
+const form = reactive({
+    symbol: '',
+    side: 'B',
+    date: heute(),
+    entryDate: '',
+    entryPrice: '',
+    exitPrice: '',
+    qty: '',
+    netPL: '',
+    fee: '',
+    leverage: '',
+})
+const speichert = ref(false)
+const meldung = ref('')
+const meldungGut = ref(false)
+
+const seitenOptionen = computed(() => [
+    { wert: 'B', text: t('addTrades.manualLong') },
+    { wert: 'SS', text: t('addTrades.manualShort') },
+])
+
+/*
+ * Ungespeichert sind nur die Zahlenfelder. Symbol, Seite und Daten bleiben
+ * nach dem Speichern bewusst stehen (schnelle Mehrfacheingabe) — zählten sie,
+ * fragte die Seite nach jedem erfolgreichen Speichern beim Verlassen nach.
+ */
+const ZAHLENFELDER = ['entryPrice', 'exitPrice', 'qty', 'netPL', 'fee', 'leverage']
+const ungespeichert = computed(() => ZAHLENFELDER.some(f => String(form[f] ?? '').trim() !== ''))
+useVerlassenSchutz(ungespeichert, () => t('common.unsavedLeave'))
+
+/**
+ * Zahl aus einem Textfeld. Textfeld statt Zahlenfeld, weil ein Zahlenfeld bei
+ * „12,50" je nach Browser '' liefert — die Gebühr wäre still „leer". Darum
+ * hier selbst: das erste Komma wird zum Punkt, leer heisst „nicht angegeben"
+ * (null), NIE null Franken.
+ */
+function leseZahl(wert, feldKey, fehler) {
+    const s = String(wert ?? '').trim()
+    if (s === '') return null
+    const z = Number(s.replace(',', '.'))
+    if (!Number.isFinite(z)) {
+        fehler.push(t('addTrades.manualNotANumber', { feld: t(feldKey) }))
+        return null
+    }
+    return z
+}
+
+/** Datum JJJJ-MM-TT als UTC-Tagesbeginn, oder null wenn ungültig. */
+function utcTag(text) {
+    const d = dayjs.utc(String(text || ''), 'YYYY-MM-DD', true)
+    return d.isValid() ? d.startOf('day') : null
+}
+
+async function speichereManuell() {
+    meldung.value = ''
+    meldungGut.value = false
+    const symbol = String(form.symbol || '').trim().toUpperCase()
+    if (!symbol) {
+        meldung.value = t('addTrades.manualSymbolMissing')
         return
     }
 
+    const fehler = []
+    const netPL = leseZahl(form.netPL, 'addTrades.manualFieldNetPL', fehler)
+    if (netPL === null && fehler.length === 0) fehler.push(t('addTrades.manualNetPLMissing'))
+    const fee = leseZahl(form.fee, 'addTrades.manualFieldFee', fehler)
+    const qty = leseZahl(form.qty, 'addTrades.manualFieldQty', fehler)
+    const entryPrice = leseZahl(form.entryPrice, 'addTrades.manualFieldEntry', fehler)
+    const exitPrice = leseZahl(form.exitPrice, 'addTrades.manualFieldExit', fehler)
+    const leverage = leseZahl(form.leverage, 'addTrades.manualFieldLeverage', fehler)
+    if (qty !== null && qty <= 0) fehler.push(t('addTrades.manualQtyPositive'))
+    if (entryPrice !== null && entryPrice < 0) fehler.push(t('addTrades.manualPricePositive'))
+    if (exitPrice !== null && exitPrice < 0) fehler.push(t('addTrades.manualPricePositive'))
+    if (leverage !== null && leverage <= 0) fehler.push(t('addTrades.manualLeveragePositive'))
+
+    const ausstieg = utcTag(form.date)
+    if (!ausstieg) fehler.push(t('addTrades.manualDateInvalid'))
+    else if (ausstieg.valueOf() > dayjs.utc().startOf('day').valueOf()) fehler.push(t('addTrades.manualDateFuture'))
+
+    let einstieg = null
+    if (String(form.entryDate || '').trim() !== '') {
+        einstieg = utcTag(form.entryDate)
+        if (!einstieg) fehler.push(t('addTrades.manualEntryDateInvalid'))
+        else if (ausstieg && einstieg.valueOf() > ausstieg.valueOf()) fehler.push(t('addTrades.manualEntryAfterExit'))
+    }
+
+    if (fehler.length) {
+        meldung.value = fehler.join(' · ')
+        return
+    }
+
+    // Warnung sperrt nicht: ein Verlust trotz Kursgewinn kann echt sein (Gebühren, Funding).
+    let warnung = ''
+    if (entryPrice > 0 && exitPrice > 0 && netPL !== 0) {
+        const lang = form.side === 'B'
+        const preisGewinn = lang ? exitPrice > entryPrice : exitPrice < entryPrice
+        if (preisGewinn !== netPL > 0) warnung = ' — ' + t('addTrades.manualPnlMismatch')
+    }
+
+    speichert.value = true
     try {
-        const startTime = dayjs.utc(apiStartDate.value).startOf('day').valueOf()
-        const endTime = dayjs.utc(apiEndDate.value).endOf('day').valueOf()
-        const currentBroker = broker.value
+        const gebuehr = fee !== null ? Math.abs(fee) : 0
+        const grossPL = netPL + gebuehr
+        const menge = qty ?? 1
+        const dateUnix = ausstieg.unix()
+        const exitTime = ausstieg.add(12, 'hour').unix()
+        const entryTime = einstieg ? einstieg.add(12, 'hour').unix() : exitTime
 
-        // Fetch positions from selected broker API
-        let allPositions = []
+        const trade = buildTradeObj({
+            id: 't' + dateUnix + '_0_manual' + Date.now(),
+            broker: broker.value,
+            td: dateUnix,
+            side: form.side,
+            quantity: menge,
+            entryTime,
+            exitTime,
+            entryPrice: entryPrice ?? 0,
+            exitPrice: exitPrice ?? 0,
+            symbol,
+            grossPL,
+            netPL,
+            fee: gebuehr,
+            tradingFee: gebuehr,
+            fundingFee: 0,
+            isGrossWin: istGewinn(grossPL),
+            isNetWin: istGewinn(netPL),
+        })
+        if (leverage !== null) trade.leverage = leverage
 
-        if (currentBroker === 'bitget') {
-            // Bitget: server-side pagination is handled by the endpoint
-            const response = await axios.get('/api/bitget/positions', {
-                params: { startTime, endTime }
-            })
+        await saveManualTrade(trade)
+        try { await refreshAccountBalance({ broker: broker.value, force: true }) } catch { /* Kontostand ist Nebensache */ }
 
-            if (response.data.code !== 0) {
-                throw new Error(response.data.msg || 'API error')
-            }
+        meldung.value = t('addTrades.manualSaved', {
+            symbol,
+            seite: form.side === 'B' ? t('addTrades.manualLong') : t('addTrades.manualShort'),
+            pnl: (netPL >= 0 ? '+' : '') + netPL,
+            datum: form.date,
+        }) + warnung
+        meldungGut.value = true
+        // Hebel mitleeren: blieb er stehen, galt das Formular nach jedem
+        // Speichern weiter als ungespeichert und der Verlassen-Schutz fragte.
+        for (const f of ZAHLENFELDER) form[f] = ''
+    } catch (e) {
+        meldung.value = t('addTrades.manualSaveFailed') + ' ' + (e?.message || String(e))
+    } finally {
+        speichert.value = false
+    }
+}
 
-            allPositions = response.data.data?.positionList || []
-        } else {
-            // Bitunix: client-side pagination with skip
-            let skip = 0
-            let hasMore = true
+// ── API-Import ─────────────────────────────────────────────────────────────
 
-            while (hasMore) {
-                const response = await axios.get('/api/bitunix/positions', {
-                    params: { startTime, endTime, skip, limit: 100 }
-                })
+const startDatum = ref(dayjs().subtract(7, 'day').format('YYYY-MM-DD'))
+const endDatum = ref(heute())
+const importiert = ref(false)
+const importFehler = ref('')
+const importErgebnis = ref('')
 
-                if (response.data.code !== 0) {
-                    throw new Error(response.data.msg || 'API error')
-                }
+const titelBenachrichtigung = () => brokerName.value + ' Import'
+const melde = (text) => sendNotification('importFertig', titelBenachrichtigung(), text)
 
-                const positions = response.data.data?.positionList || []
-                allPositions = allPositions.concat(positions)
+async function importierePionex() {
+    importiert.value = true
+    importFehler.value = ''
+    importErgebnis.value = ''
+    try {
+        const ergebnis = await useQuickApiImport('pionex')
+        const text = ergebnis?.message || t('messages.importCount', { count: ergebnis?.count ?? 0 })
+        // Abweichung: die Benachrichtigung erscheint nur bei Tab ohne Fokus —
+        // wer die Seite ansieht, bekäme sonst gar keine Rückmeldung.
+        importErgebnis.value = text
+        melde(text)
+    } catch (e) {
+        const text = e?.response?.data?.error || e?.message || t('addTrades.importFailed')
+        importFehler.value = text
+        melde(t('messages.importFailed') + text)
+    } finally {
+        importiert.value = false
+    }
+}
 
-                if (positions.length < 100) {
-                    hasMore = false
-                } else {
-                    skip += 100
-                }
-            }
-        }
+/** Antwort der Positions-Proxys prüfen; `code` ≠ 0 ist ein Börsenfehler. */
+function positionenAus(antwort) {
+    const d = antwort?.data || {}
+    if (d.code !== 0) throw new Error(d.msg || 'API error')
+    return d.data?.positionList || []
+}
 
-        if (allPositions.length === 0) {
-            apiImportError.value = t('addTrades.noPositionsFound')
-            sendNotification('importFertig', `${brokerLabel.value} Import`, t('addTrades.noPositionsFound'))
-            apiImportLoading.value = false
+async function holePositionen(startTime, endTime) {
+    if (broker.value === 'bitget') {
+        return positionenAus(await axios.get('/api/bitget/positions', { params: { startTime, endTime } }))
+    }
+    const alle = []
+    const limit = 100
+    for (let skip = 0; ; skip += limit) {
+        const seite = positionenAus(await axios.get('/api/bitunix/positions', { params: { startTime, endTime, skip, limit } }))
+        alle.push(...seite)
+        if (seite.length < limit) break
+    }
+    return alle
+}
+
+async function importiereApi() {
+    importiert.value = true
+    importFehler.value = ''
+    importErgebnis.value = ''
+    try {
+        const startTime = dayjs.utc(startDatum.value).startOf('day').valueOf()
+        const endTime = dayjs.utc(endDatum.value).endOf('day').valueOf()
+        const positionen = await holePositionen(startTime, endTime)
+        if (!positionen.length) {
+            importFehler.value = t('addTrades.noPositionsFound')
+            melde(t('addTrades.noPositionsFound'))
             return
         }
 
-        /*
-         * EIN Bauplan für Trade-Objekte, nicht zwei.
-         *
-         * Hier standen bis zum Audit vom 28.08.2026 zwei eigene Parser plus
-         * ein von Hand nachgebautes Trade-Objekt — eine Feld-für-Feld-Kopie
-         * von `buildTradeObj`, die drei Korrekturen nicht mitbekommen hatte:
-         *   - `realizedPNL` ist bei Bitunix bereits der fertige Wallet-Delta,
-         *     hier wurden Gebühr UND Funding ein zweites Mal abgezogen,
-         *   - `Math.abs` auf dem Funding machte erhaltenes Funding zu Kosten,
-         *   - `tradingFee`/`fundingFee` fehlten im Objekt, weshalb die
-         *     Funding-Zeile der Kennzahlen-Kachel lautlos verschwand.
-         *
-         * Die Rechnung steht jetzt nur noch in `quickImport.js`. Wer sie
-         * ändert, ändert beide Importwege.
-         */
         spinnerLoadingPage.value = true
-
-        for (let key in executions) delete executions[key]
-        const trades = {}
+        for (const k of Object.keys(executions)) delete executions[k]
         existingImports.length = 0
         tradesData.length = 0
 
-        allPositions.forEach((pos, i) => {
-            const tradeObj = currentBroker === 'bitget'
-                ? createBitgetTradeObj(pos, i)
-                : createBitunixTradeObj(pos, i)
-
-            const dateUnix = tradeObj.td
-            if (!trades[dateUnix]) trades[dateUnix] = []
-            if (!executions[dateUnix]) executions[dateUnix] = []
-
-            trades[dateUnix].push(tradeObj)
-            executions[dateUnix].push({ ...tradeObj, trade: tradeObj.id })
+        const erzeuge = broker.value === 'bitget' ? createBitgetTradeObj : createBitunixTradeObj
+        const jeTag = {}
+        positionen.forEach((pos, i) => {
+            const trade = erzeuge(pos, i)
+            ;(jeTag[trade.td] ||= []).push(trade)
+            ;(executions[trade.td] ||= []).push({ ...trade, trade: trade.id })
         })
 
-        // Filter out already imported dates
-        // existingTradesArray contains date strings (YYYY-MM-DD),
-        // trades/executions keys are dateUnix numbers
-        const existingDateSet = new Set(existingTradesArray)
-        for (const dateUnixKey of Object.keys(trades)) {
-            const dateStr = dayjs.unix(Number(dateUnixKey)).utc().format('YYYY-MM-DD')
-            if (existingDateSet.has(dateStr)) {
-                console.log(" -> Already imported date " + dateStr + " (dateUnix=" + dateUnixKey + ")")
-                existingImports.push(Number(dateUnixKey))
-                delete trades[dateUnixKey]
-                delete executions[dateUnixKey]
+        /*
+         * Bereits vorhandene Tage aussortieren — bewusst tageweise und über
+         * alle Broker, wie bisher (die Duplikatprüfung dieses Wegs bleibt; der
+         * positionsgenaue Abgleich des Schnellimports wäre ein eigener Auftrag).
+         */
+        for (const td of Object.keys(jeTag)) {
+            const datum = dayjs.unix(Number(td)).utc().format('YYYY-MM-DD')
+            if (existingTradesArray.includes(datum)) {
+                existingImports.push(Number(td))
+                delete jeTag[td]
+                delete executions[td]
             }
         }
 
-        // Check if anything left to import
-        if (Object.keys(trades).length === 0) {
-            apiImportError.value = t('addTrades.allAlreadyImported')
-            sendNotification('importFertig', `${brokerLabel.value} Import`, t('messages.noNewTrades'))
+        const neueTage = Object.keys(jeTag).length
+        if (!neueTage) {
+            importFehler.value = t('addTrades.allAlreadyImported')
+            melde(t('messages.noNewTrades'))
             spinnerLoadingPage.value = false
-            apiImportLoading.value = false
             return
         }
 
-        // Write trades to the global trades object
-        for (let key in globalTrades) delete globalTrades[key]
-        Object.assign(globalTrades, trades)
-
+        ersetzeObjekt(trades, jeTag)
         await useCreateBlotter()
         await useCreatePnL()
-
         spinnerLoadingPage.value = false
-        console.log(` -> Imported ${allPositions.length} positions from ${brokerLabel.value} API (${Object.keys(trades).length} new days)`)
-        sendNotification('importFertig', `${brokerLabel.value} Import`, t('messages.positionsImported', { count: allPositions.length, days: Object.keys(trades).length }))
-
-    } catch (error) {
-        apiImportError.value = error.message || t('addTrades.importFailed')
-        sendNotification('importFertig', `${brokerLabel.value} Import`, t('messages.importFailed') + (error.message || t('common.error')))
+        melde(t('messages.positionsImported', { count: positionen.length, days: neueTage }))
+    } catch (e) {
+        importFehler.value = e?.message || t('addTrades.importFailed')
+        melde(t('messages.importFailed') + (e?.message || t('common.error')))
         spinnerLoadingPage.value = false
+    } finally {
+        importiert.value = false
     }
-
-    apiImportLoading.value = false
 }
 
+const hatVorschau = computed(() => Object.keys(executions).length > 0)
+const bereitsImportiert = computed(() => existingImports.map(td => useDateCalFormat(td)).join(', '))
+
+function absenden() {
+    // Ohne Argumente: als Ereignis-Handler gebunden landete sonst das Klickereignis darin.
+    useUploadTrades()
+}
+
+function abbrechen() {
+    router.push('/dashboard')
+}
 </script>
+
 <template>
-    <SpinnerLoadingPage />
+    <div class="import-seite">
+        <Reiter v-model="reiter" :reiter="reiterListe" class="at-mu-4" />
 
-    <!-- Import mode tabs -->
-    <div class="mt-3">
-        <ul class="nav nav-tabs">
-            <li class="nav-item">
-                <a class="nav-link" :class="{ active: importMode === 'manual' }" href="#" @click.prevent="importMode = 'manual'">{{ t('addTrades.manualTab') }}</a>
-            </li>
-            <li class="nav-item">
-                <a class="nav-link" :class="{ active: importMode === 'api' }" href="#" @click.prevent="importMode = 'api'">{{ t('addTrades.apiImport') }}</a>
-            </li>
-        </ul>
-    </div>
+        <!-- Manuelle Eingabe -->
+        <Karte v-if="reiter === 'manuell'">
+            <p class="einleitung">
+                {{ t('addTrades.manualIntro') }} <strong>{{ brokerName }}</strong>. {{ t('addTrades.manualIntroRequired') }}
+            </p>
 
-    <!-- Manuelle Eingabe (Futures) -->
-    <div v-show="importMode === 'manual'" class="mt-3" style="max-width: 660px;">
-        <p class="txt-small">{{ t('addTrades.manualIntro') }} <strong>{{ brokerLabel }}</strong>. {{ t('addTrades.manualIntroRequired') }}</p>
-        <div class="row g-2 mb-2">
-            <div class="col-sm-6">
-                <label class="form-label mb-0">Symbol</label>
-                <input class="form-control" v-model="manual.symbol" placeholder="BTCUSDT" />
-            </div>
-            <div class="col-sm-6">
-                <label class="form-label mb-0">{{ t('addTrades.manualSide') }}</label>
-                <select class="form-control" v-model="manual.side">
-                    <option value="B">{{ t('addTrades.manualLong') }}</option>
-                    <option value="SS">{{ t('addTrades.manualShort') }}</option>
-                </select>
-            </div>
-        </div>
-        <div class="row g-2 mb-2">
-            <div class="col-sm-6">
-                <label class="form-label mb-0">{{ t('addTrades.manualDateExit') }}</label>
-                <input type="date" class="form-control" v-model="manual.date" />
-            </div>
-            <div class="col-sm-6">
-                <label class="form-label mb-0">{{ t('addTrades.manualDateEntry') }} <span class="text-muted">{{ t('addTrades.manualOptional') }}</span></label>
-                <input type="date" class="form-control" v-model="manual.entryDate" />
-            </div>
-        </div>
-        <div class="row g-2 mb-2">
-            <div class="col-sm-6">
-                <label class="form-label mb-0">{{ t('addTrades.manualFieldEntry') }} <span class="text-muted">{{ t('addTrades.manualOptionalShort') }}</span></label>
-                <input type="text" inputmode="decimal" class="form-control" v-model="manual.entryPrice" />
-            </div>
-            <div class="col-sm-6">
-                <label class="form-label mb-0">{{ t('addTrades.manualFieldExit') }} <span class="text-muted">{{ t('addTrades.manualOptionalShort') }}</span></label>
-                <input type="text" inputmode="decimal" class="form-control" v-model="manual.exitPrice" />
-            </div>
-        </div>
-        <div class="row g-2 mb-2">
-            <div class="col-sm-4">
-                <label class="form-label mb-0">{{ t('addTrades.manualFieldQty') }} <span class="text-muted">{{ t('addTrades.manualOptionalShort') }}</span></label>
-                <input type="text" inputmode="decimal" class="form-control" v-model="manual.qty" />
-            </div>
-            <div class="col-sm-4">
-                <label class="form-label mb-0">{{ t('addTrades.manualFieldNetPL') }} (USDT) *</label>
-                <input type="text" inputmode="decimal" class="form-control" v-model="manual.netPL" :placeholder="t('addTrades.manualPnlPlaceholder')" />
-            </div>
-            <div class="col-sm-4">
-                <label class="form-label mb-0">{{ t('dashboard.fees') }} <span class="text-muted">(opt.)</span></label>
-                <input type="text" inputmode="decimal" class="form-control" v-model="manual.fee" />
-            </div>
-        </div>
-        <div class="row g-2 mb-3">
-            <div class="col-sm-4">
-                <label class="form-label mb-0">{{ t('addTrades.manualFieldLeverage') }} <span class="text-muted">{{ t('addTrades.manualOptionalShort') }}</span></label>
-                <input type="text" inputmode="decimal" class="form-control" v-model="manual.leverage" />
-            </div>
-        </div>
-        <button type="button" class="btn btn-success" :disabled="manualSaving" @click="addManualTrade">
-            {{ manualSaving ? t('addTrades.manualSavingStatus') : t('addTrades.manualSave') }}
-        </button>
-        <div v-if="manualMsg" class="mt-2 small" :class="manualMsg.ok ? 'greenTrade' : 'redTrade'">{{ manualMsg.text }}</div>
-    </div>
+            <form class="at-formzeile" novalidate @submit.prevent="speichereManuell">
+                <div class="at-feldbreite-m">
+                    <label class="at-label" for="mt-symbol">{{ t('addTrades.feldSymbol') }}</label>
+                    <input id="mt-symbol" v-model="form.symbol" class="at-feld" type="text" placeholder="BTCUSDT"
+                        autocomplete="off" autocapitalize="characters" spellcheck="false" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-side">{{ t('addTrades.manualSide') }}</label>
+                    <select id="mt-side" v-model="form.side" class="at-feld">
+                        <option v-for="o in seitenOptionen" :key="o.wert" :value="o.wert">{{ o.text }}</option>
+                    </select>
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-date">{{ t('addTrades.manualDateExit') }}</label>
+                    <input id="mt-date" v-model="form.date" class="at-feld" type="date" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-entrydate">{{ t('addTrades.manualDateEntry') }} <span class="leise">{{ t('addTrades.manualOptional') }}</span></label>
+                    <input id="mt-entrydate" v-model="form.entryDate" class="at-feld" type="date" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-entry">{{ t('addTrades.manualFieldEntry') }} <span class="leise">{{ t('addTrades.manualOptionalShort') }}</span></label>
+                    <input id="mt-entry" v-model="form.entryPrice" class="at-feld" type="text" inputmode="decimal" autocomplete="off" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-exit">{{ t('addTrades.manualFieldExit') }} <span class="leise">{{ t('addTrades.manualOptionalShort') }}</span></label>
+                    <input id="mt-exit" v-model="form.exitPrice" class="at-feld" type="text" inputmode="decimal" autocomplete="off" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-qty">{{ t('addTrades.manualFieldQty') }} <span class="leise">{{ t('addTrades.manualOptionalShort') }}</span></label>
+                    <input id="mt-qty" v-model="form.qty" class="at-feld" type="text" inputmode="decimal" autocomplete="off" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-netpl">{{ t('addTrades.manualFieldNetPL') }} (USDT) *</label>
+                    <input id="mt-netpl" v-model="form.netPL" class="at-feld" type="text" inputmode="decimal" autocomplete="off"
+                        :placeholder="t('addTrades.manualPnlPlaceholder')" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-fee">{{ t('dashboard.fees') }} <span class="leise">(opt.)</span></label>
+                    <input id="mt-fee" v-model="form.fee" class="at-feld" type="text" inputmode="decimal" autocomplete="off" />
+                </div>
+                <div class="at-feldbreite-s">
+                    <label class="at-label" for="mt-lev">{{ t('addTrades.manualFieldLeverage') }} <span class="leise">{{ t('addTrades.manualOptionalShort') }}</span></label>
+                    <input id="mt-lev" v-model="form.leverage" class="at-feld" type="text" inputmode="decimal" autocomplete="off" />
+                </div>
+                <div class="at-feldbreite-voll">
+                    <Knopf art="haupt" type="submit" symbol="speichern" :laedt="speichert">
+                        {{ speichert ? t('addTrades.manualSavingStatus') : t('addTrades.manualSave') }}
+                    </Knopf>
+                </div>
+            </form>
 
-    <!-- API Import -->
-    <div v-show="importMode === 'api'" class="mt-3">
-        <p class="txt-small" v-html="t('addTrades.apiDescription', { broker: brokerLabel })"></p>
+            <Hinweis v-if="meldung" :art="meldungGut ? 'gut' : 'fehler'" class="at-mo-3">{{ meldung }}</Hinweis>
+        </Karte>
 
-        <!-- Pionex: Bot-Import (Zeitraum über Einstellungen → kein Datumsfeld) -->
-        <div v-if="isPionex" class="mb-3">
-            <p class="txt-small text-muted">{{ t('addTrades.apiPionexHint') }}</p>
-            <button type="button" class="btn btn-primary" @click="importFromApi" :disabled="apiImportLoading">
-                <span v-if="apiImportLoading">{{ t('addTrades.importingStatus') }}</span>
-                <span v-else>{{ t('addTrades.apiPionexButton') }}</span>
-            </button>
-        </div>
+        <!-- API-Import -->
+        <template v-else>
+            <Karte>
+                <!-- Text mit Link zu den Einstellungen kommt als HTML aus i18n -->
+                <p class="einleitung" v-html="t('addTrades.apiDescription', { broker: brokerName })"></p>
 
-        <!-- Bitunix / Bitget: Zeitraum-basierter Import -->
-        <div v-else class="row mb-3">
-            <div class="col">
-                <label class="form-label">{{ t('addTrades.startDate') }}</label>
-                <input type="date" class="form-control" v-model="apiStartDate" />
-            </div>
-            <div class="col">
-                <label class="form-label">{{ t('addTrades.endDate') }}</label>
-                <input type="date" class="form-control" v-model="apiEndDate" />
-            </div>
-            <div class="col align-self-end">
-                <button type="button" class="btn btn-primary" @click="importFromApi" :disabled="apiImportLoading">
-                    <span v-if="apiImportLoading">{{ t('addTrades.importingStatus') }}</span>
-                    <span v-else>{{ t('addTrades.importFromApi') }}</span>
-                </button>
-            </div>
-        </div>
-        <div v-if="apiImportError" class="alert alert-danger">{{ apiImportError }}</div>
-    </div>
+                <template v-if="broker === 'pionex'">
+                    <p class="leise">{{ t('addTrades.apiPionexHint') }}</p>
+                    <Knopf art="haupt" symbol="herunterladen" :laedt="importiert" @click="importierePionex">
+                        {{ importiert ? t('addTrades.importingStatus') : t('addTrades.apiPionexButton') }}
+                    </Knopf>
+                </template>
 
-    <!-- Results (API-Import-Vorschau) -->
-    <div v-show="importMode === 'api'" class="mt-3">
-        <div v-if="existingImports.length != 0">
-            {{ t('addTrades.alreadyImported') }} <span v-for="(item, index) in existingImports">
-                <span v-if="index > 0">, </span>{{ useDateCalFormat(item) }}</span>
-        </div>
+                <div v-else class="at-formzeile">
+                    <div class="at-feldbreite-s">
+                        <label class="at-label" for="api-start">{{ t('addTrades.startDate') }}</label>
+                        <input id="api-start" v-model="startDatum" class="at-feld" type="date" />
+                    </div>
+                    <div class="at-feldbreite-s">
+                        <label class="at-label" for="api-ende">{{ t('addTrades.endDate') }}</label>
+                        <input id="api-ende" v-model="endDatum" class="at-feld" type="date" />
+                    </div>
+                    <div>
+                        <Knopf art="haupt" symbol="herunterladen" :laedt="importiert" @click="importiereApi">
+                            {{ importiert ? t('addTrades.importingStatus') : t('addTrades.importFromApi') }}
+                        </Knopf>
+                    </div>
+                </div>
 
-        <div v-if="Object.keys(blotter).length > 0 && Object.keys(pAndL).length > 0"
-            v-for="(execution, index) in executions">
-            <div v-if="blotter[index]">
-                <h3 class="ml-2 mt-2 text-blue">{{ useCreatedDateFormat(index) }}</h3>
-                <table class="table">
-                    <thead>
-                        <tr>
-                            <th scope="col">Symbol</th>
-                            <th scope="col">Gross PnL</th>
-                            <th scope="col">Fees</th>
-                            <th scope="col">Net PnL</th>
-                            <th scope="col">Wins</th>
-                            <th scope="col">Losses</th>
-                            <th scope="col">Trades</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="blot in blotter[index]">
-                            <td>{{ blot.symbol }}</td>
-                            <td v-bind:class="[blot.grossProceeds >= 0 ? 'greenTrade' : 'redTrade']">
-                                {{ (blot.grossProceeds).toFixed(2) }}</td>
-                            <td>{{ (blot.fees).toFixed(2) }}</td>
-                            <td v-bind:class="[blot.netProceeds >= 0 ? 'greenTrade' : 'redTrade']">
-                                {{ (blot.netProceeds).toFixed(2) }}</td>
-                            <td>{{ blot.grossWinsCount }}</td>
-                            <td>{{ blot.grossLossCount }}</td>
-                            <td>{{ blot.trades }}</td>
-                        </tr>
-                        <tr v-if="index != null" class="sumRow">
-                            <td>{{ t('common.total') }}</td>
-                            <td v-bind:class="[pAndL[index].grossProceeds >= 0 ? 'greenTrade' : 'redTrade']">
-                                {{ (pAndL[index].grossProceeds).toFixed(2) }}</td>
-                            <td>{{ (pAndL[index].fees).toFixed(2) }}</td>
-                            <td v-bind:class="[pAndL[index].netProceeds >= 0 ? 'greenTrade' : 'redTrade']">
-                                {{ (pAndL[index].netProceeds).toFixed(2) }}</td>
-                            <td>{{ pAndL[index].grossWinsCount }}</td>
-                            <td>{{ pAndL[index].grossLossCount }}</td>
-                            <td>{{ pAndL[index].trades }}</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
+                <Hinweis v-if="importFehler" art="fehler" class="at-mo-3">{{ importFehler }}</Hinweis>
+                <Hinweis v-else-if="importErgebnis" art="gut" class="at-mo-3">{{ importErgebnis }}</Hinweis>
+            </Karte>
 
-    <!--BUTTONS (API-Import-Vorschau)-->
-    <div v-show="importMode === 'api'">
-        <button v-show="Object.keys(executions).length > 0 && !spinnerLoadingPage" type="button"
-            v-on:click="useUploadTrades" class="btn btn-success btn-lg me-3">{{ t('common.submit') }}</button>
+            <div v-if="spinnerLoadingPage" class="laden"><Kreisel :groesse="28" /></div>
 
-        <!-- `type="cancel"` gibt es nicht; der Browser faellt auf `submit`
-             zurueck. Und `location.href` startet die ganze App neu. -->
-        <button type="button" @click="router.push('/dashboard')"
-            class="btn btn-outline-secondary btn-sm me-2">{{ t('common.cancel') }}</button>
+            <Karte v-else-if="existingImports.length || hatVorschau" class="at-mo-4">
+                <p v-if="existingImports.length" class="leise">
+                    {{ t('addTrades.alreadyImported') }} {{ bereitsImportiert }}
+                </p>
 
+                <ImportVorschau />
+
+                <div class="aktionen">
+                    <Knopf v-if="hatVorschau" art="haupt" symbol="haken" @click="absenden">{{ t('common.submit') }}</Knopf>
+                    <Knopf art="leise" klein @click="abbrechen">{{ t('common.cancel') }}</Knopf>
+                </div>
+            </Karte>
+        </template>
     </div>
 </template>
+
+<style scoped>
+.import-seite {
+    max-width: 60rem;
+    min-width: 0;
+}
+
+.einleitung {
+    margin: 0 0 var(--abstand-4);
+    color: var(--muted);
+}
+
+.einleitung :deep(a) {
+    color: var(--accent);
+}
+
+.leise {
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.laden {
+    display: flex;
+    justify-content: center;
+    padding: var(--abstand-6) 0;
+}
+
+.aktionen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-3);
+    margin-top: var(--abstand-5);
+}
+</style>

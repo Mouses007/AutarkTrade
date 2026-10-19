@@ -28,7 +28,6 @@
     "knex": "^3.3.0",
     "lightweight-charts": "5.2.1",
     "lodash": "^4.18.1",
-    "markerjs2": "^2.32.1",
     "nodemailer": "^9.0.5",
     "papaparse": "^5.5.4",
     "pg": "^8.22.0",

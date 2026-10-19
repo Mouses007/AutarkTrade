@@ -28,7 +28,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 1 | S5 Redesign Handel | Chart, Live-Trading, Sessions, Incoming, Agent-Seiten | `claude/s5-redesign-handel-51c2a6` | **fertig** |
 | 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | `claude/s6-redesign-analyse-3fe1f2` | **fertig** |
 | 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | `claude/s7-journal-kern-a3e03e` | **fertig** |
-| 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | – | wartet auf S7 + S4 |
+| 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | `claude/s8-ansichten-a5395a` | **fertig** |
 | 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | `claude/s9-geruest-23d7aa` | Teil 1 auf master; Teil 2 (Entfernen) wartet auf S8 |
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | `claude/s12-quellen-9112f7` | **fertig** |
@@ -84,6 +84,74 @@ Stand im Anhang von `docs/VERKAUFS-PRUEFUNG.md`.
 - `KachelIndizes.vue`/`KachelWal.vue` sind nur noch Anzeigepfade für „entfernt“ und können weg.
 - Settings: Antwort von „Anweisung prüfen“ (Lagebericht) trägt noch kein KI-Label.
 - Anbieteranfragen (Binance, CoinGecko-Demo, GoPlus, CryptoQuant, Bybit/Bitget …) und Anwaltsfragen bleiben offen.
+## S8 Ansichten neu — Ergebnis (19.10.2026)
+
+- **Clean-Room**: drei Beschreibungs-Agenten schrieben `docs/spec/ansichten.md` (~3 700 Z.,
+  Prosa/Tabellen; Abschnitt 0 = Entscheidungen des Leitstands zu allen offenen Punkten und
+  Altfehlern). Altdateien danach gelöscht; fünf frische Agenten bauten parallel nur aus Spec
+  und Golden Master neu (Daily · Screenshots+Markierung · Playbook · Dashboard/Auswertung/
+  Kalender/TradeEvalPopup · AddTrades/AddExcursions). Gleiche Pfade und Export-Namen, Router
+  und Layout unverändert.
+- **Neu**: `views/{Daily,Dashboard,Auswertung,Calendar,Screenshots,Playbook,AddTrades,
+  AddExcursions}.vue`, `components/{Calendar,Screenshot,TradeEvalPopup}.vue`,
+  `utils/screenshots.js`; Unterkomponenten unter `components/{dashboard,auswertung,playbook,
+  import,bildmarkierung}/`; `utils/scrolleZu.js` (scrollt nur den Inhaltsbereich). Neu
+  gestaltet (eigener Code): `BotDashboard`, `ShareCardModal`, `NoData`,
+  `rahmen/ScreenshotVollbild` (jetzt `basis/Dialog`, geöffnet über
+  `useSelectedScreenshotFunction`/`useOeffneScreenshotVollbild` statt `#fullScreenModal`).
+  Alles ohne Bootstrap-Klassen/-JS, Font Awesome und Unicons; Symbole je Gruppe in
+  `basis/symbole/journal-*.js`.
+- **markerjs2 ersetzt** (Paket entfernt, THIRD-PARTY-NOTICES neu): eigene Bildmarkierung
+  `utils/bildmarkierung.js` (rein, Selbsttest `__selftest-bildmarkierung.mjs`, 107 Prüfungen)
+  + `components/bildmarkierung/BildMarkierung.vue` (SVG; Pfeil, Rechteck, Linie, Text,
+  Freihand, Auswahl/Verschieben/Löschen, Farbe, Strichbreite, Rückgängig/Wiederholen, Maus
+  und Touch). `maState` v2 `{v:2, marker, fremd}` mit Koordinaten relativ zur Bildgrösse;
+  alle 13 markerjs2-Typen werden gelesen, beim Speichern migriert, unbekannte bleiben in
+  `fremd`. **Bewusste Änderung**: `annotatedBase64` ist jetzt das eingebrannte Gesamtbild
+  (`markersOnly` 0) — vorher nur die transparente Ebene, die Playbook, Kopieren und KI als
+  „Bild ohne Chart" bekamen; Altzeilen mit `markersOnly` 1 zeigt die Karte weiter als
+  Original + Ebene. Markieren benennt das Bild nicht mehr um (Playbook-Verknüpfung blieb
+  sonst auf der Strecke).
+- **Quill** bleibt (BSD-3, npm, nur Playbook und Incoming; die CDN-Kopie war schon weg); im
+  Playbook ohne Bild-Einfügen.
+- **Behobene Altfehler** (Spec Abschnitt 0): ein Schliessweg im Trade-Detail, der speichert;
+  MFE-Eingabe unter der ID des offenen Trades, Auto-MFE nur Anzeige + „Übernehmen";
+  Kerzen/MFE vom Futures-Markt (Symbole ohne Spot zeigten nichts); Databento/Polygon in
+  Daily gestrichen (Route fehlte); Reiter je Tageskarte unabhängig; Playbook lädt/speichert
+  `trendScreenshotId`, löscht nur über ID/exakten Namen, Abbrechen setzt zurück, Bilder ohne
+  Base64 vorladen; AddExcursions hängt nicht mehr (Fristen, Meldung) und schreibt keine
+  doppelten Exkursionen; TradeEvalPopup meldet wieder bei jeder neuen Bewertung;
+  Screenshot-Zuordnung über `objectId`, `maState {}` wirft nicht mehr. Rechenregeln
+  (Brutto/Netto, Break-even, Duplikatprüfung des Imports) unverändert.
+- **Gemeinsame Bausteine nachgebessert**: `InfoTipp` hängt seine Box in ein offenes `<dialog>`
+  (lag sonst darunter); `.at-tabelle-huelle` ist `position: relative` (ein `.at-unsichtbar`
+  im Spaltenkopf schob die Tagesansicht am Telefon auf 574 px).
+- **Geprüft**: `npm run test:self` 140/140, Golden Master unverändert grün, `npm run build`
+  fehlerfrei. Prüf-Instanz `s8-pruef` (Port 8099, `AT_ALLOW_INSECURE=1 AT_TESTBETRIEB=1
+  AT_BEDINGUNGEN=aus`, Wegwerf-SQLite mit 48 Trades über `journal-bridge` und einem Bild mit
+  altem markerjs2-Zustand): Dashboard (alle Reiter), Tagesansicht mit Detail, Kerzenchart,
+  Blättern, Vollbild; Screenshots mit Markierung (Altmarker migriert, gezeichnet,
+  rückgängig, eingebrannt gespeichert — `name` blieb); Kalender, Auswertung, Playbook
+  (Deep-Link, Bewertung gespeichert), manueller Trade gespeichert, Exkursionen — Desktop 1440
+  und Telefon 375 ohne Querscrollen, ohne JS-Fehler. 23 Screenshots im Notizordner
+  (`s8-screenshots/`). Nicht im Browser geprüft: API-Import (keine Schlüssel), Share-Karte
+  mit FLUX, KI-Bewertung.
+
+### Offene Punkte aus S8
+
+- **Für S9**: In den S8-Dateien gibt es kein Bootstrap mehr; `#fullScreenModal` ist weg. Die
+  Weiterleitungen `stores/globals.js` usw. und `useInitTab`/`useInitPopover`/
+  Tagesdiagramm-Aufrufe in `utils/journal/ablauf.js` sind für die neuen Ansichten wirkungslos
+  (Spec D.13.1) — beim Aufräumen entfernen. `Dialog.vue` hat fest deutsche aria-Texte.
+- Zahlen- und Datumsformat der Ansichten wie bisher (`$-4.19`, englische Monatsnamen aus dayjs);
+  Vereinheitlichung wäre eine eigene Aufgabe.
+- Die Tags-Bearbeitung in der Tagesansicht war schon vorher tot (nichts öffnete das Fenster)
+  und wurde nicht nachgebaut; Tags werden im Playbook gepflegt.
+- Nach Rebase auf S12: die Tagesansicht zeigt bei abgeschalteter Marktdatenquelle die
+  `{aus, meldung}`-Antwort von `/api/binance/klines` als Grund statt „Chart nicht verfügbar";
+  ShareCardModal trägt den KI-Hinweis von S12 im neuen Dialog.
+- `NOTICE.md` geändert (markerjs2-Absatz raus) → neue Prüfsumme, der Rechtliches-Dialog fragt
+  einmal neu.
 
 ## S9 Gerüst & Einstellungen — Teil 1 (19.10.2026)
 

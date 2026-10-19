@@ -2,23 +2,35 @@
 /**
  * Vollbild-Ansicht eines Screenshots mit Blättern (zurück/weiter).
  *
- * Geöffnet wird sie von aussen: `components/Screenshot.vue` und
- * `views/Daily.vue` setzen per `useSelectedScreenshotFunction(index, quelle,
- * daten)` die Auswahl und öffnen das Fenster über
- * `data-bs-toggle="modal" data-bs-target="#fullScreenModal"`.
+ * Geöffnet wird sie von aussen über `useSelectedScreenshotFunction(index,
+ * quelle, daten)` aus `utils/screenshots.js`: die Funktion setzt die Auswahl
+ * UND öffnet das Vollbild (`screenshotVollbildOffen`). Wer ohne neue Auswahl
+ * öffnen oder schliessen will: `useOeffneScreenshotVollbild()` /
+ * `useSchliesseScreenshotVollbild()`. Das Bootstrap-Modal `#fullScreenModal`
+ * gibt es nicht mehr.
  *
- * S9-Teil2: Das Markup ist deshalb noch ein Bootstrap-Modal mit der festen ID
- * `fullScreenModal`. Fällt Bootstrap weg, wird es ein `basis/Dialog.vue`, und
- * die beiden Öffner rufen statt des data-Attributs eine Funktion auf.
+ * Ein nativer Dialog liegt in der obersten Ebene über allem — auch über dem
+ * Daily-Detailfenster, das darunter offen bleibt. Der Rückweg dorthin ist
+ * deshalb einfach Schliessen.
+ *
+ * Hier hängt auch der Markierungseditor: diese Komponente ist einmal global
+ * im Layout eingehängt, so kann jede Ansicht `useSetupMarkerArea` rufen,
+ * ohne den Editor selbst einzubinden.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Dialog from '../basis/Dialog.vue'
 import Symbol from '../basis/Symbol.vue'
+import Kreisel from '../basis/Kreisel.vue'
 import Screenshot from '../Screenshot.vue'
+import BildMarkierung from '../bildmarkierung/BildMarkierung.vue'
 import { selectedScreenshotIndex } from '../../stores/ui.js'
 import { screenshots, selectedScreenshot } from '../../stores/trades.js'
 import { getMore } from '../../stores/filters.js'
-import { useSelectedScreenshotFunction } from '../../utils/screenshots.js'
+import {
+    useSelectedScreenshotFunction, screenshotVollbildOffen, useSchliesseScreenshotVollbild,
+} from '../../utils/screenshots.js'
+import { useCreatedDateFormat } from '../../utils/journal/format.js'
 
 const { t } = useI18n()
 
@@ -26,58 +38,56 @@ const index = computed(() => selectedScreenshotIndex.value)
 const hatBild = computed(() => Object.keys(selectedScreenshot).length > 0)
 const mitZurueck = computed(() => Number.isInteger(index.value) && index.value - 1 >= 0)
 const mitWeiter = computed(() => Number.isInteger(index.value) && index.value + 1 > 0 && !!screenshots[index.value + 1])
+const titel = computed(() => (selectedScreenshot.dateUnix ? useCreatedDateFormat(selectedScreenshot.dateUnix) : t('nav.screenshots')))
 
 function blaettere(schritt) {
     useSelectedScreenshotFunction(index.value + schritt, 'fullScreen')
 }
+
+function offenSetzen(wert) {
+    if (!wert) useSchliesseScreenshotVollbild()
+}
+
+/** Pfeiltasten blättern, solange das Vollbild den Fokus hat. */
+function taste(e) {
+    if (e.key === 'ArrowLeft' && mitZurueck.value) blaettere(-1)
+    else if (e.key === 'ArrowRight' && mitWeiter.value && !getMore.value) blaettere(1)
+}
 </script>
 
 <template>
-    <!-- S9-Teil2: Bootstrap-Modal (Klassen modal/modal-dialog/modal-content), bis die Öffner umgestellt sind. -->
-    <div id="fullScreenModal" class="modal fade" tabindex="-1" aria-hidden="true" :aria-label="t('nav.screenshots')">
-        <div class="modal-dialog modal-fullscreen">
-            <div class="modal-content at-vollbild">
-                <div class="inhalt">
-                    <Screenshot v-if="hatBild" :index="index" source="fullScreen" :screenshot-data="selectedScreenshot" />
-                </div>
-                <div class="fuss">
-                    <button v-if="mitZurueck" type="button" class="blaettern" :title="t('nav.vorheriges')"
-                        :aria-label="t('nav.vorheriges')" @click="blaettere(-1)">
-                        <Symbol name="einklappen" :groesse="22" />
-                    </button>
-                    <span v-else></span>
-                    <button v-if="mitWeiter" type="button" class="blaettern" :disabled="getMore" :title="t('nav.naechstes')"
-                        :aria-label="t('nav.naechstes')" @click="blaettere(1)">
-                        <span v-if="getMore" class="kreisel" aria-hidden="true"></span>
-                        <Symbol v-else name="ausklappen" :groesse="22" />
-                    </button>
-                </div>
-            </div>
+    <Dialog :model-value="screenshotVollbildOffen" :titel="titel" breite="100rem" @update:model-value="offenSetzen" @keydown="taste">
+        <div class="inhalt">
+            <Screenshot v-if="hatBild" :index="index" source="fullScreen" :screenshot-data="selectedScreenshot" />
         </div>
-    </div>
+        <template v-if="mitZurueck || mitWeiter" #fuss>
+            <div class="blaetterleiste">
+                <button v-if="mitZurueck" type="button" class="blaettern" :title="t('nav.vorheriges')"
+                    :aria-label="t('nav.vorheriges')" @click="blaettere(-1)">
+                    <Symbol name="einklappen" :groesse="22" />
+                </button>
+                <span v-else></span>
+                <button v-if="mitWeiter" type="button" class="blaettern" :disabled="getMore" :title="t('nav.naechstes')"
+                    :aria-label="t('nav.naechstes')" @click="blaettere(1)">
+                    <Kreisel v-if="getMore" :groesse="18" />
+                    <Symbol v-else name="ausklappen" :groesse="22" />
+                </button>
+            </div>
+        </template>
+    </Dialog>
+    <BildMarkierung />
 </template>
 
 <style scoped>
-.at-vollbild {
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-    border: 0;
-    border-radius: 0;
-}
-
 .inhalt {
-    flex: 1 1 auto;
-    overflow: auto;
-    padding: var(--abstand-3);
+    min-height: 0;
 }
 
-.fuss {
+.blaetterleiste {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--abstand-2) var(--abstand-4);
-    border-top: 1px solid var(--line);
+    width: 100%;
 }
 
 .blaettern {
@@ -100,18 +110,5 @@ function blaettere(schritt) {
 
 .blaettern:disabled {
     cursor: wait;
-}
-
-.kreisel {
-    width: 18px;
-    height: 18px;
-    border: 2px solid var(--line-stark);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: at-dreh 0.8s linear infinite;
-}
-
-@keyframes at-dreh {
-    to { transform: rotate(360deg); }
 }
 </style>

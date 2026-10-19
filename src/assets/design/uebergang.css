@@ -254,10 +254,6 @@ table { color: var(--text) !important; }
 .quill-incoming .ql-editor, .quill-incoming.ql-container .ql-editor { min-height: 90px; }
 .quill-incoming .ql-editor.ql-blank::before { color: var(--muted); font-style: normal; }
 
-/* markerjs2 (Screenshot-Annotation): über allem, Werkzeugleiste dunkel. */
-[class^="__markerjs2_"], [class*=" __markerjs2_"] { z-index: 2000; }
-[class*="__markerjs2_"] img { margin-top: 0 !important; }
-[class*="__markerjs2__"][class*="toolbar"] { background-color: var(--bg) !important; }
 
 /* =========================================================================
  * C. Geteiltes Chrom mehrerer Seiten

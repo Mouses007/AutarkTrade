@@ -9,8 +9,8 @@ Stand vom 19. Oktober 2026
 >   Code stehen, darf der Stand nicht unter `LICENSE` weitergegeben werden** — er ist als
 >   Ganzes noch ein Werk unter GPL-3.0. Den Nachweis, dass nichts übrig ist, liefert S11
 >   (`HERKUNFT.md`).
-> - markerjs2 (Linkware) und die CDN-Einbindungen von Font Awesome und Unicons sind noch
->   drin (Abschnitt „Fremde Software", Ablösung in S8/S9).
+> - Die CDN-Einbindungen von Font Awesome und Unicons sind noch drin (Abschnitt „Fremde
+>   Software", Ablösung in S9). markerjs2 ist seit S8 durch eine eigene Bildmarkierung ersetzt.
 > - Das Quellenangebot für das Container-Image (Abschnitt „Container-Image") braucht eine
 >   Anschrift des Anbieters.
 
@@ -56,9 +56,6 @@ Sichtbare Pflichten in der Oberfläche:
   <https://www.tradingview.com/>. Das Attributionslogo steht in jedem Chart
   (`attributionLogo: true`) und verlinkt auf TradingView; dieser Hinweis steht unter
   Rechtliches.
-- **markerjs2** (Screenshot-Annotation) steht unter der *marker.js 2 Linkware License*: ein
-  Link zur marker.js-Website muss während des Betriebs sichtbar sein. Wird in S8 durch eine
-  eigene Annotation ersetzt.
 
 Nicht mitgeliefert, sondern zur Laufzeit von einem CDN geladen (bis S9): Font Awesome 4.7
 (Schrift OFL-1.1, CSS MIT) und Iconscout Unicons (IconScout Simple License). Sie werden durch

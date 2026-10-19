@@ -1,175 +1,328 @@
 <script setup>
-import { onBeforeMount, ref, onMounted, nextTick } from 'vue';
+/**
+ * Exkursionen (`/addExcursions`): für vergangene Handelstage ohne Exkursion
+ * den MFE-Preis je Trade aus Minutenkerzen (Databento oder Polygon) bestimmen
+ * und in `excursions` schreiben.
+ *
+ * Die Module in `utils/journal/import.js` haben bekannte Fallen, die hier —
+ * und nur hier — abgefangen werden, weil der Journal-Kern unangetastet bleibt:
+ *   - `useGetOHLCV` erfüllt nach dem ERSTEN Symbol, die übrigen laden danach
+ *     in dieselbe Liste weiter → wir warten selbst, bis alle da sind, mit Frist.
+ *   - `useGetMFEPrices` für ein Symbol ohne Kerzen erfüllt NIE → wir rufen es
+ *     nur für geladene Symbole auf, und jeden Aufruf mit Frist.
+ *   - Dessen Modulliste wird nie geleert, `useUpdateMfePrices` schreibt sie
+ *     ganz → ein zweiter Lauf schriebe doppelte Exkursionen. Darum schreibt
+ *     diese Ansicht nur die Einträge der Trades DIESES Laufs, je Trade einmal.
+ * Ohne das drehte der Kreisel bei einem fehlenden Symbol für immer.
+ *
+ * Fachlich ist die Seite ein Überbleibsel aus dem Aktienkontext: Databento
+ * kennt nur `future`/`stock`, Polygon die Krypto-Perps nicht in dieser Form.
+ * Sie bleibt in Parität erhalten; meist endet sie jetzt in einer Meldung statt
+ * in einem hängenden Kreisel.
+ */
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { spinnerLoadingPage } from '../stores/ui.js';
-import { daysMargin, daysBack } from '../stores/filters.js';
-import { imports, excursions } from '../stores/trades.js';
-import { apis } from '../stores/settings.js';
-import { useGetExcursions } from '../utils/journal/tagebuch.js';
-import { useDateCalFormat } from '../utils/journal/format.js';
-import { useGetAPIS, usePageRedirect } from '../utils/journal/app.js';
-import { useGetTrades } from '../utils/journal/laden.js';
-import { useGetOHLCV, useGetMFEPrices, useUpdateMfePrices } from '../utils/journal/import.js';
-import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue';
 import { useI18n } from 'vue-i18n'
-const { t } = useI18n()
-/* MODULES */
 import dayjs from '../utils/journal/zeit.js'
+import Karte from '../components/basis/Karte.vue'
+import Knopf from '../components/basis/Knopf.vue'
+import Hinweis from '../components/basis/Hinweis.vue'
+import Kreisel from '../components/basis/Kreisel.vue'
+import { spinnerLoadingPage } from '../stores/app/laden.js'
+import { daysBack, daysMargin } from '../stores/journal/filter.js'
+import { imports } from '../stores/journal/auswertung.js'
+import { excursions } from '../stores/journal/tagebuch.js'
+import { apis } from '../stores/app/einstellungen.js'
+import { useGetAPIS, usePageRedirect } from '../utils/journal/app.js'
+import { useGetTrades } from '../utils/journal/laden.js'
+import { useGetExcursions } from '../utils/journal/tagebuch.js'
+import { useGetOHLCV, useGetMFEPrices } from '../utils/journal/import.js'
+import { useDateCalFormat } from '../utils/journal/format.js'
+import { dbCreate } from '../utils/db.js'
 
+const { t } = useI18n()
 const router = useRouter()
+
+/*
+ * Fristen. Polygon wartet bei HTTP 429 bis zu fünfmal 60 s — darum ist die
+ * Frist für ALLE Kerzen grosszügig; ein einzelner MFE-Aufruf rechnet nur und
+ * braucht keine Sekunde.
+ */
+const FRIST_KERZEN_MS = 180000
+const FRIST_MFE_MS = 10000
+const TAKT_MS = 250
+
+// Sinnvolle Vorgaben: ohne sie war die untere Zeitgrenze NaN und der
+// Puffervergleich nie wahr — die Seite meldete nie einen fehlenden Tag.
+if (!(Number(daysBack.value) > 0)) daysBack.value = 30
+if (!(Number(daysMargin.value) >= 0) || daysMargin.value === '' || daysMargin.value == null) daysMargin.value = 1
 
 spinnerLoadingPage.value = false
 
 const apiIndex = ref(-1)
-const apiSource = ref(null)
-let ohlc = []
-let dateArray = ref([])
-let tradesArray = []
-let tradedSymbols = []
-let tradedStartDate = null
-let tradedEndDate = null
-let mfePrices = []
+const apiQuelle = ref(null)
+const fehlendeTage = ref([])      // dateUnix
+const tradeListe = ref([])
+const symbolListe = ref([])       // { symbol, secType }
+const fruehester = ref(null)
+const spaetester = ref(null)
 
-onBeforeMount(async () => {
-    await useGetAPIS()
-    //console.log(" imports " + JSON.stringify(imports.value))
-    //console.log(" excursions " + JSON.stringify(excursions))
-    apiIndex.value = -1
-    let databentoIndex = apis.findIndex(obj => obj.provider === "databento")
-    let polygonIndex = apis.findIndex(obj => obj.provider === "polygon")
+const laeuft = ref(false)
+const meldungen = ref([])         // { art, text }
+const gespeichertAnzahl = ref(0)
 
-    if (databentoIndex > -1 && apis[databentoIndex].key != "") {
-        apiIndex.value = databentoIndex
-        apiSource.value = "databento"
-    } else if (polygonIndex > -1 && apis[polygonIndex].key != "") {
-        apiIndex.value = polygonIndex
-        apiSource.value = "polygon"
+const hatSchluessel = computed(() => apiIndex.value >= 0)
+const einstellungsLink = computed(() => `<a href="/settings/journal">${t('nav.settings')}</a>`)
+const pufferWort = computed(() => (Number(daysMargin.value) > 1 ? t('excursions.dayBufferMehr') : t('excursions.dayBuffer')))
+const fehlendeText = computed(() => fehlendeTage.value.map(d => useDateCalFormat(d)).join(', '))
+
+function waehleApi() {
+    const mitSchluessel = (anbieter) => apis.findIndex(a => a.provider === anbieter && a.key)
+    const db = mitSchluessel('databento')
+    const pg = mitSchluessel('polygon')
+    if (db >= 0) { apiIndex.value = db; apiQuelle.value = 'databento' }
+    else if (pg >= 0) { apiIndex.value = pg; apiQuelle.value = 'polygon' }
+    else { apiIndex.value = -1; apiQuelle.value = null }
+}
+
+/*
+ * Jede Eingabe startet eine Prüfung; überholte Läufe dürfen die Anzeige nicht
+ * mit veralteten Ergebnissen überschreiben.
+ */
+let pruefNr = 0
+async function pruefeFehlendeTage() {
+    const nr = ++pruefNr
+    const zurueck = Number(daysBack.value)
+    if (!(zurueck > 0)) return
+    try {
+        await Promise.all([useGetTrades(), useGetExcursions()])
+    } catch (e) {
+        console.warn('Exkursionen: Tage nicht lesbar', e)
+        return
+    }
+    if (nr !== pruefNr) return
+
+    // Alles zurücksetzen — früher wuchsen Symbole und Zeitfenster über alle Prüfungen.
+    const tage = []
+    const liste = []
+    const symbole = []
+    let frueh = null
+    let spaet = null
+    const grenze = dayjs().subtract(Number(daysMargin.value) || 0, 'day').unix()
+    const erledigt = new Set(excursions.map(x => Number(x.dateUnix)))
+
+    for (const zeile of imports.value || []) {
+        const du = Number(zeile.dateUnix)
+        if (erledigt.has(du)) continue
+        if (du >= grenze) continue   // im Puffer: Daten des Tages evtl. noch nicht vollständig
+        tage.push(du)
+        for (const tr of Array.isArray(zeile.trades) ? zeile.trades : []) {
+            liste.push(tr)
+            if (!symbole.some(s => s.symbol === tr.symbol)) symbole.push({ symbol: tr.symbol, secType: tr.type })
+        }
+        if (frueh === null || du < frueh) frueh = du
+        if (spaet === null || du > spaet) spaet = du
     }
 
-    checkMFEDates()
-})
+    fehlendeTage.value = tage
+    tradeListe.value = liste
+    symbolListe.value = symbole
+    fruehester.value = frueh
+    spaetester.value = spaet
+}
 
-const checkMFEDates = async () => {
-    await Promise.all([useGetTrades(), useGetExcursions()])
-    dateArray.value.length = 0
-    tradesArray = []
-    if (imports.value.length > 0) {
-        imports.value.forEach(async (element) => {
+async function start() {
+    try {
+        await useGetAPIS()
+    } catch (e) {
+        console.warn('Exkursionen: API-Liste nicht lesbar', e)
+    }
+    waehleApi()
+    pruefeFehlendeTage()
+}
+start()
 
-            let index = excursions.findIndex(obj => obj.dateUnix == element.dateUnix)
-            if (index == -1) {
+watch([daysBack, daysMargin], () => { pruefeFehlendeTage() })
 
-                if (dayjs(element.dateUnix * 1000).isBefore(dayjs().subtract(daysMargin.value, 'days'))) {
-                    console.log("  --> Excursion date does not exist " + useDateCalFormat(element.dateUnix))
+/** Versprechen mit Frist: erfüllt mit `{ zeit: true }`, wenn es nicht rechtzeitig kommt. */
+function mitFrist(versprechen, ms) {
+    let uhr
+    const frist = new Promise(r => { uhr = setTimeout(() => r({ zeit: true }), ms) })
+    return Promise.race([Promise.resolve(versprechen).then(wert => ({ wert })), frist])
+        .finally(() => clearTimeout(uhr))
+}
 
-                    //console.log(" element "+JSON.stringify(element))
-                    dateArray.value.push(element.dateUnix)
-                    element.trades.forEach(element => {
-                        tradesArray.push(element)
-                    });
-                    if (!tradedStartDate) {
-                        tradedStartDate = element.dateUnix
-                    } else {
-                        if (element.dateUnix < tradedStartDate) tradedStartDate = element.dateUnix
-                    }
+const fehlt = (kerzen, symbol) => !kerzen.some(k => k.symbol == symbol)
 
-                    if (!tradedEndDate) {
-                        tradedEndDate = element.dateUnix
-                    } else {
-                        if (element.dateUnix > tradedEndDate) tradedEndDate = element.dateUnix
-                    }
-
-                    element.trades.forEach(el => {
-                        let index = tradedSymbols.findIndex(obj => obj.symbol == el.symbol)
-                        if (index == -1) {
-                            let temp = {}
-                            temp.symbol = el.symbol
-                            temp.secType = el.type
-                            tradedSymbols.push(temp)
-                        }
-
-                    });
-                    //console.log(" tradedSymbols " + JSON.stringify(tradedSymbols))
-                    //console.log(" tradedStartDate " + tradedStartDate)
-                    //console.log(" tradedEndDate " + tradedEndDate)
-
-                } else {
-                    console.log("  --> Excursion date does not exist " + useDateCalFormat(element.dateUnix) + " but does not comply with margin")
-                }
-
-            } else {
-                console.log("  --> Excursion date exists " + useDateCalFormat(element.dateUnix))
-            }
-        });
-    } else {
-        console.log(" -> No Imports for the period")
+/** Wartet, bis die Kerzenliste alle Symbole enthält oder die Frist abläuft. */
+async function warteAufAlle(kerzen, symbole, bisMs) {
+    while (Date.now() < bisMs && symbole.some(s => fehlt(kerzen, s.symbol))) {
+        await new Promise(r => setTimeout(r, TAKT_MS))
     }
 }
 
-const updateMFEPrices = async () => {
-    return new Promise(async (resolve, reject) => {
-        spinnerLoadingPage.value = true
-        mfePrices = []
-        ohlc = await useGetOHLCV(apiSource.value, "manual", tradedSymbols, tradedStartDate, tradedEndDate)
-        //console.log(" ohlc " + JSON.stringify(ohlc))
-        for (const element of tradesArray) {
-            //console.log(" element " + JSON.stringify(element))
-            if (element.openPosition == false) {
-                mfePrices = await useGetMFEPrices(element, element.entryTime, element.entryPrice, element, ohlc)
-            }
+async function hinzufuegen() {
+    spinnerLoadingPage.value = true
+    laeuft.value = true
+    meldungen.value = []
+    gespeichertAnzahl.value = 0
+    let alleGut = true
+    try {
+        const bis = Date.now() + FRIST_KERZEN_MS
+        const symbole = [...symbolListe.value]
+        const antwort = await mitFrist(useGetOHLCV(apiQuelle.value, 'manual', symbole, fruehester.value, spaetester.value), FRIST_KERZEN_MS)
+        if (antwort.zeit) {
+            meldungen.value.push({ art: 'fehler', text: t('excursions.zeitueberschreitung', { sekunden: FRIST_KERZEN_MS / 1000 }) })
+            return
         }
-        console.log("mfePrices " + JSON.stringify(mfePrices))
-        if (mfePrices.length > 0) {
-            await useUpdateMfePrices(null, null, mfePrices)
+        const kerzen = Array.isArray(antwort.wert) ? antwort.wert : []
+        await warteAufAlle(kerzen, symbole, bis)
+        if (!kerzen.length) {
+            meldungen.value.push({ art: 'fehler', text: t('excursions.keineKerzen') })
+            return
         }
+        const ohne = symbole.filter(s => fehlt(kerzen, s.symbol)).map(s => s.symbol)
+        if (ohne.length) {
+            alleGut = false
+            meldungen.value.push({ art: 'warn', text: t('excursions.kerzenFehlen', { symbole: ohne.join(', ') }) })
+        }
+
+        const dieserLauf = new Set()
+        let liste = []
+        let ohneAntwort = 0
+        for (const trade of tradeListe.value) {
+            if (trade.openPosition != false) continue
+            if (fehlt(kerzen, trade.symbol)) continue
+            dieserLauf.add(trade.id)
+            const r = await mitFrist(useGetMFEPrices(trade, trade.entryTime, trade.entryPrice, trade, kerzen), FRIST_MFE_MS)
+            if (r.zeit) { ohneAntwort++; continue }
+            if (Array.isArray(r.wert)) liste = r.wert
+        }
+        if (ohneAntwort) {
+            alleGut = false
+            meldungen.value.push({ art: 'warn', text: t('excursions.tradesOhneAntwort', { anzahl: ohneAntwort }) })
+        }
+
+        // Nur Einträge dieses Laufs, je Trade einmal (der letzte gilt).
+        const jeTrade = new Map()
+        for (const e of liste) if (dieserLauf.has(e.tradeId)) jeTrade.set(e.tradeId, e)
+        for (const e of jeTrade.values()) {
+            await dbCreate('excursions', { mfePrice: e.mfePrice, dateUnix: e.dateUnix, tradeId: e.tradeId })
+            gespeichertAnzahl.value++
+        }
+
+        if (!gespeichertAnzahl.value) {
+            alleGut = false
+            meldungen.value.push({ art: 'warn', text: t('excursions.nichtsBestimmt') })
+        } else if (!alleGut) {
+            meldungen.value.push({ art: 'gut', text: t('excursions.gespeichert', { anzahl: gespeichertAnzahl.value }) })
+        }
+    } catch (e) {
+        alleGut = false
+        meldungen.value.push({ art: 'fehler', text: t('excursions.fehler') + ' ' + (e?.message || String(e)) })
+    } finally {
         spinnerLoadingPage.value = false
-        usePageRedirect("daily")
-    })
+        laeuft.value = false
+    }
+
+    if (alleGut && meldungen.value.length === 0) {
+        usePageRedirect('daily')
+        return
+    }
+    // Gespeicherte Tage fallen aus der Liste; was übrig bleibt, steht wieder da.
+    pruefeFehlendeTage()
 }
 
+function abbrechen() {
+    router.push('/dashboard')
+}
 </script>
+
 <template>
-    <SpinnerLoadingPage />
-    <div class="row mt-2" v-show="!spinnerLoadingPage">
-        <div>
-            <div v-if="apiIndex != -1">
-                <div class="col-3">
-
-                </div>
-                <div class="col-3">
-
-                </div>
-
-                <div>
-                    <p style="display: inline-flex; align-items: center; flex-wrap: wrap;">
-                        {{ t('excursions.forLastDays') }}
-                        <input type="number" class="form-control ms-2 me-2 inputText" v-model="daysBack"
-                            v-on:input="checkMFEDates()" />
-                        {{ t('excursions.daysWithBuffer') }}
-                        <input type="number" class="form-control ms-2 me-2 inputText" v-model="daysMargin"
-                            v-on:input="checkMFEDates()" style="width: 70px;vertical-align: baseline;" />
-                            {{ t('excursions.dayBuffer') }}
-                        <span v-if="daysMargin > 1" class="me-1">e</span><span v-else class="me-1"></span>
-                        {{ t('excursions.buffer') }}
-                        <span v-if="dateArray.length > 0">{{ t('excursions.missingMfeDates') }}
-                            <span v-for="(item, index) in dateArray">
-                                <span v-if="index > 0">, </span>{{ useDateCalFormat(item) }}</span></span>
-                        <span v-else class="ms-1">{{ t('excursions.allUpToDate') }}</span>
-                    </p>
-                </div>
-
-                <!--BUTTONS-->
-
-                <button v-show="dateArray.length > 0 && !spinnerLoadingPage" type="button" v-on:click="updateMFEPrices"
-                    class="btn btn-success btn-lg me-3">{{ t('excursions.add') }}</button>
-
-                <!-- siehe AddTrades.vue: kein `type="cancel"`, keine harte Navigation -->
-                <button type="button" @click="router.push('/dashboard')"
-                    class="btn btn-outline-secondary btn-sm me-2">{{ t('common.cancel') }}</button>
-
-            </div>
-            <div v-else v-html="t('excursions.configureApiKey', { link: '<a href=\'/settings/journal\'>' + t('nav.settings') + '</a>' })"></div>
-
+    <div class="exkursionen-seite">
+        <div v-if="spinnerLoadingPage" class="laden">
+            <Kreisel :groesse="28" />
+            <span v-if="laeuft" class="leise">{{ t('excursions.laeuft') }}</span>
         </div>
+
+        <Karte v-else>
+            <p v-if="!hatSchluessel" class="satz" v-html="t('excursions.configureApiKey', { link: einstellungsLink })"></p>
+
+            <template v-else>
+                <p class="satz">
+                    {{ t('excursions.forLastDays') }}
+                    <input v-model="daysBack" class="at-feld zahl-feld" type="number" min="1" step="1" inputmode="numeric"
+                        :aria-label="t('excursions.feldTage')" />
+                    {{ t('excursions.daysWithBuffer') }}
+                    <input v-model="daysMargin" class="at-feld zahl-feld" type="number" min="0" step="1" inputmode="numeric"
+                        :aria-label="t('excursions.feldPuffer')" />
+                    {{ pufferWort }} {{ t('excursions.buffer') }}
+                    <template v-if="fehlendeTage.length">
+                        {{ t('excursions.missingMfeDates') }} <span class="daten">{{ fehlendeText }}</span>
+                    </template>
+                    <template v-else>{{ t('excursions.allUpToDate') }}</template>
+                </p>
+            </template>
+
+            <Hinweis v-for="(m, i) in meldungen" :key="i" :art="m.art" class="at-mo-3">{{ m.text }}</Hinweis>
+
+            <div class="aktionen">
+                <Knopf v-if="hatSchluessel && fehlendeTage.length" art="haupt" symbol="plus" @click="hinzufuegen">
+                    {{ t('excursions.add') }}
+                </Knopf>
+                <Knopf v-if="gespeichertAnzahl > 0" art="normal" @click="usePageRedirect('daily')">
+                    {{ t('excursions.zurTagesansicht') }}
+                </Knopf>
+                <Knopf art="leise" klein @click="abbrechen">{{ t('common.cancel') }}</Knopf>
+            </div>
+        </Karte>
     </div>
 </template>
+
+<style scoped>
+.exkursionen-seite {
+    max-width: 50rem;
+    min-width: 0;
+}
+
+.laden {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--abstand-3);
+    padding: var(--abstand-6) 0;
+}
+
+.leise {
+    color: var(--muted);
+}
+
+.satz {
+    margin: 0;
+    line-height: 2.2;
+    color: var(--text);
+}
+
+.satz :deep(a) {
+    color: var(--accent);
+}
+
+.zahl-feld {
+    display: inline-block;
+    width: 5rem;
+    margin: 0 var(--abstand-1);
+    vertical-align: middle;
+}
+
+.daten {
+    overflow-wrap: anywhere;
+}
+
+.aktionen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-3);
+    margin-top: var(--abstand-5);
+}
+</style>
