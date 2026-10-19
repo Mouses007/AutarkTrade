@@ -2164,6 +2164,39 @@ function getPositionDate(pos) {
 </template>
 
 <style scoped>
+/* Positionskarte: Kennzahlen, Detailbereich. */
+.incoming-card { height: auto; }
+.incoming-info { font-size: 0.8rem; color: var(--muted); }
+.incoming-pnl { font-size: 1.15rem; font-weight: 700; }
+.incoming-meta-section { padding: 0.6rem 0.75rem; background: var(--panel-soft); border-radius: var(--radius-knopf); }
+
+/* Stress-/Emotionsskala 1–10 */
+.stress-dot {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    width: 1rem;
+    line-height: 1;
+    font-size: 0.9rem;
+}
+.stress-dot.stress-spacer { width: 0.4rem; font-size: 0.6rem; }
+.stress-dot.active { color: var(--warn); }
+.stress-dot.inactive { color: var(--leise); }
+.stress-number { margin-bottom: 0.15rem; font-size: 0.6rem; color: var(--muted); }
+
+/* Bearbeitungsabschnitte */
+.pb-edit-section { padding: 0.6rem 0; border-bottom: 1px solid var(--line); }
+.pb-edit-section:last-child { border-bottom: 0; }
+.pb-edit-label {
+    display: block;
+    margin-bottom: 0.3rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
 .incoming-seite {
     margin-top: var(--abstand-2);
 }
@@ -2627,13 +2660,16 @@ function getPositionDate(pos) {
     border-top: none !important;
     border-radius: 0 0 var(--radius-klein) var(--radius-klein);
     background: var(--panel);
+    color: var(--text);
     font-family: var(--schrift);
 }
 .pb-edit-section :deep(.ql-editor) {
+    min-height: 90px;
     color: var(--text);
 }
 .pb-edit-section :deep(.ql-editor.ql-blank::before) {
     color: var(--leise);
+    font-style: normal;
 }
 .pb-edit-section :deep(.ql-snow .ql-stroke) {
     stroke: var(--muted);

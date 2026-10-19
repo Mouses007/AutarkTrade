@@ -173,7 +173,7 @@ watch(() => props.daten, zeichne)
     gap: 0.4rem;
     margin-bottom: 0.4rem;
     padding: 0.35rem 0.6rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: rgba(255, 95, 86, 0.16);
     border: 1px solid rgba(255, 95, 86, 0.5);
     color: rgb(255, 140, 130);

@@ -1235,7 +1235,7 @@ onBeforeMount(async () => {
 .report-content :deep(strong) {
     color: var(--text);
 }
-/* Chat-Blasen (.chat-bubble …) stehen global in uebergang.css */
+/* Chat-Blasen (.chat-bubble …) stehen global in design/journal.css */
 
 /* Agent Session List */
 .agent-session-item {

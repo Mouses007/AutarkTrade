@@ -290,12 +290,12 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
 .avAus { color: #e0b030; }
 .avHinweis { font-size: .874rem; margin: .6rem 0; }
 .avEinst { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: flex-end; margin-top: .6rem; padding: .6rem .75rem;
-    border-radius: var(--border-radius, 8px); background: var(--bg); font-size: .85rem; }
+    border-radius: var(--radius); background: var(--bg); font-size: .85rem; }
 .avEinst label { display: flex; flex-direction: column; gap: .15rem; }
 .avEinst input[type=number] { width: 7rem; }
 .avEinst .avSchalter { flex-direction: row; align-items: center; gap: .35rem; }
 .avKarten { display: flex; flex-direction: column; gap: .75rem; }
-.avKarte { border: 1px solid var(--line); border-radius: var(--border-radius, 8px); padding: .65rem .85rem;
+.avKarte { border: 1px solid var(--line); border-radius: var(--radius); padding: .65rem .85rem;
     background: var(--bg); }
 .avKarte.kippt { border-color: rgba(239, 83, 80, .55); }
 .avKarte.ueberdehnt { border-color: rgba(224, 176, 48, .45); }

@@ -249,7 +249,7 @@ defineExpose({ jetzt })
     height: calc(100dvh - 190px);
     min-height: 560px;
     border: 1px solid var(--line-stark);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: var(--pChrom);
     overflow: hidden;
 }

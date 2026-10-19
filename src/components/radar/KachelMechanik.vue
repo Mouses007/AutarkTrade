@@ -197,7 +197,7 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
 .mxBadge {
     align-self: flex-start;
     border: 1px solid;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     padding: 0.2rem 0.6rem;
     font-size: 0.95rem;
     font-weight: 600;

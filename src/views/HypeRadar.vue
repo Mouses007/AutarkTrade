@@ -2324,7 +2324,7 @@ watch(locale, () => zeichne())
 
 .hypZelle {
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .7rem .85rem;
 }
 
@@ -2388,7 +2388,7 @@ watch(locale, () => zeichne())
 .hypGueteUrteil {
     font-size: .82rem;
     padding: .05rem .5rem;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, .05);
     color: var(--leise);
 }
@@ -2558,7 +2558,7 @@ watch(locale, () => zeichne())
 
 .hypKarte {
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .55rem .7rem;
 }
 
@@ -2740,7 +2740,7 @@ watch(locale, () => zeichne())
 .hypLive {
     background: var(--bg);
     border: 1px solid var(--accent);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .8rem 1rem;
     margin-bottom: 1.25rem;
 }
@@ -2906,7 +2906,7 @@ watch(locale, () => zeichne())
     position: relative;
     min-width: 15rem;
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .6rem .8rem;
     cursor: pointer;
     border: 1px solid transparent;
@@ -2966,7 +2966,7 @@ watch(locale, () => zeichne())
 
 .hypKandidat {
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .8rem 1rem;
     margin-bottom: .75rem;
 }
@@ -3125,7 +3125,7 @@ watch(locale, () => zeichne())
     display: block;
     background: var(--bg);
     border: 1px solid transparent;
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .5rem .75rem;
     cursor: pointer;
 }
@@ -3160,7 +3160,7 @@ watch(locale, () => zeichne())
     margin-top: .6rem;
     padding: .75rem .9rem;
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
 }
 
 .hypRolle {

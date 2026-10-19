@@ -386,7 +386,7 @@ async function erzeuge(erzwingen = false, auto = false) {
 
 .hlBadge {
     border: 1px solid;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     padding: 0.15rem 0.55rem;
     font-size: 0.86rem;
     font-weight: 600;
@@ -514,7 +514,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     border-left: 3px solid;
     padding: 0.25rem 0.6rem;
     background: var(--panel-soft);
-    border-radius: 0 var(--border-radius, 6px) var(--border-radius, 6px) 0;
+    border-radius: 0 var(--radius) var(--radius) 0;
 }
 
 .hlKarteTitel {
@@ -610,7 +610,7 @@ async function erzeuge(erzwingen = false, auto = false) {
 .hlTakt {
     background: none;
     border: 1px solid var(--panel-soft);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     padding: 0.1rem 0.45rem;
     font-size: 0.76rem;
     color: var(--muted);

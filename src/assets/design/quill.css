@@ -1,0 +1,34 @@
+/*
+ * Quill im dunklen Thema (PlaybookEditor.vue, Incoming.vue) und gespeicherte
+ * Quill-Notizen, die per v-html ausserhalb des Editors erscheinen.
+ *
+ * Global, weil Quill Werkzeugleiste und Editor selbst erzeugt. Die Hüllen der
+ * beiden Editoren stehen scoped in ihren Komponenten (.pb-quill,
+ * .pb-edit-section/.quill-incoming); hier nur, was für beide gilt.
+ */
+
+/* Aufzählungspunkt gespeicherter Notizen; im Editor zeichnet Quill selbst. */
+li[data-list="bullet"] { list-style-type: disc; }
+.ql-editor li[data-list="bullet"] { list-style-type: none; }
+
+/* Werkzeugleiste: aktiv und unter dem Zeiger in Akzent. */
+.ql-snow .ql-toolbar button:hover,
+.ql-snow .ql-toolbar button.ql-active,
+.ql-snow .ql-picker-label:hover,
+.ql-snow .ql-picker-label.ql-active,
+.ql-snow .ql-picker-item:hover,
+.ql-snow .ql-picker-item.ql-selected,
+.ql-snow.ql-toolbar button:hover,
+.ql-snow.ql-toolbar button.ql-active { color: var(--accent) !important; }
+.ql-snow .ql-toolbar button:hover .ql-stroke,
+.ql-snow .ql-toolbar button.ql-active .ql-stroke,
+.ql-snow.ql-toolbar button:hover .ql-stroke,
+.ql-snow.ql-toolbar button.ql-active .ql-stroke,
+.ql-snow .ql-picker-label:hover .ql-stroke { stroke: var(--accent) !important; }
+.ql-snow .ql-toolbar button:hover .ql-fill,
+.ql-snow .ql-toolbar button.ql-active .ql-fill,
+.ql-snow.ql-toolbar button:hover .ql-fill,
+.ql-snow.ql-toolbar button.ql-active .ql-fill { fill: var(--accent) !important; }
+.ql-snow a, .ql-editor a { color: var(--accent); }
+.ql-editor .ql-color-blue { color: var(--accent); }
+.ql-editor .ql-bg-blue { background-color: var(--accent); }

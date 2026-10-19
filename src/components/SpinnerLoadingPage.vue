@@ -10,3 +10,15 @@ import Kreisel from '@/components/basis/Kreisel.vue'
         {{ spinnerLoadingPageText }}
     </div>
 </template>
+<style scoped>
+/* Lade-Overlay: über allem, klickt aber nicht weg. */
+.overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    display: flex;
+    justify-content: center;
+    padding-top: 40vh;
+    pointer-events: none;
+}
+</style>

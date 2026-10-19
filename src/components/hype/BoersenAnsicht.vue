@@ -444,7 +444,7 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
 }
 .bwKachel {
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .55rem .75rem;
 }
 .bwKachelTitel {

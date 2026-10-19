@@ -170,7 +170,7 @@ const standText = computed(() => {
     font-size: 0.66rem;
 }
 
-/* Kein Punkt-Farbcode für „aus" in style-dark.css — grau: weder gut noch kaputt */
+/* Kein Punkt-Farbcode für „aus" in design/kacheln.css — grau: weder gut noch kaputt */
 :deep(.liveDot.dot-aus),
 .liveDot.dot-aus {
     background: var(--muted);

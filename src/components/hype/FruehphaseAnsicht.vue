@@ -1124,7 +1124,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     margin: .8rem 0 1rem;
     padding: .7rem .9rem;
     border: 1px solid rgba(1, 180, 255, .35);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     background: rgba(1, 180, 255, .05);
 }
 .fpFokusKopf {
@@ -1196,7 +1196,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 .fpKandidat {
     background: var(--bg);
     border: 1px solid var(--line);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .7rem .85rem;
     min-width: 0;
 }
@@ -1390,7 +1390,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 .fpKarte {
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .55rem .7rem;
 }
 .fpKarteZeile {

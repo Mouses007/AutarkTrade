@@ -256,7 +256,7 @@ watch(levMapHours, () => lade())
     flex: 1 1 auto;
     min-height: 0;
     background: var(--bg);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
 }
 
 .oiCards {
@@ -272,7 +272,7 @@ watch(levMapHours, () => lade())
     gap: 0.15rem;
     padding: 0.4rem 0.7rem;
     background: var(--bg);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     min-width: 8rem;
 }
 

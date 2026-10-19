@@ -1994,7 +1994,7 @@ onBeforeUnmount(() => {
 .nwGuthaben {
     margin: 0 0 0.7rem;
     padding: 0.45rem 0.7rem;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     background: rgba(250, 190, 60, 0.1);
     border: 1px solid rgba(250, 190, 60, 0.35);
 }
@@ -2015,7 +2015,7 @@ onBeforeUnmount(() => {
 .nwKarte {
     min-width: 0;
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     box-shadow: var(--schatten);
     padding: 1rem 1.1rem;
     margin-bottom: 1rem;
@@ -2150,7 +2150,7 @@ onBeforeUnmount(() => {
     width: 100%;
     padding: 0.4rem 0.7rem;
     border: 1px solid transparent;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: var(--panel-soft);
     color: var(--text);
     font-size: 0.82rem;
@@ -2445,7 +2445,7 @@ onBeforeUnmount(() => {
     padding: 0.6rem 0.75rem 0.7rem;
     border: 1px solid var(--line);
     border-top: 2px solid var(--line-stark);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.022);
 }
 
@@ -2579,7 +2579,7 @@ onBeforeUnmount(() => {
 .nwDoBlock {
     min-width: 0;
     border: 1px solid var(--line);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.022);
     padding: 0.7rem 0.8rem 0.5rem;
     overflow-x: auto;
@@ -2758,7 +2758,7 @@ onBeforeUnmount(() => {
 .nwDoZahlen {
     margin: 0 0 1rem;
     border: 1px solid var(--line);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.022);
 }
 
@@ -2785,7 +2785,7 @@ onBeforeUnmount(() => {
     margin-bottom: 0.5rem;
     border: 1px solid var(--line);
     border-left: 3px solid transparent;
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.018);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
@@ -2869,7 +2869,7 @@ onBeforeUnmount(() => {
 .nwArchiv {
     margin: 0.6rem 0 0.2rem;
     border: 1px solid var(--line);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     overflow: hidden;
 }
 
@@ -2942,7 +2942,7 @@ onBeforeUnmount(() => {
 }
 
 .nwPunkt {
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.025);
     border-left: 3px solid var(--line);
     overflow: hidden;
@@ -3042,7 +3042,7 @@ onBeforeUnmount(() => {
     width: 100%;
     max-height: 320px;
     object-fit: cover;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     margin: 0 0 0.9rem;
 }
 
@@ -3798,7 +3798,7 @@ onBeforeUnmount(() => {
 .nwLageKarte {
     background: var(--panel-soft);
     border-left: 3px solid var(--accent);
-    border-radius: 0 var(--border-radius, 6px) var(--border-radius, 6px) 0;
+    border-radius: 0 var(--radius) var(--radius) 0;
     padding: 0.6rem 0.8rem;
     min-width: 0;
 }
@@ -3819,7 +3819,7 @@ onBeforeUnmount(() => {
     text-transform: none;
     letter-spacing: 0;
     border: 1px solid currentColor;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     padding: 0 0.4rem;
     font-size: 0.72rem;
     white-space: nowrap;

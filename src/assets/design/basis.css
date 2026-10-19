@@ -1,9 +1,10 @@
 /*
  * Grundlage für alle Seiten: Elemente ohne Klasse.
  *
- * Wird NACH design/uebergang.css geladen (src/main.js) und gewinnt damit bei
- * gleicher Spezifität. Bewusst nur Elemente und wenige Hilfsklassen —
- * Bauteile bringen ihr Aussehen in `src/components/basis/` selbst mit.
+ * Wird NACH den thematischen Dateien (kacheln.css, journal.css, quill.css)
+ * geladen (src/main.js) und gewinnt damit bei gleicher Spezifität. Bewusst
+ * nur Elemente und wenige Hilfsklassen — Bauteile bringen ihr Aussehen in
+ * `src/components/basis/` selbst mit.
  *
  * Seit S9 Teil 2 ohne Bootstrap: der Abschnitt „Grundordnung" übernimmt, was
  * dessen Reboot bisher erledigt hat, in eigener, knapper Form. Die Regeln für
@@ -32,6 +33,11 @@ body {
 }
 
 [hidden] {
+    display: none !important;
+}
+
+/* Vue nimmt das Attribut beim Einhängen weg (layouts/Dashboard.vue). */
+[v-cloak] {
     display: none !important;
 }
 
@@ -199,6 +205,26 @@ legend + * {
     color: var(--text);
 }
 
+::placeholder {
+    color: var(--muted) !important;
+    opacity: 1;
+}
+
+/* Datumsfelder: eigene Randfarbe; das Kalender-Symbol des Browsers ist
+   schwarz und wird auf dem dunklen Grund umgekehrt. */
+input[type='date'],
+input[type='month'],
+input[type='datetime-local'] {
+    color: var(--text);
+    border-color: var(--muted);
+}
+
+input[type='date']::-webkit-calendar-picker-indicator,
+input[type='month']::-webkit-calendar-picker-indicator,
+input[type='datetime-local']::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
 :where(input[type='checkbox'], input[type='radio'], input[type='range'], progress) {
     accent-color: var(--accent);
 }
@@ -235,7 +261,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* Die alte style-dark.css setzte die Schrift über `*` — das schlägt jede Vererbung.
+/* Das frühere Alt-Stylesheet setzte die Schrift über `*` — das schlägt jede Vererbung.
    Hier dieselbe Breite, damit nirgends Nunito übrig bleibt. Formularfelder
    und Knöpfe erben sonst die Browser-Schrift. */
 * {

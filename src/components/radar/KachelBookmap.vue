@@ -72,7 +72,7 @@ const { t } = useI18n()
     position: absolute;
     inset: 0;
     background: var(--bg);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     overflow: hidden;
 }
 

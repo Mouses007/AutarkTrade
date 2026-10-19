@@ -13,7 +13,13 @@
  *   - src/: kein `window.bootstrap`, kein Import aus 'bootstrap', keine
  *     `data-bs-…`-Attribute (ohne Bootstrap-JS tun sie stillschweigend nichts),
  *   - src/: keine Klassen der Symbolschriften (`uil …`, `fa …`) — ohne die
- *     Schrift wäre dort eine leere Stelle statt eines Symbols.
+ *     Schrift wäre dort eine leere Stelle statt eines Symbols,
+ *   - keine Übergangsschicht mehr (S9 Teil 3): weder
+ *     src/assets/design/uebergang.css noch src/assets/style-dark.css, und in
+ *     src/ (auch .css) keine alten Variablennamen (--blue-color, --white-*,
+ *     --black-bg-*, --grey-*, --border-radius …). Sie waren nur noch Aliase
+ *     auf die Token; ohne die Schicht wären sie leer und die Regel fiele
+ *     stillschweigend auf den Browser-Standard zurück.
  *
  * Gezeichnet wird über `components/basis/Symbol.vue`; Grundstil und Reset
  * stehen in `assets/design/basis.css`.
@@ -60,7 +66,7 @@ function dateien(ordner, raus = []) {
     for (const e of fs.readdirSync(ordner, { withFileTypes: true })) {
         const voll = path.join(ordner, e.name)
         if (e.isDirectory()) { if (e.name !== 'node_modules') dateien(voll, raus); continue }
-        if (/\.(vue|js|mjs|ts|html)$/.test(e.name) && voll !== selbst) raus.push(voll)
+        if (/\.(vue|js|mjs|ts|html|css)$/.test(e.name) && voll !== selbst) raus.push(voll)
     }
     return raus
 }
@@ -79,7 +85,11 @@ function ohneKommentare(text) {
 /** Ist ein Klassenname einer der Symbolschriften? */
 const schriftKlasse = (k) => k === 'uil' || k.startsWith('uil-') || k === 'fa' || k.startsWith('fa-')
 
+/** Variablennamen der früheren style-dark.css bzw. uebergang.css. */
+const alteVariable = /--(blue-color|blue-active-color|green|green-color|red-color|red-hover-color|grey-[\w-]+|black-bg[\w-]*|white-\d+|bg-card|border-color|border-radius|border-subtle|shadow-sm)(?![\w-])/g
+
 const bootstrapFunde = []
+const variablenFunde = []
 const datenBsFunde = []
 const klassenFunde = []
 
@@ -89,6 +99,9 @@ for (const datei of dateien(quelle)) {
 
     for (const m of text.matchAll(/window\.bootstrap|globalThis\.bootstrap|from\s+['"]bootstrap(\/[^'"]*)?['"]|import\s+['"]bootstrap(\/[^'"]*)?['"]|\bnew\s+bootstrap\./g)) {
         bootstrapFunde.push(`${ort(datei, text, m.index)}  ${m[0]}`)
+    }
+    for (const m of text.matchAll(alteVariable)) {
+        variablenFunde.push(`${ort(datei, text, m.index)}  ${m[0]}`)
     }
     for (const m of text.matchAll(/data-bs-[a-z-]+/g)) {
         datenBsFunde.push(`${ort(datei, text, m.index)}  ${m[0]}`)
@@ -110,6 +123,12 @@ for (const datei of dateien(quelle)) {
 pruefe("src/ ohne window.bootstrap / Import aus 'bootstrap'", bootstrapFunde)
 pruefe('src/ ohne data-bs-Attribute', datenBsFunde)
 pruefe('src/ ohne Klassen der Symbolschriften (uil …, fa …)', [...new Set(klassenFunde)])
+pruefe('src/ ohne alte Variablennamen (--blue-color, --white-*, --border-radius …)', variablenFunde)
+
+// ── Übergangsschicht ─────────────────────────────────────────────────────
+pruefe('keine Übergangsschicht (uebergang.css, style-dark.css)',
+    ['src/assets/design/uebergang.css', 'src/assets/style-dark.css']
+        .filter((d) => fs.existsSync(path.join(wurzel, d))))
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)
 if (fehler) process.exit(1)

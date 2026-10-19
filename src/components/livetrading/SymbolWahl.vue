@@ -193,7 +193,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
     gap: 0.25rem;
     background: var(--bg);
     border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
     max-height: 20rem;
     overflow-y: auto;
@@ -225,7 +225,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
 .swSuche {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     color: var(--text);
     padding: 0.18rem 0.4rem;
     font-size: 0.8rem;

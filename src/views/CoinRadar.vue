@@ -2036,7 +2036,7 @@ onBeforeUnmount(() => {
 
 .crZelle {
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .7rem .85rem;
 }
 
@@ -2080,7 +2080,7 @@ onBeforeUnmount(() => {
     gap: .3rem;
     background: var(--bg);
     border-left: 3px solid var(--accent);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .7rem .9rem;
     margin-bottom: 1.1rem;
     font-size: .977rem;
@@ -2399,7 +2399,7 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crKarte {
     background: var(--bg);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .6rem .7rem;
     cursor: pointer;
 }
@@ -2460,7 +2460,7 @@ a.crBoerse:hover, a.crBoerse:active {
     color: var(--leise);
     font-size: .85rem;
     border: 1px solid var(--line-stark);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     padding: .25rem .8rem;
 }
 
@@ -2502,7 +2502,7 @@ a.crBoerse:hover, a.crBoerse:active {
     /* Reset gegenüber dem Standard-<button> — sieht sonst wie ein Formularfeld aus */
     background: transparent;
     border: 1px solid transparent;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     padding: .2rem .4rem;
     margin: -.2rem -.4rem;
     text-align: left;
@@ -2536,7 +2536,7 @@ a.crBoerse:hover, a.crBoerse:active {
     position: relative;
     background: var(--bg);
     border: 1px solid var(--line-stark);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .9rem 1rem;
     font-size: .87rem;
 }
@@ -2717,7 +2717,7 @@ a.crBoerse:hover, a.crBoerse:active {
     flex-wrap: wrap;
     background: var(--panel-soft);
     border: 1px solid var(--leise);
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     padding: .5rem .75rem;
 }
 
@@ -2757,7 +2757,7 @@ a.crBoerse:hover, a.crBoerse:active {
 .crEinzelFehler {
     margin-top: .5rem;
     padding: .6rem .75rem;
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     background: rgba(255, 193, 7, .1);
     border: 1px solid rgba(255, 193, 7, .3);
     font-size: .85rem;
@@ -2792,7 +2792,7 @@ a.crBoerse:hover, a.crBoerse:active {
 .crEinzelKarte {
     margin-top: .5rem;
     padding: .85rem 1rem 1rem;
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     background: var(--panel-soft);
     border: 1px solid var(--leise);
 }
@@ -2869,7 +2869,7 @@ a.crBoerse:hover, a.crBoerse:active {
 .crEinzelWert {
     text-align: center;
     padding: .4rem .25rem;
-    border-radius: var(--border-radius, 8px);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, .04);
 }
 

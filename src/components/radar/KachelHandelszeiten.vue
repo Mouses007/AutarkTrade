@@ -185,7 +185,7 @@ const band = computed(() => lage.value.phasenHeute
     align-items: center;
     gap: 0.4rem;
     padding: 0.3rem 0.5rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     font-size: 0.82rem;
     font-weight: 600;
 }

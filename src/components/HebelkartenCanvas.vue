@@ -364,7 +364,7 @@ defineExpose({ status, statusDetail, stand, zeitstempel, accountRatio })
     flex: 1 1 auto;
     min-height: 0;
     background: var(--bg);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     overflow: hidden;
     cursor: crosshair;
     /* Der Finger setzt das Fadenkreuz und zoomt mit zwei Fingern — die Geste

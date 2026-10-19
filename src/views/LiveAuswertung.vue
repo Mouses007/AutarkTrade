@@ -254,7 +254,7 @@ onMounted(lade)
     gap: 1.4rem;
     flex-wrap: wrap;
     padding: 0.5rem 0.7rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.04);
 }
 
@@ -281,7 +281,7 @@ onMounted(lade)
 
 .awBlock {
     padding: 0.6rem 0.7rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.03);
 }
 

@@ -230,7 +230,7 @@ const statusLabel = {
     margin-top: 0.45rem;
     padding: 0.3rem 0.6rem;
     border: 1px solid var(--line-stark);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: var(--bg);
 }
 
@@ -263,7 +263,7 @@ const statusLabel = {
     flex: 1;
     min-height: 0;
     border: 1px solid var(--line-stark);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: #0a0a0a;
     overflow: hidden;
 }

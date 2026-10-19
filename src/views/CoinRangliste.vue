@@ -472,7 +472,7 @@ onBeforeUnmount(stopPolling)
 
 <style scoped>
 /*
- * `.dailyCard` trägt global `height: 100%` (style-dark.css). Das ist dort
+ * `.dailyCard` trägt global `height: 100%` (design/journal.css). Das ist dort
  * richtig, wo Karten NEBENEINANDER in einer Zeile stehen und gleich hoch sein
  * sollen — Dashboard und Auswertung leben davon.
  *

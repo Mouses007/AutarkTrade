@@ -119,7 +119,7 @@ function schliessenBeiEsc(e) {
 .infoBox {
     background: var(--bg);
     border: 1px solid var(--line-stark);
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     max-width: 46rem;
     width: 100%;
     max-height: 84vh;
@@ -211,7 +211,7 @@ function schliessenBeiEsc(e) {
 .infoCaveat {
     margin: 1rem 0 0;
     padding: 0.6rem 0.75rem;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     background: rgba(250, 190, 60, 0.08);
     border: 1px solid rgba(250, 190, 60, 0.35);
     color: rgb(250, 190, 60);

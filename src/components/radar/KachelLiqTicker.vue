@@ -167,7 +167,7 @@ function geld(v) {
     font-weight: 600;
     color: #ff6b7a;
     background: rgba(220, 53, 69, 0.14);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     padding: 0.22rem 0.4rem;
 }
 

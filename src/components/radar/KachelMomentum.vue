@@ -498,7 +498,7 @@ const strNeben = computed(() => {
 .mrStatus {
     margin-left: 0.5rem;
     padding: 0.08rem 0.55rem;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
     font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.03em;

@@ -285,7 +285,7 @@ onBeforeUnmount(speichereJetzt)
     padding: 0.5rem 0.7rem;
     margin-bottom: 0.7rem;
     background: var(--panel-soft);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
 }
 
 .stZeile {
@@ -305,7 +305,7 @@ onBeforeUnmount(speichereJetzt)
     cursor: pointer;
     margin: -0.3rem -0.4rem;
     padding: 0.3rem 0.4rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
 }
 
 .stZeileKlickbar:hover {
@@ -369,7 +369,7 @@ onBeforeUnmount(speichereJetzt)
 .stInput {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     color: var(--text);
     padding: 0.2rem 0.45rem;
     font-size: 0.85rem;
@@ -393,7 +393,7 @@ onBeforeUnmount(speichereJetzt)
 .stNotizen {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     color: var(--text);
     padding: 0.35rem 0.5rem;
     font-size: 0.85rem;
@@ -414,7 +414,7 @@ onBeforeUnmount(speichereJetzt)
     gap: 0.6rem;
     font-size: 0.85rem;
     padding: 0.35rem 0.5rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.05);
 }
 

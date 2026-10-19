@@ -101,7 +101,7 @@ const stunden = computed(() => Number(props.params?.stunden) || DAYTRADING_STUND
     inset: 0;
     display: flex;
     overflow: hidden;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius);
 }
 
 .hkGanzeSeite {

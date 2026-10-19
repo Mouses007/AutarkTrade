@@ -287,7 +287,7 @@ onMounted(lade)
     gap: 1rem;
     font-size: 0.85rem;
     padding: 0.4rem 0.6rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.04);
 }
 
@@ -298,7 +298,7 @@ onMounted(lade)
     flex-direction: column;
     gap: 0.25rem;
     padding: 0.5rem 0.6rem;
-    border-radius: var(--border-radius);
+    border-radius: var(--radius);
     background: rgba(255, 255, 255, 0.03);
     border-left: 3px solid transparent;
 }

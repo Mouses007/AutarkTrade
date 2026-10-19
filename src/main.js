@@ -8,8 +8,13 @@ import i18n, { starteSprache } from './i18n'
 // zeichnet src/components/basis/Symbol.vue. Quill laden Playbook.vue und
 // Incoming.vue selbst (samt CSS), nicht hier — es gehört nicht ins Start-Bundle.
 
+// Reihenfolge: Token → thematische Klassen → Elemente (basis) → Hilfsklassen
+// → Rahmen. Bei gleicher Spezifität gewinnt das Spätere, also setzen sich
+// basis.css und die at-Hilfsklassen gegen kacheln/journal/quill durch.
 import './assets/design/tokens.css'
-import './assets/design/uebergang.css'
+import './assets/design/kacheln.css'
+import './assets/design/journal.css'
+import './assets/design/quill.css'
 import './assets/design/basis.css'
 import './assets/design/hilfen.css'
 import './assets/design/rahmen.css'
