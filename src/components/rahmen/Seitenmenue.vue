@@ -2,9 +2,9 @@
 /**
  * Seitenmenü von AutarkTrade (Inhalt der Menüspalte im Layout).
  *
- * Von oben: Nutzername, Klappknopf (nur Desktop), das Menü des aktuellen
- * Modus, Fuss mit Version und Update. Einstellungen und Abmelden stehen
- * rechts oben in der Kopfleiste.
+ * Von oben: Klappknopf (nur Desktop), das Menü des aktuellen Modus, unten
+ * Profilbild mit Namen und darunter der Fuss mit Version und Update.
+ * Einstellungen und Abmelden stehen rechts oben in der Kopfleiste.
  *
  * Alle Modus-Menüs kommen aus der Registry `config/menu.js`. Das Journal hat
  * oben zusätzlich Börse, Kategorie und Filter (`MenueJournalKopf.vue`) und
@@ -103,11 +103,6 @@ const waehlerVariante = computed(() => (menueModus.value === 'live' ? WAEHLER[pa
 
 <template>
     <div class="at-seitenmenue" :class="{ schmal }">
-        <div v-if="currentUser?.username && !schmal" class="nutzer">
-            <img v-if="currentUser.avatar" :src="currentUser.avatar" alt="" class="avatar" />
-            <span class="name">{{ currentUser.username }}</span>
-        </div>
-
         <button v-if="desktop" type="button" class="klappe"
             :title="schmal ? t('nav.menuAusklappen') : t('nav.menuEinklappen')"
             :aria-label="schmal ? t('nav.menuAusklappen') : t('nav.menuEinklappen')" :aria-expanded="!schmal"
@@ -134,7 +129,14 @@ const waehlerVariante = computed(() => (menueModus.value === 'live' ? WAEHLER[pa
 
         </nav>
 
-        <MenueFuss v-if="!schmal" />
+        <!-- Unten: Profil über Version und Rechtlichem. -->
+        <div v-if="!schmal" class="unten">
+            <div v-if="currentUser?.username" class="nutzer">
+                <img v-if="currentUser.avatar" :src="currentUser.avatar" alt="" class="avatar" />
+                <span class="name">{{ currentUser.username }}</span>
+            </div>
+            <MenueFuss />
+        </div>
     </div>
 </template>
 
@@ -153,21 +155,35 @@ const waehlerVariante = computed(() => (menueModus.value === 'live' ? WAEHLER[pa
     align-items: stretch;
 }
 
+.unten {
+    margin-top: auto;
+    padding-top: var(--abstand-4);
+}
+
+/* MenueFuss schiebt sich selbst per margin-top: auto nach unten — hier sitzt er schon unten. */
+.unten :deep(.at-menue-fuss) {
+    margin-top: 0;
+}
+
 .nutzer {
     display: flex;
     align-items: center;
-    gap: var(--abstand-2);
-    padding: 0 var(--abstand-2) var(--abstand-3);
+    gap: var(--abstand-3);
+    padding: var(--abstand-3) var(--abstand-2) var(--abstand-1);
+    border-top: 1px solid var(--line);
     color: var(--text);
     font-weight: 600;
+    font-size: 1rem;
     min-width: 0;
 }
 
 .avatar {
-    width: 28px;
-    height: 28px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
     object-fit: cover;
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
 }
 
 .name {
