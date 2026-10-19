@@ -1,516 +1,83 @@
+/**
+ * Router von AutarkTrade.
+ *
+ * Die Tabelle steht in `./routen.js`. Hier nur, was bei jedem Seitenwechsel
+ * geschieht (in dieser Reihenfolge):
+ *
+ *   1. Dokumenttitel setzen — auch für Ziele, die gleich umgeleitet werden.
+ *   2. Setup nicht abgeschlossen → /setup; Update-Assistent ausstehend →
+ *      /update-assistent. Der Status kommt einmal pro Seitenleben vom Server.
+ *   3. Den Modus aus der Route ableiten. Die Route ist die Wahrheit, `appMode`
+ *      nur das Gedächtnis: ein Deep-Link auf /liquidity schaltet still auf
+ *      „live", damit das Seitenmenü schon beim ersten Zeichnen stimmt.
+ *
+ * Bewusst NICHT hier: die Wache für abgeschaltete Modi. Beim kalten Deep-Link
+ * sind die Einstellungen noch nicht geladen, ein Router-Hook müsste raten.
+ * Sie sitzt im Layout (`layouts/Dashboard.vue`), das warten kann.
+ */
 import { createRouter, createWebHistory } from 'vue-router'
 import axios from 'axios'
-import DashboardLayout from '../layouts/Dashboard.vue'
 import i18n from '../i18n'
-import { appMode } from '../stores/globals.js'
+import { appMode } from '../stores/ui.js'
+import { routen } from './routen.js'
+
+const APP_NAME = 'AutarkTrade'
 
 const router = createRouter({
-    history: createWebHistory(
-        import.meta.env.BASE_URL),
-    routes: [{
-        path: '/',
-        // Landing-Page: normalerweise der Chart-Arbeitsplatz (Modus `start`).
-        // Ist er in den Einstellungen abgeschaltet (`startseiteAn = 0`), landet
-        // man im Journal. Der Wert wird beim App-Start nach localStorage
-        // gespiegelt (siehe useInitApp), damit hier synchron entschieden werden
-        // kann. Spalte und Schlüssel heissen aus Rücksicht auf bestehende
-        // Einstellungen weiter `startseiteAn`.
-        redirect: () => (localStorage.getItem('startseiteAn') === '0' ? '/dashboard' : '/chart'),
-    },
-    {
-        // Chart-Arbeitsplatz: ersetzt seit 18.10.2026 die frühere Übersicht
-        // (Kachelraster). Eigener Modus `start` — das Dashboard-Layout lädt
-        // hier KEINE Journal-Daten; Journal-Overlays holt der Chart selbst.
-        path: '/chart',
-        name: 'chart',
-        meta: {
-            title: "Chart", titleKey: "nav.chart",
-            mode: 'start',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Chart.vue')
-    },
-    {
-        // Startseite von AutarkTrade: Logo und die Modi als Kacheln. Ziel des
-        // Logos in der Kopfleiste. Eigener Pseudo-Modus, damit das Layout
-        // keine Journal-Daten lädt; ohne Seitenmenü und Titelzeile.
-        path: '/start',
-        name: 'start',
-        meta: {
-            title: "AutarkTrade", titleKey: "app.startTitel",
-            mode: 'uebersicht',
-            ohneSeitenmenue: true,
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Start.vue')
-    },
-    {
-        // Alte Adresse der Übersicht: Lesezeichen und die Logo-Verlinkung
-        // älterer Stände führen weiter hierher.
-        path: '/startseite',
-        redirect: '/chart',
-    },
-    {
-        path: '/setup',
-        name: 'setup',
-        meta: {
-            title: "Setup", titleKey: "nav.setup",
-            skipSetupCheck: true
-        },
-        component: () =>
-            import('../views/Setup.vue')
-    },
-    {
-        // Zeigt nach dem Setup-Wizard UND einmalig nach einem Update dieselben
-        // Onboarding-Schritte (Standardeinstellungen/KI/News/Mail). Braucht
-        // beide Skip-Flags: skipSetupCheck, weil die Route sonst zirkulär auf
-        // sich selbst prüfen würde, skipUpdateCheck gegen den eigentlichen
-        // Redirect-Grund dieser Route.
-        path: '/update-assistent',
-        name: 'updateAssistent',
-        meta: {
-            title: "Update-Assistent", titleKey: "onboarding.title",
-            skipSetupCheck: true, skipUpdateCheck: true
-        },
-        component: () =>
-            import('../views/UpdateAssistent.vue')
-    },
-    {
-        path: '/dashboard',
-        name: 'dashboard',
-        meta: {
-            title: "Dashboard", titleKey: "nav.dashboard",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Dashboard.vue')
-    },
-    {
-        path: '/accounts',
-        name: 'accounts',
-        meta: {
-            title: "Konten", titleKey: "nav.accounts",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Accounts.vue')
-    },
-    {
-        path: '/calendar',
-        name: 'calendar',
-        meta: {
-            title: "Calendar", titleKey: "nav.calendar",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Calendar.vue')
-    },
-    {
-        path: '/daily',
-        name: 'daily',
-        meta: {
-            title: "Daily", titleKey: "nav.dailyView",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Daily.vue')
-    },
-    {
-        path: '/incoming',
-        name: 'incoming',
-        meta: {
-            title: "Pendente Trades", titleKey: "nav.pendingTrades",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Incoming.vue')
-    },
-    {
-        path: '/diary',
-        redirect: '/incoming'
-    },
-    {
-        path: '/screenshots',
-        name: 'screenshots',
-        meta: {
-            title: "Screenshots", titleKey: "nav.screenshots",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Screenshots.vue')
-    },
-    {
-        // Lern-Karteikasten: Sitzung und Kartenverwaltung teilen sich eine
-        // Route (wie Hype-/Coin-Radar), damit eine laufende Sitzung beim
-        // Wechsel zwischen den Menüeinträgen nicht verloren geht.
-        path: '/lernen/:reiter?',
-        name: 'lernen',
-        meta: {
-            title: "Lernen", titleKey: "nav.lernen",
-            mode: 'lernen',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Lernen.vue')
-    },
-    {
-        path: '/playbook',
-        name: 'playbook',
-        meta: {
-            title: "Playbook", titleKey: "nav.playbook",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Playbook.vue')
-    },
-    {
-        path: '/auswertung',
-        name: 'auswertung',
-        meta: {
-            title: "Auswertung", titleKey: "nav.evaluation",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Auswertung.vue')
-    },
-    {
-        // Archiv und Auswertung stehen im Live-Modus unter „Handeln", nicht im
-        // Journal: alles zum Live-Trading an einem Ort, ein Weg zu einer Sache.
-        path: '/live-sessions',
-        name: 'liveSessions',
-        meta: {
-            title: "Archiv", titleKey: "nav.liveSessions",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/LiveSessions.vue')
-    },
-    {
-        path: '/live-auswertung',
-        name: 'liveAuswertung',
-        meta: {
-            title: "Auswertung", titleKey: "nav.liveAuswertung",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/LiveAuswertung.vue')
-    },
-    {
-        path: '/ki-coach',
-        name: 'kiAgent',
-        meta: {
-            title: "KI-Coach", titleKey: "nav.kiAgent",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/KiAgent.vue')
-    },
-    {
-        path: '/addTrades',
-        name: 'addTrades',
-        meta: {
-            title: "Manueller Trade Import", titleKey: "nav.manualImport",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AddTrades.vue')
-
-    },
-    {
-        path: '/addDiary',
-        redirect: '/incoming'
-    },
-    {
-        path: '/addPlaybook',
-        redirect: '/daily'
-    },
-    {
-        path: '/addScreenshot',
-        redirect: '/screenshots'
-    },
-    {
-        path: '/addExcursions',
-        name: 'addExcursions',
-        meta: {
-            title: "Add Excursions", titleKey: "nav.addExcursions",
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AddExcursions.vue')
-    },
-    {
-        path: '/settings',
-        name: 'settings',
-        meta: {
-            title: "Settings", titleKey: "nav.settings",
-            // Einstellungen sind aus jedem Modus erreichbar und wechseln ihn nicht
-            mode: 'any',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Settings.vue')
-    },
-    {
-        // Live-Analyse: Binance-Orderbuch-Heatmap / Bookmap.
-        // `mode` steuert, welches Seitenmenü gerendert wird; alle Routen ohne
-        // dieses Feld gelten als 'journal' (siehe beforeEach).
-        path: '/liquidity',
-        name: 'liquidity',
-        meta: {
-            title: "Live-Analyse", titleKey: "nav.liquidity",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Liquidity.vue')
-    },
-    {
-        path: '/liquidations',
-        name: 'liquidations',
-        meta: {
-            title: "Liquidationskarte", titleKey: "nav.liquidations",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Liquidations.vue')
-    },
-    {
-        path: '/openinterest',
-        name: 'openinterest',
-        meta: {
-            title: "Open Interest", titleKey: "nav.openInterest",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/OpenInterest.vue')
-    },
-    {
-        // Hype-Radar: was gerade neu gehypt wird — gesammelt, bewertet und
-        // hart auf Betrugsmuster gefiltert, bevor es überhaupt angezeigt wird.
-        //
-        // Der optionale Abschnitt ist der frühere Seiten-Reiter: Übersicht und
-        // Berichte stehen jetzt als eigene Einträge im Seitenmenü. Bewusst ein
-        // Parameter und keine zweite Route — derselbe Routen-Eintrag heisst,
-        // dass die Seite beim Wechsel NICHT neu aufgebaut wird: ein laufender
-        // Scan (SSE-Strom) überlebt den Wechsel, die Kandidatentabelle behält
-        // Filter und aufgeklappte Zeilen.
-        path: '/hype-radar/:reiter?',
-        name: 'hypeRadar',
-        meta: {
-            title: "Hype-Radar", titleKey: "nav.hypeRadar",
-            mode: 'research',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/HypeRadar.vue')
-    },
-    {
-        // Coin-Radar: Geschwister des Hype-Radars mit der umgekehrten Frage —
-        // nicht „was ist neu", sondern „welcher der handelbaren Coins lässt
-        // sich gerade am besten handeln".
-        // Abschnitt wie beim Hype-Radar: Rangliste und Verlauf sind
-        // Menüeinträge, teilen sich aber einen Routen-Eintrag und damit die
-        // geladene Rangliste.
-        path: '/coin-radar/:reiter?',
-        name: 'coinRadar',
-        meta: {
-            title: "Coin-Radar", titleKey: "nav.coinRadar",
-            mode: 'research',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/CoinRadar.vue')
-    },
-    {
-        // Marktradar: Kachelraster mit Stimmung, Positionierung und eigenen
-        // Kennzahlen — der Blick auf die Marktlage, bevor man in die Tiefe geht.
-        path: '/marktradar',
-        name: 'marktradar',
-        meta: {
-            title: "Marktradar", titleKey: "nav.marktradar",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Marktradar.vue')
-    },
-    {
-        // Live-Trading-Fenster: der Arbeitsplatz für die Stunden, in denen
-        // tatsächlich gehandelt wird. Eigenes Kachelraster mit eigenem Layout,
-        // damit der Marktradar seine Übersicht behält.
-        //
-        // Abschaltbar über `livetradingAn`. Die Prüfung sitzt in der Seite und
-        // NICHT hier: beim ersten Aufruf eines Deep-Links sind die
-        // Einstellungen unter Umständen noch nicht geladen, und ein
-        // Router-Guard würde dann fälschlich umleiten.
-        path: '/livetrading',
-        name: 'livetrading',
-        meta: {
-            title: "Live-Trading", titleKey: "nav.livetrading",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Livetrading.vue')
-    },
-    {
-        // Nachrichten: Lagebericht, Wirtschaftskalender und Beiträge. Bewusst
-        // eine eigene Seite — Text liest man anders als Zahlen, und der
-        // Wirtschaftskalender ist eine Nachricht mit Datum, keine Kennzahl.
-        path: '/nachrichten',
-        name: 'nachrichten',
-        meta: {
-            title: "Nachrichten", titleKey: "nav.nachrichten",
-            mode: 'live',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/Nachrichten.vue')
-    },
-    {
-        path: '/agent/strategies',
-        name: 'agentStrategies',
-        meta: {
-            title: "Strategien", titleKey: "nav.agentStrategies",
-            mode: 'agent',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AgentStrategies.vue')
-    },
-    {
-        path: '/agent/setups',
-        name: 'agentSetups',
-        meta: {
-            title: "Setups", titleKey: "nav.agentSetups",
-            mode: 'agent',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AgentSetups.vue')
-    },
-    {
-        path: '/agent/performance',
-        name: 'agentPerformance',
-        meta: {
-            title: "Agent-Auswertung", titleKey: "nav.agentPerformance",
-            mode: 'agent',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AgentPerformance.vue')
-    },
-    {
-        path: '/agent/editor',
-        name: 'agentEditor',
-        meta: {
-            title: "Strategie-Editor", titleKey: "nav.agentEditor",
-            mode: 'agent',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AgentEditor.vue')
-    },
-    {
-        path: '/agent/builder',
-        name: 'agentBuilder',
-        meta: {
-            title: "Neue Strategie", titleKey: "nav.agentBuilder",
-            mode: 'agent',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AgentBuilder.vue')
-    },
-    {
-        path: '/agent/lab',
-        name: 'agentLab',
-        meta: {
-            title: "Labor", titleKey: "nav.agentLab",
-            mode: 'agent',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/AgentLab.vue')
-    },
-    {
-        path: '/agent/rangliste',
-        name: 'coinRangliste',
-        meta: {
-            title: "Coin-Rangliste", titleKey: "nav.coinRangliste",
-            mode: 'agent',
-            layout: DashboardLayout
-        },
-        component: () =>
-            import('../views/CoinRangliste.vue')
-    },
-    {
-        path: '/imports',
-        redirect: '/settings'
-    }
-    ]
+    history: createWebHistory(import.meta.env.BASE_URL),
+    routes: routen,
 })
 
-// Cache fuer Setup-Status (wird einmal geladen)
-let setupChecked = false
-let setupComplete = false
-// Ob der Update-Assistent aussteht (Bestandsinstallation nach einem Update).
-// Läuft am selben Request wie der Setup-Check, damit kein zweiter Roundtrip
-// beim Boot nötig ist.
-let updateAssistantPending = false
+function setzeDokumentTitel(to) {
+    const key = to.meta?.titleKey
+    let titel = ''
+    if (key && i18n.global.te(key)) titel = i18n.global.t(key)
+    else titel = to.meta?.title || ''
+    document.title = titel ? `${titel} · ${APP_NAME}` : APP_NAME
+}
 
-router.beforeEach(async (to, from, next) => {
-    const seitenTitel = to.meta.titleKey ? i18n.global.t(to.meta.titleKey) : to.meta.title
-    document.title = seitenTitel ? `${seitenTitel} · AutarkTrade` : 'AutarkTrade'
-
-    // Setup-Seite selbst braucht keinen Check
-    if (to.meta.skipSetupCheck) {
-        return next()
+/*
+ * Setup- und Update-Status: ein Aufruf liefert beides, damit der Start keinen
+ * zweiten Roundtrip kostet. Gemerkt für die ganze Lebensdauer der Seite — der
+ * Update-Assistent endet mit einem harten Neuladen, also wird danach frisch
+ * gefragt und es braucht keinen Schutz gegen eine Umleitungsschleife.
+ * Ein alter Server ohne den Endpunkt gilt als fertig eingerichtet.
+ */
+let statusAnfrage = null
+function holeEinrichtungsStatus() {
+    if (!statusAnfrage) {
+        statusAnfrage = axios.get('/api/setup/status')
+            .then(({ data }) => ({
+                setupFertig: data?.setupComplete !== false,
+                updateOffen: !!data?.updateAssistantPending,
+            }))
+            .catch(() => ({ setupFertig: true, updateOffen: false }))
     }
+    return statusAnfrage
+}
 
-    // Setup-Status pruefen (nur einmal pro Session)
-    if (!setupChecked) {
-        try {
-            const { data } = await axios.get('/api/setup/status')
-            setupComplete = !!data.setupComplete
-            updateAssistantPending = !!data.updateAssistantPending
-        } catch (e) {
-            // Bei Fehler Setup ueberspringen (z.B. alter Server ohne Endpoint)
-            setupComplete = true
-            updateAssistantPending = false
-        }
-        setupChecked = true
+/** Welcher Modus gehört zu dieser Route? `any`/`uebersicht` lassen den gemerkten stehen. */
+function modusDerRoute(to) {
+    const m = to.meta?.mode
+    if (m === 'any' || m === 'uebersicht') return appMode.value
+    return m || 'journal'
+}
+
+router.beforeEach(async (to) => {
+    setzeDokumentTitel(to)
+
+    if (to.meta?.skipSetupCheck) return true
+
+    const { setupFertig, updateOffen } = await holeEinrichtungsStatus()
+    if (!setupFertig) return '/setup'
+    if (updateOffen && !to.meta?.skipUpdateCheck) return '/update-assistent'
+
+    const modus = modusDerRoute(to)
+    if (modus && modus !== appMode.value) {
+        appMode.value = modus
+        try { localStorage.setItem('appMode', modus) } catch { /* privater Modus */ }
     }
-
-    // Zum Setup weiterleiten wenn nicht abgeschlossen
-    if (!setupComplete) {
-        return next('/setup')
-    }
-
-    // Nach einem Update einmalig zum Update-Assistenten. Der Assistent selbst
-    // macht nach Abschluss/"Später" einen harten Reload (kein router.push) —
-    // dadurch wird dieser Cache-Stand neu geholt, kein Redirect-Loop nötig.
-    if (updateAssistantPending && !to.meta.skipUpdateCheck) {
-        return next('/update-assistent')
-    }
-
-    // Die Route bestimmt den Modus, nicht umgekehrt: ein Deep-Link auf
-    // /liquidity schaltet still auf 'live' um, damit das Seitenmenü schon beim
-    // ersten Paint stimmt. Routen ohne meta.mode gehören zum Journal.
-    // 'uebersicht' (Startseite /start) gehört keinem Modus und lässt ihn stehen.
-    const wantedMode = (to.meta.mode === 'any' || to.meta.mode === 'uebersicht') ? appMode.value : (to.meta.mode || 'journal')
-    if (appMode.value !== wantedMode) {
-        appMode.value = wantedMode
-        localStorage.setItem('appMode', wantedMode)
-    }
-
-    next()
+    return true
 })
 
 export default router

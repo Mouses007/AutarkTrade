@@ -1,313 +1,352 @@
 <script setup>
-import SideMenu from '../components/SideMenu.vue'
-import Nav from '../components/Nav.vue'
-import Screenshot from '../components/Screenshot.vue'
-import ReturnToTopButton from '../components/ReturnToTopButton.vue'
-import TradeEvalPopup from '../components/TradeEvalPopup.vue'
-import { computed, ref, onBeforeMount, onMounted, onUnmounted, watch } from 'vue'
+/**
+ * Layout von AutarkTrade — hängt als `meta.layout` an jeder Seite.
+ *
+ * Kopfleiste oben, darunter Menüspalte und Inhalt mit Titelzeile. Weil alle
+ * Routen dieselbe Komponente tragen, wird das Layout bei einer SPA-Navigation
+ * NICHT neu aufgebaut; alles, was von der Route abhängt, beobachtet sie
+ * deshalb (Seiten-ID, Journal-Start, Modus-Wache).
+ *
+ * Aufgaben:
+ *   - Einstellungen und Sprache laden, Bildschirmart messen (auch bei
+ *     Grössenänderung)
+ *   - im Journal: Zeiträume, Tags, Pending-Zähler und ihr Polling, Popups,
+ *     Wache für einen laufenden KI-Bericht
+ *   - Wache für abgeschaltete Modi (siehe unten, warum hier und nicht im Router)
+ *   - Cockpit (`?cockpit=1`) und Vollbild: ohne Kopfleiste, Menü und Titelzeile
+ *   - Zensur-Modus, Zurück-Geste für das Handy-Menü
+ */
+import { ref, computed, watch, onBeforeMount, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useCreatedDateFormat, useTimeFormat, useHourMinuteFormat } from '../utils/formatters.js'
-import { useInitParse, usePageId, useScreenType, useGetTimeZone, useGetPeriods, useSetValues, useCloseMobileMenu } from '../utils/utils.js'
-import { screenType, sideMenuMobileOut, pageId, selectedScreenshotIndex, appMode, privacyMode } from '../stores/ui.js'
-import { sideMenuEingeklappt } from '../stores/globals.js'
-import { starteZensur } from '../utils/privacy.js'
-import { getMore } from '../stores/filters.js'
-import { screenshots, selectedScreenshot, screenshot } from '../stores/trades.js'
-import { currentUser, aiReportGenerating, aiReportCountBefore, aiReportLabel } from '../stores/settings.js'
-import { hydrateLiveSettings } from '../stores/live.js'
-import { useSelectedScreenshotFunction } from '../utils/screenshots'
-import { useUpdatePendingCounts, useStartGlobalPolling, useStopGlobalPolling } from '../utils/incoming.js'
-import { useGetAvailableTags } from '../utils/daily.js'
-import { requestNotificationPermission, sendNotification } from '../utils/notify'
-import { logWarn } from '../utils/logger.js'
-import { ebeneAuf, ebeneZu } from '../composables/useZurueckGeste.js'
-import { useImVollbild } from '../utils/geraet.js'
-import BetaHinweis from '../components/BetaHinweis.vue'
+import { useI18n } from 'vue-i18n'
+
 import Kopfleiste from '../components/rahmen/Kopfleiste.vue'
 import TestbetriebBanner from '../components/rahmen/TestbetriebBanner.vue'
-import { ladeSystemModus } from '../stores/system.js'
+import Seitenmenue from '../components/rahmen/Seitenmenue.vue'
+import Titelzeile from '../components/rahmen/Titelzeile.vue'
+import ScreenshotVollbild from '../components/rahmen/ScreenshotVollbild.vue'
+import ReturnToTopButton from '../components/ReturnToTopButton.vue'
+import TradeEvalPopup from '../components/TradeEvalPopup.vue'
 import PageInfo from '../components/PageInfo.vue'
+import BetaHinweis from '../components/BetaHinweis.vue'
+
+import { pageId, screenType, sideMenuMobileOut, appMode, privacyMode } from '../stores/ui.js'
+import { sideMenuEingeklappt } from '../stores/globals.js'
+import { currentUser } from '../stores/settings.js'
+import { ladeSystemModus } from '../stores/system.js'
+import { hydrateLiveSettings } from '../stores/live.js'
 import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
+import {
+    useInitParse, useGetTimeZone, useScreenType, useGetPeriods, useSetValues, useCloseMobileMenu,
+} from '../utils/utils.js'
+import { useGetAvailableTags } from '../utils/daily.js'
+import { useUpdatePendingCounts, useStartGlobalPolling, useStopGlobalPolling } from '../utils/incoming.js'
+import { requestNotificationPermission } from '../utils/notify.js'
+import { logWarn } from '../utils/logger.js'
+import { ebeneAuf, ebeneZu } from '../composables/useZurueckGeste.js'
+import { useKiBerichtWache } from '../composables/useKiBerichtWache.js'
+import { useImVollbild } from '../utils/geraet.js'
+import { starteZensur } from '../utils/privacy.js'
 import { setLocale } from '../i18n'
-import i18n from '../i18n'
-import axios from 'axios'
 
-const _t = (key, named) => i18n.global.t(key, named)
-
+const { t } = useI18n()
 const route = useRoute()
-// Die Live-Analyse teilt sich das Layout mit dem Journal, braucht aber keine
-// Trade-Daten: Perioden, Tags, Pending-Counts und die Popups bleiben dort aus.
-const isJournal = computed(() => {
-  const mode = route.meta?.mode
-  return mode === undefined || mode === 'journal' || mode === 'any'
-})
-
-// Der Agent-Modus handelt selbstständig — die Warnung gehört auf JEDE seiner
-// Seiten, nicht nur auf die Startseite. Wer über einen Direktlink im Labor
-// landet, muss sie genauso sehen.
-const isAgent = computed(() => route.meta?.mode === 'agent')
-
-/**
- * Cockpit-Modus: das Live-Trading-Fenster in einem eigenen Browserfenster.
- *
- * Seitenmenü und Navigation fallen weg — sie wären dort nur Wege zurück ins
- * Journal, also genau die Ablenkung, gegen die eine Handelssitzung mit festem
- * Plan gedacht ist. Der Inhalt bekommt dafür die ganze Breite.
- *
- * Bewusst an der URL (`?cockpit=1`) und nicht an einer Einstellung: dasselbe
- * Fenster soll sich auch neu laden lassen und dabei Cockpit bleiben.
- */
-const istCockpit = computed(() => String(route.query?.cockpit || '') === '1')
-
-/**
- * Vollbild räumt dieselbe Umgebung weg wie das Cockpit.
- *
- * Ich hatte das zuerst getrennt gehalten mit dem Argument, im Vollbild
- * verschwinde ohnehin nur die Browserleiste. Das ist zwar richtig, aber es geht
- * am Zweck vorbei: wer Vollbild drückt, will die Fläche für die Kacheln — und
- * ein Seitenmenü, das im Vollbild als Einziges stehen bleibt, ist genau der
- * Rand, den man loswerden wollte.
- *
- * Der Weg zurück bleibt immer offen: Esc verlässt das Vollbild, und die
- * Kopfzeile des Live-Fensters trägt weiterhin ihren eigenen Knopf.
- */
-const imVollbild = useImVollbild()
-const chromeAus = computed(() => istCockpit.value || imVollbild.value)
-
-// Seiten ohne Seitenmenü und Titelzeile (die Startseite /start bringt beides selbst mit).
-const ohneSeitenmenue = computed(() => !!route.meta?.ohneSeitenmenue)
-
-// ── Datenschutz-/Zensur-Modus ──
-// Blendet Zahlen/Kontostände im Journal-Inhalt unkenntlich aus. Nur im Journal:
-// im Live-Modus wären verwischte Kurse sinnlos.
-const mainEl = ref(null)
-let stopZensur = null
-function aktualisiereZensur() {
-    const an = privacyMode.value && appMode.value === 'journal' && !!mainEl.value
-    if (an && !stopZensur) {
-        stopZensur = starteZensur(mainEl.value)
-    } else if (!an && stopZensur) {
-        stopZensur()
-        stopZensur = null
-    }
-}
-watch([privacyMode, appMode], aktualisiereZensur)
-
-/*
- * Wache für abgeschaltete Modi.
- *
- * Hier und nicht im Router: beim kalten Deep-Link sind die Einstellungen noch
- * nicht geladen, `currentUser` ist null, und eine `beforeEach`-Wache müsste
- * raten. Sie würde falsch raten — jeder Aufruf von /marktradar landete bei
- * langsamem Einstellungsabruf im Journal. Deshalb wartet die Wache: solange
- * nichts geladen ist, leitet sie nichts um.
- *
- * Und hier statt je Seite: das Layout hängt an JEDER Route. Fünf Kopien
- * derselben Watch in fünf Views wären fünf Stellen, die auseinanderlaufen.
- *
- * Beide Quellen werden gebraucht:
- *   `currentUser` — die Einstellungen treffen verspätet ein (Deep-Link).
- *   `route.fullPath` — Navigation innerhalb der App (Zurück-Knopf, altes
- *                      Lesezeichen), wenn die Einstellungen längst da sind.
- *
- * `livetradingAn` bleibt davon unberührt: das ist ein Seiten-Flag und wird
- * weiterhin in `Livetrading.vue` selbst bewacht.
- */
 const router = useRouter()
-watch([currentUser, () => route.fullPath], ([u]) => {
-  if (!u) return
-  const modus = route.meta?.mode
-  // Modusneutrale Seiten (Einstellungen, Konten) und das Journal haben keinen
-  // Schalter — sie sind immer erreichbar.
-  if (!modus || modus === 'any' || modus === 'journal') return
-  if (istModusAn(modus, u)) return
-  router.replace(modeHome(ersterAktiverModus(u)))
-}, { immediate: true })
-onMounted(aktualisiereZensur)
-onUnmounted(() => { if (stopZensur) { stopZensur(); stopZensur = null } })
 
+/* ── Abgeleitete Zustände ─────────────────────────────── */
 
-/*========================================
-  Functions used on all Dashboard components
-========================================*/
-onBeforeMount(async () => {
-  usePageId()
-  // Betriebsart (Banner „Testbetrieb"); wartet nicht, der Rest braucht sie nicht.
-  ladeSystemModus()
-  await useInitParse()
-  // Sync language from DB settings to i18n. Nur Deutsch liegt im
-  // Start-Bundle; eine andere Sprache wird hier nachgeladen.
-  await setLocale(currentUser.value?.language || 'de')
-  useGetTimeZone()
-  useScreenType()
-  // Live-Analyse-Einstellungen aus den Settings übernehmen (auch im Journal —
-  // die Einstellungen-Seite zeigt sie dort)
-  hydrateLiveSettings()
-
-  // Ab hier nur noch Journal-Ballast (Trade-Filter, Bewertungs-Popups, Polling)
-  if (!isJournal.value) return
-
-  await useGetPeriods()
-  await useSetValues()
-
-  // Load available tags for evaluation popup
-  await useGetAvailableTags()
-
-  // Update pending evaluation counters and start polling
-  // This runs after currentUser is loaded, so showTradePopups check works.
-  // TradeEvalPopup watches evalNotificationShown and shows popup when counts > 0.
-  // Request notification permission if enabled
-  if (currentUser.value?.browserNotifications !== 0) {
-    requestNotificationPermission()
-  }
-
-  if (currentUser.value?.showTradePopups !== 0) {
-    console.log(' -> Dashboard: updating pending evaluation counts')
-    await useUpdatePendingCounts()
-    useStartGlobalPolling()
-  }
+/**
+ * Journal-Ballast (Perioden, Tags, Pending-Zähler, Popups, KI-Bericht) nur
+ * dort, wo er gebraucht wird. Die Einstellungen (`any`) zählen dazu; Chart,
+ * Startseite, Live, Entdecken, Agent und Lernen brauchen keine Trade-Daten.
+ */
+const istJournal = computed(() => {
+    const m = route.meta?.mode
+    return !m || m === 'journal' || m === 'any'
 })
+const istAgent = computed(() => route.meta?.mode === 'agent')
 
-// Re-sync dynamic period ranges (thisMonth/thisWeek/...) when the app
-// regains focus, so a month rollover while the tab was hidden is picked up.
-async function refreshPeriodsOnVisible() {
-  if (document.visibilityState !== 'visible' || !isJournal.value) return
-  try {
+/**
+ * Cockpit: das Live-Trading-Fenster in einem eigenen Browserfenster. Menü und
+ * Titelzeile wären dort nur Wege zurück ins Journal — genau die Ablenkung,
+ * gegen die eine Sitzung mit festem Plan gedacht ist. An der URL statt an
+ * einer Einstellung, damit das Fenster neu laden kann und Cockpit bleibt.
+ */
+const istCockpit = computed(() => route.query?.cockpit === '1')
+/** Vollbild räumt dieselbe Umgebung weg: wer Vollbild drückt, will die Fläche. */
+const imVollbild = useImVollbild()
+const ohneRahmen = computed(() => istCockpit.value || imVollbild.value)
+const mitMenue = computed(() => !ohneRahmen.value && !route.meta?.ohneSeitenmenue)
+
+const desktop = computed(() => screenType.value === 'computer')
+const menueSchmal = computed(() => desktop.value && sideMenuEingeklappt.value)
+
+/* ── Seiten-ID folgt jeder Navigation ─────────────────── */
+// Früher nur beim Mount gesetzt: nach router.push blieb die alte Seite stehen.
+watch(() => route.name, (name) => { pageId.value = name }, { immediate: true })
+
+/* ── Initialisierung ──────────────────────────────────── */
+
+let journalGestartet = false
+/** Einmal je Seitenleben, sobald eine Journal-Route erreicht ist. */
+async function starteJournal() {
+    if (journalGestartet) return
+    journalGestartet = true
     await useGetPeriods()
     await useSetValues()
-  } catch (e) {
-    logWarn('Period refresh failed:', e)
-  }
+    await useGetAvailableTags()   // für das Bewertungs-Popup
+    const u = currentUser.value
+    // Nur eine ausdrückliche 0 schaltet ab; fehlt der Wert, gilt er als an.
+    const aus = (v) => v === 0 || v === '0'
+    if (!aus(u?.browserNotifications)) requestNotificationPermission()
+    // Erst nach dem Laden der Einstellungen, damit die Popup-Einstellung greift.
+    if (!aus(u?.showTradePopups)) {
+        await useUpdatePendingCounts()
+        useStartGlobalPolling()
+    }
 }
 
-onMounted(() => {
-  document.addEventListener('visibilitychange', refreshPeriodsOnVisible)
-  window.addEventListener('focus', refreshPeriodsOnVisible)
+const grundBereit = ref(false)
+
+onBeforeMount(async () => {
+    ladeSystemModus()                       // Testbetrieb-Flag, ohne zu warten
+    await useInitParse()                    // Einstellungen → currentUser
+    // Nur Deutsch liegt im Start-Bundle; andere Sprachen werden nachgeladen.
+    await setLocale(currentUser.value?.language || 'de')
+    useGetTimeZone()
+    useScreenType()
+    hydrateLiveSettings()                   // auch im Journal: die Einstellungsseite zeigt die Live-Werte
+    grundBereit.value = true
+    if (istJournal.value) await starteJournal()
 })
 
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', refreshPeriodsOnVisible)
-  window.removeEventListener('focus', refreshPeriodsOnVisible)
+// Wer per SPA-Navigation aus einem anderen Modus ins Journal kommt (z. B. vom
+// Chart in die Einstellungen), bekommt die Journal-Daten nachgereicht.
+watch(istJournal, (jetzt) => {
+    if (jetzt && grundBereit.value) starteJournal().catch((e) => logWarn('layout', 'Journal-Start fehlgeschlagen', e?.message || e))
 })
 
-onUnmounted(() => {
-  useStopGlobalPolling()
-})
+/* ── Bildschirmart folgt der Fenstergrösse ────────────── */
+let groesseTakt = null
+function beiGroesse() {
+    clearTimeout(groesseTakt)
+    groesseTakt = setTimeout(() => {
+        const vorher = screenType.value
+        useScreenType()
+        // Vom Telefon auf den Desktop: ein ausgefahrenes Handy-Menü schliessen.
+        if (vorher === 'mobile' && screenType.value === 'computer') useCloseMobileMenu()
+    }, 120)
+}
 
-/**
- * Zurück-Geste schliesst das ausgefahrene Handy-Menü, statt die Seite zu
- * verlassen. Auf dem Desktop läuft das nie an, weil das Menü dort nicht
- * ausfährt und `sideMenuMobileOut` false bleibt.
+/* ── Wache für abgeschaltete Modi ─────────────────────── */
+/*
+ * Hier und nicht im Router: beim kalten Deep-Link sind die Einstellungen noch
+ * nicht da, ein Router-Hook müsste raten — und jeder Aufruf von /marktradar
+ * landete bei langsamem Abruf im Journal. Das Layout kann warten. Beobachtet
+ * werden beide Quellen: die Einstellungen kommen verspätet (Deep-Link), eine
+ * Navigation in der App (Zurück, altes Lesezeichen) kommt, wenn sie längst da
+ * sind. Das Seiten-Flag `livetradingAn` prüft Livetrading.vue selbst.
  */
+watch([currentUser, () => route.fullPath], () => {
+    const u = currentUser.value
+    if (!u) return                                   // Unwissen ist kein Nein
+    const m = route.meta?.mode
+    if (!m || m === 'any' || m === 'journal') return
+    if (istModusAn(m, u)) return
+    router.replace(modeHome(ersterAktiverModus(u)))
+}, { immediate: true })
+
+/* ── Zensur (nur Journal) ─────────────────────────────── */
+const hauptEl = ref(null)
+let zensurStopp = null
+function bewerteZensur() {
+    const an = privacyMode.value && appMode.value === 'journal' && !!hauptEl.value
+    if (an && !zensurStopp) zensurStopp = starteZensur(hauptEl.value)
+    else if (!an && zensurStopp) { zensurStopp(); zensurStopp = null }
+}
+watch([privacyMode, appMode], () => nextTick(bewerteZensur))
+
+/* ── Zeiträume auffrischen, wenn man zurückkommt ──────── */
+// Ein Monatswechsel, während der Tab verborgen war, wird so erkannt.
+async function frischeZeitraeume() {
+    if (!istJournal.value || !journalGestartet) return
+    try {
+        await useGetPeriods()
+        await useSetValues()
+    } catch (e) {
+        logWarn('layout', 'Zeiträume nicht aufgefrischt', e?.message || e)
+    }
+}
+function beiSichtbarkeit() {
+    if (document.visibilityState === 'visible') frischeZeitraeume()
+}
+
+/* ── Zurück-Geste schliesst das Handy-Menü ────────────── */
+// Dieselbe Funktionsreferenz an beide Aufrufe: der Ebenen-Stapel vergleicht Referenzen.
 watch(sideMenuMobileOut, (offen) => {
-  if (offen) ebeneAuf(useCloseMobileMenu)
-  else ebeneZu(useCloseMobileMenu)
+    if (offen) ebeneAuf(useCloseMobileMenu)
+    else ebeneZu(useCloseMobileMenu)
 })
 
-// KI-Bericht Polling: Wenn ein Bericht generiert wird und der User NICHT auf der KI-Agent-Seite ist,
-// pollen wir ob der Server den Bericht schon gespeichert hat und senden eine Benachrichtigung.
-// Wir watchen BEIDE Refs: aiReportGenerating UND pageId — damit das Polling auch startet,
-// wenn der User erst nach dem Start des Berichts die Seite wechselt.
-let aiPollInterval = null
-let lastAiPollErrorTs = 0
-watch([aiReportGenerating, pageId], ([generating, page]) => {
-  if (generating && isJournal.value && page !== 'kiAgent' && currentUser.value?.aiEnabled !== false && currentUser.value?.aiEnabled !== 0) {
-    // Polling starten (falls noch nicht aktiv)
-    if (!aiPollInterval) {
-      aiPollInterval = setInterval(async () => {
-        try {
-          const res = await axios.get('/api/ai/reports')
-          if (res.data.length > aiReportCountBefore.value) {
-            // Neuer Report gefunden — Benachrichtigung senden und Polling stoppen
-            sendNotification('kiBerichtFertig', _t('notifications.reportReady'), _t('notifications.reportCreated', { label: aiReportLabel.value || 'Zeitraum' }))
-            aiReportGenerating.value = false
-            clearInterval(aiPollInterval)
-            aiPollInterval = null
-          }
-        } catch (e) {
-          // Throttle logging to avoid console spam during temporary outages
-          const now = Date.now()
-          if (now - lastAiPollErrorTs > 15000) {
-            logWarn('dashboard-layout', 'KI-Report-Polling fehlgeschlagen', e)
-            lastAiPollErrorTs = now
-          }
-        }
-      }, 5000)
-    }
-  } else if (!generating && aiPollInterval) {
-    clearInterval(aiPollInterval)
-    aiPollInterval = null
-  }
+/* ── KI-Bericht ───────────────────────────────────────── */
+useKiBerichtWache(istJournal, t)
+
+/* ── Auf- und Abbau ───────────────────────────────────── */
+onMounted(() => {
+    bewerteZensur()
+    window.addEventListener('resize', beiGroesse)
+    window.addEventListener('orientationchange', beiGroesse)
+    document.addEventListener('visibilitychange', beiSichtbarkeit)
+    window.addEventListener('focus', frischeZeitraeume)
+})
+
+onBeforeUnmount(() => {
+    useStopGlobalPolling()
+    if (zensurStopp) { zensurStopp(); zensurStopp = null }
+    clearTimeout(groesseTakt)
+    window.removeEventListener('resize', beiGroesse)
+    window.removeEventListener('orientationchange', beiGroesse)
+    document.removeEventListener('visibilitychange', beiSichtbarkeit)
+    window.removeEventListener('focus', frischeZeitraeume)
 })
 </script>
+
 <template>
-  <ReturnToTopButton />
-  <Kopfleiste v-if="!chromeAus" />
-  <TestbetriebBanner />
-  <div v-cloak class="container-fluid g-0 at-rahmen">
-    <div class="row g-0">
-      <div v-if="!chromeAus && !ohneSeitenmenue" id="sideMenu" v-bind:class="'min-vh-100 ' +
-        (screenType == 'computer' ? (sideMenuEingeklappt ? 'sideMenu sideMenuSchmal' : 'sideMenu col-2') : 'sideMenuMobile')
-        ">
-        <SideMenu />
-      </div>
-      <!-- Eingeklappt nimmt der Inhalt den ganzen Rest (`col`), statt bei 10/12 zu bleiben. -->
-      <div :class="[(chromeAus || ohneSeitenmenue) ? 'col-12' : (screenType == 'computer' && sideMenuEingeklappt ? 'col inhaltNebenSchmal' : 'col-12 col-lg-10'), 'position-relative']">
-        <!-- Tippen neben das ausgefahrene Menü schliesst es. Vorher stand hier
-             ein Name, den es im Setup nie gab — der Klick lief ins Leere. -->
-        <div v-show="sideMenuMobileOut" class="sideMenuMobileOut position-absolute" v-on:click="useCloseMobileMenu"></div>
-        <Nav v-if="!chromeAus && !ohneSeitenmenue" />
-        <main ref="mainEl">
-          <div v-if="isAgent" class="row ps-3 pe-3 pt-3">
-            <!-- Die Anleitung hängt am Layout statt an einer Seite: sie ist
-                 damit von JEDER Agent-Seite aus erreichbar — auch wenn der
-                 Beta-Hinweis für die Sitzung weggeklickt wurde. Breite an
-                 col-xl-11 angeglichen, damit sie mit dem Seiteninhalt (z. B.
-                 den Strategie-Instanzen) fluchtet statt volle Breite zu ziehen. -->
-            <div class="col-12 col-xl-11">
-              <div class="d-flex justify-content-end mb-2">
-                <PageInfo section="info.agent" />
-              </div>
-              <BetaHinweis />
-            </div>
-          </div>
-          <slot />
-        </main>
-      </div>
-      <!--footer-->
-    </div>
-  </div>
-  <!-- Modal -->
-  <div class="modal fade" id="fullScreenModal" tabindex="-1" aria-labelledby="fullScreenModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-fullscreen">
-      <div class="modal-content">
-        <div class="modal-body">
-          <Screenshot v-if="Object.keys(selectedScreenshot).length > 0" :index="selectedScreenshotIndex" source="fullScreen" :screenshot-data="selectedScreenshot" />
+    <ReturnToTopButton />
+    <Kopfleiste v-if="!ohneRahmen" />
+    <TestbetriebBanner />
+
+    <div class="at-rahmen" :class="{ 'ohne-menue': !mitMenue }" v-cloak>
+        <!-- id="sideMenu": utils.js (useToggleMobileMenu/useCloseMobileMenu) sucht diese ID. -->
+        <aside v-if="mitMenue" id="sideMenu" class="at-menuespalte"
+            :class="desktop ? { schmal: menueSchmal } : { mobil: true, offen: sideMenuMobileOut }">
+            <Seitenmenue />
+        </aside>
+
+        <div class="at-inhaltsspalte">
+            <div v-if="mitMenue && !desktop && sideMenuMobileOut" class="at-abdunkelung" aria-hidden="true"
+                @click="useCloseMobileMenu()"></div>
+
+            <Titelzeile v-if="mitMenue" />
+
+            <main ref="hauptEl">
+                <!--
+                    Der Agent-Modus handelt selbstständig: die Warnung gehört auf
+                    jede seiner Seiten, auch bei Direktlink. Die Anleitung hängt am
+                    Layout, damit sie erreichbar bleibt, wenn der Hinweis für die
+                    Sitzung weggeklickt ist.
+                -->
+                <div v-if="istAgent" class="at-agent-kopf">
+                    <div class="innen">
+                        <div class="anleitung">
+                            <PageInfo section="info.agent" />
+                        </div>
+                        <BetaHinweis />
+                    </div>
+                </div>
+                <slot />
+            </main>
         </div>
-        <div class="modal-footer">
-          <!-- NEXT / PREVIOUS -->
-          
-            <div class="text-start">
-              <button v-if="selectedScreenshotIndex - 1 >= 0" class="btn btn-outline-primary btn-sm ms-3 mb-2"
-                v-on:click="useSelectedScreenshotFunction((selectedScreenshotIndex - 1), 'fullScreen')">
-                <i class="fa fa-chevron-left me-2"></i></button>
-            </div>
-            <div v-if="selectedScreenshotIndex + 1 > 0 && screenshots[selectedScreenshotIndex + 1]"
-              class="ms-auto text-end">
-              <button class="btn btn-outline-primary btn-sm me-3 mb-2"
-                v-on:click="useSelectedScreenshotFunction((selectedScreenshotIndex + 1), 'fullScreen')"
-                :disabled="getMore"><span v-if="!getMore"><i class="fa fa-chevron-right ms-2"></i></span>
-                <span v-else>
-                  <div class="spinner-border spinner-border-sm" role="status">
-                  </div>
-                </span>
-              </button>
-            </div>
-          
-        </div>
-      </div>
     </div>
-  </div>
-  <!-- Trade Evaluation Popup -->
-  <TradeEvalPopup v-if="isJournal" />
+
+    <ScreenshotVollbild />
+    <TradeEvalPopup v-if="istJournal" />
 </template>
+
+<style scoped>
+.at-rahmen {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    margin: 0;
+}
+
+/* ── Menüspalte Desktop ── */
+.at-menuespalte {
+    position: sticky;
+    top: var(--kopf-hoehe);
+    flex: 0 0 16.6667%;
+    min-width: 210px;
+    max-width: 300px;
+    height: calc(100vh - var(--kopf-hoehe));
+    height: calc(100dvh - var(--kopf-hoehe));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    transition: flex-basis 0.2s, min-width 0.2s;
+}
+
+.at-menuespalte.schmal {
+    flex-basis: 64px;
+    min-width: 64px;
+}
+
+/* ── Menüspalte Telefon: fährt von links über alles ausser Modals ── */
+.at-menuespalte.mobil {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 1045;
+    width: 260px;
+    min-width: 0;
+    max-width: 85vw;
+    height: 100vh;
+    height: 100dvh;
+    box-shadow: var(--schatten);
+    transform: translateX(-105%);
+    /* Unsichtbar erst NACH dem Einfahren, damit der Übergang zu sehen ist —
+       und eingefahren nicht per Tab erreichbar. */
+    visibility: hidden;
+    transition: transform 0.22s ease, visibility 0s linear 0.22s;
+}
+
+.at-menuespalte.mobil.offen {
+    transform: none;
+    visibility: visible;
+    transition: transform 0.22s ease, visibility 0s;
+}
+
+/* ── Inhalt ── */
+.at-inhaltsspalte {
+    position: relative;
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: calc(100vh - var(--kopf-hoehe));
+}
+
+.at-abdunkelung {
+    position: fixed;
+    inset: 0;
+    z-index: 1040;
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+}
+
+main {
+    min-width: 0;
+}
+
+.at-agent-kopf {
+    padding: var(--abstand-3) var(--abstand-4) 0;
+}
+
+.at-agent-kopf .anleitung {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: var(--abstand-2);
+}
+
+/* Gleiche Breite wie der Inhalt der Agent-Seiten (11/12 ab 1200 px). */
+@media (min-width: 1200px) {
+    .at-agent-kopf .innen {
+        width: 91.6667%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .at-menuespalte,
+    .at-menuespalte.mobil {
+        transition: none;
+    }
+}
+</style>

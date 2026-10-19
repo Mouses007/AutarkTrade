@@ -148,7 +148,7 @@ watch(() => props.daten, zeichne)
             <Symbol :name="daten.ohneSchluessel ? 'schluessel' : 'uhr'" />
             <p v-if="daten.ohneSchluessel">
                 {{ t('marktradar.etf.keinSchluessel') }}
-                <router-link to="/settings" class="etfLink">{{ t('marktradar.etf.zuEinstellungen') }}</router-link>
+                <router-link to="/settings/live" class="etfLink">{{ t('marktradar.etf.zuEinstellungen') }}</router-link>
             </p>
             <p v-else>{{ daten.hinweis || t('marktradar.etf.wartet') }}</p>
         </div>

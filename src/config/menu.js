@@ -1,8 +1,15 @@
 /**
  * Zentrale Seiten- und Modus-Registry.
  *
- * Reines Datenmodul (keine Vue-Abhängigkeit) — wird von Nav.vue (Seitentitel/Icon),
- * SideMenu.vue (Live-Menü) und dem ModeSwitcher genutzt.
+ * Reines Datenmodul (keine Vue-Abhängigkeit) — wird von der Titelzeile
+ * (`components/rahmen/Titelzeile.vue`, Seitentitel), dem Seitenmenü
+ * (`components/rahmen/Seitenmenue.vue`, alle Modus-Menüs), der Kopfleiste und
+ * dem alten ModeSwitcher genutzt.
+ *
+ * `symbol` / `menuSymbol` sind Namen aus `components/basis/Symbol.vue` — das
+ * Seitenmenü zeichnet nur noch diese. `icon` / `menuIcon` (Unicons-Klassen)
+ * bleiben stehen, solange Altdateien wie ModeSwitcher.vue sie lesen; sie
+ * fallen mit Unicons weg (S9).
  *
  * `id` === route.name === pageId. `group: null` heisst: Seite existiert, taucht
  * aber nicht als Menüeintrag auf (Konten hat eine eigene Pille, /setup und
@@ -31,44 +38,44 @@ export const PAGES = [
     // ── Start ───────────────────────────────────────────────
     // Landing-Page der App, eigener Modus: der Chart-Arbeitsplatz (ersetzt seit
     // 18.10.2026 die Übersicht). `group: null` → kein Seitenmenü-Eintrag, der
-    // Chart braucht die Breite. Der Eintrag existiert trotzdem, damit Nav.vue
-    // Titel und Icon der Seite findet.
-    { id: 'chart', mode: 'start', path: '/chart', icon: 'uil uil-chart', titleKey: 'nav.chart', group: null },
+    // Chart braucht die Breite. Der Eintrag existiert trotzdem, damit die
+    // Titelzeile den Titel der Seite findet.
+    { id: 'chart', mode: 'start', path: '/chart', icon: 'uil uil-chart', symbol: 'chart', titleKey: 'nav.chart', group: null },
 
     // ── Journal ─────────────────────────────────────────────
-    { id: 'dashboard', mode: 'journal', path: '/dashboard', icon: 'uil uil-apps', titleKey: 'nav.dashboard', group: 'analyze' },
-    { id: 'daily', mode: 'journal', path: '/daily', icon: 'uil uil-signal-alt-3', titleKey: 'nav.dailyView', group: 'analyze' },
-    { id: 'calendar', mode: 'journal', path: '/calendar', icon: 'uil uil-calendar-alt', titleKey: 'nav.calendar', group: 'analyze' },
-    { id: 'playbook', mode: 'journal', path: '/playbook', icon: 'uil uil-compass', titleKey: 'nav.playbook', group: 'reflect' },
-    { id: 'auswertung', mode: 'journal', path: '/auswertung', icon: 'uil uil-chart-pie', titleKey: 'nav.evaluation', group: 'reflect' },
-    { id: 'kiAgent', mode: 'journal', path: '/ki-coach', icon: 'uil uil-robot', titleKey: 'nav.kiAgent', group: 'reflect' },
-    { id: 'screenshots', mode: 'journal', path: '/screenshots', icon: 'uil uil-image-v', titleKey: 'nav.screenshots', group: 'reflect' },
-    { id: 'incoming', mode: 'journal', path: '/incoming', icon: 'uil uil-arrow-circle-down', titleKey: 'nav.pendingTrades', group: 'add' },
-    { id: 'addTrades', mode: 'journal', path: '/addTrades', icon: 'uil uil-plus-circle', titleKey: 'nav.manualImport', group: 'add' },
-    { id: 'accounts', mode: 'journal', path: '/accounts', icon: 'uil uil-wallet', titleKey: 'nav.accounts', group: null },
-    { id: 'addExcursions', mode: 'journal', path: '/addExcursions', icon: 'uil uil-refresh', titleKey: 'nav.addExcursions', group: null },
-    { id: 'setup', mode: 'journal', path: '/setup', icon: 'uil uil-rocket', titleKey: 'nav.setup', group: null },
+    { id: 'dashboard', mode: 'journal', path: '/dashboard', icon: 'uil uil-apps', symbol: 'raster', titleKey: 'nav.dashboard', group: 'analyze' },
+    { id: 'daily', mode: 'journal', path: '/daily', icon: 'uil uil-signal-alt-3', symbol: 'balken', titleKey: 'nav.dailyView', group: 'analyze' },
+    { id: 'calendar', mode: 'journal', path: '/calendar', icon: 'uil uil-calendar-alt', symbol: 'kalender', titleKey: 'nav.calendar', group: 'analyze' },
+    { id: 'playbook', mode: 'journal', path: '/playbook', icon: 'uil uil-compass', symbol: 'kompass', titleKey: 'nav.playbook', group: 'reflect' },
+    { id: 'auswertung', mode: 'journal', path: '/auswertung', icon: 'uil uil-chart-pie', symbol: 'torte', titleKey: 'nav.evaluation', group: 'reflect' },
+    { id: 'kiAgent', mode: 'journal', path: '/ki-coach', icon: 'uil uil-robot', symbol: 'ki', titleKey: 'nav.kiAgent', group: 'reflect' },
+    { id: 'screenshots', mode: 'journal', path: '/screenshots', icon: 'uil uil-image-v', symbol: 'bild', titleKey: 'nav.screenshots', group: 'reflect' },
+    { id: 'incoming', mode: 'journal', path: '/incoming', icon: 'uil uil-arrow-circle-down', symbol: 'eingang', titleKey: 'nav.pendingTrades', group: 'add' },
+    { id: 'addTrades', mode: 'journal', path: '/addTrades', icon: 'uil uil-plus-circle', symbol: 'plus', titleKey: 'nav.manualImport', group: 'add' },
+    { id: 'accounts', mode: 'journal', path: '/accounts', icon: 'uil uil-wallet', symbol: 'geldboerse', titleKey: 'nav.accounts', group: null },
+    { id: 'addExcursions', mode: 'journal', path: '/addExcursions', icon: 'uil uil-refresh', symbol: 'aktualisieren', titleKey: 'nav.addExcursions', group: null },
+    { id: 'setup', mode: 'journal', path: '/setup', icon: 'uil uil-rocket', symbol: 'rakete', titleKey: 'nav.setup', group: null },
 
     // ── Live-Analyse ────────────────────────────────────────
     // Reihenfolge nach Nutzerwunsch: vom Überblick ins Detail. Der Marktradar
     // steht vorn und ist zugleich die Startseite des Modus (siehe MODES unten) —
     // er beantwortet in einem Blick, in welcher Lage man sitzt. Danach die
     // Nachrichten, dann die Werkzeuge, die einen einzelnen Markt sezieren.
-    { id: 'marktradar', mode: 'live', path: '/marktradar', icon: 'uil uil-dashboard', titleKey: 'nav.marktradar', group: 'liveAnalyze' },
-    { id: 'nachrichten', mode: 'live', path: '/nachrichten', icon: 'uil uil-newspaper', titleKey: 'nav.nachrichten', group: 'liveAnalyze' },
-    { id: 'openinterest', mode: 'live', path: '/openinterest', icon: 'uil uil-layer-group', titleKey: 'nav.openInterest', group: 'liveAnalyze' },
-    { id: 'liquidity', mode: 'live', path: '/liquidity', icon: 'uil uil-chart-line', titleKey: 'nav.liquidity', group: 'liveAnalyze' },
-    { id: 'liquidations', mode: 'live', path: '/liquidations', icon: 'uil uil-fire', titleKey: 'nav.liquidations', group: 'liveAnalyze' },
+    { id: 'marktradar', mode: 'live', path: '/marktradar', icon: 'uil uil-dashboard', symbol: 'tacho', titleKey: 'nav.marktradar', group: 'liveAnalyze' },
+    { id: 'nachrichten', mode: 'live', path: '/nachrichten', icon: 'uil uil-newspaper', symbol: 'zeitung', titleKey: 'nav.nachrichten', group: 'liveAnalyze' },
+    { id: 'openinterest', mode: 'live', path: '/openinterest', icon: 'uil uil-layer-group', symbol: 'ebenen', titleKey: 'nav.openInterest', group: 'liveAnalyze' },
+    { id: 'liquidity', mode: 'live', path: '/liquidity', icon: 'uil uil-chart-line', symbol: 'live', titleKey: 'nav.liquidity', group: 'liveAnalyze' },
+    { id: 'liquidations', mode: 'live', path: '/liquidations', icon: 'uil uil-fire', symbol: 'flamme', titleKey: 'nav.liquidations', group: 'liveAnalyze' },
     // Eigene Gruppe, weil Handeln etwas anderes ist als Analysieren: die
     // Seiten darüber beantworten „wie steht der Markt", diese hier begleitet
     // die Stunden, in denen man tatsächlich Geld riskiert.
     // `mobilFlag`: Nur-Desktop-Sperre lässt sich per Einstellung fürs Telefon
     // aufheben (Layout & Stil → „Live-Trading auf dem Handy").
-    { id: 'livetrading', mode: 'live', path: '/livetrading', icon: 'uil uil-crosshairs', titleKey: 'nav.livetrading', group: 'liveTrade', flag: 'livetradingAn', nurDesktop: true, mobilFlag: 'livetradingMobil' },
+    { id: 'livetrading', mode: 'live', path: '/livetrading', icon: 'uil uil-crosshairs', symbol: 'fadenkreuz', titleKey: 'nav.livetrading', group: 'liveTrade', flag: 'livetradingAn', nurDesktop: true, mobilFlag: 'livetradingMobil' },
     // Archiv und Auswertung sind bewusst NICHT `nurDesktop`: nachlesen und
     // auswerten geht am Telefon, nur das Handeln selbst braucht Platz.
-    { id: 'liveSessions', mode: 'live', path: '/live-sessions', icon: 'uil uil-history', titleKey: 'nav.liveSessions', group: 'liveTrade', flag: 'livetradingAn' },
-    { id: 'liveAuswertung', mode: 'live', path: '/live-auswertung', icon: 'uil uil-chart-pie', titleKey: 'nav.liveAuswertung', group: 'liveTrade', flag: 'livetradingAn' },
+    { id: 'liveSessions', mode: 'live', path: '/live-sessions', icon: 'uil uil-history', symbol: 'verlauf', titleKey: 'nav.liveSessions', group: 'liveTrade', flag: 'livetradingAn' },
+    { id: 'liveAuswertung', mode: 'live', path: '/live-auswertung', icon: 'uil uil-chart-pie', symbol: 'torte', titleKey: 'nav.liveAuswertung', group: 'liveTrade', flag: 'livetradingAn' },
 
     // ── Entdecken ───────────────────────────────────────────
     /*
@@ -83,16 +90,16 @@ export const PAGES = [
      * hiesse, unterwegs gar nichts zu sehen; und unterwegs ist genau die Zeit,
      * in der ein Liquiditätsabfluss auffallen soll.
      */
-    { id: 'hypeRadar', mode: 'research', path: '/hype-radar', icon: 'uil uil-telescope', titleKey: 'nav.hypeRadar', menuKey: 'hype.tab_dashboard', menuIcon: 'uil uil-dashboard', group: 'hypeGruppe' },
+    { id: 'hypeRadar', mode: 'research', path: '/hype-radar', icon: 'uil uil-telescope', symbol: 'entdecken', titleKey: 'nav.hypeRadar', menuKey: 'hype.tab_dashboard', menuIcon: 'uil uil-dashboard', menuSymbol: 'tacho', group: 'hypeGruppe' },
     /*
      * Die Frühphase: Token, die die Hauptprüfung noch nicht sieht (jünger als
      * zwölf Stunden oder unter 50 000 USD Liquidität). Zwischen Übersicht und
      * Berichten, weil sie der Übersicht VORAUS läuft.
      */
-    { id: 'hypeFrueh', mode: 'research', path: '/hype-radar/fruehphase', icon: 'uil uil-bolt-alt', titleKey: 'hype.tab_fruehphase', group: 'hypeGruppe' },
+    { id: 'hypeFrueh', mode: 'research', path: '/hype-radar/fruehphase', icon: 'uil uil-bolt-alt', symbol: 'blitz', titleKey: 'hype.tab_fruehphase', group: 'hypeGruppe' },
     // Börsen-Beobachter: neue Listungen und die Leiter Alpha → mittlere → grosse Börsen.
-    { id: 'hypeBoersen', mode: 'research', path: '/hype-radar/boersen', icon: 'uil uil-building', titleKey: 'hype.tab_boersen', group: 'hypeGruppe' },
-    { id: 'hypeBerichte', mode: 'research', path: '/hype-radar/berichte', icon: 'uil uil-file-alt', titleKey: 'hype.tab_berichte', group: 'hypeGruppe' },
+    { id: 'hypeBoersen', mode: 'research', path: '/hype-radar/boersen', icon: 'uil uil-building', symbol: 'gebaeude', titleKey: 'hype.tab_boersen', group: 'hypeGruppe' },
+    { id: 'hypeBerichte', mode: 'research', path: '/hype-radar/berichte', icon: 'uil uil-file-alt', symbol: 'dokument', titleKey: 'hype.tab_berichte', group: 'hypeGruppe' },
     /*
      * Der Coin-Radar steht daneben und nicht darunter: Es sind zwei Fragen,
      * nicht eine Frage mit zwei Ansichten. Der Hype-Radar sucht draussen nach
@@ -100,33 +107,33 @@ export const PAGES = [
      * Ebenfalls nicht `nurDesktop` — eine Rangliste mit Kennzahlen liest sich
      * auf 375 Pixeln als Kartenliste einwandfrei.
      */
-    { id: 'coinRadar', mode: 'research', path: '/coin-radar', icon: 'uil uil-chart-line', titleKey: 'nav.coinRadar', menuKey: 'coinradar.tab_rangliste', menuIcon: 'uil uil-list-ol-alt', group: 'coinGruppe' },
-    { id: 'coinVerlauf', mode: 'research', path: '/coin-radar/verlauf', icon: 'uil uil-history', titleKey: 'coinradar.tab_verlauf', group: 'coinGruppe' },
+    { id: 'coinRadar', mode: 'research', path: '/coin-radar', icon: 'uil uil-chart-line', symbol: 'live', titleKey: 'nav.coinRadar', menuKey: 'coinradar.tab_rangliste', menuIcon: 'uil uil-list-ol-alt', menuSymbol: 'listeNummer', group: 'coinGruppe' },
+    { id: 'coinVerlauf', mode: 'research', path: '/coin-radar/verlauf', icon: 'uil uil-history', symbol: 'verlauf', titleKey: 'coinradar.tab_verlauf', group: 'coinGruppe' },
     // Abverkaufs-Wache: gepumpte Perps, die zu kippen beginnen (`server/coin-radar/abverkauf.js`).
-    { id: 'coinAbverkauf', mode: 'research', path: '/coin-radar/abverkauf', icon: 'uil uil-arrow-down-right', titleKey: 'coinradar.tab_abverkauf', group: 'coinGruppe' },
+    { id: 'coinAbverkauf', mode: 'research', path: '/coin-radar/abverkauf', icon: 'uil uil-arrow-down-right', symbol: 'pfeilSchraegAb', titleKey: 'coinradar.tab_abverkauf', group: 'coinGruppe' },
 
     // ── Agent-Trading ───────────────────────────────────────
-    { id: 'agentStrategies', mode: 'agent', path: '/agent/strategies', icon: 'uil uil-processor', titleKey: 'nav.agentStrategies', group: 'agentRun' },
-    { id: 'agentSetups', mode: 'agent', path: '/agent/setups', icon: 'uil uil-crosshairs', titleKey: 'nav.agentSetups', group: 'agentRun' },
-    { id: 'agentEditor', mode: 'agent', path: '/agent/editor', icon: 'uil uil-cube', titleKey: 'nav.agentEditor', group: 'agentBuild' },
-    { id: 'agentBuilder', mode: 'agent', path: '/agent/builder', icon: 'uil uil-file-alt', titleKey: 'nav.agentBuilder', group: 'agentBuild' },
-    { id: 'agentPerformance', mode: 'agent', path: '/agent/performance', icon: 'uil uil-chart-pie', titleKey: 'nav.agentPerformance', group: 'agentReview' },
-    { id: 'agentLab', mode: 'agent', path: '/agent/lab', icon: 'uil uil-flask', titleKey: 'nav.agentLab', group: 'agentReview' },
+    { id: 'agentStrategies', mode: 'agent', path: '/agent/strategies', icon: 'uil uil-processor', symbol: 'agent', titleKey: 'nav.agentStrategies', group: 'agentRun' },
+    { id: 'agentSetups', mode: 'agent', path: '/agent/setups', icon: 'uil uil-crosshairs', symbol: 'fadenkreuz', titleKey: 'nav.agentSetups', group: 'agentRun' },
+    { id: 'agentEditor', mode: 'agent', path: '/agent/editor', icon: 'uil uil-cube', symbol: 'wuerfel', titleKey: 'nav.agentEditor', group: 'agentBuild' },
+    { id: 'agentBuilder', mode: 'agent', path: '/agent/builder', icon: 'uil uil-file-alt', symbol: 'dokument', titleKey: 'nav.agentBuilder', group: 'agentBuild' },
+    { id: 'agentPerformance', mode: 'agent', path: '/agent/performance', icon: 'uil uil-chart-pie', symbol: 'torte', titleKey: 'nav.agentPerformance', group: 'agentReview' },
+    { id: 'agentLab', mode: 'agent', path: '/agent/lab', icon: 'uil uil-flask', symbol: 'test', titleKey: 'nav.agentLab', group: 'agentReview' },
     // Die Coin-Rangliste ist eine Auswertung, kein Labor: sie testet eine
     // fertige Strategie gegen viele Münzen, statt an ihr zu schrauben.
-    { id: 'coinRangliste', mode: 'agent', path: '/agent/rangliste', icon: 'uil uil-list-ol-alt', titleKey: 'nav.coinRangliste', group: 'agentReview' },
+    { id: 'coinRangliste', mode: 'agent', path: '/agent/rangliste', icon: 'uil uil-list-ol-alt', symbol: 'listeNummer', titleKey: 'nav.coinRangliste', group: 'agentReview' },
 
     // ── Lernen ──────────────────────────────────────────────
     // Leitner-Karteikasten für Fachbegriffe. Drei Einträge auf einer Route,
     // nach demselben Muster wie Hype-/Coin-Radar oben: eine laufende
     // Lernsitzung überlebt den Wechsel zwischen Sitzung, Kartenverwaltung
     // und Statistik.
-    { id: 'lernen', mode: 'lernen', path: '/lernen', icon: 'uil uil-graduation-hat', titleKey: 'nav.lernen', group: 'lernenGruppe' },
-    { id: 'lernenKarten', mode: 'lernen', path: '/lernen/karten', icon: 'uil uil-list-ul', titleKey: 'lernen.tabKarten', group: 'lernenGruppe' },
-    { id: 'lernenStatistik', mode: 'lernen', path: '/lernen/statistik', icon: 'uil uil-chart-pie', titleKey: 'lernen.tabStatistik', group: 'lernenGruppe' },
+    { id: 'lernen', mode: 'lernen', path: '/lernen', icon: 'uil uil-graduation-hat', symbol: 'lernen', titleKey: 'nav.lernen', group: 'lernenGruppe' },
+    { id: 'lernenKarten', mode: 'lernen', path: '/lernen/karten', icon: 'uil uil-list-ul', symbol: 'liste', titleKey: 'lernen.tabKarten', group: 'lernenGruppe' },
+    { id: 'lernenStatistik', mode: 'lernen', path: '/lernen/statistik', icon: 'uil uil-chart-pie', symbol: 'torte', titleKey: 'lernen.tabStatistik', group: 'lernenGruppe' },
 
     // ── modusübergreifend ───────────────────────────────────
-    { id: 'settings', mode: null, path: '/settings', icon: 'uil uil-sliders-v-alt', titleKey: 'nav.settings', group: null },
+    { id: 'settings', mode: null, path: '/settings', icon: 'uil uil-sliders-v-alt', symbol: 'einstellungen', titleKey: 'nav.settings', group: null },
 ]
 
 /**
@@ -152,9 +159,9 @@ export const MODES = [
     // Landing-Page der App: der Chart-Arbeitsplatz. Die Modus-ID bleibt
     // `start` und das Flag `startseiteAn` — beide stehen in gespeicherten
     // Einstellungen und im localStorage bestehender Installationen.
-    { id: 'journal', titleKey: 'modes.journal', icon: 'uil uil-book-alt', home: '/dashboard', enabled: true },
-    { id: 'start', titleKey: 'modes.start', icon: 'uil uil-chart', home: '/chart', enabled: true, flag: 'startseiteAn' },
-    { id: 'live', titleKey: 'modes.live', shortKey: 'modes.liveShort', icon: 'uil uil-chart-line', home: '/marktradar', enabled: true, flag: 'modusLiveAn' },
+    { id: 'journal', titleKey: 'modes.journal', icon: 'uil uil-book-alt', symbol: 'journal', home: '/dashboard', enabled: true },
+    { id: 'start', titleKey: 'modes.start', icon: 'uil uil-chart', symbol: 'chart', home: '/chart', enabled: true, flag: 'startseiteAn' },
+    { id: 'live', titleKey: 'modes.live', shortKey: 'modes.liveShort', icon: 'uil uil-chart-line', symbol: 'live', home: '/marktradar', enabled: true, flag: 'modusLiveAn' },
     /*
      * Entdecken: was es noch nicht ins Journal geschafft hat. Bislang ein
      * Platzhalter, jetzt von Hype-Radar und Coin-Radar bewohnt.
@@ -168,16 +175,16 @@ export const MODES = [
      * Abschaltbar bleibt er, aber aus dem anderen Grund: Wer nur sein Journal
      * führt, braucht den Modus nicht.
      */
-    { id: 'research', titleKey: 'modes.research', icon: 'uil uil-telescope', home: '/hype-radar', enabled: true, flag: 'modusResearchAn' },
+    { id: 'research', titleKey: 'modes.research', icon: 'uil uil-telescope', symbol: 'entdecken', home: '/hype-radar', enabled: true, flag: 'modusResearchAn' },
     // Freigegeben als Beta. Der Modus handelt selbstständig, deshalb warnt
     // `BetaHinweis.vue` auf jeder seiner Seiten, und der scharfe Betrieb hängt
     // zusätzlich an der dreifachen Freigabekette (globaler Schalter, Freigabe je
     // Instanz, Mindestzahl Papier-Trades).
-    { id: 'agent', titleKey: 'modes.agent', shortKey: 'modes.agentShort', icon: 'uil uil-robot', home: '/agent/strategies', enabled: true, beta: true, flag: 'modusStrategieAn' },
+    { id: 'agent', titleKey: 'modes.agent', shortKey: 'modes.agentShort', icon: 'uil uil-robot', symbol: 'agent', home: '/agent/strategies', enabled: true, beta: true, flag: 'modusStrategieAn' },
     // Leitner-Karteikasten: Fachbegriffe und Marktzusammenhänge lernen, die im
     // Journal selbst laufend vorkommen. Kein Betrieb, keine Live-Daten — darf
     // deshalb auch am Telefon voll bedient werden.
-    { id: 'lernen', titleKey: 'modes.lernen', icon: 'uil uil-graduation-hat', home: '/lernen', enabled: true, flag: 'modusLernenAn' },
+    { id: 'lernen', titleKey: 'modes.lernen', icon: 'uil uil-graduation-hat', symbol: 'lernen', home: '/lernen', enabled: true, flag: 'modusLernenAn' },
 ]
 
 export const pageById = (id) => PAGES.find(p => p.id === id) || null

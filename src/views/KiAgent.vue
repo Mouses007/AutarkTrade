@@ -721,7 +721,7 @@ onBeforeMount(async () => {
                 <small v-if="aiProvider === 'ollama'" class="at-gedaempft">
                     {{ t('kiAgent.ollamaDockerHint') }} <code>docker start ollama</code>
                 </small>
-                <small v-else class="at-gedaempft" v-html="t('kiAgent.checkApiKey', { link: '<a href=\'/settings\'>' + t('nav.settings') + '</a>' })">
+                <small v-else class="at-gedaempft" v-html="t('kiAgent.checkApiKey', { link: '<a href=\'/settings/ki\'>' + t('nav.settings') + '</a>' })">
                 </small>
             </div>
 

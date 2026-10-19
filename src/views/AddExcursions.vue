@@ -168,7 +168,7 @@ const updateMFEPrices = async () => {
                     class="btn btn-outline-secondary btn-sm me-2">{{ t('common.cancel') }}</button>
 
             </div>
-            <div v-else v-html="t('excursions.configureApiKey', { link: '<a href=\'/settings\'>' + t('nav.settings') + '</a>' })"></div>
+            <div v-else v-html="t('excursions.configureApiKey', { link: '<a href=\'/settings/journal\'>' + t('nav.settings') + '</a>' })"></div>
 
         </div>
     </div>

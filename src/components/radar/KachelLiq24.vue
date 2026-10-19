@@ -135,7 +135,7 @@ watch(() => props.daten, zeichne)
         <div v-if="!daten.aktiv" class="lqAus">
             <Symbol name="aufnahme" />
             <p>{{ t('marktradar.liq.inactive') }}</p>
-            <a href="/settings" class="ctl-pill">{{ t('marktradar.liq.activate') }}</a>
+            <a href="/settings/live" class="ctl-pill">{{ t('marktradar.liq.activate') }}</a>
         </div>
 
         <template v-else>

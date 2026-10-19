@@ -232,7 +232,8 @@ export const selectedBroker = typeof localStorage !== 'undefined' ? ref(localSto
 // 'agent' (Agent-Trading). Steuert,
 // welches Seitenmenü das SideMenu rendert. Die Route ist die Wahrheit
 // (meta.mode), dieser Ref nur das Gedächtnis für den Umschalter.
-export const APP_MODES = ['start', 'journal', 'live', 'research', 'agent']
+// Muss alle Modi aus config/menu.js kennen — sonst fällt ein gemerkter Modus beim Neuladen auf das Journal (z. B. Lernen → Einstellungen).
+export const APP_MODES = ['start', 'journal', 'live', 'research', 'agent', 'lernen']
 export const appMode = typeof localStorage !== 'undefined'
     ? ref(APP_MODES.includes(localStorage.getItem('appMode')) ? localStorage.getItem('appMode') : 'journal')
     : ref('journal')

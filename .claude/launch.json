@@ -5,6 +5,12 @@
       "name": "autarktrade-v2",
       "url": "http://localhost:8091",
       "port": 8091
+    },
+    {
+      "name": "s9-pruef",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["-c", "export PATH=/home/maro/.nvm/versions/node/v20.20.0/bin:$PATH; AT_PORT=8097 AT_TESTBETRIEB=1 AT_NO_ENGINE=1 AT_NO_RECORDER=1 AT_NO_GUARD=1 node index.mjs"],
+      "port": 8097
     }
   ]
 }

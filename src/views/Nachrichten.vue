@@ -452,17 +452,16 @@ function ladeBerichtOptionen() {
 /**
  * Zu den vollen Einstellungen springen — direkt in den richtigen Reiter.
  *
- * Die Seite merkt sich ihren Reiter im localStorage (`settingsBereich` /
- * `settingsKiBereich`), also wird er hier gesetzt, bevor der Router dorthin
- * wechselt. Ohne das landet man auf „Allgemein" und sucht sich durch zwei
- * Reiterreihen.
+ * Der Bereich steht in der Adresse (`/settings/ki`); den Unter-Reiter der KI
+ * merkt sich die Seite weiter im localStorage (`settingsKiBereich`), also wird
+ * er hier gesetzt, bevor der Router dorthin wechselt. Ohne das landet man im
+ * zuletzt offenen KI-Reiter und sucht sich durch die Reiterreihe.
  */
 function zuDenEinstellungen() {
     try {
-        localStorage.setItem('settingsBereich', 'ki')
         localStorage.setItem('settingsKiBereich', 'nachrichten')
     } catch (_) { /* privater Modus: dann eben der zuletzt offene Reiter */ }
-    router.push('/settings')
+    router.push('/settings/ki')
 }
 
 /** Die Einstellungen als ein Satz — „täglich · Crypto + Finanzen · Mittel · …". */
