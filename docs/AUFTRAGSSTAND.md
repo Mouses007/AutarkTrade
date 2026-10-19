@@ -73,4 +73,13 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 - Installations-/Update-Skripte (`install*.sh/.bat`, `update*`, `setup-remote.sh`) zeigen
   noch auf das alte Repo (S10).
 - `LIZENZ-PLAN.md` liegt als Bestandsaufnahme im Repo; `HERKUNFT.md` ist ein Platzhalter bis S11.
+- **Fehler (auch im Live-Journal)**: Die Migration „Mail-Versand des Lageberichts übernehmen"
+  in `server/database.js` (~Z. 2167) läuft bei JEDEM Start, solange `radarNewsMailAktiv = 0`
+  und `benachrichtigungen.lageberichtFertig.email = true` — wer den Versand ausschaltet,
+  hat ihn nach dem nächsten Neustart wieder an. In der Kopie behoben durch Entfernen der
+  alten Mail-Wahl; der Code braucht einen Merker „übernommen".
+- Marktradar, Ansicht „Pult": am Telefon überlappen die oberen Kacheln (gesehen im
+  Prüf-Container, nicht gegen den alten Stand verglichen) — Bereich S6.
+- Screenshots mit echten Daten: 8091 steht hinter dem Passwort-Gate der Kopie; geprüft
+  wurde die Oberfläche im Prüf-Container mit leerer SQLite, die Daten über die API.
 - Privates GitHub-Repo „AutarkTrade": erst nach Bestätigung des Nutzers.
