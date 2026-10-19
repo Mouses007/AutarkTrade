@@ -1832,7 +1832,7 @@
     "research": "Research",
     "lernen": "Lernen",
     "comingSoon": "Kommt später",
-    "betaHint": "Unfertig — bitte nur im Papierbetrieb verwenden"
+    "betaHint": "Unfertig — nur Simulation, keine Orders"
   },
   "live": {
     "symbol": "SYMBOL",
@@ -2488,7 +2488,7 @@
     "matrixFootnote": "Ein Kandidat zählt erst, wenn er in JEDEM Feld besser ist — sonst wurde er auf einem Fenster ausgewählt und dort gemessen. Unter 30 Trades ist ein Feld nicht belastbar (gelb).",
     "matrixIdentical": "Kandidat und Basis sind identisch — ändere zuerst einen Parameter oben.",
     "betaTitle": "Agent-Modus ist in Entwicklung",
-    "betaBody": "Dieser Bereich ist unfertig und nicht für den produktiven Einsatz gedacht. Er trifft eigenständig Handelsentscheidungen — prüfe jede Zahl, bevor du ihr folgst. Keine Anlageberatung.",
+    "betaBody": "Dieser Bereich ist unfertig und nicht für den produktiven Einsatz gedacht. Er simuliert Handelsentscheidungen, ohne Orders zu senden — prüfe jede Zahl, bevor du ihr folgst. Keine Anlageberatung.",
     "betaPoint1": "Fang im Papierbetrieb an und lass ihn lange genug laufen, um Ergebnisse beurteilen zu können.",
     "betaPoint2": "AutarkTrade handelt nicht selbst: Instanzen laufen nur im Papier- oder Schattenbetrieb, es geht keine Order an eine Börse.",
     "betaPoint3": "Backtest-Zahlen sind kein Versprechen. Ein Ergebnis zählt erst, wenn es auch ausserhalb des Zeitraums hält, in dem es ausgesucht wurde.",

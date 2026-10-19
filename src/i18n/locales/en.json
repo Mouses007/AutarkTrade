@@ -1832,7 +1832,7 @@
     "research": "Research",
     "lernen": "Learn",
     "comingSoon": "Coming soon",
-    "betaHint": "Unfinished — please use in paper mode only"
+    "betaHint": "Unfinished — simulation only, no orders"
   },
   "live": {
     "symbol": "SYMBOL",
@@ -2488,7 +2488,7 @@
     "matrixFootnote": "A candidate only counts when it is better in EVERY cell — otherwise it was chosen on one window and measured there. Below 30 trades a cell is not reliable (amber).",
     "matrixIdentical": "Candidate and base are identical — change a parameter above first.",
     "betaTitle": "Agent mode is under development",
-    "betaBody": "This area is unfinished and not meant for production use. It makes trading decisions on its own — check every number before you act on it. This is not investment advice.",
+    "betaBody": "This area is unfinished and not meant for production use. It simulates trading decisions without sending orders — check every number before you act on it. This is not investment advice.",
     "betaPoint1": "Start in paper mode and let it run long enough for the results to mean something.",
     "betaPoint2": "AutarkTrade does not trade by itself: instances only run in paper or shadow mode, no order goes to an exchange.",
     "betaPoint3": "Backtest numbers are not a promise. A result only counts once it holds outside the period it was chosen on.",

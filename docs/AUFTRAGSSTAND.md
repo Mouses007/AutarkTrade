@@ -33,6 +33,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | `claude/s12-quellen-9112f7` | **fertig** |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | `claude/s11-herkunft-fa3692` | **fertig** (altes Repo: nur vorbereitet, auf Anweisung) |
+| 4 | S13 Scharfen Handel auslagern | Orders, Stop-Wächter, Margen-Netz, Abgleich, Live-Freigabe ausbauen; aufbewahren auf `spaeter/scharfer-handel`; Migration live → Papier | `claude/s13-handel-auslagern-f7e9fe` | **fertig** → `docs/SPAETER-SCHARFER-HANDEL.md` |
 
 ## Gesamtfazit (S11, 19.10.2026)
 
@@ -58,6 +59,40 @@ Attribution, jede KI-Ausgabe ist gekennzeichnet (S12, Verkaufs-Prüfung Anhang 1
    (Demo-Tarif im verkauften Produkt), dazu Bitunix, Bitget, Bybit, GoPlus, CryptoQuant, RugCheck.
 4. Vertrieb: Händler-Dienst (Merchant of Record) und Kunden-Zugang zur Registry statt
    GitHub-Token je Kunde (`HERKUNFT.md`, Anhang B).
+
+## S13 Scharfen Handel auslagern — Ergebnis (19.10.2026)
+
+Der Nutzer will den scharfen Handel nicht in der ersten Auslieferung: **AutarkTrade sendet keine Orders mehr.**
+Strategien laufen nur noch als Simulation (Papier und Schatten).
+
+- **Aufbewahrt** auf dem Branch `spaeter/scharfer-handel` (= master `e7c6709` vor dem Ausbau, ins private Repo
+  gepusht). `docs/SPAETER-SCHARFER-HANDEL.md`: was dort liegt, wie man es zurückholt (revert des S13-Commits,
+  Migration entschärfen, Probeorder, Rechtsfrage F-7), und die geplante Trennung **Leseschlüssel**
+  (Import/Positionen) / **Handelsschlüssel** (Handel ja, Auszahlung nein, IP-gebunden; nur Ausführung und
+  Stop-Wächter; ohne ihn kein scharfer Handel).
+- **Ausgebaut:** `server/execution/{bitunix,pionex,stop-waechter,stop-regeln,margen-netz,abgleich}.js`,
+  `server/live-gates.js`, `fill-simulator.js:closePositionMitFills`, Risiko-Parameter `netzModus`/`netzMaxR`,
+  Routen `readiness`, `approve-live`, `probeorder`, `waechter`, Start/Stopp des Stop-Wächters und `AT_NO_GUARD`,
+  Einstellungen `strategyLiveEnabled`/`strategyMinPaperTrades` (Spalten bleiben), UI (Freigabe-Dialog,
+  Wächter-Ampel, Broker-Netz-Warnung, Schalter in KI → Strategie), Hilfe- und i18n-Texte, sechs Selbsttestdateien.
+  Lesende Pionex-Probe ohne `isolatedMode`.
+- **Behalten:** Papier/Schatten, Backtests, Labor, Erkennung, Coin-Rangliste, Not-Aus (nur Simulation),
+  `paper.js`, `zwischenstand.js`, `pionex-meta.js` (Rundung des Schattens), Journal-Import lesend. Die
+  Broker-Registry (`execution/index.js`) kennt bitunix/pionex nur noch als Regelquelle und **wirft weiter** bei
+  unbekanntem Namen. Engine und API kennen nur `BETRIEBSARTEN = ['paper', 'shadow']`; `live` wird abgelehnt
+  (`mode_ausgelagert`), eine `live`-Positionszeile nie gebucht oder geschlossen.
+- **DB v29** (`server/migrationen/s13.js`, idempotent bei jedem Start): Live-Instanzen → `paper` + pausiert
+  (`lastError` nennt den Grund), Live-Positionen `ausgelagert = 1`, Status unverändert, kein Börsenaufruf.
+  Oberfläche zeigt sie als „Live (ausgelagert)" ohne Schliessen-Knopf.
+- **Rechtliches/Doku:** `LICENSE` Fassung 0.2 (Ziffer 7: die Software gibt keine Orders auf; Haftungsausschluss
+  für eigene Orders bleibt) — verlangt neue Zustimmung. `NOTICE.md` ohne Handelsbezug, unverändert. README,
+  CLAUDE.md, `server/app-hilfe.js`, Verkaufs-Prüfung (Zeilen 3/4/92, F-7 für diese Auslieferung gegenstandslos).
+- **Wache:** `server/execution/__selftest-broker-registry.mjs` schlägt an, wenn ein Order-Verb in die Registry
+  oder ein Order-Pfad von Bitunix/Pionex (`place_order`, `flash_close_position`, `/uapi/v1/trade/order`,
+  `orderByClientOrderId`, `isolatedMode` …) in `server/`, `shared/`, `scripts/` oder `index.mjs` zurückkehrt;
+  `__selftest-testbetrieb.mjs`, dass kein Stop-Wächter im Startpfad steht.
+- **Geprüft:** `npm run test:self` 138/138 Dateien grün (5 550 Prüfungen; vorher 144 — sechs Live-Tests
+  entfernt), `npm run build` fehlerfrei, Testcontainer neu gebaut, Strategie-/Agent-Seiten im Browser angesehen.
 
 ## S11 Herkunftsnachweis & Freigabe — Ergebnis (19.10.2026)
 
