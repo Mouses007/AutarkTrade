@@ -13,10 +13,8 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import Logo from '../basis/Logo.vue'
 import Symbol from '../basis/Symbol.vue'
-import Pille from '../basis/Pille.vue'
 import { appMode, pageId, screenType } from '../../stores/ui.js'
 import { currentUser } from '../../stores/settings.js'
-import { testbetrieb } from '../../stores/system.js'
 import { MODES, modeHome, pageById, istModusAn } from '../../config/menu.js'
 
 const { t } = useI18n()
@@ -59,7 +57,6 @@ function wechsle(m, e) {
             </a>
         </nav>
         <div class="rechts">
-            <Pille v-if="testbetrieb" ton="warn" symbol="test" :title="t('app.testbetriebText')">{{ t('app.testbetrieb') }}</Pille>
             <a class="knopf" href="/settings" :class="{ aktiv: pageId === 'settings' }" :title="t('nav.settings')"
                 :aria-label="t('nav.settings')">
                 <Symbol name="einstellungen" :groesse="20" />

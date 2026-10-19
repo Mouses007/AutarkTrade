@@ -21,7 +21,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import Kopfleiste from '../components/rahmen/Kopfleiste.vue'
-import TestbetriebBanner from '../components/rahmen/TestbetriebBanner.vue'
 import Seitenmenue from '../components/rahmen/Seitenmenue.vue'
 import Titelzeile from '../components/rahmen/Titelzeile.vue'
 import ScreenshotVollbild from '../components/rahmen/ScreenshotVollbild.vue'
@@ -212,7 +211,6 @@ onBeforeUnmount(() => {
 <template>
     <NachObenKnopf />
     <Kopfleiste v-if="!ohneRahmen" />
-    <TestbetriebBanner />
 
     <div class="at-rahmen" :class="{ 'ohne-menue': !mitMenue }" v-cloak>
         <!-- id="sideMenu": utils.js (schalteMobilMenue/useCloseMobileMenu) sucht diese ID. -->

@@ -2,9 +2,9 @@
  * Scrollt den Inhaltsbereich zu einem Element — und nur ihn.
  *
  * `scrollIntoView` scrollt JEDEN Vorfahren, auch das Dokument. Das Layout
- * scrollt aber im Inhaltsbereich unter Kopfleiste und Testbetrieb-Banner;
- * das Dokument ist nur so hoch wie das Fenster plus Banner. Mit
- * `scrollIntoView` rutschte die Seite deshalb um die Bannerhöhe und mehr nach
+ * scrollt aber im Inhaltsbereich unter der Kopfleiste;
+ * das Dokument ist kaum höher als das Fenster. Mit
+ * `scrollIntoView` rutschte die Seite deshalb nach
  * oben und liess unten eine schwarze Fläche stehen (Playbook-Deep-Link,
  * 19.10.2026). Hier wird der nächste scrollbare Vorfahr gesucht und nur er
  * bewegt.
