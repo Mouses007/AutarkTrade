@@ -688,10 +688,6 @@ onBeforeMount(async () => {
                                                     </td>
                                                     <td class="text-end greenTrade">-{{ useTwoDecCurrencyFormat(totals.fundingReceived) }}</td>
                                                 </tr>
-                                                <tr v-if="(totals.otherCommission || 0) > 0">
-                                                    <td>{{ t('dashboard.regulatoryFees') }}</td>
-                                                    <td class="text-end">{{ useTwoDecCurrencyFormat(totals.otherCommission) }}</td>
-                                                </tr>
                                                 <tr v-if="(totals.otherFees || 0) > 0">
                                                     <td>{{ t('dashboard.otherFees') }}</td>
                                                     <td class="text-end">{{ useTwoDecCurrencyFormat(totals.otherFees) }}</td>

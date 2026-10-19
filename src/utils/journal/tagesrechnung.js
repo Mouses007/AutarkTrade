@@ -12,7 +12,7 @@ import { gruppiere, sortiertNach, jsonKopie, ersetzeObjekt } from './hilfen.js'
 
 /** Felder, die Blotter und P&L schlicht aufsummieren (gleicher Name in Quelle und Ziel). */
 const SUMMEN = [
-    'buyQuantity', 'sellQuantity', 'commission', 'sec', 'taf', 'nscc', 'nasdaq',
+    'buyQuantity', 'sellQuantity', 'commission',
     'grossProceeds', 'grossWins', 'grossLoss', 'grossSharePL', 'grossSharePLWins', 'grossSharePLLoss',
     'netProceeds', 'netWins', 'netLoss', 'netSharePL', 'netSharePLWins', 'netSharePLLoss',
     'grossWinsQuantity', 'grossLossQuantity', 'grossWinsCount', 'grossLossCount',
@@ -20,7 +20,7 @@ const SUMMEN = [
 ]
 
 function leererPosten() {
-    const p = { otherCommission: 0, fees: 0, executions: 0, trades: 0,
+    const p = { fees: 0, executions: 0, trades: 0,
         highGrossSharePLWin: 0, highGrossSharePLLoss: 0, highNetSharePLWin: 0, highNetSharePLLoss: 0 }
     for (const f of SUMMEN) p[f] = 0
     return p
@@ -39,8 +39,7 @@ function blotterPosten(symbol, liste) {
     const p = leererPosten()
     for (const t of liste) {
         for (const f of SUMMEN) p[f] += t[f]
-        p.otherCommission += t.sec + t.taf + t.nscc + t.nasdaq
-        p.fees += t.commission + t.sec + t.taf + t.nscc + t.nasdaq
+        p.fees += t.commission
         p.executions += t.executionsCount
         p.trades += t.tradesCount
         merkeSpitzen(p, t.grossSharePL, t.netSharePL)
@@ -72,7 +71,7 @@ export async function useCreatePnL() {
     for (const td of Object.keys(blotter)) {
         const p = leererPosten()
         for (const b of Object.values(blotter[td])) {
-            for (const f of [...SUMMEN, 'otherCommission', 'fees', 'executions', 'trades']) p[f] += b[f]
+            for (const f of [...SUMMEN, 'fees', 'executions', 'trades']) p[f] += b[f]
             if (b.highGrossSharePLWin > p.highGrossSharePLWin) p.highGrossSharePLWin = b.highGrossSharePLWin
             if (b.highGrossSharePLLoss < p.highGrossSharePLLoss) p.highGrossSharePLLoss = b.highGrossSharePLLoss
             if (b.highNetSharePLWin > p.highNetSharePLWin) p.highNetSharePLWin = b.highNetSharePLWin

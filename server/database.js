@@ -189,7 +189,12 @@ async function fixPostgresSequences(knex) {
 // v26: Chart-Arbeitsplatz (ersetzt die Übersicht) — `chart_layouts`,
 // `chart_watchlists`, `chart_zeichnungen`, `chart_alarme`. Rein additiv.
 // v27: Indikator-Vorlagen des Charts (`chart_vorlagen`). Rein additiv.
-const SCHEMA_VERSION = 27
+// v28: Aktienbörsen-Gebühren aus dem Journal entfernt — `sec`/`taf`/`nscc`/
+// `nasdaq` (immer 0) und die daraus gebildete `otherCommission` werden aus
+// den JSON-Spalten `trades`/`executions`/`blotter`/`pAndL` jeder Tageszeile
+// gestrichen. Ein älterer Codestand rechnete `fees` mit diesen Feldern und
+// käme auf NaN — deshalb die Warnung unten ernst nehmen.
+const SCHEMA_VERSION = 28
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
@@ -3493,6 +3498,48 @@ async function runMigrations(knex, client) {
      */
     await addColumnIfNotExists('settings', 'lizenzSchluessel', (t) => t.text('lizenzSchluessel').defaultTo(''))
     await addColumnIfNotExists('settings', 'rechtlichesZustimmung', (t) => t.text('rechtlichesZustimmung').defaultTo(''))
+
+    // ── v28 ─────────────────────────────────────────────────────────────
+    /*
+     * Die Felder `sec`, `taf`, `nscc`, `nasdaq` stammen von US-Aktienbörsen
+     * und waren bei Krypto-Futures immer 0; `otherCommission` war ihre Summe.
+     * Sie werden aus jeder Tageszeile gestrichen. Läuft nur, solange der
+     * gespeicherte Schema-Stand unter 28 liegt; das Streichen selbst ist
+     * wiederholbar (fehlende Schlüssel bleiben fehlend).
+     */
+    await addColumnIfNotExists('settings', 'schemaVersion', (t) => t.integer('schemaVersion').defaultTo(0))
+    const vorV28 = Number((await knex('settings').select('schemaVersion').where('id', 1).first())?.schemaVersion) || 0
+    if (vorV28 < 28 && (await knex.schema.hasTable('trades'))) {
+        const ALTFELDER = ['sec', 'taf', 'nscc', 'nasdaq', 'otherCommission']
+        const streiche = (o) => {
+            let weg = false
+            if (o && typeof o === 'object') {
+                for (const f of ALTFELDER) if (f in o) { delete o[f]; weg = true }
+            }
+            return weg
+        }
+        const lies = (text, leer) => { try { return JSON.parse(text || leer) } catch { return null } }
+        let geaendert = 0
+        for (const zeile of await knex('trades').select('id', 'trades', 'executions', 'blotter', 'pAndL')) {
+            const neu = {}
+            for (const spalte of ['trades', 'executions']) {
+                const liste = lies(zeile[spalte], '[]')
+                if (Array.isArray(liste) && liste.map(streiche).some(Boolean)) neu[spalte] = JSON.stringify(liste)
+            }
+            const blotter = lies(zeile.blotter, '{}')
+            if (blotter && typeof blotter === 'object') {
+                const posten = Array.isArray(blotter) ? blotter : Object.values(blotter)
+                if (posten.map(streiche).some(Boolean)) neu.blotter = JSON.stringify(blotter)
+            }
+            const pAndL = lies(zeile.pAndL, '{}')
+            if (streiche(pAndL)) neu.pAndL = JSON.stringify(pAndL)
+            if (Object.keys(neu).length) {
+                await knex('trades').where('id', zeile.id).update(neu)
+                geaendert++
+            }
+        }
+        if (geaendert) console.log(` -> v28: Aktienbörsen-Gebühren aus ${geaendert} Tageszeilen entfernt`)
+    }
 
     // ==================== SCHEMA-ANKER ====================
     // Ganz am Ende, damit die Version erst steht, wenn alle Checks durch sind.

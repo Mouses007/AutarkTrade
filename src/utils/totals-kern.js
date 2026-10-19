@@ -28,8 +28,7 @@ export function neueSummen() {
     return {
         buyQuantity: 0, sellQuantity: 0,
         commission: 0, fundingFees: 0, fundingPaid: 0, fundingReceived: 0,
-        tradingFees: 0, sec: 0, taf: 0, nscc: 0, nasdaq: 0,
-        otherCommission: 0, fees: 0,
+        tradingFees: 0, fees: 0,
         grossProceeds: 0, grossWins: 0, grossLoss: 0, grossSharePL: 0,
         grossSharePLWins: 0, grossSharePLLoss: 0,
         highGrossSharePLWin: 0, highGrossSharePLLoss: 0,
@@ -54,12 +53,7 @@ export function summiereTrade(s, el) {
     s.fundingPaid += funding.paid
     s.fundingReceived += funding.received
     s.tradingFees += z(el.tradingFee)
-    s.sec += z(el.sec)
-    s.taf += z(el.taf)
-    s.nscc += z(el.nscc)
-    s.nasdaq += z(el.nasdaq)
-    s.otherCommission += z(el.sec) + z(el.taf) + z(el.nscc) + z(el.nasdaq)
-    s.fees += z(el.commission) + z(el.sec) + z(el.taf) + z(el.nscc) + z(el.nasdaq)
+    s.fees += z(el.commission)
 
     s.grossProceeds += z(el.grossProceeds)
     s.grossWins += z(el.grossWins)

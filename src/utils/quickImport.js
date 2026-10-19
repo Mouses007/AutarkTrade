@@ -526,7 +526,6 @@ export function buildTradeObj({ id, broker, td, side, quantity, entryTime, exitT
         commission: fee,
         tradingFee: tradingFee || 0,
         fundingFee: fundingFee || 0,
-        sec: 0, taf: 0, nscc: 0, nasdaq: 0,
         grossSharePL: grossPL,
         netSharePL: netPL,
         grossWins: isGrossWin ? grossPL : 0,

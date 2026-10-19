@@ -181,7 +181,7 @@ Erzeugt von `quickImport.js`/`buildTradeObj` bzw. `incoming.js` und
 `excursions` (siehe 4.2), `financials`/`cashJournal` (Altbestand, im
 Krypto-Betrieb nie gesetzt).
 
-**Aktienbörsen-Felder `sec`, `taf`, `nscc`, `nasdaq`:** Sie stammen aus dem
+**Aktienbörsen-Felder `sec`, `taf`, `nscc`, `nasdaq`:** *(Entfernt in S7, 19.10.2026, samt `otherCommission`; Migration v28. `fees` = `commission`.)* Sie stammen aus dem
 Aktien-Ursprung und sind im Krypto-Betrieb IMMER 0. Sie entstehen in
 `buildTradeObj` (`quickImport.js`), in `incoming.js` (Trade-Objekt aus offenen
 Positionen) und in `server/journal-bridge.js`. Gelesen werden sie in

@@ -35,7 +35,7 @@ console.log('\nSummierung (Fixture: Gewinn, Verlust, Break-even, kaputter Trade)
 {
     // Felder wie sie eine Zeile aus `trades.trades` trägt (Tages-Blotter).
     const gewinn = {
-        buyQuantity: 10, sellQuantity: 10, commission: 0, sec: 0, taf: 0, nscc: 0, nasdaq: 0,
+        buyQuantity: 10, sellQuantity: 10, commission: 0,
         grossProceeds: 120, grossWins: 120, grossLoss: 0, grossSharePL: 12,
         grossSharePLWins: 12, grossSharePLLoss: 0,
         netProceeds: 100, netWins: 100, netLoss: 0, netSharePL: 10,
@@ -47,7 +47,7 @@ console.log('\nSummierung (Fixture: Gewinn, Verlust, Break-even, kaputter Trade)
         financials: 0,
     }
     const verlust = {
-        buyQuantity: 4, sellQuantity: 4, commission: 0, sec: 0, taf: 0, nscc: 0, nasdaq: 0,
+        buyQuantity: 4, sellQuantity: 4, commission: 0,
         grossProceeds: -50, grossWins: 0, grossLoss: -50, grossSharePL: -12.5,
         grossSharePLWins: 0, grossSharePLLoss: -12.5,
         netProceeds: -47, netWins: 0, netLoss: -47, netSharePL: -11.75,
@@ -60,7 +60,7 @@ console.log('\nSummierung (Fixture: Gewinn, Verlust, Break-even, kaputter Trade)
     }
     // Break-even: 0 zählt nach Journal-Kanon als Gewinner (netWinsCount: 1).
     const breakEven = {
-        buyQuantity: 1, sellQuantity: 1, commission: 0, sec: 0, taf: 0, nscc: 0, nasdaq: 0,
+        buyQuantity: 1, sellQuantity: 1, commission: 0,
         grossProceeds: 0, grossWins: 0, grossLoss: 0, grossSharePL: 0,
         grossSharePLWins: 0, grossSharePLLoss: 0,
         netProceeds: 0, netWins: 0, netLoss: 0, netSharePL: 0,

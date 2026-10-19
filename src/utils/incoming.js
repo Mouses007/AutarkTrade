@@ -511,7 +511,6 @@ async function createTradeFromClosedPosition(histPos, incoming, skipMetadata = f
         commission: fee,
         tradingFee: tradingFee || 0,
         fundingFee: fundingFee || 0,
-        sec: 0, taf: 0, nscc: 0, nasdaq: 0,
         grossSharePL: grossPL,
         netSharePL: netPL,
         grossWins: isGrossWin ? grossPL : 0,

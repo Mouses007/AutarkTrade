@@ -84,7 +84,6 @@ export function alsJournalTrade(t, { account = 'agent' } = {}) {
         commission: Number(t.fees) || 0,
         tradingFee: Number(t.fees) || 0,
         fundingFee: Number(t.funding) || 0,
-        sec: 0, taf: 0, nscc: 0, nasdaq: 0,
         grossSharePL: brutto,
         netSharePL: netto,
         grossWins: b.wins, grossLoss: b.loss,
