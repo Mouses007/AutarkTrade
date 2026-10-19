@@ -20,6 +20,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageInfo from '../components/PageInfo.vue'
+import { Symbol, Kreisel } from '../components/basis'
 import { dbFind } from '../utils/db.js'
 import { werteAus, MIN_GRUPPE } from '../utils/sitzungStatistik.js'
 import { timeZoneTrade } from '../stores/ui.js'
@@ -81,7 +82,7 @@ onMounted(lade)
             </div>
             <div class="liveActions">
                 <button type="button" class="ctl-pill" @click="lade">
-                    <i class="uil uil-sync"></i>{{ t('marktradar.refreshAll') }}
+                    <Symbol name="aktualisieren" />{{ t('marktradar.refreshAll') }}
                 </button>
                 <span class="ctl-sep"></span>
                 <PageInfo section="info.liveAuswertung" />
@@ -89,7 +90,7 @@ onMounted(lade)
         </div>
 
         <div v-if="fehler" class="awFehler">{{ fehler }}</div>
-        <div v-if="laedt" class="awLeer"><span class="spinner-border spinner-border-sm"></span></div>
+        <div v-if="laedt" class="awLeer"><Kreisel /></div>
         <div v-else-if="!a.gesamt.anzahl" class="awLeer">{{ t('liveAuswertung.keine') }}</div>
 
         <template v-else>

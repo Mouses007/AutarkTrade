@@ -12,6 +12,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Symbol from '@/components/basis/Symbol.vue'
 
 const { t, te } = useI18n()
 
@@ -87,8 +88,8 @@ function zuruecksetzen(p) {
         <div v-for="g in gruppiert" :key="g.id" class="param-group">
             <div class="param-group-title">{{ g.label }}</div>
 
-            <div v-for="p in g.items" :key="p.key" class="row align-items-center param-row">
-                <div class="col-12 col-md-5">
+            <div v-for="p in g.items" :key="p.key" class="param-zeile">
+                <div class="param-kopf">
                     <label class="param-label" :for="`p-${p.key}`">
                         {{ beschriftung(p) }}
                         <!-- Abweichungen vom Default sichtbar machen: bei 31 Parametern
@@ -96,14 +97,14 @@ function zuruecksetzen(p) {
                         <button v-if="istGeaendert(p)" type="button" class="param-reset"
                             :title="t('strategies.resetToDefault', { value: String(p.default) })"
                             @click="zuruecksetzen(p)">
-                            <i class="uil uil-history"></i>
+                            <Symbol name="verlauf" />
                         </button>
                     </label>
                     <div v-if="hinweis(p)" class="param-hint">{{ hinweis(p) }}</div>
                 </div>
 
-                <div class="col-12 col-md-7">
-                    <select v-if="p.type === 'select'" :id="`p-${p.key}`" class="form-select form-select-sm"
+                <div class="param-wert">
+                    <select v-if="p.type === 'select'" :id="`p-${p.key}`" class="at-feld klein"
                         :disabled="disabled" :value="wertVon(p)"
                         @change="setzen(p, $event.target.value)">
                         <option v-for="o in p.options" :key="optionWert(o)" :value="optionWert(o)">
@@ -111,18 +112,18 @@ function zuruecksetzen(p) {
                         </option>
                     </select>
 
-                    <div v-else-if="p.type === 'boolean'" class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" :id="`p-${p.key}`"
+                    <label v-else-if="p.type === 'boolean'" class="at-check">
+                        <input type="checkbox" :id="`p-${p.key}`"
                             :disabled="disabled" :checked="!!wertVon(p)"
                             @change="setzen(p, $event.target.checked)" />
-                    </div>
+                    </label>
 
                     <input v-else-if="p.type === 'string'" :id="`p-${p.key}`" type="text"
-                        class="form-control form-control-sm" :disabled="disabled"
+                        class="at-feld klein" :disabled="disabled"
                         :value="wertVon(p)" @input="setzen(p, $event.target.value)" />
 
-                    <div v-else class="d-flex align-items-center gap-2">
-                        <input :id="`p-${p.key}`" type="number" class="form-control form-control-sm param-number"
+                    <div v-else class="param-zahl-zeile">
+                        <input :id="`p-${p.key}`" type="number" class="at-feld klein param-number"
                             :disabled="disabled" :min="p.min" :max="p.max" :step="p.step || 1"
                             :value="wertVon(p)" @change="setzen(p, $event.target.value)" />
                         <small v-if="p.min !== undefined" class="param-range">{{ p.min }}–{{ p.max }}</small>
@@ -142,25 +143,43 @@ function zuruecksetzen(p) {
     font-size: 0.72rem;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
-    border-bottom: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
-    padding-bottom: 0.25rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
+    padding-bottom: var(--abstand-1);
     margin-bottom: 0.55rem;
 }
 
-.param-row {
+.param-zeile {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    align-items: center;
+    gap: var(--abstand-1) var(--abstand-4);
     margin-bottom: 0.4rem;
 }
 
+.param-kopf,
+.param-wert {
+    min-width: 0;
+}
+
 .param-label {
+    display: inline-flex;
+    align-items: center;
     font-size: 0.86rem;
     margin-bottom: 0;
+    color: var(--text);
 }
 
 .param-hint {
     font-size: 0.72rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
     line-height: 1.25;
+}
+
+.param-zahl-zeile {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
 }
 
 .param-number {
@@ -169,17 +188,24 @@ function zuruecksetzen(p) {
 
 .param-range {
     font-size: 0.68rem;
-    color: var(--white-38, rgba(255, 255, 255, 0.38));
+    color: var(--leise);
     white-space: nowrap;
 }
 
 .param-reset {
+    display: inline-flex;
     background: none;
     border: none;
     padding: 0 0 0 0.3rem;
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
     font-size: 0.8rem;
     line-height: 1;
     cursor: pointer;
+}
+
+@media (max-width: 767.98px) {
+    .param-zeile {
+        grid-template-columns: 1fr;
+    }
 }
 </style>

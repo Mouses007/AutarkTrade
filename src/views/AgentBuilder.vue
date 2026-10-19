@@ -19,6 +19,7 @@ import { spinnerLoadingPage } from '../stores/ui.js'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
+import { Knopf, Pille, Symbol, Hinweis, Kreisel } from '../components/basis'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -208,30 +209,30 @@ async function entwurfLoeschen(d) {
 
 <template>
     <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="row mt-3 ps-3 pe-3">
-        <div class="col-12 col-xl-11">
+    <div v-show="!spinnerLoadingPage" class="builder-seite">
+        <div class="builder-inhalt">
 
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                <h5 class="mb-0 me-auto">{{ t('strategies.builderTitle') }}</h5>
-                <span class="badge bg-dark">{{ faehigkeiten.provider }} · {{ faehigkeiten.model }}</span>
-                <span v-if="kosten > 0" class="badge bg-secondary">${{ kosten.toFixed(4) }}</span>
+            <div class="kopfzeile">
+                <h5 class="seitentitel">{{ t('strategies.builderTitle') }}</h5>
+                <Pille ton="neutral">{{ faehigkeiten.provider }} · {{ faehigkeiten.model }}</Pille>
+                <Pille v-if="kosten > 0" ton="neutral">${{ kosten.toFixed(4) }}</Pille>
                 <button type="button" class="ctl-pill accent" @click="neuerEntwurf">
-                    <i class="uil uil-plus me-1"></i>{{ t('strategies.newDraft') }}
+                    <Symbol name="plus" class="vor" />{{ t('strategies.newDraft') }}
                 </button>
             </div>
 
-            <div class="alert alert-secondary py-2 small">
-                <i class="uil uil-shield-check me-1"></i>{{ t('strategies.builderSafety') }}
+            <div class="sicherheit">
+                <Symbol name="schildHaken" class="vor" />{{ t('strategies.builderSafety') }}
             </div>
-            <div v-if="fehler" class="alert alert-danger py-2">{{ fehler }}</div>
+            <Hinweis v-if="fehler" art="fehler" class="abstand-unten">{{ fehler }}</Hinweis>
 
-            <div class="row g-3">
+            <div class="raster">
                 <!-- ══ Gespräch ══ -->
-                <div class="col-12 col-lg-7">
-                    <div class="dailyCard p-3">
-                        <div class="section-title mb-2">{{ t('strategies.conversation') }}</div>
+                <div class="spalte-gespraech">
+                    <div class="dailyCard karte">
+                        <div class="section-title">{{ t('strategies.conversation') }}</div>
 
-                        <div v-if="!verlauf.length" class="text-muted small mb-3">
+                        <div v-if="!verlauf.length" class="at-gedaempft klein-text abstand-unten">
                             {{ t('strategies.builderIntro') }}
                         </div>
 
@@ -241,56 +242,54 @@ async function entwurfLoeschen(d) {
                                 {{ m.content }}
                             </div>
                             <div v-if="laeuft" class="chat-bubble chat-bubble-ai">
-                                <span class="spinner-border spinner-border-sm me-2"></span>{{ t('strategies.reading') }}
+                                <Kreisel class="vor" />{{ t('strategies.reading') }}
                             </div>
                         </div>
 
-                        <div v-if="offeneFragen.length" class="mt-2 p-2 border rounded">
-                            <div class="small fw-bold mb-1">
-                                <i class="uil uil-question-circle me-1"></i>{{ t('strategies.openQuestions') }}
+                        <div v-if="offeneFragen.length" class="fragen">
+                            <div class="klein-text fett fragen-kopf">
+                                <Symbol name="frage" class="vor" />{{ t('strategies.openQuestions') }}
                             </div>
-                            <ul class="mb-0 ps-3 small">
+                            <ul class="liste klein-text">
                                 <li v-for="(f, i) in offeneFragen" :key="i">{{ f }}</li>
                             </ul>
                         </div>
 
                         <!-- Was das Vokabular nicht abbildet — bewusst prominent -->
-                        <div v-if="nichtUmsetzbar.length" class="alert alert-warning py-2 small mt-2 mb-0">
+                        <Hinweis v-if="nichtUmsetzbar.length" art="warn" class="abstand-oben klein-text">
                             <strong>{{ t('strategies.notExpressible') }}</strong>
-                            <ul class="mb-0 ps-3">
+                            <ul class="liste">
                                 <li v-for="(f, i) in nichtUmsetzbar" :key="i">{{ f }}</li>
                             </ul>
-                        </div>
+                        </Hinweis>
 
-                        <div v-if="pruefFehler.length" class="alert alert-danger py-2 small mt-2 mb-0">
+                        <Hinweis v-if="pruefFehler.length" art="fehler" class="abstand-oben klein-text">
                             <strong>{{ t('strategies.rejectedAfterRetries') }}</strong>
-                            <ul class="mb-0 ps-3">
+                            <ul class="liste">
                                 <li v-for="(f, i) in pruefFehler" :key="i">{{ f }}</li>
                             </ul>
+                        </Hinweis>
+
+                        <div v-if="anhaenge.length" class="anhaenge">
+                            <Pille v-for="(a, i) in anhaenge" :key="i" ton="neutral" symbol="anhang"
+                                class="pointerClass" @click="anhangWeg(i)">
+                                {{ a.name }} ({{ kb(a.groesse) }})
+                                <Symbol name="schliessen" />
+                            </Pille>
                         </div>
 
-                        <div v-if="anhaenge.length" class="mt-2">
-                            <span v-for="(a, i) in anhaenge" :key="i"
-                                class="badge bg-dark me-1 mb-1 pointerClass" @click="anhangWeg(i)">
-                                <i class="uil uil-paperclip me-1"></i>{{ a.name }} ({{ kb(a.groesse) }})
-                                <i class="uil uil-times ms-1"></i>
-                            </span>
-                        </div>
-
-                        <div class="d-flex gap-2 mt-2">
-                            <label class="btn btn-sm btn-outline-secondary mb-0" :title="t('strategies.attach')">
-                                <i class="uil uil-paperclip"></i>
-                                <input type="file" multiple :accept="erlaubteTypen" class="d-none"
+                        <div class="eingabe-zeile">
+                            <label class="datei-knopf" :title="t('strategies.attach')">
+                                <Symbol name="anhang" />
+                                <input type="file" multiple :accept="erlaubteTypen" class="versteckt"
                                     @change="dateienGewaehlt" />
                             </label>
-                            <textarea v-model="eingabe" class="form-control chat-input" rows="2"
+                            <textarea v-model="eingabe" class="at-feld chat-input" rows="2"
                                 :placeholder="t('strategies.rulesPlaceholder')"
                                 @keydown.enter.exact.prevent="senden"></textarea>
-                            <button class="btn btn-sm btn-success" :disabled="laeuft" @click="senden">
-                                <i class="uil uil-message"></i>
-                            </button>
+                            <Knopf art="haupt" klein nurSymbol symbol="nachricht" :disabled="laeuft" @click="senden" />
                         </div>
-                        <small class="text-muted">
+                        <small class="at-gedaempft">
                             {{ t('strategies.acceptedFiles') }}:
                             {{ t('strategies.text') }}<template v-if="faehigkeiten.image">, {{ t('strategies.images') }}</template>
                             <template v-if="faehigkeiten.pdf">, PDF</template>
@@ -300,51 +299,50 @@ async function entwurfLoeschen(d) {
                 </div>
 
                 <!-- ══ Erkannte Strategie ══ -->
-                <div class="col-12 col-lg-5">
-                    <div class="dailyCard p-3">
-                        <div class="section-title mb-2">{{ t('strategies.recognisedStrategy') }}</div>
+                <div class="spalte-regeln">
+                    <div class="dailyCard karte">
+                        <div class="section-title">{{ t('strategies.recognisedStrategy') }}</div>
 
-                        <div v-if="!regeln" class="text-muted small">{{ t('strategies.noRulesYet') }}</div>
+                        <div v-if="!regeln" class="at-gedaempft klein-text">{{ t('strategies.noRulesYet') }}</div>
 
                         <template v-else>
-                            <p class="mb-1"><strong>{{ regeln.name }}</strong>
-                                <span class="text-muted small ms-1">{{ regeln.id }}</span></p>
-                            <div class="mb-2">
-                                <span class="badge me-1"
-                                    :class="regeln.direction === 'long' ? 'bg-success' : 'bg-danger'">
+                            <p class="regel-name"><strong>{{ regeln.name }}</strong>
+                                <span class="at-gedaempft klein-text regel-id">{{ regeln.id }}</span></p>
+                            <div class="pillen abstand-unten">
+                                <Pille :ton="regeln.direction === 'long' ? 'gut' : 'schlecht'">
                                     {{ regeln.direction === 'long' ? 'LONG' : 'SHORT' }}
-                                </span>
-                                <span v-for="tf in regeln.timeframes" :key="tf" class="badge bg-dark me-1">{{ tf }}</span>
-                                <span v-if="versuche > 1" class="badge bg-secondary"
-                                    :title="t('strategies.retriesHint')">{{ versuche }}×</span>
+                                </Pille>
+                                <Pille v-for="tf in regeln.timeframes" :key="tf" ton="neutral">{{ tf }}</Pille>
+                                <Pille v-if="versuche > 1" ton="neutral"
+                                    :title="t('strategies.retriesHint')">{{ versuche }}×</Pille>
                             </div>
 
                             <div style="max-height: 34vh; overflow-y: auto;">
                                 <div class="mini-title">{{ t('strategies.blockIndicators') }}</div>
-                                <div v-for="ind in regeln.indicators" :key="ind.id" class="mini-row">
+                                <div v-for="ind in regeln.indicators" :key="ind.id" class="mini-zeile">
                                     <span class="mono">{{ ind.id }}</span> = {{ ind.type.toUpperCase() }}
                                     <template v-if="ind.anchor"> ({{ t('strategies.vwapAnchor' + (ind.anchor === 'session' ? 'Session' : 'Rolling')) }})</template>
                                     <template v-else> {{ alsText(ind.period) }}</template>
                                 </div>
 
                                 <div class="mini-title">{{ t('strategies.blockSignal') }}</div>
-                                <div class="mini-row">{{ t('strategies.signal_' + regeln.signal.type) }}</div>
+                                <div class="mini-zeile">{{ t('strategies.signal_' + regeln.signal.type) }}</div>
 
                                 <template v-if="regeln.signalFilters.length">
                                     <div class="mini-title">{{ t('strategies.blockFilters') }}</div>
-                                    <div v-for="(b, i) in regeln.signalFilters" :key="i" class="mini-row">
+                                    <div v-for="(b, i) in regeln.signalFilters" :key="i" class="mini-zeile">
                                         {{ bedingungText(b) }}
                                     </div>
                                 </template>
 
                                 <div class="mini-title">{{ t('strategies.blockEntry') }}</div>
-                                <div class="mini-row">
+                                <div class="mini-zeile">
                                     {{ t('strategies.entry_' + regeln.entry.type) }}
                                     <template v-if="regeln.entry.anchor"> — {{ regeln.entry.anchor }}</template>
                                 </div>
 
                                 <div class="mini-title">{{ t('strategies.blockInvalidations') }}</div>
-                                <div v-for="(v, i) in regeln.invalidations" :key="i" class="mini-row">
+                                <div v-for="(v, i) in regeln.invalidations" :key="i" class="mini-zeile">
                                     <span class="mono">{{ v.code }}</span>:
                                     <template v-if="v.type === 'timeout'">
                                         {{ t('strategies.afterCandles', { n: alsText(v.candles) }) }}
@@ -353,11 +351,11 @@ async function entwurfLoeschen(d) {
                                 </div>
 
                                 <div class="mini-title">{{ t('strategies.blockExit') }}</div>
-                                <div class="mini-row">
+                                <div class="mini-zeile">
                                     {{ t('strategies.stop') }}: {{ regeln.stopLoss.anchor }}
                                     ± {{ alsText(regeln.stopLoss.offsetPct) }} %
                                 </div>
-                                <div class="mini-row">
+                                <div class="mini-zeile">
                                     {{ t('strategies.target') }}: {{ t('strategies.tp_' + regeln.takeProfit.mode) }}
                                     <template v-if="regeln.takeProfit.rr"> {{ alsText(regeln.takeProfit.rr) }} R</template>
                                     <template v-if="regeln.takeProfit.anchor"> {{ regeln.takeProfit.anchor }}</template>
@@ -366,12 +364,12 @@ async function entwurfLoeschen(d) {
                                 <div class="mini-title">
                                     {{ t('strategies.paramsFound', { n: regeln.params.length }) }}
                                 </div>
-                                <table class="table table-sm table-borderless mb-0">
+                                <table class="at-tabelle dicht param-tabelle">
                                     <tbody>
                                         <tr v-for="p in regeln.params" :key="p.key">
-                                            <td class="small">{{ p.label || p.key }}</td>
-                                            <td class="text-end small text-muted">{{ p.default }}</td>
-                                            <td class="text-end small text-muted" style="width: 5rem;">
+                                            <td>{{ p.label || p.key }}</td>
+                                            <td class="zahl at-gedaempft">{{ p.default }}</td>
+                                            <td class="zahl at-gedaempft" style="width: 5rem;">
                                                 <template v-if="p.min !== undefined">{{ p.min }}–{{ p.max }}</template>
                                                 <template v-else>{{ p.type }}</template>
                                             </td>
@@ -380,53 +378,51 @@ async function entwurfLoeschen(d) {
                                 </table>
                             </div>
 
-                            <button class="btn btn-sm btn-success mt-3" :disabled="!aktuellerEntwurf || gespeichert"
-                                @click="uebernehmen">
-                                <i class="uil uil-check me-1"></i>{{ t('strategies.takeOver') }}
-                            </button>
+                            <Knopf art="haupt" klein symbol="haken" class="uebernehmen"
+                                :disabled="!aktuellerEntwurf || !!gespeichert" @click="uebernehmen">
+                                {{ t('strategies.takeOver') }}
+                            </Knopf>
 
-                            <div v-if="gespeichert" class="alert alert-success py-2 mt-2 small mb-0">
+                            <Hinweis v-if="gespeichert" art="gut" class="abstand-oben klein-text">
                                 {{ t('strategies.savedAndLoaded', { id: gespeichert.strategyId }) }}
-                                <div class="mt-2 d-flex gap-2">
-                                    <button class="btn btn-sm btn-outline-light py-0"
-                                        @click="router.push('/agent/editor')">
+                                <div class="knopfzeile">
+                                    <Knopf klein @click="router.push('/agent/editor')">
                                         {{ t('strategies.openInEditor') }}
-                                    </button>
-                                    <button class="btn btn-sm btn-outline-light py-0"
-                                        @click="router.push('/agent/lab')">
+                                    </Knopf>
+                                    <Knopf klein @click="router.push('/agent/lab')">
                                         {{ t('strategies.backtestNow') }}
-                                    </button>
+                                    </Knopf>
                                 </div>
-                            </div>
+                            </Hinweis>
                         </template>
                     </div>
                 </div>
             </div>
 
             <!-- Entwürfe -->
-            <div v-if="entwuerfe.length" class="dailyCard p-3 mt-3">
-                <div class="section-title mb-2">{{ t('strategies.drafts') }}</div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-borderless mb-0">
+            <div v-if="entwuerfe.length" class="dailyCard karte abstand-oben-gross">
+                <div class="section-title">{{ t('strategies.drafts') }}</div>
+                <div class="at-tabelle-huelle">
+                    <table class="at-tabelle dicht">
                         <tbody>
                             <tr v-for="d in entwuerfe" :key="d.id"
-                                :class="aktuellerEntwurf?.id === d.id ? 'table-active' : ''">
-                                <td class="small pointerClass" @click="entwurfOeffnen(d)">{{ d.title }}</td>
-                                <td class="small text-muted">{{ d.sourceName }}</td>
-                                <td class="small">
-                                    <span class="badge" :class="d.status === 'generated' ? 'bg-success' : 'bg-secondary'">
+                                :class="aktuellerEntwurf?.id === d.id ? 'gewaehlt' : ''">
+                                <td class="pointerClass" @click="entwurfOeffnen(d)">{{ d.title }}</td>
+                                <td class="at-gedaempft">{{ d.sourceName }}</td>
+                                <td>
+                                    <Pille :ton="d.status === 'generated' ? 'gut' : 'neutral'">
                                         {{ t('strategies.draftStatus_' + d.status) }}
-                                    </span>
+                                    </Pille>
                                 </td>
-                                <td class="text-end" style="white-space: nowrap;">
+                                <td class="zahl" style="white-space: nowrap;">
                                     <template v-if="loeschFrage === d.id">
-                                        <button class="btn btn-sm btn-danger py-0 me-1"
-                                            @click="entwurfLoeschen(d)">{{ t('common.yes') }}</button>
-                                        <button class="btn btn-sm btn-outline-secondary py-0"
-                                            @click="loeschFrage = null">{{ t('common.no') }}</button>
+                                        <Knopf art="gefahr" klein class="vor"
+                                            @click="entwurfLoeschen(d)">{{ t('common.yes') }}</Knopf>
+                                        <Knopf art="leise" klein
+                                            @click="loeschFrage = null">{{ t('common.no') }}</Knopf>
                                     </template>
-                                    <button v-else class="btn btn-sm btn-outline-danger py-0"
-                                        @click="loeschFrage = d.id"><i class="uil uil-trash-alt"></i></button>
+                                    <Knopf v-else art="gefahr" klein nurSymbol symbol="muell"
+                                        @click="loeschFrage = d.id" />
                                 </td>
                             </tr>
                         </tbody>
@@ -438,34 +434,213 @@ async function entwurfLoeschen(d) {
 </template>
 
 <style scoped>
+.builder-seite {
+    padding: var(--abstand-4) var(--abstand-4) 0;
+}
+
+.builder-inhalt {
+    max-width: 1500px;
+}
+
 /* `.dailyCard` setzt global height:100% — bei gestapelten Karten falsch. */
 .dailyCard {
     height: auto;
+}
+
+.karte {
+    padding: var(--abstand-4);
+}
+
+.kopfzeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-4);
+}
+
+.seitentitel {
+    margin: 0 auto 0 0;
+}
+
+.vor {
+    margin-right: var(--abstand-1);
+}
+
+.sicherheit {
+    display: flex;
+    align-items: center;
+    font-size: 0.85rem;
+    color: var(--muted);
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-2) var(--abstand-3);
+    margin-bottom: var(--abstand-3);
+}
+
+.raster {
+    display: grid;
+    grid-template-columns: 7fr 5fr;
+    gap: var(--abstand-4);
+    align-items: start;
+}
+
+.spalte-gespraech,
+.spalte-regeln {
+    min-width: 0;
 }
 
 .section-title {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
+    margin-bottom: var(--abstand-2);
+}
+
+.klein-text {
+    font-size: 0.85rem;
+}
+
+.fett {
+    font-weight: 700;
+}
+
+.abstand-unten {
+    margin-bottom: var(--abstand-3);
+}
+
+.abstand-oben {
+    margin-top: var(--abstand-2);
+}
+
+.abstand-oben-gross {
+    margin-top: var(--abstand-4);
+}
+
+.fragen {
+    margin-top: var(--abstand-2);
+    padding: var(--abstand-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+}
+
+.fragen-kopf {
+    display: flex;
+    align-items: center;
+    margin-bottom: var(--abstand-1);
+}
+
+.liste {
+    margin: 0;
+    padding-left: var(--abstand-4);
+}
+
+.anhaenge,
+.pillen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
+}
+
+.anhaenge {
+    margin-top: var(--abstand-2);
+}
+
+.eingabe-zeile {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-2);
+}
+
+.eingabe-zeile .chat-input {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.datei-knopf {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--text);
+    cursor: pointer;
+    margin: 0;
+}
+
+.datei-knopf:hover {
+    border-color: var(--line-stark);
+}
+
+.versteckt {
+    display: none;
+}
+
+.regel-name {
+    margin: 0 0 var(--abstand-1);
+}
+
+.regel-id {
+    margin-left: var(--abstand-1);
+}
+
+.param-tabelle {
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+tr.gewaehlt td {
+    background: var(--accent-flaeche);
+}
+
+.uebernehmen {
+    margin-top: var(--abstand-3);
+}
+
+.knopfzeile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-2);
 }
 
 .mini-title {
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
     margin-top: 0.7rem;
     margin-bottom: 0.15rem;
 }
 
-.mini-row {
+.mini-zeile {
     font-size: 0.8rem;
     padding: 0.1rem 0;
 }
 
 .mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--schrift-mono);
     font-size: 0.76rem;
+}
+
+@media (max-width: 991.98px) {
+    .raster {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .builder-seite {
+        padding: var(--abstand-3) var(--abstand-3) 0;
+    }
+
+    .karte {
+        padding: var(--abstand-3);
+    }
 }
 </style>

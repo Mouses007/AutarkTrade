@@ -11,6 +11,7 @@ import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { loadSymbolMeta } from '../../utils/liveSymbols.js'
+import { Symbol } from '../basis'
 
 const props = defineProps({
     symbol: { type: String, default: '' },
@@ -85,14 +86,14 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
 
 <template>
     <div class="symbolSuche">
-        <button v-if="!ohneKnopf" class="knopf" @click="oeffne" :title="t('chart.symbolSuchen')" :aria-label="t('chart.symbolSuchen')">
-            <i class="uil uil-search"></i>
+        <button v-if="!ohneKnopf" type="button" class="knopf" @click="oeffne" :title="t('chart.symbolSuchen')" :aria-label="t('chart.symbolSuchen')">
+            <Symbol name="suche" />
             <span class="sym">{{ symbol }}</span>
             <span class="markt">{{ markt === 'spot' ? 'Spot' : 'Perp' }}</span>
         </button>
         <div v-if="offen && !eingebettet" class="hintergrund" @click="offen = false"></div>
         <div v-if="offen" class="liste" :class="{ eingebettet }">
-            <input ref="feld" v-model="suche" class="form-control form-control-sm" :placeholder="t('chart.symbolPlatzhalter')"
+            <input ref="feld" v-model="suche" class="at-feld klein" :placeholder="t('chart.symbolPlatzhalter')"
                 @keydown="taste" />
             <div class="zeilen">
                 <div v-for="(s, i) in treffer" :key="s.markt + s.symbol" class="zeile" :class="{ markiert: i === markiert }"
@@ -100,7 +101,7 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
                     <span class="sym">{{ s.symbol }}</span>
                     <span class="chip" :class="s.markt">{{ s.markt === 'spot' ? 'Spot' : 'Perp' }}</span>
                     <span class="boersen">
-                        <span v-for="b in boersenFuer(s)" :key="b.id" class="badge"
+                        <span v-for="b in boersenFuer(s)" :key="b.id" class="boerseKuerzel"
                             :title="t('chart.handelbarAuf', { boerse: b.id })">{{ b.kurz }}</span>
                     </span>
                 </div>
@@ -120,10 +121,11 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
     align-items: center;
     gap: 6px;
     background: transparent;
-    border: 1px solid var(--white-10);
-    border-radius: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
     padding: 3px 10px;
-    color: var(--white-87, #eee);
+    cursor: pointer;
+    color: var(--text);
     font-size: 13px;
 }
 
@@ -132,7 +134,7 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
 }
 
 .knopf .markt {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
 }
 
@@ -149,11 +151,11 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
     z-index: 41;
     width: 340px;
     max-width: calc(100vw - 32px);
-    background: var(--black-bg-5, #1e222d);
-    border: 1px solid var(--white-18);
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
     border-radius: 8px;
     padding: 8px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--schatten);
 }
 
 .liste.eingebettet {
@@ -180,7 +182,7 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
 }
 
 .zeile.markiert {
-    background: rgba(1, 180, 255, 0.12);
+    background: var(--accent-flaeche);
 }
 
 .zeile .sym {
@@ -192,23 +194,28 @@ defineExpose({ oeffne, schliesse: () => { offen.value = false }, istOffen: () =>
     font-size: 10px;
     padding: 0 5px;
     border-radius: 3px;
-    background: var(--white-10);
-    color: var(--grey-text);
+    background: var(--line);
+    color: var(--muted);
 }
 
 .chip.futures {
-    color: var(--blue-color);
+    color: var(--accent);
 }
 
-.badge {
+.boerseKuerzel {
+    display: inline-block;
     font-size: 9px;
+    font-weight: 700;
+    line-height: 1.4;
+    padding: 0 4px;
+    border-radius: var(--radius-pille);
     margin-left: 3px;
-    background: rgba(38, 166, 154, 0.2);
-    color: var(--green);
+    background: var(--good-flaeche);
+    color: var(--good);
 }
 
 .leer {
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 8px;
     font-size: 12px;
 }

@@ -19,6 +19,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import { Kreisel } from '../basis'
 
 const props = defineProps({
     symbol: { type: String, required: true },
@@ -139,7 +140,7 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
 <template>
     <div class="mbox">
         <div v-if="fehler && !daten" class="hinweis">{{ fehler }}</div>
-        <div v-else-if="!daten" class="hinweis"><span class="spinner-border spinner-border-sm"></span></div>
+        <div v-else-if="!daten" class="hinweis"><Kreisel /></div>
         <template v-else>
             <!-- Kopf: das Urteil -->
             <div class="kopf" :class="'k-' + seite(status)">
@@ -227,11 +228,11 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
     flex-direction: column;
     gap: 6px;
     font-size: 11.5px;
-    color: var(--white-87, #e6e6e6);
+    color: var(--text);
 }
 
 .hinweis {
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 10px;
     text-align: center;
 }
@@ -261,7 +262,7 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
     padding: 2px 7px;
     border-radius: 10px;
     background: rgba(255, 255, 255, 0.08);
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .kopf .punkt {
@@ -316,7 +317,7 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
     font-size: 9.5px;
     text-transform: uppercase;
     letter-spacing: 0.07em;
-    color: var(--grey-text);
+    color: var(--muted);
     margin-bottom: 4px;
 }
 
@@ -400,7 +401,7 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
 }
 
 .vName {
-    color: var(--grey-text);
+    color: var(--muted);
     font-weight: 600;
 }
 
@@ -459,7 +460,7 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
 }
 
 .struktur small {
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .struktur .ema {
@@ -538,6 +539,6 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
 
 .fussnote {
     font-size: 10px;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 </style>

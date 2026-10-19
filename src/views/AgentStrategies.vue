@@ -6,7 +6,7 @@
  * Server im Manifest mitliefert (StrategyParamForm). Eine weitere Strategie
  * erscheint hier deshalb automatisch, sobald sie serverseitig registriert ist.
  */
-import { ref, computed, onBeforeMount, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
@@ -18,6 +18,7 @@ import { useXDecCurrencyFormat } from '../utils/formatters.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/dayjs-setup.js'
+import { Knopf, Pille, Symbol, Hinweis, Kreisel, Reiter } from '../components/basis'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -430,48 +431,61 @@ async function notAusAusloesen(positionenSchliessen) {
     }
 }
 
-const modusFarbe = (m) => (m === 'live' ? 'bg-danger' : m === 'shadow' ? 'bg-warning text-dark' : 'bg-secondary')
+// Ton der Pille je Modus (Baustein `Pille`)
+const modusFarbe = (m) => (m === 'live' ? 'schlecht' : m === 'shadow' ? 'warn' : 'neutral')
+const waechterTon = computed(() => ({ gut: 'gut', alt: 'warn', tot: 'schlecht' }[waechterAmpel.value] || 'neutral'))
+
+// Reiter im Editor (ersetzt die Bootstrap-Pills). Jeder neu geöffnete Editor
+// beginnt wie vorher bei den Strategie-Parametern.
+const editorReiter = ref('params')
+const editorReiterListe = computed(() => [
+    { id: 'params', titel: t('strategies.strategyParams') },
+    { id: 'risk', titel: t('strategies.riskParams') },
+])
+watch(() => !!bearbeite.value, (offen) => { if (offen) editorReiter.value = 'params' })
 const geld = (v) => useXDecCurrencyFormat(Number(v) || 0, 2)
 const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '–' : Number(v).toFixed(n))
 </script>
 
 <template>
     <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="row mt-3 ps-3 pe-3">
-        <div class="col-12 col-xl-11">
+    <div v-show="!spinnerLoadingPage" class="instanzen-seite">
+        <div class="instanzen-inhalt">
 
             <!-- Kopfzeile -->
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                <h5 class="mb-0 me-auto">{{ t('strategies.title') }}</h5>
-                <span v-if="engine.killSwitch" class="badge bg-danger">
-                    <i class="uil uil-exclamation-octagon me-1"></i>{{ t('strategies.killSwitchActive') }}
-                </span>
-                <span v-if="!engine.liveEnabled" class="badge bg-secondary">{{ t('strategies.liveOffGlobal') }}</span>
+            <div class="kopfzeile">
+                <h5 class="seitentitel">{{ t('strategies.title') }}</h5>
+                <Pille v-if="engine.killSwitch" ton="schlecht" symbol="stopp">
+                    {{ t('strategies.killSwitchActive') }}
+                </Pille>
+                <Pille v-if="!engine.liveEnabled" ton="neutral">{{ t('strategies.liveOffGlobal') }}</Pille>
                 <button type="button" class="ctl-pill" @click="jetztPruefen">
-                    <i class="uil uil-sync me-1"></i>{{ t('strategies.runNow') }}
+                    <Symbol name="aktualisieren" class="vor" />{{ t('strategies.runNow') }}
                 </button>
                 <button type="button" class="ctl-pill warn" @click="notAus = true">
-                    <i class="uil uil-power me-1"></i>{{ t('strategies.killSwitch') }}
+                    <Symbol name="ein" class="vor" />{{ t('strategies.killSwitch') }}
                 </button>
                 <button v-if="!bearbeite" type="button" class="ctl-pill accent" @click="neu">
-                    <i class="uil uil-plus me-1"></i>{{ t('strategies.newInstance') }}
+                    <Symbol name="plus" class="vor" />{{ t('strategies.newInstance') }}
                 </button>
             </div>
 
-            <div v-if="meldung" class="alert alert-info py-2">{{ meldung }}</div>
-            <div v-if="fehler" class="alert alert-danger py-2">{{ fehler }}</div>
+            <Hinweis v-if="meldung" art="info" class="abstand">{{ meldung }}</Hinweis>
+            <Hinweis v-if="fehler" art="fehler" class="abstand">{{ fehler }}</Hinweis>
 
             <!-- Not-Aus -->
-            <div v-if="notAus" class="dailyCard p-3 mb-3 border border-danger">
-                <p class="mb-2"><strong>{{ t('strategies.killSwitchConfirm') }}</strong></p>
-                <p class="text-muted small mb-3">{{ t('strategies.killSwitchHint') }}</p>
-                <button class="btn btn-sm btn-danger me-2" @click="notAusAusloesen(true)">
-                    {{ t('strategies.killAndClose') }}
-                </button>
-                <button class="btn btn-sm btn-outline-danger me-2" @click="notAusAusloesen(false)">
-                    {{ t('strategies.killOnly') }}
-                </button>
-                <button class="btn btn-sm btn-outline-secondary" @click="notAus = false">{{ t('common.cancel') }}</button>
+            <div v-if="notAus" class="dailyCard karte abstand gefahr-rand">
+                <p class="abstand-klein"><strong>{{ t('strategies.killSwitchConfirm') }}</strong></p>
+                <p class="at-gedaempft klein-text">{{ t('strategies.killSwitchHint') }}</p>
+                <div class="knopfzeile">
+                    <Knopf art="gefahr" klein @click="notAusAusloesen(true)">
+                        {{ t('strategies.killAndClose') }}
+                    </Knopf>
+                    <Knopf art="gefahr" klein @click="notAusAusloesen(false)">
+                        {{ t('strategies.killOnly') }}
+                    </Knopf>
+                    <Knopf art="leise" klein @click="notAus = false">{{ t('common.cancel') }}</Knopf>
+                </div>
             </div>
 
             <!--
@@ -480,71 +494,66 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                 die Zeile sonst Dauerlärm.
             -->
             <div v-if="waechter && (waechter.offeneLivePositionen > 0 || waechterAmpel === 'tot')"
-                class="dailyCard p-3 mb-3"
-                :class="waechterAmpel === 'tot' ? 'border border-danger' : ''">
-                <div class="d-flex flex-wrap align-items-center gap-2">
+                class="dailyCard karte abstand"
+                :class="waechterAmpel === 'tot' ? 'gefahr-rand' : ''">
+                <div class="zeile">
                     <span :class="['status-dot', waechterAmpel === 'gut' ? 'on' : 'off']"></span>
                     <strong>{{ t('strategies.guardTitle') }}</strong>
-                    <span class="badge" :class="{
-                        'bg-success': waechterAmpel === 'gut',
-                        'bg-warning text-dark': waechterAmpel === 'alt',
-                        'bg-danger': waechterAmpel === 'tot',
-                        'bg-secondary': waechterAmpel === 'unbekannt',
-                    }">
+                    <Pille :ton="waechterTon">
                         {{ waechter.laeuft && waechter.alter !== null
                             ? t('strategies.guardRunning', { s: Math.round(waechter.alter / 1000) })
                             : t('strategies.guardNever') }}
-                    </span>
-                    <span class="badge bg-dark">
+                    </Pille>
+                    <Pille ton="neutral">
                         {{ t('strategies.guardWatching', { n: waechter.offeneLivePositionen }) }}
-                    </span>
-                    <span v-if="waechter.unbewacht > 0" class="badge bg-danger">
+                    </Pille>
+                    <Pille v-if="waechter.unbewacht > 0" ton="schlecht">
                         {{ t('strategies.guardStale', { n: waechter.unbewacht }) }}
-                    </span>
-                    <span v-if="waechter.abgeschaltet" class="badge bg-danger">AT_NO_GUARD=1</span>
+                    </Pille>
+                    <Pille v-if="waechter.abgeschaltet" ton="schlecht">AT_NO_GUARD=1</Pille>
                 </div>
-                <div v-if="waechterAmpel === 'tot'" class="alert alert-danger py-2 small mt-2 mb-0">
-                    <i class="uil uil-exclamation-triangle me-1"></i>{{ t('strategies.guardDangerHint') }}
-                </div>
-                <div v-if="waechter.letzterFehler" class="text-muted small mt-2">
+                <Hinweis v-if="waechterAmpel === 'tot'" art="fehler" class="oben klein-text">
+                    {{ t('strategies.guardDangerHint') }}
+                </Hinweis>
+                <div v-if="waechter.letzterFehler" class="at-gedaempft klein-text oben">
                     {{ waechter.letzterFehler }}
                 </div>
             </div>
 
             <!-- ══ Liste ══ -->
             <template v-if="!bearbeite">
-                <div v-if="!instanzen.length" class="dailyCard p-4 text-center text-muted">
+                <div v-if="!instanzen.length" class="dailyCard karte leer at-gedaempft">
                     {{ t('strategies.noInstances') }}
                 </div>
 
-                <div v-for="inst in instanzen" :key="inst.id" class="dailyCard p-3 mb-2">
-                    <div class="d-flex flex-wrap align-items-center gap-2">
+                <div v-for="inst in instanzen" :key="inst.id" class="dailyCard karte abstand-klein">
+                    <div class="zeile">
                         <span :class="['status-dot', inst.enabled ? 'on' : 'off']"></span>
                         <strong>{{ inst.name }}</strong>
-                        <span class="badge" :class="modusFarbe(inst.mode)">{{ t('strategies.mode_' + inst.mode) }}</span>
-                        <span class="badge bg-dark" :title="ohneBoersenStop(inst.broker) ? t('strategies.brokerNoStopShort') : ''">
+                        <Pille :ton="modusFarbe(inst.mode)">{{ t('strategies.mode_' + inst.mode) }}</Pille>
+                        <Pille ton="neutral" :title="ohneBoersenStop(inst.broker) ? t('strategies.brokerNoStopShort') : ''">
                             {{ brokerName(inst.broker) }}
-                            <i v-if="ohneBoersenStop(inst.broker) && inst.mode !== 'paper'"
-                                class="uil uil-shield-exclamation ms-1 text-warning"></i>
-                        </span>
-                        <span class="badge bg-dark">{{ (inst.timeframes?.length ? inst.timeframes : [inst.timeframe]).join(' · ') }}</span>
-                        <span class="badge bg-dark">v{{ inst.paramsVersion }}</span>
-                        <span v-for="s in inst.symbols" :key="s" class="badge pointerClass"
-                            :class="coinOffen.instanceId === inst.id && coinOffen.symbol === s ? 'bg-info text-dark' : 'bg-dark'"
+                            <Symbol v-if="ohneBoersenStop(inst.broker) && inst.mode !== 'paper'"
+                                name="schildWarnung" class="at-warn" />
+                        </Pille>
+                        <Pille ton="neutral">{{ (inst.timeframes?.length ? inst.timeframes : [inst.timeframe]).join(' · ') }}</Pille>
+                        <Pille ton="neutral">v{{ inst.paramsVersion }}</Pille>
+                        <Pille v-for="s in inst.symbols" :key="s" class="pointerClass"
+                            :ton="coinOffen.instanceId === inst.id && coinOffen.symbol === s ? 'akzent' : 'neutral'"
                             :title="t('strategies.coinTradesHint')"
-                            @click="coinAnzeigen(inst, s)">{{ s }}</span>
+                            @click="coinAnzeigen(inst, s)">{{ s }}</Pille>
 
-                        <div class="ms-auto d-flex align-items-center gap-3">
-                            <small class="text-muted">
+                        <div class="kennzahlen">
+                            <small class="at-gedaempft">
                                 {{ t('strategies.openPositions') }}: <strong>{{ inst.openPositions }}</strong>
                             </small>
-                            <small class="text-muted">
+                            <small class="at-gedaempft">
                                 {{ t('strategies.trades') }}: <strong>{{ inst.totalTrades }}</strong>
                             </small>
                             <small :class="inst.totalNetPnl >= 0 ? 'greenTrade' : 'redTrade'">
                                 {{ geld(inst.totalNetPnl) }}
                             </small>
-                            <small v-if="schwebend[inst.id]" class="text-muted">
+                            <small v-if="schwebend[inst.id]" class="at-gedaempft">
                                 {{ t('strategies.unrealizedShort') }}:
                                 <strong :class="schwebend[inst.id].netPnl > 0 ? 'greenTrade' : schwebend[inst.id].netPnl < 0 ? 'redTrade' : ''">
                                     {{ (schwebend[inst.id].netPnl > 0 ? '+' : '') + geld(schwebend[inst.id].netPnl) }}
@@ -553,165 +562,161 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                         </div>
                     </div>
 
-                    <div v-if="inst.lastError" class="alert alert-warning py-1 px-2 mt-2 mb-0 small">
+                    <Hinweis v-if="inst.lastError" art="warn" class="oben klein-text">
                         {{ inst.lastError }}
-                    </div>
+                    </Hinweis>
 
-                    <div v-if="verlaufOffen === inst.id" class="mt-2 verlaufBox p-2">
-                        <div v-if="verlaufLaedt" class="text-muted small">
-                            <span class="spinner-border spinner-border-sm me-1"></span>{{ t('strategies.historyLoading') }}
+                    <div v-if="verlaufOffen === inst.id" class="oben verlaufBox">
+                        <div v-if="verlaufLaedt" class="at-gedaempft klein-text">
+                            <Kreisel class="vor" />{{ t('strategies.historyLoading') }}
                         </div>
                         <template v-else>
-                            <div v-for="z in verlaufDaten" :key="z.paramsVersion" class="verlaufZeile py-2">
-                                <div class="d-flex flex-wrap align-items-center gap-2">
-                                    <span class="badge" :class="z.paramsVersion === inst.paramsVersion ? 'bg-info text-dark' : 'bg-dark'">
+                            <div v-for="z in verlaufDaten" :key="z.paramsVersion" class="verlaufZeile">
+                                <div class="zeile">
+                                    <Pille :ton="z.paramsVersion === inst.paramsVersion ? 'akzent' : 'neutral'">
                                         v{{ z.paramsVersion }}
-                                    </span>
-                                    <small class="text-muted">{{ new Date(z.createdAt).toLocaleString() }}</small>
-                                    <small class="text-muted">· {{ verlaufQuelle(z.source) }}</small>
-                                    <span class="ms-auto d-flex gap-3">
-                                        <small class="text-muted">{{ t('strategies.trades') }}: <strong>{{ z.trades }}</strong></small>
+                                    </Pille>
+                                    <small class="at-gedaempft">{{ new Date(z.createdAt).toLocaleString() }}</small>
+                                    <small class="at-gedaempft">· {{ verlaufQuelle(z.source) }}</small>
+                                    <span class="kennzahlen">
+                                        <small class="at-gedaempft">{{ t('strategies.trades') }}: <strong>{{ z.trades }}</strong></small>
                                         <small v-if="z.trades" :class="z.summeR >= 0 ? 'greenTrade' : 'redTrade'">
                                             {{ z.summeR >= 0 ? '+' : '' }}{{ z.summeR.toFixed(2) }}R
                                         </small>
-                                        <small v-if="z.trades" class="text-muted">
+                                        <small v-if="z.trades" class="at-gedaempft">
                                             {{ t('strategies.kpiWinRate') }} {{ z.winRate?.toFixed(0) }}%
                                         </small>
                                     </span>
                                 </div>
-                                <div v-if="z.diff?.length" class="mt-1 d-flex flex-wrap gap-1">
-                                    <span v-for="d in z.diff" :key="d.key" class="badge diffBadge">
+                                <div v-if="z.diff?.length" class="diff-zeile">
+                                    <span v-for="d in z.diff" :key="d.key" class="diffBadge">
                                         {{ d.key }}: {{ d.alt }} → {{ d.neu }}
                                     </span>
                                 </div>
-                                <div v-else-if="z.diff" class="mt-1">
-                                    <small class="text-muted fst-italic">{{ t('strategies.historyNoDiff') }}</small>
+                                <div v-else-if="z.diff" class="oben-klein">
+                                    <small class="at-gedaempft kursiv">{{ t('strategies.historyNoDiff') }}</small>
                                 </div>
                             </div>
-                            <div v-if="!verlaufDaten.length" class="text-muted small">{{ t('strategies.historyEmpty') }}</div>
+                            <div v-if="!verlaufDaten.length" class="at-gedaempft klein-text">{{ t('strategies.historyEmpty') }}</div>
                         </template>
                     </div>
 
                     <!-- ══ Coin-Ausblick ══
                          Klick auf ein Symbol-Badge oben klappt hier die Trades
                          dieser Instanz auf genau diesem Coin auf. -->
-                    <div v-if="coinOffen.instanceId === inst.id" class="mt-2 verlaufBox p-2">
-                        <div v-if="coinLaedt" class="text-muted small">
-                            <span class="spinner-border spinner-border-sm me-1"></span>{{ t('common.loading') }}
+                    <div v-if="coinOffen.instanceId === inst.id" class="oben verlaufBox">
+                        <div v-if="coinLaedt" class="at-gedaempft klein-text">
+                            <Kreisel class="vor" />{{ t('common.loading') }}
                         </div>
                         <template v-else>
-                            <div v-if="!coinTrades.length" class="text-muted small">
+                            <div v-if="!coinTrades.length" class="at-gedaempft klein-text">
                                 {{ t('strategies.coinTradesEmpty', { symbol: coinOffen.symbol }) }}
                             </div>
                             <template v-else>
-                                <div class="table-responsive">
-                                    <table class="table table-sm table-borderless mb-0">
+                                <div class="at-tabelle-huelle">
+                                    <table class="at-tabelle dicht">
                                         <thead>
-                                            <tr class="text-muted small">
+                                            <tr>
                                                 <th>{{ t('strategies.exitTime') }}</th>
                                                 <th>{{ t('strategies.direction') }}</th>
-                                                <th class="text-end">R</th>
-                                                <th class="text-end">PnL</th>
+                                                <th class="zahl">R</th>
+                                                <th class="zahl">PnL</th>
                                                 <th>{{ t('strategies.byExitReason') }}</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             <tr v-for="tr in coinTrades" :key="tr.id">
-                                                <td class="small text-muted">{{ dayjs(Number(tr.exitTime)).format('DD.MM. HH:mm') }}</td>
-                                                <td class="small">{{ tr.direction }}</td>
-                                                <td class="text-end small" :class="tr.rMultiple >= 0 ? 'greenTrade' : 'redTrade'">
+                                                <td class="at-gedaempft">{{ dayjs(Number(tr.exitTime)).format('DD.MM. HH:mm') }}</td>
+                                                <td>{{ tr.direction }}</td>
+                                                <td class="zahl" :class="tr.rMultiple >= 0 ? 'greenTrade' : 'redTrade'">
                                                     {{ zahl(tr.rMultiple) }}
                                                 </td>
-                                                <td class="text-end small" :class="tr.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                                <td class="zahl" :class="tr.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
                                                     {{ geld(tr.netPnl) }}
                                                 </td>
-                                                <td class="small text-muted">{{ tr.exitReason }}</td>
+                                                <td class="at-gedaempft">{{ tr.exitReason }}</td>
                                             </tr>
                                         </tbody>
                                     </table>
                                 </div>
-                                <button class="btn btn-sm btn-outline-info mt-2" @click="zurZwischenauswertung">
-                                    <i class="uil uil-chart-line me-1"></i>{{ t('strategies.toInterimReview') }}
-                                </button>
+                                <Knopf klein symbol="linie" class="oben" @click="zurZwischenauswertung">
+                                    {{ t('strategies.toInterimReview') }}
+                                </Knopf>
                             </template>
                         </template>
                     </div>
 
-                    <div class="d-flex flex-wrap gap-2 mt-2">
-                        <button class="btn btn-sm" :class="inst.enabled ? 'btn-outline-warning' : 'btn-outline-success'"
-                            @click="umschalten(inst)">
-                            <i :class="inst.enabled ? 'uil uil-pause' : 'uil uil-play'" class="me-1"></i>
+                    <div class="knopfzeile oben">
+                        <Knopf klein :symbol="inst.enabled ? 'pause' : 'play'" @click="umschalten(inst)">
                             {{ inst.enabled ? t('strategies.stop') : t('strategies.start') }}
-                        </button>
-                        <button class="btn btn-sm btn-outline-primary" @click="bearbeiten(inst)">
-                            <i class="uil uil-edit me-1"></i>{{ t('common.edit') }}
-                        </button>
-                        <button class="btn btn-sm btn-outline-info" :title="t('strategies.optimizeTitle')"
+                        </Knopf>
+                        <Knopf klein symbol="stift" @click="bearbeiten(inst)">
+                            {{ t('common.edit') }}
+                        </Knopf>
+                        <Knopf klein symbol="ki" :titel="t('strategies.optimizeTitle')"
                             @click="kiOptimieren(inst)">
-                            <i class="uil uil-robot me-1"></i>{{ t('strategies.aiOptimize') }}
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary"
-                            :class="{ active: verlaufOffen === inst.id }"
+                            {{ t('strategies.aiOptimize') }}
+                        </Knopf>
+                        <Knopf klein symbol="verlauf"
+                            :class="{ aktiv: verlaufOffen === inst.id }"
                             @click="verlaufAnzeigen(inst)">
-                            <i class="uil uil-history me-1"></i>{{ t('strategies.historyBtn') }} (v{{ inst.paramsVersion }})
-                        </button>
-                        <button v-if="inst.mode === 'live' && !inst.liveApprovedAt"
-                            class="btn btn-sm btn-outline-danger"
+                            {{ t('strategies.historyBtn') }} (v{{ inst.paramsVersion }})
+                        </Knopf>
+                        <Knopf v-if="inst.mode === 'live' && !inst.liveApprovedAt"
+                            art="gefahr" klein symbol="schlossOffen"
                             @click="freigabeOeffnen(inst)">
-                            <i class="uil uil-lock-open-alt me-1"></i>{{ t('strategies.approveLive') }}
-                        </button>
-                        <span v-else-if="inst.mode === 'live'" class="badge bg-success align-self-center">
+                            {{ t('strategies.approveLive') }}
+                        </Knopf>
+                        <Pille v-else-if="inst.mode === 'live'" ton="gut" class="mittig">
                             {{ t('strategies.liveApprovedBadge') }}
-                        </span>
+                        </Pille>
 
                         <template v-if="loeschBestaetigung === inst.id">
-                            <button class="btn btn-sm btn-danger" @click="loeschen(inst)">{{ t('common.yes') }}</button>
-                            <button class="btn btn-sm btn-outline-secondary"
-                                @click="loeschBestaetigung = null">{{ t('common.no') }}</button>
+                            <Knopf art="gefahr" klein @click="loeschen(inst)">{{ t('common.yes') }}</Knopf>
+                            <Knopf art="leise" klein
+                                @click="loeschBestaetigung = null">{{ t('common.no') }}</Knopf>
                         </template>
-                        <button v-else class="btn btn-sm btn-outline-danger ms-auto"
-                            @click="loeschBestaetigung = inst.id">
-                            <i class="uil uil-trash-alt"></i>
-                        </button>
+                        <Knopf v-else art="gefahr" klein nurSymbol symbol="muell" class="rechts"
+                            @click="loeschBestaetigung = inst.id" />
                     </div>
 
                     <!-- Live-Freigabe: verlangt den exakten Namen -->
-                    <div v-if="freigabeFuer?.id === inst.id" class="mt-3 p-3 border border-danger rounded">
-                        <p class="mb-2 small">{{ t('strategies.approveLiveWarning') }}</p>
+                    <div v-if="freigabeFuer?.id === inst.id" class="freigabe">
+                        <p class="klein-text abstand-klein">{{ t('strategies.approveLiveWarning') }}</p>
 
                         <!-- Die Nachweise. Sie stehen VOR dem Eingabefeld, weil der
                              Nutzer sonst den Namen tippt und erst danach erfährt,
                              dass es ohnehin nicht geht. -->
-                        <div v-if="reife[inst.id]" class="mb-3">
-                            <div class="small mb-1">
+                        <div v-if="reife[inst.id]" class="abstand-mittel">
+                            <div class="klein-text tore-kopf">
                                 <strong>{{ t('strategies.gatesTitle') }}</strong>
-                                <span class="badge ms-1" :class="reife[inst.id].bereit ? 'bg-success' : 'bg-warning text-dark'">
+                                <Pille :ton="reife[inst.id].bereit ? 'gut' : 'warn'">
                                     {{ reife[inst.id].bereit ? t('strategies.gatesReady')
                                         : t('strategies.gatesOpen', { n: reife[inst.id].offen.length }) }}
-                                </span>
+                                </Pille>
                             </div>
-                            <div v-for="tor in reife[inst.id].tore" :key="tor.id" class="small torZeile">
-                                <i :class="tor.erfuellt ? 'uil uil-check-circle torJa' : 'uil uil-times-circle torNein'"></i>
-                                <span :class="tor.erfuellt ? '' : 'text-muted'">{{ t('strategies.gate_' + tor.id) }}</span>
-                                <span class="text-muted">— {{ tor.detail }}</span>
+                            <div v-for="tor in reife[inst.id].tore" :key="tor.id" class="klein-text torZeile">
+                                <Symbol :name="tor.erfuellt ? 'hakenKreis' : 'fehler'" :class="tor.erfuellt ? 'torJa' : 'torNein'" />
+                                <span :class="tor.erfuellt ? '' : 'at-gedaempft'">{{ t('strategies.gate_' + tor.id) }}</span>
+                                <span class="at-gedaempft">— {{ tor.detail }}</span>
                             </div>
                         </div>
 
-                        <div v-else-if="reifeFehler[inst.id]" class="mb-3 small text-warning">
-                            <i class="uil uil-exclamation-triangle"></i>
+                        <div v-else-if="reifeFehler[inst.id]" class="abstand-mittel klein-text at-warn tore-kopf">
+                            <Symbol name="warnung" />
                             {{ t('strategies.gatesUnknown') }}
-                            <button class="btn btn-sm btn-outline-secondary ms-2 py-0"
-                                @click="reifeLaden(inst)">{{ t('common.retry') }}</button>
+                            <Knopf art="leise" klein
+                                @click="reifeLaden(inst)">{{ t('common.retry') }}</Knopf>
                         </div>
 
-                        <p class="mb-2 small">{{ t('strategies.approveLiveType', { name: inst.name }) }}</p>
-                        <div class="d-flex gap-2">
-                            <input v-model="freigabeText" class="form-control form-control-sm" :placeholder="inst.name" />
-                            <button class="btn btn-sm btn-danger"
+                        <p class="klein-text abstand-klein">{{ t('strategies.approveLiveType', { name: inst.name }) }}</p>
+                        <div class="freigabe-zeile">
+                            <input v-model="freigabeText" class="at-feld klein" :placeholder="inst.name" />
+                            <Knopf art="gefahr" klein
                                 :disabled="freigabeText !== inst.name || reife[inst.id]?.bereit !== true"
-                                @click="freigeben">{{ t('strategies.approve') }}</button>
-                            <button class="btn btn-sm btn-outline-secondary"
-                                @click="freigabeFuer = null">{{ t('common.cancel') }}</button>
+                                @click="freigeben">{{ t('strategies.approve') }}</Knopf>
+                            <Knopf art="leise" klein
+                                @click="freigabeFuer = null">{{ t('common.cancel') }}</Knopf>
                         </div>
                     </div>
                 </div>
@@ -719,88 +724,87 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 
             <!-- ══ Editor ══ -->
             <template v-else>
-                <div class="dailyCard p-3">
-                    <div class="row mb-3">
-                        <div class="col-12 col-md-6 mb-2">
-                            <label class="form-label small">{{ t('strategies.strategy') }}</label>
-                            <select v-model="bearbeite.strategyId" class="form-select form-select-sm"
+                <div class="dailyCard karte">
+                    <div class="editor-raster">
+                        <div class="e-6">
+                            <label class="at-label">{{ t('strategies.strategy') }}</label>
+                            <select v-model="bearbeite.strategyId" class="at-feld klein"
                                 :disabled="!istNeu" @change="strategieGewechselt">
                                 <option v-for="s in registry.strategies" :key="s.id" :value="s.id">{{ s.name }}</option>
                             </select>
-                            <small v-if="gewaehlteStrategie" class="text-muted">{{ gewaehlteStrategie.description }}</small>
+                            <small v-if="gewaehlteStrategie" class="at-gedaempft">{{ gewaehlteStrategie.description }}</small>
                         </div>
-                        <div class="col-12 col-md-6 mb-2">
-                            <label class="form-label small">{{ t('strategies.name') }}</label>
-                            <input v-model="bearbeite.name" class="form-control form-control-sm" />
+                        <div class="e-6">
+                            <label class="at-label">{{ t('strategies.name') }}</label>
+                            <input v-model="bearbeite.name" class="at-feld klein" />
                         </div>
-                        <div class="col-6 col-md-3 mb-2">
-                            <label class="form-label small">{{ t('strategies.modeLabel') }}</label>
-                            <select v-model="bearbeite.mode" class="form-select form-select-sm">
+                        <div class="e-3 m-halb">
+                            <label class="at-label">{{ t('strategies.modeLabel') }}</label>
+                            <select v-model="bearbeite.mode" class="at-feld klein">
                                 <option v-for="m in registry.modes" :key="m" :value="m">{{ t('strategies.mode_' + m) }}</option>
                             </select>
                         </div>
-                        <div class="col-6 col-md-3 mb-2">
-                            <label class="form-label small">{{ t('strategies.brokerLabel') }}</label>
-                            <select v-model="bearbeite.broker" class="form-select form-select-sm">
+                        <div class="e-3 m-halb">
+                            <label class="at-label">{{ t('strategies.brokerLabel') }}</label>
+                            <select v-model="bearbeite.broker" class="at-feld klein">
                                 <option v-for="b in registry.broker || []" :key="b.id" :value="b.id">{{ b.label }}</option>
                             </select>
-                            <small v-if="!istNeu && bearbeite.liveApprovedAt" class="text-warning">
+                            <small v-if="!istNeu && bearbeite.liveApprovedAt" class="at-warn">
                                 {{ t('strategies.brokerChangeResetsApproval') }}
                             </small>
                         </div>
-                        <div class="col-6 col-md-3 mb-2">
-                            <label class="form-label small">{{ t('strategies.timeframe') }}</label>
-                            <select v-model="bearbeite.timeframe" class="form-select form-select-sm"
+                        <div class="e-3 m-halb">
+                            <label class="at-label">{{ t('strategies.timeframe') }}</label>
+                            <select v-model="bearbeite.timeframe" class="at-feld klein"
                                 @change="tfHauptGewechselt">
                                 <option v-for="tf in gewaehlteStrategie?.supportedTimeframes || []" :key="tf" :value="tf">
                                     {{ tf }}
                                 </option>
                             </select>
                         </div>
-                        <div class="col-12 mb-2">
-                            <label class="form-label small">
+                        <div class="e-12">
+                            <label class="at-label">
                                 {{ t('strategies.extraTimeframes') }}
-                                <i class="uil uil-info-circle text-muted" :title="t('strategies.extraTimeframesHint')"></i>
+                                <span class="at-gedaempft" :title="t('strategies.extraTimeframesHint')"><Symbol name="info" /></span>
                             </label>
-                            <div class="d-flex flex-wrap gap-2">
+                            <div class="tf-zeile">
                                 <button v-for="tf in gewaehlteStrategie?.supportedTimeframes || []" :key="tf"
                                     type="button"
-                                    class="btn btn-sm"
-                                    :class="tfAktiv(tf) ? 'btn-primary' : 'btn-outline-secondary'"
+                                    class="tf-knopf"
+                                    :class="{ aktiv: tfAktiv(tf) }"
                                     :disabled="tf === bearbeite.timeframe"
                                     @click="tfUmschalten(tf)">
                                     {{ tf }}
                                 </button>
                             </div>
-                            <small class="text-muted">{{ t('strategies.extraTimeframesHint') }}</small>
+                            <small class="at-gedaempft">{{ t('strategies.extraTimeframesHint') }}</small>
                         </div>
-                        <div class="col-12 col-md-6 mb-2">
-                            <label class="form-label small">{{ t('strategies.symbols') }}</label>
-                            <div class="d-flex gap-2 mb-1">
-                                <input v-model="symbolEingabe" class="form-control form-control-sm"
+                        <div class="e-6">
+                            <label class="at-label">{{ t('strategies.symbols') }}</label>
+                            <div class="symbol-zeile">
+                                <input v-model="symbolEingabe" class="at-feld klein"
                                     placeholder="BTCUSDT" @keydown.enter.prevent="symbolHinzu" />
-                                <button class="btn btn-sm btn-outline-primary" @click="symbolHinzu">
-                                    <i class="uil uil-plus"></i>
-                                </button>
+                                <Knopf klein nurSymbol symbol="plus" @click="symbolHinzu" />
                             </div>
-                            <span v-for="s in bearbeite.symbols" :key="s"
-                                class="badge bg-dark me-1 pointerClass" @click="symbolWeg(s)">
-                                {{ s }} <i class="uil uil-times"></i>
-                            </span>
+                            <div class="pillen">
+                                <Pille v-for="s in bearbeite.symbols" :key="s" ton="neutral"
+                                    class="pointerClass" @click="symbolWeg(s)">
+                                    {{ s }} <Symbol name="schliessen" />
+                                </Pille>
+                            </div>
                         </div>
                     </div>
 
-                    <div v-if="bearbeite.mode === 'live'" class="alert alert-danger py-2 small">
-                        <i class="uil uil-exclamation-triangle me-1"></i>{{ t('strategies.liveModeWarning') }}
-                    </div>
+                    <Hinweis v-if="bearbeite.mode === 'live'" art="fehler" class="abstand klein-text">
+                        {{ t('strategies.liveModeWarning') }}
+                    </Hinweis>
                     <!--
                         Die Warnung nennt eine ZAHL. Eine Warnung ohne Zahl liest
                         niemand zweimal, und „die Marge fängt das schon" ist ohne
                         Grössenordnung keine Aussage.
                     -->
-                    <div v-if="ohneBoersenStop(bearbeite.broker) && bearbeite.mode !== 'paper'"
-                        class="alert alert-warning py-2 small">
-                        <i class="uil uil-shield-exclamation me-1"></i>
+                    <Hinweis v-if="ohneBoersenStop(bearbeite.broker) && bearbeite.mode !== 'paper'"
+                        art="warn" class="abstand klein-text">
                         {{ t('strategies.brokerNoStopWarning', { broker: brokerName(bearbeite.broker) }) }}
                         <template v-if="netzR">
                             {{ t('strategies.brokerNoStopNet', {
@@ -809,37 +813,32 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                                 r2: netzR.bei2Pct.toFixed(1),
                             }) }}
                         </template>
-                    </div>
-                    <div v-else-if="bearbeite.mode === 'shadow'" class="alert alert-warning py-2 small">
-                        <i class="uil uil-eye me-1"></i>{{ t('strategies.shadowModeHint') }}
-                    </div>
+                    </Hinweis>
+                    <Hinweis v-else-if="bearbeite.mode === 'shadow'" art="warn" class="abstand klein-text">
+                        {{ t('strategies.shadowModeHint') }}
+                    </Hinweis>
 
-                    <ul class="nav nav-pills mb-3">
-                        <li class="nav-item"><a class="nav-link active" data-bs-toggle="pill" href="#tab-params">
-                            {{ t('strategies.strategyParams') }}</a></li>
-                        <li class="nav-item"><a class="nav-link" data-bs-toggle="pill" href="#tab-risk">
-                            {{ t('strategies.riskParams') }}</a></li>
-                    </ul>
-                    <div class="tab-content">
-                        <div class="tab-pane fade show active" id="tab-params">
+                    <Reiter v-model="editorReiter" :reiter="editorReiterListe" class="abstand" />
+                    <div>
+                        <div v-show="editorReiter === 'params'">
                             <StrategyParamForm v-model="bearbeite.params"
                                 :schema="gewaehlteStrategie?.params || []"
                                 :groups="gewaehlteStrategie?.paramGroups || []"
                                 :i18nPrefix="'strategies.' + bearbeite.strategyId" />
                         </div>
-                        <div class="tab-pane fade" id="tab-risk">
+                        <div v-show="editorReiter === 'risk'">
                             <StrategyParamForm v-model="bearbeite.risk"
                                 :schema="registry.riskParams" i18nPrefix="strategies.risk" />
                         </div>
                     </div>
 
-                    <div class="d-flex gap-2 mt-3">
-                        <button class="btn btn-sm btn-success" :disabled="speichern" @click="sichern">
-                            <i class="uil uil-save me-1"></i>{{ t('common.save') }}
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" @click="bearbeite = null">
+                    <div class="knopfzeile oben-gross">
+                        <Knopf art="haupt" klein symbol="speichern" :disabled="speichern" @click="sichern">
+                            {{ t('common.save') }}
+                        </Knopf>
+                        <Knopf art="leise" klein @click="bearbeite = null">
                             {{ t('common.cancel') }}
-                        </button>
+                        </Knopf>
                     </div>
                 </div>
             </template>
@@ -848,30 +847,185 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 </template>
 
 <style scoped>
-.verlaufBox {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--white-18, rgba(255, 255, 255, 0.15));
-    border-radius: var(--border-radius, 6px);
+.instanzen-seite {
+    padding: var(--abstand-4) var(--abstand-4) 0;
 }
 
-.verlaufZeile + .verlaufZeile {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.diffBadge {
-    background: rgba(1, 180, 255, 0.12);
-    border: 1px solid rgba(1, 180, 255, 0.35);
-    color: var(--blue-color, #01B4FF);
-    font-weight: 500;
+.instanzen-inhalt {
+    max-width: 1500px;
 }
 
 /* `.dailyCard` setzt global `height: 100%`. Das passt für Raster mit einer Karte
    je Spalte, hier stehen die Karten aber gestapelt untereinander — dort zieht die
    Regel jede einzelne Karte auf die Höhe der GESAMTEN Spalte und erzeugt riesige
-   Leerräume. Karten, die bewusst mitwachsen sollen, tragen `h-100` (mit
-   !important) und bleiben davon unberührt. */
+   Leerräume. */
 .dailyCard {
     height: auto;
+}
+
+.karte {
+    padding: var(--abstand-4);
+}
+
+.karte.leer {
+    padding: var(--abstand-5);
+    text-align: center;
+}
+
+.gefahr-rand {
+    border: 1px solid var(--bad);
+}
+
+.kopfzeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-4);
+}
+
+.seitentitel {
+    margin: 0 auto 0 0;
+}
+
+.abstand {
+    margin-bottom: var(--abstand-4);
+}
+
+.abstand-mittel {
+    margin-bottom: var(--abstand-3);
+}
+
+.abstand-klein {
+    margin: 0 0 var(--abstand-2);
+}
+
+.oben {
+    margin-top: var(--abstand-2);
+}
+
+.oben-klein {
+    margin-top: var(--abstand-1);
+}
+
+.oben-gross {
+    margin-top: var(--abstand-4);
+}
+
+.klein-text {
+    font-size: 0.85rem;
+}
+
+.kursiv {
+    font-style: italic;
+}
+
+.vor {
+    margin-right: var(--abstand-1);
+}
+
+.rechts {
+    margin-left: auto;
+}
+
+.mittig {
+    align-self: center;
+}
+
+.zeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.kennzahlen {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2) var(--abstand-4);
+    margin-left: auto;
+}
+
+.knopfzeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.knopfzeile .aktiv {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.verlaufBox {
+    padding: var(--abstand-2);
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+}
+
+.verlaufZeile {
+    padding: var(--abstand-2) 0;
+}
+
+.verlaufZeile + .verlaufZeile {
+    border-top: 1px solid var(--line);
+}
+
+.diff-zeile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
+    margin-top: var(--abstand-1);
+}
+
+.diffBadge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--radius-pille);
+    background: var(--accent-flaeche);
+    border: 1px solid var(--accent-rand);
+    color: var(--accent);
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.at-tabelle {
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.freigabe {
+    margin-top: var(--abstand-4);
+    padding: var(--abstand-4);
+    border: 1px solid var(--bad);
+    border-radius: var(--radius-knopf);
+}
+
+.tore-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-1);
+}
+
+.freigabe-zeile,
+.symbol-zeile {
+    display: flex;
+    gap: var(--abstand-2);
+}
+
+.freigabe-zeile .at-feld,
+.symbol-zeile .at-feld {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.symbol-zeile {
+    margin-bottom: var(--abstand-1);
 }
 
 .torZeile {
@@ -881,8 +1035,8 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
     padding: 0.1rem 0;
 }
 
-.torJa { color: var(--green, #27ae60); }
-.torNein { color: var(--red-color, #e74c3c); }
+.torJa { color: var(--good); }
+.torNein { color: var(--bad); }
 
 .status-dot {
     width: 9px;
@@ -892,11 +1046,100 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 }
 
 .status-dot.on {
-    background: #48c78e;
-    box-shadow: 0 0 6px rgba(72, 199, 142, 0.8);
+    background: var(--good);
+    box-shadow: 0 0 6px var(--good);
 }
 
 .status-dot.off {
-    background: rgba(255, 255, 255, 0.25);
+    background: var(--line-stark);
+}
+
+/* Editor: 12er-Raster wie vorher, Telefon einspaltig
+   (Modus, Broker, Zeiteinheit teilen sich halbe Breiten). */
+.editor-raster {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--abstand-2) var(--abstand-4);
+    margin-bottom: var(--abstand-4);
+}
+
+.editor-raster > * {
+    grid-column: span 12;
+    min-width: 0;
+}
+
+.at-label {
+    margin-bottom: var(--abstand-1);
+}
+
+.tf-zeile,
+.pillen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+}
+
+.pillen {
+    gap: var(--abstand-1);
+}
+
+.tf-knopf {
+    padding: 0.3rem 0.7rem;
+    border-radius: var(--radius-knopf);
+    border: 1px solid var(--line);
+    background: var(--panel-soft);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.tf-knopf:hover:not(:disabled) {
+    color: var(--text);
+    border-color: var(--line-stark);
+}
+
+.tf-knopf.aktiv {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.tf-knopf:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+}
+
+@media (min-width: 768px) {
+    .editor-raster > .e-3 { grid-column: span 3; }
+    .editor-raster > .e-6 { grid-column: span 6; }
+}
+
+@media (max-width: 767.98px) {
+    .instanzen-seite {
+        padding: var(--abstand-3) var(--abstand-3) 0;
+    }
+
+    .karte,
+    .freigabe {
+        padding: var(--abstand-3);
+    }
+
+    .editor-raster > .m-halb {
+        grid-column: span 6;
+    }
+
+    .kennzahlen {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .freigabe-zeile {
+        flex-wrap: wrap;
+    }
+
+    .freigabe-zeile .at-feld {
+        flex-basis: 100%;
+    }
 }
 </style>

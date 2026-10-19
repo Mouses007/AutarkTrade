@@ -13,6 +13,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { kurzname, saubereParams } from '../../utils/chart/indikatorRegister.js'
+import { Symbol } from '../basis'
 
 const props = defineProps({ panel: { type: Object, required: true } })
 const emit = defineEmits(['aendere', 'umschalten', 'volumen'])
@@ -62,7 +63,7 @@ function schalte(i, s) {
     <div class="ibox">
         <button class="kopf" :aria-expanded="offen" :title="t(offen ? 'chart.indBox.zu' : 'chart.indBox.auf')" @click="offen = !offen">
             <span>{{ t('chart.indBox.titel') }}</span>
-            <i :class="offen ? 'uil uil-angle-down' : 'uil uil-angle-up'"></i>
+            <Symbol :name="offen ? 'runter' : 'hoch'" class="pfeil" />
         </button>
         <div v-if="offen" class="inhalt">
             <div class="zeile">
@@ -101,8 +102,8 @@ function schalte(i, s) {
     padding: 8px 10px;
     margin-bottom: 6px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--line);
+    background: var(--panel-soft);
     font-size: 11px;
 }
 .kopf {
@@ -113,14 +114,14 @@ function schalte(i, s) {
     background: transparent;
     border: none;
     padding: 0;
-    color: var(--grey-text);
+    color: var(--muted);
     letter-spacing: 0.04em;
     text-transform: uppercase;
     font-size: 10px;
     cursor: pointer;
 }
-.kopf:hover { color: #e6e6e6; }
-.kopf i { font-size: 20px; line-height: 14px; }
+.kopf:hover { color: var(--text); }
+.kopf .pfeil { font-size: 16px; }
 .inhalt {
     display: flex;
     flex-direction: column;
@@ -132,7 +133,7 @@ function schalte(i, s) {
     flex-direction: column;
     gap: 4px;
     padding-top: 6px;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--line);
 }
 .zeile {
     display: flex;
@@ -143,23 +144,23 @@ function schalte(i, s) {
 .gruppe {
     width: 46px;
     flex-shrink: 0;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 .chip {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--line-stark);
     background: transparent;
-    color: var(--grey-text);
+    color: var(--muted);
     border-radius: 10px;
     padding: 1px 8px;
     font-size: 11px;
     line-height: 16px;
     cursor: pointer;
 }
-.chip:hover { border-color: rgba(1, 180, 255, 0.5); }
+.chip:hover { border-color: var(--accent-rand); }
 .chip.an {
-    background: rgba(1, 180, 255, 0.18);
-    border-color: rgba(1, 180, 255, 0.6);
-    color: #e6e6e6;
+    background: var(--accent-flaeche);
+    border-color: var(--accent-rand);
+    color: var(--text);
 }
 .chip.haupt { font-weight: 600; }
 </style>

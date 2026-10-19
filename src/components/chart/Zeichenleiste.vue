@@ -10,6 +10,7 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { WERKZEUGE } from '../../utils/chart/zeichnungen/werkzeuge.js'
+import { Symbol } from '../basis'
 
 defineProps({
     werkzeug: { type: String, default: null },
@@ -18,6 +19,25 @@ defineProps({
 })
 const emit = defineEmits(['werkzeug', 'magnet', 'versteckt', 'alleLoeschen'])
 const { t } = useI18n()
+
+/*
+ * Symbol je Werkzeug. `WERKZEUGE` (werkzeuge.js) trägt noch die alten
+ * Unicons-Klassen; gezeichnet wird hier nach dem Typ, damit die Liste unangetastet bleibt.
+ */
+const WERKZEUG_SYMBOL = {
+    trendlinie: 'linie',
+    strahl: 'wachstum',
+    horizontale: 'minus',
+    strahlH: 'pfeilRechts',
+    vertikale: 'spalten',
+    kanal: 'zeilen',
+    rechteck: 'quadrat',
+    fib: 'prozent',
+    volprofil: 'rangliste',
+    position: 'fadenkreuz',
+    text: 'text',
+    messen: 'regler',
+}
 
 const SCHLUESSEL = 'chartWerkzeugeOffen'
 function lese() {
@@ -33,12 +53,12 @@ function umschalten() {
 <template>
     <div class="zeichenleiste" :class="{ offen }">
         <button class="w klappe" :title="t(offen ? 'chart.wzKurz.einklappen' : 'chart.wzKurz.ausklappen')" @click="umschalten" :aria-label="t(offen ? 'chart.wzKurz.einklappen' : 'chart.wzKurz.ausklappen')">
-            <i :class="offen ? 'uil uil-angle-double-left' : 'uil uil-angle-double-right'"></i>
+            <Symbol :name="offen ? 'doppelLinks' : 'doppelRechts'" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.einklappen') }}</span>
         </button>
         <hr />
         <button class="w" :class="{ an: !werkzeug }" :title="t('chart.wz.zeiger')" @click="emit('werkzeug', null)" :aria-label="t('chart.wz.zeiger')">
-            <i class="uil uil-mouse-alt"></i>
+            <Symbol name="maus" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wz.zeiger') }}</span>
         </button>
         <hr />
@@ -46,26 +66,21 @@ function umschalten() {
             <hr v-if="i > 0 && WERKZEUGE[i - 1].gruppe !== w.gruppe" />
             <button class="w" :class="{ an: werkzeug === w.typ }" :title="t('chart.wz.' + w.typ)"
                 @click="emit('werkzeug', werkzeug === w.typ ? null : w.typ)" :aria-label="t('chart.wz.' + w.typ)">
-                <i :class="w.icon"></i>
+                <Symbol :name="WERKZEUG_SYMBOL[w.typ] || 'stift'" class="zeichen" />
                 <span v-if="offen" class="name">{{ t('chart.wz.' + w.typ) }}</span>
             </button>
         </template>
         <hr />
         <button class="w" :class="{ an: magnet }" :title="t('chart.wz.magnet')" @click="emit('magnet')" :aria-label="t('chart.wz.magnet')">
-            <!-- Eigenes Symbol: `uil-magnet` gibt es im geladenen Unicons-Satz nicht (der Knopf war leer). -->
-            <svg class="svgSymbol" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 3h4v8a2 2 0 0 0 4 0V3h4v8a6 6 0 0 1-12 0V3z" fill="none" stroke="currentColor" stroke-width="1.8"
-                    stroke-linejoin="round" />
-                <path d="M6 7h4M14 7h4" stroke="currentColor" stroke-width="1.8" />
-            </svg>
+            <Symbol name="magnet" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.magnet') }}</span>
         </button>
         <button class="w" :class="{ an: versteckt }" :title="t('chart.wz.allesVerstecken')" @click="emit('versteckt')" :aria-label="t('chart.wz.allesVerstecken')">
-            <i :class="versteckt ? 'uil uil-eye-slash' : 'uil uil-eye'"></i>
+            <Symbol :name="versteckt ? 'augeAus' : 'auge'" class="zeichen" />
             <span v-if="offen" class="name">{{ t(versteckt ? 'chart.wzKurz.einblenden' : 'chart.wzKurz.ausblenden') }}</span>
         </button>
         <button class="w" :title="t('chart.wz.alleLoeschen')" @click="emit('alleLoeschen')" :aria-label="t('chart.wz.alleLoeschen')">
-            <i class="uil uil-trash-alt"></i>
+            <Symbol name="muell" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.alleLoeschen') }}</span>
         </button>
     </div>
@@ -78,9 +93,9 @@ function umschalten() {
     align-items: center;
     gap: 2px;
     padding: 4px 2px;
-    border: 1px solid var(--white-10);
-    border-radius: 6px;
-    background: var(--black-bg-7, #131722);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    background: var(--panel);
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -96,9 +111,10 @@ function umschalten() {
     height: 28px;
     background: transparent;
     border: none;
-    color: var(--grey-text);
-    border-radius: 4px;
+    color: var(--muted);
+    border-radius: var(--radius-klein);
     font-size: 16px;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -112,11 +128,9 @@ function umschalten() {
     padding: 0 6px;
 }
 
-.offen .w > i,
-.offen .w > .svgSymbol {
+.offen .w > .zeichen {
     width: 18px;
     flex-shrink: 0;
-    text-align: center;
 }
 
 .name {
@@ -126,30 +140,27 @@ function umschalten() {
     text-overflow: ellipsis;
 }
 
-.svgSymbol {
-    width: 16px;
-    height: 16px;
-}
-
 .klappe {
-    color: var(--grey-text);
+    color: var(--muted);
     opacity: 0.8;
 }
 
 .w:hover {
-    color: var(--white-87, #eee);
-    background: var(--white-10);
+    color: var(--text);
+    background: var(--line);
 }
 
 .w.an {
-    color: var(--blue-color);
-    background: rgba(1, 180, 255, 0.12);
+    color: var(--accent);
+    background: var(--accent-flaeche);
 }
 
 hr {
     width: 70%;
     margin: 3px 0;
-    border-color: var(--white-18);
+    border: none;
+    border-top: 1px solid var(--line-stark);
+    opacity: 1;
 }
 
 .offen hr {

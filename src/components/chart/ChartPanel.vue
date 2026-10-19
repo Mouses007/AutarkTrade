@@ -29,6 +29,7 @@ import { zeichnungenVon, legeAn, aendere, loesche } from '../../stores/chartZeic
 import ZeichnungStil from './ZeichnungStil.vue'
 import { kiVorschau } from '../../utils/chart/kiZeichnungen.js'
 import TradeKarte from './TradeKarte.vue'
+import { Symbol, Kreisel, Knopf } from '../basis'
 import axios from 'axios'
 import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { StrategieEbene } from '../../utils/chart/overlays/StrategieEbene.js'
@@ -1152,14 +1153,14 @@ defineExpose({
                 <span v-if="text" class="marktHinweis" :title="t('chart.markt.titel.' + name)">{{ text }}</span>
             </template>
             <span v-if="journalInfo && journalInfo.anzahl" class="journalHinweis" :title="t('chart.journalHinweis')">
-                <i class="uil uil-book-alt"></i> {{ journalInfo.anzahl }}{{ journalInfo.gekappt ? '+' : '' }}
+                <Symbol name="buch" /> {{ journalInfo.anzahl }}{{ journalInfo.gekappt ? '+' : '' }}
             </span>
             <!-- Volumen ist kein Indikator aus dem Register, aber genauso ausblendbar; Zustand im Layout (panel.volumen). -->
             <div class="indZeile" :class="{ aus: !volumenAn }">
                 <span class="indName">{{ t('chart.volumen') }}</span>
                 <span class="indKnoepfe">
                     <button :title="t(volumenAn ? 'chart.ausblenden' : 'chart.einblenden')" @click.stop="emit('indikator', { aktion: 'volumen' })" :aria-label="t(volumenAn ? 'chart.ausblenden' : 'chart.einblenden')">
-                        <i :class="volumenAn ? 'uil uil-eye' : 'uil uil-eye-slash'"></i></button>
+                        <Symbol :name="volumenAn ? 'auge' : 'augeAus'" /></button>
                 </span>
             </div>
             <div v-for="ind in (panel.indikatoren || [])" :key="ind.id" class="indZeile" :class="{ aus: ind.sichtbar === false }">
@@ -1168,11 +1169,9 @@ defineExpose({
                 <span class="indKnoepfe">
                     <button :title="t(ind.sichtbar === false ? 'chart.einblenden' : 'chart.ausblenden')"
                         @click.stop="emit('indikator', { aktion: 'umschalten', id: ind.id })" :aria-label="t(ind.sichtbar === false ? 'chart.einblenden' : 'chart.ausblenden')">
-                        <i :class="ind.sichtbar === false ? 'uil uil-eye-slash' : 'uil uil-eye'"></i></button>
-                    <button :title="t('chart.einstellungen')" @click.stop="emit('indikator', { aktion: 'bearbeiten', id: ind.id })" :aria-label="t('chart.einstellungen')"><i
-                            class="uil uil-setting"></i></button>
-                    <button :title="t('chart.entfernen')" @click.stop="emit('indikator', { aktion: 'entfernen', id: ind.id })" :aria-label="t('chart.entfernen')"><i
-                            class="uil uil-times"></i></button>
+                        <Symbol :name="ind.sichtbar === false ? 'augeAus' : 'auge'" /></button>
+                    <button :title="t('chart.einstellungen')" @click.stop="emit('indikator', { aktion: 'bearbeiten', id: ind.id })" :aria-label="t('chart.einstellungen')"><Symbol name="einstellungen" /></button>
+                    <button :title="t('chart.entfernen')" @click.stop="emit('indikator', { aktion: 'entfernen', id: ind.id })" :aria-label="t('chart.entfernen')"><Symbol name="schliessen" /></button>
                 </span>
             </div>
         </div>
@@ -1188,18 +1187,18 @@ defineExpose({
         <div v-if="kontext" class="kontextHintergrund" @mousedown.stop="kontext = null" @contextmenu.prevent="kontext = null"></div>
         <div v-if="kontext" class="kontextMenue" :style="{ left: kontext.x + 'px', top: kontext.y + 'px' }" @mousedown.stop>
             <div class="kopfzeile">{{ kerzenSerie?.priceFormatter().format(kontext.preis) }}</div>
-            <button @click="alarmHier"><i class="uil uil-bell"></i> {{ t('chart.alarm.hier') }}</button>
-            <button @click="zeichnungHier('horizontale')"><i class="uil uil-minus"></i> {{ t('chart.wz.horizontale') }}</button>
-            <button @click="zeichnungHier('strahlH')"><i class="uil uil-arrow-right"></i> {{ t('chart.wz.strahlH') }}</button>
+            <button @click="alarmHier"><Symbol name="glocke" /> {{ t('chart.alarm.hier') }}</button>
+            <button @click="zeichnungHier('horizontale')"><Symbol name="minus" /> {{ t('chart.wz.horizontale') }}</button>
+            <button @click="zeichnungHier('strahlH')"><Symbol name="pfeilRechts" /> {{ t('chart.wz.strahlH') }}</button>
             <hr />
             <!-- Fragt nach (Chart.vue) und lässt gesperrte Zeichnungen stehen — wie der Mülleimer in der Werkzeugleiste. -->
-            <button class="gefahr" @click="kontext = null; emit('alleLoeschen')"><i class="uil uil-trash-alt"></i> {{ t('chart.wzKurz.alleZeichnungenLoeschen') }}</button>
+            <button class="gefahr" @click="kontext = null; emit('alleLoeschen')"><Symbol name="muell" /> {{ t('chart.wzKurz.alleZeichnungenLoeschen') }}</button>
         </div>
 
-        <div v-if="laedt" class="hinweis"><span class="spinner-border spinner-border-sm"></span></div>
+        <div v-if="laedt" class="hinweis"><Kreisel /></div>
         <div v-else-if="fehler" class="hinweis fehler">
             {{ t('chart.ladeFehler') }}: {{ fehler }}
-            <button class="btn btn-sm btn-outline-secondary ms-2" @click="ladeNeu">{{ t('chart.erneut') }}</button>
+            <Knopf klein class="erneut" @click="ladeNeu">{{ t('chart.erneut') }}</Knopf>
         </div>
         <slot />
     </div>
@@ -1217,31 +1216,31 @@ defineExpose({
     font-size: 10px;
     font-weight: 600;
     line-height: 18px;
-    border: 1px solid var(--white-18, rgba(255, 255, 255, 0.18));
+    border: 1px solid var(--line-stark);
     border-radius: 3px;
     background: rgba(10, 14, 22, 0.85);
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .autoKnopf.an {
-    color: var(--blue-color);
-    border-color: var(--blue-color);
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 .chartPanel {
     position: relative;
     min-width: 0;
     min-height: 0;
-    border: 1px solid rgba(1, 180, 255, 0.12);
-    border-radius: var(--border-radius, 12px);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
     overflow: hidden;
     background: #0a0e16;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .chartPanel.aktiv {
-    border-color: rgba(1, 180, 255, 0.55);
-    box-shadow: 0 0 0 1px rgba(1, 180, 255, 0.15), 0 0 18px rgba(1, 180, 255, 0.08);
+    border-color: var(--accent-rand);
+    box-shadow: 0 0 0 1px var(--accent-flaeche);
 }
 
 .flaeche {
@@ -1259,13 +1258,13 @@ defineExpose({
     gap: 2px 10px;
     align-items: center;
     font-size: 11px;
-    color: var(--grey-text);
+    color: var(--muted);
     pointer-events: none;
     max-width: calc(100% - 80px);
 }
 
 .legende b {
-    color: var(--white-87, #ddd);
+    color: var(--text);
     font-weight: 500;
 }
 
@@ -1281,54 +1280,63 @@ defineExpose({
     display: flex;
     flex-direction: column;
     min-width: 170px;
-    background: var(--black-bg-5, #1e222d);
-    border: 1px solid var(--white-18);
-    border-radius: 6px;
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
     padding: 4px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--schatten);
     font-size: 12px;
 }
 
 .kontextMenue .kopfzeile {
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 2px 8px 4px;
-    border-bottom: 1px solid var(--white-10);
+    border-bottom: 1px solid var(--line);
     margin-bottom: 2px;
 }
 
 .kontextMenue button {
     background: transparent;
     border: none;
-    color: var(--white-87, #ddd);
+    color: var(--text);
     text-align: left;
     padding: 5px 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
 }
 
 .kontextMenue hr {
     margin: 4px 0;
-    border-color: var(--white-18);
+    border: none;
+    border-top: 1px solid var(--line-stark);
+    opacity: 1;
 }
 
 .kontextMenue button.gefahr:hover {
-    color: var(--red-color);
+    color: var(--bad);
 }
 
 .kontextMenue button:hover {
-    background: var(--white-10);
+    background: var(--panel-soft);
 }
 
 .marktHinweis {
-    color: #ff9800;
+    color: var(--warn);
     font-size: 10px;
 }
 
 .quelleHinweis {
-    color: #ff9800;
+    color: var(--warn);
 }
 
 .journalHinweis {
-    color: var(--blue-color);
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
 }
 
 .indZeile {
@@ -1353,7 +1361,7 @@ defineExpose({
 }
 
 .indName {
-    color: var(--white-87, #ddd);
+    color: var(--text);
 }
 
 .indKnoepfe {
@@ -1371,39 +1379,41 @@ defineExpose({
 .indKnoepfe button {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 3px;
     font-size: 12px;
+    display: inline-flex;
+    cursor: pointer;
 }
 
 .indKnoepfe button:hover {
-    color: var(--white-87, #eee);
+    color: var(--text);
 }
 
 .legende .sym {
-    color: var(--white-87, #eee);
+    color: var(--text);
     font-weight: 600;
     font-size: 12px;
 }
 
 .legende .tf,
 .legende .markt {
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .punkt {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--grey-color);
+    background: var(--muted);
 }
 
 .punkt.open {
-    background: var(--green);
+    background: var(--good);
 }
 
 .punkt.closed {
-    background: var(--red-color);
+    background: var(--bad);
 }
 
 .hinweis {
@@ -1414,8 +1424,12 @@ defineExpose({
     justify-content: center;
     z-index: 4;
     pointer-events: none;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 12px;
+}
+
+.hinweis .erneut {
+    margin-left: var(--abstand-2);
 }
 
 .hinweis.fehler {

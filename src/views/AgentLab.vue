@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { spinnerLoadingPage } from '../stores/ui.js'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
+import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
 import { useXDecCurrencyFormat } from '../utils/formatters.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
@@ -292,9 +293,9 @@ async function laufEntscheiden(lauf, entscheidung) {
     }
 }
 
-/** Farbe des Stabilitäts-Urteils — Plateau gut, Nadel warnend. */
-const urteilKlasse = (u) => (u === 'plateau' ? 'bg-success'
-    : (u === 'nadel' || u === 'schmal' || u === 'uneinig') ? 'bg-warning text-dark' : 'bg-secondary')
+/** Ton des Stabilitäts-Urteils (Pille) — Plateau gut, Nadel warnend. */
+const urteilKlasse = (u) => (u === 'plateau' ? 'gut'
+    : (u === 'nadel' || u === 'schmal' || u === 'uneinig') ? 'warn' : 'neutral')
 
 /**
  * Mehrfach-Test starten.
@@ -399,129 +400,130 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
 
 <template>
     <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="row mt-3 ps-3 pe-3">
-        <div class="col-12 col-xl-11">
-            <h5 class="mb-3">{{ t('strategies.labTitle') }}</h5>
-            <div v-if="fehler" class="alert alert-danger py-2">{{ fehler }}</div>
+    <div v-show="!spinnerLoadingPage" class="seite">
+        <div class="seiteInnen">
+            <h5 class="seitenTitel">{{ t('strategies.labTitle') }}</h5>
+            <Hinweis v-if="fehler" art="fehler" class="abstandUnten3">{{ fehler }}</Hinweis>
 
             <!-- ══ Vorschläge ══ -->
-            <div v-if="vorschlaege.filter(v => v.status === 'pending').length" class="dailyCard p-3 mb-3">
-                <div class="section-title mb-2">
-                    <i class="uil uil-lightbulb-alt me-1"></i>{{ t('strategies.suggestions') }}
+            <div v-if="vorschlaege.filter(v => v.status === 'pending').length" class="dailyCard karte">
+                <div class="section-title abstandUnten">
+                    <Symbol name="idee" class="vorSymbol" />{{ t('strategies.suggestions') }}
                 </div>
-                <p class="text-muted small">{{ t('strategies.suggestionsHint') }}</p>
+                <p class="at-gedaempft fein">{{ t('strategies.suggestionsHint') }}</p>
                 <div v-for="v in vorschlaege.filter(v => v.status === 'pending')" :key="v.id"
-                    class="border rounded p-2 mb-2">
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <strong class="small">{{ v.title }}</strong>
-                        <span class="badge bg-dark">{{ instanzName(v.instanceId) }}</span>
-                        <span class="badge bg-secondary">{{ v.source }}</span>
+                    class="vorschlag">
+                    <div class="zeileMitSymbol abstandUnten1">
+                        <strong class="fein">{{ v.title }}</strong>
+                        <Pille ton="neutral">{{ instanzName(v.instanceId) }}</Pille>
+                        <Pille ton="neutral">{{ v.source }}</Pille>
                     </div>
-                    <p class="small text-muted mb-2">{{ v.rationale }}</p>
-                    <div class="mb-2">
-                        <span v-for="(wert, key) in v.proposedParams" :key="key" class="badge bg-dark me-1">
+                    <p class="fein at-gedaempft abstandUnten">{{ v.rationale }}</p>
+                    <div class="chips abstandUnten">
+                        <Pille v-for="(wert, key) in v.proposedParams" :key="key" ton="neutral">
                             {{ key }}: {{ wert }}
-                        </span>
+                        </Pille>
                     </div>
-                    <button class="btn btn-sm btn-success me-2" @click="entscheiden(v, 'accept')">
-                        {{ t('strategies.acceptSuggestion') }}
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary" @click="entscheiden(v, 'reject')">
-                        {{ t('strategies.rejectSuggestion') }}
-                    </button>
+                    <div class="knopfZeile">
+                        <Knopf art="haupt" klein @click="entscheiden(v, 'accept')">
+                            {{ t('strategies.acceptSuggestion') }}
+                        </Knopf>
+                        <Knopf klein @click="entscheiden(v, 'reject')">
+                            {{ t('strategies.rejectSuggestion') }}
+                        </Knopf>
+                    </div>
                 </div>
             </div>
 
             <!-- ══ Backtest ══ -->
-            <div class="dailyCard p-3 mb-3">
-                <div class="section-title mb-2">{{ t('strategies.backtest') }}</div>
-                <div class="row g-2 align-items-end mb-3">
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small mb-1">{{ t('strategies.strategy') }}</label>
-                        <select v-model="form.strategyId" class="form-select form-select-sm" @change="strategieGewechselt">
+            <div class="dailyCard karte">
+                <div class="section-title abstandUnten">{{ t('strategies.backtest') }}</div>
+                <div class="raster unten abstandUnten3">
+                    <div class="b3 m3">
+                        <label class="at-label">{{ t('strategies.strategy') }}</label>
+                        <select v-model="form.strategyId" class="at-feld klein" @change="strategieGewechselt">
                             <option v-for="s in registry.strategies" :key="s.id" :value="s.id">{{ s.name }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small mb-1">{{ t('strategies.fromInstanceLabel') }}</label>
-                        <div class="d-flex gap-1">
-                            <select v-model="form.instanceId" class="form-select form-select-sm">
+                    <div class="b3 m3">
+                        <label class="at-label">{{ t('strategies.fromInstanceLabel') }}</label>
+                        <div class="reihe">
+                            <select v-model="form.instanceId" class="at-feld klein">
                                 <option value="">–</option>
                                 <option v-for="i in instanzen" :key="i.id" :value="i.id">{{ i.name }}</option>
                             </select>
-                            <button class="btn btn-sm btn-outline-primary" :disabled="!form.instanceId"
-                                :title="t('strategies.copyFromInstance')"
-                                @click="vonInstanz"><i class="uil uil-import"></i></button>
+                            <Knopf klein nurSymbol symbol="herunterladen" :disabled="!form.instanceId"
+                                :titel="t('strategies.copyFromInstance')"
+                                @click="vonInstanz" />
                         </div>
                     </div>
-                    <div class="col-12 col-md-3">
-                        <label class="form-label small mb-1">&nbsp;</label>
-                        <button class="btn btn-sm btn-info w-100 d-block" :disabled="!form.instanceId"
-                            :title="t('strategies.optimizeTitle')"
+                    <div class="b3">
+                        <Knopf klein symbol="ki" class="voll" :disabled="!form.instanceId"
+                            :titel="t('strategies.optimizeTitle')"
                             @click="optimierenLassen">
-                            <i class="uil uil-robot me-1"></i>{{ t('strategies.aiOptimize') }}
-                        </button>
+                            {{ t('strategies.aiOptimize') }}
+                        </Knopf>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.symbol') }}</label>
-                        <input v-model="form.symbol" class="form-control form-control-sm" />
+                    <div class="b2 m3">
+                        <label class="at-label">{{ t('strategies.symbol') }}</label>
+                        <input v-model="form.symbol" class="at-feld klein" />
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.timeframe') }}</label>
-                        <select v-model="form.timeframe" class="form-select form-select-sm">
+                    <div class="b2 m3">
+                        <label class="at-label">{{ t('strategies.timeframe') }}</label>
+                        <select v-model="form.timeframe" class="at-feld klein">
                             <option v-for="tf in strategie?.supportedTimeframes || []" :key="tf" :value="tf">{{ tf }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-1">
-                        <label class="form-label small mb-1">{{ t('strategies.period') }}</label>
-                        <select v-model="form.zeitmodus" class="form-select form-select-sm">
+                    <div class="b1 m3">
+                        <label class="at-label">{{ t('strategies.period') }}</label>
+                        <select v-model="form.zeitmodus" class="at-feld klein">
                             <option value="tage">{{ t('strategies.days') }}</option>
                             <option value="datum">{{ t('strategies.dateRange') }}</option>
                         </select>
                     </div>
-                    <div v-if="form.zeitmodus === 'tage'" class="col-6 col-md-1">
-                        <label class="form-label small mb-1">{{ t('strategies.days') }}</label>
+                    <div v-if="form.zeitmodus === 'tage'" class="b1 m3">
+                        <label class="at-label">{{ t('strategies.days') }}</label>
                         <input v-model.number="form.tage" type="number" min="7" max="720"
-                            class="form-control form-control-sm" />
+                            class="at-feld klein" />
                     </div>
                     <template v-else>
-                        <div class="col-6 col-md-2">
-                            <label class="form-label small mb-1">{{ t('strategies.from') }}</label>
-                            <div class="d-flex gap-1">
-                                <input v-model="form.von" type="date" class="form-control form-control-sm" />
-                                <button class="btn btn-sm btn-outline-secondary flex-shrink-0"
-                                    :disabled="athLaedt" :title="t('strategies.sinceAthTitle')"
+                        <div class="b2">
+                            <label class="at-label">{{ t('strategies.from') }}</label>
+                            <div class="reihe">
+                                <input v-model="form.von" type="date" class="at-feld klein" />
+                                <Knopf klein class="festeBreite"
+                                    :disabled="athLaedt" :titel="t('strategies.sinceAthTitle')"
                                     @click="vonAufAth">
-                                    <span v-if="athLaedt" class="spinner-border spinner-border-sm"></span>
+                                    <Kreisel v-if="athLaedt" still />
                                     <span v-else>{{ t('strategies.sinceAth') }}</span>
-                                </button>
+                                </Knopf>
                             </div>
                         </div>
-                        <div class="col-6 col-md-2">
-                            <label class="form-label small mb-1">{{ t('strategies.to') }}</label>
-                            <input v-model="form.bis" type="date" class="form-control form-control-sm" />
+                        <div class="b2">
+                            <label class="at-label">{{ t('strategies.to') }}</label>
+                            <input v-model="form.bis" type="date" class="at-feld klein" />
                         </div>
                     </template>
-                    <div class="col-6 col-md-1">
-                        <button class="btn btn-sm btn-success w-100" :disabled="laueft" @click="starten">
-                            <span v-if="laueft" class="spinner-border spinner-border-sm"></span>
+                    <div class="b1">
+                        <Knopf art="haupt" klein class="voll" :disabled="laueft" @click="starten">
+                            <Kreisel v-if="laueft" still />
                             <span v-else>{{ t('strategies.run') }}</span>
-                        </button>
+                        </Knopf>
                     </div>
                 </div>
 
-                <p v-if="form.instanceId" class="small text-muted mb-2">
-                    <i class="uil uil-robot me-1"></i>{{ t('strategies.optimizeHint') }}
+                <p v-if="form.instanceId" class="fein at-gedaempft abstandUnten">
+                    <Symbol name="ki" class="vorSymbol" />{{ t('strategies.optimizeHint') }}
                 </p>
 
                 <details>
-                    <summary class="small text-muted pointerClass mb-2">{{ t('strategies.showParams') }}</summary>
-                    <div class="row">
-                        <div class="col-12 col-lg-7">
+                    <summary class="fein at-gedaempft pointerClass abstandUnten">{{ t('strategies.showParams') }}</summary>
+                    <div class="paramSpalten">
+                        <div>
                             <StrategyParamForm v-model="form.params" :schema="strategie?.params || []"
                                 :groups="strategie?.paramGroups || []" :i18nPrefix="'strategies.' + form.strategyId" />
                         </div>
-                        <div class="col-12 col-lg-5">
+                        <div>
                             <StrategyParamForm v-model="form.risk" :schema="registry.riskParams"
                                 i18nPrefix="strategies.risk" />
                         </div>
@@ -532,49 +534,49 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             <!-- ══ Robustheit ══
                  Drei Stufen zwischen „guter Backtest" und „belastbar". Sie
                  benutzen bewusst dasselbe Formular wie der Backtest darüber. -->
-            <div class="dailyCard p-3 mb-3">
-                <div class="section-title mb-1">
-                    <i class="uil uil-shield-check me-1"></i>{{ t('strategies.robustTitle') }}
+            <div class="dailyCard karte">
+                <div class="section-title abstandUnten1">
+                    <Symbol name="schildHaken" class="vorSymbol" />{{ t('strategies.robustTitle') }}
                 </div>
-                <p class="small text-muted">{{ t('strategies.robustHint') }}</p>
+                <p class="fein at-gedaempft">{{ t('strategies.robustHint') }}</p>
 
-                <div class="row g-2 align-items-end mb-2">
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small mb-1">{{ t('strategies.robustParam') }}</label>
-                        <select v-model="robust.paramKey" class="form-select form-select-sm">
+                <div class="raster unten abstandUnten">
+                    <div class="b3">
+                        <label class="at-label">{{ t('strategies.robustParam') }}</label>
+                        <select v-model="robust.paramKey" class="at-feld klein">
                             <option value="">—</option>
                             <option v-for="p in zahlParameter" :key="p.key" :value="p.key">
                                 {{ parameterName(p) }}
                             </option>
                         </select>
                     </div>
-                    <div class="col-4 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.robustFrom') }}</label>
-                        <input v-model.number="robust.von" type="number" class="form-control form-control-sm" />
+                    <div class="b2 m2">
+                        <label class="at-label">{{ t('strategies.robustFrom') }}</label>
+                        <input v-model.number="robust.von" type="number" class="at-feld klein" />
                     </div>
-                    <div class="col-4 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.robustTo') }}</label>
-                        <input v-model.number="robust.bis" type="number" class="form-control form-control-sm" />
+                    <div class="b2 m2">
+                        <label class="at-label">{{ t('strategies.robustTo') }}</label>
+                        <input v-model.number="robust.bis" type="number" class="at-feld klein" />
                     </div>
-                    <div class="col-4 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.robustStep') }}</label>
-                        <input v-model.number="robust.schritt" type="number" step="0.1" class="form-control form-control-sm" />
+                    <div class="b2 m2">
+                        <label class="at-label">{{ t('strategies.robustStep') }}</label>
+                        <input v-model.number="robust.schritt" type="number" step="0.1" class="at-feld klein" />
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.robustRuns') }}</label>
+                    <div class="b2 m3">
+                        <label class="at-label">{{ t('strategies.robustRuns') }}</label>
                         <input v-model.number="robust.laeufe" type="number" min="100" max="5000" step="100"
-                            class="form-control form-control-sm" />
+                            class="at-feld klein" />
                     </div>
-                    <div class="col-6 col-md-1">
-                        <label class="form-label small mb-1">{{ t('strategies.robustWindows') }}</label>
+                    <div class="b1 m3">
+                        <label class="at-label">{{ t('strategies.robustWindows') }}</label>
                         <input v-model.number="robust.fenster" type="number" min="2" max="12"
-                            class="form-control form-control-sm" />
+                            class="at-feld klein" />
                     </div>
-                    <div class="col-12">
-                        <label class="form-label small mb-1">{{ t('strategies.robustSymbols') }}</label>
-                        <input v-model="robust.symbole" class="form-control form-control-sm" placeholder="BTCUSDT, ETHUSDT" />
+                    <div class="b12">
+                        <label class="at-label">{{ t('strategies.robustSymbols') }}</label>
+                        <input v-model="robust.symbole" class="at-feld klein" placeholder="BTCUSDT, ETHUSDT" />
                     </div>
-                    <div class="col-12">
+                    <div class="b12">
                         <div class="stufenLeiste">
                             <span class="stufenTitel">{{ t('strategies.robustSteps', { n: stufen.length }) }}</span>
                             <span v-for="w in stufen" :key="w" class="stufenWert">{{ w }}</span>
@@ -582,39 +584,39 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                     </div>
                 </div>
 
-                <div class="d-flex flex-wrap gap-2 mb-3 robustKnoepfe">
-                    <button class="btn btn-sm btn-outline-primary" :disabled="!!robust.laeuft || !robust.paramKey"
+                <div class="knopfZeile abstandUnten3">
+                    <Knopf klein :disabled="!!robust.laeuft || !robust.paramKey"
                         @click="robustStarten('stabilitaet')">
-                        <span v-if="robust.laeuft === 'stabilitaet'" class="spinner-border spinner-border-sm me-1"></span>
+                        <Kreisel v-if="robust.laeuft === 'stabilitaet'" still />
                         {{ t('strategies.robustStability') }}
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" :disabled="!!robust.laeuft"
+                    </Knopf>
+                    <Knopf klein :disabled="!!robust.laeuft"
                         @click="robustStarten('montecarlo')">
-                        <span v-if="robust.laeuft === 'montecarlo'" class="spinner-border spinner-border-sm me-1"></span>
+                        <Kreisel v-if="robust.laeuft === 'montecarlo'" still />
                         {{ t('strategies.robustMonteCarlo') }}
-                    </button>
-                    <button class="btn btn-sm btn-primary" :disabled="!!robust.laeuft || !robust.paramKey"
+                    </Knopf>
+                    <Knopf art="haupt" klein :disabled="!!robust.laeuft || !robust.paramKey"
                         @click="robustStarten('matrix')">
-                        <span v-if="robust.laeuft === 'matrix'" class="spinner-border spinner-border-sm me-1"></span>
+                        <Kreisel v-if="robust.laeuft === 'matrix'" still />
                         {{ t('strategies.robustMatrix') }}
-                    </button>
-                    <button class="btn btn-sm btn-outline-primary" :disabled="!!robust.laeuft || !robust.paramKey"
+                    </Knopf>
+                    <Knopf klein :disabled="!!robust.laeuft || !robust.paramKey"
                         @click="robustStarten('walkforward')">
-                        <span v-if="robust.laeuft === 'walkforward'" class="spinner-border spinner-border-sm me-1"></span>
+                        <Kreisel v-if="robust.laeuft === 'walkforward'" still />
                         {{ t('strategies.robustWalkForward') }}
-                    </button>
+                    </Knopf>
                 </div>
 
-                <div v-if="robust.fehler" class="alert alert-danger py-2 small">{{ robust.fehler }}</div>
+                <Hinweis v-if="robust.fehler" art="fehler" class="abstandUnten">{{ robust.fehler }}</Hinweis>
 
                 <!-- Stabilität über mehrere Symbole und beide Fenster -->
-                <div v-if="robust.matrixStab?.proWert" class="mb-3">
-                    <div class="d-flex align-items-center gap-2 mb-1 flex-wrap">
-                        <strong class="small">{{ t('strategies.robustMatrix') }}</strong>
-                        <span class="badge" :class="urteilKlasse(robust.matrixStab.urteil)">
+                <div v-if="robust.matrixStab?.proWert" class="abstandUnten3">
+                    <div class="zeileMitSymbol abstandUnten1">
+                        <strong class="fein">{{ t('strategies.robustMatrix') }}</strong>
+                        <Pille :ton="urteilKlasse(robust.matrixStab.urteil)">
                             {{ t('strategies.mverdict_' + robust.matrixStab.urteil) }}
-                        </span>
-                        <span class="small text-muted">
+                        </Pille>
+                        <span class="fein at-gedaempft">
                             {{ t('strategies.robustCells', {
                                 n: robust.matrixStab.zellen.length,
                                 s: robust.matrixStab.symbole.join(', '),
@@ -622,67 +624,67 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                         </span>
                         <!-- Datenlücken gehören neben das Urteil, nicht in eine
                              Fussnote: sie erklären, warum eine Zelle schweigt. -->
-                        <span v-if="robust.matrixStab.unvollstaendig" class="badge bg-warning text-dark">
+                        <Pille v-if="robust.matrixStab.unvollstaendig" ton="warn">
                             {{ t('strategies.robustGaps', { n: robust.matrixStab.unvollstaendig }) }}
-                        </span>
+                        </Pille>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-borderless mb-0">
-                            <thead><tr class="small text-muted">
+                    <div class="at-tabelle-huelle">
+                        <table class="at-tabelle dicht">
+                            <thead><tr>
                                 <th>{{ t('strategies.robustValue') }}</th>
-                                <th class="text-end">{{ t('strategies.mcolHolds') }}</th>
-                                <th class="text-end">{{ t('strategies.mcolMedian') }}</th>
-                                <th class="text-end">{{ t('strategies.mcolWorst') }}</th>
-                                <th class="text-end">{{ t('strategies.mcolBest') }}</th>
+                                <th class="zahl">{{ t('strategies.mcolHolds') }}</th>
+                                <th class="zahl">{{ t('strategies.mcolMedian') }}</th>
+                                <th class="zahl">{{ t('strategies.mcolWorst') }}</th>
+                                <th class="zahl">{{ t('strategies.mcolBest') }}</th>
                                 <th></th>
                             </tr></thead>
                             <tbody>
                                 <tr v-for="p in robust.matrixStab.proWert" :key="p.wert">
-                                    <td class="small"><strong>{{ p.wert }}</strong></td>
-                                    <td class="text-end small">{{ p.positiv }}/{{ p.zellen }}</td>
-                                    <td class="text-end small" :class="p.median >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.median) }}</td>
-                                    <td class="text-end small redTrade">{{ zahl(p.schlechteste) }}</td>
-                                    <td class="text-end small greenTrade">{{ zahl(p.beste) }}</td>
-                                    <td class="text-end">
-                                        <span v-if="p.traegt" class="badge bg-success">{{ t('strategies.mHolds') }}</span>
+                                    <td><strong>{{ p.wert }}</strong></td>
+                                    <td class="zahl">{{ p.positiv }}/{{ p.zellen }}</td>
+                                    <td class="zahl" :class="p.median >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.median) }}</td>
+                                    <td class="zahl redTrade">{{ zahl(p.schlechteste) }}</td>
+                                    <td class="zahl greenTrade">{{ zahl(p.beste) }}</td>
+                                    <td class="zahl">
+                                        <Pille v-if="p.traegt" ton="gut">{{ t('strategies.mHolds') }}</Pille>
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <p class="small text-muted mt-1 mb-0">{{ t('strategies.robustMatrixHint') }}</p>
+                    <p class="fussnote">{{ t('strategies.robustMatrixHint') }}</p>
                 </div>
 
                 <!-- Stabilität -->
-                <div v-if="robust.stabilitaet && robust.stabilitaet.punkte" class="mb-3">
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <strong class="small">{{ t('strategies.robustStability') }}</strong>
-                        <span class="badge" :class="urteilKlasse(robust.stabilitaet.urteil)">
+                <div v-if="robust.stabilitaet && robust.stabilitaet.punkte" class="abstandUnten3">
+                    <div class="zeileMitSymbol abstandUnten1">
+                        <strong class="fein">{{ t('strategies.robustStability') }}</strong>
+                        <Pille :ton="urteilKlasse(robust.stabilitaet.urteil)">
                             {{ t('strategies.verdict_' + robust.stabilitaet.urteil) }}
-                        </span>
-                        <span v-if="robust.stabilitaet.plateau?.length" class="small text-muted">
+                        </Pille>
+                        <span v-if="robust.stabilitaet.plateau?.length" class="fein at-gedaempft">
                             {{ t('strategies.robustPlateau', { werte: robust.stabilitaet.plateau.join(', ') }) }}
                         </span>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-borderless mb-0">
-                            <thead><tr class="small text-muted">
+                    <div class="at-tabelle-huelle">
+                        <table class="at-tabelle dicht">
+                            <thead><tr>
                                 <th>{{ t('strategies.robustValue') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiTrades') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiExpectancy') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiExpectancyOhneTop') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiReturn') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiMaxDd') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiTrades') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiExpectancy') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiExpectancyOhneTop') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiReturn') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiMaxDd') }}</th>
                             </tr></thead>
                             <tbody>
                                 <tr v-for="p in robust.stabilitaet.punkte" :key="p.wert"
                                     :class="{ besterWert: p.wert === robust.stabilitaet.besterWert }">
-                                    <td class="small"><strong>{{ p.wert }}</strong></td>
-                                    <td class="text-end small" :class="{ 'text-muted': !p.belastbar }">{{ p.trades }}</td>
-                                    <td class="text-end small" :class="p.expectancyR >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.expectancyR) }}</td>
-                                    <td class="text-end small" :class="p.expectancyROhneTop >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.expectancyROhneTop) }}</td>
-                                    <td class="text-end small">{{ zahl(p.returnPct, 1) }} %</td>
-                                    <td class="text-end small">{{ zahl(p.maxDrawdownPct, 1) }} %</td>
+                                    <td><strong>{{ p.wert }}</strong></td>
+                                    <td class="zahl" :class="{ 'at-gedaempft': !p.belastbar }">{{ p.trades }}</td>
+                                    <td class="zahl" :class="p.expectancyR >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.expectancyR) }}</td>
+                                    <td class="zahl" :class="p.expectancyROhneTop >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.expectancyROhneTop) }}</td>
+                                    <td class="zahl">{{ zahl(p.returnPct, 1) }} %</td>
+                                    <td class="zahl">{{ zahl(p.maxDrawdownPct, 1) }} %</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -690,31 +692,34 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                 </div>
 
                 <!-- Monte Carlo -->
-                <div v-if="robust.montecarlo?.monteCarlo" class="mb-3">
-                    <strong class="small d-block mb-1">{{ t('strategies.robustMonteCarlo') }}</strong>
-                    <div v-if="robust.montecarlo.monteCarlo.hinweis" class="small text-muted">
+                <div v-if="robust.montecarlo?.monteCarlo" class="abstandUnten3">
+                    <strong class="fein zeileFuer abstandUnten1">{{ t('strategies.robustMonteCarlo') }}</strong>
+                    <div v-if="robust.montecarlo.monteCarlo.hinweis" class="fein at-gedaempft">
                         {{ robust.montecarlo.monteCarlo.hinweis }}
                     </div>
                     <template v-else>
                         <!-- Die wichtigste Zahl zuerst: wie oft ging es schief? -->
-                        <div class="alert py-2 px-3 small mb-2"
-                            :class="robust.montecarlo.monteCarlo.ziehen.anteilVerlust > 0.4 ? 'alert-warning' : 'alert-secondary'">
+                        <Hinweis v-if="robust.montecarlo.monteCarlo.ziehen.anteilVerlust > 0.4" art="warn" class="abstandUnten">
+                            {{ t('strategies.robustLossShare', {
+                                p: (robust.montecarlo.monteCarlo.ziehen.anteilVerlust * 100).toFixed(0),
+                                n: robust.montecarlo.monteCarlo.laeufe,
+                            }) }}
+                        </Hinweis>
+                        <div v-else class="kasten abstandUnten">
                             {{ t('strategies.robustLossShare', {
                                 p: (robust.montecarlo.monteCarlo.ziehen.anteilVerlust * 100).toFixed(0),
                                 n: robust.montecarlo.monteCarlo.laeufe,
                             }) }}
                         </div>
-                        <div class="row g-2">
-                            <div class="col-6 col-md-3" v-for="k in [
+                        <div class="kpis vier">
+                            <div v-for="k in [
                                 { l: t('strategies.mcEndP5'), v: geld(robust.montecarlo.monteCarlo.ziehen.endEquity.p5) },
                                 { l: t('strategies.mcEndP50'), v: geld(robust.montecarlo.monteCarlo.ziehen.endEquity.p50) },
                                 { l: t('strategies.mcEndP95'), v: geld(robust.montecarlo.monteCarlo.ziehen.endEquity.p95) },
                                 { l: t('strategies.mcDdP95'), v: zahl(robust.montecarlo.monteCarlo.reihenfolge.maxDrawdownPct.p95, 1) + ' %' },
-                            ]" :key="k.l">
-                                <div class="text-center p-2">
-                                    <div class="kpi-label">{{ k.l }}</div>
-                                    <div class="kpi-value">{{ k.v }}</div>
-                                </div>
+                            ]" :key="k.l" class="kpi">
+                                <div class="kpi-label">{{ k.l }}</div>
+                                <div class="kpi-value">{{ k.v }}</div>
                             </div>
                         </div>
                     </template>
@@ -722,33 +727,33 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
 
                 <!-- Walk-forward -->
                 <div v-if="robust.walkforward?.abschnitte">
-                    <div class="d-flex align-items-center gap-2 mb-1">
-                        <strong class="small">{{ t('strategies.robustWalkForward') }}</strong>
-                        <span class="badge" :class="robust.walkforward.auswahlStabil ? 'bg-success' : 'bg-warning text-dark'">
+                    <div class="zeileMitSymbol abstandUnten1">
+                        <strong class="fein">{{ t('strategies.robustWalkForward') }}</strong>
+                        <Pille :ton="robust.walkforward.auswahlStabil ? 'gut' : 'warn'">
                             {{ robust.walkforward.auswahlStabil ? t('strategies.wfStable') : t('strategies.wfUnstable') }}
-                        </span>
+                        </Pille>
                     </div>
-                    <div class="table-responsive mb-2">
-                        <table class="table table-sm table-borderless mb-0">
-                            <thead><tr class="small text-muted">
+                    <div class="at-tabelle-huelle abstandUnten">
+                        <table class="at-tabelle dicht">
+                            <thead><tr>
                                 <th>{{ t('strategies.wfSegment') }}</th>
                                 <th>{{ t('strategies.wfChosen') }}</th>
-                                <th class="text-end">{{ t('strategies.wfOos') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiTrades') }}</th>
+                                <th class="zahl">{{ t('strategies.wfOos') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiTrades') }}</th>
                             </tr></thead>
                             <tbody>
                                 <tr v-for="(a, i) in robust.walkforward.abschnitte" :key="i">
-                                    <td class="small text-muted">{{ datum(a.pruefVon) }} – {{ datum(a.pruefBis) }}</td>
-                                    <td class="small"><strong>{{ a.gewaehlt }}</strong></td>
-                                    <td class="text-end small" :class="a.pruefExpectancyR >= 0 ? 'greenTrade' : 'redTrade'">
+                                    <td class="at-gedaempft">{{ datum(a.pruefVon) }} – {{ datum(a.pruefBis) }}</td>
+                                    <td><strong>{{ a.gewaehlt }}</strong></td>
+                                    <td class="zahl" :class="a.pruefExpectancyR >= 0 ? 'greenTrade' : 'redTrade'">
                                         {{ zahl(a.pruefExpectancyR) }} R
                                     </td>
-                                    <td class="text-end small">{{ a.pruefTrades }}</td>
+                                    <td class="zahl">{{ a.pruefTrades }}</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
-                    <div class="alert alert-secondary py-2 px-3 small mb-0">
+                    <div class="kasten">
                         {{ t('strategies.wfTotal', {
                             trades: robust.walkforward.gesamt.trades,
                             expR: zahl(robust.walkforward.gesamt.expectancyR),
@@ -760,65 +765,61 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             </div>
 
             <!-- ══ Mehrfach-Test ══ -->
-            <div class="dailyCard p-3 mb-3">
-                <div class="section-title mb-1">
-                    <i class="uil uil-apps me-1"></i>{{ t('strategies.matrixTitle') }}
+            <div class="dailyCard karte">
+                <div class="section-title abstandUnten1">
+                    <Symbol name="raster" class="vorSymbol" />{{ t('strategies.matrixTitle') }}
                 </div>
-                <p class="text-muted small mb-2">{{ t('strategies.matrixHint') }}</p>
-                <div class="row g-2 align-items-end mb-2">
-                    <div class="col-12 col-md-3">
-                        <label class="form-label small mb-1">{{ t('strategies.matrixSymbols') }}</label>
-                        <input v-model="matrix.symbole" type="text" class="form-control form-control-sm"
+                <p class="at-gedaempft fein abstandUnten">{{ t('strategies.matrixHint') }}</p>
+                <div class="raster unten abstandUnten">
+                    <div class="b3">
+                        <label class="at-label">{{ t('strategies.matrixSymbols') }}</label>
+                        <input v-model="matrix.symbole" type="text" class="at-feld klein"
                                placeholder="BTCUSDT, ETHUSDT" />
                     </div>
-                    <div class="col-6 col-md-1">
-                        <label class="form-label small mb-1">{{ t('strategies.period') }}</label>
-                        <select v-model="matrix.zeitmodus" class="form-select form-select-sm">
+                    <div class="b1 m3">
+                        <label class="at-label">{{ t('strategies.period') }}</label>
+                        <select v-model="matrix.zeitmodus" class="at-feld klein">
                             <option value="tage">{{ t('strategies.days') }}</option>
                             <option value="datum">{{ t('strategies.dateRange') }}</option>
                         </select>
                     </div>
-                    <div v-if="matrix.zeitmodus === 'tage'" class="col-6 col-md-1">
-                        <label class="form-label small mb-1">{{ t('strategies.days') }}</label>
+                    <div v-if="matrix.zeitmodus === 'tage'" class="b1 m3">
+                        <label class="at-label">{{ t('strategies.days') }}</label>
                         <input v-model.number="matrix.tage" type="number" min="14" max="720"
-                            class="form-control form-control-sm" />
+                            class="at-feld klein" />
                     </div>
                     <template v-else>
-                        <div class="col-6 col-md-2">
-                            <label class="form-label small mb-1">{{ t('strategies.from') }}</label>
-                            <input v-model="matrix.von" type="date" class="form-control form-control-sm" />
+                        <div class="b2 m3">
+                            <label class="at-label">{{ t('strategies.from') }}</label>
+                            <input v-model="matrix.von" type="date" class="at-feld klein" />
                         </div>
-                        <div class="col-6 col-md-2">
-                            <label class="form-label small mb-1">{{ t('strategies.to') }}</label>
-                            <input v-model="matrix.bis" type="date" class="form-control form-control-sm" />
+                        <div class="b2 m3">
+                            <label class="at-label">{{ t('strategies.to') }}</label>
+                            <input v-model="matrix.bis" type="date" class="at-feld klein" />
                         </div>
                     </template>
-                    <div class="col-6 col-md-3">
-                        <div class="form-check">
-                            <input id="matrixVergleich" v-model="matrix.gegenGespeicherte"
-                                   class="form-check-input" type="checkbox" />
-                            <label class="form-check-label small" for="matrixVergleich">
-                                {{ t('strategies.matrixCompare') }}
-                            </label>
-                        </div>
+                    <div class="b3">
+                        <label class="at-check fein" for="matrixVergleich">
+                            <input id="matrixVergleich" v-model="matrix.gegenGespeicherte" type="checkbox" />
+                            {{ t('strategies.matrixCompare') }}
+                        </label>
                     </div>
-                    <div class="col-12 col-md-2">
-                        <button class="btn btn-sm greenBtn w-100" :disabled="matrix.laeuft || !form.strategyId"
+                    <div class="b2">
+                        <Knopf art="haupt" klein class="voll" :disabled="matrix.laeuft || !form.strategyId"
                                 @click="matrixStarten">
                             {{ matrix.laeuft ? t('strategies.running') : t('strategies.matrixStart') }}
-                        </button>
+                        </Knopf>
                     </div>
                 </div>
 
-                <div v-if="matrix.fehler" class="text-danger small mb-2">{{ matrix.fehler }}</div>
+                <div v-if="matrix.fehler" class="at-schlecht fein abstandUnten">{{ matrix.fehler }}</div>
 
                 <template v-if="matrix.ergebnis">
-                    <div v-if="matrix.ergebnis.urteil?.identisch" class="alert alert-secondary py-2 px-3 small mb-2">
+                    <div v-if="matrix.ergebnis.urteil?.identisch" class="kasten abstandUnten">
                         {{ t('strategies.matrixIdentical') }}
                     </div>
-                    <div v-else-if="matrix.ergebnis.urteil"
-                         class="alert py-2 px-3 small mb-2"
-                         :class="matrix.ergebnis.urteil.bestanden ? 'alert-success' : 'alert-warning'">
+                    <Hinweis v-else-if="matrix.ergebnis.urteil" class="abstandUnten"
+                         :art="matrix.ergebnis.urteil.bestanden ? 'gut' : 'warn'">
                         <strong>{{ matrix.ergebnis.urteil.bestanden
                             ? t('strategies.matrixPassed') : t('strategies.matrixFailedVerdict') }}</strong>
                         —
@@ -826,20 +827,20 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                             besser: matrix.ergebnis.urteil.besser,
                             felder: matrix.ergebnis.urteil.felder,
                         }) }}
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-borderless mb-0 small">
+                    </Hinweis>
+                    <div class="at-tabelle-huelle">
+                        <table class="at-tabelle dicht">
                             <thead>
-                                <tr class="text-muted">
+                                <tr>
                                     <th>{{ t('strategies.symbol') }}</th>
                                     <th>{{ t('strategies.matrixWindow') }}</th>
-                                    <th class="text-end">{{ t('strategies.kpiTrades') }}</th>
-                                    <th class="text-end" v-if="matrix.ergebnis.urteil">{{ t('strategies.matrixBase') }}</th>
-                                    <th class="text-end">{{ t('strategies.matrixCandidate') }}</th>
-                                    <th class="text-end" v-if="matrix.ergebnis.urteil">Δ</th>
-                                    <th class="text-end">{{ t('strategies.matrixWithoutBest') }}</th>
-                                    <th class="text-end">{{ t('strategies.kpiMaxDd') }}</th>
-                                    <th class="text-end" :title="t('strategies.baselineHint')">{{ t('strategies.kpiBuyHold') }}</th>
+                                    <th class="zahl">{{ t('strategies.kpiTrades') }}</th>
+                                    <th class="zahl" v-if="matrix.ergebnis.urteil">{{ t('strategies.matrixBase') }}</th>
+                                    <th class="zahl">{{ t('strategies.matrixCandidate') }}</th>
+                                    <th class="zahl" v-if="matrix.ergebnis.urteil">Δ</th>
+                                    <th class="zahl">{{ t('strategies.matrixWithoutBest') }}</th>
+                                    <th class="zahl">{{ t('strategies.kpiMaxDd') }}</th>
+                                    <th class="zahl" :title="t('strategies.baselineHint')">{{ t('strategies.kpiBuyHold') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -847,20 +848,20 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                     <td>{{ z.symbol }}</td>
                                     <td>{{ z.fenster === 'optimierung'
                                         ? t('strategies.matrixWindowOpt') : t('strategies.matrixWindowCheck') }}</td>
-                                    <td class="text-end" :class="{ 'text-warning': z.kandidat.trades < 30 }">
+                                    <td class="zahl" :class="{ 'at-warn': z.kandidat.trades < 30 }">
                                         {{ z.kandidat.trades }}
                                     </td>
-                                    <td class="text-end" v-if="matrix.ergebnis.urteil">
+                                    <td class="zahl" v-if="matrix.ergebnis.urteil">
                                         {{ matrixZahl(z.basis?.expectancyR) }}
                                     </td>
-                                    <td class="text-end">{{ matrixZahl(z.kandidat.expectancyR) }}</td>
-                                    <td class="text-end" v-if="matrix.ergebnis.urteil"
+                                    <td class="zahl">{{ matrixZahl(z.kandidat.expectancyR) }}</td>
+                                    <td class="zahl" v-if="matrix.ergebnis.urteil"
                                         :class="z.deltaR >= 0 ? 'greenTrade' : 'redTrade'">
                                         {{ z.deltaR >= 0 ? '+' : '' }}{{ matrixZahl(z.deltaR) }}
                                     </td>
-                                    <td class="text-end">{{ matrixZahl(z.kandidat.ohneBestenR) }}</td>
-                                    <td class="text-end">{{ matrixZahl(z.kandidat.maxDrawdownPct, 2) }} %</td>
-                                    <td class="text-end text-muted">
+                                    <td class="zahl">{{ matrixZahl(z.kandidat.ohneBestenR) }}</td>
+                                    <td class="zahl">{{ matrixZahl(z.kandidat.maxDrawdownPct, 2) }} %</td>
+                                    <td class="zahl at-gedaempft">
                                         {{ z.kandidat.baselineBuyHoldReturnPct === null ? '–'
                                             : matrixZahl(z.kandidat.baselineBuyHoldReturnPct, 1) + ' %' }}
                                     </td>
@@ -868,30 +869,28 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                             </tbody>
                         </table>
                     </div>
-                    <p class="text-muted small mt-2 mb-0">{{ t('strategies.matrixFootnote') }}</p>
+                    <p class="fussnote">{{ t('strategies.matrixFootnote') }}</p>
                 </template>
             </div>
 
             <!-- ══ Ergebnis ══ -->
-            <div v-if="ergebnis" class="dailyCard p-3 mb-3">
-                <div class="section-title mb-2">{{ t('strategies.result') }}</div>
-                <div v-if="!ergebnis.stats.trades" class="text-muted small">
+            <div v-if="ergebnis" class="dailyCard karte">
+                <div class="section-title abstandUnten">{{ t('strategies.result') }}</div>
+                <div v-if="!ergebnis.stats.trades" class="at-gedaempft fein">
                     {{ ergebnis.stats.hinweis || t('strategies.noTradesInPeriod') }}
                 </div>
                 <template v-else>
                     <!-- Zwei Warnungen, die vor jeder Zahl kommen müssen: zu
                          wenige Trades machen jede Kennzahl zum Zufall, und ein
                          unvollständiger Zeitraum misst still etwas anderes. -->
-                    <div v-if="!ergebnis.stats.belastbar" class="alert alert-warning py-2 px-3 small mb-2">
-                        <i class="uil uil-exclamation-triangle me-1"></i>
+                    <Hinweis v-if="!ergebnis.stats.belastbar" art="warn" class="abstandUnten">
                         {{ t('strategies.nichtBelastbar', {
                             trades: ergebnis.stats.trades,
                             mindest: ergebnis.stats.mindestTrades,
                         }) }}
-                    </div>
-                    <div v-if="ergebnis.stats.abdeckung && !ergebnis.stats.abdeckung.vollstaendig"
-                        class="alert alert-danger py-2 px-3 small mb-2">
-                        <i class="uil uil-database me-1"></i>
+                    </Hinweis>
+                    <Hinweis v-if="ergebnis.stats.abdeckung && !ergebnis.stats.abdeckung.vollstaendig"
+                        art="fehler" class="abstandUnten">
                         {{ t('strategies.abdeckungLuecke', {
                             prozent: zahl(ergebnis.stats.abdeckung.prozent, 0),
                             vorhanden: ergebnis.stats.abdeckung.vorhanden,
@@ -901,43 +900,41 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                             — {{ t('strategies.abdeckungFehlt', { rand: ergebnis.stats.abdeckung.fehlend.join(' + ') }) }}
                             ({{ datum(ergebnis.stats.abdeckung.von) }} – {{ datum(ergebnis.stats.abdeckung.bis) }})
                         </template>
-                    </div>
+                    </Hinweis>
 
                     <!-- Ein Lauf, der wie ein gefilterter aussieht, aber keiner
                          war, ist die gefährlichste Sorte Ergebnis: man vergleicht
                          ihn mit gefilterten Läufen und zieht den falschen Schluss. -->
-                    <div v-if="ergebnis.stats.htfFilter?.verlangt && !ergebnis.stats.htfFilter.aktiv"
-                        class="alert alert-danger py-2 px-3 small mb-2">
-                        <i class="uil uil-filter-slash me-1"></i>
+                    <Hinweis v-if="ergebnis.stats.htfFilter?.verlangt && !ergebnis.stats.htfFilter.aktiv"
+                        art="fehler" class="abstandUnten">
                         {{ t('strategies.htfFilterInaktiv', {
                             tf: ergebnis.stats.htfFilter.timeframe,
                             kerzen: ergebnis.stats.htfFilter.kerzen,
                         }) }}
-                    </div>
+                    </Hinweis>
 
                     <!-- Der Hebel im Formular ist nicht zwingend der, mit dem
                          gerechnet wurde: der Betrieb kappt global, und das Labor
                          tut es seit dem Audit auch. Wer das nicht sieht,
                          vergleicht ein Laborergebnis mit einem Papierlauf, der
                          andere Positionsgrössen hatte. -->
-                    <div v-if="ergebnis.stats.leverageGekappt" class="alert alert-warning py-2 px-3 small mb-2">
-                        <i class="uil uil-compress-arrows me-1"></i>
+                    <Hinweis v-if="ergebnis.stats.leverageGekappt" art="warn" class="abstandUnten">
                         {{ t('strategies.hebelGekappt', { hebel: ergebnis.stats.leverageEffektiv }) }}
-                    </div>
+                    </Hinweis>
 
                     <!-- Ein Lauf ohne Finanzierungskosten ist nicht dasselbe wie
                          einer, in dem sie nichts gekostet haben. Deshalb steht die
                          Annahme dabei — in beide Richtungen. -->
-                    <div v-if="ergebnis.stats.trades" class="small text-muted mb-2">
+                    <div v-if="ergebnis.stats.trades" class="fein at-gedaempft abstandUnten">
                         <template v-if="ergebnis.stats.fundingModelliert">
-                            <i class="uil uil-percentage me-1"></i>
+                            <Symbol name="prozent" class="vorSymbol" />
                             {{ t('strategies.fundingKosten', {
                                 bps: ergebnis.stats.fundingBpsPer8h,
                                 betrag: geld(ergebnis.stats.funding),
                             }) }}
                         </template>
                         <template v-else>
-                            <i class="uil uil-info-circle me-1"></i>
+                            <Symbol name="info" class="vorSymbol" />
                             {{ t('strategies.fundingNichtModelliert') }}
                         </template>
                     </div>
@@ -946,8 +943,8 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                          Kennzahl mit — weder in Trefferquote und Erwartung noch
                          in Rendite und Rückgang. Was sie wert wären, steht
                          deshalb hier daneben statt still in der Rendite. -->
-                    <div v-if="ergebnis.stats.nochOffen" class="alert alert-secondary py-2 px-3 small mb-2">
-                        <i class="uil uil-clock me-1"></i>
+                    <div v-if="ergebnis.stats.nochOffen" class="kasten abstandUnten">
+                        <Symbol name="uhr" class="vorSymbol" />
                         {{ t('strategies.offenAmEnde', {
                             anzahl: ergebnis.stats.nochOffen,
                             wert: zahl(ergebnis.stats.unrealisiertPnl, 2),
@@ -958,8 +955,8 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                          Zeitraum oder eine Kurve ganz ohne Schwankung). Dann steht
                          hier ein Strich — eine 0 wäre an dieser Stelle keine
                          fehlende Zahl, sondern eine falsche Behauptung. -->
-                    <div class="row g-2 mb-3">
-                        <div class="col-4 col-md-2" v-for="k in [
+                    <div class="kpis abstandUnten3">
+                        <div v-for="k in [
                             { l: t('strategies.kpiTrades'), v: ergebnis.stats.trades },
                             { l: t('strategies.kpiWinRate'), v: zahl(ergebnis.stats.winRate, 1) + ' %' },
                             { l: t('strategies.kpiExpectancy'), v: zahl(ergebnis.stats.expectancyR) + ' R',
@@ -978,13 +975,11 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                   ? '—' : zahl(ergebnis.stats.sharpe, 2),
                               farbe: ergebnis.stats.sharpe === null || ergebnis.stats.sharpe === undefined
                                   ? undefined : ergebnis.stats.sharpe >= 1 },
-                        ]" :key="k.l">
-                            <div class="text-center p-2">
-                                <div class="kpi-label">{{ k.l }}</div>
-                                <div class="kpi-value"
-                                    :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">
-                                    {{ k.v }}
-                                </div>
+                        ]" :key="k.l" class="kpi">
+                            <div class="kpi-label">{{ k.l }}</div>
+                            <div class="kpi-value"
+                                :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">
+                                {{ k.v }}
                             </div>
                         </div>
                     </div>
@@ -992,43 +987,43 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                     <!-- Kontrollgruppe: schlägt die Strategie reines Halten? Ohne
                          sie ist eine positive Rendite bedeutungslos. -->
                     <p v-if="ergebnis.stats.baselineBuyHoldReturnPct !== null && ergebnis.stats.baselineBuyHoldReturnPct !== undefined"
-                        class="small mb-3"
-                        :class="ergebnis.stats.baselineDiffPct > 0 ? 'greenTrade' : (ergebnis.stats.baselineDiffPct < 0 ? 'redTrade' : 'text-muted')">
-                        <i class="uil uil-balance-scale me-1"></i>
+                        class="fein abstandUnten3"
+                        :class="ergebnis.stats.baselineDiffPct > 0 ? 'greenTrade' : (ergebnis.stats.baselineDiffPct < 0 ? 'redTrade' : 'at-gedaempft')">
+                        <Symbol name="waage" class="vorSymbol" />
                         {{ ergebnis.stats.baselineDiffPct > 0
                             ? t('strategies.baselineBeats', { diff: zahl(Math.abs(ergebnis.stats.baselineDiffPct), 1) })
                             : ergebnis.stats.baselineDiffPct < 0
                                 ? t('strategies.baselineMisses', { diff: zahl(Math.abs(ergebnis.stats.baselineDiffPct), 1) })
                                 : t('strategies.baselineTie') }}
-                        <span class="text-muted">
+                        <span class="at-gedaempft">
                             ({{ t('strategies.returnPct') }} {{ zahl(ergebnis.stats.returnPct, 1) }} % ·
                             {{ t('strategies.kpiBuyHold') }} {{ zahl(ergebnis.stats.baselineBuyHoldReturnPct, 1) }} %)
                         </span>
                     </p>
 
-                    <div class="row">
-                        <div class="col-12 col-md-6">
-                            <div class="section-title mb-1">{{ t('strategies.funnel') }}</div>
-                            <table class="table table-sm table-borderless mb-0">
+                    <div class="zweiSpalten">
+                        <div>
+                            <div class="section-title abstandUnten1">{{ t('strategies.funnel') }}</div>
+                            <table class="at-tabelle dicht">
                                 <tbody>
                                     <tr v-for="k in ['setupsDetected', 'triggered', 'executed']" :key="k">
-                                        <td class="small">{{ t('strategies.bt_' + k) }}</td>
-                                        <td class="text-end small"><strong>{{ ergebnis.funnel[k] }}</strong></td>
+                                        <td>{{ t('strategies.bt_' + k) }}</td>
+                                        <td class="zahl"><strong>{{ ergebnis.funnel[k] }}</strong></td>
                                     </tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div class="col-12 col-md-6">
-                            <div class="section-title mb-1">{{ t('strategies.whyLost') }}</div>
-                            <table class="table table-sm table-borderless mb-0">
+                        <div>
+                            <div class="section-title abstandUnten1">{{ t('strategies.whyLost') }}</div>
+                            <table class="at-tabelle dicht">
                                 <tbody>
                                     <tr v-for="[g, n] in sortiert(ergebnis.funnel.invalidated)" :key="g">
-                                        <td class="small">{{ t('strategies.reason_' + g) }}</td>
-                                        <td class="text-end small">{{ n }}</td>
+                                        <td>{{ t('strategies.reason_' + g) }}</td>
+                                        <td class="zahl">{{ n }}</td>
                                     </tr>
                                     <tr v-for="[g, n] in sortiert(ergebnis.funnel.riskRejected)" :key="'r' + g">
-                                        <td class="small text-warning">{{ t('strategies.reason_' + g) }}</td>
-                                        <td class="text-end small">{{ n }}</td>
+                                        <td class="at-warn">{{ t('strategies.reason_' + g) }}</td>
+                                        <td class="zahl">{{ n }}</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1038,33 +1033,35 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             </div>
 
             <!-- ══ Frühere Läufe ══ -->
-            <div v-if="laeufe.length" class="dailyCard p-3">
-                <div class="d-flex align-items-center mb-2">
-                    <div class="section-title me-auto">{{ t('strategies.previousRuns') }}</div>
-                    <template v-if="alleLoeschenFrage">
-                        <span class="small text-muted me-2">{{ t('strategies.deleteAllRunsConfirm') }}</span>
-                        <button class="btn btn-sm btn-danger py-0 me-1" @click="alleLaeufeLoeschen">
-                            {{ t('common.yes') }}
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary py-0"
-                            @click="alleLoeschenFrage = false">{{ t('common.no') }}</button>
-                    </template>
-                    <button v-else class="btn btn-sm btn-outline-danger py-0"
-                        @click="alleLoeschenFrage = true">
-                        <i class="uil uil-trash-alt me-1"></i>{{ t('strategies.deleteAllRuns') }}
-                    </button>
+            <div v-if="laeufe.length" class="dailyCard karte">
+                <div class="laeufeKopf abstandUnten">
+                    <div class="section-title">{{ t('strategies.previousRuns') }}</div>
+                    <span class="titelKnoepfe">
+                        <template v-if="alleLoeschenFrage">
+                            <span class="fein at-gedaempft">{{ t('strategies.deleteAllRunsConfirm') }}</span>
+                            <Knopf art="gefahr" klein @click="alleLaeufeLoeschen">
+                                {{ t('common.yes') }}
+                            </Knopf>
+                            <Knopf klein
+                                @click="alleLoeschenFrage = false">{{ t('common.no') }}</Knopf>
+                        </template>
+                        <Knopf v-else art="gefahr" klein symbol="muell"
+                            @click="alleLoeschenFrage = true">
+                            {{ t('strategies.deleteAllRuns') }}
+                        </Knopf>
+                    </span>
                 </div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-borderless mb-0">
+                <div class="at-tabelle-huelle">
+                    <table class="at-tabelle dicht">
                         <thead>
-                            <tr class="text-muted small">
+                            <tr>
                                 <th>{{ t('strategies.label') }}</th>
                                 <th>{{ t('strategies.symbol') }}</th>
                                 <th>{{ t('strategies.timeframe') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiTrades') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiWinRate') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiExpectancy') }}</th>
-                                <th class="text-end">{{ t('strategies.kpiProfitFactor') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiTrades') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiWinRate') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiExpectancy') }}</th>
+                                <th class="zahl">{{ t('strategies.kpiProfitFactor') }}</th>
                                 <th>{{ t('strategies.period') }}</th>
                                 <th :title="t('strategies.regCostsHint')">{{ t('strategies.regCosts') }}</th>
                                 <th>{{ t('strategies.regDecision') }}</th>
@@ -1073,25 +1070,25 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                         </thead>
                         <tbody>
                             <tr v-for="l in laeufe" :key="l.id">
-                                <td class="small">{{ l.label || '–' }}</td>
-                                <td class="small">{{ l.symbol }}</td>
-                                <td class="small">{{ l.timeframe }}</td>
-                                <td class="text-end small">{{ l.stats.trades ?? 0 }}</td>
-                                <td class="text-end small">{{ zahl(l.stats.winRate, 1) }}</td>
-                                <td class="text-end small"
+                                <td>{{ l.label || '–' }}</td>
+                                <td>{{ l.symbol }}</td>
+                                <td>{{ l.timeframe }}</td>
+                                <td class="zahl">{{ l.stats.trades ?? 0 }}</td>
+                                <td class="zahl">{{ zahl(l.stats.winRate, 1) }}</td>
+                                <td class="zahl"
                                     :class="(l.stats.expectancyR || 0) >= 0 ? 'greenTrade' : 'redTrade'">
                                     {{ zahl(l.stats.expectancyR) }}
                                 </td>
-                                <td class="text-end small">
+                                <td class="zahl">
                                     {{ profitFaktor(l.stats.profitFactor, l.stats.trades) }}
                                 </td>
-                                <td class="small text-muted">
+                                <td class="at-gedaempft keinUmbruch">
                                     {{ dayjs(Number(l.fromTs)).format('DD.MM.YY') }} –
                                     {{ dayjs(Number(l.toTs)).format('DD.MM.YY') }}
                                 </td>
                                 <!-- Kostenmodell und Regelfassung: ohne beides ist
                                      ein alter Lauf nicht nachstellbar. -->
-                                <td class="small text-muted" style="white-space: nowrap;">
+                                <td class="at-gedaempft keinUmbruch">
                                     <!-- Läufe von vor der Maker/Taker-Aufteilung tragen
                                          nur einen Satz — der wird als solcher gezeigt,
                                          nicht in zwei erfundene Zahlen aufgeteilt. -->
@@ -1102,37 +1099,35 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                         {{ l.risk.feeBps }}+{{ l.risk.slippageBps }} bp
                                     </template>
                                     <template v-else>–</template>
-                                    <span v-if="l.ruleVersion" class="badge bg-dark ms-1">v{{ l.ruleVersion }}</span>
-                                    <span v-if="l.variantenGeprueft > 1" class="badge bg-warning text-dark ms-1"
+                                    <Pille v-if="l.ruleVersion" ton="neutral" class="nebenan">v{{ l.ruleVersion }}</Pille>
+                                    <Pille v-if="l.variantenGeprueft > 1" ton="warn" class="nebenan"
                                         :title="t('strategies.regVariantsHint')">
                                         {{ t('strategies.regVariants', { n: l.variantenGeprueft }) }}
-                                    </span>
+                                    </Pille>
                                 </td>
-                                <td style="white-space: nowrap;">
-                                    <span v-if="l.entscheidung && l.entscheidung !== 'offen'"
-                                        class="badge me-1" :class="l.entscheidung === 'uebernommen' ? 'bg-success' : 'bg-secondary'"
+                                <td class="aktionen">
+                                    <Pille v-if="l.entscheidung && l.entscheidung !== 'offen'"
+                                        :ton="l.entscheidung === 'uebernommen' ? 'gut' : 'neutral'"
                                         :title="l.notiz || ''">
                                         {{ t('strategies.dec_' + l.entscheidung) }}
-                                    </span>
-                                    <button class="btn btn-sm btn-outline-success py-0 px-1"
-                                        :title="t('strategies.dec_uebernommen')"
-                                        @click="laufEntscheiden(l, 'uebernommen')"><i class="uil uil-check"></i></button>
-                                    <button class="btn btn-sm btn-outline-secondary py-0 px-1 ms-1"
-                                        :title="t('strategies.dec_verworfen')"
-                                        @click="laufEntscheiden(l, 'verworfen')"><i class="uil uil-times"></i></button>
+                                    </Pille>
+                                    <Knopf klein nurSymbol symbol="haken"
+                                        :titel="t('strategies.dec_uebernommen')"
+                                        @click="laufEntscheiden(l, 'uebernommen')" />
+                                    <Knopf klein nurSymbol symbol="schliessen"
+                                        :titel="t('strategies.dec_verworfen')"
+                                        @click="laufEntscheiden(l, 'verworfen')" />
                                 </td>
-                                <td class="text-end" style="white-space: nowrap;">
+                                <td class="zahl aktionen">
                                     <template v-if="loeschBestaetigung === l.id">
-                                        <button class="btn btn-sm btn-danger py-0 me-1"
-                                            @click="laufLoeschen(l)">{{ t('common.yes') }}</button>
-                                        <button class="btn btn-sm btn-outline-secondary py-0"
-                                            @click="loeschBestaetigung = null">{{ t('common.no') }}</button>
+                                        <Knopf art="gefahr" klein
+                                            @click="laufLoeschen(l)">{{ t('common.yes') }}</Knopf>
+                                        <Knopf klein
+                                            @click="loeschBestaetigung = null">{{ t('common.no') }}</Knopf>
                                     </template>
-                                    <button v-else class="btn btn-sm btn-outline-danger py-0"
-                                        :title="t('strategies.deleteRun')"
-                                        @click="loeschBestaetigung = l.id">
-                                        <i class="uil uil-trash-alt"></i>
-                                    </button>
+                                    <Knopf v-else art="gefahr" klein nurSymbol symbol="muell"
+                                        :titel="t('strategies.deleteRun')"
+                                        @click="loeschBestaetigung = l.id" />
                                 </td>
                             </tr>
                         </tbody>
@@ -1144,11 +1139,23 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
 </template>
 
 <style scoped>
-/* `.dailyCard` setzt global `height: 100%`. Das passt für Raster mit einer Karte
-   je Spalte, hier stehen die Karten aber gestapelt untereinander — dort zieht die
-   Regel jede einzelne Karte auf die Höhe der GESAMTEN Spalte und erzeugt riesige
-   Leerräume. Karten, die bewusst mitwachsen sollen, tragen `h-100` (mit
-   !important) und bleiben davon unberührt. */
+/* ── Seitenrahmen ── */
+.seite {
+    padding: var(--abstand-4) var(--abstand-4) var(--abstand-5);
+}
+
+.seiteInnen {
+    max-width: 1500px;
+}
+
+.karte {
+    padding: var(--abstand-4);
+    margin-bottom: var(--abstand-4);
+}
+
+/* `.dailyCard` setzt global `height: 100%`. Hier stehen die Karten gestapelt
+   untereinander — dort zieht die Regel jede einzelne Karte auf die Höhe der
+   GESAMTEN Spalte und erzeugt riesige Leerräume. */
 .dailyCard {
     height: auto;
 }
@@ -1157,15 +1164,212 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
 }
 
-/* Abgeblendete Knöpfe waren auf dunklem Grund kaum zu entziffern — Bootstraps
-   Vorgabe senkt die Deckkraft so weit, dass die Beschriftung verschwindet. */
-.robustKnoepfe .btn:disabled {
-    opacity: 1;
-    color: var(--white-38, rgba(255, 255, 255, 0.55));
-    border-color: var(--white-10, rgba(255, 255, 255, 0.15));
+.fein {
+    font-size: 0.85rem;
+}
+
+.vorSymbol {
+    margin-right: var(--abstand-1);
+    vertical-align: -0.125em;
+}
+
+.abstandUnten1 { margin-bottom: var(--abstand-1); }
+.abstandUnten { margin-bottom: var(--abstand-2); }
+.abstandUnten3 { margin-bottom: var(--abstand-4); }
+.abstandOben { margin-top: var(--abstand-2); }
+.abstandOben3 { margin-top: var(--abstand-4); }
+
+.rechts {
+    margin-left: auto;
+}
+
+.zeileMitSymbol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
+}
+
+.knopfZeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+/* Neutraler Kasten (früher alert-secondary): eine Aussage, keine Warnung. */
+.kasten {
+    padding: var(--abstand-2) var(--abstand-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.kastenZeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.punkte {
+    margin: 0;
+    padding-left: var(--abstand-4);
+}
+
+/* ── Raster: 12 Spalten ab Tablet, auf dem Telefon 6 Spalten mit
+   Vorgabe „ganze Breite" — wo zwei oder drei Felder nebeneinander
+   lesbar bleiben, tragen sie m3 bzw. m2. ── */
+.raster {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--abstand-2);
+}
+
+.raster.eng {
+    gap: var(--abstand-1);
+}
+
+.raster.unten {
+    align-items: end;
+}
+
+.raster.mittig {
+    align-items: center;
+}
+
+.b1 { grid-column: span 1; }
+.b2 { grid-column: span 2; }
+.b3 { grid-column: span 3; }
+.b4 { grid-column: span 4; }
+.b5 { grid-column: span 5; }
+.b6 { grid-column: span 6; }
+.b8 { grid-column: span 8; }
+.b12 { grid-column: 1 / -1; }
+.ab5 { grid-column: 5 / span 4; }
+
+.reihe {
+    display: flex;
+    gap: var(--abstand-1);
+    min-width: 0;
+}
+
+.reihe > .at-feld {
+    min-width: 0;
+}
+
+.voll {
+    width: 100%;
+}
+
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--abstand-2);
+}
+
+.kpi {
+    text-align: center;
+    padding: var(--abstand-2);
+}
+
+.kpi-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+}
+
+.kpi-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.zweiSpalten {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--abstand-4);
+}
+
+.aktionen {
+    white-space: nowrap;
+}
+
+.aktionen > * + * {
+    margin-left: var(--abstand-1);
+}
+
+@media (max-width: 767.98px) {
+    .seite {
+        padding: var(--abstand-3) var(--abstand-4) var(--abstand-5);
+    }
+
+    .karte {
+        padding: var(--abstand-3);
+    }
+
+    .raster {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .raster > * {
+        grid-column: 1 / -1;
+    }
+
+    .raster > .m3 { grid-column: span 3; }
+    .raster > .m2 { grid-column: span 2; }
+
+    .kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .zweiSpalten {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Labor ── */
+.seitenTitel {
+    margin: 0 0 var(--abstand-4);
+}
+
+.vorschlag {
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-3);
+    margin-bottom: var(--abstand-2);
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
+}
+
+.festeBreite {
+    flex: 0 0 auto;
+}
+
+.paramSpalten {
+    display: grid;
+    grid-template-columns: 7fr 5fr;
+    gap: var(--abstand-4);
+}
+
+.zeileFuer {
+    display: block;
+}
+
+.fussnote {
+    margin: var(--abstand-1) 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
 }
 
 .stufenLeiste {
@@ -1177,31 +1381,60 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
 
 .stufenTitel {
     font-size: 0.8rem;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
     margin-right: 0.15rem;
 }
 
 .stufenWert {
     font-size: 0.8rem;
     padding: 0.1rem 0.45rem;
-    border-radius: var(--border-radius, 6px);
-    background: var(--white-10, rgba(255, 255, 255, 0.08));
-    border: 1px solid var(--white-10, rgba(255, 255, 255, 0.12));
+    border-radius: var(--radius-klein);
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
 }
 
 tr.besterWert {
-    background: rgba(1, 180, 255, 0.10);
+    background: var(--accent-flaeche);
 }
 
-.kpi-label {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+.kpis.vier {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.kpi-value {
-    font-size: 1.1rem;
-    font-weight: 600;
+.laeufeKopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.titelKnoepfe {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-1);
+    margin-left: auto;
+}
+
+.keinUmbruch {
+    white-space: nowrap;
+}
+
+.nebenan {
+    margin-left: var(--abstand-1);
+}
+
+/* Breiter als lg: Parameter 7/5 nebeneinander, darunter untereinander
+   (wie zuvor col-lg-7 / col-lg-5). */
+@media (max-width: 991.98px) {
+    .paramSpalten {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .kpis.vier {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 </style>

@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { spinnerLoadingPage } from '../stores/ui.js'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import ZahlOderParam from '../components/ZahlOderParam.vue'
+import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import { useAgentTimelineChart } from '../utils/charts.js'
@@ -471,80 +472,83 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
 
 <template>
     <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="row mt-3 ps-3 pe-3">
-        <div class="col-12 col-xl-11">
+    <div v-show="!spinnerLoadingPage" class="seite">
+        <div class="seiteInnen">
 
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                <h5 class="mb-0 me-auto">{{ t('strategies.editorTitle') }}</h5>
+            <div class="kopf">
+                <h5 class="seitenTitel">{{ t('strategies.editorTitle') }}</h5>
                 <button type="button" class="ctl-pill" @click="leer">
-                    <i class="uil uil-plus me-1"></i>{{ t('strategies.emptyStrategy') }}
+                    <Symbol name="plus" class="vorSymbol" />{{ t('strategies.emptyStrategy') }}
                 </button>
                 <!-- Import über ein verstecktes Dateifeld: ein Klick, kein Dialog. -->
                 <input ref="importFeld" type="file" accept="application/json,.json"
-                    class="d-none" @change="importDatei" />
+                    class="versteckt" @change="importDatei" />
                 <button type="button" class="ctl-pill" @click="importFeld?.click()">
-                    <i class="uil uil-upload-alt me-1"></i>{{ t('strategies.importStrategy') }}
+                    <Symbol name="hochladen" class="vorSymbol" />{{ t('strategies.importStrategy') }}
                 </button>
             </div>
 
-            <div class="alert alert-secondary py-2 small">
-                <i class="uil uil-info-circle me-1"></i>{{ t('strategies.editorIntro') }}
+            <div class="kasten abstandUnten">
+                <Symbol name="info" class="vorSymbol" />{{ t('strategies.editorIntro') }}
             </div>
-            <div v-if="meldung" class="alert alert-info py-2">{{ meldung }}</div>
-            <div v-if="fehler" class="alert alert-danger py-2">{{ fehler }}</div>
+            <Hinweis v-if="meldung" art="info" class="abstandUnten">{{ meldung }}</Hinweis>
+            <Hinweis v-if="fehler" art="fehler" class="abstandUnten">{{ fehler }}</Hinweis>
 
             <!-- ══ Vorlagen ══ -->
-            <div v-if="!entwurf && versteckteVorlagen.length" class="alert alert-secondary py-2 small d-flex align-items-center gap-2">
+            <div v-if="!entwurf && versteckteVorlagen.length" class="kasten kastenZeile abstandUnten">
                 <span>{{ t('strategies.templatesHidden', { n: versteckteVorlagen.length }) }}</span>
-                <button class="btn btn-sm btn-outline-secondary py-0 ms-auto" @click="vorlagenZurueckholen">
+                <Knopf klein class="rechts" @click="vorlagenZurueckholen">
                     {{ t('strategies.templatesRestore') }}
-                </button>
+                </Knopf>
             </div>
-            <div v-if="!entwurf" class="row g-3 mb-3">
-                <div v-for="v in vorlagen" :key="v.key" class="col-12 col-md-4">
-                    <div class="dailyCard p-3 h-100 d-flex flex-column position-relative">
-                        <button class="btn btn-sm btn-link text-muted vorlageWeg" :title="t('strategies.templateHide')"
-                            @click="vorlageAusblenden(v)"><i class="uil uil-times"></i></button>
+            <div v-if="!entwurf" class="vorlagen">
+                <div v-for="v in vorlagen" :key="v.key" class="vorlagenZelle">
+                    <div class="dailyCard vorlage">
+                        <Knopf art="leise" klein nurSymbol symbol="schliessen" class="vorlageWeg"
+                            :titel="t('strategies.templateHide')"
+                            @click="vorlageAusblenden(v)" />
                         <strong>{{ v.titel }}</strong>
-                        <div v-if="v.markt" class="mt-1">
-                            <span class="badge marktBadge" :class="marktKlasse(v.markt)">
-                                <i class="uil uil-chart-line me-1"></i>{{ v.markt }}
+                        <div v-if="v.markt" class="vorlageMarkt">
+                            <span class="marktBadge" :class="marktKlasse(v.markt)">
+                                <Symbol name="linie" class="vorSymbol" />{{ v.markt }}
                             </span>
                         </div>
-                        <p class="small text-muted flex-grow-1 mt-1">{{ v.beschreibung }}</p>
-                        <button class="btn btn-sm btn-outline-primary" @click="ausVorlage(v)">
+                        <p class="vorlageText">{{ v.beschreibung }}</p>
+                        <Knopf klein @click="ausVorlage(v)">
                             {{ t('strategies.useTemplate') }}
-                        </button>
+                        </Knopf>
                     </div>
                 </div>
             </div>
 
             <!-- ══ Editor ══ -->
             <template v-if="entwurf">
-                <div class="dailyCard p-3 mb-3">
-                    <div class="row g-2 mb-3">
-                        <div class="col-12 col-md-3">
-                            <label class="form-label small mb-1">{{ t('strategies.shortName') }}</label>
-                            <input v-model="entwurf.strategyId" class="form-control form-control-sm"
+                <div class="dailyCard karte">
+                    <div class="raster abstandUnten3">
+                        <div class="b3">
+                            <label class="at-label">{{ t('strategies.shortName') }}</label>
+                            <input v-model="entwurf.strategyId" class="at-feld klein"
                                 :disabled="!istNeu" placeholder="meine_strategie" @change="pruefen" />
                         </div>
-                        <div class="col-12 col-md-4">
-                            <label class="form-label small mb-1">{{ t('strategies.name') }}</label>
-                            <input v-model="entwurf.name" class="form-control form-control-sm" @change="pruefen" />
+                        <div class="b4">
+                            <label class="at-label">{{ t('strategies.name') }}</label>
+                            <input v-model="entwurf.name" class="at-feld klein" @change="pruefen" />
                         </div>
-                        <div class="col-12 col-md-5">
-                            <label class="form-label small mb-1">{{ t('strategies.descriptionLabel') }}</label>
-                            <input v-model="entwurf.description" class="form-control form-control-sm" />
+                        <div class="b5">
+                            <label class="at-label">{{ t('strategies.descriptionLabel') }}</label>
+                            <input v-model="entwurf.description" class="at-feld klein" />
                         </div>
-                        <div class="col-12 col-md-6">
-                            <label class="form-label small mb-1">{{ t('strategies.timeframes') }}</label><br>
-                            <span v-for="tf in ZEITEINHEITEN" :key="tf"
-                                :class="['badge me-1 pointerClass', entwurf.rules.timeframes.includes(tf) ? 'bg-primary' : 'bg-dark']"
-                                @click="zeiteinheitAn(tf)">{{ tf }}</span>
+                        <div class="b6">
+                            <label class="at-label">{{ t('strategies.timeframes') }}</label>
+                            <div class="chips">
+                                <button v-for="tf in ZEITEINHEITEN" :key="tf" type="button"
+                                    :class="['tfChip', { an: entwurf.rules.timeframes.includes(tf) }]"
+                                    @click="zeiteinheitAn(tf)">{{ tf }}</button>
+                            </div>
                         </div>
-                        <div class="col-6 col-md-3">
-                            <label class="form-label small mb-1">{{ t('strategies.direction') }}</label>
-                            <select v-model="entwurf.rules.direction" class="form-select form-select-sm" @change="pruefen">
+                        <div class="b3">
+                            <label class="at-label">{{ t('strategies.direction') }}</label>
+                            <select v-model="entwurf.rules.direction" class="at-feld klein" @change="pruefen">
                                 <option value="long">Long</option>
                                 <option value="short">Short</option>
                                 <!-- Beide: die Erkennung läuft je Richtung einmal.
@@ -560,27 +564,27 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                          Werte; die Bausteine selbst bleiben verborgen. Wer eine
                          Strategie beurteilen will, muss sie lesen können — nicht
                          entziffern. -->
-                    <div class="d-flex align-items-center gap-2 mb-2">
-                        <div class="btn-group btn-group-sm">
-                            <button class="btn" :class="einfach ? 'btn-primary' : 'btn-outline-secondary'"
+                    <div class="modusZeile">
+                        <div class="umschalter" role="group">
+                            <button type="button" :class="{ an: einfach }"
                                 @click="einfach = true">{{ t('strategies.modeSimple') }}</button>
-                            <button class="btn" :class="!einfach ? 'btn-primary' : 'btn-outline-secondary'"
+                            <button type="button" :class="{ an: !einfach }"
                                 @click="einfach = false">{{ t('strategies.modeExpert') }}</button>
                         </div>
-                        <small class="text-muted">{{ einfach ? t('strategies.modeSimpleHint') : t('strategies.modeExpertHint') }}</small>
+                        <small class="at-gedaempft">{{ einfach ? t('strategies.modeSimpleHint') : t('strategies.modeExpertHint') }}</small>
                     </div>
 
                     <!-- ══ Was diese Strategie tut ══ -->
-                    <div v-if="saetze.length" class="saetzeKarte mb-3">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <i class="uil uil-book-open"></i>
-                            <strong class="small">{{ t('strategies.rulesInWords') }}</strong>
+                    <div v-if="saetze.length" class="saetzeKarte abstandUnten3">
+                        <div class="zeileMitSymbol">
+                            <Symbol name="buch" />
+                            <strong class="fein">{{ t('strategies.rulesInWords') }}</strong>
                         </div>
                         <div v-for="s in saetze" :key="s.titel" class="satzZeile">
                             <span class="satzTitel">{{ s.titel }}</span>
                             <span>{{ s.text }}</span>
                         </div>
-                        <p class="small text-muted mb-0 mt-2">{{ t('strategies.rulesInWordsHint') }}</p>
+                        <p class="fussnote">{{ t('strategies.rulesInWordsHint') }}</p>
                     </div>
 
                     <!-- ══ Im Gespräch bauen ══
@@ -588,23 +592,22 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                          dasselbe Regelwerk, das die Felder darunter zeigen.
                          Vorher lagen Gespräch und Formular auf zwei Seiten —
                          man sah nie, was ein Satz eigentlich verändert hat. -->
-                    <div class="chatPanel mb-3">
-                        <div class="d-flex align-items-center gap-2 mb-2">
-                            <i class="uil uil-comment-alt-lines chatIcon"></i>
+                    <div class="chatPanel abstandUnten3">
+                        <div class="zeileMitSymbol">
+                            <Symbol name="nachricht" class="chatIcon" />
                             <strong>{{ t('strategies.chatTitle') }}</strong>
-                            <span v-if="chatGeaendert.length" class="badge bg-primary">
+                            <Pille v-if="chatGeaendert.length" ton="akzent">
                                 {{ t('strategies.chatChanged', { n: chatGeaendert.length }) }}
-                            </span>
-                            <button class="btn btn-sm btn-outline-secondary ms-auto py-0"
-                                @click="chatOffen = !chatOffen">
+                            </Pille>
+                            <Knopf klein class="rechts" @click="chatOffen = !chatOffen">
                                 {{ chatOffen ? t('strategies.chatHide') : t('strategies.chatShow') }}
-                            </button>
+                            </Knopf>
                         </div>
 
                         <template v-if="chatOffen">
                             <p class="block-hint">{{ t('strategies.chatHint') }}</p>
 
-                            <div v-if="chatVerlauf.length" class="chatVerlauf mb-2">
+                            <div v-if="chatVerlauf.length" class="chatVerlauf abstandUnten">
                                 <div v-for="(m, i) in chatVerlauf" :key="i"
                                     :class="['chatZeile', m.role === 'user' ? 'chatNutzer' : 'chatModell']">
                                     {{ m.content }}
@@ -613,72 +616,73 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
 
                             <!-- Rückfragen: anklickbar, damit man sie direkt beantwortet
                                  statt sie abzutippen. -->
-                            <div v-if="chatFragen.length" class="mb-2">
-                                <div class="small text-muted mb-1">{{ t('strategies.chatOpenQuestions') }}</div>
-                                <button v-for="(f, i) in chatFragen" :key="i" type="button"
-                                    class="btn btn-sm btn-outline-primary me-1 mb-1 text-start"
-                                    @click="frageUebernehmen(f)">{{ f }}</button>
+                            <div v-if="chatFragen.length" class="abstandUnten">
+                                <div class="fein at-gedaempft abstandUnten1">{{ t('strategies.chatOpenQuestions') }}</div>
+                                <div class="fragen">
+                                    <Knopf v-for="(f, i) in chatFragen" :key="i" klein class="frageKnopf"
+                                        @click="frageUebernehmen(f)">{{ f }}</Knopf>
+                                </div>
                             </div>
 
                             <!-- Was sich mit den Bausteinen nicht ausdrücken lässt.
                                  Muss stehen bleiben: sonst hält man eine Lücke für
                                  umgesetzt. -->
-                            <div v-if="chatNichtUmsetzbar.length" class="alert alert-warning py-2 px-3 small mb-2">
-                                <strong>{{ t('strategies.chatNotExpressible') }}</strong>
-                                <ul class="mb-0 ps-3">
+                            <Hinweis v-if="chatNichtUmsetzbar.length" art="warn" class="abstandUnten"
+                                :titel="t('strategies.chatNotExpressible')">
+                                <ul class="punkte">
                                     <li v-for="(n, i) in chatNichtUmsetzbar" :key="i">{{ n }}</li>
                                 </ul>
-                            </div>
+                            </Hinweis>
 
-                            <div v-if="chatFehler" class="alert alert-danger py-2 px-3 small mb-2">{{ chatFehler }}</div>
+                            <Hinweis v-if="chatFehler" art="fehler" class="abstandUnten">{{ chatFehler }}</Hinweis>
 
-                            <div class="d-flex gap-2">
-                                <textarea v-model="chatEingabe" class="form-control form-control-sm" rows="2"
+                            <div class="chatEingabe">
+                                <textarea v-model="chatEingabe" class="at-feld klein" rows="2"
                                     :placeholder="t('strategies.chatPlaceholder')"
                                     :disabled="chatLaeuft"
                                     @keydown.enter.exact.prevent="chatSenden"></textarea>
-                                <button class="btn btn-sm btn-primary flex-shrink-0" :disabled="chatLaeuft || !chatEingabe.trim()"
+                                <Knopf art="haupt" klein :disabled="chatLaeuft || !chatEingabe.trim()"
                                     @click="chatSenden">
-                                    <span v-if="chatLaeuft" class="spinner-border spinner-border-sm"></span>
+                                    <Kreisel v-if="chatLaeuft" still />
                                     <span v-else>{{ t('strategies.chatSend') }}</span>
-                                </button>
+                                </Knopf>
                             </div>
                         </template>
                     </div>
 
                     <!-- Prüfung -->
-                    <div v-if="pruefung && !pruefung.ok" class="alert alert-warning py-2 small mb-3">
-                        <strong>{{ t('strategies.notYetValid') }}</strong>
-                        <ul class="mb-0 ps-3">
+                    <Hinweis v-if="pruefung && !pruefung.ok" art="warn" class="abstandUnten3"
+                        :titel="t('strategies.notYetValid')">
+                        <ul class="punkte">
                             <li v-for="(f, i) in pruefung.fehler" :key="i">{{ f }}</li>
                         </ul>
-                    </div>
-                    <div v-else-if="pruefung?.hinweise?.length" class="alert alert-secondary py-2 small mb-3">
-                        <ul class="mb-0 ps-3"><li v-for="(h, i) in pruefung.hinweise" :key="i">{{ h }}</li></ul>
+                    </Hinweis>
+                    <div v-else-if="pruefung?.hinweise?.length" class="kasten abstandUnten3">
+                        <ul class="punkte"><li v-for="(h, i) in pruefung.hinweise" :key="i">{{ h }}</li></ul>
                     </div>
 
                     <!-- ── 1. Parameter ── -->
                     <div class="block" :class="{ blockGeaendert: chatBetrifft('params') }">
                         <div class="block-title">
                             <span class="nr">1</span>{{ t('strategies.blockParams') }}
-                            <button class="btn btn-sm btn-outline-secondary py-0 ms-auto" @click="paramHinzu">+</button>
+                            <Knopf klein class="rechts" @click="paramHinzu">+</Knopf>
                         </div>
                         <p class="block-hint">{{ t('strategies.blockParamsHint') }}</p>
-                        <div v-for="(p, i) in entwurf.rules.params" :key="i" class="row g-1 mb-1 align-items-center">
-                            <div class="col-3"><input v-model="p.key" class="form-control form-control-sm" placeholder="name" @change="pruefen" /></div>
-                            <div class="col-4"><input v-model="p.label" class="form-control form-control-sm" :placeholder="t('strategies.labelPlaceholder')" /></div>
-                            <div class="col-2">
-                                <select v-model="p.type" class="form-select form-select-sm" @change="pruefen">
+                        <div v-for="(p, i) in entwurf.rules.params" :key="i" class="raster eng eintrag mittig">
+                            <div class="b3 m3"><input v-model="p.key" class="at-feld klein" placeholder="name" @change="pruefen" /></div>
+                            <div class="b4 m3"><input v-model="p.label" class="at-feld klein" :placeholder="t('strategies.labelPlaceholder')" /></div>
+                            <div class="b2">
+                                <select v-model="p.type" class="at-feld klein" @change="pruefen">
                                     <option value="number">{{ t('strategies.typeNumber') }}</option>
                                     <option value="integer">{{ t('strategies.typeInteger') }}</option>
                                     <option value="boolean">{{ t('strategies.typeBoolean') }}</option>
                                 </select>
                             </div>
-                            <div class="col-1"><input v-model.number="p.default" type="number" class="form-control form-control-sm" @change="pruefen" /></div>
-                            <div class="col-1"><input v-model.number="p.min" type="number" class="form-control form-control-sm" @change="pruefen" /></div>
-                            <div class="col-1 d-flex gap-1">
-                                <input v-model.number="p.max" type="number" class="form-control form-control-sm" @change="pruefen" />
-                                <button class="btn btn-sm btn-outline-danger py-0" @click="paramWeg(i)"><i class="uil uil-times"></i></button>
+                            <div class="b1 m2"><input v-model.number="p.default" type="number" class="at-feld klein" @change="pruefen" /></div>
+                            <div class="b1 m2"><input v-model.number="p.min" type="number" class="at-feld klein" @change="pruefen" /></div>
+                            <div class="b1 m2 reihe">
+                                <input v-model.number="p.max" type="number" class="at-feld klein" @change="pruefen" />
+                                <Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="paramWeg(i)" />
                             </div>
                         </div>
                     </div>
@@ -687,39 +691,39 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                     <div v-if="!einfach" class="block" :class="{ blockGeaendert: chatBetrifft('indicators') }">
                         <div class="block-title">
                             <span class="nr">2</span>{{ t('strategies.blockIndicators') }}
-                            <button class="btn btn-sm btn-outline-secondary py-0 ms-auto" @click="indikatorHinzu">+</button>
+                            <Knopf klein class="rechts" @click="indikatorHinzu">+</Knopf>
                         </div>
                         <p class="block-hint">{{ t('strategies.blockIndicatorsHint') }}</p>
-                        <div v-for="(ind, i) in entwurf.rules.indicators" :key="i" class="row g-1 mb-1">
-                            <div class="col-4"><input v-model="ind.id" class="form-control form-control-sm" @change="pruefen" /></div>
-                            <div class="col-3">
-                                <select v-model="ind.type" class="form-select form-select-sm" @change="pruefen">
+                        <div v-for="(ind, i) in entwurf.rules.indicators" :key="i" class="raster eng eintrag">
+                            <div class="b4 m3"><input v-model="ind.id" class="at-feld klein" @change="pruefen" /></div>
+                            <div class="b3 m3">
+                                <select v-model="ind.type" class="at-feld klein" @change="pruefen">
                                     <option v-for="x in bausteine.indikatoren" :key="x" :value="x">{{ t('strategies.ind_' + x) }}</option>
                                 </select>
                             </div>
-                            <div class="col-4">
+                            <div class="b4">
                                 <!-- VWAP braucht statt einer Periode einen Anker; das Band
                                      zusätzlich den Faktor der Standardabweichung. -->
                                 <template v-if="['vwap','vwapBand'].includes(ind.type)">
-                                    <div class="d-flex gap-1">
-                                        <select v-model="ind.anchor" class="form-select form-select-sm" @change="pruefen">
+                                    <div class="reihe">
+                                        <select v-model="ind.anchor" class="at-feld klein" @change="pruefen">
                                             <option v-for="a in (bausteine.vwapAnker || [])" :key="a" :value="a">
                                                 {{ ankerLabel(a) }}
                                             </option>
                                         </select>
                                         <input v-if="ind.anchor === 'rolling'" v-model.number="ind.period" type="number" min="2"
-                                            class="form-control form-control-sm" style="max-width:5rem" @change="pruefen" />
+                                            class="at-feld klein" style="max-width:5rem" @change="pruefen" />
                                         <!-- Swing-Anker: Pivot-Stärke und welche Fächerlinie gemeint ist.
                                              Ohne diese Felder hinge die Linie stumm auf ihren Vorgaben. -->
                                         <template v-if="['swingHigh','swingLow'].includes(ind.anchor)">
                                             <ZahlOderParam :ziel="ind" feld="pivot" :standard="20"
                                                 :titel="t('strategies.vwapPivot')" :params="parameterNamen" @aendern="pruefen" />
-                                            <select v-model.number="ind.nth" class="form-select form-select-sm"
+                                            <select v-model.number="ind.nth" class="at-feld klein"
                                                 style="max-width:5rem" :title="t('strategies.vwapNth')" @change="pruefen">
                                                 <option v-for="n in [1,2,3]" :key="n" :value="n">{{ n }}.</option>
                                             </select>
                                         </template>
-                                        <select v-if="ind.type === 'vwapBand'" class="form-select form-select-sm"
+                                        <select v-if="ind.type === 'vwapBand'" class="at-feld klein"
                                             style="max-width:7rem" :value="refText(ind.mult)"
                                             :title="t('strategies.vwapMultHint')"
                                             @change="refSetzen(ind, 'mult', $event.target.value)">
@@ -731,7 +735,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                 <!-- Die Tageseröffnung hat keine Einstellung — ein
                                      Periodenfeld daneben wäre eine Lüge. -->
                                 <template v-else-if="ind.type === 'dayOpen'">
-                                    <span class="text-muted small">{{ t('strategies.noSetting') }}</span>
+                                    <span class="at-gedaempft fein">{{ t('strategies.noSetting') }}</span>
                                 </template>
                                 <!-- MACD, Bollinger und Stochastik haben eigene
                                      Kennzahlen. Die Engine liest sie längst
@@ -740,7 +744,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                      Standardwerten stehen, ohne dass man es
                                      sieht. -->
                                 <template v-else-if="['macd','macdSignal','macdHist'].includes(ind.type)">
-                                    <div class="d-flex gap-1">
+                                    <div class="reihe">
                                         <ZahlOderParam :ziel="ind" feld="fast" :standard="12"
                                             :titel="t('strategies.macdFast')" :params="parameterNamen" @aendern="pruefen" />
                                         <ZahlOderParam :ziel="ind" feld="slow" :standard="26"
@@ -750,12 +754,12 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                     </div>
                                 </template>
                                 <template v-else-if="['bollUpper','bollMiddle','bollLower'].includes(ind.type)">
-                                    <div class="d-flex gap-1">
+                                    <div class="reihe">
                                         <ZahlOderParam :ziel="ind" feld="period" :standard="20"
                                             :titel="t('strategies.bollPeriod')" :params="parameterNamen" @aendern="pruefen" />
                                         <ZahlOderParam :ziel="ind" feld="mult" :standard="2" :schritt="0.1"
                                             :titel="t('strategies.bollMult')" :params="parameterNamen" @aendern="pruefen" />
-                                        <select v-model="ind.basis" class="form-select form-select-sm"
+                                        <select v-model="ind.basis" class="at-feld klein"
                                             style="max-width:5.5rem" :title="t('strategies.bollBasis')" @change="pruefen">
                                             <option value="sma">SMA</option>
                                             <option value="ema">EMA</option>
@@ -763,7 +767,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                     </div>
                                 </template>
                                 <template v-else-if="['stochK','stochD'].includes(ind.type)">
-                                    <div class="d-flex gap-1">
+                                    <div class="reihe">
                                         <ZahlOderParam :ziel="ind" feld="period" :standard="14"
                                             :titel="t('strategies.stochPeriod')" :params="parameterNamen" @aendern="pruefen" />
                                         <ZahlOderParam :ziel="ind" feld="smoothK" :standard="3"
@@ -777,7 +781,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                 <ZahlOderParam v-else :ziel="ind" feld="period" :standard="14"
                                     :titel="t('strategies.periodLabel')" :params="parameterNamen" @aendern="pruefen" />
                             </div>
-                            <div class="col-1"><button class="btn btn-sm btn-outline-danger py-0 w-100" @click="indikatorWeg(i)"><i class="uil uil-times"></i></button></div>
+                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="indikatorWeg(i)" /></div>
                         </div>
                     </div>
 
@@ -785,38 +789,38 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                     <div v-if="!einfach" class="block" :class="{ blockGeaendert: chatBetrifft('signal') }">
                         <div class="block-title"><span class="nr">3</span>{{ t('strategies.blockSignal') }}</div>
                         <p class="block-hint">{{ t('strategies.blockSignalHint') }}</p>
-                        <div class="row g-1">
-                            <div class="col-4">
-                                <select v-model="entwurf.rules.signal.type" class="form-select form-select-sm" @change="pruefen">
+                        <div class="raster eng">
+                            <div class="b4">
+                                <select v-model="entwurf.rules.signal.type" class="at-feld klein" @change="pruefen">
                                     <option v-for="s in bausteine.signale" :key="s" :value="s">{{ t('strategies.signal_' + s) }}</option>
                                 </select>
                             </div>
                             <template v-if="['pivotHigh','pivotLow'].includes(entwurf.rules.signal.type)">
-                                <div class="col-4">
-                                    <input v-model.number="entwurf.rules.signal.left" type="number" min="1" class="form-control form-control-sm"
+                                <div class="b4 m3">
+                                    <input v-model.number="entwurf.rules.signal.left" type="number" min="1" class="at-feld klein"
                                         :placeholder="t('strategies.leftBars')" @change="pruefen" />
                                 </div>
-                                <div class="col-4">
-                                    <input v-model.number="entwurf.rules.signal.right" type="number" min="1" class="form-control form-control-sm"
+                                <div class="b4 m3">
+                                    <input v-model.number="entwurf.rules.signal.right" type="number" min="1" class="at-feld klein"
                                         :placeholder="t('strategies.rightBars')" @change="pruefen" />
                                 </div>
                             </template>
                             <!-- Berührung einer Linie, die vorher schon gehalten hat:
                                  Linie + wie oft vorher. „2" heisst dritte Berührung. -->
                             <template v-else-if="entwurf.rules.signal.type === 'levelTouch'">
-                                <div class="col-4">
-                                    <select class="form-select form-select-sm" :value="refText(entwurf.rules.signal.line)"
+                                <div class="b4">
+                                    <select class="at-feld klein" :value="refText(entwurf.rules.signal.line)"
                                         :title="t('strategies.touchLine')"
                                         @change="refSetzen(entwurf.rules.signal, 'line', $event.target.value)">
                                         <option value="">–</option>
                                         <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                     </select>
                                 </div>
-                                <div class="col-4">
+                                <div class="b4 reihe">
                                     <ZahlOderParam :ziel="entwurf.rules.signal" feld="minPrevTouches" :standard="2"
                                         :titel="t('strategies.touchPrev')" :params="parameterNamen" @aendern="pruefen" />
                                 </div>
-                                <div class="col-4 offset-4 mt-1 d-flex gap-1">
+                                <div class="b4 ab5 reihe">
                                     <ZahlOderParam :ziel="entwurf.rules.signal" feld="separation" :standard="3"
                                         :titel="t('strategies.touchSeparation')" :params="parameterNamen" @aendern="pruefen" />
                                     <ZahlOderParam :ziel="entwurf.rules.signal" feld="window" :standard="200"
@@ -826,27 +830,27 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                             <!-- Kerzenmuster als Auslöser: Muster + Gegenkerzen davor.
                                  Die Engine liest beides längst, im Formular fehlten sie. -->
                             <template v-else-if="entwurf.rules.signal.type === 'pattern'">
-                                <div class="col-4">
-                                    <select v-model="entwurf.rules.signal.pattern" class="form-select form-select-sm" @change="pruefen">
+                                <div class="b4">
+                                    <select v-model="entwurf.rules.signal.pattern" class="at-feld klein" @change="pruefen">
                                         <option v-for="m in (bausteine.muster || [])" :key="m" :value="m">
                                             {{ t('strategies.muster_' + m) }}
                                         </option>
                                     </select>
                                 </div>
-                                <div class="col-4">
+                                <div class="b4 reihe">
                                     <ZahlOderParam :ziel="entwurf.rules.signal" feld="prevOpposite" :standard="0"
                                         :titel="t('strategies.prevOpposite')" :params="parameterNamen" @aendern="pruefen" />
                                 </div>
                             </template>
                             <template v-else>
-                                <div class="col-4">
-                                    <select class="form-select form-select-sm" :value="refText(entwurf.rules.signal.a)"
+                                <div class="b4">
+                                    <select class="at-feld klein" :value="refText(entwurf.rules.signal.a)"
                                         @change="refSetzen(entwurf.rules.signal, 'a', $event.target.value)">
                                         <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                     </select>
                                 </div>
-                                <div class="col-4">
-                                    <select class="form-select form-select-sm" :value="refText(entwurf.rules.signal.b)"
+                                <div class="b4">
+                                    <select class="at-feld klein" :value="refText(entwurf.rules.signal.b)"
                                         @change="refSetzen(entwurf.rules.signal, 'b', $event.target.value)">
                                         <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                     </select>
@@ -859,46 +863,46 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                     <div v-if="!einfach" class="block" :class="{ blockGeaendert: chatBetrifft('signalFilters') }">
                         <div class="block-title">
                             <span class="nr">4</span>{{ t('strategies.blockFilters') }}
-                            <button class="btn btn-sm btn-outline-secondary py-0 ms-auto" @click="bedingungHinzu('signalFilters')">+</button>
+                            <Knopf klein class="rechts" @click="bedingungHinzu('signalFilters')">+</Knopf>
                         </div>
                         <p class="block-hint">{{ t('strategies.blockFiltersHint') }}</p>
-                        <div v-for="(b, i) in entwurf.rules.signalFilters" :key="i" class="row g-1 mb-1">
-                            <div class="col-3">
-                                <select class="form-select form-select-sm" :value="refText(b.left)"
+                        <div v-for="(b, i) in entwurf.rules.signalFilters" :key="i" class="raster eng eintrag">
+                            <div class="b3 m3">
+                                <select class="at-feld klein" :value="refText(b.left)"
                                     @change="refSetzen(b, 'left', $event.target.value)">
                                     <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                 </select>
                             </div>
-                            <div class="col-3">
-                                <select v-model="b.op" class="form-select form-select-sm" @change="pruefen">
+                            <div class="b3 m3">
+                                <select v-model="b.op" class="at-feld klein" @change="pruefen">
                                     <option v-for="o in bausteine.vergleiche" :key="o" :value="o">{{ t('strategies.op_' + o) }}</option>
                                 </select>
                             </div>
-                            <div class="col-3">
+                            <div class="b3">
                                 <!-- Der Berührungszähler hat keine rechte Seite — nur die Linie links. -->
-                                <select v-if="b.op !== 'priorTouchesGte'" class="form-select form-select-sm" :value="refText(b.right)"
+                                <select v-if="b.op !== 'priorTouchesGte'" class="at-feld klein" :value="refText(b.right)"
                                     @change="refSetzen(b, 'right', $event.target.value)">
                                     <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                     <option v-for="pk in parameterNamen" :key="pk" :value="'param:' + pk">{{ t('strategies.fromParam', { name: pk }) }}</option>
                                 </select>
-                                <div v-else class="d-flex gap-1">
+                                <div v-else class="reihe">
                                     <ZahlOderParam :ziel="b" feld="separation" :standard="3"
                                         :titel="t('strategies.touchSeparation')" :params="parameterNamen" @aendern="pruefen" />
                                     <ZahlOderParam :ziel="b" feld="window" :standard="200"
                                         :titel="t('strategies.touchWindow')" :params="parameterNamen" @aendern="pruefen" />
                                 </div>
                             </div>
-                            <div class="col-2">
+                            <div class="b2 reihe">
                                 <ZahlOderParam v-if="b.op === 'priorTouchesGte'" :ziel="b" feld="value" :standard="2"
                                     :titel="t('strategies.touchPrev')" :params="parameterNamen" @aendern="pruefen" />
                                 <select v-else-if="['distancePctGt','distancePctLt','isBullish','isBearish'].includes(b.op)"
-                                    class="form-select form-select-sm" :value="refText(b.value)"
+                                    class="at-feld klein" :value="refText(b.value)"
                                     @change="refSetzen(b, 'value', $event.target.value)">
                                     <option v-for="n in [0,0.5,1,2,2.5,5,10]" :key="n" :value="String(n)">{{ n }}</option>
                                     <option v-for="pk in parameterNamen" :key="pk" :value="'param:' + pk">{{ pk }}</option>
                                 </select>
                             </div>
-                            <div class="col-1"><button class="btn btn-sm btn-outline-danger py-0 w-100" @click="bedingungWeg('signalFilters', i)"><i class="uil uil-times"></i></button></div>
+                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="bedingungWeg('signalFilters', i)" /></div>
                         </div>
                     </div>
 
@@ -906,22 +910,22 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                     <div v-if="!einfach" class="block" :class="{ blockGeaendert: chatBetrifft('entry') }">
                         <div class="block-title"><span class="nr">5</span>{{ t('strategies.blockEntry') }}</div>
                         <p class="block-hint">{{ t('strategies.blockEntryHint') }}</p>
-                        <div class="row g-1">
-                            <div class="col-4">
-                                <select v-model="entwurf.rules.entry.type" class="form-select form-select-sm" @change="pruefen">
+                        <div class="raster eng">
+                            <div class="b4">
+                                <select v-model="entwurf.rules.entry.type" class="at-feld klein" @change="pruefen">
                                     <option v-for="e in bausteine.einstieg" :key="e" :value="e">{{ t('strategies.entry_' + e) }}</option>
                                 </select>
                             </div>
                             <template v-if="entwurf.rules.entry.type === 'touch'">
-                                <div class="col-4">
-                                    <select class="form-select form-select-sm" :value="refText(entwurf.rules.entry.anchor)"
+                                <div class="b4 m3">
+                                    <select class="at-feld klein" :value="refText(entwurf.rules.entry.anchor)"
                                         @change="refSetzen(entwurf.rules.entry, 'anchor', $event.target.value)">
                                         <option value="">–</option>
                                         <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                     </select>
                                 </div>
-                                <div class="col-4">
-                                    <select v-model="entwurf.rules.entry.from" class="form-select form-select-sm" @change="pruefen">
+                                <div class="b4 m3">
+                                    <select v-model="entwurf.rules.entry.from" class="at-feld klein" @change="pruefen">
                                         <option value="above">{{ t('strategies.fromAbove') }}</option>
                                         <option value="below">{{ t('strategies.fromBelow') }}</option>
                                     </select>
@@ -934,19 +938,21 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                     <div v-if="!einfach" class="block" :class="{ blockGeaendert: chatBetrifft('invalidations') }">
                         <div class="block-title">
                             <span class="nr">6</span>{{ t('strategies.blockInvalidations') }}
-                            <button class="btn btn-sm btn-outline-secondary py-0 ms-auto me-1" @click="abbruchHinzu('condition')">
-                                + {{ t('strategies.condition') }}
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary py-0" @click="abbruchHinzu('timeout')">
-                                + {{ t('strategies.timeout') }}
-                            </button>
+                            <span class="titelKnoepfe">
+                                <Knopf klein @click="abbruchHinzu('condition')">
+                                    + {{ t('strategies.condition') }}
+                                </Knopf>
+                                <Knopf klein @click="abbruchHinzu('timeout')">
+                                    + {{ t('strategies.timeout') }}
+                                </Knopf>
+                            </span>
                         </div>
                         <p class="block-hint">{{ t('strategies.blockInvalidationsHint') }}</p>
-                        <div v-for="(v, i) in entwurf.rules.invalidations" :key="i" class="row g-1 mb-1">
-                            <div class="col-3"><input v-model="v.code" class="form-control form-control-sm" :placeholder="t('strategies.reasonCode')" @change="pruefen" /></div>
+                        <div v-for="(v, i) in entwurf.rules.invalidations" :key="i" class="raster eng eintrag">
+                            <div class="b3"><input v-model="v.code" class="at-feld klein" :placeholder="t('strategies.reasonCode')" @change="pruefen" /></div>
                             <template v-if="v.type === 'timeout'">
-                                <div class="col-8">
-                                    <select class="form-select form-select-sm" :value="refText(v.candles)"
+                                <div class="b8">
+                                    <select class="at-feld klein" :value="refText(v.candles)"
                                         @change="refSetzen(v, 'candles', $event.target.value)">
                                         <option v-for="n in [3,5,10,15,20,30,50]" :key="n" :value="String(n)">{{ t('strategies.afterCandles', { n }) }}</option>
                                         <option v-for="pk in parameterNamen" :key="pk" :value="'param:' + pk">{{ t('strategies.fromParam', { name: pk }) }}</option>
@@ -954,131 +960,131 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                 </div>
                             </template>
                             <template v-else>
-                                <div class="col-3">
-                                    <select class="form-select form-select-sm" :value="refText(v.when.left)"
+                                <div class="b3 m3">
+                                    <select class="at-feld klein" :value="refText(v.when.left)"
                                         @change="refSetzen(v.when, 'left', $event.target.value)">
                                         <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                     </select>
                                 </div>
-                                <div class="col-3">
-                                    <select v-model="v.when.op" class="form-select form-select-sm" @change="pruefen">
+                                <div class="b3 m3">
+                                    <select v-model="v.when.op" class="at-feld klein" @change="pruefen">
                                         <option v-for="o in bausteine.vergleiche" :key="o" :value="o">{{ t('strategies.op_' + o) }}</option>
                                     </select>
                                 </div>
-                                <div class="col-2">
+                                <div class="b2 reihe">
                                     <ZahlOderParam v-if="v.when.op === 'priorTouchesGte'" :ziel="v.when" feld="value" :standard="2"
                                         :titel="t('strategies.touchPrev')" :params="parameterNamen" @aendern="pruefen" />
-                                    <select v-else class="form-select form-select-sm" :value="refText(v.when.right)"
+                                    <select v-else class="at-feld klein" :value="refText(v.when.right)"
                                         @change="refSetzen(v.when, 'right', $event.target.value)">
                                         <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                     </select>
                                 </div>
                             </template>
-                            <div class="col-1"><button class="btn btn-sm btn-outline-danger py-0 w-100" @click="abbruchWeg(i)"><i class="uil uil-times"></i></button></div>
+                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="abbruchWeg(i)" /></div>
                         </div>
                     </div>
 
                     <!-- ── 7. Stop und Ziel ── -->
                     <div v-if="!einfach" class="block" :class="{ blockGeaendert: chatBetrifft(['stopLoss','takeProfit','breakEvenAtR']) }">
                         <div class="block-title"><span class="nr">7</span>{{ t('strategies.blockExit') }}</div>
-                        <div class="row g-1 mb-2">
-                            <div class="col-2 small pt-1">{{ t('strategies.stop') }}</div>
-                            <div class="col-4">
-                                <select class="form-select form-select-sm" :value="refText(entwurf.rules.stopLoss.anchor)"
+                        <div class="raster eng abstandUnten">
+                            <div class="b2 zeilenTitel">{{ t('strategies.stop') }}</div>
+                            <div class="b4">
+                                <select class="at-feld klein" :value="refText(entwurf.rules.stopLoss.anchor)"
                                     @change="refSetzen(entwurf.rules.stopLoss, 'anchor', $event.target.value)">
                                     <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                 </select>
                             </div>
-                            <div class="col-4">
-                                <select class="form-select form-select-sm" :value="refText(entwurf.rules.stopLoss.offsetPct)"
+                            <div class="b4">
+                                <select class="at-feld klein" :value="refText(entwurf.rules.stopLoss.offsetPct)"
                                     @change="refSetzen(entwurf.rules.stopLoss, 'offsetPct', $event.target.value)">
                                     <option v-for="n in [0,0.1,0.2,0.3,0.5,1,2]" :key="n" :value="String(n)">{{ n }} % {{ t('strategies.beyond') }}</option>
                                     <option v-for="pk in parameterNamen" :key="pk" :value="'param:' + pk">{{ t('strategies.fromParam', { name: pk }) }}</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="row g-1">
-                            <div class="col-2 small pt-1">{{ t('strategies.target') }}</div>
-                            <div class="col-4">
-                                <select v-model="entwurf.rules.takeProfit.mode" class="form-select form-select-sm" @change="pruefen">
+                        <div class="raster eng">
+                            <div class="b2 zeilenTitel">{{ t('strategies.target') }}</div>
+                            <div class="b4">
+                                <select v-model="entwurf.rules.takeProfit.mode" class="at-feld klein" @change="pruefen">
                                     <option v-for="z in bausteine.ziele" :key="z" :value="z">{{ t('strategies.tp_' + z) }}</option>
                                 </select>
                             </div>
-                            <div class="col-4">
-                                <select v-if="entwurf.rules.takeProfit.mode === 'rr'" class="form-select form-select-sm"
+                            <div class="b4">
+                                <select v-if="entwurf.rules.takeProfit.mode === 'rr'" class="at-feld klein"
                                     :value="refText(entwurf.rules.takeProfit.rr)"
                                     @change="refSetzen(entwurf.rules.takeProfit, 'rr', $event.target.value)">
                                     <option v-for="n in [1,1.5,2,2.5,3,4,5]" :key="n" :value="String(n)">{{ n }} R</option>
                                     <option v-for="pk in parameterNamen" :key="pk" :value="'param:' + pk">{{ t('strategies.fromParam', { name: pk }) }}</option>
                                 </select>
-                                <select v-else-if="entwurf.rules.takeProfit.mode === 'anchor'" class="form-select form-select-sm"
+                                <select v-else-if="entwurf.rules.takeProfit.mode === 'anchor'" class="at-feld klein"
                                     :value="refText(entwurf.rules.takeProfit.anchor)"
                                     @change="refSetzen(entwurf.rules.takeProfit, 'anchor', $event.target.value)">
                                     <option v-for="x in referenzen" :key="x" :value="x">{{ x }}</option>
                                 </select>
                             </div>
-                            <div class="col-2">
+                            <div class="b2">
                                 <input v-model.number="entwurf.rules.breakEvenAtR" type="number" step="0.5" min="0"
-                                    class="form-control form-control-sm" :title="t('strategies.breakEvenTitle')" @change="pruefen" />
+                                    class="at-feld klein" :title="t('strategies.breakEvenTitle')" @change="pruefen" />
                             </div>
                         </div>
                     </div>
 
-                    <div class="d-flex gap-2 mt-3">
-                        <button class="btn btn-sm btn-success" :disabled="speichert || (pruefung && !pruefung.ok)" @click="sichern">
-                            <i class="uil uil-save me-1"></i>{{ t('common.save') }}
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" @click="entwurf = null">{{ t('common.cancel') }}</button>
+                    <div class="knopfZeile abstandOben3">
+                        <Knopf art="haupt" klein symbol="speichern" :disabled="speichert || (pruefung && !pruefung.ok)" @click="sichern">
+                            {{ t('common.save') }}
+                        </Knopf>
+                        <Knopf klein @click="entwurf = null">{{ t('common.cancel') }}</Knopf>
                     </div>
                 </div>
 
                 <!-- ══ Test ══ -->
-                <div class="dailyCard p-3 mb-3">
-                    <div class="section-title mb-2">{{ t('strategies.testNow') }}</div>
-                    <div class="row g-2 align-items-end">
-                        <div class="col-4 col-md-3">
-                            <label class="form-label small mb-1">{{ t('strategies.symbol') }}</label>
-                            <input v-model="test.symbol" class="form-control form-control-sm" />
+                <div class="dailyCard karte">
+                    <div class="section-title abstandUnten">{{ t('strategies.testNow') }}</div>
+                    <div class="raster unten">
+                        <div class="b3 m2">
+                            <label class="at-label">{{ t('strategies.symbol') }}</label>
+                            <input v-model="test.symbol" class="at-feld klein" />
                         </div>
-                        <div class="col-4 col-md-2">
-                            <label class="form-label small mb-1">{{ t('strategies.timeframe') }}</label>
-                            <select v-model="test.timeframe" class="form-select form-select-sm">
+                        <div class="b2 m2">
+                            <label class="at-label">{{ t('strategies.timeframe') }}</label>
+                            <select v-model="test.timeframe" class="at-feld klein">
                                 <option v-for="tf in entwurf.rules.timeframes" :key="tf" :value="tf">{{ tf }}</option>
                             </select>
                         </div>
-                        <div class="col-4 col-md-2">
-                            <label class="form-label small mb-1">{{ t('strategies.days') }}</label>
-                            <input v-model.number="test.tage" type="number" min="30" max="720" class="form-control form-control-sm" />
+                        <div class="b2 m2">
+                            <label class="at-label">{{ t('strategies.days') }}</label>
+                            <input v-model.number="test.tage" type="number" min="30" max="720" class="at-feld klein" />
                         </div>
-                        <div class="col-12 col-md-2">
-                            <button class="btn btn-sm btn-success w-100" :disabled="testLaeuft" @click="testen">
-                                <span v-if="testLaeuft" class="spinner-border spinner-border-sm"></span>
+                        <div class="b2">
+                            <Knopf art="haupt" klein class="voll" :disabled="testLaeuft" @click="testen">
+                                <Kreisel v-if="testLaeuft" still />
                                 <span v-else>{{ t('strategies.run') }}</span>
-                            </button>
+                            </Knopf>
                         </div>
                     </div>
 
-                    <div v-if="testErgebnis" class="mt-3">
+                    <div v-if="testErgebnis" class="abstandOben3">
                         <!-- Der Chart zum Testlauf. Kräftig = gehandelt, blass
                              gestrichelt = erkannt und verworfen. -->
-                        <div class="mb-2">
-                            <div class="d-flex align-items-center gap-2 mb-1">
-                                <i class="uil uil-chart-line"></i>
-                                <strong class="small">{{ t('strategies.chartTitle') }}</strong>
-                                <span v-if="testErgebnis.setups?.length" class="badge bg-dark">
+                        <div class="abstandUnten">
+                            <div class="zeileMitSymbol abstandUnten1">
+                                <Symbol name="linie" />
+                                <strong class="fein">{{ t('strategies.chartTitle') }}</strong>
+                                <Pille v-if="testErgebnis.setups?.length" ton="neutral">
                                     {{ t('strategies.chartSetups', { n: testErgebnis.setups.length }) }}
-                                </span>
+                                </Pille>
                             </div>
-                            <p class="small text-muted mb-1">{{ t('strategies.chartHint') }}</p>
+                            <p class="fein at-gedaempft abstandUnten1">{{ t('strategies.chartHint') }}</p>
                             <div id="editorChart" class="editorChart"></div>
-                            <div v-if="chartMeldung" class="small text-muted">{{ chartMeldung }}</div>
+                            <div v-if="chartMeldung" class="fein at-gedaempft">{{ chartMeldung }}</div>
                         </div>
 
-                        <div v-if="!testErgebnis.stats.trades" class="text-muted small">
+                        <div v-if="!testErgebnis.stats.trades" class="at-gedaempft fein">
                             {{ testErgebnis.stats.hinweis || t('strategies.noTradesInPeriod') }}
                         </div>
-                        <div v-else class="row g-2">
-                            <div class="col-4 col-md-2" v-for="k in [
+                        <div v-else class="kpis">
+                            <div v-for="k in [
                                 { l: t('strategies.kpiTrades'), v: testErgebnis.stats.trades },
                                 { l: t('strategies.kpiWinRate'), v: zahl(testErgebnis.stats.winRate, 1) + ' %' },
                                 { l: t('strategies.kpiExpectancy'), v: zahl(testErgebnis.stats.expectancyR) + ' R',
@@ -1086,32 +1092,30 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                 { l: t('strategies.kpiProfitFactor'), v: zahl(testErgebnis.stats.profitFactor) },
                                 { l: t('strategies.kpiNetPnl'), v: zahl(testErgebnis.stats.netPnl), farbe: testErgebnis.stats.netPnl >= 0 },
                                 { l: t('strategies.kpiMaxDd'), v: zahl(testErgebnis.stats.maxDrawdownPct, 1) + ' %' },
-                            ]" :key="k.l">
-                                <div class="text-center p-2">
-                                    <div class="kpi-label">{{ k.l }}</div>
-                                    <div class="kpi-value" :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">{{ k.v }}</div>
-                                </div>
+                            ]" :key="k.l" class="kpi">
+                                <div class="kpi-label">{{ k.l }}</div>
+                                <div class="kpi-value" :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">{{ k.v }}</div>
                             </div>
                         </div>
-                        <div v-if="testErgebnis.funnel" class="row mt-2">
-                            <div class="col-12 col-md-6">
-                                <div class="section-title mb-1">{{ t('strategies.funnel') }}</div>
-                                <table class="table table-sm table-borderless mb-0">
+                        <div v-if="testErgebnis.funnel" class="zweiSpalten abstandOben">
+                            <div>
+                                <div class="section-title abstandUnten1">{{ t('strategies.funnel') }}</div>
+                                <table class="at-tabelle dicht">
                                     <tbody>
                                         <tr v-for="k in ['setupsDetected','triggered','executed']" :key="k">
-                                            <td class="small">{{ t('strategies.bt_' + k) }}</td>
-                                            <td class="text-end small"><strong>{{ testErgebnis.funnel[k] }}</strong></td>
+                                            <td>{{ t('strategies.bt_' + k) }}</td>
+                                            <td class="zahl"><strong>{{ testErgebnis.funnel[k] }}</strong></td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
-                            <div class="col-12 col-md-6">
-                                <div class="section-title mb-1">{{ t('strategies.whyLost') }}</div>
-                                <table class="table table-sm table-borderless mb-0">
+                            <div>
+                                <div class="section-title abstandUnten1">{{ t('strategies.whyLost') }}</div>
+                                <table class="at-tabelle dicht">
                                     <tbody>
                                         <tr v-for="[g, n] in sortiert(testErgebnis.funnel.invalidated)" :key="g">
-                                            <td class="small">{{ g }}</td>
-                                            <td class="text-end small">{{ n }}</td>
+                                            <td>{{ g }}</td>
+                                            <td class="zahl">{{ n }}</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1122,32 +1126,30 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
             </template>
 
             <!-- ══ Eigene Strategien ══ -->
-            <div v-if="liste.length" class="dailyCard p-3">
-                <div class="section-title mb-2">{{ t('strategies.myStrategies') }}</div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-borderless mb-0">
+            <div v-if="liste.length" class="dailyCard karte">
+                <div class="section-title abstandUnten">{{ t('strategies.myStrategies') }}</div>
+                <div class="at-tabelle-huelle">
+                    <table class="at-tabelle dicht">
                         <tbody>
                             <tr v-for="s in liste" :key="s.id">
-                                <td class="small pointerClass" @click="bearbeiten(s)"><strong>{{ s.name }}</strong></td>
-                                <td class="small text-muted">{{ s.strategyId }}</td>
-                                <td class="small">
-                                    <span class="badge" :class="s.geladen ? 'bg-success' : 'bg-danger'">
+                                <td class="pointerClass" @click="bearbeiten(s)"><strong>{{ s.name }}</strong></td>
+                                <td class="at-gedaempft">{{ s.strategyId }}</td>
+                                <td>
+                                    <Pille :ton="s.geladen ? 'gut' : 'schlecht'">
                                         {{ s.geladen ? t('strategies.loaded') : t('strategies.notLoaded') }}
-                                    </span>
+                                    </Pille>
                                 </td>
-                                <td class="small text-muted">{{ (s.rules.timeframes || []).join(', ') }}</td>
-                                <td class="text-end" style="white-space: nowrap;">
-                                    <button class="btn btn-sm btn-outline-secondary py-0 me-1" :title="t('strategies.exportTitle')"
-                                        @click="exportieren(s)"><i class="uil uil-download-alt"></i></button>
-                                    <button class="btn btn-sm btn-outline-secondary py-0 me-1" :title="t('strategies.duplicate')"
-                                        @click="kopieren(s)"><i class="uil uil-copy"></i></button>
+                                <td class="at-gedaempft">{{ (s.rules.timeframes || []).join(', ') }}</td>
+                                <td class="zahl aktionen">
+                                    <Knopf klein nurSymbol symbol="herunterladen" :titel="t('strategies.exportTitle')"
+                                        @click="exportieren(s)" />
+                                    <Knopf klein nurSymbol symbol="kopieren" :titel="t('strategies.duplicate')"
+                                        @click="kopieren(s)" />
                                     <template v-if="loeschFrage === s.id">
-                                        <button class="btn btn-sm btn-danger py-0 me-1" @click="loeschen(s)">{{ t('common.yes') }}</button>
-                                        <button class="btn btn-sm btn-outline-secondary py-0" @click="loeschFrage = null">{{ t('common.no') }}</button>
+                                        <Knopf art="gefahr" klein @click="loeschen(s)">{{ t('common.yes') }}</Knopf>
+                                        <Knopf klein @click="loeschFrage = null">{{ t('common.no') }}</Knopf>
                                     </template>
-                                    <button v-else class="btn btn-sm btn-outline-danger py-0" @click="loeschFrage = s.id">
-                                        <i class="uil uil-trash-alt"></i>
-                                    </button>
+                                    <Knopf v-else art="gefahr" klein nurSymbol symbol="muell" @click="loeschFrage = s.id" />
                                 </td>
                             </tr>
                         </tbody>
@@ -1159,6 +1161,23 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
 </template>
 
 <style scoped>
+/* ── Seitenrahmen ── */
+.seite {
+    padding: var(--abstand-4) var(--abstand-4) var(--abstand-5);
+}
+
+.seiteInnen {
+    max-width: 1500px;
+}
+
+.karte {
+    padding: var(--abstand-4);
+    margin-bottom: var(--abstand-4);
+}
+
+/* `.dailyCard` setzt global `height: 100%`. Hier stehen die Karten gestapelt
+   untereinander — dort zieht die Regel jede einzelne Karte auf die Höhe der
+   GESAMTEN Spalte und erzeugt riesige Leerräume. */
 .dailyCard {
     height: auto;
 }
@@ -1167,34 +1186,385 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
+}
+
+.fein {
+    font-size: 0.85rem;
+}
+
+.vorSymbol {
+    margin-right: var(--abstand-1);
+    vertical-align: -0.125em;
+}
+
+.abstandUnten1 { margin-bottom: var(--abstand-1); }
+.abstandUnten { margin-bottom: var(--abstand-2); }
+.abstandUnten3 { margin-bottom: var(--abstand-4); }
+.abstandOben { margin-top: var(--abstand-2); }
+.abstandOben3 { margin-top: var(--abstand-4); }
+
+.rechts {
+    margin-left: auto;
+}
+
+.zeileMitSymbol {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
+}
+
+.knopfZeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+/* Neutraler Kasten (früher alert-secondary): eine Aussage, keine Warnung. */
+.kasten {
+    padding: var(--abstand-2) var(--abstand-3);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
+    color: var(--muted);
+    font-size: 0.85rem;
+}
+
+.kastenZeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.punkte {
+    margin: 0;
+    padding-left: var(--abstand-4);
+}
+
+/* ── Raster: 12 Spalten ab Tablet, auf dem Telefon 6 Spalten mit
+   Vorgabe „ganze Breite" — wo zwei oder drei Felder nebeneinander
+   lesbar bleiben, tragen sie m3 bzw. m2. ── */
+.raster {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--abstand-2);
+}
+
+.raster.eng {
+    gap: var(--abstand-1);
+}
+
+.raster.unten {
+    align-items: end;
+}
+
+.raster.mittig {
+    align-items: center;
+}
+
+.b1 { grid-column: span 1; }
+.b2 { grid-column: span 2; }
+.b3 { grid-column: span 3; }
+.b4 { grid-column: span 4; }
+.b5 { grid-column: span 5; }
+.b6 { grid-column: span 6; }
+.b8 { grid-column: span 8; }
+.b12 { grid-column: 1 / -1; }
+.ab5 { grid-column: 5 / span 4; }
+
+.reihe {
+    display: flex;
+    gap: var(--abstand-1);
+    min-width: 0;
+}
+
+.reihe > .at-feld {
+    min-width: 0;
+}
+
+.voll {
+    width: 100%;
+}
+
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: var(--abstand-2);
+}
+
+.kpi {
+    text-align: center;
+    padding: var(--abstand-2);
+}
+
+.kpi-label {
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+}
+
+.kpi-value {
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.zweiSpalten {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--abstand-4);
+}
+
+.aktionen {
+    white-space: nowrap;
+}
+
+.aktionen > * + * {
+    margin-left: var(--abstand-1);
+}
+
+@media (max-width: 767.98px) {
+    .seite {
+        padding: var(--abstand-3) var(--abstand-4) var(--abstand-5);
+    }
+
+    .karte {
+        padding: var(--abstand-3);
+    }
+
+    .raster {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .raster > * {
+        grid-column: 1 / -1;
+    }
+
+    .raster > .m3 { grid-column: span 3; }
+    .raster > .m2 { grid-column: span 2; }
+
+    .kpis {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .zweiSpalten {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Strategie-Editor ── */
+.kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-4);
+}
+
+.seitenTitel {
+    margin: 0 auto 0 0;
+}
+
+.versteckt {
+    display: none;
+}
+
+.vorlagen {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--abstand-4);
+    margin-bottom: var(--abstand-4);
+}
+
+.vorlage {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: var(--abstand-4);
+}
+
+.vorlage > strong {
+    padding-right: var(--abstand-5);
+}
+
+.vorlageWeg {
+    position: absolute;
+    top: var(--abstand-1);
+    right: var(--abstand-1);
+}
+
+.vorlageMarkt {
+    margin-top: var(--abstand-1);
+}
+
+.vorlageText {
+    flex-grow: 1;
+    margin: var(--abstand-1) 0 var(--abstand-3);
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+/* Marktphasen-Marke auf den Vorlagen-Karten */
+.marktBadge {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: var(--radius-pille);
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: normal;
+    text-align: left;
+}
+.marktTrend {
+    background: var(--accent-flaeche);
+    border: 1px solid var(--accent-rand);
+    color: var(--accent);
+}
+.marktSeitwaerts {
+    background: var(--warn-flaeche);
+    border: 1px solid var(--warn);
+    color: var(--warn);
+}
+.marktNeutral {
+    background: var(--panel-soft);
+    border: 1px solid var(--line-stark);
+    color: var(--muted);
+}
+
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
+}
+
+.tfChip {
+    padding: 0.15rem 0.55rem;
+    border-radius: var(--radius-klein);
+    border: 1px solid var(--line);
+    background: var(--panel-soft);
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.tfChip:hover {
+    color: var(--text);
+}
+
+.tfChip.an {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+}
+
+.modusZeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
+}
+
+.umschalter {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    overflow: hidden;
+}
+
+.umschalter button {
+    padding: 0.3rem 0.75rem;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.umschalter button + button {
+    border-left: 1px solid var(--line);
+}
+
+.umschalter button.an {
+    background: var(--accent);
+    color: var(--on-accent);
 }
 
 .block {
-    border-top: 1px solid var(--white-10,rgba(255, 255, 255, 0.1));
-    padding-top: 0.7rem;
-    margin-top: 0.7rem;
+    border-top: 1px solid var(--line);
+    padding-top: var(--abstand-3);
+    margin-top: var(--abstand-3);
 }
 
 /* Vom letzten Chat-Vorschlag angefasst. Bewusst eine Kante statt einer Füllung:
    sie zeigt den Ort, ohne die Werte darin schwerer lesbar zu machen. */
 .block.blockGeaendert {
-    border-left: 3px solid var(--blue-color, #01B4FF);
+    border-left: 3px solid var(--accent);
     padding-left: 0.6rem;
     margin-left: -0.6rem;
-    background: rgba(1, 180, 255, 0.06);
-    border-radius: var(--border-radius, 6px);
+    background: var(--accent-flaeche);
+    border-radius: var(--radius-klein);
 }
 
-/* Der Chat ist ein Werkzeug, kein Anhängsel — er bekommt eine eigene Fläche,
-   damit er nicht als weitere Formularzeile gelesen wird. */
-.vorlageWeg {
-    position: absolute;
-    top: 0.2rem;
-    right: 0.3rem;
-    padding: 0 0.3rem;
-    line-height: 1;
-    text-decoration: none;
+.block-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-1);
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+}
+
+.block-title .nr {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.3rem;
+    height: 1.3rem;
+    margin-right: var(--abstand-1);
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 0.7rem;
+}
+
+.titelKnoepfe {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
+    margin-left: auto;
+}
+
+.block-hint {
+    font-size: 0.74rem;
+    color: var(--muted);
+    margin-bottom: var(--abstand-2);
+}
+
+.eintrag + .eintrag {
+    margin-top: var(--abstand-1);
+}
+
+.wegZelle {
+    display: flex;
+}
+
+.wegZelle > * {
+    flex: 1 1 auto;
+}
+
+.zeilenTitel {
+    font-size: 0.85rem;
+    padding-top: var(--abstand-1);
 }
 
 .editorChart {
@@ -1203,9 +1573,9 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
 }
 
 .saetzeKarte {
-    border: 1px solid var(--white-10,rgba(255, 255, 255, 0.12));
-    border-radius: var(--border-radius, 6px);
-    padding: 0.75rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-3);
 }
 
 .satzZeile {
@@ -1218,107 +1588,123 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
 
 .satzTitel {
     flex: 0 0 6.5rem;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
     font-size: 0.8rem;
 }
 
+.fussnote {
+    margin: var(--abstand-2) 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+/* Der Chat ist ein Werkzeug, kein Anhängsel — er bekommt eine eigene Fläche,
+   damit er nicht als weitere Formularzeile gelesen wird. */
 .chatPanel {
-    border: 1px solid rgba(1, 180, 255, 0.35);
-    background: rgba(1, 180, 255, 0.05);
-    border-radius: var(--border-radius, 6px);
-    padding: 0.75rem;
-    margin-top: 0.7rem;
+    border: 1px solid var(--accent-rand);
+    background: var(--panel-soft);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-3);
+    margin-top: var(--abstand-3);
 }
 
 .chatIcon {
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
     font-size: 1.1rem;
 }
 
 .chatVerlauf {
     max-height: 16rem;
     overflow-y: auto;
-    border: 1px solid var(--white-10,rgba(255, 255, 255, 0.1));
-    border-radius: var(--border-radius, 6px);
-    padding: 0.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    padding: var(--abstand-2);
 }
 
 .chatZeile {
     font-size: 0.85rem;
     padding: 0.35rem 0.55rem;
     margin-bottom: 0.35rem;
-    border-radius: var(--border-radius, 6px);
+    border-radius: var(--radius-klein);
     white-space: pre-wrap;
 }
 
 .chatNutzer {
-    background: rgba(1, 180, 255, 0.14);
+    background: var(--accent-flaeche);
     margin-left: 2rem;
 }
 
 .chatModell {
-    background: var(--white-10, rgba(255, 255, 255, 0.06));
+    background: var(--panel-hoch);
     margin-right: 2rem;
 }
 
-/* Marktphasen-Badge auf den Vorlagen-Karten */
-.marktBadge {
-    font-weight: 500;
-    white-space: normal;
-    text-align: left;
-}
-.marktTrend {
-    background: rgba(1, 180, 255, 0.12);
-    border: 1px solid rgba(1, 180, 255, 0.45);
-    color: rgba(1, 180, 255, 0.95);
-}
-.marktSeitwaerts {
-    background: rgba(240, 196, 25, 0.12);
-    border: 1px solid rgba(240, 196, 25, 0.45);
-    color: rgba(240, 196, 25, 0.95);
-}
-.marktNeutral {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    color: rgba(255, 255, 255, 0.75);
-}
-
-.block-title {
+.fragen {
     display: flex;
-    align-items: center;
-    font-size: 0.85rem;
-    font-weight: 600;
-    margin-bottom: 0.2rem;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
 }
 
-.block-title .nr {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.3rem;
-    height: 1.3rem;
-    margin-right: 0.5rem;
-    border-radius: 50%;
-    background: var(--blue-color, #01B4FF);
-    color: #fff;
-    font-size: 0.7rem;
+.frageKnopf {
+    text-align: left;
+    justify-content: flex-start;
 }
 
-.block-hint {
-    font-size: 0.74rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
-    margin-bottom: 0.5rem;
+.chatEingabe {
+    display: flex;
+    gap: var(--abstand-2);
+    align-items: stretch;
 }
 
-.kpi-label {
-    font-size: 0.68rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+.chatEingabe .at-feld {
+    flex: 1 1 auto;
+    min-width: 0;
 }
 
-.kpi-value {
-    font-size: 1.1rem;
-    font-weight: 600;
+.chatEingabe > :last-child {
+    flex: 0 0 auto;
+}
+
+@media (max-width: 767.98px) {
+    .vorlagen {
+        grid-template-columns: 1fr;
+    }
+
+    /* Mehrere Einträge untereinander: eine feine Trennlinie, sonst verschwimmen
+       die Felder eines Eintrags mit denen des nächsten. */
+    .eintrag + .eintrag {
+        margin-top: var(--abstand-2);
+        padding-top: var(--abstand-2);
+        border-top: 1px dashed var(--line);
+    }
+
+    .wegZelle {
+        justify-content: flex-end;
+    }
+
+    .wegZelle > * {
+        flex: 0 0 auto;
+    }
+
+    .zeilenTitel {
+        padding-top: 0;
+    }
+
+    .satzZeile {
+        flex-direction: column;
+        gap: 0;
+    }
+
+    .satzTitel {
+        flex-basis: auto;
+    }
+
+    .chatNutzer {
+        margin-left: var(--abstand-4);
+    }
+
+    .chatModell {
+        margin-right: var(--abstand-4);
+    }
 }
 </style>

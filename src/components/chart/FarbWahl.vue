@@ -99,8 +99,8 @@ onBeforeUnmount(zu)
     height: 26px;
     padding: 3px;
     border-radius: 6px;
-    border: 1px solid var(--white-18);
-    background: var(--black-bg-5, #1e222d);
+    border: 1px solid var(--line-stark);
+    background: var(--panel);
     cursor: pointer;
 }
 
@@ -116,8 +116,8 @@ onBeforeUnmount(zu)
     z-index: 3000;
     padding: 8px;
     border-radius: 8px;
-    border: 1px solid var(--white-18);
-    background: var(--black-bg-5, #1e222d);
+    border: 1px solid var(--line-stark);
+    background: var(--panel);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
     display: flex;
     flex-direction: column;
@@ -153,7 +153,7 @@ onBeforeUnmount(zu)
     gap: 6px;
     margin-top: 6px;
     font-size: 12px;
-    color: var(--grey-text);
+    color: var(--muted);
     cursor: pointer;
 }
 

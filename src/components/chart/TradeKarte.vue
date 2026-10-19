@@ -11,6 +11,7 @@ import dayjs from '../../utils/dayjs-setup.js'
 import { timeZoneTrade, scrollToDateUnix } from '../../stores/ui.js'
 import { selectedMonth, selectedMonthPreset } from '../../stores/filters.js'
 import { dauerText } from '../../utils/chart/zeichnungen/geometrie.js'
+import { Symbol, Knopf } from '../basis'
 
 const props = defineProps({
     trade: { type: Object, required: true },
@@ -51,7 +52,7 @@ function zumJournal() {
         <div class="kopf">
             <span class="richtung" :class="tr.richtung">{{ t(tr.richtung === 'long' ? 'chart.richtungLong' : 'chart.richtungShort') }}</span>
             <span class="broker">{{ tr.broker }}</span>
-            <button class="zu" @click="emit('schliesse')"><i class="uil uil-times"></i></button>
+            <button type="button" class="zu" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
         </div>
         <div class="ergebnis" :class="(tr.netto ?? 0) >= 0 ? 'greenTrade' : 'redTrade'">
             {{ geld(tr.netto) }}
@@ -75,8 +76,7 @@ function zumJournal() {
                 <b>{{ t('chart.trade.regelTreu') }}</b> {{ tr.notiz.regelTreu === 1 ? t('chart.trade.ja') : t('chart.trade.nein') }}</div>
         </template>
         <div v-if="tr.tags?.length" class="tags"><span v-for="g in tr.tags" :key="g" class="tag">{{ g }}</span></div>
-        <button class="btn btn-sm btn-outline-secondary w-100 mt-2" @click="zumJournal">
-            <i class="uil uil-book-alt"></i> {{ t('chart.trade.zumJournal') }}</button>
+        <Knopf klein symbol="buch" class="zumJournal" @click="zumJournal">{{ t('chart.trade.zumJournal') }}</Knopf>
     </div>
 </template>
 
@@ -90,11 +90,11 @@ function zumJournal() {
     max-width: calc(100% - 80px);
     max-height: calc(100% - 50px);
     overflow-y: auto;
-    background: var(--black-bg-5, #1e222d);
-    border: 1px solid var(--white-18);
-    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
     padding: 10px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--schatten);
     font-size: 12px;
 }
 
@@ -111,24 +111,35 @@ function zumJournal() {
 }
 
 .richtung.long {
-    background: rgba(38, 166, 154, 0.2);
-    color: var(--green);
+    background: var(--good-flaeche);
+    color: var(--good);
 }
 
 .richtung.short {
-    background: rgba(255, 105, 96, 0.2);
-    color: var(--red-color);
+    background: var(--bad-flaeche);
+    color: var(--bad);
 }
 
 .broker {
-    color: var(--grey-text);
+    color: var(--muted);
     flex: 1;
 }
 
 .zu {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.zu:hover {
+    color: var(--text);
+}
+
+.zumJournal {
+    width: 100%;
+    margin-top: var(--abstand-2);
 }
 
 .ergebnis {
@@ -148,15 +159,15 @@ table {
 
 td {
     padding: 1px 4px 1px 0;
-    color: var(--white-87, #ddd);
+    color: var(--text);
 }
 
 td:first-child {
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .hinweis {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
     margin-top: 4px;
 }
@@ -167,7 +178,7 @@ td:first-child {
 }
 
 .feld b {
-    color: var(--grey-text);
+    color: var(--muted);
     font-weight: 500;
     display: block;
 }
@@ -180,7 +191,7 @@ td:first-child {
 }
 
 .tag {
-    background: var(--white-10);
+    background: var(--line);
     border-radius: 3px;
     padding: 0 5px;
     font-size: 11px;

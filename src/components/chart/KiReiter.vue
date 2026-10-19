@@ -15,6 +15,7 @@ import axios from 'axios'
 import { linieAlsZeichnung, zoneAlsZeichnung, profilAlsZeichnung, istProfilLinie, istProfilZone } from '../../utils/chart/kiZeichnungen.js'
 import { legeAn } from '../../stores/chartZeichnungen.js'
 import KiChat from './KiChat.vue'
+import { Symbol, Knopf } from '../basis'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -191,21 +192,20 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 
 <template>
     <div class="kiReiter">
-        <div class="btn-group btn-group-sm modus" role="group">
-            <button type="button" class="btn" :class="modus === 'analyse' ? 'btn-primary' : 'btn-outline-secondary'" @click="setzeModus('analyse')">
-                <i class="uil uil-chart-line"></i> {{ t('chart.ki.modusAnalyse') }}</button>
-            <button type="button" class="btn" :class="modus === 'chat' ? 'btn-primary' : 'btn-outline-secondary'" @click="setzeModus('chat')">
-                <i class="uil uil-comment-dots"></i> {{ t('chart.ki.modusChat') }}</button>
+        <div class="modus" role="group">
+            <button type="button" :class="{ an: modus === 'analyse' }" :aria-pressed="modus === 'analyse'" @click="setzeModus('analyse')">
+                <Symbol name="linie" /> {{ t('chart.ki.modusAnalyse') }}</button>
+            <button type="button" :class="{ an: modus === 'chat' }" :aria-pressed="modus === 'chat'" @click="setzeModus('chat')">
+                <Symbol name="nachricht" /> {{ t('chart.ki.modusChat') }}</button>
         </div>
         <KiChat v-if="modus === 'chat'" class="chatFlaeche" :panel="panel" :sichtbar-bis="sichtbarBis" />
         <template v-else>
-        <button class="btn btn-sm btn-outline-primary" :disabled="laeuft || keineQuelle" @click="erstelle">
-            <span v-if="laeuft" class="spinner-border spinner-border-sm"></span>
-            <template v-else><i class="uil uil-robot"></i> {{ t('chart.ki.erstellen', { symbol: panel.symbol, tf: panel.interval }) }}</template>
-        </button>
+        <Knopf klein symbol="ki" :laedt="laeuft" :disabled="keineQuelle" class="erstellen" @click="erstelle">
+            <template v-if="!laeuft">{{ t('chart.ki.erstellen', { symbol: panel.symbol, tf: panel.interval }) }}</template>
+        </Knopf>
         <div class="optionen">
             <label v-for="o in OPTIONEN" :key="o" class="option" :class="{ aus: o === 'zonen' && !zonenMoeglich }" :title="t('chart.ki.optTipp.' + o)">
-                <input v-model="optionen[o]" type="checkbox" class="form-check-input" :disabled="o === 'zonen' && !zonenMoeglich" />
+                <input v-model="optionen[o]" type="checkbox" :disabled="o === 'zonen' && !zonenMoeglich" />
                 {{ t('chart.ki.opt.' + o) }}
             </label>
         </div>
@@ -228,8 +228,8 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 
             <div v-if="analyse.linien?.length || analyse.zonen?.length" class="abschnitt">
                 {{ t('chart.ki.vorschlaege') }}
-                <button class="btn btn-sm btn-link p-0 ms-2" :disabled="uebernimmtAlle" @click="alleUebernehmen">{{ t('chart.ki.alleUebernehmen') }}</button>
-                <button v-if="analyse.auswahl" class="btn btn-sm btn-link p-0 ms-2" :class="{ an: alle }" @click="schalteAlle">{{ t(alle ? 'chart.ki.kandidatenAus' : 'chart.ki.kandidatenZeigen') }}</button>
+                <button type="button" class="textKnopf abstandLinks" :disabled="uebernimmtAlle" @click="alleUebernehmen">{{ t('chart.ki.alleUebernehmen') }}</button>
+                <button v-if="analyse.auswahl" class="textKnopf abstandLinks" :class="{ an: alle }" @click="schalteAlle">{{ t(alle ? 'chart.ki.kandidatenAus' : 'chart.ki.kandidatenZeigen') }}</button>
             </div>
             <div v-for="(l, i) in analyse.linien" :key="'l' + i" class="vorschlag">
                 <div class="zeile">
@@ -237,7 +237,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                     <span v-if="l.id" class="id" :class="l.gewicht">{{ l.id }}</span>
                     <span class="label">{{ l.label }}</span>
                     <span class="preis">{{ l.p1 === l.p2 ? preis(l.p1) : `${preis(l.p1)} → ${preis(l.p2)}` }}</span>
-                    <button class="btn btn-sm btn-link p-0" :disabled="uebernommen.has('linie' + i)" @click="uebernimm('linie', i)">
+                    <button type="button" class="textKnopf" :disabled="uebernommen.has('linie' + i)" @click="uebernimm('linie', i)">
                         {{ uebernommen.has('linie' + i) ? '✓' : t('chart.ki.uebernehmen') }}</button>
                 </div>
                 <small>{{ l.grund }}</small>
@@ -248,13 +248,13 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                     <span v-if="z.ids?.length" class="id" :class="z.gewicht">{{ z.ids.join('+') }}</span>
                     <span class="label">{{ z.label }}</span>
                     <span class="preis">{{ preis(z.tief) }}–{{ preis(z.hoch) }}</span>
-                    <button class="btn btn-sm btn-link p-0" :disabled="uebernommen.has('zone' + i)" @click="uebernimm('zone', i)">
+                    <button type="button" class="textKnopf" :disabled="uebernommen.has('zone' + i)" @click="uebernimm('zone', i)">
                         {{ uebernommen.has('zone' + i) ? '✓' : t('chart.ki.uebernehmen') }}</button>
                 </div>
                 <small>{{ z.grund }}</small>
             </div>
             <div v-if="analyse.verworfen?.length" class="verworfen">{{ t('chart.ki.verworfen', { n: analyse.verworfen.length }) }}</div>
-            <button class="btn btn-sm btn-link p-0" @click="verwerfen">{{ t('chart.ki.vorschauWeg') }}</button>
+            <button type="button" class="textKnopf" @click="verwerfen">{{ t('chart.ki.vorschauWeg') }}</button>
         </template>
         </template>
     </div>
@@ -287,7 +287,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
     align-items: center;
     gap: 4px;
     font-size: 11px;
-    color: var(--white-87, #ddd);
+    color: var(--text);
     cursor: pointer;
     white-space: nowrap;
 }
@@ -303,7 +303,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 }
 
 .struktur {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
 }
 
@@ -311,43 +311,101 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
     font-size: 10px;
     padding: 0 4px;
     border-radius: 4px;
-    background: var(--white-10);
-    color: var(--grey-text);
+    background: var(--line);
+    color: var(--muted);
     margin: 0 2px;
 }
 
 .id.stark {
-    background: rgba(245, 197, 66, 0.25);
-    color: #f5c542;
+    background: var(--warn-flaeche);
+    color: var(--warn);
 }
 
 .id.schwach {
     opacity: 0.6;
 }
 
-.btn-link.an {
+.textKnopf.an {
     font-weight: 600;
 }
 
-.modus {
-    display: flex;
+.abstandLinks {
+    margin-left: var(--abstand-2);
+}
+
+.erstellen {
     flex-shrink: 0;
 }
 
-.modus .btn {
-    flex: 1;
-    font-size: 12px;
+/* Umschalter Analyse/Chat: zwei gleich breite Segmente. */
+.modus {
+    display: flex;
+    flex-shrink: 0;
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
+    overflow: hidden;
 }
+
+.modus button {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.modus button + button {
+    border-left: 1px solid var(--line-stark);
+}
+
+.modus button:hover {
+    color: var(--text);
+}
+
+.modus button.an {
+    background: var(--accent-flaeche);
+    color: var(--accent);
+}
+
+.option input {
+    accent-color: var(--accent);
+}
+
+/* Text-Knopf: Handlung ohne Fläche, für Zeilen in der dichten Seitenleiste. */
+.textKnopf {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.textKnopf:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.textKnopf:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
 
 .hinweis,
 .kopf small,
 .verworfen {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
 }
 
 .fehler {
-    color: var(--red-color);
+    color: var(--bad);
 }
 
 .text {
@@ -359,7 +417,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--grey-text);
+    color: var(--muted);
     margin-top: 6px;
 }
 
@@ -368,7 +426,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 }
 
 .bedingung b {
-    color: var(--blue-color);
+    color: var(--accent);
     font-weight: 500;
 }
 
@@ -394,10 +452,10 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 
 .vorschlag .preis {
     font-variant-numeric: tabular-nums;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .vorschlag small {
-    color: var(--grey-text);
+    color: var(--muted);
 }
 </style>

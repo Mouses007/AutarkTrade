@@ -18,6 +18,7 @@ import { useXDecCurrencyFormat } from '../utils/formatters.js'
 import { logError } from '../utils/logger.js'
 import dayjs from '../utils/dayjs-setup.js'
 import InfoTipp from '../components/InfoTipp.vue'
+import { Knopf, Pille, Symbol } from '../components/basis'
 
 const { t } = useI18n()
 
@@ -53,11 +54,12 @@ const dauer = (ms) => {
     return d > 0 ? t('strategies.durationDays', { d, h }) : t('strategies.durationHours', { h, m: min % 60 })
 }
 
+// Ton der Pille je Status (Baustein `Pille`)
 const statusFarbe = (s) => ({
-    open: 'bg-primary', closed: 'bg-secondary', triggered: 'bg-info text-dark',
-    waiting_retest: 'bg-warning text-dark', armed: 'bg-warning text-dark',
-    invalidated: 'bg-danger', expired: 'bg-dark', rejected: 'bg-danger',
-}[s] || 'bg-dark')
+    open: 'akzent', closed: 'neutral', triggered: 'akzent',
+    waiting_retest: 'warn', armed: 'warn',
+    invalidated: 'schlecht', expired: 'neutral', rejected: 'schlecht',
+}[s] || 'neutral')
 
 const instanzVon = (id) => instanzen.value.find((i) => i.id === id) || null
 
@@ -166,16 +168,16 @@ const gruende = computed(() => {
 
 <template>
     <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="row mt-3 ps-3 pe-3">
-        <div class="col-12 col-xl-11">
+    <div v-show="!spinnerLoadingPage" class="setups-seite">
+        <div class="setups-inhalt">
 
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-                <h5 class="mb-0 me-auto">{{ t('strategies.setupsTitle') }}</h5>
-                <select v-model="filter.instanceId" class="form-select form-select-sm w-auto" @change="laden">
+            <div class="kopfzeile">
+                <h5 class="seitentitel">{{ t('strategies.setupsTitle') }}</h5>
+                <select v-model="filter.instanceId" class="at-feld klein filter-feld" @change="laden">
                     <option value="">{{ t('strategies.allInstances') }}</option>
                     <option v-for="i in instanzen" :key="i.id" :value="i.id">{{ i.name }}</option>
                 </select>
-                <select v-model="filter.status" class="form-select form-select-sm w-auto" @change="laden">
+                <select v-model="filter.status" class="at-feld klein filter-feld" @change="laden">
                     <option value="">{{ t('strategies.allStatus') }}</option>
                     <option value="waiting_retest,armed">{{ t('strategies.statusWaiting') }}</option>
                     <option value="open">{{ t('strategies.statusOpen') }}</option>
@@ -185,73 +187,72 @@ const gruende = computed(() => {
             </div>
 
             <!-- Offene Positionen -->
-            <div v-if="positionen.length" class="dailyCard p-3 mb-3">
-                <div class="section-title mb-2">{{ t('strategies.openPositions') }}</div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-borderless mb-0">
+            <div v-if="positionen.length" class="dailyCard karte">
+                <div class="section-title">{{ t('strategies.openPositions') }}</div>
+                <div class="at-tabelle-huelle">
+                    <table class="at-tabelle dicht">
                         <thead>
-                            <tr class="text-muted small">
+                            <tr>
                                 <th>{{ t('strategies.symbol') }}</th>
                                 <th>{{ t('strategies.direction') }}</th>
-                                <th class="text-end">{{ t('strategies.qty') }}</th>
-                                <th class="text-end">{{ t('strategies.entry') }}</th>
-                                <th class="text-end">{{ t('strategies.markPrice') }}</th>
-                                <th class="text-end">{{ t('strategies.stop') }}</th>
-                                <th class="text-end">{{ t('strategies.target') }}</th>
-                                <th class="text-end">{{ t('strategies.notional') }}</th>
-                                <th class="text-end">{{ t('strategies.grossShort') }}</th>
-                                <th class="text-end">{{ t('strategies.fees') }}</th>
-                                <th class="text-end">{{ t('strategies.funding') }}</th>
-                                <th class="text-end">
+                                <th class="zahl">{{ t('strategies.qty') }}</th>
+                                <th class="zahl">{{ t('strategies.entry') }}</th>
+                                <th class="zahl">{{ t('strategies.markPrice') }}</th>
+                                <th class="zahl">{{ t('strategies.stop') }}</th>
+                                <th class="zahl">{{ t('strategies.target') }}</th>
+                                <th class="zahl">{{ t('strategies.notional') }}</th>
+                                <th class="zahl">{{ t('strategies.grossShort') }}</th>
+                                <th class="zahl">{{ t('strategies.fees') }}</th>
+                                <th class="zahl">{{ t('strategies.funding') }}</th>
+                                <th class="zahl">
                                     {{ t('strategies.unrealizedNet') }}<InfoTipp schluessel="strategies.unrealizedHint" breit />
                                 </th>
-                                <th class="text-end">{{ t('strategies.heldSince') }}</th>
+                                <th class="zahl">{{ t('strategies.heldSince') }}</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody>
                             <tr v-for="p in positionen" :key="p.id">
-                                <td class="small">
+                                <td>
                                     {{ p.symbol }}
-                                    <div class="text-muted" style="font-size: 0.75em">{{ p.instanz }}</div>
+                                    <div class="at-gedaempft unterzeile">{{ p.instanz }}</div>
                                 </td>
-                                <td class="small" :class="p.direction === 'long' ? 'greenTrade' : 'redTrade'">
+                                <td :class="p.direction === 'long' ? 'greenTrade' : 'redTrade'">
                                     {{ p.direction === 'long' ? 'LONG' : 'SHORT' }}
                                 </td>
-                                <td class="text-end small">{{ p.qty }}</td>
-                                <td class="text-end small">{{ kurs(p.entryPrice) }}</td>
-                                <td class="text-end small">
+                                <td class="zahl">{{ p.qty }}</td>
+                                <td class="zahl">{{ kurs(p.entryPrice) }}</td>
+                                <td class="zahl">
                                     <template v-if="p.stand">{{ kurs(p.stand.markPrice) }}</template>
-                                    <span v-else class="text-muted" :title="p.fehler">{{ t('strategies.priceUnavailable') }}</span>
+                                    <span v-else class="at-gedaempft" :title="p.fehler">{{ t('strategies.priceUnavailable') }}</span>
                                 </td>
-                                <td class="text-end small">{{ kurs(p.stopLoss) }}</td>
-                                <td class="text-end small">{{ p.takeProfit ? kurs(p.takeProfit) : '–' }}</td>
-                                <td class="text-end small">{{ geld(p.notionalUsdt) }}</td>
+                                <td class="zahl">{{ kurs(p.stopLoss) }}</td>
+                                <td class="zahl">{{ p.takeProfit ? kurs(p.takeProfit) : '–' }}</td>
+                                <td class="zahl">{{ geld(p.notionalUsdt) }}</td>
                                 <template v-if="p.stand">
-                                    <td class="text-end small" :class="pnlKlasse(p.stand.grossPnl)">{{ geldMitVz(p.stand.grossPnl) }}</td>
-                                    <td class="text-end small redTrade">
+                                    <td class="zahl" :class="pnlKlasse(p.stand.grossPnl)">{{ geldMitVz(p.stand.grossPnl) }}</td>
+                                    <td class="zahl redTrade">
                                         −{{ geld(p.stand.fees) }}<InfoTipp :text="t('strategies.feesHint', {
                                             open: geld(p.stand.feeOpen + p.stand.feePartial), close: geld(p.stand.feeClose) })" />
                                     </td>
-                                    <td class="text-end small" :class="pnlKlasse(p.stand.funding)">
+                                    <td class="zahl" :class="pnlKlasse(p.stand.funding)">
                                         <template v-if="p.stand.funding !== null">
                                             {{ geldMitVz(p.stand.funding) }}<InfoTipp breit
                                                 :text="t('strategies.fundingHint', { bps: p.fundingBpsAnnahme })" />
                                         </template>
-                                        <span v-else class="text-muted" :title="t('strategies.fundingUnknown')">?</span>
+                                        <span v-else class="at-gedaempft" :title="t('strategies.fundingUnknown')">?</span>
                                     </td>
-                                    <td class="text-end small fw-bold" :class="pnlKlasse(p.stand.netPnl)">
+                                    <td class="zahl fett" :class="pnlKlasse(p.stand.netPnl)">
                                         {{ geldMitVz(p.stand.netPnl) }}
-                                        <div class="fw-normal" style="font-size: 0.75em">{{ (p.stand.rMultiple > 0 ? '+' : '') + zahl(p.stand.rMultiple) }} R</div>
+                                        <div class="normal unterzeile">{{ (p.stand.rMultiple > 0 ? '+' : '') + zahl(p.stand.rMultiple) }} R</div>
                                     </td>
-                                    <td class="text-end small">{{ dauer(p.stand.heldMs) }}</td>
+                                    <td class="zahl">{{ dauer(p.stand.heldMs) }}</td>
                                 </template>
                                 <td v-else colspan="5"></td>
-                                <td class="text-end">
-                                    <button class="btn btn-sm btn-outline-danger py-0"
-                                        @click="positionSchliessen(p)">
+                                <td class="zahl">
+                                    <Knopf art="gefahr" klein @click="positionSchliessen(p)">
                                         {{ t('strategies.close') }}
-                                    </button>
+                                    </Knopf>
                                 </td>
                             </tr>
                         </tbody>
@@ -260,30 +261,27 @@ const gruende = computed(() => {
             </div>
 
             <!-- Chart des gewählten Setups -->
-            <div v-if="gewaehlt" class="dailyCard p-3 mb-3">
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <div v-if="gewaehlt" class="dailyCard karte">
+                <div class="chart-kopf">
                     <strong>{{ gewaehlt.symbol }}</strong>
-                    <span class="badge bg-dark">{{ gewaehlt.timeframe }}</span>
-                    <span class="badge" :class="gewaehlt.direction === 'long' ? 'bg-success' : 'bg-danger'">
+                    <Pille ton="neutral">{{ gewaehlt.timeframe }}</Pille>
+                    <Pille :ton="gewaehlt.direction === 'long' ? 'gut' : 'schlecht'">
                         {{ gewaehlt.direction === 'long' ? 'LONG' : 'SHORT' }}
-                    </span>
-                    <span class="badge" :class="statusFarbe(gewaehlt.status)">
+                    </Pille>
+                    <Pille :ton="statusFarbe(gewaehlt.status)">
                         {{ t('strategies.status_' + gewaehlt.status) }}
-                    </span>
-                    <span v-if="gewaehlt.invalidReason" class="badge bg-dark">
+                    </Pille>
+                    <Pille v-if="gewaehlt.invalidReason" ton="neutral">
                         {{ t('strategies.reason_' + gewaehlt.invalidReason) }}
-                    </span>
-                    <button class="btn btn-sm btn-outline-secondary ms-auto py-0" :title="t('strategies.chartEnlarge')"
-                        @click="chartVergroessern()">
-                        <i class="uil" :class="chartGross ? 'uil-compress' : 'uil-expand-arrows-alt'"></i>
-                    </button>
-                    <button class="btn btn-sm btn-outline-secondary py-0" @click="gewaehlt = null">
-                        <i class="uil uil-times"></i>
-                    </button>
+                    </Pille>
+                    <Knopf class="rechts" art="leise" klein nurSymbol
+                        :symbol="chartGross ? 'verkleinern' : 'vergroessern'"
+                        :titel="t('strategies.chartEnlarge')" @click="chartVergroessern()" />
+                    <Knopf art="leise" klein nurSymbol symbol="schliessen" @click="gewaehlt = null" />
                 </div>
                 <div id="setupChart" :style="{ height: chartGross ? '78vh' : '340px' }"></div>
-                <div v-if="chartFehler" class="text-muted small mt-2">{{ chartFehler }}</div>
-                <div class="d-flex flex-wrap gap-3 mt-2 small text-muted">
+                <div v-if="chartFehler" class="at-gedaempft klein-text oben">{{ chartFehler }}</div>
+                <div class="eckdaten at-gedaempft klein-text">
                     <span>{{ t('strategies.zone') }}: {{ zahl(gewaehlt.obLow) }} – {{ zahl(gewaehlt.obHigh) }}</span>
                     <span>{{ t('strategies.entry') }}: {{ zahl(gewaehlt.entry) }}</span>
                     <span>{{ t('strategies.stop') }}: {{ zahl(gewaehlt.stopLoss) }}</span>
@@ -294,28 +292,30 @@ const gruende = computed(() => {
             </div>
 
             <!-- Gründeübersicht -->
-            <div v-if="gruende.length" class="dailyCard p-3 mb-3">
-                <div class="section-title mb-2">{{ t('strategies.whyLost') }}</div>
-                <span v-for="[g, n] in gruende" :key="g" class="badge bg-dark me-2 mb-1">
-                    {{ t('strategies.reason_' + g) }}: {{ n }}
-                </span>
+            <div v-if="gruende.length" class="dailyCard karte">
+                <div class="section-title">{{ t('strategies.whyLost') }}</div>
+                <div class="pillen">
+                    <Pille v-for="[g, n] in gruende" :key="g" ton="neutral">
+                        {{ t('strategies.reason_' + g) }}: {{ n }}
+                    </Pille>
+                </div>
             </div>
 
             <!-- Setup-Liste -->
-            <div v-if="!setups.length" class="dailyCard p-4 text-center text-muted">
+            <div v-if="!setups.length" class="dailyCard karte leer at-gedaempft">
                 {{ t('strategies.noSetups') }}
             </div>
-            <div v-else class="dailyCard p-3">
-                <div class="table-responsive">
-                    <table class="table table-sm table-borderless mb-0">
+            <div v-else class="dailyCard karte">
+                <div class="at-tabelle-huelle">
+                    <table class="at-tabelle dicht">
                         <thead>
-                            <tr class="text-muted small">
+                            <tr>
                                 <th>{{ t('strategies.symbol') }}</th>
                                 <th>{{ t('strategies.direction') }}</th>
                                 <th>{{ t('strategies.statusLabel') }}</th>
-                                <th class="text-end">{{ t('strategies.entry') }}</th>
-                                <th class="text-end">{{ t('strategies.stop') }}</th>
-                                <th class="text-end">RR</th>
+                                <th class="zahl">{{ t('strategies.entry') }}</th>
+                                <th class="zahl">{{ t('strategies.stop') }}</th>
+                                <th class="zahl">RR</th>
                                 <th>{{ t('strategies.sweepAt') }}</th>
                                 <th>{{ t('strategies.reasonLabel') }}</th>
                                 <th></th>
@@ -323,22 +323,22 @@ const gruende = computed(() => {
                         </thead>
                         <tbody>
                             <tr v-for="s in setups" :key="s.id" class="pointerClass"
-                                :class="gewaehlt?.id === s.id ? 'table-active' : ''" @click="anzeigen(s)">
-                                <td class="small">{{ s.symbol }}</td>
-                                <td class="small" :class="s.direction === 'long' ? 'greenTrade' : 'redTrade'">
+                                :class="gewaehlt?.id === s.id ? 'gewaehlt' : ''" @click="anzeigen(s)">
+                                <td>{{ s.symbol }}</td>
+                                <td :class="s.direction === 'long' ? 'greenTrade' : 'redTrade'">
                                     {{ s.direction === 'long' ? 'LONG' : 'SHORT' }}
                                 </td>
-                                <td><span class="badge" :class="statusFarbe(s.status)">
-                                    {{ t('strategies.status_' + s.status) }}</span></td>
-                                <td class="text-end small">{{ zahl(s.entry) }}</td>
-                                <td class="text-end small">{{ zahl(s.stopLoss) }}</td>
-                                <td class="text-end small">{{ zahl(s.rr) }}</td>
-                                <td class="small">{{ zeit(s.sweepCandleTime) }}</td>
-                                <td class="small text-muted">
+                                <td><Pille :ton="statusFarbe(s.status)">
+                                    {{ t('strategies.status_' + s.status) }}</Pille></td>
+                                <td class="zahl">{{ zahl(s.entry) }}</td>
+                                <td class="zahl">{{ zahl(s.stopLoss) }}</td>
+                                <td class="zahl">{{ zahl(s.rr) }}</td>
+                                <td>{{ zeit(s.sweepCandleTime) }}</td>
+                                <td class="at-gedaempft">
                                     {{ s.invalidReason || s.rejectReason
                                         ? t('strategies.reason_' + (s.invalidReason || s.rejectReason)) : '' }}
                                 </td>
-                                <td class="text-end"><i class="uil uil-chart-line text-muted"></i></td>
+                                <td class="zahl"><Symbol name="linie" class="at-gedaempft" /></td>
                             </tr>
                         </tbody>
                     </table>
@@ -349,19 +349,126 @@ const gruende = computed(() => {
 </template>
 
 <style scoped>
+.setups-seite {
+    padding: var(--abstand-4) var(--abstand-4) 0;
+}
+
+.setups-inhalt {
+    max-width: 1500px;
+}
+
 /* `.dailyCard` setzt global `height: 100%`. Das passt für Raster mit einer Karte
    je Spalte, hier stehen die Karten aber gestapelt untereinander — dort zieht die
    Regel jede einzelne Karte auf die Höhe der GESAMTEN Spalte und erzeugt riesige
-   Leerräume. Karten, die bewusst mitwachsen sollen, tragen `h-100` (mit
-   !important) und bleiben davon unberührt. */
+   Leerräume. */
 .dailyCard {
     height: auto;
+}
+
+.karte {
+    padding: var(--abstand-4);
+    margin-bottom: var(--abstand-4);
+}
+
+.karte.leer {
+    padding: var(--abstand-5);
+    text-align: center;
+}
+
+.kopfzeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-4);
+}
+
+.seitentitel {
+    margin: 0 auto 0 0;
+}
+
+.filter-feld {
+    width: auto;
+    max-width: 100%;
 }
 
 .section-title {
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
+    margin-bottom: var(--abstand-2);
+}
+
+.at-tabelle {
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.unterzeile {
+    font-size: 0.75em;
+}
+
+.fett {
+    font-weight: 700;
+}
+
+.normal {
+    font-weight: 400;
+}
+
+tr.gewaehlt td {
+    background: var(--accent-flaeche);
+}
+
+.chart-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
+}
+
+.chart-kopf .rechts {
+    margin-left: auto;
+}
+
+.klein-text {
+    font-size: 0.85rem;
+}
+
+.oben {
+    margin-top: var(--abstand-2);
+}
+
+.eckdaten {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-2) var(--abstand-4);
+    margin-top: var(--abstand-2);
+}
+
+.pillen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-1) var(--abstand-2);
+}
+
+@media (max-width: 767.98px) {
+    .setups-seite {
+        padding: var(--abstand-3) var(--abstand-3) 0;
+    }
+
+    .karte {
+        padding: var(--abstand-3);
+    }
+
+    .seitentitel {
+        flex-basis: 100%;
+    }
+
+    .filter-feld {
+        flex: 1 1 10rem;
+    }
 }
 </style>

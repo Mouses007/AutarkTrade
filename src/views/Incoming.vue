@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import NoData from '../components/NoData.vue'
 import PageInfo from '../components/PageInfo.vue'
+import { Knopf, Symbol, Pille, Hinweis, Kreisel } from '../components/basis'
 import { spinnerLoadingPage, timeZoneTrade, expandedId, kopiertesBild } from '../stores/ui.js'
 import { allTradeTimeframes, selectedTradeTimeframes, selectedBroker, selectedTradeCategory, brokers } from '../stores/filters.js'
 import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, availableTags } from '../stores/trades.js'
@@ -1436,37 +1437,37 @@ function getPositionDate(pos) {
 }
 </script>
 
+
 <template>
-    <div class="row mt-2">
+    <div class="incoming-seite">
         <div v-show="!spinnerLoadingPage">
             <!-- Header -->
-            <div class="row mb-3 align-items-center">
-                <div class="col">
-                    <small v-if="incomingLastFetched" class="text-muted">
+            <div class="incoming-kopf">
+                <div class="incoming-kopf-stand">
+                    <small v-if="incomingLastFetched" class="at-gedaempft">
                         {{ t('incoming.lastUpdated') }} {{ formatTime(incomingLastFetched) }}
-                        <span v-if="incomingPollingActive" class="spinner-border spinner-border-sm ms-2" role="status"></span>
+                        <Kreisel v-if="incomingPollingActive" class="abstand-links" />
                     </small>
                 </div>
-                <div class="col-auto d-flex align-items-center gap-2">
-                    <button class="btn btn-sm btn-outline-primary" @click="manualRefresh" :disabled="incomingPollingActive">
-                        <i class="uil uil-sync me-1"></i>{{ t('incoming.refresh') }}
-                    </button>
+                <div class="incoming-kopf-aktionen">
+                    <Knopf klein symbol="aktualisieren" @click="manualRefresh" :disabled="incomingPollingActive">
+                        {{ t('incoming.refresh') }}
+                    </Knopf>
                     <PageInfo section="info.pendente" />
                 </div>
             </div>
 
             <!-- Error — beim Börsenausfall übernimmt der Kasten darunter, sonst
                  stünde dieselbe Meldung zweimal da (einmal rot, einmal gelb). -->
-            <div v-if="incomingError && !brokerFehler.length" class="alert alert-danger">{{ incomingError }}</div>
+            <Hinweis v-if="incomingError && !brokerFehler.length" art="fehler" class="incoming-hinweis">{{ incomingError }}</Hinweis>
 
             <!-- Börse antwortet nicht: je Börse eine Zeile, solange es anhält -->
-            <div v-for="f in brokerFehler" :key="'boerse_' + f.broker" class="alert alert-warning py-2 px-3 mb-2">
-                <i class="uil uil-exclamation-triangle me-1"></i>
+            <Hinweis v-for="f in brokerFehler" :key="'boerse_' + f.broker" art="warn" class="incoming-hinweis">
                 <strong>{{ t('incoming.brokerAusfall', { boerse: f.name }) }}</strong>
                 <span v-if="f.teilweise"> {{ t('incoming.brokerTeilausfall') }}</span>
-                <div class="small mt-1 opacity-75">{{ f.meldung }}</div>
-                <div class="small mt-1">{{ t('incoming.brokerAusfallHinweis') }}</div>
-            </div>
+                <div class="hinweis-zeile hinweis-leise">{{ f.meldung }}</div>
+                <div class="hinweis-zeile">{{ t('incoming.brokerAusfallHinweis') }}</div>
+            </Hinweis>
 
             <!-- No positions -->
             <NoData v-if="orderedPositions.length === 0 && !incomingError && !brokerFehler.length" />
@@ -1475,21 +1476,21 @@ function getPositionDate(pos) {
             <template v-for="(pos, idx) in orderedPositions" :key="(pos.broker || '') + '_' + pos.positionId">
             <h4 v-if="brokerHeaderAt(idx)" class="incoming-broker-title">{{ brokerHeaderAt(idx) }}</h4>
             <h6 v-if="sectionHeaderAt(idx)" class="incoming-section-title">{{ sectionHeaderAt(idx) }}</h6>
-            <div class="dailyCard incoming-card mb-2 p-2">
+            <div class="dailyCard incoming-card pos-karte">
                 <!-- Card header -->
-                <div class="row align-items-center pointerClass" @click="toggleExpand(pos.positionId)">
-                    <div class="col-auto">
-                        <strong class="fs-5">{{ pos.symbol }}</strong>
-                        <span class="ms-2 fw-bold" :class="displaySide(pos.side) === 'LONG' ? 'greenTrade' : (displaySide(pos.side) === 'NEUTRAL' ? 'text-muted' : 'redTrade')">
+                <div class="karten-kopf pointerClass" @click="toggleExpand(pos.positionId)">
+                    <div class="karten-kopf-links">
+                        <strong class="symbol-name">{{ pos.symbol }}</strong>
+                        <span class="seite" :class="displaySide(pos.side) === 'LONG' ? 'greenTrade' : (displaySide(pos.side) === 'NEUTRAL' ? 'at-gedaempft' : 'redTrade')">
                             {{ displaySide(pos.side) }}
                         </span>
-                        <span class="ms-2 incoming-info">{{ pos.leverage }}x</span>
-                        <span v-if="pos.coinM" class="badge ms-2" style="background:rgba(245,158,11,0.18);color:#f59e0b;font-size:0.6rem;">COIN-M</span>
-                        <span v-if="pos.status === 'pending_evaluation'" class="badge bg-warning text-dark ms-2">{{ t('incoming.closed') }}</span>
+                        <span class="incoming-info">{{ pos.leverage }}x</span>
+                        <Pille v-if="pos.coinM" ton="warn">COIN-M</Pille>
+                        <Pille v-if="pos.status === 'pending_evaluation'" ton="warn">{{ t('incoming.closed') }}</Pille>
                     </div>
-                    <div class="col text-end">
+                    <div class="karten-kopf-pnl">
                         <span v-if="pos.status === 'pending_evaluation' && closedPnL(pos) != null"
-                            class="incoming-pnl fw-bold"
+                            class="incoming-pnl fett"
                             :class="parseFloat(closedPnL(pos)) >= 0 ? 'greenTrade' : 'redTrade'">
                             {{ formatCurrency(closedPnL(pos)) }}
                         </span>
@@ -1497,60 +1498,57 @@ function getPositionDate(pos) {
                             <span class="incoming-pnl" :class="parseFloat(pos.unrealizedPNL || 0) >= 0 ? 'greenTrade' : 'redTrade'">
                                 {{ formatCurrency(pos.unrealizedPNL, pos.marginCoin) }}
                             </span>
-                            <div v-if="getOpenRealizedPnL(pos) !== 0" class="small mt-1"
-                                :class="getOpenRealizedPnL(pos) >= 0 ? 'greenTrade' : 'redTrade'"
-                                style="opacity: 0.85;">
-                                <span class="text-muted me-1">{{ t('incoming.realized') }}</span>{{ formatCurrency(getOpenRealizedPnL(pos)) }}
+                            <div v-if="getOpenRealizedPnL(pos) !== 0" class="klein-text realisiert"
+                                :class="getOpenRealizedPnL(pos) >= 0 ? 'greenTrade' : 'redTrade'">
+                                <span class="at-gedaempft abstand-rechts">{{ t('incoming.realized') }}</span>{{ formatCurrency(getOpenRealizedPnL(pos)) }}
                             </div>
                         </template>
                     </div>
-                    <div class="col-auto">
-                        <i :class="expandedId === pos.positionId ? 'uil-angle-up' : 'uil-angle-down'" class="uil fs-4"></i>
+                    <div class="karten-kopf-pfeil">
+                        <Symbol :name="expandedId === pos.positionId ? 'hoch' : 'runter'" :groesse="22" />
                     </div>
                 </div>
 
                 <!-- Trade info line -->
-                <div class="row mt-1">
-                    <div class="col">
-                        <small class="incoming-info">
-                            {{ t('incoming.entry') }}
-                            <!-- Bots: Startpreis (Bot-Start) + Ø Haltepreis (driftet). Futures: bisher. -->
-                            <template v-if="isBotPosition(pos)">
-                                <span v-if="parseFloat(pos.bitunixData?.startPrice) > 0">Start {{ parseFloat(pos.bitunixData.startPrice).toFixed(2) }} · </span>Ø {{ parseFloat(pos.entryPrice || 0).toFixed(2) }}
-                            </template>
-                            <template v-else-if="getEntryFills(pos.positionId, pos.side).length > 1">
-                                Ø {{ getAvgEntryPrice(pos.positionId, pos.side).toFixed(5) }} ({{ getEntryFills(pos.positionId, pos.side).length }}×)
-                            </template>
-                            <template v-else>
-                                {{ parseFloat(pos.entryPrice || 0).toFixed(2) }}
-                            </template>
-                            <template v-if="getBreakevenPrice(pos.positionId, pos.side) > 0">
-                                | <span class="text-muted">BE: {{ getBreakevenPrice(pos.positionId, pos.side).toFixed(2) }}</span>
-                            </template>
-                            <template v-if="getTpSlForPosition(pos.positionId).sl">
-                                | <span :style="isSLAboveBreakeven(pos.positionId, pos.side) ? 'color: #86efac' : ''" :class="!isSLAboveBreakeven(pos.positionId, pos.side) ? 'text-danger' : ''">SL: {{ getTpSlForPosition(pos.positionId).sl }}</span>
-                            </template>
-                            <template v-if="getTpSlForPosition(pos.positionId).tp">
-                                | <span style="color: #f59e0b;">TP: {{ getTpSlForPosition(pos.positionId).tp }}</span>
-                            </template>
-                            <!-- Bots: echte Liquidation + Investment in Margin-Münze (coin-M: z.B. SOL);
-                                 Futures: bisheriges Verhalten (markPrice als Liq, Marge in USDT). -->
-                            <template v-if="isBotPosition(pos)">
-                                <span v-if="parseFloat(pos.bitunixData?.liqPrice) > 0"> | {{ t('incoming.liquidation') }} {{ parseFloat(pos.bitunixData.liqPrice).toFixed(2) }}</span>
-                                <span v-if="parseFloat(pos.bitunixData?.margin) > 0"> | {{ t('incoming.margin') }} {{ parseFloat(pos.bitunixData.margin).toFixed(pos.coinM ? 4 : 2) }} {{ pos.marginCoin || 'USDT' }}</span>
-                                <span v-if="parseFloat(pos.markPrice) > 0"> | {{ t('incoming.marketPrice') }} {{ parseFloat(pos.markPrice).toFixed(2) }}</span>
-                            </template>
-                            <template v-else>
-                                <span v-if="pos.markPrice"> | {{ t('incoming.liquidation') }} {{ parseFloat(pos.markPrice || 0).toFixed(2) }}</span>
-                                | {{ t('incoming.margin') }} {{ parseFloat(pos.bitunixData?.margin || 0).toFixed(2) }} USDT
-                            </template>
-                            <span v-if="getPositionDate(pos)"> | {{ getPositionDate(pos) }}</span>
-                        </small>
-                    </div>
+                <div class="info-zeile">
+                    <small class="incoming-info">
+                        {{ t('incoming.entry') }}
+                        <!-- Bots: Startpreis (Bot-Start) + Ø Haltepreis (driftet). Futures: bisher. -->
+                        <template v-if="isBotPosition(pos)">
+                            <span v-if="parseFloat(pos.bitunixData?.startPrice) > 0">Start {{ parseFloat(pos.bitunixData.startPrice).toFixed(2) }} · </span>Ø {{ parseFloat(pos.entryPrice || 0).toFixed(2) }}
+                        </template>
+                        <template v-else-if="getEntryFills(pos.positionId, pos.side).length > 1">
+                            Ø {{ getAvgEntryPrice(pos.positionId, pos.side).toFixed(5) }} ({{ getEntryFills(pos.positionId, pos.side).length }}×)
+                        </template>
+                        <template v-else>
+                            {{ parseFloat(pos.entryPrice || 0).toFixed(2) }}
+                        </template>
+                        <template v-if="getBreakevenPrice(pos.positionId, pos.side) > 0">
+                            | <span class="at-gedaempft">BE: {{ getBreakevenPrice(pos.positionId, pos.side).toFixed(2) }}</span>
+                        </template>
+                        <template v-if="getTpSlForPosition(pos.positionId).sl">
+                            | <span :class="isSLAboveBreakeven(pos.positionId, pos.side) ? 'at-gut' : 'at-schlecht'">SL: {{ getTpSlForPosition(pos.positionId).sl }}</span>
+                        </template>
+                        <template v-if="getTpSlForPosition(pos.positionId).tp">
+                            | <span class="at-warn">TP: {{ getTpSlForPosition(pos.positionId).tp }}</span>
+                        </template>
+                        <!-- Bots: echte Liquidation + Investment in Margin-Münze (coin-M: z.B. SOL);
+                             Futures: bisheriges Verhalten (markPrice als Liq, Marge in USDT). -->
+                        <template v-if="isBotPosition(pos)">
+                            <span v-if="parseFloat(pos.bitunixData?.liqPrice) > 0"> | {{ t('incoming.liquidation') }} {{ parseFloat(pos.bitunixData.liqPrice).toFixed(2) }}</span>
+                            <span v-if="parseFloat(pos.bitunixData?.margin) > 0"> | {{ t('incoming.margin') }} {{ parseFloat(pos.bitunixData.margin).toFixed(pos.coinM ? 4 : 2) }} {{ pos.marginCoin || 'USDT' }}</span>
+                            <span v-if="parseFloat(pos.markPrice) > 0"> | {{ t('incoming.marketPrice') }} {{ parseFloat(pos.markPrice).toFixed(2) }}</span>
+                        </template>
+                        <template v-else>
+                            <span v-if="pos.markPrice"> | {{ t('incoming.liquidation') }} {{ parseFloat(pos.markPrice || 0).toFixed(2) }}</span>
+                            | {{ t('incoming.margin') }} {{ parseFloat(pos.bitunixData?.margin || 0).toFixed(2) }} USDT
+                        </template>
+                        <span v-if="getPositionDate(pos)"> | {{ getPositionDate(pos) }}</span>
+                    </small>
                 </div>
 
                 <!-- Stress level indicator (always visible if set) -->
-                <div v-if="pos.stressLevel > 0 && expandedId !== pos.positionId" class="mt-1">
+                <div v-if="pos.stressLevel > 0 && expandedId !== pos.positionId" class="stress-zeile">
                     <small class="incoming-info">{{ t('incoming.stress') }} </small>
                     <template v-for="n in 10" :key="n">
                         <span class="stress-dot" :class="n <= pos.stressLevel ? 'active' : 'inactive'">
@@ -1563,179 +1561,180 @@ function getPositionDate(pos) {
                 </div>
 
                 <!-- ===== EXPANDED DETAIL SECTION ===== -->
-                <div v-if="expandedId === pos.positionId" class="mt-2 incoming-meta-section">
+                <div v-if="expandedId === pos.positionId" class="incoming-meta-section detail-bereich">
 
                     <!-- ========== FILLS / COMPOUND TRACKING ========== -->
-                    <div v-if="pos.status === 'open' && (pos.broker === 'bitunix' || pos.broker === 'bitget')" class="fills-section p-3 mb-2">
-                        <div class="d-flex align-items-center justify-content-between mb-2">
-                            <span class="fw-bold" style="font-size: 0.95rem;">
-                                <i class="uil uil-layers me-1"></i>
+                    <div v-if="pos.status === 'open' && (pos.broker === 'bitunix' || pos.broker === 'bitget')" class="fills-section abschnitt">
+                        <div class="fills-kopf">
+                            <span class="abschnitt-titel">
+                                <Symbol name="ebenen" />
                                 {{ t('incoming.fills') }}
                                 <span v-if="getEntryFills(pos.positionId, pos.side).length > 1"
-                                    class="text-muted ms-1">({{ getEntryFills(pos.positionId, pos.side).length }} {{ t('incoming.fillEntries') }})</span>
+                                    class="at-gedaempft">({{ getEntryFills(pos.positionId, pos.side).length }} {{ t('incoming.fillEntries') }})</span>
                             </span>
-                            <span v-if="getEntryFills(pos.positionId, pos.side).length > 0" class="fw-bold" style="font-size: 0.85rem;">
+                            <span v-if="getEntryFills(pos.positionId, pos.side).length > 0" class="fett fills-schnitt">
                                 {{ t('incoming.fillAvgPrice') }}: {{ getAvgEntryPrice(pos.positionId, pos.side).toFixed(5) }}
                             </span>
                         </div>
 
                         <!-- Loading -->
-                        <div v-if="getFillsForPosition(pos.positionId).loading" class="text-muted small">
-                            <span class="spinner-border spinner-border-sm me-1" style="width: 0.7rem; height: 0.7rem;"></span>
+                        <div v-if="getFillsForPosition(pos.positionId).loading" class="at-gedaempft klein-text">
+                            <Kreisel :groesse="11" still class="abstand-rechts" />
                             Loading...
                         </div>
 
                         <!-- Error -->
-                        <div v-else-if="getFillsForPosition(pos.positionId).error" class="text-danger small">
+                        <div v-else-if="getFillsForPosition(pos.positionId).error" class="at-schlecht klein-text">
                             {{ getFillsForPosition(pos.positionId).error }}
                         </div>
 
                         <!-- Fills table -->
                         <div v-else-if="getFillsForPosition(pos.positionId).trades.length > 0">
-                            <table class="table table-sm table-borderless mb-1" style="font-size: 0.8rem; color: var(--white-80);">
+                            <div class="fills-huelle">
+                            <table class="fills-tabelle">
                                 <tbody>
                                     <template v-for="(group, gIdx) in groupFillsByMinute(getFillsForPosition(pos.positionId).trades, 'ctime')" :key="group.key">
-                                        <tr :class="group.reduceOnly ? 'text-danger' : ''"
+                                        <tr :class="group.reduceOnly ? 'at-schlecht' : ''"
                                             :style="group.isGroup ? 'cursor: pointer;' : ''"
                                             @click="group.isGroup && toggleFillGroup(group.key)">
-                                            <td class="text-muted ps-0" style="width: 100px;">
-                                                <span v-if="group.isGroup" style="font-size: 0.6rem; margin-right: 2px;">{{ expandedFillGroups.has(group.key) ? '▼' : '▶' }}</span>
+                                            <td class="at-gedaempft zelle-zeit">
+                                                <span v-if="group.isGroup" class="gruppen-pfeil">{{ expandedFillGroups.has(group.key) ? '▼' : '▶' }}</span>
                                                 {{ formatFillTime(group.time) }}
                                             </td>
-                                            <td style="width: 80px;" class="text-end">{{ group.totalQty }}</td>
-                                            <td class="text-muted px-1">×</td>
-                                            <td style="width: 90px;">{{ group.isGroup ? group.avgPrice.toFixed(5) : parseFloat(group.fills[0].price) }}</td>
-                                            <td class="text-muted px-1">=</td>
-                                            <td class="text-end" style="width: 90px;">{{ group.totalValue.toFixed(2) }}</td>
+                                            <td class="zahl zelle-menge">{{ group.totalQty }}</td>
+                                            <td class="at-gedaempft zelle-op">×</td>
+                                            <td class="zelle-preis">{{ group.isGroup ? group.avgPrice.toFixed(5) : parseFloat(group.fills[0].price) }}</td>
+                                            <td class="at-gedaempft zelle-op">=</td>
+                                            <td class="zahl zelle-preis">{{ group.totalValue.toFixed(2) }}</td>
                                             <td>
-                                                <span v-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'close'"
-                                                    class="badge bg-danger" style="font-size: 0.65rem;">{{ t('incoming.fillClose') }}</span>
-                                                <span v-else-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'partialClose'"
-                                                    class="badge bg-warning text-dark" style="font-size: 0.65rem;">{{ t('incoming.fillPartialClose') }}</span>
-                                                <span v-else-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'initial'"
-                                                    class="badge bg-secondary" style="font-size: 0.65rem;">{{ t('incoming.fillInitial') }}</span>
-                                                <span v-else class="badge bg-info" style="font-size: 0.65rem;">{{ t('incoming.fillCompound') }}</span>
-                                                <span v-if="group.isGroup" class="text-muted ms-1" style="font-size: 0.6rem;">({{ group.fills.length }})</span>
+                                                <Pille v-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'close'"
+                                                    ton="schlecht">{{ t('incoming.fillClose') }}</Pille>
+                                                <Pille v-else-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'partialClose'"
+                                                    ton="warn">{{ t('incoming.fillPartialClose') }}</Pille>
+                                                <Pille v-else-if="getIncomingFillBadgeType(group.fills[0], group.firstFillIdx, getFillsForPosition(pos.positionId).trades) === 'initial'"
+                                                    ton="neutral">{{ t('incoming.fillInitial') }}</Pille>
+                                                <Pille v-else ton="akzent">{{ t('incoming.fillCompound') }}</Pille>
+                                                <span v-if="group.isGroup" class="at-gedaempft gruppen-zahl">({{ group.fills.length }})</span>
                                             </td>
-                                            <td class="text-end text-muted pe-0" style="width: 90px;">{{ t('incoming.fillFee') }}: {{ group.totalFee.toFixed(4) }}</td>
+                                            <td class="zahl at-gedaempft zelle-gebuehr">{{ t('incoming.fillFee') }}: {{ group.totalFee.toFixed(4) }}</td>
                                         </tr>
                                         <template v-if="group.isGroup && expandedFillGroups.has(group.key)">
                                             <tr v-for="(fill, fIdx) in group.fills" :key="group.key + '_' + fIdx"
-                                                :class="fill.reduceOnly ? 'text-danger' : ''" style="opacity: 0.6; font-size: 0.7rem;">
-                                                <td class="ps-0" style="width: 100px;"></td>
-                                                <td style="width: 80px;" class="text-end">{{ parseFloat(fill.qty) }}</td>
-                                                <td class="text-muted px-1">×</td>
-                                                <td style="width: 90px;">{{ parseFloat(fill.price) }}</td>
-                                                <td class="text-muted px-1">=</td>
-                                                <td class="text-end" style="width: 90px;">{{ (parseFloat(fill.qty) * parseFloat(fill.price)).toFixed(2) }}</td>
+                                                class="fill-einzeln" :class="fill.reduceOnly ? 'at-schlecht' : ''">
+                                                <td class="zelle-zeit"></td>
+                                                <td class="zahl zelle-menge">{{ parseFloat(fill.qty) }}</td>
+                                                <td class="at-gedaempft zelle-op">×</td>
+                                                <td class="zelle-preis">{{ parseFloat(fill.price) }}</td>
+                                                <td class="at-gedaempft zelle-op">=</td>
+                                                <td class="zahl zelle-preis">{{ (parseFloat(fill.qty) * parseFloat(fill.price)).toFixed(2) }}</td>
                                                 <td></td>
-                                                <td class="text-end text-muted pe-0" style="width: 90px;">{{ t('incoming.fillFee') }}: {{ parseFloat(fill.fee || 0).toFixed(4) }}</td>
+                                                <td class="zahl at-gedaempft zelle-gebuehr">{{ t('incoming.fillFee') }}: {{ parseFloat(fill.fee || 0).toFixed(4) }}</td>
                                             </tr>
                                         </template>
                                     </template>
                                 </tbody>
                             </table>
+                            </div>
                             <!-- Totals row -->
                             <div v-if="getFillsForPosition(pos.positionId).trades.length > 0"
-                                class="d-flex justify-content-between border-top pt-1 mt-1" style="font-size: 0.8rem; border-color: var(--white-20) !important;">
-                                <span class="text-muted">
+                                class="summen-zeile">
+                                <span class="at-gedaempft">
                                     {{ t('incoming.fillTotal') }}:
-                                    <strong class="text-white">{{ getEntryFills(pos.positionId, pos.side).reduce((sum, f) => sum + parseFloat(f.qty || 0), 0) }}</strong>
+                                    <strong class="hell">{{ getEntryFills(pos.positionId, pos.side).reduce((sum, f) => sum + parseFloat(f.qty || 0), 0) }}</strong>
                                 </span>
-                                <span class="text-muted">
+                                <span class="at-gedaempft">
                                     {{ t('incoming.fillFee') }}:
-                                    <strong class="text-white">{{ getFillsForPosition(pos.positionId).trades.reduce((sum, f) => sum + parseFloat(f.fee || 0), 0).toFixed(4) }}</strong>
+                                    <strong class="hell">{{ getFillsForPosition(pos.positionId).trades.reduce((sum, f) => sum + parseFloat(f.fee || 0), 0).toFixed(4) }}</strong>
                                 </span>
                             </div>
                             <!-- Position Size: Marge × Hebel -->
-                            <div class="d-flex justify-content-between border-top pt-1 mt-1" style="font-size: 0.8rem; border-color: var(--white-20) !important;">
-                                <span class="text-muted">
+                            <div class="summen-zeile">
+                                <span class="at-gedaempft">
                                     {{ t('incoming.positionSize') }}:
-                                    <span class="text-white">{{ parseFloat(pos.bitunixData?.margin || 0).toFixed(2) }}</span>
-                                    <span class="text-muted"> × </span>
-                                    <span class="text-white">{{ pos.leverage }}x</span>
-                                    <span class="text-muted"> = </span>
-                                    <strong class="text-white">{{ (parseFloat(pos.bitunixData?.margin || 0) * parseFloat(pos.leverage || 1)).toFixed(2) }} USDT</strong>
+                                    <span class="hell">{{ parseFloat(pos.bitunixData?.margin || 0).toFixed(2) }}</span>
+                                    <span class="at-gedaempft"> × </span>
+                                    <span class="hell">{{ pos.leverage }}x</span>
+                                    <span class="at-gedaempft"> = </span>
+                                    <strong class="hell">{{ (parseFloat(pos.bitunixData?.margin || 0) * parseFloat(pos.leverage || 1)).toFixed(2) }} USDT</strong>
                                 </span>
                             </div>
                         </div>
 
                         <!-- TP/SL Orders + BE -->
                         <div v-if="getTpSlForPosition(pos.positionId).sl || getTpSlForPosition(pos.positionId).tp || getBreakevenPrice(pos.positionId, pos.side) > 0"
-                            class="d-flex gap-3 mt-2 pt-2 border-top" style="font-size: 0.8rem; border-color: var(--white-20) !important;">
+                            class="tpsl-zeile">
                             <span v-if="getTpSlForPosition(pos.positionId).sl">
-                                <span class="fw-bold" :class="!isSLAboveBreakeven(pos.positionId, pos.side) ? 'text-danger' : ''" :style="isSLAboveBreakeven(pos.positionId, pos.side) ? 'color: #86efac' : ''">SL: {{ getTpSlForPosition(pos.positionId).sl }}</span>
-                                <span class="text-muted ms-1">({{ getTpSlForPosition(pos.positionId).slQty }})</span>
+                                <span class="fett" :class="isSLAboveBreakeven(pos.positionId, pos.side) ? 'at-gut' : 'at-schlecht'">SL: {{ getTpSlForPosition(pos.positionId).sl }}</span>
+                                <span class="at-gedaempft abstand-links">({{ getTpSlForPosition(pos.positionId).slQty }})</span>
                             </span>
                             <span v-if="getBreakevenPrice(pos.positionId, pos.side) > 0">
-                                <span class="text-muted fw-bold">BE: {{ getBreakevenPrice(pos.positionId, pos.side).toFixed(2) }}</span>
+                                <span class="at-gedaempft fett">BE: {{ getBreakevenPrice(pos.positionId, pos.side).toFixed(2) }}</span>
                             </span>
                             <span v-if="getTpSlForPosition(pos.positionId).tp">
-                                <span class="fw-bold" style="color: #f59e0b;">TP: {{ getTpSlForPosition(pos.positionId).tp }}</span>
-                                <span class="text-muted ms-1">({{ getTpSlForPosition(pos.positionId).tpQty }})</span>
+                                <span class="fett at-warn">TP: {{ getTpSlForPosition(pos.positionId).tp }}</span>
+                                <span class="at-gedaempft abstand-links">({{ getTpSlForPosition(pos.positionId).tpQty }})</span>
                             </span>
-                            <span v-if="getRRR(pos.positionId, pos.side)" class="ms-auto">
-                                <span class="fw-bold" style="color: #a78bfa;">RRR 1:{{ getRRR(pos.positionId, pos.side) }}</span>
+                            <span v-if="getRRR(pos.positionId, pos.side)" class="rechts-aussen">
+                                <span class="fett rrr">RRR 1:{{ getRRR(pos.positionId, pos.side) }}</span>
                             </span>
                         </div>
 
                         <!-- TP/SL Change History -->
                         <div v-if="getTpSlHistoryForPosition(pos.positionId).length > 0"
-                            class="mt-2 pt-2 border-top" style="font-size: 0.75rem; border-color: var(--white-20) !important;">
-                            <div class="text-muted mb-1 pointerClass" @click.stop="toggleTpSlHistory(pos.positionId)">
-                                <i class="uil uil-history me-1"></i>SL/TP Protokoll
-                                <i :class="tpslCollapsedIds.includes(pos.positionId) ? 'uil-angle-down' : 'uil-angle-up'" class="uil ms-1" style="font-size: 1.3rem; vertical-align: middle;"></i>
+                            class="tpsl-verlauf">
+                            <div class="at-gedaempft tpsl-verlauf-kopf pointerClass" @click.stop="toggleTpSlHistory(pos.positionId)">
+                                <Symbol name="verlauf" />SL/TP Protokoll
+                                <Symbol :name="tpslCollapsedIds.includes(pos.positionId) ? 'runter' : 'hoch'" :groesse="18" />
                             </div>
                             <template v-if="!tpslCollapsedIds.includes(pos.positionId)">
                                 <div v-for="(entry, idx) in getTpSlHistoryForPosition(pos.positionId)" :key="idx"
-                                    class="d-flex align-items-center gap-2 mb-1">
-                                    <span class="text-muted" style="width: 90px;">{{ dayjs(entry.time).tz(timeZoneTrade.value).format('DD.MM. HH:mm') }}</span>
-                                    <span :class="entry.type === 'SL' ? (isSLAboveBreakeven(pos.positionId, pos.side) ? '' : 'text-danger') : (entry.action === 'triggered' ? 'text-success fw-bold' : '')"
-                                        :style="entry.type === 'SL' && isSLAboveBreakeven(pos.positionId, pos.side) ? 'color: #86efac' : (entry.type === 'TP' && entry.action !== 'triggered' ? 'color: #f59e0b' : '')">
+                                    class="tpsl-eintrag">
+                                    <span class="at-gedaempft tpsl-zeit">{{ dayjs(entry.time).tz(timeZoneTrade.value).format('DD.MM. HH:mm') }}</span>
+                                    <span :class="entry.type === 'SL' ? (isSLAboveBreakeven(pos.positionId, pos.side) ? 'at-gut' : 'at-schlecht') : (entry.action === 'triggered' ? 'at-gut fett' : (entry.type === 'TP' ? 'at-warn' : ''))">
                                         {{ entry.type }}
                                     </span>
                                     <template v-if="entry.action === 'set'">
-                                        <span class="text-muted">→</span>
-                                        <span class="text-white">{{ entry.newVal }}</span>
-                                        <span v-if="entry.qty && getTpSlEntryDisplay(entry, pos.quantity)" class="text-muted">({{ getTpSlEntryDisplay(entry, pos.quantity).qty }} · {{ getTpSlEntryDisplay(entry, pos.quantity).pct }}%)</span>
-                                        <span class="badge bg-secondary" style="font-size: 0.6rem;">Gesetzt</span>
+                                        <span class="at-gedaempft">→</span>
+                                        <span class="hell">{{ entry.newVal }}</span>
+                                        <span v-if="entry.qty && getTpSlEntryDisplay(entry, pos.quantity)" class="at-gedaempft">({{ getTpSlEntryDisplay(entry, pos.quantity).qty }} · {{ getTpSlEntryDisplay(entry, pos.quantity).pct }}%)</span>
+                                        <Pille ton="neutral">Gesetzt</Pille>
                                     </template>
                                     <template v-else-if="entry.action === 'moved'">
-                                        <span class="text-muted" style="text-decoration: line-through;">{{ entry.oldVal }}</span>
-                                        <span class="text-muted">→</span>
-                                        <span class="text-white">{{ entry.newVal }}</span>
-                                        <span v-if="entry.qty && getTpSlEntryDisplay(entry, pos.quantity)" class="text-muted">({{ getTpSlEntryDisplay(entry, pos.quantity).qty }} · {{ getTpSlEntryDisplay(entry, pos.quantity).pct }}%)</span>
-                                        <span class="badge bg-warning text-dark" style="font-size: 0.6rem;">Verschoben</span>
+                                        <span class="at-gedaempft durchgestrichen">{{ entry.oldVal }}</span>
+                                        <span class="at-gedaempft">→</span>
+                                        <span class="hell">{{ entry.newVal }}</span>
+                                        <span v-if="entry.qty && getTpSlEntryDisplay(entry, pos.quantity)" class="at-gedaempft">({{ getTpSlEntryDisplay(entry, pos.quantity).qty }} · {{ getTpSlEntryDisplay(entry, pos.quantity).pct }}%)</span>
+                                        <Pille ton="warn">Verschoben</Pille>
                                     </template>
                                     <template v-else-if="entry.action === 'triggered'">
-                                        <span class="text-success" style="text-decoration: line-through;">{{ entry.oldVal }}</span>
-                                        <span class="text-success">→</span>
-                                        <span class="text-success fw-bold">Ausgelöst ✓</span>
+                                        <span class="at-gut durchgestrichen">{{ entry.oldVal }}</span>
+                                        <span class="at-gut">→</span>
+                                        <span class="at-gut fett">Ausgelöst ✓</span>
                                     </template>
                                     <template v-else-if="entry.action === 'removed'">
-                                        <span class="text-muted" style="text-decoration: line-through;">{{ entry.oldVal }}</span>
-                                        <span class="text-muted">→ entfernt</span>
+                                        <span class="at-gedaempft durchgestrichen">{{ entry.oldVal }}</span>
+                                        <span class="at-gedaempft">→ entfernt</span>
                                     </template>
-                                    <span v-if="entry.rrr" class="ms-auto" style="color: #a78bfa; font-weight: 600;">1:{{ entry.rrr }}</span>
+                                    <span v-if="entry.rrr" class="rechts-aussen rrr">1:{{ entry.rrr }}</span>
                                 </div>
                             </template>
                         </div>
                     </div>
 
                     <!-- ========== OPENING EVALUATION (nur Futures, nicht für Bots) ========== -->
-                    <div v-if="!isBotPosition(pos)" class="opening-eval-section p-3 mb-2">
-                    <div class="d-flex align-items-center mb-3">
-                        <i class="uil uil-unlock-alt me-2" style="color: var(--green-color, #10b981); font-size: 1.1rem;"></i>
-                        <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.openingEvaluation') }}</span>
+                    <div v-if="!isBotPosition(pos)" class="opening-eval-section abschnitt">
+                    <div class="abschnitt-kopf">
+                        <Symbol name="schlossOffen" :groesse="18" class="kopf-symbol-gut" />
+                        <span class="abschnitt-titel">{{ t('incoming.openingEvaluation') }}</span>
                     </div>
 
                     <!-- Trade-Typ -->
                     <div class="pb-edit-section">
                         <label class="pb-edit-label">{{ t('incoming.tradeType') }}</label>
-                        <div class="d-flex flex-wrap gap-1">
-                            <button v-for="tt in tradeTypeOptions" :key="tt.value"
-                                class="btn btn-sm py-0 px-2"
-                                :class="pos.tradeType === tt.value ? 'btn-primary' : 'btn-outline-secondary'"
+                        <div class="wahl-reihe">
+                            <button v-for="tt in tradeTypeOptions" :key="tt.value" type="button"
+                                class="wahl"
+                                :class="pos.tradeType === tt.value ? 'gewaehlt' : ''"
                                 @click.stop="updateTradeType(pos, tt.value)">
                                 {{ t(tt.labelKey) }}
                             </button>
@@ -1745,10 +1744,10 @@ function getPositionDate(pos) {
                     <!-- Timeframe -->
                     <div class="pb-edit-section">
                         <label class="pb-edit-label">{{ t('incoming.timeframe') }}</label>
-                        <div class="d-flex flex-wrap gap-1">
-                            <button v-for="tf in timeframeOptions" :key="tf.value"
-                                class="btn btn-sm py-0 px-2"
-                                :class="pos.entryTimeframe === tf.value ? 'btn-primary' : 'btn-outline-secondary'"
+                        <div class="wahl-reihe">
+                            <button v-for="tf in timeframeOptions" :key="tf.value" type="button"
+                                class="wahl"
+                                :class="pos.entryTimeframe === tf.value ? 'gewaehlt' : ''"
                                 @click.stop="updateTimeframe(pos, tf.value)">
                                 {{ tf.label }}
                             </button>
@@ -1758,7 +1757,7 @@ function getPositionDate(pos) {
                     <!-- Stresslevel -->
                     <div class="pb-edit-section">
                         <label class="pb-edit-label">{{ t('incoming.stressLevel') }}</label>
-                        <div class="d-flex align-items-end flex-wrap">
+                        <div class="punkte-reihe">
                             <template v-for="n in 10" :key="'os'+n">
                                 <span @click.stop="updateStress(pos, n)"
                                     class="stress-dot pointerClass"
@@ -1776,7 +1775,7 @@ function getPositionDate(pos) {
                     <!-- Emotionslevel -->
                     <div class="pb-edit-section">
                         <label class="pb-edit-label">{{ t('incoming.emotionLevel') }}</label>
-                        <div class="d-flex align-items-end flex-wrap">
+                        <div class="punkte-reihe">
                             <template v-for="n in 10" :key="'oe'+n">
                                 <span @click.stop="updateEmotionLevel(pos, n)"
                                     class="stress-dot pointerClass"
@@ -1794,7 +1793,7 @@ function getPositionDate(pos) {
                     <!-- Emotionen -->
                     <div class="pb-edit-section">
                         <label class="pb-edit-label">{{ t('incoming.emotions') }}</label>
-                        <textarea class="form-control form-control-sm" v-model="pos.feelings"
+                        <textarea class="at-feld klein" v-model="pos.feelings"
                             :placeholder="t('incoming.emotionsPlaceholder')" rows="2"></textarea>
                     </div>
 
@@ -1807,15 +1806,15 @@ function getPositionDate(pos) {
                     <!-- Tags -->
                     <div class="pb-edit-section">
                         <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
-                        <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                        <div class="tag-reihe">
                             <span v-for="(tag, idx) in (pos.tags || [])" :key="tag.id"
-                                class="badge me-1 pointerClass"
+                                class="tag-chip pointerClass"
                                 :style="{ backgroundColor: getTagColor(tag.id) }"
                                 @click.stop="removeTag(pos, idx)">
-                                {{ tag.name }} <span class="ms-1">&times;</span>
+                                {{ tag.name }} <span class="abstand-links">&times;</span>
                             </span>
                         </div>
-                        <select class="form-select form-select-sm"
+                        <select class="at-feld klein"
                             @change.stop="addTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                             <option selected disabled>{{ t('incoming.addTag') }}</option>
                             <template v-for="group in availableTags" :key="group.id">
@@ -1833,22 +1832,22 @@ function getPositionDate(pos) {
                     <!-- Screenshots (max 2) -->
                     <div class="pb-edit-section">
                         <label class="pb-edit-label">{{ t('incoming.screenshot') }}</label>
-                        <div class="d-flex flex-wrap align-items-start gap-2 mb-2">
+                        <div class="screenshot-reihe">
                             <!-- Erster Screenshot (Thumbnail) -->
-                            <div v-if="pos.entryScreenshotId" class="position-relative screenshot-thumb">
+                            <div v-if="pos.entryScreenshotId" class="screenshot-thumb">
                                 <img v-if="entryScreenshotPreviews[pos.positionId]"
                                     :src="entryScreenshotPreviews[pos.positionId]"
-                                    class="rounded" style="max-height: 120px; max-width: 200px; object-fit: contain;" />
-                                <span v-else class="badge bg-secondary"><i class="uil uil-image me-1"></i>1</span>
-                                <i class="uil uil-times-circle screenshot-remove" @click.stop="removeEntryScreenshot(pos)"></i>
+                                    class="screenshot-bild" />
+                                <Pille v-else ton="neutral" symbol="bild">1</Pille>
+                                <button type="button" class="screenshot-remove" @click.stop="removeEntryScreenshot(pos)"><Symbol name="fehler" /></button>
                             </div>
                             <!-- Zweiter Screenshot (Thumbnail) -->
-                            <div v-if="pos.trendScreenshotId" class="position-relative screenshot-thumb">
+                            <div v-if="pos.trendScreenshotId" class="screenshot-thumb">
                                 <img v-if="trendScreenshotPreviews[pos.positionId]"
                                     :src="trendScreenshotPreviews[pos.positionId]"
-                                    class="rounded" style="max-height: 120px; max-width: 200px; object-fit: contain;" />
-                                <span v-else class="badge bg-secondary"><i class="uil uil-image me-1"></i>2</span>
-                                <i class="uil uil-times-circle screenshot-remove" @click.stop="removeTrendScreenshot(pos)"></i>
+                                    class="screenshot-bild" />
+                                <Pille v-else ton="neutral" symbol="bild">2</Pille>
+                                <button type="button" class="screenshot-remove" @click.stop="removeTrendScreenshot(pos)"><Symbol name="fehler" /></button>
                             </div>
                         </div>
                         <!-- Upload (sichtbar solange weniger als 2 Screenshots) —
@@ -1860,45 +1859,45 @@ function getPositionDate(pos) {
                             @drop.prevent="onDropScreenshot($event, pos, pos.entryScreenshotId ? 'trend' : 'entry')">
                             <input type="file" accept="image/*" class="pb-drop-input"
                                 @change="!pos.entryScreenshotId ? handleEntryScreenshotUpload($event, pos) : handleTrendScreenshotUpload($event, pos)" />
-                            <i class="uil uil-image-plus me-1"></i>Bild wählen, hierher ziehen oder einfügen (Strg/Cmd+V)
+                            <Symbol name="bildPlus" />Bild wählen, hierher ziehen oder einfügen (Strg/Cmd+V)
                         </label>
-                        <button v-if="kopiertesBild && (!pos.entryScreenshotId || !pos.trendScreenshotId)"
-                            type="button" class="btn btn-sm btn-outline-primary mt-2"
+                        <Knopf v-if="kopiertesBild && (!pos.entryScreenshotId || !pos.trendScreenshotId)"
+                            klein symbol="zwischenablage" class="abstand-oben"
                             @click.stop="kopiertesBildEinfuegen(pos, pos.entryScreenshotId ? 'trend' : 'entry')">
-                            <i class="uil uil-clipboard-notes me-1"></i>Kopiertes Bild einfügen
-                        </button>
+                            Kopiertes Bild einfügen
+                        </Knopf>
                         <!-- Chartbild: Einstieg/Stop/Ziel + Strategie-Setups (LSOB/GUSS-Tag) automatisch -->
-                        <div class="d-flex align-items-center gap-2 mt-2">
-                            <button type="button" class="btn btn-sm btn-outline-info" :disabled="chartBildStand[pos.positionId]?.laeuft"
-                                :title="t('incoming.chartBildTipp')" @click.stop="chartBildErzeugen(pos)">
-                                <span v-if="chartBildStand[pos.positionId]?.laeuft" class="spinner-border spinner-border-sm me-1"></span>
-                                <i v-else class="uil uil-chart me-1"></i>{{ t('incoming.chartBild') }}
-                            </button>
-                            <small v-if="chartBildStand[pos.positionId]?.fehler" class="text-warning">{{ chartBildStand[pos.positionId].fehler }}</small>
-                            <small v-else class="text-muted">{{ t('incoming.chartBildHinweis') }}</small>
+                        <div class="chartbild-zeile">
+                            <Knopf klein :symbol="chartBildStand[pos.positionId]?.laeuft ? '' : 'chart'"
+                                :laedt="!!chartBildStand[pos.positionId]?.laeuft"
+                                :titel="t('incoming.chartBildTipp')" @click.stop="chartBildErzeugen(pos)">
+                                {{ t('incoming.chartBild') }}
+                            </Knopf>
+                            <small v-if="chartBildStand[pos.positionId]?.fehler" class="at-warn">{{ chartBildStand[pos.positionId].fehler }}</small>
+                            <small v-else class="at-gedaempft">{{ t('incoming.chartBildHinweis') }}</small>
                         </div>
                     </div>
 
                     </div><!-- /opening-eval-section -->
 
                     <!-- ========== CLOSING EVALUATION (Futures) ========== -->
-                    <div v-if="pos.status === 'pending_evaluation' && !isBotPosition(pos)" class="closing-eval-section mt-3 p-3">
-                        <div class="d-flex align-items-center mb-3">
-                            <i class="uil uil-lock-alt me-2" style="color: var(--blue-color); font-size: 1.1rem;"></i>
-                            <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.closingEvaluation') }}</span>
+                    <div v-if="pos.status === 'pending_evaluation' && !isBotPosition(pos)" class="closing-eval-section abschnitt abschnitt-abstand">
+                        <div class="abschnitt-kopf">
+                            <Symbol name="schloss" :groesse="18" class="kopf-symbol" />
+                            <span class="abschnitt-titel">{{ t('incoming.closingEvaluation') }}</span>
                         </div>
 
                         <!-- Strategie eingehalten? (oberster Punkt) -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.strategyFollowed') }}</label>
-                            <div class="d-flex gap-2">
-                                <button class="btn btn-sm px-3"
-                                    :class="pos.strategyFollowed === 1 ? 'btn-success' : 'btn-outline-secondary'"
+                            <div class="wahl-reihe">
+                                <button type="button" class="wahl breit"
+                                    :class="pos.strategyFollowed === 1 ? 'gewaehlt-gut' : ''"
                                     @click.stop="updateStrategyFollowed(pos, 1)">
                                     {{ t('incoming.strategyYes') }}
                                 </button>
-                                <button class="btn btn-sm px-3"
-                                    :class="pos.strategyFollowed === 0 ? 'btn-danger' : 'btn-outline-secondary'"
+                                <button type="button" class="wahl breit"
+                                    :class="pos.strategyFollowed === 0 ? 'gewaehlt-schlecht' : ''"
                                     @click.stop="updateStrategyFollowed(pos, 0)">
                                     {{ t('incoming.strategyNo') }}
                                 </button>
@@ -1909,16 +1908,16 @@ function getPositionDate(pos) {
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">
                                 {{ t('incoming.tradeType') }}
-                                <small v-if="autoDetectedTradeType[pos.positionId] === true" class="text-muted ms-1">{{ t('incoming.autoDetected') }}</small>
+                                <small v-if="autoDetectedTradeType[pos.positionId] === true" class="at-gedaempft abstand-links">{{ t('incoming.autoDetected') }}</small>
                             </label>
-                            <div class="d-flex flex-wrap gap-1 align-items-center">
-                                <button v-for="tt in tradeTypeOptions" :key="tt.value"
-                                    class="btn btn-sm py-0 px-2"
-                                    :class="pos.closingTradeType === tt.value ? 'btn-primary' : 'btn-outline-secondary'"
+                            <div class="wahl-reihe">
+                                <button v-for="tt in tradeTypeOptions" :key="tt.value" type="button"
+                                    class="wahl"
+                                    :class="pos.closingTradeType === tt.value ? 'gewaehlt' : ''"
                                     @click.stop="updateClosingTradeType(pos, tt.value)">
                                     {{ t(tt.labelKey) }}
                                 </button>
-                                <small v-if="getTradeDurationMinutes(pos)" class="text-muted ms-2">
+                                <small v-if="getTradeDurationMinutes(pos)" class="at-gedaempft haltedauer">
                                     {{ t('incoming.holdDuration') }}: {{ formatDuration(getTradeDurationMinutes(pos)) }}
                                 </small>
                             </div>
@@ -1927,7 +1926,7 @@ function getPositionDate(pos) {
                         <!-- Emotionslevel (Abschluss) -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.closingEmotionLevel') }}</label>
-                            <div class="d-flex align-items-end flex-wrap">
+                            <div class="punkte-reihe">
                                 <template v-for="n in 10" :key="'ce'+n">
                                     <span @click.stop="updateClosingEmotionLevel(pos, n)"
                                         class="stress-dot pointerClass"
@@ -1945,7 +1944,7 @@ function getPositionDate(pos) {
                         <!-- Emotionen (Abschluss) -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.closingEmotions') }}</label>
-                            <textarea class="form-control form-control-sm" v-model="pos.closingFeelings"
+                            <textarea class="at-feld klein" v-model="pos.closingFeelings"
                                 :placeholder="t('incoming.closingEmotionsPlaceholder')" rows="2"></textarea>
                         </div>
 
@@ -1958,15 +1957,15 @@ function getPositionDate(pos) {
                         <!-- Tags -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
-                            <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                            <div class="tag-reihe">
                                 <span v-for="(tag, idx) in (pos.closingTags || [])" :key="tag.id"
-                                    class="badge me-1 pointerClass"
+                                    class="tag-chip pointerClass"
                                     :style="{ backgroundColor: getTagColor(tag.id) }"
                                     @click.stop="removeClosingTag(pos, idx)">
-                                    {{ tag.name }} <span class="ms-1">&times;</span>
+                                    {{ tag.name }} <span class="abstand-links">&times;</span>
                                 </span>
                             </div>
-                            <select class="form-select form-select-sm"
+                            <select class="at-feld klein"
                                 @change.stop="addClosingTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                                 <option selected disabled>{{ t('incoming.addTag') }}</option>
                                 <template v-for="group in availableTags" :key="group.id">
@@ -1984,13 +1983,13 @@ function getPositionDate(pos) {
                         <!-- Closing Screenshot -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.screenshot') }}</label>
-                            <div v-if="pos.closingScreenshotId" class="d-flex align-items-start gap-2 mb-2">
-                                <div class="position-relative screenshot-thumb">
+                            <div v-if="pos.closingScreenshotId" class="screenshot-reihe">
+                                <div class="screenshot-thumb">
                                     <img v-if="closingScreenshotPreviews[pos.positionId]"
                                         :src="closingScreenshotPreviews[pos.positionId]"
-                                        class="rounded" style="max-height: 120px; max-width: 200px; object-fit: contain;" />
-                                    <span v-else class="badge bg-secondary"><i class="uil uil-image me-1"></i>1</span>
-                                    <i class="uil uil-times-circle screenshot-remove" @click.stop="removeClosingScreenshot(pos)"></i>
+                                        class="screenshot-bild" />
+                                    <Pille v-else ton="neutral" symbol="bild">1</Pille>
+                                    <button type="button" class="screenshot-remove" @click.stop="removeClosingScreenshot(pos)"><Symbol name="fehler" /></button>
                                 </div>
                             </div>
                             <label v-else class="pb-drop"
@@ -2000,31 +1999,31 @@ function getPositionDate(pos) {
                                 @drop.prevent="onDropScreenshot($event, pos, 'closing')">
                                 <input type="file" accept="image/*" class="pb-drop-input"
                                     @change="handleClosingScreenshotUpload($event, pos)" />
-                                <i class="uil uil-image-plus me-1"></i>Bild wählen, hierher ziehen oder einfügen (Strg/Cmd+V)
+                                <Symbol name="bildPlus" />Bild wählen, hierher ziehen oder einfügen (Strg/Cmd+V)
                             </label>
-                            <button v-if="kopiertesBild && !pos.closingScreenshotId"
-                                type="button" class="btn btn-sm btn-outline-primary mt-2"
+                            <Knopf v-if="kopiertesBild && !pos.closingScreenshotId"
+                                klein symbol="zwischenablage" class="abstand-oben"
                                 @click.stop="kopiertesBildEinfuegen(pos, 'closing')">
-                                <i class="uil uil-clipboard-notes me-1"></i>Kopiertes Bild einfügen
-                            </button>
+                                Kopiertes Bild einfügen
+                            </Knopf>
                         </div>
 
                         <!-- Satisfaction -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
-                            <div class="d-flex gap-3">
-                                <span class="pointerClass fs-4"
-                                    :style="pos.satisfaction === 1 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                            <div class="zufrieden-reihe">
+                                <span class="pointerClass zufrieden"
+                                    :class="{ 'zufrieden-aus': pos.satisfaction !== 1 }"
                                     @click.stop="updateSatisfaction(pos, 1)">
                                     👍
                                 </span>
-                                <span class="pointerClass fs-4"
-                                    :style="pos.satisfaction === 2 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                <span class="pointerClass zufrieden"
+                                    :class="{ 'zufrieden-aus': pos.satisfaction !== 2 }"
                                     @click.stop="updateSatisfaction(pos, 2)">
                                     ✊
                                 </span>
-                                <span class="pointerClass fs-4"
-                                    :style="pos.satisfaction === 0 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                <span class="pointerClass zufrieden"
+                                    :class="{ 'zufrieden-aus': pos.satisfaction !== 0 }"
                                     @click.stop="updateSatisfaction(pos, 0)">
                                     👎
                                 </span>
@@ -2033,10 +2032,10 @@ function getPositionDate(pos) {
                     </div>
 
                     <!-- ========== BOT NOTIZ (laufend, schlank) ========== -->
-                    <div v-if="pos.status !== 'pending_evaluation' && isBotPosition(pos)" class="opening-eval-section p-3 mb-2">
-                        <div class="d-flex align-items-center mb-3">
-                            <i class="uil uil-robot me-2" style="color: var(--blue-color); font-size: 1.1rem;"></i>
-                            <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.botEvaluation') }}</span>
+                    <div v-if="pos.status !== 'pending_evaluation' && isBotPosition(pos)" class="opening-eval-section abschnitt">
+                        <div class="abschnitt-kopf">
+                            <Symbol name="ki" :groesse="18" class="kopf-symbol" />
+                            <span class="abschnitt-titel">{{ t('incoming.botEvaluation') }}</span>
                         </div>
 
                         <!-- Notiz (Quill Editor) -->
@@ -2048,15 +2047,15 @@ function getPositionDate(pos) {
                         <!-- Tags -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
-                            <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                            <div class="tag-reihe">
                                 <span v-for="(tag, idx) in (pos.tags || [])" :key="tag.id"
-                                    class="badge me-1 pointerClass"
+                                    class="tag-chip pointerClass"
                                     :style="{ backgroundColor: getTagColor(tag.id) }"
                                     @click.stop="removeTag(pos, idx)">
-                                    {{ tag.name }} <span class="ms-1">&times;</span>
+                                    {{ tag.name }} <span class="abstand-links">&times;</span>
                                 </span>
                             </div>
-                            <select class="form-select form-select-sm"
+                            <select class="at-feld klein"
                                 @change.stop="addTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                                 <option selected disabled>{{ t('incoming.addTag') }}</option>
                                 <template v-for="group in availableTags" :key="group.id">
@@ -2073,10 +2072,10 @@ function getPositionDate(pos) {
                     </div>
 
                     <!-- ========== BOT EVALUATION (schlank) ========== -->
-                    <div v-if="pos.status === 'pending_evaluation' && isBotPosition(pos)" class="closing-eval-section mt-3 p-3">
-                        <div class="d-flex align-items-center mb-3">
-                            <i class="uil uil-robot me-2" style="color: var(--blue-color); font-size: 1.1rem;"></i>
-                            <span class="fw-bold" style="font-size: 0.95rem;">{{ t('incoming.botEvaluation') }}</span>
+                    <div v-if="pos.status === 'pending_evaluation' && isBotPosition(pos)" class="closing-eval-section abschnitt abschnitt-abstand">
+                        <div class="abschnitt-kopf">
+                            <Symbol name="ki" :groesse="18" class="kopf-symbol" />
+                            <span class="abschnitt-titel">{{ t('incoming.botEvaluation') }}</span>
                         </div>
 
                         <!-- Notiz (Quill Editor) -->
@@ -2088,15 +2087,15 @@ function getPositionDate(pos) {
                         <!-- Tags -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
-                            <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                            <div class="tag-reihe">
                                 <span v-for="(tag, idx) in (pos.closingTags || [])" :key="tag.id"
-                                    class="badge me-1 pointerClass"
+                                    class="tag-chip pointerClass"
                                     :style="{ backgroundColor: getTagColor(tag.id) }"
                                     @click.stop="removeClosingTag(pos, idx)">
-                                    {{ tag.name }} <span class="ms-1">&times;</span>
+                                    {{ tag.name }} <span class="abstand-links">&times;</span>
                                 </span>
                             </div>
-                            <select class="form-select form-select-sm"
+                            <select class="at-feld klein"
                                 @change.stop="addClosingTag(pos, JSON.parse($event.target.value)); $event.target.selectedIndex = 0">
                                 <option selected disabled>{{ t('incoming.addTag') }}</option>
                                 <template v-for="group in availableTags" :key="group.id">
@@ -2114,19 +2113,19 @@ function getPositionDate(pos) {
                         <!-- Satisfaction -->
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
-                            <div class="d-flex gap-3">
-                                <span class="pointerClass fs-4"
-                                    :style="pos.satisfaction === 1 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                            <div class="zufrieden-reihe">
+                                <span class="pointerClass zufrieden"
+                                    :class="{ 'zufrieden-aus': pos.satisfaction !== 1 }"
                                     @click.stop="updateSatisfaction(pos, 1)">
                                     👍
                                 </span>
-                                <span class="pointerClass fs-4"
-                                    :style="pos.satisfaction === 2 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                <span class="pointerClass zufrieden"
+                                    :class="{ 'zufrieden-aus': pos.satisfaction !== 2 }"
                                     @click.stop="updateSatisfaction(pos, 2)">
                                     ✊
                                 </span>
-                                <span class="pointerClass fs-4"
-                                    :style="pos.satisfaction === 0 ? '' : 'opacity: 0.3; filter: grayscale(1)'"
+                                <span class="pointerClass zufrieden"
+                                    :class="{ 'zufrieden-aus': pos.satisfaction !== 0 }"
                                     @click.stop="updateSatisfaction(pos, 0)">
                                     👎
                                 </span>
@@ -2135,33 +2134,24 @@ function getPositionDate(pos) {
                     </div>
 
                     <!-- ===== SAVE / COMPLETE BUTTONS ===== -->
-                    <div class="d-flex justify-content-between align-items-center mt-2">
-                        <div class="form-check mb-0">
-                            <input type="checkbox" class="form-check-input" :id="'skipEval-' + pos.positionId"
+                    <div class="aktionen-zeile">
+                        <label class="at-check skip-check" :for="'skipEval-' + pos.positionId">
+                            <input type="checkbox" :id="'skipEval-' + pos.positionId"
                                 v-model="pos.skipEvaluation" :true-value="1" :false-value="0"
                                 @click.stop>
-                            <label class="form-check-label small text-muted" :for="'skipEval-' + pos.positionId">
-                                {{ t('incoming.skipEvaluation') }}
-                            </label>
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <button v-if="pos.status === 'pending_evaluation'"
-                                class="btn btn-primary btn-sm"
+                            <span class="klein-text at-gedaempft">{{ t('incoming.skipEvaluation') }}</span>
+                        </label>
+                        <div class="aktionen-knoepfe">
+                            <Knopf v-if="pos.status === 'pending_evaluation'"
+                                art="haupt" klein symbol="hakenKreis"
                                 @click.stop="completeClosingEvaluation(pos)"
-                                :disabled="closingId === pos.objectId">
-                                <span v-if="closingId === pos.objectId">
-                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                </span>
-                                <span v-else><i class="uil uil-check-circle me-1"></i></span>
+                                :laedt="closingId === pos.objectId">
                                 {{ t('incoming.completeEvaluation') }}
-                            </button>
-                            <button class="btn btn-success btn-sm" @click.stop="saveMetadata(pos)" :disabled="savingId === pos.objectId">
-                                <span v-if="savingId === pos.objectId">
-                                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
-                                </span>
-                                <span v-else><i class="uil uil-check me-1"></i></span>
+                            </Knopf>
+                            <Knopf :art="pos.status === 'pending_evaluation' ? 'normal' : 'haupt'" klein symbol="haken"
+                                @click.stop="saveMetadata(pos)" :laedt="savingId === pos.objectId">
                                 {{ t('common.save') }}
-                            </button>
+                            </Knopf>
                         </div>
                     </div>
                 </div>
@@ -2174,14 +2164,46 @@ function getPositionDate(pos) {
 </template>
 
 <style scoped>
+.incoming-seite {
+    margin-top: var(--abstand-2);
+}
+
+/* Kopf: Stand links, Aktualisieren + Info rechts */
+.incoming-kopf {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-3);
+    margin-bottom: var(--abstand-4);
+}
+.incoming-kopf-stand {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.incoming-kopf-aktionen {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    flex: 0 0 auto;
+}
+.incoming-hinweis {
+    margin-bottom: var(--abstand-2);
+}
+.hinweis-zeile {
+    font-size: 0.85em;
+    margin-top: var(--abstand-1);
+}
+.hinweis-leise {
+    opacity: 0.75;
+}
+
 /* Gruppen-Überschriften der pendenten Trades (je Börse + Futures/Bots) */
 .incoming-broker-title {
     margin: 1.4rem 0 0.35rem;
     font-weight: 700;
     font-size: 1.25rem;
-    color: var(--white-87, rgba(255,255,255,0.87));
+    color: var(--text);
     padding-bottom: 0.3rem;
-    border-bottom: 1px solid var(--white-10, rgba(255,255,255,0.08));
+    border-bottom: 1px solid var(--line);
 }
 .incoming-broker-title:first-child {
     margin-top: 0;
@@ -2192,51 +2214,332 @@ function getPositionDate(pos) {
     font-size: 0.82rem;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--grey-color, rgba(255,255,255,0.5));
+    color: var(--muted);
 }
 
+/* Positionskarte */
+.pos-karte {
+    margin-bottom: var(--abstand-2);
+    padding: var(--abstand-2);
+}
+.karten-kopf {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-3);
+}
+.karten-kopf-links {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    flex: 0 1 auto;
+    min-width: 0;
+}
+.karten-kopf-pnl {
+    flex: 1 1 auto;
+    text-align: right;
+}
+.karten-kopf-pfeil {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    color: var(--muted);
+}
+.symbol-name {
+    font-size: 1.25rem;
+}
+.seite,
+.fett {
+    font-weight: 700;
+}
+.realisiert {
+    margin-top: var(--abstand-1);
+    opacity: 0.85;
+}
+.klein-text {
+    font-size: 0.875em;
+}
+.hell {
+    color: var(--text);
+}
+.durchgestrichen {
+    text-decoration: line-through;
+}
+.abstand-links {
+    margin-left: var(--abstand-1);
+}
+.abstand-rechts {
+    margin-right: var(--abstand-1);
+}
+.abstand-oben {
+    margin-top: var(--abstand-2);
+}
+.rechts-aussen {
+    margin-left: auto;
+}
+.rrr {
+    color: var(--accent);
+    font-weight: 600;
+}
+.info-zeile,
+.stress-zeile {
+    margin-top: var(--abstand-1);
+}
+
+/* Aufgeklappter Bereich */
+.detail-bereich {
+    margin-top: var(--abstand-2);
+}
+.abschnitt {
+    padding: var(--abstand-4);
+    margin-bottom: var(--abstand-2);
+}
+.abschnitt-abstand {
+    margin-top: var(--abstand-4);
+}
+.abschnitt-kopf {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-4);
+}
+.abschnitt-titel {
+    font-weight: 700;
+    font-size: 0.95rem;
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--abstand-1);
+}
+.kopf-symbol {
+    color: var(--accent);
+}
+.kopf-symbol-gut {
+    color: var(--good);
+}
+
+.opening-eval-section,
+.closing-eval-section,
+.fills-section {
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+}
 .opening-eval-section {
-    background: var(--black-bg-3, #1a1a2e);
-    border: 1px solid var(--white-10, rgba(255,255,255,0.06));
-    border-left: 3px solid var(--green-color, #10b981);
-    border-radius: var(--border-radius, 6px);
+    border-left: 3px solid var(--good);
 }
 .closing-eval-section {
-    background: var(--black-bg-3, #1a1a2e);
-    border: 1px solid var(--white-10, rgba(255,255,255,0.06));
-    border-left: 3px solid var(--blue-color, #3b82f6);
-    border-radius: var(--border-radius, 6px);
+    border-left: 3px solid var(--accent);
 }
 .fills-section {
-    background: var(--black-bg-3, #1a1a2e);
-    border: 1px solid var(--white-10, rgba(255,255,255,0.06));
-    border-left: 3px solid var(--grey-color, #6b7280);
-    border-radius: var(--border-radius, 6px);
+    border-left: 3px solid var(--line-stark);
 }
-.fills-section .table {
-    margin-bottom: 0;
+
+/* Fills */
+.fills-kopf {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
 }
-.fills-section .table td {
+.fills-schnitt {
+    font-size: 0.85rem;
+}
+.fills-huelle {
+    overflow-x: auto;
+}
+.fills-tabelle {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    color: var(--text);
+    margin-bottom: var(--abstand-1);
+}
+.fills-tabelle td {
     padding: 0.15rem 0.3rem;
     vertical-align: middle;
     border: none;
+    white-space: nowrap;
+}
+.fills-tabelle td.zahl {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+.fills-tabelle td:first-child {
+    padding-left: 0;
+}
+.fills-tabelle td:last-child {
+    padding-right: 0;
+}
+.zelle-zeit { width: 100px; }
+.zelle-menge { width: 80px; }
+.zelle-preis { width: 90px; }
+.zelle-gebuehr { width: 90px; }
+.zelle-op {
+    padding-left: var(--abstand-1) !important;
+    padding-right: var(--abstand-1) !important;
+}
+.gruppen-pfeil {
+    font-size: 0.6rem;
+    margin-right: 2px;
+}
+.gruppen-zahl {
+    font-size: 0.6rem;
+    margin-left: var(--abstand-1);
+}
+.fill-einzeln {
+    opacity: 0.6;
+    font-size: 0.7rem;
+}
+.summen-zeile {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    border-top: 1px solid var(--line);
+    padding-top: var(--abstand-1);
+    margin-top: var(--abstand-1);
+    font-size: 0.8rem;
+}
+.tpsl-zeile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--abstand-4);
+    margin-top: var(--abstand-2);
+    padding-top: var(--abstand-2);
+    border-top: 1px solid var(--line);
+    font-size: 0.8rem;
+}
+.tpsl-verlauf {
+    margin-top: var(--abstand-2);
+    padding-top: var(--abstand-2);
+    border-top: 1px solid var(--line);
+    font-size: 0.75rem;
+}
+.tpsl-verlauf-kopf {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--abstand-1);
+    margin-bottom: var(--abstand-1);
+}
+.tpsl-eintrag {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-1);
+}
+.tpsl-zeit {
+    width: 90px;
+}
+
+/* Auswahl-Knöpfe (Trade-Typ, Zeitrahmen, Strategie) */
+.wahl-reihe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-1);
+}
+.wahl {
+    padding: 0.1rem 0.6rem;
+    border-radius: var(--radius-klein);
+    border: 1px solid var(--line-stark);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.wahl:hover {
+    color: var(--text);
+    border-color: var(--muted);
+}
+.wahl.breit {
+    padding: 0.25rem 1rem;
+}
+.wahl.gewaehlt {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+}
+.wahl.gewaehlt-gut {
+    background: var(--good-flaeche);
+    border-color: var(--good);
+    color: var(--good);
+}
+.wahl.gewaehlt-schlecht {
+    background: var(--bad-flaeche);
+    border-color: var(--bad);
+    color: var(--bad);
+}
+.haltedauer {
+    margin-left: var(--abstand-2);
+}
+.punkte-reihe {
+    display: flex;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+/* Tags */
+.tag-reihe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-1);
+    margin-bottom: var(--abstand-1);
+}
+.tag-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.18rem 0.55rem;
+    border-radius: var(--radius-pille);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+}
+
+/* Screenshots */
+.screenshot-reihe {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
 }
 .screenshot-thumb {
+    position: relative;
     display: inline-block;
+}
+.screenshot-bild {
+    display: block;
+    max-height: 120px;
+    max-width: 200px;
+    object-fit: contain;
+    border-radius: var(--radius-klein);
 }
 .screenshot-remove {
     position: absolute;
     top: -6px;
     right: -6px;
-    color: var(--red-color, #ff6960);
-    background: var(--black-bg-3, #1a1a2e);
+    display: inline-flex;
+    padding: 0;
+    border: none;
+    color: var(--bad);
+    background: var(--panel-soft);
     border-radius: 50%;
     font-size: 1.2rem;
     cursor: pointer;
     line-height: 1;
 }
 .screenshot-remove:hover {
-    color: #ff4040;
+    color: var(--text);
+    background: var(--bad);
 }
 
 /* Drag&Drop-Zone für Screenshots (Klick öffnet Dateiwahl). */
@@ -2247,23 +2550,110 @@ function getPositionDate(pos) {
     gap: 0.3rem;
     width: 100%;
     padding: 0.6rem 0.75rem;
-    border: 1.5px dashed var(--white-18, rgba(255, 255, 255, 0.2));
-    border-radius: 8px;
-    background: var(--black-bg-7, rgba(255, 255, 255, 0.03));
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    border: 1.5px dashed var(--line-stark);
+    border-radius: var(--radius-knopf);
+    background: var(--panel);
+    color: var(--muted);
     font-size: 0.78rem;
     text-align: center;
     cursor: pointer;
     transition: all 0.15s ease;
 }
 .pb-drop:hover {
-    border-color: var(--white-38, rgba(255, 255, 255, 0.38));
-    color: var(--white-87, rgba(255, 255, 255, 0.87));
+    border-color: var(--muted);
+    color: var(--text);
 }
 .pb-drop-over {
-    border-color: var(--blue-color, #01B4FF);
-    background: rgba(1, 180, 255, 0.08);
-    color: var(--white-87, rgba(255, 255, 255, 0.87));
+    border-color: var(--accent);
+    background: var(--accent-flaeche);
+    color: var(--text);
 }
 .pb-drop-input { display: none; }
+
+.chartbild-zeile {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-2);
+}
+
+/* Zufriedenheit */
+.zufrieden-reihe {
+    display: flex;
+    gap: var(--abstand-4);
+}
+.zufrieden {
+    font-size: 1.5rem;
+}
+.zufrieden-aus {
+    opacity: 0.3;
+    filter: grayscale(1);
+}
+
+/* Speichern / Abschliessen */
+.aktionen-zeile {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+    margin-top: var(--abstand-2);
+}
+.skip-check {
+    margin-bottom: 0;
+}
+.aktionen-knoepfe {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--abstand-2);
+}
+
+/* Quill-Hülle: Werkzeugleiste und Feld auf die Token */
+.pb-edit-section :deep(.ql-toolbar.ql-snow) {
+    border: 1px solid var(--line) !important;
+    border-radius: var(--radius-klein) var(--radius-klein) 0 0;
+    background: var(--panel);
+    padding: 4px 8px;
+}
+.pb-edit-section :deep(.ql-container.ql-snow) {
+    border: 1px solid var(--line) !important;
+    border-top: none !important;
+    border-radius: 0 0 var(--radius-klein) var(--radius-klein);
+    background: var(--panel);
+    font-family: var(--schrift);
+}
+.pb-edit-section :deep(.ql-editor) {
+    color: var(--text);
+}
+.pb-edit-section :deep(.ql-editor.ql-blank::before) {
+    color: var(--leise);
+}
+.pb-edit-section :deep(.ql-snow .ql-stroke) {
+    stroke: var(--muted);
+}
+.pb-edit-section :deep(.ql-snow .ql-fill) {
+    fill: var(--muted);
+}
+.pb-edit-section :deep(.ql-snow .ql-picker) {
+    color: var(--muted);
+}
+.pb-edit-section :deep(.ql-snow button:hover .ql-stroke),
+.pb-edit-section :deep(.ql-snow button.ql-active .ql-stroke) {
+    stroke: var(--accent);
+}
+.pb-edit-section :deep(.ql-snow button:hover .ql-fill),
+.pb-edit-section :deep(.ql-snow button.ql-active .ql-fill) {
+    fill: var(--accent);
+}
+
+@media (max-width: 767.98px) {
+    .abschnitt {
+        padding: var(--abstand-3);
+    }
+    .incoming-pnl {
+        font-size: 1.05rem;
+    }
+}
 </style>

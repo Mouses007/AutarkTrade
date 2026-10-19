@@ -8,6 +8,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { alarme, beschreibe, aendereAlarm, loescheAlarm } from '../../stores/chartAlarme.js'
+import { Symbol, Knopf } from '../basis'
 
 const props = defineProps({
     symbol: { type: String, required: true },
@@ -45,9 +46,9 @@ function loesche(a) {
 
 <template>
     <div class="alarmReiter">
-        <button class="btn btn-sm btn-outline-primary" @click="emit('neu', kurs)">
-            <i class="uil uil-bell"></i> {{ t('chart.alarm.neuPreis', { symbol }) }}
-        </button>
+        <Knopf klein symbol="glocke" class="neuKnopf" @click="emit('neu', kurs)">
+            {{ t('chart.alarm.neuPreis', { symbol }) }}
+        </Knopf>
         <div class="tipp">{{ t('chart.alarm.tipp') }}</div>
         <label class="alle"><input v-model="alle" type="checkbox" /> {{ t('chart.alarm.alleSymbole') }}</label>
         <div v-if="!liste.length" class="leer">{{ t('chart.alarm.leer') }}</div>
@@ -56,22 +57,22 @@ function loesche(a) {
                 <span class="sym">{{ a.symbol }}<small v-if="a.markt === 'spot'"> Spot</small></span>
                 <span class="was">{{ beschreibe(a) }}</span>
                 <span class="werkzeug" @click.stop>
-                    <button :title="t(a.aktiv ? 'chart.alarm.ausschalten' : 'chart.alarm.einschalten')"
+                    <button type="button" :title="t(a.aktiv ? 'chart.alarm.ausschalten' : 'chart.alarm.einschalten')"
                         @click="aendereAlarm(a.id, { aktiv: !a.aktiv })" :aria-label="t(a.aktiv ? 'chart.alarm.ausschalten' : 'chart.alarm.einschalten')">
-                        <i :class="a.aktiv ? 'uil uil-bell' : 'uil uil-bell-slash'"></i></button>
-                    <button :title="t('chart.einstellungen')" @click="emit('bearbeite', a)" :aria-label="t('chart.einstellungen')"><i class="uil uil-pen"></i></button>
-                    <button :title="t('chart.entfernen')" @click="loesche(a)" :aria-label="t('chart.entfernen')"><i class="uil uil-trash-alt"></i></button>
+                        <Symbol :name="a.aktiv ? 'glocke' : 'glockeAus'" /></button>
+                    <button type="button" :title="t('chart.einstellungen')" @click="emit('bearbeite', a)" :aria-label="t('chart.einstellungen')"><Symbol name="stift" /></button>
+                    <button type="button" :title="t('chart.entfernen')" @click="loesche(a)" :aria-label="t('chart.entfernen')"><Symbol name="muell" /></button>
                 </span>
             </div>
             <div v-if="offen === a.id" class="details">
                 <div>{{ a.einmalig ? t('chart.alarm.einmalig') : t('chart.alarm.wiederholend', { min: a.bedingung.sperreMin ?? 15 }) }}</div>
                 <div v-if="a.notiz">{{ a.notiz }}</div>
                 <div>{{ t('chart.alarm.zuletzt') }}: {{ zeit(a.ausgeloestAm) }} ({{ a.anzahlAusgeloest }}×)</div>
-                <div v-for="(v, i) in [...a.verlauf].reverse().slice(0, 5)" :key="i" class="verlauf">{{ zeit(v.t) }} · {{ v.p }}<template v-if="v.hinweis === 'geometrieEndet'"> · {{ t('chart.alarm.geometrieEndet') }}</template><template v-else-if="v.zugestellt === false"> · <span class="text-warning">{{ t('chart.alarm.nichtZugestellt') }}</span></template></div>
+                <div v-for="(v, i) in [...a.verlauf].reverse().slice(0, 5)" :key="i" class="verlauf">{{ zeit(v.t) }} · {{ v.p }}<template v-if="v.hinweis === 'geometrieEndet'"> · {{ t('chart.alarm.geometrieEndet') }}</template><template v-else-if="v.zugestellt === false"> · <span class="at-warn">{{ t('chart.alarm.nichtZugestellt') }}</span></template></div>
             </div>
         </div>
         <div class="testZeile">
-            <button class="btn btn-sm btn-link p-0" @click="test">{{ t('chart.alarm.test') }}</button>
+            <button type="button" class="textKnopf" @click="test">{{ t('chart.alarm.test') }}</button>
             <small>{{ testStand }}</small>
         </div>
     </div>
@@ -89,7 +90,7 @@ function loesche(a) {
 
 .tipp,
 .leer {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
 }
 
@@ -117,7 +118,7 @@ function loesche(a) {
 }
 
 .zeile:hover {
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .sym {
@@ -126,24 +127,43 @@ function loesche(a) {
 
 .was {
     flex: 1;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .werkzeug button {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 3px;
+    display: inline-flex;
+    cursor: pointer;
 }
 
 .werkzeug button:hover {
-    color: var(--white-87, #eee);
+    color: var(--text);
 }
 
 .details {
     padding: 2px 8px 6px 14px;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
+}
+
+.neuKnopf {
+    align-self: flex-start;
+}
+
+.textKnopf {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.textKnopf:hover {
+    text-decoration: underline;
 }
 
 .testZeile {

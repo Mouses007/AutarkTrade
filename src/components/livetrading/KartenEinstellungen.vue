@@ -25,6 +25,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LiveSymbolPicker from '../LiveSymbolPicker.vue'
+import Symbol from '../basis/Symbol.vue'
 
 const emit = defineEmits(['schliessen'])
 const { t } = useI18n()
@@ -42,19 +43,19 @@ onMounted(() => boxEl.value?.focus())
         <div class="radarOverlay" tabindex="0" ref="boxEl" @click.self="emit('schliessen')" @keydown="beiTaste">
             <div class="radarOverlayBox keBox">
                 <div class="radarOverlayHead">
-                    <h5><i class="uil uil-setting me-1"></i>{{ t('livetrading.karten.titel') }}</h5>
+                    <h5><Symbol name="einstellungen" class="keZeichen" />{{ t('livetrading.karten.titel') }}</h5>
                     <button type="button" class="radarOverlayClose" :title="t('common.close')"
                         @click="emit('schliessen')">
-                        <i class="uil uil-times"></i>
+                        <Symbol name="schliessen" />
                     </button>
                 </div>
                 <div class="radarOverlayBody keBody">
                     <section class="keSpalte">
-                        <h6><i class="uil uil-chart-line me-1"></i>{{ t('nav.liquidity') }}</h6>
+                        <h6><Symbol name="linie" class="keZeichen" />{{ t('nav.liquidity') }}</h6>
                         <LiveSymbolPicker variant="bookmap" ohne-symbol in-kachel />
                     </section>
                     <section class="keSpalte">
-                        <h6><i class="uil uil-fire me-1"></i>{{ t('nav.liquidations') }}</h6>
+                        <h6><Symbol name="feuer" class="keZeichen" />{{ t('nav.liquidations') }}</h6>
                         <LiveSymbolPicker variant="levmap" ohne-symbol in-kachel />
                     </section>
                 </div>
@@ -85,6 +86,11 @@ onMounted(() => boxEl.value?.focus())
     font-size: 0.9rem;
     color: var(--white-87);
     border-bottom: 1px solid var(--white-18);
+}
+
+.keZeichen {
+    margin-right: var(--abstand-1);
+    vertical-align: -0.125em;
 }
 
 @media (max-width: 767.98px) {

@@ -22,6 +22,7 @@ import { liveSymbol, FAVORITE_SYMBOLS } from '../../stores/live.js'
 import { loadSymbolMeta } from '../../utils/liveSymbols.js'
 import { boerseUrl, aktivierteBoersen, BOERSE_NAME } from '../../utils/boersenLinks.js'
 import { currentUser } from '../../stores/globals.js'
+import Symbol from '../basis/Symbol.vue'
 
 const { t } = useI18n()
 
@@ -95,9 +96,9 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
 <template>
     <div ref="wurzel" class="swWrap">
         <button type="button" class="swAktuell" @click.stop="umschalten">
-            <i class="uil uil-coins"></i>
+            <Symbol name="muenzen" />
             <b>{{ kurz(liveSymbol) }}</b>
-            <i class="uil" :class="offen ? 'uil-angle-up' : 'uil-angle-down'"></i>
+            <Symbol :name="offen ? 'hoch' : 'runter'" />
         </button>
         <!-- Links LINKS vom Symbol und ausserhalb des Flusses: das Symbol sitzt
              exakt in der Seitenmitte, rechts davon steht die breite Knopfleiste.
@@ -106,7 +107,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
         <span v-if="oeffnen.length" class="swOeffnen">
             <a v-for="o in oeffnen" :key="o.b" class="swBoerse" :href="o.url" target="_blank" rel="noopener noreferrer"
                 :title="t('live.inBoerse', { s: kurz(liveSymbol), b: o.name })">
-                {{ o.name }} <i class="uil uil-external-link-alt"></i>
+                {{ o.name }} <Symbol name="extern" />
             </a>
         </span>
 

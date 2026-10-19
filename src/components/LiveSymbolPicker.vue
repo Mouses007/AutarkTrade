@@ -25,6 +25,7 @@ import {
 } from '../stores/live.js'
 import { LEVERAGE_TIERS, parseTierAuswahl } from '../../shared/leverageMap.js'
 import { mmrHerkunft } from '../utils/marginRate.js'
+import Symbol from './basis/Symbol.vue'
 
 const props = defineProps({
     /** 'bookmap' | 'levmap' | 'oi' — bestimmt, was unter dem Symbolblock steht. */
@@ -359,7 +360,7 @@ onMounted(async () => {
 <template>
     <div class="livePicker">
         <template v-if="!ohneSymbol">
-        <label class="fw-lighter">{{ t('live.symbol') }}</label>
+        <label class="lpLabel">{{ t('live.symbol') }}</label>
         <!-- Marktwahl nur in der Bookmap: die anderen beiden Seiten sind
              Futures-only, eine Spot-Pille wäre dort eine tote Taste. -->
         <div v-if="variant === 'bookmap'" class="market-pills">
@@ -370,7 +371,7 @@ onMounted(async () => {
         </div>
 
         <div class="symbolCurrent">{{ liveSymbol }}</div>
-        <input v-model="query" class="sidebar-select mb-1" type="text" :placeholder="t('live.search')"
+        <input v-model="query" class="sidebar-select lpUnten" type="text" :placeholder="t('live.search')"
             @focus="open = true" />
         <div v-if="open || query" class="symbolList">
             <div v-if="loading" class="symbolHint">{{ t('live.loading') }}</div>
@@ -383,18 +384,18 @@ onMounted(async () => {
         </template>
 
         <template v-if="variant === 'bookmap'">
-        <label class="fw-lighter mt-2">{{ t('live.display') }}</label>
-        <select v-model.number="liveViewPct" class="sidebar-select mb-1" :title="t('live.bandTitle')">
+        <label class="lpLabel lpOben">{{ t('live.display') }}</label>
+        <select v-model.number="liveViewPct" class="sidebar-select lpUnten" :title="t('live.bandTitle')">
             <option v-for="p in VIEW_PCT_OPTIONS" :key="p" :value="p">± {{ p }} %</option>
         </select>
         <!-- Zeitspanne gehört neben das Preisband: die beiden spannen zusammen
              auf, was man sieht. Der Takt darunter ist etwas anderes — er sagt,
              wie fein AUFGEZEICHNET wird, und ändert die Ansicht nur indirekt. -->
-        <select v-model.number="liveSpanneMin" class="sidebar-select mb-1" :disabled="istWiedergabe"
+        <select v-model.number="liveSpanneMin" class="sidebar-select lpUnten" :disabled="istWiedergabe"
             :title="istWiedergabe ? t('live.replayLocked') : t('live.spanTitle')">
             <option v-for="m in spannen" :key="m" :value="m">{{ spanneLabel(m) }}</option>
         </select>
-        <select v-model.number="liveFrameMs" class="sidebar-select mb-1" :disabled="istWiedergabe"
+        <select v-model.number="liveFrameMs" class="sidebar-select lpUnten" :disabled="istWiedergabe"
             :title="istWiedergabe ? t('live.replayLocked') : t('live.frameTitle')">
             <option v-for="f in FRAME_MS_OPTIONS" :key="f" :value="f">{{ t('live.perColumn', { ms: f }) }}</option>
         </select>
@@ -403,8 +404,8 @@ onMounted(async () => {
         <!-- Preisachse: dasselbe wie die Zeitspanne, nur senkrecht. Eine
              Ringzeile ist bei BTC 2 USD; ohne Zusammenfassen stehen dort
              Striche statt Zonen, weil Orders auf runden Preisen sitzen. -->
-        <label class="fw-lighter mt-2">{{ t('live.priceFold') }}</label>
-        <select v-model.number="livePreisFaltung" class="sidebar-select mb-1" :title="t('live.priceFoldTitle')">
+        <label class="lpLabel lpOben">{{ t('live.priceFold') }}</label>
+        <select v-model.number="livePreisFaltung" class="sidebar-select lpUnten" :title="t('live.priceFoldTitle')">
             <option v-for="n in PREIS_FALTUNG_OPTIONS" :key="n" :value="n">{{ preisFaltungLabel(n) }}</option>
         </select>
         <!-- Zwei Spuren am rechten Rand, die verschiedene Fragen beantworten:
@@ -412,25 +413,25 @@ onMounted(async () => {
              LIEGT. In der Wiedergabe gibt es kein aktuelles Buch. Die
              Zwischenüberschrift steht hier, weil beide nebeneinander sonst
              wie zwei Varianten desselben aussehen. -->
-        <label class="fw-lighter mt-2">{{ t('live.lanes') }}</label>
+        <label class="lpLabel lpOben">{{ t('live.lanes') }}</label>
         <label :class="['liveToggle', istWiedergabe ? 'liveToggleAus' : '']"
             :title="istWiedergabe ? t('live.replayNoBook') : t('live.buchTitle')">
-            <input type="checkbox" v-model="liveShowBuch" class="me-1" :disabled="istWiedergabe" />{{ t('live.buch') }}
+            <input type="checkbox" v-model="liveShowBuch" class="lpHaken" :disabled="istWiedergabe" />{{ t('live.buch') }}
         </label>
         <template v-if="liveShowBuch && !istWiedergabe">
-            <label class="fw-lighter mt-1" style="font-size:0.72rem;">
+            <label class="lpLabel lpObenKlein" style="font-size:0.72rem;">
                 {{ t('live.laneWidth') }} <span class="threshVal">{{ liveBuchW }} PX</span>
             </label>
             <input v-model.number="liveBuchW" type="range" min="48" max="200" step="4" class="threshRange" />
             <label class="liveToggle" :title="t('live.otherVenuesTitle')">
-                <input type="checkbox" v-model="liveFremdBuch" class="me-1" />{{ t('live.otherVenues') }}
+                <input type="checkbox" v-model="liveFremdBuch" class="lpHaken" />{{ t('live.otherVenues') }}
             </label>
         </template>
         <label class="liveToggle" :title="istWiedergabe ? t('live.replayTradesAb') : null">
-            <input type="checkbox" v-model="liveShowProfile" class="me-1" />{{ t('live.profile') }}
+            <input type="checkbox" v-model="liveShowProfile" class="lpHaken" />{{ t('live.profile') }}
         </label>
         <template v-if="liveShowProfile">
-            <label class="fw-lighter mt-1" style="font-size:0.72rem;">
+            <label class="lpLabel lpObenKlein" style="font-size:0.72rem;">
                 {{ t('live.laneWidth') }}
                 <span class="threshVal">{{ liveProfileW }} px</span>
             </label>
@@ -439,26 +440,26 @@ onMounted(async () => {
                 :title="t('live.laneWidthTitle')" />
         </template>
         <label v-if="liveMarket === 'futures'" class="liveToggle">
-            <input type="checkbox" v-model="liveShowLiquidations" class="me-1" />{{ t('live.liquidations') }}
+            <input type="checkbox" v-model="liveShowLiquidations" class="lpHaken" />{{ t('live.liquidations') }}
         </label>
         <label class="liveToggle" :title="istWiedergabe ? t('live.replayTradesAb') : t('live.volumeBarsTitle')">
-            <input type="checkbox" v-model="liveShowVolumeBars" class="me-1" />{{ t('live.volumeBars') }}
+            <input type="checkbox" v-model="liveShowVolumeBars" class="lpHaken" />{{ t('live.volumeBars') }}
         </label>
         <label class="liveToggle" :title="istWiedergabe ? t('live.replayTradesAb') : t('live.deltaTitle')">
-            <input type="checkbox" v-model="liveShowDelta" class="me-1" />{{ t('live.delta') }}
+            <input type="checkbox" v-model="liveShowDelta" class="lpHaken" />{{ t('live.delta') }}
         </label>
         <label class="liveToggle" :title="t('live.absorptionTitle')">
-            <input type="checkbox" v-model="liveShowAbsorption" class="me-1" />{{ t('live.absorption') }}
+            <input type="checkbox" v-model="liveShowAbsorption" class="lpHaken" />{{ t('live.absorption') }}
         </label>
         <label :class="['liveToggle', istWiedergabe ? 'liveToggleAus' : '']"
             :title="istWiedergabe ? t('live.replayLocked') : t('live.pauseBgTitle')">
-            <input type="checkbox" v-model="livePauseInBackground" class="me-1" :disabled="istWiedergabe" />{{ t('live.pauseBg') }}
+            <input type="checkbox" v-model="livePauseInBackground" class="lpHaken" :disabled="istWiedergabe" />{{ t('live.pauseBg') }}
         </label>
         <div v-if="!livePauseInBackground && !istWiedergabe" class="autoRefHint">{{ t('live.pauseBgOffHint') }}</div>
         <div v-if="istWiedergabe" class="autoRefHint">{{ t('live.replayHint') }}</div>
 
-        <label class="fw-lighter mt-2">{{ t('live.colorScale') }}</label>
-        <select v-model="liveColorMode" class="sidebar-select mb-1"
+        <label class="lpLabel lpOben">{{ t('live.colorScale') }}</label>
+        <select v-model="liveColorMode" class="sidebar-select lpUnten"
             :title="t('live.colorScaleTitle')">
             <option value="auto">{{ t('live.auto') }}</option>
             <option value="fixed">{{ t('live.fixedValue') }}</option>
@@ -469,7 +470,7 @@ onMounted(async () => {
             <button type="button" class="refBtn" :disabled="!liveAutoRefValue"
                 :title="t('live.takeAutoTitle', { value: fmtRef(liveAutoRefValue) })"
                 @click="liveColorRef = Number(liveAutoRefValue.toPrecision(4))">
-                <i class="uil uil-import"></i>
+                <Symbol name="herunterladen" />
             </button>
         </div>
         <div v-else class="autoRefHint">{{ t('live.autoValue', { value: fmtRef(liveAutoRefValue) }) }}</div>
@@ -478,14 +479,14 @@ onMounted(async () => {
         <!-- Ein Regler für beide Modi. Der Bezugswert unterscheidet sich
              (gemessener Median gegen von Hand gesetzt), die Sättigung ist
              dieselbe Frage: bei welchem Vielfachen davon ist eine Zelle voll. -->
-        <label class="fw-lighter mt-2">
+        <label class="lpLabel lpOben">
             {{ t('live.saturationMult') }}
             <span class="threshVal">{{ liveSaettigung.toFixed(1) }}×</span>
         </label>
         <input v-model.number="liveSaettigung" type="range" min="1.5" max="8" step="0.1"
             class="threshRange" :title="t('live.saturationMultTitle')" />
 
-        <label class="fw-lighter mt-2">
+        <label class="lpLabel lpOben">
             {{ t('live.threshold') }}
             <span class="threshVal">{{ Math.round(liveThreshold * 100) }} %</span>
         </label>
@@ -493,7 +494,7 @@ onMounted(async () => {
             class="threshRange" :title="t('live.thresholdTitle')" />
 
         <template v-if="!istWiedergabe">
-            <label class="fw-lighter mt-2">
+            <label class="lpLabel lpOben">
                 {{ t('live.dotStep') }}
                 <span class="threshVal">{{ liveDotStep === 1 ? t('live.dotStepOff') : liveDotStep + ' px' }}</span>
             </label>
@@ -506,7 +507,7 @@ onMounted(async () => {
 
         <!-- ── Liquidationskarte ────────────────────────────── -->
         <template v-if="variant === 'levmap'">
-            <label class="fw-lighter mt-2">{{ t('levmap.viewLabel') }}</label>
+            <label class="lpLabel lpOben">{{ t('levmap.viewLabel') }}</label>
             <div class="market-pills">
                 <button type="button" :class="['cat-pill', levMapView === 'dist' ? 'active' : '']"
                     :title="t('levmap.viewDistTitle')" @click="levMapView = 'dist'">{{ t('levmap.viewDist') }}</button>
@@ -514,7 +515,7 @@ onMounted(async () => {
                     :title="t('levmap.viewHistoryTitle')" @click="levMapView = 'history'">{{ t('levmap.viewHistory') }}</button>
             </div>
 
-            <label class="fw-lighter mt-2" :title="t('levmap.tierToggleTitle')">{{ t('levmap.tierLabel') }}</label>
+            <label class="lpLabel lpOben" :title="t('levmap.tierToggleTitle')">{{ t('levmap.tierLabel') }}</label>
             <div class="tierGrid">
                 <button type="button" :class="['cat-pill', !tierAuswahl ? 'active' : '']"
                     :title="t('levmap.tierToggleTitle')" @click="levMapTier = 'all'">{{ t('levmap.allTiers') }}</button>
@@ -527,7 +528,7 @@ onMounted(async () => {
                     @click="tierUmschalten(L)">{{ effektiverHebel(L) }}x</button>
             </div>
 
-            <label class="fw-lighter mt-2" :title="t('levmap.weightsTitle')">{{ t('levmap.weightsLabel') }}</label>
+            <label class="lpLabel lpOben" :title="t('levmap.weightsTitle')">{{ t('levmap.weightsLabel') }}</label>
             <div class="gewichtRow">
                 <label v-for="(L, i) in TIERS" :key="L" class="gewichtFeld">
                     <span class="gewichtStufe">{{ effektiverHebel(L) }}x</span>
@@ -549,26 +550,26 @@ onMounted(async () => {
             </div>
 
             <template v-if="!inKachel">
-            <label class="fw-lighter mt-2">{{ t('levmap.windowLabel') }}</label>
-            <select v-model.number="levMapHours" class="sidebar-select mb-1" :title="t('levmap.windowTitle')">
+            <label class="lpLabel lpOben">{{ t('levmap.windowLabel') }}</label>
+            <select v-model.number="levMapHours" class="sidebar-select lpUnten" :title="t('levmap.windowTitle')">
                 <option v-for="h in LEV_HOURS" :key="h" :value="h">{{ fensterLabel(h) }}</option>
             </select>
-            <select v-model.number="levMapSpanPct" class="sidebar-select mb-1" :title="t('levmap.spanTitle')">
+            <select v-model.number="levMapSpanPct" class="sidebar-select lpUnten" :title="t('levmap.spanTitle')">
                 <option v-for="s in spanOptionen" :key="s" :value="s">± {{ s }} %</option>
             </select>
             <div class="autoRefHint">{{ t('levmap.wheelHint') }}</div>
             </template>
-            <div v-else class="autoRefHint mt-2">{{ t('levmap.kachelHinweis') }}</div>
+            <div v-else class="autoRefHint lpOben">{{ t('levmap.kachelHinweis') }}</div>
 
             <template v-if="levMapView === 'history'">
-                <label class="fw-lighter mt-2">
+                <label class="lpLabel lpOben">
                     {{ t('levmap.thresholdLabel') }}
                     <span class="threshVal">{{ Math.round(levMapThreshold * 100) }} %</span>
                 </label>
                 <input v-model.number="levMapThreshold" type="range" min="0" max="0.9" step="0.05"
                     class="threshRange" :title="t('levmap.thresholdTitle')" />
 
-                <label class="fw-lighter mt-2">
+                <label class="lpLabel lpOben">
                     {{ t('levmap.profileLabel') }}
                     <span class="threshVal">{{ levMapProfileW }} px</span>
                 </label>
@@ -577,8 +578,8 @@ onMounted(async () => {
                 <div class="autoRefHint">{{ levMapProfileW === 0 ? t('levmap.profileOff') : '' }}</div>
             </template>
 
-            <label class="fw-lighter mt-2">{{ t('levmap.mmr') }}</label>
-            <select v-model="levMapMmrQuelle" class="sidebar-select mb-1" :title="t('levmap.mmrSourceTitle')">
+            <label class="lpLabel lpOben">{{ t('levmap.mmr') }}</label>
+            <select v-model="levMapMmrQuelle" class="sidebar-select lpUnten" :title="t('levmap.mmrSourceTitle')">
                 <option value="binance">{{ t('levmap.mmrSourceBinance') }}</option>
                 <option value="bybit">{{ t('levmap.mmrSourceBybit') }}</option>
                 <option value="manuell">{{ t('levmap.mmrSourceManual') }}</option>
@@ -590,8 +591,8 @@ onMounted(async () => {
 
         <!-- ── Open Interest ────────────────────────────────── -->
         <template v-if="variant === 'oi'">
-            <label class="fw-lighter mt-2">{{ t('levmap.windowLabel') }}</label>
-            <select v-model.number="levMapHours" class="sidebar-select mb-1" :title="t('levmap.windowTitle')">
+            <label class="lpLabel lpOben">{{ t('levmap.windowLabel') }}</label>
+            <select v-model.number="levMapHours" class="sidebar-select lpUnten" :title="t('levmap.windowTitle')">
                 <option v-for="h in OI_HOURS" :key="h" :value="h">{{ fensterLabel(h) }}</option>
             </select>
         </template>
@@ -602,6 +603,27 @@ onMounted(async () => {
 .livePicker {
     display: flex;
     flex-direction: column;
+}
+
+/* Feldbeschriftung im Seitenmenü: leichter Schnitt, wie bisher. */
+.lpLabel {
+    font-weight: lighter;
+}
+
+.lpOben {
+    margin-top: var(--abstand-2);
+}
+
+.lpObenKlein {
+    margin-top: var(--abstand-1);
+}
+
+.lpUnten {
+    margin-bottom: var(--abstand-1);
+}
+
+.lpHaken {
+    margin-right: var(--abstand-1);
 }
 
 /* Hebelstufen: umbrechendes Raster statt einer Reihe — in der schmalen

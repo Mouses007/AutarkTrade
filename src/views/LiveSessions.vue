@@ -15,6 +15,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import PageInfo from '../components/PageInfo.vue'
+import { Symbol, Kreisel } from '../components/basis'
 import dayjs from '../utils/dayjs-setup.js'
 import { dbFind, dbUpdate, dbDelete } from '../utils/db.js'
 
@@ -170,10 +171,10 @@ onMounted(lade)
                 <button v-if="archivAnzahl" type="button"
                     :class="['ctl-pill', archivZeigen ? 'active' : '']"
                     @click="archivZeigen = !archivZeigen">
-                    <i class="uil uil-archive"></i>{{ t('liveSessions.archivZeigen', { n: archivAnzahl }) }}
+                    <Symbol name="archiv" />{{ t('liveSessions.archivZeigen', { n: archivAnzahl }) }}
                 </button>
                 <button type="button" class="ctl-pill" @click="lade">
-                    <i class="uil uil-sync"></i>{{ t('marktradar.refreshAll') }}
+                    <Symbol name="aktualisieren" />{{ t('marktradar.refreshAll') }}
                 </button>
                 <span class="ctl-sep"></span>
                 <PageInfo section="info.liveSessions" />
@@ -190,7 +191,7 @@ onMounted(lade)
         </div>
 
         <div v-if="fehler" class="lsFehler">{{ fehler }}</div>
-        <div v-if="laedt" class="lsLeer"><span class="spinner-border spinner-border-sm"></span></div>
+        <div v-if="laedt" class="lsLeer"><Kreisel /></div>
         <div v-else-if="!sitzungen.length" class="lsLeer">{{ t('liveSessions.keine') }}</div>
         <div v-else-if="!sichtbare.length" class="lsLeer">{{ t('liveSessions.alleArchiviert') }}</div>
 
@@ -225,7 +226,7 @@ onMounted(lade)
                 </button>
                 <button v-if="s.status !== 'laufend'" type="button" class="ctl-pill"
                     @click="archivieren(s, !istArchiviert(s))">
-                    <i class="uil" :class="istArchiviert(s) ? 'uil-upload-alt' : 'uil-archive'"></i>
+                    <Symbol :name="istArchiviert(s) ? 'hochladen' : 'archiv'" />
                     {{ istArchiviert(s) ? t('liveSessions.hervorholen') : t('liveSessions.archivieren') }}
                 </button>
                 <button type="button" :class="['ctl-pill', loeschFrage === s.objectId ? 'lsLoeschScharf' : '']"
@@ -243,7 +244,7 @@ onMounted(lade)
             </div>
 
             <div v-if="s.planNotiz" class="lsVorsatz">
-                <i class="uil uil-notes"></i>{{ s.planNotiz }}
+                <Symbol name="notiz" />{{ s.planNotiz }}
             </div>
             <div v-if="s.notizen" class="lsNotizen">{{ s.notizen }}</div>
             <div v-if="s.fazit" class="lsFazit">{{ s.fazit }}</div>

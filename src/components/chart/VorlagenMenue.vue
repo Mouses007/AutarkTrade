@@ -14,6 +14,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { api } from '../../utils/chart/arbeitsplatz.js'
+import { Symbol } from '../basis'
 
 const props = defineProps({
     aktuelle: { type: Array, default: () => [] },   // Indikatoren des aktiven Panels
@@ -94,7 +95,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
 <template>
     <div ref="wurzel" class="aufklapp">
         <button class="tf" :class="{ an: offen }" :title="t('chart.vorlage.titel')" @click="umschalten" :aria-label="t('chart.vorlage.titel')">
-            <i class="uil uil-bookmark"></i> {{ t('chart.vorlage.knopf') }}
+            <Symbol name="lesezeichen" /> {{ t('chart.vorlage.knopf') }}
         </button>
         <div v-if="offen" class="menue vorlagenMenue">
             <div class="kopf">{{ t('chart.vorlage.titel') }}</div>
@@ -105,15 +106,15 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
                 </button>
                 <button class="mini stern" :class="{ an: favoriten.includes(v.id) }"
                     :title="t(favoriten.includes(v.id) ? 'chart.vorlage.favoritWeg' : 'chart.vorlage.favoritHinzu')"
-                    @click="schalteFavorit(v)" :aria-label="t(favoriten.includes(v.id) ? 'chart.vorlage.favoritWeg' : 'chart.vorlage.favoritHinzu')"><i class="uil uil-star"></i></button>
-                <button class="mini" :title="t('chart.vorlage.hinzufuegen')" @click="anwenden(v, 'hinzu')" :aria-label="t('chart.vorlage.hinzufuegen')"><i class="uil uil-plus"></i></button>
-                <button class="mini" :disabled="!aktuelle.length" :title="t('chart.vorlage.ueberschreiben')" @click="ueberschreiben(v)" :aria-label="t('chart.vorlage.ueberschreiben')"><i class="uil uil-sync"></i></button>
-                <button class="mini" :title="t('chart.vorlage.umbenennen')" @click="umbenennen(v)" :aria-label="t('chart.vorlage.umbenennen')"><i class="uil uil-pen"></i></button>
-                <button class="mini weg" :title="t('chart.vorlage.loeschen')" @click="loeschen(v)" :aria-label="t('chart.vorlage.loeschen')"><i class="uil uil-trash-alt"></i></button>
+                    @click="schalteFavorit(v)" :aria-label="t(favoriten.includes(v.id) ? 'chart.vorlage.favoritWeg' : 'chart.vorlage.favoritHinzu')"><Symbol name="stern" :gefuellt="favoriten.includes(v.id)" /></button>
+                <button class="mini" :title="t('chart.vorlage.hinzufuegen')" @click="anwenden(v, 'hinzu')" :aria-label="t('chart.vorlage.hinzufuegen')"><Symbol name="plus" /></button>
+                <button class="mini" :disabled="!aktuelle.length" :title="t('chart.vorlage.ueberschreiben')" @click="ueberschreiben(v)" :aria-label="t('chart.vorlage.ueberschreiben')"><Symbol name="aktualisieren" /></button>
+                <button class="mini" :title="t('chart.vorlage.umbenennen')" @click="umbenennen(v)" :aria-label="t('chart.vorlage.umbenennen')"><Symbol name="stift" /></button>
+                <button class="mini weg" :title="t('chart.vorlage.loeschen')" @click="loeschen(v)" :aria-label="t('chart.vorlage.loeschen')"><Symbol name="muell" /></button>
             </div>
             <hr />
             <button class="eintrag" :disabled="!aktuelle.length" @click="speichern">
-                <i class="uil uil-plus-circle"></i> {{ t('chart.vorlage.speichern', { n: aktuelle.length }) }}
+                <Symbol name="plusKreis" /> {{ t('chart.vorlage.speichern', { n: aktuelle.length }) }}
             </button>
             <div v-if="fehler" class="fehler">{{ fehler }}</div>
         </div>
@@ -121,7 +122,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
     <!-- Favoriten direkt in der Leiste: ein Klick ersetzt die Indikatoren des aktiven Charts. -->
     <button v-for="v in favoritVorlagen" :key="'fav' + v.id" class="tf favorit"
         :title="t('chart.vorlage.anwendenTitel', { n: v.indikatoren.length })" @click="anwenden(v, 'ersetzen')" :aria-label="t('chart.vorlage.anwendenTitel', { n: v.indikatoren.length })">
-        <i class="uil uil-star"></i> {{ v.name }}
+        <Symbol name="stern" gefuellt class="favSymbol" /> {{ v.name }}
     </button>
 </template>
 
@@ -130,21 +131,25 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
 .tf {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 12px;
     padding: 3px 7px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
 }
 
 .tf:hover {
-    color: var(--white-87, #eee);
-    background: var(--white-10);
+    color: var(--text);
+    background: var(--line);
 }
 
 .tf.an {
-    color: var(--blue-color);
-    background: rgba(1, 180, 255, 0.1);
+    color: var(--accent);
+    background: var(--accent-flaeche);
 }
 
 .aufklapp {
@@ -158,30 +163,36 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
     z-index: 30;
     display: flex;
     gap: 2px;
-    background: var(--black-bg-5, #1e222d);
-    border: 1px solid var(--white-18);
-    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
     padding: 6px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--schatten);
 }
 
 .menue hr {
     margin: 4px 0;
-    border-color: var(--white-18);
+    border: none;
+    border-top: 1px solid var(--line-stark);
+    opacity: 1;
 }
 
 .eintrag {
     background: transparent;
     border: none;
-    color: var(--white-87, #ddd);
+    color: var(--text);
     text-align: left;
     font-size: 12px;
     padding: 5px 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
 }
 
 .eintrag:hover:not(:disabled) {
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .eintrag:disabled {
@@ -198,13 +209,13 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 4px 4px;
 }
 
 .leer {
     font-size: 12px;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 4px;
 }
 
@@ -223,34 +234,37 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
     white-space: nowrap;
     background: transparent;
     border: none;
-    color: var(--white-87, #ddd);
+    color: var(--text);
     padding: 5px 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
     font-size: 12px;
+    cursor: pointer;
 }
 
 .zeile .name small {
-    color: var(--grey-text);
+    color: var(--muted);
     margin-left: 4px;
 }
 
 .zeile .name:hover,
 .mini:hover:not(:disabled) {
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .mini {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 3px 5px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
     font-size: 13px;
+    display: inline-flex;
+    cursor: pointer;
 }
 
 .mini.stern.an,
 .mini.stern:hover {
-    color: #ffd54f;
+    color: var(--warn);
 }
 
 .favorit {
@@ -259,13 +273,13 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
     text-overflow: ellipsis;
 }
 
-.favorit i {
-    color: #ffd54f;
+.favorit .favSymbol {
+    color: var(--warn);
     font-size: 10px;
 }
 
 .mini.weg:hover {
-    color: var(--red-color);
+    color: var(--bad);
 }
 
 .mini:disabled {
@@ -273,7 +287,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
 }
 
 .fehler {
-    color: var(--red-color);
+    color: var(--bad);
     font-size: 11px;
     padding: 4px;
 }

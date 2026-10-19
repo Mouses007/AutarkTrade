@@ -8,6 +8,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { INDIKATOREN, saubereParams, kurzname } from '../../utils/chart/indikatorRegister.js'
 import FarbWahl from './FarbWahl.vue'
+import { Symbol, Knopf } from '../basis'
 
 const props = defineProps({
     instanz: { type: Object, default: null },    // null = hinzufügen
@@ -113,7 +114,7 @@ onMounted(async () => {
             <template v-if="!entwurf">
                 <div class="kopf">
                     <b>{{ t('chart.indikatoren') }}</b>
-                    <button class="zu" @click="emit('schliesse')"><i class="uil uil-times"></i></button>
+                    <button type="button" class="zu" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
                 </div>
                 <template v-if="aktive.length">
                     <div class="abschnitt">{{ t('chart.indAktiv') }}</div>
@@ -121,14 +122,14 @@ onMounted(async () => {
                         <div v-for="a in aktive" :key="a.id" class="aktiv" :class="{ aus: a.sichtbar === false }">
                             <span class="name">{{ kurzname(a.typ, a.params, t('chart.ind.' + a.typ + '.kurz')) }}</span>
                             <button :title="t(a.sichtbar === false ? 'chart.einblenden' : 'chart.ausblenden')" @click="emit('umschalten', a.id)" :aria-label="t(a.sichtbar === false ? 'chart.einblenden' : 'chart.ausblenden')">
-                                <i :class="a.sichtbar === false ? 'uil uil-eye-slash' : 'uil uil-eye'"></i></button>
-                            <button :title="t('chart.einstellungen')" @click="emit('bearbeite', a.id)" :aria-label="t('chart.einstellungen')"><i class="uil uil-setting"></i></button>
-                            <button class="weg" :title="t('chart.entfernen')" @click="emit('entferne', a.id)" :aria-label="t('chart.entfernen')"><i class="uil uil-trash-alt"></i></button>
+                                <Symbol :name="a.sichtbar === false ? 'augeAus' : 'auge'" /></button>
+                            <button :title="t('chart.einstellungen')" @click="emit('bearbeite', a.id)" :aria-label="t('chart.einstellungen')"><Symbol name="einstellungen" /></button>
+                            <button class="weg" :title="t('chart.entfernen')" @click="emit('entferne', a.id)" :aria-label="t('chart.entfernen')"><Symbol name="muell" /></button>
                         </div>
                     </div>
                     <div class="abschnitt">{{ t('chart.indHinzu') }}</div>
                 </template>
-                <input ref="feld" v-model="suche" class="form-control form-control-sm" :placeholder="t('chart.indSuchen')" />
+                <input ref="feld" v-model="suche" class="at-feld klein" :placeholder="t('chart.indSuchen')" />
                 <div class="liste">
                     <button v-for="x in liste" :key="x.typ" class="eintrag" @click="emit('hinzu', x.typ)">
                         <span class="name">{{ x.name }}</span>
@@ -142,29 +143,29 @@ onMounted(async () => {
             <template v-else>
                 <div class="kopf">
                     <b>{{ t(`chart.ind.${entwurf.typ}.name`) }}</b>
-                    <button class="zu" @click="emit('schliesse')"><i class="uil uil-times"></i></button>
+                    <button type="button" class="zu" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
                 </div>
                 <div class="form">
                     <section v-for="g in gruppen" :key="g.id" class="gruppe" :class="{ zu: g.id && !offen.has(g.id) }">
                         <div v-if="g.id" class="gKopf" @click="klappe(g.id)">
-                            <i class="uil uil-angle-right pfeil"></i>
+                            <Symbol name="ausklappen" class="pfeil" />
                             <span class="gName">{{ t('chart.indGruppe.' + g.id) }}</span>
-                            <input v-if="g.haupt" v-model="entwurf.params[g.haupt.key]" type="checkbox" class="form-check-input schalter"
+                            <input v-if="g.haupt" v-model="entwurf.params[g.haupt.key]" type="checkbox" class="schalter"
                                 :title="t('chart.indParam.' + g.haupt.key)" @click.stop />
                         </div>
                         <div v-show="!g.id || offen.has(g.id)" class="gInhalt" :class="{ aus: gruppeAus(g) }">
                             <div v-for="z in g.zeilen" :key="z[0].key" class="zeile" :class="{ aus: zeileAus(z) }" :title="hilfe(z[0].key)">
-                                <span class="zName">{{ name(z[0]) }}<i v-if="hilfe(z[0].key)" class="uil uil-info-circle hinweisI"></i></span>
+                                <span class="zName">{{ name(z[0]) }}<Symbol v-if="hilfe(z[0].key)" name="info" class="hinweisI" /></span>
                                 <span class="regler">
                                     <template v-for="p in z" :key="p.key">
                                         <input v-if="p.typ === 'zahl'" v-model.number="entwurf.params[p.key]" type="number"
-                                            class="form-control form-control-sm zahl" :min="p.min" :max="p.max" :step="p.schritt"
+                                            class="at-feld klein zahl" :min="p.min" :max="p.max" :step="p.schritt"
                                             :title="name(p)" />
                                         <input v-else-if="p.typ === 'schalter'" v-model="entwurf.params[p.key]" type="checkbox"
-                                            class="form-check-input schalter" :title="name(p)" />
+                                            class="schalter" :title="name(p)" />
                                         <FarbWahl v-else-if="p.typ === 'farbe'" v-model="entwurf.params[p.key]"
                                             :titel="t('chart.indParam.' + p.key)" />
-                                        <select v-else v-model="entwurf.params[p.key]" class="form-select form-select-sm wahl"
+                                        <select v-else v-model="entwurf.params[p.key]" class="at-feld klein wahl"
                                             :title="name(p)">
                                             <option v-for="o in p.optionen" :key="o" :value="o">{{ optionName(p, o) }}</option>
                                         </select>
@@ -180,8 +181,8 @@ onMounted(async () => {
                     </div>
                 </div>
                 <div class="fuss">
-                    <button class="btn btn-sm btn-outline-secondary" @click="standard">{{ t('chart.standard') }}</button>
-                    <button class="btn btn-sm btn-primary" @click="speichere">{{ t('chart.uebernehmen') }}</button>
+                    <Knopf art="leise" klein @click="standard">{{ t('chart.standard') }}</Knopf>
+                    <Knopf art="haupt" klein @click="speichere">{{ t('chart.uebernehmen') }}</Knopf>
                 </div>
             </template>
         </div>
@@ -207,11 +208,11 @@ onMounted(async () => {
     display: flex;
     flex-direction: column;
     gap: 8px;
-    background: var(--black-bg-5, #1e222d);
-    border: 1px solid var(--white-18);
-    border-radius: 10px;
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-knopf);
     padding: 12px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--schatten);
 }
 
 .kopf {
@@ -223,14 +224,20 @@ onMounted(async () => {
 .zu {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.zu:hover {
+    color: var(--text);
 }
 
 .abschnitt {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 /* Die aktiven Indikatoren schrumpfen NICHT — vorher drückte der lange Katalog darunter
@@ -255,7 +262,7 @@ onMounted(async () => {
     gap: 4px;
     padding: 3px 6px;
     border-radius: 6px;
-    background: var(--white-10);
+    background: var(--line);
     font-size: 12px;
 }
 
@@ -270,16 +277,18 @@ onMounted(async () => {
 .aktiv button {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 4px;
+    display: inline-flex;
+    cursor: pointer;
 }
 
 .aktiv button:hover {
-    color: var(--white-87, #eee);
+    color: var(--text);
 }
 
 .aktiv button.weg:hover {
-    color: var(--red-color);
+    color: var(--bad);
 }
 
 .liste {
@@ -299,11 +308,12 @@ onMounted(async () => {
     border: none;
     border-radius: 6px;
     padding: 6px 8px;
-    color: var(--white-87, #ddd);
+    color: var(--text);
+    cursor: pointer;
 }
 
 .eintrag:hover {
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .eintrag .name {
@@ -313,12 +323,12 @@ onMounted(async () => {
 
 .eintrag .ort {
     font-size: 10px;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .eintrag small {
     grid-column: 1 / -1;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
 }
 
@@ -339,9 +349,9 @@ onMounted(async () => {
 }
 
 .gruppe {
-    border: 1px solid var(--white-10);
+    border: 1px solid var(--line);
     border-radius: 7px;
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--panel-soft);
 }
 
 .gruppe:not(:has(.gKopf)) {
@@ -359,18 +369,18 @@ onMounted(async () => {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--white-87, #ddd);
+    color: var(--text);
 }
 
 .gKopf:hover {
-    background: var(--white-10);
+    background: var(--line);
     border-radius: 7px;
 }
 
 .gKopf .pfeil {
     transition: transform 0.15s;
     transform: rotate(90deg);
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .gruppe.zu .gKopf .pfeil {
@@ -418,10 +428,16 @@ onMounted(async () => {
     margin: 0;
 }
 
+.schalter {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
 .hinweisI {
     margin-left: 4px;
     opacity: 0.5;
     font-size: 11px;
+    vertical-align: -1px;
 }
 
 .regler input[type='color'] {
@@ -445,7 +461,7 @@ onMounted(async () => {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--grey-text);
+    color: var(--muted);
     margin-top: 6px;
 }
 

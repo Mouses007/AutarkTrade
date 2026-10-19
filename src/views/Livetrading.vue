@@ -20,6 +20,7 @@ import { ref, computed, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import PageInfo from '../components/PageInfo.vue'
+import Symbol from '../components/basis/Symbol.vue'
 import RadarKachel from '../components/RadarKachel.vue'
 import RadarOverlay from '../components/RadarOverlay.vue'
 import SitzungsLeiste from '../components/livetrading/SitzungsLeiste.vue'
@@ -379,26 +380,26 @@ const interaktiv = (kachel) => kachel.gross === false
                 <div class="ltAnsicht">
                     <button type="button" :class="['ctl-pill', ansicht === 'raster' ? 'active' : '']"
                         :title="t('livetrading.ansicht.rasterSub')" @click="waehleAnsicht('raster')">
-                        <i class="uil uil-apps"></i>{{ t('livetrading.ansicht.raster') }}
+                        <Symbol name="raster" />{{ t('livetrading.ansicht.raster') }}
                     </button>
                     <button type="button" :class="['ctl-pill', ansicht === 'pult' ? 'active' : '']"
                         :title="t('livetrading.ansicht.pultSub')" @click="waehleAnsicht('pult')">
-                        <i class="uil uil-sliders-v-alt"></i>{{ t('livetrading.ansicht.pult') }}
+                        <Symbol name="regler" />{{ t('livetrading.ansicht.pult') }}
                     </button>
                 </div>
                 <span class="ctl-sep"></span>
                 <!-- Sichtbarkeit ist eine Rasterfrage: das Pult hat feste
                      Instrumente und kennt kein Ausblenden. -->
-                <div v-if="ansicht === 'raster'" ref="configRef" class="position-relative">
+                <div v-if="ansicht === 'raster'" ref="configRef" class="ltKartenWahl">
                     <button type="button" class="ctl-pill" @click="showConfigDropdown = !showConfigDropdown">
-                        <i class="uil uil-apps"></i>{{ t('marktradar.cards') }}
+                        <Symbol name="raster" />{{ t('marktradar.cards') }}
                     </button>
                     <div v-if="showConfigDropdown" class="card-config-dropdown">
                         <div class="card-config-title">{{ t('auswertung.visibleCards') }}</div>
                         <div v-for="kachel in alleKacheln" :key="kachel.id" class="card-config-item"
                             @click="beiUmschalten(kachel.id)">
-                            <i class="uil me-2"
-                                :class="isVisible(kachel.id) ? 'uil-check-square text-success' : 'uil-square-full text-muted'"></i>
+                            <Symbol :name="isVisible(kachel.id) ? 'hakenKasten' : 'quadrat'"
+                                :class="['ltWahlZeichen', isVisible(kachel.id) ? 'at-gut' : 'at-gedaempft']" />
                             {{ t(kachel.titleKey) }}
                         </div>
                     </div>
@@ -408,7 +409,7 @@ const interaktiv = (kachel) => kachel.gross === false
                      und Pult gleichermassen. -->
                 <button type="button" class="ctl-pill" :title="t('livetrading.karten.hinweisKnopf')"
                     @click="kartenOffen = true">
-                    <i class="uil uil-setting"></i>{{ t('livetrading.karten.knopf') }}
+                    <Symbol name="einstellungen" />{{ t('livetrading.karten.knopf') }}
                 </button>
                 <!-- „Alle aktualisieren" gibt es hier bewusst NICHT (im
                      Marktradar schon). Der Prüftakt liegt bei 3 s statt 30 s,
@@ -421,15 +422,15 @@ const interaktiv = (kachel) => kachel.gross === false
                 <button type="button" class="ctl-pill" :class="{ fotoOk: fotoZustand === 'ok' }"
                     :disabled="fotoZustand === 'laeuft'" :title="t('livetrading.foto.hinweis')"
                     @click="cockpitFoto">
-                    <i class="uil" :class="fotoZustand === 'ok' ? 'uil-check' : 'uil-camera'"></i>
+                    <Symbol :name="fotoZustand === 'ok' ? 'haken' : 'kamera'" />
                     {{ fotoZustand === 'ok' ? t('livetrading.foto.gespeichert') : t('livetrading.foto.knopf') }}
                 </button>
                 <!-- Nur ausserhalb des eigenen Fensters: dort ist man schon. -->
                 <button v-if="!istCockpit" type="button" class="ctl-pill" @click="oeffneFenster">
-                    <i class="uil uil-expand-arrows-alt"></i>{{ t('livetrading.vollbild') }}
+                    <Symbol name="vergroessern" />{{ t('livetrading.vollbild') }}
                 </button>
                 <a v-if="istCockpit" class="ctl-pill" href="/marktradar">
-                    <i class="uil uil-arrow-left"></i>{{ t('livetrading.zumJournal') }}
+                    <Symbol name="pfeilLinks" />{{ t('livetrading.zumJournal') }}
                 </a>
                 <span class="ctl-sep"></span>
                 <PageInfo section="info.livetrading" />
@@ -439,9 +440,9 @@ const interaktiv = (kachel) => kachel.gross === false
         <KartenEinstellungen v-if="kartenOffen" @schliessen="kartenOffen = false" />
 
         <div v-if="fotoZustand === 'fehler'" class="fotoFehler">
-            <i class="uil uil-exclamation-triangle"></i>{{ fotoMeldung }}
+            <Symbol name="warnung" />{{ fotoMeldung }}
             <button type="button" class="radarCardBtn" @click="fotoZustand = ''; fotoMeldung = ''">
-                <i class="uil uil-times"></i>
+                <Symbol name="schliessen" />
             </button>
         </div>
 
@@ -576,18 +577,28 @@ const interaktiv = (kachel) => kachel.gross === false
     flex: 0 0 auto;
 }
 
-.fotoOk { color: #4ec9a0; }
+.fotoOk { color: var(--good); }
+
+/* Bezugspunkt des Kartenwahl-Menüs (global `.card-config-dropdown`, absolut). */
+.ltKartenWahl {
+    position: relative;
+}
+
+.ltWahlZeichen {
+    margin-right: var(--abstand-2);
+    vertical-align: -0.125em;
+}
 
 .fotoFehler {
     display: flex;
     align-items: center;
     gap: 0.45rem;
     font-size: 0.82rem;
-    color: #ff6b7a;
+    color: var(--bad);
     padding: 0.3rem 0.5rem;
     margin-bottom: 0.4rem;
-    border-radius: var(--border-radius);
-    background: rgba(220, 53, 69, 0.12);
+    border-radius: var(--radius-knopf);
+    background: var(--bad-flaeche);
 }
 
 .fotoFehler .radarCardBtn { margin-left: auto; }

@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { ladeAlleOffenen } from '../../utils/chart/overlays/positionen.js'
 import { positionenAus, schaltePosition } from '../../stores/chartPositionen.js'
 import { overlayAn } from '../../utils/chart/overlays/liste.js'
+import { Symbol } from '../basis'
 
 const props = defineProps({ panel: { type: Object, required: true } })
 const emit = defineEmits(['waehle', 'overlay'])
@@ -44,8 +45,8 @@ const aus = (p) => positionenAus.value.has(String(p.id))
                 <span v-if="p.hebel" class="hebel">{{ p.hebel }}x</span>
                 <span class="boerse">{{ p.broker }}</span>
                 <span class="pnl" :class="p.upnl >= 0 ? 'plus' : 'minus'">{{ p.upnl >= 0 ? '+' : '' }}{{ p.upnl.toFixed(2) }}</span>
-                <button class="auge" :title="t(aus(p) ? 'chart.einblenden' : 'chart.ausblenden')" :aria-label="t(aus(p) ? 'chart.einblenden' : 'chart.ausblenden')"
-                    @click.stop="schaltePosition(p.id)"><i :class="aus(p) ? 'uil uil-eye-slash' : 'uil uil-eye'"></i></button>
+                <button type="button" class="auge" :title="t(aus(p) ? 'chart.einblenden' : 'chart.ausblenden')" :aria-label="t(aus(p) ? 'chart.einblenden' : 'chart.ausblenden')"
+                    @click.stop="schaltePosition(p.id)"><Symbol :name="aus(p) ? 'augeAus' : 'auge'" /></button>
             </div>
             <div class="werte">
                 <span>{{ zahl(p.menge) }} @ {{ zahl(p.einstieg) }}</span>
@@ -62,17 +63,18 @@ const aus = (p) => positionenAus.value.has(String(p.id))
     min-height: 0;
     font-size: 12px;
 }
+.alle input { accent-color: var(--accent); }
 .alle {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
     padding: 2px 4px 8px;
     cursor: pointer;
 }
 .leer {
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 8px 4px;
 }
 .zeile {
@@ -82,8 +84,8 @@ const aus = (p) => positionenAus.value.has(String(p.id))
     cursor: pointer;
     margin-bottom: 4px;
 }
-.zeile:hover { background: var(--white-10); }
-.zeile.aktiv { border-color: rgba(1, 180, 255, 0.35); background: rgba(1, 180, 255, 0.06); }
+.zeile:hover { background: var(--line); }
+.zeile.aktiv { border-color: var(--accent-rand); background: var(--accent-flaeche); }
 .zeile.aus { opacity: 0.5; }
 .kopf {
     display: flex;
@@ -97,28 +99,29 @@ const aus = (p) => positionenAus.value.has(String(p.id))
     padding: 0 5px;
     border-radius: 3px;
 }
-.seite.long { color: #26a69a; background: rgba(38, 166, 154, 0.15); }
-.seite.short { color: #ef5350; background: rgba(239, 83, 80, 0.15); }
-.hebel, .boerse { color: var(--grey-text); font-size: 10px; }
+.seite.long { color: var(--good); background: var(--good-flaeche); }
+.seite.short { color: var(--bad); background: var(--bad-flaeche); }
+.hebel, .boerse { color: var(--muted); font-size: 10px; }
 .pnl { margin-left: auto; font-variant-numeric: tabular-nums; }
-.pnl.plus { color: #26a69a; }
-.pnl.minus { color: #ef5350; }
+.pnl.plus { color: var(--good); }
+.pnl.minus { color: var(--bad); }
 .auge {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 2px;
     cursor: pointer;
+    display: inline-flex;
 }
-.auge:hover { color: #e6e6e6; }
+.auge:hover { color: var(--text); }
 .werte {
     display: flex;
     gap: 10px;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 11px;
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
 }
-.werte .sl { color: rgba(239, 83, 80, 0.85); }
-.werte .tp { color: rgba(38, 166, 154, 0.85); }
+.werte .sl { color: var(--bad); }
+.werte .tp { color: var(--good); }
 </style>

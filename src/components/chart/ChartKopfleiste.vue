@@ -9,6 +9,7 @@ import SymbolSuche from './SymbolSuche.vue'
 import VorlagenMenue from './VorlagenMenue.vue'
 import { INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE } from '../../utils/chart/kerzenQuelle.js'
 import { OVERLAYS, overlayAn } from '../../utils/chart/overlays/liste.js'
+import { Symbol } from '../basis'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -33,11 +34,24 @@ function schalteOverlay(id, an) {
 }
 
 const RASTER = [
-    { id: '1', icon: 'uil uil-square-full' },
-    { id: '2h', icon: 'uil uil-columns' },
-    { id: '2v', icon: 'uil uil-web-grid-alt' },
-    { id: '4', icon: 'uil uil-apps' },
+    { id: '1', icon: 'quadrat' },
+    { id: '2h', icon: 'spalten' },
+    { id: '2v', icon: 'zeilen' },
+    { id: '4', icon: 'raster' },
 ]
+
+/*
+ * Symbol je Overlay. Die Liste selbst (`overlays/liste.js`) trägt noch die alten
+ * Unicons-Klassen; gezeichnet wird hier nach der id, damit sie unangetastet bleibt.
+ */
+const OVERLAY_SYMBOL = {
+    journal: 'buch',
+    positionen: 'fadenkreuz',
+    strategie: 'ki',
+    liquidationen: 'feuer',
+    hebelzonen: 'ebenen',
+    orderbuch: 'liste',
+}
 const SKALEN = ['normal', 'log', 'prozent']
 
 /*
@@ -123,7 +137,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
                             :disabled="favoriten.includes(i) && favoriten.length <= 1"
                             :title="t(favoriten.includes(i) ? 'chart.tfFavoritWeg' : 'chart.tfFavoritHinzu')"
                             @click.stop="schalteFavorit(i)" :aria-label="t(favoriten.includes(i) ? 'chart.tfFavoritWeg' : 'chart.tfFavoritHinzu')">
-                            <i class="uil uil-star"></i>
+                            <Symbol name="stern" :gefuellt="favoriten.includes(i)" />
                         </button>
                     </div>
                 </div>
@@ -139,7 +153,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 
         <div class="gruppe">
             <button class="tf" :title="t('chart.indikatorenTitel')" @click="emit('indikatoren')" :aria-label="t('chart.indikatorenTitel')">
-                <i class="uil uil-chart-growth"></i> {{ t('chart.indikatoren') }}
+                <Symbol name="wachstum" /> {{ t('chart.indikatoren') }}
             </button>
             <VorlagenMenue :aktuelle="panel.indikatoren || []" @anwenden="emit('vorlage', $event)" />
         </div>
@@ -148,7 +162,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
         <div class="gruppe schnell" :title="t('chart.overlaysTitel')">
             <button v-for="o in OVERLAYS" :key="o.id" class="tf" :class="{ an: overlayAn(panel, o.id) }"
                 :title="t('chart.overlay.' + o.id) + ' — ' + t(overlayAn(panel, o.id) ? 'chart.ausblenden' : 'chart.einblenden')"
-                @click="schalteOverlay(o.id, !overlayAn(panel, o.id))" :aria-label="t('chart.overlay.' + o.id) + ' — ' + t(overlayAn(panel, o.id) ? 'chart.ausblenden' : 'chart.einblenden')"><i :class="o.icon"></i></button>
+                @click="schalteOverlay(o.id, !overlayAn(panel, o.id))" :aria-label="t('chart.overlay.' + o.id) + ' — ' + t(overlayAn(panel, o.id) ? 'chart.ausblenden' : 'chart.einblenden')"><Symbol :name="OVERLAY_SYMBOL[o.id] || 'ebenen'" /></button>
         </div>
 
         <slot />
@@ -158,16 +172,16 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
                 <!-- Raster im Ausklappmenü: der Knopf zeigt das aktuelle, die Leiste hat Platz für die Schnellschalter. -->
                 <div class="aufklapp">
                     <button class="tf" :class="{ an: rasterOffen }" :title="t('chart.rasterTitel')" @click="rasterOffen = !rasterOffen" :aria-label="t('chart.rasterTitel')">
-                        <i :class="RASTER.find((r) => r.id === raster)?.icon || RASTER[0].icon"></i> <i class="uil uil-angle-down pfeil"></i>
+                        <Symbol :name="RASTER.find((r) => r.id === raster)?.icon || RASTER[0].icon" /> <Symbol name="runter" class="pfeil" />
                     </button>
                     <div v-if="rasterOffen" class="menue rechtsbuendig spalte">
                         <button v-for="r in RASTER" :key="r.id" class="eintrag" :class="{ an: raster === r.id }"
-                            @click="emit('raster', r.id); rasterOffen = false"><i :class="r.icon"></i> {{ t('chart.raster.' + r.id) }}</button>
+                            @click="emit('raster', r.id); rasterOffen = false"><Symbol :name="r.icon" /> {{ t('chart.raster.' + r.id) }}</button>
                     </div>
                 </div>
                 <div class="aufklapp">
                     <button class="tf" :class="{ an: syncOffen }" :title="t('chart.sync.titel')" @click="syncOffen = !syncOffen" :aria-label="t('chart.sync.titel')">
-                        <i class="uil uil-link-h"></i>
+                        <Symbol name="verknuepfung" />
                     </button>
                     <div v-if="syncOffen" class="menue rechtsbuendig spalte">
                         <label v-for="k in ['kreuz', 'zeit', 'symbol', 'interval']" :key="k" class="schalter">
@@ -180,22 +194,22 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 
             <div class="aufklapp">
                 <button class="tf layout" @click="layoutOffen = !layoutOffen" :title="t('chart.layouts')" :aria-label="t('chart.layouts')">
-                    <i class="uil uil-window"></i> {{ aktuellesLayout?.name || '…' }}
+                    <Symbol name="fenster" /> {{ aktuellesLayout?.name || '…' }}
                 </button>
                 <div v-if="layoutOffen" class="menue rechtsbuendig spalte">
                     <button v-for="l in layouts" :key="l.id" class="eintrag" :class="{ an: l.id === layoutId }"
                         @click="emit('layoutWechsel', l.id); layoutOffen = false">{{ l.name }}</button>
                     <hr />
-                    <button class="eintrag" @click="neuesLayout"><i class="uil uil-plus"></i> {{ t('chart.layoutNeu') }}</button>
-                    <button class="eintrag" @click="umbenennen"><i class="uil uil-pen"></i> {{ t('chart.layoutUmbenennen') }}</button>
-                    <button class="eintrag" :disabled="layouts.length <= 1" @click="loeschen"><i class="uil uil-trash-alt"></i>
+                    <button class="eintrag" @click="neuesLayout"><Symbol name="plus" /> {{ t('chart.layoutNeu') }}</button>
+                    <button class="eintrag" @click="umbenennen"><Symbol name="stift" /> {{ t('chart.layoutUmbenennen') }}</button>
+                    <button class="eintrag" :disabled="layouts.length <= 1" @click="loeschen"><Symbol name="muell" />
                         {{ t('chart.layoutLoeschen') }}</button>
                 </div>
             </div>
 
-            <button class="tf" :title="t('chart.foto')" @click="emit('foto')" :aria-label="t('chart.foto')"><i class="uil uil-camera"></i></button>
+            <button class="tf" :title="t('chart.foto')" @click="emit('foto')" :aria-label="t('chart.foto')"><Symbol name="kamera" /></button>
             <button class="tf" :class="{ an: seitenleisteOffen }" :title="t('chart.seitenleiste')"
-                @click="emit('seitenleiste')" :aria-label="t('chart.seitenleiste')"><i class="uil uil-sidebar"></i></button>
+                @click="emit('seitenleiste')" :aria-label="t('chart.seitenleiste')"><Symbol name="seitenleiste" /></button>
         </div>
     </div>
 </template>
@@ -211,15 +225,15 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 
 .quelle {
     background: transparent;
-    border: 1px solid var(--white-10);
-    border-radius: 6px;
-    color: var(--grey-text);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    color: var(--muted);
     font-size: 12px;
     padding: 3px 6px;
 }
 
 .quelle option {
-    background: var(--black-bg-5, #1e222d);
+    background: var(--panel);
 }
 
 .gruppe {
@@ -227,7 +241,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
     align-items: center;
     gap: 2px;
     padding-left: 8px;
-    border-left: 1px solid var(--white-10);
+    border-left: 1px solid var(--line);
 }
 
 .rechts {
@@ -240,16 +254,20 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 .tf {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 12px;
     padding: 3px 7px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
     white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
 }
 
 .tf:hover {
-    color: var(--white-87, #eee);
-    background: var(--white-10);
+    color: var(--text);
+    background: var(--panel-soft);
 }
 
 .tf:disabled {
@@ -257,8 +275,8 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 }
 
 .tf.an {
-    color: var(--blue-color);
-    background: rgba(1, 180, 255, 0.1);
+    color: var(--accent);
+    background: var(--accent-flaeche);
 }
 
 .aufklapp {
@@ -274,11 +292,11 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
     flex-wrap: wrap;
     gap: 2px;
     width: 170px;
-    background: var(--black-bg-5, #1e222d);
-    border: 1px solid var(--white-18);
-    border-radius: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
     padding: 6px;
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--schatten);
 }
 
 .menue.tfMenue {
@@ -293,7 +311,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 2px 4px;
 }
 
@@ -311,16 +329,18 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
     background: transparent;
     border: none;
     padding: 0 4px;
-    color: var(--white-38, rgba(255, 255, 255, 0.3));
+    color: var(--leise);
     font-size: 13px;
+    display: inline-flex;
+    cursor: pointer;
 }
 
 .stern:hover:not(:disabled) {
-    color: #ffd54f;
+    color: var(--warn);
 }
 
 .stern.an {
-    color: #ffd54f;
+    color: var(--warn);
 }
 
 .stern:disabled {
@@ -346,25 +366,31 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 
 .menue hr {
     margin: 4px 0;
-    border-color: var(--white-18);
+    border: none;
+    border-top: 1px solid var(--line-stark);
+    opacity: 1;
 }
 
 .eintrag {
     background: transparent;
     border: none;
-    color: var(--white-87, #ddd);
+    color: var(--text);
     text-align: left;
     font-size: 12px;
     padding: 5px 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
 }
 
 .eintrag:hover:not(:disabled) {
-    background: var(--white-10);
+    background: var(--panel-soft);
 }
 
 .eintrag.an {
-    color: var(--blue-color);
+    color: var(--accent);
 }
 
 .eintrag:disabled {
@@ -376,7 +402,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
     gap: 8px;
     align-items: center;
     font-size: 12px;
-    color: var(--white-87, #ddd);
+    color: var(--text);
     padding: 4px 6px;
     cursor: pointer;
 }

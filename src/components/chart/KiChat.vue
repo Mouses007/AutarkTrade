@@ -14,6 +14,7 @@
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { sanitizeHtml } from '../../utils/sanitize'
+import { Knopf, Kreisel } from '../basis'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -145,29 +146,29 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
     <div class="kiChat">
         <div class="kopfzeile">
             <small>{{ t('chart.ki.chatHinweis', { symbol: panel.symbol, tf: panel.interval }) }}</small>
-            <button v-if="nachrichten.length" class="btn btn-sm btn-link p-0" @click="neu">{{ t('chart.ki.chatNeu') }}</button>
+            <button v-if="nachrichten.length" type="button" class="textKnopf" @click="neu">{{ t('chart.ki.chatNeu') }}</button>
         </div>
         <div ref="liste" class="verlauf">
             <div v-if="!nachrichten.length && !laeuft" class="leer">
                 <div>{{ t('chart.ki.chatLeer') }}</div>
-                <button v-for="v in VORSCHLAEGE" :key="v" class="btn btn-sm btn-outline-secondary vorschlag"
-                    @click="eingabe = t('chart.ki.' + v); sende()">{{ t('chart.ki.' + v) }}</button>
+                <Knopf v-for="v in VORSCHLAEGE" :key="v" klein class="vorschlag"
+                    @click="eingabe = t('chart.ki.' + v); sende()">{{ t('chart.ki.' + v) }}</Knopf>
             </div>
             <div v-for="(n, i) in nachrichten" :key="i" class="blase" :class="n.rolle">
                 <div v-if="n.rolle === 'ki'" v-html="markdown(n.text)"></div>
                 <div v-else>{{ n.text }}</div>
             </div>
             <div v-if="laeuft" class="blase ki laeuft">
-                <span class="spinner-border spinner-border-sm"></span>
+                <Kreisel />
                 <span v-for="(s, i) in schritte" :key="i" class="werkzeug">{{ s }}</span>
             </div>
             <div v-if="fehler" class="fehler">{{ fehler }}</div>
         </div>
         <div class="eingabe">
-            <textarea v-model="eingabe" class="form-control form-control-sm" rows="2" :placeholder="t('chart.ki.chatPlatzhalter')"
+            <textarea v-model="eingabe" class="at-feld klein" rows="2" :placeholder="t('chart.ki.chatPlatzhalter')"
                 :disabled="laeuft" @keydown="taste"></textarea>
-            <button class="btn btn-sm btn-primary" :disabled="laeuft || !eingabe.trim()" :title="t('chart.ki.chatSenden')"
-                :aria-label="t('chart.ki.chatSenden')" @click="sende"><i class="uil uil-message"></i></button>
+            <Knopf art="haupt" klein nur-symbol symbol="nachricht" :disabled="laeuft || !eingabe.trim()" :titel="t('chart.ki.chatSenden')"
+                @click="sende" />
         </div>
     </div>
 </template>
@@ -187,7 +188,7 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
     justify-content: space-between;
     align-items: baseline;
     gap: 6px;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .verlauf {
@@ -204,11 +205,12 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
     display: flex;
     flex-direction: column;
     gap: 4px;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .vorschlag {
     text-align: left;
+    justify-content: flex-start;
     font-size: 11px;
 }
 
@@ -221,12 +223,12 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
 
 .blase.nutzer {
     align-self: flex-end;
-    background: rgba(41, 98, 255, 0.25);
+    background: var(--accent-flaeche);
 }
 
 .blase.ki {
     align-self: flex-start;
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .blase :deep(p),
@@ -253,7 +255,7 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
 }
 
 .fehler {
-    color: var(--red-color);
+    color: var(--bad);
 }
 
 .kopfzeile,
@@ -271,4 +273,24 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
     resize: none;
     font-size: 12px;
 }
+
+/* Text-Knopf: Handlung ohne Fläche, für Zeilen in der dichten Seitenleiste. */
+.textKnopf {
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.textKnopf:hover:not(:disabled) {
+    text-decoration: underline;
+}
+
+.textKnopf:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
 </style>

@@ -21,6 +21,7 @@ import { useXDecCurrencyFormat } from '../utils/formatters.js'
 import { useAgentTimelineChart, cssColor87, cssColor60, cssColor38, blackbg5, greenColor, redColor } from '../utils/charts.js'
 import { logError } from '../utils/logger.js'
 import dayjs from '../utils/dayjs-setup.js'
+import { Knopf, Pille, Symbol, Reiter } from '../components/basis'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -334,72 +335,81 @@ const trichterStufen = computed(() => [
 
 const sortiert = (obj) => Object.entries(obj || {}).sort((a, b) => b[1] - a[1])
 const wochentag = (n) => t('strategies.weekday' + n)
+
+/** Reiter-Liste für den Baustein `Reiter` (gleiche Schlüssel wie TAB_SCHLUESSEL). */
+const reiterListe = computed(() => [
+    { id: 'uebersicht', titel: t('strategies.tabOverview') },
+    { id: 'performance', titel: t('strategies.tabPerformance') },
+    { id: 'trades', titel: t('strategies.tabTradesAnalysis') },
+    { id: 'risiko', titel: t('strategies.tabRisk') },
+    { id: 'liste', titel: t('strategies.tabTradeList') },
+])
 </script>
 
 <template>
     <SpinnerLoadingPage />
-    <div v-show="!spinnerLoadingPage" class="row mt-3 ps-3 pe-3">
-        <div class="col-12 col-xl-11">
+    <div v-show="!spinnerLoadingPage" class="perf-seite">
+        <div class="perf-inhalt">
 
-            <h5 class="mb-3">{{ t('strategies.performanceTitle') }}</h5>
+            <h5 class="seitentitel">{{ t('strategies.performanceTitle') }}</h5>
 
             <!-- Filter -->
-            <div class="dailyCard p-3 mb-3">
-                <div class="row g-2 align-items-end">
-                    <div class="col-6 col-md-3">
-                        <label class="form-label small mb-1">{{ t('strategies.instance') }}</label>
-                        <select v-model="filter.instanceId" class="form-select form-select-sm" @change="holen">
+            <div class="dailyCard karte abstand">
+                <div class="filter-raster">
+                    <div class="f-3">
+                        <label class="at-label">{{ t('strategies.instance') }}</label>
+                        <select v-model="filter.instanceId" class="at-feld klein" @change="holen">
                             <option value="">{{ t('strategies.all') }}</option>
                             <option v-for="i in instanzen" :key="i.id" :value="i.id">{{ i.name }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.modeLabel') }}</label>
-                        <select v-model="filter.mode" class="form-select form-select-sm" @change="holen">
+                    <div class="f-2">
+                        <label class="at-label">{{ t('strategies.modeLabel') }}</label>
+                        <select v-model="filter.mode" class="at-feld klein" @change="holen">
                             <option value="">{{ t('strategies.all') }}</option>
                             <option value="paper">{{ t('strategies.mode_paper') }}</option>
                             <option value="shadow">{{ t('strategies.mode_shadow') }}</option>
                             <option value="live">{{ t('strategies.mode_live') }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.symbol') }}</label>
-                        <select v-model="filter.symbol" class="form-select form-select-sm" @change="holen">
+                    <div class="f-2">
+                        <label class="at-label">{{ t('strategies.symbol') }}</label>
+                        <select v-model="filter.symbol" class="at-feld klein" @change="holen">
                             <option value="">{{ t('strategies.all') }}</option>
                             <option v-for="s in symbole" :key="s" :value="s">{{ s }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-2">
-                        <label class="form-label small mb-1">{{ t('strategies.paramsVersion') }}</label>
-                        <select v-model="filter.paramsVersion" class="form-select form-select-sm" @change="holen">
+                    <div class="f-2">
+                        <label class="at-label">{{ t('strategies.paramsVersion') }}</label>
+                        <select v-model="filter.paramsVersion" class="at-feld klein" @change="holen">
                             <option value="">{{ t('strategies.all') }}</option>
                             <option v-for="v in versionen" :key="v" :value="v">v{{ v }}</option>
                         </select>
                     </div>
-                    <div class="col-6 col-md-3 d-flex gap-2">
-                        <div class="flex-fill">
-                            <label class="form-label small mb-1">{{ t('strategies.from') }}</label>
-                            <input v-model="filter.from" type="date" class="form-control form-control-sm" @change="holen" />
+                    <div class="f-3 datum-paar">
+                        <div>
+                            <label class="at-label">{{ t('strategies.from') }}</label>
+                            <input v-model="filter.from" type="date" class="at-feld klein" @change="holen" />
                         </div>
-                        <div class="flex-fill">
-                            <label class="form-label small mb-1">{{ t('strategies.to') }}</label>
-                            <input v-model="filter.to" type="date" class="form-control form-control-sm" @change="holen" />
+                        <div>
+                            <label class="at-label">{{ t('strategies.to') }}</label>
+                            <input v-model="filter.to" type="date" class="at-feld klein" @change="holen" />
                         </div>
                     </div>
                 </div>
             </div>
 
             <!-- Zeitstrahl: Zonen und Trades des Agenten im Kursverlauf -->
-            <div class="dailyCard p-3 mb-3">
-                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                    <span class="section-title mb-0">
-                        <i class="uil uil-chart-line me-1"></i>{{ t('strategies.timelineTitle') }}
+            <div class="dailyCard karte abstand">
+                <div class="zs-kopf">
+                    <span class="section-title titel-zeile ohne-rand">
+                        <Symbol name="linie" class="vor" />{{ t('strategies.timelineTitle') }}
                     </span>
-                    <div class="ms-auto d-flex gap-2">
-                        <select v-model="zsSymbol" class="form-select form-select-sm w-auto" @change="zeitstrahlLaden">
+                    <div class="zs-wahl">
+                        <select v-model="zsSymbol" class="at-feld klein" @change="zeitstrahlLaden">
                             <option v-for="s in symbole" :key="s" :value="s">{{ s }}</option>
                         </select>
-                        <select v-model.number="zsTage" class="form-select form-select-sm w-auto" @change="zeitstrahlLaden">
+                        <select v-model.number="zsTage" class="at-feld klein" @change="zeitstrahlLaden">
                             <option :value="3">3 {{ t('strategies.days') }}</option>
                             <option :value="7">7 {{ t('strategies.days') }}</option>
                             <option :value="14">14 {{ t('strategies.days') }}</option>
@@ -407,12 +417,12 @@ const wochentag = (n) => t('strategies.weekday' + n)
                         </select>
                     </div>
                 </div>
-                <p class="text-muted small mb-2">{{ t('strategies.timelineHint') }}</p>
-                <div v-if="zsMeldung" class="text-muted small mb-2">{{ zsMeldung }}</div>
+                <p class="at-gedaempft klein-text abstand-klein">{{ t('strategies.timelineHint') }}</p>
+                <div v-if="zsMeldung" class="at-gedaempft klein-text abstand-klein">{{ zsMeldung }}</div>
                 <div id="agentZeitstrahl" class="chartClass" style="height: 380px;"></div>
             </div>
 
-            <div v-if="!kpi.trades" class="dailyCard p-4 text-center text-muted mb-3">
+            <div v-if="!kpi.trades" class="dailyCard karte leer at-gedaempft abstand">
                 {{ t('strategies.noTrades') }}
             </div>
 
@@ -422,40 +432,19 @@ const wochentag = (n) => t('strategies.weekday' + n)
                      nacheinander — kein Überblick vor dem Detail. Fünf Reiter
                      nach dem Schema, das TradingViews Strategy Report benutzt:
                      Übersicht → Performance → Trades-Analyse → Risiko → Liste. -->
-                <ul class="nav nav-pills mb-3">
-                    <li class="nav-item">
-                        <a class="nav-link" :class="{ active: activeTab === 'uebersicht' }" href="#"
-                            @click.prevent="activeTab = 'uebersicht'">{{ t('strategies.tabOverview') }}</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" :class="{ active: activeTab === 'performance' }" href="#"
-                            @click.prevent="activeTab = 'performance'">{{ t('strategies.tabPerformance') }}</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" :class="{ active: activeTab === 'trades' }" href="#"
-                            @click.prevent="activeTab = 'trades'">{{ t('strategies.tabTradesAnalysis') }}</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" :class="{ active: activeTab === 'risiko' }" href="#"
-                            @click.prevent="activeTab = 'risiko'">{{ t('strategies.tabRisk') }}</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" :class="{ active: activeTab === 'liste' }" href="#"
-                            @click.prevent="activeTab = 'liste'">{{ t('strategies.tabTradeList') }}</a>
-                    </li>
-                </ul>
+                <Reiter v-model="activeTab" :reiter="reiterListe" class="abstand" />
 
                 <!-- ══ Übersicht ══ -->
                 <div v-if="activeTab === 'uebersicht'">
-                    <div class="row g-2 mb-3">
-                        <div class="col-6 col-md-3" v-for="k in [
+                    <div class="kpi-raster abstand">
+                        <div v-for="k in [
                             { l: t('strategies.kpiNetPnl'), v: geld(kpi.netPnl), farbe: kpi.netPnl >= 0 },
                             { l: t('strategies.kpiWinRate'), v: zahl(kpi.winRate, 1) + ' %' },
                             { l: t('strategies.kpiProfitFactor'), v: profitFaktor(kpi.profitFactor, kpi.trades),
                               farbe: profitFaktorGut(kpi.profitFactor) },
                             { l: t('strategies.kpiMaxDd'), v: zahl(kpi.maxDrawdownPct, 1) + ' %' },
                         ]" :key="k.l">
-                            <div class="dailyCard p-2 text-center h-100">
+                            <div class="dailyCard kpi-karte">
                                 <div class="kpi-label">{{ k.l }}</div>
                                 <div class="kpi-value"
                                     :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">
@@ -466,17 +455,17 @@ const wochentag = (n) => t('strategies.weekday' + n)
                     </div>
 
                     <!-- Hinweise aus den Daten -->
-                    <div v-if="daten.hinweise?.length" class="dailyCard p-3 mb-3">
-                        <div class="section-title mb-2">
-                            <i class="uil uil-lightbulb-alt me-1"></i>{{ t('strategies.observations') }}
+                    <div v-if="daten.hinweise?.length" class="dailyCard karte abstand">
+                        <div class="section-title titel-zeile">
+                            <Symbol name="idee" class="vor" />{{ t('strategies.observations') }}
                         </div>
-                        <ul class="mb-0 ps-3">
-                            <li v-for="(h, i) in daten.hinweise" :key="i" class="small mb-1">{{ h.text }}</li>
+                        <ul class="liste">
+                            <li v-for="(h, i) in daten.hinweise" :key="i" class="klein-text">{{ h.text }}</li>
                         </ul>
                     </div>
 
-                    <div class="dailyCard p-3 mb-3">
-                        <div class="section-title mb-2">{{ t('strategies.equityCurve') }}</div>
+                    <div class="dailyCard karte abstand">
+                        <div class="section-title">{{ t('strategies.equityCurve') }}</div>
                         <div id="agentEquityChart" style="height: 260px;"></div>
                     </div>
 
@@ -485,29 +474,25 @@ const wochentag = (n) => t('strategies.weekday' + n)
                          dem der Coin ohnehin durchmarschiert, sieht jede Strategie
                          gut aus (dasselbe Prinzip wie in radar-guete.js). -->
                     <div v-if="kpi.baselineBuyHoldReturnPct !== null && kpi.baselineBuyHoldReturnPct !== undefined"
-                        class="dailyCard p-3">
-                        <div class="section-title mb-1">{{ t('strategies.baselineTitle') }}</div>
-                        <p class="text-muted small mb-2">{{ t('strategies.baselineHint') }}</p>
-                        <div class="row g-2 mb-2">
-                            <div class="col-6">
-                                <div class="dailyCard p-2 text-center h-100">
-                                    <div class="kpi-label">{{ t('strategies.returnPct') }}</div>
-                                    <div class="kpi-value" :class="kpi.returnPct >= 0 ? 'greenTrade' : 'redTrade'">
-                                        {{ zahl(kpi.returnPct, 1) }} %
-                                    </div>
+                        class="dailyCard karte">
+                        <div class="section-title">{{ t('strategies.baselineTitle') }}</div>
+                        <p class="at-gedaempft klein-text abstand-klein">{{ t('strategies.baselineHint') }}</p>
+                        <div class="zwei-raster abstand-klein">
+                            <div class="dailyCard kpi-karte">
+                                <div class="kpi-label">{{ t('strategies.returnPct') }}</div>
+                                <div class="kpi-value" :class="kpi.returnPct >= 0 ? 'greenTrade' : 'redTrade'">
+                                    {{ zahl(kpi.returnPct, 1) }} %
                                 </div>
                             </div>
-                            <div class="col-6">
-                                <div class="dailyCard p-2 text-center h-100">
-                                    <div class="kpi-label">{{ t('strategies.kpiBuyHold') }}</div>
-                                    <div class="kpi-value"
-                                        :class="kpi.baselineBuyHoldReturnPct >= 0 ? 'greenTrade' : 'redTrade'">
-                                        {{ zahl(kpi.baselineBuyHoldReturnPct, 1) }} %
-                                    </div>
+                            <div class="dailyCard kpi-karte">
+                                <div class="kpi-label">{{ t('strategies.kpiBuyHold') }}</div>
+                                <div class="kpi-value"
+                                    :class="kpi.baselineBuyHoldReturnPct >= 0 ? 'greenTrade' : 'redTrade'">
+                                    {{ zahl(kpi.baselineBuyHoldReturnPct, 1) }} %
                                 </div>
                             </div>
                         </div>
-                        <p class="small mb-0" :class="kpi.baselineDiffPct > 0 ? 'greenTrade' : (kpi.baselineDiffPct < 0 ? 'redTrade' : 'text-muted')">
+                        <p class="klein-text ohne-rand" :class="kpi.baselineDiffPct > 0 ? 'greenTrade' : (kpi.baselineDiffPct < 0 ? 'redTrade' : 'at-gedaempft')">
                             {{ kpi.baselineDiffPct > 0
                                 ? t('strategies.baselineBeats', { diff: zahl(Math.abs(kpi.baselineDiffPct), 1) })
                                 : kpi.baselineDiffPct < 0
@@ -519,8 +504,8 @@ const wochentag = (n) => t('strategies.weekday' + n)
 
                 <!-- ══ Performance ══ -->
                 <div v-if="activeTab === 'performance'">
-                    <div class="row g-2 mb-3">
-                        <div class="col-6 col-md-3" v-for="k in [
+                    <div class="kpi-raster abstand">
+                        <div v-for="k in [
                             { l: t('strategies.kpiTrades'), v: kpi.trades },
                             // Die Verliererseite gehört gleichberechtigt daneben: eine
                             // Trefferquote allein sagt nichts darüber, wie die Verluste
@@ -530,7 +515,7 @@ const wochentag = (n) => t('strategies.weekday' + n)
                               v: zahl(kpi.avgWinR) + ' / ' + zahl(kpi.avgLossR) + ' R' },
                             { l: t('strategies.kpiExpectancy'), v: zahl(kpi.expectancyR) + ' R', farbe: kpi.expectancyR >= 0 },
                         ]" :key="k.l">
-                            <div class="dailyCard p-2 text-center h-100">
+                            <div class="dailyCard kpi-karte">
                                 <div class="kpi-label">{{ k.l }}</div>
                                 <div class="kpi-value"
                                     :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">
@@ -539,49 +524,47 @@ const wochentag = (n) => t('strategies.weekday' + n)
                             </div>
                         </div>
                     </div>
-                    <div class="dailyCard p-3">
-                        <div class="section-title mb-2">{{ t('strategies.rDistribution') }}</div>
+                    <div class="dailyCard karte">
+                        <div class="section-title">{{ t('strategies.rDistribution') }}</div>
                         <div id="agentRChart" style="height: 260px;"></div>
                     </div>
                 </div>
 
                 <!-- ══ Trades-Analyse ══ -->
                 <div v-if="activeTab === 'trades'">
-                    <div class="row g-3 mb-3">
-                        <div class="col-12 col-lg-6">
-                            <div class="dailyCard p-3 h-100">
-                                <div class="section-title mb-2">{{ t('strategies.funnel') }}</div>
-                                <p class="text-muted small">{{ t('strategies.funnelHint') }}</p>
-                                <div v-for="s in trichterStufen" :key="s.key" class="funnel-row">
-                                    <div class="d-flex justify-content-between small">
-                                        <span>{{ t('strategies.funnel_' + s.key) }}</span>
-                                        <strong>{{ s.wert }}</strong>
-                                    </div>
-                                    <div class="funnel-bar">
-                                        <div class="funnel-fill" :style="{ width: anteil(s.wert) + '%' }"></div>
-                                    </div>
+                    <div class="halb-raster abstand">
+                        <div class="dailyCard karte hoch">
+                            <div class="section-title">{{ t('strategies.funnel') }}</div>
+                            <p class="at-gedaempft klein-text">{{ t('strategies.funnelHint') }}</p>
+                            <div v-for="s in trichterStufen" :key="s.key" class="funnel-zeile">
+                                <div class="funnel-kopf klein-text">
+                                    <span>{{ t('strategies.funnel_' + s.key) }}</span>
+                                    <strong>{{ s.wert }}</strong>
+                                </div>
+                                <div class="funnel-bar">
+                                    <div class="funnel-fill" :style="{ width: anteil(s.wert) + '%' }"></div>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="col-12 col-lg-6">
-                            <div class="dailyCard p-3 h-100">
-                                <div class="section-title mb-2">{{ t('strategies.whyLost') }}</div>
-                                <p class="text-muted small">{{ t('strategies.whyLostHint') }}</p>
+                        <div class="dailyCard karte hoch">
+                            <div class="section-title">{{ t('strategies.whyLost') }}</div>
+                            <p class="at-gedaempft klein-text">{{ t('strategies.whyLostHint') }}</p>
 
-                                <table class="table table-sm table-borderless mb-0">
+                            <div class="at-tabelle-huelle">
+                                <table class="at-tabelle dicht">
                                     <tbody>
                                         <tr v-for="[grund, n] in sortiert(trichter.byInvalidReason)" :key="'i' + grund">
-                                            <td class="small">{{ t('strategies.reason_' + grund) }}</td>
-                                            <td class="text-end small"><strong>{{ n }}</strong></td>
-                                            <td class="text-end small text-muted" style="width: 4rem;">
+                                            <td>{{ t('strategies.reason_' + grund) }}</td>
+                                            <td class="zahl"><strong>{{ n }}</strong></td>
+                                            <td class="zahl at-gedaempft" style="width: 4rem;">
                                                 {{ zahl(anteil(n), 0) }} %
                                             </td>
                                         </tr>
                                         <tr v-for="[grund, n] in sortiert(trichter.byRejectReason)" :key="'r' + grund">
-                                            <td class="small text-warning">{{ t('strategies.reason_' + grund) }}</td>
-                                            <td class="text-end small"><strong>{{ n }}</strong></td>
-                                            <td class="text-end small text-muted">{{ zahl(anteil(n), 0) }} %</td>
+                                            <td class="at-warn">{{ t('strategies.reason_' + grund) }}</td>
+                                            <td class="zahl"><strong>{{ n }}</strong></td>
+                                            <td class="zahl at-gedaempft">{{ zahl(anteil(n), 0) }} %</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -589,60 +572,64 @@ const wochentag = (n) => t('strategies.weekday' + n)
                         </div>
                     </div>
 
-                    <div class="row g-3">
-                        <div class="col-12 col-md-6 col-xl-3"
+                    <div class="gruppen-raster">
+                        <div class="gruppe"
                             v-for="g in [
                                 { titel: t('strategies.bySymbol'), rows: daten.byGroup.symbol },
                                 { titel: t('strategies.byDirection'), rows: daten.byGroup.direction },
                                 { titel: t('strategies.byExitReason'), rows: daten.byGroup.exitReason },
                                 { titel: t('strategies.byParamsVersion'), rows: daten.byGroup.paramsVersion },
                             ]" :key="g.titel">
-                            <div class="dailyCard p-3 h-100">
-                                <div class="section-title mb-2">{{ g.titel }}</div>
-                                <table class="table table-sm table-borderless mb-0">
-                                    <thead>
-                                        <tr class="text-muted small">
-                                            <th></th>
-                                            <th class="text-end">n</th>
-                                            <th class="text-end" :title="t('strategies.kpiWinsLosses')">G/V</th>
-                                            <th class="text-end">Ø R</th>
-                                            <th class="text-end">PnL</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr v-for="row in g.rows" :key="row.key">
-                                            <td class="small">{{ row.key }}</td>
-                                            <td class="text-end small">{{ row.trades }}</td>
-                                            <td class="text-end small">
-                                                <span class="greenTrade">{{ row.wins }}</span><span class="text-muted">/</span><span class="redTrade">{{ row.trades - row.wins }}</span>
-                                            </td>
-                                            <td class="text-end small" :class="row.avgR >= 0 ? 'greenTrade' : 'redTrade'">
-                                                {{ zahl(row.avgR) }}
-                                            </td>
-                                            <td class="text-end small" :class="row.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
-                                                {{ geld(row.netPnl) }}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                            <div class="dailyCard karte hoch">
+                                <div class="section-title">{{ g.titel }}</div>
+                                <div class="at-tabelle-huelle">
+                                    <table class="at-tabelle dicht">
+                                        <thead>
+                                            <tr>
+                                                <th></th>
+                                                <th class="zahl">n</th>
+                                                <th class="zahl" :title="t('strategies.kpiWinsLosses')">G/V</th>
+                                                <th class="zahl">Ø R</th>
+                                                <th class="zahl">PnL</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="row in g.rows" :key="row.key">
+                                                <td>{{ row.key }}</td>
+                                                <td class="zahl">{{ row.trades }}</td>
+                                                <td class="zahl">
+                                                    <span class="greenTrade">{{ row.wins }}</span><span class="at-gedaempft">/</span><span class="redTrade">{{ row.trades - row.wins }}</span>
+                                                </td>
+                                                <td class="zahl" :class="row.avgR >= 0 ? 'greenTrade' : 'redTrade'">
+                                                    {{ zahl(row.avgR) }}
+                                                </td>
+                                                <td class="zahl" :class="row.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                                    {{ geld(row.netPnl) }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="col-12 col-xl-6">
-                            <div class="dailyCard p-3">
-                                <div class="section-title mb-2">{{ t('strategies.byWeekday') }}</div>
-                                <table class="table table-sm table-borderless mb-0">
-                                    <tbody>
-                                        <tr v-for="row in daten.byGroup.weekday" :key="row.key">
-                                            <td class="small">{{ wochentag(row.key) }}</td>
-                                            <td class="text-end small">{{ row.trades }}</td>
-                                            <td class="text-end small">{{ zahl(row.winRate, 0) }} %</td>
-                                            <td class="text-end small" :class="row.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
-                                                {{ geld(row.netPnl) }}
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                </table>
+                        <div class="gruppe breit">
+                            <div class="dailyCard karte">
+                                <div class="section-title">{{ t('strategies.byWeekday') }}</div>
+                                <div class="at-tabelle-huelle">
+                                    <table class="at-tabelle dicht">
+                                        <tbody>
+                                            <tr v-for="row in daten.byGroup.weekday" :key="row.key">
+                                                <td>{{ wochentag(row.key) }}</td>
+                                                <td class="zahl">{{ row.trades }}</td>
+                                                <td class="zahl">{{ zahl(row.winRate, 0) }} %</td>
+                                                <td class="zahl" :class="row.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                                    {{ geld(row.netPnl) }}
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -650,28 +637,28 @@ const wochentag = (n) => t('strategies.weekday' + n)
 
                 <!-- ══ Risiko ══ -->
                 <div v-if="activeTab === 'risiko'">
-                    <div class="row g-2 mb-3">
-                        <div class="col-6 col-md-3" v-for="k in [
+                    <div class="kpi-raster abstand">
+                        <div v-for="k in [
                             { l: t('strategies.kpiSharpe'), v: zahl(kpi.sharpe) },
                             { l: t('strategies.kpiMaxDd'), v: zahl(kpi.maxDrawdownPct, 1) + ' %' },
                             { l: t('strategies.kpiFloatingDd'), v: zahl(kpi.maxFloatingDrawdownPct, 1) + ' %' },
                         ]" :key="k.l">
-                            <div class="dailyCard p-2 text-center h-100">
+                            <div class="dailyCard kpi-karte">
                                 <div class="kpi-label">{{ k.l }}</div>
                                 <div class="kpi-value">{{ k.v }}</div>
                             </div>
                         </div>
                     </div>
-                    <p class="text-muted small">{{ t('strategies.kpiFloatingDdHint') }}</p>
+                    <p class="at-gedaempft klein-text">{{ t('strategies.kpiFloatingDdHint') }}</p>
 
-                    <div class="dailyCard p-3">
-                        <div class="section-title mb-2">{{ t('strategies.mfeReached') }}</div>
-                        <p class="text-muted small">{{ t('strategies.mfeHint') }}</p>
-                        <div class="d-flex gap-3">
-                            <div v-for="(n, stufe) in kpi.mfeReached" :key="stufe" class="text-center flex-fill">
+                    <div class="dailyCard karte">
+                        <div class="section-title">{{ t('strategies.mfeReached') }}</div>
+                        <p class="at-gedaempft klein-text">{{ t('strategies.mfeHint') }}</p>
+                        <div class="mfe-zeile">
+                            <div v-for="(n, stufe) in kpi.mfeReached" :key="stufe" class="mfe-stufe">
                                 <div class="kpi-value">{{ n }}</div>
                                 <div class="kpi-label">≥ {{ stufe }}</div>
-                                <div class="kpi-label text-muted">{{ zahl((n / kpi.trades) * 100, 0) }} %</div>
+                                <div class="kpi-label">{{ zahl((n / kpi.trades) * 100, 0) }} %</div>
                             </div>
                         </div>
                     </div>
@@ -680,84 +667,84 @@ const wochentag = (n) => t('strategies.weekday' + n)
                 <!-- ══ Trade-Liste ══
                      Bisher zeigte die Auswertung nur Summen. Ein Trade, den man
                      nicht anschauen kann, lässt sich auch nicht beurteilen. -->
-                <div v-if="activeTab === 'liste' && letzteTrades.length" class="dailyCard p-3">
-                    <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
-                        <div class="section-title mb-0">{{ t('strategies.tradeList') }}</div>
+                <div v-if="activeTab === 'liste' && letzteTrades.length" class="dailyCard karte">
+                    <div class="liste-kopf">
+                        <div class="section-title ohne-rand">{{ t('strategies.tradeList') }}</div>
                         <template v-if="gewaehlt.size">
-                            <span class="badge bg-primary">{{ t('strategies.selected', { n: gewaehlt.size }) }}</span>
-                            <button class="btn btn-sm btn-outline-primary py-0" :disabled="spiegelLaeuft"
+                            <Pille>{{ t('strategies.selected', { n: gewaehlt.size }) }}</Pille>
+                            <Knopf klein symbol="herunterladen" :disabled="spiegelLaeuft"
                                 @click="gewaehlteSpiegeln">
-                                <i class="uil uil-import me-1"></i>{{ t('strategies.mirrorJournal') }}
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary py-0" :disabled="spiegelLaeuft"
+                                {{ t('strategies.mirrorJournal') }}
+                            </Knopf>
+                            <Knopf art="leise" klein symbol="schliessen" :disabled="spiegelLaeuft"
                                 @click="gewaehlteEntfernen">
-                                <i class="uil uil-times me-1"></i>{{ t('strategies.unmirrorJournal') }}
-                            </button>
+                                {{ t('strategies.unmirrorJournal') }}
+                            </Knopf>
                         </template>
-                        <span v-if="spiegelMeldung" class="small text-muted ms-auto">{{ spiegelMeldung }}</span>
+                        <span v-if="spiegelMeldung" class="klein-text at-gedaempft rechts">{{ spiegelMeldung }}</span>
                     </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm table-borderless mb-0">
+                    <div class="at-tabelle-huelle">
+                        <table class="at-tabelle dicht">
                             <thead>
-                                <tr class="text-muted small">
+                                <tr>
                                     <th style="width:2rem">
-                                        <input type="checkbox" class="form-check-input" :checked="alleGewaehlt"
+                                        <input type="checkbox" class="auswahl" :checked="alleGewaehlt"
                                             :title="t('strategies.selectAll')" @change="alleUmschalten" />
                                     </th>
                                     <th>{{ t('strategies.exitTime') }}</th>
                                     <th>{{ t('strategies.symbol') }}</th>
                                     <th>{{ t('strategies.timeframe') }}</th>
                                     <th>{{ t('strategies.direction') }}</th>
-                                    <th class="text-end">R</th>
-                                    <th class="text-end">PnL</th>
+                                    <th class="zahl">R</th>
+                                    <th class="zahl">PnL</th>
                                     <th>{{ t('strategies.byExitReason') }}</th>
-                                    <th class="text-end">{{ t('strategies.paramsVersion') }}</th>
+                                    <th class="zahl">{{ t('strategies.paramsVersion') }}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <template v-for="tr in letzteTrades" :key="tr.id">
                                     <tr class="pointerClass" @click="kontextZeigen(tr)">
                                         <td @click.stop>
-                                            <input type="checkbox" class="form-check-input"
+                                            <input type="checkbox" class="auswahl"
                                                 :checked="gewaehlt.has(tr.id)" @change="auswahlUmschalten(tr)" />
                                         </td>
-                                        <td class="small text-muted">{{ dayjs(Number(tr.exitTime)).format('DD.MM. HH:mm') }}</td>
-                                        <td class="small">{{ tr.symbol }}</td>
-                                        <td class="small">{{ tr.timeframe }}</td>
-                                        <td class="small">{{ tr.direction }}</td>
-                                        <td class="text-end small" :class="tr.rMultiple >= 0 ? 'greenTrade' : 'redTrade'">
+                                        <td class="at-gedaempft">{{ dayjs(Number(tr.exitTime)).format('DD.MM. HH:mm') }}</td>
+                                        <td>{{ tr.symbol }}</td>
+                                        <td>{{ tr.timeframe }}</td>
+                                        <td>{{ tr.direction }}</td>
+                                        <td class="zahl" :class="tr.rMultiple >= 0 ? 'greenTrade' : 'redTrade'">
                                             {{ zahl(tr.rMultiple) }}
                                         </td>
-                                        <td class="text-end small" :class="tr.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                        <td class="zahl" :class="tr.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
                                             {{ geld(tr.netPnl) }}
                                         </td>
-                                        <td class="small text-muted">{{ tr.exitReason }}</td>
-                                        <td class="text-end small">
-                                            <span class="badge bg-dark">v{{ tr.paramsVersion }}</span>
+                                        <td class="at-gedaempft">{{ tr.exitReason }}</td>
+                                        <td class="zahl">
+                                            <Pille ton="neutral">v{{ tr.paramsVersion }}</Pille>
                                         </td>
                                     </tr>
                                     <tr v-if="kontextFuer === tr.id">
                                         <td colspan="9" class="kontextZelle">
-                                            <div v-if="kontextLaedt" class="small text-muted">…</div>
+                                            <div v-if="kontextLaedt" class="klein-text at-gedaempft">…</div>
                                             <div v-else-if="kontext">
-                                                <div class="small mb-2">
+                                                <div class="klein-text abstand-klein">
                                                     <strong>{{ t('strategies.contextTitle') }}</strong>
-                                                    <span class="text-muted">
+                                                    <span class="at-gedaempft">
                                                         — {{ kontext.instanz?.name }},
                                                         {{ t('strategies.paramsVersion') }} {{ kontext.paramsVersion }}
                                                         <template v-if="kontext.ruleVersion">· {{ t('strategies.ruleVersion') }} {{ kontext.ruleVersion }}</template>
                                                     </span>
                                                 </div>
-                                                <div v-if="kontext.saetze?.length" class="mb-2">
-                                                    <div v-for="s in kontext.saetze" :key="s.titel" class="small">
-                                                        <span class="text-muted">{{ s.titel }}:</span> {{ s.text }}
+                                                <div v-if="kontext.saetze?.length" class="abstand-klein">
+                                                    <div v-for="s in kontext.saetze" :key="s.titel" class="klein-text">
+                                                        <span class="at-gedaempft">{{ s.titel }}:</span> {{ s.text }}
                                                     </div>
                                                 </div>
-                                                <div v-if="kontext.params" class="small">
-                                                    <span class="text-muted">{{ t('strategies.contextParams') }}:</span>
+                                                <div v-if="kontext.params" class="klein-text">
+                                                    <span class="at-gedaempft">{{ t('strategies.contextParams') }}:</span>
                                                     <span v-for="(v, k) in kontext.params" :key="k" class="paramChip">{{ k }}={{ v }}</span>
                                                 </div>
-                                                <div v-else class="small text-muted">{{ t('strategies.contextNoHistory') }}</div>
+                                                <div v-else class="klein-text at-gedaempft">{{ t('strategies.contextNoHistory') }}</div>
                                             </div>
                                         </td>
                                     </tr>
@@ -772,20 +759,135 @@ const wochentag = (n) => t('strategies.weekday' + n)
 </template>
 
 <style scoped>
+.perf-seite {
+    padding: var(--abstand-4) var(--abstand-4) 0;
+}
+
+.perf-inhalt {
+    max-width: 1500px;
+}
+
+.seitentitel {
+    margin: 0 0 var(--abstand-4);
+}
+
 /* `.dailyCard` setzt global `height: 100%`. Das passt für Raster mit einer Karte
    je Spalte, hier stehen die Karten aber gestapelt untereinander — dort zieht die
    Regel jede einzelne Karte auf die Höhe der GESAMTEN Spalte und erzeugt riesige
-   Leerräume. Karten, die bewusst mitwachsen sollen, tragen `h-100` (mit
-   !important) und bleiben davon unberührt. */
+   Leerräume. Karten, die bewusst mitwachsen sollen, tragen `hoch`. */
 .dailyCard {
     height: auto;
+}
+
+.dailyCard.hoch,
+.dailyCard.kpi-karte {
+    height: 100%;
+}
+
+.karte {
+    padding: var(--abstand-4);
+}
+
+.karte.leer {
+    padding: var(--abstand-5);
+    text-align: center;
+}
+
+.abstand {
+    margin-bottom: var(--abstand-4);
+}
+
+.abstand-klein {
+    margin-bottom: var(--abstand-2);
+}
+
+.ohne-rand {
+    margin: 0;
+}
+
+.klein-text {
+    font-size: 0.85rem;
+}
+
+.vor {
+    margin-right: var(--abstand-1);
+}
+
+.rechts {
+    margin-left: auto;
+}
+
+.titel-zeile {
+    display: flex;
+    align-items: center;
+}
+
+.filter-raster {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--abstand-2);
+    align-items: end;
+}
+
+.filter-raster > * {
+    grid-column: span 6;
+    min-width: 0;
+}
+
+.datum-paar {
+    display: flex;
+    gap: var(--abstand-2);
+}
+
+.datum-paar > * {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.at-label {
+    margin-bottom: var(--abstand-1);
+}
+
+.zs-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-1);
+}
+
+.zs-wahl {
+    display: flex;
+    gap: var(--abstand-2);
+    margin-left: auto;
+}
+
+.zs-wahl .at-feld {
+    width: auto;
+}
+
+.kpi-raster {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--abstand-2);
+}
+
+.zwei-raster {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--abstand-2);
+}
+
+.kpi-karte {
+    padding: var(--abstand-2);
+    text-align: center;
 }
 
 .kpi-label {
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 
 .kpi-value {
@@ -797,23 +899,149 @@ const wochentag = (n) => t('strategies.weekday' + n)
     font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
+    margin-bottom: var(--abstand-2);
 }
 
-.funnel-row {
+.liste {
+    margin: 0;
+    padding-left: var(--abstand-4);
+}
+
+.liste li {
+    margin-bottom: var(--abstand-1);
+}
+
+.halb-raster {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--abstand-4);
+}
+
+.halb-raster > *,
+.gruppe {
+    min-width: 0;
+}
+
+.gruppen-raster {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--abstand-4);
+}
+
+.gruppe.breit {
+    grid-column: span 2;
+}
+
+.at-tabelle {
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.funnel-zeile {
     margin-bottom: 0.55rem;
+}
+
+.funnel-kopf {
+    display: flex;
+    justify-content: space-between;
 }
 
 .funnel-bar {
     height: 8px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.07);
+    border-radius: var(--radius-pille);
+    background: var(--panel-soft);
     overflow: hidden;
 }
 
 .funnel-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--accent), #48c78e);
+    background: var(--accent);
     transition: width 0.3s ease;
+}
+
+.mfe-zeile {
+    display: flex;
+    gap: var(--abstand-4);
+}
+
+.mfe-stufe {
+    flex: 1 1 0;
+    text-align: center;
+}
+
+.liste-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
+}
+
+.auswahl {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.kontextZelle {
+    background: var(--panel-soft);
+}
+
+.paramChip {
+    display: inline-block;
+    margin: 0 0 var(--abstand-1) var(--abstand-1);
+    padding: 0 var(--abstand-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pille);
+    font-family: var(--schrift-mono);
+    font-size: 0.75rem;
+}
+
+@media (min-width: 768px) {
+    .filter-raster > .f-2 { grid-column: span 2; }
+    .filter-raster > .f-3 { grid-column: span 3; }
+}
+
+@media (max-width: 1199.98px) {
+    .gruppen-raster {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991.98px) {
+    .halb-raster {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .perf-seite {
+        padding: var(--abstand-3) var(--abstand-3) 0;
+    }
+
+    .karte {
+        padding: var(--abstand-3);
+    }
+
+    .kpi-raster {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .gruppen-raster {
+        grid-template-columns: 1fr;
+    }
+
+    .gruppe.breit {
+        grid-column: auto;
+    }
+
+    .zs-wahl {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .zs-wahl .at-feld {
+        flex: 1 1 0;
+    }
 }
 </style>

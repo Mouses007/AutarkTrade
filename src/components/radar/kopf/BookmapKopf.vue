@@ -27,6 +27,7 @@ import {
     VIEW_PCT_OPTIONS, spannenOptionen,
 } from '../../../stores/live.js'
 import { computed } from 'vue'
+import Symbol from '../../basis/Symbol.vue'
 
 const { t } = useI18n()
 

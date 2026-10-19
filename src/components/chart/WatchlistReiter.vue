@@ -10,6 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { BinanceStream, buildMiniTickerUrl } from '../../utils/binanceStream.js'
 import axios from 'axios'
 import SymbolSuche from './SymbolSuche.vue'
+import { Symbol } from '../basis'
 import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js'
 import { currentUser } from '../../stores/globals.js'
 import { aktivierteBoersen } from '../../utils/boersenLinks.js'
@@ -136,15 +137,14 @@ function loescheListe() {
 <template>
     <div class="watchlist">
         <div class="kopf">
-            <select v-model="listeId" class="form-select form-select-sm">
+            <select v-model="listeId" class="at-feld klein">
                 <option v-for="w in watchlists" :key="w.id" :value="w.id">{{ w.name }}</option>
             </select>
-            <button class="icon" :title="t('chart.watchlistNeu')" @click="neueListe" :aria-label="t('chart.watchlistNeu')"><i class="uil uil-plus"></i></button>
-            <button class="icon" :title="t('chart.watchlistLoeschen')" :disabled="watchlists.length <= 1" @click="loescheListe" :aria-label="t('chart.watchlistLoeschen')"><i
-                    class="uil uil-trash-alt"></i></button>
+            <button type="button" class="mini" :title="t('chart.watchlistNeu')" @click="neueListe" :aria-label="t('chart.watchlistNeu')"><Symbol name="plus" /></button>
+            <button type="button" class="mini" :title="t('chart.watchlistLoeschen')" :disabled="watchlists.length <= 1" @click="loescheListe" :aria-label="t('chart.watchlistLoeschen')"><Symbol name="muell" /></button>
         </div>
-        <button class="hinzu" :disabled="enthaeltAktives || !liste" @click="fuegeHinzu">
-            <i class="uil uil-star"></i> {{ t('chart.watchlistHinzu', { symbol: aktivesSymbol }) }}
+        <button type="button" class="hinzu" :disabled="enthaeltAktives || !liste" @click="fuegeHinzu">
+            <Symbol name="stern" /> {{ t('chart.watchlistHinzu', { symbol: aktivesSymbol }) }}
         </button>
         <div class="zeilen">
             <div v-for="(s, i) in symbole" :key="s.markt + s.symbol" class="zeile"
@@ -158,14 +158,14 @@ function loescheListe() {
                     {{ aenderung(s) == null ? '' : (aenderung(s) >= 0 ? '+' : '') + aenderung(s).toFixed(2) + ' %' }}
                 </span>
                 <span class="werkzeug" @click.stop>
-                    <button class="icon" @click="verschiebe(i, -1)"><i class="uil uil-angle-up"></i></button>
-                    <button class="icon" @click="verschiebe(i, 1)"><i class="uil uil-angle-down"></i></button>
-                    <button class="icon" @click="entferne(s)"><i class="uil uil-times"></i></button>
+                    <button type="button" class="mini" @click="verschiebe(i, -1)"><Symbol name="hoch" /></button>
+                    <button type="button" class="mini" @click="verschiebe(i, 1)"><Symbol name="runter" /></button>
+                    <button type="button" class="mini" @click="entferne(s)"><Symbol name="schliessen" /></button>
                 </span>
             </div>
             <div v-if="!symbole.length" class="leer">{{ t('chart.watchlistLeer') }}</div>
-            <button class="coinHinzu" :class="{ an: sucheOffen }" :disabled="!liste" @click="oeffneSuche">
-                <i :class="sucheOffen ? 'uil uil-times' : 'uil uil-plus'"></i> {{ t(sucheOffen ? 'chart.watchlistSucheZu' : 'chart.watchlistCoinHinzu') }}
+            <button type="button" class="coinHinzu" :class="{ an: sucheOffen }" :disabled="!liste" @click="oeffneSuche">
+                <Symbol :name="sucheOffen ? 'schliessen' : 'plus'" /> {{ t(sucheOffen ? 'chart.watchlistSucheZu' : 'chart.watchlistCoinHinzu') }}
             </button>
             <SymbolSuche ref="suche" ohne-knopf eingebettet @waehle="ausSuche" />
         </div>
@@ -178,16 +178,21 @@ function loescheListe() {
     margin-top: 6px;
     padding: 5px;
     background: transparent;
-    border: 1px dashed var(--white-18, rgba(255, 255, 255, 0.18));
-    border-radius: 6px;
-    color: var(--grey-text);
+    border: 1px dashed var(--line-stark);
+    border-radius: var(--radius-klein);
+    color: var(--muted);
     font-size: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
 }
 
 .coinHinzu:hover:not(:disabled),
 .coinHinzu.an {
-    color: var(--blue-color);
-    border-color: var(--blue-color);
+    color: var(--accent);
+    border-color: var(--accent);
 }
 
 .watchlist {
@@ -203,26 +208,34 @@ function loescheListe() {
     align-items: center;
 }
 
-.icon {
+.mini {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 2px 5px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
 }
 
-.icon:hover:not(:disabled) {
-    color: var(--white-87, #eee);
-    background: var(--white-10);
+.mini:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--line);
 }
 
 .hinzu {
     background: transparent;
-    border: 1px dashed var(--white-18);
-    color: var(--grey-text);
+    border: 1px dashed var(--line-stark);
+    color: var(--muted);
     font-size: 11px;
-    border-radius: 6px;
+    border-radius: var(--radius-klein);
     padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
 }
 
 .hinzu:disabled {
@@ -247,11 +260,11 @@ function loescheListe() {
 }
 
 .zeile:hover {
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .zeile.an {
-    background: rgba(1, 180, 255, 0.1);
+    background: var(--accent-flaeche);
 }
 
 .sym {
@@ -288,7 +301,7 @@ function loescheListe() {
 .boerse.pionex { color: #f0a04b; }
 
 .sym small {
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .preis {
@@ -306,7 +319,7 @@ function loescheListe() {
     display: none;
     position: absolute;
     right: 2px;
-    background: var(--black-bg-5, #1e222d);
+    background: var(--panel);
     border-radius: 4px;
 }
 
@@ -315,7 +328,7 @@ function loescheListe() {
 }
 
 .leer {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 12px;
     padding: 8px 4px;
 }

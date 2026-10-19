@@ -51,20 +51,57 @@ function umschalten() {
 </script>
 
 <template>
-    <div class="d-flex" style="min-width:0">
-        <select v-if="istParam" class="form-select form-select-sm"
+    <div class="zop">
+        <select v-if="istParam" class="at-feld klein"
             :title="titel || t('strategies.fromParamShort')"
             :value="paramName"
             @change="setzen({ param: $event.target.value })">
             <option v-for="pk in params" :key="pk" :value="pk">{{ pk }}</option>
         </select>
-        <input v-else type="number" class="form-control form-control-sm"
+        <input v-else type="number" class="at-feld klein"
             :step="schritt" :placeholder="String(standard)" :title="titel"
             :value="wert" @change="zahlSetzen($event.target.value)" />
         <button v-if="params.length" type="button"
-            class="btn btn-sm px-1 flex-shrink-0"
-            :class="istParam ? 'btn-primary' : 'btn-outline-secondary'"
+            class="zopKnopf"
+            :class="{ an: istParam }"
             :title="t('strategies.fromParamShort')"
             @click="umschalten">ƒ</button>
     </div>
 </template>
+
+<style scoped>
+.zop {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 0;
+}
+
+.zop .at-feld {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.zopKnopf {
+    flex: 0 0 auto;
+    margin-left: var(--abstand-1);
+    padding: 0 var(--abstand-2);
+    border-radius: var(--radius-klein);
+    border: 1px solid var(--line);
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.zopKnopf:hover {
+    color: var(--text);
+    border-color: var(--line-stark);
+}
+
+.zopKnopf.an {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+}
+</style>

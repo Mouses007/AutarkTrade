@@ -24,6 +24,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import dayjs from '../../utils/dayjs-setup.js'
+import Symbol from '../basis/Symbol.vue'
 import { lageZu } from '../../../shared/handelszeiten.js'
 import Symbol from '@/components/basis/Symbol.vue'
 

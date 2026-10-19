@@ -13,6 +13,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
+import { Knopf, Pille, Symbol, Hinweis, Kreisel } from '../components/basis'
 
 const { t } = useI18n()
 
@@ -53,7 +54,7 @@ const datum = (ms) => (ms ? new Date(Number(ms)).toLocaleDateString() : '—')
 /** Ampel der Prüfhälfte — grün bestätigt, gelb zu dünn, rot gekippt. */
 function ampel(z) {
     if (z.bestaetigt) return { farbe: 'greenTrade', text: t('rangliste.bestaetigt') }
-    if (Number(z.bTrades) < 30) return { farbe: 'text-warning', text: t('rangliste.duenn') }
+    if (Number(z.bTrades) < 30) return { farbe: 'at-warn', text: t('rangliste.duenn') }
     return { farbe: 'redTrade', text: t('rangliste.gekippt') }
 }
 
@@ -206,34 +207,34 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <template>
-<div class="row mt-2">
-    <div class="col-12">
-        <div class="dailyCard p-3 mb-3">
-            <div class="section-title mb-1">
-                <i class="uil uil-list-ol-alt me-1"></i>{{ t('rangliste.title') }}
+<div class="rangliste-seite">
+    <div>
+        <div class="dailyCard karte">
+            <div class="section-title titel-zeile">
+                <Symbol name="liste" class="vor" />{{ t('rangliste.title') }}
             </div>
-            <p class="text-muted small mb-0">{{ t('rangliste.hint') }}</p>
+            <p class="at-gedaempft klein-text ohne-rand">{{ t('rangliste.hint') }}</p>
         </div>
 
-        <div v-if="fehler" class="alert alert-danger py-2 px-3 small">{{ fehler }}</div>
+        <Hinweis v-if="fehler" art="fehler" class="abstand klein-text">{{ fehler }}</Hinweis>
 
         <!-- ══ Einstellungen ══ -->
-        <div class="dailyCard p-3 mb-3">
-            <div class="row g-2 align-items-end mb-2">
-                <div class="col-12 col-md-4">
-                    <label class="form-label small mb-1">{{ t('rangliste.strategie') }}</label>
-                    <select v-model="form.strategyId" class="form-select form-select-sm" @change="holeVorschlag">
+        <div class="dailyCard karte">
+            <div class="formular">
+                <div class="b-4">
+                    <label class="at-label">{{ t('rangliste.strategie') }}</label>
+                    <select v-model="form.strategyId" class="at-feld klein" @change="holeVorschlag">
                         <option v-for="s in strategien" :key="s.id" :value="s.id">{{ s.name }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label small mb-1">{{ t('rangliste.zeitraum') }}</label>
+                <div class="b-2 mobil-halb">
+                    <label class="at-label">{{ t('rangliste.zeitraum') }}</label>
                     <input v-model.number="form.tage" type="number" min="14" max="720"
-                           class="form-control form-control-sm" @change="holeVorschlag" />
+                           class="at-feld klein" @change="holeVorschlag" />
                 </div>
-                <div class="col-6 col-md-2">
-                    <label class="form-label small mb-1">{{ t('rangliste.zeiteinheit') }}</label>
-                    <select v-model="form.timeframe" class="form-select form-select-sm">
+                <div class="b-2 mobil-halb">
+                    <label class="at-label">{{ t('rangliste.zeiteinheit') }}</label>
+                    <select v-model="form.timeframe" class="at-feld klein">
                         <option v-for="tf in (vorschlag?.kandidaten || [])" :key="tf" :value="tf">{{ tf }}</option>
                     </select>
                 </div>
@@ -241,174 +242,174 @@ onBeforeUnmount(stopPolling)
 
             <!-- Der Vorschlag steht MIT Begründung da: eine Zeiteinheit, die aus
                  dem Nichts vorgeschlagen wird, übernimmt man blind. -->
-            <div v-if="vorschlag?.begruendung" class="alert alert-secondary py-2 px-3 small mb-2">
-                <i class="uil uil-lightbulb-alt me-1"></i>{{ vorschlag.begruendung }}
+            <div v-if="vorschlag?.begruendung" class="notiz abstand-klein">
+                <Symbol name="idee" class="vor" />{{ vorschlag.begruendung }}
             </div>
-            <div v-if="vorschlag?.knapp?.length" class="alert alert-warning py-2 px-3 small mb-2">
-                <i class="uil uil-exclamation-triangle me-1"></i>
-                <span v-for="k in vorschlag.knapp" :key="k.timeframe" class="me-2">
+            <Hinweis v-if="vorschlag?.knapp?.length" art="warn" class="abstand-klein klein-text">
+                <span v-for="k in vorschlag.knapp" :key="k.timeframe" class="knapp">
                     <strong>{{ k.timeframe }}</strong>: {{ k.text }}
                 </span>
-            </div>
+            </Hinweis>
 
-            <hr class="my-3" />
+            <hr class="trenner" />
 
             <!-- ══ Universum ══ -->
-            <div class="section-title mb-2">{{ t('rangliste.universum') }}</div>
-            <p v-if="quellen" class="text-muted small mb-2">
+            <div class="section-title abstand-klein">{{ t('rangliste.universum') }}</div>
+            <p v-if="quellen" class="at-gedaempft klein-text abstand-klein">
                 {{ t('rangliste.quellen', quellen) }}
             </p>
-            <div class="row g-2 align-items-end mb-2">
-                <div class="col-12 col-md-4">
-                    <select v-model="form.art" class="form-select form-select-sm" @change="probe = null">
+            <div class="formular">
+                <div class="b-4">
+                    <select v-model="form.art" class="at-feld klein" @change="probe = null">
                         <option value="bitunix">{{ t('rangliste.artBitunix') }}</option>
                         <option value="top">{{ t('rangliste.artTop') }}</option>
                         <option value="manuell">{{ t('rangliste.artManuell') }}</option>
                         <option value="ki">{{ t('rangliste.artKi') }}</option>
                     </select>
                 </div>
-                <div v-if="form.art === 'top'" class="col-6 col-md-2">
-                    <label class="form-label small mb-1">{{ t('rangliste.anzahl') }}</label>
+                <div v-if="form.art === 'top'" class="b-2 mobil-halb">
+                    <label class="at-label">{{ t('rangliste.anzahl') }}</label>
                     <input v-model.number="form.n" type="number" min="5" max="250"
-                           class="form-control form-control-sm" />
+                           class="at-feld klein" />
                 </div>
-                <div v-if="form.art === 'ki'" class="col-12 col-md-4">
-                    <label class="form-label small mb-1">{{ t('rangliste.kiThema') }}</label>
-                    <div class="input-group input-group-sm">
-                        <input v-model="form.thema" type="text" class="form-control"
+                <div v-if="form.art === 'ki'" class="b-4">
+                    <label class="at-label">{{ t('rangliste.kiThema') }}</label>
+                    <div class="feld-gruppe">
+                        <input v-model="form.thema" type="text" class="at-feld klein"
                                placeholder="RWA" @keyup.enter="kiVorschlag" />
-                        <button class="btn btn-outline-secondary" :disabled="kiLaeuft || !form.thema"
-                                @click="kiVorschlag">
-                            <span v-if="kiLaeuft" class="spinner-border spinner-border-sm"></span>
+                        <Knopf klein :disabled="kiLaeuft || !form.thema" @click="kiVorschlag">
+                            <Kreisel v-if="kiLaeuft" still />
                             <span v-else>{{ t('rangliste.kiVorschlagen') }}</span>
-                        </button>
+                        </Knopf>
                     </div>
                 </div>
-                <div v-if="form.art === 'manuell' || form.art === 'ki'" class="col-12 col-md-6">
-                    <label class="form-label small mb-1">{{ t('rangliste.symbole') }}</label>
-                    <input v-model="form.symbole" type="text" class="form-control form-control-sm"
+                <div v-if="form.art === 'manuell' || form.art === 'ki'" class="b-6">
+                    <label class="at-label">{{ t('rangliste.symbole') }}</label>
+                    <input v-model="form.symbole" type="text" class="at-feld klein"
                            placeholder="BTCUSDT, ETHUSDT" />
                 </div>
-                <div class="col-12 col-md-3">
-                    <div class="form-check">
-                        <input v-model="form.nurHandelbar" class="form-check-input" type="checkbox" id="nurH" />
-                        <label class="form-check-label small" for="nurH">{{ t('rangliste.nurHandelbar') }}</label>
-                    </div>
+                <div class="b-3">
+                    <label class="at-check klein-text" for="nurH">
+                        <input v-model="form.nurHandelbar" type="checkbox" id="nurH" />
+                        {{ t('rangliste.nurHandelbar') }}
+                    </label>
                 </div>
-                <div class="col-12 col-md-2">
-                    <button class="btn btn-sm btn-outline-secondary w-100" @click="pruefeUniversum">
+                <div class="b-2">
+                    <Knopf klein class="voll" @click="pruefeUniversum">
                         {{ t('rangliste.pruefen') }}
-                    </button>
+                    </Knopf>
                 </div>
             </div>
 
             <!-- Was das Modell vorgeschlagen hat UND was davon nicht ging.
                  Eine still gekürzte Liste wäre eine Behauptung über
                  Vollständigkeit, die niemand nachprüfen kann. -->
-            <div v-if="kiErgebnis" class="alert alert-secondary py-2 px-3 small mb-2">
-                <strong>{{ kiErgebnis.name }}</strong> — {{ kiErgebnis.begruendung }}
-                <div v-if="kiErgebnis.verworfen.length" class="text-warning mt-1">
-                    {{ t('rangliste.kiVerworfen', {
-                        n: kiErgebnis.verworfen.length,
-                        gesamt: kiErgebnis.gesamtVorschlaege,
-                    }) }}
-                    <span class="text-muted">{{ kiErgebnis.verworfen.slice(0, 8).join(', ') }}</span>
-                </div>
-                <div class="text-muted mt-1">
-                    {{ kiErgebnis.provider }}/{{ kiErgebnis.modell }} ·
-                    {{ kiErgebnis.tokens }} Token · {{ kiErgebnis.kostenUsd.toFixed(4) }} USD
+            <div v-if="kiErgebnis" class="notiz abstand-klein">
+                <div>
+                    <strong>{{ kiErgebnis.name }}</strong> — {{ kiErgebnis.begruendung }}
+                    <div v-if="kiErgebnis.verworfen.length" class="at-warn oben">
+                        {{ t('rangliste.kiVerworfen', {
+                            n: kiErgebnis.verworfen.length,
+                            gesamt: kiErgebnis.gesamtVorschlaege,
+                        }) }}
+                        <span class="at-gedaempft">{{ kiErgebnis.verworfen.slice(0, 8).join(', ') }}</span>
+                    </div>
+                    <div class="at-gedaempft oben">
+                        {{ kiErgebnis.provider }}/{{ kiErgebnis.modell }} ·
+                        {{ kiErgebnis.tokens }} Token · {{ kiErgebnis.kostenUsd.toFixed(4) }} USD
+                    </div>
                 </div>
             </div>
 
-            <div v-if="probe" class="alert alert-secondary py-2 px-3 small mb-2">
-                <strong>{{ t('rangliste.gefunden', { n: probe.anzahl }) }}</strong>
-                <span class="text-muted ms-1">
-                    {{ t('rangliste.ausgeschlossen', {
-                        ohneHistorie: probe.ohneHistorie.length,
-                        ohneMarkt: probe.ohneMarkt.length,
-                        nichtHandelbar: probe.nichtHandelbar.length,
-                    }) }}
-                </span>
+            <div v-if="probe" class="notiz abstand-klein">
+                <div>
+                    <strong>{{ t('rangliste.gefunden', { n: probe.anzahl }) }}</strong>
+                    <span class="at-gedaempft links">
+                        {{ t('rangliste.ausgeschlossen', {
+                            ohneHistorie: probe.ohneHistorie.length,
+                            ohneMarkt: probe.ohneMarkt.length,
+                            nichtHandelbar: probe.nichtHandelbar.length,
+                        }) }}
+                    </span>
+                </div>
             </div>
 
-            <button class="btn btn-sm btn-primary" :disabled="laden || laeuftGerade || !form.timeframe"
+            <Knopf art="haupt" klein :laedt="laden" :disabled="laden || laeuftGerade || !form.timeframe"
                     @click="starten">
-                <span v-if="laden" class="spinner-border spinner-border-sm me-1"></span>
                 {{ t('rangliste.starten') }}
-            </button>
+            </Knopf>
         </div>
 
         <!-- ══ Fortschritt ══ -->
-        <div v-if="lauf" class="dailyCard p-3 mb-3">
-            <div class="d-flex justify-content-between align-items-center mb-2">
+        <div v-if="lauf" class="dailyCard karte">
+            <div class="lauf-kopf">
                 <div>
                     <strong>{{ lauf.universumName }}</strong>
-                    <span class="text-muted small ms-2">
+                    <span class="at-gedaempft klein-text links">
                         {{ lauf.strategyId }} · {{ lauf.timeframe }} ·
                         {{ datum(lauf.fromTs) }} – {{ datum(lauf.toTs) }}
                     </span>
                 </div>
-                <div>
-                    <span class="badge me-2"
-                          :class="lauf.status === 'fertig' ? 'bg-success'
-                                : lauf.status === 'fehler' ? 'bg-danger'
-                                : lauf.status === 'abgebrochen' ? 'bg-secondary' : 'bg-primary'">
+                <div class="lauf-aktionen">
+                    <Pille :ton="lauf.status === 'fertig' ? 'gut'
+                                : lauf.status === 'fehler' ? 'schlecht'
+                                : lauf.status === 'abgebrochen' ? 'neutral' : 'akzent'">
                         {{ t('rangliste.st_' + lauf.status) }}
-                    </span>
-                    <button v-if="laeuftGerade" class="btn btn-sm btn-outline-danger" @click="abbrechen">
+                    </Pille>
+                    <Knopf v-if="laeuftGerade" art="gefahr" klein @click="abbrechen">
                         {{ t('rangliste.abbrechen') }}
-                    </button>
+                    </Knopf>
                 </div>
             </div>
-            <div v-if="laeuftGerade" class="progress mb-1" style="height: 6px">
-                <div class="progress-bar" role="progressbar"
+            <div v-if="laeuftGerade" class="fortschritt">
+                <div class="fortschritt-balken" role="progressbar"
                      :style="{ width: (lauf.gesamt ? (lauf.fortschritt / lauf.gesamt * 100) : 0) + '%' }"></div>
             </div>
-            <div class="small text-muted">
+            <div class="klein-text at-gedaempft">
                 {{ t('rangliste.fortschritt', { fertig: lauf.fortschritt, gesamt: lauf.gesamt }) }}
-                <span v-if="lauf.timeframeBegruendung" class="ms-2">· {{ lauf.timeframeBegruendung }}</span>
+                <span v-if="lauf.timeframeBegruendung" class="links">· {{ lauf.timeframeBegruendung }}</span>
             </div>
         </div>
 
         <!-- ══ Die Beurteilung — wichtiger als die Tabelle ══ -->
-        <div v-if="lauf?.nullverteilung?.satz" class="alert py-2 px-3 small mb-3"
-             :class="lauf.nullverteilung.umtopfen && lauf.nullverteilung.umtopfen.anteilUeberBeobachtet < 0.05
-                     ? 'alert-success' : 'alert-warning'">
-            <div class="fw-bold mb-1">
-                <i class="uil uil-dice-six me-1"></i>{{ t('rangliste.beurteilung') }}
+        <Hinweis v-if="lauf?.nullverteilung?.satz" class="abstand klein-text"
+             :art="lauf.nullverteilung.umtopfen && lauf.nullverteilung.umtopfen.anteilUeberBeobachtet < 0.05
+                     ? 'gut' : 'warn'">
+            <div class="fett titel-zeile">
+                <Symbol name="wuerfel" class="vor" />{{ t('rangliste.beurteilung') }}
             </div>
             {{ lauf.nullverteilung.satz }}
-        </div>
+        </Hinweis>
 
         <!-- ══ Rangliste ══ -->
-        <div v-if="belastbare.length" class="dailyCard p-3 mb-3">
-            <div class="table-responsive">
-                <table class="table table-sm table-hover align-middle mb-0">
+        <div v-if="belastbare.length" class="dailyCard karte">
+            <div class="at-tabelle-huelle">
+                <table class="at-tabelle dicht">
                     <thead><tr>
                         <th style="width:3rem">{{ t('rangliste.rang') }}</th>
                         <th>{{ t('rangliste.symbol') }}</th>
-                        <th class="text-end">{{ t('rangliste.trades') }}</th>
-                        <th class="text-end">{{ t('rangliste.ohneTop') }}</th>
-                        <th class="text-end">{{ t('rangliste.erwartung') }}</th>
-                        <th class="text-end">{{ t('rangliste.maxDd') }}</th>
-                        <th class="text-end">{{ t('rangliste.pruefhaelfte') }}</th>
+                        <th class="zahl">{{ t('rangliste.trades') }}</th>
+                        <th class="zahl">{{ t('rangliste.ohneTop') }}</th>
+                        <th class="zahl">{{ t('rangliste.erwartung') }}</th>
+                        <th class="zahl">{{ t('rangliste.maxDd') }}</th>
+                        <th class="zahl">{{ t('rangliste.pruefhaelfte') }}</th>
                         <th></th>
                     </tr></thead>
                     <tbody>
                         <tr v-for="z in belastbare" :key="z.id">
-                            <td class="text-muted">{{ z.rangA }}</td>
+                            <td class="at-gedaempft">{{ z.rangA }}</td>
                             <td><strong>{{ z.symbol }}</strong></td>
-                            <td class="text-end small">{{ z.aTrades }}</td>
-                            <td class="text-end small" :class="z.aOhneTopR >= 0 ? 'greenTrade' : 'redTrade'">
+                            <td class="zahl">{{ z.aTrades }}</td>
+                            <td class="zahl" :class="z.aOhneTopR >= 0 ? 'greenTrade' : 'redTrade'">
                                 {{ zahl(z.aOhneTopR) }} R
                             </td>
-                            <td class="text-end small text-muted">{{ zahl(z.aExpectancyR) }} R</td>
-                            <td class="text-end small text-muted">{{ zahl(z.aMaxDdPct, 1) }} %</td>
-                            <td class="text-end small" :class="z.bOhneTopR >= 0 ? 'greenTrade' : 'redTrade'">
+                            <td class="zahl at-gedaempft">{{ zahl(z.aExpectancyR) }} R</td>
+                            <td class="zahl at-gedaempft">{{ zahl(z.aMaxDdPct, 1) }} %</td>
+                            <td class="zahl" :class="z.bOhneTopR >= 0 ? 'greenTrade' : 'redTrade'">
                                 {{ zahl(z.bOhneTopR) }} R
-                                <span class="text-muted">({{ z.bTrades }})</span>
+                                <span class="at-gedaempft">({{ z.bTrades }})</span>
                             </td>
-                            <td class="small" :class="ampel(z).farbe">{{ ampel(z).text }}</td>
+                            <td :class="ampel(z).farbe">{{ ampel(z).text }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -416,19 +417,19 @@ onBeforeUnmount(stopPolling)
         </div>
 
         <!-- ══ Unter der Trennlinie — sichtbar, aber ohne Rang ══ -->
-        <div v-if="uebrige.length" class="dailyCard p-3 mb-3">
-            <p class="text-muted small mb-2">{{ t('rangliste.unterTrennlinie') }}</p>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
+        <div v-if="uebrige.length" class="dailyCard karte">
+            <p class="at-gedaempft klein-text abstand-klein">{{ t('rangliste.unterTrennlinie') }}</p>
+            <div class="at-tabelle-huelle">
+                <table class="at-tabelle dicht">
                     <tbody>
                         <tr v-for="z in uebrige" :key="z.id">
                             <td style="width:9rem">
-                                <span class="badge bg-secondary">{{ t('rangliste.k_' + z.klasse) }}</span>
+                                <Pille ton="neutral">{{ t('rangliste.k_' + z.klasse) }}</Pille>
                             </td>
                             <td><strong>{{ z.symbol }}</strong></td>
-                            <td class="text-end small">{{ z.aTrades }} {{ t('rangliste.trades') }}</td>
-                            <td class="text-end small text-muted">{{ zahl(z.aOhneTopR) }} R</td>
-                            <td class="small text-muted">
+                            <td class="zahl">{{ z.aTrades }} {{ t('rangliste.trades') }}</td>
+                            <td class="zahl at-gedaempft">{{ zahl(z.aOhneTopR) }} R</td>
+                            <td class="at-gedaempft">
                                 <span v-if="z.klasse === 'datenluecke'">
                                     {{ zahl(z.abdeckungPct, 0) }} % · ab {{ datum(z.historieAb) }}
                                 </span>
@@ -441,23 +442,21 @@ onBeforeUnmount(stopPolling)
         </div>
 
         <!-- ══ Frühere Läufe ══ -->
-        <div class="dailyCard p-3 mb-3">
-            <div class="section-title mb-2">{{ t('rangliste.laeufe') }}</div>
-            <p v-if="!laeufe.length" class="text-muted small mb-0">{{ t('rangliste.keineLaeufe') }}</p>
-            <div v-else class="table-responsive">
-                <table class="table table-sm table-hover align-middle mb-0">
+        <div class="dailyCard karte">
+            <div class="section-title abstand-klein">{{ t('rangliste.laeufe') }}</div>
+            <p v-if="!laeufe.length" class="at-gedaempft klein-text ohne-rand">{{ t('rangliste.keineLaeufe') }}</p>
+            <div v-else class="at-tabelle-huelle">
+                <table class="at-tabelle dicht">
                     <tbody>
                         <tr v-for="l in laeufe" :key="l.id" style="cursor:pointer" @click="oeffne(l.id)">
-                            <td class="small">{{ l.universumName }}</td>
-                            <td class="small text-muted">{{ l.strategyId }} · {{ l.timeframe }}</td>
-                            <td class="small text-muted">{{ datum(l.fromTs) }} – {{ datum(l.toTs) }}</td>
-                            <td class="small">{{ t('rangliste.st_' + l.status) }}</td>
-                            <td class="small text-muted">{{ l.fortschritt }}/{{ l.gesamt }}</td>
-                            <td class="text-end">
-                                <button class="btn btn-sm btn-outline-danger py-0 px-1"
-                                        @click.stop="loesche(l.id)">
-                                    <i class="uil uil-trash-alt"></i>
-                                </button>
+                            <td>{{ l.universumName }}</td>
+                            <td class="at-gedaempft">{{ l.strategyId }} · {{ l.timeframe }}</td>
+                            <td class="at-gedaempft">{{ datum(l.fromTs) }} – {{ datum(l.toTs) }}</td>
+                            <td>{{ t('rangliste.st_' + l.status) }}</td>
+                            <td class="at-gedaempft">{{ l.fortschritt }}/{{ l.gesamt }}</td>
+                            <td class="zahl">
+                                <Knopf art="gefahr" klein nurSymbol symbol="muell"
+                                        @click.stop="loesche(l.id)" />
                             </td>
                         </tr>
                     </tbody>
@@ -474,17 +473,172 @@ onBeforeUnmount(stopPolling)
  * richtig, wo Karten NEBENEINANDER in einer Zeile stehen und gleich hoch sein
  * sollen — Dashboard und Auswertung leben davon.
  *
- * Hier stehen die sechs Karten aber UNTEREINANDER in einer einzigen `.col-12`.
- * Die ist ein Flex-Element von `.row` und bekommt dadurch eine feste Höhe;
- * jede Karte nahm sich daraufhin die volle Höhe. Gemessen: sechs Karten à
- * 3796 px und eine 23 325 px hohe Seite — die Rangliste stand dann irgendwo
- * weit unten hinter riesigen Löchern.
- *
- * Nachgemessen betrifft das ausschliesslich diese Seite; alle anderen
- * dailyCard-Seiten haben unauffällige Höhen. Deshalb hier heilen und nicht
- * global.
+ * Hier stehen die sechs Karten aber UNTEREINANDER. Gemessen (mit dem alten
+ * Bootstrap-Raster): sechs Karten à 3796 px und eine 23 325 px hohe Seite —
+ * die Rangliste stand dann irgendwo weit unten hinter riesigen Löchern.
+ * Deshalb hier heilen und nicht global.
  */
 .dailyCard {
     height: auto;
+}
+
+.rangliste-seite {
+    margin-top: var(--abstand-2);
+}
+
+.karte {
+    padding: var(--abstand-4);
+    margin-bottom: var(--abstand-4);
+}
+
+.abstand {
+    margin-bottom: var(--abstand-4);
+}
+
+.abstand-klein {
+    margin-bottom: var(--abstand-2);
+}
+
+.ohne-rand {
+    margin: 0;
+}
+
+.section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: var(--abstand-1);
+}
+
+.titel-zeile {
+    display: flex;
+    align-items: center;
+}
+
+.vor {
+    margin-right: var(--abstand-1);
+}
+
+.links {
+    margin-left: var(--abstand-2);
+}
+
+.oben {
+    margin-top: var(--abstand-1);
+}
+
+.klein-text {
+    font-size: 0.85rem;
+}
+
+.fett {
+    font-weight: 700;
+    margin-bottom: var(--abstand-1);
+}
+
+/* Formularraster: 12 Spalten wie vorher, auf dem Telefon einspaltig
+   (ausser den beiden Zahlenfeldern, die halbe Breite teilen). */
+.formular {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--abstand-2);
+    align-items: end;
+    margin-bottom: var(--abstand-2);
+}
+
+.formular > * {
+    grid-column: span 12;
+    min-width: 0;
+}
+
+.at-label {
+    margin-bottom: var(--abstand-1);
+}
+
+.feld-gruppe {
+    display: flex;
+    gap: var(--abstand-1);
+}
+
+.feld-gruppe .at-feld {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.voll {
+    width: 100%;
+}
+
+.notiz {
+    display: flex;
+    align-items: flex-start;
+    font-size: 0.85rem;
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-2) var(--abstand-3);
+}
+
+.knapp {
+    margin-right: var(--abstand-2);
+}
+
+.trenner {
+    border: 0;
+    border-top: 1px solid var(--line);
+    margin: var(--abstand-4) 0;
+    opacity: 1;
+}
+
+.lauf-kopf {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--abstand-2);
+    margin-bottom: var(--abstand-2);
+}
+
+.lauf-aktionen {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-2);
+}
+
+.fortschritt {
+    height: 6px;
+    background: var(--panel-soft);
+    border-radius: var(--radius-pille);
+    overflow: hidden;
+    margin-bottom: var(--abstand-1);
+}
+
+.fortschritt-balken {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.3s;
+}
+
+.at-tabelle {
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+@media (max-width: 767.98px) {
+    .formular > .mobil-halb {
+        grid-column: span 6;
+    }
+
+    .karte {
+        padding: var(--abstand-3);
+    }
+}
+
+@media (min-width: 768px) {
+    .formular > .b-2 { grid-column: span 2; }
+    .formular > .b-3 { grid-column: span 3; }
+    .formular > .b-4 { grid-column: span 4; }
+    .formular > .b-6 { grid-column: span 6; }
 }
 </style>

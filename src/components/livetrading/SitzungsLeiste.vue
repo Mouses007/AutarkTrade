@@ -24,6 +24,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/dayjs-setup.js'
+import Symbol from '../basis/Symbol.vue'
 import { oeffneLivetradingFenster } from '../../utils/livetradingFenster.js'
 import { useVerlassenSchutz } from '../../composables/useVerlassenSchutz.js'
 import { liveSymbol, liveMarket } from '../../stores/live.js'
@@ -187,7 +188,7 @@ onBeforeUnmount(speichereJetzt)
                 <span class="stTitel">{{ t('livetrading.sitzung.neu') }}</span>
                 <span class="stLuecke"></span>
                 <span class="stKlapp">
-                    <i class="uil" :class="zu ? 'uil-angle-down' : 'uil-angle-up'"></i>
+                    <Symbol :name="zu ? 'runter' : 'hoch'" />
                 </span>
             </div>
             <div v-if="!zu" class="stZeile stPlan">
@@ -205,7 +206,7 @@ onBeforeUnmount(speichereJetzt)
                         :placeholder="t('livetrading.sitzung.planNotizHint')" />
                 </label>
                 <button type="button" class="ctl-pill stStart" :disabled="beschaeftigt" @click="starten">
-                    <i class="uil uil-play"></i>{{ t('livetrading.sitzung.starten') }}
+                    <Symbol name="play" />{{ t('livetrading.sitzung.starten') }}
                 </button>
             </div>
         </template>
@@ -226,15 +227,15 @@ onBeforeUnmount(speichereJetzt)
                 <!-- `.stop`: sitzt in der jetzt ganzflächig klickbaren Zeile,
                      ohne das würde Beenden zusätzlich die Zeile umschalten. -->
                 <button type="button" class="ctl-pill" :disabled="beschaeftigt" @click.stop="beendenUmschalten">
-                    <i class="uil uil-square"></i>{{ t('livetrading.sitzung.beenden') }}
+                    <Symbol name="quadrat" />{{ t('livetrading.sitzung.beenden') }}
                 </button>
                 <span class="stKlapp">
-                    <i class="uil" :class="zu ? 'uil-angle-down' : 'uil-angle-up'"></i>
+                    <Symbol :name="zu ? 'runter' : 'hoch'" />
                 </span>
             </div>
 
             <div v-if="aktiveSitzung.planNotiz && !zu" class="stPlanNotiz">
-                <i class="uil uil-notes"></i>{{ aktiveSitzung.planNotiz }}
+                <Symbol name="notiz" />{{ aktiveSitzung.planNotiz }}
             </div>
 
             <textarea v-if="!zu" class="stNotizen" :value="aktiveSitzung.notizen"
@@ -268,7 +269,7 @@ onBeforeUnmount(speichereJetzt)
             </span>
             <span class="stLuecke"></span>
             <button type="button" class="radarCardBtn" @click="letzteBilanz = null">
-                <i class="uil uil-times"></i>
+                <Symbol name="schliessen" />
             </button>
         </div>
 

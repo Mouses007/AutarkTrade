@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FARBEN, stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
+import { Symbol } from '../basis'
 
 const props = defineProps({
     zeichnung: { type: Object, required: true },
@@ -65,28 +66,28 @@ function nurDieseZeiteinheit() {
             {{ s.strich === 'gestrichelt' ? '╌' : s.strich === 'gepunktet' ? '┈' : '─' }}
         </button>
         <button v-if="hatVerlaengern" class="k" :class="{ an: s.rechts }" :title="t('chart.stil.rechts')"
-            @click="stil({ rechts: !s.rechts })" :aria-label="t('chart.stil.rechts')"><i class="uil uil-arrow-to-right"></i></button>
+            @click="stil({ rechts: !s.rechts })" :aria-label="t('chart.stil.rechts')"><Symbol name="pfeilAnschlagRechts" /></button>
         <button v-if="typ === 'trendlinie'" class="k" :class="{ an: s.links }" :title="t('chart.stil.links')"
-            @click="stil({ links: !s.links })" :aria-label="t('chart.stil.links')"><i class="uil uil-left-arrow-to-left"></i></button>
+            @click="stil({ links: !s.links })" :aria-label="t('chart.stil.links')"><Symbol name="pfeilAnschlagLinks" /></button>
  <button v-if="typ === 'volprofil'" class="k" :title="t('chart.stil.zeilen')" @click="naechsteZeilen" :aria-label="t('chart.stil.zeilen')">
             {{ s.zeilen || 24 }}</button>
         <button v-if="typ === 'volprofil'" class="k" :class="{ an: s.einfarbig }" :title="t('chart.stil.einfarbig')"
-            @click="stil({ einfarbig: !s.einfarbig })" :aria-label="t('chart.stil.einfarbig')"><i class="uil uil-palette"></i></button>
+            @click="stil({ einfarbig: !s.einfarbig })" :aria-label="t('chart.stil.einfarbig')"><Symbol name="palette" /></button>
         <button v-if="typ === 'volprofil'" class="k" :class="{ an: s.marken !== false }" :title="t('chart.stil.marken')"
             @click="stil({ marken: s.marken === false })" :aria-label="t('chart.stil.marken')">POC</button>
         <button v-if="hatFuellung" class="k" :class="{ an: s.fuellung }" :title="t('chart.stil.fuellung')"
-            @click="stil({ fuellung: !s.fuellung })" :aria-label="t('chart.stil.fuellung')"><i class="uil uil-tear"></i></button>
-        <button v-if="hatText" class="k" :title="t('chart.stil.text')" @click="emit('text')" :aria-label="t('chart.stil.text')"><i class="uil uil-text"></i></button>
+            @click="stil({ fuellung: !s.fuellung })" :aria-label="t('chart.stil.fuellung')"><Symbol name="tropfen" /></button>
+        <button v-if="hatText" class="k" :title="t('chart.stil.text')" @click="emit('text')" :aria-label="t('chart.stil.text')"><Symbol name="text" /></button>
         <span class="trenn"></span>
         <button class="k" :class="{ an: nurHier }" :title="t('chart.stil.nurHier', { tf: interval })" @click="nurDieseZeiteinheit" :aria-label="t('chart.stil.nurHier', { tf: interval })">
             {{ interval }}
         </button>
-        <button v-if="alarmMoeglich" class="k" :title="t('chart.stil.alarm')" @click="emit('alarm')" :aria-label="t('chart.stil.alarm')"><i class="uil uil-bell"></i></button>
+        <button v-if="alarmMoeglich" class="k" :title="t('chart.stil.alarm')" @click="emit('alarm')" :aria-label="t('chart.stil.alarm')"><Symbol name="glocke" /></button>
         <button class="k" :class="{ an: zeichnung.gesperrt }" :title="t(zeichnung.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren')"
             @click="emit('aendere', { gesperrt: !zeichnung.gesperrt })" :aria-label="t(zeichnung.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren')">
-            <i :class="zeichnung.gesperrt ? 'uil uil-lock' : 'uil uil-unlock'"></i></button>
-        <button class="k" :title="t('chart.ausblenden')" @click="emit('aendere', { versteckt: true })" :aria-label="t('chart.ausblenden')"><i class="uil uil-eye-slash"></i></button>
-        <button class="k loeschen" :title="t('chart.entfernen')" @click="emit('loesche')" :aria-label="t('chart.entfernen')"><i class="uil uil-trash-alt"></i></button>
+            <Symbol :name="zeichnung.gesperrt ? 'schloss' : 'schlossOffen'" /></button>
+        <button class="k" :title="t('chart.ausblenden')" @click="emit('aendere', { versteckt: true })" :aria-label="t('chart.ausblenden')"><Symbol name="augeAus" /></button>
+        <button class="k loeschen" :title="t('chart.entfernen')" @click="emit('loesche')" :aria-label="t('chart.entfernen')"><Symbol name="muell" /></button>
     </div>
 </template>
 
@@ -101,10 +102,10 @@ function nurDieseZeiteinheit() {
     align-items: center;
     gap: 3px;
     padding: 4px 6px;
-    background: var(--black-bg-5, #1e222d);
-    border: 1px solid var(--white-18);
-    border-radius: 8px;
-    box-shadow: var(--shadow-sm);
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
+    box-shadow: var(--schatten);
     max-width: calc(100% - 86px);
     overflow-x: auto;
 }
@@ -116,10 +117,11 @@ function nurDieseZeiteinheit() {
     border: 2px solid transparent;
     padding: 0;
     flex-shrink: 0;
+    cursor: pointer;
 }
 
 .farbe.an {
-    border-color: #fff;
+    border-color: var(--text);
 }
 
 .k {
@@ -127,9 +129,10 @@ function nurDieseZeiteinheit() {
     height: 24px;
     background: transparent;
     border: none;
-    color: var(--grey-text);
-    border-radius: 4px;
+    color: var(--muted);
+    border-radius: var(--radius-klein);
     font-size: 13px;
+    cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -137,17 +140,17 @@ function nurDieseZeiteinheit() {
 }
 
 .k:hover {
-    color: var(--white-87, #eee);
-    background: var(--white-10);
+    color: var(--text);
+    background: var(--line);
 }
 
 .k.an {
-    color: var(--blue-color);
-    background: rgba(1, 180, 255, 0.12);
+    color: var(--accent);
+    background: var(--accent-flaeche);
 }
 
 .k.loeschen:hover {
-    color: var(--red-color);
+    color: var(--bad);
 }
 
 .breite {
@@ -159,7 +162,7 @@ function nurDieseZeiteinheit() {
 .trenn {
     width: 1px;
     height: 18px;
-    background: var(--white-18);
+    background: var(--line-stark);
     margin: 0 3px;
     flex-shrink: 0;
 }

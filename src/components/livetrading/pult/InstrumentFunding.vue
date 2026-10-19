@@ -16,6 +16,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { liveSymbol } from '../../../stores/live.js'
+import Symbol from '../../basis/Symbol.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -68,7 +69,7 @@ const takt = computed(() => {
             <span class="ifEinheit">{{ t('livetrading.pult.proJahr') }}</span>
             <span v-if="takt" class="ifTakt">{{ takt }}</span>
             <span v-if="bisZahlung" class="ifZahlung">
-                <i class="uil uil-clock"></i>{{ bisZahlung }}
+                <Symbol name="uhr" />{{ bisZahlung }}
             </span>
         </div>
 
@@ -128,7 +129,7 @@ const takt = computed(() => {
     color: var(--white-60);
 }
 
-.ifZahlung i { margin-right: 0.2rem; }
+.ifZahlung svg { margin-right: 0.2rem; vertical-align: -0.125em; }
 
 .ifBitunix {
     display: flex;

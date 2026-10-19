@@ -7,6 +7,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
+import { Symbol } from '../basis'
 
 const props = defineProps({
     symbol: { type: String, required: true },
@@ -41,13 +42,13 @@ function beschreibung(z) {
             <span class="info">{{ beschreibung(z) }}</span>
             <span v-if="Array.isArray(z.sichtbarAuf) && z.sichtbarAuf.length" class="tf">{{ z.sichtbarAuf.join(',') }}</span>
             <span class="werkzeug" @click.stop>
-                <button :title="t(z.versteckt ? 'chart.einblenden' : 'chart.ausblenden')"
+                <button type="button" :title="t(z.versteckt ? 'chart.einblenden' : 'chart.ausblenden')"
                     @click="emit('aendere', z, { versteckt: !z.versteckt })" :aria-label="t(z.versteckt ? 'chart.einblenden' : 'chart.ausblenden')">
-                    <i :class="z.versteckt ? 'uil uil-eye-slash' : 'uil uil-eye'"></i></button>
-                <button :title="t(z.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren')"
+                    <Symbol :name="z.versteckt ? 'augeAus' : 'auge'" /></button>
+                <button type="button" :title="t(z.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren')"
                     @click="emit('aendere', z, { gesperrt: !z.gesperrt })" :aria-label="t(z.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren')">
-                    <i :class="z.gesperrt ? 'uil uil-lock' : 'uil uil-unlock'"></i></button>
-                <button :title="t('chart.entfernen')" @click="emit('loesche', z)" :aria-label="t('chart.entfernen')"><i class="uil uil-trash-alt"></i></button>
+                    <Symbol :name="z.gesperrt ? 'schloss' : 'schlossOffen'" /></button>
+                <button type="button" :title="t('chart.entfernen')" @click="emit('loesche', z)" :aria-label="t('chart.entfernen')"><Symbol name="muell" /></button>
             </span>
         </div>
     </div>
@@ -60,7 +61,7 @@ function beschreibung(z) {
 }
 
 .leer {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 12px;
     padding: 8px 4px;
 }
@@ -76,11 +77,11 @@ function beschreibung(z) {
 }
 
 .zeile:hover {
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .zeile.an {
-    background: rgba(1, 180, 255, 0.1);
+    background: var(--accent-flaeche);
 }
 
 .zeile.aus {
@@ -100,7 +101,7 @@ function beschreibung(z) {
 
 .info {
     flex: 1;
-    color: var(--grey-text);
+    color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -108,7 +109,7 @@ function beschreibung(z) {
 
 .tf {
     font-size: 10px;
-    color: var(--blue-color);
+    color: var(--accent);
 }
 
 .werkzeug {
@@ -118,11 +119,13 @@ function beschreibung(z) {
 .werkzeug button {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 3px;
+    display: inline-flex;
+    cursor: pointer;
 }
 
 .werkzeug button:hover {
-    color: var(--white-87, #eee);
+    color: var(--text);
 }
 </style>

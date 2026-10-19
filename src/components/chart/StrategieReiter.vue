@@ -11,6 +11,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import { Knopf, Kreisel } from '../basis'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -99,7 +100,7 @@ onMounted(async () => {
         </label>
 
         <div class="abschnitt">{{ t('chart.str.erkennen') }}</div>
-        <select v-model="wahl" class="form-select form-select-sm">
+        <select v-model="wahl" class="at-feld klein">
             <option value="">{{ t('chart.str.waehlen') }}</option>
             <optgroup v-if="instanzen.length" :label="t('chart.str.instanzen')">
                 <option v-for="i in instanzen" :key="i.id" :value="'i:' + i.id">{{ i.strategieName }} · {{ panel.symbol }} ·
@@ -109,10 +110,9 @@ onMounted(async () => {
                 <option v-for="s in passendeStrategien" :key="s.id" :value="'s:' + s.id">{{ s.name }}</option>
             </optgroup>
         </select>
-        <button class="btn btn-sm btn-outline-primary" :disabled="!wahl || laeuft" @click="erkenne">
-            <span v-if="laeuft" class="spinner-border spinner-border-sm"></span>
-            <template v-else><i class="uil uil-search-alt"></i> {{ t('chart.str.jetztErkennen', { tf: panel.interval }) }}</template>
-        </button>
+        <Knopf klein symbol="suche" :laedt="laeuft" :disabled="!wahl" class="erkennen" @click="erkenne">
+            <template v-if="!laeuft">{{ t('chart.str.jetztErkennen', { tf: panel.interval }) }}</template>
+        </Knopf>
         <div v-if="fehler" class="fehler">{{ fehler }}</div>
         <div v-if="vorschau" class="ergebnis">
             <div><b>{{ vorschau.strategieName }}</b> · {{ vorschau.timeframe }} · {{ vorschau.kerzen }} {{ t('chart.str.kerzen') }}</div>
@@ -123,7 +123,7 @@ onMounted(async () => {
                 · {{ t('chart.str.trend') }} {{ vorschau.overlays.trend?.ebene1 > 0 ? '↑' : vorschau.overlays.trend?.ebene1 < 0 ? '↓' : '–' }}
                 / {{ vorschau.overlays.trend?.ebene2 > 0 ? '↑' : vorschau.overlays.trend?.ebene2 < 0 ? '↓' : '–' }}</div>
             <div v-if="vorschau.overlays?.hinweis === 'htfFehlt'" class="fehler">{{ t('chart.str.htfFehlt') }}</div>
-            <button class="btn btn-sm btn-link p-0" @click="emit('vorschau', null)">{{ t('chart.str.vorschauWeg') }}</button>
+            <button type="button" class="textKnopf" @click="emit('vorschau', null)">{{ t('chart.str.vorschauWeg') }}</button>
         </div>
 
         <div class="abschnitt">{{ t('chart.str.backtests') }}</div>
@@ -134,7 +134,7 @@ onMounted(async () => {
             <small>{{ datum(b.von) }}–{{ datum(b.bis) }}</small>
             <small v-if="b.anzahl != null">{{ b.anzahl }} T<template v-if="b.summeR != null"> · {{ b.summeR >= 0 ? '+' : '' }}{{
                 b.summeR.toFixed(1) }} R</template></small>
-            <span v-if="btLaedt === b.id" class="spinner-border spinner-border-sm"></span>
+            <Kreisel v-if="btLaedt === b.id" />
         </div>
     </div>
 </template>
@@ -153,12 +153,12 @@ onMounted(async () => {
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--grey-text);
+    color: var(--muted);
     margin-top: 6px;
 }
 
 .leer {
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .instanz {
@@ -174,7 +174,7 @@ onMounted(async () => {
 }
 
 .instanz small {
-    color: var(--grey-text);
+    color: var(--muted);
     width: 100%;
     padding-left: 20px;
 }
@@ -183,25 +183,25 @@ onMounted(async () => {
     font-size: 10px;
     padding: 0 4px;
     border-radius: 3px;
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .modus.live {
-    background: rgba(255, 105, 96, 0.25);
-    color: var(--red-color);
+    background: var(--bad-flaeche);
+    color: var(--bad);
 }
 
 .modus.shadow {
-    color: var(--blue-color);
+    color: var(--accent);
 }
 
 .fehler {
-    color: var(--red-color);
+    color: var(--bad);
     font-size: 11px;
 }
 
 .ergebnis {
-    background: var(--white-10);
+    background: var(--line);
     border-radius: 6px;
     padding: 6px;
     display: flex;
@@ -218,14 +218,36 @@ onMounted(async () => {
 }
 
 .backtest:hover {
-    background: var(--white-10);
+    background: var(--line);
 }
 
 .backtest.an {
-    background: rgba(255, 152, 0, 0.15);
+    background: var(--warn-flaeche);
 }
 
 .backtest small {
-    color: var(--grey-text);
+    color: var(--muted);
+}
+
+.erkennen {
+    align-self: flex-start;
+}
+
+.instanz input {
+    accent-color: var(--accent);
+}
+
+.textKnopf {
+    align-self: flex-start;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+}
+
+.textKnopf:hover {
+    text-decoration: underline;
 }
 </style>

@@ -29,6 +29,8 @@ import {
     replayEntry, replayExit, replayFokus, replayZoom,
 } from '../stores/live.js'
 import dayjs from '../utils/dayjs-setup.js'
+import Symbol from './basis/Symbol.vue'
+import Kreisel from './basis/Kreisel.vue'
 
 const emit = defineEmits(['status'])
 
@@ -1091,12 +1093,12 @@ watch(liveFrozen, (frozen) => {
         <canvas ref="uiEl" class="layer layerUi"></canvas>
 
         <div v-if="status !== 'live' && status !== 'replay'" class="heatBadge">
-            <span v-if="status === 'error'" class="text-danger">{{ statusDetail || 'Fehler' }}</span>
-            <span v-else-if="status === 'empty'" class="text-warning">
-                <i class="uil uil-info-circle me-1"></i>{{ statusDetail || 'Keine Aufzeichnung' }}
+            <span v-if="status === 'error'" class="at-schlecht">{{ statusDetail || 'Fehler' }}</span>
+            <span v-else-if="status === 'empty'" class="at-warn">
+                <Symbol name="info" class="heatZeichen" />{{ statusDetail || 'Keine Aufzeichnung' }}
             </span>
             <span v-else>
-                <span class="spinner-border spinner-border-sm me-2"></span>
+                <Kreisel class="heatKreisel" />
                 <span v-if="status === 'connecting'">Verbinde…</span>
                 <span v-else-if="status === 'syncing'">Synchronisiere Orderbuch…</span>
                 <span v-else-if="status === 'reconnecting'">Verbindung verloren — neuer Versuch…</span>
@@ -1106,16 +1108,24 @@ watch(liveFrozen, (frozen) => {
             </span>
         </div>
         <div v-if="liveFrozen" class="heatBadge frozen">
-            <i class="uil uil-pause me-1"></i>Eingefroren — Aufzeichnung läuft weiter
+            <Symbol name="pause" class="heatZeichen" />Eingefroren — Aufzeichnung läuft weiter
             <span v-if="panLabel"> · vor {{ panLabel }} Min</span>
         </div>
         <div v-else-if="!liveAutoFollow" class="heatBadge manual">
-            <i class="uil uil-lock me-1"></i>Feste Preisachse — Doppelklick für Auto
+            <Symbol name="schloss" class="heatZeichen" />Feste Preisachse — Doppelklick für Auto
         </div>
     </div>
 </template>
 
 <style scoped>
+.heatZeichen {
+    margin-right: var(--abstand-1);
+}
+
+.heatKreisel {
+    margin-right: var(--abstand-2);
+}
+
 .heatWrap {
     position: absolute;
     inset: 0;

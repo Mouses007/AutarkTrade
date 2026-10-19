@@ -27,6 +27,7 @@ import AlarmDialog from '../components/chart/AlarmDialog.vue'
 import MomentumBox from '../components/chart/MomentumBox.vue'
 import IndikatorSchalter from '../components/chart/IndikatorSchalter.vue'
 import OffeneReiter from '../components/chart/OffeneReiter.vue'
+import { Symbol, Hinweis, Kreisel } from '../components/basis'
 import { alarme, abonniereAlarme, neueAusloesungen, quittiere } from '../stores/chartAlarme.js'
 import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoeschen, macheRueckgaengig, macheWiederholen, fehlerMeldung } from '../stores/chartZeichnungen.js'
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
@@ -56,12 +57,12 @@ const rasterKlasse = computed(() => (telefon.value ? 'r1' : 'r' + daten.value.ra
  * mit ihren Ausbaustufen dazu; ein leerer Reiter wird gar nicht erst gezeigt.
  */
 const REITER = [
-    { id: 'watchlist', icon: 'uil uil-star' },
-    { id: 'offen', icon: 'uil uil-crosshair' },
-    { id: 'objekte', icon: 'uil uil-layer-group' },
-    { id: 'strategien', icon: 'uil uil-robot' },
-    { id: 'alarme', icon: 'uil uil-bell' },
-    { id: 'ki', icon: 'uil uil-brain' },
+    { id: 'watchlist', icon: 'stern' },
+    { id: 'offen', icon: 'fadenkreuz' },
+    { id: 'objekte', icon: 'ebenen' },
+    { id: 'strategien', icon: 'ki' },
+    { id: 'alarme', icon: 'glocke' },
+    { id: 'ki', icon: 'gehirn' },
 ]
 
 // ── Laden und Speichern ─────────────────────────────────────────────────
@@ -538,11 +539,10 @@ watch(sichtbareAnzahl, async () => {
 
 <template>
     <div ref="seite" class="chartSeite" :class="{ telefon }">
-        <div v-if="ladeFehler" class="alert alert-warning m-2">{{ t('chart.arbeitsplatzFehler') }}: {{ ladeFehler }}</div>
-        <div v-if="konfliktHinweis" class="alert alert-info m-2 py-1 d-flex align-items-center gap-2">
-            <i class="uil uil-sync"></i><span class="flex-grow-1">{{ konfliktHinweis }}</span>
-            <button type="button" class="btn-close btn-close-white" :aria-label="t('chart.schliessen')" @click="konfliktHinweis = ''"></button>
-        </div>
+        <Hinweis v-if="ladeFehler" art="warn" class="seitenHinweis">{{ t('chart.arbeitsplatzFehler') }}: {{ ladeFehler }}</Hinweis>
+        <Hinweis v-if="konfliktHinweis" art="info" schliessbar class="seitenHinweis knapp" @zu="konfliktHinweis = ''">
+            {{ konfliktHinweis }}
+        </Hinweis>
 
         <template v-if="bereit">
             <ChartKopfleiste ref="kopf" :panel="aktivesPanel" :raster="daten.raster" :sync="daten.sync" :layouts="layouts"
@@ -551,10 +551,10 @@ watch(sichtbareAnzahl, async () => {
                 @layout-neu="layoutNeu" @layout-umbenennen="layoutUmbenennen" @layout-loeschen="layoutLoeschen"
                 @seitenleiste="daten.seitenleiste.offen = !daten.seitenleiste.offen" @foto="foto" />
 
-            <div v-for="n in neueAusloesungen" :key="n.id + '-' + n.t" class="alert alert-warning py-1 px-2 my-1 small alarmBanner"
+            <div v-for="n in neueAusloesungen" :key="n.id + '-' + n.t" class="leistenMeldung alarmBanner"
                 @click="quittiere(n.id)">
-                <i class="uil uil-bell"></i> {{ n.text }} <small>({{ t('chart.alarm.quittieren') }})</small></div>
-            <div v-if="fehlerMeldung" class="alert alert-warning py-1 px-2 my-1 small" @click="fehlerSchliessen">
+                <Symbol name="glocke" /> {{ n.text }} <small>({{ t('chart.alarm.quittieren') }})</small></div>
+            <div v-if="fehlerMeldung" class="leistenMeldung" @click="fehlerSchliessen">
                 {{ t('chart.zeichnungFehler') }}: {{ fehlerMeldung }}</div>
 
             <div class="arbeitsflaeche" :class="{ mitLeiste: daten.seitenleiste.offen }"
@@ -584,7 +584,7 @@ watch(sichtbareAnzahl, async () => {
                     <div v-if="REITER.length > 1" class="reiter">
                         <button v-for="r in REITER" :key="r.id" :class="{ an: daten.seitenleiste.reiter === r.id }"
                             :title="t('chart.reiter.' + r.id)" @click="daten.seitenleiste.reiter = r.id" :aria-label="t('chart.reiter.' + r.id)">
-                            <i :class="r.icon"></i>
+                            <Symbol :name="r.icon" />
                         </button>
                     </div>
                     <div class="reiterInhalt">
@@ -622,13 +622,13 @@ watch(sichtbareAnzahl, async () => {
                         <span class="boxTitel" role="button" tabindex="0" :aria-expanded="boxOffen" :title="t(boxOffen ? 'chart.mbox.zu' : 'chart.mbox.auf')"
                             @pointerdown.stop @dblclick.stop @click.stop="schalteBox" @keydown.enter.prevent="schalteBox">{{ t('chart.mbox.titel') }}</span>
                         <button @pointerdown.stop @click.stop="schalteBox" :title="t(boxOffen ? 'chart.mbox.zu' : 'chart.mbox.auf')" :aria-label="t(boxOffen ? 'chart.mbox.zu' : 'chart.mbox.auf')">
-                            <i :class="boxOffen ? 'uil uil-angle-down' : 'uil uil-angle-up'"></i></button>
+                            <Symbol :name="boxOffen ? 'runter' : 'hoch'" /></button>
                     </div>
                     <div v-if="boxOffen" class="boxBereich" :style="{ height: boxHoehe + 'px' }">
                         <MomentumBox :symbol="aktivesPanel.symbol" :interval="aktivesPanel.interval" :markt="aktivesPanel.markt" />
                     </div>
-                    <!-- Lizenzhinweis der Chart-Bibliothek (Apache-2.0): Hersteller und Link
-                         auf einer Seite der App — deshalb steht im Chart selbst kein Logo. -->
+                    <!-- Lizenzhinweis der Chart-Bibliothek (Apache-2.0, NOTICE). Zusätzlich zum
+                         TradingView-Logo im Chart (`attributionLogo: true` in ChartPanel). -->
                     <a class="lizenz" href="https://www.tradingview.com/" target="_blank" rel="noopener">
                         Charts: TradingView Lightweight Charts™ · © TradingView, Inc.</a>
                 </aside>
@@ -641,7 +641,7 @@ watch(sichtbareAnzahl, async () => {
             @entferne="(id) => indikatorAktion(dialog.panel, { aktion: 'entfernen', id })"
             @umschalten="(id) => indikatorAktion(dialog.panel, { aktion: 'umschalten', id })"
             @schliesse="dialog = null" />
-        <div v-else-if="!ladeFehler && !bereit" class="laden"><span class="spinner-border spinner-border-sm"></span></div>
+        <div v-else-if="!ladeFehler && !bereit" class="laden"><Kreisel /></div>
     </div>
 </template>
 
@@ -694,10 +694,10 @@ watch(sichtbareAnzahl, async () => {
     flex-direction: column;
     gap: 8px;
     min-height: 0;
-    border: 1px solid var(--white-10);
-    border-radius: 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
     padding: 8px;
-    background: var(--black-bg-7, #131722);
+    background: var(--panel);
     position: relative;
     min-width: 0;
 }
@@ -723,19 +723,19 @@ watch(sichtbareAnzahl, async () => {
     height: 36px;
     transform: translateY(-50%);
     border-radius: 2px;
-    background: var(--white-18, rgba(255, 255, 255, 0.18));
+    background: var(--line-stark);
     transition: background 0.15s, height 0.15s;
 }
 
 .leisteGriff:hover::after {
-    background: var(--blue-color);
+    background: var(--accent);
     height: 64px;
 }
 
 .reiter {
     display: flex;
     gap: 2px;
-    border-bottom: 1px solid var(--white-10);
+    border-bottom: 1px solid var(--line);
     padding-bottom: 6px;
 }
 
@@ -743,20 +743,29 @@ watch(sichtbareAnzahl, async () => {
     flex: 1;
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 4px;
-    border-radius: 4px;
+    border-radius: var(--radius-klein);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.reiter button:hover {
+    color: var(--text);
 }
 
 .reiter button.an {
-    color: var(--blue-color);
-    background: rgba(1, 180, 255, 0.1);
+    color: var(--accent);
+    background: var(--accent-flaeche);
 }
 
 .lizenz {
     margin-top: auto;
     font-size: 9px;
-    color: var(--grey-text);
+    color: var(--muted);
     opacity: 0.6;
     text-decoration: none;
 }
@@ -780,12 +789,12 @@ watch(sichtbareAnzahl, async () => {
     justify-content: space-between;
     gap: 6px;
     padding: 3px 2px;
-    border-top: 1px solid var(--white-18, rgba(255, 255, 255, 0.18));
+    border-top: 1px solid var(--line-stark);
     cursor: row-resize;
     font-size: 10px;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--grey-text);
+    color: var(--muted);
     touch-action: none;
     flex-shrink: 0;
 }
@@ -795,13 +804,13 @@ watch(sichtbareAnzahl, async () => {
 }
 
 .boxTrenner:hover:not(.zu) {
-    border-top-color: var(--blue-color);
+    border-top-color: var(--accent);
 }
 
 .boxTrenner button {
     background: transparent;
     border: none;
-    color: var(--grey-text);
+    color: var(--muted);
     padding: 0 4px;
     cursor: pointer;
 }
@@ -811,12 +820,13 @@ watch(sichtbareAnzahl, async () => {
 }
 
 .boxTitel:hover {
-    color: var(--white-87, #e6e6e6);
+    color: var(--text);
 }
 
-.boxTrenner button i {
-    font-size: 20px;
-    line-height: 14px;
+.boxTrenner button {
+    display: inline-flex;
+    align-items: center;
+    font-size: 16px;
 }
 
 .vvSchalter {
@@ -834,7 +844,35 @@ watch(sichtbareAnzahl, async () => {
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--grey-text);
+    color: var(--muted);
+}
+
+.seitenHinweis {
+    margin: var(--abstand-2);
+}
+
+.seitenHinweis.knapp {
+    padding: var(--abstand-1) var(--abstand-2);
+    align-items: center;
+}
+
+/* Alarm- und Zeichenfehler: schmale Zeile über der Arbeitsfläche, Klick quittiert. */
+.leistenMeldung {
+    display: flex;
+    align-items: center;
+    gap: var(--abstand-1);
+    margin: var(--abstand-1) 0;
+    padding: var(--abstand-1) var(--abstand-2);
+    border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+    border-radius: var(--radius-klein);
+    background: var(--warn-flaeche);
+    color: var(--text);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.leistenMeldung > :first-child {
+    color: var(--warn);
 }
 
 .laden {
