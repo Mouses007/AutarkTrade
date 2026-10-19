@@ -309,7 +309,7 @@ async function restartServer() {
                     <p class="at-klein at-gedaempft at-mu-2"><strong>{{ t('setup.nextSteps') }}</strong></p>
                     <ul class="at-klein at-gedaempft">
                         <li v-html="t('setup.nextStepSettings', { settings: '<strong>' + t('nav.settings') + '</strong>' })"></li>
-                        <li v-html="t('setup.nextStepImport', { csv: '<strong>CSV-Upload</strong>', api: '<strong>Bitunix-API</strong>' })"></li>
+                        <li v-html="t('setup.nextStepImport', { api: '<strong>' + t('setup.apiImportName') + '</strong>' })"></li>
                     </ul>
                 </div>
 

@@ -2,14 +2,22 @@ name: Docker publish
 
 # Baut das Container-Image von AutarkTrade.
 #
-# Übergangsstand (S2 „Fundament V2"): NUR von Hand startbar und NUR in die
-# GitHub-Registry (ghcr.io, bei einem privaten Repo privat). Das alte Projekt
-# veröffentlichte bei jedem v*-Tag auch auf dem öffentlichen Docker Hub — für
-# ein Produkt unter eigener Lizenz wäre das eine ungewollte Veröffentlichung.
-# Die endgültige Registry richtet S11 „Herkunftsnachweis & Freigabe" ein.
+# Ziel ist ausschliesslich die GitHub-Registry ghcr.io/mouses007/autarktrade.
+# Das Paket gehört zum privaten Repo und ist damit privat: ziehen kann nur, wer
+# ein Token mit `read:packages` hat (Kunden über den `zugang` im Lizenzschlüssel,
+# server/update-api.js). Kein Docker Hub — ein öffentliches Image wäre eine
+# Weitergabe ohne Lizenz.
+#
+#   von Hand (Actions → Run workflow)  → :edge        zum Ausprobieren
+#   Tag v4.1.0                         → :4.1.0, :4.1, :latest
+#
+# Der Update-Knopf im Container zieht das Image, mit dem der Container läuft
+# (in der Regel :latest), und nur, wenn das Release vor `updatesBis` erschien.
 
 on:
   workflow_dispatch:
+  push:
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -29,7 +37,10 @@ jobs:
           images: ghcr.io/mouses007/autarktrade
           flavor: latest=false
           tags: |
-            type=raw,value=edge
+            type=raw,value=edge,enable=${{ github.event_name == 'workflow_dispatch' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') }}
           labels: |
             org.opencontainers.image.title=AutarkTrade
             org.opencontainers.image.description=AutarkTrade – Trading-Journal und Analyse-Arbeitsplatz für Krypto-Futures

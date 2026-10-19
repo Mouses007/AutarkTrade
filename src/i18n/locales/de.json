@@ -987,7 +987,7 @@
     "restartServer": "Bitte starte den Server neu, damit die neue Datenbank verwendet wird.",
     "serverRestartRequired": "Server-Neustart erforderlich",
     "featureDashboard": "Dashboard mit Trading-Statistiken",
-    "featureImport": "Trades importieren (CSV & API)",
+    "featureImport": "Trades über die Börsen-API importieren",
     "featureKi": "KI-gestützte Analyse",
     "featureDiary": "Trading-Tagebuch",
     "featureAnalysis": "Trading-Analyse",
@@ -998,7 +998,8 @@
     "goToDashboard": "Zum Dashboard",
     "nextSteps": "Nächste Schritte:",
     "nextStepSettings": "Gehe zu {settings} um deine Zeitzone und Konten einzurichten",
-    "nextStepImport": "Importiere deine ersten Trades über {csv} oder {api}",
+    "nextStepImport": "Importiere deine ersten Trades über {api} oder trage sie von Hand ein",
+    "apiImportName": "Börsen-API (Bitunix, Bitget, Pionex)",
     "postgresUsedOnRestart": "PostgreSQL-Verbindung wird beim nächsten Start verwendet."
   },
   "onboarding": {
