@@ -24,7 +24,7 @@ import { useSetupImageUpload, useSaveScreenshot, useGetScreenshots, useSelectedS
 
 import { useGetExcursions, useGetTags, useGetAvailableTags, useUpdateAvailableTags, useUpdateTags, useFindHighestIdNumber, useFindHighestIdNumberTradeTags, useUpdateNote, useGetNotes, useGetTagInfo, useCreateAvailableTagsArray, useFilterSuggestions, useTradeTagsChange, useFilterTags, useToggleTagsDropdown, useResetTags, useDailySatisfactionChange } from '../utils/daily';
 
-import { useCandlestickChart } from '../utils/charts';
+import { useCandlestickChart } from '../utils/journal/diagramme/index.js';
 
 import { useGetMFEPrices, useCreateOHLCV } from '../utils/journal-alt.js';
 

@@ -10,14 +10,14 @@ import { selectedRange, selectedDateRange, selectedMonth, selectedAccounts, sele
 import { filteredTrades, availableTags, groups } from "../stores/trades.js"
 import { useCalculateProfitAnalysis, useGetFilteredTrades, useGetFilteredTradesForDaily, useGroupTrades, useTotalTrades } from "./trades.js"
 /*
- * Dynamisch, siehe SidebarFilters.vue: `charts.js` zieht das
+ * Dynamisch, siehe SidebarFilters.vue: Das Diagramm-Modul (`journal/diagramme/`) zieht das
  * ECharts-Vollbundle nach. Diese Datei ist ueber die Filterleiste am Layout
  * erreichbar; ein statischer Import legte ECharts in jedes Start-Bundle.
  * Geladen wird es genau dann, wenn ein Diagramm gezeichnet werden soll.
  */
 let chartsModul = null
 async function holeCharts() {
-    if (!chartsModul) chartsModul = await import('./charts.js')
+    if (!chartsModul) chartsModul = await import('./journal/diagramme/index.js')
     return chartsModul
 }
 const useECharts = async (p) => (await holeCharts()).useECharts(p)
@@ -34,7 +34,7 @@ const useECharts = async (p) => (await holeCharts()).useECharts(p)
  *
  * Synchron: Die Knoten müssen eingesammelt werden, SOLANGE sie noch im
  * Dokument stehen (darum onBeforeUnmount, nicht onUnmounted); dispose über
- * die Registry funktioniert danach auch abgehängt. Ist charts.js noch nie
+ * die Registry funktioniert danach auch abgehängt. Ist das Diagramm-Modul noch nie
  * geladen worden, wurde auch nie ein Diagramm gebaut — nichts zu tun.
  */
 export function useDisposeJournalCharts() {

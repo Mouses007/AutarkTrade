@@ -12,7 +12,7 @@
  * gearbeitet hat.
  */
 
-import { useCandlestickChart } from './charts.js'
+import { useCandlestickChart } from './journal/diagramme/index.js'
 
 /**
  * Kerzen aus `market-data`-Form in die drei Arrays, die der Chart erwartet.

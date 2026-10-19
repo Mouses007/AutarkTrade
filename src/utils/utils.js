@@ -5,7 +5,7 @@ import { periodRange, selectedDashTab, selectedPeriodRange, selectedPositions, s
 import { tags, filteredTrades, screenshots, screenshotsInfos, availableTags, groups } from "../stores/trades.js"
 import { apis, layoutStyle } from "../stores/settings.js"
 /*
- * `charts.js` wird NICHT statisch importiert.
+ * Das Diagramm-Modul (`journal/diagramme/`) wird NICHT statisch importiert.
  *
  * Es zieht das ECharts-Vollbundle nach (332 kB gzip), und diese Datei haengt
  * ueber `layouts/Dashboard.vue` am Router — ECharts lag damit im Preload
@@ -17,7 +17,7 @@ import { apis, layoutStyle } from "../stores/settings.js"
  * Views, ihr Chunk kommt ohnehin erst bei Bedarf.
  */
 async function useECharts(param) {
-    const m = await import('./charts.js')
+    const m = await import('./journal/diagramme/index.js')
     return m.useECharts(param)
 }
 import { useDeleteScreenshot, useGetScreenshots } from '../utils/screenshots.js'

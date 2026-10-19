@@ -18,7 +18,7 @@ import * as echarts from 'echarts'
 import { spinnerLoadingPage } from '../stores/ui.js'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import { useXDecCurrencyFormat } from '../utils/formatters.js'
-import { useAgentTimelineChart, cssColor87, cssColor60, cssColor38, blackbg5, greenColor, redColor } from '../utils/charts.js'
+import { useAgentTimelineChart, cssColor87, cssColor60, cssColor38, blackbg5, greenColor, redColor } from '../utils/journal/diagramme/index.js'
 import { logError } from '../utils/logger.js'
 import dayjs from '../utils/dayjs-setup.js'
 import { Knopf, Pille, Symbol, Reiter } from '../components/basis'
@@ -259,7 +259,7 @@ function groesseAnpassen() {
     zeitstrahlChart?.resize()
 }
 
-// Dieselben Konstanten wie AgentEditor.vue/AgentSetups.vue (aus charts.js) —
+// Dieselben Konstanten wie AgentEditor.vue/AgentSetups.vue (aus journal/diagramme, Design-Tokens) —
 // vorher hatte diese Datei ihre eigene, zufällig übereinstimmende Kopie.
 const achse = { axisLine: { lineStyle: { color: cssColor38 } },
                 axisLabel: { color: cssColor60, fontSize: 10 } }

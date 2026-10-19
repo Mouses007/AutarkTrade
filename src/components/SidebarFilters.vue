@@ -12,7 +12,7 @@ import { tags, availableTags } from "../stores/trades.js"
  * Aufruf beim Zuruecksetzen der Filter.
  */
 async function useECharts(param) {
-    const m = await import('../utils/charts.js')
+    const m = await import('../utils/journal/diagramme/index.js')
     return m.useECharts(param)
 }
 import { useRefreshScreenshot } from "../utils/screenshots"

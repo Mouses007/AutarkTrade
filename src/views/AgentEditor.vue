@@ -20,7 +20,7 @@ import ZahlOderParam from '../components/ZahlOderParam.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
-import { useAgentTimelineChart } from '../utils/charts.js'
+import { useAgentTimelineChart } from '../utils/journal/diagramme/index.js'
 
 const { t } = useI18n()
 

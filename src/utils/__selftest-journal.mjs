@@ -240,15 +240,41 @@ function baueBoersenAntworten() {
  */
 const sauber = (x) => JSON.parse(JSON.stringify(x, (_k, v) => (typeof v === 'function' ? undefined : v)))
 
+/**
+ * Darstellungsfelder in Datenpunkten (Farben, Hover, Beschriftung) zählen
+ * nicht: die Farben der Diagramme sind bewusst aus den Design-Tokens neu
+ * gewählt (S4). Verglichen wird, WELCHE Datenpunkte es gibt und welche Werte
+ * sie tragen — nicht, wie sie aussehen. Läuft auf BEIDEN Seiten (Lauf und
+ * eingefrorener Stand), damit die golden.json unverändert bleiben kann.
+ */
+const DARSTELLUNG = new Set(['itemStyle', 'emphasis', 'lineStyle', 'areaStyle', 'label'])
+function ohneDarstellung(x) {
+    if (Array.isArray(x)) return x.map(ohneDarstellung)
+    if (!x || typeof x !== 'object') return x
+    return Object.fromEntries(Object.entries(x).filter(([k]) => !DARSTELLUNG.has(k)).map(([k, v]) => [k, ohneDarstellung(v)]))
+}
+
 function diagrammDaten(option) {
     if (!option) return null
     const liste = (x) => (x == null ? [] : Array.isArray(x) ? x : [x])
-    return sauber({
+    return ohneDarstellung(sauber({
         series: liste(option.series).map(s => ({ name: s.name, type: s.type, data: s.data })),
         xAxis: liste(option.xAxis).map(a => a?.data),
         yAxis: liste(option.yAxis).map(a => a?.data),
         legend: liste(option.legend).map(l => l?.data),
-    })
+    }))
+}
+
+/** Dieselbe Bereinigung auf die Diagramm-Teile des eingefrorenen Stands. */
+function bereinigeSollDiagramme(soll) {
+    for (const sz of Object.values(soll.dashboard || {})) {
+        for (const art of Object.keys(sz.diagramme || {})) {
+            for (const id of Object.keys(sz.diagramme[art])) sz.diagramme[art][id] = ohneDarstellung(sz.diagramme[art][id])
+        }
+    }
+    const tag = soll.tagesansicht?.diagramme || {}
+    for (const id of Object.keys(tag)) tag[id] = ohneDarstellung(tag[id])
+    return soll
 }
 
 // Summenreihenfolge darf sich im Neubau ändern — 1e-9 relativ fängt Rundung,
@@ -301,7 +327,7 @@ const quick = await import('./quickImport.js')
 const kern = await import('./trades.js')
 const tage = await import('./daily.js')
 const kalender = await import('./calendar.js')
-const charts = await import('./charts.js')
+const charts = await import('./journal/diagramme/index.js')
 
 const netz = baueBoersenAntworten()
 globalThis.__journalDaten = {
@@ -553,6 +579,7 @@ if (SCHREIBEN) {
         pruefe('Golden Master vorhanden', false, 'erst mit JOURNAL_GOLDEN_SCHREIBEN=1 erzeugen')
     }
     if (soll) {
+        bereinigeSollDiagramme(soll)
         const teile = [
             ['Import: Tageszeilen, Konten, Notizen', 'import'],
             ...Object.keys(SZENARIEN).map(n => [`Dashboard „${n}"`, `dashboard.${n}`]),

@@ -7,7 +7,7 @@ import { amountCase } from '../stores/filters.js'
 import { filteredTrades, auswertungNotes, satisfactionArray, satisfactionTradeArray, tags, availableTags } from '../stores/trades.js'
 import { useChartFormat, useThousandCurrencyFormat } from '../utils/formatters.js'
 import { useMountAuswertung } from '../utils/mountOrchestration.js'
-import { useGaugeChart, useHorizontalBarChart, useSplitBarChart, useStressLineChart, useRadarChart } from '../utils/charts'
+import { useGaugeChart, useHorizontalBarChart, useSplitBarChart, useStressLineChart, useRadarChart } from '../utils/journal/diagramme/index.js'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
