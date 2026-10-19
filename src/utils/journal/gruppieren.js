@@ -92,11 +92,12 @@ export async function useGroupTrades() {
     const ohneGruppe = (e) => { const { _gruppe, ...rest } = e; return rest }
     groups.tags = gruppiere(eintraege.map(ohneGruppe), e => e.tag.id)
 
-    // Bewusster Altfehler §7.1: `groups[<Gruppen-ID>]` wird nur für die
-    // Gruppen gesetzt, die im aktuellen Lauf vorkommen. Gruppen aus einem
-    // früheren Lauf bleiben stehen — ein Rücksetzen gehört HIERHER (alle
-    // Schlüssel `group_*` vor der Schleife löschen), sobald der Golden Master
-    // bewusst neu geschrieben wird.
+    // Tag-Gruppen kommen und gehen mit dem Filter: was der vorige Lauf unter
+    // `group_*` abgelegt hat, muss weg, sonst zeigen die Tag-Diagramme nach
+    // einem Filterwechsel noch die alten Trades (bis 19.10.2026 der Fall).
+    for (const schluessel of Object.keys(groups)) {
+        if (schluessel.startsWith('group_')) delete groups[schluessel]
+    }
     const jeGruppe = gruppiere(eintraege, e => e._gruppe)
     for (const [gruppenId, inGruppe] of Object.entries(jeGruppe)) {
         groups[gruppenId] = gruppiere(inGruppe.map(ohneGruppe), e => e.tag.id)

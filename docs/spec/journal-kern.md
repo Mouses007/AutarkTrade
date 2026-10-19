@@ -1611,7 +1611,7 @@ schreibt den Golden Master bewusst neu
 (`JOURNAL_GOLDEN_SCHREIBEN=1 node src/utils/__selftest-journal.mjs` bzw.
 `…__selftest-mfe-pfade.mjs`) und nennt die geänderten Zahlen im Commit.
 
-1. **Tag-Gruppen werden nicht zurückgesetzt.** `groups[<Gruppen-ID>]`
+1. **Tag-Gruppen werden nicht zurückgesetzt.** *(Behoben in S7, 19.10.2026: `group_*` wird vor jedem Lauf geleert.)* `groups[<Gruppen-ID>]`
    (`group_1`, `group_2`, …) bleiben aus früheren Läufen stehen, wenn eine
    Gruppe im aktuellen Lauf nicht vorkommt. Im Szenario „nurAgent“ (ein Trade
    ohne Tags) stehen in `group_1`/`group_2` noch die Trades des vorigen

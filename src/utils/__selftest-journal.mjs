@@ -16,12 +16,11 @@
  * wer ihn beim Neubau behebt, schreibt den Stand bewusst neu und sagt im
  * Commit, welche Zahl sich warum geändert hat.
  *
- * Bekannt und mit eingefroren (19.10.2026): `useGroupTrades` setzt die
- * Tag-Gruppen (`groups.group_*`) nicht zurück. Ein Szenario sieht dort die
- * Trades des VORHERIGEN — im Szenario „nurAgent" (1 Trade) stehen 36 bzw. 49
- * fremde Trades in group_1/group_2. Im Dashboard heisst das: nach einem
- * Filterwechsel zeigen die Tag-Diagramme noch den alten Filter. Die
- * Reihenfolge der Szenarien ist deshalb Teil des Golden Masters.
+ * Behoben 19.10.2026 (S7): `useGroupTrades` setzte die Tag-Gruppen
+ * (`groups.group_*`) zwischen zwei Läufen nicht zurück — im Szenario
+ * „nurAgent" standen 36 bzw. 49 fremde Trades des Vorgängers in
+ * group_1/group_2. Die Reihenfolge der Szenarien bleibt trotzdem fest, damit
+ * ein Rückfall auffällt.
  *
  * Datensatz: synthetisch und deterministisch (fester Zufallskeim), damit keine
  * echten Kontodaten ins Repo gelangen. Er läuft durch den ECHTEN Importpfad
