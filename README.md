@@ -357,7 +357,7 @@ Your open positions outside the browser — all three companions live in this re
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | Vue 3 (Composition API), Vue Router, ECharts, Lightweight Charts (chart workspace), Bootstrap (dark theme) |
+| Frontend | Vue 3 (Composition API), Vue Router, ECharts, Lightweight Charts (chart workspace), own design system (no Bootstrap/icon fonts) |
 | Backend | Express.js, Knex.js |
 | Database | SQLite (default) or PostgreSQL (optional) |
 | Rich Text | Quill |

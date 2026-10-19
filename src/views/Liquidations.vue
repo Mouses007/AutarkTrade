@@ -140,6 +140,14 @@ const ratio = computed(() => {
     white-space: nowrap;
 }
 
+/* Am Telefon untereinander: nebeneinander quetschte die Ratio-Zeile (nowrap)
+   den Messhinweis in eine Wortspalte. */
+@media (max-width: 767.98px) {
+    .levFoot {
+        flex-wrap: wrap;
+    }
+}
+
 /* Konten-Ratio: Balkenmuster wie .lsBalken in KachelLsOi, auf Fusszeilen-
    Format eingedampft (10 px statt 16, keine Innenbeschriftung). */
 .ratioWrap {

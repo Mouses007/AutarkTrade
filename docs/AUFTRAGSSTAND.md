@@ -29,7 +29,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | `claude/s6-redesign-analyse-3fe1f2` | **fertig** |
 | 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | `claude/s7-journal-kern-a3e03e` | **fertig** |
 | 2 | S8 Ansichten neu | Daily, Dashboard, Kalender, Screenshots (markerjs2 ersetzen), AddTrades, Playbook | `claude/s8-ansichten-a5395a` | **fertig** |
-| 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | `claude/s9-geruest-23d7aa` | Teil 1 auf master; Teil 2 (Entfernen) wartet auf S8 |
+| 2 | S9 Gerüst & Einstellungen | Router, Menü, Layout, `Settings.vue` zerlegen, Bootstrap/FA/Unicons entfernen | `claude/s9-geruest-23d7aa` | **fertig** |
 | 2 | S10 Lizenz & Vertrieb | LICENSE, NOTICE, THIRD-PARTY-NOTICES, Zustimmungsdialog, `server/lizenz.js`, private Update-Quelle; NOTICE-Text von Lightweight Charts („TradingView Lightweight Charts™ Copyright (c) 2025 TradingView, Inc. https://www.tradingview.com/") auf eine Über-/Lizenzen-Seite (S1, VERKAUFS-PRUEFUNG.md Abschn. 3) | `claude/s10-lizenz-vertrieb-74c6fd` | **fertig** |
 | 2 | S12 Quellen & Pflichthinweise | Massnahmen 1–6 und 9 aus der Verkaufs-Prüfung: Marktdaten-Abstraktion, rote Quellen raus, CoinGecko mit Kundenschlüssel, Attributionen, KI-Kennzeichnung | `claude/s12-quellen-9112f7` | **fertig** |
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | – | wartet auf alle |
@@ -152,6 +152,47 @@ Stand im Anhang von `docs/VERKAUFS-PRUEFUNG.md`.
   ShareCardModal trägt den KI-Hinweis von S12 im neuen Dialog.
 - `NOTICE.md` geändert (markerjs2-Absatz raus) → neue Prüfsumme, der Rechtliches-Dialog fragt
   einmal neu.
+
+## S9 Gerüst & Einstellungen — Teil 2 (19.10.2026)
+
+- **Bootstrap (CSS, JS, Popper), Font Awesome und Unicons sind weg**: aus `index.html` (keine
+  CDN-Ressource mehr), `package.json`/`package-lock.json`, `main.js` (`window.bootstrap`) und allen
+  Dateien. `THIRD-PARTY-NOTICES` neu erzeugt. `useInitTooltip`/`useInitPopover`/`useInitTab`
+  gelöscht, Filter-Tooltips über `InfoTipp`. Umgestellt auf Bausteine/`hilfen.css`: Setup,
+  Update-Assistent, Onboarding (auch in den Einstellungen benutzt), LoginGate, ModelManager,
+  KiUebersicht, KiAgent, Lernen, Accounts, FilterLeiste, BetaHinweis, ReturnToTop, Liquidity u. a.
+  `ModeSwitcher.vue` (unbenutzt) und `basis/symbole/unicons.js` gelöscht; `menu.js` ohne `icon`.
+- **Übergangsschicht aufgelöst**: `uebergang.css` → `kacheln.css` (Kachelraster, Kachel,
+  Overlay, `ctl-pill`, `card-config-*`, Live-Kopfzeile), `journal.css` (`dailyCard`,
+  `greenTrade`/`redTrade`, Diagrammflächen, `.tag`, Chat), `quill.css`, `basis.css` (eigene
+  Grundordnung statt Bootstrap-Reboot, native Felder in `:where()`), `hilfen.css` (Zensur,
+  `pointerClass`) und scoped. Alte Variablen (`--blue-color`, `--white-*`, `--black-bg-*`,
+  `--border-radius` …) in ~90 Dateien durch Tokens ersetzt. Desktop: berechnete Stile auf 52
+  Routen vor/nach dem Auflösen gleich; Telefon: Kartenradius 10 → 14 px wie die übrigen Karten.
+- **Selbsttest** `src/utils/__selftest-ohne-bootstrap.mjs`: kein Bootstrap/Popper/Icon-Font in
+  `package.json`, keine CDN-Links in `index.html`, kein `window.bootstrap`/`data-bs-*`, keine
+  `uil`/`fa`-Klassen, keine Übergangsdatei und keine alten Variablen in `src/`.
+- **Behoben nebenbei**: `AgentPerformance` rief `apiFehlerText` ohne Import auf; Fusszeile der
+  Liquidationskarte quetschte am Telefon den Messhinweis in eine Wortspalte.
+- **Geprüft**: `npm run test:self` grün, `npm run build` fehlerfrei. Durchgeklickt im Prüf-Server
+  `s9-pruef` (gleicher Build, Wegwerf-SQLite, Testbetrieb): 46 Routen je Desktop (1440) und
+  Telefon (390) als Screenshots im Notizordner der Sitzungsgruppe (`s9-screenshots/`, Übersichten
+  `s9-blatt/`), dazu Marktradar/Liquidationskarte/Einstellungen im eingebauten Browser. Der
+  Prüf-Container 8091 (echte Datenkopie) steht hinter dem Passwort der Kopie — dort nur
+  Neubau und Anmeldeseite geprüft.
+
+### Offene Punkte aus S9
+
+- Reine Weiterleitungen aus S7 stehen noch: `stores/globals.js`,
+  `utils/{trades,daily,mountOrchestration,utils}.js` (niemand importiert sie) sowie
+  `utils/formatters.js` und `utils/dayjs-setup.js` (noch von `utils/journal/diagramme/*` benutzt —
+  dort auf `../format.js` bzw. `../zeit.js` umhängen, dann löschen). Das Löschen war in dieser
+  Sitzung nicht freigegeben → S11.
+- `tokens.css` Z. 10–13 nennt im Kommentar noch `style-dark.css` (Datei gehört nicht S9).
+- Live-Trading-Kopf: Symbolwahl überdeckt unter ~1600 px den Umschalter Raster/Pult (aus S5, unverändert).
+- `Dialog.vue` hat fest deutsche aria-Texte (aus S8); KiUebersicht-ECharts mit festen Achsenfarben.
+- Headless-Screenshots von Marktradar bleiben schwarz (Dauerabfragen halten die virtuelle Zeit an);
+  im Browser geprüft, in Ordnung.
 
 ## S9 Gerüst & Einstellungen — Teil 1 (19.10.2026)
 
