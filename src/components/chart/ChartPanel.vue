@@ -142,7 +142,9 @@ function baueChart() {
             textColor: text,
             fontSize: 11,
             fontFamily: schrift,
-            attributionLogo: false,
+            // Pflicht der Lizenz (Apache-2.0 + NOTICE von TradingView): das Logo bleibt
+            // sichtbar. Entscheidung des Nutzers vom 19.10.2026, siehe VERKAUFS-PRUEFUNG.md.
+            attributionLogo: true,
             panes: { separatorColor: 'rgba(1,180,255,0.12)', separatorHoverColor: 'rgba(1,180,255,0.25)', enableResize: true },
         },
         grid: { vertLines: { visible: false }, horzLines: { color: 'rgba(1,180,255,0.05)' } },
