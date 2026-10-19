@@ -225,7 +225,7 @@ watch([() => props.daten, () => props.gross], zeichne)
 .rgSatz {
     margin: 0.35rem 0 0;
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .rgTabelle {
@@ -240,14 +240,14 @@ watch([() => props.daten, () => props.gross], zeichne)
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     padding: 0.3rem 0.4rem;
     white-space: nowrap;
 }
 
 .rgTabelle td {
     padding: 0.25rem 0.4rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.07));
+    border-top: 1px solid var(--line);
     font-variant-numeric: tabular-nums;
 }
 
@@ -260,7 +260,7 @@ watch([() => props.daten, () => props.gross], zeichne)
 }
 
 .rgTabelle td small {
-    color: var(--white-38);
+    color: var(--muted);
     margin-left: 0.3rem;
 }
 
@@ -284,6 +284,6 @@ watch([() => props.daten, () => props.gross], zeichne)
 .rgQuelle {
     margin: 0.6rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

@@ -220,13 +220,13 @@ const band = computed(() => lage.value.phasenHeute
 .hzPhase {
     font-size: 1.15rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .ampel-gruen .hzPhase { color: #4ec9a0; }
 .ampel-gelb .hzPhase { color: #ffc93c; }
 .ampel-rot .hzPhase { color: #ff6b7a; }
-.ampel-grau .hzPhase { color: var(--white-60); }
+.ampel-grau .hzPhase { color: var(--muted); }
 
 .hzUeberlappung {
     font-size: 0.72rem;
@@ -255,19 +255,19 @@ const band = computed(() => lage.value.phasenHeute
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .hzZeileRest {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hzZeileUhr {
     font-variant-numeric: tabular-nums;
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
     min-width: 2.6rem;
     text-align: right;
 }
@@ -288,12 +288,12 @@ const band = computed(() => lage.value.phasenHeute
     font-size: 0.78rem;
     padding: 0.1rem 0.3rem;
     border-radius: 4px;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .hzBandStueck.aktiv {
     background: rgba(255, 255, 255, 0.07);
-    color: var(--white-87);
+    color: var(--text);
     font-weight: 600;
 }
 
@@ -304,6 +304,6 @@ const band = computed(() => lage.value.phasenHeute
 .hzFuss {
     margin-top: auto;
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

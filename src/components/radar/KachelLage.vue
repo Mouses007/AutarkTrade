@@ -237,13 +237,13 @@ async function erzeuge(erzwingen = false) {
 
 .lgLeerIcon {
     font-size: 1.6rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lgLeerText {
     margin: 0 0 0.4rem;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
     max-width: 26rem;
 }
 
@@ -274,7 +274,7 @@ async function erzeuge(erzwingen = false) {
    alt sie ist. Unauffällig, solange sie frisch ist. */
 .lgAlter {
     font-size: 0.7rem;
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
     white-space: nowrap;
 }
 
@@ -288,12 +288,12 @@ async function erzeuge(erzwingen = false) {
     background: none;
     border: none;
     padding: 0 0.2rem;
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
 .lgErneut:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .lgTitel {
@@ -301,7 +301,7 @@ async function erzeuge(erzwingen = false) {
     font-size: 0.95rem;
     font-weight: 600;
     line-height: 1.35;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .lgWrap.gross .lgTitel {
@@ -330,7 +330,7 @@ async function erzeuge(erzwingen = false) {
     align-items: center;
     gap: 0.4rem;
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     padding: 0.1rem 0;
     white-space: nowrap;
     overflow: hidden;
@@ -348,7 +348,7 @@ async function erzeuge(erzwingen = false) {
     margin: 0.6rem 0 0;
     font-size: 0.95rem;
     line-height: 1.5;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .lgListe {
@@ -361,27 +361,27 @@ async function erzeuge(erzwingen = false) {
 .lgKarte {
     border-left: 3px solid;
     padding: 0.25rem 0.6rem;
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.04));
+    background: var(--panel-soft);
     border-radius: 0 var(--border-radius, 6px) var(--border-radius, 6px) 0;
 }
 
 .lgKarteTitel {
     font-size: 0.86rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .lgKarteText {
     font-size: 0.84rem;
     line-height: 1.4;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .lgAbschnitt {
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-bottom: 0.2rem;
 }
 
@@ -394,7 +394,7 @@ async function erzeuge(erzwingen = false) {
     margin: 0;
     font-size: 0.88rem;
     line-height: 1.45;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .lgAchten ul {
@@ -405,7 +405,7 @@ async function erzeuge(erzwingen = false) {
 .lgAchten li {
     font-size: 0.88rem;
     line-height: 1.45;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .lgGrundlage {
@@ -414,7 +414,7 @@ async function erzeuge(erzwingen = false) {
 }
 
 .lgGrundlage summary {
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
@@ -422,24 +422,24 @@ async function erzeuge(erzwingen = false) {
     display: flex;
     gap: 0.6rem;
     padding: 0.15rem 0;
-    border-top: 1px solid var(--black-bg-12, rgba(255, 255, 255, 0.07));
+    border-top: 1px solid var(--panel-soft);
 }
 
 .lgQuelleName {
     flex: none;
     width: 11rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lgQuelleText {
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     font-variant-numeric: tabular-nums;
 }
 
 .lgFuss {
     margin: 0.9rem 0 0;
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lgModell {

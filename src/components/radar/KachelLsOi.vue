@@ -189,12 +189,12 @@ watch(() => props.daten, zeichne)
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lsZahl b {
     font-size: 1.15rem;
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
@@ -243,12 +243,12 @@ watch(() => props.daten, zeichne)
 .lsDeutung {
     margin: 0.35rem 0 0;
     font-size: 0.82rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lsQuelle {
     margin: 0.5rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

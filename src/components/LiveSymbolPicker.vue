@@ -651,15 +651,15 @@ onMounted(async () => {
 
 .gewichtStufe {
     font-size: 0.66rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
     text-align: center;
 }
 
 .gewichtInput {
     width: 100%;
-    background-color: var(--black-bg-7);
-    color: var(--white-87);
-    border: 1px solid var(--white-18);
+    background-color: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
     border-radius: 6px;
     font-size: 0.78rem;
     padding: 0.2rem 0.15rem;
@@ -675,7 +675,7 @@ onMounted(async () => {
 }
 
 .unerklaert {
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 
 .uebernehmenKnopf {
@@ -688,9 +688,9 @@ onMounted(async () => {
    Lag vorher als toter, scoped Block in SideMenu.vue und griff hier nie. */
 .sidebar-select {
     width: 100%;
-    background-color: var(--black-bg-7);
-    color: var(--white-87);
-    border: 1px solid var(--white-18);
+    background-color: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line-stark);
     border-radius: 8px;
     font-size: 0.82rem;
     font-weight: 600;
@@ -700,26 +700,26 @@ onMounted(async () => {
 }
 
 .sidebar-select::placeholder {
-    color: var(--white-38);
+    color: var(--muted);
     font-weight: 400;
 }
 
 .sidebar-select:hover {
-    background: var(--black-bg-12);
-    border-color: var(--white-38);
+    background: var(--panel-soft);
+    border-color: var(--muted);
 }
 
 .sidebar-select:focus {
-    background-color: var(--black-bg-7);
-    color: var(--white-87);
-    border-color: var(--blue-color);
+    background-color: var(--panel);
+    color: var(--text);
+    border-color: var(--accent);
     box-shadow: 0 0 0 0.1rem rgba(74, 158, 255, 0.15);
     outline: none;
 }
 
 .sidebar-select option {
-    background-color: var(--black-bg-7);
-    color: var(--white-87);
+    background-color: var(--panel);
+    color: var(--text);
 }
 
 .market-pills {
@@ -733,16 +733,16 @@ onMounted(async () => {
     padding: 0.15rem 0.7rem;
     /* Rundung wie die Menü-Buttons (8px). */
     border-radius: 8px;
-    border: 1px solid var(--white-18, rgba(255, 255, 255, 0.15));
+    border: 1px solid var(--line-stark);
     background: transparent;
-    color: var(--white-70);
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     cursor: pointer;
     transition: all 0.15s ease;
 }
 
 .cat-pill.active {
-    background: var(--blue-color);
-    border-color: var(--blue-color);
+    background: var(--accent);
+    border-color: var(--accent);
     color: #fff;
     font-weight: 600;
 }
@@ -750,14 +750,14 @@ onMounted(async () => {
 .symbolCurrent {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
     margin-bottom: 0.3rem;
 }
 
 .symbolList {
     max-height: 190px;
     overflow-y: auto;
-    border: 1px solid var(--white-18);
+    border: 1px solid var(--line-stark);
     border-radius: 8px;
     margin-bottom: 0.4rem;
 }
@@ -770,29 +770,29 @@ onMounted(async () => {
     padding: 0.22rem 0.5rem;
     border: none;
     background: transparent;
-    color: var(--white-70);
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     cursor: pointer;
 }
 
 .symbolItem:hover {
-    background: var(--black-bg-12);
-    color: var(--white-87);
+    background: var(--panel-soft);
+    color: var(--text);
 }
 
 .symbolItem.active {
-    color: var(--blue-color);
+    color: var(--accent);
     font-weight: 600;
 }
 
 .symbolHint {
     font-size: 0.75rem;
-    color: var(--white-38);
+    color: var(--muted);
     padding: 0.3rem 0.5rem;
 }
 
 .liveToggle {
     font-size: 0.78rem;
-    color: var(--white-70);
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     cursor: pointer;
 }
 
@@ -809,17 +809,17 @@ onMounted(async () => {
 
 .refBtn {
     flex-shrink: 0;
-    border: 1px solid var(--white-18);
+    border: 1px solid var(--line-stark);
     border-radius: 8px;
     background: transparent;
-    color: var(--white-70);
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     padding: 0 0.5rem;
     cursor: pointer;
 }
 
 .refBtn:hover:not(:disabled) {
-    border-color: var(--blue-color);
-    color: var(--white-87);
+    border-color: var(--accent);
+    color: var(--text);
 }
 
 .refBtn:disabled {
@@ -829,17 +829,17 @@ onMounted(async () => {
 
 .autoRefHint {
     font-size: 0.72rem;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .threshVal {
-    color: var(--blue-color);
+    color: var(--accent);
     margin-left: 0.3rem;
 }
 
 .threshRange {
     width: 100%;
-    accent-color: var(--blue-color);
+    accent-color: var(--accent);
     cursor: pointer;
 }
 </style>

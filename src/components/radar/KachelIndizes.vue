@@ -114,7 +114,7 @@ function delta(m) {
     return ((m.preis - m.vorherClose) / m.vorherClose) * 100
 }
 
-const farbeFuer = (d) => d == null ? 'var(--white-60)' : (d >= 0 ? '#4ec9a0' : '#ff6b7a')
+const farbeFuer = (d) => d == null ? 'var(--muted)' : (d >= 0 ? '#4ec9a0' : '#ff6b7a')
 
 /**
  * Zeitpunkt der US-Kassaeröffnung im dargestellten Zeitraum.
@@ -337,14 +337,14 @@ watch(() => props.daten, zeichne)
     border-radius: 999px;
     padding: 0.1rem 0.45rem;
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
 .ixPille.active {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.2);
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .ixKurz { font-weight: 700; }
@@ -360,12 +360,12 @@ watch(() => props.daten, zeichne)
 
 .ixPreis b {
     font-size: 1.05rem;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .ixName {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -374,14 +374,14 @@ watch(() => props.daten, zeichne)
 .ixZeit {
     margin-left: auto;
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 /* Das Alter steht direkt neben der Marktzeit und darf sie nicht überstrahlen —
    auffällig wird es erst, wenn es die erwartete Verzögerung überschreitet. */
 .ixAlter {
     font-size: 0.68rem;
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
     white-space: nowrap;
 }
 

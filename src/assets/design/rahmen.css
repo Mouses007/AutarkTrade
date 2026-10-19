@@ -1,186 +1,37 @@
 /*
- * App-Rahmen von AutarkTrade: Seitenmenü und Inhaltsfläche unter der
- * Kopfleiste (components/rahmen/Kopfleiste.vue).
+ * App-Rahmen von AutarkTrade: was die Inhaltsfläche unter der Kopfleiste
+ * (components/rahmen/Kopfleiste.vue) global braucht.
  *
- * Überschreibt die alten Seitenmenü-Regeln (früher style-dark.css, heute
- * design/uebergang.css), ohne SideMenu.vue umzubauen — dessen Funktionen (Börsen- und Kategorie-
- * Pillen, Filter, Einklappen, Update-Knopf) bleiben unberührt. Wenn S9 das
- * Seitenmenü neu schreibt, fällt diese Datei mit uebergang.css weg.
+ * Seitenmenü und Spalten stehen scoped in layouts/Dashboard.vue und
+ * components/rahmen/Seitenmenue.vue. Die früheren Abbildungen der
+ * Bootstrap-Variablen (--bs-…) und die Anpassungen an Bootstrap-Klassen
+ * (btn, form-control, modal, dropdown) sind mit Bootstrap in S9 Teil 2
+ * weggefallen; den Grundstil der nativen Elemente trägt basis.css.
  */
 
-/* Desktop: Menü klebt unter der Kopfleiste und scrollt in sich. */
-.sideMenu {
-    background: var(--panel);
-    border-right: 1px solid var(--line);
-    box-shadow: none;
-    top: var(--kopf-hoehe);
-    max-height: calc(100vh - var(--kopf-hoehe));
-    max-height: calc(100dvh - var(--kopf-hoehe));
+/* Inhalt: Rand mit der Fensterbreite, nie breiter als nötig. */
+.at-rahmen main {
+    padding: 0.6rem clamp(0.6rem, 1.6vw, 1.2rem) 1.4rem;
 }
 
-/* Telefon: Menü fährt über alles, auch über die Kopfleiste. */
-.sideMenuMobile {
-    background: var(--panel);
-    border-right: 1px solid var(--line);
-    box-shadow: var(--schatten);
-    top: 0;
-    height: 100vh;
-    height: 100dvh;
-    max-height: 100dvh;
-    width: 260px;
-}
-
-.sideMenuDiv {
-    border-bottom: 1px solid var(--line);
-}
-
-.sideMenuDiv label {
-    color: var(--leise);
-    font-weight: 700;
-    font-size: 0.68rem;
-    letter-spacing: 0.1em;
-}
-
-.sideMenuDiv a,
-.sideMenuDiv a.nav-link {
-    color: var(--muted);
-}
-
-.sideMenuDiv a.nav-link {
-    position: relative;
-    border-radius: var(--radius-knopf);
-    font-size: 0.92rem;
-}
-
-.sideMenuDiv a.nav-link:hover {
-    background: var(--panel-soft);
-    color: var(--text);
-}
-
-.activeNavCss,
-.sideMenuDiv a.nav-link.activeNavCss {
-    color: var(--text) !important;
-    background: var(--accent-flaeche) !important;
-}
-
-.sideMenuDiv a.nav-link.activeNavCss i {
-    color: var(--accent);
-}
-
-/* Akzentstrich links am aktiven Eintrag, wie der Unterstrich der Kopfleiste. */
-.sideMenuDiv a.nav-link.activeNavCss::before {
-    content: '';
-    position: absolute;
-    left: -0.5rem;
-    top: 22%;
-    bottom: 22%;
-    width: 3px;
-    border-radius: 2px;
-    background: var(--accent);
-}
-
-.menuKlappe {
-    color: var(--muted);
-}
-
-.menuKlappe:hover {
-    color: var(--accent);
-}
-
-/* Pillen im Menü (Börse, Futures/Bot) im Pillenstil des Gestaltungssystems. */
+/* Umschalt-Pillen (z. B. Futures/Spot im Live-Symbolwähler). */
 .cat-pill {
-    border-radius: var(--radius-pille) !important;
-    border: 1px solid var(--line-stark) !important;
-    background: transparent !important;
-    color: var(--muted) !important;
+    padding: 0.2rem 0.75rem;
+    border-radius: var(--radius-pille);
+    border: 1px solid var(--line-stark);
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.82rem;
+    cursor: pointer;
+}
+
+.cat-pill:hover {
+    color: var(--text);
+    border-color: var(--accent-rand);
 }
 
 .cat-pill.active {
-    background: var(--accent-flaeche) !important;
-    border-color: var(--accent-rand) !important;
-    color: var(--accent) !important;
-}
-
-/* Inhalt */
-.at-rahmen main {
-    padding: 0.6rem clamp(0.6rem, 1.6vw, 1.2rem) 1.4rem !important;
-}
-
-/* Bootstrap-Grundtöne auf die Token. */
-.btn-primary {
-    --bs-btn-bg: var(--accent);
-    --bs-btn-border-color: var(--accent);
-    --bs-btn-color: var(--on-accent);
-    --bs-btn-hover-bg: var(--accent-hover);
-    --bs-btn-hover-border-color: var(--accent-hover);
-    --bs-btn-hover-color: var(--on-accent);
-    --bs-btn-active-bg: var(--accent-hover);
-    --bs-btn-active-border-color: var(--accent-hover);
-    --bs-btn-active-color: var(--on-accent);
-    --bs-btn-disabled-bg: var(--accent-schwach);
-    --bs-btn-disabled-border-color: var(--accent-schwach);
-}
-
-.btn-outline-primary {
-    --bs-btn-color: var(--accent);
-    --bs-btn-border-color: var(--accent-rand);
-    --bs-btn-hover-bg: var(--accent-flaeche);
-    --bs-btn-hover-border-color: var(--accent);
-    --bs-btn-hover-color: var(--accent);
-    --bs-btn-active-bg: var(--accent-flaeche);
-    --bs-btn-active-color: var(--accent);
-}
-
-:root {
-    --bs-body-bg: var(--bg);
-    --bs-body-color: var(--text);
-    --bs-body-font-family: var(--schrift);
-    --bs-border-color: var(--line);
-    --bs-primary: #1fd6c4;
-    --bs-primary-rgb: 31, 214, 196;
-    --bs-link-color: var(--accent);
-    --bs-link-color-rgb: 31, 214, 196;
-    --bs-link-hover-color: var(--accent-hover);
-    --bs-success-rgb: 63, 191, 143;
-    --bs-danger-rgb: 224, 87, 76;
-    --bs-warning-rgb: 216, 163, 58;
-    --bs-border-radius: var(--radius-knopf);
-}
-
-.modal-content {
-    background: var(--panel);
-    border: 1px solid var(--line-stark);
-    border-radius: var(--radius);
-    color: var(--text);
-}
-
-.dropdown-menu {
-    --bs-dropdown-bg: var(--panel-soft);
-    --bs-dropdown-border-color: var(--line-stark);
-    --bs-dropdown-link-color: var(--text);
-    --bs-dropdown-link-hover-bg: var(--accent-flaeche);
-    --bs-dropdown-link-hover-color: var(--text);
-    --bs-dropdown-link-active-bg: var(--accent);
-    --bs-dropdown-link-active-color: var(--on-accent);
-}
-
-.form-control,
-.form-select {
-    background-color: var(--bg);
-    border-color: var(--line-stark);
-    border-radius: var(--radius-knopf);
-    color: var(--text);
-}
-
-.form-control:focus,
-.form-select:focus {
-    background-color: var(--bg);
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-flaeche);
-    color: var(--text);
-}
-
-.form-check-input:checked {
-    background-color: var(--accent);
-    border-color: var(--accent);
+    background: var(--accent-flaeche);
+    border-color: var(--accent-rand);
+    color: var(--accent);
 }

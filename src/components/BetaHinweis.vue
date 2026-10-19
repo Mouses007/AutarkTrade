@@ -12,6 +12,8 @@
  */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import Hinweis from './basis/Hinweis.vue'
+import Pille from './basis/Pille.vue'
 
 const { t } = useI18n()
 
@@ -25,53 +27,43 @@ function zuklappen() {
 </script>
 
 <template>
-    <div v-if="offen" class="betaHinweis d-flex align-items-start gap-2 p-3 mb-3">
-        <i class="uil uil-exclamation-triangle betaIcon"></i>
-        <div class="flex-fill">
-            <div class="betaTitel mb-1">
-                {{ t('strategies.betaTitle') }}
-                <span class="betaBadge ms-1">Beta</span>
-            </div>
-            <p class="mb-1 small">{{ t('strategies.betaBody') }}</p>
-            <ul class="mb-0 small ps-3">
-                <li>{{ t('strategies.betaPoint1') }}</li>
-                <li>{{ t('strategies.betaPoint2') }}</li>
-                <li>{{ t('strategies.betaPoint3') }}</li>
-            </ul>
+    <Hinweis v-if="offen" art="warn" schliessbar class="betaHinweis" @zu="zuklappen">
+        <div class="betaTitel">
+            {{ t('strategies.betaTitle') }}
+            <Pille ton="warn">Beta</Pille>
         </div>
-        <button class="btn btn-sm btn-link text-muted p-0" :title="t('strategies.betaDismiss')"
-                @click="zuklappen">
-            <i class="uil uil-times"></i>
-        </button>
-    </div>
+        <p class="betaText">{{ t('strategies.betaBody') }}</p>
+        <ul class="betaListe">
+            <li>{{ t('strategies.betaPoint1') }}</li>
+            <li>{{ t('strategies.betaPoint2') }}</li>
+            <li>{{ t('strategies.betaPoint3') }}</li>
+        </ul>
+    </Hinweis>
 </template>
 
 <style scoped>
 .betaHinweis {
-    border: 1px solid rgba(240, 196, 25, 0.45);
+    margin-bottom: 1rem;
     border-left-width: 3px;
-    border-radius: var(--border-radius);
-    background: rgba(240, 196, 25, 0.07);
-}
-
-.betaIcon {
-    color: rgba(240, 196, 25, 0.95);
-    font-size: 1.2rem;
-    line-height: 1.4;
 }
 
 .betaTitel {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.25rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
-.betaBadge {
-    font-size: 0.7rem;
-    font-weight: 600;
-    padding: 0.1rem 0.4rem;
-    border-radius: 0.6rem;
-    background: rgba(240, 196, 25, 0.2);
-    color: rgba(240, 196, 25, 0.95);
-    vertical-align: middle;
+.betaText {
+    margin: 0 0 0.25rem;
+    font-size: 0.875em;
+}
+
+.betaListe {
+    margin: 0;
+    padding-left: 1rem;
+    font-size: 0.875em;
 }
 </style>

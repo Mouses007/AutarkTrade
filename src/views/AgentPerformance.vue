@@ -20,6 +20,7 @@ import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import { useXDecCurrencyFormat } from '../utils/journal/format.js'
 import { useAgentTimelineChart, cssColor87, cssColor60, cssColor38, blackbg5, greenColor, redColor } from '../utils/journal/diagramme/index.js'
 import { logError } from '../utils/logger.js'
+import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/journal/zeit.js'
 import { Knopf, Pille, Symbol, Reiter } from '../components/basis'
 

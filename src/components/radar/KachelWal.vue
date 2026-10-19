@@ -35,7 +35,7 @@ function setzeFenster(stunden) {
 
 const geld = (v) => (v >= 1e9 ? `${(v / 1e9).toFixed(2)} Mrd` : v >= 1e6 ? `${(v / 1e6).toFixed(1)} Mio` : `${Math.round(v / 1000)}k`)
 
-const richtungFarbe = (r) => (r === 'ein' ? ROT : r === 'aus' ? GRUEN : 'var(--white-60)')
+const richtungFarbe = (r) => (r === 'ein' ? ROT : r === 'aus' ? GRUEN : 'var(--muted)')
 const richtungIcon = (r) => (r === 'ein' ? 'pfeilKreisRechts' : r === 'aus' ? 'pfeilKreisLinks' : 'frage')
 const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
 </script>
@@ -105,7 +105,7 @@ const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
     gap: 0.4rem;
     text-align: center;
     font-size: 0.82rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .walAus i {
@@ -132,14 +132,14 @@ const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
 
 .walLeisteLabel {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin-right: 0.15rem;
 }
 
 .walLeer {
     margin: 0.4rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .walListe {
@@ -168,41 +168,41 @@ const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
 
 .walSymbol {
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .walUsd {
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .walGegenpartei {
-    color: var(--white-60);
+    color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .walZeit {
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.76rem;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
 }
 
 .walLink {
-    color: var(--white-60);
+    color: var(--muted);
     text-decoration: none;
     display: flex;
 }
 
 .walLink:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .walQuelle {
     margin: 0.7rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

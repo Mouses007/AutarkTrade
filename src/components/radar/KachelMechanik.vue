@@ -183,7 +183,7 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
 
 .mxLeisteLabel {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin-right: 0.15rem;
 }
 
@@ -224,12 +224,12 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
 }
 
 .mxLabel {
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .mxWert {
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .mxSpike {
@@ -253,7 +253,7 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
 
 .mxLiqFehlt {
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin-top: 0.25rem;
 }
 
@@ -267,9 +267,9 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
 .mxGrund {
     padding: 0.1rem 0.5rem;
     border-radius: 999px;
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.07));
+    background: var(--panel-soft);
     font-size: 0.76rem;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .mxKi {
@@ -280,7 +280,7 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
 .mxKiFehler {
     margin: 0.4rem 0 0;
     font-size: 0.82rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .mxKiFehler {
@@ -291,13 +291,13 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
     margin: 0.5rem 0 0;
     font-size: 0.9rem;
     line-height: 1.45;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .mxKiHinweis {
     margin: 0.25rem 0 0;
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .mxKiModell {
@@ -307,6 +307,6 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
 .mxQuelle {
     margin: 0.7rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

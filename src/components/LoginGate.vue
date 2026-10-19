@@ -1,6 +1,7 @@
 <script setup>
 import { ref } from 'vue'
 import axios from 'axios'
+import Knopf from './basis/Knopf.vue'
 
 // setup=true: Erst-Einrichtung im Netzbetrieb — es existiert noch kein
 // Passwort, der Server verteilt keine Cookies. Statt „Anmelden" wird hier das
@@ -74,14 +75,14 @@ async function forgotPassword() {
 <template>
     <div class="login-gate">
         <div class="login-card">
-            <h3 class="mb-1">AutarkTrade</h3>
+            <h3 class="login-titel">AutarkTrade</h3>
             <p v-if="setup" class="login-sub">Der Dienst ist im Netzwerk erreichbar — lege zuerst ein Passwort fest.</p>
             <p v-else class="login-sub">Passwortgeschützt</p>
             <form @submit.prevent="submit">
                 <input
                     v-model="password"
                     type="password"
-                    class="form-control login-input"
+                    class="at-feld login-input"
                     :placeholder="setup ? 'Neues Passwort (min. 6 Zeichen)' : 'Passwort'"
                     autofocus
                     :autocomplete="setup ? 'new-password' : 'current-password'"
@@ -90,15 +91,15 @@ async function forgotPassword() {
                     v-if="setup"
                     v-model="passwordWdh"
                     type="password"
-                    class="form-control login-input"
+                    class="at-feld login-input"
                     placeholder="Passwort wiederholen"
                     autocomplete="new-password"
                 />
                 <div v-if="error" class="login-error">{{ error }}</div>
                 <div v-if="info" class="login-info">{{ info }}</div>
-                <button type="submit" class="btn btn-primary login-btn" :disabled="loading || !password">
+                <Knopf type="submit" art="haupt" class="login-btn" :disabled="loading || !password">
                     {{ loading ? (setup ? 'Speichern…' : 'Anmelden…') : (setup ? 'Passwort festlegen' : 'Anmelden') }}
-                </button>
+                </Knopf>
             </form>
             <button v-if="!setup" type="button" class="login-forgot" :disabled="resetting" @click="forgotPassword">
                 {{ resetting ? 'Zurücksetzen…' : 'Passwort vergessen?' }}
@@ -114,21 +115,26 @@ async function forgotPassword() {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--black-bg-2, #14161c);
+    padding: 1rem;
+    background: var(--bg);
     z-index: 9999;
 }
 .login-card {
-    background: var(--black-bg-1, #1c1f27);
+    background: var(--panel);
+    border: 1px solid var(--line);
     padding: 2.5rem;
-    border-radius: var(--border-radius, 12px);
-    box-shadow: var(--shadow-sm, 0 4px 20px rgba(0, 0, 0, 0.4));
+    border-radius: var(--radius);
+    box-shadow: var(--schatten);
     width: 320px;
-    max-width: 90vw;
+    max-width: 100%;
     text-align: center;
-    color: var(--white-1, #e9e9e9);
+    color: var(--text);
+}
+.login-titel {
+    margin: 0 0 0.25rem;
 }
 .login-sub {
-    color: var(--grey-color, #9aa0aa);
+    color: var(--muted);
     font-size: 0.9rem;
     margin-bottom: 1.5rem;
 }
@@ -139,12 +145,12 @@ async function forgotPassword() {
     width: 100%;
 }
 .login-error {
-    color: #ff6b6b;
+    color: var(--bad);
     font-size: 0.85rem;
     margin-bottom: 0.75rem;
 }
 .login-info {
-    color: #51cf66;
+    color: var(--good);
     font-size: 0.85rem;
     margin-bottom: 0.75rem;
 }
@@ -152,12 +158,12 @@ async function forgotPassword() {
     margin-top: 1rem;
     background: none;
     border: none;
-    color: var(--grey-color, #9aa0aa);
+    color: var(--muted);
     font-size: 0.8rem;
     text-decoration: underline;
     cursor: pointer;
 }
 .login-forgot:hover {
-    color: var(--white-1, #e9e9e9);
+    color: var(--text);
 }
 </style>

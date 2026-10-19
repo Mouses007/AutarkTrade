@@ -9,6 +9,9 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import InfoTipp from '../InfoTipp.vue'
+import Knopf from '../basis/Knopf.vue'
+import Feld from '@/views/einstellungen/gemeinsam/Feld.vue'
+import Schalter from '@/views/einstellungen/gemeinsam/Schalter.vue'
 
 const { t } = useI18n()
 
@@ -106,81 +109,83 @@ onMounted(ladeMailKonfig)
 
 <template>
     <div>
-        <div class="form-check form-switch mt-2">
-            <input class="form-check-input" type="checkbox" id="mailAktivToggleOnboarding"
-                :checked="mail.mailAktiv === 1"
-                @change="mail.mailAktiv = $event.target.checked ? 1 : 0; speichereMail()">
-            <label class="form-check-label" for="mailAktivToggleOnboarding">
-                {{ t('settings.benachrichtigungen.mailAktiv') }}
-            </label>
+        <Schalter class="at-mo-2" :model-value="mail.mailAktiv === 1"
+            :label="t('settings.benachrichtigungen.mailAktiv')"
+            @change="v => { mail.mailAktiv = v ? 1 : 0; speichereMail() }" />
+
+        <div class="at-flex at-mitte at-luecke-2 at-umbruch at-mo-3">
+            <span class="at-gedaempft mail-klein">{{ t('settings.benachrichtigungen.vorlage') }}</span>
+            <Knopf v-for="v in MAIL_VORLAGEN" :key="v.name" klein @click="mailVorlage(v)">{{ v.name }}</Knopf>
         </div>
 
-        <div class="d-flex align-items-center gap-2 flex-wrap mt-3">
-            <span class="text-muted" style="font-size:0.8rem;">{{ t('settings.benachrichtigungen.vorlage') }}</span>
-            <button v-for="v in MAIL_VORLAGEN" :key="v.name" type="button"
-                class="btn btn-sm btn-outline-secondary" @click="mailVorlage(v)">{{ v.name }}</button>
-        </div>
+        <Feld class="at-mo-2">
+            <template #label>{{ t('settings.benachrichtigungen.schrift') }}<InfoTipp schluessel="settings.info.mailSchrift" /></template>
+            <select class="at-feld mail-s" v-model="mail.mailSchriftGroesse" @change="speichereMail">
+                <option value="normal">{{ t('settings.benachrichtigungen.schriftNormal') }}</option>
+                <option value="gross">{{ t('settings.benachrichtigungen.schriftGross') }}</option>
+                <option value="sehrGross">{{ t('settings.benachrichtigungen.schriftSehrGross') }}</option>
+            </select>
+        </Feld>
 
-        <div class="row align-items-center mt-2">
-            <div class="col-12 col-md-4">{{ t('settings.benachrichtigungen.schrift') }}<InfoTipp schluessel="settings.info.mailSchrift" /></div>
-            <div class="col-12 col-md-8">
-                <select class="form-select" style="max-width:14rem;"
-                    v-model="mail.mailSchriftGroesse" @change="speichereMail">
-                    <option value="normal">{{ t('settings.benachrichtigungen.schriftNormal') }}</option>
-                    <option value="gross">{{ t('settings.benachrichtigungen.schriftGross') }}</option>
-                    <option value="sehrGross">{{ t('settings.benachrichtigungen.schriftSehrGross') }}</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="row align-items-center mt-3">
-            <div class="col-12 col-md-4">{{ t('settings.benachrichtigungen.host') }}<InfoTipp schluessel="settings.info.mailSicherheit" /></div>
-            <div class="col-12 col-md-8 d-flex gap-2 flex-wrap">
-                <input type="text" class="form-control" style="max-width:18rem;"
-                    v-model="mail.mailHost" placeholder="smtp.example.com" />
-                <input type="number" class="form-control" style="max-width:7rem;"
-                    v-model.number="mail.mailPort" placeholder="587" />
-                <select class="form-select" style="max-width:11rem;" v-model="mail.mailSicherheit">
+        <Feld>
+            <template #label>{{ t('settings.benachrichtigungen.host') }}<InfoTipp schluessel="settings.info.mailSicherheit" /></template>
+            <div class="at-flex at-luecke-2 at-umbruch">
+                <input type="text" class="at-feld mail-l" v-model="mail.mailHost" placeholder="smtp.example.com" />
+                <input type="number" class="at-feld mail-port" v-model.number="mail.mailPort" placeholder="587" />
+                <select class="at-feld mail-m" v-model="mail.mailSicherheit">
                     <option value="tls">TLS (465)</option>
                     <option value="starttls">STARTTLS (587)</option>
                     <option value="keine">{{ t('settings.benachrichtigungen.mailSecurityNone') }}</option>
                 </select>
             </div>
-        </div>
+        </Feld>
 
-        <div class="row align-items-center mt-2">
-            <div class="col-12 col-md-4">{{ t('settings.benachrichtigungen.zugang') }}</div>
-            <div class="col-12 col-md-8 d-flex gap-2 flex-wrap">
-                <input type="text" class="form-control" style="max-width:18rem;"
-                    v-model="mail.mailUser" :placeholder="t('settings.benachrichtigungen.benutzer')" />
-                <input type="password" class="form-control" style="max-width:14rem;"
-                    v-model="mail.mailPasswort" :placeholder="t('settings.benachrichtigungen.passwort')" />
+        <Feld :label="t('settings.benachrichtigungen.zugang')">
+            <div class="at-flex at-luecke-2 at-umbruch">
+                <input type="text" class="at-feld mail-l" v-model="mail.mailUser"
+                    :placeholder="t('settings.benachrichtigungen.benutzer')" />
+                <input type="password" class="at-feld mail-s" v-model="mail.mailPasswort"
+                    :placeholder="t('settings.benachrichtigungen.passwort')" />
             </div>
-        </div>
+        </Feld>
 
-        <div class="row align-items-center mt-2">
-            <div class="col-12 col-md-4">{{ t('settings.benachrichtigungen.adressen') }}</div>
-            <div class="col-12 col-md-8 d-flex gap-2 flex-wrap">
-                <input type="email" class="form-control" style="max-width:18rem;"
-                    v-model="mail.mailVon" :placeholder="t('settings.benachrichtigungen.von')" />
-                <input type="email" class="form-control" style="max-width:18rem;"
-                    v-model="mail.mailAn" :placeholder="t('settings.benachrichtigungen.an')" />
+        <Feld :label="t('settings.benachrichtigungen.adressen')">
+            <div class="at-flex at-luecke-2 at-umbruch">
+                <input type="email" class="at-feld mail-l" v-model="mail.mailVon"
+                    :placeholder="t('settings.benachrichtigungen.von')" />
+                <input type="email" class="at-feld mail-l" v-model="mail.mailAn"
+                    :placeholder="t('settings.benachrichtigungen.an')" />
             </div>
-        </div>
+        </Feld>
 
-        <div class="d-flex align-items-center gap-2 flex-wrap mt-3">
-            <button type="button" class="btn btn-sm btn-primary" @click="speichereMail">
+        <div class="at-flex at-mitte at-luecke-2 at-umbruch at-mo-3">
+            <Knopf art="haupt" klein @click="speichereMail">
                 {{ t('settings.benachrichtigungen.speichern') }}
-            </button>
-            <button type="button" class="btn btn-sm btn-outline-primary"
-                :disabled="mailTestLaeuft" @click="testeMail">
+            </Knopf>
+            <Knopf klein :laedt="mailTestLaeuft" @click="testeMail">
                 {{ mailTestLaeuft ? t('settings.benachrichtigungen.testLaeuft') : t('settings.benachrichtigungen.test') }}
-            </button>
-            <span v-if="mailMeldung" :class="mailFehler ? 'text-danger' : 'text-success'"
-                style="font-size:0.85rem;">{{ mailMeldung }}</span>
+            </Knopf>
+            <span v-if="mailMeldung" :class="mailFehler ? 'at-schlecht' : 'at-gut'" class="mail-meldung">{{ mailMeldung }}</span>
         </div>
-        <p class="fw-lighter mt-2" style="font-size:0.8rem;">
+        <p class="at-gedaempft at-mo-2 mail-klein">
             {{ t('settings.benachrichtigungen.passwortHinweis') }}
         </p>
     </div>
 </template>
+
+<style scoped>
+.mail-klein {
+    font-size: 0.8rem;
+}
+
+.mail-meldung {
+    font-size: 0.85rem;
+}
+
+/* Feldbreiten wie zuvor; am Telefon nie breiter als die Zeile. */
+.mail-l { max-width: 18rem; }
+.mail-m { max-width: 11rem; }
+.mail-s { max-width: 14rem; }
+.mail-port { max-width: 7rem; }
+.at-flex > .at-feld { flex: 1 1 7rem; }
+</style>

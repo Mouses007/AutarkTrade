@@ -230,7 +230,7 @@ watch(() => props.daten, zeichne)
     gap: 0.4rem;
     text-align: center;
     font-size: 0.82rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lqAus i {
@@ -257,14 +257,14 @@ watch(() => props.daten, zeichne)
 
 .lqLeisteLabel {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin-right: 0.15rem;
 }
 
 .lqLeer {
     margin: 0.2rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lqKopf {
@@ -282,12 +282,12 @@ watch(() => props.daten, zeichne)
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lqZahl b {
     font-size: 1.1rem;
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
@@ -323,7 +323,7 @@ watch(() => props.daten, zeichne)
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-bottom: 0.2rem;
 }
 
@@ -339,7 +339,7 @@ watch(() => props.daten, zeichne)
 .lqQuelle {
     margin: 0.7rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lqBoersen {
@@ -347,7 +347,7 @@ watch(() => props.daten, zeichne)
     gap: 0.8rem;
     margin-top: 0.6rem;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
 }
 </style>

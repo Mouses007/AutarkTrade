@@ -23,7 +23,7 @@ import { useTotalTrades } from './summen.js'
 import { useGroupTrades } from './gruppieren.js'
 import { useCalculateProfitAnalysis } from './gewinnanalyse.js'
 import { useLoadCalendar } from './kalender.js'
-import { useInitTab, useInitTooltip, useInitPopover, useGetAPIS } from './app.js'
+import { useGetAPIS } from './app.js'
 import { useGetScreenshots, useGetScreenshotsPagination } from '../screenshots.js'
 import { ladeDiagramme, geladeneDiagramme } from './diagrammLader.js'
 
@@ -71,9 +71,6 @@ export async function useMountDashboard() {
         pruefe(aktuell)
         spinnerLoadingPage.value = false
         dashboardIdMounted.value = true
-        useInitTab('dashboard')
-        await nextTick()
-        useInitTooltip()
         // Tag-Gruppen mit Diagramm: Reihenfolge des Katalogs
         const vorhanden = Object.keys(groups)
         for (const g of availableTags) {
@@ -107,11 +104,9 @@ export async function useMountDaily() {
         await useGetFilteredTrades()
         pruefe(aktuell)
         spinnerLoadingPage.value = false
-        useInitTab('daily')
         ladeDiagramme().then(d => { d.useRenderDoubleLineChart(); d.useRenderPieChart() })
         useLoadCalendar()
         useGetScreenshots(true)
-        useInitPopover()
         renderingCharts.value = false
     } catch (fehler) {
         if (fehler instanceof Ueberholt) return
@@ -146,7 +141,6 @@ export async function useMountScreenshots() {
         await Promise.all([useGetTags(), useGetAvailableTags()])
         pruefe(aktuell)
         await useGetScreenshots(false)
-        useInitPopover()
     } catch (fehler) {
         if (!(fehler instanceof Ueberholt)) console.error('Screenshots laden fehlgeschlagen:', fehler)
     } finally {
@@ -166,8 +160,6 @@ export async function useMountAuswertung() {
         pruefe(aktuell)
         spinnerLoadingPage.value = false
         auswertungMounted.value = true
-        await nextTick()
-        useInitTooltip()
     } catch (fehler) {
         if (fehler instanceof Ueberholt) return
         console.error('Auswertung laden fehlgeschlagen:', fehler)
@@ -185,7 +177,6 @@ export async function useLoadMore() {
         useGetFilteredTradesForDaily()
         const d = await ladeDiagramme()
         await Promise.all([d.useRenderDoubleLineChart(), d.useRenderPieChart()])
-        useInitTab('daily')
     } else if (pageId.value === 'screenshots') {
         await useGetScreenshots(false)
     }

@@ -255,7 +255,7 @@ watch(levMapHours, () => lade())
 .oiChart {
     flex: 1 1 auto;
     min-height: 0;
-    background: var(--black-bg-2, #14141f);
+    background: var(--bg);
     border-radius: var(--border-radius, 6px);
 }
 
@@ -271,7 +271,7 @@ watch(levMapHours, () => lade())
     flex-direction: column;
     gap: 0.15rem;
     padding: 0.4rem 0.7rem;
-    background: var(--black-bg-3, #1a1a2e);
+    background: var(--bg);
     border-radius: var(--border-radius, 6px);
     min-width: 8rem;
 }
@@ -282,13 +282,13 @@ watch(levMapHours, () => lade())
 
 .oiLabel {
     font-size: 0.78rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .oiValue {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--white-87, rgba(255, 255, 255, 0.87));
+    color: var(--text);
 }
 
 .oiValue.up {

@@ -1,11 +1,26 @@
 <script setup>
+    import { useI18n } from 'vue-i18n'
+    import Knopf from './basis/Knopf.vue'
     import { windowIsScrolled } from "../stores/ui.js";
     import { returnToTop, useCheckIfWindowIsScrolled } from "../utils/journal/app.js";
+    const { t } = useI18n()
     useCheckIfWindowIsScrolled();
 </script>
 
 <template>
-    <button class="btn blueBtn btn-sm" id="btn-return-to-top" v-show="windowIsScrolled" v-on:click="returnToTop">
-        <i class="uil uil-arrow-up"></i>
-    </button>
+    <Knopf v-show="windowIsScrolled" class="nachOben" art="haupt" klein nur-symbol symbol="hoch"
+        :titel="t('common.nachOben')" @click="returnToTop" />
 </template>
+
+<style scoped>
+.nachOben {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 1030;
+}
+
+@media (max-width: 575.98px) {
+    .nachOben { right: 0.75rem; bottom: 0.75rem; }
+}
+</style>

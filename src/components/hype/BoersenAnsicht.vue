@@ -402,7 +402,7 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     flex-wrap: wrap;
 }
 .bwStand, .bwGrau, .bwHinweis {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .bwStand {
     font-size: .874rem;
@@ -420,10 +420,10 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     font-size: .782rem;
     padding: .05rem .45rem;
     border-radius: 10px;
-    background: var(--white-10, rgba(255, 255, 255, .08));
+    background: var(--line);
 }
 .bwChip.aus {
-    color: var(--red-color, #e05252);
+    color: var(--bad);
 }
 .bwChip.warn {
     color: var(--warn);
@@ -443,7 +443,7 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     margin-bottom: 1rem;
 }
 .bwKachel {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .55rem .75rem;
 }
@@ -470,11 +470,11 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     opacity: .55;
 }
 :deep(.bwGrau) {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .bwKette {
     font-size: .782rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-left: .3rem;
 }
 .bwStufe, :deep(.bwStufe) {
@@ -483,9 +483,9 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     padding: .02rem .4rem;
     border-radius: 4px;
     margin-right: .25rem;
-    background: var(--white-10, rgba(255, 255, 255, .08));
+    background: var(--line);
 }
-.bwStufe.mittel, :deep(.bwStufe.mittel) { color: var(--blue-color, #4da3ff); }
+.bwStufe.mittel, :deep(.bwStufe.mittel) { color: var(--accent); }
 .bwStufe.gross, :deep(.bwStufe.gross) { color: #4caf50; }
 .bwTabelle a, :deep(.bwTabelle a), :deep(a.bwStufe), :deep(a.bwToken), :deep(a.bwNebenLink) {
     text-decoration: none;
@@ -493,8 +493,8 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
 :deep(.bwTokenZelle) { display: inline-flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
 :deep(a.bwToken) { color: inherit; }
 :deep(a.bwToken:hover), :deep(a.bwStufe:hover) { text-decoration: underline; }
-:deep(.bwNebenLink) { font-size: .7rem; padding: 0 .3rem; border-radius: 3px; background: var(--white-10, rgba(255, 255, 255, .08));
-    color: var(--grey-color, #9aa0a6); }
-:deep(.bwKette) { font-size: .782rem; color: var(--grey-color, #9aa0a6); }
-.bwTiefeZeile td { background: var(--black-bg-2, rgba(255, 255, 255, .03)); }
+:deep(.bwNebenLink) { font-size: .7rem; padding: 0 .3rem; border-radius: 3px; background: var(--line);
+    color: var(--leise); }
+:deep(.bwKette) { font-size: .782rem; color: var(--leise); }
+.bwTiefeZeile td { background: var(--bg); }
 </style>

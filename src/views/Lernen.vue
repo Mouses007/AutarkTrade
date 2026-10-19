@@ -330,7 +330,7 @@ async function aktivUmschalten(karte) {
 </script>
 
 <template>
-    <div class="at-px-3 at-px-3 at-pu-5">
+    <div class="at-px-3 at-pu-5">
         <SpinnerLoadingPage />
 
         <div v-show="!spinnerLoadingPage">
@@ -653,7 +653,7 @@ async function aktivUmschalten(karte) {
                                 <span class="lernen-kategorie-name">{{ kategorieLabel(k.kategorie) }}</span>
                                 <div class="lernen-kategorie-bar-wrap">
                                     <div class="lernen-kategorie-bar"
-                                        :style="{ width: (k.quote * 100) + '%', background: k.quote >= 0.75 ? '#22c55e' : k.quote >= 0.5 ? '#f59e0b' : '#ef4444' }"></div>
+                                        :style="{ width: (k.quote * 100) + '%', background: k.quote >= 0.75 ? 'var(--good)' : k.quote >= 0.5 ? 'var(--warn)' : 'var(--bad)' }"></div>
                                 </div>
                                 <span class="lernen-kategorie-quote">
                                     {{ Math.round(k.quote * 100) }}%<template v-if="k.duenn"> · {{ t('lernen.statistik.duennHinweis') }}</template>
@@ -707,7 +707,7 @@ async function aktivUmschalten(karte) {
 }
 .lernen-niveauwahl-titel {
     font-size: 0.82rem;
-    color: var(--grey-color, #8b95a1);
+    color: var(--muted);
     margin-right: 0.2rem;
 }
 .lernen-niveauwahl-zahl {
@@ -717,29 +717,29 @@ async function aktivUmschalten(karte) {
 }
 .lernen-niveauwahl-hinweis {
     font-size: 0.78rem;
-    color: var(--grey-color, #8b95a1);
+    color: var(--muted);
     margin-left: 0.2rem;
 }
 
 .lernen-panel { max-width: 640px; margin: 0 auto; }
 .lernen-panel-review { max-width: 820px; }
 
-.lernen-faellig-count { font-size: 2.4rem; font-weight: 700; color: var(--white-87, rgba(255, 255, 255, 0.9)); }
+.lernen-faellig-count { font-size: 2.4rem; font-weight: 700; color: var(--text); }
 
-.lernen-box-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--black-bg-7, rgba(255, 255, 255, 0.05)); }
-.lernen-box-seg { display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: rgba(0, 0, 0, 0.6); min-width: 2px; }
-.lernen-box-seg.box-1 { background: #ef4444; }
-.lernen-box-seg.box-2 { background: #f59e0b; }
-.lernen-box-seg.box-3 { background: #3b82f6; }
-.lernen-box-seg.box-4 { background: #22c55e; }
+.lernen-box-bar { display: flex; height: 14px; border-radius: 999px; overflow: hidden; background: var(--panel-hoch); }
+.lernen-box-seg { display: flex; align-items: center; justify-content: center; font-size: 0.65rem; color: var(--on-accent); min-width: 2px; }
+.lernen-box-seg.box-1 { background: var(--bad); }
+.lernen-box-seg.box-2 { background: var(--warn); }
+.lernen-box-seg.box-3 { background: var(--accent); }
+.lernen-box-seg.box-4 { background: var(--good); }
 
 .lernen-box-legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; font-size: 0.82rem; }
 .lernen-box-legend-item { display: inline-flex; align-items: center; }
 .lernen-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 0.4rem; }
-.lernen-dot.box-1 { background: #ef4444; }
-.lernen-dot.box-2 { background: #f59e0b; }
-.lernen-dot.box-3 { background: #3b82f6; }
-.lernen-dot.box-4 { background: #22c55e; }
+.lernen-dot.box-1 { background: var(--bad); }
+.lernen-dot.box-2 { background: var(--warn); }
+.lernen-dot.box-3 { background: var(--accent); }
+.lernen-dot.box-4 { background: var(--good); }
 
 .lernen-niveau-filter { display: flex; gap: 0.35rem; }
 
@@ -750,44 +750,44 @@ async function aktivUmschalten(karte) {
  * und ein reiner Text-Trigger ("?" + "Antwort zeigen") statt eines Buttons —
  * das Vorbild kennt dort keine gefüllten Schaltflächen.
  */
-.lernen-karteikarte { background: #000; border-radius: var(--border-radius, 8px); overflow: hidden; }
+.lernen-karteikarte { background: var(--bg); border-radius: var(--radius-knopf); overflow: hidden; }
 
 .lernen-statusleiste {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 0.6rem 1rem; background: var(--black-bg-5, #1a1a1a);
-    font-size: 0.8rem; color: var(--grey-color, rgba(255, 255, 255, 0.6));
+    padding: 0.6rem 1rem; background: var(--panel-soft);
+    font-size: 0.8rem; color: var(--muted);
 }
 .lernen-statusleiste-btn {
     background: none; border: none; padding: 0; font: inherit;
-    color: var(--grey-color, rgba(255, 255, 255, 0.6)); text-decoration: underline;
+    color: var(--muted); text-decoration: underline;
 }
 .lernen-statusleiste-aktionen { display: inline-flex; align-items: center; gap: 0.9rem; }
 .lernen-statusleiste-icon {
     background: none; border: none; padding: 0; line-height: 1;
-    font-size: 1.05rem; color: var(--grey-color, rgba(255, 255, 255, 0.6));
+    font-size: 1.05rem; color: var(--muted);
 }
-.lernen-statusleiste-icon:hover { color: var(--white-87, rgba(255, 255, 255, 0.9)); }
+.lernen-statusleiste-icon:hover { color: var(--text); }
 
 /* Auslöser der Kartenerklärung — betont zurückhaltend: er soll erst auffallen,
    wenn man die Antwort gelesen hat und etwas offen geblieben ist. */
 .lernen-erklaerung-knopf {
     margin-top: 0.9rem; align-self: center; background: none; border: none; padding: 0.15rem 0.4rem;
-    font-size: 0.9rem; color: var(--blue-color, #3b82f6);
+    font-size: 0.9rem; color: var(--accent);
     display: inline-flex; align-items: center; gap: 0.35rem;
 }
 .lernen-erklaerung-knopf:hover { text-decoration: underline; }
 
 .lernen-card-box { min-height: 220px; display: flex; flex-direction: column; justify-content: center; padding: 2.5rem 1.5rem 1.5rem; text-align: center; }
 .lernen-card-box-antwort { min-height: 140px; padding-top: 1.5rem; }
-.lernen-frage { font-size: 1.75rem; font-weight: 600; line-height: 1.35; color: var(--white-87, rgba(255, 255, 255, 0.92)); }
-.lernen-antwort { font-size: 1.25rem; line-height: 1.5; color: var(--white-87, rgba(255, 255, 255, 0.85)); }
-.lernen-erklaerung { margin-top: 0.9rem; font-size: 0.95rem; line-height: 1.5; color: var(--white-60, rgba(255, 255, 255, 0.6)); }
+.lernen-frage { font-size: 1.75rem; font-weight: 600; line-height: 1.35; color: var(--text); }
+.lernen-antwort { font-size: 1.25rem; line-height: 1.5; color: var(--text); }
+.lernen-erklaerung { margin-top: 0.9rem; font-size: 0.95rem; line-height: 1.5; color: var(--muted); }
 
-.lernen-trennlinie { height: 2px; background: #22c55e; margin: 0 1.5rem; }
+.lernen-trennlinie { height: 2px; background: var(--good); margin: 0 1.5rem; }
 
 .lernen-reveal { padding: 1.5rem; text-align: center; cursor: pointer; }
-.lernen-reveal-mark { font-size: 1.5rem; color: var(--grey-color, rgba(255, 255, 255, 0.4)); }
-.lernen-reveal-text { font-size: 1.1rem; color: var(--grey-color, rgba(255, 255, 255, 0.6)); margin-top: 0.25rem; }
+.lernen-reveal-mark { font-size: 1.5rem; color: var(--leise); }
+.lernen-reveal-text { font-size: 1.1rem; color: var(--muted); margin-top: 0.25rem; }
 
 /* Vier Bewertungsstufen, in derselben Farbfolge wie die Box-Legende (1=rot … 4=grün) —
    die Farbe deutet also gleich an, wie weit die Karte damit springt. */
@@ -803,32 +803,32 @@ async function aktivUmschalten(karte) {
     .lernen-grade-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 .lernen-grade-btn {
-    border: none; border-top: 1px solid rgba(255, 255, 255, 0.1); border-right: 1px solid rgba(255, 255, 255, 0.1);
+    border: none; border-top: 1px solid var(--line); border-right: 1px solid var(--line);
     padding: 0.9rem 0.4rem; font-size: 0.88rem; font-weight: 600;
-    background: var(--black-bg-5, #1a1a1a); color: var(--white-87, rgba(255, 255, 255, 0.9));
+    background: var(--panel-soft); color: var(--text);
 }
 .lernen-grade-btn:last-child { border-right: none; }
-.lernen-grade-vergessen { color: #ef4444; }
-.lernen-grade-schwer { color: #f59e0b; }
-.lernen-summary-schwer { color: #f59e0b; }
-.lernen-grade-gut { color: #3b82f6; }
-.lernen-grade-leicht { color: #22c55e; }
-.lernen-grade-btn:active { background: var(--black-bg-7, #262626); }
+.lernen-grade-vergessen { color: var(--bad); }
+.lernen-grade-schwer { color: var(--warn); }
+.lernen-summary-schwer { color: var(--warn); }
+.lernen-grade-gut { color: var(--accent); }
+.lernen-grade-leicht { color: var(--good); }
+.lernen-grade-btn:active { background: var(--panel-hoch); }
 
 .lernen-summary-value { font-size: 2rem; font-weight: 700; }
 
 .lernen-karte-text { min-width: 0; }
 .lernen-inaktiv { opacity: 0.5; }
 
-.lernen-stat-value { font-size: 1.9rem; font-weight: 700; color: var(--white-87, rgba(255, 255, 255, 0.92)); }
+.lernen-stat-value { font-size: 1.9rem; font-weight: 700; color: var(--text); }
 
 .lernen-tage-chart { display: flex; align-items: flex-end; gap: 0.3rem; height: 70px; }
 .lernen-tage-balken-wrap { flex: 1; display: flex; align-items: flex-end; height: 100%; }
-.lernen-tage-balken { width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--blue-color, #3b82f6); }
+.lernen-tage-balken { width: 100%; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--accent); }
 
 .lernen-kategorie-zeile { display: grid; grid-template-columns: 9rem minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.4rem 0; font-size: 0.85rem; }
-.lernen-kategorie-name { color: var(--white-87, rgba(255, 255, 255, 0.85)); }
-.lernen-kategorie-bar-wrap { height: 8px; border-radius: 999px; overflow: hidden; background: var(--black-bg-7, rgba(255, 255, 255, 0.08)); }
+.lernen-kategorie-name { color: var(--text); }
+.lernen-kategorie-bar-wrap { height: 8px; border-radius: 999px; overflow: hidden; background: var(--panel-hoch); }
 .lernen-kategorie-bar { height: 100%; }
-.lernen-kategorie-quote { color: var(--grey-color, rgba(255, 255, 255, 0.6)); white-space: nowrap; text-align: right; }
+.lernen-kategorie-quote { color: var(--muted); white-space: nowrap; text-align: right; }
 </style>

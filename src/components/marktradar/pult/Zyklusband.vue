@@ -156,7 +156,7 @@ const piNah = computed(() => abstand.value !== null && abstand.value > -10)
 .zyPreis {
     font-size: 0.86rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
     margin-top: 0.1rem;
 }
 
@@ -194,7 +194,7 @@ const piNah = computed(() => abstand.value !== null && abstand.value > -10)
     top: 20px;
     transform: translateX(-50%);
     font-size: 0.66rem;
-    color: var(--white-87);
+    color: var(--text);
     white-space: nowrap;
 }
 
@@ -219,7 +219,7 @@ const piNah = computed(() => abstand.value !== null && abstand.value > -10)
     font-size: 0.92rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .zyPiZahl.zyWarn { color: #e8a33d; }
@@ -252,7 +252,7 @@ const piNah = computed(() => abstand.value !== null && abstand.value > -10)
 
 .zyPiFuss {
     font-size: 0.6rem;
-    color: var(--white-38);
+    color: var(--muted);
     margin-top: 0.2rem;
 }
 

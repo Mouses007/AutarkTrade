@@ -201,7 +201,7 @@ watch(() => props.daten, zeichne)
 
 .pcLabel {
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .pcChart {
@@ -219,12 +219,12 @@ watch(() => props.daten, zeichne)
     gap: 0.3rem 1.4rem;
     margin-top: 0.7rem;
     font-size: 0.84rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .pcZahlen b {
     margin-left: 0.4rem;
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
@@ -234,7 +234,7 @@ watch(() => props.daten, zeichne)
     gap: 0.3rem 1rem;
     margin-top: 0.6rem;
     font-size: 0.82rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .pcTitel {
@@ -253,6 +253,6 @@ watch(() => props.daten, zeichne)
     border-left: 3px solid rgba(240, 196, 25, 0.8);
     background: rgba(240, 196, 25, 0.08);
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 </style>

@@ -3,8 +3,8 @@
  * Kopfleiste von AutarkTrade: Logo links, Modi als Navigation (Unterstrich in
  * Akzentfarbe wie bei AutarkDarts), rechts Einstellungen.
  *
- * Löst den breiten Modus-Umschalter unter dem Seitentitel ab (ModeSwitcher.vue
- * bleibt für eine schmale Spalte bestehen). Die Logik ist dieselbe: nur
+ * Hat den früheren Modus-Umschalter unter dem Seitentitel (ModeSwitcher.vue,
+ * in S9 entfernt) abgelöst und dessen Logik übernommen: nur
  * eingeschaltete Modi (`istModusAn`), Wechsel per vollem Seitenaufruf, damit
  * offene WebSockets und Timer der Live-Ansicht sicher enden.
  */
@@ -35,7 +35,7 @@ function beschriftung(m) {
 
 function wechsle(m, e) {
     if (!m.enabled) { e.preventDefault(); return }
-    // Schon auf einer Seite dieses Modus: nichts tun (siehe ModeSwitcher.vue).
+    // Schon auf einer Seite dieses Modus: nichts tun.
     const seitenModus = pageById(pageId.value)?.mode ?? null
     if (seitenModus === m.id) { e.preventDefault(); return }
     localStorage.setItem('appMode', m.id)

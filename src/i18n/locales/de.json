@@ -21,6 +21,7 @@
   },
   "common": {
     "save": "Speichern",
+    "nachOben": "Nach oben",
     "cancel": "Abbrechen",
     "retry": "Erneut versuchen",
     "unsavedLeave": "Es gibt ungespeicherte Eingaben. Seite trotzdem verlassen?",
@@ -782,6 +783,7 @@
     "searchModelsPlaceholder": "Suchen, z. B. \"gpt\" oder \"claude\"",
     "noModelsMatch": "Kein Modell passt zur Suche.",
     "addAll": "Alle übernehmen",
+    "addModel": "Modell übernehmen",
     "alreadyInList": "in der Liste",
     "providerFetchFailed": "Der Anbieter konnte nicht abgefragt werden.",
     "providerNoModels": "Der Anbieter hat keine passenden Modelle gemeldet.",

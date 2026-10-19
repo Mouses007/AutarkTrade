@@ -157,12 +157,12 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
     font-size: 0.8rem;
-    color: var(--white-87);
+    color: var(--text);
     text-decoration: none;
     white-space: nowrap;
 }
 
-.swBoerse:hover { background: rgba(255, 255, 255, 0.1); color: var(--white-87); }
+.swBoerse:hover { background: rgba(255, 255, 255, 0.1); color: var(--text); }
 
 .swAktuell {
     display: inline-flex;
@@ -171,13 +171,13 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
     background: rgba(255, 255, 255, 0.07);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 8px;
-    color: var(--white-87);
+    color: var(--text);
     padding: 0.12rem 0.55rem;
     font-size: 0.9rem;
     cursor: pointer;
 }
 
-.swAktuell b { color: var(--blue-color, #01B4FF); }
+.swAktuell b { color: var(--accent); }
 .swAktuell:hover { background: rgba(255, 255, 255, 0.12); }
 
 .swListe {
@@ -191,7 +191,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    background: var(--black-bg-2, #14141f);
+    background: var(--bg);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: var(--border-radius, 6px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
@@ -209,7 +209,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid transparent;
     border-radius: 8px;
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.74rem;
     padding: 0.08rem 0.4rem;
     cursor: pointer;
@@ -226,7 +226,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--border-radius, 6px);
-    color: var(--white-87);
+    color: var(--text);
     padding: 0.18rem 0.4rem;
     font-size: 0.8rem;
 }
@@ -236,7 +236,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
     background: none;
     border: 1px solid transparent;
     border-radius: 4px;
-    color: var(--white-87);
+    color: var(--text);
     font-size: 0.8rem;
     padding: 0.1rem 0.35rem;
     cursor: pointer;
@@ -246,7 +246,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
 
 .swHinweis {
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
     padding: 0.1rem 0.35rem;
 }
 </style>

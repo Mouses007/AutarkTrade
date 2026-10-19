@@ -284,7 +284,7 @@ onBeforeUnmount(speichereJetzt)
     gap: 0.4rem;
     padding: 0.5rem 0.7rem;
     margin-bottom: 0.7rem;
-    background: var(--black-bg-soft, rgba(255, 255, 255, 0.03));
+    background: var(--panel-soft);
     border-radius: var(--border-radius);
 }
 
@@ -316,19 +316,19 @@ onBeforeUnmount(speichereJetzt)
 
 .stTitel {
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .stSymbol {
     font-weight: 600;
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
 }
 
 .stUhr {
     font-variant-numeric: tabular-nums;
     font-size: 1.15rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 /* Ein laufender Punkt, damit man auf einen Blick sieht, dass mitgezählt wird */
@@ -350,12 +350,12 @@ onBeforeUnmount(speichereJetzt)
     padding: 0.05rem 0.4rem;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.08);
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .stSeit, .stPlan span {
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .stFeld {
@@ -370,7 +370,7 @@ onBeforeUnmount(speichereJetzt)
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: var(--border-radius);
-    color: var(--white-87);
+    color: var(--text);
     padding: 0.2rem 0.45rem;
     font-size: 0.85rem;
     width: 100%;
@@ -384,7 +384,7 @@ onBeforeUnmount(speichereJetzt)
 
 .stPlanNotiz {
     font-size: 0.82rem;
-    color: var(--white-60);
+    color: var(--muted);
     display: flex;
     gap: 0.35rem;
     align-items: center;
@@ -394,7 +394,7 @@ onBeforeUnmount(speichereJetzt)
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--border-radius);
-    color: var(--white-87);
+    color: var(--text);
     padding: 0.35rem 0.5rem;
     font-size: 0.85rem;
     resize: vertical;
@@ -435,14 +435,14 @@ onBeforeUnmount(speichereJetzt)
  */
 .stKlapp {
     display: inline-flex;
-    color: var(--white-60);
+    color: var(--muted);
     padding: 0 0.2rem;
     line-height: 1;
     font-size: 1.1rem;
 }
 
 /* Reagiert auf Hover der ganzen Zeile, nicht nur auf das Symbol selbst. */
-.stZeileKlickbar:hover .stKlapp { color: var(--white-87); }
+.stZeileKlickbar:hover .stKlapp { color: var(--text); }
 
 .stFehler {
     font-size: 0.8rem;

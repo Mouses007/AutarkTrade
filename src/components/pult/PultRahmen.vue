@@ -45,7 +45,6 @@ import QuelleAus from '../quellen/QuelleAus.vue'
 import { useI18n } from 'vue-i18n'
 import InfoTipp from '../InfoTipp.vue'
 import Symbol from '@/components/basis/Symbol.vue'
-import { symbolName } from '@/components/basis/symbole/unicons.js'
 
 const props = defineProps({
     /** Nutzlasten aller Kacheln, id-indiziert. */
@@ -146,7 +145,7 @@ defineExpose({ jetzt })
                     <button v-for="b in buehnen" :key="b.id" type="button"
                         :class="['ctl-pill', buehne === b.id ? 'active' : '']"
                         @click="waehleBuehne(b.id)">
-                        <Symbol v-if="b.icon" :name="symbolName(b.icon)" />{{ t(b.titleKey) }}
+                        <Symbol v-if="b.icon" :name="b.icon" />{{ t(b.titleKey) }}
                     </button>
                     <span class="pBuehneStand">
                         <span :class="['liveDot', 'dot-' + (zustand[buehne] || 'idle')]"></span>
@@ -240,7 +239,7 @@ defineExpose({ jetzt })
     --pBand: rgba(255, 255, 255, 0.042);
     /* Titel-Beschriftungen im ganzen Pult (Instrumentenleiste, Stimmungs- und
        Zyklusband, Lage-Fuss) — EINE Stelle, damit sie garantiert gleich
-       aussehen. 50 % heller als das globale `--white-38`, das hier vorher
+       aussehen. 50 % heller als das globale `--white-38` (heute `--muted`), das hier vorher
        direkt verwendet wurde. */
     --pTitel: hsla(0, 0%, 100%, 0.57);
 
@@ -249,7 +248,7 @@ defineExpose({ jetzt })
     /* dvh statt vh: auf Geräten mit einfahrender Adressleiste misst vh falsch */
     height: calc(100dvh - 190px);
     min-height: 560px;
-    border: 1px solid var(--white-18);
+    border: 1px solid var(--line-stark);
     border-radius: var(--border-radius);
     background: var(--pChrom);
     overflow: hidden;
@@ -290,7 +289,7 @@ defineExpose({ jetzt })
     gap: 0.3rem;
     font-size: 0.68rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 /* `min-height: 0` ist Pflicht, sonst wächst die Canvas-Kachel aus dem Raster
@@ -368,7 +367,7 @@ defineExpose({ jetzt })
     gap: 0.3rem;
     font-size: 0.62rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .pInstKoerper {

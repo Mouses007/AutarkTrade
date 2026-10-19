@@ -159,7 +159,7 @@ const zahl = (v) => Number(v) || 0
 
 .poLabel {
     font-size: 0.66rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .poWert b {
@@ -187,7 +187,7 @@ const zahl = (v) => Number(v) || 0
 }
 
 .poPlanLabel {
-    color: var(--white-60);
+    color: var(--muted);
     min-width: 5.2rem;
 }
 
@@ -213,7 +213,7 @@ const zahl = (v) => Number(v) || 0
     font-variant-numeric: tabular-nums;
     min-width: 2.4rem;
     text-align: right;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .poVerletzt {
@@ -224,7 +224,7 @@ const zahl = (v) => Number(v) || 0
 
 .poKeinPlan {
     font-size: 0.7rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .poListe {
@@ -245,12 +245,12 @@ const zahl = (v) => Number(v) || 0
 .poLuecke { flex: 1; }
 .poSym { font-weight: 700; }
 .poSeite { font-size: 0.68rem; font-weight: 600; }
-.poHebel { font-size: 0.68rem; color: var(--white-60); }
+.poHebel { font-size: 0.68rem; color: var(--muted); }
 .poPnl { font-variant-numeric: tabular-nums; font-weight: 600; }
 
 .poLeer {
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .poRisiko {
@@ -261,6 +261,6 @@ const zahl = (v) => Number(v) || 0
 .poFuss {
     margin-top: auto;
     font-size: 0.68rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

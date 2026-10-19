@@ -110,7 +110,7 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
 .mkKopplungText {
     font-size: 0.98rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .mkWrap.gross .mkKopplungText {
@@ -119,7 +119,7 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
 
 .mkR {
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
 }
 
@@ -141,18 +141,18 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
 .mkStable {
     margin-top: 0.35rem;
     padding-top: 0.35rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.08));
+    border-top: 1px solid var(--line);
 }
 
 .mkName {
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .mkZu {
     margin-left: 0.3rem;
     padding: 0 0.28rem;
     border-radius: 3px;
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.08));
+    background: var(--panel-soft);
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -163,11 +163,11 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
     display: flex;
     gap: 0.5rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .mkPreis {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .mkStablePct {
@@ -175,7 +175,7 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
 }
 
 .mkFehlt {
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .mkLegende {
@@ -185,7 +185,7 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
     gap: 0.25rem 0.4rem;
     margin: 0.5rem 0 0;
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     opacity: 0.85;
 }
 
@@ -214,25 +214,25 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
     justify-content: space-between;
     gap: 0.6rem;
     font-size: 0.84rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .mkDetailZeile b {
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
 .mkDom {
     margin-top: 0.9rem;
     padding-top: 0.6rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.08));
+    border-top: 1px solid var(--line);
 }
 
 .mkDomKopf {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-bottom: 0.25rem;
 }
 
@@ -241,7 +241,7 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
     justify-content: space-between;
     gap: 0.6rem;
     font-size: 0.9rem;
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
@@ -250,24 +250,24 @@ const punkte = (v) => (!Number.isFinite(v) ? 'â€”' : `${v > 0 ? '+' : v < 0 ? 'â
     gap: 1.2rem;
     margin-top: 0.25rem;
     font-size: 0.84rem;
-    color: var(--white-60);
+    color: var(--muted);
     flex-wrap: wrap;
 }
 
 .mkDomAufteilung b {
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
 .mkDomHinweis {
     margin: 0.35rem 0 0;
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .mkQuelle {
     margin: 0.7rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

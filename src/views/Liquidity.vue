@@ -11,6 +11,7 @@ import { useFuellhoehe } from '../composables/useFuellhoehe.js'
 import { useI18n } from 'vue-i18n'
 import LiquidityHeatmap from '../components/LiquidityHeatmap.vue'
 import PageInfo from '../components/PageInfo.vue'
+import Symbol from '../components/basis/Symbol.vue'
 import {
     liveSymbol, liveMarket, liveRamp, liveFrozen, liveAutoFollow,
     liveMode, replayFrom, replayTo, replayLabel, RAMP_OPTIONS,
@@ -131,18 +132,18 @@ const statusLabel = {
                     <span class="ctl-sep"></span>
                 </template>
                 <button v-if="isReplay" type="button" class="ctl-pill active-warn" @click="zurueckZuLive">
-                    <i class="uil uil-history"></i>Wiedergabe verlassen
+                    <Symbol name="verlauf" />Wiedergabe verlassen
                 </button>
                 <button v-if="!isReplay" type="button" :class="['ctl-pill', liveFrozen ? 'active-warn' : '']"
                     :title="liveFrozen ? 'Weiterlaufen lassen' : 'Ansicht einfrieren (Aufzeichnung läuft weiter)'"
                     @click="liveFrozen = !liveFrozen">
-                    <i :class="liveFrozen ? 'uil uil-play' : 'uil uil-pause'"></i>
+                    <Symbol :name="liveFrozen ? 'play' : 'pause'" />
                     {{ liveFrozen ? 'Weiter' : 'Pause' }}
                 </button>
                 <button type="button" :class="['ctl-pill', liveAutoFollow ? 'active' : '']"
                     title="Preisachse folgt dem Mittelkurs (Doppelklick im Chart setzt zurück)"
                     @click="liveAutoFollow = !liveAutoFollow">
-                    <i class="uil uil-crosshair"></i>Auto-Achse
+                    <Symbol name="fadenkreuz" />Auto-Achse
                 </button>
                 <span class="ctl-sep"></span>
                 <button v-for="r in RAMP_OPTIONS" :key="r.id" type="button"
@@ -200,7 +201,7 @@ const statusLabel = {
 
 .replayInfo {
     font-size: 0.78rem;
-    color: var(--blue-color);
+    color: var(--accent);
     margin-left: 0.3rem;
 }
 
@@ -214,12 +215,12 @@ const statusLabel = {
 
 .imbalanceBuy {
     background: rgba(38, 190, 150, 0.18);
-    color: var(--green-color, #26be96);
+    color: var(--good);
 }
 
 .imbalanceSell {
     background: rgba(255, 95, 86, 0.18);
-    color: var(--red-color, #ff5f56);
+    color: var(--bad);
 }
 
 .replayBar {
@@ -228,27 +229,27 @@ const statusLabel = {
     gap: 0.6rem;
     margin-top: 0.45rem;
     padding: 0.3rem 0.6rem;
-    border: 1px solid var(--white-18);
+    border: 1px solid var(--line-stark);
     border-radius: var(--border-radius);
-    background: var(--black-bg-3);
+    background: var(--bg);
 }
 
 .replayRange {
     flex: 1;
-    accent-color: var(--blue-color);
+    accent-color: var(--accent);
     cursor: pointer;
 }
 
 .replayTime {
     font-variant-numeric: tabular-nums;
     font-size: 0.82rem;
-    color: var(--white-87);
+    color: var(--text);
     min-width: 4.5rem;
 }
 
 .replayHint {
     font-size: 0.72rem;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 
@@ -261,7 +262,7 @@ const statusLabel = {
     isolation: isolate;
     flex: 1;
     min-height: 0;
-    border: 1px solid var(--white-18);
+    border: 1px solid var(--line-stark);
     border-radius: var(--border-radius);
     background: #0a0a0a;
     overflow: hidden;

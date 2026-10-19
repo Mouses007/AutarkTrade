@@ -15,7 +15,7 @@ import { currentUser } from '../../stores/settings.js'
 import { selectedPeriodRange, selectedGrossNet, selectedPositions, selectedMonth, selectedDateRange } from '../../stores/filters.js'
 import { filteredTradesTrades } from '../../stores/trades.js'
 import { pageById } from '../../config/menu.js'
-import { useToggleMobileMenu, useInitTooltip, useExport } from '../../utils/journal/app.js'
+import { useToggleMobileMenu, useExport } from '../../utils/journal/app.js'
 import { useDateCalFormat } from '../../utils/journal/format.js'
 import dayjs from '../../utils/journal/zeit.js'
 
@@ -85,10 +85,6 @@ function taste(e) {
 }
 
 onMounted(() => {
-    // Bootstrap-Tooltips der Seiten (z. B. Info-Symbole im Journal-Dashboard)
-    // werden bis zur Ablösung von Bootstrap hier einmal je Seitenaufruf
-    // eingerichtet. S9-Teil2: entfällt mit Bootstrap.
-    useInitTooltip()
     document.addEventListener('click', klickDraussen)
     document.addEventListener('keydown', taste)
 })

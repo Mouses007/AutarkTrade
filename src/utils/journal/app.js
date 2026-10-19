@@ -1,35 +1,28 @@
 /**
  * App-Start und Seitenhilfen: Einstellungen laden, Zeitzone, Perioden,
- * Vorgaben aus localStorage, Reiter, Popover/Tooltip, mobiles Menü, Export
- * (Spezifikation journal-kern.md §4.8).
+ * Vorgaben aus localStorage, mobiles Menü, Export (Spezifikation
+ * journal-kern.md §4.8). Reiter, Popover und Tooltips liefen über
+ * Bootstrap-JS; seit S9 steuern die Ansichten ihre Reiter selbst, Löschen
+ * bestätigt jede Ansicht selbst und Erklärungen hängen an `InfoTipp.vue`.
  */
-import { nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import dayjs from './zeit.js'
 import i18n from '../../i18n/index.js'
 import { dbGetSettings } from '../db.js'
 import {
-    pageId, currentUser, timeZoneTrade, selectedItem, sideMenuMobileOut, screenType, windowIsScrolled,
-    idCurrent, idPrevious, idCurrentType, idCurrentNumber, idPreviousType, idPreviousNumber,
+    pageId, currentUser, timeZoneTrade, sideMenuMobileOut, screenType, windowIsScrolled,
 } from '../../stores/app/rahmen.js'
-import { renderData, tabGettingScreenshots } from '../../stores/app/laden.js'
 import { apis } from '../../stores/app/einstellungen.js'
 import {
     periodRange, selectedDashTab, selectedPeriodRange, selectedPositions, selectedTimeFrame, selectedRatio,
     selectedAccount, selectedGrossNet, selectedPlSatisfaction, selectedBroker, selectedDateRange, selectedMonth,
     selectedMonthPreset, selectedAccounts, amountCase, selectedTags, selectedTradeTimeframes,
 } from '../../stores/journal/filter.js'
-import { filteredTrades } from '../../stores/journal/auswertung.js'
 import { tags, availableTags } from '../../stores/journal/tagebuch.js'
-import { screenshots, screenshotsInfos, screenshotsPagination } from '../../stores/journal/screenshots.js'
+import { screenshotsPagination } from '../../stores/journal/screenshots.js'
 import { useGetTags, useGetAvailableTags } from './tagebuch.js'
-import { useDeleteTrade, useDeleteExcursions } from './laden.js'
-import { useStartOfDay } from './format.js'
-import { useGetScreenshots, useDeleteScreenshot } from '../screenshots.js'
-import { ladeDiagramme } from './diagrammLader.js'
 
 const t = (k) => i18n.global.t(k)
-const bootstrap = () => globalThis.bootstrap
 
 function speichere(schluessel, wert) {
     try { localStorage.setItem(schluessel, wert) } catch { /* egal */ }
@@ -201,128 +194,6 @@ export async function useSetValues() {
     }
 
     amountCase.value = lies('selectedGrossNet')
-}
-
-// ── Reiter ─────────────────────────────────────────────────────────────────
-
-let reiterOffen = false
-
-function reiterDaily(knopf) {
-    knopf.addEventListener('click', async () => {
-        const ersterKlick = idCurrent.value === undefined
-        if (!ersterKlick) idPrevious.value = idCurrent.value
-        idCurrent.value = knopf.id
-        if (idPrevious.value === undefined) idPrevious.value = idCurrent.value
-
-        const [artJetzt, nrJetzt] = String(idCurrent.value).split('-')
-        const [artVorher, nrVorher] = String(idPrevious.value).split('-')
-        idCurrentType.value = artJetzt
-        idCurrentNumber.value = nrJetzt
-        idPreviousType.value = artVorher
-        idPreviousNumber.value = nrVorher
-
-        if (artJetzt === 'screenshots') {
-            const tagUnix = filteredTrades[nrJetzt]?.dateUnix
-            const info = screenshotsInfos.find(x => x.dateUnixDay == tagUnix || x.dateUnixDay == useStartOfDay(tagUnix))
-            if (info && (screenshots.length === 0 || screenshots[0].dateUnixDay !== info.dateUnixDay)) {
-                tabGettingScreenshots.value = true
-                await useGetScreenshots(true, info.dateUnixDay)
-                tabGettingScreenshots.value = false
-            }
-        }
-
-        const inhalt = document.querySelector(`#${artJetzt}Nav-${nrJetzt}`)
-        if (ersterKlick) {
-            reiterOffen = true
-        } else if (idCurrent.value === idPrevious.value) {
-            // derselbe Reiter noch einmal: Inhalt zu- bzw. aufklappen
-            reiterOffen = !reiterOffen
-            inhalt?.classList.toggle('show', reiterOffen)
-            inhalt?.classList.toggle('active', reiterOffen)
-            knopf.classList.toggle('active', reiterOffen)
-        } else {
-            reiterOffen = true
-            const vorher = document.querySelector(`#${artVorher}Nav-${nrVorher}`)
-            vorher?.classList.remove('show', 'active')
-            document.getElementById(idPrevious.value)?.classList.remove('active')
-        }
-    })
-}
-
-function reiterDashboard(knopf) {
-    knopf.addEventListener('shown.bs.tab', async (ereignis) => {
-        selectedDashTab.value = ereignis.target.id
-        speichere('selectedDashTab', ereignis.target.id)
-        renderData.value += 1
-        await nextTick()
-        ;(await ladeDiagramme()).useECharts('init')
-    })
-}
-
-export function useInitTab(art) {
-    idCurrent.value = undefined
-    idPrevious.value = undefined
-    reiterOffen = false
-    for (const knopf of document.querySelectorAll('#nav-tab button')) {
-        if (art === 'dashboard') reiterDashboard(knopf)
-        else if (art === 'daily') reiterDaily(knopf)
-    }
-}
-
-// ── Popover (Löschen bestätigen) und Tooltip ───────────────────────────────
-
-async function loeschenAusfuehren() {
-    if (pageId.value === 'screenshots' || pageId.value === 'daily') {
-        await useDeleteScreenshot()
-    } else if (pageId.value === 'imports') {
-        await useDeleteTrade()
-        await useDeleteExcursions()
-    }
-}
-
-let popoverKlickRegistriert = false
-let geklickterKnopf = null
-
-export function useInitPopover() {
-    const bs = bootstrap()
-    if (bs?.Popover) {
-        for (const el of document.querySelectorAll('[data-bs-toggle="popover"]')) {
-            if (!bs.Popover.getInstance(el)) new bs.Popover(el)
-        }
-    } else {
-        console.warn('Bootstrap-Popover nicht verfügbar')
-    }
-    if (popoverKlickRegistriert) return
-    popoverKlickRegistriert = true
-    document.addEventListener('click', async (ereignis) => {
-        const ziel = ereignis.target
-        const pop = bootstrap()?.Popover
-        const loeschKnopf = ziel?.closest?.('.popoverDelete')
-        if (loeschKnopf) {
-            geklickterKnopf = loeschKnopf
-            if (!pop) {
-                if (confirm(t('messages.confirmDelete'))) await loeschenAusfuehren()
-                else selectedItem.value = null
-            } else {
-                for (const anderer of document.querySelectorAll('.popoverDelete')) {
-                    if (anderer !== loeschKnopf) pop.getInstance(anderer)?.hide()
-                }
-            }
-            return
-        }
-        const ja = ziel?.closest?.('.popoverYes')
-        const nein = ziel?.closest?.('.popoverNo')
-        if (!ja && !nein) return
-        if (geklickterKnopf && pop) pop.getInstance(geklickterKnopf)?.hide()
-        if (nein) selectedItem.value = null
-        else await loeschenAusfuehren()
-    })
-}
-
-export function useInitTooltip() {
-    const bs = bootstrap()
-    if (!bs?.Tooltip) return
-    for (const el of document.querySelectorAll('[data-bs-toggle="tooltip"]')) new bs.Tooltip(el)
 }
 
 // ── Fenster, Seite, Menü ───────────────────────────────────────────────────

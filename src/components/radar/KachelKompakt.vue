@@ -316,28 +316,28 @@ function waehle(symbol) { liveSymbol.value = symbol }
 .kpOhneHover { cursor: default; }
 .kpOhneHover:hover { background: none; }
 .kpKlick { cursor: pointer; }
-.kpKlick:hover { color: var(--white-87); }
+.kpKlick:hover { color: var(--text); }
 
 .kpLabel {
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     white-space: nowrap;
 }
 
-.kpLabel small { text-transform: none; letter-spacing: 0; color: var(--white-38, rgba(255, 255, 255, 0.38)); }
+.kpLabel small { text-transform: none; letter-spacing: 0; color: var(--muted); }
 
 .kpWert {
-    color: var(--white-87);
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .kpWert b { font-weight: 600; }
-.kpNeben { margin-left: 0.45rem; color: var(--white-60); }
-.kpLeise { color: var(--white-60); }
+.kpNeben { margin-left: 0.45rem; color: var(--muted); }
+.kpLeise { color: var(--muted); }
 
 .kpPlus { color: rgb(38, 190, 150); }
 .kpMinus { color: rgb(255, 95, 86); }
@@ -395,13 +395,13 @@ function waehle(symbol) { liveSymbol.value = symbol }
 .kpCoinWahl {
     border: none;
     background: none;
-    color: var(--white-87);
+    color: var(--text);
     padding: 0 0.35rem;
     font-size: inherit;
     line-height: inherit;
 }
 
-.kpCoin small { color: var(--white-60); }
+.kpCoin small { color: var(--muted); }
 
 .kpBx {
     padding: 0 0.2rem;
@@ -425,7 +425,7 @@ function waehle(symbol) { liveSymbol.value = symbol }
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .kpText .kpWert b { margin-right: 0.4rem; }

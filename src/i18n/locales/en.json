@@ -21,6 +21,7 @@
   },
   "common": {
     "save": "Save",
+    "nachOben": "Back to top",
     "cancel": "Cancel",
     "retry": "Retry",
     "unsavedLeave": "You have unsaved changes. Leave the page anyway?",
@@ -782,6 +783,7 @@
     "searchModelsPlaceholder": "Search, e.g. \"gpt\" or \"claude\"",
     "noModelsMatch": "No model matches the search.",
     "addAll": "Add all",
+    "addModel": "Add model",
     "alreadyInList": "in list",
     "providerFetchFailed": "Could not query the provider.",
     "providerNoModels": "The provider reported no suitable models.",

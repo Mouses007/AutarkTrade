@@ -2295,12 +2295,12 @@ watch(locale, () => zeichne())
 
 .hypEinstZeile {
     font-size: .76rem;
-    color: var(--white-60, rgba(255, 255, 255, .6));
+    color: var(--muted);
     cursor: pointer;
 }
 
 .hypEinstZeile:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hypKnoepfe {
@@ -2312,7 +2312,7 @@ watch(locale, () => zeichne())
 
 .hypFortschritt {
     font-size: .897rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypKennzahlen {
@@ -2323,7 +2323,7 @@ watch(locale, () => zeichne())
 }
 
 .hypZelle {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .7rem .85rem;
 }
@@ -2336,7 +2336,7 @@ watch(locale, () => zeichne())
 
 .hypLabel {
     font-size: .874rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypKlein {
@@ -2356,13 +2356,13 @@ watch(locale, () => zeichne())
 
 .hypHinweis {
     font-size: .897rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-bottom: .6rem;
 }
 
 .hypHinweisKlein {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-left: .35rem;
 }
 
@@ -2390,7 +2390,7 @@ watch(locale, () => zeichne())
     padding: .05rem .5rem;
     border-radius: var(--border-radius, 6px);
     background: rgba(255, 255, 255, .05);
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypGueteUrteil.gut {
@@ -2413,7 +2413,7 @@ watch(locale, () => zeichne())
 }
 
 .hypChip.aktiv {
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
     color: #fff;
 }
 
@@ -2426,7 +2426,7 @@ watch(locale, () => zeichne())
    referenziert, ohne je definiert zu sein — der Hinweis blieb deshalb
    unauffällig genau dort, wo er auffallen sollte. */
 .hypAus {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     opacity: .85;
 }
 
@@ -2441,7 +2441,7 @@ watch(locale, () => zeichne())
 
 .hypTabelle th {
     font-weight: 600;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-size: .851rem;
     cursor: pointer;
     white-space: nowrap;
@@ -2456,7 +2456,7 @@ watch(locale, () => zeichne())
 }
 
 .hypTritt {
-    color: var(--orange-color, #ffb300);
+    color: var(--warn);
     opacity: .8;
     margin-left: .35rem;
     font-size: .8rem;
@@ -2464,21 +2464,21 @@ watch(locale, () => zeichne())
 
 .hypKette {
     font-size: .782rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-left: .4rem;
 }
 
 .hypDex {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-right: .35rem;
 }
 
 .hypStern {
     cursor: pointer;
     margin-right: .35rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     opacity: .45;
     font-size: .977rem;
 }
@@ -2503,7 +2503,7 @@ watch(locale, () => zeichne())
 
 .hypFavTitel {
     font-size: .897rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-right: .3rem;
 }
 
@@ -2513,19 +2513,19 @@ watch(locale, () => zeichne())
     font-weight: 600;
     padding: .2rem .6rem;
     border-radius: 999px;
-    background: var(--black-bg-2, rgba(255, 255, 255, .05));
+    background: var(--bg);
     border: 1px solid transparent;
     color: inherit;
     cursor: pointer;
 }
 
 .hypFavChip:hover {
-    border-color: var(--grey-color, #9aa0a6);
+    border-color: var(--leise);
 }
 
 .hypFavChip.aktiv {
-    border-color: var(--blue-color, #4da3ff);
-    color: var(--blue-color, #4da3ff);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .hypFavKette {
@@ -2557,7 +2557,7 @@ watch(locale, () => zeichne())
 }
 
 .hypKarte {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .55rem .7rem;
 }
@@ -2586,13 +2586,13 @@ watch(locale, () => zeichne())
 .hypKarteWert {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: .828rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypKarteHinweise {
     margin-top: .4rem;
     font-size: .828rem;
-    color: var(--orange-color, #ffb300);
+    color: var(--warn);
 }
 
 /* ── Schmale Fenster ────────────────────────────────────── */
@@ -2639,7 +2639,7 @@ watch(locale, () => zeichne())
     padding: 0 .25rem;
     margin-left: .35rem;
     border-radius: 999px;
-    background: var(--red-color, #e06c75);
+    background: var(--bad);
     color: #fff;
     font-size: .713rem;
     text-align: center;
@@ -2656,36 +2656,36 @@ watch(locale, () => zeichne())
     gap: .6rem;
     padding: .4rem .6rem;
     border-radius: 6px;
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
-    border-left: 3px solid var(--grey-color, #9aa0a6);
+    background: var(--bg);
+    border-left: 3px solid var(--leise);
     font-size: .92rem;
 }
 
-.hypAlarm.warnung { border-left-color: var(--orange-color, #ffb300); }
-.hypAlarm.kritisch { border-left-color: var(--red-color, #e06c75); }
+.hypAlarm.warnung { border-left-color: var(--warn); }
+.hypAlarm.kritisch { border-left-color: var(--bad); }
 .hypAlarm.gelesen { opacity: .55; }
 .hypAlarmLink { cursor: pointer; }
-.hypAlarmLink:hover { text-decoration: underline; color: var(--blue-color, #01B4FF); }
+.hypAlarmLink:hover { text-decoration: underline; color: var(--accent); }
 
 .hypAlarmSchwere {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: .736rem;
     text-transform: uppercase;
     letter-spacing: .06em;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     flex: none;
     width: 4.5rem;
 }
 
-.hypAlarm.kritisch .hypAlarmSchwere { color: var(--red-color, #e06c75); }
-.hypAlarm.warnung .hypAlarmSchwere { color: var(--orange-color, #ffb300); }
+.hypAlarm.kritisch .hypAlarmSchwere { color: var(--bad); }
+.hypAlarm.warnung .hypAlarmSchwere { color: var(--warn); }
 
 .hypAlarmText { flex: 1; }
 
 .hypAlarmZeit {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: .782rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     flex: none;
 }
 
@@ -2699,7 +2699,7 @@ watch(locale, () => zeichne())
 .hypAlarmWeg:hover { opacity: 1; }
 
 .hypAlarmWeg.scharf {
-    color: var(--red-color, #e06c75);
+    color: var(--bad);
     opacity: 1;
 }
 
@@ -2738,8 +2738,8 @@ watch(locale, () => zeichne())
 }
 
 .hypLive {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
-    border: 1px solid var(--blue-color, #4da3ff);
+    background: var(--bg);
+    border: 1px solid var(--accent);
     border-radius: var(--border-radius, 8px);
     padding: .8rem 1rem;
     margin-bottom: 1.25rem;
@@ -2755,7 +2755,7 @@ watch(locale, () => zeichne())
 
 .hypLiveStand {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-left: .5rem;
 }
 
@@ -2790,27 +2790,27 @@ watch(locale, () => zeichne())
 
 .hypLiveLabel {
     font-size: .782rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-top: .1rem;
 }
 
 .hypLiveExtra {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-top: .1rem;
 }
 
 .hypLiveHinweise {
     margin-top: .6rem;
     font-size: .851rem;
-    color: var(--orange-color, #ffb300);
+    color: var(--warn);
 }
 
 /* Kürzel der eigenen Börsen: gefüllt, damit „hier handelbar" sich von der
    blossen Herkunftsangabe des DEX abhebt. */
 .hypBoerse.namensgleich {
     background: transparent;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     border: 1px dashed currentColor;
     cursor: help;
 }
@@ -2822,7 +2822,7 @@ watch(locale, () => zeichne())
     font-weight: 600;
     padding: .06rem .3rem;
     border-radius: 4px;
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
     color: #fff;
     margin-right: .25rem;
     vertical-align: middle;
@@ -2860,7 +2860,7 @@ watch(locale, () => zeichne())
 
 .hypNoteName {
     width: 5.5rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypBalken {
@@ -2874,7 +2874,7 @@ watch(locale, () => zeichne())
 .hypBalken i {
     display: block;
     height: 100%;
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
 }
 
 .hypNoteWert {
@@ -2905,7 +2905,7 @@ watch(locale, () => zeichne())
 .hypBerichtKarte {
     position: relative;
     min-width: 15rem;
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .6rem .8rem;
     cursor: pointer;
@@ -2913,12 +2913,12 @@ watch(locale, () => zeichne())
 }
 
 .hypBerichtKarte.aktiv {
-    border-color: var(--blue-color, #4da3ff);
+    border-color: var(--accent);
 }
 
 .hypBerichtDatum {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypBerichtTitel {
@@ -2929,7 +2929,7 @@ watch(locale, () => zeichne())
 
 .hypBerichtMeta {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypLoeschen {
@@ -2945,7 +2945,7 @@ watch(locale, () => zeichne())
 }
 
 .hypLoeschen.scharf {
-    color: var(--red-color, #e06c75);
+    color: var(--bad);
     opacity: 1;
 }
 
@@ -2960,12 +2960,12 @@ watch(locale, () => zeichne())
 
 .hypMarktkontext {
     font-size: 1.058rem;
-    color: var(--grey-color, #c9cdd2);
+    color: var(--leise);
     margin-bottom: 1.25rem;
 }
 
 .hypKandidat {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .8rem 1rem;
     margin-bottom: .75rem;
@@ -2981,12 +2981,12 @@ watch(locale, () => zeichne())
 
 .hypKandidatName {
     font-size: .92rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypNoten {
     font-size: .851rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypAbschnitte {
@@ -2996,7 +2996,7 @@ watch(locale, () => zeichne())
 
 .hypAbschnitte dt {
     font-size: .828rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-weight: 600;
     margin-top: .4rem;
 }
@@ -3018,9 +3018,9 @@ watch(locale, () => zeichne())
 .hypDisclaimer {
     margin-top: 1.5rem;
     padding: .6rem .8rem;
-    border-left: 3px solid var(--grey-color, #9aa0a6);
+    border-left: 3px solid var(--leise);
     font-size: .897rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 /* ── Einstellungen ──────────────────────────────────────────────── */
@@ -3032,11 +3032,11 @@ watch(locale, () => zeichne())
 .hypEinstTrenner {
     margin-top: 1.75rem;
     padding-top: .75rem;
-    border-top: 1px solid var(--white-10, rgba(255, 255, 255, .1));
+    border-top: 1px solid var(--line);
     font-size: .8rem;
     letter-spacing: .04em;
     text-transform: uppercase;
-    color: var(--grey-text, #8a9199);
+    color: var(--muted);
 }
 
 .hypZahl {
@@ -3067,12 +3067,12 @@ watch(locale, () => zeichne())
 
 .hypSumme {
     font-size: .874rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-top: .3rem;
 }
 
 .hypSumme.falsch {
-    color: var(--orange-color, #ffb300);
+    color: var(--warn);
 }
 
 .hypQuellen {
@@ -3088,7 +3088,7 @@ watch(locale, () => zeichne())
 .hypBerichtProjekt {
     margin-top: .5rem;
     padding-top: .5rem;
-    border-top: 1px solid var(--white-10, rgba(255, 255, 255, .1));
+    border-top: 1px solid var(--line);
 }
 
 /* Zugangsdaten der Quellen: eine Zeile je Quelle, Feld und Bezugsquelle
@@ -3123,7 +3123,7 @@ watch(locale, () => zeichne())
 
 .hypStufe {
     display: block;
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border: 1px solid transparent;
     border-radius: var(--border-radius, 8px);
     padding: .5rem .75rem;
@@ -3131,7 +3131,7 @@ watch(locale, () => zeichne())
 }
 
 .hypStufe.aktiv {
-    border-color: var(--blue-color, #4da3ff);
+    border-color: var(--accent);
 }
 
 .hypStufe input {
@@ -3146,12 +3146,12 @@ watch(locale, () => zeichne())
 
 .hypStufePreis {
     font-size: .851rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .hypStufeModelle {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -3159,7 +3159,7 @@ watch(locale, () => zeichne())
     max-width: 40rem;
     margin-top: .6rem;
     padding: .75rem .9rem;
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
 }
 

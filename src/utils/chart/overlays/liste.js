@@ -6,15 +6,15 @@
  * Chart. Was Netz oder Rechenzeit kostet, ist ab Werk aus.
  */
 export const OVERLAYS = [
-    { id: 'journal', icon: 'uil uil-book-alt', vorgabe: true },
-    { id: 'positionen', icon: 'uil uil-crosshair', vorgabe: true },
+    { id: 'journal', vorgabe: true },
+    { id: 'positionen', vorgabe: true },
     // Nur Datenbank, kein Fremdabruf — deshalb ebenfalls ab Werk an.
-    { id: 'strategie', icon: 'uil uil-robot', vorgabe: true },
+    { id: 'strategie', vorgabe: true },
     // Kosten Abrufe (Orderbuch alle 10 s, Gewicht 10) oder sind ein Modell —
     // deshalb ab Werk aus.
-    { id: 'liquidationen', icon: 'uil uil-fire', vorgabe: false },
-    { id: 'hebelzonen', icon: 'uil uil-layer-group', vorgabe: false },
-    { id: 'orderbuch', icon: 'uil uil-list-ul', vorgabe: false },
+    { id: 'liquidationen', vorgabe: false },
+    { id: 'hebelzonen', vorgabe: false },
+    { id: 'orderbuch', vorgabe: false },
 ]
 
 export function overlayAn(panel, id) {

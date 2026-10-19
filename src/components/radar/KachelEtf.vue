@@ -236,7 +236,7 @@ watch(() => props.daten, zeichne)
     justify-content: center;
     gap: 0.5rem;
     text-align: center;
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.85rem;
 }
 
@@ -248,7 +248,7 @@ watch(() => props.daten, zeichne)
 .etfLeer p { margin: 0; }
 
 .etfLink {
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
     text-decoration: none;
     white-space: nowrap;
 }
@@ -265,7 +265,7 @@ watch(() => props.daten, zeichne)
     font-weight: 700;
     line-height: 1.1;
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .etfFluss.zu { color: #26be96; }
@@ -273,13 +273,13 @@ watch(() => props.daten, zeichne)
 
 .etfEinheit {
     font-size: 0.85rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .etfTag {
     margin-left: auto;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
 }
 
@@ -290,11 +290,11 @@ watch(() => props.daten, zeichne)
     flex-wrap: wrap;
     margin-top: 0.15rem;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .etfZeile b {
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
@@ -317,11 +317,11 @@ watch(() => props.daten, zeichne)
 
 .etfFuss {
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .etfFuss b {
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
@@ -338,28 +338,28 @@ watch(() => props.daten, zeichne)
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     padding-bottom: 0.3rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .etfTabelle td {
     padding: 0.28rem 0;
-    color: var(--white-87);
+    color: var(--text);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     font-variant-numeric: tabular-nums;
 }
 
 .etfTabelle .r { text-align: right; }
-.etfTabelle .sub { color: var(--white-60); }
+.etfTabelle .sub { color: var(--muted); }
 .etfTabelle .zu { color: #26be96; }
 .etfTabelle .ab { color: rgb(255, 95, 86); }
 
-.etfRest td { color: var(--white-60); font-style: italic; }
+.etfRest td { color: var(--muted); font-style: italic; }
 
 .etfNotiz {
     margin: 0.7rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

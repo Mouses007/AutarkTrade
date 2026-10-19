@@ -4,7 +4,7 @@
  * Ersetzt die frühere style-dark.css. Enthält NUR, was die heutigen Seiten
  * noch brauchen und weder basis.css noch rahmen.css abdecken:
  *   A. alte Variablennamen als Aliase auf die Token aus tokens.css,
- *   B. Anpassungen an Bootstrap (dunkles Thema in Token-Farben),
+ *   B. Browser-Felder und Quill im dunklen Thema,
  *   C. geteiltes Chrom mehrerer Seiten (Live-Kopf, Pillen, Kachelraster …),
  *   D. seitenspezifische Klassen, gruppiert nach der Datei, die sie benutzt.
  *
@@ -13,9 +13,8 @@
  * rahmen.css gewinnen bei gleicher Spezifität.
  *
  * Abbau: in S9 Teil 2 (Bootstrap-Entfernung) wandern die Gruppen in ihre
- * Komponenten bzw. die Bausteine unter components/basis/, Abschnitt B fällt
- * mit Bootstrap weg, Abschnitt A, sobald keine Datei die alten Namen mehr
- * benutzt.
+ * Komponenten bzw. die Bausteine unter components/basis/; Abschnitt A fällt,
+ * sobald keine Datei die alten Namen mehr benutzt.
  */
 
 /* =========================================================================
@@ -71,10 +70,10 @@
 }
 
 /* =========================================================================
- * B. Bootstrap im dunklen Thema
- *    Nur Punkte, die rahmen.css (Bootstrap-Variablen, Formularfelder,
- *    Modal-Fläche, Dropdown-Variablen) nicht schon regelt.
- *    Fällt in S9 Teil 2 mit Bootstrap weg.
+ * B. Browser- und Fremdbausteine im dunklen Thema
+ *    Datumsfelder, Quill, v-cloak. Die Bootstrap-Anpassungen (Reiter,
+ *    Tabellen, Modale, Popover, Aufklappmenüs) sind mit Bootstrap in S9
+ *    Teil 2 weggefallen; den Grundstil trägt jetzt basis.css.
  * ========================================================================= */
 
 /* Grundverhalten */
@@ -107,112 +106,6 @@ li[data-list="bullet"] { list-style-type: disc; }
     clip: rect(0, 0, 0, 0) !important;
     white-space: nowrap !important;
     border: 0 !important;
-}
-
-.text-muted { color: var(--muted) !important; }
-
-/* Formularfelder: rahmen.css setzt Fläche, Rand, Fokus. Hier nur der Rest. */
-.form-control, .form-select { transition: border-color 0.15s, box-shadow 0.15s; }
-
-.form-control:disabled, .form-control[readonly], .form-select:disabled {
-    background-color: var(--panel);
-    color: var(--text);
-    opacity: 1;
-}
-
-/* Reiter */
-.nav-tabs {
-    --bs-nav-tabs-border-color: var(--line);
-    --bs-nav-tabs-link-hover-border-color: transparent;
-    --bs-nav-tabs-link-active-bg: var(--panel);
-    --bs-nav-tabs-link-active-color: var(--accent);
-    --bs-nav-tabs-link-active-border-color: var(--line) var(--line) var(--panel);
-    --bs-nav-tabs-border-radius: var(--radius-knopf);
-}
-
-.nav-link { color: var(--text); }
-
-.nav-link:hover, .nav-link:focus { color: var(--accent); }
-
-/* Aufklappmenüs: Variablen stehen in rahmen.css. */
-.dropdown-menu { border-radius: var(--radius-knopf); box-shadow: var(--schatten); overflow: hidden; }
-
-.dropdown-item.active, .dropdown-item:active {
-    background: var(--accent-flaeche) !important;
-    color: var(--accent) !important;
-}
-
-/* Knopf in `.dropdown` sieht aus wie ein Auswahlfeld (SidebarFilters, Daily). */
-.dropdown > .btn {
-    width: 100%;
-    text-align: left;
-    background-color: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--line-stark);
-    padding-right: 2rem;
-    background-image: var(--bs-form-select-bg-img);
-    background-repeat: no-repeat;
-    background-position: right 0.6rem center;
-    background-size: 12px 10px;
-}
-
-.dropdown > .dropdown-toggle::after { display: none; }
-
-.btn-secondary:focus, .btn-secondary:active { box-shadow: none !important; }
-
-/* Dialoge */
-.modal-content { box-shadow: var(--schatten); }
-
-.row > .modal { padding: 0; }
-
-#evalPopupModal .modal-dialog { max-width: 520px; }
-#evalPopupModal .modal-body { max-height: 75vh; overflow-y: auto; }
-#evalPopupModal .modal-header, #evalPopupModal .modal-footer { padding: 0.5rem 1rem; }
-
-#tradesModal .modal-dialog { max-width: 90vw; margin-top: 1rem; }
-
-/* Tabellen: Zellen dunkel statt Bootstrap-Weiss. */
-table { color: var(--text) !important; }
-
-.table {
-    --bs-table-bg: var(--panel);
-    --bs-table-color: var(--text);
-    --bs-table-border-color: var(--line);
-    --bs-table-striped-bg: var(--panel-soft);
-    --bs-table-hover-bg: var(--panel-soft);
-    --bs-table-hover-color: var(--text);
-    border-radius: var(--radius-knopf);
-    overflow: hidden;
-}
-
-/* Popover (Lösch-Rückfrage) und breiter Tooltip — erzeugt Bootstrap zur Laufzeit. */
-.popover {
-    --bs-popover-bg: var(--panel-soft);
-    --bs-popover-border-color: var(--line-stark);
-    --bs-popover-body-color: var(--muted);
-    --bs-popover-border-radius: var(--radius-knopf);
-    --bs-popover-arrow-border: var(--line-stark);
-    box-shadow: var(--schatten);
-}
-
-.tooltipLargeLeft .tooltip-inner { max-width: 360px; text-align: left; }
-
-/* Handy: waagerecht scrollende Tabellen, Fingermasse. */
-@media (max-width: 991.98px) {
-    .table-responsive, .tab-content { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .table-responsive table:not(.stats-table),
-    .tab-content .table-responsive table:not(.stats-table) { min-width: 600px; }
-}
-
-@media (max-width: 767.98px) {
-    .form-control, .form-select { min-height: 40px; }
-    .btn { min-height: 40px; }
-    .btn-sm { min-height: 34px; padding: 0.2rem 0.55rem; }
-    .mb-3 { margin-bottom: 0.6rem !important; }
-    .nav-tabs .nav-link { padding: 0.4rem 0.6rem; font-size: 0.85rem; }
-    #evalPopupModal .modal-dialog { max-width: none; margin: 0.5rem; }
-    #tradesModal .modal-dialog { max-width: none; margin: 0; min-height: 100dvh; }
-    #tradesModal .modal-content { min-height: 100dvh; border-radius: 0; }
 }
 
 /* Quill (Playbook.vue, Incoming.vue) — Werkzeugleiste in Akzent. */

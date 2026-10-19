@@ -156,13 +156,13 @@ const name = (id) => t(`livetrading.handelszeiten.${id}`)
     font-size: 0.62rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .zSpanne {
     font-size: 0.62rem;
     letter-spacing: 0.12em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-top: 0.1rem;
 }
 
@@ -189,7 +189,7 @@ const name = (id) => t(`livetrading.handelszeiten.${id}`)
     left: 3px;
     font-size: 0.6rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 /* Sitzungen als flache Bänder, die laufende in Akzentfarbe. */
@@ -207,11 +207,11 @@ const name = (id) => t(`livetrading.handelszeiten.${id}`)
     top: 12px;
     left: 2px;
     font-size: 0.62rem;
-    color: var(--white-38);
+    color: var(--muted);
     white-space: nowrap;
 }
 
-.zBlock.zAktiv .zBlockText { color: var(--white-60); }
+.zBlock.zAktiv .zBlockText { color: var(--muted); }
 
 .zUeberlappung {
     position: absolute;
@@ -220,7 +220,7 @@ const name = (id) => t(`livetrading.handelszeiten.${id}`)
     font-size: 0.58rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--blue-color);
+    color: var(--accent);
 }
 
 /*
@@ -252,7 +252,7 @@ const name = (id) => t(`livetrading.handelszeiten.${id}`)
 }
 
 .zTermin.zHoch .zTerminText { color: #ff5f56; }
-.zTermin.zVorbei .zTerminText { color: var(--white-38); }
+.zTermin.zVorbei .zTerminText { color: var(--muted); }
 
 .zNadel {
     position: absolute;

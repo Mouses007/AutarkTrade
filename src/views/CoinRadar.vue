@@ -1999,12 +1999,12 @@ onBeforeUnmount(() => {
 
 .crEinstZeile {
     font-size: .76rem;
-    color: var(--white-60, rgba(255, 255, 255, .6));
+    color: var(--muted);
     cursor: pointer;
 }
 
 .crEinstZeile:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .crKnoepfe {
@@ -2016,7 +2016,7 @@ onBeforeUnmount(() => {
 
 .crFortschritt {
     font-size: .897rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .crLeerIcon {
@@ -2035,7 +2035,7 @@ onBeforeUnmount(() => {
 }
 
 .crZelle {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .7rem .85rem;
 }
@@ -2058,7 +2058,7 @@ onBeforeUnmount(() => {
 
 .crLabel {
     font-size: .874rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .crExtra {
@@ -2078,8 +2078,8 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: flex-start;
     gap: .3rem;
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
-    border-left: 3px solid var(--blue-color, #4da3ff);
+    background: var(--bg);
+    border-left: 3px solid var(--accent);
     border-radius: var(--border-radius, 8px);
     padding: .7rem .9rem;
     margin-bottom: 1.1rem;
@@ -2089,7 +2089,7 @@ onBeforeUnmount(() => {
 
 .crQuelle {
     font-size: .782rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     display: block;
     margin-top: .3rem;
 }
@@ -2115,7 +2115,7 @@ onBeforeUnmount(() => {
 }
 
 .crChip.aktiv {
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
     color: #fff;
 }
 
@@ -2135,7 +2135,7 @@ onBeforeUnmount(() => {
 
 /* ── Dritte Achse: BTC ──────────────────────────────────── */
 .crEigen {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 /* Der Gleichlauf ist im Zeitraum zerbrochen. Warnfarbe, weil die
@@ -2147,14 +2147,14 @@ onBeforeUnmount(() => {
 /* Unaufdringlich: Das Zeichen erklärt einen Grundsatz, es meldet nichts. */
 .crInfoWink {
     margin-left: .35rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     cursor: help;
     font-size: .9em;
 }
 
 .crHinweisWort {
     margin-left: .4rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-weight: 400;
 }
 
@@ -2168,14 +2168,14 @@ onBeforeUnmount(() => {
     padding: 0 .22rem;
     border-radius: 3px;
     background: rgba(255, 255, 255, .05);
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-size: .68rem;
     vertical-align: middle;
     text-decoration: none;
 }
 
 a.crBoersePunkt:hover {
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
     color: #fff;
 }
 
@@ -2191,7 +2191,7 @@ a.crBoersePunkt:hover {
 
 .crTabelle th {
     font-weight: 600;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-size: .851rem;
     cursor: pointer;
     white-space: nowrap;
@@ -2218,12 +2218,12 @@ a.crBoersePunkt:hover {
 }
 
 .crStark {
-    color: var(--blue-color, #4da3ff);
+    color: var(--accent);
     font-weight: 600;
 }
 
 .crRangZelle {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-variant-numeric: tabular-nums;
 }
 
@@ -2233,15 +2233,15 @@ a.crBoersePunkt:hover {
 }
 
 .crNote.gut {
-    color: var(--green-color, #4caf50);
+    color: var(--good);
 }
 
 .crNote.mittel {
-    color: var(--orange-color, #ffb300);
+    color: var(--warn);
 }
 
 .crNote.schwach {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .crBadge {
@@ -2252,7 +2252,7 @@ a.crBoersePunkt:hover {
 .crStern {
     cursor: pointer;
     margin-right: .35rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     opacity: .45;
     font-size: .977rem;
 }
@@ -2272,7 +2272,7 @@ a.crBoersePunkt:hover {
     padding: 0 .3rem;
     border-radius: 3px;
     background: rgba(255, 255, 255, .08);
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-size: .69rem;
     letter-spacing: .03em;
     text-decoration: none;
@@ -2287,16 +2287,16 @@ a.crBoerse {
 }
 
 a.crBoerse:hover, a.crBoerse:active {
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
     color: #fff;
 }
 
 .crZeTabelle tr.crBeste {
-    color: var(--green-color, #4caf50);
+    color: var(--good);
 }
 
 .crBestaetigt {
-    color: var(--green-color, #4caf50);
+    color: var(--good);
     font-size: .92rem;
     margin-left: .3rem;
 }
@@ -2315,7 +2315,7 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crDetailTitel {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     text-transform: uppercase;
     letter-spacing: .04em;
     margin-bottom: .4rem;
@@ -2348,7 +2348,7 @@ a.crBoerse:hover, a.crBoerse:active {
 .crBalken i {
     display: block;
     height: 100%;
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
 }
 
 .crNoteWert {
@@ -2364,7 +2364,7 @@ a.crBoerse:hover, a.crBoerse:active {
 }
 
 .crZeTabelle th {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-weight: 500;
     text-align: right;
     padding-right: .5rem;
@@ -2388,7 +2388,7 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crHinweise {
     font-size: .828rem;
-    color: var(--orange-color, #ffb300);
+    color: var(--warn);
 }
 
 /* ── Karten am Telefon ──────────────────────────────────── */
@@ -2398,7 +2398,7 @@ a.crBoerse:hover, a.crBoerse:active {
 }
 
 .crKarte {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .6rem .7rem;
     cursor: pointer;
@@ -2413,7 +2413,7 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crRang {
     font-size: .805rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     min-width: 1.5rem;
     font-variant-numeric: tabular-nums;
 }
@@ -2424,7 +2424,7 @@ a.crBoerse:hover, a.crBoerse:active {
     gap: .75rem;
     margin-top: .35rem;
     font-size: .828rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .crPaar b {
@@ -2452,21 +2452,21 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crHinweis {
     font-size: .897rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-bottom: .6rem;
 }
 
 .crMehr {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-size: .85rem;
-    border: 1px solid var(--black-bg-soft, #2a2a2a);
+    border: 1px solid var(--line-stark);
     border-radius: var(--border-radius, 6px);
     padding: .25rem .8rem;
 }
 
 .crMehr:hover {
-    color: var(--white-color, #e8eaed);
-    border-color: var(--blue-color, #4f8bff);
+    color: var(--text);
+    border-color: var(--accent);
 }
 
 .crKlein {
@@ -2517,7 +2517,7 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crDauer.aktiv {
     background: rgba(79, 139, 255, .1);
-    border-color: var(--blue-color, #4f8bff);
+    border-color: var(--accent);
 }
 
 .crDauerSymbol {
@@ -2527,15 +2527,15 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crDauerWert {
     font-size: .851rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-variant-numeric: tabular-nums;
 }
 
 /* ── Coin-Info-Feld ─────────────────────────────────────── */
 .crCoinInfo {
     position: relative;
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
-    border: 1px solid var(--black-bg-soft, #2a2a2a);
+    background: var(--bg);
+    border: 1px solid var(--line-stark);
     border-radius: var(--border-radius, 8px);
     padding: .9rem 1rem;
     font-size: .87rem;
@@ -2547,13 +2547,13 @@ a.crBoerse:hover, a.crBoerse:active {
     right: .5rem;
     background: transparent;
     border: 0;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     cursor: pointer;
     padding: .2rem;
 }
 
 .crCoinInfoZu:hover {
-    color: var(--white-color, #e8eaed);
+    color: var(--text);
 }
 
 .crCoinInfoKopf {
@@ -2574,7 +2574,7 @@ a.crBoerse:hover, a.crBoerse:active {
 .crCoinInfoRang {
     display: block;
     font-size: .76rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .crCoinInfoTags {
@@ -2589,7 +2589,7 @@ a.crBoerse:hover, a.crBoerse:active {
     padding: .1rem .45rem;
     border-radius: 999px;
     background: rgba(255, 255, 255, .06);
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 
 .crCoinInfoText {
@@ -2609,7 +2609,7 @@ a.crBoerse:hover, a.crBoerse:active {
     background: transparent;
     border: 0;
     padding: 0;
-    color: var(--blue-color, #4f8bff);
+    color: var(--accent);
     font-size: .8rem;
     cursor: pointer;
     margin-bottom: .6rem;
@@ -2630,18 +2630,18 @@ a.crBoerse:hover, a.crBoerse:active {
     padding: .2rem .55rem;
     border-radius: 999px;
     background: rgba(255, 255, 255, .06);
-    color: var(--white-70, rgba(255, 255, 255, .7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     text-decoration: none;
 }
 
 .crCoinInfoLinks a:hover {
-    background: var(--blue-color, #4f8bff);
+    background: var(--accent);
     color: #fff;
 }
 
 .crCoinInfoFuss {
     font-size: .72rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin: .4rem 0 0;
     line-height: 1.4;
 }
@@ -2692,12 +2692,12 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crSumme {
     font-size: .897rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-top: .5rem;
 }
 
 .crSumme.warn {
-    color: var(--orange-color, #ffb300);
+    color: var(--warn);
 }
 
 /* ── Schmale Fenster ────────────────────────────────────── */
@@ -2715,8 +2715,8 @@ a.crBoerse:hover, a.crBoerse:active {
     align-items: center;
     gap: .5rem;
     flex-wrap: wrap;
-    background: var(--black-bg-soft, rgba(255, 255, 255, .03));
-    border: 1px solid var(--grey-color, rgba(255, 255, 255, .12));
+    background: var(--panel-soft);
+    border: 1px solid var(--leise);
     border-radius: var(--border-radius, 8px);
     padding: .5rem .75rem;
 }
@@ -2731,7 +2731,7 @@ a.crBoerse:hover, a.crBoerse:active {
     min-width: 0;
     background: transparent;
     border: none;
-    border-bottom: 1px solid var(--grey-color, rgba(255, 255, 255, .18));
+    border-bottom: 1px solid var(--leise);
     color: inherit;
     padding: .25rem .25rem;
     font-size: .9rem;
@@ -2740,7 +2740,7 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crEinzelFeld:focus {
     outline: none;
-    border-bottom-color: var(--blue-color, #4a9eff);
+    border-bottom-color: var(--accent);
 }
 
 .crEinzelFeld::placeholder {
@@ -2778,7 +2778,7 @@ a.crBoerse:hover, a.crBoerse:active {
 
 .crEinzelChip {
     background: rgba(255, 255, 255, .06);
-    border: 1px solid var(--grey-color, rgba(255, 255, 255, .15));
+    border: 1px solid var(--leise);
     border-radius: 999px;
     padding: .1rem .55rem;
     font-size: .75rem;
@@ -2786,15 +2786,15 @@ a.crBoerse:hover, a.crBoerse:active {
 }
 
 .crEinzelChip:hover {
-    border-color: var(--blue-color, #4a9eff);
+    border-color: var(--accent);
 }
 
 .crEinzelKarte {
     margin-top: .5rem;
     padding: .85rem 1rem 1rem;
     border-radius: var(--border-radius, 8px);
-    background: var(--black-bg-soft, rgba(255, 255, 255, .03));
-    border: 1px solid var(--grey-color, rgba(255, 255, 255, .12));
+    background: var(--panel-soft);
+    border: 1px solid var(--leise);
 }
 
 .crEinzelTitel {
@@ -2940,5 +2940,5 @@ a.crBoerse:hover, a.crBoerse:active {
 
 /* ── Tiefensuche ── */
 .crTiefe { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: .75rem; }
-.crTiefeHinweis { font-size: .8rem; color: var(--grey-text, #8a9199); }
+.crTiefeHinweis { font-size: .8rem; color: var(--muted); }
 </style>

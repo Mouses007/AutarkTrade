@@ -14,6 +14,9 @@ import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import { apiFehlerText } from '../utils/apiError.js'
+import Knopf from './basis/Knopf.vue'
+import Pille from './basis/Pille.vue'
+import Hinweis from './basis/Hinweis.vue'
 
 const { t } = useI18n()
 
@@ -260,143 +263,124 @@ const prozent = computed(() => {
 </script>
 
 <template>
-    <div class="mt-2">
-        <button class="btn btn-sm btn-outline-secondary" @click="oeffnen">
-            <i class="uil" :class="offen ? 'uil-angle-up' : 'uil-angle-down'"></i>
+    <div class="at-mo-2">
+        <Knopf klein :symbol="offen ? 'hoch' : 'runter'" @click="oeffnen">
             {{ t('settings.manageModels') }}
-        </button>
+        </Knopf>
 
-        <div v-if="offen" class="modelle mt-2 p-3">
+        <div v-if="offen" class="modelle at-mo-2 at-p-3">
             <!-- Anbieterwahl: Nur hier, nicht bei den Bild-Instanzen. Wer die
                  Modelle eines anderen Anbieters ansehen will, musste vorher die
                  ganze App umstellen — für eine Leseoperation. -->
-            <div v-if="waehlbar" class="d-flex align-items-center gap-2 mb-3">
-                <label class="small text-muted mb-0">{{ t('settings.modelsFor') }}</label>
-                <select class="form-select form-select-sm" style="max-width:14rem;"
+            <div v-if="waehlbar" class="at-flex at-mitte at-umbruch at-luecke-2 at-mu-3">
+                <label class="at-klein at-gedaempft">{{ t('settings.modelsFor') }}</label>
+                <select class="at-feld klein" style="max-width:14rem;"
                     :value="aktiv" @change="e => { gewaehlt = e.target.value; selbstGewaehlt = true }">
                     <option v-for="id in anbieterListe" :key="id" :value="id">{{ id }}</option>
                 </select>
-                <small v-if="aktiv !== provider" class="text-muted">
+                <small v-if="aktiv !== provider" class="at-gedaempft">
                     {{ t('settings.modelsOtherProvider') }}
                 </small>
             </div>
 
-            <div v-if="fehler" class="alert alert-danger py-2 small">{{ fehler }}</div>
-            <div v-if="meldung" class="alert alert-success py-2 small">{{ meldung }}</div>
+            <Hinweis v-if="fehler" art="fehler" class="at-mu-2">{{ fehler }}</Hinweis>
+            <Hinweis v-if="meldung" art="gut" class="at-mu-2">{{ meldung }}</Hinweis>
 
             <!-- ══ Ollama: was auf der Platte liegt ══ -->
             <template v-if="istOllama">
-                <p class="small text-muted mb-2">{{ t('settings.ollamaModelsHint') }}</p>
+                <p class="at-klein at-gedaempft at-mu-2">{{ t('settings.ollamaModelsHint') }}</p>
 
-                <table v-if="ollamaModelle.length" class="table table-sm table-borderless mb-2">
-                    <tbody>
-                        <tr v-for="m in ollamaModelle" :key="m.name">
-                            <td class="small"><span class="mono">{{ m.name }}</span></td>
-                            <td class="small text-muted">{{ m.parameter }} {{ m.quantisierung }}</td>
-                            <td class="small text-muted text-end">{{ mb(m.groesseBytes) }}</td>
-                            <td class="text-end" style="white-space: nowrap; width: 6rem;">
-                                <template v-if="loeschFrage === m.name">
-                                    <button class="btn btn-sm btn-danger py-0 me-1"
-                                        @click="ollamaLoeschen(m.name)">{{ t('common.yes') }}</button>
-                                    <button class="btn btn-sm btn-outline-secondary py-0"
-                                        @click="loeschFrage = null">{{ t('common.no') }}</button>
-                                </template>
-                                <button v-else class="btn btn-sm btn-outline-danger py-0"
-                                    :title="t('settings.deleteModel')" @click="loeschFrage = m.name">
-                                    <i class="uil uil-trash-alt"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p v-else class="small text-muted">{{ t('settings.noOllamaModels') }}</p>
+                <div v-if="ollamaModelle.length" class="at-tabelle-huelle at-mu-2">
+                    <table class="at-tabelle dicht ohneRand">
+                        <tbody>
+                            <tr v-for="m in ollamaModelle" :key="m.name">
+                                <td><span class="mono">{{ m.name }}</span></td>
+                                <td class="at-klein at-gedaempft">{{ m.parameter }} {{ m.quantisierung }}</td>
+                                <td class="at-klein at-gedaempft at-rechtsbuendig at-nowrap">{{ mb(m.groesseBytes) }}</td>
+                                <td class="at-rechtsbuendig" style="white-space: nowrap; width: 6rem;">
+                                    <span v-if="loeschFrage === m.name" class="at-iflex at-luecke-1">
+                                        <Knopf art="gefahr" klein @click="ollamaLoeschen(m.name)">{{ t('common.yes') }}</Knopf>
+                                        <Knopf art="leise" klein @click="loeschFrage = null">{{ t('common.no') }}</Knopf>
+                                    </span>
+                                    <Knopf v-else art="leise" klein nur-symbol symbol="muell"
+                                        :titel="t('settings.deleteModel')" @click="loeschFrage = m.name" />
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p v-else class="at-klein at-gedaempft">{{ t('settings.noOllamaModels') }}</p>
 
-                <div v-if="download" class="mb-2">
-                    <div class="d-flex align-items-center gap-2 small">
-                        <span class="me-auto">{{ download.name }} — {{ download.status }}</span>
+                <div v-if="download" class="at-mu-2">
+                    <div class="at-flex at-mitte at-umbruch at-luecke-2 at-klein">
+                        <span class="at-wachsen">{{ download.name }} — {{ download.status }}</span>
                         <span v-if="download.gesamt">{{ mb(download.fertig) }} / {{ mb(download.gesamt) }}</span>
-                        <button class="btn btn-sm btn-outline-danger py-0" @click="abbrechen">
-                            {{ t('common.cancel') }}
-                        </button>
+                        <Knopf art="leise" klein @click="abbrechen">{{ t('common.cancel') }}</Knopf>
                     </div>
-                    <div class="progress mt-1" style="height: 6px;">
-                        <div class="progress-bar" :style="{ width: prozent + '%' }"></div>
+                    <div class="fortschritt at-mo-1" role="progressbar" :aria-valuenow="prozent" aria-valuemin="0" aria-valuemax="100">
+                        <div class="fortschrittBalken" :style="{ width: prozent + '%' }"></div>
                     </div>
                 </div>
 
-                <div class="d-flex gap-2">
-                    <input v-model="neuerName" class="form-control form-control-sm"
+                <div class="at-flex at-luecke-2">
+                    <input v-model="neuerName" class="at-feld klein at-wachsen"
                         :placeholder="t('settings.ollamaPullPlaceholder')"
                         :disabled="!!download" @keydown.enter.prevent="herunterladen" />
-                    <button class="btn btn-sm btn-success" :disabled="!!download || !neuerName.trim()"
-                        @click="herunterladen">
-                        <i class="uil uil-download-alt me-1"></i>{{ t('settings.download') }}
-                    </button>
+                    <Knopf art="haupt" klein symbol="herunterladen" :disabled="!!download || !neuerName.trim()"
+                        @click="herunterladen">{{ t('settings.download') }}</Knopf>
                 </div>
-                <small class="text-muted">{{ t('settings.ollamaPullHint') }}</small>
+                <p class="at-hilfe">{{ t('settings.ollamaPullHint') }}</p>
             </template>
 
             <!-- ══ Cloud-Anbieter: freie Liste ══ -->
             <template v-else>
-                <p class="small text-muted mb-2">{{ t('settings.cloudModelsHint') }}</p>
+                <p class="at-klein at-gedaempft at-mu-2">{{ t('settings.cloudModelsHint') }}</p>
 
-                <div v-for="m in eigene" :key="m" class="d-flex align-items-center gap-2 mb-1">
-                    <span class="mono small me-auto">{{ m }}</span>
-                    <span v-if="istOhneSampling(m)" class="badge bg-dark"
-                        :title="t('settings.noSamplingHint')">{{ t('settings.noSampling') }}</span>
-                    <button class="btn btn-sm btn-outline-danger py-0" @click="entfernen(m)">
-                        <i class="uil uil-times"></i>
-                    </button>
+                <div v-for="m in eigene" :key="m" class="at-flex at-mitte at-luecke-2 at-mu-1">
+                    <span class="mono at-wachsen">{{ m }}</span>
+                    <Pille v-if="istOhneSampling(m)" ton="neutral"
+                        :title="t('settings.noSamplingHint')">{{ t('settings.noSampling') }}</Pille>
+                    <Knopf art="leise" klein nur-symbol symbol="schliessen" :titel="t('common.remove')" @click="entfernen(m)" />
                 </div>
 
-                <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-sm btn-outline-primary" :disabled="holtAngebot"
-                        @click="angebotHolen">
-                        <span v-if="holtAngebot" class="spinner-border spinner-border-sm me-1"></span>
-                        <i v-else class="uil uil-cloud-download me-1"></i>{{ t('settings.fetchFromProvider') }}
-                    </button>
-                    <button v-if="angebot" class="btn btn-sm btn-outline-secondary"
-                        @click="angebot = null; angebotSuche = ''">
+                <div class="at-flex at-umbruch at-luecke-2 at-mo-3">
+                    <Knopf klein symbol="herunterladen" :laedt="holtAngebot" @click="angebotHolen">
+                        {{ t('settings.fetchFromProvider') }}
+                    </Knopf>
+                    <Knopf v-if="angebot" art="leise" klein @click="angebot = null; angebotSuche = ''">
                         {{ t('common.close') }}
-                    </button>
+                    </Knopf>
                 </div>
 
-                <div v-if="angebot" class="angebot mt-2 p-2">
-                    <div class="d-flex align-items-center mb-1 gap-2">
-                        <span class="small text-muted me-auto">
+                <div v-if="angebot" class="angebot at-mo-2 at-p-2">
+                    <div class="at-flex at-mitte at-luecke-2 at-mu-1">
+                        <span class="at-klein at-gedaempft at-wachsen">
                             {{ angebotSuche.trim() ? t('settings.providerOffersFiltered', { n: angebotGefiltert.length, gesamt: angebot.length }) : t('settings.providerOffers', { n: angebot.length }) }}
                         </span>
-                        <button class="btn btn-sm btn-outline-primary py-0" @click="alleUebernehmen">
-                            {{ t('settings.addAll') }}
-                        </button>
+                        <Knopf klein @click="alleUebernehmen">{{ t('settings.addAll') }}</Knopf>
                     </div>
-                    <input v-model="angebotSuche" type="text" class="form-control form-control-sm mb-2"
+                    <input v-model="angebotSuche" type="text" class="at-feld klein at-mu-2"
                         :placeholder="t('settings.searchModelsPlaceholder')" />
-                    <div v-if="!angebotGefiltert.length" class="small text-muted py-1">
+                    <div v-if="!angebotGefiltert.length" class="at-klein at-gedaempft at-py-1">
                         {{ t('settings.noModelsMatch') }}
                     </div>
-                    <div v-for="m in angebotGefiltert" :key="m" class="d-flex align-items-center gap-2 py-1">
-                        <span class="mono small me-auto" :class="{ 'text-muted': eigene.includes(m) }">{{ m }}</span>
-                        <span v-if="istOhneSampling(m)" class="badge bg-dark">{{ t('settings.noSampling') }}</span>
-                        <span v-if="eigene.includes(m)" class="small text-muted">{{ t('settings.alreadyInList') }}</span>
-                        <button v-else class="btn btn-sm btn-outline-primary py-0" @click="uebernehmen(m)">
-                            <i class="uil uil-plus"></i>
-                        </button>
+                    <div v-for="m in angebotGefiltert" :key="m" class="at-flex at-mitte at-luecke-2 at-py-1">
+                        <span class="mono at-wachsen" :class="{ 'at-gedaempft': eigene.includes(m) }">{{ m }}</span>
+                        <Pille v-if="istOhneSampling(m)" ton="neutral">{{ t('settings.noSampling') }}</Pille>
+                        <span v-if="eigene.includes(m)" class="at-klein at-gedaempft">{{ t('settings.alreadyInList') }}</span>
+                        <Knopf v-else klein nur-symbol symbol="plus" :titel="t('settings.addModel')" @click="uebernehmen(m)" />
                     </div>
                 </div>
 
-                <div class="d-flex gap-2 mt-2">
-                    <input v-model="neuerName" class="form-control form-control-sm"
+                <div class="at-flex at-umbruch at-luecke-2 at-mo-2">
+                    <input v-model="neuerName" class="at-feld klein at-wachsen"
                         :placeholder="t('settings.modelNamePlaceholder')"
                         @keydown.enter.prevent="hinzufuegen" />
-                    <button class="btn btn-sm btn-outline-primary" :disabled="laedt || !neuerName.trim()"
-                        @click="hinzufuegen">
-                        <i class="uil uil-plus"></i>
-                    </button>
-                    <button v-if="abweichend" class="btn btn-sm btn-outline-secondary"
-                        :disabled="laedt" @click="zuruecksetzen">
+                    <Knopf klein nur-symbol symbol="plus" :titel="t('settings.addModel')"
+                        :disabled="laedt || !neuerName.trim()" @click="hinzufuegen" />
+                    <Knopf v-if="abweichend" art="leise" klein :disabled="laedt" @click="zuruecksetzen">
                         {{ t('settings.resetList') }}
-                    </button>
+                    </Knopf>
                 </div>
             </template>
         </div>
@@ -405,20 +389,39 @@ const prozent = computed(() => {
 
 <style scoped>
 .modelle {
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
-    border-radius: var(--border-radius, 6px);
-    background: var(--black-bg-5, rgba(0, 0, 0, 0.2));
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    background: var(--panel-soft);
 }
 
 .mono {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--schrift-mono);
     font-size: 0.8rem;
+    overflow-wrap: anywhere;
+    min-width: 0;
+}
+
+.ohneRand td {
+    border-bottom: 0;
 }
 
 .angebot {
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
-    border-radius: var(--border-radius, 6px);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
     max-height: 40vh;
     overflow-y: auto;
+}
+
+.fortschritt {
+    height: 6px;
+    border-radius: var(--radius-pille);
+    background: var(--panel-hoch);
+    overflow: hidden;
+}
+
+.fortschrittBalken {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s;
 }
 </style>

@@ -71,7 +71,7 @@ const { t } = useI18n()
 .bmFlaeche {
     position: absolute;
     inset: 0;
-    background: var(--black-bg-2, #14141f);
+    background: var(--bg);
     border-radius: var(--border-radius, 6px);
     overflow: hidden;
 }
@@ -88,7 +88,7 @@ const { t } = useI18n()
     border-radius: 999px;
     font-size: 0.68rem;
     text-decoration: none;
-    color: var(--white-87);
+    color: var(--text);
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.16);
 }

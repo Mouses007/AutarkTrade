@@ -116,7 +116,7 @@ const stunden = computed(() => Number(props.params?.stunden) || DAYTRADING_STUND
     border-radius: 999px;
     font-size: 0.68rem;
     text-decoration: none;
-    color: var(--white-87);
+    color: var(--text);
     background: rgba(0, 0, 0, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.16);
 }

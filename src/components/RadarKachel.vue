@@ -25,11 +25,10 @@ import Symbol from '@/components/basis/Symbol.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Quellenhinweis from '@/components/basis/Quellenhinweis.vue'
 import QuelleAus from '@/components/quellen/QuelleAus.vue'
-import { symbolName } from '@/components/basis/symbole/unicons.js'
 
 const props = defineProps({
     titel: { type: String, required: true },
-    /** Symbolname; eine alte Unicons-Angabe (`'uil uil-…'`) wird noch übersetzt. */
+    /** Symbolname aus `components/basis/Symbol.vue`. */
     icon: { type: String, default: '' },
     /** 'idle' | 'loading' | 'ready' | 'veraltet' | 'error' */
     zustand: { type: String, default: 'idle' },
@@ -85,7 +84,7 @@ const standText = computed(() => {
         <div class="radarCardHead">
             <!-- Eigener Griff: auf dem Handy dürfen sich Ziehen und Antippen nicht beissen -->
             <span class="radarGriff" :title="t('marktradar.drag')"><Symbol name="ziehgriff" /></span>
-            <Symbol v-if="icon" :name="symbolName(icon)" class="radarCardIcon" />
+            <Symbol v-if="icon" :name="icon" class="radarCardIcon" />
             <span class="radarCardTitle">{{ titel }}</span>
             <InfoTipp v-if="infoKey" :schluessel="infoKey" />
             <span :class="['liveDot', 'dot-' + zustand]" :title="t('marktradar.status_' + zustand)"></span>

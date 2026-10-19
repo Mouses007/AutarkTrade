@@ -13,6 +13,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import Symbol from '../basis/Symbol.vue'
 
 const { t } = useI18n()
 
@@ -92,32 +93,32 @@ defineExpose({ uebernehmen })
 <template>
     <div class="onboarding-schritt">
         <h3>{{ t('onboarding.ki.title') }}</h3>
-        <p class="text-muted">{{ t('onboarding.ki.intro') }}</p>
+        <p class="at-gedaempft">{{ t('onboarding.ki.intro') }}</p>
 
-        <div class="mb-3">
-            <label class="form-label small">{{ t('settings.provider') }}</label>
-            <select class="form-select" v-model="aiProvider">
+        <div class="at-mu-3">
+            <label class="at-label">{{ t('settings.provider') }}</label>
+            <select class="at-feld" v-model="aiProvider">
                 <option v-for="a in anbieterListe" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
             <!-- Pflichthinweis des Anbieters (server/ai-models.js `hinweis`, S12). -->
-            <small v-if="aktuellerAnbieter?.hinweis" class="text-muted d-block mt-1">{{ t(aktuellerAnbieter.hinweis) }}</small>
+            <small v-if="aktuellerAnbieter?.hinweis" class="at-hilfe at-block">{{ t(aktuellerAnbieter.hinweis) }}</small>
         </div>
 
-        <div v-if="aktuellerAnbieter?.brauchtKey" class="mb-3">
-            <label class="form-label small">{{ t('settings.apiKeyLabel') }}</label>
-            <input type="password" class="form-control" v-model="aiKeys[aiProvider]"
+        <div v-if="aktuellerAnbieter?.brauchtKey" class="at-mu-3">
+            <label class="at-label">{{ t('settings.apiKeyLabel') }}</label>
+            <input type="password" class="at-feld" v-model="aiKeys[aiProvider]"
                 :placeholder="schonEingerichtet ? t('onboarding.ki.keySetHint') : 'sk-...'">
         </div>
 
-        <div v-if="modelle.length" class="mb-1">
-            <label class="form-label small">{{ t('settings.model') }}</label>
-            <select class="form-select" v-model="aiModel">
+        <div v-if="modelle.length" class="at-mu-1">
+            <label class="at-label">{{ t('settings.model') }}</label>
+            <select class="at-feld" v-model="aiModel">
                 <option v-for="m in modelle" :key="m" :value="m">{{ m }}</option>
             </select>
         </div>
 
-        <p v-if="schonEingerichtet" class="small text-success mt-2">
-            <i class="uil uil-check-circle"></i> {{ t('onboarding.ki.alreadySet') }}
+        <p v-if="schonEingerichtet" class="at-klein at-gut at-mo-2 at-flex at-mitte at-luecke-1">
+            <Symbol name="hakenKreis" /> {{ t('onboarding.ki.alreadySet') }}
         </p>
     </div>
 </template>

@@ -19,6 +19,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import Knopf from '../basis/Knopf.vue'
 
 const { t } = useI18n()
 
@@ -94,83 +95,106 @@ onMounted(ladeNewsQuellen)
 
 <template>
     <div>
-        <table class="table table-sm align-middle" v-if="newsQuellen.length">
-            <thead>
-                <tr>
-                    <th style="width:6rem;">{{ t('settings.ki.news.colType') }}</th>
-                    <th>{{ t('settings.ki.news.colName') }}</th>
-                    <th>{{ t('settings.ki.news.colAddress') }}</th>
-                    <th style="width:5rem;" class="text-center">{{ t('settings.ki.news.colActive') }}</th>
-                    <th style="width:6rem;" class="text-center" :title="t('settings.ki.news.colExcludeTitle')">
-                        {{ t('settings.ki.news.colExclude') }}</th>
-                    <th style="width:5rem;" class="text-center" :title="t('settings.ki.news.colVideosTitle')">{{ t('settings.ki.news.colVideos') }}</th>
-                    <th style="width:7rem;"></th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr v-for="q in newsQuellen" :key="q.id">
-                    <td class="text-muted">{{ q.art }}</td>
-                    <td>{{ q.name || '—' }}</td>
-                    <td class="text-truncate" style="max-width:22rem;">
-                        <span :title="q.url">{{ q.url }}</span>
-                        <div v-if="q.letzterFehler" class="small" style="color:rgb(250,190,60);">
-                            {{ q.letzterFehler }}
-                        </div>
-                    </td>
-                    <td class="text-center">
-                        <input type="checkbox" :checked="!!q.enabled" :disabled="ENTFERNT.includes(q.art)"
-                            :title="ENTFERNT.includes(q.art) ? t('onboarding.news.telegramEntfernt') : ''"
-                            @change="quelleAendern(q, { enabled: $event.target.checked ? 1 : 0 })">
-                    </td>
-                    <td class="text-center">
-                        <input type="checkbox" :checked="!!q.laerm"
-                            @change="quelleAendern(q, { laerm: $event.target.checked ? 1 : 0 })">
-                    </td>
-                    <td class="text-center">
-                        <input v-if="q.art === 'youtube'" type="checkbox"
-                            :checked="Number(q.videoAnalyse ?? 1) === 1"
-                            @change="quelleAendern(q, { videoAnalyse: $event.target.checked ? 1 : 0 })">
-                        <span v-else class="text-muted">—</span>
-                    </td>
-                    <td class="text-end">
-                        <button class="btn btn-outline-danger btn-sm" @click="quelleLoeschen(q)">
-                            <i class="uil uil-trash"></i>
-                        </button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>
+        <div v-if="newsQuellen.length" class="at-tabelle-huelle at-mu-3">
+            <table class="at-tabelle dicht">
+                <thead>
+                    <tr>
+                        <th class="sp-art">{{ t('settings.ki.news.colType') }}</th>
+                        <th>{{ t('settings.ki.news.colName') }}</th>
+                        <th>{{ t('settings.ki.news.colAddress') }}</th>
+                        <th class="sp-schmal at-mittig">{{ t('settings.ki.news.colActive') }}</th>
+                        <th class="sp-art at-mittig" :title="t('settings.ki.news.colExcludeTitle')">
+                            {{ t('settings.ki.news.colExclude') }}</th>
+                        <th class="sp-schmal at-mittig" :title="t('settings.ki.news.colVideosTitle')">{{ t('settings.ki.news.colVideos') }}</th>
+                        <th class="sp-aktion"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="q in newsQuellen" :key="q.id">
+                        <td class="at-gedaempft">{{ q.art }}</td>
+                        <td>{{ q.name || '—' }}</td>
+                        <td class="at-kuerzen sp-adresse">
+                            <span :title="q.url">{{ q.url }}</span>
+                            <div v-if="q.letzterFehler" class="at-klein at-warn">
+                                {{ q.letzterFehler }}
+                            </div>
+                        </td>
+                        <td class="at-mittig">
+                            <input type="checkbox" :checked="!!q.enabled" :disabled="ENTFERNT.includes(q.art)"
+                                :title="ENTFERNT.includes(q.art) ? t('onboarding.news.telegramEntfernt') : ''"
+                                @change="quelleAendern(q, { enabled: $event.target.checked ? 1 : 0 })">
+                        </td>
+                        <td class="at-mittig">
+                            <input type="checkbox" :checked="!!q.laerm"
+                                @change="quelleAendern(q, { laerm: $event.target.checked ? 1 : 0 })">
+                        </td>
+                        <td class="at-mittig">
+                            <input v-if="q.art === 'youtube'" type="checkbox"
+                                :checked="Number(q.videoAnalyse ?? 1) === 1"
+                                @change="quelleAendern(q, { videoAnalyse: $event.target.checked ? 1 : 0 })">
+                            <span v-else class="at-gedaempft">—</span>
+                        </td>
+                        <td class="at-rechtsbuendig">
+                            <Knopf art="gefahr" klein nur-symbol symbol="muell" titel="Löschen" @click="quelleLoeschen(q)" />
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
-        <div class="row g-2 align-items-center">
-            <div class="col-6 col-md-2">
-                <select class="form-select form-select-sm" v-model="neueQuelle.art">
+        <div class="at-formzeile eng">
+            <div class="neu-art">
+                <select class="at-feld klein" v-model="neueQuelle.art">
                     <option value="youtube">YouTube</option>
                     <option value="rss">RSS</option>
                     <option value="truth">Truth Social</option>
                     <option value="x">X (via Grok)</option>
                 </select>
             </div>
-            <div class="col-6 col-md-3">
-                <input class="form-control form-control-sm" v-model="neueQuelle.name" :placeholder="t('settings.ki.news.sourceNamePlaceholder')">
+            <div class="neu-name">
+                <input class="at-feld klein" v-model="neueQuelle.name" :placeholder="t('settings.ki.news.sourceNamePlaceholder')">
             </div>
-            <div class="col-12 col-md-5">
-                <input class="form-control form-control-sm" v-model="neueQuelle.url"
+            <div class="neu-url">
+                <input class="at-feld klein" v-model="neueQuelle.url"
                     :placeholder="neueQuelle.art === 'x' ? '@handle'
                         : neueQuelle.art === 'youtube' ? 'https://www.youtube.com/feeds/videos.xml?channel_id=…'
                             : 'https://…'">
             </div>
-            <div class="col-12 col-md-2 d-flex gap-1">
-                <button class="btn btn-outline-secondary btn-sm" :disabled="newsTestet"
-                    @click="quelleTesten">{{ t('settings.ki.news.testSourceBtn') }}</button>
-                <button class="btn btn-outline-primary btn-sm" @click="quelleAnlegen">{{ t('settings.ki.news.addSourceBtn') }}</button>
+            <div class="at-flex at-luecke-1">
+                <Knopf klein :disabled="newsTestet" @click="quelleTesten">{{ t('settings.ki.news.testSourceBtn') }}</Knopf>
+                <Knopf klein @click="quelleAnlegen">{{ t('settings.ki.news.addSourceBtn') }}</Knopf>
             </div>
         </div>
-        <div v-if="newsMeldung" class="small mt-2" :class="newsFehler ? 'text-danger' : 'text-muted'">
+        <div v-if="newsMeldung" class="at-klein at-mo-2" :class="newsFehler ? 'at-schlecht' : 'at-gedaempft'">
             {{ newsMeldung }}
         </div>
 
         <!-- Bewusst ohne Vorschläge: welche Verlage und Kanäle gelesen und von
              der KI zusammengefasst werden, entscheidet der Nutzer (S12). -->
-        <p class="small text-muted mt-2 mb-0">{{ t('onboarding.news.eigeneQuellen') }}</p>
+        <p class="at-klein at-gedaempft at-mo-2 at-mu-0">{{ t('onboarding.news.eigeneQuellen') }}</p>
     </div>
 </template>
+
+<style scoped>
+.sp-art { width: 6rem; }
+.sp-schmal { width: 5rem; }
+.sp-aktion { width: 4rem; }
+.sp-adresse { max-width: 22rem; }
+
+td input[type='checkbox'] {
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+/* Neue Quelle: Art + Name nebeneinander, die Adresse darf wachsen; am
+   Telefon bricht alles einspaltig um. */
+.neu-art { flex: 1 1 7rem; max-width: 10rem; }
+.neu-name { flex: 1 1 9rem; }
+.neu-url { flex: 3 1 14rem; }
+
+@media (max-width: 575px) {
+    .neu-art,
+    .neu-name,
+    .neu-url { flex-basis: 100%; max-width: none; }
+}
+</style>

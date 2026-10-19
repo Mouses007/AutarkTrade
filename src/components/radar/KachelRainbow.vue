@@ -184,7 +184,7 @@ watch(() => props.daten, zeichne)
 .rbPreis {
     font-size: 1.3rem;
     font-weight: 700;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .rbBand {
@@ -207,7 +207,7 @@ watch(() => props.daten, zeichne)
     gap: 0.2rem 0.9rem;
     margin-top: 0.6rem;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .rbLegendeEintrag i {
@@ -224,13 +224,13 @@ watch(() => props.daten, zeichne)
     border-left: 3px solid rgba(240, 196, 25, 0.8);
     background: rgba(240, 196, 25, 0.08);
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .rbQuelle {
     margin: 0.5rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
 }
 </style>

@@ -72,12 +72,12 @@ onMounted(laden)
 </script>
 
 <template>
-    <Karte class="at-lizenz mb-4" :titel="t('lizenz.titel')">
+    <Karte class="at-lizenz at-mu-4" :titel="t('lizenz.titel')">
         <template #aktionen>
             <Pille v-if="stand" :ton="pillenArt">{{ modusText }}</Pille>
         </template>
 
-        <Hinweis art="warn" :titel="t('rechtliches.betaTitel')" class="mb-3">{{ t('rechtliches.betaText') }}</Hinweis>
+        <Hinweis art="warn" :titel="t('rechtliches.betaTitel')" class="at-mu-3">{{ t('rechtliches.betaText') }}</Hinweis>
 
         <dl v-if="stand && stand.modus !== 'test' && stand.modus !== 'ungueltig'" class="angaben">
             <dt>{{ t('lizenz.kaeufer') }}</dt><dd>{{ stand.kaeufer }}</dd>
@@ -108,7 +108,7 @@ onMounted(laden)
             <Knopf v-if="stand && stand.modus !== 'test'" art="leise" :laedt="beschaeftigt" @click="entfernen">{{ t('lizenz.entfernen') }}</Knopf>
             <Knopf art="leise" @click="oeffneRechtliches()">{{ t('rechtliches.anzeigen') }}</Knopf>
         </div>
-        <Hinweis v-if="fehler && !eingabeOffen" art="fehler" class="mt-2">{{ fehler }}</Hinweis>
+        <Hinweis v-if="fehler && !eingabeOffen" art="fehler" class="at-mo-2">{{ fehler }}</Hinweis>
     </Karte>
 </template>
 

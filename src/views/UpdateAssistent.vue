@@ -53,14 +53,20 @@ onMounted(async () => {
     align-items: center;
     justify-content: center;
     gap: 1rem;
-    background: var(--black-bg-color, #0d1117);
+    background: var(--bg);
     padding: 2rem;
 }
 
+@media (max-width: 575px) {
+    .update-assistent-container {
+        padding: 1rem;
+    }
+}
+
 .release-notes {
-    background: var(--black-bg-2-color, #161b22);
-    border: 1px solid var(--white-10, rgba(255, 255, 255, 0.1));
-    border-radius: 12px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
     max-width: 620px;
     width: 100%;
     padding: 1rem 1.5rem;
@@ -68,14 +74,14 @@ onMounted(async () => {
 
 .release-name {
     font-weight: 600;
-    color: var(--white-color, #e6edf3);
+    color: var(--text);
     margin-bottom: 0.5rem;
 }
 
 .release-body {
     white-space: pre-wrap;
     font-size: 0.85rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
     max-height: 8rem;
     overflow-y: auto;
 }

@@ -661,9 +661,7 @@ onBeforeMount(async () => {
         vueRouter.replace({ path: route.path })
     }
 
-    // Clean up any stale Bootstrap modal backdrops from previous page
-    document.querySelectorAll('.modal-backdrop').forEach(el => el.remove())
-    document.body.classList.remove('modal-open')
+    // Eine Sperre des Seitenscrollens, die eine vorherige Seite hinterlassen hat, lösen
     document.body.style.removeProperty('overflow')
     document.body.style.removeProperty('padding-right')
 
@@ -773,7 +771,7 @@ onBeforeMount(async () => {
                 </div>
 
                 <!-- Stil Quick-Selection -->
-                <div class="at-flex at-mitte at-luecke-2 at-mo-2 at-po-2" style="border-top: 1px solid var(--white-18, rgba(255,255,255,0.08));">
+                <div class="at-flex at-mitte at-luecke-2 at-mo-2 at-po-2" style="border-top: 1px solid var(--line);">
                     <span class="at-gedaempft at-klein at-mr-1"><Symbol name="palette" class="at-mr-1" />{{ t('kiAgent.reportStyle') }}:</span>
                     <button v-for="preset in reportStylePresets" :key="preset.value"
                         class="report-style-btn"
@@ -811,7 +809,7 @@ onBeforeMount(async () => {
                         <Symbol name="dokumentHaken" class="at-mr-1" />
                         <span class="at-fett at-mr-2">{{ report.label }}</span>
                         <Pille ton="neutral" class="at-mr-2" style="font-size: 0.7rem;">{{ PROVIDER_LABELS[report.provider] || report.provider }}</Pille>
-                        <Pille class="at-mr-2" v-if="report.promptPreset" style="font-size: 0.65rem; background-color: var(--blue-color, #4a90d9); opacity: 0.8;">{{ report.promptPreset }}</Pille>
+                        <Pille class="at-mr-2" v-if="report.promptPreset" style="font-size: 0.65rem;">{{ report.promptPreset }}</Pille>
                         <span class="at-gedaempft at-klein">{{ formatDate(report.createdAt) }}</span>
                     </div>
                     <div class="at-flex at-mitte at-luecke-1">
@@ -866,7 +864,7 @@ onBeforeMount(async () => {
                     <KiHinweis :anbieter="report.provider" :modell="report.model" />
 
                     <!-- Token-Verbrauch -->
-                    <div class="at-flex at-mitte at-luecke-3 at-mo-2 at-po-2 at-gedaempft at-klein" style="border-top: 1px solid var(--border-color, #333);">
+                    <div class="at-flex at-mitte at-luecke-3 at-mo-2 at-po-2 at-gedaempft at-klein" style="border-top: 1px solid var(--line);">
                         <span><Symbol name="prozessor" class="at-mr-1" />{{ report.model || '—' }}</span>
                         <span>{{ t('kiAgent.prompt') }}: {{ report.totalTokens > 0 ? report.promptTokens?.toLocaleString() : '—' }}</span>
                         <span>{{ t('kiAgent.response') }}: {{ report.totalTokens > 0 ? report.completionTokens?.toLocaleString() : '—' }}</span>
@@ -874,7 +872,7 @@ onBeforeMount(async () => {
                     </div>
 
                     <!-- Chat / Rückfragen -->
-                    <div v-if="chatEnabled && aiOnline" class="chat-section at-mo-3 at-po-3" style="border-top: 1px solid var(--border-color, #333);">
+                    <div v-if="chatEnabled && aiOnline" class="chat-section at-mo-3 at-po-3" style="border-top: 1px solid var(--line);">
                         <div class="at-flex at-verteilt at-mitte at-mu-2">
                             <span class="at-klein at-fett"><Symbol name="nachricht" class="at-mr-1" />{{ t('kiAgent.followUp') }}</span>
                             <Knopf v-if="chatMessages[report.id]?.length > 0" klein symbol="muell" @click="clearChat(report.id)" :title="t('kiAgent.clearChat')">
@@ -1034,12 +1032,12 @@ onBeforeMount(async () => {
                                     <!-- Tool Messages -->
                                     <div v-if="msg.role === 'tool'" class="agent-tool-step at-mu-1 at-ml-3">
                                         <div class="at-flex at-mitte at-luecke-1 pointerClass" @click="toggleAgentTool(idx)">
-                                            <Symbol style="color: #a78bfa;" name="einstellungen" />
-                                            <span class="at-klein" style="color: #a78bfa;">{{ msg.toolName }}</span>
+                                            <Symbol class="agentWerkzeug" name="einstellungen" />
+                                            <span class="at-klein agentWerkzeug">{{ msg.toolName }}</span>
                                             <Symbol :name="agentExpandedTools.has(idx) ? 'runter' : 'ausklappen'" style="font-size: 0.7rem;" />
                                         </div>
-                                        <div v-if="agentExpandedTools.has(idx)" class="agent-tool-detail at-mo-1 at-p-2" style="background: rgba(167, 139, 250, 0.08); font-size: 0.75rem; max-height: 200px; overflow-y: auto;">
-                                            <pre style="white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--white-60);">{{ msg.content?.substring(0, 2000) }}</pre>
+                                        <div v-if="agentExpandedTools.has(idx)" class="agent-tool-detail at-mo-1 at-p-2" style="background: var(--panel-soft); font-size: 0.75rem; max-height: 200px; overflow-y: auto;">
+                                            <pre style="white-space: pre-wrap; word-break: break-word; margin: 0; color: var(--muted);">{{ msg.content?.substring(0, 2000) }}</pre>
                                         </div>
                                     </div>
 
@@ -1063,13 +1061,13 @@ onBeforeMount(async () => {
                                             <span class="at-gedaempft at-klein">{{ t('kiAgent.agentThinking') }} ({{ step.iteration }})</span>
                                         </template>
                                         <template v-if="step.type === 'tool_call'">
-                                            <Symbol style="color: #a78bfa;" name="einstellungen" class="at-mr-1" />
-                                            <span class="at-klein" style="color: #a78bfa;">{{ step.name }}</span>
+                                            <Symbol name="einstellungen" class="at-mr-1 agentWerkzeug" />
+                                            <span class="at-klein agentWerkzeug">{{ step.name }}</span>
                                             <span class="at-gedaempft at-klein at-ml-1">({{ formatToolParams(step.params) }})</span>
                                         </template>
                                         <template v-if="step.type === 'tool_result'">
-                                            <Symbol style="color: #34d399;" name="hakenKreis" class="at-mr-1" />
-                                            <span class="at-klein" style="color: #34d399;">{{ step.name }}: {{ step.resultPreview }}</span>
+                                            <Symbol name="hakenKreis" class="at-mr-1 at-gut" />
+                                            <span class="at-klein at-gut">{{ step.name }}: {{ step.resultPreview }}</span>
                                         </template>
                                         <template v-if="step.type === 'warning'">
                                             <Symbol name="warnung" class="at-mr-1 at-warn" />
@@ -1152,22 +1150,22 @@ onBeforeMount(async () => {
     align-items: center;
     font-size: 0.78rem;
     padding: 0.2rem 0.55rem;
-    border: 1px solid var(--white-18, rgba(255,255,255,0.15));
-    border-radius: 4px;
-    color: var(--white-60, rgba(255,255,255,0.6));
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-pille);
+    color: var(--muted);
     background: transparent;
     cursor: pointer;
     transition: all 0.15s;
     white-space: nowrap;
 }
 .report-style-btn:hover:not(:disabled) {
-    border-color: var(--blue-color, #6cb4ee);
-    color: var(--blue-color, #6cb4ee);
+    border-color: var(--accent);
+    color: var(--accent);
 }
 .report-style-btn.active {
-    border-color: var(--blue-color, #6cb4ee);
-    color: var(--blue-color, #6cb4ee);
-    background: rgba(108, 180, 238, 0.1);
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-flaeche);
 }
 .report-style-btn:disabled {
     opacity: 0.4;
@@ -1181,10 +1179,10 @@ onBeforeMount(async () => {
     gap: 0.25rem;
     font-size: 0.72rem;
     padding: 0.15rem 0.5rem;
-    border: 1px solid rgba(245, 158, 11, 0.3);
-    border-radius: 4px;
-    color: #f59e0b;
-    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid var(--warn);
+    border-radius: var(--radius-pille);
+    color: var(--warn);
+    background: var(--warn-flaeche);
     cursor: default;
 }
 
@@ -1195,15 +1193,15 @@ onBeforeMount(async () => {
 }
 
 .report-content :deep(h3) {
-    color: var(--white-87);
+    color: var(--text);
     font-size: 1.1rem;
     margin-top: 0.8rem;
     margin-bottom: 0.4rem;
 }
 .report-content :deep(h4.report-section-title) {
     font-size: 1rem;
-    color: var(--blue-color, #6cb4ee);
-    border-bottom: 1px solid var(--border-color, #333);
+    color: var(--accent);
+    border-bottom: 1px solid var(--line);
     padding-bottom: 0.3rem;
     margin-top: 1rem;
     margin-bottom: 0.4rem;
@@ -1215,14 +1213,14 @@ onBeforeMount(async () => {
 }
 .report-content :deep(h5) {
     font-size: 0.9rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin-top: 0.5rem;
     margin-bottom: 0.2rem;
 }
 .report-content :deep(p) {
     font-size: 0.85rem;
     line-height: 1.5;
-    color: var(--white-87);
+    color: var(--text);
     margin-bottom: 0.4rem;
 }
 .report-content :deep(ul) {
@@ -1231,42 +1229,41 @@ onBeforeMount(async () => {
 }
 .report-content :deep(li) {
     font-size: 0.85rem;
-    color: var(--white-87);
+    color: var(--text);
     margin-bottom: 0.15rem;
 }
 .report-content :deep(strong) {
-    color: var(--white-100, #fff);
+    color: var(--text);
 }
-/* Chat-CSS ist in style-dark.css global */
+/* Chat-Blasen (.chat-bubble …) stehen global in uebergang.css */
 
-/* Tab-Styling */
 /* Agent Session List */
 .agent-session-item {
     border: 1px solid transparent;
     transition: all 0.15s;
 }
 .agent-session-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: var(--border-color, #333);
+    background: var(--panel-soft);
+    border-color: var(--line);
 }
 .agent-session-active {
-    background: rgba(74, 144, 217, 0.15) !important;
-    border-color: var(--blue-color, #4a90d9) !important;
+    background: var(--accent-flaeche) !important;
+    border-color: var(--accent) !important;
 }
 
 /* Kopfzeilen-Knöpfe der Session-Liste (Auswahlmodus, Archiv) */
 .agent-list-btn {
     cursor: pointer;
-    color: var(--white-38, rgba(255, 255, 255, 0.4));
+    color: var(--leise);
     font-size: 0.9rem;
     padding: 0 0.2rem;
     transition: color 0.15s;
 }
 .agent-list-btn:hover {
-    color: var(--white-87, rgba(255, 255, 255, 0.9));
+    color: var(--text);
 }
 .agent-list-btn.active {
-    color: var(--blue-color, #4a90d9);
+    color: var(--accent);
 }
 
 /* Agent Tool Steps */
@@ -1276,8 +1273,12 @@ onBeforeMount(async () => {
     padding: 0.15rem 0;
 }
 .agent-tool-step {
-    border-left: 2px solid rgba(167, 139, 250, 0.3);
+    border-left: 2px solid var(--line-stark);
     padding-left: 0.5rem;
 }
 
+/* Werkzeugschritte des Agenten: zurückgenommen, sie sind Begleittext. */
+.agentWerkzeug {
+    color: var(--muted);
+}
 </style>

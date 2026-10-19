@@ -285,18 +285,18 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
 
 <style scoped>
 .avKopf { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
-.avStand, .avGrau, .avHinweis { color: var(--grey-color, #9aa0a6); }
+.avStand, .avGrau, .avHinweis { color: var(--leise); }
 .avStand { font-size: .874rem; }
 .avAus { color: #e0b030; }
 .avHinweis { font-size: .874rem; margin: .6rem 0; }
 .avEinst { display: flex; flex-wrap: wrap; gap: .6rem 1rem; align-items: flex-end; margin-top: .6rem; padding: .6rem .75rem;
-    border-radius: var(--border-radius, 8px); background: var(--black-bg-2, rgba(255, 255, 255, .03)); font-size: .85rem; }
+    border-radius: var(--border-radius, 8px); background: var(--bg); font-size: .85rem; }
 .avEinst label { display: flex; flex-direction: column; gap: .15rem; }
 .avEinst input[type=number] { width: 7rem; }
 .avEinst .avSchalter { flex-direction: row; align-items: center; gap: .35rem; }
 .avKarten { display: flex; flex-direction: column; gap: .75rem; }
-.avKarte { border: 1px solid var(--white-10, rgba(255, 255, 255, .1)); border-radius: var(--border-radius, 8px); padding: .65rem .85rem;
-    background: var(--black-bg-2, rgba(255, 255, 255, .03)); }
+.avKarte { border: 1px solid var(--line); border-radius: var(--border-radius, 8px); padding: .65rem .85rem;
+    background: var(--bg); }
 .avKarte.kippt { border-color: rgba(239, 83, 80, .55); }
 .avKarte.ueberdehnt { border-color: rgba(224, 176, 48, .45); }
 .avKarteKopf { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
@@ -306,13 +306,13 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
 .avPhase.ueberdehnt { background: rgba(224, 176, 48, .18); color: #e0b030; }
 .avNote { font-size: .85rem; }
 .avLinks { display: flex; gap: .3rem; }
-.avLink { font-size: .74rem; padding: .02rem .4rem; border-radius: 4px; background: var(--white-10, rgba(255, 255, 255, .08)); text-decoration: none; }
-.avKz { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .82rem; color: var(--grey-color, #9aa0a6); margin: .45rem 0; }
-.avKz b { color: var(--white-87, #e8eaed); font-weight: 600; }
+.avLink { font-size: .74rem; padding: .02rem .4rem; border-radius: 4px; background: var(--line); text-decoration: none; }
+.avKz { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .82rem; color: var(--leise); margin: .45rem 0; }
+.avKz b { color: var(--text); font-weight: 600; }
 .avKz b.at-gut { color: var(--good); }
 .avKz b.at-schlecht { color: var(--bad); }
 .avSpalten { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: .75rem; }
-.avTitel { font-size: .74rem; letter-spacing: .05em; text-transform: uppercase; color: var(--grey-color, #9aa0a6); margin-bottom: .2rem; }
+.avTitel { font-size: .74rem; letter-spacing: .05em; text-transform: uppercase; color: var(--leise); margin-bottom: .2rem; }
 .avTitelGross { font-size: .95rem; font-weight: 600; margin-bottom: .2rem; }
 .avListe { list-style: none; padding: 0; margin: 0; font-size: .86rem; }
 .avListe li { padding: .05rem 0; }

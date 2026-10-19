@@ -271,12 +271,12 @@ onMounted(lade)
 
 .awLabel {
     font-size: 0.7rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .awKlein {
     font-size: 0.66rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .awBlock {
@@ -288,12 +288,12 @@ onMounted(lade)
 .awBlock h3 {
     font-size: 0.95rem;
     margin: 0 0 0.4rem;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .awBlock h4 {
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin: 0 0 0.25rem;
 }
 
@@ -318,7 +318,7 @@ onMounted(lade)
 
 .awZeileName {
     min-width: 3.6rem;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .awSchiene {
@@ -341,7 +341,7 @@ onMounted(lade)
 
 .awZeileN {
     font-size: 0.68rem;
-    color: var(--white-60);
+    color: var(--muted);
     min-width: 1.4rem;
     text-align: right;
 }
@@ -386,13 +386,13 @@ onMounted(lade)
 
 .awText {
     font-size: 0.8rem;
-    color: var(--white-87);
+    color: var(--text);
     margin: 0.3rem 0 0;
 }
 
 .awHinweis {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin: 0.25rem 0 0;
 }
 
@@ -400,13 +400,13 @@ onMounted(lade)
     margin: 0.2rem 0 0;
     padding-left: 1.1rem;
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .awLeer {
     padding: 1.5rem;
     text-align: center;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .awFehler {

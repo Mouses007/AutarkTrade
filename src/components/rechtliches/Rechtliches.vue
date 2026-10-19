@@ -144,7 +144,7 @@ onMounted(async () => {
 .at-rechtliches {
     position: fixed;
     inset: 0;
-    z-index: 3000; /* über Bootstrap-Modals (1055) und dem Testbetrieb-Banner */
+    z-index: 3000; /* über anderen Überlagerungen und dem Testbetrieb-Banner */
     display: grid;
     /* minmax(0, 1fr): sonst wächst die Spalte auf die längste Textzeile, und am
        Telefon ragt der Kasten über den Rand. */

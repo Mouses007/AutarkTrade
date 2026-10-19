@@ -94,7 +94,7 @@ const ratio = computed(() => {
 <style scoped>
 .viewHint {
     font-size: 0.75rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 
 .levWrap {
@@ -133,7 +133,7 @@ const ratio = computed(() => {
     gap: 1rem;
     padding: 0.4rem 0.2rem 0;
     font-size: 0.74rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 
 .levStamp {

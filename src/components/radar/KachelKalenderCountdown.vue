@@ -121,7 +121,7 @@ const stufe = (impact) => String(impact || '').toLowerCase()
 
 .kdLabel {
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .kdListe {
@@ -154,7 +154,7 @@ const stufe = (impact) => String(impact || '').toLowerCase()
     height: 7px;
     border-radius: 50%;
     flex: 0 0 auto;
-    background: var(--white-60);
+    background: var(--muted);
 }
 
 .kdImpact.impact-high { background: #ff6b7a; }
@@ -165,7 +165,7 @@ const stufe = (impact) => String(impact || '').toLowerCase()
 .kdLand {
     font-weight: 700;
     font-size: 0.7rem;
-    color: var(--white-60);
+    color: var(--muted);
     min-width: 2.1rem;
 }
 
@@ -175,13 +175,13 @@ const stufe = (impact) => String(impact || '').toLowerCase()
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .kdRest {
     font-variant-numeric: tabular-nums;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
     white-space: nowrap;
 }
 
@@ -190,7 +190,7 @@ const stufe = (impact) => String(impact || '').toLowerCase()
 .kdUhr {
     font-variant-numeric: tabular-nums;
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     min-width: 2.5rem;
     text-align: right;
 }
@@ -198,7 +198,7 @@ const stufe = (impact) => String(impact || '').toLowerCase()
 .kdLeer {
     margin: auto 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
     text-align: center;
     padding: 0.5rem;
 }

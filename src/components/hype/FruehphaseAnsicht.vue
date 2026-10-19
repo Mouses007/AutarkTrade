@@ -1074,7 +1074,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 .fpStand {
     font-size: .874rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .fpAus {
     color: #e0b030;
@@ -1087,7 +1087,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 .fpSchalter {
     font-size: .851rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     display: flex;
     align-items: center;
     gap: .3rem;
@@ -1103,10 +1103,10 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     font-size: .782rem;
     padding: .05rem .45rem;
     border-radius: 10px;
-    background: var(--white-10, rgba(255, 255, 255, .08));
+    background: var(--line);
 }
 .fpQuelle.aus {
-    color: var(--red-color, #e05252);
+    color: var(--bad);
 }
 /* Aus (kein Schlüssel, abgeschaltet) — ein Zustand, kein Ausfall. */
 .fpQuelle.abgeschaltet {
@@ -1139,7 +1139,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     margin-left: auto;
     border: none;
     background: none;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .fpFokusRaster {
     display: grid;
@@ -1150,7 +1150,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     font-size: .7rem;
     text-transform: uppercase;
     letter-spacing: .06em;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-bottom: .2rem;
 }
 .fpFokusGruppe {
@@ -1164,7 +1164,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 .fpHinweis {
     font-size: .874rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin: .6rem 0;
 }
 /* ── Blöcke: Kandidaten, Beobachtungsliste, Rohliste ── */
@@ -1186,7 +1186,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     font-size: .782rem;
     padding: 0 .45rem;
     border-radius: 10px;
-    background: var(--white-10, rgba(255, 255, 255, .08));
+    background: var(--line);
 }
 .fpKandidaten {
     display: flex;
@@ -1194,8 +1194,8 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     gap: .75rem;
 }
 .fpKandidat {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
-    border: 1px solid var(--white-10, rgba(255, 255, 255, .08));
+    background: var(--bg);
+    border: 1px solid var(--line);
     border-radius: var(--border-radius, 8px);
     padding: .7rem .85rem;
     min-width: 0;
@@ -1223,14 +1223,14 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 :deep(.fpKartenKnopf) {
     background: none;
-    border: 1px solid var(--white-10, rgba(255, 255, 255, .12));
+    border: 1px solid var(--line);
     border-radius: 4px;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     padding: 0 .35rem;
     line-height: 1.4;
     font-size: 1rem;
 }
-:deep(.fpKartenKnopf:hover) { color: var(--white-87, #fff); }
+:deep(.fpKartenKnopf:hover) { color: var(--text); }
 .fpTiefe {
     display: flex;
     align-items: center;
@@ -1259,13 +1259,13 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 :deep(.fpKzName) {
     font-size: .74rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 :deep(.fpSternKnopf) {
     background: none;
     border: 0;
     padding: 0 .1rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     cursor: pointer;
     line-height: 1;
 }
@@ -1284,7 +1284,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 :deep(.fpVerlaufNote) {
     fill: none;
-    stroke: var(--blue-color, #4da3ff);
+    stroke: var(--accent);
     stroke-width: 1.8;
     vector-effect: non-scaling-stroke;
 }
@@ -1305,7 +1305,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     flex-wrap: wrap;
     gap: .25rem 1rem;
     font-size: .782rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     margin-top: .2rem;
 }
 :deep(.fpStrich) {
@@ -1313,7 +1313,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     width: 14px;
     height: 0;
     vertical-align: middle;
-    border-top: 2px solid var(--blue-color, #4da3ff);
+    border-top: 2px solid var(--accent);
 }
 :deep(.fpStrich.mc) {
     border-top: 2px dashed #4caf50;
@@ -1328,14 +1328,14 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     background: rgba(255, 255, 255, .03);
 }
 .fpKette, .fpGrau {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .fpKette {
     font-size: .782rem;
     margin-left: .4rem;
 }
 :deep(.fpKette) {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-size: .782rem;
 }
 .fpSignale, :deep(.fpSignale) {
@@ -1346,10 +1346,10 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 :deep(.fpSignal) {
     font-size: .82rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 :deep(.fpSignal.smart) { color: #4caf50; font-weight: 600; }
-:deep(.fpSignal.boerse) { color: var(--blue-color, #4da3ff); }
+:deep(.fpSignal.boerse) { color: var(--accent); }
 .fpGuete {
     margin-top: 1.25rem;
 }
@@ -1362,13 +1362,13 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 .gut, :deep(.gut) { color: #4caf50; }
 .mittel, :deep(.mittel) { color: #e0b030; }
-.schwach, :deep(.schwach) { color: var(--grey-color, #9aa0a6); }
+.schwach, :deep(.schwach) { color: var(--leise); }
 .fpTrend, :deep(.fpTrend) {
     margin-left: .25rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .fpTrend.steigt, :deep(.fpTrend.steigt) { color: #4caf50; }
-.fpTrend.faellt, :deep(.fpTrend.faellt) { color: var(--red-color, #e05252); }
+.fpTrend.faellt, :deep(.fpTrend.faellt) { color: var(--bad); }
 .fpLinie {
     width: 60px;
     height: 18px;
@@ -1376,7 +1376,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 }
 .fpLinie polyline {
     fill: none;
-    stroke: var(--blue-color, #4da3ff);
+    stroke: var(--accent);
     stroke-width: 1.5;
     vector-effect: non-scaling-stroke;
 }
@@ -1389,7 +1389,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     gap: .5rem;
 }
 .fpKarte {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
     padding: .55rem .7rem;
 }
@@ -1403,7 +1403,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 .fpDetailKarte {
     font-size: .874rem;
     margin-top: .5rem;
-    border-top: 1px solid var(--white-10, rgba(255, 255, 255, .1));
+    border-top: 1px solid var(--line);
     padding-top: .5rem;
 }
 .hypBadge, :deep(.hypBadge) {
@@ -1445,7 +1445,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
 :deep(.fpBalken i) {
     display: block;
     height: 100%;
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
 }
 :deep(.befundListe) {
     list-style: none;
@@ -1462,12 +1462,12 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     flex: 0 0 .8rem;
     font-weight: 700;
     text-align: center;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 :deep(.befundListe li.plus .befundZeichen) { color: #4caf50; }
-:deep(.befundListe li.minus .befundZeichen) { color: var(--red-color, #e05252); }
+:deep(.befundListe li.minus .befundZeichen) { color: var(--bad); }
 :deep(.fpGrau) {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
     font-size: .851rem;
 }
 :deep(.fpVertrag) {

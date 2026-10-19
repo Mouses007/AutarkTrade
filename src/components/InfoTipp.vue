@@ -12,21 +12,16 @@
  * bestehen: sie sind der einzige Name dieser Knöpfe und müssen auch dann noch
  * da sein, wenn jemand die erweiterten Infos abschaltet.
  *
- * BEWUSST OHNE BOOTSTRAP-TOOLTIP. Vier Gründe, der Reihe nach:
- *   1. Bootstrap-Tooltips sind imperative Instanzen. Ein `v-if` auf dem
- *      Element liesse sie verwaist zurück; jede der ~100 Stellen bräuchte
- *      `dispose()` beim Ausblenden und `new` beim Einblenden.
- *   2. `useInitTooltip()` (utils.js) ist nicht idempotent — anders als
- *      `useInitPopover()` prüft es kein `getInstance()`. Jeder Aufruf stapelt
- *      eine weitere Instanz auf dieselben Elemente. Da wollen wir nicht rein.
- *   3. Bootstrap kommt vom CDN. Ohne Netz ist `window.bootstrap` undefined —
- *      Hilfetexte, die ausgerechnet offline verschwinden, sind die falsche
- *      Ausfallart für eine App, die lokal laufen soll.
- *   4. `data-bs-html="true"` schiebt übersetzten Text durch `innerHTML`.
- *      Hier gibt es diesen Pfad gar nicht: `white-space: pre-line` macht aus
- *      einem `\n` in der Übersetzung einen Umbruch, ganz ohne HTML.
+ * Bewusst eine eigene Komponente statt einer Tooltip-Bibliothek:
+ *   1. Deklarativ: ein `v-if` auf dem Element nimmt die Erklärung mit, es
+ *      gibt keine imperativen Instanzen, die man beim Ausblenden aufräumen
+ *      müsste.
+ *   2. Ohne Netz: alles liegt im Paket, die Hilfetexte verschwinden nicht,
+ *      wenn ein CDN fehlt — die richtige Ausfallart für eine lokale App.
+ *   3. Kein HTML-Pfad: `white-space: pre-line` macht aus einem `\n` in der
+ *      Übersetzung einen Umbruch; übersetzter Text geht nie durch `innerHTML`.
  *
- * Positionierung ohne Popper: Teleport an den Körper und feste Position aus
+ * Positionierung ohne Bibliothek: Teleport an den Körper und feste Position aus
  * `getBoundingClientRect()`. Nötig, weil Kachelköpfe und Einstellungszeilen
  * ihren Überlauf abschneiden — dasselbe Muster und derselbe Grund wie bei
  * `PageInfo.vue` und `RadarOverlay.vue`.
@@ -182,7 +177,7 @@ onBeforeUnmount(() => {
 .infoTipp {
     display: inline-flex;
     align-items: center;
-    color: var(--white-38, rgba(255, 255, 255, 0.38));
+    color: var(--leise);
     font-size: 0.85rem;
     line-height: 1;
     cursor: help;
@@ -192,11 +187,11 @@ onBeforeUnmount(() => {
 
 .infoTipp:hover,
 .infoTipp:focus-visible {
-    color: var(--blue-color, #4a9eff);
+    color: var(--accent);
 }
 
 .infoTipp:focus-visible {
-    box-shadow: 0 0 0 2px var(--blue-color, #4a9eff);
+    box-shadow: 0 0 0 2px var(--accent);
     border-radius: 50%;
 }
 </style>
@@ -210,12 +205,12 @@ onBeforeUnmount(() => {
     width: 320px;
     max-width: calc(100vw - 16px);
     transform: translateY(-100%);
-    background: var(--black-bg-12, #1f1f1f);
-    border: 1px solid var(--white-18, rgba(255, 255, 255, 0.18));
-    border-radius: var(--border-radius, 6px);
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+    background: var(--panel-hoch);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
+    box-shadow: var(--schatten);
     padding: 0.7rem 0.85rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: var(--text);
     /* Bewusst deutlich grösser als der Rest der Oberfläche: das hier ist
        Lerntext zum Durchlesen, nicht ein Kürzel zum kurzen Überfliegen. */
     font-size: 0.98rem;

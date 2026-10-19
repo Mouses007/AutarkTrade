@@ -203,14 +203,14 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     font-size: .82rem;
     border-radius: 4px;
     padding: .05rem .4rem;
-    background: var(--white-10, rgba(255, 255, 255, .1));
+    background: var(--line);
 }
 .ppNote.gut { color: #4caf50; }
 .ppNote.mittel { color: #e0b030; }
-.ppNote.schwach { color: var(--red-color, #e05252); }
-.ppNote.leer { color: var(--grey-color, #9aa0a6); }
+.ppNote.schwach { color: var(--bad); }
+.ppNote.leer { color: var(--leise); }
 .ppZeit, .ppGrau, .ppLeer {
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .ppZeit {
     font-size: .782rem;
@@ -219,7 +219,7 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     margin-bottom: .25rem;
 }
 .ppFehler {
-    color: var(--red-color, #e05252);
+    color: var(--bad);
 }
 .ppBefunde {
     list-style: none;
@@ -235,10 +235,10 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     flex: 0 0 .8rem;
     font-weight: 700;
     text-align: center;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--leise);
 }
 .ppBefunde li.plus .ppZeichen { color: #4caf50; }
-.ppBefunde li.minus .ppZeichen { color: var(--red-color, #e05252); }
+.ppBefunde li.minus .ppZeichen { color: var(--bad); }
 .ppLinks {
     display: flex;
     flex-wrap: wrap;
@@ -250,7 +250,7 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
 .ppAuszug {
     margin: .4rem 0 0;
     font-style: italic;
-    color: var(--white-60, rgba(255, 255, 255, .6));
+    color: var(--muted);
     overflow-wrap: anywhere;
 }
 </style>

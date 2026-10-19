@@ -363,13 +363,13 @@ async function erzeuge(erzwingen = false, auto = false) {
 
 .hlLeerIcon {
     font-size: 1.6rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .hlLeerText {
     margin: 0 0 0.4rem;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
     max-width: 26rem;
 }
 
@@ -398,7 +398,7 @@ async function erzeuge(erzwingen = false, auto = false) {
 
 .hlAlter {
     font-size: 0.7rem;
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
     white-space: nowrap;
 }
 
@@ -411,12 +411,12 @@ async function erzeuge(erzwingen = false, auto = false) {
     background: none;
     border: none;
     padding: 0 0.2rem;
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
 .hlErneut:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hlTitel {
@@ -424,7 +424,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     font-size: 0.95rem;
     font-weight: 600;
     line-height: 1.35;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hlWrap.gross .hlTitel {
@@ -453,7 +453,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     align-items: center;
     gap: 0.4rem;
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     padding: 0.1rem 0;
     white-space: nowrap;
     overflow: hidden;
@@ -472,10 +472,10 @@ async function erzeuge(erzwingen = false, auto = false) {
 .hlSpielraumKurz {
     margin: 0.4rem 0 0;
     padding-top: 0.35rem;
-    border-top: 1px solid var(--black-bg-12, rgba(255, 255, 255, 0.07));
+    border-top: 1px solid var(--panel-soft);
     font-size: 0.8rem;
     line-height: 1.35;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -486,7 +486,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     margin: 0.6rem 0 0;
     font-size: 0.95rem;
     line-height: 1.5;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hlZwei {
@@ -500,7 +500,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     margin: 0;
     font-size: 0.9rem;
     line-height: 1.45;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hlListe {
@@ -513,27 +513,27 @@ async function erzeuge(erzwingen = false, auto = false) {
 .hlKarte {
     border-left: 3px solid;
     padding: 0.25rem 0.6rem;
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.04));
+    background: var(--panel-soft);
     border-radius: 0 var(--border-radius, 6px) var(--border-radius, 6px) 0;
 }
 
 .hlKarteTitel {
     font-size: 0.86rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hlKarteText {
     font-size: 0.84rem;
     line-height: 1.4;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .hlAbschnitt {
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-bottom: 0.2rem;
 }
 
@@ -548,7 +548,7 @@ async function erzeuge(erzwingen = false, auto = false) {
 .hlBed {
     font-size: 0.88rem;
     line-height: 1.5;
-    color: var(--white-87);
+    color: var(--text);
     padding: 0.15rem 0;
 }
 
@@ -557,7 +557,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-right: 0.3rem;
 }
 
@@ -577,7 +577,7 @@ async function erzeuge(erzwingen = false, auto = false) {
 .hlHinfaellig li {
     font-size: 0.88rem;
     line-height: 1.45;
-    color: var(--white-87);
+    color: var(--text);
     font-variant-numeric: tabular-nums;
 }
 
@@ -585,7 +585,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     margin: 0;
     font-size: 0.88rem;
     line-height: 1.45;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .hlAuto {
@@ -595,7 +595,7 @@ async function erzeuge(erzwingen = false, auto = false) {
     gap: 0.5rem;
     margin-top: 1rem;
     padding-top: 0.6rem;
-    border-top: 1px solid var(--black-bg-12, rgba(255, 255, 255, 0.07));
+    border-top: 1px solid var(--panel-soft);
 }
 
 .hlAuto .hlAbschnitt {
@@ -609,22 +609,22 @@ async function erzeuge(erzwingen = false, auto = false) {
 
 .hlTakt {
     background: none;
-    border: 1px solid var(--black-bg-12, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--panel-soft);
     border-radius: var(--border-radius, 6px);
     padding: 0.1rem 0.45rem;
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
 .hlTakt.an {
-    border-color: var(--blue-color, rgb(90, 156, 255));
-    color: var(--blue-color, rgb(90, 156, 255));
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .hlAutoHinweis {
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .hlAutoHinweis.warn {
@@ -637,7 +637,7 @@ async function erzeuge(erzwingen = false, auto = false) {
 }
 
 .hlGrundlage summary {
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
@@ -645,24 +645,24 @@ async function erzeuge(erzwingen = false, auto = false) {
     display: flex;
     gap: 0.6rem;
     padding: 0.15rem 0;
-    border-top: 1px solid var(--black-bg-12, rgba(255, 255, 255, 0.07));
+    border-top: 1px solid var(--panel-soft);
 }
 
 .hlQuelleName {
     flex: none;
     width: 9rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .hlQuelleText {
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     font-variant-numeric: tabular-nums;
 }
 
 .hlFuss {
     margin: 0.9rem 0 0;
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .hlModell {

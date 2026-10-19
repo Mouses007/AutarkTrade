@@ -269,7 +269,7 @@ watch(() => props.daten, zeichne)
 
 .rLabel {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin: 0 0.1rem 0 0.15rem;
     white-space: nowrap;
 }
@@ -278,7 +278,7 @@ watch(() => props.daten, zeichne)
     margin-left: auto;
     padding-left: 0.4rem;
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
     white-space: nowrap;
 }
 
@@ -294,7 +294,7 @@ watch(() => props.daten, zeichne)
 .rQuelle {
     margin: 0.6rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .rErsatz {

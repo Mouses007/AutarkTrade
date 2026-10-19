@@ -539,7 +539,7 @@ const interaktiv = (kachel) => kachel.gross === false
     right: 0;
     z-index: 40;
     padding: 0 0.6rem 0.4rem;
-    background: var(--black-bg, #0d0d14);
+    background: var(--bg);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     transform: translateY(calc(-100% + 6px));
     transition: transform 0.18s ease;

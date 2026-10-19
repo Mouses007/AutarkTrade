@@ -242,17 +242,17 @@ watch(() => props.daten, zeichne)
     gap: 0.4rem 1.4rem;
     margin-top: 0.6rem;
     font-size: 0.86rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .fngGrossZahlen b {
     margin-left: 0.4rem;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .fngQuelle {
     margin: 0.6rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

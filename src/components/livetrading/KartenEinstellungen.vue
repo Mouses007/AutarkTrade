@@ -84,8 +84,8 @@ onMounted(() => boxEl.value?.focus())
     margin: 0 0 0.5rem;
     padding-bottom: 0.35rem;
     font-size: 0.9rem;
-    color: var(--white-87);
-    border-bottom: 1px solid var(--white-18);
+    color: var(--text);
+    border-bottom: 1px solid var(--line-stark);
 }
 
 .keZeichen {

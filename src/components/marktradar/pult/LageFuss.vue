@@ -129,7 +129,7 @@ const ersterSatz = computed(() => {
     flex: 1 1 auto;
     min-width: 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -138,7 +138,7 @@ const ersterSatz = computed(() => {
 .lfLeer {
     flex: 1 1 auto;
     font-size: 0.78rem;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .lfMehr {
@@ -147,8 +147,8 @@ const ersterSatz = computed(() => {
     border: 0;
     padding: 0;
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
-.lfMehr:hover { color: var(--blue-color); }
+.lfMehr:hover { color: var(--accent); }
 </style>

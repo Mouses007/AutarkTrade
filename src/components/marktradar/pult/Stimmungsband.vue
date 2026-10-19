@@ -217,7 +217,7 @@ const vzProz = (v, n = 2) => v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math
     font-size: 1.05rem;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .sZahl em {
@@ -264,11 +264,11 @@ const vzProz = (v, n = 2) => v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math
     gap: 0.5rem;
     margin-top: 0.25rem;
     font-size: 0.6rem;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .sEnden b {
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.68rem;
     text-align: center;
 }
@@ -276,7 +276,7 @@ const vzProz = (v, n = 2) => v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math
 .sGross {
     font-size: 1.35rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
     line-height: 1.2;
     margin-top: 0.15rem;
 }
@@ -294,7 +294,7 @@ const vzProz = (v, n = 2) => v === null ? '—' : `${v >= 0 ? '+' : '−'}${Math
     font-size: 0.6rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .gut { color: #26be96; }

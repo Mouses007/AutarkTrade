@@ -541,7 +541,7 @@ const strNeben = computed(() => {
     top: 2px;
     left: 4px;
     font-size: 0.68rem;
-    color: var(--white-87);
+    color: var(--text);
     background: rgba(13, 13, 20, 0.8);
     padding: 0 0.3rem;
     border-radius: 3px;
@@ -569,8 +569,8 @@ const strNeben = computed(() => {
 .mrTf.mrLong { background: rgba(76, 175, 80, 0.2); }
 .mrTf.mrShort { background: rgba(239, 83, 80, 0.2); }
 
-.mrTfName { font-weight: 700; font-size: 0.74rem; color: var(--white-87); }
-.mrTfZustand { color: var(--white-87); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.mrTfName { font-weight: 700; font-size: 0.74rem; color: var(--text); }
+.mrTfZustand { color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .mrTfSignal { position: absolute; top: 1px; left: 4px; font-size: 0.55rem; color: #ffd54f; }
 
 /* Kleiner Punkt rechts oben: diese Zeitebene zählt bei der Punktstärke mit */
@@ -604,7 +604,7 @@ const strNeben = computed(() => {
 .mrFelder.mrDrei { grid-template-columns: minmax(0, 0.92fr) minmax(0, 1fr) minmax(0, 1.08fr); border-top-color: rgba(255, 255, 255, 0.07); margin-top: -0.25rem; }
 
 .mrLabel {
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.62rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -615,33 +615,33 @@ const strNeben = computed(() => {
     text-transform: none;
     letter-spacing: 0;
     font-size: 0.62rem;
-    color: var(--white-38, rgba(255, 255, 255, 0.38));
+    color: var(--muted);
 }
 
 .mrWert {
     font-size: 0.82rem;
-    color: var(--white-87);
+    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .mrWert b { font-weight: 600; }
-.mrWert small { margin-left: 0.35rem; font-size: 0.7rem; color: var(--white-60); }
+.mrWert small { margin-left: 0.35rem; font-size: 0.7rem; color: var(--muted); }
 .mrWert small.mrKurs { margin-left: 0.15rem; margin-right: 0.1rem; }
 
 .gross .mrWert { font-size: 0.92rem; }
 
 .mrLong { color: #4caf50; }
 .mrShort { color: #ef5350; }
-.mrNeutral { color: var(--white-60); }
+.mrNeutral { color: var(--muted); }
 .mrViolett { color: #a58cf5; }
 .mrTf.mrLong, .mrTf.mrShort, .mrTf.mrNeutral { color: inherit; }
 
 .mrLegende {
     margin-top: 0.4rem;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
     columns: 2;
     column-gap: 1.4rem;
 }

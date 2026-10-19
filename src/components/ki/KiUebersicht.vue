@@ -1,13 +1,13 @@
 <template>
     <div class="kiUeb">
-        <div v-if="laedt" class="text-muted small py-3">
-            <span class="spinner-border spinner-border-sm me-2"></span>{{ t('kiUebersicht.laedt') }}
+        <div v-if="laedt" class="at-flex at-mitte at-luecke-2 at-gedaempft at-klein at-py-3">
+            <Kreisel />{{ t('kiUebersicht.laedt') }}
         </div>
-        <div v-else-if="fehler" class="alert alert-danger py-2 small">{{ fehler }}</div>
+        <Hinweis v-else-if="fehler" art="fehler">{{ fehler }}</Hinweis>
 
         <template v-else>
             <!-- ── Kennzahlen ─────────────────────────────────────────── -->
-            <div class="kuGrid mb-4">
+            <div class="kuGrid at-mu-4">
                 <div class="kuZelle">
                     <div class="kuWert">{{ geld(daten.verbrauch.heute.kostenUsd) }}</div>
                     <div class="kuLabel">{{ t('kiUebersicht.heute') }}</div>
@@ -37,18 +37,18 @@
             <h6 class="kuTitel">{{ t('kiUebersicht.verlaufTitel') }}</h6>
             <p class="kuHinweis">{{ t('kiUebersicht.verlaufHinweis') }}</p>
             <div v-if="hatVerlauf" ref="verlaufEl" class="kuVerlauf"></div>
-            <p v-else class="text-muted small mb-4">{{ t('kiUebersicht.keinVerbrauch') }}</p>
+            <p v-else class="at-gedaempft at-klein at-mu-4">{{ t('kiUebersicht.keinVerbrauch') }}</p>
 
             <!-- ── Funktionen ─────────────────────────────────────────── -->
             <h6 class="kuTitel">{{ t('kiUebersicht.funktionenTitel') }}</h6>
             <p class="kuHinweis">{{ t('kiUebersicht.funktionenHinweis') }}</p>
-            <div class="table-responsive mb-4">
-                <table class="table table-sm align-middle kuTabelle">
+            <div class="at-tabelle-huelle at-mu-4">
+                <table class="at-tabelle dicht kuTabelle">
                     <thead>
                         <tr>
                             <th>{{ t('kiUebersicht.spalteFunktion') }}</th>
                             <th>{{ t('kiUebersicht.spalteModell') }}</th>
-                            <th class="text-end">{{ t('kiUebersicht.spalte30') }}</th>
+                            <th class="zahl">{{ t('kiUebersicht.spalte30') }}</th>
                             <th></th>
                         </tr>
                     </thead>
@@ -61,19 +61,19 @@
                                 <span v-if="f.schluessel" class="kuModell">{{ f.schluessel.join(', ') }}</span>
                                 <template v-else>
                                     <span class="kuModell">{{ anbieterAnzeige(f.provider, t) || '—' }}<template v-if="f.modell">/{{ f.modell }}</template></span>
-                                    <span v-if="f.folgtGlobal" class="badge bg-secondary ms-2 kuBadge">
+                                    <Pille v-if="f.folgtGlobal" ton="neutral" class="at-ml-2 kuBadge">
                                         {{ t('kiUebersicht.folgtGlobal') }}
-                                    </span>
+                                    </Pille>
                                 </template>
                             </td>
-                            <td class="text-end">
+                            <td class="zahl">
                                 <template v-if="f.verbrauch30.laeufe">
                                     {{ geld(f.verbrauch30.kostenUsd) }}
-                                    <span class="kuExtra d-block">{{ t('kiUebersicht.laeufe', { n: f.verbrauch30.laeufe }) }}</span>
+                                    <span class="kuExtra at-block">{{ t('kiUebersicht.laeufe', { n: f.verbrauch30.laeufe }) }}</span>
                                 </template>
-                                <span v-else class="text-muted">—</span>
+                                <span v-else class="at-gedaempft">—</span>
                             </td>
-                            <td class="text-end">
+                            <td class="at-rechtsbuendig">
                                 <a v-if="f.bereich" href="#" class="kuLink" @click.prevent="$emit('gehe-zu', f.bereich)">
                                     {{ t('kiUebersicht.einstellen') }}
                                 </a>
@@ -86,8 +86,8 @@
             <!-- ── Automatiken ────────────────────────────────────────── -->
             <h6 class="kuTitel">{{ t('kiUebersicht.automatikenTitel') }}</h6>
             <p class="kuHinweis">{{ t('kiUebersicht.automatikenHinweis') }}</p>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle kuTabelle">
+            <div class="at-tabelle-huelle">
+                <table class="at-tabelle dicht kuTabelle">
                     <thead>
                         <tr>
                             <th>{{ t('kiUebersicht.spalteAutomatik') }}</th>
@@ -100,12 +100,12 @@
                         <tr v-for="a in daten.automatiken" :key="a.id" :class="{ kuAus: !a.an }">
                             <td>
                                 {{ t(a.titelKey) }}
-                                <span v-if="a.kostet" class="badge bg-warning text-dark ms-2 kuBadge">
+                                <Pille v-if="a.kostet" ton="warn" class="at-ml-2 kuBadge">
                                     {{ t('kiUebersicht.kostet') }}
-                                </span>
-                                <span v-if="!a.an" class="badge bg-secondary ms-2 kuBadge">
+                                </Pille>
+                                <Pille v-if="!a.an" ton="neutral" class="at-ml-2 kuBadge">
                                     {{ t('kiUebersicht.aus') }}
-                                </span>
+                                </Pille>
                             </td>
                             <!-- Wo ein Zeitplan steht, ersetzt er den Takt: „täglich"
                                  und „täglich ab 12 Uhr" untereinander sagt zweimal
@@ -113,12 +113,12 @@
                             <td>{{ a.zeitplan ? zeitplanText(a.zeitplan) : t(a.taktKey) }}</td>
                             <td>
                                 <span v-if="a.letzterLauf">{{ zeitpunkt(a.letzterLauf) }}</span>
-                                <span v-else class="text-muted">{{ t('kiUebersicht.nochNie') }}</span>
-                                <span v-if="a.fehler" class="kuFehler d-block" :title="a.fehler">
-                                    <i class="uil uil-exclamation-triangle"></i> {{ a.fehler.slice(0, 60) }}
+                                <span v-else class="at-gedaempft">{{ t('kiUebersicht.nochNie') }}</span>
+                                <span v-if="a.fehler" class="kuFehler at-block" :title="a.fehler">
+                                    <Symbol name="warnung" /> {{ a.fehler.slice(0, 60) }}
                                 </span>
                             </td>
-                            <td class="text-end">
+                            <td class="at-rechtsbuendig">
                                 <a v-if="a.bereich" href="#" class="kuLink" @click.prevent="$emit('gehe-zu', a.bereich)">
                                     {{ t('kiUebersicht.einstellen') }}
                                 </a>
@@ -146,6 +146,10 @@ import * as echarts from 'echarts'
 import { useKostenAnzeige } from '../../utils/journal/format.js'
 import { logWarn } from '../../utils/logger.js'
 import { ladeKiAnbieter, anbieterAnzeige } from '../../utils/kiAnbieter.js'
+import Kreisel from '../basis/Kreisel.vue'
+import Hinweis from '../basis/Hinweis.vue'
+import Pille from '../basis/Pille.vue'
+import Symbol from '../basis/Symbol.vue'
 
 const { t, locale } = useI18n()
 defineEmits(['gehe-zu'])
@@ -278,7 +282,7 @@ defineExpose({ laden })
 
 .kuHinweis {
     font-size: .78rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--muted);
     margin-bottom: .6rem;
 }
 
@@ -289,8 +293,8 @@ defineExpose({ laden })
 }
 
 .kuZelle {
-    background: var(--black-bg-2, rgba(255, 255, 255, .03));
-    border-radius: var(--border-radius, 8px);
+    background: var(--panel-soft);
+    border-radius: var(--radius-knopf);
     padding: .7rem .85rem;
 }
 
@@ -301,17 +305,17 @@ defineExpose({ laden })
 }
 
 .kuWert.kuAktiv {
-    color: var(--blue-color, #4da3ff);
+    color: var(--accent);
 }
 
 .kuLabel {
     font-size: .78rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--muted);
 }
 
 .kuExtra {
     font-size: .72rem;
-    color: var(--grey-color, #9aa0a6);
+    color: var(--muted);
 }
 
 .kuPunkt {
@@ -319,7 +323,7 @@ defineExpose({ laden })
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--blue-color, #4da3ff);
+    background: var(--accent);
     margin-right: 4px;
     animation: kuPuls 1.6s ease-in-out infinite;
 }
@@ -346,13 +350,12 @@ defineExpose({ laden })
 }
 
 .kuTabelle th {
-    font-weight: 600;
-    color: var(--grey-color, #9aa0a6);
-    font-size: .75rem;
+    text-transform: none;
+    letter-spacing: normal;
 }
 
 .kuModell {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--schrift-mono);
     font-size: .78rem;
 }
 
@@ -368,10 +371,11 @@ defineExpose({ laden })
 
 .kuFehler {
     font-size: .72rem;
-    color: var(--red-color, #e06c75);
+    color: var(--bad);
 }
 
 .kuLink {
+    color: var(--accent);
     font-size: .78rem;
     text-decoration: none;
     white-space: nowrap;

@@ -363,7 +363,7 @@ defineExpose({ status, statusDetail, stand, zeitstempel, accountRatio })
     position: relative;
     flex: 1 1 auto;
     min-height: 0;
-    background: var(--black-bg-2, #14141f);
+    background: var(--bg);
     border-radius: var(--border-radius, 6px);
     overflow: hidden;
     cursor: crosshair;

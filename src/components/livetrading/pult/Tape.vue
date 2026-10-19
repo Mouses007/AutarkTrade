@@ -105,7 +105,7 @@ const kurz = (s) => String(s || '').replace(/USDT$/, '')
     font-size: 0.62rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--white-38);
+    color: var(--muted);
     border-right: 1px solid var(--pTrenn);
 }
 
@@ -119,7 +119,7 @@ const kurz = (s) => String(s || '').replace(/USDT$/, '')
 }
 
 .tSumme { display: flex; align-items: baseline; gap: 0.3rem; font-size: 0.72rem; }
-.tSummeLabel { font-size: 0.6rem; color: var(--white-38); }
+.tSummeLabel { font-size: 0.6rem; color: var(--muted); }
 .tSumme b { font-variant-numeric: tabular-nums; }
 
 /* Säulen von der Mitte weg wäre hübscher und schlechter: gestapelt liest man
@@ -166,9 +166,9 @@ const kurz = (s) => String(s || '').replace(/USDT$/, '')
     font-variant-numeric: tabular-nums;
 }
 
-.tZeit { color: var(--white-38); }
-.tSym { color: var(--white-60); }
-.tLeer { font-size: 0.72rem; color: var(--white-38); }
+.tZeit { color: var(--muted); }
+.tSym { color: var(--muted); }
+.tLeer { font-size: 0.72rem; color: var(--muted); }
 
 .gut { color: #26be96; }
 .schlecht { color: #ff5f56; }

@@ -120,10 +120,10 @@ function zeitText(sek) {
 }
 
 function baueChart() {
-    const gruen = farbe('--green', '#26a69a')
-    const rot = farbe('--red-color', '#FF6960')
-    const text = farbe('--grey-text', '#8a9199')
-    const blau = farbe('--blue-color', '#1fd6c4')
+    const gruen = farbe('--good', '#26a69a')
+    const rot = farbe('--bad', '#FF6960')
+    const text = farbe('--muted', '#8a9199')
+    const blau = farbe('--accent', '#1fd6c4')
     const schrift = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif'
 
     /*

@@ -4,10 +4,12 @@
  * journal-kern.md §4.9). Ändert die Auswahl-Stores sofort, gespeichert und neu
  * geladen wird erst mit „Anwenden".
  */
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/journal/zeit.js'
 import Symbol from '../basis/Symbol.vue'
+import Knopf from '../basis/Knopf.vue'
+import InfoTipp from '../InfoTipp.vue'
 import { pageId, timeZoneTrade, hasData } from '../../stores/app/rahmen.js'
 import {
     periodRange, positions, timeFrames, ratios, grossNet, plSatisfaction, selectedPositions, selectedTimeFrame,
@@ -17,7 +19,7 @@ import {
 import { availableTags } from '../../stores/journal/tagebuch.js'
 import { useDateCalFormat, useDateCalFormatMonth, useCapitalizeFirstLetter } from '../../utils/journal/format.js'
 import { useMountCalendar, useMountDashboard, useMountDaily, useMountAuswertung, useCheckVisibleScreen } from '../../utils/journal/ablauf.js'
-import { useInitTooltip, useCloseMobileMenu } from '../../utils/journal/app.js'
+import { useCloseMobileMenu } from '../../utils/journal/app.js'
 import { ladeDiagramme } from '../../utils/journal/diagrammLader.js'
 import { useRefreshScreenshot } from '../../utils/screenshots.js'
 
@@ -167,10 +169,8 @@ function anwenden() {
     useCloseMobileMenu()
 }
 
-onMounted(async () => {
+onMounted(() => {
     markiereAlleTags()
-    await nextTick()
-    useInitTooltip()
 })
 </script>
 
@@ -179,120 +179,120 @@ onMounted(async () => {
         <button type="button" class="filterKopf" :aria-expanded="offen" @click="offen = !offen">
             <Symbol name="suche" />
             <span>{{ t('common.filter') }}</span>
-            <Symbol :name="offen ? 'hoch' : 'runter'" class="ms-auto" />
+            <Symbol :name="offen ? 'hoch' : 'runter'" class="at-ml-auto" />
         </button>
 
         <div v-show="offen" class="filterInhalt">
             <!-- Zeitraum -->
             <div v-if="zeigt('periodRange')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select class="form-select form-select-sm" :value="periodeWert" @change="waehlePeriode($event.target.value)">
+                    <select class="at-feld klein" :value="periodeWert" @change="waehlePeriode($event.target.value)">
                         <option v-for="p in periodRange" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
                     <div v-if="periodeWert !== 'all' && selectedDateRange" class="filterDaten">
-                        <input type="date" class="form-control form-control-sm" :value="useDateCalFormat(selectedDateRange.start)" @change="setzeStart($event.target.value)">
-                        <input type="date" class="form-control form-control-sm" :value="useDateCalFormat(selectedDateRange.end)" @change="setzeEnde($event.target.value)">
+                        <input type="date" class="at-feld klein" :value="useDateCalFormat(selectedDateRange.start)" @change="setzeStart($event.target.value)">
+                        <input type="date" class="at-feld klein" :value="useDateCalFormat(selectedDateRange.end)" @change="setzeEnde($event.target.value)">
                     </div>
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.periodRange')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.periodRange" /></span>
             </div>
 
             <!-- Monat -->
             <div v-if="zeigt('month')" class="filterZeile">
                 <div class="filterSteuer">
-                    <input type="month" class="form-control form-control-sm" :aria-label="t('filters.monthLabel')" :value="monatWert" @input="setzeMonat($event.target.value)">
+                    <input type="month" class="at-feld klein" :aria-label="t('filters.monthLabel')" :value="monatWert" @input="setzeMonat($event.target.value)">
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.month')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.month" /></span>
             </div>
 
             <!-- Brutto/Netto -->
             <div v-if="zeigt('grossNet')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-model="selectedGrossNet" class="form-select form-select-sm">
+                    <select v-model="selectedGrossNet" class="at-feld klein">
                         <option v-for="g in grossNet" :key="g.value" :value="g.value">{{ g.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.grossNet')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.grossNet" /></span>
             </div>
 
             <!-- Richtung -->
             <div v-if="zeigt('positions')" class="filterZeile">
                 <div class="filterSteuer">
-                    <button type="button" class="form-select form-select-sm text-start" @click="positionenOffen = !positionenOffen">{{ positionenText }}</button>
+                    <button type="button" class="at-feld klein filterAufklapp" @click="positionenOffen = !positionenOffen"><span class="at-kuerzen">{{ positionenText }}</span><Symbol name="runter" /></button>
                     <div v-show="positionenOffen" class="filterListe">
                         <label v-for="p in positions" :key="p.value" class="filterHaken">
-                            <input v-model="selectedPositions" type="checkbox" class="form-check-input" :value="p.value">
+                            <input v-model="selectedPositions" type="checkbox" :value="p.value">
                             {{ p.label }}
                         </label>
                     </div>
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.positions')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.positions" /></span>
             </div>
 
             <!-- Balken je Zeitraum -->
             <div v-if="zeigt('timeFrame')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-model="selectedTimeFrame" class="form-select form-select-sm">
+                    <select v-model="selectedTimeFrame" class="at-feld klein">
                         <option v-for="f in timeFrames" :key="f.value" :value="f.value">{{ f.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.timeFrame')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.timeFrame" /></span>
             </div>
 
             <!-- Kennzahl -->
             <div v-if="zeigt('ratio')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-model="selectedRatio" class="form-select form-select-sm">
+                    <select v-model="selectedRatio" class="at-feld klein">
                         <option v-for="r in ratios" :key="r.value" :value="r.value">{{ r.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.ratio')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.ratio" /></span>
             </div>
 
             <!-- PnL oder Zufriedenheit -->
             <div v-if="zeigt('plSatisfaction')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select class="form-select form-select-sm" :value="selectedPlSatisfaction" @change="tempSelectedPlSatisfaction = $event.target.value">
+                    <select class="at-feld klein" :value="selectedPlSatisfaction" @change="tempSelectedPlSatisfaction = $event.target.value">
                         <option v-for="p in plSatisfaction" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.plSatisfaction')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.plSatisfaction" /></span>
             </div>
 
             <!-- Tags -->
             <div v-if="zeigt('tags')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-if="pageId === 'dashboard'" class="form-select form-select-sm" :value="dashboardTagWert" @change="waehleDashboardTag($event.target.value)">
+                    <select v-if="pageId === 'dashboard'" class="at-feld klein" :value="dashboardTagWert" @change="waehleDashboardTag($event.target.value)">
                         <option value="all">{{ t('filters.allTags') }}</option>
                         <option :value="OHNE_TAG">{{ t('filters.noTag') }}</option>
                         <option v-for="tag in angeboteneTags" :key="tag.id" :value="tag.id">{{ tag.name }}</option>
                     </select>
                     <template v-else>
-                        <button type="button" class="form-select form-select-sm text-start" @click="tagsOffen = !tagsOffen">
-                            Tags ({{ (selectedTags || []).length }})
+                        <button type="button" class="at-feld klein filterAufklapp" @click="tagsOffen = !tagsOffen">
+                            <span class="at-kuerzen">Tags ({{ (selectedTags || []).length }})</span><Symbol name="runter" />
                         </button>
                         <div v-show="tagsOffen" class="filterListe">
                             <button type="button" class="filterUmschalter" @click="schalteAlleTags">
                                 {{ alleTagsMarkiert ? t('common.none') : t('common.all') }}
                             </button>
                             <label class="filterHaken">
-                                <input v-model="selectedTags" type="checkbox" class="form-check-input" :value="OHNE_TAG">
+                                <input v-model="selectedTags" type="checkbox" :value="OHNE_TAG">
                                 {{ t('filters.noTag') }}
                             </label>
                             <div v-for="gruppe in availableTags" :key="gruppe.id" class="filterGruppe">
                                 <div class="filterGruppenKopf" :style="{ color: gruppe.color }">{{ gruppe.name }}</div>
                                 <label v-for="tag in gruppe.tags || []" :key="tag.id" class="filterHaken">
-                                    <input v-model="selectedTags" type="checkbox" class="form-check-input" :value="tag.id">
+                                    <input v-model="selectedTags" type="checkbox" :value="tag.id">
                                     {{ tag.name }}
                                 </label>
                             </div>
                         </div>
                     </template>
                 </div>
-                <span class="filterInfo" data-bs-toggle="tooltip" :data-bs-title="t('filters.tags')"><Symbol name="info" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.tags" /></span>
             </div>
 
-            <button type="button" class="btn btn-sm btn-primary filterAnwenden" @click="anwenden">{{ t('common.apply') }}</button>
+            <Knopf art="haupt" klein class="filterAnwenden" @click="anwenden">{{ t('common.apply') }}</Knopf>
         </div>
     </div>
 </template>
@@ -374,6 +374,19 @@ onMounted(async () => {
     color: var(--muted);
     font-size: 0.75rem;
     padding: 0.1rem 0.6rem;
+}
+.filterAufklapp {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    text-align: left;
+}
+.filterAufklapp :deep(.at-symbol) {
+    color: var(--muted);
+}
+.filterHaken input {
+    accent-color: var(--accent);
 }
 .filterAnwenden {
     align-self: flex-start;

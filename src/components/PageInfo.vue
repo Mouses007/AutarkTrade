@@ -117,8 +117,8 @@ function schliessenBeiEsc(e) {
 }
 
 .infoBox {
-    background: var(--black-bg-2, #14141f);
-    border: 1px solid var(--white-18, rgba(255, 255, 255, 0.18));
+    background: var(--bg);
+    border: 1px solid var(--line-stark);
     border-radius: var(--border-radius, 6px);
     max-width: 46rem;
     width: 100%;
@@ -136,7 +136,7 @@ function schliessenBeiEsc(e) {
     position: sticky;
     top: 0;
     z-index: 1;
-    background: var(--black-bg-2, #14141f);
+    background: var(--bg);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -146,25 +146,25 @@ function schliessenBeiEsc(e) {
 
 .infoHead h5 {
     margin: 0;
-    color: var(--white-87, rgba(255, 255, 255, 0.87));
+    color: var(--text);
     font-weight: 600;
 }
 
 .infoClose {
     background: none;
     border: none;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
     font-size: 1.15rem;
     cursor: pointer;
     line-height: 1;
 }
 
 .infoClose:hover {
-    color: var(--white-87, rgba(255, 255, 255, 0.87));
+    color: var(--text);
 }
 
 .infoIntro {
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     font-size: 0.9rem;
     margin-bottom: 1rem;
 }
@@ -179,8 +179,8 @@ function schliessenBeiEsc(e) {
 .infoGroup {
     margin: 1.4rem 0 0.8rem;
     padding-top: 0.5rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.12));
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    border-top: 1px solid var(--line);
+    color: var(--muted);
     font-size: 0.72rem;
     font-weight: 600;
     letter-spacing: 0.09em;
@@ -194,7 +194,7 @@ function schliessenBeiEsc(e) {
 }
 
 .infoSectionTitle {
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
     font-size: 0.82rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -203,7 +203,7 @@ function schliessenBeiEsc(e) {
 
 .infoSection p {
     margin: 0;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     font-size: 0.86rem;
     line-height: 1.5;
 }

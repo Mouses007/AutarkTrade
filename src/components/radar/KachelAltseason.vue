@@ -30,7 +30,7 @@ const index = computed(() => props.daten?.index ?? null)
 /** Farbe folgt der Lage: Bitcoin-Saison orange, Altcoin-Saison blau. */
 const farbe = computed(() => {
     const i = index.value
-    if (i === null) return 'var(--white-60)'
+    if (i === null) return 'var(--muted)'
     if (i >= 75) return '#1fd6c4'
     if (i <= 25) return '#f7931a'
     return '#9aa0aa'
@@ -118,7 +118,7 @@ const proz = (v) => `${v > 0 ? '+' : ''}${v} %`
 
 .asLeisteLabel {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin-right: 0.15rem;
 }
 
@@ -178,13 +178,13 @@ const proz = (v) => `${v > 0 ? '+' : ''}${v} %`
     display: flex;
     justify-content: space-between;
     font-size: 0.7rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .asSatz {
     margin: 0.5rem 0 0;
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .asListen {
@@ -198,7 +198,7 @@ const proz = (v) => `${v > 0 ? '+' : ''}${v} %`
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-bottom: 0.2rem;
 }
 
@@ -212,7 +212,7 @@ const proz = (v) => `${v > 0 ? '+' : ''}${v} %`
 }
 
 .asZeile:hover {
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.05));
+    background: var(--panel-soft);
 }
 
 .up {
@@ -226,6 +226,6 @@ const proz = (v) => `${v > 0 ? '+' : ''}${v} %`
 .asQuelle {
     margin: 0.7rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

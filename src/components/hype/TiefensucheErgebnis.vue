@@ -97,16 +97,16 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
 </template>
 
 <style scoped>
-.tsErgebnis { margin-top: .6rem; padding-top: .6rem; border-top: 1px solid var(--white-10, rgba(255, 255, 255, .1)); display: grid; gap: .75rem; }
+.tsErgebnis { margin-top: .6rem; padding-top: .6rem; border-top: 1px solid var(--line); display: grid; gap: .75rem; }
 .tsKopf { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-size: .9rem; }
-.tsTitel { font-size: .75rem; letter-spacing: .05em; text-transform: uppercase; color: var(--grey-text, #8a9199); margin-bottom: .3rem; }
+.tsTitel { font-size: .75rem; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin-bottom: .3rem; }
 .tsZeile { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; font-size: .85rem; padding: .1rem 0; opacity: .7; }
 .tsZeile.gewaehlt { opacity: 1; }
 .tsZeile code { font-size: .8rem; word-break: break-all; }
 .tsKette { min-width: 5.5rem; font-weight: 600; }
-.tsGrau { color: var(--grey-text, #8a9199); }
-.tsGut { color: var(--green, #26a69a); }
+.tsGrau { color: var(--muted); }
+.tsGut { color: var(--good); }
 .tsBefunde { list-style: none; padding: 0; margin: 0; font-size: .85rem; }
-.tsBefunde li.minus { color: var(--red-color, #FF6960); }
-.tsBefunde li.info { color: var(--grey-text, #8a9199); }
+.tsBefunde li.minus { color: var(--bad); }
+.tsBefunde li.info { color: var(--muted); }
 </style>

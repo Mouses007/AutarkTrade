@@ -267,17 +267,17 @@ watch(() => props.daten, zeichne)
 .domAufbau,
 .domHinweis {
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .domMcap {
     font-size: 0.84rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .domMcap b {
     margin-left: 0.4rem;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 /* Tag 1: noch keine eigene Reihe. Lieber ein ehrlicher Platzhalter als eine
@@ -291,7 +291,7 @@ watch(() => props.daten, zeichne)
     gap: 0.3rem;
     text-align: center;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .domLeer i {
@@ -331,14 +331,14 @@ watch(() => props.daten, zeichne)
 .domAufteilung {
     margin-left: auto;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
     white-space: nowrap;
 }
 
 .domQuelle {
     margin: 0.4rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 </style>

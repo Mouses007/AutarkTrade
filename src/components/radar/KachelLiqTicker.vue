@@ -156,7 +156,7 @@ function geld(v) {
 
 .ltAnzahl {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .ltWarn {
@@ -247,7 +247,7 @@ function geld(v) {
     font-variant-numeric: tabular-nums;
 }
 
-.ltZeit { color: var(--white-60); }
+.ltZeit { color: var(--muted); }
 .ltSym { font-weight: 700; min-width: 2.6rem; }
 .ltBetrag { font-weight: 600; min-width: 4rem; }
 
@@ -257,12 +257,12 @@ function geld(v) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .ltBoerse {
     font-size: 0.66rem;
-    color: var(--white-60);
+    color: var(--muted);
     opacity: 0.7;
 }
 
@@ -270,12 +270,12 @@ function geld(v) {
     margin: auto 0;
     text-align: center;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .ltFuss {
     margin-top: auto;
     font-size: 0.68rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

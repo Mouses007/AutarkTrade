@@ -107,7 +107,7 @@ const takt = computed(() => {
     flex-wrap: wrap;
 }
 
-.ifSym { font-size: 0.78rem; color: var(--white-60); }
+.ifSym { font-size: 0.78rem; color: var(--muted); }
 
 .ifWert {
     font-size: 1.15rem;
@@ -119,14 +119,14 @@ const takt = computed(() => {
     font-size: 0.6rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .ifZahlung {
     margin-left: auto;
     font-size: 0.68rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .ifZahlung svg { margin-right: 0.2rem; vertical-align: -0.125em; }
@@ -142,7 +142,7 @@ const takt = computed(() => {
     font-size: 0.6rem;
     letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
 .ifExtreme {
@@ -164,8 +164,8 @@ const takt = computed(() => {
     cursor: pointer;
 }
 
-.ifZeile:hover .ifExtSym { color: var(--blue-color); }
-.ifExtSym { color: var(--white-60); }
+.ifZeile:hover .ifExtSym { color: var(--accent); }
+.ifExtSym { color: var(--muted); }
 
 .gut { color: #26be96; }
 .schlecht { color: #ff5f56; }

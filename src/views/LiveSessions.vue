@@ -291,7 +291,7 @@ onMounted(lade)
     background: rgba(255, 255, 255, 0.04);
 }
 
-.lsDisziplin { color: var(--white-60); }
+.lsDisziplin { color: var(--muted); }
 
 .lsKarte {
     display: flex;
@@ -322,14 +322,14 @@ onMounted(lade)
 }
 
 .lsLuecke { flex: 1; }
-.lsDatum { font-variant-numeric: tabular-nums; color: var(--white-87); }
-.lsSymbol { font-weight: 700; color: var(--blue-color, #01B4FF); }
-.lsDauer { color: var(--white-60); font-size: 0.76rem; }
+.lsDatum { font-variant-numeric: tabular-nums; color: var(--text); }
+.lsSymbol { font-weight: 700; color: var(--accent); }
+.lsDauer { color: var(--muted); font-size: 0.76rem; }
 .lsPnl { font-weight: 700; font-variant-numeric: tabular-nums; }
-.lsTrades { color: var(--white-60); font-size: 0.76rem; }
+.lsTrades { color: var(--muted); font-size: 0.76rem; }
 
 .lsStatusLaufend { color: #4ec9a0; font-weight: 600; }
-.lsStatusAbbruch { color: var(--white-60); font-style: italic; }
+.lsStatusAbbruch { color: var(--muted); font-style: italic; }
 
 .lsLoeschScharf { color: #ff6b7a; border-color: rgba(255, 107, 122, 0.5); }
 
@@ -340,7 +340,7 @@ onMounted(lade)
     font-size: 0.78rem;
 }
 
-.lsPlanText { color: var(--white-60); }
+.lsPlanText { color: var(--muted); }
 .lsPlanOk { color: #4ec9a0; font-weight: 600; }
 .lsPlanWeg { color: #ff6b7a; font-weight: 600; }
 
@@ -349,19 +349,19 @@ onMounted(lade)
     gap: 0.3rem;
     align-items: center;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lsNotizen {
     font-size: 0.8rem;
-    color: var(--white-87);
+    color: var(--text);
     white-space: pre-wrap;
 }
 
 .lsFazit {
     font-size: 0.82rem;
     font-style: italic;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .lsProtokoll {
@@ -380,10 +380,10 @@ onMounted(lade)
     font-variant-numeric: tabular-nums;
 }
 
-.lsProtoZeit { color: var(--white-60); min-width: 4.2rem; }
-.lsProtoArt { color: var(--white-60); min-width: 4.5rem; }
+.lsProtoZeit { color: var(--muted); min-width: 4.2rem; }
+.lsProtoArt { color: var(--muted); min-width: 4.5rem; }
 .lsProtoText { flex: 1; min-width: 0; }
-.lsProtoLeer { font-size: 0.76rem; color: var(--white-60); }
+.lsProtoLeer { font-size: 0.76rem; color: var(--muted); }
 
 .lsTradeListe {
     margin-top: 0.3rem;
@@ -392,13 +392,13 @@ onMounted(lade)
 }
 
 .lsTradeSym { font-weight: 700; min-width: 3rem; }
-.lsTradeSeite { color: var(--white-60); min-width: 3.5rem; }
+.lsTradeSeite { color: var(--muted); min-width: 3.5rem; }
 .lsTradePnl { font-weight: 600; }
 
 .lsLeer {
     padding: 1.5rem;
     text-align: center;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .lsFehler {

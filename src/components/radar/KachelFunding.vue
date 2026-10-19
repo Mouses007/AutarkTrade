@@ -208,7 +208,7 @@ function bisZahlung(ms) {
 
 .fLeisteLabel {
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
     margin-right: 0.15rem;
 }
 
@@ -216,7 +216,7 @@ function bisZahlung(ms) {
     width: 1px;
     align-self: stretch;
     margin: 0.1rem 0.25rem;
-    background: var(--white-12, rgba(255, 255, 255, 0.12));
+    background: var(--line);
 }
 
 .fKlein {
@@ -238,9 +238,9 @@ function bisZahlung(ms) {
     gap: 0.9rem;
     margin-top: 0.4rem;
     padding-top: 0.35rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.08));
+    border-top: 1px solid var(--line);
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .fExtrem {
@@ -279,7 +279,7 @@ function bisZahlung(ms) {
     font-size: 0.66rem;
     text-transform: none;
     letter-spacing: 0;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .fWerte {
@@ -324,11 +324,11 @@ function bisZahlung(ms) {
 }
 
 .fZeile:hover {
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.05));
+    background: var(--panel-soft);
 }
 
 .fSym {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .fWert {
@@ -344,7 +344,7 @@ function bisZahlung(ms) {
 }
 
 .muted {
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 /* Auf schmalen Schirmen scrollt die Tabelle waagerecht, statt zu zerfliessen */
@@ -362,12 +362,12 @@ function bisZahlung(ms) {
 .fTabelle th {
     position: sticky;
     top: 0;
-    background: var(--black-bg-3);
+    background: var(--bg);
     text-align: left;
     font-size: 0.76rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     padding: 0.3rem 0.4rem;
     cursor: pointer;
     white-space: nowrap;
@@ -375,7 +375,7 @@ function bisZahlung(ms) {
 
 .fTabelle td {
     padding: 0.22rem 0.4rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.07));
+    border-top: 1px solid var(--line);
     font-variant-numeric: tabular-nums;
 }
 
@@ -384,7 +384,7 @@ function bisZahlung(ms) {
 }
 
 .fTabelle tbody tr:hover {
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.05));
+    background: var(--panel-soft);
 }
 
 .r {
@@ -394,7 +394,7 @@ function bisZahlung(ms) {
 .fQuelle {
     margin: 0.6rem 0 0;
     font-size: 0.8rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .fErsatz {

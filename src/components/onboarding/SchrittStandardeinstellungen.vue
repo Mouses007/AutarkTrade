@@ -35,14 +35,14 @@ defineExpose({ uebernehmen })
 <template>
     <div class="onboarding-schritt">
         <h3>{{ t('onboarding.defaults.title') }}</h3>
-        <p class="text-muted">{{ t('onboarding.defaults.intro') }}</p>
+        <p class="at-gedaempft">{{ t('onboarding.defaults.intro') }}</p>
         <div class="vorschlag-liste">
             <label v-for="v in STANDARD_VORSCHLAEGE" :key="v.id" class="vorschlag-item">
                 <input type="checkbox" v-model="angehakt[v.id]">
                 <span>
                     {{ t(v.labelKey) }}
                     <InfoTipp :schluessel="v.infoKey" />
-                    <small v-if="v.bereitsAngepasst?.()" class="d-block text-muted">
+                    <small v-if="v.bereitsAngepasst?.()" class="at-block at-gedaempft">
                         {{ t('onboarding.defaults.alreadyCustomized') }}
                     </small>
                 </span>
@@ -68,5 +68,6 @@ defineExpose({ uebernehmen })
 
 .vorschlag-item input {
     margin-top: 0.2rem;
+    accent-color: var(--accent);
 }
 </style>

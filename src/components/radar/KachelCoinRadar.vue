@@ -201,11 +201,11 @@ function waehle(symbol) {
 .crKor.gut { color: #4ec9a5; }
 .crKor.mittel { color: #e8b04b; }
 .crKor.schwach { color: #e07a5f; }
-.crKor.muted { color: var(--white-45, rgba(255, 255, 255, 0.45)); }
+.crKor.muted { color: var(--muted); }
 
 .crAlter {
     margin-left: auto;
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
     white-space: nowrap;
 }
 
@@ -240,7 +240,7 @@ function waehle(symbol) {
 
 .crZeileKopf {
     font-size: 0.66rem;
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
     text-transform: uppercase;
     letter-spacing: 0.03em;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -249,7 +249,7 @@ function waehle(symbol) {
 }
 
 .crRang {
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
     text-align: right;
     font-variant-numeric: tabular-nums;
 }
@@ -278,12 +278,12 @@ function waehle(symbol) {
     padding: 0 0.18rem;
     border-radius: 3px;
     text-decoration: none;
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
     background: rgba(255, 255, 255, 0.05);
 }
 
 .crBoerse:hover {
-    color: var(--blue-color, #4da3ff);
+    color: var(--accent);
     background: rgba(77, 163, 255, 0.15);
 }
 
@@ -302,7 +302,7 @@ function waehle(symbol) {
 
 .crWert.gut { color: #4ec9a5; }
 .crWert.mittel { color: #e8b04b; }
-.crWert.schwach { color: var(--white-60, rgba(255, 255, 255, 0.6)); }
+.crWert.schwach { color: var(--muted); }
 
 .crKlick { cursor: pointer; }
 .crKlick:hover { background: rgba(255, 255, 255, 0.06); }
@@ -313,6 +313,6 @@ function waehle(symbol) {
 
 .crLeer {
     font-size: 0.75rem;
-    color: var(--white-45, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
 }
 </style>

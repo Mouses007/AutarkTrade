@@ -236,14 +236,14 @@ const alterText = computed(() => {
     font-size: 0.62rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--white-38);
+    color: var(--muted);
     white-space: nowrap;
 }
 
 .pSymbol {
     font-size: 1.25rem;
     letter-spacing: 0.05em;
-    color: var(--white-87);
+    color: var(--text);
     line-height: 1.1;
     font-weight: 600;
 }
@@ -253,15 +253,15 @@ const alterText = computed(() => {
 .pPreis {
     font-size: 1.6rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
     line-height: 1.1;
 }
 
-.pPreis.pAlt { color: var(--white-38); }
-.pNachkomma { font-size: 0.95rem; color: var(--white-38); }
+.pPreis.pAlt { color: var(--muted); }
+.pNachkomma { font-size: 0.95rem; color: var(--muted); }
 
 .pPreisFuss { display: flex; gap: 0.5rem; margin-top: 0.15rem; }
-.pTrenner { color: var(--white-38); }
+.pTrenner { color: var(--muted); }
 .pWarn { color: #e8a33d; }
 
 .gut { color: #26be96; }
@@ -275,10 +275,10 @@ const alterText = computed(() => {
     font-size: 0.62rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--white-38);
+    color: var(--muted);
 }
 
-.pBudgetZahl { font-variant-numeric: tabular-nums; color: var(--white-60); }
+.pBudgetZahl { font-variant-numeric: tabular-nums; color: var(--muted); }
 .pBudgetZahl.pbNah { color: #e8a33d; }
 .pBudgetZahl.pbUeber { color: #ff5f56; }
 
@@ -303,7 +303,7 @@ const alterText = computed(() => {
     transition: width 0.3s ease;
 }
 
-.pBalkenNeutral { background: repeating-linear-gradient(90deg, var(--white-60) 0 5px, transparent 5px 7px); }
+.pBalkenNeutral { background: repeating-linear-gradient(90deg, var(--muted) 0 5px, transparent 5px 7px); }
 
 /* Die Trade-Zählung läuft neutral mit und färbt sich erst an denselben zwei
    Schwellen wie das Verlustbudget — sonst wäre der eine Balken eine Warnung
@@ -318,7 +318,7 @@ const alterText = computed(() => {
     bottom: -2px;
     left: 70%;
     width: 1px;
-    background: var(--white-38);
+    background: var(--muted);
 }
 
 /* Über der Grenze: ein Strich am rechten Ende, damit „drüber" nicht wie
@@ -346,7 +346,7 @@ const alterText = computed(() => {
 .pZeit {
     font-size: 1.3rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
     line-height: 1.1;
 }
 </style>

@@ -1966,7 +1966,7 @@ onBeforeUnmount(() => {
 .nwMeldung {
     margin: 0 0 0.6rem;
     font-size: 0.84rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwMeldung.fehler {
@@ -1988,7 +1988,7 @@ onBeforeUnmount(() => {
 
 .nwSchnellZeile {
     font-size: 0.76rem;
-    color: var(--white-60, rgba(255, 255, 255, 0.6));
+    color: var(--muted);
 }
 
 .nwGuthaben {
@@ -2006,7 +2006,7 @@ onBeforeUnmount(() => {
     display: flex;
     align-items: center;
     gap: 0.35rem;
-    color: var(--white-40, rgba(255, 255, 255, 0.4));
+    color: var(--leise);
 }
 
 /* Ohne `min-width: 0` besteht ein Grid-Element auf seiner Min-Content-Breite —
@@ -2014,9 +2014,9 @@ onBeforeUnmount(() => {
    als der Bildschirm. Die Terminzeilen kürzen stattdessen mit Auslassungspunkten. */
 .nwKarte {
     min-width: 0;
-    background: var(--black-bg-2, #16161d);
+    background: var(--bg);
     border-radius: var(--border-radius, 8px);
-    box-shadow: var(--shadow-sm);
+    box-shadow: var(--schatten);
     padding: 1rem 1.1rem;
     margin-bottom: 1rem;
 }
@@ -2042,14 +2042,14 @@ onBeforeUnmount(() => {
 
 .nwZeitpunkt {
     font-size: 0.76rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwUeberschrift {
     margin: 0 0 0.5rem;
     font-size: 1.25rem;
     font-weight: 700;
-    color: var(--white-87);
+    color: var(--text);
     line-height: 1.3;
 }
 
@@ -2057,7 +2057,7 @@ onBeforeUnmount(() => {
     margin: 0 0 1rem;
     font-size: 0.96rem;
     line-height: 1.55;
-    color: var(--white-75, rgba(255, 255, 255, 0.75));
+    color: var(--text);
 }
 
 /* Drei Spalten ab 900 px, zwei ab 600, darunter eine. Die Kacheln sind seit
@@ -2088,7 +2088,7 @@ onBeforeUnmount(() => {
    nicht wie ein Dashboard. */
 .nwZeitung .nwBerichtKopf {
     padding-bottom: 0.5rem;
-    border-bottom: 3px double var(--white-30, rgba(255, 255, 255, 0.3));
+    border-bottom: 3px double var(--leise);
     flex-wrap: wrap;
 }
 
@@ -2103,8 +2103,8 @@ onBeforeUnmount(() => {
     font-family: Georgia, 'Times New Roman', serif;
     font-size: 1.02rem;
     font-style: italic;
-    color: var(--white-75, rgba(255, 255, 255, 0.78));
-    border-bottom: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+    color: var(--text);
+    border-bottom: 1px solid var(--line);
     padding-bottom: 0.8rem;
 }
 
@@ -2139,7 +2139,7 @@ onBeforeUnmount(() => {
     align-items: center;
     gap: 0.4rem;
     margin: 0 0 0.3rem;
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 0.78rem;
 }
 
@@ -2151,19 +2151,19 @@ onBeforeUnmount(() => {
     padding: 0.4rem 0.7rem;
     border: 1px solid transparent;
     border-radius: var(--border-radius);
-    background: var(--black-bg-soft, rgba(255, 255, 255, 0.03));
-    color: var(--white-2, #d5d7dc);
+    background: var(--panel-soft);
+    color: var(--text);
     font-size: 0.82rem;
     text-align: left;
     cursor: pointer;
 }
 
 .nwKetteZeile:hover {
-    border-color: var(--grey-color);
+    border-color: var(--leise);
 }
 
 .nwKetteZeile.offen {
-    border-color: var(--blue-color);
+    border-color: var(--accent);
     background: rgba(1, 180, 255, 0.08);
 }
 
@@ -2192,11 +2192,11 @@ onBeforeUnmount(() => {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--grey-text);
+    color: var(--muted);
 }
 
 .nwKetteTag {
-    color: var(--grey-text);
+    color: var(--muted);
     font-size: 0.74rem;
 }
 
@@ -2264,7 +2264,7 @@ onBeforeUnmount(() => {
     font-family: Georgia, 'Times New Roman', serif;
     font-size: 1.15rem;
     font-weight: 700;
-    color: var(--white-87);
+    color: var(--text);
     line-height: 1.3;
 }
 
@@ -2275,7 +2275,7 @@ onBeforeUnmount(() => {
     font-family: Georgia, 'Times New Roman', serif;
     font-size: 0.95rem;
     line-height: 1.65;
-    color: var(--white-75, rgba(255, 255, 255, 0.78));
+    color: var(--text);
     text-align: justify;
     hyphens: auto;
 }
@@ -2287,7 +2287,7 @@ onBeforeUnmount(() => {
     max-height: 180px;
     object-fit: cover;
     border-radius: 6px;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--line);
     display: block;
     margin-bottom: 0.5rem;
 }
@@ -2302,19 +2302,19 @@ onBeforeUnmount(() => {
     gap: 0.5rem;
     margin: 0.3rem 0 1rem;
     padding-top: 0.5rem;
-    border-top: 1px dashed var(--white-12, rgba(255, 255, 255, 0.1));
+    border-top: 1px dashed var(--line);
 }
 .nwWeitereBilderLabel {
     flex-basis: 100%;
     font-size: 0.72rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 .nwWeitereBilder img {
     height: 90px;
     max-width: 160px;
     object-fit: cover;
     border-radius: 6px;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--line);
     opacity: 0.85;
     display: block;
 }
@@ -2326,7 +2326,7 @@ onBeforeUnmount(() => {
     .nwKapitelText {
         columns: 2;
         column-gap: 2rem;
-        column-rule: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+        column-rule: 1px solid var(--line);
     }
 }
 
@@ -2342,7 +2342,7 @@ onBeforeUnmount(() => {
     .nwKapitel {
         columns: 2;
         column-gap: 2rem;
-        column-rule: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+        column-rule: 1px solid var(--line);
     }
 
     /* Kopf und Vorspann laufen über die volle Breite, erst danach bricht es. */
@@ -2370,11 +2370,11 @@ onBeforeUnmount(() => {
     font-size: 0.98rem;
     font-weight: 700;
     line-height: 1.25;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwArtikel:hover .nwArtikelTitel {
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
 }
 
 .nwArtikelText {
@@ -2382,7 +2382,7 @@ onBeforeUnmount(() => {
     font-family: Georgia, 'Times New Roman', serif;
     font-size: 0.9rem;
     line-height: 1.6;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     text-align: justify;
     hyphens: auto;
 }
@@ -2401,7 +2401,7 @@ onBeforeUnmount(() => {
     margin: 0.3rem 0 0;
     font-family: system-ui, sans-serif;
     font-size: 0.66rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 
 /* Top-Meldungen: höchstens drei, deshalb nie mehr als drei Spalten — und auf dem
@@ -2417,7 +2417,7 @@ onBeforeUnmount(() => {
     line-height: 0.85;
     padding: 0.06em 0.12em 0 0;
     font-weight: 700;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 /*
@@ -2443,8 +2443,8 @@ onBeforeUnmount(() => {
 .nwWaageSpalte {
     min-width: 0;
     padding: 0.6rem 0.75rem 0.7rem;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
-    border-top: 2px solid var(--white-18, rgba(255, 255, 255, 0.2));
+    border: 1px solid var(--line);
+    border-top: 2px solid var(--line-stark);
     border-radius: var(--border-radius, 8px);
     background: rgba(255, 255, 255, 0.022);
 }
@@ -2470,7 +2470,7 @@ onBeforeUnmount(() => {
     font-weight: 700;
     letter-spacing: 0.07em;
     text-transform: uppercase;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwWaageSpalte.dafuer .nwWaageKopf i {
@@ -2500,7 +2500,7 @@ onBeforeUnmount(() => {
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     font-size: 0.84rem;
     line-height: 1.5;
-    color: var(--white-75, rgba(255, 255, 255, 0.75));
+    color: var(--text);
 }
 
 .nwWaageListe li:last-child {
@@ -2529,14 +2529,14 @@ onBeforeUnmount(() => {
 
 .nwArt.fakt {
     background: rgba(255, 255, 255, 0.09);
-    border-color: var(--white-18, rgba(255, 255, 255, 0.18));
-    color: var(--white-87);
+    border-color: var(--line-stark);
+    color: var(--text);
 }
 
 .nwArt.einschaetzung {
     background: transparent;
-    border-color: var(--white-12, rgba(255, 255, 255, 0.14));
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    border-color: var(--line);
+    color: var(--muted);
 }
 
 /*
@@ -2578,7 +2578,7 @@ onBeforeUnmount(() => {
 
 .nwDoBlock {
     min-width: 0;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--line);
     border-radius: var(--border-radius, 8px);
     background: rgba(255, 255, 255, 0.022);
     padding: 0.7rem 0.8rem 0.5rem;
@@ -2594,11 +2594,11 @@ onBeforeUnmount(() => {
     font-weight: 700;
     letter-spacing: 0.09em;
     text-transform: uppercase;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwDoTitel i {
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
     font-size: 0.95rem;
 }
 
@@ -2617,15 +2617,15 @@ onBeforeUnmount(() => {
     font-weight: 600;
     letter-spacing: 0.07em;
     text-transform: uppercase;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
-    border-bottom: 1px solid var(--white-12, rgba(255, 255, 255, 0.12));
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
     white-space: nowrap;
 }
 
 .nwDoTab td {
     padding: 0.4rem 0.5rem 0.4rem 0;
     vertical-align: top;
-    color: var(--white-75, rgba(255, 255, 255, 0.75));
+    color: var(--text);
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     line-height: 1.35;
 }
@@ -2639,20 +2639,20 @@ onBeforeUnmount(() => {
 }
 
 .nwDoWas {
-    color: var(--white-87);
+    color: var(--text);
     font-weight: 600;
     white-space: nowrap;
 }
 
 .nwDoWert b {
-    color: var(--white-87);
+    color: var(--text);
     font-weight: 700;
     white-space: nowrap;
 }
 
 .nwDoZusatz,
 .nwDoHer {
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
     font-size: 0.78rem;
 }
 
@@ -2671,26 +2671,26 @@ onBeforeUnmount(() => {
     display: block;
     height: 100%;
     border-radius: 2px;
-    background: var(--blue-color, #01B4FF);
+    background: var(--accent);
 }
 
 .nwDoZeit {
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
-    color: var(--white-87);
+    color: var(--text);
     font-weight: 600;
 }
 
 .nwDoLand {
     white-space: nowrap;
     font-weight: 500;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 
 /* Der Vorwert in Klammern hinter der Prognose — ohne ihn sagt „0,5 %" nichts. */
 .nwDoVor {
     margin-left: 0.35rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
     font-size: 0.76rem;
 }
 
@@ -2705,14 +2705,14 @@ onBeforeUnmount(() => {
 .nwDoFuss {
     margin: 0.45rem 0 0;
     font-size: 0.68rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.45));
+    color: var(--muted);
 }
 
 /* ── Kapitel im Dossier ── */
 .nwDoKapitel {
     margin: 0 0 1.6rem;
     padding-top: 0.9rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+    border-top: 1px solid var(--line);
 }
 
 .nwDoKapitelKopf {
@@ -2729,7 +2729,7 @@ onBeforeUnmount(() => {
     font-size: 1.08rem;
     font-weight: 700;
     line-height: 1.3;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwDoNummer {
@@ -2750,14 +2750,14 @@ onBeforeUnmount(() => {
     margin: 0 0 0.8rem;
     font-size: 0.9rem;
     line-height: 1.6;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 /* Kennzahlentabelle des Kapitels: eigener Rahmen, damit sie sich von den
    Meldungen darunter absetzt — sie ist ein Nachschlagewerk, kein Text. */
 .nwDoZahlen {
     margin: 0 0 1rem;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--line);
     border-radius: var(--border-radius, 8px);
     background: rgba(255, 255, 255, 0.022);
 }
@@ -2783,7 +2783,7 @@ onBeforeUnmount(() => {
     gap: 0.7rem;
     padding: 0.7rem 0.75rem;
     margin-bottom: 0.5rem;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.09));
+    border: 1px solid var(--line);
     border-left: 3px solid transparent;
     border-radius: var(--border-radius, 8px);
     background: rgba(255, 255, 255, 0.018);
@@ -2793,7 +2793,7 @@ onBeforeUnmount(() => {
 
 .nwDoMeldung:hover {
     background: rgba(255, 255, 255, 0.045);
-    border-color: var(--white-18, rgba(255, 255, 255, 0.2));
+    border-color: var(--line-stark);
 }
 
 /* „Wichtig" nur als Kante plus Marke — eine ganze Karte einzufärben macht
@@ -2819,7 +2819,7 @@ onBeforeUnmount(() => {
     height: 88px;
     object-fit: cover;
     border-radius: 6px;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--line);
     display: block;
 }
 
@@ -2836,18 +2836,18 @@ onBeforeUnmount(() => {
     font-size: 0.95rem;
     font-weight: 700;
     line-height: 1.3;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwDoMeldung:hover .nwDoMeldungTitel {
-    color: var(--blue-color, #01B4FF);
+    color: var(--accent);
 }
 
 .nwDoMeldungText {
     margin: 0;
     font-size: 0.86rem;
     line-height: 1.55;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .nwDoMeldungFuss {
@@ -2857,7 +2857,7 @@ onBeforeUnmount(() => {
     gap: 0.35rem 0.6rem;
     margin: 0.5rem 0 0;
     font-size: 0.68rem;
-    color: var(--white-50, rgba(255, 255, 255, 0.5));
+    color: var(--muted);
 }
 
 .nwDoMeldungFuss .nwPunktQuelle {
@@ -2868,7 +2868,7 @@ onBeforeUnmount(() => {
 /* ── Archivliste ── */
 .nwArchiv {
     margin: 0.6rem 0 0.2rem;
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--line);
     border-radius: var(--border-radius, 6px);
     overflow: hidden;
 }
@@ -2881,8 +2881,8 @@ onBeforeUnmount(() => {
     padding: 0.45rem 0.7rem;
     background: none;
     border: 0;
-    border-bottom: 1px solid var(--white-12, rgba(255, 255, 255, 0.06));
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    border-bottom: 1px solid var(--line);
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     font-size: 0.82rem;
     text-align: left;
     cursor: pointer;
@@ -2895,13 +2895,13 @@ onBeforeUnmount(() => {
 .nwArchivZeile:hover,
 .nwArchivZeile.aktiv {
     background: rgba(255, 255, 255, 0.05);
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwArchivDatum {
     flex: 0 0 auto;
     font-variant-numeric: tabular-nums;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwArchivTitel {
@@ -2915,7 +2915,7 @@ onBeforeUnmount(() => {
 
 .nwArchivMeta {
     flex: 0 0 auto;
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.74rem;
     white-space: nowrap;
 }
@@ -2927,7 +2927,7 @@ onBeforeUnmount(() => {
     gap: 0.25rem;
     padding: 0.1rem 0.35rem;
     border-radius: 4px;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwArchivLoeschen:hover {
@@ -2944,7 +2944,7 @@ onBeforeUnmount(() => {
 .nwPunkt {
     border-radius: var(--border-radius, 6px);
     background: rgba(255, 255, 255, 0.025);
-    border-left: 3px solid var(--white-12, rgba(255, 255, 255, 0.12));
+    border-left: 3px solid var(--line);
     overflow: hidden;
     transition: background 0.15s;
 }
@@ -3000,7 +3000,7 @@ onBeforeUnmount(() => {
     align-items: center;
     gap: 0.5rem;
     margin-top: 0.1rem;
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.74rem;
 }
 
@@ -3027,14 +3027,14 @@ onBeforeUnmount(() => {
     padding: 0.15rem 0.45rem;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--white-12, rgba(255, 255, 255, 0.12));
+    border: 1px solid var(--line);
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwZahl b {
     font-size: 0.84rem;
-    color: var(--white-87);
+    color: var(--text);
     font-weight: 600;
 }
 
@@ -3052,7 +3052,7 @@ onBeforeUnmount(() => {
     height: 1.35rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.08);
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.72rem;
     font-weight: 600;
     display: flex;
@@ -3107,7 +3107,7 @@ onBeforeUnmount(() => {
     margin: 0 0 1.2rem;
     font-size: 1rem;
     line-height: 1.6;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwFensterTitel {
@@ -3115,7 +3115,7 @@ onBeforeUnmount(() => {
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwBeleg {
@@ -3124,19 +3124,19 @@ onBeforeUnmount(() => {
     gap: 0.4rem;
     padding: 0.28rem 0;
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     text-decoration: none;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.06));
+    border-top: 1px solid var(--line);
 }
 
 .nwBeleg:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwBelegQuelle {
     flex: 0 0 auto;
     font-weight: 600;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwBelegTitel {
@@ -3150,8 +3150,8 @@ onBeforeUnmount(() => {
     margin: 0;
     padding-top: 0.4rem;
     font-size: 0.8rem;
-    color: var(--white-60);
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.06));
+    color: var(--muted);
+    border-top: 1px solid var(--line);
 }
 
 /* Wichtiges hebt sich ab, ohne zu schreien */
@@ -3163,7 +3163,7 @@ onBeforeUnmount(() => {
     flex: 1 1 auto;
     min-width: 0;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
     line-height: 1.35;
 }
 
@@ -3178,15 +3178,15 @@ onBeforeUnmount(() => {
     margin: 0;
     font-size: 0.88rem;
     line-height: 1.55;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .nwFuss {
     margin: 1rem 0 0;
     padding-top: 0.6rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.08));
+    border-top: 1px solid var(--line);
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwLoeschen {
@@ -3195,7 +3195,7 @@ onBeforeUnmount(() => {
     border: 0;
     padding: 0.1rem 0.35rem;
     border-radius: 4px;
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
@@ -3207,7 +3207,7 @@ onBeforeUnmount(() => {
 .nwVideos {
     margin-top: 1rem;
     padding-top: 0.6rem;
-    border-top: 1px solid var(--white-12, rgba(255, 255, 255, 0.08));
+    border-top: 1px solid var(--line);
 }
 
 .nwVideosKopf {
@@ -3220,13 +3220,13 @@ onBeforeUnmount(() => {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-bottom: 0.2rem;
     cursor: pointer;
 }
 
 .nwVideosKopf:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwVideosZahl {
@@ -3242,12 +3242,12 @@ onBeforeUnmount(() => {
     gap: 0.4rem;
     padding: 0.2rem 0;
     font-size: 0.82rem;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     text-decoration: none;
 }
 
 .nwVideo:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 /*
@@ -3262,10 +3262,10 @@ onBeforeUnmount(() => {
 .nwVideoText {
     margin: 0.1rem 0 0.5rem 1.35rem;
     padding-left: 0.7rem;
-    border-left: 2px solid var(--white-12, rgba(255, 255, 255, 0.1));
+    border-left: 2px solid var(--line);
     font-size: 0.78rem;
     line-height: 1.5;
-    color: var(--white-60, rgba(255, 255, 255, 0.62));
+    color: var(--muted);
 }
 
 .nwVideoText p {
@@ -3292,7 +3292,7 @@ onBeforeUnmount(() => {
 }
 
 .nwVideoErgebnis.alt {
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwVideoErgebnis.schlecht {
@@ -3365,7 +3365,7 @@ onBeforeUnmount(() => {
     top: 10%;
     bottom: 10%;
     width: 2px;
-    background: var(--white-12, rgba(255, 255, 255, 0.1));
+    background: var(--line);
     opacity: 0;
     transition: opacity 0.15s;
 }
@@ -3390,11 +3390,11 @@ onBeforeUnmount(() => {
     height: 3px;
     margin: 3px auto;
     border-radius: 2px;
-    background: var(--white-12, rgba(255, 255, 255, 0.12));
+    background: var(--line);
 }
 
 .nwGriff:hover::after {
-    background: var(--white-38, rgba(255, 255, 255, 0.32));
+    background: var(--muted);
 }
 
 .nwAnzahl {
@@ -3420,14 +3420,14 @@ onBeforeUnmount(() => {
     margin: 0 0 0.7rem;
     font-size: 0.95rem;
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwCountdown {
     margin-left: auto;
     font-size: 0.76rem;
     font-weight: 400;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwFilter {
@@ -3452,7 +3452,7 @@ onBeforeUnmount(() => {
     width: 1px;
     height: 14px;
     margin: 0 0.3rem;
-    background: var(--white-12, rgba(255, 255, 255, 0.15));
+    background: var(--line);
 }
 
 .nwZeitraum {
@@ -3475,7 +3475,7 @@ onBeforeUnmount(() => {
     font-size: 0.68rem;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: var(--white-60);
+    color: var(--muted);
     opacity: 0.7;
 }
 
@@ -3489,8 +3489,8 @@ onBeforeUnmount(() => {
     font-size: 0.76rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
-    border-bottom: 1px solid var(--white-12, rgba(255, 255, 255, 0.08));
+    color: var(--muted);
+    border-bottom: 1px solid var(--line);
 }
 
 .nwTermin {
@@ -3520,19 +3520,19 @@ onBeforeUnmount(() => {
 
 .nwZeit {
     font-variant-numeric: tabular-nums;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwLand {
     font-weight: 600;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwTerminTitel {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .nwWerte {
@@ -3541,7 +3541,7 @@ onBeforeUnmount(() => {
     display: flex;
     gap: 0.5rem;
     font-variant-numeric: tabular-nums;
-    color: var(--white-60);
+    color: var(--muted);
     white-space: nowrap;
 }
 
@@ -3555,11 +3555,11 @@ onBeforeUnmount(() => {
 }
 
 .nwProg {
-    color: var(--white-75, rgba(255, 255, 255, 0.75));
+    color: var(--text);
 }
 
 .nwIst {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 /* Über oder unter der Erwartung — ohne Wertung, nur als Richtung */
@@ -3578,7 +3578,7 @@ onBeforeUnmount(() => {
     grid-template-areas: 'bild kopf' 'bild titel' 'bild text' 'bild klappe';
     column-gap: 0.6rem;
     padding: 0.45rem 0;
-    border-bottom: 1px solid var(--white-12, rgba(255, 255, 255, 0.07));
+    border-bottom: 1px solid var(--line);
     text-decoration: none;
     color: inherit;
 }
@@ -3602,7 +3602,7 @@ onBeforeUnmount(() => {
     align-items: center;
     gap: 0.35rem;
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 
 .nwQuelle {
@@ -3617,7 +3617,7 @@ onBeforeUnmount(() => {
     grid-area: titel;
     font-size: 0.9rem;
     line-height: 1.35;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 /* Vorschau: drei Zeilen, sauber abgeschnitten. Mehr wäre eine Volltextkopie
@@ -3627,7 +3627,7 @@ onBeforeUnmount(() => {
     margin-top: 0.15rem;
     font-size: 0.82rem;
     line-height: 1.45;
-    color: var(--white-60);
+    color: var(--muted);
     display: -webkit-box;
     -webkit-line-clamp: 3;
     line-clamp: 3;
@@ -3640,7 +3640,7 @@ onBeforeUnmount(() => {
     margin-top: 0.2rem;
     font-size: 0.84rem;
     line-height: 1.45;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     /* Stichpunkte der Videoanalyse: die Zeilenumbrüche sind der Inhalt */
     white-space: pre-line;
 }
@@ -3665,12 +3665,12 @@ onBeforeUnmount(() => {
     background: none;
     border: 0;
     font-size: 0.74rem;
-    color: var(--white-60);
+    color: var(--muted);
     cursor: pointer;
 }
 
 .nwKlappe:hover {
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwVideoMarke {
@@ -3687,7 +3687,7 @@ onBeforeUnmount(() => {
 .nwHinweis {
     margin: 0.7rem 0 0;
     font-size: 0.78rem;
-    color: var(--white-60);
+    color: var(--muted);
     line-height: 1.4;
 }
 
@@ -3698,7 +3698,7 @@ onBeforeUnmount(() => {
     gap: 0.4rem;
     padding: 2.2rem 1rem;
     text-align: center;
-    color: var(--white-60);
+    color: var(--muted);
     font-size: 0.88rem;
 }
 
@@ -3796,8 +3796,8 @@ onBeforeUnmount(() => {
 }
 
 .nwLageKarte {
-    background: var(--black-bg-12, rgba(255, 255, 255, 0.04));
-    border-left: 3px solid var(--blue-color, rgb(90, 156, 255));
+    background: var(--panel-soft);
+    border-left: 3px solid var(--accent);
     border-radius: 0 var(--border-radius, 6px) var(--border-radius, 6px) 0;
     padding: 0.6rem 0.8rem;
     min-width: 0;
@@ -3810,7 +3810,7 @@ onBeforeUnmount(() => {
     font-size: 0.74rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-bottom: 0.3rem;
 }
 
@@ -3830,21 +3830,21 @@ onBeforeUnmount(() => {
     font-size: 0.95rem;
     font-weight: 600;
     line-height: 1.35;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwLageText {
     margin: 0;
     font-size: 0.86rem;
     line-height: 1.5;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .nwLageNeben {
     margin: 0.4rem 0 0;
     font-size: 0.84rem;
     line-height: 1.45;
-    color: var(--white-70, rgba(255, 255, 255, 0.7));
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
 }
 
 .nwLageBed {
@@ -3852,7 +3852,7 @@ onBeforeUnmount(() => {
     padding-left: 1rem;
     font-size: 0.84rem;
     line-height: 1.5;
-    color: var(--white-87);
+    color: var(--text);
 }
 
 .nwLageWenn,
@@ -3860,7 +3860,7 @@ onBeforeUnmount(() => {
     font-size: 0.7rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--white-60);
+    color: var(--muted);
     margin-right: 0.25rem;
 }
 
@@ -3883,6 +3883,6 @@ onBeforeUnmount(() => {
     grid-column: 1 / -1;
     margin: 0;
     font-size: 0.72rem;
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>

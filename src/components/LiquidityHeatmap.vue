@@ -1175,7 +1175,7 @@ watch(liveFrozen, (frozen) => {
     left: 0.7rem;
     z-index: 4;
     font-size: 0.78rem;
-    color: var(--white-70);
+    color: color-mix(in srgb, var(--text) 70%, var(--muted));
     background: rgba(0, 0, 0, 0.55);
     border-radius: 999px;
     padding: 0.2rem 0.7rem;
@@ -1187,6 +1187,6 @@ watch(liveFrozen, (frozen) => {
 }
 
 .heatBadge.manual {
-    color: var(--white-60);
+    color: var(--muted);
 }
 </style>
