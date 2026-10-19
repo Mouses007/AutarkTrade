@@ -42,7 +42,7 @@ export function alsJournalTrade(t, { account = 'agent' } = {}) {
 
     // Die Aufteilung. Ein Trade ist entweder Gewinner oder Verlierer — nie
     // beides und nie keins. Break-even (0) zählt als GEWINNER — das ist der
-    // Journal-Kanon (Import in addTrades.js, Dashboard-Färbung: 0 = kein
+    // Journal-Kanon (Import in quickImport.js, Dashboard-Färbung: 0 = kein
     // Verlust). Diese Brücke schreibt INS Journal, also gilt dessen Konvention;
     // vorher stand hier `> 0`, und dieselbe Null zählte je nach Herkunft mal
     // als Gewinn, mal als Verlust. Die Backtest-STATISTIK (strategy-backtest)

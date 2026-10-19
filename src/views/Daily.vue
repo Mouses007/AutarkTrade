@@ -26,13 +26,12 @@ import { useGetExcursions, useGetTags, useGetAvailableTags, useUpdateAvailableTa
 
 import { useCandlestickChart } from '../utils/charts';
 
-import { useGetMFEPrices } from '../utils/addTrades';
+import { useGetMFEPrices, useCreateOHLCV } from '../utils/journal-alt.js';
 
 /* MODULES */
 import { dbFirst, dbCreate, dbUpdate } from '../utils/db.js'
 import dayjs from '../utils/dayjs-setup.js'
 import axios from 'axios'
-import { useCreateOHLCV } from '../utils/addTrades';
 
 
 const router = useRouter()
@@ -345,7 +344,7 @@ function toggleFillGroup(key) {
 
 
 let ohlcArray = [] // array used for charts
-let ohlcv = [] // array used for MFE / excursion calculation (same as in addTrades.js)
+let ohlcv = [] // array used for MFE / excursion calculation (same as in journal-alt.js)
 
 
 /* ===== Orderbuch zum Trade =====
@@ -1202,7 +1201,7 @@ function getOHLC(date, symbol, type, interval, entryTime) {
                     //console.log(" response "+JSON.stringify(response.data))
 
                     let res = await useCreateOHLCV(response.data, temp)
-                    ohlcv.push(res) // used for MFE calculation (same as in addTrades.js)
+                    ohlcv.push(res) // used for MFE calculation (same as in journal-alt.js)
 
                     let tempArray = {}
                     tempArray.date = date
@@ -1280,7 +1279,7 @@ function getOHLC(date, symbol, type, interval, entryTime) {
                     let temp = {}
                     temp.symbol = symbol
                     temp.ohlcv = response.data.results
-                    ohlcv.push(temp) // used for MFE calculation (same as in addTrades.js)
+                    ohlcv.push(temp) // used for MFE calculation (same as in journal-alt.js)
 
                     for (let index = 0; index < response.data.results.length; index++) {
                         const element = response.data.results[index];

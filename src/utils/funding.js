@@ -5,7 +5,7 @@
  *   +  = erhalten (erhöht das Nettoergebnis)
  *   −  = bezahlt  (senkt das Nettoergebnis)
  *
- * So schreiben es alle Import-Pfade (quickImport.js, incoming.js, brokers.js,
+ * So schreiben es alle Import-Pfade (quickImport.js, incoming.js,
  * journal-bridge.js), und so rechnet die Netto-Formel:
  *   netto = brutto − tradingFee + fundingFee
  *

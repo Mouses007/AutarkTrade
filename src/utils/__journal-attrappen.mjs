@@ -1,8 +1,8 @@
 /**
- * Lade-Haken für den Golden-Master-Test des Journal-Kerns
- * (`__selftest-journal.mjs`).
+ * Lade-Haken für die Golden-Master-Tests des Journal-Kerns
+ * (`__selftest-journal.mjs`, `__selftest-mfe-pfade.mjs`).
  *
- * Der Journal-Kern (`trades.js`, `addTrades.js`, `calendar.js` …) ist nicht
+ * Der Journal-Kern (`trades.js`, `journal-alt.js`, `calendar.js` …) ist nicht
  * rein: er liest über `db.js` per axios aus der REST-API und schreibt in
  * Vue-Stores. Damit er in Node ohne Server läuft, ersetzt dieser Haken genau
  * fünf Module durch Attrappen und lässt alles andere echt:

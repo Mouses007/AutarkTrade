@@ -7,7 +7,7 @@ import { splitFunding } from "./funding.js";
 import { mfeR } from "./mfe-kern.js";
 import { neueSummen, summiereTrade, leiteKennzahlenAb } from "./totals-kern.js";
 /* useRefreshTrades moved to mountOrchestration.js */
-import { useCreateBlotter, useCreatePnL } from "./addTrades.js"
+import { useCreateBlotter, useCreatePnL } from "./journal-alt.js"
 import { dbFind, dbFirst, dbDelete, dbDeleteWhere } from './db.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import axios from 'axios'
@@ -893,10 +893,10 @@ export async function useCalculateProfitAnalysis(param) {
                              * aber seit dem Wegfall des Aktien-Importpfades nicht
                              * mehr: alle lebenden Zuweisungen setzen
                              * `grossSharePL = grossProceeds` OHNE Division
-                             * (quickImport.js, addTrades.js beim CSV-Import,
-                             * journal-bridge.js). Die einzige teilende Stelle sitzt
-                             * in `createTrades()` — einer Funktion, die nirgends
-                             * aufgerufen wird. Das Dashboard beschriftet dieselbe
+                             * (quickImport.js, journal-bridge.js). Die einzige
+                             * teilende Stelle sass in `createTrades()` — einer
+                             * Funktion, die nirgends aufgerufen wurde (mit dem
+                             * alten Import in S3 gelöscht). Das Dashboard beschriftet dieselbe
                              * Zahl korrekt als "avgLossPerTrade" (Dashboard.vue).
                              *
                              * Ohne die Multiplikation mit der Menge wurde ein

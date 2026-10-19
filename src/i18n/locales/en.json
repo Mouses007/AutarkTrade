@@ -1011,9 +1011,7 @@
     "apiPionexHint": "Pionex bots will be imported (period via “Import from date” in Settings). Existing bots are enriched with the PnL breakdown.",
     "apiPionexButton": "Import bots",
     "allAlreadyImported": "All positions in this time period have already been imported.",
-    "importFailed": "API import failed",
-    "noCsvData": "No data found in CSV file",
-    "noValidBitgetTrades": "No valid trades found in Bitget CSV"
+    "importFailed": "API import failed"
   },
   "hype": {
     "abInfo": "from info",

@@ -71,11 +71,11 @@ Links im Seitenmenü: Börsen-Umschalter (Bitunix/Bitget/Pionex), Pille „Konto
 - **KI-Coach** — siehe Thema "ki".`,
     },
     import: {
-        titel: 'Trades importieren (CSV & API)',
-        text: `Zwei Wege, Trades ins Journal zu bekommen:
+        titel: 'Trades importieren (API & manuell)',
+        text: `Zwei Wege, Trades ins Journal zu bekommen (einen CSV-Import gibt es nicht mehr):
 
-1. **CSV-Import** (Seite „Imports" bzw. über die Import-Funktion): CSV-Export der Börse hochladen. Bitunix ist der Hauptweg („Futures Profit"/„Futures Loss"-Zeilen), Bitget wird ebenfalls unterstützt. Die Beträge aus der Bitunix-CSV sind bereits netto; Gebühren werden getrennt ausgewiesen.
-2. **API-Import**: In den Einstellungen API-Schlüssel der Börse hinterlegen (Bitunix: Key + Secret; Bitget: Key + Secret + Passphrase; Pionex analog). Die Schlüssel werden verschlüsselt gespeichert und nie im Klartext angezeigt. Danach holt die App geschlossene Trades und offene Positionen direkt von der Börse; „Pendente Trades" zeigt offene Positionen live.
+1. **API-Import**: In den Einstellungen API-Schlüssel der Börse hinterlegen (Bitunix: Key + Secret; Bitget: Key + Secret + Passphrase; Pionex analog). Die Schlüssel werden verschlüsselt gespeichert und nie im Klartext angezeigt. Danach holt die App geschlossene Trades und offene Positionen direkt von der Börse; „Pendente Trades" zeigt offene Positionen live.
+2. **Manueller Import**: einzelne Trades von Hand erfassen — für eine Börse ohne API-Schlüssel oder einen Trade, den die Börse nicht mehr liefert.
 
 Nach dem Import lassen sich Trades in der Tages-Ansicht mit Notizen, Tags, Playbooks, Zufriedenheits-Bewertung und Screenshots anreichern. Bot-Trades (Grid u.ä.) können als eigene Kategorie geführt werden.
 

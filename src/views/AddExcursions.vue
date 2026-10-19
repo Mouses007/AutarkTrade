@@ -9,7 +9,7 @@ import { useGetExcursions } from '../utils/daily';
 import { useDateCalFormat } from '../utils/formatters.js';
 import { useGetAPIS, usePageRedirect } from '../utils/utils';
 import { useGetTrades } from '../utils/trades';
-import { useGetOHLCV, useGetMFEPrices, useUpdateMfePrices } from '../utils/addTrades';
+import { useGetOHLCV, useGetMFEPrices, useUpdateMfePrices } from '../utils/journal-alt.js';
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue';
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()

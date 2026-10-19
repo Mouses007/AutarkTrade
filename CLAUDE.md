@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Key simplifications from the original project:**
 - No cloud login (single user, direct to dashboard); API protected by session cookie
 - SQLite (or optional PostgreSQL) instead of MongoDB/Parse Server (no Docker needed)
-- Bitunix primary; optional Bitget broker (both API; the CSV upload tab was removed in v3.0.0)
+- Bitunix primary; optional Bitget and Pionex brokers (API or manual entry only; the CSV upload tab was removed in v3.0.0, its code in S3)
 - No Stripe payments, no PostHog analytics, no Shepherd tours
 - KI-Agent: AI reports/chat (Ollama, OpenAI, Anthropic, Gemini, DeepSeek)
 
@@ -23,7 +23,7 @@ README.md and this file are kept in sync for project and architecture descriptio
 - **Backend**: Express.js with Knex (SQLite default, optional PostgreSQL)
 - **Charts**: Apache ECharts; the chart workspace (`/chart`) uses Lightweight Charts 5 (TradingView, Apache-2.0 — the attribution logo must stay on)
 - **Styling**: own design system (`src/assets/design/tokens.css`, `basis.css`, `rahmen.css`; building blocks in `src/components/basis/`), Bootstrap 5 bundled via npm as a transition (to be removed in S9); legacy dark theme `src/assets/style-dark.css` maps its variables onto the tokens
-- **Other key libs**: dayjs (dates/timezones), PapaParse (CSV), Quill (rich text), markerjs2 (screenshot annotation), lodash, axios
+- **Other key libs**: dayjs (dates/timezones), PapaParse (only the Databento OHLCV CSV in `journal-alt.js`), Quill (rich text), markerjs2 (screenshot annotation), lodash, axios
 
 ## Commands
 
@@ -89,8 +89,21 @@ hook (`__journal-attrappen.mjs`); `process.env.TZ` is pinned because the
 grouping uses the process time zone. Integers (timestamps, counts) compare
 exactly, floats at 1e-9 relative.
 
-Not covered: CSV import (`brokers.js`/`addTrades.js`), the MFE/OHLCV paths of
-`addTrades.js`, the REST CRUD layer, and anything rendered in the frontend.
+`src/utils/__selftest-mfe-pfade.mjs` is the second golden master, same
+technique and the same `JOURNAL_GOLDEN_SCHREIBEN=1` switch, for what lives in
+`src/utils/journal-alt.js`: Databento CSV → candles (`useCreateOHLCV`), candle
+fetching via Polygon and Databento (`useGetOHLCV`, synthetic 1-minute candles
+served through the axios mock — which passes config/body to a response
+function), the MFE price per trade in two trading time zones
+(`useGetMFEPrices`), storing them (`useUpdateMfePrices`), and the preview/save
+of the API import in `AddTrades.vue` (`useCreateBlotter`/`useCreatePnL`/
+`useGetExistingTradesArray`/`useUploadTrades`). Stand in
+`src/utils/fixtures/mfe-pfade-golden.json`. Frozen with it: `mfePrices` is a
+module store that is never cleared (a second MFE run in the same session
+writes the first one's rows again, and so does the next `useUploadTrades`),
+and `useGetOHLCV` resolves after the FIRST symbol.
+
+Not covered: the REST CRUD layer and anything rendered in the frontend.
 
 ## Architecture
 
@@ -190,8 +203,8 @@ View initialization follows a pattern in `src/utils/mountOrchestration.js`:
 ### Business Logic Utils
 
 - `trades.js` — Query/filter/group trades, P&L calculations (`useGetFilteredTrades`, `useGroupTrades`, `useCalculateProfitAnalysis`)
-- `addTrades.js` — Import Bitunix API data (~2000+ lines, contains dead code from the old import flow — left intentionally; the CSV path in here has had no UI since v3.0.0)
-- `brokers.js` / `brokers-kern.js` — CSV parsers (PapaParse), functional and self-tested but unreachable from the UI since v3.0.0; kept for a possible reinstatement
+- `quickImport.js` — the API import (Bitunix/Bitget/Pionex) and manual trade entry: one builder for trade objects (`buildTradeObj`)
+- `journal-alt.js` — transition module (S3): what was still called from the former `addTrades.js` — preview/save of the API import in `AddTrades.vue`, blotter/P&L for `trades.js`, MFE/OHLCV for `Daily.vue`/`AddExcursions.vue`. TradeNote-derived, kept unchanged until the clean-room rebuild (S7/S8); covered by the two golden masters. The CSV import (`brokers.js`, `brokers-kern.js`, CSV parts of `addTrades.js`) and the dead execution-based import flow were deleted in S3
 - `charts.js` — ECharts configuration and rendering
 
 ### Key Views
@@ -205,7 +218,7 @@ View initialization follows a pattern in `src/utils/mountOrchestration.js`:
 
 - `HypeRadar.vue` / `CoinRadar.vue` — The two pages of the `research` mode (`/hype-radar`, `/coin-radar`; the Hype-Radar has four side-menu views on one route — overview, `fruehphase` rendered by `src/components/hype/FruehphaseAnsicht.vue`, `boersen` by `BoersenAnsicht.vue`, and `berichte`; `src/components/hype/ProjektPruefung.vue` shows a project check in all three), siblings with opposite questions: "what is new out there" vs. "what can be traded today". Same shape, same star, same expandable sub-scores; phone gets cards instead of tables. The former in-page tabs are gone: each view is a **side-menu entry** on a shared route (`/hype-radar` + `/hype-radar/berichte`, `/coin-radar` + `/coin-radar/verlauf`) — one route record per page, so switching does not remount and a running scan keeps its SSE stream. Settings are no longer a tab but a **gear panel with a one-line summary**, the same pattern as `Nachrichten.vue`. The star feeds one shared `hype_favoriten` list — `quelle` decides which watchdog data path applies. `CoinRadar.vue` shows the **rank correlation among the headline figures**, in words as well as a number ("Rangfolge ist grösstenteils Rauschen"): a ranking that hides its own predictive power is more dangerous than none. The gate view switches to a **different column set** (reason, turnover, spread, depth) rather than printing zeros — for a rejected coin no metrics were ever computed. Note: the side menu renders per-mode groups (`research` = `HYPE-RADAR` + `COIN-RADAR`) and highlights by **path, not `pageId`** — two entries share one route name, so `pageId` would light up both. `menuKey`/`menuIcon` in `menu.js` let a menu entry read "Übersicht" while the page header still says "Hype-Radar".
 - `Incoming.vue` — Live open positions from Bitunix API
-- `AddTrades.vue` — Manual single-trade entry + API import; the CSV upload tab was removed in v3.0.0 (the parser stack in `brokers.js`/`addTrades.js` remains, without UI)
+- `AddTrades.vue` — Manual single-trade entry + API import (no CSV import; removed from the UI in v3.0.0 and from the code in S3)
 
 ### Key Components
 
@@ -240,6 +253,6 @@ No `.env` files — runtime config stored in DB (settings table) and localStorag
 
 ### Bitunix / Bitget Integration
 
-**CSV Import**: removed from the UI in v3.0.0 — imports run via API (or manual entry) only. The parser code (`brokers.js`: "Futures Profit"/"Futures Loss" rows for Bitunix, Bitget where implemented) remains in the codebase, self-tested, for a possible reinstatement. Known caveats if it is ever wired up again: it stamps entry/exit times to midnight (audit 31.08.2026, M-01) and its TrxId-based IDs don't match the API import's positionId dedup (M-02).
+**CSV Import**: none. Removed from the UI in v3.0.0 and from the code in S3 (19.10.2026); imports run via API (or manual entry) only. The CSV *export* of filtered trades on the dashboard is unaffected.
 
 **API Import**: Configure API Key + Secret (Bitunix) or API Key + Secret + Passphrase (Bitget) in Settings. Keys are encrypted at rest (`server/crypto.js`). Server-side proxies (`/api/bitunix/*`, `/api/bitget/*`) fetch positions; Bitunix uses SHA256 double-hash auth.
