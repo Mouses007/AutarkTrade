@@ -14,14 +14,13 @@
 
 import zlib from 'zlib'
 import { promisify } from 'util'
-import axios from 'axios'
 import WebSocket from 'ws'
 import { getKnex } from './database.js'
 import { OrderBook } from '../shared/orderbook.js'
 import { pickBucketSize, inferTickSize } from '../shared/priceBins.js'
 import { logWarn, logError } from './logger.js'
 import { melde } from './benachrichtigungen.js'
-import { notiereGewicht } from './binance-takt.js'
+import * as marktdaten from './marktdaten/index.js'
 import { BYBIT_LIQ_WS, BYBIT_PING_MS, BYBIT_PONG_LIMIT_MS, bybitSubscribeMsg, normalisiereBybitLiq } from './bybit-liq.js'
 import { merkeLiq } from './liq-ticker.js'
 import { beansprucheFuehrung, gibFuehrungFrei } from './db-claim.js'
@@ -31,21 +30,38 @@ import { istTestbetrieb } from './umgebung.js'
 const gzip = promisify(zlib.gzip)
 const gunzip = promisify(zlib.gunzip)
 
-const REST_BASE = { futures: 'https://fapi.binance.com', spot: 'https://api.binance.com' }
+/*
+ * Binance-Wurzeln aus `server/marktdaten/binance.js` — dem einzigen Ort mit
+ * Binance-Adressen (S12). Benutzt werden sie nur, wenn die Marktdatenquelle
+ * die Fähigkeit `streams` hat (Binance); `reconcile` startet sonst weder
+ * Orderbuch-Rekorder noch den Binance-Sammelstrom. Der Bybit-Sammelstrom
+ * (`liqB`) hängt nicht an der Wahl.
+ */
+const BWS = marktdaten.ANBIETER.binance.WS
 const REST_PATH = { futures: '/fapi/v1/depth', spot: '/api/v3/depth' }
 const WS_BASE = {
     // Seit dem Binance-Umbau (23.04.2026) liegen Orderbuch-Streams auf /public
-    futures: 'wss://fstream.binance.com/public/stream?streams=',
-    spot: 'wss://stream.binance.com:9443/stream?streams=',
+    futures: `${BWS.futures}/public/stream?streams=`,
+    spot: `${BWS.spot}/stream?streams=`,
 }
 // forceOrder liegt auf der /market-Route, nicht auf /public
-const LIQ_WS_BASE = 'wss://fstream.binance.com/market/ws/'
+const LIQ_WS_BASE = `${BWS.futures}/market/ws/`
 // Seitenkanal je Symbol: forceOrder + aggTrade teilen sich EINE Verbindung
 // (beide liegen bei Futures auf /market; Spot kennt keine Routen-Trennung und
 // keine Liquidationen — dort läuft nur aggTrade).
 const SIDE_WS = {
-    futures: (sym) => `wss://fstream.binance.com/market/stream?streams=${sym}@forceOrder/${sym}@aggTrade`,
-    spot: (sym) => `wss://stream.binance.com:9443/stream?streams=${sym}@aggTrade`,
+    futures: (sym) => `${BWS.futures}/market/stream?streams=${sym}@forceOrder/${sym}@aggTrade`,
+    spot: (sym) => `${BWS.spot}/stream?streams=${sym}@aggTrade`,
+}
+
+/**
+ * Orderbuch-Snapshot (limit 1000) über die Marktdaten-Schicht: wirft
+ * `MarktdatenAus`, wenn Binance abgewählt ist. Der Snapshot wiegt 20 Punkte —
+ * `binanceHole` meldet sie an das gemeinsame Budget, sonst zahlte der
+ * Live-Stream dafür.
+ */
+function holeTiefe(market, symbol) {
+    return marktdaten.binanceHole('streams', market, REST_PATH[market], { symbol, limit: 1000 })
 }
 
 // Sammelstrom: nur diese Symbole werden gespeichert (deckungsgleich mit den
@@ -435,15 +451,8 @@ class SymbolRecorder {
     async _fetchSnapshot() {
         if (this.stopped) return
         try {
-            const antwort = await axios.get(`${REST_BASE[this.market]}${REST_PATH[this.market]}`, {
-                params: { symbol: this.symbol, limit: 1000 },
-                timeout: 10000,
-            })
-            const { data } = antwort
+            const data = await holeTiefe(this.market, this.symbol)
             if (this.stopped) return
-            // Der Snapshot mit limit=1000 wiegt bei Binance 20 Punkte — er
-            // gehört ins gemeinsame Budget, sonst zahlt der Live-Stream dafür
-            notiereGewicht(antwort.headers)
             this.snapshotVersuche = 0
             // Frischer Anker: der Re-Anker-Cooldown in _writeFrame zählt ab hier
             this._letzterAnker = Date.now()
@@ -488,11 +497,7 @@ class SymbolRecorder {
         if (this._ankerLaeuft) return
         this._ankerLaeuft = true
         try {
-            const antwort = await axios.get(`${REST_BASE[this.market]}${REST_PATH[this.market]}`, {
-                params: { symbol: this.symbol, limit: 1000 },
-                timeout: 10000,
-            })
-            notiereGewicht(antwort.headers)
+            const antwort = { data: await holeTiefe(this.market, this.symbol) }
             // Zwischenzeitlicher Resync/Stop: der Snapshot gehört zu einem
             // Buchzustand, den es nicht mehr gibt — verwerfen.
             if (this.stopped || this.buffering || !this.book.synced) return
@@ -1524,9 +1529,25 @@ let hatFuehrung = false
  * Gleicht die laufenden Recorder mit den Einstellungen ab. Läuft periodisch,
  * damit eine Änderung in den Einstellungen ohne Neustart greift.
  */
+// Einmal melden, dass die Binance-Aufzeichnung mangels Marktdatenquelle ruht.
+let streamsAusGemeldet = false
+
 async function reconcile() {
     let config
     try { config = await readConfig() } catch (e) { return }
+
+    /*
+     * Orderbuch-Rekorder und Binance-Sammelstrom nur mit der Fähigkeit
+     * `streams` (Marktdatenquelle Binance, S12). Ohne sie bleibt allein der
+     * Bybit-Sammelstrom — er hängt an `allLiq`, nicht an der Wahl.
+     */
+    const binanceStreams = await marktdaten.kann('streams').catch(() => false)
+    if (!binanceStreams && config.enabled && config.symbols.length) {
+        if (!streamsAusGemeldet) {
+            streamsAusGemeldet = true
+            console.log(' -> [recorder] Orderbuch-Aufzeichnung ruht: braucht die Marktdatenquelle Binance (Einstellungen › Datenquellen)')
+        }
+    } else if (binanceStreams) streamsAusGemeldet = false
 
     // Führung nur holen (und halten), wenn es Arbeit gibt — sonst blockierte
     // ein Prozess mit abgeschalteter Aufzeichnung den, der sie führen soll.
@@ -1556,7 +1577,7 @@ async function reconcile() {
     if (RECORDER_AUS) config = { ...config, enabled: false, allLiq: false, symbols: [] }
 
     const wanted = new Map()
-    if (config.enabled) {
+    if (config.enabled && binanceStreams) {
         for (const symbol of config.symbols) {
             wanted.set(`${symbol}|${config.market}`, { symbol, market: config.market, ...config })
         }
@@ -1580,10 +1601,11 @@ async function reconcile() {
         console.log(` -> [recorder] gestartet: ${target.symbol} (${target.frameMs} ms, ${target.rows} Zeilen)`)
     }
 
-    if (config.allLiq && !collector) {
+    const binanceLiq = config.allLiq && binanceStreams
+    if (binanceLiq && !collector) {
         collector = new MarketLiquidationCollector()
         collector.start()
-    } else if (!config.allLiq && collector) {
+    } else if (!binanceLiq && collector) {
         const alt = collector
         collector = null
         await alt.stop()

@@ -89,33 +89,28 @@ export function boersenLinksVon(zeile, csv) {
 /*
  * Handelsseiten der Börsen, die der Börsen-Beobachter (Hype-Radar → Börsen)
  * führt — Spot, gegen USDT bzw. die Hauswährung der Börse. Geprüft am
- * 12.10.2026 mit SOL: Binance, Upbit, OKX, Bybit, Kraken, Bitget, Gate und
- * MEXC öffnen das Paar; Coinbase verlangt für die Handelsseite eine Anmeldung
- * (sonst Umleitung auf die Marktübersicht); KuCoin war aus dem Netz der
- * Entwicklung nicht erreichbar, das Muster ist das dokumentierte. Binance Alpha
- * hat keine Seite je Kürzel — dort führt der Vertrag (DexScreener).
+ * 12.10.2026 mit SOL: Binance, Bybit, Kraken, Bitget und Gate öffnen das
+ * Paar; Coinbase verlangt für die Handelsseite eine Anmeldung (sonst
+ * Umleitung auf die Marktübersicht); KuCoin war aus dem Netz der Entwicklung
+ * nicht erreichbar, das Muster ist das dokumentierte. Reine Links, keine
+ * Logos (Verkaufs-Prüfung Z. 13). Upbit, OKX, MEXC und Binance Alpha beobachtet
+ * der Radar seit S12 nicht mehr — ihre Links sind mit ihnen gegangen.
  */
 export const LISTUNG_URL = {
     'binance-spot': (s) => `https://www.binance.com/en/trade/${s}_USDT?type=spot`,
     'binance-futures': (s) => `https://www.binance.com/en/futures/${s}USDT`,
     coinbase: (s) => `https://www.coinbase.com/advanced-trade/spot/${s}-USD`,
-    upbit: (s) => `https://upbit.com/exchange?code=CRIX.UPBIT.KRW-${s}`,
-    okx: (s) => `https://www.okx.com/trade-spot/${s.toLowerCase()}-usdt`,
     bybit: (s) => `https://www.bybit.com/en/trade/spot/${s}/USDT`,
     kraken: (s) => `https://pro.kraken.com/app/trade/${s.toLowerCase()}-usd`,
     kucoin: (s) => `https://www.kucoin.com/trade/${s}-USDT`,
     gate: (s) => `https://www.gate.com/trade/${s}_USDT`,
-    mexc: (s) => `https://www.mexc.com/exchange/${s}_USDT`,
     bitget: (s) => `https://www.bitget.com/spot/${s}USDT`,
 }
 
-/** Handelsseite eines Kürzels auf einer beobachteten Börse; Alpha nur mit Vertrag. */
-export function listungUrl(boerse, symbol, { chain = '', contract = '' } = {}) {
+/** Handelsseite eines Kürzels auf einer beobachteten Börse. */
+export function listungUrl(boerse, symbol) {
     const s = String(symbol || '').trim().toUpperCase()
     if (!s) return null
-    if (boerse === 'binance-alpha') {
-        return contract ? `https://dexscreener.com/${encodeURIComponent(chain || 'bsc')}/${encodeURIComponent(contract)}` : null
-    }
     return LISTUNG_URL[boerse]?.(encodeURIComponent(s)) || null
 }
 

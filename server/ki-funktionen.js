@@ -51,8 +51,6 @@ export const KI_FUNKTIONEN = [
         id: 'recherche', titelKey: 'kiUebersicht.fn.recherche', bereich: 'nachrichten',
         fest: { provider: 'perplexity', feld: 'radarNewsRechercheModell', standard: 'sonar' },
         aufgabe: 'recherche',
-        // `deepseek-suche` im Modellfeld heisst: Recherche über DeepSeek.
-        umschalter: { wert: 'deepseek-suche', provider: 'deepseek' },
         funktionen: ['recherche'],
     },
     {

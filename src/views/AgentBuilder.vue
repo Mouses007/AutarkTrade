@@ -20,6 +20,7 @@ import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import { Knopf, Pille, Symbol, Hinweis, Kreisel } from '../components/basis'
+import KiHinweis from '../components/quellen/KiHinweis.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -238,8 +239,11 @@ async function entwurfLoeschen(d) {
 
                         <div class="chat-messages" style="max-height: 42vh; overflow-y: auto;">
                             <div v-for="(m, i) in verlauf" :key="i"
-                                :class="['chat-bubble', m.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai']">
+                                :class="['chat-bubble', m.role === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai']"
+                                :data-ki-generiert="m.role === 'user' ? null : 'true'">
                                 {{ m.content }}
+                                <!-- S12: Pflichtlabel an jeder KI-Antwort. -->
+                                <KiHinweis v-if="m.role !== 'user'" klein />
                             </div>
                             <div v-if="laeuft" class="chat-bubble chat-bubble-ai">
                                 <Kreisel class="vor" />{{ t('strategies.reading') }}
@@ -306,6 +310,8 @@ async function entwurfLoeschen(d) {
                         <div v-if="!regeln" class="at-gedaempft klein-text">{{ t('strategies.noRulesYet') }}</div>
 
                         <template v-else>
+                            <!-- S12: die Strategie hat ein KI-Modell aus der Beschreibung gelesen. -->
+                            <KiHinweis klein :anbieter="faehigkeiten.provider" :modell="faehigkeiten.model" />
                             <p class="regel-name"><strong>{{ regeln.name }}</strong>
                                 <span class="at-gedaempft klein-text regel-id">{{ regeln.id }}</span></p>
                             <div class="pillen abstand-unten">

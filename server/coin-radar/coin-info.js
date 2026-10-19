@@ -3,17 +3,22 @@
  * Website — für den Klick auf ein Symbol im Coin-Radar.
  *
  * Quelle ist CoinGecko (`search` zum Auflösen des Handelssymbols auf eine
- * CoinGecko-Id, `coins/{id}` für die eigentlichen Angaben) über den
- * gemeinsamen, bereits ratenbegrenzten `holeJson` des Hype-Radars — eigene
- * Bremse hier hätte nichts gegen dessen Verbrauch geschützt, beide Module
- * treffen denselben Host.
+ * CoinGecko-Id, `coins/{id}` für die eigentlichen Angaben) — NUR mit dem
+ * Schlüssel des Kunden (Verkaufs-Prüfung Z. 87, S12): ohne ihn wirft der
+ * Abruf `QuelleAus('CoinGecko', 'schluesselFehlt')`, und die Route sagt das.
+ * Gefragt wird über `holeCoinGecko` des Hype-Radars, damit die gemeinsame
+ * Ratenbremse alle CoinGecko-Abrufe des Hauses sieht. Die Anzeige trägt
+ * „Powered by CoinGecko" (API-Terms §4.4).
+ *
+ * Kein Bild: Coin-Logos sind fremde Inhalte (Terms 4(A), Verkaufs-Prüfung
+ * Z. 58) — die Oberfläche zeichnet Ticker-Initialen.
  *
  * ⚠ CoinGecko führt seit Jahren KEIN strukturiertes „Team"-Feld mehr. Was
  * hier steht, ist die Projektbeschreibung plus Links — daraus lässt sich ein
  * Team allenfalls lesen, nicht zuverlässig ableiten. Kein Feld täuscht das vor.
  */
 
-import { holeJson } from '../hype-radar/quellen.js'
+import { holeCoinGecko } from '../hype-radar/quellen.js'
 import { logWarn } from '../logger.js'
 
 /** Projektinfos ändern sich kaum — ein Tag Cache ist grosszügig, nicht knapp. */
@@ -27,21 +32,19 @@ function basisVon(symbol) {
 
 /**
  * @param {string} symbol  Handelssymbol, z.B. "BSBUSDT"
- * @param {string} [schluessel]  entschlüsselter CoinGecko-Demo-Key, falls hinterlegt
  * @returns {Promise<object|null>}  null = nicht gefunden, nicht „Fehler beim Abruf"
+ * @throws {QuelleAus} ohne CoinGecko-Schlüssel
  */
-export async function holeCoinInfo(symbol, schluessel = '') {
+export async function holeCoinInfo(symbol) {
     const basis = basisVon(symbol)
     if (!basis) return null
 
     const alt = cache.get(basis)
     if (alt && Date.now() - alt.ts < CACHE_TTL_MS) return alt.daten
 
-    const kopf = schluessel ? { 'x-cg-demo-api-key': schluessel } : {}
     let treffer
     try {
-        const suche = await holeJson(
-            `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(basis)}`, { kopf })
+        const suche = await holeCoinGecko(`/search?query=${encodeURIComponent(basis)}`)
         const kandidaten = suche?.coins || []
         // Exakter Symbol-Treffer mit dem kleinsten (= bedeutendsten) Rang zuerst
         // — bei mehrdeutigen Tickern (z.B. "BSB": Rang 747 UND Rang 7004) ist das
@@ -66,10 +69,9 @@ export async function holeCoinInfo(symbol, schluessel = '') {
 
     let j
     try {
-        j = await holeJson(
-            `https://api.coingecko.com/api/v3/coins/${treffer.id}`
+        j = await holeCoinGecko(`/coins/${encodeURIComponent(treffer.id)}`
             + '?localization=false&tickers=false&market_data=true&community_data=false'
-            + '&developer_data=false&sparkline=false', { kopf })
+            + '&developer_data=false&sparkline=false')
     } catch (e) {
         logWarn('coin-radar', `Coin-Info: Details zu "${treffer.id}" fehlgeschlagen: ${e.message}`)
         throw e
@@ -78,7 +80,6 @@ export async function holeCoinInfo(symbol, schluessel = '') {
     const daten = {
         name: j?.name || treffer.name || basis,
         symbol: String(j?.symbol || basis).toUpperCase(),
-        bild: j?.image?.small || treffer.thumb || '',
         // CoinGecko liefert die Beschreibung mit HTML-Links; angezeigt wird Text.
         beschreibung: String(j?.description?.en || '').replace(/<[^>]*>/g, '').trim(),
         kategorien: Array.isArray(j?.categories) ? j.categories.filter(Boolean) : [],

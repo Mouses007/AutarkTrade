@@ -55,48 +55,23 @@ const klemme = (n) => {
 }
 
 /**
- * Wie stark wird gesprochen.
+ * Wie stark wird gesprochen — oder `null`, wenn es dazu keine Messung gibt.
  *
- * Ohne eigene Historie lässt sich keine echte Beschleunigung messen — der
- * erste Lauf hat keinen Vergleichswert. Gemessen wird deshalb die Stärke der
- * vorhandenen Sozialsignale. Sobald mehrere Läufe gespeichert sind, kann hier
- * die Veränderung gegenüber dem Vorlauf einziehen (siehe `sozialVeraenderung`).
+ * Seit S12 (19.10.2026) hat der Hauptlauf KEINE eigene Sozialquelle mehr:
+ * Reddit-RSS ist aus Lizenzgründen entfernt (Verkaufs-Prüfung Z. 61). Bis
+ * dahin hiess „nicht in r/CryptoMoonShots" 0 — eine Messung. Jetzt gibt es
+ * Sozialsignale nur noch aus der Frühphase (/biz/, X, über `reifeFunde`) und
+ * die gekaufte Sichtbarkeit von DexScreener. Fehlt beides, ist die Teilnote
+ * UNBEKANNT, nicht 0; `bewerte` mittelt dann über die übrigen Gewichte.
+ *
+ * Die Stärke der vorhandenen Signale zählt, keine Beschleunigung — der erste
+ * Lauf hat keinen Vergleichswert (siehe `sozialVeraenderung`).
  */
 export function noteSozial(k) {
     const s = k?.sozial || {}
     let punkte = 0
+    let gemessen = false
 
-    /*
-     * Reddit: die Position in „hot", nicht die Stimmenzahl.
-     *
-     * Der RSS-Feed nennt keine Stimmen — nur die Reihenfolge, und die ist
-     * bereits nach Zustimmung sortiert. Platz 1 wiegt am schwersten, Platz 50
-     * kaum noch.
-     *
-     * GEDECKELT bei 60 und nicht bei 100: r/CryptoMoonShots ist ein Ort, an
-     * dem Leute ihre eigenen Token bewerben. Ein Auftritt dort ist ein
-     * Hinweis, keine Bestätigung — er soll einen Fund nicht allein an die
-     * Spitze tragen.
-     */
-    const rang = Number(s.redditRang)
-    if (Number.isFinite(rang) && rang > 0) {
-        punkte = Math.max(punkte, klemme(Math.min(REDDIT_DECKEL, 61 - rang)))
-    }
-
-    /*
-     * Die gekauften Sozialsignale sind am 21.08.2026 entfallen.
-     *
-     * `galaxyScore`/`altRank` kamen von LunarCrush, `stimmen` von Reddit,
-     * `panicScore` von CryptoPanic — alle drei Quellen sind entfernt, weil
-     * keine davon nutzbar war (Reddit sperrt mit 403, die anderen beiden haben
-     * keinen Gratis-Tarif mehr). Die Zweige standen danach als toter Code da:
-     * geprüft trug KEINER der 2337 gespeicherten Kandidaten eines dieser
-     * Felder. Sie zu behalten hiesse, eine Bewertung zu beschreiben, die nicht
-     * stattfinden kann.
-     *
-     * Übrig bleibt die gekaufte Aufmerksamkeit unten — kein Sozialsignal im
-     * eigentlichen Sinn, aber messbar und gedeckelt.
-     */
     /*
      * Bezahlte Hervorhebung ist Aufmerksamkeit, aber gekaufte.
      *
@@ -112,30 +87,29 @@ export function noteSozial(k) {
      * Muster, gegen das der ganze Radar gebaut ist.
      */
     /*
-     * Aus der Frühphase: auf wie vielen Plattformen (Telegram, /biz/, Reddit)
-     * der Token während der Beobachtung genannt wurde. Eine Plattform ist ein
+     * Aus der Frühphase: auf wie vielen Plattformen (/biz/, X; bis S12 auch
+     * Telegram und Reddit) der Token während der Beobachtung genannt wurde. Eine Plattform ist ein
      * Hinweis — Kanäle, in denen Token beworben werden, gibt es überall. Zwei
      * und drei unabhängige Orte sind das Frühsignal, um das es dem Radar geht:
      * eine Erzählung, die sich ausbreitet, bevor der Handel sie einholt.
-     * Gedeckelt wie Reddit, nur höher, weil es mehrere Stimmen sind.
+     * Gedeckelt (früher neben dem Reddit-Deckel von 60), höher, weil es mehrere Stimmen sind.
      */
     const plattformen = Number(s.fruehPlattformen)
     if (Number.isFinite(plattformen) && plattformen > 0) {
+        gemessen = true
         punkte = Math.max(punkte, Math.min(FRUEH_DECKEL, 30 + 25 * (plattformen - 1)))
     }
 
     const gekauft = Math.max(Number(s.boostGesamt) || 0, Number(k?.markt?.boosts) || 0)
     if (gekauft > 0) {
+        gemessen = true
         punkte = Math.max(punkte, Math.min(BOOST_DECKEL, klemme(Math.log10(gekauft + 1) * 20)))
     }
-    return klemme(punkte)
+    return gemessen ? klemme(punkte) : null
 }
 
 /** Höchstens so viel Aufmerksamkeit lässt sich kaufen. */
 export const BOOST_DECKEL = 30
-
-/** Und höchstens so viel trägt ein Auftritt in einem Werbe-Unterforum. */
-export const REDDIT_DECKEL = 60
 
 /** Und so viel die Nennung auf mehreren Plattformen während der Frühphase. */
 export const FRUEH_DECKEL = 80
@@ -455,11 +429,16 @@ export function bewerte(kandidat, gewichte = STANDARD_GEWICHTE, narrative = STAN
         neuheit: noteNeuheit(kandidat),
     }
 
-    // Durch die Gewichtssumme teilen statt fest durch 100: wer die Gewichte
-    // von Hand verstellt und dabei nicht auf 100 kommt, soll trotzdem eine
-    // Note zwischen 0 und 100 bekommen und keine krumme Zahl.
-    const summe = Object.values(g).reduce((a, b) => a + (Number(b) || 0), 0) || 1
-    const gewichtet = Object.entries(teilnoten)
+    /*
+     * Durch die Gewichtssumme teilen statt fest durch 100: wer die Gewichte
+     * von Hand verstellt und dabei nicht auf 100 kommt, soll trotzdem eine
+     * Note zwischen 0 und 100 bekommen und keine krumme Zahl. Eine unbekannte
+     * Teilnote (`null`, seit S12 vor allem Sozial) zählt weder im Zähler noch
+     * im Nenner — als 0 gerechnet, drückte sie jede Note um ihr Gewicht.
+     */
+    const gemessen = Object.entries(teilnoten).filter(([, note]) => note !== null && note !== undefined)
+    const summe = gemessen.reduce((a, [feld]) => a + (Number(g[feld]) || 0), 0) || 1
+    const gewichtet = gemessen
         .reduce((acc, [feld, note]) => acc + note * (Number(g[feld]) || 0), 0)
 
     /*

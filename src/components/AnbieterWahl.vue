@@ -12,10 +12,26 @@
  * Leere Wahl heisst „nimm den global eingestellten Anbieter". Damit das nicht
  * geraten werden muss, steht der tatsächlich greifende Stand als Text daneben.
  */
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { kiAnbieter, ladeKiAnbieter, anbieterAnzeige } from '../utils/kiAnbieter.js'
 
 const { t } = useI18n()
+
+/*
+ * Anzeigename und Pflichthinweis kommen aus dem Anbieter-Verzeichnis des
+ * Servers (S12): vorher stand hier die rohe ID — „deepseek" auch dann noch,
+ * als der Eintrag längst ein neutraler Endpunkt war.
+ */
+onMounted(ladeKiAnbieter)
+const nameVon = (id) => anbieterAnzeige(id, t)
+const hinweis = computed(() => {
+    const id = props.provider
+    const k = id ? kiAnbieter.value[id]?.hinweis : ''
+    return k ? t(k) : ''
+})
+/** Gespeichert, aber nicht mehr angeboten (z. B. MiniMax): bleibt sichtbar statt leer. */
+const ausgeblendet = computed(() => !!props.provider && !anbieter.value.includes(props.provider))
 
 const props = defineProps({
     /** Gewählter Anbieter, '' = global */
@@ -60,7 +76,8 @@ function setzeAnbieter(wert) {
         <select class="at-feld klein" style="max-width:12rem;" :disabled="disabled"
             :value="provider" @change="setzeAnbieter($event.target.value)">
             <option v-if="erlaubeGlobal" value="">{{ t('settings.ki.useGlobal') }}</option>
-            <option v-for="a in anbieter" :key="a" :value="a">{{ a }}</option>
+            <option v-for="a in anbieter" :key="a" :value="a">{{ nameVon(a) }}</option>
+            <option v-if="ausgeblendet" :value="provider">{{ nameVon(provider) }} ({{ t('settings.providerRetired') }})</option>
         </select>
 
         <select class="at-feld klein" style="max-width:16rem;"
@@ -74,9 +91,11 @@ function setzeAnbieter(wert) {
              Behauptung, die man nur durch Ausprobieren prüfen kann. -->
         <small v-if="!provider && erlaubeGlobal" class="at-gedaempft">
             {{ t('settings.ki.currentlyGlobal', {
-                anbieter: globalProvider || '—',
+                anbieter: globalProvider ? nameVon(globalProvider) : '—',
                 modell: globalModell || t('settings.ki.defaultModel'),
             }) }}
         </small>
+        <!-- Pflichthinweis des gewählten Anbieters (server/ai-models.js `hinweis`). -->
+        <small v-if="hinweis" class="at-gedaempft" style="flex-basis:100%;">{{ hinweis }}</small>
     </div>
 </template>

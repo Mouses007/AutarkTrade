@@ -7,7 +7,15 @@
  * Wichtig: Backoff mit Jitter ist Pflicht, nicht Kür. Binance erlaubt ~300
  * Verbindungsversuche pro 5 Minuten und IP; eine ungebremste Reconnect-Schleife
  * handelt sich binnen Minuten eine Sperre ein.
+ *
+ * Seit S12 (Verkaufs-Prüfung, Massnahme 1) nur noch mit der Marktdatenquelle
+ * Binance: die URL-Bauer liefern `null`, solange die Wahl nicht geladen oder
+ * nicht Binance ist — der Aufrufer zeigt dann `QuelleAus` statt zu verbinden.
+ * Die Wurzeln kommen vom Server (`/api/marktdaten/quelle` → `streamWurzeln`),
+ * damit im Browser-Code keine Binance-Adresse steht. Vor dem Bauen also
+ * `await ladeMarktdaten()`.
  */
+import { marktdaten } from './marktdaten.js'
 
 const MAX_BACKOFF_MS = 30000
 const WATCHDOG_INTERVAL_MS = 2000
@@ -179,8 +187,17 @@ export class BinanceStream {
  * dabei offen und meldet keinen Fehler, sie sendet einfach nichts.
  * Spot ist davon nicht betroffen und behält den bisherigen Pfad.
  */
-const FUTURES_HOST = 'wss://fstream.binance.com'
-const SPOT_HOST = 'wss://stream.binance.com:9443'
+/** WebSocket-Wurzel des Marktes, oder null ohne Binance-Wahl. */
+function wurzel(market) {
+    const m = marktdaten.value
+    if (m?.wahl !== 'binance' || !m.streamWurzeln) return null
+    return (market === 'spot' ? m.streamWurzeln.spot : m.streamWurzeln.futures) || null
+}
+
+/** Gibt es Binance-Streams (Wahl geladen und Binance)? */
+export function streamsMoeglich() {
+    return Boolean(wurzel('futures'))
+}
 
 /**
  * Kombinierter Stream: Diff-Tiefe + Trades in EINER Verbindung.
@@ -196,9 +213,11 @@ const SPOT_HOST = 'wss://stream.binance.com:9443'
 export function buildStreamUrl(symbol, market, depthInterval = '100ms') {
     const s = symbol.toLowerCase()
     const streams = `${s}@depth@${depthInterval}/${s}@trade`
+    const w = wurzel(market)
+    if (!w) return null
     return market === 'spot'
-        ? `${SPOT_HOST}/stream?streams=${streams}`
-        : `${FUTURES_HOST}/public/stream?streams=${streams}`
+        ? `${w}/stream?streams=${streams}`
+        : `${w}/public/stream?streams=${streams}`
 }
 
 /**
@@ -208,7 +227,8 @@ export function buildStreamUrl(symbol, market, depthInterval = '100ms') {
  */
 export function buildLiquidationUrl(symbol, market) {
     if (market === 'spot') return null
-    return `${FUTURES_HOST}/market/ws/${symbol.toLowerCase()}@forceOrder`
+    const w = wurzel(market)
+    return w ? `${w}/market/ws/${symbol.toLowerCase()}@forceOrder` : null
 }
 
 /**
@@ -220,9 +240,11 @@ export function buildLiquidationUrl(symbol, market) {
  */
 export function buildKlineUrl(symbol, market, interval) {
     const s = `${symbol.toLowerCase()}@kline_${interval}`
+    const w = wurzel(market)
+    if (!w) return null
     return market === 'spot'
-        ? `${SPOT_HOST}/ws/${s}`
-        : `${FUTURES_HOST}/market/ws/${s}`
+        ? `${w}/ws/${s}`
+        : `${w}/market/ws/${s}`
 }
 
 /**
@@ -234,7 +256,9 @@ export function buildKlineUrl(symbol, market, interval) {
 export function buildMiniTickerUrl(symbole, market) {
     if (!symbole.length) return null
     const streams = symbole.map((s) => `${s.toLowerCase()}@miniTicker`).join('/')
+    const w = wurzel(market)
+    if (!w) return null
     return market === 'spot'
-        ? `${SPOT_HOST}/stream?streams=${streams}`
-        : `${FUTURES_HOST}/market/stream?streams=${streams}`
+        ? `${w}/stream?streams=${streams}`
+        : `${w}/market/stream?streams=${streams}`
 }

@@ -137,22 +137,17 @@ export const AI_TASKS = {
     recherche: {
         id: 'recherche',
         name: 'Web-Recherche',
-        description: 'Recherche mit Belegen. Perplexity Sonar (Vorgabe, frischer, mit Bildern) oder `deepseek/deepseek-suche` — DeepSeek-Suche + Schreibmodell, rund 4× billiger, Treffer weniger tagesaktuell; die Chartanalyse bleibt bei Perplexity',
+        // Die DeepSeek-Suche (zweiter Weg seit 18.10.2026) ist seit S12 weg:
+        // DeepSeek verbietet die Nennung seines Namens ohne Erlaubnis (Verkaufs-
+        // Prüfung Z. 89d), und die Such-API gibt es nur bei DeepSeek selbst,
+        // nicht bei einem beliebigen OpenAI-kompatiblen Endpunkt.
+        description: 'Recherche mit Belegen über Perplexity Sonar',
         importance: 'medium',
         maxTokens: 2000,
-        recommendedModels: ['perplexity/sonar-pro', 'perplexity/sonar', 'deepseek/deepseek-suche'],
+        recommendedModels: ['perplexity/sonar-pro', 'perplexity/sonar'],
         requiresToolCalling: false,
-        supportedProviders: ['perplexity', 'deepseek'],
+        supportedProviders: ['perplexity'],
         rueckfallFeld: 'radarNewsRechercheModell',
-    },
-    recherche_schreiber: {
-        id: 'recherche-schreiber',
-        name: 'Recherche-Schreiber (DeepSeek-Suche)',
-        description: 'Fasst die Treffer der DeepSeek-Suche mit Belegnummern zusammen — nur aktiv, wenn die Recherche über DeepSeek läuft',
-        importance: 'low',
-        maxTokens: 8000,
-        recommendedModels: ['anthropic/claude-haiku-5-5', 'deepseek/deepseek-flash'],
-        requiresToolCalling: false,
     },
     agent: {
         id: 'agent',

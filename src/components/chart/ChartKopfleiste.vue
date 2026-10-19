@@ -7,7 +7,7 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SymbolSuche from './SymbolSuche.vue'
 import VorlagenMenue from './VorlagenMenue.vue'
-import { INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE } from '../../utils/chart/kerzenQuelle.js'
+import { INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE, boerseFuer, waehlbareBoersen, binanceGewaehlt } from '../../utils/chart/kerzenQuelle.js'
 import { OVERLAYS, overlayAn } from '../../utils/chart/overlays/liste.js'
 import { Symbol } from '../basis'
 
@@ -80,7 +80,16 @@ function schalteFavorit(i) {
 }
 const verborgeneIntervalle = computed(() => INTERVALLE.filter((i) => !favoriten.value.includes(i)))
 /** Zeiteinheiten, die die gewählte Kursquelle nicht kennt (Bitget: kein 8h). */
-const gesperrt = computed(() => new Set(props.panel.markt === 'spot' ? [] : (QUELLEN_OHNE[props.panel.boerse] || [])))
+const gesperrt = computed(() => new Set(QUELLEN_OHNE[aktiveBoerse.value] || []))
+/*
+ * Quellenwahl nach der Marktdatenquelle (S12): Binance steht nur zur Wahl,
+ * wenn der Kunde Binance gewählt hat. Die Helfer lesen den `marktdaten`-Ref,
+ * die Listen ziehen also nach, sobald die Wahl geladen oder geändert ist.
+ */
+const aktiveBoerse = computed(() => boerseFuer(props.panel))
+const boersenListe = computed(() => waehlbareBoersen())
+/** Spot gibt es nur bei Binance — dort ist die Wahl gesperrt. */
+const quelleGesperrt = computed(() => props.panel.markt === 'spot' && binanceGewaehlt())
 const aktuellesLayout = computed(() => props.layouts.find((l) => l.id === props.layoutId))
 
 function intervall(i) {
@@ -112,11 +121,9 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 <template>
     <div class="kopfleiste">
         <SymbolSuche ref="suche" :symbol="panel.symbol" :markt="panel.markt" @waehle="emit('panel', $event)" />
-        <select class="quelle" :value="panel.markt === 'spot' ? 'binance' : (panel.boerse || 'binance')" :disabled="panel.markt === 'spot'"
-            :title="t('chart.quelle.titel')" @change="emit('panel', { boerse: $event.target.value })">
-            <option value="binance">{{ t('chart.quelle.binance') }}</option>
-            <option value="bitunix">{{ t('chart.quelle.bitunix') }}</option>
-            <option value="bitget">{{ t('chart.quelle.bitget') }}</option>
+        <select class="quelle" :value="aktiveBoerse" :disabled="quelleGesperrt"
+            :title="t('chart.quelle.titel')" @change="emit('panel', { boerse: $event.target.value, ...(panel.markt === 'spot' ? { markt: 'futures' } : {}) })">
+            <option v-for="b in boersenListe" :key="b" :value="b">{{ t('chart.quelle.' + b) }}</option>
         </select>
 
         <div class="gruppe">

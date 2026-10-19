@@ -18,6 +18,7 @@ import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Reiter from '@/components/basis/Reiter.vue'
+import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const { t } = useI18n()
 
@@ -282,13 +283,13 @@ const dateRange = computed(() => {
     }
 })
 
-// Provider-Label. `deepseek` steht bewusst noch drin: der Anbieter ist nicht
-// mehr wählbar, aber alte Berichte tragen ihn — ohne Eintrag stünde dort der
-// rohe Schlüssel.
+// Provider-Label. Die ID `deepseek` ist seit S12 der neutrale „OpenAI-kompatible
+// Endpunkt 2" (Verkaufs-Prüfung 89d: kein Name ohne Erlaubnis) — alte Berichte
+// tragen die ID weiter, angezeigt wird der neutrale Name.
 const PROVIDER_LABELS = {
     ollama: 'Ollama', openai: 'OpenAI', anthropic: 'Anthropic', gemini: 'Gemini',
     mistral: 'Mistral', xai: 'Grok (xAI)', qwen: 'Qwen', custom: 'Eigener Anbieter',
-    deepseek: 'DeepSeek',
+    deepseek: 'OpenAI-kompatibler Endpunkt 2',
 }
 const providerLabel = computed(() => PROVIDER_LABELS[aiProvider.value] || aiProvider.value)
 
@@ -809,7 +810,7 @@ onBeforeMount(async () => {
                         <Symbol class="at-mr-1" :name="expandedReports.has(report.id) ? 'runter' : 'ausklappen'" />
                         <Symbol name="dokumentHaken" class="at-mr-1" />
                         <span class="at-fett at-mr-2">{{ report.label }}</span>
-                        <Pille ton="neutral" class="at-mr-2" style="font-size: 0.7rem;">{{ report.provider }}</Pille>
+                        <Pille ton="neutral" class="at-mr-2" style="font-size: 0.7rem;">{{ PROVIDER_LABELS[report.provider] || report.provider }}</Pille>
                         <Pille class="at-mr-2" v-if="report.promptPreset" style="font-size: 0.65rem; background-color: var(--blue-color, #4a90d9); opacity: 0.8;">{{ report.promptPreset }}</Pille>
                         <span class="at-gedaempft at-klein">{{ formatDate(report.createdAt) }}</span>
                     </div>
@@ -860,7 +861,9 @@ onBeforeMount(async () => {
                     </div>
 
                     <!-- Bericht-Text -->
-                    <div class="report-content" v-html="markdownToHtml(report.report)"></div>
+                    <div class="report-content" data-ki-generiert="true" v-html="markdownToHtml(report.report)"></div>
+                    <!-- S12: Pflichtlabel an jedem KI-Bericht. -->
+                    <KiHinweis :anbieter="report.provider" :modell="report.model" />
 
                     <!-- Token-Verbrauch -->
                     <div class="at-flex at-mitte at-luecke-3 at-mo-2 at-po-2 at-gedaempft at-klein" style="border-top: 1px solid var(--border-color, #333);">
@@ -889,7 +892,10 @@ onBeforeMount(async () => {
                                     <span v-if="msg.role === 'assistant' && msg.totalTokens > 0" class="at-gedaempft at-klein at-ml-auto">{{ msg.totalTokens }} {{ t('kiAgent.tokens') }}</span>
                                 </div>
                                 <div v-if="msg.role === 'user'" class="chat-bubble chat-bubble-user">{{ msg.content }}</div>
-                                <div v-else class="chat-bubble chat-bubble-ai report-content" v-html="markdownToHtml(msg.content)"></div>
+                                <template v-else>
+                                    <div class="chat-bubble chat-bubble-ai report-content" data-ki-generiert="true" v-html="markdownToHtml(msg.content)"></div>
+                                    <KiHinweis klein />
+                                </template>
                             </div>
                         </div>
 
@@ -1043,7 +1049,9 @@ onBeforeMount(async () => {
                                             <Symbol name="ki" />
                                             <span class="at-klein at-fett">{{ t('kiAgent.agent') }}</span>
                                         </div>
-                                        <div class="chat-bubble chat-bubble-ai report-content" v-html="markdownToHtml(msg.content)"></div>
+                                        <div class="chat-bubble chat-bubble-ai report-content" data-ki-generiert="true" v-html="markdownToHtml(msg.content)"></div>
+                                        <!-- S12: jede KI-Antwort trägt das Pflichtlabel. -->
+                                        <KiHinweis klein />
                                     </div>
                                 </template>
 

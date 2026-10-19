@@ -119,7 +119,7 @@ export async function sammleKacheln(symbol) {
     return { mechanik, fng, dom, funding, lsoi, liq24, rsi, markt, altseason, picycle, rainbow, makro, regime }
 }
 
-export function baueSystem(englisch, empfehlungen = false) {
+export function baueSystem(englisch) {
     const regeln = englisch
         ? [
             'You are a sober market observer inside a trading journal. You receive the CURRENT readings of a market',
@@ -128,10 +128,7 @@ export function baueSystem(englisch, empfehlungen = false) {
             'Summarise the overall situation in a way that can be read in fifteen seconds.',
             'Use ONLY the numbers given. Never invent a number, never add outside knowledge, never guess a price.',
             'Name contradictions between the readings explicitly — that is the most valuable part.',
-            ...(empfehlungen
-                ? ['Trading recommendations and price targets ARE allowed — but only with the level at which they',
-                    'hold and what would refute them. They belong in "text" or in a "punkte" entry.']
-                : ['NO trading recommendation, no price targets, no entries or exits, no "one should".']),
+            'NO trading recommendation, no price targets, no entries or exits, no "one should".',
             'Respond in English.',
         ]
         : [
@@ -141,13 +138,9 @@ export function baueSystem(englisch, empfehlungen = false) {
             'Fasse die Gesamtlage so zusammen, dass man sie in fünfzehn Sekunden liest.',
             'Nutze AUSSCHLIESSLICH die genannten Zahlen. Erfinde nie eine Zahl, ergänze kein Fremdwissen, rate keinen Kurs.',
             'Benenne Widersprüche zwischen den Messwerten ausdrücklich — das ist der wertvollste Teil.',
-            // Nur dieses Verbot ist schaltbar; „erfinde nie eine Zahl" darueber
-            // bleibt in jedem Fall. Das Schema kennt kein Kursziel-Feld, also
-            // muss dabeistehen, wohin die Aussage gehoert.
-            ...(empfehlungen
-                ? ['Handelsempfehlungen und Kursziele sind ERLAUBT — aber nur mit der Marke, an der sie gelten,',
-                    'und dem, was sie widerlegt. Sie gehoeren in "text" oder in einen "punkte"-Eintrag.']
-                : ['KEINE Handelsempfehlung, keine Kursziele, keine Ein- oder Ausstiege, kein „sollte man".']),
+            // Gilt immer — den Schalter `kiEmpfehlungenAn` gibt es seit S12
+            // (19.10.2026) nicht mehr (Verkaufs-Prüfung 2.8).
+            'KEINE Handelsempfehlung, keine Kursziele, keine Ein- oder Ausstiege, kein „sollte man".',
             'Antworte auf Deutsch.',
         ]
 
@@ -224,13 +217,9 @@ export async function erzeugeLage(symbol, erzwingen = false) {
             throw new Error('Zu wenige Kacheln liefern gerade Daten — eine Gesamtlage wäre geraten')
         }
 
-        // `kiEmpfehlungenAn` gleich mitlesen: ein globaler Schalter
-        // (Einstellungen → KI → Allgemein), der bestimmt, ob diese Kachel
-        // Kursziele und Empfehlungen geben darf. Vorgabe aus.
-        const s = await getKnex()('settings').select('language', 'kiEmpfehlungenAn')
+        const s = await getKnex()('settings').select('language')
             .where('id', 1).first().catch(() => null)
         const englisch = s?.language === 'en'
-        const empfehlungen = Number(s?.kiEmpfehlungenAn ?? 0) === 1
 
         const cfg = await ladeLlmConfigFuerAufgabe('marktradar-lage')
         /*
@@ -249,7 +238,7 @@ export async function erzeugeLage(symbol, erzwingen = false) {
         // lange Herleitung: `low` reicht.
         cfg.aufwand = 'low'
 
-        const system = baueSystem(englisch, empfehlungen)
+        const system = baueSystem(englisch)
         const user = [
             `SYMBOL: ${sym}`,
             `ZEITPUNKT: ${new Date().toISOString()}`,
@@ -278,6 +267,8 @@ export async function erzeugeLage(symbol, erzwingen = false) {
             model: cfg.model,
             provider: cfg.provider,
             costUsd: antwort.costUsd ?? null,
+            // EU AI Act Art. 50: maschinenlesbar als KI-Ausgabe markiert (S12).
+            kiGeneriert: true,
         }
         // Ein Knopfdruck, der eine Minute braucht, wirft die Frage auf, WO die
         // Zeit hingeht. Der Löwenanteil ist je nach Modell der Denkschritt der

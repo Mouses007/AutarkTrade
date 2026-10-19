@@ -4,6 +4,10 @@
  * (ein Stream je Markt, nur für die Symbole der Liste); 24h-Veränderung ist
  * Schluss gegen Eröffnung des rollierenden 24h-Fensters — dieselbe Zahl, die
  * Binance selbst anzeigt.
+ *
+ * Ohne Marktdatenquelle Binance (S12) gibt es keinen Stream: dann fragt die
+ * Liste `/api/chart/ticker` alle 15 s ab (Bitget, Server-Cache 10 s). Bei
+ * „aus" liefert der Server `{ aus: true }`, und die Kurse bleiben „—".
  */
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -14,6 +18,7 @@ import { Symbol } from '../basis'
 import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js'
 import { currentUser } from '../../stores/app/rahmen.js'
 import { aktivierteBoersen } from '../../utils/boersenLinks.js'
+import { ladeMarktdaten } from '../../utils/marktdaten.js'
 
 const props = defineProps({
     watchlists: { type: Array, default: () => [] },
@@ -26,6 +31,8 @@ const { t } = useI18n()
 const listeId = ref(null)
 const kurse = ref({})            // `${markt}|${symbol}` → { c, o }
 let streams = []
+let abfrageUhr = null
+const ABFRAGE_MS = 15_000
 
 const liste = computed(() => props.watchlists.find((w) => w.id === listeId.value) || props.watchlists[0] || null)
 const symbole = computed(() => liste.value?.symbole || [])
@@ -35,13 +42,37 @@ watch(() => props.watchlists, (w) => {
     if (!w.find((x) => x.id === listeId.value)) listeId.value = w[0]?.id ?? null
 }, { immediate: true })
 
-function verbinde() {
+/** Startkurse (und ohne Stream: laufende Kurse) per REST. */
+function holeKurse(markt, syms, ueberschreiben) {
+    if (!syms.length) return
+    axios.get('/api/chart/ticker', { params: { markt, symbole: syms.join(',') } }).then(({ data }) => {
+        if (data?.aus) return
+        const neu = { ...kurse.value }
+        for (const [sym, k] of Object.entries(data.kurse || {})) {
+            if (ueberschreiben || !neu[`${markt}|${sym}`]) neu[`${markt}|${sym}`] = k
+        }
+        kurse.value = neu
+    }).catch(() => { /* nächster Abruf oder Stream füllt nach */ })
+}
+
+let verbindeNr = 0
+async function verbinde() {
+    const nr = ++verbindeNr
     for (const s of streams) s.stop()
     streams = []
+    clearInterval(abfrageUhr)
+    abfrageUhr = null
+    // Die URL-Bauer brauchen die Wahl der Marktdatenquelle.
+    await ladeMarktdaten()
+    if (nr !== verbindeNr) return
+    const ohneStream = []
     for (const markt of ['futures', 'spot']) {
         const syms = symbole.value.filter((s) => s.markt === markt).map((s) => s.symbol)
         const url = buildMiniTickerUrl(syms, markt)
-        if (!url) continue
+        if (!url) {
+            if (syms.length) ohneStream.push([markt, syms])
+            continue
+        }
         const st = new BinanceStream({
             url,
             silenceLimitMs: 30_000,
@@ -54,16 +85,17 @@ function verbinde() {
         st.connect()
         streams.push(st)
         // Startkurse sofort, nicht erst beim ersten Tick — sonst steht „—" da, bis jedes Symbol einmal gehandelt hat.
-        axios.get('/api/chart/ticker', { params: { markt, symbole: syms.join(',') } }).then(({ data }) => {
-            const neu = { ...kurse.value }
-            for (const [sym, k] of Object.entries(data.kurse || {})) if (!neu[`${markt}|${sym}`]) neu[`${markt}|${sym}`] = k
-            kurse.value = neu
-        }).catch(() => { /* der Stream füllt nach */ })
+        holeKurse(markt, syms, false)
+    }
+    if (ohneStream.length) {
+        const runde = () => { if (!document.hidden) for (const [m, syms] of ohneStream) holeKurse(m, syms, true) }
+        runde()
+        abfrageUhr = setInterval(runde, ABFRAGE_MS)
     }
 }
 
 watch(() => symbole.value.map((s) => s.markt + s.symbol).join(','), verbinde, { immediate: true })
-onBeforeUnmount(() => { for (const s of streams) s.stop() })
+onBeforeUnmount(() => { verbindeNr++; for (const s of streams) s.stop(); clearInterval(abfrageUhr) })
 
 // Börsenlinks je Zeile: nur wo der Coin gelistet ist, und nur die Börsen, die in den
 // Einstellungen für Börsenlinks aktiviert sind (dieselbe Einstellung wie im Coin-Radar).

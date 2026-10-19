@@ -164,8 +164,10 @@ console.log('\nSocket-Lebenszyklus (eingespeister WebSocket)')
     // ohne Netz geladen und der Ersatz eingespeist — echtes Öffnen wäre hier
     // weder möglich noch aussagekräftig.
     const quelle = fs.readFileSync(new URL('../src/utils/binanceStream.js', import.meta.url), 'utf8')
+    // Importe (seit S12 die Marktdaten-Wahl für die URL-Bauer) fallen weg —
+    // geprüft wird hier nur der Socket-Lebenszyklus von BinanceStream.
     const fabrik = new Function('WebSocket', 'module',
-        `${quelle.replace(/^export /gm, '')}\nmodule.exports = { BinanceStream }`)
+        `${quelle.replace(/^import .*$/gm, '').replace(/^export /gm, '')}\nmodule.exports = { BinanceStream }`)
     const modul = { exports: {} }
     fabrik(ErsatzSocket, modul)
     const { BinanceStream } = modul.exports
@@ -220,17 +222,28 @@ console.log('\nRecorder-Rückzug bei Snapshot-Fehlern')
         && !/_fetchSnapshot\(\), 3000\)/.test(fehlerZweig))
     check('der Zähler wird bei Erfolg zurückgesetzt',
         /this\.snapshotVersuche = 0/.test(fehlerZweig))
+    // Seit S12 holt der Recorder den Snapshot über die Marktdaten-Schicht
+    // (`holeTiefe` → `binanceHole`), und deren Binance-`hole` meldet das
+    // Gewicht. Geprüft wird die ganze Kette, nicht nur das letzte Glied.
+    const md = fs.readFileSync(new URL('./marktdaten/binance.js', import.meta.url), 'utf8')
+    const mdHole = md.slice(md.indexOf('export async function hole('), md.indexOf('export function kerzenAus'))
     check('das Snapshot-Gewicht wird an die Bremse gemeldet',
-        /notiereGewicht\(/.test(fehlerZweig))
+        /holeTiefe\(/.test(fehlerZweig)
+        && /function holeTiefe[\s\S]{0,200}marktdaten\.binanceHole\(/.test(rec)
+        && /notiereGewicht\(/.test(mdHole))
 }
 
 // ── Verdrahtung des Proxys ───────────────────────────────────────────────
 console.log('\nVerdrahtung des Binance-Proxys')
 {
+    // Seit S12 ruft der Proxy Binance nur noch über `server/marktdaten/` —
+    // dort meldet `hole` jedes Gewicht. Ein direkter axios-Abruf hier ginge an
+    // der Bremse (und an der Wahl der Marktdatenquelle) vorbei.
     const api = fs.readFileSync(new URL('./binance-api.js', import.meta.url), 'utf8')
+    const ueberSchicht = (api.match(/marktdaten\.binanceHole\(|anbieter\.hole\(/g) || []).length
     check('binance-api.js meldet sein Gewicht an die Bremse',
-        /from '\.\/binance-takt\.js'/.test(api) && (api.match(/notiereGewicht\(/g) || []).length >= 2,
-        `${(api.match(/notiereGewicht\(/g) || []).length} Aufrufe`)
+        !/axios\.get\(/.test(api) && /from '\.\/marktdaten\/index\.js'/.test(api) && ueberSchicht >= 2,
+        `${ueberSchicht} Abrufe über die Marktdaten-Schicht`)
 }
 
 console.log(`\n${fehlgeschlagen === 0 ? '\x1b[32m' : '\x1b[31m'}${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen\x1b[0m`)

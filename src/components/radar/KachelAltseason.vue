@@ -89,6 +89,9 @@ const proz = (v) => `${v > 0 ? '+' : ''}${v} %`
             </div>
         </div>
 
+        <!-- Ohne CoinGecko-Schlüssel: die 50 umsatzstärksten Perps statt der
+             50 grössten Coins — eine andere Auswahl, das gehört dazu. -->
+        <p v-if="daten.basis === 'umsatz'" class="asQuelle">{{ t('marktradar.altseason.basisUmsatz') }}</p>
         <p v-if="gross" class="asQuelle">{{ t('marktradar.altseason.source') }}</p>
     </div>
 </template>

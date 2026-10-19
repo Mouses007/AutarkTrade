@@ -162,12 +162,16 @@ export function setupNewsProfilRoutes(app) {
                 }
             }
 
-            const quellenIds = (await knex('news_sources').select('id', 'name')).reduce((m, q) => (m.set(q.id, q.name), m), new Map())
+            const quellenArt = (await knex('news_sources').select('id', 'art')).reduce((m, q) => (m.set(q.id, q.art), m), new Map())
             const fehlendeQuellen = []
             for (const [id, werte] of Object.entries(quellen)) {
-                if (!quellenIds.has(Number(id))) { fehlendeQuellen.push(werte.name || `#${id}`); continue }
+                if (!quellenArt.has(Number(id))) { fehlendeQuellen.push(werte.name || `#${id}`); continue }
+                // Ein vor S12 gespeichertes Profil darf eine Telegram-Quelle
+                // nicht wieder einschalten — der Abruf ist entfernt
+                // (`ARTEN_ENTFERNT` in marktradar-news.js).
+                const entfernt = quellenArt.get(Number(id)) === 'telegram'
                 await knex('news_sources').where('id', Number(id))
-                    .update({ enabled: werte.enabled ? 1 : 0, laerm: werte.laerm ? 1 : 0, updatedAt: Date.now() })
+                    .update({ enabled: werte.enabled && !entfernt ? 1 : 0, laerm: werte.laerm ? 1 : 0, updatedAt: Date.now() })
             }
 
             res.json({ ok: true, geaendert, fehlendeQuellen })

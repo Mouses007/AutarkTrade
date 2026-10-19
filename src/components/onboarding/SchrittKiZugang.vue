@@ -99,6 +99,8 @@ defineExpose({ uebernehmen })
             <select class="form-select" v-model="aiProvider">
                 <option v-for="a in anbieterListe" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
+            <!-- Pflichthinweis des Anbieters (server/ai-models.js `hinweis`, S12). -->
+            <small v-if="aktuellerAnbieter?.hinweis" class="text-muted d-block mt-1">{{ t(aktuellerAnbieter.hinweis) }}</small>
         </div>
 
         <div v-if="aktuellerAnbieter?.brauchtKey" class="mb-3">

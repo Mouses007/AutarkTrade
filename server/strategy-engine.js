@@ -36,6 +36,12 @@ import { beansprucheFuehrung, verlaengereFuehrung, gibFuehrungFrei } from './db-
 import { wartungsmargePctFuer } from './margin-rates.js'
 import { umgebungAn } from './umgebung.js'
 import { istTestbetrieb } from './umgebung.js'
+import { istAus as marktdatenAus } from './marktdaten/index.js'
+
+// Instanzen, deren „Marktdaten aus" schon im Log steht: alle 15 s dieselbe
+// Zeile wäre Lärm, der echte Fehler verdeckt (S12). `lastError` sagt es der
+// Oberfläche weiterhin bei jedem Takt.
+const ausGemeldet = new Set()
 
 const TICK_MS = 15000          // Prüfintervall; gearbeitet wird nur bei neuem Kerzenschluss
 const MAX_SYMBOLS = 20         // Deckel je Instanz, damit ein Tippfehler den Server nicht flutet
@@ -913,7 +919,13 @@ async function verarbeiteInstanz(row, schalter) {
         stats.lastRunAt = Date.now()
     } catch (e) {
         stats.errors++
-        logError('strategy-engine', `Instanz ${instance.id} (${instance.name}) fehlgeschlagen`, e)
+        if (!marktdatenAus(e)) {
+            ausGemeldet.delete(instance.id)
+            logError('strategy-engine', `Instanz ${instance.id} (${instance.name}) fehlgeschlagen`, e)
+        } else if (!ausGemeldet.has(instance.id)) {
+            ausGemeldet.add(instance.id)
+            logWarn('strategy-engine', `Instanz ${instance.id} (${instance.name}) ausgesetzt: ${e.message}`)
+        }
         await knex('strategy_instances').where('id', instance.id)
             .update({ lastError: String(e.message).slice(0, 500) })
             .catch(() => {})
@@ -975,7 +987,8 @@ async function pflegeOffenePositionen() {
                 maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct),
             })
         } catch (e) {
-            logWarn('strategy-engine', `Positions-Nachlauf ${instanceId}/${symbol} fehlgeschlagen: ${e.message}`)
+            // Ohne Marktdaten steht es schon einmal bei der Instanz im Log (`ausGemeldet`).
+            if (!marktdatenAus(e)) logWarn('strategy-engine', `Positions-Nachlauf ${instanceId}/${symbol} fehlgeschlagen: ${e.message}`)
         }
     }
 }

@@ -54,7 +54,7 @@ console.log('\nVollständigkeit gegen liveFeed.js\n')
  * plus 'ready'/'replay' aus der Hebelkarte und der Wiedergabe. Kommt dort ein
  * Zustand dazu, fällt hier auf, dass er hier fehlt — und nicht erst im Handel.
  */
-const GEMELDET = ['idle', 'connecting', 'syncing', 'live', 'reconnecting', 'paused', 'error', 'empty', 'loading', 'ready', 'replay']
+const GEMELDET = ['idle', 'connecting', 'syncing', 'live', 'reconnecting', 'paused', 'error', 'empty', 'loading', 'ready', 'replay', 'quelleAus']
 const fehlend = GEMELDET.filter(z => z !== 'idle' && !BEKANNTE_ZUSTAENDE.includes(z))
 check('alle gemeldeten Zustände sind abgebildet', fehlend.length === 0, fehlend.join(', '))
 // 'idle' steht bewusst NICHT in der Tabelle: es ist schon der Rückfallwert.

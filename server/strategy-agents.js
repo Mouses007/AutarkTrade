@@ -22,24 +22,31 @@ import { ladeLlmConfig, ladeLlmConfigFuerAufgabe, callLLMJson } from './llm.js'
 import { getFundingRate } from './market-data.js'
 import { startOfDayUtc } from './risk-engine.js'
 
-const FEAR_GREED_URL = 'https://api.alternative.me/fng/?limit=1'
-const HTTP_TIMEOUT = 8000
-
 /** Was der Agent antworten darf. Alles andere wird verworfen. */
 const ERLAUBTE_AKTIONEN = ['allow', 'reject']
 
 // ── Sentiment-Daten ──────────────────────────────────────────────────────
 
+/** Englische Bezeichnung der alternative.me-Stufen (wie deren `value_classification`). */
+const FNG_BEZEICHNUNG = {
+    extremeFear: 'Extreme Fear', fear: 'Fear', neutral: 'Neutral', greed: 'Greed', extremeGreed: 'Extreme Greed',
+}
+
+/**
+ * Fear & Greed über denselben Abruf und Zwischenspeicher wie die
+ * Marktradar-Kachel (`holeFearGreed` in marktradar-api.js) — eine Adresse
+ * für alternative.me im ganzen Programm, und ein Strategie-Takt kostet keinen
+ * eigenen Abruf mehr. alternative.me erlaubt die kommerzielle Nutzung, wenn
+ * die Quelle genannt wird (Verkaufs-Prüfung Z. 19); `quelle` geht deshalb
+ * mit in die Daten, die der Agent sieht und die im Protokoll stehen.
+ */
 async function holeFearGreed() {
     try {
-        const ctrl = new AbortController()
-        const timer = setTimeout(() => ctrl.abort(), HTTP_TIMEOUT)
-        const r = await fetch(FEAR_GREED_URL, { signal: ctrl.signal })
-        clearTimeout(timer)
-        if (!r.ok) return null
-        const d = await r.json()
-        const eintrag = d?.data?.[0]
-        return eintrag ? { wert: Number(eintrag.value), einordnung: eintrag.value_classification } : null
+        const { holeFearGreed: holeFng } = await import('./marktradar-api.js')
+        const d = await holeFng(2)
+        const wert = d?.aktuell?.wert
+        if (!Number.isFinite(wert)) return null
+        return { wert, einordnung: FNG_BEZEICHNUNG[d.aktuell.klasse] || d.aktuell.klasse, quelle: 'Alternative.me' }
     } catch (e) {
         logWarn('strategy-agents', `Fear&Greed nicht abrufbar: ${e.message}`)
         return null

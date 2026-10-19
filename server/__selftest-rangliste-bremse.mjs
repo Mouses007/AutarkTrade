@@ -183,8 +183,13 @@ console.log('\nVerdrahtung im Abrufpfad')
         /WIEDERHOLUNGEN\[versuch\]/.test(quelle))
     check('vor jedem Historienabruf wird angestanden',
         /await warteAufGewicht\(\)/.test(quelle))
+    // Seit S12 läuft jeder Kerzenabruf über `server/marktdaten/`; dort meldet
+    // der Binance-Anbieter in `hole` das Gewicht (Futures) — die Kette prüfen.
+    const md = await import('node:fs').then((fs) => fs.readFileSync('server/marktdaten/binance.js', 'utf8'))
+    const mdHole = md.slice(md.indexOf('export async function hole('), md.indexOf('export function kerzenAus'))
+    const mdKerzen = md.slice(md.indexOf('export async function kerzen('), md.indexOf('export async function preis('))
     check('jeder Abruf meldet sein Gewicht zurück',
-        /notiereGewicht\(antwort\.headers\)/.test(quelle))
+        /fordere\('kerzen'/.test(quelle) && /notiereGewicht\(antwort\.headers\)/.test(mdHole) && /await hole\(/.test(mdKerzen))
     // Genau abgrenzen statt mit einem Fenster raten: der erste Versuch suchte
     // „warteAufGewicht irgendwo nach getClosedCandles" und schlug an, weil die
     // NÄCHSTE Funktion es enthält. Ein Test, der über Funktionsgrenzen hinweg

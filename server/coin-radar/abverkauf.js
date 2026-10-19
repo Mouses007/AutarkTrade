@@ -21,13 +21,19 @@
  *   Börsen        ob das Perpetual auf Bitunix oder Bitget handelbar ist
  *
  * Gerechnet wird in `abverkauf-bewertung.js`; hier steht nur der Weg.
+ *
+ * Nur mit der Marktdatenquelle Binance (S12): Open-Interest-Historie,
+ * Konten-Quoten und Taker-Verhältnis — der Kern der Kipp-Signale — gibt es
+ * bei keinem anderen Anbieter. Mit halben Daten liefe die Wache nicht
+ * „etwas schwächer", sondern meldete auf einer anderen Grundlage, als die
+ * Erfolgskontrolle sie misst. Ohne Binance ruht sie und sagt das einmal.
  */
 
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { beansprucheAufgabe, meldeFehler } from '../db-claim.js'
-import { holeJson } from '../marktradar-api.js'
 import { getClosedCandles } from '../market-data.js'
+import * as marktdaten from '../marktdaten/index.js'
 import { warteAufGewicht } from '../binance-takt.js'
 import { holeMarktweit } from './daten.js'
 import { BOERSEN as AUSFUEHRUNG } from './boersen.js'
@@ -36,8 +42,6 @@ import { leseEinstellungen as leseHypeEinstellungen } from '../hype-radar/einste
 import { stelleZu } from '../hype-radar/zustellung.js'
 import { leseLiquidationen } from '../live-recorder.js'
 import { bewerteAbverkauf, vorauswahl, waehlePartner, NACHLAUF_MS, ABVERKAUF_VORGABEN } from './abverkauf-bewertung.js'
-
-const FAPI = 'https://fapi.binance.com'
 
 /** Je Coin höchstens eine Kipp-Meldung in dieser Zeit. */
 const MELDE_SPERRE_MS = 6 * 3600e3
@@ -80,6 +84,8 @@ export async function abverkaufLauf() {
 }
 
 async function laufIntern() {
+    // Wirft `MarktdatenAus`, wenn nicht Binance gewählt ist (siehe Kopf).
+    await marktdaten.binanceRest('oiHistorie', 'futures')
     const knex = getKnex()
     const jetzt = Date.now()
     const einst = await leseAbverkaufEinst()
@@ -165,7 +171,8 @@ function boersenVon(symbol, handelbar) {
 /** Alle Zahlen eines Kandidaten. Jede Quelle fällt einzeln aus — fehlend heisst unbekannt. */
 async function holeDaten(m, jetzt) {
     const sym = m.symbol
-    const json = (pfad) => holeJson(`${FAPI}${pfad}`).catch(() => null)
+    // Gewicht und 429/418 meldet `binanceHole` an die Bremse.
+    const json = (faehigkeit, pfad, params) => marktdaten.binanceHole(faehigkeit, 'futures', pfad, { symbol: sym, ...params }).catch(() => null)
     await warteAufGewicht(6)
     const [k1h, k15m, spot, oi1, oi5, konten, top, taker] = await Promise.all([
         getClosedCandles(sym, '1h', 200).catch(() => []),
@@ -178,11 +185,11 @@ async function holeDaten(m, jetzt) {
         getClosedCandles(sym, '1h', 200, { market: 'spot' })
             .then((k) => (Array.isArray(k) ? k : null))
             .catch((e) => (e?.response?.status === 400 || e?.status === 400 ? [] : null)),
-        json(`/futures/data/openInterestHist?symbol=${sym}&period=1h&limit=48`),
-        json(`/futures/data/openInterestHist?symbol=${sym}&period=5m&limit=36`),
-        json(`/futures/data/globalLongShortAccountRatio?symbol=${sym}&period=1h&limit=2`),
-        json(`/futures/data/topLongShortPositionRatio?symbol=${sym}&period=1h&limit=2`),
-        json(`/futures/data/takerlongshortRatio?symbol=${sym}&period=5m&limit=36`),
+        json('oiHistorie', '/futures/data/openInterestHist', { period: '1h', limit: 48 }),
+        json('oiHistorie', '/futures/data/openInterestHist', { period: '5m', limit: 36 }),
+        json('longShort', '/futures/data/globalLongShortAccountRatio', { period: '1h', limit: 2 }),
+        json('longShort', '/futures/data/topLongShortPositionRatio', { period: '1h', limit: 2 }),
+        json('takerVolumen', '/futures/data/takerlongshortRatio', { period: '5m', limit: 36 }),
     ])
     const reihe = (a, feld) => (Array.isArray(a) ? a.map((x) => ({ t: Number(x.timestamp), wert: zahl(x[feld]) })) : [])
     return {
@@ -309,7 +316,11 @@ export async function abverkaufUebersicht() {
         .select('gruppe', 'horizont', 'renditePct', 'mfePct', 'status', 'symbol', 'erstelltAm')
         .orderBy('erstelltAm', 'desc').limit(3000).catch(() => [])
     const { abverkaufGuete } = await import('./abverkauf-bewertung.js')
+    // Ruht die Wache mangels Binance-Daten, sagt die Seite das (`QuelleAus`).
+    let aus = null
+    try { await marktdaten.binanceRest('oiHistorie', 'futures') } catch (e) { if (marktdaten.istAus(e)) aus = marktdaten.ausAntwort(e) }
     return {
+        aus,
         stand: abverkaufStand(),
         einst: await leseAbverkaufEinst(),
         coins,
@@ -323,11 +334,18 @@ export async function abverkaufUebersicht() {
  * Anspruch in der Datenbank hält das Intervall über alle Prozesse (NAS und
  * Testcontainer teilen eine Datenbank).
  */
+let ausGemeldet = false
 export function startAbverkaufTakt() {
     const uhr = setInterval(async () => {
         try {
             const einst = await leseAbverkaufEinst()
             if (!einst.an) return
+            // Ohne Binance-Marktdaten ruhen — einmal im Log, nicht alle fünf Minuten.
+            if (!(await marktdaten.kann('oiHistorie'))) {
+                if (!ausGemeldet) { ausGemeldet = true; logWarn('abverkauf', 'Wache ruht: braucht die Marktdatenquelle Binance (Open-Interest-Historie)') }
+                return
+            }
+            ausGemeldet = false
             const minuten = Math.max(5, Number(einst.intervallMin) || 10)
             if (!(await beansprucheAufgabe('coinradar_abverkauf', minuten * 60e3 - 30e3))) return
             const e = await abverkaufLauf()

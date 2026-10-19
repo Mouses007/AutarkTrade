@@ -15,6 +15,7 @@ import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { sanitizeHtml } from '../../utils/sanitize'
 import { Knopf, Kreisel } from '../basis'
+import KiHinweis from '../quellen/KiHinweis.vue'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -154,9 +155,12 @@ const VORSCHLAEGE = ['frageStruktur', 'frageMarken', 'frageLinien']
                 <Knopf v-for="v in VORSCHLAEGE" :key="v" klein class="vorschlag"
                     @click="eingabe = t('chart.ki.' + v); sende()">{{ t('chart.ki.' + v) }}</Knopf>
             </div>
-            <div v-for="(n, i) in nachrichten" :key="i" class="blase" :class="n.rolle">
+            <div v-for="(n, i) in nachrichten" :key="i" class="blase" :class="n.rolle"
+                :data-ki-generiert="n.rolle === 'ki' ? 'true' : null">
                 <div v-if="n.rolle === 'ki'" v-html="markdown(n.text)"></div>
                 <div v-else>{{ n.text }}</div>
+                <!-- S12: jede KI-Antwort trägt das Pflichtlabel. -->
+                <KiHinweis v-if="n.rolle === 'ki'" klein />
             </div>
             <div v-if="laeuft" class="blase ki laeuft">
                 <Kreisel />

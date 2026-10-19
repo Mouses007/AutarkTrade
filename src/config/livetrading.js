@@ -35,6 +35,7 @@
  */
 
 import { baueKachelListe, macheSortierer } from './kachel-registry.js'
+import { Q } from './marktradar.js'
 
 /**
  * Standardanordnung — die vom Nutzer eingerichtete Aufstellung (10.10.2026):
@@ -72,6 +73,17 @@ export const KOMPAKT_QUELLEN = [
  */
 export const KOMPAKT_AUSGEBLENDET = [...KOMPAKT_QUELLEN, 'positionen']
 
+/*
+ * Quellenangaben wie im Marktradar (`Q` dort). Kalender: amtliche Quellen mit
+ * der Quellenangabe, um die sie bitten (Fed, BEA, Eurostat — Fundstellen in
+ * `server/kalender-quellen.js`).
+ */
+const KALENDER_QUELLEN = [
+    { name: 'Federal Reserve Board', url: 'https://www.federalreserve.gov/newsevents/calendar.htm', art: 'quelle' },
+    { name: 'U.S. Bureau of Economic Analysis', url: 'https://www.bea.gov/news/schedule', art: 'quelle' },
+    { name: 'Eurostat', url: 'https://ec.europa.eu/eurostat/news/release-calendar', art: 'quelle' },
+]
+
 const DEFINITIONEN = [
     {
         /*
@@ -91,7 +103,7 @@ const DEFINITIONEN = [
         hoehe: 320,
         // Die Gross-Ansicht wäre dieselbe Liste, nur breiter
         gross: false,
-        quelle: 'die übrigen Kacheln dieser Seite',
+        quelle: [],
     },
     {
         /*
@@ -109,7 +121,7 @@ const DEFINITIONEN = [
         intervallMs: 60 * 1000,
         spalten: 2,
         hoehe: 320,
-        quelle: 'Binance-Kerzen (Futures + Spot)',
+        quelle: [{ marktdaten: true, zusatz: '(Futures + Spot)' }],
     },
     {
         id: 'handelszeiten',
@@ -119,7 +131,7 @@ const DEFINITIONEN = [
         endpunkt: null,
         intervallMs: Infinity,
         spalten: 1,
-        quelle: 'Eigene Rechnung (Zeitzonen)',
+        quelle: [{ name: 'eigene Rechnung (Zeitzonen)', klein: false }],
     },
     {
         id: 'mechanik',
@@ -129,7 +141,7 @@ const DEFINITIONEN = [
         params: { fenster: '15m' },
         intervallMs: 60 * 1000,
         spalten: 1,
-        quelle: 'Binance · eigene Aufzeichnung',
+        quelle: [Q.marktdaten, { name: 'eigene Aufzeichnung', klein: false }],
         symbolAbhaengig: true,
     },
     {
@@ -142,7 +154,7 @@ const DEFINITIONEN = [
         // hier billig und machen aus der Kachel erst einen Ticker.
         intervallMs: 5 * 1000,
         spalten: 1,
-        quelle: 'eigene Aufzeichnung (Binance gedrosselt · Bybit ungedrosselt)',
+        quelle: [{ name: 'eigene Aufzeichnung (Binance, Bybit)' }],
     },
     {
         id: 'positionen',
@@ -154,7 +166,7 @@ const DEFINITIONEN = [
         sitzungAbhaengig: true,
         intervallMs: 10 * 1000,
         spalten: 1,
-        quelle: 'Bitunix (offene und geschlossene Positionen)',
+        quelle: [{ name: 'Bitunix (eigenes Konto)' }],
     },
     {
         id: 'kalender',
@@ -164,22 +176,24 @@ const DEFINITIONEN = [
         params: { stunden: 8 },
         intervallMs: 60 * 1000,
         spalten: 1,
-        quelle: 'ForexFactory · Fed-Kalender (eigener Bestand)',
+        quelle: KALENDER_QUELLEN,
     },
     {
         id: 'indizes',
         titleKey: 'livetrading.indizes.title',
         icon: 'linie',
+        /*
+         * ENTFERNT (S12): die Kerzen von ES, NQ, RTY und DXY kamen aus Yahoo
+         * Finance, dessen Bedingungen automatisiertes Sammeln und kommerzielle
+         * Nutzung verbieten (Verkaufs-Prüfung Z. 39). Der Eintrag bleibt, damit
+         * gespeicherte Layouts nicht ins Leere greifen; der Endpunkt antwortet
+         * `{ aus: true, grund: 'entfernt' }`, und die Kachel zeigt das. Einmal
+         * je Stunde nachzufragen genügt — es ändert sich nichts.
+         */
         endpunkt: '/api/livetrading/indizes',
-        // `stunden` statt `range`: Yahoos `range=1d` liefert für einen Future
-        // nur die laufende reguläre Sitzung — morgens sind das zehn Kerzen.
-        // Der Server holt jetzt immer fünf Tage und schneidet auf dieses
-        // Fenster zu; die Auflösung wandert mit (siehe `FENSTER` in der Kachel).
-        params: { interval: '5m', stunden: 12 },
-        intervallMs: 60 * 1000,
-        // Ein Kerzenchart braucht Breite, sonst klebt jede Kerze an der nächsten
-        spalten: 2,
-        quelle: 'Yahoo Finance (ES=F, NQ=F, RTY=F, DX-Y.NYB)',
+        intervallMs: 60 * 60 * 1000,
+        spalten: 1,
+        quelle: [],
     },
     {
         id: 'coinradar',
@@ -197,7 +211,7 @@ const DEFINITIONEN = [
         // fragen liefert dieselbe Zeile noch einmal.
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'Coin-Radar (eigener Lauf)',
+        quelle: [{ name: 'Coin-Radar (eigener Lauf)', klein: false }],
     },
     {
         id: 'funding',
@@ -207,7 +221,7 @@ const DEFINITIONEN = [
         params: { n: 50 },
         intervallMs: 60 * 1000,
         spalten: 1,
-        quelle: 'Binance USDⓈ-M Futures',
+        quelle: [Q.marktdaten, { name: 'Bitunix' }, { name: 'Bybit' }],
     },
     {
         id: 'lsoi',
@@ -218,7 +232,7 @@ const DEFINITIONEN = [
         symbolAbhaengig: true,
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'Binance USDⓈ-M Futures',
+        quelle: [Q.marktdaten],
     },
     {
         id: 'makro',
@@ -227,7 +241,7 @@ const DEFINITIONEN = [
         endpunkt: '/api/marktradar/makro',
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'Yahoo Finance · CoinGecko · Binance-Tageskerzen',
+        quelle: [Q.coingecko],
     },
     {
         /*
@@ -249,7 +263,7 @@ const DEFINITIONEN = [
         symbolAbhaengig: true,
         intervallMs: 60 * 1000,
         spalten: 2,
-        quelle: 'Kerzen, Kalender und Handelszeiten · Einordnung durch die eingestellte KI',
+        quelle: [{ name: 'Kerzen, Kalender und Handelszeiten', klein: false }],
     },
     {
         // Dieselbe Kachel wie im Marktradar. Der Endpunkt LIEST nur, was schon
@@ -263,7 +277,7 @@ const DEFINITIONEN = [
         symbolAbhaengig: true,
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'die übrigen Kacheln · Einordnung durch die eingestellte KI',
+        quelle: [{ name: 'die übrigen Kacheln', klein: false }],
     },
     /*
      * Die beiden Canvas-Kacheln hängen an eigenen Datenströmen und stehen
@@ -292,7 +306,7 @@ const DEFINITIONEN = [
         // Hängt an einem eigenen Strom und meldet dessen Zustand selbst ans
         // Raster. Siehe `eigenerStrom` in `useKachelRaster.js`.
         eigenerStrom: true,
-        quelle: 'Binance-Orderbuchstrom (live)',
+        quelle: [{ marktdaten: true, zusatz: 'Orderbuchstrom (live)' }],
     },
     {
         id: 'hebelkarte',
@@ -308,7 +322,7 @@ const DEFINITIONEN = [
         hoehe: 690,
         gross: false,
         eigenerStrom: true,
-        quelle: 'Modell auf Basis der eigenen Aufzeichnung',
+        quelle: [{ marktdaten: true, zusatz: '(Modell aus Open-Interest-Verlauf)' }],
     },
 ]
 

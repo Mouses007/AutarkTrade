@@ -43,6 +43,7 @@
 import { getClosedCandles, TIMEFRAME_MS } from '../market-data.js'
 import { holeJson as radarJson } from '../marktradar-api.js'
 import { warteAufGewicht } from '../binance-takt.js'
+import { wahl as marktdatenWahl } from '../marktdaten/index.js'
 import { holeHandelbar, holeTestbar } from '../coin-universum.js'
 import { ladeListungen, pruefeListung } from '../hype-radar/listungen.js'
 import { logWarn } from '../logger.js'
@@ -459,7 +460,9 @@ export async function pruefeEinzeln(eingabe, einst = {}, quellen = {}) {
  * Kontingent wegnehmen.
  */
 async function holeBinanceKerzen(symbol, zeiteinheit) {
-    await warteAufGewicht(2)
+    // Die Gewichtsbremse kennt nur Binance; Kerzen kommen von der gewählten
+    // Marktdatenquelle (`server/marktdaten`), der Name blieb aus der Zeit davor.
+    if ((await marktdatenWahl()) === 'binance') await warteAufGewicht(2)
     return getClosedCandles(symbol, zeiteinheit, KERZEN_ANZAHL)
 }
 

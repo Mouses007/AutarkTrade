@@ -405,11 +405,13 @@
                 </div>
 
                 <!-- KI-Einordnung -->
-                <div v-if="lauf.einordnung" class="crEinordnung">
+                <div v-if="lauf.einordnung" class="crEinordnung" data-ki-generiert="true">
                     <Symbol name="nachricht" class="at-mr-2" />
                     <div>
                         <p class="at-mu-0">{{ lauf.einordnung }}</p>
                         <span class="crQuelle">{{ t('coinradar.einordnungQuelle') }}</span>
+                        <!-- S12: Pflichtlabel an der KI-Einordnung. -->
+                        <KiHinweis klein />
                     </div>
                 </div>
 
@@ -842,12 +844,15 @@
                             <Kreisel still />
                         </div>
                         <p v-else-if="coinInfoFehler" class="at-gedaempft at-klein at-mu-0">{{ coinInfoFehler }}</p>
+                        <!-- Ohne CoinGecko-Schlüssel (S12): ein Zustand mit Weg zur Einstellung, kein Fehler. -->
+                        <QuelleAus v-else-if="coinInfoAus" :aus="coinInfoAus" klein />
                         <p v-else-if="coinInfo === null" class="at-gedaempft at-klein at-mu-0">
                             {{ t('coinradar.coinInfoKeineDaten', { symbol: kurz(coinInfoSymbol) }) }}
                         </p>
                         <template v-else-if="coinInfo">
                             <div class="crCoinInfoKopf">
-                                <img v-if="coinInfo.bild" :src="coinInfo.bild" alt="" referrerpolicy="no-referrer">
+                                <!-- Kein Coin-Logo (fremde Inhalte, S12) — Initialen des Kürzels. -->
+                                <TickerZeichen :symbol="coinInfo.symbol || kurz(coinInfoSymbol)" />
                                 <div>
                                     <strong>{{ coinInfo.name }}</strong>
                                     <span v-if="coinInfo.marketCapRang" class="crCoinInfoRang">
@@ -885,6 +890,7 @@
                                     <Symbol name="extern" />CoinGecko</a>
                             </div>
                             <p class="crCoinInfoFuss">{{ coinInfoSichtbarkeitText }}</p>
+                            <RadarQuellen :quellen="['coingecko']" />
                         </template>
                     </div>
                 </div>
@@ -1020,6 +1026,9 @@ import axios from 'axios'
 import PageInfo from '../components/PageInfo.vue'
 import InfoTipp from '../components/InfoTipp.vue'
 import TiefensucheErgebnis from '../components/hype/TiefensucheErgebnis.vue'
+import TickerZeichen from '../components/hype/TickerZeichen.vue'
+import RadarQuellen from '../components/hype/RadarQuellen.vue'
+import QuelleAus from '../components/quellen/QuelleAus.vue'
 import AbverkaufAnsicht from '../components/coinradar/AbverkaufAnsicht.vue'
 import { useKostenAnzeige } from '../utils/journal/format.js'
 import { useIstTelefon } from '../utils/geraet.js'
@@ -1033,6 +1042,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
+import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const { t } = useI18n()
 const istTelefon = useIstTelefon()
@@ -1450,6 +1460,7 @@ const coinInfo = ref(undefined)   // undefined = noch nicht geladen, null = kein
 const coinInfoLaedt = ref(false)
 const coinInfoFehler = ref('')
 const coinInfoVoll = ref(false)
+const coinInfoAus = ref(null)     // `{aus: true, …}` ohne CoinGecko-Schlüssel (S12)
 let coinInfoLauf = 0   // gegen überholende Antworten beim schnellen Umklicken
 
 /*
@@ -1474,12 +1485,14 @@ async function coinInfoOeffnen(symbol) {
     coinInfoSymbol.value = symbol
     coinInfo.value = undefined
     coinInfoFehler.value = ''
+    coinInfoAus.value = null
     coinInfoVoll.value = false
     coinInfoLaedt.value = true
     const eigenerLauf = ++coinInfoLauf
     try {
         const { data } = await axios.get('/api/coin-radar/coin-info', { params: { symbol } })
         if (eigenerLauf !== coinInfoLauf) return   // zwischenzeitlich ein anderes Symbol angeklickt
+        if (data?.aus) { coinInfoAus.value = data; coinInfo.value = undefined; return }
         coinInfo.value = data?.info ?? null
     } catch (e) {
         if (eigenerLauf !== coinInfoLauf) return

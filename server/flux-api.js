@@ -590,6 +590,14 @@ export async function setupFluxRoutes(app) {
                 overlay: svgOverlay,
                 prompt,
                 backgroundImage: imgBuffer.toString('base64'),
+                // S12 (EU AI Act Art. 50): der Hintergrund ist KI-erzeugt. Der Browser
+                // schreibt daraufhin das sichtbare Label ins Bild und die Kennzeichnung
+                // in die PNG-Metadaten (`src/utils/shareCardBild.js`) — die Metadaten
+                // des Anbieters gehen beim Zusammensetzen auf der Leinwand verloren.
+                kiGeneriert: true,
+                kiQuelle: provider === 'gemini'
+                    ? `Google Gemini ${settings?.geminiImageModel || ''}`.trim()
+                    : `FLUX.2 (Black Forest Labs) ${settings?.fluxModel || ''}`.trim(),
             })
         } catch (e) {
             console.error('Share card generate error:', e)
@@ -631,7 +639,9 @@ export async function setupFluxRoutes(app) {
             })
 
             console.log(` -> Share card from template "${template.name}" generated (no API call)`)
-            res.json({ hintergrund: datenUrl(bgBuffer), overlay: svgOverlay, prompt: template.prompt, fromTemplate: true })
+            // Vorlagen sind gespeicherte KI-Hintergründe (auch die mitgelieferten:
+            // sie tragen ihren Prompt) — also ebenso gekennzeichnet (S12).
+            res.json({ hintergrund: datenUrl(bgBuffer), overlay: svgOverlay, prompt: template.prompt, fromTemplate: true, kiGeneriert: true })
         } catch (e) {
             console.error('Generate from template error:', e)
             res.status(500).json({ error: 'Interner Serverfehler' })

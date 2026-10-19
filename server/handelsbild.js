@@ -312,7 +312,10 @@ export function baueHandelsZeilen(d = {}) {
         const offen = (d.termine.ereignisse || []).filter(e => !e.vorbei).slice(0, 4)
         if (offen.length) {
             dazu('termine', `Termine der nächsten ${d.termine.stunden} h: ` + offen
-                .map(e => `${e.country || ''} ${e.title} in ${dauer(e.inMs)} (Bedeutung ${e.impact})`.trim())
+                // Der Kalender liefert `land`/`titel` (calendar_events); bis
+                // 19.10.2026 las diese Zeile `country`/`title` und schrieb der
+                // KI „undefined" statt des Termins. Beide Formen gelten.
+                .map(e => `${e.land ?? e.country ?? ''} ${e.titel ?? e.title} in ${dauer(e.inMs)} (Bedeutung ${e.impact})`.trim())
                 .join('; '))
         } else if (d.termine.gesamtImZeitraum > 0) {
             // „Nichts los" und „alles weggefiltert" sind zwei verschiedene
@@ -543,12 +546,17 @@ export function baueHandelsZeilen(d = {}) {
             + ` (${mitWert.length ? Math.round((plus / mitWert.length) * 100) : 0} %)`)
     }
 
-    if (d.makro?.maerkte?.length) {
+    // Aktien-Futures und Dollar-Index (Yahoo) sind seit S12 entfernt — es
+    // bleibt der Stablecoin-Fluss (CoinGecko mit Kundenschlüssel). Ältere
+    // Nutzlasten mit `maerkte` werden weiter gelesen.
+    if (d.makro) {
         const namen = { sp500: 'S&P 500', nasdaq: 'Nasdaq 100', russell: 'Russell 2000', dxy: 'Dollar-Index' }
-        const teile = d.makro.maerkte.filter(m => m.verfuegbar).map(m =>
+        const teile = (d.makro.maerkte || []).filter(m => m.verfuegbar).map(m =>
             `${namen[m.id] || m.id} ${pz(m.deltaPct, 2)}${m.offen === false ? ' (Börse zu)' : ''}`)
         const k = d.makro.korrelation
         if (k && nz(k.nasdaq)) teile.push(`Korrelation BTC↔Nasdaq ${k.nasdaq} (${k.deutung})`)
+        const st = d.makro.stablecoins
+        if (st?.verfuegbar) teile.push(`Stablecoin-Menge ${st.tage} T ${pz(st.deltaPct, 2)}`)
         if (teile.length) dazu('makro', `Makro: ${teile.join('; ')}`)
     }
 

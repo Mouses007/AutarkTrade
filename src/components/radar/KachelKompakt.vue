@@ -26,6 +26,7 @@ import { liveSymbol } from '../../stores/live.js'
 import { currentUser } from '../../stores/app/rahmen.js'
 import { boerseUrl, boersenLinksVon, BOERSE_KURZ, BOERSE_NAME } from '../../utils/boersenLinks.js'
 import Symbol from '@/components/basis/Symbol.vue'
+import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -263,7 +264,7 @@ function waehle(symbol) { liveSymbol.value = symbol }
         <div v-if="handelslage" class="kpZeile kpText" @click="emit('oeffne', 'handelslage')">
             <span class="kpLabel">{{ t('livetrading.kompakt.handelslage') }}</span>
             <span v-if="handelslage.leer" class="kpWert kpLeise">{{ t('livetrading.kompakt.einordnen') }} →</span>
-            <span v-else class="kpWert">
+            <span v-else class="kpWert" data-ki-generiert="true">
                 <b :class="LAGE_FARBE[handelslage.lage] || ''">{{ t('livetrading.handelslage.lage_' + (handelslage.lage || 'unklar')) }}</b>
                 <span class="kpSatz">{{ handelslage.text }}</span>
                 <span class="kpNeben">{{ alter(handelslage.stand) }}</span>
@@ -272,11 +273,13 @@ function waehle(symbol) { liveSymbol.value = symbol }
 
         <div v-if="gesamtlage" class="kpZeile kpText" @click="emit('oeffne', 'lage')">
             <span class="kpLabel">{{ t('livetrading.kompakt.gesamtlage') }}</span>
-            <span class="kpWert">
+            <span class="kpWert" data-ki-generiert="true">
                 <span class="kpSatz">{{ gesamtlage.text }}</span>
                 <span class="kpNeben">{{ alter(gesamtlage.stand) }}</span>
             </span>
         </div>
+        <!-- S12: die beiden Sätze darüber sind KI-Text — Pflichtlabel. -->
+        <KiHinweis v-if="(handelslage && !handelslage.leer) || gesamtlage" klein />
     </div>
 </template>
 

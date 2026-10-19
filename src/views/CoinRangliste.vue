@@ -14,6 +14,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import { Knopf, Pille, Symbol, Hinweis, Kreisel } from '../components/basis'
+import KiHinweis from '../components/quellen/KiHinweis.vue'
 
 const { t } = useI18n()
 
@@ -304,7 +305,7 @@ onBeforeUnmount(stopPolling)
             <!-- Was das Modell vorgeschlagen hat UND was davon nicht ging.
                  Eine still gekürzte Liste wäre eine Behauptung über
                  Vollständigkeit, die niemand nachprüfen kann. -->
-            <div v-if="kiErgebnis" class="notiz abstand-klein">
+            <div v-if="kiErgebnis" class="notiz abstand-klein" data-ki-generiert="true">
                 <div>
                     <strong>{{ kiErgebnis.name }}</strong> — {{ kiErgebnis.begruendung }}
                     <div v-if="kiErgebnis.verworfen.length" class="at-warn oben">
@@ -318,6 +319,8 @@ onBeforeUnmount(stopPolling)
                         {{ kiErgebnis.provider }}/{{ kiErgebnis.modell }} ·
                         {{ kiErgebnis.tokens }} Token · {{ kiErgebnis.kostenUsd.toFixed(4) }} USD
                     </div>
+                    <!-- S12: Pflichtlabel am KI-Vorschlag. -->
+                    <KiHinweis klein />
                 </div>
             </div>
 

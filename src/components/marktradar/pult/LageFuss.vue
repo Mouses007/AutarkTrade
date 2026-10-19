@@ -19,6 +19,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
+import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -66,7 +67,9 @@ const ersterSatz = computed(() => {
             <span class="lfStimmung" :style="{ color: farbe }">
                 {{ daten.stimmung ? t('marktradar.lage.stimmung_' + daten.stimmung) : '' }}
             </span>
-            <span class="lfText">{{ ersterSatz }}</span>
+            <span class="lfText" data-ki-generiert="true">{{ ersterSatz }}</span>
+            <!-- S12: Pflichtlabel, auch in der einzeiligen Leiste. -->
+            <KiHinweis zeile />
             <button type="button" class="lfMehr" @click="emit('oeffnen')">
                 {{ t('marktradar.pult.ganzerText') }}<Symbol name="ausklappen" />
             </button>

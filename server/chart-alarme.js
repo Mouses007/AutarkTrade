@@ -10,9 +10,11 @@
  * von 30 s; fällt der Halter aus, übernimmt der andere nach einer halben
  * Minute.
  *
- * Preise kommen als EIN Sammelabruf je Markt (`ticker/price` ohne Symbol,
- * Gewicht 2 bzw. 4) statt einer Anfrage je Alarm — zwanzig Alarme kosten so
- * dasselbe wie einer.
+ * Preise kommen als EIN Sammelabruf je Markt (Binance `ticker/price` ohne
+ * Symbol, Gewicht 2 bzw. 4; Bitget `tickers`) statt einer Anfrage je Alarm —
+ * zwanzig Alarme kosten so dasselbe wie einer. Welche Börse, entscheidet die
+ * Marktdatenquelle (`server/marktdaten/`); mit `aus` ruht der Takt und sagt
+ * das einmal im Log.
  *
  * Zugestellt wird über die Push-Kanäle des Hype-Radars (ntfy, Telegram,
  * Webhook — eine Stelle für alle Handy-Meldungen) und, wenn in den
@@ -20,10 +22,10 @@
  * Regeln selbst (Kreuzen, Lücke, Sperrfrist) stehen rein in
  * `chart-alarm-regeln.js`.
  */
-import axios from 'axios'
 import { getKnex } from './database.js'
 import { beansprucheFuehrung, verlaengereFuehrung } from './db-claim.js'
-import { notiereGewicht, melde429, warteAufGewicht } from './binance-takt.js'
+import { warteAufGewicht } from './binance-takt.js'
+import * as marktdaten from './marktdaten/index.js'
 import { pruefeAlarm, sperreAbgelaufen, geometrieVorbei, MIN_SPERRE_MIN } from './chart-alarm-regeln.js'
 import { stelleZu } from './hype-radar/zustellung.js'
 import { leseEinstellungen } from './hype-radar/einstellungen.js'
@@ -41,10 +43,6 @@ const LINIEN_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'kanal']
 const ZONEN_TYPEN = ['rechteck', 'kanal']
 const RICHTUNGEN = { preis: ['ueber', 'unter', 'kreuzt'], linie: ['ueber', 'unter', 'kreuzt'], zone: ['betreten', 'verlassen'] }
 
-const PREIS_URL = {
-    futures: 'https://fapi.binance.com/fapi/v1/ticker/price',
-    spot: 'https://api.binance.com/api/v3/ticker/price',
-}
 const PREIS_GEWICHT = { futures: 2, spot: 4 }
 
 function parse(text, ersatz) {
@@ -125,36 +123,36 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
 }
 
 // ── Preise ───────────────────────────────────────────────────────────────
-// Letzter Sammelabruf je Markt — fürs Anlegen (gibt es das Symbol bei Binance?) ohne Extraabruf.
-const letztePreise = { futures: { t: 0, karte: null }, spot: { t: 0, karte: null } }
+// Letzter Sammelabruf je Markt — fürs Anlegen (führt die Quelle das Symbol?) ohne Extraabruf.
+// `quelle` gehört dazu: nach einem Wechsel der Marktdatenquelle gilt die alte Karte nicht.
+const letztePreise = { futures: { t: 0, karte: null, quelle: null }, spot: { t: 0, karte: null, quelle: null } }
 
-/** Führt Binance das Symbol? null = unbekannt (kein frischer Abruf, dann nicht ablehnen). */
-async function symbolBeiBinance(symbol, markt) {
+/** Führt die Marktdatenquelle das Symbol? null = unbekannt (kein frischer Abruf, dann nicht ablehnen). */
+async function symbolBeiQuelle(symbol, markt) {
     const l = letztePreise[markt]
     try {
-        if (!l.karte || Date.now() - l.t > 10 * 60_000) await holePreise(markt)
-    } catch { return null }
+        if (!l.karte || l.quelle !== await marktdaten.wahl() || Date.now() - l.t > 10 * 60_000) await holePreise(markt)
+    } catch (e) {
+        if (marktdaten.istAus(e)) throw e
+        return null
+    }
     return letztePreise[markt].karte ? letztePreise[markt].karte.has(symbol) : null
 }
 
 async function holePreise(markt) {
-    await warteAufGewicht(PREIS_GEWICHT[markt])
-    try {
-        const r = await axios.get(PREIS_URL[markt], { timeout: 8000 })
-        notiereGewicht(r.headers)
-        const karte = new Map()
-        for (const x of r.data || []) {
-            const p = Number(x.price)
-            if (x.symbol && p > 0) karte.set(x.symbol, p)
-        }
-        letztePreise[markt] = { t: Date.now(), karte }
-        return karte
-    } catch (e) {
-        const status = e.response?.status
-        if (status === 429 || status === 418) melde429(status, e.response?.headers)
-        throw e
-    }
+    const anbieter = await marktdaten.fordere('ticker', { markt })
+    // Die Bremse rechnet in Binance-Gewicht — nur dort anstehen. Gewicht und
+    // 429/418 meldet der Binance-Anbieter selbst.
+    if (anbieter.id === 'binance') await warteAufGewicht(PREIS_GEWICHT[markt])
+    const roh = await anbieter.preise({ markt })
+    const karte = new Map()
+    for (const [sym, p] of roh) if (sym && p > 0) karte.set(sym, p)
+    letztePreise[markt] = { t: Date.now(), karte, quelle: anbieter.id }
+    return karte
 }
+
+// Einmal melden, dass der Takt mangels Marktdaten ruht — alle 5 s dieselbe Zeile wäre Lärm.
+let ausGemeldet = false
 
 // ── Meldung ──────────────────────────────────────────────────────────────
 function zahl(p) {
@@ -238,8 +236,9 @@ async function einTakt() {
 
         const preise = {}
         for (const markt of new Set(alarme.map((a) => a.markt))) {
-            try { preise[markt] = await holePreise(markt) } catch (e) {
-                logWarn('chart-alarme', `Preise ${markt}: ${e.message}`)
+            try { preise[markt] = await holePreise(markt); ausGemeldet = false } catch (e) {
+                if (!marktdaten.istAus(e)) logWarn('chart-alarme', `Preise ${markt}: ${e.message}`)
+                else if (!ausGemeldet) { ausGemeldet = true; logWarn('chart-alarme', `Alarme ruhen: ${e.message}`) }
             }
         }
 
@@ -337,10 +336,17 @@ export function setupChartAlarmRoutes(app) {
             const knex = getKnex()
             const { fehler, daten } = await pruefeEingabe(req.body || {}, knex)
             if (fehler) return res.status(400).json({ error: fehler })
-            // Die Alarme laufen auf Binance-Kursen; ein Symbol, das Binance nicht führt
-            // (nur Bitunix/Bitget), käme im Takt nie an — sagen statt still nie auslösen.
-            if ((await symbolBeiBinance(daten.symbol, daten.markt)) === false) {
-                return res.status(400).json({ error: `${daten.symbol} gibt es bei Binance ${daten.markt === 'spot' ? 'Spot' : 'Futures'} nicht — die Alarme laufen auf Binance-Kursen` })
+            // Die Alarme laufen auf den Kursen der Marktdatenquelle; ein Symbol, das sie nicht
+            // führt (nur Bitunix), käme im Takt nie an — sagen statt still nie auslösen.
+            // Ohne Marktdaten gar nicht anlegen: der Alarm könnte nie auslösen.
+            let gefuehrt
+            try { gefuehrt = await symbolBeiQuelle(daten.symbol, daten.markt) } catch (e) {
+                if (marktdaten.sendeWennAus(res, e)) return
+                throw e
+            }
+            if (gefuehrt === false) {
+                const quelle = letztePreise[daten.markt].quelle === 'bitget' ? 'Bitget' : 'Binance'
+                return res.status(400).json({ error: `${daten.symbol} gibt es bei ${quelle} ${daten.markt === 'spot' ? 'Spot' : 'Futures'} nicht — die Alarme laufen auf ${quelle}-Kursen` })
             }
             const [zeile] = await knex('chart_alarme').insert({
                 einmalig: 1, aktiv: 1, kanaele: JSON.stringify({ push: true, mail: true }),

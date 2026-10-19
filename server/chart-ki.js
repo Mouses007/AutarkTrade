@@ -10,8 +10,12 @@
  *      stützen darf, steht in der Eingabe (Kerzen, eigene Linien, Hebelzonen).
  *   2. Keine Prognose, kein Kursziel, keine Empfehlung — wohl aber Marken und
  *      Bedingungen („solange über X …"). Geprüft mit demselben Wächter wie die
- *      Coin-Radar-Einordnung (`pruefeEinordnung`); ist in den Einstellungen
- *      `kiEmpfehlungenAn` gesetzt, entfällt die Prüfung wie bei der Handelslage.
+ *      Coin-Radar-Einordnung (`pruefeEinordnung`). Die Prüfung gilt IMMER:
+ *      den Schalter `kiEmpfehlungenAn`, der sie abschaltete, gibt es seit S12
+ *      (19.10.2026) nicht mehr — eine persönliche Kauf-/Verkaufsempfehlung
+ *      verlangt bei den KI-Anbietern menschliche Prüfung (Verkaufs-Prüfung 2.8).
+ *   5. Die Antwort trägt `kiGeneriert: true` (EU AI Act Art. 50) — die
+ *      Oberfläche hängt daran das Label „KI-generiert – keine Anlageberatung“.
  *   3. GET erzeugt nie. Ein Lauf je Symbol+Zeiteinheit wird zusammengelegt,
  *      und zwischen zwei erzwungenen Läufen liegen mindestens 45 s.
  *   4. Was die Prüfung verwirft, steht im Protokoll und in der Antwort
@@ -33,6 +37,7 @@ import { getClosedCandles, isValidTimeframe } from './market-data.js'
 import { holeHebelzonen } from './hebelzonen.js'
 import { pruefeEinordnung } from './coin-radar/einordnung.js'
 import { tradesAusZeilen } from './chart-journal.js'
+import { sendeWennAus } from './quellen/aus.js'
 import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon } from './chart-kandidaten.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
@@ -96,7 +101,7 @@ export function filterePaket(paket, a) {
     return { ...paket, kandidaten: paket.kandidaten.filter((k) => a[QUELLE_ZU_AUSWAHL[k.quelle]] !== false) }
 }
 
-export function systemText(englisch, empfehlungen, auswahl = AUSWAHL_STANDARD) {
+export function systemText(englisch, auswahl = AUSWAHL_STANDARD) {
     const a = normAuswahl(auswahl)
     const sprache = englisch ? 'Write all texts in English.' : 'Schreibe alle Texte auf Deutsch.'
     const quellen = [a.niveaus && 'Niveaus (N…)', a.volumen && 'Volumenprofil-Marken (V…)', a.trend && 'ungebrochene Trendlinien (T…)', a.htf && 'Marken der höheren Zeiteinheit (D…)'].filter(Boolean).join(', ')
@@ -111,7 +116,7 @@ export function systemText(englisch, empfehlungen, auswahl = AUSWAHL_STANDARD) {
         a.niveaus ? '- Niveaus mit vielen Durchquerungen sind Drehpunkte der Spanne, keine harte Grenze — sag das.' : null,
         a.bedingungen ? '- Bedingungen: an eine ID gebunden; "richtung" ueber/unter meint einen Schluss der Zeiteinheit jenseits der Marke; "ziel" (optional) ist die nächste ID in dieser Richtung.' : '- Keine Bedingungen. Gib "bedingungen": [] zurück.',
         '- Stütze dich NUR auf die Eingabe. Keine Nachrichten, kein Allgemeinwissen über den Coin.',
-        empfehlungen ? null : `- KEINE Prognose, KEIN Kursziel, KEINE Handelsempfehlung, kein "dürfte", kein "wird steigen/fallen", kein "kaufen/verkaufen".${a.bedingungen ? ' "ziel" ist die nächste Marke, kein Kursziel —' : ''} beschreibe, was ein Bruch bedeuten würde.`,
+        `- KEINE Prognose, KEIN Kursziel, KEINE Handelsempfehlung, kein "dürfte", kein "wird steigen/fallen", kein "kaufen/verkaufen".${a.bedingungen ? ' "ziel" ist die nächste Marke, kein Kursziel —' : ''} beschreibe, was ein Bruch bedeuten würde.`,
         `- Höchstens ${MAX_LINIEN} Linien${a.trend ? ` (davon höchstens ${MAX_TRENDS} Trendlinien)` : ''}${a.zonen ? `, ${MAX_ZONEN} Zonen` : ''}${a.bedingungen ? `, ${MAX_BEDINGUNGEN} Bedingungen` : ''}. Lieber wenige gute.`,
         '- Beschriftung "label" höchstens 40 Zeichen, "grund" höchstens 200 Zeichen.',
         `- ${sprache}`,
@@ -140,15 +145,15 @@ const ID_RE = /\[([A-Za-z]\d{1,2})\]/g
  * Das Modell nennt IDs; Preise und Zeiten kommen ausschliesslich aus `paket`.
  * Verworfen wird mit Grund: unbekannte ID, Zone aus einer Trendlinie, zu
  * breite oder nicht benachbarte Zone, Ziel gegen die Richtung, doppelt,
- * zu viele, Prognose/Empfehlung (ausser `empfehlungen`). Zahlen im Text, die
+ * zu viele, Prognose/Empfehlung (immer, siehe Kopf Punkt 2). Zahlen im Text, die
  * zu keiner Marke passen, kommen nur in `warnungen` (erst beobachten, dann
  * scharf schalten).
  */
-export function pruefeChartAuswahl(json, paket, { empfehlungen = false, auswahl = AUSWAHL_STANDARD } = {}) {
+export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD } = {}) {
     const wahl = normAuswahl(auswahl)
     const verworfen = []
     const warnungen = []
-    const textOk = (t) => empfehlungen || pruefeEinordnung({ text: t }).ok
+    const textOk = (t) => pruefeEinordnung({ text: t }).ok
     const wort = (x, max) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, max)
     const A = paket.atr, kurs = paket.kurs
     const karte = new Map(paket.kandidaten.map((k) => [k.id, k]))
@@ -325,14 +330,13 @@ export async function ladeChartDaten({ symbol, interval, markt = 'futures', anza
         markt === 'spot' ? null : holeHebelzonen(symbol).catch(() => null),
         knex('trades').select('dateUnix', 'broker', 'trades')
             .where('dateUnix', '>=', Math.floor(vonT / 1000) - 7 * 86400).catch(() => []),
-        knex('settings').select('language', 'kiEmpfehlungenAn').where('id', 1).first().catch(() => null),
+        knex('settings').select('language').where('id', 1).first().catch(() => null),
     ])
     const zeichnungen = zeichnungenRoh.map((z) => ({ ...z, punkte: JSON.parse(z.punkte || '[]'), stil: JSON.parse(z.stil || '{}') }))
     const trades = tradesAusZeilen(tagesZeilen, symbol, vonT, Date.now())
     return {
         kerzen, zeichnungen, hebel, trades,
         englisch: s?.language === 'en',
-        empfehlungen: Number(s?.kiEmpfehlungenAn ?? 0) === 1,
     }
 }
 
@@ -356,7 +360,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
 
     const lauf = (async () => {
         const intervalHtf = HTF_VON[interval] || null
-        const [{ kerzen, zeichnungen, hebel, trades, englisch, empfehlungen }, kerzenHtf] = await Promise.all([
+        const [{ kerzen, zeichnungen, hebel, trades, englisch }, kerzenHtf] = await Promise.all([
             ladeChartDaten({ symbol, interval, markt }),
             intervalHtf && wahl.htf ? getClosedCandles(symbol, intervalHtf, HTF_KERZEN, { market: markt }).catch(() => null) : null,
         ])
@@ -373,7 +377,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         // Inhalt bei voller Rechnung — deshalb grosszügig, und bei
         // abgeschnittenem JSON einmal mit doppeltem Deckel.
         cfg.maxTokens = 3000
-        const system = systemText(englisch, empfehlungen, wahl)
+        const system = systemText(englisch, wahl)
         const user = baueChartEingabe({ symbol, interval, paket, hebelzonen: wahl.hebel ? hebel : null, trades })
         const buchung = { zweck: 'chart-analyse', ausloeser: 'manuell', bezug: { typ: 'symbol', id: symbol } }
         let antwort = await callLLMJson(cfg, { system, user, timeoutMs: 90000, ...buchung })
@@ -384,7 +388,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
             antwort = await callLLMJson(cfg, { system, user, timeoutMs: 90000, ...buchung })
             if (antwort.costUsd != null) kosten = (kosten ?? 0) + antwort.costUsd
         }
-        const ergebnis = pruefeChartAuswahl(antwort.json, paket, { empfehlungen, auswahl: wahl })
+        const ergebnis = pruefeChartAuswahl(antwort.json, paket, { auswahl: wahl })
         for (const v of ergebnis.verworfen) logWarn('chart-ki', `${symbol} ${interval}: ${v.art} verworfen (${v.grund}) — ${v.inhalt}`)
         for (const w of ergebnis.warnungen) logWarn('chart-ki', `${symbol} ${interval}: Zahl ${w.zahl} in ${w.wo} passt zu keiner Marke`)
         if (ergebnis.leer) throw new Error('Die KI hat keine verwertbare Analyse geliefert')
@@ -392,6 +396,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         const payload = {
             symbol, interval, ...ergebnis, kerzenVon: vonT, kerzenBis: bisT, auswahl: kandidatenKurz(paket), optionen: wahl,
             markt, provider: cfg.provider, model: cfg.model, costUsd: kosten,
+            kiGeneriert: true,
         }
         cache.set(schluessel, { ts: Date.now(), payload })
         while (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value)
@@ -425,6 +430,7 @@ export function setupChartKiRoutes(app) {
         try {
             res.json(await erzeugeChartAnalyse({ symbol, interval, markt: req.body?.markt === 'spot' ? 'spot' : 'futures', auswahl: req.body?.auswahl }))
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logWarn('chart-ki', `${symbol} ${interval}: ${e.message}`)
             res.status(e.status === 429 || e.status === 400 ? e.status : 502).json({ error: e.message })
         }

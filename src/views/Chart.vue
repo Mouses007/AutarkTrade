@@ -33,6 +33,8 @@ import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoesch
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { api, standardLayout, vervollstaendige, passeAnRaster, PANELS_JE_RASTER, STANDARD_WATCHLIST } from '../utils/chart/arbeitsplatz.js'
+import { passePanelAn, vorgabeBoerse } from '../utils/chart/kerzenQuelle.js'
+import { ladeMarktdaten } from '../utils/marktdaten.js'
 
 const { t } = useI18n()
 const telefon = useIstTelefon()
@@ -72,10 +74,14 @@ let ignoriereNaechsteAenderung = false
 // was davon abweicht (vorher speicherte jeder Seitenabbau, auch ein unberührter Hintergrund-Tab).
 let gespeichertText = ''
 const konfliktHinweis = ref('')
+/** Gespeicherte Binance-Panels wurden auf die Marktdatenquelle umgestellt (S12). */
+const quellenHinweis = ref('')
 const standVon = (id) => layouts.value.find((l) => l.id === id)?.geaendertAm
 
 async function lade() {
     try {
+        // Erst die Marktdatenquelle kennen: sie entscheidet, ob Binance-Panels bleiben dürfen.
+        await ladeMarktdaten()
         let liste = await api.layouts()
         if (!liste.length) liste = [await api.layoutNeu(t('chart.layoutStandard'), standardLayout(), true)]
         layouts.value = liste
@@ -94,8 +100,18 @@ async function lade() {
 function waehleLayout(layout) {
     ignoriereNaechsteAenderung = true
     layoutId.value = layout.id
-    daten.value = vervollstaendige(layout.daten)
-    gespeichertText = JSON.stringify(daten.value)
+    const d = vervollstaendige(layout.daten)
+    gespeichertText = JSON.stringify(d)
+    /*
+     * Panels auf Binance-Kerzen, obwohl Binance nicht (mehr) die Marktdaten-
+     * quelle ist: auf die Vorgabe-Börse stellen und das sagen. Der Text oben
+     * bleibt der alte Stand, damit die Umstellung gespeichert wird.
+     */
+    if (d.panels.map(passePanelAn).some(Boolean)) {
+        const name = { bitget: 'Bitget', bitunix: 'Bitunix' }[vorgabeBoerse()] || vorgabeBoerse()
+        quellenHinweis.value = t('chart.quelleUmgestellt', { quelle: name })
+    }
+    daten.value = d
     const i = layouts.value.findIndex((l) => l.id === layout.id)
     if (i >= 0) layouts.value[i] = { ...layouts.value[i], geaendertAm: layout.geaendertAm }
 }
@@ -542,6 +558,9 @@ watch(sichtbareAnzahl, async () => {
         <Hinweis v-if="ladeFehler" art="warn" class="seitenHinweis">{{ t('chart.arbeitsplatzFehler') }}: {{ ladeFehler }}</Hinweis>
         <Hinweis v-if="konfliktHinweis" art="info" schliessbar class="seitenHinweis knapp" @zu="konfliktHinweis = ''">
             {{ konfliktHinweis }}
+        </Hinweis>
+        <Hinweis v-if="quellenHinweis" art="info" schliessbar class="seitenHinweis knapp" @zu="quellenHinweis = ''">
+            {{ quellenHinweis }}
         </Hinweis>
 
         <template v-if="bereit">

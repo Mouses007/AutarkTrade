@@ -129,7 +129,7 @@ async function runModelAnalysisAgent() {
             <h3 class="zwischentitel oben">{{ t('settings.ki.costTitle') }}</h3>
             <p class="leise">
                 <strong>{{ t('settings.ki.costEstimate') }}</strong><br />
-                <code>Claude Opus: $50–150</code> · <code>GPT-4o: $30–100</code> · <code>Llama 70B: $5–20</code> · <code>DeepSeek: $5–15</code>
+                <code>Claude Opus: $50–150</code> · <code>GPT-4o: $30–100</code> · <code>Llama 70B: $5–20</code>
             </p>
             <p class="leise hinweiszeile">
                 <Symbol name="info" :groesse="14" />

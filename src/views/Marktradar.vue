@@ -16,6 +16,7 @@ import PageInfo from '../components/PageInfo.vue'
 import RadarKachel from '../components/RadarKachel.vue'
 import SymbolWahl from '../components/livetrading/SymbolWahl.vue'
 import RadarOverlay from '../components/RadarOverlay.vue'
+import QuelleAus from '../components/quellen/QuelleAus.vue'
 import KachelFearGreed from '../components/radar/KachelFearGreed.vue'
 import KachelDominanz from '../components/radar/KachelDominanz.vue'
 import KachelFunding from '../components/radar/KachelFunding.vue'
@@ -127,8 +128,8 @@ function waehleAnsicht(wert) {
 const immerLaden = computed(() => ansicht.value === 'pult' ? PULT_KACHELN : [])
 
 const {
-    gridEl, daten, zustand, stand, fehler, kachelParams,
-    alleKacheln, sichtbareKacheln, gesamtZustand,
+    gridEl, daten, aus, zustand, stand, fehler, kachelParams,
+    alleKacheln, sichtbareKacheln, gesamtZustand, quellenVon, quellenGeladen,
     offeneKachel, offeneDefinition, showConfigDropdown, configRef,
     ladeKachel, ladeFaellige, beiUmschalten, isVisible, setzeKachelZustand,
     setzeParams, setzeAnzeige, stilFuer, starteGroesse, setzeGroesseZurueck,
@@ -330,7 +331,7 @@ watch(() => daten.funding, (d) => {
              als im Live-Fenster hängt hier keine Kachel an einem WebSocket, eine
              zweite Instanz kostet also nichts ausser Platz. Der Lage-Fuss
              braucht sie, um den ganzen Bericht zu zeigen. -->
-        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :zustand="zustand" :stand="stand"
+        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :zustand="zustand" :stand="stand" :quellen="quellenGeladen"
             :kachel-params="kachelParams" :komponenten="KOMPONENTEN" :symbol="liveSymbol"
             @params="setzeParams" @anzeige="setzeAnzeige"
             @zustand="(id, z, extra) => setzeKachelZustand(id, z, extra)"
@@ -342,6 +343,7 @@ watch(() => daten.funding, (d) => {
                 :style="stilFuer(kachel)">
                 <RadarKachel :titel="t(kachel.titleKey)" :icon="kachel.icon" :info-key="kachel.infoKey" :zustand="zustand[kachel.id] || 'idle'"
                     :stand="stand[kachel.id] || 0" :fehler="fehler[kachel.id] || ''" :hat-daten="!!daten[kachel.id]"
+                    :aus="aus[kachel.id] || null" :quellen="quellenVon[kachel.id] || []"
                     @gross="offeneKachel = kachel.id" @neuladen="ladeKachel(kachel.id, true)"
                     @groesse-start="starteGroesse(kachel, $event)" @groesse-zurueck="setzeGroesseZurueck(kachel)">
                     <!-- `neuladen` aus der Kachel heraus: eine Kachel, die selbst
@@ -360,9 +362,10 @@ watch(() => daten.funding, (d) => {
         <div v-if="ansicht === 'raster' && !sichtbareKacheln.length" class="radarLeer">{{ t('marktradar.allHidden') }}</div>
 
         <!-- Gross: dieselbe Komponente, dieselben Daten, nur mit mehr Platz -->
-        <RadarOverlay v-if="offeneKachel && daten[offeneKachel]" :titel="t(offeneDefinition.titleKey)"
-            :info-key="offeneDefinition.infoKey" :quelle="offeneDefinition.quelle" @schliessen="offeneKachel = null">
-            <component :is="KOMPONENTEN[offeneKachel]" :daten="daten[offeneKachel]" :gross="true"
+        <RadarOverlay v-if="offeneKachel && (daten[offeneKachel] || aus[offeneKachel])" :titel="t(offeneDefinition.titleKey)"
+            :info-key="offeneDefinition.infoKey" :quelle="quellenVon[offeneKachel] || []" @schliessen="offeneKachel = null">
+            <QuelleAus v-if="aus[offeneKachel]" :aus="aus[offeneKachel]" />
+            <component v-else :is="KOMPONENTEN[offeneKachel]" :daten="daten[offeneKachel]" :gross="true"
                 :params="kachelParams[offeneKachel] || {}"
                 @params="setzeParams(offeneKachel, $event)"
                 @anzeige="setzeAnzeige(offeneKachel, $event)"

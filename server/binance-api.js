@@ -1,32 +1,31 @@
 /**
- * Binance Public API Proxy
- * Proxied die kostenlosen, öffentlichen Binance-Endpoints (Klines, Orderbuch-
- * Snapshot, Symbol-Metadaten) um CORS zu vermeiden. Kein API-Key nötig.
+ * Marktdaten-Proxy (Routen-Namen `/api/binance/*` aus der Zeit, als es nur
+ * Binance gab — die Namen bleiben, damit gespeicherte Seiten und Skripte
+ * weiterlaufen).
  *
- * Die Live-Analyse (Heatmap/Bookmap) holt sich den Depth-Snapshot hierüber und
- * abonniert den Diff-Stream danach direkt per WebSocket aus dem Browser.
+ * Seit S12 läuft alles über `server/marktdaten/index.js`:
+ *   /klines, /exchange-info  über die gewählte Marktdatenquelle (Binance
+ *                            oder Bitget); bei Binance unverändert die rohe
+ *                            Binance-Antwort.
+ *   /depth                   nur Binance: der Snapshot ist der Ankerpunkt für
+ *                            den Diff-Stream der Bookmap (`lastUpdateId`),
+ *                            ohne Streams ist er wertlos → Fähigkeit `streams`.
+ *   /leverage-map            nur Binance: Open-Interest-Historie und Taker-
+ *                            Volumen gibt es bei keinem anderen Anbieter.
+ * Fehlt die Fähigkeit, antwortet die Route mit `{ aus: true, … }` (HTTP 200).
+ *
+ * Die Gewichtsbremse sieht jeden Binance-Abruf weiterhin: `binanceHole` und
+ * der Binance-Anbieter melden Gewicht und 429/418 an `binance-takt.js`
+ * (dieser Proxy und die Kerzen-Abrufe teilen sich EINE Binance-IP; zählte er
+ * nicht mit, träfe ein 429 als Erstes den Live-Stream).
  */
 
-import axios from 'axios'
-// Gemeinsame Gewichtsbremse: dieser Proxy und die Kerzen-Abrufe teilen
-// sich EINE Binance-IP. Zählte der Proxy nicht mit, träfe ein 429 als
-// Erstes den Live-Stream — also genau das, was am wenigsten warten kann.
-import { notiereGewicht, melde429 } from './binance-takt.js'
-
-const BASES = {
-    spot: 'https://api.binance.com',
-    futures: 'https://fapi.binance.com',
-}
+import * as marktdaten from './marktdaten/index.js'
 
 const PATHS = {
     spot: { depth: '/api/v3/depth', info: '/api/v3/exchangeInfo', klines: '/api/v3/klines' },
     futures: { depth: '/fapi/v1/depth', info: '/fapi/v1/exchangeInfo', klines: '/fapi/v1/klines' },
 }
-
-// Spot erlaubt max. 1000 Kerzen pro Abruf, Futures 1500.
-const KLINE_LIMITS = { spot: 1000, futures: 1500 }
-
-const HTTP_TIMEOUT = 10000
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 
 // Von Binance akzeptierte depth-Limits (Futures kennt kein 5000)
@@ -42,23 +41,24 @@ function pickMarket(query) {
 }
 
 function sendBinanceError(res, error, what) {
-    console.error(` -> Binance API Fehler (${what}):`, error.response?.data || error.message)
+    if (marktdaten.sendeWennAus(res, error)) return
+    console.error(` -> Marktdaten-Fehler (${what}):`, error.response?.data || error.message)
     if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-        return res.status(504).json({ error: `Binance antwortet nicht (${what}). Bitte später erneut versuchen.` })
+        return res.status(504).json({ error: `Die Marktdatenquelle antwortet nicht (${what}). Bitte später erneut versuchen.` })
     }
     const status = error.response?.status || 500
     if (status === 429 || status === 418) {
-        // Die Strafe gilt der IP, nicht diesem Endpunkt. Ohne diese Meldung
-        // liefen die Kerzen-Abrufe munter weiter und holten sich die nächste —
-        // die gemeinsame Bremse erfährt es sonst nie.
-        melde429(status, error.response?.headers)
-        return res.status(429).json({ error: 'Binance-Rate-Limit erreicht. Bitte kurz warten.' })
+        // Die Strafe gilt der IP, nicht diesem Endpunkt — die gemeinsame
+        // Bremse muss davon erfahren. Sie kennt sie schon: jeder Binance-Abruf läuft über
+        // `marktdaten/binance.js:hole`, das 429/418 selbst meldet. Ein 429 von
+        // Bitget gehört NICHT an die Binance-Bremse.
+        return res.status(429).json({ error: 'Rate-Limit der Marktdatenquelle erreicht. Bitte kurz warten.' })
     }
     res.status(status).json({ error: error.response?.data?.msg || `${what} fehlgeschlagen: ${error.message}` })
 }
 
 // exchangeInfo ist roh 3-5 MB und ändert sich selten → geslimmt cachen.
-const infoCache = new Map()   // market -> { ts, payload }
+const infoCache = new Map()   // quelle|market -> { ts, payload }
 const INFO_CACHE_MS = 6 * 60 * 60 * 1000
 
 // ── Hebelkarte: Open Interest + Kerzen ──────────────────────
@@ -92,11 +92,9 @@ async function lese1mOiReihe(symbol) {
             .select('t', 'oi')
         if (!zeilen.length) return null
 
-        const stuetzenRes = await axios.get(`${BASES.futures}/futures/data/openInterestHist`, {
-            params: { symbol, period: '5m', limit: 110 }, timeout: HTTP_TIMEOUT,
-        })
-        notiereGewicht(stuetzenRes.headers)
-        const fuenfMin = (Array.isArray(stuetzenRes.data) ? stuetzenRes.data : [])
+        const stuetzen = await marktdaten.binanceHole('oiHistorie', 'futures', '/futures/data/openInterestHist',
+            { symbol, period: '5m', limit: 110 })
+        const fuenfMin = (Array.isArray(stuetzen) ? stuetzen : [])
             .map(h => ({ t: Number(h.timestamp), oi: Number(h.sumOpenInterest) }))
 
         const { fuelleOiLuecken } = await import('./oi-archiv.js')
@@ -106,9 +104,8 @@ async function lese1mOiReihe(symbol) {
         // 1m verkleidete 5m-Stufenfunktion — dann lieber ehrlich 5m liefern.
         if (abdeckung < 0.6 || reihe.length < 20) return null
         return reihe.map(p => ({ timestamp: p.t, sumOpenInterest: p.oi, sumOpenInterestValue: 0 }))
-    } catch (fehler) {
-        const status = fehler.response?.status
-        if (status === 429 || status === 418) melde429(status, fehler.response?.headers)
+    } catch {
+        // 429/418 hat `binanceHole` schon an die Bremse gemeldet.
         return null
     }
 }
@@ -163,6 +160,14 @@ function slimExchangeInfo(raw, market) {
     return { market, serverTime: raw.serverTime, symbols }
 }
 
+/** Dieselbe schlanke Form aus der gemeinsamen Symbolliste (`marktdaten.symbole`). */
+function slimAusSymbolen(map, market) {
+    const symbols = [...map.values()]
+        .map((s) => ({ symbol: s.symbol, base: s.basis, quote: s.quote, tickSize: s.tickSize || null, stepSize: s.stepSize || null }))
+        .sort((a, b) => a.symbol.localeCompare(b.symbol))
+    return { market, serverTime: Date.now(), symbols }
+}
+
 /**
  * Rohdaten der Hebelkarte beschaffen: Open-Interest-Historie, Kerzen und die
  * Kontenquote, auf denselben Zeitraster zusammengeführt.
@@ -191,6 +196,9 @@ function slimExchangeInfo(raw, market) {
  * @returns {Promise<{payload: object, cache: 'HIT'|'MISS'}>}
  */
 export async function holeLeverageMapPunkte(symbol, period = '5m', { force = false } = {}) {
+    // Vor dem Cache: mit abgewählter Binance-Quelle darf auch ein warmer
+    // Eintrag nichts mehr ausliefern. Wirft `MarktdatenAus`.
+    await marktdaten.binanceRest('oiHistorie', 'futures')
     let p = LEVMAP_PERIODS[period] ? period : '5m'
     /*
      * Der Cache-Schlüssel ist `symbol|period` OHNE limit. Würde hier die
@@ -225,23 +233,18 @@ export async function holeLeverageMapPunkte(symbol, period = '5m', { force = fal
     // /futures/data/… liegt NICHT unter /fapi/v1.
     // Die Kontenquote kennt kein 1m — dort bleibt 5m die feinste Stufe.
     const ratioPeriod = p === '1m' ? '5m' : p
-    const [histRes, nowRes, ratioRes] = await Promise.all([
+    // Gewicht meldet `binanceHole` an die gemeinsame IP-Bremse — diese Route
+    // tat das früher als einzige nicht (Audit-Fund 31.08.2026).
+    const [histRoh, jetzt, ratio] = await Promise.all([
         histEigen
             ? null
-            : axios.get(`${BASES.futures}/futures/data/openInterestHist`,
-                { params: { symbol, period: p, limit }, timeout: HTTP_TIMEOUT }),
-        axios.get(`${BASES.futures}/fapi/v1/openInterest`,
-            { params: { symbol }, timeout: HTTP_TIMEOUT }),
-        axios.get(`${BASES.futures}/futures/data/globalLongShortAccountRatio`,
-            { params: { symbol, period: ratioPeriod, limit: 1 }, timeout: HTTP_TIMEOUT }).catch(() => null),
+            : marktdaten.binanceHole('oiHistorie', 'futures', '/futures/data/openInterestHist', { symbol, period: p, limit }),
+        marktdaten.binanceHole('oiHistorie', 'futures', '/fapi/v1/openInterest', { symbol }),
+        marktdaten.binanceHole('longShort', 'futures', '/futures/data/globalLongShortAccountRatio',
+            { symbol, period: ratioPeriod, limit: 1 }).catch(() => null),
     ])
-    // Gewicht an die gemeinsame IP-Bremse melden — diese Route tat das
-    // als einzige nicht (Audit-Fund 31.08.2026).
-    notiereGewicht(nowRes.headers)
-    if (histRes) notiereGewicht(histRes.headers)
-    if (ratioRes) notiereGewicht(ratioRes.headers)
 
-    const hist = histEigen || (Array.isArray(histRes?.data) ? histRes.data : [])
+    const hist = histEigen || (Array.isArray(histRoh) ? histRoh : [])
     if (!hist.length) {
         const leer = {
             symbol, period: p, points: [],
@@ -253,25 +256,24 @@ export async function holeLeverageMapPunkte(symbol, period = '5m', { force = fal
 
     // startTime eine Periode früher: jeder OI-Punkt braucht die bei
     // seinem Zeitstempel ENDENDE Kerze (siehe mergeLeverageMapPoints)
-    const klinesRes = await axios.get(`${BASES.futures}/fapi/v1/klines`, {
-        params: { symbol, interval: p, startTime: Number(hist[0].timestamp) - periodMs, limit: hist.length + 2 },
-        timeout: HTTP_TIMEOUT,
-    })
-    notiereGewicht(klinesRes.headers)
+    // Rohe Binance-Kerzen, nicht `marktdaten.kerzen`: das Modell braucht
+    // Spalte 9 (Taker-Kaufvolumen), die die gemeinsame Kerzenform nicht trägt.
+    const klines = await marktdaten.binanceHole('takerVolumen', 'futures', '/fapi/v1/klines',
+        { symbol, interval: p, startTime: Number(hist[0].timestamp) - periodMs, limit: hist.length + 2 })
 
-    const points = mergeLeverageMapPoints(hist, klinesRes.data, periodMs)
+    const points = mergeLeverageMapPoints(hist, Array.isArray(klines) ? klines : [], periodMs)
     const letzte = points[points.length - 1]
 
     const payload = {
         symbol, period: p,
-        openInterest: Number(nowRes.data?.openInterest) || 0,
+        openInterest: Number(jetzt?.openInterest) || 0,
         spanneMs: points.length ? letzte.t - points[0].t : 0,
         // Seit dem End-Join ist jede zugeordnete Kerze abgeschlossen (sie
         // endet am OI-Zeitpunkt) — eine „laufende Periode" gibt es im
         // Datensatz nicht mehr. Feld bleibt für die Client-Kompatibilität.
         unvollstaendig: false,
-        accountRatio: ratioRes?.data?.[0]
-            ? { long: +ratioRes.data[0].longAccount, short: +ratioRes.data[0].shortAccount }
+        accountRatio: ratio?.[0]
+            ? { long: +ratio[0].longAccount, short: +ratio[0].shortAccount }
             : null,
         points,
     }
@@ -312,10 +314,11 @@ export function setupBinanceRoutes(app) {
                 return res.status(400).json({ error: 'market muss "spot" oder "futures" sein' })
             }
 
+            const anbieter = await marktdaten.fordere('kerzen', { markt: market })
             const params = {
                 symbol: String(symbol).toUpperCase().slice(0, 20),
                 interval: interval || '1m',
-                limit: Math.min(Math.max(1, parseInt(limit, 10) || 1000), KLINE_LIMITS[market]),
+                limit: Math.min(Math.max(1, parseInt(limit, 10) || 1000), anbieter.KERZEN_MAX[market]),
             }
 
             // Zeitfenster ist optional — aber entweder beide Grenzen oder keine.
@@ -335,11 +338,18 @@ export function setupBinanceRoutes(app) {
             const fenster = params.startTime
                 ? `von ${new Date(params.startTime).toISOString()} bis ${new Date(params.endTime).toISOString()}`
                 : `letzte ${params.limit}`
-            console.log(` -> Binance klines (${market}): ${params.symbol} ${params.interval} ${fenster}`)
+            console.log(` -> ${anbieter.name} klines (${market}): ${params.symbol} ${params.interval} ${fenster}`)
 
-            const response = await axios.get(`${BASES[market]}${PATHS[market].klines}`, { params, timeout: HTTP_TIMEOUT })
-            notiereGewicht(response.headers)
-            res.json(response.data)
+            if (anbieter.id === 'binance') {
+                // Binance: die rohe Antwort wie immer (Spalten 7–11 lesen manche Seiten).
+                return res.json(await anbieter.hole(market, PATHS[market].klines, params))
+            }
+            // Andere Anbieter in Binance-Spaltenform [t,o,h,l,c,v,closeTime] —
+            // die Seiten lesen nur 0–6.
+            const kerzen = await anbieter.kerzen(params.symbol, params.interval, {
+                markt: market, limit: params.limit, start: params.startTime, ende: params.endTime,
+            })
+            res.json(kerzen.slice(-params.limit).map((k) => [k.t, k.o, k.h, k.l, k.c, k.v, k.closeTime]))
 
         } catch (error) {
             sendBinanceError(res, error, 'Klines')
@@ -371,12 +381,8 @@ export function setupBinanceRoutes(app) {
             const wanted = parseInt(req.query.limit, 10) || allowed[allowed.length - 1]
             const limit = allowed.reduce((best, v) => Math.abs(v - wanted) < Math.abs(best - wanted) ? v : best, allowed[0])
 
-            const antwort = await axios.get(`${BASES[market]}${PATHS[market].depth}`, {
-                params: { symbol, limit },
-                timeout: HTTP_TIMEOUT
-            })
-            notiereGewicht(antwort.headers)
-            const { data } = antwort
+            // Nur mit Streams: ein Snapshot ohne Diff-Stream hat keinen Abnehmer.
+            const data = await marktdaten.binanceHole('streams', market, PATHS[market].depth, { symbol, limit })
 
             // Snapshots sind sekundengenau relevant — nichts zwischenspeichern
             res.setHeader('Cache-Control', 'no-store')
@@ -400,16 +406,19 @@ export function setupBinanceRoutes(app) {
                 return res.status(400).json({ error: 'market muss "spot" oder "futures" sein' })
             }
 
-            const cached = infoCache.get(market)
+            const anbieter = await marktdaten.fordere('symbole', { markt: market })
+            const key = `${anbieter.id}|${market}`
+            const cached = infoCache.get(key)
             if (cached && (Date.now() - cached.ts) < INFO_CACHE_MS && req.query.force !== '1') {
                 res.setHeader('X-Cache', 'HIT')
                 return res.json(cached.payload)
             }
 
-            const { data } = await axios.get(`${BASES[market]}${PATHS[market].info}`, { timeout: HTTP_TIMEOUT })
-            const payload = slimExchangeInfo(data, market)
-            infoCache.set(market, { ts: Date.now(), payload })
-            console.log(` -> Binance exchangeInfo (${market}): ${payload.symbols.length} Symbole gecacht`)
+            const payload = anbieter.id === 'binance'
+                ? slimExchangeInfo(await anbieter.hole(market, PATHS[market].info, {}, { timeout: 10000 }), market)
+                : slimAusSymbolen(await anbieter.symbole({ markt: market }), market)
+            infoCache.set(key, { ts: Date.now(), payload })
+            console.log(` -> ${anbieter.name} Symbolliste (${market}): ${payload.symbols.length} Symbole gecacht`)
             res.setHeader('X-Cache', 'MISS')
             res.json(payload)
 

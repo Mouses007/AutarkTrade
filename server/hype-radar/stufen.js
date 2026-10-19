@@ -47,9 +47,16 @@ export const ROLLEN = ['research', 'editor']
  * Preset muss verlässlich sein — wer Ollama will, wählt „manuell".
  */
 export const PROFILE = {
+    /*
+     * Bis S12 (19.10.2026) DeepSeek. DeepSeek verbietet die Nennung seines
+     * Namens ohne Erlaubnis (Terms 5.2, Verkaufs-Prüfung Z. 89d) und läuft
+     * jetzt nur noch als frei konfigurierter „OpenAI-kompatibler Endpunkt" —
+     * ein Preset darf nicht darauf zeigen, weil es keinen bekannten Betreiber
+     * und keine bekannten Modellnamen mehr hat. Qwen ist der günstige Ersatz.
+     */
     guenstig: {
-        research: { provider: 'deepseek', modell: 'deepseek-flash' },
-        editor: { provider: 'deepseek', modell: 'deepseek-v4-pro' },
+        research: { provider: 'qwen', modell: 'qwen3.8-flash' },
+        editor: { provider: 'qwen', modell: 'qwen3.7-plus' },
     },
     mittel: {
         research: { provider: 'moonshot', modell: 'kimi-k2.6' },

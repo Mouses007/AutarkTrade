@@ -163,7 +163,8 @@ async function lade(erzwingen = false) {
         if (data.unvollstaendig && p.length) p.pop()
         rohPunkte = p
         rohPeriode = data.period || period
-        hinweis.value = data.hinweis || ''
+        // `{ aus: true, meldung }`: OI-Historie nur mit Marktdatenquelle Binance (S12)
+        hinweis.value = data.hinweis || data.meldung || ''
         schneiden()
     } catch (e) {
         if (meine !== laufendeAnfrage) return

@@ -3,7 +3,6 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ModelManager from '@/components/ModelManager.vue'
-import Hinweis from '@/components/basis/Hinweis.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
@@ -11,11 +10,9 @@ import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
 import { currentUser } from '@/stores/settings.js'
-import { kiSpeichern } from '../gemeinsam/speichern.js'
 import { kiBereichWechseln } from '../gemeinsam/useKiBereich.js'
 import { useKiAnbieter } from '../gemeinsam/useKiAnbieter.js'
 import { fluxApiKey, geminiImageApiKey, shareCardProvider } from '../gemeinsam/useShareCard.js'
-import { kiEmpfehlungenAn } from '../gemeinsam/useRadarEinstellungen.js'
 
 const { t } = useI18n()
 
@@ -39,17 +36,9 @@ const {
             <Schalter :model-value="kiAn" :label="t('settings.aiEnabled')" :hilfe="t('settings.aiEnabledHint')"
                 @change="toggleAiEnabled" />
 
-            <!-- Handelsempfehlungen, Kursziele, Prognosen.
-                 Steht hier und nicht bei „Nachrichten", weil er ALLE
-                 KI-Ausgaben betrifft: Lagebericht, Gesamtlage-Kachel
-                 und Handelslage-Kachel im Live-Trading-Fenster. Vorgabe
-                 aus — das ist der Stand, den jeder Bestand hatte. -->
-            <Schalter v-model="kiEmpfehlungenAn" :label="t('settings.ki.empfehlungenAn')"
-                :hilfe="t('settings.ki.empfehlungenHint')"
-                @change="v => kiSpeichern('kiEmpfehlungenAn', v ? 1 : 0)" />
-            <Hinweis v-if="kiEmpfehlungenAn" art="warn" class="abstand">
-                {{ t('settings.ki.empfehlungenWarnung') }}
-            </Hinweis>
+            <!-- S12: KI-Ausgaben geben nie Handelsempfehlungen, Kursziele oder
+                 Prognosen; den früheren Schalter dafür gibt es nicht mehr. -->
+            <p class="leise block abstand">{{ t('settings.ki.keineEmpfehlungen') }}</p>
 
             <div v-show="kiAn">
                 <p class="einleitung abstand">{{ t('settings.kiDescription') }}</p>
@@ -64,6 +53,9 @@ const {
                             {{ aiProvider }} ({{ t('settings.providerRetired') }})
                         </option>
                     </select>
+                    <!-- Pflichthinweis des Anbieters (Text aus server/ai-models.js `hinweis`). -->
+                    <span v-if="aktuellerAnbieter?.hinweis" class="leise block">{{ t(aktuellerAnbieter.hinweis) }}</span>
+                    <span v-else-if="aiProvider === 'minimax'" class="warnung block">{{ t('kiHinweis.anbieter.minimax') }}</span>
                 </Feld>
 
                 <!-- Ollama URL (nur bei Ollama) -->
@@ -113,6 +105,7 @@ const {
                             <span class="liste-name">
                                 {{ anbieterName(a) }}
                                 <Pille v-if="a.id === aiProvider" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
+                                <span v-if="a.hinweis && a.id !== 'ollama'" class="leise block klein">{{ t(a.hinweis) }}</span>
                             </span>
                             <span class="liste-mitte mit-knopf">
                                 <input type="password" v-model="aiKeys[a.id]"
@@ -143,6 +136,7 @@ const {
                             <span class="liste-name">
                                 FLUX.2 <span class="leise">(Black Forest Labs)</span>
                                 <Pille v-if="shareCardProvider === 'flux'" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
+                                <span class="leise block klein">{{ t('kiHinweis.anbieter.flux') }}</span>
                             </span>
                             <span class="liste-mitte">
                                 <span v-if="fluxApiKey" class="gut klein">
@@ -160,6 +154,7 @@ const {
                             <span class="liste-name">
                                 Google Gemini <span class="leise">(Nano Banana)</span>
                                 <Pille v-if="shareCardProvider === 'gemini'" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
+                                <span class="leise block klein">{{ t('kiHinweis.anbieter.gemini') }}</span>
                             </span>
                             <span class="liste-mitte">
                                 <span v-if="geminiImageApiKey" class="gut klein">
@@ -274,6 +269,7 @@ const {
 .abstand { margin-top: var(--abstand-3); }
 .konsole { font-size: 0.85rem; }
 .klein { font-size: 0.85rem; }
+.warnung { color: var(--warn); }
 .betrifft { font-size: 0.75rem; margin-top: 0.15rem; }
 .temperatur { min-width: 2.75rem; justify-content: center; }
 .link {

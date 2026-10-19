@@ -5,35 +5,35 @@
  * Projekt dahinter herausfinden lässt:
  *
  *   Webseite      gelesen über `net-guard` — die Adresse stammt von Fremden
- *                 (DexScreener-Profil, pump.fun-Metadaten), und ohne den
+ *                 (DexScreener-Profil), und ohne den
  *                 Schutzwall wäre ein Tokenprofil ein bequemer Weg, den Server
  *                 ins eigene Netz zu schicken.
  *   Domain-Alter  über RDAP (`rdap.org` leitet zur zuständigen Registry weiter)
  *   GitHub        Konto, Repository und frühere Projekte desselben Kontos
- *   Ersteller     bei pump.fun: alle Coins derselben Wallet und ob einer davon
- *                 die Kurve geschafft hat — für Token ohne Seite und ohne Code
- *                 ist das die einzige Spur zum „Team".
+ *
+ * Die Ersteller-Bilanz (alle Coins derselben pump.fun-Wallet, ob einer die
+ * Kurve schaffte) ist seit S12 entfernt: sie kam aus dem inoffiziellen
+ * pump.fun-Frontend-API, dessen Bedingungen Bots und kommerzielle Nutzung
+ * verbieten (Verkaufs-Prüfung Z. 60). Ohne sie gibt es keine Spur zum
+ * „Team" eines Tokens ohne Seite und Code — der Teil ist unbekannt, nicht
+ * schlecht, und kostet keine Punkte.
  *
  * Gerechnet wird in `projekt-bewertung.js`; hier steht nur der Weg dorthin.
  * Jede Prüfung landet 24 Stunden in `hype_projekt`: GitHub erlaubt ohne
  * Schlüssel sechzig Anfragen je STUNDE, und dieselbe Seite ändert sich in
  * einem Tag selten.
  *
- * Die pump.fun-Pfade stammen aus dem inoffiziellen Frontend-API. Live geprüft
- * am 07.10.2026: `/coins/user-created-coins/{wallet}` gibt es dort nicht
- * (404), der Filter `/coins?creator={wallet}` liefert die Starts einer Wallet.
- * `/coins/{mint}` antwortet für jeden Coin mit 404 (10.10.2026), gelesen wird
- * `/coins-v2/{mint}` (`pumpCoin` in quellen.js). Jeder Teil fällt einzeln aus — dann
- * bleibt er „unbekannt" und kostet keine Punkte.
+ * Jeder Teil fällt einzeln aus — dann bleibt er „unbekannt" und kostet keine
+ * Punkte.
  */
 
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { holeText as holeGeschuetzt } from '../net-guard.js'
-import { holeJson, dexDetails, linksAusInfo, pumpCoin } from './quellen.js'
+import { holeJson, dexDetails } from './quellen.js'
 import {
     leseWebseite, registrierbareDomain, gratisPlattform, rdapRegistriert, ordneWebseite, ordneAbruffehler,
-    kanalAus, seitenBeleg, githubZiel, githubFakten, githubBeleg, erstellerBilanz, bewerteProjekt, PROJEKT_REGELN, hostVon,
+    kanalAus, seitenBeleg, githubZiel, githubFakten, githubBeleg, bewerteProjekt, PROJEKT_REGELN, hostVon,
 } from './projekt-bewertung.js'
 
 /** So lange gilt eine Prüfung. */
@@ -44,8 +44,6 @@ const ERZWINGEN_AB_MS = 5 * 60e3
 
 /** Wie viel Seitentext für den Bericht aufbewahrt wird. */
 const AUSZUG_ZEICHEN = 1500
-
-const PUMP = 'https://frontend-api-v3.pump.fun'
 
 /** EVM-Adressen ohne Rücksicht auf Gross/Klein — DexScreener schreibt sie mit Prüfsumme, andere klein. */
 const vertragKern = (c) => (/^0x[0-9a-f]{40}$/i.test(String(c || '')) ? String(c).toLowerCase() : String(c || ''))
@@ -136,7 +134,7 @@ async function geteiltMit(host, kandidat) {
  * behielte sonst einen Tag lang Pluspunkte für eine Seite, die nun drei Token
  * für sich beanspruchen.
  *
- * @param {object} kandidat  {symbol, name, chain, contract, links?, ersteller?, pump?}
+ * @param {object} kandidat  {symbol, name, chain, contract, links?, pump?}
  * @param {object} opts      {neu: true} erzwingt eine frische Prüfung (gebremst)
  * @returns {Promise<{note:number|null, befunde:Array, fakten:object, geprueftAm:number}>}
  */
@@ -175,7 +173,7 @@ export async function pruefeProjekt(kandidat, opts = {}) {
  * Mehrere Projekte prüfen, höchstens `parallel` gleichzeitig.
  *
  * Eine Prüfung wartet die meiste Zeit auf fremde Server (Webseite bis zehn
- * Sekunden, RDAP, GitHub, pump.fun). Fünfzehn hintereinander dauerten im
+ * Sekunden, RDAP, GitHub). Fünfzehn hintereinander dauerten im
  * ungünstigen Fall mehrere Minuten; drei gleichzeitig dritteln das, ohne
  * GitHub zu überrennen — dessen Eimer in `quellen.js` bremst ohnehin.
  *
@@ -210,23 +208,9 @@ async function pruefeFrisch(kandidat) {
         // Host einer Seite, die eine kuratierte Quelle (CoinGecko) dem Coin zuordnet.
         seiteBelegt: k.seiteBelegt ? hostVon(k.seiteBelegt) : '',
     }
-    // Die Frühphase weiss es genauer (Kurve, Quelle, Handelsplatz) — die Endung „pump" trägt nur jeder vierte nicht.
-    const istPump = k.chain === 'solana' && (k.pump === true || /pump$/i.test(String(k.contract || '')))
 
-    // ── Links und Ersteller zusammentragen ──────────────────────────────
+    // ── Links zusammentragen (DexScreener) ──────────────────────────────
     let links = k.links || null
-    let ersteller = String(k.ersteller || '')
-    if (istPump && (!links || !ersteller)) {
-        // Ausfall von pump.fun: dann eben ohne — die Prüfung soll nicht daran scheitern.
-        const coin = await pumpCoin(k.contract).catch((e) => {
-            logWarn('hype-projekt', `pump.fun ${String(k.contract).slice(0, 8)}…: ${e.message}`)
-            return null
-        })
-        if (coin) {
-            links = links || linksAusInfo(coin)
-            ersteller = ersteller || String(coin.creator || '')
-        }
-    }
     if (!links && k.contract) {
         const d = await dexDetails(k.contract).catch(() => null)
         links = d?.markt?.links || null
@@ -267,35 +251,12 @@ async function pruefeFrisch(kandidat) {
         })
     }
 
-    // ── Ersteller (pump.fun) ────────────────────────────────────────────
-    let erstellerFakten = null
-    if (istPump && ersteller) {
-        /*
-         * `/coins/user-created-coins/{wallet}` gibt es auf frontend-api-v3
-         * nicht (07.10.2026: „Cannot GET", HTTP 404 bei jeder Wallet) — die
-         * Ersteller-Bilanz war deshalb immer leer, und „hat schon Coins durch
-         * die Kurve gebracht" fiel nie. Die Coin-Liste nimmt `creator` als
-         * Filter: für eine Wallet mit vier Starts kamen genau diese vier. Ein
-         * vertippter Filter liefert dagegen still die fünfzig neuesten Coins
-         * ALLER Ersteller (gemessen 10.10.2026) — daher die Gegenprobe über
-         * `wallet` in `erstellerBilanz`.
-         */
-        const coins = await holeJson(
-            `${PUMP}/coins?creator=${encodeURIComponent(ersteller)}&offset=0&limit=50&sort=created_timestamp&order=DESC&includeNsfw=true`)
-            .catch((e) => {
-                logWarn('hype-projekt', `Ersteller-Historie ${ersteller.slice(0, 8)}…: ${e.message}`)
-                return null
-            })
-        erstellerFakten = erstellerBilanz(coins, { mint: k.contract, wallet: ersteller })
-    }
-
     const fakten = {
         token,
         webseite,
         kanaele,
         kanaeleVerworfen: verworfen,
         github,
-        ersteller: erstellerFakten ? { wallet: ersteller, ...erstellerFakten } : (ersteller ? { wallet: ersteller } : null),
     }
     const urteil = bewerteProjekt({
         token,
@@ -304,7 +265,6 @@ async function pruefeFrisch(kandidat) {
         kanaele: (links.kanaele?.length || links.webseiten?.length || webseite.status === 'ok') ? kanaele : null,
         kanaeleVerworfen: verworfen,
         github,
-        ersteller: erstellerFakten,
     })
     return { ...urteil, regel: PROJEKT_REGELN, fakten, geprueftAm: Date.now() }
 }
@@ -434,6 +394,5 @@ export function kurzfassung(ergebnis) {
             repo: ergebnis.fakten.github.repo,
             fruehereProjekte: ergebnis.fakten.github.fruehereProjekte,
         } : null,
-        ersteller: ergebnis.fakten?.ersteller || null,
     }
 }

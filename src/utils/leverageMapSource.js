@@ -196,13 +196,14 @@ export class LeverageMapSource {
                 spanneMs: data.spanneMs || 0,
                 unvollstaendig: !!data.unvollstaendig,
                 accountRatio: data.accountRatio || null,
-                hinweis: data.hinweis || '',
+                // `{ aus: true, meldung }`: OI-Historie gibt es nur mit Marktdatenquelle Binance (S12)
+                hinweis: data.hinweis || data.meldung || '',
             }
             this._schneiden()
             this.backoff = 60000
             if (!punkte.length) {
                 this.map = null
-                this.onStatus?.('empty', data.hinweis || 'keine Open-Interest-Historie')
+                this.onStatus?.('empty', data.hinweis || data.meldung || 'keine Open-Interest-Historie')
                 this.onMap?.()
                 return
             }

@@ -21,7 +21,7 @@ import { erzeugeEinordnung } from './coin-radar/einordnung.js'
 import { holeCoinInfo } from './coin-radar/coin-info.js'
 import { tiefensuche, tiefensucheVertrag } from './coin-radar/tiefensuche.js'
 import { pruefeEinzeln } from './coin-radar/einzel.js'
-import { leseSchluessel } from './hype-radar/einstellungen.js'
+import { sendeWennAus, istAus, ausAntwort } from './quellen/aus.js'
 import { legeAnCoinRadar, HORIZONTE } from './radar-ergebnisse.js'
 import { werteAus } from './radar-guete.js'
 import { raeumeRadarAuf } from './radar-aufraeumen.js'
@@ -175,10 +175,11 @@ export function setupCoinRadarRoutes(app) {
         try {
             const symbol = String(req.query.symbol || '').trim()
             if (!symbol) return res.status(400).json({ error: 'Symbol fehlt' })
-            const { coingecko } = await leseSchluessel()
-            const info = await holeCoinInfo(symbol, coingecko)
+            const info = await holeCoinInfo(symbol)
             res.json({ info })
         } catch (e) {
+            // Ohne CoinGecko-Schlüssel: 200 mit `{aus: true, …}` — ein Zustand, kein Fehler.
+            if (sendeWennAus(res, e)) return
             logWarn('coin-radar', `Coin-Info: ${e.message}`)
             res.status(502).json({ error: 'Projekt-Infos konnten nicht geladen werden' })
         }
@@ -188,7 +189,7 @@ export function setupCoinRadarRoutes(app) {
      * Tiefensuche: was hinter dem Coin steht — Verträge je Kette, Vertrags-
      * und Halterprüfung, On-Chain-Pools, Projektprüfung (`coin-radar/tiefensuche.js`).
      * GET wie die Einzelprüfung: schreibt nur in den Zwischenspeicher der
-     * Projektprüfung, kostet kein Geld, nur Abrufe ohne Schlüssel.
+     * Projektprüfung, kostet kein Geld; nach Symbol nur mit CoinGecko-Schlüssel.
      */
     app.get('/api/coin-radar/tiefensuche', async (req, res) => {
         try {
@@ -200,9 +201,9 @@ export function setupCoinRadarRoutes(app) {
             }
             const symbol = String(req.query.symbol || '').trim()
             if (!symbol) return res.status(400).json({ error: 'Symbol fehlt' })
-            const { coingecko } = await leseSchluessel()
-            res.json(await tiefensuche(symbol, coingecko))
+            res.json(await tiefensuche(symbol))
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logWarn('coin-radar', `Tiefensuche: ${e.message}`)
             res.status(502).json({ error: 'Die Tiefensuche ist fehlgeschlagen' })
         }
@@ -241,6 +242,7 @@ export function setupCoinRadarRoutes(app) {
             const bericht = await pruefeEinzeln(eingabe, einst)
             res.json({ bericht, konstanten: KONSTANTEN })
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logWarn('coin-radar', `Einzelprüfung: ${e.message}`)
             res.status(502).json({ error: 'Der Coin konnte nicht gemessen werden' })
         }
@@ -350,6 +352,7 @@ export function setupCoinRadarRoutes(app) {
         try {
             res.json(await abverkaufUebersicht())
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logWarn('coin-radar', `Abverkauf lesen: ${e.message}`)
             res.status(500).json({ error: 'Die Abverkaufs-Wache konnte nicht geladen werden' })
         }
@@ -412,7 +415,8 @@ export function setupCoinRadarRoutes(app) {
                 (fertig) => sende({ type: 'fertig', ...fertig }))
         } catch (e) {
             logWarn('coin-radar', `Lauf fehlgeschlagen: ${e.message}`)
-            sende({ type: 'fehler', fehler: e.message })
+            // Ohne Marktdaten (Einstellungen › Datenquellen) ist das kein Fehler, sondern ein Zustand.
+            sende({ type: 'fehler', fehler: e.message, ...(istAus(e) ? ausAntwort(e) : {}) })
         } finally {
             if (halteFuehrung) clearInterval(halteFuehrung)
             if (hatFuehrung) await gibFuehrungFrei(FUEHRUNG_KEY).catch(() => {})
@@ -509,6 +513,7 @@ async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => f
         // Die Einordnung NACH dem Abschluss: Sie kostet, und die Rangliste ist
         // das Produkt. Scheitert sie, steht der Lauf trotzdem als „fertig" da.
         let einordnung = ''
+        let kiGeneriert = false
         if (einst.einordnungAn) {
             melde({ schritt: 'einordnung' })
             /*
@@ -531,13 +536,14 @@ async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => f
             }, laufId)
             if (e) {
                 einordnung = e.text
+                kiGeneriert = Boolean(e.kiGeneriert)
                 await knex('coinradar_laeufe').where('id', laufId)
                     .update({ einordnung: e.text, kostenUsd: e.kostenUsd })
             }
         }
 
-        fertigMelden({ laufId, ...ergebnis, einordnung })
-        return { laufId, ...ergebnis, einordnung }
+        fertigMelden({ laufId, ...ergebnis, einordnung, kiGeneriert })
+        return { laufId, ...ergebnis, einordnung, kiGeneriert }
     } catch (e) {
         await knex('coinradar_laeufe').where('id', laufId)
             .update({ status: 'fehler', beendetAm: Date.now(), fehler: String(e.message).slice(0, 500) })

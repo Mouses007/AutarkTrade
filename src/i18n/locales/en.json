@@ -621,9 +621,6 @@
       },
       "agentBudget": "Token budget per run",
       "agentBudgetHint": "Upper limit for one agent run across all reasoning rounds (input + output). When reached, the agent summarises what it has found so far. More budget = deeper analyses, but higher cost per question.",
-      "empfehlungenAn": "Allow trading recommendations, price targets and forecasts",
-      "empfehlungenHint": "Applies to the news report and to the Overall situation and Trading situation tiles. Switched off, they only describe what was measured.",
-      "empfehlungenWarnung": "When on, every such statement must name the level at which it holds and what would refute it. The report is also sent by email. Descriptions of the readings (what a liquidation cluster is, what a movement budget above 100 % means) stay unchanged — they explain the number, they forbid nothing.",
       "modelOptimization": "Model optimisation",
       "modelOptimizationHint": "Optimise OpenRouter models per task",
       "analysisStart": "Start agent analysis",
@@ -638,7 +635,8 @@
       "costTitle": "Cost overview",
       "costEstimate": "Estimated monthly cost:",
       "costHint": "Use the agent analysis above to find the best model per task and save costs.",
-      "deepseekSearch": "DeepSeek search + Haiku (cheaper)"
+      "deepseekSearch": "DeepSeek search + Haiku (cheaper)",
+      "keineEmpfehlungen": "AI texts (situation report, overall and trading situation, chart analysis, chat) give no trading recommendations, price targets or forecasts and are labelled as AI-generated — they are not investment advice."
     },
     "aiEnabled": "AI features enabled",
     "aiEnabledHint": "Hides AI Agent from menu and dashboard. Settings are preserved.",
@@ -912,7 +910,8 @@
     "importEvaluateLink": "Evaluate",
     "importNoTradesFound": "No individual trades found.",
     "modelsFor": "Models of",
-    "modelsOtherProvider": "not your main provider — changes apply to this list only"
+    "modelsOtherProvider": "not your main provider — changes apply to this list only",
+    "area_datenquellen": "Data sources"
   },
   "setup": {
     "welcome": "Welcome!",
@@ -975,7 +974,9 @@
     },
     "news": {
       "title": "News sources",
-      "intro": "Sources you already added stay untouched — this is only for adding new ones."
+      "intro": "Sources you already added stay untouched — this is only for adding new ones.",
+      "telegramEntfernt": "Telegram retrieval removed — Telegram prohibits reading public channels. The source can be deleted but not re-enabled.",
+      "eigeneQuellen": "No sources are pre-filled: you choose which feeds and channels are read and summarised by the AI. Mind the terms of use of each source."
     },
     "mail": {
       "title": "Configure email",
@@ -1130,7 +1131,7 @@
     "boersenTitel": "Own exchanges",
     "boostHinweis": "Paid visibility on DexScreener ({n} boosts) — part of this attention was bought.",
     "botToken": "Bot token",
-    "brauchtSchluessel": "needs a key",
+    "brauchtSchluessel": "needs the CoinGecko key",
     "einordnung": "Why people talk about it",
     "empfohlen": "recommended",
     "favEntfernen": "Remove from favourites",
@@ -1315,13 +1316,6 @@
     "favWeniger": "show fewer",
     "alarmeMehr": "show {n} older",
     "alarmeWeniger": "show newest only",
-    "keyNoetig": "— key required",
-    "keyOptional": "— optional, raises the limit",
-    "keyPlatzhalter": "Paste key",
-    "keyHolen": "Get key",
-    "keyHinweis": {
-      "coingecko": "Without a key the free tier applies, with a tight limit that drops calls. The demo key is free."
-    },
     "boersenFilterChip": "{b} — show only finds tradable there. Selecting several means \"on at least one\". Unresolved listings stay in.",
     "wachhundAus": "Off",
     "wachhundAusHinweis": "The watchdog is off. Favourites stay saved and visible — they are simply no longer watched, and no new alerts are raised.",
@@ -1332,9 +1326,9 @@
     "gueteFuss": "{offen} still open · {fehl} not measurable",
     "tab_fruehphase": "Early phase",
     "spalteSubstanz": "Substance",
-    "spalteSubstanzTitel": "Substance score of the project check (website, domain, GitHub, creator) — shown next to hype and safety, never combined with either",
+    "spalteSubstanzTitel": "Substance score of the project check (website, domain, GitHub) — stands next to hype and safety and is merged with neither",
     "projektTitel": "Project check",
-    "projektHinweis": "For passed finds the radar looks at what stands behind the token: the website (content, contract address, placeholder text), the domain age, GitHub (maintained? earlier projects?) and, on pump.fun, the creator's history. No key needed; each check is valid for 24 hours.",
+    "projektHinweis": "For the passed finds the radar looks at what is behind the token: the website (content, contract address, placeholder text), the domain age and GitHub (maintained? earlier projects?). No keys; each check is valid for 24 hours.",
     "projektAn": "Project check during scans",
     "projektMax": "at most per run",
     "fruehTitel": "Early phase",
@@ -1343,16 +1337,9 @@
     "fruehTakt": "Interval",
     "fruehAlarmAb": "Alert from score",
     "fruehAlarmHinweis": "Alerts fire when the score crosses the threshold, at most every 12 hours per token, through the watchdog's channels — and only for what could also be a candidate: contract and project checked, at least three sub-scores, two of them from the market, at least 20 transactions in the last hour. 0 = watch only.",
-    "fruehQuelle_pumpfunNeu": "pump.fun — newest launches",
-    "fruehQuelle_pumpfunAufstieg": "pump.fun — trading now, still on the curve",
     "fruehQuelle_dexscreenerProfile": "DexScreener — new profiles and takeovers",
-    "fruehQuelle_geckoterminalNeu": "GeckoTerminal — new pools with buyer counts",
+    "fruehQuelle_geckoterminalNeu": "CoinGecko on-chain — new pools with buyer count (own key)",
     "fruehQuelle_biz": "4chan /biz/ — mentioned addresses",
-    "fruehQuelle_telegram": "Telegram — configured channels",
-    "fruehQuelle_reddit": "Reddit — mentions",
-    "fruehTelegram": "Telegram channels (public)",
-    "fruehTelegramPlatzhalter": "{'@'}channel or t.me/channel — one per line",
-    "fruehTelegramHinweis": "The public preview (t.me/s/…) is read, last six hours, at most 15 channels. Call channels often promote their own tokens — a single mention is a hint; only several independent platforms count.",
     "zFrueh": "early phase every {n} min",
     "zFruehAus": "early phase off",
     "fruehQuelle_x": "X via Grok — paid",
@@ -1363,11 +1350,11 @@
     "smartWallets": "Watched wallets (Solana)",
     "smartWalletsPlatzhalter": "address name — one per line",
     "smartTakt": "Read purchases every",
-    "smartRpc": "Solana RPC address (optional)",
-    "smartRpcPlatzhalter": "empty = public node · e.g. a Helius address",
-    "smartHinweis": "Wallets from the GMGN, Kolscan or Cielo leaderboards. Only purchases the wallet signed and paid for itself count. Two wallets on the same token trigger an alert at once. For more than a few wallets enter your own RPC address (e.g. Helius, free tier).",
+    "smartRpc": "Own Solana RPC address",
+    "smartRpcPlatzhalter": "e.g. Helius address (free tier)",
+    "smartHinweis": "Wallets from the GMGN, Kolscan or Cielo leaderboards. Only buys the wallet signed and paid itself count. Two wallets on the same token trigger an alert at once. Reading only goes through your own RPC address (e.g. Helius, free tier) — the public Solana node is, per Solana, not meant for applications and is not used.",
     "boersenwachtTitel": "Exchange watcher",
-    "boersenwachtHinweis": "Compares the public market lists of large and mid-sized exchanges and Binance Alpha, detects new listings and checks whether the radar had flagged the token before. No keys.",
+    "boersenwachtHinweis": "Compares the public market lists of large and mid-sized exchanges, detects new listings and checks whether the radar flagged the token beforehand. No keys.",
     "boersenwachtAn": "Watch exchanges",
     "boersenwachtTakt": "Compare every",
     "boersenAlleMelden": "Also alert on listings the radar did not know (large exchanges only)",
@@ -1378,7 +1365,30 @@
     "guete_filterNichtGesichert": "Filter: no significant difference",
     "guete_noteNichtGesichert": "Score: no significant difference",
     "einstGemeinsam": "Applies to all views — the settings of overview, early phase and exchanges are found in each of them",
-    "alarmOeffnen": "Open coin"
+    "alarmOeffnen": "Open coin",
+    "noteUnbekannt": "Unknown — no source measured this. Does not count as 0; the total averages over the other sub-scores.",
+    "boerse_kraken": "Kraken",
+    "boerse_binance-spot": "Binance spot (only with Binance as market data source)",
+    "cgZuDatenquellen": "Settings › Data sources",
+    "cgSchluesselFehlt": "No key stored — CoinGecko trending, new pools and buyer counts are off.",
+    "boerse_coinbase": "Coinbase",
+    "boerse_gate": "Gate",
+    "boersenWahlHinweis": "Coinbase, Kraken, KuCoin and Gate are off by default: their terms do not visibly allow using their market data in a sold program — enable at your own responsibility. Upbit, OKX, MEXC and Binance Alpha were removed for licensing reasons.",
+    "quellenAbgeschaltet": "Off (no key or switched off): {q}.",
+    "quelleDaten": "Data:",
+    "boerse_bitget": "Bitget",
+    "rugcheckAn": "Use RugCheck (Solana: insider networks, liquidity lock, fallback when GoPlus fails)",
+    "boerse_bybit": "Bybit",
+    "rugcheckHinweis": "RugCheck's terms of use are unclear (keys and paid tiers possible) — hence off by default. Without RugCheck GoPlus checks alone: insider networks stay unknown, and on Solana the liquidity lock is unknown — with \"liquidity must be locked\" Solana finds then fail.",
+    "quellenEntferntHinweis": "pump.fun, CoinPaprika and Reddit are no longer connected: their terms do not allow use in a sold program. CoinGecko and its on-chain pools (formerly GeckoTerminal) only run with your own CoinGecko key.",
+    "boerse_binance-futures": "Binance futures (only with Binance as market data source)",
+    "boerse_kucoin": "KuCoin",
+    "quelleName_dexscreener": "DexScreener — profiles, boosts, pairs",
+    "quelleName_geckoterminal": "CoinGecko on-chain — trending pools",
+    "quelleQuelle": "Source:",
+    "cgSchluesselDa": "Key stored — CoinGecko trending and on-chain pools are running.",
+    "smartRpcPflicht": "— required, otherwise smart money is off",
+    "quelleName_coingecko": "CoinGecko — trending"
   },
   "kiUebersicht": {
     "laedt": "Loading overview …",
@@ -1710,9 +1720,9 @@
     "coverage": "Snapshot reach — incomplete above/below",
     "traded": "traded",
     "bookLane": "resting",
-    "otherVenues": "Bybit + OKX",
+    "otherVenues": "Bybit",
     "shareBinance": "Binance",
-    "otherVenuesTitle": "Shows as a faint bar behind how much rests at the same prices on Bybit and OKX. Deliberately NOT added up: the venues' mid prices differ by several dollars, so summing smears the same wall across zones",
+    "otherVenuesTitle": "Shows as a faint bar behind how much rests at the same prices on Bybit. Deliberately NOT added up: the venues' mid prices differ by several dollars, so summing smears the same wall across zones",
     "lanes": "RIGHT-HAND LANES",
     "bid": "Bids",
     "ask": "Asks",
@@ -2574,7 +2584,6 @@
     "thresholdLabel": "ZONE THRESHOLD",
     "mmrTitle": "Maintenance margin rate — sets how far away liquidation prices sit",
     "mmrSourceTitle": "Where the maintenance margin comes from. Tier 1 is always used — the map does not know position sizes.",
-    "mmrSourceBinance": "Binance (automatic)",
     "mmrSourceBybit": "Bybit (automatic)",
     "mmrSourceManual": "Manual",
     "mmrHintManual": "One fixed value for every coin. 0.004 is BTCUSDT tier 1; small coins sit at 0.01 to 0.05.",
@@ -2591,7 +2600,8 @@
     "kachelHinweis": "Set the time window in the tile's header; the price band there is fixed at ± 2 % — in the trading window the zones close to the price are what count.",
     "wheelHint": "Mouse wheel in the chart zooms continuously",
     "coverage": "Coverage",
-    "thinWindow": "Window too short — the map shows only a fraction of positions"
+    "thinWindow": "Window too short — the map shows only a fraction of positions",
+    "mmrVorgabe": "Fixed default 0.004 — Bybit does not know the symbol or is not answering"
   },
   "oi": {
     "oi": "Open interest",
@@ -2645,7 +2655,7 @@
       "low": "Low",
       "high": "High",
       "days": "{n} days",
-      "source": "Source: alternative.me — sentiment index built from volatility, volume, surveys and search trends. It measures mood, not price.",
+      "source": "Source: Alternative.me — sentiment index built from volatility, volume, surveys and search trends. It measures mood, not price.",
       "class_extremeFear": "Extreme fear",
       "class_fear": "Fear",
       "class_neutral": "Neutral",
@@ -2660,8 +2670,8 @@
       "building": "Own recording: {n} of {ziel} days",
       "noHistory": "Own curve starts today · full history in the large view",
       "ownSeries": "Own record since {seit} · {n} days",
-      "ownSeriesEmpty": "The own recording starts today. The curve above comes from TradingView.",
-      "source": "Curve and current value from our own record; imported once from CoinMarketCap and updated daily from the same source. Dominance says which share of the crypto market sits in Bitcoin — if it rises while prices fall, money is fleeing altcoins into BTC rather than entering the market.",
+      "ownSeriesEmpty": "The own recording starts today — the curve grows from here, one day at a time.",
+      "source": "Current value from CoinGecko (your own key), the curve from our own daily snapshots — it starts with the first snapshot and grows day by day. Dominance says which share of the crypto market sits in Bitcoin — if it rises while prices fall, money is fleeing altcoins into BTC rather than entering the market.",
       "rest": "Others",
       "range": {
         "d30": "30 days",
@@ -2688,8 +2698,8 @@
       "divergenzTitel": "Funding divergence: {symbol}",
       "divergenzText": "Binance {binance}% p.a., Bybit {bybit}% p.a. — {delta} points apart.",
       "divergenzGegensatz": "Binance {binance}% p.a., Bybit {bybit}% p.a. — the exchanges disagree about which side is crowded.",
-      "source": "Binance USDⓈ-M perpetuals, the {n} markets with the highest 24h volume. The rate is charged every 8 hours; \"p.a.\" annualises it. Positive means longs pay shorts — a crowded long side. Clicking a row sets the symbol for the live views.",
-      "sourceMcap": "Binance USDⓈ-M perpetuals, the {n} largest coins by market cap (CoinGecko) that are tradable on Binance. The rate is charged every 8 hours; \"p.a.\" annualises it. Positive means longs pay shorts — a crowded long side. Clicking a row sets the symbol for the live views.",
+      "source": "USDⓈ-M perpetuals of the selected market data source, the {n} markets with the highest 24h volume. Depending on the market the rate is charged every 1, 4 or 8 hours; \"p.a.\" annualises it. Positive means longs pay shorts — a crowded long side. Clicking a row sets the symbol for the live views.",
+      "sourceMcap": "USDⓈ-M perpetuals of the selected market data source, the {n} largest coins by market cap (CoinGecko) that are tradable there. Depending on the market the rate is charged every 1, 4 or 8 hours; \"p.a.\" annualises it. Positive means longs pay shorts — a crowded long side. Clicking a row sets the symbol for the live views.",
       "info": "What holding a position costs or earns for longs or shorts. Positive means longs pay shorts — a crowded long side.\nFunding is a real cost, not a footnote: on a multi-day trade it can eat a meaningful chunk of the profit."
     },
     "lsoi": {
@@ -2697,12 +2707,12 @@
       "ratio": "Account ratio",
       "oiDelta": "OI 24h",
       "priceDelta": "Price 24h",
-      "source": "Binance account ratio for {symbol} (hourly, 48 hours). It counts ACCOUNTS, not capital — a whale weighs the same as a tiny account. Together with open interest and price it yields the reading below.",
+      "source": "Binance account ratio for {symbol} (hourly, 48 hours) — only available with Binance as market data source. It counts ACCOUNTS, not capital — a whale weighs the same as a tiny account. Together with open interest and price it yields the reading below.",
       "info": "How many accounts sit long vs. short, together with the change in open interest and price.\nIt counts accounts, not capital — the ratio mostly reflects retail. A skewed ratio plus growing OI means one side is loading up and getting vulnerable to a reversal."
     },
     "rsi": {
       "title": "RSI heatmap",
-      "source": "Wilder RSI(14) from closed Binance candles. Each dot is one market, ordered left to right by 24h volume. The dashed line is the average — it shows whether a reading fits the market or fights it. Clicking a dot sets the symbol for the live views.",
+      "source": "Wilder RSI(14) from closed candles of the selected market data source. Each dot is one market, ordered left to right by 24h volume. The dashed line is the average — it shows whether a reading fits the market or fights it. Clicking a dot sets the symbol for the live views.",
       "derived": "Markets come from your trades over the last 90 days; you can enter your own list in the settings.",
       "top": "By volume",
       "mcap": "Market cap",
@@ -2714,9 +2724,9 @@
       "zone_neutral": "Neutral",
       "zone_weak": "Weak",
       "zone_oversold": "Oversold",
-      "topHint": "The highest-volume crypto perpetuals on Binance — how many is set on the right",
+      "topHint": "The highest-volume crypto perpetuals of the market data source — how many is set on the right",
       "mcapHint": "The coin perpetuals with the highest market cap (CoinGecko) — how many is set on the right",
-      "sourceMcap": "Wilder RSI(14) from closed Binance candles. Each dot is one market, ordered left to right by market cap. The dashed line is the average — it shows whether a reading fits the market or fights it. Clicking a dot sets the symbol for the live views.",
+      "sourceMcap": "Wilder RSI(14) from closed candles of the selected market data source. Each dot is one market, ordered left to right by market cap (CoinGecko). The dashed line is the average — it shows whether a reading fits the market or fights it. Clicking a dot sets the symbol for the live views.",
       "ownHint": "Only the markets you traded yourself over the last 90 days",
       "openBoerse": "→ Open on {boerse}",
       "info": "How overbought or oversold each individual market is right now.\nThe dashed line is the average — and it is the real yardstick here: an oversold coin while the average is low is not its own story, it's just the whole market."
@@ -2750,7 +2760,8 @@
       "band_grund": "Basement",
       "caveat": "This is a curve fitted to the past, not a forecast. The bands shift with every new price — what reads as \"cheap\" today may be the middle in a year. Useful as a multi-year mood gauge, not as a trading signal.",
       "params": "ln(price) ≈ {a} · ln(days since genesis) + {b}, residual spread {s}, {n} points",
-      "info": "Where the Bitcoin price sits long-term relative to its historical range, from \"sell-off\" to \"bubble\".\nThe bands shift with every new price — what reads as \"cheap\" today can be the middle in a year. A mood gauge across years, too coarse for a single trading decision."
+      "info": "Where the Bitcoin price sits long-term relative to its historical range, from \"sell-off\" to \"bubble\".\nThe bands shift with every new price — what reads as \"cheap\" today can be the middle in a year. A mood gauge across years, too coarse for a single trading decision.",
+      "seit": "Price series from {datum} (daily candles of the market data source). The former series from 2009 came from blockchain.info and was removed for licensing reasons — over the shorter span the curve comes out flatter."
     },
     "top": "Top",
     "liq": {
@@ -2797,8 +2808,10 @@
       "domFromSupply": "from real flows",
       "domFromPrice": "from price moves",
       "domHint": "Dominance on its own cannot be read: it rises even when only prices fall. Only the split shows whether money actually moved.",
-      "source": "Equities as FUTURES (ES/NQ/RTY), not cash indices: the index stands still overnight and on weekends while the future trades nearly around the clock — only that makes the comparison with the non-stop crypto market honest. Colour shows tailwind or headwind FOR CRYPTO, not the direction of the market itself: a rising dollar is therefore red. Stablecoin flow is the change in USDT and USDC supply — deliberately not \"USDT dominance\", which rises arithmetically whenever crypto falls and merely restates the price drop. Inflow or outflow, by contrast, shows real money entering or leaving the market. The Russell 2000 sits next to the Nasdaq as a cross-check: if both move together it is a liquidity or rates move that reaches crypto too; if only the Nasdaq moves it is rotation into a few large caps and rarely carries over.",
-      "info": "The view from outside the crypto market: US equity futures, the dollar index, stablecoin flow.\nThe headline is the CORRELATION BTC↔Nasdaq, not the price. Colour shows tailwind or headwind FOR crypto — a rising dollar is therefore red, even though the dollar itself is \"up\"."
+      "source": "Stablecoin flow is the change in USDT and USDC supply (CoinGecko, your own key) — deliberately not \"USDT dominance\", which rises mechanically whenever crypto falls and then merely repeats the price drop. Inflow or outflow shows real money entering or leaving the market. The dominance decomposition uses total market cap from our own daily CoinGecko snapshots and appears once enough days have been recorded.",
+      "info": "Money flowing into crypto: how the supply of stablecoins (USDT + USDC) changes, and whether rising stablecoin dominance is real money or just falling prices.\nEquity futures and the dollar index used to be shown here and were removed for licensing reasons (Yahoo Finance).",
+      "indizesEntfernt": "Equity futures and dollar index removed (Yahoo Finance licence)",
+      "domWaechst": "The stablecoin dominance decomposition appears once our own daily snapshots of the total market have two points about 30 days apart."
     },
     "lage": {
       "title": "Overall picture (AI)",
@@ -2847,7 +2860,7 @@
       "erklaeren": "AI context",
       "erklaerungLaedt": "Generating context …",
       "erklaerungHinweis": "Context, not trading advice.",
-      "source": "State derived rule-based from price and OI change (Binance USDⓈ-M), the current funding rate and this journal's own liquidation recording (Binance + Bybit) over the selected window. The same numbers always yield the same state — the AI may explain it, it never decides it.",
+      "source": "State derived rule-based from price and OI change, the current funding rate (selected market data source; OI history only with Binance) and this journal's own liquidation recording (Binance + Bybit) over the selected window. The same numbers always yield the same state — the AI may explain it, it never decides it.",
       "info": "Condenses price, open interest, funding and liquidated volume into a single market state — e.g. \"long squeeze risk\" or \"deleveraging\".\nA quick way to see where pressure sits in the market before digging into the individual tiles. Rule-based, not a forecast."
     },
     "regime": {
@@ -2887,7 +2900,8 @@
       "caveat": "Three hits on three occasions (2013, 2017, 2021) are an observation, not proof — no rule can be derived from that statistically. The name comes from 350 divided by 111 being roughly π; that too is numerology, not a mechanism. Useful as a multi-year mood gauge, not as an exit signal.",
       "alarm": "Crossover on {datum}: the 111-day line crossed above the doubled 350-day line.",
       "vorwarnung": "Early warning: the short line is only {pct} % below the long one (threshold {schwelle} %).",
-      "info": "A historical signal that has coincided with a Bitcoin cycle top in the past.\nThree hits on three occasions is an observation, not a rule — an early warning for \"careful with leverage\", not an exit signal for a single position."
+      "info": "A historical signal that has coincided with a Bitcoin cycle top in the past.\nThree hits on three occasions is an observation, not a rule — an early warning for \"careful with leverage\", not an exit signal for a single position.",
+      "seit": "Price series from {datum} (daily candles of the market data source); the 2013 and 2017 crossings lie before it and are therefore missing from the list."
     },
     "altseason": {
       "title": "Altcoin season index",
@@ -2898,8 +2912,9 @@
       "best": "Strongest",
       "worst": "Weakest",
       "summary": "{besser} of {n} large altcoins beat Bitcoin over {tage} days. BTC itself: {btc}.",
-      "source": "Computed from Binance daily candles of the largest coins with a perpetual market, measured against BTC over the same window. The 25 and 75 thresholds come from the original index — they are set, not derived. Clicking a row sets the symbol for the live views.",
-      "info": "Whether altcoins or Bitcoin itself are currently leading the market.\nAbove 75 = altcoin season (alt longs have a tailwind), below 25 = bitcoin season (alts often lag BTC then, even while rising). The thresholds are set, not derived."
+      "source": "Computed from daily candles of the market data source for the largest coins with a perpetual market (selected by CoinGecko market cap), measured against BTC over the same window. The 25 and 75 thresholds come from the original index — they are set, not derived. Clicking a row sets the symbol for the live views.",
+      "info": "Whether altcoins or Bitcoin itself are currently leading the market.\nAbove 75 = altcoin season (alt longs have a tailwind), below 25 = bitcoin season (alts often lag BTC then, even while rising). The thresholds are set, not derived.",
+      "basisUmsatz": "Without a CoinGecko key: counting the 50 highest-volume perpetuals instead of the 50 largest coins."
     },
     "etf": {
       "title": "ETF flow (BTC)",
@@ -2932,8 +2947,10 @@
         "aus": "Away from an exchange — potential accumulation",
         "unbekannt": "Direction unknown"
       },
-      "info": "Large crypto transactions from our own Telegram sources (Whale Alert, Lookonchain, …), detected automatically — no extra network call.\nRed = movement toward an exchange (potential sell pressure), green = movement away from an exchange (potential accumulation). Wallet-to-wallet moves stay grey because the direction isn't guessed there."
-    }
+      "info": "Removed: this tile read large transactions from recorded Telegram channels (Whale Alert, Lookonchain). Telegram prohibits reading public channels this way; without a permitted replacement the tile stays empty."
+    },
+    "status_aus": "Source off",
+    "mcapErsatz": "Market cap needs your own CoinGecko key — sorted by 24h volume instead."
   },
   "info": {
     "buttonTitle": "How to read this view",
@@ -2952,11 +2969,11 @@
         },
         {
           "h": "ENLARGING A CARD",
-          "p": "Clicking the magnifier opens the same card in the full window — the same component with the same data, only with more room. It costs no extra request. Enlarged, many cards show more than they do small: longer history, tables instead of just the headline figure, extra switches. The source of the numbers is always stated at the bottom. Esc or a click beside the card closes it again."
+          "p": "Clicking the magnifier opens the same card in the full window — the same component with the same data, only with more room. It costs no extra request. Enlarged, many cards show more than they do small: longer history, tables instead of just the headline figure, extra switches. Where the numbers come from is already shown in small print under every card — with the attributions the providers require (\"Source: Alternative.me\", \"Powered by CoinGecko\", \"Data: CryptoQuant\") and the selected market data source. Esc or a click beside the card closes it again."
         },
         {
           "h": "TIMESTAMP AND DOT COLOUR",
-          "p": "The top right of every card says when the numbers are from. The dot next to it is green for fresh data and amber when the source could not be reached — you then keep seeing the last good state instead of an empty card. Red means nothing is available at all. The dot in the page header summarises all cards; if it is amber, some card below is showing a stale state."
+          "p": "The top right of every card says when the numbers are from. The dot next to it is green for fresh data and amber when the source could not be reached — you then keep seeing the last good state instead of an empty card. Red means nothing is available at all. The dot in the page header summarises all cards; if it is amber, some card below is showing a stale state. A grey dot with a notice box means the source is off — no key stored (CoinGecko), the selected market data source cannot provide it, or the source was removed for licensing reasons. The box says which, and links to the settings."
         },
         {
           "h": "HOW OFTEN DATA IS RELOADED",
@@ -2973,11 +2990,11 @@
         },
         {
           "h": "BTC DOMINANCE",
-          "p": "What share of the entire crypto market belongs to Bitcoin. The curve comes from our own store — about six years of history, imported once from CoinMarketCap and updated daily; three series are shown: Bitcoin, Ethereum and all the rest. The spot value comes from the same series, with CoinGecko only as a fallback. Reading: rising dominance with falling prices means a flight out of altcoins into BTC; falling dominance with rising prices means fresh money is spreading out. In practice: an altcoin long against rising dominance is swimming upstream, however good the coin's chart looks."
+          "p": "What share of the entire crypto market belongs to Bitcoin. The current value comes from CoinGecko and needs your own key (Settings › Data sources; the demo key is enough). The curve comes from our own daily snapshots of the same source and grows from day one; three series are shown: Bitcoin, Ethereum and all the rest. The history imported once from CoinMarketCap is no longer shown for licensing reasons. Reading: rising dominance with falling prices means a flight out of altcoins into BTC; falling dominance with rising prices means fresh money is spreading out. In practice: an altcoin long against rising dominance swims against the current, even if the coin's chart looks good."
         },
         {
           "h": "FUNDING RATES",
-          "p": "The payment between longs and shorts on Binance perpetuals. The payment interval is not the same everywhere — eight hours is the norm, but many markets pay every four hours; \"p.a.\" extrapolates using each market's actual interval so you can judge the magnitude. Positive means longs pay shorts — the long side is crowded. The card shows the extremes on both sides and, below, your own markets. Two things to take away: funding is a real cost — at +100 % p.a. holding eats into your margin — and an extreme reading tells you where the crowd sits, not when it will turn."
+          "p": "The payment between longs and shorts on the perpetuals of the selected market data source (Binance or Bitget), with Bitunix and Bybit alongside for comparison. The payment interval is not the same everywhere — eight hours is the norm, but many markets pay every four hours; \"p.a.\" extrapolates using each market's actual interval so you can judge the magnitude. Positive means longs pay shorts — the long side is crowded. The card shows the extremes on both sides and, below, your own markets. Two things to take away: funding is a real cost — at +100 % p.a. holding eats into your margin — and an extreme reading tells you where the crowd sits, not when it will turn."
         },
         {
           "h": "LONG/SHORT + OPEN INTEREST",
@@ -2985,7 +3002,7 @@
         },
         {
           "h": "MACRO BACKDROP",
-          "p": "The only tile that looks outside the crypto market — and therefore the only one that can explain a move whose cause does not sit here at all. It shows the S&P 500 and Nasdaq 100 futures, the dollar index and the stablecoin flow. Three notes: first, these are deliberately FUTURES and not cash indices — the index stands still overnight and on weekends while the future trades nearly around the clock; a frozen value is tagged \"closed\". Second, the headline is the COUPLING (correlation of daily returns BTC↔Nasdaq over 30 days), not the price: \"Nasdaq −1 %\" only means something if your market is currently tied to it, and that coupling varies a lot. Third, colour shows tailwind or headwind FOR CRYPTO rather than the direction of the market itself — a rising dollar appears red because a strong dollar means tighter global liquidity. The stablecoin flow is deliberately the change in USDT and USDC supply, not \"USDT dominance\": the latter rises arithmetically whenever crypto falls and merely restates the price drop, while supply shows real money flowing in or being pulled out. The enlarged view does show dominance — but only DECOMPOSED. An example with round numbers: a total market of 2170bn including 245bn of stablecoins gives 11.3 % dominance. If the rest of the market falls 10 % without a single USDT being minted or redeemed, dominance reads 12.4 % — a jump of 1.1 points although not one dollar moved. That is why the tile splits the change into \"from real flows\" and \"from price moves\"; the two add up exactly to the total change. If the price part alone accounts for the swing, it was an optical illusion. Conversely a genuine inflow can coincide with FALLING dominance during a rally — the split makes that visible too."
+          "p": "Money flowing into crypto: stablecoin flow and decomposed stablecoin dominance, both from CoinGecko with your own key. Equity futures (S&P 500, Nasdaq 100, Russell 2000), the dollar index and the BTC↔Nasdaq coupling used to be shown here; they came from Yahoo Finance, whose terms prohibit automated retrieval and commercial use, and have been removed. Stablecoin flow is deliberately the change in USDT and USDC supply, not \"USDT dominance\": that rises mechanically whenever crypto falls and merely repeats the price drop; supply shows real money flowing in or being withdrawn. Dominance is only shown DECOMPOSED. An example in round numbers: total market 2170 bn, of which 245 bn stablecoins, gives 11.3 % dominance. If the rest of the market falls 10 % without a single USDT minted or redeemed, dominance stands at 12.4 % — a jump of 1.1 points although no money moved. That is why the card splits the change into \"from real flows\" and \"from price moves\"; together they add up exactly to the total change. Total market cap comes from our own daily snapshots — the split appears once about 30 days have been recorded."
         },
         {
           "h": "MARKET MECHANICS",
@@ -2993,7 +3010,7 @@
         },
         {
           "h": "RSI HEATMAP",
-          "p": "Wilder's RSI(14) from closed Binance candles, one dot per market, sorted left to right by turnover. The dashed line is the average of all shown markets — and that is the real value of this card: an oversold coin while the average is equally low is nothing of its own, just the market. What stands out is whatever deviates from the average. Switchable between the highest-turnover markets and the markets you traded yourself over the last 90 days."
+          "p": "Wilder's RSI(14) from closed candles of the selected market data source, one dot per market, sorted left to right by turnover. The dashed line is the average of all shown markets — and that is the real value of this card: an oversold coin while the average is equally low is nothing of its own, just the market. What stands out is whatever deviates from the average. Switchable between the highest-turnover markets and the markets you traded yourself over the last 90 days."
         },
         {
           "h": "MARKET OVERVIEW",
@@ -3005,15 +3022,15 @@
         },
         {
           "h": "ALTCOIN SEASON INDEX",
-          "p": "How many of the large altcoins with a perpetual market beat Bitcoin over the selected window, calculated from Binance daily candles. Above 75 is altcoin season, below 25 Bitcoin season — both thresholds come from the original index; they are set, not derived. The window changes the verdict considerably; when in doubt compare two windows before drawing a conclusion."
+          "p": "How many of the large altcoins with a perpetual market beat Bitcoin over the selected window, calculated from daily candles of the selected market data source. The coins are the largest by market cap (CoinGecko, your own key); without a key the highest-volume perpetuals — the card then says which selection applies. Above 75 is altcoin season, below 25 Bitcoin season — both thresholds come from the original index; they are set, not derived. The window changes the verdict considerably; when in doubt compare two windows before drawing a conclusion."
         },
         {
           "h": "RAINBOW (BTC)",
-          "p": "A logarithmic curve fitted to Bitcoin's entire price history, with bands from \"fire sale\" to \"bubble\". The thing to understand: the bands shift with every new price because the fit is recalculated — what counts as \"cheap\" today can be the middle band a year from now. A usable mood gauge across years, far too coarse for a trading decision."
+          "p": "A logarithmic curve fitted to Bitcoin's price history since 2017 (BTCUSDT daily candles from the market data source; the former series from 2009 came from blockchain.info and was removed for licensing reasons — over the shorter span the curve comes out flatter), with bands from \"fire sale\" to \"bubble\". The thing to understand: the bands shift with every new price because the fit is recalculated — what counts as \"cheap\" today can be the middle band a year from now. A usable mood gauge across years, far too coarse for a trading decision."
         },
         {
           "h": "PI CYCLE TOP (BTC)",
-          "p": "When the 111-day moving average crosses the doubled 350-day average from below, that historically landed close to a cycle top. The card shows the distance between the two lines and whether a crossing has triggered. Three hits in three opportunities is an observation, not a rule — treat it as an early warning to be careful with leverage, not as an exit signal."
+          "p": "When the 111-day moving average crosses the doubled 350-day average from below, that historically landed close to a cycle top. The card shows the distance between the two lines and whether a crossing has triggered. Three hits in three opportunities is an observation, not a rule — treat it as an early warning to be careful with leverage, not as an exit signal. It is computed from daily candles since 2017 — the 350-day line therefore starts in mid-2018, and the 2013 and 2017 crossings are missing from the list."
         },
         {
           "h": "YOUR TRADES × MARKET REGIME",
@@ -3259,7 +3276,7 @@
         },
         {
           "h": "THE CALENDAR",
-          "p": "Economic events grouped by day. Each entry shows the time in your time zone, the currency area, the impact level plus forecast, actual and previous values. Yesterday deliberately stays visible so you can read the actual value of releases that already happened — how the market reacted to the last number is often more informative than the next forecast."
+          "p": "The economic calendar, grouped by day, from official calendars: Federal Reserve Board (FOMC, Beige Book), U.S. Bureau of Economic Analysis (GDP, personal income and outlays incl. PCE, trade balance) and Eurostat (inflation, GDP, unemployment, industry and retail in the euro area). Each event shows the time in your time zone, the currency area and the impact level. These sources publish no forecasts or previous values — those come from surveys that paid providers sell. US labour-market and inflation data (BLS) are missing because the BLS blocks automated retrieval. The sources are listed under the calendar."
         },
         {
           "h": "THE POSTS",
@@ -3279,8 +3296,8 @@
           "p": "The vertical divider between calendar and posts can be dragged, as can the bottom edge of both lists; a double click on the handle resets the height. This too lives in the device's browser — on a phone the columns stack anyway."
         },
         {
-          "h": "WHY THE CALENDAR GROWS OVER TIME",
-          "p": "The feed only ever carries the current week. The journal therefore collects every event it sees permanently instead of passing it through. Consequence: your own stock only reaches as far into the future as the source has switched over so far — the line below the list says until when. An empty second week means \"not collected yet\", not \"nothing scheduled\"."
+          "h": "WHY THE CALENDAR GROWS",
+          "p": "Agencies publish their calendars different distances ahead — the Fed months ahead, Eurostat and the BEA for the current and following year. The journal keeps every event it has seen instead of just passing it through, and checks every six hours. Under the list it says how far the stock reaches in the selected range; an empty stretch after it means \"not published yet\", not \"nothing happening\"."
         },
         {
           "g": "In daily use",
@@ -3292,7 +3309,7 @@
           "p": "This page comes before the market radar. First: is there any reason to be careful today? Then: what shape is the market in, and finally the detail on one symbol. Done the other way round, you read the calendar after the stop has already been hit."
         }
       ],
-      "caveat": "Summaries are produced by a language model and can be wrong or leave out something important — always check the original source before deciding. Event times and impact levels come from a third-party feed, get rescheduled at short notice and are equally unverified. None of this is investment advice."
+      "caveat": "Summaries come from a language model and can be wrong or leave out something important — always check the original source before a decision. Events and times come from the agencies' calendars, can be moved at short notice and are unverified; impact levels are assigned by the journal itself. None of this is investment advice."
     },
     "button": "Info",
     "agent": {
@@ -3365,8 +3382,8 @@
           "p": "The positions tile reads the open and closed positions of the running session from Bitunix and computes the session state against the plan limits — realised and unrealised stay separate, and the limits count only against the realised part. The calendar countdown shows the next economic events of the coming hours from our own calendar store."
         },
         {
-          "h": "INDICES, FUNDING, LONG/SHORT, MACRO",
-          "p": "Indices shows ES=F, NQ=F, RTY=F and the dollar index as intraday candles from Yahoo. Funding, long/short + open interest and the macro environment are the same tiles as in the market radar — funding and long/short follow the symbol choice."
+          "h": "FUNDING, LONG/SHORT, MACRO",
+          "p": "Funding, long/short + open interest and macro backdrop are the same cards as in the market radar — funding and long/short follow the symbol selection. The former \"Indices\" card (ES, NQ, RTY and the dollar index from Yahoo Finance) was removed for licensing reasons; if shown, it says so."
         },
         {
           "h": "BOOKMAP & LEVERAGE MAP",
@@ -3378,10 +3395,10 @@
         },
         {
           "h": "COMPACT & MOMENTUM RADAR",
-          "p": "The Compact tile sums up the side tiles (trading hours, events, mechanics, liquidations, long/short, funding, indices, Coin Radar, trading view, overall view) as one line each; a click opens the full tile, and the single tiles can still be switched on under “Cards”. The trading-view automation only runs while its own tile is visible. The Momentum Radar shows wave, money flow, dots and rails of the chosen timeframe (5m–4h) and below it the panel with status, SWING/DAY setup, spot vs futures, VWAP and 4h structure — computed on closed candles only."
+          "p": "The Compact tile sums up the side tiles (trading hours, events, mechanics, liquidations, long/short, funding, Coin Radar, trading view, overall view) as one line each; a click opens the full tile, and the single tiles can still be switched on under “Cards”. The trading-view automation only runs while its own tile is visible. The Momentum Radar shows wave, money flow, dots and rails of the chosen timeframe (5m–4h) and below it the panel with status, SWING/DAY setup, spot vs futures, VWAP and 4h structure — computed on closed candles only."
         }
       ],
-      "caveat": "The third-party figures (indices, funding, calendar) promise nothing and can go stale — the dot on the tile tells you how fresh they are. The leverage map is a model, not a measurement. This page is a tool, not a signal generator: your strategy still supplies the trigger."
+      "caveat": "The third-party figures (funding, calendar, market data) promise nothing and can go stale — the dot on the tile tells you how fresh they are. The leverage map is a model, not a measurement. This page is a tool, not a signal generator: your strategy still supplies the trigger."
     },
     "liveSessions": {
       "title": "Session archive — what became of your intentions",
@@ -3440,7 +3457,7 @@
         {
           "g": "HOW THE RADAR WORKS",
           "h": "FOUR STAGES, THE MODEL LAST",
-          "p": "Stage 1 collects finds from CoinGecko, DexScreener and GeckoTerminal. Stage 2 computes a hype score. Stage 3 checks every candidate for fraud patterns. Only stage 4 calls a language model — and only for the best few. Having an AI judge five hundred raw finds would be slow, expensive and slightly different every run; a computed ranking can be checked."
+          "p": "Stage 1 collects finds from DexScreener and — with your own CoinGecko key — from CoinGecko (trending and on-chain pools). Stage 2 computes a hype score. Stage 3 checks every candidate for fraud patterns. Only stage 4 calls a language model — and only for the best few. Having an AI judge five hundred raw finds would be slow, expensive and slightly different every run; a computed ranking can be checked. pump.fun, CoinPaprika and Reddit are no longer connected for licensing reasons."
         },
         {
           "h": "SCANNING IS FREE, THE REPORT IS NOT",
@@ -3466,7 +3483,7 @@
         {
           "g": "SAFETY",
           "h": "THE STAGE THAT DECIDES WHETHER THIS IS USEFUL",
-          "p": "Thousands of tokens launch daily, and a sizeable share is built so buyers cannot get out again. Checked are sell locks, mintability, sell taxes, whether liquidity is locked, and the distribution of the largest holders — via GoPlus, and via RugCheck as a fallback on Solana."
+          "p": "Thousands of tokens launch daily, and a sizeable share is built so buyers cannot get out again. Checked are sell locks, mintability, sell taxes, whether liquidity is locked, and the distribution of the largest holders — via GoPlus (\"Powered by GoPlus Security\"), and on Solana optionally also via RugCheck (off by default, terms unclear)."
         },
         {
           "h": "HARD REJECT OR SOFT DEDUCTION",
@@ -3687,28 +3704,28 @@
         {
           "g": "HOW THE EARLY PHASE WORKS",
           "h": "SOURCES",
-          "p": "pump.fun (newest launches and what is trading on the bonding curve right now), DexScreener (newly paid profiles and community takeovers), GeckoTerminal (new pools), the 4chan /biz/ catalog (which contract addresses are mentioned), configured public Telegram channels, optionally Reddit — all without keys — and, paid, X via Grok. Buyers and sellers — distinct wallets, not transactions — come from GeckoTerminal for every token. A ticker mention (\"$FROG\") only counts for a token already known, only if exactly one has that symbol and only if no coin of that name is listed on Bitunix, Bitget or Pionex — otherwise every mention of the original would signal its copycats. Tokens older than three days are not taken in — they have launched, they are not early."
+          "p": "DexScreener (newly paid profiles and community takeovers, no key), CoinGecko on-chain (new pools — only with your CoinGecko key), the 4chan /biz/ catalog (which contract addresses are mentioned) and, paid, X via Grok. Buyers and sellers — distinct wallets, not transactions — come from CoinGecko on-chain for every token; without a key participation stays unknown. pump.fun, Telegram channels and Reddit were removed for licensing reasons; the early phase therefore only sees a token on the pump.fun curve if DexScreener or CoinGecko list it as a venue or someone mentions its contract. A ticker mention (\"$FROG\") only counts for a token already known, only if exactly one has that symbol and only if no coin of that name is listed on Bitunix, Bitget or Pionex — otherwise every mention of the original would signal its copycats. Tokens older than three days are not taken in — they have launched, they are not early."
         },
         {
           "h": "ACCELERATION, NOT SIZE",
-          "p": "Five sub-scores: trading surge (last hour's transactions against the token's own history — at first sight the last five minutes against the minutes before; for a token under an hour old it is computed per minute of its age, otherwise steady trading would look like a surge), participation (distinct buyers instead of transactions; holder growth only against a figure from the same source), social (on how many platforms it is mentioned — three platforms outweigh a hundred mentions on one; measured the same for every token as soon as a social source ran), team/substance (the project check) and momentum (valuation against the oldest reading of the last twelve hours; King of the Hill — the pump.fun front page — counts for three hours)."
+          "p": "Five sub-scores: trading surge (last hour's transactions against the token's own history — at first sight the last five minutes against the minutes before; for a token under an hour old it is computed per minute of its age, otherwise steady trading would look like a surge), participation (distinct buyers instead of transactions; holder growth only against a figure from the same source), social (on how many platforms it is mentioned — three platforms outweigh a hundred mentions on one; measured the same for every token as soon as a social source ran), team/substance (the project check) and momentum (valuation against the oldest reading of the last twelve hours)."
         },
         {
           "h": "WHAT IS DEDUCTED",
-          "p": "One-sided buying (from 30 transactions in the hour, no sell or more than eight buys per sell — often a bot or a sell lock), circular trading (from 100 pool transactions, more than eight per participating wallet), volume without price movement (wash suspicion), serial creators without a single success (only without a project check — otherwise it is already in the substance score), and a collapse below 20 % of the observed peak — then the token is discarded. A token without a single trade for at least 30 minutes is discarded as well: dead, not quiet. A paid DexScreener profile earns no points — it shows an ad budget, not a team — and is only noted at the token. 50 of the 150 slots per run are reserved for new tokens so the search is not clogged by old finds after the first run."
+          "p": "One-sided buying (from 30 transactions in the hour, no sell or more than eight buys per sell — often a bot or a sell lock), circular trading (from 100 pool transactions, more than eight per participating wallet), volume without price movement (wash suspicion) and a collapse below 20 % of the observed peak — then the token is discarded. A token without a single trade for at least 30 minutes is discarded as well: dead, not quiet. A paid DexScreener profile earns no points — it shows an ad budget, not a team — and is only noted at the token. 50 of the 150 slots per run are reserved for new tokens so the search is not clogged by old finds after the first run."
         },
         {
           "h": "CONTRACT, HOLDERS, SMART MONEY",
-          "p": "For the best of each run the contract is checked (RugCheck, else GoPlus): mint or freeze authority, honeypot and the like discard the token at once, as do Token-2022 extensions that let the issuer freeze or move balances. Plus the holder picture — insider wallets (deduction from 15 %), networks of linked insiders (once they hold 5 % together), the ten largest holders (from 50 %, excluding the bonding curve and known pools; on the curve additionally from 80 % of the sold part once there are 50 holders) and the creator (from 10 %; if not among the largest holders it reads \"below x %\" instead of an invented zero) — and the holder count, whose growth feeds participation. Smart money: wallets you enter in the settings. A buy only counts if the wallet signed it and paid at least 0.005 SOL beyond fee and rent; a wallet that sells half of it again within the window no longer counts. If two wallets buy the same token, it gets a slot in every run and is reported at once as soon as its contract is checked."
+          "p": "For the best of each run the contract is checked (RugCheck if enabled, else GoPlus): mint or freeze authority, honeypot and the like discard the token at once, as do Token-2022 extensions that let the issuer freeze or move balances. Plus the holder picture — insider wallets (deduction from 15 %), networks of linked insiders (once they hold 5 % together; RugCheck only), the ten largest holders (from 50 %, excluding the bonding curve and known pools; on the curve additionally from 80 % of the sold part once there are 50 holders) and the creator (from 10 %; if not among the largest holders it reads \"below x %\" instead of an invented zero) — and the holder count, whose growth feeds participation. Smart money: wallets you enter in the settings, read through your own Solana RPC address (without it smart money is off). A buy only counts if the wallet signed it and paid at least 0.005 SOL beyond fee and rent; a wallet that sells half of it again within the window no longer counts. If two wallets buy the same token, it gets a slot in every run and is reported at once as soon as its contract is checked."
         },
         {
           "h": "PROJECT CHECK",
-          "p": "For the best of each run: the website (sections, correct contract address, placeholder text), the domain age, GitHub (maintained, earlier projects) and for pump.fun the other coins of the same wallet — for tokens without a site or code the only trace of a team. The website has to be its OWN: a tweet, a video, someone else's repository or a trading page counts as \"no own website\", the coin page of another address as the copied details of another coin. Points are only given for a site that demonstrably belongs to the token (contract on it, or the name in domain or title plus \"$symbol\" or a trading link); if several tokens list the same site, only the one whose contract is on it keeps them."
+          "p": "For the best of each run: the website (sections, correct contract address, placeholder text), the domain age and GitHub (maintained, earlier projects). The website has to be its OWN: a tweet, a video, someone else's repository or a trading page counts as \"no own website\", the coin page of another address as the copied details of another coin. Points are only given for a site that demonstrably belongs to the token (contract on it, or the name in domain or title plus \"$symbol\" or a trading link); if several tokens list the same site, only the one whose contract is on it keeps them."
         },
         {
           "g": "AFTERWARDS",
           "h": "MATURE → MAIN CHECK",
-          "p": "From twelve hours and USD 50,000 liquidity a token counts as mature. On the next scan it enters the main check as a source of its own — with safety check and report — even if no trending list carries it at that moment. Where it was mentioned on Telegram or /biz/, that counts there as independent social confirmation."
+          "p": "From twelve hours and USD 50,000 liquidity a token counts as mature. On the next scan it enters the main check as a source of its own — with safety check and report — even if no trending list carries it at that moment. Where it was mentioned on /biz/ or X, that counts there as independent social confirmation."
         },
         {
           "h": "ALERTS",
@@ -3727,16 +3744,16 @@
     },
     "hypeBoersen": {
       "title": "Exchanges — being in before the listing",
-      "intro": "Almost no young project starts on a centralized exchange. The path leads via DEXs and preliminary stages upwards, and a listing on Binance, Coinbase or Upbit is for most the peak of attention. This page watches the ladder and measures how early the radar was.",
+      "intro": "Almost no young project starts on a centralized exchange. The path leads via DEXs and mid-sized exchanges upwards, and a listing on Binance or Coinbase is for most the peak of attention. This page watches the ladder and measures how early the radar was.",
       "sections": [
         {
           "g": "HOW THE WATCHER WORKS",
           "h": "WHAT IS COMPARED",
-          "p": "The public market lists of Binance (spot and futures), Coinbase, Upbit, OKX, Bybit and Kraken (large exchanges), KuCoin, Gate, MEXC and Bitget (mid-sized) plus the Binance Alpha token list — all without keys. The first compare sets the baseline; new is what appears afterwards. An exchange that does not answer or returns only part of its list keeps its last good state — otherwise the next complete fetch would produce hundreds of seemingly new listings."
+          "p": "The public market lists of Binance (spot and futures — only with Binance as market data source), Coinbase, Bybit and Kraken (large exchanges), KuCoin, Gate and Bitget (mid-sized) — all without keys. Coinbase, Kraken, KuCoin and Gate are off by default because their terms are unclear for a sold program. The first compare sets the baseline; new is what appears afterwards. An exchange that does not answer or returns only part of its list keeps its last good state — otherwise the next complete fetch would produce hundreds of seemingly new listings."
         },
         {
-          "h": "BINANCE ALPHA",
-          "p": "The preliminary stage: Binance adds tokens with their contract address there before (and whether) they reach the actual exchange. Because Alpha names the address, matching it to the radar is certain. A radar token being added to Alpha triggers an alert — that is the real early signal."
+          "h": "REMOVED EXCHANGES",
+          "p": "Upbit, OKX and MEXC forbid in their terms using their market data in third-party or commercial programs; the Binance Alpha token list came from an undocumented endpoint of the Binance website. All four are therefore no longer connected — and with Alpha the certain match by contract address before a listing is gone too."
         },
         {
           "h": "DID THE RADAR KNOW THE TOKEN?",
@@ -3744,7 +3761,7 @@
         },
         {
           "h": "ON THE WAY UP",
-          "p": "Flagged radar tokens that are already on Alpha or a mid-sized exchange but not yet on a large one. This is the list of candidates — not a forecast, just their position on the ladder."
+          "p": "Flagged radar tokens that are already on a mid-sized exchange but not yet on a large one. This is the list of candidates — not a forecast, just their position on the ladder."
         }
       ],
       "caveat": "A listing guarantees nothing; many tokens fall after a big listing. The exchange endpoints are public but not documented for this purpose — if one fails, it is shown at that exchange. Not investment advice."
@@ -3790,13 +3807,13 @@
       "m1": "1 month"
     },
     "rangeHint": "How far ahead the preview reaches. The past day always stays visible so released events still show their actual value.",
-    "stockUntil": "Our own record reaches to {datum}. The source only ever carries the current week — later events accumulate once it rolls over.",
+    "stockUntil": "The last known event in this range is on {datum}. Agencies publish their calendars different distances ahead — an empty stretch after it does not mean \"nothing happening\".",
     "impact": {
       "high": "high only",
       "medium": "medium+",
       "all": "all"
     },
-    "impactHint": "Impact as rated by the source. „medium+\" includes high. This week: high only 8, medium+ 21, all 96 events.",
+    "impactHint": "Impact — assigned by the journal per release (GDP, PCE, flash inflation and rate decisions are high). \"medium+\" includes high.",
     "countryHint": "Toggle currency areas. With none selected, all are shown.",
     "previous": "Previous",
     "resizeHint": "Drag to resize · double-click resets",
@@ -3922,7 +3939,8 @@
     "pickFromChain": "Pick a line above to read that briefing.",
     "toSettings": "All settings: AI → News",
     "stillRunning": "The run outlasts the connection — it continues on the server. The page checks back every 15 seconds.",
-    "arrivedLate": "Done — the briefing has arrived."
+    "arrivedLate": "Done — the briefing has arrived.",
+    "calEurostat": "Eurostat events are selected by us and published without a time; 11:00 (Luxembourg) is the usual release time of the euro indicators. Eurostat is not responsible for this adaptation."
   },
   "rangliste": {
     "title": "Coin ranking",
@@ -4084,7 +4102,7 @@
       "keineKerzen": "No candles in range",
       "alt": "{min} min old",
       "verzoegertCa": "approx. {min} min delayed",
-      "info": "How US equity futures and the dollar are moving right now, while crypto keeps trading.\nCrypto often tracks the risk appetite of traditional markets — falling futures and a rising dollar are usually headwinds, even while the crypto price itself still looks calm."
+      "info": "Removed: this tile showed US equity futures (ES, NQ, RTY) and the dollar index from Yahoo Finance. Yahoo prohibits automated retrieval and commercial use; without a permitted replacement the tile stays empty."
     },
     "liq": {
       "title": "Liquidations (live)",
@@ -4139,7 +4157,7 @@
       "impact_medium": "medium impact",
       "impact_low": "low impact",
       "impact_holiday": "holiday",
-      "info": "When the next important economic event is due, with a countdown.\nA high-impact event is a good reason to stop opening new positions shortly before it — the move right after is usually too fast for a clean entry."
+      "info": "When the next important economic release is due, with a countdown — from the calendars of the Federal Reserve, the U.S. Bureau of Economic Analysis and Eurostat.\nA high-impact event is a good reason not to open a new position just before it — the move afterwards is often too fast for a clean entry."
     },
     "positionen": {
       "title": "Positions & plan",
@@ -4179,7 +4197,7 @@
     },
     "kompakt": {
       "title": "Compact",
-      "info": "The side tiles of this page as one line each: trading hours, next event, mechanics, liquidations, long/short, funding, indices, Coin Radar and the two AI assessments.\nSame data as the single tiles, which keep loading in the background. Click a line to open the full tile; the single tiles can be shown again under “Cards” at any time.",
+      "info": "The side tiles of this page as one line each: trading hours, next event, mechanics, liquidations, long/short, funding, Coin Radar and the two AI assessments.\nSame data as the single tiles, which keep loading in the background. Click a line to open the full tile; the single tiles can be shown again under “Cards” at any time.",
       "zeit": "Time",
       "in": "in {zeit}",
       "termin": "Event",
@@ -4641,7 +4659,7 @@
     "status_kandidat": "candidate",
     "kandidatenTitel": "Candidates",
     "kandidatenRegel": "score from {n}, contract and project checked, at least two market measurements, trading, measured in the last run",
-    "kandidatenLeer": "No token meets all conditions right now. That is the normal case: only about one percent of pump.fun tokens ever completes the curve.",
+    "kandidatenLeer": "No token meets all conditions right now. That is normal: only a small share of young tokens is traded to any meaningful degree.",
     "trichterSatz": "Of {n} watched tokens, the first thing missing is: {teile}.",
     "trichter_veraltet": "{n} not measured in the last run",
     "trichter_verworfen": "{n} rejected",
@@ -4685,12 +4703,9 @@
     "kzAlter": "Age",
     "kzPreis": "Price",
     "kzStand": "As of",
-    "quelleName_pumpfun": "pump.fun",
     "quelleName_dexscreener": "DexScreener",
-    "quelleName_geckoterminal": "GeckoTerminal",
+    "quelleName_geckoterminal": "CoinGecko on-chain",
     "quelleName_biz": "/biz/",
-    "quelleName_telegram": "Telegram",
-    "quelleName_reddit": "Reddit",
     "quelleName_smartmoney": "Smart money",
     "quelleName_details": "market data",
     "quelleName_kaeufer": "buyers",
@@ -4717,7 +4732,6 @@
     "halterKurz": "holders",
     "spalteHalter": "Holders",
     "spalteHalterTitel": "Last measured number of holders (RugCheck/GoPlus, for the best of each run)",
-    "signalKoth": "King of the Hill on pump.fun after {m} min",
     "signalSmart": "{n} watched wallet(s) bought: {namen}",
     "signalBoerse": "Already listed: {b}",
     "gueteTitel": "Outcome tracking — does the score hit?",
@@ -4769,13 +4783,15 @@
     "fokusStatus_fehlgeschlagen": "measurement failed",
     "fokusBestes": "best",
     "fokusLebt": "still traded",
-    "fokusTot": "no trading"
+    "fokusTot": "no trading",
+    "spurHinweis": "To be honest: pump.fun, Telegram channels and Reddit were removed for licensing reasons. The trail before the first pool is narrower as a result — a token on the pump.fun curve now only appears if DexScreener or CoinGecko on-chain list it as a venue or someone mentions its contract on /biz/ or X. King of the Hill, comment count and creator record are gone.",
+    "quelleAus": "off"
   },
   "hypeProjekt": {
     "titel": "Project check",
-    "noteTitel": "Substance score 0–100: website, domain age, GitHub, creator history",
+    "noteTitel": "Substance score 0–100: website, domain age, GitHub",
     "keineNoteTitel": "Too little checkable for a score",
-    "info": "What stands behind the token, gathered without keys: the website (sections such as roadmap and tokenomics, does it show the right contract address, placeholder text, site builder), the domain age (RDAP), the GitHub account (maintained, earlier projects with stars) and for pump.fun tokens the other coins of the same wallet — creators who got one through the curve before succeed far more often than the base rate of about 1 %; those launching dozens produce mass goods. Starts at 50, points for and against. What could not be checked (bot protection, TLD without RDAP) costs nothing. No guarantee: a good website is cheap.",
+    "info": "What stands behind the token, gathered without keys: the website (sections such as roadmap and tokenomics, does it show the right contract address, placeholder text, site builder), the domain age (RDAP), the GitHub account (maintained, earlier projects with stars) (the pump.fun creator record is gone). Starts at 50, points for and against. What could not be checked (bot protection, TLD without RDAP) costs nothing. No guarantee: a good website is cheap.",
     "geprueftAm": "checked {z}",
     "pruefen": "Check project",
     "neuPruefen": "check again",
@@ -4787,10 +4803,6 @@
     "ghRepo": "★ {s}, last push {p} ago",
     "ghFork": "fork",
     "ghFrueher": "Earlier projects",
-    "ersteller": "Creator",
-    "erstellerBilanz": "{n} other coins, {g} through the curve, {h} in the last 24 h",
-    "erstellerBeste": "best valuation USD {m}",
-    "erstellerBeispiele": "Completed",
     "unterTag": "under a day",
     "tage": "{n} days",
     "monate": "{n} months",
@@ -4868,11 +4880,11 @@
     "tiefeTitel": "Check contract, holders and project — by contract where known, otherwise by ticker on CoinGecko",
     "tiefeLaeuft": "checking … (up to half a minute)",
     "angekuendigtTitel": "Announced",
-    "angekuendigtHinweis": "Pairs an exchange has already created but which do not trade yet — with the start time where the exchange states it (Binance Futures, OKX, Gate, Bitget). Once trading starts they move to the new listings.",
+    "angekuendigtHinweis": "Pairs an exchange has already created but that do not trade yet — with start time where the exchange states it (Binance futures, Gate, Bitget). Once trading starts they move to the new listings.",
     "angekuendigtLeer": "Nothing announced right now.",
     "spalteStart": "Trading start",
     "spalteHandelsStart": "Trading start",
-    "handelsStartTitel": "When the pair started trading — only Binance Futures, OKX, Gate and Bitget state it; \"Seen\" is the check that noticed it.",
+    "handelsStartTitel": "When the pair started trading — only Binance futures, Gate and Bitget state it; \"Seen\" is the compare in which it showed up.",
     "spalteAuchAuf": "Also on",
     "auchAufTitel": "Other watched exchanges with the same ticker. Matched by ticker, so without guarantee: for small tokens it can be a namesake.",
     "erstauftritt": "only here",
@@ -4892,15 +4904,14 @@
     "startFehler": "Compare could not be started.",
     "ladeFehler": "Exchange watcher could not be loaded.",
     "chipTitel": "{n} markets · as of {z}",
-    "erklaerung": "Young projects climb a ladder: DEX, then Binance Alpha or mid-sized exchanges, then the large ones. A listing at the top is usually the end of the easy part — you want to be in before. Only what the radar flagged before the listing counts.",
-    "stufe_alpha": "Binance Alpha",
+    "erklaerung": "Young projects climb a ladder: DEX, then mid-sized exchanges, then the large ones. A listing at the top is usually the end of the easy part — you want to be in before. Only what the radar flagged before the listing counts.",
     "stufe_mittel": "Mid-sized exchanges",
     "stufe_gross": "Large exchanges",
     "erkannt": "flagged before / newly listed",
     "vorlauf": "median {n} ahead",
     "leiterTitel": "On the way up",
-    "leiterHinweis": "Radar tokens already on Binance Alpha or a mid-sized exchange. Those not yet on a large one come first.",
-    "leiterLeer": "None yet — the list fills as soon as flagged radar tokens appear on Alpha or mid-sized exchanges.",
+    "leiterHinweis": "Radar tokens already on a mid-sized exchange. Those not yet on a large one are at the top.",
+    "leiterLeer": "None yet — the list fills as soon as flagged radar tokens appear on mid-sized exchanges.",
     "neuTitel": "New listings",
     "neuLeer": "None yet. The first compare sets the baseline; new is what appears afterwards.",
     "spalteToken": "Token",
@@ -4917,7 +4928,11 @@
     "namensvetter": "namesake? (same ticker, too small)",
     "nurGesehen": "seen, not flagged",
     "stunden": "{n} h",
-    "tage": "{n} days"
+    "tage": "{n} days",
+    "chipAus": "off",
+    "ausHinweis": "Crossed-out exchanges are not read — switched off in the gear panel (Coinbase, Kraken, KuCoin and Gate by default: terms unclear) or, for Binance, because another market data source is selected.",
+    "ausAbgeschaltet": "Switched off (Hype radar › gear › exchange watcher)",
+    "ausMarktdaten": "Only with Binance as market data source (Settings › Data sources)"
   },
   "chart": {
     "rasterTitel": "Grid: how many charts side by side / stacked",
@@ -5510,7 +5525,7 @@
       "nichtZugestellt": "not delivered"
     },
     "quelle": {
-      "titel": "Price source: Binance (live via websocket, deep history) or your trading exchange's prices (polled)",
+      "titel": "Price source: Binance (live via websocket, deep history — only with market data source Binance) or your trading exchange's prices (polled)",
       "binance": "Binance",
       "bitunix": "Bitunix",
       "bitget": "Bitget",
@@ -5538,7 +5553,10 @@
       "kaufwand": "Buy wall",
       "verkaufswand": "Sell wall",
       "liqLong": "Liq. longs",
-      "liqShort": "Liq. shorts"
+      "liqShort": "Liq. shorts",
+      "quelleAus": "{was}: not available with the selected market data source",
+      "hebelName": "Leverage zones",
+      "buchName": "Order book"
     },
     "ki": {
       "erstellen": "AI analysis for {symbol} {tf}",
@@ -5760,7 +5778,8 @@
     "richtungLong": "Long",
     "richtungShort": "Short",
     "playbook": "Playbook",
-    "farbeEigene": "Custom colour …"
+    "farbeEigene": "Custom colour …",
+    "quelleUmgestellt": "The market data source is not Binance — panels with Binance candles now show {quelle} (futures)."
   },
   "rechtliches": {
     "titel": "Legal",
@@ -5806,5 +5825,86 @@
     "fehler_signatur": "The signature does not match – the key was altered or not issued by us.",
     "fehler_inhalt": "The key is signed but its content is incomplete. Please contact the vendor.",
     "updateGesperrt": "licence needed"
+  },
+  "kiHinweis": {
+    "label": "AI-generated – not investment advice – check the facts",
+    "titel": "This content was produced by an AI model. It is not investment advice and not a recommendation to buy or sell, and it may contain errors — verify figures and statements yourself before any decision.",
+    "bild": "AI-generated – not investment advice",
+    "namen": {
+      "endpunkt": "Own endpoint",
+      "endpunkt2": "OpenAI-compatible endpoint 2"
+    },
+    "anbieter": {
+      "gemini": "For users in the EEA, Switzerland and the UK only permitted with a paid key (Paid Services); on the free tier Google uses inputs and outputs for training.",
+      "endpunkt": "You enter the address, key and model yourself. Inputs are sent to the operator of this endpoint, possibly in a third country — its terms and privacy policy apply.",
+      "minimax": "MiniMax is no longer offered (terms of use could not be verified). An existing configuration keeps working for now; please switch to another provider.",
+      "ollama": "Runs locally. Mind the licence of the loaded model — it applies in addition to Ollama's licence.",
+      "flux": "Black Forest Labs may use inputs and outputs (text and images) to train its models. Do not remove AI labels from the image."
+    }
+  },
+  "datenquellen": {
+    "titel": "Data sources",
+    "aus": {
+      "schluesselFehlt": "{quelle}: only with your own API key",
+      "schluesselFehltText": "This source only runs with your own key. Without it the feature stays off.",
+      "entfernt": "{quelle}: no longer connected",
+      "entferntText": "The terms of this source do not allow its use in AutarkTrade. The feature is unavailable until a permitted replacement exists.",
+      "aus": "{quelle} is switched off",
+      "marktdaten": "Not available with the selected market data source",
+      "marktdatenText": "{quelle} does not provide {was}.",
+      "marktdatenAusText": "Public market data is switched off — so {was} is unavailable.",
+      "zuEinstellungen": "Settings › Data sources"
+    },
+    "faehigkeit": {
+      "kerzen": "Candles (futures)",
+      "spot": "Spot candles and tickers",
+      "ticker": "Tickers of all markets",
+      "orderbuch": "Order book snapshot",
+      "funding": "Funding rates",
+      "symbole": "Contract rules",
+      "oiHistorie": "Open interest history",
+      "takerVolumen": "Taker buy/sell",
+      "longShort": "Long/short ratio",
+      "liquidationen": "Liquidation stream",
+      "streams": "Real-time streams (Bookmap, recorder, replay)",
+      "listungen": "Listing data (trading start)"
+    },
+    "md": {
+      "titel": "Market data source",
+      "unter": "Where prices, candles, order books and funding for chart, market radar, live trading, coin radar and strategy tests come from.",
+      "verantwortungTitel": "Your responsibility",
+      "verantwortung": "Market data comes directly from the selected exchange to your computer. AutarkTrade has no data agreement with any exchange. Whether the exchange's terms allow your use (country, private or business, storing recordings) is for you to check and your responsibility.",
+      "gewaehlt": "selected",
+      "aus": "Off",
+      "beschreibung_binance": "Full scope, including Bookmap, recorder, replay, liquidations, open interest history and long/short.",
+      "beschreibung_bitget": "Basics: candles, tickers, order book, funding. Everything that needs real-time streams or futures statistics stays off.",
+      "beschreibung_aus": "No public market data from exchanges. Journal, account imports and orders via your own API keys keep working.",
+      "weiterhin": "Account data (trades, positions, orders) runs independently via your own exchange keys. The chart can additionally show Bitunix and Bitget candles."
+    },
+    "cg": {
+      "titel": "CoinGecko",
+      "unter": "Only with your own API key.",
+      "hinterlegt": "Key stored (…{ende}, {tarif})",
+      "keiner": "No key — CoinGecko features are off",
+      "wofuer": "Enables: dominance, market overview and stablecoin supply in the market radar, trending and on-chain data (GeckoTerminal) in the hype radar, coin info and deep check in the coin radar.",
+      "schluessel": "API key",
+      "tarif": "Plan",
+      "speichern": "Save",
+      "testen": "Test",
+      "loeschen": "Delete",
+      "holen": "Get a key from CoinGecko",
+      "testOk": "CoinGecko accepts this key.",
+      "testFehler": "CoinGecko rejects: {fehler}",
+      "gespeichert": "Saved.",
+      "geloescht": "Key deleted — CoinGecko features are now off.",
+      "demoHinweis": "You enter into the agreement with CoinGecko yourself. Whether the free demo plan covers your use is governed by CoinGecko's terms; if in doubt, choose a paid plan."
+    },
+    "andere": {
+      "titel": "Other keys",
+      "ki": "AI providers: Settings › AI.",
+      "cryptoquant": "CryptoQuant (ETF flows): in the ETF tile of the market radar.",
+      "solana": "Solana RPC (smart money): Hype radar › Settings — without your own RPC URL smart money stays off.",
+      "boersen": "Exchange accounts (Bitunix, Bitget, Pionex): Settings › Journal."
+    }
   }
 }

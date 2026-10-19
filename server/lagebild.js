@@ -199,9 +199,12 @@ export function baueZeilen(d = {}) {
     }
 
     // ── Makro ───────────────────────────────────────────────────────────
-    if (d.makro?.maerkte?.length) {
+    // Aktien-Futures und Dollar-Index (Yahoo) sind seit S12 entfernt; ältere
+    // Nutzlasten mit `maerkte` werden weiter gelesen, neue haben nur noch den
+    // Stablecoin-Teil (CoinGecko mit Kundenschlüssel).
+    if (d.makro) {
         const namen = { sp500: 'S&P 500', nasdaq: 'Nasdaq 100', russell: 'Russell 2000', dxy: 'Dollar-Index' }
-        const teile = d.makro.maerkte.filter(m => m.verfuegbar).map(m =>
+        const teile = (d.makro.maerkte || []).filter(m => m.verfuegbar).map(m =>
             `${namen[m.id] || m.id} ${pz(m.deltaPct, 2)}${m.offen === false ? ' (Börse zu)' : ''}`)
         const k = d.makro.korrelation
         if (k && nz(k.nasdaq)) teile.push(`Korrelation BTC↔Nasdaq ${k.nasdaq} (${k.deutung})`)

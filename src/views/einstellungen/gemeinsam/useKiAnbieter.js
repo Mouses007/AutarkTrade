@@ -24,6 +24,8 @@ export let aiKeys = reactive({})
 export let aiOllamaUrl = ref('http://localhost:11434')
 export let aiCustomUrl = ref('')
 export let aiQwenUrl = ref('')
+// Zweiter OpenAI-kompatibler Endpunkt (interne ID `deepseek`, S12).
+export let aiDeepseekUrl = ref('')
 export let aiTemperature = ref(0.7)
 export let aiMaxTokens = ref(1500)
 export let aiScreenshots = ref(false)
@@ -141,12 +143,14 @@ export function useKiAnbieter() {
         get() {
             const feld = aktuellerAnbieter.value?.urlSpalte
             if (feld === 'aiQwenUrl') return aiQwenUrl.value
+            if (feld === 'aiDeepseekUrl') return aiDeepseekUrl.value
             if (feld === 'aiCustomUrl') return aiCustomUrl.value
             return ''
         },
         set(wert) {
             const feld = aktuellerAnbieter.value?.urlSpalte
             if (feld === 'aiQwenUrl') aiQwenUrl.value = wert
+            else if (feld === 'aiDeepseekUrl') aiDeepseekUrl.value = wert
             else if (feld === 'aiCustomUrl') aiCustomUrl.value = wert
         },
     })
@@ -215,6 +219,7 @@ export function useKiAnbieter() {
                 aiOllamaUrl: aiOllamaUrl.value || 'http://localhost:11434',
                 aiCustomUrl: aiCustomUrl.value.trim(),
                 aiQwenUrl: aiQwenUrl.value.trim(),
+                aiDeepseekUrl: aiDeepseekUrl.value.trim(),
                 aiTemperature: parseFloat(aiTemperature.value) || 0.7,
                 aiMaxTokens: parseInt(aiMaxTokens.value) || 1500,
                 aiScreenshots: aiScreenshots.value,
@@ -286,6 +291,7 @@ export function useKiAnbieter() {
     function anbieterName(a) {
         if (a?.id === 'ollama') return t('settings.ki.provOllama')
         if (a?.id === 'custom') return t('settings.ki.provCustom')
+        if (a?.id === 'deepseek') return t('kiHinweis.namen.endpunkt2')
         return a?.name || ''
     }
 
@@ -342,6 +348,7 @@ export function useKiAnbieter() {
             aiOllamaUrl.value = s.aiOllamaUrl || 'http://localhost:11434'
             aiCustomUrl.value = s.aiCustomUrl || ''
             aiQwenUrl.value = s.aiQwenUrl || ''
+            aiDeepseekUrl.value = s.aiDeepseekUrl || ''
             aiTemperature.value = s.aiTemperature ?? 0.7
             aiMaxTokens.value = s.aiMaxTokens || 1500
             aiScreenshots.value = s.aiScreenshots || false
@@ -403,7 +410,7 @@ export function useKiAnbieter() {
 
     return {
         // Zustand
-        aiProvider, aiModel, aiKeys, aiOllamaUrl, aiCustomUrl, aiQwenUrl, aiTemperature, aiMaxTokens,
+        aiProvider, aiModel, aiKeys, aiOllamaUrl, aiCustomUrl, aiQwenUrl, aiDeepseekUrl, aiTemperature, aiMaxTokens,
         aiScreenshots, aiChatEnabled, aiReportPrompt, aiReportPromptPreset, aiTestLoading, aiTestResult,
         ollamaModels, modellListen, bildModellListen, bildStandardListen, anbieterListe, ohneSampling,
         aiBerichtProvider, aiBerichtModell, aiAgentProvider, aiAgentModell, aiAgentTokenBudget,

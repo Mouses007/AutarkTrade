@@ -13,10 +13,14 @@
  *   getTransaction           — je neue Signatur einmal, gerechnet in
  *                              `kaeufeAusTransaktion` (nur signierte und
  *                              bezahlte Käufe, keine Airdrops)
- * Damit geht jede RPC-Adresse: die öffentliche (gedrosselt, für eine Handvoll
- * Wallets genug) oder eine eigene, etwa die Gratis-Stufe von Helius. Die
- * Adresse kommt vom Nutzer und läuft deshalb durch `net-guard` — sonst wäre
- * das Feld ein bequemer Weg, den Server ins eigene Netz zu schicken.
+ * Damit geht jede RPC-Adresse, etwa die Gratis-Stufe von Helius — aber nur
+ * eine EIGENE: Seit S12 gibt es keinen öffentlichen Knoten als Vorgabe mehr.
+ * Solana schreibt über `api.mainnet-beta.solana.com` selbst „not intended
+ * for production applications" (Verkaufs-Prüfung Z. 67); ein verkauftes
+ * Programm, das alle Kunden darüber schickt, ist genau das. Ohne eigene
+ * Adresse ist Smart Money aus (`QuelleAus('Solana-RPC', 'schluesselFehlt')`).
+ * Die Adresse kommt vom Nutzer und läuft deshalb durch `net-guard` — sonst
+ * wäre das Feld ein bequemer Weg, den Server ins eigene Netz zu schicken.
  *
  * Gegen den öffentlichen Knoten geprüft am 10.10.2026, an Käufen und
  * Verkäufen auf zwei pump.fun-Kurven: Felder wie dokumentiert, Mengen
@@ -27,10 +31,11 @@
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { pruefeOeffentlicheUrl } from '../net-guard.js'
+import { QuelleAus } from '../quellen/aus.js'
 import { handelAusTransaktion, smartSignale, smartWalletListe } from './fruehphase-bewertung.js'
 
-/** Ohne eigene Adresse: der öffentliche Knoten. Gedrosselt, aber ohne Schlüssel. */
-const OEFFENTLICH = 'https://api.mainnet-beta.solana.com'
+/** Anzeigename in „Quelle aus"-Meldungen. */
+export const RPC_NAME = 'Solana-RPC'
 
 /** Höchstens so viele Transaktionen je Abruf — über alle Wallets. */
 const MAX_TX_JE_ABRUF = 120
@@ -47,10 +52,12 @@ const AUFBEWAHREN_MS = 7 * 24 * 3600e3
 /*
  * Abstand zwischen zwei Transaktionsabrufen. Der öffentliche Knoten erlaubt
  * rund 40 Aufrufe je Methode in zehn Sekunden; 150 ms (fast 70) liefen am
- * 10.10.2026 in HTTP 429. Eine eigene Adresse (Helius & Co.) darf schneller.
+ * 10.10.2026 in HTTP 429. Trägt jemand ihn trotzdem als eigene Adresse ein,
+ * gilt dieser Abstand; Helius & Co. dürfen schneller.
  */
 const PAUSE_OEFFENTLICH_MS = 300
 const PAUSE_EIGEN_MS = 120
+const istOeffentlicherKnoten = (url) => /(^|\.)mainnet-beta\.solana\.com$/i.test((() => { try { return new URL(url).hostname } catch { return '' } })())
 
 /** Bei HTTP 429 so lange warten, dann erneut — danach gilt der Abruf als gescheitert. */
 const WARTEN_BEI_429_MS = [2000, 6000]
@@ -92,14 +99,16 @@ async function rpc(url, method, params, timeout = 15000) {
  * Neue Käufe aller beobachteten Wallets holen und speichern.
  *
  * @param {object} einst     Hype-Radar-Einstellungen (`smartWallets`)
- * @param {string} rpcUrl    eigene RPC-Adresse, leer = öffentlicher Knoten
+ * @param {string} rpcUrl    eigene RPC-Adresse (Pflicht)
  * @returns {Promise<{wallets:number, neu:number, fehler:number}>}
+ * @throws {QuelleAus} ohne eigene RPC-Adresse
  */
 export async function smartAbruf(einst, rpcUrl = '') {
     const wallets = smartWalletListe(einst?.smartWallets)
     if (!wallets.length) return { wallets: 0, neu: 0, fehler: 0 }
-    const url = String(rpcUrl || '').trim() || OEFFENTLICH
-    const abstand = url === OEFFENTLICH ? PAUSE_OEFFENTLICH_MS : PAUSE_EIGEN_MS
+    const url = String(rpcUrl || '').trim()
+    if (!url) throw new QuelleAus(RPC_NAME, 'schluesselFehlt', 'Smart Money braucht eine eigene Solana-RPC-Adresse (Hype-Radar › Einstellungen › Frühphase)')
+    const abstand = istOeffentlicherKnoten(url) ? PAUSE_OEFFENTLICH_MS : PAUSE_EIGEN_MS
     await pruefeOeffentlicheUrl(url)
 
     const knex = getKnex()

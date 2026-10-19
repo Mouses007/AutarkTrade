@@ -1,7 +1,7 @@
 /**
  * Selbsttest: Wartungsmargen-Parser (`margin-rates.js`).
  *
- * Läuft ohne Netz — geprüft wird nur, ob aus den beiden Antwortformaten die
+ * Läuft ohne Netz — geprüft wird nur, ob aus dem Bybit-Antwortformat die
  * richtige STUFE gezogen wird. Genau das ist die Stelle, an der ein Fehler
  * nicht auffällt: eine Rate aus Stufe 3 sieht aus wie eine gültige Zahl, und
  * die Karte zeichnet damit anstandslos Zonen an der falschen Stelle.
@@ -10,7 +10,8 @@
  *
  * Aufruf: node server/__selftest-margin-rates.mjs
  */
-import { parseBinanceKlammern, parseBybitRisikolimit } from './margin-rates.js'
+import { readFileSync } from 'node:fs'
+import { parseBybitRisikolimit, MMR_VORGABE } from './margin-rates.js'
 
 let fehler = 0
 // Auch die bestandenen zählen: `scripts/run-selftests.mjs` liest das Zahlenpaar
@@ -23,60 +24,6 @@ const pruefe = (name, bedingung, zusatz = '') => {
 }
 
 console.log('Wartungsmargen-Parser')
-
-// ── Binance ────────────────────────────────────────────────────────────
-const binanceRoh = {
-    data: {
-        brackets: [
-            {
-                symbol: 'BTCUSDT',
-                riskBrackets: [
-                    { bracketSeq: 1, bracketNotionalFloor: 0, bracketNotionalCap: 300000, bracketMaintenanceMarginRate: 0.004, maxOpenPosLeverage: 150 },
-                    { bracketSeq: 2, bracketNotionalFloor: 300000, bracketNotionalCap: 4000000, bracketMaintenanceMarginRate: 0.005, maxOpenPosLeverage: 100 },
-                ],
-            },
-            {
-                // Umgekehrte Reihenfolge: die Nummer ist Anzeige, die
-                // Untergrenze ist die Aussage.
-                symbol: 'WIFUSDT',
-                riskBrackets: [
-                    { bracketSeq: 2, bracketNotionalFloor: 5000, bracketNotionalCap: 25000, bracketMaintenanceMarginRate: 0.025, maxOpenPosLeverage: 50 },
-                    { bracketSeq: 1, bracketNotionalFloor: 0, bracketNotionalCap: 5000, bracketMaintenanceMarginRate: 0.01, maxOpenPosLeverage: 75 },
-                ],
-            },
-            // Unbrauchbar: keine Stufe mit Untergrenze 0
-            { symbol: 'KAPUTTUSDT', riskBrackets: [{ bracketSeq: 2, bracketNotionalFloor: 1000, bracketNotionalCap: 5000, bracketMaintenanceMarginRate: 0.02 }] },
-            // Unbrauchbar: Rate 0
-            { symbol: 'NULLUSDT', riskBrackets: [{ bracketSeq: 1, bracketNotionalFloor: 0, bracketNotionalCap: 5000, bracketMaintenanceMarginRate: 0 }] },
-        ],
-    },
-}
-
-const tabelle = parseBinanceKlammern(binanceRoh)
-pruefe('BTC nimmt Stufe 1', tabelle.get('BTCUSDT')?.mmr === 0.004, `bekam ${tabelle.get('BTCUSDT')?.mmr}`)
-pruefe('BTC-Obergrenze', tabelle.get('BTCUSDT')?.obergrenze === 300000)
-pruefe('BTC-Stufenzahl', tabelle.get('BTCUSDT')?.stufen === 2)
-pruefe('WIF trotz verdrehter Reihenfolge', tabelle.get('WIFUSDT')?.mmr === 0.01, `bekam ${tabelle.get('WIFUSDT')?.mmr}`)
-pruefe('Symbol ohne Stufe 1 fällt raus', !tabelle.has('KAPUTTUSDT'))
-pruefe('Rate 0 fällt raus', !tabelle.has('NULLUSDT'))
-pruefe('Leere Antwort ergibt leere Tabelle', parseBinanceKlammern({}).size === 0)
-pruefe('null ergibt leere Tabelle', parseBinanceKlammern(null).size === 0)
-
-// ── Volle Klammerliste (seit 31.08.2026 nicht mehr verworfen) ──────────
-{
-    const btc = tabelle.get('BTCUSDT')
-    pruefe('Klammerliste ist vollständig', btc?.klammern?.length === 2,
-        `bekam ${btc?.klammern?.length}`)
-    pruefe('Klammern sind nach Untergrenze sortiert',
-        btc?.klammern[0].floor === 0 && btc?.klammern[1].floor === 300000)
-    pruefe('Klammer trägt mmr und maxHebel je Stufe',
-        btc?.klammern[1].mmr === 0.005 && btc?.klammern[1].maxHebel === 100)
-    const wif = tabelle.get('WIFUSDT')
-    pruefe('verdrehte Reihenfolge wird in den Klammern geradegezogen',
-        wif?.klammern[0].floor === 0 && wif?.klammern[0].mmr === 0.01)
-    pruefe('fehlendes cum wird 0, nicht NaN',
-        btc?.klammern.every(k => Number.isFinite(k.cum)))
-}
 
 // ── Bybit ──────────────────────────────────────────────────────────────
 const bybitRoh = {
@@ -108,9 +55,11 @@ pruefe('Leere Liste ergibt null', parseBybitRisikolimit({ result: { list: [] } }
 pruefe('Fehlende Antwort ergibt null', parseBybitRisikolimit(null) === null)
 pruefe('Rate 0 ergibt null', parseBybitRisikolimit({ result: { list: [{ riskLimitValue: '1', maintenanceMargin: '0', isLowestRisk: 1 }] } }) === null)
 
-// ── Die beiden Börsen sind NICHT austauschbar ──────────────────────────
-// Steht hier als Merkposten: wer hier später mitteln will, bricht diesen Test.
-pruefe('Binance und Bybit weichen bei BTC ab', tabelle.get('BTCUSDT').mmr !== 0.005)
+// ── Binance-Klammern sind entfernt (S12, Verkaufs-Prüfung Zeile 34) ─────
+// Der undokumentierte `bapi`-Endpunkt ist rot; er darf nicht zurückkehren.
+const quelle = readFileSync(new URL('./margin-rates.js', import.meta.url), 'utf8')
+pruefe('kein Binance-bapi-Abruf mehr', !/https?:\/\/[^'"`]*binance\.com/.test(quelle))
+pruefe('Vorgabe bleibt 0,004', MMR_VORGABE === 0.004)
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)
 if (fehler) process.exit(1)

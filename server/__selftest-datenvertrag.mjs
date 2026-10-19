@@ -97,7 +97,8 @@ const liste = (w) => Array.isArray(w)
     }
 }
 
-// ── GeckoTerminal ───────────────────────────────────────────────────────
+// ── On-Chain-Pools (CoinGecko `/onchain`, vormals GeckoTerminal-API) ────
+// Seit S12 über den CoinGecko-Kundenschlüssel; Antwortform unverändert (Doku 19.10.2026).
 {
     const j = lade('geckoterminal-pools')
     p('Fixture geckoterminal vorhanden', Boolean(j))

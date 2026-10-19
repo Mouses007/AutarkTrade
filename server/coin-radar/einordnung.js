@@ -260,7 +260,8 @@ export async function erzeugeEinordnung(bewertet, meta = {}, laufId = 0) {
          * bezahlt ist bezahlt. Deshalb kommen sie aus der Antwort und nicht
          * aus einer eigenen Rechnung.
          */
-        return { text: geprueft.text, kostenUsd: Number(antwort?.costUsd) || 0 }
+        // `kiGeneriert`: EU AI Act Art. 50 — der Aufrufer reicht es an die Antwort weiter (S12).
+        return { text: geprueft.text, kostenUsd: Number(antwort?.costUsd) || 0, kiGeneriert: true }
     } catch (e) {
         logWarn('coin-radar', `Einordnung fehlgeschlagen: ${e.message}`)
         return null

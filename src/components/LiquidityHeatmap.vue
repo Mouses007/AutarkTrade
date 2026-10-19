@@ -31,6 +31,7 @@ import {
 import dayjs from '../utils/journal/zeit.js'
 import Symbol from './basis/Symbol.vue'
 import Kreisel from './basis/Kreisel.vue'
+import QuelleAus from './quellen/QuelleAus.vue'
 
 const emit = defineEmits(['status'])
 
@@ -125,6 +126,8 @@ const overlayEl = ref(null)
 const uiEl = ref(null)
 
 const status = ref('idle')
+/** Ausgrund, wenn die Marktdatenquelle keine Streams hat (S12). */
+const statusAus = ref(null)
 const statusDetail = ref('')
 /** Wie weit horizontal zurückgezogen wurde, in ms — nur fürs Badge, siehe colOffset. */
 const panMs = ref(0)
@@ -338,8 +341,10 @@ function letzteDatenSpalte(ring) {
 
 function setStatus(state, detail) {
     status.value = state
-    statusDetail.value = detail || ''
-    emit('status', { state, detail })
+    // `quelleAus` trägt als Detail den Ausgrund (`{ aus: true, … }`), keinen Text.
+    statusAus.value = state === 'quelleAus' ? detail : null
+    statusDetail.value = state === 'quelleAus' ? (detail?.meldung || '') : (detail || '')
+    emit('status', { state, detail: state === 'quelleAus' ? statusDetail.value : detail })
 }
 
 /** Sichtfenster nachführen; liefert true, wenn die Heatmap neu gezeichnet werden muss. */
@@ -1092,7 +1097,10 @@ watch(liveFrozen, (frozen) => {
         <canvas ref="overlayEl" class="layer layerOverlay"></canvas>
         <canvas ref="uiEl" class="layer layerUi"></canvas>
 
-        <div v-if="status !== 'live' && status !== 'replay'" class="heatBadge">
+        <div v-if="status === 'quelleAus' && statusAus" class="heatAus">
+            <QuelleAus :aus="statusAus" />
+        </div>
+        <div v-else-if="status !== 'live' && status !== 'replay'" class="heatBadge">
             <span v-if="status === 'error'" class="at-schlecht">{{ statusDetail || 'Fehler' }}</span>
             <span v-else-if="status === 'empty'" class="at-warn">
                 <Symbol name="info" class="heatZeichen" />{{ statusDetail || 'Keine Aufzeichnung' }}
@@ -1148,6 +1156,18 @@ watch(liveFrozen, (frozen) => {
 .layerHeat { z-index: 1; }
 .layerOverlay { z-index: 2; }
 .layerUi { z-index: 3; }
+
+/* Marktdatenquelle ohne Streams: Erklärung mittig über der leeren Fläche. */
+.heatAus {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+}
+.heatAus > * { max-width: 28rem; }
 
 .heatBadge {
     position: absolute;

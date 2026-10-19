@@ -32,7 +32,7 @@ import { getClosedCandles } from './market-data.js'
 import { holeHebelzonen } from './hebelzonen.js'
 import { lies as liesLiqTicker } from './liq-ticker.js'
 import { lageZu } from '../shared/handelszeiten.js'
-import { leseKalender } from './marktradar-kalender.js'
+import { leseKalender, KALENDER_LAENDER_VORGABE } from './marktradar-kalender.js'
 import {
     holeMechanik, holeFunding, holeLsOi, holeMakro, holeRsi, holeMarkt,
 } from './marktradar-api.js'
@@ -141,7 +141,7 @@ async function holeTermine(stunden) {
     const daten = await leseKalender({
         von: jetzt - 60 * 60 * 1000,
         bis: jetzt + stunden * 60 * 60 * 1000,
-        laender: s?.radarKalenderLaender ?? 'USD,JPY',
+        laender: s?.radarKalenderLaender ?? KALENDER_LAENDER_VORGABE,
         impact: s?.radarKalenderImpact ?? 'medium',
     })
     const ereignisse = (daten.ereignisse || []).map(e => ({
@@ -275,7 +275,7 @@ export async function sammleHandelsdaten(symbol) {
     }
 }
 
-export function baueSystem(englisch, empfehlungen = false) {
+export function baueSystem(englisch) {
     const regeln = englisch
         ? [
             'You are a sober market observer inside the live-trading window of a trading journal.',
@@ -288,11 +288,7 @@ export function baueSystem(englisch, empfehlungen = false) {
             'The questions you answer, in this order: (1) is there tradable movement at all right now,',
             '(2) what KIND of movement is it, (3) how much room is left, (4) what would make this reading void.',
             'Use ONLY the numbers given. Never invent a number, never add outside knowledge.',
-            ...(empfehlungen
-                ? ['Trading recommendations, price targets and position sizes ARE allowed — but only with the level',
-                    'at which they hold and what would refute them. A number without both, you leave out.',
-                    'They belong in "text" and "bedingungen"; there is no other field for them.']
-                : ['NO trading recommendation: no entries, no exits, no price targets, no position sizes, no "one should".']),
+            'NO trading recommendation: no entries, no exits, no price targets, no position sizes, no "one should".',
             'Conditions ARE wanted: "continuation holds as long as X" is a statement about the market, not about the reader.',
             'Price marks contained in the readings (previous day high/low, session VWAP, day high/low) may be named.',
             'Time beats technique: if an event of high importance is due within an hour, that is the main finding,',
@@ -311,24 +307,10 @@ export function baueSystem(englisch, empfehlungen = false) {
             'Die Fragen, die du beantwortest, in dieser Reihenfolge: (1) ist gerade überhaupt handelbare Bewegung da,',
             '(2) welcher ART ist sie, (3) wie viel Spielraum ist noch übrig, (4) was macht diese Einordnung hinfällig.',
             'Nutze AUSSCHLIESSLICH die genannten Zahlen. Erfinde nie eine Zahl, ergänze kein Fremdwissen.',
-            /*
-             * Der Schalter kippt NUR dieses Verbot. Die Saetze weiter oben, die
-             * sagen was ein Cluster IST, bleiben in jedem Fall stehen — sie
-             * verbieten nichts, sie erklaeren die Zahl.
-             *
-             * Wo die Aussage hin soll, muss dabeistehen: Das Antwortschema hat
-             * kein Feld fuer Kursziele (`normalisiereHandelslage` wirft alles
-             * weg, was es nicht kennt). Ohne diesen Hinweis landet die erlaubte
-             * Aussage in einem erfundenen Feld und verschwindet stillschweigend
-             * — der Leser haette den Schalter umgelegt, ohne dass sich etwas
-             * aendert.
-             */
-            ...(empfehlungen
-                ? ['Handelsempfehlungen, Kursziele und Positionsgrössen sind ERLAUBT — aber nur mit der Marke,',
-                    'an der sie gelten, und dem, was sie widerlegt. Eine Zahl ohne beides laesst du weg.',
-                    'Sie gehoeren in "text" und "bedingungen"; ein anderes Feld dafuer gibt es nicht.']
-                : ['KEINE Handelsempfehlung: keine Einstiege, keine Ausstiege, keine Kursziele, keine Positionsgrössen,',
-                    'kein „sollte man".']),
+            // Gilt immer — den Schalter `kiEmpfehlungenAn`, der dieses Verbot
+            // kippte, gibt es seit S12 (19.10.2026) nicht mehr (Verkaufs-Prüfung 2.8).
+            'KEINE Handelsempfehlung: keine Einstiege, keine Ausstiege, keine Kursziele, keine Positionsgrössen,',
+            'kein „sollte man".',
             'Bedingungen sind ausdrücklich erwünscht: „Fortsetzung trägt, solange X" ist eine Aussage über den Markt,',
             'nicht über den Leser.',
             'Preismarken, die in den Messwerten stehen (Vortageshoch/-tief, Tages-VWAP, Tageshoch/-tief), darfst du nennen.',
@@ -434,13 +416,9 @@ export async function erzeugeHandelslage(symbol, { erzwingen = false, auto = fal
             throw new Error('Zu wenige Quellen liefern gerade Daten — eine Handelslage wäre geraten')
         }
 
-        // `kiEmpfehlungenAn` gleich mitlesen: ein globaler Schalter
-        // (Einstellungen → KI → Allgemein), der bestimmt, ob diese Kachel
-        // Kursziele und Empfehlungen geben darf. Vorgabe aus.
-        const s = await getKnex()('settings').select('language', 'kiEmpfehlungenAn')
+        const s = await getKnex()('settings').select('language')
             .where('id', 1).first().catch(() => null)
         const englisch = s?.language === 'en'
-        const empfehlungen = Number(s?.kiEmpfehlungenAn ?? 0) === 1
 
         const cfg = await ladeLlmConfigFuerAufgabe('livetrading-handelslage')
         // Gleiche Begründung wie bei der Gesamtlage: die bestellte Antwort ist
@@ -452,7 +430,7 @@ export async function erzeugeHandelslage(symbol, { erzwingen = false, auto = fal
         // lange Herleitung: `low` reicht.
         cfg.aufwand = 'low'
 
-        const system = baueSystem(englisch, empfehlungen)
+        const system = baueSystem(englisch)
         const user = [
             `SYMBOL: ${sym}`,
             `ZEITPUNKT: ${new Date().toISOString()} (UTC)`,
@@ -494,6 +472,8 @@ export async function erzeugeHandelslage(symbol, { erzwingen = false, auto = fal
             costUsd: antwort.costUsd ?? null,
             automatisch: auto,
             autoRest: autoRestHeute(),
+            // EU AI Act Art. 50: maschinenlesbar als KI-Ausgabe markiert (S12).
+            kiGeneriert: true,
         }
         console.log(` -> Handelslage ${sym}: Quellen ${tGesammelt - t0} ms, KI ${Date.now() - tGesammelt} ms `
             + `(${cfg.provider}/${cfg.model}), ${grundlage.length} Zeilen${auto ? ', automatisch' : ''}`)

@@ -7,6 +7,7 @@ import { loadDbConfig } from './db-config.js'
 import { seedDefaultTemplates, korrigiereVorlagenKategorien } from './default-templates.js'
 import { seedDefaultLernkarten } from './default-lernkarten.js'
 import { istGewinn } from '../shared/gewinn.js'
+import { migriereS12 } from './migrationen/s12.js'
 
 let knex = null
 
@@ -871,10 +872,11 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'levMapHours', (t) => t.integer('levMapHours').defaultTo(48))
     await addColumnIfNotExists('settings', 'levMapSpanPct', (t) => t.float('levMapSpanPct').defaultTo(8))
     await addColumnIfNotExists('settings', 'levMapMmr', (t) => t.float('levMapMmr').defaultTo(0.004))
-    // Woher die Wartungsmarge kommt: 'binance' | 'bybit' | 'manuell'. Vorgabe
-    // ist die Börse, auf der die Karte rechnet — die alte feste 0,004 stimmte
-    // nur für BTC/ETH und lag bei allen anderen Coins deutlich zu tief.
-    await addColumnIfNotExists('settings', 'levMapMmrQuelle', (t) => t.string('levMapMmrQuelle').defaultTo('binance'))
+    // Woher die Wartungsmarge kommt: 'bybit' | 'manuell'. Die alte feste 0,004
+    // stimmte nur für BTC/ETH und lag bei allen anderen Coins deutlich zu tief.
+    // 'binance' las einen undokumentierten bapi-Endpunkt und ist seit S12 weg
+    // (Verkaufs-Prüfung Z. 34); `migrationen/s12-marktdaten.js` stellt um.
+    await addColumnIfNotExists('settings', 'levMapMmrQuelle', (t) => t.string('levMapMmrQuelle').defaultTo('bybit'))
     await addColumnIfNotExists('settings', 'levMapWeights', (t) => t.string('levMapWeights').defaultTo('40,30,20,10'))
     await addColumnIfNotExists('settings', 'levMapView', (t) => t.string('levMapView').defaultTo('dist'))
     await addColumnIfNotExists('settings', 'levMapThreshold', (t) => t.float('levMapThreshold').defaultTo(0))
@@ -1854,7 +1856,7 @@ async function runMigrations(knex, client) {
         console.log(' -> Created table: calendar_events')
     }
 
-    await addColumnIfNotExists('settings', 'radarKalenderLaender', (t) => t.text('radarKalenderLaender').defaultTo('USD,JPY'))
+    await addColumnIfNotExists('settings', 'radarKalenderLaender', (t) => t.text('radarKalenderLaender').defaultTo('USD,EUR'))
     await addColumnIfNotExists('settings', 'radarKalenderImpact', (t) => t.text('radarKalenderImpact').defaultTo('medium'))
 
     /*
@@ -3540,6 +3542,11 @@ async function runMigrations(knex, client) {
         }
         if (geaendert) console.log(` -> v28: Aktienbörsen-Gebühren aus ${geaendert} Tageszeilen entfernt`)
     }
+
+    // ── Quellen & Pflichthinweise (S12) ────────────────────────────────
+    // Marktdatenquelle, CoinGecko-Tarif und die Überführungen der Bereiche,
+    // siehe `server/migrationen/s12.js`. Additiv, ohne neue SCHEMA_VERSION.
+    await migriereS12(knex, addColumnIfNotExists)
 
     // ==================== SCHEMA-ANKER ====================
     // Ganz am Ende, damit die Version erst steht, wenn alle Checks durch sind.

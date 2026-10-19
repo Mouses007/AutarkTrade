@@ -342,10 +342,10 @@ const WIEDERHOLUNG_MS = 30 * 60 * 1000
  * an, als je gemessen werden konnte, und Frühphase und Hype kamen hinter
  * Hunderttausenden Coin-Aufträgen nie an die Reihe. Frühphase und Hype zuerst:
  * ihre Quellen sind die langsamen, und ihre Fenster schliessen sich (ein Token
- * ohne Kerzen in GeckoTerminal ist nach Wochen nicht mehr nachzumessen).
+ * ohne On-Chain-Kerzen ist nach Wochen nicht mehr nachzumessen).
  */
-// Frühphase knapp: jede Messung kostet bis zu zwei GeckoTerminal-Abrufe, und dort
-// gehen nur fünf je Minute — der Durchgang braucht sie für die Käufer.
+// Frühphase knapp: jede Messung kostet bis zu drei CoinGecko-Abrufe (Pools,
+// Kerzen), und das Demo-Kontingent (30/min) teilt sie mit dem Durchgang.
 export const DECKEL_JE_ART = { frueh: 4, hype: 20, coinradar: 40, abverkauf: 10 }
 
 /** Ein Durchgang hört nach so langer Zeit auf; der Rest wartet auf den nächsten. */
@@ -380,7 +380,7 @@ export async function messeFaellige(deckel = DECKEL_JE_ART) {
         if (Date.now() - beginn > DURCHGANG_MS) break
         /*
          * Frühphasen-Aufträge nach alten Regeln werden nicht ausgewertet — sie
-         * zu messen kostete je Auftrag DexScreener, pump.fun und zwei
+         * zu messen kostete je Auftrag DexScreener, pump.fun (bis S12) und zwei
          * GeckoTerminal-Abrufe. Gemessen am 10.10.2026 auf der NAS: 389 solche
          * standen vor den sechs neuen, und ihr Verbrauch fehlte dem laufenden
          * Durchgang bei den Käufern (31 von 150 Token).
@@ -559,21 +559,21 @@ async function messeHype(a) {
     }
 }
 
-/** GeckoTerminal-Netz je Kette — für die Kerzen des Messfensters. */
+/** On-Chain-Netz (CoinGecko `/onchain`, GeckoTerminal-Kennung) je Kette — für die Kerzen des Messfensters. */
 const GECKO_NETZ = { solana: 'solana', ethereum: 'eth', base: 'base', bsc: 'bsc' }
 
 /** Kerzenbreite für das MFE: fünfzehn Minuten — ein Stundenhoch verwischt den Ausbruch, der zählt. */
 const MFE_KERZE_MS = 15 * 60e3
 
 /**
- * Höchster Kurs im Messfenster aus GeckoTerminal-Kerzen — rein.
+ * Höchster Kurs im Messfenster aus On-Chain-Kerzen — rein.
  *
  * Nur Kerzen, die im Fenster BEGINNEN. Bis 10.10.2026 zählte die Stunde VOR
  * dem Start mit (`von − 1 h`): Ein Token, der kurz vor der Meldung schon
  * gestiegen war, brachte sein altes Hoch als „Höchststand danach" mit — bei
  * einem Ausbruch ist das die Regel, nicht die Ausnahme.
  *
- * @param {Array} ohlcv  GeckoTerminal `ohlcv_list`: [Sekunden, o, h, l, c, v]
+ * @param {Array} ohlcv  `ohlcv_list` (CoinGecko `/onchain/…/ohlcv`): [Sekunden, o, h, l, c, v]
  * @returns {{hoch:number, erstesOpen:number, erste:number}|null}
  */
 export function hochImFenster(ohlcv, von, bis) {
@@ -587,30 +587,27 @@ export function hochImFenster(ohlcv, von, bis) {
 
 /** Ab so vielen Transaktionen in sechs Stunden „lebt" ein Token noch. */
 export const LEBT_MIN_TX_6H = 5
-const LEBT_FENSTER_MS = 6 * 3600e3
 
 /**
  * Lebt der Token noch — wird er GEHANDELT? Rein.
  *
  * Bis 10.10.2026 hiess „lebt": DexScreener kennt ein Paar mit Liquidität über
- * null. Ein toter Token mit gesperrter Liquidität lebte damit für immer, und
- * ein Token auf der Kurve, den pump.fun kennt, lebte schon deshalb. Jetzt
+ * null. Ein toter Token mit gesperrter Liquidität lebte damit für immer. Jetzt
  * zählt Handel: mindestens fünf Transaktionen in den letzten sechs Stunden
- * (DexScreener), auf der Kurve der letzte Handel innerhalb von sechs Stunden
- * (pump.fun nennt nur den Zeitpunkt, keine Zahl).
+ * (DexScreener — auch auf der pump.fun-Kurve, die DexScreener als Paar
+ * `pumpfun` führt). Bis S12 sprang für Kurven-Token pump.fun mit dem Zeitpunkt
+ * des letzten Handels ein; ohne DexScreener-Angabe ist es jetzt unbekannt.
  *
  * @returns {1|0|null} null = Paar bekannt, aber ohne Angabe zum Handel
  */
-export function lebtNoch({ markt = null, coin = null, jetzt = Date.now() } = {}) {
+export function lebtNoch({ markt = null } = {}) {
     if (markt) {
         if (markt.liquiditaetUsd !== null && markt.liquiditaetUsd !== undefined && Number(markt.liquiditaetUsd) === 0) return 0
         const tx6 = markt.transaktionen6h
         if (tx6 !== null && tx6 !== undefined && Number.isFinite(Number(tx6))) return Number(tx6) >= LEBT_MIN_TX_6H ? 1 : 0
+        return null
     }
-    const letzter = Number(coin?.last_trade_timestamp)
-    if (coin && Number.isFinite(letzter) && letzter > 0) return jetzt - letzter <= LEBT_FENSTER_MS ? 1 : 0
-    if (markt || coin) return null
-    // Weder DexScreener noch pump.fun kennt ihn: weg.
+    // DexScreener kennt ihn nicht mehr: weg.
     return 0
 }
 
@@ -631,33 +628,44 @@ export function renditeGleichesMass(start = {}, ende = {}) {
 }
 
 /**
+ * Die Pools, in denen ein Token gehandelt wird — CoinGecko On-Chain
+ * (`/onchain/networks/{netz}/tokens/{adresse}/pools`), höchstens `n`. Die
+ * pump.fun-Kurve ist dort ein eigener Pool (Dex `pump-fun`). Rein bis auf den Abruf.
+ */
+async function poolsVon(holeCoinGecko, netz, contract, n = 2) {
+    const j = await holeCoinGecko(`/onchain/networks/${netz}/tokens/${encodeURIComponent(contract)}/pools?page=1`)
+    return (Array.isArray(j?.data) ? j.data : []).map((p) => String(p?.attributes?.address || '')).filter(Boolean).slice(0, n)
+}
+
+/**
  * Frühphase: lebt der Token, hat er die Kurve geschafft, was wurde aus Preis
  * oder Bewertung — und wie hoch stand er zwischendurch?
  *
  * Auf der Kurve gibt es oft keinen Preis von DexScreener; dort ist die
  * Bewertung der Massstab (bei fester Menge bewegen sich beide gleich).
  *
- * pump.fun wird über `pumpCoin` gelesen (`/coins-v2`; `/coins/{mint}` antwortet
- * für jeden Coin mit 404). Ein Ausfall WIRFT — bis 10.10.2026 wurde jeder
- * Fehler zu „pump.fun kennt ihn nicht", und ohne DexScreener-Paar daraus „tot".
+ * Seit S12 ohne pump.fun (Verkaufs-Prüfung Z. 60): „durch die Kurve" liest
+ * sich am DexScreener-Handelsplatz (`pumpfun` = noch auf der Kurve, alles
+ * andere = weitergezogen); ohne Paar ist es unbekannt, nicht „nein". Die
+ * Kerzen für den Höchststand kommen von CoinGecko On-Chain, nur mit dem
+ * Schlüssel des Kunden — ohne ihn bleibt das MFE unbekannt (null), der
+ * Auftrag scheitert daran nicht.
  */
 async function messeFrueh(a) {
     if (!a.contract) throw new Error('keine Vertragsadresse')
-    const { dexDetails, holeJson, pumpCoin } = await import('./hype-radar/quellen.js')
+    const { dexDetails, holeCoinGecko } = await import('./hype-radar/quellen.js')
+    const { istAus } = await import('./quellen/aus.js')
     const d = await dexDetails(a.contract, { streng: true })
     // Der Zustand am Start sagt es (Kurve, Quelle, Handelsplatz); die Endung nur bei Altbestand.
     const istPump = a.pumpFun !== null && a.pumpFun !== undefined
         ? Number(a.pumpFun) === 1
         : a.chain === 'solana' && /pump$/i.test(String(a.contract))
-    const coin = istPump ? await pumpCoin(a.contract) : null
     const m = d?.markt || null
 
     const preisEnde = positiv(m?.preisUsd)
-    const mcapEnde = positiv(m?.marktkapitalisierung) ?? positiv(m?.fdv) ?? positiv(coin?.usd_market_cap)
+    const mcapEnde = positiv(m?.marktkapitalisierung) ?? positiv(m?.fdv)
     const liqEnde = m && m.liquiditaetUsd !== null && m.liquiditaetUsd !== undefined ? zahl(m.liquiditaetUsd) : null
-    let graduiert = null
-    if (coin) graduiert = coin.complete === true ? 1 : 0
-    else if (istPump && m?.dex) graduiert = m.dex !== 'pumpfun' ? 1 : 0
+    const graduiert = istPump && m?.dex ? (m.dex !== 'pumpfun' ? 1 : 0) : null
 
     const { renditePct } = renditeGleichesMass(a, { preisEnde, mcapEnde })
 
@@ -665,12 +673,12 @@ async function messeFrueh(a) {
      * MFE über alle Pools, in denen der Token im Fenster gehandelt wurde: auf
      * der Kurve UND im Pool danach. Bis 10.10.2026 nur über das Paar, das
      * DexScreener am ENDE zeigte — für einen Token, der zwischendurch die
-     * Kurve verliess, fehlte damit genau die Phase, in der er stieg.
+     * Kurve verliess, fehlte damit genau die Phase, in der er stieg. Die
+     * Kurven-Adresse kam bis S12 von pump.fun, jetzt aus der Poolliste.
      */
     let mfePct = null
     const netz = GECKO_NETZ[a.chain]
-    const pools = [...new Set([coin?.bonding_curve, coin?.pool_address, d?.pair].filter(Boolean))].slice(0, 2)
-    if (netz && pools.length) {
+    if (netz) {
         const dauer = HORIZONTE.frueh[a.horizont] || 0
         const von = Number(a.erstelltAm)
         const bis = von + dauer
@@ -678,21 +686,31 @@ async function messeFrueh(a) {
         let hoch = null
         let fruehestes = null
         let beantwortet = 0
-        for (const pool of pools) {
+        let ohneSchluessel = false
+        let pools = d?.pair ? [d.pair] : []
+        try {
+            pools = [...new Set([...await poolsVon(holeCoinGecko, netz, a.contract), ...pools])].slice(0, 2)
+        } catch (e) {
+            if (istAus(e)) ohneSchluessel = true
+            else if (Number(e.status) !== 404 && !letzterVersuch) throw new Error(`On-Chain-Pools: ${e.message}`)
+        }
+        for (const pool of ohneSchluessel ? [] : pools) {
             let j
             try {
-                j = await holeJson(`https://api.geckoterminal.com/api/v2/networks/${netz}/pools/${encodeURIComponent(pool)}`
+                j = await holeCoinGecko(`/onchain/networks/${netz}/pools/${encodeURIComponent(pool)}`
                     + `/ohlcv/minute?aggregate=15&limit=${Math.min(1000, Math.ceil(dauer / MFE_KERZE_MS) + 2)}`
                     + `&before_timestamp=${Math.ceil(bis / 1000)}&currency=usd&token=${encodeURIComponent(a.contract)}`)
             } catch (e) {
                 /*
-                 * Kennt GeckoTerminal den Pool nicht, fehlt er eben. Alles andere —
-                 * Drosselung, Ausfall — ist vorübergehend: dann wird der Auftrag
-                 * später wiederholt. Bis 10.10.2026 wurde daraus still „kein
-                 * Höchststand", endgültig: auf der NAS hatte eine von 40 Messungen ein MFE.
+                 * Kein Schlüssel: MFE unbekannt. Kennt CoinGecko den Pool nicht,
+                 * fehlt er eben. Alles andere — Drosselung, Ausfall — ist
+                 * vorübergehend: dann wird der Auftrag später wiederholt. Bis
+                 * 10.10.2026 wurde daraus still „kein Höchststand", endgültig: auf
+                 * der NAS hatte eine von 40 Messungen ein MFE.
                  */
+                if (istAus(e)) { ohneSchluessel = true; break }
                 if (Number(e.status) === 404) continue
-                if (!letzterVersuch) throw new Error(`GeckoTerminal-Kerzen: ${e.message}`)
+                if (!letzterVersuch) throw new Error(`On-Chain-Kerzen: ${e.message}`)
                 continue
             }
             // `token=` wählt die Seite des Pools; ohne Gegenprobe wäre es bei vertauschten Seiten der SOL-Kurs.
@@ -705,7 +723,9 @@ async function messeFrueh(a) {
             if (!fruehestes || f.erste < fruehestes.erste) fruehestes = f
         }
         const basis = positiv(a.preisStart) ?? positiv(fruehestes?.erstesOpen)
-        if (hoch !== null && basis) {
+        if (ohneSchluessel) {
+            mfePct = null
+        } else if (hoch !== null && basis) {
             mfePct = ((hoch - basis) / basis) * 100
         } else if (hoch === null && beantwortet > 0 && positiv(a.preisStart)) {
             /*
@@ -720,7 +740,7 @@ async function messeFrueh(a) {
     return {
         preisEnde, mcapEnde, liquiditaetEnde: liqEnde,
         renditePct, mfePct, graduiert,
-        nochHandelbar: lebtNoch({ markt: m, coin, jetzt: Date.now() }),
+        nochHandelbar: lebtNoch({ markt: m }),
     }
 }
 

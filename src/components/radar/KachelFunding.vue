@@ -10,6 +10,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { liveSymbol } from '../../stores/live.js'
+import { marktdaten } from '../../utils/marktdaten.js'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -42,6 +43,9 @@ function sortiere(feld) {
 
 const proz = (v) => `${(v * 100).toFixed(3)} %`
 const jahr = (v) => `${(v * 100).toFixed(1)} %`
+/** Börse der Marktbreite: die gewählte Marktdatenquelle, nicht fest Binance (S12). */
+const boerse = computed(() => marktdaten.value?.name || 'Binance')
+
 // Für die eigenen Märkte: Binance-, Bybit- oder Bitunix-Wert kann fehlen
 const pa = (v) => (v === null || v === undefined ? '—' : jahr(v))
 const farbe = (v) => (v === null || v === undefined ? 'muted' : v >= 0 ? 'hoch' : 'tief')
@@ -79,6 +83,9 @@ function bisZahlung(ms) {
                 :class="['ctl-pill', daten.rang === 'mcap' ? 'active' : '']"
                 @click.stop="emit('params', { rang: 'mcap' })">{{ t('marktradar.funding.byMcap') }}</button>
         </div>
+        <!-- Mcap gewählt, aber kein CoinGecko-Schlüssel: der Server rechnet nach
+             Umsatz und sagt es — die Kachel sagt es weiter. -->
+        <p v-if="daten.rangErsatz" class="fErsatz">{{ t('marktradar.mcapErsatz') }}</p>
         <!-- Klein: zuerst DEINE Märkte. Die Extreme des Gesamtmarkts sitzen
              fast immer in Mikro-Werten, die niemand handelt — die stehen
              deshalb kleiner darunter. -->
@@ -86,7 +93,7 @@ function bisZahlung(ms) {
             <template v-if="(daten.eigene || []).length">
                 <div class="fKopf">
                     <span>{{ t('marktradar.funding.yours') }}</span>
-                    <span class="fLegende">Binance · Bitunix</span>
+                    <span class="fLegende">{{ boerse }} · Bitunix</span>
                 </div>
                 <div class="fEigene">
                     <div v-for="r in (daten.eigene || []).slice(0, 8)" :key="r.symbol" class="fZeile"
@@ -128,7 +135,7 @@ function bisZahlung(ms) {
                     <thead>
                         <tr>
                             <th>{{ t('marktradar.funding.symbol') }}</th>
-                            <th class="r">Binance {{ t('marktradar.funding.annual') }}</th>
+                            <th class="r">{{ boerse }} {{ t('marktradar.funding.annual') }}</th>
                             <th class="r">Bybit {{ t('marktradar.funding.annual') }}</th>
                             <th class="r">Bitunix {{ t('marktradar.funding.annual') }}</th>
                             <th class="r">{{ t('marktradar.funding.interval') }}</th>
@@ -388,5 +395,11 @@ function bisZahlung(ms) {
     margin: 0.6rem 0 0;
     font-size: 0.8rem;
     color: var(--white-60);
+}
+
+.fErsatz {
+    margin: 0 0 0.3rem;
+    font-size: 0.72rem;
+    color: var(--warn);
 }
 </style>

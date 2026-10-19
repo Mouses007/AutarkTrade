@@ -84,13 +84,6 @@ const KREIS_FAKTOR = 8
 const MIN_VOL_BASIS_USD = 1000
 
 /*
- * King of the Hill ist ein Ereignis, kein Zustand: Bis 10.10.2026 wurde es
- * fortgeschrieben und zählte als Momentum 60–80, auch Tage später und nach
- * einem Absturz. Es gilt so lange nach dem Erreichen.
- */
-const KOTH_GILT_MS = 3 * 3600e3
-
-/*
  * Momentum misst das Wachstum über höchstens dieses Fenster. Vorher war die
  * Basis die älteste gespeicherte Aufnahme — bei 48 Aufnahmen sind das je nach
  * Takt 4 Stunden (5 min) oder 48 Stunden (60 min): dieselbe Bewegung ergab je
@@ -431,13 +424,12 @@ export function momentaufnahme(markt = {}, sozial = {}, ts = Date.now(), { fenst
     return {
         ts,
         /*
-         * Bewertung in fester Reihenfolge: DexScreener bzw. GeckoTerminal vor
-         * pump.fun. Bis 10.10.2026 kam pump.fun zuerst, sobald der Token in
-         * einer pump.fun-Liste stand — und ein Token rutscht von Lauf zu Lauf
-         * in diese Listen hinein und wieder heraus. Momentum und Einbruch
-         * rechneten dann zwischen zwei Quellen statt über die Zeit.
+         * Bewertung in fester Reihenfolge: Marktkapitalisierung vor FDV, beide
+         * von DexScreener bzw. CoinGecko On-Chain. (Bis S12 kam pump.fun als
+         * dritte Quelle dazu; bis 10.10.2026 sogar zuerst — Momentum und
+         * Einbruch rechneten dann zwischen zwei Quellen statt über die Zeit.)
          */
-        mcap: positiv(markt.marktkapitalisierung, markt.fdv, markt.marktKapUsd),
+        mcap: positiv(markt.marktkapitalisierung, markt.fdv),
         liq: zahl(markt.liquiditaetUsd),
         preis: zahl(markt.preisUsd),
         vol1h: zahl(markt.volumen1h),
@@ -448,18 +440,14 @@ export function momentaufnahme(markt = {}, sozial = {}, ts = Date.now(), { fenst
         kaeufe1h: zahl(markt.kaeufe1h),
         verkaeufe1h: zahl(markt.verkaeufe1h),
         // Verschiedene Wallets und die Transaktionen DESSELBEN Pools — für
-        // Beteiligung und Kreishandel; beides aus GeckoTerminal, nie gemischt.
+        // Beteiligung und Kreishandel; beides aus CoinGecko On-Chain, nie gemischt.
         kaeufer1h: zahl(markt.kaeufer1h),
         verkaeufer1h: zahl(markt.verkaeufer1h),
         poolTx1h: zahl(markt.poolTx1h),
         aend1h: zahl(markt.aenderung1h),
-        antworten: zahl(markt.antworten),
         // Halter: nur, wenn in DIESEM Durchgang gemessen (Risikoprüfung) —
         // eine fortgeschriebene Zahl sähe aus wie Stillstand.
         halter: positiv(markt.halter),
-        // King of the Hill (pump.fun-Startseite): Minuten ab Start, und wann.
-        kothMin: zahl(markt.kothMin),
-        kothAm: zahl(markt.kothAm),
         fenster: Number.isFinite(fenster) && fenster > 0 ? fenster : null,
         erw: Number(sozial.erwaehnungen) || 0,
         plattformen: Array.isArray(sozial.plattformen) ? sozial.plattformen.length : 0,
@@ -493,13 +481,12 @@ export function verteilePlaetze(bekannte = [], neue = [], max = 150, neuPlaetze 
  * Funkstille: Sie wird nicht geschrieben, die letzte bleibt stehen, und nach
  * `VERGESSEN_MS` fällt der Token heraus.
  *
- * Nicht mitgezählt wird, was aus dem letzten Stand übernommen ist — King of
- * the Hill und die X-Nennungen werden fortgeschrieben und sähen sonst aus wie
- * eine Messung. Nennungen aus DIESEM Durchgang gibt der Aufrufer mit.
+ * Nicht mitgezählt wird, was aus dem letzten Stand übernommen ist — die
+ * X-Nennungen werden fortgeschrieben und sähen sonst aus wie eine Messung. Nennungen aus DIESEM Durchgang gibt der Aufrufer mit.
  */
 export function hatMessung(stand, sozialDiesmal = false) {
     if (!stand) return false
-    return sozialDiesmal || ['mcap', 'liq', 'preis', 'vol1h', 'tx1h', 'tx5m', 'kaeufer1h', 'antworten']
+    return sozialDiesmal || ['mcap', 'liq', 'preis', 'vol1h', 'tx1h', 'tx5m', 'kaeufer1h']
         .some((k) => stand[k] !== null && stand[k] !== undefined)
 }
 
@@ -691,7 +678,6 @@ function handelsSchub(stand, frueher, geborenAm) {
  * @param {Array}  e.verlauf      frühere Momentaufnahmen (ohne `stand`)
  * @param {number} e.projektNote  Substanz-Note der Projektprüfung (oder null)
  * @param {object} e.links        {webseiten, kanaele}
- * @param {object} e.ersteller    Ersteller-Bilanz (oder null)
  * @param {boolean} e.profil      bezahltes DexScreener-Profil / Community-Übernahme
  * @param {number} e.geborenAm    Startzeit des Tokens (ms) oder null — rechnet
  *                                die Stundenzahlen junger Token auf ihr Alter um
@@ -700,7 +686,7 @@ function handelsSchub(stand, frueher, geborenAm) {
  *                                Messung (0) — für JEDEN Token gleich
  * @returns {{note:number, teilnoten:object, abdeckung:number, markt:number, belastbar:boolean, befunde:Array, trend:string}}
  */
-export function bewerteFrueh({ stand, verlauf = [], projektNote = null, links = null, ersteller = null, profil = false, risiko = null, smart = null, geborenAm = null, sozialGeprueft = false } = {}) {
+export function bewerteFrueh({ stand, verlauf = [], projektNote = null, links = null, profil = false, risiko = null, smart = null, geborenAm = null, sozialGeprueft = false } = {}) {
     const befunde = []
     const plus = (schluessel, text) => befunde.push({ art: 'plus', schluessel, text })
     const minus = (schluessel, text) => befunde.push({ art: 'minus', schluessel, text })
@@ -777,27 +763,18 @@ export function bewerteFrueh({ stand, verlauf = [], projektNote = null, links = 
 
     // ── Sozial: mehr Plattformen, mehr Erwähnungen als zuvor ────────────
     /*
-     * Gemessen ist Sozial, wenn in diesem Durchgang eine soziale Quelle lief —
-     * dann heisst „nirgends genannt" 0, und zwar für JEDEN Token. Bis
-     * 10.10.2026 entschied die pump.fun-Kommentarzahl: pump.fun-Token hatten
-     * sie (meist 0) und bekamen Sozial = 0, alle anderen „unbekannt" — ein
-     * Nachteil von bis zu einem Viertel des Gewichts, allein wegen der Herkunft.
-     * Ein Kommentar-Zuwachs ist ein positiver Beleg und zählt immer.
+     * Gemessen ist Sozial, wenn in diesem Durchgang eine soziale Quelle lief
+     * (/biz/, X) — dann heisst „nirgends genannt" 0, und zwar für JEDEN Token.
+     * Bis 10.10.2026 entschied die pump.fun-Kommentarzahl: pump.fun-Token
+     * hatten sie (meist 0) und bekamen Sozial = 0, alle anderen „unbekannt".
+     * Die Kommentarzahl ist seit S12 mit pump.fun entfernt. Lief keine soziale
+     * Quelle und nennt keine den Token, ist Sozial unbekannt (null), nie 0.
      */
-    let kommentareJeStunde = null
-    if (vorige?.antworten !== null && vorige?.antworten !== undefined && stand.antworten !== null) {
-        kommentareJeStunde = (stand.antworten - vorige.antworten) / Math.max(0.25, (stand.ts - vorige.ts) / 3600e3)
-    }
-    const kommentarSchub = kommentareJeStunde !== null && kommentareJeStunde >= 20
-    if (sozialGeprueft || stand.plattformen > 0 || kommentarSchub) {
+    if (sozialGeprueft || stand.plattformen > 0) {
         let s = Math.min(60, stand.plattformen * 20)
         if (vorige && stand.erw >= 2 && stand.erw >= (vorige.erw || 0) * 2) {
             s += 25
             plus('sozialSchub', `Erwähnungen ${vorige.erw || 0} → ${stand.erw}`)
-        }
-        if (kommentarSchub) {
-            s += 15
-            plus('kommentare', `${Math.round(kommentareJeStunde)} neue Kommentare je Stunde auf pump.fun`)
         }
         teilnoten.sozial = klemme(s)
         if (stand.plattformen >= 2) plus('plattformen', `Erwähnt auf ${stand.plattformen} unabhängigen Plattformen`)
@@ -811,7 +788,7 @@ export function bewerteFrueh({ stand, verlauf = [], projektNote = null, links = 
     } else {
         /*
          * Ohne Projektprüfung dieselben Massstäbe wie in ihr: Ein Tweet, ein
-         * TikTok-Video oder die Coin-Seite auf pump.fun ist keine Webseite, ein
+         * TikTok-Video oder eine Coin-Seite auf einer Handelsplattform ist keine Webseite, ein
          * Link auf einen einzelnen Beitrag oder einen Handelsbot kein Kanal.
          */
         const kanaele = new Set((links?.kanaele || []).map((k) => kanalAus(k?.url))
@@ -828,7 +805,6 @@ export function bewerteFrueh({ stand, verlauf = [], projektNote = null, links = 
      * über `links`.
      */
     if (profil) info('profil', 'Bezahltes DexScreener-Profil oder Community-Übernahme — Werbebudget, kein Beleg für ein Team')
-    if (ersteller?.graduiert > 0) plus('erstellerErfolg', `Ersteller hat schon ${ersteller.graduiert} Coin(s) durch die Kurve gebracht`)
 
     // ── Momentum: Bewertung über höchstens zwölf Stunden ────────────────
     const erste = frueher.find((s) => s.mcap !== null && s.ts >= stand.ts - MOMENTUM_FENSTER_MS) || null
@@ -839,20 +815,6 @@ export function bewerteFrueh({ stand, verlauf = [], projektNote = null, links = 
     } else {
         teilnoten.momentum = null
     }
-    /*
-     * King of the Hill: der Token stand oben auf der pump.fun-Startseite —
-     * genug Kaufdruck, um alle anderen Starts der Stunde zu überholen. Ohne
-     * Verlauf ist das die einzige Momentum-Messung, die es gibt — aber nur
-     * kurz nach dem Erreichen (`KOTH_GILT_MS`). Ohne Zeitpunkt (Aufnahmen vor
-     * dem 10.10.2026) zählt es nicht mehr.
-     */
-    const kothAm = zahl(stand.kothAm)
-    if (stand.kothMin !== null && stand.kothMin !== undefined && kothAm !== null && stand.ts - kothAm <= KOTH_GILT_MS) {
-        const schnell = stand.kothMin <= 30
-        teilnoten.momentum = Math.max(teilnoten.momentum ?? 0, schnell ? 80 : 60)
-        plus('koth', `King of the Hill auf pump.fun nach ${Math.max(1, Math.round(stand.kothMin))} min, vor ${dauerText(stand.ts - kothAm)}`)
-    }
-
     // ── Gewichtete Note über das, was messbar war ───────────────────────
     let summe = 0
     let gewicht = 0
@@ -921,21 +883,6 @@ export function bewerteFrueh({ stand, verlauf = [], projektNote = null, links = 
         && stand.aend1h !== null && Math.abs(stand.aend1h) < 5) {
         note -= 10
         minus('washVerdacht', 'Volumen verfünffacht, Preis kaum bewegt — Verdacht auf Wash-Trading')
-    }
-    /*
-     * Serien-Ersteller: Die Projektprüfung zieht dafür schon ab (−20 Serie,
-     * −10 Masse), und ihre Note IST die Team-Teilnote. Ein zweiter Abzug hier
-     * strafte dasselbe doppelt, ein Ersteller-Erfolg zählte dagegen nur
-     * einmal. Abgezogen wird nur noch, wenn keine Projektnote vorliegt.
-     */
-    if (ersteller && ersteller.graduiert === 0 && ersteller.andere >= 10) {
-        const text = `Ersteller hat ${ersteller.andere}${ersteller.vollstaendig === false ? '+' : ''} Coins aufgelegt, keiner kam durch die Kurve`
-        if (Number.isFinite(Number(projektNote)) && projektNote !== null) {
-            info('erstellerSerie', text)
-        } else {
-            note -= 20
-            minus('erstellerSerie', text)
-        }
     }
     // Eingebrochen: vom Höchststand der Beobachtung um mehr als 80 % gefallen.
     const hoch = Math.max(0, ...frueher.map((s) => s.mcap || 0), stand.mcap || 0)

@@ -18,6 +18,7 @@ import { spinnerLoadingPage } from '../stores/ui.js'
 import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
+import KiHinweis from '../components/quellen/KiHinweis.vue'
 import { useXDecCurrencyFormat } from '../utils/journal/format.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
@@ -418,7 +419,9 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || 'â
                         <Pille ton="neutral">{{ instanzName(v.instanceId) }}</Pille>
                         <Pille ton="neutral">{{ v.source }}</Pille>
                     </div>
-                    <p class="fein at-gedaempft abstandUnten">{{ v.rationale }}</p>
+                    <p class="fein at-gedaempft abstandUnten" :data-ki-generiert="v.source === 'agent' ? 'true' : null">{{ v.rationale }}</p>
+                    <!-- S12: VorschlÃ¤ge des KI-Agenten tragen das Pflichtlabel. -->
+                    <KiHinweis v-if="v.source === 'agent'" klein />
                     <div class="chips abstandUnten">
                         <Pille v-for="(wert, key) in v.proposedParams" :key="key" ton="neutral">
                             {{ key }}: {{ wert }}

@@ -73,8 +73,8 @@ const tierAuswahl = computed(() => parseTierAuswahl(levMapTier.value))
 const tierAktiv = (L) => tierAuswahl.value?.includes(L) ?? false
 
 /**
- * Effektiver Hebel einer Pille: der Max-Hebel des Symbols (aus den Binance-
- * Brackets) klemmt Stufen, die es dort gar nicht gibt — eine 100x-Pille bei
+ * Effektiver Hebel einer Pille: der Max-Hebel des Symbols (aus den Bybit-
+ * Risikolimits) klemmt Stufen, die es dort gar nicht gibt — eine 100x-Pille bei
  * einem 75x-Coin zeigt dann „75x". Kollabiert eine Stufe komplett auf eine
  * niedrigere (Max-Hebel 50: 100x wäre dasselbe wie 50x), wird sie deaktiviert.
  */
@@ -182,7 +182,9 @@ const mmrHinweis = computed(() => {
     if (h.zustand === 'fehler') return t('levmap.mmrFailed')
     if (h.zustand !== 'da') return t('levmap.mmrHintAuto')
 
-    const teile = [t('levmap.mmrFrom', { quelle: h.quelle === 'bybit' ? 'Bybit' : 'Binance' })]
+    // Schweigt Bybit, gilt die feste Vorgabe — das soll man sehen (S12).
+    if (h.quelle === 'vorgabe') return t('levmap.mmrVorgabe')
+    const teile = [t('levmap.mmrFrom', { quelle: 'Bybit' })]
     if (h.obergrenze) teile.push(t('levmap.mmrUpTo', { n: kurzBetrag(h.obergrenze) }))
     if (h.ersatz) teile.push(t('levmap.mmrSubstitute'))
     if (h.veraltet) teile.push(t('levmap.mmrStale'))
@@ -580,7 +582,6 @@ onMounted(async () => {
 
             <label class="lpLabel lpOben">{{ t('levmap.mmr') }}</label>
             <select v-model="levMapMmrQuelle" class="sidebar-select lpUnten" :title="t('levmap.mmrSourceTitle')">
-                <option value="binance">{{ t('levmap.mmrSourceBinance') }}</option>
                 <option value="bybit">{{ t('levmap.mmrSourceBybit') }}</option>
                 <option value="manuell">{{ t('levmap.mmrSourceManual') }}</option>
             </select>

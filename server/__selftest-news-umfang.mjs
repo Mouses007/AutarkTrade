@@ -388,42 +388,30 @@ p('undefined ist nicht endgültig', istEndgueltig(undefined) === false)
 }
 
 /*
- * Handelsempfehlungen, Kursziele, Prognosen — wählbar seit 05.09.2026
- * (`kiEmpfehlungenAn`, gilt auch für die Gesamtlage- und Handelslage-Kachel).
+ * Handelsempfehlungen, Kursziele, Prognosen — immer verboten.
  *
- * Vorgabe AUS: Der Bericht geht per Mail hinaus, auch an die Empfängerliste.
- * Eingeschaltet bleibt die Pflicht, Bedingung und Widerlegung zu nennen — eine
- * nackte Zahl ist auch dann keine Aussage.
+ * Von 05.09.2026 bis S12 (19.10.2026) gab es den Schalter `kiEmpfehlungenAn`,
+ * der das Verbot aus dem Bericht nahm. Er ist weg (Verkaufs-Prüfung 2.8): der
+ * Bericht geht per Mail hinaus, auch an die Empfängerliste, und eine
+ * persönliche Empfehlung verlangt bei den KI-Anbietern menschliche Prüfung.
+ * Ausführlich: `server/__selftest-ki-empfehlungen.mjs`.
  */
 {
-    const aus = bauLagePrompt({ themen: ['crypto'] })
-    const an = bauLagePrompt({ themen: ['crypto'], empfehlungen: true })
+    const p0 = bauLagePrompt({ themen: ['crypto'] })
+    const alt = bauLagePrompt({ themen: ['crypto'], empfehlungen: true })
 
-    p('Vorgabe verbietet Empfehlungen wie bisher',
-        aus.includes('Keine Handelsempfehlungen, keine Kursziele, keine Prognosen.'))
-    p('eingeschaltet sind sie erlaubt',
-        an.includes('sind ERLAUBT') && !an.includes('Keine Handelsempfehlungen, keine Kursziele, keine Prognosen.'))
-    // Erlaubt heisst nicht schrankenlos: ohne Bedingung und Widerlegung nicht.
-    p('erlaubt verlangt Begründung, Marke und Widerlegung',
-        an.includes('was die Aussage widerlegt') && an.includes('lässt du weg'))
-    p('erlaubt trennt eigene Einschätzung von Fremdprognose',
-        an.includes('Prognosen der ZITIERTEN Quellen'))
+    p('Bericht verbietet Empfehlungen',
+        p0.includes('Keine Handelsempfehlungen, keine Kursziele, keine Prognosen.'))
+    p('ein altes `empfehlungen: true` ändert den Prompt nicht', alt === p0)
+    p('nirgends „ERLAUBT"', !p0.includes('ERLAUBT'))
+    // Die Waage stellt Fragen, sie entscheidet nicht.
+    p('„offen" bleibt eine Frage', p0.includes('über 66.000 kaufen'))
 
-    // Die Waage stellt Fragen — auch wenn Empfehlungen erlaubt sind. Sonst
-    // steht die Antwort in der Spalte, die die Frage stellen soll.
-    p('„offen" bleibt in beiden Fassungen eine Frage',
-        aus.includes('über 66.000 kaufen') && an.includes('Die Waage wägt ab, sie entscheidet nicht'))
-
-    // Die Prüfung der eigenen Anweisung muss mitziehen, sonst nennt sie eine
-    // Anweisung „gegenregel", die der Leser längst erlaubt hat.
-    const pruefAus = bauAnweisungPruefPrompt({ themen: ['crypto'] })
-    const pruefAn = bauAnweisungPruefPrompt({ themen: ['crypto'], empfehlungen: true })
-    p('Anweisungsprüfung kennt das Verbot in der Vorgabe',
-        pruefAus.includes('keine Handelsempfehlungen'))
-    p('Anweisungsprüfung nennt Empfehlungen dann nicht mehr unverrückbar',
-        !pruefAn.includes('keine Handelsempfehlungen') && pruefAn.includes('ERLAUBT'))
-    p('Anweisungsprüfung kennt die neue Grenze der Kapitel-Lage',
-        pruefAus.includes('bleibt wirkungslos') && pruefAn.includes('bleibt wirkungslos'))
+    const pruef = bauAnweisungPruefPrompt({ themen: ['crypto'] })
+    p('Anweisungsprüfung kennt das Verbot', pruef.includes('keine Handelsempfehlungen'))
+    p('Anweisungsprüfung: altes `empfehlungen: true` ändert nichts',
+        bauAnweisungPruefPrompt({ themen: ['crypto'], empfehlungen: true }) === pruef)
+    p('Anweisungsprüfung kennt die Grenze der Kapitel-Lage', pruef.includes('bleibt wirkungslos'))
 }
 
 

@@ -431,7 +431,8 @@ export function setupOllamaRoutes(app) {
                 usage: tokenUsage, bezug: { typ: 'bericht', id: savedId },
             })
 
-            res.json({ report, provider, model: model || provider, data: reportData, tokenUsage, savedId })
+            // `kiGeneriert` (S12, EU AI Act Art. 50): maschinenlesbare Kennzeichnung in jeder KI-Antwort dieser Datei.
+            res.json({ report, provider, model: model || provider, data: reportData, tokenUsage, savedId, kiGeneriert: true })
         } catch (e) {
             console.error('AI report error:', e)
             const guthabenLeer = await merkeGuthabenAusFehler(e)
@@ -461,7 +462,7 @@ export function setupOllamaRoutes(app) {
             const prompt = buildPrompt(reportData)
             const ollamaModel = model || 'llama3.2:latest'
             const result = await generateOllama(prompt, ollamaModel, 0.7, 1500, await getOllamaUrl())
-            res.json({ report: result.text, model: ollamaModel, data: reportData })
+            res.json({ report: result.text, model: ollamaModel, data: reportData, kiGeneriert: true })
         } catch (e) {
             console.error('Ollama report error:', e)
             res.status(500).json({ error: 'Bericht-Generierung fehlgeschlagen' })
@@ -778,7 +779,8 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                 review: result.text,
                 provider,
                 model: model || provider,
-                tokenUsage: result.usage
+                tokenUsage: result.usage,
+                kiGeneriert: true,
             })
         } catch (e) {
             console.error('Trade review error:', e)
@@ -795,7 +797,8 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                 res.json({
                     review: note.aiReview,
                     provider: note.aiReviewProvider || '',
-                    model: note.aiReviewModel || ''
+                    model: note.aiReviewModel || '',
+                    kiGeneriert: true,
                 })
             } else {
                 res.json({ review: '', provider: '', model: '' })
@@ -816,7 +819,8 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
             const messages = await knex('ai_trade_messages')
                 .where('tradeId', tradeId)
                 .orderBy('id', 'asc')
-            res.json(messages)
+            // Antworten der KI tragen die Kennzeichnung je Nachricht.
+            res.json(messages.map((m) => (m.role === 'assistant' ? { ...m, kiGeneriert: true } : m)))
         } catch (e) {
             res.json([])
         }
@@ -925,7 +929,8 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
 
             res.json({
                 reply: result.text,
-                tokenUsage: result.usage
+                tokenUsage: result.usage,
+                kiGeneriert: true,
             })
         } catch (e) {
             console.error('Trade review chat error:', e)
@@ -1113,7 +1118,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
     app.post('/api/ai/settings', async (req, res) => {
         try {
             const knex = getKnex()
-            const { aiProvider, aiModel, aiOllamaUrl, aiCustomUrl, aiQwenUrl, aiTemperature, aiMaxTokens, aiScreenshots, aiReportPrompt, aiChatEnabled, keys } = req.body
+            const { aiProvider, aiModel, aiOllamaUrl, aiCustomUrl, aiQwenUrl, aiDeepseekUrl, aiTemperature, aiMaxTokens, aiScreenshots, aiReportPrompt, aiChatEnabled, keys } = req.body
 
             // SSRF-Schutz: Ollama-URL validieren bevor sie in die DB geht
             const sanitizedOllamaUrl = aiOllamaUrl || 'http://localhost:11434'
@@ -1131,10 +1136,15 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
             if (aiQwenUrl && !sauberQwen) {
                 return res.status(400).json({ error: 'Die Qwen-Basis-URL ist ungültig (nur http/https).' })
             }
+            // Zweiter OpenAI-kompatibler Endpunkt (interne ID `deepseek`, S12).
+            const sauberEndpunkt2 = basisUrl(aiDeepseekUrl)
+            if (aiDeepseekUrl && !sauberEndpunkt2) {
+                return res.status(400).json({ error: 'Die Basis-URL des Endpunkts 2 ist ungültig (nur http/https).' })
+            }
             // Über das Protokoll hinaus: keine Zugangsdaten in der Adresse und
             // kein Metadaten-Dienst als „Modell-Endpunkt". Ein Ziel im eigenen
             // Netz bleibt erlaubt — dafür sind diese Felder da.
-            for (const [feld, wert] of [['Die Basis-URL des eigenen Anbieters', sauberCustom], ['Die Qwen-Basis-URL', sauberQwen]]) {
+            for (const [feld, wert] of [['Die Basis-URL des eigenen Anbieters', sauberCustom], ['Die Qwen-Basis-URL', sauberQwen], ['Die Basis-URL des Endpunkts 2', sauberEndpunkt2]]) {
                 if (!wert) continue
                 try {
                     await pruefeKiEndpunkt(wert)
@@ -1149,6 +1159,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                 aiOllamaUrl: sanitizedOllamaUrl,
                 aiCustomUrl: sauberCustom,
                 ...(aiQwenUrl !== undefined ? { aiQwenUrl: sauberQwen } : {}),
+                ...(aiDeepseekUrl !== undefined ? { aiDeepseekUrl: sauberEndpunkt2 } : {}),
                 aiTemperature: aiTemperature ?? 0.7,
                 aiMaxTokens: aiMaxTokens || 1500,
                 aiScreenshots: aiScreenshots ? 1 : 0,
@@ -1214,6 +1225,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                 aiOllamaUrl: settings?.aiOllamaUrl || 'http://localhost:11434',
                 aiCustomUrl: settings?.aiCustomUrl || '',
                 aiQwenUrl: settings?.aiQwenUrl || '',
+                aiDeepseekUrl: settings?.aiDeepseekUrl || '',
                 aiTemperature: settings?.aiTemperature ?? 0.7,
                 aiMaxTokens: settings?.aiMaxTokens || 1500,
                 aiScreenshots: settings?.aiScreenshots === 1,
@@ -1278,6 +1290,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                     logWarn('ollama-api', `Invalid reportData JSON for ai_reports.id=${r.id}, using fallback object`, e)
                     r.reportData = {}
                 }
+                r.kiGeneriert = true
             }
             res.json(reports)
         } catch (e) {
@@ -1313,7 +1326,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
             const messages = await knex('ai_report_messages')
                 .where('reportId', reportId)
                 .orderBy('id', 'asc')
-            res.json(messages)
+            res.json(messages.map((m) => (m.role === 'assistant' ? { ...m, kiGeneriert: true } : m)))
         } catch (e) {
             console.error('Load chat messages error:', e)
             res.json([])
@@ -1426,7 +1439,8 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
 
             res.json({
                 reply: result.text,
-                tokenUsage: result.usage
+                tokenUsage: result.usage,
+                kiGeneriert: true,
             })
         } catch (e) {
             console.error('Chat error:', e)

@@ -4,9 +4,14 @@
  * Das Ziel ist nicht „handelbar auf der eigenen Börse", sondern: VOR dem
  * Listing einer grossen Börse investiert sein. Junge Projekte starten fast nie
  * auf einer zentralen Börse; sie steigen eine Leiter hinauf — DEX, dann
- * Binance Alpha oder mittlere Börsen (MEXC, Gate, KuCoin, Bitget), dann die
- * grossen (Binance, Coinbase, Upbit, OKX, Bybit, Kraken). Ein Listing ganz oben
- * ist meist das Ende des leichten Teils der Bewegung, nicht der Anfang.
+ * mittlere Börsen (Gate, KuCoin, Bitget), dann die grossen (Binance,
+ * Coinbase, Bybit, Kraken). Ein Listing ganz oben ist meist das Ende des
+ * leichten Teils der Bewegung, nicht der Anfang.
+ *
+ * Seit S12 (Verkaufs-Prüfung vom 19.10.2026) ohne Upbit, OKX und MEXC (deren
+ * Bedingungen verbieten Drittprogramme bzw. kommerzielle Nutzung der
+ * Marktdaten) und ohne Binance Alpha (undokumentierter `bapi`-Endpunkt des
+ * Web-Frontends). Die Sprosse „Alpha" gibt es damit nicht mehr.
  *
  * Drei Fragen, drei Funktionen:
  *   neueEintraege   was ist seit dem letzten guten Stand dazugekommen?
@@ -18,17 +23,13 @@
 
 /** Die beobachteten Börsen. `stufe` ist die Sprosse der Leiter. */
 export const BOERSEN = [
-    { id: 'binance-alpha', name: 'Binance Alpha', stufe: 'alpha' },
     { id: 'binance-spot', name: 'Binance Spot', stufe: 'gross' },
     { id: 'binance-futures', name: 'Binance Futures', stufe: 'gross' },
     { id: 'coinbase', name: 'Coinbase', stufe: 'gross' },
-    { id: 'upbit', name: 'Upbit', stufe: 'gross' },
-    { id: 'okx', name: 'OKX', stufe: 'gross' },
     { id: 'bybit', name: 'Bybit', stufe: 'gross' },
     { id: 'kraken', name: 'Kraken', stufe: 'gross' },
     { id: 'kucoin', name: 'KuCoin', stufe: 'mittel' },
     { id: 'gate', name: 'Gate', stufe: 'mittel' },
-    { id: 'mexc', name: 'MEXC', stufe: 'mittel' },
     { id: 'bitget', name: 'Bitget', stufe: 'mittel' },
 ]
 export const BOERSE_NACH_ID = new Map(BOERSEN.map((b) => [b.id, b]))
@@ -49,7 +50,7 @@ export const MAX_NEU_JE_ABRUF = 40
 
 /**
  * Gegenwährungen, die von Paarnamen ohne Trennzeichen abgeschnitten werden
- * (Binance, MEXC). Längste zuerst, damit FDUSD nicht als USD endet.
+ * (Binance). Längste zuerst, damit FDUSD nicht als USD endet.
  */
 const GEGEN = ['FDUSD', 'USDT', 'USDC', 'TUSD', 'BUSD', 'USDE', 'AEUR', 'EURI', 'DAI', 'TRY', 'EUR', 'BRL', 'JPY',
     'ARS', 'MXN', 'PLN', 'RON', 'ZAR', 'UAH', 'COP', 'CZK', 'IDR', 'BTC', 'ETH', 'BNB', 'USD']
@@ -88,25 +89,9 @@ export const LESER = {
     // `ticker/price` (ein Array) wird weiter gelesen.
     'binance-futures': (j) => eindeutig((Array.isArray(j) ? j : (Array.isArray(j?.symbols) ? j.symbols : []))
         .filter((x) => !x?.status || x.status === 'TRADING').map((x) => basisAusPaar(x?.symbol))),
-    'binance-alpha': (j) => {
-        const liste = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : [])
-        const raus = new Map()
-        for (const t of liste) {
-            const symbol = kuerzel(t?.symbol)
-            if (!symbol) continue
-            const chain = alphaKette(t?.chainId)
-            const contract = normVertrag(chain, t?.contractAddress)
-            const schluessel = contract ? `${chain}|${contract}` : `sym|${symbol}`
-            raus.set(schluessel, { schluessel, symbol, chain, contract })
-        }
-        return [...raus.values()].sort((a, b) => a.schluessel.localeCompare(b.schluessel))
-    },
     coinbase: (j) => eindeutig((Array.isArray(j) ? j : [])
         .filter((p) => String(p?.status || 'online') === 'online' && p?.trading_disabled !== true)
         .map((p) => kuerzel(p?.base_currency))),
-    upbit: (j) => eindeutig((Array.isArray(j) ? j : []).map((m) => kuerzel(String(m?.market || '').split('-')[1]))),
-    okx: (j) => eindeutig((Array.isArray(j?.data) ? j.data : [])
-        .filter((x) => String(x?.state || 'live') === 'live').map((x) => kuerzel(x?.baseCcy))),
     bybit: (j) => eindeutig((Array.isArray(j?.result?.list) ? j.result.list : [])
         .filter((x) => String(x?.status || 'Trading') === 'Trading').map((x) => kuerzel(x?.baseCoin))),
     kraken: (j) => eindeutig(Object.values(j?.result || {}).map((x) => {
@@ -117,24 +102,22 @@ export const LESER = {
         .filter((x) => x?.enableTrading !== false).map((x) => kuerzel(x?.baseCurrency))),
     gate: (j) => eindeutig((Array.isArray(j) ? j : [])
         .filter((x) => String(x?.trade_status || 'tradable') === 'tradable').map((x) => kuerzel(x?.base))),
-    mexc: (j) => eindeutig((Array.isArray(j?.data) ? j.data : []).map((s) => basisAusPaar(s))),
     bitget: (j) => eindeutig((Array.isArray(j?.data) ? j.data : [])
         .filter((x) => String(x?.status || 'online') === 'online').map((x) => kuerzel(x?.baseCoin))),
 }
 
 // ── Handelsstart ────────────────────────────────────────────────────────
 /*
- * Vier Börsen nennen in derselben Liste, WANN ein Paar zu handeln beginnt —
+ * Drei Börsen nennen in derselben Liste, WANN ein Paar zu handeln beginnt —
  * auch für Paare, die angelegt, aber noch nicht offen sind. Geprüft gegen die
  * Live-Antworten am 12.10.2026:
  *
  *   Binance Futures  `onboardDate` (ms), `status: PENDING_TRADING` vor dem Start
  *                    (GAIBUSDT stand fünf Wochen vorher drin)
- *   OKX              `listTime` (ms), `state: preopen` vor dem Start
  *   Gate             `buy_start` (s), `trade_status: sellable` bis Kaufstart
  *   Bitget           `openTime` (ms); angekündigte Paare stehen nicht drin
  *
- * Coinbase, Upbit, Bybit, Kraken, MEXC und Binance Spot führen keinen Zeitpunkt.
+ * Coinbase, Bybit, Kraken und Binance Spot führen keinen Zeitpunkt (OKX bis S12).
  * Ein Zeitpunkt vor 2015 ist ein Lesefehler (0, Sekunden statt ms), kein Start.
  */
 const NACH_2015 = Date.UTC(2015, 0, 1)
@@ -151,10 +134,6 @@ export const STARTS = {
     'binance-futures': (j, jetzt = Date.now()) => sammleStarts((Array.isArray(j?.symbols) ? j.symbols : []).map((x) => ({
         symbol: basisAusPaar(x?.symbol), start: ms(x?.onboardDate),
         offen: x?.status === 'TRADING', vorher: x?.status === 'PENDING_TRADING',
-    })), jetzt),
-    okx: (j, jetzt = Date.now()) => sammleStarts((Array.isArray(j?.data) ? j.data : []).map((x) => ({
-        symbol: kuerzel(x?.baseCcy), start: ms(x?.listTime),
-        offen: x?.state === 'live', vorher: x?.state === 'preopen',
     })), jetzt),
     gate: (j, jetzt = Date.now()) => sammleStarts((Array.isArray(j) ? j : []).map((x) => {
         const start = ms(x?.buy_start, 1000)
@@ -198,23 +177,13 @@ function sammleStarts(zeilen, jetzt = Date.now()) {
     return { laufend, angekuendigt }
 }
 
-/** Binance-Alpha-Ketten-Kennung → unsere Kette. */
-function alphaKette(id) {
-    const s = String(id || '')
-    if (s === '56') return 'bsc'
-    if (s === '1') return 'ethereum'
-    if (s === '8453') return 'base'
-    if (/^CT_501$|^501$|sol/i.test(s)) return 'solana'
-    return s.toLowerCase()
-}
-
 export function normVertrag(chain, contract) {
     const c = String(contract || '').trim()
     if (!c) return ''
     return chain === 'solana' ? c : c.toLowerCase()
 }
 
-/** Schlüssel eines Eintrags — bei Alpha das Objekt, sonst das Kürzel selbst. */
+/** Schlüssel eines Eintrags — das Kürzel selbst (Objekte trug bis S12 nur Binance Alpha). */
 export const eintragSchluessel = (e) => (typeof e === 'string' ? e : e?.schluessel || '')
 
 // ── Neue Listungen ──────────────────────────────────────────────────────
@@ -253,7 +222,8 @@ export function neueEintraege(alt, neu) {
 /**
  * Eine neue Listung dem Wissen des Radars zuordnen.
  *
- * Nach VERTRAG (Binance Alpha nennt ihn) ist das sicher. Nach Kürzel nur,
+ * Nach VERTRAG ist das sicher (bis S12 nannte ihn Binance Alpha; die
+ * verbliebenen Börsenlisten führen nur Kürzel). Nach Kürzel nur,
  * wenn der gleichnamige Radar-Token gross genug ist, um überhaupt gelistet zu
  * werden — sonst ist es ein Namensvetter, und dann zählt er nicht als
  * „rechtzeitig erkannt". Das würde die Vorlaufstatistik schönen.
@@ -308,23 +278,18 @@ export const istTreffer = (z) => z.treffer === 'vertrag' || z.treffer === 'kuerz
  * Auf welchen Börsen steht ein Token gerade?
  *
  * @param {{symbol, chain, contract, bewertungUsd}} token
- * @param {Map<string, Set<string>>} staende  Börse → Schlüssel (Kürzel; bei Alpha `chain|contract`)
- * @returns {{alpha:boolean, mittel:string[], gross:string[]}}
+ * @param {Map<string, Set<string>>} staende  Börse → Kürzel
+ * @returns {{mittel:string[], gross:string[]}}
  */
 export function leiterFuer(token, staende) {
-    const raus = { alpha: false, mittel: [], gross: [] }
+    const raus = { mittel: [], gross: [] }
     const symbol = kuerzel(token.symbol)
-    const v = normVertrag(token.chain, token.contract)
     // Ein kleiner DEX-Token mit gleichem Kürzel wie ein CEX-Coin ist ein
     // Namensvetter — die Kürzel-Treffer zählen erst ab der Listungsgrösse.
     const kuerzelZaehlt = Number(token.bewertungUsd) >= MIN_BEWERTUNG_KUERZEL
     for (const [id, eintraege] of staende || []) {
         const b = BOERSE_NACH_ID.get(id)
         if (!b) continue
-        if (b.stufe === 'alpha') {
-            if (v && eintraege.has(`${token.chain}|${v}`)) raus.alpha = true
-            continue
-        }
         if (kuerzelZaehlt && eintraege.has(symbol)) raus[b.stufe].push(b.name)
     }
     return raus
@@ -334,24 +299,19 @@ export function leiterFuer(token, staende) {
  * Auf welchen ANDEREN Börsen steht dasselbe Kürzel schon? Für eine neue oder
  * angekündigte Listung: ist sie ein Erstauftritt oder zieht sie nach?
  *
- * Über das Kürzel, also ohne Gewähr: QI auf MEXC und QI auf einer anderen
- * Börse können verschiedene Token sein. Binance Alpha zählt nur über den
- * Vertrag, weil es dort Schlüssel aus Kette und Vertrag führt.
+ * Über das Kürzel, also ohne Gewähr: QI auf Gate und QI auf einer anderen
+ * Börse können verschiedene Token sein.
  *
  * @returns {string[]} Börsennamen in der Reihenfolge von `BOERSEN`
  */
 export function auchGelistetAuf(listung, staende) {
     const symbol = kuerzel(listung.symbol)
-    const v = normVertrag(listung.chain, listung.contract)
     const raus = []
     for (const b of BOERSEN) {
         if (b.id === listung.boerse) continue
         const eintraege = staende?.get(b.id)
         if (!eintraege) continue
-        const da = b.stufe === 'alpha'
-            ? (v && eintraege.has(`${listung.chain}|${v}`)) || eintraege.has(`sym|${symbol}`)
-            : eintraege.has(symbol)
-        if (da) raus.push(b.name)
+        if (eintraege.has(symbol)) raus.push(b.name)
     }
     return raus
 }
@@ -364,7 +324,7 @@ export function auchGelistetAuf(listung, staende) {
  */
 export function vorlaufStatistik(listungen = []) {
     const raus = {}
-    for (const stufe of ['alpha', 'mittel', 'gross']) {
+    for (const stufe of ['mittel', 'gross']) {
         const l = listungen.filter((z) => BOERSE_NACH_ID.get(z.boerse)?.stufe === stufe)
         const erkannt = l.filter((z) => istTreffer(z) && Number(z.radarSeit) > 0 && Number(z.radarSeit) <= Number(z.gesehenAm))
         const tage = erkannt.map((z) => (Number(z.gesehenAm) - Number(z.radarSeit)) / 86400e3).sort((a, b) => a - b)

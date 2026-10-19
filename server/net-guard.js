@@ -30,14 +30,16 @@ const HTTP_TIMEOUT = 10000
 const MAX_BYTES = 2 * 1024 * 1024
 const MAX_UMLEITUNGEN = 3
 
-/** Eigene Quellen — fest verdrahtet, brauchen keine Namensauflösung. */
+/**
+ * Eigene Quellen — fest verdrahtet, brauchen keine Namensauflösung.
+ * Die Binance-Hosts stehen seit S12 nicht mehr hier: kein Abruf über diesen
+ * Wächter geht an Binance (Marktdaten laufen über `server/marktdaten/`).
+ */
 export const FESTE_HOSTS = new Set([
     'api.alternative.me',
     'api.coingecko.com',
     'api.blockchain.info',
     'nfs.faireconomy.media',
-    'fapi.binance.com',
-    'api.binance.com',
     'www.youtube.com',
 ])
 

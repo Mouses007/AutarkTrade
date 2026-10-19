@@ -23,6 +23,7 @@ import PageInfo from '../components/PageInfo.vue'
 import Symbol from '../components/basis/Symbol.vue'
 import RadarKachel from '../components/RadarKachel.vue'
 import RadarOverlay from '../components/RadarOverlay.vue'
+import QuelleAus from '../components/quellen/QuelleAus.vue'
 import SitzungsLeiste from '../components/livetrading/SitzungsLeiste.vue'
 import SymbolWahl from '../components/livetrading/SymbolWahl.vue'
 import KartenEinstellungen from '../components/livetrading/KartenEinstellungen.vue'
@@ -186,8 +187,8 @@ try {
 } catch { /* gesperrter Speicher: dann eben die bisherige Aufstellung */ }
 
 const {
-    gridEl, daten, zustand, stand, fehler, kachelParams,
-    alleKacheln, sichtbareKacheln, gesamtZustand,
+    gridEl, daten, aus, zustand, stand, fehler, kachelParams,
+    alleKacheln, sichtbareKacheln, gesamtZustand, quellenVon, quellenGeladen,
     offeneKachel, offeneDefinition, showConfigDropdown, configRef,
     ladeKachel, beiUmschalten, isVisible, setzeKachelZustand,
     setzeParams, setzeAnzeige, stilFuer, starteGroesse, setzeGroesseZurueck,
@@ -456,7 +457,7 @@ const interaktiv = (kachel) => kachel.gross === false
             Zustand. Der Preis ist ein Verbindungsaufbau beim Umschalten — er
             steht am Zustandspunkt, und das ist die ehrlichere Anzeige.
         -->
-        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :zustand="zustand" :stand="stand"
+        <PultAnsicht v-if="ansicht === 'pult'" :daten="daten" :zustand="zustand" :stand="stand" :quellen="quellenGeladen"
             :kachel-params="kachelParams" :komponenten="KOMPONENTEN" :symbol="liveSymbol"
             @params="setzeParams" @anzeige="setzeAnzeige"
             @zustand="(id, z, extra) => setzeKachelZustand(id, z, extra)"
@@ -467,6 +468,8 @@ const interaktiv = (kachel) => kachel.gross === false
                 :style="stilFuer(kachel)">
                 <RadarKachel :titel="t(kachel.titleKey)" :icon="kachel.icon" :info-key="kachel.infoKey" :zustand="zustand[kachel.id] || 'idle'"
                     :stand="stand[kachel.id] || 0" :fehler="fehler[kachel.id] || ''" :hat-daten="!!daten[kachel.id]"
+                    :aus="aus[kachel.id] || null"
+                    :quellen="kachel.id === 'kompakt' ? quellenGeladen : (quellenVon[kachel.id] || [])"
                     :eigenstaendig="eigenstaendig(kachel)" :interaktiv="interaktiv(kachel)"
                     @gross="offeneKachel = kachel.id" @neuladen="neuLaden(kachel.id)"
                     @groesse-start="starteGroesse(kachel, $event)" @groesse-zurueck="setzeGroesseZurueck(kachel)">
@@ -496,10 +499,11 @@ const interaktiv = (kachel) => kachel.gross === false
         </div>
 
         <!-- Gross: dieselbe Komponente, dieselben Daten, nur mit mehr Platz -->
-        <RadarOverlay v-if="ansicht === 'raster' && offeneKachel && (daten[offeneKachel] || !offeneDefinition?.endpunkt)"
+        <RadarOverlay v-if="ansicht === 'raster' && offeneKachel && (daten[offeneKachel] || aus[offeneKachel] || !offeneDefinition?.endpunkt)"
             :titel="t(offeneDefinition.titleKey)"
-            :info-key="offeneDefinition.infoKey" :quelle="offeneDefinition.quelle" @schliessen="offeneKachel = null">
-            <component :is="KOMPONENTEN[offeneKachel]" :daten="daten[offeneKachel]" :gross="true"
+            :info-key="offeneDefinition.infoKey" :quelle="quellenVon[offeneKachel] || []" @schliessen="offeneKachel = null">
+            <QuelleAus v-if="aus[offeneKachel]" :aus="aus[offeneKachel]" />
+            <component v-else :is="KOMPONENTEN[offeneKachel]" :daten="daten[offeneKachel]" :gross="true"
                 :params="kachelParams[offeneKachel] || {}"
                 @params="setzeParams(offeneKachel, $event)"
                 @anzeige="setzeAnzeige(offeneKachel, $event)"

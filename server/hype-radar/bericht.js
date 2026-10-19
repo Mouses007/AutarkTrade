@@ -26,8 +26,12 @@ import { rollenAnbieter } from './stufen.js'
 import { logWarn } from '../logger.js'
 import { alsZitat, entschaerfe, ZITAT_REGEL } from '../fremdtext.js'
 
-/** Steht unter jedem Bericht. Nicht verhandelbar, nicht vom Modell erzeugt. */
-export const HINWEIS = 'Keine Anlageberatung. Frühphasen-Token sind hochriskant; '
+/**
+ * Steht unter jedem Bericht. Nicht verhandelbar, nicht vom Modell erzeugt.
+ * Beginnt seit S12 mit dem Pflichtlabel (EU AI Act Art. 50) — so trägt es
+ * auch jeder Weg, der nur `hinweis` weiterreicht (Archiv, Versand).
+ */
+export const HINWEIS = 'KI-generiert – keine Anlageberatung – Fakten prüfen. Frühphasen-Token sind hochriskant; '
     + 'ein Totalverlust ist möglich. Diese Zusammenstellung ist Recherche, keine Empfehlung.'
 
 const SYSTEM_REDAKTEUR = `Du bist Research-Analyst für Krypto-Frühphasenprojekte.
@@ -308,6 +312,8 @@ export async function erzeugeBericht(bestanden, verworfen, einstellungen = {}, m
         kandidaten,
         aussortiert: verworfen.map((v) => ({ symbol: v.symbol, grund: v.verworfenGrund })),
         hinweis: HINWEIS,
+        // EU AI Act Art. 50: maschinenlesbar als KI-Ausgabe markiert (S12).
+        kiGeneriert: true,
         meta: { ...meta, tokens: antwort.usage?.totalTokens || 0, kostenUsd: antwort.costUsd || 0 },
     }
 }

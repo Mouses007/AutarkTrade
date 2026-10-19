@@ -415,7 +415,6 @@ async function berichtJetzt() {
                     <select v-model="radarNewsRechercheModell"
                         @change="kiSpeichern('radarNewsRechercheModell', radarNewsRechercheModell)">
                         <option v-for="m in (modellListen.perplexity || ['sonar', 'sonar-pro'])" :key="m" :value="m">{{ m }}</option>
-                        <option value="deepseek-suche">{{ t('settings.ki.deepseekSearch') }}</option>
                     </select>
                 </label>
             </div>

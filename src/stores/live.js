@@ -79,10 +79,12 @@ export const liveSaettigung = ref(3)
 export const liveShowBuch = ref(true)
 export const liveBuchW = ref(96)              // Breite der Buch-Leiter in px
 /*
- * Fremde Börsen (Bybit, OKX) in der Leiter mitzeigen — als eigener Balken,
+ * Fremde Börse (Bybit) in der Leiter mitzeigen — als eigener Balken,
  * nicht aufaddiert. Warum nicht summiert: siehe server/fremdbuch.js.
+ * Vorgabe AUS seit S12: Bybit-Marktdaten sind ungeklärt (Verkaufs-Prüfung
+ * Zeile 37, gelb); wer es eingeschaltet hatte, behält seine Wahl.
  */
-export const liveFremdBuch = ref(true)
+export const liveFremdBuch = ref(false)
 export const liveAutoFollow = ref(true)
 export const liveThreshold = ref(0)           // 0..0.95, blendet schwache Liquidität aus
 export const liveShowLiquidations = ref(true) // Zwangsliquidationen einzeichnen (nur Futures)
@@ -98,7 +100,10 @@ export const levMapTier = ref('all')          // 'all' | Kommaliste von Hebelwer
 export const levMapHours = ref(48)            // gewünschtes Zeitfenster
 export const levMapSpanPct = ref(8)           // Preisspanne um den Mid, einseitig
 export const levMapMmr = ref(0.004)           // Maintenance-Margin-Rate, Stufe 1
-export const levMapMmrQuelle = ref('binance') // 'binance' | 'bybit' | 'manuell'
+// 'bybit' | 'manuell'. 'binance' gibt es seit S12 nicht mehr (undokumentierter
+// bapi-Endpunkt, Verkaufs-Prüfung Zeile 34) — gespeicherte Werte zieht
+// `hydrateLiveSettings` auf 'bybit'.
+export const levMapMmrQuelle = ref('bybit')
 export const levMapProfileW = ref(74)         // Breite der Profilspur im Verlauf
 export const levMapThreshold = ref(0)         // blendet schwache Zonen aus (0..0.9)
 export const levMapView = ref('dist')         // 'dist' = Verteilung | 'history' = Verlauf
@@ -221,6 +226,7 @@ export function hydrateLiveSettings() {
         const passend = [...VIEW_PCT_OPTIONS].reverse().find(v => v <= liveViewPct.value)
         liveViewPct.value = passend ?? VIEW_PCT_OPTIONS[VIEW_PCT_OPTIONS.length - 1]
     }
+    if (levMapMmrQuelle.value === 'binance') levMapMmrQuelle.value = 'bybit'
     klemmeSpanne()
     hydrated = true
 }

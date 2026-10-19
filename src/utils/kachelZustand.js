@@ -53,6 +53,11 @@ const ABBILDUNG = Object.assign(Object.create(null), {
 
     // Es ist kaputt
     error: 'error',
+
+    // Es ist AUS: die Marktdatenquelle hat keine Streams (S12). Nichts ist
+    // kaputt und nichts kommt gleich — die Kachel erklärt es selbst
+    // (`QuelleAus`). Ausdrücklich eingetragen, nicht dem Rückfall überlassen.
+    quelleAus: 'idle',
 })
 
 /**

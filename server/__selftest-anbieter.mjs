@@ -34,15 +34,35 @@ console.log('Anbieter-Verzeichnis')
 //    braucht ein billiges Modell für Hilfsarbeiten. Die Mechanik für
 //    abgekündigte Anbieter bleibt geprüft: `ANBIETER` filtert sie heraus,
 //    zur Laufzeit werden sie weiter bedient.
-pruefe('DeepSeek ist wieder wählbar', ANBIETER.includes('deepseek'))
-pruefe('DeepSeek bleibt zur Laufzeit bedienbar', istOpenAiKompatibel('deepseek'))
+// S12 (Verkaufs-Prüfung 89d): die ID `deepseek` bleibt wählbar, aber als
+// neutraler „OpenAI-kompatibler Endpunkt 2" — kein Name, keine feste Adresse,
+// keine vorbelegte Modell-Liste, kein Konsolen-Link.
+pruefe('Endpunkt 2 (ID deepseek) ist wählbar', ANBIETER.includes('deepseek'))
+pruefe('Endpunkt 2 bleibt zur Laufzeit bedienbar', istOpenAiKompatibel('deepseek'))
+// Nur was die Oberfläche zeigt — Spaltennamen und das Laufzeit-Rückfallmodell sind intern.
+pruefe('Endpunkt 2 nennt DeepSeek in nichts Sichtbarem',
+    !/deepseek/i.test(JSON.stringify([ANBIETER_REG.deepseek.name, ANBIETER_REG.deepseek.keyUrl || '',
+        ANBIETER_REG.deepseek.basisUrl || '', ANBIETER_REG.deepseek.modelle])))
+pruefe('Endpunkt 2 verlangt eine eigene Adresse',
+    ANBIETER_REG.deepseek.pflichtUrl === true && !!ANBIETER_REG.deepseek.urlSpalte && !ANBIETER_REG.deepseek.basisUrl)
+pruefe('Endpunkt 2 hat keine vorbelegte Auswahl-Liste', STANDARD_MODELLE.deepseek.length === 0)
+pruefe('Bestand ohne gespeichertes Modell läuft weiter', standardModell('deepseek') !== '')
+// S12 (89k): MiniMax aus der Auswahl, Bestand läuft weiter.
+pruefe('MiniMax ist nicht mehr wählbar', !ANBIETER.includes('minimax') && ANBIETER_REG.minimax.abgekuendigt === true)
+pruefe('MiniMax bleibt zur Laufzeit bedienbar', istOpenAiKompatibel('minimax') && !!ANBIETER_REG.minimax.keySpalte)
+// Pflichthinweise stehen im Verzeichnis, nicht verstreut in der Oberfläche.
+pruefe('Gemini trägt den Bezahl-Hinweis', ANBIETER_REG.gemini.hinweis === 'kiHinweis.anbieter.gemini')
+pruefe('Ollama trägt den Modell-Lizenz-Hinweis', ANBIETER_REG.ollama.hinweis === 'kiHinweis.anbieter.ollama')
+pruefe('MiniMax trägt einen Hinweis', !!ANBIETER_REG.minimax.hinweis)
+pruefe('beide freien Endpunkte tragen den Datenschutz-Hinweis',
+    ANBIETER_REG.custom.hinweis === 'kiHinweis.anbieter.endpunkt' && ANBIETER_REG.deepseek.hinweis === 'kiHinweis.anbieter.endpunkt')
 pruefe('abgekündigte Anbieter fallen aus der Auswahl',
     Object.entries(ANBIETER_REG).filter(([, r]) => r.abgekuendigt)
         .every(([id]) => !ANBIETER.includes(id)))
 pruefe('Mistral/xAI/Qwen sind wählbar',
     ['mistral', 'xai', 'qwen'].every((p) => ANBIETER.includes(p)))
 pruefe('die neuen Anbieter sind wählbar',
-    ['moonshot', 'zai', 'minimax'].every((p) => ANBIETER.includes(p)))
+    ['moonshot', 'zai'].every((p) => ANBIETER.includes(p)))
 pruefe('STANDARD_MODELLE deckt genau die Auswahl ab',
     JSON.stringify(Object.keys(STANDARD_MODELLE)) === JSON.stringify(ANBIETER))
 

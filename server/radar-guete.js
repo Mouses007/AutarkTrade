@@ -367,8 +367,17 @@ function urteileHype(spitze, verworfen, feld) {
     return teile.length ? teile : ['zuWenigVergleich']
 }
 
-/** Regelstand der Frühphasen-Aufträge, die ausgewertet werden (siehe `FRUEH_REGEL` in radar-ergebnisse.js). */
-export const FRUEH_REGEL_AUSWERTUNG = 2
+/**
+ * Regelstand der Frühphasen-Aufträge, die ausgewertet werden (siehe `FRUEH_REGEL` in radar-ergebnisse.js).
+ *
+ * 3 seit S12 (19.10.2026): Die Note hat King of the Hill, die pump.fun-
+ * Kommentare und die Ersteller-Bilanz verloren — wer „Spitze" wird, ist damit
+ * eine andere Auswahl; „durch die Kurve" misst jetzt DexScreener (Handelsplatz)
+ * statt pump.fun (`complete`), und der Start-Zustand ist ohne Handelsplatz
+ * unbekannt statt „auf der Kurve". Paare nach Regel 2 bleiben als Altbestand
+ * sichtbar, gemischt wird nicht.
+ */
+export const FRUEH_REGEL_AUSWERTUNG = 3
 
 /** Unter so vielen vollständigen Paaren je Frage gibt es kein Urteil. */
 export const MIN_PAARE = 10

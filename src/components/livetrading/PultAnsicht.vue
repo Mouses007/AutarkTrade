@@ -14,6 +14,7 @@
  * Bühne und Instrumentenleiste kommen aus `config/pult.js`.
  */
 import PultRahmen from '../pult/PultRahmen.vue'
+import Quellenhinweis from '../basis/Quellenhinweis.vue'
 import Statusband from './pult/Statusband.vue'
 import Zeitband from './pult/Zeitband.vue'
 import Tape from './pult/Tape.vue'
@@ -27,6 +28,8 @@ const props = defineProps({
     kachelParams: { type: Object, default: () => ({}) },
     komponenten: { type: Object, required: true },
     symbol: { type: String, default: '' },
+    /** Vereinigte Quellenliste der gezeigten Kacheln (`quellenGeladen`). */
+    quellen: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['params', 'anzeige', 'zustand', 'neuladen'])
@@ -57,6 +60,16 @@ const EIGENE = { funding: InstrumentFunding }
 
         <template #fuss>
             <Tape :daten="daten.liqticker" />
+            <!-- Pflicht-Attributionen der gezeigten Daten (S12): das Pult hat
+                 keine Kachelrahmen, also stehen sie gesammelt hier. -->
+            <Quellenhinweis v-if="quellen.length" :quellen="quellen" class="pultQuellen" />
         </template>
     </PultRahmen>
 </template>
+
+<style scoped>
+.pultQuellen {
+    margin: 0.25rem 0 0;
+    padding: 0 0.5rem;
+}
+</style>

@@ -32,8 +32,10 @@
  * Regelstand. Eine gespeicherte Prüfung mit anderem Stand gilt als abgelaufen —
  * sonst stünden nach einer Regeländerung bis zu einen Tag lang Noten nach den
  * alten Regeln neben solchen nach den neuen.
+ *
+ * 3 seit S12 (19.10.2026): ohne Ersteller-Bilanz (pump.fun entfernt).
  */
-export const PROJEKT_REGELN = 2
+export const PROJEKT_REGELN = 3
 
 // ── Webseite ────────────────────────────────────────────────────────────
 
@@ -682,48 +684,6 @@ export function githubBeleg(g, { vonSeite = false, contract = '', seitenHost = '
     return false
 }
 
-// ── Ersteller-Bilanz (pump.fun) ─────────────────────────────────────────
-
-/**
- * Was der Ersteller vorher aufgelegt hat — die Frage „hat dieses Team schon
- * einmal etwas zustande gebracht", für Token ohne Webseite und ohne Code.
- *
- * Gemessen an pump.fun (Marino et al. 2026; scorplabs 2026): Wer schon einmal
- * einen Coin durch die Kurve gebracht hat, schafft es mit dem nächsten um ein
- * Vielfaches häufiger als die Grundrate von rund 1 %. Wer dagegen Dutzende
- * aufgelegt hat und keiner kam durch, legt in Serie auf — Massenware.
- *
- * Die Antwort kommt als Liste oder als `{coins: [...]}`; beides wird gelesen.
- * Der aktuelle Coin zählt nicht mit.
- *
- * Gegenprobe mit `wallet`: Jeder Coin muss diese Wallet als `creator` tragen.
- * Greift der Filter der Abfrage einmal nicht (Parameter umbenannt, Antwort aus
- * einem Zwischenspeicher), kämen die fünfzig neuesten Coins ALLER Ersteller
- * zurück — und jeder Token hätte „50+ Coins, keiner durch die Kurve", minus
- * dreissig Punkte. Dann lieber unbekannt.
- */
-export function erstellerBilanz(antwort, { mint = '', wallet = '', jetzt = Date.now() } = {}) {
-    const roh = Array.isArray(antwort) ? antwort : (Array.isArray(antwort?.coins) ? antwort.coins : null)
-    if (!roh) return null
-    if (wallet && roh.some((c) => String(c?.creator || '') !== String(wallet))) return null
-    const andere = roh.filter((c) => c && String(c.mint || '') !== String(mint))
-    const graduiert = andere.filter((c) => c.complete === true || Boolean(c.raydium_pool) || Boolean(c.pump_swap_pool))
-    const juengst = andere.filter((c) => {
-        const t = Number(c.created_timestamp)
-        return Number.isFinite(t) && t > 0 && jetzt - t < 24 * 3600e3
-    })
-    const besteKap = Math.max(0, ...andere.map((c) => Number(c.usd_market_cap) || 0))
-    return {
-        andere: andere.length,
-        graduiert: graduiert.length,
-        letzte24h: juengst.length,
-        besteMarktkapUsd: besteKap || null,
-        beispiele: graduiert.slice(0, 3).map((c) => ({ symbol: String(c.symbol || ''), mint: String(c.mint || '') })),
-        // Die Liste ist gedeckelt (eine Seite); mehr heisst „mindestens".
-        vollstaendig: roh.length < 50,
-    }
-}
-
 // ── Gesamturteil ────────────────────────────────────────────────────────
 
 const PUNKTE = {
@@ -746,9 +706,6 @@ const PUNKTE = {
     githubFork: -10,
     githubKontoNeu: -5,
     githubFruehere: 10,
-    erstellerErfolg: 15,
-    erstellerSerie: -20,
-    erstellerMasse: -10,
 }
 
 /** Höchstens so viel bringen die Abschnitte der Seite zusammen. */
@@ -777,7 +734,7 @@ const KANAL_GRUND = {
  *
  * @param {object} f  {token:{symbol,name,contract},
  *                     webseite:{status, grund, fakten, host, domainAlterTage, plattform, art, adresse, geteilt},
- *                     kanaele:{x,telegram,discord}, kanaeleVerworfen:[{art,grund}], github, ersteller}
+ *                     kanaele:{x,telegram,discord}, kanaeleVerworfen:[{art,grund}], github}
  * @returns {{note:number|null, befunde:Array<{art:string, schluessel:string, text:string}>}}
  */
 export function bewerteProjekt(f = {}) {
@@ -940,27 +897,6 @@ export function bewerteProjekt(f = {}) {
         }
         if (ohneBelegVerdient) {
             info('githubOhneBeleg', `GitHub ${g.konto?.name || g.repo?.name || ''} ohne belegte Verbindung zum Token — weder von der eigenen Seite verlinkt, noch nennt es Vertrag oder Seite; Code und frühere Projekte zählen nicht`.replace(/\s+—/, ' —'))
-        }
-    }
-
-    // ── Ersteller ───────────────────────────────────────────────────────
-    const e = f.ersteller
-    if (e) {
-        gemessen++
-        if (e.andere === 0) {
-            info('erstellerNeu', 'Erster Coin dieses Erstellers')
-        } else if (e.graduiert > 0) {
-            plus('erstellerErfolg', PUNKTE.erstellerErfolg,
-                `Ersteller hat schon ${e.graduiert} von ${e.andere}${e.vollstaendig ? '' : '+'} Coins durch die Kurve gebracht`
-                + (e.beispiele?.length ? ` (${e.beispiele.map((b) => b.symbol).join(', ')})` : ''))
-        } else if (e.andere >= 10) {
-            minus('erstellerSerie', PUNKTE.erstellerSerie,
-                `Ersteller hat ${e.andere}${e.vollstaendig ? '' : '+'} Coins aufgelegt, keiner kam durch die Kurve`)
-        } else {
-            info('erstellerOhneErfolg', `Ersteller hat ${e.andere} weitere Coins aufgelegt, keiner kam durch die Kurve`)
-        }
-        if (e.letzte24h >= 5) {
-            minus('erstellerMasse', PUNKTE.erstellerMasse, `Ersteller hat in 24 Stunden ${e.letzte24h} weitere Coins gestartet`)
         }
     }
 

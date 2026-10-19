@@ -22,6 +22,41 @@
 
 import { holeJson } from './quellen.js'
 
+/**
+ * Darf RugCheck gefragt werden? Schalter `rugcheckAn` der Hype-Einstellungen
+ * (S12): die Bedingungen von RugCheck sind ungeklärt (Verkaufs-Prüfung Z. 66),
+ * darum ab Werk aus. 30 s gemerkt — Frühphase und Scan fragen je Token.
+ *
+ * Dynamischer Import, weil `einstellungen.js` die Vorgaben dieser Datei liest.
+ */
+let rcMerker = { an: null, ts: 0 }
+let rcLeser = async () => {
+    const { leseEinstellungen } = await import('./einstellungen.js')
+    return (await leseEinstellungen()).rugcheckAn === true
+}
+export async function rugcheckErlaubt() {
+    if (rcMerker.an !== null && Date.now() - rcMerker.ts < 30000) return rcMerker.an
+    let an = false
+    try { an = await rcLeser() } catch { an = false }
+    rcMerker = { an, ts: Date.now() }
+    return an
+}
+/** Nur für Selbsttests: Schalter ersetzen. */
+export function _setzeRugcheck(fn) {
+    rcLeser = fn
+    rcMerker = { an: null, ts: 0 }
+}
+/** Nach dem Speichern der Einstellungen. */
+export function vergissRugcheck() {
+    rcMerker = { an: null, ts: 0 }
+}
+
+/** Ein RugCheck-Bericht — oder null, wenn RugCheck ausgeschaltet ist. */
+export async function holeRugCheck(contract) {
+    if (!(await rugcheckErlaubt())) return null
+    return holeJson(`https://api.rugcheck.xyz/v1/tokens/${encodeURIComponent(contract)}/report`)
+}
+
 /** Vorgaben der harten Grenzen. Alle in den Einstellungen änderbar. */
 export const STANDARD_SICHERHEIT = {
     minLiquiditaetUsd: 50000,     // darunter bewegt ein einzelner Verkauf den Kurs
@@ -752,7 +787,8 @@ function steuerAusGoPlusSolana(gebuehr) {
 /**
  * Sicherheitsdaten abfragen. Getrennt vom Urteil, damit dieses prüfbar bleibt.
  *
- * Solana hat zwei Quellen: GoPlus zuerst, bei Ausfall RugCheck. Der Grund ist
+ * Solana hat zwei Quellen: GoPlus zuerst, bei Ausfall RugCheck — RugCheck nur,
+ * wenn der Kunde es eingeschaltet hat (`rugcheckErlaubt`). Der Grund ist
  * kein Misstrauen gegen GoPlus, sondern ein 504 im Test vom 19.08.2026 — und
  * fast alle Meme-Funde leben auf Solana. Hinge der ganze Trichter an einem
  * einzigen wackligen Endpunkt, wäre „ungeprüft → verworfen" der Normalzustand.
@@ -774,9 +810,9 @@ export async function holeGoPlus(chain, contract) {
             // GoPlus klemmt — RugCheck übernimmt.
         }
         if (!d) {
-            const r = await holeJson(
-                `https://api.rugcheck.xyz/v1/tokens/${encodeURIComponent(contract)}/report`)
-            return ausRugCheck(r)
+            // RugCheck aus: ungeprüft (null) — nicht bestanden.
+            const r = await holeRugCheck(contract)
+            return r ? ausRugCheck(r) : null
         }
         /*
          * Die Liquiditätssperre muss von RugCheck kommen — auch wenn GoPlus
@@ -802,8 +838,9 @@ export async function holeGoPlus(chain, contract) {
         }))
         if (!lpHolders.length) {
             try {
-                const rc = await holeJson(`https://api.rugcheck.xyz/v1/tokens/${encodeURIComponent(contract)}/report`)
-                lpHolders = (ausRugCheck(rc)?.lp_holders || [])
+                // Ohne RugCheck bleibt die Solana-Sperre unbekannt (`lp_holders` leer).
+                const rc = await holeRugCheck(contract)
+                lpHolders = (rc ? ausRugCheck(rc)?.lp_holders || [] : [])
                     .map((h) => ({ ...h, percent: h.percent / 100 }))
             } catch {
                 // Bleibt leer — und „unbekannt" ist ab jetzt ein echter Befund.

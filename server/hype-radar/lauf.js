@@ -39,7 +39,6 @@ export async function scanne(einst, melde = () => {}) {
     // ── Stufe 1 ─────────────────────────────────────────────────────────
     melde({ schritt: 'sammeln' })
     const { kandidaten: gesammelt, quellenStand } = await sammle({
-        schluessel: einst.schluessel || {},
         ketten: einst.ketten,
         quellen: einst.quellen || {},
     })
@@ -96,7 +95,7 @@ export async function scanne(einst, melde = () => {}) {
                 ...k.markt,
                 ...(d?.markt || {}),
                 // Ein Detailabruf ohne Linkangaben darf die Links aus einem
-                // Profil oder von pump.fun nicht mit `null` überschreiben.
+                // Profil (oder der Frühphase) nicht mit `null` überschreiben.
                 links: d?.markt?.links || k.markt?.links || null,
             },
         }
@@ -111,7 +110,7 @@ export async function scanne(einst, melde = () => {}) {
      *
      * Erst jetzt haben die Funde von DexScreener ihr echtes Symbol — die
      * Trend-Endpunkte nennen nur Adressen. Vorher konnte sich ein Fund von
-     * DexScreener nie mit demselben Coin von CoinGecko oder Reddit treffen,
+     * DexScreener nie mit demselben Coin von CoinGecko treffen,
      * und die Quellenzahl blieb ausnahmslos 1. Da sie der wichtigste Faktor
      * gegen gekauften Lärm ist, war die Bewertung damit praktisch blind.
      *

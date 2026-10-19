@@ -681,7 +681,7 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
             }
             finalAnswer = response.text
             history.push({ role: 'assistant', content: response.text })
-            sendSSE({ type: 'answer', content: response.text })
+            sendSSE({ type: 'answer', content: response.text, kiGeneriert: true })
             break
         }
 
@@ -755,7 +755,7 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
         finalAnswer = `Das Modell hat sein Antwortbudget (Max Tokens: ${config.maxTokens}) bereits im Denkschritt aufgebraucht — es kam kein Text zurück. `
             + 'Erhöhe „Max Tokens" in den KI-Einstellungen (für die denkenden Modelle mindestens 8000).'
         history.push({ role: 'assistant', content: finalAnswer })
-        sendSSE({ type: 'answer', content: finalAnswer })
+        sendSSE({ type: 'answer', content: finalAnswer, kiGeneriert: true })
     } else if (!finalAnswer && !istAbgebrochen()) {
         const bitte = {
             role: 'user',
@@ -778,7 +778,7 @@ async function runAgentLoop(userMessage, conversationHistory, config, sendSSE, i
             finalAnswer = 'Das Token-Budget ist erreicht und die Abschluss-Zusammenfassung schlug fehl (' + e.message + '). Bitte stelle die Frage enger.'
         }
         history.push({ role: 'assistant', content: finalAnswer })
-        sendSSE({ type: 'answer', content: finalAnswer })
+        sendSSE({ type: 'answer', content: finalAnswer, kiGeneriert: true })
     }
 
     /*
@@ -965,6 +965,7 @@ export function setupAgentRoutes(app) {
 
             sendSSE({
                 type: 'done',
+                kiGeneriert: true,
                 usage: {
                     totalTokens: result.totalTokens,
                     promptTokens: result.promptTokens || 0,
@@ -1023,7 +1024,8 @@ export function setupAgentRoutes(app) {
             res.json({
                 ...session,
                 objectId: String(session.id),
-                messages: messages.map(m => ({ ...m, objectId: String(m.id) }))
+                // KI-Antworten maschinenlesbar gekennzeichnet (S12, EU AI Act Art. 50).
+                messages: messages.map(m => ({ ...m, objectId: String(m.id), ...(m.role === 'assistant' ? { kiGeneriert: true } : {}) }))
             })
         } catch (err) {
             res.status(500).json({ error: err.message })

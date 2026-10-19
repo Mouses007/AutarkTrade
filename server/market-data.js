@@ -7,27 +7,27 @@
  * Signale wären weder reproduzierbar noch backtestbar.
  *
  * Zweite Zusage: Provider-Abstraktion. Der Detector kennt nur `getClosedCandles`;
- * ob die Kerzen von Binance-Futures oder später von Bitunix kommen, ist ihm egal.
+ * woher die Kerzen kommen, entscheidet die Marktdatenquelle des Kunden
+ * (`server/marktdaten/index.js`, Einstellung `marktdatenQuelle`): Binance oder
+ * Bitget, bei `aus` wirft jeder Abruf `MarktdatenAus`.
+ *
+ * ACHTUNG Backtests: Die bisherigen Freigaben (Robustheit, Live-Gates) beruhen
+ * auf Binance-Historie. Bitget reicht je nach Zeiteinheit deutlich weniger weit
+ * zurück (`history-candles`, 200 je Seite; BTC 1D bis 2020, kleine Coins und
+ * kurze Zeiteinheiten weniger) und kennt kein 8h — ein Backtest über Bitget ist
+ * ein anderer Datensatz, keine Wiederholung. `getHistoricalCandles` meldet es,
+ * wenn die Historie später beginnt als verlangt.
+ *
+ * Die Gewichtsbremse (`binance-takt.js`) gilt nur für Binance: sie rechnet in
+ * Binance-Gewicht und liest Binance-Antwortköpfe.
  *
  * Kerzenformat (Zahlen, nicht Strings wie bei Binance):
  *   { t, o, h, l, c, v, closeTime }
  */
 
-import axios from 'axios'
 import { logWarn } from './logger.js'
-import { notiereGewicht, melde429, warteAufGewicht, istWiederholbar, WIEDERHOLUNGEN } from './binance-takt.js'
-
-const BASES = {
-    spot: 'https://api.binance.com',
-    futures: 'https://fapi.binance.com',
-}
-const KLINE_PATHS = {
-    spot: '/api/v3/klines',
-    futures: '/fapi/v1/klines',
-}
-const KLINE_LIMITS = { spot: 1000, futures: 1500 }
-
-const HTTP_TIMEOUT = 10000
+import { warteAufGewicht, istWiederholbar, WIEDERHOLUNGEN } from './binance-takt.js'
+import * as marktdaten from './marktdaten/index.js'
 
 /** Von Binance unterstützte Intervalle → Länge in Millisekunden. */
 export const TIMEFRAME_MS = {
@@ -79,50 +79,24 @@ export function currentCandleOpen(tf, now = Date.now()) {
 const cache = new Map()      // key -> { candles, fetchedAt, lastOpen }
 const inFlight = new Map()   // key -> Promise (Dedup paralleler Abrufe)
 
-const cacheKey = (symbol, interval, market) => `${symbol}|${market}|${interval}`
+// Die Wahl gehört in den Schlüssel: nach einem Wechsel der Marktdatenquelle
+// darf der Cache keine Kerzen der alten Börse weiterreichen.
+const cacheKey = (symbol, interval, market, quelle) => `${quelle}|${symbol}|${market}|${interval}`
 
-
-/** Rohe Binance-Zeilen → Zahlen-Kerzen. */
-function normalizeKlines(rows) {
-    const out = []
-    for (const k of rows) {
-        const t = Number(k[0])
-        const o = Number(k[1])
-        const h = Number(k[2])
-        const l = Number(k[3])
-        const c = Number(k[4])
-        // Defekte Zeilen lieber überspringen als NaN in den Detector lassen
-        if (!Number.isFinite(t) || !Number.isFinite(o) || !Number.isFinite(h) ||
-            !Number.isFinite(l) || !Number.isFinite(c)) continue
-        out.push({ t, o, h, l, c, v: Number(k[5]) || 0, closeTime: Number(k[6]) || 0 })
-    }
-    return out
-}
-
+/**
+ * Ein Kerzenabruf beim gewählten Anbieter. Binance zählt sein Gewicht in
+ * `marktdaten/binance.js` selbst an der Bremse mit (auch die Abrufe des
+ * Livebetriebs zahlen auf die IP ein — ohne Notiz kennte die Bremse nur ihren
+ * eigenen Anteil) und meldet 429/418 dorthin.
+ */
 async function fetchKlines({ symbol, interval, market, limit, startTime, endTime }) {
-    const params = { symbol, interval, limit: Math.min(limit, KLINE_LIMITS[market]) }
+    const a = await marktdaten.fordere('kerzen', { markt: market })
+    const opts = { markt: market, limit: Math.min(limit, a.KERZEN_MAX[market]), intervalMs: timeframeMs(interval) }
     if (startTime !== undefined && endTime !== undefined) {
-        params.startTime = startTime
-        params.endTime = endTime
+        opts.start = startTime
+        opts.ende = endTime
     }
-    try {
-        const antwort = await axios.get(`${BASES[market]}${KLINE_PATHS[market]}`, {
-            params, timeout: HTTP_TIMEOUT,
-        })
-        // Binance meldet den Verbrauch der GANZEN IP im Antwortkopf. Auch die
-        // Abrufe des Livebetriebs zahlen darauf ein — deshalb wird hier
-        // notiert, nicht erst im gebremsten Historienpfad. Ohne diese Zeile
-        // kennt die Bremse nur ihren eigenen Anteil und lässt zu viel durch.
-        notiereGewicht(antwort.headers)
-        return normalizeKlines(Array.isArray(antwort.data) ? antwort.data : [])
-    } catch (e) {
-        const status = e?.response?.status
-        // 429 (zu schnell) und 418 (gesperrt) betreffen die ganze IP, nicht nur
-        // diesen Abruf. Die Bremse muss davon erfahren, sonst rennt der nächste
-        // Historienlauf ungebremst in dieselbe Wand.
-        if (status === 429 || status === 418) melde429(status, e.response.headers)
-        throw e
-    }
+    return a.kerzen(symbol, interval, opts)
 }
 
 /**
@@ -162,7 +136,10 @@ export async function getClosedCandles(symbol, interval, limit = 300, opts = {})
 
     const now = opts.now || Date.now()
     const openOfRunning = currentCandleOpen(interval, now)
-    const key = cacheKey(sym, interval, market)
+    // `fordere` vor dem Cache: mit `aus` darf auch ein warmer Cache nichts
+    // mehr ausliefern, sonst lebte eine abgeschaltete Quelle stundenlang weiter.
+    const anbieter = await marktdaten.fordere('kerzen', { markt: market })
+    const key = cacheKey(sym, interval, market, anbieter.id)
 
     const cached = cache.get(key)
     if (!opts.force && cached && cached.lastOpen === openOfRunning && cached.candles.length >= limit) {
@@ -180,7 +157,7 @@ export async function getClosedCandles(symbol, interval, limit = 300, opts = {})
     const promise = (async () => {
         const rows = await fetchKlines({
             symbol: sym, interval, market,
-            limit: Math.min(limit + 1, KLINE_LIMITS[market]),
+            limit: Math.min(limit + 1, anbieter.KERZEN_MAX[market]),
         })
         const closed = rows.filter((k) => k.t < openOfRunning)
         cache.set(key, { candles: closed, fetchedAt: now, lastOpen: openOfRunning })
@@ -202,12 +179,6 @@ export async function getClosedCandles(symbol, interval, limit = 300, opts = {})
 }
 
 /**
- * Historische geschlossene Kerzen über ein Zeitfenster — für den Backtest.
- * Paginiert automatisch über das Binance-Limit hinaus.
- *
- * @returns {Promise<Array>} lückenlos aufsteigend sortiert, ohne laufende Kerze
- */
-/**
  * Einen Historienabruf wiederholen, wenn es sich lohnt.
  *
  * Ein Zeitüberschritt oder ein 5xx ist vorübergehend — beim nächsten Versuch
@@ -218,7 +189,7 @@ export async function getClosedCandles(symbol, interval, limit = 300, opts = {})
  * Coin als Fehlerzeile ab (gesehen bei ONDOUSDT am 16.08.2026) — obwohl der
  * Abruf eine Sekunde später fehlerfrei durchlief.
  */
-async function mitWiederholung(abruf, was) {
+async function mitWiederholung(abruf, was, bremse = true) {
     let letzter
     for (let versuch = 0; versuch <= WIEDERHOLUNGEN.length; versuch++) {
         try {
@@ -231,13 +202,29 @@ async function mitWiederholung(abruf, was) {
             logWarn('market-data', `${was}: ${e.message} — Versuch ${versuch + 2} in ${pause / 1000}s`)
             await new Promise((f) => setTimeout(f, pause))
             // Nach der Pause erneut anstehen: die Bremse könnte inzwischen
-            // wegen einer Strafe zugemacht haben.
-            await warteAufGewicht()
+            // wegen einer Strafe zugemacht haben (nur Binance, siehe oben).
+            if (bremse) await warteAufGewicht()
         }
     }
     throw letzter
 }
 
+/** Einmal je Symbol/Zeiteinheit/Quelle melden, dass die Historie kürzer ist als verlangt. */
+const kurzGemeldet = new Set()
+
+/**
+ * Historische geschlossene Kerzen über ein Zeitfenster — für den Backtest.
+ * Paginiert automatisch über das Seitenlimit des Anbieters hinaus.
+ *
+ * Binance blättert VORWÄRTS ab `startTime` (gebremst über `binance-takt.js`),
+ * Bitget nur RÜCKWÄRTS vor `endTime` — `marktdaten/bitget.js` blättert das
+ * ganze Fenster selbst und bekommt hier einen einzigen Aufruf. Bitgets
+ * `history-candles` reicht weniger weit zurück als Binance; beginnt die Reihe
+ * später als `fromTs`, steht das einmal im Log. Backtest-Freigaben, die auf
+ * Binance-Historie beruhen, gelten für eine Bitget-Reihe nicht ungeprüft.
+ *
+ * @returns {Promise<Array>} lückenlos aufsteigend sortiert, ohne laufende Kerze
+ */
 export async function getHistoricalCandles(symbol, interval, fromTs, toTs, opts = {}) {
     const market = opts.market === 'spot' ? 'spot' : 'futures'
     const sym = String(symbol || '').toUpperCase()
@@ -249,16 +236,31 @@ export async function getHistoricalCandles(symbol, interval, fromTs, toTs, opts 
     let cursor = Number(fromTs) || 0
     if (!cursor || cursor >= end) return []
 
+    const anbieter = await marktdaten.fordere('kerzen', { markt: market })
+    const maxCandles = Math.min(opts.maxCandles || 20000, 200000)
+    if (anbieter.id !== 'binance') {
+        const rows = await mitWiederholung(() => anbieter.kerzen(sym, interval, {
+            markt: market, start: cursor, ende: end, limit: maxCandles, intervalMs: step,
+        }), `${sym} ${interval}`, false)
+        const out = rows.filter((k) => k.t >= cursor && k.t < end).slice(0, maxCandles)
+        const merk = `${anbieter.id}|${sym}|${market}|${interval}`
+        if ((!out.length || out[0].t > cursor + step) && !kurzGemeldet.has(merk)) {
+            kurzGemeldet.add(merk)
+            logWarn('market-data', `${sym} ${interval}: ${anbieter.name} liefert Historie erst ab `
+                + `${out.length ? new Date(out[0].t).toISOString() : '—'} (verlangt ${new Date(cursor).toISOString()}) — `
+                + 'Backtest-Freigaben beruhen auf Binance-Historie und gelten für diese Reihe nicht ungeprüft')
+        }
+        return out
+    }
+
     /*
      * Wer nur ein paar Dutzend Kerzen braucht, fragt kleine Seiten an: Binance
      * staffelt das Gewicht nach dem angefragten `limit`, nicht nach der Zahl
      * der gelieferten Kerzen — sechzig Minutenkerzen über eine 1500er-Seite
      * kosten zehn Einheiten statt einer.
      */
-    const pageSize = Math.max(1, Math.min(KLINE_LIMITS[market], Number(opts.seite) || KLINE_LIMITS[market]))
-    const gewicht = market === 'spot' ? 2
-        : (pageSize < 100 ? 1 : pageSize < 500 ? 2 : pageSize <= 1000 ? 5 : 10)
-    const maxCandles = Math.min(opts.maxCandles || 20000, 200000)
+    const pageSize = Math.max(1, Math.min(anbieter.KERZEN_MAX[market], Number(opts.seite) || anbieter.KERZEN_MAX[market]))
+    const gewicht = anbieter.seitenGewicht(market, pageSize)
     const out = []
     let guard = 0
 
@@ -294,87 +296,55 @@ export async function getHistoricalCandles(symbol, interval, fromTs, toTs, opts 
  */
 export async function getLastPrice(symbol, opts = {}) {
     const market = opts.market === 'spot' ? 'spot' : 'futures'
-    const sym = String(symbol || '').toUpperCase()
-    const path = market === 'spot' ? '/api/v3/ticker/price' : '/fapi/v1/ticker/price'
-    const { data } = await axios.get(`${BASES[market]}${path}`, {
-        params: { symbol: sym }, timeout: HTTP_TIMEOUT,
-    })
-    const price = Number(data?.price)
-    if (!Number.isFinite(price)) throw new Error(`Kein Preis für ${sym}`)
-    return price
+    return marktdaten.preis(String(symbol || '').toUpperCase(), { markt: market })
 }
 
 /**
  * Aktuelle Funding-Rate (nur Futures) — Eingabe für den Sentiment-Agenten.
  * Gibt null zurück statt zu werfen: fehlendes Sentiment darf keinen Lauf killen.
+ * Ohne Funding-Fähigkeit (Marktdaten aus) still null — das ist ein Zustand,
+ * kein Fehler, und stünde sonst bei jedem Lauf im Log.
  */
 export async function getFundingRate(symbol) {
     try {
-        const { data } = await axios.get(`${BASES.futures}/fapi/v1/premiumIndex`, {
-            params: { symbol: String(symbol || '').toUpperCase() }, timeout: HTTP_TIMEOUT,
-        })
-        const rate = Number(data?.lastFundingRate)
-        return Number.isFinite(rate) ? { rate, nextFundingTime: Number(data?.nextFundingTime) || 0 } : null
+        const f = await marktdaten.funding(String(symbol || '').toUpperCase())
+        return f ? { rate: f.rate, nextFundingTime: f.naechste || 0 } : null
     } catch (e) {
-        logWarn('market-data', `Funding-Rate für ${symbol} nicht abrufbar: ${e.message}`)
+        if (!marktdaten.istAus(e)) logWarn('market-data', `Funding-Rate für ${symbol} nicht abrufbar: ${e.message}`)
         return null
     }
 }
 
 /**
  * Abgerechnete Funding-Sätze eines Zeitraums (nur Futures), älteste zuerst.
- * `markPrice` ist der Kurs, zu dem die Börse die Zahlung bemessen hat.
+ * `markPrice` ist der Kurs, zu dem die Börse die Zahlung bemessen hat (Bitget
+ * liefert keinen → 0, der Aufrufer nimmt dann den Kerzenkurs).
  * Wirft bei Fehlern — ein fehlender Verlauf darf nicht als „0 Funding" enden.
  */
 export async function getFundingHistory(symbol, fromTs, toTs) {
-    const sym = String(symbol || '').toUpperCase()
-    const out = []
-    let ab = Number(fromTs) || 0
-    const bis = Number(toTs) || Date.now()
-    // 1000 je Abruf = bei 4h-Takt rund 166 Tage; die Schleife ist die Absicherung
-    for (let runde = 0; runde < 10 && ab <= bis; runde++) {
-        const { data } = await axios.get(`${BASES.futures}/fapi/v1/fundingRate`, {
-            params: { symbol: sym, startTime: ab, endTime: bis, limit: 1000 }, timeout: HTTP_TIMEOUT,
-        })
-        if (!Array.isArray(data)) throw new Error(`Kein Funding-Verlauf für ${sym}`)
-        for (const e of data) {
-            out.push({ t: Number(e.fundingTime), rate: Number(e.fundingRate), markPrice: Number(e.markPrice) || 0 })
-        }
-        if (data.length < 1000) break
-        ab = Number(data[data.length - 1].fundingTime) + 1
-    }
-    return out
+    return marktdaten.fundingVerlauf(String(symbol || '').toUpperCase(), Number(fromTs) || 0, Number(toTs) || Date.now())
 }
 
 // ── Symbol-Metadaten (tickSize/stepSize) für korrektes Runden von Orders ──
-const metaCache = new Map()   // market -> { ts, map }
+const metaCache = new Map()   // quelle|market -> { ts, map }
 const META_TTL = 6 * 60 * 60 * 1000
 
 export async function getSymbolMeta(symbol, opts = {}) {
     const market = opts.market === 'spot' ? 'spot' : 'futures'
     const sym = String(symbol || '').toUpperCase()
+    const anbieter = await marktdaten.fordere('symbole', { markt: market })
+    const key = `${anbieter.id}|${market}`
 
-    const cached = metaCache.get(market)
+    const cached = metaCache.get(key)
     if (!cached || (Date.now() - cached.ts) > META_TTL) {
-        const path = market === 'spot' ? '/api/v3/exchangeInfo' : '/fapi/v1/exchangeInfo'
-        const { data } = await axios.get(`${BASES[market]}${path}`, { timeout: HTTP_TIMEOUT })
+        const roh = await anbieter.symbole({ markt: market })
+        // Nur die Felder, die `computePositionSize` liest — wie bisher.
         const map = new Map()
-        for (const s of data?.symbols || []) {
-            if (s.status !== 'TRADING') continue
-            const pf = (s.filters || []).find((f) => f.filterType === 'PRICE_FILTER')
-            const lf = (s.filters || []).find((f) => f.filterType === 'LOT_SIZE')
-            const mn = (s.filters || []).find((f) => f.filterType === 'MIN_NOTIONAL')
-            map.set(s.symbol, {
-                symbol: s.symbol,
-                tickSize: pf ? Number(pf.tickSize) : 0,
-                stepSize: lf ? Number(lf.stepSize) : 0,
-                minQty: lf ? Number(lf.minQty) : 0,
-                minNotional: mn ? Number(mn.notional ?? mn.minNotional) : 0,
-            })
+        for (const [s, m] of roh) {
+            map.set(s, { symbol: s, tickSize: m.tickSize, stepSize: m.stepSize, minQty: m.minQty, minNotional: m.minNotional })
         }
-        metaCache.set(market, { ts: Date.now(), map })
+        metaCache.set(key, { ts: Date.now(), map })
     }
 
-    return metaCache.get(market).map.get(sym) || null
+    return metaCache.get(key).map.get(sym) || null
 }
-

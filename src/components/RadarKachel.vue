@@ -6,6 +6,16 @@
  * Stand-Zeit, Griff zum Umsortieren, Lupe, Lade- und Fehlerzustand. Der Inhalt
  * kommt als Slot — die Kachel-Komponenten kennen dadurch weder Zustände noch
  * Bedienung, sie zeichnen nur.
+ *
+ * Seit S12 (Verkaufs-Prüfung) zwei Dinge mehr, beide hier statt in jeder
+ * Kachel, damit Marktradar und Live-Trading sie gleich haben:
+ *
+ *   aus      `{ aus: true, grund, quelle, … }` vom Server → statt des Inhalts
+ *            steht `QuelleAus` da (warum leer, und wo man es ändert).
+ *   quellen  Herkunft und Pflicht-Attributionen (`[{ name, url, art }]`) als
+ *            kleine Zeile unter dem Inhalt. Anbieter wie alternative.me
+ *            verlangen die Quellenangabe „gut sichtbar direkt neben den
+ *            Daten" — die Gross-Ansicht allein reicht dafür nicht.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -13,6 +23,8 @@ import dayjs from '../utils/journal/zeit.js'
 import InfoTipp from './InfoTipp.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
+import Quellenhinweis from '@/components/basis/Quellenhinweis.vue'
+import QuelleAus from '@/components/quellen/QuelleAus.vue'
 import { symbolName } from '@/components/basis/symbole/unicons.js'
 
 const props = defineProps({
@@ -48,13 +60,21 @@ const props = defineProps({
      * hinterlegten Text → kein Symbol, siehe `InfoTipp.vue`.
      */
     infoKey: { type: String, default: '' },
+    /** Antwort `{ aus: true, … }`, wenn die Quelle abgeschaltet ist — sonst null. */
+    aus: { type: Object, default: null },
+    /** Aufgelöste Quellenliste (`loeseQuellen` in useKachelRaster.js). */
+    quellen: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['gross', 'neuladen', 'groesseStart', 'groesseZurueck'])
 
 const { t } = useI18n()
 
+/** Was in der kleinen Kachel steht: alles ausser Einträgen mit `klein: false`. */
+const quellenKlein = computed(() => (props.quellen || []).filter(q => q && q.klein !== false))
+
 const standText = computed(() => {
+    if (props.aus) return ''
     if (!props.stand) return t('marktradar.never')
     return t('marktradar.asOf', { zeit: dayjs(props.stand).format('HH:mm') })
 })
@@ -94,8 +114,12 @@ const standText = computed(() => {
             </button>
         </div>
 
-        <div class="radarCardBody" @click="!interaktiv && (hatDaten || eigenstaendig) && emit('gross')">
-            <slot v-if="hatDaten || eigenstaendig"></slot>
+        <div class="radarCardBody" @click="!aus && !interaktiv && (hatDaten || eigenstaendig) && emit('gross')">
+            <div v-if="aus" class="radarAus" @click.stop>
+                <QuelleAus :aus="aus" klein />
+            </div>
+
+            <slot v-else-if="hatDaten || eigenstaendig"></slot>
 
             <div v-else-if="zustand === 'error'" class="radarLeer">
                 <Symbol name="warnung" class="at-mu-1" />
@@ -110,6 +134,13 @@ const standText = computed(() => {
             </div>
         </div>
 
+        <!-- Herkunft und Pflicht-Attribution, immer sichtbar (nicht erst in der
+             Gross-Ansicht). Auch bei `aus`: dann nennt die Zeile, woher die
+             Daten kämen. -->
+        <div v-if="quellenKlein.length" class="radarCardQuelle" @click.stop @pointerdown.stop>
+            <Quellenhinweis :quellen="quellenKlein" class="at-m-0" />
+        </div>
+
         <!-- Anfasser unten rechts: ziehen ändert Breite (in Rasterspalten) und
              Höhe, Doppelklick setzt auf die Vorgabe zurück. -->
         <span class="radarGroesse" :title="t('marktradar.resize')"
@@ -117,3 +148,32 @@ const standText = computed(() => {
             @dblclick.stop="emit('groesseZurueck')"></span>
     </div>
 </template>
+
+<style scoped>
+.radarAus {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    cursor: default;
+}
+
+.radarCardQuelle {
+    flex: 0 0 auto;
+    /* Rechts Platz lassen für den Grössen-Anfasser in der Ecke */
+    padding: 0 1.1rem 0.3rem 0.55rem;
+    cursor: default;
+}
+
+.radarCardQuelle :deep(.at-quellenhinweis) {
+    margin: 0;
+    font-size: 0.66rem;
+}
+
+/* Kein Punkt-Farbcode für „aus" in style-dark.css — grau: weder gut noch kaputt */
+:deep(.liveDot.dot-aus),
+.liveDot.dot-aus {
+    background: var(--muted);
+}
+</style>

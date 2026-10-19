@@ -2,30 +2,36 @@
  * Börsen-Beobachter — das Abrufen, Vergleichen und Melden.
  *
  * Alle dreissig Minuten (Vorgabe) werden die öffentlichen Marktlisten der
- * grossen und mittleren Börsen und die Token-Liste von Binance Alpha geholt,
- * mit dem letzten guten Stand verglichen und neue Einträge festgehalten. Zu
- * jeder neuen Listung steht, ob und seit wann der Radar den Token kannte
- * (`gedaechtnis.js`) — das ist die Antwort auf die eigentliche Frage: Waren wir
- * vorher drin?
+ * grossen und mittleren Börsen geholt, mit dem letzten guten Stand verglichen
+ * und neue Einträge festgehalten. Zu jeder neuen Listung steht, ob und seit
+ * wann der Radar den Token kannte (`gedaechtnis.js`) — das ist die Antwort auf
+ * die eigentliche Frage: Waren wir vorher drin?
  *
- * Gemeldet wird
- *   - eine neue Listung eines Radar-Tokens (sicherer oder plausibler Treffer),
- *   - die Aufnahme eines Radar-Tokens in Binance Alpha — die Vorstufe, das
- *     eigentliche Frühsignal für ein späteres Spot-Listing.
+ * Gemeldet wird eine neue Listung eines Radar-Tokens (sicherer oder
+ * plausibler Treffer).
  *
  * Gerechnet wird in `boersenwacht-bewertung.js`; hier steht nur der Weg.
  *
- * ⚠ Die Endpunkte sind die öffentlich dokumentierten Marktlisten; gegen die
- * Live-Dienste nicht geprüft (keine Verbindung aus der Entwicklungsumgebung am
- * 07.10.2026). Der Binance-Alpha-Endpunkt ist der des Binance-Web-Frontends,
- * nicht offiziell dokumentiert. Jede Börse fällt einzeln aus; ein Ausfall oder
- * eine halbe Antwort überschreibt nie den letzten guten Stand.
+ * Quellen seit S12 (Verkaufs-Prüfung vom 19.10.2026):
+ *   Binance Spot/Futures  über `server/marktdaten` (Fähigkeit `listungen`) —
+ *                         ist Binance nicht die gewählte Marktdatenquelle,
+ *                         fällt die Börse mit Begründung aus (Z. 75)
+ *   Bybit, Bitget         ab Werk an (Bedingungen unklar, Z. 83)
+ *   Coinbase, Kraken,     ab Werk AUS, bestehende Wahl bleibt (Z. 77, 79–81)
+ *   KuCoin, Gate
+ * Entfernt: Upbit, OKX, MEXC (Bedingungen verbieten es, Z. 78, 82, 83) und
+ * Binance Alpha (undokumentierter `bapi`-Endpunkt, Z. 76).
+ *
+ * Jede Börse fällt einzeln aus; ein Ausfall oder eine halbe Antwort
+ * überschreibt nie den letzten guten Stand.
  */
 
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { beansprucheAufgabe, meldeFehler } from '../db-claim.js'
 import { holeJson, dexDetailsViele } from './quellen.js'
+import { binanceHole, kann as marktdatenKann } from '../marktdaten/index.js'
+import { QuelleAus, istAus, ausAntwort } from '../quellen/aus.js'
 import { leseEinstellungen } from './einstellungen.js'
 import { stelleZu } from './zustellung.js'
 import { radarWissen } from './gedaechtnis.js'
@@ -34,20 +40,39 @@ import {
     eintragSchluessel, kuerzel, auchGelistetAuf,
 } from './boersenwacht-bewertung.js'
 
+/** Öffentliche Marktlisten ohne Schlüssel. Binance steht in `BINANCE` (über die Marktdatenquelle). */
 export const QUELLEN = {
-    'binance-alpha': 'https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list',
-    'binance-spot': 'https://api.binance.com/api/v3/ticker/price',
-    // exchangeInfo statt ticker/price: nur sie nennt Startzeit und angekündigte Kontrakte (Gewicht 1)
-    'binance-futures': 'https://fapi.binance.com/fapi/v1/exchangeInfo',
     coinbase: 'https://api.exchange.coinbase.com/products',
-    upbit: 'https://api.upbit.com/v1/market/all',
-    okx: 'https://www.okx.com/api/v5/public/instruments?instType=SPOT',
     bybit: 'https://api.bybit.com/v5/market/instruments-info?category=spot',
     kraken: 'https://api.kraken.com/0/public/AssetPairs',
     kucoin: 'https://api.kucoin.com/api/v2/symbols',
     gate: 'https://api.gateio.ws/api/v4/spot/currency_pairs',
-    mexc: 'https://api.mexc.com/api/v3/defaultSymbols',
     bitget: 'https://api.bitget.com/api/v2/spot/public/symbols',
+}
+
+/**
+ * Binance: Markt und Pfad — die Adresse kennt nur `server/marktdaten/binance.js`.
+ * Futures über `exchangeInfo`: nur sie nennt Startzeit und angekündigte Kontrakte (Gewicht 1).
+ */
+const BINANCE = {
+    'binance-spot': ['spot', '/api/v3/ticker/price'],
+    'binance-futures': ['futures', '/fapi/v1/exchangeInfo'],
+}
+
+/** Ist die Börse in den Einstellungen eingeschaltet? Unbekannt heisst: Vorgabe. */
+export function boerseAn(einst, id) {
+    const wahl = einst?.boersenwachtBoersen || {}
+    return wahl[id] !== false
+}
+
+/** Die Marktliste einer Börse — oder `QuelleAus`/`MarktdatenAus`. */
+async function holeListe(b, einst) {
+    if (!boerseAn(einst, b.id)) throw new QuelleAus(b.name, 'aus')
+    if (BINANCE[b.id]) {
+        const [markt, pfad] = BINANCE[b.id]
+        return binanceHole('listungen', markt, pfad, {}, { timeout: 20000 })
+    }
+    return holeJson(QUELLEN[b.id], { timeout: 20000 })
 }
 
 /** Eine Listung wird je Börse und Kürzel höchstens einmal gemeldet. */
@@ -76,6 +101,8 @@ export async function ladeStaende() {
     const karte = new Map()
     try {
         for (const z of await getKnex()('hype_boersen_stand').select('boerse', 'eintraege')) {
+            // Stände entfernter Börsen (Upbit, OKX, MEXC, Alpha bis S12) zählen nicht mehr.
+            if (!BOERSE_NACH_ID.has(z.boerse)) continue
             karte.set(z.boerse, new Set(sicherJson(z.eintraege, []).map(eintragSchluessel)))
         }
     } catch { /* Tabelle fehlt: leer */ }
@@ -107,7 +134,7 @@ async function boersenLaufIntern(einst) {
 
     // Eine Antwort, zwei Leser: was gelistet ist und — wo die Börse es nennt — seit wann.
     const antworten = await Promise.allSettled(BOERSEN.map(async (b) => {
-        const roh = await holeJson(QUELLEN[b.id], { timeout: 20000 })
+        const roh = await holeListe(b, einst)
         return { liste: LESER[b.id](roh), starts: STARTS[b.id] ? STARTS[b.id](roh, jetzt) : null }
     }))
 
@@ -116,6 +143,11 @@ async function boersenLaufIntern(einst) {
     for (const [i, a] of antworten.entries()) {
         const b = BOERSEN[i]
         const bisher = alt.get(b.id)
+        if (a.status === 'rejected' && istAus(a.reason)) {
+            // Abgeschaltet oder Marktdatenquelle ohne Binance — ein Zustand, kein Fehler; der alte Stand bleibt.
+            quellenStand[b.id] = { ok: false, ...ausAntwort(a.reason), fehler: a.reason.message }
+            continue
+        }
         if (a.status !== 'fulfilled') {
             const fehler = String(a.reason?.message || a.reason).slice(0, 160)
             quellenStand[b.id] = { ok: false, fehler }
@@ -139,9 +171,7 @@ async function boersenLaufIntern(einst) {
             ? { ok: true, anzahl: liste.length, neu: r.neu.length, hinweis: r.hinweis }
             : { ok: false, anzahl: liste.length, fehler: r.hinweis }
         for (const n of r.neu) {
-            const l = typeof n === 'string'
-                ? { boerse: b.id, symbol: n }
-                : { boerse: b.id, symbol: n.symbol, chain: n.chain, contract: n.contract }
+            const l = { boerse: b.id, symbol: typeof n === 'string' ? n : n.symbol }
             l.handelsStart = starts?.laufend.get(kuerzel(l.symbol)) ?? null
             neue.push(l)
         }
@@ -160,8 +190,7 @@ async function boersenLaufIntern(einst) {
      */
     const wissen = await radarWissen()
     const gelistet = new Set(neue.map((l) => kuerzel(l.symbol)))
-    for (const [id, set] of await ladeStaende()) {
-        if (BOERSE_NACH_ID.get(id)?.stufe === 'alpha') continue
+    for (const [, set] of await ladeStaende()) {
         for (const s of set) gelistet.add(s)
     }
     const auffrischen = wissen.filter((w) => w.contract && w.ersteMeldung && gelistet.has(kuerzel(w.symbol)))
@@ -208,10 +237,9 @@ async function boersenLaufIntern(einst) {
 async function melde(knex, zeile, einst) {
     const b = BOERSE_NACH_ID.get(zeile.boerse)
     const tage = zeile.radarSeit ? Math.max(0, (zeile.gesehenAm - zeile.radarSeit) / 86400e3) : null
-    const alpha = b?.stufe === 'alpha'
     const alarm = {
-        regel: alpha ? 'alpha' : 'listung',
-        schwere: alpha || b?.stufe === 'gross' ? 'warnung' : 'info',
+        regel: 'listung',
+        schwere: b?.stufe === 'gross' ? 'warnung' : 'info',
         meldung: `${zeile.symbol}: neu auf ${b?.name || zeile.boerse}`
             + (tage !== null ? ` — der Radar meldete ihn vor ${tage < 1 ? 'weniger als einem Tag' : `${Math.round(tage)} Tagen`}` : '')
             + (zeile.treffer === 'kuerzel' ? ' (Zuordnung über das Kürzel)' : ''),
@@ -232,15 +260,25 @@ async function melde(knex, zeile, einst) {
 
 /**
  * Für die Seite: Stand je Börse, die neuen Listungen, die Vorlaufstatistik
- * und die Leiter — Radar-Token, die schon auf Alpha oder mittleren Börsen
- * stehen, aber noch nicht auf den grossen.
+ * und die Leiter — Radar-Token, die schon auf mittleren Börsen stehen, aber
+ * noch nicht auf den grossen. Je Börse steht, ob sie an ist — und wenn nicht,
+ * warum (`aus`: abgeschaltet oder Marktdatenquelle ohne Binance).
  */
-export async function boersenUebersicht({ tage = 60 } = {}) {
+export async function boersenUebersicht({ tage = 60, einst = null } = {}) {
+    const e = einst || await leseEinstellungen()
+    const binanceDa = await marktdatenKann('listungen').catch(() => false)
+    const ausFuer = (b) => {
+        if (!boerseAn(e, b.id)) return { aus: true, grund: 'aus', quelle: b.name }
+        if (BINANCE[b.id] && !binanceDa) return { aus: true, grund: 'marktdaten', faehigkeit: 'listungen', quelle: b.name }
+        return null
+    }
     const knex = getKnex()
     const seit = Date.now() - tage * 86400e3
     const staendeRoh = await knex('hype_boersen_stand').select('boerse', 'anzahl', 'aktualisiertAm', 'fehler', 'angekuendigt').catch(() => [])
     const nach = new Map(staendeRoh.map((z) => [z.boerse, z]))
-    const listungen = await knex('hype_listungen_neu').where('gesehenAm', '>=', seit).orderBy('gesehenAm', 'desc').limit(300)
+    // Nur Börsen, die es noch gibt — Listungen von Upbit, OKX, MEXC und Alpha (bis S12) bleiben gespeichert, gezeigt werden sie nicht.
+    const listungen = (await knex('hype_listungen_neu').where('gesehenAm', '>=', seit).orderBy('gesehenAm', 'desc').limit(400))
+        .filter((z) => BOERSE_NACH_ID.has(z.boerse)).slice(0, 300)
 
     const staende = await ladeStaende()
     const alleWissen = await radarWissen()
@@ -254,6 +292,7 @@ export async function boersenUebersicht({ tage = 60 } = {}) {
      */
     const angekuendigt = []
     for (const z of staendeRoh) {
+        if (!BOERSE_NACH_ID.has(z.boerse)) continue
         for (const a of sicherJson(z.angekuendigt, [])) {
             const r = ordneZu({ boerse: z.boerse, symbol: a.symbol }, alleWissen)
             angekuendigt.push({ boerse: z.boerse, symbol: a.symbol, start: a.start ?? null,
@@ -272,18 +311,19 @@ export async function boersenUebersicht({ tage = 60 } = {}) {
     const leiter = []
     for (const w of jeVertrag.values()) {
         const l = leiterFuer(w, staende)
-        if (!l.alpha && !l.mittel.length) continue
+        if (!l.mittel.length) continue
         leiter.push({ symbol: w.symbol, chain: w.chain, contract: w.contract, bewertungUsd: w.bewertungUsd,
             radarSeit: w.ersteMeldung, quelle: w.quelle, ...l })
     }
     // Wer noch NICHT oben ist, zuerst — das ist die Liste, auf die es ankommt.
-    leiter.sort((a, b) => (a.gross.length - b.gross.length) || ((b.alpha ? 1 : 0) - (a.alpha ? 1 : 0))
-        || (Number(a.radarSeit) - Number(b.radarSeit)))
+    leiter.sort((a, b) => (a.gross.length - b.gross.length) || (Number(a.radarSeit) - Number(b.radarSeit)))
 
     return {
         stand: { ...boersenStand() },
         boersen: BOERSEN.map((b) => ({
             ...b,
+            an: !ausFuer(b),
+            aus: ausFuer(b),
             anzahl: Number(nach.get(b.id)?.anzahl) || 0,
             aktualisiertAm: Number(nach.get(b.id)?.aktualisiertAm) || 0,
             fehler: nach.get(b.id)?.fehler || '',

@@ -22,7 +22,7 @@
 import DashboardLayout from '../layouts/Dashboard.vue'
 
 /** Die Unterseiten der Einstellungen (`/settings/:bereich`). Ohne Angabe: die erste. */
-export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'ki', 'live', 'benachrichtigungen', 'lizenz', 'rechtliches']
+export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'ki', 'live', 'benachrichtigungen', 'datenquellen', 'lizenz', 'rechtliches']
 
 /** Seite mit dem gemeinsamen Layout. */
 function seite(path, name, laden, meta = {}, extra = {}) {

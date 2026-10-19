@@ -74,9 +74,6 @@ export let radarNewsMeldungsTiefe = ref('knapp')
    (Tagesspanne, Bedingungen). Die Handelslage misst EINEN Markt, deshalb
    das Symbol daneben. */
 export let radarNewsLagenAn = ref(true)
-/* Duerfen die KI-Ausgaben Handelsempfehlungen, Kursziele und Prognosen geben?
-   Gilt fuer Lagebericht, Gesamtlage- und Handelslage-Kachel. Vorgabe aus. */
-export let kiEmpfehlungenAn = ref(false)
 export let radarNewsLagenSymbol = ref('BTCUSDT')
 /*
  * Prüft das eingetippte Symbol gegen die echte Binance-Liste.
@@ -194,7 +191,6 @@ export function useRadarEinstellungen() {
         radarNewsMeldungsTiefe.value = ['knapp', 'normal', 'ausfuehrlich'].includes(s.radarNewsMeldungsTiefe)
             ? s.radarNewsMeldungsTiefe : 'knapp'
         radarNewsLagenAn.value = Number(s.radarNewsLagenAn ?? 1) === 1
-        kiEmpfehlungenAn.value = Number(s.kiEmpfehlungenAn ?? 0) === 1
         radarNewsLagenSymbol.value = s.radarNewsLagenSymbol || 'BTCUSDT'
         pruefeLagenSymbol()
         radarNewsTokenBudget.value = Math.max(0, Math.min(60000, Number(s.radarNewsTokenBudget) || 0))

@@ -14,6 +14,7 @@ import { TradeRing } from './tradeRing.js'
 import { pickBucketSize, inferTickSize } from '../../shared/priceBins.js'
 import { tickSizeFor } from './liveSymbols.js'
 import { loadReplay } from './replaySource.js'
+import { ladeMarktdaten, ausFuer } from './marktdaten.js'
 
 /*
  * Zeilen und erfasstes Band des Rings.
@@ -117,6 +118,18 @@ export class LiveFeed {
     async start() {
         this.stopped = false
         this._setState('connecting')
+        /*
+         * Bookmap und Liquidationsstrom gibt es nur mit der Marktdatenquelle
+         * Binance (S12): kein anderer angebundener Anbieter liefert Orderbuch-
+         * Diffs. Ohne sie Zustand `quelleAus` (Detail = `{ aus: true, … }`)
+         * statt eines Verbindungsversuchs, den die Wahl verbietet.
+         */
+        await ladeMarktdaten()
+        if (this.stopped) return
+        if (!buildStreamUrl(this.symbol, this.market)) {
+            this._setState('quelleAus', ausFuer('streams'))
+            return
+        }
         document.addEventListener('visibilitychange', this._onVisibility)
         await this._loadTickSize()
         // Während des Awaits kann stop() gelaufen sein (schneller

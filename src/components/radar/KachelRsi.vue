@@ -229,6 +229,7 @@ watch(() => props.daten, zeichne)
             <span class="rZahl">{{ t('marktradar.rsi.count', { n: daten.gezaehlt }) }}</span>
         </div>
 
+        <p v-if="daten.rangErsatz" class="rErsatz">{{ t('marktradar.mcapErsatz') }}</p>
         <div ref="chartEl" class="rChart"></div>
 
         <p v-if="gross" class="rQuelle">
@@ -294,5 +295,11 @@ watch(() => props.daten, zeichne)
     margin: 0.6rem 0 0;
     font-size: 0.8rem;
     color: var(--white-60);
+}
+
+.rErsatz {
+    margin: 0 0 0.2rem;
+    font-size: 0.72rem;
+    color: var(--warn);
 }
 </style>

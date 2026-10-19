@@ -29,8 +29,10 @@ import { useKostenAnzeige } from '../utils/journal/format.js'
 import { sendNotification } from '../utils/notify.js'
 // Dasselbe Overlay wie im Marktradar — ein Muster für beide Seiten
 import RadarOverlay from '../components/RadarOverlay.vue'
+import Quellenhinweis from '@/components/basis/Quellenhinweis.vue'
 import PageInfo from '../components/PageInfo.vue'
 import Symbol from '@/components/basis/Symbol.vue'
+import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -63,7 +65,12 @@ const STUFEN = [
     { wert: 'all', key: 'all' },
 ]
 /** Die acht Währungsräume, die der Feed überhaupt führt. */
-const LAENDER = ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'CAD', 'AUD', 'NZD']
+/*
+ * Seit S12 kommen Termine nur noch aus amtlichen Quellen (Fed, BEA, Eurostat
+ * — `server/kalender-quellen.js`); für andere Währungsräume gibt es keine.
+ * Alte ForexFactory-Zeilen anderer Länder laufen aus dem Fenster.
+ */
+const LAENDER = ['USD', 'EUR']
 
 const SPEICHER = 'nachrichten_kalender_tage'
 const SPEICHER_IMPACT = 'nachrichten_kalender_impact'
@@ -80,7 +87,7 @@ const MENGEN = [20, 40, 100, 200]
 // Je Gerät gemerkt, wie der übrige Live-Bereich es auch hält
 const zeitraum = ref(Number(localStorage.getItem(SPEICHER)) || 14)
 const impact = ref(localStorage.getItem(SPEICHER_IMPACT) || 'medium')
-const laender = ref((localStorage.getItem(SPEICHER_LAENDER) || 'USD,JPY').split(',').filter(Boolean))
+const laender = ref((localStorage.getItem(SPEICHER_LAENDER) || 'USD,EUR').split(',').filter(Boolean))
 
 /** Spaltenverhältnis in Prozent für die linke Spalte (Termine). */
 const teilung = ref(Number(localStorage.getItem(SPEICHER_TEILUNG)) || 50)
@@ -681,10 +688,14 @@ const nachTagen = computed(() => {
 })
 
 /**
- * Reicht der eigene Bestand über den gewählten Zeitraum? Der Feed führt immer
- * nur die laufende Woche; wer „1 Monat" wählt, sieht deshalb ab Woche zwei
- * nichts mehr — und darf das nicht für einen leeren Kalender halten.
+ * Reicht der eigene Bestand über den gewählten Zeitraum? Die Behörden
+ * veröffentlichen ihre Kalender unterschiedlich weit im Voraus (Eurostat
+ * dichter, die Fed Monate voraus); eine leere Strecke am Ende des Zeitraums
+ * darf nicht wie „nichts los" aussehen.
  */
+/** Hat irgendein gezeigter Termin Vorwert, Prognose oder Ist-Wert? */
+const mitWerten = computed(() => termine.value.some(e => e.previous || e.forecast || e.actual))
+
 const bestandKuerzer = computed(() => {
     const bis = Number(kalenderInfo.value?.bestandBis) || 0
     if (!bis) return false
@@ -1194,7 +1205,7 @@ onBeforeUnmount(() => {
             </button>
         </div>
 
-        <section class="nwKarte nwBericht nwZeitung">
+        <section class="nwKarte nwBericht nwZeitung" :data-ki-generiert="bericht ? 'true' : null">
             <template v-if="bericht">
                 <div class="nwBerichtKopf">
                     <span class="nwMarke">{{ t('news.briefing') }}</span>
@@ -1252,6 +1263,9 @@ onBeforeUnmount(() => {
 
                 <h2 class="nwUeberschrift">{{ bericht.ueberschrift }}</h2>
                 <p class="nwLage">{{ bericht.lage }}</p>
+                <!-- S12: Pflichtlabel oben, nicht nur im Fuss — gilt für Bericht,
+                     Zwischenmeldung und jeden geöffneten Archivbericht. -->
+                <KiHinweis :anbieter="bericht.provider" :modell="bericht.modell" />
 
                 <!-- Eigene Markteinordnung: zwei Blickwinkel, die sich nicht
                      überschneiden — Zyklus links, Handelstag rechts. Steht vor
@@ -1667,7 +1681,8 @@ onBeforeUnmount(() => {
              er beruht. Erst das macht den Bericht nachprüfbar statt behauptet. -->
         <RadarOverlay v-if="punktImFenster" :titel="punktImFenster.titel"
             :quelle="t('news.evidenceSource')" @schliessen="offenerPunkt = -1">
-            <div class="nwFenster">
+            <div class="nwFenster" data-ki-generiert="true">
+                <KiHinweis klein />
                 <p v-if="punktImFenster.wichtigkeit === 'hoch'" class="nwWichtigGross">
                     {{ t('news.important') }}
                 </p>
@@ -1749,7 +1764,9 @@ onBeforeUnmount(() => {
 
                 <div v-else class="nwKalender"
                     :style="hoehen.termine ? { maxHeight: hoehen.termine + 'px', overflowY: 'auto' } : {}">
-                    <div class="nwSpaltenkopf">
+                    <!-- Vorwert/Prognose/Ist gibt es nur in alten ForexFactory-Zeilen;
+                         die amtlichen Quellen liefern keine (S12). -->
+                    <div v-if="mitWerten" class="nwSpaltenkopf">
                         <span>{{ t('news.previous') }}</span>
                         <span>{{ t('news.forecast') }}</span>
                         <span>{{ t('news.actual') }}</span>
@@ -1789,6 +1806,13 @@ onBeforeUnmount(() => {
                     {{ t('news.stockUntil', {
                         datum: dayjs(kalenderInfo.bestandBis).tz(zone()).format('DD.MM')
                     }) }}
+                </p>
+                <!-- Pflicht-Quellenangaben der gezeigten Termine (Fed, BEA,
+                     Eurostat). Eurostat verlangt zudem, Bearbeitungen kenntlich
+                     zu machen und die eigene Nichtverantwortung zu nennen. -->
+                <Quellenhinweis v-if="(kalenderInfo.quellen || []).length" :quellen="kalenderInfo.quellen" />
+                <p v-if="(kalenderInfo.quellen || []).some(q => q.name === 'Eurostat')" class="nwHinweis">
+                    {{ t('news.calEurostat') }}
                 </p>
             </section>
 
@@ -1852,7 +1876,7 @@ onBeforeUnmount(() => {
                          Pfeil klappt auf — der Link daneben öffnet weiter das
                          Original. Ohne Stichpunkte (noch nicht angesehen)
                          bleibt nur der Titel. -->
-                    <div v-if="b.zusammenfassung" class="nwBeitragFassung"
+                    <div v-if="b.zusammenfassung" class="nwBeitragFassung" data-ki-generiert="true"
                         :class="{ zu: !aufgeklappt.includes(b.id) }">
                         <span class="nwKiMarke">{{ t('news.aiMark') }}</span>{{ b.zusammenfassung }}
                     </div>
@@ -1862,6 +1886,8 @@ onBeforeUnmount(() => {
                         <Symbol :name="aufgeklappt.includes(b.id) ? 'hoch' : 'runter'" />
                         {{ aufgeklappt.includes(b.id) ? t('news.collapse') : t('news.expand') }}
                     </button>
+                    <!-- S12: Video-Stichpunkte sind KI-Text (Gemini) — Pflichtlabel. -->
+                    <KiHinweis v-if="b.zusammenfassung" klein />
                 </a>
                 </div>
 

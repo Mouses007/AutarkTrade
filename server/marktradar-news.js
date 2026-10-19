@@ -25,7 +25,7 @@ import {
     merkeAufgabenFehler, stempleAufgabe, leseAufgabenStand,
 } from './db-claim.js'
 import { holeText, pruefeOeffentlicheUrl } from './net-guard.js'
-import { leseFeed, leseTelegram, telegramUrl } from './feed-parser.js'
+import { leseFeed } from './feed-parser.js'
 import {
     sendRadarError, holeFearGreed, holeDominanz, holeFunding, holeLsOi, holeAltseason,
     holeMarkt,
@@ -53,7 +53,19 @@ import {
 const TAG = 24 * 60 * 60 * 1000
 const MAX_ALTER = 3 * TAG          // ältere Beiträge sind keine Nachricht mehr
 const AUFBEWAHRUNG = 30 * TAG
-const ARTEN = ['youtube', 'rss', 'truth', 'telegram', 'x']
+/**
+ * Quellenarten, die NEU angelegt werden dürfen. `telegram` fehlt seit S12:
+ * Das Lesen öffentlicher Kanäle über `t.me/s/…` ist Scraping, und Telegram
+ * verbietet es ausdrücklich, Inhalte zu scrapen oder zu aggregieren, um sie
+ * mit KI einzusetzen (Content-Licensing, Verkaufs-Prüfung Z. 52). Bestehende
+ * Telegram-Quellen des Nutzers bleiben in der Liste stehen, sind aber
+ * abgeschaltet (Migration `migrationen/s12-marktradar.js`) und werden nie
+ * mehr abgerufen.
+ */
+const ARTEN = ['youtube', 'rss', 'truth', 'x']
+/** Arten, die nur noch als Altbestand vorkommen und nicht abgerufen werden. */
+export const ARTEN_ENTFERNT = ['telegram']
+export const TELEGRAM_HINWEIS = 'Telegram-Abruf entfernt (Lizenz: Telegram verbietet das Auslesen öffentlicher Kanäle)'
 
 // Kosten der letzten X-Suche. Der Abruf läuft unmittelbar vor dem Bericht
 // (gleicher Takt bzw. gleicher Knopfdruck); der Bericht holt sich die Zahl ab
@@ -120,45 +132,19 @@ export function istBruchstueck(text) {
 }
 
 /**
- * Vorschläge beim ersten Öffnen — nichts davon ist aktiv, und nichts wird
- * ungefragt abgerufen. Truth Social und X stehen als „Lärm" markiert da,
- * womit der Sammelschalter sie in seiner Vorgabestellung ausblendet.
+ * Vorschläge für neue Quellen: bewusst LEER (S12, Verkaufs-Prüfung
+ * Massnahme 10, Z. 46/53).
+ *
+ * Hier standen YouTube-Kanäle, Verlags-Feeds (Cointelegraph, CNBC, Yahoo
+ * Finance, Investing.com, The Verge, Ars Technica, TechCrunch), Telegram-Kanäle
+ * und ein Truth-Social-Spiegel. Ein verkauftes Programm, das fremde
+ * Presseinhalte vorbelegt und von einer KI zusammenfassen lässt, macht sich
+ * diese Auswahl zu eigen — Leistungsschutzrecht der Presseverleger (EU
+ * 2019/790 Art. 15), Feed-Bedingungen „persönlich, nicht-kommerziell", TDM-
+ * Vorbehalte. Der Nutzer trägt seine Quellen selbst ein; was er bereits
+ * eingetragen hat, bleibt unverändert (ausser Telegram, siehe `ARTEN`).
  */
-export const VORSCHLAEGE = [
-    // Alle fünf Kanäle am 16.08.2026 geprüft: jeder Feed liefert 15 Videos
-    { art: "youtube", name: "RobynHD", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UChWftKUs7F8Au7fyZUHrnzA", laerm: 0 },
-    { art: "youtube", name: "Bitbull", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCh8EqZyAUunyl1ryHeZAaSw", laerm: 0 },
-    { art: "youtube", name: "Coin Bureau", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCqK_GSMbpiV8spgD3ZGloSw", laerm: 0 },
-    { art: "youtube", name: "Bankless", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCAl9Ld79qaZxp9JzEOwd3aA", laerm: 0 },
-    { art: "youtube", name: "Real Vision (Makro)", url: "https://www.youtube.com/feeds/videos.xml?channel_id=UCGXWKlq1Oxr3ddEtmKhAkPg", laerm: 0 },
-    // Der deutsche Cointelegraph-Feed ist abgeschaltet (HTTP 410), der englische läuft
-    { art: 'rss', name: 'Cointelegraph', url: 'https://cointelegraph.com/rss', laerm: 0 },
-    // Finanz- und Tech-Feeds für die gleichnamigen Kapitel des Berichts.
-    // Sie ersetzen den Umweg über Perplexity Discover: dessen Seiten sind
-    // hinter einer Cloudflare-Prüfung und haben keinen Feed (geprüft
-    // 17.08.2026, HTTP 403 mit `cf-mitigated: challenge`) — und sie wären
-    // ohnehin die schlechtere Quelle, weil sie schon eine fremde
-    // KI-Zusammenfassung SIND. Hier stehen die Blätter selbst, die Discover
-    // zusammenfasst; damit bleiben Zahlen und Verweise erhalten.
-    // Alle am 17.08.2026 geprüft (Einträge je Abruf in Klammern).
-    { art: 'rss', name: 'Yahoo Finance', url: 'https://finance.yahoo.com/news/rssindex', laerm: 0 },          // 50
-    { art: 'rss', name: 'CNBC Finance', url: 'https://www.cnbc.com/id/10000664/device/rss/rss.html', laerm: 0 }, // 30
-    { art: 'rss', name: 'Investing.com', url: 'https://www.investing.com/rss/news_25.rss', laerm: 0 },        // 10
-    { art: 'rss', name: 'Ars Technica', url: 'https://feeds.arstechnica.com/arstechnica/technology-lab', laerm: 0 }, // 20
-    { art: 'rss', name: 'TechCrunch', url: 'https://techcrunch.com/feed/', laerm: 0 },                        // 20
-    { art: 'rss', name: 'The Verge', url: 'https://www.theverge.com/rss/index.xml', laerm: 0 },               // 10
-    { art: 'rss', name: 'Hacker News', url: 'https://news.ycombinator.com/rss', laerm: 0 },                   // 30
-    { art: 'telegram', name: 'Watcher Guru', url: 'https://t.me/s/watcherguru', laerm: 0 },
-    // Weitere Telegram-Kanäle mit echtem Markteinfluss, geprüft 29.08.2026 —
-    // bewusst ohne die zahllosen "90%-Trefferquote"-Signalgruppen, die bei
-    // einer Suche zuerst auftauchen: das sind bezahlte Pump-Werbeflächen,
-    // keine Nachrichtenquellen.
-    { art: 'telegram', name: 'Whale Alert', url: 'https://t.me/s/whale_alert_io', laerm: 0 },
-    { art: 'telegram', name: 'Lookonchain', url: 'https://t.me/s/lookonchainchannel', laerm: 0 },
-    { art: 'telegram', name: 'Wu Blockchain', url: 'https://t.me/s/wublockchainenglish', laerm: 0 },
-    { art: 'telegram', name: 'PANews (chinesisch)', url: 'https://t.me/s/ChannelPANews', laerm: 0 },
-    { art: "truth", name: "Truth Social (Spiegel)", url: "https://trumpstruth.org/feed", laerm: 1 },
-]
+export const VORSCHLAEGE = []
 
 async function quellen(nurAktive = true) {
     const q = getKnex()('news_sources').orderBy('id')
@@ -306,13 +292,13 @@ export async function laufeNewsAbruf({ manuell = false } = {}) {
     for (const q of liste) {
         if (filterAn && Number(q.laerm) === 1) continue
         if (q.art === 'x') continue   // oben gesammelt behandelt
+        // Altbestand einer entfernten Art: nie abrufen, auch wenn jemand die
+        // Quelle direkt in der Datenbank wieder einschaltet
+        if (ARTEN_ENTFERNT.includes(q.art)) continue
 
         try {
-            // Telegram-Kanäle liefern HTML statt XML — gleicher Abrufweg
-            // (inklusive SSRF-Prüfung), nur ein anderer Leser
-            const istTelegram = q.art === 'telegram'
-            const roh = await holeText(istTelegram ? telegramUrl(q.url) : q.url)
-            const eintraege = (istTelegram ? leseTelegram(roh) : leseFeed(roh)).filter(e => !e.zeit || e.zeit >= grenze)
+            const roh = await holeText(q.url)
+            const eintraege = leseFeed(roh).filter(e => !e.zeit || e.zeit >= grenze)
             gesehen += eintraege.length
 
             for (const e of eintraege) {
@@ -894,7 +880,7 @@ export const ZUSATZ_MAX = 2000
  *
  * Rein und ohne Netz, damit der Selbsttest sie prüfen kann.
  */
-export function eigeneAnweisungen(zusatz, empfehlungen = false) {
+export function eigeneAnweisungen(zusatz) {
     const text = String(zusatz || '').trim().slice(0, ZUSATZ_MAX)
     if (!text) return ''
     return `EIGENE ANWEISUNGEN DES LESERS — sie haben VORRANG:
@@ -907,7 +893,7 @@ unter UMFANG etwas anderes steht — dort steht die Vorgabe, hier steht der
 Wille des Lesers.
 
 Nur zwei Dinge kann auch sie nicht aushebeln: die REGELN oben — also
-${empfehlungen ? '' : 'keine Handelsempfehlungen, keine Kursziele, keine Prognosen, '}nichts
+keine Handelsempfehlungen, keine Kursziele, keine Prognosen, nichts
 erfinden — und das Antwortformat: genau das JSON unten, mit genau den
 Kapiteln von oben.
 
@@ -984,7 +970,7 @@ export function kompaktVorbericht(zeile, offset = 0) {
  */
 export function bauLagePrompt({ themen = ['crypto'], laenge = 'mittel', rhythmus = 'taeglich',
     punkte = 0, tiefe = 'normal', zusatz = '', aktualisierung = false, abdeckung = '',
-    einordnung = false, empfehlungen = false } = {}) {
+    einordnung = false } = {}) {
     const l = { ...(LAENGEN[laenge] || LAENGEN.mittel), punkte: punkteVorgabe(laenge, punkte) }
     const t = meldungsTiefeAus(tiefe)
     /*
@@ -998,13 +984,12 @@ export function bauLagePrompt({ themen = ['crypto'], laenge = 'mittel', rhythmus
         : (abdeckung || (rhythmus === 'woechentlich' ? 'der vergangenen Woche' : 'der letzten 36 Stunden'))
     const kapitelListe = themen.map(t => `- "${t}": ${THEMEN_NAMEN[t] || t}`).join('\n')
     /*
-     * Der Schalter muss BIS HIER durchgereicht werden, sonst steht das Verbot
-     * im Anweisungsblock, waehrend die REGELN oben es gerade erlauben — genau
-     * der Bautyp, gegen den `c50234d` angetreten ist, eine Etage tiefer.
-     * Aufgefallen erst im Audit, weil der Selbsttest ohne `zusatz` prueft und
-     * der Block dann gar nicht entsteht.
+     * Das Verbot von Empfehlungen, Kurszielen und Prognosen gilt immer — den
+     * Schalter `kiEmpfehlungenAn` gibt es seit S12 (19.10.2026) nicht mehr
+     * (Verkaufs-Prüfung 2.8: persönliche Empfehlungen nur mit menschlicher
+     * Prüfung). REGELN und Anweisungsblock sagen deshalb dasselbe.
      */
-    const eigene = eigeneAnweisungen(zusatz, empfehlungen)
+    const eigene = eigeneAnweisungen(zusatz)
 
     /*
      * Der Aufsatz für die Aktualisierung.
@@ -1080,13 +1065,7 @@ sich Video und Recherche, nenne beide Stände nebeneinander statt einen zu
 wählen. Text-Meldungen aus den News-Quellen gehören weiterhin NICHT in dieses
 Kapitel — sie sind Nachrichten, keine Chartaussagen.
 ` : ''}REGELN:
-${empfehlungen ? `- Handelsempfehlungen, Kursziele und Prognosen sind ERLAUBT, aber nur mit
-  Begründung aus den Quellen: Woran es sich entscheidet, welche Marke gilt und
-  was die Aussage widerlegt. Eine Zahl ohne diese drei Angaben lässt du weg.
-  Kennzeichne jede solche Aussage im Text als deine Einschätzung, nicht als
-  Nachricht — Prognosen der ZITIERTEN Quellen bleiben deren Prognosen und
-  werden mit Beleg als solche benannt.`
-        : '- Keine Handelsempfehlungen, keine Kursziele, keine Prognosen.'}
+- Keine Handelsempfehlungen, keine Kursziele, keine Prognosen.
 - Nichts erfinden. Was nicht in den Quellen steht, steht nicht im Bericht.
 - Eigenwerbung, Sponsoren, Clickbait und reine Meinungsmache lässt du weg.
 - Zahlen nennen, wenn welche dastehen — sie sind das Überprüfbare.
@@ -1107,14 +1086,9 @@ zwei Quellen dasselbe, schreibe EINEN Punkt und nenne beide Belege.
 LAGEBILD: Zusätzlich wägst du ab, was die Lage STÜTZT ("dafuer"), was sie
 BELASTET ("dagegen") und WORAN SIE SICH ENTSCHEIDET ("offen"). Je zwei bis vier
 Einträge, jeder ein Satz. "offen" nennt beobachtbare Bedingungen — was man in
-den nächsten Stunden oder Tagen sehen wird, das die Frage beantwortet. ${empfehlungen
-        ? `"offen" bleibt eine FRAGE, auch wenn Empfehlungen erlaubt sind: „ob die
-ETF-Abflüsse enden" gehört hierher, „über 66.000 kaufen" in den Meldungstext.
-Die Waage wägt ab, sie entscheidet nicht — sonst steht die Antwort in der
-Spalte, die die Frage stellen soll.`
-        : `KEINE
+den nächsten Stunden oder Tagen sehen wird, das die Frage beantwortet. KEINE
 Richtung, kein Kursziel, kein Einstieg, keine Empfehlung; „ob die ETF-Abflüsse
-enden" ist erlaubt, „über 66.000 kaufen" nicht.`}
+enden" ist erlaubt, „über 66.000 kaufen" nicht.
 Jeder Eintrag trägt "art": "fakt" NUR, wenn der Satz eine gemessene oder in den
 Quellen genannte Tatsache wiedergibt — alles Gedeutete, Verknüpfte, Gewichtete
 ist "einschaetzung". Im Zweifel "einschaetzung": eine als Fakt ausgegebene
@@ -1265,9 +1239,10 @@ async function holeMarktdatenBlock() {
          * die Gesamtlage-Karte eingeht. Nebeneinander auf einer Seite ergab das
          * am 05.09.2026 „59,1 %" in dieser Tabelle gegen „59,78 %" in der
          * Einordnung: zwei Werte derselben Grösse, beide richtig, zusammen eine
-         * stille Lüge. Der Livewert geht nicht verloren — `holeDominanz` fällt
-         * selbst auf `holeGlobal` zurück, wenn der Schnappschuss älter als drei
-         * Tage ist.
+         * stille Lüge. Seit S12 kommen beide aus CoinGecko (Kundenschlüssel):
+         * `holeDominanz` nimmt den Livewert von `holeGlobal` als Kurvenende,
+         * also ist es ohnehin dieselbe Zahl. Ohne Schlüssel wirft es
+         * `QuelleAus`, und die Zeile fällt weg (catch unten).
          */
         const g = await holeDominanz()
         werte.push({
@@ -1622,7 +1597,7 @@ export function abdeckungText(beitraege, { jetzt = Date.now() } = {}) {
  * Rein und ohne Netz, damit der Selbsttest sie prüfen kann.
  */
 export function bauAnweisungPruefPrompt({ themen = ['crypto'], laenge = 'mittel',
-    punkte = 0, tiefe = 'normal', quellen = [], empfehlungen = false } = {}) {
+    punkte = 0, tiefe = 'normal', quellen = [] } = {}) {
     /*
      * Wie in `bauLagePrompt`: eine eigene Punktzahl SCHLÄGT die Vorgabe der
      * Länge. Das fehlte hier — die Prüfung sagte dem Leser „vier bis fünf
@@ -1653,10 +1628,7 @@ So arbeitet dieser Bericht — daran ändert die Anweisung nichts:
   klar benannten PUNKT am Anfang eines Kapitels aber sehr wohl — so und nicht
   anders erfüllt der Bericht den Wunsch nach einer eigenen Kachel oder einem
   eigenen Block. Sage das als "wirkt" und nenne den Weg, statt abzulehnen.
-- Unverrückbare Regeln: ${empfehlungen ? '' : 'keine Handelsempfehlungen, keine Kursziele, keine Prognosen, '}nichts Erfundenes, Quellenangaben bleiben Pflicht.${empfehlungen ? `
-  Der Leser hat Handelsempfehlungen, Kursziele und Prognosen ERLAUBT — eine
-  Anweisung, die danach verlangt, ist also "wirkt", nicht "gegenregel". Jede
-  solche Aussage muss aber ihre Bedingung und ihre Widerlegung nennen.` : ''}
+- Unverrückbare Regeln: keine Handelsempfehlungen, keine Kursziele, keine Prognosen, nichts Erfundenes, Quellenangaben bleiben Pflicht.
 - Marktstand und eigene Einordnung sind eigene Blöcke der Seite, nicht Teil des
   geschriebenen Berichts. Die Kapitel-Lage schreibt über die Nachrichten des
   Kapitels; eine Anweisung, die dort Fear & Greed, Dominanz oder Funding
@@ -2160,7 +2132,10 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
     const filterAn = Number(s?.radarNewsQuellenAusschluss ?? 1) === 1
 
     const quellenListe = await knex('news_sources').select('id', 'name', 'art', 'laerm')
-    const erlaubt = quellenListe.filter(q => !filterAn || Number(q.laerm) !== 1)
+    // Gespeicherte Telegram-Beiträge gehen nicht mehr an die KI — genau das
+    // verbietet Telegram (S12, siehe `ARTEN_ENTFERNT`).
+    const erlaubt = quellenListe.filter(q => (!filterAn || Number(q.laerm) !== 1)
+        && !ARTEN_ENTFERNT.includes(q.art))
     const nachId = new Map(quellenListe.map(q => [q.id, q]))
     if (!erlaubt.length) return { fehler: 'Keine Quellen freigegeben' }
 
@@ -2493,7 +2468,13 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
          * bleibt dort, solange ein Perplexity-Schlüssel da ist.
          */
         const rWahl = aufgabenWahl(s?.aiTaskProviders, 'recherche')
-        const dsWeg = rWahl ? rWahl.provider === 'deepseek' : s?.radarNewsRechercheModell === DEEPSEEK_SUCHE
+        /*
+         * Der DeepSeek-Weg ist seit S12 abgeschaltet (Verkaufs-Prüfung Z. 89d:
+         * DeepSeek nur noch als neutraler OpenAI-kompatibler Endpunkt, die
+         * Such-API gibt es dort nicht). Eine gespeicherte Wahl `deepseek-suche`
+         * fällt auf Perplexity zurück, statt die Recherche ausfallen zu lassen.
+         */
+        const dsWeg = false
         const pModell = rWahl?.provider === 'perplexity' ? rWahl.model
             : (s?.radarNewsRechercheModell && s.radarNewsRechercheModell !== DEEPSEEK_SUCHE
                 ? s.radarNewsRechercheModell : undefined)
@@ -2776,13 +2757,6 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
          * sonst schreibt das Modell die Deutung des Marktstands nirgends hin.
          */
         einordnung: !!lagenBlock.text,
-        /*
-         * Handelsempfehlungen, Kursziele und Prognosen. Ein globaler Schalter
-         * (Einstellungen → KI → Allgemein), der auch die Gesamtlage- und die
-         * Handelslage-Kachel betrifft — deshalb `kiEmpfehlungenAn` und nicht
-         * `radarNews...`. Vorgabe AUS, also das bisherige Verhalten.
-         */
-        empfehlungen: Number(s?.kiEmpfehlungenAn ?? 0) === 1,
     })
     let antwort = null
     for (const budget of budgets) {
@@ -3079,6 +3053,7 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
         kostenUsd,
         provider: cfg.provider, modell: cfg.model,
         geminiFehler,
+        kiGeneriert: true,
     }
 }
 
@@ -3096,6 +3071,7 @@ export function setupNewsRoutes(app) {
     app.post('/api/marktradar/news/sources', async (req, res) => {
         try {
             const { art, name, url, laerm } = req.body || {}
+            if (ARTEN_ENTFERNT.includes(String(art))) return res.status(400).json({ error: TELEGRAM_HINWEIS })
             if (!ARTEN.includes(String(art))) return res.status(400).json({ error: 'Unbekannte Art' })
             // X-Quellen tragen keinen Abruf-Link, sondern einen Handle — der
             // Server ruft nie eine von ihnen abgeleitete Adresse auf, die
@@ -3127,6 +3103,12 @@ export function setupNewsRoutes(app) {
             const felder = {}
             for (const k of ['name', 'enabled', 'laerm', 'videoAnalyse']) {
                 if (req.body[k] !== undefined) felder[k] = k === 'name' ? String(req.body[k]).slice(0, 120) : (Number(req.body[k]) ? 1 : 0)
+            }
+            // Eine Telegram-Quelle lässt sich umbenennen oder löschen, aber
+            // nicht wieder einschalten und nicht auf eine neue Adresse setzen
+            if (felder.enabled === 1 || req.body.url !== undefined) {
+                const art = (await getKnex()('news_sources').where('id', id).select('art').first())?.art
+                if (ARTEN_ENTFERNT.includes(art)) return res.status(400).json({ error: TELEGRAM_HINWEIS })
             }
             if (req.body.url !== undefined) {
                 const zeileAlt = await getKnex()('news_sources').where('id', id).first()
@@ -3181,9 +3163,11 @@ export function setupNewsRoutes(app) {
                 }
                 return res.json({ ok: true, anzahl: 0, beispiel: [], hinweis: 'Handle gültig — Abruf erfolgt über die bezahlte X-Suche' })
             }
-            const roh = await holeText(req.body?.art === 'telegram'
-                ? telegramUrl(req.body?.url) : req.body?.url)
-            const e = req.body?.art === 'telegram' ? leseTelegram(roh) : leseFeed(roh)
+            if (ARTEN_ENTFERNT.includes(String(req.body?.art))) {
+                return res.status(400).json({ error: TELEGRAM_HINWEIS })
+            }
+            const roh = await holeText(req.body?.url)
+            const e = leseFeed(roh)
             const SPERRE = /whitelist|not authorized|rate.?limit|blocked|captcha|sign in|login required|forbidden/i
             const verdaechtig = e.length <= 1 && e.some(x => SPERRE.test(x.titel))
             if (verdaechtig) {
@@ -3214,6 +3198,7 @@ export function setupNewsRoutes(app) {
             const ohneVideos = String(req.query.ohneVideos || '') === '1'
             const erlaubt = qs
                 .filter(q => !filterAn || Number(q.laerm) !== 1)
+                .filter(q => !ARTEN_ENTFERNT.includes(q.art))
                 .filter(q => !ohneVideos || q.art !== 'youtube')
                 .map(q => q.id)
 
@@ -3306,6 +3291,8 @@ export function setupNewsRoutes(app) {
         const { marktBlock, lagenBlock, ...rest } = zeile
         return {
             ...rest,
+            // EU AI Act Art. 50: maschinenlesbar als KI-Ausgabe markiert (S12).
+            kiGeneriert: true,
             erstelltAm: Number(zeile.erstelltAm),
             punkte: JSON.parse(zeile.punkte || '[]'),
             kapitel,
@@ -3467,9 +3454,6 @@ export function setupNewsRoutes(app) {
                     punkte: s?.radarNewsPunkte,
                     tiefe: ['knapp', 'normal', 'ausfuehrlich'].includes(s?.radarNewsMeldungsTiefe)
                         ? s.radarNewsMeldungsTiefe : 'knapp',
-                    // Sonst nennt die Prüfung eine Anweisung „gegenregel", die
-                    // der Leser per Einstellung längst erlaubt hat.
-                    empfehlungen: Number(s?.kiEmpfehlungenAn ?? 0) === 1,
                     // Ohne die Liste rät das Modell, ob ein genannter Kanal
                     // erreichbar ist — und riet „nein" bei einer Quelle, die
                     // seit Monaten eingerichtet ist. Nur die AKTIVEN: eine

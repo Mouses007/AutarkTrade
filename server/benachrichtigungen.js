@@ -186,7 +186,7 @@ export function mailKonfigVollstaendig(s) {
  * Text raus, wie vorher. Mit ihnen sieht jedes Postfach die gestaltete
  * Fassung — und Textleser (oder ein Client, der HTML sperrt) den `text`.
  */
-async function sendeMail(s, { betreff, text, html, anhaenge, an }) {
+async function sendeMail(s, { betreff, text, html, anhaenge, an, kopf }) {
     if (versandGesperrt()) throw versandSperrFehler()
     const sicherheit = String(s.mailSicherheit || 'starttls')
     let passwort = ''
@@ -233,6 +233,8 @@ async function sendeMail(s, { betreff, text, html, anhaenge, an }) {
             text,
             ...(html ? { html } : {}),
             ...(anhaenge?.length ? { attachments: anhaenge } : {}),
+            // Zusätzliche Kopfzeilen, z. B. `X-AI-Generated` (siehe `KI_EREIGNISSE`).
+            ...(kopf ? { headers: kopf } : {}),
         })
     } finally {
         transport.close()
@@ -300,7 +302,16 @@ async function darfNochSenden() {
  * @param {number} [opt.ttlMs] Sperrfrist, Vorgabe 12 Stunden
  * @returns {Promise<boolean>} true = Mail wurde verschickt
  */
-export async function melde(id, { betreff, text, schluessel = '', ttlMs = 12 * 60 * 60 * 1000 } = {}) {
+/**
+ * Ereignisse, deren Mail einen KI-Text trägt (S12, EU AI Act Art. 50): sie
+ * bekommen eine Label-Zeile vor den Text und den Kopf `X-AI-Generated: true`.
+ * Hier zentral statt beim Aufrufer — ein neuer Aufrufer vergisse es sonst.
+ */
+const KI_EREIGNISSE = new Set(['lageberichtFertig'])
+export const KI_MAIL_ZEILE = 'KI-generiert – keine Anlageberatung – Fakten prüfen.'
+const KI_MAIL_KOPF = { 'X-AI-Generated': 'true' }
+
+export async function melde(id, { betreff, text, schluessel = '', ttlMs = 12 * 60 * 60 * 1000, kiGeneriert = false } = {}) {
     try {
         if (versandGesperrt()) return false
         if (!NACH_ID.has(id)) {
@@ -331,7 +342,9 @@ export async function melde(id, { betreff, text, schluessel = '', ttlMs = 12 * 6
         }
 
         try {
-            await sendeMail(s, { ...gestalteteMail(s, id, { betreff, text }), an })
+            const ki = kiGeneriert || KI_EREIGNISSE.has(id)
+            const inhalt = ki ? `${KI_MAIL_ZEILE}\n\n${text || ''}` : text
+            await sendeMail(s, { ...gestalteteMail(s, id, { betreff, text: inhalt }), an, ...(ki ? { kopf: KI_MAIL_KOPF } : {}) })
         } catch (e) {
             /*
              * Ansprüche sind gesetzt, die Mail aber nie angekommen. Ohne

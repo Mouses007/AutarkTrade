@@ -8,6 +8,13 @@
  *
  * Bestehende Quellen werden nie angetastet — dieser Schritt bietet nur das
  * Hinzufügen neuer.
+ *
+ * Seit S12 (Verkaufs-Prüfung Massnahme 10, Z. 46/52/53):
+ *   - nichts vorbelegt: die Vorschlagsliste ist leer, der Nutzer trägt
+ *     seine Quellen selbst ein (Verlags-Feeds, Kanäle, Spiegel);
+ *   - Telegram ist keine wählbare Art mehr. Bereits eingetragene
+ *     Telegram-Quellen stehen abgeschaltet in der Liste, lassen sich löschen,
+ *     aber nicht wieder einschalten.
  */
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +23,8 @@ import axios from 'axios'
 const { t } = useI18n()
 
 const newsQuellen = ref([])
-const newsVorschlaege = ref([])
+/** Arten, die nur noch als Altbestand vorkommen (wie `ARTEN_ENTFERNT` im Server). */
+const ENTFERNT = ['telegram']
 const neueQuelle = ref({ art: 'youtube', name: '', url: '' })
 const newsMeldung = ref('')
 const newsFehler = ref(false)
@@ -26,8 +34,6 @@ async function ladeNewsQuellen() {
     try {
         const { data } = await axios.get('/api/marktradar/news/sources')
         newsQuellen.value = data.quellen || []
-        const vorhanden = new Set(newsQuellen.value.map(q => q.url))
-        newsVorschlaege.value = (data.vorschlaege || []).filter(v => !vorhanden.has(v.url))
     } catch (e) {
         newsQuellen.value = []
     }
@@ -83,11 +89,6 @@ async function quelleLoeschen(q) {
     }
 }
 
-async function vorschlagUebernehmen(v) {
-    neueQuelle.value = { art: v.art, name: v.name, url: v.url, laerm: v.laerm }
-    await quelleAnlegen()
-}
-
 onMounted(ladeNewsQuellen)
 </script>
 
@@ -117,7 +118,8 @@ onMounted(ladeNewsQuellen)
                         </div>
                     </td>
                     <td class="text-center">
-                        <input type="checkbox" :checked="!!q.enabled"
+                        <input type="checkbox" :checked="!!q.enabled" :disabled="ENTFERNT.includes(q.art)"
+                            :title="ENTFERNT.includes(q.art) ? t('onboarding.news.telegramEntfernt') : ''"
                             @change="quelleAendern(q, { enabled: $event.target.checked ? 1 : 0 })">
                     </td>
                     <td class="text-center">
@@ -144,7 +146,6 @@ onMounted(ladeNewsQuellen)
                 <select class="form-select form-select-sm" v-model="neueQuelle.art">
                     <option value="youtube">YouTube</option>
                     <option value="rss">RSS</option>
-                    <option value="telegram">Telegram</option>
                     <option value="truth">Truth Social</option>
                     <option value="x">X (via Grok)</option>
                 </select>
@@ -155,8 +156,8 @@ onMounted(ladeNewsQuellen)
             <div class="col-12 col-md-5">
                 <input class="form-control form-control-sm" v-model="neueQuelle.url"
                     :placeholder="neueQuelle.art === 'x' ? '@handle'
-                        : neueQuelle.art === 'telegram' ? 'https://t.me/s/kanalname'
-                            : 'https://www.youtube.com/feeds/videos.xml?channel_id=…'">
+                        : neueQuelle.art === 'youtube' ? 'https://www.youtube.com/feeds/videos.xml?channel_id=…'
+                            : 'https://…'">
             </div>
             <div class="col-12 col-md-2 d-flex gap-1">
                 <button class="btn btn-outline-secondary btn-sm" :disabled="newsTestet"
@@ -168,12 +169,8 @@ onMounted(ladeNewsQuellen)
             {{ newsMeldung }}
         </div>
 
-        <div v-if="newsVorschlaege.length" class="mt-2 small">
-            <span class="text-muted me-2">{{ t('settings.ki.news.suggestionsLabel') }}</span>
-            <button v-for="v in newsVorschlaege" :key="v.url"
-                class="btn btn-outline-secondary btn-sm me-1 mb-1" @click="vorschlagUebernehmen(v)">
-                {{ v.name }}<span v-if="v.laerm" class="ms-1 text-muted">{{ t('settings.ki.news.noiseSuffix') }}</span>
-            </button>
-        </div>
+        <!-- Bewusst ohne Vorschläge: welche Verlage und Kanäle gelesen und von
+             der KI zusammengefasst werden, entscheidet der Nutzer (S12). -->
+        <p class="small text-muted mt-2 mb-0">{{ t('onboarding.news.eigeneQuellen') }}</p>
     </div>
 </template>

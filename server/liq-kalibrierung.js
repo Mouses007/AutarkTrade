@@ -28,17 +28,23 @@
  * `server/__selftest-liq-kalibrierung.mjs` getestet; die Route darunter
  * besorgt Events, Kerzen und Margin-Daten und cached das Ergebnis einen Tag
  * in `market_snapshots` (kind `levkal:SYMBOL`).
+ *
+ * Nur mit der Marktdatenquelle Binance (S12): Liquidationen, Kerzen und
+ * OI-Historie sind Binance-Daten; mit einer anderen Wahl antwortet die Route
+ * `{ aus: true, … }`.
  */
 
-import axios from 'axios'
 import { effektiveStufen, tierPossible, LEVERAGE_TIERS } from '../shared/leverageMap.js'
 import { leseLiquidationen } from './live-recorder.js'
 import { holeMarginRate, MMR_VORGABE } from './margin-rates.js'
-import { notiereGewicht, melde429, warteAufGewicht } from './binance-takt.js'
+import { warteAufGewicht } from './binance-takt.js'
+import * as marktdaten from './marktdaten/index.js'
 import { getKnex } from './database.js'
 import { logWarn } from './logger.js'
 
 const HTTP_TIMEOUT = 12000
+// Gewicht und 429/418 meldet `binanceHole` an die gemeinsame Bremse.
+const binance = (faehigkeit, pfad, params) => marktdaten.binanceHole(faehigkeit, 'futures', pfad, params, { timeout: HTTP_TIMEOUT })
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 const FENSTER_TAGE = 14
 const MIN_EVENTS = 200
@@ -178,12 +184,9 @@ async function holeKerzen(symbol, vonMs, bisMs) {
     let start = vonMs
     while (start < bisMs) {
         await warteAufGewicht(10)
-        const res = await axios.get('https://fapi.binance.com/fapi/v1/klines', {
-            params: { symbol, interval: '5m', startTime: start, endTime: bisMs, limit: 1500 },
-            timeout: HTTP_TIMEOUT,
-        })
-        notiereGewicht(res.headers)
-        const seite = Array.isArray(res.data) ? res.data : []
+        const roh = await binance('kerzen', '/fapi/v1/klines',
+            { symbol, interval: '5m', startTime: start, endTime: bisMs, limit: 1500 })
+        const seite = Array.isArray(roh) ? roh : []
         if (!seite.length) break
         for (const k of seite) {
             kerzen.push({ t: Number(k[0]), l: +k[3], h: +k[2], add: 0 })
@@ -206,11 +209,8 @@ async function holeKerzen(symbol, vonMs, bisMs) {
 async function heftOiAnKerzen(symbol, kerzen) {
     try {
         await warteAufGewicht(1)
-        const res = await axios.get('https://fapi.binance.com/futures/data/openInterestHist', {
-            params: { symbol, period: '5m', limit: 500 }, timeout: HTTP_TIMEOUT,
-        })
-        notiereGewicht(res.headers)
-        const hist = Array.isArray(res.data) ? res.data : []
+        const roh = await binance('oiHistorie', '/futures/data/openInterestHist', { symbol, period: '5m', limit: 500 })
+        const hist = Array.isArray(roh) ? roh : []
         const nachOpenTime = new Map(kerzen.map(k => [k.t, k]))
         for (let i = 1; i < hist.length; i++) {
             const delta = Number(hist[i].sumOpenInterest) - Number(hist[i - 1].sumOpenInterest)
@@ -219,8 +219,6 @@ async function heftOiAnKerzen(symbol, kerzen) {
             if (kerze) kerze.add = delta
         }
     } catch (fehler) {
-        const status = fehler.response?.status
-        if (status === 429 || status === 418) melde429(status, fehler.response?.headers)
         // ΔOI ist Verfeinerung, nicht Voraussetzung — ohne läuft der
         // Treffer-Rückfall.
         logWarn('liq-kalibrierung', `OI-Historie ${symbol}: ${fehler.message}`)
@@ -278,6 +276,8 @@ export function setupLiqKalibrierungRoutes(app) {
             return res.status(400).json({ error: 'symbol fehlt oder ist ungültig' })
         }
         try {
+            // Binance-Liquidationen sind die Grundlage — ohne sie `{ aus: true }`.
+            await marktdaten.binanceRest('liquidationen', 'futures')
             const knex = getKnex()
             const kind = `levkal:${symbol}`
             const heute = Date.UTC(
@@ -309,6 +309,7 @@ export function setupLiqKalibrierungRoutes(app) {
             res.setHeader('X-Cache', 'MISS')
             res.json(ergebnis)
         } catch (fehler) {
+            if (marktdaten.sendeWennAus(res, fehler)) return
             logWarn('liq-kalibrierung', `${symbol}: ${fehler.message}`)
             res.status(500).json({ error: `Hebelverteilung für ${symbol} nicht berechenbar: ${fehler.message}` })
         }

@@ -12,6 +12,7 @@
  * jedes neue Setup und kann daraus Positionen eröffnen. Hier soll nur
  * sichtbar werden, was die Strategie auf den aktuellen Kerzen sähe.
  */
+import { sendeWennAus } from './quellen/aus.js'
 import { getKnex } from './database.js'
 import { getStrategy, validateParams } from './strategies/index.js'
 import { ladeInstanz } from './strategy-engine.js'
@@ -135,9 +136,10 @@ export function setupChartStrategieRoutes(app) {
             if (!roh || typeof roh !== 'object' || Array.isArray(roh)) roh = {}
             res.json(await holeSignale(strategyId, symbol, timeframe, req.query.markt === 'spot' ? 'spot' : 'futures', roh))
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             const st = e.response?.status || e.status
             if (st === 400 || /invalid symbol|-1121/i.test(String(e.response?.data?.msg || e.message))) {
-                return res.status(400).json({ error: `${req.query.symbol || 'Symbol'} gibt es bei Binance nicht` })
+                return res.status(400).json({ error: `${req.query.symbol || 'Symbol'} gibt es bei der Marktdatenquelle nicht` })
             }
             res.status(500).json({ error: e.message })
         }
@@ -271,10 +273,11 @@ export function setupChartStrategieRoutes(app) {
                 overlays: overlaysFuer(strategie.id, { candles, params, htfCandles }),
             })
         } catch (e) {
-            // Ein Symbol, das Binance nicht führt (400 / -1121), ist ein Eingabefehler, kein Serverfehler.
+            if (sendeWennAus(res, e)) return
+            // Ein Symbol, das die Marktdatenquelle nicht führt (400 / -1121), ist ein Eingabefehler, kein Serverfehler.
             const st = e.response?.status || e.status
             if (st === 400 || /invalid symbol|-1121/i.test(String(e.response?.data?.msg || e.message))) {
-                return res.status(400).json({ error: `${req.body?.symbol || 'Symbol'} gibt es bei Binance nicht` })
+                return res.status(400).json({ error: `${req.body?.symbol || 'Symbol'} gibt es bei der Marktdatenquelle nicht` })
             }
             res.status(500).json({ error: e.message })
         }

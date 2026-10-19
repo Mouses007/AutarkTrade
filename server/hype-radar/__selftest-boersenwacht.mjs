@@ -9,8 +9,10 @@
  */
 import {
     LESER, basisAusPaar, kuerzel, neueEintraege, ordneZu, leiterFuer, vorlaufStatistik,
-    MAX_NEU_JE_ABRUF, MIN_BEWERTUNG_KUERZEL, STARTS, auchGelistetAuf,
+    MAX_NEU_JE_ABRUF, MIN_BEWERTUNG_KUERZEL, STARTS, auchGelistetAuf, BOERSEN,
 } from './boersenwacht-bewertung.js'
+import { QUELLEN, boerseAn } from './boersenwacht.js'
+import { VORGABEN } from './einstellungen.js'
 
 let fehler = 0
 let bestanden = 0
@@ -34,18 +36,26 @@ p('Binance Spot', LESER['binance-spot']([{ symbol: 'PEPEUSDT' }, { symbol: 'PEPE
 p('Coinbase: nur online und handelbar',
     LESER.coinbase([{ base_currency: 'ABC', status: 'online' }, { base_currency: 'OFF', status: 'delisted' },
         { base_currency: 'HALT', status: 'online', trading_disabled: true }]).join() === 'ABC')
-p('Upbit: Markt KRW-XYZ', LESER.upbit([{ market: 'KRW-XYZ' }, { market: 'BTC-XYZ' }]).join() === 'XYZ')
 p('Kraken: XBT ist BTC', LESER.kraken({ result: { XXBTZUSD: { wsname: 'XBT/USD' }, ABCUSD: { wsname: 'ABC/USD' } } }).join() === 'ABC,BTC')
-p('OKX: nur live', LESER.okx({ data: [{ baseCcy: 'A', state: 'live' }, { baseCcy: 'B', state: 'suspend' }] }).join() === 'A')
 p('Bybit', LESER.bybit({ result: { list: [{ baseCoin: 'A', status: 'Trading' }] } }).join() === 'A')
-p('MEXC: Paarnamen', LESER.mexc({ data: ['ABCUSDT', 'XYZUSDC'] }).join() === 'ABC,XYZ')
-const alpha = LESER['binance-alpha']({ data: [
-    { symbol: 'FOO', chainId: 'CT_501', contractAddress: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJospump' },
-    { symbol: 'BAR', chainId: '56', contractAddress: '0xABC0000000000000000000000000000000000001' },
-] })
-p('Alpha: Kette und Vertrag', alpha.length === 2 && alpha.some((a) => a.chain === 'solana' && a.contract.endsWith('pump'))
-    && alpha.some((a) => a.chain === 'bsc' && a.contract === '0xabc0000000000000000000000000000000000001'))
-p('fremde Form ergibt eine leere Liste', LESER.okx({ fehler: 1 }).length === 0 && LESER.coinbase(null).length === 0)
+p('KuCoin: nur handelbar', LESER.kucoin({ data: [{ baseCurrency: 'A', enableTrading: true }, { baseCurrency: 'B', enableTrading: false }] }).join() === 'A')
+p('fremde Form ergibt eine leere Liste', LESER.bybit({ fehler: 1 }).length === 0 && LESER.coinbase(null).length === 0)
+
+// ── S12: entfernte und abgeschaltete Börsen ─────────────────────────────
+{
+    const ids = BOERSEN.map((b) => b.id)
+    p('S12: Upbit, OKX, MEXC und Binance Alpha sind entfernt',
+        !['upbit', 'okx', 'mexc', 'binance-alpha'].some((id) => ids.includes(id) || id in LESER || id in QUELLEN))
+    p('S12: keine Sprosse „Alpha" mehr', !BOERSEN.some((b) => b.stufe === 'alpha'))
+    p('S12: keine Binance-Adresse im Börsen-Beobachter', !Object.values(QUELLEN).some((u) => /binance/i.test(u)))
+    p('S12: jede Börse hat einen Leser', ids.every((id) => typeof LESER[id] === 'function'))
+    const vorgabe = { boersenwachtBoersen: VORGABEN.boersenwachtBoersen }
+    p('S12: Coinbase, Kraken, KuCoin und Gate ab Werk aus',
+        ['coinbase', 'kraken', 'kucoin', 'gate'].every((id) => !boerseAn(vorgabe, id)))
+    p('S12: Binance, Bybit und Bitget ab Werk an',
+        ['binance-spot', 'binance-futures', 'bybit', 'bitget'].every((id) => boerseAn(vorgabe, id)))
+    p('S12: jede Börse hat eine Vorgabe', ids.every((id) => id in VORGABEN.boersenwachtBoersen))
+}
 
 // ── Neue Listungen ──────────────────────────────────────────────────────
 const alt = Array.from({ length: 100 }, (_, i) => `C${i}`)
@@ -55,8 +65,6 @@ p('halbe Antwort: nichts neu, alter Stand bleibt', !neueEintraege(alt, alt.slice
 p('leere Antwort: alter Stand bleibt', !neueEintraege(alt, []).uebernehmen)
 const flut = neueEintraege(alt, [...alt, ...Array.from({ length: MAX_NEU_JE_ABRUF + 1 }, (_, i) => `X${i}`)])
 p('Flut: Grundlinie neu, keine Ereignisse', flut.uebernehmen && flut.neu.length === 0)
-p('Alpha nach Schlüssel', neueEintraege(alpha.slice(0, 1).concat(alt.map((a) => ({ schluessel: a }))),
-    alpha.concat(alt.map((a) => ({ schluessel: a })))).neu.length === 1)
 
 // ── Zuordnung ───────────────────────────────────────────────────────────
 const tag = 86400e3
@@ -77,24 +85,25 @@ p('unbekannt: kein Treffer', ordneZu({ symbol: 'NOPE' }, wissen).treffer === '')
 
 // ── Leiter ──────────────────────────────────────────────────────────────
 const staende = new Map([
-    ['binance-alpha', new Set(['solana|7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJospump'])],
-    ['mexc', new Set(['FOO', 'BIG'])],
+    ['binance-alpha', new Set(['solana|7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJospump'])],   // Altbestand bis S12
+    ['gate', new Set(['FOO', 'BIG'])],
     ['coinbase', new Set(['BIG'])],
 ])
 const l1 = leiterFuer({ symbol: 'FOO', chain: 'solana', contract: '7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJospump', bewertungUsd: 200000 }, staende)
-p('Leiter: Alpha über den Vertrag', l1.alpha === true)
+p('Leiter: ein alter Alpha-Stand zählt nicht mehr', !('alpha' in l1))
 p('Leiter: kleiner Token zählt nicht über das Kürzel', l1.mittel.length === 0)
 const l2 = leiterFuer({ symbol: 'BIG', chain: 'base', contract: '0xb', bewertungUsd: MIN_BEWERTUNG_KUERZEL * 2 }, staende)
-p('Leiter: grosser Token über das Kürzel', l2.mittel.join() === 'MEXC' && l2.gross.join() === 'Coinbase')
+p('Leiter: grosser Token über das Kürzel', l2.mittel.join() === 'Gate' && l2.gross.join() === 'Coinbase')
 
 // ── Vorlauf ─────────────────────────────────────────────────────────────
 const T0 = 1790000000000
 const s = vorlaufStatistik([
     { boerse: 'coinbase', treffer: 'kuerzel', radarSeit: T0, gesehenAm: T0 + 4 * tag },
     { boerse: 'binance-spot', treffer: 'vertrag', radarSeit: T0 + tag, gesehenAm: T0 + 3 * tag },
-    { boerse: 'okx', treffer: 'namensgleich', radarSeit: T0, gesehenAm: T0 + 9 * tag },
-    { boerse: 'okx', treffer: '', radarSeit: null, gesehenAm: T0 + 9 * tag },
-    { boerse: 'mexc', treffer: 'kuerzel', radarSeit: T0 + 10 * tag, gesehenAm: T0 + 9 * tag },   // nach dem Listing gesehen
+    { boerse: 'bybit', treffer: 'namensgleich', radarSeit: T0, gesehenAm: T0 + 9 * tag },
+    { boerse: 'bybit', treffer: '', radarSeit: null, gesehenAm: T0 + 9 * tag },
+    { boerse: 'gate', treffer: 'kuerzel', radarSeit: T0 + 10 * tag, gesehenAm: T0 + 9 * tag },   // nach dem Listing gesehen
+    { boerse: 'okx', treffer: 'kuerzel', radarSeit: T0, gesehenAm: T0 + 2 * tag },   // entfernte Börse (bis S12): zählt nicht
 ])
 p('Vorlauf: Namensvetter zählen nicht', s.gross.neu === 4 && s.gross.erkannt === 2)
 p('Vorlauf: Median in Tagen', s.gross.medianVorlaufTage === 3, String(s.gross.medianVorlaufTage))
@@ -120,14 +129,7 @@ p('Vorlauf: erst nach dem Listing gesehen ist kein Vorlauf', s.mittel.erkannt ==
     p('… wohl aber ein Start, der erst gestern verstrich', STARTS['binance-futures']({ symbols: [{ symbol: 'SPAETUSDT', status: 'PENDING_TRADING', onboardDate: J - 86400e3 }] }, J).angekuendigt.length === 1)
     p('Binance Futures: SETTLING ist weder offen noch angekündigt', !sbf.laufend.has('OLD') && !sbf.angekuendigt.some((x) => x.symbol === 'OLD'))
 
-    const okx = STARTS.okx({ data: [
-        { baseCcy: 'XINFQ', state: 'preopen', listTime: String(Date.UTC(2026, 9, 12, 9, 30)) },
-        { baseCcy: 'BTC', state: 'live', listTime: '1548133413000' },
-        { baseCcy: 'BTC', state: 'preopen', listTime: String(J + 3600e3) },   // neues Paar eines laufenden Coins
-    ] }, J)
-    p('OKX: preopen ist angekündigt', okx.angekuendigt.map((x) => x.symbol).join() === 'XINFQ')
-    p('OKX: ein neues Paar eines laufenden Coins ist nicht angekündigt', !okx.angekuendigt.some((x) => x.symbol === 'BTC'))
-    p('OKX: Start laufend in ms', okx.laufend.get('BTC') === 1548133413000)
+    p('S12: OKX hat keinen Start-Leser mehr', !('okx' in STARTS))
 
     const gate = STARTS.gate([
         { base: 'CENT', trade_status: 'sellable', buy_start: Math.floor((J + 1800e3) / 1000) },
@@ -151,16 +153,15 @@ p('Vorlauf: erst nach dem Listing gesehen ist kein Vorlauf', s.mittel.erkannt ==
 // ── Auch gelistet auf ───────────────────────────────────────────────────
 {
     const staende = new Map([
-        ['mexc', new Set(['DRV', 'QI'])],
+        ['kucoin', new Set(['DRV', 'QI'])],
         ['gate', new Set(['QI'])],
-        ['okx', new Set(['DRV'])],
-        ['binance-alpha', new Set(['bsc|0xabc', 'sym|ZED'])],
+        ['bybit', new Set(['DRV'])],
+        ['binance-alpha', new Set(['bsc|0xabc', 'sym|ZED'])],   // Altbestand bis S12
     ])
-    p('andere Börsen mit demselben Kürzel', auchGelistetAuf({ boerse: 'mexc', symbol: 'qi' }, staende).join() === 'Gate')
-    p('die eigene Börse zählt nicht', auchGelistetAuf({ boerse: 'okx', symbol: 'DRV' }, staende).join() === 'MEXC')
-    p('Alpha über den Vertrag', auchGelistetAuf({ boerse: 'mexc', symbol: 'X', chain: 'bsc', contract: '0xABC' }, staende).join() === 'Binance Alpha')
-    p('Alpha ohne Vertrag nur über sym|', auchGelistetAuf({ boerse: 'mexc', symbol: 'ZED' }, staende).join() === 'Binance Alpha')
-    p('nirgends sonst: leer', auchGelistetAuf({ boerse: 'mexc', symbol: 'NEU' }, staende).length === 0)
+    p('andere Börsen mit demselben Kürzel', auchGelistetAuf({ boerse: 'kucoin', symbol: 'qi' }, staende).join() === 'Gate')
+    p('die eigene Börse zählt nicht', auchGelistetAuf({ boerse: 'bybit', symbol: 'DRV' }, staende).join() === 'KuCoin')
+    p('ein alter Alpha-Stand zählt nicht mehr', auchGelistetAuf({ boerse: 'kucoin', symbol: 'ZED', chain: 'bsc', contract: '0xABC' }, staende).length === 0)
+    p('nirgends sonst: leer', auchGelistetAuf({ boerse: 'kucoin', symbol: 'NEU' }, staende).length === 0)
 }
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)

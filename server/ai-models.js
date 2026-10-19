@@ -33,6 +33,14 @@ import { beobachteAbbruch } from './sse.js'
  *   jsonModus  ob `response_format: json_object` akzeptiert wird
  *   katalog    ob sich die Modellliste beim Anbieter abrufen lässt
  *   abgekuendigt  nicht mehr wählbar, aber zur Laufzeit weiter bedient
+ *   hinweis    i18n-Schlüssel (Namensraum `kiHinweis.anbieter`) mit dem
+ *              Pflichthinweis zu Bedingungen/Datenschutz des Anbieters. Steht
+ *              HIER und nur hier, damit Einstellungen, Onboarding und die
+ *              Anbieter-Wahl denselben Text zeigen (S12, Verkaufs-Prüfung 2.8).
+ *              Namen erscheinen nur als Auswahltext — Anbieter-Logos gibt es
+ *              nirgends in der App, und es soll keine geben.
+ *   laufzeitModell  Rückfallmodell NUR für Bestandskonfigurationen, die kein
+ *              Modell gespeichert haben; erscheint in keiner Auswahlliste.
  *
  * Modell-Listen bewusst kurz: was fehlt, trägt man in den Einstellungen nach.
  * Stand 18.10.2026, gegen die Anbieter-Seiten geprüft; Anthropic zusätzlich
@@ -44,6 +52,8 @@ export const ANBIETER_REG = {
     ollama: {
         name: 'Ollama (lokal)', art: 'ollama', keySpalte: '',
         anhang: { image: true, pdf: false }, jsonModus: false, katalog: false,
+        // Ollama selbst ist MIT; die Lizenz gilt für das Modell, das der Kunde lädt (2.8 Zeile 89m).
+        hinweis: 'kiHinweis.anbieter.ollama',
         modelle: [],   // kommen vom Ollama-Server selbst
     },
     anthropic: {
@@ -65,6 +75,9 @@ export const ANBIETER_REG = {
         name: 'Google Gemini', art: 'gemini', keySpalte: 'aiKeyGemini',
         keyUrl: 'aistudio.google.com/apikey',
         anhang: { image: true, pdf: true }, jsonModus: false, katalog: true,
+        // Gemini API Terms (28.04.2026): API-Clients im EWR, in der Schweiz und im
+        // UK nur mit Paid Services; im Gratis-Tarif Training an Ein-/Ausgaben (89c).
+        hinweis: 'kiHinweis.anbieter.gemini',
         // `gemini-2.x` fehlt bewusst: Google antwortet darauf mit 404
         // („no longer available to new users").
         modelle: [
@@ -130,6 +143,7 @@ export const ANBIETER_REG = {
     custom: {
         name: 'Eigener Anbieter (OpenAI-kompatibel)', art: 'openai', keySpalte: 'aiKeyCustom',
         urlSpalte: 'aiCustomUrl', pflichtUrl: true,
+        hinweis: 'kiHinweis.anbieter.endpunkt',
         // Was ein eigener Endpunkt kann, weiss nur der Betreiber. Bilder gehen
         // im OpenAI-Format mit; PDFs bleiben aussen vor, weil es dafür kein
         // einheitliches Format gibt.
@@ -137,19 +151,24 @@ export const ANBIETER_REG = {
         modelle: [],
     },
     /*
-     * DeepSeek war abgekündigt und ist wieder wählbar.
+     * Zweiter OpenAI-kompatibler Endpunkt — interne ID `deepseek`.
      *
-     * Grund für die Rückkehr: Der Hype-Radar braucht ein billiges Modell für
-     * seine Hilfsarbeiten (Entdopplung, Einordnung unklarer Kandidaten), und
-     * DeepSeek ist mit Abstand das günstigste — bei Aufgaben, für die
-     * Urteilskraft zweitrangig ist, zählt genau das.
+     * Bis S12 stand hier „DeepSeek" mit fester Adresse und Modell-Liste. Die
+     * DeepSeek-Bedingungen (29.04.2026, §5.2) verbieten aber schon die
+     * Nennung von Name und Logo ohne Erlaubnis (Verkaufs-Prüfung 89d). Darum
+     * ist der Eintrag jetzt ein neutraler Endpunkt: Adresse, Schlüssel und
+     * Modelle trägt der Kunde selbst ein. Die ID bleibt, weil Bestand an ihr
+     * hängt (Aufgaben-Zuordnungen, Hype-Radar-Stufen, `aiKeyDeepseek`);
+     * `server/migrationen/s12-ki.js` schreibt Bestandskunden mit Schlüssel
+     * die bisherige Adresse in `aiDeepseekUrl`, damit nichts stehen bleibt.
      */
     deepseek: {
-        name: 'DeepSeek', art: 'openai', keySpalte: 'aiKeyDeepseek',
-        basisUrl: 'https://api.deepseek.com/v1', keyUrl: 'platform.deepseek.com/api_keys',
+        name: 'OpenAI-kompatibler Endpunkt 2', art: 'openai', keySpalte: 'aiKeyDeepseek',
+        urlSpalte: 'aiDeepseekUrl', pflichtUrl: true,
         anhang: { image: false, pdf: false }, jsonModus: true, katalog: true,
-        // `deepseek-v4-flash` ist nur noch Alias von `deepseek-flash`.
-        modelle: ['deepseek-flash', 'deepseek-v4-pro'],
+        hinweis: 'kiHinweis.anbieter.endpunkt',
+        modelle: [],
+        laufzeitModell: 'deepseek-flash',
     },
     /*
      * Die drei Neuen sind alle OpenAI-kompatibel und teilen sich damit den
@@ -169,7 +188,13 @@ export const ANBIETER_REG = {
         anhang: { image: false, pdf: false }, jsonModus: true, katalog: true,
         modelle: ['glm-5.3', 'glm-5.2'],
     },
+    /*
+     * Aus der Auswahl genommen (S12): die MiniMax-Bedingungen liessen sich am
+     * 19.10.2026 nicht abrufen (Verkaufs-Prüfung 89k). `abgekuendigt` heisst:
+     * nicht mehr wählbar, eine bestehende Konfiguration läuft weiter.
+     */
     minimax: {
+        abgekuendigt: true, hinweis: 'kiHinweis.anbieter.minimax',
         name: 'MiniMax', art: 'openai', keySpalte: 'aiKeyMinimax',
         basisUrl: 'https://api.minimax.io/v1', keyUrl: 'platform.minimax.io/user-center/basic-information',
         anhang: { image: false, pdf: false }, jsonModus: true, katalog: true,
@@ -212,6 +237,9 @@ export const STANDARD_MODELLE = Object.fromEntries(
 export const BILD_MODELL_REG = {
     flux: {
         name: 'FLUX.2 (Bild)',
+        // BFL Service Terms 2b (04.08.2026): unwiderrufliche Lizenz zum Training
+        // an Ein- und Ausgaben (Verkaufs-Prüfung Zeile 90).
+        hinweis: 'kiHinweis.anbieter.flux',
         modelle: ['flux-2-pro', 'flux-2-flex', 'flux-2-max', 'flux-3-image'],
         // BFL führt keinen abrufbaren Katalog (kein `GET /models` — geprüft
         // gegen docs.bfl.ml, Stand 29.08.2026: 404). „Vom Anbieter holen"
@@ -224,6 +252,7 @@ export const BILD_MODELL_REG = {
     },
     geminiBild: {
         name: 'Google Gemini (Bild)',
+        hinweis: 'kiHinweis.anbieter.gemini',
         // `gemini-2.5-flash-image` ist abgeschaltet (Preisseite: 02.10.2026).
         modelle: ['gemini-3.1-flash-image', 'gemini-3-pro-image', 'gemini-nano-banana-2.1', 'gemini-3.1-flash-lite-image'],
         // Gemini führt sehr wohl einen Katalog — derselbe `/models`-Endpunkt,
@@ -268,7 +297,8 @@ export function kannBilder(provider) {
 
 /** Erstes Standardmodell eines Anbieters — Rückfall, wenn keines gewählt ist. */
 export function standardModell(provider) {
-    return ANBIETER_REG[provider]?.modelle?.[0] || ''
+    const reg = ANBIETER_REG[provider]
+    return reg?.modelle?.[0] || reg?.laufzeitModell || ''
 }
 
 /**
@@ -495,6 +525,14 @@ export function setupAiModelRoutes(app) {
                     brauchtKey: !!ANBIETER_REG[id].keySpalte,
                     urlSpalte: ANBIETER_REG[id].urlSpalte || '',
                     katalog: !!ANBIETER_REG[id].katalog,
+                    hinweis: ANBIETER_REG[id].hinweis || '',
+                })),
+                // Nicht mehr wählbar, aber eine bestehende Wahl läuft weiter —
+                // die Oberfläche braucht Name und Hinweis, um das zu sagen.
+                ausgeblendet: Object.entries(ANBIETER_REG).filter(([, r]) => r.abgekuendigt)
+                    .map(([id, r]) => ({ id, name: r.name, hinweis: r.hinweis || '' })),
+                bildAnbieter: BILD_SCHLUESSEL.map((id) => ({
+                    id, name: BILD_MODELL_REG[id].name, hinweis: BILD_MODELL_REG[id].hinweis || '',
                 })),
             })
         } catch (e) {

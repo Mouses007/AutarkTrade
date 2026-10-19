@@ -4,6 +4,8 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { useVorlagenKategorieLabel } from '../utils/journal/format.js'
+import { currentUser } from '../stores/globals.js'
+import KiHinweis from './quellen/KiHinweis.vue'
 
 const { t } = useI18n()
 
@@ -475,8 +477,10 @@ function closeModal() {
                     </div>
 
                     <!-- Generated Image Preview -->
-                    <div v-if="generatedImage && !generating" class="share-card-preview text-center">
-                        <img :src="generatedImage" class="img-fluid rounded" style="max-height: 500px;" />
+                    <div v-if="generatedImage && !generating" class="share-card-preview text-center" data-ki-generiert="true">
+                        <img :src="generatedImage" class="img-fluid rounded" style="max-height: 500px;" :alt="t('kiHinweis.bild')" />
+                        <!-- S12: das Label steht auch IM Bild und in den PNG-Metadaten (shareCardBild.js). -->
+                        <KiHinweis />
                     </div>
 
                     <!-- ====== SAVE AS TEMPLATE (after generation, only for new images) ====== -->
@@ -500,6 +504,10 @@ function closeModal() {
                         </div>
                     </div>
                 </div>
+                <!-- S12: Pflichthinweis zum Bild-Anbieter (Texte aus kiHinweis.anbieter, wie in den Einstellungen). -->
+                <p v-if="!selectedTemplateId" class="small text-muted px-3 mb-0">
+                    {{ t(currentUser?.shareCardProvider === 'gemini' ? 'kiHinweis.anbieter.gemini' : 'kiHinweis.anbieter.flux') }}
+                </p>
                 <div class="modal-footer border-0 d-flex justify-content-between">
                     <button class="btn btn-outline-secondary" @click="closeModal">
                         {{ t('common.close') }}

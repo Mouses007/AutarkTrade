@@ -13,7 +13,7 @@
  *   endpunkt    — Server-Endpunkt; null = Kachel rechnet ohne eigenen Abruf
  *   intervallMs — wie oft nachgeladen wird, solange die Kachel sichtbar ist
  *   spalten     — Breite im Raster (1 = normal, 2 = doppelt)
- *   quelle      — kurze Herkunftsangabe für die Fusszeile der Gross-Ansicht
+ *   quelle      — Quellenliste `[{ name, url?, art, klein? }]` (siehe `Q`)
  */
 
 import { baueKachelListe, macheSortierer } from './kachel-registry.js'
@@ -31,11 +31,29 @@ import { baueKachelListe, macheSortierer } from './kachel-registry.js'
  */
 export const STANDARD_REIHENFOLGE = [
     'mechanik', 'funding', 'lsoi', 'liq24', 'fng', 'dom',
-    'picycle', 'altseason', 'markt', 'rainbow', 'regime', 'rsi', 'makro', 'etf', 'wal',
+    'picycle', 'altseason', 'markt', 'rainbow', 'regime', 'rsi', 'makro', 'etf',
     // Die Zusammenfassung steht am Ende: sie liest die anderen Kacheln, also
     // gehört sie hinter sie — und nachrückende Ids landen ohnehin dort.
     'lage',
 ]
+
+/*
+ * Quellenangaben (S12, Verkaufs-Prüfung Abschn. 3.3 Punkt 2). Pflichtzeilen
+ * mit dem Wortlaut, den der Anbieter verlangt, und mit Link; sie stehen in der
+ * kleinen Kachel UND in der Gross-Ansicht (`RadarKachel`, `RadarOverlay`).
+ * `{ marktdaten: true }` wird zur gewählten Marktdatenquelle („Daten:
+ * Binance"), siehe `loeseQuellen` in `useKachelRaster.js`. `klein: false`
+ * heisst: nur in der Gross-Ansicht (Erläuterung, keine Herkunft).
+ */
+export const Q = {
+    /** Kommerziell erlaubt mit Quelle „gut sichtbar direkt neben den Daten" (Z. 19). */
+    alternativeMe: { name: 'Alternative.me', url: 'https://alternative.me/crypto/fear-and-greed-index/', art: 'quelle' },
+    /** „Powered by CoinGecko" an jeder Anzeige (API-Terms §4.4, Z. 21). */
+    coingecko: { name: 'CoinGecko', url: 'https://www.coingecko.com/', art: 'powered' },
+    /** Quelle nennen (Data Distribution Policy, Z. 30). */
+    cryptoquant: { name: 'CryptoQuant', url: 'https://cryptoquant.com/', art: 'daten' },
+    marktdaten: { marktdaten: true },
+}
 
 const DEFINITIONEN = [
     {
@@ -47,7 +65,7 @@ const DEFINITIONEN = [
         // Der Wert wechselt einmal täglich — häufiger nachfragen wäre reine Fremdlast
         intervallMs: 15 * 60 * 1000,
         spalten: 1,
-        quelle: 'alternative.me',
+        quelle: [Q.alternativeMe],
     },
     {
         id: 'dom',
@@ -57,7 +75,7 @@ const DEFINITIONEN = [
         intervallMs: 3 * 60 * 1000,
         spalten: 1,
         flaeche: true,
-        quelle: 'CoinMarketCap (eigener Bestand) · CoinGecko',
+        quelle: [Q.coingecko, { name: 'eigene Tagesschnappschüsse', klein: false }],
     },
     {
         id: 'funding',
@@ -67,7 +85,7 @@ const DEFINITIONEN = [
         params: { n: 50 },
         intervallMs: 60 * 1000,
         spalten: 1,
-        quelle: 'Binance USDⓈ-M Futures',
+        quelle: [Q.marktdaten, { name: 'Bitunix' }, { name: 'Bybit' }],
     },
     {
         id: 'lsoi',
@@ -79,7 +97,7 @@ const DEFINITIONEN = [
         symbolAbhaengig: true,
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'Binance USDⓈ-M Futures',
+        quelle: [Q.marktdaten],
     },
     {
         id: 'mechanik',
@@ -91,7 +109,7 @@ const DEFINITIONEN = [
         symbolAbhaengig: true,
         intervallMs: 60 * 1000,
         spalten: 1,
-        quelle: 'Binance USDⓈ-M Futures · eigene Liquidations-Aufzeichnung (Binance + Bybit)',
+        quelle: [Q.marktdaten, { name: 'eigene Liquidations-Aufzeichnung', klein: false }],
     },
     {
         id: 'liq24',
@@ -101,7 +119,7 @@ const DEFINITIONEN = [
         params: { stunden: 24 },
         intervallMs: 60 * 1000,
         spalten: 1,
-        quelle: 'eigene Aufzeichnung (Binance + Bybit)',
+        quelle: [{ name: 'eigene Aufzeichnung (Binance, Bybit)' }],
     },
     {
         id: 'makro',
@@ -112,7 +130,7 @@ const DEFINITIONEN = [
         // die Kopplung ändert sich in Tagen, nicht in Minuten
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'Yahoo Finance (ES/NQ-Futures, DXY) · CoinGecko · Binance-Tageskerzen',
+        quelle: [Q.coingecko],
     },
     {
         id: 'picycle',
@@ -122,7 +140,7 @@ const DEFINITIONEN = [
         // Tageskerzen — häufiger nachzufragen ändert nichts
         intervallMs: 12 * 60 * 60 * 1000,
         spalten: 1,
-        quelle: 'blockchain.info · Binance',
+        quelle: [{ marktdaten: true, zusatz: '(BTCUSDT Spot, ab 2017)' }],
     },
     {
         id: 'altseason',
@@ -132,7 +150,7 @@ const DEFINITIONEN = [
         params: { tage: 90 },
         intervallMs: 30 * 60 * 1000,
         spalten: 1,
-        quelle: 'Binance-Tageskerzen · CoinGecko-Rangliste',
+        quelle: [Q.marktdaten, Q.coingecko],
     },
     {
         id: 'markt',
@@ -144,7 +162,7 @@ const DEFINITIONEN = [
         // Blasen und Treemap brauchen Fläche, sonst wird jede Beschriftung Brei
         spalten: 2,
         flaeche: true,
-        quelle: 'CoinGecko',
+        quelle: [Q.coingecko],
     },
     {
         id: 'rainbow',
@@ -155,7 +173,7 @@ const DEFINITIONEN = [
         intervallMs: 12 * 60 * 60 * 1000,
         spalten: 1,
         flaeche: true,
-        quelle: 'blockchain.info · Binance',
+        quelle: [{ marktdaten: true, zusatz: '(BTCUSDT Spot, ab 2017)' }],
     },
     {
         id: 'regime',
@@ -165,7 +183,7 @@ const DEFINITIONEN = [
         params: { tage: 365 },
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'eigene Trades × alternative.me',
+        quelle: [Q.alternativeMe, { name: 'eigene Trades', klein: false }],
     },
     {
         id: 'lage',
@@ -181,7 +199,7 @@ const DEFINITIONEN = [
         // Nur ein Blick in den Speicher des Servers; nichts Fremdes daran
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: 'die übrigen Kacheln dieser Seite · Einordnung durch die eingestellte KI',
+        quelle: [{ name: 'die übrigen Kacheln dieser Seite', klein: false }],
     },
     {
         id: 'etf',
@@ -194,19 +212,23 @@ const DEFINITIONEN = [
         // Quelle liefert einmal täglich gegen 12:00 UTC.
         intervallMs: 30 * 60 * 1000,
         spalten: 1,
-        quelle: 'CryptoQuant (Gratis-Tarif) · eigener Bestand ab Einrichtung',
+        quelle: [Q.cryptoquant, { name: 'eigener Bestand ab Einrichtung', klein: false }],
     },
     {
         id: 'wal',
         titleKey: 'marktradar.wal.title',
         icon: 'anker',
+        /*
+         * ENTFERNT (S12): las Wal-Transaktionen aus mitgeschriebenen Telegram-
+         * Kanälen; Telegram verbietet das Auslesen öffentlicher Kanäle
+         * (Verkaufs-Prüfung Z. 31). Der Endpunkt antwortet `{ aus: true,
+         * grund: 'entfernt' }`, die Kachel sagt das. Steht in der Vorgabe-
+         * Reihenfolge nicht mehr; wer sie eingeblendet hatte, sieht den Hinweis.
+         */
         endpunkt: '/api/marktradar/wale',
-        // Nur eigene, schon gesammelte Telegram-Beiträge — kein Netzabruf,
-        // daher darf hier häufiger nachgesehen werden als bei den News selbst
-        params: { stunden: 24, minUsd: 5000000 },
-        intervallMs: 5 * 60 * 1000,
+        intervallMs: 60 * 60 * 1000,
         spalten: 1,
-        quelle: 'eigene Telegram-Quellen (Whale Alert, Lookonchain, …) · eigener Parser, keine Fremd-API',
+        quelle: [],
     },
     {
         id: 'rsi',
@@ -218,7 +240,7 @@ const DEFINITIONEN = [
         // Eine Matrix braucht Breite — sonst quetschen sich die Spalten
         spalten: 2,
         flaeche: true,
-        quelle: 'Binance-Kerzen · RSI(14) nach Wilder',
+        quelle: [Q.marktdaten, Q.coingecko],
     },
 ]
 

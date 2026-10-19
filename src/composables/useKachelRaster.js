@@ -44,6 +44,34 @@ import axios from 'axios'
 import Sortable from 'sortablejs'
 import { useHiddenCards } from './useHiddenCards.js'
 import { rasterZustand } from '../utils/kachelZustand.js'
+import { marktdaten, ladeMarktdaten } from '../utils/marktdaten.js'
+
+/**
+ * `quelle` einer Registry-Kachel → Liste für `Quellenhinweis`.
+ *
+ * Die Registry (`src/config/marktradar.js`, `src/config/livetrading.js`)
+ * schreibt Quellen als Daten: `{ name, url?, art, klein? }`. Ein Eintrag
+ * `{ marktdaten: true }` steht für die Marktdatenquelle, die der Kunde gewählt
+ * hat — „Daten: Binance" oder „Daten: Bitget", nie fest verdrahtet. Ist die
+ * Marktdatenquelle aus, entfällt die Zeile; solange die Wahl noch nicht
+ * geladen ist, ebenfalls (lieber einen Augenblick nichts als das Falsche).
+ * Ein alter Text-Eintrag wird zu `{ name }` (Art „daten").
+ */
+export function loeseQuellen(quelle, md = marktdaten.value) {
+    if (!quelle) return []
+    const liste = Array.isArray(quelle) ? quelle : [{ name: String(quelle) }]
+    const aus = []
+    for (const q of liste) {
+        if (!q) continue
+        if (q.marktdaten) {
+            if (!md?.name) continue
+            aus.push({ name: q.zusatz ? `${md.name} ${q.zusatz}` : md.name, art: 'daten', klein: q.klein })
+            continue
+        }
+        aus.push(q)
+    }
+    return aus
+}
 
 export function useKachelRaster({
     storageKey,
@@ -91,6 +119,17 @@ export function useKachelRaster({
     const zustand = reactive({})   // id → 'idle'|'loading'|'ready'|'veraltet'|'error'
     const stand = reactive({})     // id → Zeitpunkt der angezeigten Daten (ms)
     const fehler = reactive({})    // id → Meldung
+    /*
+     * id → `{ aus: true, grund, quelle, meldung, faehigkeit? }`, wenn der
+     * Server sagt, dass die Quelle der Kachel abgeschaltet ist (S12:
+     * `server/quellen/aus.js`). Bewusst NEBEN `daten` und nicht darin: die
+     * Kachelkomponenten kennen diese Form nicht und würden auf fehlenden
+     * Feldern stolpern. So bekommt eine Kachel entweder ihre Nutzlast oder
+     * gar nichts, und der Rahmen (`RadarKachel`) zeigt `QuelleAus` — für
+     * Marktradar UND Live-Trading an dieser einen Stelle. Kompakt und Pult
+     * sehen `daten[id]` leer und lassen die Zeile weg, wie bei jeder Lücke.
+     */
+    const aus = reactive({})
 
     const offeneKachel = ref(null)
     const showConfigDropdown = ref(false)
@@ -143,6 +182,35 @@ export function useKachelRaster({
     const offeneDefinition = computed(() =>
         alleKacheln.value.find(k => k.id === offeneKachel.value) || null)
 
+    /** id → aufgelöste Quellenliste; hängt an der Marktdatenwahl. */
+    const quellenVon = computed(() => {
+        const md = marktdaten.value
+        return Object.fromEntries(alleKacheln.value.map(k => [k.id, loeseQuellen(k.quelle, md)]))
+    })
+    /**
+     * Vereinigte Quellen aller Kacheln, die gerade Daten haben — für die
+     * Pult-Ansichten, die dieselben Nutzlasten ohne Kachelrahmen zeichnen und
+     * die Pflicht-Attributionen deshalb gesammelt im Fuss tragen.
+     */
+    const quellenGeladen = computed(() => {
+        const gesehen = new Set()
+        const aus = []
+        for (const id of Object.keys(daten)) {
+            if (!daten[id]) continue
+            for (const q of quellenVon.value[id] || []) {
+                if (q.klein === false) continue
+                const k = `${q.art || 'daten'}|${q.name}`
+                if (gesehen.has(k)) continue
+                gesehen.add(k)
+                aus.push(q)
+            }
+        }
+        // Pflicht-Attributionen zuerst, Herkunftsangaben danach
+        const rang = { powered: 0, quelle: 1, daten: 2, ki: 3 }
+        return aus.sort((a, b) => (rang[a.art || 'daten'] ?? 2) - (rang[b.art || 'daten'] ?? 2))
+    })
+    ladeMarktdaten()
+
     /**
      * Meldeweg für Kacheln mit `eigenerStrom`.
      *
@@ -187,6 +255,15 @@ export function useKachelRaster({
             })
             // Eine ältere Antwort darf eine neuere nicht überschreiben
             if (meine !== laufendeAnfrage[id]) return
+            if (data?.aus) {
+                aus[id] = data
+                delete daten[id]
+                stand[id] = 0
+                fehler[id] = ''
+                zustand[id] = 'aus'
+                return
+            }
+            delete aus[id]
             daten[id] = data
             stand[id] = data.stand || Date.now()
             fehler[id] = data.hinweis || ''
@@ -508,9 +585,9 @@ export function useKachelRaster({
 
     return {
         // Zustand
-        gridEl, daten, zustand, stand, fehler, kachelParams,
+        gridEl, daten, aus, zustand, stand, fehler, kachelParams,
         hiddenCards, groessen,
-        alleKacheln, sichtbareKacheln, gesamtZustand,
+        alleKacheln, sichtbareKacheln, gesamtZustand, quellenVon, quellenGeladen,
         offeneKachel, offeneDefinition,
         showConfigDropdown, configRef,
         // Bedienung

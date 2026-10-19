@@ -60,7 +60,7 @@
                                      unter denen gebucht wurde — sonst stünde dort nur „—". -->
                                 <span v-if="f.schluessel" class="kuModell">{{ f.schluessel.join(', ') }}</span>
                                 <template v-else>
-                                    <span class="kuModell">{{ f.provider || '—' }}<template v-if="f.modell">/{{ f.modell }}</template></span>
+                                    <span class="kuModell">{{ anbieterAnzeige(f.provider, t) || '—' }}<template v-if="f.modell">/{{ f.modell }}</template></span>
                                     <span v-if="f.folgtGlobal" class="badge bg-secondary ms-2 kuBadge">
                                         {{ t('kiUebersicht.folgtGlobal') }}
                                     </span>
@@ -145,6 +145,7 @@ import axios from 'axios'
 import * as echarts from 'echarts'
 import { useKostenAnzeige } from '../../utils/journal/format.js'
 import { logWarn } from '../../utils/logger.js'
+import { ladeKiAnbieter, anbieterAnzeige } from '../../utils/kiAnbieter.js'
 
 const { t, locale } = useI18n()
 defineEmits(['gehe-zu'])
@@ -253,6 +254,7 @@ function zeichne() {
 const beiGroesse = () => diagramm?.resize()
 
 onMounted(() => {
+    ladeKiAnbieter()   // neutrale Anbieternamen (S12)
     laden()
     window.addEventListener('resize', beiGroesse)
 })

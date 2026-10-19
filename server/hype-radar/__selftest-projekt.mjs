@@ -9,7 +9,7 @@
  */
 import {
     leseWebseite, sichtbarerText, registrierbareDomain, gratisPlattform, rdapRegistriert,
-    githubZiel, githubFakten, erstellerBilanz, bewerteProjekt, STERNE_FUER_PROJEKT,
+    githubZiel, githubFakten, bewerteProjekt, STERNE_FUER_PROJEKT, PROJEKT_REGELN,
     ordneWebseite, adresseImPfad, fremdePlattform, kanalAus, nenntToken, seitenBeleg, ordneAbruffehler,
     githubBeleg, hostVon, SAMMEL_AB, pfadTiefe,
 } from './projekt-bewertung.js'
@@ -117,22 +117,14 @@ p('fremder Host', githubZiel('https://gitlab.com/x/y') === null)
         g.fruehereProjekte.length === 1 && g.fruehereProjekte[0].name === 'old-dex', JSON.stringify(g.fruehereProjekte))
 }
 
-// ── Ersteller ───────────────────────────────────────────────────────────
+// ── Ersteller (S12: entfernt) ───────────────────────────────────────────
 {
-    const jetzt = Date.parse('2026-10-07T12:00:00Z')
-    const coins = [
-        { mint: 'AKTUELL', complete: false, created_timestamp: jetzt - 3600e3 },
-        { mint: 'A', symbol: 'AAA', complete: true, created_timestamp: jetzt - 40 * 86400e3, usd_market_cap: 2e6 },
-        { mint: 'B', symbol: 'BBB', complete: false, created_timestamp: jetzt - 20 * 86400e3 },
-    ]
-    const e = erstellerBilanz(coins, { mint: 'AKTUELL', jetzt })
-    p('der aktuelle Coin zählt nicht mit', e.andere === 2)
-    p('graduierte gezählt', e.graduiert === 1 && e.beispiele[0].symbol === 'AAA')
-    p('Antwort als {coins: […]} wird gelesen', erstellerBilanz({ coins }, { mint: 'AKTUELL', jetzt }).andere === 2)
-    p('unlesbare Antwort ergibt null (unbekannt)', erstellerBilanz({ fehler: 1 }) === null)
-    const serie = erstellerBilanz(Array.from({ length: 30 }, (_, i) => ({ mint: `S${i}`, complete: false, created_timestamp: jetzt - i * 1800e3 })),
-        { mint: 'X', jetzt })
-    p('Serien-Launcher gezählt', serie.andere === 30 && serie.graduiert === 0 && serie.letzte24h >= 5)
+    // Die Ersteller-Bilanz kam aus dem pump.fun-Frontend-API (Verkaufs-Prüfung Z. 60) — sie wirkt nicht mehr.
+    const mit = bewerteProjekt({ webseite: { status: 'keine' }, kanaele: {}, ersteller: { andere: 40, graduiert: 0, letzte24h: 8, vollstaendig: false } })
+    const ohne = bewerteProjekt({ webseite: { status: 'keine' }, kanaele: {} })
+    p('S12: eine Ersteller-Bilanz verändert die Note nicht', mit.note === ohne.note && !mit.befunde.some((b) => /^ersteller/.test(b.schluessel)))
+    p('S12: nur eine Ersteller-Angabe ist keine Messung', bewerteProjekt({ ersteller: { andere: 3, graduiert: 1 } }).note === null)
+    p('S12: Regelstand 3 — ältere Prüfungen gelten als abgelaufen', PROJEKT_REGELN === 3)
 }
 
 // ── Gesamturteil ────────────────────────────────────────────────────────
@@ -142,15 +134,12 @@ p('fremder Host', githubZiel('https://gitlab.com/x/y') === null)
         webseite: { status: 'ok', fakten, domainAlterTage: 400, plattform: '' },
         kanaele: { x: true, telegram: true },
         github: { beleg: true, repo: { name: 'protocol', alterTage: 600, letzterPushTage: 5, sterne: 80, istFork: false }, konto: { alterTage: 2000 }, fruehereProjekte: [{ name: 'old-dex', sterne: 450 }] },
-        ersteller: { andere: 3, graduiert: 1, letzte24h: 0, beispiele: [{ symbol: 'AAA' }], vollstaendig: true },
     })
     p('starkes Projekt bekommt hohe Substanz', stark.note >= 90, String(stark.note))
-    p('jeder Zuschlag ist begründet', stark.befunde.filter((b) => b.art === 'plus').length >= 6)
+    p('jeder Zuschlag ist begründet', stark.befunde.filter((b) => b.art === 'plus').length >= 5)
 
-    const leer = bewerteProjekt({ webseite: { status: 'keine' }, kanaele: {}, ersteller: { andere: 40, graduiert: 0, letzte24h: 8, vollstaendig: false } })
-    p('Wegwerf-Token bekommt kaum Substanz', leer.note <= 10, String(leer.note))
-    p('Serie und Masse werden benannt', leer.befunde.some((b) => b.schluessel === 'erstellerSerie')
-        && leer.befunde.some((b) => b.schluessel === 'erstellerMasse'))
+    const leer = bewerteProjekt({ webseite: { status: 'keine' }, kanaele: {} })
+    p('Wegwerf-Token bekommt kaum Substanz', leer.note <= 30, String(leer.note))
 
     const fremd = bewerteProjekt({ webseite: { status: 'ok', fakten: { ...fakten, vertragAufSeite: 'fremd', fremdeVertraege: ['0x11'] } } })
     p('fremde Vertragsadresse kostet schwer', fremd.befunde.some((b) => b.schluessel === 'vertragFremd'))
@@ -165,8 +154,6 @@ p('fremder Host', githubZiel('https://gitlab.com/x/y') === null)
     p('nichts geprüft ergibt keine Note (unbekannt, nicht 50)', bewerteProjekt({}).note === null)
     p('neue Domain kostet', bewerteProjekt({ webseite: { status: 'ok', fakten, domainAlterTage: 1, plattform: '' } })
         .befunde.some((b) => b.schluessel === 'domainNeu'))
-    p('erster Coin des Erstellers ist nur eine Auskunft',
-        bewerteProjekt({ ersteller: { andere: 0, graduiert: 0, letzte24h: 0 } }).note === 50)
     const fork = bewerteProjekt({ github: { repo: { name: 'x', istFork: true }, fruehereProjekte: [] } })
     p('Fork kostet', fork.befunde.some((b) => b.schluessel === 'githubFork'))
     const schutz = bewerteProjekt({ webseite: { status: 'geschuetzt' }, kanaele: { x: true } })
@@ -301,17 +288,6 @@ const ANDERER = 'AMpDxGn6NC4kx5p18keFNJrz28HYgbZPTrUxFTL9pump'
         githubBeleg({ ...g, repo: { ...g.repo, webseite: 'www.tootincoin.money' } }, { seitenHost: 'tootincoin.money' }) === true)
     p('… aber nicht ohne belegte eigene Seite',
         githubBeleg({ ...g, repo: { ...g.repo, webseite: 'tootincoin.money' } }, { seitenHost: '' }) === false)
-}
-
-// ── Ersteller: Gegenprobe des Filters ───────────────────────────────────
-{
-    const jetzt = Date.parse('2026-10-10T12:00:00Z')
-    const W = 'Wa11et111111111111111111111111111111111111'
-    const eigene = [{ mint: 'A', creator: W, complete: true, created_timestamp: jetzt - 86400e3 }, { mint: 'B', creator: W, complete: false }]
-    p('nur Coins dieser Wallet: gezählt', erstellerBilanz(eigene, { wallet: W, jetzt }).andere === 2)
-    // Gemessen 10.10.2026: ein vertippter Filter liefert die fünfzig neuesten Coins ALLER Ersteller.
-    const ungefiltert = [...eigene, { mint: 'C', creator: 'Fremd111111111111111111111111111111111111' }]
-    p('ein Coin eines anderen Erstellers: Antwort ungefiltert, unbekannt', erstellerBilanz(ungefiltert, { wallet: W, jetzt }) === null)
 }
 
 // ── Gesamturteil nach den neuen Regeln ──────────────────────────────────

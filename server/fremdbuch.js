@@ -13,7 +13,12 @@
  *     bekäme waagerechte Stufen, die wie Marktstruktur aussehen und reines
  *     API-Limit sind.
  *
- * Deshalb liefert dieses Modul die fremden Bücher SEPARAT. Die Karte bleibt
+ * Deshalb liefert dieses Modul die fremden Bücher SEPARAT.
+ *
+ * OKX ist seit S12 entfernt (Verkaufs-Prüfung Zeile 38, rot): OKX erlaubt
+ * Marktdaten nur „solely for your own personal, non-commercial trading“ und
+ * keine API-Dienste als Teil kommerzieller Produkte. Bybit bleibt (Zeile 37,
+ * gelb) — die Liste `boersen` hat damit höchstens einen Eintrag. Die Karte bleibt
  * Binance; die Leiter zeigt daneben, ob eine Wand auch anderswo steht. Verglichen
  * wird auf ABSOLUTEN Preisen — eine Order bei 79180 liegt bei 79180, egal auf
  * welcher Börse, und Arbitrage verbindet die Bücher genau dort.
@@ -28,31 +33,6 @@ const BAND_PCT = 1.0
 
 const cache = new Map()     // symbol → { zeit, daten }
 const laeuft = new Map()    // symbol → Promise (Doppelabrufe bündeln)
-/** OKX rechnet in KONTRAKTEN. ctVal ist die Menge je Kontrakt (BTC-USDT-SWAP: 0,01). */
-const ctValCache = new Map()
-
-/** BTCUSDT → BTC-USDT-SWAP. Nur USDT-Perpetuals, alles andere geben wir auf. */
-function okxInstId(symbol) {
-    if (!symbol.endsWith('USDT')) return null
-    return `${symbol.slice(0, -4)}-USDT-SWAP`
-}
-
-async function okxCtVal(instId) {
-    if (ctValCache.has(instId)) return ctValCache.get(instId)
-    const { data } = await axios.get('https://www.okx.com/api/v5/public/instruments', {
-        params: { instType: 'SWAP', instId }, timeout: TIMEOUT,
-    })
-    const ct = Number(data?.data?.[0]?.ctVal)
-    /*
-     * Ohne ctVal wird NICHT geraten. 0,01 stimmt für BTC und für fast nichts
-     * sonst — eine erfundene Kontraktgrösse macht aus dem Vergleich stillen
-     * Unsinn, und zwar um Faktoren.
-     */
-    const wert = Number.isFinite(ct) && ct > 0 ? ct : null
-    ctValCache.set(instId, wert)
-    return wert
-}
-
 const imBand = (stufen, mid) => {
     const spanne = mid * (BAND_PCT / 100)
     return stufen.filter(([p]) => Math.abs(p - mid) <= spanne)
@@ -74,26 +54,6 @@ async function holeBybit(symbol, midRef) {
     }
 }
 
-async function holeOkx(symbol, midRef) {
-    const instId = okxInstId(symbol)
-    if (!instId) return null
-    const ctVal = await okxCtVal(instId)
-    if (!ctVal) return null
-    const { data } = await axios.get('https://www.okx.com/api/v5/market/books', {
-        params: { instId, sz: 400 }, timeout: TIMEOUT,
-    })
-    const b = data?.data?.[0]
-    if (!b?.bids?.length || !b?.asks?.length) return null
-    const bids = b.bids.map(r => [+r[0], +r[1] * ctVal])
-    const asks = b.asks.map(r => [+r[0], +r[1] * ctVal])
-    const mid = (bids[0][0] + asks[0][0]) / 2
-    return {
-        name: 'OKX', mid,
-        bids: imBand(bids, midRef), asks: imBand(asks, midRef),
-        reichweite: { lo: Math.min(...bids.map(([p]) => p)), hi: Math.max(...asks.map(([p]) => p)) },
-    }
-}
-
 /**
  * @param {string} symbol   Binance-Schreibweise, z.B. BTCUSDT
  * @param {number} midRef   Mittelkurs von Binance — Bezug fürs Band
@@ -108,7 +68,6 @@ export async function holeFremdbuecher(symbol, midRef) {
         // Einzeln abgesichert: fällt eine Börse aus, fehlt sie, der Rest bleibt.
         const ergebnisse = await Promise.allSettled([
             holeBybit(symbol, midRef),
-            holeOkx(symbol, midRef),
         ])
         const boersen = []
         for (const e of ergebnisse) {

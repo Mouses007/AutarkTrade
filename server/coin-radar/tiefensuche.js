@@ -18,7 +18,10 @@
  * eigenen Verlauf eines jungen Tokens. Ein Perpetual mit hundert Millionen
  * Umsatz hat diesen Verlauf nicht; die Note wäre eine Zahl ohne Bedeutung.
  *
- * Kostet kein Geld (keine KI), nur Abrufe ohne Schlüssel.
+ * Kostet kein Geld (keine KI). Die Suche nach Symbol braucht den CoinGecko-
+ * Schlüssel des Kunden (`holeCoinInfo` wirft sonst `QuelleAus`); die Suche
+ * nach Vertrag kommt ohne ihn aus (DexScreener). RugCheck nur, wenn der Kunde
+ * es eingeschaltet hat (`holeRisiko`).
  */
 
 import { holeCoinInfo } from './coin-info.js'
@@ -85,10 +88,10 @@ export function vertragsAnteilTop10(halter = [], skala = '') {
  * Die Tiefensuche für ein Symbol.
  *
  * @param {string} symbol      z. B. „LUMIA" oder „LUMIAUSDT"
- * @param {string} schluessel  optionaler CoinGecko-Schlüssel
+ * @throws {QuelleAus} ohne CoinGecko-Schlüssel
  */
-export async function tiefensuche(symbol, schluessel = '') {
-    const info = await holeCoinInfo(symbol, schluessel)
+export async function tiefensuche(symbol) {
+    const info = await holeCoinInfo(symbol)
     if (!info) return { gefunden: false, symbol: String(symbol || '').toUpperCase() }
 
     const vertraege = vertraegeAus(info.plattformen)
@@ -136,7 +139,7 @@ export async function tiefensuche(symbol, schluessel = '') {
     return {
         gefunden: true,
         coin: {
-            name: info.name, symbol: info.symbol, bild: info.bild, rang: info.marketCapRang,
+            name: info.name, symbol: info.symbol, rang: info.marketCapRang,
             kategorien: info.kategorien, coingeckoUrl: info.coingeckoUrl, explorer: info.explorer,
         },
         vertraege: vertraege.map((v) => {
@@ -157,7 +160,7 @@ export async function tiefensuche(symbol, schluessel = '') {
  * aus der Beobachtung gefallen. Dieselbe Antwortform wie `tiefensuche`, damit
  * die Anzeige beide gleich liest.
  *
- * Name, Bild und Links kommen hier von DexScreener statt von CoinGecko. Die
+ * Name und Links kommen hier von DexScreener statt von CoinGecko. Die
  * Webseite gilt deshalb NICHT als belegt (`seiteBelegt` bleibt leer): auf
  * DexScreener kann jeder Herausgeber eintragen, was er will — genau das prüft
  * die Projektprüfung erst.
@@ -194,7 +197,7 @@ export async function tiefensucheVertrag(chain, contract) {
 
     return {
         gefunden: true,
-        coin: { name: d?.name || '', symbol: d?.symbol || '', bild: m.bild || '' },
+        coin: { name: d?.name || '', symbol: d?.symbol || '' },
         vertraege: [{
             chain: kette, contract: c, pruefbar,
             liquiditaetUsd: m.liquiditaetUsd ?? null, volumen24h: m.volumen24h ?? null, dex: m.dex || '', url: d?.url || '',

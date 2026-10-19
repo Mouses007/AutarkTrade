@@ -16,6 +16,8 @@ import { beobachteAbbruch, sseSender } from './sse.js'
 import { logWarn } from './logger.js'
 import { beansprucheAufgabe, meldeFehler } from './db-claim.js'
 import { leseEinstellungen, schreibeEinstellungen, schreibeSchluessel, maskiere } from './hype-radar/einstellungen.js'
+import { hatSchluessel as coingeckoDa } from './quellen/coingecko.js'
+import { vergissRugcheck } from './hype-radar/sicherheit.js'
 import { scanne, scanneUndBerichte } from './hype-radar/lauf.js'
 import { dexDetails, normChain } from './hype-radar/quellen.js'
 import { ladeListungen, pruefeListung } from './hype-radar/listungen.js'
@@ -76,6 +78,8 @@ export function setupHypeRadarRoutes(app) {
                 // in den Einstellungen wäre eine zweite Wahrheit.
                 alarmRegeln: { ...STANDARD_ALARM_REGELN, ...(e.alarmRegeln || {}) },
                 schluessel: maskiere(e.schluessel),      // nie im Klartext hinaus
+                // Der CoinGecko-Schlüssel wird unter Einstellungen › Datenquellen gepflegt; hier nur, ob einer da ist.
+                coingeckoSchluessel: await coingeckoDa(),
                 stufen: stufenNach(req.query.ordnung === 'guete' ? 'guete' : 'preis'),
                 fehlendeSchluessel: await fehlendeSchluessel(e),
             })
@@ -92,11 +96,13 @@ export function setupHypeRadarRoutes(app) {
             // leben in `wachhund.js` und sollen dort änderbar bleiben.
             await schreibeEinstellungen(rest, { alarmRegeln: STANDARD_ALARM_REGELN })
             if (schluessel) await schreibeSchluessel(schluessel)
+            vergissRugcheck()
             const e = await leseEinstellungen()
             res.json({
                 ...e,
                 alarmRegeln: { ...STANDARD_ALARM_REGELN, ...(e.alarmRegeln || {}) },
                 schluessel: maskiere(e.schluessel),
+                coingeckoSchluessel: await coingeckoDa(),
                 fehlendeSchluessel: await fehlendeSchluessel(e),
             })
         } catch (e) {
@@ -160,12 +166,8 @@ export function setupHypeRadarRoutes(app) {
                     .catch(() => null)
                 const m = sicherParse(zeile?.marktDaten, {})
                 kandidat.links = m.links || null
-                kandidat.ersteller = m.ersteller || ''
                 const f = await getKnex()('hype_frueh').where('contract', kandidat.contract).first().catch(() => null)
-                if (!kandidat.links) {
-                    kandidat.links = sicherParse(f?.links, null)
-                    kandidat.ersteller = f?.ersteller || kandidat.ersteller
-                }
+                if (!kandidat.links) kandidat.links = sicherParse(f?.links, null)
                 // Die Frühphase weiss, ob es ein pump.fun-Token ist — die Endung „pump" trägt nicht jeder.
                 if (sicherParse(f?.stand, {}).pump === true) kandidat.pump = true
             }
@@ -259,7 +261,7 @@ export function setupHypeRadarRoutes(app) {
                     .map((f) => [f, v[f] ?? null]))),
                 befunde: sicherParse(z.befunde, []),
                 projekt: kurzfassung(projekte.get(schluesselFuer(z)) || null),
-                // Auf welchen Börsen der Token schon steht (Alpha nach Vertrag).
+                // Auf welchen Börsen der Token schon steht (über das Kürzel, ab Listungsgrösse).
                 leiter: leiterFuer({ symbol: z.symbol, chain: z.chain, contract: z.contract,
                     bewertungUsd: stand?.mcap }, staende),
             })
@@ -427,8 +429,8 @@ export function setupHypeRadarRoutes(app) {
 
     /**
      * Ein Durchgang von Hand, im Hintergrund. Gebremst auf einen je Minute — die Quellen sind
-     * dieselben, die der Takt alle fünfzehn Minuten fragt, und pump.fun wie
-     * GeckoTerminal drosseln spürbar.
+     * dieselben, die der Takt alle fünfzehn Minuten fragt, und das
+     * CoinGecko-Kontingent (On-Chain) ist knapp.
      */
     app.post('/api/hype-radar/frueh/lauf', async (req, res) => {
         try {
@@ -503,6 +505,8 @@ export function setupHypeRadarRoutes(app) {
                 kandidaten: sicherParse(z.kandidaten, []),
                 aussortiert: sicherParse(z.aussortiert, []),
                 meta: sicherParse(z.meta, {}),
+                // Text vom eingestellten Sprachmodell (EU AI Act Art. 50, S12).
+                kiGeneriert: true,
             })
         } catch (e) {
             res.status(500).json({ error: 'Bericht konnte nicht geladen werden' })

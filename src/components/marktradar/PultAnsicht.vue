@@ -17,6 +17,7 @@
  * Skala — erst darauf sieht man, ob der Wert gewöhnlich oder auffällig ist.
  */
 import PultRahmen from '../pult/PultRahmen.vue'
+import Quellenhinweis from '../basis/Quellenhinweis.vue'
 import Stimmungsband from './pult/Stimmungsband.vue'
 import Zyklusband from './pult/Zyklusband.vue'
 import LageFuss from './pult/LageFuss.vue'
@@ -30,6 +31,8 @@ const props = defineProps({
     kachelParams: { type: Object, default: () => ({}) },
     komponenten: { type: Object, required: true },
     symbol: { type: String, default: '' },
+    /** Vereinigte Quellenliste der gezeigten Kacheln (`quellenGeladen`). */
+    quellen: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits(['params', 'anzeige', 'zustand', 'neuladen', 'oeffnen'])
@@ -60,6 +63,16 @@ const EIGENE = { funding: InstrumentFunding }
         <!-- Der ganze Bericht steht in der Kachel; der Fuss öffnet sie gross. -->
         <template #fuss>
             <LageFuss :daten="daten.lage" @oeffnen="emit('oeffnen', 'lage')" />
+            <!-- Pflicht-Attributionen der gezeigten Daten (S12): das Pult hat
+                 keine Kachelrahmen, also stehen sie gesammelt hier. -->
+            <Quellenhinweis v-if="quellen.length" :quellen="quellen" class="pultQuellen" />
         </template>
     </PultRahmen>
 </template>
+
+<style scoped>
+.pultQuellen {
+    margin: 0.25rem 0 0;
+    padding: 0 0.5rem;
+}
+</style>

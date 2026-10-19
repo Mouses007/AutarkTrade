@@ -152,6 +152,9 @@ watch(() => props.daten, zeichne)
             </div>
 
             <p class="pcWarnung">{{ t('marktradar.picycle.caveat') }}</p>
+            <p v-if="daten.seit" class="pcWarnung">
+                {{ t('marktradar.picycle.seit', { datum: dayjs(daten.seit).format('DD.MM.YYYY') }) }}
+            </p>
         </template>
     </div>
 </template>

@@ -141,51 +141,47 @@
                 <!-- Quellen -->
                 <h6 class="hypTitel at-mo-4">{{ t('hype.quellenTitel') }}</h6>
                 <div class="hypQuellen">
-                    <!-- Alle verbliebenen Quellen laufen ohne Schlüssel. Die drei
-                         früheren Zusatzquellen sind am 21.08.2026 entfernt worden,
-                         weil keine davon nutzbar war — Begründung im Kopf von
-                         `quellen.js`. -->
+                    <!-- Drei Quellen seit S12: DexScreener ohne Schlüssel,
+                         CoinGecko-Trend und On-Chain-Pools nur mit dem
+                         CoinGecko-Schlüssel des Kunden. pump.fun, CoinPaprika
+                         und Reddit sind aus Lizenzgründen entfernt. -->
                     <div v-for="(_, q) in einst.quellen" :key="q" class="at-check schalter">
                         <input :id="'hypQ' + q" type="checkbox"
                             v-model="einst.quellen[q]" @change="speichern">
                         <label class="at-klein" :for="'hypQ' + q">
-                            {{ q }}
-                            <!-- CoinGecko läuft auch ohne Schlüssel, nur mit
-                                 engem Limit — „braucht einen Schlüssel" wäre
-                                 dort schlicht falsch. -->
-                            <span v-if="SCHLUESSEL_QUELLEN[q] && !SCHLUESSEL_QUELLEN[q].optional && !schluesselDa(q)"
-                                class="hypHinweisKlein">
+                            {{ te('hype.quelleName_' + q) ? t('hype.quelleName_' + q) : q }}
+                            <span v-if="CG_QUELLEN.includes(q) && !einst.coingeckoSchluessel" class="hypHinweisKlein">
                                 {{ t('hype.brauchtSchluessel') }}
                             </span>
                         </label>
                     </div>
                 </div>
+                <p class="hypHinweis at-mo-1">{{ t('hype.quellenEntferntHinweis') }}</p>
 
-                <!-- Zugangsdaten der Quellen.
-                     Sie standen bisher nirgends: Die Schalter oben liessen sich
-                     einschalten, der Schlüssel dazu war nicht einzugeben, und
-                     der Lauf meldete „kein Schlüssel hinterlegt". Gespeichert
-                     wird verschlüsselt; zurück kommt nur eine Maske, und ein
-                     Feld mit Maske überschreibt beim Speichern nichts. -->
+                <!-- Der CoinGecko-Schlüssel gilt für Marktradar, Coin-Radar und
+                     Hype-Radar zugleich und hat einen Tarif (Demo/Pro) — er wird
+                     an EINER Stelle gepflegt: Einstellungen › Datenquellen. Ein
+                     zweites Feld hier hätte dieselbe Spalte ohne den Tarif
+                     beschrieben. Hier steht nur, ob einer da ist. -->
                 <div class="hypSchluessel at-mo-3">
-                    <div v-for="(info, q) in SCHLUESSEL_QUELLEN" :key="q" class="hypSchluesselZeile">
-                        <label class="at-label at-mu-1">
-                            {{ q }}
-                            <span class="hypHinweisKlein">{{ info.optional ? t('hype.keyOptional') : t('hype.keyNoetig') }}</span>
-                        </label>
-                        <div class="hypSchluesselFeld">
-                            <input v-model="einst.schluessel[q]" type="password"
-                                class="at-feld klein"
-                                :placeholder="schluesselDa(q) ? einst.schluessel[q] : t('hype.keyPlatzhalter')"
-                                @change="speichern">
-                            <a :href="info.url" target="_blank" rel="noopener"
-                                class="ctl-pill klein" :title="info.url">
-                                <Symbol name="extern" />{{ t('hype.keyHolen') }}
-                            </a>
+                    <div class="hypSchluesselZeile">
+                        <label class="at-label at-mu-1">CoinGecko</label>
+                        <div class="hypHinweis">
+                            <template v-if="einst.coingeckoSchluessel">
+                                <Symbol name="haken" class="at-mr-1" />{{ t('hype.cgSchluesselDa') }}
+                            </template>
+                            <template v-else>{{ t('hype.cgSchluesselFehlt') }}</template>
+                            <a href="/settings" class="at-ml-1" @click.prevent="zuDatenquellen">{{ t('hype.cgZuDatenquellen') }}</a>
                         </div>
-                        <div class="hypHinweis">{{ t('hype.keyHinweis.' + q) }}</div>
                     </div>
                 </div>
+
+                <!-- RugCheck: Bedingungen ungeklärt (Verkaufs-Prüfung Z. 66) — ab Werk aus. -->
+                <div class="at-check schalter at-mo-3">
+                    <input id="hypRugcheck" type="checkbox" v-model="einst.rugcheckAn" @change="speichern">
+                    <label class="at-klein" for="hypRugcheck">{{ t('hype.rugcheckAn') }}</label>
+                </div>
+                <div class="hypHinweis">{{ t('hype.rugcheckHinweis') }}</div>
                 </div>
 
                 <div class="hypEinstTrenner" :style="{ order: 99 }">{{ t('hype.einstGemeinsam') }}</div>
@@ -264,13 +260,6 @@
                     </div>
                     <div class="at-wachsen hypHinweis at-mu-0">{{ t('hype.fruehXHinweis') }}</div>
                 </div>
-                <label class="at-label at-mo-2" for="hypFruehTg">{{ t('hype.fruehTelegram') }}</label>
-                <textarea id="hypFruehTg" class="at-feld klein hypTgListe" rows="2"
-                    :value="(einst.fruehTelegram || []).join('\n')"
-                    :placeholder="t('hype.fruehTelegramPlatzhalter')"
-                    @change="fruehTelegramGeaendert"></textarea>
-                <div class="hypHinweis">{{ t('hype.fruehTelegramHinweis') }}</div>
-
                 <!-- Smart Money: Wallet-Liste, Takt und RPC-Adresse — nur, wenn
                      die Quelle eingeschaltet ist. -->
                 <template v-if="einst.fruehQuellen?.smartmoney">
@@ -289,7 +278,9 @@
                             </select>
                         </div>
                         <div class="at-wachsen">
-                            <label class="at-label">{{ t('hype.smartRpc') }}</label>
+                            <label class="at-label">{{ t('hype.smartRpc') }}
+                                <span v-if="!schluesselDa('solanaRpc')" class="hypHinweisKlein">{{ t('hype.smartRpcPflicht') }}</span>
+                            </label>
                             <input v-model="einst.schluessel.solanaRpc" type="password" class="at-feld klein"
                                 :placeholder="schluesselDa('solanaRpc') ? einst.schluessel.solanaRpc : t('hype.smartRpcPlatzhalter')"
                                 @change="speichern">
@@ -325,6 +316,16 @@
                         </div>
                     </div>
                 </div>
+                <!-- Je Börse ein Schalter (S12): Coinbase, Kraken, KuCoin und Gate
+                     ab Werk aus (Bedingungen ungeklärt), Binance folgt zusätzlich
+                     der Marktdatenquelle. -->
+                <div v-if="einst.boersenwachtBoersen" class="hypQuellen at-mo-2">
+                    <div v-for="(_, b) in einst.boersenwachtBoersen" :key="b" class="at-check schalter">
+                        <input :id="'hypBwB' + b" type="checkbox" v-model="einst.boersenwachtBoersen[b]" @change="speichern">
+                        <label class="at-klein" :for="'hypBwB' + b">{{ te('hype.boerse_' + b) ? t('hype.boerse_' + b) : b }}</label>
+                    </div>
+                </div>
+                <div class="hypHinweis">{{ t('hype.boersenWahlHinweis') }}</div>
                 </div>
 
                 <div class="hypEinstTeil" :style="teilStil('wachhund')" v-show="teilSichtbar('wachhund')">
@@ -865,8 +866,9 @@
                                                 <div class="hypDetailTitel">{{ t('hype.teilnoten') }}</div>
                                                 <div v-for="(wert, feld) in (k.sozialDaten?.teilnoten || {})" :key="feld" class="hypNote">
                                                     <span class="hypNoteName">{{ t('hype.note_' + feld) }}</span>
-                                                    <span class="hypBalken"><i :style="{ width: Math.round(wert) + '%' }"></i></span>
-                                                    <span class="hypNoteWert">{{ Math.round(wert) }}</span>
+                                                    <!-- null = unbekannt (seit S12 v. a. Sozial ohne Quelle), nicht 0. -->
+                                                    <span class="hypBalken"><i :style="{ width: (wert === null || wert === undefined ? 0 : Math.round(wert)) + '%' }"></i></span>
+                                                    <span class="hypNoteWert" :title="wert === null || wert === undefined ? t('hype.noteUnbekannt') : ''">{{ wert === null || wert === undefined ? '—' : Math.round(wert) }}</span>
                                                 </div>
                                                 <div class="hypNoteName at-mo-1">
                                                     {{ t('hype.quellenAnzahl', { n: k.sozialDaten?.quellenAnzahl || 0 }) }}:
@@ -903,6 +905,8 @@
                         </tbody>
                     </table>
                 </div>
+                <!-- Pflicht-Attributionen (S12): woher Markt-, Trend- und Sicherheitsdaten stammen. -->
+                <RadarQuellen :quellen="uebersichtQuellen" />
             </div>
         </div>
 
@@ -935,9 +939,11 @@
                 </div>
             </div>
 
-            <div v-if="offenerBericht" class="hypBericht">
+            <div v-if="offenerBericht" class="hypBericht" data-ki-generiert="true">
                 <h4 class="hypBerichtUeberschrift">{{ offenerBericht.ueberschrift }}</h4>
                 <p class="hypMarktkontext">{{ offenerBericht.marktkontext }}</p>
+                <!-- S12: Pflichtlabel am Hype-KI-Bericht. -->
+                <KiHinweis />
 
                 <div v-for="k in offenerBericht.kandidaten" :key="k.symbol" class="hypKandidat">
                     <div class="hypKandidatKopf">
@@ -1065,6 +1071,7 @@ import PageInfo from '../components/PageInfo.vue'
 import ProjektPruefung from '../components/hype/ProjektPruefung.vue'
 import FruehphaseAnsicht from '../components/hype/FruehphaseAnsicht.vue'
 import BoersenAnsicht from '../components/hype/BoersenAnsicht.vue'
+import RadarQuellen from '../components/hype/RadarQuellen.vue'
 import { useIstTelefon } from '../utils/geraet.js'
 import { currentUser } from '../stores/app/rahmen.js'
 import {
@@ -1075,6 +1082,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
+import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const { t, te, locale } = useI18n()
 
@@ -1573,18 +1581,20 @@ const berichte = ref([])
 const offenerBericht = ref(null)
 const einst = ref(null)
 const stufen = ref([])
-/*
- * Quellen, für die sich ein Schlüssel lohnt — und wo man ihn herbekommt.
- *
- * Die Namen sind dieselben wie in `SCHLUESSEL_SPALTEN` auf dem Server
- * (`server/hype-radar/einstellungen.js`); daran hängt der Schreibweg.
- *
- * Nur noch CoinGecko, und dort ist der Schlüssel OPTIONAL: Er ist gratis und
- * hebt bloss das Abruflimit von etwa 30 auf 500 Aufrufe je Minute. Die
- * Pflicht-Schlüsselquellen sind am 21.08.2026 entfallen.
- */
-const SCHLUESSEL_QUELLEN = {
-    coingecko: { url: 'https://www.coingecko.com/en/developers/dashboard', optional: true },
+/** Quellenzeile der Übersicht: DexScreener immer, CoinGecko mit Schlüssel, Prüfdienste, /biz/ über die Frühphase. */
+const uebersichtQuellen = computed(() => {
+    const e = einst.value || {}
+    return ['dexscreener', ...(e.coingeckoSchluessel ? ['coingecko'] : []), 'goplus',
+        ...(e.rugcheckAn ? ['rugcheck'] : []), ...(e.fruehAktiv && e.fruehQuellen?.biz !== false ? ['biz'] : [])]
+})
+
+/** Quellen, die nur mit dem CoinGecko-Schlüssel des Kunden laufen (S12). */
+const CG_QUELLEN = ['coingecko', 'geckoterminal']
+
+/** Zu Einstellungen › Datenquellen — derselbe Weg wie `QuelleAus`. */
+function zuDatenquellen() {
+    try { localStorage.setItem('settingsBereich', 'datenquellen') } catch (_) { /* privater Modus */ }
+    router.push('/settings').catch(() => {})
 }
 
 /** Liegt für diese Quelle schon ein Schlüssel? Erkennbar an der Maske. */
@@ -1816,9 +1826,7 @@ async function speichern() {
          */
         const r = await axios.put('/api/hype-radar/einstellungen', einst.value)
         fehlendeSchluessel.value = r.data?.fehlendeSchluessel || []
-        // Der Server bereinigt die Kanalliste (nur Namen, höchstens 15) —
-        // die Anzeige soll zeigen, was gilt, nicht was getippt wurde.
-        if (Array.isArray(r.data?.fruehTelegram)) einst.value.fruehTelegram = r.data.fruehTelegram
+        // Der Server bereinigt die Wallet-Liste — die Anzeige soll zeigen, was gilt, nicht was getippt wurde.
         if (Array.isArray(r.data?.smartWallets)) einst.value.smartWallets = r.data.smartWallets
     } catch (e) {
         logWarn('hype-radar', 'Einstellungen konnten nicht gespeichert werden', e)
@@ -1829,13 +1837,6 @@ async function speichern() {
 function smartWalletsGeaendert(ev) {
     if (!einst.value) return
     einst.value.smartWallets = String(ev.target.value || '').split(/\r?\n/).map((z) => z.trim()).filter(Boolean)
-    speichern()
-}
-
-/** Telegram-Kanäle der Frühphase: eine Zeile (oder Komma) je Kanal. */
-function fruehTelegramGeaendert(ev) {
-    if (!einst.value) return
-    einst.value.fruehTelegram = String(ev.target.value || '').split(/[\s,;]+/).filter(Boolean)
     speichern()
 }
 
@@ -1948,9 +1949,13 @@ function verarbeite(e, mitBericht) {
     }
     if (e.type !== 'fertig') return
 
+    // „aus" (kein Schlüssel, abgeschaltet) ist kein Ausfall — eigens benannt.
     const ausgefallen = Object.entries(e.quellenStand || {})
-        .filter(([, s]) => !s.ok).map(([n]) => n)
-    const teil = ausgefallen.length ? ' ' + t('hype.quellenAusgefallen', { q: ausgefallen.join(', ') }) : ''
+        .filter(([, s]) => !s.ok && !s.aus).map(([n]) => n)
+    const abgeschaltet = Object.entries(e.quellenStand || {})
+        .filter(([, s]) => s.aus).map(([n]) => (te('hype.quelleName_' + n) ? t('hype.quelleName_' + n) : n))
+    const teil = (ausgefallen.length ? ' ' + t('hype.quellenAusgefallen', { q: ausgefallen.join(', ') }) : '')
+        + (abgeschaltet.length ? ' ' + t('hype.quellenAbgeschaltet', { q: abgeschaltet.join(', ') }) : '')
 
     if (mitBericht && !e.berichtId) {
         /*
@@ -2081,7 +2086,9 @@ function zeichne() {
      */
     const punkt = (k) => {
         const tn = k.sozialDaten?.teilnoten || {}
-        const aufmerksamkeit = ((Number(tn.sozial) || 0) + (Number(tn.quellen) || 0)) / 2
+        // Sozial unbekannt (null): dann trägt die Quellenzahl allein, statt mit einer erfundenen 0 gemittelt zu werden.
+        const sozialDa = tn.sozial !== null && tn.sozial !== undefined
+        const aufmerksamkeit = sozialDa ? ((Number(tn.sozial) || 0) + (Number(tn.quellen) || 0)) / 2 : (Number(tn.quellen) || 0)
         return {
             value: [Number(tn.volumen) || 0, aufmerksamkeit, k.safetyScore, k.symbol, k.status],
             k,

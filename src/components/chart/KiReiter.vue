@@ -16,6 +16,7 @@ import { linieAlsZeichnung, zoneAlsZeichnung, profilAlsZeichnung, istProfilLinie
 import { legeAn } from '../../stores/chartZeichnungen.js'
 import KiChat from './KiChat.vue'
 import { Symbol, Knopf } from '../basis'
+import KiHinweis from '../quellen/KiHinweis.vue'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -218,11 +219,13 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                 <small>{{ zeit(analyse.stand) }} · {{ analyse.provider }}/{{ analyse.model }}<template v-if="analyse.costUsd != null">
                         · {{ analyse.costUsd.toFixed(4) }} $</template></small>
             </div>
+            <!-- S12: Pflichtlabel an der KI-Analyse (Text, Bedingungen, Vorschläge). -->
+            <KiHinweis klein />
             <div v-if="analyse.auswahl" class="struktur">{{ struktur(analyse) }}</div>
-            <p v-if="analyse.text" class="text">{{ analyse.text }}</p>
+            <p v-if="analyse.text" class="text" data-ki-generiert="true">{{ analyse.text }}</p>
 
             <div v-if="analyse.bedingungen?.length" class="abschnitt">{{ t('chart.ki.bedingungen') }}</div>
-            <div v-for="(b, i) in analyse.bedingungen" :key="'b' + i" class="bedingung">
+            <div v-for="(b, i) in analyse.bedingungen" :key="'b' + i" class="bedingung" data-ki-generiert="true">
                 <b>{{ t('chart.ki.wenn') }}</b> {{ b.wenn }} → {{ b.dann }}<span v-if="b.zielId" class="id">→ {{ b.zielId }}</span>
             </div>
 
@@ -231,7 +234,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                 <button type="button" class="textKnopf abstandLinks" :disabled="uebernimmtAlle" @click="alleUebernehmen">{{ t('chart.ki.alleUebernehmen') }}</button>
                 <button v-if="analyse.auswahl" class="textKnopf abstandLinks" :class="{ an: alle }" @click="schalteAlle">{{ t(alle ? 'chart.ki.kandidatenAus' : 'chart.ki.kandidatenZeigen') }}</button>
             </div>
-            <div v-for="(l, i) in analyse.linien" :key="'l' + i" class="vorschlag">
+            <div v-for="(l, i) in analyse.linien" :key="'l' + i" class="vorschlag" data-ki-generiert="true">
                 <div class="zeile">
                     <span class="art">{{ t('chart.ki.art.' + l.art) }}</span>
                     <span v-if="l.id" class="id" :class="l.gewicht">{{ l.id }}</span>
@@ -242,7 +245,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                 </div>
                 <small>{{ l.grund }}</small>
             </div>
-            <div v-for="(z, i) in analyse.zonen" :key="'z' + i" class="vorschlag">
+            <div v-for="(z, i) in analyse.zonen" :key="'z' + i" class="vorschlag" data-ki-generiert="true">
                 <div class="zeile">
                     <span class="art">{{ t('chart.ki.zone') }}</span>
                     <span v-if="z.ids?.length" class="id" :class="z.gewicht">{{ z.ids.join('+') }}</span>

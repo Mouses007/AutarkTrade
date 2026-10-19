@@ -23,7 +23,8 @@
 
 import axios from 'axios'
 import { getKnex } from './database.js'
-import { notiereGewicht, melde429, pausiertBis, warteAufGewicht } from './binance-takt.js'
+import { pausiertBis, warteAufGewicht } from './binance-takt.js'
+import * as marktdaten from './marktdaten/index.js'
 import { ladeListungen } from './hype-radar/listungen.js'
 import { logWarn } from './logger.js'
 import { tradesAusZeilen, mitNotizen } from './chart-journal.js'
@@ -40,10 +41,14 @@ const HTTP_TIMEOUT = 10000
 export const INTERVALLE = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
 
 /*
- * Quellen. Binance ist die Datenbasis (User-Entscheid 18.10.2026): tiefe
- * Historie, Websocket für die laufende Kerze. Bitunix und Bitget folgen als
- * wählbare REST-Quellen — sie haben öffentlich weniger Tiefe und keinen
+ * Quellen. Binance war die Datenbasis (User-Entscheid 18.10.2026): tiefe
+ * Historie, Websocket für die laufende Kerze. Seit S12 (Verkaufs-Prüfung,
+ * Massnahme 1) gibt es `binance-futures`/`binance-spot` nur noch, wenn der
+ * Kunde Binance als Marktdatenquelle gewählt hat (`server/marktdaten/`);
+ * sonst antwortet die Route mit `{ aus: true, … }`. Bitunix und Bitget folgen
+ * als wählbare REST-Quellen — sie haben öffentlich weniger Tiefe und keinen
  * angebundenen Websocket, und das wird im Kopf des Charts auch so gesagt.
+ * Bitunix ist die Ausführungsbörse des Kunden und bleibt immer wählbar.
  *
  * Gemessen 18.10.2026 gegen die Live-APIs:
  *   Bitunix  /api/v1/futures/market/kline — neueste ZUERST, höchstens 200,
@@ -56,8 +61,8 @@ export const INTERVALLE = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h
  *            `history-candles` (höchstens 200).
  */
 const QUELLEN = {
-    'binance-futures': { basis: 'https://fapi.binance.com', pfad: '/fapi/v1/klines', max: 1500 },
-    'binance-spot': { basis: 'https://api.binance.com', pfad: '/api/v3/klines', max: 1000 },
+    'binance-futures': { markt: 'futures', pfad: '/fapi/v1/klines', max: 1500 },
+    'binance-spot': { markt: 'spot', pfad: '/api/v3/klines', max: 1000 },
     'bitunix': { max: 200 },
     'bitget': { max: 1000 },
 }
@@ -333,9 +338,10 @@ function sendeGedrosselt(res) {
 // jedes offene Panel fragte alle 5 s selbst (Futures limit 500 = Gewicht 10, Spot 25).
 // Bewusst NICHT in /api/binance/depth: der Bookmap-Abgleich braucht einen frischen Snapshot,
 // ein älterer liesse die Update-Ids nicht anschliessen.
+// Über die gewählte Marktdatenquelle; Bitget gibt höchstens 100 Stufen je Seite
+// (Binance 500) — die Wände reichen dort weniger weit, der Hinweis im Chart sagt wie weit.
 const TIEFE_TTL_MS = 4000
-const tiefeCache = new Map()     // markt|symbol → { t, daten, laeuft }
-const TIEFE_BASIS = { futures: 'https://fapi.binance.com/fapi/v1/depth', spot: 'https://api.binance.com/api/v3/depth' }
+const tiefeCache = new Map()     // quelle|markt|symbol → { t, daten, laeuft }
 
 export function setupChartRoutes(app) {
 
@@ -347,23 +353,29 @@ export function setupChartRoutes(app) {
         const symbol = String(req.query.symbol || '').toUpperCase()
         if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'symbol fehlt oder ist ungültig' })
         const markt = req.query.markt === 'spot' ? 'spot' : 'futures'
-        const k = `${markt}|${symbol}`
+        let anbieter
+        try { anbieter = await marktdaten.fordere('orderbuch', { markt }) } catch (e) {
+            if (marktdaten.sendeWennAus(res, e)) return
+            return res.status(502).json({ error: e.message })
+        }
+        const binance = anbieter.id === 'binance'
+        const k = `${anbieter.id}|${markt}|${symbol}`
         const c = tiefeCache.get(k)
         if (c?.daten && Date.now() - c.t < TIEFE_TTL_MS) return res.json(c.daten)
         if (c?.laeuft) {
             try { return res.json(await c.laeuft) } catch (e) { return res.status(e.status || 502).json({ error: e.message }) }
         }
         const laeuft = (async () => {
-            if (markt === 'futures' && !(await futuresGewicht(10))) {
+            if (binance && markt === 'futures' && !(await futuresGewicht(10))) {
                 const e = new Error('Binance-Rate-Limit erreicht. Bitte kurz warten.'); e.status = 429; throw e
             }
             try {
-                const antwort = await axios.get(TIEFE_BASIS[markt], { params: { symbol, limit: 500 }, timeout: HTTP_TIMEOUT })
-                if (markt === 'futures') notiereGewicht(antwort.headers)
-                return antwort.data
+                // Gewicht und 429/418 meldet der Binance-Anbieter selbst an die Bremse (nur Futures).
+                const b = await anbieter.orderbuch(symbol, { markt, tiefe: 500 })
+                // Form wie die frühere Binance-Antwort: `bids`/`asks` als [[preis, menge]].
+                return { lastUpdateId: b.lastUpdateId, T: b.ts, bids: b.bids, asks: b.asks, quelle: anbieter.id }
             } catch (e) {
                 const st = e.response?.status
-                if (markt === 'futures' && (st === 429 || st === 418)) melde429(st, e.response.headers)
                 const f = new Error(e.response?.data?.msg || e.message); f.status = st >= 400 && st < 500 ? st : 502; throw f
             }
         })()
@@ -417,17 +429,22 @@ export function setupChartRoutes(app) {
                 return res.status(status >= 400 && status < 500 ? status : 502).json({ error: e.response?.data?.msg || e.message })
             }
         }
+        // Binance nur mit gewählter Marktdatenquelle Binance (S12).
+        try { await marktdaten.binanceRest('kerzen', q.markt) } catch (e) {
+            if (marktdaten.sendeWennAus(res, e)) return
+            return res.status(502).json({ error: e.message })
+        }
         const futures = quelle === 'binance-futures'
         if (futures && !(await futuresGewicht(klinesGewicht(limit)))) return sendeGedrosselt(res)
         try {
-            const antwort = await axios.get(q.basis + q.pfad, { params, timeout: HTTP_TIMEOUT })
-            if (futures) notiereGewicht(antwort.headers)
+            // Gewicht und Strafe meldet `binanceHole` (nur Futures) an die Bremse.
+            const roh = await marktdaten.binanceHole('kerzen', q.markt, q.pfad, params)
             res.setHeader('Cache-Control', 'no-store')
-            res.json({ quelle, symbol, interval, kerzen: kerzenAusBinance(antwort.data) })
+            res.json({ quelle, symbol, interval, kerzen: kerzenAusBinance(roh) })
         } catch (e) {
+            if (marktdaten.sendeWennAus(res, e)) return
             const status = e.response?.status || 502
             if (status === 429 || status === 418) {
-                if (futures) melde429(status, e.response?.headers)
                 return res.status(429).json({ error: 'Binance-Rate-Limit erreicht. Bitte kurz warten.' })
             }
             // Binance antwortet auf ein unbekanntes Symbol mit 400 / Code -1121.
@@ -594,33 +611,36 @@ export function setupChartRoutes(app) {
         try {
             const markt = req.query.markt === 'spot' ? 'spot' : 'futures'
             const symbole = String(req.query.symbole || '').toUpperCase().split(',').filter((x) => SYMBOL_RE.test(x)).slice(0, 40)
-            const basis = markt === 'spot' ? 'https://api.binance.com/api/v3/ticker/24hr' : 'https://fapi.binance.com/fapi/v1/ticker/24hr'
+            // Über die gewählte Marktdatenquelle (S12); ohne Ticker-Fähigkeit `{ aus: true }`.
+            const anbieter = await marktdaten.fordere('ticker', { markt })
+            const binance = anbieter.id === 'binance'
             const aus = {}
             await Promise.all(symbole.map(async (sym) => {
-                const k = `${markt}|${sym}`
+                const k = `${anbieter.id}|${markt}|${sym}`
                 const c = tickerCache.get(k)
                 if (c && Date.now() - c.zeit < (c.fehlt ? 5 * 60_000 : 10_000)) { if (c.wert) aus[sym] = c.wert; return }
                 // Während einer Binance-Strafe gar nicht erst fragen — jeder weitere Abruf verlängert sie.
-                if (markt === 'futures' && pausiertBis()) { if (c?.wert) aus[sym] = c.wert; return }
+                if (binance && markt === 'futures' && pausiertBis()) { if (c?.wert) aus[sym] = c.wert; return }
                 try {
-                    const antwort = await axios.get(basis, { params: { symbol: sym }, timeout: HTTP_TIMEOUT })
-                    if (markt === 'futures') notiereGewicht(antwort.headers)
-                    const data = antwort.data
+                    // NUR 429/418 sind eine Drosselung — der Binance-Anbieter meldet sie selbst
+                    // (nur Futures). Früher setzte melde429 für jeden Status eine 30-s-Sperre
+                    // aller Binance-Historienabrufe — ein delistetes Symbol in der Watchlist (400)
+                    // legte so Coin-Radar und Ergebnis-Tracking still.
+                    const z = await anbieter.ticker24hEinzeln(sym, { markt })
                     // q = 24h-Umsatz in USDT — der Chart misst daran, ob eine Orderbuch-Wand gross ist
-                    const wert = { c: Number(data.lastPrice), o: Number(data.openPrice), q: Number(data.quoteVolume) }
+                    const wert = { c: z.preis, o: z.eroeffnung, q: z.umsatzQuote }
                     if (Number.isFinite(wert.c)) { tickerCache.set(k, { zeit: Date.now(), wert }); aus[sym] = wert }
                 } catch (e) {
                     const st = e.response?.status
-                    // NUR 429/418 sind eine Drosselung. melde429 setzt für jeden Status eine 30-s-Sperre
-                    // aller Binance-Historienabrufe — ein delistetes Symbol in der Watchlist (400) legte
-                    // so Coin-Radar und Ergebnis-Tracking still.
-                    if (markt === 'futures' && (st === 429 || st === 418)) melde429(st, e.response.headers)
                     // Unbekanntes Symbol: 5 Minuten nicht wieder fragen (der Stream liefert es auch nicht).
-                    else if (st === 400) tickerCache.set(k, { zeit: Date.now(), wert: null, fehlt: true })
+                    if (st === 400) tickerCache.set(k, { zeit: Date.now(), wert: null, fehlt: true })
                 }
             }))
-            res.json({ markt, kurse: aus })
-        } catch (e) { res.status(500).json({ error: e.message }) }
+            res.json({ markt, quelle: anbieter.id, kurse: aus })
+        } catch (e) {
+            if (marktdaten.sendeWennAus(res, e)) return
+            res.status(500).json({ error: e.message })
+        }
     })
 
     // ── Indikator-Vorlagen ───────────────────────────────────────────────
@@ -725,12 +745,18 @@ export function setupChartRoutes(app) {
         const symbol = String(req.query.symbol || '').toUpperCase()
         if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'symbol ungültig' })
         try {
+            // OI-Historie gibt es nur bei Binance — vor dem Cache prüfen, sonst
+            // lieferte ein warmer Eintrag nach dem Abwählen weiter Zonen.
+            await marktdaten.binanceRest('oiHistorie', 'futures')
             // `ausCache` verteilt die Antwort per Spread — deshalb verpackt,
             // sonst würde aus `null` ein leeres Objekt mit Zeitstempel.
             const { zonen, veraltet } = await ausCache(`chart_hebelzonen|${symbol}`, 2 * 60 * 1000,
                 async () => ({ zonen: await holeHebelzonen(symbol) }))
             res.json({ symbol, zonen: zonen || null, veraltet: !!veraltet })
-        } catch (e) { res.status(502).json({ error: e.message }) }
+        } catch (e) {
+            if (marktdaten.sendeWennAus(res, e)) return
+            res.status(502).json({ error: e.message })
+        }
     })
 
     /**
@@ -743,10 +769,15 @@ export function setupChartRoutes(app) {
         const symbol = String(req.query.symbol || '').toUpperCase()
         if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'symbol ungültig' })
         try {
-            const { punkte } = await ausCache(`chart_funding|${symbol}`, 10 * 60 * 1000,
+            // Quelle im Schlüssel: Bitget und Binance zahlen nicht dieselben Sätze.
+            const anbieter = await marktdaten.fordere('funding')
+            const { punkte } = await ausCache(`chart_funding|${anbieter.id}|${symbol}`, 10 * 60 * 1000,
                 async () => ({ punkte: await getFundingHistory(symbol, Date.now() - 180 * 86_400_000, Date.now()) }))
-            res.json({ symbol, punkte: punkte || [] })
-        } catch (e) { res.status(502).json({ error: e.message }) }
+            res.json({ symbol, quelle: anbieter.id, punkte: punkte || [] })
+        } catch (e) {
+            if (marktdaten.sendeWennAus(res, e)) return
+            res.status(502).json({ error: e.message })
+        }
     })
 
     // ── Zeichnungen ──────────────────────────────────────────────────────

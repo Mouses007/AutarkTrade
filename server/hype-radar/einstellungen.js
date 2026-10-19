@@ -8,6 +8,14 @@
  *
  * Die Schlüssel der Fremdquellen stehen dagegen in `settings` — verschlüsselt,
  * wie alle anderen Zugangsdaten des Hauses auch.
+ *
+ * Der CoinGecko-Schlüssel (`settings.hypeKeyCoingecko`) wird seit S12 NICHT
+ * mehr hier gepflegt: er gilt für Marktradar, Coin-Radar und Hype-Radar
+ * zugleich, hat einen Tarif (Demo/Pro) und wird unter Einstellungen ›
+ * Datenquellen eingegeben (`server/quellen/coingecko.js`). Ein zweites
+ * Eingabefeld im Hype-Panel hätte dieselbe Spalte ohne den Tarif beschrieben
+ * — und den Merker in `coingecko.js` nicht geleert. Das Panel zeigt nur, ob
+ * einer hinterlegt ist, und verlinkt dorthin.
  */
 
 import { getKnex } from '../database.js'
@@ -18,13 +26,16 @@ import { smartWalletListe } from './fruehphase-bewertung.js'
 
 /** Spalten in `settings`, in denen die Schlüssel der Zusatzquellen liegen. */
 const SCHLUESSEL_SPALTEN = {
-    coingecko: 'hypeKeyCoingecko',
     // Zustellgeheimnisse des Wachhunds. Die Webhook-Adresse gehört dazu:
     // bei Home Assistant IST die Adresse das Geheimnis.
     ntfyToken: 'hypeAlarmNtfyToken',
     telegramToken: 'hypeAlarmTelegramToken',
     webhookUrl: 'hypeAlarmWebhookUrl',
-    // Smart Money: eigene Solana-RPC-Adresse (bei Helius steckt der Schlüssel darin).
+    /*
+     * Smart Money: eigene Solana-RPC-Adresse (bei Helius steckt der Schlüssel
+     * darin). PFLICHT seit S12: der öffentliche Knoten ist laut Solana „not
+     * intended for production applications" (Verkaufs-Prüfung Z. 67).
+     */
     solanaRpc: 'hypeKeySolanaRpc',
 }
 
@@ -33,21 +44,16 @@ export const VORGABEN = {
     intervallStunden: 6,
     ketten: ['solana', 'eth', 'base', 'bsc'],
     /*
-     * Alle sechs laufen OHNE Schlüssel — das ist die Aufnahmebedingung.
+     * Drei Quellen (S12, Verkaufs-Prüfung vom 19.10.2026): CoinGecko-Trend und
+     * die On-Chain-Pools (`geckoterminal`, jetzt über CoinGecko `/onchain`)
+     * nur mit dem Schlüssel des Kunden — ohne ihn stehen sie im Lauf als
+     * „aus". DexScreener läuft ohne Schlüssel.
      *
-     * CryptoPanic und LunarCrush sind am 21.08.2026 geflogen, weil beide
-     * ihren Gratis-Zugang abgeschafft haben. Reddit ist am selben Tag
-     * zurückgekommen, nachdem sich zeigte, dass nur die JSON-Schnittstelle zu
-     * ist und der RSS-Feed offen steht. Begründungen im Kopf von `quellen.js`.
-     *
-     * `pumpfun` ist als Vorgabe AN: Es ist die einzige Quelle, die einen Token
-     * sieht, bevor er einen DEX-Pool hat. `reddit` ebenfalls, weil es die
-     * einzige Quelle der Domäne `social` ist — ohne sie fehlt der Bewertung
-     * eine ganze Achse.
+     * pump.fun, CoinPaprika und Reddit sind aus Lizenzgründen entfernt; ihre
+     * gespeicherten Schalter sortiert `leseEinstellungen` aus.
      */
     quellen: {
         coingecko: true, dexscreener: true, geckoterminal: true,
-        pumpfun: true, coinpaprika: true, reddit: true,
     },
     gewichte: STANDARD_GEWICHTE,
     narrative: STANDARD_NARRATIVE,
@@ -101,38 +107,68 @@ export const VORGABEN = {
     projektPruefung: true,
     projektMax: 15,
     /*
+     * RugCheck (Solana: Vertrag, Halter, Insider-Netze, LP-Sperre). Die
+     * Bedingungen sind ungeklärt — die Seite war bei der Prüfung nicht
+     * erreichbar, laut Drittquellen gibt es Schlüssel und Bezahltarife
+     * (Verkaufs-Prüfung Z. 66). Darum ab Werk AUS; bestehende Installationen
+     * behalten es an (`server/migrationen/s12-hype.js`). Ohne RugCheck prüft
+     * GoPlus allein; Insider-Netze und die Solana-LP-Sperre sind dann
+     * unbekannt.
+     */
+    rugcheckAn: false,
+    /*
      * Die Frühphase: eine eigene Spur VOR der Hauptprüfung, für Token, die
      * noch keine zwölf Stunden alt sind oder noch keine 50 000 USD Liquidität
      * haben. Aus als Vorgabe wie der Radar selbst — sie fragt alle fünfzehn
-     * Minuten bis zu sechs Quellen ab.
+     * Minuten mehrere Quellen ab.
      *
      * `fruehAlarmAb` 0 heisst: beobachten, nicht melden.
      */
     fruehAktiv: false,
     fruehIntervallMin: 15,
+    /*
+     * pump.fun (neueste, Kurve), Reddit und die Telegram-Kanäle sind seit S12
+     * entfernt (Verkaufs-Prüfung Z. 60, 61, 63). Die Frühphase verliert damit
+     * die Spur VOR dem ersten Pool: Ein Token auf der pump.fun-Kurve erscheint
+     * nur noch, wenn DexScreener oder die CoinGecko-On-Chain-Liste ihn führen
+     * oder jemand seinen Vertrag auf /biz/ oder X nennt.
+     */
     fruehQuellen: {
-        pumpfunNeu: true, pumpfunAufstieg: true, dexscreenerProfile: true,
-        geckoterminalNeu: true, biz: true, telegram: true, reddit: false,
+        dexscreenerProfile: true,
+        // Neue Pools und Käuferzahlen — CoinGecko `/onchain`, nur mit Kundenschlüssel.
+        geckoterminalNeu: true,
+        biz: true,
         // Bezahlt (xAI, Grok `x_search`) — deshalb aus, bis jemand es will.
         x: false,
-        // Braucht eine Wallet-Liste; ohne eigene RPC-Adresse der öffentliche Knoten.
+        // Braucht eine Wallet-Liste UND eine eigene Solana-RPC-Adresse.
         smartmoney: false,
     },
     // Beobachtete Wallets [{adresse, name}] und wie oft ihre Käufe gelesen werden.
     smartWallets: [],
     smartIntervallMin: 30,
     /*
-     * Börsen-Beobachter: neue Listungen auf grossen und mittleren Börsen und
-     * auf Binance Alpha. Ohne Schlüssel; aus als Vorgabe wie alles, was im
-     * Hintergrund abruft. `boersenAlleMelden` meldet auch Listungen, die der
-     * Radar nicht kannte (nur grosse Börsen) — sonst nur Radar-Token.
+     * Börsen-Beobachter: neue Listungen auf grossen und mittleren Börsen.
+     * Ohne Schlüssel; aus als Vorgabe wie alles, was im Hintergrund abruft.
+     * `boersenAlleMelden` meldet auch Listungen, die der Radar nicht kannte
+     * (nur grosse Börsen) — sonst nur Radar-Token.
      */
     boersenwachtAn: false,
+    /*
+     * Welche Börsenlisten gelesen werden (S12). Coinbase, Kraken, KuCoin und
+     * Gate ab Werk AUS: ihre Bedingungen erlauben die Nutzung in einem
+     * verkauften Programm nicht erkennbar (Verkaufs-Prüfung Z. 77, 79–81);
+     * bestehende Installationen behalten ihre Wahl (Migration). Binance folgt
+     * zusätzlich der Marktdatenquelle. Upbit, OKX, MEXC und Binance Alpha sind
+     * entfernt (Z. 76, 78, 82, 83).
+     */
+    boersenwachtBoersen: {
+        'binance-spot': true, 'binance-futures': true, bybit: true, bitget: true,
+        coinbase: false, kraken: false, kucoin: false, gate: false,
+    },
     boersenwachtIntervallMin: 30,
     boersenAlleMelden: false,
     // Takt der X-Abfrage in Minuten; jede Abfrage kostet Suchpauschale plus Tokens.
     fruehXIntervallMin: 120,
-    fruehTelegram: [],
     fruehAlarmAb: 70,
     /*
      * Ab dieser Note steht ein meldefähiger Token in der Kandidatenliste
@@ -188,10 +224,14 @@ export async function leseEinstellungen() {
      * einer Datenwanderung: beim Lesen aussortieren, dann heilt sich der
      * Altbestand beim nächsten Speichern von selbst.
      */
-    if (e.quellen && typeof e.quellen === 'object') {
-        e.quellen = Object.fromEntries(
-            Object.entries(e.quellen).filter(([name]) => name in VORGABEN.quellen))
+    for (const feld of ['quellen', 'fruehQuellen', 'boersenwachtBoersen']) {
+        if (e[feld] && typeof e[feld] === 'object') {
+            e[feld] = Object.fromEntries(
+                Object.entries(e[feld]).filter(([name]) => name in VORGABEN[feld]))
+        }
     }
+    // Die Telegram-Kanäle der Frühphase (bis S12) bleiben gespeichert, gelesen werden sie nicht mehr.
+    delete e.fruehTelegram
 
     e.schluessel = await leseSchluessel()
     return e
@@ -295,10 +335,6 @@ export function bereinigeEinstellungen(neu = {}, zusatzVorgaben = {}) {
             raus[k] = abweichung
             continue
         }
-        if (k === 'fruehTelegram') {
-            raus[k] = telegramKanaele(v)
-            continue
-        }
         if (k === 'smartWallets') {
             raus[k] = smartWalletListe(v)
             continue
@@ -306,23 +342,6 @@ export function bereinigeEinstellungen(neu = {}, zusatzVorgaben = {}) {
         raus[k] = v
     }
     return raus
-}
-
-/**
- * Telegram-Kanäle der Frühphase: nur Kanalnamen, höchstens fünfzehn.
- *
- * Angenommen wird, was jemand aus der Adresszeile kopiert — `@name`,
- * `t.me/name`, `https://t.me/s/name`. Gespeichert wird nur der Name; was
- * danach nicht wie ein Telegram-Name aussieht, fällt weg, statt später als
- * Pfad an `t.me` zu gehen.
- */
-export function telegramKanaele(liste) {
-    const roh = Array.isArray(liste) ? liste : String(liste || '').split(/[\s,;]+/)
-    const namen = roh
-        .map((x) => String(x || '').trim()
-            .replace(/^(https?:\/\/)?(www\.)?(t\.me|telegram\.me)\/(s\/)?/i, '').replace(/^@/, '').split(/[/?#]/)[0])
-        .filter((n) => /^[A-Za-z0-9_]{4,64}$/.test(n))
-    return [...new Set(namen)].slice(0, 15)
 }
 
 /**

@@ -20,7 +20,7 @@ import {
     createChart, CandlestickSeries, HistogramSeries, CrosshairMode, PriceScaleMode, LineStyle, ColorType,
     createTextWatermark,
 } from 'lightweight-charts'
-import { ladeKerzen, LiveKerze, RestKerze, fuegeZusammen, INTERVALL_MS, istRestQuelle, QUELLEN_MAX } from '../../utils/chart/kerzenQuelle.js'
+import { ladeKerzen, LiveKerze, RestKerze, fuegeZusammen, INTERVALL_MS, istRestQuelle, QUELLEN_MAX, boerseFuer } from '../../utils/chart/kerzenQuelle.js'
 import { loadSymbolMeta } from '../../utils/liveSymbols.js'
 import { IndikatorZeichner } from '../../utils/chart/indikatorZeichner.js'
 import { kurzname } from '../../utils/chart/indikatorRegister.js'
@@ -317,6 +317,8 @@ async function ladeHebelzonen() {
     try {
         const { data } = await axios.get('/api/chart/hebelzonen', { params: { symbol } })
         if (symbol !== props.panel.symbol) return
+        // OI-Historie nur mit Marktdatenquelle Binance (S12)
+        if (data?.aus) { marktEbene.setzeZonen(null); hinweis('hebelzonen', t('chart.markt.quelleAus', { was: t('chart.markt.hebelName') })); return }
         marktEbene.setzeZonen(data.zonen)
         hinweis('hebelzonen', data.zonen ? t(data.zonen.duenn ? 'chart.markt.hebelDuenn' : 'chart.markt.hebelModell') : t('chart.markt.hebelKeine'))
     } catch { marktEbene.setzeZonen(null); hinweis('hebelzonen', t('chart.markt.hebelKeine')) }
@@ -353,6 +355,7 @@ async function ladeWaende() {
             umsatzJeMinute(symbol, m),
         ])
         if (symbol !== props.panel.symbol) return
+        if (data?.aus) { marktEbene.setzeWaende(null); hinweis('orderbuch', t('chart.markt.quelleAus', { was: t('chart.markt.buchName') })); return }
         const w = waendeAusBuch(data, { umsatzJeMinute: proMin })
         marktEbene.setzeWaende(w)
         // Wie weit der Snapshot reicht — bei BTC nur ±0,07 %, dahinter kann er keine Wand zeigen.
@@ -428,8 +431,10 @@ async function ladeExtern(nurWelche = null) {
 
 /*
  * VWAP Vector: Kerzen höherer Zeiteinheiten (MTF-EMA, Fibonacci) und
- * Intrabar-Kerzen (Candle-POC). Immer von Binance — Bitunix/Bitget liefern
- * zu wenig Historie für eine EMA 50 auf dem Tag. Intrabar höchstens
+ * Intrabar-Kerzen (Candle-POC). Von Binance, wenn als Marktdatenquelle
+ * gewählt — Bitunix/Bitget liefern zu wenig Historie für eine EMA 50 auf dem
+ * Tag; ohne Binance-Wahl trotzdem von der Vorgabe-Börse (S12), dann mit
+ * kürzerer Reichweite der höheren Zeiteinheiten. Intrabar höchstens
  * INTRA_BUDGET Kerzen (Seiten à 1500); ältere Chartkerzen bekommen keinen
  * Candle-POC. „auto" wählt die Auflösung so, dass das Budget reicht.
  */
@@ -957,10 +962,12 @@ async function ladeAeltere() {
     }
 }
 
-/** Börse der Kerzen: Binance, oder Bitunix/Bitget (nur Futures). */
+/**
+ * Börse der Kerzen: Binance, oder Bitunix/Bitget (nur Futures). Ohne
+ * Binance-Wahl der Marktdatenquelle die Vorgabe-Börse (S12, `boerseFuer`).
+ */
 function boerseVon() {
-    const b = props.panel.boerse
-    return props.panel.markt !== 'spot' && istRestQuelle(b) ? b : 'binance'
+    return boerseFuer(props.panel)
 }
 
 function starteLive(nr) {

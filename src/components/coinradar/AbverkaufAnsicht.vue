@@ -31,6 +31,7 @@
 
         <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">{{ meldung }}</Hinweis>
         <div v-if="ladeFehler" class="at-schlecht at-klein at-mo-2">{{ ladeFehler }}</div>
+        <QuelleAus v-if="daten?.aus" :aus="daten.aus" class="at-mo-2" />
 
         <p class="avHinweis">{{ t('abverkauf.erklaerung') }}</p>
 
@@ -153,6 +154,7 @@ import { currentUser } from '../../stores/app/rahmen.js'
 import { logWarn } from '../../utils/logger.js'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
+import QuelleAus from '@/components/quellen/QuelleAus.vue'
 
 const props = defineProps({ aktiv: { type: Boolean, default: false } })
 const { t, locale } = useI18n()

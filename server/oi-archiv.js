@@ -17,15 +17,19 @@
  * Schreiber minütlich zwischen den Prozessen flattern. Die Führung bevorzugt
  * den bisherigen Halter; fällt er aus, übernimmt der andere nach spätestens
  * fünf Minuten.
+ *
+ * Nur mit der Marktdatenquelle Binance (S12): das Archiv ergänzt die Binance-
+ * OI-Historie der Hebelkarte und ist ohne sie wertlos. Mit einer anderen Wahl
+ * ruht der Takt und sagt das einmal im Log.
  */
 
-import axios from 'axios'
 import { getKnex } from './database.js'
 import { beansprucheFuehrung, beansprucheAufgabe } from './db-claim.js'
-import { notiereGewicht, melde429, warteAufGewicht, pausiertBis } from './binance-takt.js'
+import { warteAufGewicht, pausiertBis } from './binance-takt.js'
 import { logWarn } from './logger.js'
+import * as marktdaten from './marktdaten/index.js'
 
-const HTTP_TIMEOUT = 10000
+let ausGemeldet = false
 const FUEHRUNG_KEY = 'oi_minute_takt'
 const FUEHRUNG_TTL_MS = 5 * 60 * 1000
 const TAKT_MS = 60 * 1000
@@ -105,6 +109,11 @@ async function einTakt() {
         // Führung statt Aufgabe: der bisherige Halter gewinnt erneut,
         // der Schreiber flattert nicht zwischen NAS und dev.
         if (!(await beansprucheFuehrung(FUEHRUNG_KEY, FUEHRUNG_TTL_MS))) return
+        if (!(await marktdaten.kann('oiHistorie'))) {
+            if (!ausGemeldet) { ausGemeldet = true; logWarn('oi-archiv', 'ruht: braucht die Marktdatenquelle Binance') }
+            return
+        }
+        ausGemeldet = false
         if (pausiertBis() > Date.now()) return   // IP steht unter 429-Strafe
 
         const symbole = await leseSymbole(knex)
@@ -112,11 +121,9 @@ async function einTakt() {
         for (const symbol of symbole) {
             try {
                 await warteAufGewicht(1)
-                const res = await axios.get('https://fapi.binance.com/fapi/v1/openInterest', {
-                    params: { symbol }, timeout: HTTP_TIMEOUT,
-                })
-                notiereGewicht(res.headers)
-                const oi = Number(res.data?.openInterest)
+                // Gewicht und 429/418 meldet `binanceHole` an die gemeinsame Bremse.
+                const daten = await marktdaten.binanceHole('oiHistorie', 'futures', '/fapi/v1/openInterest', { symbol })
+                const oi = Number(daten?.openInterest)
                 if (!(oi > 0)) continue
                 await knex('oi_minute')
                     .insert({ symbol, t: minute, oi })
@@ -124,10 +131,8 @@ async function einTakt() {
                     .ignore()
             } catch (fehler) {
                 const status = fehler.response?.status
-                if (status === 429 || status === 418) {
-                    melde429(status, fehler.response?.headers)
-                    break   // die Strafe gilt der IP — der Rest der Runde entfällt
-                }
+                // die Strafe gilt der IP — der Rest der Runde entfällt
+                if (status === 429 || status === 418 || marktdaten.istAus(fehler)) break
                 logWarn('oi-archiv', `${symbol}: ${fehler.message}`)
             }
         }

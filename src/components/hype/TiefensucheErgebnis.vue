@@ -6,11 +6,19 @@
  * Steht an zwei Stellen — in der Einzelprüfung des Coin-Radars (gesucht nach
  * Symbol) und in der Frühphase auf der Karte eines Tokens, auf den ein Alarm
  * zeigt (gesucht nach Vertrag). Beide Antworten haben dieselbe Form.
+ *
+ * S12: Ohne CoinGecko-Schlüssel antwortet die Suche nach Symbol mit
+ * `{aus: true, …}` — dann steht hier der Grund. Kein Coin-Logo (Initialen),
+ * und unten die Quellenzeile mit den Pflicht-Attributionen.
  */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ProjektPruefung from './ProjektPruefung.vue'
+import TickerZeichen from './TickerZeichen.vue'
+import RadarQuellen from './RadarQuellen.vue'
+import QuelleAus from '../quellen/QuelleAus.vue'
 
-defineProps({
+const props = defineProps({
     daten: { type: Object, required: true },
     /** Kopf mit dem gefundenen Coin — in der Einzelprüfung steht er schon darüber. */
     mitKopf: { type: Boolean, default: false },
@@ -21,16 +29,28 @@ const pct = (w) => (w === null || w === undefined || !Number.isFinite(Number(w))
 const zahlKurz = (w) => (w === null || w === undefined || !Number.isFinite(Number(w)) ? '—'
     : (Number(w) >= 1e6 ? `${(Number(w) / 1e6).toFixed(1)} Mio` : (Number(w) >= 1e3 ? `${(Number(w) / 1e3).toFixed(0)} k` : String(Number(w)))))
 const geldKurz = (w) => `${zahlKurz(w)} USD`
+/** Woher die Angaben stammen: CoinGecko nur bei der Suche nach Symbol, Prüfdienst je nach Antwort. */
+const quellen = computed(() => {
+    const d = props.daten || {}
+    const q = []
+    if (d.coin?.coingeckoUrl) q.push('coingecko')
+    q.push('dexscreener')
+    const rq = String(d.risiko?.quelle || '')
+    if (rq === 'rugcheck') q.push('rugcheck')
+    if (d.gewaehlt && rq !== 'rugcheck') q.push('goplus')
+    return q
+})
 const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devPct) : (r.devUnterPct ? '< ' + pct(r.devUnterPct) : '—'))
 </script>
 
 <template>
     <div class="tsErgebnis">
-        <p v-if="!daten.gefunden" class="at-klein at-mu-0">{{ t('coinradar.tsNichtGefunden') }}</p>
+        <QuelleAus v-if="daten.aus" :aus="daten" klein />
+        <p v-else-if="!daten.gefunden" class="at-klein at-mu-0">{{ t('coinradar.tsNichtGefunden') }}</p>
         <template v-else>
             <!-- Welcher Coin gefunden wurde: bei Suche über das Kürzel kann es ein anderer sein als gemeint. -->
             <div v-if="mitKopf && (daten.coin?.name || daten.coin?.symbol)" class="tsKopf">
-                <img v-if="daten.coin.bild" :src="daten.coin.bild" alt="" class="tsBild">
+                <TickerZeichen :symbol="daten.coin.symbol || daten.coin.name" klein />
                 <strong>{{ daten.coin.name || daten.coin.symbol }}</strong>
                 <span v-if="daten.coin.symbol" class="tsGrau">{{ daten.coin.symbol }}</span>
                 <span v-if="daten.coin.rang" class="tsGrau">#{{ daten.coin.rang }}</span>
@@ -71,6 +91,7 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
                 <ProjektPruefung v-if="daten.projekt" :projekt="daten.projekt" />
                 <p v-else class="at-klein at-mu-0">—</p>
             </div>
+            <RadarQuellen :quellen="quellen" />
         </template>
     </div>
 </template>
@@ -78,7 +99,6 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
 <style scoped>
 .tsErgebnis { margin-top: .6rem; padding-top: .6rem; border-top: 1px solid var(--white-10, rgba(255, 255, 255, .1)); display: grid; gap: .75rem; }
 .tsKopf { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-size: .9rem; }
-.tsBild { width: 20px; height: 20px; border-radius: 50%; }
 .tsTitel { font-size: .75rem; letter-spacing: .05em; text-transform: uppercase; color: var(--grey-text, #8a9199); margin-bottom: .3rem; }
 .tsZeile { display: flex; gap: .6rem; align-items: baseline; flex-wrap: wrap; font-size: .85rem; padding: .1rem 0; opacity: .7; }
 .tsZeile.gewaehlt { opacity: 1; }

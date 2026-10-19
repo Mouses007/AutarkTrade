@@ -22,21 +22,34 @@ import { logWarn } from './logger.js'
 import { getKnex } from './database.js'
 import { beansprucheAufgabe, meldeFehler } from './db-claim.js'
 import { getClosedCandles, getHistoricalCandles } from './market-data.js'
-import { notiereGewicht, melde429 } from './binance-takt.js'
+import * as marktdaten from './marktdaten/index.js'
+import { QuelleAus, istAus, sendeWennAus } from './quellen/aus.js'
+import { cgHole, hatSchluessel as cgHatSchluessel } from './quellen/coingecko.js'
 import { rsi } from './strategies/indicators.js'
 import { bewerteMechanik, FENSTER } from './marktmechanik.js'
-import {
-    reiheAusChart, deltaAusReihe, korrelationAusReihen, deuteKorrelation,
-    stableFluss, waehleDominanzPunkte, zerlegeDominanz,
-} from './makro.js'
+import { stableFluss, waehleDominanzPunkte, zerlegeDominanz } from './makro.js'
 import { ladeLlmConfig, ladeLlmConfigFuerAufgabe, callLLMJson } from './llm.js'
-import { parseWalBeitrag } from './wal-parser.js'
 import { istTestbetrieb } from './umgebung.js'
 
 const HTTP_TIMEOUT = 10000
 
+/*
+ * Fremdquellen dieser Datei nach S12 (Verkaufs-Prüfung, 19.10.2026):
+ *
+ *   alternative.me     Fear & Greed — kommerziell erlaubt mit Quellenangabe
+ *                      direkt neben den Daten (Kachel trägt sie, Z. 19)
+ *   CoinGecko          nur mit Kundenschlüssel (`quellen/coingecko.js`):
+ *                      Dominanz, Marktübersicht, Stablecoin-Menge (Z. 21, 29)
+ *   Marktdatenquelle   Kerzen, Ticker, Funding, OI/Long-Short — über
+ *                      `marktdaten/index.js`, die Wahl trifft der Kunde (Z. 22–24)
+ *   Bitunix, Bybit     Funding-Vergleich (unverändert, Z. 22)
+ *
+ * Entfernt: CoinMarketCap-Webendpunkt (Dominanz-Historie, Z. 20),
+ * blockchain.info (Rainbow, Pi-Cycle, Z. 25), Yahoo Finance (Makro, Z. 28),
+ * Telegram-Scraping (Wal-Kachel, Z. 31). Was davon schon in `market_snapshots`
+ * liegt, bleibt liegen — es kommt nur nichts mehr dazu.
+ */
 const FEAR_GREED_URL = 'https://api.alternative.me/fng/'
-const COINGECKO_GLOBAL_URL = 'https://api.coingecko.com/api/v3/global'
 
 // key -> { ts, ttlMs, payload }
 const cache = new Map()
@@ -103,41 +116,38 @@ const rundeAuf = (v, stellen = 2) => (Number.isFinite(v)
 /**
  * Abruf mit Zeitgrenze. `fetch` allein kennt keinen Timeout.
  *
- * Antworten von Binance-Futures-Hosts werden zusätzlich an die gemeinsame
- * Bremse gemeldet (`server/binance-takt.js`): Der Verbrauch gilt für die
- * GANZE IP, also zahlen die Radar-Kacheln auf dasselbe Kontingent ein wie
- * Rangliste und Historienläufe. Ohne die Meldung lösten die Kacheln ein 429
- * aus und die gebremsten Pfade feuerten trotzdem weiter, weil `gesperrtBis`
- * nie gesetzt wurde.
+ * Binance läuft hier nicht mehr durch: alle Binance-Abrufe gehen seit S12 über
+ * `marktdaten/index.js` (dort sitzt auch die Gewichtsbuchhaltung). Was hier
+ * noch geholt wird, sind die übrigen Fremdquellen (alternative.me, Bitunix,
+ * Bybit, Fed, BEA, Eurostat).
  */
 export async function holeJson(url, timeout = HTTP_TIMEOUT) {
+    return JSON.parse(await holeKoerper(url, timeout, 'application/json'))
+}
+
+/** Wie `holeJson`, liefert aber Text (Kalender im iCalendar-Format). */
+export async function holeText(url, timeout = HTTP_TIMEOUT) {
+    return holeKoerper(url, timeout, 'text/calendar, text/plain, */*')
+}
+
+/** Körper wird INNERHALB der Zeitgrenze gelesen — ein trödelnder Körper hängt sonst ohne Grenze. */
+async function holeKoerper(url, timeout, accept) {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), timeout)
-    const binance = /(^|\.)binance\.com$/.test(hostVon(url))
     try {
         const r = await fetch(url, {
             signal: ctrl.signal,
-            headers: { 'User-Agent': 'CryptoTradingJournal', Accept: 'application/json' },
+            headers: { 'User-Agent': 'AutarkTrade', Accept: accept },
         })
-        if (binance) {
-            // Beide Funktionen kommen mit `Headers` (get) wie mit Objekten klar
-            if (r.status === 429 || r.status === 418) melde429(r.status, r.headers)
-            else notiereGewicht(r.headers)
-        }
         if (!r.ok) {
             const e = new Error(`HTTP ${r.status}`)
             e.status = r.status
             throw e
         }
-        return await r.json()
+        return await r.text()
     } finally {
         clearTimeout(timer)
     }
-}
-
-/** Host einer URL, ohne bei Unsinn zu werfen. */
-function hostVon(url) {
-    try { return new URL(url).hostname.toLowerCase() } catch { return '' }
 }
 
 
@@ -160,6 +170,7 @@ export async function ausCache(key, ttlMs, holen) {
             const payload = await inFlight.get(key)
             return { ...payload, stand: cache.get(key)?.ts || Date.now(), veraltet: false, _cache: 'WAIT' }
         } catch (e) {
+            if (istAus(e)) throw e
             // Wer sich an einen laufenden Abruf hängt, muss denselben Rückfall
             // bekommen wie der, der ihn gestartet hat. Sonst entscheidet der
             // Zufall des Zeitpunkts darüber, ob eine Kachel einen Altstand
@@ -187,6 +198,16 @@ export async function ausCache(key, ttlMs, holen) {
         const payload = await p
         return { ...payload, stand: cache.get(key).ts, veraltet: false, _cache: 'MISS' }
     } catch (e) {
+        /*
+         * „Quelle aus" ist kein Ausfall, sondern ein Zustand (S12): kein
+         * Altstand, keine Sperrfrist. Sonst zeigte eine Kachel nach dem
+         * Abschalten der Marktdatenquelle oder dem Löschen des CoinGecko-
+         * Schlüssels weiter alte Zahlen, als wäre die Quelle nur gestört.
+         */
+        if (istAus(e)) {
+            cache.delete(key)
+            throw e
+        }
         const f = fehlschlag.get(key)
         fehlschlag.set(key, { ts: Date.now(), anzahl: (f?.anzahl || 0) + 1 })
         if (alt) {
@@ -225,6 +246,9 @@ export function _cacheZuruecksetzen() {
 
 /** Fehlerabbildung wie in binance-api.js: der Grund soll am Statuscode ablesbar sein. */
 export function sendRadarError(res, error, kontext) {
+    // Abgeschaltete Quelle → HTTP 200 mit `{ aus: true, … }`; die Kachel
+    // zeigt dann `QuelleAus` statt eines Fehlers (S12, `quellen/aus.js`).
+    if (sendeWennAus(res, error)) return
     const code = error?.status || error?.response?.status
     if (error?.name === 'AbortError' || error?.code === 'ECONNABORTED' || error?.code === 'ETIMEDOUT') {
         return res.status(504).json({ error: `${kontext}: Zeitüberschreitung bei der Fremdquelle` })
@@ -290,40 +314,66 @@ export async function holeFearGreed(tage = 365) {
 const TAG_MS = 24 * 60 * 60 * 1000
 const tagesBeginn = (ms) => Math.floor(ms / TAG_MS) * TAG_MS
 
-/** Momentaufnahme des Gesamtmarkts. CoinGecko gibt hier keine Historie heraus. */
+/**
+ * Momentaufnahme des Gesamtmarkts über CoinGecko `/global` — nur mit dem
+ * Schlüssel des Kunden (`quellen/coingecko.js`, Verkaufs-Prüfung Z. 21).
+ * Ohne Schlüssel wirft `cgHole` ein `QuelleAus`, die Kachel sagt das.
+ */
 export async function holeGlobal() {
     return ausCache('global', 3 * 60 * 1000, async () => {
-        const d = await holeJson(COINGECKO_GLOBAL_URL)
+        const d = await cgHole('/global')
         const pct = Number(d?.data?.market_cap_percentage?.btc)
+        const eth = Number(d?.data?.market_cap_percentage?.eth)
         const mcap = Number(d?.data?.total_market_cap?.usd)
         if (!Number.isFinite(pct)) throw new Error('Antwort ohne Dominanzwert')
-        return { pct: Math.round(pct * 100) / 100, mcapUsd: Number.isFinite(mcap) ? mcap : null }
+        return {
+            pct: Math.round(pct * 100) / 100,
+            ethPct: Number.isFinite(eth) ? Math.round(eth * 100) / 100 : null,
+            mcapUsd: Number.isFinite(mcap) ? mcap : null,
+        }
     })
 }
 
+/*
+ * Eigene Tagesreihen in `market_snapshots` (eine Quelle je Reihe):
+ *
+ *   btcDominanz, ethDominanz, totalMcapUsd   CoinGecko `/global`, ab hier fortgeschrieben
+ *   domBtc, domEth, domMcap                  ALTBESTAND aus dem CoinMarketCap-Webendpunkt
+ *
+ * Der CoinMarketCap-Import ist seit S12 entfernt (Verkaufs-Prüfung Z. 20:
+ * nur persönliche Nutzung, Speichern und Roboter verboten). Seine Zeilen
+ * bleiben in der Datenbank liegen — sie gehören zur Installation des Nutzers
+ * und werden nicht gelöscht —, gezeichnet und weitergereicht werden sie aber
+ * nicht mehr: eine Anzeige wäre genau die Weiterverwendung, die die
+ * Bedingungen ausschliessen. Die beiden Zählweisen lagen ohnehin rund zwei
+ * Punkte auseinander (16.08.2026: 58,37 % gegen 56,16 %); eine Kurve aus
+ * beiden hätte an der Naht einen Sprung, der wie ein Marktereignis aussähe.
+ *
+ * Die Kurve beginnt damit beim Kunden mit dem ersten Schnappschuss nach dem
+ * Hinterlegen des CoinGecko-Schlüssels. Bestehende Installationen haben die
+ * CoinGecko-Reihe schon seit dem Bau der Kachel mitgeschrieben.
+ */
+const SNAP = { btc: 'btcDominanz', eth: 'ethDominanz', mcap: 'totalMcapUsd' }
+
 /**
- * Tageswerte wegschreiben. Für die BTC-Dominanz gibt es keine kostenlose
- * Historie — wer sie haben will, muss sie selbst sammeln. Ein verpasster Tag
- * ist endgültig weg, deshalb läuft der Takt halbstündlich; der Anspruch sorgt
+ * Tageswerte wegschreiben. Für die Dominanz gibt es keine freie Historie —
+ * wer sie haben will, muss sie selbst sammeln. Ein verpasster Tag ist
+ * endgültig weg, deshalb läuft der Takt halbstündlich; der Anspruch sorgt
  * dafür, dass trotzdem nur zweimal am Tag wirklich geschrieben wird und nicht
- * jede Instanz für sich.
+ * jede Instanz für sich. Ohne CoinGecko-Schlüssel wird nichts beansprucht —
+ * sonst verbrannte der Takt seinen Anspruch, und der erste Schnappschuss nach
+ * dem Eintragen des Schlüssels käme erst zwölf Stunden später.
  */
 async function schreibeSchnappschuss() {
+    if (!(await cgHatSchluessel())) return
     if (!(await beansprucheAufgabe('snap_global', 12 * 60 * 60 * 1000))) return
-    // Nachschlag aus derselben Quelle wie die Kurve — acht Tage reichen, um
-    // Lücken nach einem Ausfall zu schliessen
-    try {
-        const r = await holeDominanzHistorie({ tage: 8 })
-        console.log(` -> Marktradar: Dominanz nachgeführt (${r.punkte} Tage)`)
-    } catch (e) {
-        logWarn('marktradar', `Dominanz-Nachschlag: ${e.message}`)
-    }
     try {
         const g = await holeGlobal()
         const tag = tagesBeginn(Date.now())
         const knex = getKnex()
-        const zeilen = [{ kind: 'btcDominanz', dayUnix: tag, value: g.pct, createdAt: Date.now() }]
-        if (g.mcapUsd) zeilen.push({ kind: 'totalMcapUsd', dayUnix: tag, value: g.mcapUsd, createdAt: Date.now() })
+        const zeilen = [{ kind: SNAP.btc, dayUnix: tag, value: g.pct, createdAt: Date.now() }]
+        if (g.ethPct !== null) zeilen.push({ kind: SNAP.eth, dayUnix: tag, value: g.ethPct, createdAt: Date.now() })
+        if (g.mcapUsd) zeilen.push({ kind: SNAP.mcap, dayUnix: tag, value: g.mcapUsd, createdAt: Date.now() })
         for (const zeile of zeilen) {
             // Letzter Wert des Tages gewinnt — er ist der aktuellere
             await knex('market_snapshots').insert(zeile)
@@ -331,111 +381,46 @@ async function schreibeSchnappschuss() {
         }
         console.log(` -> Marktradar: Schnappschuss geschrieben (BTC-Dominanz ${g.pct} %)`)
     } catch (e) {
+        if (istAus(e)) return
         logWarn('marktradar', `Schnappschuss fehlgeschlagen: ${e.message}`)
         await meldeFehler('snap_global', e.message)
     }
 }
 
-const CMC_HISTORIE_URL = 'https://api.coinmarketcap.com/data-api/v3/global-metrics/quotes/historical'
-
-/**
- * Dominanz-Historie holen und in den EIGENEN Bestand schreiben.
- *
- * Frei gibt es sie sonst nirgends: CoinGecko verlangt für den
- * Gesamtmarkt-Verlauf einen Bezahltarif, Messari inzwischen eine Anmeldung,
- * und aus Einzelwerten summiert liegt sie messbar 1,3 bis 4,7 Prozentpunkte
- * daneben (nachgerechnet mit Top 20/50/100). Diese Adresse ist die interne
- * Schnittstelle der CoinMarketCap-Webseite: undokumentiert, ohne Schlüssel,
- * jederzeit abschaltbar — der Nutzer hat sie in Kenntnis dessen gewählt.
- *
- * Deshalb wird sie EINMAL vollständig abgeholt und dauerhaft eingelagert.
- * Fällt die Quelle weg, verlieren wir nur den Nachschub, nicht den Bestand.
- *
- * Wichtig, und der Grund für eigene `kind`-Schlüssel: CoinMarketCap zählt
- * anders als CoinGecko — am 16.08.2026 standen 58,37 % gegen 56,16 %. Beide
- * Reihen in einen Topf zu werfen ergäbe an der Nahtstelle einen Sprung von
- * zwei Punkten, der wie ein Marktereignis aussähe. Eine Kurve, eine Quelle.
- */
-async function holeDominanzHistorie({ tage = 8 } = {}) {
-    const ende = Math.floor(Date.now() / 1000)
-    const start = ende - Math.max(2, tage) * 24 * 60 * 60
-    const roh = await holeJson(
-        `${CMC_HISTORIE_URL}?format=chart_crypto_details&interval=1d&timeEnd=${ende}&timeStart=${start}`,
-        20000)
-    const punkte = roh?.data?.quotes
-    if (!Array.isArray(punkte) || !punkte.length) throw new Error('Antwort ohne Punkte')
-
-    const knex = getKnex()
-    const zeilen = []
-    for (const p of punkte) {
-        const t = Date.parse(p.timestamp)
-        if (!Number.isFinite(t)) continue
-        const tag = tagesBeginn(t)
-        const btc = Number(p.btcDominance)
-        const eth = Number(p.ethDominance)
-        const mcap = Number(p.quote?.[0]?.totalMarketCap ?? p.quote?.[0]?.marketCap)
-        if (Number.isFinite(btc)) zeilen.push({ kind: 'domBtc', dayUnix: tag, value: btc, createdAt: Date.now() })
-        if (Number.isFinite(eth)) zeilen.push({ kind: 'domEth', dayUnix: tag, value: eth, createdAt: Date.now() })
-        if (Number.isFinite(mcap)) zeilen.push({ kind: 'domMcap', dayUnix: tag, value: mcap, createdAt: Date.now() })
-    }
-    if (!zeilen.length) throw new Error('keine verwertbaren Punkte')
-
-    for (let i = 0; i < zeilen.length; i += 200) {
-        await knex('market_snapshots').insert(zeilen.slice(i, i + 200))
-            .onConflict(['kind', 'dayUnix']).merge(['value', 'createdAt'])
-    }
-    return { punkte: punkte.length, zeilen: zeilen.length }
-}
-
-/**
- * Einmaliger Rückblick beim Start: sechs Jahre am Stück. Danach genügt der
- * tägliche Nachschlag, weil der Bestand bei uns liegt.
- */
-export async function holeDominanzRueckblick() {
-    if (!(await beansprucheAufgabe('dominanz_rueckblick', 30 * 24 * 60 * 60 * 1000))) {
-        return { uebersprungen: true }
-    }
-    const r = await holeDominanzHistorie({ tage: 6 * 365 })
-    console.log(` -> Marktradar: Dominanz-Rückblick eingelagert (${r.punkte} Tage)`)
-    return r
+/** Eine eigene Tagesreihe als `[[tagMs, wert], …]`, aufsteigend. */
+async function leseReihe(kind) {
+    const z = await getKnex()('market_snapshots')
+        .where('kind', kind).orderBy('dayUnix', 'asc').select('dayUnix', 'value')
+    return z.map(r => [Number(r.dayUnix), Number(r.value)])
 }
 
 export async function holeDominanz() {
+    // Zuerst der Live-Wert: ohne Schlüssel wirft er `QuelleAus`, und die
+    // Kachel sagt „nur mit eigenem CoinGecko-Schlüssel" statt eine Kurve aus
+    // dem Bestand zu zeigen, die nicht mehr nachwächst.
+    const jetzt = await holeGlobal()
+
     let historie = []
     let ethReihe = []
-    let quelle = 'coinmarketcap'
     try {
-        const knex = getKnex()
-        const btc = await knex('market_snapshots')
-            .where('kind', 'domBtc').orderBy('dayUnix', 'asc').select('dayUnix', 'value')
-        const eth = await knex('market_snapshots')
-            .where('kind', 'domEth').orderBy('dayUnix', 'asc').select('dayUnix', 'value')
-        historie = btc.map(z => [Number(z.dayUnix), Number(z.value)])
-        ethReihe = eth.map(z => [Number(z.dayUnix), Number(z.value)])
+        historie = await leseReihe(SNAP.btc)
+        ethReihe = await leseReihe(SNAP.eth)
     } catch (e) {
         logWarn('marktradar', `Dominanz-Historie nicht lesbar: ${e.message}`)
     }
 
-    // Der aktuelle Wert kommt aus derselben Reihe wie die Kurve, sonst passen
-    // Zahl und Kurvenende nicht zusammen. CoinGecko bleibt als Rückfall.
-    let jetzt
-    const letzterEigen = historie[historie.length - 1]
-    if (letzterEigen && Date.now() - letzterEigen[0] < 3 * TAG_MS) {
-        const mcapZeile = await getKnex()('market_snapshots')
-            .where('kind', 'domMcap').orderBy('dayUnix', 'desc').first().catch(() => null)
-        jetzt = {
-            pct: Math.round(letzterEigen[1] * 100) / 100,
-            mcapUsd: mcapZeile ? Number(mcapZeile.value) : null,
-            stand: letzterEigen[0],
-        }
-    } else {
-        jetzt = await holeGlobal()
-        quelle = 'coingecko'
-    }
+    // Das Kurvenende ist der Live-Wert von heute — derselbe, der im
+    // Schnappschuss landet. Zahl und Kurve passen so immer zusammen.
+    const heute = tagesBeginn(Date.now())
+    const mitHeute = (reihe, wert) => (wert === null || wert === undefined
+        ? reihe
+        : [...reihe.filter(([t]) => t < heute), [heute, wert]])
+    historie = mitHeute(historie, jetzt.pct)
+    ethReihe = mitHeute(ethReihe, jetzt.ethPct)
 
     // Δ 7 Tage nur, wenn ein Wert von vor mindestens 7 Tagen vorliegt — sonst
     // wäre es eine Zahl, die etwas anderes behauptet, als sie misst.
-    const sieben = tagesBeginn(Date.now()) - 7 * TAG_MS
+    const sieben = heute - 7 * TAG_MS
     const alt = [...historie].reverse().find(([t]) => t <= sieben)
     return {
         stand: jetzt.stand,
@@ -449,8 +434,8 @@ export async function holeDominanz() {
         // das Geld wandert. Steigt BTC, während der Rest fällt, ist es eine
         // Flucht in Bitcoin — steigen beide, kommt frisches Geld herein.
         ethHistorie: ethReihe,
-        eth: ethReihe.length ? Math.round(ethReihe[ethReihe.length - 1][1] * 100) / 100 : null,
-        quelle,
+        eth: jetzt.ethPct ?? (ethReihe.length ? Math.round(ethReihe[ethReihe.length - 1][1] * 100) / 100 : null),
+        quelle: 'coingecko',
         tage: historie.length,
         seit: historie.length ? historie[0][0] : null,
     }
@@ -458,7 +443,13 @@ export async function holeDominanz() {
 
 // ── Kachel: Funding-Raten ────────────────────────────────────────────────
 
-const FAPI = 'https://fapi.binance.com'
+/*
+ * Börsendaten kommen seit S12 aus der Marktdatenquelle, die der Kunde wählt
+ * (`marktdaten/index.js`: Binance, Bitget oder aus). Cache-Schlüssel tragen
+ * die Wahl mit — sonst lieferte ein 12-h-Eintrag nach dem Umschalten noch
+ * stundenlang die Liste der vorigen Börse.
+ */
+const mdWahl = () => marktdaten.wahl()
 
 /**
  * Nur echte Kryptowährungen.
@@ -470,12 +461,16 @@ const FAPI = 'https://fapi.binance.com'
  * standen in der Funding-Rangliste und im RSI-Bild Aktien statt Coins.
  */
 export async function nurCoinSymbole() {
-    const { menge } = await ausCache('coinSymbole', 12 * 60 * 60 * 1000, async () => {
-        const info = await holeJson(`${FAPI}/fapi/v1/exchangeInfo`, 20000)
-        const liste = (info?.symbols || [])
-            .filter(s => s.status === 'TRADING' && s.quoteAsset === 'USDT' && s.underlyingType === 'COIN')
+    const wahl = await mdWahl()
+    const { menge } = await ausCache(`coinSymbole|${wahl}`, 12 * 60 * 60 * 1000, async () => {
+        const info = await marktdaten.symbole({ markt: 'futures' })
+        // `underlyingType` kennt nur Binance. Bei einer Quelle ohne das Feld
+        // bleiben alle USDT-Perps drin — lieber eine Aktie zu viel in der
+        // Liste als jeder Coin zu wenig.
+        const liste = [...info.values()]
+            .filter(s => s.quote === 'USDT' && (s.underlyingType === undefined || s.underlyingType === 'COIN'))
             .map(s => s.symbol)
-        if (!liste.length) throw new Error('exchangeInfo ohne Coin-Märkte')
+        if (!liste.length) throw new Error('Kontraktliste ohne Coin-Märkte')
         return { menge: liste }
     })
     return new Set(menge)
@@ -489,14 +484,32 @@ export async function nurCoinSymbole() {
  */
 async function holeVolumen() {
     const coins = await nurCoinSymbole()
-    return ausCache('vol24', 10 * 60 * 1000, async () => {
-        const roh = await holeJson(`${FAPI}/fapi/v1/ticker/24hr`)
+    return ausCache(`vol24|${await mdWahl()}`, 10 * 60 * 1000, async () => {
+        const roh = await marktdaten.ticker24h({ markt: 'futures' })
         const map = {}
         // Aktien und Rohstoffe fallen hier schon raus, damit sie in keiner
         // Rangliste und keiner Symbolauswahl mehr auftauchen können
-        for (const t of roh) if (coins.has(t.symbol)) map[t.symbol] = Number(t.quoteVolume) || 0
+        for (const t of roh) if (coins.has(t.symbol)) map[t.symbol] = Number(t.umsatzQuote) || 0
         return { map }
     })
+}
+
+/**
+ * Funding aller Perps in einer Form: `[{ symbol, lastFundingRate,
+ * nextFundingTime, markPrice }]` (die Feldnamen von Binance `premiumIndex`,
+ * damit der Rest unverändert bleibt).
+ *
+ * Binance: `premiumIndex` ohne Symbol, ein Abruf (Gewicht 10). Bitget führt
+ * die Rate im Ticker mit — der Zeitpunkt der nächsten Zahlung fehlt dort.
+ */
+async function alleFundingRaten() {
+    const a = await marktdaten.fordere('funding')
+    if (a.id === 'binance') {
+        return marktdaten.binanceHole('funding', 'futures', '/fapi/v1/premiumIndex')
+    }
+    return (await marktdaten.ticker24h({ markt: 'futures' }))
+        .filter(t => Number.isFinite(t.funding))
+        .map(t => ({ symbol: t.symbol, lastFundingRate: t.funding, nextFundingTime: null, markPrice: t.preis }))
 }
 
 /**
@@ -601,12 +614,23 @@ export async function holeBinanceIntervalle() {
  * zwischen „gemessen: Vorgabe" und „unbekannt".
  */
 export async function holeBinanceIntervalleStreng() {
-    const { stunden } = await ausCache('binanceIntervalle', 12 * 60 * 60 * 1000, async () => {
-        const r = await holeJson(`${FAPI}/fapi/v1/fundingInfo`)
+    // Der Name ist geblieben (Coin-Radar importiert ihn); geliefert werden die
+    // Takte der GEWÄHLTEN Marktdatenquelle. Bitget nennt sie je Kontrakt
+    // (`fundInterval`), Binance nur die Abweichler in `fundingInfo`.
+    const a = await marktdaten.fordere('funding')
+    const { stunden } = await ausCache(`binanceIntervalle|${a.id}`, 12 * 60 * 60 * 1000, async () => {
         const stunden = {}
-        for (const x of r || []) {
-            const h = Number(x.fundingIntervalHours)
-            if (Number.isFinite(h) && h > 0) stunden[x.symbol] = h
+        if (a.id === 'binance') {
+            const r = await marktdaten.binanceHole('funding', 'futures', '/fapi/v1/fundingInfo')
+            for (const x of r || []) {
+                const h = Number(x.fundingIntervalHours)
+                if (Number.isFinite(h) && h > 0) stunden[x.symbol] = h
+            }
+        } else {
+            for (const x of (await marktdaten.symbole({ markt: 'futures' })).values()) {
+                const h = Number(x.fundingIntervallH)
+                if (Number.isFinite(h) && h > 0) stunden[x.symbol] = h
+            }
         }
         return { stunden }
     })
@@ -693,11 +717,19 @@ export async function holeFunding(anzahl = 50, rang = 'volumen') {
     const nachMcap = rang === 'mcap'
     const meine = await eigeneSymbole().catch(() => [])
     const gewaehlt = await divergenzSymbole().catch(() => [])
-    const schluessel = `funding|${n}|${nachMcap ? 'mcap' : 'vol'}|${meine.join(',')}|${gewaehlt.join(',')}`
-    return ausCache(schluessel, 60 * 1000, async () => {
-        // premiumIndex ohne Symbol liefert ALLE Perps in einem Abruf (Gewicht 10)
+    // Rangliste nach Marktkapitalisierung braucht CoinGecko (Kundenschlüssel).
+    // Ohne Schlüssel fällt sie auf den Umsatz zurück und SAGT das, statt die
+    // ganze Kachel abzuschalten — der Umschalter sitzt in der Kachel selbst,
+    // eine abgeschaltete Kachel liesse sich nicht mehr zurückschalten.
+    const mcapErsatz = nachMcap && !(await cgHatSchluessel())
+    const wahl = await mdWahl()
+    const schluessel = `funding|${wahl}|${n}|${nachMcap && !mcapErsatz ? 'mcap' : 'vol'}|${meine.join(',')}|${gewaehlt.join(',')}`
+    // `rangErsatz` gehört NICHT in den Cache: die Umsatz-Rangliste teilt sich
+    // den Eintrag mit der ausdrücklich gewählten — sonst fehlte der Hinweis,
+    // sobald jemand vorher „nach Umsatz" geladen hat.
+    const nutzlast = await ausCache(schluessel, 60 * 1000, async () => {
         const [roh, vol, bitunix, bybit, taktBinance] = await Promise.all([
-            holeJson(`${FAPI}/fapi/v1/premiumIndex`),
+            alleFundingRaten(),
             holeVolumen().catch(() => ({ map: {} })),
             holeBitunixFunding(meine).catch(() => ({})),
             holeBybitFunding().catch(() => ({})),
@@ -717,7 +749,7 @@ export async function holeFunding(anzahl = 50, rang = 'volumen') {
         // Binance-Symbol (`perp`) gleich mit; Coins ohne Perp werden
         // übersprungen, damit „Top 10" auch zehn HANDELBARE Märkte zeigt.
         let rangliste
-        if (nachMcap) {
+        if (nachMcap && !mcapErsatz) {
             const markt = await holeMarkt(250)
             rangliste = new Set((markt.muenzen || [])
                 .filter(m => m.perp).slice(0, n).map(m => m.perp))
@@ -793,7 +825,9 @@ export async function holeFunding(anzahl = 50, rang = 'volumen') {
             alle: zeilen,
             gezaehlt: zeilen.length,
             n,
-            rang: nachMcap ? 'mcap' : 'volumen',
+            rang: nachMcap && !mcapErsatz ? 'mcap' : 'volumen',
+            // Herkunft für den Quellenhinweis der Kachel („Daten: Binance")
+            boerse: wahl,
             // Die stärksten Börsen-Abweichungen, für Marker und Alarm. Bewusst
             // aus der RANGLISTE gezogen: bei Mikro-Werten weichen die Raten
             // ständig ab, ohne dass es jemanden betrifft.
@@ -843,6 +877,8 @@ export async function holeFunding(anzahl = 50, rang = 'volumen') {
             divergenzEigene: !gewaehlt.length,
         }
     })
+    // Gewünscht war Mcap, CoinGecko-Schlüssel fehlt → Umsatz-Rangliste mit Hinweis
+    return mcapErsatz ? { ...nutzlast, rangErsatz: true } : nutzlast
 }
 
 // ── Kachel: Long/Short-Verhältnis + Open Interest ────────────────────────
@@ -856,10 +892,21 @@ export async function holeLsOi(symbol, stunden = 48) {
     // Der Chart fragt 500 (knapp 21 Tage), die Kachel ihre 48–200.
     const limit = Math.max(6, Math.min(500, Number(stunden) || 48))
 
+    // Long/Short-Konten und OI-Verlauf gibt es nur bei Binance. Mit einer
+    // anderen Marktdatenquelle wirft das `MarktdatenAus`, und die Kachel sagt,
+    // welche Fähigkeit fehlt (statt still leer zu bleiben).
+    await marktdaten.binanceRest('longShort')
     return ausCache(`lsoi|${sym}|${limit}`, 5 * 60 * 1000, async () => {
         const [ls, oi, kerzen] = await Promise.all([
-            holeJson(`${FAPI}/futures/data/globalLongShortAccountRatio?symbol=${sym}&period=1h&limit=${limit}`),
-            holeJson(`${FAPI}/futures/data/openInterestHist?symbol=${sym}&period=1h&limit=${limit}`),
+            marktdaten.binanceHole('longShort', 'futures', '/futures/data/globalLongShortAccountRatio',
+                { symbol: sym, period: '1h', limit }).catch((e) => {
+                // Unbekanntes Symbol: Binance antwortet 400 — das ist „kein
+                // Perp-Markt", kein Ausfall (siehe unten)
+                if (e?.response?.status === 400) return []
+                throw e
+            }),
+            marktdaten.binanceHole('oiHistorie', 'futures', '/futures/data/openInterestHist',
+                { symbol: sym, period: '1h', limit }).catch(() => []),
             // Preisänderung aus denselben Stundenkerzen, die auch die Engine nutzt
             getClosedCandles(sym, '1h', 25).catch(() => []),
         ])
@@ -1004,6 +1051,8 @@ async function holeMarktkapMap() {
 export async function holeRsi(tf = '1h', quelle = 'top', anzahl = 50) {
     const n = topN(anzahl)
     const zeiteinheit = RSI_TFS_ERLAUBT.includes(String(tf)) ? String(tf) : '1h'
+    // Ohne Kerzen ist die ganze Kachel aus — nicht „0 von 50 Märkten abrufbar".
+    await marktdaten.fordere('kerzen')
     const knex = getKnex()
     const s = await knex('settings').where('id', 1).first().catch(() => null)
     const eigeneListe = String(s?.radarRsiSymbols || '').trim()
@@ -1011,6 +1060,11 @@ export async function holeRsi(tf = '1h', quelle = 'top', anzahl = 50) {
     let art = ['top', 'mcap', 'eigene', 'liste'].includes(quelle) ? quelle : 'top'
     // Eine eingetragene Liste ist eine bewusste Entscheidung — sie gewinnt
     if (art === 'liste' && !eigeneListe) art = 'top'
+    // Mcap-Rangliste kommt von CoinGecko (Kundenschlüssel). Ohne Schlüssel:
+    // Umsatz-Rangliste mit Kennzeichen, statt die Kachel samt Umschalter
+    // abzuschalten.
+    let rangErsatz = false
+    if (art === 'mcap' && !(await cgHatSchluessel())) { art = 'top'; rangErsatz = true }
 
     const symbole = art === 'liste' || (art === 'eigene' && eigeneListe)
         ? await eigeneSymbole()
@@ -1018,7 +1072,7 @@ export async function holeRsi(tf = '1h', quelle = 'top', anzahl = 50) {
         : art === 'mcap' ? await topSymboleNachMcap(n)
         : await topSymbole(n)
 
-    return ausCache(`rsi|${zeiteinheit}|${art}|${n}|${symbole.join(',')}`, 60 * 1000, async () => {
+    const nutzlast = await ausCache(`rsi|${await mdWahl()}|${zeiteinheit}|${art}|${n}|${symbole.join(',')}`, 60 * 1000, async () => {
         const { map: volumen } = await holeVolumen().catch(() => ({ map: {} }))
         const mcap = art === 'mcap' ? await holeMarktkapMap().catch(() => ({})) : {}
         const punkte = []
@@ -1068,8 +1122,11 @@ export async function holeRsi(tf = '1h', quelle = 'top', anzahl = 50) {
             gezaehlt: punkte.length,
             n,
             hatEigeneListe: Boolean(eigeneListe),
+            boerse: await mdWahl(),
         }
     })
+    // Wie bei Funding: der Hinweis liegt ausserhalb des geteilten Cache-Eintrags
+    return rangErsatz ? { ...nutzlast, rangErsatz: true } : nutzlast
 }
 
 // ── Kachel: Liquidationen 24 h ───────────────────────────────────────────
@@ -1257,7 +1314,10 @@ export async function holeMechanik(symbol, fenster) {
     }
     const f = Object.hasOwn(FENSTER, String(fenster)) ? String(fenster) : '1h'
 
-    return ausCache(`mechanik|${sym}|${f}`, 60 * 1000, async () => {
+    // Ohne Kerzen gibt es kein Urteil — dann ist die Kachel aus, nicht leer.
+    await marktdaten.fordere('kerzen')
+    const wahl = await mdWahl()
+    return ausCache(`mechanik|${wahl}|${sym}|${f}`, 60 * 1000, async () => {
         const jetzt = Date.now()
         const fensterMs = FENSTER[f].ms
         const { tf, n } = MECHANIK_RASTER[f]
@@ -1265,11 +1325,15 @@ export async function holeMechanik(symbol, fenster) {
         // Vier Quellen parallel; jede darf einzeln ausfallen — das Regelwerk
         // degradiert dann und `fehlend` benennt die Lücke, statt dass die
         // ganze Kachel an einer Teilquelle stirbt.
+        // OI-Verlauf nur bei Binance; mit einer anderen Quelle fehlt er und
+        // `fehlend` benennt die Lücke — wie bei jedem anderen Teilausfall.
         const [kerzen, oiHist, premium, fundingHist, liq, taktBinance] = await Promise.all([
             getClosedCandles(sym, tf, n).catch(() => []),
-            holeJson(`${FAPI}/futures/data/openInterestHist?symbol=${sym}&period=${tf}&limit=${n}`).catch(() => null),
-            holeJson(`${FAPI}/fapi/v1/premiumIndex?symbol=${sym}`).catch(() => null),
-            holeJson(`${FAPI}/fapi/v1/fundingRate?symbol=${sym}&limit=1`).catch(() => null),
+            marktdaten.binanceHole('oiHistorie', 'futures', '/futures/data/openInterestHist',
+                { symbol: sym, period: tf, limit: n }).catch(() => null),
+            marktdaten.funding(sym).then(f => (f ? { lastFundingRate: f.rate } : null)).catch(() => null),
+            marktdaten.fundingVerlauf(sym, jetzt - 3 * TAG_MS, jetzt)
+                .then(v => v.map(e => ({ fundingRate: e.rate }))).catch(() => null),
             liesLiqFenster(sym, jetzt - fensterMs, jetzt).catch(() => null),
             holeBinanceIntervalle(),
         ])
@@ -1429,117 +1493,66 @@ async function holeMechanikErklaerung(symbol, fenster) {
 
 // ── Kachel: Makro-Umfeld ─────────────────────────────────────────────────
 
-const YAHOO_CHART = 'https://query1.finance.yahoo.com/v8/finance/chart'
-const CG_COIN_CHART = 'https://api.coingecko.com/api/v3/coins'
-
-/**
- * Bewusst die FUTURES, nicht die Kassa-Indizes: der S&P-500-Index steht
- * nachts und am Wochenende still (beim Bau dieser Kachel war sein letzter
- * Kurs 62 Stunden alt), der Future läuft fast rund um die Uhr — nur so ist
- * der Vergleich mit dem durchlaufenden Krypto-Markt ehrlich.
- */
-const MAKRO_MAERKTE = [
-    { id: 'sp500', ticker: 'ES=F' },
-    { id: 'nasdaq', ticker: 'NQ=F' },
-    // Nebenwerte als Gegenprobe zur Nasdaq: laufen NQ und RTY zusammen, ist es
-    // eine Liquiditäts- oder Zinsbewegung und betrifft Krypto mit; läuft nur
-    // NQ, ist es Rotation in wenige grosse Werte und trägt selten hierher.
-    { id: 'russell', ticker: 'RTY=F' },
-    // Dollar-Index: kein Future, aber als Index rund um die Uhr fortgeschrieben
-    { id: 'dxy', ticker: 'DX-Y.NYB' },
-]
-
 const STABLE_COINS = ['tether', 'usd-coin']
 
-// Ab dieser Stille gilt die Börse als geschlossen (Wochenendlücke der Futures
-// ist gut eine Stunde am Tag plus Freitagabend bis Sonntagabend).
-const MAKRO_STILL_MS = 90 * 60 * 1000
-
 /**
- * Makro-Umfeld: Aktien-Futures, Dollar-Index, Kopplung zu Krypto und
- * Stablecoin-Fluss.
+ * Makro-Umfeld: Stablecoin-Fluss und die zerlegte Stablecoin-Dominanz.
  *
- * Die Kopplung ist der eigentliche Inhalt: „Nasdaq −1 %" allein sagt nichts,
- * solange offen ist, ob der Krypto-Markt gerade daran hängt. Deshalb wird die
- * Korrelation der Tagesrenditen über 30 Tage mitgerechnet und mitgeliefert.
+ * Bis S12 standen hier auch Aktien-Futures (ES, NQ, RTY) und der
+ * Dollar-Index samt Korrelation zu Bitcoin — aus Yahoo Finance. Yahoo
+ * verbietet automatisiertes Sammeln und kommerzielle Nutzung
+ * (Verkaufs-Prüfung Z. 28); dieser Teil ist ersatzlos entfernt. Ein Ersatz
+ * mit Kundenschlüssel (Databento, Massive) wurde geprüft und nicht gebaut:
+ * Massive erlaubt in den Individual-Tarifen keine Apps für andere Endnutzer
+ * (Market Data Terms §1), bei Databento hängt die Weitergabe an den
+ * durchgereichten Börsenlizenzen der CME, und die Bedingungen liessen sich
+ * nicht direkt lesen (Prüfung Z. 6). Die reine Rechnung für Korrelationen
+ * bleibt in `makro.js`, falls eine lizenzierte Quelle dazukommt.
+ *
+ * Was bleibt, kommt von CoinGecko mit dem Schlüssel des Kunden (Z. 29) —
+ * ohne Schlüssel ist die ganze Kachel aus (`QuelleAus`).
  */
 export async function holeMakro() {
     return ausCache('makro', 5 * 60 * 1000, async () => {
-        const [charts, btcKerzen, stableReihen] = await Promise.all([
-            Promise.all(MAKRO_MAERKTE.map(m => holeJson(
-                `${YAHOO_CHART}/${encodeURIComponent(m.ticker)}?range=3mo&interval=1d`, 12000,
-            ).catch(() => null))),
-            getClosedCandles('BTCUSDT', '1d', 95).catch(() => []),
-            Promise.all(STABLE_COINS.map(id => holeJson(
-                `${CG_COIN_CHART}/${id}/market_chart?vs_currency=usd&days=30&interval=daily`, 12000,
-            ).then(d => d?.market_caps || null).catch(() => null))),
-        ])
-
-        const jetzt = Date.now()
-        const maerkte = []
-        const reihen = {}
-        for (let i = 0; i < MAKRO_MAERKTE.length; i++) {
-            const def = MAKRO_MAERKTE[i]
-            if (!charts[i]) { maerkte.push({ id: def.id, verfuegbar: false }); continue }
-            const a = reiheAusChart(charts[i])
-            reihen[def.id] = a.reihe
-            const still = a.zeit ? jetzt - a.zeit : null
-            maerkte.push({
-                id: def.id,
-                verfuegbar: a.reihe.length > 0,
-                preis: a.preis,
-                deltaPct: rundeAuf(deltaAusReihe(a.reihe), 2),
-                zeit: a.zeit,
-                // Ehrlich anschreiben statt einen eingefrorenen Kurs als
-                // aktuell zu verkaufen — Krypto läuft weiter, die Börse nicht
-                offen: still === null ? null : still < MAKRO_STILL_MS,
-            })
-        }
-
-        // Krypto-Tagesreihe im selben Format wie die Yahoo-Reihen
-        const btcReihe = (btcKerzen || []).map(k => ({
-            tag: new Date(k.t).toISOString().slice(0, 10), close: k.c,
-        }))
-
-        // Korrelation nur über die letzten ~30 gemeinsamen Handelstage: über ein
-        // ganzes Quartal gemittelt verwischt genau der Regimewechsel, auf den es
-        // ankommt (Kopplung springt in Risk-off-Phasen).
-        const letzte = (r, n) => (r || []).slice(-n)
-        const korrNasdaq = korrelationAusReihen(letzte(btcReihe, 45), letzte(reihen.nasdaq, 32))
-        const korrRussell = korrelationAusReihen(letzte(btcReihe, 45), letzte(reihen.russell, 32))
-        const korrDxy = korrelationAusReihen(letzte(btcReihe, 45), letzte(reihen.dxy, 32))
+        const stableReihen = await Promise.all(STABLE_COINS.map(id => cgHole(
+            `/coins/${id}/market_chart`, { vs_currency: 'usd', days: 30, interval: 'daily' }, { timeout: 12000 },
+        ).then(d => d?.market_caps || null).catch((e) => {
+            // „Kein Schlüssel" gilt für die ganze Kachel, ein einzelner
+            // Aussetzer nur für diese Reihe
+            if (istAus(e)) throw e
+            return null
+        })))
 
         const gueltigeStable = stableReihen.filter(Boolean)
+        if (!gueltigeStable.length) throw new Error('Stablecoin-Reihen nicht abrufbar')
         const stable = stableFluss(gueltigeStable, 30)
 
         // Stablecoin-Menge je Tag — nur Tage, an denen ALLE Coins einen Wert
         // haben, sonst springt die Summe an einer Datenlücke wie ein Abfluss
         const stableNachTag = new Map()
-        if (gueltigeStable.length) {
-            const zaehler = new Map()
-            for (const reihe of gueltigeStable) {
-                for (const [ts, wert] of reihe) {
-                    if (!Number.isFinite(wert) || wert <= 0) continue
-                    const tag = new Date(ts).toISOString().slice(0, 10)
-                    const e = zaehler.get(tag) || { summe: 0, n: 0 }
-                    e.summe += wert
-                    e.n++
-                    zaehler.set(tag, e)
-                }
-            }
-            for (const [tag, e] of zaehler) {
-                if (e.n === gueltigeStable.length) stableNachTag.set(tag, e.summe)
+        const zaehler = new Map()
+        for (const reihe of gueltigeStable) {
+            for (const [ts, wert] of reihe) {
+                if (!Number.isFinite(wert) || wert <= 0) continue
+                const tag = new Date(ts).toISOString().slice(0, 10)
+                const e = zaehler.get(tag) || { summe: 0, n: 0 }
+                e.summe += wert
+                e.n++
+                zaehler.set(tag, e)
             }
         }
+        for (const [tag, e] of zaehler) {
+            if (e.n === gueltigeStable.length) stableNachTag.set(tag, e.summe)
+        }
 
-        // Gesamtmarkt-Historie aus den eigenen Tagesschnappschüssen. Die Menge
-        // kommt von CoinGecko, der Gesamtmarkt aus der CoinMarketCap-Reihe —
-        // der absolute Dominanz-WERT trägt dadurch einen kleinen Versatz, die
-        // Zerlegung der VERÄNDERUNG bleibt davon unberührt.
+        // Gesamtmarkt aus den eigenen Tagesschnappschüssen derselben Quelle
+        // (CoinGecko `/global`, Reihe `totalMcapUsd`) — Menge und Gesamtmarkt
+        // zählen damit gleich. Die frühere CoinMarketCap-Reihe ist Altbestand
+        // und bleibt unberührt (siehe `SNAP`).
         let totalNachTag = new Map()
         try {
             const snaps = await getKnex()('market_snapshots')
-                .where('kind', 'domMcap')
+                .where('kind', SNAP.mcap)
                 .andWhere('dayUnix', '>=', Date.now() - 45 * 86400000)
                 .orderBy('dayUnix')
             totalNachTag = new Map(snaps.map(r => [
@@ -1553,14 +1566,6 @@ export async function holeMakro() {
         const zerlegt = punkte ? zerlegeDominanz(punkte) : null
 
         return {
-            maerkte,
-            korrelation: {
-                nasdaq: rundeAuf(korrNasdaq.r, 2),
-                russell: rundeAuf(korrRussell.r, 2),
-                dxy: rundeAuf(korrDxy.r, 2),
-                punkte: korrNasdaq.punkte,
-                deutung: deuteKorrelation(korrNasdaq.r),
-            },
             stablecoins: {
                 jetztUsd: stable.jetztUsd,
                 deltaUsd: stable.deltaUsd,
@@ -1580,6 +1585,8 @@ export async function holeMakro() {
                 von: punkte.tagVon,
                 bis: punkte.tagBis,
             } : null,
+            // Für die Kachel: der Aktien-/Dollar-Teil ist entfernt, nicht gestört
+            indizesEntfernt: true,
         }
     })
 }
@@ -1676,9 +1683,36 @@ export async function holeRegime(tage = 365) {
 
 // ── Kachel: Regenbogen-Chart ─────────────────────────────────────────────
 
-const BTC_HISTORIE_URL = 'https://api.blockchain.info/charts/market-price?timespan=all&format=json&sampled=true'
 const GENESIS = Date.UTC(2009, 0, 3)   // Bitcoins erster Block
 const TAG = 24 * 60 * 60 * 1000
+
+/**
+ * Beginn der BTC-Tagesreihe. Bis S12 kam die Historie ab 2009 von
+ * blockchain.info — deren API-Bedingungen verbieten Kommerzialisierung,
+ * Speichern über das Erlaubte hinaus und Scraping (Verkaufs-Prüfung Z. 25).
+ * Jetzt kommen Tageskerzen BTCUSDT Spot aus der Marktdatenquelle des Kunden;
+ * Binance führt das Paar seit 17.08.2017, Bitget etwas kürzer. Die frühere
+ * Rückfallreihe (Monatskurse, ebenfalls von blockchain.info) ist gelöscht.
+ */
+const BTC_REIHE_AB = Date.UTC(2017, 7, 1)
+
+/**
+ * Tagesschlüsse BTCUSDT (Spot) ab 2017 aus der Marktdatenquelle — geteilt von
+ * Regenbogen und Pi-Cycle, gleicher Cache. `getHistoricalCandles` blättert
+ * selbst (Binance: Seiten zu 1000, Bitget: rückwärts über `history-candles`)
+ * und liefert nur geschlossene Kerzen.
+ */
+async function holeBtcTagesreihe() {
+    const wahl = await mdWahl()
+    await marktdaten.fordere('kerzen', { markt: 'spot' })
+    const { reihe, quelle } = await ausCache(`btcTage|${wahl}`, 12 * 60 * 60 * 1000, async () => {
+        const kerzen = await getHistoricalCandles('BTCUSDT', '1d', BTC_REIHE_AB, Date.now(), { market: 'spot' })
+        const reihe = kerzen.map(k => ({ t: k.t, p: k.c })).filter(v => v.p > 0)
+        if (reihe.length < 500) throw new Error(`BTC-Tagesreihe zu kurz (${reihe.length} Tage)`)
+        return { reihe, quelle: wahl }
+    })
+    return { reihe, quelle }
+}
 
 /**
  * Bänder des Regenbogen-Charts. Die Namen sind bewusst salopp — das Ding ist
@@ -1697,21 +1731,14 @@ const RAINBOW_BAENDER = [
     { k: -2.0, key: 'grund', farbe: '#3a4fa0' },
 ]
 
-/** Statische Rückfallreihe aus dem Repo — falls die Fremdquelle ausfällt. */
-async function statischeBtcReihe() {
-    const { readFile } = await import('fs/promises')
-    const pfad = new URL('./data/btc-monatskurse.json', import.meta.url)
-    const roh = JSON.parse(await readFile(pfad, 'utf8'))
-    return roh.werte.map(([t, p]) => ({ t, p }))
-}
-
 /**
- * Logarithmische Regression über die gesamte Kurshistorie:
+ * Logarithmische Regression über die verfügbare Kurshistorie:
  *   ln(Preis) ≈ a · ln(Tage seit Genesis) + b
  * Zurückgegeben werden auch Reststreuung und Stützpunktzahl, damit die
- * Kurve nachrechenbar ist statt geglaubt werden zu müssen.
+ * Kurve nachrechenbar ist statt geglaubt werden zu müssen. Rein, für den
+ * Selbsttest exportiert.
  */
-function regression(punkte) {
+export function regression(punkte) {
     let sx = 0, sy = 0, sxx = 0, sxy = 0
     for (const v of punkte) {
         const x = Math.log((v.t - GENESIS) / TAG)
@@ -1729,57 +1756,54 @@ function regression(punkte) {
     return { a, b, s: Math.sqrt(ss / Math.max(1, n - 2)), n }
 }
 
+/**
+ * Jede siebte Tageskerze, vom jüngsten Tag rückwärts gezählt — der jüngste
+ * Punkt ist damit immer dabei. Wochenpunkte statt Tagespunkte: gleiche
+ * Gewichtung über die Jahre wie vorher, und ein Siebtel der Nutzlast.
+ */
+export function wochenpunkte(reihe) {
+    const aus = []
+    for (let i = reihe.length - 1; i >= 0; i -= 7) aus.push(reihe[i])
+    return aus.reverse()
+}
+
+/*
+ * Kalibrierung (ehrlich, gemessen 19.10.2026 an BTCUSDT-Tageskerzen):
+ * Die Regression läuft jetzt nur noch über 2017 bis heute statt über 2010 bis
+ * heute. Das flacht die Kurve ab — Steigung a ≈ 4,40 statt ≈ 4,95, „fair"
+ * heute ≈ 103 000 statt ≈ 120 000 USD —, und der Kurs stand am Messtag eine
+ * Bandstufe höher („günstig" statt „kaufen"). Über nur neun Jahre ist der
+ * Hebel der Logarithmus-Achse kurz (ln 3100 … ln 6500), die Steigung also
+ * unsicherer, und die Fortschreibung in die Zukunft weniger belastbar als
+ * früher. Die Kachel nennt den Startpunkt der Reihe (`seit`), damit niemand
+ * sie für die alte Kurve hält. Die Bänder selbst (k in Standardabweichungen
+ * der Reststreuung) bleiben unverändert.
+ */
 export async function holeRainbow() {
-    return ausCache('rainbow', 12 * 60 * 60 * 1000, async () => {
-        let punkte = []
-        let quelle = 'blockchain.info'
-        try {
-            const d = await holeJson(BTC_HISTORIE_URL, 20000)
-            punkte = (d?.values || []).map(v => ({ t: v.x * 1000, p: v.y })).filter(v => v.p > 0)
-        } catch (e) {
-            logWarn('marktradar', `BTC-Historie nicht abrufbar, nutze statische Reihe: ${e.message}`)
-        }
-        if (punkte.length < 100) {
-            punkte = await statischeBtcReihe()
-            quelle = 'statische Reihe im Repo'
-        }
+    const { reihe, quelle } = await holeBtcTagesreihe()
+    return ausCache(`rainbow|${quelle}`, 12 * 60 * 60 * 1000, async () => {
+        const punkte = wochenpunkte(reihe)
+        const reg = regression(punkte)
 
-        // Jüngeres Ende mit Binance-Wochenkerzen auffrischen: die Fremdreihe
-        // ist grob abgetastet und hinkt bis zu einer Woche hinterher.
-        try {
-            const seit = punkte[punkte.length - 1].t - 30 * TAG
-            const kerzen = await getHistoricalCandles('BTCUSDT', '1w', seit, Date.now(), { market: 'spot' })
-            const alt = punkte.filter(v => v.t < seit)
-            punkte = [...alt, ...kerzen.map(k => ({ t: k.t, p: k.c }))]
-        } catch (e) {
-            logWarn('marktradar', `Binance-Wochenkerzen für den Regenbogen fehlen: ${e.message}`)
-        }
-
-        // Die ersten Monate sind wertlos: Kurse nahe null verzerren die
-        // Regression stark, gehandelt wurde damals praktisch nicht.
-        const gefiltert = punkte.filter(v => v.t >= GENESIS + 180 * TAG)
-        const reg = regression(gefiltert)
-
-        const jetzt = gefiltert[gefiltert.length - 1]
+        const jetzt = reihe[reihe.length - 1]
         const bandWert = (k, t) => Math.exp(reg.a * Math.log((t - GENESIS) / TAG) + reg.b + k * reg.s)
         // In welchem Band steht der Kurs gerade?
         const heutige = RAINBOW_BAENDER.map(b => ({ ...b, wert: bandWert(b.k, jetzt.t) }))
         const aktuell = heutige.find(b => jetzt.p >= b.wert) || heutige[heutige.length - 1]
 
         return {
-            punkte: gefiltert.map(v => [v.t, Math.round(v.p * 100) / 100]),
+            punkte: punkte.map(v => [v.t, Math.round(v.p * 100) / 100]),
             baender: RAINBOW_BAENDER,
             regression: { a: reg.a, b: reg.b, s: reg.s, n: reg.n },
             genesis: GENESIS,
             jetzt: { t: jetzt.t, preis: jetzt.p, band: aktuell.key },
+            seit: reihe[0].t,
             quelle,
         }
     })
 }
 
 // ── Kachel: Pi-Cycle-Top ─────────────────────────────────────────────────
-
-const BTC_TAGES_URL = 'https://api.blockchain.info/charts/market-price?timespan=all&format=json&sampled=false'
 
 /** Gleitender Durchschnitt; die ersten `n-1` Stellen bleiben leer. */
 function gleitend(werte, n) {
@@ -1803,30 +1827,15 @@ function gleitend(werte, n) {
  * das ist Zahlenmystik und kein Mechanismus.
  */
 export async function holePiCycle() {
-    return ausCache('picycle', 12 * 60 * 60 * 1000, async () => {
-        let reihe = []
-        let quelle = 'blockchain.info'
-        try {
-            const d = await holeJson(BTC_TAGES_URL, 25000)
-            reihe = (d?.values || []).map(v => ({ t: v.x * 1000, p: v.y })).filter(v => v.p > 0)
-        } catch (e) {
-            logWarn('marktradar', `Pi-Cycle: Tagesreihe nicht abrufbar — ${e.message}`)
-        }
-        if (reihe.length < 800) {
-            // Ohne die lange Historie ist die 350-Tage-Linie wertlos
-            const kerzen = await getClosedCandles('BTCUSDT', '1d', 1000, { market: 'spot' })
-            reihe = kerzen.map(k => ({ t: k.t, p: k.c }))
-            quelle = 'Binance (verkürzt)'
-        }
-
-        // Jüngstes Ende auffrischen: die Fremdreihe endet je nach Abruf ein bis
-        // zwei Tage in der Vergangenheit
-        try {
-            const kerzen = await getClosedCandles('BTCUSDT', '1d', 10, { market: 'spot' })
-            const letzterFremd = reihe[reihe.length - 1].t
-            for (const k of kerzen) if (k.t > letzterFremd) reihe.push({ t: k.t, p: k.c })
-        } catch { /* ohne die letzten Tage geht es auch */ }
-
+    const { reihe, quelle } = await holeBtcTagesreihe()
+    return ausCache(`picycle|${quelle}`, 12 * 60 * 60 * 1000, async () => {
+        /*
+         * Seit S12 aus Tageskerzen ab 2017 (siehe `BTC_REIHE_AB`). Die
+         * 350-Tage-Linie steht damit erst ab Mitte 2018; die Kreuzungen 2013
+         * und Dezember 2017 liegen vor der Reihe und fehlen, die von 2021
+         * ist drin. Das Modell bleibt dasselbe, nur seine Vorgeschichte ist
+         * kürzer — die Kachel nennt den Beginn (`seit`).
+         */
         const preise = reihe.map(r => r.p)
         const ma111 = gleitend(preise, 111)
         const ma350x2 = gleitend(preise, 350).map(v => (v === null ? null : v * 2))
@@ -1876,6 +1885,7 @@ export async function holePiCycle() {
                 abstandPct: kurz && lang ? Math.round(((kurz / lang) - 1) * 1000) / 10 : null,
                 ausgeloest: Boolean(kurz && lang && kurz > lang),
             },
+            seit: reihe[0].t,
             quelle,
         }
     })
@@ -1894,12 +1904,31 @@ export async function holePiCycle() {
  */
 export async function holeAltseason(tage = 90) {
     const fenster = [30, 90].includes(Number(tage)) ? Number(tage) : 90
-    const roh = await holeMarkt(100)
-    const kandidaten = (roh.muenzen || [])
-        .filter(m => m.perp && m.symbol !== 'BTC')
-        .slice(0, 50)
+    await marktdaten.fordere('kerzen')
 
-    return ausCache(`altseason|${fenster}|${kandidaten.length}`, 30 * 60 * 1000, async () => {
+    /*
+     * Auswahl: die 50 grössten Altcoins nach Marktkapitalisierung (CoinGecko,
+     * Kundenschlüssel). Ohne Schlüssel die 50 umsatzstärksten Coin-Perps der
+     * Marktdatenquelle — eine andere Auswahl, deshalb trägt die Antwort
+     * `basis`, und die Kachel sagt es dazu.
+     */
+    let kandidaten
+    let basis = 'mcap'
+    if (await cgHatSchluessel()) {
+        const roh = await holeMarkt(100)
+        kandidaten = (roh.muenzen || [])
+            .filter(m => m.perp && m.symbol !== 'BTC')
+            .slice(0, 50)
+    } else {
+        basis = 'umsatz'
+        const STABIL = /^(USDC|FDUSD|TUSD|USDP|DAI|BUSD|USDE)USDT$/
+        kandidaten = (await topSymbole(100))
+            .filter(s => s !== 'BTCUSDT' && !STABIL.test(s))
+            .slice(0, 50)
+            .map(perp => ({ perp, symbol: perp.replace(/^1000+/, '').replace(/USDT$/, '') }))
+    }
+
+    return ausCache(`altseason|${await mdWahl()}|${basis}|${fenster}|${kandidaten.length}`, 30 * 60 * 1000, async () => {
         const wandel = async (symbol) => {
             const kerzen = await getClosedCandles(symbol, '1d', fenster + 2)
             if (kerzen.length < fenster) return null
@@ -1947,13 +1976,12 @@ export async function holeAltseason(tage = 90) {
             oben: werte.slice(0, 5),
             unten: werte.slice(-5).reverse(),
             lage: index === null ? null : index >= 75 ? 'altcoin' : index <= 25 ? 'bitcoin' : 'gemischt',
+            basis,
         }
     })
 }
 
 // ── Kachel: Marktübersicht (Blasen / Kacheln) ────────────────────────────
-
-const COINGECKO_MARKETS = 'https://api.coingecko.com/api/v3/coins/markets'
 
 /**
  * Top-N Coins mit Veränderung über drei Zeitfenster — ein einziger Abruf.
@@ -1976,9 +2004,12 @@ export async function holeMarkt(anzahl = 100) {
         // Immer die vollen 250 holen: Stablecoins und tokenisierte Realwerte
         // fallen gleich raus, und „Top 10" soll am Ende auch zehn COINS zeigen
         // und nicht sieben.
-        const url = `${COINGECKO_MARKETS}?vs_currency=usd&order=market_cap_desc`
-            + '&per_page=250&page=1&price_change_percentage=1h%2C24h%2C7d'
-        const roh = await holeJson(url)
+        // CoinGecko nur mit Kundenschlüssel (Z. 21); ohne wirft `cgHole`
+        // ein `QuelleAus`, die Kachel sagt „nur mit eigenem Schlüssel".
+        const roh = await cgHole('/coins/markets', {
+            vs_currency: 'usd', order: 'market_cap_desc', per_page: 250, page: 1,
+            price_change_percentage: '1h,24h,7d',
+        })
         if (!Array.isArray(roh)) throw new Error('Unerwartete Antwort')
 
         const STABLE = /^(USDT|USDC|DAI|FDUSD|USDE|USDS|TUSD|PYUSD|USD1|BUIDL|USDTB|RLUSD|USDF)$/i
@@ -2051,59 +2082,17 @@ export async function holeMarkt(anzahl = 100) {
 // ── Kachel: Wal-Transaktionen ────────────────────────────────────────────
 
 /**
- * Grosse Krypto-Transaktionen aus den bereits gesammelten Telegram-Quellen
- * (`news_items`) — keine eigene Fremdquelle, kein zweiter Abruf. Bewusst
- * ohne Kanal-Whitelist: der Parser läuft über ALLE aktiven Telegram-Quellen
- * und behält nur, was er als Wal-Transaktion über der Schwelle erkennt.
- * Kommt der Nutzer später ein fünfter Kanal hinzu, muss hier nichts geändert
- * werden — dieselbe Lehre wie bei `STANDARD_ALARM_REGELN` im Hype-Radar,
- * wo eine zweite, separat gepflegte Liste irgendwann verlässlich abdriftet.
- *
- * `aktiveQuellen` (Anzahl eingeschalteter Telegram-Quellen, nicht nur
- * Wal-Kanäle) lässt die Kachel „keine Quelle aktiv" von „nichts über der
- * Schwelle im Fenster" unterscheiden — dieselbe Unterscheidung wie
- * `gesamtImZeitraum` beim Kalender-Countdown.
+ * Entfernt (S12). Die Kachel las grosse Transaktionen aus mitgeschriebenen
+ * öffentlichen Telegram-Kanälen (Whale Alert, Lookonchain). Telegram verbietet
+ * das Scrapen und Aggregieren öffentlicher Kanäle zum Einsatz von KI und jeden
+ * Zugriff ausserhalb der „normalen" Nutzung (Content-Licensing, Verkaufs-
+ * Prüfung Z. 31); Telegram-Quellen werden deshalb gar nicht mehr abgerufen.
+ * Ein Ersatz (Whale-Alert-API mit Kundenschlüssel) bräuchte erst eine Prüfung
+ * der Whale-Alert-Bedingungen. Bis dahin sagt die Kachel, dass sie entfernt
+ * ist — der Parser (`wal-parser.js`) bleibt für einen solchen Ersatz liegen.
  */
-export async function holeWalTransaktionen({ stunden = 24, minUsd = 5_000_000 } = {}) {
-    const fenster = Math.max(1, Math.min(168, Math.round(Number(stunden)) || 24))
-    const schwelle = Math.max(0, Number(minUsd) || 0)
-
-    return ausCache(`wal|${fenster}|${schwelle}`, 5 * 60 * 1000, async () => {
-        const knex = getKnex()
-        const telegramQuellen = await knex('news_sources').where({ art: 'telegram' })
-        const aktive = telegramQuellen.filter(q => Number(q.enabled) === 1)
-
-        if (!aktive.length) {
-            return { transaktionen: [], aktiveQuellen: 0, fenster, schwelle }
-        }
-
-        const seit = Date.now() - fenster * 60 * 60 * 1000
-        const beitraege = await knex('news_items')
-            .whereIn('sourceId', aktive.map(q => q.id))
-            .where('publishedAt', '>=', seit)
-            .select('inhalt', 'url', 'publishedAt', 'sourceId')
-
-        const nameVon = new Map(aktive.map(q => [q.id, q.name]))
-        const transaktionen = []
-        for (const b of beitraege) {
-            const p = parseWalBeitrag(b.inhalt)
-            if (!p.erkannt || p.usdWert < schwelle) continue
-            transaktionen.push({
-                zeit: Number(b.publishedAt),
-                betrag: p.betrag,
-                symbol: p.symbol,
-                usdWert: p.usdWert,
-                richtung: p.richtung,
-                gegenpartei: p.gegenpartei,
-                zuversicht: p.zuversicht,
-                quelle: nameVon.get(b.sourceId) || '',
-                url: b.url,
-            })
-        }
-        transaktionen.sort((a, b) => b.usdWert - a.usdWert)
-
-        return { transaktionen: transaktionen.slice(0, 30), aktiveQuellen: aktive.length, fenster, schwelle }
-    })
+export async function holeWalTransaktionen() {
+    throw new QuelleAus('Telegram', 'entfernt')
 }
 
 let snapTimer = null
@@ -2243,9 +2232,7 @@ export function setupMarktradarRoutes(app) {
     app.get('/api/marktradar/wale', async (req, res) => {
         try {
             if (req.query.force === '1') verwerfeCache('wal|')
-            sendeRadar(res, await holeWalTransaktionen({
-                stunden: req.query.stunden, minUsd: req.query.minUsd,
-            }))
+            sendeRadar(res, await holeWalTransaktionen())
         } catch (e) {
             sendRadarError(res, e, 'Wal-Transaktionen')
         }
@@ -2259,8 +2246,6 @@ export function setupMarktradarRoutes(app) {
     setTimeout(() => {
         holeMarkt(100).catch(() => { })
         nurCoinSymbole().catch(() => { })
-        // Einmaliger Rückblick; der Anspruch verhindert Wiederholung
-        holeDominanzRueckblick().catch((e) => logWarn('marktradar', `Rückblick: ${e.message}`))
     }, 4000)
 
     // Erster Schnappschuss beim Start, danach halbstündlich nachfassen

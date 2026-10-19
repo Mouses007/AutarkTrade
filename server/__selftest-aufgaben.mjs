@@ -162,12 +162,13 @@ const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b)
     pruefe('höchstens so viele Belege wie der Bericht nimmt', deckel.urls.length === 2 && !deckel.text.includes('[3]'))
 
     const r = aufgabeNachId('recherche')
-    pruefe('Recherche erlaubt DeepSeek', r.supportedProviders.includes('deepseek'))
+    // S12: DeepSeek-Suche abgeschaltet (Verkaufs-Prüfung Z. 89d) — nur noch Perplexity.
+    pruefe('Recherche erlaubt DeepSeek NICHT mehr', !r.supportedProviders.includes('deepseek'))
     pruefe('Vorgabe bleibt Perplexity', r.recommendedModels[0].startsWith('perplexity/'))
-    pruefe('Schreiber-Aufgabe registriert', aufgabeNachId('recherche-schreiber')?.recommendedModels[0] === 'anthropic/claude-haiku-5-5')
+    pruefe('Schreiber-Aufgabe entfernt', !aufgabeNachId('recherche-schreiber'))
     const f = KI_FUNKTIONEN.find((x) => x.id === 'recherche')
-    pruefe('Übersicht zeigt DeepSeek, wenn das Nachrichtenfeld umgeschaltet ist',
-        anbieterVon(f, { radarNewsRechercheModell: DEEPSEEK_SUCHE }) === 'deepseek')
+    pruefe('alte Wahl deepseek-suche zeigt Perplexity (der Weg fällt dorthin zurück)',
+        anbieterVon(f, { radarNewsRechercheModell: DEEPSEEK_SUCHE }) === 'perplexity')
     pruefe('sonst Perplexity', anbieterVon(f, { radarNewsRechercheModell: 'sonar-pro' }) === 'perplexity')
 }
 

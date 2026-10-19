@@ -250,7 +250,11 @@ export function useExportReportPdf(reportText, zeitraum, reportData) {
         doc.setFontSize(7.5)
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(...grayText)
-        doc.text('AutarkTrade — KI-Analyse', margin, pageHeight - 9)
+        // S12 (EU AI Act Art. 50): Pflichtlabel auf JEDER Seite, nicht nur auf
+        // der ersten — eine einzeln weitergereichte Seite bleibt gekennzeichnet.
+        // Bindestrich statt Halbgeviertstrich: die Standardschrift von jsPDF
+        // kennt nur WinAnsi, und ein fehlendes Zeichen fiele still weg.
+        doc.text('AutarkTrade - KI-generiert - keine Anlageberatung - Fakten prüfen', margin, pageHeight - 9)
 
         // Rechts: Seitenzahl
         doc.text(`Seite ${i} / ${totalPages}`, pageWidth - margin, pageHeight - 9, { align: 'right' })
@@ -259,6 +263,14 @@ export function useExportReportPdf(reportText, zeitraum, reportData) {
     // ==========================================
     // DOWNLOAD
     // ==========================================
+
+    // Maschinenlesbar: dieselbe Kennzeichnung in den Dokument-Eigenschaften.
+    doc.setProperties({
+        title: `KI-Analyse ${zeitraum}`,
+        subject: 'KI-generiert - keine Anlageberatung - Fakten prüfen',
+        keywords: 'AI-generated, KI-generiert, trainedAlgorithmicMedia',
+        creator: 'AutarkTrade',
+    })
 
     const dateStr = zeitraum.replace(/[^a-zA-Z0-9äöüÄÖÜ]/g, '-').replace(/-+/g, '-')
     doc.save(`Trading-Bericht-${dateStr}.pdf`)

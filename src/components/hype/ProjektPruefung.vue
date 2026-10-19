@@ -19,7 +19,7 @@
 
         <template v-if="daten">
             <!-- Eine Liste, Warnungen zuerst. Die Fakten dahinter (Domain-Alter,
-                 Sterne, Ersteller-Bilanz) stehen bereits in den Befunden; die
+                 Sterne) stehen bereits in den Befunden; die
                  Links darunter tragen die Einzelheiten im Tooltip. -->
             <ul v-if="befunde.length" class="ppBefunde">
                 <li v-for="(b, i) in befunde" :key="i" :class="b.art">
@@ -31,6 +31,8 @@
                     rel="noopener noreferrer nofollow">{{ l.text }} ↗</a>
             </div>
             <p v-if="daten.auszug" class="ppAuszug">„{{ daten.auszug }}"</p>
+            <!-- Links zum Token kommen von DexScreener (bzw. CoinGecko in der Tiefensuche, dort mit eigener Zeile). -->
+            <RadarQuellen :quellen="['dexscreener']" />
         </template>
     </div>
 </template>
@@ -38,8 +40,9 @@
 <script setup>
 import Symbol from '@/components/basis/Symbol.vue'
 /**
- * Projektprüfung eines Hype-Radar-Funds: Webseite, Domain-Alter, GitHub,
- * Ersteller-Vorgeschichte — und eine Substanz-Note daraus.
+ * Projektprüfung eines Hype-Radar-Funds: Webseite, Domain-Alter, GitHub —
+ * und eine Substanz-Note daraus. (Die Ersteller-Vorgeschichte kam von
+ * pump.fun und ist seit S12 entfernt.)
  *
  * Die Note steht bewusst NEBEN Hype- und Sicherheitsnote und wird mit keiner
  * verrechnet: Ein Token kann laut sein und nichts dahinter haben, oder still
@@ -53,6 +56,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import InfoTipp from '../InfoTipp.vue'
+import RadarQuellen from './RadarQuellen.vue'
 import { sichereUrl } from '../../utils/sanitize.js'
 import Kreisel from '@/components/basis/Kreisel.vue'
 
@@ -114,7 +118,7 @@ const REIHE = ['minus', 'plus', 'info']
 const befunde = computed(() => [...(daten.value?.befunde || [])]
     .sort((a, b) => REIHE.indexOf(a.art) - REIHE.indexOf(b.art)))
 
-/** Webseite, Kanäle, GitHub, Ersteller — eine Zeile, Einzelheiten im Tooltip. */
+/** Webseite, Kanäle, GitHub — eine Zeile, Einzelheiten im Tooltip. */
 const links = computed(() => {
     const d = daten.value
     if (!d) return []
@@ -143,20 +147,6 @@ const links = computed(() => {
             ].filter(Boolean).join('\n'),
         })
     }
-    const e = d.ersteller
-    if (e?.wallet) {
-        raus.push({
-            url: `https://pump.fun/profile/${encodeURIComponent(e.wallet)}`,
-            text: `${t('hypeProjekt.ersteller')} ${kurzAdresse(e.wallet)}`,
-            titel: [
-                e.wallet,
-                hatZahl(e.andere) ? t('hypeProjekt.erstellerBilanz', {
-                    n: e.andere + (e.vollstaendig === false ? '+' : ''), g: e.graduiert, h: e.letzte24h }) : '',
-                e.besteMarktkapUsd ? t('hypeProjekt.erstellerBeste', { m: geld(e.besteMarktkapUsd) }) : '',
-                e.beispiele?.length ? `${t('hypeProjekt.erstellerBeispiele')}: ${e.beispiele.map((b) => b.symbol || kurzAdresse(b.mint)).join(', ')}` : '',
-            ].filter(Boolean).join('\n'),
-        })
-    }
     return raus
 })
 
@@ -179,8 +169,6 @@ function hostVon(url) {
     try { return new URL(url).hostname.replace(/^www\./, '') } catch { return String(url || '').slice(0, 40) }
 }
 
-const kurzAdresse = (a) => (String(a || '').length > 12 ? `${String(a).slice(0, 4)}…${String(a).slice(-4)}` : String(a || ''))
-
 function tageText(tage) {
     if (!hatZahl(tage)) return '—'
     const d = Number(tage)
@@ -188,14 +176,6 @@ function tageText(tage) {
     if (d < 60) return t('hypeProjekt.tage', { n: Math.round(d) })
     if (d < 730) return t('hypeProjekt.monate', { n: Math.round(d / 30) })
     return t('hypeProjekt.jahre', { n: (d / 365).toFixed(1) })
-}
-
-function geld(n) {
-    const z = Number(n)
-    if (!Number.isFinite(z) || z <= 0) return '—'
-    if (z >= 1e6) return `${(z / 1e6).toFixed(1)} M`
-    if (z >= 1e3) return `${Math.round(z / 1e3)} k`
-    return String(Math.round(z))
 }
 
 const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(

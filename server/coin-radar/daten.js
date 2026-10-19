@@ -15,14 +15,20 @@
  * Diese Reihenfolge ist keine Sparmassnahme, sondern die Arbeitsweise, die
  * auch Trader beschreiben: erst grob sieben, dann die Übriggebliebenen genau
  * ansehen. Ein Lauf über das ganze Universum bleibt so unter einer Minute.
+ *
+ * Woher die Marktdaten kommen, entscheidet die Marktdatenquelle des Kunden
+ * (`server/marktdaten/`, S12). Binance: unverändert die vier Abrufe und die
+ * Gewichtsbremse. Bitget: EIN Abruf `tickers` trägt Umsatz, Geld/Brief samt
+ * Menge und Funding, der Funding-Takt kommt aus den Kontraktregeln. Mit `aus`
+ * wirft `holeMarktweit` ein `MarktdatenAus` — der Lauf bricht ab, die letzte
+ * gute Rangliste bleibt stehen.
  */
 
-import { holeJson, holeBinanceIntervalleStreng } from '../marktradar-api.js'
+import { holeBinanceIntervalleStreng } from '../marktradar-api.js'
 import { getClosedCandles } from '../market-data.js'
 import { warteAufGewicht } from '../binance-takt.js'
 import { logWarn } from '../logger.js'
-
-const FAPI = 'https://fapi.binance.com'
+import * as marktdaten from '../marktdaten/index.js'
 
 /**
  * Gewicht eines Kline-Abrufs mit ≤ 500 Kerzen.
@@ -54,15 +60,18 @@ export const KERZEN_ANZAHL = 200
  * @returns {Promise<{jeSymbol: Map<string, object>, quellenStand: object}>}
  */
 export async function holeMarktweit() {
-    if (letzterStand && Date.now() - letzterStand.ts < MARKTWEIT_FRISCH_MS) return letzterStand.wert
-    if (laufenderAbruf) return laufenderAbruf
-    laufenderAbruf = holeMarktweitFrisch()
+    // Die Quelle gehört zum Stand: nach einem Wechsel gilt der alte nicht mehr.
+    const anbieter = await marktdaten.fordere('ticker', { markt: 'futures' })
+    if (letzterStand && letzterStand.quelle === anbieter.id && Date.now() - letzterStand.ts < MARKTWEIT_FRISCH_MS) return letzterStand.wert
+    if (laufenderAbruf?.quelle === anbieter.id) return laufenderAbruf.p
+    const p = (anbieter.id === 'binance' ? holeMarktweitFrisch() : holeMarktweitAllgemein(anbieter))
         .then((wert) => {
-            letzterStand = { ts: Date.now(), wert }
+            letzterStand = { ts: Date.now(), wert, quelle: anbieter.id }
             return wert
         })
-        .finally(() => { laufenderAbruf = null })
-    return laufenderAbruf
+        .finally(() => { if (laufenderAbruf?.p === p) laufenderAbruf = null })
+    laufenderAbruf = { p, quelle: anbieter.id }
+    return p
 }
 
 /*
@@ -80,10 +89,13 @@ let laufenderAbruf = null
 
 async function holeMarktweitFrisch() {
     await warteAufGewicht(GEWICHT_MARKTWEIT)
+    // Roh über `binanceHole`: die gemeinsame Tickerform trägt `count` und den
+    // Mark-Preis nicht. Gewicht und 429/418 meldet der Binance-Anbieter selbst.
+    const roh = (faehigkeit, pfad) => marktdaten.binanceHole(faehigkeit, 'futures', pfad, {})
     const [umsatz, buch, funding, intervalle] = await Promise.allSettled([
-        holeJson(`${FAPI}/fapi/v1/ticker/24hr`),
-        holeJson(`${FAPI}/fapi/v1/ticker/bookTicker`),
-        holeJson(`${FAPI}/fapi/v1/premiumIndex`),
+        roh('ticker', '/fapi/v1/ticker/24hr'),
+        roh('ticker', '/fapi/v1/ticker/bookTicker'),
+        roh('funding', '/fapi/v1/premiumIndex'),
         /*
          * Der Funding-TAKT je Symbol — acht Stunden sind nur der Normalfall.
          *
@@ -180,6 +192,81 @@ async function holeMarktweitFrisch() {
 }
 
 /**
+ * Funding-Takt je Symbol aus den Kontraktregeln eines Nicht-Binance-Anbieters
+ * (Bitget `fundInterval`), zwölf Stunden zwischengespeichert — er ändert sich
+ * selten, und die Kontraktliste ist der grösste Abruf.
+ */
+const taktCache = new Map()   // quelle → { ts, takt }
+async function fundingTaktAllgemein(anbieter) {
+    const c = taktCache.get(anbieter.id)
+    if (c && Date.now() - c.ts < 12 * 60 * 60 * 1000) return c.takt
+    const takt = {}
+    for (const [sym, m] of await anbieter.symbole({ markt: 'futures' })) {
+        if (Number(m.fundingIntervallH) > 0) takt[sym] = Number(m.fundingIntervallH)
+    }
+    taktCache.set(anbieter.id, { ts: Date.now(), takt })
+    return takt
+}
+
+/**
+ * Dieselbe Rückgabe aus der gemeinsamen Tickerform (`marktdaten.ticker24h`).
+ * Was der Anbieter nicht liefert, bleibt unbekannt: Bitget hat keine
+ * Trade-Anzahl (`trades24h: null`) und keinen nächsten Zahlungstermin im
+ * Ticker (`naechsteZahlung: null`); ein unbekannter Funding-Takt ergibt wie
+ * bei Binance eine unbekannte Jahresrate, keine 8-h-Annahme.
+ */
+async function holeMarktweitAllgemein(anbieter) {
+    const [ticker, intervalle] = await Promise.allSettled([
+        anbieter.ticker24h({ markt: 'futures' }),
+        fundingTaktAllgemein(anbieter),
+    ])
+    const takt = intervalle.status === 'fulfilled' ? intervalle.value : null
+    const quellenStand = {}
+    const jeSymbol = new Map()
+    if (ticker.status !== 'fulfilled' || !Array.isArray(ticker.value)) {
+        const fehler = fehlertext(ticker.reason)
+        quellenStand.umsatz = { ok: false, fehler }
+        quellenStand.buch = { ok: false, fehler }
+        quellenStand.funding = { ok: false, fehler }
+        logWarn('coin-radar', `${anbieter.name}-Ticker nicht abrufbar: ${fehler}`)
+        return { jeSymbol, quellenStand }
+    }
+    let mitBuch = 0
+    let mitFunding = 0
+    for (const t of ticker.value) {
+        if (!t?.symbol) continue
+        const e = { symbol: t.symbol }
+        e.umsatz24h = Number(t.umsatzQuote) || 0
+        e.preisAenderung24h = Number.isFinite(t.aenderungPct) ? t.aenderungPct : null
+        e.trades24h = null
+        if (t.bid > 0 && t.ask > 0 && t.ask >= t.bid) {
+            const mitte = (t.ask + t.bid) / 2
+            e.spreadBp = ((t.ask - t.bid) / mitte) * 10000
+            e.tiefeUsd = Math.min(Number(t.bidMenge) || 0, Number(t.askMenge) || 0) * mitte
+            e.preis = mitte
+            mitBuch++
+        }
+        if (t.funding !== undefined) {
+            // Bitget liefert wie Binance den Dezimalbruch → Prozent erst hier.
+            e.fundingRate = Number.isFinite(t.funding) ? t.funding * 100 : null
+            e.fundingIntervallH = takt ? (Number(takt[t.symbol]) || null) : null
+            e.naechsteZahlung = null
+            mitFunding++
+        }
+        if (!e.preis) e.preis = Number.isFinite(t.preis) ? t.preis : null
+        jeSymbol.set(t.symbol, e)
+    }
+    quellenStand.umsatz = { ok: true, anzahl: ticker.value.length, quelle: anbieter.id }
+    quellenStand.buch = mitBuch ? { ok: true, anzahl: mitBuch, quelle: anbieter.id } : { ok: false, fehler: 'keine Geld/Brief-Kurse im Ticker' }
+    quellenStand.funding = mitFunding ? { ok: true, anzahl: mitFunding, quelle: anbieter.id } : { ok: false, fehler: 'kein Funding im Ticker' }
+    if (!takt) {
+        quellenStand.fundingTakt = { ok: false, fehler: fehlertext(intervalle.reason) }
+        logWarn('coin-radar', `Funding-Takt nicht abrufbar — Jahresraten bleiben unbekannt: ${quellenStand.fundingTakt.fehler}`)
+    }
+    return { jeSymbol, quellenStand }
+}
+
+/**
  * Kerzen für viele Symbole — gebremst.
  *
  * `getClosedCandles` ist der Livepfad und ruft mit Absicht KEINE Bremse: eine
@@ -200,12 +287,15 @@ async function holeMarktweitFrisch() {
 export async function holeKerzenGebremst(symbole, zeiteinheit, melde = () => {}) {
     const raus = new Map()
     const HAEPPCHEN = 5
+    // Die Bremse rechnet in Binance-Gewicht; bei einem anderen Anbieter wäre
+    // das Warten sinnlos (und `MarktdatenAus` fliegt hier vor dem ersten Abruf).
+    const binance = (await marktdaten.fordere('kerzen')).id === 'binance'
 
     for (let i = 0; i < symbole.length; i += HAEPPCHEN) {
         const teil = symbole.slice(i, i + HAEPPCHEN)
         await Promise.all(teil.map(async (symbol) => {
             try {
-                await warteAufGewicht(GEWICHT_KLEINE_KLINES)
+                if (binance) await warteAufGewicht(GEWICHT_KLEINE_KLINES)
                 const kerzen = await getClosedCandles(symbol, zeiteinheit, KERZEN_ANZAHL)
                 if (Array.isArray(kerzen) && kerzen.length) raus.set(symbol, kerzen)
             } catch (e) {

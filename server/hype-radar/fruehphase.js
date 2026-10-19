@@ -6,17 +6,25 @@
  * holt sie, was gerade entsteht, schreibt je Token eine Momentaufnahme fort
  * und rechnet aus dem Verlauf die Beschleunigung (`fruehphase-bewertung.js`).
  *
- * Quellen, alle ohne Schlüssel:
+ * Quellen (Stand S12, Verkaufs-Prüfung vom 19.10.2026):
  *
- *   pump.fun       die neuesten Starts und was gerade auf der Kurve gehandelt
- *                  wird — mit Ersteller, Kommentarzahl und den Links aus den
- *                  Metadaten
  *   DexScreener    neue Token-Profile (jemand bezahlt dafür) und
- *                  Community-Übernahmen
- *   GeckoTerminal  neue Pools je Kette — mit der Zahl VERSCHIEDENER Käufer
+ *                  Community-Übernahmen — ohne Schlüssel
+ *   CoinGecko      neue Pools je Kette mit der Zahl VERSCHIEDENER Käufer
+ *   (On-Chain)     (`/onchain/…`, vormals die öffentliche GeckoTerminal-API) —
+ *                  nur mit dem Schlüssel des Kunden, sonst „aus"
  *   /biz/          4chan-Katalog: wer nennt welche Vertragsadresse
- *   Telegram       eingestellte öffentliche Kanäle, gelesen wie in den News
- *   Reddit         der RSS-Feed aus der Hauptspur
+ *                  (Quelle nennen und verlinken, 4chan-API-Regeln)
+ *   X              über Grok, bezahlt, aus als Vorgabe
+ *   Smart Money    nur mit eigener Solana-RPC-Adresse
+ *
+ * Entfernt sind pump.fun (inoffizielles Frontend-API, Bots verboten),
+ * Telegram-Kanäle (t.me/s-Scraping) und Reddit-RSS. Die ehrliche Folge: Die
+ * Spur VOR dem ersten Pool ist schmaler geworden. Ein Token auf der
+ * pump.fun-Kurve taucht nur noch auf, wenn DexScreener oder die On-Chain-
+ * Liste ihn führen (beide kennen die Kurve als Handelsplatz `pumpfun` bzw.
+ * `pump-fun`) oder jemand seinen Vertrag auf /biz/ oder X nennt. King of the
+ * Hill, Kommentarzahl und die Ersteller-Bilanz gibt es nicht mehr.
  *
  * Ein Token, der hier reift (alt und liquide genug), wandert beim nächsten
  * Scan als eigene Quelle in die Hauptprüfung (`reifeFunde`). Wer über die
@@ -35,9 +43,8 @@
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { beansprucheAufgabe, meldeFehler } from '../db-claim.js'
-import { holeText as holeGeschuetzt } from '../net-guard.js'
-import { leseTelegram, telegramUrl } from '../feed-parser.js'
-import { holeJson, dexDetailsViele, linksAusInfo, normChain, normSymbol, ausReddit, fund } from './quellen.js'
+import { holeJson, holeCoinGecko, ONCHAIN_NETZ, dexDetailsViele, linksAusInfo, normChain, normSymbol, fund } from './quellen.js'
+import { istAus, ausAntwort } from '../quellen/aus.js'
 import { leseEinstellungen } from './einstellungen.js'
 import { stelleZu } from './zustellung.js'
 import { pruefeViele, gespeichertePruefung } from './projekt.js'
@@ -48,7 +55,7 @@ import {
     erwaehnungenIn, leseBizKatalog, momentaufnahme, naechsterVerlauf, bewerteFrueh, statusFrueh, xNennungen, risikoFrueh,
     risikoUnpruefbar, meldefaehig, hatMessung, verteilePlaetze, MAX_ALTER_STUNDEN, tokenGeburt,
 } from './fruehphase-bewertung.js'
-import { ausRugCheck, holeGoPlus } from './sicherheit.js'
+import { ausRugCheck, holeGoPlus, holeRugCheck } from './sicherheit.js'
 import { ladeListungen, pruefeListung } from './listungen.js'
 import { smartAbruf, smartKarteLesen } from './smartmoney.js'
 import { legeAnFrueh } from '../radar-ergebnisse.js'
@@ -60,7 +67,7 @@ const MAX_BEOBACHTET = 150
 /*
  * So viele Plätze je Durchgang gehören NEUEN Token. Bis 07.10.2026 bekamen
  * bekannte Token alle Plätze zuerst: 142 neue im ersten Durchgang, dann 9,
- * dann 4 — bei rund hundert Funden allein von pump.fun je Lauf. Eine Spur,
+ * dann 4 — bei rund hundert Funden allein von pump.fun je Lauf (bis S12). Eine Spur,
  * die „früh" heisst, darf nicht nach dem ersten Lauf aufhören zu suchen.
  */
 const NEU_PLAETZE = 50
@@ -99,9 +106,7 @@ const RISIKO_GILT_MS = 6 * 3600e3
 /** Derselbe Token wird frühestens nach dieser Zeit erneut gemeldet. */
 const ALARM_SPERRE_MS = 12 * 3600e3
 
-const PUMP = 'https://frontend-api-v3.pump.fun'
 const DEX = 'https://api.dexscreener.com'
-const GECKO = 'https://api.geckoterminal.com/api/v2'
 
 const sicherJson = (t, r) => { try { return JSON.parse(t) ?? r } catch { return r } }
 const schluessel = (chain, contract) => `${chain}|${contract}`
@@ -115,7 +120,7 @@ const schluessel = (chain, contract) => `${chain}|${contract}`
 const zn = (w) => (w === null || w === undefined || w === '' || !Number.isFinite(Number(w)) ? null : Number(w))
 
 /*
- * Kauf-/Verkaufszahlen eines GeckoTerminal-Pools für ein Stundenfenster. Alle
+ * Kauf-/Verkaufszahlen eines On-Chain-Pools (CoinGecko `/onchain`) für ein Stundenfenster. Alle
  * Werte aus DEMSELBEN Pool — Wallets und Transaktionen gehören für den
  * Kreishandel-Vergleich zusammen.
  */
@@ -162,43 +167,11 @@ function eintragen(karte, f) {
 
 // ── Quellen ─────────────────────────────────────────────────────────────
 
-/** pump.fun: Coin-Objekt → Fund. */
-function ausPumpCoin(c, quelle) {
-    return {
-        chain: 'solana',
-        contract: String(c?.mint || ''),
-        symbol: c?.symbol,
-        name: c?.name,
-        quelle,
-        links: linksAusInfo(c),
-        ersteller: String(c?.creator || ''),
-        erstelltAm: Number(c?.created_timestamp) || null,
-        // Die Bindungskurve als Halter — die Risikoprüfung nimmt sie aus der
-        // Top-10-Rechnung. Felder aus dem pump.fun-Frontend-API, nicht live geprüft.
-        kurve: [c?.bonding_curve, c?.associated_bonding_curve].filter(Boolean).map(String),
-        markt: {
-            marktKapUsd: Number(c?.usd_market_cap) || null,
-            antworten: zn(c?.reply_count),
-            graduiert: c?.complete === true,
-            kothMin: kothMinuten(c),
-            // Millisekunden (live geprüft 10.10.2026) — der Zeitpunkt, nicht nur die Dauer.
-            kothAm: Number(c?.king_of_the_hill_timestamp) > 0 ? Number(c.king_of_the_hill_timestamp) : null,
-        },
-    }
-}
-
-/** Minuten vom Start bis „King of the Hill" — null, wenn nie erreicht. */
-function kothMinuten(c) {
-    const koth = Number(c?.king_of_the_hill_timestamp)
-    const start = Number(c?.created_timestamp)
-    return koth > 0 && start > 0 && koth >= start ? (koth - start) / 60e3 : null
-}
-
 /*
- * pump.fun-Token erkennt man an der Kurve, an der Quelle oder am Handelsplatz —
- * nicht an der Endung „pump": 390 von 1730 Solana-Token mit pump.fun-Kurve
- * endeten anders (gemessen 10.10.2026). Für sie wurde nie eine
- * Ersteller-Bilanz geholt, und die Bindungskurve galt nicht als Kurve.
+ * pump.fun-Token erkennt man an der Kurve, am Handelsplatz (DexScreener
+ * `pumpfun`/`pumpswap`) oder — bei Zeilen vor S12 — an der alten Quelle,
+ * nicht an der Endung „pump" allein: 390 von 1730 Solana-Token mit
+ * pump.fun-Kurve endeten anders (gemessen 10.10.2026).
  */
 const istPump = (x, quellenAlt = []) => x.chain === 'solana' && (
     /pump$/i.test(String(x.contract || ''))
@@ -208,12 +181,15 @@ const istPump = (x, quellenAlt = []) => x.chain === 'solana' && (
 
 /**
  * Vertrag und Halter eines Tokens. Solana zuerst bei RugCheck — nur dort gibt
- * es die Insider-Markierung —, GoPlus als Rückfall; EVM bei GoPlus.
+ * es die Insider-Markierung —, GoPlus als Rückfall; EVM bei GoPlus. RugCheck
+ * nur, wenn der Kunde es eingeschaltet hat (`rugcheckAn`, Bedingungen
+ * ungeklärt); sonst GoPlus allein, und Insider-Netze bleiben unbekannt.
  */
 export async function holeRisiko(chain, contract) {
     if (chain === 'solana') {
         try {
-            const r = ausRugCheck(await holeJson(`https://api.rugcheck.xyz/v1/tokens/${encodeURIComponent(contract)}/report`))
+            const roh = await holeRugCheck(contract)
+            const r = roh ? ausRugCheck(roh) : null
             if (r) return r
         } catch { /* GoPlus versuchen */ }
     }
@@ -225,51 +201,6 @@ async function jeDrei(liste, fn) {
     let i = 0
     const arbeiter = async () => { while (i < liste.length) await fn(liste[i++]) }
     await Promise.all(Array.from({ length: Math.min(3, liste.length) }, arbeiter))
-}
-
-async function pumpfun(einst) {
-    const q = einst.fruehQuellen || {}
-    const listen = []
-    if (q.pumpfunNeu !== false) listen.push(['pumpfun-neu', 'sort=created_timestamp'])
-    /*
-     * Was gerade auf der Kurve gehandelt wird. Graduierte fallen heraus: die
-     * sind schon eine Stufe weiter und kommen über DexScreener und
-     * GeckoTerminal.
-     *
-     * Bis 07.10.2026 stand hier `sort=market_cap` mit der Absicht „die
-     * grössten, die noch auf der Kurve stehen". Gemessen liefert das die
-     * fünfzig grössten GRADUIERTEN aller Zeiten (oben USDF mit 959 Mio USD),
-     * die der Filter danach alle verwarf — die Liste war immer leer, und King
-     * of the Hill wurde nie gesehen. Mit `complete=false` kommen Leichen, die
-     * seit über 400 Tagen auf der Kurve hängen; ein Altersfilter in der
-     * Abfrage (`created_timestamp_gte`) wird ignoriert. Die Sortierung nach
-     * dem letzten Handel lieferte 50 Token auf der Kurve, 45 davon jünger als
-     * ein Tag; den Rest nimmt `MAX_ALTER_STUNDEN`.
-     */
-    if (q.pumpfunAufstieg !== false) listen.push(['pumpfun-aufstieg', 'sort=last_trade_timestamp&complete=false'])
-    /*
-     * Nacheinander, nicht gleichzeitig: Der zweite gleichzeitige Abruf bekam
-     * HTTP 429 und fiel still aus — die Quelle gilt erst als ausgefallen, wenn
-     * ALLE ihre Abrufe scheitern.
-     */
-    const raus = []
-    let ok = 0
-    let letzterFehler = null
-    for (const [quelle, abfrage] of listen) {
-        try {
-            const j = await holeJson(`${PUMP}/coins?limit=50&offset=0&${abfrage}&order=DESC&includeNsfw=false`)
-            ok++
-            for (const c of Array.isArray(j) ? j : []) {
-                if (quelle === 'pumpfun-aufstieg' && c?.complete === true) continue
-                raus.push(ausPumpCoin(c, quelle))
-            }
-        } catch (e) {
-            letzterFehler = e
-            logWarn('hype-frueh', `pump.fun ${quelle}: ${e.message}`)
-        }
-    }
-    if (listen.length && !ok) throw letzterFehler
-    return raus
 }
 
 async function dexscreenerProfile() {
@@ -291,8 +222,8 @@ async function dexscreenerProfile() {
     return raus
 }
 
-/** GeckoTerminal-Kette ↔ unsere Kette. */
-const GECKO_NETZ = { solana: 'solana', ethereum: 'eth', base: 'base', bsc: 'bsc' }
+/** On-Chain-Netz (GeckoTerminal-Kennung) ↔ unsere Kette. */
+const GECKO_NETZ = ONCHAIN_NETZ
 
 async function geckoNeu(einst) {
     const raus = []
@@ -304,7 +235,7 @@ async function geckoNeu(einst) {
         if (!netz) continue
         versucht++
         try {
-            const j = await holeJson(`${GECKO}/networks/${netz}/new_pools?include=base_token&page=1`)
+            const j = await holeCoinGecko(`/onchain/networks/${netz}/new_pools?include=base_token&page=1`)
             const tokens = new Map((Array.isArray(j?.included) ? j.included : [])
                 .filter((t) => t?.type === 'token').map((t) => [t.id, t.attributes || {}]))
             for (const p of (Array.isArray(j?.data) ? j.data : []).slice(0, 30)) {
@@ -331,8 +262,10 @@ async function geckoNeu(einst) {
                 })
             }
         } catch (e) {
+            // Ohne CoinGecko-Schlüssel ist die Quelle aus — für alle Ketten.
+            if (istAus(e)) throw e
             letzterFehler = e
-            logWarn('hype-frueh', `GeckoTerminal ${kette}: ${e.message}`)
+            logWarn('hype-frueh', `CoinGecko On-Chain ${kette}: ${e.message}`)
         }
     }
     // Alle Ketten ausgefallen ist ein Ausfall, nicht „nichts Neues".
@@ -340,14 +273,17 @@ async function geckoNeu(einst) {
     return raus
 }
 
-/** So viele Adressen nimmt GeckoTerminal je Sammelabruf. */
+/** So viele Adressen nimmt `tokens/multi` je Sammelabruf (Demo-Tarif; Doku 19.10.2026). */
 const GECKO_SAMMEL = 30
 
 /**
  * Käufer, Verkäufer und Transaktionen des Hauptpools für ALLE beobachteten
- * Token — `tokens/multi/{adressen}?include=top_pools`, je Kette in Häppchen
- * zu dreissig, auch für pump.fun-Kurven (Dex `pump-fun`, live geprüft am
- * 10.10.2026).
+ * Token — CoinGecko `/onchain/networks/{netz}/tokens/multi/{adressen}
+ * ?include=top_pools` (gleiche Antwortform wie die GeckoTerminal-API, laut
+ * CoinGecko-Doku vom 19.10.2026 mit `buyers`/`sellers` je Fenster), je Kette
+ * in Häppchen zu dreissig, auch für pump.fun-Kurven (Dex `pump-fun`, über
+ * GeckoTerminal live geprüft am 10.10.2026). Nur mit Kundenschlüssel — ohne
+ * ihn `aus` statt einer Zahl.
  *
  * Bis dahin kamen diese Zahlen nur aus `new_pools`, also nur im ersten
  * Durchgang eines ganz neuen Pools. Die Teilnote Beteiligung war danach
@@ -355,7 +291,7 @@ const GECKO_SAMMEL = 30
  * der Kreishandel-Abzug galt nur für Neue — HOTBOT (274 Transaktionen von 11
  * Wallets) und XBC (277 von 10) liefen durch.
  *
- * @returns {Promise<{karte: Map<string, object>, versucht:number, fehler:string}>}
+ * @returns {Promise<{karte: Map<string, object>, versucht:number, fehler:string, aus?:object}>}
  *          Adresse (klein) → Marktfelder
  */
 async function geckoMarkt(eintraege) {
@@ -377,7 +313,7 @@ async function geckoMarkt(eintraege) {
             const teil = adressen.slice(i, i + GECKO_SAMMEL)
             versucht++
             try {
-                const j = await holeJson(`${GECKO}/networks/${netz}/tokens/multi/${teil.map(encodeURIComponent).join(',')}?include=top_pools`)
+                const j = await holeCoinGecko(`/onchain/networks/${netz}/tokens/multi/${teil.map(encodeURIComponent).join(',')}?include=top_pools`)
                 const pools = new Map((Array.isArray(j?.included) ? j.included : [])
                     .filter((p) => p?.type === 'pool').map((p) => [p.id, p]))
                 for (const t of Array.isArray(j?.data) ? j.data : []) {
@@ -394,9 +330,11 @@ async function geckoMarkt(eintraege) {
                     karte.set(adresse, { markt: h1 ? geckoFenster(h1) : {}, aeltesterPoolAm })
                 }
             } catch (e) {
+                // Kein Schlüssel: kein weiterer Versuch, die Käufer sind unbekannt.
+                if (istAus(e)) return { karte, versucht, gescheitert, gefragt, fehler: e.message, aus: ausAntwort(e) }
                 gescheitert++
                 fehler = String(e.message).slice(0, 160)
-                logWarn('hype-frueh', `GeckoTerminal Käufer ${netz}: ${e.message}`)
+                logWarn('hype-frueh', `CoinGecko On-Chain Käufer ${netz}: ${e.message}`)
             }
         }
     }
@@ -423,29 +361,6 @@ function erwaehnungen(texte, plattform) {
 async function biz() {
     const j = await holeJson('https://a.4cdn.org/biz/catalog.json')
     return erwaehnungen(leseBizKatalog(j).map((f) => f.text), 'biz')
-}
-
-async function telegram(kanaele) {
-    const texte = []
-    for (const name of (kanaele || []).slice(0, 15)) {
-        const url = telegramUrl(name)
-        if (!url) continue
-        try {
-            const html = await holeGeschuetzt(url, { timeout: 10000, versuche: 1 })
-            // Nur die letzten sechs Stunden — ältere Rufe sind kein Frühsignal mehr.
-            const grenze = Date.now() - 6 * 3600e3
-            for (const b of leseTelegram(html)) if (!b.zeit || b.zeit >= grenze) texte.push(b.inhalt)
-        } catch (e) {
-            logWarn('hype-frueh', `Telegram ${name}: ${e.message}`)
-        }
-    }
-    return erwaehnungen(texte, 'telegram')
-}
-
-async function reddit() {
-    const funde = await ausReddit()
-    const texte = funde.map((f) => `${f.symbol ? `$${f.symbol}` : ''} ${f.contract || ''}`)
-    return erwaehnungen(texte, 'reddit')
 }
 
 /**
@@ -578,14 +493,11 @@ async function fruehLaufIntern(einst) {
 
     // ── Quellen parallel; jede fällt für sich aus ───────────────────────
     const aufgaben = [
-        ['pumpfun', q.pumpfunNeu !== false || q.pumpfunAufstieg !== false, () => pumpfun(einst)],
         ['dexscreener', q.dexscreenerProfile !== false, dexscreenerProfile],
         ['geckoterminal', q.geckoterminalNeu !== false, () => geckoNeu(einst)],
     ].filter(([, an]) => an)
     const sozial = [
         ['biz', q.biz !== false, biz],
-        ['telegram', (einst.fruehTelegram || []).length > 0 && q.telegram !== false, () => telegram(einst.fruehTelegram)],
-        ['reddit', q.reddit === true, reddit],
         ['x', xFaellig, () => xQuelle(einst, bekannt, kuerzelErlaubt)],
     ].filter(([, an]) => an)
 
@@ -595,7 +507,13 @@ async function fruehLaufIntern(einst) {
      * Transaktion einen RPC-Aufruf braucht und dauert. Gelesen wird das
      * Signal danach in JEDEM Durchgang aus der Datenbank.
      */
-    const smartAn = q.smartmoney === true && (einst.smartWallets || []).length > 0
+    const smartGewollt = q.smartmoney === true && (einst.smartWallets || []).length > 0
+    // Ohne eigene RPC-Adresse ist Smart Money aus (kein öffentlicher Knoten mehr, S12).
+    const smartAn = smartGewollt && Boolean(String(einst.schluessel?.solanaRpc || '').trim())
+    if (smartGewollt && !smartAn) {
+        quellenStand.smartmoney = { ok: false, aus: true, grund: 'schluesselFehlt', quelle: 'Solana-RPC',
+            fehler: 'Smart Money braucht eine eigene Solana-RPC-Adresse' }
+    }
     const smartArbeit = (async () => {
         if (!smartAn) return
         const faellig = await beansprucheAufgabe('hype_frueh_smart',
@@ -605,7 +523,9 @@ async function fruehLaufIntern(einst) {
             const r = await smartAbruf(einst, einst.schluessel?.solanaRpc || '')
             quellenStand.smartmoney = { ok: true, anzahl: r.neu, wallets: r.wallets, fehler: r.fehler ? `${r.fehler} Wallet(s) nicht lesbar` : '' }
         } catch (e) {
-            quellenStand.smartmoney = { ok: false, fehler: String(e.message).slice(0, 160) }
+            quellenStand.smartmoney = istAus(e)
+                ? { ok: false, ...ausAntwort(e), fehler: e.message }
+                : { ok: false, fehler: String(e.message).slice(0, 160) }
         }
     })()
 
@@ -619,6 +539,9 @@ async function fruehLaufIntern(einst) {
         if (e.status === 'fulfilled') {
             quellenStand[name] = { ok: true, anzahl: e.value.length }
             for (const f of e.value) eintragen(karte, f)
+        } else if (istAus(e.reason)) {
+            // Kein Ausfall, sondern ein Zustand (kein Kundenschlüssel) — die Oberfläche sagt es so.
+            quellenStand[name] = { ok: false, ...ausAntwort(e.reason), fehler: e.reason.message }
         } else {
             quellenStand[name] = { ok: false, fehler: String(e.reason?.message || e.reason).slice(0, 160) }
         }
@@ -730,7 +653,7 @@ async function fruehLaufIntern(einst) {
     /*
      * DexScreener ist für Handel, Liquidität, Preis UND Bewertung die
      * Hauptquelle; bis 10.10.2026 füllte er die Bewertung nur, wo noch nichts
-     * stand — je nach Lauf kam sie dann von pump.fun oder von DexScreener.
+     * stand — je nach Lauf kam sie dann von pump.fun (bis S12) oder von DexScreener.
      */
     const DEX_VORRANG = ['liquiditaetUsd', 'volumen1h', 'transaktionen1h', 'transaktionen5m', 'preisUsd', 'aenderung1h',
         'kaufVerkauf1h', 'marktkapitalisierung', 'fdv']
@@ -741,6 +664,14 @@ async function fruehLaufIntern(einst) {
         if (!x.symbol && d.symbol) x.symbol = d.symbol
         if (!x.name && d.name) x.name = d.name
         if (!x.links && d.markt?.links) x.links = d.markt.links
+        /*
+         * Auf der pump.fun-Kurve ist das DexScreener-„Paar" die Bindungskurve
+         * selbst. Bis S12 kam ihre Adresse von pump.fun; jetzt von hier — die
+         * Risikoprüfung nimmt sie aus der Top-10-Rechnung. Nicht live gegen die
+         * Halterliste geprüft: Erkennt `risikoFrueh` sie dort nicht, bleibt der
+         * Top-10-Anteil unbekannt statt 80 %.
+         */
+        if (d.markt?.dex === 'pumpfun' && d.pair && !x.kurve?.length) x.kurve = [String(d.pair)]
         if (Number.isFinite(d.markt?.paarAlterStunden)) x.paarStarts = [...(x.paarStarts || []), jetzt - d.markt.paarAlterStunden * 3600e3]
         for (const [f, w] of Object.entries(d.markt || {})) {
             if (w === null || w === undefined) continue
@@ -750,7 +681,7 @@ async function fruehLaufIntern(einst) {
         }
     }
 
-    // ── Käufer und Pool-Transaktionen (GeckoTerminal, für alle) ─────────
+    // ── Käufer und Pool-Transaktionen (CoinGecko On-Chain, für alle) ────
     const gecko = await geckoMarkt(alle)
     for (const x of alle) {
         const g = gecko.karte.get(String(x.contract).toLowerCase())
@@ -760,7 +691,10 @@ async function fruehLaufIntern(einst) {
         for (const [f, w] of Object.entries(g.markt)) if (w !== null && w !== undefined) x.markt[f] = w
         if (g.aeltesterPoolAm) x.paarStarts = [...(x.paarStarts || []), g.aeltesterPoolAm]
     }
-    if (gecko.versucht) {
+    if (gecko.aus) {
+        // Ohne CoinGecko-Schlüssel keine Käuferzahlen — die Teilnote Beteiligung bleibt unbekannt.
+        quellenStand.kaeufer = { ok: false, ...gecko.aus, fehler: gecko.fehler }
+    } else if (gecko.versucht) {
         /*
          * Wie viele von wie vielen — und ob Teilabfragen scheiterten. Bis
          * 10.10.2026 stand „ok", sobald irgendeine Antwort kam; im Lauf des
@@ -779,13 +713,13 @@ async function fruehLaufIntern(einst) {
      * genannt" eine Messung — für jeden Token. Eine noch gültige X-Messung
      * (fortgeschrieben, `X_GILT_MS`) zählt mit.
      */
-    const sozialGeprueft = ['biz', 'telegram', 'reddit', 'x'].some((q) => quellenStand[q]?.ok)
+    const sozialGeprueft = ['biz', 'x'].some((q) => quellenStand[q]?.ok)
         || Boolean(letzteX?.ok && Number(letzteX.am) >= jetzt - X_GILT_MS)
 
     // ── Bewerten (erster Durchgang) ─────────────────────────────────────
     const bewerte = (e) => bewerteFrueh({
         stand: e.stand, verlauf: e.verlauf, links: e.x.links, profil: e.x.profil,
-        projektNote: e.projektNote, ersteller: e.bilanz, risiko: e.risiko, smart: e.smart, geborenAm: e.geborenAm,
+        projektNote: e.projektNote, risiko: e.risiko, smart: e.smart, geborenAm: e.geborenAm,
         sozialGeprueft,
     })
     const ergebnisse = []
@@ -799,8 +733,8 @@ async function fruehLaufIntern(einst) {
         /*
          * Das Alter steht vor der Bewertung fest, weil sie es braucht: die
          * Stundenzahlen eines Tokens unter einer Stunde decken nur sein Alter
-         * ab. Der FRÜHESTE bekannte Start (`tokenGeburt`): pump.fun bzw. der
-         * neue Pool, das DexScreener-Paar, der älteste GeckoTerminal-Hauptpool,
+         * ab. Der FRÜHESTE bekannte Start (`tokenGeburt`): der neue Pool, das
+         * DexScreener-Paar, der älteste On-Chain-Hauptpool,
          * der letzte gespeicherte Wert. Ein neuer Pool allein machte PEPE und
          * POL zu Minuten alten Token. Für den Status zählt notfalls der erste
          * Blick — das unterschätzt das Alter, nie umgekehrt.
@@ -826,13 +760,16 @@ async function fruehLaufIntern(einst) {
         let erwaehnungen = x.erwaehnungen
         if (x.xInfo && !plattformen.has('x')) { plattformen.add('x'); erwaehnungen += Number(x.xInfo.autoren) || 0 }
 
-        // Kurve und King of the Hill: aus diesem Lauf, sonst aus dem letzten
-        // (ein bekannter Token steht nicht in jeder pump.fun-Liste).
+        // Die Kurve: aus diesem Lauf (DexScreener-Paar), sonst aus dem letzten.
         x.kurve = x.kurve || altStand.kurve || null
-        if (x.markt.kothMin === undefined || x.markt.kothMin === null) x.markt.kothMin = altStand.kothMin ?? null
-        if (x.markt.kothAm === undefined || x.markt.kothAm === null) x.markt.kothAm = altStand.kothAm ?? null
-        const graduiert = x.markt.graduiert === true || altStand.graduiert === true
-            || Boolean(x.markt.dex && x.markt.dex !== 'pumpfun')
+        /*
+         * Durch die Kurve: ein Handelsplatz ausser der Kurve selbst (pumpswap,
+         * raydium …) oder ein früherer Befund. Seit S12 die einzige Herkunft —
+         * pump.fun meldete `complete`. Ohne DexScreener-Paar unbekannt, nicht „nein".
+         */
+        const graduiert = altStand.graduiert === true || (x.markt.dex
+            ? x.markt.dex !== 'pumpfun'
+            : (altStand.graduiert === false ? false : null))
 
         /*
          * Wie viele Minuten die Stundenzahlen dieser Aufnahme abdecken: das
@@ -854,9 +791,9 @@ async function fruehLaufIntern(einst) {
         const e = {
             x, alt, altStand, verlauf, stand, graduiert, geborenAm, alterStunden,
             pump: istPump(x, sicherJson(alt?.quellen, [])),
-            aufKurve: istPump(x, sicherJson(alt?.quellen, [])) && !graduiert,
+            // Unbekannt (kein Handelsplatz bekannt) zählt wie bisher als „noch auf der Kurve".
+            aufKurve: istPump(x, sicherJson(alt?.quellen, [])) && graduiert !== true,
             projektNote: gilt ? gilt.note : (gespeichert ? null : alt?.projektNote ?? null),
-            bilanz: gilt?.fakten?.ersteller || null,
             risiko: altStand.risiko && Number(altStand.risiko.am) >= jetzt - RISIKO_GILT_MS ? altStand.risiko : null,
             smart: smartKarte.get(String(x.contract)) || smartKarte.get(String(x.contract).toLowerCase()) || null,
         }
@@ -900,7 +837,7 @@ async function fruehLaufIntern(einst) {
         const kandidaten = [...ergebnisse].sort((a, b) => b.r.note - a.r.note).slice(0, PROJEKT_JE_LAUF)
         await pruefeViele(kandidaten.map((e) => ({
             symbol: e.x.symbol, name: e.x.name, chain: e.x.chain, contract: e.x.contract,
-            links: e.x.links, ersteller: e.x.ersteller, pump: e.pump,
+            links: e.x.links, pump: e.pump,
         })), {
             jeFertig: (_, p, fehler, i) => {
                 const e = kandidaten[i]
@@ -909,7 +846,6 @@ async function fruehLaufIntern(einst) {
                     return
                 }
                 e.projektNote = p.note
-                e.bilanz = p.fakten?.ersteller || e.bilanz
             },
         })
     }
@@ -1072,17 +1008,19 @@ async function raeumeAuf(knex, jetzt) {
     }
 }
 
-/** Plattformen, auf denen Menschen reden — im Gegensatz zu Ketten, die handeln. */
-const SOZIALE_PLATTFORMEN = ['telegram', 'biz', 'reddit', 'x']
+/**
+ * Plattformen, auf denen Menschen reden — im Gegensatz zu Ketten, die handeln.
+ * Telegram und Reddit bis S12; ihre alten Nennungen zählen nicht mehr.
+ */
+const SOZIALE_PLATTFORMEN = ['biz', 'x']
 
 /**
  * Reife Token als Funde für die Hauptprüfung.
  *
  * Eigene Quelle `fruehphase` (Domäne onchain: der Token wurde über Stunden
- * gehandelt gesehen). Wo er in Telegram-Kanälen oder auf /biz/ genannt wurde,
- * (oder auf X) kommt je Plattform ein Fund der Domäne `social` dazu — die Belege aus der
- * Beobachtung sollen nicht verloren gehen. Reddit nicht: das fragt die
- * Hauptprüfung selbst, ein zweiter Fund wäre dieselbe Stimme doppelt.
+ * gehandelt gesehen). Wo er auf /biz/ oder X genannt wurde, kommt je
+ * Plattform ein Fund der Domäne `social` dazu — die Belege aus der
+ * Beobachtung sollen nicht verloren gehen.
  *
  * `sozial.fruehPlattformen` trägt die Zahl der Plattformen in die
  * Sozial-Teilnote (`noteSozial`).
@@ -1102,7 +1040,7 @@ export async function reifeFunde() {
             }
             funde.push(fund({ ...basis, quelle: 'fruehphase',
                 sozial: sozial.length ? { fruehPlattformen: sozial.length } : {} }))
-            for (const p of ['telegram', 'biz', 'x']) if (sozial.includes(p)) funde.push(fund({ ...basis, quelle: p }))
+            for (const p of SOZIALE_PLATTFORMEN) if (sozial.includes(p)) funde.push(fund({ ...basis, quelle: p }))
         })
         return funde
     } catch {

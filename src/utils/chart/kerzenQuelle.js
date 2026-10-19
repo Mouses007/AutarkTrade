@@ -9,6 +9,7 @@
  */
 import axios from 'axios'
 import { BinanceStream, buildKlineUrl } from '../binanceStream.js'
+import { marktdaten, ladeMarktdaten } from '../marktdaten.js'
 
 export const INTERVALLE = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
 
@@ -25,16 +26,63 @@ export const INTERVALL_MS = {
     '1M': 30.44 * 1440 * MIN,
 }
 
+export const istRestQuelle = (boerse) => boerse === 'bitunix' || boerse === 'bitget'
+
+/*
+ * Marktdatenquelle (S12, Verkaufs-Prüfung Massnahme 1): Binance-Kerzen gibt
+ * es nur, wenn der Kunde Binance gewählt hat. Sonst ist die Vorgabe des
+ * Charts die gewählte Quelle (Bitget) bzw. bei „aus" Bitunix — die
+ * Ausführungsbörse, deren Kerzen der Chart immer zeigen darf. Vorher
+ * `await ladeMarktdaten()`; ungeladen gilt Binance nicht als gewählt.
+ */
+export function binanceGewaehlt() {
+    return marktdaten.value?.wahl === 'binance'
+}
+
+/** Vorgabe-Börse des Charts nach der Marktdatenquelle. */
+export function vorgabeBoerse() {
+    const w = marktdaten.value?.wahl
+    return w === 'binance' ? 'binance' : w === 'bitget' ? 'bitget' : 'bitunix'
+}
+
+/** Wählbare Börsen der Quellenwahl im Kopf eines Panels. */
+export function waehlbareBoersen() {
+    return binanceGewaehlt() ? ['binance', 'bitunix', 'bitget'] : ['bitunix', 'bitget']
+}
+
 /**
- * Quelle aus Börse und Markt. Binance ist die Datenbasis; Bitunix und Bitget
- * gibt es nur als Futures und nur per REST (siehe `server/chart-api.js`).
+ * Börse, aus der ein Panel wirklich lädt: Bitunix/Bitget (nur Futures) wie
+ * gewählt, sonst Binance — und ohne Binance-Wahl die Vorgabe-Börse.
+ */
+export function boerseFuer(panel) {
+    const b = panel?.boerse
+    if (panel?.markt !== 'spot' && istRestQuelle(b)) return b
+    return binanceGewaehlt() ? 'binance' : vorgabeBoerse()
+}
+
+/**
+ * Gespeichertes Panel an die Marktdatenquelle anpassen: steht es auf Binance
+ * (Futures oder Spot) und ist Binance nicht gewählt, wechselt es auf die
+ * Vorgabe-Börse (Futures — Bitunix/Bitget sind hier nur als Futures
+ * angebunden). Gibt true zurück, wenn umgestellt wurde, damit die Seite es
+ * sagen kann.
+ */
+export function passePanelAn(panel) {
+    if (!panel || binanceGewaehlt()) return false
+    if (panel.markt !== 'spot' && istRestQuelle(panel.boerse)) return false
+    panel.markt = 'futures'
+    panel.boerse = vorgabeBoerse()
+    return true
+}
+
+/**
+ * Quelle aus Börse und Markt für `/api/chart/kerzen`. Bitunix und Bitget gibt
+ * es nur als Futures und nur per REST (siehe `server/chart-api.js`).
  */
 export function quelleFuer(markt, boerse = 'binance') {
     if (boerse === 'bitunix' || boerse === 'bitget') return boerse
     return markt === 'spot' ? 'binance-spot' : 'binance-futures'
 }
-
-export const istRestQuelle = (boerse) => boerse === 'bitunix' || boerse === 'bitget'
 
 /** Wie viele Kerzen eine Quelle je Abruf hergibt. */
 export const QUELLEN_MAX = { binance: 1000, bitunix: 200, bitget: 1000 }
@@ -47,10 +95,16 @@ export const QUELLEN_OHNE = { bitget: ['8h'] }
  * die davor — für das Nachladen beim Zurückscrollen.
  * @returns {Promise<Array<{t,o,h,l,c,v}>>}
  */
-export async function ladeKerzen({ markt, symbol, interval, endTime, limit = 1000, boerse = 'binance', mitLauf = false }) {
+export async function ladeKerzen({ markt, symbol, interval, endTime, limit = 1000, boerse, mitLauf = false }) {
+    // Ohne ausdrückliche Börse (VWAP Vector, Trade-Bild): Binance, wenn gewählt, sonst die Vorgabe.
+    // Die Wahl erst kennen — ungeladen fiele die Vorgabe sonst auf Bitunix.
+    if (!marktdaten.value) await ladeMarktdaten()
+    if (!boerse) boerse = binanceGewaehlt() ? 'binance' : vorgabeBoerse()
     const params = { quelle: quelleFuer(markt, boerse), symbol, interval, limit: Math.min(limit, QUELLEN_MAX[boerse] || 1000) }
     if (endTime) params.endTime = endTime
     const { data } = await axios.get('/api/chart/kerzen', { params })
+    // `{ aus: true }`: die Marktdatenquelle hat diese Kerzen nicht — als Fehler weiterreichen.
+    if (data?.aus) throw Object.assign(new Error(data.meldung || 'Marktdaten aus'), { aus: data })
     const kerzen = (data?.kerzen || []).map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }))
     return mitLauf ? { kerzen, lauf: data?.lauf || null } : kerzen
 }
@@ -120,8 +174,13 @@ export class RestKerze {
 export class LiveKerze {
     constructor({ markt, symbol, interval, onKerze, onLuecke, onStatus }) {
         this.ersteVerbindung = true
+        const url = buildKlineUrl(symbol, markt, interval)
+        // Ohne Binance-Wahl kein Stream (der URL-Bauer sagt null) — die Kerzen
+        // bleiben dann beim letzten REST-Stand, statt zu einer Börse zu verbinden,
+        // die der Kunde abgewählt hat.
+        if (!url) { this.stream = null; onStatus?.('closed'); return }
         this.stream = new BinanceStream({
-            url: buildKlineUrl(symbol, markt, interval),
+            url,
             // Bei 1w/1M kommen Updates nur, wenn gehandelt wird — das tut der
             // Markt aber ständig; 30 s Stille heisst hier wirklich tot.
             silenceLimitMs: 30_000,
@@ -143,7 +202,7 @@ export class LiveKerze {
     }
 
     stop() {
-        this.stream.stop()
+        this.stream?.stop()
     }
 }
 

@@ -7,6 +7,7 @@ import { setupBitunixRoutes } from './server/bitunix-api.js'
 import { setupBitgetRoutes } from './server/bitget-api.js'
 import { setupPionexRoutes } from './server/pionex-api.js'
 import { setupBinanceRoutes } from './server/binance-api.js'
+import { setupQuellenRoutes } from './server/quellen/routen.js'
 import { setupMarginRateRoutes } from './server/margin-rates.js'
 import { setupPolygonRoutes } from './server/polygon-api.js'
 import { setupMarktradarRoutes, stopMarktradar } from './server/marktradar-api.js'
@@ -151,6 +152,7 @@ const startIndex = async () => {
     setupBitunixRoutes(app);
     setupBitgetRoutes(app);
     setupPionexRoutes(app);
+    setupQuellenRoutes(app);
     setupBinanceRoutes(app);
     setupMarginRateRoutes(app);
     setupPolygonRoutes(app);
