@@ -22,7 +22,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import dayjs from '../../../utils/dayjs-setup.js'
+import dayjs from '../../../utils/journal/zeit.js'
 import { lageZu } from '../../../../shared/handelszeiten.js'
 
 const props = defineProps({

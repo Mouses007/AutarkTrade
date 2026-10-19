@@ -26,7 +26,7 @@ import {
     levMapTier, levMapHours, levMapSpanPct, levMapMmr, levMapMmrQuelle, levMapWeights, levMapView, levMapThreshold, levMapProfileW,
 } from '../stores/live.js'
 import { aktualisiereMarginRate, mmrHerkunft } from '../utils/marginRate.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 
 /**
  * Eigene Vorgaben statt der Einstellungen aus dem Seitenmenü.

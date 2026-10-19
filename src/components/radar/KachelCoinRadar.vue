@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { liveSymbol } from '../../stores/live.js'
-import { currentUser } from '../../stores/globals.js'
+import { currentUser } from '../../stores/app/rahmen.js'
 import { BOERSE_KURZ, BOERSE_NAME, boerseUrl, boersenLinksVon } from '../../utils/boersenLinks.js'
 
 const props = defineProps({

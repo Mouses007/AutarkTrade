@@ -16,7 +16,7 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
-import dayjs from '../../utils/dayjs-setup.js'
+import dayjs from '../../utils/journal/zeit.js'
 import { lageZu } from '../../../shared/handelszeiten.js'
 
 const props = defineProps({

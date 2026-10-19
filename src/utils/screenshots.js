@@ -2,11 +2,11 @@ import { pageId, dateScreenshotEdited, renderData, markerAreaOpen, spinnerLoadin
 import { selectedMonth, selectedTags, selectedBroker } from '../stores/filters.js'
 import { screenshots, screenshot, tradeScreenshotChanged, selectedScreenshot, tags, tradeTags, screenshotsInfos } from '../stores/trades.js'
 /* useLoadMore removed — inlined below to break circular dependency */
-import { useUpdateTags, useUpdateAvailableTags} from './daily.js';
+import { useUpdateTags, useUpdateAvailableTags} from './journal/tagebuch.js';
 import { dbFind, dbFirst, dbCreate, dbUpdate, dbDelete } from './db.js'
 
 /* MODULES */
-import dayjs from './dayjs-setup.js'
+import dayjs from './journal/zeit.js'
 import i18n from '../i18n/index.js'
 import * as markerjs2 from 'markerjs2';
 

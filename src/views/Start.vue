@@ -13,7 +13,7 @@ import Pille from '../components/basis/Pille.vue'
 import { currentUser } from '../stores/settings.js'
 import { appMode } from '../stores/ui.js'
 import { MODES, modeHome, istModusAn } from '../config/menu.js'
-import { usePageId } from '../utils/utils.js'
+import { usePageId } from '../utils/journal/app.js'
 
 const { t } = useI18n()
 const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'entdecken', agent: 'agent', lernen: 'lernen' }

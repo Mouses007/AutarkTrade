@@ -5,12 +5,12 @@ import { useI18n } from 'vue-i18n'
 import { pageId, timeZoneTrade, spinnerLoadingPage, scrollToDateUnix } from '../stores/ui.js';
 import { selectedMonth, selectedMonthPreset, selectedPlSatisfaction, amountCase } from '../stores/filters.js';
 import { calendarData, miniCalendarsData } from '../stores/trades.js';
-import { useThousandCurrencyFormat } from '../utils/formatters.js';
-import { useMountCalendar, useMountDaily } from '../utils/mountOrchestration.js';
+import { useThousandCurrencyFormat } from '../utils/journal/format.js';
+import { useMountCalendar, useMountDaily } from '../utils/journal/ablauf.js';
 
 const { t } = useI18n()
 const router = useRouter()
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 
 
 const days = computed(() => [t('calendar.mon'), t('calendar.tue'), t('calendar.wed'), t('calendar.thu'), t('calendar.fri'), t('calendar.sat'), t('calendar.sun')])

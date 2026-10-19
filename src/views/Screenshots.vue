@@ -5,7 +5,7 @@ import SpinnerLoadingPage from '../components/SpinnerLoadingPage.vue';
 import Screenshot from '../components/Screenshot.vue';
 import { spinnerLoadMore, spinnerLoadingPage, expandedScreenshot } from '../stores/ui.js';
 import { screenshots } from '../stores/trades.js';
-import { useMountScreenshots, useCheckVisibleScreen, useLoadMore } from '../utils/mountOrchestration.js';
+import { useMountScreenshots, useCheckVisibleScreen, useLoadMore } from '../utils/journal/ablauf.js';
 import { endOfList } from '../stores/ui.js';
 import { sanitizeHtml } from '../utils/sanitize';
 import { useI18n } from 'vue-i18n'

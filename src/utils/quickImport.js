@@ -1,5 +1,5 @@
 import axios from 'axios'
-import dayjs from './dayjs-setup.js'
+import dayjs from './journal/zeit.js'
 import { dbCreate, dbFind, dbDelete, dbUpdate as dbUpdateRecord, dbFindTradeIdByPositionId } from './db.js'
 import { dbUpdateSettings } from './db.js'
 import { currentUser } from '../stores/settings.js'

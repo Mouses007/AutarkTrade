@@ -7,7 +7,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import dayjs from '../../utils/dayjs-setup.js'
+import dayjs from '../../utils/journal/zeit.js'
 import { timeZoneTrade, scrollToDateUnix } from '../../stores/ui.js'
 import { selectedMonth, selectedMonthPreset } from '../../stores/filters.js'
 import { dauerText } from '../../utils/chart/zeichnungen/geometrie.js'

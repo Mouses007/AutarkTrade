@@ -1058,7 +1058,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import * as echarts from 'echarts'
-import { useKostenAnzeige } from '../utils/formatters.js'
+import { useKostenAnzeige } from '../utils/journal/format.js'
 import { logWarn } from '../utils/logger.js'
 import AnbieterWahl from '../components/AnbieterWahl.vue'
 import PageInfo from '../components/PageInfo.vue'
@@ -1066,7 +1066,7 @@ import ProjektPruefung from '../components/hype/ProjektPruefung.vue'
 import FruehphaseAnsicht from '../components/hype/FruehphaseAnsicht.vue'
 import BoersenAnsicht from '../components/hype/BoersenAnsicht.vue'
 import { useIstTelefon } from '../utils/geraet.js'
-import { currentUser } from '../stores/globals.js'
+import { currentUser } from '../stores/app/rahmen.js'
 import {
     BOERSE_KURZ as BOERSE_LINK_KURZ, BOERSE_NAME as BOERSE_LINK_NAME,
     boerseUrl, aktivierteBoersen,

@@ -8,13 +8,13 @@ import BotDashboard from '../components/BotDashboard.vue'
 import { totals, profitAnalysis, satisfactionArray, satisfactionTradeArray, availableTags, groups, filteredTradesTrades, excursions } from '../stores/trades.js'
 import { currentUser } from '../stores/settings.js'
 import { allTimeNetPnL, allTimeVolume, last30dVolume, displayBonus, refreshAccountBalance, syncStartBalanceFromBroker } from '../stores/accountBalance.js'
-import { incomingPositions } from '../stores/globals.js'
+import { incomingPositions } from '../stores/journal/offenePositionen.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
 import { dbFind } from '../utils/db.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 import { istGewinn } from '../../shared/gewinn.js'
-import { useThousandCurrencyFormat, useTwoDecCurrencyFormat, useXDecCurrencyFormat, useThousandFormat, useXDecFormat } from '../utils/formatters.js';
-import { useMountDashboard, useDisposeJournalCharts } from '../utils/mountOrchestration.js';
+import { useThousandCurrencyFormat, useTwoDecCurrencyFormat, useXDecCurrencyFormat, useThousandFormat, useXDecFormat } from '../utils/journal/format.js';
+import { useMountDashboard, useDisposeJournalCharts } from '../utils/journal/ablauf.js';
 import NoData from '../components/NoData.vue';
 
 const { t } = useI18n()

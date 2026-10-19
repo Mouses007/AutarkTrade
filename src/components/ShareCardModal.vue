@@ -3,7 +3,7 @@ import { zeichneShareCard } from '../utils/shareCardBild.js'
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { useVorlagenKategorieLabel } from '../utils/formatters.js'
+import { useVorlagenKategorieLabel } from '../utils/journal/format.js'
 
 const { t } = useI18n()
 

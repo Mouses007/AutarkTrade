@@ -12,7 +12,7 @@ import axios from 'axios'
 import SymbolSuche from './SymbolSuche.vue'
 import { Symbol } from '../basis'
 import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js'
-import { currentUser } from '../../stores/globals.js'
+import { currentUser } from '../../stores/app/rahmen.js'
 import { aktivierteBoersen } from '../../utils/boersenLinks.js'
 
 const props = defineProps({

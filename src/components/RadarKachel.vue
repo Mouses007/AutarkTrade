@@ -9,7 +9,7 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 import InfoTipp from './InfoTipp.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'

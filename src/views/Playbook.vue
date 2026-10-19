@@ -7,15 +7,15 @@ import { spinnerLoadingPage, timeZoneTrade } from '../stores/ui.js'
 import { allTradeTimeframes, selectedTradeTimeframes, selectedBroker } from '../stores/filters.js'
 import { kopiertesBild } from '../stores/ui.js'
 import { availableTags } from '../stores/trades.js'
-import { useGetAvailableTags, useGetTagInfo } from '../utils/daily.js'
-import { useCreatedDateFormat } from '../utils/formatters.js'
+import { useGetAvailableTags, useGetTagInfo } from '../utils/journal/tagebuch.js'
+import { useCreatedDateFormat } from '../utils/journal/format.js'
 import { dbFind, dbGet, dbUpdate, dbCreate, dbDelete } from '../utils/db.js'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 import { sanitizeHtml } from '../utils/sanitize'
 import { useI18n } from 'vue-i18n'
 import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 
 const route = useRoute()
 const { t } = useI18n()

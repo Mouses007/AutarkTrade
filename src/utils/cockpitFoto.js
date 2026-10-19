@@ -20,7 +20,7 @@
  * reichen, um das Bild neben den importierten Trade zu legen.
  */
 
-import dayjs from './dayjs-setup.js'
+import dayjs from './journal/zeit.js'
 import { dbCreate } from './db.js'
 import { timeZoneTrade } from '../stores/ui.js'
 import { selectedBroker } from '../stores/filters.js'

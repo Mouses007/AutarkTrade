@@ -2,9 +2,9 @@
 import { selectedItem, modalDailyTradeOpen, pageId, kopiertesBild } from '../stores/ui.js';
 import { tags } from '../stores/trades.js';
 import { useSetupMarkerArea, useSelectedScreenshotFunction } from '../utils/screenshots';
-import { useHourMinuteFormat, useTimeFormat, useCreatedDateFormat } from '../utils/formatters.js';
-import { useEditItem } from '../utils/utils';
-import { useGetTagInfo } from '../utils/daily';
+import { useHourMinuteFormat, useTimeFormat, useCreatedDateFormat } from '../utils/journal/format.js';
+import { useEditItem } from '../utils/journal/app.js';
+import { useGetTagInfo } from '../utils/journal/tagebuch.js';
 
 
 import { ref } from 'vue'

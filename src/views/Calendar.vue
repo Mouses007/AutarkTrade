@@ -5,7 +5,7 @@ import NoData from '../components/NoData.vue';
 import Calendar from '../components/Calendar.vue';
 import { spinnerLoadingPage } from '../stores/ui.js';
 import { calendarData, filteredTrades } from '../stores/trades.js';
-import { useMountCalendar } from '../utils/mountOrchestration.js'
+import { useMountCalendar } from '../utils/journal/ablauf.js'
 
 onBeforeMount(async () => {
     await useMountCalendar()

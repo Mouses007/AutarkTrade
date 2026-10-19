@@ -16,7 +16,7 @@ import {
     liveMode, replayFrom, replayTo, replayLabel, RAMP_OPTIONS,
     replayEntry, replayExit, replayFokus, replayZoom, REPLAY_ZOOM_OPTIONS,
 } from '../stores/live.js'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 
 // Höhe wird gemessen, nicht in CSS geraten — siehe useFuellhoehe.js
 const { el: wrapHoehe } = useFuellhoehe()

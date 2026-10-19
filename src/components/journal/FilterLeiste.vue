@@ -19,6 +19,7 @@ import { useDateCalFormat, useDateCalFormatMonth, useCapitalizeFirstLetter } fro
 import { useMountCalendar, useMountDashboard, useMountDaily, useMountAuswertung, useCheckVisibleScreen } from '../../utils/journal/ablauf.js'
 import { useInitTooltip, useCloseMobileMenu } from '../../utils/journal/app.js'
 import { ladeDiagramme } from '../../utils/journal/diagrammLader.js'
+import { useRefreshScreenshot } from '../../utils/screenshots.js'
 
 const { t } = useI18n()
 
@@ -147,7 +148,6 @@ async function speichern() {
         await useMountDaily()
         useCheckVisibleScreen()
     } else if (pageId.value === 'screenshots') {
-        const { useRefreshScreenshot } = await import('../../utils/screenshots.js')
         await useRefreshScreenshot()
         useCheckVisibleScreen()
     } else if (pageId.value === 'calendar') {
@@ -335,6 +335,7 @@ onMounted(async () => {
 }
 .filterDaten {
     display: flex;
+    flex-direction: column;
     gap: 0.3rem;
 }
 .filterInfo {

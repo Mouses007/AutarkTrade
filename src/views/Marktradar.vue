@@ -34,7 +34,7 @@ import KachelEtf from '../components/radar/KachelEtf.vue'
 import KachelWal from '../components/radar/KachelWal.vue'
 import { liveSymbol } from '../stores/live.js'
 // Für die Alarm-Einstellungen: currentUser hält den Einstellungssatz
-import { currentUser } from '../stores/globals.js'
+import { currentUser } from '../stores/app/rahmen.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { oeffneLivetradingFenster } from '../utils/livetradingFenster.js'
 import { sendNotification } from '../utils/notify.js'

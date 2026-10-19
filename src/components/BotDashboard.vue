@@ -21,8 +21,8 @@ import { amountCase, selectedBroker } from '../stores/filters.js'
 import {
     useTwoDecCurrencyFormat, useThousandCurrencyFormat, useThousandFormat,
     useXDecFormat, useTwoDecFormat
-} from '../utils/formatters.js'
-import dayjs from '../utils/dayjs-setup.js'
+} from '../utils/journal/format.js'
+import dayjs from '../utils/journal/zeit.js'
 
 // ===== Helpers =====
 

@@ -143,7 +143,7 @@ import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import * as echarts from 'echarts'
-import { useKostenAnzeige } from '../../utils/formatters.js'
+import { useKostenAnzeige } from '../../utils/journal/format.js'
 import { logWarn } from '../../utils/logger.js'
 
 const { t, locale } = useI18n()

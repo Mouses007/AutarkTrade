@@ -20,10 +20,10 @@
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import dayjs from '../../utils/dayjs-setup.js'
+import dayjs from '../../utils/journal/zeit.js'
 import { lageZu } from '../../../shared/handelszeiten.js'
 import { liveSymbol } from '../../stores/live.js'
-import { currentUser } from '../../stores/globals.js'
+import { currentUser } from '../../stores/app/rahmen.js'
 import { boerseUrl, boersenLinksVon, BOERSE_KURZ, BOERSE_NAME } from '../../utils/boersenLinks.js'
 import Symbol from '@/components/basis/Symbol.vue'
 

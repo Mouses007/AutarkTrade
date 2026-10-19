@@ -23,7 +23,7 @@ README.md and this file are kept in sync for project and architecture descriptio
 - **Backend**: Express.js with Knex (SQLite default, optional PostgreSQL)
 - **Charts**: Apache ECharts; the chart workspace (`/chart`) uses Lightweight Charts 5 (TradingView, Apache-2.0 — the attribution logo must stay on)
 - **Styling**: own design system (`src/assets/design/tokens.css`, `basis.css`, `rahmen.css`; building blocks in `src/components/basis/`), Bootstrap 5 bundled via npm as a transition (to be removed in S9); transition layer `src/assets/design/uebergang.css` (replaced `style-dark.css` in S9 part 1) maps the old variable names onto the tokens
-- **Other key libs**: dayjs (dates/timezones), PapaParse (only the Databento OHLCV CSV in `journal-alt.js`), Quill (rich text), markerjs2 (screenshot annotation), lodash, axios
+- **Other key libs**: dayjs (dates/timezones), PapaParse (only the Databento OHLCV CSV in `utils/journal/import.js`), Quill (rich text), markerjs2 (screenshot annotation), lodash, axios
 
 ## Commands
 
@@ -93,7 +93,7 @@ exactly, floats at 1e-9 relative.
 
 `src/utils/__selftest-mfe-pfade.mjs` is the second golden master, same
 technique and the same `JOURNAL_GOLDEN_SCHREIBEN=1` switch, for what lives in
-`src/utils/journal-alt.js`: Databento CSV → candles (`useCreateOHLCV`), candle
+`src/utils/journal/import.js` and `tagesrechnung.js` (until S7 `journal-alt.js`): Databento CSV → candles (`useCreateOHLCV`), candle
 fetching via Polygon and Databento (`useGetOHLCV`, synthetic 1-minute candles
 served through the axios mock — which passes config/body to a response
 function), the MFE price per trade in two trading time zones
@@ -186,7 +186,7 @@ Not covered: the REST CRUD layer and anything rendered in the frontend.
 
 **Layout system**: `App.vue` renders `<component :is="$route.meta.layout">` — all routes use `DashboardLayout` (side menu + nav + content area). Routes defined in `src/router/index.js`, all lazy-loaded.
 
-**State management** (`src/stores/globals.js`): Uses Vue `ref()` and `reactive()` exports directly — **not Pinia stores**. Components import and mutate these directly. Filter state (selected tags, positions, date ranges, etc.) is persisted to `localStorage`.
+**State management** (`src/stores/app/*` — rahmen, laden, einstellungen — and `src/stores/journal/*` — filter, auswertung, import, tagebuch, kalender, screenshots, offenePositionen; the bundles `stores/{ui,filters,trades,settings}.js` re-export them, `stores/globals.js` is a forwarding file until S9): Uses Vue `ref()` and `reactive()` exports directly — **not Pinia stores**. Components import and mutate these directly. Filter state (selected tags, positions, date ranges, etc.) is persisted to `localStorage`.
 
 **`currentUser.value`**: Holds app settings loaded from the SQLite `settings` table via `dbGetSettings()`. This is not a user object — it's the single-user settings record.
 
@@ -199,16 +199,16 @@ All DB operations go through `src/utils/db.js` which calls the Express REST API 
 
 ### Mount Orchestration
 
-View initialization follows a pattern in `src/utils/mountOrchestration.js`:
+View initialization follows a pattern in `src/utils/journal/ablauf.js` (a generation counter lets a newer mount silently abort an older one):
 - `useMountDashboard()` — sequential + parallel promise chains: fetch data → filter → calculate totals → group → render charts
 - `useMountDaily()`, `useMountCalendar()`, `useMountScreenshots()` — similar patterns per view
 - Each manages spinner state (`spinnerLoadingPage.value`) and mounted flags
 
 ### Business Logic Utils
 
-- `trades.js` — Query/filter/group trades, P&L calculations (`useGetFilteredTrades`, `useGroupTrades`, `useCalculateProfitAnalysis`)
+- `journal/` — the journal core, rebuilt clean-room in S7 from `docs/spec/journal-kern.md`: `laden.js` (load + filter, `useGetFilteredTrades`; the pure filter/enrichment in `filtern.js`), `summen.js` (`useTotalTrades`, summing via `totals-kern.js`), `gruppieren.js` (`useGroupTrades`), `gewinnanalyse.js` (`useCalculateProfitAnalysis`), `tagesrechnung.js` (blotter/P&L), `kalender.js`, `tagebuch.js` (satisfaction, tags, notes, excursions), `import.js` (import preview/save, OHLCV, MFE), `ablauf.js` (mounts), `app.js` (app init, periods, tabs, popover), `format.js` (formatters), `zeit.js` (the dayjs instance). The deliberate legacy bugs of spec §7 are reproduced and marked in the code; the old paths `utils/{trades,daily,mountOrchestration,formatters,dayjs-setup,utils}.js` are forwarding files until S9
 - `quickImport.js` — the API import (Bitunix/Bitget/Pionex) and manual trade entry: one builder for trade objects (`buildTradeObj`)
-- `journal-alt.js` — transition module (S3): what was still called from the former `addTrades.js` — preview/save of the API import in `AddTrades.vue`, blotter/P&L for `trades.js`, MFE/OHLCV for `Daily.vue`/`AddExcursions.vue`. TradeNote-derived, kept unchanged until the clean-room rebuild (S7/S8); covered by the two golden masters. The CSV import (`brokers.js`, `brokers-kern.js`, CSV parts of `addTrades.js`) and the dead execution-based import flow were deleted in S3
+- The CSV import (`brokers.js`, `brokers-kern.js`, CSV parts of `addTrades.js`) and the dead execution-based import flow were deleted in S3
 - `charts.js` — ECharts configuration and rendering
 
 ### Key Views
@@ -229,7 +229,7 @@ View initialization follows a pattern in `src/utils/mountOrchestration.js`:
 - `InfoTipp.vue` — the one way to attach an inline explanation to a single element: a small "i" that shows text on hover (tap on phones), globally switchable via the `erweiterteInfos` setting (default on, mirrored to `localStorage` so nothing flashes before settings load). Deliberately **not** a Bootstrap tooltip: those are imperative instances that a `v-if` would orphan, `useInitTooltip()` in `utils.js` is not idempotent (unlike `useInitPopover()` right above it), and Bootstrap comes from a CDN — help text that vanishes offline is the wrong failure mode. Positioning is `Teleport to="body"` + fixed coords from `getBoundingClientRect()`, the same pattern and the same reason as `PageInfo.vue`/`RadarOverlay.vue` (tile heads clip overflow). `te()` before `t()` is mandatory: a missing key renders **nothing** rather than the raw key — the bug that made `info.coinRadar.caveat` show up literally for months. Boundary: `title=` says what a control **is**, `InfoTipp` says what a number **means**, so the existing `title=` attributes on bare icon buttons stay. Tile-level texts attach through `infoKey` on the registry entries, derived in `kachel-registry.js` as `<raum>.title` → `<raum>.info` (two Live-Trading tiles hang on `nav.liquidity`/`nav.liquidations` and carry an explicit `infoKey`) — ~29 texts cover their placements across Marktradar and Live-Trading.
 - `ShareCardModal.vue` — Trade share card generator (FLUX.2 AI image + SVG overlay via `flux-api.js`)
 - `TradeEvalPopup.vue` — Trade evaluation/rating popup (SL/TP, RRR, etc.)
-- `SidebarFilters.vue` — Global filter panel (tags, date range, position type); state in `globals.js`
+- `journal/FilterLeiste.vue` — Global filter panel in the side menu (tags, date range, position type); state in `stores/journal/filter.js`
 
 ### Styling
 

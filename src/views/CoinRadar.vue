@@ -1021,10 +1021,10 @@ import PageInfo from '../components/PageInfo.vue'
 import InfoTipp from '../components/InfoTipp.vue'
 import TiefensucheErgebnis from '../components/hype/TiefensucheErgebnis.vue'
 import AbverkaufAnsicht from '../components/coinradar/AbverkaufAnsicht.vue'
-import { useKostenAnzeige } from '../utils/formatters.js'
+import { useKostenAnzeige } from '../utils/journal/format.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { logWarn } from '../utils/logger.js'
-import { currentUser } from '../stores/globals.js'
+import { currentUser } from '../stores/app/rahmen.js'
 import {
     BOERSE_KURZ as BOERSE_LINK_KURZ, BOERSE_NAME as BOERSE_LINK_NAME,
     boerseUrl, boersenLinksVon as boersenLinksAus,

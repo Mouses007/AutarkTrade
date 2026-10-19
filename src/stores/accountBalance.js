@@ -25,10 +25,10 @@
  */
 import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
-import dayjs from '../utils/dayjs-setup.js'
+import dayjs from '../utils/journal/zeit.js'
 import { dbFind, dbUpdateSettings } from '../utils/db.js'
 import { selectedBroker } from './filters.js'
-import { currentUser } from './globals.js'
+import { currentUser } from './app/rahmen.js'
 
 // Per-Broker-Cache: { bitunix: { totalNet, totalVol, vol30d, ts }, bitget: {...} }
 const cache = reactive({})

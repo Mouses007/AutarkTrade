@@ -5,8 +5,8 @@
  *   JOURNAL_GOLDEN_SCHREIBEN=1 node src/utils/__selftest-mfe-pfade.mjs   # Stand einfrieren
  *
  * Der zweite Golden Master neben `__selftest-journal.mjs`. Jener deckt den
- * Journal-Kern ab, ausdrücklich NICHT aber, was heute in `journal-alt.js`
- * steht (bis S3 in `addTrades.js`):
+ * Journal-Kern ab, ausdrücklich NICHT aber, was in `utils/journal/import.js` und
+ * `tagesrechnung.js` steht (bis S7 `journal-alt.js`, bis S3 `addTrades.js`):
  *
  *   - `useCreateOHLCV`   Databento-CSV → Kerzen (Tagesansicht)
  *   - `useGetOHLCV`      Kerzen für alle Symbole holen, Polygon und Databento

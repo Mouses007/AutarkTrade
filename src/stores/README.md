@@ -1,42 +1,49 @@
 # Stores
 
-Zustand lebt weiterhin zentral in `globals.js`. Die Einstiegspunkte `ui.js`, `filters.js`, `trades.js`, `settings.js` und `diary.js` bündeln Re-Exports; die Unterordner gruppieren sie nach Domain/Concern.
+Kein Pinia: Zustand sind direkt exportierte `ref()`/`reactive()`/`computed()`.
+Seit S7 (Neubau des Journal-Kerns) leben die Werte nach Zuständigkeit in zwei
+Ordnern; die exportierten Namen sind unverändert (Spezifikation
+`docs/spec/journal-kern.md` §3).
 
-## Einstiegspunkte (öffentliche API)
+## Wo die Werte leben
 
 | Datei | Inhalt |
 |-------|--------|
-| `ui.js` | Loading, Navigation, Tabs, Screenshot-UI, allgemeiner App-State |
-| `filters.js` | Auswahlwerte (Tags, Zeitraum, …) und Optionlisten |
-| `trades.js` | Dashboard-Daten, Add-Trades, Daily-Detail, Incoming, Screenshots, Kalender |
-| `settings.js` | User/Config und KI-Report-Status |
-| `diary.js` | Tagebuch-State (eigene Refs/Reactive) |
+| `app/rahmen.js` | Seite (`pageId`), Einstellungszeile (`currentUser`), Zeitzone, Modus, Menü, Reiterzustand, Abfrage-Limits |
+| `app/laden.js` | Spinner, Mounted-Flags, `renderData`, `barChartNegativeTagGroups` |
+| `app/einstellungen.js` | `renderProfile`, `apis`, `layoutStyle`, KI-Report-Status |
+| `app/ablage.js` | Hilfen zum Lesen aus localStorage/sessionStorage beim Laden (kein Zustand) |
+| `journal/filter.js` | Auswahl der Seitenleiste (`selected*`, `amountCase` …) und Optionslisten |
+| `journal/auswertung.js` | Ergebnis der Kette: `filteredTrades*`, `totals`, `totalsByDate`, `groups`, `profitAnalysis` |
+| `journal/import.js` | Import-Vorschau: `executions`, `trades`, `blotter`, `pAndL`, vorhandene Tage |
+| `journal/tagebuch.js` | Zufriedenheit, Tags, Tag-Katalog, Notizen, Exkursionen, Bearbeitungszustand |
+| `journal/kalender.js` | `calendarData`, `miniCalendarsData`, `tradeAccounts` |
+| `journal/screenshots.js` | Screenshot-Daten und -Bearbeitung |
+| `journal/offenePositionen.js` | Incoming-Positionen und Bewertungs-Hinweise |
 
-## Granulare Imports
+## Einstiegspunkte (Re-Exporte)
 
-Statt nur aus dem Einstiegspunkt kannst du gezielt aus Submodulen importieren:
+| Datei | Inhalt |
+|-------|--------|
+| `ui.js` | `ui/loading.js`, `ui/navigation.js`, `ui/tabs.js`, `ui/screenshots-ui.js`, `ui/app.js` |
+| `filters.js` | `filters/selection.js`, `filters/options.js` |
+| `trades.js` | `trades/dashboard.js`, `add-trades.js`, `daily-detail.js`, `incoming.js`, `screenshots.js`, `calendar.js` |
+| `settings.js` | `settings/app.js`, `settings/reporting.js` |
+
+Die Unterordner re-exportieren nur aus `app/*` und `journal/*`. Neuer Code
+importiert am besten direkt aus `app/*` bzw. `journal/*`:
 
 ```js
-// Nur Loading-State
-import { spinnerLoadingPage, dashboardChartsMounted } from '@/stores/ui/loading.js'
-
-// Nur Filter-Auswahl
-import { selectedTags, selectedDateRange } from '@/stores/filters/selection.js'
-
-// Nur Incoming/Evaluation
-import { pendingOpeningCount, getNotifiedPositionIds } from '@/stores/trades/incoming.js'
+import { pageId, timeZoneTrade } from '@/stores/app/rahmen.js'
+import { selectedTags, selectedRange } from '@/stores/journal/filter.js'
 ```
 
-Weiterhin gültig (und unverändert):
+`globals.js` ist nur noch eine Weiterleitung für parallele Sitzungen und
+entfällt in S9.
 
-```js
-import { spinnerLoadingPage, selectedTags } from '@/stores/ui.js'
-import { selectedTags } from '@/stores/filters.js'
-```
+## Regeln
 
-## Ordnerstruktur
-
-- `ui/` — loading.js, navigation.js, tabs.js, screenshots-ui.js, app.js
-- `filters/` — selection.js, options.js
-- `trades/` — dashboard.js, add-trades.js, daily-detail.js, incoming.js, screenshots.js, calendar.js
-- `settings/` — app.js, reporting.js
+- `reactive([])`/`reactive({})` werden in place geleert und gefüllt, nie
+  ersetzt — Konsumenten halten Referenzen darauf.
+- Ohne `localStorage` (Node ohne Attrappe) liefern einige Filter-Exporte ''
+  statt einer Ref (Altverhalten, `app/ablage.js`: `refOderLeer`).

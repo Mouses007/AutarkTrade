@@ -14,7 +14,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import { liveSymbol } from '../../stores/live.js'
-import { currentUser } from '../../stores/globals.js'
+import { currentUser } from '../../stores/app/rahmen.js'
 import { BOERSE_NAME, boerseUrl, aktivierteBoersen } from '../../utils/boersenLinks.js'
 
 const props = defineProps({
