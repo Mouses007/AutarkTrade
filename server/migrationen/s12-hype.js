@@ -61,7 +61,8 @@ export async function migriere(knex, addColumnIfNotExists) { // eslint-disable-l
             try { return z ? JSON.parse(z.wert) : undefined } catch { return undefined }
         }
         // RugCheck lief bisher immer mit — an lassen, solange der Nutzer nichts anderes sagt.
-        if ((await lies('rugcheckAn')) === undefined) await schreibe('rugcheckAn', true)
+        // `null` = „Vorgabe" (S15 speichert nur Abweichungen) gilt wie ungesetzt.
+        if ((await lies('rugcheckAn')) == null) await schreibe('rugcheckAn', true)
         // Börsen: bisher liefen alle. Die gelben bleiben an, die übrigen nimmt die Vorgabe.
         const boersen = (await lies('boersenwachtBoersen')) || {}
         let geaendert = false

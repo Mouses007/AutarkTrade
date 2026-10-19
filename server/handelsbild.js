@@ -546,9 +546,9 @@ export function baueHandelsZeilen(d = {}) {
             + ` (${mitWert.length ? Math.round((plus / mitWert.length) * 100) : 0} %)`)
     }
 
-    // Aktien-Futures und Dollar-Index (Yahoo) sind seit S12 entfernt — es
-    // bleibt der Stablecoin-Fluss (CoinGecko mit Kundenschlüssel). Ältere
-    // Nutzlasten mit `maerkte` werden weiter gelesen.
+    // Aktien-Futures und Dollar-Index (Yahoo) liefert `holeMakro` nur mit
+    // dem Schalter `quellenOhneFreigabe` (S15); ohne ihn bleibt der
+    // Stablecoin-Fluss (CoinGecko). Beide Formen werden gelesen.
     if (d.makro) {
         const namen = { sp500: 'S&P 500', nasdaq: 'Nasdaq 100', russell: 'Russell 2000', dxy: 'Dollar-Index' }
         const teile = (d.makro.maerkte || []).filter(m => m.verfuegbar).map(m =>

@@ -23,7 +23,8 @@ import { getKnex } from './database.js'
 import { logWarn } from './logger.js'
 import { getHistoricalCandles, timeframeMs } from './market-data.js'
 import { beansprucheAufgabe } from './db-claim.js'
-import { FRUEH_REGEL_AUSWERTUNG } from './radar-guete.js'
+import { FRUEH_REGEL_AUSWERTUNG, FRUEH_REGEL_OHNE_FREIGABE, fruehRegelFuer } from './radar-guete.js'
+import { freigabeAn, quelleErlaubt } from './quellen/freigabe.js'
 
 /**
  * Wann gemessen wird.
@@ -210,6 +211,15 @@ export async function legeAnHype(erstelltAm) {
  */
 export const FRUEH_REGEL = FRUEH_REGEL_AUSWERTUNG
 
+/**
+ * S15: Neue Aufträge bekommen den Stand des Schalters „Quellen ohne
+ * Verkaufsfreigabe" (an → 2 wie vor S12, aus → 3). Gemessen werden beide —
+ * ein Umlegen des Schalters soll offene Aufträge nicht als Altbestand
+ * auslassen; ausgewertet wird je Stand getrennt (`werteAusFrueh`).
+ */
+export const GUELTIGE_FRUEH_REGELN = [FRUEH_REGEL_OHNE_FREIGABE, FRUEH_REGEL_AUSWERTUNG]
+const fruehRegelGilt = (r) => GUELTIGE_FRUEH_REGELN.includes(Number(r))
+
 /** Je Durchgang so viele Token für die Grundrate — Zufallsauswahl der NEU gesehenen. */
 const FELD_FRUEH = 1
 
@@ -286,6 +296,7 @@ export function laufIdFrueh(z) {
  * geschafft" heisst nur etwas für einen Token, der zu Beginn noch darauf war.
  */
 export async function legeAnFrueh(spitze = [], vergleichbar = [], neuGesehen = []) {
+    const regel = fruehRegelFuer(await freigabeAn())
     const auswahl = waehleFrueh(spitze, vergleichbar, neuGesehen).filter((z) => z.contract && z.id)
     if (!auswahl.length) return 0
     const jetzt = Date.now()
@@ -307,7 +318,7 @@ export async function legeAnFrueh(spitze = [], vergleichbar = [], neuGesehen = [
                 preisStart: positiv(z.preis),
                 mcapStart: positiv(z.mcap),
                 liquiditaetStart: zahl(z.liq),
-                regel: FRUEH_REGEL,
+                regel,
                 graduiertStart: z.graduiert === true ? 1 : (z.graduiert === false ? 0 : null),
                 alterStartH: zahl(z.alterStunden),
                 pumpFun: z.pump === true ? 1 : (z.pump === false ? 0 : null),
@@ -362,7 +373,7 @@ export async function messeFaellige(deckel = DECKEL_JE_ART) {
     const beginn = Date.now()
     // Altbestand der Frühphase in einem Zug auslassen (siehe unten); danach ist das ein leerer Schritt.
     await knex('radar_ergebnisse').where({ art: 'frueh', status: 'offen' })
-        .where((q) => q.whereNull('regel').orWhereNot('regel', FRUEH_REGEL))
+        .where((q) => q.whereNull('regel').orWhereNotIn('regel', GUELTIGE_FRUEH_REGELN))
         .update({ status: 'ausgelassen', fehler: 'alter Regelstand — wird nicht ausgewertet', gemessenAm: beginn })
         .catch((e) => logWarn('radar-ergebnisse', `Altbestand auslassen: ${e.message}`))
     const faellig = []
@@ -385,7 +396,7 @@ export async function messeFaellige(deckel = DECKEL_JE_ART) {
          * standen vor den sechs neuen, und ihr Verbrauch fehlte dem laufenden
          * Durchgang bei den Käufern (31 von 150 Token).
          */
-        if (a.art === 'frueh' && Number(a.regel) !== FRUEH_REGEL) {
+        if (a.art === 'frueh' && !fruehRegelGilt(a.regel)) {
             await knex('radar_ergebnisse').where('id', a.id)
                 .update({ status: 'ausgelassen', fehler: 'alter Regelstand — wird nicht ausgewertet', gemessenAm: Date.now() })
                 .catch(() => {})
@@ -587,27 +598,31 @@ export function hochImFenster(ohlcv, von, bis) {
 
 /** Ab so vielen Transaktionen in sechs Stunden „lebt" ein Token noch. */
 export const LEBT_MIN_TX_6H = 5
+const LEBT_FENSTER_MS = 6 * 3600e3
 
 /**
  * Lebt der Token noch — wird er GEHANDELT? Rein.
  *
  * Bis 10.10.2026 hiess „lebt": DexScreener kennt ein Paar mit Liquidität über
- * null. Ein toter Token mit gesperrter Liquidität lebte damit für immer. Jetzt
+ * null. Ein toter Token mit gesperrter Liquidität lebte damit für immer, und
+ * ein Token auf der Kurve, den pump.fun kennt, lebte schon deshalb. Jetzt
  * zählt Handel: mindestens fünf Transaktionen in den letzten sechs Stunden
- * (DexScreener — auch auf der pump.fun-Kurve, die DexScreener als Paar
- * `pumpfun` führt). Bis S12 sprang für Kurven-Token pump.fun mit dem Zeitpunkt
- * des letzten Handels ein; ohne DexScreener-Angabe ist es jetzt unbekannt.
+ * (DexScreener), auf der Kurve der letzte Handel innerhalb von sechs Stunden
+ * (pump.fun nennt nur den Zeitpunkt, keine Zahl; S15 nur mit Schalter an —
+ * ohne `coin` ist die Rechnung die von S12).
  *
  * @returns {1|0|null} null = Paar bekannt, aber ohne Angabe zum Handel
  */
-export function lebtNoch({ markt = null } = {}) {
+export function lebtNoch({ markt = null, coin = null, jetzt = Date.now() } = {}) {
     if (markt) {
         if (markt.liquiditaetUsd !== null && markt.liquiditaetUsd !== undefined && Number(markt.liquiditaetUsd) === 0) return 0
         const tx6 = markt.transaktionen6h
         if (tx6 !== null && tx6 !== undefined && Number.isFinite(Number(tx6))) return Number(tx6) >= LEBT_MIN_TX_6H ? 1 : 0
-        return null
     }
-    // DexScreener kennt ihn nicht mehr: weg.
+    const letzter = Number(coin?.last_trade_timestamp)
+    if (coin && Number.isFinite(letzter) && letzter > 0) return jetzt - letzter <= LEBT_FENSTER_MS ? 1 : 0
+    if (markt || coin) return null
+    // Weder DexScreener noch pump.fun kennt ihn: weg.
     return 0
 }
 
@@ -653,19 +668,29 @@ async function poolsVon(holeCoinGecko, netz, contract, n = 2) {
  */
 async function messeFrueh(a) {
     if (!a.contract) throw new Error('keine Vertragsadresse')
-    const { dexDetails, holeCoinGecko } = await import('./hype-radar/quellen.js')
+    const { dexDetails, holeCoinGecko, pumpCoin } = await import('./hype-radar/quellen.js')
     const { istAus } = await import('./quellen/aus.js')
     const d = await dexDetails(a.contract, { streng: true })
     // Der Zustand am Start sagt es (Kurve, Quelle, Handelsplatz); die Endung nur bei Altbestand.
     const istPump = a.pumpFun !== null && a.pumpFun !== undefined
         ? Number(a.pumpFun) === 1
         : a.chain === 'solana' && /pump$/i.test(String(a.contract))
+    /*
+     * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" wie vor S12 über
+     * `pumpCoin` (`/coins-v2`; `/coins/{mint}` antwortet für jeden Coin mit
+     * 404). Ein Ausfall WIRFT — bis 10.10.2026 wurde jeder Fehler zu „pump.fun
+     * kennt ihn nicht", und ohne DexScreener-Paar daraus „tot".
+     */
+    const pumpFrei = await quelleErlaubt('pumpfun')
+    const coin = istPump && pumpFrei ? await pumpCoin(a.contract) : null
     const m = d?.markt || null
 
     const preisEnde = positiv(m?.preisUsd)
-    const mcapEnde = positiv(m?.marktkapitalisierung) ?? positiv(m?.fdv)
+    const mcapEnde = positiv(m?.marktkapitalisierung) ?? positiv(m?.fdv) ?? positiv(coin?.usd_market_cap)
     const liqEnde = m && m.liquiditaetUsd !== null && m.liquiditaetUsd !== undefined ? zahl(m.liquiditaetUsd) : null
-    const graduiert = istPump && m?.dex ? (m.dex !== 'pumpfun' ? 1 : 0) : null
+    let graduiert = null
+    if (coin) graduiert = coin.complete === true ? 1 : 0
+    else if (istPump && m?.dex) graduiert = m.dex !== 'pumpfun' ? 1 : 0
 
     const { renditePct } = renditeGleichesMass(a, { preisEnde, mcapEnde })
 
@@ -678,7 +703,9 @@ async function messeFrueh(a) {
      */
     let mfePct = null
     const netz = GECKO_NETZ[a.chain]
-    if (netz) {
+    // Mit Schalter an (S15) die Pools wie vor S12: Kurve und Pool von pump.fun, dazu das DexScreener-Paar.
+    const altePools = pumpFrei ? [...new Set([coin?.bonding_curve, coin?.pool_address, d?.pair].filter(Boolean))].slice(0, 2) : null
+    if (netz && (!altePools || altePools.length)) {
         const dauer = HORIZONTE.frueh[a.horizont] || 0
         const von = Number(a.erstelltAm)
         const bis = von + dauer
@@ -687,12 +714,14 @@ async function messeFrueh(a) {
         let fruehestes = null
         let beantwortet = 0
         let ohneSchluessel = false
-        let pools = d?.pair ? [d.pair] : []
-        try {
-            pools = [...new Set([...await poolsVon(holeCoinGecko, netz, a.contract), ...pools])].slice(0, 2)
-        } catch (e) {
-            if (istAus(e)) ohneSchluessel = true
-            else if (Number(e.status) !== 404 && !letzterVersuch) throw new Error(`On-Chain-Pools: ${e.message}`)
+        let pools = altePools || (d?.pair ? [d.pair] : [])
+        if (!altePools) {
+            try {
+                pools = [...new Set([...await poolsVon(holeCoinGecko, netz, a.contract), ...pools])].slice(0, 2)
+            } catch (e) {
+                if (istAus(e)) ohneSchluessel = true
+                else if (Number(e.status) !== 404 && !letzterVersuch) throw new Error(`On-Chain-Pools: ${e.message}`)
+            }
         }
         for (const pool of ohneSchluessel ? [] : pools) {
             let j
@@ -740,7 +769,7 @@ async function messeFrueh(a) {
     return {
         preisEnde, mcapEnde, liquiditaetEnde: liqEnde,
         renditePct, mfePct, graduiert,
-        nochHandelbar: lebtNoch({ markt: m }),
+        nochHandelbar: lebtNoch({ markt: m, coin, jetzt: Date.now() }),
     }
 }
 

@@ -66,11 +66,36 @@ const klemme = (n) => {
  *
  * Die Stärke der vorhandenen Signale zählt, keine Beschleunigung — der erste
  * Lauf hat keinen Vergleichswert (siehe `sozialVeraenderung`).
+ *
+ * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (`ohneFreigabe`) ist
+ * Reddit wieder die eigene Sozialquelle des Hauptlaufs, und die Rechnung ist
+ * die von vor S12: kein Signal heisst 0, nicht unbekannt — Reddit hat dann ja
+ * gefragt und den Token nicht gefunden.
+ *
+ * @param {object} opts  {ohneFreigabe} — true: Rechnung wie vor S12
  */
-export function noteSozial(k) {
+export function noteSozial(k, { ohneFreigabe = false } = {}) {
     const s = k?.sozial || {}
     let punkte = 0
     let gemessen = false
+
+    /*
+     * Reddit (S15, nur mit Schalter an — aus wirkt ein Rang nicht, wie nach
+     * S12): die Position in „hot", nicht die
+     * Stimmenzahl. Der RSS-Feed nennt keine Stimmen — nur die Reihenfolge,
+     * und die ist bereits nach Zustimmung sortiert. Platz 1 wiegt am
+     * schwersten, Platz 50 kaum noch.
+     *
+     * GEDECKELT bei 60 und nicht bei 100: r/CryptoMoonShots ist ein Ort, an
+     * dem Leute ihre eigenen Token bewerben. Ein Auftritt dort ist ein
+     * Hinweis, keine Bestätigung — er soll einen Fund nicht allein an die
+     * Spitze tragen.
+     */
+    const rang = Number(s.redditRang)
+    if (ohneFreigabe && Number.isFinite(rang) && rang > 0) {
+        gemessen = true
+        punkte = Math.max(punkte, klemme(Math.min(REDDIT_DECKEL, 61 - rang)))
+    }
 
     /*
      * Bezahlte Hervorhebung ist Aufmerksamkeit, aber gekaufte.
@@ -105,11 +130,14 @@ export function noteSozial(k) {
         gemessen = true
         punkte = Math.max(punkte, Math.min(BOOST_DECKEL, klemme(Math.log10(gekauft + 1) * 20)))
     }
-    return gemessen ? klemme(punkte) : null
+    return gemessen || ohneFreigabe ? klemme(punkte) : null
 }
 
 /** Höchstens so viel Aufmerksamkeit lässt sich kaufen. */
 export const BOOST_DECKEL = 30
+
+/** Und höchstens so viel trägt ein Auftritt in einem Werbe-Unterforum (Reddit, S15). */
+export const REDDIT_DECKEL = 60
 
 /** Und so viel die Nennung auf mehreren Plattformen während der Frühphase. */
 export const FRUEH_DECKEL = 80
@@ -417,12 +445,13 @@ export const TRITTBRETT_ABZUG = 35
  *
  * @returns {{hypeScore:number, teilnoten:object, narrativ:string, trittbrett:object}}
  */
-export function bewerte(kandidat, gewichte = STANDARD_GEWICHTE, narrative = STANDARD_NARRATIVE) {
+export function bewerte(kandidat, gewichte = STANDARD_GEWICHTE, narrative = STANDARD_NARRATIVE, { ohneFreigabe = false } = {}) {
     const g = { ...STANDARD_GEWICHTE, ...(gewichte || {}) }
     const narr = noteNarrativ(kandidat, narrative)
 
     const teilnoten = {
-        sozial: noteSozial(kandidat),
+        // S15: mit Schalter an die Sozialrechnung von vor S12 (kein Signal = 0).
+        sozial: noteSozial(kandidat, { ohneFreigabe }),
         volumen: noteVolumen(kandidat),
         quellen: noteQuellen(kandidat),
         narrativ: narr.note,

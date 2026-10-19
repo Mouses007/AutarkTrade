@@ -19,6 +19,9 @@
  * for production applications" (Verkaufs-Prüfung Z. 67); ein verkauftes
  * Programm, das alle Kunden darüber schickt, ist genau das. Ohne eigene
  * Adresse ist Smart Money aus (`QuelleAus('Solana-RPC', 'schluesselFehlt')`).
+ * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID
+ * `solanaRpcOeffentlich`) ist der öffentliche Knoten wieder die Vorgabe wie
+ * vor S12 — gedrosselt, für eine Handvoll Wallets genug.
  * Die Adresse kommt vom Nutzer und läuft deshalb durch `net-guard` — sonst
  * wäre das Feld ein bequemer Weg, den Server ins eigene Netz zu schicken.
  *
@@ -32,10 +35,21 @@ import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { pruefeOeffentlicheUrl } from '../net-guard.js'
 import { QuelleAus } from '../quellen/aus.js'
+import { quelleErlaubt } from '../quellen/freigabe.js'
 import { handelAusTransaktion, smartSignale, smartWalletListe } from './fruehphase-bewertung.js'
 
 /** Anzeigename in „Quelle aus"-Meldungen. */
 export const RPC_NAME = 'Solana-RPC'
+
+/** Der öffentliche Knoten — nur mit Schalter an (S15), gedrosselt, aber ohne Schlüssel. */
+export const OEFFENTLICH = 'https://api.mainnet-beta.solana.com'
+
+/** Welche RPC-Adresse gilt: die eigene, sonst (Schalter an) der öffentliche Knoten, sonst ''. */
+export async function rpcAdresse(rpcUrl = '') {
+    const eigen = String(rpcUrl || '').trim()
+    if (eigen) return eigen
+    return (await quelleErlaubt('solanaRpcOeffentlich')) ? OEFFENTLICH : ''
+}
 
 /** Höchstens so viele Transaktionen je Abruf — über alle Wallets. */
 const MAX_TX_JE_ABRUF = 120
@@ -99,14 +113,14 @@ async function rpc(url, method, params, timeout = 15000) {
  * Neue Käufe aller beobachteten Wallets holen und speichern.
  *
  * @param {object} einst     Hype-Radar-Einstellungen (`smartWallets`)
- * @param {string} rpcUrl    eigene RPC-Adresse (Pflicht)
+ * @param {string} rpcUrl    eigene RPC-Adresse (Pflicht, ausser mit Schalter an: dann leer = öffentlicher Knoten)
  * @returns {Promise<{wallets:number, neu:number, fehler:number}>}
  * @throws {QuelleAus} ohne eigene RPC-Adresse
  */
 export async function smartAbruf(einst, rpcUrl = '') {
     const wallets = smartWalletListe(einst?.smartWallets)
     if (!wallets.length) return { wallets: 0, neu: 0, fehler: 0 }
-    const url = String(rpcUrl || '').trim()
+    const url = await rpcAdresse(rpcUrl)
     if (!url) throw new QuelleAus(RPC_NAME, 'schluesselFehlt', 'Smart Money braucht eine eigene Solana-RPC-Adresse (Hype-Radar › Einstellungen › Frühphase)')
     const abstand = istOeffentlicherKnoten(url) ? PAUSE_OEFFENTLICH_MS : PAUSE_EIGEN_MS
     await pruefeOeffentlicheUrl(url)

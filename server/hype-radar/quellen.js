@@ -27,11 +27,27 @@
  *
  * CryptoPanic und LunarCrush standen hier bis zum 21.08.2026 und sind entfernt
  * worden, weil beide ihren Gratis-Tarif abgeschafft haben.
+ *
+ * S15 (19.10.2026): Mit dem Schalter „Quellen ohne Verkaufsfreigabe" an
+ * (`server/quellen/freigabe.js`, Vorgabe) laufen pump.fun, CoinPaprika und
+ * Reddit-RSS wieder wie vor S12, CoinGecko-Trend ohne Schlüssel über den
+ * öffentlichen Endpunkt und die On-Chain-Pools über api.geckoterminal.com
+ * (`server/quellen/coingecko.js`). Der Schalter wird an EINER Stelle
+ * durchgesetzt: `holeJson`/`holeText` fragen je Host (`HOST_FREIGABE`), bevor
+ * eine Anfrage hinausgeht — so kann kein vergessener Aufrufer eine Quelle
+ * ohne Freigabe erreichen, wenn der Schalter aus ist.
+ *
+ * Reddit war am 21.08.2026 zuerst mit entfernt und ist dann zurückgekommen.
+ * Der Grund für die Kehrtwende ist eine Messung: `/hot.json` ergab in vier
+ * von vier Versuchen 403, `/hot.rss` mit DERSELBEN Kennung 200. Gesperrt war
+ * nicht die Quelle, sondern der Weg dorthin.
  */
 
 import { logWarn } from '../logger.js'
+import { leseFeed } from '../feed-parser.js'
 import { cgAnfrage } from '../quellen/coingecko.js'
-import { istAus, ausAntwort } from '../quellen/aus.js'
+import { QuelleAus, istAus, ausAntwort } from '../quellen/aus.js'
+import { quelleErlaubt, quelleErlaubtSofort, QUELLEN_OHNE_FREIGABE } from '../quellen/freigabe.js'
 
 /** Zeitgrenze je Einzelabruf. Lieber eine Quelle weniger als ein hängender Lauf. */
 const ABRUF_TIMEOUT_MS = 10000
@@ -62,7 +78,40 @@ export const ERLAUBTE_HOSTS = new Set([
      */
     'api.exchange.coinbase.com', 'api.bybit.com', 'api.kraken.com', 'api.kucoin.com',
     'api.gateio.ws', 'api.bitget.com',
+    /*
+     * S15: Quellen ohne Verkaufsfreigabe — erlaubte Hosts nur, solange der
+     * Schalter an ist (`HOST_FREIGABE`, geprüft vor jedem Abruf).
+     */
+    'api.geckoterminal.com', 'www.reddit.com', 'frontend-api-v3.pump.fun', 'api.coinpaprika.com',
+    'api.upbit.com', 'www.okx.com', 'api.mexc.com',
 ])
+
+/**
+ * Hosts, die nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" erreicht
+ * werden dürfen: Host → ID in `QUELLEN_OHNE_FREIGABE`. Binance Alpha läuft
+ * über `server/marktdaten/binance.js`, RugCheck und die gelben Börsen sind
+ * nur in der VORGABE betroffen (`einstellungen.js`).
+ */
+export const HOST_FREIGABE = {
+    'api.geckoterminal.com': 'geckoterminal',
+    'www.reddit.com': 'reddit',
+    'frontend-api-v3.pump.fun': 'pumpfun',
+    'api.coinpaprika.com': 'coinpaprika',
+    'api.upbit.com': 'upbit',
+    'www.okx.com': 'okx',
+    'api.mexc.com': 'mexc',
+}
+
+/** Host erlaubt und — wo nötig — freigegeben? Wirft `QuelleAus(…, 'ohneFreigabe')`. */
+async function pruefeHost(url) {
+    const ziel = new URL(url)
+    if (!ERLAUBTE_HOSTS.has(ziel.hostname)) {
+        throw new Error(`Host nicht erlaubt: ${ziel.hostname}`)
+    }
+    const id = HOST_FREIGABE[ziel.hostname]
+    if (id && !(await quelleErlaubt(id))) throw new QuelleAus(QUELLEN_OHNE_FREIGABE[id].name, 'ohneFreigabe')
+    return ziel
+}
 
 /**
  * Einfacher Eimer je Host.
@@ -97,12 +146,75 @@ const EIMER = {
      */
     'api.coingecko.com': new Eimer(25),
     'pro-api.coingecko.com': new Eimer(250),
+    /*
+     * GeckoTerminal ohne Schlüssel (S15, Schalter an). Gemessen am 10.10.2026
+     * (ruhige NAS, 15 Abrufe je Minute): fünf kamen durch, dann eine halbe
+     * Minute nur 429. Die dokumentierten 30 je Minute gelten nicht — mit 25
+     * kamen im Lauf die Käufer für 30 von 149 Token an, 4 von 5 Sammelabfragen
+     * scheiterten. Fünf je Minute, ein Abruf alle zwölf Sekunden.
+     */
+    'api.geckoterminal.com': new Eimer(5),
     'api.gopluslabs.io': new Eimer(30),
+    /*
+     * Reddit drosselt spürbar. Gemessen am 21.08.2026: bei 20 s Abstand kam
+     * nur jeder zweite Abruf durch, bei 60 s jeder. Eins je Minute ist die
+     * ehrliche Obergrenze — bei zwei Unterforen und einem Lauf alle sechs
+     * Stunden kostet das zwei Minuten und fällt nicht ins Gewicht.
+     */
+    'www.reddit.com': new Eimer(1),
+    'frontend-api-v3.pump.fun': new Eimer(20),
+    'api.coinpaprika.com': new Eimer(10),
     // Ohne Schlüssel 60 Anfragen je STUNDE — der Zwischenspeicher der
     // Projektprüfung (24 h) ist die eigentliche Bremse, das hier nur die Reserve.
     'api.github.com': new Eimer(10),
     // 4chan verlangt höchstens eine Anfrage je Sekunde.
     'a.4cdn.org': new Eimer(30),
+}
+
+/**
+ * Wie `holeJson`, aber für Text — RSS und Atom kommen als XML.
+ *
+ * Eigene Funktion statt eines Schalters an `holeJson`: Dort steht `Accept:
+ * application/json` im Kopf, und ein Feed-Server darf darauf mit 406
+ * antworten. Der Rest (Whitelist, Freigabe, Bremse, eine Wiederholung) ist derselbe.
+ */
+export async function holeText(url, { timeout = ABRUF_TIMEOUT_MS, kopf = {} } = {}) {
+    const ziel = await pruefeHost(url)
+    await EIMER[ziel.hostname]?.warte()
+
+    let letzterFehler
+    for (let versuch = 0; versuch < 2; versuch++) {
+        const abbruch = new AbortController()
+        const uhr = setTimeout(() => abbruch.abort(), timeout)
+        try {
+            const r = await fetch(url, {
+                signal: abbruch.signal,
+                headers: {
+                    'User-Agent': 'AutarkTrade/4 (Hype-Radar)',
+                    Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml',
+                    ...kopf,
+                },
+            })
+            if (!r.ok) {
+                const fehler = new Error(`HTTP ${r.status}`)
+                /*
+                 * 429 ist hier NICHT endgültig: Reddit drosselt, und genau
+                 * dafür ist die Wiederholung da. Bei 403 dagegen hilft kein
+                 * zweiter Versuch — das ist eine Entscheidung, keine Last.
+                 */
+                if (r.status < 500 && r.status !== 429) throw Object.assign(fehler, { endgueltig: true })
+                throw fehler
+            }
+            return await r.text()
+        } catch (e) {
+            letzterFehler = e
+            if (e.endgueltig || versuch === 1) break
+            await new Promise((r) => setTimeout(r, 2000))
+        } finally {
+            clearTimeout(uhr)
+        }
+    }
+    throw letzterFehler
 }
 
 /**
@@ -113,10 +225,7 @@ const EIMER = {
  * Nachfassen genau die falsche Antwort.
  */
 export async function holeJson(url, { timeout = ABRUF_TIMEOUT_MS, kopf = {} } = {}) {
-    const ziel = new URL(url)
-    if (!ERLAUBTE_HOSTS.has(ziel.hostname)) {
-        throw new Error(`Host nicht erlaubt: ${ziel.hostname}`)
-    }
+    const ziel = await pruefeHost(url)
     await EIMER[ziel.hostname]?.warte()
 
     let letzterFehler
@@ -177,6 +286,41 @@ export async function holeCoinGecko(pfad, opts = {}) {
 /** CoinGecko-On-Chain-Netz (GeckoTerminal-Kennung) je Kette. */
 export const ONCHAIN_NETZ = { solana: 'solana', ethereum: 'eth', base: 'base', bsc: 'bsc' }
 
+/**
+ * Ein einzelner pump.fun-Coin, über `/coins-v2/{mint}` (S15: nur mit dem
+ * Schalter „Quellen ohne Verkaufsfreigabe", sonst wirft `holeJson`
+ * `QuelleAus(…, 'ohneFreigabe')`).
+ *
+ * `/coins/{mint}` antwortet für JEDEN Coin mit 404 — gemessen am 10.10.2026
+ * am meistgehandelten des Augenblicks, auch mit `?sync=true`. Projektprüfung
+ * (Links, Ersteller) und Erfolgskontrolle (Kurve geschafft, lebt) bekamen bis
+ * dahin still „gibt es nicht". Die Filter `?mint=` und `?searchTerm=` der
+ * Liste werden ignoriert (sie liefern irgendwelche Coins) — deshalb die
+ * Gegenprobe über `mint`.
+ *
+ * @returns {Promise<object|null>} der Coin; null, wenn pump.fun ihn nicht kennt (404)
+ * @throws bei jedem anderen Fehler — „gerade nicht erreichbar" ist nicht „gibt es nicht"
+ */
+export async function pumpCoin(mint) {
+    try {
+        const c = await holeJson(`${PUMP}/coins-v2/${encodeURIComponent(mint)}`)
+        return c && typeof c === 'object' && String(c.mint || '') === String(mint) ? c : null
+    } catch (e) {
+        if (Number(e.status) === 404) return null
+        throw e
+    }
+}
+
+/**
+ * pump.fun-Frontend-API (S15, nur mit Schalter an — `HOST_FREIGABE`).
+ * ⚠ Per curl am 19.10.2026 aus dem Entwicklungsnetz: `/coins?…` antwortete
+ * mit HTTP 403 und einer Cloudflare-Prüfseite („Just a moment…"), auch mit
+ * Browser-Kennung; `/coins-v2/{mint}` antwortete (404 für eine unbekannte
+ * Adresse). Umgangen wird die Prüfung nicht — die Quelle steht dann im Lauf
+ * als ausgefallen.
+ */
+export const PUMP = 'https://frontend-api-v3.pump.fun'
+
 /** Symbol vereinheitlichen — „$PEPE" und „pepe" sind derselbe Fund. */
 export function normSymbol(roh) {
     return String(roh || '').trim().replace(/^\$/, '').toUpperCase().slice(0, 20)
@@ -220,7 +364,11 @@ export function fund({ symbol, name = '', chain = '', contract = '', pair = '', 
 // passiert eine Ebene höher, damit hier keine Quelle den Ausfall einer anderen
 // verstecken kann.
 
-/** CoinGecko: wonach gerade gesucht wird. Nur mit Kundenschlüssel. */
+/**
+ * CoinGecko: wonach gerade gesucht wird. Mit Kundenschlüssel — oder, mit dem
+ * Schalter „Quellen ohne Verkaufsfreigabe" (S15), über den öffentlichen
+ * Endpunkt wie vor S12 (`server/quellen/coingecko.js`).
+ */
 export async function ausCoinGecko() {
     const j = await holeCoinGecko('/search/trending')
     return (j?.coins || []).map((c, i) => fund({
@@ -480,7 +628,7 @@ function ausPaar(p, seite = 'base') {
             kaufVerkauf1h: umgekehrt(m.kaufVerkauf1h),
             kaeufe1h: m.verkaeufe1h,
             verkaeufe1h: m.kaeufe1h,
-            boosts: 0, webseiten: null, kanaele: null, links: null,
+            boosts: 0, webseiten: null, kanaele: null, bild: '', links: null,
         },
     }
 }
@@ -564,8 +712,13 @@ function ausPaarBasis(p, seite) {
             // die Anzeige verlinkt ohnehin auf DexScreener.
             webseiten: (p?.info?.websites || []).length,
             kanaele: (p?.info?.socials || []).length,
-            // Kein Token-Bild: Logos sind fremde Inhalte (Verkaufs-Prüfung Z. 58),
-            // die Oberfläche zeichnet Ticker-Initialen.
+            /*
+             * Token-Bild: Logos sind fremde Inhalte (Verkaufs-Prüfung Z. 58).
+             * Die Adresse wird mitgeliefert, angezeigt wird sie nur mit dem
+             * Schalter „Quellen ohne Verkaufsfreigabe" (ID `tokenbilder`,
+             * `TickerZeichen.vue`) — sonst Ticker-Initialen.
+             */
+            bild: quelleErlaubtSofort('tokenbilder') ? (p?.info?.imageUrl || '') : '',
             /*
              * Die Adressen selbst, nicht nur ihre Anzahl — die Projektprüfung
              * liest die Webseite und sucht das Team dahinter. Gedeckelt, damit
@@ -581,8 +734,9 @@ function ausPaarBasis(p, seite) {
  * wurde eine fehlende Kursänderung zu „0 %", also zu einer Messung.
  */
 /**
- * Webseiten und Kanäle eines Tokens in einer Form — aus DexScreener
- * (`info.websites`/`info.socials`, Profile und Boosts `links`).
+ * Webseiten und Kanäle eines Tokens in einer Form — gleich, ob sie aus
+ * DexScreener (`info.websites`/`info.socials`, Profile `links`) oder pump.fun
+ * (`website`, `twitter`, `telegram`; S15, nur mit Schalter an) kommen.
  *
  * @returns {{webseiten:string[], kanaele:Array<{typ:string, url:string}>}|null}
  */
@@ -604,6 +758,14 @@ export function linksAusInfo(info) {
         if (!typ || typ === 'website' || typ === 'web') webseiten.push(u)
         else kanaele.push({ typ, url: u })
     }
+    // pump.fun: einzelne Felder; X manchmal nur als Name.
+    if (url(info.website)) webseiten.push(url(info.website))
+    if (info.twitter) {
+        const t = String(info.twitter).trim()
+        const u = url(t) || (/^@?[A-Za-z0-9_]{1,15}$/.test(t) ? `https://x.com/${t.replace(/^@/, '')}` : '')
+        if (u) kanaele.push({ typ: 'twitter', url: u })
+    }
+    if (url(info.telegram)) kanaele.push({ typ: 'telegram', url: url(info.telegram) })
     if (!webseiten.length && !kanaele.length) return null
     return { webseiten: [...new Set(webseiten)].slice(0, 3), kanaele: kanaele.slice(0, 6) }
 }
@@ -690,6 +852,156 @@ export async function ausGeckoTerminal(ketten = ['solana', 'eth', 'base', 'bsc']
     }
     if (!funde.length) throw new Error('keine Kette lieferte Daten')
     return funde.filter((f) => f.symbol)
+}
+
+/**
+ * Reddit — über den RSS-Feed, nicht über die JSON-Schnittstelle.
+ *
+ * Der alte Weg (`/hot.json`) ist tot: vier von vier Abrufen am 21.08.2026
+ * ergaben 403, und daran ändert auch eine Kennung nichts. `/hot.rss` dagegen
+ * antwortet derselben Kennung mit 200 — es ist ein öffentlicher Feed, für
+ * Leseprogramme gedacht, und wir geben uns dabei als das aus, was wir sind.
+ *
+ * Gedrosselt wird spürbar (siehe `EIMER`). Der Feed liefert die Beitrags-
+ * titel samt Textvorschau; daraus werden `$SYMBOL`-Nennungen und
+ * Vertragsadressen gezogen. Gemessen an r/CryptoMoonShots: aus 25 Beiträgen
+ * 7 Symbole, 5 Solana- und 8 EVM-Adressen.
+ *
+ * S15: nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `reddit`);
+ * sonst wirft `holeText` `QuelleAus`, und der Lauf führt Reddit als „aus".
+ *
+ * Bis S12 war das die EINZIGE Quelle der Domäne `social` — Menschen, die reden, statt
+ * Ketten, die handeln. Genau deshalb ist sie den Aufwand wert, obwohl das
+ * Rauschen hoch ist: Sie bestätigt unabhängig von allem anderen.
+ */
+export async function ausReddit(unterforen = ['CryptoMoonShots', 'SolanaMemeCoins']) {
+    const funde = []
+    for (const sub of unterforen) {
+        try {
+            const xml = await holeText(`https://www.reddit.com/r/${encodeURIComponent(sub)}/hot.rss?limit=50`)
+            const beitraege = leseFeed(xml)
+            for (const b of beitraege) {
+                const text = `${b.titel || ''} ${b.inhalt || ''}`
+                /*
+                 * Die Stimmenzahl steht im RSS NICHT — anders als in der alten
+                 * JSON-Antwort. Statt eine zu erfinden, zählt die POSITION:
+                 * „hot" ist bereits nach Zustimmung sortiert, der erste
+                 * Beitrag hat mehr davon als der fünfzigste. Eine erfundene
+                 * Stimmenzahl wäre eine Messung, die nie stattfand.
+                 */
+                const rang = beitraege.indexOf(b) + 1
+                const kuerzel = text.match(/\$([A-Za-z][A-Za-z0-9]{1,9})\b/g) || []
+                const evm = text.match(/0x[a-fA-F0-9]{40}/g) || []
+                const sol = text.match(/\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/g) || []
+                for (const k of kuerzel.slice(0, 3)) {
+                    funde.push(fund({
+                        symbol: k.slice(1),
+                        quelle: `reddit-${sub}`,
+                        url: b.link || '',
+                        contract: evm[0] || sol[0] || '',
+                        rang,
+                        /*
+                         * NUR der Rang, keine erfundene Stimmenzahl.
+                         *
+                         * Im ersten Anlauf stand hier `stimmen: 51 - rang` —
+                         * eine Zahl, die aussieht wie gemessene Zustimmung und
+                         * keine ist. Der Feed nennt Stimmen nicht; „Platz 7 in
+                         * hot" ist alles, was wir wissen, und genau das steht
+                         * jetzt da.
+                         */
+                        sozial: { redditRang: rang, redditNennungen: 1 },
+                    }))
+                }
+            }
+        } catch (e) {
+            // Ohne Freigabe ist die ganze Quelle aus — nicht je Unterforum weiterversuchen.
+            if (istAus(e)) throw e
+            logWarn('hype-radar', `Reddit ${sub}: ${e.message}`)
+        }
+    }
+    if (!funde.length) throw new Error('kein Unterforum lieferte Daten')
+    return funde
+}
+
+/**
+ * Pump.fun — die frischesten Solana-Starts.
+ *
+ * Der Wert dieser Quelle ist der ZEITPUNKT. Ein Token auf der Bindungskurve
+ * hat noch keinen Raydium-Pool und taucht deshalb weder bei DexScreener noch
+ * bei GeckoTerminal auf. Gemessen am 21.08.2026 waren die obersten Einträge
+ * null Stunden alt, mit Marktkapitalisierungen zwischen 680 und 108'000 USD.
+ *
+ * Der alte Host `frontend-api.pump.fun` ist abgeschaltet (HTTP 530); der
+ * v3-Host antwortet ohne Schlüssel.
+ *
+ * S15: nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `pumpfun`).
+ *
+ * Domäne bleibt `onchain`: Auch eine Bindungskurve ist gehandelte Kette, nur
+ * an einem anderen Ort. Als eigene Bestätigung neben DexScreener zu zählen
+ * wäre derselbe Fehler, den das Audit im August behoben hat.
+ */
+export async function ausPumpFun(anzahl = 50) {
+    const j = await holeJson(
+        `${PUMP}/coins?limit=${Math.min(100, anzahl)}`
+        + '&sort=created_timestamp&order=DESC&includeNsfw=false')
+    const liste = Array.isArray(j) ? j : []
+    return liste
+        .map((c, i) => {
+            const erstellt = Number(c?.created_timestamp) || 0
+            const alterStunden = erstellt ? (Date.now() - erstellt) / 3600000 : null
+            return fund({
+                symbol: c?.symbol,
+                name: c?.name || '',
+                chain: 'solana',
+                contract: c?.mint || '',
+                quelle: 'pumpfun',
+                rang: i + 1,
+                url: c?.mint ? `https://pump.fun/coin/${c.mint}` : '',
+                markt: {
+                    marktKapUsd: Number(c?.usd_market_cap) || null,
+                    paarAlterStunden: alterStunden,
+                    // `complete` heisst: die Kurve ist durch, der Token ist an
+                    // eine echte Börse gewandert. Das ist ein Reifezeichen.
+                    graduiert: c?.complete === true,
+                    links: linksAusInfo(c),
+                    // Die Wallet, die den Token aufgelegt hat — Schlüssel zur
+                    // Frage, was dieses „Team" vorher schon gestartet hat.
+                    ersteller: String(c?.creator || ''),
+                },
+            })
+        })
+        .filter((f) => f.symbol)
+}
+
+/**
+ * CoinPaprika — zweite Meinung zur Entdeckung.
+ *
+ * Anderes Haus als CoinGecko, eigene Redaktion, eigene Aufnahmekriterien.
+ * Deshalb ist es keine Verdopplung derselben Liste, sondern eine unabhängige
+ * Bestätigung INNERHALB der Domäne `discovery` — sie erhöht die Datenqualität,
+ * nicht die Zahl der Belege.
+ *
+ * Gemessen: 61'083 Coins, davon 14'974 aktiv und 71 mit `is_new`-Marke.
+ *
+ * S15: nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `coinpaprika`).
+ *
+ * ⚠ Die Antwort ist 7,4 MB gross, und `limit` wird ignoriert (geprüft). Bei
+ * einem Lauf alle sechs Stunden sind das rund 30 MB am Tag — vertretbar, aber
+ * der Grund, warum diese Quelle nicht öfter befragt werden sollte.
+ */
+export async function ausCoinPaprika() {
+    const j = await holeJson('https://api.coinpaprika.com/v1/coins', { timeout: 25000 })
+    const liste = Array.isArray(j) ? j : []
+    return liste
+        .filter((c) => c?.is_new && c?.is_active)
+        .slice(0, 60)
+        .map((c, i) => fund({
+            symbol: c?.symbol,
+            name: c?.name || '',
+            quelle: 'coinpaprika',
+            rang: Number(c?.rank) > 0 ? Number(c.rank) : i + 1,
+        }))
+        .filter((f) => f.symbol)
 }
 
 /**
@@ -841,6 +1153,16 @@ const QUELL_DOMAENE = {
      */
     fruehphase: 'onchain',
     biz: 'social',
+    /*
+     * S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe": wie vor S12.
+     * Auch eine Bindungskurve ist gehandelte Kette — nur an anderem Ort.
+     */
+    pumpfun: 'onchain',
+    // Eigenes Haus, eigene Aufnahmekriterien — aber dieselbe Frage wie CoinGecko.
+    coinpaprika: 'discovery',
+    // Menschen, die reden, statt Ketten, die handeln.
+    reddit: 'social',
+    telegram: 'social',
     // X über Grok — nur gezählte, zitierte Posts verschiedener Autoren.
     x: 'social',
 }
@@ -856,6 +1178,8 @@ const QUELL_DOMAENE = {
  * aus zwei Durchgängen der Zusammenführung zählt einmal.
  */
 const SOZIAL_ZUSAMMEN = {
+    // Reddit (S15, Schalter an): der beste Rang zählt — summiert ergaben zwei Nennungen 0 (bis 07.10.2026).
+    redditRang: (a, b) => Math.min(a, b),
     boostGesamt: (a, b) => Math.max(a, b),
     // Dieselbe Beobachtung, zweimal gemeldet, ist keine zweite Plattform.
     fruehPlattformen: (a, b) => Math.max(a, b),
@@ -929,6 +1253,14 @@ export async function sammle({ ketten, quellen = {} } = {}) {
     if (an('coingecko')) aufgaben.push(['coingecko', () => ausCoinGecko()])
     if (an('dexscreener')) aufgaben.push(['dexscreener', () => ausDexScreener()])
     if (an('geckoterminal')) aufgaben.push(['geckoterminal', () => ausGeckoTerminal(ketten)])
+    /*
+     * S15: die Quellen ohne Verkaufsfreigabe. Mit dem Schalter aus laufen sie
+     * gar nicht erst an (kein „aus" im Stand — es gibt sie dann nicht, wie nach
+     * S12); `holeJson` sperrt zusätzlich je Host.
+     */
+    for (const [name, f] of [['pumpfun', () => ausPumpFun()], ['coinpaprika', () => ausCoinPaprika()], ['reddit', () => ausReddit()]]) {
+        if (an(name) && await quelleErlaubt(name)) aufgaben.push([name, f])
+    }
 
     const ergebnisse = await Promise.allSettled(aufgaben.map(([, f]) => f()))
 

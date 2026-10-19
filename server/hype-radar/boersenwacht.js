@@ -24,6 +24,18 @@
  *
  * Jede Börse fällt einzeln aus; ein Ausfall oder eine halbe Antwort
  * überschreibt nie den letzten guten Stand.
+ *
+ * S15 (19.10.2026): Mit dem Schalter „Quellen ohne Verkaufsfreigabe" an
+ * (Vorgabe) beobachtet der Wächter wieder alle Börsen wie vor S12 —
+ * zusätzlich Upbit, OKX (mit Handelsstart), MEXC und Binance Alpha (Token-
+ * Liste des Web-Frontends, `bapiAlphaListe` in `server/marktdaten/binance.js`,
+ * unabhängig von der gewählten Marktdatenquelle), Coinbase, Kraken, KuCoin
+ * und Gate ab Werk an. Gemeldet wird dann auch wieder die Aufnahme eines
+ * Radar-Tokens in Binance Alpha — die Vorstufe, das eigentliche Frühsignal
+ * für ein späteres Spot-Listing. Mit dem Schalter aus gilt das oben Gesagte;
+ * gespeicherte Stände und Listungen der entfernten Börsen bleiben liegen,
+ * gezeigt und gezählt werden sie nicht. Endpunkte am 19.10.2026 per curl
+ * geprüft: Alpha, Upbit, OKX und MEXC antworten mit HTTP 200.
  */
 
 import { getKnex } from '../database.js'
@@ -31,12 +43,14 @@ import { logWarn } from '../logger.js'
 import { beansprucheAufgabe, meldeFehler } from '../db-claim.js'
 import { holeJson, dexDetailsViele } from './quellen.js'
 import { binanceHole, kann as marktdatenKann } from '../marktdaten/index.js'
+import { bapiAlphaListe } from '../marktdaten/binance.js'
 import { QuelleAus, istAus, ausAntwort } from '../quellen/aus.js'
+import { freigabeAn, quelleErlaubt, QUELLEN_OHNE_FREIGABE } from '../quellen/freigabe.js'
 import { leseEinstellungen } from './einstellungen.js'
 import { stelleZu } from './zustellung.js'
 import { radarWissen } from './gedaechtnis.js'
 import {
-    BOERSEN, BOERSE_NACH_ID, LESER, STARTS, neueEintraege, ordneZu, istTreffer, leiterFuer, vorlaufStatistik,
+    boersenFuer, BOERSE_NACH_ID, LESER, STARTS, neueEintraege, ordneZu, istTreffer, leiterFuer, vorlaufStatistik,
     eintragSchluessel, kuerzel, auchGelistetAuf,
 } from './boersenwacht-bewertung.js'
 
@@ -48,6 +62,10 @@ export const QUELLEN = {
     kucoin: 'https://api.kucoin.com/api/v2/symbols',
     gate: 'https://api.gateio.ws/api/v4/spot/currency_pairs',
     bitget: 'https://api.bitget.com/api/v2/spot/public/symbols',
+    // S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (`HOST_FREIGABE` in quellen.js sperrt zusätzlich).
+    upbit: 'https://api.upbit.com/v1/market/all',
+    okx: 'https://www.okx.com/api/v5/public/instruments?instType=SPOT',
+    mexc: 'https://api.mexc.com/api/v3/defaultSymbols',
 }
 
 /**
@@ -67,7 +85,9 @@ export function boerseAn(einst, id) {
 
 /** Die Marktliste einer Börse — oder `QuelleAus`/`MarktdatenAus`. */
 async function holeListe(b, einst) {
+    if (b.freigabe && !(await quelleErlaubt(b.freigabe))) throw new QuelleAus(QUELLEN_OHNE_FREIGABE[b.freigabe].name, 'ohneFreigabe')
     if (!boerseAn(einst, b.id)) throw new QuelleAus(b.name, 'aus')
+    if (b.id === 'binance-alpha') return bapiAlphaListe({ timeout: 20000 })
     if (BINANCE[b.id]) {
         const [markt, pfad] = BINANCE[b.id]
         return binanceHole('listungen', markt, pfad, {}, { timeout: 20000 })
@@ -97,16 +117,18 @@ export function boersenStand() {
  */
 let staendeCache = null
 export async function ladeStaende() {
-    if (staendeCache && Date.now() - staendeCache.ts < 5 * 60e3) return staendeCache.karte
+    const frei = await freigabeAn()
+    if (staendeCache && staendeCache.frei === frei && Date.now() - staendeCache.ts < 5 * 60e3) return staendeCache.karte
+    const aktiv = new Set(boersenFuer(frei).map((b) => b.id))
     const karte = new Map()
     try {
         for (const z of await getKnex()('hype_boersen_stand').select('boerse', 'eintraege')) {
-            // Stände entfernter Börsen (Upbit, OKX, MEXC, Alpha bis S12) zählen nicht mehr.
-            if (!BOERSE_NACH_ID.has(z.boerse)) continue
+            // Stände der Börsen ohne Freigabe (Upbit, OKX, MEXC, Alpha) zählen nur mit Schalter an (S15).
+            if (!aktiv.has(z.boerse)) continue
             karte.set(z.boerse, new Set(sicherJson(z.eintraege, []).map(eintragSchluessel)))
         }
     } catch { /* Tabelle fehlt: leer */ }
-    staendeCache = { ts: Date.now(), karte }
+    staendeCache = { ts: Date.now(), karte, frei }
     return karte
 }
 
@@ -131,6 +153,7 @@ async function boersenLaufIntern(einst) {
     const knex = getKnex()
     const jetzt = Date.now()
     const alt = new Map((await knex('hype_boersen_stand').select('*')).map((z) => [z.boerse, z]))
+    const BOERSEN = boersenFuer(await freigabeAn())
 
     // Eine Antwort, zwei Leser: was gelistet ist und — wo die Börse es nennt — seit wann.
     const antworten = await Promise.allSettled(BOERSEN.map(async (b) => {
@@ -171,7 +194,10 @@ async function boersenLaufIntern(einst) {
             ? { ok: true, anzahl: liste.length, neu: r.neu.length, hinweis: r.hinweis }
             : { ok: false, anzahl: liste.length, fehler: r.hinweis }
         for (const n of r.neu) {
-            const l = { boerse: b.id, symbol: typeof n === 'string' ? n : n.symbol }
+            // Alpha (S15, Schalter an) nennt Kette und Vertrag; die übrigen nur das Kürzel.
+            const l = typeof n === 'string'
+                ? { boerse: b.id, symbol: n }
+                : { boerse: b.id, symbol: n.symbol, chain: n.chain, contract: n.contract }
             l.handelsStart = starts?.laufend.get(kuerzel(l.symbol)) ?? null
             neue.push(l)
         }
@@ -190,7 +216,8 @@ async function boersenLaufIntern(einst) {
      */
     const wissen = await radarWissen()
     const gelistet = new Set(neue.map((l) => kuerzel(l.symbol)))
-    for (const [, set] of await ladeStaende()) {
+    for (const [id, set] of await ladeStaende()) {
+        if (BOERSE_NACH_ID.get(id)?.stufe === 'alpha') continue
         for (const s of set) gelistet.add(s)
     }
     const auffrischen = wissen.filter((w) => w.contract && w.ersteMeldung && gelistet.has(kuerzel(w.symbol)))
@@ -237,9 +264,11 @@ async function boersenLaufIntern(einst) {
 async function melde(knex, zeile, einst) {
     const b = BOERSE_NACH_ID.get(zeile.boerse)
     const tage = zeile.radarSeit ? Math.max(0, (zeile.gesehenAm - zeile.radarSeit) / 86400e3) : null
+    // Binance Alpha (S15, nur mit Schalter an): die Vorstufe, eigene Regel.
+    const alpha = b?.stufe === 'alpha'
     const alarm = {
-        regel: 'listung',
-        schwere: b?.stufe === 'gross' ? 'warnung' : 'info',
+        regel: alpha ? 'alpha' : 'listung',
+        schwere: alpha || b?.stufe === 'gross' ? 'warnung' : 'info',
         meldung: `${zeile.symbol}: neu auf ${b?.name || zeile.boerse}`
             + (tage !== null ? ` — der Radar meldete ihn vor ${tage < 1 ? 'weniger als einem Tag' : `${Math.round(tage)} Tagen`}` : '')
             + (zeile.treffer === 'kuerzel' ? ' (Zuordnung über das Kürzel)' : ''),
@@ -266,6 +295,9 @@ async function melde(knex, zeile, einst) {
  */
 export async function boersenUebersicht({ tage = 60, einst = null } = {}) {
     const e = einst || await leseEinstellungen()
+    const frei = await freigabeAn()
+    const BOERSEN = boersenFuer(frei)
+    const aktiv = new Set(BOERSEN.map((b) => b.id))
     const binanceDa = await marktdatenKann('listungen').catch(() => false)
     const ausFuer = (b) => {
         if (!boerseAn(e, b.id)) return { aus: true, grund: 'aus', quelle: b.name }
@@ -276,15 +308,15 @@ export async function boersenUebersicht({ tage = 60, einst = null } = {}) {
     const seit = Date.now() - tage * 86400e3
     const staendeRoh = await knex('hype_boersen_stand').select('boerse', 'anzahl', 'aktualisiertAm', 'fehler', 'angekuendigt').catch(() => [])
     const nach = new Map(staendeRoh.map((z) => [z.boerse, z]))
-    // Nur Börsen, die es noch gibt — Listungen von Upbit, OKX, MEXC und Alpha (bis S12) bleiben gespeichert, gezeigt werden sie nicht.
+    // Nur Börsen der geltenden Liste — Listungen von Upbit, OKX, MEXC und Alpha bleiben gespeichert, gezeigt werden sie nur mit Schalter an (S15).
     const listungen = (await knex('hype_listungen_neu').where('gesehenAm', '>=', seit).orderBy('gesehenAm', 'desc').limit(400))
-        .filter((z) => BOERSE_NACH_ID.has(z.boerse)).slice(0, 300)
+        .filter((z) => aktiv.has(z.boerse)).slice(0, 300)
 
     const staende = await ladeStaende()
     const alleWissen = await radarWissen()
     const wissen = alleWissen.filter((w) => w.ersteMeldung)
     // Wo dasselbe Kürzel sonst noch steht — für neue wie für angekündigte Listungen.
-    for (const z of listungen) z.auchAuf = auchGelistetAuf(z, staende)
+    for (const z of listungen) z.auchAuf = auchGelistetAuf(z, staende, BOERSEN)
     /*
      * Angekündigt: angelegt, aber noch nicht offen — mit Startzeit, wo die
      * Börse sie nennt. Was schon begonnen hat, fällt beim nächsten Abgleich
@@ -292,11 +324,11 @@ export async function boersenUebersicht({ tage = 60, einst = null } = {}) {
      */
     const angekuendigt = []
     for (const z of staendeRoh) {
-        if (!BOERSE_NACH_ID.has(z.boerse)) continue
+        if (!aktiv.has(z.boerse)) continue
         for (const a of sicherJson(z.angekuendigt, [])) {
             const r = ordneZu({ boerse: z.boerse, symbol: a.symbol }, alleWissen)
             angekuendigt.push({ boerse: z.boerse, symbol: a.symbol, start: a.start ?? null,
-                auchAuf: auchGelistetAuf({ boerse: z.boerse, symbol: a.symbol }, staende),
+                auchAuf: auchGelistetAuf({ boerse: z.boerse, symbol: a.symbol }, staende, BOERSEN),
                 treffer: r.treffer, radarSeit: r.radarSeit, radarGesehen: r.radarGesehen })
         }
     }
@@ -310,13 +342,14 @@ export async function boersenUebersicht({ tage = 60, einst = null } = {}) {
     }
     const leiter = []
     for (const w of jeVertrag.values()) {
-        const l = leiterFuer(w, staende)
-        if (!l.mittel.length) continue
+        const l = leiterFuer(w, staende, BOERSEN)
+        if (!l.alpha && !l.mittel.length) continue
         leiter.push({ symbol: w.symbol, chain: w.chain, contract: w.contract, bewertungUsd: w.bewertungUsd,
             radarSeit: w.ersteMeldung, quelle: w.quelle, ...l })
     }
     // Wer noch NICHT oben ist, zuerst — das ist die Liste, auf die es ankommt.
-    leiter.sort((a, b) => (a.gross.length - b.gross.length) || (Number(a.radarSeit) - Number(b.radarSeit)))
+    leiter.sort((a, b) => (a.gross.length - b.gross.length) || ((b.alpha ? 1 : 0) - (a.alpha ? 1 : 0))
+        || (Number(a.radarSeit) - Number(b.radarSeit)))
 
     return {
         stand: { ...boersenStand() },
@@ -330,7 +363,7 @@ export async function boersenUebersicht({ tage = 60, einst = null } = {}) {
         })),
         listungen,
         angekuendigt,
-        statistik: vorlaufStatistik(listungen),
+        statistik: vorlaufStatistik(listungen, BOERSEN),
         leiter: leiter.slice(0, 50),
     }
 }

@@ -23,6 +23,7 @@ import { encrypt, decrypt } from '../crypto.js'
 import { STANDARD_GEWICHTE, STANDARD_NARRATIVE } from './bewertung.js'
 import { STANDARD_SICHERHEIT } from './sicherheit.js'
 import { smartWalletListe } from './fruehphase-bewertung.js'
+import { freigabeAn, freigabeAnSofort } from '../quellen/freigabe.js'
 
 /** Spalten in `settings`, in denen die Schlüssel der Zusatzquellen liegen. */
 const SCHLUESSEL_SPALTEN = {
@@ -183,15 +184,49 @@ export const VORGABEN = {
     sprache: 'de',
 }
 
+/**
+ * Was mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15, Vorgabe an)
+ * ANDERS ist als in `VORGABEN` — die Vorgaben von vor S12 (`def88a3`).
+ * `VORGABEN` selbst bleibt der Stand nach S12 (Schalter aus).
+ *
+ *   quellen         pump.fun, CoinPaprika, Reddit an (wie vor S12)
+ *   fruehQuellen    pump.fun-Listen und Telegram an, Reddit aus (wie vor S12)
+ *   fruehTelegram   die Kanalliste der Frühphase wird wieder gelesen
+ *   rugcheckAn      RugCheck läuft ab Werk mit (ID `rugcheck`)
+ *   boersenwacht…   Coinbase, Kraken, KuCoin, Gate ab Werk an (ID
+ *                   `gelbeBoersen`); Binance Alpha, Upbit, OKX, MEXC wieder da
+ */
+export const VORGABEN_OHNE_FREIGABE = {
+    quellen: { ...VORGABEN.quellen, pumpfun: true, coinpaprika: true, reddit: true },
+    // Reihenfolge wie vor S12 (die Oberfläche zeichnet die Schalter in dieser Folge).
+    fruehQuellen: {
+        pumpfunNeu: true, pumpfunAufstieg: true, dexscreenerProfile: true, geckoterminalNeu: true,
+        biz: true, telegram: true, reddit: false, ...VORGABEN.fruehQuellen,
+    },
+    fruehTelegram: [],
+    rugcheckAn: true,
+    boersenwachtBoersen: {
+        'binance-alpha': true, ...VORGABEN.boersenwachtBoersen,
+        coinbase: true, kraken: true, kucoin: true, gate: true,
+        upbit: true, okx: true, mexc: true,
+    },
+}
+
+/** Die Vorgaben, die gerade gelten — je nach Schalter (Vorgabe: letzter bekannter Stand). */
+export function vorgabenFuer(ohneFreigabe = freigabeAnSofort()) {
+    return ohneFreigabe ? { ...VORGABEN, ...VORGABEN_OHNE_FREIGABE } : VORGABEN
+}
+
 /** Alle Einstellungen, mit Vorgaben aufgefüllt. */
 export async function leseEinstellungen() {
+    const V = vorgabenFuer(await freigabeAn())
     const knex = getKnex()
     let zeilen = []
     try {
         zeilen = await knex('hype_settings').select('schluessel', 'wert')
     } catch {
         // Tabelle fehlt noch (älterer Codestand hat die DB angelegt).
-        return { ...VORGABEN, schluessel: {} }
+        return { ...V, schluessel: {} }
     }
 
     const gespeichert = {}
@@ -204,13 +239,13 @@ export async function leseEinstellungen() {
         }
     }
 
-    const e = { ...VORGABEN }
+    const e = { ...V }
     for (const [k, v] of Object.entries(gespeichert)) {
         if (v === null || v === undefined) continue
         // Verschachtelte Objekte auffüllen statt ersetzen: sonst fehlt nach
         // dem Hinzufügen einer neuen Schraube genau diese in alten Ständen.
-        e[k] = (typeof v === 'object' && !Array.isArray(v) && typeof VORGABEN[k] === 'object' && !Array.isArray(VORGABEN[k]))
-            ? { ...VORGABEN[k], ...v }
+        e[k] = (typeof v === 'object' && !Array.isArray(v) && typeof V[k] === 'object' && !Array.isArray(V[k]))
+            ? { ...V[k], ...v }
             : v
     }
 
@@ -227,11 +262,14 @@ export async function leseEinstellungen() {
     for (const feld of ['quellen', 'fruehQuellen', 'boersenwachtBoersen']) {
         if (e[feld] && typeof e[feld] === 'object') {
             e[feld] = Object.fromEntries(
-                Object.entries(e[feld]).filter(([name]) => name in VORGABEN[feld]))
+                Object.entries(e[feld]).filter(([name]) => name in V[feld]))
         }
     }
-    // Die Telegram-Kanäle der Frühphase (bis S12) bleiben gespeichert, gelesen werden sie nicht mehr.
-    delete e.fruehTelegram
+    /*
+     * Die Telegram-Kanäle der Frühphase bleiben gespeichert; gelesen werden sie
+     * nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15).
+     */
+    if (!('fruehTelegram' in V)) delete e.fruehTelegram
 
     e.schluessel = await leseSchluessel()
     return e
@@ -286,7 +324,17 @@ export async function schreibeEinstellungen(neu = {}, zusatzVorgaben = {}) {
  * oder `STANDARD_SICHERHEIT` erreichte diese Installation nie mehr: genau die
  * zweite Wahrheit, die der leere `alarmRegeln`-Eintrag oben verhindern sollte.
  */
-const NUR_ABWEICHUNGEN = new Set(['alarmRegeln', 'sicherheit', 'gewichte'])
+const NUR_ABWEICHUNGEN = new Set(['alarmRegeln', 'sicherheit', 'gewichte', 'boersenwachtBoersen'])
+
+/*
+ * S15: Diese Vorgaben hängen am Schalter „Quellen ohne Verkaufsfreigabe".
+ * Gespeichert wird nur, was von der GERADE geltenden Vorgabe abweicht — sonst
+ * fröre ein Speichern bei Schalter an `rugcheckAn: true` und „Coinbase an" als
+ * eigene Wahl ein, und nach dem Ausschalten liefen sie weiter wie mit Schalter.
+ * `boersenwachtBoersen` steht deshalb auch in `NUR_ABWEICHUNGEN`; eine
+ * Einzelwahl, die der Vorgabe gleicht, wird als `null` geschrieben (= Vorgabe).
+ */
+const SCHALTER_VORGABE = new Set(['rugcheckAn'])
 
 /**
  * `''` und Unzahlen sind keine Einstellung.
@@ -309,12 +357,17 @@ function alsZahl(w) {
  * @param {object} zusatzVorgaben  Vorgaben, die hier nicht stehen dürfen
  *                                 (`alarmRegeln` kommt aus `wachhund.js`)
  */
-export function bereinigeEinstellungen(neu = {}, zusatzVorgaben = {}) {
-    const vorgaben = { ...VORGABEN, ...zusatzVorgaben }
+export function bereinigeEinstellungen(neu = {}, zusatzVorgaben = {}, { ohneFreigabe = freigabeAnSofort() } = {}) {
+    const V = vorgabenFuer(ohneFreigabe)
+    const vorgaben = { ...V, ...zusatzVorgaben }
     const raus = {}
     for (const [k, v] of Object.entries(neu || {})) {
-        if (!(k in VORGABEN)) continue
+        if (!(k in V)) continue
         const vorgabe = vorgaben[k]
+        if (SCHALTER_VORGABE.has(k)) {
+            raus[k] = v === vorgabe ? null : v
+            continue
+        }
         if (typeof vorgabe === 'number') {
             const z = alsZahl(v)
             if (z !== undefined) raus[k] = z
@@ -335,6 +388,10 @@ export function bereinigeEinstellungen(neu = {}, zusatzVorgaben = {}) {
             raus[k] = abweichung
             continue
         }
+        if (k === 'fruehTelegram') {
+            raus[k] = telegramKanaele(v)
+            continue
+        }
         if (k === 'smartWallets') {
             raus[k] = smartWalletListe(v)
             continue
@@ -342,6 +399,24 @@ export function bereinigeEinstellungen(neu = {}, zusatzVorgaben = {}) {
         raus[k] = v
     }
     return raus
+}
+
+/**
+ * Telegram-Kanäle der Frühphase: nur Kanalnamen, höchstens fünfzehn
+ * (S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe").
+ *
+ * Angenommen wird, was jemand aus der Adresszeile kopiert — `@name`,
+ * `t.me/name`, `https://t.me/s/name`. Gespeichert wird nur der Name; was
+ * danach nicht wie ein Telegram-Name aussieht, fällt weg, statt später als
+ * Pfad an `t.me` zu gehen.
+ */
+export function telegramKanaele(liste) {
+    const roh = Array.isArray(liste) ? liste : String(liste || '').split(/[\s,;]+/)
+    const namen = roh
+        .map((x) => String(x || '').trim()
+            .replace(/^(https?:\/\/)?(www\.)?(t\.me|telegram\.me)\/(s\/)?/i, '').replace(/^@/, '').split(/[/?#]/)[0])
+        .filter((n) => /^[A-Za-z0-9_]{4,64}$/.test(n))
+    return [...new Set(namen)].slice(0, 15)
 }
 
 /**

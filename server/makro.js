@@ -1,15 +1,30 @@
 /**
- * Makro-Umfeld: Stablecoin-Fluss, Dominanz-Zerlegung und die Rechnung für
- * Korrelationen zwischen Tagesreihen.
+ * Makro-Umfeld: Aktien-Futures, Dollar-Index und Stablecoin-Fluss.
  *
- * Bis S12 gehörten Aktien-Futures (ES, NQ, RTY) und der Dollar-Index aus
- * Yahoo Finance dazu, samt Korrelation zu Bitcoin — „Nasdaq −1 %" allein ist
- * Dekoration, die Kopplung ist die Aussage. Yahoo ist entfernt (siehe unten);
- * die Korrelationsrechnung bleibt, damit eine lizenzierte Indexquelle sie
- * ohne Neubau wieder nutzen kann.
+ * Warum das überhaupt ins Krypto-Journal gehört: Alle übrigen Radar-Kacheln
+ * sind krypto-intern. Fällt Bitcoin, weil die Nasdaq fällt, kann keine davon
+ * das sagen — man sucht die Ursache dann im Krypto-Markt, wo sie nicht liegt.
+ *
+ * Zwei Entscheidungen, die den Wert der Kachel ausmachen:
+ *
+ * 1. **Futures statt Kassa-Indizes.** Der S&P-500-INDEX steht am Wochenende
+ *    und nachts still — beim Bau dieser Kachel war sein letzter Kurs 62 Stunden
+ *    alt, während der Future auf die Sekunde aktuell war. Krypto handelt durch,
+ *    also muss der Vergleichswert das auch (annähernd) tun.
+ *
+ * 2. **Korrelation gehört dazu.** „Nasdaq −1 %" allein ist Dekoration: die
+ *    Kopplung zwischen Krypto und Aktien schwankt stark. Die Aussage lautet
+ *    nicht „Nasdaq fällt", sondern „Nasdaq fällt UND dein Markt hängt gerade
+ *    daran". Ohne die Korrelation fehlt die halbe Information.
  *
  * Reines Modul ohne Netz und DB (Selbsttest: __selftest-makro.mjs); die
  * Datenbeschaffung liegt in marktradar-api.js (holeMakro).
+ *
+ * Yahoo Finance hat keine Verkaufsfreigabe (Verkaufs-Prüfung Z. 28/39). S12
+ * hatte die Leser darum entfernt; seit S15 (19.10.2026) sind sie zurück und
+ * die ABRUFE laufen nur mit `quelleErlaubt('yahoo')` (Schalter
+ * `quellenOhneFreigabe`, `server/quellen/freigabe.js`). Die Leser selbst
+ * holen nichts und bleiben ohne Schalter.
  */
 
 /** Ab so vielen gemeinsamen Tagen gilt eine Korrelation als überhaupt zeigbar. */
@@ -17,14 +32,102 @@ export const KORR_MIN_PUNKTE = 12
 export const KORR_STARK = 0.6
 export const KORR_MITTEL = 0.35
 
-/*
- * Hier standen bis S12 zwei Leser für Antworten des Yahoo-Finance-Chart-
- * Endpunkts (`reiheAusChart`, `ohlcAusChart`). Yahoo ist als Quelle entfernt
- * (Verkaufs-Prüfung Z. 28/39: automatisiertes Sammeln und kommerzielle Nutzung
- * verboten), die Leser mit ihr. Die übrige Rechnung bleibt: Korrelation und
- * Delta arbeiten auf jeder Tagesreihe `{tag, close}`, `pearson` braucht der
- * Coin-Radar, Stablecoin-Fluss und Dominanz-Zerlegung die Makro-Kachel.
+/**
+ * Yahoo-Chart-Antwort in eine Tagesreihe übersetzen.
+ * Lücken (null-Schlusskurse an Feiertagen) fallen raus, statt als 0 zu gelten.
+ *
+ * @returns {{ reihe: Array<{tag: string, close: number}>, preis: number|null,
+ *             zeit: number|null, name: string|null }}
  */
+export function reiheAusChart(json) {
+    const res = json?.chart?.result?.[0]
+    const ts = res?.timestamp
+    const cl = res?.indicators?.quote?.[0]?.close
+    const reihe = []
+    if (Array.isArray(ts) && Array.isArray(cl)) {
+        for (let i = 0; i < ts.length; i++) {
+            const c = Number(cl[i])
+            const t = Number(ts[i])
+            if (!Number.isFinite(c) || c <= 0 || !Number.isFinite(t)) continue
+            reihe.push({ tag: new Date(t * 1000).toISOString().slice(0, 10), close: c })
+        }
+    }
+    // `> 0` statt bloss `isFinite`: fehlt das Feld, ergibt `Number(null)` eine
+    // 0 — und die ist endlich. Ohne diese Schranke griff der Rückfall auf den
+    // letzten Schlusskurs NIE, und die Makro-Kachel zeigte bei einer Antwort
+    // ohne Kurs eine glatte 0 samt absurdem Tagesdelta.
+    const preis = Number(res?.meta?.regularMarketPrice)
+    const zeit = Number(res?.meta?.regularMarketTime)
+    return {
+        reihe,
+        preis: Number.isFinite(preis) && preis > 0
+            ? preis
+            : (reihe.length ? reihe[reihe.length - 1].close : null),
+        // Yahoo liefert Sekunden, der Rest des Journals rechnet in Millisekunden
+        zeit: Number.isFinite(zeit) && zeit > 0 ? zeit * 1000 : null,
+        name: res?.meta?.shortName || null,
+    }
+}
+
+/**
+ * Wie `reiheAusChart`, aber mit erhaltenem OHLC — für Intraday-Kerzen.
+ *
+ * `reiheAusChart` bleibt bewusst unangetastet: es hat einen Selbsttest, und für
+ * die Korrelationsrechnung ist eine reine Schlusskursreihe genau richtig. Für
+ * einen Kerzenchart braucht es dagegen open/high/low, und Yahoo liefert die
+ * ohnehin mit — sie wurden nur weggeworfen.
+ *
+ * Lücken sind bei `interval=5m` die Regel, nicht die Ausnahme: Yahoo schickt
+ * für jede Minute des angefragten Zeitraums einen Eintrag, auch für Zeiten, in
+ * denen nicht gehandelt wurde. Eine Zeile mit einem fehlenden der vier Werte
+ * fällt heraus, statt als Null in den Chart zu rutschen.
+ *
+ * `vorherClose` kommt aus `meta.chartPreviousClose`. **Das ist nur bei
+ * `range=1d` der Vortagesschluss** — das Feld meint den Schluss VOR dem
+ * abgefragten Zeitraum, bei `range=3mo` also den Kurs von vor drei Monaten
+ * (siehe die Warnung bei `deltaAusReihe`). Wer diese Funktion mit einem
+ * längeren Zeitraum aufruft, darf `vorherClose` nicht als „gestern" lesen.
+ *
+ * @returns {{ kerzen: Array<{t:number,o:number,h:number,l:number,c:number,v:number}>,
+ *             preis: number|null, zeit: number|null, vorherClose: number|null,
+ *             name: string|null, zone: string|null }}
+ */
+export function ohlcAusChart(json) {
+    const res = json?.chart?.result?.[0]
+    const ts = res?.timestamp
+    const q = res?.indicators?.quote?.[0]
+    const kerzen = []
+    if (Array.isArray(ts) && q) {
+        for (let i = 0; i < ts.length; i++) {
+            const t = Number(ts[i])
+            const o = Number(q.open?.[i])
+            const h = Number(q.high?.[i])
+            const l = Number(q.low?.[i])
+            const c = Number(q.close?.[i])
+            if (![t, o, h, l, c].every(Number.isFinite)) continue
+            if (o <= 0 || h <= 0 || l <= 0 || c <= 0) continue
+            const v = Number(q.volume?.[i])
+            // Yahoo liefert Sekunden, der Rest des Journals rechnet in Millisekunden
+            kerzen.push({ t: t * 1000, o, h, l, c, v: Number.isFinite(v) ? v : 0 })
+        }
+    }
+    // `> 0` statt bloss `isFinite`: fehlt das Feld, ergibt `Number(null)` eine
+    // 0 — und die ist endlich. Ohne diese Schranke stünde bei einer Antwort
+    // ohne Kurs eine glatte 0 im Chart statt des letzten Schlusskurses.
+    const preis = Number(res?.meta?.regularMarketPrice)
+    const zeit = Number(res?.meta?.regularMarketTime)
+    const vorher = Number(res?.meta?.chartPreviousClose)
+    return {
+        kerzen,
+        preis: Number.isFinite(preis) && preis > 0
+            ? preis
+            : (kerzen.length ? kerzen[kerzen.length - 1].c : null),
+        zeit: Number.isFinite(zeit) && zeit > 0 ? zeit * 1000 : null,
+        vorherClose: Number.isFinite(vorher) && vorher > 0 ? vorher : null,
+        name: res?.meta?.shortName || null,
+        zone: res?.meta?.exchangeTimezoneName || null,
+    }
+}
 
 /**
  * Veränderung zur vorherigen Sitzung in Prozent.

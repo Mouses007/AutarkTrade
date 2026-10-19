@@ -183,7 +183,8 @@
                         </label>
                     </div>
                 </div>
-                <p class="hypHinweis at-mo-1">{{ t('hype.quellenEntferntHinweis') }}</p>
+                <!-- S15: mit dem Schalter „Quellen ohne Verkaufsfreigabe" laufen die alten Quellen wieder. -->
+                <p class="hypHinweis at-mo-1">{{ frei ? t('hype.quellenFreiHinweis') : t('hype.quellenEntferntHinweis') }}</p>
 
                 <!-- Der CoinGecko-Schlüssel gilt für Marktradar, Coin-Radar und
                      Hype-Radar zugleich und hat einen Tarif (Demo/Pro) — er wird
@@ -194,21 +195,24 @@
                     <div class="hypSchluesselZeile">
                         <label class="at-label at-mu-1">CoinGecko</label>
                         <div class="hypHinweis">
-                            <template v-if="einst.coingeckoSchluessel">
+                            <template v-if="einst.coingeckoEigen ?? einst.coingeckoSchluessel">
                                 <Symbol name="haken" class="at-mr-1" />{{ t('hype.cgSchluesselDa') }}
                             </template>
+                            <!-- S15: ohne eigenen Schlüssel, Schalter an → öffentliche Endpunkte. -->
+                            <template v-else-if="einst.coingeckoSchluessel">{{ t('hype.cgOeffentlich') }}</template>
                             <template v-else>{{ t('hype.cgSchluesselFehlt') }}</template>
                             <a href="/settings" class="at-ml-1" @click.prevent="zuDatenquellen">{{ t('hype.cgZuDatenquellen') }}</a>
                         </div>
                     </div>
                 </div>
 
-                <!-- RugCheck: Bedingungen ungeklärt (Verkaufs-Prüfung Z. 66) — ab Werk aus. -->
+                <!-- RugCheck: Bedingungen ungeklärt (Verkaufs-Prüfung Z. 66) — ab Werk aus,
+                     mit dem Schalter „Quellen ohne Verkaufsfreigabe" ab Werk an (S15). -->
                 <div class="at-check schalter at-mo-3">
                     <input id="hypRugcheck" type="checkbox" v-model="einst.rugcheckAn" @change="speichern">
                     <label class="at-klein" for="hypRugcheck">{{ t('hype.rugcheckAn') }}</label>
                 </div>
-                <div class="hypHinweis">{{ t('hype.rugcheckHinweis') }}</div>
+                <div class="hypHinweis">{{ frei ? t('hype.rugcheckHinweisFrei') : t('hype.rugcheckHinweis') }}</div>
                 </div>
 
                 <div class="hypEinstTrenner" :style="{ order: 99 }">{{ t('hype.einstGemeinsam') }}</div>
@@ -217,7 +221,7 @@
                      Kostet keinen Schlüssel, aber Fremdabrufe je Fund —
                      deshalb gedeckelt. -->
                 <h6 class="hypTitel at-mo-4">{{ t('hype.projektTitel') }}</h6>
-                <p class="hypHinweis">{{ t('hype.projektHinweis') }}</p>
+                <p class="hypHinweis">{{ frei ? t('hype.projektHinweisFrei') : t('hype.projektHinweis') }}</p>
                 <div class="at-formzeile">
                     <div>
                         <div class="at-check schalter">
@@ -271,7 +275,7 @@
                     <div v-for="(_, q) in einst.fruehQuellen" :key="q" class="at-check schalter">
                         <input :id="'hypFQ' + q" type="checkbox"
                             v-model="einst.fruehQuellen[q]" @change="speichern">
-                        <label class="at-klein" :for="'hypFQ' + q">{{ t('hype.fruehQuelle_' + q) }}</label>
+                        <label class="at-klein" :for="'hypFQ' + q">{{ frei && te('hype.fruehQuelle_' + q + 'Frei') ? t('hype.fruehQuelle_' + q + 'Frei') : t('hype.fruehQuelle_' + q) }}</label>
                     </div>
                 </div>
                 <!-- X kostet je Abfrage — deshalb ein eigener, längerer Takt. -->
@@ -287,6 +291,17 @@
                     </div>
                     <div class="at-wachsen hypHinweis at-mu-0">{{ t('hype.fruehXHinweis') }}</div>
                 </div>
+                <!-- Telegram-Kanäle der Frühphase — nur mit dem Schalter
+                     „Quellen ohne Verkaufsfreigabe" (S15); aus, bleibt die
+                     gespeicherte Liste liegen und wird nicht gelesen. -->
+                <template v-if="frei">
+                    <label class="at-label at-mo-2" for="hypFruehTg">{{ t('hype.fruehTelegram') }}</label>
+                    <textarea id="hypFruehTg" class="at-feld klein hypTgListe" rows="2"
+                        :value="(einst.fruehTelegram || []).join('\n')"
+                        :placeholder="t('hype.fruehTelegramPlatzhalter')"
+                        @change="fruehTelegramGeaendert"></textarea>
+                    <div class="hypHinweis">{{ t('hype.fruehTelegramHinweis') }}</div>
+                </template>
                 <!-- Smart Money: Wallet-Liste, Takt und RPC-Adresse — nur, wenn
                      die Quelle eingeschaltet ist. -->
                 <template v-if="einst.fruehQuellen?.smartmoney">
@@ -305,22 +320,23 @@
                             </select>
                         </div>
                         <div class="at-wachsen">
-                            <label class="at-label">{{ t('hype.smartRpc') }}
-                                <span v-if="!schluesselDa('solanaRpc')" class="hypHinweisKlein">{{ t('hype.smartRpcPflicht') }}</span>
+                            <!-- S15: mit Schalter an ist der öffentliche Solana-Knoten wieder die Vorgabe. -->
+                            <label class="at-label">{{ frei ? t('hype.smartRpcFrei') : t('hype.smartRpc') }}
+                                <span v-if="!frei && !schluesselDa('solanaRpc')" class="hypHinweisKlein">{{ t('hype.smartRpcPflicht') }}</span>
                             </label>
                             <input v-model="einst.schluessel.solanaRpc" type="password" class="at-feld klein"
-                                :placeholder="schluesselDa('solanaRpc') ? einst.schluessel.solanaRpc : t('hype.smartRpcPlatzhalter')"
+                                :placeholder="schluesselDa('solanaRpc') ? einst.schluessel.solanaRpc : (frei ? t('hype.smartRpcPlatzhalterFrei') : t('hype.smartRpcPlatzhalter'))"
                                 @change="speichern">
                         </div>
                     </div>
-                    <div class="hypHinweis">{{ t('hype.smartHinweis') }}</div>
+                    <div class="hypHinweis">{{ frei ? t('hype.smartHinweisFrei') : t('hype.smartHinweis') }}</div>
                 </template>
                 </div>
 
                 <div class="hypEinstTeil" :style="teilStil('boersen')" v-show="teilSichtbar('boersen')">
                 <!-- Börsen-Beobachter -->
                 <h6 class="hypTitel at-mo-4">{{ t('hype.boersenwachtTitel') }}</h6>
-                <p class="hypHinweis">{{ t('hype.boersenwachtHinweis') }}</p>
+                <p class="hypHinweis">{{ frei ? t('hype.boersenwachtHinweisFrei') : t('hype.boersenwachtHinweis') }}</p>
                 <div class="at-formzeile">
                     <div>
                         <div class="at-check schalter">
@@ -352,7 +368,7 @@
                         <label class="at-klein" :for="'hypBwB' + b">{{ te('hype.boerse_' + b) ? t('hype.boerse_' + b) : b }}</label>
                     </div>
                 </div>
-                <div class="hypHinweis">{{ t('hype.boersenWahlHinweis') }}</div>
+                <div class="hypHinweis">{{ frei ? t('hype.boersenWahlHinweisFrei') : t('hype.boersenWahlHinweis') }}</div>
                 </div>
 
                 <div class="hypEinstTeil" :style="teilStil('wachhund')" v-show="teilSichtbar('wachhund')">
@@ -851,7 +867,7 @@
                                 <th @click="sortiere('symbol')">{{ t('hype.spalteSymbol') }}</th>
                                 <th @click="sortiere('hypeScore')" class="at-rechtsbuendig">{{ t('hype.spalteHype') }}</th>
                                 <th v-if="spalten.sicherheit" @click="sortiere('safetyScore')" class="at-rechtsbuendig">{{ t('hype.spalteSafety') }}</th>
-                                <th v-if="spalten.substanz" @click="sortiere('projektNote')" class="at-rechtsbuendig" :title="t('hype.spalteSubstanzTitel')">{{ t('hype.spalteSubstanz') }}</th>
+                                <th v-if="spalten.substanz" @click="sortiere('projektNote')" class="at-rechtsbuendig" :title="frei ? t('hype.spalteSubstanzTitelFrei') : t('hype.spalteSubstanzTitel')">{{ t('hype.spalteSubstanz') }}</th>
                                 <th v-if="spalten.narrativ">{{ t('hype.spalteNarrativ') }}</th>
                                 <th v-if="spalten.liq" class="at-rechtsbuendig">{{ t('hype.spalteLiq') }}</th>
                                 <th v-if="spalten.alter" class="at-rechtsbuendig">{{ t('hype.spalteAlter') }}</th>
@@ -1149,6 +1165,7 @@ import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import KiHinweis from '@/components/quellen/KiHinweis.vue'
+import { ladeFreigabe, freigabeAn } from '../utils/quellenFreigabe.js'
 
 const { t, te, locale } = useI18n()
 
@@ -1678,10 +1695,25 @@ const berichte = ref([])
 const offenerBericht = ref(null)
 const einst = ref(null)
 const stufen = ref([])
+/**
+ * Schalter „Quellen ohne Verkaufsfreigabe" (S15, Einstellungen › Datenquellen):
+ * an → pump.fun, CoinPaprika, Reddit, Telegram, Binance Alpha … wie vor S12.
+ * Bis geladen gilt die Vorgabe (an).
+ */
+const frei = computed(() => freigabeAn())
+
 /** Quellenzeile der Übersicht: DexScreener immer, CoinGecko mit Schlüssel, Prüfdienste, /biz/ über die Frühphase. */
 const uebersichtQuellen = computed(() => {
     const e = einst.value || {}
-    return ['dexscreener', ...(e.coingeckoSchluessel ? ['coingecko'] : []), 'goplus',
+    const q = e.quellen || {}
+    // S15: die Quellen ohne Verkaufsfreigabe tragen ebenfalls ihre Zeile, solange sie laufen.
+    const ohneFreigabe = frei.value
+        ? [...(q.pumpfun !== false ? ['pumpfun'] : []), ...(q.coinpaprika !== false ? ['coinpaprika'] : []),
+            ...(q.reddit !== false ? ['reddit'] : []),
+            ...(!(e.coingeckoEigen ?? true) && q.geckoterminal !== false ? ['geckoterminal'] : []),
+            ...(e.fruehAktiv && (e.fruehTelegram || []).length && e.fruehQuellen?.telegram !== false ? ['telegram'] : [])]
+        : []
+    return ['dexscreener', ...(e.coingeckoSchluessel ? ['coingecko'] : []), ...ohneFreigabe, 'goplus',
         ...(e.rugcheckAn ? ['rugcheck'] : []), ...(e.fruehAktiv && e.fruehQuellen?.biz !== false ? ['biz'] : [])]
 })
 
@@ -2057,8 +2089,9 @@ async function speichern() {
          */
         const r = await axios.put('/api/hype-radar/einstellungen', einst.value)
         fehlendeSchluessel.value = r.data?.fehlendeSchluessel || []
-        // Der Server bereinigt die Wallet-Liste — die Anzeige soll zeigen, was gilt, nicht was getippt wurde.
+        // Der Server bereinigt Wallet- und Kanalliste — die Anzeige soll zeigen, was gilt, nicht was getippt wurde.
         if (Array.isArray(r.data?.smartWallets)) einst.value.smartWallets = r.data.smartWallets
+        if (Array.isArray(r.data?.fruehTelegram)) einst.value.fruehTelegram = r.data.fruehTelegram
     } catch (e) {
         logWarn('hype-radar', 'Einstellungen konnten nicht gespeichert werden', e)
     }
@@ -2068,6 +2101,13 @@ async function speichern() {
 function smartWalletsGeaendert(ev) {
     if (!einst.value) return
     einst.value.smartWallets = String(ev.target.value || '').split(/\r?\n/).map((z) => z.trim()).filter(Boolean)
+    speichern()
+}
+
+/** Telegram-Kanäle der Frühphase (S15, nur mit Schalter an): eine Zeile (oder Komma) je Kanal. */
+function fruehTelegramGeaendert(ev) {
+    if (!einst.value) return
+    einst.value.fruehTelegram = String(ev.target.value || '').split(/[\s,;]+/).filter(Boolean)
     speichern()
 }
 
@@ -2492,6 +2532,7 @@ onMounted(async () => {
         breitenBeobachter.observe(wurzel.value)
     }
     uhrTakt = setInterval(() => { jetztMs.value = Date.now() }, 60000)
+    ladeFreigabe()
     await Promise.all([
         ladeKandidaten(), ladeBerichte(), ladeGuete(), ladeEinstellungen(),
         ladeFavoriten(), ladeAlarme(), ladeKiQuellen(),

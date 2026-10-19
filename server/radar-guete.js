@@ -379,6 +379,20 @@ function urteileHype(spitze, verworfen, feld) {
  */
 export const FRUEH_REGEL_AUSWERTUNG = 3
 
+/**
+ * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" kommen King of the
+ * Hill, die Kommentare, die Ersteller-Bilanz und `complete` von pump.fun
+ * zurück — die Note und „durch die Kurve" sind dann wieder die von Regel 2.
+ * Deshalb hängt der Stand am Schalter statt einen Stand 4 zu erfinden: Paare,
+ * die vor S12 nach Regel 2 entstanden, gehören mit Schalter an wieder zur
+ * Auswertung; nach Regel 3 entstandene stehen dann als Altbestand daneben.
+ * Gemischt wird nie.
+ */
+export const FRUEH_REGEL_OHNE_FREIGABE = 2
+
+/** Regelstand je Schalter. */
+export const fruehRegelFuer = (ohneFreigabe) => (ohneFreigabe ? FRUEH_REGEL_OHNE_FREIGABE : FRUEH_REGEL_AUSWERTUNG)
+
 /** Unter so vielen vollständigen Paaren je Frage gibt es kein Urteil. */
 export const MIN_PAARE = 10
 
@@ -446,8 +460,8 @@ function paarVergleich(paare, frage) {
  * gezählt, aber nicht ausgewertet — ihre Spitze und ihre Kontrolle waren
  * anders bestimmt.
  */
-export function werteAusFrueh(zeilen = [], horizont = '') {
-    const aktuell = zeilen.filter((z) => Number(z.regel) === FRUEH_REGEL_AUSWERTUNG)
+export function werteAusFrueh(zeilen = [], horizont = '', regel = FRUEH_REGEL_AUSWERTUNG) {
+    const aktuell = zeilen.filter((z) => Number(z.regel) === regel)
     const gemessenAktuell = aktuell.filter((z) => z.status === 'gemessen')
     const nach = (name) => gemessenAktuell.filter((z) => z.gruppe === name)
     const spitzeZeilen = nach('spitze')

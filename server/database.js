@@ -9,6 +9,7 @@ import { seedDefaultLernkarten } from './default-lernkarten.js'
 import { istGewinn } from '../shared/gewinn.js'
 import { migriereS12 } from './migrationen/s12.js'
 import { migriereS13 } from './migrationen/s13.js'
+import { migriereS15 } from './migrationen/s15.js'
 
 let knex = null
 
@@ -882,7 +883,7 @@ async function runMigrations(knex, client) {
     // stimmte nur für BTC/ETH und lag bei allen anderen Coins deutlich zu tief.
     // 'binance' las einen undokumentierten bapi-Endpunkt und ist seit S12 weg
     // (Verkaufs-Prüfung Z. 34); `migrationen/s12-marktdaten.js` stellt um.
-    await addColumnIfNotExists('settings', 'levMapMmrQuelle', (t) => t.string('levMapMmrQuelle').defaultTo('bybit'))
+    await addColumnIfNotExists('settings', 'levMapMmrQuelle', (t) => t.string('levMapMmrQuelle').defaultTo('binance'))
     await addColumnIfNotExists('settings', 'levMapWeights', (t) => t.string('levMapWeights').defaultTo('40,30,20,10'))
     await addColumnIfNotExists('settings', 'levMapView', (t) => t.string('levMapView').defaultTo('dist'))
     await addColumnIfNotExists('settings', 'levMapThreshold', (t) => t.float('levMapThreshold').defaultTo(0))
@@ -3558,6 +3559,11 @@ async function runMigrations(knex, client) {
 
     // ── v29: Scharfen Handel auslagern (S13) ───────────────────────────
     await migriereS13(knex, addColumnIfNotExists)
+
+    // ── Analysequellen zurück (S15) ────────────────────────────────────
+    // Schalter `quellenOhneFreigabe` (Vorgabe an) und Rückführung der
+    // S12-Einstellungen, siehe `server/migrationen/s15.js`. Additiv.
+    await migriereS15(knex, addColumnIfNotExists)
 
     // ==================== SCHEMA-ANKER ====================
     // Ganz am Ende, damit die Version erst steht, wenn alle Checks durch sind.

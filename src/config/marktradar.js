@@ -31,7 +31,7 @@ import { baueKachelListe, macheSortierer } from './kachel-registry.js'
  */
 export const STANDARD_REIHENFOLGE = [
     'mechanik', 'funding', 'lsoi', 'liq24', 'fng', 'dom',
-    'picycle', 'altseason', 'markt', 'rainbow', 'regime', 'rsi', 'makro', 'etf',
+    'picycle', 'altseason', 'markt', 'rainbow', 'regime', 'rsi', 'makro', 'etf', 'wal',
     // Die Zusammenfassung steht am Ende: sie liest die anderen Kacheln, also
     // gehört sie hinter sie — und nachrückende Ids landen ohnehin dort.
     'lage',
@@ -53,6 +53,15 @@ export const Q = {
     /** Quelle nennen (Data Distribution Policy, Z. 30). */
     cryptoquant: { name: 'CryptoQuant', url: 'https://cryptoquant.com/', art: 'daten' },
     marktdaten: { marktdaten: true },
+    /*
+     * Quellen ohne Verkaufsfreigabe (S15, `server/quellen/freigabe.js`): nur
+     * angezeigt, solange der Schalter `quellenOhneFreigabe` an ist
+     * (`freigabe: true`, siehe `loeseQuellen`).
+     */
+    yahoo: { name: 'Yahoo Finance', url: 'https://finance.yahoo.com/', art: 'daten', freigabe: true },
+    blockchainInfo: { name: 'blockchain.info', url: 'https://www.blockchain.com/explorer/charts/market-price', art: 'daten', freigabe: true },
+    coinmarketcap: { name: 'CoinMarketCap', url: 'https://coinmarketcap.com/charts/', art: 'daten', freigabe: true },
+    telegram: { name: 'eigene Telegram-Quellen (Whale Alert, Lookonchain, …)', art: 'daten', freigabe: true },
 }
 
 const DEFINITIONEN = [
@@ -75,7 +84,7 @@ const DEFINITIONEN = [
         intervallMs: 3 * 60 * 1000,
         spalten: 1,
         flaeche: true,
-        quelle: [Q.coingecko, { name: 'eigene Tagesschnappschüsse', klein: false }],
+        quelle: [Q.coinmarketcap, Q.coingecko, { name: 'eigene Tagesschnappschüsse', klein: false }],
     },
     {
         id: 'funding',
@@ -130,7 +139,7 @@ const DEFINITIONEN = [
         // die Kopplung ändert sich in Tagen, nicht in Minuten
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: [Q.coingecko],
+        quelle: [Q.yahoo, Q.coingecko, { marktdaten: true, zusatz: '(BTC-Tageskerzen)', freigabe: true }],
     },
     {
         id: 'picycle',
@@ -140,7 +149,8 @@ const DEFINITIONEN = [
         // Tageskerzen — häufiger nachzufragen ändert nichts
         intervallMs: 12 * 60 * 60 * 1000,
         spalten: 1,
-        quelle: [{ marktdaten: true, zusatz: '(BTCUSDT Spot, ab 2017)' }],
+        quelle: [Q.blockchainInfo, { marktdaten: true, zusatz: '(BTCUSDT Spot)', freigabe: true },
+            { marktdaten: true, zusatz: '(BTCUSDT Spot, ab 2017)', ohneSchalter: true }],
     },
     {
         id: 'altseason',
@@ -173,7 +183,8 @@ const DEFINITIONEN = [
         intervallMs: 12 * 60 * 60 * 1000,
         spalten: 1,
         flaeche: true,
-        quelle: [{ marktdaten: true, zusatz: '(BTCUSDT Spot, ab 2017)' }],
+        quelle: [Q.blockchainInfo, { marktdaten: true, zusatz: '(BTCUSDT Spot)', freigabe: true },
+            { marktdaten: true, zusatz: '(BTCUSDT Spot, ab 2017)', ohneSchalter: true }],
     },
     {
         id: 'regime',
@@ -219,16 +230,19 @@ const DEFINITIONEN = [
         titleKey: 'marktradar.wal.title',
         icon: 'anker',
         /*
-         * ENTFERNT (S12): las Wal-Transaktionen aus mitgeschriebenen Telegram-
-         * Kanälen; Telegram verbietet das Auslesen öffentlicher Kanäle
-         * (Verkaufs-Prüfung Z. 31). Der Endpunkt antwortet `{ aus: true,
-         * grund: 'entfernt' }`, die Kachel sagt das. Steht in der Vorgabe-
-         * Reihenfolge nicht mehr; wer sie eingeblendet hatte, sieht den Hinweis.
+         * Liest Wal-Transaktionen aus mitgeschriebenen Telegram-Kanälen.
+         * Telegram hat keine Verkaufsfreigabe (Verkaufs-Prüfung Z. 31): S12
+         * hatte die Kachel entfernt, seit S15 läuft sie wieder, solange der
+         * Schalter `quellenOhneFreigabe` an ist — sonst antwortet der Endpunkt
+         * `{ aus: true, grund: 'ohneFreigabe' }` und die Kachel sagt das.
+         * Nur eigene, schon gesammelte Telegram-Beiträge — kein Netzabruf,
+         * daher darf hier häufiger nachgesehen werden als bei den News selbst.
          */
         endpunkt: '/api/marktradar/wale',
-        intervallMs: 60 * 60 * 1000,
+        params: { stunden: 24, minUsd: 5000000 },
+        intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: [],
+        quelle: [Q.telegram, { name: 'eigener Parser, keine Fremd-API', klein: false }],
     },
     {
         id: 'rsi',

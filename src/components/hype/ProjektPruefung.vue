@@ -3,9 +3,9 @@
         <div class="ppKopf">
             <span class="ppTitel">{{ t('hypeProjekt.titel') }}</span>
             <span v-if="daten && daten.note !== null && daten.note !== undefined" class="ppNote" :class="notenKlasse(daten.note)"
-                :title="t('hypeProjekt.noteTitel')">{{ daten.note }}</span>
+                :title="frei ? t('hypeProjekt.noteTitelFrei') : t('hypeProjekt.noteTitel')">{{ daten.note }}</span>
             <span v-else-if="daten" class="ppNote leer" :title="t('hypeProjekt.keineNoteTitel')">—</span>
-            <InfoTipp schluessel="hypeProjekt.info" breit />
+            <InfoTipp :schluessel="frei ? 'hypeProjekt.infoFrei' : 'hypeProjekt.info'" breit />
             <span v-if="daten?.geprueftAm" class="ppZeit">{{ t('hypeProjekt.geprueftAm', { z: zeitpunkt(daten.geprueftAm) }) }}</span>
             <button v-if="kandidat?.contract || kandidat?.symbol" type="button" class="ctl-pill klein at-ml-auto"
                 :disabled="laedt" @click.stop="pruefen(Boolean(daten))">
@@ -32,7 +32,7 @@
             </div>
             <p v-if="daten.auszug" class="ppAuszug">„{{ daten.auszug }}"</p>
             <!-- Links zum Token kommen von DexScreener (bzw. CoinGecko in der Tiefensuche, dort mit eigener Zeile). -->
-            <RadarQuellen :quellen="['dexscreener']" />
+            <RadarQuellen :quellen="['dexscreener', ...(daten.ersteller?.wallet ? ['pumpfun'] : [])]" />
         </template>
     </div>
 </template>
@@ -57,6 +57,7 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import InfoTipp from '../InfoTipp.vue'
 import RadarQuellen from './RadarQuellen.vue'
+import { ladeFreigabe, freigabeAn } from '../../utils/quellenFreigabe.js'
 import { sichereUrl } from '../../utils/sanitize.js'
 import Kreisel from '@/components/basis/Kreisel.vue'
 
@@ -118,7 +119,14 @@ const REIHE = ['minus', 'plus', 'info']
 const befunde = computed(() => [...(daten.value?.befunde || [])]
     .sort((a, b) => REIHE.indexOf(a.art) - REIHE.indexOf(b.art)))
 
-/** Webseite, Kanäle, GitHub — eine Zeile, Einzelheiten im Tooltip. */
+/**
+ * Schalter „Quellen ohne Verkaufsfreigabe" (S15): mit ihm misst die Prüfung
+ * wieder die Ersteller-Bilanz von pump.fun (der Server liefert `ersteller`).
+ */
+const frei = computed(() => freigabeAn())
+ladeFreigabe()
+
+/** Webseite, Kanäle, GitHub, Ersteller (pump.fun, S15) — eine Zeile, Einzelheiten im Tooltip. */
 const links = computed(() => {
     const d = daten.value
     if (!d) return []
@@ -147,8 +155,33 @@ const links = computed(() => {
             ].filter(Boolean).join('\n'),
         })
     }
+    // Nur, was der Server mit Schalter an gemessen hat — ohne ihn fehlt das Feld.
+    const e = d.ersteller
+    if (e?.wallet) {
+        raus.push({
+            url: `https://pump.fun/profile/${encodeURIComponent(e.wallet)}`,
+            text: `${t('hypeProjekt.ersteller')} ${kurzAdresse(e.wallet)}`,
+            titel: [
+                e.wallet,
+                hatZahl(e.andere) ? t('hypeProjekt.erstellerBilanz', {
+                    n: e.andere + (e.vollstaendig === false ? '+' : ''), g: e.graduiert, h: e.letzte24h }) : '',
+                e.besteMarktkapUsd ? t('hypeProjekt.erstellerBeste', { m: geld(e.besteMarktkapUsd) }) : '',
+                e.beispiele?.length ? `${t('hypeProjekt.erstellerBeispiele')}: ${e.beispiele.map((b) => b.symbol || kurzAdresse(b.mint)).join(', ')}` : '',
+            ].filter(Boolean).join('\n'),
+        })
+    }
     return raus
 })
+
+const kurzAdresse = (a) => (String(a || '').length > 12 ? `${String(a).slice(0, 4)}…${String(a).slice(-4)}` : String(a || ''))
+
+function geld(n) {
+    const z = Number(n)
+    if (!Number.isFinite(z) || z <= 0) return '—'
+    if (z >= 1e6) return `${(z / 1e6).toFixed(1)} M`
+    if (z >= 1e3) return `${Math.round(z / 1e3)} k`
+    return String(Math.round(z))
+}
 
 const githubName = computed(() => {
     const g = daten.value?.github

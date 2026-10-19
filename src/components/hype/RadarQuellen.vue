@@ -10,6 +10,11 @@
  *   dexscreener  „Daten: DexScreener" (keine Pflicht, Z. 57)
  *   rugcheck     „Daten: RugCheck" (nur wenn eingeschaltet)
  *
+ * S15 — Quellen ohne Verkaufsfreigabe (nur mit dem Schalter an, der Aufrufer
+ * entscheidet, ob sie gelaufen sind):
+ *   pumpfun, reddit, coinpaprika, geckoterminal, telegram   je „Daten: …"
+ *   binance-alpha, upbit, okx, mexc                         Börsenlisten
+ *
  *   <RadarQuellen :quellen="['dexscreener', 'coingecko']" />
  */
 import { computed } from 'vue'
@@ -30,6 +35,16 @@ const RADAR_QUELLEN = {
     biz: { name: '4chan /biz/', url: 'https://boards.4chan.org/biz/', art: 'quelle' },
     dexscreener: { name: 'DexScreener', url: 'https://dexscreener.com/', art: 'daten' },
     rugcheck: { name: 'RugCheck', url: 'https://rugcheck.xyz/', art: 'daten' },
+    // S15, Quellen ohne Verkaufsfreigabe:
+    pumpfun: { name: 'pump.fun', url: 'https://pump.fun/', art: 'daten' },
+    reddit: { name: 'Reddit', url: 'https://www.reddit.com/', art: 'daten' },
+    coinpaprika: { name: 'CoinPaprika', url: 'https://coinpaprika.com/', art: 'daten' },
+    geckoterminal: { name: 'GeckoTerminal', url: 'https://www.geckoterminal.com/', art: 'daten' },
+    telegram: { name: 'Telegram', url: 'https://telegram.org/', art: 'quelle' },
+    'binance-alpha': { name: 'Binance Alpha', url: 'https://www.binance.com/', art: 'daten' },
+    upbit: { name: 'Upbit', url: 'https://upbit.com/', art: 'daten' },
+    okx: { name: 'OKX', url: 'https://www.okx.com/', art: 'daten' },
+    mexc: { name: 'MEXC', url: 'https://www.mexc.com/', art: 'daten' },
 }
 
 const liste = computed(() => [...new Set(props.quellen || [])].map((q) => RADAR_QUELLEN[q]).filter(Boolean))

@@ -1029,7 +1029,7 @@
     "news": {
       "title": "Nachrichtenquellen",
       "intro": "Bereits eingetragene Quellen bleiben unangetastet — hier lassen sich neue hinzufügen.",
-      "telegramEntfernt": "Telegram-Abruf entfernt — Telegram verbietet das Auslesen öffentlicher Kanäle. Die Quelle lässt sich löschen, aber nicht wieder einschalten.",
+      "telegramEntfernt": "Telegram ist aus (Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) ist aus) — Telegram verbietet das Auslesen öffentlicher Kanäle. Die Quelle lässt sich löschen, aber nicht wieder einschalten.",
       "eigeneQuellen": "Es sind keine Quellen vorbelegt: welche Feeds und Kanäle gelesen und von der KI zusammengefasst werden, trägst du selbst ein. Beachte die Nutzungsbedingungen der jeweiligen Quelle."
     },
     "mail": {
@@ -1485,7 +1485,32 @@
     "lageLadeFehler": "Die Daten des Hype-Radars konnten nicht geladen werden (Server nicht erreichbar oder gerade neu gestartet) — neuer Versuch alle 5 s.",
     "lageNeuLaden": "jetzt neu laden",
     "alarmeLadeFehler": "Alarme oder Favoriten konnten nicht geladen werden — neuer Versuch alle 5 s.",
-    "keinerGeprueftKurz": "{n} Funde unter der Schwelle —"
+    "keinerGeprueftKurz": "{n} Funde unter der Schwelle —",
+    "fruehQuelle_pumpfunNeu": "pump.fun — neueste Starts",
+    "fruehQuelle_pumpfunAufstieg": "pump.fun — gerade gehandelt, noch auf der Kurve",
+    "fruehQuelle_telegram": "Telegram — eingestellte Kanäle",
+    "fruehQuelle_reddit": "Reddit — Nennungen",
+    "fruehTelegram": "Telegram-Kanäle (öffentlich)",
+    "fruehTelegramPlatzhalter": "{'@'}kanal oder t.me/kanal — einer je Zeile",
+    "fruehTelegramHinweis": "Gelesen wird die öffentliche Vorschau (t.me/s/…), die letzten sechs Stunden, höchstens 15 Kanäle. Call-Kanäle werben oft für eigene Token — eine einzelne Nennung ist ein Hinweis, erst mehrere unabhängige Plattformen zählen.",
+    "smartRpcFrei": "Solana-RPC-Adresse (optional)",
+    "smartRpcPlatzhalterFrei": "leer = öffentlicher Knoten · z. B. Helius-Adresse",
+    "smartHinweisFrei": "Wallets aus den Bestenlisten von GMGN, Kolscan oder Cielo. Es zählen nur Käufe, die die Wallet selbst signiert und bezahlt hat. Zwei Wallets auf demselben Token lösen sofort eine Meldung aus. Für mehr als ein paar Wallets eine eigene RPC-Adresse eintragen (z. B. Helius, Gratis-Stufe).",
+    "boersenwachtHinweisFrei": "Gleicht die öffentlichen Marktlisten grosser und mittlerer Börsen und Binance Alpha ab, erkennt neue Listungen und prüft, ob der Radar den Token vorher gemeldet hatte. Ohne Schlüssel.",
+    "projektHinweisFrei": "Für die bestandenen Funde wird nachgesehen, was hinter dem Token steht: die Webseite (Inhalt, Vertragsadresse, Platzhaltertext), das Alter der Domain, GitHub (gepflegt? frühere Projekte?) und bei pump.fun die Vorgeschichte des Erstellers. Ohne Schlüssel; jede Prüfung gilt 24 Stunden.",
+    "spalteSubstanzTitelFrei": "Substanz-Note der Projektprüfung (Webseite, Domain, GitHub, Ersteller) — steht neben Hype und Sicherheit und wird mit keiner verrechnet",
+    "quelleName_pumpfun": "pump.fun — neueste Starts",
+    "quelleName_coinpaprika": "CoinPaprika — neue Coins",
+    "quelleName_reddit": "Reddit — r/CryptoMoonShots, r/SolanaMemeCoins",
+    "boerse_binance-alpha": "Binance Alpha",
+    "boerse_upbit": "Upbit",
+    "boerse_okx": "OKX",
+    "boerse_mexc": "MEXC",
+    "quellenFreiHinweis": "Quellen ohne Verkaufsfreigabe sind an (Einstellungen › Datenquellen): pump.fun, CoinPaprika und Reddit laufen wie früher; CoinGecko und GeckoTerminal ohne eigenen Schlüssel über die öffentlichen Endpunkte mit engem Limit — ein eigener Schlüssel hat Vorrang.",
+    "cgOeffentlich": "Kein eigener Schlüssel — CoinGecko-Trends und On-Chain-Pools laufen über die öffentlichen Endpunkte (CoinGecko, GeckoTerminal), gedrosselt.",
+    "rugcheckHinweisFrei": "RugCheck läuft ab Werk mit (Quellen ohne Verkaufsfreigabe an): für Solana Insider-Netzwerke und die Liquiditätssperre. Ohne RugCheck prüft GoPlus allein — dann sind beide unbekannt.",
+    "boersenWahlHinweisFrei": "Mit „Quellen ohne Verkaufsfreigabe\" an sind alle Börsen ab Werk an, auch Binance Alpha, Upbit, OKX und MEXC. Binance Spot und Futures folgen zusätzlich der Marktdatenquelle.",
+    "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko On-Chain — neue Pools mit Käuferzahl"
   },
   "kiUebersicht": {
     "laedt": "Übersicht wird geladen …",
@@ -1949,7 +1974,9 @@
     "imbalanceBuy": "{pct} % Kauf",
     "imbalanceSell": "{pct} % Verkauf",
     "imbalanceTitle": "Kauf- zu Verkaufsvolumen nahe am Mittelkurs",
-    "inBoerse": "{s} in {b} öffnen (neuer Tab)"
+    "inBoerse": "{s} in {b} öffnen (neuer Tab)",
+    "otherVenuesOkx": "Bybit + OKX",
+    "otherVenuesTitleOkx": "Zeigt als blassen Balken dahinter, wie viel bei Bybit und OKX auf denselben Preisen liegt. Bewusst NICHT aufaddiert: die Mittelkurse der Börsen liegen mehrere Dollar auseinander, summiert verschmiert dieselbe Wand über mehrere Zonen"
   },
   "strategies": {
     "labTitle": "Labor",
@@ -2781,7 +2808,9 @@
     "wheelHint": "Mausrad im Chart zoomt stufenlos",
     "coverage": "Abdeckung",
     "thinWindow": "Fenster zu kurz — die Karte zeigt nur einen Bruchteil der Positionen",
-    "mmrVorgabe": "Feste Vorgabe 0,004 — Bybit kennt das Symbol nicht oder antwortet nicht"
+    "mmrVorgabe": "Feste Vorgabe 0,004 — Bybit kennt das Symbol nicht oder antwortet nicht",
+    "mmrSourceBinance": "Binance (automatisch)",
+    "mmrVorgabeBeide": "Feste Vorgabe 0,004 — weder Binance noch Bybit kennen das Symbol oder antworten"
   },
   "oi": {
     "oi": "Offenes Interesse",
@@ -2851,7 +2880,7 @@
       "noHistory": "Eigene Kurve beginnt heute · volle Historie in der Gross-Ansicht",
       "ownSeries": "Eigener Bestand seit {seit} · {n} Tage",
       "ownSeriesEmpty": "Die eigene Aufzeichnung beginnt heute — die Kurve wächst ab jetzt mit jedem Tag.",
-      "source": "Momentwert von CoinGecko (eigener Schlüssel), die Kurve aus den eigenen täglichen Schnappschüssen — sie beginnt mit dem ersten Schnappschuss und wächst danach Tag für Tag. Die Dominanz sagt, welcher Anteil des Kryptomarkts auf Bitcoin entfällt — steigt sie bei fallenden Kursen, wird eher aus Altcoins in BTC geflüchtet als neues Geld investiert.",
+      "source": "Mit Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen): Kurve und Momentwert aus dem eigenen Bestand, einmalig von CoinMarketCap eingelagert und täglich aus derselben Quelle nachgeführt, CoinGecko als Rückfall. Ohne Schalter: Momentwert von CoinGecko, die Kurve aus den eigenen täglichen Schnappschüssen — sie wächst Tag für Tag. Die Dominanz sagt, welcher Anteil des Kryptomarkts auf Bitcoin entfällt — steigt sie bei fallenden Kursen, wird eher aus Altcoins in BTC geflüchtet als neues Geld investiert.",
       "rest": "Rest",
       "range": {
         "d30": "30 Tage",
@@ -2941,7 +2970,7 @@
       "caveat": "Das ist eine Kurvenanpassung an die Vergangenheit, keine Prognose. Die Bänder verschieben sich mit jedem neuen Kurs — was heute „günstig\" heisst, kann in einem Jahr die Mitte sein. Als Stimmungsmesser über Jahre brauchbar, als Handelssignal nicht.",
       "params": "ln(Preis) ≈ {a} · ln(Tage seit Genesis) + {b}, Reststreuung {s}, {n} Stützpunkte",
       "info": "Wo der Bitcoin-Kurs langfristig im Verhältnis zu seiner historischen Bandbreite steht, von „Ausverkauf“ bis „Blase“.\nDie Bänder verschieben sich mit jedem neuen Kurs — was heute „günstig“ heisst, kann in einem Jahr die Mitte sein. Über Jahre ein Stimmungsmesser, für eine einzelne Handelsentscheidung zu grob.",
-      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle). Die frühere Reihe ab 2009 kam von blockchain.info und ist aus Lizenzgründen entfernt — die Kurve ist über die kürzere Zeit flacher gerechnet."
+      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle). Die Reihe ab 2009 von blockchain.info läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) — über die kürzere Zeit ist die Kurve flacher gerechnet."
     },
     "top": "Top",
     "liq": {
@@ -2989,9 +3018,10 @@
       "domFromPrice": "aus Kursbewegung",
       "domHint": "Die Dominanz allein ist nicht deutbar: sie steigt schon, wenn nur die Kurse fallen. Erst die Aufteilung zeigt, ob wirklich Geld geflossen ist.",
       "source": "Der Stablecoin-Fluss ist die Mengenänderung von USDT und USDC (CoinGecko, eigener Schlüssel) — bewusst nicht die „USDT-Dominanz\", denn die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang. Zu- oder Abfluss dagegen zeigt echtes Geld, das in den Markt kommt oder ihn verlässt. Die Zerlegung der Dominanz rechnet mit dem Gesamtmarkt aus den eigenen täglichen CoinGecko-Schnappschüssen und erscheint, sobald dort genug Tage liegen.",
-      "info": "Der Geldfluss in den Kryptomarkt: wie sich die Menge der Stablecoins (USDT + USDC) verändert und ob eine steigende Stablecoin-Dominanz echtes Geld oder nur fallende Kurse ist.\nAktien-Futures und Dollar-Index standen früher hier und sind aus Lizenzgründen entfernt (Yahoo Finance).",
-      "indizesEntfernt": "Aktien-Futures und Dollar-Index entfernt (Lizenz Yahoo Finance)",
-      "domWaechst": "Die Zerlegung der Stablecoin-Dominanz erscheint, sobald die eigenen täglichen Schnappschüsse des Gesamtmarkts zwei Punkte im Abstand von rund 30 Tagen haben."
+      "info": "Der Blick von aussen auf den Kryptomarkt: US-Aktienfutures, Dollar-Index, Stablecoin-Fluss.\nDie Kopfzeile ist die KOPPLUNG BTC↔Nasdaq, nicht der Kurs. Die Farbe zeigt Rückenwind oder Gegenwind FÜR Krypto — ein steigender Dollar ist deshalb rot, auch wenn der Dollar selbst „steigt“.\nAktien und Dollar kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn bleibt der Stablecoin-Fluss.",
+      "indizesEntfernt": "Aktien-Futures und Dollar-Index aus (Yahoo Finance, Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen))",
+      "domWaechst": "Die Zerlegung der Stablecoin-Dominanz erscheint, sobald die eigenen täglichen Schnappschüsse des Gesamtmarkts zwei Punkte im Abstand von rund 30 Tagen haben.",
+      "sourceMitIndizes": "Aktien als FUTURES (ES/NQ/RTY), nicht als Kassa-Index: der Index steht nachts und am Wochenende still, der Future läuft fast durch — nur so ist der Vergleich mit dem durchlaufenden Krypto-Markt ehrlich. Die Farbe zeigt Rückenwind oder Gegenwind FÜR KRYPTO, nicht die Richtung des Marktes: ein steigender Dollar ist deshalb rot. Der Stablecoin-Fluss ist die Mengenänderung von USDT und USDC — bewusst nicht die „USDT-Dominanz\", denn die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang. Zu- oder Abfluss dagegen zeigt echtes Geld, das in den Markt kommt oder ihn verlässt. Der Russell 2000 steht als Gegenprobe zur Nasdaq daneben: laufen beide zusammen, ist es eine Liquiditäts- oder Zinsbewegung, die Krypto mitbetrifft; läuft nur die Nasdaq, ist es Rotation in wenige grosse Werte und trägt selten hierher."
     },
     "lage": {
       "title": "Gesamtlage (KI)",
@@ -3081,7 +3111,7 @@
       "alarm": "Kreuzung am {datum}: Die 111-Tage-Linie hat die doppelte 350-Tage-Linie von unten geschnitten.",
       "vorwarnung": "Vorwarnung: Die kurze Linie ist nur noch {pct} % von der langen entfernt (Schwelle {schwelle} %).",
       "info": "Ein historisches Signal, das in der Vergangenheit nahe an einem Bitcoin-Zyklushoch auftrat.\nDrei Treffer bei drei Gelegenheiten sind eine Beobachtung, keine Regel — eine Frühwarnung für „Vorsicht mit Hebel“, kein Ausstiegssignal für eine einzelne Position.",
-      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle); die Kreuzungen 2013 und 2017 liegen davor und fehlen deshalb in der Liste."
+      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle); die Kreuzungen 2013 und 2017 liegen davor und fehlen deshalb. Mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) rechnet die Kachel mit der Reihe ab 2010 von blockchain.info."
     },
     "altseason": {
       "title": "Altcoin-Season-Index",
@@ -3127,7 +3157,7 @@
         "aus": "von Börse weg — potenzielle Verwahrung",
         "unbekannt": "Richtung unbekannt"
       },
-      "info": "Entfernt: Die Kachel las grosse Transaktionen aus mitgeschriebenen Telegram-Kanälen (Whale Alert, Lookonchain). Telegram verbietet das Auslesen öffentlicher Kanäle; ohne zulässigen Ersatz bleibt die Kachel leer."
+      "info": "Grosse Krypto-Transaktionen aus den eigenen Telegram-Quellen (Whale Alert, Lookonchain, …), automatisch erkannt — kein zusätzlicher Netzabruf.\nRot = Bewegung Richtung Börse (potenzieller Verkaufsdruck), Grün = Bewegung von einer Börse weg (potenzielle Verwahrung). Wallet-zu-Wallet-Bewegungen bleiben grau, weil die Richtung dort nicht geraten wird.\nTelegram läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) — Telegram verbietet das Auslesen öffentlicher Kanäle; ohne Schalter sagt die Kachel „aus\"."
     },
     "status_aus": "Quelle aus",
     "mcapErsatz": "Marktkapitalisierung braucht einen eigenen CoinGecko-Schlüssel — sortiert wird deshalb nach 24h-Umsatz."
@@ -3170,7 +3200,7 @@
         },
         {
           "h": "BTC-DOMINANZ",
-          "p": "Welcher Anteil des gesamten Kryptomarkts auf Bitcoin entfällt. Der Momentwert kommt von CoinGecko und braucht einen eigenen Schlüssel (Einstellungen › Datenquellen, der Demo-Schlüssel genügt). Die Kurve stammt aus eigenen täglichen Schnappschüssen derselben Quelle und wächst ab dem ersten Tag; gezeigt werden drei Reihen: Bitcoin, Ethereum und der ganze Rest. Die frühere, einmalig von CoinMarketCap eingelagerte Historie wird aus Lizenzgründen nicht mehr gezeigt. Lesart: steigende Dominanz bei fallenden Kursen heisst Flucht aus Altcoins in BTC, fallende Dominanz bei steigenden Kursen heisst, dass frisches Geld in die Breite geht. Praktisch: ein Altcoin-Long gegen steigende Dominanz schwimmt gegen den Strom, auch wenn der Chart des Coins gut aussieht."
+          "p": "Welcher Anteil des gesamten Kryptomarkts auf Bitcoin entfällt. Die Kurve stammt aus dem eigenen Bestand — rund sechs Jahre Historie, einmalig von CoinMarketCap eingelagert und täglich nachgeführt; gezeigt werden drei Reihen: Bitcoin, Ethereum und der ganze Rest. Der Momentwert kommt aus derselben Reihe, CoinGecko dient nur als Rückfall. Lesart: steigende Dominanz bei fallenden Kursen heisst Flucht aus Altcoins in BTC, fallende Dominanz bei steigenden Kursen heisst, dass frisches Geld in die Breite geht. Praktisch: ein Altcoin-Long gegen steigende Dominanz schwimmt gegen den Strom, auch wenn der Chart des Coins gut aussieht. Das gilt mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn kommt der Momentwert von CoinGecko (eigener Schlüssel) und die Kurve aus eigenen täglichen Schnappschüssen, die ab dem ersten Tag wächst."
         },
         {
           "h": "FUNDING-RATEN",
@@ -3182,7 +3212,7 @@
         },
         {
           "h": "MAKRO-UMFELD",
-          "p": "Der Geldfluss in den Kryptomarkt: der Stablecoin-Fluss und die zerlegte Stablecoin-Dominanz, beides von CoinGecko mit eigenem Schlüssel. Aktien-Futures (S&P 500, Nasdaq 100, Russell 2000), der Dollar-Index und die Kopplung BTC↔Nasdaq standen früher hier; sie kamen aus Yahoo Finance, dessen Bedingungen automatisiertes Abrufen und kommerzielle Nutzung verbieten, und sind entfernt. Der Stablecoin-Fluss ist bewusst die Mengenänderung von USDT und USDC und nicht die „USDT-Dominanz\": die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang; die Menge dagegen zeigt echtes Geld, das zufliesst oder abgezogen wird. Die Dominanz steht nur ZERLEGT da. Ein Beispiel mit runden Zahlen: Gesamtmarkt 2170 Mrd, davon 245 Mrd Stablecoins, macht 11,3 % Dominanz. Fällt der übrige Markt um 10 %, ohne dass ein einziger USDT geprägt oder eingelöst wird, steht die Dominanz bei 12,4 % — ein Sprung von 1,1 Punkten, obwohl kein Franken bewegt wurde. Genau deshalb teilt die Kachel die Veränderung in „aus echten Flüssen\" und „aus Kursbewegung\" auf; beide zusammen ergeben exakt die Gesamtveränderung. Den Gesamtmarkt dafür nimmt sie aus den eigenen täglichen Schnappschüssen — die Aufteilung erscheint, sobald dort rund 30 Tage liegen."
+          "p": "Die einzige Kachel, die aus dem Krypto-Markt herausschaut — und damit die einzige, die eine Bewegung erklären kann, die ihre Ursache gar nicht hier hat. Gezeigt werden S&P-500- und Nasdaq-100-Future, der Dollar-Index und der Stablecoin-Fluss. Drei Dinge dazu: Erstens sind es bewusst FUTURES und keine Kassa-Indizes — der Index steht nachts und am Wochenende still, der Future läuft fast durch; ein stehender Wert bekommt das Kürzel „zu\". Zweitens ist die Kopfzeile die KOPPLUNG (Korrelation der Tagesrenditen BTC↔Nasdaq über 30 Tage), nicht der Kurs: „Nasdaq −1 %\" sagt erst dann etwas, wenn dein Markt gerade daran hängt, und diese Kopplung schwankt stark. Drittens zeigt die Farbe Rückenwind oder Gegenwind FÜR KRYPTO und nicht die Richtung des Marktes — ein steigender Dollar erscheint deshalb rot, weil ein starker Dollar knappere globale Liquidität bedeutet. Der Stablecoin-Fluss ist bewusst die Mengenänderung von USDT und USDC und nicht die „USDT-Dominanz\": die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang; die Menge dagegen zeigt echtes Geld, das zufliesst oder abgezogen wird. In der Gross-Ansicht steht die Dominanz trotzdem — aber nur ZERLEGT: Ein Beispiel mit runden Zahlen: Gesamtmarkt 2170 Mrd, davon 245 Mrd Stablecoins, macht 11,3 % Dominanz. Fällt der übrige Markt um 10 %, ohne dass ein einziger USDT geprägt oder eingelöst wird, steht die Dominanz bei 12,4 % — ein Sprung von 1,1 Punkten, obwohl kein Franken bewegt wurde. Genau deshalb teilt die Kachel die Veränderung in „aus echten Flüssen\" und „aus Kursbewegung\" auf; beide zusammen ergeben exakt die Gesamtveränderung. Steht der Kursanteil allein für den Ausschlag, war es eine optische Täuschung. Umgekehrt kann ein echter Zufluss in einer Rally sogar mit FALLENDER Dominanz einhergehen — auch das macht die Aufteilung sichtbar. Aktien-Futures und Dollar-Index kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn zeigt die Kachel nur den Geldfluss."
         },
         {
           "h": "MARKTMECHANIK",
@@ -3206,11 +3236,11 @@
         },
         {
           "h": "REGENBOGEN (BTC)",
-          "p": "Eine logarithmische Kurvenanpassung an die Preisgeschichte von Bitcoin seit 2017 (Tageskerzen BTCUSDT der Marktdatenquelle; die frühere Reihe ab 2009 kam von blockchain.info und ist aus Lizenzgründen entfernt — über die kürzere Zeit fällt die Kurve flacher aus), mit Bändern von „Ausverkauf\" bis „Blase\". Wichtig zu verstehen: die Bänder verschieben sich mit jedem neuen Kurs, weil die Anpassung neu gerechnet wird — was heute „günstig\" heisst, kann in einem Jahr die Mitte sein. Über Jahre ein brauchbarer Stimmungsmesser, für eine Handelsentscheidung zu grob."
+          "p": "Eine logarithmische Kurvenanpassung an die gesamte Preisgeschichte von Bitcoin, mit Bändern von „Ausverkauf\" bis „Blase\". Wichtig zu verstehen: die Bänder verschieben sich mit jedem neuen Kurs, weil die Anpassung neu gerechnet wird — was heute „günstig\" heisst, kann in einem Jahr die Mitte sein. Über Jahre ein brauchbarer Stimmungsmesser, für eine Handelsentscheidung zu grob. Die ganze Historie ab 2009 (blockchain.info) läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn rechnet die Kachel mit Tageskerzen ab 2017, und die Kurve fällt flacher aus."
         },
         {
           "h": "PI-CYCLE-TOP (BTC)",
-          "p": "Schneidet die 111-Tage-Linie die doppelte 350-Tage-Linie von unten, lag das in der Vergangenheit nahe an einem Zyklushoch. Die Kachel zeigt den Abstand beider Linien und ob eine Kreuzung ausgelöst hat. Drei Treffer bei drei Gelegenheiten sind eine Beobachtung, keine Regel — behandle das Ding als Frühwarnung für „Vorsicht mit Hebel\", nicht als Ausstiegssignal. Gerechnet wird mit Tageskerzen ab 2017 — die 350-Tage-Linie beginnt damit Mitte 2018, die Kreuzungen von 2013 und 2017 fehlen in der Liste."
+          "p": "Schneidet die 111-Tage-Linie die doppelte 350-Tage-Linie von unten, lag das in der Vergangenheit nahe an einem Zyklushoch. Die Kachel zeigt den Abstand beider Linien und ob eine Kreuzung ausgelöst hat. Drei Treffer bei drei Gelegenheiten sind eine Beobachtung, keine Regel — behandle das Ding als Frühwarnung für „Vorsicht mit Hebel\", nicht als Ausstiegssignal. Mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) rechnet sie mit der Reihe ab 2010 (blockchain.info); ohne ihn mit Tageskerzen ab 2017 — dann beginnt die 350-Tage-Linie Mitte 2018, und die Kreuzungen 2013 und 2017 fehlen."
         },
         {
           "h": "DEINE TRADES × MARKTREGIME",
@@ -3456,7 +3486,7 @@
         },
         {
           "h": "DIE TERMINE",
-          "p": "Der Wirtschaftskalender, nach Tagen gruppiert, aus amtlichen Kalendern: Federal Reserve Board (FOMC, Beige Book), U.S. Bureau of Economic Analysis (BIP, Einkommen und Ausgaben inkl. PCE, Handelsbilanz) und Eurostat (Inflation, BIP, Arbeitslosigkeit, Industrie und Einzelhandel im Euroraum). Je Termin siehst du Uhrzeit in deiner Zeitzone, Währungsraum und Wirkungsstufe. Prognosen und Vorwerte liefern diese Quellen nicht — sie stammen aus Umfragen, die Bezahlanbieter verkaufen. Die US-Arbeitsmarkt- und Inflationsdaten (BLS) fehlen, weil das BLS automatische Abrufe sperrt. Die Quellen stehen unter der Liste."
+          "p": "Der Wirtschaftskalender, nach Tagen gruppiert, aus amtlichen Kalendern: Federal Reserve Board (FOMC, Beige Book), U.S. Bureau of Economic Analysis (BIP, Einkommen und Ausgaben inkl. PCE, Handelsbilanz) und Eurostat (Inflation, BIP, Arbeitslosigkeit, Industrie und Einzelhandel im Euroraum). Je Termin siehst du Uhrzeit in deiner Zeitzone, Währungsraum und Wirkungsstufe. Prognosen und Vorwerte liefern diese Quellen nicht — sie stammen aus Umfragen, die Bezahlanbieter verkaufen. Die US-Arbeitsmarkt- und Inflationsdaten (BLS) fehlen, weil das BLS automatische Abrufe sperrt. Die Quellen stehen unter der Liste. Mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) kommt der Wochen-Feed von ForexFactory dazu — acht Währungsräume, mit Prognose, Vorwert und Ist-Wert; ein Termin, der in beiden Quellen steht, erscheint einmal."
         },
         {
           "h": "DIE BEITRÄGE",
@@ -3477,7 +3507,7 @@
         },
         {
           "h": "WARUM DER KALENDER MITWÄCHST",
-          "p": "Die Behörden veröffentlichen ihre Kalender unterschiedlich weit im Voraus — die Fed Monate, Eurostat und das BEA für das laufende und folgende Jahr. Das Journal sammelt jeden gesehenen Termin dauerhaft ein, statt ihn nur durchzureichen, und fragt alle sechs Stunden nach. Unter der Liste steht, bis wann der Bestand im gewählten Zeitraum reicht; eine leere Strecke danach heisst „noch nicht veröffentlicht\", nicht „nichts los\"."
+          "p": "Die Behörden veröffentlichen ihre Kalender unterschiedlich weit im Voraus — die Fed Monate, Eurostat und das BEA für das laufende und folgende Jahr. Das Journal sammelt jeden gesehenen Termin dauerhaft ein, statt ihn nur durchzureichen, und fragt alle sechs Stunden nach. Unter der Liste steht, bis wann der Bestand im gewählten Zeitraum reicht; eine leere Strecke danach heisst „noch nicht veröffentlicht\", nicht „nichts los\". ForexFactory (nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen)) führt dagegen immer nur die laufende Woche — dort heisst eine leere zweite Woche „noch nicht eingesammelt\"."
         },
         {
           "g": "Im Alltag",
@@ -3562,8 +3592,8 @@
           "p": "Die Positionskachel liest die offenen und geschlossenen Positionen der laufenden Sitzung von Bitunix und rechnet den Sitzungsstand gegen die Plangrenzen — realisiert und unrealisiert bleiben getrennt, die Grenzen zählen nur gegen den realisierten Teil. Der Kalender-Countdown zeigt die nächsten Wirtschaftstermine der kommenden Stunden aus dem eigenen Kalenderbestand."
         },
         {
-          "h": "FUNDING, LONG/SHORT, MAKRO",
-          "p": "Funding, Long/Short + offenes Interesse und Makro-Umfeld sind dieselben Kacheln wie im Marktradar — Funding und Long/Short folgen der Symbolwahl. Die frühere Kachel „Indizes\" (ES, NQ, RTY und Dollar-Index von Yahoo Finance) ist aus Lizenzgründen entfernt; eingeblendet sagt sie das."
+          "h": "INDIZES, FUNDING, LONG/SHORT, MAKRO",
+          "p": "Indizes zeigt ES=F, NQ=F, RTY=F und den Dollar-Index als Intraday-Kerzen von Yahoo. Funding, Long/Short + offenes Interesse und Makro-Umfeld sind dieselben Kacheln wie im Marktradar — Funding und Long/Short folgen der Symbolwahl. Die Indizes laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn sagt die Kachel das."
         },
         {
           "h": "BOOKMAP & HEBELKARTE",
@@ -3575,10 +3605,10 @@
         },
         {
           "h": "KOMPAKT & MOMENTUM RADAR",
-          "p": "Die Kompakt-Kachel fasst die Nebenkacheln (Handelszeiten, Termine, Mechanik, Liquidationen, Long/Short, Funding, Coin-Radar, Handelslage, Gesamtlage) als je eine Zeile zusammen; ein Klick öffnet die volle Kachel, und die Einzelkacheln bleiben unter „Kacheln“ zuschaltbar. Die Automatik der Handelslage läuft nur, solange deren eigene Kachel sichtbar ist. Der Momentum Radar zeigt Welle, Geldfluss, Punkte und Schienen der gewählten Zeitebene (5m–4h) und darunter das Panel mit Status, SWING/DAY-Setup, Spot gegen Futures, VWAP und 4h-Struktur — gerechnet nur auf geschlossenen Kerzen."
+          "p": "Die Kompakt-Kachel fasst die Nebenkacheln (Handelszeiten, Termine, Mechanik, Liquidationen, Long/Short, Funding, Indizes, Coin-Radar, Handelslage, Gesamtlage) als je eine Zeile zusammen; ein Klick öffnet die volle Kachel, und die Einzelkacheln bleiben unter „Kacheln“ zuschaltbar. Die Automatik der Handelslage läuft nur, solange deren eigene Kachel sichtbar ist. Der Momentum Radar zeigt Welle, Geldfluss, Punkte und Schienen der gewählten Zeitebene (5m–4h) und darunter das Panel mit Status, SWING/DAY-Setup, Spot gegen Futures, VWAP und 4h-Struktur — gerechnet nur auf geschlossenen Kerzen."
         }
       ],
-      "caveat": "Die Zahlen der Fremdquellen (Funding, Kalender, Marktdaten) versprechen nichts und können veralten — der Punkt in der Kachel sagt, wie frisch sie sind. Die Hebelkarte ist ein Modell, kein Messwert. Diese Seite ist Werkzeug, kein Signalgeber: den Auslöser liefert weiterhin deine Strategie."
+      "caveat": "Die Zahlen der Fremdquellen (Indizes, Funding, Kalender) versprechen nichts und können veralten — der Punkt in der Kachel sagt, wie frisch sie sind. Die Hebelkarte ist ein Modell, kein Messwert. Diese Seite ist Werkzeug, kein Signalgeber: den Auslöser liefert weiterhin deine Strategie."
     },
     "liveSessions": {
       "title": "Sitzungs-Archiv — was aus deinen Vorsätzen geworden ist",
@@ -3993,7 +4023,7 @@
       "medium": "ab mittel",
       "all": "alle"
     },
-    "impactHint": "Wirkung — vom Journal je Veröffentlichung vergeben (BIP, PCE, Inflations-Schnellschätzung und Zinsentscheid hoch). „ab mittel\" schliesst hohe mit ein.",
+    "impactHint": "Wirkung — vom Journal je Veröffentlichung vergeben (BIP, PCE, Inflations-Schnellschätzung und Zinsentscheid hoch). „ab mittel\" schliesst hohe mit ein. Bei ForexFactory-Terminen (nur mit Schalter) die Wirkung laut Quelle.",
     "countryHint": "Währungsräume an- und abwählen. Ist keiner gewählt, werden alle gezeigt.",
     "previous": "Vorher",
     "resizeHint": "Höhe ziehen · Doppelklick setzt zurück",
@@ -4282,7 +4312,7 @@
       "keineKerzen": "Keine Kerzen im Zeitraum",
       "alt": "{min} Min. alt",
       "verzoegertCa": "ca. {min} Min. verzögert",
-      "info": "Entfernt: Die Kachel zeigte US-Aktienfutures (ES, NQ, RTY) und den Dollar-Index aus Yahoo Finance. Yahoo verbietet automatisiertes Abrufen und kommerzielle Nutzung; ohne zulässigen Ersatz bleibt die Kachel leer."
+      "info": "Wie sich US-Aktienfutures und der Dollar gerade bewegen, während Krypto weiterläuft.\nKrypto hängt oft am Risikoappetit der traditionellen Märkte — fallende Futures und ein steigender Dollar sind meist Gegenwind, auch wenn der Krypto-Kurs selbst noch ruhig aussieht.\nDie Kerzen kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn sagt die Kachel „aus\"."
     },
     "liq": {
       "title": "Liquidationen (live)",
@@ -4337,7 +4367,7 @@
       "impact_medium": "mittlere Wirkung",
       "impact_low": "geringe Wirkung",
       "impact_holiday": "Feiertag",
-      "info": "Wann der nächste wichtige Wirtschaftstermin fällig ist, mit Countdown — aus den Kalendern von Federal Reserve, U.S. Bureau of Economic Analysis und Eurostat.\nEin Termin mit hoher erwarteter Wirkung ist ein guter Grund, kurz davor keine neue Position mehr zu eröffnen — die Bewegung danach ist oft zu schnell für einen sauberen Einstieg."
+      "info": "Wann der nächste wichtige Wirtschaftstermin fällig ist, mit Countdown — aus den Kalendern von Federal Reserve, U.S. Bureau of Economic Analysis und Eurostat, mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) zusätzlich aus ForexFactory.\nEin Termin mit hoher erwarteter Wirkung ist ein guter Grund, kurz davor keine neue Position mehr zu eröffnen — die Bewegung danach ist oft zu schnell für einen sauberen Einstieg."
     },
     "positionen": {
       "title": "Positionen & Plan",
@@ -4377,7 +4407,7 @@
     },
     "kompakt": {
       "title": "Kompakt",
-      "info": "Die Nebenkacheln dieser Seite als je eine Zeile: Handelszeit, nächster Termin, Mechanik, Liquidationen, Long/Short, Funding, Coin-Radar und die beiden KI-Einordnungen.\nDieselben Daten wie die Einzelkacheln, die dafür im Hintergrund weiterlaufen. Ein Klick auf eine Zeile öffnet die volle Kachel; die Einzelkacheln lassen sich unter „Kacheln“ jederzeit wieder einblenden.",
+      "info": "Die Nebenkacheln dieser Seite als je eine Zeile: Handelszeit, nächster Termin, Mechanik, Liquidationen, Long/Short, Funding, Indizes, Coin-Radar und die beiden KI-Einordnungen.\nDieselben Daten wie die Einzelkacheln, die dafür im Hintergrund weiterlaufen. Ein Klick auf eine Zeile öffnet die volle Kachel; die Einzelkacheln lassen sich unter „Kacheln“ jederzeit wieder einblenden.",
       "zeit": "Zeit",
       "in": "in {zeit}",
       "termin": "Termin",
@@ -4965,7 +4995,12 @@
     "fokusLebt": "wird gehandelt",
     "fokusTot": "kein Handel mehr",
     "spurHinweis": "Ehrlich gesagt: pump.fun, Telegram-Kanäle und Reddit sind aus Lizenzgründen entfernt. Die Spur vor dem ersten Pool ist dadurch schmaler — ein Token auf der pump.fun-Kurve erscheint nur noch, wenn DexScreener oder CoinGecko On-Chain ihn als Handelsplatz führen oder jemand seinen Vertrag auf /biz/ oder X nennt. King of the Hill, Kommentarzahl und Ersteller-Bilanz gibt es nicht mehr.",
-    "quelleAus": "aus"
+    "quelleAus": "aus",
+    "quelleName_pumpfun": "pump.fun",
+    "quelleName_telegram": "Telegram",
+    "quelleName_reddit": "Reddit",
+    "signalKoth": "King of the Hill auf pump.fun nach {m} min",
+    "kandidatenLeerFrei": "Gerade erfüllt kein Token alle Bedingungen. Das ist der Normalfall: Nur rund ein Prozent der pump.fun-Token schafft überhaupt die Kurve."
   },
   "hypeProjekt": {
     "titel": "Projektprüfung",
@@ -4986,7 +5021,13 @@
     "unterTag": "unter einem Tag",
     "tage": "{n} Tage",
     "monate": "{n} Monate",
-    "jahre": "{n} Jahre"
+    "jahre": "{n} Jahre",
+    "ersteller": "Ersteller",
+    "erstellerBilanz": "{n} weitere Coins, {g} durch die Kurve, {h} in den letzten 24 h",
+    "erstellerBeste": "beste Bewertung {m} USD",
+    "erstellerBeispiele": "Abgeschlossen",
+    "infoFrei": "Was hinter dem Token steht, ohne Schlüssel zusammengetragen: die Webseite (Abschnitte wie Roadmap und Tokenomics, steht die richtige Vertragsadresse darauf, Platzhaltertext, Baukasten), das Alter der Domain (RDAP), das GitHub-Konto (gepflegt, frühere Projekte mit Sternen) und bei pump.fun-Token die anderen Coins derselben Wallet — wer schon einmal einen durch die Kurve gebracht hat, schafft es deutlich häufiger als die Grundrate von rund 1 %, wer Dutzende auflegt, produziert Massenware. Start bei 50, Punkte dafür und dagegen. Was nicht prüfbar war (Bot-Schutz, Endung ohne RDAP), kostet nichts. Keine Garantie: eine gute Webseite kostet wenig.",
+    "noteTitelFrei": "Substanz-Note 0–100: Webseite, Domain-Alter, GitHub, Ersteller-Vorgeschichte"
   },
   "abverkauf": {
     "an": "Wache an — alle {n} min",
@@ -5112,7 +5153,13 @@
     "chipAus": "aus",
     "ausHinweis": "Durchgestrichene Börsen werden nicht gelesen — im Zahnrad abgeschaltet (Coinbase, Kraken, KuCoin und Gate ab Werk: Bedingungen ungeklärt) oder, bei Binance, weil eine andere Marktdatenquelle gewählt ist.",
     "ausAbgeschaltet": "Abgeschaltet (Hype-Radar › Zahnrad › Börsen-Beobachter)",
-    "ausMarktdaten": "Nur mit Binance als Marktdatenquelle (Einstellungen › Datenquellen)"
+    "ausMarktdaten": "Nur mit Binance als Marktdatenquelle (Einstellungen › Datenquellen)",
+    "stufe_alpha": "Binance Alpha",
+    "erklaerungFrei": "Junge Projekte steigen eine Leiter hinauf: DEX, dann Binance Alpha oder mittlere Börsen, dann die grossen. Ein Listing ganz oben ist meist das Ende des leichten Teils — investiert sein will man vorher. Gezählt wird nur, was der Radar vor dem Listing gemeldet hat.",
+    "leiterHinweisFrei": "Radar-Token, die schon auf Binance Alpha oder einer mittleren Börse stehen. Wer noch nicht auf einer grossen steht, steht oben.",
+    "leiterLeerFrei": "Noch keiner — die Liste füllt sich, sobald gemeldete Radar-Token auf Alpha oder mittleren Börsen auftauchen.",
+    "angekuendigtHinweisFrei": "Paare, die eine Börse schon angelegt hat, die aber noch nicht handeln — mit Startzeit, wo die Börse sie nennt (Binance Futures, OKX, Gate, Bitget). Sobald der Handel beginnt, wandern sie zu den neuen Listungen.",
+    "handelsStartTitelFrei": "Wann das Paar zu handeln begann — nur Binance Futures, OKX, Gate und Bitget nennen es; „Gesehen\" ist der Abgleich, bei dem es auffiel."
   },
   "chart": {
     "rasterTitel": "Raster: wie viele Charts nebeneinander/übereinander",
@@ -6033,7 +6080,9 @@
       "marktdaten": "Mit der gewählten Marktdatenquelle nicht verfügbar",
       "marktdatenText": "{was} liefert {quelle} nicht.",
       "marktdatenAusText": "Öffentliche Marktdaten sind ausgeschaltet — {was} gibt es deshalb nicht.",
-      "zuEinstellungen": "Einstellungen › Datenquellen"
+      "zuEinstellungen": "Einstellungen › Datenquellen",
+      "ohneFreigabe": "{quelle}: abgeschaltet",
+      "ohneFreigabeText": "Diese Quelle hat keine Freigabe für einen Verkauf und läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen)."
     },
     "faehigkeit": {
       "kerzen": "Kerzen (Futures)",
@@ -6077,7 +6126,8 @@
       "testFehler": "CoinGecko lehnt ab: {fehler}",
       "gespeichert": "Gespeichert.",
       "geloescht": "Schlüssel gelöscht — CoinGecko-Funktionen sind jetzt aus.",
-      "demoHinweis": "Du schliesst den Vertrag mit CoinGecko selbst ab. Ob der kostenlose Demo-Tarif deine Nutzung abdeckt, regeln die CoinGecko-Bedingungen; im Zweifel einen Bezahltarif wählen."
+      "demoHinweis": "Du schliesst den Vertrag mit CoinGecko selbst ab. Ob der kostenlose Demo-Tarif deine Nutzung abdeckt, regeln die CoinGecko-Bedingungen; im Zweifel einen Bezahltarif wählen.",
+      "oeffentlich": "Kein Schlüssel — öffentlicher Endpunkt (Quellen ohne Verkaufsfreigabe)"
     },
     "andere": {
       "titel": "Weitere Schlüssel",
@@ -6085,6 +6135,14 @@
       "cryptoquant": "CryptoQuant (ETF-Fluss): in der ETF-Kachel des Marktradars.",
       "solana": "Solana-RPC (Smart Money): Hype-Radar › Einstellungen — ohne eigene RPC-Adresse bleibt Smart Money aus.",
       "boersen": "Börsen-Konten (Bitunix, Bitget, Pionex): Einstellungen › Journal."
+    },
+    "of": {
+      "titel": "Quellen ohne Verkaufsfreigabe",
+      "unter": "Analysequellen, deren Bedingungen einen Verkauf von AutarkTrade nicht erlauben oder ungeklärt sind (docs/VERKAUFS-PRUEFUNG.md). Für den Eigengebrauch an.",
+      "schalter": "Quellen ohne Verkaufsfreigabe nutzen",
+      "anText": "An: Diese Quellen laufen wie im alten Journal. Ob deine Nutzung von ihren Bedingungen gedeckt ist, prüfst und verantwortest du selbst.",
+      "ausText": "Aus: AutarkTrade verhält sich wie eine Verkaufsversion — diese Quellen und die Funktionen, die nur sie haben, sind aus und sagen warum.",
+      "zeilen": "Prüfung Zeile {zeilen}"
     }
   }
 }

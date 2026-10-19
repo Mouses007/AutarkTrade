@@ -485,3 +485,58 @@ pump.fun-API, Telegram t.me/s, Reddit, CoinPaprika, Upbit, MEXC, OKX, Binance Al
 ### Begleitprogramme
 
 Stand nach S11: siehe NOTICE.md („Begleitprogramme") und `docs/AUFTRAGSSTAND.md`, Abschnitt S11.
+
+---
+
+## Anhang: Stand nach S15 „Analysequellen zurück" — Quellen zurück hinter Schalter (Vorgabe an) (19.10.2026)
+
+S12 hat alles entfernt, was diese Prüfung für einen **Verkauf** rot oder ungeklärt nennt. Das war für den Eigengebrauch nie
+verlangt. Seit S15 kommen diese Quellen zurück, hinter **einem** Schalter: **Einstellungen › Datenquellen › „Quellen ohne
+Verkaufsfreigabe"** (`settings.quellenOhneFreigabe`), **Vorgabe an**. An = Verhalten wie vor S12 (altes Journal), aus = Stand
+nach S12 (Anhang oben) — für eine spätere Verkaufsversion genügt es, den Schalter aus- und die Vorgabe umzustellen. Die Ampel
+der Tabelle bleibt richtig: sie beschreibt die Bedingungen der Anbieter, und an denen ändert der Schalter nichts. Wer ihn
+anlässt, nutzt diese Quellen auf eigene Verantwortung (Hinweis an der Einstellung).
+
+Welche Quelle unter den Schalter fällt, steht an **einer** Stelle: `QUELLEN_OHNE_FREIGABE` in `server/quellen/freigabe.js`,
+je Eintrag mit den Zeilen dieser Tabelle. Der Selbsttest `server/quellen/__selftest-freigabe.mjs` prüft, dass jede genannte
+Zeile hier existiert und jede ID, nach der der Code fragt, in der Liste steht. Bei Schalter aus antworten die Funktionen mit
+„Quelle aus" (Grund `ohneFreigabe`) und es geht keine Anfrage hinaus. Behalten aus S12: Marktdatenquelle, Attributionen
+(auch für die zurückgekehrten Quellen), KI-Kennzeichnung, Zustand „Quelle aus".
+
+| # | Stand nach S15 (Schalter an) |
+|---|---|
+| 13 | Börsen-Links zu Upbit, OKX, MEXC wieder da (Hype-Teil). |
+| 20 | CoinMarketCap-Dominanz-Import läuft wieder (ID `coinmarketcap`); aus: eigene CoinGecko-Schnappschüsse. |
+| 21, 29, 55, 87 | CoinGecko ohne eigenen Schlüssel über den öffentlichen Endpunkt (ID `coingeckoOeffentlich`, zentral `server/quellen/coingecko.js`); ein eigener Schlüssel hat immer Vorrang. Dominanz, Marktübersicht, Stablecoins, Trending, Coin-Info, Tiefensuche laufen ohne Schlüssel. |
+| 25 | blockchain.info-Historie ab 2009 für Rainbow und Pi Cycle mit alter Kalibrierung und Rückfalldatei `server/data/btc-monatskurse.json` (ID `blockchaininfo`). |
+| 28, 32, 39, 42 | Yahoo Finance: ES/NQ/RTY/DXY in der Makro-Kachel, Indizes-Kachel und Live-Trading-Indizes mit Intraday-Kerzen, Daten wieder in Gesamt- und Handelslage (ID `yahoo`). |
+| 31 | Wal-Kachel (Telegram) wieder da (ID `telegram`). |
+| 34 | Binance-bapi-Brackets wieder Vorgabe der Wartungsmarge, Bybit als Ersatz (ID `binanceBrackets`, Funktion in `server/marktdaten/binance.js`). |
+| 37, 38 | Buch-Leiter: Bybit + OKX, Vergleich ab Werk an (ID `okx`). |
+| 40, 47 | ForexFactory Woche/Monat wieder zusätzlich zu Fed/BEA/Eurostat, entdoppelt, „Quelle: ForexFactory"; Kalender-Countdown und Handelslage lesen sie mit. Aus: ForexFactory-Bestand wird nicht gezeigt. |
+| 46, 53 | Vorbelegte News-Vorschläge (Verlags-RSS, Truth Social) wieder im Onboarding (ID `newsVorschlaege`). |
+| 52 | Telegram-Kanäle als News-Quelle wieder anlegbar, abrufbar, an die KI (ID `telegram`); von S12 abgeschaltete Quellen per Migration wieder an. |
+| 56 | CoinPaprika wieder Hype-Quelle (ID `coinpaprika`). |
+| 58 | Token-/Coin-Logos wieder sichtbar (ID `tokenbilder`). |
+| 59 | GeckoTerminal ohne Schlüssel über api.geckoterminal.com, Ratenbremse 5/min wie früher (ID `geckoterminal`). |
+| 60 | pump.fun vollständig zurück: Listen, Coin, King of the Hill, Kommentare, Ersteller-Bilanz, Kurve, Messung (ID `pumpfun`). |
+| 61 | Reddit-RSS mit der Sozialrechnung von vor S12 (ID `reddit`). |
+| 63 | Telegram-Kanäle der Frühphase werden wieder gelesen (ID `telegram`). |
+| 66 | RugCheck ab Werk an (ID `rugcheck`). |
+| 67 | Öffentlicher Solana-Knoten wieder Vorgabe für Smart Money (ID `solanaRpcOeffentlich`). |
+| 76 | Binance Alpha im Börsenwächter mit Stufe `alpha` und Alpha-Alarm (ID `binanceAlpha`, Funktion in `marktdaten/binance.js`). |
+| 77, 79–81 | Coinbase, Kraken, KuCoin, Gate ab Werk an (ID `gelbeBoersen`). |
+| 78, 82, 83 | Upbit, MEXC, OKX (mit Handelsstart) wieder im Börsenwächter (IDs `upbit`, `mexc`, `okx`). |
+| 89d | Recherche-Weg „DeepSeek-Suche" wieder wählbar (ID `deepseekSuche`); die neutrale Benennung „Endpunkt 2" bleibt. |
+
+Nicht zurückgeholt, weil keine Datenquelle: neutrale Benennung des Endpunkts 2, MiniMax-Abkündigung, Anbieterhinweise,
+KI-Labels und der Wegfall von `kiEmpfehlungenAn`.
+
+**Migration** (`server/migrationen/s15.js`): Spalte mit Vorgabe an; bei Schalter an bei jedem Start die von S12 markiert
+abgeschalteten Telegram-Quellen wieder an; einmalig Kalender-Länder `USD,EUR` → `USD,JPY` und Wartungsmarge `bybit` →
+`binance`. `server/migrationen/s12.js` überspringt bei Schalter an seine abschaltenden Schritte.
+
+**Geprüft am 19.10.2026** gegen die DB-Kopie (Testcontainer, Testbetrieb, Abruf von Hand über die Routen): Makro, Indizes,
+Kalender (Fed 9, BEA 53, Eurostat 15, ForexFactory 86), Dominanz, Rainbow, Pi Cycle, Marktübersicht, Wal-Kachel, Altseason,
+Hype-Scan (CoinGecko, DexScreener, GeckoTerminal, pump.fun, CoinPaprika, Reddit), Frühphase (pump.fun, GeckoTerminal) und
+Börsenwächter (Alpha, Upbit, OKX, MEXC u. a.; KuCoin aus dem Netz nicht erreichbar) liefern; Schalter aus → `ohneFreigabe`.

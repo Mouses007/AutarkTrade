@@ -51,6 +51,11 @@ export const KI_FUNKTIONEN = [
         id: 'recherche', titelKey: 'kiUebersicht.fn.recherche', bereich: 'nachrichten',
         fest: { provider: 'perplexity', feld: 'radarNewsRechercheModell', standard: 'sonar' },
         aufgabe: 'recherche',
+        // `deepseek-suche` im Modellfeld heisst: Recherche über DeepSeek — nur
+        // mit Schalter `quellenOhneFreigabe` (S15, ID `deepseekSuche`); ohne
+        // ihn fällt der Bericht auf Perplexity zurück, und so zeigt es auch
+        // die Übersicht.
+        umschalter: { wert: 'deepseek-suche', provider: 'deepseek', schalter: 'quellenOhneFreigabe' },
         funktionen: ['recherche'],
     },
     {
@@ -112,6 +117,16 @@ export const KI_FUNKTIONEN = [
  *
  * Rein und ohne Datenbank, damit der Selbsttest sie prüfen kann.
  */
+/**
+ * Wert eines Schalters aus `settings` — Gegenstück zu `normSchalter` in
+ * `quellen/freigabe.js`, hier nachgebaut, damit das Modul ein Blatt bleibt.
+ * Unbekannt (Spalte fehlt) ist AN, wie dort.
+ */
+function schalterAn(w) {
+    if (w === undefined || w === null || w === '') return true
+    return !(w === false || w === 0 || w === '0' || String(w).toLowerCase() === 'false')
+}
+
 export function anbieterVon(eintrag, settings) {
     const s = settings || {}
     const global = String(s.aiProvider || '').trim() || 'ollama'
@@ -123,7 +138,8 @@ export function anbieterVon(eintrag, settings) {
         const wert = String(karte?.[eintrag.aufgabe] || '').trim()
         if (wert) return wert.split('/')[0].trim()
     }
-    if (eintrag.umschalter && s[eintrag.fest?.feld] === eintrag.umschalter.wert) {
+    if (eintrag.umschalter && s[eintrag.fest?.feld] === eintrag.umschalter.wert
+        && schalterAn(eintrag.umschalter.schalter ? s[eintrag.umschalter.schalter] : true)) {
         return eintrag.umschalter.provider
     }
     if (eintrag.fest) {

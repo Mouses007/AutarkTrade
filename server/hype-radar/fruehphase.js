@@ -26,6 +26,15 @@
  * `pump-fun`) oder jemand seinen Vertrag auf /biz/ oder X nennt. King of the
  * Hill, Kommentarzahl und die Ersteller-Bilanz gibt es nicht mehr.
  *
+ * S15 (19.10.2026): Mit dem Schalter „Quellen ohne Verkaufsfreigabe" an
+ * (`server/quellen/freigabe.js`, Vorgabe) läuft die Frühphase wieder wie vor
+ * S12: pump.fun (die neuesten Starts und was gerade auf der Kurve gehandelt
+ * wird — mit Ersteller, Kommentarzahl, King of the Hill und den Links aus den
+ * Metadaten), die eingestellten Telegram-Kanäle (`fruehTelegram`, gelesen wie
+ * in den News), optional Reddit (der RSS-Feed aus der Hauptspur), die
+ * On-Chain-Pools ohne Schlüssel über GeckoTerminal und Smart Money über den
+ * öffentlichen Solana-Knoten. Mit dem Schalter aus gilt das oben Gesagte.
+ *
  * Ein Token, der hier reift (alt und liquide genug), wandert beim nächsten
  * Scan als eigene Quelle in die Hauptprüfung (`reifeFunde`). Wer über die
  * Alarmschwelle steigt, wird gemeldet — über dieselben Kanäle wie der Wachhund.
@@ -43,8 +52,11 @@
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { beansprucheAufgabe, meldeFehler } from '../db-claim.js'
-import { holeJson, holeCoinGecko, ONCHAIN_NETZ, dexDetailsViele, linksAusInfo, normChain, normSymbol, fund } from './quellen.js'
+import { holeText as holeGeschuetzt } from '../net-guard.js'
+import { leseTelegram, telegramUrl } from '../feed-parser.js'
+import { holeJson, holeCoinGecko, ONCHAIN_NETZ, dexDetailsViele, linksAusInfo, normChain, normSymbol, fund, ausReddit, PUMP } from './quellen.js'
 import { istAus, ausAntwort } from '../quellen/aus.js'
+import { quelleErlaubt } from '../quellen/freigabe.js'
 import { leseEinstellungen } from './einstellungen.js'
 import { stelleZu } from './zustellung.js'
 import { pruefeViele, gespeichertePruefung } from './projekt.js'
@@ -57,7 +69,7 @@ import {
 } from './fruehphase-bewertung.js'
 import { ausRugCheck, holeGoPlus, holeRugCheck } from './sicherheit.js'
 import { ladeListungen, pruefeListung } from './listungen.js'
-import { smartAbruf, smartKarteLesen } from './smartmoney.js'
+import { smartAbruf, smartKarteLesen, rpcAdresse } from './smartmoney.js'
 import { legeAnFrueh } from '../radar-ergebnisse.js'
 import { merke, MERKEN_AB_NOTE } from './gedaechtnis.js'
 
@@ -167,6 +179,38 @@ function eintragen(karte, f) {
 
 // ── Quellen ─────────────────────────────────────────────────────────────
 
+/** pump.fun: Coin-Objekt → Fund (S15, nur mit Schalter an). */
+function ausPumpCoin(c, quelle) {
+    return {
+        chain: 'solana',
+        contract: String(c?.mint || ''),
+        symbol: c?.symbol,
+        name: c?.name,
+        quelle,
+        links: linksAusInfo(c),
+        ersteller: String(c?.creator || ''),
+        erstelltAm: Number(c?.created_timestamp) || null,
+        // Die Bindungskurve als Halter — die Risikoprüfung nimmt sie aus der
+        // Top-10-Rechnung. Felder aus dem pump.fun-Frontend-API, nicht live geprüft.
+        kurve: [c?.bonding_curve, c?.associated_bonding_curve].filter(Boolean).map(String),
+        markt: {
+            marktKapUsd: Number(c?.usd_market_cap) || null,
+            antworten: zn(c?.reply_count),
+            graduiert: c?.complete === true,
+            kothMin: kothMinuten(c),
+            // Millisekunden (live geprüft 10.10.2026) — der Zeitpunkt, nicht nur die Dauer.
+            kothAm: Number(c?.king_of_the_hill_timestamp) > 0 ? Number(c.king_of_the_hill_timestamp) : null,
+        },
+    }
+}
+
+/** Minuten vom Start bis „King of the Hill" — null, wenn nie erreicht. */
+function kothMinuten(c) {
+    const koth = Number(c?.king_of_the_hill_timestamp)
+    const start = Number(c?.created_timestamp)
+    return koth > 0 && start > 0 && koth >= start ? (koth - start) / 60e3 : null
+}
+
 /*
  * pump.fun-Token erkennt man an der Kurve, am Handelsplatz (DexScreener
  * `pumpfun`/`pumpswap`) oder — bei Zeilen vor S12 — an der alten Quelle,
@@ -201,6 +245,52 @@ async function jeDrei(liste, fn) {
     let i = 0
     const arbeiter = async () => { while (i < liste.length) await fn(liste[i++]) }
     await Promise.all(Array.from({ length: Math.min(3, liste.length) }, arbeiter))
+}
+
+/** pump.fun-Listen (S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe", ID `pumpfun`). */
+async function pumpfun(einst) {
+    const q = einst.fruehQuellen || {}
+    const listen = []
+    if (q.pumpfunNeu !== false) listen.push(['pumpfun-neu', 'sort=created_timestamp'])
+    /*
+     * Was gerade auf der Kurve gehandelt wird. Graduierte fallen heraus: die
+     * sind schon eine Stufe weiter und kommen über DexScreener und
+     * GeckoTerminal.
+     *
+     * Bis 07.10.2026 stand hier `sort=market_cap` mit der Absicht „die
+     * grössten, die noch auf der Kurve stehen". Gemessen liefert das die
+     * fünfzig grössten GRADUIERTEN aller Zeiten (oben USDF mit 959 Mio USD),
+     * die der Filter danach alle verwarf — die Liste war immer leer, und King
+     * of the Hill wurde nie gesehen. Mit `complete=false` kommen Leichen, die
+     * seit über 400 Tagen auf der Kurve hängen; ein Altersfilter in der
+     * Abfrage (`created_timestamp_gte`) wird ignoriert. Die Sortierung nach
+     * dem letzten Handel lieferte 50 Token auf der Kurve, 45 davon jünger als
+     * ein Tag; den Rest nimmt `MAX_ALTER_STUNDEN`.
+     */
+    if (q.pumpfunAufstieg !== false) listen.push(['pumpfun-aufstieg', 'sort=last_trade_timestamp&complete=false'])
+    /*
+     * Nacheinander, nicht gleichzeitig: Der zweite gleichzeitige Abruf bekam
+     * HTTP 429 und fiel still aus — die Quelle gilt erst als ausgefallen, wenn
+     * ALLE ihre Abrufe scheitern.
+     */
+    const raus = []
+    let ok = 0
+    let letzterFehler = null
+    for (const [quelle, abfrage] of listen) {
+        try {
+            const j = await holeJson(`${PUMP}/coins?limit=50&offset=0&${abfrage}&order=DESC&includeNsfw=false`)
+            ok++
+            for (const c of Array.isArray(j) ? j : []) {
+                if (quelle === 'pumpfun-aufstieg' && c?.complete === true) continue
+                raus.push(ausPumpCoin(c, quelle))
+            }
+        } catch (e) {
+            letzterFehler = e
+            logWarn('hype-frueh', `pump.fun ${quelle}: ${e.message}`)
+        }
+    }
+    if (listen.length && !ok) throw letzterFehler
+    return raus
 }
 
 async function dexscreenerProfile() {
@@ -363,6 +453,30 @@ async function biz() {
     return erwaehnungen(leseBizKatalog(j).map((f) => f.text), 'biz')
 }
 
+/** Telegram-Kanäle (S15, nur mit Schalter an, ID `telegram`) und Reddit (ID `reddit`). */
+async function telegram(kanaele) {
+    const texte = []
+    for (const name of (kanaele || []).slice(0, 15)) {
+        const url = telegramUrl(name)
+        if (!url) continue
+        try {
+            const html = await holeGeschuetzt(url, { timeout: 10000, versuche: 1 })
+            // Nur die letzten sechs Stunden — ältere Rufe sind kein Frühsignal mehr.
+            const grenze = Date.now() - 6 * 3600e3
+            for (const b of leseTelegram(html)) if (!b.zeit || b.zeit >= grenze) texte.push(b.inhalt)
+        } catch (e) {
+            logWarn('hype-frueh', `Telegram ${name}: ${e.message}`)
+        }
+    }
+    return erwaehnungen(texte, 'telegram')
+}
+
+async function reddit() {
+    const funde = await ausReddit()
+    const texte = funde.map((f) => `${f.symbol ? `$${f.symbol}` : ''} ${f.contract || ''}`)
+    return erwaehnungen(texte, 'reddit')
+}
+
 /**
  * X über Grok (`x_search`): eine bezahlte Abfrage nach den bestbeobachteten
  * Token und nach neu beworbenen Adressen. Gezählt wird in `xNennungen` —
@@ -492,12 +606,20 @@ async function fruehLaufIntern(einst) {
         Math.max(30, Number(einst.fruehXIntervallMin) || 120) * 60e3 - 30e3)
 
     // ── Quellen parallel; jede fällt für sich aus ───────────────────────
+    /*
+     * S15: pump.fun, Telegram und Reddit nur mit dem Schalter „Quellen ohne
+     * Verkaufsfreigabe" — aus, gibt es sie in diesem Lauf nicht (wie nach S12).
+     */
+    const [pumpFrei, telegramFrei, redditFrei] = await Promise.all(['pumpfun', 'telegram', 'reddit'].map((id) => quelleErlaubt(id)))
     const aufgaben = [
+        ['pumpfun', pumpFrei && (q.pumpfunNeu !== false || q.pumpfunAufstieg !== false), () => pumpfun(einst)],
         ['dexscreener', q.dexscreenerProfile !== false, dexscreenerProfile],
         ['geckoterminal', q.geckoterminalNeu !== false, () => geckoNeu(einst)],
     ].filter(([, an]) => an)
     const sozial = [
         ['biz', q.biz !== false, biz],
+        ['telegram', telegramFrei && (einst.fruehTelegram || []).length > 0 && q.telegram !== false, () => telegram(einst.fruehTelegram)],
+        ['reddit', redditFrei && q.reddit === true, reddit],
         ['x', xFaellig, () => xQuelle(einst, bekannt, kuerzelErlaubt)],
     ].filter(([, an]) => an)
 
@@ -508,8 +630,8 @@ async function fruehLaufIntern(einst) {
      * Signal danach in JEDEM Durchgang aus der Datenbank.
      */
     const smartGewollt = q.smartmoney === true && (einst.smartWallets || []).length > 0
-    // Ohne eigene RPC-Adresse ist Smart Money aus (kein öffentlicher Knoten mehr, S12).
-    const smartAn = smartGewollt && Boolean(String(einst.schluessel?.solanaRpc || '').trim())
+    // Ohne eigene RPC-Adresse ist Smart Money aus (S12) — mit Schalter an gilt der öffentliche Knoten (S15).
+    const smartAn = smartGewollt && Boolean(await rpcAdresse(einst.schluessel?.solanaRpc || ''))
     if (smartGewollt && !smartAn) {
         quellenStand.smartmoney = { ok: false, aus: true, grund: 'schluesselFehlt', quelle: 'Solana-RPC',
             fehler: 'Smart Money braucht eine eigene Solana-RPC-Adresse' }
@@ -713,13 +835,13 @@ async function fruehLaufIntern(einst) {
      * genannt" eine Messung — für jeden Token. Eine noch gültige X-Messung
      * (fortgeschrieben, `X_GILT_MS`) zählt mit.
      */
-    const sozialGeprueft = ['biz', 'x'].some((q) => quellenStand[q]?.ok)
+    const sozialGeprueft = ['biz', 'telegram', 'reddit', 'x'].some((q) => quellenStand[q]?.ok)
         || Boolean(letzteX?.ok && Number(letzteX.am) >= jetzt - X_GILT_MS)
 
     // ── Bewerten (erster Durchgang) ─────────────────────────────────────
     const bewerte = (e) => bewerteFrueh({
         stand: e.stand, verlauf: e.verlauf, links: e.x.links, profil: e.x.profil,
-        projektNote: e.projektNote, risiko: e.risiko, smart: e.smart, geborenAm: e.geborenAm,
+        projektNote: e.projektNote, ersteller: e.bilanz, risiko: e.risiko, smart: e.smart, geborenAm: e.geborenAm,
         sozialGeprueft,
     })
     const ergebnisse = []
@@ -760,16 +882,25 @@ async function fruehLaufIntern(einst) {
         let erwaehnungen = x.erwaehnungen
         if (x.xInfo && !plattformen.has('x')) { plattformen.add('x'); erwaehnungen += Number(x.xInfo.autoren) || 0 }
 
-        // Die Kurve: aus diesem Lauf (DexScreener-Paar), sonst aus dem letzten.
+        // Kurve und King of the Hill: aus diesem Lauf (pump.fun bzw. DexScreener-Paar),
+        // sonst aus dem letzten (ein bekannter Token steht nicht in jeder pump.fun-Liste).
         x.kurve = x.kurve || altStand.kurve || null
+        if (pumpFrei) {
+            if (x.markt.kothMin === undefined || x.markt.kothMin === null) x.markt.kothMin = altStand.kothMin ?? null
+            if (x.markt.kothAm === undefined || x.markt.kothAm === null) x.markt.kothAm = altStand.kothAm ?? null
+        }
         /*
          * Durch die Kurve: ein Handelsplatz ausser der Kurve selbst (pumpswap,
-         * raydium …) oder ein früherer Befund. Seit S12 die einzige Herkunft —
-         * pump.fun meldete `complete`. Ohne DexScreener-Paar unbekannt, nicht „nein".
+         * raydium …) oder ein früherer Befund. Mit Schalter an (S15) meldet es
+         * pump.fun (`complete`), und unbekannt heisst wie vor S12 „nein". Mit
+         * Schalter aus (S12) ist der Handelsplatz die einzige Herkunft — ohne
+         * DexScreener-Paar unbekannt, nicht „nein".
          */
-        const graduiert = altStand.graduiert === true || (x.markt.dex
-            ? x.markt.dex !== 'pumpfun'
-            : (altStand.graduiert === false ? false : null))
+        const graduiert = pumpFrei
+            ? (x.markt.graduiert === true || altStand.graduiert === true || Boolean(x.markt.dex && x.markt.dex !== 'pumpfun'))
+            : (altStand.graduiert === true || (x.markt.dex
+                ? x.markt.dex !== 'pumpfun'
+                : (altStand.graduiert === false ? false : null)))
 
         /*
          * Wie viele Minuten die Stundenzahlen dieser Aufnahme abdecken: das
@@ -794,6 +925,8 @@ async function fruehLaufIntern(einst) {
             // Unbekannt (kein Handelsplatz bekannt) zählt wie bisher als „noch auf der Kurve".
             aufKurve: istPump(x, sicherJson(alt?.quellen, [])) && graduiert !== true,
             projektNote: gilt ? gilt.note : (gespeichert ? null : alt?.projektNote ?? null),
+            // Ersteller-Bilanz der Projektprüfung (pump.fun, S15 nur mit Schalter an).
+            bilanz: gilt?.fakten?.ersteller || null,
             risiko: altStand.risiko && Number(altStand.risiko.am) >= jetzt - RISIKO_GILT_MS ? altStand.risiko : null,
             smart: smartKarte.get(String(x.contract)) || smartKarte.get(String(x.contract).toLowerCase()) || null,
         }
@@ -837,7 +970,7 @@ async function fruehLaufIntern(einst) {
         const kandidaten = [...ergebnisse].sort((a, b) => b.r.note - a.r.note).slice(0, PROJEKT_JE_LAUF)
         await pruefeViele(kandidaten.map((e) => ({
             symbol: e.x.symbol, name: e.x.name, chain: e.x.chain, contract: e.x.contract,
-            links: e.x.links, pump: e.pump,
+            links: e.x.links, ersteller: e.x.ersteller, pump: e.pump,
         })), {
             jeFertig: (_, p, fehler, i) => {
                 const e = kandidaten[i]
@@ -846,6 +979,7 @@ async function fruehLaufIntern(einst) {
                     return
                 }
                 e.projektNote = p.note
+                e.bilanz = p.fakten?.ersteller || e.bilanz
             },
         })
     }
@@ -1010,9 +1144,11 @@ async function raeumeAuf(knex, jetzt) {
 
 /**
  * Plattformen, auf denen Menschen reden — im Gegensatz zu Ketten, die handeln.
- * Telegram und Reddit bis S12; ihre alten Nennungen zählen nicht mehr.
+ * Telegram und Reddit nur mit dem Schalter „Quellen ohne Verkaufsfreigabe"
+ * (S15); mit Schalter aus zählen ihre alten Nennungen nicht (S12).
  */
 const SOZIALE_PLATTFORMEN = ['biz', 'x']
+const SOZIALE_PLATTFORMEN_OHNE_FREIGABE = ['telegram', 'biz', 'reddit', 'x']
 
 /**
  * Reife Token als Funde für die Hauptprüfung.
@@ -1031,16 +1167,23 @@ export async function reifeFunde() {
             .andWhere('letzterBlick', '>=', Date.now() - 24 * 3600e3)
             .orderBy('note', 'desc').limit(20)
         const funde = []
+        const frei = await quelleErlaubt('telegram')
+        const plattformen = frei ? SOZIALE_PLATTFORMEN_OHNE_FREIGABE : SOZIALE_PLATTFORMEN
+        /*
+         * Reddit bekommt keinen eigenen Fund: das fragt die Hauptprüfung selbst
+         * (mit Schalter an), ein zweiter Fund wäre dieselbe Stimme doppelt.
+         */
+        const eigeneFunde = plattformen.filter((p) => p !== 'reddit')
         zeilen.forEach((z, i) => {
             const quellen = sicherJson(z.quellen, [])
-            const sozial = SOZIALE_PLATTFORMEN.filter((p) => quellen.includes(p))
+            const sozial = plattformen.filter((p) => quellen.includes(p))
             const basis = {
                 symbol: z.symbol, name: z.name, chain: z.chain, contract: z.contract, rang: i + 1,
                 markt: { links: sicherJson(z.links, null), ersteller: z.ersteller || '' },
             }
             funde.push(fund({ ...basis, quelle: 'fruehphase',
                 sozial: sozial.length ? { fruehPlattformen: sozial.length } : {} }))
-            for (const p of SOZIALE_PLATTFORMEN) if (sozial.includes(p)) funde.push(fund({ ...basis, quelle: p }))
+            for (const p of eigeneFunde) if (sozial.includes(p)) funde.push(fund({ ...basis, quelle: p }))
         })
         return funde
     } catch {

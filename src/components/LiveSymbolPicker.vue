@@ -25,6 +25,7 @@ import {
 } from '../stores/live.js'
 import { LEVERAGE_TIERS, parseTierAuswahl } from '../../shared/leverageMap.js'
 import { mmrHerkunft } from '../utils/marginRate.js'
+import { ladeFreigabe, freigabeAn } from '../utils/quellenFreigabe.js'
 import Symbol from './basis/Symbol.vue'
 
 const props = defineProps({
@@ -73,8 +74,8 @@ const tierAuswahl = computed(() => parseTierAuswahl(levMapTier.value))
 const tierAktiv = (L) => tierAuswahl.value?.includes(L) ?? false
 
 /**
- * Effektiver Hebel einer Pille: der Max-Hebel des Symbols (aus den Bybit-
- * Risikolimits) klemmt Stufen, die es dort gar nicht gibt — eine 100x-Pille bei
+ * Effektiver Hebel einer Pille: der Max-Hebel des Symbols (Binance-Brackets bzw.
+ * Bybit-Risikolimits) klemmt Stufen, die es dort gar nicht gibt — eine 100x-Pille bei
  * einem 75x-Coin zeigt dann „75x". Kollabiert eine Stufe komplett auf eine
  * niedrigere (Max-Hebel 50: 100x wäre dasselbe wie 50x), wird sie deaktiviert.
  */
@@ -182,9 +183,9 @@ const mmrHinweis = computed(() => {
     if (h.zustand === 'fehler') return t('levmap.mmrFailed')
     if (h.zustand !== 'da') return t('levmap.mmrHintAuto')
 
-    // Schweigt Bybit, gilt die feste Vorgabe — das soll man sehen (S12).
-    if (h.quelle === 'vorgabe') return t('levmap.mmrVorgabe')
-    const teile = [t('levmap.mmrFrom', { quelle: 'Bybit' })]
+    // Schweigen die Börsen, gilt die feste Vorgabe — das soll man sehen (S12).
+    if (h.quelle === 'vorgabe') return t(freigabeAn() ? 'levmap.mmrVorgabeBeide' : 'levmap.mmrVorgabe')
+    const teile = [t('levmap.mmrFrom', { quelle: h.quelle === 'binance' ? 'Binance' : 'Bybit' })]
     if (h.obergrenze) teile.push(t('levmap.mmrUpTo', { n: kurzBetrag(h.obergrenze) }))
     if (h.ersatz) teile.push(t('levmap.mmrSubstitute'))
     if (h.veraltet) teile.push(t('levmap.mmrStale'))
@@ -346,6 +347,7 @@ async function switchMarket(market) {
 watch(effektiverMarkt, loadSymbols)
 
 onMounted(async () => {
+    ladeFreigabe()
     /*
      * Ohne Symbolblock keine Vorbelegung: das Einstellungsfenster im Cockpit
      * öffnet sich mitten in einer Sitzung, und die Kaskade (offene Position →
@@ -425,8 +427,8 @@ onMounted(async () => {
                 {{ t('live.laneWidth') }} <span class="threshVal">{{ liveBuchW }} PX</span>
             </label>
             <input v-model.number="liveBuchW" type="range" min="48" max="200" step="4" class="threshRange" />
-            <label class="liveToggle" :title="t('live.otherVenuesTitle')">
-                <input type="checkbox" v-model="liveFremdBuch" class="lpHaken" />{{ t('live.otherVenues') }}
+            <label class="liveToggle" :title="freigabeAn() ? t('live.otherVenuesTitleOkx') : t('live.otherVenuesTitle')">
+                <input type="checkbox" v-model="liveFremdBuch" class="lpHaken" />{{ freigabeAn() ? t('live.otherVenuesOkx') : t('live.otherVenues') }}
             </label>
         </template>
         <label class="liveToggle" :title="istWiedergabe ? t('live.replayTradesAb') : null">
@@ -582,6 +584,8 @@ onMounted(async () => {
 
             <label class="lpLabel lpOben">{{ t('levmap.mmr') }}</label>
             <select v-model="levMapMmrQuelle" class="sidebar-select lpUnten" :title="t('levmap.mmrSourceTitle')">
+                <!-- Binance-bapi nur mit Schalter „Quellen ohne Verkaufsfreigabe" (S15). -->
+                <option v-if="freigabeAn()" value="binance">{{ t('levmap.mmrSourceBinance') }}</option>
                 <option value="bybit">{{ t('levmap.mmrSourceBybit') }}</option>
                 <option value="manuell">{{ t('levmap.mmrSourceManual') }}</option>
             </select>

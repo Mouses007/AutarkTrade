@@ -16,6 +16,11 @@
  * 3. **Regenbogen auf kürzerer Reihe** (`wochenpunkte`, `regression`): der
  *    jüngste Tag muss in der Stichprobe sein, sonst steht „jetzt" auf einem
  *    bis zu sechs Tage alten Kurs.
+ * 4. **Schalter „Quellen ohne Verkaufsfreigabe"** (S15): ForexFactory lesen
+ *    und gegen die amtlichen Termine entdoppeln; mit Schalter AUS geht keine
+ *    Anfrage an Yahoo, blockchain.info, CoinMarketCap oder ForexFactory, und
+ *    die Wal-Kachel sagt „ohneFreigabe" — mit Schalter AN laufen die alten
+ *    Wege (Abrufe hier abgefangen, nichts verlässt den Rechner).
  *
  * Kein Netz.
  */
@@ -26,6 +31,12 @@ import {
 } from './kalender-quellen.js'
 import { ausCache, _cacheZuruecksetzen, wochenpunkte, regression } from './marktradar-api.js'
 import { QuelleAus } from './quellen/aus.js'
+import { _setzeLeser } from './quellen/freigabe.js'
+import { normalisiereFf, entdopple, impactVon, DOPPELT_MS, FF_QUELLE } from './marktradar-kalender.js'
+import {
+    holeMakro, holeRainbow, holePiCycle, holeWalTransaktionen, holeDominanzRueckblick,
+} from './marktradar-api.js'
+import axios from 'axios'
 
 let bestanden = 0
 let fehler = 0
@@ -166,6 +177,101 @@ console.log('\nRegenbogen auf Tageskerzen ab 2017')
     pruefe('Regression trifft Steigung und Achsenabschnitt',
         Math.abs(reg.a - a) < 1e-6 && Math.abs(reg.b - b) < 1e-5, `${reg.a} ${reg.b}`)
     pruefe('Reststreuung einer exakten Kurve ist 0', reg.s < 1e-6)
+}
+
+console.log('\nForexFactory (Schalter an) und Entdoppeln')
+{
+    const z = normalisiereFf({ title: 'Core PCE Price Index m/m', country: 'usd', date: '2026-10-30T08:30:00-04:00', impact: 'High', forecast: '0.2%', previous: '0.3%' }, 'ff-woche')
+    pruefe('Feed-Eintrag wird gelesen (Land gross, Zeit mit Zone)',
+        z && z.land === 'USD' && z.dateUnix === Date.parse('2026-10-30T12:30:00Z') && z.impact === 'high' && z.forecast === '0.2%')
+    pruefe('ohne Land oder Titel → null', normalisiereFf({ title: 'x', date: '2026-10-30T08:30:00Z' }, 'ff-woche') === null)
+    pruefe('Feiertag bleibt eigene Stufe, Unbekanntes ist niedrig',
+        impactVon('Holiday') === 'holiday' && impactVon('Non-Economic') === 'low' && impactVon('Medium') === 'medium')
+
+    const t = Date.parse('2026-10-29T18:00:00Z')
+    const zeilen = [
+        { quelle: 'ff-woche', land: 'USD', dateUnix: t, titel: 'Federal Funds Rate' },
+        { quelle: 'fed', land: 'USD', dateUnix: t, titel: 'FOMC Meeting' },
+        { quelle: 'bea', land: 'USD', dateUnix: t + 2 * DOPPELT_MS, titel: 'Personal Income' },
+        { quelle: 'eurostat', land: 'EUR', dateUnix: t, titel: 'Euro area GDP' },
+    ]
+    const e = entdopple(zeilen)
+    pruefe('amtlicher Termin zur selben Zeit im selben Land entfällt (ForexFactory gewinnt)',
+        !e.some(r => r.quelle === 'fed') && e.some(r => r.quelle === 'ff-woche'))
+    pruefe('Gegenprobe: zehn Minuten daneben ist ein anderer Termin und bleibt',
+        e.some(r => r.quelle === 'bea'))
+    pruefe('Gegenprobe: anderes Land zur selben Zeit bleibt', e.some(r => r.quelle === 'eurostat'))
+    pruefe('ohne ForexFactory-Zeilen bleibt alles', entdopple(zeilen.slice(1)).length === 3)
+    pruefe('Quellenhinweis „ForexFactory"', FF_QUELLE.name === 'ForexFactory' && FF_QUELLE.art === 'quelle')
+}
+
+console.log('\nSchalter „Quellen ohne Verkaufsfreigabe"')
+{
+    // Jede Anfrage wird abgefangen und mitgeschrieben — nichts geht ins Netz.
+    const gesehen = []
+    const echtFetch = globalThis.fetch
+    globalThis.fetch = async (url) => {
+        gesehen.push(String(url))
+        const u = String(url)
+        if (u.includes('blockchain.info')) {
+            const tag = 86400
+            const values = Array.from({ length: 900 }, (_, i) => ({ x: 1262304000 + i * tag * 3, y: 1 + i * 10 }))
+            return new Response(JSON.stringify({ values }), { status: 200 })
+        }
+        if (u.includes('finance.yahoo.com')) {
+            const ts = Array.from({ length: 40 }, (_, i) => 1788000000 + i * 86400)
+            return new Response(JSON.stringify({ chart: { result: [{ meta: { regularMarketPrice: 100, regularMarketTime: ts[39] }, timestamp: ts, indicators: { quote: [{ close: ts.map((_, i) => 90 + i) }] } }] } }), { status: 200 })
+        }
+        return new Response('{}', { status: 503 })
+    }
+    const echtAdapter = axios.defaults.adapter
+    axios.defaults.adapter = async (cfg) => {
+        gesehen.push(String(cfg.url))
+        // 400 statt Netzfehler: wird nicht wiederholt (`istWiederholbar`), der
+        // Test wartet so nicht die Pausen der Historienabrufe ab
+        const e = new Error('kein Netz im Selbsttest'); e.response = { status: 400, data: {} }; throw e
+    }
+    const host = (h) => gesehen.some(u => u.includes(h))
+    try {
+        // ── AUS: wie nach S12 ──
+        _setzeLeser(async () => false)
+        _cacheZuruecksetzen()
+        gesehen.length = 0
+        let fehlerMakro = null
+        try { await holeMakro() } catch (e) { fehlerMakro = e }
+        pruefe('aus: Makro fragt Yahoo nicht', !host('yahoo'))
+        pruefe('aus: Makro ohne CoinGecko-Schlüssel ist „Quelle aus" statt Fehler',
+            fehlerMakro?.code === 'quelleAus', fehlerMakro?.message)
+        await holeRainbow().catch(() => null)
+        await holePiCycle().catch(() => null)
+        pruefe('aus: Regenbogen/Pi-Cycle fragen blockchain.info nicht', !host('blockchain.info'))
+        const rb = await holeDominanzRueckblick()
+        pruefe('aus: kein CoinMarketCap-Rückblick', rb.uebersprungen === true && !host('coinmarketcap'))
+        let walFehler = null
+        try { await holeWalTransaktionen() } catch (e) { walFehler = e }
+        pruefe('aus: Wal-Kachel sagt „ohneFreigabe"', walFehler?.code === 'quelleAus' && walFehler.grund === 'ohneFreigabe')
+
+        // ── AN: wie vor S12 ──
+        _setzeLeser(async () => true)
+        _cacheZuruecksetzen()
+        gesehen.length = 0
+        const m = await holeMakro()
+        pruefe('an: Makro holt ES, NQ, RTY und DXY von Yahoo',
+            ['ES%3DF', 'NQ%3DF', 'RTY%3DF', 'DX-Y.NYB'].every(t => gesehen.some(u => u.includes('yahoo') && u.includes(t))))
+        pruefe('an: Märkte und Kopplung in der Antwort, kein „entfernt"',
+            Array.isArray(m.maerkte) && m.maerkte.length === 4 && m.korrelation && !m.indizesEntfernt)
+        pruefe('an: Stablecoins ohne Netz → nur diese Zeile fehlt', m.stablecoins.verfuegbar === false)
+        const r = await holeRainbow()
+        pruefe('an: Regenbogen aus blockchain.info (Reihe ab 2010, alte Kalibrierung)',
+            host('blockchain.info') && r.quelle === 'blockchain.info' && !r.seit, r.quelle)
+        const pc = await holePiCycle()
+        pruefe('an: Pi-Cycle aus blockchain.info', pc.quelle === 'blockchain.info' && pc.punkte.length >= 800)
+    } finally {
+        globalThis.fetch = echtFetch
+        axios.defaults.adapter = echtAdapter
+        _setzeLeser(async () => true)
+        _cacheZuruecksetzen()
+    }
 }
 
 console.log(`\n${bestanden} bestanden, ${fehler} fehlgeschlagen`)

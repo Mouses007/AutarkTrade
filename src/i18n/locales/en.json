@@ -1029,7 +1029,7 @@
     "news": {
       "title": "News sources",
       "intro": "Sources you already added stay untouched — this is only for adding new ones.",
-      "telegramEntfernt": "Telegram retrieval removed — Telegram prohibits reading public channels. The source can be deleted but not re-enabled.",
+      "telegramEntfernt": "Telegram is off (the \"sources without sales clearance\" switch (Settings › Data sources) is off) — Telegram prohibits reading public channels. The source can be deleted but not re-enabled.",
       "eigeneQuellen": "No sources are pre-filled: you choose which feeds and channels are read and summarised by the AI. Mind the terms of use of each source."
     },
     "mail": {
@@ -1485,7 +1485,32 @@
     "lageLadeFehler": "The Hype Radar data could not be loaded (server unreachable or restarting) — retrying every 5 s.",
     "lageNeuLaden": "reload now",
     "alarmeLadeFehler": "Alerts or favourites could not be loaded — retrying every 5 s.",
-    "keinerGeprueftKurz": "{n} finds below the threshold —"
+    "keinerGeprueftKurz": "{n} finds below the threshold —",
+    "fruehQuelle_pumpfunNeu": "pump.fun — newest launches",
+    "fruehQuelle_pumpfunAufstieg": "pump.fun — trading now, still on the curve",
+    "fruehQuelle_telegram": "Telegram — configured channels",
+    "fruehQuelle_reddit": "Reddit — mentions",
+    "fruehTelegram": "Telegram channels (public)",
+    "fruehTelegramPlatzhalter": "{'@'}channel or t.me/channel — one per line",
+    "fruehTelegramHinweis": "The public preview (t.me/s/…) is read, last six hours, at most 15 channels. Call channels often promote their own tokens — a single mention is a hint; only several independent platforms count.",
+    "smartRpcFrei": "Solana RPC address (optional)",
+    "smartRpcPlatzhalterFrei": "empty = public node · e.g. a Helius address",
+    "smartHinweisFrei": "Wallets from the GMGN, Kolscan or Cielo leaderboards. Only purchases the wallet signed and paid for itself count. Two wallets on the same token trigger an alert at once. For more than a few wallets enter your own RPC address (e.g. Helius, free tier).",
+    "boersenwachtHinweisFrei": "Compares the public market lists of large and mid-sized exchanges and Binance Alpha, detects new listings and checks whether the radar had flagged the token before. No keys.",
+    "projektHinweisFrei": "For passed finds the radar looks at what stands behind the token: the website (content, contract address, placeholder text), the domain age, GitHub (maintained? earlier projects?) and, on pump.fun, the creator's history. No key needed; each check is valid for 24 hours.",
+    "spalteSubstanzTitelFrei": "Substance score of the project check (website, domain, GitHub, creator) — shown next to hype and safety, never combined with either",
+    "quelleName_pumpfun": "pump.fun — newest launches",
+    "quelleName_coinpaprika": "CoinPaprika — new coins",
+    "quelleName_reddit": "Reddit — r/CryptoMoonShots, r/SolanaMemeCoins",
+    "boerse_binance-alpha": "Binance Alpha",
+    "boerse_upbit": "Upbit",
+    "boerse_okx": "OKX",
+    "boerse_mexc": "MEXC",
+    "quellenFreiHinweis": "Sources without sales clearance are on (Settings › Data sources): pump.fun, CoinPaprika and Reddit run as before; CoinGecko and GeckoTerminal without your own key via the public endpoints with a tight limit — your own key takes precedence.",
+    "cgOeffentlich": "No own key — CoinGecko trends and on-chain pools run via the public endpoints (CoinGecko, GeckoTerminal), throttled.",
+    "rugcheckHinweisFrei": "RugCheck runs by default (sources without sales clearance on): insider networks and the liquidity lock on Solana. Without RugCheck, GoPlus checks alone — then both are unknown.",
+    "boersenWahlHinweisFrei": "With \"sources without sales clearance\" on, all exchanges are on by default, including Binance Alpha, Upbit, OKX and MEXC. Binance spot and futures additionally follow the market data source.",
+    "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko on-chain — new pools with buyer count"
   },
   "kiUebersicht": {
     "laedt": "Loading overview …",
@@ -1949,7 +1974,9 @@
     "imbalanceBuy": "{pct}% buy",
     "imbalanceSell": "{pct}% sell",
     "imbalanceTitle": "Buy vs. sell volume near the mid price",
-    "inBoerse": "Open {s} in {b} (new tab)"
+    "inBoerse": "Open {s} in {b} (new tab)",
+    "otherVenuesOkx": "Bybit + OKX",
+    "otherVenuesTitleOkx": "Shows as a faint bar behind how much rests at the same prices on Bybit and OKX. Deliberately NOT added up: the venues' mid prices differ by several dollars, so summing smears the same wall across zones"
   },
   "strategies": {
     "labTitle": "Lab",
@@ -2781,7 +2808,9 @@
     "wheelHint": "Mouse wheel in the chart zooms continuously",
     "coverage": "Coverage",
     "thinWindow": "Window too short — the map shows only a fraction of positions",
-    "mmrVorgabe": "Fixed default 0.004 — Bybit does not know the symbol or is not answering"
+    "mmrVorgabe": "Fixed default 0.004 — Bybit does not know the symbol or is not answering",
+    "mmrSourceBinance": "Binance (automatic)",
+    "mmrVorgabeBeide": "Fixed default 0.004 — neither Binance nor Bybit know the symbol or are answering"
   },
   "oi": {
     "oi": "Open interest",
@@ -2851,7 +2880,7 @@
       "noHistory": "Own curve starts today · full history in the large view",
       "ownSeries": "Own record since {seit} · {n} days",
       "ownSeriesEmpty": "The own recording starts today — the curve grows from here, one day at a time.",
-      "source": "Current value from CoinGecko (your own key), the curve from our own daily snapshots — it starts with the first snapshot and grows day by day. Dominance says which share of the crypto market sits in Bitcoin — if it rises while prices fall, money is fleeing altcoins into BTC rather than entering the market.",
+      "source": "With the \"sources without sales clearance\" switch (Settings › Data sources): curve and current value from our own stock, imported once from CoinMarketCap and topped up daily from the same source, CoinGecko as fallback. Without the switch: current value from CoinGecko, the curve from our own daily snapshots — it grows day by day. Dominance says which share of the crypto market sits in Bitcoin — if it rises while prices fall, money is fleeing altcoins into BTC rather than entering the market.",
       "rest": "Others",
       "range": {
         "d30": "30 days",
@@ -2941,7 +2970,7 @@
       "caveat": "This is a curve fitted to the past, not a forecast. The bands shift with every new price — what reads as \"cheap\" today may be the middle in a year. Useful as a multi-year mood gauge, not as a trading signal.",
       "params": "ln(price) ≈ {a} · ln(days since genesis) + {b}, residual spread {s}, {n} points",
       "info": "Where the Bitcoin price sits long-term relative to its historical range, from \"sell-off\" to \"bubble\".\nThe bands shift with every new price — what reads as \"cheap\" today can be the middle in a year. A mood gauge across years, too coarse for a single trading decision.",
-      "seit": "Price series from {datum} (daily candles of the market data source). The former series from 2009 came from blockchain.info and was removed for licensing reasons — over the shorter span the curve comes out flatter."
+      "seit": "Price series from {datum} (daily candles of the market data source). The series from 2009 (blockchain.info) only runs with the \"sources without sales clearance\" switch (Settings › Data sources) — over the shorter span the curve comes out flatter."
     },
     "top": "Top",
     "liq": {
@@ -2989,9 +3018,10 @@
       "domFromPrice": "from price moves",
       "domHint": "Dominance on its own cannot be read: it rises even when only prices fall. Only the split shows whether money actually moved.",
       "source": "Stablecoin flow is the change in USDT and USDC supply (CoinGecko, your own key) — deliberately not \"USDT dominance\", which rises mechanically whenever crypto falls and then merely repeats the price drop. Inflow or outflow shows real money entering or leaving the market. The dominance decomposition uses total market cap from our own daily CoinGecko snapshots and appears once enough days have been recorded.",
-      "info": "Money flowing into crypto: how the supply of stablecoins (USDT + USDC) changes, and whether rising stablecoin dominance is real money or just falling prices.\nEquity futures and the dollar index used to be shown here and were removed for licensing reasons (Yahoo Finance).",
-      "indizesEntfernt": "Equity futures and dollar index removed (Yahoo Finance licence)",
-      "domWaechst": "The stablecoin dominance decomposition appears once our own daily snapshots of the total market have two points about 30 days apart."
+      "info": "The view from outside the crypto market: US equity futures, the dollar index, stablecoin flow.\nThe headline is the CORRELATION BTC↔Nasdaq, not the price. Colour shows tailwind or headwind FOR crypto — a rising dollar is therefore red, even though the dollar itself is \"up\".\nEquities and the dollar come from Yahoo Finance and only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the stablecoin flow remains.",
+      "indizesEntfernt": "Equity futures and dollar index off (Yahoo Finance, \"sources without sales clearance\" switch (Settings › Data sources))",
+      "domWaechst": "The stablecoin dominance decomposition appears once our own daily snapshots of the total market have two points about 30 days apart.",
+      "sourceMitIndizes": "Equities as FUTURES (ES/NQ/RTY), not cash indices: the index stands still overnight and on weekends while the future trades nearly around the clock — only that makes the comparison with the non-stop crypto market honest. Colour shows tailwind or headwind FOR CRYPTO, not the direction of the market itself: a rising dollar is therefore red. Stablecoin flow is the change in USDT and USDC supply — deliberately not \"USDT dominance\", which rises arithmetically whenever crypto falls and merely restates the price drop. Inflow or outflow, by contrast, shows real money entering or leaving the market. The Russell 2000 sits next to the Nasdaq as a cross-check: if both move together it is a liquidity or rates move that reaches crypto too; if only the Nasdaq moves it is rotation into a few large caps and rarely carries over."
     },
     "lage": {
       "title": "Overall picture (AI)",
@@ -3081,7 +3111,7 @@
       "alarm": "Crossover on {datum}: the 111-day line crossed above the doubled 350-day line.",
       "vorwarnung": "Early warning: the short line is only {pct} % below the long one (threshold {schwelle} %).",
       "info": "A historical signal that has coincided with a Bitcoin cycle top in the past.\nThree hits on three occasions is an observation, not a rule — an early warning for \"careful with leverage\", not an exit signal for a single position.",
-      "seit": "Price series from {datum} (daily candles of the market data source); the 2013 and 2017 crossings lie before it and are therefore missing from the list."
+      "seit": "Price series from {datum} (daily candles of the market data source); the 2013 and 2017 crossings lie before it and are missing. With the \"sources without sales clearance\" switch (Settings › Data sources) the card uses the series from 2010 (blockchain.info)."
     },
     "altseason": {
       "title": "Altcoin season index",
@@ -3127,7 +3157,7 @@
         "aus": "Away from an exchange — potential accumulation",
         "unbekannt": "Direction unknown"
       },
-      "info": "Removed: this tile read large transactions from recorded Telegram channels (Whale Alert, Lookonchain). Telegram prohibits reading public channels this way; without a permitted replacement the tile stays empty."
+      "info": "Large crypto transactions from our own Telegram sources (Whale Alert, Lookonchain, …), detected automatically — no extra network call.\nRed = movement toward an exchange (potential sell pressure), green = movement away from an exchange (potential accumulation). Wallet-to-wallet moves stay grey because the direction isn't guessed there.\nTelegram only runs with the \"sources without sales clearance\" switch (Settings › Data sources) — Telegram prohibits reading public channels this way; without the switch the tile says \"off\"."
     },
     "status_aus": "Source off",
     "mcapErsatz": "Market cap needs your own CoinGecko key — sorted by 24h volume instead."
@@ -3170,7 +3200,7 @@
         },
         {
           "h": "BTC DOMINANCE",
-          "p": "What share of the entire crypto market belongs to Bitcoin. The current value comes from CoinGecko and needs your own key (Settings › Data sources; the demo key is enough). The curve comes from our own daily snapshots of the same source and grows from day one; three series are shown: Bitcoin, Ethereum and all the rest. The history imported once from CoinMarketCap is no longer shown for licensing reasons. Reading: rising dominance with falling prices means a flight out of altcoins into BTC; falling dominance with rising prices means fresh money is spreading out. In practice: an altcoin long against rising dominance swims against the current, even if the coin's chart looks good."
+          "p": "What share of the entire crypto market belongs to Bitcoin. The curve comes from our own store — about six years of history, imported once from CoinMarketCap and updated daily; three series are shown: Bitcoin, Ethereum and all the rest. The spot value comes from the same series, with CoinGecko only as a fallback. Reading: rising dominance with falling prices means a flight out of altcoins into BTC; falling dominance with rising prices means fresh money is spreading out. In practice: an altcoin long against rising dominance is swimming upstream, however good the coin's chart looks. That applies with the \"sources without sales clearance\" switch (Settings › Data sources); without it the current value comes from CoinGecko (own key) and the curve from our own daily snapshots, growing from day one."
         },
         {
           "h": "FUNDING RATES",
@@ -3182,7 +3212,7 @@
         },
         {
           "h": "MACRO BACKDROP",
-          "p": "Money flowing into crypto: stablecoin flow and decomposed stablecoin dominance, both from CoinGecko with your own key. Equity futures (S&P 500, Nasdaq 100, Russell 2000), the dollar index and the BTC↔Nasdaq coupling used to be shown here; they came from Yahoo Finance, whose terms prohibit automated retrieval and commercial use, and have been removed. Stablecoin flow is deliberately the change in USDT and USDC supply, not \"USDT dominance\": that rises mechanically whenever crypto falls and merely repeats the price drop; supply shows real money flowing in or being withdrawn. Dominance is only shown DECOMPOSED. An example in round numbers: total market 2170 bn, of which 245 bn stablecoins, gives 11.3 % dominance. If the rest of the market falls 10 % without a single USDT minted or redeemed, dominance stands at 12.4 % — a jump of 1.1 points although no money moved. That is why the card splits the change into \"from real flows\" and \"from price moves\"; together they add up exactly to the total change. Total market cap comes from our own daily snapshots — the split appears once about 30 days have been recorded."
+          "p": "The only tile that looks outside the crypto market — and therefore the only one that can explain a move whose cause does not sit here at all. It shows the S&P 500 and Nasdaq 100 futures, the dollar index and the stablecoin flow. Three notes: first, these are deliberately FUTURES and not cash indices — the index stands still overnight and on weekends while the future trades nearly around the clock; a frozen value is tagged \"closed\". Second, the headline is the COUPLING (correlation of daily returns BTC↔Nasdaq over 30 days), not the price: \"Nasdaq −1 %\" only means something if your market is currently tied to it, and that coupling varies a lot. Third, colour shows tailwind or headwind FOR CRYPTO rather than the direction of the market itself — a rising dollar appears red because a strong dollar means tighter global liquidity. The stablecoin flow is deliberately the change in USDT and USDC supply, not \"USDT dominance\": the latter rises arithmetically whenever crypto falls and merely restates the price drop, while supply shows real money flowing in or being pulled out. The enlarged view does show dominance — but only DECOMPOSED. An example with round numbers: a total market of 2170bn including 245bn of stablecoins gives 11.3 % dominance. If the rest of the market falls 10 % without a single USDT being minted or redeemed, dominance reads 12.4 % — a jump of 1.1 points although not one dollar moved. That is why the tile splits the change into \"from real flows\" and \"from price moves\"; the two add up exactly to the total change. If the price part alone accounts for the swing, it was an optical illusion. Conversely a genuine inflow can coincide with FALLING dominance during a rally — the split makes that visible too. Equity futures and the dollar index come from Yahoo Finance and only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card shows only the money flow."
         },
         {
           "h": "MARKET MECHANICS",
@@ -3206,11 +3236,11 @@
         },
         {
           "h": "RAINBOW (BTC)",
-          "p": "A logarithmic curve fitted to Bitcoin's price history since 2017 (BTCUSDT daily candles from the market data source; the former series from 2009 came from blockchain.info and was removed for licensing reasons — over the shorter span the curve comes out flatter), with bands from \"fire sale\" to \"bubble\". The thing to understand: the bands shift with every new price because the fit is recalculated — what counts as \"cheap\" today can be the middle band a year from now. A usable mood gauge across years, far too coarse for a trading decision."
+          "p": "A logarithmic curve fitted to Bitcoin's entire price history, with bands from \"fire sale\" to \"bubble\". The thing to understand: the bands shift with every new price because the fit is recalculated — what counts as \"cheap\" today can be the middle band a year from now. A usable mood gauge across years, far too coarse for a trading decision. The full history from 2009 (blockchain.info) only runs with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card uses daily candles from 2017 and the curve comes out flatter."
         },
         {
           "h": "PI CYCLE TOP (BTC)",
-          "p": "When the 111-day moving average crosses the doubled 350-day average from below, that historically landed close to a cycle top. The card shows the distance between the two lines and whether a crossing has triggered. Three hits in three opportunities is an observation, not a rule — treat it as an early warning to be careful with leverage, not as an exit signal. It is computed from daily candles since 2017 — the 350-day line therefore starts in mid-2018, and the 2013 and 2017 crossings are missing from the list."
+          "p": "When the 111-day moving average crosses the doubled 350-day average from below, that historically landed close to a cycle top. The card shows the distance between the two lines and whether a crossing has triggered. Three hits in three opportunities is an observation, not a rule — treat it as an early warning to be careful with leverage, not as an exit signal. With the \"sources without sales clearance\" switch (Settings › Data sources) it uses the series from 2010 (blockchain.info); without it daily candles from 2017 — the 350-day line then starts in mid-2018, and the 2013 and 2017 crossings are missing."
         },
         {
           "h": "YOUR TRADES × MARKET REGIME",
@@ -3456,7 +3486,7 @@
         },
         {
           "h": "THE CALENDAR",
-          "p": "The economic calendar, grouped by day, from official calendars: Federal Reserve Board (FOMC, Beige Book), U.S. Bureau of Economic Analysis (GDP, personal income and outlays incl. PCE, trade balance) and Eurostat (inflation, GDP, unemployment, industry and retail in the euro area). Each event shows the time in your time zone, the currency area and the impact level. These sources publish no forecasts or previous values — those come from surveys that paid providers sell. US labour-market and inflation data (BLS) are missing because the BLS blocks automated retrieval. The sources are listed under the calendar."
+          "p": " With the \"sources without sales clearance\" switch (Settings › Data sources) the ForexFactory weekly feed is added — eight currency areas, with forecast, previous and actual; an event listed by both sources appears once."
         },
         {
           "h": "THE POSTS",
@@ -3477,7 +3507,7 @@
         },
         {
           "h": "WHY THE CALENDAR GROWS",
-          "p": "Agencies publish their calendars different distances ahead — the Fed months ahead, Eurostat and the BEA for the current and following year. The journal keeps every event it has seen instead of just passing it through, and checks every six hours. Under the list it says how far the stock reaches in the selected range; an empty stretch after it means \"not published yet\", not \"nothing happening\"."
+          "p": " ForexFactory (only with the \"sources without sales clearance\" switch (Settings › Data sources)) by contrast only lists the current week — there an empty second week means \"not collected yet\"."
         },
         {
           "g": "In daily use",
@@ -3562,8 +3592,8 @@
           "p": "The positions tile reads the open and closed positions of the running session from Bitunix and computes the session state against the plan limits — realised and unrealised stay separate, and the limits count only against the realised part. The calendar countdown shows the next economic events of the coming hours from our own calendar store."
         },
         {
-          "h": "FUNDING, LONG/SHORT, MACRO",
-          "p": "Funding, long/short + open interest and macro backdrop are the same cards as in the market radar — funding and long/short follow the symbol selection. The former \"Indices\" card (ES, NQ, RTY and the dollar index from Yahoo Finance) was removed for licensing reasons; if shown, it says so."
+          "h": "INDICES, FUNDING, LONG/SHORT, MACRO",
+          "p": "Indices shows ES=F, NQ=F, RTY=F and the dollar index as intraday candles from Yahoo. Funding, long/short + open interest and the macro environment are the same tiles as in the market radar — funding and long/short follow the symbol choice. The indices only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card says so."
         },
         {
           "h": "BOOKMAP & LEVERAGE MAP",
@@ -3575,10 +3605,10 @@
         },
         {
           "h": "COMPACT & MOMENTUM RADAR",
-          "p": "The Compact tile sums up the side tiles (trading hours, events, mechanics, liquidations, long/short, funding, Coin Radar, trading view, overall view) as one line each; a click opens the full tile, and the single tiles can still be switched on under “Cards”. The trading-view automation only runs while its own tile is visible. The Momentum Radar shows wave, money flow, dots and rails of the chosen timeframe (5m–4h) and below it the panel with status, SWING/DAY setup, spot vs futures, VWAP and 4h structure — computed on closed candles only."
+          "p": "The Compact tile sums up the side tiles (trading hours, events, mechanics, liquidations, long/short, funding, indices, Coin Radar, trading view, overall view) as one line each; a click opens the full tile, and the single tiles can still be switched on under “Cards”. The trading-view automation only runs while its own tile is visible. The Momentum Radar shows wave, money flow, dots and rails of the chosen timeframe (5m–4h) and below it the panel with status, SWING/DAY setup, spot vs futures, VWAP and 4h structure — computed on closed candles only."
         }
       ],
-      "caveat": "The third-party figures (funding, calendar, market data) promise nothing and can go stale — the dot on the tile tells you how fresh they are. The leverage map is a model, not a measurement. This page is a tool, not a signal generator: your strategy still supplies the trigger."
+      "caveat": "The third-party figures (indices, funding, calendar) promise nothing and can go stale — the dot on the tile tells you how fresh they are. The leverage map is a model, not a measurement. This page is a tool, not a signal generator: your strategy still supplies the trigger."
     },
     "liveSessions": {
       "title": "Session archive — what became of your intentions",
@@ -3993,7 +4023,7 @@
       "medium": "medium+",
       "all": "all"
     },
-    "impactHint": "Impact — assigned by the journal per release (GDP, PCE, flash inflation and rate decisions are high). \"medium+\" includes high.",
+    "impactHint": "Impact — assigned by the journal per release (GDP, PCE, flash inflation and rate decisions are high). \"medium+\" includes high. For ForexFactory events (switch on only) the impact as given by the source.",
     "countryHint": "Toggle currency areas. With none selected, all are shown.",
     "previous": "Previous",
     "resizeHint": "Drag to resize · double-click resets",
@@ -4282,7 +4312,7 @@
       "keineKerzen": "No candles in range",
       "alt": "{min} min old",
       "verzoegertCa": "approx. {min} min delayed",
-      "info": "Removed: this tile showed US equity futures (ES, NQ, RTY) and the dollar index from Yahoo Finance. Yahoo prohibits automated retrieval and commercial use; without a permitted replacement the tile stays empty."
+      "info": "How US equity futures and the dollar are moving right now, while crypto keeps trading.\nCrypto often tracks the risk appetite of traditional markets — falling futures and a rising dollar are usually headwinds, even while the crypto price itself still looks calm.\nThe candles come from Yahoo Finance and only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card says \"off\"."
     },
     "liq": {
       "title": "Liquidations (live)",
@@ -4337,7 +4367,7 @@
       "impact_medium": "medium impact",
       "impact_low": "low impact",
       "impact_holiday": "holiday",
-      "info": "When the next important economic release is due, with a countdown — from the calendars of the Federal Reserve, the U.S. Bureau of Economic Analysis and Eurostat.\nA high-impact event is a good reason not to open a new position just before it — the move afterwards is often too fast for a clean entry."
+      "info": "When the next important economic release is due, with a countdown — from the calendars of the Federal Reserve, the U.S. Bureau of Economic Analysis and Eurostat. With the \"sources without sales clearance\" switch (Settings › Data sources) ForexFactory is added.\nA high-impact event is a good reason not to open a new position just before it — the move afterwards is often too fast for a clean entry."
     },
     "positionen": {
       "title": "Positions & plan",
@@ -4377,7 +4407,7 @@
     },
     "kompakt": {
       "title": "Compact",
-      "info": "The side tiles of this page as one line each: trading hours, next event, mechanics, liquidations, long/short, funding, Coin Radar and the two AI assessments.\nSame data as the single tiles, which keep loading in the background. Click a line to open the full tile; the single tiles can be shown again under “Cards” at any time.",
+      "info": "The side tiles of this page as one line each: trading hours, next event, mechanics, liquidations, long/short, funding, indices, Coin Radar and the two AI assessments.\nSame data as the single tiles, which keep loading in the background. Click a line to open the full tile; the single tiles can be shown again under “Cards” at any time.",
       "zeit": "Time",
       "in": "in {zeit}",
       "termin": "Event",
@@ -4965,7 +4995,12 @@
     "fokusLebt": "still traded",
     "fokusTot": "no trading",
     "spurHinweis": "To be honest: pump.fun, Telegram channels and Reddit were removed for licensing reasons. The trail before the first pool is narrower as a result — a token on the pump.fun curve now only appears if DexScreener or CoinGecko on-chain list it as a venue or someone mentions its contract on /biz/ or X. King of the Hill, comment count and creator record are gone.",
-    "quelleAus": "off"
+    "quelleAus": "off",
+    "quelleName_pumpfun": "pump.fun",
+    "quelleName_telegram": "Telegram",
+    "quelleName_reddit": "Reddit",
+    "signalKoth": "King of the Hill on pump.fun after {m} min",
+    "kandidatenLeerFrei": "No token meets all conditions right now. That is the normal case: only about one percent of pump.fun tokens ever completes the curve."
   },
   "hypeProjekt": {
     "titel": "Project check",
@@ -4986,7 +5021,13 @@
     "unterTag": "under a day",
     "tage": "{n} days",
     "monate": "{n} months",
-    "jahre": "{n} years"
+    "jahre": "{n} years",
+    "ersteller": "Creator",
+    "erstellerBilanz": "{n} other coins, {g} through the curve, {h} in the last 24 h",
+    "erstellerBeste": "best valuation USD {m}",
+    "erstellerBeispiele": "Completed",
+    "infoFrei": "What stands behind the token, gathered without keys: the website (sections such as roadmap and tokenomics, does it show the right contract address, placeholder text, site builder), the domain age (RDAP), the GitHub account (maintained, earlier projects with stars) and for pump.fun tokens the other coins of the same wallet — creators who got one through the curve before succeed far more often than the base rate of about 1 %; those launching dozens produce mass goods. Starts at 50, points for and against. What could not be checked (bot protection, TLD without RDAP) costs nothing. No guarantee: a good website is cheap.",
+    "noteTitelFrei": "Substance score 0–100: website, domain age, GitHub, creator history"
   },
   "abverkauf": {
     "an": "Watch on — every {n} min",
@@ -5112,7 +5153,13 @@
     "chipAus": "off",
     "ausHinweis": "Crossed-out exchanges are not read — switched off in the gear panel (Coinbase, Kraken, KuCoin and Gate by default: terms unclear) or, for Binance, because another market data source is selected.",
     "ausAbgeschaltet": "Switched off (Hype radar › gear › exchange watcher)",
-    "ausMarktdaten": "Only with Binance as market data source (Settings › Data sources)"
+    "ausMarktdaten": "Only with Binance as market data source (Settings › Data sources)",
+    "stufe_alpha": "Binance Alpha",
+    "erklaerungFrei": "Young projects climb a ladder: DEX, then Binance Alpha or mid-sized exchanges, then the large ones. A listing at the top is usually the end of the easy part — you want to be in before. Only what the radar flagged before the listing counts.",
+    "leiterHinweisFrei": "Radar tokens already on Binance Alpha or a mid-sized exchange. Those not yet on a large one come first.",
+    "leiterLeerFrei": "None yet — the list fills as soon as flagged radar tokens appear on Alpha or mid-sized exchanges.",
+    "angekuendigtHinweisFrei": "Pairs an exchange has already created but which do not trade yet — with the start time where the exchange states it (Binance Futures, OKX, Gate, Bitget). Once trading starts they move to the new listings.",
+    "handelsStartTitelFrei": "When the pair started trading — only Binance Futures, OKX, Gate and Bitget state it; \"Seen\" is the check that noticed it."
   },
   "chart": {
     "rasterTitel": "Grid: how many charts side by side / stacked",
@@ -6033,7 +6080,9 @@
       "marktdaten": "Not available with the selected market data source",
       "marktdatenText": "{quelle} does not provide {was}.",
       "marktdatenAusText": "Public market data is switched off — so {was} is unavailable.",
-      "zuEinstellungen": "Settings › Data sources"
+      "zuEinstellungen": "Settings › Data sources",
+      "ohneFreigabe": "{quelle}: switched off",
+      "ohneFreigabeText": "This source has no clearance for a sale and only runs with the switch \"Sources without sales clearance\" (Settings › Data sources)."
     },
     "faehigkeit": {
       "kerzen": "Candles (futures)",
@@ -6077,7 +6126,8 @@
       "testFehler": "CoinGecko rejects: {fehler}",
       "gespeichert": "Saved.",
       "geloescht": "Key deleted — CoinGecko features are now off.",
-      "demoHinweis": "You enter into the agreement with CoinGecko yourself. Whether the free demo plan covers your use is governed by CoinGecko's terms; if in doubt, choose a paid plan."
+      "demoHinweis": "You enter into the agreement with CoinGecko yourself. Whether the free demo plan covers your use is governed by CoinGecko's terms; if in doubt, choose a paid plan.",
+      "oeffentlich": "No key — public endpoint (sources without sales clearance)"
     },
     "andere": {
       "titel": "Other keys",
@@ -6085,6 +6135,14 @@
       "cryptoquant": "CryptoQuant (ETF flows): in the ETF tile of the market radar.",
       "solana": "Solana RPC (smart money): Hype radar › Settings — without your own RPC URL smart money stays off.",
       "boersen": "Exchange accounts (Bitunix, Bitget, Pionex): Settings › Journal."
+    },
+    "of": {
+      "titel": "Sources without sales clearance",
+      "unter": "Analysis sources whose terms do not allow selling AutarkTrade or are unclear (docs/VERKAUFS-PRUEFUNG.md). On for personal use.",
+      "schalter": "Use sources without sales clearance",
+      "anText": "On: these sources run as in the old journal. Whether your use is covered by their terms is for you to check and your responsibility.",
+      "ausText": "Off: AutarkTrade behaves like a sales version — these sources and the functions only they provide are off and say why.",
+      "zeilen": "review row {zeilen}"
     }
   }
 }

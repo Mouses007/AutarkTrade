@@ -135,7 +135,8 @@
 
         <p class="fpHinweis">{{ t('hypeFrueh.erklaerung') }}</p>
         <!-- Seit S12 ohne pump.fun, Telegram und Reddit — die Spur vor dem ersten Pool ist schmaler. -->
-        <p class="fpHinweis">{{ t('hypeFrueh.spurHinweis') }}</p>
+        <!-- S15: mit dem Schalter „Quellen ohne Verkaufsfreigabe" ist die Spur wieder die alte — dann kein Hinweis. -->
+        <p v-if="!frei" class="fpHinweis">{{ t('hypeFrueh.spurHinweis') }}</p>
 
         <div v-if="ladeFehler" class="at-schlecht at-klein">{{ ladeFehler }}</div>
         <div v-else-if="daten === null" class="at-gedaempft at-klein"><Kreisel still /></div>
@@ -150,7 +151,7 @@
                         <Symbol name="auge" class="at-mr-1" />{{ t('hypeFrueh.ausgeblendetZeigen', { n: ausgeblendetZahl }) }}
                     </button>
                 </div>
-                <p v-if="!daten.kandidaten.length" class="fpGrau at-klein at-mu-1">{{ t('hypeFrueh.kandidatenLeer') }}</p>
+                <p v-if="!daten.kandidaten.length" class="fpGrau at-klein at-mu-1">{{ frei ? t('hypeFrueh.kandidatenLeerFrei') : t('hypeFrueh.kandidatenLeer') }}</p>
                 <div v-else-if="sichtbareKandidaten.length" class="fpKandidaten">
                     <FruehKarte v-for="z in sichtbareKandidaten" :key="'k' + z.id" :z="z" :zu="istZu(z.id)" schliessbar
                         @stern="sternUmschalten" @zu="zuUmschalten(z.id)" @weg="ausblenden(z)" />
@@ -358,6 +359,7 @@ import Pille from '@/components/basis/Pille.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import RadarQuellen from './RadarQuellen.vue'
 import QuelleAus from '../quellen/QuelleAus.vue'
+import { ladeFreigabe, freigabeAn } from '../../utils/quellenFreigabe.js'
 
 const props = defineProps({
     /** Ist die Ansicht gerade sichtbar? Nur dann wird geladen und getaktet. */
@@ -423,11 +425,17 @@ const ohneSchluessel = computed(() => {
     return q ? { aus: true, grund: q.grund, quelle: q.quelle, meldung: q.meldung || q.fehler } : null
 })
 
+/** Schalter „Quellen ohne Verkaufsfreigabe" (S15): pump.fun, Telegram, Reddit, King of the Hill … */
+const frei = computed(() => freigabeAn())
+ladeFreigabe()
+
 /** Pflicht-Attributionen der Frühphase (S12): DexScreener, CoinGecko On-Chain, /biz/, Prüfdienste. */
 const quellenZeile = computed(() => {
     const qs = stand.value?.letzter?.quellenStand || {}
     const q = ['dexscreener']
-    if (qs.geckoterminal?.ok || qs.kaeufer?.ok) q.push('coingecko')
+    // S15: die Quellen ohne Verkaufsfreigabe, die in diesem Lauf geliefert haben.
+    for (const id of ['pumpfun', 'telegram', 'reddit']) if (qs[id]?.ok) q.push(id)
+    if (qs.geckoterminal?.ok || qs.kaeufer?.ok) q.push(frei.value && !props.einst?.coingeckoEigen ? 'geckoterminal' : 'coingecko')
     if (qs.biz?.ok || qs.biz === undefined) q.push('biz')
     q.push('goplus')
     if (props.einst?.rugcheckAn) q.push('rugcheck')
@@ -772,9 +780,11 @@ function kaeuferText(s) {
 }
 
 // Telegram und Reddit bis S12 — ihre alten Nennungen zeigt die Liste nicht mehr.
+// Telegram und Reddit nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15); aus, zeigt die Liste ihre alten Nennungen nicht.
 const SOZIAL = ['biz', 'x']
-const sozialVon = (z) => SOZIAL.filter((p) => (z.quellen || []).includes(p))
-const SOZIAL_KURZ = { biz: '/biz/', x: 'X' }
+const SOZIAL_FREI = ['telegram', 'biz', 'reddit', 'x']
+const sozialVon = (z) => (frei.value ? SOZIAL_FREI : SOZIAL).filter((p) => (z.quellen || []).includes(p))
+const SOZIAL_KURZ = { telegram: 'TG', biz: '/biz/', reddit: 'Reddit', x: 'X' }
 const sozialText = (z) => (sozialVon(z).length ? sozialVon(z).map((p) => SOZIAL_KURZ[p]).join(' · ') : '—')
 const sozialTitel = (z) => (sozialVon(z).length ? t('hypeFrueh.sozialTitel', { p: sozialVon(z).join(', '), n: z.stand?.erw ?? 0 }) : '')
 
@@ -808,7 +818,8 @@ const dexLink = (chain, contract) => `https://dexscreener.com/${encodeURICompone
 /*
  * Die Signale, die ein Terminal zuerst zeigt, als kleine Zeichen am Token:
  * Brieftasche = beobachtete Wallets haben gekauft, Gebäude = schon auf einer
- * Börse. (Die Krone für King of the Hill kam von pump.fun und ist seit S12 weg.)
+ * Börse, Rakete = King of the Hill auf pump.fun (nur mit dem Schalter „Quellen
+ * ohne Verkaufsfreigabe", S15 — das Feld gibt es sonst nicht).
  */
 const FruehSignale = defineComponent({
     props: { z: { type: Object, required: true } },
@@ -816,12 +827,15 @@ const FruehSignale = defineComponent({
         return () => {
             const z = p.z
             const teile = []
+            if (frei.value && hatZahl(z.stand?.kothMin)) {
+                teile.push(h(Symbol, { name: 'rakete', class: 'fpSignal koth', titel: t('hypeFrueh.signalKoth', { m: Math.max(1, Math.round(z.stand.kothMin)) }) }))
+            }
             if (z.stand?.smart?.wallets > 0) {
                 teile.push(h('span', { class: 'fpSignal smart', title: t('hypeFrueh.signalSmart', { n: z.stand.smart.wallets, namen: (z.stand.smart.namen || []).join(', ') }) },
                     [h(Symbol, { name: 'geldbeutel' }), String(z.stand.smart.wallets)]))
             }
             const l = z.leiter || {}
-            const boersen = [...(l.mittel || []), ...(l.gross || [])]
+            const boersen = [...(l.alpha ? ['Binance Alpha'] : []), ...(l.mittel || []), ...(l.gross || [])]
             if (boersen.length) {
                 teile.push(h(Symbol, { name: 'gebaeude', class: 'fpSignal boerse', titel: t('hypeFrueh.signalBoerse', { b: boersen.join(', ') }) }))
             }
@@ -1051,7 +1065,7 @@ function kennzahlen(z) {
         `Dev ${pz(r.devPct)}`,
     ]
     const l = z.leiter || {}
-    const boersen = [...(l.mittel || []), ...(l.gross || [])]
+    const boersen = [...(l.alpha ? ['Binance Alpha'] : []), ...(l.mittel || []), ...(l.gross || [])]
     if (boersen.length) teile.push(`${t('hypeFrueh.boersen')}: ${boersen.join(', ')}`)
     return teile.join(' · ')
 }
@@ -1348,6 +1362,7 @@ const sortiereBefunde = (b) => [...b].sort((x, y) => ['minus', 'plus', 'info'].i
     font-size: .82rem;
     color: var(--leise);
 }
+:deep(.fpSignal.koth) { color: var(--warn); }
 :deep(.fpSignal.smart) { color: #4caf50; font-weight: 600; }
 :deep(.fpSignal.boerse) { color: var(--accent); }
 .fpGuete {

@@ -15,7 +15,7 @@
  */
 import {
     precisionAt, rangGegenErgebnis, werteAus, werteLaufAus, werteAusHype, werteAusFrueh, spanne, median,
-    schwelleFuer, vorzeichenTest, MIN_LAEUFE, fisherExakt, FRUEH_REGEL_AUSWERTUNG,
+    schwelleFuer, vorzeichenTest, MIN_LAEUFE, fisherExakt, FRUEH_REGEL_AUSWERTUNG, fruehRegelFuer,
 } from './radar-guete.js'
 
 let fehler = 0
@@ -256,6 +256,17 @@ const reihe = (n, f) => Array.from({ length: n }, (_, i) => f(i))
     const kurveNichtAufKurve = werteAusFrueh(zeilen.map((x) => ({ ...x, graduiertStart: 1 })), '1d')
     p('Frühphase: Kurvenabschluss zählt nur, wer am Start noch darauf war', kurveNichtAufKurve.spitze.kurve.n === 0)
     p('Frühphase: unter zehn Paaren kein Urteil', werteAusFrueh(paare.slice(0, 18), '1d').urteil[0] === 'zuWenig')
+    /*
+     * S15: Der Regelstand hängt am Schalter „Quellen ohne Verkaufsfreigabe" —
+     * an = 2 (wie vor S12), aus = 3. Ausgewertet wird nur der geltende Stand,
+     * der andere steht als Altbestand daneben; gemischt wird nie.
+     */
+    p('Schalter: Regelstand an 2, aus 3', fruehRegelFuer(true) === 2 && fruehRegelFuer(false) === FRUEH_REGEL_AUSWERTUNG)
+    const alsZwei = zeilen.map((x) => (Number(x.regel) === FRUEH_REGEL_AUSWERTUNG ? { ...x, regel: 2 } : x))
+    const an = werteAusFrueh(alsZwei, '1d', fruehRegelFuer(true))
+    p('Schalter an: Paare nach Regel 2 werden ausgewertet', an.paare === 14 && an.altbestand === 2, `${an.paare}/${an.altbestand}`)
+    const ausMitZwei = werteAusFrueh(alsZwei, '1d', fruehRegelFuer(false))
+    p('Schalter aus: Paare nach Regel 2 sind Altbestand', ausMitZwei.paare === 0 && ausMitZwei.spitze.n === 0)
 }
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)

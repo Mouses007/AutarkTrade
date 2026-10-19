@@ -25,15 +25,27 @@
  *
  * Jeder Teil fällt einzeln aus — dann bleibt er „unbekannt" und kostet keine
  * Punkte.
+ *
+ * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `pumpfun`) ist die
+ * Ersteller-Bilanz wieder da wie vor S12: bei pump.fun alle Coins derselben
+ * Wallet und ob einer davon die Kurve geschafft hat — für Token ohne Seite und
+ * ohne Code die einzige Spur zum „Team". Die pump.fun-Pfade stammen aus dem
+ * inoffiziellen Frontend-API. Live geprüft am 07.10.2026:
+ * `/coins/user-created-coins/{wallet}` gibt es dort nicht (404), der Filter
+ * `/coins?creator={wallet}` liefert die Starts einer Wallet. `/coins/{mint}`
+ * antwortet für jeden Coin mit 404 (10.10.2026), gelesen wird `/coins-v2/{mint}`
+ * (`pumpCoin` in quellen.js). Der Regelstand hängt am Schalter
+ * (`projektRegeln` in projekt-bewertung.js).
  */
 
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { holeText as holeGeschuetzt } from '../net-guard.js'
-import { holeJson, dexDetails } from './quellen.js'
+import { holeJson, dexDetails, linksAusInfo, pumpCoin, PUMP } from './quellen.js'
+import { freigabeAn, quelleErlaubt } from '../quellen/freigabe.js'
 import {
     leseWebseite, registrierbareDomain, gratisPlattform, rdapRegistriert, ordneWebseite, ordneAbruffehler,
-    kanalAus, seitenBeleg, githubZiel, githubFakten, githubBeleg, bewerteProjekt, PROJEKT_REGELN, hostVon,
+    kanalAus, seitenBeleg, githubZiel, githubFakten, githubBeleg, erstellerBilanz, bewerteProjekt, projektRegeln, hostVon,
 } from './projekt-bewertung.js'
 
 /** So lange gilt eine Prüfung. */
@@ -55,14 +67,19 @@ export const schluesselFuer = (k) => (k.contract
 /** Wie lange etwas her ist, in Tagen. */
 const tageSeit = (ms) => (Number.isFinite(ms) ? Math.max(0, (Date.now() - ms) / 86400e3) : null)
 
+/** Der Regelstand, der gerade gilt — hängt am Schalter „Quellen ohne Verkaufsfreigabe" (S15). */
+async function aktuelleRegel() {
+    return projektRegeln(await freigabeAn())
+}
+
 /**
  * Eine gespeicherte Zeile lesen. Nach einer Regeländerung (`PROJEKT_REGELN`)
  * ist sie `veraltet`: ihre Note ist nach Regeln gerechnet, die nicht mehr
  * gelten, und darf weder angezeigt noch weitergerechnet werden.
  */
-function ausZeile(z) {
+function ausZeile(z, regel) {
     const e = { ...JSON.parse(z.ergebnis || '{}'), geprueftAm: Number(z.geprueftAm) || 0 }
-    if (Number(e.regel) !== PROJEKT_REGELN) e.veraltet = true
+    if (Number(e.regel) !== regel) e.veraltet = true
     return e
 }
 
@@ -73,7 +90,7 @@ function ausZeile(z) {
 export async function gespeichertePruefung(kandidat) {
     try {
         const z = await getKnex()('hype_projekt').where('schluessel', schluesselFuer(kandidat)).first()
-        return z ? ausZeile(z) : null
+        return z ? ausZeile(z, await aktuelleRegel()) : null
     } catch {
         return null
     }
@@ -94,9 +111,10 @@ export async function gespeichertePruefungen(kandidaten = []) {
     if (!schluessel.length) return raus
     try {
         const zeilen = await getKnex()('hype_projekt').whereIn('schluessel', schluessel)
+        const regel = await aktuelleRegel()
         for (const z of zeilen) {
             try {
-                const e = ausZeile(z)
+                const e = ausZeile(z, regel)
                 if (!e.veraltet) raus.set(z.schluessel, e)
             } catch { /* eine kaputte Zeile fehlt eben */ }
         }
@@ -134,7 +152,7 @@ async function geteiltMit(host, kandidat) {
  * behielte sonst einen Tag lang Pluspunkte für eine Seite, die nun drei Token
  * für sich beanspruchen.
  *
- * @param {object} kandidat  {symbol, name, chain, contract, links?, pump?}
+ * @param {object} kandidat  {symbol, name, chain, contract, links?, ersteller?, pump?}
  * @param {object} opts      {neu: true} erzwingt eine frische Prüfung (gebremst)
  * @returns {Promise<{note:number|null, befunde:Array, fakten:object, geprueftAm:number}>}
  */
@@ -208,9 +226,26 @@ async function pruefeFrisch(kandidat) {
         // Host einer Seite, die eine kuratierte Quelle (CoinGecko) dem Coin zuordnet.
         seiteBelegt: k.seiteBelegt ? hostVon(k.seiteBelegt) : '',
     }
+    // S15: die Ersteller-Bilanz und die pump.fun-Links nur mit dem Schalter an.
+    const pumpFrei = await quelleErlaubt('pumpfun')
+    const regel = projektRegeln(await freigabeAn())
+    // Die Frühphase weiss es genauer (Kurve, Quelle, Handelsplatz) — die Endung „pump" trägt nur jeder vierte nicht.
+    const istPump = pumpFrei && k.chain === 'solana' && (k.pump === true || /pump$/i.test(String(k.contract || '')))
 
-    // ── Links zusammentragen (DexScreener) ──────────────────────────────
+    // ── Links und Ersteller zusammentragen ──────────────────────────────
     let links = k.links || null
+    let ersteller = pumpFrei ? String(k.ersteller || '') : ''
+    if (istPump && (!links || !ersteller)) {
+        // Ausfall von pump.fun: dann eben ohne — die Prüfung soll nicht daran scheitern.
+        const coin = await pumpCoin(k.contract).catch((e) => {
+            logWarn('hype-projekt', `pump.fun ${String(k.contract).slice(0, 8)}…: ${e.message}`)
+            return null
+        })
+        if (coin) {
+            links = links || linksAusInfo(coin)
+            ersteller = ersteller || String(coin.creator || '')
+        }
+    }
     if (!links && k.contract) {
         const d = await dexDetails(k.contract).catch(() => null)
         links = d?.markt?.links || null
@@ -251,12 +286,35 @@ async function pruefeFrisch(kandidat) {
         })
     }
 
+    // ── Ersteller (pump.fun) ────────────────────────────────────────────
+    let erstellerFakten = null
+    if (istPump && ersteller) {
+        /*
+         * `/coins/user-created-coins/{wallet}` gibt es auf frontend-api-v3
+         * nicht (07.10.2026: „Cannot GET", HTTP 404 bei jeder Wallet) — die
+         * Ersteller-Bilanz war deshalb immer leer, und „hat schon Coins durch
+         * die Kurve gebracht" fiel nie. Die Coin-Liste nimmt `creator` als
+         * Filter: für eine Wallet mit vier Starts kamen genau diese vier. Ein
+         * vertippter Filter liefert dagegen still die fünfzig neuesten Coins
+         * ALLER Ersteller (gemessen 10.10.2026) — daher die Gegenprobe über
+         * `wallet` in `erstellerBilanz`.
+         */
+        const coins = await holeJson(
+            `${PUMP}/coins?creator=${encodeURIComponent(ersteller)}&offset=0&limit=50&sort=created_timestamp&order=DESC&includeNsfw=true`)
+            .catch((e) => {
+                logWarn('hype-projekt', `Ersteller-Historie ${ersteller.slice(0, 8)}…: ${e.message}`)
+                return null
+            })
+        erstellerFakten = erstellerBilanz(coins, { mint: k.contract, wallet: ersteller })
+    }
+
     const fakten = {
         token,
         webseite,
         kanaele,
         kanaeleVerworfen: verworfen,
         github,
+        ersteller: erstellerFakten ? { wallet: ersteller, ...erstellerFakten } : (ersteller ? { wallet: ersteller } : null),
     }
     const urteil = bewerteProjekt({
         token,
@@ -265,8 +323,9 @@ async function pruefeFrisch(kandidat) {
         kanaele: (links.kanaele?.length || links.webseiten?.length || webseite.status === 'ok') ? kanaele : null,
         kanaeleVerworfen: verworfen,
         github,
+        ersteller: erstellerFakten,
     })
-    return { ...urteil, regel: PROJEKT_REGELN, fakten, geprueftAm: Date.now() }
+    return { ...urteil, regel, fakten, geprueftAm: Date.now() }
 }
 
 /**
@@ -394,5 +453,7 @@ export function kurzfassung(ergebnis) {
             repo: ergebnis.fakten.github.repo,
             fruehereProjekte: ergebnis.fakten.github.fruehereProjekte,
         } : null,
+        // pump.fun-Ersteller (S15, nur mit Schalter an gemessen).
+        ersteller: ergebnis.fakten?.ersteller || null,
     }
 }

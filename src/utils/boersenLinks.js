@@ -95,6 +95,13 @@ export function boersenLinksVon(zeile, csv) {
  * nicht erreichbar, das Muster ist das dokumentierte. Reine Links, keine
  * Logos (Verkaufs-Prüfung Z. 13). Upbit, OKX, MEXC und Binance Alpha beobachtet
  * der Radar seit S12 nicht mehr — ihre Links sind mit ihnen gegangen.
+ *
+ * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" sind sie zurück
+ * (`LISTUNG_URL_OHNE_FREIGABE`, am 12.10.2026 mit SOL geprüft: Upbit, OKX und
+ * MEXC öffnen das Paar). Binance Alpha hat keine Seite je Kürzel — dort führt
+ * der Vertrag (DexScreener). Wer `listungUrl` aufruft, sagt mit
+ * `ohneFreigabe`, ob der Schalter an ist (`freigabeAn()` aus
+ * `quellenFreigabe.js`); Vorgabe ist an, wie der Schalter selbst.
  */
 export const LISTUNG_URL = {
     'binance-spot': (s) => `https://www.binance.com/en/trade/${s}_USDT?type=spot`,
@@ -107,11 +114,22 @@ export const LISTUNG_URL = {
     bitget: (s) => `https://www.bitget.com/spot/${s}USDT`,
 }
 
-/** Handelsseite eines Kürzels auf einer beobachteten Börse. */
-export function listungUrl(boerse, symbol) {
+/** Nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15, IDs upbit/okx/mexc). */
+export const LISTUNG_URL_OHNE_FREIGABE = {
+    upbit: (s) => `https://upbit.com/exchange?code=CRIX.UPBIT.KRW-${s}`,
+    okx: (s) => `https://www.okx.com/trade-spot/${s.toLowerCase()}-usdt`,
+    mexc: (s) => `https://www.mexc.com/exchange/${s}_USDT`,
+}
+
+/** Handelsseite eines Kürzels auf einer beobachteten Börse; Alpha (Schalter an) nur mit Vertrag. */
+export function listungUrl(boerse, symbol, { chain = '', contract = '', ohneFreigabe = true } = {}) {
     const s = String(symbol || '').trim().toUpperCase()
     if (!s) return null
-    return LISTUNG_URL[boerse]?.(encodeURIComponent(s)) || null
+    if (boerse === 'binance-alpha') {
+        return ohneFreigabe && contract ? `https://dexscreener.com/${encodeURIComponent(chain || 'bsc')}/${encodeURIComponent(contract)}` : null
+    }
+    const muster = LISTUNG_URL[boerse] || (ohneFreigabe ? LISTUNG_URL_OHNE_FREIGABE[boerse] : null)
+    return muster?.(encodeURIComponent(s)) || null
 }
 
 /** CoinGecko-Suche nach einem Kürzel — für alles, was keine Börse führt. */

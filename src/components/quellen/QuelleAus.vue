@@ -53,7 +53,7 @@ const text = computed(() => {
     const k = `datenquellen.aus.${grund.value}Text`
     return te(k) ? t(k, { quelle: props.aus?.quelle || '' }) : ''
 })
-const zuEinstellungen = computed(() => ['schluesselFehlt', 'marktdaten', 'aus'].includes(grund.value))
+const zuEinstellungen = computed(() => ['schluesselFehlt', 'marktdaten', 'aus', 'ohneFreigabe'].includes(grund.value))
 </script>
 
 <template>

@@ -80,10 +80,19 @@ console.log('Hype-Radar: Frühphase')
 {
     const s = momentaufnahme({ marktkapitalisierung: 50000, liquiditaetUsd: null, transaktionen1h: 300 }, { erwaehnungen: 2, plattformen: ['biz', 'x'] }, 1000)
     p('fehlende Liquidität bleibt null, nicht 0', s.liq === null)
-    // S12: pump.fun ist entfernt — seine Bewertung (`marktKapUsd`) und King of the Hill fliessen nicht mehr ein.
-    const ohnePump = momentaufnahme({ marktKapUsd: 50000, kothMin: 3, kothAm: 900, antworten: 40 }, {}, 1000)
-    p('S12: pump.fun-Felder ergeben keine Messung', ohnePump.mcap === null && !('kothMin' in ohnePump) && !('antworten' in ohnePump)
-        && !hatMessung(ohnePump))
+    /*
+     * pump.fun-Felder (`marktKapUsd`, King of the Hill, Kommentare) gibt es nur
+     * mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15) — dann wirken sie
+     * wie vor S12. Mit Schalter aus kommen sie nie an (der Abruf läuft nicht,
+     * `__selftest-quellen-s12.mjs`), und ohne sie ist die Aufnahme die von S12.
+     */
+    const mitPump = momentaufnahme({ marktKapUsd: 50000, kothMin: 3, kothAm: 900, antworten: 40 }, {}, 1000)
+    p('Schalter an: pump.fun-Bewertung zuletzt, King of the Hill und Kommentare übernommen',
+        mitPump.mcap === 50000 && mitPump.kothMin === 3 && mitPump.kothAm === 900 && mitPump.antworten === 40 && hatMessung(mitPump))
+    p('DexScreener-Bewertung vor pump.fun', momentaufnahme({ marktKapUsd: 50000, marktkapitalisierung: 70000 }, {}, 1000).mcap === 70000)
+    const ohnePump = momentaufnahme({}, {}, 1000)
+    p('Schalter aus: ohne pump.fun-Felder keine Messung', ohnePump.mcap === null && ohnePump.kothMin === null
+        && ohnePump.antworten === null && !hatMessung(ohnePump))
     p('Plattformen gezählt', s.plattformen === 2 && s.erw === 2)
     const v = Array.from({ length: MAX_VERLAUF + 5 }, (_, i) => ({ ts: i }))
     p('Verlauf wird gekappt', naechsterVerlauf(v, { ts: 999 }).length === MAX_VERLAUF)
@@ -196,13 +205,15 @@ const stand = (ts, o = {}) => ({ ts, mcap: null, liq: null, preis: null, vol1h: 
 
 // ── Ohne Messung kein Stand ─────────────────────────────────────────────
 {
-    // Der Lauf vom 07.10.2026 18:52: lauter null (damals nur fortgeschriebenes King of the Hill).
+    // Der Lauf vom 07.10.2026 18:52: lauter null, nur fortgeschriebenes King of the Hill.
     p('nichts gemessen: keine Messung', !hatMessung(stand(H, {})))
+    p('… auch nicht durch fortgeschriebenes King of the Hill (Schalter an)', !hatMessung(stand(H, { kothMin: 12 })))
     p('… auch nicht durch fortgeschriebenes X', !hatMessung(stand(H, { plattformen: 1, erw: 3 })))
     p('Nennung in DIESEM Durchgang zählt', hatMessung(stand(H, {}), true))
     p('eine Bewertung zählt', hatMessung(stand(H, { mcap: 3256 })))
     p('null Transaktionen sind eine Messung, kein Fehlen', hatMessung(stand(H, { tx1h: 0 })))
-    p('S12: pump.fun-Kommentare sind keine Messung mehr', !hatMessung(stand(H, { antworten: 0 })))
+    p('Schalter an: pump.fun-Kommentare zählen', hatMessung(stand(H, { antworten: 0 })))
+    p('Schalter aus: ohne Kommentarzahl keine Messung', !hatMessung(stand(H, { antworten: null })))
     // Was ohne die Sperre geschah: Team allein trägt die Note.
     const leer = bewerteFrueh({ stand: stand(H, {}), links: { webseiten: ['https://a.fun'], kanaele: [{ typ: 'twitter', url: 'https://x.com/afun' }] } })
     p('ohne Messung käme die Note allein aus dem Team', leer.abdeckung === 1 && leer.note === 50, `${leer.note}`)
@@ -260,7 +271,7 @@ const stand = (ts, o = {}) => ({ ts, mcap: null, liq: null, preis: null, vol1h: 
 
 // ── Sozial: für jeden Token gleich ──────────────────────────────────────
 {
-    // Bis S12 hatten pump.fun-Token eine Kommentarzahl (oft 0), andere nicht — sie darf nichts mehr ändern.
+    // Mit Schalter an haben pump.fun-Token eine Kommentarzahl (oft 0), andere nicht.
     const pump = stand(H, { antworten: 0, tx1h: 100 })
     const andere = stand(H, { tx1h: 100 })
     const a = bewerteFrueh({ stand: pump, sozialGeprueft: true })
@@ -269,9 +280,12 @@ const stand = (ts, o = {}) => ({ ts, mcap: null, liq: null, preis: null, vol1h: 
     const c = bewerteFrueh({ stand: pump, sozialGeprueft: false })
     const d = bewerteFrueh({ stand: andere, sozialGeprueft: false })
     p('Sozial ungeprüft: pump.fun und andere gleich (unbekannt)', c.teilnoten.sozial === null && d.teilnoten.sozial === null)
-    // S12: ein Kommentar-Zuwachs (pump.fun) ist keine Sozialmessung mehr — ohne soziale Quelle bleibt Sozial unbekannt.
+    // Schalter an: ein Kommentar-Zuwachs ist ein Beleg — auch ohne soziale Quelle.
     const kom = bewerteFrueh({ stand: stand(H, { antworten: 60 }), verlauf: [stand(0, { antworten: 10 })] })
-    p('S12: Kommentar-Zuwachs zählt nicht mehr', kom.teilnoten.sozial === null && !kom.befunde.some((x) => x.schluessel === 'kommentare'))
+    p('Schalter an: Kommentar-Zuwachs zählt als Sozialmessung', kom.teilnoten.sozial === 15 && kom.befunde.some((x) => x.schluessel === 'kommentare'))
+    // Schalter aus: keine Kommentarzahl — ohne soziale Quelle bleibt Sozial unbekannt.
+    const ohneKom = bewerteFrueh({ stand: stand(H, {}), verlauf: [stand(0, {})] })
+    p('Schalter aus: ohne Kommentare und soziale Quelle unbekannt', ohneKom.teilnoten.sozial === null && !ohneKom.befunde.some((x) => x.schluessel === 'kommentare'))
 }
 
 // ── Momentum über höchstens zwölf Stunden ───────────────────────────────
@@ -396,10 +410,15 @@ const stand = (ts, o = {}) => ({ ts, mcap: null, liq: null, preis: null, vol1h: 
         verlauf: [stand(0, { vol1h: 8000, tx1h: 100 }), stand(H, { vol1h: 10000, tx1h: 120 })],
     })
     p('Volumen ohne Preisbewegung: Wash-Verdacht', wash.befunde.some((x) => x.schluessel === 'washVerdacht'))
-    // S12: die Ersteller-Bilanz (pump.fun) gibt es nicht mehr — auch eine übergebene wirkt nicht.
+    // Schalter an: die Ersteller-Bilanz (pump.fun, über die Projektprüfung) wirkt wie vor S12.
     const serie = bewerteFrueh({ stand: stand(H, basis), ersteller: { andere: 40, graduiert: 0 } })
-    p('S12: keine Ersteller-Bilanz mehr', !serie.befunde.some((x) => /^ersteller/.test(x.schluessel))
-        && serie.note === bewerteFrueh({ stand: stand(H, basis) }).note)
+    p('Schalter an: Serien-Ersteller kostet', serie.befunde.some((x) => x.schluessel === 'erstellerSerie')
+        && serie.note < bewerteFrueh({ stand: stand(H, basis) }).note)
+    p('Schalter an: mit Projektnote nur ein Hinweis (kein doppelter Abzug)',
+        bewerteFrueh({ stand: stand(H, basis), ersteller: { andere: 40, graduiert: 0 }, projektNote: 40 }).befunde
+            .some((x) => x.schluessel === 'erstellerSerie' && x.art === 'info'))
+    // Schalter aus: es kommt keine Bilanz an — dann keine Ersteller-Befunde.
+    p('Schalter aus: ohne Ersteller-Bilanz keine Ersteller-Befunde', !bewerteFrueh({ stand: stand(H, basis) }).befunde.some((x) => /^ersteller/.test(x.schluessel)))
     const crash = bewerteFrueh({ stand: stand(2 * H, { ...basis, mcap: 5000 }), verlauf: [stand(0, { mcap: 30000 }), stand(H, { mcap: 80000 })] })
     p('Einbruch vom Höchststand erkannt', crash.befunde.some((x) => x.schluessel === 'eingebrochen'))
     p('… und wird verworfen', statusFrueh(stand(0, { mcap: 5000 }), 3, crash.befunde).status === 'verworfen')
@@ -512,9 +531,16 @@ const stand = (ts, o = {}) => ({ ts, mcap: null, liq: null, preis: null, vol1h: 
     const wechsel = bewerteFrueh({ stand: stand(H, { halter: 10872, halterQuelle: 'goplus-solana' }),
         verlauf: [{ ...stand(0, { halter: 28811, halterQuelle: 'rugcheck' }), note: 30 }] })
     p('Halter aus zwei Quellen werden nicht verglichen', !wechsel.befunde.some((x) => /^halter/.test(x.schluessel)) && wechsel.teilnoten.beteiligung === null)
-    // S12: King of the Hill kam von pump.fun — ein alter Stand mit dem Feld gibt kein Momentum mehr.
+    // Schalter an: King of the Hill (pump.fun) wie vor S12.
     const koth = bewerteFrueh({ stand: stand(0, { kothMin: 12, kothAm: -20 * 60e3 }) })
-    p('S12: King of the Hill zählt nicht mehr', koth.teilnoten.momentum === null && !koth.befunde.some((x) => x.schluessel === 'koth'))
+    p('Schalter an — King of the Hill: Momentum ohne Verlauf', koth.teilnoten.momentum === 80 && koth.befunde.some((x) => x.schluessel === 'koth'))
+    // Ein Ereignis, kein Zustand: fünf Stunden später zählt es nicht mehr.
+    const kothAlt = bewerteFrueh({ stand: stand(5 * H, { kothMin: 12, kothAm: 0 }) })
+    p('King of the Hill vor 5 h zählt nicht mehr', kothAlt.teilnoten.momentum === null && !kothAlt.befunde.some((x) => x.schluessel === 'koth'))
+    p('King of the Hill ohne Zeitpunkt zählt nicht', bewerteFrueh({ stand: stand(0, { kothMin: 12 }) }).teilnoten.momentum === null)
+    // Schalter aus: kein Feld, kein Momentum.
+    const ohneKoth = bewerteFrueh({ stand: stand(0, {}) })
+    p('Schalter aus: ohne King of the Hill kein Momentum', ohneKoth.teilnoten.momentum === null && !ohneKoth.befunde.some((x) => x.schluessel === 'koth'))
     const s0 = stand(0, { tx1h: 120, tx5m: 30 })
     const ohne = bewerteFrueh({ stand: s0 }).note
     const eine = bewerteFrueh({ stand: s0, smart: { wallets: 1 } }).note

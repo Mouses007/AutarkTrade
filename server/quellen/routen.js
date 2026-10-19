@@ -6,6 +6,7 @@
  *   PUT  /api/marktdaten/quelle     { wahl }               (marktdaten/index.js)
  *   PUT  /api/quellen/coingecko     { schluessel?, tarif? } leer = löschen
  *   POST /api/quellen/coingecko/test                        prüft /ping mit Schlüssel
+ *   GET/PUT /api/quellen/ohne-freigabe  { an }             Schalter (S15, freigabe.js)
  *
  * Schlüssel verlassen den Server nie im Klartext; die Antwort nennt nur, ob
  * einer hinterlegt ist, und seine letzten vier Zeichen.
@@ -16,17 +17,36 @@ import { getKnex } from '../database.js'
 import { encrypt } from '../crypto.js'
 import { beschreibung, setupMarktdatenRoutes } from '../marktdaten/index.js'
 import * as coingecko from './coingecko.js'
+import * as freigabe from './freigabe.js'
 
 async function cgStatus() {
-    const z = await coingecko.zugang()
-    return z ? { hinterlegt: true, tarif: z.tarif, ende: z.schluessel.slice(-4) } : { hinterlegt: false, tarif: 'demo' }
+    const z = await coingecko.eigenerZugang()
+    if (z) return { hinterlegt: true, tarif: z.tarif, ende: z.schluessel.slice(-4) }
+    return { hinterlegt: false, tarif: 'demo', oeffentlich: Boolean(await coingecko.zugang()) }
 }
 
 export function setupQuellenRoutes(app) {
     setupMarktdatenRoutes(app)
 
     app.get('/api/quellen', async (req, res) => {
-        res.json({ marktdaten: await beschreibung(), coingecko: await cgStatus() })
+        res.json({ marktdaten: await beschreibung(), coingecko: await cgStatus(), ohneFreigabe: await freigabe.freigabeStand() })
+    })
+
+    // Schalter „Quellen ohne Verkaufsfreigabe" (S15, `freigabe.js`).
+    app.get('/api/quellen/ohne-freigabe', async (req, res) => {
+        res.json(await freigabe.freigabeStand())
+    })
+
+    app.put('/api/quellen/ohne-freigabe', async (req, res) => {
+        try {
+            const an = req.body?.an !== false
+            await getKnex()('settings').where('id', 1).update({ [freigabe.SCHALTER]: an ? 1 : 0 })
+            freigabe.vergiss()
+            coingecko.vergiss()
+            res.json(await freigabe.freigabeStand())
+        } catch (e) {
+            res.status(500).json({ error: e.message })
+        }
     })
 
     app.put('/api/quellen/coingecko', async (req, res) => {

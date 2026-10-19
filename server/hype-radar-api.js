@@ -16,7 +16,7 @@ import { beobachteAbbruch, sseSender } from './sse.js'
 import { logWarn } from './logger.js'
 import { beansprucheAufgabe, meldeFehler } from './db-claim.js'
 import { leseEinstellungen, schreibeEinstellungen, schreibeSchluessel, maskiere } from './hype-radar/einstellungen.js'
-import { hatSchluessel as coingeckoDa } from './quellen/coingecko.js'
+import { hatSchluessel as coingeckoDa, hatEigenenSchluessel as coingeckoEigen } from './quellen/coingecko.js'
 import { vergissRugcheck } from './hype-radar/sicherheit.js'
 import { scanne, scanneUndBerichte } from './hype-radar/lauf.js'
 import { dexDetails, normChain } from './hype-radar/quellen.js'
@@ -26,7 +26,8 @@ import { testZustellung } from './hype-radar/zustellung.js'
 import { stufenNach, benoetigteAnbieter } from './hype-radar/stufen.js'
 import { keySpalte } from './ai-models.js'
 import { HORIZONTE } from './radar-ergebnisse.js'
-import { werteAusHype, werteAusFrueh } from './radar-guete.js'
+import { werteAusHype, werteAusFrueh, fruehRegelFuer } from './radar-guete.js'
+import { freigabeAn } from './quellen/freigabe.js'
 import { pruefeProjekt, kurzfassung, gespeichertePruefungen, schluesselFuer } from './hype-radar/projekt.js'
 import { fruehLauf, fruehStand } from './hype-radar/fruehphase.js'
 import { istDuenn, kandidatStatus, KANDIDAT_AB } from './hype-radar/fruehphase-bewertung.js'
@@ -38,7 +39,7 @@ const vertragsSchluessel = (chain, contract) => {
 }
 import { smartWalletStand } from './hype-radar/smartmoney.js'
 import { boersenLauf, boersenStand, boersenUebersicht, ladeStaende } from './hype-radar/boersenwacht.js'
-import { leiterFuer } from './hype-radar/boersenwacht-bewertung.js'
+import { leiterFuer, boersenFuer } from './hype-radar/boersenwacht-bewertung.js'
 // Börsenfavoriten (Coin-Radar) brauchen den anderen Datenweg — siehe `boersenLive`.
 import { holeMarktweit } from './coin-radar/daten.js'
 import { fundingJahresRate } from './coin-radar/kennzahlen.js'
@@ -80,6 +81,10 @@ export function setupHypeRadarRoutes(app) {
                 schluessel: maskiere(e.schluessel),      // nie im Klartext hinaus
                 // Der CoinGecko-Schlüssel wird unter Einstellungen › Datenquellen gepflegt; hier nur, ob einer da ist.
                 coingeckoSchluessel: await coingeckoDa(),
+                // S15: nutzbar heisst mit Schalter an auch „öffentlicher Endpunkt" — das Panel unterscheidet.
+                coingeckoEigen: await coingeckoEigen(),
+                // S15: Schalter „Quellen ohne Verkaufsfreigabe" — die Oberfläche zeigt danach pump.fun, Telegram, Alpha …
+                quellenOhneFreigabe: await freigabeAn(),
                 stufen: stufenNach(req.query.ordnung === 'guete' ? 'guete' : 'preis'),
                 fehlendeSchluessel: await fehlendeSchluessel(e),
             })
@@ -103,6 +108,10 @@ export function setupHypeRadarRoutes(app) {
                 alarmRegeln: { ...STANDARD_ALARM_REGELN, ...(e.alarmRegeln || {}) },
                 schluessel: maskiere(e.schluessel),
                 coingeckoSchluessel: await coingeckoDa(),
+                // S15: nutzbar heisst mit Schalter an auch „öffentlicher Endpunkt" — das Panel unterscheidet.
+                coingeckoEigen: await coingeckoEigen(),
+                // S15: Schalter „Quellen ohne Verkaufsfreigabe" — die Oberfläche zeigt danach pump.fun, Telegram, Alpha …
+                quellenOhneFreigabe: await freigabeAn(),
                 fehlendeSchluessel: await fehlendeSchluessel(e),
             })
         } catch (e) {
@@ -166,8 +175,13 @@ export function setupHypeRadarRoutes(app) {
                     .catch(() => null)
                 const m = sicherParse(zeile?.marktDaten, {})
                 kandidat.links = m.links || null
+                // Ersteller (pump.fun) — nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" genutzt (projekt.js).
+                kandidat.ersteller = m.ersteller || ''
                 const f = await getKnex()('hype_frueh').where('contract', kandidat.contract).first().catch(() => null)
-                if (!kandidat.links) kandidat.links = sicherParse(f?.links, null)
+                if (!kandidat.links) {
+                    kandidat.links = sicherParse(f?.links, null)
+                    kandidat.ersteller = f?.ersteller || kandidat.ersteller
+                }
                 // Die Frühphase weiss, ob es ein pump.fun-Token ist — die Endung „pump" trägt nicht jeder.
                 if (sicherParse(f?.stand, {}).pump === true) kandidat.pump = true
             }
@@ -246,6 +260,7 @@ export function setupHypeRadarRoutes(app) {
 
             const projekte = await gespeichertePruefungen([...kandidaten.map((g) => g.z), ...favZeilen, ...roh])
             const staende = await ladeStaende()
+            const boersen = boersenFuer(await freigabeAn())
             const VOLLER_VERLAUF = ['ts', 'note', 'mcap', 'liq', 'halter', 'tx1h', 'kaeufer1h', 'verkaeufer1h']
             const ansicht = (z, stand = sicherParse(z.stand, {}), { voll = false } = {}) => ({
                 ...z,
@@ -263,7 +278,7 @@ export function setupHypeRadarRoutes(app) {
                 projekt: kurzfassung(projekte.get(schluesselFuer(z)) || null),
                 // Auf welchen Börsen der Token schon steht (über das Kürzel, ab Listungsgrösse).
                 leiter: leiterFuer({ symbol: z.symbol, chain: z.chain, contract: z.contract,
-                    bewertungUsd: stand?.mcap }, staende),
+                    bewertungUsd: stand?.mcap }, staende, boersen),
             })
 
             const zeilen = roh.map((z) => ansicht(z))
@@ -384,9 +399,11 @@ export function setupHypeRadarRoutes(app) {
             const zeilen = await getKnex()('radar_ergebnisse')
                 .where('art', 'frueh').andWhere('erstelltAm', '>=', seit)
             const horizonte = Object.keys(HORIZONTE.frueh).filter((h) => zeilen.some((z) => z.horizont === h))
+            // Ausgewertet wird der Regelstand des Schalters „Quellen ohne Verkaufsfreigabe" (S15).
+            const regel = fruehRegelFuer(await freigabeAn())
             res.json({
-                seit, tage, gesamt: zeilen.length,
-                jeHorizont: horizonte.map((h) => werteAusFrueh(zeilen.filter((z) => z.horizont === h), h)),
+                seit, tage, gesamt: zeilen.length, regel,
+                jeHorizont: horizonte.map((h) => werteAusFrueh(zeilen.filter((z) => z.horizont === h), h, regel)),
             })
         } catch (e) {
             logWarn('hype-radar', `Frühphase-Güte lesen: ${e.message}`)

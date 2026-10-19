@@ -6,6 +6,8 @@
  *                    Solana-RPC …), und es ist keiner hinterlegt
  *   entfernt         Quelle wurde aus Lizenzgründen entfernt, ohne Ersatz
  *   aus              Quelle ist vom Kunden abgeschaltet
+ *   ohneFreigabe     Quelle ohne Verkaufsfreigabe, Schalter „Quellen ohne
+ *                    Verkaufsfreigabe" ist aus (S15, `freigabe.js`)
  *   marktdaten       Marktdatenquelle hat die Fähigkeit nicht (`marktdaten/index.js`)
  *
  * Routen antworten darauf mit HTTP 200 und `{ aus: true, grund, quelle,
@@ -15,7 +17,7 @@
 
 import { istAus as istMarktdatenAus, ausAntwort as marktdatenAntwort } from '../marktdaten/index.js'
 
-export const GRUENDE = ['schluesselFehlt', 'entfernt', 'aus', 'marktdaten']
+export const GRUENDE = ['schluesselFehlt', 'entfernt', 'aus', 'ohneFreigabe', 'marktdaten']
 
 export class QuelleAus extends Error {
     /**
@@ -36,6 +38,7 @@ function standardMeldung(quelle, grund) {
     if (grund === 'schluesselFehlt') return `${quelle}: nur mit eigenem API-Schlüssel (Einstellungen › Datenquellen)`
     if (grund === 'entfernt') return `${quelle} ist aus Lizenzgründen nicht mehr angebunden`
     if (grund === 'aus') return `${quelle} ist ausgeschaltet`
+    if (grund === 'ohneFreigabe') return `${quelle} ist aus (Einstellungen › Datenquellen › Quellen ohne Verkaufsfreigabe)`
     return `${quelle} nicht verfügbar`
 }
 

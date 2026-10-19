@@ -30,11 +30,12 @@
         <Hinweis v-if="meldung" class="at-mo-2" :art="meldungFehler ? 'fehler' : 'info'">{{ meldung }}</Hinweis>
         <div v-if="ladeFehler" class="at-schlecht at-klein at-mo-2">{{ ladeFehler }}</div>
 
-        <p class="bwHinweis">{{ t('hypeBoersen.erklaerung') }}</p>
+        <p class="bwHinweis">{{ frei ? t('hypeBoersen.erklaerungFrei') : t('hypeBoersen.erklaerung') }}</p>
 
         <!-- Die Zahl, auf die es ankommt: wie früh war der Radar? -->
         <div v-if="daten?.statistik" class="bwStatistik">
-            <div v-for="s in ['mittel', 'gross']" :key="s" class="bwKachel">
+            <!-- Die Sprosse „Alpha" nur, wenn der Server sie zählt (Schalter „Quellen ohne Verkaufsfreigabe", S15). -->
+            <div v-for="s in ['alpha', 'mittel', 'gross'].filter((x) => daten.statistik[x])" :key="s" class="bwKachel">
                 <div class="bwKachelTitel">{{ t('hypeBoersen.stufe_' + s) }}</div>
                 <div class="bwKachelZahl">{{ daten.statistik[s].erkannt }} / {{ daten.statistik[s].neu }}</div>
                 <div class="bwGrau at-klein">
@@ -47,8 +48,8 @@
         <!-- Auf dem Weg nach oben: Radar-Token auf mittleren Börsen. -->
         <div class="bwAbschnitt">
             <div class="bwTitel">{{ t('hypeBoersen.leiterTitel') }}</div>
-            <p class="bwGrau at-klein at-mu-1">{{ t('hypeBoersen.leiterHinweis') }}</p>
-            <p v-if="!daten?.leiter?.length" class="bwGrau at-klein">{{ t('hypeBoersen.leiterLeer') }}</p>
+            <p class="bwGrau at-klein at-mu-1">{{ frei ? t('hypeBoersen.leiterHinweisFrei') : t('hypeBoersen.leiterHinweis') }}</p>
+            <p v-if="!daten?.leiter?.length" class="bwGrau at-klein">{{ frei ? t('hypeBoersen.leiterLeerFrei') : t('hypeBoersen.leiterLeer') }}</p>
             <div v-else class="at-tabelle-huelle">
                 <table class="at-tabelle dicht bwTabelle">
                     <thead>
@@ -69,6 +70,7 @@
                             <td class="at-rechtsbuendig">{{ geld(l.bewertungUsd) }}</td>
                             <td>{{ l.radarSeit ? t('hypeBoersen.vorTagen', { n: tageText((Date.now() - l.radarSeit) / 86400e3) }) : '—' }}</td>
                             <td>
+                                <span v-if="l.alpha" class="bwStufe alpha">Alpha</span>
                                 <span v-for="m in l.mittel" :key="m" class="bwStufe mittel">{{ m }}</span>
                                 <span v-for="g in l.gross" :key="g" class="bwStufe gross">{{ g }}</span>
                             </td>
@@ -81,7 +83,7 @@
         <!-- Angekündigt: angelegt, aber noch nicht offen — mit Startzeit, wo die Börse sie nennt. -->
         <div class="bwAbschnitt">
             <div class="bwTitel">{{ t('hypeBoersen.angekuendigtTitel') }}</div>
-            <p class="bwGrau at-klein at-mu-1">{{ t('hypeBoersen.angekuendigtHinweis') }}</p>
+            <p class="bwGrau at-klein at-mu-1">{{ frei ? t('hypeBoersen.angekuendigtHinweisFrei') : t('hypeBoersen.angekuendigtHinweis') }}</p>
             <p v-if="!daten?.angekuendigt?.length" class="bwGrau at-klein">{{ t('hypeBoersen.angekuendigtLeer') }}</p>
             <div v-else class="at-tabelle-huelle">
                 <table class="at-tabelle dicht bwTabelle">
@@ -132,7 +134,7 @@
                     <thead>
                         <tr>
                             <th>{{ t('hypeBoersen.spalteDatum') }}</th>
-                            <th :title="t('hypeBoersen.handelsStartTitel')">{{ t('hypeBoersen.spalteHandelsStart') }}</th>
+                            <th :title="frei ? t('hypeBoersen.handelsStartTitelFrei') : t('hypeBoersen.handelsStartTitel')">{{ t('hypeBoersen.spalteHandelsStart') }}</th>
                             <th>{{ t('hypeBoersen.spalteBoerse') }}</th>
                             <th>{{ t('hypeBoersen.spalteToken') }}</th>
                             <th :title="t('hypeBoersen.auchAufTitel')">{{ t('hypeBoersen.spalteAuchAuf') }}</th>
@@ -167,8 +169,8 @@
                 </table>
             </div>
         </div>
-        <!-- Bewertungen und DEX-Links kommen von DexScreener. -->
-        <RadarQuellen :quellen="['dexscreener']" class="at-mo-2" />
+        <!-- Bewertungen und DEX-Links kommen von DexScreener; dazu die gelesenen Börsenlisten ohne Verkaufsfreigabe (S15). -->
+        <RadarQuellen :quellen="quellenZeile" class="at-mo-2" />
     </div>
 </template>
 
@@ -197,6 +199,7 @@ import { listungUrl, coingeckoSuche } from '../../utils/boersenLinks.js'
 import TiefensucheErgebnis from './TiefensucheErgebnis.vue'
 import RadarQuellen from './RadarQuellen.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
+import { ladeFreigabe, freigabeAn } from '../../utils/quellenFreigabe.js'
 
 const props = defineProps({
     aktiv: { type: Boolean, default: false },
@@ -205,6 +208,12 @@ const props = defineProps({
 const { t, locale } = useI18n()
 
 const daten = ref(null)
+/** Schalter „Quellen ohne Verkaufsfreigabe" (S15): Alpha, Upbit, OKX, MEXC und ihre Links. */
+const frei = computed(() => freigabeAn())
+ladeFreigabe()
+const OHNE_FREIGABE = ['binance-alpha', 'upbit', 'okx', 'mexc']
+const quellenZeile = computed(() => ['dexscreener',
+    ...(daten.value?.boersen || []).filter((b) => OHNE_FREIGABE.includes(b.id) && !b.aus && b.anzahl).map((b) => b.id)])
 const ladeFehler = ref('')
 const meldung = ref('')
 const meldungFehler = ref(false)
@@ -270,7 +279,7 @@ const AuchAuf = defineComponent({
         return () => (p.liste?.length
             ? h('span', { class: 'bwAuch' }, p.liste.map((name) => {
                 // Jede Börse ein Link auf ihre Handelsseite, wo es eine gibt.
-                const url = listungUrl(idNachName.value.get(name), p.symbol)
+                const url = listungUrl(idNachName.value.get(name), p.symbol, { ohneFreigabe: frei.value })
                 const klasse = ['bwStufe', stufeNachName.value.get(name) || '']
                 return url
                     ? h('a', { class: klasse, key: name, href: url, target: '_blank', rel: 'noopener noreferrer', title: t('hypeBoersen.handelsseite', { b: name }) }, name)
@@ -286,13 +295,14 @@ const TokenZelle = defineComponent({
     setup(p) {
         return () => {
             const z = p.z
-            const url = listungUrl(z.boerse, z.symbol)
+            const url = listungUrl(z.boerse, z.symbol, { chain: z.chain, contract: z.contract, ohneFreigabe: frei.value })
             const teile = [url
                 ? h('a', { href: url, target: '_blank', rel: 'noopener noreferrer', class: 'bwToken', title: t('hypeBoersen.handelsseite', { b: boerseName(z.boerse) }) }, [h('strong', z.symbol)])
                 : h('strong', z.symbol)]
             if (z.chain) teile.push(h('span', { class: 'bwKette' }, z.chain))
             teile.push(h('a', { href: coingeckoSuche(z.symbol), target: '_blank', rel: 'noopener noreferrer', class: 'bwNebenLink', title: t('hypeBoersen.coingeckoTitel') }, 'CG'))
-            if (z.contract) {
+            // Bei Alpha führt der Token-Link schon zu DexScreener — kein zweites „DEX".
+            if (z.contract && z.boerse !== 'binance-alpha') {
                 teile.push(h('a', { href: `https://dexscreener.com/${encodeURIComponent(z.chain || 'solana')}/${encodeURIComponent(z.contract)}`,
                     target: '_blank', rel: 'noopener noreferrer', class: 'bwNebenLink', title: 'DexScreener' }, 'DEX'))
             }
@@ -485,6 +495,7 @@ const zeitpunkt = (ms) => new Date(Number(ms)).toLocaleString(
     margin-right: .25rem;
     background: var(--line);
 }
+.bwStufe.alpha, :deep(.bwStufe.alpha) { color: var(--warn); }
 .bwStufe.mittel, :deep(.bwStufe.mittel) { color: var(--accent); }
 .bwStufe.gross, :deep(.bwStufe.gross) { color: #4caf50; }
 .bwTabelle a, :deep(.bwTabelle a), :deep(a.bwStufe), :deep(a.bwToken), :deep(a.bwNebenLink) {

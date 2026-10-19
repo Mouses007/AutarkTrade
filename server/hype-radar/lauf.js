@@ -11,6 +11,7 @@
  * aber Minuten.
  */
 
+import { freigabeAn } from '../quellen/freigabe.js'
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
 import { sammle, dexDetailsViele, fuehreZusammen } from './quellen.js'
@@ -130,6 +131,8 @@ export async function scanne(einst, melde = () => {}) {
      */
     melde({ schritt: 'listungen' })
     const listen = await ladeListungen()
+    // S15: mit dem Schalter „Quellen ohne Verkaufsfreigabe" die Sozialrechnung von vor S12.
+    const ohneFreigabe = await freigabeAn()
 
     // ── Stufe 2, endgültig ──────────────────────────────────────────────
     const bewertet = vereint
@@ -140,7 +143,7 @@ export async function scanne(einst, melde = () => {}) {
             const vetter = nurNamensgleich(k)
             return {
                 ...k,
-                ...bewerte(k, gewichte, narrative),
+                ...bewerte(k, gewichte, narrative, { ohneFreigabe }),
                 markt: {
                     ...k.markt,
                     listungen: vetter ? [] : liste,

@@ -14,12 +14,17 @@
  *
  * Der Schlüssel verlässt den Server nie im Klartext: angezeigt werden nur
  * „hinterlegt" und die letzten vier Zeichen.
+ *
+ * S15: Schalter „Quellen ohne Verkaufsfreigabe" (Vorgabe an) — die Liste,
+ * was darunter fällt, kommt vom Server (`server/quellen/freigabe.js`).
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { Karte, Knopf, Hinweis, Pille, Quellenhinweis } from '@/components/basis/index.js'
 import { setzeMarktdaten } from '@/utils/marktdaten.js'
+import { setzeFreigabe } from '@/utils/quellenFreigabe.js'
+import Schalter from './gemeinsam/Schalter.vue'
 
 const { t } = useI18n()
 
@@ -62,6 +67,21 @@ async function waehle(id) {
         fehler.value = e?.response?.data?.error || e.message
     } finally {
         speichertWahl.value = false
+    }
+}
+
+const freigabeLaeuft = ref(false)
+async function freigabeSetzen(an) {
+    freigabeLaeuft.value = true
+    try {
+        const neu = await setzeFreigabe(an)
+        stand.value = { ...stand.value, ohneFreigabe: neu }
+        const { data } = await axios.get('/api/quellen')
+        stand.value = data
+    } catch (e) {
+        fehler.value = e?.response?.data?.error || e.message
+    } finally {
+        freigabeLaeuft.value = false
     }
 }
 
@@ -129,11 +149,26 @@ async function cgSpeichern(loeschen = false) {
             <p class="leise">{{ t('datenquellen.md.weiterhin') }}</p>
         </Karte>
 
+        <Karte v-if="stand?.ohneFreigabe" :titel="t('datenquellen.of.titel')" :unter="t('datenquellen.of.unter')">
+            <Schalter :model-value="stand.ohneFreigabe.an" :label="t('datenquellen.of.schalter')"
+                :disabled="freigabeLaeuft" @change="freigabeSetzen" />
+            <Hinweis art="warn" :titel="t('datenquellen.md.verantwortungTitel')">
+                {{ t(stand.ohneFreigabe.an ? 'datenquellen.of.anText' : 'datenquellen.of.ausText') }}
+            </Hinweis>
+            <ul class="of-liste">
+                <li v-for="q in stand.ohneFreigabe.quellen" :key="q.id" :class="{ aus: !stand.ohneFreigabe.an }">
+                    <strong>{{ q.name }}</strong> — {{ q.was }}
+                    <span class="zeilen">({{ t('datenquellen.of.zeilen', { zeilen: q.zeilen.join(', ') }) }})</span>
+                </li>
+            </ul>
+        </Karte>
+
         <Karte :titel="t('datenquellen.cg.titel')" :unter="t('datenquellen.cg.unter')">
             <p class="status">
                 <Pille v-if="stand?.coingecko?.hinterlegt" ton="gut">
                     {{ t('datenquellen.cg.hinterlegt', { ende: stand.coingecko.ende, tarif: stand.coingecko.tarif }) }}
                 </Pille>
+                <Pille v-else-if="stand?.coingecko?.oeffentlich" ton="neutral">{{ t('datenquellen.cg.oeffentlich') }}</Pille>
                 <Pille v-else ton="neutral">{{ t('datenquellen.cg.keiner') }}</Pille>
             </p>
             <p class="leise">{{ t('datenquellen.cg.wofuer') }}</p>
@@ -310,6 +345,24 @@ async function cgSpeichern(loeschen = false) {
 
 .extern:hover {
     text-decoration: underline;
+}
+
+.of-liste {
+    margin: 0.7rem 0 0;
+    padding-left: 1.1rem;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--text);
+}
+
+.of-liste li.aus {
+    color: var(--muted);
+    text-decoration: line-through;
+}
+
+.of-liste .zeilen {
+    color: var(--muted);
+    font-size: 0.75rem;
 }
 
 .andere {

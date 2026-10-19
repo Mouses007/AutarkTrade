@@ -18,13 +18,16 @@
  * eigenen Verlauf eines jungen Tokens. Ein Perpetual mit hundert Millionen
  * Umsatz hat diesen Verlauf nicht; die Note wäre eine Zahl ohne Bedeutung.
  *
- * Kostet kein Geld (keine KI). Die Suche nach Symbol braucht den CoinGecko-
- * Schlüssel des Kunden (`holeCoinInfo` wirft sonst `QuelleAus`); die Suche
- * nach Vertrag kommt ohne ihn aus (DexScreener). RugCheck nur, wenn der Kunde
- * es eingeschaltet hat (`holeRisiko`).
+ * Kostet kein Geld (keine KI). Die Suche nach Symbol braucht CoinGecko —
+ * den Schlüssel des Kunden oder, mit dem Schalter „Quellen ohne
+ * Verkaufsfreigabe" an, den öffentlichen Endpunkt (`holeCoinInfo` wirft sonst
+ * `QuelleAus`); die Suche
+ * nach Vertrag kommt ohne ihn aus (DexScreener). RugCheck nach der Einstellung
+ * des Hype-Radars (`holeRisiko`; Vorgabe dort am Schalter `rugcheck`).
  */
 
 import { holeCoinInfo } from './coin-info.js'
+import { quelleErlaubt } from '../quellen/freigabe.js'
 import { dexDetails, normChain } from '../hype-radar/quellen.js'
 import { holeRisiko } from '../hype-radar/fruehphase.js'
 import { risikoFrueh } from '../hype-radar/fruehphase-bewertung.js'
@@ -88,7 +91,7 @@ export function vertragsAnteilTop10(halter = [], skala = '') {
  * Die Tiefensuche für ein Symbol.
  *
  * @param {string} symbol      z. B. „LUMIA" oder „LUMIAUSDT"
- * @throws {QuelleAus} ohne CoinGecko-Schlüssel
+ * @throws {QuelleAus} ohne CoinGecko-Zugang
  */
 export async function tiefensuche(symbol) {
     const info = await holeCoinInfo(symbol)
@@ -139,7 +142,8 @@ export async function tiefensuche(symbol) {
     return {
         gefunden: true,
         coin: {
-            name: info.name, symbol: info.symbol, rang: info.marketCapRang,
+            // `bild` nur mit Schalter an (`holeCoinInfo` lässt es sonst weg).
+            name: info.name, symbol: info.symbol, ...(info.bild ? { bild: info.bild } : {}), rang: info.marketCapRang,
             kategorien: info.kategorien, coingeckoUrl: info.coingeckoUrl, explorer: info.explorer,
         },
         vertraege: vertraege.map((v) => {
@@ -160,7 +164,7 @@ export async function tiefensuche(symbol) {
  * aus der Beobachtung gefallen. Dieselbe Antwortform wie `tiefensuche`, damit
  * die Anzeige beide gleich liest.
  *
- * Name und Links kommen hier von DexScreener statt von CoinGecko. Die
+ * Name, Links (und mit Schalter an das Bild) kommen hier von DexScreener statt von CoinGecko. Die
  * Webseite gilt deshalb NICHT als belegt (`seiteBelegt` bleibt leer): auf
  * DexScreener kann jeder Herausgeber eintragen, was er will — genau das prüft
  * die Projektprüfung erst.
@@ -197,7 +201,11 @@ export async function tiefensucheVertrag(chain, contract) {
 
     return {
         gefunden: true,
-        coin: { name: d?.name || '', symbol: d?.symbol || '' },
+        // Bild von DexScreener nur mit Schalter an (ID `tokenbilder`, wie vor S12).
+        coin: {
+            name: d?.name || '', symbol: d?.symbol || '',
+            ...(m.bild && (await quelleErlaubt('tokenbilder')) ? { bild: m.bild } : {}),
+        },
         vertraege: [{
             chain: kette, contract: c, pruefbar,
             liquiditaetUsd: m.liquiditaetUsd ?? null, volumen24h: m.volumen24h ?? null, dex: m.dex || '', url: d?.url || '',

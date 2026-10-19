@@ -33,6 +33,7 @@ import Quellenhinweis from '@/components/basis/Quellenhinweis.vue'
 import PageInfo from '../components/PageInfo.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import KiHinweis from '@/components/quellen/KiHinweis.vue'
+import { ladeFreigabe, freigabeAn } from '@/utils/quellenFreigabe.js'
 
 const { t, locale } = useI18n()
 const router = useRouter()
@@ -64,13 +65,14 @@ const STUFEN = [
     { wert: 'medium', key: 'medium' },
     { wert: 'all', key: 'all' },
 ]
-/** Die acht Währungsräume, die der Feed überhaupt führt. */
 /*
- * Seit S12 kommen Termine nur noch aus amtlichen Quellen (Fed, BEA, Eurostat
- * — `server/kalender-quellen.js`); für andere Währungsräume gibt es keine.
- * Alte ForexFactory-Zeilen anderer Länder laufen aus dem Fenster.
+ * Mit Schalter „Quellen ohne Verkaufsfreigabe" (S15) läuft ForexFactory
+ * zusätzlich und führt die acht Währungsräume wie vor S12. Ohne ihn kommen
+ * Termine nur aus amtlichen Quellen (Fed, BEA, Eurostat —
+ * `server/kalender-quellen.js`); für andere Währungsräume gibt es keine.
  */
-const LAENDER = ['USD', 'EUR']
+const LAENDER_FF = ['USD', 'EUR', 'GBP', 'JPY', 'CNY', 'CAD', 'AUD', 'NZD']
+const LAENDER = computed(() => (freigabeAn() ? LAENDER_FF : ['USD', 'EUR']))
 
 const SPEICHER = 'nachrichten_kalender_tage'
 const SPEICHER_IMPACT = 'nachrichten_kalender_impact'
@@ -1075,6 +1077,7 @@ function oeffneBildZuPunkt(p) {
 
 let takt = null
 onMounted(() => {
+    ladeFreigabe()
     ladeAlles()
     pruefeGuthaben()
     ladeNewsProfile()

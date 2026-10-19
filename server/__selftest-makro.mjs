@@ -7,12 +7,11 @@
  * selbst verraten: die Angleichung auf gemeinsame Handelstage (sonst vergleicht
  * man Freitag→Montag der Nasdaq mit Sonntag→Montag von Bitcoin und bekommt eine
  * plausibel aussehende, aber falsche Korrelation) und dass `deltaAusReihe` aus
- * der Reihe rechnet statt aus einem mitgelieferten Vorwert. Die Leser für
- * Yahoo-Antworten sind mit der Quelle entfernt (S12).
+ * der Reihe rechnet statt aus Yahoos `chartPreviousClose`.
  */
 
 import {
-    deltaAusReihe, pearson, korrelationAusReihen,
+    reiheAusChart, deltaAusReihe, pearson, korrelationAusReihen,
     deuteKorrelation, stableFluss, zerlegeDominanz, waehleDominanzPunkte,
     KORR_MIN_PUNKTE,
 } from './makro.js'
@@ -28,6 +27,17 @@ function check(name, ok, detail) {
 
 const nahe = (a, b, eps = 1e-9) => a !== null && Math.abs(a - b) < eps
 
+/** Chart-Antwort im Yahoo-Format bauen (Zeitstempel in Sekunden). */
+const chart = (paare, meta = {}) => ({
+    chart: {
+        result: [{
+            meta: { regularMarketPrice: meta.preis, regularMarketTime: meta.zeit, shortName: meta.name },
+            timestamp: paare.map(p => Math.floor(Date.parse(p[0] + 'T00:00:00Z') / 1000)),
+            indicators: { quote: [{ close: paare.map(p => p[1]) }] },
+        }],
+    },
+})
+
 /** Tagesreihe aus einem Startdatum und Schlusskursen. */
 const reihe = (start, werte) => werte.map((close, i) => {
     const d = new Date(Date.parse(start + 'T00:00:00Z') + i * 86400000)
@@ -35,6 +45,53 @@ const reihe = (start, werte) => werte.map((close, i) => {
 })
 
 console.log('\nMakro-Umfeld — Selbsttest\n')
+
+// ── Yahoo-Antwort lesen ──────────────────────────────────────────────────
+console.log('Chart-Antwort lesen')
+{
+    const j = chart([['2026-08-13', 7822.5], ['2026-08-14', 7805], ['2026-08-17', 7816.5]],
+        { preis: 7816.5, zeit: 1786961982, name: 'E-Mini S&P 500' })
+    const a = reiheAusChart(j)
+    check('Tage und Schlusskurse werden gelesen',
+        a.reihe.length === 3 && a.reihe[0].tag === '2026-08-13' && a.reihe[2].close === 7816.5)
+    check('Zeit wird von Sekunden in Millisekunden umgerechnet', a.zeit === 1786961982000)
+    check('Name kommt mit', a.name === 'E-Mini S&P 500')
+
+    const mitLuecke = reiheAusChart(chart([['2026-08-13', 100], ['2026-08-14', null], ['2026-08-17', 102]]))
+    check('null-Schlusskurse (Feiertag) fallen raus, statt als 0 zu zählen',
+        mitLuecke.reihe.length === 2 && mitLuecke.reihe[1].close === 102)
+
+    check('leere/kaputte Antwort kippt nicht um',
+        reiheAusChart({}).reihe.length === 0 && reiheAusChart(null).preis === null)
+
+    const ohneMeta = reiheAusChart(chart([['2026-08-17', 55]]))
+    check('ohne Meta-Preis wird der letzte Schlusskurs genommen', ohneMeta.preis === 55)
+
+    /*
+     * Der Fall, der lange durchgerutscht ist: Yahoo schickt bei geschlossenen
+     * Märkten und Aussetzern nicht `undefined`, sondern ein explizites `null`.
+     * `Number(undefined)` ist NaN und fällt korrekt zurück — `Number(null)` ist
+     * aber 0, und die ist endlich. Der Rückfall griff deshalb nie, und die
+     * Makro-Kachel zeigte einen Kurs von 0 samt absurdem Tagesdelta.
+     * Die Prüfung darüber deckt nur `undefined` ab; diese hier `null`.
+     */
+    const nullPreis = reiheAusChart(chart([['2026-08-13', 101], ['2026-08-17', 102]],
+        { preis: null, zeit: null }))
+    check('meta-Preis null → letzter Schlusskurs, NICHT 0',
+        nullPreis.preis === 102, String(nullPreis.preis))
+    check('meta-Zeit null → null, NICHT 0',
+        nullPreis.zeit === null, String(nullPreis.zeit))
+    check('… und das Delta bleibt dadurch brauchbar',
+        nahe(deltaAusReihe(nullPreis.reihe), (102 - 101) / 101 * 100))
+
+    const nullPreisLeer = reiheAusChart(chart([], { preis: null }))
+    check('meta-Preis null ohne Reihe → null statt 0',
+        nullPreisLeer.preis === null, String(nullPreisLeer.preis))
+
+    const nullKurs = reiheAusChart(chart([['2026-08-17', 55]], { preis: 0, zeit: 0 }))
+    check('ein gemeldeter Kurs von 0 gilt als fehlend', nullKurs.preis === 55)
+    check('eine gemeldete Zeit von 0 gilt als fehlend', nullKurs.zeit === null)
+}
 
 // ── Veränderung zur Vorsitzung ───────────────────────────────────────────
 console.log('\nVeränderung zur Vorsitzung')

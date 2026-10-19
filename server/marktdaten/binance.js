@@ -215,3 +215,35 @@ export function seitenGewicht(m, seite) {
     if (markt(m) === 'spot') return 2
     return seite < 100 ? 1 : seite < 500 ? 2 : seite <= 1000 ? 5 : 10
 }
+
+// ── Web-Backend (bapi) — keine Marktdaten-Fähigkeit ─────────────────────
+// Steht hier nur, damit keine Binance-Adresse ausserhalb dieser Datei liegt.
+// Undokumentiert und für einen Verkauf rot (Verkaufs-Prüfung Zeile 34);
+// läuft nur hinter dem Schalter „Quellen ohne Verkaufsfreigabe"
+// (`server/quellen/freigabe.js`, ID `binanceBrackets`) — das prüft der Aufrufer.
+
+/** Wartungsmargen-Klammern aller USDⓈ-M-Symbole, ohne Schlüssel (~1,6 MB; 19.10.2026 per curl geprüft: antwortet). */
+export const BAPI_KLAMMERN_URL = 'https://www.binance.com/bapi/futures/v1/friendly/future/common/brackets'
+
+/** Rohantwort `{ data: { brackets: [...] } }` der Klammertabelle. */
+export async function bapiKlammern({ timeout = 12000 } = {}) {
+    const { data } = await axios.get(BAPI_KLAMMERN_URL, { timeout })
+    return data
+}
+
+/**
+ * Binance Alpha: die Token-Liste des Web-Frontends (Börsen-Beobachter des
+ * Hype-Radars, Sprosse `alpha`). Ebenfalls bapi, undokumentiert und für einen
+ * Verkauf rot (Verkaufs-Prüfung Zeile 76); nur hinter dem Schalter „Quellen
+ * ohne Verkaufsfreigabe" (ID `binanceAlpha`) — das prüft der Aufrufer
+ * (`server/hype-radar/boersenwacht.js`). Unabhängig von der gewählten
+ * Marktdatenquelle wie vor S12: es ist keine Marktdaten-Fähigkeit.
+ * 19.10.2026 per curl geprüft: antwortet (HTTP 200, ~860 kB).
+ */
+export const BAPI_ALPHA_URL = 'https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list'
+
+/** Rohantwort `{ data: [{ symbol, chainId, contractAddress, … }] }`. */
+export async function bapiAlphaListe({ timeout = 20000 } = {}) {
+    const { data } = await axios.get(BAPI_ALPHA_URL, { timeout, headers: { 'User-Agent': 'AutarkTrade/4 (Hype-Radar)', Accept: 'application/json' } })
+    return data
+}

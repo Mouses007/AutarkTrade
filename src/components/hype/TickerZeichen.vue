@@ -12,16 +12,35 @@
  * Nur Design-Tokens: der Ton ist eine Mischung aus Akzent, Text und Warnfarbe
  * mit der Fläche — Grün und Rot bleiben Gewinn und Verlust vorbehalten.
  *
+ * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `tokenbilder`)
+ * zeigt das Zeichen wieder das Logo, wenn der Server eines mitliefert
+ * (`bild`) — wie vor S12. Lädt es nicht, bleiben die Initialen. Mit Schalter
+ * aus wird kein Bild geladen, auch wenn eine Adresse da ist.
+ *
  *   <TickerZeichen symbol="PEPE" />
  *   <TickerZeichen :symbol="k.symbol" :schluessel="k.contract" klein />
+ *   <TickerZeichen :symbol="c.symbol" :bild="c.bild" />
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { ladeFreigabe, freigabeAn } from '../../utils/quellenFreigabe.js'
+import { sichereUrl } from '../../utils/sanitize.js'
 
 const props = defineProps({
     symbol: { type: String, default: '' },
     /** Woraus der Ton abgeleitet wird (Vertrag); ohne ihn das Kürzel. */
     schluessel: { type: String, default: '' },
     klein: { type: Boolean, default: false },
+    /** Logo-Adresse (nur mit Schalter an gezeigt). */
+    bild: { type: String, default: '' },
+})
+
+ladeFreigabe()
+const kaputt = ref(false)
+watch(() => props.bild, () => { kaputt.value = false })
+const bildUrl = computed(() => {
+    if (!props.bild || kaputt.value || !freigabeAn()) return ''
+    const u = sichereUrl(props.bild)
+    return u && /^https:\/\//i.test(u) ? u : ''
 })
 
 const initialen = computed(() => {
@@ -46,7 +65,9 @@ const ton = computed(() => {
 </script>
 
 <template>
-    <span :class="['at-tickerzeichen', { klein }]" :style="ton" aria-hidden="true">{{ initialen }}</span>
+    <img v-if="bildUrl" :src="bildUrl" alt="" :class="['at-tickerzeichen', 'bild', { klein }]"
+        referrerpolicy="no-referrer" loading="lazy" @error="kaputt = true">
+    <span v-else :class="['at-tickerzeichen', { klein }]" :style="ton" aria-hidden="true">{{ initialen }}</span>
 </template>
 
 <style scoped>
@@ -64,6 +85,10 @@ const ton = computed(() => {
     letter-spacing: 0.02em;
     line-height: 1;
     user-select: none;
+}
+.at-tickerzeichen.bild {
+    object-fit: cover;
+    padding: 0;
 }
 .at-tickerzeichen.klein {
     width: 1.35rem;

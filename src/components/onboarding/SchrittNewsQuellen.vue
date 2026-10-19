@@ -9,23 +9,28 @@
  * Bestehende Quellen werden nie angetastet — dieser Schritt bietet nur das
  * Hinzufügen neuer.
  *
- * Seit S12 (Verkaufs-Prüfung Massnahme 10, Z. 46/52/53):
- *   - nichts vorbelegt: die Vorschlagsliste ist leer, der Nutzer trägt
- *     seine Quellen selbst ein (Verlags-Feeds, Kanäle, Spiegel);
- *   - Telegram ist keine wählbare Art mehr. Bereits eingetragene
- *     Telegram-Quellen stehen abgeschaltet in der Liste, lassen sich löschen,
- *     aber nicht wieder einschalten.
+ * Vorschläge und Telegram haben keine Verkaufsfreigabe (Verkaufs-Prüfung
+ * Massnahme 10, Z. 46/52/53). Seit S15 hängen sie am Schalter „Quellen ohne
+ * Verkaufsfreigabe" (`src/utils/quellenFreigabe.js`):
+ *   - an: wie vor S12 — Vorschläge (YouTube, Verlags-RSS, Telegram-Kanäle,
+ *     Truth-Social-Spiegel) zum Übernehmen, Telegram wählbar;
+ *   - aus: wie nach S12 — nichts vorbelegt (der Server liefert keine
+ *     Vorschläge), Telegram keine wählbare Art; eingetragene Telegram-Quellen
+ *     stehen abgeschaltet in der Liste, lassen sich löschen, aber nicht
+ *     wieder einschalten.
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Knopf from '../basis/Knopf.vue'
+import { ladeFreigabe, freigabeAn } from '../../utils/quellenFreigabe.js'
 
 const { t } = useI18n()
 
 const newsQuellen = ref([])
-/** Arten, die nur noch als Altbestand vorkommen (wie `ARTEN_ENTFERNT` im Server). */
-const ENTFERNT = ['telegram']
+const newsVorschlaege = ref([])
+/** Arten, die gerade nicht laufen dürfen (wie `artenEntfernt()` im Server). */
+const ENTFERNT = computed(() => (freigabeAn() ? [] : ['telegram']))
 const neueQuelle = ref({ art: 'youtube', name: '', url: '' })
 const newsMeldung = ref('')
 const newsFehler = ref(false)
@@ -35,6 +40,9 @@ async function ladeNewsQuellen() {
     try {
         const { data } = await axios.get('/api/marktradar/news/sources')
         newsQuellen.value = data.quellen || []
+        // Mit Schalter aus liefert der Server keine (S12)
+        const vorhanden = new Set(newsQuellen.value.map(q => q.url))
+        newsVorschlaege.value = (data.vorschlaege || []).filter(v => !vorhanden.has(v.url))
     } catch (e) {
         newsQuellen.value = []
     }
@@ -90,7 +98,12 @@ async function quelleLoeschen(q) {
     }
 }
 
-onMounted(ladeNewsQuellen)
+async function vorschlagUebernehmen(v) {
+    neueQuelle.value = { art: v.art, name: v.name, url: v.url, laerm: v.laerm }
+    await quelleAnlegen()
+}
+
+onMounted(() => { ladeFreigabe(); ladeNewsQuellen() })
 </script>
 
 <template>
@@ -147,6 +160,7 @@ onMounted(ladeNewsQuellen)
                 <select class="at-feld klein" v-model="neueQuelle.art">
                     <option value="youtube">YouTube</option>
                     <option value="rss">RSS</option>
+                    <option v-if="freigabeAn()" value="telegram">Telegram</option>
                     <option value="truth">Truth Social</option>
                     <option value="x">X (via Grok)</option>
                 </select>
@@ -157,8 +171,9 @@ onMounted(ladeNewsQuellen)
             <div class="neu-url">
                 <input class="at-feld klein" v-model="neueQuelle.url"
                     :placeholder="neueQuelle.art === 'x' ? '@handle'
-                        : neueQuelle.art === 'youtube' ? 'https://www.youtube.com/feeds/videos.xml?channel_id=…'
-                            : 'https://…'">
+                        : neueQuelle.art === 'telegram' ? 'https://t.me/s/kanalname'
+                            : neueQuelle.art === 'youtube' ? 'https://www.youtube.com/feeds/videos.xml?channel_id=…'
+                                : 'https://…'">
             </div>
             <div class="at-flex at-luecke-1">
                 <Knopf klein :disabled="newsTestet" @click="quelleTesten">{{ t('settings.ki.news.testSourceBtn') }}</Knopf>
@@ -169,9 +184,15 @@ onMounted(ladeNewsQuellen)
             {{ newsMeldung }}
         </div>
 
-        <!-- Bewusst ohne Vorschläge: welche Verlage und Kanäle gelesen und von
-             der KI zusammengefasst werden, entscheidet der Nutzer (S12). -->
-        <p class="at-klein at-gedaempft at-mo-2 at-mu-0">{{ t('onboarding.news.eigeneQuellen') }}</p>
+        <!-- Vorschläge nur mit Schalter (S15); ohne ihn entscheidet der Nutzer
+             allein, welche Verlage und Kanäle die KI zusammenfasst (S12). -->
+        <div v-if="newsVorschlaege.length" class="at-klein at-mo-2 vorschlaege">
+            <span class="at-gedaempft">{{ t('settings.ki.news.suggestionsLabel') }}</span>
+            <Knopf v-for="v in newsVorschlaege" :key="v.url" klein @click="vorschlagUebernehmen(v)">
+                {{ v.name }}<span v-if="v.laerm" class="at-gedaempft">&nbsp;{{ t('settings.ki.news.noiseSuffix') }}</span>
+            </Knopf>
+        </div>
+        <p v-else class="at-klein at-gedaempft at-mo-2 at-mu-0">{{ t('onboarding.news.eigeneQuellen') }}</p>
     </div>
 </template>
 
@@ -180,6 +201,13 @@ onMounted(ladeNewsQuellen)
 .sp-schmal { width: 5rem; }
 .sp-aktion { width: 4rem; }
 .sp-adresse { max-width: 22rem; }
+
+.vorschlaege {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+}
 
 td input[type='checkbox'] {
     accent-color: var(--accent);

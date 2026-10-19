@@ -82,6 +82,8 @@ const KALENDER_QUELLEN = [
     { name: 'Federal Reserve Board', url: 'https://www.federalreserve.gov/newsevents/calendar.htm', art: 'quelle' },
     { name: 'U.S. Bureau of Economic Analysis', url: 'https://www.bea.gov/news/schedule', art: 'quelle' },
     { name: 'Eurostat', url: 'https://ec.europa.eu/eurostat/news/release-calendar', art: 'quelle' },
+    // Ohne Verkaufsfreigabe, nur mit Schalter (S15, `freigabe: true`)
+    { name: 'ForexFactory', url: 'https://www.forexfactory.com/calendar', art: 'quelle', freigabe: true },
 ]
 
 const DEFINITIONEN = [
@@ -183,17 +185,22 @@ const DEFINITIONEN = [
         titleKey: 'livetrading.indizes.title',
         icon: 'linie',
         /*
-         * ENTFERNT (S12): die Kerzen von ES, NQ, RTY und DXY kamen aus Yahoo
-         * Finance, dessen Bedingungen automatisiertes Sammeln und kommerzielle
-         * Nutzung verbieten (Verkaufs-Prüfung Z. 39). Der Eintrag bleibt, damit
-         * gespeicherte Layouts nicht ins Leere greifen; der Endpunkt antwortet
-         * `{ aus: true, grund: 'entfernt' }`, und die Kachel zeigt das. Einmal
-         * je Stunde nachzufragen genügt — es ändert sich nichts.
+         * Kerzen von ES, NQ, RTY und DXY aus Yahoo Finance — ohne
+         * Verkaufsfreigabe (Verkaufs-Prüfung Z. 39). S12 hatte die Kachel
+         * entfernt; seit S15 läuft sie wieder, solange der Schalter
+         * `quellenOhneFreigabe` an ist, sonst antwortet der Endpunkt
+         * `{ aus: true, grund: 'ohneFreigabe' }` und die Kachel zeigt das.
          */
         endpunkt: '/api/livetrading/indizes',
-        intervallMs: 60 * 60 * 1000,
-        spalten: 1,
-        quelle: [],
+        // `stunden` statt `range`: Yahoos `range=1d` liefert für einen Future
+        // nur die laufende reguläre Sitzung — morgens sind das zehn Kerzen.
+        // Der Server holt jetzt immer fünf Tage und schneidet auf dieses
+        // Fenster zu; die Auflösung wandert mit (siehe `FENSTER` in der Kachel).
+        params: { interval: '5m', stunden: 12 },
+        intervallMs: 60 * 1000,
+        // Ein Kerzenchart braucht Breite, sonst klebt jede Kerze an der nächsten
+        spalten: 2,
+        quelle: [{ ...Q.yahoo, name: 'Yahoo Finance (ES=F, NQ=F, RTY=F, DX-Y.NYB)' }],
     },
     {
         id: 'coinradar',
@@ -241,7 +248,7 @@ const DEFINITIONEN = [
         endpunkt: '/api/marktradar/makro',
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
-        quelle: [Q.coingecko],
+        quelle: [Q.yahoo, Q.coingecko, { marktdaten: true, zusatz: '(BTC-Tageskerzen)', freigabe: true }],
     },
     {
         /*

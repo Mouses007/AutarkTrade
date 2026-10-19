@@ -9,6 +9,7 @@ import { ref, watch } from 'vue'
 import { currentUser } from './settings.js'
 import { dbUpdateSettings } from '../utils/db.js'
 import { logWarn } from '../utils/logger.js'
+import { ladeFreigabe } from '../utils/quellenFreigabe.js'
 
 export const liveSymbol = ref('BTCUSDT')
 export const liveMarket = ref('futures')
@@ -79,12 +80,14 @@ export const liveSaettigung = ref(3)
 export const liveShowBuch = ref(true)
 export const liveBuchW = ref(96)              // Breite der Buch-Leiter in px
 /*
- * Fremde Börse (Bybit) in der Leiter mitzeigen — als eigener Balken,
- * nicht aufaddiert. Warum nicht summiert: siehe server/fremdbuch.js.
- * Vorgabe AUS seit S12: Bybit-Marktdaten sind ungeklärt (Verkaufs-Prüfung
- * Zeile 37, gelb); wer es eingeschaltet hatte, behält seine Wahl.
+ * Fremde Börsen (Bybit, mit Schalter „Quellen ohne Verkaufsfreigabe" auch
+ * OKX) in der Leiter mitzeigen — als eigener Balken, nicht aufaddiert. Warum
+ * nicht summiert: siehe server/fremdbuch.js.
+ * Vorgabe wie vor S12 AN, solange der Schalter an ist; mit Schalter AUS die
+ * S12-Vorgabe AUS (Bybit-Marktdaten ungeklärt, Verkaufs-Prüfung Zeile 37,
+ * gelb). Eine gespeicherte Wahl gilt immer (`hydrateLiveSettings`).
  */
-export const liveFremdBuch = ref(false)
+export const liveFremdBuch = ref(true)
 export const liveAutoFollow = ref(true)
 export const liveThreshold = ref(0)           // 0..0.95, blendet schwache Liquidität aus
 export const liveShowLiquidations = ref(true) // Zwangsliquidationen einzeichnen (nur Futures)
@@ -100,10 +103,11 @@ export const levMapTier = ref('all')          // 'all' | Kommaliste von Hebelwer
 export const levMapHours = ref(48)            // gewünschtes Zeitfenster
 export const levMapSpanPct = ref(8)           // Preisspanne um den Mid, einseitig
 export const levMapMmr = ref(0.004)           // Maintenance-Margin-Rate, Stufe 1
-// 'bybit' | 'manuell'. 'binance' gibt es seit S12 nicht mehr (undokumentierter
-// bapi-Endpunkt, Verkaufs-Prüfung Zeile 34) — gespeicherte Werte zieht
-// `hydrateLiveSettings` auf 'bybit'.
-export const levMapMmrQuelle = ref('bybit')
+// 'binance' | 'bybit' | 'manuell'. 'binance' (undokumentierter bapi-Endpunkt,
+// Verkaufs-Prüfung Zeile 34) nur mit Schalter „Quellen ohne Verkaufsfreigabe"
+// an (S15, wie vor S12); mit Schalter AUS zieht `hydrateLiveSettings` ihn
+// auf 'bybit' (Stand S12), ohne zu speichern.
+export const levMapMmrQuelle = ref('binance')
 export const levMapProfileW = ref(74)         // Breite der Profilspur im Verlauf
 export const levMapThreshold = ref(0)         // blendet schwache Zonen aus (0..0.9)
 export const levMapView = ref('dist')         // 'dist' = Verteilung | 'history' = Verlauf
@@ -226,9 +230,26 @@ export function hydrateLiveSettings() {
         const passend = [...VIEW_PCT_OPTIONS].reverse().find(v => v <= liveViewPct.value)
         liveViewPct.value = passend ?? VIEW_PCT_OPTIONS[VIEW_PCT_OPTIONS.length - 1]
     }
-    if (levMapMmrQuelle.value === 'binance') levMapMmrQuelle.value = 'bybit'
     klemmeSpanne()
     hydrated = true
+    pruefeFreigabe(settings)
+}
+
+/**
+ * Schalter „Quellen ohne Verkaufsfreigabe" (S15): mit AUS gilt der Stand S12 —
+ * Wartungsmarge 'binance' → 'bybit', Fremdbuch-Vorgabe aus, wenn nichts
+ * gespeichert ist. Beides still, also nicht zurückgeschrieben: legt der
+ * Nutzer den Schalter wieder an, gilt wieder seine eigene Wahl.
+ */
+async function pruefeFreigabe(settings) {
+    const f = await ladeFreigabe()
+    if (f?.an !== false) return
+    const war = hydrated
+    hydrated = false
+    if (levMapMmrQuelle.value === 'binance') levMapMmrQuelle.value = 'bybit'
+    const fb = settings?.liveFremdBuch
+    if (fb === undefined || fb === null || fb === '') liveFremdBuch.value = false
+    hydrated = war
 }
 
 function scheduleSave(key, value) {

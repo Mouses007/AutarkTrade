@@ -851,8 +851,10 @@
                         </p>
                         <template v-else-if="coinInfo">
                             <div class="crCoinInfoKopf">
-                                <!-- Kein Coin-Logo (fremde Inhalte, S12) — Initialen des Kürzels. -->
-                                <TickerZeichen :symbol="coinInfo.symbol || kurz(coinInfoSymbol)" />
+                                <!-- Logo nur, wenn der Server es liefert (Schalter „Quellen ohne
+                                     Verkaufsfreigabe", ID tokenbilder, S15); sonst Initialen (S12). -->
+                                <img v-if="coinInfo.bild" :src="coinInfo.bild" alt="" referrerpolicy="no-referrer">
+                                <TickerZeichen v-else :symbol="coinInfo.symbol || kurz(coinInfoSymbol)" />
                                 <div>
                                     <strong>{{ coinInfo.name }}</strong>
                                     <span v-if="coinInfo.marketCapRang" class="crCoinInfoRang">

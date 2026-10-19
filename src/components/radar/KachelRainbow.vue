@@ -156,8 +156,10 @@ watch(() => props.daten, zeichne)
                 {{ t('marktradar.rainbow.params', {
                     a: reg.a.toFixed(4), b: reg.b.toFixed(4), s: reg.s.toFixed(4), n: reg.n
                 }) }}
+                <!-- Weg vor S12 (Schalter an): Herkunft der Reihe dazu -->
+                <template v-if="!daten.seit && daten.quelle">· {{ daten.quelle }}</template>
             </p>
-            <!-- Seit S12 nur noch Tageskerzen ab 2017 (vorher blockchain.info ab
+            <!-- Ohne Schalter (S12) nur Tageskerzen ab 2017 (mit Schalter blockchain.info ab
                  2009): die Kurve ist flacher, das gehört dazugeschrieben. -->
             <p v-if="daten.seit" class="rbQuelle">
                 {{ t('marktradar.rainbow.seit', { datum: dayjs(daten.seit).format('DD.MM.YYYY') }) }}

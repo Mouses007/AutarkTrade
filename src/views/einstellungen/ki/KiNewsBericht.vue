@@ -9,6 +9,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import Feld from '../gemeinsam/Feld.vue'
+import { ladeFreigabe, freigabeAn } from '@/utils/quellenFreigabe.js'
 import Schalter from '../gemeinsam/Schalter.vue'
 import { useKostenAnzeige, useKostenZahl } from '../../../utils/journal/format.js'
 import { empfaengerPruefung, EMPFAENGER_MAX } from '../../../../shared/empfaenger.js'
@@ -25,6 +26,7 @@ import {
 
 const { t } = useI18n()
 const { aiModel, aiProvider, modellListen, radarNewsRechercheModell } = useKiAnbieter()
+ladeFreigabe()
 const { pruefeLagenSymbol, radarSpeichern } = useRadarEinstellungen()
 
 /* Themennamen aus der Übersetzung — als computed, damit ein Sprachwechsel sie
@@ -415,6 +417,9 @@ async function berichtJetzt() {
                     <select v-model="radarNewsRechercheModell"
                         @change="kiSpeichern('radarNewsRechercheModell', radarNewsRechercheModell)">
                         <option v-for="m in (modellListen.perplexity || ['sonar', 'sonar-pro'])" :key="m" :value="m">{{ m }}</option>
+                        <!-- DeepSeek-Suche: ohne Verkaufsfreigabe, nur mit Schalter
+                             „Quellen ohne Verkaufsfreigabe" (S15) -->
+                        <option v-if="freigabeAn()" value="deepseek-suche">{{ t('settings.ki.deepseekSearch') }}</option>
                     </select>
                 </label>
             </div>

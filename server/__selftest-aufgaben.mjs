@@ -9,7 +9,7 @@
  *
  * Aufruf: node server/__selftest-aufgaben.mjs
  */
-import { aufgabenWahl, aufgabeNachId, AI_TASKS } from './ai-task-config.js'
+import { aufgabenWahl, aufgabeNachId, AI_TASKS, ohneFreigabeSicht } from './ai-task-config.js'
 import {
     aufwandFelder, lehntSamplingAb, samplingFelder, standardModell, ANBIETER_REG,
 } from './ai-models.js'
@@ -161,14 +161,33 @@ const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b)
     const deckel = nummeriereBelege('[1] [2] [3] [4]', treffer, 2)
     pruefe('höchstens so viele Belege wie der Bericht nimmt', deckel.urls.length === 2 && !deckel.text.includes('[3]'))
 
+    /*
+     * DeepSeek-Suche (Verkaufs-Prüfung Z. 89d): ohne Verkaufsfreigabe, seit
+     * S15 hinter dem Schalter `quellenOhneFreigabe`. Mit Schalter AN wie vor
+     * S12, mit Schalter AUS wie nach S12 (nur Perplexity).
+     */
     const r = aufgabeNachId('recherche')
-    // S12: DeepSeek-Suche abgeschaltet (Verkaufs-Prüfung Z. 89d) — nur noch Perplexity.
-    pruefe('Recherche erlaubt DeepSeek NICHT mehr', !r.supportedProviders.includes('deepseek'))
+    pruefe('an: Recherche erlaubt DeepSeek', r.supportedProviders.includes('deepseek'))
     pruefe('Vorgabe bleibt Perplexity', r.recommendedModels[0].startsWith('perplexity/'))
-    pruefe('Schreiber-Aufgabe entfernt', !aufgabeNachId('recherche-schreiber'))
+    pruefe('an: Schreiber-Aufgabe registriert', aufgabeNachId('recherche-schreiber')?.recommendedModels[0] === 'anthropic/claude-haiku-5-5')
+    const sichtAn = ohneFreigabeSicht(Object.values(AI_TASKS), true)
+    const sichtAus = ohneFreigabeSicht(Object.values(AI_TASKS), false)
+    const rAus = sichtAus.find((t) => t.id === 'recherche')
+    pruefe('an: Oberfläche zeigt alle Aufgaben', sichtAn.length === Object.keys(AI_TASKS).length)
+    pruefe('aus: Recherche erlaubt DeepSeek NICHT mehr (Oberfläche)',
+        !rAus.supportedProviders.includes('deepseek') && !rAus.recommendedModels.some((m) => m.startsWith('deepseek/')))
+    pruefe('aus: Beschreibung nennt DeepSeek nicht', !/deepseek/i.test(rAus.description))
+    pruefe('aus: Schreiber-Aufgabe fehlt in der Oberfläche', !sichtAus.some((t) => t.id === 'recherche-schreiber'))
+    pruefe('aus: die übrigen Aufgaben bleiben unverändert',
+        sichtAus.length === Object.keys(AI_TASKS).length - 1
+        && sichtAus.find((t) => t.id === 'agent') === AI_TASKS.agent)
     const f = KI_FUNKTIONEN.find((x) => x.id === 'recherche')
-    pruefe('alte Wahl deepseek-suche zeigt Perplexity (der Weg fällt dorthin zurück)',
-        anbieterVon(f, { radarNewsRechercheModell: DEEPSEEK_SUCHE }) === 'perplexity')
+    pruefe('an: Übersicht zeigt DeepSeek, wenn das Nachrichtenfeld umgeschaltet ist',
+        anbieterVon(f, { radarNewsRechercheModell: DEEPSEEK_SUCHE }) === 'deepseek'
+        && anbieterVon(f, { radarNewsRechercheModell: DEEPSEEK_SUCHE, quellenOhneFreigabe: 1 }) === 'deepseek')
+    pruefe('aus: alte Wahl deepseek-suche zeigt Perplexity (der Weg fällt dorthin zurück)',
+        anbieterVon(f, { radarNewsRechercheModell: DEEPSEEK_SUCHE, quellenOhneFreigabe: 0 }) === 'perplexity'
+        && anbieterVon(f, { radarNewsRechercheModell: DEEPSEEK_SUCHE, quellenOhneFreigabe: false }) === 'perplexity')
     pruefe('sonst Perplexity', anbieterVon(f, { radarNewsRechercheModell: 'sonar-pro' }) === 'perplexity')
 }
 

@@ -499,11 +499,14 @@ export function setupAiModelRoutes(app) {
             const [modelle, bildModelle] = await Promise.all([ladeModelle(gespeichert), ladeBildModelle(gespeichert)])
             // Dynamisch: `ai-task-config.js` importiert seinerseits von hier —
             // statisch wäre das ein Zyklus, und `ANBIETER_REG` noch undefiniert.
-            const { AI_TASKS } = await import('./ai-task-config.js')
+            const { AI_TASKS, ohneFreigabeSicht } = await import('./ai-task-config.js')
+            // DeepSeek-Suche nur mit Schalter `quellenOhneFreigabe` (S15)
+            const { quelleErlaubt } = await import('./quellen/freigabe.js')
+            const aufgabenSicht = ohneFreigabeSicht(Object.values(AI_TASKS), await quelleErlaubt('deepseekSuche'))
             res.json({
                 // Die Aufgaben-Tabelle der Einstellungen wird hieraus gebaut,
                 // damit jede Zeile, die dort steht, auch eine Funktion steuert.
-                aufgaben: Object.values(AI_TASKS).map((t) => ({
+                aufgaben: aufgabenSicht.map((t) => ({
                     id: t.id,
                     name: t.name,
                     beschreibung: t.description,

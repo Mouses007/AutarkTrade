@@ -134,20 +134,41 @@ export const AI_TASKS = {
         supportedProviders: ['xai'],
         rueckfallFeld: 'radarNewsXModell',
     },
+    /*
+     * Die DeepSeek-Suche (zweiter Weg seit 18.10.2026) hat keine
+     * Verkaufsfreigabe: DeepSeek verbietet die Nennung seines Namens ohne
+     * Erlaubnis (Verkaufs-Prüfung Z. 89d), und die Such-API gibt es nur bei
+     * DeepSeek selbst. S12 hatte sie entfernt; seit S15 ist sie zurück hinter
+     * dem Schalter `quellenOhneFreigabe` (ID `deepseekSuche`). `freigabe`
+     * sagt, welche Teile ohne Schalter wegfallen — `ohneFreigabeSicht()`
+     * nimmt sie für die Oberfläche heraus, der Bericht prüft den Schalter
+     * selbst (`marktradar-news.js`).
+     */
     recherche: {
         id: 'recherche',
         name: 'Web-Recherche',
-        // Die DeepSeek-Suche (zweiter Weg seit 18.10.2026) ist seit S12 weg:
-        // DeepSeek verbietet die Nennung seines Namens ohne Erlaubnis (Verkaufs-
-        // Prüfung Z. 89d), und die Such-API gibt es nur bei DeepSeek selbst,
-        // nicht bei einem beliebigen OpenAI-kompatiblen Endpunkt.
-        description: 'Recherche mit Belegen über Perplexity Sonar',
+        description: 'Recherche mit Belegen. Perplexity Sonar (Vorgabe, frischer, mit Bildern) oder `deepseek/deepseek-suche` — DeepSeek-Suche + Schreibmodell, rund 4× billiger, Treffer weniger tagesaktuell; die Chartanalyse bleibt bei Perplexity',
         importance: 'medium',
         maxTokens: 2000,
-        recommendedModels: ['perplexity/sonar-pro', 'perplexity/sonar'],
+        recommendedModels: ['perplexity/sonar-pro', 'perplexity/sonar', 'deepseek/deepseek-suche'],
         requiresToolCalling: false,
-        supportedProviders: ['perplexity'],
+        supportedProviders: ['perplexity', 'deepseek'],
         rueckfallFeld: 'radarNewsRechercheModell',
+        freigabe: {
+            id: 'deepseekSuche',
+            description: 'Recherche mit Belegen über Perplexity Sonar',
+            ohneAnbieter: ['deepseek'],
+        },
+    },
+    recherche_schreiber: {
+        id: 'recherche-schreiber',
+        name: 'Recherche-Schreiber (DeepSeek-Suche)',
+        description: 'Fasst die Treffer der DeepSeek-Suche mit Belegnummern zusammen — nur aktiv, wenn die Recherche über DeepSeek läuft',
+        importance: 'low',
+        maxTokens: 8000,
+        recommendedModels: ['anthropic/claude-haiku-5-5', 'deepseek/deepseek-flash'],
+        requiresToolCalling: false,
+        freigabe: { id: 'deepseekSuche', ganz: true },
     },
     agent: {
         id: 'agent',
@@ -210,6 +231,31 @@ export const AI_TASKS = {
         recommendedModels: ['anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5-5'],
         requiresToolCalling: false,
     },
+}
+
+/**
+ * Aufgaben, wie die Oberfläche sie sieht (rein): mit Schalter `an` alle wie
+ * eingetragen; ohne Schalter fallen Aufgaben mit `freigabe.ganz` weg, und
+ * Anbieter/Empfehlungen aus `freigabe.ohneAnbieter` werden herausgenommen —
+ * die Form von S12.
+ */
+export function ohneFreigabeSicht(aufgaben, an) {
+    if (an) return aufgaben
+    const aus = []
+    for (const t of aufgaben) {
+        const f = t.freigabe
+        if (!f) { aus.push(t); continue }
+        if (f.ganz) continue
+        const weg = f.ohneAnbieter || []
+        const ohne = (liste) => (liste || []).filter((m) => !weg.includes(String(m).split('/')[0]))
+        aus.push({
+            ...t,
+            description: f.description || t.description,
+            recommendedModels: ohne(t.recommendedModels),
+            supportedProviders: t.supportedProviders ? ohne(t.supportedProviders) : t.supportedProviders,
+        })
+    }
+    return aus
 }
 
 /** Aufgabe nach ihrer `id` (Schlüssel in `aiTaskProviders`), nicht nach dem Objekt-Schlüssel. */

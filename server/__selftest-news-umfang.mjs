@@ -17,8 +17,11 @@ import {
     budgetsAus, punkteVorgabe, videoTiefeAus, VIDEO_TIEFEN, bauLagePrompt, laengeFuerUpdate,
     bauVideoAuftrag, MELDUNGS_TIEFEN, meldungsTiefeAus, bauAnweisungPruefPrompt,
     istLiveSeite, istEndgueltig, leseLagebild, eigeneAnweisungen, ZUSATZ_MAX, istBruchstueck, de,
+    vorschlaege, artenEntfernt, VORSCHLAEGE, VORSCHLAEGE_OHNE_FREIGABE, ARTEN_ENTFERNT,
 } from './marktradar-news.js'
 import { zahlenAus } from './news-doppler.js'
+import { _setzeLeser } from './quellen/freigabe.js'
+import { leseTelegram, telegramUrl } from './feed-parser.js'
 
 let fehler = 0
 let anzahl = 0
@@ -443,6 +446,36 @@ p('echte Null bleibt eine Null', de(0) === '0' && de(0, 2) === '0,00')
         JSON.stringify(marken('Dominanz 59,6 %')))
     p('deutsche und englische Schreibweise ergeben dieselbe Marke',
         marken('Dominanz 59,6 %')[0] === marken('Dominanz 59.6 %')[0])
+}
+
+/*
+ * Schalter „Quellen ohne Verkaufsfreigabe" (S15): Telegram als News-Quelle
+ * und die vorbelegten Vorschläge (Verlags-RSS, Truth Social, Telegram-Kanäle,
+ * Verkaufs-Prüfung Z. 31/46/52/53). AUS = wie nach S12 (nichts vorbelegt,
+ * Telegram entfernt), AN = wie vor S12.
+ */
+{
+    _setzeLeser(async () => false)
+    p('aus: keine Vorschläge', (await vorschlaege()).length === 0 && VORSCHLAEGE.length === 0)
+    p('aus: Telegram gilt als entfernt', (await artenEntfernt()).includes('telegram'))
+    _setzeLeser(async () => true)
+    const v = await vorschlaege()
+    p('an: Vorschläge wie vor S12', v.length === VORSCHLAEGE_OHNE_FREIGABE.length && v.length >= 15)
+    p('an: Telegram-Kanäle und Truth-Social-Spiegel dabei',
+        v.some(x => x.art === 'telegram') && v.some(x => x.art === 'truth' && x.laerm === 1))
+    p('an: keine Art entfernt', (await artenEntfernt()).length === 0 && ARTEN_ENTFERNT.includes('telegram'))
+
+    // Der Leser selbst holt nichts — er liest die Vorschauseite t.me/s/…
+    p('Kanalname → Vorschauseite', telegramUrl('@whale_alert_io') === 'https://t.me/s/whale_alert_io'
+        && telegramUrl('https://t.me/lookonchainchannel') === 'https://t.me/s/lookonchainchannel')
+    const html = '<div class="tgme_widget_message_wrap"><div class="tgme_widget_message" data-post="whale_alert_io/123">'
+        + '<div class="tgme_widget_message_text js-message_text">🚨 1,000 #BTC (67,000,000 USD) transferred. Mehr.</div>'
+        + '<time datetime="2026-10-19T08:00:00+00:00"></time></div></div>'
+    const b = leseTelegram(html)
+    p('Telegram-Beitrag gelesen (Kennung, Link, Zeit, Text)',
+        b.length === 1 && b[0].link === 'https://t.me/whale_alert_io/123'
+        && b[0].zeit === Date.parse('2026-10-19T08:00:00Z') && b[0].inhalt.includes('67,000,000 USD'))
+    p('keine Telegram-Seite → leer', leseTelegram('<html></html>').length === 0)
 }
 
 console.log(`${anzahl - fehler} bestanden, ${fehler} fehlgeschlagen`)

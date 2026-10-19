@@ -10,7 +10,7 @@
  */
 import {
     bewerte, noteSozial, noteVolumen, noteQuellen, noteNarrativ, noteNeuheit, istTrittbrettfahrer,
-    BOOST_DECKEL, FRUEH_DECKEL,
+    BOOST_DECKEL, FRUEH_DECKEL, REDDIT_DECKEL,
     STANDARD_GEWICHTE,
 } from './bewertung.js'
 import { fuehreZusammen, evidenzDomaenen, normSymbol, normChain, dexKette, dexAbfrageGruppen, dexNachfassen } from './quellen.js'
@@ -59,14 +59,29 @@ pruefe('fehlendes Paar wird nachgetragen', pepe.pair === 'p1')
 pruefe('Boost wird nicht doppelt gezählt', pepe.sozial.boostGesamt === 15, String(pepe.sozial.boostGesamt))
 
 /*
- * S12: Reddit, pump.fun und CoinPaprika sind entfernt. Ihre Quellennamen
- * belegen keine Domäne mehr — ein alter Fund aus ihnen zählt nicht als
- * Bestätigung, und `redditRang` wirkt nicht mehr auf die Sozialnote.
+ * Schalter „Quellen ohne Verkaufsfreigabe" AUS (Stand S12): `redditRang` wirkt
+ * nicht auf die Sozialnote. Dass Reddit, pump.fun und CoinPaprika dann gar
+ * keine Funde liefern, prüft `__selftest-quellen-s12.mjs` (am Abruf).
  */
-pruefe('S12: Reddit belegt keine Domäne mehr', evidenzDomaenen([{ quelle: 'reddit-CryptoMoonShots' }]).length === 0)
-pruefe('S12: pump.fun und CoinPaprika belegen keine Domäne mehr',
-    evidenzDomaenen([{ quelle: 'pumpfun' }, { quelle: 'coinpaprika' }]).length === 0)
-pruefe('S12: ein Reddit-Rang wirkt nicht mehr', noteSozial({ sozial: { redditRang: 1 } }) === null)
+pruefe('Schalter aus: ein Reddit-Rang wirkt nicht', noteSozial({ sozial: { redditRang: 1 } }) === null)
+
+/*
+ * Schalter AN (S15, wie vor S12) — der Befund vom 07.10.2026: Der Reddit-RANG
+ * wurde addiert. Zwei Erwähnungen auf Platz 30 und 35 ergaben Platz 65 — und
+ * null Punkte. Mehr Gerede machte die Note schlechter. Jetzt gilt der beste
+ * Platz, die Nennungen werden gezählt.
+ */
+{
+    const an = { ohneFreigabe: true }
+    const r = (rang, sub) => ({ symbol: 'FOO', contract: 'So1', chain: '', pair: '',
+        quelle: { quelle: `reddit-${sub}` }, markt: {}, sozial: { redditRang: rang, redditNennungen: 1 } })
+    const einmal = fuehreZusammen([r(30, 'A')])[0]
+    const zweimal = fuehreZusammen([r(30, 'A'), r(35, 'B')])[0]
+    pruefe('Schalter an — Reddit: der beste Platz zählt', zweimal.sozial.redditRang === 30, String(zweimal.sozial.redditRang))
+    pruefe('Schalter an — Reddit: Nennungen werden gezählt', zweimal.sozial.redditNennungen === 2)
+    pruefe('Schalter an — Reddit: eine zweite Erwähnung kostet keine Note',
+        noteSozial(zweimal, an) >= noteSozial(einmal, an), `${noteSozial(einmal, an)} → ${noteSozial(zweimal, an)}`)
+}
 
 /*
  * Die Seite des Paars geht beim Zusammenführen nicht mehr verloren.
@@ -210,6 +225,22 @@ const dreiDomaenen = fuehreZusammen([
 ])
 pruefe('Handel, Entdeckung und Gerede sind drei Belege',
     dreiDomaenen[0].quellenAnzahl === 3, JSON.stringify(dreiDomaenen[0].evidenzDomaenen))
+/*
+ * Schalter an (S15): die Quellen ohne Verkaufsfreigabe in ihren Domänen wie
+ * vor S12. pump.fun ist bewusst KEINE eigene Domäne: Eine Bindungskurve ist
+ * gehandelte Kette wie ein Raydium-Pool. Sie getrennt zu zählen wäre derselbe
+ * Fehler, den das Audit bei DexScreener und GeckoTerminal behoben hat.
+ */
+pruefe('Schalter an: pump.fun, CoinPaprika und Reddit landen in der richtigen Domäne',
+    evidenzDomaenen([{ quelle: 'pumpfun' }]).join() === 'onchain'
+    && evidenzDomaenen([{ quelle: 'coinpaprika' }]).join() === 'discovery'
+    && evidenzDomaenen([{ quelle: 'reddit-SolanaMemeCoins' }]).join() === 'social')
+pruefe('Schalter an: pump.fun und GeckoTerminal bleiben EIN Beleg',
+    evidenzDomaenen([{ quelle: 'pumpfun' }, { quelle: 'geckoterminal' }]).length === 1)
+pruefe('Schalter an: CoinPaprika und CoinGecko bleiben EIN Beleg',
+    evidenzDomaenen([{ quelle: 'coinpaprika' }, { quelle: 'coingecko' }]).length === 1)
+pruefe('Schalter an: Reddit, Coingecko, DexScreener sind drei Belege',
+    evidenzDomaenen([{ quelle: 'reddit-x' }, { quelle: 'coingecko' }, { quelle: 'dexscreener' }]).length === 3)
 pruefe('die Frühphasen-Quellen landen in der richtigen Domäne',
     evidenzDomaenen([{ quelle: 'fruehphase' }]).join() === 'onchain'
     && evidenzDomaenen([{ quelle: 'biz' }]).join() === 'social'
@@ -452,8 +483,9 @@ pruefe('und reicht nie in die obere Hälfte', BOOST_DECKEL < 50)
     pruefe('Frühphase: Plattformzahl wird nicht addiert', z.sozial.fruehPlattformen === 2, String(z.sozial.fruehPlattformen))
     pruefe('Frühphase: /biz/ ist eine eigene Domäne',
         evidenzDomaenen([{ quelle: 'fruehphase' }, { quelle: 'biz' }]).length === 2)
-    pruefe('Frühphase: Telegram (bis S12) belegt nichts mehr',
-        evidenzDomaenen([{ quelle: 'fruehphase' }, { quelle: 'telegram' }]).length === 1)
+    // Telegram-Funde gibt es nur mit Schalter an (`reifeFunde`); dann wie vor S12 eine eigene Domäne.
+    pruefe('Frühphase: Telegram ist eine eigene Domäne (Schalter an)',
+        evidenzDomaenen([{ quelle: 'fruehphase' }, { quelle: 'telegram' }]).length === 2)
 }
 /*
  * `noteSozial` kennt seit S12 zwei Signale: Nennungen aus der Frühphase und
@@ -468,6 +500,33 @@ pruefe('Felder der entfernten Bezahlquellen wirken nicht mehr',
     noteSozial({ sozial: { galaxyScore: 80, panicScore: 900, altRank: 1 } }) === null)
 pruefe('eine erfundene Stimmenzahl wirkt ebenfalls nicht',
     noteSozial({ sozial: { stimmen: 5000 } }) === null)
+
+// ── Schalter an (S15): die Sozialrechnung von vor S12 ───────────────────
+{
+    const an = { ohneFreigabe: true }
+    pruefe('Schalter an: ohne Signale 0, nicht unbekannt', noteSozial({ sozial: {} }, an) === 0)
+    pruefe('Schalter an: Felder der entfernten Bezahlquellen wirken nicht',
+        noteSozial({ sozial: { galaxyScore: 80, panicScore: 900, altRank: 1 } }, an) === 0)
+    pruefe('Schalter an: eine erfundene Stimmenzahl wirkt nicht', noteSozial({ sozial: { stimmen: 5000 } }, an) === 0)
+    // Reddit: Platz 1 wiegt schwer, Platz 50 kaum noch.
+    const platz1 = noteSozial({ sozial: { redditRang: 1 } }, an)
+    const platz50 = noteSozial({ sozial: { redditRang: 50 } }, an)
+    pruefe('Schalter an: vorderer Platz gibt mehr als hinterer', platz1 > platz50, `${platz1} vs ${platz50}`)
+    pruefe('Schalter an: der vordere Platz erreicht höchstens seinen Deckel', platz1 === REDDIT_DECKEL, String(platz1))
+    pruefe('ein Werbe-Unterforum trägt niemanden allein an die Spitze', REDDIT_DECKEL < 100)
+    pruefe('Schalter an: unsinniger Rang wirkt nicht', noteSozial({ sozial: { redditRang: 0 } }, an) === 0
+        && noteSozial({ sozial: { redditRang: -3 } }, an) === 0)
+    pruefe('Schalter an: echter Zuspruch schlägt gekauften',
+        noteSozial({ sozial: { redditRang: 1 } }, an) > noteSozial({ markt: { boosts: 1e9 } }, an))
+    const max = bewerte({
+        symbol: 'AI Agent', name: 'AI Agent', quellenAnzahl: 3,
+        markt: { volumen24h: 1e9, volumen1h: 1e9, paarAlterStunden: 12 },
+        sozial: { redditRang: 1 },
+    }, STANDARD_GEWICHTE, undefined, an)
+    const erw = (REDDIT_DECKEL * 30 + 100 * 25 + 75 * 15 + 100 * 20 + 100 * 10) / 100
+    pruefe('Schalter an: die Höchstnote mit Reddit entspricht der alten Rechnung',
+        Math.abs(max.hypeScore - erw) <= 1, `gemessen ${max.hypeScore}, gerechnet ${erw}`)
+}
 
 pruefe('gekaufte Aufmerksamkeit zählt, erreicht aber höchstens ihren Deckel',
     noteSozial({ sozial: { boostGesamt: 1e9 }, markt: { boosts: 1e9 } }) === BOOST_DECKEL,
@@ -535,6 +594,12 @@ pruefe('krumme Gewichtssumme bleibt im Bereich',
 pruefe('nur Quellen gefüllt → Note entspricht dem Quellenanteil der GEMESSENEN Gewichte',
     schief.hypeScore === 25, String(schief.hypeScore))
 pruefe('unbekannte Sozialnote steht als null in den Teilnoten', schief.teilnoten.sozial === null)
+{
+    // Schalter an (S15): wie vor S12 — Sozial ist 0 und bleibt im Nenner: 100 · 10 / 50.
+    const schiefAn = bewerte({ symbol: 'A', quellenAnzahl: 4, markt: {}, sozial: {} },
+        { sozial: 10, volumen: 10, quellen: 10, narrativ: 10, neuheit: 10 }, undefined, { ohneFreigabe: true })
+    pruefe('Schalter an: nur Quellen gefüllt → Note entspricht dem Quellenanteil', schiefAn.hypeScore === 20, String(schiefAn.hypeScore))
+}
 {
     // Eine unbekannte Teilnote drückt die Note nicht: gleich wie mit Sozial-Gewicht 0.
     const k = { symbol: 'B', quellenAnzahl: 2, markt: { volumen24h: 500, paarAlterStunden: 30 }, sozial: {} }

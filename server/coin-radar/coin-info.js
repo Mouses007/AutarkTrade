@@ -4,14 +4,20 @@
  *
  * Quelle ist CoinGecko (`search` zum Auflösen des Handelssymbols auf eine
  * CoinGecko-Id, `coins/{id}` für die eigentlichen Angaben) — NUR mit dem
- * Schlüssel des Kunden (Verkaufs-Prüfung Z. 87, S12): ohne ihn wirft der
- * Abruf `QuelleAus('CoinGecko', 'schluesselFehlt')`, und die Route sagt das.
+ * Schlüssel des Kunden (Verkaufs-Prüfung Z. 87, S12) oder — seit S15 mit dem
+ * Schalter „Quellen ohne Verkaufsfreigabe" an — über den öffentlichen
+ * Endpunkt wie vor S12 (zentral in `server/quellen/coingecko.js`). Ist beides
+ * nicht da, wirft der Abruf `QuelleAus('CoinGecko', 'schluesselFehlt')`, und
+ * die Route sagt das.
  * Gefragt wird über `holeCoinGecko` des Hype-Radars, damit die gemeinsame
  * Ratenbremse alle CoinGecko-Abrufe des Hauses sieht. Die Anzeige trägt
  * „Powered by CoinGecko" (API-Terms §4.4).
  *
- * Kein Bild: Coin-Logos sind fremde Inhalte (Terms 4(A), Verkaufs-Prüfung
- * Z. 58) — die Oberfläche zeichnet Ticker-Initialen.
+ * Bild nur mit Schalter an (ID `tokenbilder`): Coin-Logos sind fremde Inhalte
+ * (Terms 4(A), Verkaufs-Prüfung Z. 58). Mit Schalter AUS fehlt `bild`, und die
+ * Oberfläche zeichnet Ticker-Initialen (Stand S12). Der Zwischenspeicher
+ * behält das Bild immer; entfernt wird es beim Ausliefern, damit ein
+ * umgelegter Schalter sofort gilt.
  *
  * ⚠ CoinGecko führt seit Jahren KEIN strukturiertes „Team"-Feld mehr. Was
  * hier steht, ist die Projektbeschreibung plus Links — daraus lässt sich ein
@@ -20,6 +26,7 @@
 
 import { holeCoinGecko } from '../hype-radar/quellen.js'
 import { logWarn } from '../logger.js'
+import { quelleErlaubt } from '../quellen/freigabe.js'
 
 /** Projektinfos ändern sich kaum — ein Tag Cache ist grosszügig, nicht knapp. */
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
@@ -36,6 +43,13 @@ function basisVon(symbol) {
  * @throws {QuelleAus} ohne CoinGecko-Schlüssel
  */
 export async function holeCoinInfo(symbol) {
+    const daten = await holeCoinInfoRoh(symbol)
+    if (!daten || !daten.bild || (await quelleErlaubt('tokenbilder'))) return daten
+    const { bild, ...ohneBild } = daten
+    return ohneBild
+}
+
+async function holeCoinInfoRoh(symbol) {
     const basis = basisVon(symbol)
     if (!basis) return null
 
@@ -80,6 +94,7 @@ export async function holeCoinInfo(symbol) {
     const daten = {
         name: j?.name || treffer.name || basis,
         symbol: String(j?.symbol || basis).toUpperCase(),
+        bild: j?.image?.small || treffer.thumb || '',
         // CoinGecko liefert die Beschreibung mit HTML-Links; angezeigt wird Text.
         beschreibung: String(j?.description?.en || '').replace(/<[^>]*>/g, '').trim(),
         kategorien: Array.isArray(j?.categories) ? j.categories.filter(Boolean) : [],

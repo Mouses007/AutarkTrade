@@ -45,6 +45,7 @@ import Sortable from 'sortablejs'
 import { useHiddenCards } from './useHiddenCards.js'
 import { rasterZustand } from '../utils/kachelZustand.js'
 import { marktdaten, ladeMarktdaten } from '../utils/marktdaten.js'
+import { quellenFreigabe, ladeFreigabe } from '../utils/quellenFreigabe.js'
 
 /**
  * `quelle` einer Registry-Kachel → Liste für `Quellenhinweis`.
@@ -56,19 +57,29 @@ import { marktdaten, ladeMarktdaten } from '../utils/marktdaten.js'
  * Marktdatenquelle aus, entfällt die Zeile; solange die Wahl noch nicht
  * geladen ist, ebenfalls (lieber einen Augenblick nichts als das Falsche).
  * Ein alter Text-Eintrag wird zu `{ name }` (Art „daten").
+ *
+ * S15: `{ freigabe: true, … }` ist eine Quelle ohne Verkaufsfreigabe (Yahoo,
+ * ForexFactory, blockchain.info …) — sie steht nur da, solange der Schalter
+ * `quellenOhneFreigabe` an ist; `{ ohneSchalter: true, … }` nur, wenn er aus
+ * ist (der Ersatzweg von S12). Unbekannt (noch nicht geladen) gilt als an,
+ * wie im Server (`freigabe.js`).
  */
-export function loeseQuellen(quelle, md = marktdaten.value) {
+export function loeseQuellen(quelle, md = marktdaten.value, fg = quellenFreigabe.value) {
+    const freigabe = fg ? fg.an !== false : true
     if (!quelle) return []
     const liste = Array.isArray(quelle) ? quelle : [{ name: String(quelle) }]
     const aus = []
     for (const q of liste) {
         if (!q) continue
+        if (q.freigabe && !freigabe) continue
+        if (q.ohneSchalter && freigabe) continue
         if (q.marktdaten) {
             if (!md?.name) continue
             aus.push({ name: q.zusatz ? `${md.name} ${q.zusatz}` : md.name, art: 'daten', klein: q.klein })
             continue
         }
-        aus.push(q)
+        const { freigabe: _f, ohneSchalter: _o, ...rest } = q
+        aus.push(rest)
     }
     return aus
 }
@@ -185,7 +196,8 @@ export function useKachelRaster({
     /** id → aufgelöste Quellenliste; hängt an der Marktdatenwahl. */
     const quellenVon = computed(() => {
         const md = marktdaten.value
-        return Object.fromEntries(alleKacheln.value.map(k => [k.id, loeseQuellen(k.quelle, md)]))
+        const fg = quellenFreigabe.value
+        return Object.fromEntries(alleKacheln.value.map(k => [k.id, loeseQuellen(k.quelle, md, fg)]))
     })
     /**
      * Vereinigte Quellen aller Kacheln, die gerade Daten haben — für die
@@ -210,6 +222,7 @@ export function useKachelRaster({
         return aus.sort((a, b) => (rang[a.art || 'daten'] ?? 2) - (rang[b.art || 'daten'] ?? 2))
     })
     ladeMarktdaten()
+    ladeFreigabe()
 
     /**
      * Meldeweg für Kacheln mit `eigenerStrom`.

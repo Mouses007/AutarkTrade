@@ -49,15 +49,18 @@ const QUELLEN = [
     ['dexscreener-boosts', 'https://api.dexscreener.com/token-boosts/top/v1',
         (j) => (Array.isArray(j) ? j.slice(0, 3) : j)],
     /*
-     * CoinGecko nur mit Kundenschlüssel (S12): ohne `AT_COINGECKO_SCHLUESSEL`
-     * (Demo-Schlüssel) werden diese beiden übersprungen. Die On-Chain-Pools
-     * kommen seitdem über `/onchain/…` statt über die öffentliche
-     * GeckoTerminal-API — dieselbe Antwortform, darum derselbe Fixture-Name.
+     * CoinGecko mit `AT_COINGECKO_SCHLUESSEL` (Demo-Schlüssel) über die
+     * CoinGecko-API (`/onchain/…` für die Pools, S12). Ohne Schlüssel wie vor
+     * S12 über die öffentlichen Endpunkte (`oeffentlich`, Schalter-IDs
+     * `coingeckoOeffentlich`/`geckoterminal`, S15) — mit
+     * `AT_QUELLEN_OHNE_FREIGABE=0` werden die beiden dann übersprungen
+     * (Stand S12). Dieselbe Antwortform, darum derselbe Fixture-Name.
      */
     ['geckoterminal-pools', 'https://api.coingecko.com/api/v3/onchain/networks/solana/trending_pools?include=base_token',
-        (j) => ({ data: (j.data || []).slice(0, 3), included: (j.included || []).slice(0, 3) }), { coingecko: true }],
+        (j) => ({ data: (j.data || []).slice(0, 3), included: (j.included || []).slice(0, 3) }),
+        { coingecko: true, oeffentlich: 'https://api.geckoterminal.com/api/v2/networks/solana/trending_pools?include=base_token' }],
     ['coingecko-trending', 'https://api.coingecko.com/api/v3/search/trending',
-        (j) => ({ coins: (j.coins || []).slice(0, 3) }), { coingecko: true }],
+        (j) => ({ coins: (j.coins || []).slice(0, 3) }), { coingecko: true, oeffentlich: 'https://api.coingecko.com/api/v3/search/trending' }],
     ['goplus-evm', 'https://api.gopluslabs.io/api/v1/token_security/1?contract_addresses=0x6982508145454ce325ddbe47a25d4ec3d2311933', null],
     ['goplus-solana', 'https://api.gopluslabs.io/api/v1/solana/token_security?contract_addresses=LFEJTxJ9yi6ojGDFpjbGfABLbH55Fc3oEK8syJJpump', null],
     ['rugcheck', 'https://api.rugcheck.xyz/v1/tokens/LFEJTxJ9yi6ojGDFpjbGfABLbH55Fc3oEK8syJJpump/report',
@@ -103,16 +106,20 @@ let verschwunden = 0
 console.log(`\nFixtures ${schreiben ? 'auffrischen' : 'vergleichen'} — ${QUELLEN.length} Quellen\n`)
 
 const cgSchluessel = String(process.env.AT_COINGECKO_SCHLUESSEL || '').trim()
+const ohneFreigabe = String(process.env.AT_QUELLEN_OHNE_FREIGABE ?? '1').trim() !== '0'
 
 for (const [name, url, kuerzen, opts = {}] of QUELLEN) {
     const datei = path.join(ordner, `${name}.json`)
-    if (opts.coingecko && !cgSchluessel) {
+    const oeffentlich = opts.coingecko && !cgSchluessel
+    if (oeffentlich && !(ohneFreigabe && opts.oeffentlich)) {
         console.log(`  ${gelb('?')} ${name} — übersprungen: CoinGecko nur mit Schlüssel (AT_COINGECKO_SCHLUESSEL)`)
         continue
     }
     let frisch
     try {
-        const antwort = await fetch(url, opts.coingecko ? { headers: { 'x-cg-demo-api-key': cgSchluessel } } : {})
+        const antwort = oeffentlich
+            ? await fetch(opts.oeffentlich)
+            : await fetch(url, opts.coingecko ? { headers: { 'x-cg-demo-api-key': cgSchluessel } } : {})
         const j = await antwort.json()
         frisch = kuerzen ? kuerzen(j) : j
     } catch (e) {

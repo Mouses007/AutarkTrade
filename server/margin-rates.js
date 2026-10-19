@@ -7,39 +7,87 @@
  * Symbolen; der Rest liegt bei 0,01 bis 0,05. Mit der Vorgabe lagen dort alle
  * Zonen um ein Vielfaches zu nah am Kurs.
  *
- * Quelle (S12, Verkaufs-Prüfung Zeile 34/35):
+ * Zwei Quellen, bewusst nicht vermischt:
  *
- *  - Bybit veröffentlicht die Risikolimits als reguläre, dokumentierte
- *    v5-API (`/v5/market/risk-limit`, ohne Schlüssel). Urteil gelb (Bybit-
- *    Bedingungen unklar), bleibt.
- *  - Schweigt Bybit oder kennt das Symbol nicht, gilt die feste Vorgabe
- *    `MMR_VORGABE` — und die Antwort sagt das (`quelle: 'vorgabe'`).
+ *  - Binance liefert die echte Tabelle über sein Web-Backend (`bapi`), ohne
+ *    Schlüssel. Der dokumentierte `/fapi/v1/leverageBracket` ist signiert,
+ *    dieser hier nicht. Dafür ist er auch nicht zugesichert — er kann sich
+ *    ohne Ankündigung ändern: cachen (Prozess + `api_cache`), und bei einem
+ *    Ausfall lieber den alten Stand ausliefern als gar keinen.
+ *    Für einen Verkauf rot (Verkaufs-Prüfung Zeile 34): S12 hatte ihn
+ *    entfernt, seit S15 läuft er wieder hinter dem Schalter „Quellen ohne
+ *    Verkaufsfreigabe" (`server/quellen/freigabe.js`, ID `binanceBrackets`).
+ *    Die Adresse steht in `server/marktdaten/binance.js` (`bapiKlammern`);
+ *    sie hängt NICHT an der gewählten Marktdatenquelle — die Klammern sind
+ *    eine Börsentabelle, keine Kursdaten, und liefen vor S12 immer.
+ *  - Bybit veröffentlicht dasselbe als reguläre, dokumentierte v5-API
+ *    (`/v5/market/risk-limit`, ohne Schlüssel; Urteil gelb, bleibt).
+ *    Mit Schalter AUS ist Bybit die einzige Quelle (Stand S12).
+ *  - Schweigen beide, gilt die feste Vorgabe `MMR_VORGABE` — und die Antwort
+ *    sagt das (`quelle: 'vorgabe'`).
  *
- * ENTFERNT 19.10.2026: die Binance-Klammertabelle aus dem undokumentierten
- * Web-Backend (`bapi/futures/…/brackets`). Die Prüfung stuft ihn rot ein
- * (Crawler/Skripte für nicht vorgesehene Informationen verboten). Der
- * dokumentierte `/fapi/v1/leverageBracket` braucht einen Binance-Konto-
- * schlüssel, den das Programm nicht hat — darum kein Ersatz über Binance.
- * Ein alter Stand `binance_brackets` in `api_cache` wird nicht mehr gelesen.
- *
- * Die Werte sind NICHT austauschbar: BTCUSDT stand bei Binance auf 0,004 und
- * steht bei Bybit auf 0,005, 1000PEPEUSDT auf 0,0065 gegen 0,01. Die Karte
- * rechnet mit der Bybit-Stufe 1 — für einen Binance-Chart eine Näherung, die
- * die Oberfläche als Quelle nennt.
+ * Die Werte sind NICHT austauschbar: BTCUSDT steht bei Binance auf 0,004 und
+ * bei Bybit auf 0,005, 1000PEPEUSDT auf 0,0065 gegen 0,01. Auch die Stufen-
+ * grenzen unterscheiden sich (BTC-Stufe 1 endet bei 300k bzw. 2 Mio). Deshalb
+ * wird hier nichts gemittelt — ein Mittelwert wäre eine Rate, die an keiner der
+ * beiden Börsen gilt. Gewählt wird eine Quelle; die andere ist nur der Ersatz,
+ * wenn die erste schweigt, und das steht dann auch in der Antwort. Mit
+ * Schalter AUS rechnet die Karte mit der Bybit-Stufe 1 — für einen Binance-
+ * Chart eine Näherung, die die Oberfläche als Quelle nennt.
  */
 
 import axios from 'axios'
 import { logWarn } from './logger.js'
+import { quelleErlaubt } from './quellen/freigabe.js'
+import { bapiKlammern } from './marktdaten/binance.js'
 
 const HTTP_TIMEOUT = 12000
-/** Risikolimits ändern sich in Wochen, nicht in Stunden. */
+/** Klammern und Risikolimits ändern sich in Wochen, nicht in Stunden. */
 const CACHE_MS = 24 * 60 * 60 * 1000
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 
 const BYBIT_URL = 'https://api.bybit.com/v5/market/risk-limit'
 
-/** Was gilt, wenn Bybit schweigt — die alte, feste Vorgabe (BTCUSDT-Stufe 1 bei Binance). */
+/** Was gilt, wenn beide Börsen schweigen — die alte, feste Vorgabe (BTCUSDT-Stufe 1 bei Binance). */
 export const MMR_VORGABE = 0.004
+
+/**
+ * Stufe 1 aus einer Binance-Klammertabelle ziehen.
+ *
+ * Genommen wird die Klammer mit Untergrenze 0, nicht `bracketSeq === 1`: die
+ * Nummer ist eine Anzeigereihenfolge, die Untergrenze ist die Aussage.
+ */
+export function parseBinanceKlammern(rohdaten) {
+    const tabelle = new Map()
+    for (const eintrag of rohdaten?.data?.brackets || []) {
+        const stufen = eintrag.riskBrackets || []
+        const erste = stufen.find(s => Number(s.bracketNotionalFloor) === 0)
+        const mmr = Number(erste?.bracketMaintenanceMarginRate)
+        if (!(mmr > 0)) continue
+        // Die volle Stufenliste bleibt erhalten (bis 31.08.2026 wurde sie hier
+        // verworfen): `cum` ist das Maintenance Amount der exakten Binance-
+        // Liquidationsformel, `maxHebel` je Stufe klemmt die Hebelklassen der
+        // Karte. Der Abruf kostet dadurch nichts extra — dieselbe Antwort,
+        // nur weniger weggeworfen.
+        const klammern = stufen
+            .map(s => ({
+                floor: Number(s.bracketNotionalFloor) || 0,
+                cap: Number(s.bracketNotionalCap) || 0,
+                mmr: Number(s.bracketMaintenanceMarginRate) || 0,
+                cum: Number(s.cumFastMaintenanceAmount) || 0,
+                maxHebel: Number(s.maxOpenPosLeverage) || 0,
+            }))
+            .sort((a, b) => a.floor - b.floor)
+        tabelle.set(String(eintrag.symbol).toUpperCase(), {
+            mmr,
+            obergrenze: Number(erste.bracketNotionalCap) || 0,
+            maxHebel: Number(erste.maxOpenPosLeverage) || 0,
+            stufen: stufen.length,
+            klammern,
+        })
+    }
+    return tabelle
+}
 
 /**
  * Stufe 1 aus einer Bybit-Risikolimit-Liste ziehen.
@@ -62,6 +110,118 @@ export function parseBybitRisikolimit(rohdaten) {
         maxHebel: Number(erste.maxLeverage) || 0,
         stufen: liste.length,
     }
+}
+
+// ── Binance: eine Tabelle für alle Symbole ──────────────────────────────
+// 1,6 MB je Abruf, deshalb genau einer pro Tag und nicht einer pro Symbol.
+// Zusätzlich DB-persistiert (`api_cache`, Schlüssel `binance_brackets`): der
+// Prozess-Cache stirbt mit jedem Neustart, und NAS-Container und dev-Server
+// luden dann beide die volle Tabelle neu. Geschrieben wird die GEPARSTE
+// Tabelle, nicht die Rohantwort — einige hundert KB statt 1,6 MB.
+let binanceCache = null       // { ts, tabelle }
+let binanceLaeuft = null      // laufender Abruf, gegen den Ansturm beim Start
+
+const BRACKETS_DB_KEY = 'binance_brackets'
+
+/**
+ * DB lazy importieren: die Parser oben bleiben pure, und der Selftest läuft
+ * ohne Netz UND ohne Datenbank. Jeder DB-Fehler ist hier weich — der Persist
+ * ist eine Abkürzung, keine Voraussetzung.
+ */
+async function leseBracketsAusDb() {
+    try {
+        const { getKnex } = await import('./database.js')
+        const knex = getKnex()
+        if (!knex) return null
+        const zeile = await knex('api_cache').where({ key: BRACKETS_DB_KEY }).first()
+        if (!zeile?.payload || (Date.now() - Number(zeile.ts)) >= CACHE_MS) return null
+        const roh = JSON.parse(zeile.payload)
+        return { ts: Number(zeile.ts), tabelle: new Map(Object.entries(roh)) }
+    } catch {
+        return null
+    }
+}
+
+async function schreibeBracketsInDb(cache) {
+    try {
+        const { getKnex } = await import('./database.js')
+        const knex = getKnex()
+        if (!knex) return
+        await knex('api_cache')
+            .insert({
+                key: BRACKETS_DB_KEY,
+                ts: cache.ts,
+                payload: JSON.stringify(Object.fromEntries(cache.tabelle)),
+            })
+            .onConflict('key')
+            .merge(['ts', 'payload'])
+    } catch (fehler) {
+        logWarn('margin-rates', `Brackets-Persist fehlgeschlagen: ${fehler.message}`)
+    }
+}
+
+async function holeBinanceTabelle() {
+    const frisch = binanceCache && (Date.now() - binanceCache.ts) < CACHE_MS
+    if (frisch) return binanceCache
+    if (binanceLaeuft) return binanceLaeuft
+
+    binanceLaeuft = (async () => {
+        try {
+            // Kalter Start: erst nachsehen, ob ein anderer Prozess die Tabelle
+            // heute schon geholt hat — dann kostet der Start keinen Netzabruf.
+            if (!binanceCache) {
+                const ausDb = await leseBracketsAusDb()
+                if (ausDb?.tabelle.size) {
+                    binanceCache = ausDb
+                    console.log(` -> Binance Hebelklammern: ${ausDb.tabelle.size} Symbole aus der DB übernommen`)
+                    return binanceCache
+                }
+            }
+            const data = await bapiKlammern({ timeout: HTTP_TIMEOUT })
+            const tabelle = parseBinanceKlammern(data)
+            if (!tabelle.size) throw new Error('leere Klammertabelle')
+            binanceCache = { ts: Date.now(), tabelle }
+            console.log(` -> Binance Hebelklammern: ${tabelle.size} Symbole gecacht`)
+            await schreibeBracketsInDb(binanceCache)
+            return binanceCache
+        } catch (fehler) {
+            logWarn('margin-rates', `Binance-Klammern nicht abrufbar: ${fehler.message}`)
+            // Alter Stand ist besser als keiner: die Klammern stehen wochenlang
+            // still, ein Tag Verspätung ändert an der Karte nichts.
+            if (binanceCache) return { ...binanceCache, veraltet: true }
+            // Notnagel: auch ein abgelaufener DB-Stand schlägt gar keinen.
+            const alt = await leseBracketsAusDbOhneFrist()
+            if (alt?.tabelle.size) {
+                binanceCache = alt
+                return { ...alt, veraltet: true }
+            }
+            return null
+        } finally {
+            binanceLaeuft = null
+        }
+    })()
+    return binanceLaeuft
+}
+
+/** Wie leseBracketsAusDb, aber ohne 24-h-Frist — nur für den Fehlerpfad. */
+async function leseBracketsAusDbOhneFrist() {
+    try {
+        const { getKnex } = await import('./database.js')
+        const knex = getKnex()
+        if (!knex) return null
+        const zeile = await knex('api_cache').where({ key: BRACKETS_DB_KEY }).first()
+        if (!zeile?.payload) return null
+        return { ts: Number(zeile.ts), tabelle: new Map(Object.entries(JSON.parse(zeile.payload))) }
+    } catch {
+        return null
+    }
+}
+
+async function ausBinance(symbol) {
+    const stand = await holeBinanceTabelle()
+    const treffer = stand?.tabelle.get(symbol)
+    if (!treffer) return null
+    return { ...treffer, quelle: 'binance', veraltet: !!stand.veraltet }
 }
 
 // ── Bybit: je Symbol ein Abruf ──────────────────────────────────────────
@@ -90,26 +250,38 @@ async function ausBybit(symbol) {
 }
 
 /**
- * Rate für ein Symbol besorgen (Bybit-Stufe 1), oder null, wenn Bybit
- * schweigt. `quelle` ist der Wunsch der Oberfläche; der frühere Wunsch
- * 'binance' wird seit S12 von Bybit bedient und als `ersatz` gekennzeichnet —
- * die Karte soll nicht so tun, als käme die Zahl von der Börse, auf die man
- * gerade schaut.
+ * Rate für ein Symbol besorgen. `quelle` ist der Wunsch, nicht das Ergebnis:
+ * antwortet die gewünschte Börse nicht oder kennt sie das Symbol nicht, wird
+ * die andere gefragt und das Ergebnis als `ersatz` gekennzeichnet. Die Karte
+ * soll nicht stehenbleiben, aber sie soll auch nicht so tun, als käme die Zahl
+ * von der Börse, auf die man gerade schaut.
+ *
+ * Ohne Wunsch: Binance, wenn der Schalter „Quellen ohne Verkaufsfreigabe" an
+ * ist (wie vor S12), sonst Bybit. Mit Schalter AUS wird Binance nie gefragt;
+ * ein Wunsch 'binance' wird dann von Bybit bedient und als `ersatz`
+ * gekennzeichnet (Stand S12).
  */
-export async function holeMarginRate(symbol, quelle = 'bybit') {
+export async function holeMarginRate(symbol, quelle) {
     const gross = String(symbol || '').toUpperCase()
     if (!SYMBOL_RE.test(gross)) return null
-    const treffer = await ausBybit(gross)
-    if (!treffer) return null
-    return { symbol: gross, gewuenscht: quelle, ersatz: quelle !== 'bybit', ...treffer }
+    const binanceErlaubt = await quelleErlaubt('binanceBrackets')
+    const wunsch = quelle === 'binance' || quelle === 'bybit' ? quelle : (binanceErlaubt ? 'binance' : 'bybit')
+
+    const reihenfolge = (wunsch === 'bybit' ? ['bybit', 'binance'] : ['binance', 'bybit'])
+        .filter(q => q !== 'binance' || binanceErlaubt)
+    for (const q of reihenfolge) {
+        const treffer = q === 'bybit' ? await ausBybit(gross) : await ausBinance(gross)
+        if (treffer) return { symbol: gross, gewuenscht: wunsch, ersatz: q !== wunsch, ...treffer }
+    }
+    return null
 }
 
 /**
  * Wartungsmarge in PROZENT für Backtest und Paper-Handel.
  *
  * `override` (aus `risk.maintenanceMarginPct`) schlägt alles: wer bewusst eine
- * Zahl einträgt, bekommt sie. Sonst die echte Stufe-1-Rate (Bybit), und erst
- * wenn Bybit schweigt, die Vorgabe. Vor dem Audit vom 19.08.2026 stand
+ * Zahl einträgt, bekommt sie. Sonst die echte Stufe-1-Rate der Börse, und erst
+ * wenn beide Börsen schweigen, die Vorgabe. Vor dem Audit vom 19.08.2026 stand
  * hier pauschal 0,5 % für jedes Symbol — bei einem Alt-Coin mit 1 % liess der
  * Backtest die Position rund 50 % weiter laufen als die Börse.
  *
@@ -131,7 +303,8 @@ export async function wartungsmargePctFuer(symbol, override = 0) {
 export function setupMarginRateRoutes(app) {
     /**
      * GET /api/margin-rate
-     * Query: symbol (required), quelle ('bybit'; 'binance' = Altwunsch, von Bybit bedient)
+     * Query: symbol (required), quelle ('binance' | 'bybit'; ohne: Binance bei
+     *        Schalter an, sonst Bybit — Binance mit Schalter AUS von Bybit bedient)
      *
      * Antwort: { symbol, mmr, quelle, gewuenscht, ersatz, veraltet,
      *            obergrenze, maxHebel, stufen }
@@ -145,8 +318,8 @@ export function setupMarginRateRoutes(app) {
         if (!SYMBOL_RE.test(symbol)) {
             return res.status(400).json({ error: 'symbol fehlt oder ist ungültig' })
         }
-        // 'binance' ist ein gespeicherter Altwunsch (vor S12) — Bybit bedient ihn.
-        const quelle = req.query.quelle === 'binance' ? 'binance' : 'bybit'
+        // Mit Schalter AUS bedient Bybit auch einen Wunsch 'binance' (S12).
+        const quelle = req.query.quelle === 'binance' || req.query.quelle === 'bybit' ? req.query.quelle : undefined
 
         const treffer = await holeMarginRate(symbol, quelle)
         res.setHeader('Cache-Control', 'private, max-age=3600')
@@ -154,9 +327,9 @@ export function setupMarginRateRoutes(app) {
             // Statt 404 die Vorgabe MIT Herkunft: sonst bliebe in der Karte
             // still die Rate des vorigen Symbols stehen.
             return res.json({
-                symbol, mmr: MMR_VORGABE, quelle: 'vorgabe', gewuenscht: quelle, ersatz: true, veraltet: false,
+                symbol, mmr: MMR_VORGABE, quelle: 'vorgabe', gewuenscht: quelle || null, ersatz: true, veraltet: false,
                 obergrenze: 0, maxHebel: 0, stufen: 0,
-                hinweis: `Bybit kennt ${symbol} nicht oder antwortet nicht — feste Vorgabe ${MMR_VORGABE}`,
+                hinweis: `Keine Börse kennt ${symbol} oder antwortet — feste Vorgabe ${MMR_VORGABE}`,
             })
         }
         res.json(treffer)

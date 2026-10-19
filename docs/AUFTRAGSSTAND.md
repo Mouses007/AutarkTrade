@@ -35,6 +35,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 3 | S11 Herkunftsnachweis & Freigabe | `scripts/herkunft-pruefen.mjs`, `HERKUNFT.md`, Widget/ESP32 umbenennen, CI, altes Repo privat | `claude/s11-herkunft-fa3692` | **fertig** (altes Repo: nur vorbereitet, auf Anweisung) |
 | 4 | S13 Scharfen Handel auslagern | Orders, Stop-Wächter, Margen-Netz, Abgleich, Live-Freigabe ausbauen; aufbewahren auf `spaeter/scharfer-handel`; Migration live → Papier | `claude/s13-handel-auslagern-f7e9fe` | **fertig** → `docs/SPAETER-SCHARFER-HANDEL.md` |
 | 5 | S14 Hype-Radar übersichtlich | Übersicht: Lagezeile, Alarme eingeklappt mit Art-Filter, Funde „geprüft“ als Vorgabe, einzeilige Tabelle/Karten, Quadrant einklappbar — nur Darstellung | `claude/s14-hype-uebersicht-7eb497` | **fertig** |
+| 5 | S15 Analysequellen zurück | Von S12 entfernte Quellen (Yahoo, ForexFactory, CMC, blockchain.info, CoinGecko/GeckoTerminal ohne Schlüssel, pump.fun, Telegram, Reddit, CoinPaprika, Upbit/MEXC/OKX/Alpha, bapi-Brackets, News-Vorschläge, öffentlicher Solana-RPC, Logos, DeepSeek-Suche) zurück hinter Schalter `quellenOhneFreigabe` (Vorgabe an) | `claude/s15-quellen-zurueck-260844` | **fertig** |
 
 ## Gesamtfazit (S11, 19.10.2026)
 
@@ -60,6 +61,31 @@ Attribution, jede KI-Ausgabe ist gekennzeichnet (S12, Verkaufs-Prüfung Anhang 1
    (Demo-Tarif im verkauften Produkt), dazu Bitunix, Bitget, Bybit, GoPlus, CryptoQuant, RugCheck.
 4. Vertrieb: Händler-Dienst (Merchant of Record) und Kunden-Zugang zur Registry statt
    GitHub-Token je Kunde (`HERKUNFT.md`, Anhang B).
+
+## S15 Analysequellen zurück — Ergebnis (19.10.2026)
+
+Anlass: S12 hatte die für einen Verkauf roten/ungeklärten Quellen entfernt, was für den Eigengebrauch nie verlangt war.
+
+- **Schalter** „Quellen ohne Verkaufsfreigabe" (Einstellungen › Datenquellen, `settings.quellenOhneFreigabe`, **Vorgabe an**).
+  An = wie vor S12, aus = Stand S12. Die eine Liste: `server/quellen/freigabe.js` (21 IDs mit Prüfungszeilen),
+  Grund `ohneFreigabe` in `QuelleAus`, Route `GET/PUT /api/quellen/ohne-freigabe`, Browser `src/utils/quellenFreigabe.js`.
+  Selbsttest `server/quellen/__selftest-freigabe.mjs` (neuer Ort in `ORTE`).
+- **Zurück** (je Zeile im S15-Anhang von `docs/VERKAUFS-PRUEFUNG.md`): Yahoo (Makro, Indizes, Live-Indizes, Gesamt-/Handelslage),
+  ForexFactory zusätzlich zu Fed/BEA/Eurostat (entdoppelt), CMC-Dominanz, blockchain.info (Rainbow/Pi Cycle, alte Kalibrierung,
+  `server/data/btc-monatskurse.json`), Wal-Kachel, Telegram (News, Frühphase), News-Vorschläge, DeepSeek-Suche, CoinGecko und
+  GeckoTerminal ohne Schlüssel (zentral in `coingecko.js`), pump.fun, Reddit, CoinPaprika, Logos, RugCheck/gelbe Börsen/öffentlicher
+  Solana-RPC als Vorgabe, Upbit/MEXC/OKX/Binance Alpha, bapi-Brackets, OKX im Fremdbuch. Binance-bapi-Endpunkte liegen in
+  `server/marktdaten/binance.js`. Behalten: Marktdaten-Abstraktion, Attributionen (ergänzt), KI-Kennzeichnung, „Quelle aus".
+- **Migration** `server/migrationen/s15.js`: auf der DB-Kopie gelaufen — 5 Telegram-Quellen wieder an, Kalender-Länder `USD,JPY`,
+  Wartungsmarge Binance (automatisch). `s12.js` überspringt bei Schalter an seine abschaltenden Schritte; die
+  Wartungsmargen-Umschreibung von S12 läuft gar nicht mehr; DB-Vorgabe `levMapMmrQuelle` wieder `binance`.
+- **Geprüft**: `npm run test:self` 142/142 grün, `npm run build` fehlerfrei. Testcontainer gegen die DB-Kopie (Testbetrieb,
+  Routen von Hand): Makro, Indizes, Kalender (ForexFactory 86 neben Fed 9/BEA 53/Eurostat 15), Dominanz, Rainbow, Pi Cycle,
+  Marktübersicht, Wal, Altseason, Hype-Scan (alle sechs Quellen ok), Frühphase (pump.fun 100, GeckoTerminal 80), Börsenwächter
+  (Alpha, Upbit, OKX, MEXC ok; KuCoin aus diesem Netz nicht erreichbar); Schalter aus → `{aus, grund: 'ohneFreigabe'}`, wieder an.
+- **Offen**: Oberfläche nicht im Browser geprüft (DB-Kopie hinter Passwort), nur Build. Kalender-Countdown-Cache hängt nicht
+  am Schalter (eine TTL lang alter Stand nach dem Umlegen). pump.fun `/coins` antwortete curl vom Arbeitsrechner mit 403
+  (Cloudflare), aus dem Container mit Daten. Reddit kündigt RSS zum 13.11.2026 ab.
 
 ## S14 Hype-Radar übersichtlich — Ergebnis (19.10.2026)
 

@@ -3,7 +3,8 @@
  *
  * Fünf Kacheln brauchen Daten, die es sonst nirgends gibt:
  *
- *   /indizes           ENTFERNT (S12) — antwortet `{ aus: true, grund: 'entfernt' }`
+ *   /indizes           Intraday-Kerzen von ES, NQ, RTY und DXY (Yahoo, nur mit Schalter
+ *                      `quellenOhneFreigabe`, sonst `{ aus: true, grund: 'ohneFreigabe' }`)
  *   /kalender-countdown Nur die Termine der nächsten Stunden, mit Restzeit
  *   /liq-ticker        Liquidationen der letzten Minuten aus dem Arbeitsspeicher
  *   /session-stand     Offene Positionen und die P&L der laufenden Sitzung
@@ -15,9 +16,11 @@
  * letzten bekannten Stand mit `veraltet: true` statt einer leeren Kachel.
  */
 
-import { ausCache, sendeRadar, sendRadarError, verwerfeCache } from './marktradar-api.js'
+import { ausCache, sendeRadar, sendRadarError, holeJson, verwerfeCache } from './marktradar-api.js'
 import { leseKalender, KALENDER_LAENDER_VORGABE } from './marktradar-kalender.js'
 import { QuelleAus, ausAntwort } from './quellen/aus.js'
+import { quelleErlaubt } from './quellen/freigabe.js'
+import { ohlcAusChart } from './makro.js'
 import { lies as liesLiqTicker } from './liq-ticker.js'
 import { getDecryptedConfig, getPendingPositions, getHistoryPositions } from './bitunix-api.js'
 import { getKnex } from './database.js'
@@ -59,15 +62,205 @@ export async function alleHistoryPositions(config, { startTime, endTime }, holeS
 }
 
 /*
- * Indizes-Kachel (ES, NQ, RTY, DXY): bis S12 Intraday-Kerzen aus dem
- * inoffiziellen Yahoo-Finance-Chart-Endpunkt. Yahoo verbietet
- * automatisiertes Sammeln ohne Erlaubnis und kommerzielle Nutzung
- * (Verkaufs-Prüfung Z. 39, wie Z. 28). Ersatz mit Kundenschlüssel geprüft
- * und nicht gebaut — Begründung bei `holeMakro` in `marktradar-api.js`.
- * Die Route bleibt, damit gespeicherte Layouts nicht ins Leere greifen, und
- * sagt, dass die Kachel entfernt ist.
+ * Indizes-Kachel (ES, NQ, RTY, DXY) aus dem inoffiziellen Yahoo-Finance-
+ * Chart-Endpunkt. Yahoo hat keine Verkaufsfreigabe (Verkaufs-Prüfung Z. 39,
+ * wie Z. 28): S12 hatte die Route darum stillgelegt, seit S15 (19.10.2026)
+ * läuft sie wieder, solange der Schalter `quellenOhneFreigabe` an ist
+ * (`quelleErlaubt('yahoo')`), sonst antwortet sie `{aus, grund: 'ohneFreigabe'}`.
  */
-const INDIZES_ENTFERNT = new QuelleAus('Yahoo Finance', 'entfernt')
+/**
+ * Dieselben Ticker wie die Makro-Kachel — ES und NQ als FUTURES, nicht als
+ * Kassa-Index: der Kassa-Index steht ausserhalb der Börsenzeiten still und war
+ * in der ersten Fassung der Makro-Kachel zeitweise 62 Stunden alt.
+ */
+/*
+ * `erwartetMin` ist die von Yahoo angegebene Verzögerung der jeweiligen Börse
+ * (CME rund 10 Minuten, ICE rund 30). Sie dient NUR als Beschriftung und als
+ * Schwelle — das tatsächliche Alter wird aus `regularMarketTime` gemessen, das
+ * `ohlcAusChart` als `zeit` liefert. Eine Konstante als Alterswert auszugeben
+ * wäre dieselbe Sorte Falschaussage, die diese Änderung beseitigen soll.
+ */
+const MAERKTE = {
+    sp500: { ticker: 'ES=F', name: 'S&P 500 (ES)', erwartetMin: 10 },
+    nasdaq: { ticker: 'NQ=F', name: 'Nasdaq 100 (NQ)', erwartetMin: 10 },
+    // Russell 2000: die Nebenwerte reagieren am stärksten auf Zins- und
+    // Risikoerwartung — dreht RTY vor ES/NQ, ist es eine Risikobewegung
+    // und keine Rotation innerhalb der grossen Werte.
+    russell: { ticker: 'RTY=F', name: 'Russell 2000 (RTY)', erwartetMin: 10 },
+    dxy: { ticker: 'DX-Y.NYB', name: 'US-Dollar-Index', erwartetMin: 30 },
+}
+
+/**
+ * Zuschlag auf die erwartete Verzögerung, ab dem die Kachel auf „veraltet"
+ * geht. Ohne ihn stünde eine Quelle, die ihre 10 Minuten genau einhält, im
+ * Sekundentakt zwischen grün und gelb.
+ *
+ * Ausserhalb der Handelszeiten läuft er ins Leere und das ist beabsichtigt:
+ * Am Wochenende ist der letzte Kurs Stunden alt, und genau das soll die Kachel
+ * dann auch sagen. Ein Feiertagskurs, der als frisch durchgeht, ist die
+ * Falschaussage — nicht ein gelber Punkt am Sonntag.
+ */
+const ALTERS_RESERVE_MIN = 5
+
+const YAHOO = 'https://query1.finance.yahoo.com/v8/finance/chart/'
+
+/**
+ * Zulässige Auflösungen. Yahoo begrenzt den Zeitraum je Auflösung (1m nur
+ * wenige Tage); mehr Stufen bringen im Stundenfenster nichts.
+ */
+const INTERVALLE = new Set(['1m', '2m', '5m', '15m', '30m', '1h'])
+
+/**
+ * TTL 60 s — unabhängig davon, wie viele Fenster offen sind, fragt der Server
+ * höchstens einmal pro Minute je Markt. Yahoo hat kein dokumentiertes Limit,
+ * blockt aber aggressive Aufrufer; vier Anfragen pro Minute für den ganzen
+ * Server sind unbedenklich.
+ */
+const INDIZES_TTL = 60 * 1000
+
+/**
+ * Zeitraum, den wir bei Yahoo IMMER anfordern — unabhängig vom Fenster, das
+ * die Kachel zeigt.
+ *
+ * `1d` war hier die naheliegende und falsche Wahl. Für einen Future meint
+ * Yahoo damit die laufende reguläre Sitzung, und die hat um sechs Uhr früh
+ * europäischer Zeit noch kaum begonnen: gemessen am 27.08.2026 lieferte
+ * `NQ=F?range=1d&interval=5m` genau **10 Kerzen**, bei `15m` noch fünf. Auf
+ * einer grossen Fläche standen dann fünf riesige Kerzen ohne jeden Bezug —
+ * man sah eine Bewegung, konnte sie aber nicht einordnen.
+ *
+ * `5d` liefert an derselben Stelle 945 Kerzen und deckt damit auch die
+ * Nachtsitzung ab, in der Krypto tatsächlich gehandelt wird. Beschnitten wird
+ * danach hier, nicht bei Yahoo — ein Abruf bedient so jedes Fenster.
+ */
+const YAHOO_RANGE = '5d'
+
+/** Fenster in Stunden: Vorgabe, Grenzen und Mindestzahl an Kerzen. */
+const FENSTER_VORGABE_H = 12
+const FENSTER_MAX_H = 120
+const MIN_KERZEN = 12
+
+/**
+ * Kerzen auf das gewünschte Fenster kürzen.
+ *
+ * Arbeitet auf einer KOPIE: `roh` kommt aus dem Zwischenspeicher und wird von
+ * parallelen Anfragen mit anderem Fenster mitbenutzt. Wer hier hineinschneidet,
+ * kürzt sie allen.
+ *
+ * Bleiben weniger als `MIN_KERZEN` übrig, gelten stattdessen die letzten
+ * `MIN_KERZEN` — ein Markt, der im Fenster gar nicht gehandelt hat (Feiertag,
+ * Wochenende, ICE-Pause), soll seinen letzten bekannten Verlauf zeigen und
+ * nicht eine leere Fläche.
+ */
+function beschneideFenster(roh, stunden) {
+    const grenze = Date.now() - stunden * 60 * 60 * 1000
+    const maerkte = {}
+    for (const [id, m] of Object.entries(roh.maerkte || {})) {
+        const alle = Array.isArray(m?.kerzen) ? m.kerzen : []
+        const drin = alle.filter(k => k.t >= grenze)
+        maerkte[id] = {
+            ...m,
+            kerzen: drin.length >= MIN_KERZEN ? drin : alle.slice(-MIN_KERZEN),
+            // Was der Schnitt weggenommen hat, gehört angeschrieben: sonst
+            // sieht ein zurückgefallenes Mindestfenster wie das gewählte aus.
+            kerzenGesamt: alle.length,
+            fensterVoll: drin.length >= MIN_KERZEN,
+        }
+    }
+    return { maerkte }
+}
+
+async function holeIndizes(interval, range) {
+    const eintraege = await Promise.all(Object.entries(MAERKTE).map(async ([id, m]) => {
+        try {
+            const url = `${YAHOO}${encodeURIComponent(m.ticker)}?range=${range}&interval=${interval}`
+            const json = await holeJson(url)
+            const daten = ohlcAusChart(json)
+            /*
+             * `quellenStand` ist ein ABSOLUTER Zeitstempel, kein Alter. Die
+             * Antwort liegt bis zu `INDIZES_TTL` im Zwischenspeicher — ein hier
+             * ausgerechnetes Alter wäre beim Ausliefern bis zu eine Minute zu
+             * jung, und ausgerechnet die Zahl, die Frische behaupten soll,
+             * würde selbst zu alt ausgeliefert. Gerechnet wird beim Senden.
+             */
+            const quellenStand = daten.zeit
+                || (daten.kerzen.length ? daten.kerzen[daten.kerzen.length - 1].t : null)
+            return [id, {
+                ...daten,
+                ticker: m.ticker,
+                name: daten.name || m.name,
+                quellenStand,
+                erwartetMin: m.erwartetMin,
+            }]
+        } catch (e) {
+            // Ein Markt darf die übrigen nicht mitnehmen
+            logWarn('livetrading', `Indizes: ${m.ticker} fehlgeschlagen`, e.message)
+            return [id, null]
+        }
+    }))
+
+    const maerkte = Object.fromEntries(eintraege)
+    const fehlend = Object.entries(maerkte).filter(([, v]) => !v).map(([k]) => k)
+    if (fehlend.length === Object.keys(MAERKTE).length) {
+        throw new Error('Kein Markt erreichbar')
+    }
+    return {
+        interval,
+        range,
+        maerkte,
+        hinweis: fehlend.length ? `Nicht erreichbar: ${fehlend.join(', ')}` : '',
+    }
+}
+
+/**
+ * Datenalter einer Indizes-Antwort BEIM SENDEN bestimmen.
+ *
+ * Rein und ohne Netz, damit prüfbar — Selbsttest in
+ * `server/__selftest-livetrading-ohlc.mjs`.
+ *
+ * Warum das nicht in `holeIndizes` steht: die Antwort kommt aus dem
+ * Zwischenspeicher. Alles, was mit `Date.now()` rechnet, muss deshalb hier
+ * passieren, sonst altert die Altersangabe mit.
+ *
+ * Warum `stand` der ÄLTESTE Quellenstand ist und nicht der jüngste: Der
+ * Kachelkopf zeigt eine Zahl für die ganze Kachel. Die darf nicht vom
+ * frischesten Markt kommen — sonst verdeckt ein munterer ES einen DXY, der
+ * seit einer halben Stunde steht. Der Kopf sagt, wie alt das ÄLTESTE ist, was
+ * man da sieht.
+ *
+ * @param {object} nutzlast Ergebnis von `holeIndizes`
+ * @param {number} [jetzt]  Bezugszeit (für den Selbsttest setzbar)
+ * @returns {{stand:number|null, veraltet:boolean, maerkte:object}}
+ */
+export function altereIndizes(nutzlast, jetzt = Date.now()) {
+    const maerkte = {}
+    const staende = []
+    let veraltet = false
+
+    for (const [id, m] of Object.entries(nutzlast?.maerkte || {})) {
+        if (!m) { maerkte[id] = m; continue }
+        const quelle = Number(m.quellenStand)
+        if (!Number.isFinite(quelle) || quelle <= 0) {
+            // Kein Zeitstempel heisst UNBEKANNT, nicht „null Minuten alt".
+            // `Number(null)` ergibt 0 und wäre hier die frischeste denkbare
+            // Angabe — genau falsch herum.
+            maerkte[id] = { ...m, alterMinuten: null }
+            continue
+        }
+        const alter = Math.max(0, (jetzt - quelle) / 60000)
+        const grenze = (Number(m.erwartetMin) || 0) + ALTERS_RESERVE_MIN
+        if (alter > grenze) veraltet = true
+        staende.push(quelle)
+        maerkte[id] = { ...m, alterMinuten: Math.round(alter * 10) / 10 }
+    }
+
+    return {
+        stand: staende.length ? Math.min(...staende) : null,
+        veraltet,
+        maerkte,
+    }
+}
+
 
 /**
  * Positionen einer Sitzung von Bitunix holen — offen und im Fenster geschlossen.
@@ -200,10 +393,47 @@ async function holeKalenderCountdown(stunden, laender, impact) {
 }
 
 export function setupLivetradingRoutes(app) {
-    /** Indizes: entfernt (siehe `INDIZES_ENTFERNT`). */
-    app.get('/api/livetrading/indizes', (req, res) => {
-        res.set('Cache-Control', 'no-store')
-        res.json(ausAntwort(INDIZES_ENTFERNT))
+    /**
+     * Intraday-Kerzen (nur mit Schalter, siehe oben). `force=1` umgeht den Cache — für den
+     * „Alle aktualisieren"-Knopf.
+     */
+    app.get('/api/livetrading/indizes', async (req, res) => {
+        try {
+            if (!(await quelleErlaubt('yahoo'))) {
+                res.set('Cache-Control', 'no-store')
+                return res.json(ausAntwort(new QuelleAus('Yahoo Finance', 'ohneFreigabe')))
+            }
+            const interval = INTERVALLE.has(String(req.query.interval)) ? String(req.query.interval) : '5m'
+            /*
+             * Das Fenster steht NICHT im Cache-Schlüssel: geholt wird immer
+             * `YAHOO_RANGE`, geschnitten wird danach. Sonst hielte der Server
+             * für jedes Fenster eine eigene Kopie derselben Kurse vor und
+             * fragte Yahoo entsprechend öfter.
+             */
+            const stunden = Math.max(1, Math.min(FENSTER_MAX_H,
+                Number(req.query.stunden) || FENSTER_VORGABE_H))
+            const key = `lt_indizes|${interval}`
+            if (req.query.force) verwerfeCache(key)
+            const roh = await ausCache(key, INDIZES_TTL, () => holeIndizes(interval, YAHOO_RANGE))
+            /*
+             * Alter erst hier: `roh` kann aus dem Zwischenspeicher kommen, und
+             * bisher setzte das Raster mangels `stand` schlicht `Date.now()` —
+             * über einer zehn Minuten alten Kerze stand die aktuelle Uhrzeit.
+             * `veraltet` aus dem Altstand-Rückfall von `ausCache` bleibt
+             * erhalten: ein Abrufproblem ist auch dann eines, wenn die Kurse
+             * im Rahmen sind.
+             */
+            const gealtert = altereIndizes(roh)
+            const geschnitten = beschneideFenster(gealtert, stunden)
+            sendeRadar(res, {
+                ...roh, ...gealtert,
+                maerkte: geschnitten.maerkte,
+                stunden,
+                veraltet: roh.veraltet || gealtert.veraltet,
+            })
+        } catch (e) {
+            sendRadarError(res, e, 'Indizes')
+        }
     })
 
     /** Wirtschaftstermine der nächsten Stunden. */

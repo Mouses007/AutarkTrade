@@ -162,8 +162,11 @@ function festerZufall(start = 1) {
     // Gesperrte Liquidität hält einen toten Token sonst für immer am Leben.
     p('lebt nicht: Paar mit Liquidität, aber kaum Handel', lebtNoch({ markt: { liquiditaetUsd: 5000, transaktionen6h: 2 } }) === 0)
     p('lebt nicht: leerer Pool', lebtNoch({ markt: { liquiditaetUsd: 0, transaktionen6h: 40 } }) === 0)
-    // S12: pump.fun ist entfernt — ein pump.fun-Coin ohne DexScreener-Paar ist kein Beleg für Leben mehr.
-    p('S12: pump.fun-Angaben wirken nicht mehr', lebtNoch({ coin: { last_trade_timestamp: jetzt - 3600e3 }, jetzt }) === 0)
+    // Schalter an (S15, wie vor S12): auf der Kurve nennt pump.fun den letzten Handel.
+    p('Schalter an — Kurve: letzter Handel vor einer Stunde', lebtNoch({ coin: { last_trade_timestamp: jetzt - 3600e3 }, jetzt }) === 1)
+    p('Schalter an — Kurve: letzter Handel vor sieben Stunden', lebtNoch({ coin: { last_trade_timestamp: jetzt - 7 * 3600e3 }, jetzt }) === 0)
+    // Schalter aus: es gibt kein `coin` — dann zählt nur DexScreener (S12).
+    p('Schalter aus: ohne pump.fun und ohne Paar weg', lebtNoch({ coin: null, jetzt }) === 0)
     p('Kurve als DexScreener-Paar: gehandelt heisst lebt', lebtNoch({ markt: { dex: 'pumpfun', liquiditaetUsd: null, transaktionen6h: 30 } }) === 1)
     p('DexScreener kennt ihn nicht: weg', lebtNoch({}) === 0)
     p('Paar ohne Angabe zum Handel: unbekannt, nicht tot', lebtNoch({ markt: { liquiditaetUsd: null } }) === null)
