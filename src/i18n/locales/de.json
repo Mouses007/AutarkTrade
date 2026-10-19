@@ -5172,6 +5172,8 @@
     "tfFavoritHinzu": "In die Leiste aufnehmen",
     "tfFavoritWeg": "Aus der Leiste nehmen",
     "leisteBreite": "Breite ziehen (Doppelklick: zurücksetzen)",
+    "leisteEinklappen": "Leiste einklappen",
+    "leisteAusklappen": "Leiste ausklappen",
     "status": {
       "connecting": "Verbinde …",
       "open": "Live",

@@ -158,6 +158,29 @@ function leisteZuruecksetzen() {
 }
 
 /*
+ * Eingeklappte Seitenleiste: ein schmaler Streifen mit den Reiter-Symbolen,
+ * wie das Seitenmenü links. Ein Klick auf ein Symbol klappt auf und öffnet
+ * diesen Reiter. Wie die Breite im Browser gespeichert, nicht im Layout; am
+ * Telefon und unter 992 px (Leiste unter dem Chart) gibt es den Streifen nicht.
+ */
+const LEISTE_SCHMAL = 46
+const SCHMAL_SCHLUESSEL = 'chartLeisteSchmal'
+const leisteSchmal = ref((() => { try { return localStorage.getItem(SCHMAL_SCHLUESSEL) === '1' } catch { return false } })())
+const breitGenug = ref(typeof window === 'undefined' || window.innerWidth > 991)
+function pruefeBreite() { breitGenug.value = window.innerWidth > 991 }
+onMounted(() => window.addEventListener('resize', pruefeBreite))
+onBeforeUnmount(() => window.removeEventListener('resize', pruefeBreite))
+const istSchmal = computed(() => leisteSchmal.value && !telefon.value && breitGenug.value)
+function schalteLeisteSchmal(an = !leisteSchmal.value) {
+    leisteSchmal.value = an
+    try { localStorage.setItem(SCHMAL_SCHLUESSEL, an ? '1' : '0') } catch { /* kein Speicher */ }
+}
+function oeffneReiter(id) {
+    daten.value.seitenleiste.reiter = id
+    schalteLeisteSchmal(false)
+}
+
+/*
  * Momentum-Box unten in der Seitenleiste: Höhe ziehbar, ein-/ausklappbar.
  * Beides im Browser — wie die Leistenbreite eine Frage des Bildschirms.
  */
@@ -577,7 +600,7 @@ watch(sichtbareAnzahl, async () => {
                 {{ t('chart.zeichnungFehler') }}: {{ fehlerMeldung }}</div>
 
             <div class="arbeitsflaeche" :class="{ mitLeiste: daten.seitenleiste.offen }"
-                :style="{ '--leisteBreite': leisteBreite + 'px' }">
+                :style="{ '--leisteBreite': (istSchmal ? LEISTE_SCHMAL : leisteBreite) + 'px' }">
                 <Zeichenleiste class="werkzeuge" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
                     :versteckt="!!daten.zeichnen?.versteckt" @werkzeug="waehleWerkzeug"
                     @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
@@ -596,11 +619,26 @@ watch(sichtbareAnzahl, async () => {
                         @panel="(patch) => Object.assign(daten.panels[i], patch)" />
                 </div>
 
-                <aside v-if="daten.seitenleiste.offen" class="seitenleiste">
+                <!-- Eingeklappt: nur der Streifen mit Aufklappen und den Reiter-Symbolen. -->
+                <aside v-if="daten.seitenleiste.offen && istSchmal" class="seitenleiste schmal">
+                    <button class="schmalKnopf" :title="t('chart.leisteAusklappen')" :aria-label="t('chart.leisteAusklappen')"
+                        @click="schalteLeisteSchmal(false)">
+                        <Symbol name="doppelLinks" />
+                    </button>
+                    <button v-for="r in REITER" :key="r.id" class="schmalKnopf" :class="{ an: daten.seitenleiste.reiter === r.id }"
+                        :title="t('chart.reiter.' + r.id)" :aria-label="t('chart.reiter.' + r.id)" @click="oeffneReiter(r.id)">
+                        <Symbol :name="r.icon" />
+                    </button>
+                </aside>
+                <aside v-else-if="daten.seitenleiste.offen" class="seitenleiste">
                     <div class="leisteGriff" :title="t('chart.leisteBreite')" @pointerdown.prevent="leisteZiehenStart"
                         @pointermove="leisteZiehen" @pointerup="leisteZiehenEnde" @pointercancel="leisteZiehenEnde"
                         @dblclick="leisteZuruecksetzen"></div>
                     <div v-if="REITER.length > 1" class="reiter">
+                        <button v-if="!telefon && breitGenug" class="einklappen" :title="t('chart.leisteEinklappen')"
+                            :aria-label="t('chart.leisteEinklappen')" @click="schalteLeisteSchmal(true)">
+                            <Symbol name="doppelRechts" />
+                        </button>
                         <button v-for="r in REITER" :key="r.id" :class="{ an: daten.seitenleiste.reiter === r.id }"
                             :title="t('chart.reiter.' + r.id)" @click="daten.seitenleiste.reiter = r.id" :aria-label="t('chart.reiter.' + r.id)">
                             <Symbol :name="r.icon" />
@@ -774,6 +812,50 @@ watch(sichtbareAnzahl, async () => {
 
 .reiter button:hover {
     color: var(--text);
+}
+
+/* Einklapp-Knopf: schmaler als die Reiter, durch eine Linie abgesetzt. */
+.reiter button.einklappen {
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    margin-right: 4px;
+    border-right: 1px solid var(--line);
+    border-radius: 0;
+}
+
+/* Eingeklappte Leiste: Symbole untereinander wie im Seitenmenü links. */
+.seitenleiste.schmal {
+    align-items: center;
+    padding: 8px 4px;
+    gap: 4px;
+}
+
+.schmalKnopf {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-klein);
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.schmalKnopf:first-child {
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    border-radius: 0;
+}
+
+.schmalKnopf:hover {
+    color: var(--text);
+    background: var(--panel-soft);
+}
+
+.schmalKnopf.an {
+    color: var(--accent);
 }
 
 .reiter button.an {

@@ -5172,6 +5172,8 @@
     "tfFavoritHinzu": "Add to the bar",
     "tfFavoritWeg": "Remove from the bar",
     "leisteBreite": "Drag to resize (double-click: reset)",
+    "leisteEinklappen": "Collapse sidebar",
+    "leisteAusklappen": "Expand sidebar",
     "status": {
       "connecting": "Connecting …",
       "open": "Live",
