@@ -81,7 +81,7 @@ const DEFINITIONEN = [
          */
         id: 'kompakt',
         titleKey: 'livetrading.kompakt.title',
-        icon: 'uil uil-list-ul',
+        icon: 'liste',
         endpunkt: null,
         intervallMs: Infinity,
         // Zwei Spalten, gleich breit wie der Momentum Radar daneben — die vom
@@ -101,7 +101,7 @@ const DEFINITIONEN = [
          */
         id: 'momentum',
         titleKey: 'livetrading.momentum.title',
-        icon: 'uil uil-heartbeat',
+        icon: 'live',
         endpunkt: '/api/livetrading/momentum',
         // 4h = Swing-Modus: die vom Nutzer gewählte Grundeinstellung
         params: { tf: '4h' },
@@ -114,7 +114,7 @@ const DEFINITIONEN = [
     {
         id: 'handelszeiten',
         titleKey: 'livetrading.handelszeiten.title',
-        icon: 'uil uil-clock',
+        icon: 'uhr',
         // Rechnet im Browser aus `shared/handelszeiten.js` — kein Abruf.
         endpunkt: null,
         intervallMs: Infinity,
@@ -124,7 +124,7 @@ const DEFINITIONEN = [
     {
         id: 'mechanik',
         titleKey: 'marktradar.mechanik.title',
-        icon: 'uil uil-cog',
+        icon: 'einstellungen',
         endpunkt: '/api/marktradar/mechanik',
         params: { fenster: '15m' },
         intervallMs: 60 * 1000,
@@ -135,7 +135,7 @@ const DEFINITIONEN = [
     {
         id: 'liqticker',
         titleKey: 'livetrading.liq.title',
-        icon: 'uil uil-fire',
+        icon: 'feuer',
         endpunkt: '/api/livetrading/liq-ticker',
         params: { minuten: 15 },
         // Der Server hält die Ereignisse im Arbeitsspeicher; fünf Sekunden sind
@@ -147,7 +147,7 @@ const DEFINITIONEN = [
     {
         id: 'positionen',
         titleKey: 'livetrading.positionen.title',
-        icon: 'uil uil-wallet',
+        icon: 'geldbeutel',
         endpunkt: '/api/livetrading/session-stand',
         // Zeitraum und Plangrenzen kommen aus der laufenden Sitzung, nicht aus
         // der Registry — die Seite reicht sie über `zusatzParams` nach.
@@ -159,7 +159,7 @@ const DEFINITIONEN = [
     {
         id: 'kalender',
         titleKey: 'livetrading.kalender.title',
-        icon: 'uil uil-calendar-alt',
+        icon: 'kalender',
         endpunkt: '/api/livetrading/kalender-countdown',
         params: { stunden: 8 },
         intervallMs: 60 * 1000,
@@ -169,7 +169,7 @@ const DEFINITIONEN = [
     {
         id: 'indizes',
         titleKey: 'livetrading.indizes.title',
-        icon: 'uil uil-chart-line',
+        icon: 'linie',
         endpunkt: '/api/livetrading/indizes',
         // `stunden` statt `range`: Yahoos `range=1d` liefert für einen Future
         // nur die laufende reguläre Sitzung — morgens sind das zehn Kerzen.
@@ -184,7 +184,7 @@ const DEFINITIONEN = [
     {
         id: 'coinradar',
         titleKey: 'livetrading.coinradar.title',
-        icon: 'uil uil-ranking',
+        icon: 'rangliste',
         /*
          * Liest den letzten FERTIGEN Lauf, stösst keinen an: `GET zeilen` ist
          * ein reiner Datenbankblick, `POST lauf` wäre 42 Sekunden Arbeit und
@@ -202,7 +202,7 @@ const DEFINITIONEN = [
     {
         id: 'funding',
         titleKey: 'marktradar.funding.title',
-        icon: 'uil uil-percentage',
+        icon: 'prozent',
         endpunkt: '/api/marktradar/funding',
         params: { n: 50 },
         intervallMs: 60 * 1000,
@@ -212,7 +212,7 @@ const DEFINITIONEN = [
     {
         id: 'lsoi',
         titleKey: 'marktradar.lsoi.title',
-        icon: 'uil uil-balance-scale',
+        icon: 'waage',
         endpunkt: '/api/marktradar/ls-oi',
         params: { stunden: 48 },
         symbolAbhaengig: true,
@@ -223,7 +223,7 @@ const DEFINITIONEN = [
     {
         id: 'makro',
         titleKey: 'marktradar.makro.title',
-        icon: 'uil uil-globe',
+        icon: 'globus',
         endpunkt: '/api/marktradar/makro',
         intervallMs: 5 * 60 * 1000,
         spalten: 1,
@@ -244,7 +244,7 @@ const DEFINITIONEN = [
          */
         id: 'handelslage',
         titleKey: 'livetrading.handelslage.title',
-        icon: 'uil uil-compass',
+        icon: 'kompass',
         endpunkt: '/api/livetrading/handelslage',
         symbolAbhaengig: true,
         intervallMs: 60 * 1000,
@@ -258,7 +258,7 @@ const DEFINITIONEN = [
         // und im Live-Fenster läuft der Prüftakt bei drei Sekunden.
         id: 'lage',
         titleKey: 'marktradar.lage.title',
-        icon: 'uil uil-robot',
+        icon: 'ki',
         endpunkt: '/api/marktradar/lage',
         symbolAbhaengig: true,
         intervallMs: 5 * 60 * 1000,
@@ -279,7 +279,7 @@ const DEFINITIONEN = [
         // Eigenes `infoKey`: `nav.liquidity`/`nav.liquidations` enden nicht auf
         // `.title`, die Ableitung ergäbe zweimal dasselbe `nav.info`.
         infoKey: 'livetrading.bookmap.info',
-        icon: 'uil uil-chart-line',
+        icon: 'linie',
         endpunkt: null,
         intervallMs: Infinity,
         spalten: 2,
@@ -300,7 +300,7 @@ const DEFINITIONEN = [
         // Eigenes `infoKey`: `nav.liquidity`/`nav.liquidations` enden nicht auf
         // `.title`, die Ableitung ergäbe zweimal dasselbe `nav.info`.
         infoKey: 'livetrading.hebelkarte.info',
-        icon: 'uil uil-fire',
+        icon: 'feuer',
         endpunkt: null,
         intervallMs: Infinity,
         spalten: 2,

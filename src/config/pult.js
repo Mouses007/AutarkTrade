@@ -33,9 +33,9 @@
  * man das sehen können, sonst liest man einen alten Kurs als aktuellen.
  */
 export const BUEHNEN = [
-    { id: 'bookmap', titleKey: 'nav.liquidity', icon: 'uil uil-chart-line' },
-    { id: 'hebelkarte', titleKey: 'nav.liquidations', icon: 'uil uil-fire' },
-    { id: 'indizes', titleKey: 'livetrading.indizes.title', icon: 'uil uil-chart-line' },
+    { id: 'bookmap', titleKey: 'nav.liquidity', icon: 'linie' },
+    { id: 'hebelkarte', titleKey: 'nav.liquidations', icon: 'feuer' },
+    { id: 'indizes', titleKey: 'livetrading.indizes.title', icon: 'linie' },
 ]
 
 /**
