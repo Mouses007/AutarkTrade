@@ -107,6 +107,10 @@ onMounted(ladeStand)
 
 <template>
     <footer class="at-menue-fuss">
+        <button type="button" class="fuss-eintrag" @click="oeffneRechtliches()">
+            <Symbol name="waage" />{{ t('rechtliches.titel') }}
+        </button>
+
         <div class="version">{{ t('nav.versionText', { version }) }}</div>
 
         <template v-if="stand?.updateAvailable">
@@ -134,10 +138,6 @@ onMounted(ladeStand)
                 <Symbol name="zurueckdrehen" />{{ t('nav.rollbackKnopf') }}
             </button>
         </template>
-
-        <button type="button" class="fuss-eintrag" @click="oeffneRechtliches()">
-            <Symbol name="waage" />{{ t('rechtliches.titel') }}
-        </button>
 
         <div v-if="fehler" class="fehler" role="alert">{{ fehler }}</div>
     </footer>
