@@ -22,7 +22,7 @@ Gezählt sind die 104 Zeilen der Funktionstabelle in Abschnitt 2 (88 Funktionsze
 
 ### Kernbefund
 
-1. **Die Kontofunktionen sind unproblematisch, die Marktdaten nicht.** Importe, offene Positionen und Orders laufen über den API-Schlüssel des Kunden. Das sehen Bitget, Pionex und Bybit ausdrücklich vor; Bitunix regelt es gar nicht. Die *öffentlichen* Marktdaten erlaubt dagegen **keine einzige Börse** ausdrücklich für ein verkauftes Drittprodukt. OKX verbietet es klar (§9.3/9.4), Upbit und MEXC ebenfalls. Binance, Bybit, Bitget, Kraken, Gate und KuCoin haben Klauseln gegen kommerzielle Nutzung, deren Reichweite für ein lokal beim Kunden laufendes Programm unklar ist.
+1. **Die Kontofunktionen sind unproblematisch, die Marktdaten nicht.** Importe, offene Positionen und Orders laufen über den API-Schlüssel des Kunden *(S13: Orders sendet AutarkTrade seit dem Ausbau des scharfen Handels nicht mehr)*. Das sehen Bitget, Pionex und Bybit ausdrücklich vor; Bitunix regelt es gar nicht. Die *öffentlichen* Marktdaten erlaubt dagegen **keine einzige Börse** ausdrücklich für ein verkauftes Drittprodukt. OKX verbietet es klar (§9.3/9.4), Upbit und MEXC ebenfalls. Binance, Bybit, Bitget, Kraken, Gate und KuCoin haben Klauseln gegen kommerzielle Nutzung, deren Reichweite für ein lokal beim Kunden laufendes Programm unklar ist.
 2. **Binance ist das Rückgrat.** Chart, Bookmap, Coin-Radar, Marktradar, Live-Trading, Rekorder und Strategie-Backtests hängen an Binance-REST und -WebSocket. Die globalen Binance-Bedingungen ließen sich nicht abrufen, die australische Fassung erlaubt nur „non-commercial personal or internal business use“. **Ohne schriftliche Klärung mit Binance ist der Verkauf des Marktdatenteils das grösste Einzelrisiko.**
 3. **Mehrere Quellen sind eindeutig rot.** Yahoo Finance (Makro, Indizes), ForexFactory (Kalender), CoinMarketCap-Webendpunkt (Dominanz), blockchain.info (Rainbow, Pi-Cycle), pump.fun, Telegram-Scraping (t.me/s), Reddit-RSS (wird am 13.11.2026 ohnehin abgeschaltet), CoinPaprika Free, Upbit, MEXC, OKX und die undokumentierten Binance-`bapi`-Endpunkte.
 4. **Die KI-Anbieter sind mit Kundenschlüssel weitgehend grün.** Dafür braucht es Disclaimer („KI-generiert, keine Anlageberatung“), keine persönlichen Kauf- oder Verkaufsempfehlungen und keine Logos. Gemini darf für Kunden in EWR, Schweiz und UK nur im Bezahltarif laufen. DeepSeek verbietet schon die Nennung seines Namens ohne Erlaubnis (§5.2).
@@ -200,6 +200,12 @@ Gemeinsame Regel aller Anbieter: **Schlüssel nicht teilen, verkaufen oder weite
 | 91 | Backtests, Detektoren, Coin-Rangliste, Paper-Engine | Binance REST-Kerzen | wie Zeile 10 | 🟡 unklar | wie Zeile 10 |
 | 92 | Agent-Modus (Paper/Shadow/Live), Strategie-Editor mit KI | Broker des Kunden + KI des Kunden | Zeilen 1–4 und 2.8 | 🟢 KS | Rechtsfrage F-7 (automatisierter Handel), Disclaimer. |
 
+> **Nachtrag S13 (19.10.2026):** Der scharfe Handel ist ausgebaut. AutarkTrade sendet keine Orders mehr;
+> Agent-Modus heisst jetzt Papier- und Schattenbetrieb (Simulation). Order-Adapter, Stop-Wächter, Margen-Netz,
+> Abgleich und Live-Freigabe liegen auf `spaeter/scharfer-handel` (`docs/SPAETER-SCHARFER-HANDEL.md`).
+> Damit entfallen die Live-Teile der Zeilen 3 und 4 (Zeile 4 ganz) und Zeile 92 wird zur reinen
+> Simulation; F-7 ist für diese Auslieferung gegenstandslos und wird erst beim Zurückholen wieder offen.
+
 **Zählung:** 🟢 41 · 🟡 45 · 🔴 18 (104 Zeilen). Die Zeilen 40 und 83 sind gemischt; gezählt ist ihre schlechtere Farbe. Die KI-Zeilen 89a–m zählen einzeln.
 
 ---
@@ -279,7 +285,8 @@ Was bleibt, ist nur MIT, ISC, BSD oder Apache. Die einzige sichtbare Pflicht ist
 - **F-4 Presse-RSS und KI-Zusammenfassung.** Haftet der Verkäufer, wenn der Kunde Verlags-Feeds einträgt und die Software sie per KI zusammenfasst (EU-Richtlinie 2019/790 Art. 4/15, TDM-Opt-out, Schweizer URG)? Reicht es, keine Feeds vorzubelegen?
 - **F-5 Telegram.** Fällt das Lesen von Kanälen, in denen der Kunden-Bot Mitglied ist, mit anschliessender KI-Auswertung unter das KI-Verbot der Content-Licensing-Bedingungen?
 - **F-6 Finanzberatung.** Sind KI-Lageberichte, Chart-Analysen mit Marken und „Bedingungen“ (Handelslage) und Coin-Ranglisten nach FIDLEG/FINIG (Schweiz) bzw. MiFID II/MiCA (EU) eine Anlageberatung oder -empfehlung? Welche Disclaimer braucht es? Mistral verbietet „any form of financial guidance“ ohne Qualifikation, Anthropic und xAI fordern menschliche Prüfung bei persönlichen Empfehlungen.
-- **F-7 Automatisierter Handel.** Ist die Live-Ausführung von Strategien über den Schlüssel des Kunden (Stop-Wächter, Margen-Netz, Agent-Modus) eine bewilligungspflichtige Tätigkeit, oder reines Werkzeug? Welche Haftungsausschlüsse sind in AGB gegenüber Konsumenten wirksam (Schweiz OR 100, EU-Klauselrichtlinie)?
+- **F-7 Automatisierter Handel.** *(S13: für die erste Auslieferung gegenstandslos — der scharfe Handel ist ausgebaut,
+  `docs/SPAETER-SCHARFER-HANDEL.md`; vor dem Zurückholen klären.)* Ist die Live-Ausführung von Strategien über den Schlüssel des Kunden (Stop-Wächter, Margen-Netz, Agent-Modus) eine bewilligungspflichtige Tätigkeit, oder reines Werkzeug? Welche Haftungsausschlüsse sind in AGB gegenüber Konsumenten wirksam (Schweiz OR 100, EU-Klauselrichtlinie)?
 - **F-8 EU AI Act Art. 50.** Ist der Verkäufer Anbieter eines KI-Systems (Art. 3 Nr. 3), obwohl der Kunde Modell und Schlüssel wählt? Welche maschinenlesbare Kennzeichnung ist ab wann Pflicht (Aufschub durch den Digital Omnibus nicht verifiziert)?
 - **F-9 Datenschutz.** Übermittlung an KI-Anbieter in Drittstaaten (DeepSeek: China; Moonshot, Z.ai: Singapur) auf Veranlassung des Kunden: Rolle des Verkäufers nach DSG und DSGVO? Pflichtangaben in der Datenschutzerklärung der Software?
 - **F-10 Länder.** Darf der Verkauf an Kunden in Ländern erfolgen, in denen eine unterstützte Börse gesperrt ist (Bitget: DE/AT/FR, Bitunix: FR, Pionex: NL/ES/FR/UK)? Reicht ein Hinweis?
@@ -399,6 +406,7 @@ Kunde die Nutzung der gewählten Quelle selbst prüft und verantwortet. Fehlt de
 | 90 | **umgesetzt:** FLUX-Trainingshinweis; Share-Bild mit sichtbarem Label und PNG-Metadaten (tEXt `AI-Generated`, XMP/IPTC `compositeWithTrainedAlgorithmicMedia`). Das C2PA-Manifest des Anbieters geht beim Zusammensetzen im Browser verloren (im Code dokumentiert; Umkopieren wäre eine gebrochene Signatur). |
 | 91 | **umgesetzt:** Backtests, Detektoren, Engine über die Marktdatenquelle; mit Bitget kürzere Historie (Hinweis im Log, Freigaben beruhen auf Binance-Historie). |
 | 92 | **umgesetzt:** Strategie-Builder und KI-Vorschläge im Labor mit Label. |
+| 3, 4, 92 (S13) | **umgesetzt:** scharfer Handel ausgebaut — keine Orders, kein Stop-Wächter, keine Live-Freigabe; Strategien nur Papier/Schatten. Zeile 4 entfällt, Zeile 3 nur noch Import/Grid-Bots/Futures lesend. Ein Selbsttest (`server/execution/__selftest-broker-registry.mjs`) schlägt an, wenn ein Order-Pfad von Bitunix oder Pionex in den Server zurückkehrt. LICENSE Fassung 0.2, Ziffer 7: die Software gibt keine Orders auf. |
 
 **Abschnitt 3.3 (sichtbare Pflichten):** Punkt 1 (TradingView-Logo) seit S2/S5 an, NOTICE in S10. Punkt 2: Alternative.me,
 CoinGecko, Federal Reserve (dazu BEA, Eurostat), 4chan /biz/, GoPlus, CryptoQuant, DexScreener eingebaut. Punkt 3: KI-Label an

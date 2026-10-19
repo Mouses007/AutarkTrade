@@ -7,7 +7,7 @@
  *              Strategie hat keine Zone — dort trägt `obHoch/obTief` die beiden
  *              EMAs —, sie bekommt ihre Linie SCHRÄG: Anker (sweepT, sweepLevel)
  *              → (obT, sweepPrice), verlängert bis zur Auslösung.
- *   Positionen offene Paper/Shadow/Live-Positionen: Einstieg, Stop, Ziel, Liq
+ *   Positionen offene Papier-/Schatten-Positionen (und ausgelagerte Live-Zeilen von vor S13): Einstieg, Stop, Ziel, Liq
  *   Trades     Raute am Einstieg, Quadrat am Ausstieg, Ergebnis in R
  *   Backtest   Trades eines gespeicherten Backtests (orange, kleiner)
  *   Vorschau   Ergebnis von „jetzt erkennen" (gestrichelt) und die Zonen, die

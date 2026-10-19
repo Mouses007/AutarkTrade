@@ -30,7 +30,7 @@ export function umgebungAn(name) {
  * Testbetrieb: die V2-Testinstanz läuft gegen eine KOPIE der Live-DB. Darin
  * stehen echte Börsenschlüssel, offene Positionen und Benachrichtigungskanäle.
  * Im Testbetrieb startet kein Hintergrund-Takt, kein Rekorder, keine Engine,
- * kein Stop-Wächter, und es geht keine Mail und kein Push hinaus. Was ein
+ * und es geht keine Mail und kein Push hinaus. Was ein
  * Mensch per Knopf auslöst, läuft weiter.
  */
 export function istTestbetrieb() {

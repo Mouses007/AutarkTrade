@@ -25,7 +25,7 @@ const router = useRouter()
 
 const registry = ref({ strategies: [], riskParams: [], riskDefaults: {}, agentDefaults: {}, modes: [] })
 const instanzen = ref([])
-const engine = ref({ killSwitch: false, liveEnabled: false, running: false })
+const engine = ref({ killSwitch: false, running: false })
 const meldung = ref('')
 const fehler = ref('')
 let pollTimer = null
@@ -50,10 +50,6 @@ async function laden() {
         registry.value = reg.data
         instanzen.value = inst.data
         engine.value = status.data
-        // Bewusst NACH den anderen und ohne await im selben Promise.all: der
-        // Wächter-Status darf die Seite nicht aufhalten, und sein Scheitern
-        // darf die Instanzliste nicht mitreissen.
-        waechterLaden()
         schwebendLaden()
     } catch (e) {
         logError('AgentStrategies', 'Laden fehlgeschlagen', e)
@@ -199,93 +195,10 @@ function neu() {
     }
 }
 
-// ── Broker: was kann der gewählte Ausführungsweg? ───────────────────────
-
-/** Fähigkeiten des Brokers einer Instanz (oder des gerade bearbeiteten). */
-function brokerInfo(id) {
-    const liste = registry.value.broker || []
-    return liste.find((b) => b.id === (id || 'bitunix')) || null
-}
+// ── Börse: deren Rundungsregeln der Schattenbetrieb anlegt ──────────────
 function brokerName(id) {
-    return brokerInfo(id)?.label || id || 'bitunix'
-}
-/*
- * Gefragt wird die FÄHIGKEIT, nicht der Name. Eine Abfrage auf 'pionex' müsste
- * bei jeder weiteren Börse ohne Stop-Order nachgezogen werden — und genau das
- * wird vergessen.
- */
-function ohneBoersenStop(id) {
-    const b = brokerInfo(id)
-    return b ? !b.faehigkeiten?.boersenStop : false
-}
-
-/** Bei wie vielen R das Margen-Netz greift — die Zahl für die Warnung. */
-const netzR = computed(() => {
-    const r = bearbeite.value?.risk || {}
-    const hebel = Number(engine.value?.maxLeverage) || 10
-    const mmr = 0.004        // Näherung für die Anzeige; gerechnet wird je Symbol
-    if (!(hebel > 1)) return null
-    // Liquidationsabstand in Prozent, geteilt durch den Stopabstand in Prozent.
-    // Der Stopabstand ist vor dem Trade unbekannt — deshalb die typische
-    // Grössenordnung als Spanne statt einer Scheingenauigkeit.
-    const liqAbstand = (1 - (1 - 1 / hebel) / (1 - mmr))
-    return { hebel, bei1Pct: liqAbstand / 0.01, bei2Pct: liqAbstand / 0.02 }
-})
-
-// ── Stop-Wächter ────────────────────────────────────────────────────────
-const waechter = ref(null)
-
-async function waechterLaden() {
-    try {
-        const r = await axios.get('/api/strategies/waechter')
-        waechter.value = r.data
-    } catch {
-        // Wie beim Reifegrad: Unwissen darf nicht als Unbedenklichkeit
-        // erscheinen. null heisst „unbekannt" und wird rot angezeigt.
-        waechter.value = null
-    }
-}
-
-/** 'gut' | 'alt' | 'tot' | 'unbekannt' — steuert die Ampel. */
-const waechterAmpel = computed(() => {
-    const w = waechter.value
-    if (!w) return 'unbekannt'
-    // Eine offene Live-Position ohne laufenden Wächter ist rot, egal wie alt
-    // der letzte Schlag ist: auf einer Börse ohne Stop-Order steht sie dann
-    // ungesichert im Markt.
-    if (w.offeneLivePositionen > 0 && (!w.laeuft || w.abgeschaltet)) return 'tot'
-    if (w.unbewacht > 0) return 'tot'
-    if (!w.laeuft) return 'unbekannt'
-    if (w.alter === null) return 'unbekannt'
-    if (w.alter < 10000) return 'gut'
-    if (w.alter < 30000) return 'alt'
-    return 'tot'
-})
-
-// ── Reifegrad: welche Nachweise fehlen für den scharfen Betrieb? ────────
-const reife = ref({})
-
-/*
- * Ein gescheiterter Abruf ist NICHT dasselbe wie „alle Tore offen" und erst
- * recht nicht dasselbe wie „alles erfüllt". Vorher wurde der Fehler still
- * geschluckt; `reife[inst.id]` blieb `undefined`, die Nachweisliste
- * verschwand aus dem Dialog, und `undefined?.bereit === false` wertete zu
- * `false` aus — die Sperre am Freigabeknopf fiel damit weg. Die Oberfläche
- * versprach die geringste Hürde, wo sie die höchste zeigen müsste. Der Server
- * lehnt zwar ohnehin ab, aber eine Freigabemaske für scharfen Handel darf
- * Unwissen nicht als Unbedenklichkeit anzeigen.
- */
-const reifeFehler = ref({})
-
-async function reifeLaden(inst) {
-    try {
-        const r = await axios.get(`/api/strategies/instances/${inst.id}/readiness`)
-        reife.value = { ...reife.value, [inst.id]: r.data }
-        reifeFehler.value = { ...reifeFehler.value, [inst.id]: false }
-    } catch {
-        reife.value = { ...reife.value, [inst.id]: undefined }
-        reifeFehler.value = { ...reifeFehler.value, [inst.id]: true }
-    }
+    const b = (registry.value.broker || []).find((x) => x.id === (id || 'bitunix'))
+    return b?.label || id || 'bitunix'
 }
 
 function bearbeiten(inst) {
@@ -384,30 +297,6 @@ async function loeschen(inst) {
     }
 }
 
-// ── Live-Freigabe ───────────────────────────────────────────────────────
-const freigabeFuer = ref(null)
-const freigabeText = ref('')
-/** Öffnet den Freigabe-Dialog und holt vorher die Nachweise. */
-function freigabeOeffnen(inst) {
-    freigabeFuer.value = inst
-    freigabeText.value = ''
-    reifeLaden(inst)
-}
-
-async function freigeben() {
-    fehler.value = ''
-    try {
-        await axios.post(`/api/strategies/instances/${freigabeFuer.value.id}/approve-live`,
-            { confirm: freigabeText.value })
-        freigabeFuer.value = null
-        freigabeText.value = ''
-        meldung.value = t('strategies.liveApproved')
-        await laden()
-    } catch (e) {
-        fehler.value = apiFehlerText(e, t('strategies.approveFailed'), t)
-    }
-}
-
 async function jetztPruefen() {
     meldung.value = t('strategies.running')
     try {
@@ -432,8 +321,7 @@ async function notAusAusloesen(positionenSchliessen) {
 }
 
 // Ton der Pille je Modus (Baustein `Pille`)
-const modusFarbe = (m) => (m === 'live' ? 'schlecht' : m === 'shadow' ? 'warn' : 'neutral')
-const waechterTon = computed(() => ({ gut: 'gut', alt: 'warn', tot: 'schlecht' }[waechterAmpel.value] || 'neutral'))
+const modusFarbe = (m) => (m === 'shadow' ? 'warn' : 'neutral')
 
 // Reiter im Editor (ersetzt die Bootstrap-Pills). Jeder neu geöffnete Editor
 // beginnt wie vorher bei den Strategie-Parametern.
@@ -458,7 +346,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                 <Pille v-if="engine.killSwitch" ton="schlecht" symbol="stopp" class="satzPille">
                     {{ t('strategies.killSwitchActive') }}
                 </Pille>
-                <Pille v-if="!engine.liveEnabled" ton="neutral" class="satzPille">{{ t('strategies.liveOffGlobal') }}</Pille>
+                <Pille ton="neutral" class="satzPille" :title="t('strategies.simulationOnlyHint')">{{ t('strategies.simulationOnly') }}</Pille>
                 <button type="button" class="ctl-pill" @click="jetztPruefen">
                     <Symbol name="aktualisieren" class="vor" />{{ t('strategies.runNow') }}
                 </button>
@@ -488,38 +376,6 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                 </div>
             </div>
 
-            <!--
-                Stop-Wächter. Nur sichtbar, wenn es etwas zu bewachen gibt oder
-                etwas nicht stimmt — auf einer reinen Papier-Installation wäre
-                die Zeile sonst Dauerlärm.
-            -->
-            <div v-if="waechter && (waechter.offeneLivePositionen > 0 || waechterAmpel === 'tot')"
-                class="dailyCard karte abstand"
-                :class="waechterAmpel === 'tot' ? 'gefahr-rand' : ''">
-                <div class="zeile">
-                    <span :class="['status-dot', waechterAmpel === 'gut' ? 'on' : 'off']"></span>
-                    <strong>{{ t('strategies.guardTitle') }}</strong>
-                    <Pille :ton="waechterTon">
-                        {{ waechter.laeuft && waechter.alter !== null
-                            ? t('strategies.guardRunning', { s: Math.round(waechter.alter / 1000) })
-                            : t('strategies.guardNever') }}
-                    </Pille>
-                    <Pille ton="neutral">
-                        {{ t('strategies.guardWatching', { n: waechter.offeneLivePositionen }) }}
-                    </Pille>
-                    <Pille v-if="waechter.unbewacht > 0" ton="schlecht">
-                        {{ t('strategies.guardStale', { n: waechter.unbewacht }) }}
-                    </Pille>
-                    <Pille v-if="waechter.abgeschaltet" ton="schlecht">AT_NO_GUARD=1</Pille>
-                </div>
-                <Hinweis v-if="waechterAmpel === 'tot'" art="fehler" class="oben klein-text">
-                    {{ t('strategies.guardDangerHint') }}
-                </Hinweis>
-                <div v-if="waechter.letzterFehler" class="at-gedaempft klein-text oben">
-                    {{ waechter.letzterFehler }}
-                </div>
-            </div>
-
             <!-- ══ Liste ══ -->
             <template v-if="!bearbeite">
                 <div v-if="!instanzen.length" class="dailyCard karte leer at-gedaempft">
@@ -531,11 +387,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                         <span :class="['status-dot', inst.enabled ? 'on' : 'off']"></span>
                         <strong>{{ inst.name }}</strong>
                         <Pille :ton="modusFarbe(inst.mode)">{{ t('strategies.mode_' + inst.mode) }}</Pille>
-                        <Pille ton="neutral" :title="ohneBoersenStop(inst.broker) ? t('strategies.brokerNoStopShort') : ''">
-                            {{ brokerName(inst.broker) }}
-                            <Symbol v-if="ohneBoersenStop(inst.broker) && inst.mode !== 'paper'"
-                                name="schildWarnung" class="at-warn" />
-                        </Pille>
+                        <Pille ton="neutral">{{ brokerName(inst.broker) }}</Pille>
                         <Pille ton="neutral">{{ (inst.timeframes?.length ? inst.timeframes : [inst.timeframe]).join(' · ') }}</Pille>
                         <Pille ton="neutral">v{{ inst.paramsVersion }}</Pille>
                         <Pille v-for="s in inst.symbols" :key="s" class="pointerClass"
@@ -662,15 +514,6 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                             @click="verlaufAnzeigen(inst)">
                             {{ t('strategies.historyBtn') }} (v{{ inst.paramsVersion }})
                         </Knopf>
-                        <Knopf v-if="inst.mode === 'live' && !inst.liveApprovedAt"
-                            art="gefahr" klein symbol="schlossOffen"
-                            @click="freigabeOeffnen(inst)">
-                            {{ t('strategies.approveLive') }}
-                        </Knopf>
-                        <Pille v-else-if="inst.mode === 'live'" ton="gut" class="mittig">
-                            {{ t('strategies.liveApprovedBadge') }}
-                        </Pille>
-
                         <template v-if="loeschBestaetigung === inst.id">
                             <Knopf art="gefahr" klein @click="loeschen(inst)">{{ t('common.yes') }}</Knopf>
                             <Knopf art="leise" klein
@@ -680,45 +523,6 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                             @click="loeschBestaetigung = inst.id" />
                     </div>
 
-                    <!-- Live-Freigabe: verlangt den exakten Namen -->
-                    <div v-if="freigabeFuer?.id === inst.id" class="freigabe">
-                        <p class="klein-text abstand-klein">{{ t('strategies.approveLiveWarning') }}</p>
-
-                        <!-- Die Nachweise. Sie stehen VOR dem Eingabefeld, weil der
-                             Nutzer sonst den Namen tippt und erst danach erfährt,
-                             dass es ohnehin nicht geht. -->
-                        <div v-if="reife[inst.id]" class="abstand-mittel">
-                            <div class="klein-text tore-kopf">
-                                <strong>{{ t('strategies.gatesTitle') }}</strong>
-                                <Pille :ton="reife[inst.id].bereit ? 'gut' : 'warn'">
-                                    {{ reife[inst.id].bereit ? t('strategies.gatesReady')
-                                        : t('strategies.gatesOpen', { n: reife[inst.id].offen.length }) }}
-                                </Pille>
-                            </div>
-                            <div v-for="tor in reife[inst.id].tore" :key="tor.id" class="klein-text torZeile">
-                                <Symbol :name="tor.erfuellt ? 'hakenKreis' : 'fehler'" :class="tor.erfuellt ? 'torJa' : 'torNein'" />
-                                <span :class="tor.erfuellt ? '' : 'at-gedaempft'">{{ t('strategies.gate_' + tor.id) }}</span>
-                                <span class="at-gedaempft">— {{ tor.detail }}</span>
-                            </div>
-                        </div>
-
-                        <div v-else-if="reifeFehler[inst.id]" class="abstand-mittel klein-text at-warn tore-kopf">
-                            <Symbol name="warnung" />
-                            {{ t('strategies.gatesUnknown') }}
-                            <Knopf art="leise" klein
-                                @click="reifeLaden(inst)">{{ t('common.retry') }}</Knopf>
-                        </div>
-
-                        <p class="klein-text abstand-klein">{{ t('strategies.approveLiveType', { name: inst.name }) }}</p>
-                        <div class="freigabe-zeile">
-                            <input v-model="freigabeText" class="at-feld klein" :placeholder="inst.name" />
-                            <Knopf art="gefahr" klein
-                                :disabled="freigabeText !== inst.name || reife[inst.id]?.bereit !== true"
-                                @click="freigeben">{{ t('strategies.approve') }}</Knopf>
-                            <Knopf art="leise" klein
-                                @click="freigabeFuer = null">{{ t('common.cancel') }}</Knopf>
-                        </div>
-                    </div>
                 </div>
             </template>
 
@@ -749,9 +553,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                             <select v-model="bearbeite.broker" class="at-feld klein">
                                 <option v-for="b in registry.broker || []" :key="b.id" :value="b.id">{{ b.label }}</option>
                             </select>
-                            <small v-if="!istNeu && bearbeite.liveApprovedAt" class="at-warn">
-                                {{ t('strategies.brokerChangeResetsApproval') }}
-                            </small>
+                            <small class="at-gedaempft">{{ t('strategies.brokerHint') }}</small>
                         </div>
                         <div class="e-3 m-halb">
                             <label class="at-label">{{ t('strategies.timeframe') }}</label>
@@ -795,26 +597,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                         </div>
                     </div>
 
-                    <Hinweis v-if="bearbeite.mode === 'live'" art="fehler" class="abstand klein-text">
-                        {{ t('strategies.liveModeWarning') }}
-                    </Hinweis>
-                    <!--
-                        Die Warnung nennt eine ZAHL. Eine Warnung ohne Zahl liest
-                        niemand zweimal, und „die Marge fängt das schon" ist ohne
-                        Grössenordnung keine Aussage.
-                    -->
-                    <Hinweis v-if="ohneBoersenStop(bearbeite.broker) && bearbeite.mode !== 'paper'"
-                        art="warn" class="abstand klein-text">
-                        {{ t('strategies.brokerNoStopWarning', { broker: brokerName(bearbeite.broker) }) }}
-                        <template v-if="netzR">
-                            {{ t('strategies.brokerNoStopNet', {
-                                hebel: netzR.hebel,
-                                r1: netzR.bei1Pct.toFixed(1),
-                                r2: netzR.bei2Pct.toFixed(1),
-                            }) }}
-                        </template>
-                    </Hinweis>
-                    <Hinweis v-else-if="bearbeite.mode === 'shadow'" art="warn" class="abstand klein-text">
+                    <Hinweis v-if="bearbeite.mode === 'shadow'" art="info" class="abstand klein-text">
                         {{ t('strategies.shadowModeHint') }}
                     </Hinweis>
 
@@ -934,10 +717,6 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
     margin-left: auto;
 }
 
-.mittig {
-    align-self: center;
-}
-
 .zeile {
     display: flex;
     flex-wrap: wrap;
@@ -1003,28 +782,11 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
     margin: 0;
 }
 
-.freigabe {
-    margin-top: var(--abstand-4);
-    padding: var(--abstand-4);
-    border: 1px solid var(--bad);
-    border-radius: var(--radius-knopf);
-}
-
-.tore-kopf {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--abstand-2);
-    margin-bottom: var(--abstand-1);
-}
-
-.freigabe-zeile,
 .symbol-zeile {
     display: flex;
     gap: var(--abstand-2);
 }
 
-.freigabe-zeile .at-feld,
 .symbol-zeile .at-feld {
     flex: 1 1 auto;
     min-width: 0;
@@ -1033,16 +795,6 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 .symbol-zeile {
     margin-bottom: var(--abstand-1);
 }
-
-.torZeile {
-    display: flex;
-    gap: 0.4rem;
-    align-items: baseline;
-    padding: 0.1rem 0;
-}
-
-.torJa { color: var(--good); }
-.torNein { color: var(--bad); }
 
 .status-dot {
     width: 9px;
@@ -1126,8 +878,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
         padding: var(--abstand-3) var(--abstand-3) 0;
     }
 
-    .karte,
-    .freigabe {
+    .karte {
         padding: var(--abstand-3);
     }
 
@@ -1138,14 +889,6 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
     .kennzahlen {
         margin-left: 0;
         width: 100%;
-    }
-
-    .freigabe-zeile {
-        flex-wrap: wrap;
-    }
-
-    .freigabe-zeile .at-feld {
-        flex-basis: 100%;
     }
 }
 </style>

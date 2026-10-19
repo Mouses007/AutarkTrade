@@ -1,5 +1,5 @@
 AutarkTrade Lizenzbedingungen
-Fassung 0.1 vom 19. Oktober 2026
+Fassung 0.2 vom 19. Oktober 2026
 
 ⚠ ENTWURF, nicht anwaltlich geprüft (aufgesetzt am 19. Oktober 2026 nach dem Muster der
 AutarkDarts-Lizenzbedingungen 1.3 und abgeglichen mit dem Code der Software und
@@ -101,24 +101,19 @@ die Software nicht benutzen; deinstallieren darfst du sie jederzeit.
 
 7. Handel über deine Börsenkonten
 
-   a) Die Software kann über die API-Schlüssel, die du einträgst, Orders bei deiner Börse
-      aufgeben, ändern und schliessen - von Hand, über die Strategie-Schicht im Papier-,
-      Schatten- oder Live-Betrieb und über den Stop-Wächter. Ob und mit welchen Rechten
-      du Schlüssel einträgst, entscheidest du. Wir empfehlen Schlüssel ohne
-      Auszahlungsrecht und mit IP-Sperre.
+   a) Die Software gibt keine Orders bei deiner Börse auf, ändert und schliesst keine.
+      Sie liest über die API-Schlüssel, die du einträgst, Trades, Positionen und
+      Kontostände für dein Journal. Strategien laufen nur als Simulation (Papier- und
+      Schattenbetrieb). Ob und mit welchen Rechten du Schlüssel einträgst, entscheidest
+      du. Wir empfehlen reine Leseschlüssel ohne Handels- und Auszahlungsrecht und mit
+      IP-Sperre.
 
-   b) Live-Betrieb und Agent-Modus sind Teil der Beta. Bei Börsen ohne Stop-Order über
-      die API (etwa Pionex) ist der Stop der Software ein Software-Stop: er wirkt nur,
-      solange die Software läuft, die Verbindung steht und die Börse antwortet.
+   b) Jede Order, die du gestützt auf Anzeigen, Auswertungen, Simulationen oder Texte
+      der Software bei deiner Börse aufgibst, gibst du selbst auf. Wir haften nicht für
+      solche Orders und nicht für die daraus entstehenden Verluste, Gebühren,
+      Finanzierungskosten oder Liquidationen. Ziffer 15 bleibt vorbehalten.
 
-   c) Wir haften nicht für Orders, die die Software in deinem Auftrag oder nach deinen
-      Einstellungen aufgibt, nicht aufgibt, verspätet, doppelt oder zu einem anderen
-      Preis ausführt, und nicht für die daraus entstehenden Verluste, Gebühren,
-      Finanzierungskosten oder Liquidationen. Das gilt auch für Fehlausführungen wegen
-      Ausfällen, Verzögerungen, Änderungen oder Fehlern der Börse, ihrer API, deines
-      Netzes, deines Geräts oder von Daten Dritter. Ziffer 15 bleibt vorbehalten.
-
-   d) Prüfe offene Positionen und Orders regelmässig direkt bei deiner Börse. Massgebend
+   c) Prüfe offene Positionen und Orders regelmässig direkt bei deiner Börse. Massgebend
       ist immer der Stand der Börse, nicht die Anzeige der Software.
 
 8. Dienste Dritter und deine Schlüssel
@@ -273,5 +268,5 @@ die Software nicht benutzen; deinstallieren darfst du sie jederzeit.
 --------------------------------------------------------------------------------
 
 Kurz gesagt: Benutzen auf einer Installation ist erlaubt, Weitergeben nicht. Die
-Software berät dich nicht und handelt nur, wie du es einstellst - Orders, Verluste und
-die Verträge mit Börsen und KI-Anbietern sind deine Sache. Deine Daten bleiben bei dir.
+Software berät dich nicht und handelt nicht selbst - Orders, Verluste und die Verträge
+mit Börsen und KI-Anbietern sind deine Sache. Deine Daten bleiben bei dir.

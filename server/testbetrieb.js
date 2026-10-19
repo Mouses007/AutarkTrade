@@ -6,11 +6,11 @@
  * KI-Schlüssel mit Guthaben. In der eigenen Datenbank ist die Testinstanz
  * zudem der einzige Bewerber um jede Führungssperre (`db-claim.js`) — ohne
  * diesen Schalter würde sie also ALLES tun, was sonst die NAS tut: Strategien
- * handeln, Stops schliessen, Lageberichte bezahlen, Mails verschicken.
+ * fahren, Lageberichte bezahlen, Mails verschicken.
  *
  * Im Testbetrieb gilt deshalb:
  *   - kein Hintergrund-Takt startet (Liste in index.mjs, über `starteTakte`),
- *     ebenso Strategie-Engine, Stop-Wächter und Rekorder;
+ *     ebenso Strategie-Engine und Rekorder;
  *   - keine Mail, kein Push (ntfy/Telegram/Webhook): `versandGesperrt()` wird
  *     am Transport geprüft, nicht an jedem Aufrufer;
  *   - was ein Mensch per Knopf auslöst (Scan, Lagebericht, Analyse), läuft —

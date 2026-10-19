@@ -27,11 +27,9 @@ import { evaluateRisk, startOfDayUtc, RISK_REASONS } from './risk-engine.js'
 import { openPaperPosition, stepPaperPositions, getPaperEquity, closePaperPositionManually } from './execution/paper.js'
 import { entryIsValid, kostenAus, einstiegsPreis } from './fill-simulator.js'
 import { agentenVeto } from './strategy-agents.js'
-// Der Ausfuehrungsweg haengt an `instance.broker`, nicht an einem festen
-// Import. Die Spalte gab es laengst, ausgewertet wurde sie nie — eine Instanz
-// konnte 'pionex' sagen und waere auf Bitunix gelandet.
+// `instance.broker` nennt die Börse, deren Rundungsregeln der Schattenbetrieb
+// anlegt. Orders sendet die Engine seit S13 keine mehr (docs/SPAETER-SCHARFER-HANDEL.md).
 import { holeAdapter } from './execution/index.js'
-import { plantHebel } from './execution/margen-netz.js'
 import { beansprucheFuehrung, verlaengereFuehrung, gibFuehrungFrei } from './db-claim.js'
 import { wartungsmargePctFuer } from './margin-rates.js'
 import { umgebungAn } from './umgebung.js'
@@ -124,7 +122,6 @@ export function ladeInstanz(row) {
         // bisherige Betrieb.
         timeframes: normalisiereTimeframes(row.timeframes, row.timeframe, strategie),
         paramsVersion: Number(row.paramsVersion) || 1,
-        liveApprovedAt: Number(row.liveApprovedAt) || 0,
         symbols, params, risk, agents, strategie,
     }
 }
@@ -133,38 +130,21 @@ export function ladeInstanz(row) {
 async function ladeSchalter() {
     const knex = getKnex()
     const s = await knex('settings')
-        .select('strategyLiveEnabled', 'strategyKillSwitch', 'strategyMaxLeverage', 'strategyMinPaperTrades')
+        .select('strategyKillSwitch', 'strategyMaxLeverage')
         .where('id', 1).first()
     return {
-        liveEnabled: Boolean(s?.strategyLiveEnabled),
         killSwitch: Boolean(s?.strategyKillSwitch),
         maxLeverage: Number(s?.strategyMaxLeverage) || 10,
-        minPaperTrades: Number(s?.strategyMinPaperTrades) || 0,
     }
 }
 
 /**
- * Darf diese Instanz echte Orders senden?
- * Drei unabhängige Bedingungen — eine allein reicht nie.
+ * Betriebsarten, die die Engine fährt. `live` gehört nicht dazu: der scharfe
+ * Handel ist seit S13 ausgelagert (Branch `spaeter/scharfer-handel`). Eine
+ * Instanz, die trotzdem `live` sagt — eine alte Zeile, an der Migration vorbei
+ * —, wird abgewiesen, nicht still als Papier gefahren.
  */
-export async function darfLiveHandeln(instance, schalter) {
-    if (instance.mode !== 'live') return { ok: true }        // paper/shadow sind immer erlaubt
-    if (!schalter.liveEnabled) return { ok: false, reason: 'live_globally_disabled' }
-    if (!instance.liveApprovedAt) return { ok: false, reason: 'live_not_approved' }
-
-    if (schalter.minPaperTrades > 0) {
-        const knex = getKnex()
-        const row = await knex('strategy_trades')
-            .where({ instanceId: instance.id })
-            .whereIn('mode', ['paper', 'shadow'])
-            .count({ n: '*' }).first()
-        const n = Number(row?.n) || 0
-        if (n < schalter.minPaperTrades) {
-            return { ok: false, reason: 'not_enough_paper_trades', detail: `${n}/${schalter.minPaperTrades}` }
-        }
-    }
-    return { ok: true }
-}
+export const BETRIEBSARTEN = ['paper', 'shadow']
 
 // ── Kontext für die Risikoprüfung ────────────────────────────────────────
 
@@ -204,14 +184,13 @@ export function risikoKontextAbfragen(knex, instanceId, now) {
         // wieder geschlossen. `whereNotExists` statt Join, damit eine Position
         // nicht doppelt in der Liste landet.
         //
-        // `pending` bleibt draussen wie bisher: das ist die Reservierung VOR
-        // der Live-Order, keine Position.
+        // `pending` bleibt draussen wie bisher: das war die Reservierung VOR
+        // einer Live-Order (Altbestand vor S13), keine Position.
         offen: knex('strategy_positions')
             .where({ instanceId })
-            // 'closing' MUSS hier mitzaehlen: das ist eine Position, die der
-            // Stop-Waechter gerade schliesst. Faellt sie raus, sieht die Engine
-            // einen freien Platz und eroeffnet daneben eine zweite — waehrend
-            // die erste noch im Markt steht.
+            // 'closing' zaehlt mit: Altbestand des Stop-Waechters (vor S13),
+            // eine Position, deren Schliessung haengengeblieben sein kann.
+            // Faellt sie raus, saehe die Engine einen freien Platz.
             .whereIn('status', ['open', 'closing', 'closed'])
             .where('entryTime', '<=', now)
             .whereNotExists((q) => q
@@ -257,14 +236,9 @@ async function ladeRisikoKontext(instance, now) {
     }
 }
 
-/**
- * Kontostand je nach Betriebsart. Live wird beim Broker erfragt — die
- * Positionsgrösse muss sich am echten Kapital bemessen, nicht an einem
- * simulierten Startwert.
- */
+/** Kontostand: Papier und Schatten rechnen mit dem simulierten Konto. */
 async function ladeKontostand(instance) {
-    if (instance.mode !== 'live') return getPaperEquity(instance)
-    return holeAdapter(instance.broker).getLiveEquity()
+    return getPaperEquity(instance)
 }
 
 /**
@@ -272,9 +246,8 @@ async function ladeKontostand(instance) {
  *
  * Der Papierbetrieb behält Binance — genau wie der Backtest, sonst runden
  * dieselben Regeln in Labor und Papier unterschiedlich und die Ergebnisse sind
- * nicht mehr vergleichbar. Schatten und Live bekommen die echten Werte der
- * Börse: shadow IST der Probelauf des Live-Pfads, sein Zweck ist zu zeigen,
- * welche Menge wirklich rausginge.
+ * nicht mehr vergleichbar. Der Schatten bekommt die echten Werte der
+ * Börse: sein Zweck ist zu zeigen, welche Menge dort zulässig wäre.
  */
 async function marktMetaFuer(instance, symbol) {
     const binance = () => getSymbolMeta(symbol, { market: instance.market }).catch(() => null)
@@ -287,53 +260,6 @@ async function marktMetaFuer(instance, symbol) {
     }
     const eigen = await adapter.holeSymbolMeta(symbol).catch(() => null)
     return eigen || binance()
-}
-
-/**
- * Plant den Hebel für eine Börse ohne Stop-Order.
- *
- * @returns {{hebel, netzVerlustR, liqPreis, gesichert, abbruch?, detail?}}
- *   `hebel: 0` heisst „kein Netz nötig, nimm den eingestellten Hebel".
- *   `abbruch` heisst: nicht handeln.
- */
-async function planeNetz(instance, setup, schalter) {
-    const keins = { hebel: 0, netzVerlustR: 0, liqPreis: 0, gesichert: false }
-    if (instance.mode === 'paper') return keins
-
-    let adapter
-    try { adapter = holeAdapter(instance.broker) } catch { return keins }
-    // Wo die Börse den Stop selbst hält, braucht es kein Margen-Netz.
-    if (adapter.faehigkeiten.boersenStop || !adapter.faehigkeiten.hebelSetzbar) return keins
-
-    const netzModus = instance.risk.netzModus || 'gedeckelt'
-    if (netzModus === 'aus') return keins
-
-    // Die Wartungsmarge MUSS von der Börse kommen, die auch liquidiert.
-    // Binance-Sätze hier einzusetzen wäre ein Netz auf dem Papier.
-    let mmr = 0
-    if (typeof adapter.holeMmr === 'function') {
-        const stufe = await adapter.holeMmr(setup.symbol, 0).catch(() => null)
-        mmr = Number(stufe?.mmr) || 0
-    }
-    if (!(mmr > 0)) {
-        return { ...keins, abbruch: 'mmr_unbekannt', detail: `Wartungsmarge für ${setup.symbol} nicht abrufbar` }
-    }
-
-    const plan = plantHebel({
-        entry: setup.entry,
-        stopLoss: setup.stopLoss,
-        direction: setup.direction,
-        mmr,
-        maxLeverage: schalter.maxLeverage,
-        wunschHebel: 0,          // die Instanz-Einstellung deckelt das Netz nicht
-        netzModus,
-        netzMaxR: Number(instance.risk.netzMaxR) || 0,
-    })
-
-    if (!(plan.hebel > 0)) {
-        return { ...keins, abbruch: plan.grund || 'netz_unerreichbar', detail: `nötiger Hebel ${Math.ceil(plan.noetigerHebel || 0)}` }
-    }
-    return plan
 }
 
 // ── Ein Symbol verarbeiten ───────────────────────────────────────────────
@@ -564,24 +490,12 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
         return { ok: action === 'execute', reason: code }
     }
 
-    // (a) Not-Aus und Live-Freigabe
+    // (a) Not-Aus und Betriebsart
     if (schalter.killSwitch) {
         return beenden('reject_risk', RISK_REASONS.KILL_SWITCH)
     }
-    const live = await darfLiveHandeln(instance, schalter)
-    if (!live.ok) return beenden('reject_risk', live.reason, live.detail)
-
-    // (a2) Veraltete Auslöser.
-    // Ein frisch erkanntes Setup wird ab seinem Impuls geprüft — der Retest kann
-    // deshalb Stunden zurückliegen, etwa beim ersten Lauf nach einem Neustart.
-    // Im Papierbetrieb ist das Nachspielen richtig und erwünscht (die Position
-    // wird anschliessend Kerze für Kerze nachbewertet). Eine ECHTE Order zu
-    // einem längst überholten Preis wäre dagegen ein Fehler — deshalb handelt
-    // live ausschliesslich auf der gerade geschlossenen Kerze.
-    const neuesteKerze = candles[candles.length - 1]?.t || 0
-    if (instance.mode === 'live' && ev.triggeredAt && ev.triggeredAt < neuesteKerze) {
-        const alter = Math.round((neuesteKerze - ev.triggeredAt) / (timeframeMs(setup.timeframe) || 1))
-        return beenden('reject_risk', 'stale_trigger', `Auslöser ${alter} Kerzen alt`)
+    if (!BETRIEBSARTEN.includes(instance.mode)) {
+        return beenden('reject_risk', 'mode_ausgelagert', `Betriebsart ${instance.mode} ist ausgelagert`)
     }
 
     // (b) Agenten-Veto — optional, darf NUR ablehnen oder verkleinern
@@ -615,14 +529,14 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
 
     // (b2) Gleiche Einstiegsprüfung wie im Backtest: die Auslösekerze muss den
     // Einstieg erreichbar gemacht haben, und der Stop darf nicht schon in ihr
-    // liegen. Ohne diese Prüfung war Paper/Live optimistischer als der Backtest.
+    // liegen. Ohne diese Prüfung war der Papierbetrieb optimistischer als der Backtest.
     const ausloeseKerze = candles.find((k) => k.t === ev.candleTime) || candles[candles.length - 1]
     const einstiegOk = entryIsValid(setup, ausloeseKerze)
     // 'entry_not_touched' ist endgültig. 'stop_in_entry_candle' dagegen wird im
     // Papierbetrieb NICHT verworfen, sondern unten pessimistisch als Verlust
     // gebucht — sonst verschwinden genau die schlechtesten Fills aus der
     // Statistik und Trefferquote wie Erwartungswert sehen besser aus, als sie
-    // sind. Live/Schatten senden für so ein Setup schlicht keine Order.
+    // sind. Der Schatten bucht so ein Setup schlicht nicht.
     if (!einstiegOk.ok && einstiegOk.reason !== 'stop_in_entry_candle') {
         return beenden('reject_risk', einstiegOk.reason, '')
     }
@@ -635,23 +549,14 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
         marktMetaFuer(instance, setup.symbol),
     ])
 
-    let referencePrice = 0
-    if (instance.mode === 'live') {
-        referencePrice = await getLastPrice(setup.symbol, { market: instance.market }).catch(() => 0)
-    }
+    // Kein Referenzkurs: die Kursabweichungs-Prüfung gilt einer echten
+    // Marktorder, und die sendet die Engine nicht mehr.
+    const referencePrice = 0
 
-    // Hebel: normalerweise der eingestellte, gedeckelt durch die Einstellung.
-    // Auf einer Börse ohne Stop-Order kommt er stattdessen aus dem Margen-Netz
-    // — dort ist die isolierte Marge die einzige Sicherung, die auch ohne
-    // laufenden Wächter greift, und wie eng sie sitzt, bestimmt der Hebel.
-    const netz = await planeNetz(instance, setup, schalter)
-    if (netz.abbruch) return beenden('reject_risk', netz.abbruch, netz.detail || '')
-
+    // Hebel: der eingestellte, gedeckelt durch die Einstellung.
     const risk = {
         ...instance.risk,
-        leverage: netz.hebel > 0
-            ? netz.hebel
-            : Math.min(instance.risk.leverage, schalter.maxLeverage),
+        leverage: Math.min(instance.risk.leverage, schalter.maxLeverage),
     }
     const pruefung = evaluateRisk({
         setup, risk, equity,
@@ -691,25 +596,12 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
         return beenden('execute', '', 'same_bar_stop')
     }
 
-    // Frische Schalterprüfung: seit dem Taktbeginn können Sekunden vergangen
-    // sein (Marktdaten, LLM-Veto). Ein inzwischen gedrückter Not-Aus muss den
-    // Einstieg HIER noch stoppen — nicht erst beim nächsten Takt.
+    // Frische Schalterprüfung im Schattenbetrieb: seit dem Taktbeginn können
+    // Sekunden vergangen sein (Marktdaten, LLM-Veto). Ein inzwischen
+    // gedrückter Not-Aus soll den Einstieg HIER noch stoppen.
     if (instance.mode !== 'paper') {
         const frisch = await ladeSchalter()
         if (frisch.killSwitch) return beenden('reject_risk', RISK_REASONS.KILL_SWITCH)
-        if (instance.mode === 'live' && !frisch.liveEnabled) {
-            return beenden('reject_risk', 'live_globally_disabled')
-        }
-
-        // Den Broker aufloesen, BEVOR reserviert wird. Ein unbekannter Name
-        // wirft (die Registry faellt bewusst nicht auf Bitunix zurueck) — und
-        // ein Wurf zwischen Reservierung und Order liesse eine 'pending'-Zeile
-        // ohne zugehoerige Order stehen.
-        try {
-            holeAdapter(instance.broker)
-        } catch (e) {
-            return beenden('reject_risk', 'unknown_broker', e.message)
-        }
     }
 
     // ═ Reihenfolge ist hier die halbe Sicherheit ═
@@ -727,7 +619,7 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
             entryPrice: einstiegsPreis(setup, ausloeseKerze),
             entryTime: now,
             costs, clientOrderId,
-            status: instance.mode === 'paper' ? 'open' : 'pending',
+            status: 'open',
         })
     } catch (err) {
         eroeffnet = { ok: false, reason: 'open_failed', detail: err.message }
@@ -738,157 +630,12 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
         return beenden('reject_risk', eroeffnet.reason || 'open_failed', eroeffnet.detail || '')
     }
 
-    let brokerAntwort = null
-    if (instance.mode !== 'paper') {
-        const adapter = holeAdapter(instance.broker)
-
-        // Margenmodus und Hebel setzen, BEVOR die Order rausgeht. Beides ist
-        // bei Börsen wie Pionex symbolweit und nachträglich nicht mehr
-        // zuverlässig änderbar. Scheitert es, wird nicht geordert: eine
-        // Position ohne isolierte Marge hat kein Netz — und auf einer Börse
-        // ohne Stop-Order ist das Netz die letzte Sicherung.
-        if (typeof adapter.bereiteSymbolVor === 'function' && adapter.faehigkeiten.hebelSetzbar) {
-            const vor = await adapter.bereiteSymbolVor({
-                symbol: setup.symbol,
-                leverage: risk.leverage,
-                isoliert: true,
-                mode: instance.mode,
-            }).catch((e) => ({ ok: false, reason: 'margin_setup_failed', detail: e.message }))
-
-            if (!vor.ok) {
-                await knex('strategy_positions').where('id', eroeffnet.positionId).del()
-                return beenden('reject_risk', vor.reason || 'margin_setup_failed', vor.detail || '')
-            }
-            lauf.executionVorbereitung = vor.vorher || null
-        }
-
-        try {
-            brokerAntwort = await adapter.openLivePosition({
-                setup, size,
-                leverage: risk.leverage,
-                clientOrderId,
-                mode: instance.mode,
-            })
-        } catch (err) {
-            brokerAntwort = { ok: false, reason: 'order_transport_error', detail: err.message, geschickt: true }
-        }
-
-        if (!brokerAntwort.ok) {
-            if (brokerAntwort.geschickt && brokerAntwort.reason !== 'order_rejected') {
-                // Transportfehler NACH dem Senden: ob die Börse die Order hat,
-                // ist unbekannt. Blind schliessen könnte eine fremde Position
-                // treffen, blind löschen würde beim nächsten Takt neu senden.
-                // Also: Reservierung als 'unknown' stehen lassen — sie blockt
-                // jeden weiteren Versuch — und laut um Handprüfung bitten.
-                await knex('strategy_positions').where('id', eroeffnet.positionId)
-                    .update({ status: 'unknown', updatedAt: knex.fn.now() })
-                logError('strategy-engine', `Order-Zustand UNBEKANNT (${setup.symbol}, ${clientOrderId}) — an der Börse prüfen! Position steht auf 'unknown'.`)
-                return beenden('error', 'order_state_unknown', brokerAntwort.detail || '')
-            }
-            // Saubere Ablehnung durch die Börse: nichts steht, Reservierung weg.
-            await knex('strategy_positions').where('id', eroeffnet.positionId).del()
-            return beenden('error', brokerAntwort.reason || 'order_failed', brokerAntwort.detail || '', {
-                executionOutput: JSON.stringify({
-                    mode: instance.mode, clientOrderId,
-                    request: brokerAntwort.request, response: brokerAntwort.response,
-                    detail: brokerAntwort.detail,
-                }),
-            })
-        }
-
-        // Ausführung bestätigt → Reservierung wird zur offenen Position. Die
-        // POSITIONS-Kennung (nicht die Order-Kennung!) best effort dazu — sie
-        // macht ein gezieltes Schliessen möglich, statt das ganze Symbol zu
-        // treffen (siehe schliessePositionManuell).
-        let livePositionId = ''
-        if (instance.mode === 'live') {
-            livePositionId = await adapter.getLivePositionId(setup.symbol, setup.direction).catch(() => '')
-        }
-
-        const werte = {
-            status: 'open',
-            externalOrderId: brokerAntwort.externalOrderId || '',
-            externalPositionId: livePositionId,
-            // Was das Margen-Netz verspricht, gehört an die Position: nach
-            // einem Neustart ist die Zeile alles, was der Wächter über sie
-            // weiss — und er hält `liqPrice` gegen den, den die Börse meldet.
-            liqPrice: netz.liqPreis || 0,
-            netzModus: netz.hebel > 0 ? (instance.risk.netzModus || 'gedeckelt') : '',
-            netzVerlustR: netz.netzVerlustR || 0,
-            guardAt: Date.now(),
-            updatedAt: knex.fn.now(),
-        }
-
-        /*
-         * Der ECHTE Ausführungspreis schlägt den geschätzten.
-         *
-         * Ohne das rechnet die gesamte PnL-Statistik mit
-         * `einstiegsPreis(setup, ausloeseKerze)` — einer Annahme aus der
-         * Kerze, nicht mit dem, was bezahlt wurde. Bei einer Marktorder liegen
-         * die beiden regelmässig auseinander, und zwar systematisch in eine
-         * Richtung. Auch die MENGE wird übernommen: eine Teilfüllung ist sonst
-         * in der Buchhaltung eine volle Position.
-         */
-        const fill = brokerAntwort.fill
-        if (instance.mode === 'live' && adapter.faehigkeiten.echterFillPreis && fill?.price > 0) {
-            werte.entryPrice = fill.price
-            if (fill.qty > 0) {
-                werte.qty = fill.qty
-                werte.initialQty = fill.qty
-                werte.notionalUsdt = fill.qty * fill.price
-                werte.marginUsdt = (fill.qty * fill.price) / (risk.leverage || 1)
-            }
-            if (Number.isFinite(Number(fill.fee))) werte.feeOpen = Math.abs(Number(fill.fee))
-            // MAE/MFE laufen ab dem echten Einstieg, sonst wäre der erste
-            // Messpunkt schon ein erfundener Ausschlag.
-            werte.maePrice = fill.price
-            werte.mfePrice = fill.price
-        }
-
-        await knex('strategy_positions').where('id', eroeffnet.positionId).update(werte)
-
-        /*
-         * Das Ziel als reduceOnly-Limit ins Buch legen — wo die Börse es kann
-         * und den Stop nicht selbst hält.
-         *
-         * Zwei Gründe: es überlebt einen Prozessausfall (der Stop tut das auf
-         * Pionex nicht), und es füllt als MAKER — genau so, wie Backtest und
-         * Fill-Simulator es rechnen. Ohne diese Order müsste der Wächter das
-         * Ziel als Marktorder nehmen, also als Taker, und der Live-Betrieb wäre
-         * systematisch teurer als der Lauf, auf dem die Freigabe beruht.
-         */
-        if (instance.mode === 'live' && adapter.faehigkeiten.boersenZiel
-            && !adapter.faehigkeiten.boersenStop && typeof adapter.setzeZiel === 'function'
-            && Number(setup.takeProfit) > 0) {
-            const z = await adapter.setzeZiel({
-                symbol: setup.symbol,
-                direction: setup.direction,
-                qty: werte.qty ?? size.qty,
-                preis: setup.takeProfit,
-                mode: 'live',
-            }).catch((e) => ({ ok: false, reason: e.message }))
-            if (z.ok && z.orderId) {
-                await knex('strategy_positions').where('id', eroeffnet.positionId)
-                    .update({ externalTpOrderId: z.orderId })
-            } else {
-                // Kein Grund abzubrechen — der Wächter nimmt das Ziel dann als
-                // Marktorder. Aber es ist teurer, und das soll im Protokoll
-                // stehen statt still zu passieren.
-                logWarn('strategy-engine',
-                    `${setup.symbol}: Ziel-Limit nicht gesetzt (${z.reason || 'unbekannt'}) — das Ziel wird teurer als gerechnet`)
-            }
-        }
-    }
-
     return beenden('execute', '', '', {
         executionOutput: JSON.stringify({
             mode: instance.mode, clientOrderId,
             qty: size.qty, entry: setup.entry, stopLoss: setup.stopLoss, takeProfit: setup.takeProfit,
             sizeFactor,
-            // Im Schattenbetrieb ist das der Beleg, was gesendet WORDEN WÄRE
-            brokerRequest: brokerAntwort?.request || null,
-            gesendet: brokerAntwort?.geschickt ?? false,
-            externalOrderId: brokerAntwort?.externalOrderId || '',
+            gesendet: false,
         }),
     })
 }
@@ -1096,57 +843,25 @@ export async function stopStrategyEngine() {
 }
 
 /**
- * Eine offene Position von Hand schliessen — für JEDE Betriebsart.
+ * Eine offene Papier- oder Schattenposition von Hand schliessen.
  *
- * Reihenfolge ist hier alles: bei `live` wird zuerst die Börse geschlossen und
- * erst bei Erfolg lokal gebucht. Andersherum entstünde der schlimmste Zustand
- * überhaupt — ein Trade, der im Journal abgeschlossen ist, während die Position
- * an der Börse offen weiterläuft und niemand mehr auf sie schaut.
- *
- * Scheitert die Börse, bleibt die Position bewusst offen und der Fehler geht
- * nach oben. Lieber eine Position, die noch da ist, als eine, die nur
- * verschwunden scheint.
+ * Eine `live`-Zeile (aus der Zeit vor S13) wird NICHT gebucht: ob sie an der
+ * Börse noch steht, weiss nur die Börse, und die fragt AutarkTrade nicht mehr.
+ * Sie lokal zu schliessen, hiesse einen Trade ins Journal zu schreiben, der an
+ * der Börse vielleicht offen weiterläuft. Also bleibt sie stehen und die
+ * Ablehnung sagt warum.
  */
 export async function schliessePositionManuell({ instance, positionRow, price, time, costs, reason = 'manual' }) {
-    if (positionRow.mode === 'live') {
-        // Gezielt über die POSITIONS-Kennung. Fehlt sie (Abfrage nach der
-        // Eröffnung fehlgeschlagen), wird sie hier nachgeholt — das symbolweite
-        // Flash-Close bleibt der letzte Ausweg, denn es träfe auch Positionen,
-        // die der Nutzer von Hand hält.
-        const adapter = holeAdapter(positionRow.broker || instance.broker)
-        let positionId = positionRow.externalPositionId || ''
-        if (!positionId) {
-            positionId = await adapter.getLivePositionId(positionRow.symbol, positionRow.direction).catch(() => '')
-        }
-        if (!positionId) {
-            logWarn('strategy-engine', `Keine Positions-Kennung für ${positionRow.symbol} — Flash-Close trifft das GANZE Symbol (auch manuelle Positionen)`)
-        }
-        const antwort = await adapter.closeLivePosition({
-            symbol: positionRow.symbol,
-            positionId: positionId || null,
-            direction: positionRow.direction,
-            qty: Number(positionRow.qty) || 0,
-            mode: 'live',
-        }).catch((err) => ({ ok: false, reason: err.message }))
-
-        if (!antwort.ok) {
-            logError('strategy-engine', `Live-Position ${positionRow.id} konnte an der Börse nicht geschlossen werden: ${antwort.reason}`)
-            return { ok: false, reason: antwort.reason || 'close_failed', trade: null }
-        }
+    if (!BETRIEBSARTEN.includes(positionRow.mode)) {
+        return { ok: false, reason: 'live_ausgelagert', trade: null }
     }
-
-    // `liveCloseBestaetigt`: die Börse hat das Close bestätigt, jetzt DARF und
-    // MUSS die Buchung folgen — sonst bliebe die Zeile für immer offen (C1).
-    const trade = await closePaperPositionManually({
-        instance, positionRow, price, time, costs, reason,
-        liveCloseBestaetigt: positionRow.mode === 'live',
-    })
+    const trade = await closePaperPositionManually({ instance, positionRow, price, time, costs, reason })
     return { ok: true, trade }
 }
 
 /**
  * Not-Aus: stoppt alle Instanzen. `closePositions` schliesst zusätzlich alle
- * offenen Positionen — bei Live-Instanzen zuerst an der Börse.
+ * offenen Papier- und Schattenpositionen.
  */
 export async function killSwitch({ closePositions = false } = {}) {
     const knex = getKnex()
@@ -1160,7 +875,9 @@ export async function killSwitch({ closePositions = false } = {}) {
         // KANN; 'closing' eine, deren Schliessung haengengeblieben ist. Beide
         // gehoeren in einen Not-Aus — er ist die Stelle, an der lieber einmal
         // zu viel nachgesehen wird.
+        // Nur Papier/Schatten: ausgelagerte Live-Zeilen bleiben unangetastet.
         const offen = await knex('strategy_positions').whereIn('status', ['open', 'closing', 'pending'])
+            .whereIn('mode', BETRIEBSARTEN)
         for (const row of offen) {
             const instRow = await knex('strategy_instances').where('id', row.instanceId).first()
             const instance = instRow ? ladeInstanz(instRow) : null

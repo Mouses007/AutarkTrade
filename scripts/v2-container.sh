@@ -5,8 +5,9 @@
 #   ./scripts/v2-container.sh --ohne-build   nur neu starten (Image steht schon)
 #
 # Läuft IMMER im Testbetrieb (AT_TESTBETRIEB=1): die Datenbank `autarktrade`
-# ist eine Kopie der Live-DB mit echten Börsenschlüsseln. Engine, Stop-Wächter
-# und Rekorder sind zusätzlich einzeln abgeschaltet — doppelt hält besser.
+# ist eine Kopie der Live-DB mit echten Börsenschlüsseln. Engine und Rekorder
+# sind zusätzlich einzeln abgeschaltet — doppelt hält besser. (Einen
+# Stop-Wächter gibt es seit S13 nicht mehr; AT_NO_GUARD ist entfallen.)
 #
 # Zugangsdaten stehen NICHT hier, sondern in scripts/.v2-container.env (nicht
 # im Repository), z. B.:
@@ -56,7 +57,7 @@ docker run -d --name "$NAME" --restart unless-stopped \
     -e DB_USER="$DB_USER" -e DB_PASSWORD="$DB_PASSWORD" \
     -e AT_SECRET="$AT_SECRET" \
     -e AT_HOST=0.0.0.0 -e AT_PORT=8080 \
-    -e AT_TESTBETRIEB=1 -e AT_NO_ENGINE=1 -e AT_NO_RECORDER=1 -e AT_NO_GUARD=1 \
+    -e AT_TESTBETRIEB=1 -e AT_NO_ENGINE=1 -e AT_NO_RECORDER=1 \
     "$IMAGE" >/dev/null
 
 echo "-> Läuft: http://localhost:$PORT  (Logs: docker logs -f $NAME)"

@@ -36,7 +36,7 @@ export const STRATEGY_TOOLS = [
             type: 'object',
             properties: {
                 instanceId: { type: 'number', description: 'Strategie-Instanz (optional)' },
-                mode: { type: 'string', description: 'paper | shadow | live (optional)' },
+                mode: { type: 'string', description: 'paper | shadow (optional; live = Altbestand vor der Auslagerung des scharfen Handels)' },
                 symbol: { type: 'string', description: 'z.B. BTCUSDT (optional)' },
                 paramsVersion: { type: 'number', description: 'Nur Trades einer Parameter-Version (optional)' },
                 from: { type: 'number', description: 'Unix ms (optional)' },

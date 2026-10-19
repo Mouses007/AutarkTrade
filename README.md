@@ -8,6 +8,11 @@ Vue 3 + Express, SQLite or PostgreSQL.
 > (redesign, own licence, rebuild finished 19.10.2026). Results and open points:
 > [`docs/AUFTRAGSSTAND.md`](docs/AUFTRAGSSTAND.md); origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
 
+> **AutarkTrade does not trade by itself.** It reads trades, positions and balances from your
+> exchange for the journal, but sends no orders. Strategies run as a simulation only (paper and
+> shadow mode). Live trading was removed for the first release and is kept for later on the branch
+> `spaeter/scharfer-handel` — see [`docs/SPAETER-SCHARFER-HANDEL.md`](docs/SPAETER-SCHARFER-HANDEL.md).
+
 > The user interface is available in **German** (default) and **English**.
 
 ## Screenshots
@@ -34,7 +39,7 @@ A TradingView-style chart workspace built on TradingView's free [Lightweight Cha
 - **Indicators** with settings (length, source, colours): SMA, EMA, Bollinger, VWAP with bands, RSI, MACD, Stochastic, Stoch-RSI, ATR, ADX, MFI, OBV, volume — computed by the same code as the strategy detectors (`shared/indicators.js`). Data panes: open interest, long share of accounts, funding, Momentum Radar.
 - **Drawing tools**: trend line, ray, horizontal, horizontal ray, vertical, parallel channel, rectangle, Fibonacci, fixed range volume profile (POC, value area), long/short position with R, text, measure — anchors and body draggable, style bar, magnet, lock, per-timeframe visibility, undo/redo. Drawings belong to the symbol (time + price), so they show on every timeframe and in every chart of that symbol.
 - **Your journal in the chart**: your trades with entry/exit markers, initial stop and target, partial fills and result in R (against the stop the trade *started* with) and USDT; click for notes, playbook, tags and a jump to the daily view. Open positions as price lines with live P&L, SL/TP and liquidation.
-- **Strategy layer**: setups of your instances as zones (Swing Game as a slanted trend line), paper/shadow/live positions, strategy trades, saved backtests; "detect now" runs a strategy on the current candles without saving and shows the zones Set and Forget is tracking, with quality and trend — so you see *why* there was no setup.
+- **Strategy layer**: setups of your instances as zones (Swing Game as a slanted trend line), paper/shadow positions, strategy trades, saved backtests; "detect now" runs a strategy on the current candles without saving and shows the zones Set and Forget is tracking, with quality and trend — so you see *why* there was no setup.
 - **Alerts**: price, line (incl. slanted lines and channel edges) and zone alerts, checked on the server every 5 s even with the page closed; fire on the crossing, not on staying above; delivered via ntfy/Telegram/webhook and mail.
 - **Own market data**: recorded liquidations as bubbles, modelled leverage zones and order book walls at the right edge.
 - **AI analysis**: the code measures the chart first — levels from clustered highs/lows, volume profile, unbroken trend lines, higher-timeframe levels, structure — and gives each mark an ID; the model only selects, weighs and explains by ID, so it cannot invent prices or draw lines the candles cut through. Support green, resistance red, trend lines violet, dashed; adopted one by one into your own drawings. No forecasts or price targets (same guard as the Coin-Radar).
@@ -325,11 +330,16 @@ presented as a finding — three sessions on a Tuesday are noise.
 - **Token Statistics** — track usage and estimated costs per provider
 - **Global AI Toggle** — enable/disable all AI features at once
 
-### Import & Broker Support
+### Strategien (simulation)
+- **Strategy instances** — built-in strategies or your own rule sets (editor, chat builder) run on closed candles in **paper** mode (simulated like the backtest) or **shadow** mode (simulated, size rounded with the rules of the chosen exchange). No order ever leaves AutarkTrade.
+- **Lab** — backtests, parameter runs, Monte Carlo, walk-forward, coin ranking; **Performance** — key figures, setup funnel, MAE/MFE.
+- **Emergency stop** — halts all instances and can close open simulated positions.
+
+### Import & Broker Support (read only)
 - **Bitunix** — API integration (positions, balance, trades)
 - **Bitget** — API integration (positions, balance, fills)
 - **Pionex** — API integration (futures and grid-bot trades)
-- **Encrypted API Keys** — AES-256-GCM encryption at rest
+- **Encrypted API Keys** — AES-256-GCM encryption at rest; a read-only key is enough (AutarkTrade sends no orders)
 - **Auto-Deduplication** — prevents duplicate trade entries on re-import
 
 ### Backup & System

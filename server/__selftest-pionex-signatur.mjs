@@ -67,9 +67,9 @@ console.log('\nSignatur-String (createSignature)\n')
     // POST: derselbe String, danach der Body-JSON ANGEHAENGT (nicht getrennt,
     // kein weiteres Zeichen dazwischen).
     const body = '{"symbol":"BTC_USDT_PERP","side":"BUY"}'
-    const erwartetPost = hmac('POST/uapi/v1/trade/order?' + q + body)
+    const erwartetPost = hmac('POST/uapi/v1/account/leverage?' + q + body)
     check('POST haengt den Body direkt an die Query an',
-        createSignature(SECRET, 'POST', '/uapi/v1/trade/order', q, body) === erwartetPost)
+        createSignature(SECRET, 'POST', '/uapi/v1/account/leverage', q, body) === erwartetPost)
 
     check('ohne Body ist POST wie GET aufgebaut',
         createSignature(SECRET, 'POST', '/p', q, '') === hmac('POST/p?' + q))
@@ -87,16 +87,16 @@ console.log('\nSignatur-String (createSignature)\n')
 console.log('\nDie Signatur haengt wirklich an allem, was sie soll\n')
 {
     const q = 'symbol=BTC_USDT_PERP&timestamp=1700000000000'
-    const grund = createSignature(SECRET, 'POST', '/uapi/v1/trade/order', q, '{"a":1}')
+    const grund = createSignature(SECRET, 'POST', '/uapi/v1/account/leverage', q, '{"a":1}')
 
     check('anderer Body → andere Signatur',
-        createSignature(SECRET, 'POST', '/uapi/v1/trade/order', q, '{"a":2}') !== grund)
+        createSignature(SECRET, 'POST', '/uapi/v1/account/leverage', q, '{"a":2}') !== grund)
     check('anderer Pfad → andere Signatur',
         createSignature(SECRET, 'POST', '/uapi/v1/trade/massOrder', q, '{"a":1}') !== grund)
     check('andere Methode → andere Signatur',
-        createSignature(SECRET, 'DELETE', '/uapi/v1/trade/order', q, '{"a":1}') !== grund)
+        createSignature(SECRET, 'DELETE', '/uapi/v1/account/leverage', q, '{"a":1}') !== grund)
     check('anderer timestamp → andere Signatur',
-        createSignature(SECRET, 'POST', '/uapi/v1/trade/order',
+        createSignature(SECRET, 'POST', '/uapi/v1/account/leverage',
             'symbol=BTC_USDT_PERP&timestamp=1700000000001', '{"a":1}') !== grund)
     check('anderes Geheimnis → andere Signatur',
         crypto.createHmac('sha256', 'anderes').update('x').digest('hex') !== hmac('x'))

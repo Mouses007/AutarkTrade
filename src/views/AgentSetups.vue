@@ -250,7 +250,10 @@ const gruende = computed(() => {
                                 </template>
                                 <td v-else colspan="5"></td>
                                 <td class="zahl">
-                                    <Knopf art="gefahr" klein @click="positionSchliessen(p)">
+                                    <Pille v-if="p.mode === 'live'" ton="warn" :title="t('strategies.liveAusgelagertHint')">
+                                        {{ t('strategies.mode_live') }}
+                                    </Pille>
+                                    <Knopf v-else art="gefahr" klein @click="positionSchliessen(p)">
                                         {{ t('strategies.close') }}
                                     </Knopf>
                                 </td>

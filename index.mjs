@@ -48,7 +48,6 @@ import { setupStrategyRoutes, ladeAlleRegelStrategien } from './server/strategy-
 import { setupStrategyBuilderRoutes } from './server/strategy-builder.js'
 import { setupRuleBuilderRoutes } from './server/rule-builder.js'
 import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engine.js'
-import { startStopWaechter, stopStopWaechter } from './server/execution/stop-waechter.js'
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
 import { logError } from './server/logger.js'
 import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession } from './server/auth.js'
@@ -248,18 +247,6 @@ async function starteServer() {
         startStrategyEngine();
     }
 
-    // Der Stop-Wächter läuft AUCH mit AT_NO_ENGINE=1 — und das ist Absicht.
-    //
-    // Er eröffnet nichts, er schliesst. Auf Börsen ohne Stop-Order (Pionex)
-    // ist er der einzige Stop, den eine Live-Position hat; stirbt der
-    // Produktivcontainer, soll der zweite Prozess nach 20 Sekunden übernehmen,
-    // statt die Positionen ungesichert stehen zu lassen. Dass trotzdem nur
-    // einer wacht, sichert die Führungssperre in der Datenbank.
-    //
-    // Ausdrücklich abschaltbar mit AT_NO_GUARD=1; im Testbetrieb immer aus
-    // (die Prüfung steckt in startStopWaechter selbst).
-    startStopWaechter();
-
     // Der Takt der Coin-Rangliste läuft AUCH mit AT_NO_ENGINE=1: er handelt
     // nicht, sondern rechnet nur — und der Entwicklungsrechner ist genau die
     // Maschine, an der jemand sitzt und einen Lauf startet. Dass trotzdem nur
@@ -382,12 +369,8 @@ async function starteServer() {
         console.log(`\n${grund} — fahre herunter…`)
         try { await stopLiveRecorder() } catch (e) { /* trotzdem beenden */ }
         // Laufende Strategie-Durchgänge auslaufen lassen, damit keine
-        // halb ausgeführte Order zurückbleibt.
+        // halb gebuchte Papierposition zurückbleibt.
         try { await stopStrategyEngine() } catch (e) { /* trotzdem beenden */ }
-        // Die Führung des Stop-Wächters ausdrücklich freigeben, statt sie
-        // ablaufen zu lassen: sonst wacht 20 Sekunden lang niemand über die
-        // Live-Positionen, obwohl ein zweiter Prozess sofort könnte.
-        try { await stopStopWaechter() } catch (e) { /* trotzdem beenden */ }
         // Ein laufender Rangliste-Lauf braucht kein Auslaufen: jeder Coin
         // ist einzeln gesichert, der nächste Start nimmt ihn wieder auf.
         try { stopRanglisteTakt() } catch (e) { /* trotzdem beenden */ }

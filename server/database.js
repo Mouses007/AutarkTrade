@@ -8,6 +8,7 @@ import { seedDefaultTemplates, korrigiereVorlagenKategorien } from './default-te
 import { seedDefaultLernkarten } from './default-lernkarten.js'
 import { istGewinn } from '../shared/gewinn.js'
 import { migriereS12 } from './migrationen/s12.js'
+import { migriereS13 } from './migrationen/s13.js'
 
 let knex = null
 
@@ -195,7 +196,12 @@ async function fixPostgresSequences(knex) {
 // den JSON-Spalten `trades`/`executions`/`blotter`/`pAndL` jeder Tageszeile
 // gestrichen. Ein älterer Codestand rechnete `fees` mit diesen Feldern und
 // käme auf NaN — deshalb die Warnung unten ernst nehmen.
-const SCHEMA_VERSION = 28
+// v29: Scharfer Handel ausgelagert (S13, `migrationen/s13.js`) — `ausgelagert`
+// an `strategy_positions`; Live-Instanzen werden auf Papier gestellt und
+// pausiert, Live-Positionen nur markiert (Status bleibt, nichts geschlossen).
+// Ein älterer Codestand ignoriert die Spalte; seine Live-Instanzen fände er
+// pausiert auf Papier vor.
+const SCHEMA_VERSION = 29
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
@@ -1602,6 +1608,8 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('strategy_positions', 'externalPositionId', (t) => t.text('externalPositionId').defaultTo(''))
 
     // ── Scharfer Betrieb auf Börsen ohne Stop-Order (Pionex) ───────────────
+    // Seit S13 ungenutzt (Handel ausgelagert); die Spalten bleiben, damit
+    // der Altbestand lesbar bleibt und `spaeter/scharfer-handel` sie wiederfindet.
     // Dort hält ein Wächter im Journal den Stop, und die isolierte Marge ist
     // die zweite Sicherung. Beides muss an der Position stehen: nach einem
     // Neustart ist die DB-Zeile alles, was der Wächter über sie weiss.
@@ -3547,6 +3555,9 @@ async function runMigrations(knex, client) {
     // Marktdatenquelle, CoinGecko-Tarif und die Überführungen der Bereiche,
     // siehe `server/migrationen/s12.js`. Additiv, ohne neue SCHEMA_VERSION.
     await migriereS12(knex, addColumnIfNotExists)
+
+    // ── v29: Scharfen Handel auslagern (S13) ───────────────────────────
+    await migriereS13(knex, addColumnIfNotExists)
 
     // ==================== SCHEMA-ANKER ====================
     // Ganz am Ende, damit die Version erst steht, wenn alle Checks durch sind.

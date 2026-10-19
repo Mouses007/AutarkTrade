@@ -5,9 +5,10 @@
  * Backtest (`fill-simulator.js`), damit beide bitgleich rechnen. Der Unterschied
  * zum Backtest ist nur, dass der Zustand in der DB liegt statt im Speicher.
  *
- * Der `shadow`-Modus benutzt denselben Code: der komplette Live-Pfad läuft
- * durch, die Order wird protokolliert statt gesendet. Das ist der letzte Test
- * vor dem Scharfschalten.
+ * Der `shadow`-Modus benutzt denselben Code, rundet aber mit den Regeln der
+ * gewählten Börse (siehe `marktMetaFuer` in der Engine). Orders sendet keiner
+ * von beiden — der scharfe Handel ist seit S13 ausgelagert
+ * (`docs/SPAETER-SCHARFER-HANDEL.md`).
  */
 
 import { getKnex } from '../database.js'
@@ -234,13 +235,12 @@ export async function stepPaperPositions({ instance, symbol, timeframe = '', can
 }
 
 /** Schliesst eine offene Position von Hand (Kill-Switch, Nutzer-Eingriff). */
-export async function closePaperPositionManually({ instance, positionRow, price, time, costs, reason = 'manual', liveCloseBestaetigt = false }) {
-    // Eine Live-Position hier zu buchen wäre die gefährlichste Art von Fehler:
-    // im Journal stünde ein geschlossener Trade, während die Position an der
-    // Börse WEITERLÄUFT — ohne dass jemand sie noch beobachtet. Der Aufrufer
-    // muss zuerst die Börse schliessen (schliessePositionManuell) und das mit
-    // `liveCloseBestaetigt` bezeugen — sonst bliebe die Zeile für immer offen.
-    if (positionRow.mode === 'live' && !liveCloseBestaetigt) {
+export async function closePaperPositionManually({ instance, positionRow, price, time, costs, reason = 'manual' }) {
+    // Eine Live-Position (vor S13) hier zu buchen wäre die gefährlichste Art
+    // von Fehler: im Journal stünde ein geschlossener Trade, während die
+    // Position an der Börse vielleicht WEITERLÄUFT. Seit der scharfe Handel
+    // ausgelagert ist, gibt es keinen Weg mehr, das Schliessen zu bezeugen.
+    if (positionRow.mode === 'live') {
         throw new Error('Live-Position kann nicht als Papier-Position geschlossen werden')
     }
     const knex = getKnex()
@@ -252,10 +252,8 @@ export async function closePaperPositionManually({ instance, positionRow, price,
         // Trade schreiben. HTTP-Route, Takt und Not-Aus können dieselbe
         // Position parallel lesen — ohne den Claim buchte jeder von ihnen.
         const beansprucht = await trx('strategy_positions')
-            // 'closing' gilt als beanspruchbar: der Stop-Waechter setzt eine
-            // Live-Position vor der Boersen-Order auf diesen Zustand und bucht
-            // erst danach. Ohne ihn hier scheiterte genau der Pfad, der die
-            // Schliessung bereits bestaetigt hat.
+            // 'closing' bleibt beanspruchbar: Altbestand aus der Zeit des
+            // Stop-Wächters, der diesen Zwischenzustand setzte.
             .where('id', positionRow.id).whereIn('status', ['open', 'closing'])
             .update({ status: 'closed', updatedAt: trx.fn.now() })
         if (!beansprucht) throw new Error('Position ist bereits geschlossen')

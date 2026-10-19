@@ -12,9 +12,9 @@
  *   `propose_param_change`  legt einen Vorschlag in `strategy_suggestions` an
  *
  * Beides ist Absicht und bewusst begrenzt: ein Vorschlag entsteht mit
- * `status='pending'` und wird erst durch einen Menschen wirksam, und die
- * Freigabekette fuer scharfen Betrieb liegt vollstaendig ausserhalb des
- * Modells (`strategy-agents.js`: "die Agenten duerfen nur bremsen"). Falsch
+ * `status='pending'` und wird erst durch einen Menschen wirksam, und Orders
+ * sendet AutarkTrade seit S13 ueberhaupt keine mehr (`strategy-agents.js`:
+ * "die Agenten duerfen nur bremsen"). Falsch
  * war nur der Kommentar — und ein Kommentar, der mehr Sicherheit behauptet als
  * da ist, ist gefaehrlicher als gar keiner.
  *

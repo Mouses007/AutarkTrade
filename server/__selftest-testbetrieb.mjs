@@ -93,8 +93,8 @@ for (const name of ['startNewsTakt', 'startHypeTakt', 'startWachhundTakt', 'star
     pruefe(`${name} steht in einer starteTakte-Liste`, new RegExp(`\\[\\s*'[^']+'\\s*,\\s*${name}\\s*\\]`).test(index))
 }
 pruefe('Strategie-Engine fragt den Testbetrieb', /NO_ENGINE'\)\s*\|\|\s*istTestbetrieb\(\)/.test(index))
-const waechter = fs.readFileSync(path.join(wurzel, 'server/execution/stop-waechter.js'), 'utf8')
-pruefe('Stop-Wächter fragt den Testbetrieb', /NO_GUARD'\)\s*\|\|\s*istTestbetrieb\(\)/.test(waechter))
+// Der Stop-Wächter ist seit S13 ausgelagert (docs/SPAETER-SCHARFER-HANDEL.md).
+pruefe('kein Stop-Wächter mehr im Startpfad', !/StopWaechter|stop-waechter/.test(index))
 const rekorder = fs.readFileSync(path.join(wurzel, 'server/live-recorder.js'), 'utf8')
 pruefe('Rekorder fragt den Testbetrieb', /RECORDER_AUS = umgebungAn\('NO_RECORDER'\) \|\| istTestbetrieb\(\)/.test(rekorder))
 

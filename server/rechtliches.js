@@ -12,7 +12,7 @@
  * Prüfsummen der Texte (der Nachweis, welcher Wortlaut bestätigt wurde) und die letzten
  * Zustimmungen als `verlauf`. Bewusst KEINE Sperre auf dem Server: die Software ist ein
  * Einzelplatz-Programm, der Dialog liegt über jeder Seite, und eine Sperre der API
- * träfe auch laufende Takte (Stop-Wächter!) — eine Sperre, die einen Stop verhindert,
+ * träfe auch laufende Takte (Alarme, Rekorder) — eine Sperre, die einen Alarm verhindert,
  * wäre schlimmer als jede fehlende Zustimmung. `AT_BEDINGUNGEN=aus` schaltet die
  * Pflicht ab (Entwicklung, Prüfskripte).
  */

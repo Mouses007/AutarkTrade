@@ -30,10 +30,8 @@ import {
     berechneBuyHoldBaseline, schaetzeFloatingDrawdownAusTrades,
 } from './strategy-backtest.js'
 import { monteCarlo, parameterStabilitaet, stabilitaetsMatrix, walkForward, MAX_STUFEN } from './robustness.js'
-import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliessePositionManuell } from './strategy-engine.js'
+import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliessePositionManuell, BETRIEBSARTEN } from './strategy-engine.js'
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
-import { waechterStatus } from './execution/stop-waechter.js'
-import { bewerteGates } from './live-gates.js'
 import { spiegleInsJournal, entferneAusJournal } from './journal-bridge.js'
 
 const MAX_SYMBOLS = 20
@@ -141,7 +139,15 @@ function pruefeInstanzEingabe(body, vorhanden = null) {
         .slice(0, MAX_SYMBOLS)
     if (!symbols.length) fehler.push('Mindestens ein gültiges Symbol angeben')
 
-    const mode = ['paper', 'shadow', 'live'].includes(body.mode) ? body.mode : (vorhanden?.mode || 'paper')
+    // `live` ist seit S13 ausgelagert (docs/SPAETER-SCHARFER-HANDEL.md) und
+    // wird abgelehnt statt still in `paper` verwandelt — wer es schickt, soll
+    // wissen, dass hier nichts scharf geschaltet wird.
+    if (body.mode !== undefined && !BETRIEBSARTEN.includes(body.mode)) {
+        fehler.push(`Betriebsart ${body.mode} gibt es nicht — der scharfe Handel ist ausgelagert`)
+    }
+    const mode = BETRIEBSARTEN.includes(body.mode)
+        ? body.mode
+        : (BETRIEBSARTEN.includes(vorhanden?.mode) ? vorhanden.mode : 'paper')
 
     if (fehler.length) return { fehler }
 
@@ -158,8 +164,7 @@ function pruefeInstanzEingabe(body, vorhanden = null) {
     }
 
     // Den Broker pruefen, statt ihn zu uebernehmen. Ein Tippfehler wuerde sonst
-    // erst beim ersten scharfen Einstieg auffallen — dann bricht die Engine mit
-    // `unknown_broker` ab, und die Instanz handelt stillschweigend nie.
+    // erst im Schattenbetrieb auffallen, wenn die Rundungsregeln fehlen.
     const broker = String(body.broker || vorhanden?.broker || 'bitunix').toLowerCase().trim()
     if (!kenntBroker(broker)) {
         return { fehler: [`Unbekannter Broker: ${broker}`] }
@@ -198,32 +203,6 @@ async function historieSchreiben(knexOderTrx, instanceId, paramsVersion, params,
     }
 }
 
-/**
- * Reifegrad einer Instanz aus den gespeicherten Daten.
- *
- * Zusammengetragen wird nur, was ohnehin vorliegt: die Backtests dieser Instanz
- * (oder ihrer Strategie), die Zahl abgeschlossener Papier-Trades und die
- * Mindestzahl aus den Einstellungen.
- */
-async function ladeReifegrad(row) {
-    const knex = getKnex()
-    const [laeufe, papier, s] = await Promise.all([
-        knex('strategy_backtests')
-            .where(function () { this.where('instanceId', row.id).orWhere('strategyId', row.strategyId) })
-            .select('stats', 'risk', 'entscheidung').orderBy('id', 'desc').limit(200),
-        knex('strategy_trades').where({ instanceId: row.id })
-            .whereIn('mode', ['paper', 'shadow']).count({ n: '*' }).first(),
-        knex('settings').select('strategyMinPaperTrades').where('id', 1).first(),
-    ])
-    return bewerteGates({
-        laeufe: laeufe.map((l) => ({
-            stats: parseJson(l.stats, {}), risk: parseJson(l.risk, {}), entscheidung: l.entscheidung,
-        })),
-        paperTrades: Number(papier?.n) || 0,
-        minPaperTrades: Number(s?.strategyMinPaperTrades) || 0,
-    })
-}
-
 export function setupStrategyRoutes(app) {
 
     // ── Registry: Manifeste treiben das gesamte Frontend-Formular ────────
@@ -233,10 +212,8 @@ export function setupStrategyRoutes(app) {
             riskParams: RISK_PARAMS,
             riskDefaults: defaultsFromSchema(RISK_PARAMS),
             agentDefaults: AGENT_DEFAULTS,
-            modes: ['paper', 'shadow', 'live'],
-            // Die Ausführungswege samt ihrer Fähigkeiten. Die Oberfläche
-            // fragt daraus ab, ob ein Broker einen Börsen-Stop kann — statt
-            // den Namen abzufragen, was bei jedem neuen Broker nachzuziehen wäre.
+            modes: BETRIEBSARTEN,
+            // Die Börsen, deren Regeln der Schattenbetrieb anlegen kann.
             broker: holeAdapterListe(),
             bausteine: BAUSTEINE,
         })
@@ -321,32 +298,10 @@ export function setupStrategyRoutes(app) {
             }
             if (paramsGeaendert) aktualisierung.paramsVersion = (Number(vorhanden.paramsVersion) || 1) + 1
 
-            // Betriebsart-Wechsel auf live setzt die Freigabe zurück
-            if (geprueft.werte.mode === 'live' && vorhanden.mode !== 'live') {
-                aktualisierung.liveApprovedAt = 0
-            }
-            // Die Freigabe galt für einen KONKRETEN Handelszustand. Ändert sich
-            // etwas Handelsrelevantes (Parameter, Risiko, Symbole, Strategie,
-            // Zeiteinheit), muss neu freigegeben werden — sonst handelt eine
-            // "genehmigte" Instanz nachträglich völlig andere Logik.
-            // Der Broker gehört ausdrücklich dazu: eine Freigabe gilt für EINEN
-            // Ausführungsweg. Bitunix hält den Stop an der Börse, Pionex nicht —
-            // dieselbe Strategie ist auf der anderen Börse ein anderes Risiko.
+            // Die Börse unter einer laufenden Position zu wechseln, hiesse:
+            // eröffnet mit den Rundungsregeln von A, gebucht als B. Also gar
+            // nicht erst zulassen.
             const brokerGeaendert = geprueft.werte.broker !== (vorhanden.broker || 'bitunix')
-            const handelsrelevant = paramsGeaendert
-                || brokerGeaendert
-                || geprueft.werte.symbols !== vorhanden.symbols
-                || geprueft.werte.strategyId !== vorhanden.strategyId
-                || geprueft.werte.timeframe !== vorhanden.timeframe
-                || geprueft.werte.timeframes !== JSON.stringify(normalisiereTimeframes(
-                    vorhanden.timeframes, vorhanden.timeframe, getStrategy(vorhanden.strategyId)))
-            if (handelsrelevant && vorhanden.liveApprovedAt) {
-                aktualisierung.liveApprovedAt = 0
-            }
-
-            // Den Ausführungsweg unter einer laufenden Position zu wechseln,
-            // hiesse: die Position steht auf Börse A, das Journal schliesst sie
-            // auf Börse B. Also gar nicht erst zulassen.
             if (brokerGeaendert) {
                 const offeneZ = await knex('strategy_positions')
                     .where('instanceId', req.params.id)
@@ -409,14 +364,8 @@ export function setupStrategyRoutes(app) {
             if (an) {
                 const instance = ladeInstanz(row)
                 if (!instance) return res.status(400).json({ error: 'Instanz ist nicht lauffähig (Strategie/Zeiteinheit prüfen)' })
-                if (instance.mode === 'live') {
-                    const s = await knex('settings').select('strategyLiveEnabled').where('id', 1).first()
-                    if (!s?.strategyLiveEnabled) {
-                        return res.status(409).json({ error: 'Live ist global nicht freigegeben (Einstellungen)' })
-                    }
-                    if (!row.liveApprovedAt) {
-                        return res.status(409).json({ error: 'Diese Instanz ist für Live nicht freigegeben' })
-                    }
+                if (!BETRIEBSARTEN.includes(instance.mode)) {
+                    return res.status(409).json({ error: 'Der scharfe Handel ist ausgelagert — Instanz auf Papier oder Schatten stellen' })
                 }
                 // Der Not-Aus wird hier NICHT aufgehoben. Er ist eine bewusste
                 // Entscheidung und darf nur dort zurückgenommen werden, wo er
@@ -435,221 +384,6 @@ export function setupStrategyRoutes(app) {
         } catch (e) {
             logError('strategy-api', 'Start/Stop fehlgeschlagen', e)
             res.status(500).json({ error: 'Status konnte nicht geändert werden' })
-        }
-    })
-
-    /**
-     * Live-Freigabe je Instanz. Verlangt den ausgeschriebenen Instanznamen als
-     * Bestätigung — ein versehentlicher Klick reicht damit nicht aus.
-     */
-    /** Reifegrad einer Instanz — welche Nachweise fehlen noch für den scharfen Betrieb? */
-    app.get('/api/strategies/instances/:id/readiness', async (req, res) => {
-        try {
-            const row = await getKnex()('strategy_instances').where('id', req.params.id).first()
-            if (!row) return res.status(404).json({ error: 'Instanz nicht gefunden' })
-            res.json(await ladeReifegrad(row))
-        } catch (e) {
-            logError('strategy-api', 'Reifegrad fehlgeschlagen', e)
-            res.status(500).json({ error: 'Reifegrad konnte nicht ermittelt werden' })
-        }
-    })
-
-    /**
-     * Zustand des Stop-Wächters.
-     *
-     * Auf einer Börse ohne Stop-Order ist ein schweigender Wächter derselbe
-     * Zustand wie „kein Stop" — nur dass ihn sonst niemand sieht. Deshalb ist
-     * das eine eigene Anzeige und keine Zeile im Engine-Status.
-     */
-    app.get('/api/strategies/waechter', async (req, res) => {
-        try {
-            const knex = getKnex()
-            const offen = await knex('strategy_positions')
-                .where('mode', 'live').whereIn('status', ['open', 'closing'])
-                .count({ n: '*' }).first()
-            const veraltet = await knex('strategy_positions')
-                .where('mode', 'live').whereIn('status', ['open', 'closing'])
-                .where('guardAt', '<', Date.now() - 30000)
-                .count({ n: '*' }).first()
-            res.json({
-                ...waechterStatus(),
-                offeneLivePositionen: Number(offen?.n) || 0,
-                unbewacht: Number(veraltet?.n) || 0,
-            })
-        } catch (e) {
-            logError('strategy-api', 'Wächter-Status fehlgeschlagen', e)
-            res.status(500).json({ error: 'Wächter-Status nicht lesbar' })
-        }
-    })
-
-    /**
-     * Probeorder: EINE winzige Order auf, Fill lesen, sofort wieder zu.
-     *
-     * ── Warum das eine eigene Route hat ────────────────────────────────────
-     * Der Order-Body ist gegen die Dokumentation gebaut und im Betrieb nicht
-     * bestätigt. Offen sind Fragen, die keine Doku beantwortet: Ist `size` bei
-     * MARKET_QTY die Basismenge oder ein Quote-Betrag? Akzeptiert Pionex das
-     * clientOrderId-Format? Lehnt `reduceOnly` sauber ab, wenn nichts da ist?
-     *
-     * Diese Fragen zum ersten Mal an einem echten Setup zu klären, hiesse: eine
-     * Position, die vielleicht hundertmal zu gross ist, und ein Stop, der nicht
-     * greift. Hier kostet dieselbe Klärung zwei Marktorders über 25 USDT.
-     *
-     * Vier Sperren, alle notwendig:
-     *   - der globale Scharf-Schalter muss an sein,
-     *   - der Not-Aus darf nicht gedrückt sein,
-     *   - der ausgeschriebene Bestätigungstext,
-     *   - ein hartes Nominal-Limit, das der Aufrufer nicht überschreiben kann.
-     */
-    app.post('/api/strategies/probeorder', async (req, res) => {
-        const MAX_NOTIONAL = 25
-        const BESTAETIGUNG = 'PROBEORDER'
-        try {
-            const body = req.body || {}
-            if (String(body.confirm || '').trim() !== BESTAETIGUNG) {
-                return res.status(400).json({ error: `Zur Bestätigung "${BESTAETIGUNG}" eingeben` })
-            }
-
-            const knex = getKnex()
-            const s = await knex('settings')
-                .select('strategyLiveEnabled', 'strategyKillSwitch').where('id', 1).first()
-            if (!s?.strategyLiveEnabled) {
-                return res.status(409).json({ error: 'Scharfer Betrieb ist global nicht freigegeben' })
-            }
-            if (s?.strategyKillSwitch) {
-                return res.status(409).json({ error: 'Not-Aus ist aktiv' })
-            }
-
-            const broker = String(body.broker || 'pionex')
-            if (!kenntBroker(broker)) return res.status(400).json({ error: `Unbekannter Broker: ${broker}` })
-            const adapter = holeAdapter(broker)
-
-            const symbol = String(body.symbol || '').toUpperCase().trim()
-            if (!symbol) return res.status(400).json({ error: 'Symbol fehlt' })
-            const direction = body.direction === 'short' ? 'short' : 'long'
-
-            const schritte = []
-            const merke = (name, d) => { schritte.push({ schritt: name, ...d }) }
-
-            // 1. Kontraktdaten — ohne sie ist jede Menge geraten.
-            const meta = typeof adapter.holeSymbolMeta === 'function'
-                ? await adapter.holeSymbolMeta(symbol).catch(() => null)
-                : null
-            if (!meta) return res.status(400).json({ error: `Keine Kontraktdaten für ${symbol}`, schritte })
-            merke('kontraktdaten', { meta })
-
-            // 2. Menge aus dem Nominal-Limit. Der Preis kommt vom Kursfeed.
-            const preis = await getLastPrice(symbol, { market: 'futures' }).catch(() => 0)
-            if (!(preis > 0)) return res.status(400).json({ error: 'Kein Kurs abrufbar', schritte })
-            const rohMenge = MAX_NOTIONAL / preis
-            const menge = typeof adapter.rundeMenge === 'function'
-                ? adapter.rundeMenge(rohMenge, meta.stepSize)
-                : rohMenge
-            merke('menge', { preis, rohMenge, menge, notional: menge * preis })
-
-            if (!(menge > 0) || (meta.minQty > 0 && menge < meta.minQty)) {
-                return res.status(400).json({
-                    error: `${MAX_NOTIONAL} USDT unterschreiten die Mindestmenge von ${symbol} (${meta.minQty}) — kleineres Symbol wählen`,
-                    schritte,
-                })
-            }
-            if (menge * preis > MAX_NOTIONAL * 1.2) {
-                return res.status(400).json({ error: 'Menge über dem Probelimit', schritte })
-            }
-
-            // 3. Margenmodus und Hebel setzen.
-            if (typeof adapter.bereiteSymbolVor === 'function') {
-                const vor = await adapter.bereiteSymbolVor({
-                    symbol, leverage: Number(body.leverage) || 5, isoliert: true, mode: 'live',
-                }).catch((e) => ({ ok: false, reason: e.message }))
-                merke('vorbereitung', vor)
-                if (!vor.ok) return res.status(409).json({ error: `Vorbereitung fehlgeschlagen: ${vor.reason}`, schritte })
-            }
-
-            // 4. Öffnen. `stopLoss` ist hier nur Formsache — der Adapter
-            //    verweigert ohne ihn, und das soll er auch bei der Probe.
-            const clientOrderId = `ctj-probe-${Date.now()}`
-            const auf = await adapter.openLivePosition({
-                setup: {
-                    symbol, direction,
-                    stopLoss: direction === 'long' ? preis * 0.5 : preis * 1.5,
-                    takeProfit: 0,
-                },
-                size: { qty: menge },
-                leverage: Number(body.leverage) || 5,
-                clientOrderId,
-                mode: 'live',
-            }).catch((e) => ({ ok: false, reason: e.message, geschickt: true }))
-            merke('oeffnen', auf)
-
-            if (!auf.ok) {
-                return res.status(502).json({ error: `Order abgelehnt: ${auf.reason} ${auf.detail || ''}`, schritte })
-            }
-
-            // 5. Was ist tatsächlich passiert? Hier klärt sich die
-            //    `size`-Frage: weicht die gefüllte Menge von der bestellten ab,
-            //    bedeutet `size` etwas anderes als angenommen.
-            const positionen = typeof adapter.holeOffenePositionen === 'function'
-                ? await adapter.holeOffenePositionen(symbol).catch(() => [])
-                : []
-            merke('position', { positionen, erwarteteMenge: menge })
-
-            // 6. Sofort wieder zu — unabhängig davon, wie Schritt 5 ausging.
-            const zu = await adapter.closeLivePosition({
-                symbol, direction, qty: menge, mode: 'live',
-            }).catch((e) => ({ ok: false, reason: e.message }))
-            merke('schliessen', zu)
-
-            const danach = typeof adapter.holeOffenePositionen === 'function'
-                ? await adapter.holeOffenePositionen(symbol).catch(() => [])
-                : []
-            merke('kontrolle', { nochOffen: danach })
-
-            if (danach.some((p) => p.qty > 0)) {
-                logError('strategy-api', `PROBEORDER: ${symbol} ist NACH dem Schliessen noch offen — von Hand prüfen!`)
-                return res.status(502).json({
-                    error: 'Position liess sich nicht schliessen — an der Börse prüfen!', schritte,
-                })
-            }
-
-            res.json({ ok: true, schritte })
-        } catch (e) {
-            logError('strategy-api', 'Probeorder fehlgeschlagen', e)
-            res.status(500).json({ error: e.message })
-        }
-    })
-
-    app.post('/api/strategies/instances/:id/approve-live', async (req, res) => {
-        try {
-            const knex = getKnex()
-            const row = await knex('strategy_instances').where('id', req.params.id).first()
-            if (!row) return res.status(404).json({ error: 'Instanz nicht gefunden' })
-
-            if (String(req.body?.confirm || '').trim() !== row.name) {
-                return res.status(400).json({ error: 'Zur Bestätigung den Namen der Instanz exakt eingeben' })
-            }
-            const s = await knex('settings').select('strategyLiveEnabled').where('id', 1).first()
-            if (!s?.strategyLiveEnabled) {
-                return res.status(409).json({ error: 'Live ist global nicht freigegeben (Einstellungen)' })
-            }
-
-            // Die Belege. Ohne sie ist die Freigabe eine Absichtserklärung —
-            // eine Strategie mit sieben Trades, ohne Gebühren gerechnet, deren
-            // Ergebnis an einem Ausreisser hängt, käme sonst durch.
-            const reife = await ladeReifegrad(row)
-            if (!reife.bereit) {
-                return res.status(409).json({
-                    error: `Noch nicht freigabereif — offene Nachweise: ${reife.offen.join(', ')}`,
-                    tore: reife.tore, offen: reife.offen,
-                })
-            }
-
-            await knex('strategy_instances').where('id', row.id)
-                .update({ liveApprovedAt: Date.now(), updatedAt: knex.fn.now() })
-            res.json({ ok: true })
-        } catch (e) {
-            logError('strategy-api', 'Live-Freigabe fehlgeschlagen', e)
-            res.status(500).json({ error: 'Freigabe fehlgeschlagen' })
         }
     })
 
@@ -1363,7 +1097,13 @@ export function setupStrategyRoutes(app) {
                 }
             }))
 
-            res.json({ zeit: jetzt, positionen: eintraege, jeInstanz: summiereJeInstanz(eintraege) })
+            // Ausgelagerte Live-Zeilen (vor S13) werden gezeigt, aber nicht in den
+            // schwebenden Stand der Instanz gerechnet: die Instanz ist inzwischen
+            // Papier, und ob die Position an der Börse noch steht, weiss nur die Börse.
+            res.json({
+                zeit: jetzt, positionen: eintraege,
+                jeInstanz: summiereJeInstanz(eintraege.filter((e) => BETRIEBSARTEN.includes(e.mode))),
+            })
         } catch (e) {
             logError('strategy-api', 'Zwischenstand offener Positionen fehlgeschlagen', e)
             res.status(500).json({ error: 'Zwischenstand konnte nicht berechnet werden' })
@@ -1375,8 +1115,11 @@ export function setupStrategyRoutes(app) {
             const knex = getKnex()
             const row = await knex('strategy_positions').where('id', req.params.id).first()
             if (!row) return res.status(404).json({ error: 'Position nicht gefunden' })
-            // 'closing' heisst: der Stop-Waechter ist schon dran. Ein zweiter
-            // Schliessversuch von Hand wuerde eine zweite Boersen-Order senden.
+            // Eine `live`-Zeile stammt aus der Zeit vor S13. Ob sie an der Börse
+            // noch steht, weiss nur die Börse — lokal buchen hiesse raten.
+            if (row.mode === 'live') {
+                return res.status(409).json({ error: 'Live-Position aus der Zeit vor der Auslagerung — an der Börse prüfen, hier wird nichts gebucht' })
+            }
             if (row.status === 'closing') {
                 return res.status(409).json({ error: 'Position wird gerade geschlossen — bitte kurz warten' })
             }
@@ -1397,7 +1140,7 @@ export function setupStrategyRoutes(app) {
                 costs: kostenAus(instance.risk),
             })
             if (!r.ok) {
-                return res.status(502).json({ error: `Position konnte an der Börse nicht geschlossen werden: ${r.reason}` })
+                return res.status(409).json({ error: `Position konnte nicht geschlossen werden: ${r.reason}` })
             }
             res.json({ ok: true, trade: r.trade })
         } catch (e) {
@@ -1718,7 +1461,7 @@ export function setupStrategyRoutes(app) {
                 for (const inst of instanzen) {
                     const neueVersion = (Number(inst.paramsVersion) || 1) + 1
                     await knex('strategy_instances').where('id', inst.id).update({
-                        paramsVersion: neueVersion, liveApprovedAt: 0, updatedAt: knex.fn.now(),
+                        paramsVersion: neueVersion, updatedAt: knex.fn.now(),
                     })
                     await historieSchreiben(knex, inst.id, neueVersion,
                         typeof inst.params === 'string' ? inst.params : JSON.stringify(inst.params || {}),
@@ -1822,14 +1565,12 @@ export function setupStrategyRoutes(app) {
         try {
             const knex = getKnex()
             const s = await knex('settings')
-                .select('strategyLiveEnabled', 'strategyKillSwitch', 'strategyMaxLeverage', 'strategyMinPaperTrades')
+                .select('strategyKillSwitch', 'strategyMaxLeverage')
                 .where('id', 1).first()
             res.json({
                 ...engineStatus(),
-                liveEnabled: Boolean(s?.strategyLiveEnabled),
                 killSwitch: Boolean(s?.strategyKillSwitch),
                 maxLeverage: Number(s?.strategyMaxLeverage) || 10,
-                minPaperTrades: Number(s?.strategyMinPaperTrades) || 0,
             })
         } catch (e) {
             res.status(500).json({ error: 'Status nicht abrufbar' })

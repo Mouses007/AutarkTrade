@@ -96,7 +96,6 @@ for (const [titel, pfad, params, datei] of [
     ['Offene Positionen', '/uapi/v1/account/positions', {}, 'pionex-positions.json'],
     ['Kontomodus', '/uapi/v1/account/positionMode', {}, null],
     ['Hebel', '/uapi/v1/account/leverage', { symbol: psym }, null],
-    ['Margenmodus', '/uapi/v1/trade/isolatedMode', { symbol: psym }, null],
     ['Offene Orders', '/uapi/v1/trade/openOrders', {}, null],
 ]) {
     try {

@@ -1,9 +1,8 @@
 <script setup>
-/** KI → Strategie: Anbieter/Modell der Strategie-KI und globale Schutzschalter der Strategie-Agenten. */
+/** KI → Strategie: Anbieter/Modell der Strategie-KI und globale Schalter der (simulierten) Strategie-Agenten. */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AnbieterWahl from '@/components/AnbieterWahl.vue'
-import Hinweis from '@/components/basis/Hinweis.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
@@ -24,9 +23,7 @@ const { aiModel, aiProvider, aiStrategieModell, aiStrategieProvider, modellListe
    fehlkonfigurierte Instanz sie nicht umgehen kann. */
 let agentExpanded = ref(true) // eigener Unter-Reiter: offen starten
 let agentKillSwitch = ref(false)
-let agentLiveEnabled = ref(false)
 let agentMaxLeverage = ref(10)
-let agentMinPaperTrades = ref(20)
 let agentLlmBudget = ref(1)
 let agentSaving = ref(false)
 let agentResult = ref(null)
@@ -34,9 +31,7 @@ let agentResult = ref(null)
 function loadAgentSettings() {
     const s = currentUser.value || {}
     agentKillSwitch.value = !!Number(s.strategyKillSwitch)
-    agentLiveEnabled.value = !!Number(s.strategyLiveEnabled)
     agentMaxLeverage.value = Number(s.strategyMaxLeverage) || 10
-    agentMinPaperTrades.value = Number(s.strategyMinPaperTrades) ?? 20
     agentLlmBudget.value = Number(s.strategyLlmBudgetUsd) || 1
 }
 
@@ -46,9 +41,7 @@ async function saveAgentSettings() {
     try {
         const daten = {
             strategyKillSwitch: agentKillSwitch.value ? 1 : 0,
-            strategyLiveEnabled: agentLiveEnabled.value ? 1 : 0,
             strategyMaxLeverage: Math.min(Math.max(1, agentMaxLeverage.value || 1), 125),
-            strategyMinPaperTrades: Math.max(0, agentMinPaperTrades.value || 0),
             strategyLlmBudgetUsd: Math.max(0, agentLlmBudget.value || 0),
         }
         await dbUpdateSettings(daten)
@@ -79,7 +72,6 @@ loadAgentSettings()
         <Abschnitt class="abstand-oben" :titel="t('settings.ki.strat.title')" symbol="agent" v-model:offen="agentExpanded">
             <template #kopf>
                 <Pille v-if="agentKillSwitch" ton="schlecht">{{ t('settings.ki.strat.killActive') }}</Pille>
-                <Pille v-else-if="agentLiveEnabled" ton="warn">{{ t('settings.ki.strat.liveOn') }}</Pille>
             </template>
 
             <p class="einleitung">
@@ -92,20 +84,9 @@ loadAgentSettings()
                 <Schalter v-model="agentKillSwitch" :hilfe="t('settings.ki.strat.killHint')" />
             </Feld>
 
-            <Feld :label="t('settings.ki.strat.allowLive')">
-                <Schalter v-model="agentLiveEnabled" :hilfe="t('settings.ki.strat.allowLiveHint')" />
-            </Feld>
-
-            <Hinweis v-if="agentLiveEnabled" art="warn">{{ t('settings.ki.strat.liveWarn') }}</Hinweis>
-
             <Feld :label="t('settings.ki.strat.maxLev')" :hilfe="t('settings.ki.strat.maxLevHint')" fuer="kiStratHebel">
                 <input id="kiStratHebel" type="number" min="1" max="125" class="schmal"
                     v-model.number="agentMaxLeverage" />
-            </Feld>
-
-            <Feld :label="t('settings.ki.strat.minPaper')" :hilfe="t('settings.ki.strat.minPaperHint')" fuer="kiStratPaper">
-                <input id="kiStratPaper" type="number" min="0" max="1000" class="schmal"
-                    v-model.number="agentMinPaperTrades" />
             </Feld>
 
             <Feld :label="t('settings.ki.strat.budget')" :hilfe="t('settings.ki.strat.budgetHint')" fuer="kiStratBudget">
