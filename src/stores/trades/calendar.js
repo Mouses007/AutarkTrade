@@ -1,8 +1,3 @@
-/**
- * Trades: Calendar data (mini calendars, calendar data).
- */
-export {
-    calendarData,
-    miniCalendarsData,
-    tradeAccounts,
-} from '../globals.js'
+// Trades: Kalender.
+// Re-Exporte; die Werte leben in stores/app/* und stores/journal/*.
+export { calendarData, miniCalendarsData, tradeAccounts } from '../journal/kalender.js'

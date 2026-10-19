@@ -1,11 +1,3 @@
-/**
- * UI: Daily/View tab state (current/previous tab ids).
- */
-export {
-    idCurrent,
-    idPrevious,
-    idCurrentType,
-    idCurrentNumber,
-    idPreviousType,
-    idPreviousNumber,
-} from '../globals.js'
+// UI: Reiterzustand der Tagesansicht.
+// Re-Exporte; die Werte leben in stores/app/* und stores/journal/*.
+export { idCurrent, idPrevious, idCurrentType, idCurrentNumber, idPreviousType, idPreviousNumber } from '../app/rahmen.js'

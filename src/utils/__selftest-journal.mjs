@@ -324,9 +324,14 @@ const filter = await import('../stores/filters.js')
 const st = await import('../stores/trades.js')
 const { currentUser } = await import('../stores/settings.js')
 const quick = await import('./quickImport.js')
-const kern = await import('./trades.js')
-const tage = await import('./daily.js')
-const kalender = await import('./calendar.js')
+const kern = {
+    ...(await import('./journal/laden.js')),
+    ...(await import('./journal/summen.js')),
+    ...(await import('./journal/gruppieren.js')),
+    ...(await import('./journal/gewinnanalyse.js')),
+}
+const tage = await import('./journal/tagebuch.js')
+const kalender = await import('./journal/kalender.js')
 const charts = await import('./journal/diagramme/index.js')
 
 const netz = baueBoersenAntworten()

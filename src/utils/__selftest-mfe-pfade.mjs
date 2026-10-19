@@ -242,7 +242,10 @@ const filter = await import('../stores/filters.js')
 const st = await import('../stores/trades.js')
 const { currentUser } = await import('../stores/settings.js')
 const quick = await import('./quickImport.js')
-const alt = await import('./journal-alt.js')
+const alt = {
+    ...(await import('./journal/import.js')),
+    ...(await import('./journal/tagesrechnung.js')),
+}
 
 globalThis.__journalDaten = {
     trades: [], excursions: [],

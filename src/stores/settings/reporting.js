@@ -1,10 +1,3 @@
-/**
- * Settings: AI report state (generating, error, last saved, label, count).
- */
-export {
-    aiReportGenerating,
-    aiReportError,
-    aiReportLastSavedId,
-    aiReportLabel,
-    aiReportCountBefore,
-} from '../globals.js'
+// Einstellungen: KI-Report-Status.
+// Re-Exporte; die Werte leben in stores/app/* und stores/journal/*.
+export { aiReportGenerating, aiReportError, aiReportLastSavedId, aiReportLabel, aiReportCountBefore } from '../app/einstellungen.js'
