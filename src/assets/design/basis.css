@@ -1,0 +1,92 @@
+/*
+ * Grundlage für alle Seiten: Elemente ohne Klasse.
+ *
+ * Wird NACH Bootstrap und NACH style-dark.css geladen (src/main.js) und gewinnt
+ * damit bei gleicher Spezifität. Bewusst nur Elemente und wenige Hilfsklassen —
+ * Bauteile bringen ihr Aussehen in `src/components/basis/` selbst mit.
+ */
+
+html,
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--schrift);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* style-dark.css setzte die Schrift über `*` — das schlägt jede Vererbung.
+   Hier dieselbe Breite, damit nirgends Nunito übrig bleibt. Formularfelder
+   und Knöpfe erben sonst die Browser-Schrift. */
+* {
+    font-family: var(--schrift);
+}
+
+code,
+kbd,
+pre,
+samp {
+    font-family: var(--schrift-mono);
+}
+
+h1,
+h2,
+h3 {
+    color: var(--text);
+    letter-spacing: -0.02em;
+}
+
+h1 {
+    font-weight: 700;
+}
+
+a {
+    color: var(--accent);
+}
+
+a:hover {
+    color: var(--accent-hover);
+}
+
+::selection {
+    background: var(--accent-schwach);
+    color: var(--text);
+}
+
+/* Sichtbarer Fokus: Tastatur ist der Notausgang, wenn die Maus spinnt. */
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+/* Rollbalken im Ton der Flächen statt grauem Weiss. */
+* {
+    scrollbar-color: var(--line-stark) transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: var(--line-stark);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+    background: var(--accent-schwach);
+}
+
+hr {
+    border-color: var(--line);
+    opacity: 1;
+}
+
+/* Zahlen in Spalten sollen untereinander stehen. */
+.zahl,
+.tabular-nums {
+    font-variant-numeric: tabular-nums;
+}
+
+.at-gedaempft {
+    color: var(--muted);
+}
+
+.at-akzent {
+    color: var(--accent);
+}

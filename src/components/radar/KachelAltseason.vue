@@ -31,7 +31,7 @@ const index = computed(() => props.daten?.index ?? null)
 const farbe = computed(() => {
     const i = index.value
     if (i === null) return 'var(--white-60)'
-    if (i >= 75) return '#01B4FF'
+    if (i >= 75) return '#1fd6c4'
     if (i <= 25) return '#f7931a'
     return '#9aa0aa'
 })

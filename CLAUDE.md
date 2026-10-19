@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Crypto Trading Journal is a **local single-user** trading journal for **Bitunix futures trading**. It lets users import trades via the Bitunix API (or enter them manually), view dashboards with analytics/charts, keep a diary, manage playbooks, and store screenshots. Licensed under GPL-3.0.
+**AutarkTrade** (4.0.0-alpha, formerly *Crypto Trading Journal*) is a **local single-user** trading journal and analysis workstation for **crypto futures** (Bitunix, Bitget, Pionex). It lets users import trades via the exchange APIs (or enter them manually), view dashboards with analytics/charts, keep a diary, manage playbooks, and store screenshots. Licence: proprietary, in preparation (work order S10); origin of the code base in `HERKUNFT.md`, remaining third-party parts in `LIZENZ-PLAN.md`.
+
+**Rebuild into a product:** the work is split into sessions S1–S11 — state, branches and open points in `docs/AUFTRAGSSTAND.md`. Rules that apply to every session: work in your own worktree, `npm run test:self` and the golden master green, then rebase and `git merge --ff-only` onto master; TradeNote-derived files are replaced clean-room (spec in `docs/spec/`, built by a fresh agent from the spec only); new dependencies only MIT/ISC/BSD/Apache-2.0; `menu.js`, `router/index.js` and `src/assets/design/tokens.css` are changed only by the session that owns them.
 
 **Key simplifications from the original project:**
 - No cloud login (single user, direct to dashboard); API protected by session cookie
@@ -20,7 +22,7 @@ README.md and this file are kept in sync for project and architecture descriptio
 - **Frontend**: Vue 3 (Composition API with `<script setup>`), Vue Router, Vite; state via `ref()`-Exporte in `src/stores/` (kein Pinia)
 - **Backend**: Express.js with Knex (SQLite default, optional PostgreSQL)
 - **Charts**: Apache ECharts; the chart workspace (`/chart`) uses Lightweight Charts 5 (TradingView, Apache-2.0 — the attribution logo must stay on)
-- **Styling**: Bootstrap (CDN in `index.html`), custom dark theme via CSS variables (`src/assets/style-dark.css`)
+- **Styling**: own design system (`src/assets/design/tokens.css`, `basis.css`, `rahmen.css`; building blocks in `src/components/basis/`), Bootstrap 5 bundled via npm as a transition (to be removed in S9); legacy dark theme `src/assets/style-dark.css` maps its variables onto the tokens
 - **Other key libs**: dayjs (dates/timezones), PapaParse (CSV), Quill (rich text), markerjs2 (screenshot annotation), lodash, axios
 
 ## Commands
@@ -95,8 +97,10 @@ Not covered: CSV import (`brokers.js`/`addTrades.js`), the MFE/OHLCV paths of
 ### Server
 
 - **`index.mjs`** — Entry point: Express server + DB init (Knex) + API routes. Session cookie set for all non-API requests; all `/api/*` require valid session. In dev mode (`NODE_ENV=dev`), proxies non-API requests to Vite dev server on port 39482. In production, serves static files from `dist/`. Default bind: `127.0.0.1` (override with `AT_HOST`).
-- **`server/database.js`** — Knex setup: **`initDb()`** / **`getKnex()`**. Schema and migrations in code. Default: SQLite (**`tradenote.db`** in project root, WAL mode). Optional PostgreSQL via **`server/db-config.js`** and `db-config.json`. Tables: settings, trades, diaries, screenshots, playbooks, satisfactions, tags, notes, excursions, bitunix_config, bitget_config, incoming_positions, ai_reports, ai_report_messages, market_snapshots (daily snapshots of values without free history, e.g. BTC dominance), radar_fetch_state (claims for periodic tasks), calendar_events, live_sessions (one row per trading session in the live-trading window: plan, notes, verdict, frozen trade snapshot), hype_projekt (24 h cache of Hype-Radar project checks), hype_frueh (tokens watched by the Hype-Radar early phase, with snapshot history), hype_gedaechtnis (first seen / first flagged per contract), hype_smart_stand + hype_smart_kaeufe (smart-money wallets), hype_boersen_stand + hype_listungen_neu (exchange watcher), chart_layouts + chart_watchlists + chart_zeichnungen + chart_alarme (chart workspace, v26), chart_vorlagen (indicator templates, v27), etc. `SCHEMA_VERSION` at the top guards against an older code stand writing against a newer schema — it only warns, it never aborts.
-- **`server/auth.js`** — Session cookie (`tn_session`) for API auth; token generated at startup.
+- **`server/database.js`** — Knex setup: **`initDb()`** / **`getKnex()`**. Schema and migrations in code. Default: SQLite (**`autarktrade.db`** in project root, WAL mode; an existing `tradenote.db` is kept in use when it is the only file). Optional PostgreSQL via **`server/db-config.js`** and `db-config.json`. Tables: settings, trades, diaries, screenshots, playbooks, satisfactions, tags, notes, excursions, bitunix_config, bitget_config, incoming_positions, ai_reports, ai_report_messages, market_snapshots (daily snapshots of values without free history, e.g. BTC dominance), radar_fetch_state (claims for periodic tasks), calendar_events, live_sessions (one row per trading session in the live-trading window: plan, notes, verdict, frozen trade snapshot), hype_projekt (24 h cache of Hype-Radar project checks), hype_frueh (tokens watched by the Hype-Radar early phase, with snapshot history), hype_gedaechtnis (first seen / first flagged per contract), hype_smart_stand + hype_smart_kaeufe (smart-money wallets), hype_boersen_stand + hype_listungen_neu (exchange watcher), chart_layouts + chart_watchlists + chart_zeichnungen + chart_alarme (chart workspace, v26), chart_vorlagen (indicator templates, v27), etc. `SCHEMA_VERSION` at the top guards against an older code stand writing against a newer schema — it only warns, it never aborts.
+- **`server/auth.js`** — Session cookie (`at_session`) for API auth; token generated at startup. The HMAC purpose string `tn_session_v1` stays unchanged on purpose (a new one would log out every device and break the shell tokens of the diagnosis scripts).
+- **`server/umgebung.js`** — Environment variables: `umgebung('X')` reads `AT_X`, falling back to the pre-rename `CTJ_X` (old compose files and NAS containers keep working); `umgebungAn('X')` for `=== '1'` switches. Read at call time, not at load.
+- **`server/testbetrieb.js`** — Test mode `AT_TESTBETRIEB=1` for the V2 test instance, which runs against a COPY of the live DB (real exchange keys, open positions, notification channels) and in its own DB is the only bidder for every leadership claim. `starteTakte([[name, fn], …])` starts the background takts in `index.mjs` — or none of them; engine, stop watcher, recorder, the calendar/snapshot/ETF timers also ask `istTestbetrieb()`. `versandGesperrt()` is checked at the transport (`sendeMail`, `melde`, hype `post`), not at every caller, so neither mail nor push leaves. Buttons keep working (a human who presses pays knowingly). `GET /api/system/modus` → `{testbetrieb}` feeds the banner (`components/rahmen/TestbetriebBanner.vue`) and switches off client-side paid automatics (Handelslage takt). `server/__selftest-testbetrieb.mjs` also fails if a `start…Takt()` in `index.mjs` bypasses `starteTakte`.
 - **`server/api-routes.js`** — Generic REST CRUD (`GET/POST/PUT/DELETE /api/db/{table}`) using Knex; table/column whitelist; settings and bitunix_config endpoints (bitunix_config response omits secretKey).
 - **`server/bitunix-api.js`** — Bitunix API client (SHA256 double-hash auth); encrypt/decrypt for API keys; proxy endpoints for positions.
 - **`server/bitget-api.js`** — Bitget API (HMAC-SHA256); encrypt/decrypt for keys.
@@ -212,20 +216,25 @@ View initialization follows a pattern in `src/utils/mountOrchestration.js`:
 
 ### Styling
 
-Dark theme uses CSS custom properties defined in `src/assets/style-dark.css`:
-- Color vars: `--blue-color`, `--grey-color`, `--black-bg-*`, `--white-*`
-- Layout vars: `--border-radius`, `--shadow-sm`
-- Utility classes: `.greenTrade`, `.redTrade`, `.dailyCard`, `.chartClass`
-
-Bootstrap loaded from CDN (not bundled).
+Design system after AutarkDarts (sister product): black ground, turquoise as the only signal colour, green/red only for profit/loss, system font (no web fonts).
+- **Tokens** in `src/assets/design/tokens.css` — the ONLY place with colour values: `--bg`, `--panel`, `--panel-soft`, `--line`, `--text`, `--muted`, `--accent`, `--accent-schwach`, `--on-accent`, `--good`/`--bad`/`--warn`, `--radius` (14px), `--radius-knopf` (10px), `--radius-pille`, `--schrift`.
+- `basis.css` (elements), `rahmen.css` (side menu/content under the header, Bootstrap variables onto tokens). Load order in `src/main.js`: Bootstrap → tokens → style-dark → basis → rahmen.
+- **Building blocks** `src/components/basis/`: `Knopf`, `Karte`, `Pille`, `Reiter`, `Tabelle`, `Eingabe`, `Dialog` (native `<dialog>`), `Seitenkopf`, `Hinweis`, `Leerzustand`, `Logo`, and `Symbol.vue` — own SVG icon set (24 grid, 1.8 stroke, `currentColor`) that replaces Font Awesome/Unicons; both still come from the CDN in `index.html` until S9 (Unicons' licence does not cover redistribution, so it is deliberately not bundled).
+- **Logo**: blossom in a ring of candles, drawn by `scripts/logo-zeichnen.mjs` (writes `src/assets/design/logo-zeichen.svg`, `public/favicon.svg`, the PNG icons, `src/assets/icon.png`).
+- **Frame**: `components/rahmen/Kopfleiste.vue` (logo → `/start`, modes with accent underline, settings), `TestbetriebBanner.vue`; `views/Start.vue` (`/start`, logo + mode tiles; `/` still lands on the chart).
+- Legacy: `src/assets/style-dark.css` keeps its old variable names (`--blue-color`, `--black-bg-*`, `--white-*`) but points them at the tokens; utility classes `.greenTrade`, `.redTrade`, `.dailyCard`, `.chartClass`. Goes away in S9.
 
 ### Environment Variables
+
+All variables are read through `server/umgebung.js`: `AT_X`, falling back to the former `CTJ_X`.
 
 - `AT_PORT` — Server port (default 8080; also accepts `PORT`)
 - `AT_HOST` — Bind address (default 127.0.0.1; use 0.0.0.0 for network access)
 - `AT_SECRET` — Secret for session token / crypto key derivation (required in production)
 - `NODE_ENV=dev` — Enable Vite dev server with HMR
 - `AT_NO_ENGINE=1` / `AT_NO_GUARD=1` / `AT_NO_RECORDER=1` — keep this process out of the strategy engine, the stop watcher, or the live recorder. All three use DB leadership claims across processes sharing one PostgreSQL; a local test container should run with `AT_NO_ENGINE=1 AT_NO_RECORDER=1`, otherwise it can win the recorder lead after a NAS restart and the NAS's in-memory liquidation ticker stays empty.
+- `AT_TESTBETRIEB=1` — test mode (see `server/testbetrieb.js`): no takts, engine, stop watcher, recorder, mail or push; banner in the UI.
+- V2 test container: `scripts/v2-container.sh` builds `autarktrade:v2-test` and runs `autarktrade-v2` on port **8091** against the NAS database `autarktrade` (a copy of the live DB, made 19.10.2026) with `AT_TESTBETRIEB=1 AT_NO_ENGINE=1 AT_NO_RECORDER=1 AT_NO_GUARD=1`; credentials in the untracked `scripts/.v2-container.env`. The script refuses `DB_NAME=tradejournal`.
 
 No `.env` files — runtime config stored in DB (settings table) and localStorage. Optional DB: `db-config.json` for PostgreSQL.
 

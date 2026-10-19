@@ -5,7 +5,19 @@
     "teil2": "Trade",
     "claim": "Your trading journal, local and independent",
     "testbetrieb": "Test mode",
-    "testbetriebText": "Copy of the live database – no background jobs, no mail, no push. Buttons still work."
+    "testbetriebText": "Copy of the live database – no background jobs, no mail, no push. Buttons still work.",
+    "modi": "Modes",
+    "startTitel": "Welcome",
+    "startUnter": "Choose what you want to work on.",
+    "modusText": {
+      "journal": "Trades, days, calendar and evaluation of your trading.",
+      "start": "Chart workspace with drawings, indicators and alerts.",
+      "live": "Market radar, news, order book and live trading.",
+      "research": "Hype radar and coin radar: find what is new, measure what is tradable.",
+      "agent": "Build, test and paper-trade strategies.",
+      "lernen": "Terms and market mechanics as flash cards."
+    },
+    "version": "Version {v}"
   },
   "common": {
     "save": "Save",

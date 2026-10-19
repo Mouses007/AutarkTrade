@@ -87,7 +87,7 @@ function zeichne() {
             },
             {
                 name: t('marktradar.lsoi.ratio'), type: 'line', data: ratio, yAxisIndex: 0, showSymbol: false,
-                lineStyle: { width: 1.8, color: '#01B4FF' },
+                lineStyle: { width: 1.8, color: '#1fd6c4' },
                 // Die 1,0-Linie ist die Wasserscheide: darüber mehr Long-Konten
                 markLine: props.gross ? {
                     silent: true, symbol: 'none',

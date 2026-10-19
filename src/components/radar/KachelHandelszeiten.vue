@@ -232,7 +232,7 @@ const band = computed(() => lage.value.phasenHeute
     padding: 0.05rem 0.35rem;
     border-radius: 999px;
     background: rgba(1, 180, 255, 0.18);
-    color: #01B4FF;
+    color: var(--accent);
 }
 
 .hzNaechste {

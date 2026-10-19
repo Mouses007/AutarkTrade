@@ -10,8 +10,6 @@ import { selectedBroker, brokers, selectedTradeCategory, BOT_BROKERS } from "../
 import { PAGES, pagesForMode, istModusAn } from '../config/menu.js'
 import SidebarFilters from './SidebarFilters.vue'
 import LiveSymbolPicker from './LiveSymbolPicker.vue'
-import donateBtc from '../assets/donate-btc.png'
-import donatePaypal from '../assets/donate-paypal.jpg'
 
 const appVersion = __APP_VERSION__
 import { useToggleMobileMenu } from "../utils/utils";
@@ -29,7 +27,6 @@ const livePickerVariant = computed(() => ({
     liquidations: 'levmap',
     openinterest: 'oi',
 }[pageId.value] || null))
-const showDonateModal = ref(false)
 
 // ── Börsen-Auswahl (nur Journal) ──
 // Steht jetzt in der Seitenleiste wie die Filter, nicht mehr als Pillen über
@@ -313,17 +310,11 @@ function goToDashboard() {
 <template>
     <!-- Der Modus-Umschalter sitzt auf jedem Bildschirm zuoberst im Inhalt
          (Nav.vue), nicht mehr in der Seitenleiste. -->
-    <div class="col-2 logoDiv" :class="{ schmal: sideMenuEingeklappt && screenType === 'computer' }">
-        <a class="logo-area pointerClass text-decoration-none" :href="logoZiel" @click.prevent="goToDashboard">
-            <div class="d-flex align-items-center">
-                <span v-if="currentUser?.avatar"><img class="logoProfileImg me-2" v-bind:src="currentUser.avatar" /></span>
-                <span v-else><img class="logoProfileImg me-2" src="../assets/icon.png" /></span>
-                <div class="logo-text">
-                    <div class="logo-title">Crypto<br>Trading Journal</div>
-                    <div v-if="currentUser?.username" class="logo-username">{{ currentUser.username }}</div>
-                </div>
-            </div>
-        </a>
+    <!-- Logo und Modi stehen seit AutarkTrade in der Kopfleiste
+         (components/rahmen/Kopfleiste.vue); hier nur noch der Nutzername. -->
+    <div v-if="currentUser?.username && !(sideMenuEingeklappt && screenType === 'computer')" class="at-nutzer">
+        <img v-if="currentUser?.avatar" class="at-avatar" :src="currentUser.avatar" alt="" />
+        <span>{{ currentUser.username }}</span>
     </div>
     <!-- Ein-/Ausklappen nur am Desktop; am Telefon fährt das Menü ohnehin ganz weg. -->
     <button v-if="screenType === 'computer'" type="button" class="menuKlappe"
@@ -492,13 +483,10 @@ function goToDashboard() {
         </div>
 
         <div class="mt-auto pt-3 sidebar-footer">
-            <a href="https://github.com/Mouses007/Crypto-Trading-Journal" target="_blank" rel="noopener"
-                class="footer-version">
-                Crypto Trading Journal V.{{ appVersion }}
-            </a>
+            <span class="footer-version">AutarkTrade {{ appVersion }}</span>
             <!-- Docker: Watchtower zieht automatisch — Link zur Release-Seite -->
             <a v-if="updateAvailable && isDocker" class="footer-update"
-                :href="updateInfo?.releaseUrl || 'https://github.com/Mouses007/Crypto-Trading-Journal/releases/latest'"
+                :href="updateInfo?.releaseUrl || 'https://github.com/Mouses007/AutarkTrade/releases/latest'"
                 target="_blank" rel="noopener"
                 :title="'Update v' + updateInfo?.remoteVersion + ' — wird automatisch via Watchtower installiert'">
                 <i class="uil uil-docker me-1"></i>Update v{{ updateInfo?.remoteVersion }}
@@ -517,34 +505,9 @@ function goToDashboard() {
                 <span class="spinner-border spinner-border-sm me-1"></span>{{ t('nav.rollback') }}
             </span>
             <span v-if="updateError" class="footer-update-error">{{ updateError }}</span>
-            <a href="#" @click.prevent="showDonateModal = true"
-                :class="['footer-donate', { 'footer-donate-highlight': updateAvailable }]">
-                <i class="uil uil-heart me-1"></i>{{ t('nav.donate') }}
-            </a>
         </div>
     </div>
 
-    <!-- Spenden Modal — Teleport to body to escape sidebar stacking context -->
-    <Teleport to="body">
-        <div v-if="showDonateModal" class="donate-overlay" @click.self="showDonateModal = false">
-            <div class="donate-modal">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h6 class="mb-0"><i class="uil uil-heart me-1"></i>{{ t('nav.donate') }}</h6>
-                    <button class="btn btn-sm btn-outline-secondary" @click="showDonateModal = false">
-                        <i class="uil uil-times"></i>
-                    </button>
-                </div>
-                <div class="donate-qr-row">
-                    <div class="donate-qr-card">
-                        <img :src="donateBtc" alt="BTC QR Code" class="donate-qr-img" />
-                    </div>
-                    <div class="donate-qr-card">
-                        <img :src="donatePaypal" alt="PayPal QR Code" class="donate-qr-img" />
-                    </div>
-                </div>
-            </div>
-        </div>
-    </Teleport>
 </template>
 
 <style scoped>
@@ -635,30 +598,6 @@ function goToDashboard() {
     color: var(--white-60);
 }
 
-.footer-donate {
-    font-size: 0.68rem;
-    color: var(--white-38);
-    opacity: 0.4;
-    text-decoration: none;
-    transition: opacity 0.2s;
-}
-
-.footer-donate:hover {
-    opacity: 0.8;
-    color: var(--white-60);
-}
-
-.footer-donate-highlight {
-    color: #4caf50 !important;
-    opacity: 0.7 !important;
-}
-
-.footer-donate-highlight:hover {
-    opacity: 1 !important;
-    color: #66bb6a !important;
-}
-
-
 .footer-update {
     display: block;
     font-size: 0.72rem;
@@ -704,51 +643,22 @@ function goToDashboard() {
     0%, 100% { opacity: 0.8; }
     50% { opacity: 1; }
 }
-</style>
 
-<!-- Unscoped styles for Teleported donate modal -->
-<style>
-.donate-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.7);
-    z-index: 9999;
+/* Nutzername oben im Menü (Logo steht in der Kopfleiste). */
+.at-nutzer {
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 0.55rem;
+    padding: 1rem 1.1rem 0.6rem;
+    color: var(--muted);
+    font-size: 0.85rem;
 }
 
-.donate-modal {
-    background: var(--black-bg-3, #1a1a2e);
-    border: 1px solid var(--white-18, rgba(255,255,255,0.18));
-    border-radius: var(--border-radius, 6px);
-    padding: 1.25rem;
-    max-width: 900px;
-    width: 95vw;
-    max-height: 90vh;
-    overflow-y: auto;
-}
-
-.donate-qr-row {
-    display: flex;
-    gap: 200px;
-    justify-content: center;
-    align-items: center;
-}
-
-.donate-qr-card {
-    flex: 1;
-    min-width: 0;
-}
-
-.donate-qr-img {
-    width: 100%;
-    border-radius: var(--border-radius, 6px);
-}
-
-@media (max-width: 500px) {
-    .donate-qr-row {
-        flex-direction: column;
-    }
+.at-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid var(--accent-rand);
 }
 </style>

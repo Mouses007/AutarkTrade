@@ -5,7 +5,19 @@
     "teil2": "Trade",
     "claim": "Dein Trading-Journal, lokal und unabhängig",
     "testbetrieb": "Testbetrieb",
-    "testbetriebText": "Kopie der Live-Datenbank – keine Hintergrund-Takte, keine Mails, kein Push. Knöpfe funktionieren."
+    "testbetriebText": "Kopie der Live-Datenbank – keine Hintergrund-Takte, keine Mails, kein Push. Knöpfe funktionieren.",
+    "modi": "Modi",
+    "startTitel": "Willkommen",
+    "startUnter": "Wähle, womit du arbeiten willst.",
+    "modusText": {
+      "journal": "Trades, Tage, Kalender und Auswertung deines Handels.",
+      "start": "Chart-Arbeitsplatz mit Zeichnungen, Indikatoren und Alarmen.",
+      "live": "Marktradar, Nachrichten, Orderbuch und Live-Trading.",
+      "research": "Hype-Radar und Coin-Radar: Neues finden, Handelbares messen.",
+      "agent": "Strategien bauen, testen und im Papierbetrieb laufen lassen.",
+      "lernen": "Fachbegriffe und Zusammenhänge im Karteikasten."
+    },
+    "version": "Version {v}"
   },
   "common": {
     "save": "Speichern",

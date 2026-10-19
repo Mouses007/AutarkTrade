@@ -41,3 +41,4 @@ scripts/.nas-deploy.env
 # Analyse-/Pruefskripte, die gegen die Live-DB oder Live-APIs laufen
 _levmap-*.mjs
 _themen-probe.mjs
+scripts/.v2-container.env

@@ -52,6 +52,12 @@ export function istTelefonJetzt() {
 export function istVollbildJetzt() {
     if (typeof window === 'undefined') return false
     if (document.fullscreenElement) return true
+    // F11 gibt es nur am Rechner. Auf Telefonen ist die Fensterhöhe gleich der
+    // Bildschirmhöhe, sobald keine Browserleiste steht (Startbildschirm-App,
+    // eingeklappte Leiste, Geräte-Emulation) — der Test hielt das für Vollbild
+    // und nahm Kopfleiste und Seitentitel weg.
+    if (window.matchMedia?.('(pointer: coarse)').matches) return false
+    if (window.matchMedia?.('(display-mode: standalone)').matches) return false
     const h = window.screen?.height
     return !!h && Math.abs(window.innerHeight - h) <= 2
 }

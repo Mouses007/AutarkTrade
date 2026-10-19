@@ -160,7 +160,7 @@ const stufe = (impact) => String(impact || '').toLowerCase()
 .kdImpact.impact-high { background: #ff6b7a; }
 .kdImpact.impact-medium { background: #ffc93c; }
 .kdImpact.impact-low { background: rgba(255, 255, 255, 0.35); }
-.kdImpact.impact-holiday { background: #01B4FF; }
+.kdImpact.impact-holiday { background: var(--accent); }
 
 .kdLand {
     font-weight: 700;

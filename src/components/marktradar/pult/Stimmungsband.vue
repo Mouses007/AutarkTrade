@@ -65,7 +65,7 @@ const FNG_ZONEN = [
 const ALT_STREIFEN = [
     { von: 0, breite: 25, farbe: '#f7931a' },
     { von: 25, breite: 50, farbe: '#9aa0aa' },
-    { von: 75, breite: 25, farbe: '#01B4FF' },
+    { von: 75, breite: 25, farbe: '#1fd6c4' },
 ]
 
 /** Zonen als Breitenanteile für die Skala. */

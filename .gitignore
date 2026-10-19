@@ -47,3 +47,4 @@ scripts/.nas-deploy.env
 # mkcert-Zertifikat + privater Schlüssel für den Caddy-HTTPS-Zugang (DOCKER.md) —
 # maschinenspezifisch, gehört nie ins Repository
 certs/
+scripts/.v2-container.env

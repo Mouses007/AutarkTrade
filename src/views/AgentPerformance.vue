@@ -282,7 +282,7 @@ function zeichne() {
             series: [{
                 type: 'line', smooth: true, showSymbol: false,
                 data: kurve.map((p) => p.equity),
-                lineStyle: { color: '#01B4FF', width: 2 },
+                lineStyle: { color: '#1fd6c4', width: 2 },
                 areaStyle: { color: 'rgba(1,180,255,0.12)' },
             }],
         })
@@ -813,7 +813,7 @@ const wochentag = (n) => t('strategies.weekday' + n)
 
 .funnel-fill {
     height: 100%;
-    background: linear-gradient(90deg, #01B4FF, #48c78e);
+    background: linear-gradient(90deg, var(--accent), #48c78e);
     transition: width 0.3s ease;
 }
 </style>

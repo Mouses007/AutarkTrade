@@ -23,6 +23,9 @@ import { logWarn } from '../utils/logger.js'
 import { ebeneAuf, ebeneZu } from '../composables/useZurueckGeste.js'
 import { useImVollbild } from '../utils/geraet.js'
 import BetaHinweis from '../components/BetaHinweis.vue'
+import Kopfleiste from '../components/rahmen/Kopfleiste.vue'
+import TestbetriebBanner from '../components/rahmen/TestbetriebBanner.vue'
+import { ladeSystemModus } from '../stores/system.js'
 import PageInfo from '../components/PageInfo.vue'
 import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
 import { setLocale } from '../i18n'
@@ -70,6 +73,9 @@ const istCockpit = computed(() => String(route.query?.cockpit || '') === '1')
  */
 const imVollbild = useImVollbild()
 const chromeAus = computed(() => istCockpit.value || imVollbild.value)
+
+// Seiten ohne Seitenmenü und Titelzeile (die Startseite /start bringt beides selbst mit).
+const ohneSeitenmenue = computed(() => !!route.meta?.ohneSeitenmenue)
 
 // ── Datenschutz-/Zensur-Modus ──
 // Blendet Zahlen/Kontostände im Journal-Inhalt unkenntlich aus. Nur im Journal:
@@ -126,6 +132,8 @@ onUnmounted(() => { if (stopZensur) { stopZensur(); stopZensur = null } })
 ========================================*/
 onBeforeMount(async () => {
   usePageId()
+  // Betriebsart (Banner „Testbetrieb"); wartet nicht, der Rest braucht sie nicht.
+  ladeSystemModus()
   await useInitParse()
   // Sync language from DB settings to i18n. Nur Deutsch liegt im
   // Start-Bundle; eine andere Sprache wird hier nachgeladen.
@@ -234,19 +242,21 @@ watch([aiReportGenerating, pageId], ([generating, page]) => {
 </script>
 <template>
   <ReturnToTopButton />
-  <div v-cloak class="container-fluid g-0">
+  <Kopfleiste v-if="!chromeAus" />
+  <TestbetriebBanner />
+  <div v-cloak class="container-fluid g-0 at-rahmen">
     <div class="row g-0">
-      <div v-if="!chromeAus" id="sideMenu" v-bind:class="'min-vh-100 ' +
+      <div v-if="!chromeAus && !ohneSeitenmenue" id="sideMenu" v-bind:class="'min-vh-100 ' +
         (screenType == 'computer' ? (sideMenuEingeklappt ? 'sideMenu sideMenuSchmal' : 'sideMenu col-2') : 'sideMenuMobile')
         ">
         <SideMenu />
       </div>
       <!-- Eingeklappt nimmt der Inhalt den ganzen Rest (`col`), statt bei 10/12 zu bleiben. -->
-      <div :class="[chromeAus ? 'col-12' : (screenType == 'computer' && sideMenuEingeklappt ? 'col inhaltNebenSchmal' : 'col-12 col-lg-10'), 'position-relative']">
+      <div :class="[(chromeAus || ohneSeitenmenue) ? 'col-12' : (screenType == 'computer' && sideMenuEingeklappt ? 'col inhaltNebenSchmal' : 'col-12 col-lg-10'), 'position-relative']">
         <!-- Tippen neben das ausgefahrene Menü schliesst es. Vorher stand hier
              ein Name, den es im Setup nie gab — der Klick lief ins Leere. -->
         <div v-show="sideMenuMobileOut" class="sideMenuMobileOut position-absolute" v-on:click="useCloseMobileMenu"></div>
-        <Nav v-if="!chromeAus" />
+        <Nav v-if="!chromeAus && !ohneSeitenmenue" />
         <main ref="mainEl">
           <div v-if="isAgent" class="row ps-3 pe-3 pt-3">
             <!-- Die Anleitung hängt am Layout statt an einer Seite: sie ist

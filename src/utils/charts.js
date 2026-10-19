@@ -293,7 +293,7 @@ export function useDoubleLineChart(param1, param2, param3, param4) { //chartID, 
                 },
                 emphasis: {
                     itemStyle: {
-                        color: '#01B4FF'
+                        color: '#1fd6c4'
                     }
                 },
             },
@@ -1604,7 +1604,7 @@ export function useCandlestickChart(ohlcTimestamps, ohlcPrices, ohlcVolumes, tra
                     type: 'slider', height: 22, bottom: 6,
                     borderColor: 'rgba(255,255,255,0.15)',
                     fillerColor: 'rgba(1, 180, 255, 0.15)',
-                    handleStyle: { color: '#01b4ff' },
+                    handleStyle: { color: '#1fd6c4' },
                     textStyle: { color: 'rgba(255,255,255,0.6)', fontSize: 10 },
                 }] : []),
             ],
@@ -3474,7 +3474,7 @@ export function useSetupChart(elementId, candles, setup) {
                 type: 'slider', height: 22, bottom: 6,
                 borderColor: 'rgba(255,255,255,0.15)',
                 fillerColor: 'rgba(1, 180, 255, 0.15)',
-                handleStyle: { color: '#01b4ff' },
+                handleStyle: { color: '#1fd6c4' },
                 textStyle: { color: 'rgba(255,255,255,0.6)', fontSize: 10 },
             },
         ],
@@ -3648,7 +3648,7 @@ export function useAgentTimelineChart(elementId, candles, setups = [], trades = 
         },
         dataZoom: [{ type: 'inside' }, { type: 'slider', height: 16, bottom: 6,
                     borderColor: 'transparent', fillerColor: 'rgba(1,180,255,0.15)',
-                    handleStyle: { color: '#01B4FF' }, textStyle: { color: cssColor60, fontSize: 9 } }],
+                    handleStyle: { color: '#1fd6c4' }, textStyle: { color: cssColor60, fontSize: 9 } }],
         series: [
             {
                 type: 'candlestick',

@@ -1,0 +1,70 @@
+/*
+ * Gestaltungs-Token von AutarkTrade.
+ *
+ * Abgeleitet aus AutarkDarts (Schwesterprodukt): Schwarz als Grund, Türkis als
+ * einzige Signalfarbe. Türkis heisst überall dasselbe — hier kannst du etwas
+ * tun, oder hier steht die Zahl, auf die es ankommt. Grün und Rot bleiben
+ * Gewinn und Verlust vorbehalten und sind gedämpft, damit sie das Türkis nicht
+ * überstimmen.
+ *
+ * Diese Datei ist die EINZIGE Stelle mit Farbwerten. `style-dark.css` bildet
+ * seine alten Variablen (--blue-color, --black-bg-*, --white-*) hierauf ab,
+ * damit die ganze App sofort die neuen Farben trägt; neue Bauteile benutzen
+ * nur noch diese Namen. Änderungen hier gehören der Sitzung „Fundament" bzw.
+ * dem Leitstand (Regel 4 im Auftragsplan).
+ */
+:root {
+    /* Flächen */
+    --bg: #05080a;
+    --panel: #0c1216;
+    --panel-soft: #131c22;
+    --panel-hoch: #182329;
+    --line: #1d2b33;
+    --line-stark: #2a3d47;
+
+    /* Schrift */
+    --text: #e8f4f6;
+    --muted: #8ea5af;
+    --leise: #6b818b;
+
+    /* Signal */
+    --accent: #1fd6c4;
+    --accent-hover: #4fe3d5;
+    --accent-schwach: #145c56;
+    --accent-flaeche: rgba(31, 214, 196, 0.14);
+    --accent-rand: rgba(31, 214, 196, 0.35);
+    /* Schrift auf türkisem Grund: sehr dunkel statt weiss — Türkis ist hell. */
+    --on-accent: #02201d;
+
+    /* Bedeutung */
+    --good: #3fbf8f;
+    --bad: #e0574c;
+    --warn: #d8a33a;
+    --good-flaeche: rgba(63, 191, 143, 0.14);
+    --bad-flaeche: rgba(224, 87, 76, 0.14);
+    --warn-flaeche: rgba(216, 163, 58, 0.14);
+
+    /* Form */
+    --radius: 14px;
+    --radius-knopf: 10px;
+    --radius-klein: 6px;
+    --radius-pille: 999px;
+    --schatten: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+    /* Schrift: Systemschrift — keine Webfonts, keine Font-Lizenzen. */
+    --schrift: system-ui, -apple-system, "Segoe UI", Roboto, "Liberation Sans", Arial, sans-serif;
+    --schrift-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+    /* Abstände */
+    --abstand-1: 0.25rem;
+    --abstand-2: 0.5rem;
+    --abstand-3: 0.75rem;
+    --abstand-4: 1rem;
+    --abstand-5: 1.5rem;
+    --abstand-6: 2rem;
+
+    /* Kopfleiste */
+    --kopf-hoehe: 56px;
+
+    color-scheme: dark;
+}

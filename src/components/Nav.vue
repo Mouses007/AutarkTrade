@@ -6,7 +6,7 @@ const { t } = useI18n()
 import { useInitTooltip } from "../utils/utils.js";
 import { useRoute, useRouter } from 'vue-router'
 import { pageById } from "../config/menu.js"
-import ModeSwitcher from './ModeSwitcher.vue'
+import Symbol from './basis/Symbol.vue'
 import { pageId, screenType, appMode, privacyMode } from "../stores/ui.js"
 import { currentUser, renderProfile } from "../stores/settings.js"
 import { version } from '../../package.json';
@@ -151,18 +151,19 @@ const navAdd = (param) => {
 </script>
 
 <template>
-    <!-- Titel oben, Modus-Navigation darunter. -->
-    <div class="justify-content-between navbar nav-pull-up">
+    <!-- Titelzeile der Seite. Die Modi stehen seit AutarkTrade in der
+         Kopfleiste (components/rahmen/Kopfleiste.vue). -->
+    <div class="justify-content-between navbar at-titelzeile">
         <div class="col-9 d-flex align-items-center">
             <span v-if="screenType == 'mobile'" class="d-flex align-items-center">
                 <a v-on:click="useToggleMobileMenu" class="mobile-menu-toggle">
-                    <i class="fa fa-bars me-2"></i>
-                    <i v-bind:class="currentPage.icon" class="me-1"></i>{{ currentPage.name }}
+                    <Symbol name="menue" :groesse="20" class="me-2" />
+                    <span class="seitentitel">{{ currentPage.name }}</span>
                     <span v-if="filterSummary" class="nav-filter-info">{{ filterSummary }}</span>
                 </a>
             </span>
             <span v-else class="d-flex align-items-center">
-                <i v-bind:class="currentPage.icon" class="me-1"></i>{{ currentPage.name }}
+                <h1 class="seitentitel">{{ currentPage.name }}</h1>
                 <span v-if="filterSummary" class="nav-filter-info">{{ filterSummary }}</span>
             </span>
         </div>
@@ -172,14 +173,14 @@ const navAdd = (param) => {
                 :class="['btn', 'btn-sm', 'privacy-toggle', privacyMode ? 'active' : '']"
                 :title="privacyMode ? t('nav.showNumbers') : t('nav.hideNumbers')"
                 @click="togglePrivacy">
-                <i :class="privacyMode ? 'fa fa-eye-slash' : 'fa fa-eye'"></i>
+                <Symbol :name="privacyMode ? 'augeAus' : 'auge'" :groesse="18" />
             </button>
             <!-- Schnellzugriff: KI-Agent (Chat) direkt öffnen. route.name statt
                  pageId, weil pageId erst beim Mount der Zielseite gesetzt wird
                  und bei SPA-Navigation einen Tick hinterherhinkt. -->
             <button v-if="aiActive && route.name !== 'kiAgent'" type="button" class="btn btn-sm privacy-toggle"
                 :title="t('nav.kiAgent')" @click="openAgent">
-                <i class="uil uil-robot"></i>
+                <Symbol name="ki" :groesse="18" />
             </button>
             <span v-if="pageId === 'dashboard'">
                 <button class="btn btn-secondary btn-sm dropdown-toggle" type="button"
@@ -196,39 +197,58 @@ const navAdd = (param) => {
             </span>
         </div>
     </div>
-    <!-- Breite Modus-Leiste unter dem Titel: Icon + Text nebeneinander. -->
-    <ModeSwitcher variant="wide" />
 </template>
 
 <style scoped>
-/* Seitentitel mit etwas Abstand nach oben. */
-.nav-pull-up {
-    margin-top: 16px;
+.at-titelzeile {
+    margin-top: 0;
+    height: auto;
+    min-height: 0;
+    padding: 1.1rem clamp(0.8rem, 2vw, 1.4rem) 0.3rem;
+    border-bottom: none;
+    background: transparent !important;
 }
 
-/* Icon-Buttons rechts (Zensur-Modus, KI-Agent) links neben Export. */
+.seitentitel {
+    margin: 0;
+    font-size: clamp(1.3rem, 2.4vw, 1.75rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.mobile-menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    color: var(--text);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.mobile-menu-toggle .seitentitel {
+    font-size: 1.2rem;
+}
+
+/* Symbol-Knöpfe rechts (Zensur-Modus, KI-Agent) links neben Export. */
 .privacy-toggle {
-    border: 1px solid var(--white-18);
-    background: transparent;
-    color: var(--white-70);
-    padding: 0.28rem 0.6rem;
-    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    background: var(--panel-soft);
+    color: var(--muted);
+    padding: 0.4rem;
+    border-radius: var(--radius-knopf);
     line-height: 1;
     transition: all 0.15s ease;
 }
 .privacy-toggle:hover {
-    color: var(--white-87);
-    border-color: var(--blue-color, #01B4FF);
+    color: var(--text);
+    border-color: var(--accent-rand);
 }
 .privacy-toggle.active {
-    background: var(--blue-color, #01B4FF);
-    border-color: var(--blue-color, #01B4FF);
-    color: #fff;
-}
-
-/* Keine Linie zwischen Titel und Modus-Leiste — die einzige Trennlinie sitzt
-   UNTER den Buttons (in ModeSwitcher). */
-.navbar {
-    border-bottom: none;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
 }
 </style>

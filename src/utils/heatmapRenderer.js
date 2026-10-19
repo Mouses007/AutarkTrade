@@ -129,7 +129,7 @@ const COLORS = {
     grid: 'rgba(255,255,255,0.10)',
     axisText: 'rgba(255,255,255,0.78)',
     midLine: 'rgba(255,255,255,0.75)',
-    accent: '#01B4FF',
+    accent: '#1fd6c4',
     // Handelsblasen: deckend statt additiv überblendet, dazu ein dunkler Rand.
     // Additives Blending liess überlappende Blasen zu weissem Brei verlaufen.
     buy: 'rgb(38,190,150)',          // --green

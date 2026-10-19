@@ -117,7 +117,7 @@ function zeichne() {
         series: [
             {
                 name: t('oi.oi'), type: 'line', data: oi, gridIndex: 0, xAxisIndex: 0, yAxisIndex: 0,
-                showSymbol: false, lineStyle: { width: 1.6, color: '#01B4FF' },
+                showSymbol: false, lineStyle: { width: 1.6, color: '#1fd6c4' },
                 areaStyle: { color: 'rgba(1,180,255,0.10)' },
             },
             {

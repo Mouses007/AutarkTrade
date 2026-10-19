@@ -1,4 +1,10 @@
 /*=================== GENERAL ===================*/
+/*
+ * AutarkTrade: Die Farbwerte stehen in `design/tokens.css`. Die alten Namen
+ * unten (--blue-color, --black-bg-*, --white-*) zeigen nur noch auf die Token,
+ * damit die ganze App ohne Umbau jeder Datei die neuen Farben trägt. Neue
+ * Bauteile benutzen die Token direkt; diese Datei fällt mit S9 weg.
+ */
 [v-cloak] {
     display: none;
 }
@@ -32,7 +38,7 @@
 }
 
 :root {
-    --grey-color: #6c757d;
+    --grey-color: var(--leise);
     /*
      * Textvariante von `--grey-color`.
      *
@@ -42,7 +48,7 @@
      * verschlechtern wuerde. Deshalb eine eigene Variable fuer die sechs
      * Textstellen: #8a9199 ergibt 5,88:1.
      */
-    --grey-text: #8a9199;
+    --grey-text: var(--muted);
 
 /*
  * MERKREGEL fuer Raster (Audit 28.08.2026, UX-13):
@@ -52,21 +58,21 @@
  * die Spalte waechst dann ueber das Raster hinaus und schiebt die Seite
  * seitlich weg. Sichtbar wird das erst auf schmalen Schirmen.
  */
-    --blue-active-color: #2ea2d9;
-    --blue-color: #01B4FF;
+    --blue-active-color: var(--accent-hover);
+    --blue-color: var(--accent);
     --ghost-grey: #f2f2f4;
-    --dark-grey: #5B6270;
-    --red-color: #FF6960;
-    --red-hover-color: #fd4b42;
-    --black: #333333;
-    --black-bg-0: hsl(0, 0%, 0%);
-    --black-bg-3: hsl(0, 0%, 3%);
-    --black-bg-5: hsl(0, 0%, 5%);
-    --black-bg-7: hsl(0, 0%, 7%);
-    --green: #26a69a;
-    --white-87: hsla(0, 0%, 100%, 0.87);
+    --dark-grey: var(--leise);
+    --red-color: var(--bad);
+    --red-hover-color: #c94539;
+    --black: var(--panel-hoch);
+    --black-bg-0: var(--bg);
+    --black-bg-3: var(--bg);
+    --black-bg-5: var(--panel);
+    --black-bg-7: var(--panel);
+    --green: var(--good);
+    --white-87: var(--text);
     /*High-emphasis (text)*/
-    --white-60: hsla(0, 0%, 100%, 0.6);
+    --white-60: var(--muted);
     /*Medium-emphasis (text)*/
     /*
      * 0.55 statt der namensgebenden 0.38.
@@ -79,18 +85,18 @@
      * Der Name bleibt, weil er an ueber fuenfzig Stellen steht; er bezeichnet
      * den Slot "Text mit geringer Betonung", nicht mehr die Deckkraft.
      */
-    --white-38: hsla(0, 0%, 100%, 0.55);
+    --white-38: var(--muted);
     /*Low-emphasis (text)*/
     /*for quill */
-    --white-70: hsla(0, 0%, 100%, 0.7);
-    --white-65: hsla(0, 0%, 100%, 0.65);
-    --white-18: hsla(0, 0%, 100%, 0.35);
+    --white-70: color-mix(in srgb, var(--text) 75%, var(--muted));
+    --white-65: var(--muted);
+    --white-18: var(--line-stark);
 
     --font-size-main: 12px;
     /*small : 13px; x-small: 10px*/
     --font-size-secondary: x-small;
 
-    --black-bg-12: hsl(0, 0%, 12%);
+    --black-bg-12: var(--panel-soft);
 
     /*
      * Nachgetragene Variablen (Audit 28.08.2026, UX-16).
@@ -108,28 +114,27 @@
      * 3,9:1 — beides unter WCAG AA. Die beiden Stellen nehmen jetzt
      * `--white-38`, den dokumentierten Slot fuer schwach betonten Text.
      */
-    --white-10: hsla(0, 0%, 100%, 0.10);
+    --white-10: var(--line);
     --white-20: hsla(0, 0%, 100%, 0.20);
     --white-50: hsla(0, 0%, 100%, 0.50);
     --white-75: hsla(0, 0%, 100%, 0.75);
     --white-80: hsla(0, 0%, 100%, 0.80);
-    --black-bg-2: hsl(0, 0%, 2%);
+    --black-bg-2: var(--bg);
     /* Flaechen und Rahmen, die sich an den Kacheln orientieren. */
     --bg-card: var(--black-bg-7);
     --border-color: var(--white-10);
-    --border-radius: 12px;
+    --border-radius: var(--radius);
     --border-subtle: 1px solid var(--white-18);
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+    --shadow-sm: var(--schatten);
     --transition-fast: all 0.2s ease;
 }
 
 * {
-    font-family: 'Nunito Sans', sans-serif;
+    font-family: var(--schrift);
 }
 
 body {
-    background-color: #fbfbfd;
-    background-color: var(--black-bg-0);
+    background-color: var(--bg);
     color: var(--white-87);
     font-size: 110%;
 }
@@ -170,7 +175,7 @@ hr {
 }
 
 .greenTrade {
-    color: #00CA73 !important;
+    color: var(--good) !important;
 }
 
 .redTrade {
@@ -178,11 +183,11 @@ hr {
 }
 
 .neutralTrade {
-    color: #FFC107 !important;
+    color: var(--warn) !important;
 }
 
 .greenTradeDiv {
-    background-color: #00CA73;
+    background-color: var(--good);
     color: #013820;
 }
 
@@ -1359,8 +1364,8 @@ ol li[data-list="bullet"] {
 /* BUTTON */
 
 .btn-outline-primary {
-    color: #01B4FF;
-    border-color: #01B4FF;
+    color: var(--accent);
+    border-color: var(--accent);
     border-radius: 8px;
     transition: var(--transition-fast);
 }
@@ -1691,7 +1696,7 @@ ul.timeline>li:before {
     display: inline-block;
     position: absolute;
     border-radius: 50%;
-    border: 3px solid #01B4FF;
+    border: 3px solid var(--accent);
     left: 20px;
     width: 20px;
     height: 20px;

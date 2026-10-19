@@ -32,6 +32,21 @@ const router = createRouter({
             import('../views/Chart.vue')
     },
     {
+        // Startseite von AutarkTrade: Logo und die Modi als Kacheln. Ziel des
+        // Logos in der Kopfleiste. Eigener Pseudo-Modus, damit das Layout
+        // keine Journal-Daten lädt; ohne Seitenmenü und Titelzeile.
+        path: '/start',
+        name: 'start',
+        meta: {
+            title: "AutarkTrade", titleKey: "app.startTitel",
+            mode: 'uebersicht',
+            ohneSeitenmenue: true,
+            layout: DashboardLayout
+        },
+        component: () =>
+            import('../views/Start.vue')
+    },
+    {
         // Alte Adresse der Übersicht: Lesezeichen und die Logo-Verlinkung
         // älterer Stände führen weiter hierher.
         path: '/startseite',
@@ -488,7 +503,8 @@ router.beforeEach(async (to, from, next) => {
     // Die Route bestimmt den Modus, nicht umgekehrt: ein Deep-Link auf
     // /liquidity schaltet still auf 'live' um, damit das Seitenmenü schon beim
     // ersten Paint stimmt. Routen ohne meta.mode gehören zum Journal.
-    const wantedMode = to.meta.mode === 'any' ? appMode.value : (to.meta.mode || 'journal')
+    // 'uebersicht' (Startseite /start) gehört keinem Modus und lässt ihn stehen.
+    const wantedMode = (to.meta.mode === 'any' || to.meta.mode === 'uebersicht') ? appMode.value : (to.meta.mode || 'journal')
     if (appMode.value !== wantedMode) {
         appMode.value = wantedMode
         localStorage.setItem('appMode', wantedMode)

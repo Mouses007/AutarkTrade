@@ -540,7 +540,7 @@ export class ZeichenEbene {
                 ctx.fillStyle = 'rgba(1,180,255,0.25)'
                 ctx.fill()
                 ctx.lineWidth = 1.5
-                ctx.strokeStyle = '#01b4ff'
+                ctx.strokeStyle = '#1fd6c4'
                 ctx.stroke()
             }
         }

@@ -15,6 +15,7 @@ import { useGetAvailableTags, useGetTagInfo } from '../utils/daily.js'
 import { dbCreate, dbUpdate, dbFind, dbGet } from '../utils/db.js'
 import dayjs from '../utils/dayjs-setup.js'
 import Quill from 'quill'
+import 'quill/dist/quill.snow.css'
 import { sanitizeHtml } from '../utils/sanitize'
 import { sendNotification } from '../utils/notify.js'
 

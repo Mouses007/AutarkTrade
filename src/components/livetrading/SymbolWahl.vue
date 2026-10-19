@@ -218,7 +218,7 @@ onBeforeUnmount(() => document.removeEventListener('click', beiKlickAussen))
 .swEintrag.active {
     background: rgba(1, 180, 255, 0.18);
     border-color: rgba(1, 180, 255, 0.4);
-    color: #01B4FF;
+    color: var(--accent);
 }
 
 .swSuche {
