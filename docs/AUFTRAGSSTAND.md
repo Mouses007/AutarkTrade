@@ -24,7 +24,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 0 | S1 Verkaufs-Prüfung | Fremdquellen, Bibliotheken, KI-Bedingungen je Funktion | – (nur lesen) | **fertig** → `docs/VERKAUFS-PRUEFUNG.md` (41 grün, 45 gelb, 18 rot) |
 | 0 | S2 Fundament V2 | Repo, Umbenennung, Testbetrieb, DB-Kopie, Container, Gestaltungssystem, Rahmen | master | **fertig** (siehe unten) |
 | 1 | S3 Aufräumen | CSV-Pfad und toten Import-Code löschen, `journal-alt.js`, zweiter Golden Master (MFE/OHLCV) | `claude/s3-aufraeumen-919210` | **fertig** |
-| 1 | S4 Diagramme neu | `charts.js` clean-room in `src/utils/journal/diagramme/` | – | offen, frei |
+| 1 | S4 Diagramme neu | `charts.js` clean-room in `src/utils/journal/diagramme/` | `claude/s4-diagramme-3c7cc1` | **fertig** |
 | 1 | S5 Redesign Handel | Chart, Live-Trading, Sessions, Incoming, Agent-Seiten | `claude/s5-redesign-handel-51c2a6` | **fertig** |
 | 1 | S6 Redesign Analyse | Marktradar, Nachrichten, Hype-/Coin-Radar, KI-Agent, Lernen | `claude/s6-redesign-analyse-3fe1f2` | **fertig** |
 | 2 | S7 Journal-Kern neu | `trades.js` & Co. clean-room, Tag-Gruppen-Fehler, Datenmodell | – | wartet auf S3 |
@@ -211,6 +211,41 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 - Prüf-Container im Browser über `127.0.0.1` öffnen, nicht `localhost`: das Cookie
   `at_session` gilt pro Host, nicht pro Port, und andere Sitzungen auf `localhost:8091`
   überschreiben es (Folge: 401 und Neuladen bei jedem Schreibzugriff).
+
+## S4 Diagramme neu — Ergebnis (19.10.2026)
+
+- **Clean-Room**: Unteragent A beschrieb `charts.js` und alle Aufrufer in
+  `docs/spec/diagramme.md` (Prosa/Tabellen, kein Code); ein frischer Unteragent B baute
+  nur aus Spec und Golden Master `src/utils/journal/diagramme/` neu (`index.js` als
+  Schnittstelle, `verteiler.js`, `grundlagen.js`, `gestaltung.js`, je Diagrammfamilie
+  ein Modul — ring, tagesansicht, zeitraum, gruppenAlt, gruppen, heatmap, gebuehren,
+  performance, kerzen, strategie, auswertung). `src/utils/charts.js` gelöscht, alle
+  Aufrufer umgehängt (die drei dynamischen Importe bleiben dynamisch, ECharts nicht im
+  Start-Bundle).
+- **Gestaltung**: Farben/Schrift zur Laufzeit aus den Tokens (`getComputedStyle`, Rückfall
+  auf die Werte aus `tokens.css`), Türkis als Akzent, `--good`/`--bad` nur für Gewinn/Verlust.
+- **Golden Master**: Daten (Reihen, Kategorien, Legende) unverändert grün, `journal-golden.json`
+  nicht neu geschrieben. `diagrammDaten()` entfernt Darstellungsfelder (`itemStyle`,
+  `emphasis`, `lineStyle`, `areaStyle`, `label`) auf beiden Seiten, weil die Farben bewusst
+  neu sind.
+- **Gesehen** im Prüf-Server (Wegwerf-SQLite mit den Golden-Master-Testdaten): Dashboard
+  (alle fünf Reiter) und Auswertung. Kerzenchart und Agent-Diagramme nicht im Browser
+  geprüft (brauchen Binance-Kerzen bzw. Strategie-Daten).
+
+### Offene Punkte aus S4 (für S7/S8)
+
+- Der Golden Master sichert die Kennzahl-Pfade der Gruppen-Diagramme nicht ab:
+  `selectedRatio`/`selectedTimeFrame` sind im Test `null` (leeres localStorage), APPT,
+  Profitfaktor und Wochen-/Monatsbündelung laufen dort nie.
+- Bewusste Abweichungen vom Altverhalten (nicht vom Golden Master erfasst): Kerzen
+  `[C,O,L,H]` der Aufrufer werden intern auf ECharts' `[O,C,L,H]` umgestellt (vorher
+  vertauschte Farben); Zoomstufe 2 des Kerzencharts zeigt die Mitte statt eines Zeitpunkts
+  nahe 1970; eine entsorgte Kerzen-Instanz wird neu geholt.
+- Altlasten laut Spec Abschnitt 6: Wochen-/Monatsbündelung vergleicht nur die Nummer
+  (ohne Jahr) und rechnet in der Prozess-Zeitzone; Profitfaktor bei Nenner 0 je Familie
+  anders; `doubleLineChart…`/`pieChart<dateUnix>` der Tagesansicht und
+  `barChartNegative12/14` haben kein Element mehr in einem Template — S8 entscheidet.
+- `Auswertung.vue` übergibt eigene rgba-Farben an Tacho/Stresslinie (S8).
 
 ## S3 Aufräumen — Ergebnis (19.10.2026)
 
