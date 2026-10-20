@@ -49,7 +49,7 @@ const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
         <div v-if="!daten.aktiveQuellen" class="walAus">
             <Symbol name="anker" />
             <p>{{ t('marktradar.wal.inactive') }}</p>
-            <router-link to="/settings/ki" class="ctl-pill" @click="kiBereichWechseln('nachrichten')">{{ t('marktradar.wal.toSettings') }}</router-link>
+            <router-link to="/settings/ki" class="ctl-pill" @click.stop="kiBereichWechseln('nachrichten')">{{ t('marktradar.wal.toSettings') }}</router-link>
         </div>
 
         <template v-else>
