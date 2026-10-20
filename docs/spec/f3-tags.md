@@ -13,7 +13,7 @@ Kennzeichen im Text:
 - **[Altfehler, beheben]** – heute falsch und von niemandem gewollt; nicht
   nachbauen, das Richtige steht dabei.
 - **[tot]** – heute ohne jeden Aufrufer in der Oberfläche. Grundsatz des
-  Projekts (docs/spec/ansichten.md, Abschnitt 0): tote Teile werden nicht
+  Projekts (seit den Ansichten-Neubauten S8): tote Teile werden nicht
   nachgebaut. Beschrieben ist das Verhalten nur, damit nichts verloren geht,
   falls der Leitstand anders entscheidet.
 

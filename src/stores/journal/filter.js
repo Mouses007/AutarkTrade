@@ -46,7 +46,6 @@ const grossNetGespeichert = lokal('at.journal.bruttoNetto')
 export const betragArt = ref(grossNetGespeichert === 'gross' || grossNetGespeichert === 'net' ? grossNetGespeichert : 'gross')
 export const betragGross = ref(undefined)
 export const selectedTradeTimeframes = reactive([])
-export const gewaehlterTagIndex = ref(undefined)
 export const plOderZufriedenheitEntwurf = ref(null)
 
 // ── Bereich und Optionen ───────────────────────────────────────────────────
@@ -81,7 +80,6 @@ const ZEITRAHMEN = [
 export const allTradeTimeframes = computed(() => ZEITRAHMEN.flatMap(([gruppe, werte]) =>
     werte.map(value => ({ value, label: t(`timeframes.${value}`), group: t(gruppe) }))))
 
-export const filteredSuggestions = reactive([])
 export const tageZurueck = ref(undefined)
 export const tageReserve = ref(undefined)
 export const holtWeitere = ref(false)

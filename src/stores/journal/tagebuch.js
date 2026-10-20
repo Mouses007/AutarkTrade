@@ -18,21 +18,14 @@ export const notes = reactive([])
 export const auswertungNotes = reactive([])
 /** Tag-Zuordnungen `{tradeId, tags, dateUnix}`. */
 export const tags = reactive([])
-export const tradeTags = reactive([])
-export const neueTradeTags = reactive([])
 /** Tag-Katalog: Gruppen `{id, name, color, tags}`. */
 export const verfuegbareTags = reactive([])
 export const verfuegbareTagListe = reactive([])
-export const tagInput = ref('')
-/** '' oder die `seitenId`, auf der die Liste offen ist. */
-export const showTagsList = ref('')
+// F3-NEUBAU: Zustand der Tag-Zuordnung eines Trades — docs/spec/f3-tags.md
 export const tradeNotiz = ref(null)
 export const tradeNotizGeaendert = ref(false)
 export const notizTagUnix = ref(undefined)
 export const notizTradeId = ref(undefined)
-export const tradeTagsGeaendert = ref(false)
-export const tradeTagsDateUnix = ref(undefined)
-export const tradeTagsId = ref(undefined)
 export const tradeExkursionGeaendert = ref(false)
 export const exkursionTagUnix = ref(undefined)
 export const exkursionTradeId = ref(undefined)

@@ -100,11 +100,7 @@ function preis(x, forex = false) {
     return formGeldStellen(p, stellen)
 }
 
-/** Wahr, wenn beide Zeitpunkte (Sekunden) in der Handelszeitzone am selben Tag liegen. Falsch = Swing. */
-function checkDate(td, zeit) {
-    const zone = tradeZeitzone.value
-    return dayjs.unix(td).tz(zone).format('YYYY-MM-DD') === dayjs.unix(zeit).tz(zone).format('YYYY-MM-DD')
-}
+// F3-NEUBAU: Prüfung „Einstieg am selben Handelstag?" — docs/spec/f3-trade-dialog.md
 
 /** Notiztext ohne HTML; Absätze und <br> werden zu Zeilenumbrüchen, damit der Text lesbar bleibt. */
 function notizOhneHtml(html) {
@@ -388,35 +384,8 @@ async function speichereExkursion() {
     await ladeExkursionen()
 }
 
-function flagsZurueck() {
-    tradeNotizGeaendert.value = false
-    tradeExkursionGeaendert.value = false
-    tradeTagsGeaendert.value = false
-    tradeBildGeaendert.value = false
-    showTagsList.value = ''
-}
+// F3-NEUBAU: Änderungsmerker zurücksetzen und ausstehende Änderungen speichern — docs/spec/f3-trade-dialog.md
 
-/** Was am bisher offenen Trade geändert wurde, wird gespeichert, bevor der nächste kommt. */
-async function speichereAusstehendes() {
-    try {
-        if (tradeNotizGeaendert.value) {
-            await speichereNotiz()
-            await ladeNotizen()
-        }
-        if (tradeExkursionGeaendert.value) await speichereExkursion()
-        if (tradeTagsGeaendert.value) {
-            await Promise.all([speichereVerfuegbareTags(), speichereTags()])
-            await Promise.all([ladeTags(), ladeVerfuegbareTags()])
-            baueTagListe()
-        }
-        if (tradeBildGeaendert.value) await speichereBild()
-    } catch (fehler) {
-        // Sichtbar wird der Fehler über den zentralen Hinweis von db.js
-        console.error('Tagesansicht: Speichern fehlgeschlagen', fehler)
-    } finally {
-        flagsZurueck()
-    }
-}
 
 // ── Detailfenster: Kerzenchart ─────────────────────────────────────────────
 
@@ -531,166 +500,10 @@ async function berechneMfe(trade) {
 
 // ── Detailfenster: Öffnen, Blättern, Schliessen ────────────────────────────
 
-/**
- * Öffnen (karte, i, i), Blättern (karte, i, i ± 1) und Schliessen (ohne
- * Argumente) laufen durch EINE Funktion: zuerst wird immer gespeichert, was am
- * bisher offenen Trade geändert wurde.
- */
-async function clickTradesModal(karte, alt, neu) {
-    if (markierungOffen.value) {
-        alert(t('common.screenshotSaveAnnotation'))
-        return false
-    }
-    setupsLaden.value = true
-    await speichereAusstehendes()
+// F3-NEUBAU: Trade-Fenster öffnen, blättern, schliessen — docs/spec/f3-trade-dialog.md
 
-    if (karte === undefined) {
-        entsorgeKerzen()
-        kerzenAuftrag++
-        setupsLaden.value = false
-        offenerTagIndex.value = undefined
-        tradeIndexVorher.value = undefined
-        tradeIndexAktiv.value = undefined
-        flagsZurueck()
-        speichernNoetig.value = false
-        tradeDetailOffen.value = false
-        dialogOffen.value = false
-        screenshotsGeladen = false
-        kerzenFehler.value = null
-        kerzenLaedt.value = false
-        offeneGruppen.clear()
-        return true
-    }
 
-    try {
-        offenerTagIndex.value = Number(karte)
-        tradeIndexVorher.value = Number(alt)
-        tradeIndexAktiv.value = Number(neu)
-        if (!tradeDetailOffen.value) kerzenSchluessel.value++
-        tradeDetailOffen.value = true
-        dialogOffen.value = true
 
-        const tag = journalTage[offenerTagIndex.value]
-        const trade = tag?.trades?.[tradeIndexAktiv.value]
-        if (!tag || !trade) return true
-
-        // Volle Screenshots genau dieses Tages, einmal je Fenster-Sitzung
-        if (!screenshotsGeladen) {
-            if (!screenshots.length || screenshots[0]?.dateUnixDay != tag.dateUnix) await ladeBilder(true, tag.dateUnix)
-            screenshotsGeladen = true
-        }
-
-        const id = trade.id
-        for (const k of Object.keys(excursion)) delete excursion[k]
-        excursion.stopLoss = null
-        excursion.maePrice = null
-        excursion.mfePrice = null
-        useResetTags()
-        offeneGruppen.clear()
-        mfeAuto.value = false
-        // Speicher-Kontext gleich beim Öffnen: eine MFE-Änderung landet immer am OFFENEN Trade
-        exkursionTradeId.value = id
-        exkursionTagUnix.value = tag.dateUnix
-
-        // Screenshot: erst der des Trades, sonst der des Tages
-        const finde = () => screenshots.find(s => s?.name === id) || screenshots.find(s => s?.dateUnixDay == tag.dateUnix)
-        let fund = finde()
-        if (!fund) {
-            const info = bildInfos.find(s => s.dateUnixDay == tag.dateUnix)
-            if (info) {
-                await ladeBilder(true, info.dateUnixDay)
-                fund = finde()
-            }
-        }
-        for (const k of Object.keys(screenshot)) delete screenshot[k]
-        if (fund) Object.assign(screenshot, fund)
-        else { screenshot.side = null; screenshot.type = null }
-        kerzenFehler.value = null
-
-        // Tags des Trades (nur Trade-Tags; unbekannte IDs fallen weg)
-        const zuordnung = tags.find(x => x.tradeId == id)
-        for (const tagId of listeVon(zuordnung?.tags)) {
-            if (tradeTags.some(x => x.id === tagId)) continue
-            for (const gruppe of verfuegbareTags) {
-                const gefunden = listeVon(gruppe.tags).find(x => x.id === tagId)
-                if (gefunden) { tradeTags.push({ id: gefunden.id, name: gefunden.name }); break }
-            }
-        }
-
-        // Notiz, Metadaten, Typen
-        tradeNotiz.value = null
-        tradingMeta.value = null
-        tradeTypeRef.value = ''
-        closingTradeTypeRef.value = ''
-        notizText.value = ''
-        const notiz = notes.find(x => x.tradeId == id)
-        if (notiz) {
-            notizText.value = notizOhneHtml(notiz.note)
-            tradeNotiz.value = notizText.value
-            tradingMeta.value = notiz.tradingMetadata || null
-            tradeTypeRef.value = notiz.tradeType || ''
-            closingTradeTypeRef.value = notiz.closingTradeType || ''
-        }
-
-        // Gespeicherte Exkursion
-        const exk = excursions.find(x => x.tradeId == id)
-        if (exk) {
-            for (const f of ['stopLoss', 'maePrice', 'mfePrice']) if (gesetzt(exk[f])) excursion[f] = exk[f]
-        }
-
-        // Kerzenchart — nicht abwarten: die Eingaben sollen nicht auf Binance warten
-        zeichneKerzen(trade, tag, tradingMeta.value)
-
-        // Auto-MFE: nur zeigen, nicht still speichern
-        if (binanceChartAn.value && !excursion.mfePrice) {
-            const mfe = await berechneMfe(trade)
-            if (mfe !== null && exkursionTradeId.value === id && !excursion.mfePrice) {
-                excursion.mfePrice = mfe
-                mfeAuto.value = true
-            }
-        }
-        return true
-    } catch (fehler) {
-        console.error('Tagesansicht: Trade öffnen', fehler)
-        return true
-    } finally {
-        if (tradeDetailOffen.value) {
-            setupsLaden.value = false
-            tagInput.value = ''
-            speichernNoetig.value = false
-        }
-    }
-}
-
-function oeffneTrade(karte, trade) {
-    if (setupsLaden.value && tradeDetailOffen.value) return
-    clickTradesModal(karte, trade, trade)
-}
-
-function blaettere(schritt) {
-    if (setupsLaden.value) return
-    clickTradesModal(offenerTagIndex.value, tradeIndexAktiv.value, tradeIndexAktiv.value + schritt)
-}
-
-/**
- * Der eine Schliessweg: ×, Esc und der Knopf unten landen alle hier.
- * Der <dialog> kann schon zu sein (Esc schliesst nativ) — deshalb hält
- * `dialogOffen` fest, ob der Weg schon läuft, und ein zweites „zu" (das
- * Dialog-Bauteil meldet sich bei × zweimal) fällt durch.
- */
-async function schliesseTrade() {
-    if (!dialogOffen.value) return
-    if (markierungOffen.value) {
-        alert(t('common.screenshotSaveAnnotation'))
-        // Nativ schon geschlossen (Esc)? Dann wieder öffnen.
-        dialogOffen.value = false
-        await nextTick()
-        dialogOffen.value = true
-        return
-    }
-    dialogOffen.value = false
-    await clickTradesModal()
-}
 
 // ── MFE-Eingabe ────────────────────────────────────────────────────────────
 
@@ -771,16 +584,7 @@ async function oeffneOrderbuch() {
 
 // ── Screenshot-Vorschau ────────────────────────────────────────────────────
 
-/**
- * Öffnet das globale Vollbild (`rahmen/ScreenshotVollbild.vue`) mit dem Bild
- * dieses Trades als Einzelbild (−1 = ohne Blättern). Es ist wie das
- * Detailfenster ein <dialog> und liegt, später geöffnet, darüber; nach dem
- * Schliessen ist das Detailfenster wieder vorn. Dort kann markiert werden —
- * darum sperrt `markierungOffen` das Blättern und Schliessen hier.
- */
-function zeigeVollbild() {
-    useSelectedScreenshotFunction(-1, 'dailyModal', screenshot)
-}
+// F3-NEUBAU: Bild des Trades im Vollbild zeigen — docs/spec/f3-screenshots.md
 
 // ── KI-Bewertung und Share-Karte ───────────────────────────────────────────
 
