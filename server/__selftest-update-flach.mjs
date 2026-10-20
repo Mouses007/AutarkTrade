@@ -117,6 +117,21 @@ try {
     pruefe('Rollback-Referenz weg', !(() => { try { git(kunde, 'rev-parse', '-q', '--verify', ROLLBACK_REF); return true } catch { return false } })())
     pruefe('Baum unverändert', git(kunde, 'rev-parse', 'HEAD^{tree}') === baum)
 
+    console.log('Shell: Ablauf von update.sh an einem alten Klon nach der neuen Wurzel')
+    const alt = path.join(tmp, 'alt')
+    fs.mkdirSync(alt)
+    git(alt, 'init', '-q', '-b', 'master')
+    git(alt, 'remote', 'add', 'origin', url)
+    git(alt, 'config', 'remote.origin.fetch', 'refs/heads/*:refs/remotes/origin/*') // ohne „+“: kein erzwungenes Nachführen
+    git(quelle, 'update-ref', 'refs/heads/master', altWurzel)
+    git(alt, 'fetch', '-q', 'origin', 'master')
+    git(alt, 'reset', '-q', '--hard', 'origin/master')
+    git(quelle, 'update-ref', 'refs/heads/master', wurzelNeu)
+    execFileSync('bash', ['-c', `. "${path.join(wurzel, 'scripts/paketquelle.sh')}" && { paketquelle_holen 2>/dev/null || true; } && git reset -q --hard FETCH_HEAD && paketquelle_flach`],
+        { cwd: alt, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    pruefe('update.sh-Ablauf landet auf der neuen Wurzel', git(alt, 'rev-parse', 'HEAD') === wurzelNeu)
+    pruefe('update.sh-Ablauf: ein Commit, Altstand weg', zahl(alt) === 1 && !gibtEs(alt, altBlob))
+
     console.log('Shell: paketquelle_flach')
     const sh = path.join(tmp, 'sh')
     git(tmp, 'clone', '-q', 'file://' + kunde, sh) // irgendein Klon mit Remote-Zweigen
@@ -143,6 +158,12 @@ const api = fs.readFileSync(path.join(wurzel, 'server/update-api.js'), 'utf8')
 pruefe('update-api ruft macheFlach mit dem Rollback-Punkt', /macheFlach\(PROJECT_ROOT, \{ rollback: preUpdateCommit \}\)/.test(api))
 for (const datei of ['update.sh', 'update-mac.command']) {
     pruefe(`${datei} macht flach`, /^\s*paketquelle_flach\b/m.test(fs.readFileSync(path.join(wurzel, datei), 'utf8')))
+}
+// Nach der neuen Wurzel ist origin/master kein Vorspulen; wird das Nachführen
+// abgewiesen, setzte `reset --hard origin/master` still auf den alten Stand zurück.
+for (const datei of ['update.sh', 'update-mac.command', 'update.bat', 'setup-remote.sh']) {
+    const text = fs.readFileSync(path.join(wurzel, datei), 'utf8')
+    pruefe(`${datei} setzt auf FETCH_HEAD`, /^\s*git reset --hard FETCH_HEAD\s*$/m.test(text) && !/^\s*git reset --hard origin\/master/m.test(text))
 }
 pruefe('update.bat macht flach', /call scripts\\paketquelle-flach\.bat/.test(fs.readFileSync(path.join(wurzel, 'update.bat'), 'utf8')))
 

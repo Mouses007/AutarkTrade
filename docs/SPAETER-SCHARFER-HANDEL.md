@@ -59,6 +59,41 @@ sondern den Ausbau rückgängig machen und nachziehen:
    automatisierten Handel ergänzen und F-6/F-7 der Verkaufs-Prüfung vorher anwaltlich klären.
 5. `CLAUDE.md`, `README.md`, `server/app-hilfe.js` und `docs/VERKAUFS-PRUEFUNG.md` nachziehen.
 
+### Nach der neuen Wurzel (F4): der Branch liegt nur noch im Bündel
+
+`scripts/historie-neu-wurzeln.sh` (Auftrag F4, Audit A3-27 bis A3-30) setzt master auf einen
+einzelnen Commit ohne Vorgänger und löscht die übrigen Zweige, lokal und auf GitHub, darunter
+`spaeter/scharfer-handel`. Der Branch hängt an der alten Historie, die mit dem Ausgangsstand des
+Forks beginnt (HERKUNFT.md), und darf deshalb nicht in das ausgelieferte Repo zurück. Sobald das
+Skript gelaufen ist, gibt es ihn **nur noch im Bündel** `V2-historie-bis-<datum>.bundle` neben dem
+Repo (`/home/maro/Schreibtisch/Trading/`; Ort, Grösse und SHA-256 stehen in
+`docs/audit/2026-10-19/ENDSTAND.md`). Die Befehle oben (`git show spaeter/scharfer-handel:…`,
+`git revert` der S13-Commits) gehen dann nicht mehr in master. So holt man ihn zurück, **ohne** die alte
+Historie wieder hineinzuziehen:
+
+```bash
+# 1. Bündel prüfen und den Branch in einen eigenen Ordner AUSSERHALB des Repos holen
+git bundle verify ../V2-historie-bis-<datum>.bundle
+git clone --branch spaeter/scharfer-handel ../V2-historie-bis-<datum>.bundle /tmp/scharf-alt
+
+# 2. Nur die Order-Teile als Dateien herüberkopieren (Tabelle oben), z.B.
+cp /tmp/scharf-alt/server/execution/{bitunix,pionex,stop-waechter,stop-regeln,margen-netz,abgleich}.js server/execution/
+cp /tmp/scharf-alt/server/live-gates.js server/
+
+# 3. Die geänderten Fassungen (index.mjs, strategy-engine.js, execution/index.js, Oberfläche, Texte)
+#    NICHT kopieren, sondern ansehen, was S13 ausgebaut hat, und von Hand einpflegen.
+#    Der alte master steckt mit im Bündel:
+git -C /tmp/scharf-alt fetch ../V2-historie-bis-<datum>.bundle master:alt-master
+git -C /tmp/scharf-alt log --oneline --grep 'S13' e7c6709..alt-master
+git -C /tmp/scharf-alt diff a0a847b e7c6709 -- server/strategy-engine.js index.mjs   # a0a847b/049b32a = S13
+diff -u server/strategy-engine.js /tmp/scharf-alt/server/strategy-engine.js
+```
+
+Nicht `git fetch <bündel> spaeter/scharfer-handel` ins Repo und nicht mergen: Das brächte die ganze alte
+Historie samt Ausgangsstand zurück, und `git rev-list --max-parents=0 --all` hätte wieder zwei Wurzeln.
+Die Namensreste aus der Zeit vor F3 (Bericht A3, A3-05 bis A3-21) wandern mit den kopierten Dateien
+mit; dort die Umbenennungen von F3 nachziehen und danach `node scripts/herkunft-pruefen.mjs` laufen lassen.
+
 ## Verbesserung für später: getrennte Schlüssel je Börse
 
 Heute liegt pro Börse **ein** API-Schlüssel in `bitunix_config`/`bitget_config`/Pionex-Einstellungen, und

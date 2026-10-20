@@ -44,7 +44,9 @@ if ! paketquelle_holen; then
 fi
 
 echo -e "  ${CYAN}[2/4] Installiere neueste Version...${RESET}"
-git reset --hard origin/master
+# FETCH_HEAD statt origin/master: nach der neuen Wurzel ist das kein Vorspulen, und ein
+# abgewiesenes Nachführen von origin/master liesse das Update still beim alten Stand.
+git reset --hard FETCH_HEAD
 # Alte Historie entfernen (nur der ausgelieferte Stand bleibt)
 paketquelle_flach || echo "  Hinweis: alte Historie nicht entfernt (Update trotzdem aktuell)"
 

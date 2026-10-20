@@ -38,6 +38,7 @@ node scripts/fixtures-auffrischen.mjs   # compare stored API fixtures against li
 node scripts/fixtures-auffrischen.mjs --schreiben   # …and update them
 node scripts/drittlizenzen.mjs          # regenerate THIRD-PARTY-NOTICES after any dependency change
 node scripts/herkunft-pruefen.mjs       # origin check against the fork's source (network; see HERKUNFT.md; --namen/--laeufe/--vorschlag)
+scripts/historie-neu-wurzeln.sh --trocken   # new root without the fork history (F4) — OWNER ONLY; without --trocken it asks before every step, rewrites master, force-pushes
 AT_LIZENZ_PRIVAT=… node scripts/lizenz-ausstellen.mjs --kaeufer "Name"   # issue a licence key (vendor only)
 ```
 

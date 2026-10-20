@@ -110,7 +110,7 @@ if [ -d "$INSTALL_DIR" ]; then
     cd "$INSTALL_DIR"
     git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL"
     git fetch --depth 1 --no-tags origin master
-    git reset --hard origin/master
+    git reset --hard FETCH_HEAD
     # Erst nach dem reset einlesen: eine alte Installation hat die Datei noch nicht
     . ./scripts/paketquelle.sh
     paketquelle_flach

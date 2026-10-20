@@ -47,8 +47,8 @@ if command -v git &>/dev/null; then
         paketquelle_hinweis
         exit 1
     fi
-    echo -e "${GRAY}  git reset --hard origin/master...${RESET}"
-    git reset --hard origin/master
+    echo -e "${GRAY}  git reset --hard FETCH_HEAD...${RESET}"
+    git reset --hard FETCH_HEAD
     if [ $? -ne 0 ]; then
         echo -e "${RED}[X] Git reset fehlgeschlagen!${RESET}"
         exit 1

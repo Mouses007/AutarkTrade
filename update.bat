@@ -56,8 +56,8 @@ if errorlevel 1 (
     echo     und update.bat erneut starten, oder git fragt nach Benutzername und Passwort.
     goto :error
 )
-echo     git reset --hard origin/master...
-git reset --hard origin/master
+echo     git reset --hard FETCH_HEAD...
+git reset --hard FETCH_HEAD
 if errorlevel 1 (
     echo   [X] Git reset fehlgeschlagen!
     goto :error
