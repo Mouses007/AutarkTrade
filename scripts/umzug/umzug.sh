@@ -12,6 +12,12 @@
 # Bricht ein Schritt ab, hält das Ganze an. Zurück: scripts/umzug/rueckweg.sh.
 set -euo pipefail
 HIER="$(cd "$(dirname "$0")" && pwd)"
+# Verbindung und sudo-Passwort EINMAL für alle Schritte: gemeinsam.sh öffnet die
+# SSH-Master-Verbindung (eine Passwortabfrage) und fragt sudo einmal ab; die
+# Teilskripte nutzen beides weiter. Das Passwort steht nur in der Umgebung dieses
+# Laufs auf diesem Rechner, nie auf der NAS-Platte oder in einer Befehlszeile.
+. "$HIER/gemeinsam.sh"
+export UMZUG_GEMEINSAM=1 UMZUG_SUDO_PW="${SUDO_PW:-}"
 for schritt in sichern alt-stoppen nas-deploy pruefen; do
     printf '\n\033[95m######## %s ########\033[0m\n' "$schritt"
     if ! "$HIER/$schritt.sh" "$@"; then

@@ -114,10 +114,13 @@ else
     # Längere, verändernde Befehle: Ausgabe sichtbar, sudo ohne eigene Abfrage
     nas_tty() { nas "$1"; }
     nas_ende() { command ssh "${SSH_OPT[@]}" -O exit "$ZIEL" 2>/dev/null || true; }
-    trap nas_ende EXIT
+    # Unter umzug.sh hält das Sammelskript die Verbindung für alle Schritte offen.
+    [ "${UMZUG_GEMEINSAM:-0}" = 1 ] || trap nas_ende EXIT
     # Eine Master-Verbindung: nur EINE Passwortabfrage für SSH.
     command ssh "${SSH_OPT[@]}" -O check "$ZIEL" 2>/dev/null || command ssh "${SSH_OPT[@]}" -fN "$ZIEL"
-    if [ -n "$NAS_SUDO" ]; then
+    if [ -n "$NAS_SUDO" ] && [ -n "${UMZUG_SUDO_PW:-}" ]; then
+        SUDO_PW="$UMZUG_SUDO_PW"     # von umzug.sh einmal abgefragt
+    elif [ -n "$NAS_SUDO" ]; then
         printf 'sudo-Passwort auf der NAS (%s): ' "$ZIEL" >/dev/tty
         IFS= read -rs SUDO_PW </dev/tty || true
         printf '\n' >/dev/tty
