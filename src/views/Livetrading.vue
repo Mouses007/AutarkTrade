@@ -442,7 +442,7 @@ const interaktiv = (kachel) => kachel.gross === false
 
         <div v-if="fotoZustand === 'fehler'" class="fotoFehler">
             <Symbol name="warnung" />{{ fotoMeldung }}
-            <button type="button" class="radarCardBtn" @click="fotoZustand = ''; fotoMeldung = ''">
+            <button type="button" class="radarCardBtn" :aria-label="t('common.close')" :title="t('common.close')" @click="fotoZustand = ''; fotoMeldung = ''">
                 <Symbol name="schliessen" />
             </button>
         </div>

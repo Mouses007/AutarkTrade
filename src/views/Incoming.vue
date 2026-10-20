@@ -1837,7 +1837,7 @@ function getPositionDate(pos) {
                                     :src="entryScreenshotPreviews[pos.positionId]"
                                     class="screenshot-bild" />
                                 <Pille v-else ton="neutral" symbol="bild">1</Pille>
-                                <button type="button" class="screenshot-remove" @click.stop="removeEntryScreenshot(pos)"><Symbol name="fehler" /></button>
+                                <button type="button" class="screenshot-remove" :aria-label="t('common.remove')" :title="t('common.remove')" @click.stop="removeEntryScreenshot(pos)"><Symbol name="fehler" /></button>
                             </div>
                             <!-- Zweiter Screenshot (Thumbnail) -->
                             <div v-if="pos.trendScreenshotId" class="screenshot-thumb">
@@ -1845,7 +1845,7 @@ function getPositionDate(pos) {
                                     :src="trendScreenshotPreviews[pos.positionId]"
                                     class="screenshot-bild" />
                                 <Pille v-else ton="neutral" symbol="bild">2</Pille>
-                                <button type="button" class="screenshot-remove" @click.stop="removeTrendScreenshot(pos)"><Symbol name="fehler" /></button>
+                                <button type="button" class="screenshot-remove" :aria-label="t('common.remove')" :title="t('common.remove')" @click.stop="removeTrendScreenshot(pos)"><Symbol name="fehler" /></button>
                             </div>
                         </div>
                         <!-- Upload (sichtbar solange weniger als 2 Screenshots) —
@@ -1987,7 +1987,7 @@ function getPositionDate(pos) {
                                         :src="closingScreenshotPreviews[pos.positionId]"
                                         class="screenshot-bild" />
                                     <Pille v-else ton="neutral" symbol="bild">1</Pille>
-                                    <button type="button" class="screenshot-remove" @click.stop="removeClosingScreenshot(pos)"><Symbol name="fehler" /></button>
+                                    <button type="button" class="screenshot-remove" :aria-label="t('common.remove')" :title="t('common.remove')" @click.stop="removeClosingScreenshot(pos)"><Symbol name="fehler" /></button>
                                 </div>
                             </div>
                             <label v-else class="pb-drop"

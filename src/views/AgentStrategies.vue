@@ -519,7 +519,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                             <Knopf art="leise" klein
                                 @click="loeschBestaetigung = null">{{ t('common.no') }}</Knopf>
                         </template>
-                        <Knopf v-else art="gefahr" klein nurSymbol symbol="muell" class="rechts"
+                        <Knopf v-else art="gefahr" klein nurSymbol symbol="muell" class="rechts" :titel="t('common.delete')"
                             @click="loeschBestaetigung = inst.id" />
                     </div>
 
@@ -586,7 +586,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                             <div class="symbol-zeile">
                                 <input v-model="symbolEingabe" class="at-feld klein"
                                     placeholder="BTCUSDT" @keydown.enter.prevent="symbolHinzu" />
-                                <Knopf klein nurSymbol symbol="plus" @click="symbolHinzu" />
+                                <Knopf klein nurSymbol symbol="plus" :titel="t('common.hinzufuegen')" @click="symbolHinzu" />
                             </div>
                             <div class="pillen">
                                 <Pille v-for="s in bearbeite.symbols" :key="s" ton="neutral"

@@ -67,7 +67,11 @@
     "connectionError": "Verbindungsfehler: ",
     "edit": "Bearbeiten",
     "endpointMissing": "Der Server kennt diesen Endpunkt nicht (404). Vermutlich läuft noch die alte Serverversion — bitte den Server neu starten.",
-    "sessionExpired": "Sitzung abgelaufen. Bitte die Seite neu laden."
+    "sessionExpired": "Sitzung abgelaufen. Bitte die Seite neu laden.",
+    "hochSchieben": "Nach oben schieben",
+    "runterSchieben": "Nach unten schieben",
+    "senden": "Senden",
+    "hinzufuegen": "Hinzufügen"
   },
   "nav": {
     "exchange": "BÖRSE",

@@ -67,7 +67,11 @@
     "connectionError": "Connection error: ",
     "edit": "Edit",
     "endpointMissing": "The server does not know this endpoint (404). It is probably still running the old build — please restart the server.",
-    "sessionExpired": "Session expired. Please reload the page."
+    "sessionExpired": "Session expired. Please reload the page.",
+    "hochSchieben": "Move up",
+    "runterSchieben": "Move down",
+    "senden": "Send",
+    "hinzufuegen": "Add"
   },
   "nav": {
     "exchange": "EXCHANGE",

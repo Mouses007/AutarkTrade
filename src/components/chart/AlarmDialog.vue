@@ -66,10 +66,10 @@ async function speichern() {
 
 <template>
     <div class="dialogHintergrund" @click.self="emit('schliesse')">
-        <div class="dialog">
+        <div class="dialog" role="dialog" aria-modal="true" :aria-label="t(istNeu ? 'chart.alarm.neu' : 'chart.alarm.aendern')">
             <div class="kopf">
                 <b class="titel"><Symbol name="glocke" /> {{ t(istNeu ? 'chart.alarm.neu' : 'chart.alarm.aendern') }} — {{ v.symbol }}{{ v.markt === 'spot' ? ' Spot' : '' }}</b>
-                <button type="button" class="zu" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
+                <button type="button" class="zu" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
             </div>
             <div class="art">{{ t('chart.alarm.art.' + art) }}<template v-if="zeichnungTyp"> · {{ t('chart.wz.' + zeichnungTyp) }}</template></div>
             <label class="zeile">

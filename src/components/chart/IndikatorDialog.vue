@@ -109,12 +109,13 @@ onMounted(async () => {
 
 <template>
     <div class="dialogHintergrund" @click.self="emit('schliesse')" @keydown.esc="emit('schliesse')" tabindex="-1">
-        <div class="dialog">
+        <div class="dialog" role="dialog" aria-modal="true"
+            :aria-label="entwurf ? t(`chart.ind.${entwurf.typ}.name`) : t('chart.indikatoren')">
             <!-- Hinzufügen -->
             <template v-if="!entwurf">
                 <div class="kopf">
                     <b>{{ t('chart.indikatoren') }}</b>
-                    <button type="button" class="zu" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
+                    <button type="button" class="zu" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
                 </div>
                 <template v-if="aktive.length">
                     <div class="abschnitt">{{ t('chart.indAktiv') }}</div>
@@ -143,7 +144,7 @@ onMounted(async () => {
             <template v-else>
                 <div class="kopf">
                     <b>{{ t(`chart.ind.${entwurf.typ}.name`) }}</b>
-                    <button type="button" class="zu" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
+                    <button type="button" class="zu" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
                 </div>
                 <div class="form">
                     <section v-for="g in gruppen" :key="g.id" class="gruppe" :class="{ zu: g.id && !offen.has(g.id) }">

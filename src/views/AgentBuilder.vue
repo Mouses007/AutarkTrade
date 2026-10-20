@@ -291,7 +291,7 @@ async function entwurfLoeschen(d) {
                             <textarea v-model="eingabe" class="at-feld chat-input" rows="2"
                                 :placeholder="t('strategies.rulesPlaceholder')"
                                 @keydown.enter.exact.prevent="senden"></textarea>
-                            <Knopf art="haupt" klein nurSymbol symbol="nachricht" :disabled="laeuft" @click="senden" />
+                            <Knopf art="haupt" klein nurSymbol symbol="nachricht" :titel="t('common.senden')" :disabled="laeuft" @click="senden" />
                         </div>
                         <small class="at-gedaempft">
                             {{ t('strategies.acceptedFiles') }}:
@@ -427,7 +427,7 @@ async function entwurfLoeschen(d) {
                                         <Knopf art="leise" klein
                                             @click="loeschFrage = null">{{ t('common.no') }}</Knopf>
                                     </template>
-                                    <Knopf v-else art="gefahr" klein nurSymbol symbol="muell"
+                                    <Knopf v-else art="gefahr" klein nurSymbol symbol="muell" :titel="t('common.delete')"
                                         @click="loeschFrage = d.id" />
                                 </td>
                             </tr>

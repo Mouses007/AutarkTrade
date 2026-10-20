@@ -190,9 +190,9 @@ function loescheListe() {
                     {{ aenderung(s) == null ? '' : (aenderung(s) >= 0 ? '+' : '') + aenderung(s).toFixed(2) + ' %' }}
                 </span>
                 <span class="werkzeug" @click.stop>
-                    <button type="button" class="mini" @click="verschiebe(i, -1)"><Symbol name="hoch" /></button>
-                    <button type="button" class="mini" @click="verschiebe(i, 1)"><Symbol name="runter" /></button>
-                    <button type="button" class="mini" @click="entferne(s)"><Symbol name="schliessen" /></button>
+                    <button type="button" class="mini" :aria-label="t('common.hochSchieben')" :title="t('common.hochSchieben')" @click="verschiebe(i, -1)"><Symbol name="hoch" /></button>
+                    <button type="button" class="mini" :aria-label="t('common.runterSchieben')" :title="t('common.runterSchieben')" @click="verschiebe(i, 1)"><Symbol name="runter" /></button>
+                    <button type="button" class="mini" :aria-label="t('common.remove')" :title="t('common.remove')" @click="entferne(s)"><Symbol name="schliessen" /></button>
                 </span>
             </div>
             <div v-if="!symbole.length" class="leer">{{ t('chart.watchlistLeer') }}</div>

@@ -837,7 +837,7 @@
                          hat KEIN strukturiertes "Team"-Feld mehr, deshalb
                          der Hinweis unten statt einer erfundenen Ja/Nein-Zeile. -->
                     <div v-if="coinInfoSymbol" class="crCoinInfo">
-                        <button type="button" class="crCoinInfoZu" @click="coinInfoSymbol = ''">
+                        <button type="button" class="crCoinInfoZu" :aria-label="t('common.close')" :title="t('common.close')" @click="coinInfoSymbol = ''">
                             <Symbol name="schliessen" />
                         </button>
                         <div v-if="coinInfoLaedt" class="at-mittig at-py-3">

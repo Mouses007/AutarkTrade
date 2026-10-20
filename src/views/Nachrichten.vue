@@ -1906,7 +1906,7 @@ onBeforeUnmount(() => {
              Escape ebenso (Listener im Setup). -->
         <Teleport to="body">
             <div v-if="grossesBild" class="nwBildOverlay" @click.self="grossesBild = null">
-                <button type="button" class="nwBildZu" @click="grossesBild = null">
+                <button type="button" class="nwBildZu" :aria-label="t('common.close')" :title="t('common.close')" @click="grossesBild = null">
                     <Symbol name="schliessen" />
                 </button>
                 <img :src="grossesBild.url" referrerpolicy="no-referrer" @click.stop />

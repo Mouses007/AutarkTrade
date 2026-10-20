@@ -280,7 +280,7 @@ const gruende = computed(() => {
                     <Knopf class="rechts" art="leise" klein nurSymbol
                         :symbol="chartGross ? 'verkleinern' : 'vergroessern'"
                         :titel="t('strategies.chartEnlarge')" @click="chartVergroessern()" />
-                    <Knopf art="leise" klein nurSymbol symbol="schliessen" @click="gewaehlt = null" />
+                    <Knopf art="leise" klein nurSymbol symbol="schliessen" :titel="t('common.close')" @click="gewaehlt = null" />
                 </div>
                 <div id="setupChart" :style="{ height: chartGross ? '78vh' : '340px' }"></div>
                 <div v-if="chartFehler" class="at-gedaempft klein-text oben">{{ chartFehler }}</div>

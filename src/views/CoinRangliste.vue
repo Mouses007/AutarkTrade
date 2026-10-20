@@ -458,7 +458,7 @@ onBeforeUnmount(stopPolling)
                             <td>{{ t('rangliste.st_' + l.status) }}</td>
                             <td class="at-gedaempft">{{ l.fortschritt }}/{{ l.gesamt }}</td>
                             <td class="zahl">
-                                <Knopf art="gefahr" klein nurSymbol symbol="muell"
+                                <Knopf art="gefahr" klein nurSymbol symbol="muell" :titel="t('common.delete')"
                                         @click.stop="loesche(l.id)" />
                             </td>
                         </tr>

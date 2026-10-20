@@ -268,7 +268,7 @@ onBeforeUnmount(speichereJetzt)
                 {{ t('livetrading.sitzung.planGehalten') }}
             </span>
             <span class="stLuecke"></span>
-            <button type="button" class="radarCardBtn" @click="letzteBilanz = null">
+            <button type="button" class="radarCardBtn" :aria-label="t('common.close')" :title="t('common.close')" @click="letzteBilanz = null">
                 <Symbol name="schliessen" />
             </button>
         </div>

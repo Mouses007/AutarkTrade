@@ -682,7 +682,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                             <div class="b1 m2"><input v-model.number="p.min" type="number" class="at-feld klein" @change="pruefen" /></div>
                             <div class="b1 m2 reihe">
                                 <input v-model.number="p.max" type="number" class="at-feld klein" @change="pruefen" />
-                                <Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="paramWeg(i)" />
+                                <Knopf art="gefahr" klein nurSymbol symbol="schliessen" :titel="t('common.remove')" @click="paramWeg(i)" />
                             </div>
                         </div>
                     </div>
@@ -781,7 +781,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                 <ZahlOderParam v-else :ziel="ind" feld="period" :standard="14"
                                     :titel="t('strategies.periodLabel')" :params="parameterNamen" @aendern="pruefen" />
                             </div>
-                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="indikatorWeg(i)" /></div>
+                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" :titel="t('common.remove')" @click="indikatorWeg(i)" /></div>
                         </div>
                     </div>
 
@@ -902,7 +902,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                     <option v-for="pk in parameterNamen" :key="pk" :value="'param:' + pk">{{ pk }}</option>
                                 </select>
                             </div>
-                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="bedingungWeg('signalFilters', i)" /></div>
+                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" :titel="t('common.remove')" @click="bedingungWeg('signalFilters', i)" /></div>
                         </div>
                     </div>
 
@@ -980,7 +980,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                     </select>
                                 </div>
                             </template>
-                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" @click="abbruchWeg(i)" /></div>
+                            <div class="b1 wegZelle"><Knopf art="gefahr" klein nurSymbol symbol="schliessen" :titel="t('common.remove')" @click="abbruchWeg(i)" /></div>
                         </div>
                     </div>
 
@@ -1149,7 +1149,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                         <Knopf art="gefahr" klein @click="loeschen(s)">{{ t('common.yes') }}</Knopf>
                                         <Knopf klein @click="loeschFrage = null">{{ t('common.no') }}</Knopf>
                                     </template>
-                                    <Knopf v-else art="gefahr" klein nurSymbol symbol="muell" @click="loeschFrage = s.id" />
+                                    <Knopf v-else art="gefahr" klein nurSymbol symbol="muell" :titel="t('common.delete')" @click="loeschFrage = s.id" />
                                 </td>
                             </tr>
                         </tbody>

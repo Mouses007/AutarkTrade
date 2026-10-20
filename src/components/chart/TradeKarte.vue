@@ -52,7 +52,7 @@ function zumJournal() {
         <div class="kopf">
             <span class="richtung" :class="tr.richtung">{{ t(tr.richtung === 'long' ? 'chart.richtungLong' : 'chart.richtungShort') }}</span>
             <span class="broker">{{ tr.broker }}</span>
-            <button type="button" class="zu" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
+            <button type="button" class="zu" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
         </div>
         <div class="ergebnis" :class="(tr.netto ?? 0) >= 0 ? 'greenTrade' : 'redTrade'">
             {{ geld(tr.netto) }}
