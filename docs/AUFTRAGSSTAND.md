@@ -40,6 +40,36 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 4 | F2 Sicherheit | Audit A2 behoben | – | **fertig** |
 | 4 | F3 Fork-Reste | Audit A3 behoben (ohne Historie) | – | **fertig** |
 | 4 | F4 Endprüfung | Endstand + Historien-Skript | – | **fertig** |
+| 5 | U1 Umzug vorbereitet | Handbuch, Skripte, Probelauf, Lizenz | – | **fertig** |
+
+## U1 Umzug vorbereitet — Ergebnis (20.10.2026)
+
+Auftrag des Nutzers: alte App abschalten, V2 nur für ihn produktiv an der Live-DB, **ohne scharfen Handel**. Nur
+vorbereitet — NAS, Live-DB `tradejournal`, der Container der alten App und das NAS-Projekt wurden weder gelesen noch
+verändert. Branch `u1-umzug`, auf master per `--ff-only`.
+
+- **Handbuch** `docs/UMZUG-PRODUKTIV.md`: Schritte 0–8 mit Befehl und Prüfung (Live-Positionen, `pg_dump -Fc` +
+  `pg_restore --list`, alte App stoppen ohne löschen, Image privat per SSH, Compose-Tausch im Projekt `tradingjournal`,
+  Migrationen v27→v29/S13/S15, Prüfliste, 8091/`autarktrade` abbauen, Rückweg) und die eigene Lizenz.
+- **Skripte** `scripts/umzug/`: `sichern.sh`, `alt-stoppen.sh`, `nas-deploy.sh`, `pruefen.sh` (nur lesend),
+  `rueckweg.sh`, Sammelskript `umzug.sh`; gemeinsamer Teil `gemeinsam.sh`. Jedes mit `--trocken` und Ja-Abfrage vor
+  jedem Eingriff; Ziele nur aus `scripts/umzug/.env` (Vorlage `.env.beispiel`, in `.gitignore`), keine Passwörter —
+  DB-Zugang und Secret bleiben in der `.env` des NAS-Projekts, die Skripte lesen dort nur Variablen-NAMEN.
+  Compose-Vorlage `docker-compose.produktiv.yml`: Image `autarktrade:produktiv` mit `pull_policy: never` (nie
+  `mouses007/…`), kein `container_name`, kein Testbetrieb, Sicherheitsschalter ausdrücklich, Caddy wie bisher.
+  Rückweg spielt die Sicherung in eine NEUE DB und tauscht die Namen; der V2-Stand bleibt als `tradejournal_v2_<datum>`.
+- **Probelauf** (Wegwerf-Postgres 17, alte App aus `git archive`, Daten über die alte API und SQL): Umzug mit
+  Migrationen v28/S13/S15 sauber, Daten gleich (ohne die v28-Felder), alter Börsenschlüssel in V2 lesbar,
+  `pruefen.sh` grün; Rückweg stellt die Trades byte-gleich wieder her. Befund behoben: Spaltenname in `sichern.sh`.
+  Alles danach entfernt.
+- **Lizenz:** vorhandener privater Schlüssel `~/.config/autarktrade/lizenz-signatur.pem` passt zum eingebauten
+  öffentlichen — kein neues Paar, `server/lizenz.js` unverändert. Ausgestellt `AT-EIGEN-0001` „Mouses007
+  (Eigenbetrieb)", ohne Ablauf, Updates bis 2099-12-31, abgelegt in `~/.config/autarktrade/lizenz-eigen.txt` (600);
+  eintragen unter Einstellungen › Lizenz.
+- **Geprüft:** `npm run test:self` 148/148, `npm run build` fehlerfrei.
+- **Offen (Nutzer):** den Umzug selbst ausführen (`scripts/umzug/umzug.sh --trocken`, dann ohne); vorher offene
+  Live-Positionen an der Börse schliessen. Auf der NAS ungeprüft: SSH/sudo-Pfad, ob DSM `pull_policy` kennt
+  (Compose v2 ab 2.x), Mail/Push, ESP32, Widget.
 
 ## F4 Endprüfung — Ergebnis (20.10.2026)
 

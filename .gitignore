@@ -57,3 +57,6 @@ scripts/.v2-container.env
 # Secret nativer Installationen ohne AT_SECRET (server/crypto.js, F2) —
 # ohne diese Datei sind die gespeicherten Schlüssel nicht lesbar; nie ins Repo.
 .at-secret
+
+# Umzug U1: Ziele und Merkzettel (keine Passwörter, aber Adressen) — nie ins Repo
+scripts/umzug/.env
