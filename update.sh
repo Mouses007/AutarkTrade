@@ -37,7 +37,7 @@ paketquelle_einrichten
 
 # Update holen
 echo -e "  ${CYAN}[1/4] Lade neueste Version...${RESET}"
-if ! git fetch origin master; then
+if ! paketquelle_holen; then
     echo -e "  ${RED}FEHLER: Paketquelle nicht erreichbar oder Zugang abgelehnt.${RESET}"
     paketquelle_hinweis
     exit 1
@@ -45,6 +45,8 @@ fi
 
 echo -e "  ${CYAN}[2/4] Installiere neueste Version...${RESET}"
 git reset --hard origin/master
+# Alte Historie entfernen (nur der ausgelieferte Stand bleibt)
+paketquelle_flach || echo "  Hinweis: alte Historie nicht entfernt (Update trotzdem aktuell)"
 
 echo -e "  ${CYAN}[3/4] Installiere Abhaengigkeiten...${RESET}"
 npm install

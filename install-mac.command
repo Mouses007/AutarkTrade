@@ -353,7 +353,7 @@ if [ ! -d ".git" ]; then
         paketquelle_einrichten >/dev/null 2>&1
         # Ohne Zugangsschlüssel nicht nach Passwort fragen — Updates gehen dann über den Knopf
         # in der Software, sobald ein Lizenzschlüssel eingetragen ist.
-        if GIT_TERMINAL_PROMPT=0 git fetch origin master >/dev/null 2>&1; then
+        if GIT_TERMINAL_PROMPT=0 paketquelle_holen >/dev/null 2>&1; then
             echo -e "  ${GREEN}[OK]${RESET}  Git-Repository     Initialisiert"
         else
             echo -e "  ${YELLOW}[!]${RESET}   Paketquelle        Noch kein Zugang (privat)"

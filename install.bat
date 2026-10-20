@@ -477,7 +477,7 @@ if not exist ".git\" (
     echo   Git-Repository initialisieren ^(fuer Auto-Updates^)...
     call scripts\paketquelle.bat >nul 2>nul
     set "GIT_TERMINAL_PROMPT=0"
-    git fetch origin master >nul 2>nul
+    git fetch --depth 1 --no-tags origin master >nul 2>nul
     if !errorlevel! equ 0 (
         echo   [OK]  Git-Repository     Initialisiert
     ) else (

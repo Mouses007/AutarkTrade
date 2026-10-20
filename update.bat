@@ -47,8 +47,8 @@ if errorlevel 1 (
 
 :: Git fetch + reset (funktioniert auch bei frischer Installation ohne Commits)
 call scripts\paketquelle.bat
-echo     git fetch origin master...
-git fetch origin master
+echo     git fetch --depth 1 origin master...
+git fetch --depth 1 --no-tags origin master
 if errorlevel 1 (
     echo   [X] Git fetch fehlgeschlagen!
     echo     Tipp: Keine Internetverbindung? Zugang zur Paketquelle?
@@ -62,6 +62,8 @@ if errorlevel 1 (
     echo   [X] Git reset fehlgeschlagen!
     goto :error
 )
+:: Alte Historie entfernen (nur der ausgelieferte Stand bleibt)
+call scripts\paketquelle-flach.bat >nul 2>nul
 echo   [OK] Code aktualisiert
 
 :: npm install

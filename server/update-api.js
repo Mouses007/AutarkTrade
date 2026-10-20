@@ -25,6 +25,7 @@ import http from 'http'
 import { fileURLToPath } from 'url'
 import { umgebung } from './umgebung.js'
 import { ladeLizenz, updateZugang, updateErlaubt } from './lizenz.js'
+import { macheFlach, FETCH_FLACH } from './update-flach.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -571,7 +572,9 @@ export function setupUpdateRoutes(app) {
             // 1. git fetch + reset statt pull (funktioniert auch ohne HEAD/Commits).
             // Die URL steht hier fest statt `origin`: so zieht auch eine Installation,
             // deren origin noch auf das alte, öffentliche Repo zeigt, aus dem neuen Kanal.
-            const fetchOutput = execSync(`git fetch ${GIT_URL} master`, {
+            // `--depth 1` (Audit A3-28): beim Kunden landet nur der ausgelieferte Stand,
+            // keine Historie; `macheFlach` unten schneidet einen alten, vollen Klon ab.
+            const fetchOutput = execSync(`git fetch ${FETCH_FLACH.join(' ')} ${GIT_URL} master`, {
                 cwd: PROJECT_ROOT,
                 encoding: 'utf8',
                 timeout: 60000,
@@ -585,6 +588,15 @@ export function setupUpdateRoutes(app) {
                 timeout: 60000
             }).trim()
             steps.push({ step: 'git reset', output: pullOutput })
+
+            // Alte Historie entfernen, den Stand vor dem Update für den Rollback behalten.
+            // Scheitert das, läuft das Update trotzdem weiter — der neue Stand ist da.
+            try {
+                const flach = macheFlach(PROJECT_ROOT, { rollback: preUpdateCommit })
+                steps.push({ step: 'git flach', output: `${flach.commits} Commit(s) im Repo, ${flach.geloescht.length} Referenz(en) entfernt` })
+            } catch (e) {
+                steps.push({ step: 'git flach', output: 'übersprungen: ' + e.message })
+            }
 
             // Read new version (from git reset — package.json ist schon aktuell)
             const newVersion = getLocalVersion()

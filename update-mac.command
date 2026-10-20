@@ -40,8 +40,8 @@ echo -e "${CYAN}[2/4]${RESET} Code aktualisieren..."
 if command -v git &>/dev/null; then
     . ./scripts/paketquelle.sh
     paketquelle_einrichten
-    echo -e "${GRAY}  git fetch origin master...${RESET}"
-    if ! git fetch origin master; then
+    echo -e "${GRAY}  git fetch --depth 1 origin master...${RESET}"
+    if ! paketquelle_holen; then
         echo -e "${RED}[X] Git fetch fehlgeschlagen!${RESET}"
         echo -e "${YELLOW}  Tipp: Keine Internetverbindung? Zugang zur Paketquelle?${RESET}"
         paketquelle_hinweis
@@ -53,6 +53,8 @@ if command -v git &>/dev/null; then
         echo -e "${RED}[X] Git reset fehlgeschlagen!${RESET}"
         exit 1
     fi
+    # Alte Historie entfernen (nur der ausgelieferte Stand bleibt)
+    paketquelle_flach || echo -e "${YELLOW}[!]${RESET} Alte Historie nicht entfernt (Update trotzdem aktuell)"
     echo -e "${GREEN}[OK]${RESET} Code aktualisiert"
 else
     echo -e "${RED}[X] Git nicht installiert — Update nicht moeglich.${RESET}"

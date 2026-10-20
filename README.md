@@ -394,7 +394,7 @@ The Android widget (`com.autarktrade.widget`) is part of AutarkTrade and under i
 #### Linux / macOS
 
 ```bash
-git clone https://github.com/Mouses007/AutarkTrade.git
+git clone --depth 1 https://github.com/Mouses007/AutarkTrade.git
 cd AutarkTrade
 chmod +x install.sh
 ./install.sh
@@ -433,7 +433,7 @@ Open `http://localhost:8080` in your browser.
 #### Quick Start (with external PostgreSQL)
 
 ```bash
-git clone https://github.com/Mouses007/AutarkTrade.git
+git clone --depth 1 https://github.com/Mouses007/AutarkTrade.git
 cd AutarkTrade
 cp .env.example .env
 ```

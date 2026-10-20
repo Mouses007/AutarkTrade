@@ -109,11 +109,15 @@ if [ -d "$INSTALL_DIR" ]; then
     echo -e "  ${CYAN}→ Aktualisiere mit git fetch + reset...${RESET}"
     cd "$INSTALL_DIR"
     git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL"
-    git fetch origin master
+    git fetch --depth 1 --no-tags origin master
     git reset --hard origin/master
+    # Erst nach dem reset einlesen: eine alte Installation hat die Datei noch nicht
+    . ./scripts/paketquelle.sh
+    paketquelle_flach
 else
+    # Nur der aktuelle Stand, keine Historie (Audit A3-28)
     echo -e "  ${CYAN}→ Klone Repository...${RESET}"
-    git clone "$REPO_URL" "$INSTALL_DIR"
+    git clone --depth 1 --no-tags --single-branch --branch master "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
 fi
 

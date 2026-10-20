@@ -35,6 +35,25 @@ paketquelle_einrichten() {
     paketquelle_zugang
 }
 
+# Stand holen: nur der eine Commit, keine Historie, keine Tags (Audit A3-28).
+paketquelle_holen() {
+    git fetch --depth 1 --no-tags origin master
+}
+
+# Nach dem reset: alte Historie entfernen (Klone von vor F4 haben sie noch ganz).
+# Gleiches Verfahren wie server/update-flach.js: nur der aktuelle Zweig bleibt,
+# HEAD wird Grenze eines flachen Klons, Unerreichbares wird gelöscht.
+paketquelle_flach() {
+    _at_zweig=$(git symbolic-ref -q HEAD || true)
+    git for-each-ref --format='%(refname)' | while read -r _at_ref; do
+        [ "$_at_ref" = "$_at_zweig" ] || git update-ref --no-deref -d "$_at_ref"
+    done
+    git rev-parse HEAD > "$(git rev-parse --git-dir)/shallow"
+    git reflog expire --expire=now --all
+    git gc --prune=now --quiet
+    unset _at_zweig _at_ref
+}
+
 paketquelle_hinweis() {
     echo "  Die Paketquelle ist privat. Zugang mit dem Zugangsschlüssel aus deiner Lizenz-Mail:"
     echo "    AT_UPDATE_TOKEN=<schluessel> $0"
