@@ -9,7 +9,7 @@
 
 <template>
     <Knopf v-show="windowIsScrolled" class="nachOben" art="haupt" klein nur-symbol symbol="hoch"
-        :titel="t('common.nachOben')" @click="returnToTop" />
+        :titel="t('common.nachOben')" @click="scrolleNachOben" />
 </template>
 
 <style scoped>

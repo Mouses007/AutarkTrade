@@ -1009,7 +1009,7 @@ onBeforeUnmount(() => {
             </Karte>
         </template>
 
-        <div v-if="spinnerLoadMore" class="nachladen"><Kreisel /></div>
+        <div v-if="ladeMehr" class="nachladen"><Kreisel /></div>
     </div>
 
     <!-- Trade-Detailfenster -->
@@ -1242,7 +1242,7 @@ onBeforeUnmount(() => {
             </section>
 
             <!-- Tags, MFE, Notiz -->
-            <div v-if="spinnerSetups" class="nachladen"><Kreisel /></div>
+            <div v-if="setupsLaden" class="nachladen"><Kreisel /></div>
             <div v-else class="eingaben">
                 <div class="feldgruppe">
                     <span class="at-label">{{ t('daily.tags') }}</span>
@@ -1277,10 +1277,10 @@ onBeforeUnmount(() => {
             <div class="detailfuss">
                 <div class="fusslinks">
                     <Knopf v-if="hatVorherigen" nur-symbol symbol="einklappen" :titel="t('daily.vorheriger')"
-                        :disabled="spinnerSetups" @click="blaettere(-1)" />
+                        :disabled="setupsLaden" @click="blaettere(-1)" />
                     <Knopf v-if="kiAn" symbol="teilen" @click="shareAusFenster">{{ t('daily.shareCard') }}</Knopf>
                 </div>
-                <Knopf :art="speichernNoetig ? 'haupt' : 'normal'" :disabled="spinnerSetups" @click="schliesseTrade">
+                <Knopf :art="speichernNoetig ? 'haupt' : 'normal'" :disabled="setupsLaden" @click="schliesseTrade">
                     {{ speichernNoetig ? t('daily.closeAndSave') : t('daily.closeModal') }}
                 </Knopf>
                 <div class="fussrechts">
@@ -1288,7 +1288,7 @@ onBeforeUnmount(() => {
                         <img :src="bildQuelle" :alt="t('common.enlarge')" />
                     </button>
                     <Knopf v-if="hatNaechsten" nur-symbol symbol="ausklappen" :titel="t('daily.naechster')"
-                        :disabled="spinnerSetups" @click="blaettere(1)" />
+                        :disabled="setupsLaden" @click="blaettere(1)" />
                 </div>
             </div>
         </div>

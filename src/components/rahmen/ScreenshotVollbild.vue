@@ -58,7 +58,7 @@ function taste(e) {
 <template>
     <Dialog :model-value="screenshotVollbildOffen" :titel="titel" breite="100rem" @update:model-value="offenSetzen" @keydown="taste">
         <div class="inhalt">
-            <Screenshot v-if="hatBild" :index="index" source="fullScreen" :screenshot-data="selectedScreenshot" />
+            <Screenshot v-if="hatBild" :index="index" source="fullScreen" :screenshot-data="gewaehltesBild" />
         </div>
         <template v-if="mitZurueck || mitWeiter" #fuss>
             <div class="blaetterleiste">
@@ -67,9 +67,9 @@ function taste(e) {
                     <Symbol name="einklappen" :groesse="22" />
                 </button>
                 <span v-else></span>
-                <button v-if="mitWeiter" type="button" class="blaettern" :disabled="getMore" :title="t('nav.naechstes')"
+                <button v-if="mitWeiter" type="button" class="blaettern" :disabled="holtWeitere" :title="t('nav.naechstes')"
                     :aria-label="t('nav.naechstes')" @click="blaettere(1)">
-                    <Kreisel v-if="getMore" :groesse="18" />
+                    <Kreisel v-if="holtWeitere" :groesse="18" />
                     <Symbol v-else name="ausklappen" :groesse="22" />
                 </button>
             </div>

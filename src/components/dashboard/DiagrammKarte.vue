@@ -19,7 +19,7 @@ defineProps({
 
 <template>
     <TitelKarte :titel="titel" :info="info">
-        <div :id="diagrammId" :key="renderData" class="chartClass dk-diagramm"
+        <div :id="diagrammId" :key="zeichenZaehler" class="chartClass dk-diagramm"
             :style="{ '--hoehe': hoehe + 'px' }"></div>
     </TitelKarte>
 </template>

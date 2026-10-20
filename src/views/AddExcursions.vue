@@ -240,7 +240,7 @@ function abbrechen() {
 
 <template>
     <div class="exkursionen-seite">
-        <div v-if="spinnerLoadingPage" class="laden">
+        <div v-if="seiteLaedt" class="laden">
             <Kreisel :groesse="28" />
             <span v-if="laeuft" class="leise">{{ t('excursions.laeuft') }}</span>
         </div>

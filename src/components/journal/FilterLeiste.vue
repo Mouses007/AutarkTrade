@@ -208,7 +208,7 @@ onMounted(() => {
             <!-- Brutto/Netto -->
             <div v-if="zeigt('grossNet')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-model="selectedGrossNet" class="at-feld klein">
+                    <select v-model="gewaehltBruttoNetto" class="at-feld klein">
                         <option v-for="g in grossNet" :key="g.value" :value="g.value">{{ g.label }}</option>
                     </select>
                 </div>
@@ -252,7 +252,7 @@ onMounted(() => {
             <!-- PnL oder Zufriedenheit -->
             <div v-if="zeigt('plSatisfaction')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select class="at-feld klein" :value="selectedPlSatisfaction" @change="plOderZufriedenheitEntwurf = $event.target.value">
+                    <select class="at-feld klein" :value="gewaehltPlOderZufriedenheit" @change="plOderZufriedenheitEntwurf = $event.target.value">
                         <option v-for="p in plSatisfaction" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
                 </div>
@@ -276,13 +276,13 @@ onMounted(() => {
                                 {{ alleTagsMarkiert ? t('common.none') : t('common.all') }}
                             </button>
                             <label class="filterHaken">
-                                <input v-model="selectedTags" type="checkbox" :value="OHNE_TAG">
+                                <input v-model="tagAuswahl" type="checkbox" :value="OHNE_TAG">
                                 {{ t('filters.noTag') }}
                             </label>
                             <div v-for="gruppe in verfuegbareTags" :key="gruppe.id" class="filterGruppe">
                                 <div class="filterGruppenKopf" :style="{ color: gruppe.color }">{{ gruppe.name }}</div>
                                 <label v-for="tag in gruppe.tags || []" :key="tag.id" class="filterHaken">
-                                    <input v-model="selectedTags" type="checkbox" :value="tag.id">
+                                    <input v-model="tagAuswahl" type="checkbox" :value="tag.id">
                                     {{ tag.name }}
                                 </label>
                             </div>

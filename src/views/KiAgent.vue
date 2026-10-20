@@ -749,7 +749,7 @@ onBeforeMount(async () => {
                     <!-- Monat -->
                     <div v-if="periodType === 'month'">
                         <label class="at-label">{{ t('kiAgent.periodMonth') }}</label>
-                        <input type="month" v-model="selectedMonth" class="at-feld klein">
+                        <input type="month" v-model="gewaehlterMonat" class="at-feld klein">
                     </div>
 
                     <!-- Custom Range -->

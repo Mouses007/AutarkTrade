@@ -116,7 +116,7 @@ onBeforeUnmount(() => {
             </article>
         </div>
 
-        <div v-if="spinnerLoadMore" class="nachladen">
+        <div v-if="ladeMehr" class="nachladen">
             <Kreisel :groesse="22" />
         </div>
     </div>

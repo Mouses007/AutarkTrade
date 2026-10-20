@@ -432,7 +432,7 @@ function abbrechen() {
                 <Hinweis v-else-if="importErgebnis" art="gut" class="at-mo-3">{{ importErgebnis }}</Hinweis>
             </Karte>
 
-            <div v-if="spinnerLoadingPage" class="laden"><Kreisel :groesse="28" /></div>
+            <div v-if="seiteLaedt" class="laden"><Kreisel :groesse="28" /></div>
 
             <Karte v-else-if="vorhandeneImporte.length || hatVorschau" class="at-mo-4">
                 <p v-if="vorhandeneImporte.length" class="leise">

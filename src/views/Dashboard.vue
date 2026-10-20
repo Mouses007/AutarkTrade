@@ -192,7 +192,7 @@ onBeforeUnmount(() => {
 
             <!-- Übersicht -->
             <div v-show="aktiverReiter === 'overviewTab'" class="db-raster">
-                <template v-if="dashboardIdMounted">
+                <template v-if="dashboardBereit">
                     <div v-if="zeige('accountBalance')" class="drittel">
                         <KarteKontostand />
                     </div>
