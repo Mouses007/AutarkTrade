@@ -167,6 +167,27 @@ app_container() {
     dk "ps -a --filter label=com.docker.compose.project=$COMPOSE_PROJEKT --filter label=com.docker.compose.service=$APP_DIENST --format '{{.Names}}'" | head -1
 }
 
+# Name der Compose-Datei im Projekt. Die NAS nutzt `compose.yaml` (Container Manager),
+# andere Installationen `docker-compose.yml`. Bevorzugt aus dem Label des App-Containers,
+# sonst die erste vorhandene. Überschreibbar mit COMPOSE_DATEI in der .env.
+compose_datei() {
+    if [ -n "${COMPOSE_DATEI:-}" ]; then echo "$COMPOSE_DATEI"; return 0; fi
+    local c f=""
+    c="$(app_container || true)"
+    [ -n "$c" ] && f="$(dk "inspect -f '{{index .Config.Labels \"com.docker.compose.project.config_files\"}}' $c" 2>/dev/null || true)"
+    f="${f%%,*}"; f="${f##*/}"
+    if [ -z "$f" ]; then
+        for k in compose.yaml compose.yml docker-compose.yml docker-compose.yaml; do
+            nas "$S test -f '$NAS_PROJEKT/$k'" && { f="$k"; break; }
+        done
+    fi
+    echo "${f:-compose.yaml}"
+}
+
+# ⚠ Auf der NAS ist der Projektordner zugleich das Datenverzeichnis der Live-Postgres
+# (PG_VERSION, base/, pg_wal/ …). Die Skripte legen dort nur Dateien ab bzw. tauschen
+# die Compose-Datei — sie löschen dort NIE etwas.
+
 # Merkzettel zwischen den Schritten (lokal, neben den Sicherungen).
 merke() {
     [ "$TROCKEN" = 1 ] && { echo "  (trocken) würde merken: $1=$2"; return 0; }

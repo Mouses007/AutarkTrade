@@ -9,8 +9,8 @@
 # - hält das laufende Image unter einem eigenen lokalen Tag fest
 #   (trading-journal:vor-v2-<datum>), damit der Rückweg es hat, auch wenn das
 #   alte Tag später umgehängt wird; nichts wird gezogen, nichts gelöscht;
-# - sichert docker-compose.yml und .env des Projekts als *.vor-v2-<datum> im
-#   Projektordner (bleiben auf der NAS, werden nicht übertragen);
+# - sichert die Compose-Datei (NAS: compose.yaml) und, falls vorhanden, .env des
+#   Projekts als *.vor-v2-<datum> im Projektordner (bleiben auf der NAS);
 # - stoppt nur den App-Container. Caddy und die DB laufen weiter.
 #
 # Der gestoppte Container bleibt stehen, bis nas-deploy.sh das Projekt mit dem
@@ -29,9 +29,12 @@ case "$ALT_IMAGE" in
     autarktrade*|"$V2_TAG") abbruch "dort läuft schon V2 ($ALT_IMAGE) — Umzug schon gemacht?" ;;
 esac
 ALT_SICHER_TAG="trading-journal:vor-v2-$DATUM"
+CD="$(compose_datei)"
+echo "Compose:   $NAS_PROJEKT/$CD"
+SICHERN="cd \"$NAS_PROJEKT\" && cp -p '$CD' '$CD.vor-v2-$DATUM' && { [ ! -f .env ] || cp -p .env .env.vor-v2-$DATUM; }"
 
 kopf "Compose-Datei und .env des Projekts sichern"
-zeige "$NAS_SUDO sh -c 'cd \"$NAS_PROJEKT\" && cp -p docker-compose.yml docker-compose.yml.vor-v2-$DATUM && cp -p .env .env.vor-v2-$DATUM && ls -l docker-compose.yml* .env*'"
+zeige "$NAS_SUDO sh -c \"$SICHERN\""
 
 kopf "Image für den Rückweg festhalten"
 zeige "$D tag $ALT_IMAGE_ID $ALT_SICHER_TAG"
@@ -39,7 +42,7 @@ zeige "$D tag $ALT_IMAGE_ID $ALT_SICHER_TAG"
 kopf "Alte App stoppen"
 echo "Läuft danach nicht mehr: $ALT_CONTAINER. Caddy und $DB_CONTAINER bleiben an."
 if frage "Compose-Datei sichern, Image festhalten und $ALT_CONTAINER jetzt stoppen?"; then
-    nas_tty "$S sh -c 'cd \"$NAS_PROJEKT\" && cp -p docker-compose.yml docker-compose.yml.vor-v2-$DATUM && cp -p .env .env.vor-v2-$DATUM'"
+    nas_tty "$S sh -c \"$SICHERN\""
     dk "tag $ALT_IMAGE_ID $ALT_SICHER_TAG"
     dk "stop -t 30 $ALT_CONTAINER" >/dev/null
     [ "$(dk "inspect -f '{{.State.Status}}' $ALT_CONTAINER")" = exited ] || abbruch "Container läuft noch"
@@ -47,7 +50,8 @@ if frage "Compose-Datei sichern, Image festhalten und $ALT_CONTAINER jetzt stopp
     merke ALT_IMAGE "$ALT_IMAGE"
     merke ALT_IMAGE_ID "$ALT_IMAGE_ID"
     merke ALT_SICHER_TAG "$ALT_SICHER_TAG"
-    merke COMPOSE_SICHERUNG "docker-compose.yml.vor-v2-$DATUM"
-    merke ENV_SICHERUNG ".env.vor-v2-$DATUM"
+    merke COMPOSE_DATEI "$CD"
+    merke COMPOSE_SICHERUNG "$CD.vor-v2-$DATUM"
+    nas "$S test -f '$NAS_PROJEKT/.env.vor-v2-$DATUM'" && merke ENV_SICHERUNG ".env.vor-v2-$DATUM"
     gruen "alte App gestoppt; Image als $ALT_SICHER_TAG festgehalten"
 fi

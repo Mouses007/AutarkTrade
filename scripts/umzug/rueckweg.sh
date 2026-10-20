@@ -74,12 +74,15 @@ if frage "Verbindungen zu $DB_NAME beenden und die Namen tauschen?"; then
 elif [ "$TROCKEN" != 1 ]; then abbruch "nicht getauscht — $RUECK bleibt liegen"; fi
 
 kopf "4. Alte App zurück"
-zeige "$NAS_SUDO cp $NAS_PROJEKT/$COMPOSE_SICHERUNG $NAS_PROJEKT/docker-compose.yml"
+CDZ="${COMPOSE_DATEI:-compose.yaml}"
+zeige "$NAS_SUDO cp $NAS_PROJEKT/$COMPOSE_SICHERUNG $NAS_PROJEKT/$CDZ"
+[ "${ENV_ANGELEGT:-0}" = 1 ] && zeige "$NAS_SUDO mv $NAS_PROJEKT/.env $NAS_PROJEKT/.env.v2-$DATUM   (die alte App hatte keine .env)"
 zeige "$D tag $ALT_SICHER_TAG ${ALT_IMAGE:-}"
 zeige "cd $NAS_PROJEKT && $D compose -p $COMPOSE_PROJEKT up -d --force-recreate   (zieht nichts: das Image ist lokal da)"
 if frage "Compose-Datei der alten App zurücklegen und sie starten?"; then
     nas_tty "set -e
-        $S cp '$NAS_PROJEKT/$COMPOSE_SICHERUNG' '$NAS_PROJEKT/docker-compose.yml'
+        $S cp '$NAS_PROJEKT/$COMPOSE_SICHERUNG' '$NAS_PROJEKT/$CDZ'
+        $( [ "${ENV_ANGELEGT:-0}" = 1 ] && echo "$S mv '$NAS_PROJEKT/.env' '$NAS_PROJEKT/.env.v2-$DATUM'" )
         $D tag '$ALT_SICHER_TAG' '$ALT_IMAGE'
         $S sh -c \"cd '$NAS_PROJEKT' && $NAS_DOCKER compose -p $COMPOSE_PROJEKT up -d --force-recreate\""
 

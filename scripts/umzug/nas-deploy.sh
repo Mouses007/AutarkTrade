@@ -50,7 +50,10 @@ echo "   NAS: $NAS_ARCH  →  Image muss linux/$ERWARTET sein"
 # Update oder Wechsel? Die Compose-Datei auf der NAS sagt es.
 JETZT_COMPOSE="$(mktemp)"
 trap 'rm -f "$JETZT_COMPOSE"; nas_ende' EXIT
-nas "$S cat '$NAS_PROJEKT/docker-compose.yml'" > "$JETZT_COMPOSE" 2>/dev/null || true
+CD="$(compose_datei)"
+echo "   Compose-Datei im Projekt: $CD"
+nas "$S cat '$NAS_PROJEKT/$CD'" > "$JETZT_COMPOSE" 2>/dev/null || true
+[ -s "$JETZT_COMPOSE" ] || abbruch "$NAS_PROJEKT/$CD ist leer oder fehlt — COMPOSE_DATEI in scripts/umzug/.env setzen"
 if grep -q "autarktrade:produktiv\|${NAS_IMAGE_TAG}" "$JETZT_COMPOSE"; then
     WECHSEL=0
     echo "   Projekt $NAS_PROJEKT läuft schon mit V2 → Update"
@@ -71,11 +74,25 @@ if [ "$WECHSEL" = 1 ]; then
         [ "$TROCKEN" = 1 ] && gelb "  (trocken) alte App läuft noch — erst alt-stoppen.sh" || abbruch "alte App läuft noch — erst scripts/umzug/alt-stoppen.sh"
     fi
     echo "   Compose-Datei, die ersetzt wird:"
-    diff -u --label "NAS: docker-compose.yml (jetzt)" --label "neu: docker-compose.produktiv.yml" "$JETZT_COMPOSE" "$NEU_COMPOSE" | sed 's/^/     /' || true
-    echo "   Variablen-NAMEN in der Projekt-.env (Werte werden nicht gelesen):"
-    nas "$S sh -c \"cut -d= -f1 '$NAS_PROJEKT/.env' | grep -v '^#' | grep . | tr '\\n' ' '\"" | sed 's/^/     /'; echo
-    nas "$S grep -q '^CTJ_SECRET=.' '$NAS_PROJEKT/.env' || $S grep -q '^AT_SECRET=.' '$NAS_PROJEKT/.env'" \
-        || abbruch "weder CTJ_SECRET noch AT_SECRET in der Projekt-.env — ohne Secret wären die Börsenschlüssel unlesbar"
+    diff -u --label "NAS: $CD (jetzt)" --label "neu: docker-compose.produktiv.yml" "$JETZT_COMPOSE" "$NEU_COMPOSE" | sed 's/^/     /' || true
+    # Die alte App hat ihre Werte (Secret, DB-Zugang, Port) direkt in der Compose-Datei,
+    # eine .env gibt es auf der NAS nicht. Die neue Compose liest sie aus .env — die wird
+    # beim Wechsel AUF DER NAS aus dem gestoppten alten Container angelegt (nur CTJ_*,
+    # AT_*, DB_*; Rechte 600). Die Werte verlassen die NAS nie.
+    if nas "$S test -f '$NAS_PROJEKT/.env'"; then
+        ENV_ANLEGEN=0
+        echo "   Variablen-NAMEN in der Projekt-.env (Werte werden nicht gelesen):"
+        nas "$S sh -c \"cut -d= -f1 '$NAS_PROJEKT/.env' | grep -v '^#' | grep . | tr '\\n' ' '\"" | sed 's/^/     /'; echo
+        nas "$S grep -q '^CTJ_SECRET=.' '$NAS_PROJEKT/.env' || $S grep -q '^AT_SECRET=.' '$NAS_PROJEKT/.env'" \
+            || abbruch "weder CTJ_SECRET noch AT_SECRET in der Projekt-.env — ohne Secret wären die Börsenschlüssel unlesbar"
+    else
+        ENV_ANLEGEN=1
+        [ -n "$ALT" ] || abbruch "keine .env und kein alter Container, aus dem sie entstehen könnte"
+        echo "   Keine .env im Projekt → wird aus $ALT angelegt. Variablen-NAMEN (Werte bleiben auf der NAS):"
+        nas "$D inspect -f '{{range .Config.Env}}{{println .}}{{end}}' $ALT | grep -E '^(CTJ_|AT_|DB_)' | cut -d= -f1 | tr '\\n' ' '" | sed 's/^/     /'; echo
+        nas "$D inspect -f '{{range .Config.Env}}{{println .}}{{end}}' $ALT | grep -Eq '^(CTJ|AT)_SECRET=.'" \
+            || abbruch "der alte Container hat kein CTJ_SECRET/AT_SECRET — ohne Secret wären die Börsenschlüssel unlesbar"
+    fi
 fi
 
 echo "── 2/5  Image bauen ──────────────────────────────────────────"
@@ -115,7 +132,8 @@ nas_tty "
     set -e
     $( [ "$NAS_HOST" = lokal ] || echo "$D load -i '$ARCHIV'" )
     $( [ "$TAG" = "$NAS_IMAGE_TAG" ] || echo "$D tag '$TAG' '$NAS_IMAGE_TAG'" )
-    $( [ "$WECHSEL" = 1 ] && echo "$S cp '$ZWISCHEN' '$NAS_PROJEKT/docker-compose.yml'; rm -f '$ZWISCHEN'" )
+    $( [ "$WECHSEL" = 1 ] && [ "${ENV_ANLEGEN:-0}" = 1 ] && echo "$S sh -c \"umask 077; $NAS_DOCKER inspect -f '{{range .Config.Env}}{{println .}}{{end}}' '$ALT' | grep -E '^(CTJ_|AT_|DB_)' > '$NAS_PROJEKT/.env'\"; $S grep -Eq '^(CTJ|AT)_SECRET=.' '$NAS_PROJEKT/.env'" )
+    $( [ "$WECHSEL" = 1 ] && echo "$S cp '$ZWISCHEN' '$NAS_PROJEKT/$CD'; rm -f '$ZWISCHEN'" )
     $S sh -c \"cd '$NAS_PROJEKT' && $NAS_DOCKER compose -p $COMPOSE_PROJEKT up -d --force-recreate\"
     # Nur namenlose Images (das vorige V2-Image nach dem Umtaggen). Getaggte bleiben —
     # auch trading-journal:vor-v2-<datum> für den Rückweg.
@@ -124,6 +142,7 @@ nas_tty "
     rm -f '$ARCHIV'
 "
 merke V2_REVISION "$REVISION"
+[ "$WECHSEL" = 1 ] && [ "${ENV_ANLEGEN:-0}" = 1 ] && merke ENV_ANGELEGT 1
 
 echo "── 5/5  Kontrolle ────────────────────────────────────────────"
 GELIEFERT=""
@@ -140,7 +159,7 @@ if [ -z "$GELIEFERT" ]; then
 fi
 echo "   NAS liefert:  $GELIEFERT"
 echo "   erwartet:     $ERWARTETES_ASSET"
-[ "$GELIEFERT" = "$ERWARTETES_ASSET" ] || abbruch "anderes Frontend als gerade gebaut — steht in $NAS_PROJEKT/docker-compose.yml ein anderes Image?"
+[ "$GELIEFERT" = "$ERWARTETES_ASSET" ] || abbruch "anderes Frontend als gerade gebaut — steht in $NAS_PROJEKT/$CD ein anderes Image?"
 if [ "$WECHSEL" = 1 ]; then
     C="$(app_container)"
     dk "logs $C 2>&1" | grep -E 'PostgreSQL:|Schema|S13|S15|v28|Testbetrieb|ready' | sed 's/^/   /' || true

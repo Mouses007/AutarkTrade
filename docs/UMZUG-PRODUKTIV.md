@@ -113,7 +113,7 @@ scripts/umzug/alt-stoppen.sh
 - Findet den App-Container über die Compose-Labels (`tradingjournal` / `trading-journal`).
 - Hält das laufende Image unter `trading-journal:vor-v2-<datum>` fest. Das ist nur ein lokaler Tag,
   es wird nichts gezogen und nichts gelöscht.
-- Sichert `docker-compose.yml` und `.env` im Projektordner als `*.vor-v2-<datum>`.
+- Sichert die Compose-Datei (auf der NAS `compose.yaml`, erkannt am Label des Containers) und, falls vorhanden, `.env` im Projektordner als `*.vor-v2-<datum>`.
 - Stoppt nur den App-Container. Caddy und `tradejournal-db` laufen weiter.
 - **Prüfung:** Der Container steht auf `exited`. `sudo ls -l /volume1/docker/tradingjournal/*.vor-v2-*`
   zeigt beide Sicherungen.
@@ -154,14 +154,28 @@ und einmal sudo in Schritt 4.
 Der Wechsel-Teil von `scripts/nas-deploy.sh`. Vorlage:
 [`scripts/umzug/docker-compose.produktiv.yml`](../scripts/umzug/docker-compose.produktiv.yml).
 
+**Gemessen auf der NAS (20.10.2026):** Die Compose-Datei heisst `compose.yaml`, und es gibt
+**keine `.env`**. Die alte App hat Secret, DB-Zugang und Port direkt in `compose.yaml` stehen.
+Die neue Compose liest sie aus `.env`. Deshalb legt das Skript beim Wechsel die `.env` **auf der
+NAS** aus dem gestoppten alten Container an: nur `CTJ_*`, `AT_*` und `DB_*`, Rechte 600. Die
+Werte verlassen die NAS nie und stehen in keinem Repo. Der Rückweg schiebt diese `.env` wieder
+beiseite (`.env.v2-<datum>`).
+
+> ⚠ **Der Projektordner `/volume1/docker/tradingjournal` ist zugleich das Datenverzeichnis der
+> Live-Postgres** (`PG_VERSION`, `base/`, `pg_wal/` …). Dort nur die Compose-Datei und die
+> `.env` anfassen, **nie** etwas löschen oder den Ordner verschieben, umbenennen oder
+> „aufräumen". Das gilt ausdrücklich auch für die spätere Aufräum-Phase.
+
 Vor der Frage zeigt das Skript:
 - den Unterschied zur Compose-Datei auf der NAS (`diff -u`);
-- die **Namen** der Variablen in der Projekt-`.env`.
+- die **Namen** der Variablen: aus der `.env`, oder, wenn sie fehlt, aus dem alten Container.
 
-Es bricht ab, wenn weder `CTJ_SECRET` noch `AT_SECRET` gesetzt ist. Danach:
+Es bricht ab, wenn kein `CTJ_SECRET`/`AT_SECRET` zu finden ist. Danach:
 
 ```bash
-sudo cp /tmp/.at-v2-compose.yml /volume1/docker/tradingjournal/docker-compose.yml
+# nur wenn keine .env da ist (auf der NAS, Werte bleiben dort):
+sudo sh -c "umask 077; docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' tradingjournal-trading-journal-1 | grep -E '^(CTJ_|AT_|DB_)' > /volume1/docker/tradingjournal/.env"
+sudo cp /tmp/.at-v2-compose.yml /volume1/docker/tradingjournal/compose.yaml
 sudo sh -c 'cd /volume1/docker/tradingjournal && docker compose -p tradingjournal up -d --force-recreate'
 ```
 
@@ -298,7 +312,12 @@ scripts/nas-deploy.sh    # baut, überträgt per SSH, erstellt das Projekt neu, 
 
 ## Nachher aufräumen (1–2 Wochen nach dem Umzug) — Stand: geplant, NICHT bereit
 
-Ziel: Vom alten bleibt nichts übrig. Die Aufräum-Phase ist **nicht** fertig vorbereitet. In der
+Ziel: Vom alten bleibt nichts übrig. Die Aufräum-Phase ist **nicht** fertig vorbereitet.
+
+> ⚠ Seit der Messung vom 20.10.2026 gilt: Der Projektordner auf der NAS enthält die Datenbank.
+> Jeder Aufräum-Schritt, der den Ordner `/volume1/docker/tradingjournal` löscht, verschiebt oder
+> umbenennt, würde die Live-DB zerstören. Ein Umbenennen des Projekts darf nur die Compose-Datei
+> in einen NEUEN Ordner legen, der Datenordner der Postgres bleibt, wo er ist. In der
 Sitzung vom 20.10.2026 hat die Rechteprüfung zwei Teile abgelehnt; sie liegen dem Nutzer zur
 Entscheidung vor:
 - die Code-Änderung zu Schritt 3: Rückfall `CTJ_*` bei Sicherheitsschaltern, Zweck des
