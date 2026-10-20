@@ -4,8 +4,9 @@ import { dbFind, dbFirst, dbCreate, dbUpdate, dbDelete, dbFindTradeIdByPositionI
 import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, pendingOpeningCount, pendingClosingCount, pendingOpeningByBroker, pendingClosingByBroker, evalNotificationShown, evalNotificationDismissed, evalNeu, getNotifiedPositionIds, addNotifiedPositionIds, removeNotifiedPositionIds } from '../stores/trades.js'
 import { expandedId } from '../stores/ui.js'
 import { currentUser } from '../stores/settings.js'
-import { selectedBroker, brokers } from '../stores/filters.js'
+import { selectedBroker } from '../stores/filters.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
+import { eingerichteteBoersen, pruefeNichtEingerichtet } from './boersenZugang.js'
 import { istGewinn } from '../../shared/gewinn.js'
 import i18n from '../i18n'
 
@@ -68,29 +69,20 @@ export async function useUpdatePendingCounts() {
 }
 
 /**
- * Determine which brokers have an API configured (analog Nav.vue:loadConfiguredBrokers).
- * Returns an array of broker value strings. Falls back to the currently selected
- * broker if no API config is found (fresh install).
- */
-async function getActiveBrokers() {
-    const result = []
-    for (const b of brokers) {
-        try {
-            const { data } = await axios.get(`/api/${b.value}/config`)
-            if (data && (data.apiKey || data.hasSecret)) result.push(b.value)
-        } catch (_) { /* Broker ohne Config-Endpoint/Key → überspringen */ }
-    }
-    return result.length ? result : [selectedBroker.value || 'bitunix']
-}
-
-/**
  * Fetch open positions from ALL configured exchanges, sync with local DB,
  * detect closed positions and create trade records. The "Pendente Trades"
  * view shows every broker at once (grouped per exchange), so we no longer
  * limit this to selectedBroker.
  */
 export async function useFetchOpenPositions() {
-    const activeBrokers = await getActiveBrokers()
+    // Nur Börsen mit Schlüssel. Ohne eingerichtete Börse wird nichts gefragt —
+    // bis 20.10.2026 fiel das auf Bitunix zurück und erntete alle 60 s HTTP 400
+    // (Audit A4-06).
+    const activeBrokers = await eingerichteteBoersen()
+    if (!activeBrokers.length) {
+        incomingBrokerFehler.value = []
+        return
+    }
     console.log(` -> Fetching open positions from: ${activeBrokers.join(', ')}`)
     incomingPollingActive.value = true
 
@@ -99,6 +91,8 @@ export async function useFetchOpenPositions() {
         for (const broker of activeBrokers) {
             try {
                 const response = await axios.get(`/api/${broker}/open-positions`)
+                // Schlüssel inzwischen entfernt: kein Fehler, Börse austragen
+                if (pruefeNichtEingerichtet(broker, response.data)) continue
 
                 if (!response.data.ok) {
                     throw new Error(response.data.error || i18n.global.t('incoming.errorFetchingPositions'))

@@ -7,6 +7,7 @@ import dayjs from 'dayjs'
 import { currentUser } from '@/stores/settings.js'
 import { useQuickApiImport } from '@/utils/quickImport.js'
 import { sendNotification } from '@/utils/notify.js'
+import { vergissBoersenZugang } from '@/utils/boersenZugang.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
@@ -76,6 +77,7 @@ async function saveBitunixConfig() {
             data.secretKey = bitunixSecretKey.value
         }
         await axios.post('/api/bitunix/config', data)
+        vergissBoersenZugang()
         alert(t('settings.bitunixSaved'))
     } catch (error) {
         alert(t('settings.savingConfigError') + error.message)
@@ -127,6 +129,7 @@ async function saveBitgetConfig() {
             data.passphrase = bitgetPassphrase.value
         }
         await axios.post('/api/bitget/config', data)
+        vergissBoersenZugang()
         alert(t('settings.bitgetSaved'))
 
         // Auto-trigger historical import if start date is set
@@ -201,6 +204,7 @@ async function savePionexConfig() {
             data.secretKey = pionexSecretKey.value
         }
         await axios.post('/api/pionex/config', data)
+        vergissBoersenZugang()
         alert(t('settings.pionexSaved'))
 
         // Auto-Import wenn Startdatum gesetzt

@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
-import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText } from './boersen-status.js'
+import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText, nichtEingerichtet } from './boersen-status.js'
 import { umgebungAn } from './umgebung.js'
 
 // Rohantworten der Börsen enthalten Positionen, Kontostände, PnL und IDs.
@@ -492,7 +492,7 @@ export function setupBitgetRoutes(app) {
             const config = await getDecryptedBitgetConfig()
 
             if (!config || !config.apiKey || !config.secretKey || !config.passphrase) {
-                return res.status(400).json({ error: 'API-Schlüssel nicht konfiguriert.' })
+                return res.json(nichtEingerichtet('bitget'))
             }
 
             const result = await getCurrentPositions(config.apiKey, config.secretKey, config.passphrase)
@@ -748,7 +748,7 @@ export function setupBitgetRoutes(app) {
         try {
             const config = await getDecryptedBitgetConfig()
             if (!config || !config.apiKey || !config.secretKey || !config.passphrase) {
-                return res.status(400).json({ error: 'API-Schlüssel nicht konfiguriert.' })
+                return res.json(nichtEingerichtet('bitget'))
             }
 
             const result = await bitgetRequest('GET', '/api/v2/mix/account/accounts', config.apiKey, config.secretKey, config.passphrase, { productType: 'USDT-FUTURES' })
@@ -787,7 +787,7 @@ export function setupBitgetRoutes(app) {
         try {
             const config = await getDecryptedBitgetConfig()
             if (!config || !config.apiKey || !config.secretKey || !config.passphrase) {
-                return res.status(400).json({ error: 'API-Schlüssel nicht konfiguriert.' })
+                return res.json(nichtEingerichtet('bitget'))
             }
             const { apiKey, secretKey, passphrase } = config
             const wallets = []

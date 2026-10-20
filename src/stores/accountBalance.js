@@ -25,6 +25,7 @@
  */
 import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
+import { istEingerichtet, pruefeNichtEingerichtet } from '../utils/boersenZugang.js'
 import dayjs from '../utils/journal/zeit.js'
 import { dbFind, dbUpdateSettings } from '../utils/db.js'
 import { selectedBroker } from './filters.js'
@@ -111,12 +112,17 @@ export async function refreshAccountBalance({ broker, force = false } = {}) {
             // Bonus zusaetzlich vom Broker holen (best effort — kein Fehler
             // wenn API gerade down ist, Bonus bleibt dann 0 bzw. Vorwert).
             let bonus = cache[b]?.bonus ?? 0
+            // Nur für eingerichtete Börsen fragen (Audit A4-06: sonst HTTP-Fehler
+            // bei jedem Aufruf auf einer frischen Installation).
             try {
-                const resp = await axios.get(`/api/${b}/balance`)
-                if (resp.data?.ok && Number.isFinite(Number(resp.data.bonus))) {
-                    bonus = Number(resp.data.bonus)
+                if (await istEingerichtet(b)) {
+                    const resp = await axios.get(`/api/${b}/balance`)
+                    if (pruefeNichtEingerichtet(b, resp.data)) { /* Schlüssel weg */ }
+                    else if (resp.data?.ok && Number.isFinite(Number(resp.data.bonus))) {
+                        bonus = Number(resp.data.bonus)
+                    }
                 }
-            } catch (_) { /* offline / kein API-Key → Bonus bleibt unveraendert */ }
+            } catch (_) { /* offline → Bonus bleibt unveraendert */ }
 
             cache[b] = { totalNet, totalVol, vol30d, bonus, ts: Date.now() }
         } finally {

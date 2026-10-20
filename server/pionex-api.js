@@ -1,6 +1,6 @@
 import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
-import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText } from './boersen-status.js'
+import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText, nichtEingerichtet } from './boersen-status.js'
 import { BASE_URL, pionexRequest } from './pionex-transport.js'
 import { journalSymbol } from './pionex-symbole.js'
 
@@ -605,7 +605,7 @@ export function setupPionexRoutes(app) {
         try {
             const config = await getDecryptedPionexConfig()
             if (!config || !config.apiKey || !config.secretKey) {
-                return res.status(400).json({ error: 'API-Schlüssel nicht konfiguriert.' })
+                return res.json(nichtEingerichtet('pionex'))
             }
             const snap = await computePionexBalance(config.apiKey, config.secretKey)
             res.json({ ok: true, ...snap })
@@ -621,7 +621,7 @@ export function setupPionexRoutes(app) {
         try {
             const config = await getDecryptedPionexConfig()
             if (!config || !config.apiKey || !config.secretKey) {
-                return res.status(400).json({ error: 'API-Schlüssel nicht konfiguriert.' })
+                return res.json(nichtEingerichtet('pionex'))
             }
             const snap = await computePionexBalance(config.apiKey, config.secretKey)
 
@@ -662,7 +662,7 @@ export function setupPionexRoutes(app) {
         try {
             const config = await getDecryptedPionexConfig()
             if (!config || !config.apiKey || !config.secretKey) {
-                return res.status(400).json({ error: 'API-Schlüssel nicht konfiguriert.' })
+                return res.json(nichtEingerichtet('pionex'))
             }
 
             /*

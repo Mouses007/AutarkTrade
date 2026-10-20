@@ -186,3 +186,18 @@ export function fehlerText(e, max = 200) {
         .replace(/\b[0-9a-f]{32,}\b/gi, '…')
         .slice(0, max)
 }
+
+
+/**
+ * Antwort der LESE-Routen, die die Seite regelmässig abfragt (offene
+ * Positionen, Kontostand, Kontoübersicht), wenn für die Börse kein Schlüssel
+ * hinterlegt ist. „Nicht eingerichtet" ist kein Fehler, sondern ein Zustand:
+ * bis 20.10.2026 kam HTTP 400, und eine frische Installation sammelte bei jedem
+ * Seitenaufruf und alle 60 s Fehler in der Konsole (Audit A4-06). Das Frontend
+ * liest `nichtEingerichtet` und fragt diese Börse danach nicht mehr ab
+ * (`src/utils/boersenZugang.js`). Was der Nutzer selbst auslöst (Import, Test)
+ * antwortet weiter mit 400 und Text.
+ */
+export function nichtEingerichtet(boerse) {
+    return { ok: false, nichtEingerichtet: true, boerse, error: 'API-Schlüssel nicht eingerichtet.', positions: [], count: 0 }
+}
