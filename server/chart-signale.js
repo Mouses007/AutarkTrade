@@ -37,6 +37,31 @@ function ausgang(setup, candles, abIndex) {
 }
 
 /**
+ * Erste Kerze ab `watchFrom` (bzw. nach der OB-Kerze), deren Docht in den Order
+ * Block hineinsticht. Ab dort ist die Zone im Bild verbraucht — auch wenn die
+ * Strategie mangels Bestätigung noch auf ihren Auslöser wartet. Nur Anzeige:
+ * die Handelsregeln in `lsob.js` bleiben unberührt.
+ * @returns {number|null} Zeit der Kerze oder null
+ */
+export function ersteBeruehrung(setup, candles) {
+    const hoch = Number(setup?.obHigh), tief = Number(setup?.obLow)
+    if (!Number.isFinite(hoch) || !Number.isFinite(tief) || !Array.isArray(candles)) return null
+    const ab = Number(setup.watchFrom)
+    const nach = Number(setup.obCandleTime)
+    for (const k of candles) {
+        if (Number.isFinite(ab) ? k.t < ab : !(k.t > nach)) continue
+        if (k.h >= tief && k.l <= hoch) return k.t
+    }
+    return null
+}
+
+/** Ende der Zone im Bild: das frühere von Berührung und Setup-Ende. */
+export function zonenEnde(endeT, beruehrtT) {
+    const e = [endeT, beruehrtT].filter((x) => Number.isFinite(x))
+    return e.length ? Math.min(...e) : null
+}
+
+/**
  * @param {{ strategie, candles, params, htfCandles?, ltfMs, htfMs?, anzeigen? }} o
  *   `anzeigen`: über wie viele der jüngsten Kerzen Signale gesucht werden
  * @returns {{ setups: Array, von: number|null, bis: number|null }}
@@ -86,6 +111,7 @@ export function signalVerlauf({ strategie, candles, params, htfCandles = null, l
             Object.assign(setup, ausgang(setup, candles, j < 0 ? n : j))
         }
     }
+    const mitZone = strategie.id === 'lsob'
     return {
         von: candles[start]?.t ?? null,
         bis: candles[n - 1]?.t ?? null,
@@ -95,6 +121,7 @@ export function signalVerlauf({ strategie, candles, params, htfCandles = null, l
             obHigh: s.obHigh ?? null, obLow: s.obLow ?? null, obCandleTime: s.obCandleTime ?? null,
             entry: s.entry ?? null, stopLoss: s.stopLoss ?? null, takeProfit: s.takeProfit ?? null,
             erkanntT: s.erkanntT, endeT: s.endeT ?? null, triggeredAt: s.triggeredAt ?? null,
+            zoneEndeT: mitZone ? zonenEnde(s.endeT, ersteBeruehrung(s, candles)) : (s.endeT ?? null),
             ausgang: s.ausgang ?? null, exitT: s.exitT ?? null, exitP: s.exitP ?? null,
         })),
     }

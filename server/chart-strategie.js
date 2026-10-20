@@ -18,7 +18,7 @@ import { getStrategy, validateParams } from './strategies/index.js'
 import { ladeInstanz } from './strategy-engine.js'
 import { getClosedCandles, isValidTimeframe } from './market-data.js'
 import { overlaysFuer } from './strategies/overlays.js'
-import { signalVerlauf, fensterFuer } from './chart-signale.js'
+import { signalVerlauf, fensterFuer, ersteBeruehrung, zonenEnde } from './chart-signale.js'
 import { timeframeMs } from './market-data.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
@@ -46,6 +46,7 @@ function setupAus(r) {
         einstieg: n(r.entry), stop: n(r.stopLoss), ziel: n(r.takeProfit), rr: n(r.rr),
         ausgeloestT: n(r.triggeredAt), grund: r.invalidReason || r.rejectReason || null,
         bestaetigung: parse(r.confirmations, {}),
+        zoneEndeT: n(r.zoneEndeT),
     }
 }
 
@@ -67,8 +68,10 @@ function tradeAus(r) {
 }
 
 /** Setups, die eine Detektion liefert, in dieselbe Form wie gespeicherte bringen. */
-function vorschauSetup(s, strategyId, timeframe) {
+function vorschauSetup(s, strategyId, timeframe, candles) {
+    const beruehrtT = strategyId === 'lsob' ? ersteBeruehrung(s, candles) : null
     return setupAus({
+        zoneEndeT: zonenEnde(s.triggeredAt, beruehrtT),
         id: null, instanceId: null, strategyId, timeframe,
         direction: s.direction, status: s.status,
         sweepLevel: s.sweepLevel, sweepPrice: s.sweepPrice, sweepCandleTime: s.sweepCandleTime,
@@ -267,7 +270,7 @@ export function setupChartStrategieRoutes(app) {
             res.json({
                 quelle, symbol, timeframe, strategyId: strategie.id, strategieName: strategie.name || strategie.id,
                 kerzen: candles.length, von: candles[0]?.t ?? null, bis: candles[candles.length - 1]?.t ?? null,
-                setups: (setups || []).map((s) => vorschauSetup(s, strategie.id, timeframe)),
+                setups: (setups || []).map((s) => vorschauSetup(s, strategie.id, timeframe, candles)),
                 gefunden: diagnostics?.sweepsFound ?? null,
                 verworfen: diagnostics?.rejected || {},
                 overlays: overlaysFuer(strategie.id, { candles, params, htfCandles }),

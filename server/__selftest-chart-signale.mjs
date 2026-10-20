@@ -7,7 +7,7 @@
  * die Schleife: kein Blick in die Zukunft, Ereignisse am richtigen Setup,
  * Ausgang Ziel/Stop ab der Kerze NACH der Auslösung.
  */
-import { signalVerlauf } from './chart-signale.js'
+import { signalVerlauf, ersteBeruehrung, zonenEnde } from './chart-signale.js'
 import { getStrategy } from './strategies/index.js'
 import { LSOB_PARAMS, GUSS_PARAMS } from '../src/utils/chart/indikatorRegister.js'
 
@@ -79,6 +79,25 @@ for (const [sid, liste] of [['lsob', LSOB_PARAMS], ['ema_touch', GUSS_PARAMS]]) 
             && (p.typ !== 'wahl' || JSON.stringify(s.options.map((o) => o.value)) === JSON.stringify(p.optionen))
         check(`${sid}.${p.key}: Vorgabe/Grenzen wie in der Strategie`, gleich, JSON.stringify({ chart: [p.vorgabe, p.min, p.max], strategie: s && [s.default, s.min, s.max] }))
     }
+}
+
+
+// ── Zonenende: erste Kerze, die in den Order Block sticht ──
+{
+    const k = (i, h, l) => ({ t: T0 + i * H, o: (h + l) / 2, h, l, c: (h + l) / 2, v: 1 })
+    // Long-OB 99–100 bei Kerze 0; Impuls weg (1–3), Kerze 4 berührt 100,2 → nicht, Kerze 5 sticht auf 99,7
+    const reihe = [k(0, 100, 99), k(1, 100.8, 99.9), k(2, 102, 101), k(3, 103, 102), k(4, 103, 100.2), k(5, 101, 99.7), k(6, 100, 98)]
+    const ob = { direction: 'long', obHigh: 100, obLow: 99, obCandleTime: T0, watchFrom: T0 + 2 * H }
+    check('Zone endet an der ersten Kerze, die hineinsticht', ersteBeruehrung(ob, reihe) === T0 + 5 * H)
+    check('Gegenprobe: Kerzen vor watchFrom (Impuls) zählen nicht', ersteBeruehrung(ob, reihe) !== T0 + H)
+    check('ohne watchFrom: erst NACH der OB-Kerze', ersteBeruehrung({ ...ob, watchFrom: undefined }, reihe) === T0 + H)
+    const short = { direction: 'short', obHigh: 101, obLow: 100, obCandleTime: T0, watchFrom: T0 + H }
+    const reiheS = [k(0, 101, 100), k(1, 99.5, 98), k(2, 99.9, 97), k(3, 100.1, 98)]
+    check('Short: Docht von unten in die Zone', ersteBeruehrung(short, reiheS) === T0 + 3 * H)
+    check('Gegenprobe: keine Berührung → null', ersteBeruehrung(short, reiheS.slice(0, 3)) === null)
+    check('Gegenprobe: Zone ohne Grenzen → null', ersteBeruehrung({ ...ob, obHigh: null }, reihe) === null)
+    check('Ende = früheres von Auslösung und Berührung', zonenEnde(T0 + 9 * H, T0 + 5 * H) === T0 + 5 * H && zonenEnde(T0 + 3 * H, T0 + 5 * H) === T0 + 3 * H)
+    check('Ende offen, wenn weder noch', zonenEnde(null, null) === null && zonenEnde(undefined, T0) === T0)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

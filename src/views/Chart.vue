@@ -14,6 +14,7 @@
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import ChartPanel from '../components/chart/ChartPanel.vue'
 import ChartKopfleiste from '../components/chart/ChartKopfleiste.vue'
 import WatchlistReiter from '../components/chart/WatchlistReiter.vue'
@@ -33,7 +34,7 @@ import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoesch
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { api, standardLayout, vervollstaendige, passeAnRaster, PANELS_JE_RASTER, STANDARD_WATCHLIST } from '../utils/chart/arbeitsplatz.js'
-import { passePanelAn, vorgabeBoerse } from '../utils/chart/kerzenQuelle.js'
+import { passePanelAn, vorgabeBoerse, waehlbareBoersen } from '../utils/chart/kerzenQuelle.js'
 import { ladeMarktdaten } from '../utils/marktdaten.js'
 
 const { t } = useI18n()
@@ -87,6 +88,7 @@ async function lade() {
         layouts.value = liste
         const aktiv = liste.find((l) => l.aktiv) || liste[0]
         waehleLayout(aktiv)
+        uebernimmSymbolAusAdresse()
 
         let wl = await api.watchlists()
         if (!wl.length) wl = [await api.watchlistNeu(t('chart.watchlistStandard'), STANDARD_WATCHLIST)]
@@ -96,6 +98,27 @@ async function lade() {
         ladeFehler.value = e.response?.data?.error || e.message
     }
 }
+
+/*
+ * `/chart?symbol=XYZUSDT[&markt=spot][&boerse=bitunix]` — so verlinken Coin-Radar,
+ * Hype-Radar und die Kacheln in den Chart (früher zu TradingView). Das Symbol geht
+ * ins aktive Panel; danach verschwindet die Abfrage aus der Adresse, sonst setzte
+ * jedes Neuladen das Panel wieder zurück.
+ */
+const route = useRoute()
+const router = useRouter()
+function uebernimmSymbolAusAdresse() {
+    const roh = String(route.query.symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+    if (!roh || !daten.value?.panels?.length) return
+    const markt = route.query.markt === 'spot' ? 'spot' : 'futures'
+    const patch = { symbol: roh, markt }
+    const boerse = String(route.query.boerse || '').toLowerCase()
+    if (boerse && waehlbareBoersen().includes(boerse)) patch.boerse = boerse
+    setzePanel(patch)
+    passePanelAn(aktivesPanel.value)
+    router.replace({ query: {} })
+}
+watch(() => route.query.symbol, (s) => { if (s && bereit.value) uebernimmSymbolAusAdresse() })
 
 function waehleLayout(layout) {
     ignoriereNaechsteAenderung = true

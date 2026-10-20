@@ -1,5 +1,12 @@
 /**
- * Verlinkung eines Coins zu einer externen Handelsseite oder zu TradingView.
+ * Verlinkung eines Coins zu einer externen Handelsseite oder zum eigenen Chart.
+ *
+ * Seit 20.10.2026 führt der Schlüssel `tradingview` (Name bleibt wegen der
+ * gespeicherten Einstellung `boersenLinks`) NICHT mehr zu TradingView, sondern
+ * in den Chart-Arbeitsplatz der App: `/chart?symbol=…` öffnet das Symbol im
+ * aktiven Panel (`Chart.vue`, `uebernimmSymbolAusAdresse`). Die Abschnitte unten
+ * beschreiben, warum dabei eine Quelle mitgeht: wo Binance ein Paar nicht führt,
+ * lädt der Chart es von Bitunix.
  *
  * Vorher an drei Stellen unabhängig dupliziert (CoinRadar.vue, KachelRsi.vue,
  * KachelMarkt.vue) — hier EINE Quelle, damit ein neues Börsen-Kürzel oder eine
@@ -35,11 +42,14 @@ export const BOERSE_URL = {
     bitunix: (s) => `https://www.bitunix.com/contract-trade/${s}`,
     bitget: (s) => `https://www.bitget.com/futures/usdt/${s}`,
     pionex: (s) => `https://www.pionex.com/en/futures/${s.replace(/USDT$/, '').replace(/^1000+/, '')}.PERP_USDT/Manual`,
-    tradingview: (s, quelle) => `https://www.tradingview.com/chart/?symbol=${String(quelle || 'BINANCE').toUpperCase()}:${s}.P`,
+    tradingview: (s, quelle) => {
+        const q = String(quelle || '').toLowerCase()
+        return `/chart?symbol=${encodeURIComponent(s)}${q && q !== 'binance' ? `&boerse=${encodeURIComponent(q)}` : ''}`
+    },
 }
 
-export const BOERSE_KURZ = { bitunix: 'BX', bitget: 'BG', pionex: 'PX', tradingview: 'TV' }
-export const BOERSE_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', tradingview: 'TradingView' }
+export const BOERSE_KURZ = { bitunix: 'BX', bitget: 'BG', pionex: 'PX', tradingview: 'CH' }
+export const BOERSE_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', tradingview: 'Chart' }
 
 /** Kanonische Reihenfolge — bestimmt sowohl die Anzeige-Reihenfolge als auch die CSV-Schreibreihenfolge der Einstellung. */
 export const BOERSE_SCHLUESSEL = ['bitunix', 'bitget', 'pionex', 'tradingview']

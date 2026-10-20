@@ -259,14 +259,14 @@ const prozent = (x) => (ok(x) ? `${x > 0 ? '+' : ''}${x} %` : '—')
 const vz = (x) => (!ok(x) || x === 0 ? '' : x > 0 ? 'at-gut' : 'at-schlecht')
 const kurs = (x) => (!ok(x) ? '—' : x >= 1000 ? Math.round(x).toLocaleString('de-CH') : x.toPrecision(5))
 
-/** Links zu den Börsen, auf denen das Perpetual handelt — plus TradingView. */
+/** Links zu den Börsen, auf denen das Perpetual handelt — plus der eigene Chart. */
 function links(c) {
     const aktiv = aktivierteBoersen(appEinstellungen.value?.boersenLinks)
     const raus = []
     for (const b of ['bitunix', 'bitget']) {
         if (c.boersen?.[b] && aktiv.includes(b)) raus.push({ boerse: b, url: boerseUrl(b, c.symbol), kurz: BOERSE_KURZ[b], name: BOERSE_NAME[b] })
     }
-    if (aktiv.includes('tradingview')) raus.push({ boerse: 'tradingview', url: boerseUrl('tradingview', c.symbol), kurz: 'TV', name: 'TradingView' })
+    if (aktiv.includes('tradingview')) raus.push({ boerse: 'tradingview', url: boerseUrl('tradingview', c.symbol), kurz: BOERSE_KURZ.tradingview, name: BOERSE_NAME.tradingview })
     return raus
 }
 

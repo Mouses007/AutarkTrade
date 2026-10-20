@@ -110,6 +110,8 @@ export class StrategieEbene {
     }
 
     endeVon(s, breite) {
+        // Eine Kerze hat in die Zone gestochen: dort endet sie, auch wenn das Setup noch wartet
+        if (s.zoneEndeT) return this.zuX(s.zoneEndeT)
         if (s.ausgeloestT) return this.zuX(s.ausgeloestT)
         if (AKTIV.includes(s.status)) return breite
         return this.zuX((s.obT || 0) + 20 * this.iv)
@@ -166,7 +168,7 @@ export class StrategieEbene {
         }
         const name = vorschau ? 'Vorschau' : (this.namen.get(s.instanceId) || s.strategyId)
         const y = this.zuY(s.richtung === 'short' ? s.obHoch || s.sweepPrice : s.obTief || s.sweepPrice)
-        if (y != null && xa >= -60) this.text(ctx, `${name} ${s.timeframe} · ${s.status}`, Math.max(2, xa + 2), y + (s.richtung === 'short' ? -4 : 12), `rgb(${rgb})`)
+        if (y != null && xa >= -60) this.text(ctx, `${name} ${s.timeframe} · ${s.zoneEndeT && !s.ausgeloestT ? 'berührt' : s.status}`, Math.max(2, xa + 2), y + (s.richtung === 'short' ? -4 : 12), `rgb(${rgb})`)
     }
 
     zeichnePosition(ctx, p, breite) {

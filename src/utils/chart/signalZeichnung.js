@@ -77,9 +77,10 @@ export class SignalZeichnung {
             const aktiv = s.status === 'triggered' || s.status === 'waiting_retest' || s.status === 'pending'
             if (!aktiv && p.sigVerworfen === false) continue
             const blass = !aktiv
-            // Zone: von ihrer Kerze bis zum Ende (Auslösung, Verwerfen) — offen bis jetzt
+            // Zone: von ihrer Kerze bis zur ersten Kerze, die hineinsticht (bzw. Auslösung,
+            // Verwerfen) — offen bis jetzt nur, solange keine sie berührt hat
             const x1 = this.X(s.obCandleTime ?? s.sweepCandleTime)
-            const x2 = this.X(s.endeT ?? bisT) ?? rechts
+            const x2 = this.X(s.zoneEndeT ?? s.endeT ?? bisT) ?? rechts
             const yo = this.Y(s.obHigh), yu = this.Y(s.obLow)
             if (x1 != null && yo != null && yu != null) {
                 ctx.fillStyle = rgba(farbe, blass ? 0.06 : 0.16)

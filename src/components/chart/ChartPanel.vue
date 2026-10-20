@@ -61,6 +61,12 @@ const laedt = ref(false)
 const fehler = ref('')
 const status = ref('')               // connecting | open | closed
 const legende = ref(null)            // Kerze unter dem Fadenkreuz (oder die letzte)
+// Hinweise und Indikatorzeilen der Legende eingeklappt? Gilt für alle Panels, gemerkt im Browser.
+const legendeZu = ref((() => { try { return localStorage.getItem('chartLegendeZu') === '1' } catch { return false } })())
+function legendeUmschalten() {
+    legendeZu.value = !legendeZu.value
+    try { localStorage.setItem('chartLegendeZu', legendeZu.value ? '1' : '0') } catch { /* nur Komfort */ }
+}
 const preisStellen = ref(2)
 const indikatorWerte = ref({})       // id → [{key, farbe, wert}] unter dem Fadenkreuz
 let zeichner = null
@@ -1159,6 +1165,13 @@ defineExpose({
                     {{ legendeDelta >= 0 ? '+' : '' }}{{ legendeDelta.toFixed(2) }} %
                 </span>
             </template>
+            <button class="legendeKnopf" :class="{ zu: legendeZu }" @click.stop="legendeUmschalten"
+                :title="t(legendeZu ? 'chart.legendeAuf' : 'chart.legendeZu')" :aria-label="t(legendeZu ? 'chart.legendeAuf' : 'chart.legendeZu')"
+                :aria-expanded="!legendeZu">
+                <Symbol name="einklappen" />
+                <span v-if="legendeZu && (panel.indikatoren || []).length">{{ (panel.indikatoren || []).length }}</span>
+            </button>
+            <template v-if="!legendeZu">
             <template v-for="(text, name) in marktHinweise" :key="name">
                 <span v-if="text" class="marktHinweis" :title="t('chart.markt.titel.' + name)">{{ text }}</span>
             </template>
@@ -1184,6 +1197,7 @@ defineExpose({
                     <button :title="t('chart.entfernen')" @click.stop="emit('indikator', { aktion: 'entfernen', id: ind.id })" :aria-label="t('chart.entfernen')"><Symbol name="schliessen" /></button>
                 </span>
             </div>
+            </template>
         </div>
 
         <ZeichnungStil v-if="ausgewaehlt" :zeichnung="ausgewaehlt" :interval="panel.interval"
@@ -1271,6 +1285,32 @@ defineExpose({
     color: var(--muted);
     pointer-events: none;
     max-width: calc(100% - 80px);
+}
+
+.legendeKnopf {
+    pointer-events: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    padding: 0 2px;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.legendeKnopf:hover {
+    color: var(--text);
+}
+
+.legendeKnopf :deep(svg) {
+    transform: rotate(-90deg);
+    transition: transform 0.15s;
+}
+
+.legendeKnopf.zu :deep(svg) {
+    transform: rotate(180deg);
 }
 
 .legende b {
