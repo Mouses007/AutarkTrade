@@ -150,9 +150,18 @@
  *     radarGhost setzt es per JS. */
 .radarGrid {
     --kachelMin: 340px;
+    /* Feine Zeilen statt Zeilen je Kachel: jede Kachel belegt so viele 8-px-Zeilen,
+       wie sie hoch ist (useKachelRaster.js → gridRow), und jede Spalte füllt sich für
+       sich. Vorher war eine Rasterzeile so hoch wie ihre höchste Kachel — eine längere
+       Kachel schob alles darunter mit, auch was gar nicht neben ihr stand. Der
+       senkrechte Abstand steckt deshalb in der Spanne, nicht in row-gap. */
+    --kachelZeile: 8px;
+    --kachelLuecke: 0.6rem;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(var(--kachelMin), 1fr));
-    gap: 0.6rem;
+    grid-auto-rows: var(--kachelZeile);
+    column-gap: var(--kachelLuecke);
+    row-gap: 0;
     padding-bottom: 6rem;
 }
 .radarGrid.imGriff { user-select: none; }

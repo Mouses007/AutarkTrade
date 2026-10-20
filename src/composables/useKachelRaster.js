@@ -375,6 +375,9 @@ export function useKachelRaster({
      * hier keine zweite 340 steht, die beim nächsten Umbau vergessen wird.
      */
     const rasterSpalten = ref(0)
+    // Feine Zeilenhöhe und Abstand des Rasters (CSS --kachelZeile / --kachelLuecke)
+    const zeilePx = ref(8)
+    const lueckePx = ref(9.6)
     let beobachter = null
 
     function messeSpalten() {
@@ -383,6 +386,8 @@ export function useKachelRaster({
         const stil = getComputedStyle(el)
         const min = parseFloat(stil.getPropertyValue('--kachelMin')) || 340
         const luecke = parseFloat(stil.columnGap) || 0
+        zeilePx.value = parseFloat(stil.gridAutoRows) || 8
+        lueckePx.value = luecke
         const breite = el.clientWidth
         if (!breite) return
         rasterSpalten.value = Math.max(1, Math.floor((breite + luecke) / (min + luecke)))
@@ -403,11 +408,16 @@ export function useKachelRaster({
         // Klemme gegen den Überlauf — der gespeicherte Wert bleibt unangetastet,
         // auf dem grossen Bildschirm ist die Kachel wieder so breit wie gezogen.
         if (rasterSpalten.value) spalten = Math.min(spalten, rasterSpalten.value)
+        // Gezogene Grösse vor Registry-Vorgabe vor Rasterstandard — damit
+        // eine Kachel (Bookmap) eine eigene Standardhöhe mitbringen kann.
+        const hoehe = g.hoehe || kachel.hoehe || standardHoehe
+        // So viele feine Zeilen, wie Kachel plus Abstand darunter brauchen.
+        const zeilen = Math.max(1, Math.ceil((hoehe + lueckePx.value) / (zeilePx.value || 8)))
         return {
             gridColumn: `span ${spalten}`,
-            // Gezogene Grösse vor Registry-Vorgabe vor Rasterstandard — damit
-            // eine Kachel (Bookmap) eine eigene Standardhöhe mitbringen kann.
-            height: `${g.hoehe || kachel.hoehe || standardHoehe}px`,
+            gridRow: `span ${zeilen}`,
+            height: `${hoehe}px`,
+            alignSelf: 'start',
         }
     }
 
