@@ -49,7 +49,8 @@ echo "   NAS: $NAS_ARCH  →  Image muss linux/$ERWARTET sein"
 
 # Update oder Wechsel? Die Compose-Datei auf der NAS sagt es.
 JETZT_COMPOSE="$(mktemp)"
-trap 'rm -f "$JETZT_COMPOSE"; nas_ende' EXIT
+# Verbindung nur schliessen, wenn nicht unter umzug.sh (das hält sie für alle Schritte).
+trap 'rm -f "$JETZT_COMPOSE"; [ "${UMZUG_GEMEINSAM:-0}" = 1 ] || nas_ende' EXIT
 CD="$(compose_datei)"
 echo "   Compose-Datei im Projekt: $CD"
 nas "$S cat '$NAS_PROJEKT/$CD'" > "$JETZT_COMPOSE" 2>/dev/null || true
@@ -74,7 +75,10 @@ if [ "$WECHSEL" = 1 ]; then
         [ "$TROCKEN" = 1 ] && gelb "  (trocken) alte App läuft noch — erst alt-stoppen.sh" || abbruch "alte App läuft noch — erst scripts/umzug/alt-stoppen.sh"
     fi
     echo "   Compose-Datei, die ersetzt wird:"
-    diff -u --label "NAS: $CD (jetzt)" --label "neu: docker-compose.produktiv.yml" "$JETZT_COMPOSE" "$NEU_COMPOSE" | sed 's/^/     /' || true
+    # Werte von Geheimnissen NIE ausgeben: Die alte Compose trägt Secret und DB-Passwort im Klartext.
+    sed -E 's/((SECRET|PASSWORD|PASSWORT|TOKEN|KEY)[A-Za-z0-9_]*[[:space:]]*[:=][[:space:]]*).*/\1***/I' "$JETZT_COMPOSE" > "$JETZT_COMPOSE.zeige"
+    diff -u --label "NAS: $CD (jetzt, Geheimnisse geschwärzt)" --label "neu: docker-compose.produktiv.yml" "$JETZT_COMPOSE.zeige" "$NEU_COMPOSE" | sed 's/^/     /' || true
+    rm -f "$JETZT_COMPOSE.zeige"
     # Die alte App hat ihre Werte (Secret, DB-Zugang, Port) direkt in der Compose-Datei,
     # eine .env gibt es auf der NAS nicht. Die neue Compose liest sie aus .env — die wird
     # beim Wechsel AUF DER NAS aus dem gestoppten alten Container angelegt (nur CTJ_*,
