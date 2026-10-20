@@ -308,7 +308,9 @@ defineExpose({ jetzt })
    (RadarOverlay, scrollt) gibt die Bühne die Höhe fest vor. Ihre
    Mindesthöhen in vh (Marktübersicht 56vh …) schoben die Grafik unten aus
    der Bühne und drückten die Steuerleiste zusammen (Audit A4-03). */
-.pBuehneKoerper :deep(.gross [class*="Chart"]) {
+/* `.gross.gross`: eine Stufe spezifischer als die Kachelregel
+   (`.mWrap.gross .mChart[data-v]`), die als späterer Chunk sonst gewinnt. */
+.pBuehneKoerper :deep(.gross.gross [class*="Chart"]) {
     min-height: 0;
 }
 
