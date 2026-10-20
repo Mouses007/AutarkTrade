@@ -8,9 +8,9 @@
  * die beim Speichern ins Canvas eingebrannt werden. Was man sieht, ist was
  * gespeichert wird.
  *
- * Geöffnet wird er über `useSetupMarkerArea(quelle, bildDaten)` aus
- * `utils/screenshots.js`; dieser Baustein hört nur auf `markierAuftrag`.
- * Eingehängt ist er einmal global (im Vollbild-Rahmen), damit jede Ansicht
+ * Geöffnet wird er über `oeffneMarkierung(bildDaten)` aus
+ * `utils/bilder/bearbeiten.js`; dieser Baustein hört nur auf `markierAuftrag`.
+ * Eingehängt ist er einmal global (im Rahmen, neben dem Vollbild), damit jede Ansicht
  * markieren kann, ohne ihn selbst einzubinden.
  *
  * Maus, Stift und Finger laufen über Pointer-Events mit Pointer-Capture;
@@ -22,7 +22,8 @@ import Dialog from '../basis/Dialog.vue'
 import Knopf from '../basis/Knopf.vue'
 import Hinweis from '../basis/Hinweis.vue'
 import Symbol from '../basis/Symbol.vue'
-import { markierAuftrag, useMarkierungUebernehmen, useMarkierungVerwerfen } from '../../utils/screenshots.js'
+import { markierAuftrag } from '../../stores/journal/bilder.js'
+import { uebernimmMarkierung, verwirfMarkierung } from '../../utils/bilder/bearbeiten.js'
 import {
     Verlauf, formen, grenzen, obersterTreffer, verschoben, umgestylt, zuKlein, istBearbeitbar, neueId, klon,
     FARBEN, STRICHBREITEN, VORGABE_FARBE, VORGABE_STRICH, ZEILENHOEHE,
@@ -292,7 +293,7 @@ async function speichern() {
     speichert.value = true
     fehler.value = ''
     try {
-        await useMarkierungUebernehmen(zustand.value)
+        await uebernimmMarkierung(zustand.value)
     } catch (e) {
         console.error('Markierung speichern fehlgeschlagen:', e)
         fehler.value = t('screenshots.markierung.fehlerSpeichern')
@@ -304,7 +305,7 @@ async function speichern() {
 function verwerfenFragen() {
     if (!markierAuftrag.value || speichert.value) return
     if ((stand.value, verlauf.geaendert) && !confirm(t('screenshots.markierung.verwerfenFrage'))) return
-    useMarkierungVerwerfen()
+    verwirfMarkierung()
 }
 
 /** Dialog-× und Esc: beide gehen hier durch, damit nichts ohne Rückfrage verloren geht. */

@@ -23,7 +23,7 @@ const alsListe = (x) => (Array.isArray(x) ? x : [])
  */
 export function baueNachschlag({ tagZeilen = [], tagesZufriedenheit = [], tradeZufriedenheit = [], exkursionen = [], notizen = [], katalog = [] }) {
     const n = {
-        tradeTags: new Map(),
+        tagsJeTrade: new Map(),
         tagesTags: new Map(),
         tagesZufriedenheit: new Map(),
         tradeZufriedenheit: new Map(),
@@ -32,7 +32,7 @@ export function baueNachschlag({ tagZeilen = [], tagesZufriedenheit = [], tradeZ
         tagName: new Map(),
     }
     for (const z of tagZeilen) {
-        if (z.tradeId != null) n.tradeTags.set(String(z.tradeId), alsListe(z.tags))
+        if (z.tradeId != null) n.tagsJeTrade.set(String(z.tradeId), alsListe(z.tags))
         // auch Trade-Zeilen landen hier unter ihrem dateUnix — so gewollt (§4.1)
         if (z.dateUnix != null) n.tagesTags.set(String(z.dateUnix), alsListe(z.tags))
     }
@@ -83,7 +83,7 @@ export function erstelleFilter({ boerse, kategorie, bereich, richtungen, konten,
         if (!(kat === 'bot' || ohneKonten || konten.includes(t.account) || t.account === boerse)) return false
 
         if (istBot(t) || istAgent(t)) return true
-        return quellePasst(n.tradeTags.get(String(t.id)) || [])
+        return quellePasst(n.tagsJeTrade.get(String(t.id)) || [])
             || quellePasst(n.tagesTags.get(String(t.td)) || [])
     }
 }
@@ -101,7 +101,7 @@ export function reichereAn(t, n, gewaehlteTags) {
 
     const tags = []
     const genommen = new Set()
-    for (const id of [...(n.tradeTags.get(String(t.id)) || []), ...(n.tagesTags.get(String(t.td)) || [])]) {
+    for (const id of [...(n.tagsJeTrade.get(String(t.id)) || []), ...(n.tagesTags.get(String(t.td)) || [])]) {
         if (!auswahl.has(id) || genommen.has(id) || !n.tagName.has(id)) continue
         genommen.add(id)
         tags.push({ id, name: n.tagName.get(id) })

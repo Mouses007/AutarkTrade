@@ -63,7 +63,7 @@ async function loadTags() {
     }
 }
 
-async function saveTags() {
+async function speichereKatalog() {
     try {
         await dbUpdateSettings({ tags: JSON.parse(JSON.stringify(tagGroups)) })
         console.log(' -> Tags saved')
@@ -83,7 +83,7 @@ function addGroup() {
     })
     newGroupName.value = ''
     newGroupColor.value = '#6c757d'
-    saveTags()
+    speichereKatalog()
 }
 
 function startEditGroup(group) {
@@ -96,7 +96,7 @@ function saveEditGroup(group) {
     group.name = editGroupName.value.trim() || group.name
     group.color = editGroupColor.value
     editingGroup.value = null
-    saveTags()
+    speichereKatalog()
 }
 
 function cancelEditGroup() {
@@ -108,7 +108,7 @@ function removeGroup(groupId) {
     if (idx === 0) return // Erste Gruppe (Strategie) ist nicht löschbar
     if (idx !== -1) {
         tagGroups.splice(idx, 1)
-        saveTags()
+        speichereKatalog()
     }
 }
 
@@ -120,14 +120,14 @@ function addTag(group) {
         name: name
     })
     newTagName.value[group.id] = ''
-    saveTags()
+    speichereKatalog()
 }
 
 function removeTag(group, tagId) {
     const idx = group.tags.findIndex(t => t.id === tagId)
     if (idx !== -1) {
         group.tags.splice(idx, 1)
-        saveTags()
+        speichereKatalog()
     }
 }
 

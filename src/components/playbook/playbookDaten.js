@@ -95,7 +95,9 @@ export function loeseTags(ids, tagInfo) {
     if (!Array.isArray(ids)) return []
     return ids.map(id => {
         const info = tagInfo(id) || {}
-        return { id, name: info.tagName || String(id), color: info.groupColor || ERSATZ_FARBE }
+        // Unbekannt (nicht im Katalog): ID als Name, neutrales Grau (f3-tags.md §4.2)
+        if (info.gruppeId === undefined) return { id, name: String(id), color: ERSATZ_FARBE }
+        return { id, name: info.name || String(id), color: info.farbe || ERSATZ_FARBE }
     })
 }
 

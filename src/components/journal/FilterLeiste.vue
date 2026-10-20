@@ -21,7 +21,7 @@ import { formDatum, formMonat, formGrossAnfang } from '../../utils/journal/forma
 import { starteKalender, starteDashboard, starteTagesansicht, useMountAuswertung, pruefeSichtbarkeit } from '../../utils/journal/ablauf.js'
 import { schliesseMobilMenue } from '../../utils/journal/app.js'
 import { ladeDiagramme } from '../../utils/journal/diagrammLader.js'
-import { ladeBilderNeu } from '../../utils/screenshots.js'
+import { baueBilderNeu } from '../../utils/bilder/laden.js'
 
 const { t } = useI18n()
 
@@ -150,7 +150,7 @@ async function speichern() {
         await starteTagesansicht()
         pruefeSichtbarkeit()
     } else if (seitenId.value === 'bilder') {
-        await ladeBilderNeu()
+        await baueBilderNeu()
         pruefeSichtbarkeit()
     } else if (seitenId.value === 'kalender') {
         starteKalender(true)

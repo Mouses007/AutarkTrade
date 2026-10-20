@@ -16,24 +16,27 @@ import { useI18n } from 'vue-i18n'
 import Symbol from './basis/Symbol.vue'
 import { tags } from '../stores/journal/tagebuch.js'
 import { kopiertesBild, markierterEintrag } from '../stores/app/rahmen.js'
-import { useSelectedScreenshotFunction, useSetupMarkerArea, useDeleteScreenshot } from '../utils/screenshots.js'
+import { zeigeImVollbild } from '../utils/bilder/vollbild.js'
+import { oeffneMarkierung, loescheVorgemerktesBild } from '../utils/bilder/bearbeiten.js'
 import { formDatumLang, formUhrzeitSek, formUhrzeit } from '../utils/journal/format.js'
-import { useGetTagInfo } from '../utils/journal/tagebuch.js'
+import { tagAngaben } from '../utils/journal/tagebuch.js'
 import { ladeBild } from '../utils/bildmarkierung.js'
 
 const props = defineProps({
-    screenshotData: { type: Object, default: () => ({}) },
-    /** Altbestand, ungenutzt — bleibt, weil Aufrufer es setzen dürfen. */
-    showTitle: { type: Boolean, default: false },
-    source: { type: String, default: 'screenshots' },
+    /** Eine Zeile aus `screenshots`. */
+    bild: { type: Object, default: () => ({}) },
+    /** 'seite' (Seite Bilder: Kopf, Werkzeuge) oder 'vollbild' (Infozeile, keine Werkzeuge). */
+    herkunft: { type: String, default: 'seite' },
+    /** Index in der UNGEFILTERTEN geladenen Liste — dort blättert das Vollbild. */
     index: { type: Number, default: undefined },
 })
 
 const { t } = useI18n()
 
-const d = computed(() => props.screenshotData || {})
+const d = computed(() => props.bild || {})
 const hatId = computed(() => d.value.objectId != null && d.value.objectId !== '')
-const bildId = computed(() => `screenshotDiv-${props.source}-${hatId.value ? d.value.objectId : d.value.dateUnix}`)
+const aufSeite = computed(() => props.herkunft === 'seite')
+const bildId = computed(() => `screenshotDiv-${props.herkunft}-${hatId.value ? d.value.objectId : d.value.dateUnix}`)
 
 /** Alte Markierungsebene über dem Original? (siehe Kopfkommentar) */
 const istEbene = computed(() => {
@@ -43,8 +46,7 @@ const istEbene = computed(() => {
 })
 const grundbild = computed(() => (istEbene.value ? d.value.originalBase64 : (d.value.annotatedBase64 || d.value.originalBase64 || '')))
 
-const mitInfo = computed(() => !['addScreenshot', 'dailyModal'].includes(props.source))
-const mitWerkzeug = computed(() => props.source !== 'fullScreen')
+const mitWerkzeug = computed(() => props.herkunft !== 'vollbild')
 const kurz = computed(() => d.value.side === 'SS' || d.value.side === 'BC' || d.value.side === 'short')
 const zeit = computed(() => {
     if (d.value.dateUnix == null) return ''
@@ -56,8 +58,8 @@ const bildTags = computed(() => {
     const ids = Array.isArray(zeile?.tags) ? zeile.tags : []
     return {
         sichtbar: ids.slice(0, 2).map(id => {
-            const info = useGetTagInfo(id)
-            return { id, name: info.tagName, farbe: info.groupColor }
+            const info = tagAngaben(id)
+            return { id, name: info.name, farbe: info.farbe }
         }),
         mehr: Math.max(0, ids.length - 2),
     }
@@ -66,12 +68,12 @@ const bildTags = computed(() => {
 // ── Werkzeuge ──
 
 function vergroessern() {
-    if (!hatId.value || props.source === 'addScreenshot') return
-    useSelectedScreenshotFunction(props.index, props.source, d.value)
+    if (!hatId.value) return
+    zeigeImVollbild(props.index, d.value)
 }
 
 function markieren() {
-    useSetupMarkerArea(props.source, d.value)
+    oeffneMarkierung(d.value)
 }
 
 // Kopieren
@@ -120,7 +122,7 @@ function loeschenFragen() {
 async function loeschenJa() {
     loescht.value = true
     markierterEintrag.value = d.value.objectId
-    try { await useDeleteScreenshot() } finally {
+    try { await loescheVorgemerktesBild() } finally {
         loescht.value = false
         fragtLoeschen.value = false
     }
@@ -134,13 +136,13 @@ onBeforeUnmount(() => clearTimeout(kopierUhr))
 </script>
 
 <template>
-    <div class="sk" :class="'q-' + source">
-        <div v-if="source === 'screenshots' && d.dateUnix != null" class="kopf">
+    <div class="sk" :class="'q-' + herkunft">
+        <div v-if="aufSeite && d.dateUnix != null" class="kopf">
             {{ formDatumLang(d.dateUnix) }}
         </div>
 
-        <div v-if="mitInfo || mitWerkzeug" class="zeile">
-            <div v-if="mitInfo" class="info">
+        <div class="zeile">
+            <div class="info">
                 <span class="symbol">{{ d.symbol }}</span>
                 <span v-if="d.side" class="seite" :class="kurz ? 'at-schlecht' : 'at-gut'">{{ kurz ? t('nav.short') : t('nav.long') }}</span>
                 <span v-if="zeit" class="at-gedaempft">{{ zeit }}</span>
@@ -150,7 +152,7 @@ onBeforeUnmount(() => clearTimeout(kopierUhr))
 
             <div v-if="mitWerkzeug" class="werkzeuge">
                 <template v-if="!fragtLoeschen">
-                    <button v-if="hatId && source !== 'addScreenshot'" type="button" class="wz" :title="t('common.enlarge')"
+                    <button v-if="hatId" type="button" class="wz" :title="t('common.enlarge')"
                         :aria-label="t('common.enlarge')" @click="vergroessern">
                         <Symbol name="vergroessern" :groesse="17" />
                     </button>
@@ -162,7 +164,7 @@ onBeforeUnmount(() => clearTimeout(kopierUhr))
                         :aria-label="kopierStatus === 'ok' ? t('screenshots.kopiert') : t('screenshots.kopieren')" @click="kopieren">
                         <Symbol :name="kopierStatus === 'ok' ? 'haken' : 'kopieren'" :groesse="17" />
                     </button>
-                    <button v-if="hatId && source !== 'addScreenshot'" type="button" class="wz gefahr" :title="t('screenshots.loeschen')"
+                    <button v-if="hatId" type="button" class="wz gefahr" :title="t('screenshots.loeschen')"
                         :aria-label="t('screenshots.loeschen')" @click="loeschenFragen">
                         <Symbol name="papierkorb" :groesse="17" />
                     </button>
@@ -175,7 +177,7 @@ onBeforeUnmount(() => clearTimeout(kopierUhr))
             </div>
         </div>
 
-        <div class="bild" :class="{ klickbar: source === 'screenshots' && hatId }" @click="source === 'screenshots' && vergroessern()">
+        <div class="bild" :class="{ klickbar: aufSeite && hatId }" @click="aufSeite && vergroessern()">
             <img v-if="grundbild" :id="bildId" :src="grundbild" :alt="d.symbol || t('nav.screenshots')" loading="lazy" />
             <img v-if="istEbene" class="ebene" :src="d.annotatedBase64" alt="" aria-hidden="true" />
         </div>
@@ -311,7 +313,7 @@ onBeforeUnmount(() => clearTimeout(kopierUhr))
 }
 
 /* Kachel auf der Seite: Bildbereich höchstens 250 px, Überlauf abgeschnitten. */
-.q-screenshots .bild {
+.q-seite .bild {
     max-height: 250px;
 }
 
@@ -320,19 +322,19 @@ onBeforeUnmount(() => clearTimeout(kopierUhr))
 }
 
 /* Vollbild: ganzes Bild, so gross wie das Fenster erlaubt. */
-.q-fullScreen .bild {
+.q-vollbild .bild {
     display: flex;
     justify-content: center;
     background: var(--bg);
 }
 
-.q-fullScreen .bild img {
+.q-vollbild .bild img {
     width: auto;
     max-width: 100%;
     max-height: calc(100dvh - 12rem);
 }
 
-.q-fullScreen .bild .ebene {
+.q-vollbild .bild .ebene {
     left: 50%;
     transform: translateX(-50%);
 }

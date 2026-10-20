@@ -2,7 +2,7 @@
 /**
  * Seite `/bilder` (Spec S.7): alle Bilder, neueste zuerst, in Seiten zu
  * vier nachgeladen (Endlos-Scroll), gefiltert nach Tags und Börse (Filterleiste,
- * serverseitig in `ladeBilder`) und hier zusätzlich nach Bildtyp.
+ * beim Laden in `utils/bilder/laden.js`) und hier zusätzlich nach Bildtyp.
  *
  * Kein Monatsfilter: die Seite zeigt alle Zeiten.
  */
@@ -14,9 +14,10 @@ import Leerzustand from '../components/basis/Leerzustand.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
 import Reiter from '../components/basis/Reiter.vue'
 import Symbol from '../components/basis/Symbol.vue'
-import { seiteLaedt, ladeMehr } from '../stores/app/laden.js'
+import { seiteLaedt, ladeMehr, bilderWerdenGeholt } from '../stores/app/laden.js'
 import { listeZuEnde } from '../stores/app/rahmen.js'
-import { screenshots, expandedScreenshot, bildSeite, bildAbfrageGrenze } from '../stores/journal/screenshots.js'
+import { bilder, bildVersatz, bildHaeppchen } from '../stores/journal/bilder.js'
+import { HAEPPCHEN_VORGABE } from '../utils/bilder/laden.js'
 import { starteBilder, pruefeSichtbarkeit, ladeWeitere } from '../utils/journal/ablauf.js'
 
 const { t } = useI18n()
@@ -50,7 +51,7 @@ function istEroeffnung(b) {
 /** Gefiltert, aber mit dem Index in der UNGEFILTERTEN Liste — das Vollbild blättert dort. */
 const sichtbar = computed(() => {
     const aus = []
-    screenshots.forEach((b, index) => {
+    bilder.forEach((b, index) => {
         if (!b || b.objectId == null) return
         if (typ.value === 'eroeffnung' && !istEroeffnung(b)) return
         if (typ.value === 'abschluss' && !istAbschluss(b)) return
@@ -78,8 +79,7 @@ const playbookLink = (b) => {
 function beimScrollen() {
     const rest = document.documentElement.scrollHeight - window.scrollY
     if (window.innerHeight + 200 < rest) return
-    if (ladeMehr.value || seiteLaedt.value || listeZuEnde.value) return
-    if (expandedScreenshot.value != null) return
+    if (ladeMehr.value || bilderWerdenGeholt.value || seiteLaedt.value || listeZuEnde.value) return
     ladeWeitere()
 }
 
@@ -87,9 +87,9 @@ onMounted(async () => {
     // Jeder Besuch beginnt vorn — sonst setzte ein zweiter Besuch beim Offset
     // des ersten fort. Eine gemerkte Menge (SS) setzt starteBilder danach.
     listeZuEnde.value = false
-    screenshots.length = 0
-    bildSeite.value = 0
-    bildAbfrageGrenze.value = 4
+    bilder.length = 0
+    bildVersatz.value = 0
+    bildHaeppchen.value = HAEPPCHEN_VORGABE
     await starteBilder()
     window.addEventListener('scroll', beimScrollen, { passive: true })
     pruefeSichtbarkeit()
@@ -109,7 +109,7 @@ onBeforeUnmount(() => {
 
         <div v-else class="raster">
             <article v-for="{ b, index } in sichtbar" :id="String(b.objectId)" :key="b.objectId" class="karte">
-                <BildKarte :screenshot-data="b" source="screenshots" :index="index" />
+                <BildKarte :bild="b" herkunft="seite" :index="index" />
                 <router-link v-if="playbookLink(b)" :to="playbookLink(b)" class="playbook at-klein">
                     <Symbol name="buch" :groesse="15" />{{ t('nav.playbook') }}
                 </router-link>

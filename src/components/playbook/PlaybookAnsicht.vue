@@ -8,7 +8,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Knopf from '@/components/basis/Knopf.vue'
 import { sanitizeHtml } from '@/utils/sanitize.js'
-import { useGetTagInfo } from '@/utils/journal/tagebuch.js'
+import { tagAngaben } from '@/utils/journal/tagebuch.js'
 import { usePlaybook } from './usePlaybook.js'
 import { hatDaten, hatText, hatMetadaten } from './playbookDaten.js'
 import PlaybookBild from './PlaybookBild.vue'
@@ -46,7 +46,7 @@ function stufe(n, umgekehrt = false) {
     return s === 'niedrig' ? 'hoch' : s === 'hoch' ? 'niedrig' : s
 }
 
-const tagFarbe = (tag) => tag.color || useGetTagInfo(tag.id).groupColor
+const tagFarbe = (tag) => tag.color || tagAngaben(tag.id).farbe
 const zufriedenheitEmoji = (s) => (s === 1 ? '👍' : s === 2 ? '✊' : '👎')
 </script>
 

@@ -7,7 +7,7 @@
 import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
 import { verfuegbareTags } from '@/stores/journal/tagebuch.js'
-import { useGetTagInfo } from '@/utils/journal/tagebuch.js'
+import { tagAngaben } from '@/utils/journal/tagebuch.js'
 
 const props = defineProps({
     /** Liste `{id, name, color?}` — wird an Ort und Stelle geändert (gehört dem Eintrag). */
@@ -16,7 +16,7 @@ const props = defineProps({
 const { t } = useI18n()
 
 const vergeben = (id) => props.liste.some(x => x.id === id)
-const farbe = (tag) => tag.color || useGetTagInfo(tag.id).groupColor
+const farbe = (tag) => tag.color || tagAngaben(tag.id).farbe
 
 function waehle(ereignis) {
     const id = ereignis.target.value

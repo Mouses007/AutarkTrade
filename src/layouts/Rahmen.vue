@@ -23,7 +23,8 @@ import { useI18n } from 'vue-i18n'
 import Kopfleiste from '../components/rahmen/Kopfleiste.vue'
 import Seitenmenue from '../components/rahmen/Seitenmenue.vue'
 import Titelzeile from '../components/rahmen/Titelzeile.vue'
-import ScreenshotVollbild from '../components/rahmen/ScreenshotVollbild.vue'
+import BildVollbild from '../components/rahmen/BildVollbild.vue'
+import BildMarkierung from '../components/bildmarkierung/BildMarkierung.vue'
 import NachObenKnopf from '../components/NachObenKnopf.vue'
 import TradeEvalPopup from '../components/TradeEvalPopup.vue'
 import PageInfo from '../components/PageInfo.vue'
@@ -246,7 +247,8 @@ onBeforeUnmount(() => {
         </div>
     </div>
 
-    <ScreenshotVollbild />
+    <BildVollbild />
+    <BildMarkierung />
     <TradeEvalPopup v-if="istJournal" />
 </template>
 

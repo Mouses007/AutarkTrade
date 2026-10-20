@@ -8,7 +8,7 @@ import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
 import Pille from '@/components/basis/Pille.vue'
 import { formDatumLang } from '@/utils/journal/format.js'
-import { useGetTagInfo } from '@/utils/journal/tagebuch.js'
+import { tagAngaben } from '@/utils/journal/tagebuch.js'
 import { usePlaybook } from './usePlaybook.js'
 import { hatDaten, seite } from './playbookDaten.js'
 import PlaybookTyp from './PlaybookTyp.vue'
@@ -28,7 +28,7 @@ const plakette = computed(() => seite(e.value.side))
 const emoji = computed(() => ({ 1: '👍', 2: '✊', 0: '👎' })[e.value.satisfaction] || '')
 const pnlText = computed(() => (e.value.pnl >= 0 ? '+' : '') + e.value.pnl.toFixed(2))
 const zeitrahmen = (wert) => (te(`timeframes.${wert}`) ? t(`timeframes.${wert}`) : wert)
-const tagFarbe = (tag) => tag.color || useGetTagInfo(tag.id).groupColor
+const tagFarbe = (tag) => tag.color || tagAngaben(tag.id).farbe
 </script>
 
 <template>

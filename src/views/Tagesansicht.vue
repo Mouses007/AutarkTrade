@@ -49,25 +49,22 @@ import { seiteLaedt, ladeMehr, setupsLaden } from '@/stores/app/laden.js'
 import { journalHatDaten, tradeZeitzone, tradeDetailOffen, speichernNoetig, scrollToDateUnix, appEinstellungen } from '@/stores/app/rahmen.js'
 import { journalTage } from '@/stores/journal/auswertung.js'
 import { tradeId } from '@/stores/journal/import.js'
-import { markierungOffen, screenshots, bildInfos, screenshot } from '@/stores/journal/screenshots.js'
+import { markierungOffen, bilder, bilderDesMonats, bildInBearbeitung } from '@/stores/journal/bilder.js'
 import {
-    tradeBildGeaendert, excursion, excursions, tradeExkursionGeaendert, exkursionTradeId, exkursionTagUnix,
-    offenerTagIndex, tradeIndexAktiv, tradeIndexVorher, tags, verfuegbareTags, tradeTags, tradeTagsGeaendert,
-    tagInput, showTagsList, notes, tradeNotiz, tradeNotizGeaendert,
+    exkursionEntwurf, excursions, tradeExkursionGeaendert, exkursionTradeId, exkursionTagUnix,
+    offenerTagIndex, tradeIndexAktiv, tags, verfuegbareTags, tagsDesTrades, notes,
 } from '@/stores/journal/tagebuch.js'
 
 import { starteTagesansicht, bestimmeBereich, useDisposeJournalCharts } from '@/utils/journal/ablauf.js'
-import {
-    ladeExkursionen, ladeTags, ladeVerfuegbareTags, speichereVerfuegbareTags, speichereTags, speichereNotiz,
-    ladeNotizen, useGetTagInfo, baueTagListe, useResetTags,
-} from '@/utils/journal/tagebuch.js'
+import { ladeExkursionen, tagAngaben, tagsFuerTrade } from '@/utils/journal/tagebuch.js'
 import {
     formDatumLang, formGeld2, formGeldStellen, formUhrzeitSek, formDauer,
     addiereGenau, formDatum, formDauerTage,
 } from '@/utils/journal/format.js'
 import dayjs from '@/utils/journal/zeit.js'
 import { ladeDiagramme, geladeneDiagramme } from '@/utils/journal/diagrammLader.js'
-import { ladeBilder, speichereBild, useSelectedScreenshotFunction } from '@/utils/screenshots.js'
+import { ladeBilderDesTages } from '@/utils/bilder/laden.js'
+import { zeigeImVollbild } from '@/utils/bilder/vollbild.js'
 import { dbFirst, dbCreate, dbUpdate } from '@/utils/db.js'
 
 const { t } = useI18n()
@@ -100,7 +97,12 @@ function preis(x, forex = false) {
     return formGeldStellen(p, stellen)
 }
 
-// F3-NEUBAU: Prüfung „Einstieg am selben Handelstag?" — docs/spec/f3-trade-dialog.md
+/**
+ * Liegen zwei Zeitpunkte (Sekunden) am selben Kalendertag der Handelszeitzone?
+ * Das Datum zählt, nicht der Abstand: 23:59 und 00:01 sind zwei Tage
+ * (docs/spec/f3-trade-dialog.md §3).
+ */
+const selberHandelstag = (a, b) => formDatum(a) === formDatum(b)
 
 /** Notiztext ohne HTML; Absätze und <br> werden zu Zeilenumbrüchen, damit der Text lesbar bleibt. */
 function notizOhneHtml(html) {
@@ -258,11 +260,11 @@ function waehleReiter(karte, id) {
     offenerReiter[karte] = offenerReiter[karte] === id ? '' : id
 }
 
-const hatBild = (trade) => bildInfos.some(s => s.name === trade.id)
+const hatBild = (trade) => bilderDesMonats.some(s => s.name === trade.id)
 
 function einstiegHinweis(trade, tag) {
     if (trade.tradesCount == 0) return ''
-    if (checkDate(trade.td ?? tag.dateUnix, trade.entryTime)) return ''
+    if (selberHandelstag(trade.td ?? tag.dateUnix, trade.entryTime)) return ''
     return t('daily.swingFrom', { date: formDatum(trade.entryTime) })
 }
 
@@ -311,8 +313,12 @@ const offeneGruppen = reactive(new Set())
 const protokollZu = ref(false)
 /** Auto-MFE nur angezeigt (Abschnitt 0, D.16-2): gespeichert wird erst nach „Übernehmen" oder eigener Eingabe. */
 const mfeAuto = ref(false)
-/** Screenshots des Tages in dieser Fenster-Sitzung schon geladen. */
-let screenshotsGeladen = false
+/** Bilder des Tages in dieser Fenster-Sitzung (Öffnen bis Schliessen) schon geprüft. */
+let fensterBilderGeprueft = false
+/** Zählt jeden Wechsel — ein spätes Auto-MFE-Ergebnis eines verlassenen Trades wird verworfen. */
+let wechselNr = 0
+/** Inhalt des Fensters; über ihn findet das Schliessen den nativen <dialog>. */
+const detailEl = ref(null)
 
 const offeneKarte = computed(() => (offenerTagIndex.value === undefined ? null : journalTage[offenerTagIndex.value] || null))
 const offenerTrade = computed(() => offeneKarte.value?.trades?.[tradeIndexAktiv.value] || null)
@@ -362,17 +368,17 @@ const botBreakdown = computed(() => {
     }
 })
 
-const bildQuelle = computed(() => screenshot.annotatedBase64 || screenshot.originalBase64 || '')
+const bildQuelle = computed(() => bildInBearbeitung.annotatedBase64 || bildInBearbeitung.originalBase64 || '')
 
 // ── Detailfenster: Speichern ───────────────────────────────────────────────
 
 async function speichereExkursion() {
     const felder = ['stopLoss', 'maePrice', 'mfePrice']
-    if (!felder.some(f => gesetzt(excursion[f]))) return
+    if (!felder.some(f => gesetzt(exkursionEntwurf[f]))) return
     setupsLaden.value = true
     // Leer, NaN oder fehlend wird null — nie NaN in die DB
     const datensatz = {}
-    for (const f of felder) datensatz[f] = istZahl(excursion[f]) ? Number(excursion[f]) : null
+    for (const f of felder) datensatz[f] = istZahl(exkursionEntwurf[f]) ? Number(exkursionEntwurf[f]) : null
     const vorhanden = await dbFirst('excursions', { equalTo: { tradeId: exkursionTradeId.value } })
     if (vorhanden) {
         await dbUpdate('excursions', vorhanden.objectId, datensatz)
@@ -384,8 +390,23 @@ async function speichereExkursion() {
     await ladeExkursionen()
 }
 
-// F3-NEUBAU: Änderungsmerker zurücksetzen und ausstehende Änderungen speichern — docs/spec/f3-trade-dialog.md
-
+/**
+ * Ausstehende Änderungen des BISHER gezeigten Trades speichern
+ * (docs/spec/f3-trade-dialog.md §4). Bedienbar ist heute nur die Exkursion
+ * (MFE-Eingabe, „Übernehmen"). Notiz, Tags und Bild haben im Trade-Fenster
+ * keine Eingabe mehr; bekommen sie eine, gilt die Reihenfolge Notiz →
+ * Exkursion → Tags → Bild, nacheinander. Ein Fehler bricht ab (Konsole, der
+ * zentrale Fehlerhinweis von db.js zeigt ihn); die Merker gehen immer zurück.
+ */
+async function speichereAusstehendes() {
+    try {
+        if (tradeExkursionGeaendert.value) await speichereExkursion()
+    } catch (fehler) {
+        console.error('Tagesansicht: Speichern fehlgeschlagen', fehler)
+    } finally {
+        tradeExkursionGeaendert.value = false
+    }
+}
 
 // ── Detailfenster: Kerzenchart ─────────────────────────────────────────────
 
@@ -500,10 +521,182 @@ async function berechneMfe(trade) {
 
 // ── Detailfenster: Öffnen, Blättern, Schliessen ────────────────────────────
 
-// F3-NEUBAU: Trade-Fenster öffnen, blättern, schliessen — docs/spec/f3-trade-dialog.md
+// Ablauf nach docs/spec/f3-trade-dialog.md §5.
 
+/**
+ * Das Bild zum Trade: zuerst das eigene (`name` = Trade-ID), sonst das erste
+ * Bild des Tages — ein Tagesbild gilt für jeden Trade des Tages.
+ */
+function findeBild(trade, karte) {
+    return bilder.find(b => b?.name === trade.id)
+        || bilder.find(b => b?.dateUnixDay === karte.dateUnix)
+        || null
+}
 
+/** Alles, was das Fenster zum gezeigten Trade braucht (§5.2 Schritte 6–13). */
+async function fuelleFenster(karte, trade, meinWechsel) {
+    // Tagesbilder einmal je Fenster-Sitzung, wenn die Liste leer ist oder zu einem anderen Tag gehört
+    if (!fensterBilderGeprueft) {
+        fensterBilderGeprueft = true
+        if (!bilder.length || bilder[0]?.dateUnixDay !== karte.dateUnix) await ladeBilderDesTages(karte.dateUnix)
+    }
 
+    // Zurücksetzen; der Speicherkontext der Exkursion zeigt SOFORT auf den neuen Trade
+    for (const k of Object.keys(exkursionEntwurf)) delete exkursionEntwurf[k]
+    Object.assign(exkursionEntwurf, { stopLoss: null, maePrice: null, mfePrice: null })
+    tagsDesTrades.length = 0
+    offeneGruppen.clear()
+    mfeAuto.value = false
+    exkursionTradeId.value = trade.id
+    exkursionTagUnix.value = karte.dateUnix
+
+    // Bild: kennt die Monatsübersicht eines, das noch nicht geladen ist, die Tagesbilder nachholen
+    let bild = findeBild(trade, karte)
+    if (!bild && bilderDesMonats.some(b => b.dateUnixDay === karte.dateUnix)) {
+        await ladeBilderDesTages(karte.dateUnix)
+        bild = findeBild(trade, karte)
+    }
+    for (const k of Object.keys(bildInBearbeitung)) delete bildInBearbeitung[k]
+    Object.assign(bildInBearbeitung, bild ? { ...bild } : { side: null, type: null })
+    kerzenFehler.value = null
+
+    // Tags nur des Trades, nicht des Tages
+    tagsDesTrades.push(...tagsFuerTrade(trade.id))
+
+    // Notiz (nur Anzeige, ohne HTML), Metadaten und Trade-Typen
+    tradingMeta.value = null
+    tradeTypeRef.value = ''
+    closingTradeTypeRef.value = ''
+    notizText.value = ''
+    const notiz = notes.find(n => n.tradeId == trade.id)
+    if (notiz) {
+        notizText.value = notizOhneHtml(notiz.note)
+        tradingMeta.value = notiz.tradingMetadata || null
+        tradeTypeRef.value = notiz.tradeType || ''
+        closingTradeTypeRef.value = notiz.closingTradeType || ''
+    }
+
+    const exkursion = excursions.find(x => x.tradeId == trade.id)
+    if (exkursion) {
+        for (const f of ['stopLoss', 'maePrice', 'mfePrice']) if (gesetzt(exkursion[f])) exkursionEntwurf[f] = exkursion[f]
+    }
+
+    // Kerzen nicht abwarten: die Eingaben sollen nicht auf die Börse warten
+    zeichneKerzen(trade, karte, tradingMeta.value)
+
+    // Auto-MFE nur zeigen, nicht als Änderung merken (D.16-2)
+    if (binanceChartAn.value && !gesetzt(exkursionEntwurf.mfePrice)) {
+        const wert = await berechneMfe(trade)
+        const nochDa = meinWechsel === wechselNr && tradeDetailOffen.value
+        if (Number.isFinite(wert) && nochDa && !gesetzt(exkursionEntwurf.mfePrice)) {
+            exkursionEntwurf.mfePrice = wert
+            mfeAuto.value = true
+        }
+    }
+}
+
+/**
+ * Zu einem Trade der Karte wechseln — beim Öffnen wie beim Blättern (§5.2).
+ * Vorher wird gespeichert, was am bisher gezeigten Trade offen ist.
+ *
+ * @returns {Promise<boolean>} gewechselt ja/nein
+ */
+async function zeigeTrade(karteIndex, tradeIndex) {
+    if (markierungOffen.value) {
+        alert(t('common.screenshotSaveAnnotation'))
+        return false
+    }
+    const meinWechsel = ++wechselNr
+    setupsLaden.value = true
+    await speichereAusstehendes()
+
+    if (!tradeDetailOffen.value) kerzenSchluessel.value++   // frischer Knoten je Öffnen, nicht je Blättern
+    offenerTagIndex.value = karteIndex
+    tradeIndexAktiv.value = tradeIndex
+    tradeDetailOffen.value = true
+    dialogOffen.value = true
+
+    const karte = journalTage[karteIndex]
+    const trade = karte?.trades?.[tradeIndex]
+    if (karte && trade) {
+        try {
+            await fuelleFenster(karte, trade, meinWechsel)
+        } catch (fehler) {
+            console.error('Tagesansicht: Trade-Fenster füllen', fehler)
+        }
+    }
+    // Nur der jüngste Wechsel gibt die Knöpfe frei; „Speichern nötig" geht nach JEDEM Wechsel zurück (Eigenart)
+    if (tradeDetailOffen.value && meinWechsel === wechselNr) {
+        setupsLaden.value = false
+        speichernNoetig.value = false
+    }
+    return true
+}
+
+/** Klick oder Enter auf eine Trade-Zeile. Lädt das Fenster gerade, zählt der Klick nicht. */
+function oeffneTrade(karteIndex, tradeIndex) {
+    if (tradeDetailOffen.value && setupsLaden.value) return
+    zeigeTrade(karteIndex, tradeIndex)
+}
+
+/** Vorheriger (−1) oder nächster (+1) Trade derselben Karte — nie über die Karte hinaus. */
+function blaettere(schritt) {
+    if (!tradeDetailOffen.value || setupsLaden.value) return
+    const ziel = tradeIndexAktiv.value + schritt
+    if (!offeneKarte.value?.trades?.[ziel]) return
+    zeigeTrade(offenerTagIndex.value, ziel)
+}
+
+/**
+ * Speichern und aufräumen (§5.4 ab Schritt 4); der Aufrufer hat den Dialog
+ * schon als zu vermerkt.
+ *
+ * @returns {Promise<boolean>} geschlossen ja/nein (nein: Markierung läuft)
+ */
+async function beendeTradeFenster() {
+    if (markierungOffen.value) {
+        alert(t('common.screenshotSaveAnnotation'))
+        return false
+    }
+    setupsLaden.value = true
+    await speichereAusstehendes()
+    wechselNr++
+    entsorgeKerzen()
+    kerzenAuftrag++
+    setupsLaden.value = false
+    offenerTagIndex.value = undefined
+    tradeIndexAktiv.value = undefined
+    tradeExkursionGeaendert.value = false
+    speichernNoetig.value = false
+    tradeDetailOffen.value = false
+    dialogOffen.value = false
+    fensterBilderGeprueft = false
+    kerzenFehler.value = null
+    kerzenLaedt.value = false
+    offeneGruppen.clear()
+    tagsDesTrades.length = 0
+    return true
+}
+
+/**
+ * Der eine Schliessweg: ×, Esc und der Knopf unten. Der Dialog-Baustein meldet
+ * × und das native `close` beide — das zweite Melden fällt hier durch.
+ */
+async function schliesseTrade() {
+    if (!dialogOffen.value) return false
+    if (markierungOffen.value) {
+        alert(t('common.screenshotSaveAnnotation'))
+        // Esc hat den nativen Dialog schon zugemacht: wieder öffnen
+        if (!detailEl.value?.closest('dialog')?.open) {
+            dialogOffen.value = false
+            await nextTick()
+            dialogOffen.value = true
+        }
+        return false
+    }
+    dialogOffen.value = false
+    return beendeTradeFenster()
+}
 
 // ── MFE-Eingabe ────────────────────────────────────────────────────────────
 
@@ -517,7 +710,7 @@ function markiereExkursion() {
 
 function mfeGeaendert(e) {
     const roh = e.target.value
-    excursion.mfePrice = roh === '' || !Number.isFinite(parseFloat(roh)) ? null : parseFloat(roh)
+    exkursionEntwurf.mfePrice = roh === '' || !Number.isFinite(parseFloat(roh)) ? null : parseFloat(roh)
     markiereExkursion()
 }
 
@@ -576,7 +769,7 @@ async function oeffneOrderbuch() {
     }
     if (dialogOffen.value) {
         dialogOffen.value = false
-        const zu = await clickTradesModal()
+        const zu = await beendeTradeFenster()
         if (!zu) { dialogOffen.value = true; return }
     }
     router.push({ path: '/liquidity', query })
@@ -584,7 +777,10 @@ async function oeffneOrderbuch() {
 
 // ── Screenshot-Vorschau ────────────────────────────────────────────────────
 
-// F3-NEUBAU: Bild des Trades im Vollbild zeigen — docs/spec/f3-screenshots.md
+/** Vorschau rechts im Fuss: das Bild als Einzelbild im Vollbild, das über dem Trade-Fenster liegt. */
+function zeigeVollbild() {
+    zeigeImVollbild(-1, bildInBearbeitung)
+}
 
 // ── KI-Bewertung und Share-Karte ───────────────────────────────────────────
 
@@ -640,7 +836,7 @@ function shareAusZeile(karte, index) {
     if (!tr) return
     const erste = ersteGruppeIds()
     const zuordnung = tags.find(x => x.tradeId == tr.id)
-    const namen = listeVon(zuordnung?.tags).filter(id => erste.has(id)).map(id => useGetTagInfo(id).tagName).filter(Boolean)
+    const namen = listeVon(zuordnung?.tags).filter(id => erste.has(id)).map(id => tagAngaben(id).name).filter(Boolean)
     const meta = notes.find(x => x.tradeId == tr.id)?.tradingMetadata || null
     shareTrade.value = shareObjekt(tr, tag, meta, namen)
     shareOffen.value = true
@@ -650,7 +846,7 @@ function shareAusFenster() {
     const tr = offenerTrade.value
     if (!tr) return
     const erste = ersteGruppeIds()
-    const namen = tradeTags.filter(x => erste.has(x.id)).map(x => x.name).filter(Boolean)
+    const namen = tagsDesTrades.filter(x => erste.has(x.id)).map(x => x.name).filter(Boolean)
     shareTrade.value = shareObjekt(tr, offeneKarte.value, tradingMeta.value, namen)
     shareOffen.value = true
 }
@@ -660,7 +856,6 @@ function shareAusFenster() {
 onMounted(async () => {
     reiterZuruecksetzen()
     await starteTagesansicht()
-    baueTagListe()
     if (scrollToDateUnix.value) {
         await nextTick()
         springeZuTag(scrollToDateUnix.value)
@@ -674,7 +869,6 @@ onBeforeUnmount(() => {
         tradeDetailOffen.value = false
         offenerTagIndex.value = undefined
         tradeIndexAktiv.value = undefined
-        tradeIndexVorher.value = undefined
         speichernNoetig.value = false
     }
     kerzenAuftrag++
@@ -818,7 +1012,7 @@ onBeforeUnmount(() => {
 
     <!-- Trade-Detailfenster -->
     <Dialog :model-value="dialogOffen" :titel="dialogTitel" breite="72rem" :aussen-schliesst="false" @zu="schliesseTrade">
-        <div v-if="tradeDetailOffen && offenerTrade" class="detail">
+        <div v-if="tradeDetailOffen && offenerTrade" ref="detailEl" class="detail">
             <!-- Kerzenchart: frischer Knoten je Öffnen (key), ID ist Vorgabe von kerzenDiagramm -->
             <div v-if="binanceChartAn" class="kerzenbereich">
                 <div v-show="!kerzenFehler" id="tagesKerzen" :key="kerzenSchluessel" ref="kerzenEl" class="kerzen"></div>
@@ -879,7 +1073,7 @@ onBeforeUnmount(() => {
                             </td>
                             <td class="at-nowrap">
                                 <template v-if="offenerTrade.tradesCount != 0">
-                                    {{ checkDate(offenerTrade.td ?? offeneKarte.dateUnix, offenerTrade.entryTime)
+                                    {{ selberHandelstag(offenerTrade.td ?? offeneKarte.dateUnix, offenerTrade.entryTime)
                                         ? formDauer(offenerTrade.exitTime - offenerTrade.entryTime)
                                         : formDauerTage(offenerTrade.exitTime - offenerTrade.entryTime) }}
                                 </template>
@@ -1051,9 +1245,9 @@ onBeforeUnmount(() => {
                 <div class="feldgruppe">
                     <span class="at-label">{{ t('daily.tags') }}</span>
                     <div class="chips">
-                        <span v-for="tag in tradeTags" :key="tag.id" class="chip"
-                            :style="{ '--chip-farbe': useGetTagInfo(tag.id).groupColor }">{{ tag.name }}</span>
-                        <span v-if="!tradeTags.length" class="at-gedaempft">–</span>
+                        <span v-for="tag in tagsDesTrades" :key="tag.id" class="chip"
+                            :style="{ '--chip-farbe': tagAngaben(tag.id).farbe }">{{ tag.name }}</span>
+                        <span v-if="!tagsDesTrades.length" class="at-gedaempft">–</span>
                     </div>
                 </div>
 
@@ -1063,7 +1257,7 @@ onBeforeUnmount(() => {
                     </label>
                     <div class="mfezeile">
                         <input id="daily-mfe" class="at-feld mfefeld" type="number" step="any"
-                            :placeholder="t('daily.mfePlatzhalter')" :value="excursion.mfePrice ?? ''" @change="mfeGeaendert" />
+                            :placeholder="t('daily.mfePlatzhalter')" :value="exkursionEntwurf.mfePrice ?? ''" @change="mfeGeaendert" />
                         <template v-if="mfeAuto">
                             <span class="at-gedaempft mfeauto">{{ t('daily.mfeAuto') }}</span>
                             <Knopf klein @click="markiereExkursion">{{ t('daily.mfeUebernehmen') }}</Knopf>

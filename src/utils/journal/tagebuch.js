@@ -1,22 +1,21 @@
 /**
  * Begleitdaten der Trades: Zufriedenheit, Exkursionen, Tags, Tag-Katalog und
- * Notizen — laden und in der Tagesansicht bearbeiten (Spezifikation §4.3).
+ * Notizen laden (Spezifikation §4.3, docs/spec/f3-tags.md §3) und Tag-Angaben
+ * aus dem Katalog nachschlagen (f3-tags.md §4.1). Geschrieben werden Tags und
+ * Zufriedenheit hier nicht — das tun Incoming, Playbook und die Einstellungen
+ * mit eigenem Code.
  */
 import dayjs from './zeit.js'
-import { dbFind, dbFirst, dbCreate, dbUpdate, dbGetSettings, dbUpdateSettings } from '../db.js'
-import { seitenId, abfrageGrenze, speichernNoetig } from '../../stores/app/rahmen.js'
-import { setupsLaden, setupsLadeText } from '../../stores/app/laden.js'
-import { gewaehlterBereich, gewaehlterTagIndex, filteredSuggestions, tageZurueck } from '../../stores/journal/filter.js'
-import { journalTage } from '../../stores/journal/auswertung.js'
-import { screenshot } from '../../stores/journal/screenshots.js'
+import { dbFind, dbGetSettings } from '../db.js'
+import { seitenId, abfrageGrenze } from '../../stores/app/rahmen.js'
+import { gewaehlterBereich, tageZurueck } from '../../stores/journal/filter.js'
 import {
-    excursions, zufriedenheitTage, zufriedenheitTrades, tags, verfuegbareTags, verfuegbareTagListe,
-    tradeTags, neueTradeTags, tradeTagsGeaendert, tradeTagsDateUnix, tradeTagsId, tagInput, showTagsList,
-    notes, auswertungNotes, tradeNotiz, notizTagUnix, notizTradeId, offenerTagIndex, tradeIndexAktiv,
+    excursions, zufriedenheitTage, zufriedenheitTrades, tags, verfuegbareTags, notes, auswertungNotes,
 } from '../../stores/journal/tagebuch.js'
 import { istGanzerZeitraum } from './hilfen.js'
 
-const UNGRUPPIERT_FARBE = '#6c757d'
+/** Farbe, wenn der Katalog leer ist (zugleich die Farbe der Auffanggruppe `group_0`). */
+const ERSATZ_FARBE = '#6c757d'
 
 /** Zeitfenster `gewaehlterBereich` als Abfrage-Bedingung (ohne {0,0}-Sonderfall). */
 function imBereich() {
@@ -101,5 +100,40 @@ export async function useGetAuswertungNotes() {
     }
 }
 
-// F3-NEUBAU: Tag-Katalog, Tag-Info, Tag-Zuordnung eines Trades, Speichern von
-// Tags, Notiz und Tageszufriedenheit — docs/spec/f3-tags.md, f3-trade-dialog.md
+// ── Tag-Angaben ────────────────────────────────────────────────────────────
+
+/**
+ * Was der Katalog über eine Tag-ID weiss (docs/spec/f3-tags.md §4.1): die
+ * Gruppen werden der Reihe nach durchsucht, der erste Treffer gilt.
+ *
+ * Ohne Treffer: Farbe der ERSTEN Gruppe (leerer Katalog → `#6c757d`), Name
+ * leer, `gruppeId`/`gruppeName` undefiniert — so landet es auch in den
+ * Trade-Objekten der Tag-Gruppierung (Golden Master). Synchron, ohne Netz.
+ *
+ * @returns {{ gruppeId: string|undefined, gruppeName: string|undefined, farbe: string, name: string }}
+ */
+export function tagAngaben(tagId) {
+    for (const gruppe of verfuegbareTags) {
+        const treffer = (Array.isArray(gruppe.tags) ? gruppe.tags : []).find(x => x.id === tagId)
+        if (treffer) return { gruppeId: gruppe.id, gruppeName: gruppe.name, farbe: gruppe.color, name: treffer.name }
+    }
+    return { gruppeId: undefined, gruppeName: undefined, farbe: verfuegbareTags[0]?.color ?? ERSATZ_FARBE, name: '' }
+}
+
+/**
+ * Tags eines Trades als `{id, name}` (f3-trade-dialog.md §5.2 Schritt 9):
+ * Zuordnung mit `tradeId` == Trade-ID (lose: Zahl und Text), jede ID einmal,
+ * unbekannte IDs fallen weg. Tages-Tags (Zuordnung über den Tag) zählen nicht.
+ */
+export function tagsFuerTrade(tradeId) {
+    const zuordnung = tags.find(z => z.tradeId == tradeId)
+    const aus = []
+    for (const id of Array.isArray(zuordnung?.tags) ? zuordnung.tags : []) {
+        if (aus.some(x => x.id === id)) continue
+        for (const gruppe of verfuegbareTags) {
+            const treffer = (Array.isArray(gruppe.tags) ? gruppe.tags : []).find(x => x.id === id)
+            if (treffer) { aus.push({ id: treffer.id, name: treffer.name }); break }
+        }
+    }
+    return aus
+}

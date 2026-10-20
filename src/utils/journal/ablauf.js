@@ -24,7 +24,7 @@ import { gruppiereTrades } from './gruppieren.js'
 import { berechneGewinnAnalyse } from './gewinnanalyse.js'
 import { ladeKalender } from './kalender.js'
 import { ladeApis } from './app.js'
-import { ladeBilder, leseBildSeite } from '../screenshots.js'
+import { ladeBilderHaeppchen, ladeBilderDesMonats, leseGemerkteSeitengroesse } from '../bilder/laden.js'
 import { ladeDiagramme, geladeneDiagramme } from './diagrammLader.js'
 
 let generation = 0
@@ -106,7 +106,7 @@ export async function starteTagesansicht() {
         seiteLaedt.value = false
         ladeDiagramme().then(d => { d.zeichneDoppellinie(); d.zeichneTorte() })
         ladeKalender()
-        ladeBilder(true)
+        ladeBilderDesMonats()
         diagrammeImAufbau.value = false
     } catch (fehler) {
         if (fehler instanceof Ueberholt) return
@@ -136,11 +136,11 @@ export async function starteBilder() {
     const aktuell = neuerLauf()
     try {
         seiteLaedt.value = true
-        leseBildSeite()
+        leseGemerkteSeitengroesse()
         await bestimmeBereich()
         await Promise.all([ladeTags(), ladeVerfuegbareTags()])
         pruefe(aktuell)
-        await ladeBilder(false)
+        await ladeBilderHaeppchen()
     } catch (fehler) {
         if (!(fehler instanceof Ueberholt)) console.error('Screenshots laden fehlgeschlagen:', fehler)
     } finally {
@@ -178,7 +178,7 @@ export async function ladeWeitere() {
         const d = await ladeDiagramme()
         await Promise.all([d.zeichneDoppellinie(), d.zeichneTorte()])
     } else if (seitenId.value === 'bilder') {
-        await ladeBilder(false)
+        await ladeBilderHaeppchen()
     }
     ladeMehr.value = false
 }

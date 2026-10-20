@@ -16,10 +16,10 @@ Ordnern; die exportierten Namen sind unverändert (Spezifikation
 | `journal/filter.js` | Auswahl der Seitenleiste (`selected*`, `betragArt` …) und Optionslisten |
 | `journal/auswertung.js` | Ergebnis der Kette: `journalTage*`, `totals`, `summenJeTag`, `groups`, `gewinnAnalyse` |
 | `journal/import.js` | Import-Vorschau: `executions`, `trades`, `blotter`, `pAndL`, vorhandene Tage |
-| `journal/tagebuch.js` | Zufriedenheit, Tags, Tag-Katalog, Notizen, Exkursionen, Bearbeitungszustand |
+| `journal/tagebuch.js` | Zufriedenheit, Tags, Tag-Katalog, Notizen, Exkursionen, Zustand des Trade-Fensters (`exkursionEntwurf`, `tagsDesTrades`) |
 | `journal/kalender.js` | `kalenderDaten`, `miniKalenderDaten`, `kalenderKonten` |
-| `journal/screenshots.js` | Screenshot-Daten und -Bearbeitung |
-| `journal/offenePositionen.js` | Incoming-Positionen und Bewertungs-Hinweise |
+| `journal/bilder.js` | Bildpfad: geladene Liste, Monatsübersicht, Bild in Bearbeitung, Vollbild, Markierungsauftrag, Blätterstand |
+| `journal/offenePositionen.js` | Incoming-Positionen, aufgeklappte Position und Bewertungs-Hinweise |
 
 ## Einstiegspunkte (Re-Exporte)
 
@@ -27,7 +27,7 @@ Ordnern; die exportierten Namen sind unverändert (Spezifikation
 |-------|--------|
 | `ui.js` | `ui/loading.js`, `ui/navigation.js`, `ui/screenshots-ui.js`, `ui/app.js` |
 | `filters.js` | `filters/selection.js`, `filters/options.js` |
-| `trades.js` | `trades/dashboard.js`, `add-trades.js`, `daily-detail.js`, `incoming.js`, `screenshots.js`, `calendar.js` |
+| `trades.js` | `trades/dashboard.js`, `add-trades.js`, `daily-detail.js`, `incoming.js`, `screenshots.js` (Bilder), `calendar.js` |
 | `settings.js` | `settings/app.js`, `settings/reporting.js` |
 
 Die Unterordner re-exportieren nur aus `app/*` und `journal/*`. Neuer Code

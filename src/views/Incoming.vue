@@ -6,13 +6,14 @@ import SeiteLaedt from '../components/SeiteLaedt.vue'
 import KeineDaten from '../components/KeineDaten.vue'
 import PageInfo from '../components/PageInfo.vue'
 import { Knopf, Symbol, Pille, Hinweis, Kreisel } from '../components/basis'
-import { seiteLaedt, tradeZeitzone, expandedId, kopiertesBild } from '../stores/ui.js'
+import { seiteLaedt, tradeZeitzone, kopiertesBild } from '../stores/ui.js'
+import { aufgeklapptePosition } from '../stores/journal/offenePositionen.js'
 import { allTradeTimeframes, selectedTradeTimeframes, gewaehlteBoerse, selectedTradeCategory, brokers } from '../stores/filters.js'
 import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, verfuegbareTags } from '../stores/trades.js'
 import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
 import { appEinstellungen } from '../stores/settings.js'
 import { useFetchOpenPositions, useGetIncomingPositions, useUpdateIncomingPosition, useDeleteIncomingPosition, useTransferClosingMetadata } from '../utils/incoming'
-import { ladeVerfuegbareTags, useGetTagInfo } from '../utils/journal/tagebuch.js'
+import { ladeVerfuegbareTags, tagAngaben } from '../utils/journal/tagebuch.js'
 import { dbCreate, dbUpdate, dbFind, dbGet } from '../utils/db.js'
 import dayjs from '../utils/journal/zeit.js'
 import Quill from 'quill'
@@ -37,7 +38,7 @@ const savingId = ref(null)
  * Aufklappen fragt nicht nach.
  */
 useVerlassenSchutz(() => {
-    const id = expandedId.value
+    const id = aufgeklapptePosition.value
     if (!id) return false
     const pos = incomingPositions.find((p) => p.positionId === id)
     if (!pos) return false
@@ -587,7 +588,7 @@ onBeforeUnmount(() => {
     Object.keys(quillInstances).forEach(key => {
         delete quillInstances[key]
     })
-    expandedId.value = null
+    aufgeklapptePosition.value = null
 })
 
 async function manualRefresh() {
@@ -595,16 +596,16 @@ async function manualRefresh() {
     try {
         await useFetchOpenPositions()
         // Re-fetch fills and TP/SL for expanded position
-        if (expandedId.value) {
-            const expandPos = incomingPositions.find(p => p.positionId === expandedId.value)
-            if (expandPos) {
-                fetchPositionFills(expandedId.value, true, expandPos.broker, expandPos.symbol, expandPos.bitunixData?.ctime, expandPos.side)
-                fetchPositionTpSl(expandedId.value, true, expandPos.broker, expandPos.symbol)
+        if (aufgeklapptePosition.value) {
+            const aufgeklappt = incomingPositions.find(p => p.positionId === aufgeklapptePosition.value)
+            if (aufgeklappt) {
+                fetchPositionFills(aufgeklapptePosition.value, true, aufgeklappt.broker, aufgeklappt.symbol, aufgeklappt.bitunixData?.ctime, aufgeklappt.side)
+                fetchPositionTpSl(aufgeklapptePosition.value, true, aufgeklappt.broker, aufgeklappt.symbol)
                 // If position transitioned to pending_evaluation, init closing Quill
-                if (expandPos.status === 'pending_evaluation') {
+                if (aufgeklappt.status === 'pending_evaluation') {
                     await nextTick()
-                    initQuillEditor(expandedId.value, 'closing')
-                    autoDetectAndSetTradeType(expandPos)
+                    initQuillEditor(aufgeklapptePosition.value, 'closing')
+                    autoDetectAndSetTradeType(aufgeklappt)
                 }
             }
         }
@@ -615,36 +616,36 @@ async function manualRefresh() {
 
 async function toggleExpand(positionId) {
     // Close current: clean up Quill instances
-    if (expandedId.value && expandedId.value !== positionId) {
-        delete quillInstances[expandedId.value + '_opening']
-        delete quillInstances[expandedId.value + '_closing']
+    if (aufgeklapptePosition.value && aufgeklapptePosition.value !== positionId) {
+        delete quillInstances[aufgeklapptePosition.value + '_opening']
+        delete quillInstances[aufgeklapptePosition.value + '_closing']
     }
 
-    if (expandedId.value === positionId) {
+    if (aufgeklapptePosition.value === positionId) {
         delete quillInstances[positionId + '_opening']
         delete quillInstances[positionId + '_closing']
-        expandedId.value = null
+        aufgeklapptePosition.value = null
         return
     }
 
-    expandedId.value = positionId
+    aufgeklapptePosition.value = positionId
 
     // Fetch fills and TP/SL for open and pending_evaluation positions (Bitunix + Bitget)
-    const expandPos = incomingPositions.find(p => p.positionId === positionId)
+    const aufgeklappt = incomingPositions.find(p => p.positionId === positionId)
     // Screenshot-Previews aus DB laden
-    if (expandPos) loadScreenshotPreviews(expandPos)
-    if (expandPos && (expandPos.status === 'open' || expandPos.status === 'pending_evaluation') && (expandPos.broker === 'bitunix' || expandPos.broker === 'bitget')) {
-        fetchPositionFills(positionId, false, expandPos.broker, expandPos.symbol, expandPos.bitunixData?.ctime, expandPos.side)
-        fetchPositionTpSl(positionId, false, expandPos.broker, expandPos.symbol)
+    if (aufgeklappt) loadScreenshotPreviews(aufgeklappt)
+    if (aufgeklappt && (aufgeklappt.status === 'open' || aufgeklappt.status === 'pending_evaluation') && (aufgeklappt.broker === 'bitunix' || aufgeklappt.broker === 'bitget')) {
+        fetchPositionFills(positionId, false, aufgeklappt.broker, aufgeklappt.symbol, aufgeklappt.bitunixData?.ctime, aufgeklappt.side)
+        fetchPositionTpSl(positionId, false, aufgeklappt.broker, aufgeklappt.symbol)
     }
 
     // Initialize Quill editors after DOM renders
     await nextTick()
     initQuillEditor(positionId, 'opening')
     // Only init closing Quill if position is pending evaluation
-    if (expandPos && expandPos.status === 'pending_evaluation') {
+    if (aufgeklappt && aufgeklappt.status === 'pending_evaluation') {
         initQuillEditor(positionId, 'closing')
-        autoDetectAndSetTradeType(expandPos)
+        autoDetectAndSetTradeType(aufgeklappt)
     }
 }
 
@@ -987,8 +988,8 @@ function removeClosingTag(pos, idx) {
 }
 
 function getTagColor(tagId) {
-    const info = useGetTagInfo(tagId)
-    return info?.groupColor || '#6c757d'
+    const info = tagAngaben(tagId)
+    return info?.farbe || '#6c757d'
 }
 
 // ===== SATISFACTION HANDLER =====
@@ -1044,12 +1045,12 @@ async function kopiertesBildEinfuegen(pos, slot) {
 // Einfügen (Strg/Cmd+V): geht an die gerade aufgeklappte Position, erstes freies
 // Feld (Einstieg → Trend → Abschluss).
 function onPasteIncoming(e) {
-    if (!expandedId.value) return
+    if (!aufgeklapptePosition.value) return
     const imgItem = [...(e.clipboardData?.items || [])].find(it => it.type && it.type.startsWith('image/'))
     if (!imgItem) return
     const file = imgItem.getAsFile()
     if (!file) return
-    const pos = incomingPositions.find(p => p.positionId === expandedId.value)
+    const pos = incomingPositions.find(p => p.positionId === aufgeklapptePosition.value)
     if (!pos) return
     e.preventDefault()
     if (!pos.entryScreenshotId) screenshotAusDatei(file, pos, 'entry')
@@ -1255,7 +1256,7 @@ async function saveMetadata(pos) {
     savingId.value = null
     delete quillInstances[openingKey]
     delete quillInstances[closingKey]
-    expandedId.value = null
+    aufgeklapptePosition.value = null
 }
 
 const closingId = ref(null)
@@ -1390,7 +1391,7 @@ async function completeClosingEvaluation(pos) {
 
         delete quillInstances[openingKey]
         delete quillInstances[closingKey]
-        expandedId.value = null
+        aufgeklapptePosition.value = null
     } catch (error) {
         console.error('Error completing evaluation:', error)
         alert(t('common.errorPrefix') + (error?.response?.data?.error || error.message || t('common.error')))
@@ -1503,7 +1504,7 @@ function getPositionDate(pos) {
                         </template>
                     </div>
                     <div class="karten-kopf-pfeil">
-                        <Symbol :name="expandedId === pos.positionId ? 'hoch' : 'runter'" :groesse="22" />
+                        <Symbol :name="aufgeklapptePosition === pos.positionId ? 'hoch' : 'runter'" :groesse="22" />
                     </div>
                 </div>
 
@@ -1546,7 +1547,7 @@ function getPositionDate(pos) {
                 </div>
 
                 <!-- Stress level indicator (always visible if set) -->
-                <div v-if="pos.stressLevel > 0 && expandedId !== pos.positionId" class="stress-zeile">
+                <div v-if="pos.stressLevel > 0 && aufgeklapptePosition !== pos.positionId" class="stress-zeile">
                     <small class="incoming-info">{{ t('incoming.stress') }} </small>
                     <template v-for="n in 10" :key="n">
                         <span class="stress-dot" :class="n <= pos.stressLevel ? 'active' : 'inactive'">
@@ -1559,7 +1560,7 @@ function getPositionDate(pos) {
                 </div>
 
                 <!-- ===== EXPANDED DETAIL SECTION ===== -->
-                <div v-if="expandedId === pos.positionId" class="incoming-meta-section detail-bereich">
+                <div v-if="aufgeklapptePosition === pos.positionId" class="incoming-meta-section detail-bereich">
 
                     <!-- ========== FILLS / COMPOUND TRACKING ========== -->
                     <div v-if="pos.status === 'open' && (pos.broker === 'bitunix' || pos.broker === 'bitget')" class="fills-section abschnitt">

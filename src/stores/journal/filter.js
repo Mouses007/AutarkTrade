@@ -82,5 +82,4 @@ export const allTradeTimeframes = computed(() => ZEITRAHMEN.flatMap(([gruppe, we
 
 export const tageZurueck = ref(undefined)
 export const tageReserve = ref(undefined)
-export const holtWeitere = ref(false)
 export const mfeSpeichern = ref(false)

@@ -1,3 +1,3 @@
-// Trades: Screenshot-Daten.
+// Trades: Bilddaten.
 // Re-Exporte; die Werte leben in stores/app/* und stores/journal/*.
-export { screenshot, screenshots, bildInfos, gewaehltesBild } from '../journal/screenshots.js'
+export { bilder, bilderDesMonats, bildInBearbeitung, vollbildBild } from '../journal/bilder.js'

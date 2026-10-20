@@ -531,11 +531,11 @@ export function setupOllamaRoutes(app) {
 
             const satisfaction = satRecord ? (satRecord.satisfaction === 1 ? 'Zufrieden' : satRecord.satisfaction === 0 ? 'Unzufrieden' : 'Neutral') : 'Nicht bewertet'
 
-            let tradeTags = ''
+            let tagText = ''
             if (tagRecord?.tags) {
                 try {
                     const parsed = JSON.parse(tagRecord.tags)
-                    tradeTags = parsed.map(t => t.name || t).join(', ')
+                    tagText = parsed.map(t => t.name || t).join(', ')
                 } catch (e) { /* ignore */ }
             }
 
@@ -704,8 +704,8 @@ TRADE-DATEN:
                 }
             }
 
-            if (tradeTags) {
-                reviewPrompt += `\n- Tags/Strategie: ${tradeTags}`
+            if (tagText) {
+                reviewPrompt += `\n- Tags/Strategie: ${tagText}`
             }
             if (playbook) {
                 reviewPrompt += `\n- Playbook: ${playbook}`

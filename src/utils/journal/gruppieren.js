@@ -7,7 +7,7 @@
 import dayjs from './zeit.js'
 import { tradeZeitzone } from '../../stores/app/rahmen.js'
 import { groups, timeFrame } from '../../stores/journal/auswertung.js'
-import { useGetTagInfo } from './tagebuch.js'
+import { tagAngaben } from './tagebuch.js'
 import { gruppiere, sortiertNach } from './hilfen.js'
 import { kette } from './kette.js'
 
@@ -67,10 +67,10 @@ function tagEintraege(liste) {
     for (const trade of liste) {
         const tagsDesTrades = trade.tags ? trade.tags : [{ id: 'no_tags', name: 'No Tags' }]
         for (const tag of tagsDesTrades) {
-            const info = useGetTagInfo(tag.id)
-            tag.groupName = info.tagGroupName
-            tag.groupId = info.tagGroupId
-            eintraege.push({ tagName: tag.name, tagGroupName: info.tagGroupName, ...trade, tag, _gruppe: info.tagGroupId })
+            const info = tagAngaben(tag.id)
+            tag.groupName = info.gruppeName
+            tag.groupId = info.gruppeId
+            eintraege.push({ tagName: tag.name, tagGroupName: info.gruppeName, ...trade, tag, _gruppe: info.gruppeId })
         }
     }
     return eintraege

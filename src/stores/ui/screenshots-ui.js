@@ -1,3 +1,3 @@
-// UI: Bearbeitungszustand der Screenshots.
+// UI: Bearbeitungs- und Vollbildzustand der Bilder.
 // Re-Exporte; die Werte leben in stores/app/* und stores/journal/*.
-export { markierungOffen, bildInBearbeitung, expandedId, expandedSource, selectedScreenshotIndex, selectedScreenshotSource, tagesBildGeaendert, resizeCompressImg, resizeCompressMaxHeight, resizeCompressMaxWidth, resizeCompressQuality, expandedScreenshot } from '../journal/screenshots.js'
+export { markierungOffen, markierAuftrag, vollbildOffen, vollbildIndex } from '../journal/bilder.js'

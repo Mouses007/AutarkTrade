@@ -47,3 +47,6 @@ export function removeNotifiedPositionIds(ids) {
     for (const id of ids) menge.delete(id)
     merkeGemeldet(menge)
 }
+
+/** Positions-ID der aufgeklappten Incoming-Karte (null = keine). */
+export const aufgeklapptePosition = ref(null)

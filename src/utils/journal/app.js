@@ -19,7 +19,6 @@ import {
     selectedMonthPreset, gewaehlteKonten, betragArt, tagAuswahl, selectedTradeTimeframes,
 } from '../../stores/journal/filter.js'
 import { tags, verfuegbareTags } from '../../stores/journal/tagebuch.js'
-import { bildSeite } from '../../stores/journal/screenshots.js'
 import { ladeTags, ladeVerfuegbareTags } from './tagebuch.js'
 
 const t = (k) => i18n.global.t(k)

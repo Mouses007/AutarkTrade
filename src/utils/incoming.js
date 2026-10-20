@@ -2,7 +2,7 @@ import axios from 'axios'
 import dayjs from './journal/zeit.js'
 import { dbFind, dbFirst, dbCreate, dbUpdate, dbDelete, dbFindTradeIdByPositionId } from './db.js'
 import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, pendingOpeningCount, pendingClosingCount, pendingOpeningByBroker, pendingClosingByBroker, evalNotificationShown, evalNotificationDismissed, evalNeu, getNotifiedPositionIds, addNotifiedPositionIds, removeNotifiedPositionIds } from '../stores/trades.js'
-import { expandedId } from '../stores/ui.js'
+import { aufgeklapptePosition } from '../stores/journal/offenePositionen.js'
 import { appEinstellungen } from '../stores/settings.js'
 import { gewaehlteBoerse } from '../stores/filters.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
@@ -731,12 +731,12 @@ async function loadIncomingPositions() {
 
     // Preserve local state of the expanded (currently edited) position
     let preservedLocal = null
-    if (expandedId.value) {
-        const expandedPos = incomingPositions.find(p => p.positionId === expandedId.value)
-        if (expandedPos) {
-            preservedLocal = { positionId: expandedPos.positionId }
+    if (aufgeklapptePosition.value) {
+        const aufgeklappt = incomingPositions.find(p => p.positionId === aufgeklapptePosition.value)
+        if (aufgeklappt) {
+            preservedLocal = { positionId: aufgeklappt.positionId }
             LOCAL_EDIT_FIELDS.forEach(field => {
-                const val = expandedPos[field]
+                const val = aufgeklappt[field]
                 if (val !== undefined && val !== null) {
                     preservedLocal[field] = (Array.isArray(val) || typeof val === 'object')
                         ? JSON.parse(JSON.stringify(val))

@@ -10,7 +10,7 @@
 import { scrolleZu } from '../../utils/scrolleZu.js'
 import { reactive, ref, inject, nextTick } from 'vue'
 import { dbFind, dbGet, dbCreate, dbUpdate, dbDelete } from '@/utils/db.js'
-import { ladeVerfuegbareTags, useGetTagInfo } from '@/utils/journal/tagebuch.js'
+import { ladeVerfuegbareTags, tagAngaben } from '@/utils/journal/tagebuch.js'
 import { gewaehlteBoerse } from '@/stores/journal/filter.js'
 import { kopiertesBild } from '@/stores/app/rahmen.js'
 import { seiteLaedt } from '@/stores/app/laden.js'
@@ -88,7 +88,7 @@ export function erzeugePlaybook() {
                 tageszeile: fund?.tageszeile,
                 zufriedenheit: zufriedenheitNachId.get(n.tradeId),
                 tagZeile: tagsNachId.get(n.tradeId),
-                tagInfo: useGetTagInfo,
+                tagInfo: tagAngaben,
             }))
         }
         eintraege.splice(0, eintraege.length, ...neu)
@@ -234,8 +234,8 @@ export function erzeugePlaybook() {
                 e.tagRecordObjectId = z?.objectId ?? null
             }
             // Neu hinzugefügte Tags kennen ihre Farbe noch nicht.
-            e.tags = loeseTags(tags, useGetTagInfo)
-            e.closingTags = loeseTags(closingTags, useGetTagInfo)
+            e.tags = loeseTags(tags, tagAngaben)
+            e.closingTags = loeseTags(closingTags, tagAngaben)
 
             schnappschuss = null
             bearbeitenId.value = null

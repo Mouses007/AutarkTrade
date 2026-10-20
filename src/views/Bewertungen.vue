@@ -60,7 +60,7 @@ onBeforeUnmount(() => window.removeEventListener('paste', pb.beiEinfuegen))
             <KeineDaten v-else />
         </template>
 
-        <!-- Eigene Überlagerung statt ScreenshotVollbild: ein einzelnes Bild,
+        <!-- Eigene Überlagerung statt BildVollbild: ein einzelnes Bild,
              kein Blättern. Esc und Klick daneben schliessen (nativer Dialog). -->
         <Dialog :model-value="vollbildOffen" :titel="t('incoming.screenshot')" breite="96vw" @zu="vollbildZu">
             <div v-if="pb.vollbild.value" class="vollbild">
