@@ -134,6 +134,20 @@ console.log('\nHost-Header (DNS-Rebinding)\n')
 
     if (altHosts === undefined) delete process.env.AT_ALLOWED_HOSTS
     else process.env.AT_ALLOWED_HOSTS = altHosts
+
+    // Name der mDNS-Ansage (AT_MDNS_NAME): genau dieser eine .local-Name, keine Wildcard
+    const altMdns = process.env.AT_MDNS_NAME
+    delete process.env.AT_MDNS_NAME
+    check('ohne AT_MDNS_NAME ist autarktrade.local nicht erlaubt', istErlaubterHost('autarktrade.local:8080') === false)
+    process.env.AT_MDNS_NAME = 'AutarkTrade.local'
+    check('AT_MDNS_NAME gibt den angesagten Namen frei', istErlaubterHost('autarktrade.local:8080') === true)
+    check('Gegenprobe: andere .local-Namen bleiben draussen', istErlaubterHost('chefkoch_nas.local:8080') === false)
+    process.env.AT_MDNS_NAME = 'evil.example'
+    check('Gegenprobe: ein Nicht-.local-Name in AT_MDNS_NAME öffnet nichts', istErlaubterHost('evil.example') === false)
+    process.env.AT_MDNS_NAME = 'aus'
+    check('AT_MDNS_NAME=aus gibt nichts frei', istErlaubterHost('aus') === false && istErlaubterHost('autarktrade.local') === false)
+    if (altMdns === undefined) delete process.env.AT_MDNS_NAME
+    else process.env.AT_MDNS_NAME = altMdns
 }
 
 console.log('\nFrei eingetragene KI-Endpunkte\n')

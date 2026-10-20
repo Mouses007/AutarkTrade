@@ -290,6 +290,19 @@ Was nach dem Umzug in V2 eingetragen wurde, steckt danach nur in `tradejournal_v
 App findet ihre Live-Instanzen so vor, wie sie in der Sicherung standen, auch eine noch aktive
 Live-Instanz. Ihr Stop-Wächter läuft dann wieder.
 
+## Eigener Name im LAN: `autarktrade.local`
+
+Die App ist zusätzlich unter **`http://autarktrade.local:8080`** erreichbar, ohne die NAS
+umzubenennen und ohne Router-Eintrag. Der Dienst `mdns` im Compose-Projekt
+(`server/mdns-name.mjs`, Host-Netz) beantwortet mDNS-Fragen nach genau diesem Namen mit der
+IPv4 der NAS; der Host-Schutz der App gibt den Namen frei (`AT_MDNS_NAME`).
+- Andere Name: `AT_MDNS_NAME=…​.local` in der Projekt-`.env`; abschalten mit `AT_MDNS_NAME=aus`.
+- Falsche Adresse gewählt (mehrere Netze an der NAS): `AT_MDNS_IP=192.168.178.100` in die `.env`.
+- Funktioniert auf Linux, macOS, iOS und Windows 10+. Manche Android-Browser lösen `.local`
+  nicht auf; dort weiter die IP nutzen. ESP32 und Widget nutzen ohnehin die IP.
+- Kommt mit dem nächsten `scripts/nas-deploy.sh`: das Update tauscht die Compose-Datei mit aus,
+  wenn sie sich geändert hat (die vorige bleibt als `compose.yaml.vor-update-<datum>`).
+
 ## Updates ab jetzt
 
 Nach dem Umzug ist **`scripts/nas-deploy.sh`** der normale Weg für jedes V2-Update. Aufruf,

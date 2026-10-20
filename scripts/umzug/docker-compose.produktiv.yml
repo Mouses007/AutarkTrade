@@ -43,6 +43,9 @@ services:
       # Fehlversuchs-Zähler hinter Caddy: der Kopf zählt nur vom Dienst `caddy` (A2-03).
       - AT_TRUST_PROXY=1
       - AT_TRUSTED_PROXY=caddy
+      # Name, unter dem die App im LAN erreichbar ist (Dienst `mdns` unten kündigt ihn an);
+      # der Host-Schutz gibt genau diesen Namen frei. Leer oder „aus" = kein eigener Name.
+      - AT_MDNS_NAME=${AT_MDNS_NAME:-autarktrade.local}
     # Kein Docker-Socket (A2-10). Die App läuft als `node` (uid 1000); ein
     # bestehendes /app/data-Volume übernimmt der Einstieg selbst (chown).
     restart: unless-stopped
@@ -62,6 +65,20 @@ services:
       - caddy_data:/data
     depends_on:
       - trading-journal
+    restart: unless-stopped
+
+  # Eigener Name im LAN ohne Router-Eintrag und ohne die NAS umzubenennen:
+  # beantwortet mDNS-Fragen nach AT_MDNS_NAME mit der IPv4 der NAS
+  # (server/mdns-name.mjs). Braucht das echte Netz für Multicast, daher host.
+  # Adresse automatisch (private IPv4), sonst AT_MDNS_IP in der .env setzen.
+  mdns:
+    image: ${AT_IMAGE:-autarktrade:produktiv}
+    pull_policy: never
+    network_mode: host
+    command: ["node", "server/mdns-name.mjs"]
+    environment:
+      - AT_MDNS_NAME=${AT_MDNS_NAME:-autarktrade.local}
+      - AT_MDNS_IP=${AT_MDNS_IP:-}
     restart: unless-stopped
 
 volumes:

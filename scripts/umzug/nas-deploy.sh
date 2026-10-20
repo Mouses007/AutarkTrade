@@ -55,9 +55,18 @@ CD="$(compose_datei)"
 echo "   Compose-Datei im Projekt: $CD"
 nas "$S cat '$NAS_PROJEKT/$CD'" > "$JETZT_COMPOSE" 2>/dev/null || true
 [ -s "$JETZT_COMPOSE" ] || abbruch "$NAS_PROJEKT/$CD ist leer oder fehlt — COMPOSE_DATEI in scripts/umzug/.env setzen"
+COMPOSE_ANDERS=0
 if grep -q "autarktrade:produktiv\|${NAS_IMAGE_TAG}" "$JETZT_COMPOSE"; then
     WECHSEL=0
     echo "   Projekt $NAS_PROJEKT läuft schon mit V2 → Update"
+    # Die Compose-Datei gehört seit dem Wechsel zu V2 und reist mit jedem Update mit
+    # (z. B. neuer Dienst `mdns`). Die vorige bleibt als $CD.vor-update-<datum> liegen.
+    if ! cmp -s "$JETZT_COMPOSE" "$NEU_COMPOSE"; then
+        COMPOSE_ANDERS=1
+        echo "   Compose-Datei hat sich geändert → wird mit ausgetauscht (vorige bleibt als $CD.vor-update-$DATUM)"
+        sed -E 's/((SECRET|PASSWORD|PASSWORT|TOKEN|KEY)[A-Za-z0-9_]*[[:space:]]*[:=][[:space:]]*).*/\1***/I' "$JETZT_COMPOSE" \
+            | diff -u --label "NAS: $CD" --label "neu" - "$NEU_COMPOSE" | sed 's/^/     /' | head -60 || true
+    fi
 else
     WECHSEL=1
     echo "   Projekt $NAS_PROJEKT nennt noch die alte App → WECHSEL auf V2 (einmalig)"
@@ -128,7 +137,7 @@ if [ "$NAS_HOST" != lokal ]; then
 else
     echo "   (lokal: Image ist schon da)"
 fi
-[ "$WECHSEL" = 1 ] && nas_ein "cat > '$ZWISCHEN'" < "$NEU_COMPOSE"
+{ [ "$WECHSEL" = 1 ] || [ "$COMPOSE_ANDERS" = 1 ]; } && nas_ein "cat > '$ZWISCHEN'" < "$NEU_COMPOSE"
 
 echo "── 4/5  Laden + Container neu erstellen (sudo) ─────────────"
 # sudo bekommt das am Anfang abgefragte Passwort (gemeinsam.sh), keine Abfrage mehr hier.
@@ -138,6 +147,7 @@ nas_tty "
     $( [ "$TAG" = "$NAS_IMAGE_TAG" ] || echo "$D tag '$TAG' '$NAS_IMAGE_TAG'" )
     $( [ "$WECHSEL" = 1 ] && [ "${ENV_ANLEGEN:-0}" = 1 ] && echo "$S sh -c \"umask 077; $NAS_DOCKER inspect -f '{{range .Config.Env}}{{println .}}{{end}}' '$ALT' | grep -E '^(CTJ_|AT_|DB_)' > '$NAS_PROJEKT/.env'\"; $S grep -Eq '^(CTJ|AT)_SECRET=.' '$NAS_PROJEKT/.env'" )
     $( [ "$WECHSEL" = 1 ] && echo "$S cp '$ZWISCHEN' '$NAS_PROJEKT/$CD'; rm -f '$ZWISCHEN'" )
+    $( [ "$COMPOSE_ANDERS" = 1 ] && echo "$S cp -p '$NAS_PROJEKT/$CD' '$NAS_PROJEKT/$CD.vor-update-$DATUM'; $S cp '$ZWISCHEN' '$NAS_PROJEKT/$CD'; rm -f '$ZWISCHEN'" )
     $S sh -c \"cd '$NAS_PROJEKT' && $NAS_DOCKER compose -p $COMPOSE_PROJEKT up -d --force-recreate\"
     # Nur namenlose Images (das vorige V2-Image nach dem Umtaggen). Getaggte bleiben —
     # auch trading-journal:vor-v2-<datum> für den Rückweg.

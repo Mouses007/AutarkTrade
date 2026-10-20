@@ -271,10 +271,16 @@ const PRIVATE_V4 = [
 
 /** Zusätzlich erlaubte Namen aus der Umgebung (Komma-getrennt). */
 function zusatzHosts() {
-    return String(umgebung('ALLOWED_HOSTS') || '')
+    const liste = String(umgebung('ALLOWED_HOSTS') || '')
         .split(',')
         .map((h) => h.trim().toLowerCase())
         .filter(Boolean)
+    // Der Name, den die mDNS-Ansage (server/mdns-name.mjs) im LAN verkündet, gehört
+    // dazu: Ein .local-Name ist nicht registrierbar, ein Rebinding-Angreifer kann ihn
+    // nicht auf sich zeigen lassen. Nur genau dieser eine Name, keine *.local-Wildcard.
+    const mdns = String(umgebung('MDNS_NAME') || '').trim().toLowerCase().replace(/\.$/, '')
+    if (mdns && mdns !== 'aus' && mdns.endsWith('.local')) liste.push(mdns)
+    return liste
 }
 
 /**
