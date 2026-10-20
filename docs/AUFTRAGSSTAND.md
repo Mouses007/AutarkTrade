@@ -38,6 +38,21 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 5 | S15 Analysequellen zurück | Von S12 entfernte Quellen (Yahoo, ForexFactory, CMC, blockchain.info, CoinGecko/GeckoTerminal ohne Schlüssel, pump.fun, Telegram, Reddit, CoinPaprika, Upbit/MEXC/OKX/Alpha, bapi-Brackets, News-Vorschläge, öffentlicher Solana-RPC, Logos, DeepSeek-Suche) zurück hinter Schalter `quellenOhneFreigabe` (Vorgabe an) | `claude/s15-quellen-zurueck-260844` | **fertig** |
 | 4 | F1 Funktion & Oberfläche | Audit A1+A4 behoben | – | **fertig** |
 | 4 | F2 Sicherheit | Audit A2 behoben | – | **fertig** |
+| 4 | F3 Fork-Reste | Audit A3 behoben (ohne Historie) | – | **fertig** |
+
+## F3 Fork-Reste — Ergebnis (20.10.2026)
+
+Grundlage: Audit A3 (`docs/audit/2026-10-19/A3-fork-reste.md`, 34 Befunde). Branch `claude/f3-fork-namen-68fe6d`, auf master per `--ff-only`. Stand je Befund im Bericht (Abschnitt „Stand nach F3").
+
+- **Behoben: alle „muss weg" und „sollte weg" ausser der Historie** (A3-27 bis A3-30 → F4). Dazu, wo die Begründung „generisch" nicht trug: Parse-Kommentare in `db.js` und die Diagramm-IDs der Herkunft.
+- **Namen:** ~130 Bezeichner, 11 Ansichts-/Komponenten-/Layout-Dateien, 6 CSS-Klassen, 17 Diagramm-IDs umbenannt; toter Zustand (`stepper`, `idCurrent…`, `useEditItem`, Parse-Alias) gelöscht. Nach dem Umbenennen der Vorlagen-Bindungs-Selbsttest aus F1: 213/213.
+- **Routen:** `/journal /kalender /tagesansicht /bilder /bewertungen /import /exkursionen /einstellungen/:bereich`; alle 13 alten Pfade (+ `/settings/<bereich>`) leiten samt Abfrage und Anker weiter. In der DB ist kein Pfad gespeichert (geprüft), also keine Migration; die Journal-Filter im `localStorage` übernimmt `src/utils/speicherUmzug.js` einmal unter `at.journal.*`.
+- **Clean-Room:** Tag-Info, Bildpfad und Trade-Fenster der Tagesansicht. Agent A beschrieb nur das Verhalten (`docs/spec/f3-*.md`), der Altcode wurde entfernt, Agent B baute ohne Zugriff eine eigene Aufteilung (`src/utils/bilder/`, `stores/journal/bilder.js`, `rahmen/BildVollbild.vue`, getrennte Wege im Trade-Fenster). Tote Teile (Tag-Eingabe, Notiz/Tags/Bild aus dem Trade-Fenster speichern, Upload/Verkleinern) nicht nachgebaut; drei Altfehler behoben (Bildspeichern schrieb `tags`-Zeilen mit `tradeId "undefined"`, Bild-Laden schaltete die Ladeanzeige des Trade-Fensters ab, Tag-Arbeitsliste blieb nach dem Schliessen gefüllt).
+- **Text/Abhängigkeit:** `daily.volTooltip` neu formuliert; `lodash` entfernt (nur noch transitiv über knex), `THIRD-PARTY-NOTICES` neu.
+- **Spezifikationen S4–S9** (nennen die alten Namen) aus dem Repo, als Beleg mit SHA-256 in `/home/maro/Schreibtisch/Trading/AutarkTrade-Beleg/clean-room-spezifikationen-2026-10/` (für F4: mit ins Bundle/Beleg nehmen).
+- **Prüfskript** `scripts/herkunft-pruefen.mjs`: zusätzlich Textdateien, Namen, Token-Fenster (umformulierte Kopien), ohne `codemirror-graphql`; Ausnahmen begründet in `scripts/herkunft-akzeptiert.json`. Ergebnis: 1 426 / 131 665 Codezeilen (1,08 %) alle generisch, 189 Namen und 170 Läufe gesichtet, Exit 0. `HERKUNFT.md` nachgeführt.
+- **Geprüft:** `npm run test:self` 147/147 (neu `src/utils/__selftest-f3-umzug.mjs`), Golden Master mit gleichen Werten (neu eingefroren nur Schlüssel: Diagramm-IDs, Zieladresse `/journal`), `npm run build` fehlerfrei. Prüf-Container auf 127.0.0.1:8096 mit Wegwerf-SQLite (die DB-Kopie hat ein Passwort, das nicht eingegeben wird; vgl. A4): alle Seiten und alten Pfade bei 1500 und 375 px, Trade-Fenster (MFE speichern beim Blättern, Esc), Bildseite mit Vollbild/Blättern, Speicher-Übernahme. Keine Konsolenfehler, kein Querscrollen. Container entfernt.
+- **Bleibt bewusst:** Datenmodell (A3-25/26), `tradenote.db`/Seed/`tn_session_v1` (A3-24, Verträglichkeit), Abfrage-API mit `objectId` (A3-18).
 
 ## F2 Sicherheit — Ergebnis (20.10.2026)
 

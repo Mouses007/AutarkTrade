@@ -261,3 +261,47 @@ resizeCompressImg, resizeCompressMaxWidth, resizeCompressMaxHeight,
 resizeCompressQuality, screenshotsPagination, grossMfeR, netMfeR, probNetWins,
 probNetLoss, financials, totalGrossProceeds/Wins/Loss, totalNetProceeds/Wins/Loss,
 totalNetWinsCount, totalNetLossCount, totalFees, totalTrades.
+
+## Stand nach F3 (20.10.2026)
+
+Auftrag F3 hat alle Befunde „muss weg" und „sollte weg" ausser der Historie
+(A3-27 bis A3-30, Auftrag F4) behoben. Die „generisch/akzeptabel"-Befunde wurden
+neu gelesen; wo die Begründung nicht trug, ist ebenfalls umgebaut (A3-18
+Kommentar, Diagramm-IDs als Nachtrag zu A3-10). Prüfskript am Ende: 1 426 von
+131 665 Codezeilen gleich (1,08 %), alle generisch; 189 gemeinsame Namen und
+170 Token-Läufe gesichtet und begründet (`scripts/herkunft-akzeptiert.json`),
+Exit 0. Golden Master mit gleichen Werten, `npm run test:self` 147/147 grün.
+
+| ID | Bewertung | Stand nach F3 |
+|---|---|---|
+| A3-01 | generisch | bleibt; Arten in HERKUNFT.md neu gezählt (CSS 1 023, Import 193, Gerüst 167, ECharts/Quill 19, JS-Standardform 12, Datenbegriff 12). |
+| A3-02 | sollte weg | **behoben**: `setupApiRoutes` → `registriereApiRouten`, Muster aus `AKZEPTIERT` gestrichen (ebenso `if (currentUser.value) {`, `tradeTags.length = 0`). |
+| A3-03 | sollte weg | **behoben**: Prüfskript prüft zusätzlich alle Textdateien, Namen und Token-Fenster (streng/normalisiert), ohne `codemirror-graphql`; gesichtete Ausnahmen mit Begründung in `scripts/herkunft-akzeptiert.json`, jede neue lässt es mit Code 1 enden. |
+| A3-04 | generisch | bleibt (MFE-Schleife ist das Verhalten, Golden Master); Namen umbenannt (A3-11). |
+| A3-05 | sollte weg | **behoben, clean-room**: Verhalten in `docs/spec/f3-tags.md` (Agent A, ohne Namen), Altcode entfernt, Neubau durch Agent B ohne Zugriff: `tagAngaben`/`tagsFuerTrade`; die tote Tag-Eingabe (Vorschläge, Hinzufügen, neue `tag_<n>`, Tageszufriedenheit setzen) nicht nachgebaut. Altfehler behoben: Bildspeichern schreibt keine Tags mehr. |
+| A3-06 | generisch | entfällt: der Ablauf war Teil des neu gebauten Trade-Fensters; gespeichert wird dort nur noch die Exkursion. |
+| A3-07 | sollte weg | **behoben, clean-room** (`docs/spec/f3-trade-dialog.md`): getrennte Wege `oeffneTrade`, `blaettere`, `zeigeTrade`, `schliesseTrade`, `beendeTradeFenster`; `checkDate` → `selberHandelstag`. Im Prüf-Container durchgespielt (öffnen, MFE eingeben, blättern = speichern, zurück, Esc). |
+| A3-08 | sollte weg | **behoben, clean-room** (`docs/spec/f3-screenshots.md`): `src/utils/bilder/{laden,bearbeiten,vollbild}.js`, `stores/journal/bilder.js`, `rahmen/BildVollbild.vue`; `resizeCompress*` und weitere tote Teile gelöscht; sessionStorage-Schlüssel `at.bilder.seite`. Altfehler behoben: Bilder laden schaltet die Ladeanzeige des Trade-Fensters nicht mehr ab. |
+| A3-09 | sollte weg | **behoben**: 20 Formatierer → `formGeld2`, `formGeld0`, `formGeldStellen`, `formZahl0/2/Stellen`, `formProzent1`, `formDatum`, `formMonat`, `formUhrzeit(Sek)`, `formDatumZeit`, `formDatumKurz`, `formMonatName`, `formDatumLang`, `formDauer(Tage)`, `formGrossAnfang`, `tagesBeginnUnix`, `addiereGenau`; Abfolge in `format.js` umgebaut. |
+| A3-10 | sollte weg | **behoben**: `ringDiagramm`, `doppellinieDiagramm`, `linienBalkenDiagramm`, `balkenDiagramm`, `balkenNegativDiagramm`, `kerzenDiagramm`; `farbeText/Gedaempft/Linie/Flaeche`. Nachtrag: auch die Diagramm-IDs der Herkunft (`pieChart1…3`, `barChart1/2`, `barChartNegative<n>` mit den Lücken 5–6/8–11/15, `lineBarChart1`, `pieChart<tag>`, `doubleLineChart<tag>`) heissen jetzt `ringGewinnquote`, `balkenKennzahl`, `balkenGruppe…`, `verlaufErtrag`, `tagesRing…`, `tagesLinie…`. |
+| A3-11 | sollte weg | **behoben**: `berechneMfePreise`, `holeImportKerzen`, `kerzenAusCsv`, `speichereMfePreise`, `speichereImport`, `ladeVorhandeneTradeTage`, `mfeListe`, `mfeSpeichern`, `marktSchluss`, `kalenderKonten`; Golden Master mfe-pfade nur wegen der neuen Zieladresse `/journal` neu eingefroren. |
+| A3-12 | muss weg / sollte weg | **behoben**: `useInitParse` gelöscht (`starteApp`), `appEinstellungen`, `seitenId`, `tradeZeitzone`, `bildschirmTyp`, `istGescrollt`, `abfrageGrenze`, `setupsLadeText`, `dashReiter`, `tageZurueck`/`tageReserve`, `holeEinstellungen`, `leiteWeiter`, `exportiereDaten`; tot gelöscht: `timeZones`, `stepper`, `itemToEditId`, `idCurrent…`/`idPrevious…`, `useEditItem` (mit Wegen zu `/addEntry` u. a.), `currentDate`. |
+| A3-13 | sollte weg | **behoben**: `gewaehlteBoerse`, `gewaehltesKonto`, `gewaehlteKonten`, `gewaehlteRichtungen`, `gewaehlterZeitrahmen`, `gewaehlteKennzahl`, `datumsBereich`, `gewaehlterZeitraum`; Optionslisten `richtungsOptionen` … ; Filterzeilen- und i18n-Schlüssel deutsch. localStorage unter `at.journal.*`, einmalige Übernahme `src/utils/speicherUmzug.js` (im Browser geprüft). |
+| A3-14 | sollte weg | **behoben**: `notizTradeId`, `notizTagUnix`, `exkursionTradeId`, `exkursionTagUnix`, `exkursionEntwurf`; `tagInput`/`showTagsList`/`tradeTags*` mit A3-05 entfallen; `loescheTrade`, `loescheExkursionen`. |
+| A3-15 | muss weg | war in F1 behoben (`seiteLaedt`). |
+| A3-16 | sollte weg | **behoben**: `journalKarte`, `gewinnWert`, `verlustWert`, `klickZiel`, `diagrammFlaeche`, `diagrammKarteFlaeche`. |
+| A3-17 | sollte weg | **behoben**: Ansichten `JournalUebersicht`, `Kalender`, `Tagesansicht`, `Bilder`, `Bewertungen`, `TradeImport`, `Exkursionen`, `Einstellungen`; Komponenten `KalenderMonat`, `KeineDaten`, `BildKarte`; `layouts/Rahmen.vue`, App.vue mit `meta.rahmen` statt `meta.layout \|\| 'div'`. Routen `/journal /kalender /tagesansicht /bilder /bewertungen /import /exkursionen /einstellungen/:bereich`, alle 13 alten Pfade leiten samt Abfrage und Anker weiter (Selbsttest `__selftest-f3-umzug.mjs`, im Prüf-Container bei 1500 und 375 px durchgeklickt). In der Datenbank steht kein Pfad (geprüft), es braucht keine DB-Migration. |
+| A3-18 | generisch | bleibt (Abfrage-API und `objectId` sind Datenformat); Parse-Kommentare in `db.js` gestrichen, `className` → `tabelle`. |
+| A3-19 | generisch | bleibt (Stil der Logmeldungen, kein Ausdruck). |
+| A3-20 | sollte weg | **behoben**: `docs/spec/{ansichten,diagramme,geruest,journal-kern,stil}.md` aus dem Repo genommen, als Beleg mit SHA-256 in `Trading/AutarkTrade-Beleg/clean-room-spezifikationen-2026-10/`; die neuen `docs/spec/f3-*.md` nennen keine alten Namen. In der Historie stecken sie bis F4. |
+| A3-21 | muss weg | **behoben**: `daily.volTooltip` in beiden Sprachen neu formuliert (gehandelte Menge in Coins/Kontrakten). |
+| A3-22 | generisch | bleibt (kurze, übliche Fachtexte). |
+| A3-23 | ok | unverändert. |
+| A3-24 | generisch | bleibt: `tradenote.db`, Seed und `tn_session_v1` sind Verträglichkeitskennungen; ein Ändern machte gespeicherte Schlüssel unlesbar bzw. meldete jedes Gerät ab. Der Seed dient seit F2 nur noch zum Lesen alter Werte. |
+| A3-25 | generisch | bleibt (Datenmodell, auf Anweisung nicht umbenannt). |
+| A3-26 | generisch | bleibt (Datenformat); die davon abgeleiteten Summenfelder (`totalNetProceeds` …) ebenso. |
+| A3-27 – A3-30 | muss weg | offen → **F4** (Historie). |
+| A3-31 | ok | unverändert. |
+| A3-32 | sollte weg | **behoben**: `lodash` aus `package.json` (nur noch transitiv über knex), `THIRD-PARTY-NOTICES` neu erzeugt, CLAUDE.md berichtigt. |
+| A3-33 | generisch | bleibt. |
+| A3-34 | generisch | bleibt (vom Prüfskript als „npm-Skript bzw. Versionsangabe" geführt). |
