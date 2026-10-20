@@ -2744,7 +2744,8 @@
     "simulationOnly": "Nur Simulation",
     "simulationOnlyHint": "AutarkTrade sendet keine Orders an eine Börse. Instanzen laufen im Papier- oder Schattenbetrieb; handeln tust du selbst an deiner Börse.",
     "reason_mode_ausgelagert": "Betriebsart live ist ausgelagert — Instanz auf Papier oder Schatten stellen",
-    "liveAusgelagertHint": "Position aus der Zeit vor der Auslagerung des scharfen Handels. AutarkTrade fragt die Börse nicht mehr und schliesst nichts — ob sie dort noch besteht, an der Börse prüfen."
+    "liveAusgelagertHint": "Position aus der Zeit vor der Auslagerung des scharfen Handels. AutarkTrade fragt die Börse nicht mehr und schliesst nichts — ob sie dort noch besteht, an der Börse prüfen.",
+    "statusFilter": "Zustand"
   },
   "levmap": {
     "title": "Liquidationszonen",
@@ -4206,7 +4207,8 @@
     "laeufe": "Frühere Läufe",
     "kiThema": "Thema (z.B. RWA, Meme, KI-Coins)",
     "kiVorschlagen": "Liste vorschlagen lassen",
-    "kiVerworfen": "{n} von {gesamt} Vorschlägen sind nicht testbar und wurden entfernt."
+    "kiVerworfen": "{n} von {gesamt} Vorschlägen sind nicht testbar und wurden entfernt.",
+    "artLabel": "Coin-Auswahl"
   },
   "livetrading": {
     "handelslage": {

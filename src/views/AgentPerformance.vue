@@ -407,10 +407,10 @@ const reiterListe = computed(() => [
                         <Symbol name="linie" class="vor" />{{ t('strategies.timelineTitle') }}
                     </span>
                     <div class="zs-wahl">
-                        <select v-model="zsSymbol" class="at-feld klein" @change="zeitstrahlLaden">
+                        <select v-model="zsSymbol" class="at-feld klein" :aria-label="t('strategies.symbol')" @change="zeitstrahlLaden">
                             <option v-for="s in symbole" :key="s" :value="s">{{ s }}</option>
                         </select>
-                        <select v-model.number="zsTage" class="at-feld klein" @change="zeitstrahlLaden">
+                        <select v-model.number="zsTage" class="at-feld klein" :aria-label="t('strategies.period')" @change="zeitstrahlLaden">
                             <option :value="3">3 {{ t('strategies.days') }}</option>
                             <option :value="7">7 {{ t('strategies.days') }}</option>
                             <option :value="14">14 {{ t('strategies.days') }}</option>

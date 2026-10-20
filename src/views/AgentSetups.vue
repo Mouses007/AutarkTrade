@@ -173,11 +173,11 @@ const gruende = computed(() => {
 
             <div class="kopfzeile">
                 <h5 class="seitentitel">{{ t('strategies.setupsTitle') }}</h5>
-                <select v-model="filter.instanceId" class="at-feld klein filter-feld" @change="laden">
+                <select v-model="filter.instanceId" class="at-feld klein filter-feld" :aria-label="t('strategies.instance')" @change="laden">
                     <option value="">{{ t('strategies.allInstances') }}</option>
                     <option v-for="i in instanzen" :key="i.id" :value="i.id">{{ i.name }}</option>
                 </select>
-                <select v-model="filter.status" class="at-feld klein filter-feld" @change="laden">
+                <select v-model="filter.status" class="at-feld klein filter-feld" :aria-label="t('strategies.statusFilter')" @change="laden">
                     <option value="">{{ t('strategies.allStatus') }}</option>
                     <option value="waiting_retest,armed">{{ t('strategies.statusWaiting') }}</option>
                     <option value="open">{{ t('strategies.statusOpen') }}</option>

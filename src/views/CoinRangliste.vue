@@ -261,7 +261,7 @@ onBeforeUnmount(stopPolling)
             </p>
             <div class="formular">
                 <div class="b-4">
-                    <select v-model="form.art" class="at-feld klein" @change="probe = null">
+                    <select v-model="form.art" class="at-feld klein" :aria-label="t('rangliste.artLabel')" @change="probe = null">
                         <option value="bitunix">{{ t('rangliste.artBitunix') }}</option>
                         <option value="top">{{ t('rangliste.artTop') }}</option>
                         <option value="manuell">{{ t('rangliste.artManuell') }}</option>

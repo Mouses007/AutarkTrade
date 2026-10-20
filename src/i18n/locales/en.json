@@ -2744,7 +2744,8 @@
     "simulationOnly": "Simulation only",
     "simulationOnlyHint": "AutarkTrade sends no orders to an exchange. Instances run in paper or shadow mode; you place trades yourself on your exchange.",
     "reason_mode_ausgelagert": "Live mode has been removed — switch the instance to paper or shadow",
-    "liveAusgelagertHint": "Position from before live trading was removed. AutarkTrade no longer queries the exchange and closes nothing — check on the exchange whether it still exists."
+    "liveAusgelagertHint": "Position from before live trading was removed. AutarkTrade no longer queries the exchange and closes nothing — check on the exchange whether it still exists.",
+    "statusFilter": "Status"
   },
   "levmap": {
     "title": "Liquidation zones",
@@ -4206,7 +4207,8 @@
     "laeufe": "Earlier runs",
     "kiThema": "Topic (e.g. RWA, meme, AI coins)",
     "kiVorschlagen": "Suggest a list",
-    "kiVerworfen": "{n} of {gesamt} suggestions are not testable and were removed."
+    "kiVerworfen": "{n} of {gesamt} suggestions are not testable and were removed.",
+    "artLabel": "Coin selection"
   },
   "livetrading": {
     "handelslage": {
