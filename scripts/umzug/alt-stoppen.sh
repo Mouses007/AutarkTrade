@@ -39,7 +39,7 @@ zeige "$D tag $ALT_IMAGE_ID $ALT_SICHER_TAG"
 kopf "Alte App stoppen"
 echo "Läuft danach nicht mehr: $ALT_CONTAINER. Caddy und $DB_CONTAINER bleiben an."
 if frage "Compose-Datei sichern, Image festhalten und $ALT_CONTAINER jetzt stoppen?"; then
-    nas_tty "$NAS_SUDO sh -c 'cd \"$NAS_PROJEKT\" && cp -p docker-compose.yml docker-compose.yml.vor-v2-$DATUM && cp -p .env .env.vor-v2-$DATUM'"
+    nas_tty "$S sh -c 'cd \"$NAS_PROJEKT\" && cp -p docker-compose.yml docker-compose.yml.vor-v2-$DATUM && cp -p .env .env.vor-v2-$DATUM'"
     dk "tag $ALT_IMAGE_ID $ALT_SICHER_TAG"
     dk "stop -t 30 $ALT_CONTAINER" >/dev/null
     [ "$(dk "inspect -f '{{.State.Status}}' $ALT_CONTAINER")" = exited ] || abbruch "Container läuft noch"

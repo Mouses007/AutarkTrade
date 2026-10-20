@@ -97,18 +97,49 @@ else
     ZIEL="$NAS_USER@$NAS_HOST"
     STEUERUNG="/tmp/.at-umzug-$(id -u)-%C"
     SSH_OPT=(-o ControlMaster=auto -o "ControlPath=$STEUERUNG" -o ControlPersist=1800 -o ConnectTimeout=10)
-    # stdin nur, wo gewollt (nas_ein) — sonst frässe ssh die Ja-Antworten einer Pipe.
-    nas() { command ssh -n "${SSH_OPT[@]}" "$ZIEL" "$1"; }
+    # sudo auf der NAS: Über SSH ohne Terminal kann sudo nicht nachfragen („a terminal is
+    # required"), mit -t fragte es bei jedem Aufruf neu. Deshalb wird das sudo-Passwort
+    # EINMAL hier abgefragt und jedem Befehl als erste Zeile von stdin mitgegeben. Die
+    # Gegenseite liest es in die Shell-Variable SPW (nie in die Befehlszeile, nie auf die
+    # Platte) und reicht es per `sudo -S` weiter. stdin ist dadurch immer belegt — ssh
+    # frisst also keine Ja-Antworten einer Pipe.
+    SUDO_PW=""
+    VOR='IFS= read -r SPW; '
+    mit_pw() { printf '%s\n' "$SUDO_PW"; }
+    nas() { mit_pw | command ssh "${SSH_OPT[@]}" "$ZIEL" "$VOR$1"; }
+    # Daten über stdin, OHNE sudo (z. B. cat > Datei)
     nas_ein() { command ssh "${SSH_OPT[@]}" "$ZIEL" "$1"; }
-    nas_tty() { command ssh -t "${SSH_OPT[@]}" "$ZIEL" "$1"; }
+    # Daten über stdin MIT sudo: erste Zeile für SPW, zweite für sudo -S, danach die Daten
+    nas_ein_sudo() { { mit_pw; mit_pw; cat; } | command ssh "${SSH_OPT[@]}" "$ZIEL" "$VOR$1"; }
+    # Längere, verändernde Befehle: Ausgabe sichtbar, sudo ohne eigene Abfrage
+    nas_tty() { nas "$1"; }
     nas_ende() { command ssh "${SSH_OPT[@]}" -O exit "$ZIEL" 2>/dev/null || true; }
     trap nas_ende EXIT
     # Eine Master-Verbindung: nur EINE Passwortabfrage für SSH.
     command ssh "${SSH_OPT[@]}" -O check "$ZIEL" 2>/dev/null || command ssh "${SSH_OPT[@]}" -fN "$ZIEL"
+    if [ -n "$NAS_SUDO" ]; then
+        printf 'sudo-Passwort auf der NAS (%s): ' "$ZIEL" >/dev/tty
+        IFS= read -rs SUDO_PW </dev/tty || true
+        printf '\n' >/dev/tty
+        mit_pw | command ssh "${SSH_OPT[@]}" "$ZIEL" "$NAS_SUDO -S -p '' -v" 2>/dev/null \
+            || { printf '\033[91m%s\033[0m\n' "ABBRUCH: sudo auf der NAS lehnt das Passwort ab" >&2; exit 1; }
+    fi
 fi
 
 # Docker auf der NAS, mit sudo (DSM legt docker nicht in den PATH einer SSH-Sitzung).
-D="${NAS_SUDO:+$NAS_SUDO }$NAS_DOCKER"
+#   S   = sudo-Vorsatz für Befehle in nas/nas_tty (Passwort aus SPW)
+#   D   = docker mit sudo, für nas/nas_tty
+#   DIN = docker mit sudo, wenn stdin Daten trägt (nur mit nas_ein_sudo)
+if [ "$NAS_HOST" != lokal ] && [ -n "$NAS_SUDO" ]; then
+    S="printf '%s\\n' \"\$SPW\" | $NAS_SUDO -S -p ''"
+    D="$S $NAS_DOCKER"
+    DIN="$NAS_SUDO -S -p '' $NAS_DOCKER"
+else
+    S="$NAS_SUDO"
+    D="${NAS_SUDO:+$NAS_SUDO }$NAS_DOCKER"
+    DIN="$D"
+    nas_ein_sudo() { nas_ein "$1"; }
+fi
 dk() { nas "$D $1"; }
 
 # Befehl nur anzeigen (vor einer Frage).
@@ -125,7 +156,7 @@ tue() {
 # psql in der DB auf der NAS. SQL über stdin, damit Anführungszeichen ("schemaVersion")
 # nicht durch zwei Shells müssen. Ausgabe ohne Kopf, Felder mit |.
 psql_nas() {
-    printf '%s\n' "$1" | nas_ein "$D exec -i $DB_CONTAINER psql -X -q -A -t -v ON_ERROR_STOP=1 -U $DB_USER -d ${2:-$DB_NAME} -f -"
+    printf '%s\n' "$1" | nas_ein_sudo "$DIN exec -i $DB_CONTAINER psql -X -q -A -t -v ON_ERROR_STOP=1 -U $DB_USER -d ${2:-$DB_NAME} -f -"
 }
 
 # Container des App-Dienstes im Compose-Projekt (läuft oder gestoppt).

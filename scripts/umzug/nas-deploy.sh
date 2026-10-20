@@ -7,7 +7,7 @@
 #
 # Bedient sich wie das Update-Skript der alten App: gleiche Einstellungsdatei
 # scripts/.nas-deploy.env (NAS_HOST, NAS_USER, NAS_PROJEKT, NAS_PORT), gleiches
-# NAS-Projekt, eine SSH-Passwortabfrage am Anfang, eine sudo-Abfrage in Schritt 4,
+# NAS-Projekt, am Anfang je eine Abfrage für das SSH- und das sudo-Passwort,
 # dieselben fünf Schritte:
 #
 #   docker build → docker save → ssh → docker load → compose up → Kontrolle
@@ -50,7 +50,7 @@ echo "   NAS: $NAS_ARCH  →  Image muss linux/$ERWARTET sein"
 # Update oder Wechsel? Die Compose-Datei auf der NAS sagt es.
 JETZT_COMPOSE="$(mktemp)"
 trap 'rm -f "$JETZT_COMPOSE"; nas_ende' EXIT
-nas "$NAS_SUDO cat '$NAS_PROJEKT/docker-compose.yml'" > "$JETZT_COMPOSE" 2>/dev/null || true
+nas "$S cat '$NAS_PROJEKT/docker-compose.yml'" > "$JETZT_COMPOSE" 2>/dev/null || true
 if grep -q "autarktrade:produktiv\|${NAS_IMAGE_TAG}" "$JETZT_COMPOSE"; then
     WECHSEL=0
     echo "   Projekt $NAS_PROJEKT läuft schon mit V2 → Update"
@@ -73,8 +73,8 @@ if [ "$WECHSEL" = 1 ]; then
     echo "   Compose-Datei, die ersetzt wird:"
     diff -u --label "NAS: docker-compose.yml (jetzt)" --label "neu: docker-compose.produktiv.yml" "$JETZT_COMPOSE" "$NEU_COMPOSE" | sed 's/^/     /' || true
     echo "   Variablen-NAMEN in der Projekt-.env (Werte werden nicht gelesen):"
-    nas "$NAS_SUDO sh -c \"cut -d= -f1 '$NAS_PROJEKT/.env' | grep -v '^#' | grep . | tr '\\n' ' '\"" | sed 's/^/     /'; echo
-    nas "$NAS_SUDO grep -q '^CTJ_SECRET=.' '$NAS_PROJEKT/.env' || $NAS_SUDO grep -q '^AT_SECRET=.' '$NAS_PROJEKT/.env'" \
+    nas "$S sh -c \"cut -d= -f1 '$NAS_PROJEKT/.env' | grep -v '^#' | grep . | tr '\\n' ' '\"" | sed 's/^/     /'; echo
+    nas "$S grep -q '^CTJ_SECRET=.' '$NAS_PROJEKT/.env' || $S grep -q '^AT_SECRET=.' '$NAS_PROJEKT/.env'" \
         || abbruch "weder CTJ_SECRET noch AT_SECRET in der Projekt-.env — ohne Secret wären die Börsenschlüssel unlesbar"
 fi
 
@@ -109,14 +109,14 @@ else
 fi
 [ "$WECHSEL" = 1 ] && nas_ein "cat > '$ZWISCHEN'" < "$NEU_COMPOSE"
 
-echo "── 4/5  Laden + Container neu erstellen (sudo, Passwort folgt) ─"
-# -t: eigenes Terminal, damit die sudo-Abfrage sichtbar ist.
+echo "── 4/5  Laden + Container neu erstellen (sudo) ─────────────"
+# sudo bekommt das am Anfang abgefragte Passwort (gemeinsam.sh), keine Abfrage mehr hier.
 nas_tty "
     set -e
     $( [ "$NAS_HOST" = lokal ] || echo "$D load -i '$ARCHIV'" )
     $( [ "$TAG" = "$NAS_IMAGE_TAG" ] || echo "$D tag '$TAG' '$NAS_IMAGE_TAG'" )
-    $( [ "$WECHSEL" = 1 ] && echo "$NAS_SUDO cp '$ZWISCHEN' '$NAS_PROJEKT/docker-compose.yml'; rm -f '$ZWISCHEN'" )
-    $NAS_SUDO sh -c \"cd '$NAS_PROJEKT' && $NAS_DOCKER compose -p $COMPOSE_PROJEKT up -d --force-recreate\"
+    $( [ "$WECHSEL" = 1 ] && echo "$S cp '$ZWISCHEN' '$NAS_PROJEKT/docker-compose.yml'; rm -f '$ZWISCHEN'" )
+    $S sh -c \"cd '$NAS_PROJEKT' && $NAS_DOCKER compose -p $COMPOSE_PROJEKT up -d --force-recreate\"
     # Nur namenlose Images (das vorige V2-Image nach dem Umtaggen). Getaggte bleiben —
     # auch trading-journal:vor-v2-<datum> für den Rückweg.
     # (Nicht im Probelauf auf diesem Rechner: dort gehörten die namenlosen Images nicht uns.)

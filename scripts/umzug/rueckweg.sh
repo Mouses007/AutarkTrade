@@ -50,7 +50,7 @@ kopf "2. Sicherung in $RUECK einspielen"
 zeige "createdb $RUECK; pg_restore --exit-on-error -d $RUECK < $(basename "$SICHERUNG_DUMP")"
 if frage "Sicherung in die neue Datenbank $RUECK einspielen?"; then
     psql_nas "create database \"$RUECK\"" postgres >/dev/null
-    nas_ein "$D exec -i $DB_CONTAINER pg_restore --exit-on-error -U $DB_USER -d $RUECK" < "$SICHERUNG_DUMP"
+    nas_ein_sudo "$DIN exec -i $DB_CONTAINER pg_restore --exit-on-error -U $DB_USER -d $RUECK" < "$SICHERUNG_DUMP"
     ABW=0
     if [ -n "${SICHERUNG_PRUEFWERTE:-}" ] && [ -f "$SICHERUNG_PRUEFWERTE" ]; then
         while IFS='|' read -r art tabelle vorher; do
@@ -79,9 +79,9 @@ zeige "$D tag $ALT_SICHER_TAG ${ALT_IMAGE:-}"
 zeige "cd $NAS_PROJEKT && $D compose -p $COMPOSE_PROJEKT up -d --force-recreate   (zieht nichts: das Image ist lokal da)"
 if frage "Compose-Datei der alten App zurücklegen und sie starten?"; then
     nas_tty "set -e
-        $NAS_SUDO cp '$NAS_PROJEKT/$COMPOSE_SICHERUNG' '$NAS_PROJEKT/docker-compose.yml'
+        $S cp '$NAS_PROJEKT/$COMPOSE_SICHERUNG' '$NAS_PROJEKT/docker-compose.yml'
         $D tag '$ALT_SICHER_TAG' '$ALT_IMAGE'
-        $NAS_SUDO sh -c \"cd '$NAS_PROJEKT' && $NAS_DOCKER compose -p $COMPOSE_PROJEKT up -d --force-recreate\""
+        $S sh -c \"cd '$NAS_PROJEKT' && $NAS_DOCKER compose -p $COMPOSE_PROJEKT up -d --force-recreate\""
 
     kopf "5. Antwortet die alte App?"
     H="$( [ "$NAS_HOST" = lokal ] && echo 127.0.0.1 || echo "$NAS_HOST")"
