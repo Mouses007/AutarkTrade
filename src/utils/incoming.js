@@ -824,7 +824,7 @@ export async function useDeleteIncomingPosition(objectId) {
 }
 
 /**
- * Start global polling for position changes (used in DashboardLayout).
+ * Start global polling for position changes (used in the frame layout).
  * Runs every 60 seconds. Detects new/closed positions and updates counters.
  * Only active when showTradePopups is enabled.
  */

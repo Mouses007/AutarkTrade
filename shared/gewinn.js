@@ -13,7 +13,7 @@
  * ausgeschrieben war — und nur an zwei richtig. Der Kanon war dreifach
  * dokumentiert und trotzdem die Minderheit im Code: dieselbe Null wurde beim
  * Import als Verlust gezählt und im Dashboard grün gefärbt
- * (`src/views/Daily.vue`). Wer die Schwelle braucht, nimmt `istGewinn()`,
+ * (`src/views/Tagesansicht.vue`). Wer die Schwelle braucht, nimmt `istGewinn()`,
  * niemand schreibt sie neu.
  *
  * Gleiche Bauart und gleicher Grund wie `src/utils/funding.js` für das

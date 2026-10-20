@@ -1046,7 +1046,7 @@ async function berichtErzeugen(aktualisieren = false) {
  * ausschreibt — die Pillen sahen mit den Vorgaben zufällig richtig aus.
  *
  * Bewusst flach beobachtet: Einstellungen, die anderswo eine EIGENSCHAFT von
- * `appEinstellungen` ändern (z.B. `radarSpeichern` in Settings.vue), lösen hier
+ * `appEinstellungen` ändern (z.B. `radarSpeichern` in Einstellungen.vue), lösen hier
  * nichts aus — sonst würde jede Änderung sofort wieder überschrieben. Ein
  * angewendetes News-Profil ERSETZT `appEinstellungen.value` dagegen komplett
  * (siehe `profilAnwenden`) und triggert den Watch damit gezielt.

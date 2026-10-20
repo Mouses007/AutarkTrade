@@ -15,7 +15,7 @@
  *   - `speichereMfePreise` MFE-Preise als Exkursionszeilen speichern
  *   - `baueBlotter`/`bauePnL`/`ladeVorhandeneTradeTage`/
  *     `speichereImport` — die Vorschau und das Speichern des API-Imports in
- *     `AddTrades.vue`
+ *     `TradeImport.vue`
  *
  * Wie der erste friert er ein, was der Code HEUTE tut, nicht was richtig ist.
  * Mit eingefroren (19.10.2026):
@@ -260,7 +260,7 @@ filter.gewaehlteBoerse.value = 'bitunix'
 
 const ergebnis = {}
 
-// --- 1. Import-Vorschau und Speichern (AddTrades.vue, importFromApi) --------
+// --- 1. Import-Vorschau und Speichern (TradeImport.vue, importFromApi) --------
 {
     // Ein bereits importierter Tag, damit die Vorschau ihn aussortiert
     const vorhandenTd = Math.floor(ms(`${TAGE[1]}T00:00:00Z`) / 1000)
@@ -317,7 +317,7 @@ const ergebnis = {}
     ergebnis.databentoCsvOhneLeerzeile = kerzenAuszug(res2.ohlcv)
 }
 
-// --- 3. Kerzen holen (AddExcursions.vue) -----------------------------------
+// --- 3. Kerzen holen (Exkursionen.vue) -----------------------------------
 const symbole = [...SYMBOLE.map(([s]) => ({ symbol: s, secType: 'crypto' })), { symbol: 'XYZUSDT', secType: 'crypto' }]
 const vonSek = Math.floor(ms(`${TAGE[0]}T00:00:00Z`) / 1000)
 const bisSek = Math.floor(ms(`${TAGE[2]}T18:00:00Z`) / 1000)

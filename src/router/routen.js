@@ -1,14 +1,13 @@
 /**
  * Routentabelle von AutarkTrade.
  *
- * Reine Daten plus die Layout-Komponente. Der Router selbst (Verlauf, Hook)
- * steht in `./index.js`.
+ * Reine Daten. Der Router selbst (Verlauf, Hook) steht in `./index.js`.
  *
  * Meta-Felder:
  *   titleKey         i18n-Schlüssel des Seitentitels (gewinnt vor `title`)
  *   title            Rohtitel, nur Rückfall für den Dokumenttitel
- *   layout           Layout-Komponente selbst (App.vue rendert sie); fehlt bei
- *                    /setup und /update-assistent
+ *   rahmen           Seite steht im Rahmen (`layouts/Rahmen.vue`, App.vue);
+ *                    fehlt bei /setup und /update-assistent
  *   mode             Modus der Route; fehlt = Journal. `any` = modusneutral
  *                    (Einstellungen), `uebersicht` = Startseite, gehört keinem
  *                    Modus und lässt den gemerkten stehen
@@ -16,17 +15,15 @@
  *   skipSetupCheck   nicht zum Setup umleiten
  *   skipUpdateCheck  nicht zum Update-Assistenten umleiten
  *
- * Alle Seiten werden erst beim Aufruf geladen; nur das Layout ist statisch,
- * weil es an jeder Route hängt.
+ * Alle Seiten werden erst beim Aufruf geladen.
  */
-import DashboardLayout from '../layouts/Dashboard.vue'
 
 /** Die Unterseiten der Einstellungen (`/einstellungen/:bereich`). Ohne Angabe: die erste. */
 export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'ki', 'live', 'benachrichtigungen', 'datenquellen', 'lizenz', 'rechtliches']
 
 /** Seite mit dem gemeinsamen Layout. */
 function seite(path, name, laden, meta = {}, extra = {}) {
-    return { path, name, component: laden, meta: { layout: DashboardLayout, ...meta }, ...extra }
+    return { path, name, component: laden, meta: { rahmen: true, ...meta }, ...extra }
 }
 
 /** Weiterleitung einer alten Adresse; Abfrage und Anker bleiben erhalten. */
@@ -70,17 +67,17 @@ export const routen = [
     },
 
     // ── Journal ─────────────────────────────────────────────
-    seite('/journal', 'journalUebersicht', () => import('../views/Dashboard.vue'), { title: 'Dashboard', titleKey: 'nav.dashboard' }),
+    seite('/journal', 'journalUebersicht', () => import('../views/JournalUebersicht.vue'), { title: 'Dashboard', titleKey: 'nav.dashboard' }),
     seite('/accounts', 'accounts', () => import('../views/Accounts.vue'), { title: 'Konten', titleKey: 'nav.accounts' }),
-    seite('/kalender', 'kalender', () => import('../views/Calendar.vue'), { title: 'Kalender', titleKey: 'nav.calendar' }),
-    seite('/tagesansicht', 'tagesansicht', () => import('../views/Daily.vue'), { title: 'Tagesansicht', titleKey: 'nav.dailyView' }),
+    seite('/kalender', 'kalender', () => import('../views/Kalender.vue'), { title: 'Kalender', titleKey: 'nav.calendar' }),
+    seite('/tagesansicht', 'tagesansicht', () => import('../views/Tagesansicht.vue'), { title: 'Tagesansicht', titleKey: 'nav.dailyView' }),
     seite('/incoming', 'incoming', () => import('../views/Incoming.vue'), { title: 'Pendente Trades', titleKey: 'nav.pendingTrades' }),
-    seite('/bilder', 'bilder', () => import('../views/Screenshots.vue'), { title: 'Screenshots', titleKey: 'nav.screenshots' }),
-    seite('/bewertungen', 'bewertungen', () => import('../views/Playbook.vue'), { title: 'Playbook', titleKey: 'nav.playbook' }),
+    seite('/bilder', 'bilder', () => import('../views/Bilder.vue'), { title: 'Screenshots', titleKey: 'nav.screenshots' }),
+    seite('/bewertungen', 'bewertungen', () => import('../views/Bewertungen.vue'), { title: 'Playbook', titleKey: 'nav.playbook' }),
     seite('/auswertung', 'auswertung', () => import('../views/Auswertung.vue'), { title: 'Auswertung', titleKey: 'nav.evaluation' }),
     seite('/ki-coach', 'kiAgent', () => import('../views/KiAgent.vue'), { title: 'KI-Coach', titleKey: 'nav.kiAgent' }),
-    seite('/import', 'tradeImport', () => import('../views/AddTrades.vue'), { title: 'Manueller Import', titleKey: 'nav.manualImport' }),
-    seite('/exkursionen', 'exkursionen', () => import('../views/AddExcursions.vue'), { title: 'Exkursionen', titleKey: 'nav.addExcursions' }),
+    seite('/import', 'tradeImport', () => import('../views/TradeImport.vue'), { title: 'Manueller Import', titleKey: 'nav.manualImport' }),
+    seite('/exkursionen', 'exkursionen', () => import('../views/Exkursionen.vue'), { title: 'Exkursionen', titleKey: 'nav.addExcursions' }),
     // Alte Adressen (Lesezeichen, Links in alten Nachrichten): Abfrage und
     // Anker gehen mit, z. B. `/playbook?tradeId=…`.
     weiter('/dashboard', '/journal'),
@@ -96,7 +93,7 @@ export const routen = [
     weiter('/addScreenshot', '/bilder'),
 
     // ── Einstellungen (modusübergreifend) ───────────────────
-    seite('/einstellungen/:bereich?', 'einstellungen', () => import('../views/Settings.vue'),
+    seite('/einstellungen/:bereich?', 'einstellungen', () => import('../views/Einstellungen.vue'),
         { title: 'Einstellungen', titleKey: 'nav.settings', mode: 'any' }, { beforeEnter: pruefeBereich }),
     // Alte Adresse der Einstellungen, samt Bereich (`/settings/ki` → `/einstellungen/ki`).
     { path: '/settings/:bereich?', redirect: (to) => ({ path: '/einstellungen' + (to.params.bereich ? '/' + to.params.bereich : ''), query: to.query, hash: to.hash }) },

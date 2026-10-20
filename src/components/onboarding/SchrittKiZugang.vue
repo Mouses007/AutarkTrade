@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Onboarding-Schritt "KI-Zugang" — bewusst NICHT aus Settings.vue extrahiert:
+ * Onboarding-Schritt "KI-Zugang" — bewusst NICHT aus Einstellungen.vue extrahiert:
  * der dortige KI-Bereich ist eng mit Berichts-Presets, Task-Provider-
  * Zuordnungen und Share-Card-Einstellungen verwoben. Hier nur das Nötigste:
  * Anbieter wählen, Schlüssel eintragen, Modell wählen.
@@ -21,7 +21,7 @@ const anbieterListe = ref([])
 const modellListen = ref({})
 // Ollama führt keinen Katalog in `/api/ai/models` (server/ai-models.js: `modelle: []`,
 // "kommen vom Ollama-Server selbst") — die echte Liste kommt separat aus
-// `/api/ollama/status`, genau wie in Settings.vue (`loadOllamaModels()`).
+// `/api/ollama/status`, genau wie in Einstellungen.vue (`loadOllamaModels()`).
 const ollamaModels = ref([])
 /** Ollama braucht keinen Schlüssel — „eingerichtet" heisst dort: der Server antwortet. */
 const ollamaOnline = ref(null)
@@ -34,7 +34,7 @@ const aktuellerAnbieter = computed(() => anbieterListe.value.find(a => a.id === 
 /**
  * Ein gespeichertes Modell, das nicht (mehr) in der Liste steht, würde das
  * Auswahlfeld sonst leer erscheinen lassen und beim nächsten Speichern still
- * verschwinden — dieselbe Absicherung wie Settings.vue `getModelsForProvider()`.
+ * verschwinden — dieselbe Absicherung wie Einstellungen.vue `getModelsForProvider()`.
  */
 const modelle = computed(() => {
     const liste = aiProvider.value === 'ollama' ? ollamaModels.value : (modellListen.value[aiProvider.value] || [])

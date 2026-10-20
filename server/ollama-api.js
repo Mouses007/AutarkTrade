@@ -63,7 +63,7 @@ function parseId(param, res, paramName = 'id') {
     return id
 }
 
-// Prompt-Presets (muss mit Settings.vue synchron sein)
+// Prompt-Presets (muss mit Einstellungen.vue synchron sein)
 const PROMPT_PRESETS = {
     'Halte den Bericht kurz und prägnant. Maximal 3-4 Sätze pro Abschnitt. Fokussiere dich auf die wichtigsten Erkenntnisse.': 'Kurz & knapp',
     'Erstelle einen ausgewogenen Trading-Bericht mit allen wichtigen Kennzahlen, Stärken, Schwächen und konkreten Verbesserungsvorschlägen. Nutze eine sachliche, professionelle Sprache.': 'Standard',

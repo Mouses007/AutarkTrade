@@ -3,7 +3,7 @@
  * Seiten-Wrapper für den gemeinsamen Onboarding-Ablauf. Der Kontext kommt aus
  * der Query (`?kontext=setup|update|manuell`, Default 'update' — der
  * Auto-Trigger im Router leitet ohne Query hierher um): Setup.vue hängt sich
- * mit `?kontext=setup` an, der manuelle Button in Settings.vue mit
+ * mit `?kontext=setup` an, der manuelle Button in Einstellungen.vue mit
  * `?kontext=manuell`. Nur im Update-Fall lohnen sich Release-Notes — bei
  * einer Neuinstallation oder einem manuellen Aufruf gibt es kein "was ist
  * neu seit deinem letzten Besuch".

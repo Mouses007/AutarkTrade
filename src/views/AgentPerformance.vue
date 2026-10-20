@@ -233,7 +233,7 @@ onBeforeMount(async () => {
     } catch (e) { /* Filterliste ist optional */ }
     // Sprung von der Instanzenliste (AgentStrategies.vue): Coin anklicken →
     // Trades ansehen → "Zur Zwischenauswertung" landet hier bereits gefiltert,
-    // gleiches Vorbild wie `tradeId` in Playbook.vue.
+    // gleiches Vorbild wie `tradeId` in Bewertungen.vue.
     if (route.query.instanceId) filter.value.instanceId = String(route.query.instanceId)
     if (route.query.symbol) filter.value.symbol = String(route.query.symbol).toUpperCase()
     if (TAB_SCHLUESSEL.includes(route.query.tab)) activeTab.value = route.query.tab

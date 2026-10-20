@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import LoginGate from './components/LoginGate.vue'
 import Rechtliches from './components/rechtliches/Rechtliches.vue'
+import Rahmen from './layouts/Rahmen.vue'
 
 const authChecked = ref(false)
 const needsLogin = ref(false)
@@ -27,9 +28,12 @@ onMounted(async () => {
 </script>
 <template>
     <LoginGate v-if="authChecked && needsLogin" :setup="setupRequired" :code-noetig="codeNoetig" />
-    <component v-else-if="authChecked" :is="$route.meta.layout || 'div'">
+    <!-- Seiten mit `meta.rahmen` (alle ausser Setup und Update-Assistent)
+         stehen im Rahmen aus Kopfleiste und Seitenmenü. -->
+    <Rahmen v-else-if="authChecked && $route.meta.rahmen">
         <RouterView />
-    </component>
+    </Rahmen>
+    <RouterView v-else-if="authChecked" />
     <!-- Zustimmung zu den Lizenzbedingungen: hier und nicht im Layout, weil der
          Setup-Assistent beim ersten Start ohne Layout läuft (S10). -->
     <Rechtliches v-if="authChecked && !needsLogin" />

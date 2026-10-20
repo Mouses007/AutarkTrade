@@ -13,7 +13,7 @@
  *
  * Bewusst NICHT hier: die Wache für abgeschaltete Modi. Beim kalten Deep-Link
  * sind die Einstellungen noch nicht geladen, ein Router-Hook müsste raten.
- * Sie sitzt im Layout (`layouts/Dashboard.vue`), das warten kann.
+ * Sie sitzt im Layout (`layouts/Rahmen.vue`), das warten kann.
  */
 import { createRouter, createWebHistory } from 'vue-router'
 import axios from 'axios'

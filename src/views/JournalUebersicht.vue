@@ -19,7 +19,7 @@ import { starteDashboard, useDisposeJournalCharts } from '../utils/journal/ablau
 import { ladeDiagramme } from '../utils/journal/diagrammLader.js'
 import { formGeld2, formGeld0, formZahl0, formZahlStellen } from '../utils/journal/format.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
-import NoData from '../components/NoData.vue'
+import KeineDaten from '../components/KeineDaten.vue'
 import BotDashboard from '../components/BotDashboard.vue'
 import Reiter from '@/components/basis/Reiter.vue'
 import KartenMenue from '../components/dashboard/KartenMenue.vue'
@@ -180,7 +180,7 @@ onBeforeUnmount(() => {
     <div>
     <SeiteLaedt />
     <div v-show="!seiteLaedt" class="db">
-        <NoData v-if="!journalHatDaten" />
+        <KeineDaten v-if="!journalHatDaten" />
 
         <BotDashboard v-else-if="selectedTradeCategory === 'bot'" />
 

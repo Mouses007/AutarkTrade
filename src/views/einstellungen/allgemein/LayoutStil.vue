@@ -102,7 +102,7 @@ async function profilSpeichern() {
     await profilNeuLaden()
 }
 
-/* Stand aus den Einstellungen — Settings.vue hat sie vor dem Mount geladen. */
+/* Stand aus den Einstellungen — Einstellungen.vue hat sie vor dem Mount geladen. */
 function ausEinstellungen() {
     const settings = appEinstellungen.value || {}
     username.value = settings.username || ''

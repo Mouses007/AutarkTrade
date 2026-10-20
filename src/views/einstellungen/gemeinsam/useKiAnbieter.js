@@ -394,7 +394,7 @@ export function useKiAnbieter() {
         }
     }
 
-    /** Was Settings.vue früher in onBeforeMount tat — jetzt beim Öffnen des KI-Bereichs. */
+    /** Was Einstellungen.vue früher in onBeforeMount tat — jetzt beim Öffnen des KI-Bereichs. */
     async function ladeKiGrundlagen() {
         // KI-Settings über verschlüsselten Endpoint laden.
         // `loadModelLists()` MUSS hier mitlaufen: ohne die Listen zeigt das

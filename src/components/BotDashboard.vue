@@ -2,7 +2,7 @@
 /**
  * Bot-Dashboard — dedizierte Übersicht für Grid-/Bot-Trades (aktuell Pionex).
  *
- * Wird in Dashboard.vue gerendert, wenn der ART-Filter auf "Bot" steht.
+ * Wird in JournalUebersicht.vue gerendert, wenn der ART-Filter auf "Bot" steht.
  * Konsumiert `gefilterteTradesFlach` (bereits auf Bots gefiltert via Kategorie-
  * Filter in trades.js) und berechnet bot-spezifische KPIs eigenständig —
  * unabhängig von der Futures-Totals-Pipeline.

@@ -3,7 +3,7 @@
  *
  * Geteilt, weil drei Sektionen sie lesen: Allgemein → Layout & Stil (die
  * Schalter selbst), KI → Strategie (Link nur bei aktivem Modus) und Live →
- * Live-Trading-Fenster. Settings.vue lädt den Stand beim Öffnen der Seite
+ * Live-Trading-Fenster. Einstellungen.vue lädt den Stand beim Öffnen der Seite
  * (`ladeModi`), bevor eine Bereichskomponente gemountet wird.
  */
 import { ref } from 'vue'

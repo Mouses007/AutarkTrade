@@ -123,7 +123,7 @@ console.log('\nKein Schalter mehr im Code')
     check('kein Server-Modul liest `kiEmpfehlungenAn`', leser.length === 0, leser.join(', '))
     const routen = readFileSync(join(HIER, 'api-routes.js'), 'utf8')
     check('Einstellungs-Whitelist lässt die Spalte nicht mehr schreiben', !routen.includes("'kiEmpfehlungenAn'"))
-    const settingsVue = readFileSync(join(HIER, '..', 'src', 'views', 'Settings.vue'), 'utf8')
+    const settingsVue = readFileSync(join(HIER, '..', 'src', 'views', 'Einstellungen.vue'), 'utf8')
     check('Einstellungsseite zeigt keinen Schalter mehr', !settingsVue.includes('kiEmpfehlungenAn'))
 }
 

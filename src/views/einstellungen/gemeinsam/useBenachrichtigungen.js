@@ -3,7 +3,7 @@
  * Modul-Singleton.
  *
  * Geteilt zwischen dem Bereich Benachrichtigungen und KI → Nachrichten (der
- * Lagebericht zeigt Browser-Kanal und Mail-Zugang an). Settings.vue lädt alles
+ * Lagebericht zeigt Browser-Kanal und Mail-Zugang an). Einstellungen.vue lädt alles
  * beim Öffnen der Seite (`ladeBrowserNotifications`, `ladeBenachrichtigungen`).
  */
 import { ref } from 'vue'

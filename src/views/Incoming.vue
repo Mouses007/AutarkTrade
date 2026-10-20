@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
-import NoData from '../components/NoData.vue'
+import KeineDaten from '../components/KeineDaten.vue'
 import PageInfo from '../components/PageInfo.vue'
 import { Knopf, Symbol, Pille, Hinweis, Kreisel } from '../components/basis'
 import { seiteLaedt, tradeZeitzone, expandedId, kopiertesBild } from '../stores/ui.js'
@@ -1468,7 +1468,7 @@ function getPositionDate(pos) {
             </Hinweis>
 
             <!-- No positions -->
-            <NoData v-if="orderedPositions.length === 0 && !incomingError && !brokerFehler.length" />
+            <KeineDaten v-if="orderedPositions.length === 0 && !incomingError && !brokerFehler.length" />
 
             <!-- Position cards: gruppiert je Börse (Titel) → Futures, dann Bots -->
             <template v-for="(pos, idx) in orderedPositions" :key="(pos.broker || '') + '_' + pos.positionId">

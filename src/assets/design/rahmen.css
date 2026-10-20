@@ -2,7 +2,7 @@
  * App-Rahmen von AutarkTrade: was die Inhaltsfläche unter der Kopfleiste
  * (components/rahmen/Kopfleiste.vue) global braucht.
  *
- * Seitenmenü und Spalten stehen scoped in layouts/Dashboard.vue und
+ * Seitenmenü und Spalten stehen scoped in layouts/Rahmen.vue und
  * components/rahmen/Seitenmenue.vue. Die früheren Abbildungen der
  * Bootstrap-Variablen (--bs-…) und die Anpassungen an Bootstrap-Klassen
  * (btn, form-control, modal, dropdown) sind mit Bootstrap in S9 Teil 2

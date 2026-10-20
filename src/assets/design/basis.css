@@ -36,7 +36,7 @@ body {
     display: none !important;
 }
 
-/* Vue nimmt das Attribut beim Einhängen weg (layouts/Dashboard.vue). */
+/* Vue nimmt das Attribut beim Einhängen weg (layouts/Rahmen.vue). */
 [v-cloak] {
     display: none !important;
 }

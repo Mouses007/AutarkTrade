@@ -22,7 +22,7 @@ import { useI18n } from 'vue-i18n'
 import Dialog from '../basis/Dialog.vue'
 import Symbol from '../basis/Symbol.vue'
 import Kreisel from '../basis/Kreisel.vue'
-import Screenshot from '../Screenshot.vue'
+import BildKarte from '../Screenshot.vue'
 import BildMarkierung from '../bildmarkierung/BildMarkierung.vue'
 import { selectedScreenshotIndex } from '../../stores/ui.js'
 import { screenshots, gewaehltesBild } from '../../stores/trades.js'
@@ -58,7 +58,7 @@ function taste(e) {
 <template>
     <Dialog :model-value="screenshotVollbildOffen" :titel="titel" breite="100rem" @update:model-value="offenSetzen" @keydown="taste">
         <div class="inhalt">
-            <Screenshot v-if="hatBild" :index="index" source="fullScreen" :screenshot-data="gewaehltesBild" />
+            <BildKarte v-if="hatBild" :index="index" source="fullScreen" :screenshot-data="gewaehltesBild" />
         </div>
         <template v-if="mitZurueck || mitWeiter" #fuss>
             <div class="blaetterleiste">

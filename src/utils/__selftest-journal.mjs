@@ -58,7 +58,7 @@ globalThis.localStorage = {
     removeItem: (k) => { ablage.delete(k) },
 }
 
-// Diagramm-Elemente, wie sie Dashboard.vue anlegt. Sichtbar (clientWidth > 0),
+// Diagramm-Elemente, wie sie JournalUebersicht.vue anlegt. Sichtbar (clientWidth > 0),
 // sonst überspringt zeichneDiagramme sie wie einen versteckten Bootstrap-Tab.
 const DIAGRAMM_IDS = [
     'pieChart1', 'pieChart2', 'pieChart3', 'perfChart1', 'feesChart1', 'symbolChart1', 'weekdayChart1',

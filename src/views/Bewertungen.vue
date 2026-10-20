@@ -16,7 +16,7 @@ import { useI18n } from 'vue-i18n'
 import Seitenkopf from '@/components/basis/Seitenkopf.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Dialog from '@/components/basis/Dialog.vue'
-import NoData from '@/components/NoData.vue'
+import KeineDaten from '@/components/KeineDaten.vue'
 import SeiteLaedt from '@/components/SeiteLaedt.vue'
 import PlaybookKarte from '@/components/playbook/PlaybookKarte.vue'
 import { erzeugePlaybook, PLAYBOOK_SCHLUESSEL } from '@/components/playbook/usePlaybook.js'
@@ -57,7 +57,7 @@ onBeforeUnmount(() => window.removeEventListener('paste', pb.beiEinfuegen))
             <div v-if="pb.eintraege.length" class="liste">
                 <PlaybookKarte v-for="e in pb.eintraege" :key="e.tradeId" :eintrag="e" />
             </div>
-            <NoData v-else />
+            <KeineDaten v-else />
         </template>
 
         <!-- Eigene Überlagerung statt ScreenshotVollbild: ein einzelnes Bild,

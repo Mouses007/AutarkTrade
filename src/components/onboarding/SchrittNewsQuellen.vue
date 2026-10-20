@@ -1,10 +1,10 @@
 <script setup>
 /**
- * Nachrichtenquellen-Verwaltung — extrahiert aus Settings.vue (Bereich KI →
+ * Nachrichtenquellen-Verwaltung — extrahiert aus Einstellungen.vue (Bereich KI →
  * Nachrichten), dort war die Logik bereits vollständig self-contained
  * (eigene Refs, eigene Endpunkte). Eine Komponente statt zweier Kopien:
  * genutzt sowohl hier im Onboarding-Assistenten als auch weiterhin in
- * Settings.vue, damit künftige Änderungen nicht auseinanderlaufen.
+ * Einstellungen.vue, damit künftige Änderungen nicht auseinanderlaufen.
  *
  * Bestehende Quellen werden nie angetastet — dieser Schritt bietet nur das
  * Hinzufügen neuer.

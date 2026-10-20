@@ -9,7 +9,7 @@ import i18n, { starteSprache } from './i18n'
 import { starteLabelVerknuepfung } from './utils/labelVerknuepfung.js'
 
 // Seit S9 ohne Bootstrap: Grundstil und Reset stehen in basis.css, Symbole
-// zeichnet src/components/basis/Symbol.vue. Quill laden Playbook.vue und
+// zeichnet src/components/basis/Symbol.vue. Quill laden Bewertungen.vue und
 // Incoming.vue selbst (samt CSS), nicht hier — es gehört nicht ins Start-Bundle.
 
 // Reihenfolge: Token → thematische Klassen → Elemente (basis) → Hilfsklassen

@@ -2,7 +2,7 @@
  * Kerzenchart eines einzelnen Trades (Tagesansicht-Modal, Bot-Trades).
  *
  * Eingabe der Kerzen in AUFRUFERFORM [Schluss, Eröffnung, Tief, Hoch]
- * (Daily.vue, botChart.js). ECharts erwartet [Eröffnung, Schluss, Tief, Hoch]
+ * (Tagesansicht.vue, botChart.js). ECharts erwartet [Eröffnung, Schluss, Tief, Hoch]
  * — umgestellt wird hier an genau einer Stelle (`zuEcharts`), damit steigende
  * Kerzen auch als steigend gefärbt sind (Spec 6.1).
  */
@@ -11,7 +11,7 @@ import { tradeZeitzone, tagesChartZoom } from '../../../stores/ui.js'
 import { element, instanzFuer, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 
-/** Zuletzt mit init = true geholte Instanz (Daily.vue zeichnet danach mit init = false weiter). */
+/** Zuletzt mit init = true geholte Instanz (Tagesansicht.vue zeichnet danach mit init = false weiter). */
 let aktuelleKerzen = null
 
 const zuEcharts = ([schluss, eroeffnung, tief, hoch]) => [eroeffnung, schluss, tief, hoch]

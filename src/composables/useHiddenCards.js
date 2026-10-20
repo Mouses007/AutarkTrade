@@ -3,7 +3,7 @@ import { reactive, ref } from 'vue'
 /**
  * Sichtbarkeit und Reihenfolge von Karten — gespeichert je Gerät im localStorage.
  *
- * Die Mechanik stand wortgleich in `Dashboard.vue` und `Auswertung.vue`; mit dem
+ * Die Mechanik stand wortgleich in `JournalUebersicht.vue` und `Auswertung.vue`; mit dem
  * Marktradar wäre sie dreimal im Baum. Herausgezogen ist nur die Mechanik, nicht
  * das Zahnrad-Markup: die drei Seiten setzen es in ganz verschiedene Leisten.
  *

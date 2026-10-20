@@ -8,7 +8,7 @@
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Screenshot from '../components/Screenshot.vue'
+import BildKarte from '../components/BildKarte.vue'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import Leerzustand from '../components/basis/Leerzustand.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
@@ -109,7 +109,7 @@ onBeforeUnmount(() => {
 
         <div v-else class="raster">
             <article v-for="{ b, index } in sichtbar" :id="String(b.objectId)" :key="b.objectId" class="karte">
-                <Screenshot :screenshot-data="b" source="screenshots" :index="index" />
+                <BildKarte :screenshot-data="b" source="screenshots" :index="index" />
                 <router-link v-if="playbookLink(b)" :to="playbookLink(b)" class="playbook at-klein">
                     <Symbol name="buch" :groesse="15" />{{ t('nav.playbook') }}
                 </router-link>

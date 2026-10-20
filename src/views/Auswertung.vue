@@ -18,7 +18,7 @@ import { ladeDiagramme, geladeneDiagramme } from '../utils/journal/diagrammLader
 import { formDatumKurz } from '../utils/journal/format.js'
 import { palette, mitDeckkraft } from '../utils/journal/diagramme/gestaltung.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
-import NoData from '../components/NoData.vue'
+import KeineDaten from '../components/KeineDaten.vue'
 import KartenMenue from '../components/dashboard/KartenMenue.vue'
 import TitelKarte from '../components/dashboard/TitelKarte.vue'
 import {
@@ -161,7 +161,7 @@ const vorzeichen = (x) => (x >= 0 ? '+' : '')
     <div ref="wurzel" class="aw">
         <SeiteLaedt />
         <div v-show="!seiteLaedt">
-            <NoData v-if="auswertungMounted && !mitTrades" />
+            <KeineDaten v-if="auswertungMounted && !mitTrades" />
 
             <div v-else-if="auswertungMounted" class="aw-seite">
                 <div class="aw-leiste">

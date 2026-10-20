@@ -3,7 +3,7 @@
  * Einstellungen › Allgemein › Lizenz (Auftrag S10).
  *
  * Zeigt den Stand des Lizenzschlüssels (`server/lizenz.js`), nimmt einen neuen an und
- * öffnet den Dialog „Rechtliches". Eigene Komponente, weil `Settings.vue` in S9 zerlegt
+ * öffnet den Dialog „Rechtliches". Eigene Komponente, weil `Einstellungen.vue` in S9 zerlegt
  * wird — dort steht nur der Einhängepunkt.
  *
  * Der Schlüsseltext kommt nie zurück in die Oberfläche (er kann Zugangsdaten zur

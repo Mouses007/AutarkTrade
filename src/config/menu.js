@@ -150,7 +150,7 @@ export const PAGES = [
 //
 // Abgeschaltet heisst wirklich abgeschaltet: der Tab verschwindet aus dem
 // Umschalter, das Seitenmenü rendert nichts mehr, und die Wache in
-// `layouts/Dashboard.vue` leitet auch einen Deep-Link auf eine Route des
+// `layouts/Rahmen.vue` leitet auch einen Deep-Link auf eine Route des
 // Modus um. Der frühere Schalter „Beta-Funktionen ausblenden" konnte das
 // nicht — er nahm nur den Tab weg, `/hype-radar` blieb per URL erreichbar.
 export const MODES = [

@@ -10,7 +10,7 @@
  * aufgebaut (v-if).
  *
  * Kein inneres KeepAlive: Diese Seite liegt selbst im KeepAlive von
- * Settings.vue, und das verschachtelte KeepAlive warf ab dem zweiten
+ * Einstellungen.vue, und das verschachtelte KeepAlive warf ab dem zweiten
  * Wechsel „ctx.deactivate is not a function" — der Inhalt blieb auf dem
  * alten Reiter stehen (Audit A4-01).
  */

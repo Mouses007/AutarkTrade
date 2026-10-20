@@ -11,8 +11,8 @@ import { seiteLaedt } from '../stores/ui.js'
 import { journalTage } from '../stores/trades.js'
 import { starteKalender } from '../utils/journal/ablauf.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
-import NoData from '../components/NoData.vue'
-import Calendar from '../components/Calendar.vue'
+import KeineDaten from '../components/KeineDaten.vue'
+import KalenderMonat from '../components/KalenderMonat.vue'
 import Karte from '@/components/basis/Karte.vue'
 
 onBeforeMount(async () => {
@@ -24,9 +24,9 @@ onBeforeMount(async () => {
     <div class="kal-seite">
         <SeiteLaedt />
         <div v-show="!seiteLaedt" class="kal-inhalt">
-            <NoData v-if="!journalTage.length" />
+            <KeineDaten v-if="!journalTage.length" />
             <Karte dicht>
-                <Calendar />
+                <KalenderMonat />
             </Karte>
         </div>
     </div>

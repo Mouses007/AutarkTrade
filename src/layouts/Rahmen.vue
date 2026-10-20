@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Layout von AutarkTrade — hängt als `meta.layout` an jeder Seite.
+ * Rahmen von AutarkTrade — App.vue setzt ihn um jede Seite mit `meta.rahmen`.
  *
  * Kopfleiste oben, darunter Menüspalte und Inhalt mit Titelzeile. Weil alle
  * Routen dieselbe Komponente tragen, wird das Layout bei einer SPA-Navigation

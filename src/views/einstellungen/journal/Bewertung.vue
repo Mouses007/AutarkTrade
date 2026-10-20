@@ -213,7 +213,7 @@ function removeCustomTimeframe(tf) {
     saveTimeframes()
 }
 
-/* Stand aus den Einstellungen — Settings.vue hat sie vor dem Mount geladen. */
+/* Stand aus den Einstellungen — Einstellungen.vue hat sie vor dem Mount geladen. */
 function ausEinstellungen() {
     const settings = appEinstellungen.value || {}
     scalpMaxMinutes.value = settings.scalpMaxMinutes ?? 15

@@ -2,7 +2,7 @@
 /**
  * Bereich „Benachrichtigungen": Browser-Hauptschalter, Kanalwahl je Ereignis
  * (mit Schwellen und den Märkten des Divergenz-Alarms) und der Mail-Zugang.
- * Register, Kanalwahl und Mail-Zugang lädt Settings.vue beim Öffnen der Seite
+ * Register, Kanalwahl und Mail-Zugang lädt Einstellungen.vue beim Öffnen der Seite
  * (useBenachrichtigungen) — KI → Nachrichten liest sie ebenfalls.
  */
 import { ref, computed } from 'vue'

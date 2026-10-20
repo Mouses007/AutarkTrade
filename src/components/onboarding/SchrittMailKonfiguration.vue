@@ -1,9 +1,9 @@
 <script setup>
 /**
- * Mail-Konfiguration (SMTP) — extrahiert aus Settings.vue (Bereich
+ * Mail-Konfiguration (SMTP) — extrahiert aus Einstellungen.vue (Bereich
  * Benachrichtigungen), dort self-contained über /api/mail/settings und
  * /api/mail/test. Wiederverwendet im Onboarding-Assistenten und weiterhin
- * in Settings.vue.
+ * in Einstellungen.vue.
  */
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -16,7 +16,7 @@ import Schalter from '@/views/einstellungen/gemeinsam/Schalter.vue'
 const { t } = useI18n()
 
 /*
- * v-model statt eigenem State: Settings.vue liest `mail.mailAktiv`/`mailAn`
+ * v-model statt eigenem State: Einstellungen.vue liest `mail.mailAktiv`/`mailAn`
  * an zwei weiteren Stellen (News-Mailversand-Hinweis, Kanal-Checkbox) und
  * braucht deshalb dieselbe Referenz. Ohne gebundenes v-model (Onboarding-
  * Kontext) liefert `defineModel` automatisch einen lokalen Fallback-Ref.
@@ -78,7 +78,7 @@ async function uebernehmen() {
 }
 
 /*
- * `laden` zusätzlich exponiert: Settings.vue hat vor der Extraktion
+ * `laden` zusätzlich exponiert: Einstellungen.vue hat vor der Extraktion
  * `ladeMailKonfig()` explizit in seiner eigenen, sequenzierten Mount-Kette
  * abgewartet (drei andere Stellen dort lesen `mail.mailAktiv`/`mailAn`
  * reaktiv). Ohne diesen Zugriff hinge die Reihenfolge nur noch daran, dass

@@ -5,7 +5,7 @@
  * Feld je Schreibvorgang) und einem Lader (`loadRadarSettings`), werden aber
  * aus vier Sektionen bedient: Live → Live-Trading-Fenster und Marktradar,
  * KI → Nachrichten, Benachrichtigungen (Schwellen und Märkte des
- * Divergenz-Alarms). Settings.vue lädt sie beim Öffnen der Seite, bevor eine
+ * Divergenz-Alarms). Einstellungen.vue lädt sie beim Öffnen der Seite, bevor eine
  * Bereichskomponente gemountet wird.
  */
 import { ref } from 'vue'
