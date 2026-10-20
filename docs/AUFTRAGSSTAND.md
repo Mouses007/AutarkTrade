@@ -67,6 +67,16 @@ verändert. Branch `u1-umzug`, auf master per `--ff-only`.
   (Eigenbetrieb)", ohne Ablauf, Updates bis 2099-12-31, abgelegt in `~/.config/autarktrade/lizenz-eigen.txt` (600);
   eintragen unter Einstellungen › Lizenz.
 - **Geprüft:** `npm run test:self` 148/148, `npm run build` fehlerfrei.
+- **Ergänzung „gewohnter Aufruf":** `scripts/nas-deploy.sh` bedient sich wie das Skript der alten App (gleiche
+  `scripts/.nas-deploy.env`, gleiche fünf Schritte, eine SSH- und eine sudo-Abfrage, gleiches NAS-Projekt) und bringt
+  das V2-Image; beim ersten Lauf erkennt es den Wechsel (Sicherung + gestoppte alte App verlangt, Compose-Tausch nach
+  Rückfrage), danach ist es der normale Update-Weg (Handbuch „Updates ab jetzt"). Probelauf: Wechsel, dann Update
+  ohne Rückfrage, Frontend-Hash beide Male gleich. Befund: `image prune -f` lief im lokalen Probelauf auf diesem
+  Rechner und entfernte namenlose Images/Build-Zwischenstufen (keine getaggten) — jetzt nur noch auf der NAS.
+- **Aufräum-Phase: NICHT fertig.** Die Rechteprüfung der Sitzung lehnte die Code-Änderung zu Schritt 3 (Rückfall
+  `CTJ_*`, Token-Zweck, Krypto-Seed) und das Skript für Schritt 1/2 (Live-DB/Rolle umbenennen, Löschen) ab. Plan,
+  Aufwand Schritt 4 (zu riskant als Einzelschritt, nur begründet) und Stand im Handbuch „Nachher aufräumen"; ein
+  ungetesteter Entwurf `scripts/umzug/nachher-aufraeumen.sh` liegt uncommitted im Worktree. Entscheidung beim Nutzer.
 - **Offen (Nutzer):** den Umzug selbst ausführen (`scripts/umzug/umzug.sh --trocken`, dann ohne); vorher offene
   Live-Positionen an der Börse schliessen. Auf der NAS ungeprüft: SSH/sudo-Pfad, ob DSM `pull_policy` kennt
   (Compose v2 ab 2.x), Mail/Push, ESP32, Widget.

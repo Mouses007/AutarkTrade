@@ -24,23 +24,33 @@ for _arg in "$@"; do
 done
 export TROCKEN
 
-ENV_DATEI="${UMZUG_ENV:-$UMZUG_DIR/.env}"
-if [ ! -f "$ENV_DATEI" ]; then
-    echo "Fehlt: $ENV_DATEI — Vorlage: cp $UMZUG_DIR/.env.beispiel $UMZUG_DIR/.env" >&2
+# Einstellungen: dieselbe Datei wie das gewohnte Update-Skript (scripts/.nas-deploy.env:
+# NAS_HOST, NAS_USER, NAS_PROJEKT, NAS_PORT), dazu optional scripts/umzug/.env für
+# alles, was nur der Umzug braucht. UMZUG_ENV ersetzt beide (Probelauf).
+if [ -n "${UMZUG_ENV:-}" ]; then
+    ENV_DATEIEN=("$UMZUG_ENV")
+else
+    ENV_DATEIEN=("$WURZEL/scripts/.nas-deploy.env" "$UMZUG_DIR/.env")
+fi
+_gelesen=0
+for _d in "${ENV_DATEIEN[@]}"; do
+    # shellcheck disable=SC1090
+    [ -f "$_d" ] && { set -a; . "$_d"; set +a; _gelesen=1; }
+done
+if [ "$_gelesen" = 0 ]; then
+    echo "Fehlt: scripts/.nas-deploy.env (wie im alten Repo) bzw. scripts/umzug/.env — Vorlage: scripts/umzug/.env.beispiel" >&2
     exit 1
 fi
-# shellcheck disable=SC1090
-set -a; . "$ENV_DATEI"; set +a
+APP_PORT="${APP_PORT:-${NAS_PORT:-8080}}"
 
 : "${NAS_HOST:?NAS_HOST fehlt in .env}"
 : "${NAS_PROJEKT:?NAS_PROJEKT fehlt in .env}"
 NAS_USER="${NAS_USER:-}"
-NAS_DOCKER="${NAS_DOCKER:-docker}"
+NAS_DOCKER="${NAS_DOCKER:-/usr/local/bin/docker}"
 NAS_SUDO="${NAS_SUDO-sudo}"
 NAS_TMP="${NAS_TMP:-/tmp}"
 COMPOSE_PROJEKT="${COMPOSE_PROJEKT:-$(basename "$NAS_PROJEKT")}"
 APP_DIENST="${APP_DIENST:-trading-journal}"
-APP_PORT="${APP_PORT:-8080}"
 TLS_PORT="${TLS_PORT:-8443}"
 DB_CONTAINER="${DB_CONTAINER:-tradejournal-db}"
 DB_NAME="${DB_NAME:-tradejournal}"

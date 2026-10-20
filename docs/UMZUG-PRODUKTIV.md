@@ -19,8 +19,8 @@ heisst es nur lokal `autarktrade:produktiv`, und die Compose-Datei sagt `pull_po
 | 0 | offene Live-Positionen schliessen | `sichern.sh` meldet sie |
 | 1 | Vollsicherung `pg_dump -Fc` + `pg_restore --list` + Prüfwerte | `sichern.sh` |
 | 2 | alte App stoppen, nicht löschen | `alt-stoppen.sh` |
-| 3 | Image privat auf die NAS | `nas-deploy.sh` |
-| 4 | Compose tauschen, Projekt neu erstellen | `nas-deploy.sh` |
+| 3 | Image privat auf die NAS | `scripts/nas-deploy.sh` (wie bisher) |
+| 4 | Compose tauschen, Projekt neu erstellen | `scripts/nas-deploy.sh` (erkennt den Wechsel) |
 | 5 | Migrationen v27 → v29 im Log | `pruefen.sh` |
 | 6 | Prüfliste | `pruefen.sh` + von Hand |
 | 7 | Testcontainer 8091 und DB-Kopie `autarktrade` abbauen (optional) | von Hand |
@@ -36,22 +36,27 @@ Alle Skripte liegen unter `scripts/umzug/`:
 
 ## Vorbereitung (am Rechner, einmal)
 
+Dieselbe Einstellungsdatei wie bisher für das Update-Skript, nur ins V2-Repo kopiert:
+
 ```bash
-cp scripts/umzug/.env.beispiel scripts/umzug/.env
+cp /home/maro/Schreibtisch/Trading/Journal/scripts/.nas-deploy.env scripts/.nas-deploy.env
 ```
 
-Die Datei `scripts/umzug/.env` enthält nur Ziele: NAS, Projektordner, Dienst- und Containernamen,
-Ablage der Sicherungen. Sie enthält **keine Passwörter**. DB-Zugang und Secret bleiben in der `.env`
-des NAS-Projekts; die Skripte lesen dort nur die **Namen** der Variablen und prüfen, dass
-`CTJ_SECRET` gesetzt ist. Die Datei ist über `.gitignore` ausgeschlossen. Vorgaben aus dem alten
-Betrieb (`Journal/scripts/.nas-deploy.env`): `NAS_USER=MARO`,
-`NAS_PROJEKT=/volume1/docker/tradingjournal`.
+Darin stehen `NAS_HOST`, `NAS_USER=MARO`, `NAS_PROJEKT=/volume1/docker/tradingjournal` und
+`NAS_PORT=8080`. Alle Umzugsskripte lesen diese Datei. Für alles andere gelten die Vorgaben aus
+`scripts/umzug/.env.beispiel` (Dienst `trading-journal`, DB-Container `tradejournal-db`, Ablage
+`~/AutarkTrade-Sicherungen`). Weicht etwas ab, kommt es in eine zusätzliche `scripts/umzug/.env`.
+
+Beide Dateien enthalten **keine Passwörter** und sind über `.gitignore` ausgeschlossen.
+DB-Zugang und Secret bleiben in der `.env` des NAS-Projekts. Die Skripte lesen dort nur die
+**Namen** der Variablen und prüfen, dass `CTJ_SECRET` gesetzt ist.
 
 Voraussetzungen:
 - SSH auf der NAS ist an.
 - Der SSH-Benutzer darf `sudo docker`.
 - Auf diesem Rechner läuft Docker (für Bau und `pg_restore --list`).
-- Der Arbeitsstand ist eingecheckt: gebaut wird `git archive HEAD`, also genau master.
+- Gebaut wird wie bisher aus dem Arbeitsordner. Das Skript meldet, wenn nicht eingecheckte
+  Änderungen mitgehen (Revision `…+lokal`). Für den Umzug also auf sauberem master stehen.
 
 Vor dem Umzug in der alten App notieren, um nachher zu vergleichen:
 - Journal › Übersicht „Dieses Jahr“: Gesamt-P&L netto, Anzahl Trades, Gewinnquote;
@@ -114,23 +119,35 @@ dann; Image, Compose-Datei und Sicherung bleiben für den Rückweg.
 
 ## 3) Image privat auf die NAS
 
-`scripts/umzug/nas-deploy.sh`, erster Teil:
+Der gewohnte Aufruf, wie bisher in der alten App:
 
 ```bash
-git archive HEAD | docker build --platform linux/amd64 -t autarktrade:produktiv -   # Architektur per `uname -m` der NAS
-docker save autarktrade:produktiv | gzip -1 | ssh MARO@192.168.178.100 'cat > /tmp/.at-v2-image.tar.gz'
-ssh -t MARO@192.168.178.100 'sudo /usr/local/bin/docker load -i /tmp/.at-v2-image.tar.gz'
+scripts/nas-deploy.sh            # ruft scripts/umzug/nas-deploy.sh; --trocken zeigt nur
 ```
 
-- **Prüfung:** Die Architektur des Images passt zur NAS. Gemeldet werden der Frontend-Hash
-  (`assets/index-….js`) und die Revision (Label `org.opencontainers.image.revision`).
-- Das Tag `autarktrade:produktiv` existiert nur auf der NAS. Das Skript bricht ab, wenn `V2_TAG` auf
-  `mouses007/…` oder `…/trading-journal…` zeigt.
-- Es gibt **kein** `image prune`: Das alte Image bleibt liegen.
+Es läuft dieselben fünf Schritte und fragt dieselben Dinge ab: einmal das SSH-Passwort am Anfang
+und einmal sudo in Schritt 4.
+
+| Schritt | Befehl | Prüfung |
+|---|---|---|
+| 1/5 | `ssh … uname -m`, Compose-Datei der NAS lesen | Architektur; **Update** (dort steht schon `autarktrade:produktiv`) oder **Wechsel** (dort steht noch die alte App) |
+| 2/5 | `docker build --platform linux/amd64 -t autarktrade:produktiv .` | Architektur des Images; Frontend-Hash `assets/index-….js`; Revision |
+| 3/5 | `docker save … \| gzip -1 \| ssh … 'cat > /tmp/.at-deploy-image.tar.gz'` | übertragene Grösse |
+| 4/5 | `ssh -t …`: `sudo docker load`, (Wechsel: Compose tauschen), `sudo sh -c 'cd /volume1/docker/tradingjournal && docker compose -p tradingjournal up -d --force-recreate'`, `docker image prune -f` | – |
+| 5/5 | `curl http://192.168.178.100:8080/` | liefert genau den Frontend-Hash von 2/5 |
+
+- Das Tag `autarktrade:produktiv` gibt es nur auf der NAS. Das Skript bricht ab, wenn `TAG` oder
+  `NAS_IMAGE_TAG` auf `mouses007/…` zeigt.
+- `image prune` entfernt nur namenlose Images. `trading-journal:vor-v2-<datum>` hat einen Tag und
+  bleibt für den Rückweg.
+- **Wechsel** (nur beim ersten Lauf):
+  - verlangt die Sicherung aus 1) und die gestoppte alte App aus 2);
+  - zeigt den Unterschied der Compose-Dateien und die Variablen-Namen der Projekt-`.env`;
+  - fragt einmal, bevor es tauscht.
 
 ## 4) Produktiv-Compose als Tausch im Projekt `tradingjournal`
 
-`scripts/umzug/nas-deploy.sh`, zweiter Teil. Vorlage:
+Der Wechsel-Teil von `scripts/nas-deploy.sh`. Vorlage:
 [`scripts/umzug/docker-compose.produktiv.yml`](../scripts/umzug/docker-compose.produktiv.yml).
 
 Vor der Frage zeigt das Skript:
@@ -154,7 +171,7 @@ sudo sh -c 'cd /volume1/docker/tradingjournal && docker compose -p tradingjourna
 | nicht root (F2) | Die App läuft als `node` (uid 1000). Ein Docker-Socket ist nicht mehr eingehängt. |
 | Volume-Rechte | Die alte App hatte an der NAS kein Datenvolume, nur den Socket; Postgres liegt im eigenen Container. Falls doch eines unter `/app/data` hängt, übergibt der Einstieg (`docker-entrypoint.sh`) es beim ersten Start einmal per `chown -R node:node` und meldet das im Log („/app/data gehört noch root …“). Scheitert das, im Compose `user: "<uid>:<gid>"` des Besitzers setzen. |
 | Sicherheitsschalter | `AT_ALLOW_INSECURE=` und `AT_RESET_AUTH=` stehen leer. Ein altes `CTJ_ALLOW_INSECURE` in der `.env` wirkt damit nicht mehr (A2-30). `AT_TRUST_PROXY=1` mit `AT_TRUSTED_PROXY=caddy` (A2-03). |
-| nichts ziehen | `pull_policy: never`. Im Container Manager **nicht** „Erstellen/Herunterladen“ drücken; neu aufspielen nur mit `nas-deploy.sh`. |
+| nichts ziehen | `pull_policy: never`. Im Container Manager **nicht** „Erstellen/Herunterladen“ drücken; neu aufspielen nur mit `scripts/nas-deploy.sh`. |
 
 - **Prüfung:** Das Skript wartet auf „AutarkTrade ready!“ im Log und zeigt die Zeilen zu Schema,
   S13, S15, v28 und Testbetrieb.
@@ -254,6 +271,70 @@ Jede Stufe hat ihre eigene Ja-Abfrage, und nichts wird weggeworfen:
 Was nach dem Umzug in V2 eingetragen wurde, steckt danach nur in `tradejournal_v2_<datum>`. Die alte
 App findet ihre Live-Instanzen so vor, wie sie in der Sicherung standen, auch eine noch aktive
 Live-Instanz. Ihr Stop-Wächter läuft dann wieder.
+
+## Updates ab jetzt
+
+Nach dem Umzug ist **`scripts/nas-deploy.sh`** der normale Weg für jedes V2-Update. Aufruf,
+Einstellungsdatei, Abfragen und Kontrolle sind dieselben wie bisher bei der alten App:
+
+```bash
+git pull                 # bzw. auf dem gewünschten Stand von master stehen
+scripts/nas-deploy.sh    # baut, überträgt per SSH, erstellt das Projekt neu, prüft den Frontend-Hash
+```
+
+- Ohne Rückfrage: Die Compose-Datei auf der NAS nennt schon `autarktrade:produktiv`, also läuft der
+  Update-Fall.
+- Neue Migrationen laufen beim Start selbst. Vor grösseren Sprüngen (neue `SCHEMA_VERSION` in
+  `server/database.js`) vorher `scripts/umzug/sichern.sh` laufen lassen, danach
+  `scripts/umzug/pruefen.sh`.
+- Im Container Manager **nicht** „Erstellen/Herunterladen“ drücken (`pull_policy: never`, das Tag
+  liegt in keiner Registry). Der Update-Knopf in der App ist im Container ohne Wirkung (A2-10).
+- Probelauf am 20.10.2026: erster Lauf als Wechsel, zweiter Lauf über `scripts/nas-deploy.sh` als
+  Update ohne Rückfrage. 5/5 lieferte beide Male den gebauten Frontend-Hash.
+
+## Nachher aufräumen (1–2 Wochen nach dem Umzug) — Stand: geplant, NICHT bereit
+
+Ziel: Vom alten bleibt nichts übrig. Die Aufräum-Phase ist **nicht** fertig vorbereitet. In der
+Sitzung vom 20.10.2026 hat die Rechteprüfung zwei Teile abgelehnt; sie liegen dem Nutzer zur
+Entscheidung vor:
+- die Code-Änderung zu Schritt 3: Rückfall `CTJ_*` bei Sicherheitsschaltern, Zweck des
+  Sitzungs-Tokens, Krypto-Seed;
+- das Skript, das die Live-DB und ihre Rolle umbenennt und alte Container und Ordner löscht
+  (Schritte 1 und 2).
+
+Ein Entwurf `scripts/umzug/nachher-aufraeumen.sh` liegt **uncommitted** im Worktree
+`.claude/worktrees/f4-endpruefung-95d718`. Er ist ungetestet und nicht auf master.
+
+| Schritt | Inhalt | Stand |
+|---|---|---|
+| 1 | alte Container/Images auf NAS und Rechner (`mouses007/trading-journal:*`, `trading-journal:*`, `crypto-trading-journal`) entfernen, vorher V2 läuft + Sicherung ≤ 24 h; `Journal/` als tar.gz (ohne `node_modules`, Rechte 600), Löschen nur angeboten | Entwurf, ungetestet |
+| 2 | Projekt `tradingjournal` → `autarktrade` (neuer Ordner `/volume1/docker/autarktrade`, alter bleibt für den Rückweg), DB und Rolle `tradejournal` → `autarktrade` über eine Hilfsrolle (die Sitzungsrolle kann sich nicht selbst umbenennen; nur mit SCRAM-Passwort, md5 hängt am Namen), Container `tradejournal-db` → `autarktrade-db`, `.env` `CTJ_*` → `AT_*`, V2-Caddyfile, Einstellungen hier nachziehen, `LIVE_DB_NAME` für `v2-container.sh`; Rückweg `--rueckweg 2`. Vorher muss die DB-Kopie `autarktrade` (8091) weg sein. | Entwurf, ungetestet |
+| 3 | Schalter `AT_ALTE_KENNUNGEN=aus`: kein `CTJ_*`-Rückfall (`server/umgebung.js`), kein Seed `tradenote-…` (`server/crypto.js`, `server/reencrypt-keys.mjs`), Token-Zweck `at_sitzung_v1` (`server/auth.js`), Rekorder schreibt `AT01`/liest `CTJ1` (`server/live-recorder.js`), Browser zieht `ctj.chart.indBoxOffen`, `ctj.chart.positionenAus`, `ctj.handelslage.autoMin` nach `at.*` (über `GET /api/system/modus`); Daten: neues `AT_SECRET`, Umschlüsseln im Container mit `AT_SECRET_ALT=<altes>` und `node server/reencrypt-keys.mjs --apply` | **nicht umgesetzt** — Code-Änderung abgelehnt, braucht Freigabe |
+| 4 | Tabellen-/Feldnamen (`satisfactions`, `excursions`, `blotter`, `pAndL`, `objectId`, `td`, …) | **nicht umgesetzt, bewusst** — siehe unten |
+| 5 | `scripts/historie-neu-wurzeln.sh` aufrufen; Befehle für das alte Repo (`gh repo edit Mouses007/Crypto-Trading-Journal --visibility private …` bzw. `gh repo delete …`) und das Docker-Hub-Image `mouses007/trading-journal` nur ausgeben | Entwurf; das Historien-Skript selbst ist fertig (F4) |
+
+**Schritt 4, Aufwand (gezählt am 20.10.2026, ohne Selbsttests):**
+
+| Name | Stellen | Dateien |
+|---|---|---|
+| `pAndL` | 128 | 23 |
+| `blotter` | 75 | 14 |
+| `excursions` | 65 | 18 |
+| `satisfactions` | 29 | 12 |
+| `objectId` | 188 | 32 |
+| `td` (Feld, zusammen mit HTML-`<td>` gezählt) | bis 773 | 51 |
+
+Dazu kommt das JSON in **jeder** gespeicherten Tageszeile (`trades.trades/blotter/pAndL`), beide
+Golden Master, das Backup-Format (Ex-/Import alter Sicherungen), ESP32 und das Android-Widget.
+
+Als Einzelschritt ist das zu riskant:
+- Ein vergessenes Feld rechnet still mit `undefined` weiter. Die Golden Master würden es zeigen,
+  aber nur für die Pfade, die sie abdecken.
+- Ein Rückweg müsste jede Zeile zurückschreiben.
+- Der Nutzen ist kosmetisch: Es sind Datenmodell-Namen, kein übernommener Ausdruck (A3-25/26).
+
+Empfehlung, falls gewünscht: ein eigener Auftrag mit Spezifikation, Migration v30 mit doppeltem
+Lesen (alter und neuer Name), Golden Master neu einfrieren und Probelauf an einer DB-Kopie.
 
 ## Eigene Lizenz
 
