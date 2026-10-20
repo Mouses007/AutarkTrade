@@ -3,12 +3,18 @@
  * Bereich „KI" mit zweiter Reiter-Ebene (je KI-Funktion ein Reiter).
  *
  * Lädt beim ersten Öffnen Zugang, Modelllisten und Share-Karten — die teilen
- * sich alle Unter-Reiter (useKiAnbieter, useShareCard). Die Unter-Reiter
- * bleiben per KeepAlive erhalten, wie früher unter v-show: Eingaben und
- * aufgeklappte Abschnitte überleben einen Reiterwechsel. Die Übersicht wird
- * wie bisher bei jedem Öffnen neu aufgebaut (v-if).
+ * sich alle Unter-Reiter (useKiAnbieter, useShareCard). Ein Unter-Reiter
+ * wird beim ersten Öffnen aufgebaut und danach nur noch per v-show
+ * versteckt: Eingaben und aufgeklappte Abschnitte überleben einen
+ * Reiterwechsel. Die Übersicht wird wie bisher bei jedem Öffnen neu
+ * aufgebaut (v-if).
+ *
+ * Kein inneres KeepAlive: Diese Seite liegt selbst im KeepAlive von
+ * Settings.vue, und das verschachtelte KeepAlive warf ab dem zweiten
+ * Wechsel „ctx.deactivate is not a function" — der Inhalt blieb auf dem
+ * alten Reiter stehen (Audit A4-01).
  */
-import { computed, onBeforeMount } from 'vue'
+import { computed, onBeforeMount, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Reiter from '@/components/basis/Reiter.vue'
 import KiUebersicht from '@/components/ki/KiUebersicht.vue'
@@ -37,7 +43,9 @@ const KI_KOMPONENTEN = {
 const kiReiter = computed(() => KI_BEREICHE.map(b => ({
     id: b.id, titel: t('settings.ki.tab_' + b.id), symbol: b.symbol,
 })))
-const kiKomponente = computed(() => KI_KOMPONENTEN[kiBereich.value] || null)
+/** Unter-Reiter, die schon einmal offen waren (bleiben aufgebaut). */
+const besucht = reactive(new Set())
+watch(kiBereich, (b) => { if (KI_KOMPONENTEN[b]) besucht.add(b) }, { immediate: true })
 
 onBeforeMount(async () => {
     await ladeKiGrundlagen()
@@ -58,9 +66,9 @@ onBeforeMount(async () => {
             <KiUebersicht v-if="kiBereich === 'uebersicht'" @gehe-zu="kiBereichWechseln" />
         </div>
 
-        <KeepAlive>
-            <component :is="kiKomponente" v-if="kiKomponente" />
-        </KeepAlive>
+        <template v-for="(komponente, id) in KI_KOMPONENTEN" :key="id">
+            <component :is="komponente" v-if="besucht.has(id)" v-show="kiBereich === id" />
+        </template>
     </div>
 </template>
 
