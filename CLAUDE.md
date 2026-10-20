@@ -68,6 +68,11 @@ S15 added `server/quellen/__selftest-freigabe.mjs` (switch logic, list ↔ revie
 `src/` exists in `de.json` — parity alone missed keys inserted into the wrong
 namespace (07.10.2026: the Hype outcome texts sat under `coinradar`, and
 `coinradar.ladeFehler` had overwritten `lernen.ladeFehler`).
+F1 (20.10.2026) added `src/utils/__selftest-vorlagen-bindungen.mjs` — every `.vue` template is compiled with
+`@vue/compiler-sfc` and every identifier that ends up as `_ctx.X` (bound neither in `<script setup>` nor an instance
+global like `$t`) fails: after the S11 rename eleven templates still read old names, which Vue silently evaluates as
+`undefined` (cards never shown, filters without effect) — and `src/utils/__selftest-barrierearm.mjs` (a `<button>`
+with only a `<Symbol>` needs `aria-label`/`title`, `<Knopf nurSymbol>` needs `titel`).
 Directories are listed in `ORTE` in `scripts/run-selftests.mjs` — a new one has
 to be added there or its tests are silently skipped.
 

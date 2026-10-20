@@ -36,6 +36,7 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 4 | S13 Scharfen Handel auslagern | Orders, Stop-Wächter, Margen-Netz, Abgleich, Live-Freigabe ausbauen; aufbewahren auf `spaeter/scharfer-handel`; Migration live → Papier | `claude/s13-handel-auslagern-f7e9fe` | **fertig** → `docs/SPAETER-SCHARFER-HANDEL.md` |
 | 5 | S14 Hype-Radar übersichtlich | Übersicht: Lagezeile, Alarme eingeklappt mit Art-Filter, Funde „geprüft“ als Vorgabe, einzeilige Tabelle/Karten, Quadrant einklappbar — nur Darstellung | `claude/s14-hype-uebersicht-7eb497` | **fertig** |
 | 5 | S15 Analysequellen zurück | Von S12 entfernte Quellen (Yahoo, ForexFactory, CMC, blockchain.info, CoinGecko/GeckoTerminal ohne Schlüssel, pump.fun, Telegram, Reddit, CoinPaprika, Upbit/MEXC/OKX/Alpha, bapi-Brackets, News-Vorschläge, öffentlicher Solana-RPC, Logos, DeepSeek-Suche) zurück hinter Schalter `quellenOhneFreigabe` (Vorgabe an) | `claude/s15-quellen-zurueck-260844` | **fertig** |
+| 4 | F1 Funktion & Oberfläche | Audit A1+A4 behoben | – | **fertig** |
 
 ## Gesamtfazit (S11, 19.10.2026)
 
@@ -61,6 +62,39 @@ Attribution, jede KI-Ausgabe ist gekennzeichnet (S12, Verkaufs-Prüfung Anhang 1
    (Demo-Tarif im verkauften Produkt), dazu Bitunix, Bitget, Bybit, GoPlus, CryptoQuant, RugCheck.
 4. Vertrieb: Händler-Dienst (Merchant of Record) und Kunden-Zugang zur Registry statt
    GitHub-Token je Kunde (`HERKUNFT.md`, Anhang B).
+
+## F1 Funktion & Oberfläche — Ergebnis (20.10.2026)
+
+Korrektur der Audit-Berichte A1 (Funktionsvergleich, 15 Befunde) und A4 (Laufprüfung, 25 Befunde), Branch
+`claude/f1-funktion-e8fce2`. Je Befund steht der Stand („behoben (Commit)“ / „offen (Grund)“) am Ende von
+`docs/audit/2026-10-19/A1-funktionsvergleich.md` und `A4-laufpruefung.md`.
+
+- **Ursache Nr. 1 behoben und abgesichert:** die nach S11 ungebundenen Vorlagen-Namen in 11 Vue-Dateien (A1-01 bis
+  A1-09: Übersichtskarten, Brutto/Netto-, Tag- und P&L-Filter, Screenshot-Vollbild, Lade-Anzeigen, Trade-Bewertung,
+  KI-Coach-Monat, Nach-oben). Neuer Selbsttest `src/utils/__selftest-vorlagen-bindungen.mjs` übersetzt jede Vorlage mit
+  `@vue/compiler-sfc` und meldet jeden `_ctx.X` ohne Bindung (Gegenprobe vor dem Fix: genau die 11 Dateien).
+- **Hoch aus A4:** KI-Unterreiter ohne verschachteltes KeepAlive (A4-01); Pult-Marktübersicht beim Kaltstart — dieselbe
+  Ursache sass in zehn ECharts-Kacheln (A4-02/03).
+- **Journal-Nachzug:** `f910385` (Bot-Positionen nicht im Chart, Erkennung jetzt einmal in `positionTpsl.js`) und
+  `3212a6f` (gemerkter Zeichenstil, KI-Volumenprofile je Abschnitt) an V2-Namen angepasst übernommen (A1-10/11).
+- **Ohne Börsenschlüssel keine 400er-Schleife** (A4-06): Lese-Routen sagen `nichtEingerichtet`, `src/utils/boersenZugang.js`
+  fragt nur eingerichtete Börsen.
+- **Texte nach S13** (A1-14/A4-07): keine „Orders über deine Börsen-Schlüssel“ mehr; LICENSE 7a und `app-hilfe.js` waren
+  konform. Die Zustimmungsformel gehört zur anwaltlichen Prüfung.
+- **Barrierearmut:** neuer Selbsttest `src/utils/__selftest-barrierearm.mjs` (31 Symbol-Knöpfe benannt), `Feld.vue` und
+  `src/utils/labelVerknuepfung.js` verknüpfen Beschriftung und Feld (A4-21/22).
+- **Weiter:** Teilausfälle im Marktradar nicht als Messung gecacht (A1-12/13), 375 px ohne waagrechtes Scrollen
+  (A4-04/05), Watchlist-Kürzel (A4-08), Monatsnamen deutsch ohne Eingriff in die Kalenderrechnung (A4-13), NOTICE als
+  Klartext (A4-17), Werkzeugleiste einzeilig (A4-20), Start-Log und Testbetrieb (A4-24), Texte A4-11/12/14/15/16/18.
+- **Bewusst offen:** A4-09 (Live-Trading-Vorgabe ist die eigene Aufstellung des Nutzers und füllt 4 Spalten; bei 1500 px
+  sind es 3), A4-19 (Beispiel-Tags = die drei eingebauten Strategien, das Chartbild erkennt sie). A1-15 und A4-25 ohne
+  Handlungsbedarf.
+- **Geprüft:** `npm run test:self` 145/145 Dateien grün (6351 Prüfungen), Golden Master unverändert; `npm run build` fehlerfrei (nur die
+  bekannte Chunk-Warnung). Prüf-Container auf Port 8099 mit `AT_TESTBETRIEB=1`/`AT_ALLOW_INSECURE=1`: gegen die DB-Kopie
+  blieb das Passwort-Gate aktiv, deshalb eine Wegwerf-SQLite mit den Journal-Tabellen der Kopie (nur lesend kopiert,
+  ohne Schlüssel und Einstellungen). Jeder Befund mit sichtbarer Wirkung im eingebauten Browser bei 1500 und 375 px
+  nachgeprüft; nicht bedienbar waren der KI-Coach-Monat (nur mit KI-Anbieter) und A4-10 (kein Ausfall während der
+  Prüfung) — dort belegen Selbsttest bzw. Code. Container entfernt.
 
 ## S15 Analysequellen zurück — Ergebnis (19.10.2026)
 
