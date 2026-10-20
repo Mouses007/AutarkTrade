@@ -5186,6 +5186,7 @@
     "leisteBreite": "Drag to resize (double-click: reset)",
     "leisteEinklappen": "Collapse sidebar",
     "leisteAusklappen": "Expand sidebar",
+    "eckGriff": "Drag to resize: vertical = this card's height, horizontal = sidebar width (double-click: reset)",
     "status": {
       "connecting": "Connecting …",
       "open": "Live",

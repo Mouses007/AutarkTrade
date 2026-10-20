@@ -335,11 +335,11 @@ main {
     margin-bottom: var(--abstand-2);
 }
 
-/* Gleiche Breite wie der Inhalt der Agent-Seiten (11/12 ab 1200 px). */
-@media (min-width: 1200px) {
-    .at-agent-kopf .innen {
-        width: 91.6667%;
-    }
+/* Gleiche Breite wie der Inhalt der Agent-Seiten: die sind seit dem Redesign auf
+   1500 px begrenzt (.instanzen-inhalt u. a.). Vorher galt hier „11/12 ab 1200 px“
+   aus der Bootstrap-Zeit — dann stand das Banner breiter als die Karten darunter. */
+.at-agent-kopf .innen {
+    max-width: 1500px;
 }
 
 @media (prefers-reduced-motion: reduce) {

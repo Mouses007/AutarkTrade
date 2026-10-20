@@ -5186,6 +5186,7 @@
     "leisteBreite": "Breite ziehen (Doppelklick: zurücksetzen)",
     "leisteEinklappen": "Leiste einklappen",
     "leisteAusklappen": "Leiste ausklappen",
+    "eckGriff": "Grösse ziehen: senkrecht = Höhe dieser Karte, waagrecht = Breite der Leiste (Doppelklick: zurücksetzen)",
     "status": {
       "connecting": "Verbinde …",
       "open": "Live",

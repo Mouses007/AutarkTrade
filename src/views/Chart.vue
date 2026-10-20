@@ -214,6 +214,61 @@ function boxZiehenEnde() {
 }
 function boxHoeheZurueck() { boxHoehe.value = BOX_VORGABE; schreibeBox('chartMomentumBoxHoehe', BOX_VORGABE) }
 
+/*
+ * Eckgriff je Karte der Seitenleiste (Reiter-Inhalt, Indikatoren, Momentum Radar):
+ * senkrecht ziehen = Höhe DIESER Karte, waagrecht = Breite der ganzen Leiste (sie
+ * ist eine Spalte, alle Karten teilen sich die Breite). Doppelklick = zurück.
+ * Der Griff sitzt UNTEN LINKS, weil die Leiste rechts steht und links wächst.
+ * Gespeichert im Browser wie Leistenbreite und Box-Höhe; ohne Wert gilt das alte
+ * Verhalten (Reiter füllt den Rest, Indikatoren so hoch wie ihr Inhalt).
+ */
+const KARTEN_SCHLUESSEL = 'chartKartenHoehe'
+const KARTE_MIN = 60
+const kartenHoehe = ref((() => { const v = leseBox(KARTEN_SCHLUESSEL, {}); return v && typeof v === 'object' ? v : {} })())
+let eckZug = null
+function kartenStil(karte) {
+    const h = kartenHoehe.value[karte]
+    return h ? { height: h + 'px' } : null
+}
+function eckStart(e, karte) {
+    const karteEl = e.currentTarget.parentElement
+    eckZug = {
+        karte, x: e.clientX, y: e.clientY, breite: leisteBreite.value,
+        hoehe: karte === 'momentum' ? boxHoehe.value : Math.round(karteEl.getBoundingClientRect().height),
+        mitBreite: !telefon.value && breitGenug.value,
+    }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    document.body.style.cursor = 'nesw-resize'
+    document.body.style.userSelect = 'none'
+}
+function eckZiehen(e) {
+    if (!eckZug) return
+    const h = Math.round(Math.max(KARTE_MIN, Math.min(1400, eckZug.hoehe + e.clientY - eckZug.y)))
+    if (eckZug.karte === 'momentum') boxHoehe.value = Math.max(80, h)
+    else kartenHoehe.value = { ...kartenHoehe.value, [eckZug.karte]: h }
+    if (eckZug.mitBreite) {
+        const max = Math.min(LEISTE_MAX, window.innerWidth * 0.6)
+        leisteBreite.value = Math.round(Math.max(LEISTE_MIN, Math.min(max, eckZug.breite + eckZug.x - e.clientX)))
+    }
+}
+function eckEnde() {
+    if (!eckZug) return
+    const { karte, mitBreite } = eckZug
+    eckZug = null
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    if (karte === 'momentum') schreibeBox('chartMomentumBoxHoehe', boxHoehe.value)
+    else schreibeBox(KARTEN_SCHLUESSEL, kartenHoehe.value)
+    if (mitBreite) { try { localStorage.setItem(LEISTE_SCHLUESSEL, String(leisteBreite.value)) } catch { /* kein Speicher */ } }
+}
+function eckZurueck(karte) {
+    if (karte === 'momentum') { boxHoeheZurueck(); return }
+    const neu = { ...kartenHoehe.value }
+    delete neu[karte]
+    kartenHoehe.value = neu
+    schreibeBox(KARTEN_SCHLUESSEL, neu)
+}
+
 watch(daten, () => {
     if (ignoriereNaechsteAenderung) { ignoriereNaechsteAenderung = false; return }
     clearTimeout(speicherUhr)
@@ -644,6 +699,7 @@ watch(sichtbareAnzahl, async () => {
                             <Symbol :name="r.icon" />
                         </button>
                     </div>
+                    <div class="karte reiterKarte" :class="{ fest: kartenHoehe.reiter }" :style="kartenStil('reiter')">
                     <div class="reiterInhalt">
                     <div class="reiterTitel">{{ t('chart.reiter.' + daten.seitenleiste.reiter) }}</div>
                     <WatchlistReiter v-if="daten.seitenleiste.reiter === 'watchlist'" :watchlists="watchlists"
@@ -668,9 +724,18 @@ watch(sichtbareAnzahl, async () => {
                         :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis"
                         @vorschau="(a) => aktivesPanelRef?.setzeKiVorschau(a)" />
                     </div>
-                    <IndikatorSchalter class="vvSchalter" :panel="aktivesPanel" @aendere="vvSchalten"
-                        @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
-                        @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
+                        <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
+                            @pointerdown.prevent.stop="eckStart($event, 'reiter')" @pointermove="eckZiehen" @pointerup="eckEnde"
+                            @pointercancel="eckEnde" @dblclick.stop="eckZurueck('reiter')"></span>
+                    </div>
+                    <div class="karte vvKarte" :class="{ fest: kartenHoehe.indikatoren }" :style="kartenStil('indikatoren')">
+                        <IndikatorSchalter class="vvSchalter" :panel="aktivesPanel" @aendere="vvSchalten"
+                            @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
+                            @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
+                        <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
+                            @pointerdown.prevent.stop="eckStart($event, 'indikatoren')" @pointermove="eckZiehen" @pointerup="eckEnde"
+                            @pointercancel="eckEnde" @dblclick.stop="eckZurueck('indikatoren')"></span>
+                    </div>
                     <!-- Momentum-Box  unter dem Reiter: Trenner ziehen = Höhe, Pfeil = ein-/ausklappen. -->
                     <div class="boxTrenner" :class="{ zu: !boxOffen }" @pointerdown="boxZiehenStart" @pointermove="boxZiehen"
                         @pointerup="boxZiehenEnde" @pointercancel="boxZiehenEnde" @dblclick="boxHoeheZurueck"
@@ -681,8 +746,13 @@ watch(sichtbareAnzahl, async () => {
                         <button @pointerdown.stop @click.stop="schalteBox" :title="t(boxOffen ? 'chart.mbox.zu' : 'chart.mbox.auf')" :aria-label="t(boxOffen ? 'chart.mbox.zu' : 'chart.mbox.auf')">
                             <Symbol :name="boxOffen ? 'runter' : 'hoch'" /></button>
                     </div>
-                    <div v-if="boxOffen" class="boxBereich" :style="{ height: boxHoehe + 'px' }">
-                        <MomentumBox :symbol="aktivesPanel.symbol" :interval="aktivesPanel.interval" :markt="aktivesPanel.markt" />
+                    <div v-if="boxOffen" class="karte boxKarte">
+                        <div class="boxBereich" :style="{ height: boxHoehe + 'px' }">
+                            <MomentumBox :symbol="aktivesPanel.symbol" :interval="aktivesPanel.interval" :markt="aktivesPanel.markt" />
+                        </div>
+                        <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
+                            @pointerdown.prevent.stop="eckStart($event, 'momentum')" @pointermove="eckZiehen" @pointerup="eckEnde"
+                            @pointercancel="eckEnde" @dblclick.stop="eckZurueck('momentum')"></span>
                     </div>
                     <!-- Lizenzhinweis der Chart-Bibliothek (Apache-2.0, NOTICE). Zusätzlich zum
                          TradingView-Logo im Chart (`attributionLogo: true` in ChartPanel). -->
@@ -873,6 +943,61 @@ watch(sichtbareAnzahl, async () => {
 
 .lizenz:hover {
     opacity: 1;
+}
+
+.karte {
+    position: relative;
+    min-height: 0;
+}
+
+.reiterKarte {
+    flex: 1;
+    min-height: 60px;
+    display: flex;
+    flex-direction: column;
+}
+
+.reiterKarte.fest {
+    flex: 0 0 auto;
+}
+
+.vvKarte {
+    flex-shrink: 0;
+}
+
+.vvKarte.fest > .vvSchalter {
+    height: 100%;
+    overflow-y: auto;
+}
+
+.boxKarte {
+    flex-shrink: 0;
+}
+
+/* Eckgriff unten links: kleines Dreieck aus zwei Linien, erst beim Darüberfahren deutlich. */
+.eckGriff {
+    position: absolute;
+    left: -2px;
+    bottom: -2px;
+    width: 14px;
+    height: 14px;
+    cursor: nesw-resize;
+    z-index: 4;
+    touch-action: none;
+    opacity: 0.45;
+    background:
+        linear-gradient(225deg, transparent 0 55%, var(--line-stark) 55% 63%, transparent 63% 75%, var(--line-stark) 75% 83%, transparent 83%);
+    transition: opacity 0.15s;
+}
+
+.karte:hover > .eckGriff {
+    opacity: 0.8;
+}
+
+.eckGriff:hover {
+    opacity: 1;
+    background:
+        linear-gradient(225deg, transparent 0 55%, var(--accent) 55% 63%, transparent 63% 75%, var(--accent) 75% 83%, transparent 83%);
 }
 
 .reiterInhalt {
