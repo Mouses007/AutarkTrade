@@ -188,7 +188,7 @@ try {
 
 const {
     gridEl, daten, aus, zustand, stand, fehler, kachelParams,
-    alleKacheln, sichtbareKacheln, gesamtZustand, quellenVon, quellenGeladen,
+    alleKacheln, sichtbareKacheln, gesamtZustand, betroffeneKacheln, quellenVon, quellenGeladen,
     offeneKachel, offeneDefinition, showConfigDropdown, configRef,
     ladeKachel, beiUmschalten, isVisible, setzeKachelZustand,
     setzeParams, setzeAnzeige, stilFuer, starteGroesse, setzeGroesseZurueck,
@@ -364,7 +364,10 @@ const interaktiv = (kachel) => kachel.gross === false
             <div class="liveTitle">
                 <span class="liveSymbol">{{ t('livetrading.title') }}</span>
                 <span :class="['liveDot', 'dot-' + gesamtZustand]"></span>
-                <span class="liveState">{{ t('marktradar.status_' + gesamtZustand) }}</span>
+                <span class="liveState" :title="betroffeneKacheln.map(k => t(k.titleKey)).join(', ') || null">
+                    {{ t('marktradar.status_' + gesamtZustand) }}<template v-if="betroffeneKacheln.length">
+                        · {{ betroffeneKacheln.map(k => t(k.titleKey)).join(', ') }}</template>
+                </span>
             </div>
 
             <!-- Mittig, weil das Symbol die ganze Seite steuert: Bookmap,

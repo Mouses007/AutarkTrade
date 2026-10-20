@@ -181,7 +181,7 @@ function loescheListe() {
         <div class="zeilen">
             <div v-for="(s, i) in symbole" :key="s.markt + s.symbol" class="zeile"
                 :class="{ an: s.symbol === aktivesSymbol && s.markt === aktiverMarkt }" @click="emit('waehle', s)">
-                <span class="sym">{{ s.symbol }}<small v-if="s.markt === 'spot'"> Spot</small>
+                <span class="sym"><span class="symName">{{ s.symbol }}<small v-if="s.markt === 'spot'"> Spot</small></span>
                     <a v-for="b in boersen(s)" :key="b.id" class="boerse" :class="b.id" :href="b.url" target="_blank" rel="noopener"
                         :title="t('chart.watchlistBoerse', { boerse: b.name })" @click.stop>{{ b.kurz }}</a>
                 </span>
@@ -302,13 +302,25 @@ function loescheListe() {
 .sym {
     display: flex;
     align-items: center;
-    gap: 4px;
+    /* In der schmalen Seitenleiste liefen die Kürzel in die Preisspalte
+       (Audit A4-08): sie brechen jetzt unter das Symbol um, die Spalte
+       schneidet nichts mehr über. */
+    flex-wrap: wrap;
+    gap: 2px 4px;
     min-width: 0;
+    overflow: hidden;
+}
+
+.symName {
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    margin-right: 4px;
 }
 
 .boerse {
-    font-size: 8.5px;
+    font-size: 10px;
     font-weight: 700;
     line-height: 1;
     padding: 2px 3px;
@@ -322,15 +334,10 @@ function loescheListe() {
     opacity: 1;
 }
 
-/* Abstand Symbol → erstes Börsen-Kürzel deutlich grösser als zwischen den Kürzeln */
-.sym > .boerse:first-of-type {
-    margin-left: 8px;
-}
-
-/* Hausfarben gedämpft: Bitunix Grün, Bitget Türkis, Pionex Orange */
-.boerse.bitunix { color: #5fd38d; }
-.boerse.bitget { color: #36c2d6; }
-.boerse.pionex { color: #f0a04b; }
+/* Hausfarben gedämpft (tokens.css) */
+.boerse.bitunix { color: var(--boerse-bitunix); }
+.boerse.bitget { color: var(--boerse-bitget); }
+.boerse.pionex { color: var(--boerse-pionex); }
 
 .sym small {
     color: var(--muted);

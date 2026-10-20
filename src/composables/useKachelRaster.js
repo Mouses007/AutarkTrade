@@ -190,6 +190,16 @@ export function useKachelRaster({
         return werte.length ? 'ready' : 'idle'
     })
 
+    /**
+     * Welche Kacheln den Kopf auf „Fehler"/„veraltet" ziehen. Ohne das stand
+     * dort ein roter Punkt ohne Hinweis, wo man suchen soll (Audit A4-10).
+     */
+    const betroffeneKacheln = computed(() => {
+        const stufe = gesamtZustand.value
+        if (stufe !== 'error' && stufe !== 'veraltet') return []
+        return sichtbareKacheln.value.filter(k => zustand[k.id] === stufe)
+    })
+
     const offeneDefinition = computed(() =>
         alleKacheln.value.find(k => k.id === offeneKachel.value) || null)
 
@@ -600,7 +610,7 @@ export function useKachelRaster({
         // Zustand
         gridEl, daten, aus, zustand, stand, fehler, kachelParams,
         hiddenCards, groessen,
-        alleKacheln, sichtbareKacheln, gesamtZustand, quellenVon, quellenGeladen,
+        alleKacheln, sichtbareKacheln, gesamtZustand, betroffeneKacheln, quellenVon, quellenGeladen,
         offeneKachel, offeneDefinition,
         showConfigDropdown, configRef,
         // Bedienung

@@ -561,7 +561,7 @@ async function aktivUmschalten(karte) {
                                  genauso wenig ersetzbar wie der einer mitgelieferten, Löschen nimmt ihn mit. -->
                             <div class="at-flex at-mitte at-luecke-1 at-fest">
                                 <div class="at-check schalter at-mr-1 at-mu-0" :title="t('lernen.karten.aktivHint')">
-                                    <input type="checkbox" :checked="Number(k.aktiv) === 1" @change="aktivUmschalten(k)">
+                                    <input type="checkbox" :checked="Number(k.aktiv) === 1" :aria-label="t('lernen.karten.aktivLabel', { frage: k.frage })" @change="aktivUmschalten(k)">
                                 </div>
                                 <Knopf klein :title="t('lernen.karten.bearbeiten')" @click="formOeffnen(k)">
                                     <Symbol name="stift" />
@@ -592,7 +592,7 @@ async function aktivUmschalten(karte) {
                                 </div>
                             </div>
                             <div class="at-check schalter at-mo-1 at-fest" :title="t('lernen.karten.aktivHint')">
-                                <input type="checkbox" :checked="Number(k.aktiv) === 1" @change="aktivUmschalten(k)">
+                                <input type="checkbox" :checked="Number(k.aktiv) === 1" :aria-label="t('lernen.karten.aktivLabel', { frage: k.frage })" @change="aktivUmschalten(k)">
                             </div>
                         </div>
                     </div>

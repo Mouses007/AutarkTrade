@@ -3,6 +3,7 @@ import { createApp } from 'vue'
 import App from './App.vue'
 import router from './router'
 import i18n, { starteSprache } from './i18n'
+import { starteLabelVerknuepfung } from './utils/labelVerknuepfung.js'
 
 // Seit S9 ohne Bootstrap: Grundstil und Reset stehen in basis.css, Symbole
 // zeichnet src/components/basis/Symbol.vue. Quill laden Playbook.vue und
@@ -30,4 +31,8 @@ app.use(router)
  * kurz die deutsche Oberflaeche auf. Schlaegt das Laden fehl, startet die App
  * trotzdem — auf Deutsch.
  */
-starteSprache().finally(() => app.mount('#app'))
+starteSprache().finally(() => {
+    app.mount('#app')
+    // Beschriftungen ohne `for` mit ihrem Feld verknüpfen (Audit A4-22)
+    starteLabelVerknuepfung()
+})

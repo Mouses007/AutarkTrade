@@ -4811,7 +4811,8 @@
       "keineEigenen": "No own cards yet.",
       "box": "Box {n}",
       "filterAlle": "All",
-      "niveauLabel": "Level"
+      "niveauLabel": "Level",
+      "aktivLabel": "Card active: {frage}"
     },
     "statistik": {
       "gesamtKarten": "Cards total",
@@ -6143,7 +6144,8 @@
       "ki": "AI providers: Settings › AI.",
       "cryptoquant": "CryptoQuant (ETF flows): in the ETF tile of the market radar.",
       "solana": "Solana RPC (smart money): Hype radar › Settings — without your own RPC URL smart money stays off.",
-      "boersen": "Exchange accounts (Bitunix, Bitget, Pionex): Settings › Journal."
+      "boersen": "Exchange accounts (Bitunix, Bitget, Pionex): Settings › Journal.",
+      "solanaOffen": "Solana RPC (smart money): Hype-Radar › Settings — without an own RPC address via the public node while “Sources without sales clearance” is on."
     },
     "of": {
       "titel": "Sources without sales clearance",

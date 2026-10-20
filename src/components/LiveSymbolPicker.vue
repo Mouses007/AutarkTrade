@@ -375,7 +375,7 @@ onMounted(async () => {
         </div>
 
         <div class="symbolCurrent">{{ liveSymbol }}</div>
-        <input v-model="query" class="sidebar-select lpUnten" type="text" :placeholder="t('live.search')"
+        <input v-model="query" class="sidebar-select lpUnten" type="text" :placeholder="t('live.search')" :aria-label="t('live.search')"
             @focus="open = true" />
         <div v-if="open || query" class="symbolList">
             <div v-if="loading" class="symbolHint">{{ t('live.loading') }}</div>
@@ -426,7 +426,8 @@ onMounted(async () => {
             <label class="lpLabel lpObenKlein" style="font-size:0.72rem;">
                 {{ t('live.laneWidth') }} <span class="threshVal">{{ liveBuchW }} PX</span>
             </label>
-            <input v-model.number="liveBuchW" type="range" min="48" max="200" step="4" class="threshRange" />
+            <input v-model.number="liveBuchW" type="range" min="48" max="200" step="4" class="threshRange"
+                :aria-label="t('live.laneWidth')" />
             <label class="liveToggle" :title="freigabeAn() ? t('live.otherVenuesTitleOkx') : t('live.otherVenuesTitle')">
                 <input type="checkbox" v-model="liveFremdBuch" class="lpHaken" />{{ freigabeAn() ? t('live.otherVenuesOkx') : t('live.otherVenues') }}
             </label>
@@ -440,7 +441,7 @@ onMounted(async () => {
                 <span class="threshVal">{{ liveProfileW }} px</span>
             </label>
             <input v-model.number="liveProfileW" type="range" min="40" max="320" step="10"
-                class="threshRange"
+                class="threshRange" :aria-label="t('live.laneWidth')"
                 :title="t('live.laneWidthTitle')" />
         </template>
         <label v-if="liveMarket === 'futures'" class="liveToggle">

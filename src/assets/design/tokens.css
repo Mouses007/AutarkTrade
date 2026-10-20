@@ -44,6 +44,12 @@
     --bad-flaeche: rgba(224, 87, 76, 0.14);
     --warn-flaeche: rgba(216, 163, 58, 0.14);
 
+    /* Börsen-Kennung (Kürzel BX/BG/PX in der Chart-Watchlist): Hausfarben
+       gedämpft — Bitunix Grün, Bitget Türkis, Pionex Orange. */
+    --boerse-bitunix: #5fd38d;
+    --boerse-bitget: #36c2d6;
+    --boerse-pionex: #f0a04b;
+
     /* Form */
     --radius: 14px;
     --radius-knopf: 10px;

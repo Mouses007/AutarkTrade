@@ -56,6 +56,10 @@
 
 @media (max-width: 767.98px) {
     .liveHeader { flex-direction: column; align-items: stretch; }
+    /* Ohne Begrenzung wurden Titel und Knopfreihe so breit wie die ganze
+       Knopfreihe, und die SEITE scrollte waagrecht statt der Reihe
+       (Marktradar 493 px, Bookmap 522 px bei 375; Audit A4-04). */
+    .liveHeader > * { min-width: 0; max-width: 100%; }
     .liveActions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
     .liveActions::-webkit-scrollbar { display: none; }
 }

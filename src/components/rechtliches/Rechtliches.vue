@@ -14,6 +14,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import { markdownAlsText } from '../../utils/markdownText.js'
 import Reiter from '../basis/Reiter.vue'
 import Knopf from '../basis/Knopf.vue'
 import Hinweis from '../basis/Hinweis.vue'
@@ -53,7 +54,7 @@ async function zeigen(name) {
     if (texte.value[name] !== undefined) return
     try {
         const { data } = await axios.get(`/api/rechtliches/text/${name}`, { responseType: 'text', transformResponse: (r) => r })
-        texte.value = { ...texte.value, [name]: data }
+        texte.value = { ...texte.value, [name]: name === 'hinweise' ? markdownAlsText(data) : data }
     } catch (e) {
         texte.value = { ...texte.value, [name]: t('rechtliches.textFehler', { fehler: e.response?.data?.error || e.message }) }
     }

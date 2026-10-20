@@ -4811,7 +4811,8 @@
       "keineEigenen": "Noch keine eigenen Karten.",
       "box": "Box {n}",
       "filterAlle": "Alle",
-      "niveauLabel": "Level"
+      "niveauLabel": "Level",
+      "aktivLabel": "Karte aktiv: {frage}"
     },
     "statistik": {
       "gesamtKarten": "Karten insgesamt",
@@ -6143,7 +6144,8 @@
       "ki": "KI-Anbieter: Einstellungen › KI.",
       "cryptoquant": "CryptoQuant (ETF-Fluss): in der ETF-Kachel des Marktradars.",
       "solana": "Solana-RPC (Smart Money): Hype-Radar › Einstellungen — ohne eigene RPC-Adresse bleibt Smart Money aus.",
-      "boersen": "Börsen-Konten (Bitunix, Bitget, Pionex): Einstellungen › Journal."
+      "boersen": "Börsen-Konten (Bitunix, Bitget, Pionex): Einstellungen › Journal.",
+      "solanaOffen": "Solana-RPC (Smart Money): Hype-Radar › Einstellungen — ohne eigene RPC-Adresse über den öffentlichen Knoten, solange „Quellen ohne Verkaufsfreigabe\" an ist."
     },
     "of": {
       "titel": "Quellen ohne Verkaufsfreigabe",

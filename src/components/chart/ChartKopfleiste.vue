@@ -222,11 +222,15 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 </template>
 
 <style scoped>
+/* Eine Zeile bis hinunter zu 1500 px mit offenem Seitenmenü: bei 10 px
+   Lücke und 7 px Knopfrand fehlten ~46 px, und die rechte Gruppe (Raster,
+   Sync, Layouts, Kamera, Leiste) stand allein in einer zweiten Zeile
+   (Audit A4-20). Schmaler bricht die Leiste weiter um. */
 .kopfleiste {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 6px 10px;
+    gap: 6px 8px;
     padding: 6px 4px;
 }
 
@@ -263,7 +267,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
     border: none;
     color: var(--muted);
     font-size: 12px;
-    padding: 3px 7px;
+    padding: 3px 5px;
     border-radius: var(--radius-klein);
     white-space: nowrap;
     display: inline-flex;

@@ -129,7 +129,7 @@ const immerLaden = computed(() => ansicht.value === 'pult' ? PULT_KACHELN : [])
 
 const {
     gridEl, daten, aus, zustand, stand, fehler, kachelParams,
-    alleKacheln, sichtbareKacheln, gesamtZustand, quellenVon, quellenGeladen,
+    alleKacheln, sichtbareKacheln, gesamtZustand, betroffeneKacheln, quellenVon, quellenGeladen,
     offeneKachel, offeneDefinition, showConfigDropdown, configRef,
     ladeKachel, ladeFaellige, beiUmschalten, isVisible, setzeKachelZustand,
     setzeParams, setzeAnzeige, stilFuer, starteGroesse, setzeGroesseZurueck,
@@ -270,7 +270,10 @@ watch(() => daten.funding, (d) => {
             <div class="liveTitle">
                 <span class="liveSymbol">{{ t('marktradar.title') }}</span>
                 <span :class="['liveDot', 'dot-' + gesamtZustand]"></span>
-                <span class="liveState">{{ t('marktradar.status_' + gesamtZustand) }}</span>
+                <span class="liveState" :title="betroffeneKacheln.map(k => t(k.titleKey)).join(', ') || null">
+                    {{ t('marktradar.status_' + gesamtZustand) }}<template v-if="betroffeneKacheln.length">
+                        · {{ betroffeneKacheln.map(k => t(k.titleKey)).join(', ') }}</template>
+                </span>
             </div>
             <!-- Symbolwahl. Sie steuert nur die Kacheln mit
                  `symbolAbhaengig` (Marktmechanik, Long/Short + OI, Gesamtlage) —

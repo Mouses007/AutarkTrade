@@ -169,6 +169,7 @@ async function divergenzLeeren() {
                             </td>
                             <td>
                                 <select v-if="SCHWELLEN[typ.id]" class="wahl"
+                                    :aria-label="t('settings.benachrichtigungen.schwelle') + ': ' + t('settings.benachrichtigungen.typ_' + typ.id)"
                                     v-model.number="SCHWELLEN[typ.id].ref().value"
                                     @change="radarSpeichern(SCHWELLEN[typ.id].spalte)">
                                     <option v-for="[wert, schluessel] in SCHWELLEN[typ.id].optionen"

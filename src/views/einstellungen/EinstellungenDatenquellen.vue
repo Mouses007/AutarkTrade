@@ -209,7 +209,7 @@ async function cgSpeichern(loeschen = false) {
             <ul class="andere">
                 <li>{{ t('datenquellen.andere.ki') }}</li>
                 <li>{{ t('datenquellen.andere.cryptoquant') }}</li>
-                <li>{{ t('datenquellen.andere.solana') }}</li>
+                <li>{{ t(stand?.ohneFreigabe?.an ? 'datenquellen.andere.solanaOffen' : 'datenquellen.andere.solana') }}</li>
                 <li>{{ t('datenquellen.andere.boersen') }}</li>
             </ul>
         </Karte>
