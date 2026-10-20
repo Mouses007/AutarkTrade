@@ -150,15 +150,24 @@ merke V2_REVISION "$REVISION"
 
 echo "── 5/5  Kontrolle ────────────────────────────────────────────"
 GELIEFERT=""
-for _ in $(seq 1 30); do
+# Der erste Start nach dem Wechsel rechnet die Migrationen v27 → v29 über die ganze
+# Live-DB (20.10.2026: deutlich über 90 s bei 4,3 GB). Darum beim Wechsel bis zu
+# 10 Minuten warten, bei einem normalen Update 3 Minuten.
+WARTEN_S=$( [ "$WECHSEL" = 1 ] && echo 600 || echo 180 )
+BEGINN=$(date +%s)
+while :; do
     GELIEFERT="$(curl -s --max-time 5 "http://$H:$NAS_PORT/" \
         | grep -o 'assets/index-[A-Za-z0-9_-]*\.js' | head -1 || true)"
     [ -n "$GELIEFERT" ] && break
-    sleep 3
+    VERGANGEN=$(( $(date +%s) - BEGINN ))
+    [ "$VERGANGEN" -ge "$WARTEN_S" ] && break
+    printf '\r   warte auf den Start … %d s' "$VERGANGEN"
+    sleep 5
 done
+printf '\r%60s\r' ''
 if [ -z "$GELIEFERT" ]; then
-    rot "Die App antwortet nach 90 s nicht. Protokoll:"
-    echo "    ssh -t $ZIEL \"$D logs --tail 50 \\\$($D ps -q -f label=com.docker.compose.service=$APP_DIENST)\""
+    rot "Die App antwortet nach $WARTEN_S s nicht. Protokoll ansehen mit:"
+    echo "    ssh -t $ZIEL \"sudo $NAS_DOCKER logs --tail 50 \\\$(sudo $NAS_DOCKER ps -q -f label=com.docker.compose.service=$APP_DIENST)\""
     exit 1
 fi
 echo "   NAS liefert:  $GELIEFERT"
