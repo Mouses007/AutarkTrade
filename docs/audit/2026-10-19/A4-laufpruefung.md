@@ -183,3 +183,38 @@ Exit 0.
 | A4-13 englische Monatsnamen | alt identisch (kein dayjs-Locale) |
 | A4-14 „Tages Ansicht" | alt identisch (`de.json:59`) |
 | A4-09 Live-Trading-Vorgabe | Erst-Ausblendung bestand alt in `views/Livetrading.vue:177-182`, jetzt in `composables/useHiddenCards.js` |
+
+## Stand nach F1 (20.10.2026)
+
+Korrektur F1 „Funktion & Oberfläche“, Branch `claude/f1-funktion-e8fce2`. Geprüft im Prüf-Container (Port 8099,
+`AT_TESTBETRIEB=1`, Wegwerf-SQLite mit den Journal-Tabellen der DB-Kopie, ohne Schlüssel und ohne Passwort) im
+eingebauten Browser bei 1500 und 375 px. Neue Selbsttests: `src/utils/__selftest-barrierearm.mjs` (Symbol-Knöpfe ohne
+Namen, Gegenprobe 31 Stellen in 14 Dateien), `src/utils/__selftest-markdown-text.mjs`.
+
+| ID | Stand nach F1 |
+|---|---|
+| A4-01 | **behoben** (`2e1efc6`) – kein inneres KeepAlive mehr; Unter-Reiter werden beim ersten Öffnen aufgebaut und per `v-show` versteckt (Eingaben bleiben). Browser 1500 und 375: alle sieben Reiter hin und her, jeder zeigt seinen Inhalt, keine Konsolenfehler. |
+| A4-02 | **behoben** (`5611063`) – Marktübersicht und neun weitere ECharts-Kacheln holen das Initialisieren bei jedem Zeichnen nach (Element unter `v-if="daten"`). Browser: Kaltstart Pult → Canvas da. |
+| A4-03 | **behoben** (`5611063`, `b3d89ca`) – `.mLeiste { flex-shrink: 0 }`; auf der Pult-Bühne gelten die vh-Mindesthöhen nicht. Browser: Leiste 24 px, Grafik 362 px in der 464 px hohen Bühne, vollständig sichtbar. |
+| A4-04 | **behoben** (`037aea8`) – `.liveHeader > * { min-width: 0; max-width: 100% }` am Telefon. Browser 375: Marktradar, Nachrichten, Bookmap `scrollWidth` 375. |
+| A4-05 | **behoben** (`363fe61`) – Pille kürzer und am Telefon umbrechend. Browser 375: 375/375. |
+| A4-06 | **behoben** (`4100c22`) – Lese-Routen antworten ohne Schlüssel 200 `{nichtEingerichtet}`; `src/utils/boersenZugang.js` – Polling und Kontostand fragen nur eingerichtete Börsen. Browser: keine Abfrage von `open-positions`/`balance`, Konsole sauber. Mit eingerichtetem Schlüssel nicht geprüft (keine Schlüssel im Prüf-Container). |
+| A4-07 | **behoben** (`af74053`) – Beta-Hinweis, Zustimmung, Datenquellen „Aus“/„weiterhin“ an S13 angepasst; LICENSE Ziffer 7a und `app-hilfe.js` waren schon konform. Die Zustimmungsformel bleibt für den Anwalt (Auftragsstand, offene Punkte). |
+| A4-08 | **behoben** (`037aea8`) – Kürzel brechen unter das Symbol um. Browser 1500: Kürzel enden bei 1316 px, Preis beginnt bei 1330 px. |
+| A4-09 | **offen (bewusst)** – die Vorgabe (Bookmap, Liquidationskarte, Momentum, Kompakt je zwei Spalten) ist laut `src/config/livetrading.js` die eigene Aufstellung des Nutzers (10.10.2026) und füllt ein 4-Spalten-Raster genau; bei 1500 px hat das Raster 3 Spalten. Eine andere Vorgabe würde seine Aufstellung ändern. Vorschlag für später: Spaltenzahl des Live-Rasters gerade halten oder Vorgabe je Breite. |
+| A4-10 | **behoben** (`037aea8`) – bei „Fehler“/„veraltet“ stehen die betroffenen Kacheln im Kopf (Text und `title`), Marktradar und Live-Trading. Im Browser nicht ausgelöst (kein Ausfall während der Prüfung). |
+| A4-11 | **behoben** (`b1fbd56`, `947713e`) – Text „Einstellungen › KI › Nachrichten“; der Link wählt den Unter-Reiter und öffnet nicht mehr die Grossansicht der Kachel (`@click.stop`, auch ETF-Kachel). Gleiche Ursache in `Nachrichten.vue` behoben. Browser: Link → `/settings/ki`, Reiter „Nachrichten“ aktiv. |
+| A4-12 | **behoben** (`363fe61`) – Untertitel folgt dem Freigabe-Schalter; dazu die Solana-Zeile unter „Weitere Schlüssel“ (`037aea8`). |
+| A4-13 | **behoben** (`263a91d`) – `anzeige(d)` in `zeit.js` (dayjs bleibt global 'en', Golden Master unverändert). Browser: „Oktober 2026“, Titelzeile „Okt. 2026 · Netto“, Vollbild „So. 18 Oktober 2026“. |
+| A4-14 | **behoben** (`b1fbd56`) – „Tagesansicht“. |
+| A4-15 | **behoben** (`b1fbd56`) – Browser: „Notizen, Stimmung und Tags je Tag“, „Börsen-Import (Bitunix, Bitget, Pionex)“. |
+| A4-16 | **behoben** (`b1fbd56`) – Ollama gilt nur bei Antwort als eingerichtet. Browser: „Ollama antwortet nicht. …“ statt „Zugang bereits eingerichtet“. |
+| A4-17 | **behoben** (`037aea8`) – NOTICE als Klartext (`src/utils/markdownText.js`). Browser: kein `#`, `>`, Backtick mehr. |
+| A4-18 | **behoben** (`363fe61`) – Prüfzeilen nur als Tooltip, kein `docs/…`-Pfad, keine Sitzungsnamen, kein „altes Journal“ im Nutzertext. |
+| A4-19 | **offen (bewusst)** – „LSOB“, „Guss“ und „Breakout“ sind die drei eingebauten Strategien (`server/strategies/lsob.js`, `ema_touch.js`/GUSS, `trendlinien_breakout.js`), und das Chartbild der Einstiegsbewertung erkennt Trades an den Tags „LSOB“/„GUSS“. Neutrale Tags würden diese Funktion für neue Nutzer ausschalten. |
+| A4-20 | **behoben** (`037aea8`) – Werkzeugleiste passt bei 1500 px mit Seitenmenü in eine Zeile (Browser: alle Gruppen y = 72–76). Das Journal-Seitenmenü im Chart ist gewollt (`Seitenmenue.vue`: vom Chart direkt ins Journal); der Kommentar in `menu.js` meint nur den fehlenden Menüeintrag. |
+| A4-21 | **behoben** (`1363714`) – 31 Symbol-Knöpfe benannt, Indikator-/Alarm-Dialog mit `role=dialog`, `aria-modal`, Name; Selbsttest verhindert neue. Browser: Dialog „Indikatoren“, Schliessen-Knopf benannt. |
+| A4-22 | **behoben** (`037aea8`, `2719755`, `a51e1ee`) – `Feld.vue` verknüpft Beschriftung und Feld selbst, `src/utils/labelVerknuepfung.js` verknüpft app-weit `<label class="at-label">` vor dem Feld; Lernkarten, Bookmap, Schwellen, Filter benannt. Browser: Einstellungen (Allgemein, Live, KI, Benachrichtigungen), Agent Labor/Auswertung/Rangliste/Setups, Lernen › Karten: 0 Felder ohne Namen. |
+| A4-23 | **behoben** (`037aea8`) – Kürzel 10 px, Farben als Tokens `--boerse-*` in `tokens.css`. |
+| A4-24 | **behoben** (`a59afa4`) – zwei verschiedene Routen-Meldungen, Schema-Version im Start-Log; im Testbetrieb schreibt der Dominanz-Rückblick nicht mehr in `market_snapshots`. Hebelkarte/Symbolliste/Klammern kommen aus Seitenabrufen. Die Chunk-Warnung des Builds bleibt (Hinweis, keine Fehlfunktion). |
+| A4-25 | **kein Handlungsbedarf** (Hinweis ohne Befund); nebenbei: der ETF-Link öffnete wie A4-11 die Grossansicht, behoben (`947713e`). |

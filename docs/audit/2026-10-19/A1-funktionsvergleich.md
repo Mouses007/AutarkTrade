@@ -157,3 +157,29 @@ neu nur `aiDeepseekUrl`.
 `A1-inventar.mjs <alt> <neu> <aus.json>` (Inventar), `A1-vorlagen-bindungen.mjs <wurzel>` (Vue-Compiler, `_ctx.X`
 ohne Bindung – nach einer Umbenennung lohnt es sich, das vor dem Merge laufen zu lassen),
 `A1-golden-master-diff.mjs <alt.json> <neu.json>`.
+
+## Stand nach F1 (20.10.2026)
+
+Korrektur F1 „Funktion & Oberfläche“, Branch `claude/f1-funktion-e8fce2`. Neu als Selbsttest:
+`src/utils/__selftest-vorlagen-bindungen.mjs` (Vue-Compiler, jeder ungebundene Vorlagen-Bezeichner; Gegenprobe vor
+dem Fix: genau die 11 Dateien aus `A1-vorlagen-bindungen.txt`). Geprüft im Prüf-Container (Port 8099, Wegwerf-SQLite mit
+den Journal-Tabellen der DB-Kopie `autarktrade`, nur lesend kopiert; das Passwort-Gate der Kopie blieb trotz
+`AT_ALLOW_INSECURE=1` aktiv) im eingebauten Browser bei 1500 und 375 px.
+
+| ID | Stand nach F1 |
+|---|---|
+| A1-01 | **behoben** (`d3f50ac`) – Vorlage auf `dashboardBereit`. Browser 1500/375: Kontostand, Kennzahlen, Gebühren sichtbar. |
+| A1-02 | **behoben** (`d3f50ac`) – `v-model="gewaehltBruttoNetto"`. Browser: Auswahl zeigt „Brutto“, Netto + Anwenden → „Dieses Jahr · Netto“, „KENNZAHLEN (NETTO)“, `localStorage.selectedGrossNet = net`. |
+| A1-03 | **behoben** (`d3f50ac`) – `tagAuswahl`, `gewaehltPlOderZufriedenheit`. Browser (Tagesansicht): Häkchen spiegeln die Auswahl (24/24), ein Klick ändert „Tags (22)“ → „(21)“. P&L/Zufriedenheit nur per Compiler-Selbsttest belegt. |
+| A1-04 | **behoben** (`d3f50ac`) – `:screenshot-data="gewaehltesBild"`. Browser: Vollbild enthält das Bild. |
+| A1-05 | **behoben** (`d3f50ac`) – `seiteLaedt`, `ladeMehr`, `holtWeitere`. Browser (Screenshots): Nachlade-Anzeige erscheint beim Scrollen, 4 Bilder nachgeladen. |
+| A1-06 | **behoben** (`d3f50ac`) – `setupsLaden`. Browser: beim Öffnen der Trade-Bewertung Ladeanzeige und ein gesperrter Knopf mehr, danach frei. |
+| A1-07 | **behoben** (`d3f50ac`) – `v-model="gewaehlterMonat"`. Im Browser nicht bedienbar (Formular erscheint nur mit erreichbarem KI-Anbieter); per Compiler-Selbsttest belegt. Monatsname jetzt in der Oberflächensprache (A4-13). |
+| A1-08 | **behoben** (`d3f50ac`) – `scrolleNachOben`. Browser `/settings/ki`: `scrollY` 585 → 0. |
+| A1-09 | **behoben** (`d3f50ac`) – `:key="zeichenZaehler"`. |
+| A1-10 | **behoben** (`1261935`) – Journal `f910385` nachgezogen; die Bot-Erkennung liegt jetzt einmal in `src/utils/positionTpsl.js` (`istBotPosition`) für Pendente Trades und Chart. Browser: das offene Pionex-Grid (SOLUSDT) der Kopie erscheint nicht unter „Offene Trades“. |
+| A1-11 | **behoben** (`1261935`) – Journal `3212a6f` nachgezogen (`src/stores/zeichenStil.js`, localStorage `at.chart.zeichenStil`; `profilAbschnitte` in `server/chart-kandidaten.js`; Selbsttests chart-kandidaten/chart-ki/ki-zeichnungen, app-hilfe, CLAUDE.md). KI-Analyse nicht ausgelöst (kostet). |
+| A1-12 | **behoben** (`ec3a3ec`) – OI-Fehler wirft (400 = kein Perp bleibt leer), `ausCache` liefert den letzten guten Stand mit `veraltet`. |
+| A1-13 | **behoben** (`ec3a3ec`) – Stablecoin-Menge/-Dominanz nur aus allen Reihen; Teilausfall ohne Yahoo → letzter guter Stand, mit Yahoo „—“ mit Erklärung (`unvollstaendig`). |
+| A1-14 | **behoben** (`af74053`) – Beta-Hinweis, Zustimmungsformel und Datenquellen-Sätze nach S13 (siehe A4-07). |
+| A1-15 | **kein Handlungsbedarf** – „(Netto)“ ist korrekt (die Tabelle zeigt Netto-P&L). |
