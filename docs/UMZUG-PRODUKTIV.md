@@ -78,6 +78,10 @@ Instanz mit `mode = 'live'` auf Papier und pausiert sie. Offene Live-Positionen 
 - **Von Hand:** In der alten App unter Agent › Strategien die Live-Instanzen pausieren und offene
   Live-Positionen an der Börse schliessen (Bitunix/Pionex). Oder bewusst mit eigenem Stop an der
   Börse stehen lassen.
+- **Bots der Börse (z. B. Pionex-Grid-Bot) bleiben offen.** Sie laufen auf den Servern der Börse
+  mit ihren eigenen Grenzen; die App hat sie nie gesteuert, sie liest sie nur (Pendente Trades,
+  Bot-Ansicht, Import). V2 liest sie genauso weiter. Sie gehören nicht zu den Live-Positionen
+  oben und blockieren `sichern.sh` nicht.
 - **Prüfung:** `scripts/umzug/sichern.sh` zeigt die Zahl der Live-Instanzen und der offenen
   Live-Positionen (`status in ('open','pending','unknown')`) samt Liste. Ist sie nicht 0, fragt es,
   ob sie erledigt sind, und bricht ohne „ja“ ab.
