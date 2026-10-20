@@ -43,7 +43,9 @@ export function starteLabelVerknuepfung() {
     new MutationObserver(() => {
         if (geplant) return
         geplant = true
-        requestAnimationFrame(lauf)
+        // setTimeout statt requestAnimationFrame: rAF ruht in Hintergrund-Tabs,
+        // dann blieben dort geöffnete Seiten unverknüpft.
+        setTimeout(lauf, 50)
     }).observe(document.body, { childList: true, subtree: true })
     lauf()
 }
