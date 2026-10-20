@@ -16,6 +16,10 @@
 
 import { istLoopbackHost, setzeBindungsModus, offenerBetriebErlaubt, sessionCookieMiddleware, apiAuthMiddleware, istErlaubterHost, getSessionCookieString, hatGueltigeSession, entwerteAlleSitzungen } from './auth.js'
 import { pruefeKiEndpunkt } from './ollama-url.js'
+import { clientIp, setupAuthRoutes, _authFuerTest, _zaehlerLeeren, _einrichtungsCode } from './auth.js'
+import { isLocalRequest, istFremdeHerkunft } from './update-api.js'
+import { umgebung, umgebungAn, alteSicherheitsSchalter } from './umgebung.js'
+import express from 'express'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -202,6 +206,167 @@ console.log('\nEntwertung von Sitzungen')
         hatGueltigeSession({ headers: { cookie: 'at_session=' } }) === false
         && hatGueltigeSession({ headers: {} }) === false
         && hatGueltigeSession({ headers: { cookie: 'at_session=abc' } }) === false)
+}
+
+/*
+ * Audit A2 (19.10.2026) — jeder Angriff aus dem Bericht als Gegenprobe.
+ * Was hier „abgewiesen" erwartet, ging vor F2 durch (Bericht A2-01/02/03/
+ * 11/16/22/23/30); der Kommentar je Block nennt den alten Ausgang.
+ */
+console.log('\nA2-01: DNS-Rebinding über 127.-Präfix\n')
+{
+    // Vor F2: istLoopbackHost('127.0.0.1.evil.example') === true, Host-Guard 200.
+    for (const h of ['127.0.0.1.evil.example', '127.0.0.1.rebind.example', '127.evil', '127.0.0.1x', '127.0.0.256']) {
+        check(`„${h}" ist kein Loopback`, istLoopbackHost(h) === false)
+    }
+    check('Host „127.0.0.1.rebind.example:8080" wird abgewiesen', istErlaubterHost('127.0.0.1.rebind.example:8080') === false)
+    check('echtes 127.255.0.1 bleibt Loopback', istLoopbackHost('127.255.0.1') === true)
+}
+
+console.log('\nA2-02: CSRF auf /api/auth/reset — Herkunft\n')
+{
+    const lokal = (headers) => isLocalRequest({ socket: { remoteAddress: '127.0.0.1' }, headers: { host: '127.0.0.1:8080', ...headers } })
+    // Vor F2: lokal({origin:'https://evil.example'}) === true.
+    check('fremde Origin ist nicht lokal', lokal({ origin: 'https://evil.example' }) === false)
+    check('Origin null ist nicht lokal', lokal({ origin: 'null' }) === false)
+    check('Sec-Fetch-Site cross-site ist nicht lokal', lokal({ 'sec-fetch-site': 'cross-site' }) === false)
+    check('Sec-Fetch-Site same-site ist nicht lokal', lokal({ 'sec-fetch-site': 'same-site' }) === false)
+    check('gleiche Origin bleibt lokal', lokal({ origin: 'http://127.0.0.1:8080', 'sec-fetch-site': 'same-origin' }) === true)
+    check('curl ohne Origin bleibt lokal', lokal({}) === true)
+    check('istFremdeHerkunft: Port zählt mit', istFremdeHerkunft({ headers: { host: '127.0.0.1:8080', origin: 'http://127.0.0.1:9999' } }) === true)
+}
+
+/** Echter HTTP-Lauf gegen die Auth-Routen (ohne DB: DB-Schritte enden in 500). */
+async function mitServer(fn) {
+    const app = express()
+    app.use(express.json({ limit: '100kb' }))
+    app.use(hostGuardMiddleware)
+    setupAuthRoutes(app)
+    const srv = await new Promise((r) => { const s = app.listen(0, '127.0.0.1', () => r(s)) })
+    const basis = `http://127.0.0.1:${srv.address().port}`
+    try { await fn(basis) } finally { srv.close() }
+}
+import { hostGuardMiddleware } from './auth.js'
+
+await mitServer(async (basis) => {
+    console.log('\nA2-02: Reset per HTTP\n')
+    // Der Angriff aus dem Bericht: text/plain, fremde Origin. Vor F2: 200 {authEnabled:false}.
+    let r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { origin: 'https://evil.example', 'content-type': 'text/plain' }, body: 'x' })
+    check('Reset mit fremder Origin → 403', r.status === 403, String(r.status))
+    r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'sec-fetch-site': 'cross-site', 'content-type': 'application/json' }, body: '{}' })
+    check('Reset cross-site (auch mit JSON) → 403', r.status === 403, String(r.status))
+    r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'x' })
+    check('Reset ohne JSON (no-cors-Form) → 415', r.status === 415, String(r.status))
+    r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    check('Reset aus der App (lokal, JSON) erreicht die DB-Stufe', r.status === 500 || r.status === 200, String(r.status))
+
+    console.log('\nA2-01: Rebinding-Kette per HTTP\n')
+    // fetch überschreibt den Host-Kopf nicht — deshalb http.request.
+    const { request } = await import('http')
+    const statusMitHost = (host) => new Promise((ok, nein) => {
+        const q = request(basis + '/api/auth/status', { headers: { host } }, (a) => { a.resume(); ok(a.statusCode) })
+        q.on('error', nein); q.end()
+    })
+    check('Host 127.0.0.1.evil.example → 421', (await statusMitHost('127.0.0.1.evil.example')) === 421)
+    check('Host 127.0.0.1:8080 → 200', (await statusMitHost('127.0.0.1:8080')) === 200)
+
+    console.log('\nA2-03: Login-Sperre mit X-Forwarded-For\n')
+    const altTP = process.env.AT_TRUST_PROXY
+    const altTPx = process.env.AT_TRUSTED_PROXY
+    process.env.AT_TRUST_PROXY = '1'
+    delete process.env.AT_TRUSTED_PROXY
+    _zaehlerLeeren()
+    await _authFuerTest('richtiges-passwort-123')
+    const stati = []
+    for (let i = 0; i < 12; i++) {
+        const a = await fetch(basis + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `10.9.9.${i}` }, body: JSON.stringify({ password: 'falsch' }) })
+        stati.push(a.status)
+    }
+    // Vor F2: 12× 401, keine 429 (jeder Versuch ein neuer Eimer).
+    check('rotierender XFF direkt am Port: Sperre greift nach 5', stati.slice(5).every((x) => x === 429), stati.join(' '))
+    const richtig = await fetch(basis + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '10.9.9.200' }, body: JSON.stringify({ password: 'richtiges-passwort-123' }) })
+    check('auch das richtige Passwort mit frischem XFF bleibt gesperrt', richtig.status === 429, String(richtig.status))
+
+    // Vom vertrauten Proxy zählt XFF weiter — sonst sperrten Fremde den Eigentümer aus.
+    process.env.AT_TRUSTED_PROXY = '127.0.0.1'
+    _zaehlerLeeren()
+    for (let i = 0; i < 6; i++) {
+        await fetch(basis + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.9' }, body: JSON.stringify({ password: 'falsch' }) })
+    }
+    const eigner = await fetch(basis + '/api/login', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': '198.51.100.4' }, body: JSON.stringify({ password: 'richtiges-passwort-123' }) })
+    check('hinter vertrautem Proxy: Fremde sperren den Eigentümer nicht aus', eigner.status === 200, String(eigner.status))
+    check('clientIp: XFF zählt nur vom vertrauten Peer',
+        await clientIp({ socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8' } }) === '5.6.7.8'
+        && await clientIp({ socket: { remoteAddress: '192.168.1.9' }, headers: { 'x-forwarded-for': '5.6.7.8' } }) === '192.168.1.9')
+
+    console.log('\nA2-11: Login blockiert die Event-Loop nicht\n')
+    _zaehlerLeeren()
+    process.env.AT_TRUSTED_PROXY = '127.0.0.1'
+    let maxLuecke = 0
+    let zuletzt = Date.now()
+    const ticker = setInterval(() => { const j = Date.now(); maxLuecke = Math.max(maxLuecke, j - zuletzt); zuletzt = j }, 5)
+    const viele = await Promise.all(Array.from({ length: 40 }, (_, i) => fetch(basis + '/api/login', {
+        method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': `10.1.${i >> 8}.${i & 255}` }, body: JSON.stringify({ password: 'falsch' }),
+    }).then((x) => x.status)))
+    clearInterval(ticker)
+    check('40 parallele Logins: Event-Loop nie > 150 ms blockiert', maxLuecke < 150, `${maxLuecke} ms`)
+    check('überzählige Logins bekommen 429 statt zu warten', viele.includes(429), viele.join(' '))
+
+    console.log('\nA2-16/A2-23: Erst-Einrichtung\n')
+    _zaehlerLeeren()
+    await _authFuerTest(null)
+    setzeBindungsModus(false)
+    const altAI = process.env.AT_ALLOW_INSECURE
+    delete process.env.AT_ALLOW_INSECURE
+    const ausDemNetz = { 'content-type': 'application/json', 'x-forwarded-for': '192.168.178.77' }
+    // Vor F2: 200 + Set-Cookie für den ersten Besucher.
+    r = await fetch(basis + '/api/auth/set-password', { method: 'POST', headers: ausDemNetz, body: JSON.stringify({ newPassword: 'angreifer12345' }) })
+    check('erstes Passwort aus dem Netz ohne Code → 403', r.status === 403 && !r.headers.get('set-cookie'), String(r.status))
+    r = await fetch(basis + '/api/auth/set-password', { method: 'POST', headers: ausDemNetz, body: JSON.stringify({ newPassword: 'angreifer12345', einrichtungsCode: 'AAAA-BBBB' }) })
+    check('… mit falschem Code → 403', r.status === 403, String(r.status))
+    const st = await (await fetch(basis + '/api/auth/status', { headers: { 'x-forwarded-for': '192.168.178.77' } })).json()
+    check('Status meldet codeNoetig aus dem Netz', st.setupRequired === true && st.codeNoetig === true, JSON.stringify(st))
+    r = await fetch(basis + '/api/auth/set-password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ newPassword: '123456' }) })
+    // Vor F2: '123456' → 200.
+    check('Passwort „123456" → 400 (min. 10)', r.status === 400, String(r.status))
+    r = await fetch(basis + '/api/auth/set-password', { method: 'POST', headers: ausDemNetz, body: JSON.stringify({ newPassword: 'eigentuemer-1234', einrichtungsCode: _einrichtungsCode().toLowerCase() }) })
+    check('mit richtigem Code (Gross/Klein egal) erreicht es die DB-Stufe', r.status === 500 || r.status === 200, String(r.status))
+    setzeBindungsModus(true)
+    if (altAI !== undefined) process.env.AT_ALLOW_INSECURE = altAI
+
+    console.log('\nA2-23: currentPassword läuft über den Zähler\n')
+    _zaehlerLeeren()
+    process.env.AT_TRUSTED_PROXY = 'nichts.invalid'
+    await _authFuerTest('richtiges-passwort-123')
+    const cookie = String(getSessionCookieString({ headers: {} })).split(';')[0]
+    const cp = []
+    for (let i = 0; i < 7; i++) {
+        const a = await fetch(basis + '/api/auth/set-password', { method: 'POST', headers: { 'content-type': 'application/json', cookie }, body: JSON.stringify({ currentPassword: 'falsch', newPassword: 'neues-passwort-99' }) })
+        cp.push(a.status)
+    }
+    // Vor F2: 10× 401, keine 429.
+    check('falsches currentPassword: nach 5 Versuchen 429', cp.slice(5).every((x) => x === 429), cp.join(' '))
+
+    await _authFuerTest(null)
+    _zaehlerLeeren()
+    if (altTP === undefined) delete process.env.AT_TRUST_PROXY; else process.env.AT_TRUST_PROXY = altTP
+    if (altTPx === undefined) delete process.env.AT_TRUSTED_PROXY; else process.env.AT_TRUSTED_PROXY = altTPx
+})
+
+console.log('\nA2-30: alte CTJ_-Schalter\n')
+{
+    const sichern = ['AT_RESET_AUTH', 'CTJ_RESET_AUTH', 'AT_NO_ENGINE', 'CTJ_NO_ENGINE'].map((k) => [k, process.env[k]])
+    process.env.CTJ_RESET_AUTH = '1'
+    delete process.env.AT_RESET_AUTH
+    check('ohne AT_RESET_AUTH wirkt CTJ_RESET_AUTH weiter (keine Aussperrung beim Update)', umgebungAn('RESET_AUTH') === true)
+    check('… und wird beim Start gemeldet', alteSicherheitsSchalter().includes('CTJ_RESET_AUTH=1'))
+    process.env.AT_RESET_AUTH = ''
+    // Vor F2: leeres AT_RESET_AUTH fiel auf CTJ_RESET_AUTH=1 zurück → Gate bei jedem Start aus.
+    check('leeres AT_RESET_AUTH überstimmt CTJ_RESET_AUTH', umgebungAn('RESET_AUTH') === false)
+    process.env.AT_NO_ENGINE = ''
+    process.env.CTJ_NO_ENGINE = '1'
+    check('andere Variablen fallen wie bisher zurück', umgebung('NO_ENGINE') === '1')
+    for (const [k, v] of sichern) { if (v === undefined) delete process.env[k]; else process.env[k] = v }
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

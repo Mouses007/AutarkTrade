@@ -50,8 +50,8 @@ import { setupRuleBuilderRoutes } from './server/rule-builder.js'
 import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engine.js'
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
 import { logError } from './server/logger.js'
-import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession } from './server/auth.js'
-import { umgebung, umgebungAn } from './server/umgebung.js'
+import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession, meldeEinrichtungsCode } from './server/auth.js'
+import { umgebung, umgebungAn, alteSicherheitsSchalter } from './server/umgebung.js'
 import { starteTakte, istTestbetrieb } from './server/testbetrieb.js'
 
 const app = express();
@@ -105,6 +105,15 @@ async function starteServer() {
     console.log('[start] Datenbank')
     await initDb()
 
+    // Sicherheitsschalter unter altem Namen laut melden (Audit A2-30): sie
+    // wirken weiter, solange AT_X fehlt, aber niemand soll es übersehen.
+    for (const alt of alteSicherheitsSchalter()) {
+        console.warn(`[AUTH] ⚠️  Alter Schalter aktiv: ${alt} — bitte auf den AT_-Namen umstellen oder entfernen.`)
+    }
+    if (umgebungAn('TRUST_PROXY') && !umgebung('TRUSTED_PROXY')) {
+        console.log('[AUTH] AT_TRUST_PROXY=1 ohne AT_TRUSTED_PROXY: X-Forwarded-For zählt nur von den Compose-Namen caddy/autarktrade-caddy.')
+    }
+
     // Notfall-Reset per AT_RESET_AUTH=1 (vor dem Laden), dann Auth-Konfig laden
     await maybeResetAuthFromEnv()
     await loadAuthConfig()
@@ -133,6 +142,7 @@ async function starteServer() {
             console.warn('\n  ⚠️  Netzbindung ohne Passwortschutz (Container).')
             console.warn('      Der Dienst startet GESPERRT: erst nach „Passwort festlegen" im')
             console.warn('      Browser ist die API nutzbar. Bewusst offen: AT_ALLOW_INSECURE=1\n')
+            meldeEinrichtungsCode()
         } else {
             console.error('\n  ⛔  ABBRUCH: Der Dienst soll im Netzwerk lauschen (AT_HOST=' + host + '),')
             console.error('      aber der Passwortschutz ist nicht aktiv. Dann hätte jeder im Netz')

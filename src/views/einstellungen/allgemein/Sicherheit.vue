@@ -29,7 +29,7 @@ async function loadAuthStatus() {
 
 async function saveAuthPassword() {
     authSaveResult.value = null
-    if (authNewPassword.value.length < 6) {
+    if (authNewPassword.value.length < 10) {
         authSaveResult.value = { success: false, message: t('settings.sicherheit.zuKurz') }
         return
     }
@@ -58,6 +58,15 @@ async function saveAuthPassword() {
 async function logout() {
     try {
         await axios.post('/api/logout')
+    } catch (e) { /* egal — danach neu laden */ }
+    window.location.reload()
+}
+
+// Alle Geräte abmelden (A2-22): entwertet das gemeinsame Sitzungs-Token.
+async function logoutEverywhere() {
+    if (!confirm(t('settings.sicherheit.ueberallFrage'))) return
+    try {
+        await axios.post('/api/auth/ueberall-abmelden')
     } catch (e) { /* egal — danach neu laden */ }
     window.location.reload()
 }
@@ -117,6 +126,9 @@ onMounted(loadAuthStatus)
             </Knopf>
             <Knopf v-if="authEnabled" class="rechts" symbol="abmelden" @click="logout">
                 {{ t('settings.sicherheit.abmelden') }}
+            </Knopf>
+            <Knopf v-if="authEnabled" symbol="abmelden" @click="logoutEverywhere">
+                {{ t('settings.sicherheit.ueberallAbmelden') }}
             </Knopf>
         </div>
 

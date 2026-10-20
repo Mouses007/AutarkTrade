@@ -7,10 +7,17 @@ import Knopf from './basis/Knopf.vue'
 // Passwort, der Server verteilt keine Cookies. Statt „Anmelden" wird hier das
 // erste Passwort festgelegt (der Server lässt das ohne Session zu, solange
 // das Gate aus ist).
-const props = defineProps({ setup: { type: Boolean, default: false } })
+const props = defineProps({
+    setup: { type: Boolean, default: false },
+    // Aus dem Netz verlangt der Server beim ersten Passwort den Code aus dem
+    // Server-Log (Audit A2-16) — am Server-Rechner selbst nicht.
+    codeNoetig: { type: Boolean, default: false },
+})
 
 const password = ref('')
 const passwordWdh = ref('')
+const code = ref('')
+const MIN = 10
 const error = ref('')
 const info = ref('')
 const loading = ref(false)
@@ -27,7 +34,14 @@ async function submit() {
                 error.value = 'Die Passwörter stimmen nicht überein.'
                 return
             }
-            const { data } = await axios.post('/api/auth/set-password', { newPassword: password.value })
+            if (password.value.length < MIN) {
+                error.value = `Das Passwort braucht mindestens ${MIN} Zeichen.`
+                return
+            }
+            const { data } = await axios.post('/api/auth/set-password', {
+                newPassword: password.value,
+                einrichtungsCode: code.value,
+            })
             if (data.ok) {
                 info.value = 'Passwort gesetzt. Seite wird neu geladen…'
                 setTimeout(() => window.location.reload(), 800)
@@ -56,7 +70,9 @@ async function forgotPassword() {
     info.value = ''
     resetting.value = true
     try {
-        const { data } = await axios.post('/api/auth/reset')
+        // JSON-Körper ist Pflicht: der Server nimmt den Reset nur so an, weil
+        // eine fremde Seite JSON nicht ohne Preflight schicken kann (A2-02).
+        const { data } = await axios.post('/api/auth/reset', { zuruecksetzen: true })
         if (data.ok) {
             info.value = 'Passwortschutz zurückgesetzt. Seite wird neu geladen…'
             setTimeout(() => window.location.reload(), 1200)
@@ -83,7 +99,7 @@ async function forgotPassword() {
                     v-model="password"
                     type="password"
                     class="at-feld login-input"
-                    :placeholder="setup ? 'Neues Passwort (min. 6 Zeichen)' : 'Passwort'"
+                    :placeholder="setup ? 'Neues Passwort (min. 10 Zeichen)' : 'Passwort'"
                     autofocus
                     :autocomplete="setup ? 'new-password' : 'current-password'"
                 />
@@ -95,6 +111,20 @@ async function forgotPassword() {
                     placeholder="Passwort wiederholen"
                     autocomplete="new-password"
                 />
+                <template v-if="setup && codeNoetig">
+                    <input
+                        v-model="code"
+                        type="text"
+                        class="at-feld login-input"
+                        placeholder="Einrichtungscode (Server-Log)"
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                    <p class="login-sub login-code-hinweis">
+                        Der Code steht im Protokoll des Servers bzw. Containers
+                        („Einrichtungscode für das erste Passwort").
+                    </p>
+                </template>
                 <div v-if="error" class="login-error">{{ error }}</div>
                 <div v-if="info" class="login-info">{{ info }}</div>
                 <Knopf type="submit" art="haupt" class="login-btn" :disabled="loading || !password">
@@ -153,6 +183,10 @@ async function forgotPassword() {
     color: var(--good);
     font-size: 0.85rem;
     margin-bottom: 0.75rem;
+}
+.login-code-hinweis {
+    margin: -0.5rem 0 1rem;
+    font-size: 0.78rem;
 }
 .login-forgot {
     margin-top: 1rem;

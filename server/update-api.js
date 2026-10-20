@@ -121,7 +121,44 @@ export function isLocalRequest(req) {
     for (const kopf of weiterleitungsHinweise) {
         if (req.headers?.[kopf]) return false
     }
+    /*
+     * Und die Anfrage muss von der App selbst stammen, nicht von einer fremden
+     * Seite im Browser des Nutzers (Audit A2-02, F2 20.10.2026). Ein
+     * `fetch('http://127.0.0.1:8080/api/auth/reset', {method:'POST',
+     * mode:'no-cors'})` von irgendeiner Webseite kommt mit Peer 127.0.0.1 und
+     * ohne Weiterleitungs-Header an — bis F2 reichte das, um das Passwort-Gate
+     * abzuschalten. Der Browser verrät die Herkunft in `Origin` und
+     * `Sec-Fetch-Site`; curl und Skripte schicken beides nicht.
+     */
+    if (istFremdeHerkunft(req)) return false
     return true
+}
+
+/**
+ * Stammt die Anfrage laut Browser von einer anderen Seite als dieser App?
+ *
+ * `Sec-Fetch-Site` setzen alle aktuellen Browser selbst (nicht per Skript
+ * fälschbar); erlaubt sind nur `same-origin` und `none` (Adresszeile,
+ * Lesezeichen). Fehlt der Kopf, entscheidet `Origin`: fehlt auch der, ist es
+ * kein Browser-Aufruf über Seitengrenzen (curl, Skripte, ältere Browser bei
+ * gleicher Herkunft); ist er da, muss sein Host gleich dem Host-Kopf sein.
+ *
+ * @param {import('express').Request} req
+ * @returns {boolean}
+ */
+export function istFremdeHerkunft(req) {
+    const h = req?.headers || {}
+    const sfs = String(h['sec-fetch-site'] || '').toLowerCase()
+    if (sfs && sfs !== 'same-origin' && sfs !== 'none') return true
+    const origin = h.origin
+    if (origin === undefined || origin === '') return false
+    // `Origin: null` kommt aus Sandbox-Frames und file:-Seiten — nie die App.
+    try {
+        const o = new URL(String(origin))
+        return o.host.toLowerCase() !== String(h.host || '').toLowerCase()
+    } catch {
+        return true
+    }
 }
 function effectiveIsDocker(req) {
     return IS_DOCKER && !isLocalRequest(req)

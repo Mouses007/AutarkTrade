@@ -142,7 +142,15 @@ let bindNurLokal = true
 /** Lauscht der Server ausschliesslich auf der Loopback-Adresse? */
 export function istLoopbackHost(host) {
     const h = String(host ?? '').trim().toLowerCase().replace(/^\[|\]$/g, '')
-    return h === 'localhost' || h === '::1' || h.startsWith('127.')
+    /*
+     * Nur echte IP-Literale aus 127.0.0.0/8, kein Präfix-Vergleich.
+     *
+     * Bis F2 (20.10.2026, Audit A2-01) stand hier `h.startsWith('127.')` —
+     * damit galt auch `127.0.0.1.angreifer.tld` als Loopback, also genau der
+     * Name, unter dem eine DNS-Rebinding-Seite die lokale App erreicht. Der
+     * Host-Guard liess sie durch, und `/api/auth/reset` öffnete das Gate.
+     */
+    return h === 'localhost' || h === '::1' || /^127(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/.test(h)
 }
 
 /** Beim Start aufrufen, sobald die Bind-Adresse feststeht. */
@@ -380,23 +388,65 @@ function parseCookieToken(req) {
 
 // ==================== Passwort-Hashing (scrypt) ====================
 
-function hashPassword(password) {
-    const salt = crypto.randomBytes(16).toString('hex')
-    const derived = crypto.scryptSync(password, salt, 64).toString('hex')
-    return `${salt}:${derived}`
+/*
+ * Asynchron und mit Parallelitätsgrenze (Audit A2-11, F2 20.10.2026).
+ *
+ * `scryptSync` rechnete jeden Login synchron in der Event-Loop — auch jeden
+ * falschen. 200 parallele Versuche hielten die ganze App rund 4 s fest, Takte
+ * und SSE eingeschlossen. Jetzt rechnet der Thread-Pool, und mehr als
+ * `HASH_PARALLEL` Hashes gleichzeitig gibt es nicht; wer dahinter in einer
+ * vollen Schlange stünde, bekommt sofort 429 statt zu warten.
+ */
+const HASH_PARALLEL = 2
+const HASH_SCHLANGE_MAX = 16
+let hashLaufend = 0
+const hashWarten = []
+
+function scryptAsync(password, salt) {
+    return new Promise((resolve, reject) => {
+        crypto.scrypt(String(password), salt, 64, (err, key) => (err ? reject(err) : resolve(key)))
+    })
 }
 
-function verifyPassword(password, stored) {
-    if (!stored || !stored.includes(':')) return false
-    const [salt, derivedHex] = stored.split(':')
-    try {
-        const derived = crypto.scryptSync(password, salt, 64)
-        const expected = Buffer.from(derivedHex, 'hex')
-        return derived.length === expected.length && crypto.timingSafeEqual(derived, expected)
-    } catch {
-        return false
+async function mitHashPlatz(fn) {
+    if (hashLaufend >= HASH_PARALLEL) {
+        if (hashWarten.length >= HASH_SCHLANGE_MAX) {
+            const e = new Error('Zu viele gleichzeitige Anmeldeversuche.')
+            e.status = 429
+            throw e
+        }
+        await new Promise((r) => hashWarten.push(r))
+    }
+    hashLaufend++
+    try { return await fn() } finally {
+        hashLaufend--
+        const naechster = hashWarten.shift()
+        if (naechster) naechster()
     }
 }
+
+async function hashPassword(password) {
+    const salt = crypto.randomBytes(16).toString('hex')
+    const derived = await mitHashPlatz(() => scryptAsync(password, salt))
+    return `${salt}:${derived.toString('hex')}`
+}
+
+async function verifyPassword(password, stored) {
+    if (!stored || !stored.includes(':')) return false
+    const [salt, derivedHex] = stored.split(':')
+    let derived
+    try {
+        derived = await mitHashPlatz(() => scryptAsync(password, salt))
+    } catch (e) {
+        if (e.status === 429) throw e
+        return false
+    }
+    const expected = Buffer.from(derivedHex, 'hex')
+    return derived.length === expected.length && crypto.timingSafeEqual(derived, expected)
+}
+
+/** Mindestlänge für NEUE Passwörter (A2-23). Bestehende kürzere gelten weiter. */
+export const PASSWORT_MIN = 10
 
 // ==================== Rate-Limiting (in-memory, pro IP) ====================
 
@@ -404,26 +454,89 @@ const LOGIN_MAX_ATTEMPTS = 5
 const LOGIN_LOCK_MS = 5 * 60 * 1000 // 5 min Sperre nach zu vielen Versuchen
 const loginAttempts = new Map() // ip -> { count, lockUntil }
 
-function clientIp(req) {
+/*
+ * Globale Bremse über alle Adressen (A2-03): selbst wenn ein Angreifer viele
+ * echte Adressen hat (IPv6-Präfix, Botnetz hinter dem Proxy), kommt er nicht
+ * über GLOBAL_MAX Fehlversuche je Minute. Der Preis: während eines laufenden
+ * Angriffs muss auch der Eigentümer bis zu einer Minute warten.
+ */
+const GLOBAL_FENSTER_MS = 60 * 1000
+const GLOBAL_MAX = 60
+let globaleFehler = []
+
+/*
+ * Wem darf der X-Forwarded-For geglaubt werden?
+ *
+ * Bis F2 (Audit A2-03) reichte `AT_TRUST_PROXY=1`, und der letzte XFF-Eintrag
+ * galt als Client — egal, wer die Verbindung aufgebaut hatte. Die Compose-
+ * Vorgabe setzt den Schalter und veröffentlicht 8080 zugleich direkt im LAN:
+ * wer 8080 direkt erreichte, schickte je Versuch einen neuen XFF und wurde nie
+ * gesperrt (~40 Versuche/s gemessen). Jetzt zählt der Kopf nur, wenn die
+ * Peer-IP selbst ein bekannter Proxy ist: `AT_TRUSTED_PROXY` (IPs oder Namen,
+ * Komma-getrennt). Ohne Angabe gelten die Compose-Namen des mitgelieferten
+ * Caddy (`caddy`, `autarktrade-caddy`) — sie lösen nur im Docker-Netz auf, so
+ * bleibt eine bestehende NAS-Installation ohne Anpassung richtig.
+ */
+const PROXY_VORGABE = ['caddy', 'autarktrade-caddy']
+let proxyCache = { schluessel: '', bis: 0, ips: new Set() }
+
+function normIp(ip) {
+    return String(ip || '').trim().replace(/^::ffff:/i, '').toLowerCase()
+}
+
+async function vertrauteProxyIps() {
+    const liste = String(umgebung('TRUSTED_PROXY') || '').split(',').map((s) => s.trim()).filter(Boolean)
+    const namen = liste.length ? liste : PROXY_VORGABE
+    const schluessel = namen.join(',')
+    if (proxyCache.schluessel === schluessel && Date.now() < proxyCache.bis) return proxyCache.ips
+    const ips = new Set()
+    const { lookup } = await import('dns/promises')
+    const net = await import('net')
+    for (const n of namen) {
+        if (net.isIP(n)) { ips.add(normIp(n)); continue }
+        try {
+            for (const a of await lookup(n, { all: true })) ips.add(normIp(a.address))
+        } catch { /* Name löst hier nicht auf: kein Proxy dieses Namens */ }
+    }
+    proxyCache = { schluessel, bis: Date.now() + 60 * 1000, ips }
+    return ips
+}
+
+/**
+ * Adresse, unter der Fehlversuche gezählt werden.
+ *
+ * Exportiert für den Selbsttest.
+ *
+ * @param {import('express').Request} req
+ * @returns {Promise<string>}
+ */
+export async function clientIp(req) {
+    const peer = normIp(req.socket?.remoteAddress || req.ip || 'unknown')
     /*
      * Hinter dem hauseigenen Reverse-Proxy (Caddy) tragen ALLE Klienten
-     * dieselbe Peer-IP — der Fehlversuchs-Zähler kollabierte zu einem
-     * einzigen Eimer, und fünf fremde Fehlversuche sperrten auch den
-     * Eigentümer aus. AT_TRUST_PROXY=1 lässt NUR diesen Zähler die vom
-     * unmittelbaren Proxy angehängte Adresse lesen (letzter Eintrag in
-     * X-Forwarded-For — den setzt der eigene Proxy, alles davor ist
-     * Klienten-Behauptung). isLocalRequest bleibt bewusst bei der Peer-IP:
-     * dort wäre ein gefälschter Header eine Rechteausweitung.
+     * dieselbe Peer-IP — der Zähler kollabierte zu einem einzigen Eimer, und
+     * fünf fremde Fehlversuche sperrten auch den Eigentümer aus. Deshalb liest
+     * NUR dieser Zähler die vom unmittelbaren Proxy angehängte Adresse (letzter
+     * Eintrag — den setzt der eigene Proxy, alles davor ist Klienten-
+     * Behauptung), und nur wenn die Verbindung wirklich vom Proxy kommt.
+     * isLocalRequest bleibt bewusst bei der Peer-IP.
      */
-    if (umgebungAn('TRUST_PROXY')) {
+    if (umgebungAn('TRUST_PROXY') && (await vertrauteProxyIps()).has(peer)) {
         const xff = String(req.headers['x-forwarded-for'] || '')
         const letzte = xff.split(',').map((s) => s.trim()).filter(Boolean).pop()
-        if (letzte) return letzte.replace('::ffff:', '')
+        if (letzte) return normIp(letzte)
     }
-    return String(req.ip || req.socket?.remoteAddress || 'unknown').replace('::ffff:', '')
+    return peer
+}
+
+function globalGebremst() {
+    const jetzt = Date.now()
+    globaleFehler = globaleFehler.filter((t) => t > jetzt - GLOBAL_FENSTER_MS)
+    return globaleFehler.length >= GLOBAL_MAX
 }
 
 function isRateLimited(ip) {
+    if (globalGebremst()) return true
     const rec = loginAttempts.get(ip)
     if (!rec) return false
     if (rec.lockUntil && Date.now() < rec.lockUntil) return true
@@ -432,6 +545,7 @@ function isRateLimited(ip) {
 
 function registerFailure(ip) {
     const jetzt = Date.now()
+    globaleFehler.push(jetzt)
     /*
      * Abgelaufene Einträge auskehren — ALLE, nicht nur gesperrte.
      *
@@ -460,6 +574,88 @@ function clearFailures(ip) {
     loginAttempts.delete(ip)
 }
 
+/** Nur für den Selbsttest: Gate ohne Datenbank ein-/ausschalten. */
+export async function _authFuerTest(passwort) {
+    authConfig = passwort
+        ? { enabled: true, passwordHash: await hashPassword(passwort) }
+        : { enabled: false, passwordHash: '' }
+}
+
+/** Nur für den Selbsttest: Zähler zurücksetzen. */
+export function _zaehlerLeeren() {
+    loginAttempts.clear()
+    globaleFehler = []
+    proxyCache = { schluessel: '', bis: 0, ips: new Set() }
+}
+
+const ZU_VIELE = { error: 'Zu viele Fehlversuche. Bitte später erneut versuchen.' }
+
+/**
+ * Passwortprüfung mit Zähler — für Login UND für `currentPassword` beim
+ * Ändern/Abschalten (A2-23: dort gab es bis F2 unbegrenzt Versuche).
+ *
+ * @returns {Promise<'ok'|'falsch'|'gesperrt'>}
+ */
+async function pruefeMitZaehler(req, password) {
+    const ip = await clientIp(req)
+    if (isRateLimited(ip)) return 'gesperrt'
+    let ok
+    try {
+        ok = !!password && await verifyPassword(password, authConfig.passwordHash)
+    } catch (e) {
+        if (e.status === 429) return 'gesperrt'
+        throw e
+    }
+    if (!ok) { registerFailure(ip); return 'falsch' }
+    clearFailures(ip)
+    return 'ok'
+}
+
+// ==================== Erst-Einrichtung ====================
+
+/*
+ * Einrichtungscode (Audit A2-16, F2 20.10.2026).
+ *
+ * Ein netzgebundener Dienst ohne Passwort startet gesperrt, und das erste
+ * Passwort darf ohne Sitzung gesetzt werden — bis F2 von JEDEM, der den Port
+ * zuerst erreicht. Jetzt verlangt das Setzen aus dem Netz den Code, der beim
+ * Start (und nach jedem Zurücksetzen) im Server-Log steht; wer das Log lesen
+ * kann, ist der Betreiber. Direkt am Rechner (localhost, keine fremde Seite)
+ * braucht es ihn nicht. Der Code lebt nur im Prozess.
+ */
+let einrichtungsCode = erzeugeCode()
+
+function erzeugeCode() {
+    // Ohne 0/O/1/I/L, damit ihn niemand falsch abtippt.
+    const zeichen = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+    const b = crypto.randomBytes(8)
+    let s = ''
+    for (let i = 0; i < 8; i++) s += zeichen[b[i] % zeichen.length]
+    return s.slice(0, 4) + '-' + s.slice(4)
+}
+
+/** Braucht das Setzen des ersten Passworts gerade einen Code? */
+function einrichtungGesperrt() {
+    return !authConfig.enabled && !offenerBetriebErlaubt()
+}
+
+/** Code ins Log schreiben, wenn der Dienst auf das erste Passwort wartet. */
+export function meldeEinrichtungsCode() {
+    if (!einrichtungGesperrt()) return
+    console.warn('\n  🔑  Einrichtungscode für das erste Passwort: ' + einrichtungsCode)
+    console.warn('      Im Browser bei „Passwort festlegen" eingeben (nur aus dem Netz nötig).\n')
+}
+
+/** Nur für den Selbsttest. */
+export function _einrichtungsCode() { return einrichtungsCode }
+
+function codePasst(eingabe) {
+    const norm = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const a = Buffer.from(norm(eingabe))
+    const b = Buffer.from(norm(einrichtungsCode))
+    return a.length === b.length && crypto.timingSafeEqual(a, b)
+}
+
 // ==================== Auth-Routen ====================
 
 export function setupAuthRoutes(app) {
@@ -470,27 +666,25 @@ export function setupAuthRoutes(app) {
         // Server verteilt dann keine Cookies, das Frontend muss zuerst ein
         // Passwort setzen lassen. Wer schon ein gültiges Cookie trägt (Token
         // überlebt via AT_SECRET), arbeitet normal weiter.
-        const setupRequired = !authConfig.enabled && !offenerBetriebErlaubt()
-            && !isValidSessionToken(parseCookieToken(req))
-        res.json({ authEnabled: authConfig.enabled, loggedIn, setupRequired })
+        const setupRequired = einrichtungGesperrt() && !isValidSessionToken(parseCookieToken(req))
+        res.json({
+            authEnabled: authConfig.enabled,
+            loggedIn,
+            setupRequired,
+            codeNoetig: setupRequired && !isLocalRequest(req),
+            passwortMin: PASSWORT_MIN,
+        })
     })
 
     // Login (öffentlich): Passwort prüfen, bei Erfolg Session-Cookie setzen
     app.post('/api/login', async (req, res) => {
-        const ip = clientIp(req)
-        if (isRateLimited(ip)) {
-            return res.status(429).json({ error: 'Zu viele Fehlversuche. Bitte später erneut versuchen.' })
-        }
         if (!authConfig.enabled) {
             // Gate nicht aktiv — Login nicht nötig
             return res.json({ ok: true, authEnabled: false })
         }
-        const password = req.body && req.body.password
-        if (!password || !verifyPassword(password, authConfig.passwordHash)) {
-            registerFailure(ip)
-            return res.status(401).json({ error: 'Falsches Passwort.' })
-        }
-        clearFailures(ip)
+        const ergebnis = await pruefeMitZaehler(req, req.body && req.body.password)
+        if (ergebnis === 'gesperrt') return res.status(429).json(ZU_VIELE)
+        if (ergebnis === 'falsch') return res.status(401).json({ error: 'Falsches Passwort.' })
         // „30 Tage angemeldet bleiben": Frontend kann { remember:false } senden für ein
         // reines Session-Cookie. Fehlt das Feld → true → 30 Tage (bisheriges Verhalten).
         const remember = req.body?.remember !== false
@@ -504,45 +698,69 @@ export function setupAuthRoutes(app) {
         res.json({ ok: true })
     })
 
+    /*
+     * Überall abmelden (geschützt, A2-22): das Sitzungs-Token ist eines für
+     * alle Geräte; Logout löscht nur das Cookie beim Klienten. Wer ein Cookie
+     * für abgegriffen hält, entwertet hiermit ALLE — auch das eigene.
+     */
+    app.post('/api/auth/ueberall-abmelden', async (req, res) => {
+        await entwerteAlleSitzungen()
+        res.setHeader('Set-Cookie', getClearCookieString(req))
+        res.json({ ok: true })
+    })
+
     // Passwort setzen/ändern (geschützt — erfordert gültige Session).
     // Aktiviert das Gate. Beim Ändern eines bestehenden Passworts ist das
     // aktuelle Passwort erforderlich.
     app.post('/api/auth/set-password', async (req, res) => {
         try {
-            const { newPassword, currentPassword } = req.body || {}
-            if (!newPassword || String(newPassword).length < 6) {
-                return res.status(400).json({ error: 'Neues Passwort muss mindestens 6 Zeichen haben.' })
+            const { newPassword, currentPassword, einrichtungsCode: code } = req.body || {}
+            if (!newPassword || String(newPassword).length < PASSWORT_MIN) {
+                return res.status(400).json({ error: `Neues Passwort muss mindestens ${PASSWORT_MIN} Zeichen haben.` })
             }
             if (authConfig.enabled) {
-                if (!verifyPassword(currentPassword || '', authConfig.passwordHash)) {
-                    return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' })
+                const ergebnis = await pruefeMitZaehler(req, currentPassword || '')
+                if (ergebnis === 'gesperrt') return res.status(429).json(ZU_VIELE)
+                if (ergebnis === 'falsch') return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' })
+            } else if (einrichtungGesperrt() && !isLocalRequest(req)
+                && !isValidSessionToken(parseCookieToken(req))) {
+                // Erst-Einrichtung aus dem Netz: nur mit dem Code aus dem Log.
+                const ip = await clientIp(req)
+                if (isRateLimited(ip)) return res.status(429).json(ZU_VIELE)
+                if (!codePasst(code)) {
+                    registerFailure(ip)
+                    meldeEinrichtungsCode()
+                    return res.status(403).json({
+                        error: 'Einrichtungscode fehlt oder ist falsch. Er steht im Server-Log (Container-Protokoll).',
+                        codeNoetig: true,
+                    })
                 }
             }
             const warErstEinrichtung = !authConfig.enabled
+            const hash = await hashPassword(newPassword)
             const knex = getKnex()
             await knex('settings').where('id', 1).update({
                 authEnabled: 1,
-                authPasswordHash: hashPassword(newPassword),
+                authPasswordHash: hash,
                 updatedAt: knex.fn.now()
             })
             await loadAuthConfig()
-            // Erst-Einrichtung: wer das erste Passwort setzt, hat sich damit
-            // als Eigentümer ausgewiesen — Cookie gleich mitgeben, sonst müsste
-            // er sich direkt danach mit demselben Passwort noch einmal anmelden.
+            einrichtungsCode = erzeugeCode()
             /*
              * Passwortwechsel entwertet ALLE bestehenden Sitzungen — wer sein
              * Passwort aendert, vermutet meistens einen Kompromiss. Danach ein
              * frisches Cookie fuer den Aufrufer, sonst meldete sich gerade der
              * ab, der die Aenderung vorgenommen hat.
              *
-             * Bei der Erst-Einrichtung gibt es noch keine fremde Sitzung; das
-             * Cookie kommt trotzdem mit, damit niemand sich direkt danach mit
-             * demselben Passwort noch einmal anmelden muss.
+             * Seit F2 (A2-22) auch bei der Erst-Einrichtung: davor kann ein
+             * Reset gelegen haben, und ein vor dem Reset abgegriffenes Cookie
+             * darf das neue Passwort nicht überleben.
              */
-            if (!warErstEinrichtung) await entwerteAlleSitzungen()
+            await entwerteAlleSitzungen()
             res.setHeader('Set-Cookie', getSessionCookieString(req))
             res.json({ ok: true, authEnabled: true, sitzungenEntwertet: !warErstEinrichtung })
         } catch (e) {
+            if (e.status === 429) return res.status(429).json(ZU_VIELE)
             res.status(500).json({ error: e.message || 'Fehler beim Setzen des Passworts.' })
         }
     })
@@ -551,8 +769,22 @@ export function setupAuthRoutes(app) {
     // Kein aktuelles Passwort nötig — wer lokal am Server sitzt, gilt als
     // Eigentümer (gleiches Vertrauensmodell wie Update/Restart).
     app.post('/api/auth/reset', async (req, res) => {
+        /*
+         * Drei Riegel seit F2 (Audit A2-01/A2-02):
+         * - isLocalRequest verlangt jetzt auch gleiche Herkunft (Origin /
+         *   Sec-Fetch-Site) — eine fremde Seite im Browser des Nutzers ist
+         *   nicht „lokal", auch wenn ihr fetch von 127.0.0.1 kommt;
+         * - der Host-Guard erkennt `127.0.0.1.angreifer.tld` nicht mehr als
+         *   Loopback (istLoopbackHost);
+         * - Content-Type muss JSON sein. Ein `no-cors`-POST einer fremden
+         *   Seite darf nur „simple" Typen schicken; JSON erzwingt einen
+         *   Preflight, den dieser Server nie beantwortet.
+         */
         if (!isLocalRequest(req)) {
             return res.status(403).json({ error: 'Zurücksetzen nur direkt am Server (localhost) möglich.' })
+        }
+        if (!req.is('application/json')) {
+            return res.status(415).json({ error: 'Zurücksetzen nur aus der App heraus.' })
         }
         try {
             const knex = getKnex()
@@ -562,6 +794,10 @@ export function setupAuthRoutes(app) {
                 updatedAt: knex.fn.now()
             })
             await loadAuthConfig()
+            // Ein vor dem Reset abgegriffenes Cookie stirbt hier (A2-22).
+            await entwerteAlleSitzungen()
+            einrichtungsCode = erzeugeCode()
+            meldeEinrichtungsCode()
             res.json({ ok: true, authEnabled: false })
         } catch (e) {
             res.status(500).json({ error: 'Zurücksetzen fehlgeschlagen.' })
@@ -581,9 +817,9 @@ export function setupAuthRoutes(app) {
             }
             if (authConfig.enabled) {
                 const { currentPassword } = req.body || {}
-                if (!verifyPassword(currentPassword || '', authConfig.passwordHash)) {
-                    return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' })
-                }
+                const ergebnis = await pruefeMitZaehler(req, currentPassword || '')
+                if (ergebnis === 'gesperrt') return res.status(429).json(ZU_VIELE)
+                if (ergebnis === 'falsch') return res.status(401).json({ error: 'Aktuelles Passwort ist falsch.' })
             }
             const knex = getKnex()
             await knex('settings').where('id', 1).update({
