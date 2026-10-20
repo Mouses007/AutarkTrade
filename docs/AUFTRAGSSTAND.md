@@ -39,6 +39,34 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 4 | F1 Funktion & Oberfläche | Audit A1+A4 behoben | – | **fertig** |
 | 4 | F2 Sicherheit | Audit A2 behoben | – | **fertig** |
 | 4 | F3 Fork-Reste | Audit A3 behoben (ohne Historie) | – | **fertig** |
+| 4 | F4 Endprüfung | Endstand + Historien-Skript | – | **fertig** |
+
+## F4 Endprüfung — Ergebnis (20.10.2026)
+
+Branch `claude/f4-endpruefung-95d718`, auf master per `--ff-only`. Bilanz aller vier Audits in
+`docs/audit/2026-10-19/ENDSTAND.md`: von 108 Befunden 101 erledigt, 7 offen.
+
+- **Sicherung:** `/home/maro/Schreibtisch/Trading/V2-historie-bis-2026-10-20.bundle` (`--all`, 38 Referenzen,
+  16 725 948 Byte, SHA-256 `349acc84…f758e`, `git bundle verify` gültig). Ein zweites Bündel
+  `V2-historie-bis-2026-10-20T*.bundle` nach dem letzten F4-Commit liegt daneben.
+- **Update ohne Historie (A3-28, behoben):** Jedes `git fetch`/`git clone` in Update-Knopf, Install- und
+  Update-Skripten, `setup-remote.sh` und README läuft mit `--depth 1 --no-tags`. Ein voller Altklon wird
+  abgeschnitten (`server/update-flach.js`, `paketquelle_flach`, `scripts/paketquelle-flach.bat`); der
+  Rollback-Commit bleibt. Die Update-Skripte setzen auf `FETCH_HEAD` statt `origin/master`, weil nach der
+  neuen Wurzel kein Vorspulen möglich ist. Selbsttest `server/__selftest-update-flach.mjs` (38 Prüfungen).
+  Die Windows-Skripte sind nicht ausgeführt, nur per Grep geprüft.
+- **Historie (A3-27/29/30): Skript bereit, NICHT ausgeführt.** Starten muss es der Nutzer:
+  `scripts/historie-neu-wurzeln.sh --trocken`, dann ohne. Es prüft das Bündel (inkl. Auspacken + `fsck`),
+  baut den Orphan-Commit „AutarkTrade – Ausgangsstand“ mit dem Baum von master, vergleicht den Baum,
+  fragt vor Umsetzen, `push --force-with-lease` samt Löschen der Remote-Zweige und Tags und vor dem
+  lokalen Aufräumen. Auf einer Wegwerf-Kopie vollständig durchgespielt: Baum identisch
+  (`90ea175…`), eine Wurzel. `docs/SPAETER-SCHARFER-HANDEL.md`: Der Branch liegt danach nur im Bündel;
+  dort steht, wie man ihn holt.
+- **Endprüfung:** `npm ci`; `npm run test:self` 148/148 (6 526 Prüfungen); `npm run build` fehlerfrei
+  (Chunk-Hinweis); `herkunft-pruefen.mjs` Exit 0 (1 428/131 849 Zeilen = 1,08 % generisch, Namen und
+  Token-Fenster 0 ungesichtet); Testcontainer 8091 neu gebaut, Start-Log sauber (Schema v29, Testbetrieb).
+- **Offen:** Historien-Skript ausführen (Nutzer); A2-15 Download-Proxy, A2-26 Release-Signatur (Hersteller);
+  A4-09, A4-19 bewusst.
 
 ## F3 Fork-Reste — Ergebnis (20.10.2026)
 

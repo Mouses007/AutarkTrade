@@ -305,3 +305,10 @@ Exit 0. Golden Master mit gleichen Werten, `npm run test:self` 147/147 grün.
 | A3-32 | sollte weg | **behoben**: `lodash` aus `package.json` (nur noch transitiv über knex), `THIRD-PARTY-NOTICES` neu erzeugt, CLAUDE.md berichtigt. |
 | A3-33 | generisch | bleibt. |
 | A3-34 | generisch | bleibt (vom Prüfskript als „npm-Skript bzw. Versionsangabe" geführt). |
+
+## Stand nach F4 (20.10.2026)
+
+| ID | Stand nach F4 |
+|---|---|
+| A3-28 | **behoben**: alle `git fetch`/`git clone` der Auslieferung mit `--depth 1 --no-tags`, bestehende volle Klone werden nach dem Update abgeschnitten (`server/update-flach.js`, Selbsttest `server/__selftest-update-flach.mjs`); Rollback-Commit bleibt erhalten. |
+| A3-27, A3-29, A3-30 | **vorbereitet, offen**: Bündel `/home/maro/Schreibtisch/Trading/V2-historie-bis-2026-10-20.bundle` angelegt und geprüft; `scripts/historie-neu-wurzeln.sh` (neue Wurzel mit gleichem Baum, `--force-with-lease`, Aufräumen, alles nach Ja-Abfrage, `--trocken`) auf einer Wegwerf-Kopie getestet, auf dem echten Repo **nicht** ausgeführt — Entscheidung des Nutzers. Einzelheiten: [ENDSTAND.md](ENDSTAND.md). |
