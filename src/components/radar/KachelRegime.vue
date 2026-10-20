@@ -40,6 +40,7 @@ const alleNegativ = computed(() => buckets.value.every(b => b.anzahl === 0 || b.
 const geld = (v) => `${v >= 0 ? '+' : ''}${Math.round(v).toLocaleString('de-CH')} $`
 
 function zeichne() {
+    starteChart()
     if (!chart || !buckets.value.length) return
 
     chart.setOption(props.gross ? optionStreu() : optionBalken(), true)
@@ -131,14 +132,25 @@ function optionStreu() {
     }
 }
 
-onMounted(async () => {
-    await nextTick()
-    if (!chartEl.value) return
+/**
+ * ECharts anhängen, sobald das Element unter `v-if="daten"` existiert. Kommen
+ * die Daten erst nach dem Einhängen (Kaltstart, Pult-Bühne), fand `onMounted`
+ * kein Element und es wurde nie mehr initialisiert (Audit A4-02) — darum holt
+ * jeder Zeichenaufruf das nach.
+ */
+function starteChart() {
+    if (!chartEl.value || chart?.getDom() === chartEl.value) return
+    // Element neu entstanden (Daten waren kurz weg): altes Chart lösen
+    if (chart) { ro?.disconnect(); chart.dispose() }
     chart = echarts.init(chartEl.value)
     ro = new ResizeObserver(() => chart?.resize())
     ro.observe(chartEl.value)
-    zeichne()
     requestAnimationFrame(() => chart?.resize())
+}
+
+onMounted(async () => {
+    await nextTick()
+    zeichne()
 })
 
 onBeforeUnmount(() => {
@@ -148,7 +160,7 @@ onBeforeUnmount(() => {
     chart = null
 })
 
-watch([() => props.daten, () => props.gross], zeichne)
+watch([() => props.daten, () => props.gross], zeichne, { flush: 'post' })
 </script>
 
 <template>

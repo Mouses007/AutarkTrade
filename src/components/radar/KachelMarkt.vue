@@ -259,6 +259,7 @@ function optionKacheln() {
 }
 
 function zeichne() {
+    starteChart()
     if (!chart || !muenzen.value.length) return
     chart.setOption(ansicht.value === 'blasen' ? optionBlasen() : optionKacheln(), true)
 }
@@ -272,9 +273,17 @@ function beiKlick(p) {
     if (m?.perp) liveSymbol.value = m.perp
 }
 
-onMounted(async () => {
-    await nextTick()
-    if (!chartEl.value) return
+/**
+ * ECharts an das Element hängen, sobald es existiert. Das Element steht unter
+ * `v-if="daten"`: beim Kaltstart (Pult-Bühne) kommen die Daten erst NACH dem
+ * Einhängen, `onMounted` findet dann kein Element — und bis 20.10.2026 wurde
+ * danach nie mehr initialisiert, die Marktübersicht blieb schwarz (Audit A4-02).
+ * Deshalb holt jeder Zeichenaufruf das Initialisieren nach.
+ */
+function starteChart() {
+    if (!chartEl.value || chart?.getDom() === chartEl.value) return
+    // Element neu entstanden (Daten waren kurz weg): altes Chart lösen
+    if (chart) { ro?.disconnect(); chart.dispose() }
     chart = echarts.init(chartEl.value)
     chart.on('click', beiKlick)
     // Nach dem Ändern der Kachelgrösse NEU RECHNEN, nicht nur skalieren: die
@@ -286,8 +295,12 @@ onMounted(async () => {
         neuRechnen = setTimeout(zeichne, 180)
     })
     ro.observe(chartEl.value)
-    zeichne()
     requestAnimationFrame(() => chart?.resize())
+}
+
+onMounted(async () => {
+    await nextTick()
+    zeichne()
 })
 
 onBeforeUnmount(() => {
@@ -298,7 +311,8 @@ onBeforeUnmount(() => {
     chart = null
 })
 
-watch([() => props.daten, ansicht, fenster, flaeche], zeichne)
+// flush 'post': erst nach dem Rendern, damit das Element unter v-if da ist
+watch([() => props.daten, ansicht, fenster, flaeche], zeichne, { flush: 'post' })
 </script>
 
 <template>
@@ -351,6 +365,9 @@ watch([() => props.daten, ansicht, fenster, flaeche], zeichne)
 }
 
 .mLeiste {
+    /* Nie zusammendrücken: in der festen Pult-Bühne schrumpfte die Leiste
+       sonst auf 4 px (Audit A4-03) */
+    flex-shrink: 0;
     display: flex;
     align-items: center;
     gap: 0.2rem;

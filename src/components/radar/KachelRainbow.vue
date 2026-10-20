@@ -44,6 +44,7 @@ function bandWert(k, t) {
 const preisText = (v) => (v >= 1000 ? Math.round(v).toLocaleString('de-CH') : v.toFixed(2))
 
 function zeichne() {
+    starteChart()
     if (!chart || !props.daten?.punkte?.length) return
     const punkte = props.daten.punkte
     const zeiten = punkte.map(p => p[0])
@@ -114,14 +115,25 @@ function zeichne() {
     }, true)
 }
 
-onMounted(async () => {
-    await nextTick()
-    if (!chartEl.value) return
+/**
+ * ECharts anhängen, sobald das Element unter `v-if="daten"` existiert. Kommen
+ * die Daten erst nach dem Einhängen (Kaltstart, Pult-Bühne), fand `onMounted`
+ * kein Element und es wurde nie mehr initialisiert (Audit A4-02) — darum holt
+ * jeder Zeichenaufruf das nach.
+ */
+function starteChart() {
+    if (!chartEl.value || chart?.getDom() === chartEl.value) return
+    // Element neu entstanden (Daten waren kurz weg): altes Chart lösen
+    if (chart) { ro?.disconnect(); chart.dispose() }
     chart = echarts.init(chartEl.value)
     ro = new ResizeObserver(() => chart?.resize())
     ro.observe(chartEl.value)
-    zeichne()
     requestAnimationFrame(() => chart?.resize())
+}
+
+onMounted(async () => {
+    await nextTick()
+    zeichne()
 })
 
 onBeforeUnmount(() => {
@@ -131,7 +143,7 @@ onBeforeUnmount(() => {
     chart = null
 })
 
-watch(() => props.daten, zeichne)
+watch(() => props.daten, zeichne, { flush: 'post' })
 </script>
 
 <template>

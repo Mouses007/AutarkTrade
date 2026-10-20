@@ -304,6 +304,14 @@ defineExpose({ jetzt })
     background: var(--pFlaeche);
 }
 
+/* Die Kacheln bekommen hier `gross`, aber anders als in der Grossansicht
+   (RadarOverlay, scrollt) gibt die Bühne die Höhe fest vor. Ihre
+   Mindesthöhen in vh (Marktübersicht 56vh …) schoben die Grafik unten aus
+   der Bühne und drückten die Steuerleiste zusammen (Audit A4-03). */
+.pBuehneKoerper :deep(.gross [class*="Chart"]) {
+    min-height: 0;
+}
+
 /* ── Instrumentenleiste ─────────────────────────────────────────────── */
 .pLeiste {
     display: flex;
