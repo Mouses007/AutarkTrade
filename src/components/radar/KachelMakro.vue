@@ -100,7 +100,7 @@ const punkte = (v) => (!Number.isFinite(v) ? '—' : `${v > 0 ? '+' : v < 0 ? '�
 
             <div class="mkZeile mkStable">
                 <span class="mkName">{{ t('marktradar.makro.stableFlow', { tage: stable.tage || 30 }) }}</span>
-                <span v-if="!stable.verfuegbar" class="mkFehlt">—</span>
+                <span v-if="!stable.verfuegbar" class="mkFehlt" :title="stable.unvollstaendig ? t('marktradar.makro.stableUnvollstaendig') : null">—</span>
                 <span v-else class="mkWert" :style="{ color: stableFarbe }">
                     {{ mrd(stable.deltaUsd) }} $
                     <span class="mkStablePct">({{ pct(stable.deltaPct) }})</span>
@@ -172,7 +172,7 @@ const punkte = (v) => (!Number.isFinite(v) ? '—' : `${v > 0 ? '+' : v < 0 ? '�
         <div class="mkListe">
             <div class="mkZeile mkStable">
                 <span class="mkName">{{ t('marktradar.makro.stableFlow', { tage: stable.tage || 30 }) }}</span>
-                <span v-if="!stable.verfuegbar" class="mkFehlt">—</span>
+                <span v-if="!stable.verfuegbar" class="mkFehlt" :title="stable.unvollstaendig ? t('marktradar.makro.stableUnvollstaendig') : null">—</span>
                 <span v-else class="mkWert" :style="{ color: stableFarbe }">
                     {{ mrd(stable.deltaUsd) }} $
                     <span class="mkStablePct">({{ pct(stable.deltaPct) }})</span>

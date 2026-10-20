@@ -1052,8 +1052,16 @@ export async function holeLsOi(symbol, stunden = 48) {
                 if (e?.response?.status === 400) return []
                 throw e
             }),
+            // Ein Aussetzer beim OI darf NICHT als „kein OI" für 5 min im
+            // Cache landen (bis 20.10.2026: .catch(() => []) — die Kachel
+            // zeigte still kein OI, Audit A1-12). Er wirft, und `ausCache`
+            // liefert den letzten guten Stand mit `veraltet`. Nur 400 heisst
+            // wie oben „kein Perp-Markt".
             marktdaten.binanceHole('oiHistorie', 'futures', '/futures/data/openInterestHist',
-                { symbol: sym, period: '1h', limit }).catch(() => []),
+                { symbol: sym, period: '1h', limit }).catch((e) => {
+                if (e?.response?.status === 400) return []
+                throw e
+            }),
             // Preisänderung aus denselben Stundenkerzen, die auch die Engine nutzt
             getClosedCandles(sym, '1h', 25).catch(() => []),
         ])
@@ -1744,8 +1752,15 @@ export async function holeMakro() {
         const korrRussell = korrelationAusReihen(letzte(btcReihe, 45), letzte(reihen.russell, 32))
         const korrDxy = korrelationAusReihen(letzte(btcReihe, 45), letzte(reihen.dxy, 32))
 
-        const gueltigeStable = stableReihen.filter(Boolean)
-        if (!yahoo && !gueltigeStable.length) throw new Error('Stablecoin-Reihen nicht abrufbar')
+        // Alle Stablecoin-Reihen oder keine: fehlt eine (Aussetzer bei
+        // CoinGecko), sprangen Menge und Dominanz bis 20.10.2026 ohne Hinweis
+        // (255 → 184 Mrd zwischen zwei Abrufen, Audit A1-13). Eine
+        // unvollständige Summe ist keine Messung — ohne Yahoo wirft die Kachel
+        // (letzter guter Stand), mit Yahoo fehlt nur die Stablecoin-Zeile.
+        const abrufbar = stableReihen.filter(r => Array.isArray(r) && r.length >= 2)
+        const stableVoll = abrufbar.length === STABLE_COINS.length
+        if (!yahoo && !stableVoll) throw new Error('Stablecoin-Reihen nicht (vollständig) abrufbar')
+        const gueltigeStable = stableVoll ? abrufbar : []
         const stable = stableFluss(gueltigeStable, 30)
 
         // Stablecoin-Menge je Tag — nur Tage, an denen ALLE Coins einen Wert
@@ -1813,6 +1828,7 @@ export async function holeMakro() {
                 deltaPct: rundeAuf(stable.deltaPct, 2),
                 tage: stable.tage,
                 verfuegbar: stable.jetztUsd !== null,
+                unvollstaendig: !stableVoll && abrufbar.length > 0,
             },
             // Dominanz nur ZERLEGT — die blosse Zahl wäre nicht deutbar, weil
             // sie schon steigt, wenn nur die Kurse fallen
