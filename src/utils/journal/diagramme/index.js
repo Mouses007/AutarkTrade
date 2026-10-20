@@ -1,6 +1,6 @@
 /**
- * Journal-Diagramme — öffentliche Schnittstelle (Ersatz für das frühere
- * `src/utils/charts.js`, Spezifikation in docs/spec/diagramme.md).
+ * Journal-Diagramme — öffentliche Schnittstelle (Neubau S4, Spezifikation
+ * diagramme.md (Beleg)).
  *
  * Aufbau:
  *   gestaltung.js   Farben/Schrift aus den Design-Tokens, Achsen, Tooltip
@@ -9,7 +9,7 @@
  *   ring.js         Ring (Quote) und Doppellinie
  *   tagesansicht.js Tagesansicht: Linien und Ring je Tag
  *   zeitraum.js     Ertrag/Kennzahl je Tag, Woche, Monat
- *   gruppenAlt.js   Kennzahl je Gruppe (barChartNegative…)
+ *   gruppenAlt.js   Kennzahl je Gruppe (balkenGruppe…)
  *   gruppen.js      Kennzahl je Gruppe (Richtung, Strategie, Wochentag …)
  *   heatmap.js      Wochentag × Stunde
  *   gebuehren.js    Gebühren je Symbol

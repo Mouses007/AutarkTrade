@@ -19,6 +19,6 @@ export const summenJeTag = reactive({})
 export const groups = reactive({})
 export const gewinnAnalyse = reactive({})
 /** Minuten-Raster der Einstiegszeit-Gruppe. */
-export const timeFrame = ref(60)
+export const zeitfensterMinuten = ref(60)
 /** Zuletzt geladene Tageszeilen. */
 export const imports = ref([])

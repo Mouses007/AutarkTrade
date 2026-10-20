@@ -46,6 +46,8 @@ export function formGrossAnfang(text) {
 // ── Datum und Zeit (Sekunden, Handelszeitzone) ─────────────────────────────
 
 const inZone = (sekunden) => dayjs.unix(sekunden).tz(tradeZeitzone.value)
+/** Beginn des Handelstags in Sekunden, gerechnet in der Handelszeitzone. */
+export const tagesBeginnUnix = (sekunden) => inZone(sekunden).startOf('day').unix()
 const formatiere = (muster) => (sekunden) => inZone(sekunden).format(muster)
 
 export const formDatum = formatiere('YYYY-MM-DD')
@@ -59,19 +61,15 @@ const formatiereAnzeige = (muster) => (sekunden) => anzeige(inZone(sekunden)).fo
 export const formMonatName = formatiereAnzeige('MMMM YYYY')
 export const formDatumLang = formatiereAnzeige('ddd DD MMMM YYYY')
 
-export function tagesBeginnUnix(sekunden) {
-    return inZone(sekunden).startOf('day').unix()
-}
+// ── Dauer ──────────────────────────────────────────────────────────────────
 
+const zerlegt = (sekunden) => dayjs.duration(sekunden * 1000)
 /** Dauer als HH:mm:ss (Stundenanteil der Zerlegung, nicht Gesamtstunden). */
-export function formDauer(sekunden) {
-    return dayjs.duration(sekunden * 1000).format('HH:mm:ss')
-}
-
+export const formDauer = (sekunden) => zerlegt(sekunden).format('HH:mm:ss')
 /** Tagesanteil der Dauer mit „day"/„days". */
 export function formDauerTage(sekunden) {
-    const tage = Number(dayjs.duration(sekunden * 1000).format('D'))
-    return tage + ' ' + (tage > 1 ? 'days' : 'day')
+    const tage = Number(zerlegt(sekunden).format('D'))
+    return `${tage} ${tage > 1 ? 'days' : 'day'}`
 }
 
 // ── Zahlen ─────────────────────────────────────────────────────────────────

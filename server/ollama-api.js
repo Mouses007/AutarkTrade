@@ -54,7 +54,7 @@ const ANFRAGE_TIMEOUT_MS = 180000
 export { isAllowedOllamaUrl, assertAllowedOllamaUrl } from './ollama-url.js'
 
 /** Parse and validate a numeric ID from request params. Returns the integer or sends 400 and returns null. */
-function parseId(param, res, paramName = 'id') {
+function leseZahlId(param, res, paramName = 'id') {
     const id = parseInt(param, 10)
     if (!Number.isInteger(id) || id < 1) {
         res.status(400).json({ error: `Ungültige ${paramName}` })
@@ -1346,7 +1346,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
 
     // Bericht löschen
     app.delete('/api/ai/reports/:id', async (req, res) => {
-        const id = parseId(req.params.id, res)
+        const id = leseZahlId(req.params.id, res)
         if (id === null) return
         try {
             const knex = getKnex()
@@ -1364,7 +1364,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
 
     // Chat-Verlauf laden
     app.get('/api/ai/reports/:reportId/messages', async (req, res) => {
-        const reportId = parseId(req.params.reportId, res, 'reportId')
+        const reportId = leseZahlId(req.params.reportId, res, 'reportId')
         if (reportId === null) return
         try {
             const knex = getKnex()
@@ -1380,7 +1380,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
 
     // Chat-Verlauf löschen
     app.delete('/api/ai/reports/:reportId/messages', async (req, res) => {
-        const reportId = parseId(req.params.reportId, res, 'reportId')
+        const reportId = leseZahlId(req.params.reportId, res, 'reportId')
         if (reportId === null) return
         try {
             const knex = getKnex()
@@ -1394,7 +1394,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
 
     // Rückfrage an KI senden
     app.post('/api/ai/reports/:reportId/chat', async (req, res) => {
-        const reportId = parseId(req.params.reportId, res, 'reportId')
+        const reportId = leseZahlId(req.params.reportId, res, 'reportId')
         if (reportId === null) return
         const { message } = req.body
         if (!message || !message.trim()) {

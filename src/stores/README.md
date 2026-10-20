@@ -3,7 +3,7 @@
 Kein Pinia: Zustand sind direkt exportierte `ref()`/`reactive()`/`computed()`.
 Seit S7 (Neubau des Journal-Kerns) leben die Werte nach Zuständigkeit in zwei
 Ordnern; die exportierten Namen sind unverändert (Spezifikation
-`docs/spec/journal-kern.md` §3).
+`journal-kern.md (Beleg)` §3).
 
 ## Wo die Werte leben
 

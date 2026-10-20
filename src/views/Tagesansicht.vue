@@ -23,7 +23,7 @@ function merkeKerzen(schluessel, wert) {
  * das Detailfenster (Kerzenchart, Fills, SL/TP-Protokoll, Bot-Aufschlüsselung,
  * MFE, Notiz, Share-Karte, Screenshot-Vorschau).
  *
- * Neubau nach docs/spec/ansichten.md, Teil „Tagesansicht" und Abschnitt 0.
+ * Neubau nach ansichten.md (Beleg), Teil „Tagesansicht" und Abschnitt 0.
  * Die Rechenwerte kommen fertig aus dem Journal-Kern (`journalTage`); diese
  * Ansicht zeichnet nur und speichert die Begleitdaten des offenen Trades.
  */

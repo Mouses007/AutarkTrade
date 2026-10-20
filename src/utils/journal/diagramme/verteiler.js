@@ -3,7 +3,7 @@
  *
  * Erst die drei Ringe, dann die Familien je ID-Präfix in fester Reihenfolge.
  * Die Reihenfolge zählt, weil spätere Aufrufe frühere am selben Element
- * überschreiben: Das Präfix `barChart` trifft auch `barChartNegative…` —
+ * überschreiben: Das Präfix `balken` trifft auch `balkenGruppe…` —
  * die bekommen erst die Form aus balkenDiagramm und dann (wenn es Werte gibt)
  * die aus balkenNegativDiagramm. Diese Überlappung ist gewollt erhalten.
  */
@@ -26,20 +26,20 @@ const FAMILIEN = [
     ['durationChart', useDurationChart],
     ['positionChart', usePositionChart],
     ['strategyChart', useStrategyChart],
-    ['lineBarChart', linienBalkenDiagramm],
-    ['barChart', balkenDiagramm],
-    ['barChartNegative', balkenNegativDiagramm],
+    ['verlaufErtrag', linienBalkenDiagramm],
+    ['balken', balkenDiagramm],
+    ['balkenGruppe', balkenNegativDiagramm],
     ['heatmapChart', useHeatmapChart],
 ]
 
 /** Anteile der drei Ringe; null = Ring nicht zeichnen. */
 function ringAnteile(id) {
     const f = fall()
-    if (id === 'pieChart1') {
+    if (id === 'ringGewinnquote') {
         const n = totals.trades
         return n ? [totals[`${f}WinsCount`] / n, totals[`${f}LossCount`] / n] : [0, 0]
     }
-    if (id === 'pieChart2') {
+    if (id === 'ringZufriedenheit') {
         const liste = [...zufriedenheitTage, ...zufriedenheitTrades]
         if (!liste.length) return null
         /* eslint-disable eqeqeq -- lose Gleichheit ist hier die Regel: 1, true, "1" zufrieden; 0, false, "", "0" nicht */
@@ -56,7 +56,7 @@ function ringAnteile(id) {
 export async function zeichneDiagramme(param) {
     sichereGroessenanpassung()
 
-    for (const id of ['pieChart1', 'pieChart2', 'pieChart3']) {
+    for (const id of ['ringGewinnquote', 'ringZufriedenheit', 'ringChanceRisiko']) {
         const knoten = element(id)
         if (param === 'clear') {
             instanzAn(knoten)?.clear()

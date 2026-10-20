@@ -5,7 +5,7 @@
  * Füllungen/SL/TP und Abschlussbewertung, bearbeitbar. Die Tabelle `playbooks`
  * benutzt die Seite nicht.
  *
- * Neubau nach `docs/spec/ansichten.md`, Teil „Playbook“. Die Seite hält nur den
+ * Neubau nach `ansichten.md (Beleg)`, Teil „Playbook“. Die Seite hält nur den
  * Rahmen (Laden, Deep-Link, Einfügen, Vollbild, Verlassen-Schutz); Zustand und
  * Abläufe liegen in `components/playbook/usePlaybook.js`, die Regeln in
  * `playbookDaten.js`.

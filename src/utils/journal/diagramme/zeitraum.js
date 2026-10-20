@@ -1,11 +1,11 @@
 /**
  * Diagramme je Zeitraum (Tag / Woche / Monat) aus den Tagessummen:
  *   - linienBalkenDiagramm: kumulierter Ertrag (Linie) + Ertrag je Zeitraum (Balken)
- *   - balkenDiagramm:     Kennzahl (barChart1) bzw. Gewinnquote (barChart2)
+ *   - balkenDiagramm:     Kennzahl (balkenKennzahl) bzw. Gewinnquote (balkenQuote)
  *
  * Bündelung: Woche = ISO-Kalenderwoche, Monat = Monat 0–11, beide in der
  * Zeitzone des PROZESSES und OHNE Jahr verglichen (bekannte Eigenheit, siehe
- * docs/spec/diagramme.md 6.4). Ohne gültigen Zeitrahmen gibt es keine Einträge.
+ * diagramme.md (Beleg) 6.4). Ohne gültigen Zeitrahmen gibt es keine Einträge.
  */
 import dayjs from '../zeit.js'
 import { gewaehlterZeitrahmen, gewaehlteKennzahl } from '../../../stores/filters.js'
@@ -144,7 +144,7 @@ export function balkenDiagramm(id) {
         const verhaeltnis = gewaehlteKennzahl.value
         const p = palette()
         const mitBeschriftung = schluessel.length <= BESCHRIFTUNG_BIS
-        const alsQuote = id === 'barChart2'
+        const alsQuote = id === 'balkenQuote'
         const punkte = []
         const kategorien = []
         for (const zr of zeitraeume(schluessel, rahmen)) {
@@ -152,7 +152,7 @@ export function balkenDiagramm(id) {
             const kz = kennzahlen(tage, zr.tage, f, rahmen)
             const r = verhaeltnis === 'appt' ? kz.appt : verhaeltnis === 'apps' ? kz.apps : verhaeltnis === 'profitFactor' ? kz.pf : undefined
             const text = (x) => kennzahlText(x.value, verhaeltnis, alsQuote)
-            if (id === 'barChart1') {
+            if (id === 'balkenKennzahl') {
                 const gut = verhaeltnis === 'profitFactor' ? (r === 0 || r >= 1) : r >= 0
                 punkte.push(balkenPunkt(r, gut, mitBeschriftung, r >= 0 ? 'top' : 'bottom', text, p))
             } else if (alsQuote) {

@@ -11,9 +11,9 @@ import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkr
 function mittelText(id, gruen) {
     const prozent = formProzent1(gruen)
     if (seitenId.value === 'journalUebersicht') {
-        if (id === 'pieChart1') return `${prozent}\nWin rate`
-        if (id === 'pieChart2') return `${prozent}\nSatisfaction`
-        if (id === 'pieChart3') {
+        if (id === 'ringGewinnquote') return `${prozent}\nWin rate`
+        if (id === 'ringZufriedenheit') return `${prozent}\nSatisfaction`
+        if (id === 'ringChanceRisiko') {
             const r = gruen > 0 && gruen < 1 ? (gruen / (1 - gruen)).toFixed(1) : '0'
             return `1:${r}\nØ RRR`
         }

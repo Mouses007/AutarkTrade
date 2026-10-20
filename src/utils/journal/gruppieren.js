@@ -6,7 +6,7 @@
  */
 import dayjs from './zeit.js'
 import { tradeZeitzone } from '../../stores/app/rahmen.js'
-import { groups, timeFrame } from '../../stores/journal/auswertung.js'
+import { groups, zeitfensterMinuten } from '../../stores/journal/auswertung.js'
 import { tagAngaben } from './tagebuch.js'
 import { gruppiere, sortiertNach } from './hilfen.js'
 import { kette } from './kette.js'
@@ -44,7 +44,7 @@ function kapStufe(m) {
 
 /** Einstiegszeit auf das Minutenraster abgerundet, als „HH:mm" in der Handelszeitzone. */
 function zeitfensterSchluessel(trade) {
-    const raster = timeFrame.value * 60 * 1000
+    const raster = zeitfensterMinuten.value * 60 * 1000
     const ms = Math.floor((trade.entryTime * 1000) / raster) * raster
     return dayjs(ms).tz(tradeZeitzone.value).format('HH:mm')
 }

@@ -61,9 +61,9 @@ globalThis.localStorage = {
 // Diagramm-Elemente, wie sie JournalUebersicht.vue anlegt. Sichtbar (clientWidth > 0),
 // sonst überspringt zeichneDiagramme sie wie einen versteckten Bootstrap-Tab.
 const DIAGRAMM_IDS = [
-    'pieChart1', 'pieChart2', 'pieChart3', 'perfChart1', 'feesChart1', 'symbolChart1', 'weekdayChart1',
-    'entryTimeChart1', 'durationChart1', 'positionChart1', 'strategyChart1', 'lineBarChart1',
-    'barChart1', 'barChart2', 'barChartNegative12', 'barChartNegative14', 'heatmapChart1',
+    'ringGewinnquote', 'ringZufriedenheit', 'ringChanceRisiko', 'perfChart1', 'feesChart1', 'symbolChart1', 'weekdayChart1',
+    'entryTimeChart1', 'durationChart1', 'positionChart1', 'strategyChart1', 'verlaufErtrag',
+    'balkenKennzahl', 'balkenQuote', 'balkenGruppeStreubesitz', 'balkenGruppeMarktwert', 'heatmapChart1',
 ]
 const element = (id) => ({ id, clientWidth: 600, clientHeight: 300, style: {}, addEventListener() {} })
 globalThis.window = { addEventListener() {}, removeEventListener() {}, innerHeight: 900, innerWidth: 1400, performance: globalThis.performance }
@@ -440,7 +440,7 @@ function stelleEin(e) {
     filter.gewaehlteBoerse.value = e.boerse ?? ''
     filter.selectedTradeCategory.value = e.kategorie || 'all'
     filter.betragArt.value = 'net'
-    st.timeFrame.value = e.zeitrahmen || 15
+    st.zeitfensterMinuten.value = e.zeitrahmen || 15
     ui.negativeTagGruppen.value = []
 }
 
@@ -483,8 +483,8 @@ async function dashboard(e) {
         filter.betragArt.value = art
         globalThis.__journalCharts = {}
         await charts.zeichneDiagramme('init')
-        for (const id of ['barChartNegative1', 'barChartNegative2', 'barChartNegative3', 'barChartNegative4', 'barChartNegative7',
-            'barChartNegative13', 'barChartNegative16', 'barChartNegative17', 'barChartNegative18']) charts.balkenNegativDiagramm(id)
+        for (const id of ['balkenGruppeZeitrahmen', 'balkenGruppeDauer', 'balkenGruppeWochentag', 'balkenGruppeTradeZahl', 'balkenGruppeAusfuehrungen',
+            'balkenGruppeEinstieg', 'balkenGruppeSymbole', 'balkenGruppeRichtung', 'balkenGruppeStrategieTags']) charts.balkenNegativDiagramm(id)
         diagramme[art] = Object.fromEntries(Object.entries(globalThis.__journalCharts).sort().map(([id, o]) => [id, diagrammDaten(o)]))
     }
     // Gruppen vergleichen gegen den GEFILTERTEN Trade: so bleibt dort nur,

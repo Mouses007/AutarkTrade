@@ -26,7 +26,7 @@ export function zeichneDoppellinie() {
             netto.push(netto.length ? netto[netto.length - 1] + n : n)
             zeiten.push(formUhrzeit(tr.exitTime))
         }
-        doppellinieDiagramm(`doubleLineChart${zeile.dateUnix}`, brutto, netto, zeiten)
+        doppellinieDiagramm(`tagesLinie${zeile.dateUnix}`, brutto, netto, zeiten)
     }
     return Promise.resolve()
 }
@@ -39,7 +39,7 @@ export function zeichneTorte() {
         const gewinne = Number(pl[`${art}WinsCount`])
         const verluste = Number(pl[`${art}LossCount`])
         const bekannt = anzahl > 0 && Number.isFinite(gewinne) && Number.isFinite(verluste)
-        ringDiagramm(`pieChart${zeile.dateUnix}`, bekannt ? gewinne / anzahl : 0, bekannt ? verluste / anzahl : 0)
+        ringDiagramm(`tagesRing${zeile.dateUnix}`, bekannt ? gewinne / anzahl : 0, bekannt ? verluste / anzahl : 0)
     }
     return Promise.resolve()
 }

@@ -1,5 +1,5 @@
 /**
- * Kennzahl je Gruppe, horizontal — das „Altinventar" (`barChartNegative<n>`).
+ * Kennzahl je Gruppe, horizontal — das „Altinventar" (`balkenGruppe…`).
  *
  * Werte sind nackte Zahlen. Nicht gewählte Kennzahl ⇒ `undefined` je Gruppe;
  * gezeichnet wird, sobald die Werteliste überhaupt einen Eintrag hat (auch
@@ -14,23 +14,23 @@ import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeiche
 import { strategieTags } from './gruppen.js'
 
 const TEILGRUPPE = {
-    barChartNegative1: 'timeframe',
-    barChartNegative2: 'duration',
-    barChartNegative3: 'day',
-    barChartNegative4: 'trades',
-    barChartNegative7: 'executions',
-    barChartNegative12: 'shareFloat',
-    barChartNegative13: 'entryPrice',
-    barChartNegative14: 'mktCap',
-    barChartNegative16: 'symbols',
-    barChartNegative17: 'position',
+    balkenGruppeZeitrahmen: 'timeframe',
+    balkenGruppeDauer: 'duration',
+    balkenGruppeWochentag: 'day',
+    balkenGruppeTradeZahl: 'trades',
+    balkenGruppeAusfuehrungen: 'executions',
+    balkenGruppeStreubesitz: 'shareFloat',
+    balkenGruppeEinstieg: 'entryPrice',
+    balkenGruppeMarktwert: 'mktCap',
+    balkenGruppeSymbole: 'symbols',
+    balkenGruppeRichtung: 'position',
 }
 
 /** Welche Teilgruppe gehört zur ID, und ist es ein Tag-Diagramm? */
 function waehleTeilgruppe(id) {
     const tagGruppe = (negativeTagGruppen.value || []).find(g => id.includes(g.id))
     if (tagGruppe) return { daten: groups[tagGruppe.id], tags: true }
-    if (id === 'barChartNegative18') return { daten: strategieTags(), tags: true }
+    if (id === 'balkenGruppeStrategieTags') return { daten: strategieTags(), tags: true }
     return { daten: groups[TEILGRUPPE[id]], tags: false }
 }
 
@@ -38,20 +38,20 @@ function waehleTeilgruppe(id) {
 function achsenText(id, wert) {
     const k = Number(wert)
     switch (id) {
-        case 'barChartNegative2': return dauerKlasse(wert)
-        case 'barChartNegative3': return WOCHENTAGE_EN[k] ?? wert
-        case 'barChartNegative4': return k <= 5 ? `${k - 5}-${k}` : k <= 30 ? `${k - 4}-${k}` : '+30'
-        case 'barChartNegative13': return k < 5 ? '0-4.99$' : k < 30 ? `${k}-${k + 4.99}$` : '+30$'
-        case 'barChartNegative12': {
+        case 'balkenGruppeDauer': return dauerKlasse(wert)
+        case 'balkenGruppeWochentag': return WOCHENTAGE_EN[k] ?? wert
+        case 'balkenGruppeTradeZahl': return k <= 5 ? `${k - 5}-${k}` : k <= 30 ? `${k - 4}-${k}` : '+30'
+        case 'balkenGruppeEinstieg': return k < 5 ? '0-4.99$' : k < 30 ? `${k}-${k + 4.99}$` : '+30$'
+        case 'balkenGruppeStreubesitz': {
             if (k >= 50) return '+50M'
             const breite = k < 10 ? 4.9 : 9.9
             return `${k}-${(k + breite).toFixed(1)}M`
         }
-        case 'barChartNegative14': {
+        case 'balkenGruppeMarktwert': {
             const namen = ['Nano-cap', 'Micro-cap', 'Small-cap', 'Mid-cap', 'Big-cap']
             return namen[k] ?? wert
         }
-        case 'barChartNegative17': return formGrossAnfang(String(wert))
+        case 'balkenGruppeRichtung': return formGrossAnfang(String(wert))
         default: return wert
     }
 }
@@ -75,7 +75,7 @@ export function balkenNegativDiagramm(id) {
                 wins += e[`${f}Wins`]
                 loss += e[`${f}Loss`]
                 proceeds += e[`${f}Proceeds`]
-                n += id === 'barChartNegative4' ? e.trades : e.tradesCount
+                n += id === 'balkenGruppeTradeZahl' ? e.trades : e.tradesCount
                 q += e.buyQuantity
             }
             const appt = proceeds === 0 && n === 0 ? null : proceeds / n
@@ -87,7 +87,7 @@ export function balkenNegativDiagramm(id) {
             if (tags && liste.length) tagNamen[g] = liste[liste.length - 1].tagName
         }
 
-        if (id === 'barChartNegative16' || id === 'barChartNegative17') {
+        if (id === 'balkenGruppeSymbole' || id === 'balkenGruppeRichtung') {
             const paare = werte.map((wert, i) => ({ wert, schluessel: kategorien[i] })).filter(x => x.wert != null)
             paare.sort(nachWert)
             werte = paare.map(x => x.wert)
@@ -110,7 +110,7 @@ export function balkenNegativDiagramm(id) {
             tooltip: {
                 trigger: 'item',
                 ...tooltipStil(p),
-                formatter: (x) => (id === 'barChartNegative16' ? `${x.name}: ` : '') + formGeld2(x.value),
+                formatter: (x) => (id === 'balkenGruppeSymbole' ? `${x.name}: ` : '') + formGeld2(x.value),
             },
             xAxis: wertAchse(p, {
                 axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => (verhaeltnis === 'profitFactor' ? formZahlStellen(v, 0) : formGeld0(v)) },

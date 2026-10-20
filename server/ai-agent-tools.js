@@ -248,7 +248,7 @@ export const AGENT_TOOLS = [
                     type: 'string',
                     description: 'Aufgaben-ID zur Analyse (z.B. "lagebericht", "trade-analyse")',
                 },
-                daysBack: {
+                lookbackDays: {
                     type: 'number',
                     description: 'Wie viele Tage in die Vergangenheit schauen (Standard: 30)',
                     default: 30,
@@ -1052,7 +1052,7 @@ async function toolAnalyzeScreenshot(knex, params) {
  * Liest `ai_usage` Tabelle und berechnet Kosten/Token-Verhältnis.
  */
 async function toolAnalyzeModelPerformance(knex, params) {
-    const { task, daysBack = 30 } = params
+    const { task, lookbackDays = 30 } = params
     if (!task) {
         const { AI_TASKS } = await import('./ai-task-config.js')
         return {
@@ -1061,7 +1061,7 @@ async function toolAnalyzeModelPerformance(knex, params) {
         }
     }
 
-    const startDate = Date.now() - (daysBack * 24 * 60 * 60 * 1000)
+    const startDate = Date.now() - (lookbackDays * 24 * 60 * 60 * 1000)
 
     // Spalten wie in `ai-usage.js`: `erstelltAm` (ms) und die Token einzeln —
     // `createdAt`/`usage` gibt es in dieser Tabelle nicht (die Abfrage schlug
@@ -1072,7 +1072,7 @@ async function toolAnalyzeModelPerformance(knex, params) {
         .select('provider', 'modell', 'totalTokens', 'kostenUsd')
 
     if (records.length === 0) {
-        return { hinweis: `Keine Nutzungsdaten für "${task}" in den letzten ${daysBack} Tagen` }
+        return { hinweis: `Keine Nutzungsdaten für "${task}" in den letzten ${lookbackDays} Tagen` }
     }
 
     // Aggregieren nach Provider/Modell
@@ -1101,7 +1101,7 @@ async function toolAnalyzeModelPerformance(knex, params) {
 
     return {
         aufgabe: task,
-        tage: daysBack,
+        tage: lookbackDays,
         modelle: modelStats.sort((a, b) => parseFloat(a.kostenProAufruf) - parseFloat(b.kostenProAufruf)),
     }
 }

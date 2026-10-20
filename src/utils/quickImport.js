@@ -227,13 +227,9 @@ export async function useQuickApiImport(explicitBroker) {
             const accounts = [...appEinstellungen.value.accounts, { value: broker, label: broker }]
             await dbUpdateSettings({ accounts })
             appEinstellungen.value.accounts = accounts
-            // Also update localStorage
-            const selected = localStorage.getItem('at.journal.konten')
-            if (selected) {
-                localStorage.setItem('at.journal.konten', selected + ',' + broker)
-            } else {
-                localStorage.setItem('at.journal.konten', broker)
-            }
+            // Die Kontoauswahl des Filters bekommt die neue Börse dazu
+            const gemerkt = localStorage.getItem('at.journal.konten')
+            localStorage.setItem('at.journal.konten', gemerkt ? `${gemerkt},${broker}` : broker)
         }
     }
 

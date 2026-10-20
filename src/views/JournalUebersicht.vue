@@ -204,14 +204,14 @@ onBeforeUnmount(() => {
                     </div>
                 </template>
                 <div v-if="zeige('cumulativePnl')" class="voll">
-                    <DiagrammKarte diagramm-id="lineBarChart1" :titel="t('dashboard.cumulativePnlChart') + kennzeichen"
+                    <DiagrammKarte diagramm-id="verlaufErtrag" :titel="t('dashboard.cumulativePnlChart') + kennzeichen"
                         info="dashboard.cumulativePnlChartTooltip" />
                 </div>
                 <div v-if="zeige('appt')" class="halb">
-                    <DiagrammKarte diagramm-id="barChart1" :titel="apptTitel" />
+                    <DiagrammKarte diagramm-id="balkenKennzahl" :titel="apptTitel" />
                 </div>
                 <div v-if="zeige('winRate')" class="halb">
-                    <DiagrammKarte diagramm-id="barChart2" :titel="t('dashboard.winRate') + kennzeichen" info="dashboard.winRateTooltip" />
+                    <DiagrammKarte diagramm-id="balkenQuote" :titel="t('dashboard.winRate') + kennzeichen" info="dashboard.winRateTooltip" />
                 </div>
             </div>
 

@@ -481,7 +481,7 @@ export function useKachelRaster({
      * enthält bewusst ALLE Kacheln, auch ausgeblendete, damit sie beim
      * Einblenden wieder an ihrem Platz erscheinen.
      */
-    function initSortable() {
+    function starteSortierung() {
         if (!gridEl.value) return
         sortable = Sortable.create(gridEl.value, {
             // Die ganze Kopfzeile zieht, nicht nur das Punkteraster: das war 14 × 14
@@ -563,7 +563,7 @@ export function useKachelRaster({
             if (!kachel.endpunkt && !kachel.eigenerStrom) zustand[kachel.id] = 'ready'
         }
         await nextTick()
-        initSortable()
+        starteSortierung()
         // Versetzt anfordern statt alle auf einmal: RSI und Altcoin-Saison holen
         // je fünfzig Kerzenreihen, und wenn zwölf Kacheln gleichzeitig loslegen,
         // drosselt Binance — mit halb leeren Kacheln als Ergebnis.

@@ -2,7 +2,7 @@
  * Reine Regeln der Playbook-Seite (Trade-Bewertungen): Eintrag aus den
  * DB-Zeilen bauen, Altformat der Notiz lesen, Bild zum Feld finden, Füllungen
  * gruppieren. Kein Vue-Zustand, kein Netz — damit die Ansicht nur zeichnet und
- * diese Regeln an einer Stelle stehen (Spezifikation `docs/spec/ansichten.md`,
+ * diese Regeln an einer Stelle stehen (Spezifikation `ansichten.md (Beleg)`,
  * Teil „Playbook“, P.3/P.4/P.7/P.8/P.9).
  */
 import dayjs from '@/utils/journal/zeit.js'

@@ -112,9 +112,9 @@ onBeforeUnmount(() => clearTimeout(syncTimer))
         </table>
 
         <div class="kb-ringe" :class="'n' + ringe">
-            <div id="pieChart1" :key="'r1-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
-            <div v-if="mitZufriedenheit" id="pieChart2" :key="'r2-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
-            <div v-if="mitRrr" id="pieChart3" :key="'r3-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
+            <div id="ringGewinnquote" :key="'r1-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
+            <div v-if="mitZufriedenheit" id="ringZufriedenheit" :key="'r2-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
+            <div v-if="mitRrr" id="ringChanceRisiko" :key="'r3-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
         </div>
 
         <div v-if="heute.anzahl > 0" class="kb-heute">
