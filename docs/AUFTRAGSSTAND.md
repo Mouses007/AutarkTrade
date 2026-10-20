@@ -37,6 +37,18 @@ was davon wo erledigt ist. Jede Sitzung trägt ihren Stand selbst nach.
 | 5 | S14 Hype-Radar übersichtlich | Übersicht: Lagezeile, Alarme eingeklappt mit Art-Filter, Funde „geprüft“ als Vorgabe, einzeilige Tabelle/Karten, Quadrant einklappbar — nur Darstellung | `claude/s14-hype-uebersicht-7eb497` | **fertig** |
 | 5 | S15 Analysequellen zurück | Von S12 entfernte Quellen (Yahoo, ForexFactory, CMC, blockchain.info, CoinGecko/GeckoTerminal ohne Schlüssel, pump.fun, Telegram, Reddit, CoinPaprika, Upbit/MEXC/OKX/Alpha, bapi-Brackets, News-Vorschläge, öffentlicher Solana-RPC, Logos, DeepSeek-Suche) zurück hinter Schalter `quellenOhneFreigabe` (Vorgabe an) | `claude/s15-quellen-zurueck-260844` | **fertig** |
 | 4 | F1 Funktion & Oberfläche | Audit A1+A4 behoben | – | **fertig** |
+| 4 | F2 Sicherheit | Audit A2 behoben | – | **fertig** |
+
+## F2 Sicherheit — Ergebnis (20.10.2026)
+
+Grundlage: Audit A2 (`docs/audit/2026-10-19/A2-sicherheit.md`, 34 Befunde). Branch `claude/f2-sicherheit-3760eb`, auf master per `--ff-only`.
+
+- **Behoben: 31 von 34**, davon alle 3 hohen (A2-01 DNS-Rebinding, A2-02 CSRF auf den Reset, A2-03 Login-Sperre per XFF) und alle 12 mittleren bis auf den geschäftlichen Teil von A2-15. Stand je Befund im Bericht (Abschnitt „Stand nach F2").
+- **Teilweise / offen:** A2-15 (Token im Lizenzschlüssel: Ausstellung nur noch mit fine-grained Token und Ablauf ≤ Update-Ende; ein Download-Proxy mit Lizenzprüfung ist Herstellersache), A2-26 (Klick-Update mit `npm ci`; Signaturprüfung braucht einen Signierschritt im Release-Prozess), A2-32 (Info, bewusst nicht geändert), A2-22 nur als „Überall abmelden" (keine Sitzungen je Gerät).
+- **Neu im Code:** `server/geheimnisse.js` (eine abgeleitete Liste aller Geheimnis-, Ziel- und Zugangsfelder), Secret-Datei `.at-secret` für native Installationen samt Migration der Maschinen-Seed-Werte, undici-Agent `GESCHUETZT` gegen DNS-Rebinding, Einrichtungscode für das erste Passwort, CSP, Container als `node`. Abhängigkeiten: `undici` 6 (MIT) neu, `nodemailer` 10, `npm audit fix`; `THIRD-PARTY-NOTICES` neu erzeugt.
+- **Bestehende Installationen:** Docker mit `AT_SECRET` und Passwort merkt nichts (Schlüssel lesbar, Cookies gültig). Compose: Docker-Socket raus, `AT_TRUSTED_PROXY` (Vorgabe `caddy,autarktrade-caddy`; im Synology-Projekt den Namen des Caddy-Dienstes eintragen). Ein root-eigenes Datenvolume wird beim Start übernommen. Native Installationen legen beim ersten Start `.at-secret` an — beim Umzug mitnehmen. Rückfall: siehe DOCKER.md „Sicherheit" und README „Encryption".
+- **Geprüft:** `npm run test:self` grün (neu: `server/__selftest-f2-sicherheit.mjs`, erweitert: `__selftest-auth.mjs`, `__selftest-netguard.mjs`), `npm run build` fehlerfrei, Gegenprobe gegen master (`A2-gegenprobe.txt`: die Angriffe schlagen vorher an), Prüf-Container auf 127.0.0.1:8097 mit Wegwerf-SQLite (`A2-pruefcontainer-f2.txt`: jeder Angriff aus dem Bericht scheitert, Oberfläche ohne CSP-Verletzung), danach entfernt.
+- **Altes Journal:** nichts geändert; `docs/audit/2026-10-19/A2-rueckportierung-journal.md` sagt je Befund, ob er dort steckt und mit welchem Patch er zu schliessen wäre (zuerst A2-10 root/Socket und A2-03 XFF).
 
 ## Gesamtfazit (S11, 19.10.2026)
 

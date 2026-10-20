@@ -69,6 +69,14 @@ docker compose up -d --build
 
 Das baut das Image mit dem neuen Code neu und startet den Container. Die Datenbank (extern auf PostgreSQL) bleibt unberührt.
 
+## Sicherheit (seit F2, 20.10.2026)
+
+- **Benutzer:** Die App läuft im Container als `node` (uid 1000), nicht als root. Der Einstieg übernimmt beim ersten Start ein bestehendes, root-eigenes `/app/data` automatisch (`chown`), danach gibt er die Rechte ab. Lässt ein eingebundenes Verzeichnis das nicht zu (z. B. NFS mit root_squash), steht eine Warnung im Log; dann in Compose `user: "<uid>:<gid>"` des Verzeichnis-Besitzers setzen — der Einstieg läuft dann gleich unter diesem Benutzer.
+- **Docker-Socket:** steht nicht mehr in der `docker-compose.yml`. Er war root-gleich auf dem Host, und das Klick-Update war im Container nie auslösbar (es verlangt localhost). Update: `docker compose pull && docker compose up -d` bzw. wie oben neu bauen. Eine alte Compose-Datei mit dem Mount funktioniert weiter; der Mount bringt nur nichts.
+- **Proxy:** `AT_TRUST_PROXY=1` wertet `X-Forwarded-For` nur noch für Verbindungen von `AT_TRUSTED_PROXY` aus (Vorgabe `caddy,autarktrade-caddy`). Heisst der Caddy-Dienst anders (Synology-Projekt), dessen Namen eintragen — sonst zählt die Login-Sperre hinter Caddy wieder alle Klienten in einem Eimer (sperrt, aber nicht aus). Port 8080 bleibt im LAN erreichbar (ESP32-Display).
+- **Erstes Passwort:** Ein neuer Container ohne Passwort verlangt beim „Passwort festlegen" den Einrichtungscode aus `docker compose logs journal`.
+- **Bestehende Installationen** mit gesetztem Passwort und `AT_SECRET` merken nichts: Anmeldung, Börsenschlüssel und Sitzungen bleiben gültig.
+
 ## Hinweise
 
 - Der Container bindet auf `0.0.0.0`, ist also im Netzwerk erreichbar

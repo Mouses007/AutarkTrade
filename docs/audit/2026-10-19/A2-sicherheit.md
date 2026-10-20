@@ -1,6 +1,6 @@
 # Audit A2 „Sicherheit" – AutarkTrade V2 (Stand master `429c77f`), 19.10.2026
 
-Nur geprüft, nichts behoben. Verglichen mit dem alten Journal (`/home/maro/Schreibtisch/Trading/Journal`, HEAD `f910385`, nur gelesen).
+Nur geprüft, nichts behoben. **Nachtrag:** Korrektur F2 vom 20.10.2026 — Stand je Befund im Abschnitt „Stand nach F2". Verglichen mit dem alten Journal (`/home/maro/Schreibtisch/Trading/Journal`, HEAD `f910385`, nur gelesen).
 
 **Wie geprüft wurde**
 - **Statisch:** alle Server-Module mit Routen, `src/` auf HTML-Sinks, Docker/Compose/Caddy, Skripte.
@@ -102,6 +102,48 @@ Ermittelt aus allen `app.get/post/put/delete` in `server/` und `index.mjs`; das 
 | A2-32 | Info | Uploads (Screenshots, Avatar, Share-Card-Vorlagen, Lernkarten) sind Base64 in Textspalten. Es gibt keine Typ- oder Grössenprüfung je Feld, nur das 50-MB-Gesamtlimit. Ausgegeben werden sie nur über `<img :src>`, ein SVG führt dort kein Script aus. Keine Route liefert gespeicherte Bilder mit eigenem Content-Type. Kein Pfad-Traversal: Einziger Schreibzugriff aus einer Anfrage ist `strategy-builder.js:308–319` mit Slug-Regex und dirname-Prüfung. `/api/rechtliches/text/..%2F..` → 404. | `api-routes.js:110`, `:116–117`; `index.mjs:65–67`. | gleich | Optional: MIME-Prüfung und Grenze je Feld. |
 | A2-33 | Info | Der net-guard-Timeout endet nach den Headern; der Body (bis 2 MB) wird ohne eigene Zeitgrenze gestreamt. Die Fehlermeldung nennt die aufgelöste interne Adresse. | `net-guard.js:224–226`, `:255ff.`, `:130`. | gleich | Gesamt-Deadline über den Body. |
 | A2-34 | Info | Masken zeigen 8 Zeichen des echten Schlüssels (erste und letzte 4; Hype-Radar je 3). | `crypto.js:83–89`, `hype-radar/einstellungen.js:441–448`. | gleich | Nur die letzten 4 zeigen. |
+
+
+## Stand nach F2 (Korrektur 20.10.2026)
+
+Belege: Selbsttests `server/__selftest-auth.mjs`, `server/__selftest-netguard.mjs`, `server/__selftest-f2-sicherheit.mjs`; Gegenprobe gegen den Stand vor F2 in [A2-gegenprobe.txt](A2-gegenprobe.txt); Angriffe gegen den Prüf-Container in [A2-pruefcontainer-f2.txt](A2-pruefcontainer-f2.txt); Rückportierung ins Journal in [A2-rueckportierung-journal.md](A2-rueckportierung-journal.md).
+
+| ID | Stand nach F2 | Wie |
+|---|---|---|
+| A2-01 | behoben (`3ca18b6`) | `istLoopbackHost` nur echte 127/8-Literale; Host `127.0.0.1.evil.example` → 421 (Selbsttest + Prüf-Container). |
+| A2-02 | behoben (`3ca18b6`) | `isLocalRequest` verlangt gleiche Herkunft (`Origin`/`Sec-Fetch-Site`), Reset nur mit JSON-Körper, Reset erhöht die Generation. Fremde Origin → 403, `text/plain` → 415. |
+| A2-03 | behoben (`3ca18b6`) | XFF zählt nur von `AT_TRUSTED_PROXY` (Vorgabe `caddy,autarktrade-caddy`), globale Bremse 60/min. Rotierender XFF direkt an 8097: `401 401 401 429 …`, richtiges Passwort danach 429. Port 8080 bleibt im LAN (ESP32), Compose setzt `AT_TRUSTED_PROXY`. |
+| A2-04 | behoben (`364b91e`) | `istPrivatV6` über die Gruppen (Hex-Form, NAT64, Multicast); jede Verbindung über den undici-Agenten `GESCHUETZT`, dessen `lookup` prüft und festnagelt (kein Rebinding). |
+| A2-05 | behoben (`364b91e`) | (a/b) gespeicherter Schlüssel nur an die gespeicherte Basis, neue Adresse testbar mit frisch eingegebenem Schlüssel; (c) URL-Felder raus aus der generischen Route, Adresswechsel ohne neuen Schlüssel leert ihn; (d) ntfy-Token, (e) SMTP-Passwort ebenso, Klartext-AUTH nur ins eigene Netz; (f) gespeichertes PG-Passwort nur für die gespeicherte Verbindung. Lauscher im Prüf-Container: kein Mitschnitt. |
+| A2-06 | behoben (`364b91e`) | `settings` wird immer als id 1 eingespielt, Zurückschreiben der geschützten Felder muss eine Zeile treffen. Nach Import mit `id: 2` und Neustart: Gate an, Gen-0-Cookie 401. |
+| A2-07 | behoben (`364b91e`) | Eine abgeleitete Liste `server/geheimnisse.js`; Selbsttest prüft jede Spalte mit Geheimnis-Namen. `apis`-Schlüssel verschlüsselt in der DB, im Export redigiert. |
+| A2-08 | behoben (`364b91e`) | Ohne `AT_SECRET` (nativ) zufälliges Secret in `.at-secret` (0600), Maschinen-Seed-Werte bleiben lesbar und werden beim Start umgeschlüsselt. Docker mit `AT_SECRET` unverändert (Selbsttest im Kindprozess). |
+| A2-09 | behoben (`364b91e`) | Börsenkonfig, Geheimnis-, Ziel- und Zugangsfelder sowie `hype_settings.alarmKanaele` bleiben beim Import; Klartext/`[REDACTED]` in Schlüsselspalten werden beim Start verschlüsselt bzw. geleert. `decrypt` reicht Klartext weiter durch (nach der Migration gibt es keinen mehr; ein strenges `decrypt` hätte unbekannte Altpfade gebrochen). |
+| A2-10 | behoben (`364b91e`) | App-Prozess als `node` (uid 1000) per `setpriv`; ein root-eigenes Altvolume wird beim Start übernommen. Socket-Mount aus `docker-compose.yml` (Klick-Update war im Container nie auslösbar). `docker exec` ohne `-u` bleibt root — das braucht ohnehin Docker-Zugriff. |
+| A2-11 | behoben (`3ca18b6`) | `crypto.scrypt` asynchron, höchstens 2 parallel, volle Schlange → 429. 200 parallele Logins: `/api/auth/status` 0,002 s (vorher 3,92 s). |
+| A2-12 | behoben (`364b91e`) | `holeBinaer` (Prüfung, Festnageln, eigene Umleitungen, 8 MB, nur `image/*`). |
+| A2-13 | behoben (`364b91e`) | Nur echte lokale IP-Literale bzw. `localhost` (`istLokalesZiel`); `pruefeKiEndpunkt` führt `::ffff:` auf IPv4 zurück und sperrt bei Auflösungsfehler. Ports bleiben frei (Ollama bekommt keinen Schlüssel, PG-Passwort nur an die gespeicherte Verbindung). |
+| A2-14 | behoben (`364b91e`) | `npm audit fix`, nodemailer 10.1.7, Drittlizenzen neu. Rest: `quill` 2.0.3 (low) — kein Fix-Release, betrifft `getSemanticHTML`, das nicht benutzt wird; Ausgaben laufen durch DOMPurify. |
+| A2-15 | teilweise (`364b91e`), offen | `lizenz-ausstellen.mjs` nimmt nur fine-grained Tokens (`github_pat_…`) mit `--token-ablauf` ≤ Update-Ende. Offen: das Token bleibt im Schlüssel lesbar — dafür braucht es einen Download-Proxy mit Lizenzprüfung beim Hersteller (Geschäfts-/Infrastrukturentscheidung). |
+| A2-16 | behoben (`3ca18b6`) | Erstes Passwort aus dem Netz nur mit Einrichtungscode aus dem Server-Log; am Server-Rechner ohne. |
+| A2-17 | behoben (`364b91e`) | `escHtml` im Tooltip der Marktkachel; zusätzlich CSP (A2-21). |
+| A2-18 | behoben (`364b91e`) | `escHtml` in den Tooltips von `gruppen.js`/`auswertung.js`. |
+| A2-19 | behoben (`364b91e`) | `sanitizeKiHtml`: KI-Ausgaben ohne `id`/`name`, Bilder nur mit relativem `src`. |
+| A2-20 | behoben (`364b91e`) | `sichereUrl()` vor allen drei DexScreener-Links. |
+| A2-21 | behoben (`364b91e`) | CSP in Produktion (`script-src 'self'`, kein eval, `object-src 'none'`, `frame-ancestors 'none'`); vue-i18n mit JIT-Übersetzung ohne `new Function`. Oberfläche im Prüf-Container ohne CSP-Verletzung. |
+| A2-22 | behoben (`3ca18b6`) | „Überall abmelden" (Generation +1), Reset und Erst-Einrichtung erhöhen die Generation. Das Token bleibt eines für alle Geräte (Sitzungen je Gerät: nicht gebaut). |
+| A2-23 | behoben (`3ca18b6`) | Neue Passwörter ≥ 10 Zeichen (bestehende kürzere bleiben gültig); `currentPassword` läuft über den Login-Zähler. |
+| A2-24 | behoben (`364b91e`) | Alle `ai*Url`/`aiKey*` und übrigen Geheimnisse aus `VALID_SETTINGS_KEYS` (auch per Filter gegen die Listen). |
+| A2-25 | behoben (`364b91e`) | db-config aus dem Backup nur mit lokalem/privatem Host; `[REDACTED]` nur durch das bestehende Passwort derselben Verbindung ersetzt, sonst übersprungen. |
+| A2-26 | teilweise (`364b91e`), offen | Klick-Update nativ mit `npm ci` (Rückfall `npm install`). Offen: Signatur-/Prüfsummenprüfung des Releases — braucht einen Signierschritt im Release-Prozess des Herstellers; Image per Digest ebenso. |
+| A2-27 | behoben (`364b91e`) | `ohneAdresse()` entfernt URL und Bot-Token aus Zustellfehlern. |
+| A2-28 | behoben (`364b91e`) | `reencrypt-keys.mjs` liest `ALLE_VERSCHLUESSELTEN`, kennt `AT_SECRET_ALT` und `.at-secret`. |
+| A2-29 | behoben (`364b91e`) | `pruefeSmtpZiel` löst auf und sperrt 169.254/16 (beim Speichern und beim Versand); `2852039166` → 400. |
+| A2-30 | behoben (`3ca18b6`) | Sicherheitsschalter fallen bei gesetztem (auch leerem) `AT_X` nicht auf `CTJ_` zurück; aktive `CTJ_`-Schalter werden beim Start gemeldet. Ohne `AT_X` wirkt `CTJ_X` weiter (keine Aussperrung beim Update). |
+| A2-31 | behoben (`364b91e`) | App-Hilfe beschreibt Einrichtungscode, Mindestlänge, „Überall abmelden", localhost-Update. |
+| A2-32 | offen (Info) | Bewusst nicht geändert: Bilder werden nur über `<img>` ausgegeben, keine Route liefert sie mit eigenem Content-Type; eine MIME-Prüfung je Feld hätte bestehende Daten-URLs gefährdet, ohne eine Lücke zu schliessen. |
+| A2-33 | behoben (`364b91e`) | Zeitgrenze bis zum letzten Byte; Fehlertext ohne aufgelöste Adresse (Feld `adresse` bleibt für die Einordnung). |
+| A2-34 | behoben (`364b91e`) | `maske()`: nur die letzten 4 Zeichen (alle Masken-Stellen). |
 
 ## Geprüft und in Ordnung
 

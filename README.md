@@ -544,7 +544,9 @@ For Docker, configure via `.env` instead (see Installation > Docker).
 
 ### Encryption (AT_SECRET)
 
-By default, API keys are encrypted with a machine-specific seed. If you run multiple instances (e.g., local + Docker) sharing the same database, set `AT_SECRET` so all instances use the same encryption key:
+Without `AT_SECRET`, a native installation creates a random secret on first start and stores it next to the database in `.at-secret` (mode 0600, never in the repository, image or backup; path overridable with `AT_SECRET_FILE`). Values still encrypted with the former machine seed (hostname + user) stay readable and are re-encrypted once on start. **Take `.at-secret` with you when moving the installation** — without it the stored keys cannot be decrypted. Docker (`NODE_ENV=production`) still requires `AT_SECRET` and never creates the file.
+
+To share one database between several instances (e.g., local + Docker), set the same `AT_SECRET` everywhere:
 
 ```bash
 # Generate a secret
@@ -557,7 +559,15 @@ export AT_SECRET=your_generated_secret
 AT_SECRET=your_generated_secret
 ```
 
-> **Important**: After setting AT_SECRET for the first time, re-enter your broker API keys in Settings — the old keys were encrypted with the previous machine seed.
+> **Important**: when switching an existing installation to `AT_SECRET`, re-encrypt the stored keys: `AT_SECRET=… node server/reencrypt-keys.mjs --apply` (it reads `.at-secret` or the machine seed as the old key; for a rotation set `AT_SECRET_ALT` to the old secret). The list of encrypted columns lives in `server/geheimnisse.js`.
+
+### Access protection (since F2, 20.10.2026)
+
+- The first password from the network requires the **setup code** printed in the server/container log („Einrichtungscode"); at the server itself (localhost) it is not needed. Passwords need at least 10 characters (existing shorter ones stay valid).
+- `AT_TRUST_PROXY=1` evaluates `X-Forwarded-For` **only** for connections from `AT_TRUSTED_PROXY` (names or IPs, comma-separated; default `caddy,autarktrade-caddy`). Direct access to port 8080 can no longer invent a new address per login attempt.
+- „Passwort vergessen" (`/api/auth/reset`) works only from the server itself, from the app's own page (no foreign `Origin`/`Sec-Fetch-Site`) and with a JSON body; it invalidates every session. Settings › General › Security has „Überall abmelden".
+- The container runs as user `node`; the Docker socket is no longer mounted (the one-click update was never reachable inside the container). Update the container with `docker compose pull && docker compose up -d`.
+- Production responses carry a Content-Security-Policy (scripts only from the app, no eval).
 
 ### Development
 

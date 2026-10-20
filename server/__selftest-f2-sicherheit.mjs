@@ -273,6 +273,18 @@ console.log('\nA2-08/A2-09: Schlüssel-Migration ohne AT_SECRET\n')
     check('mit AT_SECRET: bestehende Börsenschlüssel bleiben lesbar', aus2 === 'BOERSE', aus2)
 }
 
+console.log('\nA2-27: Zieladresse nicht im Fehlertext\n')
+{
+    const { ohneAdresse } = await import('./hype-radar/zustellung.js')
+    const url = 'https://ha.local:8123/api/webhook/GEHEIME-ID'
+    let roh
+    try { await fetch('ht!tp:/' + url) } catch (e) { roh = e }
+    const sauber = ohneAdresse(new Error(`Failed to parse URL from ${url}`), url).message
+    check('„Failed to parse URL from <URL>" verliert die Adresse', !sauber.includes('GEHEIME-ID'), sauber)
+    check('Telegram-Token im Pfad wird entfernt', !ohneAdresse(new Error('fetch https://api.telegram.org/bot123:ABC/sendMessage failed'), '').message.includes('123:ABC'))
+    void roh
+}
+
 console.log('\nA2-34: Masken\n')
 {
     const m = maskKey(encrypt('sk-ABCDEFGHIJKLMNOP1234'))

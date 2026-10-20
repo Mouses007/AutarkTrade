@@ -1,0 +1,98 @@
+# Prüf-Container F2 (20.10.2026): autarktrade:f2-pruef aus Commit 364b91e, nur 127.0.0.1:8097,
+# Wegwerf-SQLite im Volume f2-pruef-data (vorab als root angelegt, um ein Alt-Volume nachzustellen),
+# eigenes AT_SECRET, AT_TESTBETRIEB=1 AT_NO_ENGINE=1 AT_NO_RECORDER=1 AT_TRUST_PROXY=1 AT_BEDINGUNGEN=aus.
+# Container, Volume und Image danach entfernt. Nie gegen 8091/8080/NAS/Live-DB.
+
+== Start-Log (Auszug)
+-> /app/data gehört noch root — Eigentum an den Dienstbenutzer node übergeben
+🔑  Einrichtungscode für das erste Passwort: (im Log)
+Uid: 1000 (Prozess 1), /var/run/docker.sock: nicht vorhanden
+
+== Vom Host (Peer = Docker-Gateway)
+== A2-16 Erst-Einrichtung (vom Host, Peer = Docker-Gateway)
+status: {"authEnabled":false,"loggedIn":true,"setupRequired":true,"codeNoetig":true,"passwortMin":10}
+set-password ohne Code: 0
+set-password falscher Code: 403
+set-password '123456' mit Code (A2-23): 400
+set-password mit Code aus dem Log: 200
+{"ok":true,"authEnabled":true,"sitzungenEntwertet":false}
+== A2-03 Login mit rotierendem X-Forwarded-For (AT_TRUST_PROXY=1, direkt am Port)
+12 Fehlversuche: 401 401 401 429 429 429 429 429 429 429 429 429 
+richtiges Passwort mit frischem XFF trotz Sperre: {"error":"Zu viele Fehlversuche. Bitte später erneut versuchen."} 429
+== A2-11 200 parallele Logins, Antwortzeit /api/auth/status
+auth/status während des Ansturms: 0.002148s
+auth/status danach: 0.001117s
+
+== Im Container (Peer = 127.0.0.1)
+A2-01 GET /api/auth/status Host 127.0.0.1.evil.example: 421
+A2-01 POST /api/auth/reset Host 127.0.0.1.rebind.example (JSON): 421
+A2-02 POST reset Origin https://evil.example, text/plain: 403
+A2-02 POST reset Sec-Fetch-Site cross-site, JSON: 403
+A2-02 POST reset ohne Origin, text/plain (no-cors-Form): 415
+A2-02 Gate danach noch an: {"authEnabled":true,"loggedIn":false,"setupRequired":false,"codeNoetig":false,"passwortMin":10}
+A2-23 7x falsches currentPassword: 401 401 401 401 401 429 429
+A2-05 Schlüssel setzen: 200
+A2-05 GET /api/ai/settings zeigt: undefined
+A2-05a /api/ai/test basisUrl=Lauscher → Antwort: {"success":false,"message":"Der gespeicherte Schlüssel wird nur an die gespeicherte Adresse geschickt. Für eine neue Adresse den Schlüssel neu eingeben (oder erst speichern)."}
+A2-05a/b Mitschnitt des Lauschers: []
+A2-24 nach PUT: aiDeepseekUrl / aiKeyOpenrouter in Antwort: {"aiDeepseekUrl":"","aiCustomUrl":"","klartext":false}
+A2-04 pruefeOeffentlicheUrl http://[::ffff:127.0.0.1]/: gesperrt („::ffff:7f00:1" zeigt auf eine interne Adresse)
+A2-04 pruefeOeffentlicheUrl http://[::ffff:a9fe:a9fe]/: gesperrt („::ffff:a9fe:a9fe" zeigt auf eine interne Adresse)
+A2-04 Abruf über den Agenten auf localhost:9999 (Rebinding-Ersatz): gesperrt („localhost" zeigt auf eine interne Adresse)
+A2-12 holeBinaer http://127.0.0.1:9999/bild.png: gesperrt (Nur Port 80 und 443 sind erlaubt (nicht 9999))
+Lauscher-Mitschnitt gesamt: []
+
+== A2-07 Hype-Geheimnisse setzen, dann GET /api/db/settings und Export
+PUT hype-einstellungen 200
+Felder im Klartext/Geheimtext: []
+Geheimtext-Muster in der Antwort: False
+Set-Flags: {'hypeAlarmTelegramTokenSet': True, 'hypeKeySolanaRpcSet': True, 'aiKeyOpenaiSet': True}
+Export: Geheimtext-Muster: False | TELEGRAM im Klartext: False
+== A2-06/A2-09/A2-25 fremdes Backup (settings.id=2, Webhook/Bitunix/db-config fremd)
+bitunix config 404
+Import: True {'settings': 1, 'bitunix_config': 'übersprungen (Börsenzugang bleibt wie eingerichtet)', 'db-config.json': 'übersprungen (Host nicht lokal/privat)'}
+ls: cannot access '/app/db-config.json': No such file or directory
+settings-Zeilen: [
+  {
+    id: 1,
+    authEnabled: 1,
+    gen: 1,
+    webhook: 'https://ha.local/api/webhook/EIGEN',
+    aiCustomUrl: '',
+    mailHost: ''
+  }
+]
+bitunix apiKey: 
+== A2-09 Börsenschlüssel (Nachtrag: eigener Bitunix-Schlüssel vorher gesetzt)
+bitunix config 200
+Import: True übersprungen (Börsenzugang bleibt wie eingerichtet)
+bitunix nach fremdem Import: [ [ 'ECHT-BITUNIX', 'ECHT-SECRET' ] ]
+== A2-06 Neustart nach Import mit settings.id=2
+auth/status: {"authEnabled":true,"loggedIn":false,"setupRequired":false,"codeNoetig":false,"passwortMin":10}
+eigenes Cookie nach Neustart: 200
+Gen-0-Cookie (vor dem ersten Passwort ausgestellt, Gen 0): 401
+== A2-13 / A2-05f DB-Test an Präfix-Hosts
+10.attacker.example: {"ok":false,"message":"Ungültiger DB-Host (nur lokale/private Adressen erlaubt)."} 400
+192.168.attacker.net: {"ok":false,"message":"Ungültiger DB-Host (nur lokale/private Adressen erlaubt)."} 400
+172.16.x.nip.io: {"ok":false,"message":"Ungültiger DB-Host (nur lokale/private Adressen erlaubt)."} 400
+== A2-29 SMTP-Zahlen-Host
+{"error":"Der SMTP-Server zeigt auf einen Metadaten-Dienst — abgelehnt."} 400
+== A2-21 Sicherheits-Köpfe
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: no-referrer
+Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https: wss:; media-src 'self' data: blob: https:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+== A2-22 Überall abmelden
+ueberall-abmelden 200
+altes Cookie danach: 401
+== A2-10
+Uid:	1000	1000	1000	1000
+ls: cannot access '/var/run/docker.sock': No such file or directory
+== A2-30 alte Compose-Datei mit CTJ_RESET_AUTH=1, neue setzt AT_RESET_AUTH= (leer)
+auth/status: {"authEnabled":true,"loggedIn":false,"setupRequired":false,"codeNoetig":false,"passwortMin":10}
+[AUTH] ⚠️  Alter Schalter aktiv: CTJ_ALLOW_INSECURE=1 — bitte auf den AT_-Namen umstellen oder entfernen.
+[AUTH] AT_TRUST_PROXY=1 ohne AT_TRUSTED_PROXY: X-Forwarded-For zählt nur von den Compose-Namen caddy/autarktrade-caddy.
+
+== Browser (Oberfläche über localhost:8097, angemeldet)
+Chart (Binance-Streams/Kerzen), Marktradar, Einstellungen › Sicherheit: keine CSP-Verletzung in der Konsole;
+einziger Konsolenfehler: /api/bitunix/balance 400 (Testschlüssel ohne Börse — erwartet). Knopf „Überall abmelden" vorhanden.

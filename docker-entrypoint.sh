@@ -33,10 +33,10 @@ fi
 # Als root gestartet: Eigentum nachziehen, dann als `node` weiter. Läuft der
 # Container schon als anderer Benutzer (`user:` in Compose), bleibt es dabei.
 if [ "$(id -u)" = "0" ]; then
-    [ -f /app/db-config.json ] && chown node:node /app/db-config.json && chmod 600 /app/db-config.json
+    if [ -f /app/db-config.json ]; then chown node:node /app/db-config.json && chmod 600 /app/db-config.json; fi
     if [ -d /app/data ] && [ "$(stat -c %u /app/data)" != "$(id -u node)" ]; then
         echo "-> /app/data gehört noch root — Eigentum an den Dienstbenutzer node übergeben"
-        chown -R node:node /app/data
+        chown -R node:node /app/data || echo "-> WARNUNG: Eigentum von /app/data nicht übertragbar — in Compose user: \"<uid>:<gid>\" des Volume-Besitzers setzen"
     fi
     # Selbst gesetzte Symlinks zeigen ins Volume; die Verknüpfung selbst darf root gehören.
     exec setpriv --reuid=node --regid=node --init-groups -- "$@"
