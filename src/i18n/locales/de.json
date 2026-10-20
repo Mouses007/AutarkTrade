@@ -5342,7 +5342,8 @@
       "momentum": {
         "name": "Momentum Radar",
         "kurz": "Momentum",
-        "text": "Welle (WaveTrend) und Geldfluss aus dem Momentum-Radar des Live-Tradings — nur 5m, 15m, 1h, 4h."
+        "text": "Welle (WaveTrend) und Geldfluss aus dem Momentum-Radar des Live-Tradings — nur 5m, 15m, 1h, 4h.",
+        "info": "Momentum Radar — was die Farben bedeuten:\nHELLBLAUE FLÄCHE = die Welle (WaveTrend), dunkelblau dahinter = ihre Signallinie. Läuft hell über dunkel, dreht das Momentum nach oben.\nBALKEN = Geldfluss je Kerze: grün rein, rot raus, violett = nur die Futures treiben, die Bewegung läuft auf Hebel. WEISSE LINIE = Geldfluss am Spotmarkt; liegt sie unter den Balken, sind die Futures voraus.\nLINIEN: ±50 (kräftig) überkauft/überverkauft, ±100 Extrem, 0 gestrichelt.\nPUNKTE auf der Welle: grün = Long suchen, rot = Short suchen; gross = die höheren Zeitebenen plus Geldfluss stützen das Signal (≥ 60 %). Orange Raute = Extremwert jenseits ±100, ausgereizt, kein Einstieg.\nSCHIENEN bei +115 (Short) und −115 (Long): Signale der höheren Zeitebenen — 1h orange klein, 4h violett, Tag weiss, Woche gelb gross.\nDIV-Linie: Divergenz zwischen Welle und Kurs (rot bärisch, grün bullisch).\nFARBLEISTE ganz unten: Geldfluss der letzten geschlossenen 4h-Kerze (grün rein, rot raus).\nNur geschlossene Kerzen. Der Radar sagt WANN, nicht WO."
       },
       "vwapVector": {
         "name": "VWAP Vector",

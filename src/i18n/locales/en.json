@@ -5342,7 +5342,8 @@
       "momentum": {
         "name": "Momentum Radar",
         "kurz": "Momentum",
-        "text": "Wave (WaveTrend) and money flow from the live-trading momentum radar — only 5m, 15m, 1h, 4h."
+        "text": "Wave (WaveTrend) and money flow from the live-trading momentum radar — only 5m, 15m, 1h, 4h.",
+        "info": "Momentum Radar — what the colours mean:\nLIGHT BLUE AREA = the wave (WaveTrend), dark blue behind it = its signal line. Light crossing above dark means momentum turns up.\nBARS = money flow per candle: green in, red out, violet = only futures are driving, the move runs on leverage. WHITE LINE = spot money flow; below the bars means futures are ahead.\nLINES: ±50 (bold) overbought/oversold, ±100 extreme, 0 dashed.\nDOTS on the wave: green = look for longs, red = look for shorts; large = higher timeframes plus money flow back the signal (≥ 60 %). Orange diamond = extreme beyond ±100, exhausted, no entry.\nRAILS at +115 (short) and −115 (long): signals of the higher timeframes — 1h orange small, 4h violet, day white, week yellow large.\nDIV line: divergence between wave and price (red bearish, green bullish).\nCOLOUR BAR at the bottom: money flow of the last closed 4h candle (green in, red out).\nClosed candles only. The radar says WHEN, not WHERE."
       },
       "vwapVector": {
         "name": "VWAP Vector",

@@ -30,6 +30,7 @@ import ZeichnungStil from './ZeichnungStil.vue'
 import { kiVorschau } from '../../utils/chart/kiZeichnungen.js'
 import TradeKarte from './TradeKarte.vue'
 import { Symbol, Kreisel, Knopf } from '../basis'
+import InfoTipp from '../InfoTipp.vue'
 import axios from 'axios'
 import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { StrategieEbene } from '../../utils/chart/overlays/StrategieEbene.js'
@@ -50,7 +51,7 @@ const props = defineProps({
     alarmLinien: { type: Array, default: () => [] },  // aktive Preis-Alarme dieses Symbols
 })
 const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alleLoeschen', 'panel'])
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 
 const huelle = ref(null)
 const chart = shallowRef(null)
@@ -1188,6 +1189,7 @@ defineExpose({
             </div>
             <div v-for="ind in (panel.indikatoren || [])" :key="ind.id" class="indZeile" :class="{ aus: ind.sichtbar === false }">
                 <span class="indName">{{ kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.kurz')) }}</span>
+                <InfoTipp v-if="te('chart.ind.' + ind.typ + '.info')" :schluessel="'chart.ind.' + ind.typ + '.info'" breit />
                 <span v-for="w in (indikatorWerte[ind.id] || [])" :key="w.key" :style="{ color: w.farbe }">{{ wertText(w.wert, ind.typ) }}</span>
                 <span class="indKnoepfe">
                     <button :title="t(ind.sichtbar === false ? 'chart.einblenden' : 'chart.ausblenden')"
