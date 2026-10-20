@@ -6016,13 +6016,13 @@
     "erklaerung": "Before using AutarkTrade, please read the licence terms and accept them. The notices and the licences of third-party software can be read here at any time (side menu › Legal, Settings › Licence).",
     "neueFassung": "The licence terms have a new version ({fassung}, previously {bisher}). Please read them and accept again.",
     "betaTitel": "Beta – test version",
-    "betaText": "AutarkTrade is unfinished software provided for testing only. It does not yet meet the requirements of EU Regulation 2024/2847 (Cyber Resilience Act). No investment advice; orders placed with your exchange keys are at your own risk.",
+    "betaText": "AutarkTrade is unfinished software provided for testing only. It does not yet meet the requirements of EU Regulation 2024/2847 (Cyber Resilience Act). No investment advice. AutarkTrade only reads trades and positions through your exchange keys and places no orders – you place orders yourself at your exchange, at your own risk.",
     "reiterLizenz": "Licence terms",
     "reiterHinweise": "Notices (NOTICE)",
     "reiterDrittsoftware": "Third-party software",
     "laedt": "Loading …",
     "textFehler": "The text could not be loaded: {fehler}",
-    "zustimmung": "I have read the licence terms (version {fassung}) and accept them. I understand that AutarkTrade is not investment advice and that I am responsible for every order.",
+    "zustimmung": "I have read the licence terms (version {fassung}) and accept them. I understand that AutarkTrade is not investment advice, places no orders, and that I am responsible for every order I place myself at my exchange.",
     "akzeptieren": "Accept",
     "schliessen": "Close",
     "anzeigen": "Show legal texts",
@@ -6110,8 +6110,8 @@
       "aus": "Off",
       "beschreibung_binance": "Full scope, including Bookmap, recorder, replay, liquidations, open interest history and long/short.",
       "beschreibung_bitget": "Basics: candles, tickers, order book, funding. Everything that needs real-time streams or futures statistics stays off.",
-      "beschreibung_aus": "No public market data from exchanges. Journal, account imports and orders via your own API keys keep working.",
-      "weiterhin": "Account data (trades, positions, orders) runs independently via your own exchange keys. The chart can additionally show Bitunix and Bitget candles."
+      "beschreibung_aus": "No public market data from exchanges. Journal and account imports via your own API keys (read-only) keep working.",
+      "weiterhin": "Account data (trades, positions, stop and target) is read independently via your own exchange keys – read-only, no orders go out. The chart can additionally show Bitunix and Bitget candles."
     },
     "cg": {
       "titel": "CoinGecko",

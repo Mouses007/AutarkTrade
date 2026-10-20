@@ -6016,13 +6016,13 @@
     "erklaerung": "Bevor du AutarkTrade benutzt, lies bitte die Lizenzbedingungen und stimme ihnen zu. Die Hinweise und die Lizenzen fremder Software kannst du jederzeit hier nachlesen (Seitenmenü › Rechtliches, Einstellungen › Lizenz).",
     "neueFassung": "Die Lizenzbedingungen haben eine neue Fassung ({fassung}, bisher {bisher}). Bitte lies sie und stimme erneut zu.",
     "betaTitel": "Beta – Testversion",
-    "betaText": "AutarkTrade ist unfertige Software, die nur zum Testen bereitgestellt wird. Sie erfüllt die Anforderungen der EU-Verordnung 2024/2847 (Cyber Resilience Act) noch nicht. Keine Anlageberatung; Orders über deine Börsen-Schlüssel führst du auf eigenes Risiko aus.",
+    "betaText": "AutarkTrade ist unfertige Software, die nur zum Testen bereitgestellt wird. Sie erfüllt die Anforderungen der EU-Verordnung 2024/2847 (Cyber Resilience Act) noch nicht. Keine Anlageberatung. AutarkTrade liest über deine Börsen-Schlüssel nur Trades und Positionen und gibt keine Orders auf – Orders gibst du selbst bei deiner Börse auf, auf eigenes Risiko.",
     "reiterLizenz": "Lizenzbedingungen",
     "reiterHinweise": "Hinweise (NOTICE)",
     "reiterDrittsoftware": "Fremde Software",
     "laedt": "Wird geladen …",
     "textFehler": "Der Text konnte nicht geladen werden: {fehler}",
-    "zustimmung": "Ich habe die Lizenzbedingungen (Fassung {fassung}) gelesen und stimme ihnen zu. Mir ist bewusst, dass AutarkTrade keine Anlageberatung ist und ich für jede Order selbst verantwortlich bin.",
+    "zustimmung": "Ich habe die Lizenzbedingungen (Fassung {fassung}) gelesen und stimme ihnen zu. Mir ist bewusst, dass AutarkTrade keine Anlageberatung ist, keine Orders aufgibt und ich für jede Order, die ich selbst bei meiner Börse aufgebe, selbst verantwortlich bin.",
     "akzeptieren": "Akzeptieren",
     "schliessen": "Schliessen",
     "anzeigen": "Rechtliches anzeigen",
@@ -6110,8 +6110,8 @@
       "aus": "Aus",
       "beschreibung_binance": "Voller Umfang, einschliesslich Bookmap, Rekorder, Replay, Liquidationen, Open-Interest-Verlauf und Long/Short.",
       "beschreibung_bitget": "Grundbedarf: Kerzen, Ticker, Orderbuch, Funding. Alles, was Echtzeit-Streams oder Futures-Statistik braucht, bleibt aus.",
-      "beschreibung_aus": "Keine öffentlichen Marktdaten von Börsen. Journal, Kontoimporte und Orders über deine eigenen API-Schlüssel laufen weiter.",
-      "weiterhin": "Kontodaten (Trades, Positionen, Orders) laufen unabhängig davon über deine eigenen Börsen-Schlüssel. Der Chart kann zusätzlich Bitunix- und Bitget-Kerzen zeigen."
+      "beschreibung_aus": "Keine öffentlichen Marktdaten von Börsen. Journal und Kontoimporte über deine eigenen API-Schlüssel (nur lesend) laufen weiter.",
+      "weiterhin": "Kontodaten (Trades, Positionen, Stop und Ziel) liest AutarkTrade unabhängig davon über deine eigenen Börsen-Schlüssel – nur lesend, es gehen keine Orders hinaus. Der Chart kann zusätzlich Bitunix- und Bitget-Kerzen zeigen."
     },
     "cg": {
       "titel": "CoinGecko",
