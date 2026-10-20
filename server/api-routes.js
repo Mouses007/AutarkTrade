@@ -775,5 +775,5 @@ function numerischeId(id) {
     })
 
     setupEsp32AdminRoutes(app)
-    console.log(' -> API routes initialized')
+    console.log(' -> DB-REST-Routen eingerichtet')
 }

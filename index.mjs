@@ -208,7 +208,7 @@ async function starteServer() {
     // Eigene Regelstrategien aus der DB in die Registry holen — sie sind ab
     // jetzt von eingebauten nicht mehr zu unterscheiden.
     await ladeAlleRegelStrategien();
-    console.log(" -> API routes initialized")
+    console.log(" -> Alle Routen eingerichtet")
 
     // Hintergrund-Takte. Im Testbetrieb (AT_TESTBETRIEB=1, server/testbetrieb.js)
     // startet KEINER davon — die Testinstanz läuft gegen eine Kopie der

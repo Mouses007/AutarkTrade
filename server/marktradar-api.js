@@ -2706,8 +2706,13 @@ export function setupMarktradarRoutes(app) {
         holeMarkt(100).catch(() => { })
         nurCoinSymbole().catch(() => { })
         // Einmaliger Rückblick (nur mit Schalter, S15); der Anspruch
-        // verhindert Wiederholung
-        holeDominanzRueckblick().catch((e) => logWarn('marktradar', `Rückblick: ${e.message}`))
+        // verhindert Wiederholung. Im Testbetrieb nicht: er SCHREIBT in
+        // market_snapshots, und die Kopie der Live-DB soll — wie beim
+        // Schnappschuss unten — keine Messreihe fortschreiben (Audit A4-24).
+        // Das Vorwärmen darüber liest nur in den Zwischenspeicher und bleibt.
+        if (!istTestbetrieb()) {
+            holeDominanzRueckblick().catch((e) => logWarn('marktradar', `Rückblick: ${e.message}`))
+        }
     }, 4000)
 
     // Erster Schnappschuss beim Start, danach halbstündlich nachfassen

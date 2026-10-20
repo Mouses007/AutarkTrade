@@ -3578,6 +3578,7 @@ async function runMigrations(knex, client) {
     } else if (dbVersion < SCHEMA_VERSION) {
         await knex('settings').where('id', 1).update({ schemaVersion: SCHEMA_VERSION })
     }
+    console.log(` -> Datenbank-Schema v${Math.max(dbVersion, SCHEMA_VERSION)} (Code kennt v${SCHEMA_VERSION})`)
 }
 
 /*
