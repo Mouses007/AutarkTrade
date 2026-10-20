@@ -13,6 +13,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/journal/zeit.js'
 import Symbol from '@/components/basis/Symbol.vue'
+import { kiBereichWechseln } from '@/views/einstellungen/gemeinsam/useKiBereich.js'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -48,7 +49,7 @@ const richtungTitel = (r) => t(`marktradar.wal.richtung.${r}`)
         <div v-if="!daten.aktiveQuellen" class="walAus">
             <Symbol name="anker" />
             <p>{{ t('marktradar.wal.inactive') }}</p>
-            <router-link to="/settings/ki" class="ctl-pill">{{ t('marktradar.wal.toSettings') }}</router-link>
+            <router-link to="/settings/ki" class="ctl-pill" @click="kiBereichWechseln('nachrichten')">{{ t('marktradar.wal.toSettings') }}</router-link>
         </div>
 
         <template v-else>

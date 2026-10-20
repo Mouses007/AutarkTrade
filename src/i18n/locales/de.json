@@ -77,7 +77,7 @@
     "categoryAll": "Alle",
     "analyze": "ANALYSIEREN",
     "dashboard": "Dashboard",
-    "dailyView": "Tages Ansicht",
+    "dailyView": "Tagesansicht",
     "calendar": "Kalender",
     "accounts": "Konten",
     "accountsOverview": "Kontoübersicht",
@@ -983,11 +983,11 @@
     "featureDashboard": "Dashboard mit Trading-Statistiken",
     "featureImport": "Trades über die Börsen-API importieren",
     "featureKi": "KI-gestützte Analyse",
-    "featureDiary": "Trading-Tagebuch",
+    "featureDiary": "Notizen, Stimmung und Tags je Tag",
     "featureAnalysis": "Trading-Analyse",
     "featureJournal": "Trading-Tagebuch",
     "featureAiReports": "KI-Berichte",
-    "featureBitunixImport": "Bitunix-Import",
+    "featureBitunixImport": "Börsen-Import (Bitunix, Bitget, Pionex)",
     "skipSetup": "Bereits konfiguriert? Setup überspringen",
     "goToDashboard": "Zum Dashboard",
     "nextSteps": "Nächste Schritte:",
@@ -1024,7 +1024,8 @@
       "title": "KI-Zugang",
       "intro": "Für Berichte, den Agenten und mehr. Bereits hinterlegte Schlüssel bleiben erhalten, wenn du hier nichts änderst.",
       "keySetHint": "Bereits hinterlegt — leer lassen, um ihn zu behalten",
-      "alreadySet": "Zugang bereits eingerichtet."
+      "alreadySet": "Zugang bereits eingerichtet.",
+      "ollamaNichtErreichbar": "Ollama antwortet nicht. Ohne laufenden Ollama-Server funktionieren die KI-Funktionen erst, wenn du einen anderen Anbieter mit Schlüssel wählst oder Ollama startest."
     },
     "news": {
       "title": "Nachrichtenquellen",
@@ -3149,7 +3150,7 @@
     "wal": {
       "title": "Wal-Bewegungen",
       "window": "Fenster",
-      "inactive": "Keine Telegram-Quelle aktiv. Wal-Kanäle (Whale Alert, Lookonchain, …) lassen sich unter Einstellungen → Nachrichten eintragen.",
+      "inactive": "Keine Telegram-Quelle aktiv. Wal-Kanäle (Whale Alert, Lookonchain, …) lassen sich unter Einstellungen › KI › Nachrichten eintragen.",
       "toSettings": "Zu den Einstellungen",
       "empty": "Nichts über der Schwelle im gewählten Fenster.",
       "source": "eigene Telegram-Quellen · ab {schwelle} $",

@@ -19,6 +19,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { sichereUrl } from '../utils/sanitize.js'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { kiBereichWechseln } from './einstellungen/gemeinsam/useKiBereich.js'
 import axios from 'axios'
 import dayjs from '../utils/journal/zeit.js'
 import { timeZoneTrade } from '../stores/ui.js'
@@ -463,14 +464,14 @@ function ladeBerichtOptionen() {
  * Zu den vollen Einstellungen springen — direkt in den richtigen Reiter.
  *
  * Der Bereich steht in der Adresse (`/settings/ki`); den Unter-Reiter der KI
- * merkt sich die Seite weiter im localStorage (`settingsKiBereich`), also wird
- * er hier gesetzt, bevor der Router dorthin wechselt. Ohne das landet man im
+ * hält `useKiBereich.js` (gemerkt im localStorage), also wird er hier
+ * gesetzt, bevor der Router dorthin wechselt. Ohne das landet man im
  * zuletzt offenen KI-Reiter und sucht sich durch die Reiterreihe.
  */
 function zuDenEinstellungen() {
-    try {
-        localStorage.setItem('settingsKiBereich', 'nachrichten')
-    } catch (_) { /* privater Modus: dann eben der zuletzt offene Reiter */ }
+    // Über den Modul-Zustand, nicht nur localStorage: ist der KI-Bereich
+    // schon einmal geladen, liest er localStorage nicht noch einmal.
+    kiBereichWechseln('nachrichten')
     router.push('/settings/ki')
 }
 

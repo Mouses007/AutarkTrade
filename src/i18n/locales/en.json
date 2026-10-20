@@ -983,11 +983,11 @@
     "featureDashboard": "Dashboard with trading statistics",
     "featureImport": "Import trades via the exchange API",
     "featureKi": "AI-powered analysis",
-    "featureDiary": "Trading diary",
+    "featureDiary": "Notes, mood and tags per day",
     "featureAnalysis": "Trading Analysis",
     "featureJournal": "Trading Journal",
     "featureAiReports": "AI Reports",
-    "featureBitunixImport": "Bitunix Import",
+    "featureBitunixImport": "Exchange import (Bitunix, Bitget, Pionex)",
     "skipSetup": "Already configured? Skip setup",
     "goToDashboard": "Go to Dashboard",
     "nextSteps": "Next steps:",
@@ -1024,7 +1024,8 @@
       "title": "AI access",
       "intro": "For reports, the agent and more. Keys already stored stay unchanged if you don't edit them here.",
       "keySetHint": "Already stored — leave empty to keep it",
-      "alreadySet": "Access already configured."
+      "alreadySet": "Access already configured.",
+      "ollamaNichtErreichbar": "Ollama is not responding. AI features will work once you start Ollama or choose another provider with a key."
     },
     "news": {
       "title": "News sources",
@@ -3149,7 +3150,7 @@
     "wal": {
       "title": "Whale Moves",
       "window": "Window",
-      "inactive": "No Telegram source active. Whale channels (Whale Alert, Lookonchain, …) can be added under Settings → News.",
+      "inactive": "No Telegram source active. Whale channels (Whale Alert, Lookonchain, …) can be added under Settings › AI › News.",
       "toSettings": "Go to settings",
       "empty": "Nothing above the threshold in the selected window.",
       "source": "own Telegram sources · from {schwelle} $",

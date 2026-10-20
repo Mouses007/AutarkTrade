@@ -23,6 +23,8 @@ const modellListen = ref({})
 // "kommen vom Ollama-Server selbst") — die echte Liste kommt separat aus
 // `/api/ollama/status`, genau wie in Settings.vue (`loadOllamaModels()`).
 const ollamaModels = ref([])
+/** Ollama braucht keinen Schlüssel — „eingerichtet" heisst dort: der Server antwortet. */
+const ollamaOnline = ref(null)
 const aiProvider = ref('ollama')
 const aiModel = ref('')
 const aiKeys = reactive({})
@@ -41,15 +43,20 @@ const modelle = computed(() => {
 })
 const schonEingerichtet = computed(() => {
     const wert = aiKeys[aiProvider.value]
-    return aiProvider.value === 'ollama' || (!!wert && wert.includes('•'))
+    // Bis 20.10.2026 galt Ollama hier immer als eingerichtet — auch auf einer
+    // frischen Installation ohne laufenden Ollama-Server (Audit A4-16).
+    if (aiProvider.value === 'ollama') return ollamaOnline.value === true
+    return !!wert && wert.includes('•')
 })
 
 async function ladeOllamaModelle() {
     try {
         const res = await axios.get('/api/ollama/status')
         ollamaModels.value = res.data.models || []
+        ollamaOnline.value = !!res.data.online
     } catch (e) {
         ollamaModels.value = []
+        ollamaOnline.value = false
     }
 }
 
@@ -119,6 +126,9 @@ defineExpose({ uebernehmen })
 
         <p v-if="schonEingerichtet" class="at-klein at-gut at-mo-2 at-flex at-mitte at-luecke-1">
             <Symbol name="hakenKreis" /> {{ t('onboarding.ki.alreadySet') }}
+        </p>
+        <p v-else-if="aiProvider === 'ollama' && ollamaOnline === false" class="at-klein at-warn at-mo-2">
+            {{ t('onboarding.ki.ollamaNichtErreichbar') }}
         </p>
     </div>
 </template>
