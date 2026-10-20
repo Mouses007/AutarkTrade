@@ -19,9 +19,20 @@ export function linieAlsZeichnung(l) {
     // Preise trägt: dann der äussere, so wie der Server es heute ablegt.
     if (l.p1 === l.p2 || l.art === 'unterstuetzung' || l.art === 'widerstand') {
         const p = l.art === 'widerstand' ? Math.max(l.p1, l.p2) : l.art === 'unterstuetzung' ? Math.min(l.p1, l.p2) : l.p1
-        return { typ: 'strahlH', punkte: [{ t: Math.min(l.t1, l.t2 ?? l.t1), p }], stil }
+        return { typ: 'strahlH', punkte: [{ t: Math.min(l.t1, l.t2 ?? l.t1), p }], stil: { ...stil, textPos: 'rechts' } }
     }
-    return { typ: 'trendlinie', punkte: [{ t: l.t1, p: l.p1 }, { t: l.t2, p: l.p2 }], stil: { ...stil, rechts: true } }
+    return { typ: 'trendlinie', ...trendPunkte(l), stil: { ...stil, textPos: 'ende', rechts: !Number.isFinite(l.tEnde) } }
+}
+
+/*
+ * Trendlinie vom ersten Anker bis `tEnde` (letzte Kerze plus ein Teil der
+ * Spanne, server/chart-trendlinien.js) — bis 20.10.2026 lief sie ohne Ende
+ * nach rechts und stand auf BTC 15m 3 000 USD über dem Kurs. Ältere Analysen
+ * ohne `tEnde`: wie bisher durch beide Anker, nach rechts verlängert.
+ */
+function trendPunkte(l) {
+    if (Number.isFinite(l.tEnde) && Number.isFinite(l.pEnde)) return { punkte: [{ t: l.t1, p: l.p1 }, { t: l.tEnde, p: l.pEnde }] }
+    return { punkte: [{ t: l.t1, p: l.p1 }, { t: l.t2, p: l.p2 }] }
 }
 
 export function zoneAlsZeichnung(z, ab, bis) {
@@ -46,8 +57,8 @@ export function kandidatenVorschau(analyse) {
     const stil = (text) => ({ farbe: '#8a9199', breite: 1, strich: 'gepunktet', text })
     // V-Kandidaten gehören zum Profil, nicht als einzelne graue Linien
     return k.filter((x) => !gewaehlt.has(x.id) && x.quelle !== 'volumenprofil').map((x, i) => {
-        if (x.quelle === 'trend') return { id: -300 - i, typ: 'trendlinie', punkte: [{ t: x.t1, p: x.p1 }, { t: x.t2, p: x.p2 }], stil: { ...stil(x.id), rechts: true } }
-        return { id: -300 - i, typ: 'strahlH', punkte: [{ t: x.t1 ?? analyse.kerzenVon, p: x.preis }], stil: stil(x.name ? `${x.id} ${x.name}` : x.id) }
+        if (x.quelle === 'trend') return { id: -300 - i, typ: 'trendlinie', ...trendPunkte(x), stil: { ...stil(x.id), textPos: 'ende', rechts: !Number.isFinite(x.tEnde) } }
+        return { id: -300 - i, typ: 'strahlH', punkte: [{ t: x.t1 ?? analyse.kerzenVon, p: x.preis }], stil: { ...stil(x.name ? `${x.id} ${x.name}` : x.id), textPos: 'rechts' } }
     })
 }
 

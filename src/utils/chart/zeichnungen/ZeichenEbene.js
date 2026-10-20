@@ -611,7 +611,9 @@ export class ZeichenEbene {
                 const x = X(pk[0].t), y = Y(pk[0].p)
                 if (fehlt(x, y)) return
                 this.linie(ctx, x, y, breite, y, s)
-                if (s.text) this.beschriftung(ctx, s.text, x + 6, y - 4, s.farbe)
+                // `textPos: 'rechts'` (KI-Vorschläge): am rechten Rand neben der Preisachse, nicht über den Kerzen
+                if (s.text && s.textPos === 'rechts') this.beschriftung(ctx, s.text, breite - 4, y - 4, s.farbe, { rechtsbuendig: true, hinten: 'rgba(0,0,0,0.45)' })
+                else if (s.text) this.beschriftung(ctx, s.text, x + 6, y - 4, s.farbe)
                 break
             }
             case 'vertikale': {
@@ -626,7 +628,14 @@ export class ZeichenEbene {
                 if (fehlt(ax, ay, bx, by)) return
                 const v = verlaengere(ax, ay, bx, by, breite, { links: !!s.links, rechts: z.typ === 'strahl' || !!s.rechts })
                 this.linie(ctx, v.ax, v.ay, v.bx, v.by, s)
-                if (s.text) this.beschriftung(ctx, s.text, bx + 6, by - 4, s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
+                if (s.text && s.textPos === 'ende') {
+                    // KI-Trendlinie: am Ende der Strecke (rechts der letzten Kerze), in die Fläche
+                    // zurückgeholt, wenn das Ende ausserhalb liegt — nicht am zweiten Anker mitten im Kurs.
+                    const w = ctx.measureText(s.text).width
+                    const x = Math.max(4, Math.min(v.bx + 6, breite - w - 10))
+                    const y = v.bx !== v.ax ? v.ay + (v.by - v.ay) * (Math.min(x, v.bx) - v.ax) / (v.bx - v.ax) : v.by
+                    this.beschriftung(ctx, s.text, x, Math.max(14, Math.min(hoehe - 4, y - 6)), s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
+                } else if (s.text) this.beschriftung(ctx, s.text, bx + 6, by - 4, s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
                 break
             }
             case 'kanal': {

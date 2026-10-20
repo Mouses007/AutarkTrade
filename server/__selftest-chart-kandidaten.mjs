@@ -117,7 +117,7 @@ console.log('\nPaket\n')
     check('V nahe an einem N trägt „deckt"', v.every((x) => x.deckt === null || /^N\d+$/.test(x.deckt)))
     const text = kandidatenText(a)
     check('Text bei 150 Kerzen unter 3500 Zeichen', text.length < 3500, String(text.length))
-    check('Gegenprobe: keine 150 Zeitstempel im Text (nur die letzten 12 roh)', (text.match(/\d{4}-\d\d-\d\d \d\d:\d\dZ,/g) || []).length === KAND.ROH_KERZEN)
+    check('Gegenprobe: keine 150 Zeitstempel im Text (nur die letzten 12 roh)', (text.match(/\d\d\.\d\d\. \d\d:\d\d,/g) || []).length === KAND.ROH_KERZEN)
     check('zu wenige Kerzen → null statt halber Vermessung', baueKandidaten({ kerzen: k.slice(0, 20) }) === null)
 }
 

@@ -367,7 +367,7 @@ async function toolQueryChart(_knex, params) {
             letzterSchluss: letzte.c, hochImBereich: hoch, tiefImBereich: tief,
             veraenderungPct: Math.round((letzte.c / erste.o - 1) * 10000) / 100,
         },
-        text: baueChartEingabe({ symbol, interval, kerzen: d.kerzen, zeichnungen: d.zeichnungen, hebelzonen: d.hebel, trades: d.trades }),
+        text: baueChartEingabe({ symbol, interval, kerzen: d.kerzen, zeichnungen: d.zeichnungen, hebelzonen: d.hebel, trades: d.trades, zeitzone: d.zeitzone }),
         letzteAnalyse: a ? {
             alterMin: Math.round(a.alterMs / 60000), text: a.text,
             linien: a.linien.map((l) => ({ art: l.art, label: l.label, p1: l.p1, p2: l.p2 })),

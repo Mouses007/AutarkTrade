@@ -10,6 +10,7 @@
  * jede Ablehnung steht deshalb eine Gegenprobe daneben, die durchgehen MUSS.
  */
 import { baueChartEingabe, pruefeChartAuswahl, systemText, normAuswahl, filterePaket, auswahlLeer } from './chart-ki.js'
+import { zeitText } from './chart-kandidaten.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -36,7 +37,7 @@ console.log('\nEingabe\n')
         trades: [{ richtung: 'long', einstieg: { t: T0 + 5 * H, p: 100.4 }, ausstieg: null }],
     })
     check('Kandidaten mit IDs statt Roh-Kerzen', /^N1 \|/m.test(e) && /VOLUMENPROFILE je Abschnitt/.test(e) && /^A1 .*V1 POC/m.test(e))
-    check('nur die letzten 12 Kerzen roh, nicht alle 60', e.split('\n').filter((z) => /^\d{4}-\d\d-\d\d \d\d:\d\dZ,/.test(z)).length === 12)
+    check('nur die letzten 12 Kerzen roh, nicht alle 60', e.split('\n').filter((z) => /^\d\d\.\d\d\. \d\d:\d\d,/.test(z)).length === 12)
     check('eigene Linie als U-Bezug mit Beschriftung, Fibonacci weggelassen', /U1 \| horizontale bei 102 „Wochenhoch"/.test(e) && !/fib/.test(e))
     check('Hebelzonen als Modell gekennzeichnet', e.includes('Modell') && e.includes('~12 Mio USD Shorts'))
     check('offener eigener Trade als offen', e.includes('(offen)'))
@@ -63,7 +64,7 @@ const paket = {
         { id: 'N4', quelle: 'niveau', preis: 98, tief: 97.8, hoch: 98.2, t1: T0 + 20 * H, rolle: 'unterstuetzung', beruehrungen: 3 },
         { id: 'N5', quelle: 'niveau', preis: 95, tief: 94.8, hoch: 95.2, t1: T0 + 30 * H, rolle: 'unterstuetzung', beruehrungen: 2 },
         { id: 'V1', quelle: 'volumenprofil', name: 'POC', preis: 105.1, tief: 104.95, hoch: 105.25, t1: T0 },
-        { id: 'T1', quelle: 'trend', seite: 'hoch', richtung: 'ab', t1: T0 + 5 * H, p1: 112, t2: T0 + 40 * H, p2: 108, wertJetzt: 106, abstandAtr: 6, beruehrungen: 3 },
+        { id: 'T1', quelle: 'trend', seite: 'hoch', rolle: 'widerstand', richtung: 'ab', t1: T0 + 5 * H, p1: 112, t2: T0 + 40 * H, p2: 108, wertJetzt: 106, abstandAtr: 6, beruehrungen: 3, tEnde: T0 + 69 * H, pEnde: 104.8571 },
         { id: 'D1', quelle: 'htf', preis: 92, tief: 91.5, hoch: 92.5, t1: T0, beruehrungen: 2 },
     ],
 }
@@ -153,6 +154,35 @@ console.log('\nAuswahl (Kästchen im Reiter)\n')
     check('abgewählte Zonen und Bedingungen werden nicht übernommen, auch wenn das Modell sie liefert', ohne.zonen.length === 0 && ohne.bedingungen.length === 0 && ohne.linien.length === 1)
     const ohneHebel = baueChartEingabe({ symbol: 'X', interval: '1h', kerzen, hebelzonen: null })
     check('Liquidationszonen abgewählt → nicht in der Eingabe', !ohneHebel.includes('LIQUIDATIONSZONEN'))
+}
+
+console.log('\nBeschriftung, Länge, Ortszeit (20.10.2026)\n')
+{
+    const r = pruefeChartAuswahl({
+        linien: [
+            { id: 'T1', label: 'Steigende Hochlinie (5 Berührungen)', grund: 'an den Hochs' },
+            { id: 'N2', label: 'Fallende Hochlinie seit 14:45Z', grund: 'x' },
+            { id: 'N4', label: 'Boden ab 09:30 UTC', grund: 'y' },
+        ],
+        zonen: [{ ids: ['N5'], label: 'Zone (12:00)', grund: 'z' }],
+    }, paket)
+    const t = r.linien.find((l) => l.id === 'T1')
+    check('Trendlinie: Beschriftung vom Code, gemessene Berührungen, Rolle aus der Seite', t.label === 'Fallender Widerstand (3 Berührungen)', t.label)
+    check('englisch ebenso', pruefeChartAuswahl({ linien: [{ id: 'T1', label: 'x' }] }, paket, { englisch: true }).linien[0].label === 'Falling resistance (3 touches)')
+    check('Trendlinie trägt ihr Ende (tEnde/pEnde) statt endlos nach rechts', t.tEnde === T0 + 69 * H && t.pEnde === 104.8571 && t.beruehrungen === 3 && t.rolle === 'widerstand', JSON.stringify(t))
+    check('Uhrzeit mit Z aus der Beschriftung entfernt', r.linien.find((l) => l.id === 'N2').label === 'Fallende Hochlinie', r.linien.find((l) => l.id === 'N2').label)
+    check('Uhrzeit mit UTC entfernt', r.linien.find((l) => l.id === 'N4').label === 'Boden', r.linien.find((l) => l.id === 'N4').label)
+    check('Zone: Uhrzeit in Klammern entfernt', r.zonen[0].label === 'Zone', r.zonen[0].label)
+    const preis = pruefeChartAuswahl({ linien: [{ id: 'N2', label: 'Widerstand 1.25 / 105' }] }, paket)
+    check('Gegenprobe: Preise in der Beschriftung bleiben', preis.linien[0].label === 'Widerstand 1.25 / 105', preis.linien[0].label)
+    const e = baueChartEingabe({ symbol: 'X', interval: '1h', kerzen, paket: { ...paket, zeitzone: 'Europe/Zurich', kandidaten: paket.kandidaten.filter((k) => k.id === 'T1').map((k) => ({ ...k, beruehrT: [T0 + 5 * H, T0 + 20 * H, T0 + 40 * H] })), roh: [], volMedian: null } })
+    check('Eingabe in Ortszeit, nirgends eine Zeit mit Z', e.includes('ZEITEN in Ortszeit (Europe/Zurich)') && !/\d\d:\d\dZ/.test(e), e.slice(0, 300))
+    check('Trendlinie in der Eingabe mit Rolle und Berührungszeiten', /^T1 \| Widerstand an Hochs, fallend \| .* \| 3 \(\d\d\.\d\d\. \d\d:\d\d, /m.test(e), e.split('\n').find((z) => z.startsWith('T1')))
+    const zwei = pruefeChartAuswahl({ linien: [{ id: 'T1', label: 'x', gewicht: 'stark' }] }, { ...paket, kandidaten: paket.kandidaten.map((k) => (k.id === 'T1' ? { ...k, beruehrungen: 2 } : k)) })
+    check('Trendlinie mit 2 Berührungen: „stark" wird „mittel"', zwei.linien[0].gewicht === 'mittel' && zwei.linien[0].label === 'Fallender Widerstand (2 Berührungen)')
+    check('Gegenprobe: mit 3 Berührungen bleibt „stark"', pruefeChartAuswahl({ linien: [{ id: 'T1', label: 'x', gewicht: 'stark' }] }, paket).linien[0].gewicht === 'stark')
+    check('zeitText: 20.10.2026 14:45 UTC = 16:45 in Zürich', zeitText(Date.UTC(2026, 9, 20, 14, 45), 'Europe/Zurich') === '20.10. 16:45')
+    check('zeitText: unbekannte Zone fällt auf UTC zurück statt zu werfen', zeitText(Date.UTC(2026, 9, 20, 14, 45), 'Mars/Olympus') === '20.10. 14:45')
 }
 
 console.log('\nWächter\n')

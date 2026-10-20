@@ -1,27 +1,64 @@
 /**
- * Trendlinien an den Kerzen prüfen — rein, ohne Netz.
+ * Trendlinien an den Kerzen vermessen — rein, ohne Netz.
  *
- * Ein Sprachmodell liest Zahlenreihen, keine Geometrie: am 18.10.2026 zog es
- * die BTC-Abwärtslinie vom absoluten Hoch aus, und die Hochs drei Kerzen
- * später lagen 800 USD darüber. Als Widerstand ist eine Linie, durch die die
- * Kerzen hindurchwachsen, wertlos — ein Trader zeichnet sie an die Hochs, die
- * sie BERÜHREN, nicht durchstossen.
+ * Eine Trendlinie, wie ein Trader sie zieht, verbindet echte Wendepunkte
+ * derselben Seite (Widerstand an Hochs, Unterstützung an Tiefs), wird von den
+ * Kerzen respektiert und ist für den Kurs JETZT von Belang. Bis 20.10.2026
+ * prüfte der Code nur „ab dem ersten Anker kein Schluss jenseits der Linie".
+ * Das liess genau die Linien durch, die der Nutzer auf BTC 15m sah
+ * (Fall `btc-15m-nutzerfall` im Selbsttest):
+ *   - „Steigende Hochlinie (3 Berührungen)" von einem kleinen Zwischenhoch
+ *     82 198 durch die Spitze 83 420: links vom ersten Anker lagen die Hochs
+ *     bis 6 ATR ÜBER ihr, und zwei der drei „Berührungen" waren zwei Hochs
+ *     derselben Welle, vier Kerzen auseinander.
+ *   - Eine Linie, die sich vom Kurs ENTFERNT (steigend an Hochs im Abschwung,
+ *     fallend an Tiefs im Aufschwung), bricht nie — sie bestand die alte
+ *     Prüfung immer. Auf BTC 4h stand so eine 21 ATR über dem Kurs.
  *
- * Deshalb wird jede Trendlinie der KI hier gegen die Kerzen geprüft:
- *   - Seite: Widerstand (an Hochs, Kurs darunter) oder Unterstützung (an Tiefs).
- *   - Bruch: ab dem ersten Ankerpunkt bis jetzt schliesst keine Kerze jenseits
- *     der Linie, und kein Docht reicht weiter als `TOL_ATR` × ATR darüber.
- *   - Berührung: ein Wendepunkt (Hoch/Tief mit `PIVOT_K` Kerzen Abstand zu
- *     beiden Seiten) innerhalb der Toleranz.
- * Hält die Linie der KI nicht, wird sie durch die beste echte Linie derselben
- * Seite ersetzt (meiste Berührungen, dann jüngster Anker, dann längste
- * Spanne); gibt es keine, wird sie verworfen.
+ * Regeln (Konstanten in `TREND`):
+ *   Wendepunkt  Hoch/Tief über bzw. unter den `PIVOT_K` Nachbarn auf jeder Seite.
+ *   Berührung   Wendepunkt höchstens `TOL_ATR` × ATR von der Linie. Zwei
+ *               Wendepunkte, zwischen denen der Kurs nicht mindestens
+ *               `ABLOESE_ATR` × ATR von der Linie weg schloss, sind EINE
+ *               Berührung (dieselbe Welle, z. B. ein Doppelhoch). Ein Ausreisser-Docht (Docht > `DOCHT_ATR` × ATR und
+ *               > 2 × Körper) zählt nicht — eine Linie durch eine einzelne
+ *               Nadel ist nicht bestätigt.
+ *   Bruch       ab dem ersten Anker kein Schluss jenseits (¼ Toleranz) und kein
+ *               Docht weiter als die Toleranz.
+ *   Links       vor dem ersten Anker, über `LINKS_ANTEIL` der Spanne zurück,
+ *               kein Schluss jenseits der verlängerten Linie: sonst schneidet
+ *               sie durch den Verlauf, an dem sie angeblich anliegt.
+ *   Steigung    höchstens `MAX_STEIL_ATR` × ATR je Kerze; steiler ist es ein
+ *               Ausschlag, keine Trendlinie. Fast flach (< 0,75 ATR über die
+ *               Spanne) ist eine waagerechte Marke (chart-kandidaten.js).
+ *   Spanne      zwei Anker mindestens `MIN_ABSTAND` Kerzen auseinander; eine
+ *               Linie mit nur zwei Berührungen mindestens `MIN_SPANNE_ZWEI`.
+ *   Gegenlinie  steigend an Hochs / fallend an Tiefs (Kanal- oder Keilkante)
+ *               braucht `GEGEN_MIN_BER` Berührungen — mit zwei ist sie jede
+ *               beliebige Verbindung zweier Hochs.
+ *   Länge       gezeichnet bis zur letzten Kerze plus `VERL_ANTEIL` der Spanne
+ *               (mindestens `VERL_MIN`, höchstens `VERL_MAX` Kerzen) — nicht
+ *               ins Unendliche.
  */
-import { atr } from '../shared/indicators.js'
+import { atr as atrReihe } from '../shared/indicators.js'
 
-export const PIVOT_K = 3
-export const TOL_ATR = 0.3
-export const MIN_ABSTAND = 10
+export const TREND = {
+    PIVOT_K: 3,
+    TOL_ATR: 0.3,
+    MIN_ABSTAND: 10,
+    ABLOESE_ATR: 1,
+    DOCHT_ATR: 1.5,
+    LINKS_ANTEIL: 0.5,
+    MAX_STEIL_ATR: 0.3,
+    MIN_SPANNE_ZWEI: 20,
+    GEGEN_MIN_BER: 3,
+    VERL_ANTEIL: 0.25,
+    VERL_MIN: 5,
+    VERL_MAX: 20,
+}
+export const PIVOT_K = TREND.PIVOT_K
+export const TOL_ATR = TREND.TOL_ATR
+export const MIN_ABSTAND = TREND.MIN_ABSTAND
 
 /** Wendepunkte: Index i, dessen Hoch (Tief) über (unter) den K Nachbarn auf jeder Seite liegt. */
 export function wendepunkte(kerzen, seite, k = PIVOT_K) {
@@ -38,30 +75,62 @@ export function wendepunkte(kerzen, seite, k = PIVOT_K) {
     return aus
 }
 
+/** Docht auf der Seite der Linie ist eine einzelne Nadel (zählt nicht als Berührung). */
+export function istAusreisser(kerze, seite, atrWert) {
+    if (!(atrWert > 0)) return false
+    const koerper = Math.abs(kerze.c - kerze.o)
+    const docht = seite === 'hoch' ? kerze.h - Math.max(kerze.o, kerze.c) : Math.min(kerze.o, kerze.c) - kerze.l
+    return docht > TREND.DOCHT_ATR * atrWert && docht > 2 * koerper
+}
+
 const linie = (i1, p1, i2, p2) => (i) => p1 + (p2 - p1) * (i - i1) / (i2 - i1)
 
 /**
- * Hält die Gerade durch (i1,p1)–(i2,p2) als `seite`-Linie von i1 bis zur letzten Kerze?
- * @returns {{ ok: boolean, beruehrungen: number }}
+ * Hält die Gerade durch (i1,p1)–(i2,p2) als `seite`-Linie? Rechts bis zur letzten
+ * Kerze ohne Bruch, links über `LINKS_ANTEIL` der Spanne ohne Schluss jenseits.
+ * @returns {{ ok: boolean, grund?: 'bruch'|'links', beruehrungen: number, beruehrIdx: number[] }}
  */
-export function pruefeTrend(kerzen, i1, p1, i2, p2, seite, tol, pivots) {
+export function pruefeTrend(kerzen, i1, p1, i2, p2, seite, tol, pivots, { atr: atrWert = tol / TOL_ATR } = {}) {
     const L = linie(i1, p1, i2, p2)
+    const jenseits = (wert, grenze) => (seite === 'hoch' ? wert > grenze : wert < grenze)
+    const um = (y, d) => (seite === 'hoch' ? y + d : y - d)
     for (let i = i1; i < kerzen.length; i++) {
         const k = kerzen[i], y = L(i)
-        if (seite === 'hoch' ? (k.c > y + tol * 0.25 || k.h > y + tol) : (k.c < y - tol * 0.25 || k.l < y - tol)) {
-            return { ok: false, beruehrungen: 0 }
-        }
+        if (jenseits(k.c, um(y, tol * 0.25)) || jenseits(seite === 'hoch' ? k.h : k.l, um(y, tol))) return { ok: false, grund: 'bruch', beruehrungen: 0, beruehrIdx: [] }
     }
-    const beruehrungen = pivots.filter((i) => i >= i1 && Math.abs((seite === 'hoch' ? kerzen[i].h : kerzen[i].l) - L(i)) <= tol).length
-    return { ok: true, beruehrungen }
+    const links = Math.max(0, i1 - Math.ceil(TREND.LINKS_ANTEIL * (i2 - i1)))
+    for (let i = links; i < i1; i++) {
+        if (jenseits(kerzen[i].c, um(L(i), tol))) return { ok: false, grund: 'links', beruehrungen: 0, beruehrIdx: [] }
+    }
+    const wert = (i) => (seite === 'hoch' ? kerzen[i].h : kerzen[i].l)
+    const nah = pivots.filter((i) => i >= i1 && Math.abs(wert(i) - L(i)) <= tol && !istAusreisser(kerzen[i], seite, atrWert))
+    // Wendepunkte derselben Welle zu einer Berührung zusammenlegen: dazwischen muss der Kurs
+    // mindestens `ABLOESE_ATR` × ATR von der Linie weggeschlossen haben. Es zählt der nächste an der Linie.
+    const weg = (von, bis) => {
+        let m = 0
+        for (let j = von + 1; j < bis; j++) m = Math.max(m, seite === 'hoch' ? L(j) - kerzen[j].c : kerzen[j].c - L(j))
+        return m
+    }
+    const beruehrIdx = []
+    let gruppe = []
+    const schliesse = () => { if (gruppe.length) beruehrIdx.push(gruppe.reduce((a, b) => (Math.abs(wert(b) - L(b)) < Math.abs(wert(a) - L(a)) ? b : a))) }
+    for (const i of nah) {
+        if (gruppe.length && weg(gruppe[gruppe.length - 1], i) >= TREND.ABLOESE_ATR * atrWert) { schliesse(); gruppe = [] }
+        gruppe.push(i)
+    }
+    schliesse()
+    return { ok: true, beruehrungen: beruehrIdx.length, beruehrIdx }
 }
 
+/** Gegenlinie: steigend an Hochs oder fallend an Tiefs (Kanal-/Keilkante, entfernt sich vom Kurs). */
+export const istGegenlinie = (seite, p1, p2) => (seite === 'hoch' ? p2 > p1 : p2 < p1)
+
 /**
- * Alle haltenden Linien einer Seite (Paare von Wendepunkten ≥ minAbstand auseinander,
- * kein Bruch bis jetzt, ≥ 2 Berührungen) — sortiert: meiste Berührungen, dann jüngerer
+ * Alle haltenden Linien einer Seite — sortiert: meiste Berührungen, dann jüngerer
  * zweiter Anker, dann früherer erster Anker (längere Spanne).
+ * @param {{ tol: number, atr?: number, richtung?: 'auf'|'ab'|null, minAbstand?: number }} opt
  */
-export function alleTrendlinien(kerzen, seite, { tol, richtung = null, minAbstand = MIN_ABSTAND } = {}) {
+export function alleTrendlinien(kerzen, seite, { tol, atr: atrWert = tol / TOL_ATR, richtung = null, minAbstand = MIN_ABSTAND } = {}) {
     const pv = wendepunkte(kerzen, seite)
     const wert = (i) => (seite === 'hoch' ? kerzen[i].h : kerzen[i].l)
     const aus = []
@@ -72,9 +141,12 @@ export function alleTrendlinien(kerzen, seite, { tol, richtung = null, minAbstan
             const p1 = wert(i1), p2 = wert(i2)
             if (richtung === 'ab' && !(p2 < p1)) continue
             if (richtung === 'auf' && !(p2 > p1)) continue
-            const r = pruefeTrend(kerzen, i1, p1, i2, p2, seite, tol, pv)
+            if (Math.abs(p2 - p1) / (i2 - i1) > TREND.MAX_STEIL_ATR * atrWert) continue
+            const r = pruefeTrend(kerzen, i1, p1, i2, p2, seite, tol, pv, { atr: atrWert })
             if (!r.ok || r.beruehrungen < 2) continue
-            aus.push({ i1, p1, i2, p2, beruehrungen: r.beruehrungen })
+            if (r.beruehrungen === 2 && i2 - i1 < TREND.MIN_SPANNE_ZWEI) continue
+            if (istGegenlinie(seite, p1, p2) && r.beruehrungen < TREND.GEGEN_MIN_BER) continue
+            aus.push({ i1, p1, i2, p2, beruehrungen: r.beruehrungen, beruehrIdx: r.beruehrIdx })
         }
     }
     return aus.sort((x, y) => y.beruehrungen - x.beruehrungen || y.i2 - x.i2 || x.i1 - y.i1)
@@ -85,36 +157,10 @@ export function besteTrendlinie(kerzen, seite, opt = {}) {
     return alleTrendlinien(kerzen, seite, opt)[0] || null
 }
 
-/**
- * Trendlinie der KI an den Kerzen ausrichten.
- * @param {Array<{t,h,l,c}>} kerzen  aufsteigend, gleichmässig
- * @param {{t1,p1,t2,p2}} l
- * @returns {{ t1, p1, t2, p2, ersetzt: boolean, beruehrungen: number } | null}
- */
-export function richteTrendAus(kerzen, l, iv) {
-    if (!Array.isArray(kerzen) || kerzen.length < 2 * PIVOT_K + MIN_ABSTAND || !(iv > 0)) return l ? { ...l, ersetzt: false, beruehrungen: null } : null
-    const a = atr(kerzen, 14)
-    const atrJetzt = a[a.length - 1]
-    if (!(atrJetzt > 0)) return { ...l, ersetzt: false, beruehrungen: null }
-    const tol = TOL_ATR * atrJetzt
-    const idx = (t) => Math.max(0, Math.min(kerzen.length - 1, Math.round((t - kerzen[0].t) / iv)))
-    const i1 = idx(l.t1)
-    // Seite: liegt der erste Anker näher am Hoch oder am Tief seiner Kerze?
-    const seite = Math.abs(l.p1 - kerzen[i1].h) <= Math.abs(l.p1 - kerzen[i1].l) ? 'hoch' : 'tief'
-    const richtung = l.p2 < l.p1 ? 'ab' : l.p2 > l.p1 ? 'auf' : null
-    const zeit = (i) => kerzen[i].t
-
-    // 1) Die Anker der KI auf den nächsten Wendepunkt (±PIVOT_K) setzen und prüfen.
-    const pv = wendepunkte(kerzen, seite)
-    const naechster = (i) => pv.reduce((best, j) => (Math.abs(j - i) <= PIVOT_K && (best == null || Math.abs(j - i) < Math.abs(best - i)) ? j : best), null)
-    const j1 = naechster(i1), j2 = naechster(idx(l.t2))
-    const wert = (i) => (seite === 'hoch' ? kerzen[i].h : kerzen[i].l)
-    if (j1 != null && j2 != null && j2 - j1 >= MIN_ABSTAND) {
-        const r = pruefeTrend(kerzen, j1, wert(j1), j2, wert(j2), seite, tol, pv)
-        if (r.ok && r.beruehrungen >= 2) return { t1: zeit(j1), p1: wert(j1), t2: zeit(j2), p2: wert(j2), ersetzt: false, beruehrungen: r.beruehrungen }
-    }
-    // 2) Sonst die beste echte Linie derselben Seite und Richtung.
-    const b = besteTrendlinie(kerzen, seite, { tol, richtung })
-    if (!b) return null
-    return { t1: zeit(b.i1), p1: b.p1, t2: zeit(b.i2), p2: b.p2, ersetzt: true, beruehrungen: b.beruehrungen }
+/** Wie viele Kerzen über die letzte hinaus gezeichnet wird. */
+export function verlaengerung(n, i1) {
+    return Math.max(TREND.VERL_MIN, Math.min(TREND.VERL_MAX, Math.round(TREND.VERL_ANTEIL * (n - 1 - i1))))
 }
+
+/** ATR der letzten Kerze (Hilfe für Aufrufer ohne eigenen Wert). */
+export const letzteAtr = (kerzen) => { const a = atrReihe(kerzen, 14); return a[a.length - 1] }

@@ -24,7 +24,7 @@
  */
 import { atr, pivotHighs, pivotLows } from '../shared/indicators.js'
 import { volumenprofil } from '../shared/volumenprofil.js'
-import { alleTrendlinien, TOL_ATR, MIN_ABSTAND } from './chart-trendlinien.js'
+import { alleTrendlinien, istGegenlinie, verlaengerung, TOL_ATR, MIN_ABSTAND } from './chart-trendlinien.js'
 import { trendZustand, durchquerungen } from './strategies/set_and_forget.js'
 
 export const KAND = {
@@ -37,7 +37,8 @@ export const KAND = {
     NAH_JE_SEITE: 2,
     TREND_JE_SEITE: 2,
     TREND_MIN_DELTA_ATR: 0.75, // flacher ist es eine waagerechte Marke
-    TREND_MAX_ABSTAND_ATR: 4,  // zwei Berührungen nur, wenn so nah am Kurs
+    TREND_MAX_ABSTAND_ATR: 5,  // weiter weg ist eine Trendlinie für den Kurs jetzt ohne Belang
+    TREND_MAX_ABSTAND_ZWEI_ATR: 3, // mit nur zwei Berührungen enger
     SPANNE_KERZEN: 30,
     HTF_MAX: 4,
     HTF_ABSTAND_ATR_HTF: 3,
@@ -164,28 +165,49 @@ export function waehleNiveaus(niveaus, kurs, { max = KAND.MAX_NIVEAUS, nah = KAN
 }
 
 /**
- * Trendlinien-Kandidaten beider Seiten. Raus: fast flache (das ist eine waagerechte
- * Marke), zwei Berührungen weit weg vom Kurs, und Doppelte (jetzt < 0,5 ATR auseinander).
+ * Trendlinien-Kandidaten beider Seiten (Regeln in chart-trendlinien.js). Raus
+ * ausserdem: fast flache (das ist eine waagerechte Marke), weit weg vom Kurs
+ * (`TREND_MAX_ABSTAND_ATR`, mit nur zwei Berührungen oder als Gegenlinie
+ * `TREND_MAX_ABSTAND_ZWEI_ATR`
+ * — bis 20.10.2026 galt für drei Berührungen gar keine Grenze, auf BTC 4h stand
+ * eine Linie 21 ATR über dem Kurs) und Doppelte (jetzt < 0,5 ATR auseinander).
+ * Reihenfolge: meiste Berührungen, dann klassische Linie (fallend an Hochs,
+ * steigend an Tiefs) vor der Gegenlinie, dann näher am Kurs.
  */
 export function kandidatenTrendlinien(kerzen, atrWert, { jeSeite = KAND.TREND_JE_SEITE } = {}) {
     const n = kerzen.length
     if (n < 2 * KAND.PIVOT_K + MIN_ABSTAND || !(atrWert > 0)) return []
     const kurs = kerzen[n - 1].c
+    const iv = n > 1 ? kerzen[n - 1].t - kerzen[n - 2].t : 0
     const aus = []
     for (const seite of ['hoch', 'tief']) {
-        const gewaehlt = []
-        for (const c of alleTrendlinien(kerzen, seite, { tol: TOL_ATR * atrWert })) {
+        const liste = []
+        for (const c of alleTrendlinien(kerzen, seite, { tol: TOL_ATR * atrWert, atr: atrWert })) {
             if (Math.abs(c.p2 - c.p1) < KAND.TREND_MIN_DELTA_ATR * atrWert) continue
             const steigung = (c.p2 - c.p1) / (c.i2 - c.i1)
             const wertJetzt = c.p1 + steigung * (n - 1 - c.i1)
             const abstandAtr = (wertJetzt - kurs) / atrWert
-            if (c.beruehrungen < 3 && Math.abs(abstandAtr) > KAND.TREND_MAX_ABSTAND_ATR) continue
-            if (gewaehlt.some((d) => Math.abs(d.wertJetzt - wertJetzt) < 0.5 * atrWert)) continue
-            gewaehlt.push({
+            // Gegenlinien entfernen sich vom Kurs, sobald er abdreht — für sie gilt die enge Grenze.
+            const gegen = istGegenlinie(seite, c.p1, c.p2)
+            const grenze = c.beruehrungen < 3 || gegen ? KAND.TREND_MAX_ABSTAND_ZWEI_ATR : KAND.TREND_MAX_ABSTAND_ATR
+            if (Math.abs(abstandAtr) > grenze) continue
+            const ext = verlaengerung(n, c.i1)
+            liste.push({
                 seite, richtung: steigung < 0 ? 'ab' : 'auf',
+                rolle: seite === 'hoch' ? 'widerstand' : 'unterstuetzung',
+                gegen,
                 t1: kerzen[c.i1].t, p1: c.p1, t2: kerzen[c.i2].t, p2: c.p2,
-                beruehrungen: c.beruehrungen, wertJetzt, abstandAtr,
+                beruehrungen: c.beruehrungen, beruehrT: c.beruehrIdx.map((i) => kerzen[i].t),
+                letzteBeruehrungT: kerzen[c.beruehrIdx[c.beruehrIdx.length - 1]].t,
+                wertJetzt, abstandAtr,
+                tEnde: kerzen[n - 1].t + ext * iv, pEnde: wertJetzt + steigung * ext,
             })
+        }
+        liste.sort((x, y) => y.beruehrungen - x.beruehrungen || Number(x.gegen) - Number(y.gegen) || Math.abs(x.abstandAtr) - Math.abs(y.abstandAtr))
+        const gewaehlt = []
+        for (const c of liste) {
+            if (gewaehlt.some((d) => Math.abs(d.wertJetzt - c.wertJetzt) < 0.5 * atrWert)) continue
+            gewaehlt.push(c)
             if (gewaehlt.length >= jeSeite) break
         }
         aus.push(...gewaehlt)
@@ -226,7 +248,7 @@ export function spanneLetzte(kerzen, n, atrWert) {
 }
 
 /** Alles zusammen, mit stabilen IDs. */
-export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, intervalHtf = null, zeichnungen = [] }) {
+export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, intervalHtf = null, zeichnungen = [], zeitzone = 'UTC' }) {
     const n = kerzen.length
     if (n < 30) return null
     const A = letzteAtr(kerzen)
@@ -274,7 +296,7 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
         .slice(0, 12).map((z, i) => ({ id: `U${i + 1}`, typ: z.typ, punkte: z.punkte || [], text: z.stil?.text || '' }))
 
     return {
-        kurs, atr: A, vonT, bisT, interval, intervalHtf,
+        kurs, atr: A, vonT, bisT, interval, intervalHtf, zeitzone,
         spanne: spanneLetzte(kerzen, KAND.SPANNE_KERZEN, A),
         struktur: marktstruktur(kerzen),
         kandidaten, nutzer,
@@ -291,7 +313,23 @@ export function zahl(x) {
     if (a >= 1) return x.toFixed(a >= 100 ? 2 : 4).replace(/0+$/, '').replace(/\.$/, '')
     return Number(x.toPrecision(5)).toString()
 }
-const zeit = (ms) => new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + 'Z'
+/*
+ * Zeiten in Ortszeit (settings.timeZone), nie in UTC: bis 20.10.2026 standen
+ * hier ISO-Zeiten mit „Z", und das Modell schrieb sie in die Beschriftung —
+ * „Fallende Hochlinie seit 14:45Z" über einem Chart, der 16:45 zeigt.
+ */
+const formate = new Map()
+export function zeitText(ms, zeitzone = 'UTC') {
+    if (!Number.isFinite(ms)) return '—'
+    let f = formate.get(zeitzone)
+    if (!f) {
+        try { f = new Intl.DateTimeFormat('de-CH', { timeZone: zeitzone, day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) } catch { f = null }
+        if (!f) return zeitText(ms, 'UTC')
+        formate.set(zeitzone, f)
+    }
+    const t = Object.fromEntries(f.formatToParts(new Date(ms)).map((x) => [x.type, x.value]))
+    return `${t.day}.${t.month}. ${t.hour}:${t.minute}`
+}
 const atrText = (x) => `${x >= 0 ? '+' : ''}${x.toFixed(1)}`
 const ZUSTAND = { 1: 'aufwärts', '-1': 'abwärts', 0: 'unbestimmt' }
 
@@ -301,6 +339,9 @@ export const preisVon = (k) => (k.quelle === 'trend' ? k.wertJetzt : k.preis)
 export function kandidatenText(paket) {
     const z = []
     const { kurs, atr: A, spanne, struktur } = paket
+    const tz = paket.zeitzone || 'UTC'
+    const zeit = (ms) => zeitText(ms, tz)
+    z.push(`ZEITEN in Ortszeit (${tz}).`)
     z.push(`KURS ${zahl(kurs)} (letzter Schluss ${zeit(paket.bisT)}), ATR(14) ${zahl(A)} = ${(A / kurs * 100).toFixed(2)} %`)
     if (spanne) z.push(`SPANNE der letzten ${spanne.kerzen} Kerzen ${zahl(spanne.tief)}–${zahl(spanne.hoch)} = ${spanne.breiteAtr.toFixed(1)} ATR; Kurs bei ${spanne.positionPct.toFixed(0)} % der Spanne`)
     const n = paket.kandidaten.filter((k) => k.quelle === 'niveau')
@@ -318,8 +359,12 @@ export function kandidatenText(paket) {
     }
     const t = paket.kandidaten.filter((k) => k.quelle === 'trend')
     if (t.length) {
-        z.push('', 'TRENDLINIEN — alle an den Kerzen geprüft, ungebrochen (id | Seite | Anker 1 → Anker 2 | Berührungen | Wert jetzt | Abstand in ATR):')
-        for (const x of t) z.push(`${x.id} | an ${x.seite === 'hoch' ? 'Hochs' : 'Tiefs'}, ${x.richtung === 'ab' ? 'fallend' : 'steigend'} | ${zeit(x.t1)} ${zahl(x.p1)} → ${zeit(x.t2)} ${zahl(x.p2)} | ${x.beruehrungen} | ${zahl(x.wertJetzt)} | ${atrText(x.abstandAtr)}`)
+        z.push('', 'TRENDLINIEN — an den Kerzen geprüft: ungebrochen, auch links vom ersten Anker nicht durchschnitten; eine Berührung = eine eigene Welle (id | Rolle | Anker 1 → Anker 2 | Berührungen (Zeiten) | Wert jetzt | Abstand in ATR):')
+        for (const x of t) {
+            const rolle = `${x.rolle === 'widerstand' ? 'Widerstand an Hochs' : 'Unterstützung an Tiefs'}, ${x.richtung === 'ab' ? 'fallend' : 'steigend'}`
+            const ber = `${x.beruehrungen}${x.beruehrT?.length ? ` (${x.beruehrT.map(zeit).join(', ')})` : ''}`
+            z.push(`${x.id} | ${rolle} | ${zeit(x.t1)} ${zahl(x.p1)} → ${zeit(x.t2)} ${zahl(x.p2)} | ${ber} | ${zahl(x.wertJetzt)} | ${atrText(x.abstandAtr)}${x.gegen ? ' | Gegenlinie (Kanal-/Keilkante, entfernt sich vom Kurs, sobald er abdreht)' : ''}`)
+        }
     } else z.push('', 'TRENDLINIEN: keine ungebrochene Linie mit genug Berührungen.')
     if (struktur) {
         const folge = (l) => l.map((p) => `${zahl(p.p)}${p.art ? ` ${p.art}` : ''} (${zeit(p.t)})`).join(' → ')
