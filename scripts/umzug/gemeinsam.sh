@@ -82,6 +82,8 @@ frage() {
     printf '\033[93m%s\033[0m [ja/nein] ' "$1"
     if [ -t 0 ] || ! { : </dev/tty; } 2>/dev/null; then read -r antwort || true
     else read -r antwort </dev/tty || true; fi
+    # ja, Ja, JA (auch mit Leerzeichen) — alles andere ist nein.
+    antwort="$(printf '%s' "$antwort" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
     [ "$antwort" = "ja" ]
 }
 

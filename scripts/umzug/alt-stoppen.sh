@@ -54,4 +54,6 @@ if frage "Compose-Datei sichern, Image festhalten und $ALT_CONTAINER jetzt stopp
     merke COMPOSE_SICHERUNG "$CD.vor-v2-$DATUM"
     nas "$S test -f '$NAS_PROJEKT/.env.vor-v2-$DATUM'" && merke ENV_SICHERUNG ".env.vor-v2-$DATUM"
     gruen "alte App gestoppt; Image als $ALT_SICHER_TAG festgehalten"
+elif [ "$TROCKEN" != 1 ]; then
+    abbruch "nicht gestoppt — die alte App läuft weiter, nichts verändert"
 fi
