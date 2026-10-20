@@ -156,14 +156,17 @@ async function cgSpeichern(loeschen = false) {
                 {{ t(stand.ohneFreigabe.an ? 'datenquellen.of.anText' : 'datenquellen.of.ausText') }}
             </Hinweis>
             <ul class="of-liste">
-                <li v-for="q in stand.ohneFreigabe.quellen" :key="q.id" :class="{ aus: !stand.ohneFreigabe.an }">
+                <!-- Die Zeilen der Verkaufsprüfung sind ein Arbeitsvermerk, kein
+                     Nutzertext — nur noch als Tooltip (Audit A4-18). -->
+                <li v-for="q in stand.ohneFreigabe.quellen" :key="q.id" :class="{ aus: !stand.ohneFreigabe.an }"
+                    :title="t('datenquellen.of.zeilen', { zeilen: q.zeilen.join(', ') })">
                     <strong>{{ q.name }}</strong> — {{ q.was }}
-                    <span class="zeilen">({{ t('datenquellen.of.zeilen', { zeilen: q.zeilen.join(', ') }) }})</span>
                 </li>
             </ul>
         </Karte>
 
-        <Karte :titel="t('datenquellen.cg.titel')" :unter="t('datenquellen.cg.unter')">
+        <Karte :titel="t('datenquellen.cg.titel')"
+            :unter="t(stand?.ohneFreigabe?.an ? 'datenquellen.cg.unterOffen' : 'datenquellen.cg.unter')">
             <p class="status">
                 <Pille v-if="stand?.coingecko?.hinterlegt" ton="gut">
                     {{ t('datenquellen.cg.hinterlegt', { ende: stand.coingecko.ende, tarif: stand.coingecko.tarif }) }}
@@ -309,6 +312,13 @@ async function cgSpeichern(loeschen = false) {
 
 .status {
     margin: 0 0 0.3rem;
+    max-width: 100%;
+}
+/* Statuspillen tragen ganze Sätze — am Telefon umbrechen statt die Seite
+   waagrecht zu verbreitern (Audit A4-05). */
+.status :deep(.at-pille) {
+    max-width: 100%;
+    white-space: normal;
 }
 
 .zeile {
@@ -358,11 +368,6 @@ async function cgSpeichern(loeschen = false) {
 .of-liste li.aus {
     color: var(--muted);
     text-decoration: line-through;
-}
-
-.of-liste .zeilen {
-    color: var(--muted);
-    font-size: 0.75rem;
 }
 
 .andere {

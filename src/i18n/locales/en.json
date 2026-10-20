@@ -6131,7 +6131,8 @@
       "gespeichert": "Saved.",
       "geloescht": "Key deleted — CoinGecko features are now off.",
       "demoHinweis": "You enter into the agreement with CoinGecko yourself. Whether the free demo plan covers your use is governed by CoinGecko's terms; if in doubt, choose a paid plan.",
-      "oeffentlich": "No key — public endpoint (sources without sales clearance)"
+      "oeffentlich": "Public endpoint",
+      "unterOffen": "With your own API key — without a key via the public endpoint while “Sources without sales clearance” is on."
     },
     "andere": {
       "titel": "Other keys",
@@ -6142,11 +6143,11 @@
     },
     "of": {
       "titel": "Sources without sales clearance",
-      "unter": "Analysis sources whose terms do not allow selling AutarkTrade or are unclear (docs/VERKAUFS-PRUEFUNG.md). On for personal use.",
+      "unter": "Analysis sources whose terms do not allow selling AutarkTrade or are unclear. On for personal use.",
       "schalter": "Use sources without sales clearance",
-      "anText": "On: these sources run as in the old journal. Whether your use is covered by their terms is for you to check and your responsibility.",
+      "anText": "On: these sources run in full. Whether your use is covered by their terms is for you to check and your responsibility.",
       "ausText": "Off: AutarkTrade behaves like a sales version — these sources and the functions only they provide are off and say why.",
-      "zeilen": "review row {zeilen}"
+      "zeilen": "Sales review, row {zeilen}"
     }
   }
 }

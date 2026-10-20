@@ -6131,7 +6131,8 @@
       "gespeichert": "Gespeichert.",
       "geloescht": "Schlüssel gelöscht — CoinGecko-Funktionen sind jetzt aus.",
       "demoHinweis": "Du schliesst den Vertrag mit CoinGecko selbst ab. Ob der kostenlose Demo-Tarif deine Nutzung abdeckt, regeln die CoinGecko-Bedingungen; im Zweifel einen Bezahltarif wählen.",
-      "oeffentlich": "Kein Schlüssel — öffentlicher Endpunkt (Quellen ohne Verkaufsfreigabe)"
+      "oeffentlich": "Öffentlicher Endpunkt",
+      "unterOffen": "Mit deinem eigenen API-Schlüssel — ohne Schlüssel über den öffentlichen Endpunkt, solange „Quellen ohne Verkaufsfreigabe\" an ist."
     },
     "andere": {
       "titel": "Weitere Schlüssel",
@@ -6142,11 +6143,11 @@
     },
     "of": {
       "titel": "Quellen ohne Verkaufsfreigabe",
-      "unter": "Analysequellen, deren Bedingungen einen Verkauf von AutarkTrade nicht erlauben oder ungeklärt sind (docs/VERKAUFS-PRUEFUNG.md). Für den Eigengebrauch an.",
+      "unter": "Analysequellen, deren Bedingungen einen Verkauf von AutarkTrade nicht erlauben oder ungeklärt sind. Für den Eigengebrauch an.",
       "schalter": "Quellen ohne Verkaufsfreigabe nutzen",
-      "anText": "An: Diese Quellen laufen wie im alten Journal. Ob deine Nutzung von ihren Bedingungen gedeckt ist, prüfst und verantwortest du selbst.",
+      "anText": "An: Diese Quellen laufen im vollen Umfang. Ob deine Nutzung von ihren Bedingungen gedeckt ist, prüfst und verantwortest du selbst.",
       "ausText": "Aus: AutarkTrade verhält sich wie eine Verkaufsversion — diese Quellen und die Funktionen, die nur sie haben, sind aus und sagen warum.",
-      "zeilen": "Prüfung Zeile {zeilen}"
+      "zeilen": "Verkaufsprüfung, Zeile {zeilen}"
     }
   }
 }
