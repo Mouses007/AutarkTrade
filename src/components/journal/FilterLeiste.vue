@@ -26,11 +26,14 @@ import { baueBilderNeu } from '../../utils/bilder/laden.js'
 const { t } = useI18n()
 
 const OHNE_TAG = 't000t'
+// Schlüssel = Seitenkennungen aus config/menu.js (seit F3: journalUebersicht, kalender,
+// tagesansicht, bilder). Ein alter Name hier blendet den Filter still aus — darum
+// prüft src/utils/__selftest-seitenkennungen.mjs jeden Schlüssel gegen das Menü.
 const ZEILEN = {
-    dashboard: ['zeitraum', 'bruttoNetto', 'richtung', 'zeitrahmen', 'kennzahl', 'tags'],
-    calendar: ['monat', 'bruttoNetto', 'plZufriedenheit'],
-    daily: ['monat', 'bruttoNetto', 'richtung', 'tags'],
-    screenshots: ['bruttoNetto', 'richtung', 'tags'],
+    journalUebersicht: ['zeitraum', 'bruttoNetto', 'richtung', 'zeitrahmen', 'kennzahl', 'tags'],
+    kalender: ['monat', 'bruttoNetto', 'plZufriedenheit'],
+    tagesansicht: ['monat', 'bruttoNetto', 'richtung', 'tags'],
+    bilder: ['bruttoNetto', 'richtung', 'tags'],
     auswertung: ['zeitraum', 'richtung', 'tags'],
 }
 const zeilen = computed(() => ZEILEN[seitenId.value] || [])

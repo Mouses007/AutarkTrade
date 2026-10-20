@@ -226,7 +226,7 @@ async function hinzufuegen() {
     }
 
     if (alleGut && meldungen.value.length === 0) {
-        leiteWeiter('daily')
+        leiteWeiter('tagesansicht')
         return
     }
     // Gespeicherte Tage fallen aus der Liste; was übrig bleibt, steht wieder da.
@@ -270,7 +270,7 @@ function abbrechen() {
                 <Knopf v-if="hatSchluessel && fehlendeTage.length" art="haupt" symbol="plus" @click="hinzufuegen">
                     {{ t('excursions.add') }}
                 </Knopf>
-                <Knopf v-if="gespeichertAnzahl > 0" art="normal" @click="leiteWeiter('daily')">
+                <Knopf v-if="gespeichertAnzahl > 0" art="normal" @click="leiteWeiter('tagesansicht')">
                     {{ t('excursions.zurTagesansicht') }}
                 </Knopf>
                 <Knopf art="leise" klein @click="abbrechen">{{ t('common.cancel') }}</Knopf>

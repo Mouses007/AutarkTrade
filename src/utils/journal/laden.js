@@ -28,7 +28,9 @@ const NOTIZ_TEXTE = ['note', 'title', 'entryNote', 'feelings', 'playbook', 'clos
 
 /** Abfrage der Tageszeilen je nach Seite. */
 function tageszeilenAbfrage(param) {
-    if (seitenId.value === 'imports' || param === 'imports') {
+    // Eine Seite „imports“ gibt es nicht mehr (→ /settings/journal); die letzten 20
+    // Importe holt nur noch der ausdrückliche Aufruf ladeTrades('imports').
+    if (param === 'imports') {
         return { exclude: OHNE_GROSSE_SPALTEN, descending: 'dateUnix', limit: 20 }
     }
     if (seitenId.value === 'exkursionen') {
