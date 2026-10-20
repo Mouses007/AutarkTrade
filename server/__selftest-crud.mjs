@@ -13,7 +13,7 @@
 process.env.AT_DB_FILE = ':memory:'
 
 const { initDb, getKnex, uebernehmeLageberichtMail } = await import('./database.js')
-const { setupApiRoutes } = await import('./api-routes.js')
+const { registriereApiRouten } = await import('./api-routes.js')
 const express = (await import('express')).default
 
 let bestanden = 0
@@ -29,7 +29,7 @@ await initDb()
 
 const app = express()
 app.use(express.json({ limit: '5mb' }))
-setupApiRoutes(app)
+registriereApiRouten(app)
 
 const server = await new Promise((fertig) => {
     const s = app.listen(0, '127.0.0.1', () => fertig(s))
@@ -65,7 +65,7 @@ let tradeId
     }
     const { status, json } = await api('POST', '/api/db/trades', nutzlast)
     check('POST legt an (201)', status === 201, String(status))
-    // Das Mapping ERGÄNZT objectId (als Text, Parse-Erbe) — id bleibt daneben stehen.
+    // Das Mapping ERGÄNZT objectId (als Text, das Format des Frontends) — id bleibt daneben stehen.
     check('Antwort trägt objectId = String(id)', json?.objectId !== undefined && json.objectId === String(json.id), JSON.stringify(json)?.slice(0, 120))
     check('JSON-Spalte kommt als Objekt zurück, nicht als Text',
         Array.isArray(json?.trades) && json.trades[0]?.symbol === 'BTCUSDT', typeof json?.trades)

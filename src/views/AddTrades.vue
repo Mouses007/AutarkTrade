@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Trades hinzufügen (`/addTrades`): ein einzelner Futures-Trade von Hand oder
+ * Trades hinzufügen (`/import`): ein einzelner Futures-Trade von Hand oder
  * ein API-Import über einen Zeitraum mit Vorschau vor dem Speichern.
  *
  * Rechnen tut diese Ansicht fast nichts selbst: Trade-Objekte kommen aus
@@ -20,13 +20,13 @@ import Hinweis from '../components/basis/Hinweis.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
 import ImportVorschau from '../components/import/ImportVorschau.vue'
 import { seiteLaedt } from '../stores/app/laden.js'
-import { selectedBroker } from '../stores/journal/filter.js'
+import { gewaehlteBoerse } from '../stores/journal/filter.js'
 import { executions, vorhandeneImporte, vorhandeneTradeTage, tradeZeilen, trades, blotter, pAndL } from '../stores/journal/import.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
-import { useGetExistingTradesArray, useUploadTrades } from '../utils/journal/import.js'
+import { ladeVorhandeneTradeTage, speichereImport } from '../utils/journal/import.js'
 import { baueBlotter, bauePnL } from '../utils/journal/tagesrechnung.js'
 import { ersetzeObjekt } from '../utils/journal/hilfen.js'
-import { useDateCalFormat } from '../utils/journal/format.js'
+import { formDatum } from '../utils/journal/format.js'
 import { useQuickApiImport, createBitunixTradeObj, createBitgetTradeObj, buildTradeObj, saveManualTrade } from '../utils/quickImport.js'
 import { istGewinn } from '../../shared/gewinn.js'
 import { sendNotification } from '../utils/notify.js'
@@ -38,7 +38,7 @@ const router = useRouter()
 seiteLaedt.value = false
 
 const BROKER_NAMEN = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
-const broker = computed(() => selectedBroker.value || 'bitunix')
+const broker = computed(() => gewaehlteBoerse.value || 'bitunix')
 const brokerName = computed(() => BROKER_NAMEN[broker.value] || 'Bitunix')
 
 const reiter = ref('manuell')
@@ -50,7 +50,7 @@ const reiterListe = computed(() => [
 onMounted(() => {
     // Nicht abwarten: bei einem DB-Fehler bleibt das Versprechen offen, und
     // nichts in dieser Ansicht braucht die Liste vor dem ersten API-Import.
-    useGetExistingTradesArray()
+    ladeVorhandeneTradeTage()
 })
 
 // ── Manuelle Eingabe ───────────────────────────────────────────────────────
@@ -322,15 +322,15 @@ async function importiereApi() {
 }
 
 const hatVorschau = computed(() => Object.keys(executions).length > 0)
-const bereitsImportiert = computed(() => vorhandeneImporte.map(td => useDateCalFormat(td)).join(', '))
+const bereitsImportiert = computed(() => vorhandeneImporte.map(td => formDatum(td)).join(', '))
 
 function absenden() {
     // Ohne Argumente: als Ereignis-Handler gebunden landete sonst das Klickereignis darin.
-    useUploadTrades()
+    speichereImport()
 }
 
 function abbrechen() {
-    router.push('/dashboard')
+    router.push('/journal')
 }
 </script>
 

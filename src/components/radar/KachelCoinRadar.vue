@@ -22,7 +22,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { liveSymbol } from '../../stores/live.js'
-import { currentUser } from '../../stores/app/rahmen.js'
+import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { BOERSE_KURZ, BOERSE_NAME, boerseUrl, boersenLinksVon } from '../../utils/boersenLinks.js'
 
 const props = defineProps({
@@ -40,7 +40,7 @@ const kurz = (s) => String(s || '').replace(/USDT$/, '')
  * verlinkt werden. `z.symbol` (das volle Perp-Symbol) geht an `boerseUrl`, NICHT
  * `kurz(z.symbol)`: die URL-Bauer erwarten `BTCUSDT`, nicht `BTC`.
  */
-const links = (z) => boersenLinksVon(z, currentUser.value?.boersenLinks)
+const links = (z) => boersenLinksVon(z, appEinstellungen.value?.boersenLinks)
 
 /** Im Raster reichen zehn Zeilen; gross zeigt, was der Lauf sonst noch hergibt. */
 const liste = computed(() => (props.daten?.zeilen || []).slice(0, 10))

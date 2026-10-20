@@ -9,7 +9,7 @@ Ordnern; die exportierten Namen sind unverändert (Spezifikation
 
 | Datei | Inhalt |
 |-------|--------|
-| `app/rahmen.js` | Seite (`pageId`), Einstellungszeile (`currentUser`), Zeitzone, Modus, Menü, Reiterzustand, Abfrage-Limits |
+| `app/rahmen.js` | Seite (`seitenId`), Einstellungszeile (`appEinstellungen`), Zeitzone, Modus, Menü, Reiterzustand, Abfrage-Limits |
 | `app/laden.js` | Spinner, Mounted-Flags, `zeichenZaehler`, `negativeTagGruppen` |
 | `app/einstellungen.js` | `profilZaehler`, `apis`, `layoutStyle`, KI-Report-Status |
 | `app/ablage.js` | Hilfen zum Lesen aus localStorage/sessionStorage beim Laden (kein Zustand) |
@@ -17,7 +17,7 @@ Ordnern; die exportierten Namen sind unverändert (Spezifikation
 | `journal/auswertung.js` | Ergebnis der Kette: `journalTage*`, `totals`, `summenJeTag`, `groups`, `gewinnAnalyse` |
 | `journal/import.js` | Import-Vorschau: `executions`, `trades`, `blotter`, `pAndL`, vorhandene Tage |
 | `journal/tagebuch.js` | Zufriedenheit, Tags, Tag-Katalog, Notizen, Exkursionen, Bearbeitungszustand |
-| `journal/kalender.js` | `kalenderDaten`, `miniKalenderDaten`, `tradeAccounts` |
+| `journal/kalender.js` | `kalenderDaten`, `miniKalenderDaten`, `kalenderKonten` |
 | `journal/screenshots.js` | Screenshot-Daten und -Bearbeitung |
 | `journal/offenePositionen.js` | Incoming-Positionen und Bewertungs-Hinweise |
 
@@ -25,7 +25,7 @@ Ordnern; die exportierten Namen sind unverändert (Spezifikation
 
 | Datei | Inhalt |
 |-------|--------|
-| `ui.js` | `ui/loading.js`, `ui/navigation.js`, `ui/tabs.js`, `ui/screenshots-ui.js`, `ui/app.js` |
+| `ui.js` | `ui/loading.js`, `ui/navigation.js`, `ui/screenshots-ui.js`, `ui/app.js` |
 | `filters.js` | `filters/selection.js`, `filters/options.js` |
 | `trades.js` | `trades/dashboard.js`, `add-trades.js`, `daily-detail.js`, `incoming.js`, `screenshots.js`, `calendar.js` |
 | `settings.js` | `settings/app.js`, `settings/reporting.js` |
@@ -34,7 +34,7 @@ Die Unterordner re-exportieren nur aus `app/*` und `journal/*`. Neuer Code
 importiert am besten direkt aus `app/*` bzw. `journal/*`:
 
 ```js
-import { pageId, timeZoneTrade } from '@/stores/app/rahmen.js'
+import { seitenId, tradeZeitzone } from '@/stores/app/rahmen.js'
 import { tagAuswahl, gewaehlterBereich } from '@/stores/journal/filter.js'
 ```
 

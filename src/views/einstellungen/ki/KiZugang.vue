@@ -9,7 +9,7 @@ import Symbol from '@/components/basis/Symbol.vue'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { kiBereichWechseln } from '../gemeinsam/useKiBereich.js'
 import { useKiAnbieter } from '../gemeinsam/useKiAnbieter.js'
 import { fluxApiKey, geminiImageApiKey, shareCardProvider } from '../gemeinsam/useShareCard.js'
@@ -19,7 +19,7 @@ const { t } = useI18n()
 let kiExpanded = ref(true)   // eigener Unter-Reiter: offen starten
 
 /* Fehlt der Wert, gilt die KI als an — wie bisher im Markup. */
-const kiAn = computed(() => currentUser.value?.aiEnabled !== false && currentUser.value?.aiEnabled !== 0)
+const kiAn = computed(() => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0)
 
 const {
     aiKeys, aiMaxTokens, aiModel, aiOllamaUrl, aiProvider, aiTemperature, aiTestLoading, aiTestResult,

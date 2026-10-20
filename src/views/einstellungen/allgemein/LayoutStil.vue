@@ -11,7 +11,7 @@ import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
 import { pruefeEinstellungen, ladeZeitraeume } from '../../../utils/journal/app.js'
-import { currentUser, profilZaehler } from '@/stores/settings.js'
+import { appEinstellungen, profilZaehler } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
 import { merkeErweiterteInfos } from '@/composables/useErweiterteInfos.js'
 import { setLocale } from '@/i18n'
@@ -32,7 +32,7 @@ async function changeLanguage(lang) {
     // `setLocale` laedt die Sprachdatei bei Bedarf nach und ist deshalb async.
     await setLocale(lang)
     await dbUpdateSettings({ language: lang })
-    currentUser.value.language = lang
+    appEinstellungen.value.language = lang
     await ladeZeitraeume()
 }
 
@@ -104,7 +104,7 @@ async function profilSpeichern() {
 
 /* Stand aus den Einstellungen — Settings.vue hat sie vor dem Mount geladen. */
 function ausEinstellungen() {
-    const settings = currentUser.value || {}
+    const settings = appEinstellungen.value || {}
     username.value = settings.username || ''
     selectedLanguage.value = settings.language || 'de'
     erweiterteInfosAn.value = Number(settings.erweiterteInfos ?? 1) === 1
@@ -129,9 +129,9 @@ ausEinstellungen()
 
         <Feld :label="t('settings.profilePicture')">
             <div class="avatar-zeile">
-                <img v-if="currentUser?.avatar" :src="currentUser.avatar" class="avatar" alt="" />
+                <img v-if="appEinstellungen?.avatar" :src="appEinstellungen.avatar" class="avatar" alt="" />
                 <img v-else src="@/assets/icon.png" class="avatar" alt="" />
-                <Knopf v-if="currentUser?.avatar" art="gefahr" klein @click="deleteAvatar">{{ t('common.remove') }}</Knopf>
+                <Knopf v-if="appEinstellungen?.avatar" art="gefahr" klein @click="deleteAvatar">{{ t('common.remove') }}</Knopf>
             </div>
             <input type="file" class="datei" @change="bildGewaehlt" />
         </Feld>
@@ -148,7 +148,7 @@ ausEinstellungen()
              nachzutragen, die man beim ersten Mal übersprungen hat. -->
         <div class="block">
             <Knopf klein symbol="rakete"
-                @click="router.push({ path: '/update-assistent', query: { kontext: 'manuell', rueckkehr: '/settings' } })">
+                @click="router.push({ path: '/update-assistent', query: { kontext: 'manuell', rueckkehr: '/einstellungen' } })">
                 {{ t('onboarding.reopenButton') }}
             </Knopf>
         </div>

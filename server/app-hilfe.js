@@ -234,12 +234,12 @@ export function hilfeThema(thema) {
 // ==================== SEITENKONTEXT (für den Chat-Agenten) ====================
 //
 // Wird der Agent von einer bestimmten Seite aus geöffnet (Roboter-Button in
-// Nav.vue), bekommt er deren `pageId` mitgeschickt. `seitenKontext()` bildet
+// Nav.vue), bekommt er deren `seitenId` mitgeschickt. `seitenKontext()` bildet
 // sie auf ein Thema aus HILFE_THEMEN ab, damit der System-Prompt gezielt
 // darauf hinweisen kann, statt dass das Modell aus dem Fragetext raten muss.
 // Absichtlich als reine Server-Konstante nachgebildet statt aus
 // `src/config/menu.js` importiert — das Backend bleibt frei von
-// Frontend-Abhängigkeiten; die `pageId`-Werte sind trotzdem identisch mit den
+// Frontend-Abhängigkeiten; die `seitenId`-Werte sind trotzdem identisch mit den
 // dortigen `id`s (== route.name), siehe Kommentar dort.
 
 const MODE_ZU_THEMA = {
@@ -253,28 +253,28 @@ const MODE_ZU_THEMA = {
 
 const SEITEN_ZU_MODUS = {
     chart: 'start',
-    dashboard: 'journal', daily: 'journal', calendar: 'journal', playbook: 'journal',
-    auswertung: 'journal', kiAgent: 'journal', screenshots: 'journal', incoming: 'journal',
-    addTrades: 'journal', accounts: 'journal', addExcursions: 'journal', setup: 'journal',
+    journalUebersicht: 'journal', tagesansicht: 'journal', kalender: 'journal', bewertungen: 'journal',
+    auswertung: 'journal', kiAgent: 'journal', bilder: 'journal', incoming: 'journal',
+    tradeImport: 'journal', accounts: 'journal', exkursionen: 'journal', setup: 'journal',
     marktradar: 'live', nachrichten: 'live', openinterest: 'live', liquidity: 'live',
     liquidations: 'live', livetrading: 'live', liveSessions: 'live', liveAuswertung: 'live',
     hypeRadar: 'research', hypeFrueh: 'research', hypeBoersen: 'research', hypeBerichte: 'research', coinRadar: 'research', coinVerlauf: 'research',
     agentStrategies: 'agent', agentSetups: 'agent', agentEditor: 'agent', agentBuilder: 'agent',
     agentPerformance: 'agent', agentLab: 'agent', coinRangliste: 'agent',
     lernen: 'lernen', lernenKarten: 'lernen', lernenStatistik: 'lernen',
-    settings: null,
+    einstellungen: null,
 }
 
 // Ausnahmen, wo eine Seite ein eigenes/genaueres Thema hat als ihr Modus.
 const SEITEN_UEBERSCHREIBUNG = {
     kiAgent: 'ki',
     incoming: 'import',
-    addTrades: 'import',
+    tradeImport: 'import',
     setup: 'import',
     livetrading: 'livetrading',
     liveSessions: 'livetrading',
     liveAuswertung: 'livetrading',
-    settings: 'einstellungen',
+    einstellungen: 'einstellungen',
 }
 
 // Coin-/Hype-Radar: query_marktradar liefert Marktradar-Kacheln für EIN
@@ -294,20 +294,20 @@ const SEITEN_HINWEIS = {
 }
 
 /**
- * Kontext-Objekt zu einer Frontend-`pageId`, oder `null` wenn unbekannt oder
+ * Kontext-Objekt zu einer Frontend-`seitenId`, oder `null` wenn unbekannt oder
  * kein Thema zugeordnet ist (z.B. Einstellungen ohne Überschreibung).
- * @param {string} pageId
- * @returns {{ pageId: string, thema: string, themaTitel: string, hinweis: string|null } | null}
+ * @param {string} seitenId
+ * @returns {{ seitenId: string, thema: string, themaTitel: string, hinweis: string|null } | null}
  */
-export function seitenKontext(pageId) {
-    const id = String(pageId || '').trim()
+export function seitenKontext(seitenId) {
+    const id = String(seitenId || '').trim()
     if (!id) return null
     const modus = SEITEN_ZU_MODUS[id]
     if (modus === undefined) return null
     const thema = SEITEN_UEBERSCHREIBUNG[id] || MODE_ZU_THEMA[modus]
     if (!thema || !Object.hasOwn(HILFE_THEMEN, thema)) return null
     return {
-        pageId: id,
+        seitenId: id,
         thema,
         themaTitel: HILFE_THEMEN[thema].titel,
         hinweis: SEITEN_HINWEIS[id] || null,

@@ -14,7 +14,7 @@ import { seiteLaedt } from '../stores/ui.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import { useSetupChart } from '../utils/journal/diagramme/index.js'
 import { useBotTradeChart } from '../utils/botChart.js'
-import { useXDecCurrencyFormat } from '../utils/journal/format.js'
+import { formGeldStellen } from '../utils/journal/format.js'
 import { logError } from '../utils/logger.js'
 import dayjs from '../utils/journal/zeit.js'
 import InfoTipp from '../components/InfoTipp.vue'
@@ -34,7 +34,7 @@ let chart = null
 let pollTimer = null
 
 const zahl = (v, n = 2) => (Number.isFinite(Number(v)) ? Number(v).toFixed(n) : '–')
-const geld = (v) => useXDecCurrencyFormat(Number(v) || 0, 2)
+const geld = (v) => formGeldStellen(Number(v) || 0, 2)
 const zeit = (t) => (t ? dayjs(Number(t)).format('DD.MM.YY HH:mm') : '–')
 // Kurse brauchen je nach Coin mehr Stellen: XRP mit zwei Nachkommastellen
 // macht 1,4768 und 1,5384 zu 1,48 und 1,54 — der Zwischenstand wäre unlesbar.
@@ -46,7 +46,7 @@ const kurs = (v) => {
 }
 // Vorzeichen immer zeigen — ein schwebender Betrag ohne + liest sich wie ein Saldo
 const geldMitVz = (v) => (Number(v) > 0 ? '+' : '') + geld(v)
-const pnlKlasse = (v) => (Number(v) > 0 ? 'greenTrade' : Number(v) < 0 ? 'redTrade' : '')
+const pnlKlasse = (v) => (Number(v) > 0 ? 'gewinnWert' : Number(v) < 0 ? 'verlustWert' : '')
 const dauer = (ms) => {
     const min = Math.floor((Number(ms) || 0) / 60000)
     const d = Math.floor(min / 1440)
@@ -187,7 +187,7 @@ const gruende = computed(() => {
             </div>
 
             <!-- Offene Positionen -->
-            <div v-if="positionen.length" class="dailyCard karte">
+            <div v-if="positionen.length" class="journalKarte karte">
                 <div class="section-title">{{ t('strategies.openPositions') }}</div>
                 <div class="at-tabelle-huelle">
                     <table class="at-tabelle dicht">
@@ -217,7 +217,7 @@ const gruende = computed(() => {
                                     {{ p.symbol }}
                                     <div class="at-gedaempft unterzeile">{{ p.instanz }}</div>
                                 </td>
-                                <td :class="p.direction === 'long' ? 'greenTrade' : 'redTrade'">
+                                <td :class="p.direction === 'long' ? 'gewinnWert' : 'verlustWert'">
                                     {{ p.direction === 'long' ? 'LONG' : 'SHORT' }}
                                 </td>
                                 <td class="zahl">{{ p.qty }}</td>
@@ -231,7 +231,7 @@ const gruende = computed(() => {
                                 <td class="zahl">{{ geld(p.notionalUsdt) }}</td>
                                 <template v-if="p.stand">
                                     <td class="zahl" :class="pnlKlasse(p.stand.grossPnl)">{{ geldMitVz(p.stand.grossPnl) }}</td>
-                                    <td class="zahl redTrade">
+                                    <td class="zahl verlustWert">
                                         −{{ geld(p.stand.fees) }}<InfoTipp :text="t('strategies.feesHint', {
                                             open: geld(p.stand.feeOpen + p.stand.feePartial), close: geld(p.stand.feeClose) })" />
                                     </td>
@@ -264,7 +264,7 @@ const gruende = computed(() => {
             </div>
 
             <!-- Chart des gewählten Setups -->
-            <div v-if="gewaehlt" class="dailyCard karte">
+            <div v-if="gewaehlt" class="journalKarte karte">
                 <div class="chart-kopf">
                     <strong>{{ gewaehlt.symbol }}</strong>
                     <Pille ton="neutral">{{ gewaehlt.timeframe }}</Pille>
@@ -295,7 +295,7 @@ const gruende = computed(() => {
             </div>
 
             <!-- Gründeübersicht -->
-            <div v-if="gruende.length" class="dailyCard karte">
+            <div v-if="gruende.length" class="journalKarte karte">
                 <div class="section-title">{{ t('strategies.whyLost') }}</div>
                 <div class="pillen">
                     <Pille v-for="[g, n] in gruende" :key="g" ton="neutral">
@@ -305,10 +305,10 @@ const gruende = computed(() => {
             </div>
 
             <!-- Setup-Liste -->
-            <div v-if="!setups.length" class="dailyCard karte leer at-gedaempft">
+            <div v-if="!setups.length" class="journalKarte karte leer at-gedaempft">
                 {{ t('strategies.noSetups') }}
             </div>
-            <div v-else class="dailyCard karte">
+            <div v-else class="journalKarte karte">
                 <div class="at-tabelle-huelle">
                     <table class="at-tabelle dicht">
                         <thead>
@@ -325,10 +325,10 @@ const gruende = computed(() => {
                             </tr>
                         </thead>
                         <tbody>
-                            <tr v-for="s in setups" :key="s.id" class="pointerClass"
+                            <tr v-for="s in setups" :key="s.id" class="klickZiel"
                                 :class="gewaehlt?.id === s.id ? 'gewaehlt' : ''" @click="anzeigen(s)">
                                 <td>{{ s.symbol }}</td>
-                                <td :class="s.direction === 'long' ? 'greenTrade' : 'redTrade'">
+                                <td :class="s.direction === 'long' ? 'gewinnWert' : 'verlustWert'">
                                     {{ s.direction === 'long' ? 'LONG' : 'SHORT' }}
                                 </td>
                                 <td><Pille :ton="statusFarbe(s.status)">
@@ -360,11 +360,11 @@ const gruende = computed(() => {
     max-width: 1500px;
 }
 
-/* `.dailyCard` setzt global `height: 100%`. Das passt für Raster mit einer Karte
+/* `.journalKarte` setzt global `height: 100%`. Das passt für Raster mit einer Karte
    je Spalte, hier stehen die Karten aber gestapelt untereinander — dort zieht die
    Regel jede einzelne Karte auf die Höhe der GESAMTEN Spalte und erzeugt riesige
    Leerräume. */
-.dailyCard {
+.journalKarte {
     height: auto;
 }
 

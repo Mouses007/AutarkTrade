@@ -14,7 +14,7 @@ import { seiteLaedt } from '../stores/ui.js'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import InfoTipp from '../components/InfoTipp.vue'
-import { useXDecCurrencyFormat } from '../utils/journal/format.js'
+import { formGeldStellen } from '../utils/journal/format.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/journal/zeit.js'
@@ -331,7 +331,7 @@ const editorReiterListe = computed(() => [
     { id: 'risk', titel: t('strategies.riskParams') },
 ])
 watch(() => !!bearbeite.value, (offen) => { if (offen) editorReiter.value = 'params' })
-const geld = (v) => useXDecCurrencyFormat(Number(v) || 0, 2)
+const geld = (v) => formGeldStellen(Number(v) || 0, 2)
 const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '–' : Number(v).toFixed(n))
 </script>
 
@@ -362,7 +362,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
             <Hinweis v-if="fehler" art="fehler" class="abstand">{{ fehler }}</Hinweis>
 
             <!-- Not-Aus -->
-            <div v-if="notAus" class="dailyCard karte abstand gefahr-rand">
+            <div v-if="notAus" class="journalKarte karte abstand gefahr-rand">
                 <p class="abstand-klein"><strong>{{ t('strategies.killSwitchConfirm') }}</strong></p>
                 <p class="at-gedaempft klein-text">{{ t('strategies.killSwitchHint') }}</p>
                 <div class="knopfzeile">
@@ -378,11 +378,11 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 
             <!-- ══ Liste ══ -->
             <template v-if="!bearbeite">
-                <div v-if="!instanzen.length" class="dailyCard karte leer at-gedaempft">
+                <div v-if="!instanzen.length" class="journalKarte karte leer at-gedaempft">
                     {{ t('strategies.noInstances') }}
                 </div>
 
-                <div v-for="inst in instanzen" :key="inst.id" class="dailyCard karte abstand-klein">
+                <div v-for="inst in instanzen" :key="inst.id" class="journalKarte karte abstand-klein">
                     <div class="zeile">
                         <span :class="['status-dot', inst.enabled ? 'on' : 'off']"></span>
                         <strong>{{ inst.name }}</strong>
@@ -390,7 +390,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                         <Pille ton="neutral">{{ brokerName(inst.broker) }}</Pille>
                         <Pille ton="neutral">{{ (inst.timeframes?.length ? inst.timeframes : [inst.timeframe]).join(' · ') }}</Pille>
                         <Pille ton="neutral">v{{ inst.paramsVersion }}</Pille>
-                        <Pille v-for="s in inst.symbols" :key="s" class="pointerClass"
+                        <Pille v-for="s in inst.symbols" :key="s" class="klickZiel"
                             :ton="coinOffen.instanceId === inst.id && coinOffen.symbol === s ? 'akzent' : 'neutral'"
                             :title="t('strategies.coinTradesHint')"
                             @click="coinAnzeigen(inst, s)">{{ s }}</Pille>
@@ -402,12 +402,12 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                             <small class="at-gedaempft">
                                 {{ t('strategies.trades') }}: <strong>{{ inst.totalTrades }}</strong>
                             </small>
-                            <small :class="inst.totalNetPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                            <small :class="inst.totalNetPnl >= 0 ? 'gewinnWert' : 'verlustWert'">
                                 {{ geld(inst.totalNetPnl) }}
                             </small>
                             <small v-if="schwebend[inst.id]" class="at-gedaempft">
                                 {{ t('strategies.unrealizedShort') }}:
-                                <strong :class="schwebend[inst.id].netPnl > 0 ? 'greenTrade' : schwebend[inst.id].netPnl < 0 ? 'redTrade' : ''">
+                                <strong :class="schwebend[inst.id].netPnl > 0 ? 'gewinnWert' : schwebend[inst.id].netPnl < 0 ? 'verlustWert' : ''">
                                     {{ (schwebend[inst.id].netPnl > 0 ? '+' : '') + geld(schwebend[inst.id].netPnl) }}
                                 </strong><InfoTipp :text="schwebendHinweis(schwebend[inst.id])" />
                             </small>
@@ -432,7 +432,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                                     <small class="at-gedaempft">· {{ verlaufQuelle(z.source) }}</small>
                                     <span class="kennzahlen">
                                         <small class="at-gedaempft">{{ t('strategies.trades') }}: <strong>{{ z.trades }}</strong></small>
-                                        <small v-if="z.trades" :class="z.summeR >= 0 ? 'greenTrade' : 'redTrade'">
+                                        <small v-if="z.trades" :class="z.summeR >= 0 ? 'gewinnWert' : 'verlustWert'">
                                             {{ z.summeR >= 0 ? '+' : '' }}{{ z.summeR.toFixed(2) }}R
                                         </small>
                                         <small v-if="z.trades" class="at-gedaempft">
@@ -480,10 +480,10 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                                             <tr v-for="tr in coinTrades" :key="tr.id">
                                                 <td class="at-gedaempft">{{ dayjs(Number(tr.exitTime)).format('DD.MM. HH:mm') }}</td>
                                                 <td>{{ tr.direction }}</td>
-                                                <td class="zahl" :class="tr.rMultiple >= 0 ? 'greenTrade' : 'redTrade'">
+                                                <td class="zahl" :class="tr.rMultiple >= 0 ? 'gewinnWert' : 'verlustWert'">
                                                     {{ zahl(tr.rMultiple) }}
                                                 </td>
-                                                <td class="zahl" :class="tr.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                                <td class="zahl" :class="tr.netPnl >= 0 ? 'gewinnWert' : 'verlustWert'">
                                                     {{ geld(tr.netPnl) }}
                                                 </td>
                                                 <td class="at-gedaempft">{{ tr.exitReason }}</td>
@@ -528,7 +528,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 
             <!-- ══ Editor ══ -->
             <template v-else>
-                <div class="dailyCard karte">
+                <div class="journalKarte karte">
                     <div class="editor-raster">
                         <div class="e-6">
                             <label class="at-label">{{ t('strategies.strategy') }}</label>
@@ -590,7 +590,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
                             </div>
                             <div class="pillen">
                                 <Pille v-for="s in bearbeite.symbols" :key="s" ton="neutral"
-                                    class="pointerClass" @click="symbolWeg(s)">
+                                    class="klickZiel" @click="symbolWeg(s)">
                                     {{ s }} <Symbol name="schliessen" />
                                 </Pille>
                             </div>
@@ -644,11 +644,11 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
     max-width: 1500px;
 }
 
-/* `.dailyCard` setzt global `height: 100%`. Das passt für Raster mit einer Karte
+/* `.journalKarte` setzt global `height: 100%`. Das passt für Raster mit einer Karte
    je Spalte, hier stehen die Karten aber gestapelt untereinander — dort zieht die
    Regel jede einzelne Karte auf die Höhe der GESAMTEN Spalte und erzeugt riesige
    Leerräume. */
-.dailyCard {
+.journalKarte {
     height: auto;
 }
 

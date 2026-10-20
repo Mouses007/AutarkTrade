@@ -15,7 +15,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import { liveSymbol } from '../../stores/live.js'
-import { currentUser } from '../../stores/app/rahmen.js'
+import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { BOERSE_NAME, boerseUrl, aktivierteBoersen } from '../../utils/boersenLinks.js'
 import Symbol from '@/components/basis/Symbol.vue'
 
@@ -80,7 +80,7 @@ const mcapText = (v) => (v >= 1e12 ? `${(v / 1e12).toFixed(2)} Bio.` : v >= 1e9 
  * gültig, da `perp` bereits Binance-Format ist.
  */
 function boersenLinksZeilen(perp) {
-    return aktivierteBoersen(currentUser.value?.boersenLinks).map((b) =>
+    return aktivierteBoersen(appEinstellungen.value?.boersenLinks).map((b) =>
         `<a href="${boerseUrl(b, perp)}" target="_blank" rel="noopener noreferrer" `
         + `style="color:#4da3ff">${t('marktradar.markt.openBoerse', { boerse: BOERSE_NAME[b] })}</a>`,
     ).join('<br/>')

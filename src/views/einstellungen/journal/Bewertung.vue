@@ -9,7 +9,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import { allTradeTimeframes, selectedTradeTimeframes } from '@/stores/filters.js'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { dbUpdateSettings, dbGetSettings } from '@/utils/db.js'
 
 const { t } = useI18n()
@@ -133,13 +133,13 @@ function removeTag(group, tagId) {
 
 /* POPUP SETTING */
 async function loadPopupSetting() {
-    showTradePopups.value = currentUser.value?.showTradePopups !== 0
+    showTradePopups.value = appEinstellungen.value?.showTradePopups !== 0
 }
 
 async function savePopupSetting() {
     try {
         await dbUpdateSettings({ showTradePopups: showTradePopups.value ? 1 : 0 })
-        currentUser.value.showTradePopups = showTradePopups.value ? 1 : 0
+        appEinstellungen.value.showTradePopups = showTradePopups.value ? 1 : 0
         console.log(' -> Popup-Einstellung gespeichert:', showTradePopups.value)
     } catch (error) {
         console.error(' -> Fehler beim Speichern der Popup-Einstellung:', error)
@@ -153,8 +153,8 @@ async function saveTradeTypeThresholds() {
             scalpMaxMinutes: scalpMaxMinutes.value,
             daytradeMaxHours: daytradeMaxHours.value
         })
-        currentUser.value.scalpMaxMinutes = scalpMaxMinutes.value
-        currentUser.value.daytradeMaxHours = daytradeMaxHours.value
+        appEinstellungen.value.scalpMaxMinutes = scalpMaxMinutes.value
+        appEinstellungen.value.daytradeMaxHours = daytradeMaxHours.value
         console.log(' -> Trade-Typ-Schwellwerte gespeichert')
     } catch (error) {
         console.error(' -> Fehler beim Speichern der Trade-Typ-Schwellwerte:', error)
@@ -175,8 +175,8 @@ async function saveTimeframes() {
         const arr = [...localTimeframes]
         const custom = customTimeframes.map(tf => ({ value: tf.value, label: tf.label }))
         await dbUpdateSettings({ tradeTimeframes: arr, customTimeframes: custom })
-        currentUser.value.tradeTimeframes = arr
-        currentUser.value.customTimeframes = custom
+        appEinstellungen.value.tradeTimeframes = arr
+        appEinstellungen.value.customTimeframes = custom
         // Globales reactive Array aktualisieren
         selectedTradeTimeframes.splice(0)
         arr.forEach(v => selectedTradeTimeframes.push(v))
@@ -215,7 +215,7 @@ function removeCustomTimeframe(tf) {
 
 /* Stand aus den Einstellungen — Settings.vue hat sie vor dem Mount geladen. */
 function ausEinstellungen() {
-    const settings = currentUser.value || {}
+    const settings = appEinstellungen.value || {}
     scalpMaxMinutes.value = settings.scalpMaxMinutes ?? 15
     daytradeMaxHours.value = settings.daytradeMaxHours ?? 24
         // Timeframes laden

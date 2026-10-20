@@ -336,7 +336,7 @@ async function aktivUmschalten(karte) {
         <div v-show="!seiteLaedt">
             <!-- ===== SITZUNG ===== -->
             <template v-if="!reiter">
-                <div v-if="phase === 'start'" class="dailyCard at-p-4 lernen-panel">
+                <div v-if="phase === 'start'" class="journalKarte at-p-4 lernen-panel">
                     <!-- Ein gescheiterter Abruf sah vorher aus wie „keine Karten
                          vorhanden" — oder die Seite drehte sich fuer immer. -->
                     <Hinweis v-if="ladeFehler" class="at-mu-3" art="warn">
@@ -477,11 +477,11 @@ async function aktivUmschalten(karte) {
                     </div>
                 </div>
 
-                <div v-else-if="phase === 'summary'" class="dailyCard at-p-4 lernen-panel at-mittig">
+                <div v-else-if="phase === 'summary'" class="journalKarte at-p-4 lernen-panel at-mittig">
                     <h5 class="at-mu-3">{{ t('lernen.summary.titel') }}</h5>
                     <div class="at-flex at-zentriert at-luecke-5 at-mu-4">
                         <div>
-                            <div class="greenTrade lernen-summary-value">{{ sitzungRichtig }}</div>
+                            <div class="gewinnWert lernen-summary-value">{{ sitzungRichtig }}</div>
                             <div class="at-gedaempft at-klein">{{ t('lernen.summary.richtig') }}</div>
                         </div>
                         <!-- „Schwer" hat eine eigene Spalte: es unter „richtig"
@@ -493,7 +493,7 @@ async function aktivUmschalten(karte) {
                             <div class="at-gedaempft at-klein">{{ t('lernen.summary.schwer') }}</div>
                         </div>
                         <div>
-                            <div class="redTrade lernen-summary-value">{{ sitzungFalsch }}</div>
+                            <div class="verlustWert lernen-summary-value">{{ sitzungFalsch }}</div>
                             <div class="at-gedaempft at-klein">{{ t('lernen.summary.falsch') }}</div>
                         </div>
                     </div>
@@ -510,7 +510,7 @@ async function aktivUmschalten(karte) {
                     </Knopf>
                 </div>
 
-                <div v-if="formOffen" class="dailyCard at-p-3 at-mu-3">
+                <div v-if="formOffen" class="journalKarte at-p-3 at-mu-3">
                     <div class="at-mu-2">
                         <label class="at-label">{{ t('lernen.karten.frage') }}</label>
                         <textarea class="at-feld" rows="2" v-model="formFrage"></textarea>
@@ -549,7 +549,7 @@ async function aktivUmschalten(karte) {
                 <p v-if="!eigeneKarten.length" class="at-gedaempft at-klein at-mu-4">{{ t('lernen.karten.keineEigenen') }}</p>
                 <div v-else class="at-flex at-spalte at-luecke-2 at-mu-4">
                     <div v-for="k in eigeneKarten" :key="k.objectId">
-                        <div class="dailyCard at-p-3 at-flex at-verteilt at-oben at-luecke-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
+                        <div class="journalKarte at-p-3 at-flex at-verteilt at-oben at-luecke-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
                             <div class="lernen-karte-text">
                                 <div class="at-halbfett">{{ k.frage }}</div>
                                 <div class="at-gedaempft at-klein">{{ k.antwort }}</div>
@@ -583,7 +583,7 @@ async function aktivUmschalten(karte) {
                 </div>
                 <div class="at-flex at-spalte at-luecke-2">
                     <div v-for="k in builtinKarten" :key="k.objectId">
-                        <div class="dailyCard at-p-3 at-flex at-verteilt at-oben at-luecke-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
+                        <div class="journalKarte at-p-3 at-flex at-verteilt at-oben at-luecke-3" :class="{ 'lernen-inaktiv': Number(k.aktiv) === 0 }">
                             <div class="lernen-karte-text">
                                 <div class="at-halbfett">{{ k.frage }}</div>
                                 <div class="at-gedaempft at-klein">{{ k.antwort }}</div>
@@ -607,19 +607,19 @@ async function aktivUmschalten(karte) {
                 <template v-else>
                     <div class="lernenKennzahlen at-mu-4">
                         <div>
-                            <div class="dailyCard at-p-3 at-mittig">
+                            <div class="journalKarte at-p-3 at-mittig">
                                 <div class="lernen-stat-value">{{ statistik.uebersicht.gesamt }}</div>
                                 <div class="at-gedaempft at-klein">{{ t('lernen.statistik.gesamtKarten') }}</div>
                             </div>
                         </div>
                         <div>
-                            <div class="dailyCard at-p-3 at-mittig">
+                            <div class="journalKarte at-p-3 at-mittig">
                                 <div class="lernen-stat-value">{{ statistik.uebersicht.gemeistert }}</div>
                                 <div class="at-gedaempft at-klein">{{ t('lernen.statistik.gemeistert') }}</div>
                             </div>
                         </div>
                         <div>
-                            <div class="dailyCard at-p-3 at-mittig">
+                            <div class="journalKarte at-p-3 at-mittig">
                                 <div class="lernen-stat-value">
                                     {{ statistik.uebersicht.erfolgsquote !== null ? Math.round(statistik.uebersicht.erfolgsquote * 100) + '%' : t('lernen.statistik.erfolgsquoteLeer') }}
                                 </div>
@@ -627,7 +627,7 @@ async function aktivUmschalten(karte) {
                             </div>
                         </div>
                         <div>
-                            <div class="dailyCard at-p-3 at-mittig">
+                            <div class="journalKarte at-p-3 at-mittig">
                                 <div class="lernen-stat-value">{{ statistik.serie }}</div>
                                 <div class="at-gedaempft at-klein">
                                     {{ statistik.serie ? t('lernen.statistik.serieTage', { n: statistik.serie }) : t('lernen.statistik.serieTitel') }}
@@ -636,7 +636,7 @@ async function aktivUmschalten(karte) {
                         </div>
                     </div>
 
-                    <div class="dailyCard at-p-3 at-mu-4">
+                    <div class="journalKarte at-p-3 at-mu-4">
                         <h6 class="at-mu-3">{{ t('lernen.statistik.proTagTitel') }}</h6>
                         <div class="lernen-tage-chart">
                             <div v-for="d in statistik.proTag" :key="d.tag" class="lernen-tage-balken-wrap" :title="d.tag + ': ' + d.anzahl">
@@ -645,7 +645,7 @@ async function aktivUmschalten(karte) {
                         </div>
                     </div>
 
-                    <div class="dailyCard at-p-3">
+                    <div class="journalKarte at-p-3">
                         <h6 class="at-mu-3">{{ t('lernen.statistik.kategorieTitel') }}</h6>
                         <p v-if="!statistik.kategorien.length" class="at-gedaempft at-klein at-mu-0">{{ t('lernen.statistik.kategorieLeer') }}</p>
                         <div v-else>

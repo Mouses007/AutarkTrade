@@ -4,7 +4,7 @@
  * Die Zeilen rechnet `rechnung.js`; hier wird nur gezeichnet.
  */
 import { useI18n } from 'vue-i18n'
-import { useTwoDecCurrencyFormat } from '../../utils/journal/format.js'
+import { formGeld2 } from '../../utils/journal/format.js'
 import TitelKarte from './TitelKarte.vue'
 
 defineProps({
@@ -49,8 +49,8 @@ const faktor = (f) => (f === Infinity ? '∞' : f.toFixed(2))
                                 <span class="zahl" :class="z.quote >= 50 ? 'at-gut' : 'at-schlecht'">{{ z.quote.toFixed(0) }}%</span>
                             </div>
                         </td>
-                        <td class="zahl" :class="z.schnitt >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(z.schnitt) }}</td>
-                        <td class="zahl at-fett" :class="z.summe >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(z.summe) }}</td>
+                        <td class="zahl" :class="z.schnitt >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld2(z.schnitt) }}</td>
+                        <td class="zahl at-fett" :class="z.summe >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld2(z.summe) }}</td>
                         <td class="zahl" :class="z.faktor >= 1 ? 'at-gut' : 'at-schlecht'">{{ faktor(z.faktor) }}</td>
                     </tr>
                 </tbody>

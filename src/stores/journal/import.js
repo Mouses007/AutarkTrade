@@ -20,4 +20,4 @@ export const vorhandeneImporte = reactive([])
 export const vorhandeneTradeTage = reactive([])
 export const vorhandeneTradeTageGeladen = ref(false)
 /** Marktschluss in Handelszeitzone (MFE). */
-export const marketCloseTime = ref('16:00:00')
+export const marktSchluss = ref('16:00:00')

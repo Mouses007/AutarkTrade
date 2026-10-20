@@ -15,7 +15,7 @@ import { betragArt } from '../stores/filters.js'
 import { journalTage, auswertungNotes, zufriedenheitTage, zufriedenheitTrades, tags, verfuegbareTags } from '../stores/trades.js'
 import { useMountAuswertung } from '../utils/journal/ablauf.js'
 import { ladeDiagramme, geladeneDiagramme } from '../utils/journal/diagrammLader.js'
-import { useChartFormat } from '../utils/journal/format.js'
+import { formDatumKurz } from '../utils/journal/format.js'
 import { palette, mitDeckkraft } from '../utils/journal/diagramme/gestaltung.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import NoData from '../components/NoData.vue'
@@ -108,7 +108,7 @@ async function zeichnen() {
         d.useHorizontalBarChart('hbarChart2', rahmen.value.map(r => r.name), rahmen.value.map(r => r.anzahl), farben)
     }
     if (stress.value.liste.length) {
-        d.useStressLineChart('stressLineChart', stress.value.liste.map(n => useChartFormat(n.dateUnix)),
+        d.useStressLineChart('stressLineChart', stress.value.liste.map(n => formDatumKurz(n.dateUnix)),
             stress.value.liste.map(n => Number(n.entryStressLevel)), { max: 10 })
     }
     if (stressQuote.value.length) {
@@ -116,7 +116,7 @@ async function zeichnen() {
             stressQuote.value.map(s => (s.quote >= 50 ? p.goodBalken : p.badBalken)))
     }
     if (emotion.value.liste.length) {
-        d.useStressLineChart('emotionLineChart', emotion.value.liste.map(n => useChartFormat(n.dateUnix)),
+        d.useStressLineChart('emotionLineChart', emotion.value.liste.map(n => formDatumKurz(n.dateUnix)),
             emotion.value.liste.map(n => Number(n.emotionLevel)), { max: 10, color: p.good, name: t('auswertung.emotionProgress') })
     }
     if (emotionQuote.value.length) {
@@ -198,7 +198,7 @@ const vorzeichen = (x) => (x >= 0 ? '+' : '')
                         <div v-if="zeige('tag_' + g.name)" :class="gruppen.length === 1 ? 'voll' : 'halb'">
                             <TitelKarte :titel="g.name" :punkt="g.farbe || 'var(--muted)'"
                                 :info-text="t('auswertung.tooltipTagGroup', { name: g.name })">
-                                <div :id="'hbarTagGroup' + i" class="chartClass aw-diagramm"
+                                <div :id="'hbarTagGroup' + i" class="diagrammFlaeche aw-diagramm"
                                     :style="{ height: Math.max(160, g.zeilen.length * 34 + 40) + 'px' }"></div>
                                 <div class="at-tabelle-huelle">
                                     <table class="at-tabelle dicht">
@@ -227,14 +227,14 @@ const vorzeichen = (x) => (x >= 0 ? '+' : '')
                     <!-- Weitere Karten -->
                     <div v-if="zeige('timeframe')" class="halb">
                         <TitelKarte :titel="t('auswertung.timeframeUsage')" info="auswertung.tooltipTimeframe">
-                            <div v-if="rahmen.length" id="hbarChart2" class="chartClass aw-diagramm"></div>
+                            <div v-if="rahmen.length" id="hbarChart2" class="diagrammFlaeche aw-diagramm"></div>
                             <p v-else class="aw-leer">{{ t('auswertung.noTimeframeData') }}</p>
                         </TitelKarte>
                     </div>
                     <div v-if="zeige('stressTime')" class="halb">
                         <TitelKarte :titel="t('auswertung.stressProgress')" info="auswertung.tooltipStressProgress">
                             <template v-if="stress.liste.length">
-                                <div id="stressLineChart" class="chartClass aw-diagramm"></div>
+                                <div id="stressLineChart" class="diagrammFlaeche aw-diagramm"></div>
                                 <div class="aw-schnitt">{{ t('auswertung.avgStress') }} <b class="at-warn">{{ stress.schnitt.toFixed(1) }}</b></div>
                             </template>
                             <p v-else class="aw-leer">{{ t('auswertung.noStressData') }}</p>
@@ -242,14 +242,14 @@ const vorzeichen = (x) => (x >= 0 ? '+' : '')
                     </div>
                     <div v-if="zeige('stressPerf')" class="halb">
                         <TitelKarte :titel="t('auswertung.stressVsWinRate')" info="auswertung.tooltipStressVsWin">
-                            <div v-if="stressQuote.length" id="hbarChart3" class="chartClass aw-diagramm"></div>
+                            <div v-if="stressQuote.length" id="hbarChart3" class="diagrammFlaeche aw-diagramm"></div>
                             <p v-else class="aw-leer">{{ t('auswertung.noStressData') }}</p>
                         </TitelKarte>
                     </div>
                     <div v-if="zeige('emotionTime')" class="halb">
                         <TitelKarte :titel="t('auswertung.emotionProgress')" info="auswertung.tooltipEmotionProgress">
                             <template v-if="emotion.liste.length">
-                                <div id="emotionLineChart" class="chartClass aw-diagramm"></div>
+                                <div id="emotionLineChart" class="diagrammFlaeche aw-diagramm"></div>
                                 <div class="aw-schnitt">{{ t('auswertung.avgEmotion') }} <b class="at-gut">{{ emotion.schnitt.toFixed(1) }}</b></div>
                             </template>
                             <p v-else class="aw-leer">{{ t('auswertung.noEmotionData') }}</p>
@@ -257,12 +257,12 @@ const vorzeichen = (x) => (x >= 0 ? '+' : '')
                     </div>
                     <div v-if="zeige('emotionPerf') && emotionQuote.length" class="halb">
                         <TitelKarte :titel="t('auswertung.emotionVsWinRate')" info="auswertung.tooltipEmotionVsWin">
-                            <div id="hbarChart4" class="chartClass aw-diagramm"></div>
+                            <div id="hbarChart4" class="diagrammFlaeche aw-diagramm"></div>
                         </TitelKarte>
                     </div>
                     <div v-if="zeige('radar')" class="halb">
                         <TitelKarte :titel="t('auswertung.completenessRadar')" info="auswertung.tooltipCompletenessRadar">
-                            <div id="radarChart1" class="chartClass aw-diagramm"></div>
+                            <div id="radarChart1" class="diagrammFlaeche aw-diagramm"></div>
                         </TitelKarte>
                     </div>
                 </div>

@@ -11,8 +11,8 @@ import dayjs from './zeit.js'
 import i18n from '../../i18n/index.js'
 import { dbFind, dbFirst, dbDelete, dbDeleteWhere } from '../db.js'
 import { refreshAccountBalance } from '../../stores/accountBalance.js'
-import { pageId, timeZoneTrade, queryLimit, journalHatDaten, tagesSeite, tagesAbfrageGrenze, listeZuEnde, markierterEintrag } from '../../stores/app/rahmen.js'
-import { gewaehlterBereich, selectedPositions, selectedAccounts, tagAuswahl, selectedBroker, selectedTradeCategory, daysBack } from '../../stores/journal/filter.js'
+import { seitenId, tradeZeitzone, abfrageGrenze, journalHatDaten, tagesSeite, tagesAbfrageGrenze, listeZuEnde, markierterEintrag } from '../../stores/app/rahmen.js'
+import { gewaehlterBereich, gewaehlteRichtungen, gewaehlteKonten, tagAuswahl, gewaehlteBoerse, selectedTradeCategory, tageZurueck } from '../../stores/journal/filter.js'
 import { journalTage, gefilterteTageAlle, gefilterteTradesFlach, imports } from '../../stores/journal/auswertung.js'
 import { pAndL, blotter } from '../../stores/journal/import.js'
 import { tags, zufriedenheitTage, zufriedenheitTrades, excursions, verfuegbareTags } from '../../stores/journal/tagebuch.js'
@@ -28,25 +28,25 @@ const NOTIZ_TEXTE = ['note', 'title', 'entryNote', 'feelings', 'playbook', 'clos
 
 /** Abfrage der Tageszeilen je nach Seite. */
 function tageszeilenAbfrage(param) {
-    if (pageId.value === 'imports' || param === 'imports') {
+    if (seitenId.value === 'imports' || param === 'imports') {
         return { exclude: OHNE_GROSSE_SPALTEN, descending: 'dateUnix', limit: 20 }
     }
-    if (pageId.value === 'addExcursions') {
+    if (seitenId.value === 'exkursionen') {
         return {
             exclude: OHNE_GROSSE_SPALTEN,
-            greaterThanOrEqualTo: { dateUnix: dayjs().subtract(daysBack.value, 'day').unix() },
+            greaterThanOrEqualTo: { dateUnix: dayjs().subtract(tageZurueck.value, 'day').unix() },
             lessThan: { dateUnix: dayjs().unix() },
             ascending: 'dateUnix',
         }
     }
     const r = gewaehlterBereich.value
-    if (istGanzerZeitraum(r)) return { exclude: OHNE_GROSSE_SPALTEN, ascending: 'dateUnix', limit: queryLimit.value }
+    if (istGanzerZeitraum(r)) return { exclude: OHNE_GROSSE_SPALTEN, ascending: 'dateUnix', limit: abfrageGrenze.value }
     return {
         exclude: OHNE_GROSSE_SPALTEN,
         greaterThanOrEqualTo: { dateUnix: r.start },
         lessThan: { dateUnix: r.end },
         ascending: 'dateUnix',
-        limit: queryLimit.value,
+        limit: abfrageGrenze.value,
     }
 }
 
@@ -78,10 +78,10 @@ async function ladeTradeTypNotizen(zeilen) {
 /** Tageskopie ohne Trades/P&L/Blotter, mit Tag/Monat/Jahr in der Handelszeitzone. */
 function tageskopie(zeile, n) {
     const { trades: _t, pAndL: _p, blotter: _b, ...kopf } = zeile
-    const tag = dayjs.unix(zeile.dateUnix).tz(timeZoneTrade.value)
+    const tag = dayjs.unix(zeile.dateUnix).tz(tradeZeitzone.value)
     // Bewusster Altfehler §7.11: `date` wird zur Tageszahl, die DB-Zeichenkette geht verloren.
     const kopie = { ...kopf, date: tag.date(), month: tag.month(), year: tag.year(), trades: [] }
-    if (pageId.value === 'daily') {
+    if (seitenId.value === 'tagesansicht') {
         const k = String(zeile.dateUnix)
         kopie.satisfaction = n.tagesZufriedenheit.has(k) ? n.tagesZufriedenheit.get(k) : null
     }
@@ -109,11 +109,11 @@ export async function filtereTrades(_param) {
 
         const gewaehlt = tagAuswahl.value
         const passt = erstelleFilter({
-            boerse: selectedBroker.value,
+            boerse: gewaehlteBoerse.value,
             kategorie: selectedTradeCategory.value,
             bereich: gewaehlterBereich.value,
-            richtungen: selectedPositions.value,
-            konten: selectedAccounts.value,
+            richtungen: gewaehlteRichtungen.value,
+            konten: gewaehlteKonten.value,
             gewaehlteTags: gewaehlt,
         })
 
@@ -163,9 +163,9 @@ export function ladeNaechsteTage() {
 }
 
 /** Löscht den Handelstag `markierterEintrag` samt Notizen, Tags und Zufriedenheit. */
-export async function useDeleteTrade() {
+export async function loescheTrade() {
     const tag = markierterEintrag.value
-    const boerse = selectedBroker.value || 'bitunix'
+    const boerse = gewaehlteBoerse.value || 'bitunix'
     const zeile = await dbFirst('trades', { equalTo: { dateUnix: tag, broker: boerse } })
         || await dbFirst('trades', { equalTo: { dateUnix: tag } })
     if (!zeile) {
@@ -186,7 +186,7 @@ export async function useDeleteTrade() {
 }
 
 /** Löscht alle Exkursionen des Handelstags `markierterEintrag`. */
-export async function useDeleteExcursions() {
+export async function loescheExkursionen() {
     try {
         await dbDeleteWhere('excursions', { equalTo: { dateUnix: markierterEintrag.value } })
     } catch (e) {

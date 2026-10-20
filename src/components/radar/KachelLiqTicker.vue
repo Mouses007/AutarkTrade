@@ -88,17 +88,17 @@ function geld(v) {
 
         <div class="ltSummen">
             <div class="ltSumme">
-                <span class="ltSeiteLabel redTrade">{{ t('livetrading.liq.longs') }}</span>
-                <b class="redTrade">{{ geld(gesamt.longUsd) }} $</b>
+                <span class="ltSeiteLabel verlustWert">{{ t('livetrading.liq.longs') }}</span>
+                <b class="verlustWert">{{ geld(gesamt.longUsd) }} $</b>
             </div>
             <div class="ltSumme">
-                <span class="ltSeiteLabel greenTrade">{{ t('livetrading.liq.shorts') }}</span>
-                <b class="greenTrade">{{ geld(gesamt.shortUsd) }} $</b>
+                <span class="ltSeiteLabel gewinnWert">{{ t('livetrading.liq.shorts') }}</span>
+                <b class="gewinnWert">{{ geld(gesamt.shortUsd) }} $</b>
             </div>
         </div>
 
         <div v-if="uebergewicht" class="ltUebergewicht"
-            :class="uebergewicht.seite === 'long' ? 'redTrade' : 'greenTrade'">
+            :class="uebergewicht.seite === 'long' ? 'verlustWert' : 'gewinnWert'">
             {{ t('livetrading.liq.uebergewicht_' + uebergewicht.seite,
                  { pct: Math.round(uebergewicht.anteil * 100) }) }}
         </div>
@@ -119,7 +119,7 @@ function geld(v) {
             <div v-for="(e, i) in letzte" :key="e.t + '_' + i" class="ltZeile">
                 <span class="ltZeit">{{ dayjs(e.t).format('HH:mm:ss') }}</span>
                 <span class="ltSym">{{ e.symbol.replace(/USDT$/, '') }}</span>
-                <span :class="['ltBetrag', e.seite === 1 ? 'greenTrade' : 'redTrade']">
+                <span :class="['ltBetrag', e.seite === 1 ? 'gewinnWert' : 'verlustWert']">
                     {{ geld(e.usd) }} $
                 </span>
                 <span class="ltSeite">

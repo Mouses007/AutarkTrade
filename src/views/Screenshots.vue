@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Seite `/screenshots` (Spec S.7): alle Bilder, neueste zuerst, in Seiten zu
+ * Seite `/bilder` (Spec S.7): alle Bilder, neueste zuerst, in Seiten zu
  * vier nachgeladen (Endlos-Scroll), gefiltert nach Tags und Börse (Filterleiste,
  * serverseitig in `ladeBilder`) und hier zusätzlich nach Bildtyp.
  *
@@ -70,7 +70,7 @@ function tradeIdAus(n) {
 }
 const playbookLink = (b) => {
     const id = tradeIdAus(b.name)
-    return id ? `/playbook?tradeId=${encodeURIComponent(id)}` : ''
+    return id ? `/bewertungen?tradeId=${encodeURIComponent(id)}` : ''
 }
 
 // ── Endlos-Scroll ──

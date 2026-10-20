@@ -11,8 +11,8 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { selectedBroker } from '../stores/filters.js'
-import { currentUser } from '../stores/settings.js'
+import { gewaehlteBoerse } from '../stores/filters.js'
+import { appEinstellungen } from '../stores/settings.js'
 import { loadSymbolMeta } from '../utils/liveSymbols.js'
 import {
     liveSymbol, liveMarket, liveViewPct, liveFrameMs, liveShowProfile,
@@ -241,14 +241,14 @@ function normalizeSymbol(raw) {
 /** Vorbelegung: offene Position → zuletzt gewählt → BTCUSDT */
 async function resolveDefaultSymbol() {
     const known = (s) => s && symbols.value.some(x => x.symbol === s)
-    if (currentUser.value?.liveSymbol) return   // gespeicherte Nutzerwahl hat Vorrang
+    if (appEinstellungen.value?.liveSymbol) return   // gespeicherte Nutzerwahl hat Vorrang
     // Ohne gewählte Börse gibt es nichts abzufragen (frische Installation)
-    if (!selectedBroker.value) {
+    if (!gewaehlteBoerse.value) {
         if (!known(liveSymbol.value)) liveSymbol.value = 'BTCUSDT'
         return
     }
     try {
-        const { data } = await axios.get(`/api/${selectedBroker.value}/open-positions`)
+        const { data } = await axios.get(`/api/${gewaehlteBoerse.value}/open-positions`)
         const list = Array.isArray(data) ? data : (data?.positions || [])
         const candidate = normalizeSymbol(list[0]?.symbol)
         if (known(candidate)) { liveSymbol.value = candidate; return }

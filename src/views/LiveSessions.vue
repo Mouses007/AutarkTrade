@@ -95,7 +95,7 @@ const dauerText = (s) => {
 }
 
 const geld = (v) => `${Number(v) >= 0 ? '+' : '−'}${Math.abs(Number(v) || 0).toFixed(2)} $`
-const farbe = (v) => (Number(v) || 0) >= 0 ? 'greenTrade' : 'redTrade'
+const farbe = (v) => (Number(v) || 0) >= 0 ? 'gewinnWert' : 'verlustWert'
 
 const hatPlan = (s) => Number(s.planMaxVerlustUsd) > 0 || Number(s.planMaxTrades) > 0
 

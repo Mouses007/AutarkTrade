@@ -16,9 +16,9 @@
  */
 import { watch, onBeforeUnmount } from 'vue'
 import axios from 'axios'
-import { aiReportGenerating, aiReportCountBefore, aiReportLabel, currentUser } from '../stores/settings.js'
-import { pageId } from '../stores/ui.js'
-import { selectedBroker } from '../stores/filters.js'
+import { aiReportGenerating, aiReportCountBefore, aiReportLabel, appEinstellungen } from '../stores/settings.js'
+import { seitenId } from '../stores/ui.js'
+import { gewaehlteBoerse } from '../stores/filters.js'
 import { sendNotification } from '../utils/notify.js'
 import { logWarn } from '../utils/logger.js'
 
@@ -41,7 +41,7 @@ export function useKiBerichtWache(istJournal, t) {
         try {
             // Gleicher Filter wie beim Zählen auf dem KI-Coach (nach Börse) —
             // sonst wäre die ungefilterte Liste sofort „länger" als vorher.
-            const params = selectedBroker.value ? { broker: selectedBroker.value } : {}
+            const params = gewaehlteBoerse.value ? { broker: gewaehlteBoerse.value } : {}
             const { data } = await axios.get('/api/ai/reports', { params })
             const anzahl = Array.isArray(data) ? data.length : (data?.reports?.length ?? 0)
             if (anzahl > (aiReportCountBefore.value ?? 0)) {
@@ -60,10 +60,10 @@ export function useKiBerichtWache(istJournal, t) {
         }
     }
 
-    const kiAn = () => currentUser.value?.aiEnabled !== false && currentUser.value?.aiEnabled !== 0
+    const kiAn = () => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0
 
-    watch([aiReportGenerating, pageId, istJournal], () => {
-        const sollLaufen = aiReportGenerating.value && istJournal.value && pageId.value !== 'kiAgent' && kiAn()
+    watch([aiReportGenerating, seitenId, istJournal], () => {
+        const sollLaufen = aiReportGenerating.value && istJournal.value && seitenId.value !== 'kiAgent' && kiAn()
         if (sollLaufen && !takt) takt = setInterval(frage, TAKT_MS)
         else if (!aiReportGenerating.value) stoppe()
     })

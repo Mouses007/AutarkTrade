@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path'
 import { existsSync } from 'fs'
 import { initDb, getKnex } from './server/database.js'
-import { setupApiRoutes } from './server/api-routes.js'
+import { registriereApiRouten } from './server/api-routes.js'
 import { setupBitunixRoutes } from './server/bitunix-api.js'
 import { setupBitgetRoutes } from './server/bitget-api.js'
 import { setupPionexRoutes } from './server/pionex-api.js'
@@ -192,7 +192,7 @@ async function starteServer() {
     // Setup API routes
     console.log('[start] Routen')
     setupAuthRoutes(app);
-    setupApiRoutes(app);
+    registriereApiRouten(app);
     setupBitunixRoutes(app);
     setupBitgetRoutes(app);
     setupPionexRoutes(app);

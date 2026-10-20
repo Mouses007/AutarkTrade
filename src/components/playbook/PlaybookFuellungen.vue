@@ -7,7 +7,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
-import { timeZoneTrade } from '@/stores/app/rahmen.js'
+import { tradeZeitzone } from '@/stores/app/rahmen.js'
 import { usePlaybook } from './usePlaybook.js'
 import {
     durchschnittEroeffnung, gruppiereFuellungen, gefiltertesProtokoll, fuellZeit, fest,
@@ -22,7 +22,7 @@ const pb = usePlaybook()
 const m = computed(() => props.eintrag.tradingMetadata || {})
 const fills = computed(() => (Array.isArray(m.value.fills) ? m.value.fills : []))
 const eroeffnungen = computed(() => fills.value.filter(f => !f.reduceOnly))
-const gruppen = computed(() => gruppiereFuellungen(fills.value, timeZoneTrade.value, props.eintrag.tradeId))
+const gruppen = computed(() => gruppiereFuellungen(fills.value, tradeZeitzone.value, props.eintrag.tradeId))
 const summeEroeffnet = computed(() => eroeffnungen.value.reduce((s, f) => s + (Number(f.qty) || 0), 0))
 const summeGebuehr = computed(() => fills.value.reduce((s, f) => s + (Number(f.fee) || 0), 0))
 const protokoll = computed(() => gefiltertesProtokoll(m.value))
@@ -47,7 +47,7 @@ function protokollUmschalten() {
     else pb.zugeklappteProtokolle.add(id)
 }
 
-const zeit = (x) => fuellZeit(x, timeZoneTrade.value)
+const zeit = (x) => fuellZeit(x, tradeZeitzone.value)
 const wert = (f) => fest((Number(f.qty) || 0) * (Number(f.price) || 0), 2)
 </script>
 

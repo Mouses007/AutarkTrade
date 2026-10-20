@@ -321,7 +321,7 @@ console.error = (...a) => { fehlerMeldungen.push(a.map(x => (x instanceof Error 
 const ui = await import('../stores/ui.js')
 const filter = await import('../stores/filters.js')
 const st = await import('../stores/trades.js')
-const { currentUser } = await import('../stores/settings.js')
+const { appEinstellungen } = await import('../stores/settings.js')
 const quick = await import('./quickImport.js')
 const kern = {
     ...(await import('./journal/laden.js')),
@@ -347,7 +347,7 @@ globalThis.__journalDaten = {
     incoming_positions: [],
     notes: [], tags: [], satisfactions: [], excursions: [],
 }
-currentUser.value = { accounts: [{ value: 'bitunix', label: 'bitunix' }] }
+appEinstellungen.value = { accounts: [{ value: 'bitunix', label: 'bitunix' }] }
 
 const ergebnis = {}
 
@@ -430,14 +430,14 @@ function dayjsUnix(iso, plusMonate = 0) {
 }
 
 function stelleEin(e) {
-    ui.pageId.value = e.seite || 'dashboard'
-    ui.timeZoneTrade.value = e.zone || 'Europe/Zurich'
+    ui.seitenId.value = e.seite || 'journalUebersicht'
+    ui.tradeZeitzone.value = e.zone || 'Europe/Zurich'
     ui.journalHatDaten.value = false
     filter.gewaehlterBereich.value = e.zeitraum || { start: 0, end: 0 }
-    filter.selectedPositions.value = e.richtungen || ['long', 'short']
-    filter.selectedAccounts.value = e.konten || []
+    filter.gewaehlteRichtungen.value = e.richtungen || ['long', 'short']
+    filter.gewaehlteKonten.value = e.konten || []
     filter.tagAuswahl.value = e.tags || ALLE_TAGS
-    filter.selectedBroker.value = e.boerse ?? ''
+    filter.gewaehlteBoerse.value = e.boerse ?? ''
     filter.selectedTradeCategory.value = e.kategorie || 'all'
     filter.betragArt.value = 'net'
     st.timeFrame.value = e.zeitrahmen || 15
@@ -484,7 +484,7 @@ async function dashboard(e) {
         globalThis.__journalCharts = {}
         await charts.zeichneDiagramme('init')
         for (const id of ['barChartNegative1', 'barChartNegative2', 'barChartNegative3', 'barChartNegative4', 'barChartNegative7',
-            'barChartNegative13', 'barChartNegative16', 'barChartNegative17', 'barChartNegative18']) charts.useBarChartNegative(id)
+            'barChartNegative13', 'barChartNegative16', 'barChartNegative17', 'barChartNegative18']) charts.balkenNegativDiagramm(id)
         diagramme[art] = Object.fromEntries(Object.entries(globalThis.__journalCharts).sort().map(([id, o]) => [id, diagrammDaten(o)]))
     }
     // Gruppen vergleichen gegen den GEFILTERTEN Trade: so bleibt dort nur,
@@ -518,7 +518,7 @@ ergebnis.dashboard = {}
 for (const [name, e] of Object.entries(SZENARIEN)) ergebnis.dashboard[name] = await dashboard(e)
 
 // --- 4. Tagesansicht ---------------------------------------------------------
-stelleEin({ seite: 'daily', zeitraum: monat('2026-02') })
+stelleEin({ seite: 'tagesansicht', zeitraum: monat('2026-02') })
 await Promise.all([tage.ladeExkursionen(), tage.ladeZufriedenheit(), tage.ladeTags(), tage.ladeVerfuegbareTags()])
 await kern.filtereTrades()
 globalThis.__journalCharts = {}
@@ -534,7 +534,7 @@ ergebnis.tagesansicht = kompakt(sauber({
 ergebnis.kalender = {}
 for (const [name, iso, zone] of [['maerz', '2026-03', 'Europe/Zurich'], ['oktober', '2025-10', 'Europe/Zurich'], ['maerzUSA', '2026-03', 'America/New_York']]) {
     const m = monat(iso)
-    stelleEin({ seite: 'calendar', zone })
+    stelleEin({ seite: 'kalender', zone })
     filter.gewaehlterMonat.value = m
     filter.gewaehlterBereich.value = { start: monat(`${iso.slice(0, 4)}-01`).start, end: m.end }
     await Promise.all([tage.ladeTags(), tage.ladeVerfuegbareTags()])

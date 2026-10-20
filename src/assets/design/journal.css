@@ -8,12 +8,12 @@
 
 /* --- Gewinn/Verlust (journalweit, auch Chart, Live-Trading, Agent;
  *     utils/privacy.js nennt sie). --- */
-.greenTrade { color: var(--good) !important; }
-.redTrade { color: var(--bad) !important; }
+.gewinnWert { color: var(--good) !important; }
+.verlustWert { color: var(--bad) !important; }
 
 /* --- Standardkarte (Altbestand von Baustein `Karte`; Agent-Seiten,
  *     CoinRangliste, Incoming, KiAgent, Lernen) --- */
-.dailyCard {
+.journalKarte {
     width: 100%;
     height: 100%;
     padding: 1rem;
@@ -22,22 +22,22 @@
     border-radius: var(--radius);
     box-shadow: var(--schatten);
 }
-.dailyCard img { width: 100%; }
+.journalKarte img { width: 100%; }
 @media (max-width: 767.98px) {
-    .dailyCard { padding: 0.65rem; }
-    .dailyCard h6 { font-size: 0.9rem; }
+    .journalKarte { padding: 0.65rem; }
+    .journalKarte h6 { font-size: 0.9rem; }
 }
 
 /* --- Diagrammflächen (DiagrammKarte, KarteKontostand, Auswertung,
  *     AgentPerformance). utils/journal/ablauf.js und diagramme/grundlagen.js
  *     finden die ECharts-Flächen über diese Klassen. --- */
-.chartClass { width: 100%; height: 400px; }
-.chartIdCardClass { height: 120px; }
+.diagrammFlaeche { width: 100%; height: 400px; }
+.diagrammKarteFlaeche { height: 120px; }
 @media (max-width: 991.98px) {
-    .chartClass { height: 320px; }
+    .diagrammFlaeche { height: 320px; }
 }
 @media (max-width: 767.98px) {
-    .chartClass { height: 260px; }
+    .diagrammFlaeche { height: 260px; }
     /* Inline-Höhen einzelner Dashboard-Diagramme am Handy überstimmen. */
     #perfChart1 { height: 360px !important; }
     #heatmapChart1 { height: 240px !important; }

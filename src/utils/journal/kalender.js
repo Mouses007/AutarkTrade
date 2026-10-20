@@ -4,7 +4,7 @@
  */
 import calendarize from 'calendarize'
 import dayjs, { anzeige } from './zeit.js'
-import { pageId, timeZoneTrade } from '../../stores/app/rahmen.js'
+import { seitenId, tradeZeitzone } from '../../stores/app/rahmen.js'
 import { diagrammeImAufbau } from '../../stores/app/laden.js'
 import { gewaehlterMonat } from '../../stores/journal/filter.js'
 import { journalTage } from '../../stores/journal/auswertung.js'
@@ -15,7 +15,7 @@ const zwei = (n) => String(n).padStart(2, '0')
 
 /** Monatsanfänge, für die ein Raster entsteht (Sekunden). */
 function monate(start, zone) {
-    if (pageId.value !== 'calendar') return [start]
+    if (seitenId.value !== 'kalender') return [start]
     const anfang = dayjs.unix(start).tz(zone).startOf('month')
     const liste = []
     // vom gewählten Monat rückwärts bis Januar
@@ -69,7 +69,7 @@ export async function ladeKalender() {
         // Bewusster Altfehler §7.4: miniKalenderDaten ist ein Objekt; das hier
         // legt dort den Schlüssel `length` an, und Mini-Kalender kommen nie hinein.
         miniKalenderDaten.length = 0
-        const zone = timeZoneTrade.value
+        const zone = tradeZeitzone.value
         const start = gewaehlterMonat.value.start
         const gewaehlt = dayjs.unix(start).tz(zone).startOf('month').unix()
         for (const wert of monate(start, zone)) {

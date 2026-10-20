@@ -19,7 +19,7 @@ import SeiteLaedt from '../components/SeiteLaedt.vue'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../components/basis'
 import KiHinweis from '../components/quellen/KiHinweis.vue'
-import { useXDecCurrencyFormat } from '../utils/journal/format.js'
+import { formGeldStellen } from '../utils/journal/format.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/journal/zeit.js'
@@ -105,7 +105,7 @@ const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Nu
 // Ohne Verlust-Trades ist der Profit-Faktor nicht definiert (kommt als null).
 const profitFaktor = (v, trades) => (v === null || v === undefined ? (trades > 0 ? '∞' : '–') : zahl(v))
 const profitFaktorGut = (v) => v === null || v === undefined || v >= 1
-const geld = (v) => useXDecCurrencyFormat(Number(v) || 0, 2)
+const geld = (v) => formGeldStellen(Number(v) || 0, 2)
 /** Nur Datum — bei Abdeckungslücken zählt der Tag, nicht die Uhrzeit. */
 const datum = (t) => (t ? new Date(Number(t)).toISOString().slice(0, 10) : '–')
 
@@ -407,7 +407,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             <Hinweis v-if="fehler" art="fehler" class="abstandUnten3">{{ fehler }}</Hinweis>
 
             <!-- ══ Vorschläge ══ -->
-            <div v-if="vorschlaege.filter(v => v.status === 'pending').length" class="dailyCard karte">
+            <div v-if="vorschlaege.filter(v => v.status === 'pending').length" class="journalKarte karte">
                 <div class="section-title abstandUnten">
                     <Symbol name="idee" class="vorSymbol" />{{ t('strategies.suggestions') }}
                 </div>
@@ -439,7 +439,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             </div>
 
             <!-- ══ Backtest ══ -->
-            <div class="dailyCard karte">
+            <div class="journalKarte karte">
                 <div class="section-title abstandUnten">{{ t('strategies.backtest') }}</div>
                 <div class="raster unten abstandUnten3">
                     <div class="b3 m3">
@@ -520,7 +520,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                 </p>
 
                 <details>
-                    <summary class="fein at-gedaempft pointerClass abstandUnten">{{ t('strategies.showParams') }}</summary>
+                    <summary class="fein at-gedaempft klickZiel abstandUnten">{{ t('strategies.showParams') }}</summary>
                     <div class="paramSpalten">
                         <div>
                             <StrategyParamForm v-model="form.params" :schema="strategie?.params || []"
@@ -537,7 +537,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             <!-- ══ Robustheit ══
                  Drei Stufen zwischen „guter Backtest" und „belastbar". Sie
                  benutzen bewusst dasselbe Formular wie der Backtest darüber. -->
-            <div class="dailyCard karte">
+            <div class="journalKarte karte">
                 <div class="section-title abstandUnten1">
                     <Symbol name="schildHaken" class="vorSymbol" />{{ t('strategies.robustTitle') }}
                 </div>
@@ -645,9 +645,9 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                 <tr v-for="p in robust.matrixStab.proWert" :key="p.wert">
                                     <td><strong>{{ p.wert }}</strong></td>
                                     <td class="zahl">{{ p.positiv }}/{{ p.zellen }}</td>
-                                    <td class="zahl" :class="p.median >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.median) }}</td>
-                                    <td class="zahl redTrade">{{ zahl(p.schlechteste) }}</td>
-                                    <td class="zahl greenTrade">{{ zahl(p.beste) }}</td>
+                                    <td class="zahl" :class="p.median >= 0 ? 'gewinnWert' : 'verlustWert'">{{ zahl(p.median) }}</td>
+                                    <td class="zahl verlustWert">{{ zahl(p.schlechteste) }}</td>
+                                    <td class="zahl gewinnWert">{{ zahl(p.beste) }}</td>
                                     <td class="zahl">
                                         <Pille v-if="p.traegt" ton="gut">{{ t('strategies.mHolds') }}</Pille>
                                     </td>
@@ -684,8 +684,8 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                     :class="{ besterWert: p.wert === robust.stabilitaet.besterWert }">
                                     <td><strong>{{ p.wert }}</strong></td>
                                     <td class="zahl" :class="{ 'at-gedaempft': !p.belastbar }">{{ p.trades }}</td>
-                                    <td class="zahl" :class="p.expectancyR >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.expectancyR) }}</td>
-                                    <td class="zahl" :class="p.expectancyROhneTop >= 0 ? 'greenTrade' : 'redTrade'">{{ zahl(p.expectancyROhneTop) }}</td>
+                                    <td class="zahl" :class="p.expectancyR >= 0 ? 'gewinnWert' : 'verlustWert'">{{ zahl(p.expectancyR) }}</td>
+                                    <td class="zahl" :class="p.expectancyROhneTop >= 0 ? 'gewinnWert' : 'verlustWert'">{{ zahl(p.expectancyROhneTop) }}</td>
                                     <td class="zahl">{{ zahl(p.returnPct, 1) }} %</td>
                                     <td class="zahl">{{ zahl(p.maxDrawdownPct, 1) }} %</td>
                                 </tr>
@@ -748,7 +748,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                 <tr v-for="(a, i) in robust.walkforward.abschnitte" :key="i">
                                     <td class="at-gedaempft">{{ datum(a.pruefVon) }} – {{ datum(a.pruefBis) }}</td>
                                     <td><strong>{{ a.gewaehlt }}</strong></td>
-                                    <td class="zahl" :class="a.pruefExpectancyR >= 0 ? 'greenTrade' : 'redTrade'">
+                                    <td class="zahl" :class="a.pruefExpectancyR >= 0 ? 'gewinnWert' : 'verlustWert'">
                                         {{ zahl(a.pruefExpectancyR) }} R
                                     </td>
                                     <td class="zahl">{{ a.pruefTrades }}</td>
@@ -768,7 +768,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             </div>
 
             <!-- ══ Mehrfach-Test ══ -->
-            <div class="dailyCard karte">
+            <div class="journalKarte karte">
                 <div class="section-title abstandUnten1">
                     <Symbol name="raster" class="vorSymbol" />{{ t('strategies.matrixTitle') }}
                 </div>
@@ -859,7 +859,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                     </td>
                                     <td class="zahl">{{ matrixZahl(z.kandidat.expectancyR) }}</td>
                                     <td class="zahl" v-if="matrix.ergebnis.urteil"
-                                        :class="z.deltaR >= 0 ? 'greenTrade' : 'redTrade'">
+                                        :class="z.deltaR >= 0 ? 'gewinnWert' : 'verlustWert'">
                                         {{ z.deltaR >= 0 ? '+' : '' }}{{ matrixZahl(z.deltaR) }}
                                     </td>
                                     <td class="zahl">{{ matrixZahl(z.kandidat.ohneBestenR) }}</td>
@@ -877,7 +877,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             </div>
 
             <!-- ══ Ergebnis ══ -->
-            <div v-if="ergebnis" class="dailyCard karte">
+            <div v-if="ergebnis" class="journalKarte karte">
                 <div class="section-title abstandUnten">{{ t('strategies.result') }}</div>
                 <div v-if="!ergebnis.stats.trades" class="at-gedaempft fein">
                     {{ ergebnis.stats.hinweis || t('strategies.noTradesInPeriod') }}
@@ -981,7 +981,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                         ]" :key="k.l" class="kpi">
                             <div class="kpi-label">{{ k.l }}</div>
                             <div class="kpi-value"
-                                :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">
+                                :class="k.farbe === undefined ? '' : (k.farbe ? 'gewinnWert' : 'verlustWert')">
                                 {{ k.v }}
                             </div>
                         </div>
@@ -991,7 +991,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                          sie ist eine positive Rendite bedeutungslos. -->
                     <p v-if="ergebnis.stats.baselineBuyHoldReturnPct !== null && ergebnis.stats.baselineBuyHoldReturnPct !== undefined"
                         class="fein abstandUnten3"
-                        :class="ergebnis.stats.baselineDiffPct > 0 ? 'greenTrade' : (ergebnis.stats.baselineDiffPct < 0 ? 'redTrade' : 'at-gedaempft')">
+                        :class="ergebnis.stats.baselineDiffPct > 0 ? 'gewinnWert' : (ergebnis.stats.baselineDiffPct < 0 ? 'verlustWert' : 'at-gedaempft')">
                         <Symbol name="waage" class="vorSymbol" />
                         {{ ergebnis.stats.baselineDiffPct > 0
                             ? t('strategies.baselineBeats', { diff: zahl(Math.abs(ergebnis.stats.baselineDiffPct), 1) })
@@ -1036,7 +1036,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
             </div>
 
             <!-- ══ Frühere Läufe ══ -->
-            <div v-if="laeufe.length" class="dailyCard karte">
+            <div v-if="laeufe.length" class="journalKarte karte">
                 <div class="laeufeKopf abstandUnten">
                     <div class="section-title">{{ t('strategies.previousRuns') }}</div>
                     <span class="titelKnoepfe">
@@ -1079,7 +1079,7 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
                                 <td class="zahl">{{ l.stats.trades ?? 0 }}</td>
                                 <td class="zahl">{{ zahl(l.stats.winRate, 1) }}</td>
                                 <td class="zahl"
-                                    :class="(l.stats.expectancyR || 0) >= 0 ? 'greenTrade' : 'redTrade'">
+                                    :class="(l.stats.expectancyR || 0) >= 0 ? 'gewinnWert' : 'verlustWert'">
                                     {{ zahl(l.stats.expectancyR) }}
                                 </td>
                                 <td class="zahl">
@@ -1156,10 +1156,10 @@ const instanzName = (id) => instanzen.value.find((i) => i.id === id)?.name || '�
     margin-bottom: var(--abstand-4);
 }
 
-/* `.dailyCard` setzt global `height: 100%`. Hier stehen die Karten gestapelt
+/* `.journalKarte` setzt global `height: 100%`. Hier stehen die Karten gestapelt
    untereinander — dort zieht die Regel jede einzelne Karte auf die Höhe der
    GESAMTEN Spalte und erzeugt riesige Leerräume. */
-.dailyCard {
+.journalKarte {
     height: auto;
 }
 

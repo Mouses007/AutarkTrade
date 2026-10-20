@@ -2,7 +2,7 @@
 /** Live → Live-Recorder: serverseitige Aufzeichnung von Orderbuch, Liquidationen, Trades. */
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
 import { fmtBytes } from '../gemeinsam/format.js'
 import Knopf from '@/components/basis/Knopf.vue'
@@ -28,7 +28,7 @@ let recResult = ref(null)
 let recStatus = ref(null)
 
 function loadRecorderSettings() {
-    const s = currentUser.value || {}
+    const s = appEinstellungen.value || {}
     recEnabled.value = !!Number(s.liveRecordEnabled)
     recSymbols.value = s.liveRecordSymbols || ''
     recDays.value = Number(s.liveRecordDays) || 14

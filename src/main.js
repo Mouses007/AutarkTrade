@@ -1,3 +1,6 @@
+// Zuerst: alte Speicherschlüssel übernehmen, bevor ein Store sie liest (F3).
+import './utils/speicherUmzug.js'
+
 import { createApp } from 'vue'
 
 import App from './App.vue'

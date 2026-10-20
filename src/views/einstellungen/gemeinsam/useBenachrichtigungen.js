@@ -9,14 +9,14 @@
 import { ref } from 'vue'
 import axios from 'axios'
 import { dbUpdateSettings } from '@/utils/db.js'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { requestNotificationPermission } from '@/utils/notify'
 
 export let browserNotifications = ref(true)
 
 /** Hauptschalter aus den gerade geladenen Einstellungen übernehmen. */
 export function ladeBrowserNotifications() {
-    const settings = currentUser.value || {}
+    const settings = appEinstellungen.value || {}
     browserNotifications.value = settings.browserNotifications !== 0
 }
 
@@ -31,7 +31,7 @@ export async function saveNotificationSetting() {
             }
         }
         await dbUpdateSettings({ browserNotifications: browserNotifications.value ? 1 : 0 })
-        currentUser.value.browserNotifications = browserNotifications.value ? 1 : 0
+        appEinstellungen.value.browserNotifications = browserNotifications.value ? 1 : 0
         console.log(' -> Benachrichtigungs-Einstellung gespeichert:', browserNotifications.value)
     } catch (error) {
         console.error(' -> Fehler beim Speichern der Benachrichtigungs-Einstellung:', error)
@@ -65,7 +65,7 @@ export async function setzeKanal(id, kanal, wert) {
     }
     try {
         await dbUpdateSettings({ benachrichtigungen: kanalWahl.value })
-        if (currentUser.value) currentUser.value.benachrichtigungen = kanalWahl.value
+        if (appEinstellungen.value) appEinstellungen.value.benachrichtigungen = kanalWahl.value
     } catch (e) {
         console.error(' -> Kanalwahl nicht gespeichert:', e)
     }
@@ -101,7 +101,7 @@ export async function ladeBenachrichtigungen() {
     } catch (e) {
         console.error(' -> Meldungs-Register nicht ladbar:', e)
     }
-    const roh = currentUser.value?.benachrichtigungen
+    const roh = appEinstellungen.value?.benachrichtigungen
     kanalWahl.value = roh && typeof roh === 'object' && !Array.isArray(roh) ? { ...roh } : {}
     await ladeMail()
 }

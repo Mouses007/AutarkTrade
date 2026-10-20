@@ -1,7 +1,7 @@
 /**
  * Bot-Trades im Journal-Chart darstellen.
  *
- * Der Chart aus dem Journal (`useCandlestickChart`) kann alles, was ein
+ * Der Chart aus dem Journal (`kerzenDiagramm`) kann alles, was ein
  * abgeschlossener Trade braucht: Ein- und Ausstiegsmarker, SL/TP-Linien,
  * Teilausführungen. Ein Bot-Trade hat dieselben Angaben, nur unter anderen
  * Namen — statt einen zweiten Chart zu pflegen, wird hier übersetzt.
@@ -12,22 +12,22 @@
  * gearbeitet hat.
  */
 
-import { useCandlestickChart } from './journal/diagramme/index.js'
+import { kerzenDiagramm } from './journal/diagramme/index.js'
 
 /**
  * Kerzen aus `market-data`-Form in die drei Arrays, die der Chart erwartet.
  * Reihenfolge ist ECharts-Konvention: [close, open, low, high].
  */
 export function kerzenAufteilen(candles) {
-    const ohlcTimestamps = []
-    const ohlcPrices = []
-    const ohlcVolumes = []
+    const kerzenZeiten = []
+    const kerzenPreise = []
+    const kerzenVolumen = []
     for (const k of candles || []) {
-        ohlcTimestamps.push(Number(k.t))
-        ohlcPrices.push([Number(k.c), Number(k.o), Number(k.l), Number(k.h)])
-        ohlcVolumes.push(Number(k.v) || 0)
+        kerzenZeiten.push(Number(k.t))
+        kerzenPreise.push([Number(k.c), Number(k.o), Number(k.l), Number(k.h)])
+        kerzenVolumen.push(Number(k.v) || 0)
     }
-    return { ohlcTimestamps, ohlcPrices, ohlcVolumes }
+    return { kerzenZeiten, kerzenPreise, kerzenVolumen }
 }
 
 /**
@@ -90,11 +90,11 @@ export function zoneAusSetup(setup, beschriftung = 'Order Block') {
  * @returns {Promise}
  */
 export function useBotTradeChart(elementId, candles, botTrade, setup = null) {
-    const { ohlcTimestamps, ohlcPrices, ohlcVolumes } = kerzenAufteilen(candles)
+    const { kerzenZeiten, kerzenPreise, kerzenVolumen } = kerzenAufteilen(candles)
     const trade = alsJournalTrade(botTrade)
-    if (!trade || !ohlcTimestamps.length) return Promise.resolve(null)
-    return useCandlestickChart(
-        ohlcTimestamps, ohlcPrices, ohlcVolumes, trade, true,
+    if (!trade || !kerzenZeiten.length) return Promise.resolve(null)
+    return kerzenDiagramm(
+        kerzenZeiten, kerzenPreise, kerzenVolumen, trade, true,
         elementId, zoneAusSetup(setup), true,
     )
 }

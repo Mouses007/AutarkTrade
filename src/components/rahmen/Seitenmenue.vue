@@ -21,9 +21,9 @@ import { useI18n } from 'vue-i18n'
 import Symbol from '../basis/Symbol.vue'
 import MenueJournalKopf from './MenueJournalKopf.vue'
 import MenueFuss from './MenueFuss.vue'
-import { appMode, pageId, screenType } from '../../stores/ui.js'
+import { appMode, seitenId, bildschirmTyp } from '../../stores/ui.js'
 import { sideMenuEingeklappt, schalteSideMenu } from '../../stores/app/rahmen.js'
-import { currentUser } from '../../stores/settings.js'
+import { appEinstellungen } from '../../stores/settings.js'
 import { PAGES, pagesForMode, istModusAn } from '../../config/menu.js'
 import { useIstTelefon } from '../../utils/geraet.js'
 
@@ -33,7 +33,7 @@ const { t } = useI18n()
 const route = useRoute()
 const istTelefon = useIstTelefon()
 
-const desktop = computed(() => screenType.value === 'computer')
+const desktop = computed(() => bildschirmTyp.value === 'computer')
 const schmal = computed(() => desktop.value && sideMenuEingeklappt.value)
 
 /** Welche Registry-Gruppen in welchem Modus erscheinen, in dieser Reihenfolge. */
@@ -49,7 +49,7 @@ const GRUPPEN = {
 const menueModus = computed(() => (appMode.value === 'start' ? 'journal' : appMode.value))
 const istJournalMenue = computed(() => menueModus.value === 'journal')
 
-const kiAn = computed(() => currentUser.value?.aiEnabled !== false && currentUser.value?.aiEnabled !== 0)
+const kiAn = computed(() => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0)
 
 /**
  * Ist die Seite sichtbar? Ein Flag blendet nur bei ausdrücklicher 0 aus —
@@ -59,7 +59,7 @@ const kiAn = computed(() => currentUser.value?.aiEnabled !== false && currentUse
  * Desktop-Fenster; eine Einstellung kann sie fürs Telefon freischalten.
  */
 function sichtbar(seite) {
-    const u = currentUser.value
+    const u = appEinstellungen.value
     const v = seite.flag ? u?.[seite.flag] : undefined
     if (v === 0 || v === '0' || v === false) return false
     if (seite.nurDesktop && istTelefon.value && Number(u?.[seite.mobilFlag]) !== 1) return false
@@ -73,7 +73,7 @@ const gruppen = computed(() => {
     if (!namen) return []
     // Ganzer Modus abgeschaltet: keine Einträge eines Modus, den die Kopfleiste
     // nicht mehr anbietet. Das Journal ist nie abschaltbar.
-    if (modus !== 'journal' && !istModusAn(modus, currentUser.value)) return []
+    if (modus !== 'journal' && !istModusAn(modus, appEinstellungen.value)) return []
     const seiten = pagesForMode(modus).filter(sichtbar)
     return namen
         .map((g) => ({ id: g, seiten: seiten.filter((s) => s.group === g) }))
@@ -82,15 +82,15 @@ const gruppen = computed(() => {
 
 /*
  * Hervorhebung nach Pfad: zwei Einträge können sich einen Routennamen teilen
- * (/hype-radar und /hype-radar/berichte), über `pageId` wären beide aktiv.
- * Steht man auf einer Adresse, die kein Menüeintrag ist, entscheidet `pageId`
+ * (/hype-radar und /hype-radar/berichte), über `seitenId` wären beide aktiv.
+ * Steht man auf einer Adresse, die kein Menüeintrag ist, entscheidet `seitenId`
  * — sonst gäbe es gar keine Markierung.
  */
 const menuePfade = new Set(PAGES.filter((p) => p.group).map((p) => p.path))
 function aktiv(seite) {
     const pfad = route.path.replace(/\/+$/, '') || '/'
     if (menuePfade.has(pfad)) return pfad === seite.path
-    return pageId.value === seite.id
+    return seitenId.value === seite.id
 }
 
 const beschriftung = (seite) => t(seite.menuKey || seite.titleKey)
@@ -98,7 +98,7 @@ const symbolVon = (seite) => seite.menuSymbol || seite.symbol || 'info'
 
 /** Seiten mit Symbolwähler — alle drei teilen sich denselben Symbolblock. */
 const WAEHLER = { liquidity: 'bookmap', liquidations: 'levmap', openinterest: 'oi' }
-const waehlerVariante = computed(() => (menueModus.value === 'live' ? WAEHLER[pageId.value] || null : null))
+const waehlerVariante = computed(() => (menueModus.value === 'live' ? WAEHLER[seitenId.value] || null : null))
 </script>
 
 <template>
@@ -131,9 +131,9 @@ const waehlerVariante = computed(() => (menueModus.value === 'live' ? WAEHLER[pa
 
         <!-- Unten: Profil über Version und Rechtlichem. -->
         <div v-if="!schmal" class="unten">
-            <div v-if="currentUser?.username" class="nutzer">
-                <img v-if="currentUser.avatar" :src="currentUser.avatar" alt="" class="avatar" />
-                <span class="name">{{ currentUser.username }}</span>
+            <div v-if="appEinstellungen?.username" class="nutzer">
+                <img v-if="appEinstellungen.avatar" :src="appEinstellungen.avatar" alt="" class="avatar" />
+                <span class="name">{{ appEinstellungen.username }}</span>
             </div>
             <MenueFuss />
         </div>

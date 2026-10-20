@@ -22,8 +22,8 @@
 
 import dayjs from './journal/zeit.js'
 import { dbCreate } from './db.js'
-import { timeZoneTrade } from '../stores/ui.js'
-import { selectedBroker } from '../stores/filters.js'
+import { tradeZeitzone } from '../stores/ui.js'
+import { gewaehlteBoerse } from '../stores/filters.js'
 
 /** JPEG statt PNG: ein voller Bildschirm als PNG-Base64 wird schnell 5+ MB. */
 const JPEG_QUALITAET = 0.85
@@ -102,14 +102,14 @@ export async function speichereCockpitFoto(symbol) {
     } else {
         base64 = await fangeSeitenBild()
     }
-    const jetzt = dayjs().tz(timeZoneTrade.value)
+    const jetzt = dayjs().tz(tradeZeitzone.value)
     const dateUnix = jetzt.unix()
     const name = `${dateUnix}_${symbol || 'COCKPIT'}`
     const result = await dbCreate('screenshots', {
         name,
         symbol: symbol || '',
         side: '',
-        broker: selectedBroker.value || '',
+        broker: gewaehlteBoerse.value || '',
         originalBase64: base64,
         annotatedBase64: base64,
         markersOnly: true,

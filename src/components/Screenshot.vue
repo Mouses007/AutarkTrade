@@ -17,7 +17,7 @@ import Symbol from './basis/Symbol.vue'
 import { tags } from '../stores/journal/tagebuch.js'
 import { kopiertesBild, markierterEintrag } from '../stores/app/rahmen.js'
 import { useSelectedScreenshotFunction, useSetupMarkerArea, useDeleteScreenshot } from '../utils/screenshots.js'
-import { useCreatedDateFormat, useTimeFormat, useHourMinuteFormat } from '../utils/journal/format.js'
+import { formDatumLang, formUhrzeitSek, formUhrzeit } from '../utils/journal/format.js'
 import { useGetTagInfo } from '../utils/journal/tagebuch.js'
 import { ladeBild } from '../utils/bildmarkierung.js'
 
@@ -48,7 +48,7 @@ const mitWerkzeug = computed(() => props.source !== 'fullScreen')
 const kurz = computed(() => d.value.side === 'SS' || d.value.side === 'BC' || d.value.side === 'short')
 const zeit = computed(() => {
     if (d.value.dateUnix == null) return ''
-    return d.value.side ? useTimeFormat(d.value.dateUnix) : useHourMinuteFormat(d.value.dateUnix)
+    return d.value.side ? formUhrzeitSek(d.value.dateUnix) : formUhrzeit(d.value.dateUnix)
 })
 
 const bildTags = computed(() => {
@@ -136,7 +136,7 @@ onBeforeUnmount(() => clearTimeout(kopierUhr))
 <template>
     <div class="sk" :class="'q-' + source">
         <div v-if="source === 'screenshots' && d.dateUnix != null" class="kopf">
-            {{ useCreatedDateFormat(d.dateUnix) }}
+            {{ formDatumLang(d.dateUnix) }}
         </div>
 
         <div v-if="mitInfo || mitWerkzeug" class="zeile">

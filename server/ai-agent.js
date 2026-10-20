@@ -820,7 +820,7 @@ export function setupAgentRoutes(app) {
             return res.status(429).json({ error: 'Ein Agent-Lauf läuft bereits. Bitte warten.' })
         }
 
-        const { sessionId, message, pageId, chart } = req.body
+        const { sessionId, message, seitenId, chart } = req.body
         if (!message || !message.trim()) {
             return res.status(400).json({ error: 'Nachricht darf nicht leer sein.' })
         }
@@ -851,7 +851,7 @@ export function setupAgentRoutes(app) {
         try {
             // Load AI config
             const config = await loadAiSettings()
-            config.seitenKontext = pageId ? seitenKontext(pageId) : null
+            config.seitenKontext = seitenId ? seitenKontext(seitenId) : null
             // Chart-Kontext aus dem KI-Chat-Reiter: geprüft, bevor er in den Systemprompt geht.
             if (chart && /^[A-Z0-9]{2,20}$/.test(String(chart.symbol || '')) && isValidTimeframe(String(chart.interval || ''))) {
                 config.chartKontext = {

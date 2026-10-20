@@ -8,7 +8,7 @@ import Pille from '@/components/basis/Pille.vue'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
 import { kiSpeichern } from '../gemeinsam/speichern.js'
 import { modusStrategieAn } from '../gemeinsam/useModi.js'
@@ -29,7 +29,7 @@ let agentSaving = ref(false)
 let agentResult = ref(null)
 
 function loadAgentSettings() {
-    const s = currentUser.value || {}
+    const s = appEinstellungen.value || {}
     agentKillSwitch.value = !!Number(s.strategyKillSwitch)
     agentMaxLeverage.value = Number(s.strategyMaxLeverage) || 10
     agentLlmBudget.value = Number(s.strategyLlmBudgetUsd) || 1
@@ -45,7 +45,7 @@ async function saveAgentSettings() {
             strategyLlmBudgetUsd: Math.max(0, agentLlmBudget.value || 0),
         }
         await dbUpdateSettings(daten)
-        Object.assign(currentUser.value, daten)
+        Object.assign(appEinstellungen.value, daten)
         agentResult.value = { success: true, message: 'Gespeichert.' }
     } catch (e) {
         agentResult.value = { success: false, message: e.response?.data?.error || e.message }

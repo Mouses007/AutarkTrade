@@ -46,7 +46,7 @@ import KachelMomentum from '../components/radar/KachelMomentum.vue'
 import BookmapKopf from '../components/radar/kopf/BookmapKopf.vue'
 import LiqkarteKopf from '../components/radar/kopf/LiqkarteKopf.vue'
 import { liveSymbol } from '../stores/live.js'
-import { currentUser } from '../stores/app/rahmen.js'
+import { appEinstellungen } from '../stores/app/rahmen.js'
 import { useIstTelefon, useImVollbild } from '../utils/geraet.js'
 import { oeffneLivetradingFenster } from '../utils/livetradingFenster.js'
 import { speichereCockpitFoto } from '../utils/cockpitFoto.js'
@@ -254,9 +254,9 @@ watch(liveSymbol, (s) => merkeSymbol(s))
 /**
  * Abschalter. `immediate` deckt den Fall ab, dass die Einstellungen schon da
  * sind; der Watch den Fall, dass sie erst nachträglich eintreffen. Solange
- * `currentUser` null ist, wird NICHT umgeleitet — Unwissen ist kein Nein.
+ * `appEinstellungen` null ist, wird NICHT umgeleitet — Unwissen ist kein Nein.
  */
-watch(currentUser, (u) => {
+watch(appEinstellungen, (u) => {
     if (u && Number(u.livetradingAn ?? 1) === 0) router.replace('/marktradar')
 }, { immediate: true })
 
@@ -269,7 +269,7 @@ watch(currentUser, (u) => {
  * beim Handeln teurer als kein Werkzeug. Wer trotzdem den Direktlink aufruft,
  * landet auf dem Marktradar, der für kleine Geräte gebaut ist.
  *
- * Bewusst NICHT an `screenType`: das misst nur die Breite, und ein
+ * Bewusst NICHT an `bildschirmTyp`: das misst nur die Breite, und ein
  * Desktop-Browser in einem halb breiten Fenster wäre damit ein Telefon. Beim
  * Entwickeln hat genau das einen frisch geöffneten, noch nicht vermessenen Tab
  * hinausgeworfen. `useIstTelefon` verlangt zusätzlich einen groben Zeiger.

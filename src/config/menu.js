@@ -9,7 +9,7 @@
  * `symbol` / `menuSymbol` sind Namen aus `components/basis/Symbol.vue`. Die
  * früheren Unicons-Felder `icon` / `menuIcon` sind mit Unicons weggefallen (S9).
  *
- * `id` === route.name === pageId. `group: null` heisst: Seite existiert, taucht
+ * `id` === route.name === seitenId. `group: null` heisst: Seite existiert, taucht
  * aber nicht als Menüeintrag auf (Konten hat eine eigene Pille, /setup und
  * /imports sind Sonderfälle).
  *
@@ -24,7 +24,7 @@
  * (`/hype-radar` und `/hype-radar/berichte`), und dort soll im Menü unter der
  * Gruppenüberschrift „Übersicht" stehen, im Seitenkopf aber weiterhin
  * „Hype-Radar". Der zweite Eintrag trägt deshalb auch eine `id`, die kein
- * Routenname ist — das Menü hebt nach `path` hervor, nicht nach `pageId`.
+ * Routenname ist — das Menü hebt nach `path` hervor, nicht nach `seitenId`.
  *
  * `nurDesktop` blendet die Seite auf Telefonen aus. Kein Geschmacksurteil,
  * sondern eine Platzfrage: ein Arbeitsplatz aus elf Kacheln, Orderbuch und
@@ -41,17 +41,17 @@ export const PAGES = [
     { id: 'chart', mode: 'start', path: '/chart', symbol: 'chart', titleKey: 'nav.chart', group: null },
 
     // ── Journal ─────────────────────────────────────────────
-    { id: 'dashboard', mode: 'journal', path: '/dashboard', symbol: 'raster', titleKey: 'nav.dashboard', group: 'analyze' },
-    { id: 'daily', mode: 'journal', path: '/daily', symbol: 'balken', titleKey: 'nav.dailyView', group: 'analyze' },
-    { id: 'calendar', mode: 'journal', path: '/calendar', symbol: 'kalender', titleKey: 'nav.calendar', group: 'analyze' },
-    { id: 'playbook', mode: 'journal', path: '/playbook', symbol: 'kompass', titleKey: 'nav.playbook', group: 'reflect' },
+    { id: 'journalUebersicht', mode: 'journal', path: '/journal', symbol: 'raster', titleKey: 'nav.dashboard', group: 'analyze' },
+    { id: 'tagesansicht', mode: 'journal', path: '/tagesansicht', symbol: 'balken', titleKey: 'nav.dailyView', group: 'analyze' },
+    { id: 'kalender', mode: 'journal', path: '/kalender', symbol: 'kalender', titleKey: 'nav.calendar', group: 'analyze' },
+    { id: 'bewertungen', mode: 'journal', path: '/bewertungen', symbol: 'kompass', titleKey: 'nav.playbook', group: 'reflect' },
     { id: 'auswertung', mode: 'journal', path: '/auswertung', symbol: 'torte', titleKey: 'nav.evaluation', group: 'reflect' },
     { id: 'kiAgent', mode: 'journal', path: '/ki-coach', symbol: 'ki', titleKey: 'nav.kiAgent', group: 'reflect' },
-    { id: 'screenshots', mode: 'journal', path: '/screenshots', symbol: 'bild', titleKey: 'nav.screenshots', group: 'reflect' },
+    { id: 'bilder', mode: 'journal', path: '/bilder', symbol: 'bild', titleKey: 'nav.screenshots', group: 'reflect' },
     { id: 'incoming', mode: 'journal', path: '/incoming', symbol: 'eingang', titleKey: 'nav.pendingTrades', group: 'add' },
-    { id: 'addTrades', mode: 'journal', path: '/addTrades', symbol: 'plus', titleKey: 'nav.manualImport', group: 'add' },
+    { id: 'tradeImport', mode: 'journal', path: '/import', symbol: 'plus', titleKey: 'nav.manualImport', group: 'add' },
     { id: 'accounts', mode: 'journal', path: '/accounts', symbol: 'geldboerse', titleKey: 'nav.accounts', group: null },
-    { id: 'addExcursions', mode: 'journal', path: '/addExcursions', symbol: 'aktualisieren', titleKey: 'nav.addExcursions', group: null },
+    { id: 'exkursionen', mode: 'journal', path: '/exkursionen', symbol: 'aktualisieren', titleKey: 'nav.addExcursions', group: null },
     { id: 'setup', mode: 'journal', path: '/setup', symbol: 'rakete', titleKey: 'nav.setup', group: null },
 
     // ── Live-Analyse ────────────────────────────────────────
@@ -131,7 +131,7 @@ export const PAGES = [
     { id: 'lernenStatistik', mode: 'lernen', path: '/lernen/statistik', symbol: 'torte', titleKey: 'lernen.tabStatistik', group: 'lernenGruppe' },
 
     // ── modusübergreifend ───────────────────────────────────
-    { id: 'settings', mode: null, path: '/settings', symbol: 'einstellungen', titleKey: 'nav.settings', group: null },
+    { id: 'einstellungen', mode: null, path: '/einstellungen', symbol: 'einstellungen', titleKey: 'nav.settings', group: null },
 ]
 
 /**
@@ -157,7 +157,7 @@ export const MODES = [
     // Landing-Page der App: der Chart-Arbeitsplatz. Die Modus-ID bleibt
     // `start` und das Flag `startseiteAn` — beide stehen in gespeicherten
     // Einstellungen und im localStorage bestehender Installationen.
-    { id: 'journal', titleKey: 'modes.journal', symbol: 'journal', home: '/dashboard', enabled: true },
+    { id: 'journal', titleKey: 'modes.journal', symbol: 'journal', home: '/journal', enabled: true },
     { id: 'start', titleKey: 'modes.start', symbol: 'chart', home: '/chart', enabled: true, flag: 'startseiteAn' },
     { id: 'live', titleKey: 'modes.live', shortKey: 'modes.liveShort', symbol: 'live', home: '/marktradar', enabled: true, flag: 'modusLiveAn' },
     /*
@@ -189,7 +189,7 @@ export const pageById = (id) => PAGES.find(p => p.id === id) || null
 
 export const pagesForMode = (mode) => PAGES.filter(p => p.mode === mode && p.group)
 
-export const modeHome = (mode) => MODES.find(m => m.id === mode)?.home || '/dashboard'
+export const modeHome = (mode) => MODES.find(m => m.id === mode)?.home || '/journal'
 
 /**
  * Ist dieser Modus eingeschaltet?
@@ -200,7 +200,7 @@ export const modeHome = (mode) => MODES.find(m => m.id === mode)?.home || '/dash
  * dürfte, und ein langsamer Einstellungsabruf würde als „abgeschaltet" gelesen.
  *
  * @param {string} modeId
- * @param {object|null} einstellungen `currentUser.value` (die Einstellungszeile)
+ * @param {object|null} einstellungen `appEinstellungen.value` (die Einstellungszeile)
  */
 export const istModusAn = (modeId, einstellungen) => {
     const m = MODES.find(x => x.id === modeId)

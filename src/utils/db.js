@@ -1,7 +1,6 @@
 /**
- * Client-side database abstraction layer.
- * Drop-in replacement for Parse SDK calls.
- * All operations go through the Express REST API to SQLite.
+ * Datenzugriff des Frontends: jede Abfrage geht über die REST-API des
+ * eigenen Servers (`/api/db/:tabelle`), der sie an SQLite bzw. PostgreSQL gibt.
  */
 import axios from 'axios'
 
@@ -161,9 +160,7 @@ axios.interceptors.response.use(
 
 /**
  * Query records from a table.
- * Replaces: Parse.Object.extend(className) + new Parse.Query() + query.find()
- *
- * @param {string} className - Table name (trades, diaries, etc.)
+ * @param {string} tabelle - Table name (trades, diaries, etc.)
  * @param {object} options - Query options
  * @param {object} options.equalTo - { field: value } exact match filters
  * @param {object} options.greaterThanOrEqualTo - { field: value } >= filters
@@ -177,7 +174,7 @@ axios.interceptors.response.use(
  * @param {string[]} options.exclude - columns to exclude from results
  * @returns {Promise<Array>} Array of result objects
  */
-export async function dbFind(className, options = {}) {
+export async function dbFind(tabelle, options = {}) {
     const params = {}
 
     if (options.equalTo) {
@@ -211,87 +208,79 @@ export async function dbFind(className, options = {}) {
         params.exclude = options.exclude.join(',')
     }
 
-    const response = await axios.get(`/api/db/${className}`, { params })
+    const response = await axios.get(`/api/db/${tabelle}`, { params })
     return response.data
 }
 
 /**
  * Get a single record by ID.
- * @param {string} className - Table name
+ * @param {string} tabelle - Table name
  * @param {string|number} id - Record ID
  * @returns {Promise<object>} Single record
  */
-export async function dbGet(className, id) {
-    const response = await axios.get(`/api/db/${className}/${id}`)
+export async function dbGet(tabelle, id) {
+    const response = await axios.get(`/api/db/${tabelle}/${id}`)
     return response.data
 }
 
 /**
  * Get the first record matching filters.
- * Replaces: query.first()
- *
- * @param {string} className - Table name
+ * @param {string} tabelle - Table name
  * @param {object} options - Same as dbFind options
  * @returns {Promise<object|null>} First matching record or null
  */
-export async function dbFirst(className, options = {}) {
-    const results = await dbFind(className, { ...options, limit: 1 })
+export async function dbFirst(tabelle, options = {}) {
+    const results = await dbFind(tabelle, { ...options, limit: 1 })
     return results.length > 0 ? results[0] : null
 }
 
 /**
  * Create a new record.
- * Replaces: new Parse.Object() + object.set() + object.save()
- *
- * @param {string} className - Table name
+ * @param {string} tabelle - Table name
  * @param {object} data - Record data
  * @returns {Promise<object>} Created record with id/objectId
  */
-export async function dbCreate(className, data) {
-    const response = await axios.post(`/api/db/${className}`, data)
+export async function dbCreate(tabelle, data) {
+    const response = await axios.post(`/api/db/${tabelle}`, data)
     return response.data
 }
 
 /**
  * Update an existing record.
- * Replaces: query.first() + result.set() + result.save()
- *
- * @param {string} className - Table name
+ * @param {string} tabelle - Table name
  * @param {string|number} id - Record ID
  * @param {object} data - Fields to update
  * @returns {Promise<object>} Updated record
  */
-export async function dbUpdate(className, id, data) {
-    const response = await axios.put(`/api/db/${className}/${id}`, data)
+export async function dbUpdate(tabelle, id, data) {
+    const response = await axios.put(`/api/db/${tabelle}/${id}`, data)
     return response.data
 }
 
 /**
  * Delete a record.
- * Replaces: query.first() + result.destroy()
- *
- * @param {string} className - Table name
+ * @param {string} tabelle - Table name
  * @param {string|number} id - Record ID
  * @returns {Promise<object>} Deletion confirmation
  */
-export async function dbDelete(className, id) {
-    const response = await axios.delete(`/api/db/${className}/${id}`)
+export async function dbDelete(tabelle, id) {
+    const response = await axios.delete(`/api/db/${tabelle}/${id}`)
     return response.data
 }
 
 /**
  * Delete multiple records matching filters.
  *
- * @param {string} className - Table name
+ * @param {string} tabelle - Table name
  * @param {object} options - Filter options (equalTo, gte, lt)
  * @returns {Promise<object>} Deletion confirmation with count
  */
-export async function dbDeleteWhere(className, options = {}) {
+export async function dbDeleteWhere(tabelle, options = {}) {
     const params = {}
     if (options.equalTo) params.equalTo = JSON.stringify(options.equalTo)
     if (options.greaterThanOrEqualTo) params.gte = JSON.stringify(options.greaterThanOrEqualTo)
     if (options.lessThan) params.lt = JSON.stringify(options.lessThan)
-    const response = await axios.delete(`/api/db/${className}`, { params })
+    const response = await axios.delete(`/api/db/${tabelle}`, { params })
     return response.data
 }
 
@@ -322,7 +311,7 @@ export async function dbFindTradeIdByPositionId(dateUnix, positionId) {
 }
 
 /**
- * Get app settings (replaces Parse.User.current()).
+ * Get app settings (the single settings row).
  * @returns {Promise<object>} Settings object
  */
 export async function dbGetSettings() {

@@ -17,10 +17,10 @@ import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
 import axios from 'axios'
 import { gefilterteTradesFlach } from '../stores/trades.js'
-import { betragArt, selectedBroker } from '../stores/filters.js'
+import { betragArt, gewaehlteBoerse } from '../stores/filters.js'
 import {
-    useTwoDecCurrencyFormat, useThousandCurrencyFormat, useThousandFormat,
-    useXDecFormat, useTwoDecFormat
+    formGeld2, formGeld0, formZahl0,
+    formZahlStellen, formZahl2
 } from '../utils/journal/format.js'
 import dayjs from '../utils/journal/zeit.js'
 import { useI18n } from 'vue-i18n'
@@ -58,7 +58,7 @@ function fmtBotPnL(p) {
     if (p.marginCoin && p.marginCoin !== 'USDT') {
         return `${v >= 0 ? '+' : ''}${v.toFixed(4)} ${p.marginCoin}`
     }
-    return useTwoDecCurrencyFormat(v)
+    return formGeld2(v)
 }
 
 function fmtDuration(seconds) {
@@ -91,10 +91,10 @@ function isCoinM(t) { return botCoin(t) !== null }
 const BOT_BROKERS = ['pionex']
 const BROKER_LABEL = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
 const comingSoon = computed(() => {
-    const b = selectedBroker.value
+    const b = gewaehlteBoerse.value
     return !!b && !BOT_BROKERS.includes(b)
 })
-const comingSoonLabel = computed(() => BROKER_LABEL[selectedBroker.value] || selectedBroker.value)
+const comingSoonLabel = computed(() => BROKER_LABEL[gewaehlteBoerse.value] || gewaehlteBoerse.value)
 
 // ===== Datenbasis =====
 const allBots = computed(() => gefilterteTradesFlach.filter(t => t && t.botType))
@@ -149,7 +149,7 @@ function toggleBotExpand(id) {
 }
 // Einheiten-bewusstes Format: USDT → Währung, Coin-M → nativ (z.B. SOL).
 function fmtBotAmt(v, unit) {
-    return unit === 'USDT' ? useTwoDecCurrencyFormat(v ?? 0) : fmtCoin(v, unit)
+    return unit === 'USDT' ? formGeld2(v ?? 0) : fmtCoin(v, unit)
 }
 const closedBotsList = computed(() => {
     return [...allBots.value]
@@ -262,7 +262,7 @@ const bySymbol = computed(() => {
 // andere Börsen geben hier (gefiltert auf isBot) eine leere Liste zurück.
 const runningBots = ref([])
 async function fetchRunningBots() {
-    const broker = selectedBroker.value || 'pionex'
+    const broker = gewaehlteBoerse.value || 'pionex'
     try {
         const { data } = await axios.get(`/api/${broker}/open-positions`)
         const list = (data?.positions || []).filter(p => p && (p.isBot || p.botType))
@@ -295,7 +295,7 @@ function renderCumChart() {
         tooltip: {
             trigger: 'axis',
             ...tooltipStil(p),
-            valueFormatter: v => useTwoDecCurrencyFormat(v),
+            valueFormatter: v => formGeld2(v),
         },
         xAxis: {
             type: 'time',
@@ -304,7 +304,7 @@ function renderCumChart() {
         },
         yAxis: {
             type: 'value',
-            axisLabel: { ...schrift(p), formatter: v => useThousandFormat(v) },
+            axisLabel: { ...schrift(p), formatter: v => formZahl0(v) },
             splitLine: { lineStyle: { color: p.gitter, type: 'dashed' } },
         },
         series: [{
@@ -329,10 +329,10 @@ function renderSymbolChart() {
         backgroundColor: 'transparent',
         textStyle: { fontFamily: p.schrift },
         grid: { left: 80, right: 20, top: 10, bottom: 25 },
-        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...tooltipStil(p), valueFormatter: v => useTwoDecCurrencyFormat(v) },
+        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...tooltipStil(p), valueFormatter: v => formGeld2(v) },
         xAxis: {
             type: 'value',
-            axisLabel: { ...schrift(p), formatter: v => useThousandFormat(v) },
+            axisLabel: { ...schrift(p), formatter: v => formZahl0(v) },
             splitLine: { lineStyle: { color: p.gitter, type: 'dashed' } },
         },
         yAxis: {
@@ -407,25 +407,25 @@ watch([allBots, betragArt], renderAll, { deep: false })
                 <Karte dicht class="viertel bot-kpi">
                     <div class="bot-kpi-titel">{{ isNet ? t('dashboard.bot.nettoProfit') : t('dashboard.bot.bruttoProfit') }}</div>
                     <div class="bot-kpi-wert zahl" :class="stats.profit >= 0 ? 'at-gut' : 'at-schlecht'">
-                        {{ useTwoDecCurrencyFormat(stats.profit) }}
+                        {{ formGeld2(stats.profit) }}
                     </div>
                     <div class="bot-kpi-unter">{{ t('dashboard.bot.botsSymbole', { bots: stats.count, symbole: stats.symbols }) }}</div>
                 </Karte>
                 <Karte dicht class="viertel bot-kpi">
                     <div class="bot-kpi-titel">{{ t('dashboard.bot.roi') }}</div>
                     <div class="bot-kpi-wert zahl" :class="stats.roi >= 0 ? 'at-gut' : 'at-schlecht'">
-                        {{ useTwoDecFormat(stats.roi) }}%
+                        {{ formZahl2(stats.roi) }}%
                     </div>
-                    <div class="bot-kpi-unter">{{ t('dashboard.bot.investment') }} {{ useThousandCurrencyFormat(stats.investment) }}</div>
+                    <div class="bot-kpi-unter">{{ t('dashboard.bot.investment') }} {{ formGeld0(stats.investment) }}</div>
                 </Karte>
                 <Karte dicht class="viertel bot-kpi">
                     <div class="bot-kpi-titel">{{ t('dashboard.bot.winRate') }}</div>
-                    <div class="bot-kpi-wert zahl">{{ useTwoDecFormat(stats.winRate) }}%</div>
+                    <div class="bot-kpi-wert zahl">{{ formZahl2(stats.winRate) }}%</div>
                     <div class="bot-kpi-unter"><span class="at-gut">{{ stats.wins }}W</span> / <span class="at-schlecht">{{ stats.losses }}L</span></div>
                 </Karte>
                 <Karte dicht class="viertel bot-kpi">
                     <div class="bot-kpi-titel">{{ t('dashboard.bot.hebelLaufzeit') }}</div>
-                    <div class="bot-kpi-wert zahl">{{ useXDecFormat(stats.avgLeverage, 1) }}×</div>
+                    <div class="bot-kpi-wert zahl">{{ formZahlStellen(stats.avgLeverage, 1) }}×</div>
                     <div class="bot-kpi-unter">{{ t('dashboard.bot.laufzeitSchnitt', { dauer: fmtDuration(stats.avgDuration) }) }}</div>
                 </Karte>
 
@@ -435,27 +435,27 @@ watch([allBots, betragArt], renderAll, { deep: false })
                         <tbody>
                             <tr>
                                 <td>{{ t('dashboard.bot.gridBrutto') }}</td>
-                                <td class="zahl" :class="stats.gross >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(stats.gross) }}</td>
+                                <td class="zahl" :class="stats.gross >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld2(stats.gross) }}</td>
                             </tr>
                             <tr>
                                 <td>{{ t('dashboard.bot.tradingGebuehren') }}</td>
-                                <td class="zahl at-schlecht">−{{ useTwoDecCurrencyFormat(stats.tradingFee) }}</td>
+                                <td class="zahl at-schlecht">−{{ formGeld2(stats.tradingFee) }}</td>
                             </tr>
                             <tr>
                                 <td>{{ t('dashboard.bot.fundingErhalten') }}</td>
-                                <td class="zahl at-gut">{{ useTwoDecCurrencyFormat(stats.fundingReceived) }}</td>
+                                <td class="zahl at-gut">{{ formGeld2(stats.fundingReceived) }}</td>
                             </tr>
                             <tr>
                                 <td>{{ t('dashboard.bot.fundingBezahlt') }}</td>
-                                <td class="zahl at-schlecht">{{ useTwoDecCurrencyFormat(stats.fundingPaid) }}</td>
+                                <td class="zahl at-schlecht">{{ formGeld2(stats.fundingPaid) }}</td>
                             </tr>
                             <tr class="summe">
                                 <td><strong>{{ t('dashboard.bot.nettoProfit') }}</strong></td>
-                                <td class="zahl" :class="stats.net >= 0 ? 'at-gut' : 'at-schlecht'"><strong>{{ useTwoDecCurrencyFormat(stats.net) }}</strong></td>
+                                <td class="zahl" :class="stats.net >= 0 ? 'at-gut' : 'at-schlecht'"><strong>{{ formGeld2(stats.net) }}</strong></td>
                             </tr>
                             <tr>
                                 <td>{{ t('dashboard.bot.proBot') }}</td>
-                                <td class="zahl" :class="stats.avgProfit >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(stats.avgProfit) }}</td>
+                                <td class="zahl" :class="stats.avgProfit >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld2(stats.avgProfit) }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -463,12 +463,12 @@ watch([allBots, betragArt], renderAll, { deep: false })
                         <div v-if="stats.best" class="bot-bestwert-zeile">
                             <span class="at-gedaempft">{{ t('dashboard.bot.besterBot') }}</span>
                             <span><strong>{{ displaySymbol(stats.best.symbol) }}</strong>
-                                <span class="at-gut"> {{ useTwoDecCurrencyFormat(plUsd(stats.best)) }}</span></span>
+                                <span class="at-gut"> {{ formGeld2(plUsd(stats.best)) }}</span></span>
                         </div>
                         <div v-if="stats.worst" class="bot-bestwert-zeile">
                             <span class="at-gedaempft">{{ t('dashboard.bot.schlechtesterBot') }}</span>
                             <span><strong>{{ displaySymbol(stats.worst.symbol) }}</strong>
-                                <span class="at-schlecht"> {{ useTwoDecCurrencyFormat(plUsd(stats.worst)) }}</span></span>
+                                <span class="at-schlecht"> {{ formGeld2(plUsd(stats.worst)) }}</span></span>
                         </div>
                     </div>
                 </Karte>
@@ -486,7 +486,7 @@ watch([allBots, betragArt], renderAll, { deep: false })
                                 </td>
                                 <td class="zahl">{{ row.count }}</td>
                                 <td class="zahl" :class="row.profit >= 0 ? 'at-gut' : 'at-schlecht'">
-                                    {{ row.unit === 'USDT' ? useTwoDecCurrencyFormat(row.profit) : fmtCoin(row.profit, row.unit) }}</td>
+                                    {{ row.unit === 'USDT' ? formGeld2(row.profit) : fmtCoin(row.profit, row.unit) }}</td>
                             </tr>
                         </tbody>
                     </table>
@@ -507,8 +507,8 @@ watch([allBots, betragArt], renderAll, { deep: false })
                                         <span v-if="p.coinM" class="bot-marke warn">COIN-M</span>
                                         <span class="bot-unterzeile">{{ botTypeLabel(p.botType) }} · {{ p.side }}</span>
                                     </td>
-                                    <td class="zahl">{{ p.leverage ? useXDecFormat(p.leverage, 0) + '×' : '—' }}</td>
-                                    <td class="zahl at-gedaempft">{{ p.markPrice ? useXDecFormat(p.markPrice, p.markPrice < 1 ? 4 : 2) : '—' }}</td>
+                                    <td class="zahl">{{ p.leverage ? formZahlStellen(p.leverage, 0) + '×' : '—' }}</td>
+                                    <td class="zahl at-gedaempft">{{ p.markPrice ? formZahlStellen(p.markPrice, p.markPrice < 1 ? 4 : 2) : '—' }}</td>
                                     <td class="zahl" :class="(p.unrealizedPNL || 0) >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtBotPnL(p) }}</td>
                                 </tr>
                             </tbody>
@@ -545,7 +545,7 @@ watch([allBots, betragArt], renderAll, { deep: false })
                                     <td class="zahl at-gedaempft">{{ fmtCoin(-Math.abs(g.fees), g.coin) }}</td>
                                     <td class="zahl" :class="g.funding >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtCoin(g.funding, g.coin) }}</td>
                                     <td class="zahl" :class="g.net >= 0 ? 'at-gut' : 'at-schlecht'"><strong>{{ fmtCoin(g.net, g.coin) }}</strong></td>
-                                    <td class="zahl at-gedaempft">{{ useTwoDecCurrencyFormat(g.usdt) }}</td>
+                                    <td class="zahl at-gedaempft">{{ formGeld2(g.usdt) }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -573,9 +573,9 @@ watch([allBots, betragArt], renderAll, { deep: false })
                                 <tr v-for="s in bySymbol" :key="s.symbol">
                                     <td>{{ s.symbol }}</td>
                                     <td class="zahl">{{ s.count }}</td>
-                                    <td class="zahl" :class="s.profit >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(s.profit) }}</td>
-                                    <td class="zahl at-gedaempft">{{ useTwoDecCurrencyFormat(s.fees) }}</td>
-                                    <td class="zahl" :class="s.funding >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(s.funding) }}</td>
+                                    <td class="zahl" :class="s.profit >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld2(s.profit) }}</td>
+                                    <td class="zahl at-gedaempft">{{ formGeld2(s.fees) }}</td>
+                                    <td class="zahl" :class="s.funding >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld2(s.funding) }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -593,7 +593,7 @@ watch([allBots, betragArt], renderAll, { deep: false })
                                 <span v-if="b.leverage" class="cbot-neben">{{ b.leverage }}x</span>
                                 <span v-if="b.unit !== 'USDT'" class="bot-marke warn">COIN-M</span>
                                 <span class="cbot-pnl zahl" :class="b.net >= 0 ? 'at-gut' : 'at-schlecht'">{{ fmtBotAmt(b.net, b.unit) }}</span>
-                                <span v-if="b.showUsdt" class="cbot-neben">(≈ {{ useTwoDecCurrencyFormat(b.pnlUsdt) }})</span>
+                                <span v-if="b.showUsdt" class="cbot-neben">(≈ {{ formGeld2(b.pnlUsdt) }})</span>
                             </button>
                             <div v-if="expandedBotIds.has(b.id)" class="cbot-rumpf">
                                 <template v-if="b.hasGrid">

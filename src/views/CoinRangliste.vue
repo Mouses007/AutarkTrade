@@ -54,9 +54,9 @@ const datum = (ms) => (ms ? new Date(Number(ms)).toLocaleDateString() : '—')
 
 /** Ampel der Prüfhälfte — grün bestätigt, gelb zu dünn, rot gekippt. */
 function ampel(z) {
-    if (z.bestaetigt) return { farbe: 'greenTrade', text: t('rangliste.bestaetigt') }
+    if (z.bestaetigt) return { farbe: 'gewinnWert', text: t('rangliste.bestaetigt') }
     if (Number(z.bTrades) < 30) return { farbe: 'at-warn', text: t('rangliste.duenn') }
-    return { farbe: 'redTrade', text: t('rangliste.gekippt') }
+    return { farbe: 'verlustWert', text: t('rangliste.gekippt') }
 }
 
 async function ladeGrunddaten() {
@@ -210,7 +210,7 @@ onBeforeUnmount(stopPolling)
 <template>
 <div class="rangliste-seite">
     <div>
-        <div class="dailyCard karte">
+        <div class="journalKarte karte">
             <div class="section-title titel-zeile">
                 <Symbol name="liste" class="vor" />{{ t('rangliste.title') }}
             </div>
@@ -220,7 +220,7 @@ onBeforeUnmount(stopPolling)
         <Hinweis v-if="fehler" art="fehler" class="abstand klein-text">{{ fehler }}</Hinweis>
 
         <!-- ══ Einstellungen ══ -->
-        <div class="dailyCard karte">
+        <div class="journalKarte karte">
             <div class="formular">
                 <div class="b-4">
                     <label class="at-label">{{ t('rangliste.strategie') }}</label>
@@ -344,7 +344,7 @@ onBeforeUnmount(stopPolling)
         </div>
 
         <!-- ══ Fortschritt ══ -->
-        <div v-if="lauf" class="dailyCard karte">
+        <div v-if="lauf" class="journalKarte karte">
             <div class="lauf-kopf">
                 <div>
                     <strong>{{ lauf.universumName }}</strong>
@@ -385,7 +385,7 @@ onBeforeUnmount(stopPolling)
         </Hinweis>
 
         <!-- ══ Rangliste ══ -->
-        <div v-if="belastbare.length" class="dailyCard karte">
+        <div v-if="belastbare.length" class="journalKarte karte">
             <div class="at-tabelle-huelle">
                 <table class="at-tabelle dicht">
                     <thead><tr>
@@ -403,12 +403,12 @@ onBeforeUnmount(stopPolling)
                             <td class="at-gedaempft">{{ z.rangA }}</td>
                             <td><strong>{{ z.symbol }}</strong></td>
                             <td class="zahl">{{ z.aTrades }}</td>
-                            <td class="zahl" :class="z.aOhneTopR >= 0 ? 'greenTrade' : 'redTrade'">
+                            <td class="zahl" :class="z.aOhneTopR >= 0 ? 'gewinnWert' : 'verlustWert'">
                                 {{ zahl(z.aOhneTopR) }} R
                             </td>
                             <td class="zahl at-gedaempft">{{ zahl(z.aExpectancyR) }} R</td>
                             <td class="zahl at-gedaempft">{{ zahl(z.aMaxDdPct, 1) }} %</td>
-                            <td class="zahl" :class="z.bOhneTopR >= 0 ? 'greenTrade' : 'redTrade'">
+                            <td class="zahl" :class="z.bOhneTopR >= 0 ? 'gewinnWert' : 'verlustWert'">
                                 {{ zahl(z.bOhneTopR) }} R
                                 <span class="at-gedaempft">({{ z.bTrades }})</span>
                             </td>
@@ -420,7 +420,7 @@ onBeforeUnmount(stopPolling)
         </div>
 
         <!-- ══ Unter der Trennlinie — sichtbar, aber ohne Rang ══ -->
-        <div v-if="uebrige.length" class="dailyCard karte">
+        <div v-if="uebrige.length" class="journalKarte karte">
             <p class="at-gedaempft klein-text abstand-klein">{{ t('rangliste.unterTrennlinie') }}</p>
             <div class="at-tabelle-huelle">
                 <table class="at-tabelle dicht">
@@ -445,7 +445,7 @@ onBeforeUnmount(stopPolling)
         </div>
 
         <!-- ══ Frühere Läufe ══ -->
-        <div class="dailyCard karte">
+        <div class="journalKarte karte">
             <div class="section-title abstand-klein">{{ t('rangliste.laeufe') }}</div>
             <p v-if="!laeufe.length" class="at-gedaempft klein-text ohne-rand">{{ t('rangliste.keineLaeufe') }}</p>
             <div v-else class="at-tabelle-huelle">
@@ -472,7 +472,7 @@ onBeforeUnmount(stopPolling)
 
 <style scoped>
 /*
- * `.dailyCard` trägt global `height: 100%` (design/journal.css). Das ist dort
+ * `.journalKarte` trägt global `height: 100%` (design/journal.css). Das ist dort
  * richtig, wo Karten NEBENEINANDER in einer Zeile stehen und gleich hoch sein
  * sollen — Dashboard und Auswertung leben davon.
  *
@@ -481,7 +481,7 @@ onBeforeUnmount(stopPolling)
  * die Rangliste stand dann irgendwo weit unten hinter riesigen Löchern.
  * Deshalb hier heilen und nicht global.
  */
-.dailyCard {
+.journalKarte {
     height: auto;
 }
 

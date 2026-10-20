@@ -88,7 +88,7 @@ async function sende() {
             headers: { 'Content-Type': 'application/json' },
             signal: abbruch.signal,
             body: JSON.stringify({
-                sessionId: sitzung, message: text, pageId: 'chart',
+                sessionId: sitzung, message: text, seitenId: 'chart',
                 chart: { symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt, bis: bis && bis < Date.now() - 60_000 ? bis : null },
             }),
         })

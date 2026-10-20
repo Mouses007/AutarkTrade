@@ -1155,7 +1155,7 @@ defineExpose({
                 <span>H <b>{{ fmt(legende.high) }}</b></span>
                 <span>L <b>{{ fmt(legende.low) }}</b></span>
                 <span>C <b>{{ fmt(legende.close) }}</b></span>
-                <span v-if="legendeDelta != null" :class="legendeDelta >= 0 ? 'greenTrade' : 'redTrade'">
+                <span v-if="legendeDelta != null" :class="legendeDelta >= 0 ? 'gewinnWert' : 'verlustWert'">
                     {{ legendeDelta >= 0 ? '+' : '' }}{{ legendeDelta.toFixed(2) }} %
                 </span>
             </template>

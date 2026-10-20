@@ -1035,7 +1035,7 @@ import AbverkaufAnsicht from '../components/coinradar/AbverkaufAnsicht.vue'
 import { useKostenAnzeige } from '../utils/journal/format.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { logWarn } from '../utils/logger.js'
-import { currentUser } from '../stores/app/rahmen.js'
+import { appEinstellungen } from '../stores/app/rahmen.js'
 import {
     BOERSE_KURZ as BOERSE_LINK_KURZ, BOERSE_NAME as BOERSE_LINK_NAME,
     boerseUrl, boersenLinksVon as boersenLinksAus,
@@ -1348,7 +1348,7 @@ const handelbarAuf = (z, boerse) => boersenVon(z).some((e) => e.boerse === boers
  * Börsen, gefiltert auf das, was in den Einstellungen aktiviert ist, plus
  * TradingView (kein Listungscheck — jeder Coin hier kommt von Binance).
  */
-const boersenLinksVon = (z) => boersenLinksAus(z, currentUser.value?.boersenLinks)
+const boersenLinksVon = (z) => boersenLinksAus(z, appEinstellungen.value?.boersenLinks)
 
 /**
  * Trifft der Börsenfilter zu? ODER über die gewählten Börsen.

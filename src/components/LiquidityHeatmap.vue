@@ -18,7 +18,7 @@ import { HeatmapRenderer } from '../utils/heatmapRenderer.js'
 import { loadReplay, loadReplayLiquidations, loadReplayTrades } from '../utils/replaySource.js'
 import { TradeRing } from '../utils/tradeRing.js'
 import { followMid } from '../../shared/priceBins.js'
-import { timeZoneTrade } from '../stores/ui.js'
+import { tradeZeitzone } from '../stores/ui.js'
 import {
     liveSymbol, liveMarket, liveViewPct, liveSpanneMin, livePreisFaltung, liveFrameMs, liveHistoryMin, liveRamp,
     liveShowProfile, livePauseInBackground, liveColorMode, liveColorRef, liveSaettigung, liveProPixel, liveBucketSize, liveAbdeckungMin,
@@ -199,7 +199,7 @@ let dirtyHeat = false
 let dirtyOverlay = false
 let dirtyUi = false
 
-const formatTime = (ms) => dayjs(ms).tz(timeZoneTrade.value || dayjs.tz.guess()).format('HH:mm:ss')
+const formatTime = (ms) => dayjs(ms).tz(tradeZeitzone.value || dayjs.tz.guess()).format('HH:mm:ss')
 /** "12:34 zurück" fürs Badge — nur wenn per Zeitachse zurückgezogen wurde. */
 const panLabel = computed(() => {
     if (!panMs.value) return ''
@@ -529,7 +529,7 @@ async function startReplay() {
     if (!(bis > von)) { setStatus('empty', 'Kein gültiges Zeitfenster'); return }
     replaySchluessel = schluessel
     replayBreite = breite
-    const tag = dayjs(von).tz(timeZoneTrade.value || dayjs.tz.guess()).format('DD.MM.')
+    const tag = dayjs(von).tz(tradeZeitzone.value || dayjs.tz.guess()).format('DD.MM.')
     replayFensterLabel.value = `${tag} ${formatTime(von)} – ${formatTime(bis)}`
     // Späte Antworten eines vorherigen Laufs dürfen den aktuellen nicht
     // überschreiben — beim Durchklicken der Stufen passiert genau das sonst.

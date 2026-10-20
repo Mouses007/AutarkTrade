@@ -230,7 +230,7 @@ async function entwurfLoeschen(d) {
             <div class="raster">
                 <!-- ══ Gespräch ══ -->
                 <div class="spalte-gespraech">
-                    <div class="dailyCard karte">
+                    <div class="journalKarte karte">
                         <div class="section-title">{{ t('strategies.conversation') }}</div>
 
                         <div v-if="!verlauf.length" class="at-gedaempft klein-text abstand-unten">
@@ -276,7 +276,7 @@ async function entwurfLoeschen(d) {
 
                         <div v-if="anhaenge.length" class="anhaenge">
                             <Pille v-for="(a, i) in anhaenge" :key="i" ton="neutral" symbol="anhang"
-                                class="pointerClass" @click="anhangWeg(i)">
+                                class="klickZiel" @click="anhangWeg(i)">
                                 {{ a.name }} ({{ kb(a.groesse) }})
                                 <Symbol name="schliessen" />
                             </Pille>
@@ -304,7 +304,7 @@ async function entwurfLoeschen(d) {
 
                 <!-- ══ Erkannte Strategie ══ -->
                 <div class="spalte-regeln">
-                    <div class="dailyCard karte">
+                    <div class="journalKarte karte">
                         <div class="section-title">{{ t('strategies.recognisedStrategy') }}</div>
 
                         <div v-if="!regeln" class="at-gedaempft klein-text">{{ t('strategies.noRulesYet') }}</div>
@@ -406,14 +406,14 @@ async function entwurfLoeschen(d) {
             </div>
 
             <!-- Entwürfe -->
-            <div v-if="entwuerfe.length" class="dailyCard karte abstand-oben-gross">
+            <div v-if="entwuerfe.length" class="journalKarte karte abstand-oben-gross">
                 <div class="section-title">{{ t('strategies.drafts') }}</div>
                 <div class="at-tabelle-huelle">
                     <table class="at-tabelle dicht">
                         <tbody>
                             <tr v-for="d in entwuerfe" :key="d.id"
                                 :class="aktuellerEntwurf?.id === d.id ? 'gewaehlt' : ''">
-                                <td class="pointerClass" @click="entwurfOeffnen(d)">{{ d.title }}</td>
+                                <td class="klickZiel" @click="entwurfOeffnen(d)">{{ d.title }}</td>
                                 <td class="at-gedaempft">{{ d.sourceName }}</td>
                                 <td>
                                     <Pille :ton="d.status === 'generated' ? 'gut' : 'neutral'">
@@ -448,8 +448,8 @@ async function entwurfLoeschen(d) {
     max-width: 1500px;
 }
 
-/* `.dailyCard` setzt global height:100% — bei gestapelten Karten falsch. */
-.dailyCard {
+/* `.journalKarte` setzt global height:100% — bei gestapelten Karten falsch. */
+.journalKarte {
     height: auto;
 }
 

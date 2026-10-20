@@ -6,7 +6,7 @@
  * schreiben über `radarSpeichern` in dieselben Felder (useRadarEinstellungen).
  */
 import { useI18n } from 'vue-i18n'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { radarNewsBerichtProvider, radarNewsBerichtModell } from '../gemeinsam/useRadarEinstellungen.js'
 import KiNewsQuellen from './KiNewsQuellen.vue'
 import KiNewsBericht from './KiNewsBericht.vue'
@@ -22,7 +22,7 @@ const { t } = useI18n()
         <p class="einleitung">{{ t('settings.ki.news.intro1') }}</p>
         <p class="einleitung">
             {{ t('settings.ki.news.intro2') }}
-            <code>{{ radarNewsBerichtProvider || currentUser?.aiProvider || '—' }} / {{ radarNewsBerichtModell || currentUser?.aiModel || '—' }}</code>
+            <code>{{ radarNewsBerichtProvider || appEinstellungen?.aiProvider || '—' }} / {{ radarNewsBerichtModell || appEinstellungen?.aiModel || '—' }}</code>
             {{ t('settings.ki.news.intro2b') }}
         </p>
         <p class="einleitung">{{ t('settings.ki.news.intro3') }}</p>

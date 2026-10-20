@@ -9,12 +9,12 @@
  */
 import { nextTick } from 'vue'
 import dayjs from './zeit.js'
-import { pageId, timeZoneTrade, journalHatDaten, tagesSeite, tagesAbfrageGrenze, listeZuEnde } from '../../stores/app/rahmen.js'
+import { seitenId, tradeZeitzone, journalHatDaten, tagesSeite, tagesAbfrageGrenze, listeZuEnde } from '../../stores/app/rahmen.js'
 import {
     seiteLaedt, dashboardDiagrammeBereit, dashboardBereit, negativeTagGruppen, zeichenZaehler,
     diagrammeImAufbau, ladeMehr, auswertungMounted,
 } from '../../stores/app/laden.js'
-import { gewaehlterBereich, selectedDateRange, gewaehlterMonat, selectedPeriodRange } from '../../stores/journal/filter.js'
+import { gewaehlterBereich, datumsBereich, gewaehlterMonat, gewaehlterZeitraum } from '../../stores/journal/filter.js'
 import { groups } from '../../stores/journal/auswertung.js'
 import { verfuegbareTags } from '../../stores/journal/tagebuch.js'
 import { ladeExkursionen, ladeZufriedenheit, ladeTags, ladeVerfuegbareTags, ladeNotizen, useGetAuswertungNotes } from './tagebuch.js'
@@ -40,12 +40,12 @@ const pruefe = (aktuell) => { if (!aktuell()) throw new Ueberholt() }
 
 /** Bestimmt `gewaehlterBereich` je Seite. */
 export async function bestimmeBereich() {
-    const seite = pageId.value
-    if (seite === 'dashboard' || seite === 'auswertung') {
-        gewaehlterBereich.value = selectedPeriodRange.value?.value === 'all' ? { start: 0, end: 0 } : selectedDateRange.value
-    } else if (seite === 'calendar') {
+    const seite = seitenId.value
+    if (seite === 'journalUebersicht' || seite === 'auswertung') {
+        gewaehlterBereich.value = gewaehlterZeitraum.value?.value === 'all' ? { start: 0, end: 0 } : datumsBereich.value
+    } else if (seite === 'kalender') {
         gewaehlterBereich.value = {
-            start: dayjs.unix(gewaehlterMonat.value.start).tz(timeZoneTrade.value).startOf('year').unix(),
+            start: dayjs.unix(gewaehlterMonat.value.start).tz(tradeZeitzone.value).startOf('year').unix(),
             end: gewaehlterMonat.value.end,
         }
     } else {
@@ -173,11 +173,11 @@ export function pruefeSichtbarkeit() {
 
 export async function ladeWeitere() {
     ladeMehr.value = true
-    if (pageId.value === 'daily') {
+    if (seitenId.value === 'tagesansicht') {
         ladeNaechsteTage()
         const d = await ladeDiagramme()
         await Promise.all([d.zeichneDoppellinie(), d.zeichneTorte()])
-    } else if (pageId.value === 'screenshots') {
+    } else if (seitenId.value === 'bilder') {
         await ladeBilder(false)
     }
     ladeMehr.value = false
@@ -185,16 +185,16 @@ export async function ladeWeitere() {
 
 export async function ladeTradesNeu() {
     seiteLaedt.value = true
-    if (pageId.value === 'dashboard') await starteDashboard()
-    else if (pageId.value === 'daily') await starteTagesansicht()
-    else if (pageId.value === 'calendar') await starteKalender()
-    else window.location.href = '/dashboard'
+    if (seitenId.value === 'journalUebersicht') await starteDashboard()
+    else if (seitenId.value === 'tagesansicht') await starteTagesansicht()
+    else if (seitenId.value === 'kalender') await starteKalender()
+    else window.location.href = '/journal'
 }
 
 /** Diagramm-Instanzen freigeben, solange ihre Knoten noch im Dokument hängen. */
 export function useDisposeJournalCharts() {
     const d = geladeneDiagramme()
     if (!d) return
-    const knoten = [...document.querySelectorAll('.chartClass, .chartIdCardClass, #candlestickChart')]
+    const knoten = [...document.querySelectorAll('.diagrammFlaeche, .diagrammKarteFlaeche, #tagesKerzen')]
     if (knoten.length) d.disposeCharts(knoten)
 }

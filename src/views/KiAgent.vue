@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import { seiteLaedt } from '../stores/ui.js'
 import { aiReportGenerating, aiReportError, aiReportLastSavedId, aiReportLabel, aiReportCountBefore } from '../stores/settings.js'
-import { selectedBroker } from '../stores/filters.js'
+import { gewaehlteBoerse } from '../stores/filters.js'
 import axios from 'axios'
 import { useExportReportPdf } from '../utils/pdfExport'
 import { sanitizeKiHtml } from '../utils/sanitize'
@@ -318,7 +318,7 @@ async function checkStatus() {
 async function loadReports() {
     try {
         const params = {}
-        if (selectedBroker.value) params.broker = selectedBroker.value
+        if (gewaehlteBoerse.value) params.broker = gewaehlteBoerse.value
         const res = await axios.get('/api/ai/reports', { params })
         savedReports.splice(0, savedReports.length, ...res.data)
     } catch (e) {
@@ -343,7 +343,7 @@ async function generateReport() {
             startDate: dateRange.value.startDate,
             endDate: dateRange.value.endDate,
             label,
-            broker: selectedBroker.value || null,
+            broker: gewaehlteBoerse.value || null,
             promptOverride: stylePreset?.prompt || null
         }, { timeout: 600000 })
 
@@ -559,7 +559,7 @@ async function sendAgentMessage() {
             body: JSON.stringify({
                 sessionId: agentCurrentSessionId.value,
                 message: msg,
-                ...(agentPageContext.value ? { pageId: agentPageContext.value } : {})
+                ...(agentPageContext.value ? { seitenId: agentPageContext.value } : {})
             })
         })
 
@@ -714,18 +714,18 @@ onBeforeMount(async () => {
             </div>
 
             <!-- Offline Warnung -->
-            <div v-if="!aiOnline" class="dailyCard at-mittig at-py-4 at-mu-3">
+            <div v-if="!aiOnline" class="journalKarte at-mittig at-py-4 at-mu-3">
                 <Symbol style="font-size: 2rem;" name="warnung" class="at-warn" />
                 <p class="at-mo-2 at-mu-1">{{ t('kiAgent.providerNotReachable') }}</p>
                 <small v-if="aiProvider === 'ollama'" class="at-gedaempft">
                     {{ t('kiAgent.ollamaDockerHint') }} <code>docker start ollama</code>
                 </small>
-                <small v-else class="at-gedaempft" v-html="t('kiAgent.checkApiKey', { link: '<a href=\'/settings/ki\'>' + t('nav.settings') + '</a>' })">
+                <small v-else class="at-gedaempft" v-html="t('kiAgent.checkApiKey', { link: '<a href=\'/einstellungen/ki\'>' + t('nav.settings') + '</a>' })">
                 </small>
             </div>
 
             <!-- Konfiguration -->
-            <div v-if="aiOnline" class="dailyCard at-mu-3" style="height: auto; padding: 0.6em 1em;">
+            <div v-if="aiOnline" class="journalKarte at-mu-3" style="height: auto; padding: 0.6em 1em;">
                 <div class="at-formzeile eng">
 
                     <!-- Zeitraum-Typ -->
@@ -784,7 +784,7 @@ onBeforeMount(async () => {
             </div>
 
             <!-- Lade-Animation -->
-            <div v-if="loading" class="dailyCard at-mittig at-py-5">
+            <div v-if="loading" class="journalKarte at-mittig at-py-5">
                 <Kreisel :groesse="48" class="at-mu-3" />
                 <p class="at-gedaempft">{{ t('kiAgent.analyzing') }}</p>
                 <small class="at-gedaempft">{{ t('kiAgent.analyzeHint') }}</small>
@@ -796,14 +796,14 @@ onBeforeMount(async () => {
             </Hinweis>
 
             <!-- Gespeicherte Berichte -->
-            <div v-if="savedReports.length === 0 && !loading" class="dailyCard at-mittig at-py-4">
+            <div v-if="savedReports.length === 0 && !loading" class="journalKarte at-mittig at-py-4">
                 <Symbol style="font-size: 2rem;" name="dokumentSuche" class="at-gedaempft" />
                 <p class="at-gedaempft at-mo-2 at-mu-0">{{ t('kiAgent.noReports') }}</p>
             </div>
 
-            <div v-for="report in savedReports" :key="report.id" class="dailyCard at-mu-2" style="height: auto;">
+            <div v-for="report in savedReports" :key="report.id" class="journalKarte at-mu-2" style="height: auto;">
                 <!-- Klickbarer Header -->
-                <div class="at-flex at-verteilt at-mitte pointerClass" @click="toggleReport(report.id)">
+                <div class="at-flex at-verteilt at-mitte klickZiel" @click="toggleReport(report.id)">
                     <div class="at-flex at-mitte">
                         <Symbol class="at-mr-1" :name="expandedReports.has(report.id) ? 'runter' : 'ausklappen'" />
                         <Symbol name="dokumentHaken" class="at-mr-1" />
@@ -816,7 +816,7 @@ onBeforeMount(async () => {
                         <!-- Kompakte Stats wenn zugeklappt -->
                         <span v-if="report.reportData && !expandedReports.has(report.id)" class="at-gedaempft at-klein at-mr-2 kiNurBreit">
                             {{ report.reportData.tradeCount }} {{ t('common.trades') }} · {{ report.reportData.winRate }}% WR ·
-                            <span :class="parseFloat(report.reportData.totalNetProceeds) >= 0 ? 'greenTrade' : 'redTrade'">
+                            <span :class="parseFloat(report.reportData.totalNetProceeds) >= 0 ? 'gewinnWert' : 'verlustWert'">
                                 {{ report.reportData.totalNetProceeds }} USDT
                             </span>
                         </span>
@@ -848,7 +848,7 @@ onBeforeMount(async () => {
                         </div>
                         <div class="at-mittig">
                             <div class="at-gedaempft at-klein">{{ t('dashboard.netPnl') }}</div>
-                            <div class="at-fett" :class="parseFloat(report.reportData.totalNetProceeds) >= 0 ? 'greenTrade' : 'redTrade'">
+                            <div class="at-fett" :class="parseFloat(report.reportData.totalNetProceeds) >= 0 ? 'gewinnWert' : 'verlustWert'">
                                 {{ report.reportData.totalNetProceeds }} USDT
                             </div>
                         </div>
@@ -944,7 +944,7 @@ onBeforeMount(async () => {
                 </div>
 
                 <!-- Offline -->
-                <div v-if="!aiOnline" class="dailyCard at-mittig at-py-4 at-mu-3">
+                <div v-if="!aiOnline" class="journalKarte at-mittig at-py-4 at-mu-3">
                     <Symbol style="font-size: 2rem;" name="warnung" class="at-warn" />
                     <p class="at-mo-2 at-mu-1">{{ t('kiAgent.providerNotReachable') }}</p>
                 </div>
@@ -952,7 +952,7 @@ onBeforeMount(async () => {
                 <div v-if="aiOnline" class="kiAgentRaster">
                     <!-- Session-Liste (links) -->
                     <div>
-                        <div class="dailyCard" style="height: auto; max-height: 70vh; overflow-y: auto; padding: 0.5em;">
+                        <div class="journalKarte" style="height: auto; max-height: 70vh; overflow-y: auto; padding: 0.5em;">
                             <div class="at-flex at-mitte at-verteilt at-mu-2">
                                 <div class="at-klein at-fett"><Symbol name="verlauf" class="at-mr-1" />{{ t('kiAgent.sessions') }}</div>
                                 <div class="at-flex at-luecke-1">
@@ -970,7 +970,7 @@ onBeforeMount(async () => {
                                 {{ zeigeArchiv ? t('kiAgent.archivLeer') : t('kiAgent.noSessions') }}
                             </div>
                             <div v-for="s in sichtbareSessions" :key="s.id"
-                                class="agent-session-item at-p-2 at-mu-1 pointerClass"
+                                class="agent-session-item at-p-2 at-mu-1 klickZiel"
                                 :class="{ 'agent-session-active': agentCurrentSessionId === s.id }"
                                 @click="auswahlModus ? toggleAuswahl(s.id) : loadAgentSession(s.id)">
                                 <div class="at-flex at-mitte at-luecke-2">
@@ -1009,7 +1009,7 @@ onBeforeMount(async () => {
 
                     <!-- Chat-Bereich (rechts) -->
                     <div class="kiAgentChat">
-                        <div class="dailyCard" style="height: auto; min-height: 50vh; display: flex; flex-direction: column; padding: 0.8em;">
+                        <div class="journalKarte" style="height: auto; min-height: 50vh; display: flex; flex-direction: column; padding: 0.8em;">
 
                             <!-- Chat-Verlauf -->
                             <div ref="agentChatEl" class="agent-chat-messages at-wachsen at-mu-3" style="overflow-y: auto; max-height: 60vh;">
@@ -1031,7 +1031,7 @@ onBeforeMount(async () => {
 
                                     <!-- Tool Messages -->
                                     <div v-if="msg.role === 'tool'" class="agent-tool-step at-mu-1 at-ml-3">
-                                        <div class="at-flex at-mitte at-luecke-1 pointerClass" @click="toggleAgentTool(idx)">
+                                        <div class="at-flex at-mitte at-luecke-1 klickZiel" @click="toggleAgentTool(idx)">
                                             <Symbol class="agentWerkzeug" name="einstellungen" />
                                             <span class="at-klein agentWerkzeug">{{ msg.toolName }}</span>
                                             <Symbol :name="agentExpandedTools.has(idx) ? 'runter' : 'ausklappen'" style="font-size: 0.7rem;" />

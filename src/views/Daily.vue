@@ -18,7 +18,7 @@ function merkeKerzen(schluessel, wert) {
 
 <script setup>
 /**
- * Tagesansicht (`/daily`): eine Karte je Handelstag des gewählten Monats mit
+ * Tagesansicht (`/tagesansicht`): eine Karte je Handelstag des gewählten Monats mit
  * Kennzahlen und den Reitern Trades/Blotter; ein Klick auf einen Trade öffnet
  * das Detailfenster (Kerzenchart, Fills, SL/TP-Protokoll, Bot-Aufschlüsselung,
  * MFE, Notiz, Share-Karte, Screenshot-Vorschau).
@@ -46,12 +46,12 @@ import SeiteLaedt from '@/components/SeiteLaedt.vue'
 import ShareCardModal from '@/components/ShareCardModal.vue'
 
 import { seiteLaedt, ladeMehr, setupsLaden } from '@/stores/app/laden.js'
-import { journalHatDaten, timeZoneTrade, tradeDetailOffen, speichernNoetig, scrollToDateUnix, currentUser } from '@/stores/app/rahmen.js'
+import { journalHatDaten, tradeZeitzone, tradeDetailOffen, speichernNoetig, scrollToDateUnix, appEinstellungen } from '@/stores/app/rahmen.js'
 import { journalTage } from '@/stores/journal/auswertung.js'
 import { tradeId } from '@/stores/journal/import.js'
 import { markierungOffen, screenshots, bildInfos, screenshot } from '@/stores/journal/screenshots.js'
 import {
-    tradeBildGeaendert, excursion, excursions, tradeExkursionGeaendert, tradeExcursionId, tradeExcursionDateUnix,
+    tradeBildGeaendert, excursion, excursions, tradeExkursionGeaendert, exkursionTradeId, exkursionTagUnix,
     offenerTagIndex, tradeIndexAktiv, tradeIndexVorher, tags, verfuegbareTags, tradeTags, tradeTagsGeaendert,
     tagInput, showTagsList, notes, tradeNotiz, tradeNotizGeaendert,
 } from '@/stores/journal/tagebuch.js'
@@ -62,8 +62,8 @@ import {
     ladeNotizen, useGetTagInfo, baueTagListe, useResetTags,
 } from '@/utils/journal/tagebuch.js'
 import {
-    useCreatedDateFormat, useTwoDecCurrencyFormat, useXDecCurrencyFormat, useTimeFormat, useTimeDuration,
-    useDecimalsArithmetic, useDateCalFormat, useSwingDuration,
+    formDatumLang, formGeld2, formGeldStellen, formUhrzeitSek, formDauer,
+    addiereGenau, formDatum, formDauerTage,
 } from '@/utils/journal/format.js'
 import dayjs from '@/utils/journal/zeit.js'
 import { ladeDiagramme, geladeneDiagramme } from '@/utils/journal/diagrammLader.js'
@@ -77,14 +77,14 @@ const router = useRouter()
 
 /** KI-/Share-Knöpfe: aus nur bei ausdrücklich false oder 0 (fehlend = an). */
 const kiAn = computed(() => {
-    const v = currentUser.value?.aiEnabled
+    const v = appEinstellungen.value?.aiEnabled
     return v !== false && v !== 0
 })
-const binanceChartAn = computed(() => !!currentUser.value?.enableBinanceChart)
+const binanceChartAn = computed(() => !!appEinstellungen.value?.enableBinanceChart)
 
 const istZahl = (x) => x !== null && x !== undefined && x !== '' && Number.isFinite(Number(x))
 const gesetzt = (x) => x !== null && x !== undefined
-const geld = (x) => useTwoDecCurrencyFormat(Number(x) || 0)
+const geld = (x) => formGeld2(Number(x) || 0)
 
 /**
  * Preis mit genug Stellen für kleine Coins: 0,00001234 als „$0.00" zu zeigen
@@ -97,12 +97,12 @@ function preis(x, forex = false) {
     if (forex) return p.toFixed(5)
     const a = Math.abs(p)
     const stellen = a >= 1000 || a === 0 ? 2 : a >= 1 ? 4 : Math.min(10, Math.ceil(-Math.log10(a)) + 3)
-    return useXDecCurrencyFormat(p, stellen)
+    return formGeldStellen(p, stellen)
 }
 
 /** Wahr, wenn beide Zeitpunkte (Sekunden) in der Handelszeitzone am selben Tag liegen. Falsch = Swing. */
 function checkDate(td, zeit) {
-    const zone = timeZoneTrade.value
+    const zone = tradeZeitzone.value
     return dayjs.unix(td).tz(zone).format('YYYY-MM-DD') === dayjs.unix(zeit).tz(zone).format('YYYY-MM-DD')
 }
 
@@ -139,7 +139,7 @@ function botMuenze(trade) {
 
 function botBetrag(wert, muenze) {
     const z = parseFloat(wert || 0)
-    if (muenze === 'USDT') return useTwoDecCurrencyFormat(z)
+    if (muenze === 'USDT') return formGeld2(z)
     return `${z >= 0 ? '+' : ''}${z.toFixed(4)} ${muenze}`
 }
 
@@ -185,7 +185,7 @@ function durchschnittEinstieg(fills) {
     return ein.reduce((s, f) => s + zahl(f.qty) * zahl(f.price), 0) / menge
 }
 
-const fillZeit = (ms) => dayjs(Number(ms)).tz(timeZoneTrade.value).format('DD.MM. HH:mm')
+const fillZeit = (ms) => dayjs(Number(ms)).tz(tradeZeitzone.value).format('DD.MM. HH:mm')
 
 /**
  * Art eines Fills. Schliessend: „close" erst, wenn die bis HIER geschlossene
@@ -218,7 +218,7 @@ function gruppiereFills(fills) {
     const liste = listeVon(fills)
     const gruppen = []
     liste.forEach((f, i) => {
-        const minute = dayjs(Number(f.time)).tz(timeZoneTrade.value).format('YYYY-MM-DD HH:mm')
+        const minute = dayjs(Number(f.time)).tz(tradeZeitzone.value).format('YYYY-MM-DD HH:mm')
         const schluessel = `${minute}|${f.reduceOnly ? 1 : 0}`
         let g = gruppen[gruppen.length - 1]
         if (!g || g.schluessel !== schluessel) {
@@ -267,7 +267,7 @@ const hatBild = (trade) => bildInfos.some(s => s.name === trade.id)
 function einstiegHinweis(trade, tag) {
     if (trade.tradesCount == 0) return ''
     if (checkDate(trade.td ?? tag.dateUnix, trade.entryTime)) return ''
-    return t('daily.swingFrom', { date: useDateCalFormat(trade.entryTime) })
+    return t('daily.swingFrom', { date: formDatum(trade.entryTime) })
 }
 
 // ── Sprung zu einem Tag ────────────────────────────────────────────────────
@@ -325,7 +325,7 @@ const dialogTitel = computed(() => {
     const tr = offenerTrade.value
     const k = offeneKarte.value
     if (!tr || !k) return ''
-    return `${tr.symbol || ''} · ${useCreatedDateFormat(k.dateUnix)}`
+    return `${tr.symbol || ''} · ${formDatumLang(k.dateUnix)}`
 })
 
 const hatVorherigen = computed(() => !!offeneKarte.value?.trades?.[tradeIndexAktiv.value - 1])
@@ -377,12 +377,12 @@ async function speichereExkursion() {
     // Leer, NaN oder fehlend wird null — nie NaN in die DB
     const datensatz = {}
     for (const f of felder) datensatz[f] = istZahl(excursion[f]) ? Number(excursion[f]) : null
-    const vorhanden = await dbFirst('excursions', { equalTo: { tradeId: tradeExcursionId.value } })
+    const vorhanden = await dbFirst('excursions', { equalTo: { tradeId: exkursionTradeId.value } })
     if (vorhanden) {
         await dbUpdate('excursions', vorhanden.objectId, datensatz)
     } else {
-        await dbCreate('excursions', { ...datensatz, dateUnix: tradeExcursionDateUnix.value, tradeId: tradeExcursionId.value })
-        tradeId.value = tradeExcursionId.value
+        await dbCreate('excursions', { ...datensatz, dateUnix: exkursionTagUnix.value, tradeId: exkursionTradeId.value })
+        tradeId.value = exkursionTradeId.value
     }
     await bestimmeBereich()
     await ladeExkursionen()
@@ -451,7 +451,7 @@ function kerzenFehlerText(fehler) {
 async function zeichneKerzen(trade, karte, meta) {
     if (!binanceChartAn.value || !trade.symbol) return
     const auftrag = ++kerzenAuftrag
-    const zone = timeZoneTrade.value
+    const zone = tradeZeitzone.value
     const mitte = trade.entryTime
         ? Number(trade.entryTime) * 1000
         : dayjs.unix(trade.td ?? karte.dateUnix).tz(zone).startOf('day').add(12, 'hour').valueOf()
@@ -475,7 +475,7 @@ async function zeichneKerzen(trade, karte, meta) {
             const roh = Array.isArray(antwort.data) ? antwort.data : []
             kerzen = {
                 zeiten: roh.map(k => Number(k[0])),
-                // Reihenfolge [Schluss, Eröffnung, Tief, Hoch] erwartet useCandlestickChart
+                // Reihenfolge [Schluss, Eröffnung, Tief, Hoch] erwartet kerzenDiagramm
                 preise: roh.map(k => [Number(k[4]), Number(k[1]), Number(k[3]), Number(k[2])]),
                 volumen: roh.map(k => Number(k[5])),
             }
@@ -492,7 +492,7 @@ async function zeichneKerzen(trade, karte, meta) {
         if (auftrag !== kerzenAuftrag || !tradeDetailOffen.value) return
         // Kopie mit Metadaten: das Store-Objekt in journalTage bleibt unverändert
         const mitMeta = meta ? { ...trade, _tradingMeta: meta } : { ...trade }
-        const instanz = await d.useCandlestickChart(kerzen.zeiten, kerzen.preise, kerzen.volumen, mitMeta, true)
+        const instanz = await d.kerzenDiagramm(kerzen.zeiten, kerzen.preise, kerzen.volumen, mitMeta, true)
         instanz.resize()
         beobachteGroesse(instanz)
     } catch (fehler) {
@@ -589,8 +589,8 @@ async function clickTradesModal(karte, alt, neu) {
         offeneGruppen.clear()
         mfeAuto.value = false
         // Speicher-Kontext gleich beim Öffnen: eine MFE-Änderung landet immer am OFFENEN Trade
-        tradeExcursionId.value = id
-        tradeExcursionDateUnix.value = tag.dateUnix
+        exkursionTradeId.value = id
+        exkursionTagUnix.value = tag.dateUnix
 
         // Screenshot: erst der des Trades, sonst der des Tages
         const finde = () => screenshots.find(s => s?.name === id) || screenshots.find(s => s?.dateUnixDay == tag.dateUnix)
@@ -644,7 +644,7 @@ async function clickTradesModal(karte, alt, neu) {
         // Auto-MFE: nur zeigen, nicht still speichern
         if (binanceChartAn.value && !excursion.mfePrice) {
             const mfe = await berechneMfe(trade)
-            if (mfe !== null && tradeExcursionId.value === id && !excursion.mfePrice) {
+            if (mfe !== null && exkursionTradeId.value === id && !excursion.mfePrice) {
                 excursion.mfePrice = mfe
                 mfeAuto.value = true
             }
@@ -695,8 +695,8 @@ async function schliesseTrade() {
 // ── MFE-Eingabe ────────────────────────────────────────────────────────────
 
 function markiereExkursion() {
-    tradeExcursionDateUnix.value = offeneKarte.value?.dateUnix
-    tradeExcursionId.value = offenerTrade.value?.id
+    exkursionTagUnix.value = offeneKarte.value?.dateUnix
+    exkursionTradeId.value = offenerTrade.value?.id
     tradeExkursionGeaendert.value = true
     speichernNoetig.value = true
     mfeAuto.value = false
@@ -759,7 +759,7 @@ async function oeffneOrderbuch() {
         replay: '1', symbol: f.symbol, market: 'futures',
         from: String(Math.round(f.von)), to: String(Math.round(f.bis)),
         entry: String(Math.round(f.ein)), exit: String(Math.round(f.aus)),
-        label: `Trade ${useTimeFormat(tr.entryTime)}`,
+        label: `Trade ${formUhrzeitSek(tr.entryTime)}`,
     }
     if (dialogOffen.value) {
         dialogOffen.value = false
@@ -795,7 +795,7 @@ function kiBewertung(karte, index) {
     const agentPrompt = t('daily.aiPrompt', {
         symbol: tr.symbol || '',
         richtung: tr.strategy === 'short' ? 'Short' : 'Long',
-        datum: useDateCalFormat(tag.dateUnix),
+        datum: formDatum(tag.dateUnix),
         dateUnix: tag.dateUnix,
         einstieg: tr.entryPrice ?? '',
         ausstieg: tr.exitPrice ?? tr.closePrice ?? '',
@@ -890,7 +890,7 @@ onBeforeUnmount(() => {
             <Karte v-for="(karte, ki) in journalTage" :id="`daily-card-${karte.dateUnix}`"
                 :key="`${karte.dateUnix}-${ki}`" class="tageskarte">
                 <header class="kartenkopf">
-                    <h3 class="datum">{{ useCreatedDateFormat(karte.dateUnix) }}</h3>
+                    <h3 class="datum">{{ formDatumLang(karte.dateUnix) }}</h3>
 
                     <dl v-if="karte.pAndL" class="kennzahlen">
                         <div><dt>{{ t('daily.kzTrades') }}</dt><dd>{{ karte.pAndL.trades }}</dd></div>
@@ -948,12 +948,12 @@ onBeforeUnmount(() => {
                                         <span class="einstieg">
                                             {{ trade.openPosition ? t('daily.open') : t('daily.closed') }}
                                             <InfoTipp :text="trade.openPosition
-                                                ? t('daily.swingOpenedOn', { date: useDateCalFormat(trade.entryTime) })
-                                                : t('daily.swingClosedOn', { date: useDateCalFormat(trade.exitTime) })" />
+                                                ? t('daily.swingOpenedOn', { date: formDatum(trade.entryTime) })
+                                                : t('daily.swingClosedOn', { date: formDatum(trade.exitTime) })" />
                                         </span>
                                     </template>
                                     <span v-else class="einstieg">
-                                        {{ useTimeFormat(trade.entryTime) }}
+                                        {{ formUhrzeitSek(trade.entryTime) }}
                                         <InfoTipp v-if="einstiegHinweis(trade, karte)" :text="einstiegHinweis(trade, karte)" />
                                     </span>
                                 </td>
@@ -993,7 +993,7 @@ onBeforeUnmount(() => {
                         <tbody>
                             <tr v-for="(b, bi) in Object.values(karte.blotter || {})" :key="bi">
                                 <td class="at-halbfett">{{ b.symbol }}</td>
-                                <td class="zahl">{{ useDecimalsArithmetic(b.buyQuantity, b.sellQuantity) }}</td>
+                                <td class="zahl">{{ addiereGenau(b.buyQuantity, b.sellQuantity) }}</td>
                                 <td class="zahl" :class="b.grossProceeds >= 0 ? 'at-gut' : 'at-schlecht'">{{ geld(b.grossProceeds) }}</td>
                                 <td class="zahl">{{ geld(b.fees) }}</td>
                                 <!-- Farbe nach dem angezeigten Netto-Wert, nicht nach betragArt -->
@@ -1015,9 +1015,9 @@ onBeforeUnmount(() => {
     <!-- Trade-Detailfenster -->
     <Dialog :model-value="dialogOffen" :titel="dialogTitel" breite="72rem" :aussen-schliesst="false" @zu="schliesseTrade">
         <div v-if="tradeDetailOffen && offenerTrade" class="detail">
-            <!-- Kerzenchart: frischer Knoten je Öffnen (key), ID ist Vorgabe von useCandlestickChart -->
+            <!-- Kerzenchart: frischer Knoten je Öffnen (key), ID ist Vorgabe von kerzenDiagramm -->
             <div v-if="binanceChartAn" class="kerzenbereich">
-                <div v-show="!kerzenFehler" id="candlestickChart" :key="kerzenSchluessel" ref="kerzenEl" class="kerzen"></div>
+                <div v-show="!kerzenFehler" id="tagesKerzen" :key="kerzenSchluessel" ref="kerzenEl" class="kerzen"></div>
                 <div v-if="kerzenLaedt && !kerzenFehler" class="kerzenLaden"><Kreisel :groesse="24" /></div>
                 <p v-if="kerzenFehler" class="kerzenFehler">{{ kerzenFehler }}</p>
             </div>
@@ -1056,10 +1056,10 @@ onBeforeUnmount(() => {
                                 <span v-if="offenerTrade.tradesCount == 0" class="einstieg">
                                     {{ offenerTrade.openPosition ? t('daily.open') : t('daily.closed') }}
                                     <InfoTipp :text="offenerTrade.openPosition
-                                        ? t('daily.swingOpenedOn', { date: useDateCalFormat(offenerTrade.entryTime) })
-                                        : t('daily.swingClosedOn', { date: useDateCalFormat(offenerTrade.exitTime) })" />
+                                        ? t('daily.swingOpenedOn', { date: formDatum(offenerTrade.entryTime) })
+                                        : t('daily.swingClosedOn', { date: formDatum(offenerTrade.exitTime) })" />
                                 </span>
-                                <span v-else>{{ useTimeFormat(offenerTrade.entryTime) }}</span>
+                                <span v-else>{{ formUhrzeitSek(offenerTrade.entryTime) }}</span>
                             </td>
                             <td class="zahl at-nowrap">
                                 <span v-if="offenerTrade.tradesCount != 0" class="einstieg">
@@ -1068,7 +1068,7 @@ onBeforeUnmount(() => {
                                 </span>
                             </td>
                             <td class="at-nowrap">
-                                <template v-if="offenerTrade.tradesCount != 0">{{ useTimeFormat(offenerTrade.exitTime) }}</template>
+                                <template v-if="offenerTrade.tradesCount != 0">{{ formUhrzeitSek(offenerTrade.exitTime) }}</template>
                             </td>
                             <td class="zahl at-nowrap">
                                 <template v-if="offenerTrade.tradesCount != 0">{{ preis(offenerTrade.exitPrice, offenerTrade.type === 'forex') }}</template>
@@ -1076,8 +1076,8 @@ onBeforeUnmount(() => {
                             <td class="at-nowrap">
                                 <template v-if="offenerTrade.tradesCount != 0">
                                     {{ checkDate(offenerTrade.td ?? offeneKarte.dateUnix, offenerTrade.entryTime)
-                                        ? useTimeDuration(offenerTrade.exitTime - offenerTrade.entryTime)
-                                        : useSwingDuration(offenerTrade.exitTime - offenerTrade.entryTime) }}
+                                        ? formDauer(offenerTrade.exitTime - offenerTrade.entryTime)
+                                        : formDauerTage(offenerTrade.exitTime - offenerTrade.entryTime) }}
                                 </template>
                             </td>
                             <td class="zahl">

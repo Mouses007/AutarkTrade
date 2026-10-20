@@ -2,17 +2,17 @@
  * Import-Vorschau speichern, vorhandene Tage, Kerzen holen und MFE-Preise
  * daraus bestimmen (Spezifikation journal-kern.md §4.2).
  *
- * Modulzustand: Symbolliste mit Zeitfenster für `useGetOHLCV`, die Kerzenliste
+ * Modulzustand: Symbolliste mit Zeitfenster für `holeImportKerzen`, die Kerzenliste
  * und die MFE-Preisliste. Letztere wird bewusst NIE geleert (Altfehler §7.5).
  */
 import axios from 'axios'
 import dayjs from './zeit.js'
 import { dbFind, dbCreate } from '../db.js'
-import { currentUser, timeZoneTrade, abfrageGrenzeVorhanden } from '../../stores/app/rahmen.js'
+import { appEinstellungen, tradeZeitzone, abfrageGrenzeVorhanden } from '../../stores/app/rahmen.js'
 import { seiteLaedt } from '../../stores/app/laden.js'
-import { selectedBroker } from '../../stores/journal/filter.js'
-import { blotter, pAndL, executions, trades, tradeId, vorhandeneTradeTage, vorhandeneTradeTageGeladen, marketCloseTime } from '../../stores/journal/import.js'
-import { tradeExcursionId } from '../../stores/journal/tagebuch.js'
+import { gewaehlteBoerse } from '../../stores/journal/filter.js'
+import { blotter, pAndL, executions, trades, tradeId, vorhandeneTradeTage, vorhandeneTradeTageGeladen, marktSchluss } from '../../stores/journal/import.js'
+import { exkursionTradeId } from '../../stores/journal/tagebuch.js'
 
 const anfrage = { symbole: [], von: undefined, bis: undefined }
 let kerzen = []          // Liste {symbol, ohlcv}
@@ -25,12 +25,12 @@ async function ladePapa() {
     return papa
 }
 
-const schluesselVon = (anbieter) => currentUser.value?.apis?.find(a => a.provider === anbieter)?.key
+const schluesselVon = (anbieter) => appEinstellungen.value?.apis?.find(a => a.provider === anbieter)?.key
 const nieErfuellt = () => new Promise(() => {})
 
 // ── Vorhandene Tage ────────────────────────────────────────────────────────
 
-export function useGetExistingTradesArray(_param99, _param0) {
+export function ladeVorhandeneTradeTage(_param99, _param0) {
     // Altfehler §7.6: bei DB-Fehler bleibt das Promise unerfüllt.
     return new Promise((erfuellt) => {
         vorhandeneTradeTage.length = 0
@@ -47,7 +47,7 @@ export function useGetExistingTradesArray(_param99, _param0) {
 // ── Kerzen ─────────────────────────────────────────────────────────────────
 
 /** Databento-CSV → Kerzen in `ziel.ohlcv`; erfüllt mit `ziel`. */
-export async function useCreateOHLCV(csv, ziel) {
+export async function kerzenAusCsv(csv, ziel) {
     const Papa = await ladePapa()
     const { data } = Papa.parse(csv, { header: true, skipEmptyLines: false })
     // Altfehler §7.6: ohne eine einzige Zeile bleibt das Promise unerfüllt.
@@ -101,11 +101,11 @@ function polygonFehler(fehler) {
  * Kerzen für alle Symbole holen. Altfehler §7.7: erfüllt nach dem ERSTEN
  * Symbol, die übrigen laufen danach weiter.
  */
-export async function useGetOHLCV(quelle, modus, symbole, von, bis) {
+export async function holeImportKerzen(quelle, modus, symbole, von, bis) {
     if (symbole) anfrage.symbole = symbole
     if (von) anfrage.von = von
     if (bis) anfrage.bis = bis
-    kerzen = []   // neue Liste: eine von aussen übergebene (useGetMFEPrices) bleibt unberührt
+    kerzen = []   // neue Liste: eine von aussen übergebene (berechneMfePreise) bleibt unberührt
     const endeSek = dayjs.unix(anfrage.bis).endOf('day').unix()
 
     if (quelle === 'databento') {
@@ -117,13 +117,13 @@ export async function useGetOHLCV(quelle, modus, symbole, von, bis) {
                     axios.post('https://hist.databento.com/v0/timeseries.get_range', new URLSearchParams(rumpf).toString(), {
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ' + auth },
                     }).then(async (antwort) => {
-                        await useCreateOHLCV(antwort.data, { symbol: eintrag.symbol, ohlcv: [] })
+                        await kerzenAusCsv(antwort.data, { symbol: eintrag.symbol, ohlcv: [] })
                         erfuellt()
                     }).catch(abgelehnt)
                 } else {
                     // nicht abwarten: alle Anfragen gehen sofort raus
                     axios.post('/api/databento', rumpf).then(async (antwort) => {
-                        await useCreateOHLCV(antwort.data, { symbol: eintrag.symbol, ohlcv: [] })
+                        await kerzenAusCsv(antwort.data, { symbol: eintrag.symbol, ohlcv: [] })
                         erfuellt(kerzen)
                     }).catch(abgelehnt)
                 }
@@ -163,7 +163,7 @@ export async function useGetOHLCV(quelle, modus, symbole, von, bis) {
  * Höchster günstiger Preis zwischen Ein- und Ausstieg, bei Gewinnern bis zum
  * Marktschluss verlängert. Hängt an die Modulliste an und gibt sie GANZ zurück.
  */
-export async function useGetMFEPrices(ausf, einstiegZeit, einstiegPreis, trade, kerzenSatz) {
+export async function berechneMfePreise(ausf, einstiegZeit, einstiegPreis, trade, kerzenSatz) {
     if (kerzenSatz) kerzen = kerzenSatz
     const eintrag = kerzen.find(k => k.symbol == ausf.symbol)
     // Altfehler §7.6: Symbol unbekannt → das Promise bleibt für immer offen.
@@ -183,9 +183,9 @@ export async function useGetMFEPrices(ausf, einstiegZeit, einstiegPreis, trade, 
     const Ts = reihe[s].t
     const Tf = reihe[f].t
 
-    const zone = timeZoneTrade.value
+    const zone = tradeZeitzone.value
     const schlussTag = dayjs(Tf).tz(zone).format('YYYY-MM-DD')
-    const schluss = dayjs.tz(`${schlussTag} ${marketCloseTime.value}`, zone).valueOf()
+    const schluss = dayjs.tz(`${schlussTag} ${marktSchluss.value}`, zone).valueOf()
     const k = reihe.findIndex(x => x.t >= schluss) - 1   // keiner → -2
 
     if (Tf < Ts) {
@@ -223,7 +223,7 @@ export async function useGetMFEPrices(ausf, einstiegZeit, einstiegPreis, trade, 
 }
 
 /** Schreibt die GANZE Modulliste als Exkursionszeilen (Altfehler §7.5). */
-export function useUpdateMfePrices(_param99, _param0, _param2) {
+export function speichereMfePreise(_param99, _param0, _param2) {
     // Altfehler §7.6: leere Liste → das Promise bleibt unerfüllt.
     return new Promise((erfuellt, abgelehnt) => {
         (async () => {
@@ -231,7 +231,7 @@ export function useUpdateMfePrices(_param99, _param0, _param2) {
                 const e = mfePreise[i]
                 try {
                     await dbCreate('excursions', { mfePrice: e.mfePrice, dateUnix: e.dateUnix, tradeId: e.tradeId })
-                    tradeId.value = tradeExcursionId.value
+                    tradeId.value = exkursionTradeId.value
                 } catch {
                     abgelehnt()
                 }
@@ -243,7 +243,7 @@ export function useUpdateMfePrices(_param99, _param0, _param2) {
 
 // ── Speichern der Vorschau ─────────────────────────────────────────────────
 
-export async function useUploadTrades(_param99, _param0) {
+export async function speichereImport(_param99, _param0) {
     seiteLaedt.value = true
     const tage = Object.keys(executions)
     const fehler = []
@@ -257,7 +257,7 @@ export async function useUploadTrades(_param99, _param0) {
                 date: datum,
                 dateUnix: Number(k),
                 openPositions: offen,
-                broker: selectedBroker.value || 'bitunix',
+                broker: gewaehlteBoerse.value || 'bitunix',
                 executions: executions[k],
                 trades: trades[k],
                 blotter: blotter[k],
@@ -271,6 +271,6 @@ export async function useUploadTrades(_param99, _param0) {
     if (fehler.length) {
         alert(`${gespeichert} Handelstag(e) importiert, ${fehler.length} fehlgeschlagen:\n` + fehler.map(f => `${f.datum}: ${f.grund}`).join('\n'))
     }
-    if (tage.length > 0 && mfePreise.length > 0) await useUpdateMfePrices()
-    window.location.href = '/dashboard'
+    if (tage.length > 0 && mfePreise.length > 0) await speichereMfePreise()
+    window.location.href = '/journal'
 }

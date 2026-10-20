@@ -4,7 +4,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import dayjs from 'dayjs'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { useQuickApiImport } from '@/utils/quickImport.js'
 import { sendNotification } from '@/utils/notify.js'
 import { vergissBoersenZugang } from '@/utils/boersenZugang.js'
@@ -45,7 +45,7 @@ let bitgetSubExpanded = ref(false)
 const BOERSEN_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
 const boersenZugangKaputt = computed(() => {
     let st = {}
-    try { st = JSON.parse(currentUser.value?.boersenStatus || '{}') } catch { st = {} }
+    try { st = JSON.parse(appEinstellungen.value?.boersenStatus || '{}') } catch { st = {} }
     return Object.entries(st)
         .filter(([, v]) => v?.kaputt)
         .map(([broker, v]) => ({

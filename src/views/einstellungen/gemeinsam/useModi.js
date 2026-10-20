@@ -9,7 +9,7 @@
 import { ref } from 'vue'
 import { MODES } from '@/config/menu.js'
 import { appMode } from '@/stores/ui.js'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { kiSpeichern } from './speichern.js'
 
 // Modi einzeln abschaltbar. Journal fehlt hier absichtlich: es ist der Kern
@@ -21,7 +21,7 @@ export let modusLernenAn = ref(true)
 
 /** Stand aus den gerade geladenen Einstellungen übernehmen. */
 export function ladeModi() {
-    const settings = currentUser.value || {}
+    const settings = appEinstellungen.value || {}
         modusLiveAn.value = Number(settings.modusLiveAn ?? 1) === 1
         modusResearchAn.value = Number(settings.modusResearchAn ?? 1) === 1
         modusStrategieAn.value = Number(settings.modusStrategieAn ?? 1) === 1
@@ -31,7 +31,7 @@ export function ladeModi() {
 /**
  * Modus-Schalter speichern.
  *
- * `kiSpeichern` schreibt die Datenbank und patcht `currentUser` gleich mit —
+ * `kiSpeichern` schreibt die Datenbank und patcht `appEinstellungen` gleich mit —
  * der Tab verschwindet dadurch im selben Takt aus dem Umschalter, ohne Reload.
  *
  * Der zweite Teil räumt das Gedächtnis auf: Wer den Modus abschaltet, in dem

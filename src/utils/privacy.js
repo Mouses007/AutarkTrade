@@ -2,7 +2,7 @@
  * Datenschutz-/Zensur-Modus für das Journal.
  *
  * Zahlen und Geldwerte tragen im Journal keine gemeinsame CSS-Klasse (Mischung
- * aus greenTrade/redTrade/text-warning und Bootstrap-Utilities). Statt jede
+ * aus gewinnWert/verlustWert/text-warning und Bootstrap-Utilities). Statt jede
  * Stelle zu markieren, erkennen wir Zahlen-Blätter am Textinhalt: ein Blatt
  * (Element ohne Kind-Elemente), dessen Text mindestens eine Ziffer und KEINEN
  * Buchstaben enthält, ist ein Wert — Beschriftungen haben immer Buchstaben.

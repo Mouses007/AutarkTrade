@@ -3,8 +3,8 @@ import dayjs from './journal/zeit.js'
 import { dbFind, dbFirst, dbCreate, dbUpdate, dbDelete, dbFindTradeIdByPositionId } from './db.js'
 import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, pendingOpeningCount, pendingClosingCount, pendingOpeningByBroker, pendingClosingByBroker, evalNotificationShown, evalNotificationDismissed, evalNeu, getNotifiedPositionIds, addNotifiedPositionIds, removeNotifiedPositionIds } from '../stores/trades.js'
 import { expandedId } from '../stores/ui.js'
-import { currentUser } from '../stores/settings.js'
-import { selectedBroker } from '../stores/filters.js'
+import { appEinstellungen } from '../stores/settings.js'
+import { gewaehlteBoerse } from '../stores/filters.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { eingerichteteBoersen, pruefeNichtEingerichtet } from './boersenZugang.js'
 import { istGewinn } from '../../shared/gewinn.js'
@@ -72,7 +72,7 @@ export async function useUpdatePendingCounts() {
  * Fetch open positions from ALL configured exchanges, sync with local DB,
  * detect closed positions and create trade records. The "Pendente Trades"
  * view shows every broker at once (grouped per exchange), so we no longer
- * limit this to selectedBroker.
+ * limit this to gewaehlteBoerse.
  */
 export async function useFetchOpenPositions() {
     // Nur Börsen mit Schlüssel. Ohne eingerichtete Börse wird nichts gefragt —
@@ -236,7 +236,7 @@ async function syncPositionsWithDb(apiPositions, broker, { vollstaendig = true }
  * For each: fetch history data → create trade record → link metadata → remove from incoming.
  */
 async function handleClosedPositions(closedPositions, broker) {
-    const popupsEnabled = currentUser.value?.showTradePopups !== 0
+    const popupsEnabled = appEinstellungen.value?.showTradePopups !== 0
 
     for (const incoming of closedPositions) {
         try {
@@ -272,8 +272,8 @@ async function handleClosedPositions(closedPositions, broker) {
                 const closeTime = parseInt(histPos.mtime || histPos.uTime || 0)
                 if (openTime && closeTime && closeTime > openTime) {
                     const durationMin = (closeTime - openTime) / (1000 * 60)
-                    const scalpMax = currentUser.value?.scalpMaxMinutes ?? 15
-                    const daytradeMaxMin = (currentUser.value?.daytradeMaxHours ?? 24) * 60
+                    const scalpMax = appEinstellungen.value?.scalpMaxMinutes ?? 15
+                    const daytradeMaxMin = (appEinstellungen.value?.daytradeMaxHours ?? 24) * 60
                     if (durationMin <= scalpMax) incoming.closingTradeType = 'scalp'
                     else if (durationMin <= daytradeMaxMin) incoming.closingTradeType = 'day'
                     else incoming.closingTradeType = 'swing'
@@ -303,7 +303,7 @@ async function fetchRecentlyClosed(broker) {
         const positions = response.data.positions
         console.log(` -> ${positions.length} kürzlich geschlossene Positionen aus History`)
 
-        const popupsEnabled = currentUser.value?.showTradePopups !== 0
+        const popupsEnabled = appEinstellungen.value?.showTradePopups !== 0
 
         for (const histPos of positions) {
             const positionId = String(histPos.positionId || '')
@@ -411,7 +411,7 @@ async function fetchRecentlyClosed(broker) {
  * Links metadata (playbook → notes, screenshotId → screenshot name).
  */
 async function createTradeFromClosedPosition(histPos, incoming, skipMetadata = false, broker = null) {
-    broker = broker || incoming?.broker || selectedBroker.value || 'bitunix'
+    broker = broker || incoming?.broker || gewaehlteBoerse.value || 'bitunix'
     const isBitget = broker === 'bitget'
     const isPionex = broker === 'pionex'
 
@@ -834,7 +834,7 @@ export function useStartGlobalPolling() {
         globalPollingInterval = null
     }
 
-    if (currentUser.value?.showTradePopups === 0) return
+    if (appEinstellungen.value?.showTradePopups === 0) return
 
     console.log(' -> Globales Positions-Polling gestartet (60s)')
 
@@ -1012,7 +1012,7 @@ export async function useTransferClosingMetadata(incoming, histPos, {
     // in denen der Cache zwischendurch stale geworden ist (Browser-Tab
     // lange offen, Broker-Wechsel, etc.).
     try {
-        const broker = incoming.broker || selectedBroker.value || 'bitunix'
+        const broker = incoming.broker || gewaehlteBoerse.value || 'bitunix'
         await refreshAccountBalance({ broker, force: true })
     } catch (e) {
         console.log(' -> refreshAccountBalance nach Bewertung fehlgeschlagen:', e?.message)

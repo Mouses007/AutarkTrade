@@ -34,8 +34,8 @@ import KachelLage from '../components/radar/KachelLage.vue'
 import KachelEtf from '../components/radar/KachelEtf.vue'
 import KachelWal from '../components/radar/KachelWal.vue'
 import { liveSymbol } from '../stores/live.js'
-// Für die Alarm-Einstellungen: currentUser hält den Einstellungssatz
-import { currentUser } from '../stores/app/rahmen.js'
+// Für die Alarm-Einstellungen: appEinstellungen hält den Einstellungssatz
+import { appEinstellungen } from '../stores/app/rahmen.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { oeffneLivetradingFenster } from '../utils/livetradingFenster.js'
 import { sendNotification } from '../utils/notify.js'
@@ -99,7 +99,7 @@ migriereParams()
  */
 const istTelefon = useIstTelefon()
 const livetradingSichtbar = computed(() =>
-    Number(currentUser.value?.livetradingAn ?? 1) === 1 && !istTelefon.value)
+    Number(appEinstellungen.value?.livetradingAn ?? 1) === 1 && !istTelefon.value)
 
 const oeffneLivetrading = () => oeffneLivetradingFenster()
 
@@ -181,7 +181,7 @@ watch(() => daten.picycle, (d) => {
      * Grenze, meldet sich der Alarm einmal. Der Merker enthält die Schwelle,
      * damit ein Herabsetzen erneut auslösen darf, ein Seitenaufruf aber nicht.
      */
-    const schwelle = Number(currentUser.value?.radarPicycleSchwelle ?? 0)
+    const schwelle = Number(appEinstellungen.value?.radarPicycleSchwelle ?? 0)
     if (!schwelle || d.jetzt?.abstandPct == null) return
     if (d.jetzt.abstandPct < -schwelle) {
         // Wieder weiter entfernt: Merker löschen, damit die nächste Annäherung zählt
@@ -217,7 +217,7 @@ watch(() => daten.picycle, (d) => {
 const DIVERGENZ_KEY = 'marktradar_funding_divergenz'
 
 watch(() => daten.funding, (d) => {
-    const schwelle = Number(currentUser.value?.radarFundingDivergenz ?? 15)
+    const schwelle = Number(appEinstellungen.value?.radarFundingDivergenz ?? 15)
     if (!d || !schwelle) return
 
     let merker = {}

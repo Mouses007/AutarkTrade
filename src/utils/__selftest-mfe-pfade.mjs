@@ -8,28 +8,28 @@
  * Journal-Kern ab, ausdrücklich NICHT aber, was in `utils/journal/import.js` und
  * `tagesrechnung.js` steht (bis S7 `journal-alt.js`, bis S3 `addTrades.js`):
  *
- *   - `useCreateOHLCV`   Databento-CSV → Kerzen (Tagesansicht)
- *   - `useGetOHLCV`      Kerzen für alle Symbole holen, Polygon und Databento
+ *   - `kerzenAusCsv`   Databento-CSV → Kerzen (Tagesansicht)
+ *   - `holeImportKerzen`      Kerzen für alle Symbole holen, Polygon und Databento
  *                        (Exkursionen nachtragen)
- *   - `useGetMFEPrices`  MFE-Preis je Trade aus 1-Minuten-Kerzen
- *   - `useUpdateMfePrices` MFE-Preise als Exkursionszeilen speichern
- *   - `baueBlotter`/`bauePnL`/`useGetExistingTradesArray`/
- *     `useUploadTrades` — die Vorschau und das Speichern des API-Imports in
+ *   - `berechneMfePreise`  MFE-Preis je Trade aus 1-Minuten-Kerzen
+ *   - `speichereMfePreise` MFE-Preise als Exkursionszeilen speichern
+ *   - `baueBlotter`/`bauePnL`/`ladeVorhandeneTradeTage`/
+ *     `speichereImport` — die Vorschau und das Speichern des API-Imports in
  *     `AddTrades.vue`
  *
  * Wie der erste friert er ein, was der Code HEUTE tut, nicht was richtig ist.
  * Mit eingefroren (19.10.2026):
- *   - `mfePrices` ist ein Modulspeicher, der nie geleert wird: jeder Aufruf
- *     von `useGetMFEPrices` hängt an und liefert die ganze Liste zurück, und
- *     `useUpdateMfePrices` schreibt die ganze Liste. Im Browser heisst das:
+ *   - `mfeListe` ist ein Modulspeicher, der nie geleert wird: jeder Aufruf
+ *     von `berechneMfePreise` hängt an und liefert die ganze Liste zurück, und
+ *     `speichereMfePreise` schreibt die ganze Liste. Im Browser heisst das:
  *     wer in derselben Sitzung zweimal Exkursionen nachträgt, legt die
- *     ersten ein zweites Mal an — und `useUploadTrades` schreibt sie beim
+ *     ersten ein zweites Mal an — und `speichereImport` schreibt sie beim
  *     nächsten API-Import noch einmal. Die Vorschau läuft hier deshalb ZUERST.
- *   - `useGetOHLCV` löst nach dem ERSTEN Symbol auf, die übrigen laufen
+ *   - `holeImportKerzen` löst nach dem ERSTEN Symbol auf, die übrigen laufen
  *     danach weiter. Der Test wartet, bis alle da sind, und hält die Zahl
  *     beim Auflösen getrennt fest.
  *   - Ein Trade, dessen Symbol gar nicht in den Kerzen steht, wirft in
- *     `useGetMFEPrices` (`ohlcv[-1].ohlcv`) und das Promise bleibt für immer
+ *     `berechneMfePreise` (`ohlcv[-1].ohlcv`) und das Promise bleibt für immer
  *     offen. Dieser Fall ist deshalb NICHT im Datensatz; geprüft wird der
  *     Fall „Symbol da, Kerzen fehlen".
  *
@@ -65,7 +65,7 @@ globalThis.localStorage = {
     setItem: (k, v) => { ablage.set(k, String(v)) },
     removeItem: (k) => { ablage.delete(k) },
 }
-globalThis.window = { addEventListener() {}, removeEventListener() {}, location: { href: '/addTrades' } }
+globalThis.window = { addEventListener() {}, removeEventListener() {}, location: { href: '/import' } }
 globalThis.document = {
     getElementById: () => null,
     querySelector: () => null,
@@ -240,7 +240,7 @@ console.error = (...a) => { fehlerMeldungen.push(a.map(x => (x instanceof Error 
 const ui = await import('../stores/ui.js')
 const filter = await import('../stores/filters.js')
 const st = await import('../stores/trades.js')
-const { currentUser } = await import('../stores/settings.js')
+const { appEinstellungen } = await import('../stores/settings.js')
 const quick = await import('./quickImport.js')
 const alt = {
     ...(await import('./journal/import.js')),
@@ -251,12 +251,12 @@ globalThis.__journalDaten = {
     trades: [], excursions: [],
     settings: [{ objectId: '1', accounts: [{ value: 'bitunix', label: 'bitunix' }] }],
 }
-currentUser.value = {
+appEinstellungen.value = {
     accounts: [{ value: 'bitunix', label: 'bitunix' }],
     apis: [{ provider: 'polygon', key: 'poly-test' }, { provider: 'databento', key: 'db-test' }],
 }
-ui.timeZoneTrade.value = 'America/New_York'
-filter.selectedBroker.value = 'bitunix'
+ui.tradeZeitzone.value = 'America/New_York'
+filter.gewaehlteBoerse.value = 'bitunix'
 
 const ergebnis = {}
 
@@ -265,7 +265,7 @@ const ergebnis = {}
     // Ein bereits importierter Tag, damit die Vorschau ihn aussortiert
     const vorhandenTd = Math.floor(ms(`${TAGE[1]}T00:00:00Z`) / 1000)
     globalThis.__journalDaten.trades.push({ objectId: '1', date: TAGE[1], dateUnix: vorhandenTd, broker: 'bitunix', trades: [], executions: [], blotter: {}, pAndL: {}, openPositions: false })
-    await alt.useGetExistingTradesArray()
+    await alt.ladeVorhandeneTradeTage()
     const vorhanden = [...st.vorhandeneTradeTage]
 
     const positionen = Array.from({ length: 14 }, (_, i) => bitunixPosition(i))
@@ -289,7 +289,7 @@ const ergebnis = {}
     await alt.bauePnL()
     const vorschau = sauber({ blotter: st.blotter, pAndL: st.pAndL, vorhandeneImporte: st.vorhandeneImporte })
 
-    await alt.useUploadTrades()
+    await alt.speichereImport()
     await warte()
     ergebnis.vorschau = {
         vorhanden,
@@ -310,10 +310,10 @@ const ergebnis = {}
 {
     const temp = { symbol: 'BTCUSDT', ohlcv: [] }
     const csv = databentoCsv(KERZEN.BTCUSDT, 600, 640)
-    const res = await alt.useCreateOHLCV(csv, temp)
+    const res = await alt.kerzenAusCsv(csv, temp)
     ergebnis.databentoCsv = { gleichesObjekt: res === temp, symbol: res.symbol, ohlcv: sauber(res.ohlcv) }
     // ohne Leerzeile am Ende: die letzte Zeile trägt Daten
-    const res2 = await alt.useCreateOHLCV(csv.trimEnd(), { symbol: 'SOLUSDT', ohlcv: [] })
+    const res2 = await alt.kerzenAusCsv(csv.trimEnd(), { symbol: 'SOLUSDT', ohlcv: [] })
     ergebnis.databentoCsvOhneLeerzeile = kerzenAuszug(res2.ohlcv)
 }
 
@@ -336,12 +336,12 @@ globalThis.__journalNetz = {
     },
 }
 {
-    const polygon = await alt.useGetOHLCV('polygon', 'manual', symbole, vonSek, bisSek)
+    const polygon = await alt.holeImportKerzen('polygon', 'manual', symbole, vonSek, bisSek)
     const beimAufloesen = polygon.length
     await warte()
     ergebnis.ohlcvPolygon = { beimAufloesen, ohlcv: ohlcvAuszug(polygon) }
 
-    const databento = await alt.useGetOHLCV('databento', 'manual', symbole.slice(0, 2).map(s => ({ ...s, secType: 'stock' })), vonSek, bisSek)
+    const databento = await alt.holeImportKerzen('databento', 'manual', symbole.slice(0, 2).map(s => ({ ...s, secType: 'stock' })), vonSek, bisSek)
     const beimAufloesenDb = databento.length
     await warte()
     ergebnis.ohlcvDatabento = { beimAufloesen: beimAufloesenDb, ohlcv: ohlcvAuszug(databento) }
@@ -354,10 +354,10 @@ globalThis.__journalNetz = {
     ergebnis.mfe = {}
     let vorher = 0
     for (const zone of ['America/New_York', 'Europe/Zurich']) {
-        ui.timeZoneTrade.value = zone
+        ui.tradeZeitzone.value = zone
         const trades = kopie([...TRADES, OHNE_KERZEN])
         let mfe
-        for (const t of trades) mfe = await alt.useGetMFEPrices(t, t.entryTime, t.entryPrice, t, kerzenSatz)
+        for (const t of trades) mfe = await alt.berechneMfePreise(t, t.entryTime, t.entryPrice, t, kerzenSatz)
         ergebnis.mfe[zone] = {
             anzahlImSpeicher: mfe.length,
             preise: sauber(mfe.slice(vorher)),
@@ -366,20 +366,20 @@ globalThis.__journalNetz = {
         vorher = mfe.length
     }
     // Einen Marktschluss, der früher liegt, sieht man nur am Ausdehnen nach dem Ausstieg
-    st.marketCloseTime.value = '11:00:00'
-    ui.timeZoneTrade.value = 'Europe/Zurich'
+    st.marktSchluss.value = '11:00:00'
+    ui.tradeZeitzone.value = 'Europe/Zurich'
     const trades = kopie(TRADES.slice(0, 12))
     let mfe
-    for (const t of trades) mfe = await alt.useGetMFEPrices(t, t.entryTime, t.entryPrice, t, kerzenSatz)
+    for (const t of trades) mfe = await alt.berechneMfePreise(t, t.entryTime, t.entryPrice, t, kerzenSatz)
     ergebnis.mfe.schluss11 = sauber(mfe.slice(vorher))
-    st.marketCloseTime.value = '16:00:00'
+    st.marktSchluss.value = '16:00:00'
 }
 
 // --- 5. MFE-Preise speichern --------------------------------------------------
 {
     globalThis.__journalDaten.excursions.length = 0
-    st.tradeExcursionId.value = 'exk-42'
-    await alt.useUpdateMfePrices()
+    st.exkursionTradeId.value = 'exk-42'
+    await alt.speichereMfePreise()
     ergebnis.gespeicherteExkursionen = {
         anzahl: globalThis.__journalDaten.excursions.length,
         erste: globalThis.__journalDaten.excursions.slice(0, 5),

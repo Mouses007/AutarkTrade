@@ -8,7 +8,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import dayjs from '../../utils/journal/zeit.js'
-import { timeZoneTrade, scrollToDateUnix } from '../../stores/ui.js'
+import { tradeZeitzone, scrollToDateUnix } from '../../stores/ui.js'
 import { gewaehlterMonat, selectedMonthPreset } from '../../stores/filters.js'
 import { dauerText } from '../../utils/chart/zeichnungen/geometrie.js'
 import { Symbol, Knopf } from '../basis'
@@ -32,18 +32,18 @@ const geld = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(2)} US
  * `scrollToDateUnix` zum Tag, wie beim Klick im Kalender.
  */
 function zumJournal() {
-    const tz = timeZoneTrade.value || 'UTC'
+    const tz = tradeZeitzone.value || 'UTC'
     const tag = tr.value.tag || dayjs(tr.value.ausstieg?.t || tr.value.einstieg.t).tz(tz).startOf('day').unix()
     const start = dayjs.unix(tag).tz(tz).startOf('month').unix()
     const ende = dayjs.unix(tag).tz(tz).endOf('month').unix()
     gewaehlterMonat.value = { start, end: ende }
     selectedMonthPreset.value = 'custom'
     try {
-        localStorage.setItem('selectedMonth', JSON.stringify(gewaehlterMonat.value))
+        localStorage.setItem('at.journal.monat', JSON.stringify(gewaehlterMonat.value))
         localStorage.setItem('selectedMonthPreset', 'custom')
     } catch { /* ohne Speicher geht der Sprung trotzdem */ }
     scrollToDateUnix.value = tag
-    router.push('/daily')
+    router.push('/tagesansicht')
 }
 </script>
 
@@ -54,7 +54,7 @@ function zumJournal() {
             <span class="broker">{{ tr.broker }}</span>
             <button type="button" class="zu" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
         </div>
-        <div class="ergebnis" :class="(tr.netto ?? 0) >= 0 ? 'greenTrade' : 'redTrade'">
+        <div class="ergebnis" :class="(tr.netto ?? 0) >= 0 ? 'gewinnWert' : 'verlustWert'">
             {{ geld(tr.netto) }}
             <span v-if="tr.r != null" class="r">{{ tr.r >= 0 ? '+' : '' }}{{ tr.r.toFixed(2) }} R</span>
         </div>

@@ -6,7 +6,7 @@
  * wird als negativer Balken auf eigenem Stapel gezeigt — es mindert die Kosten.
  */
 import { gefilterteTradesFlach } from '../../../stores/trades.js'
-import { useTwoDecCurrencyFormat } from '../format.js'
+import { formGeld2 } from '../format.js'
 import { splitFunding } from '../../funding.js'
 import { festkomma, element, instanzFuer, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
@@ -58,7 +58,7 @@ export function useFeesChart(id) {
         stack: 'fees',
         barMaxWidth: 18,
         itemStyle: { color: mitDeckkraft(p.muted, 0.55) },
-        label: mitFunding ? { show: false } : { ...ende, formatter: (x) => useTwoDecCurrencyFormat(x.value) },
+        label: mitFunding ? { show: false } : { ...ende, formatter: (x) => formGeld2(x.value) },
         data: zeilen.map(z => z.trading),
     }]
     if (mitFunding) {
@@ -68,7 +68,7 @@ export function useFeesChart(id) {
             stack: 'fees',
             barMaxWidth: 18,
             itemStyle: { color: mitDeckkraft(p.bad, 0.75), borderRadius: [0, 3, 3, 0] },
-            label: mitErhalt ? { show: false } : { ...ende, formatter: (x) => useTwoDecCurrencyFormat(zeilen[x.dataIndex].total) },
+            label: mitErhalt ? { show: false } : { ...ende, formatter: (x) => formGeld2(zeilen[x.dataIndex].total) },
             data: zeilen.map(z => z.bezahlt),
         })
     }
@@ -79,7 +79,7 @@ export function useFeesChart(id) {
             stack: 'erhalten',
             barMaxWidth: 18,
             itemStyle: { color: mitDeckkraft(p.good, 0.75), borderRadius: [3, 0, 0, 3] },
-            label: { ...ende, position: 'left', formatter: (x) => useTwoDecCurrencyFormat(zeilen[x.dataIndex].netto) },
+            label: { ...ende, position: 'left', formatter: (x) => formGeld2(zeilen[x.dataIndex].netto) },
             data: zeilen.map(z => (z.erhalten > 0 ? -z.erhalten : 0)),
         })
     }
@@ -96,11 +96,11 @@ export function useFeesChart(id) {
             ...tooltipStil(p),
             formatter: (punkte) => {
                 const i = punkte[0]?.dataIndex ?? 0
-                const zeilenText = punkte.filter(x => x.value !== 0).map(x => `${x.marker}${x.seriesName}: ${useTwoDecCurrencyFormat(x.value)}`)
-                return [zeilen[i]?.symbol, ...zeilenText, `Netto: ${useTwoDecCurrencyFormat(zeilen[i]?.netto ?? 0)}`].join('<br>')
+                const zeilenText = punkte.filter(x => x.value !== 0).map(x => `${x.marker}${x.seriesName}: ${formGeld2(x.value)}`)
+                return [zeilen[i]?.symbol, ...zeilenText, `Netto: ${formGeld2(zeilen[i]?.netto ?? 0)}`].join('<br>')
             },
         },
-        xAxis: wertAchse(p, { axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => useTwoDecCurrencyFormat(v) } }),
+        xAxis: wertAchse(p, { axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => formGeld2(v) } }),
         yAxis: { ...kategorieAchse(p), data: zeilen.map(z => z.symbol) },
         series: reihen,
     })

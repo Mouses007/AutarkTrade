@@ -13,7 +13,7 @@ import { ref, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { dbUpdateSettings } from '@/utils/db.js'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 
 /* KI-AGENT SETTINGS */
 export let aiProvider = ref('ollama')
@@ -205,7 +205,7 @@ export function useKiAnbieter() {
         try {
             const val = enabled ? 1 : 0
             await dbUpdateSettings({ aiEnabled: val })
-            currentUser.value.aiEnabled = val
+            appEinstellungen.value.aiEnabled = val
         } catch (error) {
             console.error('Fehler beim Speichern der KI-Einstellung:', error)
         }
@@ -230,11 +230,11 @@ export function useKiAnbieter() {
                 // der Schlüssel des eigenen Anbieters kam nie an.
                 keys: { ...aiKeys },
             })
-            currentUser.value.aiProvider = aiProvider.value
-            currentUser.value.aiModel = aiModel.value
-            currentUser.value.aiOllamaUrl = aiOllamaUrl.value
-            currentUser.value.aiTemperature = aiTemperature.value
-            currentUser.value.aiMaxTokens = aiMaxTokens.value
+            appEinstellungen.value.aiProvider = aiProvider.value
+            appEinstellungen.value.aiModel = aiModel.value
+            appEinstellungen.value.aiOllamaUrl = aiOllamaUrl.value
+            appEinstellungen.value.aiTemperature = aiTemperature.value
+            appEinstellungen.value.aiMaxTokens = aiMaxTokens.value
             console.log(' -> KI-Einstellungen gespeichert')
             // Adresse geändert ohne neuen Schlüssel: der Server hat den alten
             // geleert (er ginge sonst an die neue Adresse, Audit A2-05).
@@ -374,7 +374,7 @@ export function useKiAnbieter() {
             }
             // Wahl je Funktion kommt aus den allgemeinen Einstellungen, nicht aus
             // /api/ai/settings — dort liegen nur Zugang und globale Vorgaben.
-            const cu = currentUser.value || {}
+            const cu = appEinstellungen.value || {}
             aiBerichtProvider.value = cu.aiBerichtProvider || ''
             aiBerichtModell.value = cu.aiBerichtModell || ''
             aiAgentProvider.value = cu.aiAgentProvider || ''

@@ -56,10 +56,10 @@ export function boerseUrl(boerse, symbol, quelle) {
 }
 
 /**
- * CSV aus den Settings (`currentUser.value.boersenLinks`) → gültiges Array.
+ * CSV aus den Settings (`appEinstellungen.value.boersenLinks`) → gültiges Array.
  *
  * Leer oder komplett unbekannt heisst "alles an", nicht "nichts an" — sonst
- * würde eine noch nicht geladene Einstellung (z. B. während `currentUser` noch
+ * würde eine noch nicht geladene Einstellung (z. B. während `appEinstellungen` noch
  * lädt) sämtliche Links verschwinden lassen, obwohl niemand das gewählt hat.
  */
 export function aktivierteBoersen(csv) {
@@ -71,7 +71,7 @@ export function aktivierteBoersen(csv) {
 /**
  * Verlinkbare Börsen einer Coin-Radar-Zeile: gelistete ∩ aktivierte, plus TradingView.
  *
- * `csv` kommt von aussen (`currentUser.value?.boersenLinks`) statt aus einem
+ * `csv` kommt von aussen (`appEinstellungen.value?.boersenLinks`) statt aus einem
  * Store-Import, damit dieses Modul frei von Vue-Abhängigkeiten bleibt — es wird
  * auch aus reinen Hilfsfunktionen heraus benutzt.
  *

@@ -17,8 +17,8 @@ import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import { seiteLaedt } from '../stores/ui.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
-import { useXDecCurrencyFormat } from '../utils/journal/format.js'
-import { useAgentTimelineChart, cssColor87, cssColor60, cssColor38, blackbg5, greenColor, redColor } from '../utils/journal/diagramme/index.js'
+import { formGeldStellen } from '../utils/journal/format.js'
+import { useAgentTimelineChart, farbeText, farbeGedaempft, farbeLinie, farbeFlaeche, greenColor, redColor } from '../utils/journal/diagramme/index.js'
 import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/journal/zeit.js'
@@ -43,7 +43,7 @@ const zsTage = ref(7)
 const zsMeldung = ref('')
 const zsLaedt = ref(false)
 
-const geld = (v) => useXDecCurrencyFormat(Number(v) || 0, 2)
+const geld = (v) => formGeldStellen(Number(v) || 0, 2)
 const zahl = (v, n = 2) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? '–' : Number(v).toFixed(n))
 
 /**
@@ -262,10 +262,10 @@ function groesseAnpassen() {
 
 // Dieselben Konstanten wie AgentEditor.vue/AgentSetups.vue (aus journal/diagramme, Design-Tokens) —
 // vorher hatte diese Datei ihre eigene, zufällig übereinstimmende Kopie.
-const achse = { axisLine: { lineStyle: { color: cssColor38 } },
-                axisLabel: { color: cssColor60, fontSize: 10 } }
-const tooltipStil = { trigger: 'axis', backgroundColor: blackbg5, borderColor: 'rgba(255,255,255,0.15)',
-                       textStyle: { color: cssColor87, fontSize: 11 } }
+const achse = { axisLine: { lineStyle: { color: farbeLinie } },
+                axisLabel: { color: farbeGedaempft, fontSize: 10 } }
+const tooltipStil = { trigger: 'axis', backgroundColor: farbeFlaeche, borderColor: 'rgba(255,255,255,0.15)',
+                       textStyle: { color: farbeText, fontSize: 11 } }
 const gitterlinie = { splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } } }
 
 function zeichne() {
@@ -355,7 +355,7 @@ const reiterListe = computed(() => [
             <h5 class="seitentitel">{{ t('strategies.performanceTitle') }}</h5>
 
             <!-- Filter -->
-            <div class="dailyCard karte abstand">
+            <div class="journalKarte karte abstand">
                 <div class="filter-raster">
                     <div class="f-3">
                         <label class="at-label">{{ t('strategies.instance') }}</label>
@@ -401,7 +401,7 @@ const reiterListe = computed(() => [
             </div>
 
             <!-- Zeitstrahl: Zonen und Trades des Agenten im Kursverlauf -->
-            <div class="dailyCard karte abstand">
+            <div class="journalKarte karte abstand">
                 <div class="zs-kopf">
                     <span class="section-title titel-zeile ohne-rand">
                         <Symbol name="linie" class="vor" />{{ t('strategies.timelineTitle') }}
@@ -420,10 +420,10 @@ const reiterListe = computed(() => [
                 </div>
                 <p class="at-gedaempft klein-text abstand-klein">{{ t('strategies.timelineHint') }}</p>
                 <div v-if="zsMeldung" class="at-gedaempft klein-text abstand-klein">{{ zsMeldung }}</div>
-                <div id="agentZeitstrahl" class="chartClass" style="height: 380px;"></div>
+                <div id="agentZeitstrahl" class="diagrammFlaeche" style="height: 380px;"></div>
             </div>
 
-            <div v-if="!kpi.trades" class="dailyCard karte leer at-gedaempft abstand">
+            <div v-if="!kpi.trades" class="journalKarte karte leer at-gedaempft abstand">
                 {{ t('strategies.noTrades') }}
             </div>
 
@@ -445,10 +445,10 @@ const reiterListe = computed(() => [
                               farbe: profitFaktorGut(kpi.profitFactor) },
                             { l: t('strategies.kpiMaxDd'), v: zahl(kpi.maxDrawdownPct, 1) + ' %' },
                         ]" :key="k.l">
-                            <div class="dailyCard kpi-karte">
+                            <div class="journalKarte kpi-karte">
                                 <div class="kpi-label">{{ k.l }}</div>
                                 <div class="kpi-value"
-                                    :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">
+                                    :class="k.farbe === undefined ? '' : (k.farbe ? 'gewinnWert' : 'verlustWert')">
                                     {{ k.v }}
                                 </div>
                             </div>
@@ -456,7 +456,7 @@ const reiterListe = computed(() => [
                     </div>
 
                     <!-- Hinweise aus den Daten -->
-                    <div v-if="daten.hinweise?.length" class="dailyCard karte abstand">
+                    <div v-if="daten.hinweise?.length" class="journalKarte karte abstand">
                         <div class="section-title titel-zeile">
                             <Symbol name="idee" class="vor" />{{ t('strategies.observations') }}
                         </div>
@@ -465,7 +465,7 @@ const reiterListe = computed(() => [
                         </ul>
                     </div>
 
-                    <div class="dailyCard karte abstand">
+                    <div class="journalKarte karte abstand">
                         <div class="section-title">{{ t('strategies.equityCurve') }}</div>
                         <div id="agentEquityChart" style="height: 260px;"></div>
                     </div>
@@ -475,25 +475,25 @@ const reiterListe = computed(() => [
                          dem der Coin ohnehin durchmarschiert, sieht jede Strategie
                          gut aus (dasselbe Prinzip wie in radar-guete.js). -->
                     <div v-if="kpi.baselineBuyHoldReturnPct !== null && kpi.baselineBuyHoldReturnPct !== undefined"
-                        class="dailyCard karte">
+                        class="journalKarte karte">
                         <div class="section-title">{{ t('strategies.baselineTitle') }}</div>
                         <p class="at-gedaempft klein-text abstand-klein">{{ t('strategies.baselineHint') }}</p>
                         <div class="zwei-raster abstand-klein">
-                            <div class="dailyCard kpi-karte">
+                            <div class="journalKarte kpi-karte">
                                 <div class="kpi-label">{{ t('strategies.returnPct') }}</div>
-                                <div class="kpi-value" :class="kpi.returnPct >= 0 ? 'greenTrade' : 'redTrade'">
+                                <div class="kpi-value" :class="kpi.returnPct >= 0 ? 'gewinnWert' : 'verlustWert'">
                                     {{ zahl(kpi.returnPct, 1) }} %
                                 </div>
                             </div>
-                            <div class="dailyCard kpi-karte">
+                            <div class="journalKarte kpi-karte">
                                 <div class="kpi-label">{{ t('strategies.kpiBuyHold') }}</div>
                                 <div class="kpi-value"
-                                    :class="kpi.baselineBuyHoldReturnPct >= 0 ? 'greenTrade' : 'redTrade'">
+                                    :class="kpi.baselineBuyHoldReturnPct >= 0 ? 'gewinnWert' : 'verlustWert'">
                                     {{ zahl(kpi.baselineBuyHoldReturnPct, 1) }} %
                                 </div>
                             </div>
                         </div>
-                        <p class="klein-text ohne-rand" :class="kpi.baselineDiffPct > 0 ? 'greenTrade' : (kpi.baselineDiffPct < 0 ? 'redTrade' : 'at-gedaempft')">
+                        <p class="klein-text ohne-rand" :class="kpi.baselineDiffPct > 0 ? 'gewinnWert' : (kpi.baselineDiffPct < 0 ? 'verlustWert' : 'at-gedaempft')">
                             {{ kpi.baselineDiffPct > 0
                                 ? t('strategies.baselineBeats', { diff: zahl(Math.abs(kpi.baselineDiffPct), 1) })
                                 : kpi.baselineDiffPct < 0
@@ -516,16 +516,16 @@ const reiterListe = computed(() => [
                               v: zahl(kpi.avgWinR) + ' / ' + zahl(kpi.avgLossR) + ' R' },
                             { l: t('strategies.kpiExpectancy'), v: zahl(kpi.expectancyR) + ' R', farbe: kpi.expectancyR >= 0 },
                         ]" :key="k.l">
-                            <div class="dailyCard kpi-karte">
+                            <div class="journalKarte kpi-karte">
                                 <div class="kpi-label">{{ k.l }}</div>
                                 <div class="kpi-value"
-                                    :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">
+                                    :class="k.farbe === undefined ? '' : (k.farbe ? 'gewinnWert' : 'verlustWert')">
                                     {{ k.v }}
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div class="dailyCard karte">
+                    <div class="journalKarte karte">
                         <div class="section-title">{{ t('strategies.rDistribution') }}</div>
                         <div id="agentRChart" style="height: 260px;"></div>
                     </div>
@@ -534,7 +534,7 @@ const reiterListe = computed(() => [
                 <!-- ══ Trades-Analyse ══ -->
                 <div v-if="activeTab === 'trades'">
                     <div class="halb-raster abstand">
-                        <div class="dailyCard karte hoch">
+                        <div class="journalKarte karte hoch">
                             <div class="section-title">{{ t('strategies.funnel') }}</div>
                             <p class="at-gedaempft klein-text">{{ t('strategies.funnelHint') }}</p>
                             <div v-for="s in trichterStufen" :key="s.key" class="funnel-zeile">
@@ -548,7 +548,7 @@ const reiterListe = computed(() => [
                             </div>
                         </div>
 
-                        <div class="dailyCard karte hoch">
+                        <div class="journalKarte karte hoch">
                             <div class="section-title">{{ t('strategies.whyLost') }}</div>
                             <p class="at-gedaempft klein-text">{{ t('strategies.whyLostHint') }}</p>
 
@@ -581,7 +581,7 @@ const reiterListe = computed(() => [
                                 { titel: t('strategies.byExitReason'), rows: daten.byGroup.exitReason },
                                 { titel: t('strategies.byParamsVersion'), rows: daten.byGroup.paramsVersion },
                             ]" :key="g.titel">
-                            <div class="dailyCard karte hoch">
+                            <div class="journalKarte karte hoch">
                                 <div class="section-title">{{ g.titel }}</div>
                                 <div class="at-tabelle-huelle">
                                     <table class="at-tabelle dicht">
@@ -599,12 +599,12 @@ const reiterListe = computed(() => [
                                                 <td>{{ row.key }}</td>
                                                 <td class="zahl">{{ row.trades }}</td>
                                                 <td class="zahl">
-                                                    <span class="greenTrade">{{ row.wins }}</span><span class="at-gedaempft">/</span><span class="redTrade">{{ row.trades - row.wins }}</span>
+                                                    <span class="gewinnWert">{{ row.wins }}</span><span class="at-gedaempft">/</span><span class="verlustWert">{{ row.trades - row.wins }}</span>
                                                 </td>
-                                                <td class="zahl" :class="row.avgR >= 0 ? 'greenTrade' : 'redTrade'">
+                                                <td class="zahl" :class="row.avgR >= 0 ? 'gewinnWert' : 'verlustWert'">
                                                     {{ zahl(row.avgR) }}
                                                 </td>
-                                                <td class="zahl" :class="row.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                                <td class="zahl" :class="row.netPnl >= 0 ? 'gewinnWert' : 'verlustWert'">
                                                     {{ geld(row.netPnl) }}
                                                 </td>
                                             </tr>
@@ -615,7 +615,7 @@ const reiterListe = computed(() => [
                         </div>
 
                         <div class="gruppe breit">
-                            <div class="dailyCard karte">
+                            <div class="journalKarte karte">
                                 <div class="section-title">{{ t('strategies.byWeekday') }}</div>
                                 <div class="at-tabelle-huelle">
                                     <table class="at-tabelle dicht">
@@ -624,7 +624,7 @@ const reiterListe = computed(() => [
                                                 <td>{{ wochentag(row.key) }}</td>
                                                 <td class="zahl">{{ row.trades }}</td>
                                                 <td class="zahl">{{ zahl(row.winRate, 0) }} %</td>
-                                                <td class="zahl" :class="row.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                                <td class="zahl" :class="row.netPnl >= 0 ? 'gewinnWert' : 'verlustWert'">
                                                     {{ geld(row.netPnl) }}
                                                 </td>
                                             </tr>
@@ -644,7 +644,7 @@ const reiterListe = computed(() => [
                             { l: t('strategies.kpiMaxDd'), v: zahl(kpi.maxDrawdownPct, 1) + ' %' },
                             { l: t('strategies.kpiFloatingDd'), v: zahl(kpi.maxFloatingDrawdownPct, 1) + ' %' },
                         ]" :key="k.l">
-                            <div class="dailyCard kpi-karte">
+                            <div class="journalKarte kpi-karte">
                                 <div class="kpi-label">{{ k.l }}</div>
                                 <div class="kpi-value">{{ k.v }}</div>
                             </div>
@@ -652,7 +652,7 @@ const reiterListe = computed(() => [
                     </div>
                     <p class="at-gedaempft klein-text">{{ t('strategies.kpiFloatingDdHint') }}</p>
 
-                    <div class="dailyCard karte">
+                    <div class="journalKarte karte">
                         <div class="section-title">{{ t('strategies.mfeReached') }}</div>
                         <p class="at-gedaempft klein-text">{{ t('strategies.mfeHint') }}</p>
                         <div class="mfe-zeile">
@@ -668,7 +668,7 @@ const reiterListe = computed(() => [
                 <!-- ══ Trade-Liste ══
                      Bisher zeigte die Auswertung nur Summen. Ein Trade, den man
                      nicht anschauen kann, lässt sich auch nicht beurteilen. -->
-                <div v-if="activeTab === 'liste' && letzteTrades.length" class="dailyCard karte">
+                <div v-if="activeTab === 'liste' && letzteTrades.length" class="journalKarte karte">
                     <div class="liste-kopf">
                         <div class="section-title ohne-rand">{{ t('strategies.tradeList') }}</div>
                         <template v-if="gewaehlt.size">
@@ -704,7 +704,7 @@ const reiterListe = computed(() => [
                             </thead>
                             <tbody>
                                 <template v-for="tr in letzteTrades" :key="tr.id">
-                                    <tr class="pointerClass" @click="kontextZeigen(tr)">
+                                    <tr class="klickZiel" @click="kontextZeigen(tr)">
                                         <td @click.stop>
                                             <input type="checkbox" class="auswahl"
                                                 :checked="gewaehlt.has(tr.id)" @change="auswahlUmschalten(tr)" />
@@ -713,10 +713,10 @@ const reiterListe = computed(() => [
                                         <td>{{ tr.symbol }}</td>
                                         <td>{{ tr.timeframe }}</td>
                                         <td>{{ tr.direction }}</td>
-                                        <td class="zahl" :class="tr.rMultiple >= 0 ? 'greenTrade' : 'redTrade'">
+                                        <td class="zahl" :class="tr.rMultiple >= 0 ? 'gewinnWert' : 'verlustWert'">
                                             {{ zahl(tr.rMultiple) }}
                                         </td>
-                                        <td class="zahl" :class="tr.netPnl >= 0 ? 'greenTrade' : 'redTrade'">
+                                        <td class="zahl" :class="tr.netPnl >= 0 ? 'gewinnWert' : 'verlustWert'">
                                             {{ geld(tr.netPnl) }}
                                         </td>
                                         <td class="at-gedaempft">{{ tr.exitReason }}</td>
@@ -772,16 +772,16 @@ const reiterListe = computed(() => [
     margin: 0 0 var(--abstand-4);
 }
 
-/* `.dailyCard` setzt global `height: 100%`. Das passt für Raster mit einer Karte
+/* `.journalKarte` setzt global `height: 100%`. Das passt für Raster mit einer Karte
    je Spalte, hier stehen die Karten aber gestapelt untereinander — dort zieht die
    Regel jede einzelne Karte auf die Höhe der GESAMTEN Spalte und erzeugt riesige
    Leerräume. Karten, die bewusst mitwachsen sollen, tragen `hoch`. */
-.dailyCard {
+.journalKarte {
     height: auto;
 }
 
-.dailyCard.hoch,
-.dailyCard.kpi-karte {
+.journalKarte.hoch,
+.journalKarte.kpi-karte {
     height: 100%;
 }
 

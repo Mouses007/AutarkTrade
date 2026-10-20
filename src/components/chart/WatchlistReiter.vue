@@ -16,7 +16,7 @@ import axios from 'axios'
 import SymbolSuche from './SymbolSuche.vue'
 import { Symbol } from '../basis'
 import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js'
-import { currentUser } from '../../stores/app/rahmen.js'
+import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { aktivierteBoersen } from '../../utils/boersenLinks.js'
 import { ladeMarktdaten } from '../../utils/marktdaten.js'
 
@@ -101,7 +101,7 @@ onBeforeUnmount(() => { verbindeNr++; for (const s of streams) s.stop(); clearIn
 // Einstellungen für Börsenlinks aktiviert sind (dieselbe Einstellung wie im Coin-Radar).
 ladeHandelbar()
 function boersen(s) {
-    const aktiv = aktivierteBoersen(currentUser.value?.boersenLinks)
+    const aktiv = aktivierteBoersen(appEinstellungen.value?.boersenLinks)
     return boersenFuerSymbol(s.symbol, s.markt).filter((b) => aktiv.includes(b.id))
 }
 
@@ -186,7 +186,7 @@ function loescheListe() {
                         :title="t('chart.watchlistBoerse', { boerse: b.name })" @click.stop>{{ b.kurz }}</a>
                 </span>
                 <span class="preis">{{ kurs(s) ? kurs(s).c.toFixed(stellen(kurs(s).c)) : '—' }}</span>
-                <span class="delta" :class="aenderung(s) == null ? '' : aenderung(s) >= 0 ? 'greenTrade' : 'redTrade'">
+                <span class="delta" :class="aenderung(s) == null ? '' : aenderung(s) >= 0 ? 'gewinnWert' : 'verlustWert'">
                     {{ aenderung(s) == null ? '' : (aenderung(s) >= 0 ? '+' : '') + aenderung(s).toFixed(2) + ' %' }}
                 </span>
                 <span class="werkzeug" @click.stop>

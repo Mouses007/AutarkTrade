@@ -1,16 +1,16 @@
 <script setup>
 /**
- * Exkursionen (`/addExcursions`): für vergangene Handelstage ohne Exkursion
+ * Exkursionen (`/exkursionen`): für vergangene Handelstage ohne Exkursion
  * den MFE-Preis je Trade aus Minutenkerzen (Databento oder Polygon) bestimmen
  * und in `excursions` schreiben.
  *
  * Die Module in `utils/journal/import.js` haben bekannte Fallen, die hier —
  * und nur hier — abgefangen werden, weil der Journal-Kern unangetastet bleibt:
- *   - `useGetOHLCV` erfüllt nach dem ERSTEN Symbol, die übrigen laden danach
+ *   - `holeImportKerzen` erfüllt nach dem ERSTEN Symbol, die übrigen laden danach
  *     in dieselbe Liste weiter → wir warten selbst, bis alle da sind, mit Frist.
- *   - `useGetMFEPrices` für ein Symbol ohne Kerzen erfüllt NIE → wir rufen es
+ *   - `berechneMfePreise` für ein Symbol ohne Kerzen erfüllt NIE → wir rufen es
  *     nur für geladene Symbole auf, und jeden Aufruf mit Frist.
- *   - Dessen Modulliste wird nie geleert, `useUpdateMfePrices` schreibt sie
+ *   - Dessen Modulliste wird nie geleert, `speichereMfePreise` schreibt sie
  *     ganz → ein zweiter Lauf schriebe doppelte Exkursionen. Darum schreibt
  *     diese Ansicht nur die Einträge der Trades DIESES Laufs, je Trade einmal.
  * Ohne das drehte der Kreisel bei einem fehlenden Symbol für immer.
@@ -29,15 +29,15 @@ import Knopf from '../components/basis/Knopf.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Kreisel from '../components/basis/Kreisel.vue'
 import { seiteLaedt } from '../stores/app/laden.js'
-import { daysBack, daysMargin } from '../stores/journal/filter.js'
+import { tageZurueck, tageReserve } from '../stores/journal/filter.js'
 import { imports } from '../stores/journal/auswertung.js'
 import { excursions } from '../stores/journal/tagebuch.js'
 import { apis } from '../stores/app/einstellungen.js'
-import { ladeApis, usePageRedirect } from '../utils/journal/app.js'
+import { ladeApis, leiteWeiter } from '../utils/journal/app.js'
 import { ladeTrades } from '../utils/journal/laden.js'
 import { ladeExkursionen } from '../utils/journal/tagebuch.js'
-import { useGetOHLCV, useGetMFEPrices } from '../utils/journal/import.js'
-import { useDateCalFormat } from '../utils/journal/format.js'
+import { holeImportKerzen, berechneMfePreise } from '../utils/journal/import.js'
+import { formDatum } from '../utils/journal/format.js'
 import { dbCreate } from '../utils/db.js'
 
 const { t } = useI18n()
@@ -54,8 +54,8 @@ const TAKT_MS = 250
 
 // Sinnvolle Vorgaben: ohne sie war die untere Zeitgrenze NaN und der
 // Puffervergleich nie wahr — die Seite meldete nie einen fehlenden Tag.
-if (!(Number(daysBack.value) > 0)) daysBack.value = 30
-if (!(Number(daysMargin.value) >= 0) || daysMargin.value === '' || daysMargin.value == null) daysMargin.value = 1
+if (!(Number(tageZurueck.value) > 0)) tageZurueck.value = 30
+if (!(Number(tageReserve.value) >= 0) || tageReserve.value === '' || tageReserve.value == null) tageReserve.value = 1
 
 seiteLaedt.value = false
 
@@ -72,9 +72,9 @@ const meldungen = ref([])         // { art, text }
 const gespeichertAnzahl = ref(0)
 
 const hatSchluessel = computed(() => boersenIndex.value >= 0)
-const einstellungsLink = computed(() => `<a href="/settings/journal">${t('nav.settings')}</a>`)
-const pufferWort = computed(() => (Number(daysMargin.value) > 1 ? t('excursions.dayBufferMehr') : t('excursions.dayBuffer')))
-const fehlendeText = computed(() => fehlendeTage.value.map(d => useDateCalFormat(d)).join(', '))
+const einstellungsLink = computed(() => `<a href="/einstellungen/journal">${t('nav.settings')}</a>`)
+const pufferWort = computed(() => (Number(tageReserve.value) > 1 ? t('excursions.dayBufferMehr') : t('excursions.dayBuffer')))
+const fehlendeText = computed(() => fehlendeTage.value.map(d => formDatum(d)).join(', '))
 
 function waehleApi() {
     const mitSchluessel = (anbieter) => apis.findIndex(a => a.provider === anbieter && a.key)
@@ -92,7 +92,7 @@ function waehleApi() {
 let pruefNr = 0
 async function pruefeFehlendeTage() {
     const nr = ++pruefNr
-    const zurueck = Number(daysBack.value)
+    const zurueck = Number(tageZurueck.value)
     if (!(zurueck > 0)) return
     try {
         await Promise.all([ladeTrades(), ladeExkursionen()])
@@ -108,7 +108,7 @@ async function pruefeFehlendeTage() {
     const symbole = []
     let frueh = null
     let spaet = null
-    const grenze = dayjs().subtract(Number(daysMargin.value) || 0, 'day').unix()
+    const grenze = dayjs().subtract(Number(tageReserve.value) || 0, 'day').unix()
     const erledigt = new Set(excursions.map(x => Number(x.dateUnix)))
 
     for (const zeile of imports.value || []) {
@@ -142,7 +142,7 @@ async function start() {
 }
 start()
 
-watch([daysBack, daysMargin], () => { pruefeFehlendeTage() })
+watch([tageZurueck, tageReserve], () => { pruefeFehlendeTage() })
 
 /** Versprechen mit Frist: erfüllt mit `{ zeit: true }`, wenn es nicht rechtzeitig kommt. */
 function mitFrist(versprechen, ms) {
@@ -170,7 +170,7 @@ async function hinzufuegen() {
     try {
         const bis = Date.now() + FRIST_KERZEN_MS
         const symbole = [...symbolListe.value]
-        const antwort = await mitFrist(useGetOHLCV(apiQuelle.value, 'manual', symbole, fruehester.value, spaetester.value), FRIST_KERZEN_MS)
+        const antwort = await mitFrist(holeImportKerzen(apiQuelle.value, 'manual', symbole, fruehester.value, spaetester.value), FRIST_KERZEN_MS)
         if (antwort.zeit) {
             meldungen.value.push({ art: 'fehler', text: t('excursions.zeitueberschreitung', { sekunden: FRIST_KERZEN_MS / 1000 }) })
             return
@@ -194,7 +194,7 @@ async function hinzufuegen() {
             if (trade.openPosition != false) continue
             if (fehlt(kerzen, trade.symbol)) continue
             dieserLauf.add(trade.id)
-            const r = await mitFrist(useGetMFEPrices(trade, trade.entryTime, trade.entryPrice, trade, kerzen), FRIST_MFE_MS)
+            const r = await mitFrist(berechneMfePreise(trade, trade.entryTime, trade.entryPrice, trade, kerzen), FRIST_MFE_MS)
             if (r.zeit) { ohneAntwort++; continue }
             if (Array.isArray(r.wert)) liste = r.wert
         }
@@ -226,7 +226,7 @@ async function hinzufuegen() {
     }
 
     if (alleGut && meldungen.value.length === 0) {
-        usePageRedirect('daily')
+        leiteWeiter('daily')
         return
     }
     // Gespeicherte Tage fallen aus der Liste; was übrig bleibt, steht wieder da.
@@ -234,7 +234,7 @@ async function hinzufuegen() {
 }
 
 function abbrechen() {
-    router.push('/dashboard')
+    router.push('/journal')
 }
 </script>
 
@@ -251,10 +251,10 @@ function abbrechen() {
             <template v-else>
                 <p class="satz">
                     {{ t('excursions.forLastDays') }}
-                    <input v-model="daysBack" class="at-feld zahl-feld" type="number" min="1" step="1" inputmode="numeric"
+                    <input v-model="tageZurueck" class="at-feld zahl-feld" type="number" min="1" step="1" inputmode="numeric"
                         :aria-label="t('excursions.feldTage')" />
                     {{ t('excursions.daysWithBuffer') }}
-                    <input v-model="daysMargin" class="at-feld zahl-feld" type="number" min="0" step="1" inputmode="numeric"
+                    <input v-model="tageReserve" class="at-feld zahl-feld" type="number" min="0" step="1" inputmode="numeric"
                         :aria-label="t('excursions.feldPuffer')" />
                     {{ pufferWort }} {{ t('excursions.buffer') }}
                     <template v-if="fehlendeTage.length">
@@ -270,7 +270,7 @@ function abbrechen() {
                 <Knopf v-if="hatSchluessel && fehlendeTage.length" art="haupt" symbol="plus" @click="hinzufuegen">
                     {{ t('excursions.add') }}
                 </Knopf>
-                <Knopf v-if="gespeichertAnzahl > 0" art="normal" @click="usePageRedirect('daily')">
+                <Knopf v-if="gespeichertAnzahl > 0" art="normal" @click="leiteWeiter('daily')">
                     {{ t('excursions.zurTagesansicht') }}
                 </Knopf>
                 <Knopf art="leise" klein @click="abbrechen">{{ t('common.cancel') }}</Knopf>

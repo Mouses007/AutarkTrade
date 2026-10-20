@@ -1,16 +1,16 @@
 /**
  * Diagramme je Zeitraum (Tag / Woche / Monat) aus den Tagessummen:
- *   - useLineBarChart: kumulierter Ertrag (Linie) + Ertrag je Zeitraum (Balken)
- *   - useBarChart:     Kennzahl (barChart1) bzw. Gewinnquote (barChart2)
+ *   - linienBalkenDiagramm: kumulierter Ertrag (Linie) + Ertrag je Zeitraum (Balken)
+ *   - balkenDiagramm:     Kennzahl (barChart1) bzw. Gewinnquote (barChart2)
  *
  * Bündelung: Woche = ISO-Kalenderwoche, Monat = Monat 0–11, beide in der
  * Zeitzone des PROZESSES und OHNE Jahr verglichen (bekannte Eigenheit, siehe
  * docs/spec/diagramme.md 6.4). Ohne gültigen Zeitrahmen gibt es keine Einträge.
  */
 import dayjs from '../zeit.js'
-import { selectedTimeFrame, selectedRatio } from '../../../stores/filters.js'
+import { gewaehlterZeitrahmen, gewaehlteKennzahl } from '../../../stores/filters.js'
 import { summenJeTag } from '../../../stores/trades.js'
-import { useChartFormat, useThousandCurrencyFormat, useXDecCurrencyFormat, useXDecFormat, useOneDecPercentFormat } from '../format.js'
+import { formDatumKurz, formGeld0, formGeldStellen, formZahlStellen, formProzent1 } from '../format.js'
 import { fall, kopie, element, instanzFuer } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeichenFarbe, vorzeichenHover } from './gestaltung.js'
 
@@ -22,7 +22,7 @@ const BESCHRIFTUNG_BIS = 20
  * @returns {Array<{kategorie: string, tage: string[]}>}
  */
 export function zeitraeume(schluessel, rahmen) {
-    if (rahmen === 'daily') return schluessel.map(k => ({ kategorie: useChartFormat(Number(k)), tage: [k] }))
+    if (rahmen === 'daily') return schluessel.map(k => ({ kategorie: formDatumKurz(Number(k)), tage: [k] }))
     if (rahmen !== 'weekly' && rahmen !== 'monthly') return []
     const merkmal = (k) => (rahmen === 'weekly' ? dayjs.unix(Number(k)).isoWeek() : dayjs.unix(Number(k)).month())
     const beginn = (k) => dayjs.unix(Number(k)).startOf(rahmen === 'weekly' ? 'isoWeek' : 'month').unix()
@@ -31,11 +31,11 @@ export function zeitraeume(schluessel, rahmen) {
     for (const k of schluessel) {
         const m = merkmal(k)
         if (!liste.length) {
-            liste.push({ kategorie: useChartFormat(Number(k)), tage: [k] })
+            liste.push({ kategorie: formDatumKurz(Number(k)), tage: [k] })
         } else if (m === aktuell) {
             liste[liste.length - 1].tage.push(k)
         } else {
-            liste.push({ kategorie: useChartFormat(beginn(k)), tage: [k] })
+            liste.push({ kategorie: formDatumKurz(beginn(k)), tage: [k] })
         }
         aktuell = m
     }
@@ -56,12 +56,12 @@ function vertikaleOption(p, kategorien, reihen, tooltip) {
         grid: { left: 8, right: 8, top: 24, bottom: 8, containLabel: true },
         tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...tooltipStil(p), formatter: tooltip },
         xAxis: { ...kategorieAchse(p), data: kategorien },
-        yAxis: wertAchse(p, { axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => useThousandCurrencyFormat(v) } }),
+        yAxis: wertAchse(p, { axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => formGeld0(v) } }),
         series: reihen,
     }
 }
 
-export function useLineBarChart(id) {
+export function linienBalkenDiagramm(id) {
     try {
         const tage = kopie(summenJeTag)
         const schluessel = Object.keys(tage)
@@ -71,13 +71,13 @@ export function useLineBarChart(id) {
         const linie = []
         const balken = []
         const kategorien = []
-        for (const zr of zeitraeume(schluessel, selectedTimeFrame.value)) {
+        for (const zr of zeitraeume(schluessel, gewaehlterZeitrahmen.value)) {
             let summe = 0
             for (const k of zr.tage) summe += tage[k][`${f}Proceeds`]
             kategorien.push(zr.kategorie)
             linie.push(linie.length ? linie[linie.length - 1] + summe : summe)
             const gut = summe >= 0
-            balken.push(balkenPunkt(summe, gut, mitBeschriftung, gut ? 'top' : 'bottom', (x) => useThousandCurrencyFormat(x.value), p))
+            balken.push(balkenPunkt(summe, gut, mitBeschriftung, gut ? 'top' : 'bottom', (x) => formGeld0(x.value), p))
         }
         instanzFuer(element(id)).setOption(vertikaleOption(p, kategorien, [
             { type: 'line', smooth: true, showSymbol: false, z: 3, lineStyle: { color: p.accent, width: 2 }, itemStyle: { color: p.accent }, data: linie },
@@ -86,7 +86,7 @@ export function useLineBarChart(id) {
             const kat = punkte[0]?.axisValue ?? ''
             const bal = punkte.find(x => x.seriesType === 'bar')
             const lin = punkte.find(x => x.seriesType === 'line')
-            return `${kat}<br>Proceeds: ${useThousandCurrencyFormat(bal?.value ?? 0)}<br>Cumulated: ${useThousandCurrencyFormat(lin?.value ?? 0)}`
+            return `${kat}<br>Proceeds: ${formGeld0(bal?.value ?? 0)}<br>Cumulated: ${formGeld0(lin?.value ?? 0)}`
         }))
         return Promise.resolve()
     } catch (e) {
@@ -128,20 +128,20 @@ function kennzahlen(tage, liste, f, rahmen) {
 }
 
 function kennzahlText(wert, verhaeltnis, alsQuote) {
-    if (alsQuote) return useOneDecPercentFormat(wert)
-    if (verhaeltnis === 'appt') return useXDecCurrencyFormat(wert, 2)
-    if (verhaeltnis === 'apps') return useXDecCurrencyFormat(wert, 4)
-    if (verhaeltnis === 'profitFactor') return useXDecFormat(wert, 2)
+    if (alsQuote) return formProzent1(wert)
+    if (verhaeltnis === 'appt') return formGeldStellen(wert, 2)
+    if (verhaeltnis === 'apps') return formGeldStellen(wert, 4)
+    if (verhaeltnis === 'profitFactor') return formZahlStellen(wert, 2)
     return String(wert)
 }
 
-export function useBarChart(id) {
+export function balkenDiagramm(id) {
     try {
         const tage = kopie(summenJeTag)
         const schluessel = Object.keys(tage)
         const f = fall()
-        const rahmen = selectedTimeFrame.value
-        const verhaeltnis = selectedRatio.value
+        const rahmen = gewaehlterZeitrahmen.value
+        const verhaeltnis = gewaehlteKennzahl.value
         const p = palette()
         const mitBeschriftung = schluessel.length <= BESCHRIFTUNG_BIS
         const alsQuote = id === 'barChart2'
@@ -163,8 +163,8 @@ export function useBarChart(id) {
         const option = vertikaleOption(p, kategorien, [{ type: 'bar', barMaxWidth: 28, data: punkte }],
             (liste) => `${liste[0]?.axisValue ?? ''}<br>${kennzahlText(liste[0]?.value, verhaeltnis, alsQuote)}`)
         option.yAxis.axisLabel.formatter = alsQuote
-            ? (v) => useOneDecPercentFormat(v)
-            : (verhaeltnis === 'profitFactor' ? (v) => useXDecFormat(v, 0) : (v) => useThousandCurrencyFormat(v))
+            ? (v) => formProzent1(v)
+            : (verhaeltnis === 'profitFactor' ? (v) => formZahlStellen(v, 0) : (v) => formGeld0(v))
         instanzFuer(element(id)).setOption(option)
         return Promise.resolve()
     } catch (e) {

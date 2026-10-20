@@ -7,9 +7,9 @@
  * alle anderen Zellen blass macht.
  */
 import dayjs from '../zeit.js'
-import { timeZoneTrade } from '../../../stores/ui.js'
+import { tradeZeitzone } from '../../../stores/ui.js'
 import { gefilterteTradesFlach } from '../../../stores/trades.js'
-import { useTwoDecCurrencyFormat } from '../format.js'
+import { formGeld2 } from '../format.js'
 import { fall, festkomma, element, instanzFuer } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, mische } from './gestaltung.js'
 
@@ -34,7 +34,7 @@ export function useHeatmapChart(id) {
     if (!gefilterteTradesFlach.length) return Promise.resolve()
 
     const f = fall()
-    const zone = timeZoneTrade.value
+    const zone = tradeZeitzone.value
     // Zelle (Tag d 0 = Montag, Stunde h) → Summe, Anzahl
     const zellen = new Map()
     for (const tr of gefilterteTradesFlach) {
@@ -71,7 +71,7 @@ export function useHeatmapChart(id) {
             formatter: (x) => {
                 const [h, d, mu, n] = x.value || x.data || []
                 const kopf = `${TAGE[d]} ${h}:00`
-                return n ? `${kopf}<br>Ø P&L: ${useTwoDecCurrencyFormat(mu)}<br>Trades: ${n}` : `${kopf}<br>Keine Trades`
+                return n ? `${kopf}<br>Ø P&L: ${formGeld2(mu)}<br>Trades: ${n}` : `${kopf}<br>Keine Trades`
             },
         },
         // unsichtbar: die Farben stehen schon an den Zellen

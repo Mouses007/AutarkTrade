@@ -11,13 +11,13 @@
 import { computed, ref, nextTick, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { seiteLaedt, dashboardBereit, zeichenZaehler, journalHatDaten } from '../stores/ui.js'
-import { selectedDashTab, betragArt, betragGross, selectedTradeCategory, selectedRatio } from '../stores/filters.js'
+import { dashReiter, betragArt, betragGross, selectedTradeCategory, gewaehlteKennzahl } from '../stores/filters.js'
 import { totals, verfuegbareTags, groups, gefilterteTradesFlach, excursions } from '../stores/trades.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
 import { starteDashboard, useDisposeJournalCharts } from '../utils/journal/ablauf.js'
 import { ladeDiagramme } from '../utils/journal/diagrammLader.js'
-import { useTwoDecCurrencyFormat, useThousandCurrencyFormat, useThousandFormat, useXDecFormat } from '../utils/journal/format.js'
+import { formGeld2, formGeld0, formZahl0, formZahlStellen } from '../utils/journal/format.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import NoData from '../components/NoData.vue'
 import BotDashboard from '../components/BotDashboard.vue'
@@ -47,7 +47,7 @@ const reiterListe = computed(() => [
 ])
 // Ein unbekannter gespeicherter Wert liess früher die Seite leer; jetzt gilt
 // die Übersicht.
-const aktiverReiter = computed(() => (REITER.includes(selectedDashTab.value) ? selectedDashTab.value : 'overviewTab'))
+const aktiverReiter = computed(() => (REITER.includes(dashReiter.value) ? dashReiter.value : 'overviewTab'))
 
 async function neuZeichnen() {
     // Alte Instanzen freigeben, solange ihre Knoten noch hängen — der neue
@@ -59,8 +59,8 @@ async function neuZeichnen() {
 }
 
 async function reiterWechsel(id) {
-    selectedDashTab.value = id
-    try { localStorage.setItem('selectedDashTab', id) } catch { /* privater Modus */ }
+    dashReiter.value = id
+    try { localStorage.setItem('at.journal.dashReiter', id) } catch { /* privater Modus */ }
     await neuZeichnen()
 }
 
@@ -116,33 +116,33 @@ const kennzeichen = computed(() => {
 })
 
 /*
- * Der Store `selectedRatio` statt `localStorage` direkt: gleicher Wert
+ * Der Store `gewaehlteKennzahl` statt `localStorage` direkt: gleicher Wert
  * (setzeFilterwerte schreibt beide), aber reaktiv.
  */
 const ratioAnzeige = computed(() => {
-    const r = ratio(selectedRatio.value, totals, betragArt.value)
+    const r = ratio(gewaehlteKennzahl.value, totals, betragArt.value)
     if (!r) return {}
     if (r.art === 'appt') {
         return {
             kurz: 'APPT',
             name: t('dashboard.avgProfitPerTrade'),
-            wert: useTwoDecCurrencyFormat(r.wert),
+            wert: formGeld2(r.wert),
             info: [
                 t('dashboard.avgProfitPerTrade'),
                 t('dashboard.apptFormula'),
-                `${t('dashboard.proceeds')}: ${useThousandCurrencyFormat(r.erloes)}`,
-                `Trades: ${useThousandFormat(r.anzahl)}`,
+                `${t('dashboard.proceeds')}: ${formGeld0(r.erloes)}`,
+                `Trades: ${formZahl0(r.anzahl)}`,
             ].join('\n'),
         }
     }
     return {
         kurz: t('options.profitFactor'),
         name: t('options.profitFactor'),
-        wert: r.wert === Infinity ? '∞' : useXDecFormat(r.wert, 2),
+        wert: r.wert === Infinity ? '∞' : formZahlStellen(r.wert, 2),
         info: [
             t('dashboard.profitFactorFormula'),
-            `${t('dashboard.gains')}: ${useThousandCurrencyFormat(r.gewinne)}`,
-            `${t('dashboard.losses')}: ${useThousandCurrencyFormat(r.verluste)}`,
+            `${t('dashboard.gains')}: ${formGeld0(r.gewinne)}`,
+            `${t('dashboard.losses')}: ${formGeld0(r.verluste)}`,
         ].join('\n'),
     }
 })

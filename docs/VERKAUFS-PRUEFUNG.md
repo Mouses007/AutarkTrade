@@ -473,7 +473,7 @@ pump.fun-API, Telegram t.me/s, Reddit, CoinPaprika, Upbit, MEXC, OKX, Binance Al
 **Abweichungen, die Zeilen betreffen:**
 
 - **Zeile 6 / 5 (Databento, Polygon):** Der „Altcode" ist nicht gelöscht, sondern in S7 clean-room nach
-  `src/utils/journal/import.js` (`useGetOHLCV`) und `views/AddExcursions.vue` übernommen worden (der Golden Master
+  `src/utils/journal/import.js` (`holeImportKerzen`) und `views/AddExcursions.vue` übernommen worden (der Golden Master
   `__selftest-mfe-pfade.mjs` deckt ihn ab). Er läuft nur mit einem vom Kunden eingetragenen Schlüssel. Urteil bleibt gelb (KS).
 - **Zeile 89d (DeepSeek):** Die Oberfläche bietet DeepSeek nicht mehr an, und der Recherche-Weg ist stillgelegt
   (`dsWeg = false` in `server/marktradar-news.js`). Der Code (`rechercheDeepseek`, die Adresse `api.deepseek.com/v1/tools/search`

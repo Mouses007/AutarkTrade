@@ -2,7 +2,7 @@
 /**
  * Karte mit genau einem ECharts-Diagramm. Die Element-ID ist Schnittstelle:
  * `zeichneDiagramme` sucht die Knoten per ID-Präfix (Spezifikation B.13), und
- * `useDisposeJournalCharts` sammelt sie über die Klasse `chartClass`. Der
+ * `useDisposeJournalCharts` sammelt sie über die Klasse `diagrammFlaeche`. Der
  * Schlüssel `zeichenZaehler` erzwingt bei jeder Erhöhung einen frischen Knoten.
  */
 import { zeichenZaehler } from '../../stores/ui.js'
@@ -19,7 +19,7 @@ defineProps({
 
 <template>
     <TitelKarte :titel="titel" :info="info">
-        <div :id="diagrammId" :key="zeichenZaehler" class="chartClass dk-diagramm"
+        <div :id="diagrammId" :key="zeichenZaehler" class="diagrammFlaeche dk-diagramm"
             :style="{ '--hoehe': hoehe + 'px' }"></div>
     </TitelKarte>
 </template>

@@ -14,9 +14,9 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { kalenderDaten } from '../stores/trades.js'
 import { betragArt, gewaehltPlOderZufriedenheit, gewaehlterMonat, selectedMonthPreset } from '../stores/filters.js'
-import { seiteLaedt, timeZoneTrade, scrollToDateUnix } from '../stores/ui.js'
+import { seiteLaedt, tradeZeitzone, scrollToDateUnix } from '../stores/ui.js'
 import { starteKalender } from '../utils/journal/ablauf.js'
-import { useThousandCurrencyFormat } from '../utils/journal/format.js'
+import { formGeld0 } from '../utils/journal/format.js'
 import dayjs from '../utils/journal/zeit.js'
 import Symbol from '@/components/basis/Symbol.vue'
 
@@ -50,22 +50,22 @@ const klickbar = (feld) => !!feld?.pAndL?.trades
 function oeffne(feld) {
     if (!(feld?.dateUnix && feld.pAndL && feld.pAndL.trades)) return
     scrollToDateUnix.value = feld.dateUnix
-    router.push('/daily')
+    router.push('/tagesansicht')
 }
 
 /**
  * Erlös als ganze Zahl: abgeschnitten mit Math.trunc. parseInt machte aus
  * einer Zahl in Exponentialschreibweise Unsinn (1e-7 wurde zu 1).
  */
-const ganz = (x) => useThousandCurrencyFormat(Math.trunc(Number(x)))
+const ganz = (x) => formGeld0(Math.trunc(Number(x)))
 
 function wechsle(schritt) {
     seiteLaedt.value = true
-    const zone = timeZoneTrade.value
+    const zone = tradeZeitzone.value
     const anfang = dayjs.unix(gewaehlterMonat.value.start).tz(zone).add(schritt, 'month').startOf('month')
     gewaehlterMonat.value.start = anfang.unix()
     gewaehlterMonat.value.end = anfang.endOf('month').unix()
-    try { localStorage.setItem('selectedMonth', JSON.stringify(gewaehlterMonat.value)) } catch { /* privater Modus */ }
+    try { localStorage.setItem('at.journal.monat', JSON.stringify(gewaehlterMonat.value)) } catch { /* privater Modus */ }
     const jetzt = dayjs().tz(zone).startOf('month').unix()
     selectedMonthPreset.value = anfang.unix() === jetzt ? 'current' : 'custom'
     try { localStorage.setItem('selectedMonthPreset', selectedMonthPreset.value) } catch { /* privater Modus */ }

@@ -4,8 +4,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import dayjs, { anzeige } from '@/utils/journal/zeit.js'
-import { useDateCalFormat } from '../../../utils/journal/format.js'
-import { selectedBroker } from '@/stores/filters.js'
+import { formDatum } from '../../../utils/journal/format.js'
+import { gewaehlteBoerse } from '@/stores/filters.js'
 import { dbFind, dbFirst, dbDelete, dbDeleteWhere } from '@/utils/db.js'
 import { refreshAccountBalance } from '@/stores/accountBalance.js'
 import { logWarn } from '@/utils/logger.js'
@@ -29,7 +29,7 @@ async function loadImports() {
         const results = await dbFind('trades', { descending: 'dateUnix', limit: 10000 })
         importsList.length = 0
 
-        const broker = selectedBroker.value
+        const broker = gewaehlteBoerse.value
         results.forEach(r => {
             if (broker && r.trades && Array.isArray(r.trades)) {
                 // Filter trades within the day to only the selected broker
@@ -119,7 +119,7 @@ async function cancelDeleteImport() {
 
 async function executeDeleteImport(dateUnix) {
     try {
-        const broker = selectedBroker.value || 'bitunix'
+        const broker = gewaehlteBoerse.value || 'bitunix'
         // Find and delete trade (broker-aware)
         const existing = await dbFirst('trades', { equalTo: { dateUnix: dateUnix, broker: broker } })
         if (existing) {
@@ -143,7 +143,7 @@ async function executeDeleteImport(dateUnix) {
 
         // Kontostand-Cache aktualisieren nach Trade-Loeschung
         try {
-            const broker = selectedBroker.value || 'bitunix'
+            const broker = gewaehlteBoerse.value || 'bitunix'
             await refreshAccountBalance({ broker, force: true })
         } catch (e) {
             logWarn('settings-view', 'refreshAccountBalance nach Delete fehlgeschlagen', e)
@@ -195,7 +195,7 @@ onMounted(loadImports)
                             <button type="button" class="kopfzeile" :aria-expanded="expandedImport === data.dateUnix"
                                 @click="toggleImportExpand(data.dateUnix)">
                                 <Symbol :name="expandedImport === data.dateUnix ? 'runter' : 'ausklappen'" :groesse="16" class="pfeil" />
-                                <span class="fett">{{ useDateCalFormat(data.dateUnix) }}</span>
+                                <span class="fett">{{ formDatum(data.dateUnix) }}</span>
                                 <Pille ton="neutral">{{ getTradeCount(data) }} {{ t('common.trades') }}</Pille>
                                 <Pille v-if="getEvaluatedCount(data) === getTradeCount(data) && getTradeCount(data) > 0"
                                     ton="gut">{{ t('settings.allEvaluated') }}</Pille>
@@ -225,7 +225,7 @@ onMounted(loadImports)
                                     </span>
                                 </div>
                                 <Pille v-if="isTradeEvaluated(trade.id)" ton="gut" symbol="haken">{{ t('settings.importEvaluatedBadge') }}</Pille>
-                                <Knopf v-else klein :href="'/playbook?tradeId=' + trade.id">{{ t('settings.importEvaluateLink') }}</Knopf>
+                                <Knopf v-else klein :href="'/bewertungen?tradeId=' + trade.id">{{ t('settings.importEvaluateLink') }}</Knopf>
                             </div>
                             <p v-if="getTradesForDay(data).length === 0" class="gedaempft klein">
                                 {{ t('settings.importNoTradesFound') }}

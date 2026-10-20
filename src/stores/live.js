@@ -6,7 +6,7 @@
  * gebündelt und verzögert, damit ein Zug am Zoom nicht zwanzig PUTs auslöst.
  */
 import { ref, watch } from 'vue'
-import { currentUser } from './settings.js'
+import { appEinstellungen } from './settings.js'
 import { dbUpdateSettings } from '../utils/db.js'
 import { logWarn } from '../utils/logger.js'
 import { ladeFreigabe } from '../utils/quellenFreigabe.js'
@@ -210,7 +210,7 @@ const NICHT_IN_WIEDERGABE = ['liveSymbol', 'liveMarket']
 
 /** Werte aus den geladenen Settings übernehmen (einmal pro Seitenaufruf). */
 export function hydrateLiveSettings() {
-    const settings = currentUser.value
+    const settings = appEinstellungen.value
     if (!settings) return
     hydrated = false   // Watcher während des Befüllens stumm schalten
     const wiedergabe = liveMode.value === 'replay'
@@ -261,7 +261,7 @@ function scheduleSave(key, value) {
         dirty = {}
         try {
             await dbUpdateSettings(payload)
-            if (currentUser.value) Object.assign(currentUser.value, payload)
+            if (appEinstellungen.value) Object.assign(appEinstellungen.value, payload)
         } catch (e) {
             logWarn('live-settings', 'Speichern fehlgeschlagen', e)
         }

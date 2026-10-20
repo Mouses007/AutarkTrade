@@ -4,7 +4,7 @@
  * Tabelle aus dem Blotter (je Symbol) mit der Tagessumme aus `pAndL` als
  * letzter Zeile.
  *
- * Liest die Import-Stores direkt — dieselben, die `useUploadTrades` später
+ * Liest die Import-Stores direkt — dieselben, die `speichereImport` später
  * speichert. So zeigt die Vorschau genau das, was geschrieben wird, und nicht
  * eine zweite Rechnung, die davon abweichen könnte.
  */
@@ -12,7 +12,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Tabelle from '../basis/Tabelle.vue'
 import { blotter, pAndL, executions } from '../../stores/journal/import.js'
-import { useCreatedDateFormat } from '../../utils/journal/format.js'
+import { formDatumLang } from '../../utils/journal/format.js'
 
 const { t } = useI18n()
 
@@ -47,7 +47,7 @@ const tage = computed(() => {
         .map(td => {
             const zeilen = Object.entries(blotter[td]).map(([symbol, b]) => zeile(symbol, b))
             if (pAndL[td]) zeilen.push(zeile(t('common.total'), pAndL[td], true))
-            return { td, titel: useCreatedDateFormat(Number(td)), zeilen }
+            return { td, titel: formDatumLang(Number(td)), zeilen }
         })
 })
 

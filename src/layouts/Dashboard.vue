@@ -29,13 +29,13 @@ import TradeEvalPopup from '../components/TradeEvalPopup.vue'
 import PageInfo from '../components/PageInfo.vue'
 import BetaHinweis from '../components/BetaHinweis.vue'
 
-import { pageId, screenType, seitenmenueMobilOffen, appMode, privacyMode } from '../stores/ui.js'
+import { seitenId, bildschirmTyp, seitenmenueMobilOffen, appMode, privacyMode } from '../stores/ui.js'
 import { sideMenuEingeklappt } from '../stores/app/rahmen.js'
-import { currentUser } from '../stores/settings.js'
+import { appEinstellungen } from '../stores/settings.js'
 import { ladeSystemModus } from '../stores/system.js'
 import { hydrateLiveSettings } from '../stores/live.js'
 import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
-import { useInitParse, leseZeitzone, leseBildschirmTyp, ladeZeitraeume, setzeFilterwerte, useCloseMobileMenu } from '../utils/journal/app.js'
+import { starteApp, leseZeitzone, leseBildschirmTyp, ladeZeitraeume, setzeFilterwerte, schliesseMobilMenue } from '../utils/journal/app.js'
 import { ladeVerfuegbareTags } from '../utils/journal/tagebuch.js'
 import { useUpdatePendingCounts, useStartGlobalPolling, useStopGlobalPolling } from '../utils/incoming.js'
 import { requestNotificationPermission } from '../utils/notify.js'
@@ -75,12 +75,12 @@ const imVollbild = useImVollbild()
 const ohneRahmen = computed(() => istCockpit.value || imVollbild.value)
 const mitMenue = computed(() => !ohneRahmen.value && !route.meta?.ohneSeitenmenue)
 
-const desktop = computed(() => screenType.value === 'computer')
+const desktop = computed(() => bildschirmTyp.value === 'computer')
 const menueSchmal = computed(() => desktop.value && sideMenuEingeklappt.value)
 
 /* ── Seiten-ID folgt jeder Navigation ─────────────────── */
 // Früher nur beim Mount gesetzt: nach router.push blieb die alte Seite stehen.
-watch(() => route.name, (name) => { pageId.value = name }, { immediate: true })
+watch(() => route.name, (name) => { seitenId.value = name }, { immediate: true })
 
 /* ── Initialisierung ──────────────────────────────────── */
 
@@ -92,7 +92,7 @@ async function starteJournal() {
     await ladeZeitraeume()
     await setzeFilterwerte()
     await ladeVerfuegbareTags()   // für das Bewertungs-Popup
-    const u = currentUser.value
+    const u = appEinstellungen.value
     // Nur eine ausdrückliche 0 schaltet ab; fehlt der Wert, gilt er als an.
     const aus = (v) => v === 0 || v === '0'
     if (!aus(u?.browserNotifications)) requestNotificationPermission()
@@ -107,9 +107,9 @@ const grundBereit = ref(false)
 
 onBeforeMount(async () => {
     ladeSystemModus()                       // Testbetrieb-Flag, ohne zu warten
-    await useInitParse()                    // Einstellungen → currentUser
+    await starteApp()                    // Einstellungen → appEinstellungen
     // Nur Deutsch liegt im Start-Bundle; andere Sprachen werden nachgeladen.
-    await setLocale(currentUser.value?.language || 'de')
+    await setLocale(appEinstellungen.value?.language || 'de')
     leseZeitzone()
     leseBildschirmTyp()
     hydrateLiveSettings()                   // auch im Journal: die Einstellungsseite zeigt die Live-Werte
@@ -128,10 +128,10 @@ let groesseTakt = null
 function beiGroesse() {
     clearTimeout(groesseTakt)
     groesseTakt = setTimeout(() => {
-        const vorher = screenType.value
+        const vorher = bildschirmTyp.value
         leseBildschirmTyp()
         // Vom Telefon auf den Desktop: ein ausgefahrenes Handy-Menü schliessen.
-        if (vorher === 'mobile' && screenType.value === 'computer') useCloseMobileMenu()
+        if (vorher === 'mobile' && bildschirmTyp.value === 'computer') schliesseMobilMenue()
     }, 120)
 }
 
@@ -144,8 +144,8 @@ function beiGroesse() {
  * Navigation in der App (Zurück, altes Lesezeichen) kommt, wenn sie längst da
  * sind. Das Seiten-Flag `livetradingAn` prüft Livetrading.vue selbst.
  */
-watch([currentUser, () => route.fullPath], () => {
-    const u = currentUser.value
+watch([appEinstellungen, () => route.fullPath], () => {
+    const u = appEinstellungen.value
     if (!u) return                                   // Unwissen ist kein Nein
     const m = route.meta?.mode
     if (!m || m === 'any' || m === 'journal') return
@@ -181,8 +181,8 @@ function beiSichtbarkeit() {
 /* ── Zurück-Geste schliesst das Handy-Menü ────────────── */
 // Dieselbe Funktionsreferenz an beide Aufrufe: der Ebenen-Stapel vergleicht Referenzen.
 watch(seitenmenueMobilOffen, (offen) => {
-    if (offen) ebeneAuf(useCloseMobileMenu)
-    else ebeneZu(useCloseMobileMenu)
+    if (offen) ebeneAuf(schliesseMobilMenue)
+    else ebeneZu(schliesseMobilMenue)
 })
 
 /* ── KI-Bericht ───────────────────────────────────────── */
@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
     <Kopfleiste v-if="!ohneRahmen" :mit-titel="mitMenue && desktop" />
 
     <div class="at-rahmen" :class="{ 'ohne-menue': !mitMenue }" v-cloak>
-        <!-- id="sideMenu": utils.js (schalteMobilMenue/useCloseMobileMenu) sucht diese ID. -->
+        <!-- id="sideMenu": utils.js (schalteMobilMenue/schliesseMobilMenue) sucht diese ID. -->
         <aside v-if="mitMenue" id="sideMenu" class="at-menuespalte"
             :class="desktop ? { schmal: menueSchmal } : { mobil: true, offen: seitenmenueMobilOffen }">
             <Seitenmenue />
@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
 
         <div class="at-inhaltsspalte">
             <div v-if="mitMenue && !desktop && seitenmenueMobilOffen" class="at-abdunkelung" aria-hidden="true"
-                @click="useCloseMobileMenu()"></div>
+                @click="schliesseMobilMenue()"></div>
 
             <!-- Desktop: Titel sitzt rechts in der Kopfleiste; sonst eigene Zeile (Telefon: öffnet das Menü). -->
             <Titelzeile v-if="mitMenue && !desktop" />

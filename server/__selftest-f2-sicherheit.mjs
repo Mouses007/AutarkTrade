@@ -21,7 +21,7 @@ delete process.env.AT_SECRET
 delete process.env.CTJ_SECRET
 
 const { initDb, getKnex } = await import('./database.js')
-const { setupApiRoutes, SETTINGS_SENSITIVE_FIELDS } = await import('./api-routes.js')
+const { registriereApiRouten, SETTINGS_SENSITIVE_FIELDS } = await import('./api-routes.js')
 const { setupBackupRoutes } = await import('./backup-api.js')
 const { setupOllamaRoutes } = await import('./ollama-api.js')
 const { setupBenachrichtigungsRoutes } = await import('./benachrichtigungen.js')
@@ -45,7 +45,7 @@ const knex = getKnex()
 
 const app = express()
 app.use(express.json({ limit: '5mb' }))
-setupApiRoutes(app)
+registriereApiRouten(app)
 setupBackupRoutes(app)
 setupOllamaRoutes(app)
 setupBenachrichtigungsRoutes(app)

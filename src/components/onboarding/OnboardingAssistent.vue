@@ -36,7 +36,7 @@ import Hinweis from '../basis/Hinweis.vue'
 
 const props = defineProps({
     kontext: { type: String, default: 'manuell' }, // 'setup' | 'update' | 'manuell'
-    rueckkehrPfad: { type: String, default: '/dashboard' },
+    rueckkehrPfad: { type: String, default: '/journal' },
 })
 
 const { t } = useI18n()

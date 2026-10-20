@@ -6,13 +6,13 @@
  */
 import { computed, ref, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { currentUser } from '../../stores/settings.js'
-import { selectedBroker, betragArt } from '../../stores/filters.js'
-import { zeichenZaehler, timeZoneTrade } from '../../stores/ui.js'
+import { appEinstellungen } from '../../stores/settings.js'
+import { gewaehlteBoerse, betragArt } from '../../stores/filters.js'
+import { zeichenZaehler, tradeZeitzone } from '../../stores/ui.js'
 import { zufriedenheitTage, zufriedenheitTrades, gewinnAnalyse, gefilterteTradesFlach } from '../../stores/trades.js'
 import { incomingPositions } from '../../stores/journal/offenePositionen.js'
 import { allTimeNetPnL, allTimeVolume, last30dVolume, displayBonus, syncStartBalanceFromBroker } from '../../stores/accountBalance.js'
-import { useTwoDecCurrencyFormat, useThousandCurrencyFormat } from '../../utils/journal/format.js'
+import { formGeld2, formGeld0 } from '../../utils/journal/format.js'
 import Symbol from '@/components/basis/Symbol.vue'
 import InfoTipp from '@/components/InfoTipp.vue'
 import TitelKarte from './TitelKarte.vue'
@@ -21,8 +21,8 @@ import { kontostand, heuteZaehler } from './rechnung.js'
 const { t } = useI18n()
 
 const stand = computed(() => kontostand({
-    benutzer: currentUser.value,
-    broker: selectedBroker.value,
+    benutzer: appEinstellungen.value,
+    broker: gewaehlteBoerse.value,
     allTimeNetPnL: allTimeNetPnL.value,
     positionen: incomingPositions,
     bonus: displayBonus.value,
@@ -39,7 +39,7 @@ const mitRrr = computed(() => {
 })
 const ringe = computed(() => 1 + (mitZufriedenheit.value ? 1 : 0) + (mitRrr.value ? 1 : 0))
 
-const heute = computed(() => heuteZaehler(gefilterteTradesFlach, timeZoneTrade.value))
+const heute = computed(() => heuteZaehler(gefilterteTradesFlach, tradeZeitzone.value))
 
 const vorzeichen = (x) => (x >= 0 ? '+' : '')
 
@@ -93,28 +93,28 @@ onBeforeUnmount(() => clearTimeout(syncTimer))
             <span>{{ t('dashboard.configureBalance') }}</span>
         </div>
         <div v-else class="kb-stand">
-            <div class="kb-gross zahl" :class="stand.pnl >= 0 ? 'at-gut' : 'at-schlecht'">{{ useTwoDecCurrencyFormat(stand.aktuell) }}</div>
+            <div class="kb-gross zahl" :class="stand.pnl >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld2(stand.aktuell) }}</div>
             <div class="kb-unter">{{ t('dashboard.currentBalance') }}</div>
             <div class="kb-perf zahl" :class="stand.performance >= 0 ? 'at-gut' : 'at-schlecht'">
                 {{ vorzeichen(stand.performance) }}{{ stand.performance.toFixed(1) }}%
             </div>
             <div v-if="stand.bonus > 0" class="kb-bonus">
-                {{ t('dashboard.bonusIncl', { betrag: useTwoDecCurrencyFormat(stand.bonus) }) }}
+                {{ t('dashboard.bonusIncl', { betrag: formGeld2(stand.bonus) }) }}
                 <InfoTipp schluessel="dashboard.bonusHint" />
             </div>
         </div>
 
         <table v-if="allTimeVolume > 0" class="kb-volumen">
             <tbody>
-                <tr><td>{{ t('dashboard.volume30d') }}</td><td class="zahl at-fett">{{ useThousandCurrencyFormat(last30dVolume) }}</td></tr>
-                <tr><td>{{ t('dashboard.volumeTotal') }}</td><td class="zahl at-fett">{{ useThousandCurrencyFormat(allTimeVolume) }}</td></tr>
+                <tr><td>{{ t('dashboard.volume30d') }}</td><td class="zahl at-fett">{{ formGeld0(last30dVolume) }}</td></tr>
+                <tr><td>{{ t('dashboard.volumeTotal') }}</td><td class="zahl at-fett">{{ formGeld0(allTimeVolume) }}</td></tr>
             </tbody>
         </table>
 
         <div class="kb-ringe" :class="'n' + ringe">
-            <div id="pieChart1" :key="'r1-' + zeichenZaehler" class="chartIdCardClass kb-ring"></div>
-            <div v-if="mitZufriedenheit" id="pieChart2" :key="'r2-' + zeichenZaehler" class="chartIdCardClass kb-ring"></div>
-            <div v-if="mitRrr" id="pieChart3" :key="'r3-' + zeichenZaehler" class="chartIdCardClass kb-ring"></div>
+            <div id="pieChart1" :key="'r1-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
+            <div v-if="mitZufriedenheit" id="pieChart2" :key="'r2-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
+            <div v-if="mitRrr" id="pieChart3" :key="'r3-' + zeichenZaehler" class="diagrammKarteFlaeche kb-ring"></div>
         </div>
 
         <div v-if="heute.anzahl > 0" class="kb-heute">
@@ -125,7 +125,7 @@ onBeforeUnmount(() => clearTimeout(syncTimer))
                 <span class="at-schlecht"><Symbol name="runter" />{{ heute.verlierer }}</span>
             </div>
             <div class="kb-heute-pnl zahl" :class="heute.pnl >= 0 ? 'at-gut' : 'at-schlecht'">
-                {{ vorzeichen(heute.pnl) }}{{ useTwoDecCurrencyFormat(heute.pnl) }}
+                {{ vorzeichen(heute.pnl) }}{{ formGeld2(heute.pnl) }}
             </div>
         </div>
     </TitelKarte>

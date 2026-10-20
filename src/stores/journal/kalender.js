@@ -7,4 +7,4 @@ export const kalenderDaten = reactive({})
 // Bewusster Altfehler (Spezifikation §7.4): ein OBJEKT, keine Liste. Die
 // Mini-Kalender werden deshalb nie gefüllt; es bleibt `{length: 0}`.
 export const miniKalenderDaten = reactive({})
-export const tradeAccounts = reactive([])
+export const kalenderKonten = reactive([])

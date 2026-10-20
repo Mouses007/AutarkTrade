@@ -3,7 +3,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
@@ -96,7 +96,7 @@ async function clearEsp32Key() {
     }
 }
 
-esp32Filter.value = currentUser.value?.esp32Filter || 'month'
+esp32Filter.value = appEinstellungen.value?.esp32Filter || 'month'
 onMounted(loadEsp32Settings)
 </script>
 

@@ -30,7 +30,7 @@ import { holtWeitere } from '../../stores/filters.js'
 import {
     useSelectedScreenshotFunction, screenshotVollbildOffen, useSchliesseScreenshotVollbild,
 } from '../../utils/screenshots.js'
-import { useCreatedDateFormat } from '../../utils/journal/format.js'
+import { formDatumLang } from '../../utils/journal/format.js'
 
 const { t } = useI18n()
 
@@ -38,7 +38,7 @@ const index = computed(() => selectedScreenshotIndex.value)
 const hatBild = computed(() => Object.keys(gewaehltesBild).length > 0)
 const mitZurueck = computed(() => Number.isInteger(index.value) && index.value - 1 >= 0)
 const mitWeiter = computed(() => Number.isInteger(index.value) && index.value + 1 > 0 && !!screenshots[index.value + 1])
-const titel = computed(() => (gewaehltesBild.dateUnix ? useCreatedDateFormat(gewaehltesBild.dateUnix) : t('nav.screenshots')))
+const titel = computed(() => (gewaehltesBild.dateUnix ? formDatumLang(gewaehltesBild.dateUnix) : t('nav.screenshots')))
 
 function blaettere(schritt) {
     useSelectedScreenshotFunction(index.value + schritt, 'fullScreen')

@@ -36,7 +36,7 @@ const plan = computed(() => props.daten?.plan || {})
 const offen = computed(() => (props.daten?.offen || []).slice(0, props.gross ? 12 : 4))
 
 const geld = (v) => `${v >= 0 ? '+' : '−'}${Math.abs(Number(v) || 0).toFixed(2)} $`
-const farbe = (v) => (Number(v) || 0) >= 0 ? 'greenTrade' : 'redTrade'
+const farbe = (v) => (Number(v) || 0) >= 0 ? 'gewinnWert' : 'verlustWert'
 
 /** Balkenbreite in Prozent, bei 100 gekappt — darüber zählt nur noch „drüber". */
 const breite = (anteil) => anteil == null ? 0 : Math.min(100, anteil * 100)
@@ -107,7 +107,7 @@ const zahl = (v) => Number(v) || 0
         <div v-if="offen.length" class="poListe">
             <div v-for="p in offen" :key="p.positionId || p.symbol" class="poZeile">
                 <span class="poSym">{{ String(p.symbol || '').replace(/USDT$/, '') }}</span>
-                <span :class="['poSeite', seiteText(p) === 'LONG' ? 'greenTrade' : 'redTrade']">
+                <span :class="['poSeite', seiteText(p) === 'LONG' ? 'gewinnWert' : 'verlustWert']">
                     {{ seiteText(p) }}
                 </span>
                 <span v-if="zahl(p.leverage)" class="poHebel">{{ zahl(p.leverage) }}×</span>

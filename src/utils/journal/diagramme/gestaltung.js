@@ -100,10 +100,10 @@ export function palette() {
 
 /* Exportierte Farbkonstanten (Schnittstelle für AgentPerformance.vue). */
 const STAND = palette()
-export const cssColor87 = STAND.text
-export const cssColor60 = STAND.muted
-export const cssColor38 = STAND.line
-export const blackbg5 = STAND.panel
+export const farbeText = STAND.text
+export const farbeGedaempft = STAND.muted
+export const farbeLinie = STAND.line
+export const farbeFlaeche = STAND.panel
 export const greenColor = STAND.good
 export const redColor = STAND.bad
 

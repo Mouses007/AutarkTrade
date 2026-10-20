@@ -4,7 +4,7 @@
  *   node src/utils/__selftest-vorlagen-bindungen.mjs
  *
  * Warum: Die S11-Umbenennung hat in elf Vorlagen die alten Namen stehen lassen
- * (`dashboardIdMounted`, `selectedGrossNet`, `spinnerLoadingPage` …), während
+ * (drei alte Namen aus der Zeit vor S11 …), während
  * Import und Store schon die neuen trugen. Vue wertet einen ungebundenen Namen
  * in der Vorlage still als `undefined` — kein Build-Fehler, keine Warnung im
  * Produktionsbau, und kein anderer Selbsttest rendert eine Vorlage. Die Folge

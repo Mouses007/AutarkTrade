@@ -10,13 +10,13 @@ import dayjs from './zeit.js'
 import i18n from '../../i18n/index.js'
 import { dbGetSettings } from '../db.js'
 import {
-    pageId, currentUser, timeZoneTrade, seitenmenueMobilOffen, screenType, windowIsScrolled,
+    seitenId, appEinstellungen, tradeZeitzone, seitenmenueMobilOffen, bildschirmTyp, istGescrollt,
 } from '../../stores/app/rahmen.js'
 import { apis } from '../../stores/app/einstellungen.js'
 import {
-    zeitraumListe, selectedDashTab, selectedPeriodRange, selectedPositions, selectedTimeFrame, selectedRatio,
-    selectedAccount, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, selectedBroker, selectedDateRange, gewaehlterMonat,
-    selectedMonthPreset, selectedAccounts, betragArt, tagAuswahl, selectedTradeTimeframes,
+    zeitraumListe, dashReiter, gewaehlterZeitraum, gewaehlteRichtungen, gewaehlterZeitrahmen, gewaehlteKennzahl,
+    gewaehltesKonto, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, gewaehlteBoerse, datumsBereich, gewaehlterMonat,
+    selectedMonthPreset, gewaehlteKonten, betragArt, tagAuswahl, selectedTradeTimeframes,
 } from '../../stores/journal/filter.js'
 import { tags, verfuegbareTags } from '../../stores/journal/tagebuch.js'
 import { bildSeite } from '../../stores/journal/screenshots.js'
@@ -31,10 +31,10 @@ const lies = (schluessel) => { try { return localStorage.getItem(schluessel) } c
 
 // ── Einstellungen und Zeitzone ─────────────────────────────────────────────
 
-export async function useInitApp() {
+export async function starteApp() {
     try {
         const einstellungen = await dbGetSettings()
-        currentUser.value = einstellungen
+        appEinstellungen.value = einstellungen
         speichere('startseiteAn', Number(einstellungen?.startseiteAn ?? 1) === 1 ? '1' : '0')
         if (Array.isArray(einstellungen?.tradeTimeframes)) {
             selectedTradeTimeframes.length = 0
@@ -42,19 +42,18 @@ export async function useInitApp() {
         }
     } catch (e) {
         console.warn('Einstellungen nicht lesbar:', e)
-        currentUser.value = {}
+        appEinstellungen.value = {}
     }
 }
-export const useInitParse = () => useInitApp()
 
-export async function useGetCurrentUser() {
-    try { currentUser.value = await dbGetSettings() } catch { currentUser.value = {} }
+export async function holeEinstellungen() {
+    try { appEinstellungen.value = await dbGetSettings() } catch { appEinstellungen.value = {} }
 }
-export const pruefeEinstellungen = () => useGetCurrentUser()
+export const pruefeEinstellungen = () => holeEinstellungen()
 
 export function leseZeitzone() {
-    const u = currentUser.value
-    timeZoneTrade.value = u && Object.prototype.hasOwnProperty.call(u, 'timeZone') ? u.timeZone : 'America/New_York'
+    const u = appEinstellungen.value
+    tradeZeitzone.value = u && Object.prototype.hasOwnProperty.call(u, 'timeZone') ? u.timeZone : 'America/New_York'
 }
 
 export async function ladeApis() {
@@ -70,7 +69,7 @@ const wochenAnfang = (d) => d.startOf('week').add(1, 'day')
 const wochenEnde = (d) => d.endOf('week').add(1, 'day')
 
 export async function ladeZeitraeume() {
-    const jetzt = dayjs().tz(timeZoneTrade.value)
+    const jetzt = dayjs().tz(tradeZeitzone.value)
     const vorWoche = jetzt.subtract(1, 'week')
     const vorMonat = jetzt.subtract(1, 'month')
     const vorDreiMonaten = jetzt.subtract(3, 'month')
@@ -102,59 +101,59 @@ const periode = (wert) => zeitraumListe.find(p => p.value === wert)
 const bereichVon = (p) => ({ start: p.start, end: p.end })
 
 export async function setzeFilterwerte() {
-    if (lies('selectedDashTab') === null) speichere('selectedDashTab', 'overviewTab')
-    selectedDashTab.value = lies('selectedDashTab')
+    if (lies('at.journal.dashReiter') === null) speichere('at.journal.dashReiter', 'overviewTab')
+    dashReiter.value = lies('at.journal.dashReiter')
 
-    if (lies('selectedPositions') === null) speichere('selectedPositions', 'long,short')
-    selectedPositions.value = lies('selectedPositions').split(',')
+    if (lies('at.journal.richtungen') === null) speichere('at.journal.richtungen', 'long,short')
+    gewaehlteRichtungen.value = lies('at.journal.richtungen').split(',')
 
-    if (lies('selectedTimeFrame') === null) speichere('selectedTimeFrame', 'daily')
-    selectedTimeFrame.value = lies('selectedTimeFrame')
+    if (lies('at.journal.zeitrahmen') === null) speichere('at.journal.zeitrahmen', 'daily')
+    gewaehlterZeitrahmen.value = lies('at.journal.zeitrahmen')
 
-    const ratio = lies('selectedRatio')
-    if (ratio === null || ratio === 'apps') speichere('selectedRatio', 'appt')
-    selectedRatio.value = lies('selectedRatio')
+    const ratio = lies('at.journal.kennzahl')
+    if (ratio === null || ratio === 'apps') speichere('at.journal.kennzahl', 'appt')
+    gewaehlteKennzahl.value = lies('at.journal.kennzahl')
 
-    if (lies('selectedAccount') === null) speichere('selectedAccount', 'all')
-    selectedAccount.value = lies('selectedAccount')
+    if (lies('at.journal.konto') === null) speichere('at.journal.konto', 'all')
+    gewaehltesKonto.value = lies('at.journal.konto')
 
-    if (lies('selectedGrossNet') === null) speichere('selectedGrossNet', 'gross')
-    gewaehltBruttoNetto.value = lies('selectedGrossNet')
+    if (lies('at.journal.bruttoNetto') === null) speichere('at.journal.bruttoNetto', 'gross')
+    gewaehltBruttoNetto.value = lies('at.journal.bruttoNetto')
 
-    if (lies('selectedPlSatisfaction') === null) speichere('selectedPlSatisfaction', 'pl')
-    gewaehltPlOderZufriedenheit.value = lies('selectedPlSatisfaction')
+    if (lies('at.journal.plZufriedenheit') === null) speichere('at.journal.plZufriedenheit', 'pl')
+    gewaehltPlOderZufriedenheit.value = lies('at.journal.plZufriedenheit')
 
-    if (lies('selectedBroker') === null) speichere('selectedBroker', 'bitunix')
-    selectedBroker.value = lies('selectedBroker')
+    if (lies('at.journal.boerse') === null) speichere('at.journal.boerse', 'bitunix')
+    gewaehlteBoerse.value = lies('at.journal.boerse')
 
-    if (lies('selectedDateRange') === null) speichere('selectedDateRange', JSON.stringify(bereichVon(periode('thisYear'))))
-    selectedDateRange.value = JSON.parse(lies('selectedDateRange'))
+    if (lies('at.journal.datumsBereich') === null) speichere('at.journal.datumsBereich', JSON.stringify(bereichVon(periode('thisYear'))))
+    datumsBereich.value = JSON.parse(lies('at.journal.datumsBereich'))
 
-    if (lies('selectedPeriodRange') === null) {
-        const r = selectedDateRange.value
+    if (lies('at.journal.zeitraum') === null) {
+        const r = datumsBereich.value
         const passend = zeitraumListe.find(p => p.start === r.start && p.end === r.end) || periode('custom')
-        speichere('selectedPeriodRange', JSON.stringify(passend))
+        speichere('at.journal.zeitraum', JSON.stringify(passend))
     }
-    selectedPeriodRange.value = JSON.parse(lies('selectedPeriodRange'))
+    gewaehlterZeitraum.value = JSON.parse(lies('at.journal.zeitraum'))
 
-    const art = selectedPeriodRange.value?.value
-    if (art === 'all' && !(selectedDateRange.value.start === 0 && selectedDateRange.value.end === 0)) {
-        selectedDateRange.value = { start: 0, end: 0 }
-        speichere('selectedDateRange', JSON.stringify(selectedDateRange.value))
+    const art = gewaehlterZeitraum.value?.value
+    if (art === 'all' && !(datumsBereich.value.start === 0 && datumsBereich.value.end === 0)) {
+        datumsBereich.value = { start: 0, end: 0 }
+        speichere('at.journal.datumsBereich', JSON.stringify(datumsBereich.value))
     }
     if (art !== 'custom' && art !== 'all') {
         // Eine Periode wie „dieser Monat" wandert mit der Zeit — frisch berechnen.
         const frisch = periode(art)
-        if (frisch && (frisch.start !== selectedPeriodRange.value.start || frisch.end !== selectedPeriodRange.value.end)) {
-            selectedPeriodRange.value = { ...frisch }
-            selectedDateRange.value = bereichVon(frisch)
-            speichere('selectedPeriodRange', JSON.stringify(selectedPeriodRange.value))
-            speichere('selectedDateRange', JSON.stringify(selectedDateRange.value))
+        if (frisch && (frisch.start !== gewaehlterZeitraum.value.start || frisch.end !== gewaehlterZeitraum.value.end)) {
+            gewaehlterZeitraum.value = { ...frisch }
+            datumsBereich.value = bereichVon(frisch)
+            speichere('at.journal.zeitraum', JSON.stringify(gewaehlterZeitraum.value))
+            speichere('at.journal.datumsBereich', JSON.stringify(datumsBereich.value))
         }
     }
 
-    if (lies('selectedMonth') === null) speichere('selectedMonth', JSON.stringify(bereichVon(periode('thisMonth'))))
-    gewaehlterMonat.value = JSON.parse(lies('selectedMonth'))
+    if (lies('at.journal.monat') === null) speichere('at.journal.monat', JSON.stringify(bereichVon(periode('thisMonth'))))
+    gewaehlterMonat.value = JSON.parse(lies('at.journal.monat'))
 
     if (lies('selectedMonthPreset') === null) speichere('selectedMonthPreset', 'current')
     selectedMonthPreset.value = lies('selectedMonthPreset')
@@ -162,18 +161,18 @@ export async function setzeFilterwerte() {
         const monat = periode('thisMonth')
         if (monat && (monat.start !== gewaehlterMonat.value?.start || monat.end !== gewaehlterMonat.value?.end)) {
             gewaehlterMonat.value = bereichVon(monat)
-            speichere('selectedMonth', JSON.stringify(gewaehlterMonat.value))
+            speichere('at.journal.monat', JSON.stringify(gewaehlterMonat.value))
         }
     }
 
-    const konten = currentUser.value?.accounts || []
-    if (lies('selectedAccounts') === null && konten.length > 0) {
-        speichere('selectedAccounts', konten.map(k => k.value).join(','))
-        selectedAccounts.value = lies('selectedAccounts').split(',')
+    const konten = appEinstellungen.value?.accounts || []
+    if (lies('at.journal.konten') === null && konten.length > 0) {
+        speichere('at.journal.konten', konten.map(k => k.value).join(','))
+        gewaehlteKonten.value = lies('at.journal.konten').split(',')
     }
 
     const tagIds = () => verfuegbareTags.flatMap(g => (g.tags || []).map(x => x.id))
-    const gespeicherteTags = lies('selectedTags')
+    const gespeicherteTags = lies('at.journal.tags')
     if (gespeicherteTags === null) {
         await ladeTags()
         const neu = ['t000t']
@@ -181,7 +180,7 @@ export async function setzeFilterwerte() {
         neu.push(...tagIds())
         tags.length = 0
         tagAuswahl.value = neu
-        speichere('selectedTags', neu.join(','))
+        speichere('at.journal.tags', neu.join(','))
     } else {
         await ladeVerfuegbareTags()
         const liste = gespeicherteTags.split(',')
@@ -189,44 +188,33 @@ export async function setzeFilterwerte() {
         for (const id of tagIds()) if (!liste.includes(id)) { liste.push(id); ergaenzt = true }
         if (ergaenzt) {
             tagAuswahl.value = liste
-            speichere('selectedTags', liste.join(','))
+            speichere('at.journal.tags', liste.join(','))
         }
     }
 
-    betragArt.value = lies('selectedGrossNet')
+    betragArt.value = lies('at.journal.bruttoNetto')
 }
 
 // ── Fenster, Seite, Menü ───────────────────────────────────────────────────
 
 export function pruefeGescrollt() {
-    window.addEventListener('scroll', () => { windowIsScrolled.value = window.scrollY > 100 })
+    window.addEventListener('scroll', () => { istGescrollt.value = window.scrollY > 100 })
 }
 
 /** Routenname der aktuellen Seite (nur in `setup` aufrufen). */
 export function setzeSeitenId() {
-    pageId.value = useRoute().name
-    return pageId.value
+    seitenId.value = useRoute().name
+    return seitenId.value
 }
 
 export function leseBildschirmTyp() {
     const breite = window.innerWidth > 0 ? window.innerWidth : screen.width
-    screenType.value = breite >= 992 ? 'computer' : 'mobile'
+    bildschirmTyp.value = breite >= 992 ? 'computer' : 'mobile'
 }
 
-export function useEditItem(id) {
-    sessionStorage.setItem('editItemId', id)
-    if (pageId.value === 'entries') {
-        window.location.href = '/addEntry'
-    } else if (pageId.value === 'screenshots') {
-        sessionStorage.setItem('screenshotsPagination', bildSeite.value)
-        sessionStorage.setItem('screenshotIdToEdit', id)
-        window.location.href = '/addScreenshot'
-    }
-}
-
-export function usePageRedirect(ziel) {
+export function leiteWeiter(ziel) {
     if (ziel) window.location.href = '/' + ziel
-    if (pageId.value === 'daily') window.location.href = '/daily'
+    if (seitenId.value === 'tagesansicht') window.location.href = '/tagesansicht'
 }
 
 export function schalteMobilMenue() {
@@ -234,7 +222,7 @@ export function schalteMobilMenue() {
     seitenmenueMobilOffen.value = !seitenmenueMobilOffen.value
 }
 
-export function useCloseMobileMenu() {
+export function schliesseMobilMenue() {
     if (!seitenmenueMobilOffen.value) return
     document.getElementById('sideMenu')?.classList.remove('toggleSideMenu')
     seitenmenueMobilOffen.value = false
@@ -246,7 +234,7 @@ export function scrolleNachOben() {
 
 // ── Export ─────────────────────────────────────────────────────────────────
 
-export async function useExport(art, name, zusatz, daten) {
+export async function exportiereDaten(art, name, zusatz, daten) {
     const dateiname = zusatz != null ? `${name}_${zusatz}` : name
     let inhalt, typ, endung
     if (art === 'json') {

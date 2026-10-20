@@ -150,7 +150,7 @@ import { ref, computed, watch, onBeforeUnmount, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { boerseUrl, BOERSE_KURZ, BOERSE_NAME, aktivierteBoersen } from '../../utils/boersenLinks.js'
-import { currentUser } from '../../stores/app/rahmen.js'
+import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { logWarn } from '../../utils/logger.js'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
@@ -261,7 +261,7 @@ const kurs = (x) => (!ok(x) ? '—' : x >= 1000 ? Math.round(x).toLocaleString('
 
 /** Links zu den Börsen, auf denen das Perpetual handelt — plus TradingView. */
 function links(c) {
-    const aktiv = aktivierteBoersen(currentUser.value?.boersenLinks)
+    const aktiv = aktivierteBoersen(appEinstellungen.value?.boersenLinks)
     const raus = []
     for (const b of ['bitunix', 'bitget']) {
         if (c.boersen?.[b] && aktiv.includes(b)) raus.push({ boerse: b, url: boerseUrl(b, c.symbol), kurz: BOERSE_KURZ[b], name: BOERSE_NAME[b] })

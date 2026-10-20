@@ -20,7 +20,7 @@ import Symbol from './basis/Symbol.vue'
 import Hinweis from './basis/Hinweis.vue'
 import Kreisel from './basis/Kreisel.vue'
 import KiHinweis from './quellen/KiHinweis.vue'
-import { currentUser } from '../stores/app/rahmen.js'
+import { appEinstellungen } from '../stores/app/rahmen.js'
 
 const { t } = useI18n()
 
@@ -482,7 +482,7 @@ function closeModal() {
             </div>
             <!-- S12: Pflichthinweis zum Bild-Anbieter (Texte aus kiHinweis.anbieter, wie in den Einstellungen). -->
             <p v-if="!selectedTemplateId" class="at-klein anbieterHinweis">
-                {{ t(currentUser?.shareCardProvider === 'gemini' ? 'kiHinweis.anbieter.gemini' : 'kiHinweis.anbieter.flux') }}
+                {{ t(appEinstellungen?.shareCardProvider === 'gemini' ? 'kiHinweis.anbieter.gemini' : 'kiHinweis.anbieter.flux') }}
             </p>
         </div>
 

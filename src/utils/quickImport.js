@@ -2,8 +2,8 @@ import axios from 'axios'
 import dayjs from './journal/zeit.js'
 import { dbCreate, dbFind, dbDelete, dbUpdate as dbUpdateRecord, dbFindTradeIdByPositionId } from './db.js'
 import { dbUpdateSettings } from './db.js'
-import { currentUser } from '../stores/settings.js'
-import { selectedBroker } from '../stores/filters.js'
+import { appEinstellungen } from '../stores/settings.js'
+import { gewaehlteBoerse } from '../stores/filters.js'
 import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { logWarn } from './logger.js'
 import { istGewinn } from '../../shared/gewinn.js'
@@ -12,11 +12,11 @@ import i18n from '../i18n'
 /**
  * Quick API Import: Fetches trades from exchange API since last import,
  * creates trade objects, filters duplicates, saves to DB.
- * Works for both Bitunix and Bitget based on selectedBroker.
+ * Works for both Bitunix and Bitget based on gewaehlteBoerse.
  * Returns { success, message, count }
  */
 export async function useQuickApiImport(explicitBroker) {
-    const broker = explicitBroker || selectedBroker.value || 'bitunix'
+    const broker = explicitBroker || gewaehlteBoerse.value || 'bitunix'
     console.log(` -> Starting quick API import for ${broker}`)
 
     // 1. Call server endpoint that fetches positions and updates lastApiImport
@@ -221,18 +221,18 @@ export async function useQuickApiImport(explicitBroker) {
     }
 
     // 6. Ensure broker account exists in settings
-    if (currentUser.value && currentUser.value.accounts) {
-        const hasAccount = currentUser.value.accounts.find(a => a.value === broker)
+    if (appEinstellungen.value && appEinstellungen.value.accounts) {
+        const hasAccount = appEinstellungen.value.accounts.find(a => a.value === broker)
         if (!hasAccount) {
-            const accounts = [...currentUser.value.accounts, { value: broker, label: broker }]
+            const accounts = [...appEinstellungen.value.accounts, { value: broker, label: broker }]
             await dbUpdateSettings({ accounts })
-            currentUser.value.accounts = accounts
+            appEinstellungen.value.accounts = accounts
             // Also update localStorage
-            const selected = localStorage.getItem('selectedAccounts')
+            const selected = localStorage.getItem('at.journal.konten')
             if (selected) {
-                localStorage.setItem('selectedAccounts', selected + ',' + broker)
+                localStorage.setItem('at.journal.konten', selected + ',' + broker)
             } else {
-                localStorage.setItem('selectedAccounts', broker)
+                localStorage.setItem('at.journal.konten', broker)
             }
         }
     }

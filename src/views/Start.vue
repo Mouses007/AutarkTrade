@@ -10,14 +10,14 @@ import { useI18n } from 'vue-i18n'
 import Logo from '../components/basis/Logo.vue'
 import Symbol from '../components/basis/Symbol.vue'
 import Pille from '../components/basis/Pille.vue'
-import { currentUser } from '../stores/settings.js'
+import { appEinstellungen } from '../stores/settings.js'
 import { appMode } from '../stores/ui.js'
 import { MODES, modeHome, istModusAn } from '../config/menu.js'
 import { setzeSeitenId } from '../utils/journal/app.js'
 
 const { t } = useI18n()
 const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'entdecken', agent: 'agent', lernen: 'lernen' }
-const modi = computed(() => MODES.filter((m) => istModusAn(m.id, currentUser.value)))
+const modi = computed(() => MODES.filter((m) => istModusAn(m.id, appEinstellungen.value)))
 const version = __APP_VERSION__
 
 function waehle(m) {

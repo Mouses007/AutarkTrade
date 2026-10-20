@@ -201,7 +201,7 @@
                             <!-- S15: ohne eigenen Schlüssel, Schalter an → öffentliche Endpunkte. -->
                             <template v-else-if="einst.coingeckoSchluessel">{{ t('hype.cgOeffentlich') }}</template>
                             <template v-else>{{ t('hype.cgSchluesselFehlt') }}</template>
-                            <a href="/settings" class="at-ml-1" @click.prevent="zuDatenquellen">{{ t('hype.cgZuDatenquellen') }}</a>
+                            <a href="/einstellungen" class="at-ml-1" @click.prevent="zuDatenquellen">{{ t('hype.cgZuDatenquellen') }}</a>
                         </div>
                     </div>
                 </div>
@@ -1155,7 +1155,7 @@ import FruehphaseAnsicht from '../components/hype/FruehphaseAnsicht.vue'
 import BoersenAnsicht from '../components/hype/BoersenAnsicht.vue'
 import RadarQuellen from '../components/hype/RadarQuellen.vue'
 import { useIstTelefon } from '../utils/geraet.js'
-import { currentUser } from '../stores/app/rahmen.js'
+import { appEinstellungen } from '../stores/app/rahmen.js'
 import {
     BOERSE_KURZ as BOERSE_LINK_KURZ, BOERSE_NAME as BOERSE_LINK_NAME,
     boerseUrl, aktivierteBoersen,
@@ -1247,7 +1247,7 @@ function listungText(l) {
  * DEX-Token öffnete der Link „This symbol doesn't exist".
  */
 function boersenLinksVon(listungen) {
-    const aktiv = aktivierteBoersen(currentUser.value?.boersenLinks)
+    const aktiv = aktivierteBoersen(appEinstellungen.value?.boersenLinks)
     const geliste = (listungen || []).filter((l) => aktiv.includes(listungBoerse(l)))
     return geliste.length && aktiv.includes('tradingview') ? [...geliste, 'tradingview'] : geliste
 }
@@ -1723,7 +1723,7 @@ const CG_QUELLEN = ['coingecko', 'geckoterminal']
 /** Zu Einstellungen › Datenquellen — derselbe Weg wie `QuelleAus`. */
 function zuDatenquellen() {
     try { localStorage.setItem('settingsBereich', 'datenquellen') } catch (_) { /* privater Modus */ }
-    router.push('/settings').catch(() => {})
+    router.push('/einstellungen').catch(() => {})
 }
 
 /** Liegt für diese Quelle schon ein Schlüssel? Erkennbar an der Maske. */

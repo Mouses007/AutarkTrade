@@ -1,5 +1,5 @@
 /**
- * Ein Feld der Einstellungen schreiben und `currentUser` im selben Takt
+ * Ein Feld der Einstellungen schreiben und `appEinstellungen` im selben Takt
  * nachziehen.
  *
  * Hiess in Settings.vue `kiSpeichern` und behält den Namen, weil das Markup
@@ -7,9 +7,9 @@
  * (Modi, Startseite, erweiterte Infos, Live-Trading am Telefon …).
  */
 import { dbUpdateSettings } from '@/utils/db.js'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 
 export async function kiSpeichern(feld, wert) {
     await dbUpdateSettings({ [feld]: wert })
-    if (currentUser.value) currentUser.value[feld] = wert
+    if (appEinstellungen.value) appEinstellungen.value[feld] = wert
 }

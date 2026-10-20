@@ -7,8 +7,8 @@
  * Tagesbeginn statt des Einstiegs — Altverhalten, so nachgebildet.
  */
 import { useI18n } from 'vue-i18n'
-import { timeZoneTrade } from '../../stores/ui.js'
-import { useTwoDecCurrencyFormat, useXDecFormat } from '../../utils/journal/format.js'
+import { tradeZeitzone } from '../../stores/ui.js'
+import { formGeld2, formZahlStellen } from '../../utils/journal/format.js'
 import dayjs from '../../utils/journal/zeit.js'
 import TitelKarte from './TitelKarte.vue'
 
@@ -17,8 +17,8 @@ defineProps({
     analyse: { type: Object, required: true },
 })
 const { t } = useI18n()
-const datum = (s) => dayjs.unix(s).tz(timeZoneTrade.value || 'Europe/Brussels').format('DD.MM.YY HH:mm')
-const preis = (x) => useXDecFormat(x, 4)
+const datum = (s) => dayjs.unix(s).tz(tradeZeitzone.value || 'Europe/Brussels').format('DD.MM.YY HH:mm')
+const preis = (x) => formZahlStellen(x, 4)
 </script>
 
 <template>
@@ -26,8 +26,8 @@ const preis = (x) => useXDecFormat(x, 4)
         <div class="mfe-summe">
             <span>{{ t('dashboard.lossTradesInProfit') }}:
                 <b class="at-schlecht">{{ analyse.treffer }} / {{ analyse.verlustTrades }} ({{ analyse.quote.toFixed(0) }}%)</b></span>
-            <span>{{ t('dashboard.givenBackProfit') }}: <b class="at-gut">{{ useTwoDecCurrencyFormat(analyse.verschenkt) }}</b></span>
-            <span>{{ t('dashboard.realizedLoss') }}: <b class="at-schlecht">-{{ useTwoDecCurrencyFormat(analyse.verlust) }}</b></span>
+            <span>{{ t('dashboard.givenBackProfit') }}: <b class="at-gut">{{ formGeld2(analyse.verschenkt) }}</b></span>
+            <span>{{ t('dashboard.realizedLoss') }}: <b class="at-schlecht">-{{ formGeld2(analyse.verlust) }}</b></span>
         </div>
         <div class="at-tabelle-huelle mfe-huelle">
             <table class="at-tabelle dicht mfe">
@@ -51,8 +51,8 @@ const preis = (x) => useXDecFormat(x, 4)
                         <td class="zahl">{{ preis(z.einstieg) }}</td>
                         <td class="zahl at-gut">{{ preis(z.mfe) }}</td>
                         <td class="zahl at-schlecht">{{ preis(z.ausstieg) }}</td>
-                        <td class="zahl at-gut at-fett">{{ useTwoDecCurrencyFormat(z.verschenkt) }}</td>
-                        <td class="zahl at-schlecht at-fett">-{{ useTwoDecCurrencyFormat(z.verlust) }}</td>
+                        <td class="zahl at-gut at-fett">{{ formGeld2(z.verschenkt) }}</td>
+                        <td class="zahl at-schlecht at-fett">-{{ formGeld2(z.verlust) }}</td>
                     </tr>
                 </tbody>
             </table>

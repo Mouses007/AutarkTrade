@@ -2,15 +2,15 @@
  * Ring mit zwei Anteilen (Gewinnquote, Zufriedenheit, RRR) und die
  * Doppellinie der Tagesansicht.
  */
-import { pageId } from '../../../stores/ui.js'
-import { useOneDecPercentFormat } from '../format.js'
+import { seitenId } from '../../../stores/ui.js'
+import { formProzent1 } from '../format.js'
 import { element, instanzFuer } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 
 /** Text in der Ringmitte, je nach Seite und Ring. */
 function mittelText(id, gruen) {
-    const prozent = useOneDecPercentFormat(gruen)
-    if (pageId.value === 'dashboard') {
+    const prozent = formProzent1(gruen)
+    if (seitenId.value === 'journalUebersicht') {
         if (id === 'pieChart1') return `${prozent}\nWin rate`
         if (id === 'pieChart2') return `${prozent}\nSatisfaction`
         if (id === 'pieChart3') {
@@ -25,7 +25,7 @@ function mittelText(id, gruen) {
  * Ring zeichnen. Datenpunkte tragen nur `value` — die Farbe kommt über die
  * Reihe, damit die Werte unverändert (nicht normiert) bleiben.
  */
-export function usePieChart(id, gruen, rot) {
+export function ringDiagramm(id, gruen, rot) {
     const knoten = element(id)
     if (!knoten) return Promise.resolve()
     const p = palette()
@@ -61,7 +61,7 @@ export function usePieChart(id, gruen, rot) {
 }
 
 /** Zwei kumulierte Linien (brutto, netto) über die Ausstiegszeiten. */
-export function useDoubleLineChart(id, brutto, netto, kategorien) {
+export function doppellinieDiagramm(id, brutto, netto, kategorien) {
     const knoten = element(id)
     if (!knoten) return Promise.resolve()
     const p = palette()

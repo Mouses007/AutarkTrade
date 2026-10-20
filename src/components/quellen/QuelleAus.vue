@@ -30,11 +30,11 @@ const router = useRouter()
 /*
  * Über den gemerkten Bereich statt über einen Pfadparameter: die
  * Einstellungsseite liest `settingsBereich` aus dem localStorage, mit und
- * ohne Route `/settings/:bereich`.
+ * ohne Route `/einstellungen/:bereich`.
  */
 function oeffneEinstellungen() {
     try { localStorage.setItem('settingsBereich', 'datenquellen') } catch (_) { /* privater Modus */ }
-    router.push('/settings/datenquellen').catch(() => {})
+    router.push('/einstellungen/datenquellen').catch(() => {})
 }
 
 const grund = computed(() => props.aus?.grund || 'aus')
@@ -62,7 +62,7 @@ const zuEinstellungen = computed(() => ['schluesselFehlt', 'marktdaten', 'aus', 
         <div class="text">
             <strong>{{ titel }}</strong>
             <span v-if="text">{{ text }}</span>
-            <a v-if="zuEinstellungen" href="/settings" class="weiter" @click.prevent="oeffneEinstellungen">
+            <a v-if="zuEinstellungen" href="/einstellungen" class="weiter" @click.prevent="oeffneEinstellungen">
                 {{ t('datenquellen.aus.zuEinstellungen') }}
             </a>
         </div>

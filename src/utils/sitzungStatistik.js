@@ -31,7 +31,7 @@ export const MIN_GRUPPE = 4
  * Stunde und Wochentag eines Zeitpunkts in einer bestimmten Zeitzone.
  *
  * Hier stand `new Date(ms).getHours()` / `.getDay()`, also die Zeitzone des
- * BROWSERS. Der Rest der App rechnet mit `timeZoneTrade`. Wer auf Reisen oder
+ * BROWSERS. Der Rest der App rechnet mit `tradeZeitzone`. Wer auf Reisen oder
  * mit einer abweichend eingestellten Maschine auswertet, bekam „Sitzungen um
  * die US-Eröffnung" im falschen Stundenbalken, und Sitzungen nahe Mitternacht
  * landeten auf dem falschen Wochentag.

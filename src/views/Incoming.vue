@@ -6,11 +6,11 @@ import SeiteLaedt from '../components/SeiteLaedt.vue'
 import NoData from '../components/NoData.vue'
 import PageInfo from '../components/PageInfo.vue'
 import { Knopf, Symbol, Pille, Hinweis, Kreisel } from '../components/basis'
-import { seiteLaedt, timeZoneTrade, expandedId, kopiertesBild } from '../stores/ui.js'
-import { allTradeTimeframes, selectedTradeTimeframes, selectedBroker, selectedTradeCategory, brokers } from '../stores/filters.js'
+import { seiteLaedt, tradeZeitzone, expandedId, kopiertesBild } from '../stores/ui.js'
+import { allTradeTimeframes, selectedTradeTimeframes, gewaehlteBoerse, selectedTradeCategory, brokers } from '../stores/filters.js'
 import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, verfuegbareTags } from '../stores/trades.js'
 import { useVerlassenSchutz } from '../composables/useVerlassenSchutz.js'
-import { currentUser } from '../stores/settings.js'
+import { appEinstellungen } from '../stores/settings.js'
 import { useFetchOpenPositions, useGetIncomingPositions, useUpdateIncomingPosition, useDeleteIncomingPosition, useTransferClosingMetadata } from '../utils/incoming'
 import { ladeVerfuegbareTags, useGetTagInfo } from '../utils/journal/tagebuch.js'
 import { dbCreate, dbUpdate, dbFind, dbGet } from '../utils/db.js'
@@ -228,7 +228,7 @@ function isSLAboveBreakeven(positionId, side) {
 }
 
 function formatFillTime(ctime) {
-    return dayjs(parseInt(ctime)).tz(timeZoneTrade.value).format('DD.MM. HH:mm')
+    return dayjs(parseInt(ctime)).tz(tradeZeitzone.value).format('DD.MM. HH:mm')
 }
 
 function getIncomingFillBadgeType(fill, idx, allFills) {
@@ -247,7 +247,7 @@ function groupFillsByMinute(fills, timeField = 'time') {
     let current = null
     for (let i = 0; i < fills.length; i++) {
         const fill = fills[i]
-        const minute = dayjs(parseInt(fill[timeField])).tz(timeZoneTrade.value).format('YYYY-MM-DD HH:mm')
+        const minute = dayjs(parseInt(fill[timeField])).tz(tradeZeitzone.value).format('YYYY-MM-DD HH:mm')
         const key = minute + '_' + (fill.reduceOnly ? '1' : '0')
         if (current && current.key === key) {
             current.fills.push(fill)
@@ -726,8 +726,8 @@ function getTradeDurationMinutes(pos) {
 }
 
 function detectTradeType(durationMinutes) {
-    const scalpMax = currentUser.value?.scalpMaxMinutes ?? 15
-    const daytradeMaxMinutes = (currentUser.value?.daytradeMaxHours ?? 24) * 60
+    const scalpMax = appEinstellungen.value?.scalpMaxMinutes ?? 15
+    const daytradeMaxMinutes = (appEinstellungen.value?.daytradeMaxHours ?? 24) * 60
     if (durationMinutes <= scalpMax) return 'scalp'
     if (durationMinutes <= daytradeMaxMinutes) return 'day'
     return 'swing'
@@ -834,7 +834,7 @@ async function chartBildErzeugen(pos, { auto = false } = {}) {
             name: `incoming_chart_${pos.positionId}`,
             symbol: pos.symbol,
             side: pos.side === 'LONG' ? 'B' : 'SS',
-            broker: pos.broker || selectedBroker.value || 'bitunix',
+            broker: pos.broker || gewaehlteBoerse.value || 'bitunix',
             originalBase64: bild, annotatedBase64: '', markersOnly: 1, maState: {},
             dateUnix: Math.floor(einstiegsZeit(pos) / 1000),
             dateUnixDay: dayjs(einstiegsZeit(pos)).utc().startOf('day').unix(),
@@ -1071,7 +1071,7 @@ async function handleEntryScreenshotUpload(event, pos) {
             name: `incoming_entry_${pos.positionId}`,
             symbol: pos.symbol,
             side: pos.side === 'LONG' ? 'B' : 'SS',
-            broker: pos.broker || selectedBroker.value || 'bitunix',
+            broker: pos.broker || gewaehlteBoerse.value || 'bitunix',
             originalBase64: base64,
             annotatedBase64: '',
             markersOnly: 1,
@@ -1107,7 +1107,7 @@ async function handleTrendScreenshotUpload(event, pos) {
             name: `incoming_trend_${pos.positionId}`,
             symbol: pos.symbol,
             side: pos.side === 'LONG' ? 'B' : 'SS',
-            broker: pos.broker || selectedBroker.value || 'bitunix',
+            broker: pos.broker || gewaehlteBoerse.value || 'bitunix',
             originalBase64: base64,
             annotatedBase64: '',
             markersOnly: 1,
@@ -1167,7 +1167,7 @@ async function handleClosingScreenshotUpload(event, pos) {
             name: `incoming_closing_${pos.positionId}`,
             symbol: pos.symbol,
             side: pos.side === 'LONG' ? 'B' : 'SS',
-            broker: pos.broker || selectedBroker.value || 'bitunix',
+            broker: pos.broker || gewaehlteBoerse.value || 'bitunix',
             originalBase64: base64,
             annotatedBase64: '',
             markersOnly: 1,
@@ -1420,13 +1420,13 @@ function getOpenRealizedPnL(pos) {
 
 function formatTime(date) {
     if (!date) return ''
-    return dayjs(date).tz(timeZoneTrade.value).format('HH:mm:ss')
+    return dayjs(date).tz(tradeZeitzone.value).format('HH:mm:ss')
 }
 
 function getPositionDate(pos) {
     const ctime = pos.bitunixData?.ctime
     if (ctime) {
-        return dayjs(parseInt(ctime)).tz(timeZoneTrade.value).format('DD.MM.YYYY')
+        return dayjs(parseInt(ctime)).tz(tradeZeitzone.value).format('DD.MM.YYYY')
     }
     if (pos.createdAt) {
         return dayjs(pos.createdAt).format('DD.MM.YYYY')
@@ -1474,12 +1474,12 @@ function getPositionDate(pos) {
             <template v-for="(pos, idx) in orderedPositions" :key="(pos.broker || '') + '_' + pos.positionId">
             <h4 v-if="brokerHeaderAt(idx)" class="incoming-broker-title">{{ brokerHeaderAt(idx) }}</h4>
             <h6 v-if="sectionHeaderAt(idx)" class="incoming-section-title">{{ sectionHeaderAt(idx) }}</h6>
-            <div class="dailyCard incoming-card pos-karte">
+            <div class="journalKarte incoming-card pos-karte">
                 <!-- Card header -->
-                <div class="karten-kopf pointerClass" @click="toggleExpand(pos.positionId)">
+                <div class="karten-kopf klickZiel" @click="toggleExpand(pos.positionId)">
                     <div class="karten-kopf-links">
                         <strong class="symbol-name">{{ pos.symbol }}</strong>
-                        <span class="seite" :class="displaySide(pos.side) === 'LONG' ? 'greenTrade' : (displaySide(pos.side) === 'NEUTRAL' ? 'at-gedaempft' : 'redTrade')">
+                        <span class="seite" :class="displaySide(pos.side) === 'LONG' ? 'gewinnWert' : (displaySide(pos.side) === 'NEUTRAL' ? 'at-gedaempft' : 'verlustWert')">
                             {{ displaySide(pos.side) }}
                         </span>
                         <span class="incoming-info">{{ pos.leverage }}x</span>
@@ -1489,15 +1489,15 @@ function getPositionDate(pos) {
                     <div class="karten-kopf-pnl">
                         <span v-if="pos.status === 'pending_evaluation' && closedPnL(pos) != null"
                             class="incoming-pnl fett"
-                            :class="parseFloat(closedPnL(pos)) >= 0 ? 'greenTrade' : 'redTrade'">
+                            :class="parseFloat(closedPnL(pos)) >= 0 ? 'gewinnWert' : 'verlustWert'">
                             {{ formatCurrency(closedPnL(pos)) }}
                         </span>
                         <template v-else>
-                            <span class="incoming-pnl" :class="parseFloat(pos.unrealizedPNL || 0) >= 0 ? 'greenTrade' : 'redTrade'">
+                            <span class="incoming-pnl" :class="parseFloat(pos.unrealizedPNL || 0) >= 0 ? 'gewinnWert' : 'verlustWert'">
                                 {{ formatCurrency(pos.unrealizedPNL, pos.marginCoin) }}
                             </span>
                             <div v-if="getOpenRealizedPnL(pos) !== 0" class="klein-text realisiert"
-                                :class="getOpenRealizedPnL(pos) >= 0 ? 'greenTrade' : 'redTrade'">
+                                :class="getOpenRealizedPnL(pos) >= 0 ? 'gewinnWert' : 'verlustWert'">
                                 <span class="at-gedaempft abstand-rechts">{{ t('incoming.realized') }}</span>{{ formatCurrency(getOpenRealizedPnL(pos)) }}
                             </div>
                         </template>
@@ -1680,14 +1680,14 @@ function getPositionDate(pos) {
                         <!-- TP/SL Change History -->
                         <div v-if="getTpSlHistoryForPosition(pos.positionId).length > 0"
                             class="tpsl-verlauf">
-                            <div class="at-gedaempft tpsl-verlauf-kopf pointerClass" @click.stop="toggleTpSlHistory(pos.positionId)">
+                            <div class="at-gedaempft tpsl-verlauf-kopf klickZiel" @click.stop="toggleTpSlHistory(pos.positionId)">
                                 <Symbol name="verlauf" />SL/TP Protokoll
                                 <Symbol :name="tpslCollapsedIds.includes(pos.positionId) ? 'runter' : 'hoch'" :groesse="18" />
                             </div>
                             <template v-if="!tpslCollapsedIds.includes(pos.positionId)">
                                 <div v-for="(entry, idx) in getTpSlHistoryForPosition(pos.positionId)" :key="idx"
                                     class="tpsl-eintrag">
-                                    <span class="at-gedaempft tpsl-zeit">{{ dayjs(entry.time).tz(timeZoneTrade.value).format('DD.MM. HH:mm') }}</span>
+                                    <span class="at-gedaempft tpsl-zeit">{{ dayjs(entry.time).tz(tradeZeitzone.value).format('DD.MM. HH:mm') }}</span>
                                     <span :class="entry.type === 'SL' ? (isSLAboveBreakeven(pos.positionId, pos.side) ? 'at-gut' : 'at-schlecht') : (entry.action === 'triggered' ? 'at-gut fett' : (entry.type === 'TP' ? 'at-warn' : ''))">
                                         {{ entry.type }}
                                     </span>
@@ -1758,7 +1758,7 @@ function getPositionDate(pos) {
                         <div class="punkte-reihe">
                             <template v-for="n in 10" :key="'os'+n">
                                 <span @click.stop="updateStress(pos, n)"
-                                    class="stress-dot pointerClass"
+                                    class="stress-dot klickZiel"
                                     :class="n <= pos.stressLevel ? 'active' : 'inactive'">
                                     <span class="stress-number">{{ n }}</span>&#x25CF;
                                 </span>
@@ -1776,7 +1776,7 @@ function getPositionDate(pos) {
                         <div class="punkte-reihe">
                             <template v-for="n in 10" :key="'oe'+n">
                                 <span @click.stop="updateEmotionLevel(pos, n)"
-                                    class="stress-dot pointerClass"
+                                    class="stress-dot klickZiel"
                                     :class="n <= pos.emotionLevel ? 'active' : 'inactive'">
                                     <span class="stress-number">{{ n }}</span>&#x25CF;
                                 </span>
@@ -1806,7 +1806,7 @@ function getPositionDate(pos) {
                         <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
                         <div class="tag-reihe">
                             <span v-for="(tag, idx) in (pos.tags || [])" :key="tag.id"
-                                class="tag-chip pointerClass"
+                                class="tag-chip klickZiel"
                                 :style="{ backgroundColor: getTagColor(tag.id) }"
                                 @click.stop="removeTag(pos, idx)">
                                 {{ tag.name }} <span class="abstand-links">&times;</span>
@@ -1927,7 +1927,7 @@ function getPositionDate(pos) {
                             <div class="punkte-reihe">
                                 <template v-for="n in 10" :key="'ce'+n">
                                     <span @click.stop="updateClosingEmotionLevel(pos, n)"
-                                        class="stress-dot pointerClass"
+                                        class="stress-dot klickZiel"
                                         :class="n <= (pos.closingEmotionLevel || 0) ? 'active' : 'inactive'">
                                         <span class="stress-number">{{ n }}</span>&#x25CF;
                                     </span>
@@ -1957,7 +1957,7 @@ function getPositionDate(pos) {
                             <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
                             <div class="tag-reihe">
                                 <span v-for="(tag, idx) in (pos.closingTags || [])" :key="tag.id"
-                                    class="tag-chip pointerClass"
+                                    class="tag-chip klickZiel"
                                     :style="{ backgroundColor: getTagColor(tag.id) }"
                                     @click.stop="removeClosingTag(pos, idx)">
                                     {{ tag.name }} <span class="abstand-links">&times;</span>
@@ -2010,17 +2010,17 @@ function getPositionDate(pos) {
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
                             <div class="zufrieden-reihe">
-                                <span class="pointerClass zufrieden"
+                                <span class="klickZiel zufrieden"
                                     :class="{ 'zufrieden-aus': pos.satisfaction !== 1 }"
                                     @click.stop="updateSatisfaction(pos, 1)">
                                     👍
                                 </span>
-                                <span class="pointerClass zufrieden"
+                                <span class="klickZiel zufrieden"
                                     :class="{ 'zufrieden-aus': pos.satisfaction !== 2 }"
                                     @click.stop="updateSatisfaction(pos, 2)">
                                     ✊
                                 </span>
-                                <span class="pointerClass zufrieden"
+                                <span class="klickZiel zufrieden"
                                     :class="{ 'zufrieden-aus': pos.satisfaction !== 0 }"
                                     @click.stop="updateSatisfaction(pos, 0)">
                                     👎
@@ -2047,7 +2047,7 @@ function getPositionDate(pos) {
                             <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
                             <div class="tag-reihe">
                                 <span v-for="(tag, idx) in (pos.tags || [])" :key="tag.id"
-                                    class="tag-chip pointerClass"
+                                    class="tag-chip klickZiel"
                                     :style="{ backgroundColor: getTagColor(tag.id) }"
                                     @click.stop="removeTag(pos, idx)">
                                     {{ tag.name }} <span class="abstand-links">&times;</span>
@@ -2087,7 +2087,7 @@ function getPositionDate(pos) {
                             <label class="pb-edit-label">{{ t('incoming.tags') }}</label>
                             <div class="tag-reihe">
                                 <span v-for="(tag, idx) in (pos.closingTags || [])" :key="tag.id"
-                                    class="tag-chip pointerClass"
+                                    class="tag-chip klickZiel"
                                     :style="{ backgroundColor: getTagColor(tag.id) }"
                                     @click.stop="removeClosingTag(pos, idx)">
                                     {{ tag.name }} <span class="abstand-links">&times;</span>
@@ -2112,17 +2112,17 @@ function getPositionDate(pos) {
                         <div class="pb-edit-section">
                             <label class="pb-edit-label">{{ t('incoming.satisfaction') }}</label>
                             <div class="zufrieden-reihe">
-                                <span class="pointerClass zufrieden"
+                                <span class="klickZiel zufrieden"
                                     :class="{ 'zufrieden-aus': pos.satisfaction !== 1 }"
                                     @click.stop="updateSatisfaction(pos, 1)">
                                     👍
                                 </span>
-                                <span class="pointerClass zufrieden"
+                                <span class="klickZiel zufrieden"
                                     :class="{ 'zufrieden-aus': pos.satisfaction !== 2 }"
                                     @click.stop="updateSatisfaction(pos, 2)">
                                     ✊
                                 </span>
-                                <span class="pointerClass zufrieden"
+                                <span class="klickZiel zufrieden"
                                     :class="{ 'zufrieden-aus': pos.satisfaction !== 0 }"
                                     @click.stop="updateSatisfaction(pos, 0)">
                                     👎

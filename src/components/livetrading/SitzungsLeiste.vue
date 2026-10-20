@@ -257,7 +257,7 @@ onBeforeUnmount(speichereJetzt)
 
         <!-- ── 3. Bilanz der letzten Sitzung ── -->
         <div v-if="letzteBilanz" class="stBilanz" :class="{ verletzt: letzteBilanz.planVerletzt }">
-            <span class="stBilanzPnl" :class="letzteBilanz.pnlUsd >= 0 ? 'greenTrade' : 'redTrade'">
+            <span class="stBilanzPnl" :class="letzteBilanz.pnlUsd >= 0 ? 'gewinnWert' : 'verlustWert'">
                 {{ geld(letzteBilanz.pnlUsd) }}
             </span>
             <span>{{ t('livetrading.sitzung.bilanzTrades', { n: letzteBilanz.tradeAnzahl }) }}</span>

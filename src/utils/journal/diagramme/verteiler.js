@@ -4,17 +4,17 @@
  * Erst die drei Ringe, dann die Familien je ID-Präfix in fester Reihenfolge.
  * Die Reihenfolge zählt, weil spätere Aufrufe frühere am selben Element
  * überschreiben: Das Präfix `barChart` trifft auch `barChartNegative…` —
- * die bekommen erst die Form aus useBarChart und dann (wenn es Werte gibt)
- * die aus useBarChartNegative. Diese Überlappung ist gewollt erhalten.
+ * die bekommen erst die Form aus balkenDiagramm und dann (wenn es Werte gibt)
+ * die aus balkenNegativDiagramm. Diese Überlappung ist gewollt erhalten.
  */
 import { totals, zufriedenheitTage, zufriedenheitTrades, gewinnAnalyse } from '../../../stores/trades.js'
 import { fall, element, instanzAn, sichtbar, sichereGroessenanpassung } from './grundlagen.js'
-import { usePieChart } from './ring.js'
+import { ringDiagramm } from './ring.js'
 import { usePerfChart } from './performance.js'
 import { useFeesChart } from './gebuehren.js'
 import { useSymbolChart, useWeekdayChart, useEntryTimeChart, useDurationChart, usePositionChart, useStrategyChart } from './gruppen.js'
-import { useLineBarChart, useBarChart } from './zeitraum.js'
-import { useBarChartNegative } from './gruppenAlt.js'
+import { linienBalkenDiagramm, balkenDiagramm } from './zeitraum.js'
+import { balkenNegativDiagramm } from './gruppenAlt.js'
 import { useHeatmapChart } from './heatmap.js'
 
 const FAMILIEN = [
@@ -26,9 +26,9 @@ const FAMILIEN = [
     ['durationChart', useDurationChart],
     ['positionChart', usePositionChart],
     ['strategyChart', useStrategyChart],
-    ['lineBarChart', useLineBarChart],
-    ['barChart', useBarChart],
-    ['barChartNegative', useBarChartNegative],
+    ['lineBarChart', linienBalkenDiagramm],
+    ['barChart', balkenDiagramm],
+    ['barChartNegative', balkenNegativDiagramm],
     ['heatmapChart', useHeatmapChart],
 ]
 
@@ -64,7 +64,7 @@ export async function zeichneDiagramme(param) {
         }
         if (param !== 'init' || !sichtbar(knoten)) continue
         const anteile = ringAnteile(id)
-        if (anteile) await usePieChart(id, anteile[0], anteile[1])
+        if (anteile) await ringDiagramm(id, anteile[0], anteile[1])
     }
 
     if (typeof document === 'undefined') return

@@ -8,9 +8,9 @@
  * gesetzt, mit leerer Reihe und leeren Kategorien.
  */
 import { escHtml } from '../../escHtml.js'
-import { selectedRatio } from '../../../stores/filters.js'
+import { gewaehlteKennzahl } from '../../../stores/filters.js'
 import { groups, verfuegbareTags } from '../../../stores/trades.js'
-import { useCapitalizeFirstLetter, useXDecCurrencyFormat, useXDecFormat, useThousandCurrencyFormat } from '../format.js'
+import { formGrossAnfang, formGeldStellen, formZahlStellen, formGeld0 } from '../format.js'
 import { fall, festkomma, element, instanzFuer, dauerKlasse, WOCHENTAGE_EN, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeichenFarbe } from './gestaltung.js'
 
@@ -40,7 +40,7 @@ const nachZahlSchluessel = (a, b) => differenz(Number(a.schluessel), Number(b.sc
 const BESCHREIBUNG = {
     position: {
         daten: () => groups.position,
-        name: (k) => useCapitalizeFirstLetter(String(k)),
+        name: (k) => formGrossAnfang(String(k)),
         sortierung: nachWert,
     },
     strategie: {
@@ -96,7 +96,7 @@ function zeichneGruppe(id, art) {
     if (!daten || !Object.keys(daten).length) return Promise.resolve()
 
     const f = fall()
-    const verhaeltnis = selectedRatio.value
+    const verhaeltnis = gewaehlteKennzahl.value
     const eintraege = []
     for (const k of Object.keys(daten)) {
         const r = kennzahl(daten[k], f, verhaeltnis)
@@ -107,7 +107,7 @@ function zeichneGruppe(id, art) {
 
     const p = palette()
     const istPf = verhaeltnis === 'profitFactor'
-    const wertText = (v) => (istPf ? useXDecFormat(v, 2) : useXDecCurrencyFormat(v, 2))
+    const wertText = (v) => (istPf ? formZahlStellen(v, 2) : formGeldStellen(v, 2))
     instanz.setOption({
         ...grundOption(p),
         grid: { left: 8, right: 48, top: 8, bottom: 8, containLabel: true },
@@ -121,7 +121,7 @@ function zeichneGruppe(id, art) {
             },
         },
         xAxis: wertAchse(p, {
-            axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => (istPf ? useXDecFormat(v, 1) : useThousandCurrencyFormat(v)) },
+            axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => (istPf ? formZahlStellen(v, 1) : formGeld0(v)) },
         }),
         yAxis: { ...kategorieAchse(p), data: eintraege.map(e => (b.kategorie ? b.kategorie(e.schluessel) : e.name)) },
         series: [{

@@ -503,7 +503,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
             </div>
             <div v-if="!entwurf" class="vorlagen">
                 <div v-for="v in vorlagen" :key="v.key" class="vorlagenZelle">
-                    <div class="dailyCard vorlage">
+                    <div class="journalKarte vorlage">
                         <Knopf art="leise" klein nurSymbol symbol="schliessen" class="vorlageWeg"
                             :titel="t('strategies.templateHide')"
                             @click="vorlageAusblenden(v)" />
@@ -523,7 +523,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
 
             <!-- ══ Editor ══ -->
             <template v-if="entwurf">
-                <div class="dailyCard karte">
+                <div class="journalKarte karte">
                     <div class="raster abstandUnten3">
                         <div class="b3">
                             <label class="at-label">{{ t('strategies.shortName') }}</label>
@@ -1039,7 +1039,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                 </div>
 
                 <!-- ══ Test ══ -->
-                <div class="dailyCard karte">
+                <div class="journalKarte karte">
                     <div class="section-title abstandUnten">{{ t('strategies.testNow') }}</div>
                     <div class="raster unten">
                         <div class="b3 m2">
@@ -1094,7 +1094,7 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
                                 { l: t('strategies.kpiMaxDd'), v: zahl(testErgebnis.stats.maxDrawdownPct, 1) + ' %' },
                             ]" :key="k.l" class="kpi">
                                 <div class="kpi-label">{{ k.l }}</div>
-                                <div class="kpi-value" :class="k.farbe === undefined ? '' : (k.farbe ? 'greenTrade' : 'redTrade')">{{ k.v }}</div>
+                                <div class="kpi-value" :class="k.farbe === undefined ? '' : (k.farbe ? 'gewinnWert' : 'verlustWert')">{{ k.v }}</div>
                             </div>
                         </div>
                         <div v-if="testErgebnis.funnel" class="zweiSpalten abstandOben">
@@ -1126,13 +1126,13 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
             </template>
 
             <!-- ══ Eigene Strategien ══ -->
-            <div v-if="liste.length" class="dailyCard karte">
+            <div v-if="liste.length" class="journalKarte karte">
                 <div class="section-title abstandUnten">{{ t('strategies.myStrategies') }}</div>
                 <div class="at-tabelle-huelle">
                     <table class="at-tabelle dicht">
                         <tbody>
                             <tr v-for="s in liste" :key="s.id">
-                                <td class="pointerClass" @click="bearbeiten(s)"><strong>{{ s.name }}</strong></td>
+                                <td class="klickZiel" @click="bearbeiten(s)"><strong>{{ s.name }}</strong></td>
                                 <td class="at-gedaempft">{{ s.strategyId }}</td>
                                 <td>
                                     <Pille :ton="s.geladen ? 'gut' : 'schlecht'">
@@ -1175,10 +1175,10 @@ const sortiert = (o) => Object.entries(o || {}).sort((a, b) => b[1] - a[1])
     margin-bottom: var(--abstand-4);
 }
 
-/* `.dailyCard` setzt global `height: 100%`. Hier stehen die Karten gestapelt
+/* `.journalKarte` setzt global `height: 100%`. Hier stehen die Karten gestapelt
    untereinander — dort zieht die Regel jede einzelne Karte auf die Höhe der
    GESAMTEN Spalte und erzeugt riesige Leerräume. */
-.dailyCard {
+.journalKarte {
     height: auto;
 }
 

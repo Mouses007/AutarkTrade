@@ -21,22 +21,22 @@
  *   - Nach createTradeFromClosedPosition (Trade-Insert)
  *   - Nach useTransferClosingMetadata (Bewertungs-Abschluss)
  *   - Nach useQuickApiImport / CSV-Import
- *   - selectedBroker-Watcher (Broker-Wechsel)
+ *   - gewaehlteBoerse-Watcher (Broker-Wechsel)
  */
 import { ref, reactive, computed, watch } from 'vue'
 import axios from 'axios'
 import { istEingerichtet, pruefeNichtEingerichtet } from '../utils/boersenZugang.js'
 import dayjs from '../utils/journal/zeit.js'
 import { dbFind, dbUpdateSettings } from '../utils/db.js'
-import { selectedBroker } from './filters.js'
-import { currentUser } from './app/rahmen.js'
+import { gewaehlteBoerse } from './filters.js'
+import { appEinstellungen } from './app/rahmen.js'
 
 // Per-Broker-Cache: { bitunix: { totalNet, totalVol, vol30d, ts }, bitget: {...} }
 const cache = reactive({})
 const loading = ref(false)
 
 function getCurrentBroker() {
-    return selectedBroker.value || 'bitunix'
+    return gewaehlteBoerse.value || 'bitunix'
 }
 
 export const allTimeNetPnL = computed(() => cache[getCurrentBroker()]?.totalNet ?? 0)
@@ -58,7 +58,7 @@ const inflight = new Map()
 /**
  * Lädt alle Trade-Tage für den Broker und berechnet Netto-PnL + Volumen.
  * @param {Object} opts
- * @param {string} [opts.broker] — overriden (default: selectedBroker)
+ * @param {string} [opts.broker] — overriden (default: gewaehlteBoerse)
  * @param {boolean} [opts.force] — Cache ignorieren, neu laden
  */
 export async function refreshAccountBalance({ broker, force = false } = {}) {
@@ -160,7 +160,7 @@ export function invalidateAccountBalance(broker = null) {
  *           {ok:false,error}>}
  */
 export async function syncStartBalanceFromBroker() {
-    const broker = selectedBroker.value || 'bitunix'
+    const broker = gewaehlteBoerse.value || 'bitunix'
     try {
         const response = await axios.get(`/api/${broker}/balance`)
         if (!response.data?.ok) {
@@ -183,12 +183,12 @@ export async function syncStartBalanceFromBroker() {
         }
 
         const calculatedStart = Math.round((realizedEquity - totalNet) * 100) / 100
-        const existing = currentUser.value?.balances || {}
+        const existing = appEinstellungen.value?.balances || {}
         const balances = { ...existing, [broker]: { start: calculatedStart } }
         await dbUpdateSettings({ balances, startBalance: calculatedStart })
-        if (currentUser.value) {
-            currentUser.value.balances = balances
-            currentUser.value.startBalance = calculatedStart
+        if (appEinstellungen.value) {
+            appEinstellungen.value.balances = balances
+            appEinstellungen.value.startBalance = calculatedStart
         }
 
         // Cache invalidieren + neu laden, damit Dashboard sofort den neuen
@@ -210,7 +210,7 @@ export async function syncStartBalanceFromBroker() {
 }
 
 // Broker-Wechsel → sicherstellen, dass Werte für den neuen Broker geladen sind
-watch(selectedBroker, (newBroker) => {
+watch(gewaehlteBoerse, (newBroker) => {
     if (!newBroker) return
     if (!cache[newBroker]) {
         refreshAccountBalance({ broker: newBroker })

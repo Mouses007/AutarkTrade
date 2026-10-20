@@ -22,9 +22,9 @@ import { useRouter } from 'vue-router'
 import { kiBereichWechseln } from './einstellungen/gemeinsam/useKiBereich.js'
 import axios from 'axios'
 import dayjs from '../utils/journal/zeit.js'
-import { timeZoneTrade } from '../stores/ui.js'
+import { tradeZeitzone } from '../stores/ui.js'
 import { seiteLaedt } from '../stores/app/laden.js'
-import { currentUser } from '../stores/app/rahmen.js'
+import { appEinstellungen } from '../stores/app/rahmen.js'
 import { dbUpdateSettings, dbGetSettings } from '../utils/db.js'
 import { useKostenAnzeige } from '../utils/journal/format.js'
 import { sendNotification } from '../utils/notify.js'
@@ -214,7 +214,7 @@ const WAAGE_ICON = {
 }
 
 const layoutModus = computed(() => {
-    const l = currentUser.value?.radarNewsLayout
+    const l = appEinstellungen.value?.radarNewsLayout
     return LAYOUTS.includes(l) ? l : LAYOUT_VORGABE
 })
 
@@ -443,7 +443,7 @@ const nPunkte = ref(0)
 const nMeldungsTiefe = ref('normal')
 
 function ladeBerichtOptionen() {
-    const s = currentUser.value || {}
+    const s = appEinstellungen.value || {}
     nRhythmus.value = ['woechentlich', 'manuell'].includes(s.radarNewsRhythmus)
         ? s.radarNewsRhythmus : 'taeglich'
     nUpdates.value = Math.max(0, Math.min(2, Number(s.radarNewsUpdates) || 0))
@@ -463,7 +463,7 @@ function ladeBerichtOptionen() {
 /**
  * Zu den vollen Einstellungen springen — direkt in den richtigen Reiter.
  *
- * Der Bereich steht in der Adresse (`/settings/ki`); den Unter-Reiter der KI
+ * Der Bereich steht in der Adresse (`/einstellungen/ki`); den Unter-Reiter der KI
  * hält `useKiBereich.js` (gemerkt im localStorage), also wird er hier
  * gesetzt, bevor der Router dorthin wechselt. Ohne das landet man im
  * zuletzt offenen KI-Reiter und sucht sich durch die Reiterreihe.
@@ -472,7 +472,7 @@ function zuDenEinstellungen() {
     // Über den Modul-Zustand, nicht nur localStorage: ist der KI-Bereich
     // schon einmal geladen, liest er localStorage nicht noch einmal.
     kiBereichWechseln('nachrichten')
-    router.push('/settings/ki')
+    router.push('/einstellungen/ki')
 }
 
 /** Die Einstellungen als ein Satz — „täglich · Crypto + Finanzen · Mittel · …". */
@@ -526,10 +526,10 @@ async function profilAnwenden(id) {
     try {
         const { data } = await axios.post(`/api/marktradar/news-profile/${id}/anwenden`)
         // Die Route schreibt direkt per Knex, nicht über dbUpdateSettings —
-        // currentUser muss deshalb komplett ERSETZT werden (nicht nur eine
-        // Eigenschaft verändert), sonst feuert `watch(currentUser, ...)`
+        // appEinstellungen muss deshalb komplett ERSETZT werden (nicht nur eine
+        // Eigenschaft verändert), sonst feuert `watch(appEinstellungen, ...)`
         // unten nicht und die Zusammenfassungszeile bliebe auf dem alten Stand.
-        currentUser.value = await dbGetSettings()
+        appEinstellungen.value = await dbGetSettings()
         const teile = []
         if (Object.keys(data.geaendert || {}).length) teile.push('Mail-/Modellwahl mit übernommen')
         if (data.fehlendeQuellen?.length) teile.push(`Quellen nicht mehr vorhanden: ${data.fehlendeQuellen.join(', ')}`)
@@ -675,7 +675,7 @@ const fehler = ref(false)
 const ART_ICON = { youtube: 'video', truth: 'megafon', x: 'nachricht', rss: 'rss' }
 const IMPACT_FARBE = { high: '#ff5f56', medium: '#e8a33d', low: '#9aa0aa', holiday: '#6b7280' }
 
-const zone = () => timeZoneTrade.value || dayjs.tz.guess()
+const zone = () => tradeZeitzone.value || dayjs.tz.guess()
 const zeit = (ms) => dayjs(ms).tz(zone()).format('HH:mm')
 const jetzt = Date.now()
 
@@ -1039,19 +1039,19 @@ async function berichtErzeugen(aktualisieren = false) {
 /*
  * Die Einstellungen kommen asynchron.
  *
- * `ladeBerichtOptionen()` allein in `onMounted` lief zu früh: `currentUser` war
+ * `ladeBerichtOptionen()` allein in `onMounted` lief zu früh: `appEinstellungen` war
  * dann meist noch leer, die Regler behielten ihre Vorgabewerte und zeigten
  * nach jedem Neuladen „täglich · Crypto · Mittel", egal was gespeichert war.
  * Aufgefallen ist es erst, seit die Zusammenfassungszeile den Zustand
  * ausschreibt — die Pillen sahen mit den Vorgaben zufällig richtig aus.
  *
  * Bewusst flach beobachtet: Einstellungen, die anderswo eine EIGENSCHAFT von
- * `currentUser` ändern (z.B. `radarSpeichern` in Settings.vue), lösen hier
+ * `appEinstellungen` ändern (z.B. `radarSpeichern` in Settings.vue), lösen hier
  * nichts aus — sonst würde jede Änderung sofort wieder überschrieben. Ein
- * angewendetes News-Profil ERSETZT `currentUser.value` dagegen komplett
+ * angewendetes News-Profil ERSETZT `appEinstellungen.value` dagegen komplett
  * (siehe `profilAnwenden`) und triggert den Watch damit gezielt.
  */
-watch(currentUser, ladeBerichtOptionen, { immediate: true })
+watch(appEinstellungen, ladeBerichtOptionen, { immediate: true })
 
 // ── Chart-Bilder gross ansehen ───────────────────────────────────────────
 // Klick auf ein Chart-Bild der Chartanalyse öffnet es bildschirmfüllend;
@@ -1144,7 +1144,7 @@ onBeforeUnmount(() => {
              einer manuellen Änderung in den Einstellungen stammt. -->
         <div class="nwSchnellKopf">
             <select class="at-feld klein nwProfilAuswahl"
-                :value="currentUser?.radarNewsAktivesProfil || ''"
+                :value="appEinstellungen?.radarNewsAktivesProfil || ''"
                 :title="t('news.quickHint')"
                 @change="profilAnwenden($event.target.value)">
                 <option value="" disabled>{{ t('news.profileChoose') }}</option>
@@ -1457,7 +1457,7 @@ onBeforeUnmount(() => {
                             </thead>
                             <tbody>
                                 <tr v-for="(z, zi) in kennzahlenZeilen(k.eintraege)" :key="zi"
-                                    class="pointerClass" @click="offenerPunkt = z.i">
+                                    class="klickZiel" @click="offenerPunkt = z.i">
                                     <td class="nwDoWert"><b>{{ z.wert }}</b></td>
                                     <td>{{ z.was }}</td>
                                     <td class="nwDoHer">{{ z.titel }}</td>
@@ -1467,7 +1467,7 @@ onBeforeUnmount(() => {
 
                         <article v-for="{ p, i } in k.eintraege" :key="i" class="nwDoMeldung"
                             :class="{ hoch: p.wichtigkeit === 'hoch' }" @click="offenerPunkt = i">
-                            <img v-if="punktBild(p)" class="nwDoBild pointerClass" :src="punktBild(p)" alt=""
+                            <img v-if="punktBild(p)" class="nwDoBild klickZiel" :src="punktBild(p)" alt=""
                                 loading="lazy" referrerpolicy="no-referrer"
                                 @click.stop="oeffneBildZuPunkt(p)"
                                 @error="$event.target.style.display = 'none'" />
@@ -1503,7 +1503,7 @@ onBeforeUnmount(() => {
                         <div v-if="weitereBilder(k).length" class="nwWeitereBilder">
                             <span class="nwWeitereBilderLabel">{{ t('news.moreCharts') }}</span>
                             <img v-for="(b, bi) in weitereBilder(k)" :key="bi" :src="b.url" :title="b.beschreibung"
-                                loading="lazy" referrerpolicy="no-referrer" class="pointerClass"
+                                loading="lazy" referrerpolicy="no-referrer" class="klickZiel"
                                 @click="grossesBild = b"
                                 @error="e => { e.target.style.display = 'none' }" />
                         </div>
@@ -1571,7 +1571,7 @@ onBeforeUnmount(() => {
                          `weitereBilder()`) folgt gesammelt nach den Artikeln. -->
                     <article v-for="{ p, i } in artikelZuThema(k.thema)" :key="i" class="nwArtikel"
                         @click="offenerPunkt = i">
-                        <img v-if="punktBild(p)" class="nwArtikelBild pointerClass" :src="punktBild(p)" alt=""
+                        <img v-if="punktBild(p)" class="nwArtikelBild klickZiel" :src="punktBild(p)" alt=""
                             loading="lazy" referrerpolicy="no-referrer"
                             @click.stop="oeffneBildZuPunkt(p)"
                             @error="$event.target.style.display = 'none'" />
@@ -1596,7 +1596,7 @@ onBeforeUnmount(() => {
                     <div v-if="weitereBilder(k).length" class="nwWeitereBilder">
                         <span class="nwWeitereBilderLabel">{{ t('news.moreCharts') }}</span>
                         <img v-for="(b, bi) in weitereBilder(k)" :key="bi" :src="b.url" :title="b.beschreibung"
-                            loading="lazy" referrerpolicy="no-referrer" class="pointerClass"
+                            loading="lazy" referrerpolicy="no-referrer" class="klickZiel"
                             @click="grossesBild = b"
                             @error="e => { e.target.style.display = 'none' }" />
                     </div>

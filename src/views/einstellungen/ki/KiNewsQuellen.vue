@@ -8,7 +8,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
 import SchrittNewsQuellen from '@/components/onboarding/SchrittNewsQuellen.vue'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { dbGetSettings } from '@/utils/db.js'
 import {
     newsProfile, radarNewsQuellenAusschluss, radarNewsRuheAn, radarNewsRuheWoerter, radarNewsFokusAn,
@@ -84,9 +84,9 @@ async function profilAnwenden(p) {
     try {
         const { data } = await axios.post(`/api/marktradar/news-profile/${p.id}/anwenden`)
         // Die Anwenden-Route schreibt direkt per Knex, nicht über
-        // dbUpdateSettings — currentUser muss deshalb frisch geholt werden,
+        // dbUpdateSettings — appEinstellungen muss deshalb frisch geholt werden,
         // sonst zeigt die Seite noch den alten Stand.
-        currentUser.value = await dbGetSettings()
+        appEinstellungen.value = await dbGetSettings()
         loadRadarSettings()
         // Die Quellen-Tabelle lebt jetzt in einer eigenen, self-contained
         // Komponente (lädt nur bei ihrem eigenen Mount) — ein Profilwechsel
@@ -112,14 +112,14 @@ async function profilAktualisieren(p) {
 
 async function profilLoeschen(p) {
     try {
-        const warAktiv = Number(currentUser.value?.radarNewsAktivesProfil) === p.id
+        const warAktiv = Number(appEinstellungen.value?.radarNewsAktivesProfil) === p.id
         await axios.delete(`/api/marktradar/news-profile/${p.id}`)
         profilLoeschBestaetigung.value = null
         await ladeNewsProfile()
         // Der Server hat radarNewsAktivesProfil zurückgesetzt, wenn es das
         // gelöschte Profil war — den lokalen Stand nachziehen, sonst zeigt
         // das Dropdown auf der Nachrichten-Seite weiter eine tote Auswahl.
-        if (warAktiv) currentUser.value = await dbGetSettings()
+        if (warAktiv) appEinstellungen.value = await dbGetSettings()
     } catch (e) {
         profilMelden(e.response?.data?.error || e.message, true)
     }
@@ -270,7 +270,7 @@ async function profilLoeschen(p) {
                         </option>
                 </select>
                 <span v-if="radarNewsRhythmus !== 'manuell'" class="leise">
-                    {{ currentUser?.timeZone || t('settings.ki.news.localTime') }}
+                    {{ appEinstellungen?.timeZone || t('settings.ki.news.localTime') }}
                 </span>
                 <span v-else class="leise">{{ t('settings.ki.news.manualHint') }}</span>
             </div>

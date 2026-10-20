@@ -1,14 +1,14 @@
 <script setup>
     import { useI18n } from 'vue-i18n'
     import Knopf from './basis/Knopf.vue'
-    import { windowIsScrolled } from "../stores/ui.js";
+    import { istGescrollt } from "../stores/ui.js";
     import { scrolleNachOben, pruefeGescrollt } from "../utils/journal/app.js";
     const { t } = useI18n()
     pruefeGescrollt();
 </script>
 
 <template>
-    <Knopf v-show="windowIsScrolled" class="nachOben" art="haupt" klein nur-symbol symbol="hoch"
+    <Knopf v-show="istGescrollt" class="nachOben" art="haupt" klein nur-symbol symbol="hoch"
         :titel="t('common.nachOben')" @click="scrolleNachOben" />
 </template>
 

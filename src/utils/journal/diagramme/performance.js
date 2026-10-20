@@ -5,7 +5,7 @@
  * Achsenbeschriftung rechnen in echte Beträge zurück.
  */
 import { gefilterteTradesFlach } from '../../../stores/trades.js'
-import { useTwoDecCurrencyFormat, useThousandCurrencyFormat } from '../format.js'
+import { formGeld2, formGeld0 } from '../format.js'
 import { fall, festkomma, element, instanzFuer, sichereGroessenanpassung, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft, vorzeichenFarbe, vorzeichenHover } from './gestaltung.js'
 
@@ -60,7 +60,7 @@ export function usePerfChart(id) {
                 const i = punkte[0]?.dataIndex ?? 0
                 const zeilen = punkte.map(x => {
                     const wert = x.seriesIndex === 0 ? echt[i] : x.value
-                    return `${x.marker}${x.seriesName}: ${useTwoDecCurrencyFormat(wert)}`
+                    return `${x.marker}${x.seriesName}: ${formGeld2(wert)}`
                 })
                 return [punkte[0]?.axisValue ?? '', ...zeilen].join('<br>')
             },
@@ -79,8 +79,8 @@ export function usePerfChart(id) {
             data: kategorien,
         },
         yAxis: [
-            wertAchse(p, { name: t('charts.equityDollar'), nameTextStyle: { color: p.muted, fontSize: 10 }, axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => useThousandCurrencyFormat(v) } }),
-            wertAchse(p, { name: t('charts.tradePnlDollar'), nameTextStyle: { color: p.muted, fontSize: 10 }, splitLine: { show: false }, axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => useThousandCurrencyFormat(ausLog(v)) } }),
+            wertAchse(p, { name: t('charts.equityDollar'), nameTextStyle: { color: p.muted, fontSize: 10 }, axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => formGeld0(v) } }),
+            wertAchse(p, { name: t('charts.tradePnlDollar'), nameTextStyle: { color: p.muted, fontSize: 10 }, splitLine: { show: false }, axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => formGeld0(ausLog(v)) } }),
         ],
         series: [
             { name: namen[0], type: 'bar', yAxisIndex: 1, barMaxWidth: 10, itemStyle: { color: p.good }, data: balken },

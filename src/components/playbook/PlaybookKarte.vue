@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
 import Pille from '@/components/basis/Pille.vue'
-import { useCreatedDateFormat } from '@/utils/journal/format.js'
+import { formDatumLang } from '@/utils/journal/format.js'
 import { useGetTagInfo } from '@/utils/journal/tagebuch.js'
 import { usePlaybook } from './usePlaybook.js'
 import { hatDaten, seite } from './playbookDaten.js'
@@ -42,7 +42,7 @@ const tagFarbe = (tag) => tag.color || useGetTagInfo(tag.id).groupColor
                     @click.stop="pb.bearbeiten(e)">
                     <Symbol name="stift" :groesse="15" />
                 </button>
-                <span class="datum">{{ useCreatedDateFormat(e.dateUnix) }}</span>
+                <span class="datum">{{ formDatumLang(e.dateUnix) }}</span>
             </div>
             <div class="rechts">
                 <span v-if="emoji" class="emoji">{{ emoji }}</span>

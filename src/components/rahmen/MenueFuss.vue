@@ -124,7 +124,7 @@ onMounted(ladeStand)
             <button v-else-if="stand.berechtigt" type="button" class="fuss-eintrag hervor pulsiert" @click="installiere">
                 <Symbol name="download" />{{ t('nav.updateAuf', { version: stand.remoteVersion }) }}
             </button>
-            <router-link v-else :to="{ name: 'settings', params: { bereich: 'lizenz' } }" class="fuss-eintrag"
+            <router-link v-else :to="{ name: 'einstellungen', params: { bereich: 'lizenz' } }" class="fuss-eintrag"
                 :title="stand.grundText || ''">
                 <Symbol name="schloss" />v{{ stand.remoteVersion }} · {{ t('lizenz.updateGesperrt') }}
             </router-link>

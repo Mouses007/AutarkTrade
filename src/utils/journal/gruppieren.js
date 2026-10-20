@@ -5,7 +5,7 @@
  * in die Achsen (Spezifikation journal-kern.md §3.6).
  */
 import dayjs from './zeit.js'
-import { timeZoneTrade } from '../../stores/app/rahmen.js'
+import { tradeZeitzone } from '../../stores/app/rahmen.js'
 import { groups, timeFrame } from '../../stores/journal/auswertung.js'
 import { useGetTagInfo } from './tagebuch.js'
 import { gruppiere, sortiertNach } from './hilfen.js'
@@ -46,7 +46,7 @@ function kapStufe(m) {
 function zeitfensterSchluessel(trade) {
     const raster = timeFrame.value * 60 * 1000
     const ms = Math.floor((trade.entryTime * 1000) / raster) * raster
-    return dayjs(ms).tz(timeZoneTrade.value).format('HH:mm')
+    return dayjs(ms).tz(tradeZeitzone.value).format('HH:mm')
 }
 
 /** Wie `gruppiere`, aber Schlüssel lexikographisch aufsteigend eingefügt. */

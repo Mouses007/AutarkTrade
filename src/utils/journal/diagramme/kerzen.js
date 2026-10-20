@@ -7,7 +7,7 @@
  * Kerzen auch als steigend gefärbt sind (Spec 6.1).
  */
 import dayjs from '../zeit.js'
-import { timeZoneTrade, tagesChartZoom } from '../../../stores/ui.js'
+import { tradeZeitzone, tagesChartZoom } from '../../../stores/ui.js'
 import { element, instanzFuer, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 
@@ -30,7 +30,7 @@ function istEntsorgt(inst) {
     return !inst || (typeof inst.isDisposed === 'function' && inst.isDisposed())
 }
 
-/** Start/Ende des Anfangsausschnitts je Zoomstufe (Sekunden, in timeZoneTrade). */
+/** Start/Ende des Anfangsausschnitts je Zoomstufe (Sekunden, in tradeZeitzone). */
 function ausschnitt(trade, zone) {
     const ein = dayjs.unix(trade.entryTime).tz(zone)
     const aus = dayjs.unix(trade.exitTime).tz(zone)
@@ -44,7 +44,7 @@ function ausschnitt(trade, zone) {
     return [ein.startOf('day'), aus.endOf('day')]
 }
 
-export function useCandlestickChart(zeiten, preise, _volumen, trade, init, elementId = 'candlestickChart', zonen = null, mitSlider = false) {
+export function kerzenDiagramm(zeiten, preise, _volumen, trade, init, elementId = 'tagesKerzen', zonen = null, mitSlider = false) {
     try {
         if (init) {
             const knoten = element(elementId)
@@ -57,7 +57,7 @@ export function useCandlestickChart(zeiten, preise, _volumen, trade, init, eleme
         }
         const instanz = aktuelleKerzen
         const p = palette()
-        const zone = timeZoneTrade.value
+        const zone = tradeZeitzone.value
         const lang = trade.strategy === 'long'
         const farbeEin = lang ? p.good : p.bad
         const farbeAus = lang ? p.bad : p.good

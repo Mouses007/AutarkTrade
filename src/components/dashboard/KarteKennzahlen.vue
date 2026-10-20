@@ -6,7 +6,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { betragArt } from '../../stores/filters.js'
 import { totals, gewinnAnalyse } from '../../stores/trades.js'
-import { useThousandCurrencyFormat, useTwoDecCurrencyFormat, useThousandFormat } from '../../utils/journal/format.js'
+import { formGeld0, formGeld2, formZahl0 } from '../../utils/journal/format.js'
 import InfoTipp from '@/components/InfoTipp.vue'
 import TitelKarte from './TitelKarte.vue'
 
@@ -23,8 +23,8 @@ const pa = (feld) => gewinnAnalyse[F.value + feld]
 /** NaN, null und undefined zeigen „-" (null warf früher beim Formatieren). */
 const leer = (x) => x === null || x === undefined || Number.isNaN(Number(x))
 const zwei = (x) => (leer(x) ? '-' : Number(x).toFixed(2))
-const waehrung = (x) => (leer(x) ? '-' : useTwoDecCurrencyFormat(x))
-const nurPositiv = (x) => (Number(x) > 0 ? useTwoDecCurrencyFormat(x) : '-')
+const waehrung = (x) => (leer(x) ? '-' : formGeld2(x))
+const nurPositiv = (x) => (Number(x) > 0 ? formGeld2(x) : '-')
 
 const kumuliert = computed(() => totals[F.value + 'Proceeds'])
 const mfeR = computed(() => pa('MfeR'))
@@ -36,7 +36,7 @@ const mfeR = computed(() => pa('MfeR'))
             <tbody>
                 <tr>
                     <td>{{ t('dashboard.cumulativePnl') }} <InfoTipp schluessel="dashboard.cumulativePnlTooltip" /></td>
-                    <td class="zahl at-fett" :class="kumuliert >= 0 ? 'at-gut' : 'at-schlecht'">{{ useThousandCurrencyFormat(kumuliert) }}</td>
+                    <td class="zahl at-fett" :class="kumuliert >= 0 ? 'at-gut' : 'at-schlecht'">{{ formGeld0(kumuliert) }}</td>
                 </tr>
                 <tr>
                     <td>{{ ratio.kurz }} <InfoTipp v-if="ratio.info" :text="ratio.info" /></td>
@@ -70,7 +70,7 @@ const mfeR = computed(() => pa('MfeR'))
                 <tr class="trenner"><td colspan="2"></td></tr>
                 <tr>
                     <td>{{ t('common.trades') }}</td>
-                    <td class="zahl at-fett">{{ useThousandFormat(totals.trades) }}</td>
+                    <td class="zahl at-fett">{{ formZahl0(totals.trades) }}</td>
                 </tr>
                 <tr>
                     <td class="at-gut">{{ t('dashboard.winTrades') }}</td>

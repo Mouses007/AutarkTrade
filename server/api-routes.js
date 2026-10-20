@@ -234,7 +234,7 @@ export function isAllowedDbHost(host) {
     return !!h && istLokalesZiel(h)
 }
 
-export function setupApiRoutes(app) {
+export function registriereApiRouten(app) {
     const knex = getKnex()
 
     // ==================== SETTINGS ====================
@@ -614,7 +614,7 @@ export function setupApiRoutes(app) {
             /*
              * Ohne Angabe wurde bisher die GANZE Tabelle geliefert. Ein Default
              * bremst das ab, ist aber bewusst so hoch gewählt wie das Limit, das
-             * das Frontend ohnehin mitschickt (queryLimit) — ein kleinerer Wert
+             * das Frontend ohnehin mitschickt (abfrageGrenze) — ein kleinerer Wert
              * würde Dashboards still um Trades kürzen statt sie zu schützen.
              *
              * Das Limit zählt ZEILEN, und das ist bei `screenshots` das falsche

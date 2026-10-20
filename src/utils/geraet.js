@@ -1,7 +1,7 @@
 /**
  * „Sitzt hier ein Telefon?" — eine Frage, zwei Merkmale.
  *
- * Das Projekt hat mit `screenType` bereits eine Antwort, die auf der Breite
+ * Das Projekt hat mit `bildschirmTyp` bereits eine Antwort, die auf der Breite
  * beruht (`>= 992 px` = 'computer'). Für das Layout ist das genau richtig: ein
  * schmales Fenster braucht ein schmales Menü, egal woran es hängt.
  *
@@ -23,7 +23,7 @@
 
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
-/** Schwelle wie bei `screenType` in `utils.js`, damit beides zusammenpasst. */
+/** Schwelle wie bei `bildschirmTyp` in `utils.js`, damit beides zusammenpasst. */
 const SCHMAL = 992
 
 export function istTelefonJetzt() {

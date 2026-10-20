@@ -2,7 +2,7 @@
 /** Journal → OHLC-Chart: Binance-Kerzen in der Trade-Ansicht. */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { dbUpdateSettings } from '@/utils/db.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
@@ -16,14 +16,14 @@ let enableBinanceChart = ref(false)
 async function saveBinanceSetting() {
     try {
         await dbUpdateSettings({ enableBinanceChart: enableBinanceChart.value ? 1 : 0 })
-        currentUser.value.enableBinanceChart = enableBinanceChart.value ? 1 : 0
+        appEinstellungen.value.enableBinanceChart = enableBinanceChart.value ? 1 : 0
         console.log(' -> Binance-Chart-Einstellung gespeichert:', enableBinanceChart.value)
     } catch (error) {
         console.error(' -> Fehler beim Speichern der Binance-Chart-Einstellung:', error)
     }
 }
 
-enableBinanceChart.value = currentUser.value?.enableBinanceChart === 1
+enableBinanceChart.value = appEinstellungen.value?.enableBinanceChart === 1
 </script>
 
 <template>

@@ -20,8 +20,8 @@ import axios from 'axios'
 import Logo from '../basis/Logo.vue'
 import Symbol from '../basis/Symbol.vue'
 import Titelzeile from './Titelzeile.vue'
-import { appMode, pageId, screenType } from '../../stores/ui.js'
-import { currentUser } from '../../stores/settings.js'
+import { appMode, seitenId, bildschirmTyp } from '../../stores/ui.js'
+import { appEinstellungen } from '../../stores/settings.js'
 import { MODES, modeHome, pageById, istModusAn } from '../../config/menu.js'
 
 defineProps({
@@ -36,8 +36,8 @@ const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'en
 const route = useRoute()
 // Auf der Startseite (/start) ist kein Modus aktiv.
 const aktiverModus = computed(() => (route.meta?.mode === 'uebersicht' ? null : appMode.value))
-const modi = computed(() => MODES.filter((m) => istModusAn(m.id, currentUser.value)))
-const mobil = computed(() => screenType.value === 'mobile')
+const modi = computed(() => MODES.filter((m) => istModusAn(m.id, appEinstellungen.value)))
+const mobil = computed(() => bildschirmTyp.value === 'mobile')
 
 function beschriftung(m) {
     return mobil.value ? t(m.shortKey || m.titleKey) : t(m.titleKey)
@@ -46,7 +46,7 @@ function beschriftung(m) {
 function wechsle(m, e) {
     if (!m.enabled) { e.preventDefault(); return }
     // Schon auf einer Seite dieses Modus: nichts tun.
-    const seitenModus = pageById(pageId.value)?.mode ?? null
+    const seitenModus = pageById(seitenId.value)?.mode ?? null
     if (seitenModus === m.id) { e.preventDefault(); return }
     localStorage.setItem('appMode', m.id)
     appMode.value = m.id
@@ -85,7 +85,7 @@ onMounted(async () => {
         <div class="rechts">
             <Titelzeile v-if="mitTitel" in-kopf />
             <span v-if="mitTitel" class="trenner" aria-hidden="true"></span>
-            <a class="knopf" href="/settings" :class="{ aktiv: pageId === 'settings' }" :title="t('nav.settings')"
+            <a class="knopf" href="/einstellungen" :class="{ aktiv: seitenId === 'einstellungen' }" :title="t('nav.settings')"
                 :aria-label="t('nav.settings')">
                 <Symbol name="einstellungen" :groesse="20" />
             </a>

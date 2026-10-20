@@ -24,10 +24,10 @@ import dayjs from './journal/zeit.js'
 import i18n from '../i18n/index.js'
 import { dbFind, dbCreate, dbUpdate, dbDelete } from './db.js'
 import {
-    pageId, timeZoneTrade, listeZuEnde, markierterEintrag, speichernNoetig,
+    seitenId, tradeZeitzone, listeZuEnde, markierterEintrag, speichernNoetig,
 } from '../stores/app/rahmen.js'
 import { seiteLaedt, zeichenZaehler, setupsLaden } from '../stores/app/laden.js'
-import { selectedBroker, tagAuswahl, gewaehlterMonat } from '../stores/journal/filter.js'
+import { gewaehlteBoerse, tagAuswahl, gewaehlterMonat } from '../stores/journal/filter.js'
 import { tags, tradeTags, tradeBildGeaendert } from '../stores/journal/tagebuch.js'
 import {
     screenshot, screenshots, bildInfos, bildSeite, bildAbfrageGrenze,
@@ -52,8 +52,8 @@ bildAbfrageGrenze.value = 4
 const leere = (obj) => { for (const k of Object.keys(obj)) delete obj[k] }
 const sitzungLesen = (k) => { try { return sessionStorage.getItem(k) } catch { return null } }
 const sitzungLoeschen = (k) => { try { sessionStorage.removeItem(k) } catch { /* egal */ } }
-const tagesanfang = (sek) => dayjs.unix(sek).tz(timeZoneTrade.value).startOf('day').unix()
-const datumText = (sek) => dayjs.unix(sek).tz(timeZoneTrade.value).format('YYYY-MM-DDTHH:mm:ss')
+const tagesanfang = (sek) => dayjs.unix(sek).tz(tradeZeitzone.value).startOf('day').unix()
+const datumText = (sek) => dayjs.unix(sek).tz(tradeZeitzone.value).format('YYYY-MM-DDTHH:mm:ss')
 
 // ── Vollbild ───────────────────────────────────────────────────────────────
 
@@ -133,8 +133,8 @@ function passtZuTags(bild) {
  * Löst immer auf, auch bei Fehlern.
  */
 export async function ladeBilder(nichtSeite, tagUnix) {
-    const aufSeite = pageId.value === 'screenshots'
-    const aufDaily = pageId.value === 'daily'
+    const aufSeite = seitenId.value === 'bilder'
+    const aufDaily = seitenId.value === 'tagesansicht'
     const monatsliste = !!nichtSeite && (tagUnix === undefined || tagUnix === null)
     try {
         let treffer
@@ -161,7 +161,7 @@ export async function ladeBilder(nichtSeite, tagUnix) {
             if (aufSeite) listeZuEnde.value = true
         } else {
             let liste = treffer
-            const boerse = selectedBroker.value
+            const boerse = gewaehlteBoerse.value
             if (boerse && aufSeite) {
                 const zuordnung = await boersenZuordnung(boerse)
                 liste = liste.filter(b => passtZurBoerse(b, zuordnung, boerse))
@@ -214,7 +214,7 @@ function alsDatenUrl(datei) {
 export async function useSetupImageFile(datei, dateUnix, symbol, side) {
     if (!datei) return
     tradeBildGeaendert.value = true
-    if (pageId.value === 'daily') {
+    if (seitenId.value === 'tagesansicht') {
         speichernNoetig.value = true
         tagesBildGeaendert.value = true
         screenshot.dateUnix = dateUnix
@@ -356,12 +356,12 @@ export async function speichereBild() {
         alert(t('common.screenshotSaveAnnotation'))
         return false
     }
-    if (pageId.value === 'addScreenshot') {
+    if (seitenId.value === 'addScreenshot') {
         // Seite gibt es nicht mehr (Route leitet um); Prüfungen bleiben harmlos.
         if (!screenshot.symbol) { alert(t('common.screenshotAddSymbol')); return false }
         if (!screenshot.originalBase64) { alert(t('common.screenshotAddImage')); return false }
         seiteLaedt.value = true
-        if (screenshot.date) screenshot.dateUnix = dayjs.tz(screenshot.date, timeZoneTrade.value).unix()
+        if (screenshot.date) screenshot.dateUnix = dayjs.tz(screenshot.date, tradeZeitzone.value).unix()
     }
     if (bildInBearbeitung.value && screenshot.originalBase64) {
         const url = String(screenshot.originalBase64)
@@ -418,9 +418,9 @@ export async function ladeBildHoch() {
         seiteLaedt.value = false
         return false
     }
-    if (pageId.value === 'addScreenshot') {
-        window.location.href = '/screenshots'
-    } else if (pageId.value === 'daily') {
+    if (seitenId.value === 'addScreenshot') {
+        window.location.href = '/bilder'
+    } else if (seitenId.value === 'tagesansicht') {
         const tag = tagesanfang(Number(screenshot.dateUnix))
         await ladeBilder(true, tag)
         await ladeBilder(true)
@@ -442,13 +442,13 @@ export async function useDeleteScreenshot() {
         console.error('Screenshot löschen fehlgeschlagen:', fehler)
         return
     }
-    if (pageId.value === 'screenshots') {
+    if (seitenId.value === 'bilder') {
         // Kein Neuladen: das setzte die Paginierung zurück.
         const i = screenshots.findIndex(s => String(s?.objectId) === String(id))
         if (i >= 0) screenshots.splice(i, 1)
         bildSeite.value = Math.max(0, bildSeite.value - 1)
         markierterEintrag.value = null
-    } else if (pageId.value === 'daily') {
+    } else if (seitenId.value === 'tagesansicht') {
         const eintrag = screenshots.find(s => String(s?.objectId) === String(id))
         if (eintrag) leere(eintrag)
         leere(screenshot)
@@ -479,7 +479,7 @@ export function useSelectedScreenshotFunction(index, quelle, daten) {
     selectedScreenshotIndex.value = index
     selectedScreenshotSource.value = quelle
     // Zwei vor dem Ende nachladen — nur auf der Seite, und nie für Einzelbilder.
-    if (Number.isInteger(index) && index >= 1 && index + 2 === screenshots.length && !listeZuEnde.value && pageId.value === 'screenshots') {
+    if (Number.isInteger(index) && index >= 1 && index + 2 === screenshots.length && !listeZuEnde.value && seitenId.value === 'bilder') {
         ladeBilder(false)
     }
     // Vorher leeren, sonst bleiben Felder des vorigen Bildes stehen (A-S4).

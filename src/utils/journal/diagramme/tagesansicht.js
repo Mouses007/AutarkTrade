@@ -9,9 +9,9 @@
  */
 import { journalTage } from '../../../stores/trades.js'
 import { betragArt } from '../../../stores/filters.js'
-import { useHourMinuteFormat } from '../format.js'
+import { formUhrzeit } from '../format.js'
 import { fall, festkomma } from './grundlagen.js'
-import { useDoubleLineChart, usePieChart } from './ring.js'
+import { doppellinieDiagramm, ringDiagramm } from './ring.js'
 
 export function zeichneDoppellinie() {
     const f = fall()
@@ -24,9 +24,9 @@ export function zeichneDoppellinie() {
             const n = festkomma(tr[`${f}Proceeds`], 2)
             brutto.push(brutto.length ? brutto[brutto.length - 1] + b : b)
             netto.push(netto.length ? netto[netto.length - 1] + n : n)
-            zeiten.push(useHourMinuteFormat(tr.exitTime))
+            zeiten.push(formUhrzeit(tr.exitTime))
         }
-        useDoubleLineChart(`doubleLineChart${zeile.dateUnix}`, brutto, netto, zeiten)
+        doppellinieDiagramm(`doubleLineChart${zeile.dateUnix}`, brutto, netto, zeiten)
     }
     return Promise.resolve()
 }
@@ -39,7 +39,7 @@ export function zeichneTorte() {
         const gewinne = Number(pl[`${art}WinsCount`])
         const verluste = Number(pl[`${art}LossCount`])
         const bekannt = anzahl > 0 && Number.isFinite(gewinne) && Number.isFinite(verluste)
-        usePieChart(`pieChart${zeile.dateUnix}`, bekannt ? gewinne / anzahl : 0, bekannt ? verluste / anzahl : 0)
+        ringDiagramm(`pieChart${zeile.dateUnix}`, bekannt ? gewinne / anzahl : 0, bekannt ? verluste / anzahl : 0)
     }
     return Promise.resolve()
 }

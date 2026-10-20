@@ -11,7 +11,7 @@ import { scrolleZu } from '../../utils/scrolleZu.js'
 import { reactive, ref, inject, nextTick } from 'vue'
 import { dbFind, dbGet, dbCreate, dbUpdate, dbDelete } from '@/utils/db.js'
 import { ladeVerfuegbareTags, useGetTagInfo } from '@/utils/journal/tagebuch.js'
-import { selectedBroker } from '@/stores/journal/filter.js'
+import { gewaehlteBoerse } from '@/stores/journal/filter.js'
 import { kopiertesBild } from '@/stores/app/rahmen.js'
 import { seiteLaedt } from '@/stores/app/laden.js'
 import {
@@ -66,7 +66,7 @@ export function erzeugePlaybook() {
             dbFind('trades', { descending: 'dateUnix', limit: 200 }),
             dbFind('screenshots', { descending: 'dateUnix', limit: 500, exclude: OHNE_BILDDATEN }),
         ])
-        const boerse = selectedBroker.value
+        const boerse = gewaehlteBoerse.value
         const tageszeilen = boerse
             ? tageszeilenRoh.filter(z => (z.trades || []).some(t => t.broker === boerse))
             : tageszeilenRoh
@@ -311,7 +311,7 @@ export function erzeugePlaybook() {
             name: `${e.tradeId}_${feld}`,
             symbol: e.symbol || '',
             side: e.side === 'long' || e.side === 'short' ? e.side : '',
-            broker: selectedBroker.value || 'bitunix',
+            broker: gewaehlteBoerse.value || 'bitunix',
             originalBase64: datenUrl,
             annotatedBase64: datenUrl,
             // Anzeigebild = vollständiges Bild (Entscheidung A-S1), keine Ebene.

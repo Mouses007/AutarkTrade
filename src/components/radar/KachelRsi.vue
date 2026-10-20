@@ -14,7 +14,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import { liveSymbol } from '../../stores/live.js'
-import { currentUser } from '../../stores/app/rahmen.js'
+import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { BOERSE_NAME, boerseUrl, aktivierteBoersen } from '../../utils/boersenLinks.js'
 
 const props = defineProps({
@@ -57,7 +57,7 @@ const kurz = (s) => s.replace(/USDT$/, '')
  * Coin (gleiches, bewusst unverändertes Verhalten wie bisher bei Bitunix).
  */
 function boersenLinksZeilen(symbol) {
-    return aktivierteBoersen(currentUser.value?.boersenLinks).map((b) =>
+    return aktivierteBoersen(appEinstellungen.value?.boersenLinks).map((b) =>
         `<a href="${boerseUrl(b, symbol)}" target="_blank" rel="noopener noreferrer" `
         + `style="color:#4da3ff">${t('marktradar.rsi.openBoerse', { boerse: BOERSE_NAME[b] })}</a>`,
     ).join('<br/>')

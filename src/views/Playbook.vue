@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Playbook (`/playbook`): trotz des Namens die Liste der TRADE-BEWERTUNGEN —
+ * Playbook (`/bewertungen`): trotz des Namens die Liste der TRADE-BEWERTUNGEN —
  * je Trade mit einer Notiz eine aufklappbare Karte mit Eröffnungsbewertung,
  * Füllungen/SL/TP und Abschlussbewertung, bearbeitbar. Die Tabelle `playbooks`
  * benutzt die Seite nicht.

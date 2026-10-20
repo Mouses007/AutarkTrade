@@ -11,7 +11,7 @@
  * (`GET /api/benachrichtigungen/typen`), damit ein neuer Meldungstyp nur an
  * einer Stelle eingetragen werden muss.
  */
-import { currentUser } from '../stores/settings.js'
+import { appEinstellungen } from '../stores/settings.js'
 
 /** Permission anfordern (sollte einmal beim App-Start aufgerufen werden) */
 export async function requestNotificationPermission() {
@@ -31,7 +31,7 @@ export async function requestNotificationPermission() {
  */
 export function browserKanalAn(eventId) {
     if (!eventId) return true
-    const wahl = currentUser.value?.benachrichtigungen
+    const wahl = appEinstellungen.value?.benachrichtigungen
     const eintrag = (wahl && typeof wahl === 'object' ? wahl[eventId] : null) || {}
     return eintrag.browser !== undefined ? Boolean(eintrag.browser) : true
 }
@@ -47,7 +47,7 @@ export function sendNotification(eventId, title, body, options = {}) {
     if (!('Notification' in window)) return
     if (Notification.permission !== 'granted') return
     if (document.hasFocus()) return // Kein Popup wenn Tab aktiv
-    if (currentUser.value?.browserNotifications === 0) return // Hauptschalter aus
+    if (appEinstellungen.value?.browserNotifications === 0) return // Hauptschalter aus
     if (!browserKanalAn(eventId)) return // Für dieses Ereignis abgewählt
 
     const notification = new Notification(title, {

@@ -6,9 +6,9 @@
  * `undefined`). Leere Liste ⇒ bisherige Option bleibt stehen.
  */
 import { negativeTagGruppen } from '../../../stores/ui.js'
-import { selectedRatio } from '../../../stores/filters.js'
+import { gewaehlteKennzahl } from '../../../stores/filters.js'
 import { groups, verfuegbareTags } from '../../../stores/trades.js'
-import { useCapitalizeFirstLetter, useThousandCurrencyFormat, useXDecCurrencyFormat, useXDecFormat, useTwoDecCurrencyFormat } from '../format.js'
+import { formGrossAnfang, formGeld0, formGeldStellen, formZahlStellen, formGeld2 } from '../format.js'
 import { fall, element, instanzFuer, dauerKlasse, WOCHENTAGE_EN } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, vorzeichenFarbe } from './gestaltung.js'
 import { strategieTags } from './gruppen.js'
@@ -51,7 +51,7 @@ function achsenText(id, wert) {
             const namen = ['Nano-cap', 'Micro-cap', 'Small-cap', 'Mid-cap', 'Big-cap']
             return namen[k] ?? wert
         }
-        case 'barChartNegative17': return useCapitalizeFirstLetter(String(wert))
+        case 'barChartNegative17': return formGrossAnfang(String(wert))
         default: return wert
     }
 }
@@ -59,12 +59,12 @@ function achsenText(id, wert) {
 /** Aufsteigend, undefined/gleich bleiben stehen (stabil). */
 const nachWert = (a, b) => (a.wert < b.wert ? -1 : a.wert == b.wert ? 0 : 1) // eslint-disable-line eqeqeq
 
-export function useBarChartNegative(id) {
+export function balkenNegativDiagramm(id) {
     try {
         const { daten, tags } = waehleTeilgruppe(id)
         const schluessel = Object.keys(daten) // undefined ⇒ TypeError ⇒ abgelehnt (Spec 3.5)
         const f = fall()
-        const verhaeltnis = selectedRatio.value
+        const verhaeltnis = gewaehlteKennzahl.value
         let werte = []
         let kategorien = []
         const tagNamen = {}
@@ -102,18 +102,18 @@ export function useBarChartNegative(id) {
         if (!werte.length) return Promise.resolve()
 
         const p = palette()
-        const wertText = (v) => (verhaeltnis === 'profitFactor' ? useXDecFormat(v, 2)
-            : verhaeltnis === 'apps' ? useXDecCurrencyFormat(v, 4) : useXDecCurrencyFormat(v, 2))
+        const wertText = (v) => (verhaeltnis === 'profitFactor' ? formZahlStellen(v, 2)
+            : verhaeltnis === 'apps' ? formGeldStellen(v, 4) : formGeldStellen(v, 2))
         instanzFuer(element(id)).setOption({
             ...grundOption(p),
             grid: { left: 8, right: 40, top: 8, bottom: 8, containLabel: true },
             tooltip: {
                 trigger: 'item',
                 ...tooltipStil(p),
-                formatter: (x) => (id === 'barChartNegative16' ? `${x.name}: ` : '') + useTwoDecCurrencyFormat(x.value),
+                formatter: (x) => (id === 'barChartNegative16' ? `${x.name}: ` : '') + formGeld2(x.value),
             },
             xAxis: wertAchse(p, {
-                axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => (verhaeltnis === 'profitFactor' ? useXDecFormat(v, 0) : useThousandCurrencyFormat(v)) },
+                axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => (verhaeltnis === 'profitFactor' ? formZahlStellen(v, 0) : formGeld0(v)) },
             }),
             yAxis: {
                 ...kategorieAchse(p),

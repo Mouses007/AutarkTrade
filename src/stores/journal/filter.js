@@ -22,27 +22,27 @@ export const brokers = reactive([
 ])
 
 // ── Auswahl ────────────────────────────────────────────────────────────────
-export const tagAuswahl = refOderLeer(() => lokalListe('selectedTags'))
-export const selectedPositions = refOderLeer(() => lokalListe('selectedPositions'))
-export const selectedTimeFrame = refOderLeer(() => lokal('selectedTimeFrame'))
-export const selectedRatio = refOderLeer(() => lokal('selectedRatio'))
-export const selectedAccount = refOderLeer(() => lokal('selectedAccount'))
-export const selectedAccounts = refOderLeer(() => lokalListe('selectedAccounts'))
-export const gewaehltBruttoNetto = refOderLeer(() => lokal('selectedGrossNet'))
-export const gewaehltPlOderZufriedenheit = refOderLeer(() => lokal('selectedPlSatisfaction'))
-export const selectedBroker = ref(mitLokalspeicher ? lokal('selectedBroker') : undefined)
+export const tagAuswahl = refOderLeer(() => lokalListe('at.journal.tags'))
+export const gewaehlteRichtungen = refOderLeer(() => lokalListe('at.journal.richtungen'))
+export const gewaehlterZeitrahmen = refOderLeer(() => lokal('at.journal.zeitrahmen'))
+export const gewaehlteKennzahl = refOderLeer(() => lokal('at.journal.kennzahl'))
+export const gewaehltesKonto = refOderLeer(() => lokal('at.journal.konto'))
+export const gewaehlteKonten = refOderLeer(() => lokalListe('at.journal.konten'))
+export const gewaehltBruttoNetto = refOderLeer(() => lokal('at.journal.bruttoNetto'))
+export const gewaehltPlOderZufriedenheit = refOderLeer(() => lokal('at.journal.plZufriedenheit'))
+export const gewaehlteBoerse = ref(mitLokalspeicher ? lokal('at.journal.boerse') : undefined)
 export const selectedTradeCategory = ref(lokal('selectedTradeCategory') || 'futures')
 // Eine Bot-Kategorie ohne Bot-Börse ergibt nur leere Seiten.
-if (mitLokalspeicher && !BOT_BROKERS.includes(selectedBroker.value) && selectedTradeCategory.value === 'bot') {
+if (mitLokalspeicher && !BOT_BROKERS.includes(gewaehlteBoerse.value) && selectedTradeCategory.value === 'bot') {
     selectedTradeCategory.value = 'futures'
     lokalSchreiben('selectedTradeCategory', 'futures')
 }
-export const selectedDateRange = refOderLeer(() => lokalJson('selectedDateRange'))
-export const gewaehlterMonat = refOderLeer(() => lokalJson('selectedMonth'))
+export const datumsBereich = refOderLeer(() => lokalJson('at.journal.datumsBereich'))
+export const gewaehlterMonat = refOderLeer(() => lokalJson('at.journal.monat'))
 export const selectedMonthPreset = ref(lokal('selectedMonthPreset') || 'current')
-export const selectedPeriodRange = refOderLeer(() => lokalJson('selectedPeriodRange'))
-export const selectedDashTab = refOderLeer(() => lokal('selectedDashTab'))
-const grossNetGespeichert = lokal('selectedGrossNet')
+export const gewaehlterZeitraum = refOderLeer(() => lokalJson('at.journal.zeitraum'))
+export const dashReiter = refOderLeer(() => lokal('at.journal.dashReiter'))
+const grossNetGespeichert = lokal('at.journal.bruttoNetto')
 export const betragArt = ref(grossNetGespeichert === 'gross' || grossNetGespeichert === 'net' ? grossNetGespeichert : 'gross')
 export const betragGross = ref(undefined)
 export const selectedTradeTimeframes = reactive([])
@@ -54,21 +54,21 @@ export const plOderZufriedenheitEntwurf = ref(null)
 export const gewaehlterBereich = ref(undefined)
 /** Gefüllt von `ladeZeitraeume`. */
 export const zeitraumListe = reactive([])
-export const positions = ref([{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }])
-export const timeFrames = computed(() => [
+export const richtungsOptionen = ref([{ value: 'long', label: 'Long' }, { value: 'short', label: 'Short' }])
+export const zeitrahmenOptionen = computed(() => [
     { value: 'daily', label: t('options.daily') },
     { value: 'weekly', label: t('options.weekly') },
     { value: 'monthly', label: t('options.monthly') },
 ])
-export const ratios = computed(() => [
+export const kennzahlOptionen = computed(() => [
     { value: 'appt', label: 'APPT' },
     { value: 'profitFactor', label: t('options.profitFactor') },
 ])
-export const grossNet = computed(() => [
+export const bruttoNettoOptionen = computed(() => [
     { value: 'gross', label: t('options.gross') },
     { value: 'net', label: t('options.net') },
 ])
-export const plSatisfaction = computed(() => [
+export const plZufriedenheitOptionen = computed(() => [
     { value: 'pl', label: 'PnL' },
     { value: 'satisfaction', label: t('options.satisfaction') },
 ])
@@ -82,7 +82,7 @@ export const allTradeTimeframes = computed(() => ZEITRAHMEN.flatMap(([gruppe, we
     werte.map(value => ({ value, label: t(`timeframes.${value}`), group: t(gruppe) }))))
 
 export const filteredSuggestions = reactive([])
-export const daysBack = ref(undefined)
-export const daysMargin = ref(undefined)
+export const tageZurueck = ref(undefined)
+export const tageReserve = ref(undefined)
 export const holtWeitere = ref(false)
-export const uploadMfePrices = ref(false)
+export const mfeSpeichern = ref(false)

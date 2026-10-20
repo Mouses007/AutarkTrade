@@ -219,10 +219,10 @@ div.at-check > label {
 
 /* Zeiger auf Klickbarem ohne Knopf (Agent-Seiten, KiAgent, Incoming,
    Nachrichten). */
-.pointerClass { cursor: pointer; }
+.klickZiel { cursor: pointer; }
 
 /* Zensurmodus des Journals: utils/privacy.js setzt `tj-censor` an jedes
    Zahlen-Blatt und `privacy-on` an <body>. Alle ECharts-Flächen verwischen,
    ausser den Quoten-Donuts (nur Prozente). */
 .tj-censor { filter: blur(6px); user-select: none; pointer-events: none; transition: filter 0.2s; }
-body.privacy-on [_echarts_instance_]:not(.chartIdCardClass) { filter: blur(8px); }
+body.privacy-on [_echarts_instance_]:not(.diagrammKarteFlaeche) { filter: blur(8px); }

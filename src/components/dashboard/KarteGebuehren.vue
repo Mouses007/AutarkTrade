@@ -10,14 +10,14 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { totals } from '../../stores/trades.js'
-import { useTwoDecCurrencyFormat } from '../../utils/journal/format.js'
+import { formGeld2 } from '../../utils/journal/format.js'
 import InfoTipp from '@/components/InfoTipp.vue'
 import TitelKarte from './TitelKarte.vue'
 import { gebuehren } from './rechnung.js'
 
 const { t } = useI18n()
 const g = computed(() => gebuehren(totals))
-const geld = useTwoDecCurrencyFormat
+const geld = formGeld2
 </script>
 
 <template>

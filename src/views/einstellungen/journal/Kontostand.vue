@@ -3,8 +3,8 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { selectedBroker } from '@/stores/filters.js'
-import { currentUser } from '@/stores/settings.js'
+import { gewaehlteBoerse } from '@/stores/filters.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { dbUpdateSettings, dbFind } from '@/utils/db.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
@@ -20,7 +20,7 @@ const balanceLoading = ref(false)
 const apiBalanceValue = ref(null)
 
 async function loadBalanceFromApi() {
-    const broker = selectedBroker.value || 'bitunix'
+    const broker = gewaehlteBoerse.value || 'bitunix'
     balanceLoading.value = true
     apiBalanceValue.value = null
     try {
@@ -65,16 +65,16 @@ async function loadBalanceFromApi() {
 
 async function saveBalances() {
     try {
-        const broker = selectedBroker.value || 'bitunix'
+        const broker = gewaehlteBoerse.value || 'bitunix'
         const start = parseFloat(startBalance.value) || 0
 
         // Save start balance per broker (no offset needed — Dashboard calculates current from P&L)
-        const existingBalances = currentUser.value?.balances || {}
+        const existingBalances = appEinstellungen.value?.balances || {}
         const balances = { ...existingBalances, [broker]: { start } }
 
         await dbUpdateSettings({ balances, startBalance: start })
-        currentUser.value.balances = balances
-        currentUser.value.startBalance = start
+        appEinstellungen.value.balances = balances
+        appEinstellungen.value.startBalance = start
 
         apiBalanceValue.value = null
 
@@ -86,8 +86,8 @@ async function saveBalances() {
 
 /* Start-Einzahlung der gewählten Börse (mit Rückfall auf das alte Einzelfeld). */
 function ausEinstellungen() {
-    const settings = currentUser.value || {}
-    const broker = selectedBroker.value || 'bitunix'
+    const settings = appEinstellungen.value || {}
+    const broker = gewaehlteBoerse.value || 'bitunix'
     const balances = settings.balances || {}
     if (balances[broker]) {
         startBalance.value = balances[broker].start || 0
@@ -100,7 +100,7 @@ ausEinstellungen()
 
 <template>
     <Abschnitt :titel="t('settings.balance')" symbol="geldboerse" v-model:offen="balanceExpanded">
-        <p class="beschreibung" v-html="t('settings.balanceDescription', { broker: (selectedBroker || 'bitunix').charAt(0).toUpperCase() + (selectedBroker || 'bitunix').slice(1) })"></p>
+        <p class="beschreibung" v-html="t('settings.balanceDescription', { broker: (gewaehlteBoerse || 'bitunix').charAt(0).toUpperCase() + (gewaehlteBoerse || 'bitunix').slice(1) })"></p>
 
         <Feld :label="t('settings.startDeposit')" fuer="kontostand-start">
             <div class="reihe">

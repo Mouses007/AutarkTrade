@@ -13,13 +13,13 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import Symbol from '../basis/Symbol.vue'
-import { appMode, pageId, screenType, privacyMode } from '../../stores/ui.js'
-import { currentUser } from '../../stores/settings.js'
-import { selectedPeriodRange, gewaehltBruttoNetto, selectedPositions, gewaehlterMonat, selectedDateRange } from '../../stores/filters.js'
+import { appMode, seitenId, bildschirmTyp, privacyMode } from '../../stores/ui.js'
+import { appEinstellungen } from '../../stores/settings.js'
+import { gewaehlterZeitraum, gewaehltBruttoNetto, gewaehlteRichtungen, gewaehlterMonat, datumsBereich } from '../../stores/filters.js'
 import { gefilterteTradesFlach } from '../../stores/trades.js'
 import { pageById } from '../../config/menu.js'
-import { schalteMobilMenue, useExport } from '../../utils/journal/app.js'
-import { useDateCalFormat } from '../../utils/journal/format.js'
+import { schalteMobilMenue, exportiereDaten } from '../../utils/journal/app.js'
+import { formDatum } from '../../utils/journal/format.js'
 import dayjs, { anzeige } from '../../utils/journal/zeit.js'
 
 const props = defineProps({
@@ -30,22 +30,22 @@ const { t, te } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
-const mobil = computed(() => !props.inKopf && screenType.value === 'mobile')
+const mobil = computed(() => !props.inKopf && bildschirmTyp.value === 'mobile')
 
 /** Titel: Registry, sonst Routen-Meta, sonst leer — darf nie werfen. */
 const titel = computed(() => {
-    const key = pageById(pageId.value)?.titleKey || route.meta?.titleKey
+    const key = pageById(seitenId.value)?.titleKey || route.meta?.titleKey
     if (key && te(key)) return t(key)
     return route.meta?.title || ''
 })
 
 /* ── Filter-Zusammenfassung (nur Journal-Seiten mit Filtern) ── */
-const FILTER_SEITEN = ['dashboard', 'daily', 'calendar', 'screenshots', 'auswertung']
+const FILTER_SEITEN = ['journalUebersicht', 'tagesansicht', 'kalender', 'bilder', 'auswertung']
 
 function zeitraum() {
-    const id = pageId.value
-    if (id === 'dashboard' || id === 'auswertung') return selectedPeriodRange.value?.label || ''
-    if (id === 'daily' || id === 'calendar') {
+    const id = seitenId.value
+    if (id === 'journalUebersicht' || id === 'auswertung') return gewaehlterZeitraum.value?.label || ''
+    if (id === 'tagesansicht' || id === 'kalender') {
         const start = gewaehlterMonat.value?.start
         return start ? anzeige(dayjs.unix(start)).format('MMM YYYY') : ''
     }
@@ -53,11 +53,11 @@ function zeitraum() {
 }
 
 const filterText = computed(() => {
-    if (!FILTER_SEITEN.includes(pageId.value)) return ''
+    if (!FILTER_SEITEN.includes(seitenId.value)) return ''
     const teile = [zeitraum()]
     if (gewaehltBruttoNetto.value === 'gross') teile.push(t('options.gross'))
     else if (gewaehltBruttoNetto.value === 'net') teile.push(t('options.net'))
-    const pos = Array.isArray(selectedPositions.value) ? selectedPositions.value : []
+    const pos = Array.isArray(gewaehlteRichtungen.value) ? gewaehlteRichtungen.value : []
     if (pos.length === 1) teile.push(pos[0] === 'long' ? t('nav.long') : t('nav.short'))
     return teile.filter(Boolean).join(' · ')
 })
@@ -69,12 +69,12 @@ function schalteZensur() {
 }
 
 /* ── KI-Schnellzugriff ── */
-const kiAn = computed(() => currentUser.value?.aiEnabled !== false && currentUser.value?.aiEnabled !== 0)
-// `route.name` statt `pageId`: so stimmt es auch unmittelbar nach einer SPA-Navigation.
+const kiAn = computed(() => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0)
+// `route.name` statt `seitenId`: so stimmt es auch unmittelbar nach einer SPA-Navigation.
 const zeigeKi = computed(() => kiAn.value && route.name !== 'kiAgent')
 function oeffneKi() {
     // Der KI-Coach öffnet den Chat-Reiter und gibt die Herkunftsseite an den Server weiter.
-    router.push({ path: '/ki-coach', query: { tab: 'agent', sourcePage: pageId.value } })
+    router.push({ path: '/ki-coach', query: { tab: 'agent', sourcePage: seitenId.value } })
 }
 
 /* ── Export (nur Dashboard) ── */
@@ -82,7 +82,7 @@ const exportOffen = ref(false)
 const exportEl = ref(null)
 function exportiere(format) {
     exportOffen.value = false
-    useExport(format, useDateCalFormat(selectedDateRange.value?.start), useDateCalFormat(selectedDateRange.value?.end), gefilterteTradesFlach)
+    exportiereDaten(format, formDatum(datumsBereich.value?.start), formDatum(datumsBereich.value?.end), gefilterteTradesFlach)
 }
 function klickDraussen(e) {
     if (exportOffen.value && exportEl.value && !exportEl.value.contains(e.target)) exportOffen.value = false
@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
                 <Symbol name="ki" :groesse="18" />
             </button>
 
-            <div v-if="pageId === 'dashboard'" ref="exportEl" class="export">
+            <div v-if="seitenId === 'journalUebersicht'" ref="exportEl" class="export">
                 <button type="button" class="exportknopf" aria-haspopup="menu" :aria-expanded="exportOffen"
                     @click="exportOffen = !exportOffen">
                     {{ t('nav.export') }}

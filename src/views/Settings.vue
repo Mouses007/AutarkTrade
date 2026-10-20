@@ -8,10 +8,10 @@
  * liegt als Modul-Singleton unter `einstellungen/gemeinsam/`.
  *
  * Bereichswahl: Der Ref `bereich` ist die Wahrheit. Er startet aus
- * `route.params.bereich` (Route `/settings/:bereich?`), sonst aus dem
+ * `route.params.bereich` (Route `/einstellungen/:bereich?`), sonst aus dem
  * localStorage, sonst „allgemein"; ein unbekannter Bereich in der Adresse
  * ergibt „allgemein". Ein Wechsel schiebt die Route nach — aber nur, wenn die
- * Route den Parameter überhaupt kennt; solange der Router noch `/settings`
+ * Route den Parameter überhaupt kennt; solange der Router noch `/einstellungen`
  * ohne Parameter führt, bleibt es beim Ref und dem localStorage.
  *
  * Früher waren alle Bereiche gleichzeitig gemountet (v-show). Jetzt mountet
@@ -24,7 +24,7 @@
 import { onBeforeMount, ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { currentUser } from '../stores/settings.js'
+import { appEinstellungen } from '../stores/settings.js'
 import { dbGetSettings } from '../utils/db.js'
 import { Reiter } from '@/components/basis/index.js'
 import { ladeModi } from './einstellungen/gemeinsam/useModi.js'
@@ -72,7 +72,7 @@ function merke(id) {
 
 /** Bereich aus der Adresse; leer = keiner angegeben, unbekannt = „allgemein". */
 function ausRoute() {
-    if (route.name !== 'settings') return null
+    if (route.name !== 'einstellungen') return null
     const p = route.params?.bereich
     if (!p) return null
     return gueltig(String(p)) || 'allgemein'
@@ -95,7 +95,7 @@ watch(() => route.params?.bereich, () => {
 /** Kennt die Route den Parameter? Sonst verwürfe der Router ihn mit Warnung. */
 function routeHatBereich() {
     try {
-        return (router.getRoutes().find(r => r.name === 'settings')?.path || '').includes(':bereich')
+        return (router.getRoutes().find(r => r.name === 'einstellungen')?.path || '').includes(':bereich')
     } catch (_) {
         return false
     }
@@ -108,21 +108,21 @@ function bereichWechseln(id) {
     if (!routeHatBereich() || route.params?.bereich === id) return
     try {
         // Abfrageparameter (etwa ?section=api) bleiben erhalten
-        Promise.resolve(router.push({ name: 'settings', params: { bereich: id }, query: route.query }))
+        Promise.resolve(router.push({ name: 'einstellungen', params: { bereich: id }, query: route.query }))
             .catch(() => { /* Ref und localStorage stimmen schon */ })
     } catch (_) { /* dito */ }
 }
 
 /*
  * Gemeinsamen Stand laden, bevor ein Bereich gemountet wird: Die Sektionen
- * lesen `currentUser` beim Aufbau synchron. Settings direkt von der API laden
- * (nicht auf currentUser verlassen, da das Layout's useInitParse() evtl. noch
+ * lesen `appEinstellungen` beim Aufbau synchron. Settings direkt von der API laden
+ * (nicht auf appEinstellungen verlassen, da das Layout's starteApp() evtl. noch
  * nicht fertig ist).
  */
 const geladen = ref(false)
 onBeforeMount(async () => {
     try {
-        currentUser.value = await dbGetSettings()
+        appEinstellungen.value = await dbGetSettings()
     } catch (error) {
         console.log(' -> Error loading settings:', error)
     }

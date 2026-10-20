@@ -18,7 +18,7 @@ const route = useRoute()
 const { t } = useI18n()
 
 const kontext = computed(() => ['setup', 'update', 'manuell'].includes(route.query.kontext) ? route.query.kontext : 'update')
-const rueckkehrPfad = computed(() => route.query.rueckkehr || '/dashboard')
+const rueckkehrPfad = computed(() => route.query.rueckkehr || '/journal')
 
 const releaseNotes = ref('')
 const releaseName = ref('')

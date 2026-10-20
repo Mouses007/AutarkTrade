@@ -21,7 +21,7 @@
  */
 import DashboardLayout from '../layouts/Dashboard.vue'
 
-/** Die Unterseiten der Einstellungen (`/settings/:bereich`). Ohne Angabe: die erste. */
+/** Die Unterseiten der Einstellungen (`/einstellungen/:bereich`). Ohne Angabe: die erste. */
 export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'ki', 'live', 'benachrichtigungen', 'datenquellen', 'lizenz', 'rechtliches']
 
 /** Seite mit dem gemeinsamen Layout. */
@@ -29,22 +29,27 @@ function seite(path, name, laden, meta = {}, extra = {}) {
     return { path, name, component: laden, meta: { layout: DashboardLayout, ...meta }, ...extra }
 }
 
+/** Weiterleitung einer alten Adresse; Abfrage und Anker bleiben erhalten. */
+function weiter(von, nach) {
+    return { path: von, redirect: (to) => ({ path: nach, query: to.query, hash: to.hash }) }
+}
+
 /**
- * Wohin `/` führt. Synchron aus dem localStorage: `useInitApp()` spiegelt die
+ * Wohin `/` führt. Synchron aus dem localStorage: `starteApp()` spiegelt die
  * Einstellung `startseiteAn` dorthin, damit hier ohne Warten auf den Server
  * entschieden werden kann. Abgeschaltet heisst ausdrücklich `'0'`.
  */
 function startziel() {
     let an = null
     try { an = localStorage.getItem('startseiteAn') } catch { /* privater Modus */ }
-    return an === '0' ? '/dashboard' : '/chart'
+    return an === '0' ? '/journal' : '/chart'
 }
 
 /** Ein unbekannter Bereich fällt auf „Allgemein" — sonst stünde eine leere Einstellungsseite da. */
 function pruefeBereich(to) {
     const b = to.params.bereich
     if (b && !EINSTELLUNGS_BEREICHE.includes(b)) {
-        return { path: '/settings/' + EINSTELLUNGS_BEREICHE[0], query: to.query, hash: to.hash }
+        return { path: '/einstellungen/' + EINSTELLUNGS_BEREICHE[0], query: to.query, hash: to.hash }
     }
     return true
 }
@@ -65,28 +70,38 @@ export const routen = [
     },
 
     // ── Journal ─────────────────────────────────────────────
-    seite('/dashboard', 'dashboard', () => import('../views/Dashboard.vue'), { title: 'Dashboard', titleKey: 'nav.dashboard' }),
+    seite('/journal', 'journalUebersicht', () => import('../views/Dashboard.vue'), { title: 'Dashboard', titleKey: 'nav.dashboard' }),
     seite('/accounts', 'accounts', () => import('../views/Accounts.vue'), { title: 'Konten', titleKey: 'nav.accounts' }),
-    seite('/calendar', 'calendar', () => import('../views/Calendar.vue'), { title: 'Kalender', titleKey: 'nav.calendar' }),
-    seite('/daily', 'daily', () => import('../views/Daily.vue'), { title: 'Tagesansicht', titleKey: 'nav.dailyView' }),
+    seite('/kalender', 'kalender', () => import('../views/Calendar.vue'), { title: 'Kalender', titleKey: 'nav.calendar' }),
+    seite('/tagesansicht', 'tagesansicht', () => import('../views/Daily.vue'), { title: 'Tagesansicht', titleKey: 'nav.dailyView' }),
     seite('/incoming', 'incoming', () => import('../views/Incoming.vue'), { title: 'Pendente Trades', titleKey: 'nav.pendingTrades' }),
-    seite('/screenshots', 'screenshots', () => import('../views/Screenshots.vue'), { title: 'Screenshots', titleKey: 'nav.screenshots' }),
-    seite('/playbook', 'playbook', () => import('../views/Playbook.vue'), { title: 'Playbook', titleKey: 'nav.playbook' }),
+    seite('/bilder', 'bilder', () => import('../views/Screenshots.vue'), { title: 'Screenshots', titleKey: 'nav.screenshots' }),
+    seite('/bewertungen', 'bewertungen', () => import('../views/Playbook.vue'), { title: 'Playbook', titleKey: 'nav.playbook' }),
     seite('/auswertung', 'auswertung', () => import('../views/Auswertung.vue'), { title: 'Auswertung', titleKey: 'nav.evaluation' }),
     seite('/ki-coach', 'kiAgent', () => import('../views/KiAgent.vue'), { title: 'KI-Coach', titleKey: 'nav.kiAgent' }),
-    seite('/addTrades', 'addTrades', () => import('../views/AddTrades.vue'), { title: 'Manueller Import', titleKey: 'nav.manualImport' }),
-    seite('/addExcursions', 'addExcursions', () => import('../views/AddExcursions.vue'), { title: 'Exkursionen', titleKey: 'nav.addExcursions' }),
-    // Alte Adressen
-    { path: '/diary', redirect: '/incoming' },
-    { path: '/addDiary', redirect: '/incoming' },
-    { path: '/addPlaybook', redirect: '/daily' },
-    { path: '/addScreenshot', redirect: '/screenshots' },
+    seite('/import', 'tradeImport', () => import('../views/AddTrades.vue'), { title: 'Manueller Import', titleKey: 'nav.manualImport' }),
+    seite('/exkursionen', 'exkursionen', () => import('../views/AddExcursions.vue'), { title: 'Exkursionen', titleKey: 'nav.addExcursions' }),
+    // Alte Adressen (Lesezeichen, Links in alten Nachrichten): Abfrage und
+    // Anker gehen mit, z. B. `/playbook?tradeId=…`.
+    weiter('/dashboard', '/journal'),
+    weiter('/calendar', '/kalender'),
+    weiter('/daily', '/tagesansicht'),
+    weiter('/screenshots', '/bilder'),
+    weiter('/playbook', '/bewertungen'),
+    weiter('/addTrades', '/import'),
+    weiter('/addExcursions', '/exkursionen'),
+    weiter('/diary', '/incoming'),
+    weiter('/addDiary', '/incoming'),
+    weiter('/addPlaybook', '/tagesansicht'),
+    weiter('/addScreenshot', '/bilder'),
 
     // ── Einstellungen (modusübergreifend) ───────────────────
-    seite('/settings/:bereich?', 'settings', () => import('../views/Settings.vue'),
+    seite('/einstellungen/:bereich?', 'einstellungen', () => import('../views/Settings.vue'),
         { title: 'Einstellungen', titleKey: 'nav.settings', mode: 'any' }, { beforeEnter: pruefeBereich }),
+    // Alte Adresse der Einstellungen, samt Bereich (`/settings/ki` → `/einstellungen/ki`).
+    { path: '/settings/:bereich?', redirect: (to) => ({ path: '/einstellungen' + (to.params.bereich ? '/' + to.params.bereich : ''), query: to.query, hash: to.hash }) },
     // Die Börsen-API-Schlüssel stehen im Journal-Bereich.
-    { path: '/imports', redirect: '/settings/journal' },
+    weiter('/imports', '/einstellungen/journal'),
 
     // ── Live-Analyse ────────────────────────────────────────
     seite('/marktradar', 'marktradar', () => import('../views/Marktradar.vue'), { title: 'Marktradar', titleKey: 'nav.marktradar', mode: 'live' }),

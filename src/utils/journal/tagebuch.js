@@ -4,15 +4,15 @@
  */
 import dayjs from './zeit.js'
 import { dbFind, dbFirst, dbCreate, dbUpdate, dbGetSettings, dbUpdateSettings } from '../db.js'
-import { pageId, queryLimit, speichernNoetig } from '../../stores/app/rahmen.js'
-import { setupsLaden, spinnerSetupsText } from '../../stores/app/laden.js'
-import { gewaehlterBereich, gewaehlterTagIndex, filteredSuggestions, daysBack } from '../../stores/journal/filter.js'
+import { seitenId, abfrageGrenze, speichernNoetig } from '../../stores/app/rahmen.js'
+import { setupsLaden, setupsLadeText } from '../../stores/app/laden.js'
+import { gewaehlterBereich, gewaehlterTagIndex, filteredSuggestions, tageZurueck } from '../../stores/journal/filter.js'
 import { journalTage } from '../../stores/journal/auswertung.js'
 import { screenshot } from '../../stores/journal/screenshots.js'
 import {
     excursions, zufriedenheitTage, zufriedenheitTrades, tags, verfuegbareTags, verfuegbareTagListe,
     tradeTags, neueTradeTags, tradeTagsGeaendert, tradeTagsDateUnix, tradeTagsId, tagInput, showTagsList,
-    notes, auswertungNotes, tradeNotiz, tradeNoteDateUnix, tradeNoteId, offenerTagIndex, tradeIndexAktiv,
+    notes, auswertungNotes, tradeNotiz, notizTagUnix, notizTradeId, offenerTagIndex, tradeIndexAktiv,
 } from '../../stores/journal/tagebuch.js'
 import { istGanzerZeitraum } from './hilfen.js'
 
@@ -31,7 +31,7 @@ const imBereichAusserAlles = () => (istGanzerZeitraum(gewaehlterBereich.value) ?
 export async function ladeZufriedenheit() {
     zufriedenheitTrades.length = 0
     zufriedenheitTage.length = 0
-    const zeilen = await dbFind('satisfactions', { descending: 'dateUnix', ...imBereichAusserAlles(), limit: queryLimit.value })
+    const zeilen = await dbFind('satisfactions', { descending: 'dateUnix', ...imBereichAusserAlles(), limit: abfrageGrenze.value })
     for (const z of zeilen) {
         const eintrag = { tradeId: z.tradeId, satisfaction: z.satisfaction, dateUnix: z.dateUnix }
         if (z.tradeId !== undefined && z.tradeId !== null && z.tradeId !== '') zufriedenheitTrades.push(eintrag)
@@ -40,9 +40,9 @@ export async function ladeZufriedenheit() {
 }
 
 export async function ladeExkursionen() {
-    const abfrage = pageId.value === 'addExcursions'
-        ? { ascending: 'dateUnix', greaterThanOrEqualTo: { dateUnix: dayjs().subtract(daysBack.value, 'day').unix() }, lessThan: { dateUnix: dayjs().unix() } }
-        : { ascending: 'dateUnix', ...imBereichAusserAlles(), limit: queryLimit.value }
+    const abfrage = seitenId.value === 'exkursionen'
+        ? { ascending: 'dateUnix', greaterThanOrEqualTo: { dateUnix: dayjs().subtract(tageZurueck.value, 'day').unix() }, lessThan: { dateUnix: dayjs().unix() } }
+        : { ascending: 'dateUnix', ...imBereichAusserAlles(), limit: abfrageGrenze.value }
     const zeilen = await dbFind('excursions', abfrage)
     excursions.length = 0
     for (const z of zeilen) excursions.push(z)
@@ -50,7 +50,7 @@ export async function ladeExkursionen() {
 
 export async function ladeTags() {
     tags.length = 0
-    const abfrage = { limit: queryLimit.value, ...(pageId.value === 'daily' ? imBereich() : {}) }
+    const abfrage = { limit: abfrageGrenze.value, ...(seitenId.value === 'tagesansicht' ? imBereich() : {}) }
     const zeilen = await dbFind('tags', abfrage)
     for (const z of zeilen) tags.push({ tradeId: z.tradeId, tags: z.tags, dateUnix: z.dateUnix })
 }
@@ -74,7 +74,7 @@ export function ladeVerfuegbareTags() {
 
 export async function ladeNotizen() {
     notes.length = 0
-    const zeilen = await dbFind('notes', { ...imBereich(), limit: queryLimit.value })
+    const zeilen = await dbFind('notes', { ...imBereich(), limit: abfrageGrenze.value })
     for (const z of zeilen) {
         notes.push({
             tradeId: z.tradeId, note: z.note, dateUnix: z.dateUnix,
@@ -87,7 +87,7 @@ export async function ladeNotizen() {
 
 export async function useGetAuswertungNotes() {
     auswertungNotes.length = 0
-    const zeilen = await dbFind('notes', { ...imBereichAusserAlles(), limit: queryLimit.value })
+    const zeilen = await dbFind('notes', { ...imBereichAusserAlles(), limit: abfrageGrenze.value })
     for (const z of zeilen) {
         auswertungNotes.push({
             tradeId: z.tradeId, dateUnix: z.dateUnix, note: z.note,
@@ -189,7 +189,7 @@ export async function useTradeTagsChange(art, wert) {
         speichernNoetig.value = true
     }
 
-    if (pageId.value !== 'daily') return
+    if (seitenId.value !== 'tagesansicht') return
     const tag = journalTage[offenerTagIndex.value]
     if (!tag) return
     tradeTagsDateUnix.value = tag.dateUnix
@@ -201,13 +201,13 @@ export function useFilterTags() {
     const vorschlaege = alleTags().filter(tag => beginntMit(tag, tagInput.value))
     filteredSuggestions.length = 0
     for (const v of vorschlaege) filteredSuggestions.push(v)
-    showTagsList.value = tagInput.value !== '' && vorschlaege.length > 0 ? pageId.value : ''
+    showTagsList.value = tagInput.value !== '' && vorschlaege.length > 0 ? seitenId.value : ''
 }
 
 export function useToggleTagsDropdown() {
     gewaehlterTagIndex.value = -1
     if (showTagsList.value === '') {
-        showTagsList.value = pageId.value
+        showTagsList.value = seitenId.value
         filteredSuggestions.length = 0
         for (const v of alleTags()) filteredSuggestions.push(v)
     } else {
@@ -223,14 +223,14 @@ export function useResetTags() {
 export async function speichereTags() {
     setupsLaden.value = true
     const ids = tradeTags.map(x => x.id)
-    const beimScreenshot = pageId.value === 'addScreenshot'
+    const beimScreenshot = seitenId.value === 'addScreenshot'
     const schluessel = beimScreenshot ? screenshot.name : (tradeTagsId.value || String(tradeTagsDateUnix.value))
     const vorhanden = await dbFirst('tags', { equalTo: { tradeId: schluessel } })
     if (vorhanden) {
-        spinnerSetupsText.value = 'Updating'
+        setupsLadeText.value = 'Updating'
         await dbUpdate('tags', vorhanden.objectId, { tags: ids })
     } else {
-        spinnerSetupsText.value = 'Saving'
+        setupsLadeText.value = 'Saving'
         await dbCreate('tags', beimScreenshot
             ? { tags: ids, dateUnix: screenshot.dateUnix, tradeId: screenshot.name }
             : { tags: ids, dateUnix: tradeTagsDateUnix.value, tradeId: tradeTagsId.value || String(tradeTagsDateUnix.value) })
@@ -246,7 +246,7 @@ export async function speichereVerfuegbareTags() {
         katalog = [{ id: 'group_0', name: 'Ungrouped', color: UNGRUPPIERT_FARBE, tags: tradeTags.map(tagKopie) }]
     } else {
         const ungruppiert = katalog.find(g => g.id === 'group_0')
-        const quelle = pageId.value === 'registerSignup' ? tradeTags : neueTradeTags
+        const quelle = seitenId.value === 'registerSignup' ? tradeTags : neueTradeTags
         for (const tag of quelle) {
             // fehlt group_0, wirft der Zugriff — wie bisher
             if (!ungruppiert.tags.some(x => x.id === tag.id)) ungruppiert.tags.push(tagKopie(tag))
@@ -259,13 +259,13 @@ export async function speichereVerfuegbareTags() {
 
 export async function speichereNotiz() {
     setupsLaden.value = true
-    const vorhanden = await dbFirst('notes', { equalTo: { tradeId: tradeNoteId.value } })
+    const vorhanden = await dbFirst('notes', { equalTo: { tradeId: notizTradeId.value } })
     if (vorhanden) {
-        spinnerSetupsText.value = 'Updating'
+        setupsLadeText.value = 'Updating'
         await dbUpdate('notes', vorhanden.objectId, { note: tradeNotiz.value })
     } else {
-        spinnerSetupsText.value = 'Saving'
-        await dbCreate('notes', { note: tradeNotiz.value, dateUnix: tradeNoteDateUnix.value, tradeId: tradeNoteId.value })
+        setupsLadeText.value = 'Saving'
+        await dbCreate('notes', { note: tradeNotiz.value, dateUnix: notizTagUnix.value, tradeId: notizTradeId.value })
     }
 }
 

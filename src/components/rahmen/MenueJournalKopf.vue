@@ -15,8 +15,8 @@ import { ref, computed, onMounted, defineAsyncComponent } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import Symbol from '../basis/Symbol.vue'
-import { pageId } from '../../stores/ui.js'
-import { selectedBroker, brokers, selectedTradeCategory, BOT_BROKERS } from '../../stores/filters.js'
+import { seitenId } from '../../stores/ui.js'
+import { gewaehlteBoerse, brokers, selectedTradeCategory, BOT_BROKERS } from '../../stores/filters.js'
 
 // Das Filterpanel zieht viel Journal-Code nach sich; geladen wird es erst,
 // wenn das Journal-Menü wirklich erscheint.
@@ -48,14 +48,14 @@ const boersen = computed(() => {
 })
 
 function waehleBoerse(wert) {
-    if (wert === selectedBroker.value) return
-    selectedBroker.value = wert
-    try { localStorage.setItem('selectedBroker', wert) } catch { /* privater Modus */ }
+    if (wert === gewaehlteBoerse.value) return
+    gewaehlteBoerse.value = wert
+    try { localStorage.setItem('at.journal.boerse', wert) } catch { /* privater Modus */ }
     window.location.reload()
 }
 
-const aufKonten = computed(() => pageId.value === 'accounts')
-const mitBot = computed(() => BOT_BROKERS.includes(selectedBroker.value))
+const aufKonten = computed(() => seitenId.value === 'accounts')
+const mitBot = computed(() => BOT_BROKERS.includes(gewaehlteBoerse.value))
 
 function waehleKategorie(kat) {
     if (kat === selectedTradeCategory.value && !aufKonten.value) return
@@ -63,7 +63,7 @@ function waehleKategorie(kat) {
     try { localStorage.setItem('selectedTradeCategory', kat) } catch { /* privater Modus */ }
     // Auf der Kontenübersicht ist keine Kategorie aktiv — der Klick führt
     // zurück in die Trading-Ansicht, auch wenn die Kategorie gleich bleibt.
-    if (aufKonten.value) window.location.href = '/dashboard'
+    if (aufKonten.value) window.location.href = '/journal'
     else window.location.reload()
 }
 
@@ -84,7 +84,7 @@ onMounted(() => {
             <div class="at-menue-ueberschrift">{{ t('nav.exchange') }}</div>
             <div class="pillen">
                 <button v-for="b in boersen" :key="b.value" type="button" class="pille"
-                    :class="{ aktiv: selectedBroker === b.value }" :aria-pressed="selectedBroker === b.value"
+                    :class="{ aktiv: gewaehlteBoerse === b.value }" :aria-pressed="gewaehlteBoerse === b.value"
                     @click="waehleBoerse(b.value)">{{ b.label }}</button>
             </div>
         </section>

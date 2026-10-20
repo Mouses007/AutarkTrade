@@ -69,7 +69,7 @@ export function sichereGroessenanpassung() {
         clearTimeout(groesseTimer)
         groesseTimer = setTimeout(() => {
             if (typeof document === 'undefined') return
-            for (const k of document.querySelectorAll('.chartClass, .chartIdCardClass')) {
+            for (const k of document.querySelectorAll('.diagrammFlaeche, .diagrammKarteFlaeche')) {
                 instanzAn(k)?.resize()
             }
         }, 150)

@@ -12,7 +12,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { dbUpdateSettings } from '@/utils/db.js'
-import { currentUser } from '@/stores/settings.js'
+import { appEinstellungen } from '@/stores/settings.js'
 import { loadSymbolMeta } from '@/utils/liveSymbols.js'
 
 /* Vorgabe an — die Seite kostet nichts, solange man sie nicht öffnet. Wer nur
@@ -138,7 +138,7 @@ export function useRadarEinstellungen() {
     }
 
     function loadRadarSettings() {
-        const s = currentUser.value || {}
+        const s = appEinstellungen.value || {}
         radarRsiSymbols.value = s.radarRsiSymbols || ''
         boersenLinks.value = String(s.boersenLinks || 'bitunix,bitget,pionex,tradingview').split(',')
             .map(b => b.trim()).filter(b => ['bitunix', 'bitget', 'pionex', 'tradingview'].includes(b))
@@ -279,8 +279,8 @@ export function useRadarEinstellungen() {
         const daten = feld ? { [feld]: alle[feld] } : alle
         await dbUpdateSettings(daten)
         // Den lokalen Stand nachziehen, sonst schreibt der nächste Speichervorgang
-        // wieder gegen einen veralteten currentUser
-        if (currentUser.value) Object.assign(currentUser.value, daten)
+        // wieder gegen einen veralteten appEinstellungen
+        if (appEinstellungen.value) Object.assign(appEinstellungen.value, daten)
         radarMeldung.value = 'Gespeichert.'
         setTimeout(() => { radarMeldung.value = '' }, 2500)
     }

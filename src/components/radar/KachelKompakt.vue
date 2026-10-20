@@ -23,7 +23,7 @@ import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/journal/zeit.js'
 import { lageZu } from '../../../shared/handelszeiten.js'
 import { liveSymbol } from '../../stores/live.js'
-import { currentUser } from '../../stores/app/rahmen.js'
+import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { boerseUrl, boersenLinksVon, BOERSE_KURZ, BOERSE_NAME } from '../../utils/boersenLinks.js'
 import Symbol from '@/components/basis/Symbol.vue'
 import KiHinweis from '@/components/quellen/KiHinweis.vue'
@@ -151,7 +151,7 @@ const LAGE_FARBE = { trend_auf: 'kpPlus', trend_ab: 'kpMinus', nachrichtenrisiko
  * Bitunix.
  */
 const OEFFNEN = ['bitunix', 'tradingview']
-const coinLinks = (z) => boersenLinksVon(z, currentUser.value?.boersenLinks)
+const coinLinks = (z) => boersenLinksVon(z, appEinstellungen.value?.boersenLinks)
     .filter(e => OEFFNEN.includes(e.boerse))
 
 /** Coin-Radar: Klick auf den Coin wählt ihn wie in der eigenen Kachel. */

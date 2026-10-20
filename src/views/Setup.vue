@@ -30,7 +30,7 @@ onMounted(async () => {
     try {
         const { data } = await axios.get('/api/setup/status')
         if (data.setupComplete) {
-            router.replace('/dashboard')
+            router.replace('/journal')
         }
     } catch (e) {
         // ignore — proceed with setup

@@ -4,7 +4,7 @@
  * Satz, warum, und optional dem Knopf, der das ändert (Slot).
  *
  *   <Leerzustand titel="Noch keine Trades" text="Verbinde eine Börse unter Einstellungen.">
- *     <Knopf art="haupt" to="/settings">Börse verbinden</Knopf>
+ *     <Knopf art="haupt" to="/einstellungen">Börse verbinden</Knopf>
  *   </Leerzustand>
  */
 import Symbol from './Symbol.vue'

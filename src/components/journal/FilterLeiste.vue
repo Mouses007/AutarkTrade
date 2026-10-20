@@ -10,16 +10,16 @@ import dayjs from '../../utils/journal/zeit.js'
 import Symbol from '../basis/Symbol.vue'
 import Knopf from '../basis/Knopf.vue'
 import InfoTipp from '../InfoTipp.vue'
-import { pageId, timeZoneTrade, journalHatDaten } from '../../stores/app/rahmen.js'
+import { seitenId, tradeZeitzone, journalHatDaten } from '../../stores/app/rahmen.js'
 import {
-    zeitraumListe, positions, timeFrames, ratios, grossNet, plSatisfaction, selectedPositions, selectedTimeFrame,
-    selectedRatio, selectedAccounts, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, selectedDateRange, gewaehlterMonat,
-    selectedMonthPreset, selectedPeriodRange, plOderZufriedenheitEntwurf, betragArt, betragGross, tagAuswahl,
+    zeitraumListe, richtungsOptionen, zeitrahmenOptionen, kennzahlOptionen, bruttoNettoOptionen, plZufriedenheitOptionen, gewaehlteRichtungen, gewaehlterZeitrahmen,
+    gewaehlteKennzahl, gewaehlteKonten, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, datumsBereich, gewaehlterMonat,
+    selectedMonthPreset, gewaehlterZeitraum, plOderZufriedenheitEntwurf, betragArt, betragGross, tagAuswahl,
 } from '../../stores/journal/filter.js'
 import { verfuegbareTags } from '../../stores/journal/tagebuch.js'
-import { useDateCalFormat, useDateCalFormatMonth, useCapitalizeFirstLetter } from '../../utils/journal/format.js'
+import { formDatum, formMonat, formGrossAnfang } from '../../utils/journal/format.js'
 import { starteKalender, starteDashboard, starteTagesansicht, useMountAuswertung, pruefeSichtbarkeit } from '../../utils/journal/ablauf.js'
-import { useCloseMobileMenu } from '../../utils/journal/app.js'
+import { schliesseMobilMenue } from '../../utils/journal/app.js'
 import { ladeDiagramme } from '../../utils/journal/diagrammLader.js'
 import { ladeBilderNeu } from '../../utils/screenshots.js'
 
@@ -27,13 +27,13 @@ const { t } = useI18n()
 
 const OHNE_TAG = 't000t'
 const ZEILEN = {
-    dashboard: ['periodRange', 'grossNet', 'positions', 'timeFrame', 'ratio', 'tags'],
-    calendar: ['month', 'grossNet', 'plSatisfaction'],
-    daily: ['month', 'grossNet', 'positions', 'tags'],
-    screenshots: ['grossNet', 'positions', 'tags'],
-    auswertung: ['periodRange', 'positions', 'tags'],
+    dashboard: ['zeitraum', 'bruttoNetto', 'richtung', 'zeitrahmen', 'kennzahl', 'tags'],
+    calendar: ['monat', 'bruttoNetto', 'plZufriedenheit'],
+    daily: ['monat', 'bruttoNetto', 'richtung', 'tags'],
+    screenshots: ['bruttoNetto', 'richtung', 'tags'],
+    auswertung: ['zeitraum', 'richtung', 'tags'],
 }
-const zeilen = computed(() => ZEILEN[pageId.value] || [])
+const zeilen = computed(() => ZEILEN[seitenId.value] || [])
 const zeigt = (zeile) => zeilen.value.includes(zeile)
 
 const offen = ref(false)
@@ -41,46 +41,46 @@ const positionenOffen = ref(false)
 const tagsOffen = ref(false)
 
 // ── Zeitraum ───────────────────────────────────────────────────────────────
-const periodeWert = computed(() => selectedPeriodRange.value?.value)
+const periodeWert = computed(() => gewaehlterZeitraum.value?.value)
 function waehlePeriode(wert) {
     const p = zeitraumListe.find(x => x.value === wert)
     if (!p) return
-    selectedPeriodRange.value = p
-    selectedDateRange.value = { start: p.start, end: p.end }
+    gewaehlterZeitraum.value = p
+    datumsBereich.value = { start: p.start, end: p.end }
 }
 function passendePeriode() {
-    const r = selectedDateRange.value
-    selectedPeriodRange.value = zeitraumListe.find(p => p.start === r.start && p.end === r.end)
+    const r = datumsBereich.value
+    gewaehlterZeitraum.value = zeitraumListe.find(p => p.start === r.start && p.end === r.end)
         || zeitraumListe.find(p => p.value === 'custom')
 }
 function setzeStart(datum) {
     if (!datum) return
-    selectedDateRange.value.start = dayjs.tz(datum, timeZoneTrade.value).startOf('day').unix()
+    datumsBereich.value.start = dayjs.tz(datum, tradeZeitzone.value).startOf('day').unix()
     passendePeriode()
 }
 function setzeEnde(datum) {
     if (!datum) return
-    selectedDateRange.value.end = dayjs.tz(datum, timeZoneTrade.value).endOf('day').unix()
+    datumsBereich.value.end = dayjs.tz(datum, tradeZeitzone.value).endOf('day').unix()
     passendePeriode()
 }
 
 // ── Monat ──────────────────────────────────────────────────────────────────
-const monatWert = computed(() => (gewaehlterMonat.value ? useDateCalFormatMonth(gewaehlterMonat.value.start) : ''))
+const monatWert = computed(() => (gewaehlterMonat.value ? formMonat(gewaehlterMonat.value.start) : ''))
 function setzeMonat(wert) {
     if (!wert) return
-    const tag = dayjs.tz(`${wert}-01`, timeZoneTrade.value)
-    const start = tag.startOf('month').unix()
-    gewaehlterMonat.value = { start, end: tag.endOf('month').unix() }
-    const jetzt = dayjs().tz(timeZoneTrade.value).startOf('month').unix()
+    const tag = dayjs.tz(`${wert}-01`, tradeZeitzone.value)
+    const start = tag.startOf('monat').unix()
+    gewaehlterMonat.value = { start, end: tag.endOf('monat').unix() }
+    const jetzt = dayjs().tz(tradeZeitzone.value).startOf('monat').unix()
     selectedMonthPreset.value = start === jetzt ? 'current' : 'custom'
 }
 
 // ── Richtung ───────────────────────────────────────────────────────────────
 const positionenText = computed(() => {
-    const gewaehlt = selectedPositions.value || []
-    if (gewaehlt.length === positions.value.length) return t('common.all')
+    const gewaehlt = gewaehlteRichtungen.value || []
+    if (gewaehlt.length === richtungsOptionen.value.length) return t('common.all')
     if (gewaehlt.length === 0) return t('common.none')
-    return positions.value.filter(p => gewaehlt.includes(p.value)).map(p => p.label).join(', ')
+    return richtungsOptionen.value.filter(p => gewaehlt.includes(p.value)).map(p => p.label).join(', ')
 })
 
 // ── Tags ───────────────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ function schalteAlleTags() {
 
 // ── Anwenden ───────────────────────────────────────────────────────────────
 const endeVorStart = () => {
-    const r = selectedDateRange.value
+    const r = datumsBereich.value
     return !!r && r.end < r.start
 }
 const speichere = (k, v) => { try { localStorage.setItem(k, v) } catch { /* egal */ } }
@@ -122,39 +122,39 @@ async function speichern() {
         alert(t('filters.endBeforeStart'))
         return
     }
-    speichere('selectedDateRange', JSON.stringify(selectedDateRange.value))
-    if (pageId.value === 'dashboard' && journalHatDaten.value) (await ladeDiagramme()).zeichneDiagramme('clear')
-    speichere('selectedPeriodRange', JSON.stringify(selectedPeriodRange.value))
-    speichere('selectedAccounts', selectedAccounts.value)
-    speichere('selectedGrossNet', gewaehltBruttoNetto.value)
+    speichere('at.journal.datumsBereich', JSON.stringify(datumsBereich.value))
+    if (seitenId.value === 'journalUebersicht' && journalHatDaten.value) (await ladeDiagramme()).zeichneDiagramme('clear')
+    speichere('at.journal.zeitraum', JSON.stringify(gewaehlterZeitraum.value))
+    speichere('at.journal.konten', gewaehlteKonten.value)
+    speichere('at.journal.bruttoNetto', gewaehltBruttoNetto.value)
     betragArt.value = gewaehltBruttoNetto.value
-    betragGross.value = gewaehltBruttoNetto.value ? useCapitalizeFirstLetter(gewaehltBruttoNetto.value) : gewaehltBruttoNetto.value
-    speichere('selectedPositions', selectedPositions.value)
-    speichere('selectedTimeFrame', selectedTimeFrame.value)
-    speichere('selectedRatio', selectedRatio.value)
-    if (pageId.value === 'daily' || pageId.value === 'calendar') {
-        speichere('selectedMonth', JSON.stringify(gewaehlterMonat.value))
+    betragGross.value = gewaehltBruttoNetto.value ? formGrossAnfang(gewaehltBruttoNetto.value) : gewaehltBruttoNetto.value
+    speichere('at.journal.richtungen', gewaehlteRichtungen.value)
+    speichere('at.journal.zeitrahmen', gewaehlterZeitrahmen.value)
+    speichere('at.journal.kennzahl', gewaehlteKennzahl.value)
+    if (seitenId.value === 'tagesansicht' || seitenId.value === 'kalender') {
+        speichere('at.journal.monat', JSON.stringify(gewaehlterMonat.value))
         speichere('selectedMonthPreset', selectedMonthPreset.value)
     }
-    speichere('selectedTags', tagAuswahl.value)
+    speichere('at.journal.tags', tagAuswahl.value)
     markiereAlleTags()
     if (plOderZufriedenheitEntwurf.value != null) {
         gewaehltPlOderZufriedenheit.value = plOderZufriedenheitEntwurf.value
-        speichere('selectedPlSatisfaction', gewaehltPlOderZufriedenheit.value)
+        speichere('at.journal.plZufriedenheit', gewaehltPlOderZufriedenheit.value)
         plOderZufriedenheitEntwurf.value = null
     }
 
-    if (pageId.value === 'dashboard') {
+    if (seitenId.value === 'journalUebersicht') {
         starteDashboard()
-    } else if (pageId.value === 'daily') {
+    } else if (seitenId.value === 'tagesansicht') {
         await starteTagesansicht()
         pruefeSichtbarkeit()
-    } else if (pageId.value === 'screenshots') {
+    } else if (seitenId.value === 'bilder') {
         await ladeBilderNeu()
         pruefeSichtbarkeit()
-    } else if (pageId.value === 'calendar') {
+    } else if (seitenId.value === 'kalender') {
         starteKalender(true)
-    } else if (pageId.value === 'auswertung') {
+    } else if (seitenId.value === 'auswertung') {
         useMountAuswertung()
     }
 }
@@ -166,7 +166,7 @@ function anwenden() {
     }
     offen.value = false
     speichern()
-    useCloseMobileMenu()
+    schliesseMobilMenue()
 }
 
 onMounted(() => {
@@ -184,85 +184,85 @@ onMounted(() => {
 
         <div v-show="offen" class="filterInhalt">
             <!-- Zeitraum -->
-            <div v-if="zeigt('periodRange')" class="filterZeile">
+            <div v-if="zeigt('zeitraum')" class="filterZeile">
                 <div class="filterSteuer">
                     <select class="at-feld klein" :value="periodeWert" @change="waehlePeriode($event.target.value)">
                         <option v-for="p in zeitraumListe" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
-                    <div v-if="periodeWert !== 'all' && selectedDateRange" class="filterDaten">
-                        <input type="date" class="at-feld klein" :value="useDateCalFormat(selectedDateRange.start)" @change="setzeStart($event.target.value)">
-                        <input type="date" class="at-feld klein" :value="useDateCalFormat(selectedDateRange.end)" @change="setzeEnde($event.target.value)">
+                    <div v-if="periodeWert !== 'all' && datumsBereich" class="filterDaten">
+                        <input type="date" class="at-feld klein" :value="formDatum(datumsBereich.start)" @change="setzeStart($event.target.value)">
+                        <input type="date" class="at-feld klein" :value="formDatum(datumsBereich.end)" @change="setzeEnde($event.target.value)">
                     </div>
                 </div>
-                <span class="filterInfo"><InfoTipp schluessel="filters.periodRange" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.zeitraum" /></span>
             </div>
 
             <!-- Monat -->
-            <div v-if="zeigt('month')" class="filterZeile">
+            <div v-if="zeigt('monat')" class="filterZeile">
                 <div class="filterSteuer">
                     <input type="month" class="at-feld klein" :aria-label="t('filters.monthLabel')" :value="monatWert" @input="setzeMonat($event.target.value)">
                 </div>
-                <span class="filterInfo"><InfoTipp schluessel="filters.month" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.monat" /></span>
             </div>
 
             <!-- Brutto/Netto -->
-            <div v-if="zeigt('grossNet')" class="filterZeile">
+            <div v-if="zeigt('bruttoNetto')" class="filterZeile">
                 <div class="filterSteuer">
                     <select v-model="gewaehltBruttoNetto" class="at-feld klein">
-                        <option v-for="g in grossNet" :key="g.value" :value="g.value">{{ g.label }}</option>
+                        <option v-for="g in bruttoNettoOptionen" :key="g.value" :value="g.value">{{ g.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo"><InfoTipp schluessel="filters.grossNet" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.bruttoNetto" /></span>
             </div>
 
             <!-- Richtung -->
-            <div v-if="zeigt('positions')" class="filterZeile">
+            <div v-if="zeigt('richtung')" class="filterZeile">
                 <div class="filterSteuer">
                     <button type="button" class="at-feld klein filterAufklapp" @click="positionenOffen = !positionenOffen"><span class="at-kuerzen">{{ positionenText }}</span><Symbol name="runter" /></button>
                     <div v-show="positionenOffen" class="filterListe">
-                        <label v-for="p in positions" :key="p.value" class="filterHaken">
-                            <input v-model="selectedPositions" type="checkbox" :value="p.value">
+                        <label v-for="p in richtungsOptionen" :key="p.value" class="filterHaken">
+                            <input v-model="gewaehlteRichtungen" type="checkbox" :value="p.value">
                             {{ p.label }}
                         </label>
                     </div>
                 </div>
-                <span class="filterInfo"><InfoTipp schluessel="filters.positions" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.richtung" /></span>
             </div>
 
             <!-- Balken je Zeitraum -->
-            <div v-if="zeigt('timeFrame')" class="filterZeile">
+            <div v-if="zeigt('zeitrahmen')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-model="selectedTimeFrame" class="at-feld klein">
-                        <option v-for="f in timeFrames" :key="f.value" :value="f.value">{{ f.label }}</option>
+                    <select v-model="gewaehlterZeitrahmen" class="at-feld klein">
+                        <option v-for="f in zeitrahmenOptionen" :key="f.value" :value="f.value">{{ f.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo"><InfoTipp schluessel="filters.timeFrame" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.zeitrahmen" /></span>
             </div>
 
             <!-- Kennzahl -->
-            <div v-if="zeigt('ratio')" class="filterZeile">
+            <div v-if="zeigt('kennzahl')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-model="selectedRatio" class="at-feld klein">
-                        <option v-for="r in ratios" :key="r.value" :value="r.value">{{ r.label }}</option>
+                    <select v-model="gewaehlteKennzahl" class="at-feld klein">
+                        <option v-for="r in kennzahlOptionen" :key="r.value" :value="r.value">{{ r.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo"><InfoTipp schluessel="filters.ratio" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.kennzahl" /></span>
             </div>
 
             <!-- PnL oder Zufriedenheit -->
-            <div v-if="zeigt('plSatisfaction')" class="filterZeile">
+            <div v-if="zeigt('plZufriedenheit')" class="filterZeile">
                 <div class="filterSteuer">
                     <select class="at-feld klein" :value="gewaehltPlOderZufriedenheit" @change="plOderZufriedenheitEntwurf = $event.target.value">
-                        <option v-for="p in plSatisfaction" :key="p.value" :value="p.value">{{ p.label }}</option>
+                        <option v-for="p in plZufriedenheitOptionen" :key="p.value" :value="p.value">{{ p.label }}</option>
                     </select>
                 </div>
-                <span class="filterInfo"><InfoTipp schluessel="filters.plSatisfaction" /></span>
+                <span class="filterInfo"><InfoTipp schluessel="filters.plZufriedenheit" /></span>
             </div>
 
             <!-- Tags -->
             <div v-if="zeigt('tags')" class="filterZeile">
                 <div class="filterSteuer">
-                    <select v-if="pageId === 'dashboard'" class="at-feld klein" :value="dashboardTagWert" @change="waehleDashboardTag($event.target.value)">
+                    <select v-if="seitenId === 'journalUebersicht'" class="at-feld klein" :value="dashboardTagWert" @change="waehleDashboardTag($event.target.value)">
                         <option value="all">{{ t('filters.allTags') }}</option>
                         <option :value="OHNE_TAG">{{ t('filters.noTag') }}</option>
                         <option v-for="tag in angeboteneTags" :key="tag.id" :value="tag.id">{{ tag.name }}</option>

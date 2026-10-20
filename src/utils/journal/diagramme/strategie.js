@@ -7,12 +7,12 @@
  * Kerzen kommen als [{t (ms), o, h, l, c}] aufsteigend.
  */
 import dayjs from '../zeit.js'
-import { timeZoneTrade } from '../../../stores/ui.js'
+import { tradeZeitzone } from '../../../stores/ui.js'
 import { element, frischeInstanz, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 
 function kerzenBasis(kerzen) {
-    const zone = timeZoneTrade.value
+    const zone = tradeZeitzone.value
     return {
         kategorien: kerzen.map(k => dayjs.unix(Math.floor(k.t / 1000)).tz(zone).format('DD.MM HH:mm')),
         daten: kerzen.map(k => [k.o, k.c, k.l, k.h]),

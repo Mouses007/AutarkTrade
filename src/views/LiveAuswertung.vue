@@ -23,7 +23,7 @@ import PageInfo from '../components/PageInfo.vue'
 import { Symbol, Kreisel } from '../components/basis'
 import { dbFind } from '../utils/db.js'
 import { werteAus, MIN_GRUPPE } from '../utils/sitzungStatistik.js'
-import { timeZoneTrade } from '../stores/ui.js'
+import { tradeZeitzone } from '../stores/ui.js'
 
 const { t } = useI18n()
 
@@ -32,8 +32,8 @@ const laedt = ref(true)
 const fehler = ref('')
 
 // Zeitzone MIT übergeben: sonst gruppiert die Auswertung nach Browserzeit,
-// während der Rest der App mit `timeZoneTrade` rechnet.
-const a = computed(() => werteAus(sitzungen.value, timeZoneTrade.value))
+// während der Rest der App mit `tradeZeitzone` rechnet.
+const a = computed(() => werteAus(sitzungen.value, tradeZeitzone.value))
 
 /*
  * Weicht der Durchschnitt stark vom Median ab, hängt das Ergebnis an wenigen
@@ -62,7 +62,7 @@ async function lade() {
 }
 
 const geld = (v) => `${Number(v) >= 0 ? '+' : '−'}${Math.abs(Number(v) || 0).toFixed(2)} $`
-const farbe = (v) => (Number(v) || 0) >= 0 ? 'greenTrade' : 'redTrade'
+const farbe = (v) => (Number(v) || 0) >= 0 ? 'gewinnWert' : 'verlustWert'
 const proz = (v) => v == null ? '—' : `${Math.round(v * 100)} %`
 
 /** Balkenbreite relativ zum grössten Betrag einer Reihe. */
