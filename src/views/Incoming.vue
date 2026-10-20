@@ -54,7 +54,7 @@ useVerlassenSchutz(() => {
 
 // ===== COMPOUND/FILLS TRACKING =====
 import axios from 'axios'
-import { holeTpSlOrders, aggregiereTpSl } from '../utils/positionTpsl.js'
+import { holeTpSlOrders, aggregiereTpSl, istBotPosition } from '../utils/positionTpsl.js'
 import { erzeugeChartBild, chartZeiteinheit, strategieAusTags } from '../utils/chart/tradeBild.js'
 const positionFills = ref({}) // Map: positionId → { loading, trades[], error }
 
@@ -877,12 +877,10 @@ function updateClosingTimeframe(pos, value) {
 }
 
 // ===== BOT DETECTION =====
-// Pionex-Bots tragen botType in historyData (normalizeBotOrder) bzw. isBot/botType
-// im live bitunixData (normalizeRunningBot). Für sie wird eine schlankere
-// Bewertungsmaske gezeigt (langfristige, automatisierte Bots).
-function isBotPosition(pos) {
-    return !!(pos?.historyData?.botType || pos?.bitunixData?.isBot || pos?.bitunixData?.botType)
-}
+// Erkennung in `src/utils/positionTpsl.js` (auch der Chart filtert damit).
+// Für Bots wird eine schlankere Bewertungsmaske gezeigt (langfristige,
+// automatisierte Bots).
+const isBotPosition = istBotPosition
 
 // Pendente Trades zeigen ALLE Börsen gleichzeitig, gruppiert je Börse mit
 // Futures zuerst, dann Bots — unabhängig vom Futures/Bot-Filter

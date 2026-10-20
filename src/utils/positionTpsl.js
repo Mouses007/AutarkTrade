@@ -8,6 +8,17 @@
  */
 import axios from 'axios'
 
+/**
+ * Bot-Position (Pionex-Grid u. ä.)? Pionex-Bots tragen `botType` in
+ * `historyData` (normalizeBotOrder) bzw. `isBot`/`botType` in den Live-Daten
+ * (normalizeRunningBot). Eine Stelle für „Pendente Trades" und den Chart:
+ * ein Grid hat keinen eigenen Einstieg, weder Stop noch Ziel — im Chart wäre
+ * es ein Durchschnitt vieler Grid-Fills, gezeichnet als Trade.
+ */
+export function istBotPosition(pos) {
+    return !!(pos?.historyData?.botType || pos?.bitunixData?.isBot || pos?.bitunixData?.botType)
+}
+
 /** Rohe TP/SL-Orders je Börse. Bitget fragt je Symbol, Bitunix je Position. */
 export async function holeTpSlOrders(broker, positionId, symbol) {
     const { data } = broker === 'bitget'

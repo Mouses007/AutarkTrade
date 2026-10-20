@@ -9,7 +9,7 @@
  */
 import { dbFind } from '../../db.js'
 import { normSymbol } from '../../../../shared/symbol.js'
-import { holeTpSlOrders, aggregiereTpSl } from '../../positionTpsl.js'
+import { holeTpSlOrders, aggregiereTpSl, istBotPosition } from '../../positionTpsl.js'
 
 const zahl = (v) => {
     const n = parseFloat(v)
@@ -47,7 +47,12 @@ let offenStand = 0
 function offenePositionenRoh() {
     if (!offenAbruf || Date.now() - offenStand > 5000) {
         offenStand = Date.now()
-        offenAbruf = dbFind('incoming_positions', { equalTo: { status: 'open' } }).catch(() => [])
+        // Bot-Positionen gehören nicht in den Chart und nicht unter „Offene
+        // Trades": ohne eigenen Einstieg und ohne Stop/Ziel zeichnete die Box
+        // den Durchschnitt vieler Grid-Fills als Trade.
+        offenAbruf = dbFind('incoming_positions', { equalTo: { status: 'open' } })
+            .then((zeilen) => zeilen.filter((p) => !istBotPosition(p)))
+            .catch(() => [])
     }
     return offenAbruf
 }
