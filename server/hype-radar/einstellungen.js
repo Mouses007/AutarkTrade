@@ -19,7 +19,7 @@
  */
 
 import { getKnex } from '../database.js'
-import { encrypt, decrypt } from '../crypto.js'
+import { encrypt, decrypt, maske } from '../crypto.js'
 import { STANDARD_GEWICHTE, STANDARD_NARRATIVE } from './bewertung.js'
 import { STANDARD_SICHERHEIT } from './sicherheit.js'
 import { smartWalletListe } from './fruehphase-bewertung.js'
@@ -443,7 +443,9 @@ export function maskiere(schluessel = {}) {
     const raus = {}
     for (const name of Object.keys(SCHLUESSEL_SPALTEN)) {
         const w = schluessel[name]
-        raus[name] = w ? `${String(w).slice(0, 3)}••••${String(w).slice(-3)}` : ''
+        // Nur die letzten 4 (A2-34); ein Punkt bleibt immer drin, daran
+        // erkennt die Oberfläche „unverändert".
+        raus[name] = w ? (maske(String(w)).includes('•') ? maske(String(w)) : '••••') : ''
     }
     return raus
 }

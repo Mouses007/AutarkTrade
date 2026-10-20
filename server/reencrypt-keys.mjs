@@ -54,7 +54,15 @@ if (zielSecret === maschinenSeed) {
 }
 
 const ZIEL = schluessel(zielSecret)
-const MASCHINE = schluessel(maschinenSeed)
+/*
+ * Der „andere" Schlüssel: bei einer Rotation das alte Secret (`AT_SECRET_ALT`),
+ * sonst wie bisher der Maschinen-Seed — oder, seit F2, die Secret-Datei einer
+ * nativen Installation (`.at-secret`), wenn sie existiert.
+ */
+const altSecret = umgebung('SECRET_ALT')
+    || (() => { try { return fs.readFileSync(umgebung('SECRET_FILE') || path.resolve('./.at-secret'), 'utf8').trim() } catch { return '' } })()
+    || maschinenSeed
+const MASCHINE = schluessel(altSecret)
 
 const istVerschluesselt = (t) => {
     if (!t) return false
@@ -83,16 +91,11 @@ function verschluesseln(text, key) {
 
 // ── Wo überall Secrets liegen ───────────────────────────────────────────
 // `authPasswordHash` steht bewusst NICHT hier: das ist ein Hash.
-const FELDER = [
-    ['settings', 'id', [
-        'aiApiKey', 'aiKeyOpenai', 'aiKeyAnthropic', 'aiKeyGemini', 'aiKeyDeepseek',
-        'aiKeyMistral', 'aiKeyXai', 'aiKeyQwen', 'aiKeyCustom', 'aiKeyOpenrouter',
-        'fluxApiKey', 'geminiImageApiKey', 'esp32ApiKey',
-    ]],
-    ['bitunix_config', 'id', ['apiKey', 'secretKey']],
-    ['bitget_config', 'id', ['apiKey', 'secretKey', 'passphrase']],
-    ['pionex_config', 'id', ['apiKey', 'secretKey']],
-]
+// Seit F2 (Audit A2-28) aus `geheimnisse.js` abgeleitet: die Handliste hier
+// vergass Perplexity, Moonshot, Z.ai, MiniMax, CryptoQuant, das Mail-Passwort
+// und alle `hype*` — nach einer Secret-Rotation waren sie still unlesbar.
+const { ALLE_VERSCHLUESSELTEN } = await import('./geheimnisse.js')
+const FELDER = ALLE_VERSCHLUESSELTEN.map(([tabelle, spalten]) => [tabelle, 'id', spalten])
 
 // ── Datenbank ───────────────────────────────────────────────────────────
 function baueKnex() {

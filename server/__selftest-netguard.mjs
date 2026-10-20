@@ -11,7 +11,7 @@
  *
  * Aufruf: node server/__selftest-netguard.mjs
  */
-import { istPrivatV4, istPrivatV6, holeText } from './net-guard.js'
+import { istPrivatV4, istPrivatV6, holeText, holeBinaer, pruefeOeffentlicheUrl, sichererLookup, GESCHUETZT } from './net-guard.js'
 
 let fehler = 0
 // Auch die bestandenen zählen: `scripts/run-selftests.mjs` liest das Zahlenpaar
@@ -152,6 +152,54 @@ const leer = (status, kopf = {}) => () => new Response(null, { status, headers: 
 }
 
 globalThis.fetch = echterFetch
+
+/*
+ * 6) Audit A2-04 (F2, 20.10.2026): IPv4-in-IPv6 in Hex-Form und Rebinding.
+ * Vor F2 gingen `[::ffff:127.0.0.1]` und `[::ffff:a9fe:a9fe]` DURCH — der
+ * URL-Parser schreibt sie in die Hex-Form um, der Regex kannte nur die Punktform.
+ */
+for (const ip of ['::ffff:7f00:1', '::ffff:a9fe:a9fe', '::ffff:c0a8:b264', '::7f00:1', '64:ff9b::7f00:1',
+    '0:0:0:0:0:ffff:7f00:1', 'ff02::1', 'fec0::1', '::ffff:0a00:0001']) {
+    pruefe(`${ip} bleibt gesperrt`, istPrivatV6(ip) === true)
+}
+pruefe('::ffff:808:808 (8.8.8.8) kommt durch', istPrivatV6('::ffff:808:808') === false)
+for (const url of ['http://[::ffff:127.0.0.1]/', 'http://[::ffff:a9fe:a9fe]/', 'http://[::ffff:192.168.178.1]/', 'http://[::1]/']) {
+    let gesperrt = false
+    try { await pruefeOeffentlicheUrl(url) } catch (e) { gesperrt = e.art === 'gesperrt' }
+    pruefe(`${url} wird abgewiesen`, gesperrt)
+}
+{
+    // Der Agent prüft beim VERBINDEN — eine Auflösung auf 127.0.0.1 nach
+    // bestandener Vorprüfung (Rebinding) kommt so nicht mehr durch.
+    const fehler = await new Promise((r) => sichererLookup('localhost', {}, (e) => r(e)))
+    pruefe('sichererLookup verweigert localhost', fehler?.art === 'gesperrt', String(fehler?.message))
+    pruefe('Fehlertext nennt die aufgelöste Adresse nicht (A2-33)', !/127\.0\.0\.1|::1/.test(String(fehler?.message)) && !!fehler?.adresse, String(fehler?.message))
+    const http = await import('http')
+    const srv = http.createServer((q, a) => a.end('GEHEIM'))
+    await new Promise((r) => srv.listen(0, '127.0.0.1', r))
+    let ergebnis = ''
+    try {
+        const a = await fetch(`http://localhost:${srv.address().port}/`, { dispatcher: GESCHUETZT })
+        ergebnis = await a.text()
+    } catch (e) { ergebnis = 'gesperrt:' + (e.cause?.art || e.message) }
+    pruefe('Abruf über den Agenten erreicht keinen lokalen Dienst', ergebnis === 'gesperrt:gesperrt', ergebnis)
+    srv.close()
+}
+{
+    // A2-12: Bilder nur mit Bildtyp, Grenze und über denselben Wächter.
+    const z = stelleFetch([() => new Response('<html>', { status: 200, headers: { 'content-type': 'text/html' } })])
+    let meldung = ''
+    try { await holeBinaer('https://www.youtube.com/bild.png', { typ: /^image\// }) } catch (e) { meldung = e.message }
+    pruefe('holeBinaer weist Nicht-Bilder ab', /Inhaltstyp/.test(meldung), meldung)
+    stelleFetch([() => new Response(new Uint8Array(2048), { status: 200, headers: { 'content-type': 'image/png' } })])
+    try { await holeBinaer('https://www.youtube.com/bild.png', { maxBytes: 1024 }) ; meldung = '' } catch (e) { meldung = e.message }
+    pruefe('holeBinaer hält die Grössengrenze', /zu gross/.test(meldung), meldung)
+    stelleFetch([leer(302, { location: 'http://169.254.169.254/latest/' })])
+    try { await holeBinaer('https://www.youtube.com/bild.png') ; meldung = '' } catch (e) { meldung = e.message }
+    pruefe('holeBinaer folgt keiner Umleitung ins Interne', /intern|eigene/i.test(meldung), meldung)
+    void z
+    globalThis.fetch = echterFetch
+}
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)
 process.exit(fehler === 0 ? 0 : 1)

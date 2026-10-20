@@ -6,7 +6,8 @@
  *     node scripts/lizenz-ausstellen.mjs --kaeufer "Erika Muster" [--mail erika@example.ch] \
  *       [--edition standard|test] [--monate 12 | --updates-bis 2027-10-19] \
  *       [--gueltig-bis 2026-11-02] [--id AT-2026-0001] \
- *       [--zugang-benutzer kunde --zugang-token github_pat_…]
+ *       [--zugang-benutzer kunde --zugang-token github_pat_… --token-ablauf 2027-10-19]
+ *     (Token: fine-grained, je Käufer, nur Lesen, Ablauf ≤ Update-Ende — A2-15)
  *
  *   node scripts/lizenz-ausstellen.mjs --pruefen "AT1.…"      # einen Schlüssel lesen
  *   node scripts/lizenz-ausstellen.mjs --neues-paar ~/pfad.pem  # einmalig: Paar erzeugen
@@ -75,6 +76,28 @@ if (!privatPfad) {
 if (!a.kaeufer || a.kaeufer === true) {
     console.error('--kaeufer "Name" fehlt.')
     process.exit(1)
+}
+
+/*
+ * Zugangstoken im Schlüssel (Audit A2-15, F2 20.10.2026): die Nutzlast ist
+ * nur signiert, nicht verschlüsselt — jeder Käufer kann das Token lesen und
+ * weitergeben. Schaden begrenzen statt verstecken: nur fine-grained Tokens
+ * (nur `contents:read`/`packages:read` auf das eine Repo), je Käufer eines,
+ * mit Ablauf spätestens am Update-Ende — dann ist ein weitergegebenes Token
+ * einzeln widerrufbar und läuft von selbst aus.
+ */
+if (a['zugang-token'] && a['zugang-token'] !== true) {
+    const token = String(a['zugang-token'])
+    if (!token.startsWith('github_pat_')) {
+        console.error('--zugang-token: nur ein fine-grained Token (github_pat_…) je Käufer — ein klassisches Token gäbe Zugriff auf alle Repos des Kontos.')
+        process.exit(1)
+    }
+    const ablauf = a['token-ablauf'] && a['token-ablauf'] !== true ? String(a['token-ablauf']) : ''
+    const updatesBisVorab = a['updates-bis'] && a['updates-bis'] !== true ? String(a['updates-bis']) : plusMonate(heute(), a.monate && a.monate !== true ? a.monate : 12)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ablauf) || ablauf > updatesBisVorab) {
+        console.error(`--token-ablauf JJJJ-MM-TT fehlt oder liegt nach dem Update-Ende (${updatesBisVorab}). Das Token bei GitHub mit genau diesem Ablauf anlegen.`)
+        process.exit(1)
+    }
 }
 
 const privat = crypto.createPrivateKey(fs.readFileSync(pfad(privatPfad)))

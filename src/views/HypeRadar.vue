@@ -666,7 +666,7 @@
                     <span v-else-if="liveOffen.fehler" class="hypLiveStand at-warn">{{ t('hype.liveFehler') }}</span>
                     <span v-else class="hypLiveStand">{{ t('hype.liveStand', { z: zeitpunkt(liveOffen.stand) }) }}</span>
                     <span class="at-ml-auto"></span>
-                    <a v-if="liveOffen.dexUrl" class="hypLink at-mr-3" :href="liveOffen.dexUrl"
+                    <a v-if="sichereUrl(liveOffen.dexUrl)" class="hypLink at-mr-3" :href="sichereUrl(liveOffen.dexUrl)"
                         target="_blank" rel="noopener noreferrer">DexScreener ↗</a>
                     <Knopf klein class="at-mr-2"
                         :class="{ hypStumm: liveOffen.favorit.stumm }"

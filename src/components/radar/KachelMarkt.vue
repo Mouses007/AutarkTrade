@@ -1,4 +1,5 @@
 <script setup>
+import { escHtml } from '@/utils/escHtml.js'
 /**
  * Kachel „Marktübersicht" — der ganze Markt auf einen Blick, in zwei Lesarten:
  *
@@ -87,7 +88,7 @@ function boersenLinksZeilen(perp) {
 
 function tooltipText(m) {
     const w = m[fenster.value]
-    return `<b>${m.symbol}</b> — ${m.name}<br/>`
+    return `<b>${escHtml(m.symbol)}</b> — ${escHtml(m.name)}<br/>`
         + `${t('marktradar.markt.change')}: <b style="color:${w >= 0 ? '#26be96' : '#ff5f56'}">${proz(w)}</b><br/>`
         + `<span style="opacity:.65">${t('marktradar.markt.mcap')}: ${mcapText(m.mcap)} $ · #${m.rang}</span>`
         // Ohne Perp-Markt führt ein Klick nirgendwohin und es gibt auch keine

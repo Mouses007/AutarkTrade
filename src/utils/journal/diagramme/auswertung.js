@@ -3,6 +3,7 @@
  * horizontale Balken, geteilte Gewinn/Verlust-Balken, Verlaufslinie, Radar.
  * Die Datenaufbereitung liegt in der Ansicht; hier wird nur gezeichnet.
  */
+import { escHtml } from '../../escHtml.js'
 import { element, instanzFuer, echarts, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 
@@ -47,7 +48,7 @@ export function useHorizontalBarChart(id, kategorien, werte, farben) {
     instanzFuer(knoten).setOption({
         ...grundOption(p),
         grid: { left: 8, right: 40, top: 8, bottom: 8, containLabel: true },
-        tooltip: { trigger: 'item', ...tooltipStil(p), formatter: (x) => `${x.name}: ${zahlText(x.value)}` },
+        tooltip: { trigger: 'item', ...tooltipStil(p), formatter: (x) => `${escHtml(x.name)}: ${zahlText(x.value)}` },
         xAxis: wertAchse(p),
         yAxis: { ...kategorieAchse(p), data: kategorien },
         series: [{
@@ -75,7 +76,7 @@ export function useSplitBarChart(id, kategorien, gewinne, verluste) {
             ...tooltipStil(p),
             formatter: (punkte) => {
                 const i = punkte[0]?.dataIndex ?? 0
-                return `${kategorien[i]}<br>${t('charts.wins')}: ${Math.abs(gewinne[i] ?? 0)}<br>${t('charts.losses')}: ${Math.abs(verluste[i] ?? 0)}`
+                return `${escHtml(kategorien[i])}<br>${t('charts.wins')}: ${Math.abs(gewinne[i] ?? 0)}<br>${t('charts.losses')}: ${Math.abs(verluste[i] ?? 0)}`
             },
         },
         xAxis: wertAchse(p, { min: -grenze, max: grenze, axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => String(Math.abs(v)) } }),

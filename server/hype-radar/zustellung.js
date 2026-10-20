@@ -55,7 +55,24 @@ async function post(url, { kopf = {}, body }) {
         if (!wiederholbar(status) || versuch === 1) break
         await new Promise((f) => setTimeout(f, 2000))
     }
-    throw letzter
+    throw ohneAdresse(letzter, url)
+}
+
+/**
+ * Fehlertext ohne Zieladresse (Audit A2-27, F2): `fetch` meldet eine
+ * ungültige Adresse als „Failed to parse URL from <URL>", und der Text ging
+ * in Log, Test-Knopf und Alarmverlauf. Bei Home Assistant IST die Webhook-
+ * Adresse das Geheimnis, beim Telegram-Bot steckt das Token im Pfad.
+ */
+export function ohneAdresse(fehler, url) {
+    const text = String(fehler?.message || fehler || 'Zustellung fehlgeschlagen')
+    let sauber = text.split(String(url || '\u0000')).join('[Adresse]')
+        .replace(/https?:\/\/\S+/gi, '[Adresse]')
+        .replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot[Token]')
+    if (/Failed to parse URL/i.test(sauber)) sauber = 'Ungültige Zieladresse'
+    const neu = new Error(sauber)
+    if (fehler?.code) neu.code = fehler.code
+    return neu
 }
 
 /**

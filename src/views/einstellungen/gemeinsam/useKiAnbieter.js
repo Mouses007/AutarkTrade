@@ -213,7 +213,7 @@ export function useKiAnbieter() {
 
     async function saveAiSettings() {
         try {
-            await axios.post('/api/ai/settings', {
+            const antwort = await axios.post('/api/ai/settings', {
                 aiProvider: aiProvider.value,
                 aiModel: aiModel.value,
                 aiOllamaUrl: aiOllamaUrl.value || 'http://localhost:11434',
@@ -236,7 +236,11 @@ export function useKiAnbieter() {
             currentUser.value.aiTemperature = aiTemperature.value
             currentUser.value.aiMaxTokens = aiMaxTokens.value
             console.log(' -> KI-Einstellungen gespeichert')
-            aiTestResult.value = { success: true, message: t('common.saved') }
+            // Adresse geändert ohne neuen Schlüssel: der Server hat den alten
+            // geleert (er ginge sonst an die neue Adresse, Audit A2-05).
+            aiTestResult.value = antwort.data?.schluesselGeleert?.length
+                ? { success: false, message: t('settings.schluesselGeleert') }
+                : { success: true, message: t('common.saved') }
             setTimeout(() => aiTestResult.value = null, 3000)
             // Maskierte Keys neu laden
             await loadAiSettings()

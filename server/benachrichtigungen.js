@@ -203,6 +203,8 @@ async function sendeMail(s, { betreff, text, html, anhaenge, an, kopf }) {
     if (METADATEN_ZIELE.some((r) => r.test(String(s.mailHost).trim()))) {
         throw new Error('SMTP-Host ist ein Metadaten-Dienst — Versand verweigert.')
     }
+    // … auch nicht über einen Zahlen-Host wie `2852039166` (A2-29).
+    await pruefeSmtpZiel(s.mailHost)
 
     const transport = nodemailer.createTransport({
         host: String(s.mailHost),
@@ -580,6 +582,39 @@ const METADATEN_ZIELE = [
     /\.internal$/i,
 ]
 
+/**
+ * Den SMTP-Host AUFLÖSEN und die Adressen prüfen (Audit A2-29, F2): der
+ * Regex oben sieht nur den Text, `2852039166` ist aber 169.254.169.254.
+ * Ein nicht auflösbarer Host fällt hier nicht durch — der Versand scheitert
+ * dann ohnehin, und speichern soll man ihn trotzdem können.
+ */
+export async function pruefeSmtpZiel(host) {
+    const h = String(host || '').trim()
+    if (!h) return
+    let adressen = []
+    try {
+        const dns = await import('node:dns')
+        adressen = await dns.promises.lookup(h, { all: true })
+    } catch { return }
+    for (const { address } of adressen) {
+        const v4 = String(address).replace(/^::ffff:/i, '')
+        if (/^169\.254\./.test(v4) || /^fe[89ab][0-9a-f]:/i.test(address)) {
+            throw new Error('Der SMTP-Server zeigt auf einen Metadaten-Dienst — abgelehnt.')
+        }
+    }
+}
+
+/** Zeigt der Host nur auf Loopback/private Adressen? (für Klartext-AUTH) */
+async function zeigtNurInsEigeneNetz(host) {
+    const { istLokalesZiel } = await import('./ollama-url.js')
+    if (istLokalesZiel(host)) return true
+    try {
+        const dns = await import('node:dns')
+        const adressen = await dns.promises.lookup(String(host), { all: true })
+        return adressen.length > 0 && adressen.every((a) => istLokalesZiel(a.address))
+    } catch { return false }
+}
+
 export function pruefeMailKonfig({ mailHost, mailPort, mailSicherheit, mailVon, mailAn }) {
     if (mailHost && !/^[A-Za-z0-9.\-_]{1,253}$/.test(String(mailHost))) {
         return 'Der SMTP-Server ist kein gültiger Hostname.'
@@ -651,11 +686,33 @@ export function setupBenachrichtigungsRoutes(app) {
             // Maskierten Wert nicht zurückschreiben — sonst überschreibt ein
             // Speichern ohne Passwortänderung das echte Passwort mit Punkten.
             // Gleiches Vorgehen wie bei den KI-Schlüsseln.
-            if (mailPasswort !== undefined && !String(mailPasswort).includes('•')) {
+            const passwortNeu = mailPasswort !== undefined && !String(mailPasswort).includes('•')
+            if (passwortNeu) {
                 aenderung.mailPasswort = mailPasswort ? encrypt(String(mailPasswort)) : ''
             }
+            /*
+             * Das Passwort gehört zu Server, Port und Benutzer (Audit A2-05e,
+             * F2): ändert sich einer davon ohne neues Passwort, wird das alte
+             * geleert — sonst bog eine Sitzung den Host um und bekam beim
+             * nächsten Versand das AUTH mitgeschickt.
+             */
+            const alt = await getKnex()('settings').select('mailHost', 'mailPort', 'mailUser', 'mailPasswort').where('id', 1).first()
+            const zielGeaendert = alt && (String(alt.mailHost || '') !== aenderung.mailHost
+                || Number(alt.mailPort || 587) !== aenderung.mailPort
+                || String(alt.mailUser || '') !== aenderung.mailUser)
+            if (zielGeaendert && !passwortNeu && alt.mailPasswort) aenderung.mailPasswort = ''
+            // Klartext-AUTH nur ins eigene Netz: ohne Verschlüsselung ginge das
+            // Passwort sonst lesbar über fremde Leitungen.
+            const mitPasswort = passwortNeu ? !!mailPasswort : (!!alt?.mailPasswort && !zielGeaendert)
+            if (aenderung.mailSicherheit === 'keine' && mitPasswort && aenderung.mailHost
+                && !(await zeigtNurInsEigeneNetz(aenderung.mailHost))) {
+                return res.status(400).json({ error: 'Ohne Verschlüsselung wird das Passwort nur an einen Server im eigenen Netz geschickt. Bitte TLS/STARTTLS wählen.' })
+            }
+            try { await pruefeSmtpZiel(aenderung.mailHost) } catch (e) {
+                return res.status(400).json({ error: e.message })
+            }
             await getKnex()('settings').where('id', 1).update(aenderung)
-            res.json({ success: true })
+            res.json({ success: true, passwortGeleert: aenderung.mailPasswort === '' && !passwortNeu })
         } catch (e) {
             logError('benachrichtigungen', 'Mail-Einstellungen nicht speicherbar', e)
             res.status(500).json({ error: 'Interner Serverfehler' })

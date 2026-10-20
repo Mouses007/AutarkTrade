@@ -13,7 +13,7 @@
  */
 import { ref, watch, nextTick, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { sanitizeHtml } from '../../utils/sanitize'
+import { sanitizeKiHtml } from '../../utils/sanitize'
 import { Knopf, Kreisel } from '../basis'
 import KiHinweis from '../quellen/KiHinweis.vue'
 
@@ -61,7 +61,7 @@ function markdown(md) {
         if (!s) return ''
         return s.startsWith('<ul') || s.startsWith('<b>') ? s : `<p>${s}</p>`
     }).filter(Boolean).join('\n')
-    return sanitizeHtml(html)
+    return sanitizeKiHtml(html)
 }
 
 async function nachUnten() {

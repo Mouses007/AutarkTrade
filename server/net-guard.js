@@ -8,14 +8,19 @@
  * eigene Netz zu schicken — inklusive der Metadaten-Adresse von Cloud-Anbietern
  * (169.254.169.254), die dort Zugangsdaten herausgibt.
  *
- * Bewusst nicht gelöst: DNS-Rebinding. Zwischen Prüfung und Abruf könnte sich
- * die Auflösung ändern. Dagegen hülfe nur ein eigener Agent mit `lookup`-Haken.
- * Bei einer lokalen Einzelnutzer-Anwendung, in der derselbe Mensch die URL
- * einträgt und den Server betreibt, ist das vertretbar — es hier zu
- * verschweigen wäre es nicht.
+ * DNS-Rebinding ist seit F2 (20.10.2026, Audit A2-04) gelöst: bis dahin
+ * prüfte `pruefeOeffentlicheUrl` die Auflösung, und `fetch` löste danach NEU
+ * auf — ein Name mit kurzer TTL zeigte beim zweiten Mal auf 127.0.0.1. Das
+ * war nicht nur theoretisch: die Projektprüfung des Hype-Radars ruft Webseiten
+ * ab, die ein Token-Ersteller bei DexScreener/CoinGecko einträgt, also ohne
+ * Zutun des Nutzers. Jetzt geht jeder Abruf über einen eigenen Agenten, dessen
+ * `lookup` dieselbe Prüfung macht und die Verbindung auf die geprüfte Adresse
+ * festnagelt (`GESCHUETZT`).
  */
 
 import dns from 'dns'
+import net from 'net'
+import { Agent } from 'undici'
 import { logWarn } from './logger.js'
 
 /*
@@ -66,17 +71,83 @@ export function istPrivatV4(ip) {
     return false
 }
 
+/**
+ * IPv6-Adresse in ihre acht 16-Bit-Gruppen zerlegen (`::` aufgefüllt, eine
+ * IPv4-Endung in zwei Gruppen umgerechnet). `null` bei Unsinn.
+ */
+function v6Gruppen(ip) {
+    let s = String(ip).toLowerCase().split('%')[0]
+    const v4 = s.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/)
+    if (v4) {
+        const t = v4[2].split('.').map(Number)
+        if (t.some((n) => !Number.isInteger(n) || n > 255)) return null
+        s = v4[1] + ((t[0] << 8) | t[1]).toString(16) + ':' + ((t[2] << 8) | t[3]).toString(16)
+    }
+    const teile = s.split('::')
+    if (teile.length > 2) return null
+    const vorn = teile[0] ? teile[0].split(':') : []
+    const hinten = teile.length === 2 && teile[1] ? teile[1].split(':') : []
+    const fehlt = 8 - vorn.length - hinten.length
+    if (teile.length === 1 ? fehlt !== 0 : fehlt < 1) return null
+    const gruppen = [...vorn, ...Array(teile.length === 2 ? fehlt : 0).fill('0'), ...hinten]
+    if (gruppen.some((g) => !/^[0-9a-f]{1,4}$/.test(g))) return null
+    return gruppen.map((g) => parseInt(g, 16))
+}
+
 export function istPrivatV6(ip) {
-    const s = ip.toLowerCase()
-    if (s === '::' || s === '::1') return true
-    // In IPv6 eingebettete IPv4-Adresse mitprüfen
-    const v4 = s.match(/::ffff:(\d+\.\d+\.\d+\.\d+)$/)
-    if (v4) return istPrivatV4(v4[1])
-    const kopf = parseInt(s.split(':')[0] || '0', 16)
-    if ((kopf & 0xfe00) === 0xfc00) return true       // fc00::/7 eindeutig lokal
-    if ((kopf & 0xffc0) === 0xfe80) return true       // fe80::/10 verbindungslokal
+    /*
+     * Über die Gruppen, nicht über den Text (Audit A2-04, F2). Der URL-Parser
+     * schreibt `[::ffff:127.0.0.1]` zu `::ffff:7f00:1` um — die Punktform, die
+     * der alte Regex erwartete, kam hier nie an, und Loopback, LAN und
+     * Cloud-Metadaten (`::ffff:a9fe:a9fe`) gingen durch.
+     */
+    const g = v6Gruppen(ip)
+    if (!g) return true                                // Unsinn: im Zweifel zu
+    const v4aus = (a, b) => `${a >> 8}.${a & 255}.${b >> 8}.${b & 255}`
+    const nullBis = (n) => g.slice(0, n).every((x) => x === 0)
+    if (nullBis(8)) return true                        // ::
+    if (nullBis(7) && g[7] === 1) return true          // ::1
+    // IPv4-mapped (::ffff:a.b.c.d) und IPv4-kompatibel (::a.b.c.d)
+    if (nullBis(5) && (g[5] === 0xffff || g[5] === 0)) return istPrivatV4(v4aus(g[6], g[7]))
+    // NAT64 (64:ff9b::/96) zeigt auf eine IPv4-Adresse
+    if (g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0)) return istPrivatV4(v4aus(g[6], g[7]))
+    if ((g[0] & 0xfe00) === 0xfc00) return true        // fc00::/7 eindeutig lokal
+    if ((g[0] & 0xffc0) === 0xfe80) return true        // fe80::/10 verbindungslokal
+    if ((g[0] & 0xffc0) === 0xfec0) return true        // fec0::/10 site-local (veraltet)
+    if ((g[0] & 0xff00) === 0xff00) return true        // Multicast
     return false
 }
+
+/** Ist diese (aufgelöste oder literale) Adresse intern? */
+export function istInterneAdresse(adresse) {
+    const typ = net.isIP(String(adresse))
+    if (typ === 4) return istPrivatV4(String(adresse))
+    if (typ === 6) return istPrivatV6(String(adresse))
+    return true
+}
+
+/**
+ * `lookup` für den Abruf-Agenten: löst auf, prüft JEDE Adresse und gibt nur
+ * geprüfte zurück. Weil der Agent genau damit verbindet, gibt es zwischen
+ * Prüfung und Verbindung keine zweite Auflösung mehr.
+ */
+export function sichererLookup(hostname, optionen, rueckruf) {
+    if (typeof optionen === 'function') { rueckruf = optionen; optionen = {} }
+    dns.lookup(hostname, { ...optionen, all: true }, (fehler, adressen) => {
+        if (fehler) return rueckruf(fehler)
+        const liste = Array.isArray(adressen) ? adressen : [{ address: adressen, family: optionen?.family || 4 }]
+        if (!liste.length) return rueckruf(fehlerMit(`Name „${hostname}" liefert keine Adresse`, { art: 'dns', code: 'ENODATA' }))
+        const intern = liste.find((a) => istInterneAdresse(a.address))
+        if (intern) {
+            return rueckruf(fehlerMit(`„${hostname}" zeigt auf eine interne Adresse`, { art: 'gesperrt', adresse: intern.address, code: 'EINTERN' }))
+        }
+        if (optionen?.all) return rueckruf(null, liste)
+        return rueckruf(null, liste[0].address, liste[0].family)
+    })
+}
+
+/** Abruf-Agent mit festgenageltem, geprüftem Ziel — für jeden Abruf an Fremd-URLs. */
+export const GESCHUETZT = new Agent({ connect: { lookup: sichererLookup } })
 
 const VERBOTENE_ENDUNGEN = ['.local', '.internal', '.home.arpa', '.lan', '.localdomain']
 
@@ -125,9 +196,11 @@ export async function pruefeOeffentlicheUrl(rawUrl) {
 
     // JEDE Adresse prüfen: ein Name kann auf mehrere zeigen, und es genügt
     // eine interne, um den Abruf zum Einfallstor zu machen.
-    for (const { address, family } of adressen) {
-        const privat = family === 6 ? istPrivatV6(address) : istPrivatV4(address)
-        if (privat) throw fehlerMit(`„${host}" zeigt auf eine interne Adresse (${address})`, { art: 'gesperrt', adresse: address })
+    for (const { address } of adressen) {
+        const privat = istInterneAdresse(address)
+        // Die Adresse steht im Feld, nicht im Text (A2-33): der Text landet in
+        // der Oberfläche und verriete sonst die Belegung des eigenen Netzes.
+        if (privat) throw fehlerMit(`„${host}" zeigt auf eine interne Adresse`, { art: 'gesperrt', adresse: address })
     }
 
     return { ok: true, host, adressen: adressen.map(a => a.address) }
@@ -187,92 +260,128 @@ export async function holeText(rawUrl, { timeout = HTTP_TIMEOUT, versuche = 3 } 
 }
 
 /**
+ * Binärdaten (Bilder) abrufen — dieselben Riegel wie `holeText`: Prüfung,
+ * festgenageltes Ziel, eigene Umleitungsverfolgung, Grössen- und Zeitgrenze.
+ *
+ * Seit F2 (Audit A2-12) für die Chartbilder der Perplexity-Bildersuche: deren
+ * URLs sind Fremddaten und wurden bis dahin mit rohem `fetch` geholt —
+ * Umleitungen gefolgt, jeder Port, ohne Grössengrenze.
+ *
+ * @param {string} rawUrl
+ * @param {{timeout?:number, maxBytes?:number, typ?:RegExp}} [opt]
+ * @returns {Promise<{daten: Buffer, typ: string}>}
+ */
+export async function holeBinaer(rawUrl, { timeout = HTTP_TIMEOUT, maxBytes = 8 * 1024 * 1024, typ = null } = {}) {
+    return einAbruf(rawUrl, timeout, { binaer: true, maxBytes, typ, accept: 'image/*' })
+}
+
+/**
  * Ein einzelner Anlauf.
  *
  * Die Umleitungen werden selbst verfolgt, weil `fetch` sonst still einer
  * Weiterleitung auf 127.0.0.1 folgen würde und die Prüfung damit umgangen wäre.
  */
-async function einAbruf(rawUrl, timeout) {
+async function einAbruf(rawUrl, timeout, {
+    binaer = false,
+    maxBytes = MAX_BYTES,
+    typ = null,
+    accept = 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+} = {}) {
     let ziel = String(rawUrl || '').trim()
 
     for (let sprung = 0; sprung <= MAX_UMLEITUNGEN; sprung++) {
         await pruefeOeffentlicheUrl(ziel)
 
+        /*
+         * Die Zeitgrenze gilt bis zum letzten Byte, nicht nur bis zu den
+         * Kopfzeilen (A2-33): ein Host, der 2 MB im Schneckentempo tröpfeln
+         * lässt, hielt den Abruf sonst beliebig lange offen.
+         */
         const ctrl = new AbortController()
         const timer = setTimeout(() => ctrl.abort(), timeout)
-        let antwort
         try {
-            antwort = await fetch(ziel, {
-                signal: ctrl.signal,
-                redirect: 'manual',
-                headers: {
-                    'User-Agent': 'AutarkTrade (Marktradar)',
-                    Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-                },
-            })
-        } catch (e) {
-            // Abbruch durch die Zeitgrenze und Netzfehler sind beide
-            // vorübergehend — der nächste Anlauf darf sie sehen.
-            e.wiederholbar = true
-            e.art = e.name === 'AbortError' ? 'zeit' : 'netz'
-            // Der Abbruch ist eine DOMException, deren `code` nur einen Getter
-            // hat — eine Zuweisung würfe hier einen NEUEN Fehler, ohne `wiederholbar`.
-            if (e.code === undefined && e.cause?.code) {
-                try { e.code = e.cause.code } catch { /* nur lesbar */ }
+            let antwort
+            try {
+                antwort = await fetch(ziel, {
+                    signal: ctrl.signal,
+                    redirect: 'manual',
+                    dispatcher: GESCHUETZT,
+                    headers: {
+                        'User-Agent': 'AutarkTrade (Marktradar)',
+                        Accept: accept,
+                    },
+                })
+            } catch (e) {
+                // Das festgenagelte Ziel war intern: endgültig, nicht wiederholen.
+                const ursache = e?.cause
+                if (ursache?.art === 'gesperrt') throw ursache
+                // Abbruch durch die Zeitgrenze und Netzfehler sind beide
+                // vorübergehend — der nächste Anlauf darf sie sehen.
+                e.wiederholbar = true
+                e.art = e.name === 'AbortError' ? 'zeit' : 'netz'
+                // Der Abbruch ist eine DOMException, deren `code` nur einen Getter
+                // hat — eine Zuweisung würfe hier einen NEUEN Fehler, ohne `wiederholbar`.
+                if (e.code === undefined && e.cause?.code) {
+                    try { e.code = e.cause.code } catch { /* nur lesbar */ }
+                }
+                throw e
             }
-            throw e
+
+            if ([301, 302, 303, 307, 308].includes(antwort.status)) {
+                const ort = antwort.headers.get('location')
+                if (!ort) throw fehlerMit(`Umleitung ohne Ziel (HTTP ${antwort.status})`, { art: 'umleitung' })
+                ziel = new URL(ort, ziel).toString()
+                continue
+            }
+
+            if (!antwort.ok) {
+                const e = new Error(`HTTP ${antwort.status}`)
+                e.status = antwort.status
+                e.wiederholbar = WIEDERHOLBAR.has(antwort.status)
+                throw e
+            }
+
+            const inhaltsTyp = String(antwort.headers.get('content-type') || '').split(';')[0].trim().toLowerCase()
+            if (typ && !typ.test(inhaltsTyp)) throw fehlerMit(`Unerwarteter Inhaltstyp (${inhaltsTyp || 'keiner'})`, { art: 'gesperrt' })
+
+            const laenge = Number(antwort.headers.get('content-length') || 0)
+            if (laenge > maxBytes) throw fehlerMit(`Antwort zu gross (${Math.round(laenge / 1024)} kB)`, { art: 'zuGross' })
+
+            /*
+             * Strömend lesen und beim Überschreiten abbrechen.
+             *
+             * Der `content-length`-Kopf allein genügt nicht: bei chunked Transfer
+             * fehlt er, und `antwort.text()` liest dann ERST alles in den Speicher
+             * und prüft danach. Ein bösartiger Feed-Host kann in den zehn Sekunden
+             * Zeitgrenze hunderte MB schicken — auf dem NAS-Container reicht das
+             * für einen Speicher-Engpass.
+             */
+            if (!antwort.body) return binaer ? { daten: Buffer.alloc(0), typ: inhaltsTyp } : ''
+            const leser = antwort.body.getReader()
+            const stuecke = []
+            let bytes = 0
+            try {
+                for (;;) {
+                    const { done, value } = await leser.read()
+                    if (done) break
+                    bytes += value.byteLength
+                    if (bytes > maxBytes) {
+                        throw fehlerMit(`Antwort zu gross (über ${Math.round(maxBytes / 1024)} kB)`, { art: 'zuGross' })
+                    }
+                    stuecke.push(Buffer.from(value))
+                }
+            } catch (e) {
+                if (e?.name === 'AbortError') throw fehlerMit('Zeitgrenze beim Lesen überschritten', { art: 'zeit', wiederholbar: true })
+                throw e
+            } finally {
+                try { await leser.cancel() } catch { /* Strom schon zu */ }
+            }
+            const daten = Buffer.concat(stuecke)
+            return binaer ? { daten, typ: inhaltsTyp } : new TextDecoder('utf-8').decode(daten)
         } finally {
             clearTimeout(timer)
         }
-
-        if ([301, 302, 303, 307, 308].includes(antwort.status)) {
-            const ort = antwort.headers.get('location')
-            if (!ort) throw fehlerMit(`Umleitung ohne Ziel (HTTP ${antwort.status})`, { art: 'umleitung' })
-            ziel = new URL(ort, ziel).toString()
-            continue
-        }
-
-        if (!antwort.ok) {
-            const e = new Error(`HTTP ${antwort.status}`)
-            e.status = antwort.status
-            e.wiederholbar = WIEDERHOLBAR.has(antwort.status)
-            throw e
-        }
-
-        const laenge = Number(antwort.headers.get('content-length') || 0)
-        if (laenge > MAX_BYTES) throw fehlerMit(`Antwort zu gross (${Math.round(laenge / 1024)} kB)`, { art: 'zuGross' })
-
-        /*
-         * Strömend lesen und beim Überschreiten abbrechen.
-         *
-         * Der `content-length`-Kopf allein genügt nicht: bei chunked Transfer
-         * fehlt er, und `antwort.text()` liest dann ERST alles in den Speicher
-         * und prüft danach. Ein bösartiger Feed-Host kann in den zehn Sekunden
-         * Zeitgrenze hunderte MB schicken — auf dem NAS-Container reicht das
-         * für einen Speicher-Engpass.
-         */
-        if (!antwort.body) return ''
-        const leser = antwort.body.getReader()
-        const dekoder = new TextDecoder('utf-8')
-        let text = ''
-        let bytes = 0
-        try {
-            for (;;) {
-                const { done, value } = await leser.read()
-                if (done) break
-                bytes += value.byteLength
-                if (bytes > MAX_BYTES) {
-                    throw fehlerMit(`Antwort zu gross (über ${Math.round(MAX_BYTES / 1024)} kB)`, { art: 'zuGross' })
-                }
-                text += dekoder.decode(value, { stream: true })
-            }
-        } finally {
-            try { await leser.cancel() } catch { /* Strom schon zu */ }
-        }
-        text += dekoder.decode()
-        return text
     }
 
     throw fehlerMit(`Mehr als ${MAX_UMLEITUNGEN} Umleitungen`, { art: 'umleitung' })
 }
-

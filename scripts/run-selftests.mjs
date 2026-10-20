@@ -18,6 +18,7 @@
  */
 
 import { spawn } from 'node:child_process'
+import os from 'node:os'
 import { readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -55,7 +56,12 @@ async function sammle() {
 
 function starte(rel) {
     return new Promise((fertig) => {
-        const kind = spawn(process.execPath, [rel], { cwd: wurzel })
+        // Ohne AT_SECRET legte crypto.js sonst die echte `.at-secret` im
+        // Projekt an (F2) — Tests bekommen eine eigene Wegwerf-Datei.
+        const kind = spawn(process.execPath, [rel], {
+            cwd: wurzel,
+            env: { ...process.env, AT_SECRET_FILE: process.env.AT_SECRET_FILE || path.join(os.tmpdir(), `at-selftest-secret-${process.pid}`) },
+        })
         let ausgabe = ''
         kind.stdout.on('data', (d) => { ausgabe += d })
         kind.stderr.on('data', (d) => { ausgabe += d })

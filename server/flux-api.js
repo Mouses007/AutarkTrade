@@ -11,7 +11,7 @@
  * das Container-Image brauchte dafür eigens DejaVu/Liberation.
  */
 import { getKnex } from './database.js'
-import { encrypt, decrypt } from './crypto.js'
+import { encrypt, decrypt, maske } from './crypto.js'
 import { merkeVerbrauch } from './ai-usage.js'
 import { schaetzeBildKosten } from './ai-preise.js'
 import { readFile } from 'fs/promises'
@@ -62,8 +62,7 @@ function maskKey(encryptedKey) {
     if (!encryptedKey) return ''
     const key = decrypt(encryptedKey)
     if (!key) return ''
-    if (key.length <= 8) return '•'.repeat(key.length)
-    return key.slice(0, 4) + '•'.repeat(Math.min(key.length - 8, 20)) + key.slice(-4)
+    return maske(key) // nur die letzten 4 (A2-34)
 }
 
 function formatNumber(num, decimals = 2) {

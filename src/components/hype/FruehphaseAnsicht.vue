@@ -29,7 +29,7 @@
                 <b>{{ fokusName }}</b>
                 <span class="fpGrau">{{ fokusInfo?.markt?.chain || fokusInfo?.gedaechtnis?.chain || '' }} · {{ kurz(fokusFehlt.contract) }}</span>
                 <span class="fpFokusLinks">
-                    <a :href="fokusInfo?.markt?.url || ('https://dexscreener.com/search?q=' + encodeURIComponent(fokusFehlt.contract))"
+                    <a :href="sichereUrl(fokusInfo?.markt?.url) || ('https://dexscreener.com/search?q=' + encodeURIComponent(fokusFehlt.contract))"
                         target="_blank" rel="noopener noreferrer">DexScreener ↗</a>
                     <a v-if="/pump$/i.test(fokusFehlt.contract)" :href="'https://pump.fun/coin/' + encodeURIComponent(fokusFehlt.contract)"
                         target="_blank" rel="noopener noreferrer">pump.fun ↗</a>
@@ -325,6 +325,7 @@
 </template>
 
 <script setup>
+import { sichereUrl } from '@/utils/sanitize.js'
 import Symbol from '@/components/basis/Symbol.vue'
 /**
  * Hype-Radar → Frühphase.

@@ -1,7 +1,9 @@
 import fs from 'fs'
 import { getKnex } from './database.js'
 import { loadDbConfig, getConfigPath, saveDbConfig } from './db-config.js'
-import { SETTINGS_SENSITIVE_FIELDS } from './api-routes.js'
+import { SETTINGS_SENSITIVE_FIELDS, isAllowedDbHost } from './api-routes.js'
+import { BEHALTEN_BEIM_IMPORT, BOERSEN_GEHEIMNISSE } from './geheimnisse.js'
+import { loadAuthConfig } from './auth.js'
 
 /*
  * Sensible Felder, die im Export unkenntlich gemacht werden.
@@ -17,8 +19,27 @@ const REDACTED_SETTINGS_KEYS = [...SETTINGS_SENSITIVE_FIELDS]
 // - die redigierten Secrets (Export enthält nur '[REDACTED]' → würde echte Keys
 //   zerstören bzw. via authPasswordHash den Eigentümer aussperren)
 // - die Auth-Schalter selbst (Schutz vor Manipulation per fremdem Backup)
+// - seit F2 (Audit A2-09) auch alle ZIELE von Geheimnissen (KI-Adressen,
+//   SMTP-Server und -Benutzer), Rechtsstand, Quellen-Schalter und `apis`:
+//   ein geteiltes „Vorlagen"-Backup leitete sonst Alarme und gespeicherte
+//   Schlüssel an Fremde um. Liste in `geheimnisse.js`.
 // Die bestehenden Werte bleiben stattdessen erhalten.
-const PRESERVE_SETTINGS_FIELDS = [...REDACTED_SETTINGS_KEYS, 'authEnabled']
+const PRESERVE_SETTINGS_FIELDS = [...new Set([...REDACTED_SETTINGS_KEYS, ...BEHALTEN_BEIM_IMPORT])]
+
+/*
+ * Börsenzugänge kommen nie aus einem Backup (A2-09): aus dem eigenen Export
+ * wurde der Schlüssel zu '[REDACTED]', aus einem fremden zu beliebigem
+ * Klartext. Die Tabellen stehen weiter im Export (redigiert, zeigt, welche
+ * Börse eingerichtet war), beim Import bleiben die bestehenden Zeilen.
+ */
+const IMPORT_UEBERSPRINGEN = new Set(Object.keys(BOERSEN_GEHEIMNISSE))
+
+/*
+ * Hype-Radar-Einstellungen, die ein Ziel bestimmen: die Alarmkanäle (ntfy-
+ * Adresse). Ihr Token liegt in `settings` und bleibt — die Adresse muss es
+ * also auch.
+ */
+const HYPE_BEHALTEN = ['alarmKanaele']
 
 // Alle Tabellen die gesichert werden (Reihenfolge wichtig für Import: abhängige zuletzt)
 const BACKUP_TABLES = [
@@ -209,6 +230,13 @@ export function setupBackupRoutes(app) {
                 for (const key of REDACTED_SETTINGS_KEYS) {
                     if (tables.settings[0][key]) tables.settings[0][key] = '[REDACTED]'
                 }
+                // Polygon-/Databento-Schlüssel in `apis` (A2-07)
+                try {
+                    const apis = JSON.parse(tables.settings[0].apis || '[]')
+                    if (Array.isArray(apis)) {
+                        tables.settings[0].apis = JSON.stringify(apis.map((a) => (a?.key ? { ...a, key: '[REDACTED]' } : a)))
+                    }
+                } catch { tables.settings[0].apis = '[]' }
             }
             for (const configTable of ['bitunix_config', 'bitget_config']) {
                 if (tables[configTable]) {
@@ -272,9 +300,16 @@ export function setupBackupRoutes(app) {
                         preservedSettings = await trx('settings').where('id', 1).first()
                     }
                 } catch (e) { /* ignore */ }
+                let preservedHype = []
+                try {
+                    if (await trx.schema.hasTable('hype_settings')) {
+                        preservedHype = await trx('hype_settings').whereIn('schluessel', HYPE_BEHALTEN)
+                    }
+                } catch (e) { /* ignore */ }
 
                 // 1. Tabellen in Abhängigkeitsreihenfolge leeren
                 for (const table of DELETE_ORDER) {
+                    if (IMPORT_UEBERSPRINGEN.has(table)) continue
                     if (tables[table]) {
                         try {
                             const hasTable = await trx.schema.hasTable(table)
@@ -289,8 +324,22 @@ export function setupBackupRoutes(app) {
 
                 // 2. Daten einfügen (in Batches für SQLite-Kompatibilität)
                 for (const table of BACKUP_TABLES) {
-                    const rows = tables[table]
+                    let rows = tables[table]
                     if (!rows || !Array.isArray(rows) || rows.length === 0) continue
+                    if (IMPORT_UEBERSPRINGEN.has(table)) {
+                        imported[table] = 'übersprungen (Börsenzugang bleibt wie eingerichtet)'
+                        continue
+                    }
+                    /*
+                     * `settings` ist eine einzige Zeile mit id 1 (A2-06). Bis
+                     * F2 wurde die id des Backups übernommen: mit `id: 2`
+                     * traf das Zurückschreiben der geschützten Felder
+                     * (`where id = 1`) nichts, beim nächsten Start legte
+                     * database.js eine leere Zeile 1 an — Passwort-Gate,
+                     * Lizenz und Sitzungs-Generation waren weg, entwertete
+                     * Cookies galten wieder.
+                     */
+                    if (table === 'settings') rows = [{ ...rows[0], id: 1 }]
 
                     try {
                         const hasTable = await trx.schema.hasTable(table)
@@ -338,7 +387,16 @@ export function setupBackupRoutes(app) {
                         if (preservedSettings[field] !== undefined) restore[field] = preservedSettings[field]
                     }
                     if (Object.keys(restore).length > 0) {
-                        await trx('settings').where('id', 1).update(restore)
+                        const n = await trx('settings').where('id', 1).update(restore)
+                        // Ohne getroffene Zeile wären Gate und Lizenz weg — dann lieber
+                        // den ganzen Import zurückrollen.
+                        if (!n && tables.settings?.length) throw new Error('Einstellungen nach dem Import nicht auffindbar (id 1)')
+                    }
+                }
+                if (preservedHype.length && tables.hype_settings) {
+                    for (const z of preservedHype) {
+                        await trx('hype_settings').where('schluessel', z.schluessel).del()
+                        await trx('hype_settings').insert(z)
                     }
                 }
             })
@@ -356,16 +414,36 @@ export function setupBackupRoutes(app) {
                     imported['db-config.json'] = 'übersprungen (Bestätigung fehlt: confirmDbConfigOverwrite)'
                 } else if (!isValidDbConfig(backupDbConfig)) {
                     imported['db-config.json'] = 'übersprungen (ungültige Struktur)'
+                } else if (!isAllowedDbHost(backupDbConfig.host)) {
+                    // Gleiche Hostprüfung wie PUT /api/db-config (A2-25): sonst
+                    // läse und schriebe die App nach dem Neustart gegen eine
+                    // fremde Datenbank — mit Auth-Daten und Schlüsseln.
+                    imported['db-config.json'] = 'übersprungen (Host nicht lokal/privat)'
                 } else {
                     try {
-                        saveDbConfig(backupDbConfig)
+                        let konfig = { ...backupDbConfig }
+                        if (!konfig.password || konfig.password === '[REDACTED]') {
+                            // Redigiertes Passwort nie wörtlich speichern: nur das
+                            // bestehende übernehmen, und nur für dieselbe Verbindung.
+                            const jetzt = loadDbConfig()
+                            const c = jetzt?.connection || {}
+                            const gleich = jetzt?.client === 'pg' && String(c.host) === String(konfig.host)
+                                && Number(c.port) === Number(konfig.port) && String(c.user) === String(konfig.user)
+                                && String(c.database) === String(konfig.database)
+                            if (!gleich) throw Object.assign(new Error('übersprungen (Passwort fehlt)'), { still: true })
+                            konfig.password = c.password
+                        }
+                        saveDbConfig(konfig)
                         imported['db-config.json'] = 1
                     } catch (e) {
-                        console.warn('Backup import: db-config.json konnte nicht wiederhergestellt werden:', e.message)
+                        if (e.still) imported['db-config.json'] = e.message
+                        else console.warn('Backup import: db-config.json konnte nicht wiederhergestellt werden:', e.message)
                     }
                 }
             }
 
+            // Gate und Generation aus der (unveränderten) Zeile 1 neu laden.
+            await loadAuthConfig()
             console.log('Backup import erfolgreich:', imported)
             res.json({ ok: true, imported })
         } catch (e) {

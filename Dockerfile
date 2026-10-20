@@ -35,13 +35,17 @@ COPY --from=builder /app/package.json ./
 # „Rechtliches" liest sie zur Laufzeit (server/rechtliches.js).
 COPY LICENSE NOTICE.md ./
 COPY --from=builder /app/THIRD-PARTY-NOTICES ./
-COPY server/ ./server/
+# server/ gehört dem Dienstbenutzer: der Strategie-Baukasten legt dort
+# erzeugte Strategien ab (strategy-builder.js). node_modules und dist bleiben
+# root — die App liest sie nur.
+COPY --chown=node:node server/ ./server/
 # Von Server und Frontend gemeinsam genutzte Logik (Orderbuch-Sync, Preis-Binning)
 COPY shared/ ./shared/
 COPY src/assets/icon.png ./src/assets/icon.png
 COPY index.mjs ./
 COPY docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh
+RUN chmod +x docker-entrypoint.sh \
+    && mkdir -p /app/data && chown node:node /app /app/data
 
 ENV AT_HOST=0.0.0.0
 ENV AT_PORT=8080
@@ -51,5 +55,12 @@ ENV AT_PORT=8080
 ENV NODE_ENV=production
 EXPOSE 8080
 
+# Die App läuft als `node` (uid 1000), nicht als root (Audit A2-10, F2
+# 20.10.2026). Der Einstieg startet als root, nur um db-config.json zu
+# schreiben und die Eigentümer eines BESTEHENDEN Datenvolumes nachzuziehen
+# (ältere Installationen haben es als root angelegt — ohne das wäre die
+# SQLite-Datei nach dem Update nicht mehr schreibbar), und gibt die Rechte dann
+# per `setpriv` ab. Bewusst ohne `USER`-Zeile: sonst könnte der Einstieg ein
+# altes Volume nicht übernehmen.
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "index.mjs"]

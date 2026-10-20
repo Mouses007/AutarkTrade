@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'path'
 import { existsSync } from 'fs'
-import { initDb } from './server/database.js'
+import { initDb, getKnex } from './server/database.js'
 import { setupApiRoutes } from './server/api-routes.js'
 import { setupBitunixRoutes } from './server/bitunix-api.js'
 import { setupBitgetRoutes } from './server/bitget-api.js'
@@ -53,6 +53,8 @@ import { logError } from './server/logger.js'
 import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession, meldeEinrichtungsCode } from './server/auth.js'
 import { umgebung, umgebungAn, alteSicherheitsSchalter } from './server/umgebung.js'
 import { starteTakte, istTestbetrieb } from './server/testbetrieb.js'
+import { migriereAltSchluessel } from './server/crypto.js'
+import { ALLE_VERSCHLUESSELTEN } from './server/geheimnisse.js'
 
 const app = express();
 app.disable('x-powered-by')
@@ -66,12 +68,34 @@ const kleinerBody = express.json({ limit: '100kb' })
 const grosserBody = express.json({ limit: '50mb' })
 app.use((req, res, next) => (hatGueltigeSession(req) ? grosserBody : kleinerBody)(req, res, next))
 
-// Security-Header (ohne zusätzliche Dependency). CSP bleibt bewusst aus, da
-// inline-Styles/Skripte genutzt werden.
+// Security-Header (ohne zusätzliche Dependency).
+//
+// Content-Security-Policy seit F2 (Audit A2-21): Skripte nur aus der App
+// selbst, kein eval, keine Objekte, keine Einbettung. Eine künftige XSS
+// (A2-17/18) kann damit kein eingeschleustes Script mehr ausführen.
+// Bewusst weit: Bilder und Verbindungen zu https/wss (Börsen-Streams,
+// Databento, Bildersuche) — eine engere Liste bräche bei jeder neuen Quelle
+// still eine Kachel. Inline-Styles braucht Vue/ECharts. Im Entwicklungsbetrieb
+// (Vite-HMR mit Inline-Skripten und ws:) keine CSP.
+const CSP = [
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "font-src 'self' data:",
+    "connect-src 'self' https: wss:",
+    "media-src 'self' data: blob: https:",
+    "worker-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+].join('; ')
 app.use(function sicherheitsKoepfe(req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('X-Frame-Options', 'DENY')
     res.setHeader('Referrer-Policy', 'no-referrer')
+    if (process.env.NODE_ENV !== 'dev') res.setHeader('Content-Security-Policy', CSP)
     // HSTS nur über HTTPS sinnvoll (sonst ignoriert / kontraproduktiv im LAN)
     const xfp = req.headers['x-forwarded-proto']
     if (req.secure || (typeof xfp === 'string' && xfp.split(',')[0].trim() === 'https')) {
@@ -104,6 +128,17 @@ async function starteServer() {
     // Initialize database (Knex — SQLite or PostgreSQL)
     console.log('[start] Datenbank')
     await initDb()
+
+    // Schlüssel-Altbestand bereinigen (F2, A2-08/A2-09): Maschinen-Seed →
+    // Secret-Datei, Klartext → verschlüsselt, '[REDACTED]' → leer.
+    try {
+        const z = await migriereAltSchluessel(getKnex(), ALLE_VERSCHLUESSELTEN)
+        if (z.umgeschluesselt || z.verschluesselt || z.geleert) {
+            console.log(`[start] Schlüssel: ${z.umgeschluesselt} umgeschlüsselt, ${z.verschluesselt} verschlüsselt, ${z.geleert} geleert`)
+        }
+    } catch (e) {
+        logError('start', 'Schlüssel-Migration fehlgeschlagen', e)
+    }
 
     // Sicherheitsschalter unter altem Namen laut melden (Audit A2-30): sie
     // wirken weiter, solange AT_X fehlt, aber niemand soll es übersehen.

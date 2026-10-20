@@ -26,14 +26,19 @@ services:
       # Fehlversuche sperrten den Eigentümer aus. Mit =1 liest NUR dieser
       # Zähler die vom Proxy angehängte X-Forwarded-For-Adresse; alle
       # anderen Prüfungen (isLocalRequest) bleiben bei der Peer-IP.
+      # Seit F2 (Audit A2-03) zählt der Kopf NUR, wenn die Verbindung von
+      # AT_TRUSTED_PROXY kommt (Namen oder IPs, Komma-getrennt; Vorgabe: die
+      # Compose-Namen caddy,autarktrade-caddy). Wer 8080 direkt anspricht,
+      # kann sich damit keine neue Adresse je Versuch mehr ausdenken. Heisst
+      # der Caddy-Dienst anders (Synology-Projekt), hier seinen Namen eintragen.
       - AT_TRUST_PROXY=${AT_TRUST_PROXY:-1}
-    volumes:
-      # Docker-Socket — ermoeglicht Klick-Update aus der App heraus. Der Mount
-      # ist NICHT read-only (das Update startet einen Helper-Container) und
-      # damit Root-aequivalent auf dem Host. Entferne den Mount, wenn du
-      # Updates nur manuell via "docker compose pull && docker compose up -d"
-      # machen willst.
-      - /var/run/docker.sock:/var/run/docker.sock
+      - AT_TRUSTED_PROXY=${AT_TRUSTED_PROXY:-caddy,autarktrade-caddy}
+    # Kein Docker-Socket mehr in der Vorgabe (Audit A2-10, F2 20.10.2026).
+    # Er war root-äquivalent auf dem Host und brachte nichts: das Klick-Update
+    # verlangt eine Anfrage von localhost, und im Container ist der Peer nie
+    # localhost — der Knopf antwortete dort immer 403. Updates im Container:
+    #   docker compose pull && docker compose up -d
+    # Die App läuft im Container als Benutzer `node`, nicht als root.
     env_file:
       - .env
     restart: unless-stopped
@@ -67,11 +72,9 @@ volumes:
   caddy_data:
 
 # Auto-Updates (Watchtower) sind bewusst NICHT Teil dieses Compose-Files.
-# Fuer lokalen Klick-Update-Betrieb reicht der Socket-Mount oben + der
-# Update-Button in der App (Docker-Mode erkannt -> App startet Helper-
-# Container, der "docker compose pull + up -d" gegen diesen Compose-File
-# ausfuehrt).
-# Wer einen Background-Poller will, kann Watchtower separat starten:
+# Updates: "docker compose pull && docker compose up -d" auf dem Host.
+# Wer einen Background-Poller will, kann Watchtower separat starten (der
+# bekommt dann den Socket — nicht die App):
 #   docker run -d --name watchtower-journal \
 #     -v /var/run/docker.sock:/var/run/docker.sock \
 #     -e WATCHTOWER_POLL_INTERVAL=3600 -e WATCHTOWER_CLEANUP=true \

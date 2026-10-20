@@ -24,7 +24,7 @@ import {
     beansprucheAufgabe, beansprucheTagesaufgabe, gibAufgabeFrei,
     merkeAufgabenFehler, stempleAufgabe, leseAufgabenStand,
 } from './db-claim.js'
-import { holeText, pruefeOeffentlicheUrl } from './net-guard.js'
+import { holeText, holeBinaer, pruefeOeffentlicheUrl } from './net-guard.js'
 import { leseFeed, leseTelegram, telegramUrl } from './feed-parser.js'
 import { quelleErlaubt } from './quellen/freigabe.js'
 import {
@@ -635,17 +635,14 @@ async function fasseVideoZusammen(videoUrl, cfg, { aufloesung = 'niedrig', tiefe
 
 /** Ein Bild laden und für einen multimodalen Modellaufruf kodieren. */
 async function ladeBildAlsAnhang(url, timeoutMs = 15000) {
-    const ctrl = new AbortController()
-    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-    try {
-        const r = await fetch(url, { signal: ctrl.signal })
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        const mediaType = String(r.headers.get('content-type') || 'image/jpeg').split(';')[0].trim()
-        const buf = Buffer.from(await r.arrayBuffer())
-        return { kind: 'image', base64: buf.toString('base64'), mediaType }
-    } finally {
-        clearTimeout(timer)
-    }
+    /*
+     * Über den Schutzwall (Audit A2-12, F2 20.10.2026): die URLs stammen aus
+     * Perplexitys Bildersuche, also aus Fremddaten. Mit rohem `fetch` folgte
+     * der Abruf jeder Umleitung, jedem Port und jeder Grösse — SSRF ins LAN
+     * und ein Speicher-DoS, mit dem Ergebnis auch noch an Gemini.
+     */
+    const { daten, typ } = await holeBinaer(url, { timeout: timeoutMs, maxBytes: 8 * 1024 * 1024, typ: /^image\// })
+    return { kind: 'image', base64: daten.toString('base64'), mediaType: typ || 'image/jpeg' }
 }
 
 /**

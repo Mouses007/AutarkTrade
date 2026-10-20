@@ -8,19 +8,56 @@
  * initialization", an einer Stelle, die mit der Ursache nichts zu tun hat.
  */
 
+import net from 'net'
+
+/**
+ * Ist `host` `localhost` oder ein IP-LITERAL aus Loopback/RFC1918 (bzw. IPv6
+ * ::1, fc00::/7, fe80::/10, IPv4-mapped davon)?
+ *
+ * Bis F2 (Audit A2-13) war das ein Präfixvergleich auf den Text: `10.evil.
+ * example.com`, `192.168.attacker.net` und `172.16.x.nip.io` galten als
+ * „privat" — bei jedem Port. Jetzt zählt nur noch eine echte Adresse.
+ *
+ * @param {string} host Hostname ohne Klammern und Port
+ */
+export function istLokalesZiel(host) {
+    const h = String(host || '').trim().toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '')
+    if (h === 'localhost') return true
+    const typ = net.isIP(h)
+    if (typ === 4) return istLokalV4(h)
+    if (typ === 6) {
+        if (h === '::1') return true
+        const m = h.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+        if (m) return istLokalV4(m[1])
+        const hex = h.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/)
+        if (hex) {
+            const a = parseInt(hex[1], 16); const b = parseInt(hex[2], 16)
+            return istLokalV4(`${a >> 8}.${a & 255}.${b >> 8}.${b & 255}`)
+        }
+        const kopf = parseInt(h.split(':')[0] || '0', 16)
+        return (kopf & 0xfe00) === 0xfc00 || (kopf & 0xffc0) === 0xfe80
+    }
+    return false
+}
+
+function istLokalV4(ip) {
+    const [a, b] = ip.split('.').map(Number)
+    return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31)
+        || (a === 0 && ip === '0.0.0.0')
+}
+
 /**
  * Prüft, ob eine URL auf einen lokalen/privaten Host zeigt.
- * Erlaubt: localhost, 127.0.0.1, ::1, 0.0.0.0, 192.168.x.x, 10.x.x.x, 172.16-31.x.x
+ * Erlaubt: localhost und IP-Literale aus 127/8, 10/8, 172.16/12, 192.168/16, ::1, fc00::/7
  * @param {string} url - Die zu prüfende URL
  * @returns {boolean} true wenn lokal/privat, false sonst
  */
 export function isAllowedOllamaUrl(url) {
     try {
         const parsed = new URL(url)
-        const host = parsed.hostname
-        const isLocal = ['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(host)
-        const isPrivate = host.startsWith('192.168.') || host.startsWith('10.') || host.match(/^172\.(1[6-9]|2\d|3[01])\./)
-        return isLocal || isPrivate
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false
+        if (parsed.username || parsed.password) return false
+        return istLokalesZiel(parsed.hostname)
     } catch {
         return false
     }
@@ -69,13 +106,30 @@ export async function pruefeKiEndpunkt(rawUrl) {
     // Schlägt die Auflösung fehl, wird NICHT blockiert: die Anfrage scheitert
     // dann ohnehin, und ein zeitweise defektes DNS soll nicht das Speichern
     // der Einstellungen verhindern.
+    /*
+     * Seit F2 (A2-13) sperrt eine fehlgeschlagene Auflösung: vorher ging ein
+     * Name, der beim Speichern nicht auflöste, ungeprüft durch — und konnte
+     * beim ersten Aufruf auf die Metadaten-Adresse zeigen.
+     */
     let adressen = []
     try {
         const dns = await import('node:dns')
         adressen = await dns.promises.lookup(host, { all: true })
-    } catch { return }
+    } catch {
+        throw new Error(`„${host}" lässt sich gerade nicht auflösen — bitte später erneut speichern`)
+    }
 
-    for (const { address, family } of adressen) {
+    for (let { address, family } of adressen) {
+        // IPv4-mapped IPv6 (`::ffff:a9fe:a9fe` = 169.254.169.254) auf IPv4 zurückführen
+        const gemappt = String(address).toLowerCase().match(/^::ffff:(?:(\d+\.\d+\.\d+\.\d+)|([0-9a-f]{1,4}):([0-9a-f]{1,4}))$/)
+        if (gemappt) {
+            if (gemappt[1]) address = gemappt[1]
+            else {
+                const a = parseInt(gemappt[2], 16); const b = parseInt(gemappt[3], 16)
+                address = `${a >> 8}.${a & 255}.${b >> 8}.${b & 255}`
+            }
+            family = 4
+        }
         if (family === 4) {
             const t = address.split('.').map(Number)
             if (t[0] === 169 && t[1] === 254) throw new Error(`„${host}" zeigt auf den Metadaten-Bereich (${address})`)

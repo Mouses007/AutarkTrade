@@ -47,3 +47,6 @@ scripts/.v2-container.env
 # Private Schlüssel (Lizenz-Signatur u. a.) gehören nie ins Repo oder Image
 *.pem
 *.key
+
+# Secret nativer Installationen (server/crypto.js) — nie ins Image
+.at-secret

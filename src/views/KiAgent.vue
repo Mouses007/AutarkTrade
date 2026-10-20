@@ -7,7 +7,7 @@ import { aiReportGenerating, aiReportError, aiReportLastSavedId, aiReportLabel, 
 import { selectedBroker } from '../stores/filters.js'
 import axios from 'axios'
 import { useExportReportPdf } from '../utils/pdfExport'
-import { sanitizeHtml } from '../utils/sanitize'
+import { sanitizeKiHtml } from '../utils/sanitize'
 import { logError, logWarn } from '../utils/logger.js'
 import dayjs, { anzeige } from '../utils/journal/zeit.js'
 import { sendNotification } from '../utils/notify'
@@ -478,7 +478,7 @@ function markdownToHtml(md) {
         return `<p>${trimmed}</p>`
     }).filter(Boolean).join('\n')
 
-    return sanitizeHtml(html)
+    return sanitizeKiHtml(html)
 }
 
 // ==================== AGENT FUNCTIONS ====================

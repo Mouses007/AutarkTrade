@@ -205,7 +205,7 @@ Eigene Karten und der Lernfortschritt liegen in der Datensicherung.`,
 - **Börsen/API-Schlüssel**: Bitunix, Bitget, Pionex — Schlüssel werden verschlüsselt gespeichert.
 - **KI**: Anbieter, Schlüssel, Modelle und Optionen je Funktion (siehe Thema "ki").
 - **Layout & Stil**: dunkles Design, „Erweiterte Infos" (das kleine „i" an Werten und Bedienelementen — Mauszeiger darüber bzw. antippen zeigt, was die Zahl bedeutet; ab Werk an), „Modi ein-/ausblenden" (Chart, Live-Analyse, Research, Strategien einzeln; Journal ist nicht abschaltbar), Live-Trading auf dem Handy freischalten, Sprache (Deutsch/Englisch).
-- **Sicherheit**: optionales Passwort-Login (Auth-Gate) für den Zugriff übers Netz; Update-PIN.
+- **Sicherheit**: optionales Passwort-Login (Auth-Gate) für den Zugriff übers Netz (mindestens 10 Zeichen; das erste Passwort aus dem Netz verlangt den Einrichtungscode aus dem Server-Protokoll); „Überall abmelden" entwertet alle Anmeldungen; Update und Neustart nur direkt am Server-Rechner (localhost) mit Bestätigung.
 - **Backup**: JSON-Export/-Import aller Daten. Sensible Schlüssel werden beim Export ausgelassen.
 - **Update**: Prüfung auf neue Versionen (GitHub) und Ein-Klick-Update.
 - **ESP32-Display**: Anbindung eines kleinen Hardware-Displays (CYD), das Kennzahlen anzeigt; eigener API-Schlüssel in den Einstellungen.

@@ -1,5 +1,5 @@
 import { getKnex } from './database.js'
-import { encrypt, decrypt } from './crypto.js'
+import { encrypt, decrypt, maske } from './crypto.js'
 import { logWarn, logError } from './logger.js'
 import { isAllowedOllamaUrl, pruefeKiEndpunkt } from './ollama-url.js'
 import {
@@ -181,9 +181,9 @@ export function setupOllamaRoutes(app) {
                 return await checkGeminiStatus(apiKey, res, model)
             } else if (istOpenAiKompatibel(provider)) {
                 // openai, mistral, xai, qwen, custom — und deepseek aus dem Altbestand
-                const basis = req.query.customUrl
-                    ? basisUrl(req.query.customUrl)
-                    : anbieterBasis(provider, settings)
+                // Nur die gespeicherte Adresse (A2-05b): bis F2 schickte
+                // `?customUrl=` den gespeicherten Schlüssel an eine beliebige URL.
+                const basis = anbieterBasis(provider, settings)
                 return await checkOpenAiKompatibelStatus(apiKey, res, model, provider, basis)
             }
             res.json({ online: false, provider, model })
@@ -204,9 +204,11 @@ export function setupOllamaRoutes(app) {
     // KI Verbindung testen
     app.post('/api/ai/test', async (req, res) => {
         let { provider, apiKey, model, ollamaUrl } = req.body
+        let gespeicherterSchluessel = false
 
         // Wenn Key maskiert ist (·), den gespeicherten Key aus DB verwenden
         if (apiKey && apiKey.includes('•')) {
+            gespeicherterSchluessel = true
             try {
                 const knex = getKnex()
                 const settings = await knex('settings')
@@ -272,9 +274,29 @@ export function setupOllamaRoutes(app) {
                 // `basisUrl` aus dem Rumpf erlaubt den Test einer noch nicht
                 // gespeicherten Adresse (Qwen-Arbeitsbereich, eigener Anbieter).
                 const roh = req.body.basisUrl || req.body.customUrl
-                const basis = roh ? basisUrl(roh) : await anbieterBasisAusDb(provider)
+                const gespeicherteBasis = await anbieterBasisAusDb(provider)
+                const basis = roh ? basisUrl(roh) : gespeicherteBasis
                 if (!basis) return res.json({ success: false, message: 'Basis-URL fehlt oder ist ungültig' })
                 if (!apiKey) return res.json({ success: false, message: 'API-Key fehlt' })
+                /*
+                 * Ein GESPEICHERTER Schlüssel geht nur an die gespeicherte
+                 * Adresse (Audit A2-05a, F2 20.10.2026). Bis dahin sandte der
+                 * Test ihn an jede `basisUrl` aus dem Rumpf — ohne Prüfung;
+                 * ein Lauscher bekam `Bearer sk-…` mitgeschnitten. Eine neue
+                 * Adresse lässt sich weiter testen, mit frisch eingegebenem
+                 * Schlüssel.
+                 */
+                if (gespeicherterSchluessel && basis !== gespeicherteBasis) {
+                    return res.json({
+                        success: false,
+                        message: 'Der gespeicherte Schlüssel wird nur an die gespeicherte Adresse geschickt. Für eine neue Adresse den Schlüssel neu eingeben (oder erst speichern).',
+                    })
+                }
+                if (roh) {
+                    try { await pruefeKiEndpunkt(basis) } catch (e) {
+                        return res.json({ success: false, message: `Adresse abgelehnt: ${e.message}` })
+                    }
+                }
 
                 /**
                  * Zwei Prüfwege, weil „OpenAI-kompatibel" nur den Chat meint.
@@ -1153,7 +1175,31 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                 }
             }
 
+            /*
+             * Schlüssel an die Adresse binden (A2-05c, F2): ändert sich die
+             * Adresse eines Anbieters, ohne dass ein neuer Schlüssel mitkommt,
+             * wird der alte geleert. Sonst bog eine (gestohlene) Sitzung die
+             * Adresse um, und der nächste Chat schickte den gespeicherten
+             * Schlüssel dorthin.
+             */
+            const vorher = await knex('settings').select(KI_SPALTEN).where('id', 1).first() || {}
+            const nachher = {
+                ...vorher,
+                aiCustomUrl: sauberCustom,
+                ...(aiQwenUrl !== undefined ? { aiQwenUrl: sauberQwen } : {}),
+                ...(aiDeepseekUrl !== undefined ? { aiDeepseekUrl: sauberEndpunkt2 } : {}),
+            }
+            const geleert = {}
+            for (const [id, reg] of Object.entries(ANBIETER_REG)) {
+                if (!reg.urlSpalte || !reg.keySpalte || !vorher[reg.keySpalte]) continue
+                if (anbieterBasis(id, vorher) === anbieterBasis(id, nachher)) continue
+                const neu = keys?.[id]
+                if (neu !== undefined && neu !== '' && !String(neu).includes('•')) continue
+                geleert[reg.keySpalte] = ''
+            }
+
             await knex('settings').where('id', 1).update({
+                ...geleert,
                 aiProvider: aiProvider || 'ollama',
                 aiModel: aiModel || '',
                 aiOllamaUrl: sanitizedOllamaUrl,
@@ -1195,7 +1241,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                 for (const id of neueSchluessel) await loescheKiGuthabenVermerk(id)
             }
 
-            res.json({ success: true })
+            res.json({ success: true, schluesselGeleert: Object.keys(geleert) })
         } catch (e) {
             console.error('Save AI settings error:', e)
             res.status(500).json({ error: 'Interner Serverfehler' })
@@ -1215,8 +1261,7 @@ Antworte auf Deutsch. Kompakt (max 500 Woerter). Markdown.`
                 if (!encryptedKey) return ''
                 const key = decrypt(encryptedKey)
                 if (!key) return ''
-                if (key.length <= 8) return '•'.repeat(key.length)
-                return key.slice(0, 4) + '•'.repeat(Math.min(key.length - 8, 20)) + key.slice(-4)
+                return maske(key) // nur die letzten 4 (A2-34)
             }
 
             res.json({

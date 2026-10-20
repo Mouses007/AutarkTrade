@@ -596,20 +596,28 @@ export function setupUpdateRoutes(app) {
             if (IS_WINDOWS) {
                 // Windows: native .node-Dateien sind gesperrt → externes Script
                 steps.push({ step: 'npm install + build', output: 'Wird in neuem Fenster ausgeführt...' })
-                spawnWindowsUpdateScript(['npm install', 'npm run build'], 'Update')
+                spawnWindowsUpdateScript(['npm ci || npm install', 'npm run build'], 'Update')
                 res.json({ ok: true, steps, newVersion })
                 setTimeout(() => {
                     console.log('\n🔄 Update — Server wird beendet, externes Script übernimmt...')
                     process.exit(0)
                 }, 1500)
             } else {
-                // Linux/macOS: npm install + build inline (keine Dateisperren)
-                const npmOutput = execSync('npm install', {
-                    cwd: PROJECT_ROOT,
-                    encoding: 'utf8',
-                    timeout: 120000
-                }).trim()
-                steps.push({ step: 'npm install', output: npmOutput })
+                // Linux/macOS: npm ci + build inline (keine Dateisperren).
+                // `npm ci` statt `npm install` (Audit A2-26, F2): installiert
+                // genau die Versionen aus package-lock.json samt Prüfsummen,
+                // statt Semver-Bereichen zu folgen. Nur wenn das scheitert
+                // (Lock passt nicht), fällt es auf `npm install` zurück —
+                // ein halb gelöschtes node_modules wäre schlimmer.
+                let npmOutput
+                let npmSchritt = 'npm ci'
+                try {
+                    npmOutput = execSync('npm ci', { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 300000 }).trim()
+                } catch (e) {
+                    npmSchritt = 'npm install (Rückfall, npm ci scheiterte)'
+                    npmOutput = execSync('npm install', { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 300000 }).trim()
+                }
+                steps.push({ step: npmSchritt, output: npmOutput })
 
                 const buildOutput = execSync('npm run build', {
                     cwd: PROJECT_ROOT,

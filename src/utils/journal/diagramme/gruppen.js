@@ -7,6 +7,7 @@
  * Familie nicht kennt) entsteht kein Eintrag — die Option wird trotzdem
  * gesetzt, mit leerer Reihe und leeren Kategorien.
  */
+import { escHtml } from '../../escHtml.js'
 import { selectedRatio } from '../../../stores/filters.js'
 import { groups, verfuegbareTags } from '../../../stores/trades.js'
 import { useCapitalizeFirstLetter, useXDecCurrencyFormat, useXDecFormat, useThousandCurrencyFormat } from '../format.js'
@@ -115,7 +116,7 @@ function zeichneGruppe(id, art) {
             ...tooltipStil(p),
             formatter: (x) => {
                 const eintrag = eintraege[x.dataIndex]
-                const kopf = art === 'einstiegszeit' ? `${eintrag?.name}:00` : eintrag?.name
+                const kopf = escHtml(art === 'einstiegszeit' ? `${eintrag?.name}:00` : eintrag?.name)
                 return `${kopf}<br>${istPf ? t('options.profitFactor') : 'APPT'}: ${wertText(x.value)}`
             },
         },

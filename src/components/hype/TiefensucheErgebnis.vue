@@ -1,4 +1,5 @@
 <script setup>
+import { sichereUrl } from '@/utils/sanitize.js'
 /**
  * Ergebnis einer Tiefensuche (`GET /api/coin-radar/tiefensuche`): Verträge,
  * Vertrags- und Halterprüfung, Projektprüfung.
@@ -67,7 +68,7 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
                     <code>{{ v.contract }}</code>
                     <span v-if="v.liquiditaetUsd" class="tsGrau">{{ t('coinradar.tsLiq') }} {{ geldKurz(v.liquiditaetUsd) }}<template v-if="v.dex"> · {{ v.dex }}</template></span>
                     <span v-else-if="!v.pruefbar" class="tsGrau">{{ t('coinradar.tsKetteNichtPruefbar') }}</span>
-                    <a v-if="v.url" :href="v.url" target="_blank" rel="noopener noreferrer">DexScreener ↗</a>
+                    <a v-if="sichereUrl(v.url)" :href="sichereUrl(v.url)" target="_blank" rel="noopener noreferrer">DexScreener ↗</a>
                 </div>
             </div>
             <div v-if="daten.gewaehlt" class="tsBlock">

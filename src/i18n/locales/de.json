@@ -841,6 +841,7 @@
     "area_live": "Live-Analyse",
     "area_agent": "Agent",
     "deleteFailed": "Löschen fehlgeschlagen.",
+    "schluesselGeleert": "Gespeichert. Die Adresse hat sich geändert — der bisherige Schlüssel wurde dafür gelöscht. Bitte den Schlüssel neu eingeben.",
     "customUrl": "Basis-URL",
     "customUrlHint": "Der Teil vor /chat/completions — meist mit /v1 am Ende. Funktioniert mit allem, was die OpenAI-Schnittstelle spricht: Groq, OpenRouter, Together, vLLM, LM Studio.",
     "qwenUrlHint": "Alibaba vergibt internationalen Konten eigene Adressen je Arbeitsbereich. Passt die Vorbelegung nicht, steht die richtige Adresse in der Model-Studio-Konsole.",

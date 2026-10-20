@@ -29,4 +29,17 @@ else
     fi
 fi
 
+# ── Rechte abgeben (Audit A2-10, F2) ─────────────────────────────────
+# Als root gestartet: Eigentum nachziehen, dann als `node` weiter. Läuft der
+# Container schon als anderer Benutzer (`user:` in Compose), bleibt es dabei.
+if [ "$(id -u)" = "0" ]; then
+    [ -f /app/db-config.json ] && chown node:node /app/db-config.json && chmod 600 /app/db-config.json
+    if [ -d /app/data ] && [ "$(stat -c %u /app/data)" != "$(id -u node)" ]; then
+        echo "-> /app/data gehört noch root — Eigentum an den Dienstbenutzer node übergeben"
+        chown -R node:node /app/data
+    fi
+    # Selbst gesetzte Symlinks zeigen ins Volume; die Verknüpfung selbst darf root gehören.
+    exec setpriv --reuid=node --regid=node --init-groups -- "$@"
+fi
+
 exec "$@"

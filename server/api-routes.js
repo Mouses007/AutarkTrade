@@ -2,9 +2,11 @@ import crypto from 'crypto'
 import { getKnex } from './database.js'
 import { loadDbConfig, saveDbConfig } from './db-config.js'
 import { setupEsp32AdminRoutes } from './esp32-api.js'
-import { encrypt, maskKey } from './crypto.js'
+import { encrypt, maskKey, decrypt, isEncrypted } from './crypto.js'
 import { isLocalRequest, getLocalVersion, compareSemver } from './update-api.js'
 import { logError } from './logger.js'
+import { GEHEIME_SETTINGS, ZIEL_SETTINGS } from './geheimnisse.js'
+import { istLokalesZiel } from './ollama-url.js'
 
 const VALID_TABLES = [
     'trades', 'diaries', 'screenshots', 'satisfactions', 'tags', 'notes', 'excursions',
@@ -29,25 +31,11 @@ const READ_ONLY_TABLES = [
 // These are written ONLY via dedicated, encrypting endpoints (/api/ai/settings,
 // /api/flux/settings, /api/esp32/*, /api/auth/set-password) — never via the
 // generic settings PUT below.
-export const SETTINGS_SENSITIVE_FIELDS = [
-    'aiApiKey', 'aiKeyOpenai', 'aiKeyAnthropic', 'aiKeyGemini', 'aiKeyDeepseek',
-    'aiKeyMistral', 'aiKeyXai', 'aiKeyQwen', 'aiKeyPerplexity',
-    'fluxApiKey', 'geminiImageApiKey', 'esp32ApiKey', 'authPasswordHash', 'aiKeyCustom',
-    // CryptoQuant (ETF-Kachel): geschrieben nur über /api/cryptoquant/settings
-    'cryptoquantApiKey',
-    // SMTP-Passwort: geschrieben nur über /api/mail/settings (verschlüsselt)
-    'mailPasswort',
-    /*
-     * Generation des Sitzungs-Tokens: geschrieben NUR von `auth.js` beim
-     * Entwerten. Über die generische Settings-Route setzbar waere sie ein
-     * Werkzeug, um sich selbst oder andere auszusperren — und beim Auslesen
-     * verriete sie, wie oft rotiert wurde.
-     */
-    'sessionGeneration',
-    // Lizenzschlüssel: kann Zugangsdaten zur Paketquelle tragen, geschrieben nur über
-    // /api/lizenz (prüft die Signatur); die Oberfläche bekommt den Stand, nie den Text.
-    'lizenzSchluessel'
-]
+//
+// Seit F2 (Audit A2-07) abgeleitet statt von Hand gepflegt: die Liste kommt
+// aus `geheimnisse.js` (KI-Schlüssel aus der Anbieter-Registry). Vorher
+// fehlten elf Spalten und gingen als Geheimtext an jede Sitzung.
+export const SETTINGS_SENSITIVE_FIELDS = [...GEHEIME_SETTINGS]
 
 /** Strip sensitive fields from a settings row, exposing only `${field}Set` presence flags. */
 function redactSettings(parsed) {
@@ -67,13 +55,16 @@ export const VALID_SETTINGS_KEYS = [
     'timeZone', 'waehrungCode', 'waehrungFaktor', 'accounts', 'tags', 'apis', 'layoutStyle', 'avatar',
     'showTradePopups', 'username', 'startBalance', 'startBalanceDate', 'currentBalance',
     'tradeTimeframes', 'customTimeframes', 'enableBinanceChart',
-    'aiProvider', 'aiModel', 'aiApiKey', 'aiTemperature', 'aiMaxTokens', 'aiOllamaUrl',
-    'aiScreenshots', 'aiKeyOpenai', 'aiKeyAnthropic', 'aiKeyGemini', 'aiKeyDeepseek',
-    'aiKeyMistral', 'aiKeyXai', 'aiKeyQwen', 'aiQwenUrl',
+    // KI-Schlüssel und -Adressen NICHT hier (A2-05c/A2-24): Schlüssel nur über
+    // /api/ai/settings (verschlüsselt), Adressen nur dort mit pruefeKiEndpunkt —
+    // sonst bog eine Sitzung die Adresse um, und der gespeicherte Schlüssel
+    // ging beim nächsten Chat dorthin.
+    'aiProvider', 'aiModel', 'aiTemperature', 'aiMaxTokens',
+    'aiScreenshots',
     'aiEnabled', 'aiReportPrompt', 'aiChatEnabled', 'browserNotifications', 'setupComplete', 'balances', 'language',
-    'fluxApiKey', 'fluxModel', 'fluxDisplayName', 'fluxAvatar', 'fluxUseCustomAvatar',
-    'shareCardProvider', 'geminiImageApiKey', 'geminiImageModel',
-    'esp32ApiKey', 'esp32Filter',
+    'fluxModel', 'fluxDisplayName', 'fluxAvatar', 'fluxUseCustomAvatar',
+    'shareCardProvider', 'geminiImageModel',
+    'esp32Filter',
     'liveSymbol', 'liveMarket', 'liveViewPct', 'liveFrameMs', 'liveHistoryMin', 'liveRamp',
     'liveShowProfile', 'livePauseInBackground', 'liveColorMode', 'liveColorRef', 'liveAutoFollow',
     'liveThreshold', 'liveShowLiquidations', 'livePrefillMin', 'liveDotStep', 'liveProfileW', 'liveShowVolumeBars',
@@ -82,8 +73,8 @@ export const VALID_SETTINGS_KEYS = [
     'liveRecordRows', 'liveRecordRangePct', 'liveRecordAllLiq',
     'scalpMaxMinutes', 'daytradeMaxHours', 'feeFixMigrated',
     'strategyKillSwitch', 'strategyMaxLeverage', 'strategyHiddenTemplates',
-    'strategyLlmBudgetUsd', 'aiModels', 'aiCustomUrl', 'aiDeepseekUrl', 'aiKeyCustom',
-    'aiKeyOpenrouter', 'aiOpenrouterCatalog', 'aiTaskProviders',
+    'strategyLlmBudgetUsd', 'aiModels',
+    'aiOpenrouterCatalog', 'aiTaskProviders',
     'radarRsiSymbols', 'radarRsiTfs', 'radarKalenderLaender', 'radarKalenderImpact', 'radarNewsQuellenAusschluss', 'radarNewsAuto', 'radarNewsStunde', 'radarNewsVideos', 'radarNewsModel', 'radarNewsAufloesung', 'radarNewsBerichtProvider', 'radarNewsBerichtModell', 'radarPicycleAlarm', 'radarPicycleSchwelle', 'radarFundingDivergenz', 'radarDivergenzSymbole', 'boersenLinks',
     'radarNewsRhythmus', 'radarNewsWochentag', 'radarNewsThemen', 'radarNewsLaenge', 'radarNewsRuheAn', 'radarNewsRuheWoerter', 'radarNewsXModell',
     'radarNewsUpdates', 'radarNewsUpdateStunden', 'radarNewsMailVoll', 'radarNewsMailInhalt', 'radarNewsMailAktiv', 'radarNewsMailAn',
@@ -101,7 +92,32 @@ export const VALID_SETTINGS_KEYS = [
     // Kanalwahl je Meldungstyp. Der SMTP-Zugang läuft NICHT hierüber, sondern
     // über /api/mail/settings — dort wird das Passwort verschlüsselt.
     'benachrichtigungen'
-]
+].filter((k) => !GEHEIME_SETTINGS.includes(k) && !ZIEL_SETTINGS.includes(k))
+
+/*
+ * Polygon-/Databento-Schlüssel in `settings.apis` (JSON-Liste {provider, key}).
+ *
+ * Bis F2 (A2-07) standen sie im Klartext in der DB und im Backup. Der Browser
+ * braucht sie weiterhin (er ruft Databento selbst und reicht den Polygon-
+ * Schlüssel an /api/polygon weiter) — deshalb liefert die Sitzung sie
+ * entschlüsselt aus, gespeichert und gesichert werden sie verschlüsselt bzw.
+ * redigiert.
+ */
+export function apisSchluesselVerschluesseln(liste) {
+    if (!Array.isArray(liste)) return liste
+    return liste.map((a) => (a && typeof a.key === 'string' && a.key && !isEncrypted(a.key)
+        ? { ...a, key: encrypt(a.key) } : a))
+}
+function apisSchluesselEntschluesseln(liste) {
+    if (!Array.isArray(liste)) return liste
+    return liste.map((a) => (a && typeof a.key === 'string' && isEncrypted(a.key)
+        ? { ...a, key: decrypt(a.key) } : a))
+}
+function settingsAusliefern(row) {
+    const parsed = parseJsonColumns('settings', row)
+    if (parsed && Array.isArray(parsed.apis)) parsed.apis = apisSchluesselEntschluesseln(parsed.apis)
+    return redactSettings(parsed)
+}
 
 // Bekannte Spalten pro Tabelle (Whitelist gegen SQL-Injection); ergänzt um Migrations-Spalten
 const TABLE_COLUMNS = {
@@ -210,11 +226,12 @@ function safeParseQuery(value) {
  * SSRF-Schutz für DB-Verbindungstests/-konfiguration: nur lokale/private Hosts.
  * Verhindert Missbrauch als interner Port-Scanner. Deckt loopback + RFC1918 ab.
  */
-function isAllowedDbHost(host) {
+export function isAllowedDbHost(host) {
+    // Nur echte lokale/private IP-Literale und localhost (A2-13): der alte
+    // Präfixvergleich liess `10.attacker.example` durch, und der DB-Test
+    // schickte das gespeicherte PG-Passwort dorthin.
     const h = String(host || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '')
-    if (!h) return false
-    if (['localhost', '127.0.0.1', '0.0.0.0', '::1'].includes(h)) return true
-    return h.startsWith('192.168.') || h.startsWith('10.') || /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+    return !!h && istLokalesZiel(h)
 }
 
 export function setupApiRoutes(app) {
@@ -224,7 +241,7 @@ export function setupApiRoutes(app) {
     app.get('/api/db/settings', async (req, res) => {
         try {
             const row = await knex('settings').where('id', 1).first()
-            res.json(redactSettings(parseJsonColumns('settings', row)))
+            res.json(settingsAusliefern(row))
         } catch (error) {
             console.error('Settings read error:', error)
             res.status(500).json({ error: 'Internal server error' })
@@ -233,7 +250,10 @@ export function setupApiRoutes(app) {
 
     app.put('/api/db/settings', async (req, res) => {
         try {
-            const data = stringifyJsonColumns('settings', req.body)
+            const body = { ...(req.body || {}) }
+            if (typeof body.apis === 'string') { try { body.apis = JSON.parse(body.apis) } catch { /* bleibt Text */ } }
+            if (Array.isArray(body.apis)) body.apis = apisSchluesselVerschluesseln(body.apis)
+            const data = stringifyJsonColumns('settings', body)
             // Only allow known settings keys (whitelist), and NEVER accept sensitive
             // secrets here — those go through dedicated, encrypting endpoints.
             const blocked = new Set(SETTINGS_SENSITIVE_FIELDS)
@@ -246,7 +266,7 @@ export function setupApiRoutes(app) {
             updateData.updatedAt = knex.fn.now()
             await knex('settings').where('id', 1).update(updateData)
             const row = await knex('settings').where('id', 1).first()
-            res.json(redactSettings(parseJsonColumns('settings', row)))
+            res.json(settingsAusliefern(row))
         } catch (error) {
             console.error('Settings update error:', error)
             res.status(500).json({ error: 'Internal server error' })
@@ -441,12 +461,23 @@ export function setupApiRoutes(app) {
                 return res.status(400).json({ ok: false, message: 'Ungültiger DB-Host (nur lokale/private Adressen erlaubt).' })
             }
 
-            // If no password provided, use the saved one from db-config.json
+            // If no password provided, use the saved one from db-config.json —
+            // aber nur für GENAU die gespeicherte Verbindung (A2-05f): sonst
+            // ging das gespeicherte PG-Passwort an jeden erlaubten Host, und
+            // node-pg schickt es auf Verlangen im Klartext.
             let testPassword = password || ''
             if (!testPassword) {
                 const savedConfig = loadDbConfig()
-                if (savedConfig.client === 'pg' && savedConfig.connection?.password) {
-                    testPassword = savedConfig.connection.password
+                const c = savedConfig.connection || {}
+                const gleich = savedConfig.client === 'pg'
+                    && String(c.host || '') === cleanHost
+                    && Number(c.port || 5432) === (parseInt(port) || 5432)
+                    && String(c.user || '') === String(user || '')
+                    && String(c.database || '') === String(database || '')
+                if (gleich && c.password) {
+                    testPassword = c.password
+                } else if (c.password) {
+                    return res.json({ ok: false, message: 'Für eine geänderte Verbindung bitte das Passwort eingeben — das gespeicherte geht nur an die gespeicherte Verbindung.' })
                 }
             }
 

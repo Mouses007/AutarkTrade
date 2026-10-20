@@ -33,7 +33,7 @@
 
 import { getKnex } from '../database.js'
 import { logWarn } from '../logger.js'
-import { pruefeOeffentlicheUrl } from '../net-guard.js'
+import { pruefeOeffentlicheUrl, GESCHUETZT } from '../net-guard.js'
 import { QuelleAus } from '../quellen/aus.js'
 import { quelleErlaubt } from '../quellen/freigabe.js'
 import { handelAusTransaktion, smartSignale, smartWalletListe } from './fruehphase-bewertung.js'
@@ -88,6 +88,9 @@ async function rpc(url, method, params, timeout = 15000) {
                 method: 'POST',
                 redirect: 'error',
                 signal: ctrl.signal,
+                // Ziel beim Verbinden geprüft und festgenagelt (A2-04): die
+                // RPC-Adresse wird nur einmal vorab geprüft.
+                dispatcher: GESCHUETZT,
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
             })

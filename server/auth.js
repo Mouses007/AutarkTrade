@@ -18,6 +18,7 @@ import { getKnex } from './database.js'
 import { isLocalRequest } from './update-api.js'
 import { logWarn } from './logger.js'
 import { umgebung, umgebungAn } from './umgebung.js'
+import { hauptGeheimnis } from './crypto.js'
 
 /**
  * Sitzungs-Token.
@@ -70,7 +71,9 @@ function leiteTokenAb(generation) {
      * Basis der Zufallswert des Prozesses statt des Hauptgeheimnisses; die
      * Rotation funktioniert in beiden Faellen gleich.
      */
-    const basis = umgebung('SECRET') ? String(umgebung('SECRET')) : zufallsToken
+    // Seit F2 auch die Secret-Datei nativer Installationen (crypto.js): dann
+    // überlebt die Anmeldung dort ebenfalls einen Neustart.
+    const basis = hauptGeheimnis() || zufallsToken
     /*
      * Generation 0 ergibt GENAU das alte Token.
      *

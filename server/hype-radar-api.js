@@ -97,10 +97,24 @@ export function setupHypeRadarRoutes(app) {
     app.put('/api/hype-radar/einstellungen', async (req, res) => {
         try {
             const { schluessel, ...rest } = req.body || {}
+            /*
+             * Das ntfy-Token gehört zur ntfy-Adresse (Audit A2-05d, F2): wird
+             * die Adresse geändert, ohne ein neues Token mitzuschicken, wird
+             * das alte geleert — sonst ginge es als Bearer an die neue Adresse.
+             */
+            const vorher = await leseEinstellungen()
+            const alteUrl = String(vorher?.alarmKanaele?.ntfy?.url || '').trim().replace(/\/+$/, '')
+            const neueUrlRoh = rest?.alarmKanaele?.ntfy?.url
+            const neueUrl = String(neueUrlRoh ?? alteUrl).trim().replace(/\/+$/, '')
+            const neuesToken = schluessel?.ntfyToken
+            const tokenNeu = neuesToken !== undefined && !String(neuesToken).includes('•')
             // Die Alarmschwellen nur als Abweichung speichern — die Vorgaben
             // leben in `wachhund.js` und sollen dort änderbar bleiben.
             await schreibeEinstellungen(rest, { alarmRegeln: STANDARD_ALARM_REGELN })
             if (schluessel) await schreibeSchluessel(schluessel)
+            if (neueUrl !== alteUrl && !tokenNeu && vorher?.schluessel?.ntfyToken) {
+                await schreibeSchluessel({ ntfyToken: '' })
+            }
             vergissRugcheck()
             const e = await leseEinstellungen()
             res.json({
