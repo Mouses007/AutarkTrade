@@ -1,5 +1,6 @@
 import { createI18n } from 'vue-i18n'
 import de from './locales/de.json'
+import { setzeAnzeigeSprache } from '../utils/journal/zeit.js'
 
 /*
  * Nur DEUTSCH liegt im Start-Bundle.
@@ -62,6 +63,7 @@ export async function setLocale(locale) {
     const ok = await ladeSprache(locale)
     if (!ok) return
     i18n.global.locale.value = locale
+    setzeAnzeigeSprache(locale)
     localStorage.setItem('appLanguage', locale)
     document.documentElement.setAttribute('lang', locale)
 }
@@ -76,6 +78,7 @@ export async function setLocale(locale) {
  */
 export async function starteSprache() {
     document.documentElement.setAttribute('lang', savedLocale)
+    setzeAnzeigeSprache(savedLocale)
     if (savedLocale !== 'de') await setLocale(savedLocale)
 }
 

@@ -3,7 +3,7 @@
  * (Spezifikation journal-kern.md §4.4).
  */
 import calendarize from 'calendarize'
-import dayjs from './zeit.js'
+import dayjs, { anzeige } from './zeit.js'
 import { pageId, timeZoneTrade } from '../../stores/app/rahmen.js'
 import { diagrammeImAufbau } from '../../stores/app/laden.js'
 import { gewaehlterMonat } from '../../stores/journal/filter.js'
@@ -40,7 +40,7 @@ function raster(monatsWert, zone) {
     const imMonat = dayjs.unix(monatsWert).tz(zone)
     const monat = imMonat.month() + 1
     const jahr = imMonat.year()
-    const titel = imMonat.format('MMMM YYYY')
+    const titel = anzeige(imMonat).format('MMMM YYYY')
 
     const aus = {}
     wochen.forEach((woche, w) => {

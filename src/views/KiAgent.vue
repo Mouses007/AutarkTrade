@@ -9,7 +9,7 @@ import axios from 'axios'
 import { useExportReportPdf } from '../utils/pdfExport'
 import { sanitizeHtml } from '../utils/sanitize'
 import { logError, logWarn } from '../utils/logger.js'
-import dayjs from '../utils/journal/zeit.js'
+import dayjs, { anzeige } from '../utils/journal/zeit.js'
 import { sendNotification } from '../utils/notify'
 import { useI18n } from 'vue-i18n'
 import Symbol from '@/components/basis/Symbol.vue'
@@ -255,7 +255,7 @@ const dateRange = computed(() => {
         return {
             startDate: start.unix(),
             endDate: end.unix(),
-            label: start.format('MMMM YYYY')
+            label: anzeige(start).format('MMMM YYYY')
         }
     } else if (type === 'halfyear') {
         const now = dayjs()

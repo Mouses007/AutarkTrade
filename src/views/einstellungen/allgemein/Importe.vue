@@ -3,7 +3,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import dayjs from 'dayjs'
+import dayjs, { anzeige } from '@/utils/journal/zeit.js'
 import { useDateCalFormat } from '../../../utils/journal/format.js'
 import { selectedBroker } from '@/stores/filters.js'
 import { dbFind, dbFirst, dbDelete, dbDeleteWhere } from '@/utils/db.js'
@@ -61,7 +61,7 @@ const importsGroupedByMonth = computed(() => {
         const d = dayjs.unix(data.dateUnix)
         const monthKey = d.format('YYYY-MM')
         if (!groups[monthKey]) {
-            groups[monthKey] = { key: monthKey, label: d.format('MMMM YYYY'), days: [], tradeCount: 0, evaluatedCount: 0 }
+            groups[monthKey] = { key: monthKey, label: anzeige(d).format('MMMM YYYY'), days: [], tradeCount: 0, evaluatedCount: 0 }
         }
         const tc = getTradeCount(data)
         groups[monthKey].days.push(data)

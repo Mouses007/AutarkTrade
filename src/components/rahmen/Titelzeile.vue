@@ -20,7 +20,7 @@ import { gefilterteTradesFlach } from '../../stores/trades.js'
 import { pageById } from '../../config/menu.js'
 import { schalteMobilMenue, useExport } from '../../utils/journal/app.js'
 import { useDateCalFormat } from '../../utils/journal/format.js'
-import dayjs from '../../utils/journal/zeit.js'
+import dayjs, { anzeige } from '../../utils/journal/zeit.js'
 
 const props = defineProps({
     inKopf: { type: Boolean, default: false },
@@ -47,7 +47,7 @@ function zeitraum() {
     if (id === 'dashboard' || id === 'auswertung') return selectedPeriodRange.value?.label || ''
     if (id === 'daily' || id === 'calendar') {
         const start = gewaehlterMonat.value?.start
-        return start ? dayjs.unix(start).format('MMM YYYY') : ''
+        return start ? anzeige(dayjs.unix(start)).format('MMM YYYY') : ''
     }
     return ''
 }

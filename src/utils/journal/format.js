@@ -5,7 +5,7 @@
  * (`timeZoneTrade`) dargestellt. Zahlen folgen der UI-Sprache aus
  * localStorage `appLanguage` (de → de-CH, en → en-US).
  */
-import dayjs from './zeit.js'
+import dayjs, { anzeige } from './zeit.js'
 import { timeZoneTrade, currentUser } from '../../stores/app/rahmen.js'
 
 // ── Kosten in der Anzeigewährung ───────────────────────────────────────────
@@ -54,8 +54,10 @@ export const useTimeFormat = formatiere('HH:mm:ss')
 export const useHourMinuteFormat = formatiere('HH:mm')
 export const useDateTimeFormat = formatiere('YYYY-MM-DD HH:mm:ss')
 export const useChartFormat = formatiere('D.M.YYYY')
-export const useMonthFormat = formatiere('MMMM YYYY')
-export const useCreatedDateFormat = formatiere('ddd DD MMMM YYYY')
+// Mit Monats-/Tagesnamen: in der Sprache der Oberfläche
+const formatiereAnzeige = (muster) => (sekunden) => anzeige(inZone(sekunden)).format(muster)
+export const useMonthFormat = formatiereAnzeige('MMMM YYYY')
+export const useCreatedDateFormat = formatiereAnzeige('ddd DD MMMM YYYY')
 
 export function useStartOfDay(sekunden) {
     return inZone(sekunden).startOf('day').unix()
