@@ -6,13 +6,22 @@
  *
  * Ausklappbar: ausgeklappt steht der Name neben jedem Symbol. Der Zustand
  * bleibt im Browser — er hängt am Bildschirm, nicht am Layout.
+ *
+ * Ganz unten: Börsenlinks (BX, BG, PX untereinander) für das Symbol des aktiven
+ * Charts — nur wo der Coin als USDT-Perpetual gelistet ist und die Börse unter
+ * „Börsenlinks" in den Einstellungen aktiviert ist (wie in der Watchlist).
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js'
+import { aktivierteBoersen } from '../../utils/boersenLinks.js'
+import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { useI18n } from 'vue-i18n'
 import { WERKZEUGE } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { Symbol } from '../basis'
 
-defineProps({
+const props = defineProps({
+    symbol: { type: String, default: '' },
+    markt: { type: String, default: 'futures' },
     werkzeug: { type: String, default: null },
     magnet: { type: Boolean, default: false },
     versteckt: { type: Boolean, default: false },
@@ -38,6 +47,12 @@ const WERKZEUG_SYMBOL = {
     text: 'text',
     messen: 'regler',
 }
+
+ladeHandelbar()
+const boersen = computed(() => {
+    const aktiv = aktivierteBoersen(appEinstellungen.value?.boersenLinks)
+    return boersenFuerSymbol(props.symbol, props.markt).filter((b) => aktiv.includes(b.id))
+})
 
 const SCHLUESSEL = 'chartWerkzeugeOffen'
 function lese() {
@@ -83,6 +98,14 @@ function umschalten() {
             <Symbol name="muell" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.alleLoeschen') }}</span>
         </button>
+        <div v-if="boersen.length" class="boersen">
+            <hr />
+            <a v-for="b in boersen" :key="b.id" class="w boerse" :class="b.id" :href="b.url" target="_blank" rel="noopener"
+                :title="t('chart.watchlistBoerse', { boerse: b.name })" :aria-label="t('chart.watchlistBoerse', { boerse: b.name })">
+                <span class="kurz zeichen">{{ b.kurz }}</span>
+                <span v-if="offen" class="name">{{ b.name }}</span>
+            </a>
+        </div>
     </div>
 </template>
 
@@ -167,4 +190,37 @@ hr {
     width: auto;
     margin: 3px 4px;
 }
+
+/* Börsenlinks ganz unten */
+.boersen {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: inherit;
+    gap: 3px;
+    width: 100%;
+}
+
+.boerse {
+    text-decoration: none;
+}
+
+.boerse .kurz {
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 3px 3px;
+    border-radius: 3px;
+    border: 1px solid currentColor;
+    opacity: 0.8;
+    text-align: center;
+}
+
+.boerse:hover .kurz {
+    opacity: 1;
+}
+
+.boerse.bitunix { color: var(--boerse-bitunix); }
+.boerse.bitget { color: var(--boerse-bitget); }
+.boerse.pionex { color: var(--boerse-pionex); }
 </style>

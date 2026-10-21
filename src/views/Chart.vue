@@ -941,7 +941,7 @@ watch(sichtbareAnzahl, async () => {
                     <button v-for="i in tfFavoriten" :key="i" type="button" :class="{ an: aktivesPanel.interval === i }"
                         :disabled="tfGesperrt.has(i)" @click="setzePanel({ interval: i })">{{ i }}</button>
                 </div>
-                <Zeichenleiste v-if="!telefon" class="werkzeuge" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
+                <Zeichenleiste v-if="!telefon" class="werkzeuge" :symbol="aktivesPanel.symbol" :markt="aktivesPanel.markt" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
                     :versteckt="!!daten.zeichnen?.versteckt" @werkzeug="waehleWerkzeug"
                     @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
                     @versteckt="daten.zeichnen = { ...(daten.zeichnen || {}), versteckt: !daten.zeichnen?.versteckt }"
