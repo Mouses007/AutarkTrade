@@ -132,6 +132,18 @@ const rasterKlasse = computed(() => (telefon.value || vollbild.value ? 'r1' : 'r
  * Seitenleisten-Reiter. Weitere (Journal, Strategien, Alarme, Objekte) kommen
  * mit ihren Ausbaustufen dazu; ein leerer Reiter wird gar nicht erst gezeigt.
  */
+/*
+ * Handy: die Reiterleiste steht ÜBER dem Chart (auch im Vollbild); ein Tipp
+ * öffnet den Reiter als Fläche über dem Chart, derselbe Tipp schliesst ihn.
+ */
+const mobilReiter = ref(null)
+function schalteMobilReiter(id) {
+    if (mobilReiter.value === id) { mobilReiter.value = null; return }
+    mobilReiter.value = id
+    daten.value.seitenleiste.reiter = id
+}
+watch(telefon, (v) => { if (!v) mobilReiter.value = null })
+
 const REITER = [
     { id: 'watchlist', icon: 'stern' },
     { id: 'offen', icon: 'fadenkreuz' },
@@ -689,6 +701,7 @@ function taste(e) {
         else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); macheWiederholen() }
         return
     }
+    if (e.key === 'Escape' && mobilReiter.value) { mobilReiter.value = null; return }
     if (e.key === 'Escape' && schublade.value) { schublade.value = null; return }
     if (e.key === 'Escape' && vollbild.value) { schalteVollbild(); return }
     if (e.altKey) return
@@ -861,6 +874,12 @@ watch(sichtbareAnzahl, async () => {
                         </aside>
                     </Transition>
                 </template>
+                <div v-if="telefon" class="reiter mobilReiter">
+                    <button v-for="r in REITER" :key="r.id" :class="{ an: mobilReiter === r.id }" :aria-pressed="mobilReiter === r.id"
+                        :title="t('chart.reiter.' + r.id)" :aria-label="t('chart.reiter.' + r.id)" @click="schalteMobilReiter(r.id)">
+                        <Symbol :name="r.icon" />
+                    </button>
+                </div>
                 <Zeichenleiste v-if="!telefon" class="werkzeuge" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
                     :versteckt="!!daten.zeichnen?.versteckt" @werkzeug="waehleWerkzeug"
                     @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
@@ -894,11 +913,11 @@ watch(sichtbareAnzahl, async () => {
                         <Symbol :name="r.icon" />
                     </button>
                 </aside>
-                <aside v-else-if="daten.seitenleiste.offen" class="seitenleiste">
+                <aside v-else-if="daten.seitenleiste.offen || telefon" class="seitenleiste">
                     <div class="leisteGriff" :title="t('chart.leisteBreite')" @pointerdown.prevent="leisteZiehenStart"
                         @pointermove="leisteZiehen" @pointerup="leisteZiehenEnde" @pointercancel="leisteZiehenEnde"
                         @dblclick="leisteZuruecksetzen"></div>
-                    <div v-if="REITER.length > 1" class="reiter">
+                    <div v-if="REITER.length > 1 && !telefon" class="reiter">
                         <button v-if="!telefon && breitGenug" class="einklappen" :title="t('chart.leisteEinklappen')"
                             :aria-label="t('chart.leisteEinklappen')" @click="schalteLeisteSchmal(true)">
                             <Symbol name="doppelRechts" />
@@ -908,15 +927,16 @@ watch(sichtbareAnzahl, async () => {
                             <Symbol :name="r.icon" />
                         </button>
                     </div>
-                    <div class="karte reiterKarte" :class="{ fest: kartenHoehe.reiter }" :style="kartenStil('reiter')">
+                    <div v-show="!telefon || mobilReiter" class="karte reiterKarte" :class="{ fest: kartenHoehe.reiter && !telefon, mobilOverlay: telefon }"
+                        :style="telefon ? null : kartenStil('reiter')">
                     <div class="reiterInhalt">
                     <div class="reiterTitel">{{ t('chart.reiter.' + daten.seitenleiste.reiter) }}</div>
                     <WatchlistReiter v-if="daten.seitenleiste.reiter === 'watchlist'" :watchlists="watchlists"
                         :aktives-symbol="aktivesPanel.symbol" :aktiver-markt="aktivesPanel.markt"
-                        @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt })" @aendere="watchlistAendern"
+                        @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); mobilReiter = null" @aendere="watchlistAendern"
                         @neu="watchlistNeu" @loesche="watchlistLoeschen" />
                     <OffeneReiter v-else-if="daten.seitenleiste.reiter === 'offen'" :panel="aktivesPanel"
-                        @waehle="(s) => setzePanel({ symbol: s, markt: 'futures' })"
+                        @waehle="(s) => { setzePanel({ symbol: s, markt: 'futures' }); mobilReiter = null }"
                         @overlay="(an) => { aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), positionen: an } }" />
                     <ObjektReiter v-else-if="daten.seitenleiste.reiter === 'objekte'" :symbol="aktivesPanel.symbol"
                         :zeichnungen="aktiveZeichnungen" :auswahl-id="aktiveAuswahl" @waehle="objektWaehlen"
@@ -1410,14 +1430,19 @@ watch(sichtbareAnzahl, async () => {
     display: none;
 }
 
-.chartSeite.vollbild .raster,
-.chartSeite.telefon.vollbild .raster {
+.chartSeite.vollbild .raster {
     height: 100%;
     min-height: 0;
 }
 
 .raster .ausgeblendet {
     display: none;
+}
+
+.chartSeite.telefon.vollbild .raster {
+    flex: 1;
+    height: auto;
+    min-height: 0;
 }
 
 /* Telefon: ein Panel, Seitenleiste unter dem Chart statt daneben. Keine
@@ -1434,6 +1459,58 @@ watch(sichtbareAnzahl, async () => {
 
 .chartSeite.telefon .seitenleiste {
     grid-column: 1 / -1;
+    /* static: der Reiter-Inhalt legt sich über den Chart, nicht über die Leiste */
+    position: static;
+}
+
+.chartSeite.telefon:not(.vollbild) .arbeitsflaeche {
+    position: relative;
+}
+
+.mobilReiter {
+    grid-column: 1 / -1;
+    padding: 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    background: var(--panel);
+}
+
+.mobilReiter button {
+    padding: 7px 4px;
+}
+
+.reiterKarte.mobilOverlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 46px;
+    z-index: 15;
+    max-height: min(72%, 560px);
+    padding: 10px;
+    overflow-y: auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    background: var(--panel);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.reiterKarte.mobilOverlay > .eckGriff {
+    display: none;
+}
+
+/* Handy im Vollbild: Leiste oben, Chart darunter, vom Rest der Seitenleiste nur der Reiter-Inhalt. */
+.chartSeite.telefon.vollbild .arbeitsflaeche {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.chartSeite.telefon.vollbild .seitenleiste {
+    display: contents;
+}
+
+.chartSeite.telefon.vollbild .seitenleiste > :not(.reiterKarte) {
+    display: none;
 }
 
 .chartSeite.telefon .raster {
