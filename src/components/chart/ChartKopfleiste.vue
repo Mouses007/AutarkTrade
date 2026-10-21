@@ -121,7 +121,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 <template>
     <div class="kopfleiste">
         <SymbolSuche ref="suche" :symbol="panel.symbol" :markt="panel.markt" @waehle="emit('panel', $event)" />
-        <select class="quelle" :value="aktiveBoerse" :disabled="quelleGesperrt"
+        <select v-if="!telefon" class="quelle" :value="aktiveBoerse" :disabled="quelleGesperrt"
             :title="t('chart.quelle.titel')" @change="emit('panel', { boerse: $event.target.value, ...(panel.markt === 'spot' ? { markt: 'futures' } : {}) })">
             <option v-for="b in boersenListe" :key="b" :value="b">{{ t('chart.quelle.' + b) }}</option>
         </select>
@@ -151,7 +151,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
             </div>
         </div>
 
-        <div class="gruppe">
+        <div v-if="!telefon" class="gruppe">
             <button v-for="s in SKALEN" :key="s" class="tf" :class="{ an: (panel.skala || 'normal') === s }"
                 :title="t('chart.skala.' + s)" @click="emit('panel', { skala: s })" :aria-label="t('chart.skala.' + s)">{{ t('chart.skalaKurz.' + s) }}</button>
             <button class="tf" :class="{ an: panel.autoSkala !== false }" :title="t(panel.autoSkala !== false ? 'chart.autoAn' : 'chart.autoAus')"
@@ -160,19 +160,19 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 
         <div class="gruppe">
             <button class="tf" :title="t('chart.indikatorenTitel')" @click="emit('indikatoren')" :aria-label="t('chart.indikatorenTitel')">
-                <Symbol name="wachstum" /> {{ t('chart.indikatoren') }}
+                <Symbol name="wachstum" /><template v-if="!telefon"> {{ t('chart.indikatoren') }}</template>
             </button>
-            <VorlagenMenue :aktuelle="panel.indikatoren || []" @anwenden="emit('vorlage', $event)" />
+            <VorlagenMenue v-if="!telefon" :aktuelle="panel.indikatoren || []" @anwenden="emit('vorlage', $event)" />
         </div>
 
         <!-- Eigene Daten als Schnellschalter: ein Klick statt Menü öffnen, Häkchen setzen, zuklicken. -->
-        <div class="gruppe schnell" :title="t('chart.overlaysTitel')">
+        <div v-if="!telefon" class="gruppe schnell" :title="t('chart.overlaysTitel')">
             <button v-for="o in OVERLAYS" :key="o.id" class="tf" :class="{ an: overlayAn(panel, o.id) }"
                 :title="t('chart.overlay.' + o.id) + ' — ' + t(overlayAn(panel, o.id) ? 'chart.ausblenden' : 'chart.einblenden')"
                 @click="schalteOverlay(o.id, !overlayAn(panel, o.id))" :aria-label="t('chart.overlay.' + o.id) + ' — ' + t(overlayAn(panel, o.id) ? 'chart.ausblenden' : 'chart.einblenden')"><Symbol :name="OVERLAY_SYMBOL[o.id] || 'ebenen'" /></button>
         </div>
 
-        <slot />
+        <slot v-if="!telefon" />
 
         <div class="rechts">
             <div v-if="!telefon" class="gruppe">
@@ -199,7 +199,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
                 </div>
             </div>
 
-            <div class="aufklapp">
+            <div v-if="!telefon" class="aufklapp">
                 <button class="tf layout" @click="layoutOffen = !layoutOffen" :title="t('chart.layouts')" :aria-label="t('chart.layouts')">
                     <Symbol name="fenster" /> {{ aktuellesLayout?.name || '…' }}
                 </button>
@@ -214,7 +214,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
                 </div>
             </div>
 
-            <button class="tf" :title="t('chart.foto')" @click="emit('foto')" :aria-label="t('chart.foto')"><Symbol name="kamera" /></button>
+            <button v-if="!telefon" class="tf" :title="t('chart.foto')" @click="emit('foto')" :aria-label="t('chart.foto')"><Symbol name="kamera" /></button>
             <button class="tf" :class="{ an: seitenleisteOffen }" :title="t('chart.seitenleiste')"
                 @click="emit('seitenleiste')" :aria-label="t('chart.seitenleiste')"><Symbol name="seitenleiste" /></button>
         </div>

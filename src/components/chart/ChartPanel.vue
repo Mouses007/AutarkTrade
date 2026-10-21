@@ -50,7 +50,7 @@ const props = defineProps({
     zeichnungenVersteckt: { type: Boolean, default: false },
     alarmLinien: { type: Array, default: () => [] },  // aktive Preis-Alarme dieses Symbols
 })
-const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alleLoeschen', 'panel'])
+const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alleLoeschen', 'panel', 'vollbild'])
 const { t, te, locale } = useI18n()
 
 const huelle = ref(null)
@@ -853,6 +853,49 @@ function preisSkalen() {
 function meldeAutoSkala() {
     if ((props.panel.autoSkala !== false) !== autoSkala.value) emit('panel', { autoSkala: autoSkala.value })
 }
+/*
+ * Doppelklick (Maus) bzw. Doppeltipp (Finger) auf die Kerzenfläche schaltet das
+ * Vollbild. NICHT auf den Achsen — dort setzt der Doppelklick die Skala zurück —,
+ * nicht mit gewähltem Zeichenwerkzeug, und nicht auf einer Zeichnung: deren
+ * Doppelklick (Text bearbeiten) hält die Zeichenebene in der Capture-Phase an.
+ * Ein Doppeltipp löst in manchen Browsern ZUSÄTZLICH ein dblclick aus — die Sperre
+ * von 500 ms verhindert, dass beides zusammen hin- und wieder zurückschaltet.
+ */
+let letzterVollbildWechsel = 0
+let letzterTipp = null
+function imKerzenFeld(e) {
+    const el = huelle.value
+    if (!el || !chart.value || props.werkzeug) return false
+    const r = el.getBoundingClientRect()
+    const x = e.clientX - r.left, y = e.clientY - r.top
+    let achseRechts = 0, achseUnten = 0
+    try { achseRechts = chart.value.priceScale('right').width() } catch { /* ohne Skala */ }
+    try { achseUnten = chart.value.timeScale().height() } catch { /* ohne Zeitachse */ }
+    return x >= 0 && y >= 0 && x < r.width - achseRechts && y < r.height - achseUnten
+}
+function vollbildWechsel(e) {
+    if (!imKerzenFeld(e)) return
+    const jetzt = Date.now()
+    if (jetzt - letzterVollbildWechsel < 500) return
+    letzterVollbildWechsel = jetzt
+    emit('vollbild')
+}
+function doppelklick(e) {
+    pruefeAutoSkala()
+    vollbildWechsel(e)
+}
+function tippEnde(e) {
+    pruefeAutoSkala()
+    if (e.pointerType !== 'touch') return
+    const jetzt = Date.now()
+    const v = letzterTipp
+    letzterTipp = { t: jetzt, x: e.clientX, y: e.clientY }
+    if (v && jetzt - v.t < 320 && Math.hypot(e.clientX - v.x, e.clientY - v.y) < 30) {
+        letzterTipp = null
+        vollbildWechsel(e)
+    }
+}
+
 function pruefeAutoSkala() {
     const s0 = preisSkalen()[0]
     if (s0) autoSkala.value = !!s0.options().autoScale
@@ -1146,7 +1189,7 @@ defineExpose({
 
 <template>
     <div class="chartPanel" :class="{ aktiv }" @mousedown="emit('fokus')" @touchstart.passive="emit('fokus')">
-        <div ref="huelle" class="flaeche" @pointerup="pruefeAutoSkala" @wheel.passive="pruefeAutoSkala" @dblclick="pruefeAutoSkala"></div>
+        <div ref="huelle" class="flaeche" @pointerup="tippEnde" @wheel.passive="pruefeAutoSkala" @dblclick="doppelklick"></div>
         <button class="autoKnopf" :class="{ an: autoSkala }" :title="t(autoSkala ? 'chart.autoAn' : 'chart.autoAus')"
             @click.stop="autoEinpassen(!autoSkala)" :aria-label="t(autoSkala ? 'chart.autoAn' : 'chart.autoAus')">A</button>
 

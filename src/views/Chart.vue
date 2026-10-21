@@ -50,10 +50,34 @@ const kopf = ref(null)
 const panelRefs = ref([])
 
 const sichtbareAnzahl = computed(() => (telefon.value ? 1 : PANELS_JE_RASTER[daten.value.raster] || 1))
+
+/*
+ * Vollbild: Doppelklick/Doppeltipp auf die Kerzen eines Panels. Gezeigt wird nur
+ * dieses Panel über die ganze Fläche (CSS, fixed) — die anderen bleiben gemountet
+ * und nur ausgeblendet, damit Kerzen und Ansicht beim Zurückschalten noch da sind.
+ * Wo der Browser es erlaubt, zusätzlich echtes Vollbild (ohne Adressleiste);
+ * iPhone-Safari kennt das für Seiten nicht, dort bleibt es beim CSS-Vollbild.
+ * Zurück: noch einmal doppelt, Esc, oder das Verlassen des echten Vollbilds.
+ */
+const vollbild = ref(false)
+function schalteVollbild(i) {
+    if (!vollbild.value) {
+        fokus(i)
+        vollbild.value = true
+        const el = document.documentElement
+        if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => { /* nur CSS */ })
+    } else {
+        vollbild.value = false
+        if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+    }
+}
+function vollbildVerlassen() {
+    if (!document.fullscreenElement && vollbild.value) vollbild.value = false
+}
 const sichtbarePanels = computed(() => daten.value.panels.slice(0, sichtbareAnzahl.value))
 const aktivIndex = computed(() => Math.min(daten.value.aktiv, sichtbareAnzahl.value - 1))
 const aktivesPanel = computed(() => daten.value.panels[aktivIndex.value])
-const rasterKlasse = computed(() => (telefon.value ? 'r1' : 'r' + daten.value.raster))
+const rasterKlasse = computed(() => (telefon.value || vollbild.value ? 'r1' : 'r' + daten.value.raster))
 
 /*
  * Seitenleisten-Reiter. Weitere (Journal, Strategien, Alarme, Objekte) kommen
@@ -590,6 +614,7 @@ function taste(e) {
         else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); macheWiederholen() }
         return
     }
+    if (e.key === 'Escape' && vollbild.value) { schalteVollbild(); return }
     if (e.altKey) return
     if (e.key === 'Escape') {
         if (panel?.abbrechen()) return
@@ -636,12 +661,15 @@ onMounted(() => {
     hoehenWaechter = new ResizeObserver(() => passeHoehe())
     hoehenWaechter.observe(document.documentElement)
     window.addEventListener('keydown', taste)
+    document.addEventListener('fullscreenchange', vollbildVerlassen)
     alarmAbo = abonniereAlarme()
 })
 onBeforeUnmount(() => {
     window.removeEventListener('resize', passeHoehe)
     hoehenWaechter?.disconnect()
     window.removeEventListener('keydown', taste)
+    document.removeEventListener('fullscreenchange', vollbildVerlassen)
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
     alarmAbo?.()
     clearTimeout(speicherUhr)
     cancelAnimationFrame(zeitRahmen)
@@ -655,7 +683,7 @@ watch(sichtbareAnzahl, async () => {
 </script>
 
 <template>
-    <div ref="seite" class="chartSeite" :class="{ telefon }">
+    <div ref="seite" class="chartSeite" :class="{ telefon, vollbild }">
         <Hinweis v-if="ladeFehler" art="warn" class="seitenHinweis">{{ t('chart.arbeitsplatzFehler') }}: {{ ladeFehler }}</Hinweis>
         <Hinweis v-if="konfliktHinweis" art="info" schliessbar class="seitenHinweis knapp" @zu="konfliktHinweis = ''">
             {{ konfliktHinweis }}
@@ -679,7 +707,7 @@ watch(sichtbareAnzahl, async () => {
 
             <div class="arbeitsflaeche" :class="{ mitLeiste: daten.seitenleiste.offen }"
                 :style="{ '--leisteBreite': (istSchmal ? LEISTE_SCHMAL : leisteBreite) + 'px' }">
-                <Zeichenleiste class="werkzeuge" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
+                <Zeichenleiste v-if="!telefon" class="werkzeuge" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
                     :versteckt="!!daten.zeichnen?.versteckt" @werkzeug="waehleWerkzeug"
                     @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
                     @versteckt="daten.zeichnen = { ...(daten.zeichnen || {}), versteckt: !daten.zeichnen?.versteckt }"
@@ -687,6 +715,7 @@ watch(sichtbareAnzahl, async () => {
                 <div class="raster" :class="rasterKlasse">
                     <ChartPanel v-for="(p, i) in sichtbarePanels" :key="layoutId + '-' + i"
                         :ref="(el) => { if (el) panelRefs[i] = el }" :panel="p" :nummer="i"
+                        :class="{ ausgeblendet: vollbild && i !== aktivIndex }" @vollbild="schalteVollbild(i)"
                         :aktiv="sichtbareAnzahl > 1 && i === aktivIndex" @fokus="fokus(i)" @kreuz="kreuz(i, $event)"
                         @bereich="bereich(i)" @indikator="indikatorAktion(i, $event)"
                         :werkzeug="i === aktivIndex ? werkzeug : null" :magnet="!!daten.zeichnen?.magnet"
@@ -751,7 +780,7 @@ watch(sichtbareAnzahl, async () => {
                             @pointerdown.prevent.stop="eckStart($event, 'reiter')" @pointermove="eckZiehen" @pointerup="eckEnde"
                             @pointercancel="eckEnde" @dblclick.stop="eckZurueck('reiter')"></span>
                     </div>
-                    <div class="karte vvKarte" :class="{ fest: kartenHoehe.indikatoren }" :style="kartenStil('indikatoren')">
+                    <div v-if="!telefon" class="karte vvKarte" :class="{ fest: kartenHoehe.indikatoren }" :style="kartenStil('indikatoren')">
                         <IndikatorSchalter class="vvSchalter" :panel="aktivesPanel" @aendere="vvSchalten"
                             @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
                             @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
@@ -1130,15 +1159,42 @@ watch(sichtbareAnzahl, async () => {
     padding: 40px;
 }
 
-/* Telefon: ein Panel, Seitenleiste unter dem Chart statt daneben. */
+/* Vollbild: das Panel deckt den ganzen Bildschirm, alles andere tritt zurück. */
+.chartSeite.vollbild .arbeitsflaeche {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: block;
+    padding: 4px;
+    background: var(--bg);
+}
+
+.chartSeite.vollbild .werkzeuge,
+.chartSeite.vollbild .seitenleiste {
+    display: none;
+}
+
+.chartSeite.vollbild .raster,
+.chartSeite.telefon.vollbild .raster {
+    height: 100%;
+    min-height: 0;
+}
+
+.raster .ausgeblendet {
+    display: none;
+}
+
+/* Telefon: ein Panel, Seitenleiste unter dem Chart statt daneben. Keine
+   Zeichenleiste — mit dem Finger zeichnet niemand genau, und sie frass die Breite. */
+.chartSeite.telefon .arbeitsflaeche,
+.chartSeite.telefon .arbeitsflaeche.mitLeiste {
+    grid-template-columns: 1fr;
+}
+
 .chartSeite.telefon {
     height: auto;
 }
 
-.chartSeite.telefon .arbeitsflaeche,
-.chartSeite.telefon .arbeitsflaeche.mitLeiste {
-    grid-template-columns: auto 1fr;
-}
 
 .chartSeite.telefon .seitenleiste {
     grid-column: 1 / -1;
