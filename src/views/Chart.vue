@@ -36,7 +36,7 @@ import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoesch
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
 import { useIstTelefon } from '../utils/geraet.js'
 import { api, standardLayout, vervollstaendige, passeAnRaster, PANELS_JE_RASTER, STANDARD_WATCHLIST } from '../utils/chart/arbeitsplatz.js'
-import { passePanelAn, vorgabeBoerse, waehlbareBoersen } from '../utils/chart/kerzenQuelle.js'
+import { passePanelAn, vorgabeBoerse, waehlbareBoersen, INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE, boerseFuer } from '../utils/chart/kerzenQuelle.js'
 import { ladeMarktdaten } from '../utils/marktdaten.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
 import { incomingPollingActive } from '../stores/journal/offenePositionen.js'
@@ -134,7 +134,23 @@ function wischAuswerten(x, y) {
         wisch = null
     }
 }
-watch(vollbild, (v) => { if (!v) schublade.value = null })
+watch(vollbild, (v) => { if (!v) schublade.value = null; else tfFavoriten.value = leseTfFavoriten() })
+
+/*
+ * Handy-Vollbild: die Kopfleiste ist weg, die Zeiteinheit soll trotzdem dezent
+ * wählbar bleiben — nur die Favoriten (dieselben wie in der Kopfleiste,
+ * `chartTfFavoriten` im Browser; gewählt werden sie dort über „…" und Stern).
+ */
+function leseTfFavoriten() {
+    try {
+        const roh = JSON.parse(localStorage.getItem('chartTfFavoriten') || 'null')
+        const gueltig = Array.isArray(roh) ? roh.filter((i) => INTERVALLE.includes(i)) : []
+        if (gueltig.length) return INTERVALLE.filter((i) => gueltig.includes(i))
+    } catch { /* kein Speicher */ }
+    return [...INTERVALLE_SICHTBAR]
+}
+const tfFavoriten = ref(leseTfFavoriten())
+const tfGesperrt = computed(() => new Set(QUELLEN_OHNE[boerseFuer(aktivesPanel.value)] || []))
 
 function vollbildVerlassen() {
     if (!document.fullscreenElement && vollbild.value) vollbild.value = false
@@ -921,6 +937,10 @@ watch(sichtbareAnzahl, async () => {
                         <Symbol :name="r.icon" />
                     </button>
                 </div>
+                <div v-if="telefon && vollbild" class="tfLeiste" role="group" :aria-label="t('chart.tfFavoriten')">
+                    <button v-for="i in tfFavoriten" :key="i" type="button" :class="{ an: aktivesPanel.interval === i }"
+                        :disabled="tfGesperrt.has(i)" @click="setzePanel({ interval: i })">{{ i }}</button>
+                </div>
                 <Zeichenleiste v-if="!telefon" class="werkzeuge" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
                     :versteckt="!!daten.zeichnen?.versteckt" @werkzeug="waehleWerkzeug"
                     @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
@@ -1400,6 +1420,35 @@ watch(sichtbareAnzahl, async () => {
     display: flex;
     justify-content: center;
     padding: 40px;
+}
+
+/* Handy-Vollbild: Zeiteinheiten-Favoriten, bewusst leise */
+.tfLeiste {
+    display: flex;
+    gap: 2px;
+    justify-content: center;
+    padding: 0 4px;
+}
+
+.tfLeiste button {
+    flex: 0 1 auto;
+    min-width: 38px;
+    padding: 3px 8px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.tfLeiste button.an {
+    color: var(--accent);
+    background: var(--accent-flaeche);
+}
+
+.tfLeiste button:disabled {
+    opacity: 0.35;
 }
 
 /* Linke Schublade: Aktionen und Einblenden eigener Daten unter den Indikatoren */
