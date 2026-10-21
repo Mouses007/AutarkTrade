@@ -49,6 +49,11 @@ const props = defineProps({
     magnet: { type: Boolean, default: false },
     zeichnungenVersteckt: { type: Boolean, default: false },
     alarmLinien: { type: Array, default: () => [] },  // aktive Preis-Alarme dieses Symbols
+    // Handy ausserhalb des Vollbilds: die Seite muss sich über dem Chart scrollen
+    // lassen. Ein senkrechter Wisch gehört dann der Seite, nicht dem Chart.
+    seiteScrollt: { type: Boolean, default: false },
+    // Handy: „A" passt immer ein — Preis und Zeitachse (neueste Kerzen).
+    zeitMitEinpassen: { type: Boolean, default: false },
 })
 const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alleLoeschen', 'panel', 'vollbild'])
 const { t, te, locale } = useI18n()
@@ -163,6 +168,7 @@ function baueChart() {
             horzLine: { color: 'rgba(1,180,255,0.45)', width: 1, style: LineStyle.LargeDashed, labelBackgroundColor: blau },
         },
         rightPriceScale: { borderVisible: false },
+        handleScroll: { vertTouchDrag: !props.seiteScrollt },
         timeScale: {
             borderVisible: false,
             timeVisible: true,
@@ -906,6 +912,22 @@ function autoEinpassen(an = true) {
     autoSkala.value = an
     meldeAutoSkala()
 }
+/**
+ * Knopf „A": am Rechner Auto ein/aus. Am Handy heisst er „einpassen" und
+ * schaltet nie aus: Preisachse auf Auto UND die neuesten Kerzen ins Bild — ein
+ * verzogener Chart ist dort mit einem Tipp wieder lesbar. Aus geht Auto am
+ * Handy wie überall, sobald man die Preisachse zieht.
+ */
+function autoKnopf() {
+    if (props.zeitMitEinpassen) { autoEinpassen(true); zeigeNeueste(); return }
+    autoEinpassen(!autoSkala.value)
+}
+/** Die jüngsten ~150 Kerzen zeigen — dieselbe Ansicht wie nach dem Laden. */
+function zeigeNeueste() {
+    const n = kerzen.value.length
+    if (n) chart.value?.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 8 })
+}
+watch(() => props.seiteScrollt, (s) => chart.value?.applyOptions({ handleScroll: { vertTouchDrag: !s } }))
 // Schalter in der Kopfleiste (oder ein anderes Gerät) hat umgestellt
 watch(() => props.panel.autoSkala !== false, (an) => { if (an !== autoSkala.value) autoEinpassen(an) })
 
@@ -1191,7 +1213,7 @@ defineExpose({
     <div class="chartPanel" :class="{ aktiv }" @mousedown="emit('fokus')" @touchstart.passive="emit('fokus')">
         <div ref="huelle" class="flaeche" @pointerup="tippEnde" @wheel.passive="pruefeAutoSkala" @dblclick="doppelklick"></div>
         <button class="autoKnopf" :class="{ an: autoSkala }" :title="t(autoSkala ? 'chart.autoAn' : 'chart.autoAus')"
-            @click.stop="autoEinpassen(!autoSkala)" :aria-label="t(autoSkala ? 'chart.autoAn' : 'chart.autoAus')">A</button>
+            @click.stop="autoKnopf" :aria-label="t(autoSkala ? 'chart.autoAn' : 'chart.autoAus')">A</button>
 
         <div class="legende">
             <span class="sym">{{ panel.symbol }}</span>

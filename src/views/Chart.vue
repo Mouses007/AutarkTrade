@@ -950,6 +950,7 @@ watch(sichtbareAnzahl, async () => {
                     <ChartPanel v-for="(p, i) in sichtbarePanels" :key="layoutId + '-' + i"
                         :ref="(el) => { if (el) panelRefs[i] = el }" :panel="p" :nummer="i"
                         :class="{ ausgeblendet: vollbild && i !== aktivIndex }" @vollbild="schalteVollbild(i)"
+                        :seite-scrollt="telefon && !vollbild" :zeit-mit-einpassen="telefon"
                         :aktiv="sichtbareAnzahl > 1 && i === aktivIndex" @fokus="fokus(i)" @kreuz="kreuz(i, $event)"
                         @bereich="bereich(i)" @indikator="indikatorAktion(i, $event)"
                         :werkzeug="i === aktivIndex ? werkzeug : null" :magnet="!!daten.zeichnen?.magnet"
