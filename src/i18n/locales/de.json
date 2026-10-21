@@ -5943,6 +5943,8 @@
       "k_vorwarn": "Vorwarnung"
     },
     "offen": {
+      "pnlLive": "uPnL aus dem Live-Kurs (ohne Gebühren/Funding)",
+      "pnlBoerse": "uPnL wie zuletzt von der Börse gemeldet",
       "imChart": "Offene Positionen im Chart zeigen",
       "leer": "Keine offenen Positionen."
     },

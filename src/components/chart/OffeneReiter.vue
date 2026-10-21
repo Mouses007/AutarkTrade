@@ -4,10 +4,19 @@
  * die das globale Polling aktuell hält). Klick auf eine Zeile zeigt ihr
  * Symbol im aktiven Chart; das Auge blendet die einzelne Position im Chart
  * aus, der Schalter oben alle (Overlay „Positionen" des aktiven Charts).
+ *
+ * Aktualität: Die Seite fragt die Börse alle 15 s (Chart.vue), danach liest
+ * der Reiter die Tabelle neu. Der uPnL läuft dazwischen mit dem Live-Kurs mit
+ * (miniTicker wie die Watchlist, ohne Binance-Stream alle 5 s per REST); ohne
+ * Kurs gilt der Wert der Börse.
  */
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ladeAlleOffenen } from '../../utils/chart/overlays/positionen.js'
+import axios from 'axios'
+import { ladeAlleOffenen, upnlLive } from '../../utils/chart/overlays/positionen.js'
+import { BinanceStream, buildMiniTickerUrl } from '../../utils/binanceStream.js'
+import { ladeMarktdaten } from '../../utils/marktdaten.js'
+import { incomingPollingActive } from '../../stores/journal/offenePositionen.js'
 import { positionenAus, schaltePosition } from '../../stores/chartPositionen.js'
 import { overlayAn } from '../../utils/chart/overlays/liste.js'
 import { Symbol } from '../basis'
@@ -25,7 +34,55 @@ async function lade() {
     laedt.value = false
 }
 onMounted(() => { lade(); uhr = setInterval(() => { if (!document.hidden) lade() }, 15_000) })
-onBeforeUnmount(() => clearInterval(uhr))
+// Nach jedem Börsenabruf (Chart-Seite oder globales Polling) sofort neu lesen.
+watch(incomingPollingActive, (laeuft, vorher) => { if (vorher && !laeuft) lade() })
+
+// ── Live-Kurse für den uPnL ──
+const kurse = ref({})                  // symbol → letzter Kurs
+const symbole = computed(() => [...new Set(liste.value.map((p) => p.symbol))].sort())
+let stream = null
+let kursUhr = null
+let verbindeNr = 0
+async function verbindeKurse(syms) {
+    const nr = ++verbindeNr
+    stream?.stop(); stream = null
+    clearInterval(kursUhr); kursUhr = null
+    if (!syms.length) return
+    await ladeMarktdaten()
+    if (nr !== verbindeNr) return
+    const url = buildMiniTickerUrl(syms, 'futures')
+    if (url) {
+        stream = new BinanceStream({
+            url,
+            silenceLimitMs: 30_000,
+            onMessage: (m) => { const d = m?.data; if (d?.s) kurse.value = { ...kurse.value, [d.s]: Number(d.c) } },
+        })
+        stream.connect()
+        return
+    }
+    const hole = () => axios.get('/api/chart/ticker', { params: { markt: 'futures', symbole: syms.join(',') } }).then(({ data }) => {
+        if (data?.aus) return
+        const neu = { ...kurse.value }
+        for (const [sym, k] of Object.entries(data.kurse || {})) neu[sym] = Number(k?.c)
+        kurse.value = neu
+    }).catch(() => { /* nächster Abruf */ })
+    hole()
+    kursUhr = setInterval(() => { if (!document.hidden) hole() }, 5_000)
+}
+watch(symbole, (neu, alt) => { if (neu.join() !== (alt || []).join()) verbindeKurse(neu) })
+onBeforeUnmount(() => { clearInterval(uhr); stream?.stop(); clearInterval(kursUhr); verbindeNr++ })
+
+/** uPnL zum Anzeigen: live, wenn ein Kurs da ist, sonst der Wert der Börse. */
+function pnl(p) {
+    const live = upnlLive(p, kurse.value[p.symbol])
+    if (live == null) return p.upnl
+    // Plausibilität: weicht der Live-Wert um mehr als Faktor 50 vom Börsenwert ab,
+    // zählt die Börse die Menge vermutlich anders (z. B. 1000er-Kontrakte) — dann
+    // lieber die verzögerte, aber richtige Zahl der Börse.
+    const b = Math.abs(p.upnl)
+    if (b >= 0.5 && (Math.abs(live) > 50 * b || Math.abs(live) < b / 50)) return p.upnl
+    return live
+}
 
 const zahl = (p) => (p == null ? '—' : Math.abs(p) >= 1000 ? p.toFixed(1) : Math.abs(p) >= 1 ? p.toFixed(3) : p.toPrecision(4))
 const aus = (p) => positionenAus.value.has(String(p.id))
@@ -44,7 +101,8 @@ const aus = (p) => positionenAus.value.has(String(p.id))
                 <span class="seite" :class="p.richtung">{{ p.richtung === 'long' ? 'LONG' : 'SHORT' }}</span>
                 <span v-if="p.hebel" class="hebel">{{ p.hebel }}x</span>
                 <span class="boerse">{{ p.broker }}</span>
-                <span class="pnl" :class="p.upnl >= 0 ? 'plus' : 'minus'">{{ p.upnl >= 0 ? '+' : '' }}{{ p.upnl.toFixed(2) }}</span>
+                <span class="pnl" :class="pnl(p) >= 0 ? 'plus' : 'minus'"
+                    :title="kurse[p.symbol] ? t('chart.offen.pnlLive') : t('chart.offen.pnlBoerse')">{{ pnl(p) >= 0 ? '+' : '' }}{{ pnl(p).toFixed(2) }}</span>
                 <button type="button" class="auge" :title="t(aus(p) ? 'chart.einblenden' : 'chart.ausblenden')" :aria-label="t(aus(p) ? 'chart.einblenden' : 'chart.ausblenden')"
                     @click.stop="schaltePosition(p.id)"><Symbol :name="aus(p) ? 'augeAus' : 'auge'" /></button>
             </div>

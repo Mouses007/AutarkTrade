@@ -75,6 +75,18 @@ export async function ladeOffenePositionen(symbol) {
 }
 
 /** Alle offenen Positionen, über alle Symbole (Reiter „Offene Trades"). */
+/**
+ * uPnL aus dem Live-Kurs: (Kurs − Einstieg) × Menge, für Short umgekehrt. Ohne
+ * Gebühren und Funding — wie die Zahl der Börse, nur ohne deren Verzug (das
+ * Polling fragt höchstens alle 15 s). Ohne gültigen Kurs: null, dann gilt der
+ * Wert der Börse.
+ */
+export function upnlLive(p, kurs) {
+    const k = Number(kurs), e = Number(p?.einstieg), m = Number(p?.menge)
+    if (!(k > 0) || !(e > 0) || !(m > 0)) return null
+    return (p.richtung === 'short' ? e - k : k - e) * m
+}
+
 export async function ladeAlleOffenen() {
     const zeilen = await offenePositionenRoh()
     return Promise.all(zeilen.map(ausZeile))

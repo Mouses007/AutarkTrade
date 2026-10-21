@@ -5943,6 +5943,8 @@
       "k_vorwarn": "Pre-warning"
     },
     "offen": {
+      "pnlLive": "uPnL from the live price (without fees/funding)",
+      "pnlBoerse": "uPnL as last reported by the exchange",
       "imChart": "Show open positions in the chart",
       "leer": "No open positions."
     },

@@ -36,6 +36,8 @@ import { useIstTelefon } from '../utils/geraet.js'
 import { api, standardLayout, vervollstaendige, passeAnRaster, PANELS_JE_RASTER, STANDARD_WATCHLIST } from '../utils/chart/arbeitsplatz.js'
 import { passePanelAn, vorgabeBoerse, waehlbareBoersen } from '../utils/chart/kerzenQuelle.js'
 import { ladeMarktdaten } from '../utils/marktdaten.js'
+import { useFetchOpenPositions } from '../utils/incoming.js'
+import { incomingPollingActive } from '../stores/journal/offenePositionen.js'
 
 const { t } = useI18n()
 const telefon = useIstTelefon()
@@ -451,6 +453,11 @@ async function gleicheLayoutAb() {
 }
 const sichtbarAbgleich = () => { if (document.visibilityState === 'visible') gleicheLayoutAb() }
 let abgleichUhr = null
+let positionenUhr = null
+function holePositionen() {
+    if (document.hidden || incomingPollingActive.value) return
+    useFetchOpenPositions().catch(() => { /* Fehler zeigt die Seite Pendente Trades */ })
+}
 
 async function layoutWechsel(id) {
     await speichere()
@@ -819,6 +826,11 @@ onMounted(() => {
     document.addEventListener('visibilitychange', sichtbarAbgleich)
     window.addEventListener('focus', gleicheLayoutAb)
     abgleichUhr = setInterval(gleicheLayoutAb, 60_000)
+    // Offene Positionen: solange der Chart offen ist, alle 15 s bei der Börse
+    // nachfragen (das globale Polling tut es nur alle 60 s). Läuft schon ein
+    // Abruf (Pendente Trades, globales Polling), wird dieser Takt übersprungen.
+    holePositionen()
+    positionenUhr = setInterval(holePositionen, 15_000)
     alarmAbo = abonniereAlarme()
 })
 onBeforeUnmount(() => {
@@ -829,6 +841,7 @@ onBeforeUnmount(() => {
     document.removeEventListener('visibilitychange', sichtbarAbgleich)
     window.removeEventListener('focus', gleicheLayoutAb)
     clearInterval(abgleichUhr)
+    clearInterval(positionenUhr)
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
     alarmAbo?.()
     clearTimeout(speicherUhr)
