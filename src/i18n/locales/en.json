@@ -5186,6 +5186,7 @@
     "leisteBreite": "Drag to resize (double-click: reset)",
     "legendeZu": "Collapse legend",
     "legendeAuf": "Expand legend",
+    "schublade": { "imChart": "Show in chart" },
     "leisteEinklappen": "Collapse sidebar",
     "leisteAusklappen": "Expand sidebar",
     "hoehenGriff": "Drag chart size: vertical = height, horizontal = sidebar width (double-click: fit to window again)",

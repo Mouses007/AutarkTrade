@@ -123,7 +123,7 @@ async function speichern() {
 .dialogHintergrund {
     position: fixed;
     inset: 0;
-    z-index: 1050;
+    z-index: 2100; /* über dem Chart-Vollbild (2000) */
     background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: flex-start;

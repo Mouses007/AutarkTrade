@@ -27,6 +27,8 @@ import KiReiter from '../components/chart/KiReiter.vue'
 import AlarmDialog from '../components/chart/AlarmDialog.vue'
 import MomentumBox from '../components/chart/MomentumBox.vue'
 import IndikatorSchalter from '../components/chart/IndikatorSchalter.vue'
+import VorlagenMenue from '../components/chart/VorlagenMenue.vue'
+import { OVERLAYS, overlayAn } from '../utils/chart/overlays/liste.js'
 import OffeneReiter from '../components/chart/OffeneReiter.vue'
 import { Symbol, Hinweis, Kreisel } from '../components/basis'
 import { alarme, abonniereAlarme, neueAusloesungen, quittiere } from '../stores/chartAlarme.js'
@@ -890,6 +892,20 @@ watch(sichtbareAnzahl, async () => {
                             <IndikatorSchalter :panel="aktivesPanel" @aendere="vvSchalten"
                                 @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
                                 @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
+                            <div class="schubAktionen">
+                                <button type="button" class="schubKnopf" @click="schublade = null; oeffneIndikatoren()">
+                                    <Symbol name="plus" /> {{ t('chart.indikatorenTitel') }}</button>
+                                <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="vorlageAnwenden" />
+                            </div>
+                            <div class="schubGruppe">
+                                <div class="schubTitel">{{ t('chart.schublade.imChart') }}</div>
+                                <div class="schubChips">
+                                    <button v-for="o in OVERLAYS" :key="o.id" type="button" class="schubChip"
+                                        :class="{ an: overlayAn(aktivesPanel, o.id) }" :aria-pressed="overlayAn(aktivesPanel, o.id)"
+                                        @click="aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), [o.id]: !overlayAn(aktivesPanel, o.id) }">
+                                        {{ t('chart.overlay.' + o.id) }}</button>
+                                </div>
+                            </div>
                         </aside>
                     </Transition>
                     <Transition name="schubRechts">
@@ -1384,6 +1400,64 @@ watch(sichtbareAnzahl, async () => {
     display: flex;
     justify-content: center;
     padding: 40px;
+}
+
+/* Linke Schublade: Aktionen und Einblenden eigener Daten unter den Indikatoren */
+.schubAktionen {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.schubKnopf {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel-soft);
+    color: var(--text);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.schubGruppe {
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-soft);
+}
+
+.schubTitel {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+}
+
+.schubChips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.schubChip {
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.schubChip.an {
+    color: var(--text);
+    border-color: var(--accent-rand);
+    background: var(--accent-flaeche);
 }
 
 /* Schubladen im Vollbild (Wischen vom Rand) */
