@@ -76,9 +76,10 @@ function schalteVollbild(i) {
  * Rand → Momentum Radar, als Schublade über dem Chart. Zu: Tipp daneben, zurück
  * zum Rand wischen oder Esc. Die Randzone ist 60 px breit, damit man knapp
  * NEBEN der Rückgeste von Android ansetzen kann (die schluckt den äussersten Rand).
- * Eine Berührung, die in der Randzone beginnt, sieht der Chart nicht: Lightweight
- * Charts hört selbst auf touchstart/touchmove und verschob sonst das Bild, statt
- * die Schublade aufgehen zu lassen (Brave/Android, 21.10.2026).
+ * Ein Wisch aus der Randzone erreicht den Chart nicht: Lightweight Charts hört
+ * selbst auf touchstart/touchmove und verschob sonst das Bild, statt die
+ * Schublade aufgehen zu lassen (Brave/Android, 21.10.2026). Rechts gilt das erst,
+ * wenn die Bewegung waagrecht ist — senkrecht zieht man dort die Preisachse.
  */
 const schublade = ref(null)          // null | 'links' | 'rechts'
 const RAND = 60
@@ -90,19 +91,30 @@ function wischStart(e) {
     if (schublade.value) { wisch = { x, y, zu: true }; return }
     const breite = window.innerWidth
     wisch = x <= RAND ? { x, y, seite: 'links' } : x >= breite - RAND ? { x, y, seite: 'rechts' } : null
-    if (wisch) e.stopPropagation()
+    // Links liegt nur Kerzenfläche: sofort abschirmen, sonst schiebt der Chart mit.
+    // Rechts liegt die Preisachse — dort entscheidet erst die Richtung (siehe wischZug),
+    // sonst liesse sich die Achse im Vollbild nicht mehr ziehen (21.10.2026).
+    if (wisch?.seite === 'links') { wisch.fest = true; e.stopPropagation() }
 }
 function wischZug(e) {
     if (!wisch || e.touches.length !== 1) return
-    if (!wisch.zu) e.stopPropagation()
-    wischAuswerten(e.touches[0].clientX, e.touches[0].clientY)
+    const x = e.touches[0].clientX, y = e.touches[0].clientY
+    if (!wisch.zu && !wisch.fest) {
+        const dx = Math.abs(x - wisch.x), dy = Math.abs(y - wisch.y)
+        if (dx < 8 && dy < 8) return
+        // Senkrecht = Achse ziehen: die Geste gehört dem Chart.
+        if (dy >= dx) { wisch = null; return }
+        wisch.fest = true
+    }
+    if (wisch.fest) e.stopPropagation()
+    wischAuswerten(x, y)
 }
 // Auch am Ende der Berührung: der Browser liefert touchmove gedrosselt oder bricht sie
 // ab, sobald er selbst scrollt — dann käme die Geste sonst nie an.
 function wischEnde(e) {
-    if (wisch && !wisch.zu) e.stopPropagation()
+    if (wisch?.fest) e.stopPropagation()
     const p = e.changedTouches?.[0]
-    if (wisch && p) wischAuswerten(p.clientX, p.clientY)
+    if (wisch && p && (wisch.fest || wisch.zu)) wischAuswerten(p.clientX, p.clientY)
     wisch = null
 }
 function wischAuswerten(x, y) {
