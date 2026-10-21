@@ -6,6 +6,7 @@ import ModelManager from '@/components/ModelManager.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
+import InfoTipp from '@/components/InfoTipp.vue'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
@@ -105,7 +106,7 @@ const {
                             <span class="liste-name">
                                 {{ anbieterName(a) }}
                                 <Pille v-if="a.id === aiProvider" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
-                                <span v-if="a.hinweis && a.id !== 'ollama'" class="leise block klein">{{ t(a.hinweis) }}</span>
+                                <InfoTipp v-if="a.hinweis && a.id !== 'ollama'" :schluessel="a.hinweis" immer breit />
                             </span>
                             <span class="liste-mitte mit-knopf">
                                 <input type="password" v-model="aiKeys[a.id]"
@@ -136,7 +137,7 @@ const {
                             <span class="liste-name">
                                 FLUX.2 <span class="leise">(Black Forest Labs)</span>
                                 <Pille v-if="shareCardProvider === 'flux'" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
-                                <span class="leise block klein">{{ t('kiHinweis.anbieter.flux') }}</span>
+                                <InfoTipp schluessel="kiHinweis.anbieter.flux" immer breit />
                             </span>
                             <span class="liste-mitte">
                                 <span v-if="fluxApiKey" class="gut klein">
@@ -154,7 +155,7 @@ const {
                             <span class="liste-name">
                                 Google Gemini <span class="leise">(Nano Banana)</span>
                                 <Pille v-if="shareCardProvider === 'gemini'" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
-                                <span class="leise block klein">{{ t('kiHinweis.anbieter.gemini') }}</span>
+                                <InfoTipp schluessel="kiHinweis.anbieter.gemini" immer breit />
                             </span>
                             <span class="liste-mitte">
                                 <span v-if="geminiImageApiKey" class="gut klein">

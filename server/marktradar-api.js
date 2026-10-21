@@ -20,7 +20,7 @@
 
 import { logWarn } from './logger.js'
 import { getKnex } from './database.js'
-import { beansprucheAufgabe, meldeFehler } from './db-claim.js'
+import { beansprucheAufgabe, meldeFehler, gibAufgabeFrei } from './db-claim.js'
 import { getClosedCandles, getHistoricalCandles } from './market-data.js'
 import * as marktdaten from './marktdaten/index.js'
 import { QuelleAus, istAus, sendeWennAus } from './quellen/aus.js'
@@ -397,10 +397,16 @@ async function schreibeSchnappschuss() {
                 .onConflict(['kind', 'dayUnix']).merge(['value', 'createdAt'])
         }
         console.log(` -> Marktradar: Schnappschuss geschrieben (BTC-Dominanz ${g.pct} %)`)
+        await meldeFehler('snap_global', '')   // ein alter Fehlervermerk gilt nicht mehr
     } catch (e) {
         if (istAus(e)) return
         logWarn('marktradar', `Schnappschuss fehlgeschlagen: ${e.message}`)
-        await meldeFehler('snap_global', e.message)
+        // Anspruch zurückgeben: der halbstündliche Takt versucht es gleich wieder,
+        // statt den Tageswert zwölf Stunden liegen zu lassen. Erst danach den
+        // Fehler vermerken (die Freigabe leert ihn).
+        await gibAufgabeFrei('snap_global')
+        const zeit = e?.name === 'AbortError' || /aborted|timeout/i.test(String(e?.message))
+        await meldeFehler('snap_global', zeit ? 'Zeitüberschreitung – Quelle antwortete nicht rechtzeitig, nächster Versuch in 30 Min.' : e.message)
     }
 }
 

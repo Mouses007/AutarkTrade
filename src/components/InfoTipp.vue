@@ -57,6 +57,8 @@ const props = defineProps({
     platz: { type: String, default: 'auto' },
     /** Breitere Box für längere Erklärungen. */
     breit: { type: Boolean, default: false },
+    /** Pflichthinweis (Anbieterbedingungen): bleibt auch bei abgeschalteten erweiterten Infos sichtbar. */
+    immer: { type: Boolean, default: false },
 })
 
 const { t, te } = useI18n()
@@ -81,7 +83,7 @@ const inhalt = computed(() => {
     return te(props.schluessel) ? t(props.schluessel) : ''
 })
 
-const zeigen = computed(() => erweiterteInfos.value && !!inhalt.value)
+const zeigen = computed(() => (props.immer || erweiterteInfos.value) && !!inhalt.value)
 
 const BREITE = 320
 const BREITE_GROSS = 480
