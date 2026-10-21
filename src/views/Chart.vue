@@ -637,11 +637,64 @@ function taste(e) {
 const seite = ref(null)
 let randUnten = 13          // Polster des Layouts unter der Seite (gemessen: 13 px)
 let hoehenWaechter = null
+/*
+ * Chart-Höhe von Hand: Eckgriff unten rechts am Chart (zwischen Chart und
+ * Seitenleiste). Senkrecht = Höhe, waagrecht = Breite der Seitenleiste. Gemerkt
+ * im Browser; Doppelklick = wieder ans Fenster angepasst. Am Telefon zählt die
+ * Höhe des Chart-Rasters, sonst die der ganzen Seite (Leiste wächst mit).
+ */
+const HOEHE_SCHLUESSEL = 'chartHoehe'
+const HOEHE_MIN = 300
+const chartHoehe = ref((() => {
+    try { const v = Number(localStorage.getItem(HOEHE_SCHLUESSEL)); return v >= HOEHE_MIN ? v : null } catch { return null }
+})())
+let hoehenZug = null
+function hoeheStart(e) {
+    const ziel = telefon.value || window.innerWidth <= 991 ? e.currentTarget.parentElement : seite.value
+    hoehenZug = {
+        x: e.clientX, y: e.clientY, breite: leisteBreite.value,
+        hoehe: Math.round(ziel?.getBoundingClientRect().height || 600),
+        mitBreite: daten.value.seitenleiste.offen && !istSchmal.value && !telefon.value && breitGenug.value,
+    }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+    document.body.style.cursor = 'nwse-resize'
+    document.body.style.userSelect = 'none'
+}
+function hoeheZiehen(e) {
+    if (!hoehenZug) return
+    chartHoehe.value = Math.round(Math.max(HOEHE_MIN, Math.min(3000, hoehenZug.hoehe + e.clientY - hoehenZug.y)))
+    if (hoehenZug.mitBreite) {
+        // Ecke nach rechts = Chart breiter = Leiste schmaler
+        const max = Math.min(LEISTE_MAX, window.innerWidth * 0.6)
+        leisteBreite.value = Math.round(Math.max(LEISTE_MIN, Math.min(max, hoehenZug.breite - (e.clientX - hoehenZug.x))))
+    }
+    passeHoehe()
+}
+function hoeheEnde() {
+    if (!hoehenZug) return
+    const { mitBreite } = hoehenZug
+    hoehenZug = null
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+    try { localStorage.setItem(HOEHE_SCHLUESSEL, String(chartHoehe.value || '')) } catch { /* nur Komfort */ }
+    if (mitBreite) { try { localStorage.setItem(LEISTE_SCHLUESSEL, String(leisteBreite.value)) } catch { /* kein Speicher */ } }
+}
+function hoeheZurueck() {
+    chartHoehe.value = null
+    try { localStorage.removeItem(HOEHE_SCHLUESSEL) } catch { /* nur Komfort */ }
+    nextTick(passeHoehe)
+}
+const rasterStil = computed(() =>
+    chartHoehe.value && (telefon.value || breiteFenster.value <= 991) && !vollbild.value ? { height: chartHoehe.value + 'px' } : null)
+const breiteFenster = ref(window.innerWidth)
+
 function passeHoehe() {
     const el = seite.value
     if (!el) return
+    breiteFenster.value = window.innerWidth
     // Telefon und schmale Fenster: Chart und Leiste untereinander, die Seite darf scrollen.
     if (telefon.value || window.innerWidth <= 991) { el.style.height = ''; return }
+    if (chartHoehe.value) { el.style.height = chartHoehe.value + 'px'; return }
     const r = el.getBoundingClientRect()
     const oben = r.top + window.scrollY
     // Den Rand nur messen, solange die Seite überläuft — passt sie, enthielte die
@@ -712,7 +765,7 @@ watch(sichtbareAnzahl, async () => {
                     @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
                     @versteckt="daten.zeichnen = { ...(daten.zeichnen || {}), versteckt: !daten.zeichnen?.versteckt }"
                     @alle-loeschen="alleLoeschen" />
-                <div class="raster" :class="rasterKlasse">
+                <div class="raster" :class="rasterKlasse" :style="rasterStil">
                     <ChartPanel v-for="(p, i) in sichtbarePanels" :key="layoutId + '-' + i"
                         :ref="(el) => { if (el) panelRefs[i] = el }" :panel="p" :nummer="i"
                         :class="{ ausgeblendet: vollbild && i !== aktivIndex }" @vollbild="schalteVollbild(i)"
@@ -724,6 +777,9 @@ watch(sichtbareAnzahl, async () => {
                         @alarm-auf-zeichnung="(z) => { fokus(i); alarmAufZeichnung(z) }"
                         @alle-loeschen="() => { fokus(i); alleLoeschen() }"
                         @panel="(patch) => Object.assign(daten.panels[i], patch)" />
+                    <span v-if="!vollbild" class="hoehenGriff" role="separator" :title="t('chart.hoehenGriff')" :aria-label="t('chart.hoehenGriff')"
+                        @pointerdown.prevent.stop="hoeheStart" @pointermove="hoeheZiehen" @pointerup="hoeheEnde"
+                        @pointercancel="hoeheEnde" @dblclick.stop="hoeheZurueck"></span>
                 </div>
 
                 <!-- Eingeklappt: nur der Streifen mit Aufklappen und den Reiter-Symbolen. -->
@@ -850,6 +906,29 @@ watch(sichtbareAnzahl, async () => {
     gap: 6px;
     min-height: 0;
     min-width: 0;
+    position: relative;
+}
+
+/* Eckgriff unten rechts am Chart, in der Lücke zur Seitenleiste: Höhe + Leistenbreite. */
+.hoehenGriff {
+    position: absolute;
+    right: -7px;
+    bottom: -7px;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    z-index: 7;
+    touch-action: none;
+    opacity: 0.55;
+    background:
+        linear-gradient(315deg, transparent 0 30%, var(--line-stark) 30% 38%, transparent 38% 50%, var(--line-stark) 50% 58%, transparent 58%);
+    transition: opacity 0.15s;
+}
+
+.hoehenGriff:hover {
+    opacity: 1;
+    background:
+        linear-gradient(315deg, transparent 0 30%, var(--accent) 30% 38%, transparent 38% 50%, var(--accent) 50% 58%, transparent 58%);
 }
 
 .raster.r1 {

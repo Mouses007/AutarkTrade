@@ -5188,6 +5188,7 @@
     "legendeAuf": "Expand legend",
     "leisteEinklappen": "Collapse sidebar",
     "leisteAusklappen": "Expand sidebar",
+    "hoehenGriff": "Drag chart size: vertical = height, horizontal = sidebar width (double-click: fit to window again)",
     "eckGriff": "Drag to resize: vertical = this card's height, horizontal = sidebar width (double-click: reset)",
     "status": {
       "connecting": "Connecting …",

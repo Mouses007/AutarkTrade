@@ -5188,6 +5188,7 @@
     "legendeAuf": "Legende ausklappen",
     "leisteEinklappen": "Leiste einklappen",
     "leisteAusklappen": "Leiste ausklappen",
+    "hoehenGriff": "Chart-Grösse ziehen: senkrecht = Höhe, waagrecht = Breite der Seitenleiste (Doppelklick: wieder ans Fenster anpassen)",
     "eckGriff": "Grösse ziehen: senkrecht = Höhe dieser Karte, waagrecht = Breite der Leiste (Doppelklick: zurücksetzen)",
     "status": {
       "connecting": "Verbinde …",
