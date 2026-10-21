@@ -11,10 +11,11 @@ Stand vom 19. Oktober 2026
 
 ## Lizenz
 
-Für AutarkTrade gelten die Lizenzbedingungen in `LICENSE`. In der Software stehen sie mit
-diesem Text und `THIRD-PARTY-NOTICES` unter **Rechtliches** (Seitenmenü unten, Einstellungen ›
+Für AutarkTrade gelten die Lizenzbedingungen in `LICENSE`, ergänzt um den
+`HAFTUNGSAUSSCHLUSS.md`. In der Software stehen sie mit diesem Text und `THIRD-PARTY-NOTICES`
+unter **Rechtliches** (Seitenmenü unten, Einstellungen ›
 Allgemein › Lizenz); beim ersten Start und bei jeder neuen Fassung muss man ihnen zustimmen.
-Im Container-Image liegen alle drei unter `/app/`.
+Im Container-Image liegen alle vier unter `/app/`.
 
 Lizenzschlüssel: `server/lizenz.js` (Ed25519, offline geprüft). Ohne Schlüssel läuft die
 Software im Testmodus; Daten werden nie gesperrt.

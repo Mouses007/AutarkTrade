@@ -29,6 +29,8 @@ export const DOKUMENTE = {
     lizenz: 'LICENSE',
     hinweise: 'NOTICE.md',
     drittsoftware: 'THIRD-PARTY-NOTICES',
+    // Teil der Bedingungen (LICENSE Ziffer 15) — darum mit Prüfsumme in der Zustimmung
+    haftung: 'HAFTUNGSAUSSCHLUSS.md',
 }
 const FASSUNG = /^Fassung\s+(\d+(?:\.\d+)*)\s+vom\s+(.+?)\s*$/
 const VERLAUF_MAX = 20

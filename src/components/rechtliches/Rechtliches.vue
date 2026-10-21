@@ -35,6 +35,7 @@ const fassung = computed(() => stand.value?.fassung?.fassung || '')
 
 const reiterListe = computed(() => [
     { id: 'lizenz', titel: t('rechtliches.reiterLizenz') },
+    { id: 'haftung', titel: t('rechtliches.reiterHaftung') },
     { id: 'hinweise', titel: t('rechtliches.reiterHinweise') },
     { id: 'drittsoftware', titel: t('rechtliches.reiterDrittsoftware') },
 ])
@@ -54,7 +55,7 @@ async function zeigen(name) {
     if (texte.value[name] !== undefined) return
     try {
         const { data } = await axios.get(`/api/rechtliches/text/${name}`, { responseType: 'text', transformResponse: (r) => r })
-        texte.value = { ...texte.value, [name]: name === 'hinweise' ? markdownAlsText(data) : data }
+        texte.value = { ...texte.value, [name]: name === 'hinweise' || name === 'haftung' ? markdownAlsText(data) : data }
     } catch (e) {
         texte.value = { ...texte.value, [name]: t('rechtliches.textFehler', { fehler: e.response?.data?.error || e.message }) }
     }

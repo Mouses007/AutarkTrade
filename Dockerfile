@@ -33,7 +33,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
 # Lizenzbedingungen, Hinweise und Drittlizenzen: Pflicht im Image, und der Dialog
 # „Rechtliches" liest sie zur Laufzeit (server/rechtliches.js).
-COPY LICENSE NOTICE.md ./
+COPY LICENSE NOTICE.md HAFTUNGSAUSSCHLUSS.md ./
 COPY --from=builder /app/THIRD-PARTY-NOTICES ./
 # server/ gehört dem Dienstbenutzer: der Strategie-Baukasten legt dort
 # erzeugte Strategien ab (strategy-builder.js). node_modules und dist bleiben
