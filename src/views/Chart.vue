@@ -353,6 +353,32 @@ async function speichereJetzt() {
     }
 }
 
+/*
+ * Das Layout liegt in der Datenbank und gilt für ALLE Geräte. Ein Fenster, das
+ * schon offen war (Handy, Tablet, zweiter Tab), zeigte bisher den Stand vom
+ * Öffnen — wer am PC einen Schalter umlegte, sah ihn am Tablet nicht und hielt
+ * die Einstellung für ungespeichert. Darum: beim Zurückkehren ins Fenster und
+ * jede Minute, solange es sichtbar ist, den Stand prüfen und übernehmen — aber
+ * nur, wenn hier nichts Ungespeichertes liegt (das gewinnt, und ein Konflikt
+ * meldet sich wie bisher beim Speichern).
+ */
+let abgleichLaeuft = false
+async function gleicheLayoutAb() {
+    const id = layoutId.value
+    if (!id || abgleichLaeuft || document.visibilityState === 'hidden') return
+    if (JSON.stringify(daten.value) !== gespeichertText) return
+    abgleichLaeuft = true
+    try {
+        const frisch = (await api.layouts()).find((x) => x.id === id)
+        if (!frisch || !(frisch.geaendertAm > (standVon(id) || 0))) return
+        // Während des Abrufs geändert oder gewechselt? Dann nichts überschreiben.
+        if (layoutId.value !== id || JSON.stringify(daten.value) !== gespeichertText) return
+        waehleLayout(frisch)
+    } catch { /* nächster Versuch beim nächsten Anlass */ } finally { abgleichLaeuft = false }
+}
+const sichtbarAbgleich = () => { if (document.visibilityState === 'visible') gleicheLayoutAb() }
+let abgleichUhr = null
+
 async function layoutWechsel(id) {
     await speichere()
     const l = layouts.value.find((x) => x.id === id)
@@ -715,6 +741,9 @@ onMounted(() => {
     hoehenWaechter.observe(document.documentElement)
     window.addEventListener('keydown', taste)
     document.addEventListener('fullscreenchange', vollbildVerlassen)
+    document.addEventListener('visibilitychange', sichtbarAbgleich)
+    window.addEventListener('focus', gleicheLayoutAb)
+    abgleichUhr = setInterval(gleicheLayoutAb, 60_000)
     alarmAbo = abonniereAlarme()
 })
 onBeforeUnmount(() => {
@@ -722,6 +751,9 @@ onBeforeUnmount(() => {
     hoehenWaechter?.disconnect()
     window.removeEventListener('keydown', taste)
     document.removeEventListener('fullscreenchange', vollbildVerlassen)
+    document.removeEventListener('visibilitychange', sichtbarAbgleich)
+    window.removeEventListener('focus', gleicheLayoutAb)
+    clearInterval(abgleichUhr)
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
     alarmAbo?.()
     clearTimeout(speicherUhr)
