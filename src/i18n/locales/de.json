@@ -6165,5 +6165,20 @@
       "ausText": "Aus: AutarkTrade verhält sich wie eine Verkaufsversion — diese Quellen und die Funktionen, die nur sie haben, sind aus und sagen warum.",
       "zeilen": "Verkaufsprüfung, Zeile {zeilen}"
     }
+  },
+  "spenden": {
+    "menue": "Spenden",
+    "titel": "Spenden",
+    "text": "AutarkTrade ist ein Einmann-Projekt. Wenn es dir hilft, freue ich mich über einen Kaffee oder eine Spende.",
+    "frage1": "Du hast schon über 50 Trades bewertet — schön, dass AutarkTrade dir hilft! Magst du das Projekt mit einem Kaffee oder einer kleinen Spende unterstützen?",
+    "frage2": "200 bewertete Trades — du nutzt AutarkTrade richtig. Falls es dir etwas wert ist: hier ein letztes Mal die Spendenmöglichkeit. Danach frage ich nicht mehr.",
+    "spaeter": "Vielleicht später",
+    "schonGespendet": "Ich habe schon gespendet",
+    "definitivNicht": "Ich will definitiv nicht",
+    "schliessen": "Schliessen",
+    "schalter": "Spenden im Menü",
+    "schalterHilfe": "Menüeintrag „Spenden“ und zwei einmalige Nachfragen (nach 50 und 200 bewerteten Trades).",
+    "kaffeeLink": "Buy-me-a-coffee-Link",
+    "kaffeeUngueltig": "Erwartet: https://buymeacoffee.com/name"
   }
 }

@@ -6165,5 +6165,20 @@
       "ausText": "Off: AutarkTrade behaves like a sales version — these sources and the functions only they provide are off and say why.",
       "zeilen": "Sales review, row {zeilen}"
     }
+  },
+  "spenden": {
+    "menue": "Donate",
+    "titel": "Donate",
+    "text": "AutarkTrade is a one-person project. If it helps you, a coffee or a donation is much appreciated.",
+    "frage1": "You have already rated more than 50 trades — great that AutarkTrade helps you! Would you like to support the project with a coffee or a small donation?",
+    "frage2": "200 rated trades — you really use AutarkTrade. If it is worth something to you: here is the donation option one last time. I won't ask again.",
+    "spaeter": "Maybe later",
+    "schonGespendet": "I already donated",
+    "definitivNicht": "Definitely not",
+    "schliessen": "Close",
+    "schalter": "Donations in the menu",
+    "schalterHilfe": "Menu entry “Donate” and two one-time prompts (after 50 and 200 rated trades).",
+    "kaffeeLink": "Buy me a coffee link",
+    "kaffeeUngueltig": "Expected: https://buymeacoffee.com/name"
   }
 }

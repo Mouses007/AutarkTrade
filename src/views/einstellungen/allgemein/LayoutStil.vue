@@ -3,7 +3,7 @@
  * Allgemein → Layout & Stil: Sprache, Profil, erweiterte Infos,
  * Onboarding-Assistent, Modi und Startseite.
  */
-import { ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { Knopf, Eingabe } from '@/components/basis/index.js'
@@ -41,6 +41,16 @@ let username = ref('')
 let livetradingMobil = ref(false)    // Live-Trading-Fenster auch am Telefon zeigen
 let startseiteAn = ref(true)         // Startseite als Landing-Page + Modus-Tab
 let erweiterteInfosAn = ref(true)    // kleines „i" an Werten und Bedienelementen
+let spendenAn = ref(true)            // Menüeintrag „Spenden" + zwei Nachfragen
+let kaffeeUrl = ref('')              // Buy-me-a-coffee-Link im Spenden-Dialog
+const kaffeeUrlGueltig = computed(() => !kaffeeUrl.value.trim() || /^https:\/\/(www\.)?buymeacoffee\.com\/[A-Za-z0-9_-]+\/?$/.test(kaffeeUrl.value.trim()))
+// Gespeichert wird kurz nach dem Tippen, nur ein gültiger (oder leerer) Link.
+let kaffeeUhr = null
+watch(kaffeeUrl, (v) => {
+    clearTimeout(kaffeeUhr)
+    if (v.trim() === String(appEinstellungen.value?.spendenKaffeeUrl || '')) return
+    kaffeeUhr = setTimeout(() => { if (kaffeeUrlGueltig.value) kiSpeichern('spendenKaffeeUrl', kaffeeUrl.value.trim()) }, 700)
+})
 
 /**
  * Startseiten-Schalter speichern. Zusätzlich zum DB-Wert wird der Zustand nach
@@ -108,6 +118,8 @@ function ausEinstellungen() {
     username.value = settings.username || ''
     selectedLanguage.value = settings.language || 'de'
     erweiterteInfosAn.value = Number(settings.erweiterteInfos ?? 1) === 1
+    spendenAn.value = Number(settings.spendenAn ?? 1) === 1
+    kaffeeUrl.value = settings.spendenKaffeeUrl || ''
     livetradingMobil.value = Number(settings.livetradingMobil ?? 0) === 1
     startseiteAn.value = Number(settings.startseiteAn ?? 1) === 1
 }
@@ -142,6 +154,16 @@ ausEinstellungen()
                 info="settings.erweiterteInfosInfo" :hilfe="t('settings.erweiterteInfosHint')"
                 @change="erweiterteInfosSpeichern" />
         </div>
+
+        <!-- Spenden: Menüeintrag und die zwei Nachfragen (50 / 200 bewertete Trades) -->
+        <div class="block">
+            <Schalter v-model="spendenAn" :label="t('spenden.schalter')" :hilfe="t('spenden.schalterHilfe')"
+                @change="(an) => kiSpeichern('spendenAn', an ? 1 : 0)" />
+        </div>
+        <Feld :label="t('spenden.kaffeeLink')">
+            <Eingabe v-model="kaffeeUrl" platzhalter="https://buymeacoffee.com/deinname"
+                :fehler="kaffeeUrlGueltig ? '' : t('spenden.kaffeeUngueltig')" />
+        </Feld>
 
         <!-- Manueller Wiederaufruf des Onboarding-Assistenten — unabhängig
              vom Versionsabgleich, z.B. um eine Nachrichtenquelle

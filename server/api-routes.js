@@ -84,7 +84,7 @@ export const VALID_SETTINGS_KEYS = [
     'radarNewsLagenAn', 'radarNewsLagenSymbol',
     'radarNewsPromptZusatz', 'radarNewsFokusAn', 'radarNewsFokusWoerter', 'radarNewsAktivesProfil',
     'livetradingAn', 'betaAusblenden', 'livetradingMobil', 'startseiteAn',
-    'erweiterteInfos', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
+    'erweiterteInfos', 'spendenAn', 'spendenKaffeeUrl', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
     // Anbieter/Modell je KI-Funktion; leer = global
     'aiBerichtProvider', 'aiBerichtModell', 'aiAgentProvider', 'aiAgentModell',
     'aiAgentTokenBudget',

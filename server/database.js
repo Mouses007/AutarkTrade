@@ -202,7 +202,9 @@ async function fixPostgresSequences(knex) {
 // pausiert, Live-Positionen nur markiert (Status bleibt, nichts geschlossen).
 // Ein älterer Codestand ignoriert die Spalte; seine Live-Instanzen fände er
 // pausiert auf Papier vor.
-const SCHEMA_VERSION = 29
+// v30: Spenden zurück (`settings.spendenAn/spendenStufe/spendenBei/spendenKaffeeUrl`).
+// Rein additiv.
+const SCHEMA_VERSION = 30
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
@@ -1899,6 +1901,15 @@ async function runMigrations(knex, client) {
      * einzuschalten. Wer sie nicht braucht, schaltet sie ab.
      */
     await addColumnIfNotExists('settings', 'erweiterteInfos', (t) => t.integer('erweiterteInfos').defaultTo(1))
+
+    /*
+     * Spenden (server/spenden.js): Menüeintrag und zwei Nachfragen (50 / 200
+     * bewertete Trades). `spendenStufe`/`spendenBei` schreibt nur der Server.
+     */
+    await addColumnIfNotExists('settings', 'spendenAn', (t) => t.integer('spendenAn').defaultTo(1))
+    await addColumnIfNotExists('settings', 'spendenStufe', (t) => t.integer('spendenStufe').defaultTo(0))
+    await addColumnIfNotExists('settings', 'spendenBei', (t) => t.integer('spendenBei').defaultTo(0))
+    await addColumnIfNotExists('settings', 'spendenKaffeeUrl', (t) => t.text('spendenKaffeeUrl').defaultTo(''))
 
     /*
      * Modi einzeln ab- und anschaltbar. Journal hat bewusst KEINEN Schalter:

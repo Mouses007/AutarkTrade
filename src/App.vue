@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import LoginGate from './components/LoginGate.vue'
 import Rechtliches from './components/rechtliches/Rechtliches.vue'
+import SpendenDialog from './components/rahmen/SpendenDialog.vue'
 import Rahmen from './layouts/Rahmen.vue'
 
 const authChecked = ref(false)
@@ -37,4 +38,5 @@ onMounted(async () => {
     <!-- Zustimmung zu den Lizenzbedingungen: hier und nicht im Layout, weil der
          Setup-Assistent beim ersten Start ohne Layout läuft (S10). -->
     <Rechtliches v-if="authChecked && !needsLogin" />
+    <SpendenDialog v-if="authChecked && !needsLogin" />
 </template>
