@@ -231,10 +231,81 @@ function uebernimmSymbolAusAdresse() {
     const patch = { symbol: roh, markt }
     const boerse = String(route.query.boerse || '').toLowerCase()
     if (boerse && waehlbareBoersen().includes(boerse)) patch.boerse = boerse
+    // Aus Research & Co. geöffnet: eigener Coin-Tab (oder der vorhandene)
+    oeffneCoinTab(roh, markt)
     setzePanel(patch)
     passePanelAn(aktivesPanel.value)
     router.replace({ query: {} })
+    // Läuft direkt nach dem Laden des Layouts — dessen erster Änderungsschub wird
+    // bewusst nicht gespeichert (ignoriereNaechsteAenderung). Ohne diesen Aufruf
+    // ging der neue Tab beim nächsten Öffnen verloren.
+    setTimeout(() => speichere(), 1000)
 }
+
+/*
+ * Coin-Tabs unter der Kopfleiste: mehrere Coins offen halten und mit einem
+ * Klick wechseln (wie Browser-Tabs). Gespeichert im Layout (`coinTabs`,
+ * `coinTabAktiv`), also auf allen Geräten gleich. Ein Tab ist nur Symbol und
+ * Markt; Zeiteinheit und Indikatoren bleiben die des Panels. Wechselt das
+ * Symbol auf anderem Weg (Watchlist, Suche), übernimmt der aktive Tab es — ausser
+ * ein anderer Tab hat es schon, dann wird der aktiv.
+ */
+const COIN_TABS_MAX = 12
+const coinTabs = computed(() => {
+    const t = daten.value?.coinTabs
+    return Array.isArray(t) && t.length ? t : [{ symbol: aktivesPanel.value?.symbol || 'BTCUSDT', markt: aktivesPanel.value?.markt || 'futures' }]
+})
+const coinTabAktiv = computed(() => Math.min(Number(daten.value?.coinTabAktiv) || 0, coinTabs.value.length - 1))
+const tabName = (tab) => String(tab.symbol).replace(/USDT$/, '') + (tab.markt === 'spot' ? ' · Spot' : '')
+function setzeTabs(liste, aktiv) {
+    daten.value.coinTabs = liste
+    daten.value.coinTabAktiv = aktiv
+}
+function oeffneCoinTab(symbol, markt) {
+    const liste = [...coinTabs.value]
+    let i = liste.findIndex((t) => t.symbol === symbol && t.markt === markt)
+    if (i < 0) {
+        liste.push({ symbol, markt })
+        while (liste.length > COIN_TABS_MAX) liste.shift()
+        i = liste.length - 1
+    }
+    setzeTabs(liste, i)
+}
+function waehleCoinTab(i) {
+    const tab = coinTabs.value[i]
+    if (!tab) return
+    setzeTabs([...coinTabs.value], i)
+    setzePanel({ symbol: tab.symbol, markt: tab.markt })
+}
+// „+": das nächste gewählte Symbol kommt in einen neuen Tab. Bricht man die
+// Suche ab, entsteht kein Tab.
+let neuerTabWartet = false
+function neuerCoinTab() {
+    if (coinTabs.value.length >= COIN_TABS_MAX) return
+    neuerTabWartet = true
+    // Suche abgebrochen: nach einer Weile gilt der nächste Wechsel wieder dem aktiven Tab
+    setTimeout(() => { neuerTabWartet = false }, 30_000)
+    kopf.value?.oeffneSuche()
+}
+function schliesseCoinTab(i) {
+    const liste = coinTabs.value.filter((_, j) => j !== i)
+    if (!liste.length) return
+    let aktiv = coinTabAktiv.value
+    if (i < aktiv || aktiv >= liste.length) aktiv = Math.max(0, aktiv - 1)
+    const war = i === coinTabAktiv.value
+    setzeTabs(liste, aktiv)
+    if (war) setzePanel({ symbol: liste[aktiv].symbol, markt: liste[aktiv].markt })
+}
+// Symbol auf anderem Weg gewechselt: aktiven Tab nachziehen (oder passenden aktivieren)
+watch(() => [aktivesPanel.value?.symbol, aktivesPanel.value?.markt], ([symbol, markt]) => {
+    if (!symbol || !bereit.value) return
+    if (neuerTabWartet) { neuerTabWartet = false; oeffneCoinTab(symbol, markt); return }
+    const liste = [...coinTabs.value]
+    const i = liste.findIndex((t) => t.symbol === symbol && t.markt === markt)
+    if (i >= 0) { if (i !== coinTabAktiv.value) daten.value.coinTabAktiv = i; return }
+    liste[coinTabAktiv.value] = { symbol, markt }
+    setzeTabs(liste, coinTabAktiv.value)
+})
 watch(() => route.query.symbol, (s) => { if (s && bereit.value) uebernimmSymbolAusAdresse() })
 
 function waehleLayout(layout) {
@@ -890,6 +961,18 @@ watch(sichtbareAnzahl, async () => {
                 @layout-neu="layoutNeu" @layout-umbenennen="layoutUmbenennen" @layout-loeschen="layoutLoeschen"
                 @seitenleiste="daten.seitenleiste.offen = !daten.seitenleiste.offen" @foto="foto" />
 
+            <div v-if="!vollbild" class="coinTabs" role="tablist" :aria-label="t('chart.coinTabs.titel')">
+                <div v-for="(tab, i) in coinTabs" :key="tab.symbol + '|' + tab.markt" class="coinTab" :class="{ an: i === coinTabAktiv }"
+                    role="tab" :aria-selected="i === coinTabAktiv" tabindex="0"
+                    @click="waehleCoinTab(i)" @keydown.enter="waehleCoinTab(i)" @auxclick.middle.prevent="schliesseCoinTab(i)">
+                    <span class="coinTabName">{{ tabName(tab) }}</span>
+                    <button v-if="coinTabs.length > 1" type="button" class="coinTabZu" :title="t('chart.coinTabs.schliessen')"
+                        :aria-label="t('chart.coinTabs.schliessen')" @click.stop="schliesseCoinTab(i)"><Symbol name="schliessen" /></button>
+                </div>
+                <button v-if="coinTabs.length < COIN_TABS_MAX" type="button" class="coinTabNeu" :title="t('chart.coinTabs.neu')"
+                    :aria-label="t('chart.coinTabs.neu')" @click="neuerCoinTab"><Symbol name="plus" /></button>
+            </div>
+
             <div v-for="n in neueAusloesungen" :key="n.id + '-' + n.t" class="leistenMeldung alarmBanner"
                 @click="quittiere(n.id)">
                 <Symbol name="glocke" /> {{ n.text }} <small>({{ t('chart.alarm.quittieren') }})</small></div>
@@ -1421,6 +1504,77 @@ watch(sichtbareAnzahl, async () => {
     display: flex;
     justify-content: center;
     padding: 40px;
+}
+
+/* Coin-Tabs unter der Kopfleiste */
+.coinTabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin: 4px 0 6px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.coinTab {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px 3px 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px 8px 0 0;
+    border-bottom-color: transparent;
+    background: transparent;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.coinTab:hover {
+    color: var(--text);
+}
+
+.coinTab.an {
+    color: var(--text);
+    background: var(--panel);
+    border-color: var(--accent-rand);
+    border-bottom-color: var(--accent);
+}
+
+.coinTabZu {
+    display: inline-flex;
+    background: transparent;
+    border: none;
+    padding: 1px;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.coinTabZu:hover {
+    opacity: 1;
+    color: var(--text);
+}
+
+.coinTabNeu {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px dashed var(--line);
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.coinTabNeu:hover {
+    color: var(--accent);
+    border-color: var(--accent-rand);
 }
 
 /* Handy-Vollbild: Zeiteinheiten-Favoriten, bewusst leise */
