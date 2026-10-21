@@ -727,8 +727,8 @@ const seite = ref(null)
 let randUnten = 13          // Polster des Layouts unter der Seite (gemessen: 13 px)
 let hoehenWaechter = null
 /*
- * Chart-Höhe von Hand: Eckgriff unten rechts am Chart (zwischen Chart und
- * Seitenleiste). Senkrecht = Höhe, waagrecht = Breite der Seitenleiste. Gemerkt
+ * Chart-Höhe von Hand: Eckgriff ganz aussen unten rechts (Ecke der Seitenleiste,
+ * ohne Leiste die des Charts). Senkrecht = Höhe, waagrecht = Breite der Seitenleiste. Gemerkt
  * im Browser; Doppelklick = wieder ans Fenster angepasst. Am Telefon zählt die
  * Höhe des Chart-Rasters, sonst die der ganzen Seite (Leiste wächst mit).
  */
@@ -739,7 +739,7 @@ const chartHoehe = ref((() => {
 })())
 let hoehenZug = null
 function hoeheStart(e) {
-    const ziel = telefon.value || window.innerWidth <= 991 ? e.currentTarget.parentElement : seite.value
+    const ziel = telefon.value || window.innerWidth <= 991 ? e.currentTarget.parentElement?.querySelector('.raster') : seite.value
     hoehenZug = {
         x: e.clientX, y: e.clientY, breite: leisteBreite.value,
         hoehe: Math.round(ziel?.getBoundingClientRect().height || 600),
@@ -897,9 +897,6 @@ watch(sichtbareAnzahl, async () => {
                         @alarm-auf-zeichnung="(z) => { fokus(i); alarmAufZeichnung(z) }"
                         @alle-loeschen="() => { fokus(i); alleLoeschen() }"
                         @panel="(patch) => Object.assign(daten.panels[i], patch)" />
-                    <span v-if="!vollbild" class="hoehenGriff" role="separator" :title="t('chart.hoehenGriff')" :aria-label="t('chart.hoehenGriff')"
-                        @pointerdown.prevent.stop="hoeheStart" @pointermove="hoeheZiehen" @pointerup="hoeheEnde"
-                        @pointercancel="hoeheEnde" @dblclick.stop="hoeheZurueck"></span>
                 </div>
 
                 <!-- Eingeklappt: nur der Streifen mit Aufklappen und den Reiter-Symbolen. -->
@@ -988,6 +985,10 @@ watch(sichtbareAnzahl, async () => {
                     <a class="lizenz" href="https://www.tradingview.com/" target="_blank" rel="noopener">
                         Charts: TradingView Lightweight Charts™ · © TradingView, Inc.</a>
                 </aside>
+                <span v-if="!vollbild" class="hoehenGriff" role="separator" :title="t('chart.hoehenGriff')" :aria-label="t('chart.hoehenGriff')"
+                    @pointerdown.prevent.stop="hoeheStart" @pointermove="hoeheZiehen" @pointerup="hoeheEnde"
+                    @pointercancel="hoeheEnde" @dblclick.stop="hoeheZurueck"></span>
+
             </div>
         </template>
         <AlarmDialog v-if="alarmVorlage" :vorlage="alarmVorlage" @schliesse="alarmVorlage = null" />
@@ -1011,6 +1012,7 @@ watch(sichtbareAnzahl, async () => {
 }
 
 .arbeitsflaeche {
+    position: relative;
     flex: 1;
     min-height: 0;
     display: grid;
@@ -1030,7 +1032,7 @@ watch(sichtbareAnzahl, async () => {
     position: relative;
 }
 
-/* Eckgriff unten rechts am Chart, in der Lücke zur Seitenleiste: Höhe + Leistenbreite. */
+/* Eckgriff ganz aussen unten rechts am Arbeitsplatz: Höhe + Leistenbreite. */
 .hoehenGriff {
     position: absolute;
     right: -7px;
