@@ -74,11 +74,14 @@ function schalteVollbild(i) {
 /*
  * Im Vollbild: vom linken Rand hereinwischen → Indikator-Kurzwahl, vom rechten
  * Rand → Momentum Radar, als Schublade über dem Chart. Zu: Tipp daneben, zurück
- * zum Rand wischen oder Esc. Die Randzone ist 44 px breit, damit man knapp
+ * zum Rand wischen oder Esc. Die Randzone ist 60 px breit, damit man knapp
  * NEBEN der Rückgeste von Android ansetzen kann (die schluckt den äussersten Rand).
+ * Eine Berührung, die in der Randzone beginnt, sieht der Chart nicht: Lightweight
+ * Charts hört selbst auf touchstart/touchmove und verschob sonst das Bild, statt
+ * die Schublade aufgehen zu lassen (Brave/Android, 21.10.2026).
  */
 const schublade = ref(null)          // null | 'links' | 'rechts'
-const RAND = 44
+const RAND = 60
 const WISCH = 50
 let wisch = null
 function wischStart(e) {
@@ -87,21 +90,25 @@ function wischStart(e) {
     if (schublade.value) { wisch = { x, y, zu: true }; return }
     const breite = window.innerWidth
     wisch = x <= RAND ? { x, y, seite: 'links' } : x >= breite - RAND ? { x, y, seite: 'rechts' } : null
+    if (wisch) e.stopPropagation()
 }
 function wischZug(e) {
     if (!wisch || e.touches.length !== 1) return
+    if (!wisch.zu) e.stopPropagation()
     wischAuswerten(e.touches[0].clientX, e.touches[0].clientY)
 }
 // Auch am Ende der Berührung: der Browser liefert touchmove gedrosselt oder bricht sie
 // ab, sobald er selbst scrollt — dann käme die Geste sonst nie an.
 function wischEnde(e) {
+    if (wisch && !wisch.zu) e.stopPropagation()
     const p = e.changedTouches?.[0]
     if (wisch && p) wischAuswerten(p.clientX, p.clientY)
     wisch = null
 }
 function wischAuswerten(x, y) {
     const dx = x - wisch.x, dy = y - wisch.y
-    if (Math.abs(dx) < WISCH || Math.abs(dy) > Math.abs(dx)) return
+    // Etwas schräg ist erlaubt (Daumen ziehen selten waagrecht), steiler als ~56° nicht.
+    if (Math.abs(dx) < WISCH || Math.abs(dy) > 1.5 * Math.abs(dx)) return
     // Nur eine Bewegung in die passende Richtung entscheidet; ein Ausreisser in die
     // Gegenrichtung beendet die Geste nicht.
     if (wisch.zu) {
