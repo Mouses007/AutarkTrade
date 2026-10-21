@@ -71,6 +71,48 @@ function schalteVollbild(i) {
         if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
     }
 }
+/*
+ * Im Vollbild: vom linken Rand hereinwischen → Indikator-Kurzwahl, vom rechten
+ * Rand → Momentum Radar, als Schublade über dem Chart. Zu: Tipp daneben, zurück
+ * zum Rand wischen oder Esc. Die Randzone ist 44 px breit, damit man knapp
+ * NEBEN der Rückgeste von Android ansetzen kann (die schluckt den äussersten Rand).
+ */
+const schublade = ref(null)          // null | 'links' | 'rechts'
+const RAND = 44
+const WISCH = 50
+let wisch = null
+function wischStart(e) {
+    if (!vollbild.value || e.touches.length !== 1) { wisch = null; return }
+    const x = e.touches[0].clientX, y = e.touches[0].clientY
+    if (schublade.value) { wisch = { x, y, zu: true }; return }
+    const breite = window.innerWidth
+    wisch = x <= RAND ? { x, y, seite: 'links' } : x >= breite - RAND ? { x, y, seite: 'rechts' } : null
+}
+function wischZug(e) {
+    if (!wisch || e.touches.length !== 1) return
+    wischAuswerten(e.touches[0].clientX, e.touches[0].clientY)
+}
+// Auch am Ende der Berührung: der Browser liefert touchmove gedrosselt oder bricht sie
+// ab, sobald er selbst scrollt — dann käme die Geste sonst nie an.
+function wischEnde(e) {
+    const p = e.changedTouches?.[0]
+    if (wisch && p) wischAuswerten(p.clientX, p.clientY)
+    wisch = null
+}
+function wischAuswerten(x, y) {
+    const dx = x - wisch.x, dy = y - wisch.y
+    if (Math.abs(dx) < WISCH || Math.abs(dy) > Math.abs(dx)) return
+    // Nur eine Bewegung in die passende Richtung entscheidet; ein Ausreisser in die
+    // Gegenrichtung beendet die Geste nicht.
+    if (wisch.zu) {
+        if ((schublade.value === 'links' && dx < 0) || (schublade.value === 'rechts' && dx > 0)) { schublade.value = null; wisch = null }
+    } else if ((wisch.seite === 'links' && dx > 0) || (wisch.seite === 'rechts' && dx < 0)) {
+        schublade.value = wisch.seite
+        wisch = null
+    }
+}
+watch(vollbild, (v) => { if (!v) schublade.value = null })
+
 function vollbildVerlassen() {
     if (!document.fullscreenElement && vollbild.value) vollbild.value = false
 }
@@ -640,6 +682,7 @@ function taste(e) {
         else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); macheWiederholen() }
         return
     }
+    if (e.key === 'Escape' && schublade.value) { schublade.value = null; return }
     if (e.key === 'Escape' && vollbild.value) { schalteVollbild(); return }
     if (e.altKey) return
     if (e.key === 'Escape') {
@@ -791,7 +834,26 @@ watch(sichtbareAnzahl, async () => {
                 {{ t('chart.zeichnungFehler') }}: {{ fehlerMeldung }}</div>
 
             <div class="arbeitsflaeche" :class="{ mitLeiste: daten.seitenleiste.offen }"
-                :style="{ '--leisteBreite': (istSchmal ? LEISTE_SCHMAL : leisteBreite) + 'px' }">
+                :style="{ '--leisteBreite': (istSchmal ? LEISTE_SCHMAL : leisteBreite) + 'px' }"
+                @touchstart.capture.passive="wischStart" @touchmove.capture.passive="wischZug" @touchend.capture.passive="wischEnde">
+                <template v-if="vollbild">
+                    <Transition name="schubHg">
+                        <div v-if="schublade" class="schubladeHg" @click="schublade = null"></div>
+                    </Transition>
+                    <Transition name="schubLinks">
+                        <aside v-if="schublade === 'links'" class="schublade links" :aria-label="t('chart.indBox.titel')">
+                            <IndikatorSchalter :panel="aktivesPanel" @aendere="vvSchalten"
+                                @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
+                                @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
+                        </aside>
+                    </Transition>
+                    <Transition name="schubRechts">
+                        <aside v-if="schublade === 'rechts'" class="schublade rechts" :aria-label="t('chart.mbox.titel')">
+                            <div class="reiterTitel">{{ t('chart.mbox.titel') }}</div>
+                            <MomentumBox :symbol="aktivesPanel.symbol" :interval="aktivesPanel.interval" :markt="aktivesPanel.markt" />
+                        </aside>
+                    </Transition>
+                </template>
                 <Zeichenleiste v-if="!telefon" class="werkzeuge" :werkzeug="werkzeug" :magnet="!!daten.zeichnen?.magnet"
                     :versteckt="!!daten.zeichnen?.versteckt" @werkzeug="waehleWerkzeug"
                     @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
@@ -1268,6 +1330,62 @@ watch(sichtbareAnzahl, async () => {
     display: flex;
     justify-content: center;
     padding: 40px;
+}
+
+/* Schubladen im Vollbild (Wischen vom Rand) */
+.schubladeHg {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.schublade {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    z-index: 21;
+    width: min(88vw, 380px);
+    overflow-y: auto;
+    padding: 10px;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    background: var(--panel);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.schublade.links {
+    left: 0;
+    border-right: 1px solid var(--line);
+}
+
+.schublade.rechts {
+    right: 0;
+    border-left: 1px solid var(--line);
+}
+
+.schubLinks-enter-active, .schubLinks-leave-active,
+.schubRechts-enter-active, .schubRechts-leave-active {
+    transition: transform 0.2s ease;
+}
+
+.schubLinks-enter-from, .schubLinks-leave-to {
+    transform: translateX(-100%);
+}
+
+.schubRechts-enter-from, .schubRechts-leave-to {
+    transform: translateX(100%);
+}
+
+.schubHg-enter-active, .schubHg-leave-active {
+    transition: opacity 0.2s;
+}
+
+.schubHg-enter-from, .schubHg-leave-to {
+    opacity: 0;
 }
 
 /* Vollbild: das Panel deckt den ganzen Bildschirm, alles andere tritt zurück. */
