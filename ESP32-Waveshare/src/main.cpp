@@ -28,7 +28,7 @@
 #define WIFI_TIMEOUT_MS    12000
 #define DISPLAY_ROTATION   3
 #define TFT_BL_PIN         5         // Backlight-Pin Waveshare ESP32-S3-Touch-LCD-2.8
-#define FW_VERSION         "3.4.1-WS"
+#define FW_VERSION         "3.4.2-WS"
 
 // ── Farben RGB565 — Tokens der AutarkTrade-Web-App ───────────────────────
 // Umgerechnet r>>3 | g>>2 | b>>3; die Namen bleiben, damit der Zeichencode
@@ -190,18 +190,32 @@ void clearConfig() {
   prefs.end();
 }
 
-// ── Touch (CST328 direkt via I2C) — Waveshare ESP32-S3-Touch-LCD-2.8 ────
-// CST328 I2C Adresse: 0x1A  — verwendet Wire1 (SDA=1, SCL=3)
-// 16-bit Registeradressen (MSB first)
-// 0xD005 = Anzahl Touch-Punkte
-// 0xD000 = XY-Daten (Portrait: x=0..239, y=0..319)
-// Display läuft in Rotation 3 (Landscape 320×240):
-//   screen_x = raw_y         (0..319)
-//   screen_y = 239 - raw_x   (0..239)
+// ── Touch — Waveshare ESP32-S3-Touch-LCD-2.8, zwei Board-Ausgaben ────────
+// V1: CST328 an 0x1A, 16-bit-Register (0xD005 Anzahl, 0xD000 XY).
+// V2 (Auslieferung seit 06/2026): CST3530 an 0x58, 32-bit-Befehle
+//     (0xD0070000 Datenblock lesen, 0xD00002AB quittieren) — Ablauf aus
+//     Waveshares CST3530.c, über github.com/itconor/esphome-cst3530.
+// Beide auf Wire1 (SDA=1, SCL=3), RST=2 active-low, INT=4. Welcher Chip
+// sitzt, entscheidet touchInit() danach, wer nach dem Reset antwortet.
+//
+// Gemessen 22.10.2026 am V2 des Nutzers: der CST328-Code las unter 0x58 mit
+// 16-bit-Adressen den Programmspeicher des Chips (ARM-Vektortabelle) — ein
+// fester Datenstrom, der als Tippen gewertet worden wäre. Und: eine
+// Info-Abfrage (0xD0030000) vor dem Lesen schaltet den CST3530 in einen
+// Modus, in dem er keine Berührungen meldet — Waveshare liest ohne.
+//
+// Koordinaten beider Chips: Portrait x=0..239, y=0..319. Display läuft in
+// Rotation 3 (Landscape 320×240): screenX = 319 - raw_y, screenY = raw_x.
 
 #define CST328_ADDR       0x1A
 #define CST328_REG_NUM    0xD005
 #define CST328_REG_XY     0xD000
+#define CST3530_ADDR      0x58
+#define CST3530_DATEN     0xD0070000
+#define CST3530_QUITT     0xD00002AB
+
+enum TouchChip { TOUCH_KEINER, TOUCH_CST328, TOUCH_CST3530 };
+static TouchChip touchChip = TOUCH_KEINER;
 
 static bool cst328Read(uint16_t reg, uint8_t* buf, uint8_t len) {
   Wire1.beginTransmission(CST328_ADDR);
@@ -225,22 +239,52 @@ static void cst328ClearFlag() {
   Wire1.endTransmission(true);
 }
 
-bool mapTouch(int* screenX, int* screenY) {
+// CST3530: 4 Befehlsbytes, dann (optional) mit Repeated Start lesen.
+static bool cst3530Befehl(uint32_t befehl, uint8_t* buf = nullptr, uint8_t len = 0) {
+  Wire1.beginTransmission(CST3530_ADDR);
+  Wire1.write((uint8_t)(befehl >> 24));
+  Wire1.write((uint8_t)(befehl >> 16));
+  Wire1.write((uint8_t)(befehl >> 8));
+  Wire1.write((uint8_t)befehl);
+  if (Wire1.endTransmission(buf == nullptr) != 0) return false;
+  if (!buf) return true;
+  if (Wire1.requestFrom((uint8_t)CST3530_ADDR, len) != len) return false;
+  for (uint8_t i = 0; i < len; i++) buf[i] = Wire1.read();
+  return true;
+}
+
+static bool leseCst328(uint16_t* raw_x, uint16_t* raw_y) {
   uint8_t nbuf[1];
   if (!cst328Read(CST328_REG_NUM, nbuf, 1)) return false;
-  uint8_t n = nbuf[0] & 0x0F;
-  if (n == 0) return false;
-
+  if ((nbuf[0] & 0x0F) == 0) return false;
   uint8_t xy[27] = {};
   if (!cst328Read(CST328_REG_XY, xy, 27)) { cst328ClearFlag(); return false; }
   cst328ClearFlag();
-
   // Ersten Touch-Punkt dekodieren (12-bit Koordinaten)
-  // xy[1]=x_high, xy[2]=y_high, xy[3]=xy_low (für i=0, num=0)
-  uint16_t raw_x = ((uint16_t)xy[1] << 4) | ((xy[3] & 0xF0) >> 4);
-  uint16_t raw_y = ((uint16_t)xy[2] << 4) |  (xy[3] & 0x0F);
+  *raw_x = ((uint16_t)xy[1] << 4) | ((xy[3] & 0xF0) >> 4);
+  *raw_y = ((uint16_t)xy[2] << 4) |  (xy[3] & 0x0F);
+  return true;
+}
 
-  Serial.printf("[Touch] n=%d raw_x=%d raw_y=%d\n", n, raw_x, raw_y);
+static bool leseCst3530(uint16_t* raw_x, uint16_t* raw_y) {
+  uint8_t b[9] = {0};
+  if (!cst3530Befehl(CST3530_DATEN, b, sizeof(b))) return false;
+  cst3530Befehl(CST3530_QUITT);   // quittieren, gibt INT frei
+  // Gültig nur mit Punktzahl (low nibble b[3]) UND Ereignis (high nibble b[8]).
+  if ((b[3] & 0x0F) == 0 || (b[8] & 0xF0) == 0) return false;
+  *raw_x = ((uint16_t)(b[7] & 0x0F) << 8) | b[4];
+  *raw_y = ((uint16_t)(b[7] & 0xF0) << 4) | b[5];
+  return true;
+}
+
+bool mapTouch(int* screenX, int* screenY) {
+  uint16_t raw_x = 0, raw_y = 0;
+  bool ok = touchChip == TOUCH_CST3530 ? leseCst3530(&raw_x, &raw_y)
+          : touchChip == TOUCH_CST328  ? leseCst328(&raw_x, &raw_y)
+          : false;
+  if (!ok) return false;
+
+  Serial.printf("[Touch] raw_x=%d raw_y=%d\n", raw_x, raw_y);
 
   // Portrait → Landscape Rotation 3 Mapping (ermittelt per Debug)
   // Drücken unten-links (x≈50,y≈220) → raw_x=224, raw_y=262
@@ -250,45 +294,43 @@ bool mapTouch(int* screenX, int* screenY) {
   return true;
 }
 
-// CST328 initialisieren: Reset + Normal-Mode aktivieren
-// Ohne diesen Befehl bleibt der Chip im Debug-Modus und meldet keine Touches!
-void cst328Init() {
+static bool antwortet(uint8_t adr) {
+  Wire1.beginTransmission(adr);
+  return Wire1.endTransmission(true) == 0;
+}
+
+// Reset, dann erkennen, welcher Chip antwortet. Zeiten wie in Waveshares
+// Touch_CST3530.cpp: 100 ms Reset halten, danach 500 ms Ruhe auf dem Bus.
+// Mit 10 ms / 200 ms antwortete der CST3530 zwar auf I2C, tastete aber nie ab
+// (alle Datenblöcke 0, INT blieb HIGH) — Verkehr in seiner Startphase hält ihn
+// offenbar davon ab. Danach bis ~1 s nachfassen.
+void touchInit() {
   Wire1.begin(TOUCH_SDA, TOUCH_SCL, 400000);
   pinMode(TOUCH_INT, INPUT);
   pinMode(TOUCH_RST, OUTPUT);
-  // Reset-Sequenz
-  digitalWrite(TOUCH_RST, HIGH); delay(50);
-  digitalWrite(TOUCH_RST, LOW);  delay(10);
-  digitalWrite(TOUCH_RST, HIGH);
-  // Normal-Mode aktivieren (0xD109 = HYN_REG_MUT_NORMAL_MODE). Der Chip nimmt
-  // I2C erst einige 100 ms nach dem Reset an — mit 50 ms kam NACK, der Befehl
-  // ging verloren und der Touch blieb stumm. Darum bis 1 s nachfassen.
-  uint8_t fehler = 2;
-  for (int versuch = 0; versuch < 10 && fehler != 0; versuch++) {
-    delay(100);
+  digitalWrite(TOUCH_RST, LOW);  delay(100);
+  digitalWrite(TOUCH_RST, HIGH); delay(500);
+  for (int versuch = 0; versuch < 8 && touchChip == TOUCH_KEINER; versuch++) {
+    if (antwortet(CST328_ADDR))       touchChip = TOUCH_CST328;
+    else if (antwortet(CST3530_ADDR)) touchChip = TOUCH_CST3530;
+    else delay(100);
+  }
+  if (touchChip == TOUCH_CST328) {
+    // Normal-Mode (0xD109) — ohne diesen Befehl bleibt der CST328 im Debug-Modus.
     Wire1.beginTransmission(CST328_ADDR);
     Wire1.write(0xD1);
     Wire1.write(0x09);
-    fehler = Wire1.endTransmission(true);
+    Wire1.endTransmission(true);
+    delay(10);
   }
-  delay(10);
-  if (fehler != 0) {
-    // Wer hängt stattdessen am Bus? Gemessen 22.10.2026 an einem Exemplar:
-    // nur 0x58, und die Adresse verschwindet bei gehaltenem TOUCH_RST — es ist
-    // also der Touch-Chip, aber nicht im Normalbetrieb (Register 0xD000 liefert
-    // nach jedem Start denselben festen Datenstrom statt Berührungen). Nicht als
-    // Touch benutzen: der Strom würde als Tippen gelesen und die Reiter springen.
-    Serial.print("[TOUCH] I2C-Scan Wire1:");
-    for (uint8_t adr = 1; adr < 127; adr++) {
-      Wire1.beginTransmission(adr);
-      if (Wire1.endTransmission(true) == 0) Serial.printf(" 0x%02X", adr);
-    }
+  if (touchChip == TOUCH_KEINER) {
+    Serial.print("[TOUCH] kein bekannter Chip — I2C-Scan Wire1:");
+    for (uint8_t adr = 1; adr < 127; adr++) if (antwortet(adr)) Serial.printf(" 0x%02X", adr);
     Serial.println();
+  } else {
+    Serial.printf("[TOUCH] %s an 0x%02X\n", touchChip == TOUCH_CST328 ? "CST328 (V1)" : "CST3530 (V2)",
+                  touchChip == TOUCH_CST328 ? CST328_ADDR : CST3530_ADDR);
   }
-  // Antwortet der Chip überhaupt? Ohne diese Zeile sah ein toter Touch im Log
-  // genauso aus wie einer, den nur niemand berührt.
-  Serial.printf("[TOUCH] CST328 an 0x%02X: %s (I2C-Code %u), INT=%d\n",
-                CST328_ADDR, fehler == 0 ? "antwortet" : "KEINE ANTWORT", fehler, digitalRead(TOUCH_INT));
 }
 
 void loadTouchCal() {}  // Keine Kalibrierung nötig (kapazitiv)
@@ -1188,8 +1230,8 @@ void setup() {
   backlightInit();           // NACH tft.init(): LEDC re-attached Pin 5 nach TFT_eSPI digitalWrite
   tft.fillScreen(COLOR_BG);
 
-  // ── Touch I2C (CST328) ───────────────────────────
-  cst328Init();
+  // ── Touch I2C (CST328 oder CST3530) ─────────────
+  touchInit();
 
   loadConfig();
 
