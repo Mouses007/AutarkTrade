@@ -37,7 +37,9 @@ app's optional password gate.
 2. The config screen opens: enter **Host** (e.g. `192.168.178.100`), **Port** (`8080`),
    the **ESP32 key**, and a **time range**. Tap **Verbindung testen** to verify, then
    **Speichern**.
-3. The widget refreshes automatically (~every 15 min, Android's minimum for background
+3. Tap a coin to open its chart in AutarkTrade; tap an exchange header to show that exchange's
+   KPIs at the top.
+4. The widget refreshes automatically (~every 15 min, Android's minimum for background
    widget updates) and on demand via the **↻ button**. Tap the **title** to reopen config.
 
 ## Chart alarms as notifications
@@ -82,6 +84,9 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
   (e.g. SOL for Coin-M), never force-converted to USDT.
 - `WidgetConfigActivity` — host/port/key/filter, „test connection", saved per widget; also the
   chart-alarm card (global settings). Opens from the launcher without a widget, too.
+- `WidgetKlickActivity` — invisible trampoline for list taps: a coin row opens
+  `/chart?symbol=…&boerse=…` in the browser, a section header switches the KPI strip to that
+  exchange. A collection has only one click template, and a broadcast may not start the browser.
 - `ChartAlarme` / `AlarmReceiver` — polling of `/api/esp32/alarme`, notification channels,
   the wake-up chain (re-armed after reboot and app update).
 - Colours are the AutarkTrade tokens (`values/colors.xml`); the logo `drawable/ic_logo.xml`
@@ -99,7 +104,7 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## Versioning
 
-`versionName` tracks the AutarkTrade version plus the build number (currently **4.0.0-21**);
+`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-22**);
 the APK file carries it in its name.
 
 ## Licence

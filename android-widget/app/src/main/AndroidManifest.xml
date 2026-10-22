@@ -49,6 +49,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Unsichtbares Sprungbrett für Klicks in der Widget-Liste (Coin → Chart, Kopf → Börse) -->
+        <activity
+            android:name=".WidgetKlickActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- Abruf der Chart-Alarme (eigener Wecker) + Neuplanung nach Neustart/Update -->
         <receiver
             android:name=".AlarmReceiver"

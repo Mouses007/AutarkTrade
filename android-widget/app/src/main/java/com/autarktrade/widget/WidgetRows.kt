@@ -50,9 +50,15 @@ object WidgetRows {
         return builder.build()
     }
 
-    // Fill-in-Intent: tippt man eine Zeile, wird die Kopf-KPI auf deren Börse umgeschaltet
-    // (über das setPendingIntentTemplate auf der Liste im Provider).
+    // Fill-in-Intents (Template im Provider, Ziel WidgetKlickActivity):
+    // Börsenkopf → Kopf-KPIs auf diese Börse umschalten.
     private fun selectFillIn(broker: String, widgetId: Int) = Intent()
+        .putExtra(TradingWidgetProvider.EXTRA_BROKER, broker)
+        .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
+
+    // Coin-Zeile → Chart dieses Coins in der Web-App.
+    private fun chartFillIn(symbol: String, broker: String, widgetId: Int) = Intent()
+        .putExtra(WidgetKlickActivity.EXTRA_SYMBOL, symbol)
         .putExtra(TradingWidgetProvider.EXTRA_BROKER, broker)
         .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
 
@@ -65,7 +71,7 @@ object WidgetRows {
 
     private fun renderFuture(ctx: Context, p: Position, broker: String, widgetId: Int): RemoteViews {
         val rv = RemoteViews(ctx.packageName, R.layout.widget_row_future)
-        rv.setOnClickFillInIntent(R.id.row_root, selectFillIn(broker, widgetId))
+        rv.setOnClickFillInIntent(R.id.row_root, chartFillIn(p.symbol, broker, widgetId))
         rv.setTextViewText(R.id.row_symbol, p.symbol)
         rv.setTextViewText(R.id.row_sub,
             "${sideLabel(p.side)} · ${lev(p.leverage)} · @${price(p.entryPrice)} → ${price(p.markPrice)}")
@@ -77,7 +83,7 @@ object WidgetRows {
 
     private fun renderBot(ctx: Context, b: Bot, widgetId: Int): RemoteViews {
         val rv = RemoteViews(ctx.packageName, R.layout.widget_row_bot)
-        rv.setOnClickFillInIntent(R.id.row_root, selectFillIn("pionex", widgetId))
+        rv.setOnClickFillInIntent(R.id.row_root, chartFillIn(b.symbol, "pionex", widgetId))
         rv.setTextViewText(R.id.row_symbol, b.symbol)
         val liq = if (b.liqPrice > 0) " · Liq ${price(b.liqPrice)}" else ""
         rv.setTextViewText(R.id.row_sub,

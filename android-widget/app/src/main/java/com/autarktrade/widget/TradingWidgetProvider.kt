@@ -58,17 +58,6 @@ class TradingWidgetProvider : AppWidgetProvider() {
                     updateWidget(context, awm, id)   // kein Netz nötig, nur Re-Render
                 }
             }
-            ACTION_SELECT_BROKER -> {
-                // Tap auf eine Börsen-Sektion/Position → Kopf-KPIs auf diese Börse
-                // umschalten (kein Netz, nur Re-Render). Hält bis zur nächsten Aktualisierung.
-                val id = intent.getIntExtra(
-                    AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-                val broker = intent.getStringExtra(EXTRA_BROKER)
-                if (id != AppWidgetManager.INVALID_APPWIDGET_ID && !broker.isNullOrBlank()) {
-                    Prefs.setSelectedBroker(context, id, broker)
-                    updateWidget(context, awm, id)
-                }
-            }
             ACTION_ALARM -> {
                 // 15-min-Auto-Refresh: jetzt aktualisieren + nächsten Alarm planen
                 // (setAndAllowWhileIdle ist one-shot → muss neu gesetzt werden).
@@ -93,7 +82,6 @@ class TradingWidgetProvider : AppWidgetProvider() {
         const val ACTION_REFRESH = "com.autarktrade.widget.ACTION_REFRESH"
         const val ACTION_TOGGLE_BALANCE = "com.autarktrade.widget.ACTION_TOGGLE_BALANCE"
         const val ACTION_ALARM = "com.autarktrade.widget.ACTION_ALARM"
-        const val ACTION_SELECT_BROKER = "com.autarktrade.widget.ACTION_SELECT_BROKER"
         const val EXTRA_BROKER = "broker"
         private const val PERIODIC_WORK = "trading_refresh_periodic"
         private const val ONESHOT_WORK = "trading_refresh_oneshot"
@@ -143,16 +131,16 @@ class TradingWidgetProvider : AppWidgetProvider() {
             rv.setRemoteAdapter(R.id.list, WidgetRows.build(context, id))
             rv.setEmptyView(R.id.list, R.id.empty)
 
-            // Klick-Template für die Listen-Items: jede Zeile liefert per Fill-In-Intent
-            // ihre Börse → ACTION_SELECT_BROKER schaltet den Kopf um. MUTABLE, damit der
-            // Fill-In die Daten ergänzen kann.
-            val selTemplate = Intent(context, TradingWidgetProvider::class.java)
-                .setAction(ACTION_SELECT_BROKER)
-                .setData(Uri.parse("tradingwidget://select/$id"))
+            // Klick-Template für die Listen-Items: jede Zeile ergänzt es per Fill-In —
+            // Coin-Zeile mit Symbol (→ Chart im Browser), Börsenkopf nur mit Börse (→ Kopf
+            // umschalten). Ziel ist WidgetKlickActivity, weil ein Broadcast den Browser nicht
+            // starten dürfte. MUTABLE, damit der Fill-In die Daten ergänzen kann.
+            val klickTemplate = Intent(context, WidgetKlickActivity::class.java)
+                .setData(Uri.parse("tradingwidget://klick/$id"))
             rv.setPendingIntentTemplate(
                 R.id.list,
-                PendingIntent.getBroadcast(
-                    context, id, selTemplate,
+                PendingIntent.getActivity(
+                    context, id, klickTemplate,
                     PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
                 )
             )
