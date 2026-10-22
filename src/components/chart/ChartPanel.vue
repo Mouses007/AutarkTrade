@@ -600,6 +600,9 @@ function zeichneAlarmLinien() {
 }
 watch(() => props.alarmLinien, zeichneAlarmLinien, { deep: true })
 
+/** Zeichnungen, auf die ein Linien- oder Zonenalarm passt (wie `LINIEN_TYPEN`/`ZONEN_TYPEN` in `server/chart-alarme.js`). */
+const ALARM_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'rechteck', 'kanal']
+
 function rechtsklick(e) {
     const r = huelle.value.getBoundingClientRect()
     const y = e.clientY - r.top
@@ -612,12 +615,13 @@ function rechtsklick(e) {
     // über seinen Rand hinausragende Teile ab.
     const x = Math.min(e.clientX - r.left, r.width - 190)
     const yMenue = Math.min(y, r.height - 160)
-    // Liegt eine Zeichnung unter dem Zeiger? Dann kann man sie hier sperren/entsperren.
+    // Liegt eine Zeichnung unter dem Zeiger? Dann kann man sie hier sperren/entsperren
+    // und — für Linien und Zonen — einen Alarm auf sie legen.
     let zeichnung = null
     try {
         const l = ebene?.lokal(e)
         const tr = l?.innen ? ebene.trefferTest(l.x, l.y) : null
-        if (tr?.z) zeichnung = { id: tr.z.id, gesperrt: !!tr.z.gesperrt }
+        if (tr?.z) zeichnung = { id: tr.z.id, gesperrt: !!tr.z.gesperrt, alarm: ALARM_TYPEN.includes(tr.z.typ), z: tr.z }
     } catch { /* ohne Treffer */ }
     kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung }
 }
@@ -1331,7 +1335,7 @@ defineExpose({
         </span>
 
         <ZeichnungStil v-if="ausgewaehlt" :zeichnung="ausgewaehlt" :interval="panel.interval"
-            :alarm-moeglich="['horizontale', 'strahlH', 'trendlinie', 'strahl', 'rechteck', 'kanal'].includes(ausgewaehlt.typ)"
+            :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
             @alarm="emit('alarmAufZeichnung', ausgewaehlt)" />
 
@@ -1357,6 +1361,8 @@ defineExpose({
                 <button @click="aendere(panel.symbol, kontext.zeichnung.id, { gesperrt: !kontext.zeichnung.gesperrt }); kontext = null">
                     <Symbol :name="kontext.zeichnung.gesperrt ? 'schlossOffen' : 'schloss'" />
                     {{ t(kontext.zeichnung.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren') }}</button>
+                <button v-if="kontext.zeichnung.alarm" @click="emit('alarmAufZeichnung', kontext.zeichnung.z); kontext = null">
+                    <Symbol name="glocke" /> {{ t('chart.alarm.aufZeichnung') }}</button>
                 <hr />
             </template>
             <button @click="alarmHier"><Symbol name="glocke" /> {{ t('chart.alarm.hier') }}</button>

@@ -5186,8 +5186,14 @@
     "leisteBreite": "Drag to resize (double-click: reset)",
     "legendeZu": "Collapse legend",
     "legendeAuf": "Expand legend",
-    "schublade": { "imChart": "Show in chart" },
-    "coinTabs": {"titel": "Open coins", "neu": "Open coin in new tab", "schliessen": "Close tab"},
+    "schublade": {
+      "imChart": "Show in chart"
+    },
+    "coinTabs": {
+      "titel": "Open coins",
+      "neu": "Open coin in new tab",
+      "schliessen": "Close tab"
+    },
     "leisteEinklappen": "Collapse sidebar",
     "leisteAusklappen": "Expand sidebar",
     "hoehenGriff": "Drag chart size: vertical = height, horizontal = sidebar width (double-click: fit to window again)",
@@ -5723,7 +5729,8 @@
       "art": {
         "preis": "Price alert",
         "linie": "Line alert",
-        "zone": "Zone alert"
+        "zone": "Zone alert",
+        "momentum": "Momentum alert"
       },
       "bedingung": "Trigger when price",
       "richtung": {
@@ -5731,7 +5738,10 @@
         "ueber": "crosses upwards",
         "unter": "crosses downwards",
         "betreten": "enters the zone",
-        "verlassen": "leaves the zone"
+        "verlassen": "leaves the zone",
+        "beide": "long and short",
+        "long": "long only",
+        "short": "short only"
       },
       "preis": "Price",
       "kante": "Channel edge",
@@ -5756,7 +5766,7 @@
       "abbrechen": "Cancel",
       "speichern": "Save",
       "neuPreis": "Price alert on {symbol}",
-      "tipp": "Line and zone alerts: select a drawing → bell. Right-click on the chart creates a price alert.",
+      "tipp": "Line and zone alerts: select a drawing → bell, or right-click the drawing. Right-click in the chart creates a price alert.",
       "alleSymbole": "Show alerts of all symbols",
       "leer": "No alerts.",
       "ausschalten": "Switch off",
@@ -5770,7 +5780,24 @@
       "testFehler": "No channel delivered",
       "testKeinKanal": "No push channel enabled (Hype-Radar → Settings → alert channels)",
       "geometrieEndet": "line/zone ended — switched off",
-      "nichtZugestellt": "not delivered"
+      "nichtZugestellt": "not delivered",
+      "neuMomentum": "Momentum alert (symbol or watchlists)",
+      "aufZeichnung": "Alert on this drawing",
+      "momentum": {
+        "punkte": "Trigger on",
+        "gross": "large dots only",
+        "alle": "large and small dots",
+        "richtungTitel": "Direction",
+        "ueberwachen": "Watch",
+        "diesesSymbol": "this symbol ({symbol})",
+        "listen": "Watchlists (favourites)",
+        "keineListen": "No watchlists — create one in the “Watchlist” tab.",
+        "zeiteinheiten": "Timeframes",
+        "paare": "{n} pair (symbol × timeframe), at most 120 | {n} pairs (symbol × timeframe), at most 120",
+        "hinweis": "Checked on the server, even with the page closed — on closed candles only, at most one notification per symbol, timeframe and candle. A dot is large when the higher timeframes and money flow agree by at least 60 % (as in the Momentum Radar). A candle that closed more than 10 min ago is not reported late.",
+        "jeKerze": "Repeating, once per symbol, timeframe and candle",
+        "watchlistLeer": "Watchlists empty or deleted — switched off"
+      }
     },
     "quelle": {
       "titel": "Price source: Binance (live via websocket, deep history — only with market data source Binance) or your trading exchange's prices (polled)",

@@ -205,7 +205,11 @@ async function fixPostgresSequences(knex) {
 // v30: Spenden zurück (`settings.spendenAn/spendenStufe/spendenBei/spendenKaffeeUrl`).
 // Rein additiv.
 // v31: Spenden-Rhythmus (`spendenStatus/Meilenstein/Seit/Letzte/Version/Dank`). Rein additiv.
-const SCHEMA_VERSION = 31
+// v32: Momentum-Alarme im Chart — `chart_alarme.watchlistIds`, `zeiteinheiten`,
+// `punktgroesse`, `stand` und die Art `momentum`. Additiv; ein älterer Codestand
+// prüft eine Zeile der Art `momentum` nie (`pruefeAlarm` kennt sie nicht, und
+// ihr leeres Symbol hat keinen Kurs) und zeigt sie nur unverständlich an.
+const SCHEMA_VERSION = 32
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
@@ -3480,7 +3484,7 @@ async function runMigrations(knex, client) {
             t.increments('id').primary()
             t.string('symbol').notNullable()
             t.string('markt').defaultTo('futures')   // futures | spot
-            t.string('art').notNullable()            // preis | linie | zone
+            t.string('art').notNullable()            // preis | linie | zone | momentum (v32)
             t.text('bedingung').defaultTo('{}')      // JSON je Art
             t.integer('zeichnungId')                 // Linien-/Zonenalarm: Quelle der Geometrie
             t.text('kanaele')                        // JSON; null = Vorgabe
@@ -3501,6 +3505,20 @@ async function runMigrations(knex, client) {
     // die Tabelle schon ohne diese Spalten angelegt haben, bekommen sie hier.
     await addColumnIfNotExists('chart_alarme', 'letzteZeit', (t) => t.bigInteger('letzteZeit').defaultTo(0))
     await addColumnIfNotExists('chart_alarme', 'verlauf', (t) => t.text('verlauf').defaultTo('[]'))
+
+    // ── v32 ─────────────────────────────────────────────────────────────
+    /*
+     * Momentum-Alarme (`server/chart-alarm-momentum.js`): statt eines Symbols
+     * eine oder mehrere Watchlists, in mehreren Zeiteinheiten zugleich.
+     *   watchlistIds  JSON [id, …]; leer/null = das Symbol der Zeile
+     *   zeiteinheiten JSON ['15m', '1h', …]
+     *   punktgroesse  'gross' | 'alle'
+     *   stand         JSON { ab: ms, k: { 'SYM|markt|tf': Öffnungszeit der zuletzt gemeldeten Kerze } }
+     */
+    await addColumnIfNotExists('chart_alarme', 'watchlistIds', (t) => t.text('watchlistIds'))
+    await addColumnIfNotExists('chart_alarme', 'zeiteinheiten', (t) => t.text('zeiteinheiten'))
+    await addColumnIfNotExists('chart_alarme', 'punktgroesse', (t) => t.string('punktgroesse'))
+    await addColumnIfNotExists('chart_alarme', 'stand', (t) => t.text('stand'))
 
     // ── v27 ─────────────────────────────────────────────────────────────
     /*

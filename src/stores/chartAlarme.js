@@ -26,18 +26,31 @@ export async function ladeAlarme() {
             gesehenBis = Math.max(...neu.map((a) => a.ausgeloestAm))
             for (const a of neu) {
                 const letzte = a.verlauf[a.verlauf.length - 1]
-                const text = `${a.symbol}: ${beschreibe(a)}${letzte ? ` — ${letzte.p}` : ''}`
-                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol: a.symbol, text, t: a.ausgeloestAm }].slice(-5)
-                sendNotification('chartAlarm', `Alarm ${a.symbol}`, text)
+                const symbol = a.symbol || letzte?.treffer?.[0]?.symbol || 'Momentum'
+                const text = a.art === 'momentum' && letzte?.treffer?.length
+                    ? letzte.treffer.map(trefferText).join(' · ')
+                    : `${a.symbol}: ${beschreibe(a)}${letzte ? ` — ${letzte.p}` : ''}`
+                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, text, t: a.ausgeloestAm }].slice(-5)
+                sendNotification('chartAlarm', `Alarm ${symbol}`, text)
             }
         }
         alarme.value = data
     } catch { /* nächster Versuch in zehn Sekunden */ }
 }
 
+/** Ein Treffer eines Momentum-Alarms: „BTCUSDT 15m ● Long" (● gross, • klein). */
+export function trefferText(tr) {
+    return `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf} ${tr.stark ? '●' : '•'} ${tr.seite === 'long' ? 'Long' : 'Short'}`
+}
+
 /** Kurzbeschreibung für Liste, Banner und Preislinie. */
 export function beschreibe(a) {
     const b = a.bedingung || {}
+    if (a.art === 'momentum') {
+        const groesse = a.punktgroesse === 'alle' ? '●• grosse + kleine' : '● grosse'
+        const r = b.richtung === 'long' ? ' Long' : b.richtung === 'short' ? ' Short' : ''
+        return `Momentum ${groesse}${r} · ${(a.zeiteinheiten || []).join(', ')}`
+    }
     const r = { ueber: '↑ über', unter: '↓ unter', kreuzt: '↕ kreuzt', betreten: '→ Zone betreten', verlassen: '← Zone verlassen' }[b.richtung || (a.art === 'zone' ? 'betreten' : 'kreuzt')]
     if (a.art === 'preis') return `${r} ${b.preis}`
     if (a.art === 'linie') return `${r} Linie${b.kante && b.kante !== 'oben' ? ` (${b.kante})` : ''}`

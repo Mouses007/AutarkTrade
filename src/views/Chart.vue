@@ -657,8 +657,15 @@ function alarmAufZeichnung(z) {
     alarmVorlage.value = { symbol: p.symbol, markt: p.markt, art, zeichnung: z }
 }
 
+/** Momentum-Alarm: Vorgabe ist das aktive Symbol in seiner Zeiteinheit; im Dialog lassen sich Watchlists wählen. */
+function alarmMomentum() {
+    const p = aktivesPanel.value
+    alarmVorlage.value = { symbol: p.symbol, markt: p.markt, art: 'momentum', interval: p.interval }
+}
+
 function alarmBearbeiten(a) {
-    alarmVorlage.value = { ...a }
+    // chartSymbol: ein Watchlist-Alarm hat kein eigenes Symbol — wer im Dialog auf „dieses Symbol" umstellt, meint das aktive.
+    alarmVorlage.value = { ...a, chartSymbol: aktivesPanel.value.symbol }
 }
 
 const aktuellerKurs = computed(() => {
@@ -1097,7 +1104,8 @@ watch(sichtbareAnzahl, async () => {
                         @vorschau="(v) => aktivesPanelRef?.setzeStrategieVorschau(v)"
                         @backtest="(b) => aktivesPanelRef?.setzeBacktest(b)" />
                     <AlarmReiter v-else-if="daten.seitenleiste.reiter === 'alarme'" :symbol="aktivesPanel.symbol"
-                        :markt="aktivesPanel.markt" :kurs="aktuellerKurs" @neu="alarmBeiPreis" @bearbeite="alarmBearbeiten" />
+                        :markt="aktivesPanel.markt" :kurs="aktuellerKurs" :watchlists="watchlists"
+                        @neu="alarmBeiPreis" @neu-momentum="alarmMomentum" @bearbeite="alarmBearbeiten" />
                     <KiReiter v-else-if="daten.seitenleiste.reiter === 'ki'" :panel="aktivesPanel"
                         :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis" />
                     </div>
@@ -1142,7 +1150,7 @@ watch(sichtbareAnzahl, async () => {
 
             </div>
         </template>
-        <AlarmDialog v-if="alarmVorlage" :vorlage="alarmVorlage" @schliesse="alarmVorlage = null" />
+        <AlarmDialog v-if="alarmVorlage" :vorlage="alarmVorlage" :watchlists="watchlists" @schliesse="alarmVorlage = null" />
         <IndikatorDialog v-if="dialog" :key="dialog.instanz?.id || 'neu'" :instanz="dialog.instanz"
             :aktive="daten.panels[dialog.panel]?.indikatoren || []" @hinzu="indikatorHinzu" @speichere="indikatorSpeichern"
             @bearbeite="(id) => indikatorAktion(dialog.panel, { aktion: 'bearbeiten', id })"

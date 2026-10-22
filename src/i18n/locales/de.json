@@ -5186,8 +5186,14 @@
     "leisteBreite": "Breite ziehen (Doppelklick: zurücksetzen)",
     "legendeZu": "Legende einklappen",
     "legendeAuf": "Legende ausklappen",
-    "schublade": { "imChart": "Im Chart zeigen" },
-    "coinTabs": {"titel": "Offene Coins", "neu": "Coin in neuem Tab öffnen", "schliessen": "Tab schliessen"},
+    "schublade": {
+      "imChart": "Im Chart zeigen"
+    },
+    "coinTabs": {
+      "titel": "Offene Coins",
+      "neu": "Coin in neuem Tab öffnen",
+      "schliessen": "Tab schliessen"
+    },
     "leisteEinklappen": "Leiste einklappen",
     "leisteAusklappen": "Leiste ausklappen",
     "hoehenGriff": "Chart-Grösse ziehen: senkrecht = Höhe, waagrecht = Breite der Seitenleiste (Doppelklick: wieder ans Fenster anpassen)",
@@ -5723,7 +5729,8 @@
       "art": {
         "preis": "Preis-Alarm",
         "linie": "Linien-Alarm",
-        "zone": "Zonen-Alarm"
+        "zone": "Zonen-Alarm",
+        "momentum": "Momentum-Alarm"
       },
       "bedingung": "Auslösen, wenn der Kurs",
       "richtung": {
@@ -5731,7 +5738,10 @@
         "ueber": "nach oben kreuzt",
         "unter": "nach unten kreuzt",
         "betreten": "die Zone betritt",
-        "verlassen": "die Zone verlässt"
+        "verlassen": "die Zone verlässt",
+        "beide": "Long und Short",
+        "long": "nur Long",
+        "short": "nur Short"
       },
       "preis": "Preis",
       "kante": "Kante des Kanals",
@@ -5756,7 +5766,7 @@
       "abbrechen": "Abbrechen",
       "speichern": "Speichern",
       "neuPreis": "Preis-Alarm auf {symbol}",
-      "tipp": "Linien- und Zonenalarme: Zeichnung auswählen → Glocke. Rechtsklick in den Chart legt einen Preis-Alarm an.",
+      "tipp": "Linien- und Zonenalarme: Zeichnung auswählen → Glocke, oder Rechtsklick auf die Zeichnung. Rechtsklick in den Chart legt einen Preis-Alarm an.",
       "alleSymbole": "Alarme aller Symbole zeigen",
       "leer": "Keine Alarme.",
       "ausschalten": "Ausschalten",
@@ -5770,7 +5780,24 @@
       "testFehler": "Kein Kanal hat zugestellt",
       "testKeinKanal": "Kein Push-Kanal eingeschaltet (Hype-Radar → Einstellungen → Alarmkanäle)",
       "geometrieEndet": "Linie/Zone zu Ende — abgeschaltet",
-      "nichtZugestellt": "nicht zugestellt"
+      "nichtZugestellt": "nicht zugestellt",
+      "neuMomentum": "Momentum-Alarm (Symbol oder Watchlists)",
+      "aufZeichnung": "Alarm auf diese Zeichnung",
+      "momentum": {
+        "punkte": "Auslösen bei",
+        "gross": "nur grossen Punkten",
+        "alle": "grossen und kleinen Punkten",
+        "richtungTitel": "Richtung",
+        "ueberwachen": "Überwachen",
+        "diesesSymbol": "dieses Symbol ({symbol})",
+        "listen": "Watchlists (Favoriten)",
+        "keineListen": "Keine Watchlists — im Reiter „Watchlist“ anlegen.",
+        "zeiteinheiten": "Zeiteinheiten",
+        "paare": "{n} Paar (Symbol × Zeiteinheit), höchstens 120 | {n} Paare (Symbol × Zeiteinheit), höchstens 120",
+        "hinweis": "Geprüft wird auf dem Server, auch bei geschlossener Seite — nur auf geschlossenen Kerzen, je Symbol, Zeiteinheit und Kerze höchstens eine Meldung. Ein Punkt ist gross, wenn die höheren Zeiteinheiten und der Geldfluss zu mindestens 60 % zustimmen (wie im Momentum Radar). Eine Kerze, die vor über 10 min schloss, wird nicht nachgemeldet.",
+        "jeKerze": "Wiederholend, je Symbol, Zeiteinheit und Kerze einmal",
+        "watchlistLeer": "Watchlists leer oder gelöscht — abgeschaltet"
+      }
     },
     "quelle": {
       "titel": "Kursquelle: Binance (live per Websocket, tiefe Historie — nur mit Marktdatenquelle Binance) oder die Kurse deiner Handelsbörse (per Abfrage)",

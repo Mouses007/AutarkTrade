@@ -21,12 +21,32 @@
  * Benachrichtigungen eingeschaltet, per Mail (`melde('chartAlarm')`). Die
  * Regeln selbst (Kreuzen, Lücke, Sperrfrist) stehen rein in
  * `chart-alarm-regeln.js`.
+ *
+ * Momentum-Alarme (Art `momentum`, Regeln rein in `chart-alarm-momentum.js`)
+ * laufen in einem EIGENEN Takt alle 15 s unter derselben Führung: sie lesen
+ * keine Kurse, sondern geschlossene Kerzen, und fragen ein Paar Symbol ×
+ * Zeiteinheit nur ab, wenn in seiner Zeiteinheit eine neue Kerze geschlossen
+ * hat. Die höheren Zeiteinheiten für die Punktstärke hält der Kerzenspeicher
+ * von `getClosedCandles` bis zu ihrer nächsten Kerze — sie kosten also nur
+ * dann Gewicht, wenn sie selbst schliessen. Vor jedem Abruf einer frisch
+ * geschlossenen Reihe steht `warteAufGewicht` (nur bei Binance).
+ *
+ * Watchlists und mehrere Zeiteinheiten gibt es NUR für Momentum-Alarme: ein
+ * Preis ist an ein Symbol gebunden (65 000 heisst bei SOL nichts), eine
+ * Zeichnung liegt auf genau einem Symbol, und Kreuzen prüft der 5-s-Takt am
+ * laufenden Kurs — dafür gibt es keine Zeiteinheit.
  */
 import { getKnex } from './database.js'
 import { beansprucheFuehrung, verlaengereFuehrung } from './db-claim.js'
 import { warteAufGewicht } from './binance-takt.js'
 import * as marktdaten from './marktdaten/index.js'
 import { pruefeAlarm, sperreAbgelaufen, geometrieVorbei, MIN_SPERRE_MIN } from './chart-alarm-regeln.js'
+import {
+    pruefeMomentum, faellig, alarmPaare, reihenFuer, neuerStand, momentumText, paarSchluessel, letzteGeschlossene,
+    MOMENTUM_ZEITEBENEN, MOMENTUM_RICHTUNGEN, PUNKTGROESSEN, KERZEN_JE_ABRUF, MAX_PAARE, MAX_SYMBOLE, MAX_WATCHLISTS,
+} from './chart-alarm-momentum.js'
+import { getClosedCandles } from './market-data.js'
+import { seitenGewicht } from './marktdaten/binance.js'
 import { stelleZu } from './hype-radar/zustellung.js'
 import { leseEinstellungen } from './hype-radar/einstellungen.js'
 import { melde } from './benachrichtigungen.js'
@@ -41,7 +61,7 @@ const MAX_ALARME = 300
 
 const LINIEN_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'kanal']
 const ZONEN_TYPEN = ['rechteck', 'kanal']
-const RICHTUNGEN = { preis: ['ueber', 'unter', 'kreuzt'], linie: ['ueber', 'unter', 'kreuzt'], zone: ['betreten', 'verlassen'] }
+const RICHTUNGEN = { preis: ['ueber', 'unter', 'kreuzt'], linie: ['ueber', 'unter', 'kreuzt'], zone: ['betreten', 'verlassen'], momentum: MOMENTUM_RICHTUNGEN }
 
 const PREIS_GEWICHT = { futures: 2, spot: 4 }
 
@@ -59,6 +79,8 @@ function alarmZeile(r) {
         letzterPreis: r.letzterPreis == null ? null : Number(r.letzterPreis), letzteZeit: Number(r.letzteZeit) || 0,
         ausgeloestAm: Number(r.ausgeloestAm) || 0, anzahlAusgeloest: Number(r.anzahlAusgeloest) || 0,
         verlauf: parse(r.verlauf, []), notiz: r.notiz || '', erstelltAm: Number(r.erstelltAm) || 0,
+        watchlistIds: parse(r.watchlistIds, []), zeiteinheiten: parse(r.zeiteinheiten, []),
+        punktgroesse: r.punktgroesse === 'alle' ? 'alle' : 'gross', stand: parse(r.stand, {}),
     }
 }
 
@@ -69,7 +91,10 @@ function alarmZeile(r) {
  */
 async function pruefeEingabe(roh, knex, teilweise = false) {
     const aus = {}
-    if (!teilweise || roh.symbol !== undefined) {
+    const mitListen = roh.art === 'momentum' && Array.isArray(roh.watchlistIds) && roh.watchlistIds.length > 0
+    if (mitListen) {
+        aus.symbol = ''   // eine Watchlist-Überwachung hat kein eigenes Symbol
+    } else if (!teilweise || roh.symbol !== undefined) {
         const s = String(roh.symbol || '').toUpperCase()
         if (!SYMBOL_RE.test(s)) return { fehler: 'symbol ungültig' }
         aus.symbol = s
@@ -112,6 +137,11 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
         }
         aus.zeichnungId = id
     }
+    if ((aus.art || roh.art) === 'momentum') {
+        const m = await pruefeMomentumFelder(roh, knex, teilweise, aus)
+        if (m.fehler) return m
+        Object.assign(aus, m.daten)
+    }
     if (roh.kanaele !== undefined) {
         const k = roh.kanaele && typeof roh.kanaele === 'object' ? roh.kanaele : {}
         aus.kanaele = JSON.stringify({ push: k.push !== false, mail: k.mail !== false })
@@ -120,6 +150,57 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
     if (roh.aktiv !== undefined) aus.aktiv = roh.aktiv ? 1 : 0
     if (roh.notiz !== undefined) aus.notiz = String(roh.notiz || '').slice(0, 300)
     return { daten: aus }
+}
+
+/**
+ * Felder eines Momentum-Alarms: Watchlists ODER Symbol, Zeiteinheiten, Punktgrösse.
+ * Die Paare werden schon beim Anlegen gezählt — ein Alarm über mehr Paare, als
+ * der Takt je prüft, lief sonst still nur zum Teil.
+ */
+async function pruefeMomentumFelder(roh, knex, teilweise, aus) {
+    const daten = {}
+    // Nur ausschalten, Notiz oder Kanäle ändern: nichts zu zählen — sonst liesse sich ein Alarm
+    // mit geleerter Watchlist nicht einmal mehr abschalten.
+    const ziel = ['watchlistIds', 'zeiteinheiten', 'punktgroesse', 'symbol'].some((f) => roh[f] !== undefined)
+    if (teilweise && !ziel && roh.aktiv !== true) return { daten }
+    if (!teilweise || roh.watchlistIds !== undefined) {
+        const ids = [...new Set((Array.isArray(roh.watchlistIds) ? roh.watchlistIds : []).map(Number))]
+        if (ids.some((id) => !Number.isSafeInteger(id) || id <= 0)) return { fehler: 'watchlistIds ungültig' }
+        if (ids.length > MAX_WATCHLISTS) return { fehler: `höchstens ${MAX_WATCHLISTS} Watchlists` }
+        if (ids.length) {
+            const da = await knex('chart_watchlists').whereIn('id', ids).select('id')
+            if (da.length !== ids.length) return { fehler: 'Watchlist nicht gefunden' }
+        }
+        daten.watchlistIds = JSON.stringify(ids)
+        if (ids.length) daten.symbol = ''
+    }
+    if (!teilweise || roh.zeiteinheiten !== undefined) {
+        const tfs = MOMENTUM_ZEITEBENEN.filter((tf) => (Array.isArray(roh.zeiteinheiten) ? roh.zeiteinheiten : []).includes(tf))
+        if (!tfs.length) return { fehler: `mindestens eine Zeiteinheit (${MOMENTUM_ZEITEBENEN.join(', ')})` }
+        daten.zeiteinheiten = JSON.stringify(tfs)
+    }
+    if (!teilweise || roh.punktgroesse !== undefined) {
+        daten.punktgroesse = PUNKTGROESSEN.includes(roh.punktgroesse) ? roh.punktgroesse : 'gross'
+    }
+    // Paare zählen — mit den Watchlists, wie sie jetzt sind
+    const alt = roh.id ? alarmZeile(await knex('chart_alarme').where('id', roh.id).first()) : null
+    const probe = {
+        symbol: daten.symbol ?? aus.symbol ?? alt?.symbol ?? '',
+        markt: aus.markt ?? alt?.markt ?? 'futures',
+        watchlistIds: daten.watchlistIds ? JSON.parse(daten.watchlistIds) : alt?.watchlistIds || [],
+        zeiteinheiten: daten.zeiteinheiten ? JSON.parse(daten.zeiteinheiten) : alt?.zeiteinheiten || [],
+    }
+    const paare = alarmPaare(probe, await watchlistKarte(knex))
+    if (!paare.length) return { fehler: probe.watchlistIds.length ? 'Die gewählten Watchlists sind leer' : 'symbol ungültig' }
+    const symbole = new Set(paare.map((x) => `${x.symbol}|${x.markt}`))
+    if (paare.length > MAX_PAARE || symbole.size > MAX_SYMBOLE) {
+        return { fehler: `Zu viele Paare (${symbole.size} Symbole × Zeiteinheiten = ${paare.length}) — höchstens ${MAX_SYMBOLE} Symbole und ${MAX_PAARE} Paare, sonst reicht das Börsengewicht nicht` }
+    }
+    return { daten }
+}
+
+async function watchlistKarte(knex) {
+    return new Map((await knex('chart_watchlists').select('id', 'symbole')).map((w) => [Number(w.id), parse(w.symbole, [])]))
 }
 
 // ── Preise ───────────────────────────────────────────────────────────────
@@ -185,15 +266,18 @@ export function meldungsText(alarm, zeichnung, erg, preis) {
  */
 async function melden(alarm, zeichnung, erg, preis, t) {
     const { titel, text } = meldungsText(alarm, zeichnung, erg, preis)
+    return stelleMeldungZu(alarm, titel, text, { alarmId: alarm.id, art: alarm.art, symbol: alarm.symbol, preis, niveau: erg.niveau ?? null }, t)
+}
+
+async function stelleMeldungZu(alarm, titel, text, daten, t) {
     const kanaele = alarm.kanaele || { push: true, mail: true }
     const zustellung = {}
     if (kanaele.push !== false) {
         try {
             zustellung.push = await stelleZu({
                 regel: 'chartAlarm', schwere: alarm.bedingung?.schwere || 'warnung',
-                meldung: text, titel, quelle: 'chart',
-                daten: { alarmId: alarm.id, art: alarm.art, symbol: alarm.symbol, preis, niveau: erg.niveau ?? null },
-            }, { symbol: alarm.symbol, chain: alarm.markt }, await leseEinstellungen())
+                meldung: text, titel, quelle: 'chart', daten,
+            }, { symbol: daten.symbol || 'Momentum', chain: alarm.markt }, await leseEinstellungen())
         } catch (e) { logWarn('chart-alarme', `Push: ${e.message}`); zustellung.push = { fehler: e.message } }
     }
     if (kanaele.mail !== false) {
@@ -229,7 +313,7 @@ async function einTakt() {
     laeuft = true
     try {
         const knex = getKnex()
-        const roh = await knex('chart_alarme').where('aktiv', 1)
+        const roh = await knex('chart_alarme').where('aktiv', 1).whereNot('art', 'momentum')
         if (!roh.length) return
         if (!(await beansprucheFuehrung(FUEHRUNG_KEY, FUEHRUNG_TTL_MS))) return
         const alarme = roh.map(alarmZeile)
@@ -310,14 +394,154 @@ async function einTakt() {
     }
 }
 
+// ── Momentum-Takt ────────────────────────────────────────────────────────
+const MOMENTUM_TAKT_MS = 15_000
+let momentumUhr = null
+let momentumLaeuft = false
+let momentumAusGemeldet = false
+const geprueftBis = new Map()     // Paar → Öffnungszeit der zuletzt geprüften Kerze
+const geholtBis = new Map()       // Reihe → jüngste geschlossene Kerze beim letzten Abruf (fürs Gewicht)
+const gewarnt = new Set()         // einmalige Logzeilen (übers Limit, Abruffehler je Reihe)
+
+function warneEinmal(schluessel, text) {
+    if (gewarnt.has(schluessel)) return
+    if (gewarnt.size > 500) gewarnt.clear()
+    gewarnt.add(schluessel)
+    logWarn('chart-alarme', text)
+}
+
+/** Ein Durchgang über alle aktiven Momentum-Alarme (exportiert für Prüfskripte; sonst ruft ihn nur der Takt). */
+export async function momentumTakt() {
+    if (momentumLaeuft) return
+    momentumLaeuft = true
+    try {
+        const knex = getKnex()
+        const roh = await knex('chart_alarme').where({ aktiv: 1, art: 'momentum' }).orderBy('id')
+        if (!roh.length) return
+        const alarme = roh.map(alarmZeile)
+        const jetzt = Date.now()
+        const listen = await watchlistKarte(knex)
+
+        // Paare je Alarm; über alle Alarme gedeckelt (Gewicht). Gleiche Paare teilen den Abruf.
+        const zugelassen = new Map()
+        const symbole = new Set()
+        const jeAlarm = []
+        for (const a of alarme) {
+            const alle = alarmPaare(a, listen)
+            if (!alle.length) {
+                if (a.watchlistIds.length) {
+                    // Watchlists gelöscht oder geleert: abschalten und sagen, warum.
+                    await knex('chart_alarme').where('id', a.id).update({
+                        aktiv: 0, verlauf: JSON.stringify([...a.verlauf, { t: jetzt, hinweis: 'watchlistLeer' }].slice(-MAX_VERLAUF)),
+                    })
+                }
+                continue
+            }
+            const eigene = []
+            for (const p of alle) {
+                const k = paarSchluessel(p)
+                if (!zugelassen.has(k)) {
+                    const sk = `${p.symbol}|${p.markt}`
+                    if (zugelassen.size >= MAX_PAARE || (!symbole.has(sk) && symbole.size >= MAX_SYMBOLE)) {
+                        warneEinmal(`limit|${a.id}|${k}`, `Momentum-Alarm ${a.id}: ${k} übersprungen — mehr als ${MAX_PAARE} Paare / ${MAX_SYMBOLE} Symbole über alle Alarme`)
+                        continue
+                    }
+                    zugelassen.set(k, p)
+                    symbole.add(sk)
+                }
+                eigene.push(p)
+            }
+            jeAlarm.push({ a, paare: eigene, alle })
+        }
+        const faellige = [...zugelassen.values()].filter((p) => faellig(p.tf, jetzt, geprueftBis.get(paarSchluessel(p))))
+        // Der Normalfall: keine Zeiteinheit hat eine neue Kerze (eine 5m-Kerze schliesst alle 300 s, der Takt läuft alle 15 s).
+        if (!faellige.length) return
+        if (!(await beansprucheFuehrung(FUEHRUNG_KEY, FUEHRUNG_TTL_MS))) return
+
+        // Kerzen holen — jede Reihe einmal, Gewicht nur für frisch geschlossene Reihen.
+        const quelle = await marktdaten.wahl()
+        const reihen = new Map()
+        for (const p of faellige) {
+            for (const r of reihenFuer(p)) {
+                const rk = paarSchluessel(r)
+                if (reihen.has(rk)) continue
+                try {
+                    const neu = letzteGeschlossene(r.tf, jetzt)
+                    if (quelle === 'binance' && !(geholtBis.get(rk) >= neu)) await warteAufGewicht(seitenGewicht(r.markt, KERZEN_JE_ABRUF + 1))
+                    reihen.set(rk, await getClosedCandles(r.symbol, r.tf, KERZEN_JE_ABRUF, { market: r.markt }))
+                    geholtBis.set(rk, neu)
+                } catch (e) {
+                    if (marktdaten.istAus(e)) {
+                        if (!momentumAusGemeldet) { momentumAusGemeldet = true; logWarn('chart-alarme', `Momentum-Alarme ruhen: ${e.message}`) }
+                        return
+                    }
+                    reihen.set(rk, null)
+                    warneEinmal(`abruf|${rk}|${letzteGeschlossene(r.tf, jetzt)}`, `Momentum-Alarm: Kerzen ${rk}: ${e.message}`)
+                }
+            }
+        }
+        momentumAusGemeldet = false
+
+        const faelligSet = new Set(faellige.map(paarSchluessel))
+        const vollstaendig = (p) => reihenFuer(p).every((r) => reihen.get(paarSchluessel(r)))
+        for (const { a, paare, alle } of jeAlarm) {
+            const treffer = []
+            for (const p of paare) {
+                const k = paarSchluessel(p)
+                if (!faelligSet.has(k) || !vollstaendig(p)) continue
+                const kerzen = Object.fromEntries(reihenFuer(p).map((r) => [r.tf, reihen.get(paarSchluessel(r))]))
+                const erg = pruefeMomentum({
+                    bedingung: { ...a.bedingung, punktgroesse: a.punktgroesse }, tf: p.tf, kerzen, jetzt,
+                    gemeldetBis: a.stand?.k?.[k], abMs: a.stand?.ab || a.erstelltAm,
+                })
+                if (erg.ausloesen) treffer.push({ ...p, kerzeT: erg.kerzeT, punkt: erg.punkt, preis: erg.preis })
+            }
+            if (!treffer.length) continue
+            // Führung vor dem Melden verlängern (wie im Preis-Takt) — sonst meldete ein zweiter Prozess dasselbe.
+            if (!(await verlaengereFuehrung(FUEHRUNG_KEY))) break
+            const t = Date.now()
+            const patch = {
+                stand: JSON.stringify(neuerStand(a.stand, treffer, alle)),
+                letzteZeit: t, ausgeloestAm: t, anzahlAusgeloest: a.anzahlAusgeloest + treffer.length,
+                ...(a.einmalig ? { aktiv: 0 } : {}),
+            }
+            // Nur melden, wenn niemand die Zeile seit dem Lesen geändert hat (letzteZeit ist der Stempel).
+            const getroffen = await knex('chart_alarme').where({ id: a.id, letzteZeit: a.letzteZeit }).update(patch)
+            if (getroffen !== 1) continue
+            const { titel, text } = momentumText(a, treffer, zahl)
+            const zustellung = await stelleMeldungZu(a, titel, text, {
+                alarmId: a.id, art: 'momentum', symbol: treffer.length === 1 ? treffer[0].symbol : '',
+                treffer: treffer.map(({ symbol, markt, tf, punkt, preis }) => ({ symbol, markt, tf, ...punkt, preis })),
+            }, t)
+            const eintrag = {
+                t, p: treffer[0].preis, zustellung, zugestellt: zugestellt(zustellung),
+                treffer: treffer.slice(0, 20).map(({ symbol, markt, tf, punkt, preis, kerzeT }) => ({ symbol, markt, tf, seite: punkt.seite, stark: punkt.stark, preis, kerzeT })),
+            }
+            await knex('chart_alarme').where('id', a.id).update({ verlauf: JSON.stringify([...a.verlauf, eintrag].slice(-MAX_VERLAUF)) })
+        }
+        // Geprüft ist ein Paar erst, wenn seine Kerzen da waren — sonst im nächsten Takt nochmal.
+        for (const p of faellige) if (vollstaendig(p)) geprueftBis.set(paarSchluessel(p), letzteGeschlossene(p.tf, jetzt))
+        if (geprueftBis.size > 4 * MAX_PAARE) {
+            for (const k of geprueftBis.keys()) if (!zugelassen.has(k)) geprueftBis.delete(k)
+        }
+    } catch (e) {
+        logWarn('chart-alarme', `Momentum-Takt: ${e.message}`)
+    } finally {
+        momentumLaeuft = false
+    }
+}
+
 export function startChartAlarmTakt() {
     if (taktUhr) return
     taktUhr = setInterval(einTakt, TAKT_MS)
+    momentumUhr = setInterval(momentumTakt, MOMENTUM_TAKT_MS)
 }
 
 export function stopChartAlarmTakt() {
     clearInterval(taktUhr)
+    clearInterval(momentumUhr)
     taktUhr = null
+    momentumUhr = null
 }
 
 // ── Routen ───────────────────────────────────────────────────────────────
@@ -339,8 +563,10 @@ export function setupChartAlarmRoutes(app) {
             // Die Alarme laufen auf den Kursen der Marktdatenquelle; ein Symbol, das sie nicht
             // führt (nur Bitunix), käme im Takt nie an — sagen statt still nie auslösen.
             // Ohne Marktdaten gar nicht anlegen: der Alarm könnte nie auslösen.
-            let gefuehrt
-            try { gefuehrt = await symbolBeiQuelle(daten.symbol, daten.markt) } catch (e) {
+            // Eine Watchlist-Überwachung hat kein eigenes Symbol; ihre Symbole kommen aus dem Chart,
+            // der dieselbe Quelle liest — fehlt eines, sagt es der Takt einmal im Log.
+            let gefuehrt = null
+            if (daten.symbol) try { gefuehrt = await symbolBeiQuelle(daten.symbol, daten.markt) } catch (e) {
                 if (marktdaten.sendeWennAus(res, e)) return
                 throw e
             }
@@ -348,8 +574,11 @@ export function setupChartAlarmRoutes(app) {
                 const quelle = letztePreise[daten.markt].quelle === 'bitget' ? 'Bitget' : 'Binance'
                 return res.status(400).json({ error: `${daten.symbol} gibt es bei ${quelle} ${daten.markt === 'spot' ? 'Spot' : 'Futures'} nicht — die Alarme laufen auf ${quelle}-Kursen` })
             }
+            const momentum = daten.art === 'momentum'
             const [zeile] = await knex('chart_alarme').insert({
-                einmalig: 1, aktiv: 1, kanaele: JSON.stringify({ push: true, mail: true }),
+                // Ein Momentum-Alarm über eine Watchlist soll weiterlaufen; je Kerze meldet er ohnehin nur einmal.
+                einmalig: momentum ? 0 : 1, aktiv: 1, kanaele: JSON.stringify({ push: true, mail: true }),
+                ...(momentum ? { stand: JSON.stringify({ ab: Date.now(), k: {} }) } : {}),
                 ...daten, erstelltAm: Date.now(),
             }).returning('id')
             const id = typeof zeile === 'object' ? zeile.id : zeile
@@ -364,13 +593,17 @@ export function setupChartAlarmRoutes(app) {
             const knex = getKnex()
             const alt = await knex('chart_alarme').where('id', id).first()
             if (!alt) return res.status(404).json({ error: 'Alarm nicht gefunden' })
-            const { fehler, daten } = await pruefeEingabe({ art: alt.art, ...req.body }, knex, true)
+            const { fehler, daten } = await pruefeEingabe({ ...req.body, art: alt.art, id }, knex, true)
             if (fehler) return res.status(400).json({ error: fehler })
             delete daten.art
             // Wieder eingeschaltet: neu ansetzen. Der gespeicherte Preis ist
             // womöglich Tage alt, und ein Vergleich damit wäre eine Kreuzung,
             // die niemand gesehen hat.
-            if (daten.aktiv === 1 && Number(alt.aktiv) !== 1) { daten.letzterPreis = null; daten.letzteZeit = 0; messung.delete(id) }
+            if (daten.aktiv === 1 && Number(alt.aktiv) !== 1) {
+                daten.letzterPreis = null; daten.letzteZeit = 0; messung.delete(id)
+                // Momentum: erst Kerzen, die nach dem Wiedereinschalten schliessen.
+                if (alt.art === 'momentum') daten.stand = JSON.stringify({ ...parse(alt.stand, {}), ab: Date.now() })
+            }
             await knex('chart_alarme').where('id', id).update(daten)
             res.json(alarmZeile(await knex('chart_alarme').where('id', id).first()))
         } catch (e) { res.status(500).json({ error: e.message }) }

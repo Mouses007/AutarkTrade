@@ -315,6 +315,60 @@ export function zaehltFuerStaerke(tf, chartTf) {
     return true
 }
 
+/** Welle, Signale und Zustand einer Zeitebene. */
+function zeitebene(kerzen, ms) {
+    const k = kerzen || []
+    const { w1, w2 } = welle(k)
+    const w = w1.length ? w1[w1.length - 1] : null
+    return { kerzen: k, ms, w1, w2, sig: signale(w1, w2), zustand: zustand(w), w }
+}
+
+/**
+ * Signalpunkte der Chart-Zeitebene mit ihrer Stärke (Vorlage: grosser Punkt,
+ * wenn ≥ 60 % der zählenden höheren Zeitebenen plus Geldfluss zustimmen).
+ * `je` braucht die Chart-Zeitebene und alle zählenden; `mf` = Geldfluss der Chart-Kerzen.
+ */
+function punkteAus(je, chartTf, mf) {
+    const chart = je[chartTf].kerzen
+    const zaehlende = ZEITEBENEN.map(z => z.tf).filter(tf => zaehltFuerStaerke(tf, chartTf))
+    const noetig = Math.max(1, Math.ceil((zaehlende.length + 1) * STR_PCT))
+    const ausrichtung = Object.fromEntries(zaehlende.map(tf => [tf, richteAus(chart, je[tf].kerzen, je[tf].ms)]))
+    const dirAn = (tf, i) => {
+        const j = ausrichtung[tf][i]
+        return j >= 0 ? zustand(je[tf].w1[j]).dir : 0
+    }
+    const { w1, sig } = je[chartTf]
+    const punkte = []
+    for (let i = 0; i < chart.length; i++) {
+        if (!sig[i].long && !sig[i].short) continue
+        const seite = sig[i].long ? 'long' : 'short'
+        const vorzeichen = seite === 'long' ? 1 : -1
+        const zustimmung = zaehlende.reduce((s, tf) => s + (dirAn(tf, i) === vorzeichen ? 1 : 0), 0)
+            + ((mf[i] ?? 0) * vorzeichen > 0 ? 1 : 0)
+        const stark = zaehlende.length > 0 && zustimmung >= noetig
+        punkte.push({ i, seite, stark, t: chart[i].t, w: w1[i] })
+    }
+    return { punkte, zaehlende, noetig }
+}
+
+/** Zeitebenen, deren Kerzen `momentumPunkte` für eine Chart-Zeitebene braucht (sie selbst zuerst). */
+export function benoetigteZeitebenen(chartTf) {
+    return [chartTf, ...ZEITEBENEN.map(z => z.tf).filter(tf => zaehltFuerStaerke(tf, chartTf))]
+}
+
+/**
+ * Nur die Signalpunkte — für die Chart-Alarme (`chart-alarm-momentum.js`).
+ * Rechnet mit denselben Funktionen wie `werteAus`, der Selbsttest vergleicht beide.
+ * @param {object} o.kerzen  { [tf]: [...] } — mindestens `benoetigteZeitebenen(chartTf)`, GESCHLOSSEN
+ * @returns {Array<{ i, t, seite: 'long'|'short', stark: boolean, w }>}
+ */
+export function momentumPunkte({ kerzen, chartTf }) {
+    if (!TF_MS[chartTf]) throw new Error(`Unbekannte Zeitebene ${chartTf}`)
+    const je = {}
+    for (const tf of benoetigteZeitebenen(chartTf)) je[tf] = zeitebene(kerzen[tf], TF_MS[tf])
+    return punkteAus(je, chartTf, geldfluss(je[chartTf].kerzen)).punkte
+}
+
 /**
  * Alles, was die Kachel zeigt, aus den Kerzen aller Zeitebenen.
  *
@@ -332,12 +386,7 @@ export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punk
 
     // Je Zeitebene: Welle, Signale, Zustand der letzten geschlossenen Kerze
     const je = {}
-    for (const { tf, ms } of ZEITEBENEN) {
-        const k = kerzen[tf] || []
-        const { w1, w2 } = welle(k)
-        const w = w1.length ? w1[w1.length - 1] : null
-        je[tf] = { kerzen: k, ms, w1, w2, sig: signale(w1, w2), zustand: zustand(w), w }
-    }
+    for (const { tf, ms } of ZEITEBENEN) je[tf] = zeitebene(kerzen[tf], ms)
 
     const zeitebenen = ZEITEBENEN.map(({ tf }) => {
         const z = je[tf]
@@ -371,42 +420,23 @@ export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punk
     const aus4 = richteAus(chart, kerzen['4h'] || [], TF_MS['4h'])
     const mf4Reihe = aus4.map(j => (j >= 0 ? mf4[j] : null))
 
-    // Punktstärke: zählende Zeitebenen + Geldfluss, ≥ 60 %
-    const zaehlende = ZEITEBENEN.map(z => z.tf).filter(tf => zaehltFuerStaerke(tf, chartTf))
-    const noetig = Math.max(1, Math.ceil((zaehlende.length + 1) * STR_PCT))
-    const ausrichtung = Object.fromEntries(zaehlende.map(tf => [tf, richteAus(chart, je[tf].kerzen, je[tf].ms)]))
-    const dirAn = (tf, i) => {
-        const j = ausrichtung[tf][i]
-        return j >= 0 ? zustand(je[tf].w1[j]).dir : 0
-    }
-
-    // Signale der Chart-Zeitebene über die ganze Historie (für Divergenzen)
+    // Punkte mit Stärke — dieselbe Rechnung wie für die Chart-Alarme (`momentumPunkte`)
+    const { punkte: punktListe, zaehlende, noetig } = punkteAus(je, chartTf, mf)
     const { w1, w2 } = je[chartTf]
-    const sig = je[chartTf].sig
-    const punktListe = []
     const rauten = []
-    const divergenzen = []
-    let letzterPunkt = null
-    let vorBaer = null
-    let vorBulle = null
-    for (let i = 0; i < chart.length; i++) {
-        if (i > 0 && kreuztRunter(w1, w2, i) && Math.max(...w1.slice(Math.max(0, i - EXT_LOOK + 1), i + 1).filter(ok)) >= OV_LVL) {
+    for (let i = 1; i < chart.length; i++) {
+        if (kreuztRunter(w1, w2, i) && Math.max(...w1.slice(Math.max(0, i - EXT_LOOK + 1), i + 1).filter(ok)) >= OV_LVL) {
             rauten.push({ i, seite: 'short' })
         }
-        if (i > 0 && kreuztHoch(w1, w2, i) && Math.min(...w1.slice(Math.max(0, i - EXT_LOOK + 1), i + 1).filter(ok)) <= -OV_LVL) {
+        if (kreuztHoch(w1, w2, i) && Math.min(...w1.slice(Math.max(0, i - EXT_LOOK + 1), i + 1).filter(ok)) <= -OV_LVL) {
             rauten.push({ i, seite: 'long' })
         }
-        if (!sig[i].long && !sig[i].short) continue
-        const seite = sig[i].long ? 'long' : 'short'
-        const vorzeichen = seite === 'long' ? 1 : -1
-        const zustimmung = zaehlende.reduce((s, tf) => s + (dirAn(tf, i) === vorzeichen ? 1 : 0), 0)
-            + ((mf[i] ?? 0) * vorzeichen > 0 ? 1 : 0)
-        const stark = zaehlende.length > 0 && zustimmung >= noetig
-        const p = { i, seite, stark, t: chart[i].t, w: w1[i] }
-        punktListe.push(p)
-        letzterPunkt = p
-
-        // Divergenz: Preis-Extrem über die letzten DIV_LOOK Kerzen gegen den vorigen Punkt
+    }
+    // Divergenz: Preis-Extrem über die letzten DIV_LOOK Kerzen gegen den vorigen Punkt derselben Seite
+    const divergenzen = []
+    let vorBaer = null
+    let vorBulle = null
+    for (const { i, seite } of punktListe) {
         const fenster = chart.slice(Math.max(0, i - DIV_LOOK + 1), i + 1)
         if (seite === 'short') {
             const px = Math.max(...fenster.map(k => k.h))
@@ -422,6 +452,7 @@ export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punk
             vorBulle = { i, w: w1[i], px }
         }
     }
+    const letzterPunkt = punktListe.length ? punktListe[punktListe.length - 1] : null
 
     // Schienen: Signale der Zeitebenen ECHT über dem Chart, an der ersten
     // Chart-Kerze, an der die höhere Kerze lesbar ist
