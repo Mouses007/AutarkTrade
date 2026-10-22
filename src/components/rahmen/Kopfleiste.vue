@@ -23,7 +23,6 @@ import Titelzeile from './Titelzeile.vue'
 import { appMode, seitenId, bildschirmTyp } from '../../stores/ui.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { MODES, modeHome, pageById, istModusAn } from '../../config/menu.js'
-import { oeffneSpenden } from '../../stores/spenden.js'
 
 defineProps({
     /** Seitentitel samt Titelzeilen-Knöpfen rechts einblenden (Desktop mit Menü). */
@@ -86,11 +85,6 @@ onMounted(async () => {
         <div class="rechts">
             <Titelzeile v-if="mitTitel" in-kopf />
             <span v-if="mitTitel" class="trenner" aria-hidden="true"></span>
-            <!-- Dezent: nur das Symbol, keine Zahl, kein Blinken (Schalter „Spenden im Menü"). -->
-            <button v-if="Number(appEinstellungen?.spendenAn ?? 1) === 1" type="button" class="knopf kaffeeKnopf"
-                :title="t('spenden.kaffeeKnopf')" :aria-label="t('spenden.kaffeeKnopf')" @click="oeffneSpenden()">
-                <Symbol name="kaffee" :groesse="19" />
-            </button>
             <a class="knopf" href="/einstellungen" :class="{ aktiv: seitenId === 'einstellungen' }" :title="t('nav.settings')"
                 :aria-label="t('nav.settings')">
                 <Symbol name="einstellungen" :groesse="20" />
@@ -251,13 +245,5 @@ onMounted(async () => {
     .modi a {
         font-size: 0.85rem;
     }
-}
-
-.kaffeeKnopf {
-    opacity: 0.7;
-}
-
-.kaffeeKnopf:hover {
-    opacity: 1;
 }
 </style>
