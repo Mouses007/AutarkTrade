@@ -28,7 +28,7 @@
 #define WIFI_TIMEOUT_MS    12000
 #define DISPLAY_ROTATION   3
 #define TFT_BL_PIN         5         // Backlight-Pin Waveshare ESP32-S3-Touch-LCD-2.8
-#define FW_VERSION         "3.4.2-WS"
+#define FW_VERSION         "3.4.3-WS"
 
 // ── Farben RGB565 — Tokens der AutarkTrade-Web-App ───────────────────────
 // Umgerechnet r>>3 | g>>2 | b>>3; die Namen bleiben, damit der Zeichencode
@@ -75,8 +75,14 @@ void backlightInit() {
   ledcWrite(0, 800);
 }
 
-// ── Light Sleep mit WiFi aus, Wakeup über Touch-INT (GPIO 4) oder Timer ──
-// Blockiert bis Touch oder 30 Min Timer. CST328 INT ist active-low.
+// ── Light Sleep mit WiFi aus, Wakeup über Touch ──────────────────────────
+// Blockiert bis Touch oder 30 Min. Geweckt wird in kurzen Schlafscheiben von
+// 250 ms: nach jeder fragt der Chip per I2C, ob jemand tippt. Vorher weckte
+// allein die INT-Leitung (GPIO 4, LOW) — der CST3530 des V2-Boards zog sie
+// am Gerät nie messbar auf LOW (22.10.2026), das Display blieb im Schlaf.
+// INT bleibt als zusätzliche Wake-Quelle: wo sie geht, weckt sie sofort.
+bool touchGedrueckt();   // unten, bei mapTouch
+
 void enterLightSleep() {
   Serial.println("[PWR] Light Sleep — WiFi aus, Wakeup via Touch oder 30min Timer");
   Serial.flush();
@@ -89,19 +95,24 @@ void enterLightSleep() {
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
 
-  // Touch INT (GPIO 4) als Wake-Quelle — gpio_wakeup ist der korrekte API für Light Sleep
   pinMode(TOUCH_INT, INPUT_PULLUP);
   gpio_wakeup_enable((gpio_num_t)TOUCH_INT, GPIO_INTR_LOW_LEVEL);
   esp_sleep_enable_gpio_wakeup();
+  esp_sleep_enable_timer_wakeup(250ULL * 1000ULL);   // Schlafscheibe 250 ms
 
-  // Safety-Net: alle 30 Min auf jeden Fall aufwachen für Datenrefresh
-  esp_sleep_enable_timer_wakeup(30ULL * 60ULL * 1000000ULL);  // 30 Min in µs
-
-  // BLOCKIERT bis Wakeup
-  esp_light_sleep_start();
+  // Safety-Net: nach 30 Min auf jeden Fall aufwachen für Datenrefresh
+  const unsigned long schlafBeginn = millis();
+  esp_sleep_wakeup_cause_t cause = ESP_SLEEP_WAKEUP_UNDEFINED;
+  while (true) {
+    esp_light_sleep_start();
+    cause = esp_sleep_get_wakeup_cause();
+    if (cause == ESP_SLEEP_WAKEUP_GPIO) break;
+    if (touchGedrueckt()) break;
+    if (millis() - schlafBeginn >= 30UL * 60UL * 1000UL) break;
+  }
 
   // ── Wake-Up ─────────────────────────────────────────
-  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
   gpio_hold_dis((gpio_num_t)TFT_BL_PIN);
   Serial.printf("[PWR] Wake from Light Sleep — cause=%d (2=GPIO, 4=Timer)\n", cause);
 
@@ -292,6 +303,12 @@ bool mapTouch(int* screenX, int* screenY) {
   *screenX = constrain(319 - (int)raw_y, 0, 319);
   *screenY = constrain((int)raw_x,       0, 239);
   return true;
+}
+
+// Für den Schlaf: liegt gerade ein Finger auf? (liest und quittiert wie mapTouch)
+bool touchGedrueckt() {
+  int x, y;
+  return mapTouch(&x, &y);
 }
 
 static bool antwortet(uint8_t adr) {
