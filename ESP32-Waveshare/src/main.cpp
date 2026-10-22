@@ -28,23 +28,26 @@
 #define WIFI_TIMEOUT_MS    12000
 #define DISPLAY_ROTATION   3
 #define TFT_BL_PIN         5         // Backlight-Pin Waveshare ESP32-S3-Touch-LCD-2.8
-#define FW_VERSION         "3.3.0-WS"
+#define FW_VERSION         "3.4.0-WS"
 
-// ── Farben RGB565 — AutarkTrade-Farbschema ──────────────────
-// Aus src/assets/style-dark.css konvertiert
-#define COLOR_BG         0x0000   // #000000  --black-bg-0
-#define COLOR_CARD       0x0000   // Schwarz — Display-Gamma macht Grau lila, daher transparent
-#define COLOR_GREEN      0x064E   // #00CA73  .greenTrade
-#define COLOR_RED        0xFB4C   // #FF6960  .redTrade
-#define COLOR_WHITE      0xFFFF   // #FFFFFF
-#define COLOR_WHITE_DIM  0x9CF3   // ~#999999 Sekundärtext
-#define COLOR_GREY       0x6BAF   // #6c757d  --grey-color
-#define COLOR_GREY_DARK  0x2945   // #292929  Trennlinien / Kartenrand
-#define COLOR_YELLOW     0xFE00   // #FFC107  .neutralTrade
-#define COLOR_BLUE       0x05BF   // #01B4FF  --blue-color
-#define COLOR_BLUE_NAV   0x2D1B   // #2ea2d9  --blue-active-color
-#define COLOR_NAV_BG     0x0841   // #080808  Nav-Hintergrund
-#define COLOR_HEADER_BG  0x0841   // #080808  Header-Hintergrund
+// ── Farben RGB565 — Tokens der AutarkTrade-Web-App ───────────────────────
+// Umgerechnet r>>3 | g>>2 | b>>3; die Namen bleiben, damit der Zeichencode
+// unverändert passt. Hex dahinter = Token der Web-App.
+#define COLOR_BG         0x0041   // #05080a  bg
+#define COLOR_CARD       0x0041   // = bg — auf diesem Panel macht Display-Gamma Grau lila, darum keine Kartenfläche
+#define COLOR_GREEN      0x3DF1   // #3fbf8f  good
+#define COLOR_RED        0xE2A9   // #e0574c  bad
+#define COLOR_WHITE      0xEFBE   // #e8f4f6  text
+#define COLOR_WHITE_DIM  0x8D35   // #8ea5af  muted
+#define COLOR_GREY       0x5BB0   // #5e7580  muted, dunkler (Beschriftungen)
+#define COLOR_GREY_DARK  0x1946   // #1d2b33  line
+#define COLOR_YELLOW     0xDD07   // #d8a33a  warn
+#define COLOR_BLUE       0x1EB8   // #1fd6c4  accent
+#define COLOR_BLUE_NAV   0x1EB8   // #1fd6c4  accent (aktiver Reiter, Rahmen)
+#define COLOR_NAV_BG     0x0882   // #0c1216  panel
+#define COLOR_HEADER_BG  0x0882   // #0c1216  panel
+#define COLOR_NAV_AKTIV  0x0945   // #0a2a28  accent sehr dunkel (aktiver Reiter)
+#define COLOR_KERN       0x0103   // #04201d  Kern der Blüte im Logo
 
 // ── Globals ──────────────────────────────────────────────
 
@@ -376,31 +379,31 @@ void drawNavBar() {
 
   // Dashboard
   if (activeScreen == 0) {
-    tft.fillRect(1, ny+1, 105, nh-1, 0x0C62);   // leicht blau-dunkel aktiv
+    tft.fillRect(1, ny+1, 105, nh-1, COLOR_NAV_AKTIV);   // leicht blau-dunkel aktiv
     tft.drawFastHLine(1, ny, 105, COLOR_BLUE);    // blauer Indikator-Strich
   }
   tft.setTextColor(activeScreen == 0 ? COLOR_WHITE : COLOR_GREY,
-                   activeScreen == 0 ? 0x0C62 : COLOR_NAV_BG);
+                   activeScreen == 0 ? COLOR_NAV_AKTIV : COLOR_NAV_BG);
   tft.setCursor(18, ny + 12);
   tft.print("Dashboard");
 
   // Positionen
   if (activeScreen == 1) {
-    tft.fillRect(108, ny+1, 105, nh-1, 0x0C62);
+    tft.fillRect(108, ny+1, 105, nh-1, COLOR_NAV_AKTIV);
     tft.drawFastHLine(108, ny, 105, COLOR_BLUE);
   }
   tft.setTextColor(activeScreen == 1 ? COLOR_WHITE : COLOR_GREY,
-                   activeScreen == 1 ? 0x0C62 : COLOR_NAV_BG);
+                   activeScreen == 1 ? COLOR_NAV_AKTIV : COLOR_NAV_BG);
   tft.setCursor(118, ny + 12);
   tft.print("Positionen");
 
   // Info-Tab
   if (activeScreen == 2) {
-    tft.fillRect(215, ny+1, 104, nh-1, 0x0C62);
+    tft.fillRect(215, ny+1, 104, nh-1, COLOR_NAV_AKTIV);
     tft.drawFastHLine(215, ny, 104, COLOR_BLUE);
   }
   tft.setTextColor(activeScreen == 2 ? COLOR_WHITE : COLOR_YELLOW,
-                   activeScreen == 2 ? 0x0C62 : COLOR_NAV_BG);
+                   activeScreen == 2 ? COLOR_NAV_AKTIV : COLOR_NAV_BG);
   tft.setCursor(251, ny + 12);
   tft.print("Info");
 
@@ -562,6 +565,21 @@ void drawScreen1() {
   drawDonut(265, cy, r, ir, rrrPct, rrrCol, "RRR", rrrStr);
 }
 
+// ── Logo-Marke: die Blüte aus dem AutarkTrade-Zeichen, vereinfacht ────
+// Fünf Blätter als Kreise um die Mitte, dunkler Kern mit Akzentrand. Der
+// Kursring des grossen Zeichens verschwimmt bei 18 px — er fehlt hier bewusst.
+void drawMarke(int cx, int cy, int r) {
+  const float blatt = r * 0.42f;
+  const float abstand = r * 0.55f;
+  for (int i = 0; i < 5; i++) {
+    float w = (-90.0f + i * 72.0f) * DEG_TO_RAD;
+    tft.fillCircle(cx + (int)roundf(cosf(w) * abstand), cy + (int)roundf(sinf(w) * abstand),
+                   (int)roundf(blatt), COLOR_BLUE);
+  }
+  tft.fillCircle(cx, cy, max(1, r / 4), COLOR_KERN);
+  tft.drawCircle(cx, cy, max(1, r / 4), COLOR_BLUE);
+}
+
 // ── SCREEN 2: Offene Positionen (Landscape 320×207) ──────
 // Spalten: Sym=70 | Side=30 | Heb=30 | Entry=52 | Mark=52 | PnL=68
 // x-Offsets: 4      76       108      140       194       248
@@ -572,12 +590,15 @@ void drawScreen2() {
   // ── Header ────────────────────────────────────────
   tft.fillRect(0, 0, 320, 24, COLOR_HEADER_BG);
   tft.drawFastHLine(0, 24, 320, COLOR_GREY_DARK);
-  tft.setTextColor(COLOR_BLUE, COLOR_HEADER_BG);
+  drawMarke(12, 12, 9);
   tft.setTextSize(1);
-  tft.setCursor(8, 5);
-  tft.print("AutarkTrade");
+  tft.setCursor(26, 5);
+  tft.setTextColor(COLOR_WHITE, COLOR_HEADER_BG);
+  tft.print("Autark");
+  tft.setTextColor(COLOR_BLUE, COLOR_HEADER_BG);
+  tft.print("Trade");
   tft.setTextColor(COLOR_GREY, COLOR_HEADER_BG);
-  tft.setCursor(8, 16);
+  tft.setCursor(26, 16);
   tft.print("Offene Positionen & Bots");
 
   int nFut = data.positions.size();
@@ -862,33 +883,33 @@ const char CONFIG_HTML[] PROGMEM = R"rawliteral(
 <title>AutarkTrade Setup</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d1117; color: #e6edf3; font-family: -apple-system, sans-serif; padding: 20px; }
-  h1 { color: #58a6ff; margin-bottom: 4px; font-size: 1.3rem; }
-  p.sub { color: #8b949e; font-size: 0.82rem; margin-bottom: 18px; }
-  .card { background: #161b22; border: 1px solid #30363d; border-radius: 10px; padding: 16px; margin-bottom: 12px; }
-  .card h2 { color: #8b949e; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
-  label { display: block; color: #8b949e; font-size: 0.82rem; margin-bottom: 3px; margin-top: 9px; }
-  input { width: 100%; background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
-          color: #e6edf3; padding: 9px 12px; font-size: 0.95rem; outline: none; }
-  input:focus { border-color: #58a6ff; }
-  button { width: 100%; background: #238636; color: #fff; border: none; border-radius: 6px;
+  body { background: #05080a; color: #e8f4f6; font-family: -apple-system, sans-serif; padding: 20px; }
+  h1 { color: #1fd6c4; margin-bottom: 4px; font-size: 1.3rem; }
+  p.sub { color: #8ea5af; font-size: 0.82rem; margin-bottom: 18px; }
+  .card { background: #0c1216; border: 1px solid #1d2b33; border-radius: 14px; padding: 16px; margin-bottom: 12px; }
+  .card h2 { color: #8ea5af; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+  label { display: block; color: #8ea5af; font-size: 0.82rem; margin-bottom: 3px; margin-top: 9px; }
+  input { width: 100%; background: #05080a; border: 1px solid #1d2b33; border-radius: 6px;
+          color: #e8f4f6; padding: 9px 12px; font-size: 0.95rem; outline: none; }
+  input:focus { border-color: #1fd6c4; }
+  button { width: 100%; background: #1fd6c4; color: #05080a; font-weight: 700; border: none; border-radius: 6px;
            padding: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: 14px; }
   button:active { opacity: 0.8; }
-  .scan-btn { background: #1f6feb; margin-top: 0; padding: 8px; font-size: 0.85rem; margin-bottom: 8px; }
-  .reset { background: #da3633; margin-top: 8px; }
-  .info { background: #1c2128; border: 1px solid #30363d; border-radius: 6px;
-          padding: 9px 12px; font-size: 0.82rem; color: #8b949e; margin-top: 5px; }
+  .scan-btn { background: #131c22; margin-top: 0; padding: 8px; font-size: 0.85rem; margin-bottom: 8px; }
+  .reset { background: #e0574c; margin-top: 8px; }
+  .info { background: #131c22; border: 1px solid #1d2b33; border-radius: 6px;
+          padding: 9px 12px; font-size: 0.82rem; color: #8ea5af; margin-top: 5px; }
   .net-list { margin-top: 8px; }
   .net-item { display: flex; justify-content: space-between; align-items: center;
-              background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+              background: #05080a; border: 1px solid #1d2b33; border-radius: 6px;
               padding: 9px 12px; margin-bottom: 5px; cursor: pointer; font-size: 0.9rem; }
-  .net-item:hover, .net-item.selected { border-color: #3fb950; background: #0d1f12; }
-  .rssi { font-size: 0.75rem; color: #8b949e; }
-  #scan-status { color: #8b949e; font-size: 0.82rem; margin-top: 5px; min-height: 18px; }
+  .net-item:hover, .net-item.selected { border-color: #3fbf8f; background: #0a2a28; }
+  .rssi { font-size: 0.75rem; color: #8ea5af; }
+  #scan-status { color: #8ea5af; font-size: 0.82rem; margin-top: 5px; min-height: 18px; }
 </style>
 </head>
 <body>
-<h1>AutarkTrade</h1>
+<h1><span style='color:#e8f4f6'>Autark</span>Trade</h1>
 <p class="sub">ESP32-2432S028 CYD Setup</p>
 
 <form action="/save" method="POST">
@@ -1002,10 +1023,10 @@ void handleSave() {
   bool saved = (cfgSSID == ssid && cfgKey == key);
   server.send(200, "text/html; charset=utf-8",
     saved
-    ? "<html><head><meta charset='UTF-8'></head><body style='background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:30px'>"
-      "<h2 style='color:#3fb950'>Gespeichert!</h2><p>ESP32 startet neu...</p></body></html>"
-    : "<html><head><meta charset='UTF-8'></head><body style='background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:30px'>"
-      "<h2 style='color:#da3633'>Fehler!</h2><p>Bitte nochmal versuchen.</p></body></html>");
+    ? "<html><head><meta charset='UTF-8'></head><body style='background:#05080a;color:#e8f4f6;font-family:sans-serif;padding:30px'>"
+      "<h2 style='color:#3fbf8f'>Gespeichert!</h2><p>ESP32 startet neu...</p></body></html>"
+    : "<html><head><meta charset='UTF-8'></head><body style='background:#05080a;color:#e8f4f6;font-family:sans-serif;padding:30px'>"
+      "<h2 style='color:#e0574c'>Fehler!</h2><p>Bitte nochmal versuchen.</p></body></html>");
   if (!saved) return;
   delay(3000);
   ESP.restart();
@@ -1014,8 +1035,8 @@ void handleSave() {
 void handleReset() {
   clearConfig();
   server.send(200, "text/html; charset=utf-8",
-    "<html><head><meta charset='UTF-8'></head><body style='background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:30px'>"
-    "<h2 style='color:#da3633'>Geloescht</h2><p>ESP32 startet neu...</p></body></html>");
+    "<html><head><meta charset='UTF-8'></head><body style='background:#05080a;color:#e8f4f6;font-family:sans-serif;padding:30px'>"
+    "<h2 style='color:#e0574c'>Geloescht</h2><p>ESP32 startet neu...</p></body></html>");
   delay(1500);
   ESP.restart();
 }
