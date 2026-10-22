@@ -4,7 +4,10 @@
  * Linien, Zonen und Bedingungen vor. Im Chart erscheinen sie gestrichelt als
  * Vorschau; was taugt, wird einzeln (oder alles) in die eigenen Zeichnungen
  * übernommen und ist danach eine ganz normale Linie — verschiebbar, mit
- * Alarm belegbar.
+ * Alarm belegbar. Übernehmen und Verwerfen geht hier und per Klick auf die
+ * gestrichelte Linie im Chart. „Vorschau erledigt" nimmt die gestrichelten
+ * Linien weg; die Analyse bleibt stehen, mit den übernommenen Vorschlägen.
+ * „Analyse zurücksetzen" leert den Reiter.
  *
  * Erzeugt wird nur auf Knopfdruck (kostet einen KI-Aufruf); beim Öffnen wird
  * die letzte Analyse für Symbol und Zeiteinheit gelesen, falls es eine gibt.
@@ -12,9 +15,11 @@
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { linieAlsZeichnung, zoneAlsZeichnung, profileAlsZeichnungen, istProfilLinie, istProfilZone } from '../../utils/chart/kiZeichnungen.js'
-import { legeAn } from '../../stores/chartZeichnungen.js'
-import { letzterStil } from '../../stores/zeichenStil.js'
+import { istProfilLinie, istProfilZone } from '../../utils/chart/kiZeichnungen.js'
+import {
+    kiAnzeige, kiMarken, kiAlle, kiUebernimmtAlle, kiIstUebernommen, setzeKiAnalyse,
+    uebernimmKi, verwirfKi, alleKiUebernehmen, schalteKiAlle, kiErledigt, kiZuruecksetzen,
+} from '../../stores/chartKi.js'
 import KiChat from './KiChat.vue'
 import { Symbol, Knopf } from '../basis'
 import KiHinweis from '../quellen/KiHinweis.vue'
@@ -24,7 +29,6 @@ const props = defineProps({
     // rechter Rand des sichtbaren Bereichs (ms) — für den Chat
     sichtbarBis: { type: Function, default: null },
 })
-const emit = defineEmits(['vorschau'])
 const { t } = useI18n()
 
 /*
@@ -52,11 +56,18 @@ const keineQuelle = computed(() => !optionen.value.niveaus && !optionen.value.tr
 // Zonen entstehen aus Niveaus, Volumenprofil oder höherer Zeiteinheit
 const zonenMoeglich = computed(() => optionen.value.niveaus || optionen.value.volumen || optionen.value.htf)
 
-const analyse = ref(null)
+/*
+ * Analyse und Zustand der Vorschläge liegen im Speicher `stores/chartKi.js` —
+ * der Chart liest denselben Stand (Klick auf eine gestrichelte Linie:
+ * Übernehmen/Verwerfen) und zeichnet die Vorschau daraus.
+ */
+const analyse = kiAnzeige
 const laeuft = ref(false)
 const fehler = ref('')
-const uebernommen = ref(new Set())
-const uebernimmtAlle = ref(false)
+const alle = kiAlle
+const uebernimmtAlle = kiUebernimmtAlle
+const offen = computed(() => !kiMarken.value.erledigt)
+const istUebernommen = (x) => kiIstUebernommen(x._key) || ((istProfilLinie(x) || istProfilZone(x)) && kiIstUebernommen('profil'))
 
 /*
  * Jede Antwort gehört zu dem Panel-Stand, für den sie bestellt wurde. Ein Lauf
@@ -71,13 +82,11 @@ async function ladeLetzte() {
     const meine = ++nr
     const fuer = stand()
     fehler.value = ''
-    uebernommen.value = new Set()
     try {
         const { data } = await axios.get('/api/chart/ki-analyse', { params: { symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt } })
         if (meine !== nr || fuer !== stand()) return
-        analyse.value = data.leer ? null : data
-    } catch { if (meine === nr) analyse.value = null }
-    zeigeVorschau(analyse.value)
+        setzeKiAnalyse(data.leer ? null : data)
+    } catch { if (meine === nr) setzeKiAnalyse(null) }
 }
 
 async function erstelle() {
@@ -94,9 +103,7 @@ async function erstelle() {
         // Inzwischen anderes Symbol: verwerfen. Der Server hat sie abgelegt — zurück
         // auf dem alten Symbol zeigt der Reiter sie wieder, ohne neu zu bezahlen.
         if (meine !== nr || fuer !== stand()) return
-        analyse.value = data
-        uebernommen.value = new Set()
-        zeigeVorschau(data)
+        setzeKiAnalyse(data)
     } catch (e) {
         // Brach nur der Browser ab, rechnet der Server weiter und legt das Ergebnis ab —
         // dann nachsehen statt einen Fehler für bezahlte Arbeit zu zeigen.
@@ -120,9 +127,7 @@ async function warteAufErgebnis(beginn, meine, fuer) {
             // 30 s Spielraum für eine abweichende Server-Uhr
             if (!data.leer && data.stand >= beginn - 30_000) {
                 fehler.value = ''
-                analyse.value = data
-                uebernommen.value = new Set()
-                zeigeVorschau(data)
+                setzeKiAnalyse(data)
                 return true
             }
         } catch { /* weiter warten */ }
@@ -130,52 +135,10 @@ async function warteAufErgebnis(beginn, meine, fuer) {
     return false
 }
 
-async function uebernimm(art, i) {
-    const a = analyse.value
-    // V-Marken: EIN Profil über den Bereich — einmal anlegen, alle V-Einträge gelten dann als übernommen
-    const profil = art === 'linie' ? istProfilLinie(a.linien[i]) : istProfilZone(a.zonen[i])
-    if (profil) {
-        if (!uebernommen.value.has('profil')) {
-            for (const roh of profileAlsZeichnungen(a, letzterStil('volprofil'))) {
-                const z = await legeAn({ symbol: a.symbol || props.panel.symbol, ...roh, sichtbarAuf: null, gesperrt: false, versteckt: false })
-                if (!z) return
-            }
-        }
-        const v = [...a.linien.map((l, j) => (istProfilLinie(l) ? `linie${j}` : null)), ...a.zonen.map((x, j) => (istProfilZone(x) ? `zone${j}` : null))].filter(Boolean)
-        uebernommen.value = new Set([...uebernommen.value, 'profil', ...v])
-        return
-    }
-    // Übernommen ohne ID im Text — „(N4)" bezieht sich nur auf diese Analyse.
-    const roh = art === 'linie' ? linieAlsZeichnung({ ...a.linien[i], id: null }) : zoneAlsZeichnung({ ...a.zonen[i], ids: [] }, a.kerzenVon, a.kerzenBis)
-    // Übernommen heisst: eigene Linie — durchgezogen statt gestrichelt.
-    // Unter dem Symbol der ANALYSE, nicht des Panels — die beiden können auseinanderlaufen.
-    const z = await legeAn({ symbol: a.symbol || props.panel.symbol, ...roh, stil: { ...roh.stil, strich: 'voll' }, sichtbarAuf: null, gesperrt: false, versteckt: false })
-    if (z) uebernommen.value = new Set([...uebernommen.value, `${art}${i}`])
-}
-
-async function alleUebernehmen() {
-    if (uebernimmtAlle.value) return     // zweiter Klick während des ersten legte alles doppelt an
-    uebernimmtAlle.value = true
-    try {
-        const a = analyse.value
-        for (let i = 0; i < a.linien.length; i++) if (!uebernommen.value.has(`linie${i}`)) await uebernimm('linie', i)
-        for (let i = 0; i < a.zonen.length; i++) if (!uebernommen.value.has(`zone${i}`)) await uebernimm('zone', i)
-    } finally { uebernimmtAlle.value = false }
-}
-
-function verwerfen() {
-    analyse.value = null
-    zeigeVorschau(null)
-}
-
-/* „Alle Kandidaten zeigen": nicht gewählte Marken grau gepunktet dazu (im Browser gemerkt). */
-const alle = ref((() => { try { return localStorage.getItem('chartKiAlle') === '1' } catch { return false } })())
-function zeigeVorschau(a) { emit('vorschau', a ? { ...a, _alle: alle.value } : null) }
-function schalteAlle() {
-    alle.value = !alle.value
-    try { localStorage.setItem('chartKiAlle', alle.value ? '1' : '0') } catch { /* kein Speicher */ }
-    zeigeVorschau(analyse.value)
-}
+const uebernimm = (x) => uebernimmKi(x._key, props.panel.symbol)
+const verwirf = (x) => verwirfKi(x._key)
+const alleUebernehmen = () => alleKiUebernehmen(props.panel.symbol)
+const schalteAlle = schalteKiAlle
 const ZUSTAND = { 1: 'auf', '-1': 'ab', 0: 'offen' }
 const struktur = (a) => {
     const s = a?.auswahl
@@ -233,34 +196,47 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
             </div>
 
             <div v-if="analyse.linien?.length || analyse.zonen?.length" class="abschnitt">
-                {{ t('chart.ki.vorschlaege') }}
-                <button type="button" class="textKnopf abstandLinks" :disabled="uebernimmtAlle" @click="alleUebernehmen">{{ t('chart.ki.alleUebernehmen') }}</button>
-                <button v-if="analyse.auswahl" class="textKnopf abstandLinks" :class="{ an: alle }" @click="schalteAlle">{{ t(alle ? 'chart.ki.kandidatenAus' : 'chart.ki.kandidatenZeigen') }}</button>
+                {{ t(offen ? 'chart.ki.vorschlaege' : 'chart.ki.eingezeichnet') }}
+                <template v-if="offen">
+                    <button type="button" class="textKnopf abstandLinks" :disabled="uebernimmtAlle" @click="alleUebernehmen">{{ t('chart.ki.alleUebernehmen') }}</button>
+                    <button v-if="analyse.auswahl" class="textKnopf abstandLinks" :class="{ an: alle }" @click="schalteAlle">{{ t(alle ? 'chart.ki.kandidatenAus' : 'chart.ki.kandidatenZeigen') }}</button>
+                </template>
             </div>
-            <div v-for="(l, i) in analyse.linien" :key="'l' + i" class="vorschlag" data-ki-generiert="true">
+            <div v-if="offen && (analyse.linien?.length || analyse.zonen?.length)" class="hinweis">{{ t('chart.ki.klickImChart') }}</div>
+            <div v-for="l in analyse.linien" :key="l._key" class="vorschlag" data-ki-generiert="true">
                 <div class="zeile">
                     <span class="art">{{ t('chart.ki.art.' + l.art) }}</span>
                     <span v-if="l.id" class="id" :class="l.gewicht">{{ l.id }}</span>
                     <span class="label">{{ l.label }}</span>
                     <span class="preis">{{ l.p1 === l.p2 ? preis(l.p1) : `${preis(l.p1)} → ${preis(l.p2)}` }}</span>
-                    <button type="button" class="textKnopf" :disabled="uebernommen.has('linie' + i)" @click="uebernimm('linie', i)">
-                        {{ uebernommen.has('linie' + i) ? '✓' : t('chart.ki.uebernehmen') }}</button>
+                    <span v-if="istUebernommen(l)" class="erledigtMarke" :title="t('chart.ki.uebernommenTitel')">✓</span>
+                    <template v-else-if="offen">
+                        <button type="button" class="textKnopf" @click="uebernimm(l)">{{ t('chart.ki.uebernehmen') }}</button>
+                        <button type="button" class="textKnopf" :title="t('chart.ki.verwerfenTitel')" :aria-label="t('chart.ki.verwerfenTitel')" @click="verwirf(l)">✕</button>
+                    </template>
                 </div>
                 <small>{{ l.grund }}</small>
             </div>
-            <div v-for="(z, i) in analyse.zonen" :key="'z' + i" class="vorschlag" data-ki-generiert="true">
+            <div v-for="z in analyse.zonen" :key="z._key" class="vorschlag" data-ki-generiert="true">
                 <div class="zeile">
                     <span class="art">{{ t('chart.ki.zone') }}</span>
                     <span v-if="z.ids?.length" class="id" :class="z.gewicht">{{ z.ids.join('+') }}</span>
                     <span class="label">{{ z.label }}</span>
                     <span class="preis">{{ preis(z.tief) }}–{{ preis(z.hoch) }}</span>
-                    <button type="button" class="textKnopf" :disabled="uebernommen.has('zone' + i)" @click="uebernimm('zone', i)">
-                        {{ uebernommen.has('zone' + i) ? '✓' : t('chart.ki.uebernehmen') }}</button>
+                    <span v-if="istUebernommen(z)" class="erledigtMarke" :title="t('chart.ki.uebernommenTitel')">✓</span>
+                    <template v-else-if="offen">
+                        <button type="button" class="textKnopf" @click="uebernimm(z)">{{ t('chart.ki.uebernehmen') }}</button>
+                        <button type="button" class="textKnopf" :title="t('chart.ki.verwerfenTitel')" :aria-label="t('chart.ki.verwerfenTitel')" @click="verwirf(z)">✕</button>
+                    </template>
                 </div>
                 <small>{{ z.grund }}</small>
             </div>
+            <div v-if="!offen && !analyse.linien?.length && !analyse.zonen?.length" class="hinweis">{{ t('chart.ki.nichtsEingezeichnet') }}</div>
             <div v-if="analyse.verworfen?.length" class="verworfen">{{ t('chart.ki.verworfen', { n: analyse.verworfen.length }) }}</div>
-            <button type="button" class="textKnopf" @click="verwerfen">{{ t('chart.ki.vorschauWeg') }}</button>
+            <div class="schluss">
+                <button v-if="offen" type="button" class="textKnopf" @click="kiErledigt">{{ t('chart.ki.vorschauErledigt') }}</button>
+                <button v-else type="button" class="textKnopf" @click="kiZuruecksetzen">{{ t('chart.ki.analyseZuruecksetzen') }}</button>
+            </div>
         </template>
         </template>
     </div>
@@ -405,6 +381,18 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 
 .hinweis,
 .kopf small,
+.erledigtMarke {
+    color: var(--good);
+    font-weight: 600;
+}
+
+.schluss {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 4px;
+    border-top: 1px solid var(--line);
+}
+
 .verworfen {
     color: var(--muted);
     font-size: 11px;

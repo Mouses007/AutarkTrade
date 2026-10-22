@@ -43,7 +43,7 @@ export class ZeichenEbene {
      * @param {HTMLElement} o.huelle   Behälter des Charts (für Zeigerereignisse)
      * @param {object} o.chart         Lightweight-Charts-Instanz
      * @param {object} o.serie         Kerzenserie (Primitive hängt daran)
-     * @param {object} o.rueckruf      { neu, aendern, auswahl, werkzeugFertig, textBearbeiten }
+     * @param {object} o.rueckruf      { neu, aendern, auswahl, werkzeugFertig, textBearbeiten, kiKlick }
      * @param {function} o.formatPreis
      */
     constructor({ huelle, chart, serie, rueckruf, formatPreis }) {
@@ -64,7 +64,7 @@ export class ZeichenEbene {
         this.magnetAn = false
         this.ziehen = null            // { id, anker, x0, y0, L0, p0, orig }
         this.vorschau = new Map()     // id → punkte während des Ziehens
-        this.temporaer = []           // Vorschau (KI-Analyse): gezeichnet, nicht bedienbar
+        this.temporaer = []           // Vorschau (KI-Analyse): gezeichnet, nur anklickbar (rueckruf.kiKlick), nicht verschiebbar
         this.verschlucke = false
         this.preisAchsen = []
         this.requestUpdate = () => {}
@@ -110,7 +110,7 @@ export class ZeichenEbene {
     hitTest(x, y) {
         if (this.werkzeugTyp) return { cursorStyle: 'crosshair', externalId: 'zeichnen', zOrder: 'top' }
         const t = this.trefferTest(x, y)
-        if (!t) return null
+        if (!t) return this.kiTreffer(x, y) ? { cursorStyle: 'pointer', externalId: 'ki', zOrder: 'top' } : null
         const z = t.z
         return { cursorStyle: z.gesperrt ? 'default' : t.anker != null ? 'grab' : 'move', externalId: String(z.id), zOrder: 'top' }
     }
@@ -294,6 +294,14 @@ export class ZeichenEbene {
         return null
     }
 
+    /** KI-Vorschlag (gestrichelt, mit `ki`-Schlüssel) unter (x, y) — der zuletzt gezeichnete zuerst. */
+    kiTreffer(x, y) {
+        if (!this.temporaer.length) return null
+        const breite = this.chart.timeScale().width()
+        for (const z of [...this.temporaer].reverse()) if (z.ki && this.trifft(z, x, y, breite)) return z
+        return null
+    }
+
     trifft(z, x, y, breite) {
         const pk = this.punkteVon(z)
         const s = stilFuer(z)
@@ -385,8 +393,13 @@ export class ZeichenEbene {
         const t = this.trefferTest(x, y)
         if (!t) {
             if (this.auswahlId != null) { this.auswahlId = null; this.rueckruf.auswahl?.(null); this.requestUpdate() }
+            // Gestrichelter KI-Vorschlag: anklicken öffnet Übernehmen/Verwerfen, verschieben lässt er sich nicht.
+            const ki = this.kiTreffer(x, y)
+            this.rueckruf.kiKlick?.(ki ? ki.ki : null, x, y)
+            if (ki) { this.verschlucke = true; e.stopPropagation(); e.preventDefault() }
             return
         }
+        this.rueckruf.kiKlick?.(null)
         if (this.auswahlId !== t.z.id) { this.auswahlId = t.z.id; this.rueckruf.auswahl?.(t.z.id); this.requestUpdate() }
         if (t.z.gesperrt) return
         this.verschlucke = true
@@ -631,12 +644,14 @@ export class ZeichenEbene {
                 const v = verlaengere(ax, ay, bx, by, breite, { links: !!s.links, rechts: z.typ === 'strahl' || !!s.rechts })
                 this.linie(ctx, v.ax, v.ay, v.bx, v.by, s)
                 if (s.text && s.textPos === 'ende') {
-                    // KI-Trendlinie: am Ende der Strecke (rechts der letzten Kerze), in die Fläche
-                    // zurückgeholt, wenn das Ende ausserhalb liegt — nicht am zweiten Anker mitten im Kurs.
+                    // KI-Trendlinie: am Ende der Strecke (rechts der letzten Kerze), nicht am zweiten Anker
+                    // mitten im Kurs. Reicht der Platz rechts nicht, rechtsbündig VOR dem Ende — immer auf
+                    // der Höhe des Endes (früher wurde die Gerade nach links verlängert, und auf einer
+                    // kurzen Linie im herausgezoomten Chart stand das Label weit unter ihr).
                     const w = ctx.measureText(s.text).width
-                    const x = Math.max(4, Math.min(v.bx + 6, breite - w - 10))
-                    const y = v.bx !== v.ax ? v.ay + (v.by - v.ay) * (Math.min(x, v.bx) - v.ax) / (v.bx - v.ax) : v.by
-                    this.beschriftung(ctx, s.text, x, Math.max(14, Math.min(hoehe - 4, y - 6)), s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
+                    const ex = Math.min(v.bx, breite), ey = v.bx !== v.ax ? v.ay + (v.by - v.ay) * (ex - v.ax) / (v.bx - v.ax) : v.by
+                    const x = ex + 6 + w <= breite - 4 ? ex + 6 : Math.max(4, ex - w - 6)
+                    this.beschriftung(ctx, s.text, x, Math.max(14, Math.min(hoehe - 4, ey - 6)), s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
                 } else if (s.text) this.beschriftung(ctx, s.text, bx + 6, by - 4, s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
                 break
             }

@@ -6,7 +6,7 @@
  * Ältere Analysen (vor dem Umbau auf IDs, 18.10.2026) liegen bis zu 30 min im
  * Cache und müssen genauso gezeichnet werden wie bisher.
  */
-import { linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil } from './chart/kiZeichnungen.js'
+import { linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil, anzeigeAnalyse, vorschauAnalyse, leereMarken, markenSchluessel } from './chart/kiZeichnungen.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -83,6 +83,39 @@ console.log('\nVolumenprofil\n')
     check('Stil = zuletzt benutzter des Profil-Werkzeugs', pb[0].stil.farbe === '#ffeb3b' && pb[0].stil.zeilen === 120)
     check('keine V-Linie und keine V-Zone mehr einzeln', !v.some((z) => /V\d/.test(z.stil?.text || '')) && v.length === 2, JSON.stringify(v.map((z) => z.typ)))
     check('Gegenprobe: ohne V kein Profil', !hatProfil({ linien: [{ id: 'N1' }], zonen: [] }))
+}
+
+console.log('\nÜbernehmen, verwerfen, erledigt, zurücksetzen (22.10.2026)\n')
+{
+    const a = {
+        symbol: 'BTCUSDT', interval: '1h', markt: 'futures', stand: 123, kerzenVon: 1, kerzenBis: 99,
+        linien: [
+            { id: 'T1', art: 'trend', t1: 10, p1: 110, t2: 40, p2: 105, tEnde: 70, pEnde: 100, label: 'a' },
+            { id: 'N1', art: 'widerstand', t1: 1, p1: 112, t2: 99, p2: 112, label: 'b' },
+            { id: 'V1', quelle: 'volumenprofil', art: 'widerstand', t1: 1, p1: 104, t2: 99, p2: 104, label: 'poc' },
+        ],
+        zonen: [{ ids: ['N2'], art: 'unterstuetzung', tief: 95, hoch: 96, label: 'z' }],
+        auswahl: { kandidaten: [{ id: 'V1', quelle: 'volumenprofil', abschnitt: 'A1', t1: 5, t2: 90, preis: 104 }] },
+    }
+    const roh = kiVorschau(a)
+    check('jede Vorschau trägt ihren Schlüssel (linie0, linie1, zone0, profil) — Klick im Chart', ['linie0', 'linie1', 'zone0', 'profil'].every((k) => roh.some((z) => z.ki === k)), roh.map((z) => z.ki).join())
+    check('graue Kandidaten sind nicht anklickbar', kiVorschau({ ...a, _alle: true, auswahl: { kandidaten: [{ id: 'N9', quelle: 'niveau', preis: 90, t1: 1 }] } }).filter((z) => z.stil.strich === 'gepunktet').every((z) => !z.ki))
+    const m = { ...leereMarken(), uebernommen: ['linie0'], geloescht: ['zone0'] }
+    const v = vorschauAnalyse(a, m)
+    check('Vorschau ohne Übernommenes (jetzt eigene Linie) und Verworfenes', v.linien.map((l) => l._key).join() === 'linie1,linie2' && v.zonen.length === 0)
+    check('… Schlüssel bleiben die ursprünglichen, auch gefiltert', kiVorschau(v).some((z) => z.ki === 'linie1') && !kiVorschau(v).some((z) => z.ki === 'linie0'))
+    const an = anzeigeAnalyse(a, m)
+    check('Reiter vor „erledigt": alles ausser dem Verworfenen', an.linien.length === 3 && an.zonen.length === 0)
+    const fertig = { ...m, erledigt: true }
+    check('„Vorschau erledigt": keine gestrichelten Linien mehr', vorschauAnalyse(a, fertig) === null && kiVorschau(vorschauAnalyse(a, fertig)).length === 0)
+    const anF = anzeigeAnalyse(a, fertig)
+    check('… Reiter zeigt die Analyse weiter, nur mit dem Eingezeichneten', anF && anF.linien.map((l) => l._key).join() === 'linie0' && anF.zonen.length === 0)
+    check('… Text und Bedingungen bleiben', anzeigeAnalyse({ ...a, text: 'x', bedingungen: [{ id: 'N1' }] }, fertig).text === 'x')
+    const profil = { ...leereMarken(), uebernommen: ['profil', 'linie2'] }
+    check('Profil übernommen: kein gestricheltes Profil mehr', !kiVorschau(vorschauAnalyse(a, profil)).some((z) => z.ki === 'profil'))
+    check('„Analyse zurücksetzen": Reiter leer, Vorschau leer', anzeigeAnalyse(a, { ...fertig, zurueck: true }) === null && vorschauAnalyse(a, { ...fertig, zurueck: true }) === null)
+    check('Schlüssel je Analyse: Symbol, Zeiteinheit, Markt, Zeitpunkt', markenSchluessel(a) === 'BTCUSDT|1h|futures|123' && markenSchluessel({ ...a, stand: 124 }) !== markenSchluessel(a))
+    check('ohne Analyse nichts', anzeigeAnalyse(null) === null && vorschauAnalyse(null) === null)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

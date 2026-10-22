@@ -1099,8 +1099,7 @@ watch(sichtbareAnzahl, async () => {
                     <AlarmReiter v-else-if="daten.seitenleiste.reiter === 'alarme'" :symbol="aktivesPanel.symbol"
                         :markt="aktivesPanel.markt" :kurs="aktuellerKurs" @neu="alarmBeiPreis" @bearbeite="alarmBearbeiten" />
                     <KiReiter v-else-if="daten.seitenleiste.reiter === 'ki'" :panel="aktivesPanel"
-                        :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis"
-                        @vorschau="(a) => aktivesPanelRef?.setzeKiVorschau(a)" />
+                        :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis" />
                     </div>
                         <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
                             @pointerdown.prevent.stop="eckStart($event, 'reiter')" @pointermove="eckZiehen" @pointerup="eckEnde"

@@ -181,7 +181,8 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
             unbekannt = true
             return ''
         })
-        return unbekannt ? null : aus
+        // „die Trendlinie [T1]" → nicht „die Trendlinie Trendlinie T1 (…)"
+        return unbekannt ? null : aus.replace(/\b(?:Trendlinie|trend ?line)\s+(?=Trendlinie T\d)/gi, '')
     }
     // Zahlen, die zu keiner Marke passen — protokollieren
     const marken = [...paket.kandidaten.flatMap((k) => (k.quelle === 'trend' ? [k.wertJetzt, k.p1, k.p2] : [k.preis, k.tief, k.hoch])),

@@ -181,6 +181,8 @@ console.log('\nBeschriftung, Länge, Ortszeit (20.10.2026)\n')
     const zwei = pruefeChartAuswahl({ linien: [{ id: 'T1', label: 'x', gewicht: 'stark' }] }, { ...paket, kandidaten: paket.kandidaten.map((k) => (k.id === 'T1' ? { ...k, beruehrungen: 2 } : k)) })
     check('Trendlinie mit 2 Berührungen: „stark" wird „mittel"', zwei.linien[0].gewicht === 'mittel' && zwei.linien[0].label === 'Fallender Widerstand (2 Berührungen)')
     check('Gegenprobe: mit 3 Berührungen bleibt „stark"', pruefeChartAuswahl({ linien: [{ id: 'T1', label: 'x', gewicht: 'stark' }] }, paket).linien[0].gewicht === 'stark')
+    const doppelt = pruefeChartAuswahl({ text: 'Darunter liegt die Trendlinie [T1].', linien: [{ id: 'N2', label: 'x', grund: 'Trendlinie [T1] liegt darunter' }] }, paket)
+    check('„Trendlinie [T1]" wird nicht zu „Trendlinie Trendlinie T1"', !/Trendlinie Trendlinie/.test(doppelt.text + doppelt.linien[0].grund) && doppelt.text.includes('die Trendlinie T1 (jetzt 106)'), doppelt.text)
     check('zeitText: 20.10.2026 14:45 UTC = 16:45 in Zürich', zeitText(Date.UTC(2026, 9, 20, 14, 45), 'Europe/Zurich') === '20.10. 16:45')
     check('zeitText: unbekannte Zone fällt auf UTC zurück statt zu werfen', zeitText(Date.UTC(2026, 9, 20, 14, 45), 'Mars/Olympus') === '20.10. 14:45')
 }

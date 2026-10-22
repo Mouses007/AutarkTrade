@@ -92,15 +92,59 @@ export function profileAlsZeichnungen(analyse, basis = {}) {
     return [...bereiche.values()].map(([t1, t2]) => ({ typ: 'volprofil', punkte: [{ t: t1, p: 0 }, { t: t2, p: 0 }], stil: { ...stil } }))
 }
 
-/** Alles aus einer Analyse als Vorschau (negative ids: nie verwechselbar mit gespeicherten). */
+/**
+ * Alles aus einer Analyse als Vorschau (negative ids: nie verwechselbar mit gespeicherten).
+ * `ki` trägt den Schlüssel des Vorschlags (`linie3`, `zone1`, `profil`) — daran erkennt
+ * die Zeichenebene einen Klick auf eine gestrichelte Linie (Übernehmen/Verwerfen im Chart).
+ * Graue Kandidaten tragen keinen: sie sind nicht vorgeschlagen.
+ */
 export function kiVorschau(analyse, { profilStil = {} } = {}) {
     if (!analyse) return []
     const ab = analyse.kerzenVon
     const bis = analyse.kerzenBis
+    const schluessel = (x, art, i) => x._key || `${art}${i}`
     return [
-        ...(analyse.linien || []).map((l, i) => (istProfilLinie(l) ? null : { id: -100 - i, ...linieAlsZeichnung(l) })).filter(Boolean),
-        ...(analyse.zonen || []).map((z, i) => (istProfilZone(z) ? null : { id: -200 - i, ...zoneAlsZeichnung(z, ab, bis) })).filter(Boolean),
-        ...(hatProfil(analyse) ? profileAlsZeichnungen(analyse, profilStil).map((z, j) => ({ id: -150 - j, ...z })) : []),
+        ...(analyse.linien || []).map((l, i) => (istProfilLinie(l) ? null : { id: -100 - i, ki: schluessel(l, 'linie', i), ...linieAlsZeichnung(l) })).filter(Boolean),
+        ...(analyse.zonen || []).map((z, i) => (istProfilZone(z) ? null : { id: -200 - i, ki: schluessel(z, 'zone', i), ...zoneAlsZeichnung(z, ab, bis) })).filter(Boolean),
+        ...(hatProfil(analyse) ? profileAlsZeichnungen(analyse, profilStil).map((z, j) => ({ id: -150 - j, ki: 'profil', ...z })) : []),
         ...(analyse._alle ? kandidatenVorschau(analyse) : []),
     ]
+}
+
+/*
+ * Was mit den Vorschlägen einer Analyse geschehen ist — je Analyse (Symbol,
+ * Zeiteinheit, Markt, Zeitpunkt) gemerkt, damit ein Neuladen oder ein Wechsel
+ * des Reiters die übernommenen Linien nicht wieder gestrichelt daneben zeigt.
+ *   uebernommen  Schlüssel (`linie3`, `zone1`, `profil`), jetzt eigene Zeichnungen
+ *   geloescht    im Chart oder im Reiter verworfen
+ *   erledigt     „Vorschau erledigt": keine gestrichelten Linien mehr, im Reiter
+ *                bleibt die Analyse mit den übernommenen Vorschlägen stehen
+ *   zurueck      „Analyse zurücksetzen": der Reiter ist leer
+ */
+export const leereMarken = () => ({ uebernommen: [], geloescht: [], erledigt: false, zurueck: false })
+export const markenSchluessel = (a) => (a ? `${a.symbol}|${a.interval}|${a.markt === 'spot' ? 'spot' : 'futures'}|${a.stand}` : '')
+
+/** Linien und Zonen mit ihrem Schlüssel (`_key`), nach dem Zustand gefiltert. */
+function gefiltert(analyse, behalte) {
+    const linien = (analyse.linien || []).map((l, i) => ({ ...l, _key: `linie${i}` })).filter((l) => behalte(l._key, istProfilLinie(l)))
+    const zonen = (analyse.zonen || []).map((z, i) => ({ ...z, _key: `zone${i}` })).filter((z) => behalte(z._key, istProfilZone(z)))
+    return { ...analyse, linien, zonen }
+}
+
+/**
+ * Was der Reiter zeigt: vor „erledigt" alles ausser dem Verworfenen, danach nur
+ * noch das Übernommene (das, was jetzt im Chart eingezeichnet ist). Nach
+ * „zurücksetzen" nichts.
+ */
+export function anzeigeAnalyse(analyse, marken = leereMarken()) {
+    if (!analyse || marken.zurueck) return null
+    const ue = new Set(marken.uebernommen), weg = new Set(marken.geloescht)
+    return gefiltert(analyse, (k, profil) => (marken.erledigt ? ue.has(k) || (profil && ue.has('profil')) : !weg.has(k)))
+}
+
+/** Was gestrichelt im Chart steht: nur Offenes — nicht Übernommenes (ist jetzt eine eigene Linie), nicht Verworfenes. */
+export function vorschauAnalyse(analyse, marken = leereMarken()) {
+    if (!analyse || marken.zurueck || marken.erledigt) return null
+    const ue = new Set(marken.uebernommen), weg = new Set(marken.geloescht)
+    return gefiltert(analyse, (k, profil) => !ue.has(k) && !weg.has(k) && !(profil && ue.has('profil')))
 }

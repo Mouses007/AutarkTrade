@@ -28,6 +28,7 @@ import { ZeichenEbene } from '../../utils/chart/zeichnungen/ZeichenEbene.js'
 import { zeichnungenVon, legeAn, aendere, loesche } from '../../stores/chartZeichnungen.js'
 import ZeichnungStil from './ZeichnungStil.vue'
 import { kiVorschau } from '../../utils/chart/kiZeichnungen.js'
+import { kiVorschauDaten, kiVorschlag, uebernimmKi, verwirfKi } from '../../stores/chartKi.js'
 import TradeKarte from './TradeKarte.vue'
 import { Symbol, Kreisel, Knopf } from '../basis'
 import InfoTipp from '../InfoTipp.vue'
@@ -245,8 +246,10 @@ function baueChart() {
             auswahl: (id) => { auswahlId.value = id },
             werkzeugFertig: () => emit('werkzeugFertig'),
             textBearbeiten: textBearbeiten,
+            kiKlick: (schluessel, x, y) => { kiWahl.value = schluessel ? { schluessel, x, y } : null },
         },
     })
+    zeigeKi()
     marktEbene = new MarktEbene({
         chart: c, serie: ks,
         texte: { kauf: t('chart.markt.kaufwand'), verkauf: t('chart.markt.verkaufswand'), liqLong: t('chart.markt.liqLong'), liqShort: t('chart.markt.liqShort') },
@@ -736,7 +739,7 @@ watch(() => props.panel.symbol, () => {
     setzeStrategieVorschau(null)
     setzeBacktest(null)
 })
-watch(() => props.panel.interval, () => { setzeStrategieVorschau(null); setzeKiVorschau(null) })
+watch(() => [props.panel.interval, props.panel.symbol, props.panel.markt], () => { setzeStrategieVorschau(null); zeigeKi() })
 let marktNeuUhr = null
 watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], () => {
     marktEbene?.setzeLiquidationen([])
@@ -806,14 +809,51 @@ function loescheAuswahl() {
 
 /** Escape: laufende Zeichnung oder Messung verwerfen, sonst Auswahl lösen. */
 function abbrechen() {
+    if (kiWahl.value) { kiWahl.value = null; return true }
     if (ebene?.abbrechen()) return true
     if (auswahlId.value != null) { auswahlId.value = null; ebene?.setzeAuswahl(null); return true }
     return false
 }
 
-/** KI-Vorschläge gestrichelt einblenden (oder mit null entfernen). */
+/** KI-Vorschläge gestrichelt einblenden (oder mit null entfernen) — nur auf dem Chart, für den die Analyse gilt. */
 function setzeKiVorschau(analyse) {
-    ebene?.setzeTemporaer(analyse && analyse.symbol === props.panel.symbol && analyse.interval === props.panel.interval ? kiVorschau(analyse, { profilStil: letzterStil('volprofil') }) : [])
+    const passt = analyse && analyse.symbol === props.panel.symbol && analyse.interval === props.panel.interval
+        && (analyse.markt === 'spot') === (props.panel.markt === 'spot')
+    ebene?.setzeTemporaer(passt ? kiVorschau(analyse, { profilStil: letzterStil('volprofil') }) : [])
+    if (!passt) kiWahl.value = null
+}
+/*
+ * Die Vorschau kommt aus dem Speicher `stores/chartKi.js` — derselbe Stand wie im
+ * KI-Reiter. Übernommenes und Verworfenes fällt dort heraus, „Vorschau erledigt"
+ * leert sie. Ein Klick auf eine gestrichelte Linie öffnet `kiWahl`.
+ */
+const zeigeKi = () => setzeKiVorschau(kiVorschauDaten.value)
+watch(kiVorschauDaten, zeigeKi)
+const kiWahl = ref(null)         // { schluessel, x, y } — angeklickter Vorschlag
+const kiWahlInfo = computed(() => {
+    const w = kiWahl.value
+    const v = w && kiVorschlag(w.schluessel)
+    if (!v) return null
+    const breite = huelle.value?.clientWidth || 600
+    return {
+        text: v.profil ? t('chart.ki.profil') : `${v.eintrag.label || ''}${v.eintrag.id ? ` (${v.eintrag.id})` : v.eintrag.ids?.length ? ` (${v.eintrag.ids.join('+')})` : ''}`,
+        links: Math.max(4, Math.min(w.x + 10, breite - 230)), oben: Math.max(4, w.y + 10),
+    }
+})
+watch(kiVorschauDaten, () => {
+    // Was nicht mehr in der Vorschau steht (übernommen, verworfen, erledigt), hat keine Wahl mehr.
+    const w = kiWahl.value
+    if (w && !kiVorschau(kiVorschauDaten.value).some((z) => z.ki === w.schluessel)) kiWahl.value = null
+})
+async function kiWahlUebernehmen() {
+    const w = kiWahl.value
+    kiWahl.value = null
+    if (w) await uebernimmKi(w.schluessel, props.panel.symbol)
+}
+function kiWahlVerwerfen() {
+    const w = kiWahl.value
+    kiWahl.value = null
+    if (w) verwirfKi(w.schluessel)
 }
 
 function waehleZeichnung(id) {
@@ -1295,6 +1335,18 @@ defineExpose({
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
             @alarm="emit('alarmAufZeichnung', ausgewaehlt)" />
 
+        <!-- Klick auf einen gestrichelten KI-Vorschlag: übernehmen oder verwerfen, ohne den Reiter zu öffnen. -->
+        <div v-if="kiWahlInfo" class="kiWahl" data-ki-generiert="true" :style="{ left: kiWahlInfo.links + 'px', top: kiWahlInfo.oben + 'px' }"
+            @mousedown.stop @pointerdown.stop>
+            <div class="kiWahlKopf"><Symbol name="ki" /> {{ t('chart.ki.vorschlagKopf') }}</div>
+            <div class="kiWahlText">{{ kiWahlInfo.text }}</div>
+            <div class="kiWahlKnoepfe">
+                <Knopf klein @click="kiWahlUebernehmen">{{ t('chart.ki.uebernehmen') }}</Knopf>
+                <Knopf klein @click="kiWahlVerwerfen">{{ t('chart.ki.verwerfen') }}</Knopf>
+                <button type="button" class="kiWahlZu" :title="t('chart.ki.schliessen')" :aria-label="t('chart.ki.schliessen')" @click="kiWahl = null"><Symbol name="schliessen" /></button>
+            </div>
+        </div>
+
         <TradeKarte v-if="gewaehlterTrade" :trade="gewaehlterTrade" :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)"
             @schliesse="schliesseTrade" />
 
@@ -1592,5 +1644,46 @@ defineExpose({
 .hinweis.fehler {
     pointer-events: auto;
     background: rgba(0, 0, 0, 0.35);
+}
+.kiWahl {
+    position: absolute;
+    z-index: 6;
+    min-width: 200px;
+    max-width: 260px;
+    padding: 8px 10px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.kiWahlKopf {
+    color: var(--muted);
+    font-size: 11px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.kiWahlText {
+    color: var(--text);
+}
+
+.kiWahlKnoepfe {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.kiWahlZu {
+    margin-left: auto;
+    background: none;
+    border: 0;
+    color: var(--muted);
+    cursor: pointer;
 }
 </style>
