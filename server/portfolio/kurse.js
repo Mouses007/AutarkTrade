@@ -27,7 +27,7 @@ const FX_TTL = 60 * 60e3
 const MARKT_TTL = 60e3
 
 /** Umbenennungen und verpackte Coins → das Symbol, unter dem es einen Kurs gibt. */
-const ALIAS = { WETH: 'ETH', WBTC: 'BTC', WBNB: 'BNB', WPOL: 'POL', WMATIC: 'POL', MATIC: 'POL', WAVAX: 'AVAX', WSOL: 'SOL', BTCB: 'BTC', CHSB: 'BORG' }
+const ALIAS = { BTT: 'BTTC', WETH: 'ETH', WBTC: 'BTC', WBNB: 'BNB', WPOL: 'POL', WMATIC: 'POL', MATIC: 'POL', WAVAX: 'AVAX', WSOL: 'SOL', BTCB: 'BTC', CHSB: 'BORG' }
 
 /** DexScreener-Namen der Ketten. */
 export const DEX_KETTE = { 'evm:1': 'ethereum', 'evm:42161': 'arbitrum', 'evm:8453': 'base', 'evm:10': 'optimism', 'evm:56': 'bsc', 'evm:137': 'polygon', 'evm:43114': 'avalanche', sol: 'solana' }
@@ -74,9 +74,10 @@ export async function fxHeute() {
 }
 
 /** USD → CHF an einem Tag (für die eingefrorene Bewertung einer Bewegung). */
-export async function fxAm(datum) {
+export async function fxAm(datum, waehrung = 'CHF') {
+    const schluessel = waehrung === 'EUR' ? 'usdeur' : 'usdchf'
     const k = getKnex()
-    const z = await k('portfolio_kurse').where({ schluessel: 'usdchf', datum }).first().catch(() => null)
+    const z = await k('portfolio_kurse').where({ schluessel, datum }).first().catch(() => null)
     if (z?.usd > 0) return z.usd
     // Eine Woche um den Tag laden: Wochenenden/Feiertage haben keinen EZB-Kurs.
     const t = Date.parse(datum + 'T00:00:00Z')
@@ -85,9 +86,9 @@ export async function fxAm(datum) {
         const d = await frankfurter(`from=${von}&to=${datum}`)
         let letzter = null
         for (const x of d) {
-            if (x.quote !== 'CHF') continue
-            await merkeKurs('usdchf', x.date, x.rate, 'EZB')
-            if (x.date <= datum) letzter = x.rate
+            if (x.quote !== 'CHF' && x.quote !== 'EUR') continue
+            await merkeKurs(x.quote === 'EUR' ? 'usdeur' : 'usdchf', x.date, x.rate, 'EZB')
+            if (x.quote === waehrung && x.date <= datum) letzter = x.rate
         }
         if (letzter) return letzter
     } catch { /* unten */ }
@@ -187,10 +188,11 @@ function kursEinfach(asset, fx, { karte, ersatz }) {
     if (asset === 'EUR') return { usd: 1 / fx.eur, quelle: `Wechselkurs (${fx.quelle})` }
     if (asset === 'CHF') return { usd: 1 / fx.chf, quelle: `Wechselkurs (${fx.quelle})` }
     const a = ALIAS[asset] || asset
+    // Ein Kurs von 0 ist kein Kurs (eingestellte Paare stehen bei Binance mit 0 im Ticker).
     const p = karte.get(`${a}USDT`) ?? karte.get(`${a}USDC`)
-    if (Number.isFinite(p)) return { usd: p, quelle: 'Marktdaten (Spot)' }
+    if (Number.isFinite(p) && p > 0) return { usd: p, quelle: 'Marktdaten (Spot)' }
     const e = ersatz?.get(`${a}USDT`)
-    return Number.isFinite(e) ? { usd: e, quelle: 'Bitget Spot' } : { usd: null, quelle: 'kein Kurs' }
+    return Number.isFinite(e) && e > 0 ? { usd: e, quelle: 'Bitget Spot' } : { usd: null, quelle: 'kein Kurs' }
 }
 
 /**

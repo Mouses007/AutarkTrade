@@ -68,18 +68,44 @@ console.log('\nPionex Fills (echter BTC-Kauf)')
     check('Kauf: USDT = −size×Preis', nah(s.get('USDT'), -0.00107118 * 88107.6))
 }
 
-console.log('\nBitpanda Operationen (Schema, ungeprüft)')
+console.log('\nBitpanda Operationen (Form der echten Antwort vom 23.10.2026)')
 {
-    const sym = new Map([['btc', 'BTC'], ['eur', 'EUR']])
+    const sym = new Map([['btc', 'BTC'], ['algo', 'ALGO'], ['chf', 'CHF'], ['eth', 'ETH'], ['fet', 'FET'], ['iota', 'IOTA'], ['miota', 'MIOTA']])
+    const tx = (asset, flow, value, extra = {}) => ({ transaction_id: Math.random().toString(36), asset_id: asset === 'chf' ? undefined : asset, currency_id: asset === 'chf' ? 'chf' : undefined, flow, asset_amount: { value: String(value) }, credited_at: '2026-10-20T18:27:11Z', ...extra })
     const b = ausBitpandaOperationen([
-        { operation_id: 'op1', operation_type: 'buy', transactions: [
-            { transaction_id: 't1', asset_id: 'btc', flow: 'INCOMING', asset_amount: { value: '0.01' }, credited_at: '2026-01-02T10:00:00Z' },
-            { transaction_id: 't2', asset_id: 'eur', flow: 'OUTGOING', asset_amount: { value: '900' }, credited_at: '2026-01-02T10:00:00Z' }] },
-        { operation_id: 'op2', operation_type: 'crypto_withdrawal', transactions: [
-            { transaction_id: 't3', asset_id: 'btc', flow: 'OUTGOING', asset_amount: { value: '0.005' }, credited_at: '2026-02-01T10:00:00Z' }] },
+        // Staking: Betrag brutto, 20 % Gebühr ZUSÄTZLICH abgezogen (belegt über asset_balance_after)
+        { operation_id: 'r1', operation_type: 'reward', transactions: [tx('algo', 'INCOMING', '1.10803044', { fee_amount: { value: '0.22160609', asset_id: 'algo' }, wallet_owner: 'staking-service' })] },
+        // Sparplan: CHF raus, BTC rein (Fiat über currency_id)
+        { operation_id: 's1', operation_type: 'savings_plan', transactions: [tx('chf', 'OUTGOING', '50', { transaction_type: 'buy' }), tx('btc', 'INCOMING', '0.0007', { transaction_type: 'buy' })] },
+        // Swap mit 4 Transaktionen: ETH → CHF → FET (Zwischenschritt hebt sich auf)
+        { operation_id: 'w1', operation_type: 'swap', transactions: [tx('eth', 'OUTGOING', '0.1'), tx('chf', 'INCOMING', '300'), tx('chf', 'OUTGOING', '300'), tx('fet', 'INCOMING', '500')] },
+        // Auszahlung mit Netzgebühr obendrauf
+        { operation_id: 'a1', operation_type: 'withdrawal', transactions: [tx('btc', 'OUTGOING', '0.0005', { fee_amount: { value: '0.00001', asset_id: 'btc' } })] },
+        // Fusion MIOTA → IOTA
+        { operation_id: 'm1', operation_type: 'merger_crypto', transactions: [tx('miota', 'OUTGOING', '100'), tx('iota', 'INCOMING', '100')] },
+        // Index-Kauf: CHF raus, drei Coins rein
+        { operation_id: 'i1', operation_type: 'index_buy', transactions: [tx('chf', 'OUTGOING', '100'), tx('btc', 'INCOMING', '0.0005', { wallet_owner: 'bci-service' }), tx('eth', 'INCOMING', '0.01', { wallet_owner: 'bci-service' }), tx('fet', 'INCOMING', '10', { wallet_owner: 'bci-service' })] },
+        // Gebühr (trading_premium) und Unbekanntes
+        { operation_id: 'g1', operation_type: 'trading_premium', transactions: [tx('algo', 'OUTGOING', '0', { fee_amount: { value: '0.5', asset_id: 'algo' } })] },
+        { operation_id: 'x1', operation_type: 'irgendwas_neues', transactions: [tx('algo', 'INCOMING', '2')] },
+        // Sparplan-Lastschrift: nur die Transaktion sagt „deposit"
+        { operation_id: 'l1', operation_type: 'savings_plan', transactions: [tx('chf', 'INCOMING', '50', { transaction_type: 'deposit' })] },
     ], sym)
-    check('Kauf gegen EUR', b[0].art === 'kauf' && b[0].asset === 'BTC' && b[0].gegenAsset === 'EUR' && b[0].gegenMenge === -900)
-    check('Auszahlung negativ', b[1].art === 'auszahlung' && b[1].menge === -0.005)
+    const s = saldiere(b)
+    const r = b.find((x) => x.externeId === 'r1')
+    check('Staking: Art staking, Menge = brutto − Gebühr', r.art === 'staking' && nah(r.menge, 1.10803044 - 0.22160609), String(r.menge))
+    const k = b.find((x) => x.externeId === 's1')
+    check('Sparplan: Kauf BTC gegen CHF', k.art === 'kauf' && k.asset === 'BTC' && k.gegenAsset === 'CHF' && k.gegenMenge === -50)
+    const w = b.find((x) => x.externeId === 'w1')
+    check('Swap über CHF: ein Tausch ETH → FET, Zwischenschritt weg', w.art === 'tausch' && w.asset === 'FET' && w.gegenAsset === 'ETH', JSON.stringify(w))
+    check('Auszahlung: Gebühr zusätzlich', nah(b.find((x) => x.externeId === 'a1').menge, -0.00051))
+    check('Fusion MIOTA → IOTA als Tausch', b.find((x) => x.externeId === 'm1').art === 'tausch')
+    check('Index-Kauf: je Asset eine Zeile', b.filter((x) => x.externeId.startsWith('i1:')).length === 4)
+    check('trading_premium = Gebühr', b.find((x) => x.externeId === 'g1').art === 'gebuehr')
+    check('Unbekannter Typ → sonstiges', b.find((x) => x.externeId === 'x1').art === 'sonstiges')
+    check('Sparplan-Lastschrift = Einzahlung', b.find((x) => x.externeId === 'l1').art === 'einzahlung')
+    check('Saldo CHF = +50 − 50 − 100', nah(s.get('CHF'), -100))
+    check('Saldo ALGO = Staking netto − Prämie + 2', nah(s.get('ALGO'), 1.10803044 - 0.22160609 - 0.5 + 2))
 }
 
 console.log('\nEVM')

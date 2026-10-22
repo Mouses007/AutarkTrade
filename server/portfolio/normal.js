@@ -106,6 +106,9 @@ export function ausBitgetSteuer(zeilen) {
     return aus.sort((a, b) => a.zeit - b.zeit)
 }
 
+/** Fiat: Ein- und Auszahlungen davon sind Bankbewegungen, keine Transfers zwischen Wallets. */
+export const FIAT = ['CHF', 'EUR', 'USD', 'GBP', 'PLN', 'CZK', 'HUF', 'SEK', 'NOK', 'DKK', 'TRY', 'RON']
+
 /** Stablecoins und Fiat: was als „Geld" gilt, damit ein Tausch Kauf oder Verkauf heisst. */
 export const STABIL = { USDT: 1, USDC: 1, FDUSD: 1, DAI: 1, BUSD: 1, TUSD: 1, USDE: 1, PYUSD: 1, USD: 1, EUR: 1, CHF: 1 }
 
@@ -176,59 +179,84 @@ export function ausPionexFills(fills) {
 // ── Bitpanda: GET /v1/operations ─────────────────────────────────────────
 
 /*
- * NICHT gegen echte Daten geprüft (kein Schlüssel vorhanden). Gebaut nach dem
- * OpenAPI-Schema vom 22.10.2026: eine Operation trägt 1..n Transaktionen mit
- * `flow` INCOMING/OUTGOING und `asset_amount.value`; `operation_type` ist ein
- * freier Text ohne Aufzählung. Darum wird die Art aus dem Text GERATEN und
- * alles Unklare als `sonstiges` abgelegt — sichtbar in der Prüfliste.
- * Gebühren stehen nur im Rohfeld, bis belegt ist, ob `asset_amount` netto ist.
- *
+ * Gemessen 23.10.2026 gegen das echte Konto (1'330 Operationen, 2019–2026):
+ *   - Jede Transaktion trägt `asset_amount` (Krypto: `asset_id`, Fiat:
+ *     `currency_id`) und `flow`. `fee_amount` wird IMMER ZUSÄTZLICH abgezogen
+ *     — belegt über `asset_balance_after` in 2'500 Fällen (Staking-Belohnung
+ *     mit 20 % Gebühr, Ein-/Auszahlung, trading_premium, Lagergebühr).
+ *   - Mit dieser Regel ergibt die Summe aller Operationen für JEDEN Coin und
+ *     für CHF exakt den Portfolio-Bestand.
+ *   - Eine Operation kann viele Transaktionen tragen (Swap: 4, Index-Kauf
+ *     und -Umschichtung: bis 50) und mehrere Teil-Wallets berühren
+ *     (`shared-default`, `bci-service` = Crypto-Index, `staking-service`).
+ *     Bewegungen zwischen eigenen Teil-Wallets heben sich auf; gezählt wird
+ *     die Netto-Wirkung je Asset und Operation.
+ *   - `operation_type` ist freier Text; die gesehenen Werte stehen in
+ *     BITPANDA_ART. Unbekanntes landet als `sonstiges` in der Prüfliste.
+ */
+const BITPANDA_ART = {
+    reward: 'staking', passive_earn_reward: 'staking',
+    best_reward: 'belohnung', onetime_reward: 'belohnung', instant_trade_bonus: 'belohnung', giveaway: 'belohnung',
+    airdrop: 'airdrop',
+    deposit: 'einzahlung', withdrawal: 'auszahlung',
+    trading_premium: 'gebuehr', metal_storage_fee: 'gebuehr',
+    stake: 'umbuchung', unstake: 'umbuchung',
+}
+
+/**
  * @param {Array} ops
- * @param {Map<string,string>} symbole  asset_id → Symbol
+ * @param {Map<string,string>} symbole  asset_id bzw. currency_id → Symbol
  */
 export function ausBitpandaOperationen(ops, symbole) {
-    const sym = (id) => symbole?.get(id) || null
+    const sym = (id) => (id && symbole?.get(id)) || null
     const aus = []
     for (const op of ops || []) {
-        const txs = (op.transactions || []).filter((t) => zahl(t.asset_amount?.value))
         const typ = String(op.operation_type || '').toLowerCase()
-        const rein = txs.filter((t) => t.flow === 'INCOMING')
-        const raus = txs.filter((t) => t.flow === 'OUTGOING')
-        const zeitVon = (t) => Date.parse(t.credited_at) || 0
-        if (rein.length === 1 && raus.length === 1 && sym(rein[0].asset_id) && sym(raus[0].asset_id)) {
-            const r = rein[0], o = raus[0]
-            const rSym = sym(r.asset_id), oSym = sym(o.asset_id)
-            const art = handelsArt(oSym, rSym)
-            const verkauf = art === 'verkauf'
+        const delta = new Map()
+        let zeit = 0, unbekannt = false
+        for (const t of op.transactions || []) {
+            const id = t.asset_id || t.currency_id || t.asset_amount?.asset_id || t.asset_amount?.currency_id
+            const s = sym(id)
+            if (!s) { unbekannt = true; continue }
+            const betrag = zahl(t.asset_amount?.value) || 0
+            delta.set(s, (delta.get(s) || 0) + (t.flow === 'INCOMING' ? betrag : -betrag))
+            const gebuehr = zahl(t.fee_amount?.value) || 0
+            if (gebuehr) {
+                const fs = sym(t.fee_amount.asset_id || t.fee_amount.currency_id) || s
+                delta.set(fs, (delta.get(fs) || 0) - gebuehr)
+            }
+            zeit = Math.max(zeit, Date.parse(t.credited_at) || 0)
+        }
+        const teile = [...delta.entries()].filter(([, v]) => Math.abs(v) > 1e-12)
+        if (!teile.length) continue
+        const roh = { operation_type: op.operation_type, unbekanntesAsset: unbekannt || undefined }
+        // Sparplan-Lastschrift: operation_type `savings_plan`, die Transaktion
+        // selbst sagt `deposit` — die Transaktion weiss es genauer.
+        const tTypen = new Set((op.transactions || []).map((t) => t.transaction_type).filter(Boolean))
+        const art = BITPANDA_ART[typ] || (tTypen.size === 1 ? BITPANDA_ART[[...tTypen][0]] : undefined)
+        if (teile.length === 2 && Math.sign(teile[0][1]) !== Math.sign(teile[1][1])) {
+            const [plus, minus] = teile[0][1] > 0 ? teile : [teile[1], teile[0]]
+            const hArt = handelsArt(minus[0], plus[0])
+            const verkauf = hArt === 'verkauf'
             aus.push(bewegung({
-                externeId: op.operation_id, zeit: Math.max(zeitVon(r), zeitVon(o)), art,
-                asset: verkauf ? oSym : rSym, menge: verkauf ? -zahl(o.asset_amount.value) : zahl(r.asset_amount.value),
-                gegenAsset: verkauf ? rSym : oSym, gegenMenge: verkauf ? zahl(r.asset_amount.value) : -zahl(o.asset_amount.value),
-                roh: op,
+                externeId: op.operation_id, zeit, art: hArt,
+                asset: verkauf ? minus[0] : plus[0], menge: verkauf ? minus[1] : plus[1],
+                gegenAsset: verkauf ? plus[0] : minus[0], gegenMenge: verkauf ? plus[1] : minus[1],
+                roh,
             }))
             continue
         }
-        for (const t of txs) {
-            const s = sym(t.asset_id)
-            if (!s) continue
-            const ein = t.flow === 'INCOMING'
-            let art = 'sonstiges'
-            if (/deposit/.test(typ)) art = 'einzahlung'
-            else if (/withdraw/.test(typ)) art = 'auszahlung'
-            else if (/stak|earn|reward/.test(typ)) art = ein ? 'staking' : 'umbuchung'
-            else if (/airdrop/.test(typ)) art = 'airdrop'
-            else if (/transfer/.test(typ)) art = 'umbuchung'
-            else if (/buy/.test(typ)) art = 'kauf'
-            else if (/sell/.test(typ)) art = 'verkauf'
-            aus.push(bewegung({
-                externeId: t.transaction_id || `${op.operation_id}:${t.asset_id}`,
-                zeit: zeitVon(t), art, asset: s,
-                menge: ein ? zahl(t.asset_amount.value) : -zahl(t.asset_amount.value),
-                roh: { operation_type: op.operation_type, ...t },
-            }))
+        if (teile.length === 1) {
+            const [s, v] = teile[0]
+            aus.push(bewegung({ externeId: op.operation_id, zeit, art: art || 'sonstiges', asset: s, menge: v, roh }))
+            continue
+        }
+        // Viele Assets (Index-Kauf/-Umschichtung, Swap in einen Index): je Asset eine Zeile.
+        for (const [s, v] of teile) {
+            aus.push(bewegung({ externeId: `${op.operation_id}:${s}`, zeit, art: art || 'tausch', asset: s, menge: v, roh }))
         }
     }
-    return aus.sort((a, b) => a.zeit - b.zeit)
+    return aus.sort((x, y) => x.zeit - y.zeit)
 }
 
 // ── EVM: Etherscan V2 txlist / tokentx / txlistinternal ──────────────────

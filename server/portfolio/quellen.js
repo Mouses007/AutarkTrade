@@ -24,6 +24,7 @@ import { pionexRequest } from '../pionex-transport.js'
 import { ausBitgetSteuer, ausBitunixOrders, ausPionexFills, ausBitpandaOperationen, ausEvm, ausBtc, saldiere } from './normal.js'
 import { leseXpub, leseAdresse } from './btc.js'
 import { EVM_NETZE } from '../../shared/portfolio-adresse.js'
+import { fxHeute } from './kurse.js'
 
 const warte = (ms) => new Promise((r) => setTimeout(r, ms))
 const TAG = 86400e3
@@ -262,7 +263,7 @@ export async function testeBitpanda(key) {
     return true
 }
 
-export async function holeBitpanda(seit) {
+export async function holeBitpanda(seit, alterStand = {}) {
     const key = await schluessel('bitpanda')
     if (!key) throw new NichtEingerichtet('Bitpanda-Schlüssel fehlt')
     const portfolio = (await bitpandaHole(key, '/portfolio')).data || []
@@ -270,24 +271,44 @@ export async function holeBitpanda(seit) {
     const ops = await bitpandaAlle(key, '/operations', params)
 
     // Symbole zu den IDs: Krypto/Aktien über /assets, Fiat über /currencies.
-    const ids = new Set(portfolio.map((p) => p.asset_id))
-    for (const o of ops) for (const t of o.transactions || []) if (t.asset_id) ids.add(t.asset_id)
-    const symbole = new Map()
-    const liste = [...ids].filter(Boolean)
-    for (let i = 0; i < liste.length; i += 40) {
-        const d = await bitpandaHole(key, '/assets', { id: liste.slice(i, i + 40).join(','), page_size: 100 }).catch(() => ({ data: [] }))
-        for (const a of d.data || []) symbole.set(a.id, a.symbol)
-    }
+    // Symbole: Fiat über /currencies (ein Abruf), Krypto/Aktien/Metalle über
+    // /assets je ID. Die IDs sind stabil — gemerkt in `stand.symbole`, damit
+    // ein Folgelauf nur neue nachfragt.
+    const symbole = new Map(Object.entries(alterStand.symbole || {}))
     try {
         for (const c of (await bitpandaHole(key, '/currencies')).data || []) symbole.set(c.id, c.symbol || c.code)
-    } catch { /* Fiat ohne Namen */ }
+    } catch { /* Fiat ohne Namen → bleibt sichtbar als unbekannt */ }
+    const ids = new Set(portfolio.map((p) => p.asset_id).filter(Boolean))
+    for (const o of ops) for (const t of o.transactions || []) if (t.asset_id) ids.add(t.asset_id)
+    for (const id of ids) {
+        if (symbole.has(id)) continue
+        const d = await bitpandaHole(key, '/assets', { id }).catch(() => ({ data: [] }))
+        for (const a of d.data || []) symbole.set(a.id, a.symbol)
+        await warte(120)
+    }
 
+    // `currency_balance` ist Bitpandas eigene Bewertung der Position (in der
+    // Währung `currency_id`, gemessen: EUR). Daraus ein Kurs je Einheit in USD
+    // — nur als Ersatz für Coins, die keine Börse führt (CSPR, DUEL, MBTN …).
+    let usdJeEur = null
+    try { usdJeEur = 1 / (await fxHeute()).eur } catch { /* ohne Ersatzkurs */ }
     const bestand = portfolio
-        .map((p) => ({ ort: 'konto', asset: symbole.get(p.asset_id) || p.asset_id, menge: Number(p.balance?.value || 0) }))
+        .map((p) => {
+            const menge = Number(p.balance?.value || 0)
+            const wert = Number(p.currency_balance?.value)
+            const waehrung = symbole.get(p.currency_balance?.currency_id)
+            let kursUsd = null
+            if (menge > 0 && wert > 0 && waehrung === 'EUR' && usdJeEur) kursUsd = (wert / menge) * usdJeEur
+            else if (menge > 0 && wert > 0 && ['USD', 'USDT', 'USDC'].includes(waehrung)) kursUsd = wert / menge
+            return { ort: 'konto', asset: symbole.get(p.asset_id || p.currency_id) || p.asset_id || p.currency_id, menge, kursUsd }
+        })
         .filter((b) => b.menge > 0)
     return {
+        // Die Historie reicht ab Kontoeröffnung (gemessen: 2019); Folgeläufe
+        // holen ab der jüngsten Bewegung nach — der Bestand bleibt nachrechenbar.
         bestand, bewegungen: ausBitpandaOperationen(ops, symbole), vollstaendig: true,
-        hinweis: 'Bitpanda: Format nach Dokumentation gebaut, noch nicht mit echten Daten geprüft.',
+        stand: { symbole: Object.fromEntries(symbole) },
+        hinweis: seit ? null : `Bitpanda: ${ops.length} Operationen gelesen.`,
     }
 }
 

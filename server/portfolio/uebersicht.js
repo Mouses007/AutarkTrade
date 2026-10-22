@@ -45,12 +45,22 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     const { kurse, fx, marktFehler } = await kurseFuer(posten)
 
     const keyVon = (b) => (b.kontrakt ? `${b.asset}|${b.kontrakt}` : b.asset)
+    const quellKurs = new Map()
+    for (const b of bestaende) {
+        if (Number(b.kursUsd) > 0 && !quellKurs.has(keyVon(b))) {
+            quellKurs.set(keyVon(b), { usd: Number(b.kursUsd), quelle: `Bewertung ${b.quelle === 'bitpanda' ? 'Bitpanda' : b.quelle}` })
+        }
+    }
     const jeAsset = new Map()
     const jeQuelle = new Map()
     let gesamtUsd = 0, ohneKurs = 0
     for (const b of bestaende) {
         const key = keyVon(b)
-        const kurs = kurse.get(key) || { usd: null, quelle: 'kein Kurs' }
+        let kurs = kurse.get(key) || { usd: null, quelle: 'kein Kurs' }
+        // Ohne Börsenkurs: den Kurs, den eine Quelle selbst nennt (Bitpanda) —
+        // für ALLE Orte dieses Coins, denn derselbe Coin hat überall denselben
+        // Wert (CSPR bei Bitget ohne Kurs, bei Bitpanda bewertet).
+        if (kurs.usd == null && quellKurs.has(key)) kurs = quellKurs.get(key)
         const usd = kurs.usd != null ? b.menge * kurs.usd : null
         const chf = usd != null ? usd * fx.chf : null
         if (usd != null) gesamtUsd += usd; else ohneKurs++

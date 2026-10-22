@@ -28,7 +28,7 @@ import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } fro
 import { berechneUebersicht } from './uebersicht.js'
 import { rufeAb, laufStand } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
-import { ARTEN } from './normal.js'
+import { ARTEN, FIAT } from './normal.js'
 
 const SCHLUESSEL_NAMEN = ['bitpanda', 'etherscan']
 const EINORDNUNGEN = ['transfer', 'kauf', 'einkommen', 'ignorieren']
@@ -64,13 +64,13 @@ export function setupPortfolioRoutes(app) {
             }
             if (req.query.offen === '1') {
                 q.whereNull('einordnung').whereNull('transferMit')
-                    .whereIn('art', OFFENE_ARTEN)
+                    .whereIn('art', OFFENE_ARTEN).whereNotIn('asset', FIAT)
             }
             if (req.query.vor) q.where('zeit', '<', Number(req.query.vor))
             const limit = Math.min(Number(req.query.limit) || 100, 500)
             const zeilen = await q.orderBy('zeit', 'desc').orderBy('id', 'desc').limit(limit)
             const offen = await k('portfolio_bewegungen').whereNull('einordnung').whereNull('transferMit')
-                .whereIn('art', OFFENE_ARTEN).count({ n: '*' }).first()
+                .whereIn('art', OFFENE_ARTEN).whereNotIn('asset', FIAT).count({ n: '*' }).first()
             res.json({ ok: true, zeilen, offen: Number(offen?.n || 0), weitere: zeilen.length === limit })
         } catch (e) { fehler(res, e) }
     })
@@ -81,7 +81,7 @@ export function setupPortfolioRoutes(app) {
             const e = req.body?.einordnung
             const quelle = String(req.body?.quelle || '')
             if (!EINORDNUNGEN.includes(e) || !quelle) return fehler(res, 'Quelle und Einordnung nötig', 400)
-            const q = getKnex()('portfolio_bewegungen').where('quelle', quelle).whereNull('einordnung').whereNull('transferMit').whereIn('art', OFFENE_ARTEN)
+            const q = getKnex()('portfolio_bewegungen').where('quelle', quelle).whereNull('einordnung').whereNull('transferMit').whereIn('art', OFFENE_ARTEN).whereNotIn('asset', FIAT)
             if (req.body?.art && OFFENE_ARTEN.includes(req.body.art)) q.where('art', req.body.art)
             const n = await q.update({ einordnung: e })
             res.json({ ok: true, geaendert: n })

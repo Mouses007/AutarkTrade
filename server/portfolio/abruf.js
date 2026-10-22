@@ -64,7 +64,7 @@ async function holeQuelle(q, seit, altStand = {}) {
         if (q.quelle === 'bitget') return holeBitget(seit)
         if (q.quelle === 'bitunix') return holeBitunix()
         if (q.quelle === 'pionex') return holePionex()
-        if (q.quelle === 'bitpanda') return holeBitpanda(seit)
+        if (q.quelle === 'bitpanda') return holeBitpanda(seit, altStand)
     }
     const a = q.adresse
     const wert = decrypt(a.adresse)
@@ -86,7 +86,7 @@ async function speichere(quelle, erg) {
         if (erg.bestand.length) {
             await trx('portfolio_bestaende').insert(erg.bestand.map((b) => ({
                 quelle, ort: b.ort || null, asset: String(b.asset).toUpperCase(), kontrakt: b.kontrakt || null,
-                menge: b.menge, name: b.name || (b.ohneSymbol ? 'ohneSymbol' : null), zeit: jetzt,
+                menge: b.menge, name: b.name || (b.ohneSymbol ? 'ohneSymbol' : null), kursUsd: b.kursUsd ?? null, zeit: jetzt,
             })))
         }
         for (let i = 0; i < erg.bewegungen.length; i += 200) {
@@ -138,26 +138,31 @@ async function paareTransfers() {
  * Gedeckelt je Lauf, weil jede neue Kombination aus Asset und Tag einen
  * Kerzenabruf kostet; der nächste Lauf macht weiter.
  */
-async function bewerteBewegungen(max = 60) {
+async function bewerteBewegungen(max = 400) {
     const k = getKnex()
     const offen = await k('portfolio_bewegungen').whereNull('chfQuelle').orderBy('zeit', 'desc').limit(max)
     let n = 0
     for (const b of offen) {
         const datum = new Date(Number(b.zeit)).toISOString().slice(0, 10)
-        const fx = await fxAm(datum)
-        // Bewertet wird die Seite, die NICHT Geld ist (bei Kauf das Gekaufte),
-        // bei reinen Bewegungen das Asset selbst.
-        // Gegen einen Dollar-Stablecoin gehandelt: der bezahlte Betrag IST der
-        // Wert — genauer als jeder Tageskurs.
-        let usdWert = null, quelle = null
-        if (b.gegenAsset && DOLLAR.has(b.gegenAsset) && Number(b.gegenMenge)) {
-            usdWert = Math.abs(Number(b.gegenMenge)); quelle = 'Handelsbetrag'
+        const usdChf = await fxAm(datum, 'CHF')
+        // Bewertet wird zuerst über den GEZAHLTEN Betrag, wenn eine Seite Geld
+        // ist — genauer als jeder Tageskurs: CHF direkt, EUR zum EZB-Kurs des
+        // Tages, ein Dollar-Stablecoin zu 1 USD. Sonst Menge × Tageskurs.
+        let wert = null, quelle = null
+        const seiten = [[b.asset, b.menge], [b.gegenAsset, b.gegenMenge]]
+        const geld = seiten.find(([a, m]) => a === 'CHF' && Number(m)) || seiten.find(([a, m]) => a === 'EUR' && Number(m)) || seiten.find(([a, m]) => DOLLAR.has(a) && Number(m))
+        if (geld) {
+            const betrag = Math.abs(Number(geld[1]))
+            if (geld[0] === 'CHF') { wert = betrag; quelle = 'Betrag in CHF' }
+            else if (geld[0] === 'EUR') {
+                const usdEur = await fxAm(datum, 'EUR')
+                if (usdEur && usdChf) { wert = betrag / usdEur * usdChf; quelle = 'Betrag in EUR · EZB' }
+            } else if (usdChf) { wert = betrag * usdChf; quelle = 'Handelsbetrag · EZB' }
         } else if (Number(b.menge)) {
             const t = await tagesKursUsd(b.asset, datum)
-            if (t.usd != null) { usdWert = Math.abs(Number(b.menge)) * t.usd; quelle = t.quelle }
+            if (t.usd != null && usdChf) { wert = Math.abs(Number(b.menge)) * t.usd * usdChf; quelle = `${t.quelle} · EZB` }
         }
-        const wert = usdWert != null && fx ? usdWert * fx : null
-        await k('portfolio_bewegungen').where('id', b.id).update({ chfWert: wert, chfQuelle: wert == null ? 'kein Kurs' : `${quelle} · EZB` })
+        await k('portfolio_bewegungen').where('id', b.id).update({ chfWert: wert, chfQuelle: wert == null ? 'kein Kurs' : quelle })
         n++
     }
     return n
