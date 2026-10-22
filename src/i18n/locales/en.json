@@ -6182,6 +6182,12 @@
     }
   },
   "spenden": {
+    "frageMeilenstein": "You have rated {n} trades — great that AutarkTrade helps you! Would you like to support the project with a coffee or a small donation?",
+    "frageZeit": "You have been using AutarkTrade for {tage} days. It is a one-person project without subscription or ads — a small donation keeps it going.",
+    "frageUpdate": "AutarkTrade was updated to version {version}. If the work on it is worth something to you, a coffee is much appreciated.",
+    "frageDank": "Thank you for supporting AutarkTrade! It keeps going — thanks to you too.",
+    "titelDank": "Thank you",
+    "kaffeeKnopf": "Buy a coffee",
     "menue": "Donate",
     "titel": "Donate",
     "text": "AutarkTrade is a one-person project. If it helps you, a coffee or a donation is much appreciated.",
@@ -6192,7 +6198,7 @@
     "definitivNicht": "Definitely not",
     "schliessen": "Close",
     "schalter": "Donations in the menu",
-    "schalterHilfe": "Menu entry “Donate” and two one-time prompts (after 50 and 200 rated trades).",
+    "schalterHilfe": "Menu entry, coffee button at the top and rare prompts (50/200/500/1000 rated trades, after updates, every few months; at most once in 30 days).",
     "kaffeeLink": "Buy me a coffee link",
     "kaffeeUngueltig": "Expected: https://buymeacoffee.com/name"
   }

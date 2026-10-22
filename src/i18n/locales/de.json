@@ -6182,6 +6182,12 @@
     }
   },
   "spenden": {
+    "frageMeilenstein": "Du hast {n} Trades bewertet — schön, dass AutarkTrade dir hilft! Magst du das Projekt mit einem Kaffee oder einer kleinen Spende unterstützen?",
+    "frageZeit": "Du nutzt AutarkTrade seit {tage} Tagen. Es ist ein Einmann-Projekt ohne Abo und ohne Werbung — eine kleine Spende hält es am Laufen.",
+    "frageUpdate": "AutarkTrade wurde auf Version {version} aktualisiert. Wenn dir die Arbeit daran etwas wert ist, freue ich mich über einen Kaffee.",
+    "frageDank": "Danke, dass du AutarkTrade unterstützt hast! Es läuft weiter — auch dank dir.",
+    "titelDank": "Danke",
+    "kaffeeKnopf": "Kaffee spendieren",
     "menue": "Spenden",
     "titel": "Spenden",
     "text": "AutarkTrade ist ein Einmann-Projekt. Wenn es dir hilft, freue ich mich über einen Kaffee oder eine Spende.",
@@ -6192,7 +6198,7 @@
     "definitivNicht": "Ich will definitiv nicht",
     "schliessen": "Schliessen",
     "schalter": "Spenden im Menü",
-    "schalterHilfe": "Menüeintrag „Spenden“ und zwei einmalige Nachfragen (nach 50 und 200 bewerteten Trades).",
+    "schalterHilfe": "Menüeintrag, Kaffee-Knopf oben und seltene Nachfragen (50/200/500/1000 bewertete Trades, nach Updates, alle paar Monate; höchstens einmal in 30 Tagen).",
     "kaffeeLink": "Buy-me-a-coffee-Link",
     "kaffeeUngueltig": "Erwartet: https://buymeacoffee.com/name"
   }

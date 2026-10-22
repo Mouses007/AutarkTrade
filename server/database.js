@@ -204,7 +204,8 @@ async function fixPostgresSequences(knex) {
 // pausiert auf Papier vor.
 // v30: Spenden zurück (`settings.spendenAn/spendenStufe/spendenBei/spendenKaffeeUrl`).
 // Rein additiv.
-const SCHEMA_VERSION = 30
+// v31: Spenden-Rhythmus (`spendenStatus/Meilenstein/Seit/Letzte/Version/Dank`). Rein additiv.
+const SCHEMA_VERSION = 31
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
@@ -1910,6 +1911,13 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'spendenStufe', (t) => t.integer('spendenStufe').defaultTo(0))
     await addColumnIfNotExists('settings', 'spendenBei', (t) => t.integer('spendenBei').defaultTo(0))
     await addColumnIfNotExists('settings', 'spendenKaffeeUrl', (t) => t.text('spendenKaffeeUrl').defaultTo(''))
+    // Zweite Fassung (Meilensteine 50/200/500/1000, Zeit, Update, 30-Tage-Sperre)
+    await addColumnIfNotExists('settings', 'spendenStatus', (t) => t.text('spendenStatus').defaultTo(''))
+    await addColumnIfNotExists('settings', 'spendenMeilenstein', (t) => t.integer('spendenMeilenstein').defaultTo(0))
+    await addColumnIfNotExists('settings', 'spendenSeit', (t) => t.bigInteger('spendenSeit').defaultTo(0))
+    await addColumnIfNotExists('settings', 'spendenLetzte', (t) => t.bigInteger('spendenLetzte').defaultTo(0))
+    await addColumnIfNotExists('settings', 'spendenVersion', (t) => t.text('spendenVersion').defaultTo(''))
+    await addColumnIfNotExists('settings', 'spendenDank', (t) => t.bigInteger('spendenDank').defaultTo(0))
 
     /*
      * Modi einzeln ab- und anschaltbar. Journal hat bewusst KEINEN Schalter:
