@@ -51,7 +51,7 @@ export function leseArten(roh) {
  */
 function ersatzText(alarm, e) {
     if (alarm.art === 'momentum' && Array.isArray(e.treffer) && e.treffer.length) {
-        const tr = e.treffer.map((x) => ({ ...x, punkt: { stark: !!x.stark, seite: SEITE[x.seite] ? x.seite : 'long' } }))
+        const tr = e.treffer.map((x) => ({ ...x, punkt: { stark: !!x.stark, divergenz: !!x.divergenz, seite: SEITE[x.seite] ? x.seite : 'long' } }))
         return momentumText(alarm, tr, zahl)
     }
     const markt = alarm.markt === 'spot' ? ' Spot' : ''
