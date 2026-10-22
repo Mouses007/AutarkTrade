@@ -1,13 +1,6 @@
 # NOTICE – Herkunft und fremde Bestandteile
 
-Stand vom 19. Oktober 2026
-
-> ⚠ ENTWURF, nicht anwaltlich geprüft (am 19. Oktober 2026 mit dem Code, `package-lock.json`
-> und `docs/VERKAUFS-PRUEFUNG.md` abgeglichen). Offen vor der ersten Weitergabe an Dritte:
->
-> - Anwaltliche Prüfung von `LICENSE`, dieser Datei und `HERKUNFT.md`.
-> - Das Quellenangebot für das Container-Image (Abschnitt „Container-Image") braucht eine
->   Anschrift des Anbieters.
+Stand vom 22. Oktober 2026
 
 ## Lizenz
 
@@ -81,8 +74,9 @@ seiner Bestandteile) unter `/usr/local/include/node/` bzw. in der Node-Distribut
 
 Quellenangebot: Die Quellen genau dieser Debian-Pakete in genau diesen Fassungen sind über
 <https://snapshot.debian.org/> erhältlich (Paketliste: `dpkg-query -W` im Image). Auf Anfrage
-an den Anbieter (siehe `LICENSE`, Ziffer 1) liefern wir sie für mindestens drei Jahre nach der
-letzten Auslieferung des Images auf einem üblichen Datenträger zum Selbstkostenpreis.
+(Issue im Repo https://github.com/Mouses007/AutarkTrade) liefern wir sie für mindestens drei
+Jahre nach der letzten Auslieferung des Images zum Selbstkostenpreis. Den Quellcode von
+AutarkTrade selbst gibt es jederzeit im selben Repo (AGPL-3.0).
 
 ## Begleitprogramme
 

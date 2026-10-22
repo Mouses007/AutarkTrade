@@ -2,7 +2,7 @@
 
 Fassung 1.0 vom 22. Oktober 2026
 
-> ⚠ ENTWURF, nicht anwaltlich geprüft. AutarkTrade ist freie Software unter der GNU Affero General Public License 3.0 (Datei `LICENSE`). Sie wird ohne jede Gewährleistung bereitgestellt, soweit das Gesetz es zulässt (Ziffern 15 und 16 der AGPL). Dieser Haftungsausschluss erklärt, was das für ein Werkzeug rund um Trading bedeutet. Zwingende gesetzliche Rechte, insbesondere die von Konsumentinnen und Konsumenten, bleiben unberührt.
+> AutarkTrade ist freie Software unter der GNU Affero General Public License 3.0 (Datei `LICENSE`). Sie wird ohne jede Gewährleistung bereitgestellt, soweit das Gesetz es zulässt (Ziffern 15 und 16 der AGPL). Dieser Haftungsausschluss erklärt, was das für ein Werkzeug rund um Trading bedeutet. Zwingende gesetzliche Rechte, insbesondere die von Konsumentinnen und Konsumenten, bleiben unberührt.
 
 ## Kurz gesagt
 
