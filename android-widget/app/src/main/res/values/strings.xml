@@ -43,6 +43,13 @@
     <string name="art_momentum">Momentum-Alarme (Watchlists × Zeiteinheiten)</string>
     <string name="cfg_hinweis_genau">Verzögerung: bei eingeschaltetem Bildschirm höchstens %1$d min. Liegt das Gerät still mit Bildschirm aus (Doze), lässt Android den Abruf nur etwa alle 9–15 min zu — so lange kann ein Alarm dann warten. Für Meldungen in Sekunden: den ntfy-Kanal in AutarkTrade nutzen.</string>
     <string name="cfg_hinweis_ungenau">Verzögerung: bei eingeschaltetem Bildschirm %1$d bis etwa %2$d min — ohne genaue Wecker darf Android jeden Abruf um bis zu drei Viertel des Takts verschieben. Liegt das Gerät still mit Bildschirm aus (Doze), lässt Android den Abruf nur etwa alle 9–15 min zu. Für Meldungen in Sekunden: den ntfy-Kanal in AutarkTrade nutzen.</string>
+    <string name="cfg_sofort_titel">Sofort-Zustellung</string>
+    <string name="cfg_sofort">Sofort über ntfy (UnifiedPush) — Meldung in Sekunden, auch im Ruhezustand</string>
+    <string name="cfg_sofort_aus">Aus. Voraussetzung: die ntfy-App auf dem Handy (F-Droid oder Play Store); sie hält die Verbindung, der Abruf oben bleibt als Rückfall.</string>
+    <string name="cfg_sofort_keine_app">Keine UnifiedPush-App gefunden — bitte die ntfy-App installieren und erneut speichern.</string>
+    <string name="cfg_sofort_stand">%1$s%2$s</string>
+    <string name="cfg_sofort_letzte">, letzte Sofort-Meldung %1$s</string>
+    <string name="cfg_hinweis_sofort">Mit Sofort-Zustellung kommt ein Alarm in wenigen Sekunden, auch wenn das Handy schläft. Der Abruf im gewählten Takt fängt auf, was unterwegs verloren geht (ntfy aus, kein Netz).</string>
     <string name="cfg_genau_an">Genaue Wecker: erlaubt ✓</string>
     <string name="cfg_genau_aus">Genaue Wecker erlauben (pünktlicher)</string>
     <string name="cfg_akku">Akku-Optimierung für die App abschalten…</string>

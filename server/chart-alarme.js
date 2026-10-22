@@ -48,6 +48,7 @@ import {
 import { getClosedCandles } from './market-data.js'
 import { seitenGewicht } from './marktdaten/binance.js'
 import { stelleZu } from './hype-radar/zustellung.js'
+import { sendeAnGeraete } from './esp32-push.js'
 import { leseEinstellungen } from './hype-radar/einstellungen.js'
 import { melde } from './benachrichtigungen.js'
 import { logWarn } from './logger.js'
@@ -308,6 +309,7 @@ async function stelleMeldungZu(alarm, titel, text, daten, t) {
 /** Wurde die Meldung irgendwo zugestellt? */
 function zugestellt(z) {
     if (z.mail === 'ok') return true
+    if (Object.values(z.handy || {}).some((v) => v === 'ok')) return true
     return Object.values(z.push || {}).some((v) => v === 'ok')
 }
 
@@ -402,7 +404,10 @@ async function einTakt() {
                 const zustellung = await melden(a, z, erg, p, t)
                 // Titel und Text stehen mit im Verlauf: das Android-Widget liest Auslösungen
                 // über /api/esp32/alarme und soll denselben Wortlaut melden wie ntfy/Telegram.
-                const eintrag = { t, p, niveau: erg.niveau ?? null, titel, text, zustellung, zugestellt: zugestellt(zustellung) }
+                const eintrag = { t, p, niveau: erg.niveau ?? null, titel, text, zustellung }
+                // Sofort ans Handy (UnifiedPush) — vor dem Verlauf, damit das Ergebnis mit hineinkommt.
+                zustellung.handy = await sendeAnGeraete(a, eintrag)
+                eintrag.zugestellt = zugestellt(zustellung)
                 await knex('chart_alarme').where('id', a.id).update({
                     verlauf: JSON.stringify([...a.verlauf, eintrag].slice(-MAX_VERLAUF)),
                 })
@@ -542,9 +547,11 @@ export async function momentumTakt() {
                 treffer: treffer.map(({ symbol, markt, tf, punkt, preis }) => ({ symbol, markt, tf, ...punkt, preis })),
             }, t)
             const eintrag = {
-                t, p: treffer[0].preis, titel, text, zustellung, zugestellt: zugestellt(zustellung),
+                t, p: treffer[0].preis, titel, text, zustellung,
                 treffer: treffer.slice(0, 20).map(({ symbol, markt, tf, punkt, preis, kerzeT }) => ({ symbol, markt, tf, seite: punkt.seite, stark: punkt.stark, divergenz: punkt.divergenz, preis, kerzeT })),
             }
+            zustellung.handy = await sendeAnGeraete(a, eintrag)
+            eintrag.zugestellt = zugestellt(zustellung)
             await knex('chart_alarme').where('id', a.id).update({ verlauf: JSON.stringify([...a.verlauf, eintrag].slice(-MAX_VERLAUF)) })
         }
         // Geprüft ist ein Paar erst, wenn seine Kerzen da waren — sonst im nächsten Takt nochmal.

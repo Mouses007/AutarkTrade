@@ -134,7 +134,12 @@ object ChartAlarme {
      * landet in den Prefs und wird in den Einstellungen angezeigt.
      * @return Zahl neu gemeldeter Auslösungen, oder -1 bei Fehler.
      */
-    fun abrufen(ctx: Context): Int {
+    /** Abruf und Sofort-Zustellung teilen die Liste gemeldeter Kennungen — nie gleichzeitig daran. */
+    private val sperre = Any()
+
+    fun abrufen(ctx: Context): Int = synchronized(sperre) { abrufenGesperrt(ctx) }
+
+    private fun abrufenGesperrt(ctx: Context): Int {
         if (!Prefs.alarmeAn(ctx) || !Prefs.alarmVerbunden(ctx)) return 0
         return try {
             val seitAlt = Prefs.alarmSeit(ctx)
@@ -160,15 +165,47 @@ object ChartAlarme {
 
     private fun parse(obj: JSONObject): List<Ausloesung> {
         val arr = obj.optJSONArray("alarme") ?: return emptyList()
-        return (0 until arr.length()).mapNotNull { i ->
-            val a = arr.optJSONObject(i) ?: return@mapNotNull null
-            val id = a.optString("id")
-            if (id.isBlank()) return@mapNotNull null
-            Ausloesung(
-                id = id, art = a.optString("art"), zeit = a.optLong("zeit"),
-                symbol = a.optString("symbol"), markt = a.optString("markt", "futures"),
-                titel = a.optString("titel"), text = a.optString("text"),
-            )
+        return (0 until arr.length()).mapNotNull { i -> arr.optJSONObject(i)?.let { ausloesung(it) } }
+    }
+
+    private fun ausloesung(a: JSONObject): Ausloesung? {
+        val id = a.optString("id")
+        if (id.isBlank()) return null
+        return Ausloesung(
+            id = id, art = a.optString("art"), zeit = a.optLong("zeit"),
+            symbol = a.optString("symbol"), markt = a.optString("markt", "futures"),
+            titel = a.optString("titel"), text = a.optString("text"),
+        )
+    }
+
+    // ── Sofort-Zustellung (UnifiedPush) ─────────────────────────────────
+
+    /**
+     * Eine Nachricht des Servers über ntfy: dieselbe Form wie ein Eintrag aus
+     * /api/esp32/alarme. Nur entschlüsselte Nachrichten kommen hier an (PushDienst
+     * verwirft den Rest) — eine Fälschung über die öffentliche ntfy-Adresse gibt es nicht.
+     */
+    fun empfangen(ctx: Context, json: String) = synchronized(sperre) {
+        if (!Prefs.alarmeAn(ctx)) return@synchronized
+        val a = try { ausloesung(JSONObject(json)) } catch (e: Exception) { null } ?: return@synchronized
+        Prefs.setSofortLetzte(ctx, System.currentTimeMillis())
+        if (a.art !in Prefs.alarmArten(ctx)) return@synchronized
+        if (a.id in Prefs.alarmGesehen(ctx).toHashSet()) return@synchronized   // schon per Abruf gemeldet
+        melden(ctx, listOf(a))
+        Prefs.merkeGesehen(ctx, listOf(a.id))
+        android.util.Log.d("TJWidget", "Sofort-Zustellung: ${a.id} gemeldet")
+    }
+
+    /** Adresse + Schlüssel beim Server eintragen (oder austragen). Blockiert — nie auf dem Main-Thread. */
+    fun sofortAnServer(ctx: Context, an: Boolean) {
+        val endpoint = Prefs.sofortEndpoint(ctx)
+        if (endpoint.isBlank() || !Prefs.alarmVerbunden(ctx)) return
+        try {
+            ApiClient.meldePush(Prefs.alarmHost(ctx), Prefs.alarmPort(ctx), Prefs.alarmKey(ctx), an,
+                endpoint, Prefs.sofortP256dh(ctx), Prefs.sofortAuth(ctx), android.os.Build.MODEL ?: "")
+            Prefs.saveSofortStatus(ctx, if (an) "eingetragen" else "ausgetragen")
+        } catch (e: Exception) {
+            Prefs.saveSofortStatus(ctx, "Server: ${e.message}")
         }
     }
 

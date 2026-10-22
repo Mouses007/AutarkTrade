@@ -35,7 +35,7 @@ export const VERSCHLUESSELTE_SETTINGS = [...new Set([
  * Sitzungs-Generation, Lizenzschlüssel (kann Zugangsdaten der Paketquelle
  * tragen). Werden genauso wenig ausgeliefert.
  */
-export const SONSTIGE_GEHEIME_SETTINGS = ['authPasswordHash', 'sessionGeneration', 'lizenzSchluessel']
+export const SONSTIGE_GEHEIME_SETTINGS = ['authPasswordHash', 'sessionGeneration', 'lizenzSchluessel', 'esp32PushGeraete']
 
 /** Alles, was `GET /api/db/settings` und das Backup nie im Wert zeigen. */
 export const GEHEIME_SETTINGS = [...VERSCHLUESSELTE_SETTINGS, ...SONSTIGE_GEHEIME_SETTINGS]
@@ -51,6 +51,8 @@ export const GEHEIME_SETTINGS = [...VERSCHLUESSELTE_SETTINGS, ...SONSTIGE_GEHEIM
 export const ZIEL_SETTINGS = [...new Set([
     ...KI_URL_SPALTEN, 'aiOllamaUrl',
     'mailHost', 'mailPort', 'mailUser', 'mailSicherheit', 'mailVon', 'mailAn',
+    // Handy-Geräte der Sofort-Zustellung (Adresse + Auth-Geheimnis): nur über /api/esp32/push
+    'esp32PushGeraete',
 ])]
 
 /** Zugangs- und Rechtsstand: nie aus einem Backup. */

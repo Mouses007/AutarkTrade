@@ -10,6 +10,7 @@
  * Public endpoints (no session required):
  *   GET /api/esp32/display
  *   GET /api/esp32/alarme?seit=<ms>&arten=…   Auslösungen der Chart-Alarme (Android-Widget)
+ *   POST/DELETE /api/esp32/push                Sofort-Zustellung per UnifiedPush an-/abmelden
  *
  * Admin endpoints (behind session auth, via setupEsp32AdminRoutes):
  *   GET    /api/esp32/settings  — key presence flag
@@ -24,6 +25,7 @@ import { getCurrentPositions as getBitgetCurrentPositions } from './bitget-api.j
 import { getRunningBotPositions } from './pionex-api.js'
 import { ausCache } from './marktradar-api.js'
 import { ausloesungenAus, leseArten } from './esp32-alarme.js'
+import { pruefeGeraet, mitGeraet, ohneGeraet, ladeGeraete, speichereGeraete } from './esp32-push.js'
 import dayjs from 'dayjs'
 import dayjsUtc from 'dayjs/plugin/utc.js'
 import dayjsTimezone from 'dayjs/plugin/timezone.js'
@@ -326,7 +328,36 @@ export function setupEsp32Routes(app) {
         }
     })
 
-    console.log(' -> ESP32 display route initialized (GET /api/esp32/display, /api/esp32/alarme)')
+    // Sofort-Zustellung: das Widget trägt hier die Adresse ein, die ihm der
+    // UnifiedPush-Verteiler (ntfy) gegeben hat, samt Web-Push-Schlüssel.
+    app.post('/api/esp32/push', async (req, res) => {
+        try {
+            if (!(await verifyEsp32Key(req))) return res.status(401).json({ error: 'Unauthorized' })
+            const { fehler, daten } = pruefeGeraet(req.body || {})
+            if (fehler) return res.status(400).json({ error: fehler })
+            const liste = mitGeraet(await ladeGeraete(), daten)
+            await speichereGeraete(liste)
+            res.json({ ok: true, geraete: liste.length })
+        } catch (e) {
+            console.error('ESP32 push POST error:', e)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    app.delete('/api/esp32/push', async (req, res) => {
+        try {
+            if (!(await verifyEsp32Key(req))) return res.status(401).json({ error: 'Unauthorized' })
+            const endpoint = String(req.body?.endpoint || '')
+            const liste = ohneGeraet(await ladeGeraete(), endpoint)
+            await speichereGeraete(liste)
+            res.json({ ok: true, geraete: liste.length })
+        } catch (e) {
+            console.error('ESP32 push DELETE error:', e)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    console.log(' -> ESP32 display route initialized (GET /api/esp32/display, /api/esp32/alarme, /api/esp32/push)')
 }
 
 // ============================================================

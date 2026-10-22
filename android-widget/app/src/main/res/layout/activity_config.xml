@@ -148,6 +148,16 @@
                 <CheckBox android:id="@+id/art_zone" style="@style/Haken" android:text="@string/art_zone" />
                 <CheckBox android:id="@+id/art_momentum" style="@style/Haken" android:text="@string/art_momentum" />
 
+                <TextView style="@style/FieldLabel" android:layout_marginTop="12dp" android:text="@string/cfg_sofort_titel" />
+                <CheckBox android:id="@+id/sofort_an" style="@style/Haken" android:text="@string/cfg_sofort" />
+                <TextView
+                    android:id="@+id/sofort_stand"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="32dp"
+                    android:textColor="@color/muted"
+                    android:textSize="12sp" />
+
                 <TextView
                     android:id="@+id/alarm_hinweis"
                     android:layout_width="match_parent"

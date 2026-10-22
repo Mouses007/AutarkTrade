@@ -11,8 +11,8 @@ android {
         applicationId = "com.autarktrade.widget"
         minSdk = 31
         targetSdk = 35
-        versionCode = 22
-        versionName = "4.1.0-22"
+        versionCode = 23
+        versionName = "4.1.0-23"
     }
 
     buildTypes {
@@ -49,5 +49,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // UnifiedPush (Sofort-Zustellung der Chart-Alarme über die ntfy-App, ohne Google-Dienste).
+    // 3.0.10 ist die letzte mit Kotlin 2.0.x gebaute Version — ab 3.1 bräuchte es Kotlin 2.2.
+    implementation("org.unifiedpush.android:connector:3.0.10")
     // org.json is part of the Android platform — no dependency needed.
 }

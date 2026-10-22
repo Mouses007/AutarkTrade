@@ -51,6 +51,17 @@ alarm looks like; tapping a notification opens `http://<host>:<port>/chart?symbo
 browser. Sound, vibration and importance can be changed per channel in Android's app
 settings (two channels: *Chart-Alarme* and *Momentum-Alarme*).
 
+**Instant delivery (UnifiedPush via ntfy).** Install the **ntfy** app (F-Droid or Play Store),
+then tick „Sofort über ntfy" in the alarm card and save. The widget registers with ntfy as a
+UnifiedPush distributor, gets a push address (e.g. `https://ntfy.sh/up…?up=1`) plus a Web-Push
+key, and enters both at `POST /api/esp32/push`. From then on every chart alarm is sent at once,
+encrypted (RFC 8291, `server/webpush.js`): ntfy.sh cannot read it, and the widget drops every
+message that does not decrypt with its key — knowing the ntfy address is not enough to fake an
+alarm. Measured in the emulator: 0.8 s from server to notification. ntfy holds one connection
+for all its topics; turn off battery optimisation for ntfy as it asks. If no phone is connected
+at that moment, ntfy.sh answers 507 and drops the message — the polling below then delivers it.
+Duplicates between both paths are filtered by id.
+
 **Why polling, and what it costs in delay.** A self-hosted server without Firebase cannot
 wake a phone; only a connection the phone itself keeps open can (that is what the ntfy app
 does — AutarkTrade already supports ntfy as a push channel). The app therefore asks
@@ -87,6 +98,9 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 - `WidgetKlickActivity` — invisible trampoline for list taps: a coin row opens
   `/chart?symbol=…&boerse=…` in the browser, a section header switches the KPI strip to that
   exchange. A collection has only one click template, and a broadcast may not start the browser.
+- `PushDienst` — UnifiedPush `PushService`: stores the address from ntfy, enters it at the
+  server, hands decrypted messages to `ChartAlarme.empfangen` (connector 3.0.10 — the last one
+  built with Kotlin 2.0; it brings Tink for the Web-Push decryption).
 - `ChartAlarme` / `AlarmReceiver` — polling of `/api/esp32/alarme`, notification channels,
   the wake-up chain (re-armed after reboot and app update).
 - Colours are the AutarkTrade tokens (`values/colors.xml`); the logo `drawable/ic_logo.xml`
@@ -104,7 +118,7 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## Versioning
 
-`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-22**);
+`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-23**);
 the APK file carries it in its name.
 
 ## Licence

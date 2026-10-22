@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
 import com.autarktrade.widget.model.DisplayData
+import org.unifiedpush.android.connector.UnifiedPush
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -53,6 +54,7 @@ class WidgetConfigActivity : AppCompatActivity() {
     private lateinit var alarmeAn: SwitchCompat
     private lateinit var taktSpin: Spinner
     private lateinit var artBoxen: Map<String, CheckBox>
+    private lateinit var sofortBox: CheckBox
 
     private fun setupSpinner(spinner: Spinner, names: List<String>) {
         spinner.adapter = ArrayAdapter(this, R.layout.spinner_item, names).apply {
@@ -111,6 +113,9 @@ class WidgetConfigActivity : AppCompatActivity() {
         taktSpin.setSelection(taktVals.indexOf(Prefs.alarmTaktMin(this)).let { if (it < 0) 1 else it })
         val arten = Prefs.alarmArten(this)
         artBoxen.forEach { (art, box) -> box.isChecked = art in arten }
+        sofortBox = findViewById(R.id.sofort_an)
+        sofortBox.isChecked = Prefs.sofortAn(this)
+        sofortBox.setOnCheckedChangeListener { _, _ -> zeigeAlarmDetails() }
         alarmeAn.setOnCheckedChangeListener { _, an ->
             zeigeAlarmDetails()
             // Ab Android 13 muss die App fragen, bevor sie melden darf.
@@ -162,6 +167,7 @@ class WidgetConfigActivity : AppCompatActivity() {
             Prefs.saveAlarmConfig(this, alarmeAn.isChecked, taktVals[taktSpin.selectedItemPosition.coerceAtLeast(0)],
                 gewaehlt.ifEmpty { Prefs.ALLE_ARTEN.toSet() }, h, p, k)
             if (alarmeAn.isChecked) ChartAlarme.kanaeleAnlegen(this)
+            sofortUmstellen(alarmeAn.isChecked && sofortBox.isChecked)
             status.text = getString(R.string.cfg_testing)
 
             thread {
@@ -209,6 +215,32 @@ class WidgetConfigActivity : AppCompatActivity() {
         zeigeAlarmDetails()
     }
 
+    /**
+     * Sofort-Zustellung an- oder abschalten. An: den UnifiedPush-Verteiler (ntfy)
+     * wählen — bei mehreren fragt Android einmal — und dort anmelden; die Adresse
+     * kommt asynchron in PushDienst.onNewEndpoint an und wird von dort beim Server
+     * eingetragen. War schon eine da (anderer Server gespeichert), gleich neu eintragen.
+     */
+    private fun sofortUmstellen(an: Boolean) {
+        val app = applicationContext
+        val vorher = Prefs.sofortAn(this)
+        Prefs.setSofortAn(this, an)
+        if (an) {
+            UnifiedPush.tryUseCurrentOrDefaultDistributor(this) { gefunden ->
+                if (!gefunden) {
+                    Prefs.setSofortAn(app, false)
+                    Prefs.saveSofortStatus(app, getString(R.string.cfg_sofort_keine_app))
+                    runOnUiThread { status.text = getString(R.string.cfg_sofort_keine_app); zeigeAlarmDetails() }
+                    return@tryUseCurrentOrDefaultDistributor
+                }
+                UnifiedPush.register(app, messageForDistributor = "AutarkTrade Chart-Alarme")
+                if (Prefs.sofortEndpoint(app).isNotBlank()) thread { ChartAlarme.sofortAnServer(app, true) }
+            }
+        } else if (vorher) {
+            UnifiedPush.unregister(app)   // → PushDienst.onUnregistered trägt beim Server aus
+        }
+    }
+
     /** Host/Port/Key aus den Feldern, oder null (dann steht der Hinweis schon da). */
     private fun verbindung(): Triple<String, String, String>? {
         val h = host.text.toString().trim()
@@ -225,9 +257,19 @@ class WidgetConfigActivity : AppCompatActivity() {
         val genau = getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
         // Gemessen im Emulator (Android 15): ein ungenauer 2-min-Wecker bekam ein Fenster
         // von +1:30 — er kann also bis ~3:30 nach dem letzten Abruf feuern.
-        findViewById<TextView>(R.id.alarm_hinweis).text =
-            if (genau) getString(R.string.cfg_hinweis_genau, takt)
-            else getString(R.string.cfg_hinweis_ungenau, takt, Math.ceil(takt * 1.75).toInt())
+        findViewById<TextView>(R.id.alarm_hinweis).text = when {
+            ::sofortBox.isInitialized && sofortBox.isChecked -> getString(R.string.cfg_hinweis_sofort)
+            genau -> getString(R.string.cfg_hinweis_genau, takt)
+            else -> getString(R.string.cfg_hinweis_ungenau, takt, Math.ceil(takt * 1.75).toInt())
+        }
+        if (::sofortBox.isInitialized) {
+            val letzte = Prefs.sofortLetzte(this)
+            findViewById<TextView>(R.id.sofort_stand).text = if (!Prefs.sofortAn(this) && !sofortBox.isChecked)
+                getString(R.string.cfg_sofort_aus)
+            else getString(R.string.cfg_sofort_stand, Prefs.sofortStatus(this) ?: "—",
+                if (letzte > 0) getString(R.string.cfg_sofort_letzte,
+                    SimpleDateFormat("dd.MM. HH:mm:ss", Locale.GERMAN).format(Date(letzte))) else "")
+        }
         findViewById<Button>(R.id.btn_genau).apply {
             text = getString(if (genau) R.string.cfg_genau_an else R.string.cfg_genau_aus)
             isEnabled = !genau

@@ -117,6 +117,31 @@ object Prefs {
             .apply()
     }
     /** Zeit des letzten Abrufversuchs (Erfolg oder Fehler, Gerätezeit). */
+    /** Neu gemeldete Kennungen dazunehmen, ohne den Abrufstand zu verschieben (Sofort-Zustellung). */
+    fun merkeGesehen(ctx: Context, ids: List<String>) {
+        sp(ctx).edit().putString("alarm_gesehen", (alarmGesehen(ctx) + ids).takeLast(400).joinToString("\n")).apply()
+    }
+
+    // --- Sofort-Zustellung (UnifiedPush) ---
+    fun sofortAn(ctx: Context): Boolean = sp(ctx).getBoolean("sofort_an", false)
+    fun setSofortAn(ctx: Context, an: Boolean) { sp(ctx).edit().putBoolean("sofort_an", an).apply() }
+    /** Adresse + Schlüssel vom Verteiler; leer = nicht angemeldet. */
+    fun sofortEndpoint(ctx: Context): String = sp(ctx).getString("sofort_endpoint", "") ?: ""
+    fun sofortP256dh(ctx: Context): String = sp(ctx).getString("sofort_p256dh", "") ?: ""
+    fun sofortAuth(ctx: Context): String = sp(ctx).getString("sofort_auth", "") ?: ""
+    fun saveSofortEndpoint(ctx: Context, endpoint: String, p256dh: String, auth: String) {
+        sp(ctx).edit().putString("sofort_endpoint", endpoint).putString("sofort_p256dh", p256dh)
+            .putString("sofort_auth", auth).apply()
+    }
+    fun clearSofortEndpoint(ctx: Context) {
+        sp(ctx).edit().remove("sofort_endpoint").remove("sofort_p256dh").remove("sofort_auth").apply()
+    }
+    /** Letzter Stand für die Anzeige („beim Server eingetragen", Fehler …). */
+    fun sofortStatus(ctx: Context): String? = sp(ctx).getString("sofort_status", null)
+    fun saveSofortStatus(ctx: Context, text: String) { sp(ctx).edit().putString("sofort_status", text).apply() }
+    fun sofortLetzte(ctx: Context): Long = sp(ctx).getLong("sofort_letzte", 0L)
+    fun setSofortLetzte(ctx: Context, t: Long) { sp(ctx).edit().putLong("sofort_letzte", t).apply() }
+
     fun alarmLetzterAbruf(ctx: Context): Long = sp(ctx).getLong("alarm_abruf", 0L)
     fun alarmFehler(ctx: Context): String? = sp(ctx).getString("alarm_fehler", null)
     fun saveAlarmFehler(ctx: Context, msg: String) {

@@ -1,7 +1,9 @@
 package com.autarktrade.widget
 
 import okhttp3.OkHttpClient
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
 /**
@@ -68,6 +70,29 @@ object ApiClient {
                 })
             }
             return body
+        }
+    }
+
+    /**
+     * Sofort-Zustellung beim Server an- (POST) oder abmelden (DELETE). Der Server
+     * verschlüsselt jede Auslösung mit p256dh/auth und POSTet sie an [endpoint].
+     */
+    fun meldePush(host: String, port: String, key: String, an: Boolean,
+                  endpoint: String, p256dh: String = "", auth: String = "", geraet: String = "") {
+        val json = org.json.JSONObject().put("endpoint", endpoint)
+        if (an) json.put("p256dh", p256dh).put("auth", auth).put("geraet", geraet)
+        val body = json.toString().toRequestBody("application/json".toMediaType())
+        val req = Request.Builder().url("http://$host:$port/api/esp32/push").header("X-ESP32-Key", key)
+            .method(if (an) "POST" else "DELETE", body).build()
+        client.newCall(req).execute().use { resp ->
+            if (!resp.isSuccessful) {
+                throw RuntimeException(when (resp.code) {
+                    401 -> "Key ungültig (401)"
+                    404 -> "Server zu alt — /api/esp32/push fehlt (404)"
+                    400 -> "abgelehnt: ${resp.body?.string()?.take(80)}"
+                    else -> "HTTP ${resp.code}"
+                })
+            }
         }
     }
 }

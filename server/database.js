@@ -211,7 +211,9 @@ async function fixPostgresSequences(knex) {
 // ihr leeres Symbol hat keinen Kurs) und zeigt sie nur unverständlich an.
 // v33: `quellenOhneFreigabeGefragt` (Quellen-Frage beim ersten Start). Bestehende
 // Installationen gelten als gefragt, neue starten mit dem Schalter aus.
-const SCHEMA_VERSION = 33
+// v34: `settings.esp32PushGeraete` (Sofort-Zustellung der Chart-Alarme ans
+// Android-Widget über UnifiedPush). Rein additiv.
+const SCHEMA_VERSION = 34
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
@@ -2226,6 +2228,10 @@ async function runMigrations(knex, client) {
     // Schlüssel von sich aus nirgends — sichtbar wurde das bis 14.09.2026 nur
     // im Serverprotokoll. Siehe `server/boersen-status.js`.
     await addColumnIfNotExists('settings', 'boersenStatus', (t) => t.text('boersenStatus').defaultTo('{}'))
+    // Android-Widget: per UnifiedPush angemeldete Geräte (JSON-Liste aus Adresse,
+    // Web-Push-Schlüssel und Auth-Geheimnis). Chart-Alarme gehen sofort an sie,
+    // statt erst beim nächsten Abruf. Siehe `server/esp32-push.js`.
+    await addColumnIfNotExists('settings', 'esp32PushGeraete', (t) => t.text('esp32PushGeraete').defaultTo('[]'))
     // Anbieter und Modell je KI-Funktion. Leer = der global eingestellte
     // Anbieter. Vorher hatte nur der Lagebericht diese Wahl, alles andere hing
     // am globalen Feld — wer den Agenten auf ein günstiges Modell stellen

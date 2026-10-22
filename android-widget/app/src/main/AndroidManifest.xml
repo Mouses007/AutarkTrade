@@ -58,6 +58,15 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Sofort-Zustellung: Nachrichten des UnifiedPush-Verteilers (ntfy) -->
+        <service
+            android:name=".PushDienst"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="org.unifiedpush.android.connector.PUSH_EVENT" />
+            </intent-filter>
+        </service>
+
         <!-- Abruf der Chart-Alarme (eigener Wecker) + Neuplanung nach Neustart/Update -->
         <receiver
             android:name=".AlarmReceiver"
