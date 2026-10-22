@@ -41,7 +41,8 @@
     <string name="art_linie">Linienalarme (Horizontale, Trendlinie, Kanal)</string>
     <string name="art_zone">Zonenalarme</string>
     <string name="art_momentum">Momentum-Alarme (Watchlists × Zeiteinheiten)</string>
-    <string name="cfg_hinweis">Verzögerung: bei eingeschaltetem Bildschirm höchstens %1$d min. Liegt das Gerät still mit Bildschirm aus (Doze), lässt Android den Abruf nur etwa alle 9–15 min zu — so lange kann ein Alarm dann warten. Für Meldungen in Sekunden: den ntfy-Kanal in AutarkTrade nutzen.</string>
+    <string name="cfg_hinweis_genau">Verzögerung: bei eingeschaltetem Bildschirm höchstens %1$d min. Liegt das Gerät still mit Bildschirm aus (Doze), lässt Android den Abruf nur etwa alle 9–15 min zu — so lange kann ein Alarm dann warten. Für Meldungen in Sekunden: den ntfy-Kanal in AutarkTrade nutzen.</string>
+    <string name="cfg_hinweis_ungenau">Verzögerung: bei eingeschaltetem Bildschirm %1$d bis etwa %2$d min — ohne genaue Wecker darf Android jeden Abruf um bis zu drei Viertel des Takts verschieben. Liegt das Gerät still mit Bildschirm aus (Doze), lässt Android den Abruf nur etwa alle 9–15 min zu. Für Meldungen in Sekunden: den ntfy-Kanal in AutarkTrade nutzen.</string>
     <string name="cfg_genau_an">Genaue Wecker: erlaubt ✓</string>
     <string name="cfg_genau_aus">Genaue Wecker erlauben (pünktlicher)</string>
     <string name="cfg_akku">Akku-Optimierung für die App abschalten…</string>

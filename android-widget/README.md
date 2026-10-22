@@ -54,7 +54,9 @@ wake a phone; only a connection the phone itself keeps open can (that is what th
 does — AutarkTrade already supports ntfy as a push channel). The app therefore asks
 `GET /api/esp32/alarme?seit=<ms>` (same `X-ESP32-Key`) on an `AlarmManager` wake-up:
 
-- screen on / phone in use: an alarm arrives at most one interval late;
+- screen on / phone in use: an alarm arrives at most one interval late with **exact alarms**
+  allowed; without them Android may shift each wake-up by up to ¾ of the interval (measured:
+  a 2-min wake-up got a window of +1:30, i.e. up to ~3.5 min);
 - phone lying still with the screen off (**Doze**): Android lets such wake-ups through only
   about every 9–15 minutes, so an alarm can wait that long. Allowing **exact alarms** and
   turning off **battery optimisation** for the app (buttons in the settings) helps, it does

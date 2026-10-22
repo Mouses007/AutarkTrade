@@ -222,8 +222,12 @@ class WidgetConfigActivity : AppCompatActivity() {
         if (!::alarmeAn.isInitialized) return
         findViewById<View>(R.id.alarm_details).visibility = if (alarmeAn.isChecked) View.VISIBLE else View.GONE
         val takt = taktVals[taktSpin.selectedItemPosition.coerceAtLeast(0)]
-        findViewById<TextView>(R.id.alarm_hinweis).text = getString(R.string.cfg_hinweis, takt)
         val genau = getSystemService(AlarmManager::class.java)?.canScheduleExactAlarms() == true
+        // Gemessen im Emulator (Android 15): ein ungenauer 2-min-Wecker bekam ein Fenster
+        // von +1:30 — er kann also bis ~3:30 nach dem letzten Abruf feuern.
+        findViewById<TextView>(R.id.alarm_hinweis).text =
+            if (genau) getString(R.string.cfg_hinweis_genau, takt)
+            else getString(R.string.cfg_hinweis_ungenau, takt, Math.ceil(takt * 1.75).toInt())
         findViewById<Button>(R.id.btn_genau).apply {
             text = getString(if (genau) R.string.cfg_genau_an else R.string.cfg_genau_aus)
             isEnabled = !genau

@@ -26,7 +26,9 @@ import java.util.Locale
  * `GET /api/esp32/alarme?seit=…` und meldet, was neu ist.
  *
  * Ehrlich zur Verzögerung:
- *  - Bildschirm an oder Gerät in Bewegung: höchstens ein Takt (Vorgabe 2 min).
+ *  - Bildschirm an oder Gerät in Bewegung: mit „Genaue Wecker" höchstens ein Takt
+ *    (Vorgabe 2 min); ohne darf Android jeden Wecker um bis zu ¾ Takt schieben
+ *    (gemessen: 2-min-Wecker mit Fenster +1:30).
  *  - Doze (Gerät liegt still, Bildschirm aus): Android lässt Wecker mit
  *    allow-while-idle nur noch etwa alle 9–15 min zu — ein Alarm kann dann so
  *    lange liegen. Mit „Genaue Wecker" und ohne Akku-Optimierung wird es besser,

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Vorschau in der Widget-Auswahl. -->
+<!-- Vorschau-Bild für Launcher, die previewLayout (API 31+) nicht auswerten. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@drawable/widget_bg" />
-    <item android:drawable="@drawable/ic_logo" android:gravity="center" android:width="96dp" android:height="96dp" />
+    <item><inset android:drawable="@drawable/ic_logo" android:insetTop="28%" android:insetBottom="28%" android:insetLeft="34%" android:insetRight="34%" /></item>
 </layer-list>
