@@ -7,8 +7,9 @@
  * Auth: Static API key stored encrypted in settings.esp32ApiKey
  * Header: X-ESP32-Key: <plaintext-key>
  *
- * Public endpoint (no session required):
+ * Public endpoints (no session required):
  *   GET /api/esp32/display
+ *   GET /api/esp32/alarme?seit=<ms>&arten=…   Auslösungen der Chart-Alarme (Android-Widget)
  *
  * Admin endpoints (behind session auth, via setupEsp32AdminRoutes):
  *   GET    /api/esp32/settings  — key presence flag
@@ -22,6 +23,7 @@ import { getPendingPositions } from './bitunix-api.js'
 import { getCurrentPositions as getBitgetCurrentPositions } from './bitget-api.js'
 import { getRunningBotPositions } from './pionex-api.js'
 import { ausCache } from './marktradar-api.js'
+import { ausloesungenAus, leseArten } from './esp32-alarme.js'
 import dayjs from 'dayjs'
 import dayjsUtc from 'dayjs/plugin/utc.js'
 import dayjsTimezone from 'dayjs/plugin/timezone.js'
@@ -302,7 +304,29 @@ export function setupEsp32Routes(app) {
         }
     })
 
-    console.log(' -> ESP32 display route initialized (GET /api/esp32/display)')
+    /*
+     * Auslösungen der Chart-Alarme seit `seit` (ms). Das Android-Widget fragt
+     * hier im eigenen Takt nach und zeigt daraus Benachrichtigungen — ohne
+     * Firebase, ohne Sitzung. `jetzt` ist die Serveruhr: das Gerät rechnet
+     * seinen nächsten `seit` daraus, nicht aus der eigenen Uhr, die abweichen kann.
+     * Bewusst ohne ausCache: höchstens 300 kleine Zeilen, und ein Cache von
+     * 15 s wäre genau die Verzögerung, die hier niemand will.
+     */
+    app.get('/api/esp32/alarme', async (req, res) => {
+        try {
+            if (!(await verifyEsp32Key(req))) return res.status(401).json({ error: 'Unauthorized' })
+            const seit = Math.max(0, Number(req.query.seit) || 0)
+            const zeilen = await getKnex()('chart_alarme')
+                .where('ausgeloestAm', '>', seit)
+                .select('id', 'art', 'symbol', 'markt', 'notiz', 'kanaele', 'verlauf')
+            res.json({ jetzt: Date.now(), alarme: ausloesungenAus(zeilen, { seit, arten: leseArten(req.query.arten) }) })
+        } catch (e) {
+            console.error('ESP32 alarme error:', e)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    console.log(' -> ESP32 display route initialized (GET /api/esp32/display, /api/esp32/alarme)')
 }
 
 // ============================================================

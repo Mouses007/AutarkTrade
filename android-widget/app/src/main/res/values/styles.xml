@@ -26,17 +26,82 @@
     <style name="FieldLabel">
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textColor">@color/text_secondary</item>
+        <item name="android:textColor">@color/muted</item>
         <item name="android:textSize">12sp</item>
-        <item name="android:layout_marginBottom">4dp</item>
+        <item name="android:layout_marginBottom">6dp</item>
     </style>
 
     <style name="Field">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
-        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:background">@drawable/bg_feld</item>
+        <item name="android:paddingHorizontal">12dp</item>
+        <item name="android:paddingVertical">10dp</item>
+        <item name="android:textColor">@color/text</item>
         <item name="android:textColorHint">@color/text_muted</item>
+        <item name="android:textCursorDrawable">@null</item>
         <item name="android:textSize">15sp</item>
-        <item name="android:layout_marginBottom">16dp</item>
+        <item name="android:layout_marginBottom">14dp</item>
+    </style>
+
+    <!-- Karte: panel, Radius 14, Rahmenlinie (wie .karte in der Web-App) -->
+    <style name="Karte">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_karte</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:layout_marginBottom">14dp</item>
+    </style>
+
+    <style name="KartenTitel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:layout_marginBottom">12dp</item>
+    </style>
+
+    <style name="Auswahl">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:background">@drawable/bg_feld</item>
+        <item name="android:paddingHorizontal">12dp</item>
+        <item name="android:popupBackground">@color/panel_soft</item>
+        <item name="android:layout_marginBottom">14dp</item>
+    </style>
+
+    <style name="Haken">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="buttonTint">@color/accent</item>
+    </style>
+
+    <style name="KnopfHaupt" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:background">@drawable/bg_knopf_haupt</item>
+        <item name="android:textColor">@color/bg</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <style name="KnopfNeben" parent="Widget.AppCompat.Button.Borderless">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:background">@drawable/bg_knopf_neben</item>
+        <item name="android:textColor">@color/text</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <style name="AkzentSchalter">
+        <item name="colorControlActivated">@color/accent</item>
+        <item name="colorSwitchThumbNormal">@color/muted</item>
+        <item name="android:colorForeground">@color/line</item>
     </style>
 </resources>

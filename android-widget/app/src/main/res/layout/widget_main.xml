@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@drawable/widget_bg"
-    android:padding="10dp">
+    android:padding="12dp">
 
     <!-- Header row: title + refresh button -->
     <LinearLayout
@@ -13,22 +13,49 @@
         android:orientation="horizontal"
         android:gravity="center_vertical">
 
-        <ImageView
-            android:layout_width="22dp"
-            android:layout_height="22dp"
-            android:layout_marginEnd="6dp"
-            android:src="@drawable/ic_logo"
-            android:contentDescription="@string/app_name" />
-
-        <TextView
+        <!-- Titel = Logo + Schriftzug „Autark" + „Trade" (Akzent) wie in der Kopfleiste.
+             Tippen öffnet die Einstellungen. -->
+        <LinearLayout
             android:id="@+id/title"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="@string/app_name"
-            android:textColor="@color/text_primary"
-            android:textSize="14sp"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginEnd="6dp"
+                android:src="@drawable/ic_logo"
+                android:contentDescription="@string/app_name" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Autark"
+                android:textColor="@color/text"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Trade"
+                android:textColor="@color/accent"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <!-- Glocke: Chart-Alarme sind eingeschaltet -->
+            <ImageView
+                android:id="@+id/alarm_an"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginStart="6dp"
+                android:src="@drawable/ic_glocke"
+                android:visibility="gone"
+                android:contentDescription="@string/w_alarme_an" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/updated"

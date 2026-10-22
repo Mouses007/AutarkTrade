@@ -202,6 +202,9 @@ class TradingWidgetProvider : AppWidgetProvider() {
                 )
             )
 
+            // Glocke im Titel, solange Chart-Alarme gemeldet werden.
+            rv.setViewVisibility(R.id.alarm_an, if (Prefs.alarmeAn(context)) View.VISIBLE else View.GONE)
+
             applyHeader(context, rv, id)
             awm.updateAppWidget(id, rv)
         }

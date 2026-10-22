@@ -4,7 +4,7 @@
     <string name="widget_description">Offene Positionen &amp; Bots aus AutarkTrade</string>
 
     <!-- Config screen -->
-    <string name="cfg_title">AutarkTrade-Widget — Einstellungen</string>
+    <string name="cfg_title">Widget und Chart-Alarme — Einstellungen</string>
     <string name="cfg_host">Server-Host / IP</string>
     <string name="cfg_host_hint">z.B. 192.168.178.100</string>
     <string name="cfg_port">Port</string>
@@ -28,4 +28,44 @@
     <string name="w_refreshing">Aktualisiere…</string>
     <string name="w_tap_config">Tippen zum Einrichten</string>
     <string name="w_toggle_balance">Saldo ein-/ausblenden</string>
+    <string name="w_alarme_an">Chart-Alarme an</string>
+
+    <!-- Einstellungen: Karten -->
+    <string name="cfg_karte_verbindung">Verbindung</string>
+    <string name="cfg_karte_widget">Widget</string>
+    <string name="cfg_karte_alarme">Chart-Alarme</string>
+    <string name="cfg_alarme_info">Preis-, Linien-, Zonen- und Momentum-Alarme des Chart-Arbeitsplatzes als Benachrichtigung. Die App fragt den Server im gewählten Takt ab — ohne Google-Dienste. Tippen auf eine Meldung öffnet den Chart.</string>
+    <string name="cfg_takt">Abfragetakt</string>
+    <string name="cfg_arten">Welche Alarme</string>
+    <string name="art_preis">Preisalarme</string>
+    <string name="art_linie">Linienalarme (Horizontale, Trendlinie, Kanal)</string>
+    <string name="art_zone">Zonenalarme</string>
+    <string name="art_momentum">Momentum-Alarme (Watchlists × Zeiteinheiten)</string>
+    <string name="cfg_hinweis">Verzögerung: bei eingeschaltetem Bildschirm höchstens %1$d min. Liegt das Gerät still mit Bildschirm aus (Doze), lässt Android den Abruf nur etwa alle 9–15 min zu — so lange kann ein Alarm dann warten. Für Meldungen in Sekunden: den ntfy-Kanal in AutarkTrade nutzen.</string>
+    <string name="cfg_genau_an">Genaue Wecker: erlaubt ✓</string>
+    <string name="cfg_genau_aus">Genaue Wecker erlauben (pünktlicher)</string>
+    <string name="cfg_akku">Akku-Optimierung für die App abschalten…</string>
+    <string name="cfg_testmeldung">Testmeldung senden</string>
+    <string name="cfg_stand_nie">Noch kein Abruf.</string>
+    <string name="cfg_stand">Letzter Abruf %1$s</string>
+    <string name="cfg_stand_fehler">Letzter Abruf %1$s — Fehler: %2$s</string>
+    <string name="cfg_keine_art">Mindestens eine Alarmart wählen.</string>
+    <string name="cfg_keine_erlaubnis">Benachrichtigungen sind für die App gesperrt — in den Android-Einstellungen erlauben.</string>
+    <string name="cfg_gespeichert">Gespeichert.</string>
+    <string name="cfg_alarm_test_ok">Verbindung OK, Alarm-Endpunkt antwortet</string>
+    <string name="takt_1">jede Minute (mehr Akku)</string>
+    <string name="takt_2">alle 2 Minuten (Vorgabe)</string>
+    <string name="takt_5">alle 5 Minuten</string>
+    <string name="takt_10">alle 10 Minuten</string>
+    <string name="takt_15">alle 15 Minuten (sparsam)</string>
+
+    <!-- Benachrichtigungen -->
+    <string name="kanal_chart">Chart-Alarme</string>
+    <string name="kanal_chart_info">Preis-, Linien- und Zonenalarme aus dem Chart-Arbeitsplatz</string>
+    <string name="kanal_momentum">Momentum-Alarme</string>
+    <string name="kanal_momentum_info">Momentum-Punkte auf Watchlists und Zeiteinheiten</string>
+    <string name="n_sammel">%1$d Chart-Alarme</string>
+    <string name="n_weitere">und %1$d weitere</string>
+    <string name="n_test_titel">BTCUSDT steigt über 100 000 (Test)</string>
+    <string name="n_test_text">Testmeldung aus den Widget-Einstellungen. So sieht ein Chart-Alarm aus; abgefragt wird alle %1$s min.</string>
 </resources>

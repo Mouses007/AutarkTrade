@@ -50,4 +50,24 @@ object ApiClient {
             return body
         }
     }
+
+    /**
+     * Auslösungen der Chart-Alarme seit [seit] (Serverzeit in ms). Gleiche Auth wie
+     * /display. Rückgabe: rohes JSON {jetzt, alarme:[…]}.
+     */
+    fun fetchAlarme(host: String, port: String, key: String, seit: Long, arten: Set<String>): String {
+        val url = "http://$host:$port/api/esp32/alarme?seit=$seit&arten=${arten.sorted().joinToString(",")}"
+        val req = Request.Builder().url(url).header("X-ESP32-Key", key).get().build()
+        client.newCall(req).execute().use { resp ->
+            val body = resp.body?.string() ?: ""
+            if (!resp.isSuccessful) {
+                throw RuntimeException(when (resp.code) {
+                    401 -> "Key ungültig (401)"
+                    404 -> "Server zu alt — /api/esp32/alarme fehlt (404)"
+                    else -> "HTTP ${resp.code}"
+                })
+            }
+            return body
+        }
+    }
 }

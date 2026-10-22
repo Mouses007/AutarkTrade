@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Headless APK build: JDK 17 + Android cmdline-tools + Gradle 8.9 -> app-debug.apk
+# Headless APK build: JDK 17 + Android cmdline-tools + Gradle 8.9 -> autarktrade-widget-<version>-debug.apk
 set -euo pipefail
 
 BUILD="$HOME/android-build"
@@ -59,11 +59,11 @@ log "Gradle: $($GRADLE --version | grep -i '^Gradle' | head -1)"
 # ---------- 5) Build APK ----------
 cd "$PROJ"
 echo "sdk.dir=$SDK" > local.properties
-log "Building app-debug.apk…"
+log "Building debug APK…"
 "$GRADLE" --no-daemon assembleDebug
 
-APK="$PROJ/app/build/outputs/apk/debug/app-debug.apk"
-if [ -f "$APK" ]; then
+APK="$(ls -t "$PROJ"/app/build/outputs/apk/debug/*.apk 2>/dev/null | head -1)"
+if [ -n "$APK" ] && [ -f "$APK" ]; then
   log "SUCCESS: $APK ($(du -h "$APK" | cut -f1))"
 else
   log "BUILD FINISHED but APK not found!"; exit 2

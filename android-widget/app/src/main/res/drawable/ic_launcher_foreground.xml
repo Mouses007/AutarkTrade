@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AutarkTrade-Logo als Adaptive-Icon-Vordergrund. ~15% Inset, damit das runde
-     Emblem komplett innerhalb der Safe-Zone liegt (Rund-/Squircle-Mask). -->
+<!-- AutarkTrade-Zeichen als Adaptive-Icon-Vordergrund. 19 % Einzug: der äussere
+     Kursring (96 von 100) bleibt so innerhalb der 66-dp-Sicherheitszone, auch
+     unter einer runden Maske. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
     android:drawable="@drawable/ic_logo"
-    android:inset="15%" />
+    android:inset="19%" />

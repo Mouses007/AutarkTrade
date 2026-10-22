@@ -11,8 +11,8 @@ android {
         applicationId = "com.autarktrade.widget"
         minSdk = 31
         targetSdk = 35
-        versionCode = 20
-        versionName = "4.0.0-20"
+        versionCode = 21
+        versionName = "4.0.0-21"
     }
 
     buildTypes {
@@ -31,6 +31,16 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    // APK nach Version benennen (autarktrade-widget-4.0.0-21-debug.apk) statt app-debug.apk —
+    // so liegt nie eine alte Datei unter demselben Namen herum.
+    applicationVariants.all {
+        val variante = this
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "autarktrade-widget-${variante.versionName}-${variante.buildType.name}.apk"
+        }
     }
 }
 

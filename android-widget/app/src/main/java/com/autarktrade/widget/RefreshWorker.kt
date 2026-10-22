@@ -77,6 +77,10 @@ class RefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
                 }
             }
 
+            // Chart-Alarme: Wecker-Kette prüfen und ggf. nachholen (eigener try, damit
+            // ein Fehler dort das Widget nie aufhält).
+            try { ChartAlarme.nachholen(ctx) } catch (e: Exception) { android.util.Log.w("TJWidget", "Alarm-Nachholen: ${e.message}") }
+
             // Volles updateWidget: baut Kopf/KPIs UND die eingebetteten Collection-Items
             // (RemoteCollectionItems) neu aus dem Cache → Liste aktualisiert ohne Service-
             // Binding (kein Freeze-Problem), Spinner wird zurückgesetzt.

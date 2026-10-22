@@ -373,8 +373,11 @@ async function einTakt() {
                 const getroffen = await knex('chart_alarme').where({ id: a.id, letzteZeit: a.letzteZeit }).update(patch)
                 messung.set(a.id, { p, t, gespeichert: t })
                 if (getroffen !== 1) continue
+                const { titel, text } = meldungsText(a, z, erg, p)
                 const zustellung = await melden(a, z, erg, p, t)
-                const eintrag = { t, p, niveau: erg.niveau ?? null, zustellung, zugestellt: zugestellt(zustellung) }
+                // Titel und Text stehen mit im Verlauf: das Android-Widget liest Auslösungen
+                // über /api/esp32/alarme und soll denselben Wortlaut melden wie ntfy/Telegram.
+                const eintrag = { t, p, niveau: erg.niveau ?? null, titel, text, zustellung, zugestellt: zugestellt(zustellung) }
                 await knex('chart_alarme').where('id', a.id).update({
                     verlauf: JSON.stringify([...a.verlauf, eintrag].slice(-MAX_VERLAUF)),
                 })
@@ -514,7 +517,7 @@ export async function momentumTakt() {
                 treffer: treffer.map(({ symbol, markt, tf, punkt, preis }) => ({ symbol, markt, tf, ...punkt, preis })),
             }, t)
             const eintrag = {
-                t, p: treffer[0].preis, zustellung, zugestellt: zugestellt(zustellung),
+                t, p: treffer[0].preis, titel, text, zustellung, zugestellt: zugestellt(zustellung),
                 treffer: treffer.slice(0, 20).map(({ symbol, markt, tf, punkt, preis, kerzeT }) => ({ symbol, markt, tf, seite: punkt.seite, stark: punkt.stark, preis, kerzeT })),
             }
             await knex('chart_alarme').where('id', a.id).update({ verlauf: JSON.stringify([...a.verlauf, eintrag].slice(-MAX_VERLAUF)) })

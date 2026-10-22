@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Einstellungen: drei Karten (Verbindung, Widget, Chart-Alarme) im Stil der Web-App.
+     Ohne Widget-Kontext (Start aus dem Launcher) fehlt die Widget-Karte. -->
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -10,79 +12,190 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="20dp">
+        android:padding="16dp">
+
+        <!-- Kopf: Logo + Schriftzug -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="4dp">
+
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/ic_logo"
+                android:contentDescription="@string/app_name" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Autark"
+                android:textColor="@color/text"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Trade"
+                android:textColor="@color/accent"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/cfg_title"
-            android:textColor="@color/text_primary"
-            android:textSize="20sp"
-            android:textStyle="bold"
-            android:layout_marginBottom="20dp" />
-
-        <TextView style="@style/FieldLabel" android:text="@string/cfg_host" />
-        <EditText
-            android:id="@+id/in_host"
-            style="@style/Field"
-            android:hint="@string/cfg_host_hint"
-            android:inputType="textUri" />
-
-        <TextView style="@style/FieldLabel" android:text="@string/cfg_port" />
-        <EditText
-            android:id="@+id/in_port"
-            style="@style/Field"
-            android:text="8080"
-            android:inputType="number" />
-
-        <TextView style="@style/FieldLabel" android:text="@string/cfg_key" />
-        <EditText
-            android:id="@+id/in_key"
-            style="@style/Field"
-            android:hint="@string/cfg_key_hint"
-            android:inputType="textNoSuggestions" />
-
-        <TextView style="@style/FieldLabel" android:text="@string/cfg_filter" />
-        <Spinner
-            android:id="@+id/in_filter"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp" />
-
-        <TextView style="@style/FieldLabel" android:text="@string/cfg_default_broker" />
-        <Spinner
-            android:id="@+id/in_broker"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:textColor="@color/muted"
+            android:textSize="13sp"
             android:layout_marginBottom="16dp" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal">
+        <!-- ── Verbindung ── -->
+        <LinearLayout style="@style/Karte">
+            <TextView style="@style/KartenTitel" android:text="@string/cfg_karte_verbindung" />
+
+            <TextView style="@style/FieldLabel" android:text="@string/cfg_host" />
+            <EditText
+                android:id="@+id/in_host"
+                style="@style/Field"
+                android:hint="@string/cfg_host_hint"
+                android:inputType="textUri" />
+
+            <TextView style="@style/FieldLabel" android:text="@string/cfg_port" />
+            <EditText
+                android:id="@+id/in_port"
+                style="@style/Field"
+                android:text="8080"
+                android:inputType="number" />
+
+            <TextView style="@style/FieldLabel" android:text="@string/cfg_key" />
+            <EditText
+                android:id="@+id/in_key"
+                style="@style/Field"
+                android:hint="@string/cfg_key_hint"
+                android:inputType="textNoSuggestions" />
 
             <Button
                 android:id="@+id/btn_test"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="8dp"
+                style="@style/KnopfNeben"
                 android:text="@string/cfg_test" />
-
-            <Button
-                android:id="@+id/btn_save"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/cfg_save" />
         </LinearLayout>
+
+        <!-- ── Widget ── -->
+        <LinearLayout android:id="@+id/karte_widget" style="@style/Karte">
+            <TextView style="@style/KartenTitel" android:text="@string/cfg_karte_widget" />
+
+            <TextView style="@style/FieldLabel" android:text="@string/cfg_filter" />
+            <Spinner
+                android:id="@+id/in_filter"
+                style="@style/Auswahl" />
+
+            <TextView style="@style/FieldLabel" android:text="@string/cfg_default_broker" />
+            <Spinner
+                android:id="@+id/in_broker"
+                style="@style/Auswahl" />
+        </LinearLayout>
+
+        <!-- ── Chart-Alarme ── -->
+        <LinearLayout style="@style/Karte">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    style="@style/KartenTitel"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginBottom="0dp"
+                    android:text="@string/cfg_karte_alarme" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/in_alarme"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:theme="@style/AkzentSchalter" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="12dp"
+                android:text="@string/cfg_alarme_info"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:id="@+id/alarm_details"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView style="@style/FieldLabel" android:text="@string/cfg_takt" />
+                <Spinner
+                    android:id="@+id/in_takt"
+                    style="@style/Auswahl" />
+
+                <TextView style="@style/FieldLabel" android:text="@string/cfg_arten" />
+                <CheckBox android:id="@+id/art_preis" style="@style/Haken" android:text="@string/art_preis" />
+                <CheckBox android:id="@+id/art_linie" style="@style/Haken" android:text="@string/art_linie" />
+                <CheckBox android:id="@+id/art_zone" style="@style/Haken" android:text="@string/art_zone" />
+                <CheckBox android:id="@+id/art_momentum" style="@style/Haken" android:text="@string/art_momentum" />
+
+                <TextView
+                    android:id="@+id/alarm_hinweis"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:padding="10dp"
+                    android:background="@drawable/bg_feld"
+                    android:textColor="@color/muted"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btn_genau"
+                    style="@style/KnopfNeben"
+                    android:layout_marginTop="10dp" />
+
+                <Button
+                    android:id="@+id/btn_akku"
+                    style="@style/KnopfNeben"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/cfg_akku" />
+
+                <Button
+                    android:id="@+id/btn_testmeldung"
+                    style="@style/KnopfNeben"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/cfg_testmeldung" />
+
+                <TextView
+                    android:id="@+id/alarm_stand"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:textColor="@color/muted"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/btn_save"
+            style="@style/KnopfHaupt"
+            android:text="@string/cfg_save" />
 
         <TextView
             android:id="@+id/status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:textColor="@color/text_secondary"
+            android:layout_marginTop="12dp"
+            android:textColor="@color/muted"
             android:textSize="13sp"
             android:text="" />
     </LinearLayout>

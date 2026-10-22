@@ -1,17 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Dark theme matching the Cinnamon desklet (background rgba(15,20,28)) -->
-    <color name="bg">#0F141C</color>
-    <color name="bg_card">#161D29</color>
-    <color name="bg_header">#1B2433</color>
-    <color name="row_alt">#121822</color>
-    <color name="separator">#2A3547</color>
-    <color name="text_primary">#E6EAF0</color>
-    <color name="text_secondary">#9AA7B8</color>
-    <color name="text_muted">#66758A</color>
-    <color name="profit">#26C281</color>
-    <color name="loss">#E5544B</color>
-    <color name="side_long">#26C281</color>
-    <color name="side_short">#E5544B</color>
-    <color name="accent">#3B82F6</color>
+    <!-- AutarkTrade-Farbtokens (src/assets/design): dieselben Werte wie die Web-App,
+         damit Widget, Einstellungen und Benachrichtigung zur Kopfleiste passen. -->
+    <color name="bg">#05080A</color>
+    <color name="panel">#0C1216</color>
+    <color name="panel_soft">#131C22</color>
+    <color name="line">#1D2B33</color>
+    <color name="text">#E8F4F6</color>
+    <color name="muted">#8EA5AF</color>
+    <color name="accent">#1FD6C4</color>
+    <color name="accent_dim">#0C7F74</color>
+    <color name="good">#3FBF8F</color>
+    <color name="bad">#E0574C</color>
+    <color name="warn">#D8A33A</color>
+
+    <!-- Alte Namen, auf die Tokens abgebildet (Layouts und Kotlin lesen sie). -->
+    <color name="bg_card">@color/panel</color>
+    <color name="bg_header">@color/panel_soft</color>
+    <color name="row_alt">#0F171B</color>
+    <color name="separator">@color/line</color>
+    <color name="text_primary">@color/text</color>
+    <color name="text_secondary">@color/muted</color>
+    <color name="text_muted">#5E7580</color>
+    <color name="profit">@color/good</color>
+    <color name="loss">@color/bad</color>
+    <color name="side_long">@color/good</color>
+    <color name="side_short">@color/bad</color>
 </resources>
