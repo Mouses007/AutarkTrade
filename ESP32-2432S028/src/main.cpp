@@ -32,7 +32,7 @@ XPT2046_Touchscreen ts(TOUCH_CS_PIN, TOUCH_IRQ_PIN);
 #define WIFI_TIMEOUT_MS     12000
 #define DISPLAY_ROTATION    3
 #define TFT_BL_PIN          21        // Backlight-Pin ESP32-2432S028 (CYD)
-#define FW_VERSION          "3.4.0-CYD"
+#define FW_VERSION          "3.4.1-CYD"
 
 // ── Farben RGB565 — Tokens der AutarkTrade-Web-App ───────────────────────
 // Umgerechnet r>>3 | g>>2 | b>>3; die Namen bleiben, damit der Zeichencode
@@ -52,6 +52,8 @@ XPT2046_Touchscreen ts(TOUCH_CS_PIN, TOUCH_IRQ_PIN);
 #define COLOR_HEADER_BG  0x0882   // #0c1216  panel
 #define COLOR_NAV_AKTIV  0x0945   // #0a2a28  accent sehr dunkel (aktiver Reiter)
 #define COLOR_KERN       0x0103   // #04201d  Kern der Blüte im Logo
+
+void drawMarke(int cx, int cy, int r);   // Logo-Blüte, unten bei SCREEN 2
 
 // ── Globals ──────────────────────────────────────────────
 
@@ -328,9 +330,10 @@ void drawScreen1() {
   fillCard(4, cardY, 312, cardH);
 
   // Label + Filter
+  drawMarke(17, cardY + 10, 6);
   tft.setTextColor(COLOR_GREY, COLOR_CARD);
   tft.setTextSize(1);
-  tft.setCursor(12, cardY + 7);
+  tft.setCursor(28, cardY + 7);
   tft.print(data.hasBalance ? "KONTOSTAND" : "P&L GESAMT");
 
   const char* fLbl = cfgFilter == "month" ? "Monat" :
@@ -1036,6 +1039,7 @@ void setup() {
     tft.setTextSize(2);
     tft.setCursor(10, 20);
     tft.print("SETUP MODUS");
+    drawMarke(296, 26, 16);
     tft.drawFastVLine(160, 50, 155, COLOR_GREY_DARK);
     tft.setTextColor(COLOR_GREY, COLOR_BG);
     tft.setTextSize(1);

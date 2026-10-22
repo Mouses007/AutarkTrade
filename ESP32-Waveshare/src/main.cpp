@@ -28,13 +28,13 @@
 #define WIFI_TIMEOUT_MS    12000
 #define DISPLAY_ROTATION   3
 #define TFT_BL_PIN         5         // Backlight-Pin Waveshare ESP32-S3-Touch-LCD-2.8
-#define FW_VERSION         "3.4.0-WS"
+#define FW_VERSION         "3.4.1-WS"
 
 // ── Farben RGB565 — Tokens der AutarkTrade-Web-App ───────────────────────
 // Umgerechnet r>>3 | g>>2 | b>>3; die Namen bleiben, damit der Zeichencode
 // unverändert passt. Hex dahinter = Token der Web-App.
 #define COLOR_BG         0x0041   // #05080a  bg
-#define COLOR_CARD       0x0041   // = bg — auf diesem Panel macht Display-Gamma Grau lila, darum keine Kartenfläche
+#define COLOR_CARD       0x0882   // #0c1216  panel
 #define COLOR_GREEN      0x3DF1   // #3fbf8f  good
 #define COLOR_RED        0xE2A9   // #e0574c  bad
 #define COLOR_WHITE      0xEFBE   // #e8f4f6  text
@@ -48,6 +48,8 @@
 #define COLOR_HEADER_BG  0x0882   // #0c1216  panel
 #define COLOR_NAV_AKTIV  0x0945   // #0a2a28  accent sehr dunkel (aktiver Reiter)
 #define COLOR_KERN       0x0103   // #04201d  Kern der Blüte im Logo
+
+void drawMarke(int cx, int cy, int r);   // Logo-Blüte, unten bei SCREEN 2
 
 // ── Globals ──────────────────────────────────────────────
 
@@ -256,14 +258,37 @@ void cst328Init() {
   pinMode(TOUCH_RST, OUTPUT);
   // Reset-Sequenz
   digitalWrite(TOUCH_RST, HIGH); delay(50);
-  digitalWrite(TOUCH_RST, LOW);  delay(5);
-  digitalWrite(TOUCH_RST, HIGH); delay(50);
-  // Normal-Mode aktivieren (0xD109 = HYN_REG_MUT_NORMAL_MODE)
-  Wire1.beginTransmission(CST328_ADDR);
-  Wire1.write(0xD1);
-  Wire1.write(0x09);
-  Wire1.endTransmission(true);
+  digitalWrite(TOUCH_RST, LOW);  delay(10);
+  digitalWrite(TOUCH_RST, HIGH);
+  // Normal-Mode aktivieren (0xD109 = HYN_REG_MUT_NORMAL_MODE). Der Chip nimmt
+  // I2C erst einige 100 ms nach dem Reset an — mit 50 ms kam NACK, der Befehl
+  // ging verloren und der Touch blieb stumm. Darum bis 1 s nachfassen.
+  uint8_t fehler = 2;
+  for (int versuch = 0; versuch < 10 && fehler != 0; versuch++) {
+    delay(100);
+    Wire1.beginTransmission(CST328_ADDR);
+    Wire1.write(0xD1);
+    Wire1.write(0x09);
+    fehler = Wire1.endTransmission(true);
+  }
   delay(10);
+  if (fehler != 0) {
+    // Wer hängt stattdessen am Bus? Gemessen 22.10.2026 an einem Exemplar:
+    // nur 0x58, und die Adresse verschwindet bei gehaltenem TOUCH_RST — es ist
+    // also der Touch-Chip, aber nicht im Normalbetrieb (Register 0xD000 liefert
+    // nach jedem Start denselben festen Datenstrom statt Berührungen). Nicht als
+    // Touch benutzen: der Strom würde als Tippen gelesen und die Reiter springen.
+    Serial.print("[TOUCH] I2C-Scan Wire1:");
+    for (uint8_t adr = 1; adr < 127; adr++) {
+      Wire1.beginTransmission(adr);
+      if (Wire1.endTransmission(true) == 0) Serial.printf(" 0x%02X", adr);
+    }
+    Serial.println();
+  }
+  // Antwortet der Chip überhaupt? Ohne diese Zeile sah ein toter Touch im Log
+  // genauso aus wie einer, den nur niemand berührt.
+  Serial.printf("[TOUCH] CST328 an 0x%02X: %s (I2C-Code %u), INT=%d\n",
+                CST328_ADDR, fehler == 0 ? "antwortet" : "KEINE ANTWORT", fehler, digitalRead(TOUCH_INT));
 }
 
 void loadTouchCal() {}  // Keine Kalibrierung nötig (kapazitiv)
@@ -285,9 +310,14 @@ void waveshareInitST7789() {
   tft.writecommand(0x3A);   // COLMOD 16-bit
   tft.writedata(0x05);
 
+  // RAMCTRL: das Waveshare-Demo setzt 0xE8 — Bit 3 (ENDIAN) = little endian,
+  // passend zu LVGL mit LV_COLOR_16_SWAP. TFT_eSPI schickt Farben MSB zuerst;
+  // mit gesetztem Bit kam jede Farbe byte-vertauscht an (Akzent violett, Gelb
+  // cyan, Grau lila — der alte Kommentar „Display-Gamma macht Grau lila" war
+  // genau das). 0xE0 = dasselbe ohne ENDIAN-Bit.
   tft.writecommand(0xB0);
   tft.writedata(0x00);
-  tft.writedata(0xE8);
+  tft.writedata(0xE0);
 
   tft.writecommand(0xB2);
   tft.writedata(0x0C); tft.writedata(0x0C); tft.writedata(0x00);
@@ -459,9 +489,10 @@ void drawScreen1() {
   fillCard(4, cardY, 312, cardH);
 
   // Label + Filter
+  drawMarke(17, cardY + 10, 6);
   tft.setTextColor(COLOR_GREY, COLOR_CARD);
   tft.setTextSize(1);
-  tft.setCursor(12, cardY + 7);
+  tft.setCursor(28, cardY + 7);
   tft.print(data.hasBalance ? "KONTOSTAND" : "P&L GESAMT");
 
   const char* fLbl = cfgFilter == "month" ? "Monat" :
@@ -1176,6 +1207,7 @@ void setup() {
     tft.setTextSize(2);
     tft.setCursor(10, 20);
     tft.print("SETUP MODUS");
+    drawMarke(296, 26, 16);
     tft.drawFastVLine(160, 50, 155, COLOR_GREY_DARK);
     tft.setTextColor(COLOR_GREY, COLOR_BG);
     tft.setTextSize(1);
