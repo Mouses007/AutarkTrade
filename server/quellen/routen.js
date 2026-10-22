@@ -40,7 +40,8 @@ export function setupQuellenRoutes(app) {
     app.put('/api/quellen/ohne-freigabe', async (req, res) => {
         try {
             const an = req.body?.an !== false
-            await getKnex()('settings').where('id', 1).update({ [freigabe.SCHALTER]: an ? 1 : 0 })
+            // Jede ausdrückliche Wahl zählt als beantwortete Erstfrage.
+            await getKnex()('settings').where('id', 1).update({ [freigabe.SCHALTER]: an ? 1 : 0, quellenOhneFreigabeGefragt: 1 })
             freigabe.vergiss()
             coingecko.vergiss()
             res.json(await freigabe.freigabeStand())

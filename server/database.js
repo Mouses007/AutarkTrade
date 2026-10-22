@@ -209,10 +209,15 @@ async function fixPostgresSequences(knex) {
 // `punktgroesse`, `stand` und die Art `momentum`. Additiv; ein älterer Codestand
 // prüft eine Zeile der Art `momentum` nie (`pruefeAlarm` kennt sie nicht, und
 // ihr leeres Symbol hat keinen Kurs) und zeigt sie nur unverständlich an.
-const SCHEMA_VERSION = 32
+// v33: `quellenOhneFreigabeGefragt` (Quellen-Frage beim ersten Start). Bestehende
+// Installationen gelten als gefragt, neue starten mit dem Schalter aus.
+const SCHEMA_VERSION = 33
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
+    // Wird die Tabelle `settings` in diesem Lauf erst angelegt, ist es eine
+    // neue Installation (für die einmalige Quellen-Frage, Variante B).
+    const frischeInstallation = !(await knex.schema.hasTable('settings'))
 
     /*
      * Spalte nachruesten, wenn sie fehlt.
@@ -3602,6 +3607,20 @@ async function runMigrations(knex, client) {
     // Schalter `quellenOhneFreigabe` (Vorgabe an) und Rückführung der
     // S12-Einstellungen, siehe `server/migrationen/s15.js`. Additiv.
     await migriereS15(knex, addColumnIfNotExists)
+
+    /*
+     * Quellen-Frage beim ersten Start (Rechtsaudit 10/2026, B-2, Variante B).
+     * Neue Installationen starten mit `quellenOhneFreigabe` AUS und fragen
+     * einmal; wer schon installiert hatte, gilt als gefragt und behält seine
+     * Einstellung. Entschieden wird nur, wenn die Spalte in DIESEM Lauf neu ist.
+     */
+    const quellenFrageNeu = !(await knex.schema.hasColumn('settings', 'quellenOhneFreigabeGefragt'))
+    await addColumnIfNotExists('settings', 'quellenOhneFreigabeGefragt', (t) => t.integer('quellenOhneFreigabeGefragt').defaultTo(0))
+    if (quellenFrageNeu) {
+        await knex('settings').where('id', 1).update(frischeInstallation
+            ? { quellenOhneFreigabe: 0, quellenOhneFreigabeGefragt: 0 }
+            : { quellenOhneFreigabeGefragt: 1 })
+    }
 
     // ==================== SCHEMA-ANKER ====================
     // Ganz am Ende, damit die Version erst steht, wenn alle Checks durch sind.

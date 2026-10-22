@@ -7,6 +7,9 @@ import { ref } from 'vue'
  */
 export const rechtlichesOffen = ref(false)
 export const rechtlichesReiter = ref('haftung')
+/** Stand der Pflicht-Zustimmung für andere Erststart-Dialoge (Quellen-Frage): erst geladen, dann nicht mehr offen. */
+export const rechtlichesGeladen = ref(false)
+export const rechtlichesPflichtOffen = ref(false)
 
 export function oeffneRechtliches(reiter = 'haftung') {
     rechtlichesReiter.value = reiter

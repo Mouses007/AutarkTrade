@@ -6234,5 +6234,12 @@
     "schalterHilfe": "Menüeintrag, Kaffee-Knopf oben und seltene Nachfragen (50/200/500/1000 bewertete Trades, nach Updates, alle paar Monate; höchstens einmal in 30 Tagen).",
     "kaffeeLink": "Buy-me-a-coffee-Link",
     "kaffeeUngueltig": "Erwartet: https://buymeacoffee.com/name"
+  },
+  "quellenFrage": {
+    "titel": "Datenquellen ohne Freigabe",
+    "text": "Einige Analysen holen Daten aus Quellen, deren Nutzungsbedingungen das automatische Abfragen nicht oder nur eingeschränkt erlauben. Willst du sie trotzdem nutzen? Das geschieht auf deine eigene Verantwortung; die Bedingungen der Anbieter gelten weiter.",
+    "hinweis": "Ohne diese Quellen fehlen die genannten Anzeigen; alles andere läuft. Ändern kannst du das jederzeit unter Einstellungen › Datenquellen.",
+    "an": "Nutzen (eigene Verantwortung)",
+    "aus": "Aus lassen"
   }
 }

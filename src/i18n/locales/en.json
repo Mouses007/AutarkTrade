@@ -6234,5 +6234,12 @@
     "schalterHilfe": "Menu entry, coffee button at the top and rare prompts (50/200/500/1000 rated trades, after updates, every few months; at most once in 30 days).",
     "kaffeeLink": "Buy me a coffee link",
     "kaffeeUngueltig": "Expected: https://buymeacoffee.com/name"
+  },
+  "quellenFrage": {
+    "titel": "Data sources without permission",
+    "text": "Some analyses fetch data from sources whose terms do not allow automated access, or only with restrictions. Do you want to use them anyway? This is at your own responsibility; the providers' terms still apply.",
+    "hinweis": "Without these sources the listed displays are missing; everything else works. You can change this at any time under Settings › Data sources.",
+    "an": "Use them (own responsibility)",
+    "aus": "Keep off"
   }
 }

@@ -19,7 +19,7 @@ import Reiter from '../basis/Reiter.vue'
 import Knopf from '../basis/Knopf.vue'
 import Hinweis from '../basis/Hinweis.vue'
 import Symbol from '../basis/Symbol.vue'
-import { rechtlichesOffen, rechtlichesReiter } from '../../stores/rechtliches.js'
+import { rechtlichesOffen, rechtlichesReiter, rechtlichesGeladen, rechtlichesPflichtOffen } from '../../stores/rechtliches.js'
 
 const { t } = useI18n()
 const QUELLCODE_URL = 'https://github.com/Mouses007/AutarkTrade'
@@ -32,6 +32,7 @@ const beschaeftigt = ref(false)
 
 const pflichtOffen = computed(() => !!stand.value?.noetig)
 const sichtbar = computed(() => pflichtOffen.value || rechtlichesOffen.value)
+watch(pflichtOffen, (v) => { rechtlichesPflichtOffen.value = v }, { immediate: true })
 const fassung = computed(() => stand.value?.fassung?.fassung || '')
 
 const reiterListe = computed(() => [
@@ -45,9 +46,11 @@ async function laden() {
     try {
         const { data } = await axios.get('/api/rechtliches')
         stand.value = data
+        rechtlichesGeladen.value = true
     } catch {
         // Ein Server ohne die Route (älterer Stand) oder gerade stumm: nichts zeigen.
         stand.value = null
+        rechtlichesGeladen.value = true
     }
 }
 

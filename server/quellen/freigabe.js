@@ -119,8 +119,15 @@ export async function fordereQuelle(id) {
 
 /** Für die Einstellungsseite und `GET /api/quellen`. */
 export async function freigabeStand() {
+    let gefragt = true
+    try {
+        const { getKnex } = await import('../database.js')
+        const z = await getKnex()('settings').select('quellenOhneFreigabeGefragt').where('id', 1).first()
+        gefragt = Number(z?.quellenOhneFreigabeGefragt ?? 1) === 1
+    } catch { /* ohne Spalte oder DB (Selbsttest): nicht fragen */ }
     return {
         an: await freigabeAn(),
+        gefragt,
         vorgabe: VORGABE,
         quellen: IDS.map((id) => ({ id, ...QUELLEN_OHNE_FREIGABE[id] })),
     }
