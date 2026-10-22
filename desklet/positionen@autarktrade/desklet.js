@@ -22,7 +22,12 @@ try {
 }
 
 const UUID         = "positionen@autarktrade";
-const APP_NAME     = "AutarkTrade";
+
+/** Trennlinie als 1px-Fläche — Strichzeichen hatten eine feste Länge und
+ *  endeten je nach Schrift und Breite vor dem Rand oder liefen darüber. */
+function linie(cls) {
+    return new St.Widget({ style_class: cls, x_expand: true });
+}
 
 // --- Translation support -------------------------------------------------
 Gettext.bindtextdomain(UUID, GLib.get_user_data_dir() + "/locale");
@@ -78,7 +83,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         let fsUi    = this.fontSizeUi  ?? 11;
         let mw      = this.minWidth    ?? 480;
         this._outer.set_style(
-            `background-color: rgba(15,20,28,${opacity.toFixed(2)});` +
+            `background-color: rgba(12,18,22,${opacity.toFixed(2)});` +
             `min-width: ${mw}px;`
         );
         // Scaling factor for column widths (base: fs=12)
@@ -105,6 +110,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         this._applyStyle();
         // Update static UI elements
         if (this._titleLabel)    this._titleLabel.set_style(this._titleStyle);
+        if (this._titleAkzent)   this._titleAkzent.set_style(this._titleStyle);
         if (this._subtitleLabel) this._subtitleLabel.set_style(this._subtitleStyle);
         if (this._footerTime)    this._footerTime.set_style(this._footerStyle);
         if (this._footerRight)   this._footerRight.set_style(this._footerStyle);
@@ -176,22 +182,27 @@ class TradingPositionsDesklet extends Desklet.Desklet {
 
         // Title
         let titleBox = new St.BoxLayout({ vertical: true, style_class: 'desklet-title-box' });
-        this._titleLabel    = new St.Label({ text: APP_NAME, style_class: 'desklet-title' });
+        // Schriftzug wie in der Kopfleiste der Web-App: „Autark" + „Trade" in Akzentfarbe.
+        let titleRow = new St.BoxLayout({ style_class: 'desklet-title-row' });
+        this._titleLabel    = new St.Label({ text: 'Autark', style_class: 'desklet-title' });
+        this._titleAkzent   = new St.Label({ text: 'Trade', style_class: 'desklet-title-akzent' });
+        titleRow.add_child(this._titleLabel);
+        titleRow.add_child(this._titleAkzent);
         this._subtitleLabel = new St.Label({ text: _('Open positions & bots'), style_class: 'desklet-subtitle' });
-        titleBox.add_child(this._titleLabel);
+        titleBox.add_child(titleRow);
         titleBox.add_child(this._subtitleLabel);
         headerRow.add_child(titleBox);
         outer.add_child(headerRow);
 
         // Separator after header
-        outer.add_child(new St.Label({ text: '\u2500'.repeat(44), style_class: 'separator' }));
+        outer.add_child(linie('linie'));
 
         // --- Content area (positions / status) ---
         this._content = new St.BoxLayout({ vertical: true, style_class: 'desklet-content' });
         outer.add_child(this._content);
 
         // --- Footer ---
-        outer.add_child(new St.Label({ text: '\u2500'.repeat(44), style_class: 'separator' }));
+        outer.add_child(linie('linie'));
         let footer = new St.BoxLayout({ style_class: 'desklet-footer' });
         this._footerTime  = new St.Label({ text: '', style_class: 'footer-time' });
         this._footerRight = new St.Label({ text: '', style_class: 'footer-right' });
@@ -306,7 +317,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
                 (byBroker[b] = byBroker[b] || []).push(p);
             }
             for (let b of Object.keys(byBroker).sort()) {
-                if (renderedAny) this._content.add_child(new St.Label({ text: '─'.repeat(44), style_class: 'separator-thin' }));
+                if (renderedAny) this._content.add_child(linie('linie-duenn'));
                 this._renderFuturesSection(byBroker[b], this._brokerLabel(b));
                 renderedAny = true;
             }
@@ -314,7 +325,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
 
         if (bots.length > 0) {
             if (renderedAny) {
-                this._content.add_child(new St.Label({ text: '─'.repeat(44), style_class: 'separator-thin' }));
+                this._content.add_child(linie('linie-duenn'));
             }
             this._renderBotSection(bots);
         }
@@ -352,7 +363,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         if (this._totalStyle) totalLbl.set_style(this._totalStyle);
         totalRow.add_child(totalLbl);
         this._content.add_child(totalRow);
-        this._content.add_child(new St.Label({ text: '\u2500'.repeat(44), style_class: 'separator-thin' }));
+        this._content.add_child(linie('linie-duenn'));
 
         // Header row — same column widths as the position rows
         let headerCells = [
@@ -383,7 +394,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         if (this._totalStyle) titleLbl.set_style(this._totalStyle);
         titleRow.add_child(titleLbl);
         this._content.add_child(titleRow);
-        this._content.add_child(new St.Label({ text: '─'.repeat(44), style_class: 'separator-thin' }));
+        this._content.add_child(linie('linie-duenn'));
 
         let headerCells = [
             { text: _('Symbol'), width: this._colWidths.symbol },
