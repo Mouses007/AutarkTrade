@@ -38,8 +38,23 @@
  * 02.09.2026: `BINANCE:XMRUSDT.P` und `BINANCE:1000PEPEUSDT.P` laden beide,
  * die Varianten ohne `.P` beide nicht.
  */
+/*
+ * Bitunix am Handy: Die App übernimmt von bitunix.com NUR `/u-link/*` (so in
+ * apple-app-site-association und am 22.10.2026 auf Android mit „Bitunix Pro"
+ * getestet). `/contract-trade/…` öffnete immer den Browser. Ein u-link öffnet die
+ * App, aber auf dem zuletzt gezeigten Chart: zwölf Schreibweisen mit ETHUSDT
+ * landeten alle auf BTC. Der Nutzer wollte die App trotzdem. Das Symbol steht im
+ * Pfad, falls Bitunix es eines Tages auswertet. Bitget und Pionex starteten aus
+ * dem Browser gar keine App, sie bleiben bei der Webseite.
+ */
+const mobilesGeraet = () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+
+export function bitunixUrl(s, mobil = mobilesGeraet()) {
+    return mobil ? `https://www.bitunix.com/u-link/contract-trade/${s}` : `https://www.bitunix.com/contract-trade/${s}`
+}
+
 export const BOERSE_URL = {
-    bitunix: (s) => `https://www.bitunix.com/contract-trade/${s}`,
+    bitunix: (s) => bitunixUrl(s),
     bitget: (s) => `https://www.bitget.com/futures/usdt/${s}`,
     pionex: (s) => `https://www.pionex.com/en/futures/${s.replace(/USDT$/, '').replace(/^1000+/, '')}.PERP_USDT/Manual`,
     tradingview: (s, quelle) => {

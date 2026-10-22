@@ -3,7 +3,7 @@
  *
  * Aufruf: node src/utils/__selftest-boersenlinks.mjs
  */
-import { listungUrl, LISTUNG_URL, coingeckoSuche } from './boersenLinks.js'
+import { listungUrl, LISTUNG_URL, coingeckoSuche, bitunixUrl, boerseUrl } from './boersenLinks.js'
 import { BOERSEN, ALLE_BOERSEN } from '../../server/hype-radar/boersenwacht-bewertung.js'
 
 let fehler = 0
@@ -38,6 +38,9 @@ p('unbekannte Börse: kein Link', listungUrl('irgendwo', 'X') === null)
 p('leeres Kürzel: kein Link', listungUrl('gate', '') === null)
 p('Sonderzeichen werden kodiert', !/[ /]/.test(listungUrl('gate', 'A B/C').split('/trade/')[1]))
 p('CoinGecko-Suche', coingeckoSuche('SOL') === 'https://www.coingecko.com/en/search?query=SOL')
+p('Bitunix am Handy: u-link (nur den nimmt die App)', bitunixUrl('ETHUSDT', true) === 'https://www.bitunix.com/u-link/contract-trade/ETHUSDT')
+p('Bitunix am PC: Handelsseite wie bisher', bitunixUrl('ETHUSDT', false) === 'https://www.bitunix.com/contract-trade/ETHUSDT')
+p('ohne Browser (Node) gilt PC', boerseUrl('bitunix', 'BTCUSDT') === 'https://www.bitunix.com/contract-trade/BTCUSDT')
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)
 process.exit(fehler === 0 ? 0 : 1)
