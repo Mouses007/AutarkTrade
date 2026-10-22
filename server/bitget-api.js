@@ -32,7 +32,7 @@ function createSignature(secretKey, timestamp, method, requestPath, queryString,
  * IMPORTANT: Bitget requires the signature prehash to use UNESCAPED query string values,
  * matching their official SDK's unescapedStringify() approach.
  */
-async function bitgetRequest(method, path, apiKey, secretKey, passphrase, params = {}, body = null) {
+export async function bitgetRequest(method, path, apiKey, secretKey, passphrase, params = {}, body = null) {
     const timestamp = String(Date.now())
 
     // Sort keys alphabetically (required by Bitget)

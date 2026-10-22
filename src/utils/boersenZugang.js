@@ -12,6 +12,12 @@
  */
 import axios from 'axios'
 import { brokers } from '../stores/filters.js'
+import { appEinstellungen } from '../stores/settings.js'
+
+/** Futures für diese Börse abgeschaltet (Einstellung `portfolioBoersen`, Testzweig)? */
+export function futuresAus(boerse, einstellungen = appEinstellungen.value) {
+    try { return Number(JSON.parse(einstellungen?.portfolioBoersen || '{}')?.[boerse]?.futures ?? 1) === 0 } catch { return false }
+}
 
 const GUELTIG_MS = 5 * 60 * 1000
 let stand = null          // { liste: string[], ts }
@@ -26,7 +32,7 @@ export async function eingerichteteBoersen() {
         for (const b of brokers) {
             try {
                 const { data } = await axios.get(`/api/${b.value}/config`)
-                if (data && (data.apiKey || data.hasSecret)) liste.push(b.value)
+                if (data && (data.apiKey || data.hasSecret) && !futuresAus(b.value)) liste.push(b.value)
             } catch { /* ohne Config-Endpunkt: nicht eingerichtet */ }
         }
         stand = { liste, ts: Date.now() }

@@ -131,6 +131,7 @@ export const routen = [
     // Ein Eintrag für Sitzung/Karten/Statistik: eine laufende Lernsitzung
     // überlebt den Wechsel.
     seite('/lernen/:reiter?', 'lernen', () => import('../views/Lernen.vue'), { title: 'Lernen', titleKey: 'nav.lernen', mode: 'lernen' }),
+    seite('/portfolio/:reiter?', 'portfolio', () => import('../views/Portfolio.vue'), { title: 'Portfolio', titleKey: 'nav.portfolio', mode: 'portfolio' }),
 
     // ── Unbekannte Adresse ──────────────────────────────────
     // Ohne diesen Eintrag bliebe die Seite weiss (keine Route, kein Layout).

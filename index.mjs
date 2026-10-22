@@ -49,6 +49,8 @@ import { setupStrategyBuilderRoutes } from './server/strategy-builder.js'
 import { setupRuleBuilderRoutes } from './server/rule-builder.js'
 import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engine.js'
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
+import { setupPortfolioRoutes } from './server/portfolio/api.js'
+import { startePortfolioTakt, stoppePortfolioTakt } from './server/portfolio/abruf.js'
 import { logError } from './server/logger.js'
 import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession, meldeEinrichtungsCode } from './server/auth.js'
 import { umgebung, umgebungAn, alteSicherheitsSchalter } from './server/umgebung.js'
@@ -250,6 +252,7 @@ async function starteServer() {
     setupStrategyBuilderRoutes(app);
     setupRuleBuilderRoutes(app);
     setupRanglisteRoutes(app);
+    setupPortfolioRoutes(app);
     // Eigene Regelstrategien aus der DB in die Registry holen — sie sind ab
     // jetzt von eingebauten nicht mehr zu unterscheiden.
     await ladeAlleRegelStrategien();
@@ -297,6 +300,11 @@ async function starteServer() {
     // Maschine, an der jemand sitzt und einen Lauf startet. Dass trotzdem nur
     // einer arbeitet, sichert die Führungssperre in der Datenbank.
     starteTakte([['Rangliste', startRanglisteTakt]]);
+
+    // Spot-Portfolio (Testzweig): Takt alle 15 min, im Testbetrieb aus wie
+    // jeder Takt — dort holt die Seite beim Öffnen selbst nach, wenn der
+    // letzte Abruf älter als 15 min ist (`stores/portfolio.js`).
+    starteTakte([['Portfolio', startePortfolioTakt]]);
 
     const entwicklung = process.env.NODE_ENV === 'dev'
     if (entwicklung) {
@@ -419,6 +427,7 @@ async function starteServer() {
         // Ein laufender Rangliste-Lauf braucht kein Auslaufen: jeder Coin
         // ist einzeln gesichert, der nächste Start nimmt ihn wieder auf.
         try { stopRanglisteTakt() } catch (e) { /* trotzdem beenden */ }
+        try { stoppePortfolioTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopOiArchivTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopChartAlarmTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopMarktradar() } catch (e) { /* trotzdem beenden */ }

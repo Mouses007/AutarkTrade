@@ -11,6 +11,7 @@ import { umgebungAn } from './umgebung.js'
 const BROKER_DEBUG = umgebungAn('DEBUG_BROKER')
 
 const BASE_URL = 'https://fapi.bitunix.com'
+export const BITUNIX_SPOT_URL = 'https://openapi.bitunix.com'
 
 /**
  * Bitunix API authentication.
@@ -33,7 +34,11 @@ function generateNonce(length = 32) {
 /**
  * Make an authenticated request to Bitunix API.
  */
-export async function bitunixRequest(method, path, apiKey, secretKey, params = {}, body = '') {
+/**
+ * `basis`: Spot liegt auf einem eigenen Host (`BITUNIX_SPOT_URL`, gemessen
+ * 22.10.2026, in der aktuellen Doku nicht aufgeführt) — gleiche Signatur.
+ */
+export async function bitunixRequest(method, path, apiKey, secretKey, params = {}, body = '', basis = BASE_URL) {
     const timestamp = String(Date.now())
     const nonce = generateNonce()
 
@@ -51,8 +56,8 @@ export async function bitunixRequest(method, path, apiKey, secretKey, params = {
     const sign = createSignature(apiKey, secretKey, timestamp, nonce, queryParamsForSign, bodyString)
 
     const url = queryStringForUrl
-        ? `${BASE_URL}${path}?${queryStringForUrl}`
-        : `${BASE_URL}${path}`
+        ? `${basis}${path}?${queryStringForUrl}`
+        : `${basis}${path}`
 
     const headers = {
         'Content-Type': 'application/json',

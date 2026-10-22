@@ -43,6 +43,7 @@ const GRUPPEN = {
     research: ['hypeGruppe', 'coinGruppe'],
     agent: ['agentRun', 'agentBuild', 'agentReview'],
     lernen: ['lernenGruppe'],
+    portfolio: ['portfolioGruppe'],
 }
 
 /** Der Modus `start` (Chart) zeigt das Journal-Menü. */
