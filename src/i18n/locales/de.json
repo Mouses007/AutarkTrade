@@ -910,7 +910,7 @@
       "schriftSehrGross": "Sehr gross",
       "mailSecurityNone": "ohne",
       "typ_chartAlarm": "Chart-Alarm (Preis, Linie, Zone, Momentum)",
-      "hinweis_chartAlarm": "Die Alarme selbst legst du im Chart an — hier steht nur, ob sie auch per Mail kommen. Push (ntfy, Telegram, Webhook) läuft über die Kanäle unter Research → Hype-Radar → Zahnrad → „Zustellung“; dort muss mindestens ein Kanal eingeschaltet sein."
+      "hinweis_chartAlarm": "Die Alarme selbst legst du im Chart an — hier steht nur, ob sie auch per Mail kommen. Push (ntfy, Telegram, Webhook) richtest du weiter unten unter „Push aufs Handy\" ein."
     },
     "erweiterteInfos": "Erweiterte Infos",
     "erweiterteInfosHint": "Zeigt ein kleines „i“ an Werten und Bedienelementen. Mauszeiger darüber (am Telefon: antippen) erklärt, was die Zahl bedeutet.",
@@ -971,7 +971,12 @@
     "importNoTradesFound": "Keine einzelnen Trades gefunden.",
     "modelsFor": "Modelle von",
     "modelsOtherProvider": "nicht dein Hauptanbieter — Änderungen gelten nur für diese Liste",
-    "area_datenquellen": "Datenquellen"
+    "area_datenquellen": "Datenquellen",
+    "push": {
+      "titel": "Push aufs Handy",
+      "einleitung": "ntfy, Telegram oder Webhook — gilt für alle Alarme: Chart (Preis, Linie, Zone, Momentum), Hype-Radar, Frühphase, Börsen-Beobachter, Abverkauf. Je Kanal eine Mindest-Dringlichkeit; ein Chart-Alarm hat als Vorgabe „Warnung\".",
+      "ntfyKurz": "am einfachsten: App installieren, Adresse https://ntfy.sh und ein eigenes, schwer erratbares Topic"
+    }
   },
   "setup": {
     "welcome": "Willkommen!",
@@ -1245,7 +1250,6 @@
     "heissestesNarrativ": "Häufigstes Thema",
     "imBericht": "im Bericht",
     "intervall": "Takt",
-    "kanaeleHinweis": "Die Alarmliste hier ist immer an. Diese Kanäle bringen Alarme zusätzlich aufs Handy oder in die Hausautomatisierung — je Kanal mit eigener Mindest-Schwere.",
     "kanaeleTesten": "Kanäle testen",
     "kanaeleTitel": "Zustellung",
     "kandidaten": "Funde",
@@ -1518,7 +1522,9 @@
     "cgOeffentlich": "Kein eigener Schlüssel — CoinGecko-Trends und On-Chain-Pools laufen über die öffentlichen Endpunkte (CoinGecko, GeckoTerminal), gedrosselt.",
     "rugcheckHinweisFrei": "RugCheck läuft ab Werk mit (Quellen ohne Verkaufsfreigabe an): für Solana Insider-Netzwerke und die Liquiditätssperre. Ohne RugCheck prüft GoPlus allein — dann sind beide unbekannt.",
     "boersenWahlHinweisFrei": "Mit „Quellen ohne Verkaufsfreigabe\" an sind alle Börsen ab Werk an, auch Binance Alpha, Upbit, OKX und MEXC. Binance Spot und Futures folgen zusätzlich der Marktdatenquelle.",
-    "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko On-Chain — neue Pools mit Käuferzahl"
+    "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko On-Chain — neue Pools mit Käuferzahl",
+    "kanaeleUmgezogen": "Die Kanäle (ntfy, Telegram, Webhook) gelten für alle Alarme und stehen deshalb unter",
+    "kanaeleZiel": "Einstellungen › Benachrichtigungen"
   },
   "kiUebersicht": {
     "laedt": "Übersicht wird geladen …",
@@ -5778,7 +5784,7 @@
       "quittieren": "Klick zum Schliessen",
       "hier": "Alarm bei diesem Preis",
       "testFehler": "Kein Kanal hat zugestellt",
-      "testKeinKanal": "Kein Push-Kanal eingeschaltet — einrichten unter Research → Hype-Radar → Zahnrad → „Zustellung“ (ntfy, Telegram oder Webhook).",
+      "testKeinKanal": "Kein Push-Kanal eingeschaltet — einrichten unter Einstellungen › Benachrichtigungen › „Push aufs Handy\" (ntfy, Telegram oder Webhook).",
       "geometrieEndet": "Linie/Zone zu Ende — abgeschaltet",
       "nichtZugestellt": "nicht zugestellt",
       "neuMomentum": "Momentum-Alarm (Symbol oder Watchlists)",

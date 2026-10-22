@@ -1,13 +1,15 @@
 <script setup>
 /**
  * Bereich „Benachrichtigungen": Browser-Hauptschalter, Kanalwahl je Ereignis
- * (mit Schwellen und den Märkten des Divergenz-Alarms) und der Mail-Zugang.
+ * (mit Schwellen und den Märkten des Divergenz-Alarms), die Push-Kanäle
+ * (ntfy/Telegram/Webhook, `PushKanaele.vue`) und der Mail-Zugang.
  * Register, Kanalwahl und Mail-Zugang lädt Einstellungen.vue beim Öffnen der Seite
  * (useBenachrichtigungen) — KI → Nachrichten liest sie ebenfalls.
  */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SchrittMailKonfiguration from '@/components/onboarding/SchrittMailKonfiguration.vue'
+import PushKanaele from '@/components/benachrichtigung/PushKanaele.vue'
 import { loadSymbolMeta } from '@/utils/liveSymbols.js'
 import { Karte, Symbol } from '@/components/basis/index.js'
 import Schalter from './gemeinsam/Schalter.vue'
@@ -230,6 +232,11 @@ async function divergenzLeeren() {
                     was: meldeAnderswo.map(typ => t('settings.benachrichtigungen.typ_' + typ.id)).join(', ')
                 }) }}</span>
             </p>
+        </Karte>
+
+        <!--=============== PUSH ===============-->
+        <Karte :titel="t('settings.push.titel')" :unter="t('settings.push.einleitung')">
+            <PushKanaele />
         </Karte>
 
         <!--=============== E-MAIL ===============-->

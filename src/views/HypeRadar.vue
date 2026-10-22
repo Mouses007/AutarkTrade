@@ -434,79 +434,11 @@
                 </div>
 
                 <div class="hypEinstTeil" :style="teilStil('kanaele')" v-show="teilSichtbar('kanaele')">
-                <!-- Zustellkanäle -->
+                <!-- Zustellkanäle: seit 22.10.2026 unter Einstellungen › Benachrichtigungen (PushKanaele.vue),
+                     denn sie gelten für alle Alarme, nicht nur für den Hype-Radar. -->
                 <h6 class="hypTitel at-mo-4">{{ t('hype.kanaeleTitel') }}</h6>
-                <p class="hypHinweis">{{ t('hype.kanaeleHinweis') }}</p>
-
-                <div class="hypKanal">
-                    <div class="at-check schalter">
-                        <input id="hypKanNtfy" type="checkbox"
-                            v-model="einst.alarmKanaele.ntfy.an" @change="speichern">
-                        <label for="hypKanNtfy"><strong>ntfy</strong></label>
-                    </div>
-                    <div v-if="einst.alarmKanaele.ntfy.an" class="hypKanalFelder">
-                        <input v-model="einst.alarmKanaele.ntfy.url" class="at-feld klein"
-                            :placeholder="t('hype.ntfyUrl')" @change="speichern">
-                        <input v-model="einst.alarmKanaele.ntfy.topic" class="at-feld klein"
-                            placeholder="Topic" @change="speichern">
-                        <input v-model="einst.schluessel.ntfyToken" type="password" class="at-feld klein"
-                            :placeholder="t('hype.tokenOptional')" @change="speichern">
-                        <select v-model="einst.alarmKanaele.ntfy.minSchwere" class="at-feld klein"
-                            @change="speichern">
-                            <option value="info">{{ t('hype.abInfo') }}</option>
-                            <option value="warnung">{{ t('hype.abWarnung') }}</option>
-                            <option value="kritisch">{{ t('hype.abKritisch') }}</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="hypKanal">
-                    <div class="at-check schalter">
-                        <input id="hypKanTg" type="checkbox"
-                            v-model="einst.alarmKanaele.telegram.an" @change="speichern">
-                        <label for="hypKanTg"><strong>Telegram</strong></label>
-                    </div>
-                    <div v-if="einst.alarmKanaele.telegram.an" class="hypKanalFelder">
-                        <input v-model="einst.schluessel.telegramToken" type="password" class="at-feld klein"
-                            :placeholder="t('hype.botToken')" @change="speichern">
-                        <input v-model="einst.alarmKanaele.telegram.chatId" class="at-feld klein"
-                            placeholder="Chat-ID" @change="speichern">
-                        <select v-model="einst.alarmKanaele.telegram.minSchwere" class="at-feld klein"
-                            @change="speichern">
-                            <option value="info">{{ t('hype.abInfo') }}</option>
-                            <option value="warnung">{{ t('hype.abWarnung') }}</option>
-                            <option value="kritisch">{{ t('hype.abKritisch') }}</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="hypKanal">
-                    <div class="at-check schalter">
-                        <input id="hypKanWh" type="checkbox"
-                            v-model="einst.alarmKanaele.webhook.an" @change="speichern">
-                        <label for="hypKanWh">
-                            <strong>Webhook</strong>
-                            <span class="hypHinweisKlein">{{ t('hype.webhookHa') }}</span>
-                        </label>
-                    </div>
-                    <div v-if="einst.alarmKanaele.webhook.an" class="hypKanalFelder">
-                        <input v-model="einst.schluessel.webhookUrl" type="password" class="at-feld klein hypBreit"
-                            :placeholder="t('hype.webhookUrl')" @change="speichern">
-                        <select v-model="einst.alarmKanaele.webhook.minSchwere" class="at-feld klein"
-                            @change="speichern">
-                            <option value="info">{{ t('hype.abInfo') }}</option>
-                            <option value="warnung">{{ t('hype.abWarnung') }}</option>
-                            <option value="kritisch">{{ t('hype.abKritisch') }}</option>
-                        </select>
-                        <div class="hypHinweis at-mu-0" style="flex-basis: 100%">{{ t('hype.webhookPayload') }}</div>
-                    </div>
-                </div>
-
-                <Knopf klein class="at-mo-2" :disabled="testLaeuft" @click="kanaeleTesten">
-                    <Kreisel still class="at-mr-1" v-if="testLaeuft" />
-                    {{ t('hype.kanaeleTesten') }}
-                </Knopf>
-                <span v-if="testErgebnis" class="at-ml-2 at-klein">{{ testErgebnis }}</span>
+                <p class="hypHinweis">{{ t('hype.kanaeleUmgezogen') }}
+                    <router-link to="/einstellungen/benachrichtigungen">{{ t('hype.kanaeleZiel') }}</router-link></p>
                 </div>
 
                 <div class="hypEinstTeil" :style="teilStil('ki')" v-show="teilSichtbar('ki')">
@@ -1392,8 +1324,6 @@ function liveSchliessen() {
 
 // ── Alarme ──────────────────────────────────────────────────────────────
 const alarme = ref([])
-const testLaeuft = ref(false)
-const testErgebnis = ref('')
 let alarmTakt = null
 
 const ungeleseneAlarme = computed(() => alarme.value.filter((a) => !a.gelesen))
@@ -1528,20 +1458,6 @@ async function stummUmschalten(f) {
         if (liveOffen.value?.favorit?.id === f.id) liveOffen.value.favorit.stumm = r.data.stumm
     } catch (e) {
         logWarn('hype-radar', 'Stumm-Schalter fehlgeschlagen', e)
-    }
-}
-
-async function kanaeleTesten() {
-    testLaeuft.value = true
-    testErgebnis.value = ''
-    try {
-        const r = await axios.post('/api/hype-radar/alarme/test')
-        testErgebnis.value = Object.entries(r.data)
-            .map(([kanal, stand]) => `${kanal}: ${stand}`).join(' · ')
-    } catch (e) {
-        testErgebnis.value = t('hype.testFehlgeschlagen')
-    } finally {
-        testLaeuft.value = false
     }
 }
 
@@ -2883,15 +2799,7 @@ watch(locale, () => zeichne())
 
     /* Eingabefelder der Zustellkanäle dürfen die Seite nicht breiter
        machen als das Fenster. */
-    .hypKanalFelder {
-        padding-left: 0;
-    }
 
-    .hypKanalFelder .at-feld,
-    .hypKanalFelder .hypBreit {
-        width: 100%;
-        min-width: 0;
-    }
 
     .hypZahl {
         width: 100%;
@@ -2971,27 +2879,9 @@ watch(locale, () => zeichne())
     border-color: color-mix(in srgb, var(--warn) 45%, transparent);
 }
 
-.hypKanal {
-    padding: .5rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, .06);
-}
 
-.hypKanalFelder {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .4rem;
-    margin-top: .4rem;
-    padding-left: 2.4rem;
-}
 
-.hypKanalFelder .at-feld {
-    width: auto;
-    min-width: 9rem;
-}
 
-.hypKanalFelder .hypBreit {
-    min-width: 22rem;
-}
 
 .hypLive {
     background: var(--bg);

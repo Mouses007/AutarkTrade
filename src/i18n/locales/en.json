@@ -910,7 +910,7 @@
       "schriftSehrGross": "Extra large",
       "mailSecurityNone": "none",
       "typ_chartAlarm": "Chart alert (price, line, zone, momentum)",
-      "hinweis_chartAlarm": "You create the alerts on the chart — this only decides whether they also arrive by mail. Push (ntfy, Telegram, webhook) uses the channels under Research → Hype radar → gear → “Delivery”; at least one channel must be enabled there."
+      "hinweis_chartAlarm": "You create the alerts on the chart — this only decides whether they also arrive by mail. Push (ntfy, Telegram, webhook) is set up further down under “Push to your phone”."
     },
     "erweiterteInfos": "Extended info",
     "erweiterteInfosHint": "Shows a small \"i\" next to values and controls. Hover (tap on phone) explains what the number means.",
@@ -971,7 +971,12 @@
     "importNoTradesFound": "No individual trades found.",
     "modelsFor": "Models of",
     "modelsOtherProvider": "not your main provider — changes apply to this list only",
-    "area_datenquellen": "Data sources"
+    "area_datenquellen": "Data sources",
+    "push": {
+      "titel": "Push to your phone",
+      "einleitung": "ntfy, Telegram or webhook — used by all alerts: chart (price, line, zone, momentum), hype radar, early phase, exchange watcher, sell-off. Each channel has a minimum urgency; chart alerts default to “warning”.",
+      "ntfyKurz": "simplest: install the app, address https://ntfy.sh and your own hard-to-guess topic"
+    }
   },
   "setup": {
     "welcome": "Welcome!",
@@ -1245,7 +1250,6 @@
     "heissestesNarrativ": "Most common theme",
     "imBericht": "in report",
     "intervall": "Interval",
-    "kanaeleHinweis": "The in-app list is always on. These channels additionally push alerts to your phone or home automation — each with its own minimum severity.",
     "kanaeleTesten": "Test channels",
     "kanaeleTitel": "Delivery",
     "kandidaten": "Finds",
@@ -1518,7 +1522,9 @@
     "cgOeffentlich": "No own key — CoinGecko trends and on-chain pools run via the public endpoints (CoinGecko, GeckoTerminal), throttled.",
     "rugcheckHinweisFrei": "RugCheck runs by default (sources without sales clearance on): insider networks and the liquidity lock on Solana. Without RugCheck, GoPlus checks alone — then both are unknown.",
     "boersenWahlHinweisFrei": "With \"sources without sales clearance\" on, all exchanges are on by default, including Binance Alpha, Upbit, OKX and MEXC. Binance spot and futures additionally follow the market data source.",
-    "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko on-chain — new pools with buyer count"
+    "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko on-chain — new pools with buyer count",
+    "kanaeleUmgezogen": "The channels (ntfy, Telegram, webhook) apply to all alerts and therefore live under",
+    "kanaeleZiel": "Settings › Notifications"
   },
   "kiUebersicht": {
     "laedt": "Loading overview …",
@@ -5778,7 +5784,7 @@
       "quittieren": "click to dismiss",
       "hier": "Alert at this price",
       "testFehler": "No channel delivered",
-      "testKeinKanal": "No push channel enabled — set one up under Research → Hype radar → gear → “Delivery” (ntfy, Telegram or webhook).",
+      "testKeinKanal": "No push channel enabled — set one up under Settings › Notifications › “Push to your phone” (ntfy, Telegram or webhook).",
       "geometrieEndet": "line/zone ended — switched off",
       "nichtZugestellt": "not delivered",
       "neuMomentum": "Momentum alert (symbol or watchlists)",
