@@ -4,7 +4,7 @@ Trading journal and analysis workstation for **crypto futures** on **Bitunix**, 
 Runs locally or via Docker — no cloud, no account.
 Vue 3 + Express, SQLite or PostgreSQL.
 
-> **Status:** 4.0.0-alpha — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
+> **Status:** 4.0.0 (beta) — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
 > (redesign, own licence, rebuild finished 19.10.2026). Results and open points:
 > [`docs/AUFTRAGSSTAND.md`](docs/AUFTRAGSSTAND.md); origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
 

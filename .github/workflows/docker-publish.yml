@@ -2,17 +2,16 @@ name: Docker publish
 
 # Baut das Container-Image von AutarkTrade.
 #
-# Ziel ist ausschliesslich die GitHub-Registry ghcr.io/mouses007/autarktrade.
-# Das Paket gehört zum privaten Repo und ist damit privat: ziehen kann nur, wer
-# ein Token mit `read:packages` hat (Kunden über den `zugang` im Lizenzschlüssel,
-# server/update-api.js). Kein Docker Hub — ein öffentliches Image wäre eine
-# Weitergabe ohne Lizenz.
+# Ziel ist die GitHub-Registry ghcr.io/mouses007/autarktrade. AutarkTrade ist
+# freie Software (AGPL-3.0); das Paket ist öffentlich, jeder kann es ohne Token
+# ziehen. Kein Docker Hub mehr — dort liegt nur noch das alte Crypto Trading Journal.
 #
 #   von Hand (Actions → Run workflow)  → :edge        zum Ausprobieren
 #   Tag v4.1.0                         → :4.1.0, :4.1, :latest
 #
 # Der Update-Knopf im Container zieht das Image, mit dem der Container läuft
-# (in der Regel :latest), und nur, wenn das Release vor `updatesBis` erschien.
+# (in der Regel :latest). Vorabversionen (Tag mit „-", z. B. v4.1.0-beta.1)
+# bekommen kein :latest.
 
 on:
   workflow_dispatch:

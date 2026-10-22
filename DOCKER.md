@@ -3,7 +3,8 @@
 ## Voraussetzungen
 
 - Docker und Docker Compose installiert
-- Zugang zum Git-Repository
+- Das Repository (öffentlich, AGPL-3.0): https://github.com/Mouses007/AutarkTrade
+- Image: `ghcr.io/mouses007/autarktrade:latest` (öffentlich, amd64 und arm64)
 
 ## Schnellstart (mit externer PostgreSQL)
 
@@ -11,7 +12,7 @@ Wenn du bereits eine PostgreSQL-Datenbank hast (z.B. auf dem NAS), verbindet sic
 
 ```bash
 # 1. Repository klonen
-git clone <repo-url> autarktrade
+git clone https://github.com/Mouses007/AutarkTrade.git autarktrade
 cd autarktrade
 
 # 2. Konfiguration anlegen
@@ -31,7 +32,8 @@ DB_NAME=tradejournal
 ```
 
 ```bash
-# 3. Container bauen und starten
+# 3. Image holen und Container starten
+docker compose pull
 docker compose up -d
 
 # 4. Öffne im Browser
@@ -63,11 +65,11 @@ docker compose ps
 ## Update
 
 ```bash
-git pull
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
-Das baut das Image mit dem neuen Code neu und startet den Container. Die Datenbank (extern auf PostgreSQL) bleibt unberührt.
+Das holt das neueste Image und startet den Container neu. Wer selbst baut: `git pull && docker compose up -d --build`. Die Datenbank (extern auf PostgreSQL) bleibt unberührt.
 
 ## Sicherheit (seit F2, 20.10.2026)
 

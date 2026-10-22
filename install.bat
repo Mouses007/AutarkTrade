@@ -481,8 +481,8 @@ if not exist ".git\" (
     if !errorlevel! equ 0 (
         echo   [OK]  Git-Repository     Initialisiert
     ) else (
-        echo   [!]   Paketquelle        Noch kein Zugang ^(privat^)
-        echo                             Updates gibt es mit Lizenzschluessel ueber den Knopf in der Software
+        echo   [!]   Paketquelle        Nicht erreichbar
+        echo                             Updates spaeter ueber den Knopf in der Software
     )
     set "GIT_TERMINAL_PROMPT="
     echo.

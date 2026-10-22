@@ -351,13 +351,12 @@ if [ ! -d ".git" ]; then
         echo -e "  ${CYAN}Git-Repository initialisieren (fuer Auto-Updates)...${RESET}"
         . ./scripts/paketquelle.sh
         paketquelle_einrichten >/dev/null 2>&1
-        # Ohne Zugangsschlüssel nicht nach Passwort fragen — Updates gehen dann über den Knopf
-        # in der Software, sobald ein Lizenzschlüssel eingetragen ist.
+        # Nie nach Passwort fragen: die Quelle ist öffentlich.
         if GIT_TERMINAL_PROMPT=0 paketquelle_holen >/dev/null 2>&1; then
             echo -e "  ${GREEN}[OK]${RESET}  Git-Repository     Initialisiert"
         else
-            echo -e "  ${YELLOW}[!]${RESET}   Paketquelle        Noch kein Zugang (privat)"
-            echo -e "  ${GRAY}       Updates gibt es mit Lizenzschluessel ueber den Knopf in der Software${RESET}"
+            echo -e "  ${YELLOW}[!]${RESET}   Paketquelle        Nicht erreichbar"
+            echo -e "  ${GRAY}       Updates spaeter ueber den Knopf in der Software${RESET}"
         fi
         echo ""
     else

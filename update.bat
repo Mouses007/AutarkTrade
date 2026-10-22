@@ -36,7 +36,7 @@ if errorlevel 1 (
     echo   [!] Git nicht installiert -- automatisches Update nicht moeglich.
     echo.
     echo   Manuelles Update:
-    echo     1. Lade das neueste Paket ueber den Link aus deiner Lizenz-Mail herunter
+    echo     1. Lade das neueste Paket von github.com/Mouses007/AutarkTrade/releases herunter
     echo     2. Entpacke die Dateien in diesen Ordner
     echo     3. WICHTIG: autarktrade.db NICHT ueberschreiben!
     echo     4. Druecke eine Taste um mit npm install fortzufahren...
@@ -52,8 +52,7 @@ git fetch --depth 1 --no-tags origin master
 if errorlevel 1 (
     echo   [X] Git fetch fehlgeschlagen!
     echo     Tipp: Keine Internetverbindung? Zugang zur Paketquelle?
-    echo     Die Paketquelle ist privat: set AT_UPDATE_TOKEN=^<Zugangsschluessel aus der Lizenz-Mail^>
-    echo     und update.bat erneut starten, oder git fragt nach Benutzername und Passwort.
+    echo     Quelle: github.com/Mouses007/AutarkTrade ^(oeffentlich^).
     goto :error
 )
 echo     git reset --hard FETCH_HEAD...

@@ -1,6 +1,9 @@
 services:
   journal:
-    image: autarktrade:latest
+    # Fertiges Image aus der öffentlichen Registry (Update: docker compose pull && docker compose up -d).
+    # Wer lieber selbst baut: docker compose up -d --build (baut aus diesem Ordner).
+    image: ghcr.io/mouses007/autarktrade:latest
+    build: .
     container_name: autarktrade
     ports:
       # ACHTUNG: ohne "127.0.0.1:"-Präfix ist der Port im ganzen LAN erreichbar.

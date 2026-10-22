@@ -1,14 +1,14 @@
 # Paketquelle von AutarkTrade für die Installations- und Update-Skripte (S10).
 # Wird mit `. scripts/paketquelle.sh` eingelesen, nicht ausgeführt.
 #
-# Die Quelle ist das PRIVATE Repo Mouses007/AutarkTrade. Zugang:
-#   AT_UPDATE_TOKEN    Zugangsschlüssel aus der Lizenz-Mail (GitHub-Token, nur Lesen)
+# Die Quelle ist das öffentliche Repo Mouses007/AutarkTrade (AGPL-3.0) — kein Zugang
+# nötig. Optional, etwa für einen eigenen privaten Fork:
+#   AT_UPDATE_TOKEN    GitHub-Token (nur Lesen)
 #   AT_UPDATE_BENUTZER optional, Vorgabe x-access-token
-# Ohne AT_UPDATE_TOKEN fragt git selbst nach Benutzername und Passwort (Token).
 #
-# Der Token geht über GIT_CONFIG_* an git — nicht auf die Befehlszeile (Prozessliste)
+# Ein Token geht über GIT_CONFIG_* an git — nicht auf die Befehlszeile (Prozessliste)
 # und nicht in .git/config. Dasselbe Verfahren nutzt der Update-Knopf der Software
-# (server/update-api.js), der dazu die Update-Berechtigung aus dem Lizenzschlüssel prüft.
+# (server/update-api.js).
 # Das alte, öffentliche Repo (Crypto-Trading-Journal, GPL, 3.x) ist KEIN Kanal mehr;
 # paketquelle_einrichten stellt eine alte Installation auf das neue Repo um.
 
@@ -55,7 +55,6 @@ paketquelle_flach() {
 }
 
 paketquelle_hinweis() {
-    echo "  Die Paketquelle ist privat. Zugang mit dem Zugangsschlüssel aus deiner Lizenz-Mail:"
-    echo "    AT_UPDATE_TOKEN=<schluessel> $0"
-    echo "  oder git fragt nach Benutzername und Passwort (dort den Schlüssel eingeben)."
+    echo "  Die Paketquelle ist github.com/Mouses007/AutarkTrade — Internetverbindung prüfen."
+    echo "  Für einen privaten Fork: AT_UPDATE_TOKEN=<github-token> $0"
 }

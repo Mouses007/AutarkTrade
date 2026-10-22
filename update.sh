@@ -1,6 +1,6 @@
 #!/bin/bash
 # AutarkTrade - Manuelles Update
-# Der Update-Knopf in der Software prueft die Update-Berechtigung deines Lizenzschluessels;
+# Normalerweise genuegt der Update-Knopf in der Software;
 # dieses Skript ist der Weg fuer den Notfall. Bei Update-Problemen im Installationsordner:
 #   chmod +x update.sh && ./update.sh
 

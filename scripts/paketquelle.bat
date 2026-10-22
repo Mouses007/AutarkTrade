@@ -2,9 +2,8 @@
 :: Paketquelle von AutarkTrade fuer install.bat / update.bat (S10).
 :: Aufruf: call scripts\paketquelle.bat   (im Installationsordner)
 ::
-:: Quelle ist das PRIVATE Repo Mouses007/AutarkTrade. Zugang ueber AT_UPDATE_TOKEN
-:: (Zugangsschluessel aus der Lizenz-Mail) und optional AT_UPDATE_BENUTZER; ohne Token
-:: fragt git selbst. Der Token geht per GIT_CONFIG_* an git, nicht auf die Befehlszeile
+:: Quelle ist das oeffentliche Repo Mouses007/AutarkTrade (AGPL-3.0), kein Zugang noetig.
+:: Optional fuer einen privaten Fork: AT_UPDATE_TOKEN und AT_UPDATE_BENUTZER. Der Token geht per GIT_CONFIG_* an git, nicht auf die Befehlszeile
 :: und nicht in .git\config. Stellt eine alte Installation vom oeffentlichen Repo um.
 set "AT_REPO_URL=https://github.com/Mouses007/AutarkTrade.git"
 if not exist ".git\" git init -q
