@@ -111,7 +111,7 @@ onMounted(ladeStand)
 <template>
     <footer class="at-menue-fuss">
         <button v-if="spendenAn" type="button" class="fuss-eintrag" @click="oeffneSpenden()">
-            <Symbol name="herz" />{{ t('spenden.menue') }}
+            <Symbol name="kaffee" />{{ t('spenden.menue') }}
         </button>
         <button type="button" class="fuss-eintrag" @click="oeffneRechtliches()">
             <Symbol name="waage" />{{ t('rechtliches.titel') }}

@@ -909,8 +909,8 @@
       "schriftGross": "Large",
       "schriftSehrGross": "Extra large",
       "mailSecurityNone": "none",
-      "typ_chartAlarm": "Chart alert (price, line, zone)",
-      "hinweis_chartAlarm": "You create the alerts on the chart — this only decides whether they also arrive by mail. Push (ntfy, Telegram, webhook) uses the channels from Research → Hype radar → Alerts."
+      "typ_chartAlarm": "Chart alert (price, line, zone, momentum)",
+      "hinweis_chartAlarm": "You create the alerts on the chart — this only decides whether they also arrive by mail. Push (ntfy, Telegram, webhook) uses the channels under Research → Hype radar → gear → “Delivery”; at least one channel must be enabled there."
     },
     "erweiterteInfos": "Extended info",
     "erweiterteInfosHint": "Shows a small \"i\" next to values and controls. Hover (tap on phone) explains what the number means.",
@@ -5778,7 +5778,7 @@
       "quittieren": "click to dismiss",
       "hier": "Alert at this price",
       "testFehler": "No channel delivered",
-      "testKeinKanal": "No push channel enabled (Hype-Radar → Settings → alert channels)",
+      "testKeinKanal": "No push channel enabled — set one up under Research → Hype radar → gear → “Delivery” (ntfy, Telegram or webhook).",
       "geometrieEndet": "line/zone ended — switched off",
       "nichtZugestellt": "not delivered",
       "neuMomentum": "Momentum alert (symbol or watchlists)",

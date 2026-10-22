@@ -909,8 +909,8 @@
       "schriftGross": "Gross",
       "schriftSehrGross": "Sehr gross",
       "mailSecurityNone": "ohne",
-      "typ_chartAlarm": "Chart-Alarm (Preis, Linie, Zone)",
-      "hinweis_chartAlarm": "Die Alarme selbst legst du im Chart an — hier steht nur, ob sie auch per Mail kommen. Push (ntfy, Telegram, Webhook) läuft über die Kanäle aus Research → Hype-Radar → Alarme."
+      "typ_chartAlarm": "Chart-Alarm (Preis, Linie, Zone, Momentum)",
+      "hinweis_chartAlarm": "Die Alarme selbst legst du im Chart an — hier steht nur, ob sie auch per Mail kommen. Push (ntfy, Telegram, Webhook) läuft über die Kanäle unter Research → Hype-Radar → Zahnrad → „Zustellung“; dort muss mindestens ein Kanal eingeschaltet sein."
     },
     "erweiterteInfos": "Erweiterte Infos",
     "erweiterteInfosHint": "Zeigt ein kleines „i“ an Werten und Bedienelementen. Mauszeiger darüber (am Telefon: antippen) erklärt, was die Zahl bedeutet.",
@@ -5778,7 +5778,7 @@
       "quittieren": "Klick zum Schliessen",
       "hier": "Alarm bei diesem Preis",
       "testFehler": "Kein Kanal hat zugestellt",
-      "testKeinKanal": "Kein Push-Kanal eingeschaltet (Hype-Radar → Einstellungen → Alarmkanäle)",
+      "testKeinKanal": "Kein Push-Kanal eingeschaltet — einrichten unter Research → Hype-Radar → Zahnrad → „Zustellung“ (ntfy, Telegram oder Webhook).",
       "geometrieEndet": "Linie/Zone zu Ende — abgeschaltet",
       "nichtZugestellt": "nicht zugestellt",
       "neuMomentum": "Momentum-Alarm (Symbol oder Watchlists)",
