@@ -17,15 +17,20 @@ Vue 3 + Express, SQLite or PostgreSQL.
 
 ## Screenshots
 
-![Dashboard — P&L overview, win rate, fees](assets/screenshots/dashboard.png)
+*All screenshots show a demo installation with synthetic trades — no real account data.*
 
-![Trading performance charts with MFE analysis](assets/screenshots/performance.png)
+![Chart workspace — coin tabs, VWAP Vector, Momentum Radar, watchlist and indicator switches](assets/screenshots/chart.png)
 
-![Marktradar — live market tiles: Fear & Greed, funding rates, liquidations](assets/screenshots/marktradar.png)
+![Journal dashboard — P&L, win rate, fees, cumulative P&L](assets/screenshots/dashboard.png)
 
-![Live trading window — bookmap, liquidation map, session plan](assets/screenshots/livetrading.png)
+![Marktradar — Fear & Greed, altcoin season, market overview, market mechanics, funding](assets/screenshots/marktradar.png)
 
-![Incoming positions — live position monitoring with SL/TP protocol](assets/screenshots/incoming.png)
+![Calendar — daily results](assets/screenshots/kalender.png)
+
+<p>
+  <img src="assets/screenshots/mobil-chart.png" alt="Chart on the phone" width="260">
+  <img src="assets/screenshots/mobil-vollbild.png" alt="Phone full screen — swipe in the Momentum Radar" width="260">
+</p>
 
 ---
 
