@@ -13,8 +13,7 @@
  * Einmal-Token aus `GET /api/update/check?force=1` — der Server nimmt sie nur
  * mit Token und nur von localhost an.
  *
- * Installieren nur mit Update-Berechtigung aus dem Lizenzschlüssel (S10,
- * `stand.berechtigt`); sonst ein Hinweis, der zu Einstellungen › Lizenz führt.
+ * Seit 22.10.2026 (AGPL-3.0) ohne Lizenzschlüssel: jedes neuere Release ist installierbar.
  * Darunter der Einstieg in den Dialog „Rechtliches" (`stores/rechtliches.js`).
  */
 import { ref, onMounted } from 'vue'
@@ -128,13 +127,9 @@ onMounted(ladeStand)
             <span v-else-if="installiert" class="fuss-eintrag">
                 <span class="kreisel" aria-hidden="true"></span>{{ t('nav.installing') }}
             </span>
-            <button v-else-if="stand.berechtigt" type="button" class="fuss-eintrag hervor pulsiert" @click="installiere">
+            <button v-else type="button" class="fuss-eintrag hervor pulsiert" @click="installiere">
                 <Symbol name="download" />{{ t('nav.updateAuf', { version: stand.remoteVersion }) }}
             </button>
-            <router-link v-else :to="{ name: 'einstellungen', params: { bereich: 'lizenz' } }" class="fuss-eintrag"
-                :title="stand.grundText || ''">
-                <Symbol name="schloss" />v{{ stand.remoteVersion }} · {{ t('lizenz.updateGesperrt') }}
-            </router-link>
         </template>
 
         <template v-if="rollbackMoeglich">

@@ -19,7 +19,7 @@
  */
 
 /** Die Unterseiten der Einstellungen (`/einstellungen/:bereich`). Ohne Angabe: die erste. */
-export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'ki', 'live', 'benachrichtigungen', 'datenquellen', 'lizenz', 'rechtliches']
+export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'ki', 'live', 'benachrichtigungen', 'datenquellen', 'rechtliches']
 
 /** Seite mit dem gemeinsamen Layout. */
 function seite(path, name, laden, meta = {}, extra = {}) {

@@ -4,16 +4,11 @@
  * GET  /api/update/check    → lokale Fassung gegen das neueste Release vergleichen
  * POST /api/update/install  → git fetch + reset + npm install (bzw. docker pull) + Neustart
  *
- * Kanal (S10 „Lizenz & Vertrieb"): das private Repo `Mouses007/AutarkTrade` (Releases
- * und Quelltext) bzw. das private Image `ghcr.io/mouses007/autarktrade`. Beides
- * braucht Zugangsdaten: `AT_UPDATE_TOKEN` (+ `AT_UPDATE_BENUTZER`) oder das Feld
- * `zugang` im Lizenzschlüssel (`server/lizenz.js`). Ohne Zugang meldet die Prüfung
- * `kanal: 'keinZugang'` statt eines Fehlers.
- *
- * Ob ein Update INSTALLIERT werden darf, sagt der Lizenzschlüssel: das Release muss
- * an oder vor `updatesBis` erschienen sein (`updateErlaubt`). Im Testmodus (kein
- * Schlüssel) zeigt die Prüfung neue Fassungen an, installiert sie aber nicht —
- * die installierte Fassung läuft unverändert weiter (Ziffer 7 der Bedingungen).
+ * Kanal: das Repo `Mouses007/AutarkTrade` (Releases und Quelltext) bzw. das Image
+ * `ghcr.io/mouses007/autarktrade`. Seit 22.10.2026 steht AutarkTrade unter der
+ * AGPL-3.0 — es gibt keinen Lizenzschlüssel und keine Update-Sperre mehr. Solange
+ * das Repo privat ist, braucht die Abfrage `AT_UPDATE_TOKEN` (+ `AT_UPDATE_BENUTZER`);
+ * ohne Token wird öffentlich gefragt, und ein 404 heisst dann „keinZugang", kein Fehler.
  */
 import { execSync, spawn } from 'child_process'
 import crypto from 'crypto'
@@ -24,7 +19,12 @@ import https from 'https'
 import http from 'http'
 import { fileURLToPath } from 'url'
 import { umgebung } from './umgebung.js'
-import { ladeLizenz, updateZugang, updateErlaubt } from './lizenz.js'
+
+/** Zugangsdaten zur Paketquelle aus der Umgebung; `null` ohne (dann öffentlich). Nie an die Oberfläche. */
+function updateZugang() {
+    const token = umgebung('UPDATE_TOKEN')
+    return token ? { benutzer: umgebung('UPDATE_BENUTZER') || 'x-access-token', token } : null
+}
 import { macheFlach, FETCH_FLACH } from './update-flach.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -367,10 +367,7 @@ function gitUmgebung(zugang) {
 
 /** Texte für die Gründe aus `updateErlaubt` — die Oberfläche zeigt sie, wie sie kommen. */
 const GRUND_TEXT = {
-    keinSchluessel: 'Updates gibt es mit einem Lizenzschlüssel (Einstellungen › Lizenz). Die installierte Fassung läuft unverändert weiter.',
-    keineGueltigeLizenz: 'Der eingetragene Lizenzschlüssel ist ungültig oder abgelaufen (Einstellungen › Lizenz).',
-    updatesAbgelaufen: 'Diese Fassung ist nach dem Ende deiner Update-Berechtigung erschienen. Die installierte Fassung läuft weiter; für neuere braucht es eine Verlängerung.',
-    datumUnbekannt: 'Das Erscheinungsdatum der neuen Fassung ist unbekannt — Update nicht möglich.',
+    keinZugang: 'Die Paketquelle ist nicht erreichbar (privates Repo ohne AT_UPDATE_TOKEN).',
 }
 
 // Get local version from package.json. Cached: an update always ends in
@@ -456,8 +453,7 @@ export async function pruefeAufUpdate(forceRefresh = false) {
     if (!forceRefresh && lastCheck && (now - lastCheckTime) < CHECK_CACHE_MS) return lastCheck
 
     const localVersion = getLocalVersion()
-    const lizenz = await ladeLizenz()
-    const zugang = await updateZugang()
+    const zugang = updateZugang()
     const basis = {
         ok: true,
         localVersion,
@@ -467,22 +463,13 @@ export async function pruefeAufUpdate(forceRefresh = false) {
         releaseNotes: '',
         releaseUrl: '',
         publishedAt: '',
-        kanal: zugang ? 'privat' : 'keinZugang',
-        lizenz: { modus: lizenz.modus, updatesBis: lizenz.updatesBis ?? null },
-        berechtigt: false,
+        kanal: zugang ? 'token' : 'oeffentlich',
+        berechtigt: true,
         grund: null,
     }
-    if (!zugang) {
-        // Ohne Zugangsdaten antwortet das private Repo mit 404 — das ist kein Fehler
-        // der Prüfung, sondern ein fehlender Schlüssel. Nichts abfragen.
-        lastCheck = { ...basis, grund: lizenz.modus === 'voll' ? 'keinZugang' : 'keinSchluessel' }
-        lastCheckTime = now
-        return lastCheck
-    }
     try {
-        const release = await httpsGetJson(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, zugang.token)
+        const release = await httpsGetJson(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, zugang?.token)
         const remoteVersion = (release.tag_name || '').replace(/^v/, '') || localVersion
-        const erlaubt = updateErlaubt(lizenz, release.published_at)
         lastCheck = {
             ...basis,
             remoteVersion,
@@ -491,16 +478,13 @@ export async function pruefeAufUpdate(forceRefresh = false) {
             releaseNotes: release.body || '',
             releaseUrl: release.html_url || '',
             publishedAt: release.published_at || '',
-            berechtigt: erlaubt.erlaubt,
-            grund: erlaubt.erlaubt ? null : erlaubt.grund,
-            grundText: erlaubt.erlaubt ? '' : GRUND_TEXT[erlaubt.grund] || '',
         }
         lastCheckTime = now
         return lastCheck
     } catch (err) {
-        // Noch kein Release veröffentlicht ist kein Fehler
+        // Noch kein Release — oder privates Repo ohne Token (GitHub antwortet dann 404): kein Fehler
         if (err.status === 404) {
-            lastCheck = basis
+            lastCheck = zugang ? basis : { ...basis, grund: 'keinZugang', grundText: GRUND_TEXT.keinZugang }
             lastCheckTime = Date.now()
             return lastCheck
         }
@@ -527,16 +511,12 @@ export function setupUpdateRoutes(app) {
             // Hartes Gate: localhost + gültiges Bestätigungs-Token
             if (!guardDestructiveUpdate(req, res)) return
 
-            // Lizenz-Gate: frisch prüfen, nicht aus dem Zwischenspeicher — zwischen
-            // Anzeige und Klick kann der Schlüssel entfernt worden sein.
+            // Frisch prüfen, nicht aus dem Zwischenspeicher.
             const stand = await pruefeAufUpdate(true)
             if (!stand.updateAvailable) {
                 return res.status(400).json({ ok: false, error: 'Kein neueres Release in der Paketquelle.' })
             }
-            if (!stand.berechtigt) {
-                return res.status(403).json({ ok: false, grund: stand.grund, error: stand.grundText || GRUND_TEXT[stand.grund] || 'Update nicht berechtigt.' })
-            }
-            const zugang = await updateZugang()
+            const zugang = updateZugang()
 
             // Docker-Modus: neues Image pullen und Container via Helfer neu erstellen
             if (IS_DOCKER) {
@@ -730,11 +710,10 @@ export function setupUpdateRoutes(app) {
     setTimeout(async () => {
         try {
             const stand = await pruefeAufUpdate(true)
-            if (stand.kanal === 'keinZugang') {
-                console.log(' -> Update-Prüfung: keine Zugangsdaten zur Paketquelle (Lizenzschlüssel oder AT_UPDATE_TOKEN)')
+            if (stand.grund === 'keinZugang') {
+                console.log(' -> Update-Prüfung: Paketquelle nicht erreichbar (privates Repo ohne AT_UPDATE_TOKEN)')
             } else if (stand.updateAvailable) {
-                console.log(`\n🆕 Update verfügbar: v${stand.localVersion} → v${stand.remoteVersion}` +
-                    (stand.berechtigt ? '' : ` (nicht installierbar: ${stand.grund})`))
+                console.log(`\n🆕 Update verfügbar: v${stand.localVersion} → v${stand.remoteVersion}`)
             } else {
                 console.log(` -> Version v${stand.localVersion} ist aktuell`)
             }

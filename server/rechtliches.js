@@ -1,8 +1,10 @@
 /**
- * Die Lizenzbedingungen, denen man zustimmen muss (Auftrag S10, Muster AutarkDarts
- * `game_server/rechtliches.py`).
+ * Was man beim ersten Start bestätigt: den Haftungsausschluss
+ * (`HAFTUNGSAUSSCHLUSS.md`). Seit 22.10.2026 steht AutarkTrade unter der AGPL-3.0
+ * (`LICENSE`); einer Open-Source-Lizenz muss man zum Benutzen nicht zustimmen,
+ * dem Risikohinweis schon. Muster: AutarkDarts `game_server/rechtliches.py`.
  *
- * Beim ersten Start und bei jeder neuen FASSUNG von `LICENSE` zeigt die Oberfläche den
+ * Beim ersten Start und bei jeder neuen FASSUNG des Haftungsausschlusses zeigt die Oberfläche den
  * Dialog „Rechtliches" (`src/components/rechtliches/Rechtliches.vue`) über allem, bis
  * zugestimmt ist. Die Fassung steht in der zweiten Zeile: `Fassung X.Y vom …` — ein
  * Tippfehler, der sie nicht ändert, verlangt keine neue Zustimmung; eine neue Fassung
@@ -24,12 +26,13 @@ import { umgebung } from './umgebung.js'
 
 const WURZEL = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
-/** Name in der Oberfläche → Datei neben dem Code. Zugestimmt wird `lizenz`. */
+/** Name in der Oberfläche → Datei neben dem Code. Zugestimmt wird `haftung`. */
+export const ZUSTIMMUNG = 'haftung'
 export const DOKUMENTE = {
     lizenz: 'LICENSE',
     hinweise: 'NOTICE.md',
     drittsoftware: 'THIRD-PARTY-NOTICES',
-    // Teil der Bedingungen (LICENSE Ziffer 15) — darum mit Prüfsumme in der Zustimmung
+    // Das, dem zugestimmt wird (ZUSTIMMUNG); Prüfsumme aller Texte in der Zustimmung
     haftung: 'HAFTUNGSAUSSCHLUSS.md',
 }
 const FASSUNG = /^Fassung\s+(\d+(?:\.\d+)*)\s+vom\s+(.+?)\s*$/
@@ -54,7 +57,7 @@ export function fassungAus(inhalt) {
     return null
 }
 
-export function fassung(name = 'lizenz') {
+export function fassung(name = ZUSTIMMUNG) {
     try { return fassungAus(text(name)) } catch { return null }
 }
 
@@ -101,7 +104,7 @@ async function knexHolen() {
 export async function stand(knex) {
     const k = knex || await knexHolen()
     const row = await k('settings').select('rechtlichesZustimmung').where('id', 1).first()
-    return standAus(zustimmungAus(row?.rechtlichesZustimmung), fassung('lizenz'), pflicht())
+    return standAus(zustimmungAus(row?.rechtlichesZustimmung), fassung(), pflicht())
 }
 
 /**
@@ -110,8 +113,8 @@ export async function stand(knex) {
  * nur ein Wortlaut, den man gesehen hat.
  */
 export async function akzeptieren(gesehen, knex) {
-    const aktuell = fassung('lizenz')
-    if (!aktuell) throw Object.assign(new Error('Die Lizenzbedingungen fehlen oder nennen keine Fassung'), { status: 500 })
+    const aktuell = fassung()
+    if (!aktuell) throw Object.assign(new Error('Der Haftungsausschluss fehlt oder nennt keine Fassung'), { status: 500 })
     if (String(gesehen) !== aktuell.fassung) {
         throw Object.assign(new Error(`Gezeigt wurde Fassung ${gesehen}, es gilt aber ${aktuell.fassung} — bitte neu laden`), { status: 409 })
     }

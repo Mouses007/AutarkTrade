@@ -30,14 +30,15 @@ pruefe('Fassung aus Zeile 2', fassungAus('Titel\nFassung 1.2 vom 3. Mai 2027\n')
 pruefe('Datum dazu', fassungAus('Titel\nFassung 1.2 vom 3. Mai 2027\n')?.datum === '3. Mai 2027')
 pruefe('ohne Fassung → null', fassungAus('Titel\nirgendwas') === null)
 pruefe('Fassung tief im Text zählt nicht', fassungAus('a\nb\nc\nd\ne\nf\nFassung 9.9 vom heute') === null)
-const echt = fassung('lizenz')
-pruefe('LICENSE nennt eine Fassung', !!echt?.fassung, JSON.stringify(echt))
+const echt = fassung()
+pruefe('der Haftungsausschluss (Zustimmung) nennt eine Fassung', !!echt?.fassung, JSON.stringify(echt))
 for (const name of Object.keys(DOKUMENTE)) {
     let ok = false
     try { ok = text(name).length > 200 } catch { /* fehlt */ }
     pruefe(`${DOKUMENTE[name]} liegt bei`, ok)
 }
-pruefe('LICENSE ist der AutarkTrade-Text, nicht mehr die GPL', /AutarkTrade Lizenzbedingungen/.test(text('lizenz')) && !/GNU GENERAL PUBLIC LICENSE/.test(text('lizenz').slice(0, 500)))
+pruefe('LICENSE ist die AGPL-3.0 (seit 22.10.2026)', /GNU AFFERO GENERAL PUBLIC LICENSE/.test(text('lizenz').slice(0, 300)) && /Version 3, 19 November 2007/.test(text('lizenz').slice(0, 300)))
+pruefe('package.json nennt die AGPL', /"license": "AGPL-3\.0-or-later"/.test(fs.readFileSync(path.join(wurzel, 'package.json'), 'utf8')))
 
 console.log('Stand')
 const a = { fassung: '0.1', datum: 'x' }
@@ -46,7 +47,7 @@ pruefe('… aber keine „neue Fassung"', standAus(null, a).neueFassung === fals
 pruefe('dieselbe Fassung → nicht nötig', standAus({ fassung: '0.1' }, a).noetig === false)
 pruefe('andere Fassung → nötig und neu', (() => { const s = standAus({ fassung: '0.0' }, a); return s.noetig && s.neueFassung })())
 pruefe('ohne Pflicht nie nötig', standAus(null, a, false).noetig === false)
-pruefe('LICENSE ohne Fassung → nötig (lieber fragen als schweigen)', standAus({ fassung: '0.1' }, null).noetig === true)
+pruefe('Haftungsausschluss ohne Fassung → nötig (lieber fragen als schweigen)', standAus({ fassung: '0.1' }, null).noetig === true)
 pruefe('kaputtes JSON → keine Zustimmung', zustimmungAus('{kaputt') === null)
 pruefe('JSON ohne Fassung → keine Zustimmung', zustimmungAus('{"zeit":"x"}') === null)
 

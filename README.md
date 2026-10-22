@@ -598,4 +598,6 @@ Starts the Vite dev server with Hot Module Replacement on port 39482, proxied th
 
 ## License
 
-Proprietary — [`LICENSE`](LICENSE) (AutarkTrade Lizenzbedingungen, **draft, not reviewed by a lawyer**; vendor still a placeholder). The software asks for consent on first start and on every new version of the terms (dialog "Rechtliches", `server/rechtliches.js`). Licence keys are Ed25519-signed tokens checked offline (`server/lizenz.js`); without a key the software runs in test mode — every function usable, data never locked. Keys are issued with `scripts/lizenz-ausstellen.mjs` (private key only via `AT_LIZENZ_PRIVAT`, never in the repository).
+Free software under the **GNU Affero General Public License v3.0 or later** — [`LICENSE`](LICENSE) (SPDX `AGPL-3.0-or-later`). Copyright (C) 2026 Mouses007. Provided WITHOUT ANY WARRANTY; on first start (and for every new version) the app asks you to accept the disclaimer [`HAFTUNGSAUSSCHLUSS.md`](HAFTUNGSAUSSCHLUSS.md) (dialog "Rechtliches", `server/rechtliches.js`). If you run a modified version for other users over a network, the AGPL requires you to offer them its source code. The name "AutarkTrade" and the logo are not covered by the licence.
+
+If AutarkTrade is useful to you, a donation keeps it going (side menu › Donate, or the coffee icon at the top right).

@@ -35,7 +35,6 @@ import EinstellungenJournal from './einstellungen/EinstellungenJournal.vue'
 import EinstellungenLive from './einstellungen/EinstellungenLive.vue'
 import EinstellungenKi from './einstellungen/EinstellungenKi.vue'
 import EinstellungenBenachrichtigungen from './einstellungen/EinstellungenBenachrichtigungen.vue'
-import EinstellungenLizenz from './einstellungen/EinstellungenLizenz.vue'
 import EinstellungenRechtliches from './einstellungen/EinstellungenRechtliches.vue'
 import EinstellungenDatenquellen from './einstellungen/EinstellungenDatenquellen.vue'
 
@@ -57,8 +56,6 @@ const BEREICHE = [
     { id: 'benachrichtigungen', symbol: 'glocke', komponente: EinstellungenBenachrichtigungen },
     // S12: Marktdatenquelle und Kundenschlüssel (CoinGecko)
     { id: 'datenquellen', symbol: 'datenbank', komponente: EinstellungenDatenquellen },
-    // Einhängepunkte für S10 (Lizenz & Vertrieb)
-    { id: 'lizenz', symbol: 'schluessel', komponente: EinstellungenLizenz },
     { id: 'rechtliches', symbol: 'waage', komponente: EinstellungenRechtliches },
 ]
 const gueltig = (id) => (BEREICHE.some(b => b.id === id) ? id : null)

@@ -3520,8 +3520,9 @@ async function runMigrations(knex, client) {
 
     // ── Lizenz & Rechtliches (S10) ─────────────────────────────────────
     /*
-     * Lizenzschlüssel (`server/lizenz.js`, Ed25519-Token, nur über /api/lizenz
-     * geschrieben) und die Zustimmung zu den Lizenzbedingungen
+     * `lizenzSchluessel`: Altlast — die Lizenzschlüssel entfielen mit der AGPL
+     * (22.10.2026); die Spalte bleibt, damit nichts gelöscht wird. Dazu die
+     * Zustimmung (seit 22.10.2026 zum Haftungsausschluss)
      * (`server/rechtliches.js`: zugestimmte Fassung, Zeit, Prüfsummen, Verlauf).
      * Rein additiv, deshalb ohne neue SCHEMA_VERSION: ein älterer Codestand
      * kennt die Spalten nicht und fasst sie nicht an.

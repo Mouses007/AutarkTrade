@@ -22,6 +22,7 @@ import Symbol from '../basis/Symbol.vue'
 import { rechtlichesOffen, rechtlichesReiter } from '../../stores/rechtliches.js'
 
 const { t } = useI18n()
+const QUELLCODE_URL = 'https://github.com/Mouses007/AutarkTrade'
 
 const stand = ref(null)
 const texte = ref({})
@@ -34,8 +35,8 @@ const sichtbar = computed(() => pflichtOffen.value || rechtlichesOffen.value)
 const fassung = computed(() => stand.value?.fassung?.fassung || '')
 
 const reiterListe = computed(() => [
-    { id: 'lizenz', titel: t('rechtliches.reiterLizenz') },
     { id: 'haftung', titel: t('rechtliches.reiterHaftung') },
+    { id: 'lizenz', titel: t('rechtliches.reiterLizenz') },
     { id: 'hinweise', titel: t('rechtliches.reiterHinweise') },
     { id: 'drittsoftware', titel: t('rechtliches.reiterDrittsoftware') },
 ])
@@ -87,12 +88,12 @@ function taste(e) {
 }
 
 // Den Text erst holen, wenn der Dialog aufgeht — sonst lüde jede Seite ihn umsonst.
-watch(sichtbar, (offen) => { if (offen) zeigen(rechtlichesReiter.value || 'lizenz') })
+watch(sichtbar, (offen) => { if (offen) zeigen(pflichtOffen.value ? 'haftung' : (rechtlichesReiter.value || 'haftung')) })
 watch(rechtlichesReiter, (r) => { if (sichtbar.value) zeigen(r) })
 
 onMounted(async () => {
     await laden()
-    if (sichtbar.value) zeigen('lizenz')
+    if (sichtbar.value) zeigen('haftung')
 })
 </script>
 
@@ -118,6 +119,9 @@ onMounted(async () => {
 
                 <Reiter :model-value="rechtlichesReiter" :reiter="reiterListe" @update:model-value="zeigen" />
                 <div class="text" role="tabpanel" tabindex="0">{{ texte[rechtlichesReiter] ?? t('rechtliches.laedt') }}</div>
+                <!-- AGPL-3.0 Ziffer 13: wer die Software übers Netz nutzt, muss an den Quellcode kommen. -->
+                <p class="quelle">{{ t('rechtliches.quellcodeText') }}
+                    <a :href="QUELLCODE_URL" target="_blank" rel="noopener noreferrer">{{ QUELLCODE_URL.replace('https://', '') }}</a></p>
 
                 <template v-if="pflichtOffen">
                     <label class="haken">
@@ -253,5 +257,15 @@ h2 {
     margin-right: auto;
     color: var(--muted);
     font-size: 0.85rem;
+}
+
+.quelle {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.quelle a {
+    color: var(--accent);
 }
 </style>

@@ -1,8 +1,8 @@
 # Haftungsausschluss
 
-Stand vom 21. Oktober 2026 – Teil der Lizenzbedingungen (Ziffer 15)
+Fassung 1.0 vom 22. Oktober 2026
 
-> ⚠ ENTWURF, nicht anwaltlich geprüft. Er fasst zusammen und ergänzt, was die Lizenzbedingungen in `LICENSE` (Ziffern 6, 7, 8, 14 und 15) regeln. Bei einem Widerspruch gehen die Lizenzbedingungen vor. Zwingende gesetzliche Rechte, insbesondere die von Konsumentinnen und Konsumenten, bleiben in jedem Fall unberührt.
+> ⚠ ENTWURF, nicht anwaltlich geprüft. AutarkTrade ist freie Software unter der GNU Affero General Public License 3.0 (Datei `LICENSE`). Sie wird ohne jede Gewährleistung bereitgestellt, soweit das Gesetz es zulässt (Ziffern 15 und 16 der AGPL). Dieser Haftungsausschluss erklärt, was das für ein Werkzeug rund um Trading bedeutet. Zwingende gesetzliche Rechte, insbesondere die von Konsumentinnen und Konsumenten, bleiben unberührt.
 
 ## Kurz gesagt
 
@@ -41,7 +41,7 @@ Preis-, Linien- und Radar-Alarme, Push-Nachrichten und Mails können verspätet 
 
 ## 8. Schlüssel, Sicherheit und Daten
 
-Für die Rechte deiner API-Schlüssel und den Schutz deines Geräts bist du verantwortlich. Wir empfehlen reine Leseschlüssel ohne Handels- und Auszahlungsrecht und mit IP-Sperre. Lege regelmässig Sicherungen deiner Daten an. Für Datenverlust haften wir im Rahmen von Ziffer 15 der Lizenzbedingungen.
+Für die Rechte deiner API-Schlüssel und den Schutz deines Geräts bist du verantwortlich. Wir empfehlen reine Leseschlüssel ohne Handels- und Auszahlungsrecht und mit IP-Sperre. Lege regelmässig Sicherungen deiner Daten an. Für Datenverlust haften wir nicht, soweit das Gesetz es zulässt.
 
 ## 9. Verfügbarkeit und Updates
 

@@ -11,14 +11,19 @@ Stand vom 19. Oktober 2026
 
 ## Lizenz
 
-Für AutarkTrade gelten die Lizenzbedingungen in `LICENSE`, ergänzt um den
-`HAFTUNGSAUSSCHLUSS.md`. In der Software stehen sie mit diesem Text und `THIRD-PARTY-NOTICES`
-unter **Rechtliches** (Seitenmenü unten, Einstellungen ›
-Allgemein › Lizenz); beim ersten Start und bei jeder neuen Fassung muss man ihnen zustimmen.
-Im Container-Image liegen alle vier unter `/app/`.
+AutarkTrade ist freie Software: Copyright (C) 2026 Mouses007. Sie steht unter der
+GNU Affero General Public License, Version 3 oder (nach deiner Wahl) jeder späteren Version
+(`LICENSE`, SPDX `AGPL-3.0-or-later`; seit 22. Oktober 2026, vorher eigene Lizenzbedingungen
+eines nie ausgelieferten Entwurfs). Sie wird OHNE JEDE GEWÄHRLEISTUNG bereitgestellt; was das
+für ein Trading-Werkzeug heisst, sagt `HAFTUNGSAUSSCHLUSS.md` — dem stimmt man beim ersten
+Start und bei jeder neuen Fassung zu.
 
-Lizenzschlüssel: `server/lizenz.js` (Ed25519, offline geprüft). Ohne Schlüssel läuft die
-Software im Testmodus; Daten werden nie gesperrt.
+In der Software stehen Haftungsausschluss, Lizenz, dieser Text und `THIRD-PARTY-NOTICES`
+unter **Rechtliches** (Seitenmenü unten, Einstellungen › Rechtliches), dazu der Link zum
+Quellcode (AGPL Ziffer 13). Im Container-Image liegen alle vier unter `/app/`.
+
+Es gibt keine Lizenzschlüssel und keine Update-Sperre mehr. Der Name „AutarkTrade" und das
+Logo sind nicht Teil der Lizenz.
 
 ## Herkunft
 

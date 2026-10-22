@@ -131,6 +131,10 @@ const fremdText = fremdDateien.filter(istText)
 const eigeneAlle = execFileSync('git', ['-C', wurzel, 'ls-files'], { encoding: 'utf8' }).split('\n').filter(Boolean)
 // Diese Datei, ihre Liste und die Prüfberichte nennen fremde Namen absichtlich.
 const SELBST = new Set(['scripts/herkunft-pruefen.mjs', 'scripts/herkunft-akzeptiert.json', 'HERKUNFT.md', 'package-lock.json'])
+// `LICENSE` ist seit 22.10.2026 der unveränderte AGPL-3.0-Text der Free Software Foundation.
+// Er teilt Hunderte Sätze mit dem GPL-Text im Vergleichsstand — beide stammen von der FSF,
+// keiner ist Ausdruck von TradeNote. Prüfen hiesse, die Lizenz gegen sich selbst zu vergleichen.
+SELBST.add('LICENSE')
 const eigeneCode = eigeneAlle.filter(f => CODE.has(path.extname(f)) && !SELBST.has(f) && !f.startsWith('docs/audit/'))
 const eigeneText = eigeneAlle.filter(f => istText(f) && !SELBST.has(f) && !f.startsWith('docs/audit/'))
 

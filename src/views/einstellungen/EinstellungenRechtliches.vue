@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Bereich „Rechtliches": Einstieg in die Lizenzbedingungen, die NOTICE-Hinweise
+ * Bereich „Rechtliches": Einstieg in Haftungsausschluss, Lizenz (AGPL-3.0), die NOTICE-Hinweise
  * (u. a. TradingView Lightweight Charts) und die Lizenzen fremder Software.
  * Die Texte selbst zeigt der Dialog aus S10 (`components/rechtliches/Rechtliches.vue`,
  * hängt in `App.vue`); hier nur je Reiter ein Knopf, der ihn dort öffnet.
@@ -11,7 +11,8 @@ import { oeffneRechtliches } from '@/stores/rechtliches.js'
 
 const { t } = useI18n()
 const REITER = [
-    { id: 'lizenz', schluessel: 'rechtliches.reiterLizenz', symbol: 'waage' },
+    { id: 'haftung', schluessel: 'rechtliches.reiterHaftung', symbol: 'waage' },
+    { id: 'lizenz', schluessel: 'rechtliches.reiterLizenz', symbol: 'dokument' },
     { id: 'hinweise', schluessel: 'rechtliches.reiterHinweise', symbol: 'info' },
     { id: 'drittsoftware', schluessel: 'rechtliches.reiterDrittsoftware', symbol: 'dokument' },
 ]

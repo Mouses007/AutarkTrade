@@ -6,9 +6,9 @@ import { ref } from 'vue'
  * öffnen ihn Seitenmenü und Einstellungen über diesen Schalter.
  */
 export const rechtlichesOffen = ref(false)
-export const rechtlichesReiter = ref('lizenz')
+export const rechtlichesReiter = ref('haftung')
 
-export function oeffneRechtliches(reiter = 'lizenz') {
+export function oeffneRechtliches(reiter = 'haftung') {
     rechtlichesReiter.value = reiter
     rechtlichesOffen.value = true
 }

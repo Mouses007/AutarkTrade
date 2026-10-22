@@ -361,6 +361,7 @@
     "src/views/einstellungen/ki/KiNewsQuellen.vue|2d44893f71aa": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/einstellungen/ki/KiNewsQuellen.vue|4772b047befa": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/einstellungen/live/Marktradar.vue|af56a140fb84": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "vite.config.js|5d47e06eeef9": "Gerüst von Vue, Router, Vite"
+    "vite.config.js|5d47e06eeef9": "Gerüst von Vue, Router, Vite",
+    "server/update-api.js|91ba38c394c9": "Folge von Konsolenmeldungen (Ergebnis der Update-Prüfung beim Start)"
   }
 }
