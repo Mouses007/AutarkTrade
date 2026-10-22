@@ -22,7 +22,7 @@ import { overlayAn } from '../../utils/chart/overlays/liste.js'
 import { Symbol } from '../basis'
 
 const props = defineProps({ panel: { type: Object, required: true } })
-const emit = defineEmits(['waehle', 'overlay'])
+const emit = defineEmits(['waehle', 'neuerTab', 'overlay'])
 const { t } = useI18n()
 
 const liste = ref([])
@@ -95,7 +95,8 @@ const aus = (p) => positionenAus.value.has(String(p.id))
             {{ t('chart.offen.imChart') }}
         </label>
         <div v-if="!laedt && !liste.length" class="leer">{{ t('chart.offen.leer') }}</div>
-        <div v-for="p in liste" :key="p.id" class="zeile" :class="{ aktiv: p.symbol === panel.symbol, aus: aus(p) }" @click="emit('waehle', p.symbol)">
+        <div v-for="p in liste" :key="p.id" class="zeile" :class="{ aktiv: p.symbol === panel.symbol, aus: aus(p) }" @click="emit('waehle', p.symbol)"
+            @mousedown.middle.prevent @auxclick.middle.prevent="emit('neuerTab', p.symbol)">
             <div class="kopf">
                 <span class="sym">{{ p.symbol }}</span>
                 <span class="seite" :class="p.richtung">{{ p.richtung === 'long' ? 'LONG' : 'SHORT' }}</span>

@@ -25,7 +25,7 @@ const props = defineProps({
     aktivesSymbol: { type: String, default: '' },
     aktiverMarkt: { type: String, default: 'futures' },
 })
-const emit = defineEmits(['waehle', 'aendere', 'neu', 'loesche'])
+const emit = defineEmits(['waehle', 'neuerTab', 'aendere', 'neu', 'loesche'])
 const { t } = useI18n()
 
 const listeId = ref(null)
@@ -180,7 +180,8 @@ function loescheListe() {
         </button>
         <div class="zeilen">
             <div v-for="(s, i) in symbole" :key="s.markt + s.symbol" class="zeile"
-                :class="{ an: s.symbol === aktivesSymbol && s.markt === aktiverMarkt }" @click="emit('waehle', s)">
+                :class="{ an: s.symbol === aktivesSymbol && s.markt === aktiverMarkt }" @click="emit('waehle', s)"
+                @mousedown.middle.prevent @auxclick.middle.prevent="emit('neuerTab', s)">
                 <span class="sym"><span class="symName">{{ s.symbol }}<small v-if="s.markt === 'spot'"> Spot</small></span>
                     <a v-for="b in boersen(s)" :key="b.id" class="boerse" :class="b.id" :href="b.url" target="_blank" rel="noopener"
                         :title="t('chart.watchlistBoerse', { boerse: b.name })" @click.stop>{{ b.kurz }}</a>

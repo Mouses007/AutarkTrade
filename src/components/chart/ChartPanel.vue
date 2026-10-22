@@ -76,6 +76,15 @@ function legendeUmschalten() {
 const preisStellen = ref(2)
 const indikatorWerte = ref({})       // id → [{key, farbe, wert}] unter dem Fadenkreuz
 let zeichner = null
+// Fenstertitel der Indikator-Fenster (für das „i" daneben); Höhen ändern sich beim
+// Ziehen der Trenner ohne Ereignis — darum ein leichter Abgleich alle 0,5 s.
+const fensterTitel = ref([])
+let titelUhr = null
+function titelAbgleich() {
+    if (!zeichner) { fensterTitel.value = []; return }
+    const neu = zeichner.fensterTitel().filter((f) => te('chart.ind.' + f.typ + '.info'))
+    if (JSON.stringify(neu) !== JSON.stringify(fensterTitel.value)) fensterTitel.value = neu
+}
 let wasserzeichen = null
 
 /** Symbol und Zeiteinheit blass im Hintergrund — wer vier Charts offen hat, sieht sofort, welcher welcher ist. */
@@ -1173,8 +1182,10 @@ onMounted(() => {
     // Capture + nicht passiv: vor der Bibliothek, die das Rad sonst als Zeit-Zoom nimmt.
     huelle.value.addEventListener('wheel', radAufAchse, { capture: true, passive: false })
     document.addEventListener('visibilitychange', sichtbarkeitGeaendert)
+    titelUhr = setInterval(() => { if (!document.hidden) titelAbgleich() }, 500)
 })
 onBeforeUnmount(() => {
+    clearInterval(titelUhr)
     document.removeEventListener('visibilitychange', sichtbarkeitGeaendert)
     huelle.value?.removeEventListener('wheel', radAufAchse, { capture: true })
     ladeNummer++
@@ -1267,6 +1278,11 @@ defineExpose({
             </template>
         </div>
 
+        <!-- „i" neben den Titeln der Indikator-Fenster (z. B. Momentum Radar); der Titel selbst ist Canvas. -->
+        <span v-for="f in fensterTitel" :key="f.id" class="fensterInfo" :style="{ top: f.oben + 5 + 'px', left: 4 + f.breite + 6 + 'px' }">
+            <InfoTipp :schluessel="'chart.ind.' + f.typ + '.info'" breit />
+        </span>
+
         <ZeichnungStil v-if="ausgewaehlt" :zeichnung="ausgewaehlt" :interval="panel.interval"
             :alarm-moeglich="['horizontale', 'strahlH', 'trendlinie', 'strahl', 'rechteck', 'kanal'].includes(ausgewaehlt.typ)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
@@ -1352,6 +1368,17 @@ defineExpose({
     color: var(--muted);
     pointer-events: none;
     max-width: calc(100% - 80px);
+}
+
+.fensterInfo {
+    position: absolute;
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 3px;
+    border-radius: 4px;
+    background: rgba(10, 14, 22, 0.78);
 }
 
 .legendeKnopf {

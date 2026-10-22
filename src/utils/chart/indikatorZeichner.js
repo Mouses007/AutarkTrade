@@ -141,6 +141,7 @@ class FensterTitel {
         ctx.save()
         ctx.font = '600 11px -apple-system, "Segoe UI", Roboto, sans-serif'
         const b = ctx.measureText(this.text).width
+        this.breite = b + 12
         ctx.fillStyle = 'rgba(10,14,22,0.78)'
         ctx.beginPath()
         if (ctx.roundRect) ctx.roundRect(4, 4, b + 12, 18, 4); else ctx.rect(4, 4, b + 12, 18)
@@ -279,6 +280,25 @@ export class IndikatorZeichner {
             panes[0].setStretchFactor(Math.max(2, panes.length))
             for (let i = 1; i < panes.length; i++) panes[i].setStretchFactor(1)
         }
+    }
+
+    /**
+     * Wo die Fenstertitel stehen — für Bedienelemente daneben (das „i" im Panel).
+     * @returns {{ id, typ, text, oben, breite }[]}  oben/breite in px relativ zum Chart
+     */
+    fensterTitel() {
+        const panes = this.chart.panes()
+        const aus = []
+        for (const e of this.eintraege) {
+            if (!e.titel?.text) continue
+            const s = Object.values(e.serien)[0]
+            let idx = -1
+            try { idx = s.getPane().paneIndex() } catch { continue }
+            let oben = 0
+            for (let i = 0; i < idx; i++) oben += panes[i].getHeight() + 1
+            aus.push({ id: e.instanz.id, typ: e.instanz.typ, text: e.titel.text, oben, breite: e.titel.breite || 0 })
+        }
+        return aus
     }
 
     abbauen() {

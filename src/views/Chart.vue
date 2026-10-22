@@ -271,6 +271,11 @@ function oeffneCoinTab(symbol, markt) {
     }
     setzeTabs(liste, i)
 }
+/** Mittelklick in Watchlist / Offene Trades: Coin in neuem (oder seinem vorhandenen) Tab. */
+function coinInNeuemTab(symbol, markt = 'futures') {
+    oeffneCoinTab(symbol, markt)
+    setzePanel({ symbol, markt })
+}
 function waehleCoinTab(i) {
     const tab = coinTabs.value[i]
     if (!tab) return
@@ -1075,10 +1080,12 @@ watch(sichtbareAnzahl, async () => {
                     <div class="reiterTitel">{{ t('chart.reiter.' + daten.seitenleiste.reiter) }}</div>
                     <WatchlistReiter v-if="daten.seitenleiste.reiter === 'watchlist'" :watchlists="watchlists"
                         :aktives-symbol="aktivesPanel.symbol" :aktiver-markt="aktivesPanel.markt"
-                        @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); mobilReiter = null" @aendere="watchlistAendern"
+                        @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); mobilReiter = null"
+                        @neuer-tab="(s) => coinInNeuemTab(s.symbol, s.markt)" @aendere="watchlistAendern"
                         @neu="watchlistNeu" @loesche="watchlistLoeschen" />
                     <OffeneReiter v-else-if="daten.seitenleiste.reiter === 'offen'" :panel="aktivesPanel"
                         @waehle="(s) => { setzePanel({ symbol: s, markt: 'futures' }); mobilReiter = null }"
+                        @neuer-tab="(s) => coinInNeuemTab(s, 'futures')"
                         @overlay="(an) => { aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), positionen: an } }" />
                     <ObjektReiter v-else-if="daten.seitenleiste.reiter === 'objekte'" :symbol="aktivesPanel.symbol"
                         :zeichnungen="aktiveZeichnungen" :auswahl-id="aktiveAuswahl" @waehle="objektWaehlen"
