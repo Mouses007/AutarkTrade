@@ -5,13 +5,11 @@ Runs locally or via Docker — no cloud, no account.
 Vue 3 + Express, SQLite or PostgreSQL.
 
 > **Status:** 4.0.0 (beta) — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
-> (redesign, own licence, rebuild finished 19.10.2026). Results and open points:
-> [`docs/AUFTRAGSSTAND.md`](docs/AUFTRAGSSTAND.md); origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
+> (redesign, rebuilt code, AGPL-3.0). Origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
 
 > **AutarkTrade does not trade by itself.** It reads trades, positions and balances from your
 > exchange for the journal, but sends no orders. Strategies run as a simulation only (paper and
-> shadow mode). Live trading was removed for the first release and is kept for later on the branch
-> `spaeter/scharfer-handel` — see [`docs/SPAETER-SCHARFER-HANDEL.md`](docs/SPAETER-SCHARFER-HANDEL.md).
+> shadow mode). Live trading is not part of this release.
 
 > The user interface is available in **German** (default) and **English**.
 

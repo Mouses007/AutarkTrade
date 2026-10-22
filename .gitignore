@@ -60,3 +60,15 @@ scripts/.v2-container.env
 
 # Umzug U1: Ziele und Merkzettel (keine Passwörter, aber Adressen) — nie ins Repo
 scripts/umzug/.env
+
+# Intern, nicht veröffentlichen (22.10.2026): Arbeitsnotizen, Gutachten, Audits,
+# Specs und die Skripte für die eigene NAS. Bleiben lokal, nur nicht im Repo.
+docs/
+CLAUDE.md
+**/CLAUDE.md
+.claude/
+scripts/nas-deploy.sh
+scripts/umzug/
+scripts/v2-container.sh
+scripts/historie-neu-wurzeln.sh
+.github/DOCKER-SETUP.md

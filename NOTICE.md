@@ -95,5 +95,5 @@ Lizenzbedingungen von AutarkTrade selbst.
 Namen von Börsen, KI-Anbietern und Datenquellen (Bitunix, Bitget, Pionex, Binance, Anthropic,
 OpenAI, Google, TradingView u. a.) stehen nur beschreibend da, um zu sagen, womit die Software
 zusammenarbeitet. Sie gehören ihren Inhabern; eine Verbindung zu ihnen oder eine Empfehlung
-durch sie besteht nicht. Welche Datenquelle unter welchen Bedingungen benutzt wird und welche
-Hinweise sie verlangt, steht in `docs/VERKAUFS-PRUEFUNG.md` (Umsetzung S12).
+durch sie besteht nicht. Welche Datenquelle welche Hinweise verlangt, zeigt die Software an der
+jeweiligen Anzeige (Quellenhinweis) und unter Einstellungen › Datenquellen.

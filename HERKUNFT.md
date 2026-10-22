@@ -64,7 +64,7 @@ node scripts/herkunft-pruefen.mjs --vorschlag  # Ungesichtetes als JSON-Gerüst
 Die Zeilenprüfung findet wörtliche Übernahmen, die Token-Fenster finden
 umformulierte, solange die Form gleich blieb. Gegen Umformulieren steht ausserdem
 die Clean-Room-Regel, nach der die Aufträge S3–S9 gearbeitet haben: Ein
-Agent beschrieb das Verhalten der Altdateien (`docs/spec/`), ein frischer Agent ohne
+Agent beschrieb das Verhalten der Altdateien (Spezifikationen, beim Autor archiviert), ein frischer Agent ohne
 Zugriff auf die Altdateien baute nur aus dieser Beschreibung und dem Golden Master
 (`src/utils/__selftest-journal.mjs`) neu; danach wurden die Altdateien gelöscht.
 
@@ -96,7 +96,7 @@ S11 hat deshalb:
 
 ## Was in F3 geändert wurde (20.10.2026)
 
-Audit A3 (`docs/audit/2026-10-19/A3-fork-reste.md`) fand nach S11 keine kopierte
+Audit A3 (Bericht beim Autor archiviert) fand nach S11 keine kopierte
 Zeile, aber noch rund 120 übernommene Namen, 13 Routenpfade, einen übersetzten
 Hilfetext und drei Module mit der Aufteilung des Ursprungs. F3 hat:
 
@@ -120,7 +120,7 @@ Hilfetext und drei Module mit der Aufteilung des Ursprungs. F3 hat:
   unter `at.journal.*`.
 - **Tag-Info, Bildpfad und Trade-Fenster der Tagesansicht** nach der
   Clean-Room-Regel neu geschnitten: Agent A beschrieb das Verhalten
-  (`docs/spec/f3-*.md`, ohne alte Namen), der Altcode wurde entfernt, ein
+  (Spezifikationen ohne alte Namen, beim Autor archiviert), der Altcode wurde entfernt, ein
   frischer Agent B baute ohne Zugriff darauf eine eigene Aufteilung
   (`src/utils/bilder/`, `stores/journal/bilder.js`, `rahmen/BildVollbild.vue`,
   getrennte Wege `oeffneTrade`/`blaettere`/`schliesseTrade`). Die tote
@@ -178,7 +178,7 @@ Kein schützbarer Ausdruck, aber aus Verträglichkeit mit bestehenden Daten unve
   mitgeschrieben; die Commit-Historie enthält keine fremden Autoren.
 - Vor der ersten Weitergabe unter `LICENSE` lässt der Anbieter diesen Nachweis
   zusammen mit LICENSE und NOTICE anwaltlich gegenlesen (offener Punkt in
-  `docs/AUFTRAGSSTAND.md`).
+  den Auftragsstand (beim Autor archiviert)).
 
 ## Anhang A: Bestandsaufnahme vor dem Neubau (19.10.2026)
 
@@ -215,7 +215,7 @@ die Gegenprobe per `git blame` zeigte damals 6,8 % nie angefasste Zeilen.
 Umbauplan damals: Golden Master zuerst, dann toten Code löschen (CSV-Pfad), dann
 Neubau in Paketen A Journal-Kern → B Import → C Auswertungs-Charts → D Ansichten →
 E Gerüst und Stil, zuletzt dieser Nachweis. So umgesetzt; Stand je Auftrag in
-`docs/AUFTRAGSSTAND.md`.
+den Auftragsstand (beim Autor archiviert).
 
 ## Anhang B: Lizenzmodell (Entscheidung 19.10.2026)
 

@@ -15,7 +15,7 @@
  *
  * Aufruf: node server/quellen/__selftest-freigabe.mjs
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
@@ -77,14 +77,18 @@ p('sendeWennAus lässt echte Fehler durch', sendeWennAus(res, new Error('kaputt'
 // ── Liste und Prüfungszeilen ────────────────────────────────────────────
 const hier = path.dirname(fileURLToPath(import.meta.url))
 const wurzel = path.resolve(hier, '../..')
-const pruefung = readFileSync(path.join(wurzel, 'docs/VERKAUFS-PRUEFUNG.md'), 'utf8')
-const zeilen = new Set([...pruefung.matchAll(/^\| (\d+[a-z]?) \|/gm)].map((m) => m[1]))
-p('Prüfung hat Zeilen', zeilen.size > 80, `${zeilen.size}`)
+// Die Prüfung liegt seit 22.10.2026 nur noch beim Autor (docs/ ist nicht im Repo).
+// Fehlt sie (öffentlicher Klon), wird nur der Teil ohne sie geprüft.
+const pruefDatei = path.join(wurzel, 'docs/VERKAUFS-PRUEFUNG.md')
+const zeilen = existsSync(pruefDatei)
+    ? new Set([...readFileSync(pruefDatei, 'utf8').matchAll(/^\| (\d+[a-z]?) \|/gm)].map((m) => m[1]))
+    : null
+if (zeilen) p('Prüfung hat Zeilen', zeilen.size > 80, `${zeilen.size}`)
 for (const id of IDS) {
     const q = QUELLEN_OHNE_FREIGABE[id]
     p(`${id}: Name und Beschreibung`, q.name && q.was)
     p(`${id}: mindestens eine Prüfungszeile`, Array.isArray(q.zeilen) && q.zeilen.length > 0)
-    for (const z of q.zeilen) p(`${id}: Zeile ${z} gibt es in VERKAUFS-PRUEFUNG.md`, zeilen.has(String(z)))
+    if (zeilen) for (const z of q.zeilen) p(`${id}: Zeile ${z} gibt es in VERKAUFS-PRUEFUNG.md`, zeilen.has(String(z)))
 }
 _setzeLeser(async () => 1)
 const stand = await freigabeStand()
