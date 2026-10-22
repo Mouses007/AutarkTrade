@@ -608,8 +608,15 @@ function rechtsklick(e) {
     // Am rechten oder unteren Rand nach innen klappen — das Panel schneidet
     // über seinen Rand hinausragende Teile ab.
     const x = Math.min(e.clientX - r.left, r.width - 190)
-    const yMenue = Math.min(y, r.height - 130)
-    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis }
+    const yMenue = Math.min(y, r.height - 160)
+    // Liegt eine Zeichnung unter dem Zeiger? Dann kann man sie hier sperren/entsperren.
+    let zeichnung = null
+    try {
+        const l = ebene?.lokal(e)
+        const tr = l?.innen ? ebene.trefferTest(l.x, l.y) : null
+        if (tr?.z) zeichnung = { id: tr.z.id, gesperrt: !!tr.z.gesperrt }
+    } catch { /* ohne Treffer */ }
+    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung }
 }
 
 function alarmHier() {
@@ -1294,6 +1301,12 @@ defineExpose({
         <div v-if="kontext" class="kontextHintergrund" @mousedown.stop="kontext = null" @contextmenu.prevent="kontext = null"></div>
         <div v-if="kontext" class="kontextMenue" :style="{ left: kontext.x + 'px', top: kontext.y + 'px' }" @mousedown.stop>
             <div class="kopfzeile">{{ kerzenSerie?.priceFormatter().format(kontext.preis) }}</div>
+            <template v-if="kontext.zeichnung">
+                <button @click="aendere(panel.symbol, kontext.zeichnung.id, { gesperrt: !kontext.zeichnung.gesperrt }); kontext = null">
+                    <Symbol :name="kontext.zeichnung.gesperrt ? 'schlossOffen' : 'schloss'" />
+                    {{ t(kontext.zeichnung.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren') }}</button>
+                <hr />
+            </template>
             <button @click="alarmHier"><Symbol name="glocke" /> {{ t('chart.alarm.hier') }}</button>
             <button @click="zeichnungHier('horizontale')"><Symbol name="minus" /> {{ t('chart.wz.horizontale') }}</button>
             <button @click="zeichnungHier('strahlH')"><Symbol name="pfeilRechts" /> {{ t('chart.wz.strahlH') }}</button>

@@ -21,6 +21,8 @@ import { volumenprofil } from '../../../../shared/volumenprofil.js'
 const ANKER = 5
 const TREFFER = 6
 const SCHRIFT = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
+/** Türkis der App (tokens.css `--accent`) — Vorgabe des Volumenprofils. */
+const HAUSFARBE = '#1fd6c4'
 
 function mitAlpha(farbe, a) {
     const m = /^#([0-9a-f]{6})$/i.exec(farbe || '')
@@ -675,9 +677,10 @@ export class ZeichenEbene {
                 if (fehlt(x1, x2) || !vp) return
                 const yo = Y(vp.oben), yu = Y(vp.unten)
                 if (fehlt(yo, yu)) return
-                // Rahmen des Bereichs
-                ctx.fillStyle = 'rgba(41,98,255,0.05)'
-                ctx.fillRect(x1, yo, x2 - x1, yu - yo)
+                // Kein Hintergrund und einfarbige Balken (Nutzerwunsch 22.10.2026): ein
+                // Profil zeigt, WO gehandelt wurde, nicht Kauf gegen Verkauf. Die alte
+                // Vorgabe-Farbe (Grün) gilt als Hausfarbe, gewählte Farben bleiben.
+                const farbe = !s.farbe || s.farbe.toLowerCase() === '#26a69a' ? HAUSFARBE : s.farbe
                 // Balken von links, längster = 40 % der Bereichsbreite (mindestens 60 px)
                 const max = Math.max(...vp.zeilen.map((r) => r.summe))
                 const lang = Math.max(60, (x2 - x1) * 0.4)
@@ -687,12 +690,8 @@ export class ZeichenEbene {
                     if (fehlt(ya, yb) || !r.summe) continue
                     const h = Math.max(1, Math.abs(yb - ya) - 1)
                     const inVa = i >= vp.vaVon && i <= vp.vaBis
-                    const wAuf = lang * r.auf / max, wAb = lang * r.ab / max
-                    ctx.fillStyle = mitAlpha(s.farbe, inVa ? 0.6 : 0.25)
-                    ctx.fillRect(x1, Math.min(ya, yb), wAuf, h)
-                    // einfarbig: Verkaufsvolumen in derselben Farbe — ein Profil, keine Kauf/Verkauf-Aufteilung
-                    ctx.fillStyle = mitAlpha(s.einfarbig ? s.farbe : '#ef5350', inVa ? 0.6 : 0.25)
-                    ctx.fillRect(x1 + wAuf, Math.min(ya, yb), wAb, h)
+                    ctx.fillStyle = mitAlpha(farbe, inVa ? 0.55 : 0.22)
+                    ctx.fillRect(x1, Math.min(ya, yb), lang * r.summe / max, h)
                 }
                 const ende = s.rechts ? breite : x2
                 const marke = (p, farbe, text, strich) => {

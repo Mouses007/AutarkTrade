@@ -71,8 +71,6 @@ function nurDieseZeiteinheit() {
             @click="stil({ links: !s.links })" :aria-label="t('chart.stil.links')"><Symbol name="pfeilAnschlagLinks" /></button>
  <button v-if="typ === 'volprofil'" class="k" :title="t('chart.stil.zeilen')" @click="naechsteZeilen" :aria-label="t('chart.stil.zeilen')">
             {{ s.zeilen || 24 }}</button>
-        <button v-if="typ === 'volprofil'" class="k" :class="{ an: s.einfarbig }" :title="t('chart.stil.einfarbig')"
-            @click="stil({ einfarbig: !s.einfarbig })" :aria-label="t('chart.stil.einfarbig')"><Symbol name="palette" /></button>
         <button v-if="typ === 'volprofil'" class="k" :class="{ an: s.marken !== false }" :title="t('chart.stil.marken')"
             @click="stil({ marken: s.marken === false })" :aria-label="t('chart.stil.marken')">POC</button>
         <button v-if="hatFuellung" class="k" :class="{ an: s.fuellung }" :title="t('chart.stil.fuellung')"

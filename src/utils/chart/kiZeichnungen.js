@@ -67,11 +67,11 @@ export function kandidatenVorschau(analyse) {
  * zwischen zwei grossen Wendepunkten (server/chart-kandidaten.js). Wählt die
  * KI eine davon, erscheint über diesem Abschnitt ein Fixed-Range-Profil wie
  * vom eigenen Profil-Werkzeug — im zuletzt benutzten Stil des Werkzeugs
- * (`basis`), sonst einfarbig blau mit POC/VAH/VAL. Die Marken selbst nicht
+ * (`basis`), sonst einfarbig in der Hausfarbe mit POC/VAH/VAL. Die Marken selbst nicht
  * noch einmal als eigene Linien. Analysen ohne Abschnitte (älter als
  * 19.10.2026): ein Profil über den ganzen Bereich.
  */
-export const PROFIL_STIL = { farbe: '#29b6f6', zeilen: 96, rechts: false, einfarbig: true, marken: true }
+export const PROFIL_STIL = { farbe: '#1fd6c4', zeilen: 96, rechts: false, marken: true }
 const istV = (id) => /^V\d+$/.test(String(id || ''))
 export const istProfilLinie = (l) => l?.quelle === 'volumenprofil' || istV(l?.id)
 export const istProfilZone = (z) => (z?.ids || []).some(istV)
