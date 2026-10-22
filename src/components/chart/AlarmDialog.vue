@@ -34,7 +34,9 @@ const zeichnungTyp = v.zeichnung?.typ || null
 const art = v.art
 const richtung = ref(v.bedingung?.richtung || (art === 'zone' ? 'betreten' : art === 'momentum' ? 'beide' : 'kreuzt'))
 const preis = ref(v.bedingung?.preis ?? v.preis ?? '')
-const kante = ref(v.bedingung?.kante || 'oben')
+const profil = v.zeichnung?.profil || null      // Volumenprofil: { poc, vah, val } wie im Chart
+const kante = ref(v.bedingung?.kante || (zeichnungTyp === 'volprofil' ? 'poc' : 'oben'))
+const PROFIL_NAME = { poc: 'POC', vah: 'VAH', val: 'VAL' }
 // Ein Momentum-Alarm über Watchlists soll weiterlaufen — je Kerze meldet er ohnehin nur einmal.
 const einmalig = ref(v.einmalig ?? art !== 'momentum')
 const sperreMin = ref(v.bedingung?.sperreMin ?? 15)
@@ -82,6 +84,7 @@ async function speichern() {
     if (art === 'preis') bedingung.preis = Number(preis.value)
     if (art === 'momentum' && divergenz.value) bedingung.divergenz = true
     if (zeichnungTyp === 'kanal' && art === 'linie') bedingung.kante = kante.value
+    if (zeichnungTyp === 'volprofil' && profil) { bedingung.kante = kante.value; bedingung.niveau = profil[kante.value] }
     if (!einmalig.value && art !== 'momentum') bedingung.sperreMin = Number(sperreMin.value) || 0
     const gemeinsam = { bedingung, einmalig: einmalig.value, kanaele: { push: push.value, mail: mail.value }, notiz: notiz.value }
     if (art === 'momentum') {
@@ -157,6 +160,18 @@ async function speichern() {
                 <span>{{ t('chart.alarm.preis') }}</span>
                 <input v-model="preis" type="number" step="any" class="at-feld klein" />
             </label>
+            <template v-if="zeichnungTyp === 'volprofil'">
+                <label class="zeile">
+                    <span>{{ t('chart.alarm.profilLinie') }}</span>
+                    <select v-model="kante" class="at-feld klein" :disabled="!profil">
+                        <option v-for="k in ['poc', 'vah', 'val']" :key="k" :value="k">
+                            {{ PROFIL_NAME[k] }}{{ profil ? ' — ' + Number(profil[k].toPrecision(7)) : '' }}</option>
+                    </select>
+                </label>
+                <div class="hinweis">{{ t(profil ? 'chart.alarm.profilHinweis' : 'chart.alarm.profilFehlt') }}</div>
+            </template>
+            <div v-else-if="!istNeu && PROFIL_NAME[v.bedingung?.kante]" class="art">
+                {{ t('chart.alarm.profilLinie') }}: {{ PROFIL_NAME[v.bedingung.kante] }} — {{ Number(Number(v.bedingung.niveau).toPrecision(7)) }}</div>
             <label v-if="art === 'linie' && zeichnungTyp === 'kanal'" class="zeile">
                 <span>{{ t('chart.alarm.kante') }}</span>
                 <select v-model="kante" class="at-feld klein">
@@ -187,7 +202,7 @@ async function speichern() {
             <div v-if="fehler" class="fehler">{{ fehler }}</div>
             <div class="fuss">
                 <Knopf art="leise" klein @click="emit('schliesse')">{{ t('chart.alarm.abbrechen') }}</Knopf>
-                <Knopf art="haupt" klein :disabled="speichert || (art === 'preis' && !(Number(preis) > 0)) || momentumUnvollstaendig" @click="speichern">
+                <Knopf art="haupt" klein :disabled="speichert || (art === 'preis' && !(Number(preis) > 0)) || momentumUnvollstaendig || (zeichnungTyp === 'volprofil' && !profil)" @click="speichern">
                     {{ t('chart.alarm.speichern') }}</Knopf>
             </div>
         </div>

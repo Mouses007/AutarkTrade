@@ -40,7 +40,7 @@ import { getKnex } from './database.js'
 import { beansprucheFuehrung, verlaengereFuehrung } from './db-claim.js'
 import { warteAufGewicht } from './binance-takt.js'
 import * as marktdaten from './marktdaten/index.js'
-import { pruefeAlarm, sperreAbgelaufen, geometrieVorbei, MIN_SPERRE_MIN } from './chart-alarm-regeln.js'
+import { pruefeAlarm, sperreAbgelaufen, geometrieVorbei, profilSignatur, PROFIL_LINIEN, MIN_SPERRE_MIN } from './chart-alarm-regeln.js'
 import {
     pruefeMomentum, faellig, alarmPaare, reihenFuer, neuerStand, momentumText, paarSchluessel, letzteGeschlossene,
     MOMENTUM_ZEITEBENEN, OHNE_GROSSE, MOMENTUM_RICHTUNGEN, PUNKTGROESSEN, KERZEN_JE_ABRUF, MAX_PAARE, MAX_SYMBOLE, MAX_WATCHLISTS,
@@ -59,7 +59,7 @@ const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 const MAX_VERLAUF = 20
 const MAX_ALARME = 300
 
-const LINIEN_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'kanal']
+const LINIEN_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'kanal', 'volprofil']
 const ZONEN_TYPEN = ['rechteck', 'kanal']
 const RICHTUNGEN = { preis: ['ueber', 'unter', 'kreuzt'], linie: ['ueber', 'unter', 'kreuzt'], zone: ['betreten', 'verlassen'], momentum: MOMENTUM_RICHTUNGEN }
 
@@ -118,7 +118,9 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
             if (!(p > 0)) return { fehler: 'preis fehlt' }
             bed.preis = p
         }
-        if (b.kante !== undefined) bed.kante = ['oben', 'unten', 'mitte'].includes(b.kante) ? b.kante : 'oben'
+        if (b.kante !== undefined) bed.kante = ['oben', 'unten', 'mitte', ...PROFIL_LINIEN].includes(b.kante) ? b.kante : 'oben'
+        // Volumenprofil: die Höhe, wie der Chart sie zeigte (siehe `profilSignatur`)
+        if (b.niveau !== undefined && Number(b.niveau) > 0) bed.niveau = Number(b.niveau)
         if (b.sperreMin !== undefined) bed.sperreMin = Math.max(MIN_SPERRE_MIN, Math.min(10080, Number(b.sperreMin) || 0))
         if (a === 'momentum' && b.divergenz) bed.divergenz = true
         if (b.schwere !== undefined) bed.schwere = ['info', 'warnung', 'kritisch'].includes(b.schwere) ? b.schwere : 'warnung'
@@ -131,8 +133,15 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
         const erlaubt = aus.art === 'linie' ? LINIEN_TYPEN : ZONEN_TYPEN
         if (!erlaubt.includes(z.typ)) return { fehler: `ein ${aus.art}-Alarm geht nicht auf ${z.typ}` }
         if (z.symbol !== aus.symbol) return { fehler: 'zeichnung gehört zu einem anderen Symbol' }
-        // Eine Linie/Zone, die schon zu Ende ist, kann nie auslösen — sagen statt still anlegen.
         const geo = { ...z, punkte: parse(z.punkte, []), stil: parse(z.stil, {}) }
+        if (z.typ === 'volprofil') {
+            const bed = parse(aus.bedingung, {})
+            if (!PROFIL_LINIEN.includes(bed.kante)) return { fehler: 'Linie des Volumenprofils fehlt (POC, VAH oder VAL)' }
+            if (!(bed.niveau > 0)) return { fehler: 'Höhe der Profillinie fehlt' }
+            bed.profil = profilSignatur(geo)
+            aus.bedingung = JSON.stringify(bed)
+        }
+        // Eine Linie/Zone, die schon zu Ende ist, kann nie auslösen — sagen statt still anlegen.
         if (geometrieVorbei({ art: aus.art, bedingung: parse(aus.bedingung, {}) }, geo, Date.now())) {
             return { fehler: 'Die Linie bzw. Zone endet vor jetzt — „Nach rechts verlängern" einschalten, sonst kann der Alarm nie auslösen' }
         }
@@ -250,14 +259,16 @@ function zahl(p) {
 }
 
 const WORT = { ueber: 'steigt über', unter: 'fällt unter', betreten: 'läuft in die Zone', verlassen: 'verlässt die Zone' }
-const TYP_NAME = { horizontale: 'Horizontale', strahlH: 'Strahl', trendlinie: 'Trendlinie', strahl: 'Strahl', kanal: 'Kanal', rechteck: 'Zone' }
+const TYP_NAME = { horizontale: 'Horizontale', strahlH: 'Strahl', trendlinie: 'Trendlinie', strahl: 'Strahl', kanal: 'Kanal', rechteck: 'Zone', volprofil: 'Volumenprofil' }
+const PROFIL_NAME = { poc: 'POC', vah: 'VAH', val: 'VAL' }
 
 /** Text einer Auslösung — rein, damit er im Selbsttest der Route mitgeprüft werden kann. */
 export function meldungsText(alarm, zeichnung, erg, preis) {
     const was = alarm.art === 'zone'
         ? WORT[alarm.bedingung?.richtung || 'betreten']
         : `${WORT[erg.richtung] || 'kreuzt'} ${zahl(erg.niveau)}`
-    const wo = alarm.art === 'preis' ? '' : ` (${TYP_NAME[zeichnung?.typ] || 'Zeichnung'}${zeichnung?.stil?.text ? ` „${zeichnung.stil.text}"` : ''})`
+    const profil = zeichnung?.typ === 'volprofil' && PROFIL_NAME[alarm.bedingung?.kante] ? ` ${PROFIL_NAME[alarm.bedingung.kante]}` : ''
+    const wo = alarm.art === 'preis' ? '' : ` (${TYP_NAME[zeichnung?.typ] || 'Zeichnung'}${profil}${zeichnung?.stil?.text ? ` „${zeichnung.stil.text}"` : ''})`
     const markt = alarm.markt === 'spot' ? ' Spot' : ''
     const titel = `${alarm.symbol}${markt} ${was}`
     const text = `${titel}${wo} — jetzt ${zahl(preis)}${alarm.notiz ? `\n${alarm.notiz}` : ''}`
@@ -350,6 +361,14 @@ async function einTakt() {
             if ((a.art === 'linie' || a.art === 'zone') && !z) {
                 // Die Zeichnung ist weg — der Alarm hätte nie wieder etwas zu prüfen.
                 await knex('chart_alarme').where('id', a.id).update({ aktiv: 0 })
+                continue
+            }
+            if (z?.typ === 'volprofil' && a.bedingung?.profil !== profilSignatur(z)) {
+                // Bereich oder Zeilenzahl geändert: die gemerkte Höhe gilt nicht mehr.
+                await knex('chart_alarme').where('id', a.id).update({
+                    aktiv: 0, verlauf: JSON.stringify([...a.verlauf, { t, p, hinweis: 'profilGeaendert' }].slice(-MAX_VERLAUF)),
+                })
+                messung.delete(a.id)
                 continue
             }
             if (geometrieVorbei(a, z, t)) {
@@ -605,6 +624,12 @@ export function setupChartAlarmRoutes(app) {
             const { fehler, daten } = await pruefeEingabe({ ...req.body, art: alt.art, id }, knex, true)
             if (fehler) return res.status(400).json({ error: fehler })
             delete daten.art
+            // Volumenprofil: Höhe und Signatur stammen vom Anlegen — ein Ändern von Dringlichkeit
+            // oder Sperrfrist schickt sie nicht mit und darf sie nicht löschen.
+            if (daten.bedingung && alt.art === 'linie') {
+                const altB = parse(alt.bedingung, {})
+                if (altB.profil) daten.bedingung = JSON.stringify({ ...JSON.parse(daten.bedingung), niveau: altB.niveau, profil: altB.profil, kante: altB.kante })
+            }
             // Wieder eingeschaltet: neu ansetzen. Der gespeicherte Preis ist
             // womöglich Tage alt, und ein Vergleich damit wäre eine Kreuzung,
             // die niemand gesehen hat.

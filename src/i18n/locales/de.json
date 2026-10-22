@@ -5807,7 +5807,11 @@
         "divGross": "Divergenzen an grossen Punkten",
         "divAlle": "allen Divergenzen"
       },
-      "momentumHier": "Momentum-Alarm …"
+      "momentumHier": "Momentum-Alarm …",
+      "profilLinie": "Linie des Profils",
+      "profilHinweis": "Die Höhe wird so übernommen, wie das Profil jetzt im Chart steht. Verschiebst du den Bereich oder änderst die Zeilenzahl, schaltet sich der Alarm ab — dann neu setzen.",
+      "profilFehlt": "Das Profil ist in diesem Chart nicht berechnet (keine Kerzen im Bereich) — Chart so einstellen, dass es sichtbar ist.",
+      "profilGeaendert": "Profil geändert — Alarm neu setzen"
     },
     "quelle": {
       "titel": "Kursquelle: Binance (live per Websocket, tiefe Historie — nur mit Marktdatenquelle Binance) oder die Kurse deiner Handelsbörse (per Abfrage)",

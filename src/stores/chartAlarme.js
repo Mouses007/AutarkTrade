@@ -53,6 +53,8 @@ export function beschreibe(a) {
     }
     const r = { ueber: '↑ über', unter: '↓ unter', kreuzt: '↕ kreuzt', betreten: '→ Zone betreten', verlassen: '← Zone verlassen' }[b.richtung || (a.art === 'zone' ? 'betreten' : 'kreuzt')]
     if (a.art === 'preis') return `${r} ${b.preis}`
+    const profil = { poc: 'POC', vah: 'VAH', val: 'VAL' }[b.kante]
+    if (a.art === 'linie' && profil) return `${r} ${profil}${Number(b.niveau) > 0 ? ` ${Number(Number(b.niveau).toPrecision(7))}` : ''}`
     if (a.art === 'linie') return `${r} Linie${b.kante && b.kante !== 'oben' ? ` (${b.kante})` : ''}`
     return r
 }

@@ -5807,7 +5807,11 @@
         "divGross": "divergences at large dots",
         "divAlle": "all divergences"
       },
-      "momentumHier": "Momentum alert …"
+      "momentumHier": "Momentum alert …",
+      "profilLinie": "Profile line",
+      "profilHinweis": "The level is taken as the profile currently stands on the chart. If you move the range or change the row count, the alert switches off — then set it again.",
+      "profilFehlt": "The profile is not computed on this chart (no candles in the range) — adjust the chart so it is visible.",
+      "profilGeaendert": "Profile changed — set the alert again"
     },
     "quelle": {
       "titel": "Price source: Binance (live via websocket, deep history — only with market data source Binance) or your trading exchange's prices (polled)",

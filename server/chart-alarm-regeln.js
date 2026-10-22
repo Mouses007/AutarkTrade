@@ -56,12 +56,32 @@ export function ordnePunkte(typ, punkte) {
     return punkte
 }
 
+/** Linien eines Volumenprofils, auf die ein Alarm passt. */
+export const PROFIL_LINIEN = ['poc', 'vah', 'val']
+
+/**
+ * Was am Volumenprofil die Höhe von POC/VAH/VAL bestimmt: Zeitbereich und
+ * Zeilenzahl. Die Höhe selbst rechnet der BROWSER aus den Kerzen seines
+ * Panels (Zeiteinheit und Börse des Charts) und schickt sie beim Anlegen mit
+ * (`bedingung.niveau`) — der Server hätte andere Kerzen und damit ein anderes
+ * Profil. Ändert sich die Signatur, gilt die gemerkte Höhe nicht mehr: der
+ * Takt schaltet den Alarm ab und sagt warum (`profilGeaendert`).
+ * Sperren, Farbe oder Ausblenden ändern sie nicht.
+ */
+export function profilSignatur(z) {
+    const ts = (z?.punkte || []).map((q) => Number(q.t)).filter(Number.isFinite)
+    if (!ts.length) return ''
+    return `${Math.min(...ts)}|${Math.max(...ts)}|${Math.round(Number(z?.stil?.zeilen) || 24)}`
+}
+
 /**
  * Preis einer Linien-Zeichnung zur Zeit t — oder null, wenn die Linie dort
  * nicht existiert (Strecke zu Ende, Strahl hat noch nicht begonnen).
- * Beim Kanal wählt `kante` 'oben' | 'unten' | 'mitte'.
+ * Beim Kanal wählt `kante` 'oben' | 'unten' | 'mitte'; beim Volumenprofil
+ * gilt die gemerkte Höhe `bedingung.niveau` als Waagrechte ab Profilbeginn
+ * (nach rechts verlängert, ausser `stil.rechts === false` — die Vorgabe ist an).
  */
-export function linienPreis(z, t, kante = 'oben') {
+export function linienPreis(z, t, kante = 'oben', bedingung = null) {
     const pk = ordnePunkte(z?.typ, z?.punkte || []) || []
     const stil = z?.stil || {}
     const log = stil.skala === 'log'
@@ -81,6 +101,13 @@ export function linienPreis(z, t, kante = 'oben') {
             if (t < pk[0].t && !stil.links) return null
             if (t > pk[1].t && !stil.rechts) return null
             return geradePreis(pk[0], pk[1], t, log)
+        }
+        case 'volprofil': {
+            const n = Number(bedingung?.niveau)
+            if (!(n > 0) || pk.length < 2) return null
+            const von = Math.min(pk[0].t, pk[1].t), bis = Math.max(pk[0].t, pk[1].t)
+            if (t < von || (t > bis && stil.rechts === false)) return null
+            return n
         }
         case 'kanal': {
             const g = kanalBei(z, t)
@@ -154,8 +181,8 @@ export function pruefeAlarm(alarm, zeichnung, vorher, jetzt, { maxLueckeMs = MAX
     if (alarm.art === 'preis') {
         altNiveau = neuNiveau = Number(b.preis)
     } else if (alarm.art === 'linie') {
-        altNiveau = linienPreis(zeichnung, vorher.t, b.kante)
-        neuNiveau = linienPreis(zeichnung, jetzt.t, b.kante)
+        altNiveau = linienPreis(zeichnung, vorher.t, b.kante, b)
+        neuNiveau = linienPreis(zeichnung, jetzt.t, b.kante, b)
     } else {
         return { ausloesen: false, grund: 'unbekannteArt' }
     }
@@ -196,7 +223,7 @@ export function sperreAbgelaufen(alarm, jetztMs) {
 export function geometrieVorbei(alarm, z, t) {
     if (!z) return false
     if (alarm.art === 'linie') {
-        if (linienPreis(z, t, alarm.bedingung?.kante) != null) return false
+        if (linienPreis(z, t, alarm.bedingung?.kante, alarm.bedingung) != null) return false
         // vorbei = es gibt einen früheren Zeitpunkt, an dem die Linie existierte, und t liegt danach
         const pk = ordnePunkte(z.typ, z.punkte || []) || []
         const ende = Math.max(...pk.map((q) => q.t))

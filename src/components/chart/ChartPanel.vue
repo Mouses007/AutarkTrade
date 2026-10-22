@@ -25,6 +25,7 @@ import { loadSymbolMeta } from '../../utils/liveSymbols.js'
 import { IndikatorZeichner } from '../../utils/chart/indikatorZeichner.js'
 import { kurzname } from '../../utils/chart/indikatorRegister.js'
 import { ZeichenEbene } from '../../utils/chart/zeichnungen/ZeichenEbene.js'
+import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { zeichnungenVon, legeAn, aendere, loesche } from '../../stores/chartZeichnungen.js'
 import ZeichnungStil from './ZeichnungStil.vue'
 import { kiVorschau } from '../../utils/chart/kiZeichnungen.js'
@@ -601,7 +602,18 @@ function zeichneAlarmLinien() {
 watch(() => props.alarmLinien, zeichneAlarmLinien, { deep: true })
 
 /** Zeichnungen, auf die ein Linien- oder Zonenalarm passt (wie `LINIEN_TYPEN`/`ZONEN_TYPEN` in `server/chart-alarme.js`). */
-const ALARM_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'rechteck', 'kanal']
+const ALARM_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'rechteck', 'kanal', 'volprofil']
+
+/**
+ * Zeichnung für den Alarm-Dialog. Beim Volumenprofil kommen POC/VAH/VAL mit,
+ * so wie DIESES Panel sie aus seinen Kerzen rechnet — der Server hätte andere
+ * Kerzen (Zeiteinheit, Börse) und damit ein anderes Profil.
+ */
+function fuerAlarm(z) {
+    if (z?.typ !== 'volprofil' || !ebene) return z
+    const vp = ebene.profilFuer(z.punkte, stilFuer(z))
+    return vp ? { ...z, profil: { poc: vp.poc, vah: vp.vah, val: vp.val } } : z
+}
 
 function rechtsklick(e) {
     const r = huelle.value.getBoundingClientRect()
@@ -1355,7 +1367,7 @@ defineExpose({
         <ZeichnungStil v-if="ausgewaehlt" :zeichnung="ausgewaehlt" :interval="panel.interval"
             :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
-            @alarm="emit('alarmAufZeichnung', ausgewaehlt)" />
+            @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />
 
         <!-- Klick auf einen gestrichelten KI-Vorschlag: übernehmen oder verwerfen, ohne den Reiter zu öffnen. -->
         <div v-if="kiWahlInfo" class="kiWahl" data-ki-generiert="true" :style="{ left: kiWahlInfo.links + 'px', top: kiWahlInfo.oben + 'px' }"
@@ -1384,7 +1396,7 @@ defineExpose({
                 <button @click="aendere(panel.symbol, kontext.zeichnung.id, { gesperrt: !kontext.zeichnung.gesperrt }); kontext = null">
                     <Symbol :name="kontext.zeichnung.gesperrt ? 'schlossOffen' : 'schloss'" />
                     {{ t(kontext.zeichnung.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren') }}</button>
-                <button v-if="kontext.zeichnung.alarm" @click="emit('alarmAufZeichnung', kontext.zeichnung.z); kontext = null">
+                <button v-if="kontext.zeichnung.alarm" @click="emit('alarmAufZeichnung', fuerAlarm(kontext.zeichnung.z)); kontext = null">
                     <Symbol name="glocke" /> {{ t('chart.alarm.aufZeichnung') }}</button>
                 <hr />
             </template>

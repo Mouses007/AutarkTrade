@@ -7,7 +7,7 @@
  * — ein Alarm, der zu oft meldet, wird abgeschaltet, und dann meldet er auch
  * den einen Fall nicht mehr, auf den es ankam.
  */
-import { geradePreis, linienPreis, kanalBei, zoneBei, pruefeAlarm, sperreAbgelaufen, geometrieVorbei, ordnePunkte, MAX_LUECKE_MS } from './chart-alarm-regeln.js'
+import { geradePreis, linienPreis, kanalBei, zoneBei, pruefeAlarm, sperreAbgelaufen, geometrieVorbei, ordnePunkte, profilSignatur, MAX_LUECKE_MS } from './chart-alarm-regeln.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -133,6 +133,27 @@ console.log('\nGeometrie zu Ende\n')
     const re = { typ: 'rechteck', punkte: [{ t: T, p: 100 }, { t: T + 10 * M, p: 110 }], stil: {} }
     check('Rechteck zu Ende → vorbei', geometrieVorbei(zone, re, T + 11 * M))
     check('Gegenprobe: Rechteck mit „rechts" → nicht vorbei', !geometrieVorbei(zone, { ...re, stil: { rechts: true } }, T + 11 * M))
+}
+
+console.log('\nVolumenprofil (POC/VAH/VAL)\n')
+{
+    // Profil über Minute 0…60, Höhe der gewählten Linie wie im Chart gemessen: 100
+    const vp = { typ: 'volprofil', punkte: [{ t: T + 60 * M, p: 90 }, { t: T, p: 110 }], stil: { zeilen: 24 } }
+    const alarm = { art: 'linie', bedingung: { kante: 'poc', niveau: 100, richtung: 'ueber' } }
+    check('Linie gilt ab Profilbeginn (Punkte in beliebiger Reihenfolge)', linienPreis(vp, T + 5 * M, 'poc', alarm.bedingung) === 100)
+    check('vor dem Profil gibt es die Linie nicht', linienPreis(vp, T - M, 'poc', alarm.bedingung) === null)
+    check('nach rechts verlängert ist die Vorgabe (stil.rechts fehlt)', linienPreis(vp, T + 500 * M, 'poc', alarm.bedingung) === 100)
+    check('stil.rechts = false: endet am Profilende', linienPreis({ ...vp, stil: { rechts: false } }, T + 61 * M, 'poc', alarm.bedingung) === null)
+    check('ohne gemerkte Höhe keine Linie', linienPreis(vp, T + 5 * M, 'poc', { kante: 'poc' }) === null)
+    check('kreuzt die Profillinie nach oben → löst aus', pruefeAlarm(alarm, vp, m(99, 100), m(100.5, 101)).ausloesen)
+    check('bleibt darüber → löst NICHT aus', !pruefeAlarm(alarm, vp, m(101, 100), m(102, 101)).ausloesen)
+    check('verlängertes Profil ist nie „vorbei"', !geometrieVorbei(alarm, vp, T + 10000 * M))
+    const sig = profilSignatur(vp)
+    check('Signatur: Farbe, Sperre, Text ändern sie nicht',
+        profilSignatur({ ...vp, gesperrt: 1, stil: { zeilen: 24, farbe: '#fff', text: 'x' } }) === sig)
+    check('Signatur: anderer Bereich ändert sie', profilSignatur({ ...vp, punkte: [{ t: T, p: 90 }, { t: T + 61 * M, p: 110 }] }) !== sig)
+    check('Signatur: andere Zeilenzahl ändert sie', profilSignatur({ ...vp, stil: { zeilen: 40 } }) !== sig)
+    check('Signatur: Vorgabe 24 Zeilen = ausdrücklich 24', profilSignatur({ ...vp, stil: {} }) === sig)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
