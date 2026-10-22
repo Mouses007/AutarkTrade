@@ -5797,8 +5797,9 @@
         "hinweis": "Geprüft wird auf dem Server, auch bei geschlossener Seite — nur auf geschlossenen Kerzen, je Symbol, Zeiteinheit und Kerze höchstens eine Meldung. Ein Punkt ist gross, wenn die höheren Zeiteinheiten und der Geldfluss zu mindestens 60 % zustimmen (wie im Momentum Radar). Eine Kerze, die vor über 10 min schloss, wird nicht nachgemeldet.",
         "jeKerze": "Wiederholend, je Symbol, Zeiteinheit und Kerze einmal",
         "watchlistLeer": "Watchlists leer oder gelöscht — abgeschaltet",
-        "divergenz": "nur Punkte mit Divergenz (wie „DIV\" im Radar)",
-        "wocheOhneGrosse": "Auf 1w gibt es keine grossen Punkte — über der Woche stimmt keine Zeiteinheit zu. „Grosse und kleine Punkte\" wählen oder 1w abwählen."
+        "wocheOhneGrosse": "Auf 1w gibt es keine grossen Punkte — über der Woche stimmt keine Zeiteinheit zu. Eine Wahl ohne „grosse\" nehmen oder 1w abwählen.",
+        "divGross": "Divergenzen an grossen Punkten",
+        "divAlle": "allen Divergenzen"
       },
       "momentumHier": "Momentum-Alarm …"
     },

@@ -5797,8 +5797,9 @@
         "hinweis": "Checked on the server, even with the page closed — on closed candles only, at most one notification per symbol, timeframe and candle. A dot is large when the higher timeframes and money flow agree by at least 60 % (as in the Momentum Radar). A candle that closed more than 10 min ago is not reported late.",
         "jeKerze": "Repeating, once per symbol, timeframe and candle",
         "watchlistLeer": "Watchlists empty or deleted — switched off",
-        "divergenz": "only dots with a divergence (like “DIV” in the radar)",
-        "wocheOhneGrosse": "There are no large dots on 1w — no timeframe above the week can agree. Choose “large and small dots” or untick 1w."
+        "wocheOhneGrosse": "There are no large dots on 1w — no timeframe above the week can agree. Pick an option without “large” or untick 1w.",
+        "divGross": "divergences at large dots",
+        "divAlle": "all divergences"
       },
       "momentumHier": "Momentum alert …"
     },

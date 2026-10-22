@@ -53,8 +53,11 @@ const symbolZiel = v.symbol || v.chartSymbol || ''
 const ziel = ref(v.watchlistIds?.length ? 'listen' : 'symbol')
 const listenIds = ref([...(v.watchlistIds || [])])
 const zeiteinheiten = ref(v.zeiteinheiten?.length ? [...v.zeiteinheiten] : [ZEITEINHEITEN.includes(v.interval) ? v.interval : '15m'])
-const punktgroesse = ref(v.punktgroesse || 'gross')
-const divergenz = ref(!!v.bedingung?.divergenz)
+// Ein Feld „Auslösen bei" für Grösse und Divergenz: gross | alle | divGross | divAlle.
+// Gespeichert wird weiter getrennt (`punktgroesse` + `bedingung.divergenz`).
+const ausloeser = ref((v.bedingung?.divergenz ? 'div' : '') + ((v.punktgroesse || 'gross') === 'alle' ? (v.bedingung?.divergenz ? 'Alle' : 'alle') : (v.bedingung?.divergenz ? 'Gross' : 'gross')))
+const punktgroesse = computed(() => (/alle$/i.test(ausloeser.value) ? 'alle' : 'gross'))
+const divergenz = computed(() => ausloeser.value.startsWith('div'))
 /** Wen der Alarm überwacht — im Titel: das Symbol, oder bei Watchlists deren Namen statt des Coins. */
 const zielName = computed(() => {
     if (art !== 'momentum' || ziel.value !== 'listen') return `${v.symbol || symbolZiel}${v.markt === 'spot' ? ' Spot' : ''}`
@@ -117,12 +120,13 @@ async function speichern() {
             <template v-if="art === 'momentum'">
                 <label class="zeile">
                     <span>{{ t('chart.alarm.momentum.punkte') }}</span>
-                    <select v-model="punktgroesse" class="at-feld klein">
+                    <select v-model="ausloeser" class="at-feld klein">
                         <option value="gross">{{ t('chart.alarm.momentum.gross') }}</option>
                         <option value="alle">{{ t('chart.alarm.momentum.alle') }}</option>
+                        <option value="divGross">{{ t('chart.alarm.momentum.divGross') }}</option>
+                        <option value="divAlle">{{ t('chart.alarm.momentum.divAlle') }}</option>
                     </select>
                 </label>
-                <label class="haken"><input v-model="divergenz" type="checkbox" /> {{ t('chart.alarm.momentum.divergenz') }}</label>
                 <div class="gruppe">
                     <span>{{ t('chart.alarm.momentum.ueberwachen') }}</span>
                     <label class="haken"><input v-model="ziel" type="radio" value="symbol" :disabled="!symbolZiel" />

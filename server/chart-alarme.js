@@ -188,7 +188,7 @@ async function pruefeMomentumFelder(roh, knex, teilweise, aus) {
     const tfsJetzt = daten.zeiteinheiten ? JSON.parse(daten.zeiteinheiten) : alt?.zeiteinheiten || []
     const groesseJetzt = daten.punktgroesse || alt?.punktgroesse || 'gross'
     if (groesseJetzt === 'gross' && tfsJetzt.some((tf) => OHNE_GROSSE.includes(tf))) {
-        return { fehler: 'Auf 1w gibt es keine grossen Punkte (keine höhere Zeiteinheit stimmt zu) — „grosse und kleine Punkte" wählen oder 1w abwählen' }
+        return { fehler: 'Auf 1w gibt es keine grossen Punkte (keine höhere Zeiteinheit stimmt zu) — eine Wahl ohne „grosse" nehmen oder 1w abwählen' }
     }
     const probe = {
         symbol: daten.symbol ?? aus.symbol ?? alt?.symbol ?? '',
