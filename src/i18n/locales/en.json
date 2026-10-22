@@ -5796,8 +5796,11 @@
         "paare": "{n} pair (symbol × timeframe), at most 120 | {n} pairs (symbol × timeframe), at most 120",
         "hinweis": "Checked on the server, even with the page closed — on closed candles only, at most one notification per symbol, timeframe and candle. A dot is large when the higher timeframes and money flow agree by at least 60 % (as in the Momentum Radar). A candle that closed more than 10 min ago is not reported late.",
         "jeKerze": "Repeating, once per symbol, timeframe and candle",
-        "watchlistLeer": "Watchlists empty or deleted — switched off"
-      }
+        "watchlistLeer": "Watchlists empty or deleted — switched off",
+        "divergenz": "only dots with a divergence (like “DIV” in the radar)",
+        "wocheOhneGrosse": "There are no large dots on 1w — no timeframe above the week can agree. Choose “large and small dots” or untick 1w."
+      },
+      "momentumHier": "Momentum alert …"
     },
     "quelle": {
       "titel": "Price source: Binance (live via websocket, deep history — only with market data source Binance) or your trading exchange's prices (polled)",

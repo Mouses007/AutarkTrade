@@ -56,7 +56,7 @@ const props = defineProps({
     // Handy: „A" passt immer ein — Preis und Zeitachse (neueste Kerzen).
     zeitMitEinpassen: { type: Boolean, default: false },
 })
-const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alleLoeschen', 'panel', 'vollbild'])
+const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alleLoeschen', 'panel', 'vollbild'])
 const { t, te, locale } = useI18n()
 
 const huelle = ref(null)
@@ -607,7 +607,14 @@ function rechtsklick(e) {
     const r = huelle.value.getBoundingClientRect()
     const y = e.clientY - r.top
     const hoehe = chart.value?.panes()[0]?.getHeight() ?? r.height
-    if (y < 0 || y > hoehe) return
+    if (y < 0) return
+    if (y > hoehe) {
+        // Unter dem Kurs: im Fenster des Momentum Radar einen Momentum-Alarm anbieten.
+        if (!momentumFensterBei(y)) return
+        e.preventDefault()
+        kontext.value = { x: Math.max(4, Math.min(e.clientX - r.left, r.width - 190)), y: Math.max(4, Math.min(y, r.height - 60)), momentum: true }
+        return
+    }
     const preis = kerzenSerie.value?.coordinateToPrice(y)
     if (preis == null) return
     e.preventDefault()
@@ -624,6 +631,17 @@ function rechtsklick(e) {
         if (tr?.z) zeichnung = { id: tr.z.id, gesperrt: !!tr.z.gesperrt, alarm: ALARM_TYPEN.includes(tr.z.typ), z: tr.z }
     } catch { /* ohne Treffer */ }
     kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung }
+}
+
+/** Liegt y (px im Panel) im Fenster eines Momentum-Radar-Indikators? */
+function momentumFensterBei(y) {
+    const panes = chart.value?.panes() || []
+    for (const f of zeichner?.fensterTitel() || []) {
+        if (f.typ !== 'momentum') continue
+        const fenster = panes.find((_, i) => panes.slice(0, i).reduce((s, q) => s + q.getHeight() + 1, 0) === f.oben)
+        if (fenster && y >= f.oben && y < f.oben + fenster.getHeight()) return true
+    }
+    return false
 }
 
 function alarmHier() {
@@ -1356,6 +1374,11 @@ defineExpose({
 
         <div v-if="kontext" class="kontextHintergrund" @mousedown.stop="kontext = null" @contextmenu.prevent="kontext = null"></div>
         <div v-if="kontext" class="kontextMenue" :style="{ left: kontext.x + 'px', top: kontext.y + 'px' }" @mousedown.stop>
+            <template v-if="kontext.momentum">
+                <div class="kopfzeile">{{ t('chart.ind.momentum.name') }}</div>
+                <button @click="kontext = null; emit('alarmMomentum')"><Symbol name="glocke" /> {{ t('chart.alarm.momentumHier') }}</button>
+            </template>
+            <template v-else>
             <div class="kopfzeile">{{ kerzenSerie?.priceFormatter().format(kontext.preis) }}</div>
             <template v-if="kontext.zeichnung">
                 <button @click="aendere(panel.symbol, kontext.zeichnung.id, { gesperrt: !kontext.zeichnung.gesperrt }); kontext = null">
@@ -1371,6 +1394,7 @@ defineExpose({
             <hr />
             <!-- Fragt nach (Chart.vue) und lässt gesperrte Zeichnungen stehen — wie der Mülleimer in der Werkzeugleiste. -->
             <button class="gefahr" @click="kontext = null; emit('alleLoeschen')"><Symbol name="muell" /> {{ t('chart.wzKurz.alleZeichnungenLoeschen') }}</button>
+            </template>
         </div>
 
         <div v-if="laedt" class="hinweis"><Kreisel /></div>

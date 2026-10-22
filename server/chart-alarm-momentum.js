@@ -4,7 +4,8 @@
  *
  * Ein Momentum-Alarm meldet die Signalpunkte des Momentum Radar
  * (`momentum-radar.js`, `momentumPunkte`): „nur grosse Punkte" oder „grosse
- * und kleine", optional nur eine Richtung. Er schaut auf ein Symbol ODER auf
+ * und kleine", optional nur eine Richtung und optional nur Punkte, an denen
+ * eine Divergenz endet (`bedingung.divergenz`). Er schaut auf ein Symbol ODER auf
  * eine oder mehrere Watchlists, und das in mehreren Zeiteinheiten zugleich —
  * jede Kombination Symbol × Zeiteinheit ist ein „Paar".
  *
@@ -29,10 +30,16 @@
  * dem Schluss — die Börse braucht ein paar Sekunden, bis die geschlossene
  * Kerze endgültig ist.
  */
-import { momentumPunkte, benoetigteZeitebenen, CHART_ZEITEBENEN, ZEITEBENEN } from './momentum-radar.js'
+import { momentumPunkte, benoetigteZeitebenen, ZEITEBENEN } from './momentum-radar.js'
 
-/** Wählbare Zeiteinheiten — dieselben wie die Chart-Zeitebenen der Kachel. */
-export const MOMENTUM_ZEITEBENEN = CHART_ZEITEBENEN
+/**
+ * Wählbare Zeiteinheiten: die Chart-Zeitebenen der Kachel plus Tag und Woche.
+ * Auf 1w gibt es keine höhere Zeiteinheit, also nie einen GROSSEN Punkt
+ * (`punkteAus`: ohne zählende Zeitebene ist kein Punkt stark) — „nur grosse"
+ * auf 1w lehnt die Eingabeprüfung deshalb ab (`OHNE_GROSSE`).
+ */
+export const MOMENTUM_ZEITEBENEN = ['5m', '15m', '1h', '4h', '1d', '1w']
+export const OHNE_GROSSE = ['1w']
 export const TF_MS = Object.fromEntries(ZEITEBENEN.map((z) => [z.tf, z.ms]))
 export const PUNKTGROESSEN = ['gross', 'alle']
 export const MOMENTUM_RICHTUNGEN = ['beide', 'long', 'short']
@@ -59,9 +66,13 @@ export const MAX_PAARE = 120
 export const MAX_SYMBOLE = 60
 export const MAX_WATCHLISTS = 10
 
-/** Beginn der laufenden Kerze (5m…4h rasten auf UTC-Epoch). */
+/** Montag, 5. Jan. 1970 00:00 UTC — Wochenkerzen beginnen montags, der Epoch war ein Donnerstag. */
+const MONTAG = 345_600_000
+
+/** Beginn der laufenden Kerze (5m…1d rasten auf UTC-Epoch, 1w auf Montag 00:00 UTC). */
 export function laufendeKerze(tf, jetzt) {
     const ms = TF_MS[tf]
+    if (tf === '1w') return Math.floor((jetzt - MONTAG) / ms) * ms + MONTAG
     return Math.floor(jetzt / ms) * ms
 }
 
@@ -82,11 +93,15 @@ export function nurGeschlossene(kerzen, tf, jetzt) {
     return (kerzen || []).filter((k) => k.t + ms <= jetzt)
 }
 
-/** Passt der Punkt zur Bedingung? Bei „nur grosse" zählt ein kleiner Punkt nicht. */
+/**
+ * Passt der Punkt zur Bedingung? Bei „nur grosse" zählt ein kleiner Punkt nicht,
+ * mit „nur mit Divergenz" einer ohne Divergenz nicht (beides kombinierbar).
+ */
 export function passtPunkt(bedingung, punkt) {
     if (!punkt) return false
     const groesse = bedingung?.punktgroesse === 'alle' ? 'alle' : 'gross'
     if (groesse === 'gross' && !punkt.stark) return false
+    if (bedingung?.divergenz && !punkt.divergenz) return false
     const r = bedingung?.richtung || 'beide'
     return r === 'beide' || r === punkt.seite
 }
@@ -159,7 +174,7 @@ export function pruefeMomentum({ bedingung, tf, kerzen, jetzt, gemeldetBis = 0, 
     const punkte = momentumPunkte({ kerzen: geschlossen, chartTf: tf })
     const p = punkte.length && punkte[punkte.length - 1].t === letzte.t ? punkte[punkte.length - 1] : null
     if (!p) return { ausloesen: false, grund: 'keinPunkt', kerzeT: letzte.t }
-    const punkt = { seite: p.seite, stark: p.stark, w: Number.isFinite(p.w) ? Math.round(p.w * 10) / 10 : null }
+    const punkt = { seite: p.seite, stark: p.stark, divergenz: !!p.divergenz, w: Number.isFinite(p.w) ? Math.round(p.w * 10) / 10 : null }
     if (!passtPunkt(bedingung, punkt)) return { ausloesen: false, grund: 'passtNicht', kerzeT: letzte.t, punkt }
     return { ausloesen: true, kerzeT: letzte.t, punkt, preis: letzte.c }
 }
@@ -178,12 +193,13 @@ export function neuerStand(stand, treffer, paare) {
 }
 
 const SEITE = { long: 'Long', short: 'Short' }
+const art = (p) => `${p.stark ? 'grosser' : 'kleiner'} ${SEITE[p.seite]}-Punkt${p.divergenz ? ' mit Divergenz' : ''}`
 
 /** Text einer (gebündelten) Auslösung. */
 export function momentumText(alarm, treffer, zahl = String) {
-    const zeile = (tr) => `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf}: ${tr.punkt.stark ? 'grosser' : 'kleiner'} ${SEITE[tr.punkt.seite]}-Punkt — ${zahl(tr.preis)}`
+    const zeile = (tr) => `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf}: ${art(tr.punkt)} — ${zahl(tr.preis)}`
     const titel = treffer.length === 1
-        ? `Momentum ${treffer[0].symbol} ${treffer[0].tf}: ${treffer[0].punkt.stark ? 'grosser' : 'kleiner'} ${SEITE[treffer[0].punkt.seite]}-Punkt`
+        ? `Momentum ${treffer[0].symbol} ${treffer[0].tf}: ${art(treffer[0].punkt)}`
         : `Momentum: ${treffer.length} Signale`
     const text = `${treffer.map(zeile).join('\n')}${alarm.notiz ? `\n${alarm.notiz}` : ''}`
     return { titel, text }

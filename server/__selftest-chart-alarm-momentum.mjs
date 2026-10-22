@@ -77,6 +77,35 @@ console.log('\nPunktgrösse und Richtung\n')
     check('passtPunkt: kein Punkt → nein', !passtPunkt(ALLE, null))
 }
 
+console.log('\nDivergenz\n')
+{
+    // Je einen Punkt mit und ohne Divergenz suchen (beliebige Grösse).
+    let mit = null
+    let ohne = null
+    for (let seed = 11; seed < 400 && !(mit && ohne); seed++) {
+        const satzD = satz(seed)
+        const pk = momentumPunkte({ kerzen: satzD, chartTf: '15m' }).filter((p) => p.i > 400)
+        if (!mit) { const p = pk.find((x) => x.divergenz); if (p) mit = { p, k: satzD } }
+        if (!ohne) { const p = pk.find((x) => !x.divergenz); if (p) ohne = { p, k: satzD } }
+    }
+    check('Testdaten: Punkt mit und ohne Divergenz gefunden', mit && ohne)
+    const fall = ({ p, k }, bedingung) => pruefeMomentum({
+        bedingung, tf: '15m', kerzen: { ...k, '15m': k['15m'].slice(0, p.i + 1) }, jetzt: k['15m'][p.i].t + TF_MS['15m'] + VERZUG_MS,
+    })
+    const d = fall(mit, { ...ALLE, divergenz: true })
+    check('Punkt mit Divergenz bei „nur mit Divergenz" → löst aus', d.ausloesen && d.punkt.divergenz, JSON.stringify(d))
+    const o = fall(ohne, { ...ALLE, divergenz: true })
+    check('Punkt OHNE Divergenz bei „nur mit Divergenz" → meldet NICHT', !o.ausloesen && o.grund === 'passtNicht', JSON.stringify(o))
+    check('…ohne den Haken meldet derselbe Punkt', fall(ohne, ALLE).ausloesen)
+    check('Divergenz + „nur grosse": kleiner Divergenzpunkt meldet NICHT',
+        mit.p.stark || !fall(mit, { ...GROSS, divergenz: true }).ausloesen)
+    const v = werteAus({ kerzen: { ...mit.k, '5m': [], '1w': [] }, chartTf: '15m', punkte: 700 }).verlauf.divergenzen.map((x) => x.i2)
+    const pkt = momentumPunkte({ kerzen: mit.k, chartTf: '15m' }).filter((x) => x.divergenz).map((x) => x.i)
+    check('Divergenz-Punkte == Divergenzen der Kachel', JSON.stringify([...new Set(v)]) === JSON.stringify(pkt), `${v} / ${pkt}`)
+    check('Meldungstext nennt die Divergenz',
+        momentumText({}, [{ symbol: 'X', markt: 'futures', tf: '1h', punkt: { seite: 'short', stark: true, divergenz: true }, preis: 1 }]).titel.endsWith('Short-Punkt mit Divergenz'))
+}
+
 console.log('\nNur geschlossene Kerzen\n')
 {
     // Uhr MITTEN in der Kerze des Punkts: sie läuft noch; jüngste geschlossene ist die davor.
@@ -118,7 +147,7 @@ console.log('\nVerspätung, veraltete Reihe, Anlage\n')
     const vor = pruefeMomentum({ bedingung: GROSS, tf: '15m', kerzen: bis(gross.i), jetzt: nach(gross), abMs: nach(gross) - 1000 })
     check('Kerze schloss vor dem Anlegen → meldet NICHT', !vor.ausloesen && vor.grund === 'vorAnlage')
     check('zu wenig Kerzen → kein Urteil', pruefeMomentum({ bedingung: GROSS, tf: '15m', kerzen: { '15m': kerzen['15m'].slice(0, 10) }, jetzt: nach(gross) }).grund === 'zuWenigKerzen')
-    check('unbekannte Zeiteinheit → kein Urteil', pruefeMomentum({ bedingung: GROSS, tf: '1d', kerzen, jetzt: nach(gross) }).grund === 'zeiteinheit')
+    check('unbekannte Zeiteinheit → kein Urteil', pruefeMomentum({ bedingung: GROSS, tf: '2h', kerzen, jetzt: nach(gross) }).grund === 'zeiteinheit')
 }
 
 console.log('\nFälligkeit\n')
@@ -133,13 +162,36 @@ console.log('\nFälligkeit\n')
         !faellig('4h', grenze + 3600000, letzteGeschlossene('4h', grenze + 3600000)))
 }
 
+console.log('\nTag und Woche\n')
+{
+    const mi = Date.UTC(2026, 9, 21, 15, 0)            // Mittwoch, 21.10.2026
+    check('Wochenkerze beginnt Montag 00:00 UTC', laufendeKerze('1w', mi) === Date.UTC(2026, 9, 19))
+    check('Montag kurz nach Mitternacht: neue Woche, die alte ist geschlossen',
+        laufendeKerze('1w', Date.UTC(2026, 9, 26, 0, 1)) === Date.UTC(2026, 9, 26) && letzteGeschlossene('1w', Date.UTC(2026, 9, 26, 0, 1)) === Date.UTC(2026, 9, 19))
+    check('Sonntagabend: die Woche läuft noch', laufendeKerze('1w', Date.UTC(2026, 9, 25, 23, 59)) === Date.UTC(2026, 9, 19))
+    check('1d ist nach dem Tagesschluss fällig, danach den Tag über nicht mehr',
+        faellig('1d', Date.UTC(2026, 9, 22, 0, 1), 0) && !faellig('1d', Date.UTC(2026, 9, 22, 15), letzteGeschlossene('1d', Date.UTC(2026, 9, 22, 0, 1))))
+    check('1d zählt 1w für die Stärke, 1w hat keine höhere Zeiteinheit',
+        benoetigteZeitebenen('1d').join() === '1d,1w' && benoetigteZeitebenen('1w').join() === '1w')
+    // Wochenkerzen ab einem Montag, Tageskerzen dazu — 1w hat nie grosse Punkte.
+    const mo = Date.UTC(2020, 0, 6)
+    const woche = reihe(77, '1w', 300).map((k, i) => ({ ...k, t: mo + i * TF_MS['1w'] }))
+    const pw = momentumPunkte({ kerzen: { '1w': woche }, chartTf: '1w' })
+    check('1w: Punkte gibt es, grosse nie', pw.length > 0 && pw.every((p) => !p.stark), `${pw.length} Punkte`)
+    const p1 = pw[pw.length - 1]
+    const jetztW = woche[p1.i].t + TF_MS['1w'] + VERZUG_MS
+    const w = pruefeMomentum({ bedingung: ALLE, tf: '1w', kerzen: { '1w': woche.slice(0, p1.i + 1) }, jetzt: jetztW })
+    check('1w mit „grosse und kleine" meldet den Wochenpunkt', w.ausloesen && w.kerzeT === woche[p1.i].t, JSON.stringify(w))
+    check('1w mit „nur grosse" meldet nie', !pruefeMomentum({ bedingung: GROSS, tf: '1w', kerzen: { '1w': woche.slice(0, p1.i + 1) }, jetzt: jetztW }).ausloesen)
+}
+
 console.log('\nPaare aus Symbol und Watchlists\n')
 {
     const wl = new Map([[1, [{ symbol: 'BTCUSDT', markt: 'futures' }, { symbol: 'ethusdt', markt: 'futures' }]], [2, [{ symbol: 'BTCUSDT', markt: 'futures' }, { symbol: 'SOLUSDT', markt: 'spot' }, { symbol: 'kaputt!' }]]])
-    const p = alarmPaare({ watchlistIds: [1, 2], zeiteinheiten: ['15m', '1h', '1d'] }, wl)
+    const p = alarmPaare({ watchlistIds: [1, 2], zeiteinheiten: ['15m', '1h', '2h'] }, wl)
     check('zwei Listen × zwei gültige Zeiteinheiten, Doppelte einmal', p.length === 6, JSON.stringify(p))
     check('Spot bleibt Spot, Kleinschreibung wird gross', p.some((x) => x.symbol === 'SOLUSDT' && x.markt === 'spot') && p.some((x) => x.symbol === 'ETHUSDT'))
-    check('unbekannte Zeiteinheit (1d) fällt weg', !p.some((x) => x.tf === '1d'))
+    check('unbekannte Zeiteinheit (2h) fällt weg', !p.some((x) => x.tf === '2h'))
     check('gelöschte Watchlist → keine Paare', alarmPaare({ watchlistIds: [9], zeiteinheiten: ['15m'] }, wl).length === 0)
     check('ohne Watchlist: das Symbol des Alarms', alarmPaare({ symbol: 'XRPUSDT', markt: 'futures', zeiteinheiten: ['5m', '4h'] }, wl).length === 2)
     const r = reihenFuer({ symbol: 'BTCUSDT', markt: 'futures', tf: '15m' }).map((x) => x.tf).sort()

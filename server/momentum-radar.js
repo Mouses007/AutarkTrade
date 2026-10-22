@@ -351,6 +351,35 @@ function punkteAus(je, chartTf, mf) {
     return { punkte, zaehlende, noetig }
 }
 
+/**
+ * Divergenzen (Vorlage): an jedem Punkt das Preis-Extrem der letzten DIV_LOOK
+ * Kerzen gegen den vorigen Punkt derselben Seite — höheres Hoch bei tieferer
+ * Welle (Short), tieferes Tief bei höherer Welle (Long), höchstens DIV_MAX
+ * Kerzen auseinander. Eine Divergenz gehört zum SPÄTEREN Punkt (`i2`).
+ */
+export function divergenzenAus(chart, w1, punkte) {
+    const divergenzen = []
+    let vorBaer = null
+    let vorBulle = null
+    for (const { i, seite } of punkte) {
+        const fenster = chart.slice(Math.max(0, i - DIV_LOOK + 1), i + 1)
+        if (seite === 'short') {
+            const px = Math.max(...fenster.map(k => k.h))
+            if (vorBaer && i - vorBaer.i <= DIV_MAX && px > vorBaer.px && w1[i] < vorBaer.w) {
+                divergenzen.push({ i1: vorBaer.i, w1: vorBaer.w, i2: i, w2: w1[i], seite })
+            }
+            vorBaer = { i, w: w1[i], px }
+        } else {
+            const px = Math.min(...fenster.map(k => k.l))
+            if (vorBulle && i - vorBulle.i <= DIV_MAX && px < vorBulle.px && w1[i] > vorBulle.w) {
+                divergenzen.push({ i1: vorBulle.i, w1: vorBulle.w, i2: i, w2: w1[i], seite })
+            }
+            vorBulle = { i, w: w1[i], px }
+        }
+    }
+    return divergenzen
+}
+
 /** Zeitebenen, deren Kerzen `momentumPunkte` für eine Chart-Zeitebene braucht (sie selbst zuerst). */
 export function benoetigteZeitebenen(chartTf) {
     return [chartTf, ...ZEITEBENEN.map(z => z.tf).filter(tf => zaehltFuerStaerke(tf, chartTf))]
@@ -360,13 +389,17 @@ export function benoetigteZeitebenen(chartTf) {
  * Nur die Signalpunkte — für die Chart-Alarme (`chart-alarm-momentum.js`).
  * Rechnet mit denselben Funktionen wie `werteAus`, der Selbsttest vergleicht beide.
  * @param {object} o.kerzen  { [tf]: [...] } — mindestens `benoetigteZeitebenen(chartTf)`, GESCHLOSSEN
- * @returns {Array<{ i, t, seite: 'long'|'short', stark: boolean, w }>}
+ * `divergenz` = an diesem Punkt endet eine Divergenz (`divergenzenAus`, wie in der Kachel).
+ * @returns {Array<{ i, t, seite: 'long'|'short', stark: boolean, w, divergenz: boolean }>}
  */
 export function momentumPunkte({ kerzen, chartTf }) {
     if (!TF_MS[chartTf]) throw new Error(`Unbekannte Zeitebene ${chartTf}`)
     const je = {}
     for (const tf of benoetigteZeitebenen(chartTf)) je[tf] = zeitebene(kerzen[tf], TF_MS[tf])
-    return punkteAus(je, chartTf, geldfluss(je[chartTf].kerzen)).punkte
+    const chart = je[chartTf].kerzen
+    const { punkte } = punkteAus(je, chartTf, geldfluss(chart))
+    const enden = new Set(divergenzenAus(chart, je[chartTf].w1, punkte).map(d => d.i2))
+    return punkte.map(p => ({ ...p, divergenz: enden.has(p.i) }))
 }
 
 /**
@@ -432,26 +465,7 @@ export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punk
             rauten.push({ i, seite: 'long' })
         }
     }
-    // Divergenz: Preis-Extrem über die letzten DIV_LOOK Kerzen gegen den vorigen Punkt derselben Seite
-    const divergenzen = []
-    let vorBaer = null
-    let vorBulle = null
-    for (const { i, seite } of punktListe) {
-        const fenster = chart.slice(Math.max(0, i - DIV_LOOK + 1), i + 1)
-        if (seite === 'short') {
-            const px = Math.max(...fenster.map(k => k.h))
-            if (vorBaer && i - vorBaer.i <= DIV_MAX && px > vorBaer.px && w1[i] < vorBaer.w) {
-                divergenzen.push({ i1: vorBaer.i, w1: vorBaer.w, i2: i, w2: w1[i], seite })
-            }
-            vorBaer = { i, w: w1[i], px }
-        } else {
-            const px = Math.min(...fenster.map(k => k.l))
-            if (vorBulle && i - vorBulle.i <= DIV_MAX && px < vorBulle.px && w1[i] > vorBulle.w) {
-                divergenzen.push({ i1: vorBulle.i, w1: vorBulle.w, i2: i, w2: w1[i], seite })
-            }
-            vorBulle = { i, w: w1[i], px }
-        }
-    }
+    const divergenzen = divergenzenAus(chart, w1, punktListe)
     const letzterPunkt = punktListe.length ? punktListe[punktListe.length - 1] : null
 
     // Schienen: Signale der Zeitebenen ECHT über dem Chart, an der ersten

@@ -40,7 +40,7 @@ export async function ladeAlarme() {
 
 /** Ein Treffer eines Momentum-Alarms: „BTCUSDT 15m ● Long" (● gross, • klein). */
 export function trefferText(tr) {
-    return `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf} ${tr.stark ? '●' : '•'} ${tr.seite === 'long' ? 'Long' : 'Short'}`
+    return `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf} ${tr.stark ? '●' : '•'} ${tr.seite === 'long' ? 'Long' : 'Short'}${tr.divergenz ? ' Div' : ''}`
 }
 
 /** Kurzbeschreibung für Liste, Banner und Preislinie. */
@@ -49,7 +49,7 @@ export function beschreibe(a) {
     if (a.art === 'momentum') {
         const groesse = a.punktgroesse === 'alle' ? '●• grosse + kleine' : '● grosse'
         const r = b.richtung === 'long' ? ' Long' : b.richtung === 'short' ? ' Short' : ''
-        return `Momentum ${groesse}${r} · ${(a.zeiteinheiten || []).join(', ')}`
+        return `Momentum ${groesse}${b.divergenz ? ' mit Divergenz' : ''}${r} · ${(a.zeiteinheiten || []).join(', ')}`
     }
     const r = { ueber: '↑ über', unter: '↓ unter', kreuzt: '↕ kreuzt', betreten: '→ Zone betreten', verlassen: '← Zone verlassen' }[b.richtung || (a.art === 'zone' ? 'betreten' : 'kreuzt')]
     if (a.art === 'preis') return `${r} ${b.preis}`

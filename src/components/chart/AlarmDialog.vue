@@ -48,12 +48,19 @@ const speichert = ref(false)
 const richtungen = computed(() => (art === 'zone' ? ['betreten', 'verlassen'] : art === 'momentum' ? ['beide', 'long', 'short'] : ['kreuzt', 'ueber', 'unter']))
 
 // ── Momentum ──
-const ZEITEINHEITEN = ['5m', '15m', '1h', '4h']
+const ZEITEINHEITEN = ['5m', '15m', '1h', '4h', '1d', '1w']
 const symbolZiel = v.symbol || v.chartSymbol || ''
 const ziel = ref(v.watchlistIds?.length ? 'listen' : 'symbol')
 const listenIds = ref([...(v.watchlistIds || [])])
 const zeiteinheiten = ref(v.zeiteinheiten?.length ? [...v.zeiteinheiten] : [ZEITEINHEITEN.includes(v.interval) ? v.interval : '15m'])
 const punktgroesse = ref(v.punktgroesse || 'gross')
+const divergenz = ref(!!v.bedingung?.divergenz)
+/** Wen der Alarm überwacht — im Titel: das Symbol, oder bei Watchlists deren Namen statt des Coins. */
+const zielName = computed(() => {
+    if (art !== 'momentum' || ziel.value !== 'listen') return `${v.symbol || symbolZiel}${v.markt === 'spot' ? ' Spot' : ''}`
+    const namen = props.watchlists.filter((w) => listenIds.value.includes(w.id)).map((w) => w.name)
+    return namen.length ? namen.join(', ') : t('chart.alarm.momentum.listen')
+})
 /** Symbole × Zeiteinheiten — wie der Server zählt (Doppelte in zwei Listen einmal). */
 const paare = computed(() => {
     if (ziel.value === 'symbol') return symbolZiel ? zeiteinheiten.value.length : 0
@@ -61,13 +68,16 @@ const paare = computed(() => {
     for (const w of props.watchlists) if (listenIds.value.includes(w.id)) for (const x of w.symbole || []) s.add(`${x.symbol}|${x.markt}`)
     return s.size * zeiteinheiten.value.length
 })
-const momentumUnvollstaendig = computed(() => art === 'momentum' && (!zeiteinheiten.value.length || !paare.value))
+// Auf 1w gibt es keine grossen Punkte (keine höhere Zeiteinheit) — der Server lehnt das ab, hier schon sagen.
+const wocheOhneGrosse = computed(() => art === 'momentum' && punktgroesse.value === 'gross' && zeiteinheiten.value.includes('1w'))
+const momentumUnvollstaendig = computed(() => art === 'momentum' && (!zeiteinheiten.value.length || !paare.value || wocheOhneGrosse.value))
 
 async function speichern() {
     fehler.value = ''
     speichert.value = true
     const bedingung = { richtung: richtung.value, schwere: schwere.value }
     if (art === 'preis') bedingung.preis = Number(preis.value)
+    if (art === 'momentum' && divergenz.value) bedingung.divergenz = true
     if (zeichnungTyp === 'kanal' && art === 'linie') bedingung.kante = kante.value
     if (!einmalig.value && art !== 'momentum') bedingung.sperreMin = Number(sperreMin.value) || 0
     const gemeinsam = { bedingung, einmalig: einmalig.value, kanaele: { push: push.value, mail: mail.value }, notiz: notiz.value }
@@ -100,7 +110,7 @@ async function speichern() {
     <div class="dialogHintergrund" @click.self="emit('schliesse')">
         <div class="dialog" role="dialog" aria-modal="true" :aria-label="t(istNeu ? 'chart.alarm.neu' : 'chart.alarm.aendern')">
             <div class="kopf">
-                <b class="titel"><Symbol name="glocke" /> {{ t(istNeu ? 'chart.alarm.neu' : 'chart.alarm.aendern') }} — {{ v.symbol }}{{ v.markt === 'spot' ? ' Spot' : '' }}</b>
+                <b class="titel"><Symbol name="glocke" /> {{ t(istNeu ? 'chart.alarm.neu' : 'chart.alarm.aendern') }} — {{ zielName }}</b>
                 <button type="button" class="zu" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
             </div>
             <div class="art">{{ t('chart.alarm.art.' + art) }}<template v-if="zeichnungTyp"> · {{ t('chart.wz.' + zeichnungTyp) }}</template></div>
@@ -112,6 +122,7 @@ async function speichern() {
                         <option value="alle">{{ t('chart.alarm.momentum.alle') }}</option>
                     </select>
                 </label>
+                <label class="haken"><input v-model="divergenz" type="checkbox" /> {{ t('chart.alarm.momentum.divergenz') }}</label>
                 <div class="gruppe">
                     <span>{{ t('chart.alarm.momentum.ueberwachen') }}</span>
                     <label class="haken"><input v-model="ziel" type="radio" value="symbol" :disabled="!symbolZiel" />
@@ -125,10 +136,11 @@ async function speichern() {
                 </div>
                 <div class="gruppe">
                     <span>{{ t('chart.alarm.momentum.zeiteinheiten') }}</span>
-                    <div class="haken">
+                    <div class="haken tfs">
                         <label v-for="z in ZEITEINHEITEN" :key="z"><input v-model="zeiteinheiten" type="checkbox" :value="z" /> {{ z }}</label>
                     </div>
                     <small class="leise">{{ t('chart.alarm.momentum.paare', { n: paare }, paare) }}</small>
+                    <small v-if="wocheOhneGrosse" class="fehler">{{ t('chart.alarm.momentum.wocheOhneGrosse') }}</small>
                 </div>
             </template>
             <label class="zeile">
@@ -211,6 +223,10 @@ async function speichern() {
 
 .titel {
     display: inline-flex;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     align-items: center;
     gap: var(--abstand-1);
 }
@@ -233,7 +249,7 @@ async function speichern() {
 
 .zeile {
     display: grid;
-    grid-template-columns: 1fr 170px;
+    grid-template-columns: 1fr 210px;
     align-items: center;
     gap: 8px;
 }
@@ -254,6 +270,11 @@ async function speichern() {
     display: flex;
     flex-direction: column;
     gap: 4px;
+}
+
+.tfs {
+    flex-wrap: wrap;
+    gap: 6px 12px;
 }
 
 .liste {

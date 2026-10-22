@@ -43,7 +43,7 @@ import * as marktdaten from './marktdaten/index.js'
 import { pruefeAlarm, sperreAbgelaufen, geometrieVorbei, MIN_SPERRE_MIN } from './chart-alarm-regeln.js'
 import {
     pruefeMomentum, faellig, alarmPaare, reihenFuer, neuerStand, momentumText, paarSchluessel, letzteGeschlossene,
-    MOMENTUM_ZEITEBENEN, MOMENTUM_RICHTUNGEN, PUNKTGROESSEN, KERZEN_JE_ABRUF, MAX_PAARE, MAX_SYMBOLE, MAX_WATCHLISTS,
+    MOMENTUM_ZEITEBENEN, OHNE_GROSSE, MOMENTUM_RICHTUNGEN, PUNKTGROESSEN, KERZEN_JE_ABRUF, MAX_PAARE, MAX_SYMBOLE, MAX_WATCHLISTS,
 } from './chart-alarm-momentum.js'
 import { getClosedCandles } from './market-data.js'
 import { seitenGewicht } from './marktdaten/binance.js'
@@ -120,6 +120,7 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
         }
         if (b.kante !== undefined) bed.kante = ['oben', 'unten', 'mitte'].includes(b.kante) ? b.kante : 'oben'
         if (b.sperreMin !== undefined) bed.sperreMin = Math.max(MIN_SPERRE_MIN, Math.min(10080, Number(b.sperreMin) || 0))
+        if (a === 'momentum' && b.divergenz) bed.divergenz = true
         if (b.schwere !== undefined) bed.schwere = ['info', 'warnung', 'kritisch'].includes(b.schwere) ? b.schwere : 'warnung'
         aus.bedingung = JSON.stringify(bed)
     }
@@ -184,6 +185,11 @@ async function pruefeMomentumFelder(roh, knex, teilweise, aus) {
     }
     // Paare zählen — mit den Watchlists, wie sie jetzt sind
     const alt = roh.id ? alarmZeile(await knex('chart_alarme').where('id', roh.id).first()) : null
+    const tfsJetzt = daten.zeiteinheiten ? JSON.parse(daten.zeiteinheiten) : alt?.zeiteinheiten || []
+    const groesseJetzt = daten.punktgroesse || alt?.punktgroesse || 'gross'
+    if (groesseJetzt === 'gross' && tfsJetzt.some((tf) => OHNE_GROSSE.includes(tf))) {
+        return { fehler: 'Auf 1w gibt es keine grossen Punkte (keine höhere Zeiteinheit stimmt zu) — „grosse und kleine Punkte" wählen oder 1w abwählen' }
+    }
     const probe = {
         symbol: daten.symbol ?? aus.symbol ?? alt?.symbol ?? '',
         markt: aus.markt ?? alt?.markt ?? 'futures',
@@ -518,7 +524,7 @@ export async function momentumTakt() {
             }, t)
             const eintrag = {
                 t, p: treffer[0].preis, titel, text, zustellung, zugestellt: zugestellt(zustellung),
-                treffer: treffer.slice(0, 20).map(({ symbol, markt, tf, punkt, preis, kerzeT }) => ({ symbol, markt, tf, seite: punkt.seite, stark: punkt.stark, preis, kerzeT })),
+                treffer: treffer.slice(0, 20).map(({ symbol, markt, tf, punkt, preis, kerzeT }) => ({ symbol, markt, tf, seite: punkt.seite, stark: punkt.stark, divergenz: punkt.divergenz, preis, kerzeT })),
             }
             await knex('chart_alarme').where('id', a.id).update({ verlauf: JSON.stringify([...a.verlauf, eintrag].slice(-MAX_VERLAUF)) })
         }

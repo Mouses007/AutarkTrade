@@ -1052,6 +1052,7 @@ watch(sichtbareAnzahl, async () => {
                         :zeichnungen-versteckt="!!daten.zeichnen?.versteckt" @werkzeug-fertig="werkzeug = null"
                         :alarm-linien="alarmLinienFuer(p)" @alarm-bei-preis="(x) => { fokus(i); alarmBeiPreis(x) }"
                         @alarm-auf-zeichnung="(z) => { fokus(i); alarmAufZeichnung(z) }"
+                        @alarm-momentum="() => { fokus(i); alarmMomentum() }"
                         @alle-loeschen="() => { fokus(i); alleLoeschen() }"
                         @panel="(patch) => Object.assign(daten.panels[i], patch)" />
                 </div>

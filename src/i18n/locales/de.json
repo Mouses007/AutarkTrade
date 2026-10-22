@@ -5796,8 +5796,11 @@
         "paare": "{n} Paar (Symbol × Zeiteinheit), höchstens 120 | {n} Paare (Symbol × Zeiteinheit), höchstens 120",
         "hinweis": "Geprüft wird auf dem Server, auch bei geschlossener Seite — nur auf geschlossenen Kerzen, je Symbol, Zeiteinheit und Kerze höchstens eine Meldung. Ein Punkt ist gross, wenn die höheren Zeiteinheiten und der Geldfluss zu mindestens 60 % zustimmen (wie im Momentum Radar). Eine Kerze, die vor über 10 min schloss, wird nicht nachgemeldet.",
         "jeKerze": "Wiederholend, je Symbol, Zeiteinheit und Kerze einmal",
-        "watchlistLeer": "Watchlists leer oder gelöscht — abgeschaltet"
-      }
+        "watchlistLeer": "Watchlists leer oder gelöscht — abgeschaltet",
+        "divergenz": "nur Punkte mit Divergenz (wie „DIV\" im Radar)",
+        "wocheOhneGrosse": "Auf 1w gibt es keine grossen Punkte — über der Woche stimmt keine Zeiteinheit zu. „Grosse und kleine Punkte\" wählen oder 1w abwählen."
+      },
+      "momentumHier": "Momentum-Alarm …"
     },
     "quelle": {
       "titel": "Kursquelle: Binance (live per Websocket, tiefe Historie — nur mit Marktdatenquelle Binance) oder die Kurse deiner Handelsbörse (per Abfrage)",
