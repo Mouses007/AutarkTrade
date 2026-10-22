@@ -40,6 +40,7 @@ import { passePanelAn, vorgabeBoerse, waehlbareBoersen, INTERVALLE, INTERVALLE_S
 import { ladeMarktdaten } from '../utils/marktdaten.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
 import { incomingPollingActive } from '../stores/journal/offenePositionen.js'
+import { fuehreZusammen } from '../utils/chart/layoutZusammenfuehren.js'
 
 const { t } = useI18n()
 const telefon = useIstTelefon()
@@ -191,7 +192,6 @@ let ignoriereNaechsteAenderung = false
 // Stand des Layouts, wie er zuletzt gespeichert oder geladen wurde — gespeichert wird nur,
 // was davon abweicht (vorher speicherte jeder Seitenabbau, auch ein unberührter Hintergrund-Tab).
 let gespeichertText = ''
-const konfliktHinweis = ref('')
 /** Gespeicherte Binance-Panels wurden auf die Marktdatenquelle umgestellt (S12). */
 const quellenHinweis = ref('')
 const standVon = (id) => layouts.value.find((l) => l.id === id)?.geaendertAm
@@ -505,20 +505,33 @@ async function speichereJetzt() {
     if (!id) return
     const text = JSON.stringify(daten.value)
     if (text === gespeichertText) return
+    const basisText = gespeichertText
     try {
         const neu = await api.layoutSpeichern(id, { daten: JSON.parse(text), stand: standVon(id) })
         if (layoutId.value === id) gespeichertText = text
         const i = layouts.value.findIndex((l) => l.id === neu.id)
         if (i >= 0) layouts.value[i] = { ...layouts.value[i], geaendertAm: neu.geaendertAm }
     } catch (e) {
-        // Ein anderes Fenster hat dieses Layout inzwischen gespeichert: dessen Stand
-        // übernehmen und es sagen — still überschreiben verlor dort die Arbeit.
+        // Ein anderes Fenster hat dieses Layout inzwischen gespeichert: beide Änderungen
+        // zusammenführen und erneut speichern. Bis 22.10.2026 gewann hier still der fremde
+        // Stand — ein VWAP-Vector-Schalter am Handy war weg, sobald der PC zuvor speicherte.
         const aktuell = e.response?.status === 409 ? e.response.data?.aktuell : null
-        if (aktuell && layoutId.value === id) {
-            waehleLayout(aktuell)
-            konfliktHinweis.value = t('chart.layoutKonflikt')
-        }
-        // sonst: nächste Änderung versucht es erneut
+        if (!aktuell || layoutId.value !== id) return // sonst: nächste Änderung versucht es erneut
+        const ihr = vervollstaendige(aktuell.daten)
+        const zusammen = fuehreZusammen(basisText ? JSON.parse(basisText) : ihr,
+            JSON.parse(JSON.stringify(daten.value)), ihr)
+        gespeichertText = JSON.stringify(ihr)
+        const i = layouts.value.findIndex((l) => l.id === id)
+        if (i >= 0) layouts.value[i] = { ...layouts.value[i], geaendertAm: aktuell.geaendertAm }
+        ignoriereNaechsteAenderung = true
+        daten.value = zusammen
+        if (JSON.stringify(zusammen) === gespeichertText) return
+        // Ein Versuch genügt: läuft auch der auf 409, versucht es die nächste Änderung.
+        try {
+            const neu = await api.layoutSpeichern(id, { daten: zusammen, stand: aktuell.geaendertAm })
+            if (layoutId.value === id) gespeichertText = JSON.stringify(zusammen)
+            if (i >= 0) layouts.value[i] = { ...layouts.value[i], geaendertAm: neu.geaendertAm }
+        } catch { /* nächste Änderung versucht es erneut */ }
     }
 }
 
@@ -959,9 +972,6 @@ watch(sichtbareAnzahl, async () => {
 <template>
     <div ref="seite" class="chartSeite" :class="{ telefon, vollbild }">
         <Hinweis v-if="ladeFehler" art="warn" class="seitenHinweis">{{ t('chart.arbeitsplatzFehler') }}: {{ ladeFehler }}</Hinweis>
-        <Hinweis v-if="konfliktHinweis" art="info" schliessbar class="seitenHinweis knapp" @zu="konfliktHinweis = ''">
-            {{ konfliktHinweis }}
-        </Hinweis>
         <Hinweis v-if="quellenHinweis" art="info" schliessbar class="seitenHinweis knapp" @zu="quellenHinweis = ''">
             {{ quellenHinweis }}
         </Hinweis>
