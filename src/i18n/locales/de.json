@@ -1127,8 +1127,8 @@
     "closingEmotions": "Emotionen (Abschluss)",
     "closingEmotionsPlaceholder": "Wie hast du dich beim Abschluss gefühlt?",
     "chartBild": "Chartbild erzeugen",
-    "chartBildTipp": "Holt den Chart der gewählten Zeiteinheit mit Einstieg, Stop und Ziel — mit Tag „LSOB\" oder „GUSS\" auch deren Setups samt Order Block — und legt ihn als Screenshot ab.",
-    "chartBildHinweis": "Automatisch bei Wahl der Zeiteinheit; ein LSOB-/GUSS-Tag zeichnet die Strategie mit ein.",
+    "chartBildTipp": "Holt den Chart der gewählten Zeiteinheit mit Einstieg, Stop und Ziel — mit einem Strategie-Tag (Liquidity Sweep + Order Block oder EMA Bounce) auch deren Setups — und legt ihn als Screenshot ab.",
+    "chartBildHinweis": "Automatisch bei Wahl der Zeiteinheit; ein Strategie-Tag (Liquidity Sweep + Order Block, EMA Bounce) zeichnet die Strategie mit ein.",
     "chartBildTf": "Erst eine Zeiteinheit wählen.",
     "chartBildVoll": "Beide Screenshot-Felder sind belegt — eines entfernen."
   },
@@ -3544,7 +3544,7 @@
       "sections": [
         {
           "h": "1 · Strategie wählen oder bauen",
-          "p": "Unter „Neue Strategie\" liegen fertige Vorlagen (LSOB, MACD-Wolke, Bollinger+RSI u. a.) — eine Vorlage übernehmen ist der schnellste Start. Eigene Ideen baust du im Strategie-Editor aus Bausteinen zusammen oder beschreibst sie dem Chat-Baukasten in Worten; es entsteht dieselbe Art von Regelwerk, kein Programmcode."
+          "p": "Unter „Neue Strategie\" liegen fertige Vorlagen (Liquidity Sweep + Order Block, MACD-Wolke, Bollinger+RSI u. a.) — eine Vorlage übernehmen ist der schnellste Start. Eigene Ideen baust du im Strategie-Editor aus Bausteinen zusammen oder beschreibst sie dem Chat-Baukasten in Worten; es entsteht dieselbe Art von Regelwerk, kein Programmcode."
         },
         {
           "h": "2 · Instanz anlegen — immer zuerst Papier",
@@ -5371,9 +5371,9 @@
         "text": "Signale der Strategie LSOB über den geladenen Verlauf: Sweep-Marke, Order-Block-Zone, Einstieg mit Stop und Ziel, Ausgang. Gerechnet wie im Backtest, mit den Standardparametern."
       },
       "guss": {
-        "name": "GUSS — EMA Touch (Sniperentry)",
-        "kurz": "GUSS",
-        "text": "Signale der Strategie EMA Touch („GUSS Sniperentry\"): neues Hoch, Korrektur in einem Guss an die EMA 50, Einstieg mit Stop und Ziel. Dazu EMA 21/50/200."
+        "name": "EMA Bounce — Rücklauf an die EMA",
+        "kurz": "EMA Bounce",
+        "text": "Signale der Strategie EMA Bounce: neues Hoch, saubere Korrektur an die EMA 50, Einstieg mit Stop und Ziel. Dazu EMA 21/50/200."
       },
       "lsobCv": {
         "name": "LSOB-Boxen (Sweep + Retest)",
@@ -5381,9 +5381,9 @@
         "text": "Liquidity-Sweep-Boxen an Pivot-Hochs/-Tiefs, die das vorige Pivot überbieten; Box = ganze Kerze, ungültig bei Körper-Eindringen über die Toleranz; Signal beim ersten Retest; Vorwarnlinie."
       },
       "gussCv": {
-        "name": "GUSS-Rücklauf (Start/Entry)",
-        "kurz": "GUSS-Lauf",
-        "text": "Start beim höchsten/tiefsten Schluss der letzten Kerzen in EMA-Trendordnung mit ATR-Abständen, Rücklauf „in einem Guss\" an die Ziel-EMA (Gegenkerzen-Logik), Label Start/Entry."
+        "name": "EMA-Bounce-Rücklauf (Start/Entry)",
+        "kurz": "EMA-Bounce-Lauf",
+        "text": "Start beim höchsten/tiefsten Schluss der letzten Kerzen in EMA-Trendordnung mit ATR-Abständen, saubere Korrektur an die Ziel-EMA (Gegenkerzen-Logik), Label Start/Entry."
       }
     },
     "indParam": {
@@ -5558,8 +5558,8 @@
       "minAbstand50200": "Min. Abstand EMA 50/200 (ATR)",
       "preisFilter": "Mindestabstand Preis zu EMA 21",
       "minAbstandPreis": "Min. Abstand Preis/EMA 21 (ATR)",
-      "zeigeLong": "GUSS anzeigen (Long)",
-      "zeigeShort": "R-GUSS anzeigen (Short)",
+      "zeigeLong": "EMA Bounce Long anzeigen",
+      "zeigeShort": "EMA Bounce Short anzeigen",
       "ziel21": "Ziel EMA 21",
       "ziel50": "Ziel EMA 50",
       "ziel200": "Ziel EMA 200",
@@ -5936,7 +5936,7 @@
       "lsobAusstieg": "Stop / Ziel",
       "gussTrend": "Trend (EMAs)",
       "gussImpuls": "Impuls",
-      "gussKorrektur": "Korrektur „in einem Guss\"",
+      "gussKorrektur": "Saubere Korrektur",
       "sigBild": "Darstellung",
       "cvKern": "Kernlogik",
       "cvBild": "Darstellung",
@@ -5944,7 +5944,7 @@
       "gcvAllg": "Allgemein",
       "gcvEma": "EMA-Logik",
       "gcvAtr": "ATR-Abstandsfilter",
-      "gcvZiel": "GUSS-Ziele",
+      "gcvZiel": "EMA-Bounce-Ziele",
       "gcvGegen": "Gegenkerzen"
     },
     "indHilfe": {

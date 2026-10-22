@@ -32,14 +32,14 @@ const TF_KARTE = {
 }
 export const chartZeiteinheit = (tf) => TF_KARTE[tf] || null
 
-/** Strategie aus den Tags des Trades: „LSOB" → lsob, „GUSS"/„EMA Touch" → ema_touch. */
+/** Strategie aus den Tags des Trades: „LSOB" → lsob, „EMA Bounce"/„GUSS"/„EMA Touch" → ema_touch (GUSS: alte Tags). */
 export function strategieAusTags(tags) {
     const namen = (tags || []).map((t) => String(t?.name || t || '').toUpperCase())
     if (namen.some((n) => n.includes('LSOB'))) return 'lsob'
-    if (namen.some((n) => n.includes('GUSS') || n.includes('EMA TOUCH') || n.includes('EMA-TOUCH'))) return 'ema_touch'
+    if (namen.some((n) => n.includes('GUSS') || n.includes('EMA BOUNCE') || n.includes('EMA TOUCH') || n.includes('EMA-TOUCH'))) return 'ema_touch'
     return null
 }
-const STRATEGIE_NAME = { lsob: 'LSOB', ema_touch: 'GUSS' }
+const STRATEGIE_NAME = { lsob: 'Liquidity Sweep + Order Block', ema_touch: 'EMA Bounce' }
 const STRATEGIE_TF = ['5m', '15m', '30m', '1h', '4h', '1d']
 
 // Ein Bild-Takt — mit Zeitgrenze: im Hintergrund-Tab laufen keine requestAnimationFrame,

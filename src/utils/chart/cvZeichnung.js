@@ -6,8 +6,8 @@
  *   LSOB   gültige Boxen von der Pivot-Kerze bis zum rechten Rand, Label
  *          „LSOB" über (Short) bzw. unter (Long) der Box, Signal-Pins am
  *          Retest, optionale Vorwarnlinie.
- *   GUSS   „GUSS Start" / „R-GUSS Start" an der Start-Kerze (Initial blass,
- *          nach dem Einstieg kräftig = bestätigt), „GUSS Entry (EMA 50)" am
+ *   GUSS   „EMA Bounce ▲ Start" / „EMA Bounce ▼ Start" an der Start-Kerze (Initial blass,
+ *          nach dem Einstieg kräftig = bestätigt), „EMA Bounce ▲ Entry" (mit Ziel-EMA) am
  *          Einstieg an der EMA. Die EMAs selbst sind Serien des Indikators.
  */
 import { ereignisZuLogisch, logischZuX } from './zeichnungen/geometrie.js'
@@ -119,7 +119,7 @@ export class CvZeichnung {
             // Verfallene Starts werden nicht gezeichnet — nur die mit Einstieg und den offenen.
             if (e.status === 'verfallen') continue
             const lang = e.seite === 'long'
-            const name = lang ? 'GUSS' : 'R-GUSS'
+            const name = lang ? 'EMA Bounce ▲' : 'EMA Bounce ▼'
             const farbe = lang ? '#26a69a' : '#ef5350'
             // Start: Kontur (blass, solange kein Einstieg kam); Entry: volle Fläche mit Ziel-EMA und Preis.
             const xs = this.X(e.startT), ys = this.Y(e.startP)

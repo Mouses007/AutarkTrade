@@ -422,7 +422,7 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [] }) {
 
 export default {
     id: 'ema_touch',
-    name: 'EMA Touch — „GUSS Sniperentry"',
+    name: 'EMA Bounce',
     description: 'Höheres Hoch weit über der EMA21, danach Korrektur ohne eine einzige bullische Kerze bis zur EMA50 — dort der Einstieg.',
     version: DETECTOR_VERSION,
     supportedTimeframes: ['5m', '15m', '30m', '1h', '4h', '1d'],

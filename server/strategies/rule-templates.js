@@ -173,11 +173,11 @@ export const VORLAGEN = [
     },
     {
         key: 'ema_pullback',
-        titel: '„GUSS Sniperentry" — Rücklauf an eine EMA',
+        titel: 'EMA Bounce — Rücklauf an eine EMA',
         markt: 'Trend — Fortsetzung nach Rücklauf; ohne Trend nur Rauschen',
         beschreibung: 'Höheres Hoch weit über der schnellen EMA, danach Korrektur ohne grüne Kerze '
             + 'bis zur langsameren EMA — dort der Einstieg. Baukasten-Fassung der eingebauten Strategie '
-            + '„EMA Touch" (Kryptomano-PDF); die Eingebaute prüft die Guss-Bedingung vollständig.',
+            + '„EMA Bounce"; die Eingebaute prüft die saubere Korrektur vollständig.',
         rules: {
             timeframes: ['15m', '1h', '4h'],
             direction: 'long',

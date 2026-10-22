@@ -728,9 +728,9 @@ Der beigefügte Screenshot zeigt den TradingView-Chart dieses Trades. Die SL/TP-
 - Kerzenmuster (Doji, Hammer, Engulfing etc.) am Entry/Exit
 - Trendlinien, Support/Resistance (horizontale Linien)
 - Gleitende Durchschnitte (gelbe/orange/weisse Linien = MAs)
-- Indikatoren: GUSS, LSOB, VRVP falls im Chart-Header sichtbar
+- Indikatoren: EMA Bounce, LSOB, VRVP falls im Chart-Header sichtbar
 - Marktstruktur: Higher Highs/Lows, Lower Highs/Lows, Konsolidierung
-- Labels im Chart wie "GUSS Start", "GUSS Entry" = Indikator-Signale
+- Labels im Chart wie "EMA Bounce ▲ Start", "EMA Bounce ▲ Entry" = Indikator-Signale
 - Farbige Rechtecke koennen SL/TP-Zonen visuell markieren (Rot = SL, Gruen = TP)
 
 **Bewerte im Screenshot:**
