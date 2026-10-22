@@ -3,6 +3,11 @@ package com.autarktrade.widget
 import android.appwidget.AppWidgetManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Typeface
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import com.autarktrade.widget.model.Bot
@@ -73,8 +78,8 @@ object WidgetRows {
         val rv = RemoteViews(ctx.packageName, R.layout.widget_row_future)
         rv.setOnClickFillInIntent(R.id.row_root, chartFillIn(p.symbol, broker, widgetId))
         rv.setTextViewText(R.id.row_symbol, p.symbol)
-        rv.setTextViewText(R.id.row_sub,
-            "${sideLabel(p.side)} · ${lev(p.leverage)} · @${price(p.entryPrice)} → ${price(p.markPrice)}")
+        rv.setTextViewText(R.id.row_sub, mitSeite(ctx, p.side,
+            " · ${lev(p.leverage)} · @${price(p.entryPrice)} → ${price(p.markPrice)}"))
         rv.setTextViewText(R.id.row_pnl, signed(p.unrealizedPNL, 2))
         rv.setTextColor(R.id.row_pnl, pnlColor(ctx, p.unrealizedPNL))
         rv.setTextViewText(R.id.row_pnl2, if (p.realizedPNL != 0.0) "real ${signed(p.realizedPNL, 2)}" else "")
@@ -86,12 +91,30 @@ object WidgetRows {
         rv.setOnClickFillInIntent(R.id.row_root, chartFillIn(b.symbol, "pionex", widgetId))
         rv.setTextViewText(R.id.row_symbol, b.symbol)
         val liq = if (b.liqPrice > 0) " · Liq ${price(b.liqPrice)}" else ""
-        rv.setTextViewText(R.id.row_sub,
-            "${sideLabel(b.side)} · ${lev(b.leverage)} · Ø${price(b.entryPrice)}$liq")
+        rv.setTextViewText(R.id.row_sub, mitSeite(ctx, b.side,
+            " · ${lev(b.leverage)} · Ø${price(b.entryPrice)}$liq"))
         val dec = if (b.marginCoin == "USDT") 2 else 4
         rv.setTextViewText(R.id.row_pnl, "${signed(b.unrealizedPNL, dec)} ${b.marginCoin}")
         rv.setTextColor(R.id.row_pnl, pnlColor(ctx, b.unrealizedPNL))
         return rv
+    }
+
+    /**
+     * Unterzeile mit eingefärbter Seite: long grün, short rot (Tokens good/bad),
+     * der Rest bleibt gedämpft. RemoteViews übertragen ForegroundColorSpan mit.
+     */
+    private fun mitSeite(ctx: Context, side: String, rest: String): CharSequence {
+        val wort = sideLabel(side)
+        val farbe = when (wort) {
+            "long" -> R.color.side_long
+            "short" -> R.color.side_short
+            else -> return wort + rest
+        }
+        return SpannableStringBuilder(wort).apply {
+            setSpan(ForegroundColorSpan(ContextCompat.getColor(ctx, farbe)), 0, wort.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            setSpan(StyleSpan(Typeface.BOLD), 0, wort.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            append(rest)
+        }
     }
 
     // --- formatting helpers ---

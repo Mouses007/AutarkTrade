@@ -118,7 +118,7 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## Versioning
 
-`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-23**);
+`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-24**);
 the APK file carries it in its name.
 
 ## Licence
