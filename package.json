@@ -1,6 +1,6 @@
 {
   "name": "autarktrade",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "description": "AutarkTrade – lokales Trading-Journal und Analyse-Arbeitsplatz für Krypto-Futures (Bitunix, Bitget, Pionex), SQLite/PostgreSQL, KI-Auswertungen.",
   "author": "Mouses007",
   "license": "AGPL-3.0-or-later",
