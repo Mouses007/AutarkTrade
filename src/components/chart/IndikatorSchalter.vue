@@ -66,31 +66,21 @@ function schalte(i, s) {
             <Symbol :name="offen ? 'runter' : 'hoch'" class="pfeil" />
         </button>
         <div v-if="offen" class="inhalt">
+            <!-- Alle Hauptschalter in einer Zeile; Unterschalter darunter je Indikator -->
             <div class="zeile">
                 <button class="chip haupt" :class="{ an: volumenAn }" :aria-pressed="volumenAn" @click="emit('volumen')">{{ t('chart.volumen') }}</button>
-                <template v-for="i in liste" :key="i.id">
-                    <button v-if="!UNTER[i.typ]" class="chip haupt" :class="{ an: i.sichtbar !== false }" :aria-pressed="i.sichtbar !== false"
-                        @click="emit('umschalten', i.id)">{{ name(i) }}</button>
-                </template>
+                <button v-for="i in liste" :key="i.id" class="chip haupt" :class="{ an: i.sichtbar !== false }" :aria-pressed="i.sichtbar !== false"
+                    @click="emit('umschalten', i.id)">{{ name(i) }}</button>
             </div>
-            <div v-for="i in liste.filter((x) => UNTER[x.typ])" :key="i.id" class="block">
-                <div class="zeile">
-                    <button class="chip haupt" :class="{ an: i.sichtbar !== false }" :aria-pressed="i.sichtbar !== false"
-                        @click="emit('umschalten', i.id)">{{ name(i) }}</button>
-                    <template v-if="i.sichtbar !== false && UNTER[i.typ].length === 1 && !UNTER[i.typ][0].g">
-                        <button v-for="s in UNTER[i.typ][0].schalter" :key="s.key" class="chip" :class="{ an: an(i, s) }" :aria-pressed="an(i, s)"
+            <div v-for="i in liste.filter((x) => UNTER[x.typ] && x.sichtbar !== false)" :key="i.id" class="block">
+                <div class="blockTitel">{{ name(i) }}</div>
+                <div v-for="(z, n) in UNTER[i.typ]" :key="n" class="zeile">
+                    <span class="gruppe">{{ z.g ? t(z.g) : '' }}</span>
+                    <div class="chips">
+                        <button v-for="s in z.schalter" :key="s.key" class="chip" :class="{ an: an(i, s) }" :aria-pressed="an(i, s)"
                             :title="s.tipp ? t(s.tipp) : ''" @click="schalte(i, s)">{{ t(s.text) }}</button>
-                    </template>
-                </div>
-                <template v-if="i.sichtbar !== false && (UNTER[i.typ].length > 1 || UNTER[i.typ][0].g)">
-                    <div v-for="(z, n) in UNTER[i.typ]" :key="n" class="zeile">
-                        <span class="gruppe">{{ z.g ? t(z.g) : '' }}</span>
-                        <div class="chips">
-                            <button v-for="s in z.schalter" :key="s.key" class="chip" :class="{ an: an(i, s) }" :aria-pressed="an(i, s)"
-                                :title="s.tipp ? t(s.tipp) : ''" @click="schalte(i, s)">{{ t(s.text) }}</button>
-                        </div>
                     </div>
-                </template>
+                </div>
             </div>
         </div>
     </div>
@@ -136,6 +126,12 @@ function schalte(i, s) {
     gap: 4px;
     padding-top: 6px;
     border-top: 1px solid var(--line);
+}
+.blockTitel {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--muted);
 }
 .zeile {
     display: flex;
