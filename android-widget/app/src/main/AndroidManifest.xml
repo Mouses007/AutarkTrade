@@ -11,6 +11,21 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
+    <!-- Ab Android 11 sieht eine App fremde Pakete nur, wenn sie danach fragt: hier die
+         Web-Link-Empfänger, um eine installierte AutarkTrade-WebAPK zu finden. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="http" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

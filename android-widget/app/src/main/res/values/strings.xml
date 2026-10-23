@@ -12,6 +12,11 @@
     <string name="cfg_key_hint">aus AutarkTrade → Einstellungen → Externe Anzeigen</string>
     <string name="cfg_filter">Zeitraum (für „Heute/Gesamt")</string>
     <string name="cfg_default_broker">Standard-Börse oben (nach Aktualisieren)</string>
+    <string name="cfg_web">Adresse der installierten Web-App (für Links, optional)</string>
+    <string name="cfg_web_hint">z.B. https://192.168.178.100:8443</string>
+    <string name="cfg_web_app">Installierte AutarkTrade-App gefunden ✓ — Coins und Alarme öffnen dort.</string>
+    <string name="cfg_web_browser">Keine installierte App für diese Adresse — Links öffnen im Browser. Die App über HTTPS in Chrome mit „Installieren" einrichten und genau diese Adresse hier eintragen.</string>
+    <string name="cfg_web_ungueltig">Die Web-App-Adresse muss mit http:// oder https:// beginnen.</string>
     <string name="cfg_test">Verbindung testen</string>
     <string name="cfg_save">Speichern</string>
     <string name="cfg_testing">Teste…</string>

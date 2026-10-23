@@ -122,6 +122,10 @@ object Prefs {
         sp(ctx).edit().putString("alarm_gesehen", (alarmGesehen(ctx) + ids).takeLast(400).joinToString("\n")).apply()
     }
 
+    /** Adresse der installierten Web-App für Links (z. B. https://192.168.178.100:8443); leer = API-Adresse. */
+    fun webAdresse(ctx: Context): String = sp(ctx).getString("web_adresse", "") ?: ""
+    fun setWebAdresse(ctx: Context, adresse: String) { sp(ctx).edit().putString("web_adresse", adresse.trim()).apply() }
+
     // --- Sofort-Zustellung (UnifiedPush) ---
     fun sofortAn(ctx: Context): Boolean = sp(ctx).getBoolean("sofort_an", false)
     fun setSofortAn(ctx: Context, an: Boolean) { sp(ctx).edit().putBoolean("sofort_an", an).apply() }

@@ -50,6 +50,7 @@ class WidgetConfigActivity : AppCompatActivity() {
     private lateinit var host: EditText
     private lateinit var port: EditText
     private lateinit var key: EditText
+    private lateinit var web: EditText
     private lateinit var status: TextView
     private lateinit var alarmeAn: SwitchCompat
     private lateinit var taktSpin: Spinner
@@ -75,6 +76,9 @@ class WidgetConfigActivity : AppCompatActivity() {
         host = findViewById(R.id.in_host)
         port = findViewById(R.id.in_port)
         key = findViewById(R.id.in_key)
+        web = findViewById(R.id.in_web)
+        web.setText(Prefs.webAdresse(this))
+        web.setOnFocusChangeListener { _, fokus -> if (!fokus) zeigeWebStand() }
         status = findViewById(R.id.status)
         val filterSpin = findViewById<Spinner>(R.id.in_filter)
         val brokerSpin = findViewById<Spinner>(R.id.in_broker)
@@ -162,6 +166,11 @@ class WidgetConfigActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btn_save).setOnClickListener {
             val (h, p, k) = verbindung() ?: return@setOnClickListener
+            val webNeu = web.text.toString().trim()
+            if (webNeu.isNotBlank() && !webNeu.matches(Regex("^https?://\\S+$"))) {
+                status.text = getString(R.string.cfg_web_ungueltig); return@setOnClickListener
+            }
+            Prefs.setWebAdresse(this, webNeu)
             val gewaehlt = artBoxen.filterValues { it.isChecked }.keys
             if (alarmeAn.isChecked && gewaehlt.isEmpty()) { status.text = getString(R.string.cfg_keine_art); return@setOnClickListener }
             Prefs.saveAlarmConfig(this, alarmeAn.isChecked, taktVals[taktSpin.selectedItemPosition.coerceAtLeast(0)],
@@ -213,6 +222,17 @@ class WidgetConfigActivity : AppCompatActivity() {
         super.onResume()
         // Zurück aus den System-Einstellungen (genaue Wecker / Akku) → Stand neu zeigen.
         zeigeAlarmDetails()
+        zeigeWebStand()
+    }
+
+    /** Öffnen Links in einer installierten App oder im Browser? (für die eingetragene bzw. API-Adresse) */
+    private fun zeigeWebStand() {
+        if (!::web.isInitialized) return
+        val eingabe = web.text.toString().trim().trimEnd('/')
+        val basis = eingabe.ifBlank { "http://${host.text.toString().trim()}:${port.text.toString().trim().ifBlank { "8080" }}" }
+        val uri = Uri.parse("$basis/chart")
+        findViewById<TextView>(R.id.web_stand).text = getString(
+            if (WebApp.webApk(this, uri) != null) R.string.cfg_web_app else R.string.cfg_web_browser)
     }
 
     /**

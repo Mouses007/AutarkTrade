@@ -44,13 +44,13 @@ class WidgetKlickActivity : Activity() {
         val host = Prefs.host(this, widgetId)
         if (host.isBlank()) return
         val sauber = symbol.uppercase().replace(Regex("[^A-Z0-9]"), "")
-        val url = Uri.parse("http://$host:${Prefs.port(this, widgetId)}/chart").buildUpon()
+        val url = Uri.parse(WebApp.basis(this, host, Prefs.port(this, widgetId)) + "/chart").buildUpon()
             .appendQueryParameter("symbol", sauber)
             .apply { if (!broker.isNullOrBlank()) appendQueryParameter("boerse", broker.lowercase()) }
             .build()
-        android.util.Log.d("TJWidget", "Chart öffnen: $url")
+        android.util.Log.d("TJWidget", "Chart öffnen: $url → ${WebApp.webApk(this, url) ?: "Browser"}")
         try {
-            startActivity(Intent(Intent.ACTION_VIEW, url).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            startActivity(WebApp.oeffnen(this, url))
         } catch (e: Exception) {
             android.util.Log.w("TJWidget", "Chart öffnen: ${e.message}")
         }

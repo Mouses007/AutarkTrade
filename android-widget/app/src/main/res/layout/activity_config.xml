@@ -79,6 +79,21 @@
                 android:hint="@string/cfg_key_hint"
                 android:inputType="textNoSuggestions" />
 
+            <TextView style="@style/FieldLabel" android:text="@string/cfg_web" />
+            <EditText
+                android:id="@+id/in_web"
+                style="@style/Field"
+                android:layout_marginBottom="4dp"
+                android:hint="@string/cfg_web_hint"
+                android:inputType="textUri" />
+            <TextView
+                android:id="@+id/web_stand"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
+
             <Button
                 android:id="@+id/btn_test"
                 style="@style/KnopfNeben"

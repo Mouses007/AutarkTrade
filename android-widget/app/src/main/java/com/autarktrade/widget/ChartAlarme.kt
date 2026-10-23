@@ -223,10 +223,10 @@ object ChartAlarme {
 
     /** Tipp → Web-App im Browser auf /chart?symbol=…; ohne Symbol der Chart-Arbeitsplatz. */
     private fun chartLink(ctx: Context, a: Ausloesung?): PendingIntent {
-        val basis = "http://${Prefs.alarmHost(ctx)}:${Prefs.alarmPort(ctx)}/chart"
+        val basis = WebApp.basis(ctx, Prefs.alarmHost(ctx), Prefs.alarmPort(ctx)) + "/chart"
         val url = if (a == null || a.symbol.isBlank()) basis
             else "$basis?symbol=${Uri.encode(a.symbol)}${if (a.markt == "spot") "&markt=spot" else ""}"
-        val i = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val i = WebApp.oeffnen(ctx, Uri.parse(url))
         return PendingIntent.getActivity(ctx, (a?.id ?: "sammel").hashCode(), i,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }

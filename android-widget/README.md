@@ -38,7 +38,15 @@ app's optional password gate.
    the **ESP32 key**, and a **time range**. Tap **Verbindung testen** to verify, then
    **Speichern**.
 3. Tap a coin to open its chart in AutarkTrade; tap an exchange header to show that exchange's
-   KPIs at the top.
+   KPIs at the top. Links go to the **installed web app** if you enter its address under
+   „Adresse der installierten Web-App" (e.g. `https://192.168.178.100:8443`): install AutarkTrade
+   in Chrome over HTTPS with „Installieren" (a WebAPK — over http it is only a shortcut, which
+   cannot receive links). The status line below the field says whether such an app was found;
+   without one, links open in the browser. Alarm notifications use the same address. Links go to the **installed web app** if you enter its address under
+   „Adresse der installierten Web-App" (e.g. `https://192.168.178.100:8443`): install AutarkTrade
+   in Chrome over HTTPS with „Installieren" (a WebAPK — over http it is only a shortcut, which
+   cannot receive links). The status line below the field says whether such an app was found;
+   without one, links open in the browser. Alarm notifications use the same address.
 4. The widget refreshes automatically (~every 15 min, Android's minimum for background
    widget updates) and on demand via the **↻ button**. Tap the **title** to reopen config.
 
@@ -118,7 +126,7 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## Versioning
 
-`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-24**);
+`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-25**);
 the APK file carries it in its name.
 
 ## Licence
