@@ -385,7 +385,10 @@ export async function holeEvm(adresse, netze) {
                 }
                 continue
             } catch (e) {
-                hinweise.push(`${netz.name}: ${e.message}`)
+                // Gemessen 23.10.2026: der Gratis-Tarif von Etherscan deckt BNB Chain nicht ab.
+                hinweise.push(/Free API access is not supported|upgrade your api plan/i.test(e.message)
+                    ? `${netz.name}: nicht im Gratis-Tarif von Etherscan — nur ${netz.nativ}-Bestand, Token aus dem Import`
+                    : `${netz.name}: ${e.message}`)
             }
         }
         try {
