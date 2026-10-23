@@ -168,6 +168,21 @@ async function bewerteBewegungen(max = 400) {
     return n
 }
 
+/**
+ * Alles Unbewertete bewerten (nach einem Datei-Import: tausende Zeilen auf
+ * einmal). Läuft im Hintergrund, höchstens einmal gleichzeitig.
+ */
+let bewertetGerade = false
+export async function bewerteAlles() {
+    if (bewertetGerade) return
+    bewertetGerade = true
+    try {
+        for (let i = 0; i < 100; i++) {
+            if ((await bewerteBewegungen(400)) < 400) break
+        }
+    } finally { bewertetGerade = false }
+}
+
 /** Tageswert festhalten (eine Zeile je Tag, der letzte Lauf des Tages gilt). */
 async function merkeTageswert() {
     const u = await berechneUebersicht({ ohneVerlauf: true })

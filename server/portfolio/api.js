@@ -32,7 +32,7 @@ import { getKnex } from '../database.js'
 import { encrypt } from '../crypto.js'
 import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } from '../../shared/portfolio-adresse.js'
 import { berechneUebersicht } from './uebersicht.js'
-import { rufeAb, laufStand } from './abruf.js'
+import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
 import { ARTEN, FIAT } from './normal.js'
 import { leseImportCsv, importQuelle } from './import.js'
@@ -260,6 +260,9 @@ export function setupPortfolioRoutes(app) {
                     ergebnis.push({ ort: o.ort, negativ })
                 }
             })
+            // CHF-Werte der neuen Zeilen ohne Wert sofort nachziehen, nicht erst
+            // 400 je Abruf — sonst fehlt das Einkommen in der Steuer-Ansicht.
+            bewerteAlles().catch((e) => console.warn(' -> Portfolio-Bewertung:', e.message))
             res.json({ ok: true, neu, uebersprungen: r.zeilen.length - neu, orte: ergebnis })
         } catch (e) { fehler(res, e) }
     })
