@@ -83,7 +83,7 @@ function schalteVollbild(i) {
 /*
  * Im Vollbild: vom linken Rand hereinwischen → obere Hälfte Indikator-Kurzwahl, untere
  * Hälfte Zeichenwerkzeuge (die Wahl schliesst die Schublade); vom rechten
- * Rand oben → Favoriten (Vorlagen + Watchlist, eine Wahl schliesst), unten → Momentum Radar, als Schublade über dem Chart. Zu: Tipp daneben, zurück
+ * Rand oben → Favoriten (Watchlist, ein Coin schliesst), unten → Momentum Radar, als Schublade über dem Chart. Zu: Tipp daneben, zurück
  * zum Rand wischen oder Esc. Die Randzone ist 60 px breit, damit man knapp
  * NEBEN der Rückgeste von Android ansetzen kann (die schluckt den äussersten Rand).
  * Ein Wisch aus der Randzone erreicht den Chart nicht: Lightweight Charts hört
@@ -92,7 +92,7 @@ function schalteVollbild(i) {
  * wenn die Bewegung waagrecht ist — senkrecht zieht man dort die Preisachse.
  */
 // Beide Ränder teilen die Höhe (Wunsch 23.10.2026): links oben Indikatoren, links unten
-// Zeichenwerkzeuge; rechts oben Favoriten (Watchlist + Vorlagen), rechts unten Momentum Radar.
+// Zeichenwerkzeuge; rechts oben Favoriten (Watchlist), rechts unten Momentum Radar.
 const schublade = ref(null)          // null | 'links' | 'werkzeuge' | 'favoriten' | 'rechts'
 const RECHTS = new Set(['rechts', 'favoriten'])
 const RAND = 60
@@ -1019,6 +1019,13 @@ watch(sichtbareAnzahl, async () => {
                     </Transition>
                     <Transition name="schubLinks">
                         <aside v-if="schublade === 'links'" class="schublade links" :aria-label="t('chart.indBox.titel')">
+                            <div class="schubZeile">
+                                <span class="schubTitel">{{ t('chart.schublade.vorlagen') }}</span>
+                                <div class="schubKnoepfe">
+                                    <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="(v) => { vorlageAnwenden(v); schublade = null }" />
+                                </div>
+                            </div>
+                            <hr class="schubTrenner" />
                             <IndikatorSchalter :panel="aktivesPanel" @aendere="vvSchalten"
                                 @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
                                 @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
@@ -1026,7 +1033,6 @@ watch(sichtbareAnzahl, async () => {
                             <div class="schubAktionen">
                                 <button type="button" class="schubKnopf" @click="schublade = null; oeffneIndikatoren()">
                                     <Symbol name="plus" /> {{ t('chart.indikatorenTitel') }}</button>
-                                <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="vorlageAnwenden" />
                             </div>
                             <hr class="schubTrenner" />
                             <div class="schubGruppe">
@@ -1052,11 +1058,6 @@ watch(sichtbareAnzahl, async () => {
                     </Transition>
                     <Transition name="schubRechts">
                         <aside v-if="schublade === 'favoriten'" class="schublade rechts" :aria-label="t('chart.schublade.favoriten')">
-                            <div class="reiterTitel">{{ t('chart.schublade.vorlagen') }}</div>
-                            <div class="schubAktionen">
-                                <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="(v) => { vorlageAnwenden(v); schublade = null }" />
-                            </div>
-                            <hr class="schubTrenner" />
                             <div class="reiterTitel">{{ t('chart.schublade.favoriten') }}</div>
                             <WatchlistReiter :watchlists="watchlists" :aktives-symbol="aktivesPanel.symbol" :aktiver-markt="aktivesPanel.markt"
                                 @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); schublade = null"
@@ -1752,6 +1753,26 @@ watch(sichtbareAnzahl, async () => {
 .schublade.links {
     left: 0;
     border-right: 1px solid var(--line);
+}
+
+/* Zeile mit Beschrieb links und Knöpfen rechts (Vorlagen oben in der linken Schublade) */
+.schubZeile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.schubZeile .schubTitel {
+    margin-bottom: 0;
+}
+
+.schubKnoepfe {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+    min-width: 0;
 }
 
 /* Feine Linie in der Hausfarbe zwischen den Abschnitten einer Schublade */
