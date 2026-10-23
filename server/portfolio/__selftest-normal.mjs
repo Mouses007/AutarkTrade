@@ -173,6 +173,7 @@ console.log('\nEingabefeld')
     check('Privater Schlüssel (64 Hex) abgelehnt', erkenneEingabe('0x' + 'ab'.repeat(32)).grund === 'geheim')
     check('xprv abgelehnt', erkenneEingabe('xprv9s21ZrQH143K3QTDL4LXw2F7HEK3wJUD2nW2nRk4stbPy6cq3jPPqjiChkVvvNKmPGJxWUtg6LnF5kejMRNNU3TGtRBeJgk33yuGBxrMPHi').grund === 'geheim')
     check('WIF abgelehnt', erkenneEingabe('L1aW4aubDFB7yfras2S1mN3bqg9nwySY8nkoLmJebSLD5BWv3ENZ').grund === 'geheim')
+    check('XRP r… erkannt (vor Solana)', erkenneEingabe('rMvrBkEo82kLYTYYgSBE74LXc9ZKqV68Rm').kette === 'xrp')
     check('Tron: noch nicht unterstützt', erkenneEingabe('TJCnKsPa7y5okkXvQAidZBzqx3QyQ6sxMW').grund === 'nichtUnterstuetzt')
 }
 

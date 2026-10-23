@@ -116,6 +116,10 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
             t.text('stand')                          // JSON: Quellen-eigene Zusatzinfos
         })
     }
+    // Übergabe Import → Live: diese Adresse setzt die Historie der genannten
+    // importierten Orte fort; live gezählt wird erst NACH `liveAb`.
+    await addColumnIfNotExists('portfolio_adressen', 'importOrte', (t) => t.text('importOrte'))
+    await addColumnIfNotExists('portfolio_adressen', 'liveAb', (t) => t.bigInteger('liveAb'))
     // Import (Datei): wie belegt eine Zeile ist, und die Notiz der Rekonstruktion.
     await addColumnIfNotExists('portfolio_bewegungen', 'sicherheit', (t) => t.string('sicherheit'))
     await addColumnIfNotExists('portfolio_bewegungen', 'notiz', (t) => t.text('notiz'))

@@ -25,6 +25,9 @@ export const EVM_NETZE = [
     { id: 56, name: 'BNB Chain', kurz: 'BSC', nativ: 'BNB' },
     { id: 137, name: 'Polygon', kurz: 'POL', nativ: 'POL' },
     { id: 43114, name: 'Avalanche', kurz: 'AVAX', nativ: 'AVAX' },
+    // VeChain hat dasselbe Adressformat (0x…), ist aber keine EVM-Kette mit
+    // Etherscan: gelesen wird nur der Bestand (VET + VTHO) über mainnet.vechain.org.
+    { id: 100009, name: 'VeChain', kurz: 'VET', nativ: 'VET', nurBestand: true },
 ]
 
 /** Vorgabe für ein neues EVM-Konto: die Netze, auf denen die meisten etwas liegen haben. */
@@ -34,14 +37,15 @@ export const KETTEN = {
     btc: { name: 'Bitcoin', asset: 'BTC' },
     evm: { name: 'EVM', asset: 'ETH' },
     sol: { name: 'Solana', asset: 'SOL' },
+    xrp: { name: 'XRP Ledger', asset: 'XRP' },
 }
 
 /** Wallet-Typen mit Vorschlag, welche Ketten man dort typischerweise einträgt. */
 export const WALLET_TYPEN = {
-    ledger: { name: 'Ledger', ketten: ['btc', 'evm', 'sol'] },
+    ledger: { name: 'Ledger', ketten: ['btc', 'evm', 'xrp', 'sol'] },
     safepal: { name: 'SafePal', ketten: ['evm', 'btc', 'sol'] },
     metamask: { name: 'MetaMask', ketten: ['evm'] },
-    andere: { name: 'Andere', ketten: ['btc', 'evm', 'sol'] },
+    andere: { name: 'Andere', ketten: ['btc', 'evm', 'xrp', 'sol'] },
 }
 
 const XPUB_ART = {
@@ -93,13 +97,18 @@ export function erkenneEingabe(roh) {
     if (new RegExp(`^T${B58}{33}$`).test(s)) {
         return { ok: false, grund: 'nichtUnterstuetzt', text: 'Tron-Adresse — Tron wird noch nicht abgefragt.' }
     }
+    // XRP: klassische Adresse r… (Alphabet des XRPL ist ein anderes Base58,
+    // die Form genügt hier); vor Solana prüfen, die Längen überschneiden sich.
+    if (/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(s)) {
+        return { ok: true, kette: 'xrp', art: 'adresse', wert: s, text: 'XRP-Adresse' }
+    }
     if (new RegExp(`^[13]${B58}{25,34}$`).test(s) && s.length <= 35) {
         return { ok: true, kette: 'btc', art: 'adresse', wert: s, text: s.startsWith('3') ? 'Bitcoin-Adresse (P2SH)' : 'Bitcoin-Adresse (Legacy)' }
     }
     if (new RegExp(`^${B58}{32,44}$`).test(s)) {
         return { ok: true, kette: 'sol', art: 'adresse', wert: s, text: 'Solana-Adresse' }
     }
-    return { ok: false, grund: 'unbekannt', text: 'Unbekanntes Format. Erkannt werden xpub/ypub/zpub, bc1…/1…/3…, 0x… und Solana-Adressen.' }
+    return { ok: false, grund: 'unbekannt', text: 'Unbekanntes Format. Erkannt werden xpub/ypub/zpub, bc1…/1…/3…, 0x… (EVM, VeChain), r… (XRP) und Solana-Adressen.' }
 }
 
 /** Kurzform für die Anzeige: Anfang…Ende. */

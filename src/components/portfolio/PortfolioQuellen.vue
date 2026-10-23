@@ -50,9 +50,11 @@ const adressFuer = ref(null)       // walletId mit offenem Adressfeld
 const umbenennen = ref(null)
 const loeschFrage = ref(null)
 
+const importOrte = ref([])
 async function ladeWallets() {
     const { data } = await axios.get('/api/portfolio/wallets')
     wallets.value = data.wallets
+    importOrte.value = data.importOrte || []
     typen.value = data.typen
     netzNamen.value = Object.fromEntries(data.netze.map((n) => [n.id, n.name]))
 }
@@ -100,8 +102,49 @@ async function adresseFertig() {
     await ladeUebersicht()
     starteAbruf()   // die neue Adresse wird ohnehin gelesen; so pollt die Seite mit
 }
-const kettenName = (k) => ({ btc: 'Bitcoin', evm: 'EVM', sol: 'Solana' }[k] || k)
-const kettenSymbol = (k) => ({ btc: 'muenzen', evm: 'ebenen', sol: 'blitz' }[k] || 'kreis')
+const kettenName = (k) => ({ btc: 'Bitcoin', evm: 'EVM', sol: 'Solana', xrp: 'XRP' }[k] || k)
+const kettenSymbol = (k) => ({ btc: 'muenzen', evm: 'ebenen', sol: 'blitz', xrp: 'tropfen' }[k] || 'kreis')
+
+// ── Übergabe Import → Live ──
+const uebergabeFuer = ref(null)      // Adress-ID mit offenem Übergabe-Feld
+const uebergabeOrte = ref([])
+const uebergabeAb = ref('')
+const vergeben = computed(() => {
+    const m = new Map()
+    for (const w of wallets.value) for (const a of w.adressen) for (const o of a.importOrte || []) m.set(o, a.id)
+    return m
+})
+/** Vorschlag: Import-Orte, deren Name das Adresskürzel oder die Kette trägt. */
+function vorschlag(a) {
+    const kurz = String(a.anzeige || '').slice(0, 6).toLowerCase()
+    return importOrte.value.filter((o) => {
+        const n = o.ort.toLowerCase()
+        if (vergeben.value.has(o.ort) && vergeben.value.get(o.ort) !== a.id) return false
+        if (a.kette === 'evm' && kurz.startsWith('0x') && n.includes(kurz)) return true
+        if (a.kette === 'xrp' && n.includes('xrp')) return true
+        if (a.kette === 'btc' && n.includes('btc')) return true
+        return false
+    }).map((o) => o.ort)
+}
+function oeffneUebergabe(a) {
+    uebergabeFuer.value = a.id
+    uebergabeOrte.value = a.importOrte?.length ? [...a.importOrte] : vorschlag(a)
+    const bis = Math.max(0, ...importOrte.value.filter((o) => uebergabeOrte.value.includes(o.ort)).map((o) => o.bis || 0))
+    const ab = a.liveAb || bis || Date.now()
+    uebergabeAb.value = new Date(ab).toISOString().slice(0, 10)
+}
+function schalteOrt(ort) {
+    uebergabeOrte.value = uebergabeOrte.value.includes(ort) ? uebergabeOrte.value.filter((o) => o !== ort) : [...uebergabeOrte.value, ort]
+}
+async function speichereUebergabe(a, loesen = false) {
+    // Stichtag = Ende des gewählten Tages (Schweizer Zeit): alles an diesem Tag gehört noch zum Import.
+    const liveAb = Date.parse(`${uebergabeAb.value}T23:59:59+01:00`)
+    await axios.put(`/api/portfolio/adressen/${a.id}`, { importOrte: loesen ? [] : uebergabeOrte.value, liveAb })
+    uebergabeFuer.value = null
+    await ladeWallets()
+    if (!loesen) starteAbruf(`a${a.id}`); else await ladeUebersicht()
+}
+const datumKurz = (ms) => (ms ? new Date(ms).toLocaleDateString('de-CH') : '')
 
 // ── Zugänge (Etherscan, Bitpanda steht in den API-Einstellungen) ──
 const schluessel = ref({})
@@ -209,6 +252,31 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
                             <button v-for="(name, id) in netzNamen" :key="id" type="button" class="pq-netz" :class="{ an: a.netze.includes(Number(id)) }" @click="schalteNetz(a, Number(id))">{{ name }}</button>
                         </div>
                         <small v-if="stand('a' + a.id)?.meldung" class="pq-hinweis" :class="{ schlecht: stand('a' + a.id)?.status === 'fehler' }">{{ stand('a' + a.id).meldung }}</small>
+                        <!-- Übergabe Import → Live -->
+                        <div v-if="uebergabeFuer !== a.id" class="pq-uebergabe-zeile">
+                            <template v-if="a.importOrte?.length">
+                                <Symbol name="verlauf" :groesse="13" />
+                                <span>{{ t('portfolio.ueHistorie', { orte: a.importOrte.join(', '), ab: datumKurz(a.liveAb) }) }}</span>
+                                <button type="button" class="pq-link-knopf" @click="oeffneUebergabe(a)">{{ t('portfolio.ueAendern') }}</button>
+                            </template>
+                            <button v-else-if="importOrte.length" type="button" class="pq-link-knopf" @click="oeffneUebergabe(a)">
+                                <Symbol name="verlauf" :groesse="13" />{{ t('portfolio.ueUebernehmen') }}<span v-if="vorschlag(a).length" class="pq-vorschlag">{{ t('portfolio.ueVorschlag', { n: vorschlag(a).length }) }}</span>
+                            </button>
+                        </div>
+                        <div v-else class="pq-uebergabe">
+                            <p class="pq-klein">{{ t('portfolio.ueErkl') }}</p>
+                            <div class="pq-netze">
+                                <button v-for="o in importOrte" :key="o.ort" type="button" class="pq-netz"
+                                    :class="{ an: uebergabeOrte.includes(o.ort) }" :disabled="vergeben.has(o.ort) && vergeben.get(o.ort) !== a.id"
+                                    :title="vergeben.has(o.ort) && vergeben.get(o.ort) !== a.id ? t('portfolio.ueSchonVergeben') : ''" @click="schalteOrt(o.ort)">{{ o.ort }}</button>
+                            </div>
+                            <div class="at-flex at-luecke-2 at-mitte at-umbruch at-mo-2">
+                                <label class="pq-klein">{{ t('portfolio.ueAb') }} <input v-model="uebergabeAb" type="date" class="pq-datum" /></label>
+                                <Knopf art="haupt" klein :disabled="!uebergabeOrte.length" @click="speichereUebergabe(a)">{{ t('common.save') }}</Knopf>
+                                <Knopf v-if="a.importOrte?.length" art="leise" klein @click="speichereUebergabe(a, true)">{{ t('portfolio.ueLoesen') }}</Knopf>
+                                <Knopf art="leise" klein @click="uebergabeFuer = null">{{ t('common.cancel') }}</Knopf>
+                            </div>
+                        </div>
                     </div>
                     <div class="pq-adr-rechts">
                         <span v-if="stand('a' + a.id)?.letzterAbruf">{{ chf(stand('a' + a.id).chf) }}</span>
@@ -299,6 +367,12 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
 .pq-netz { border: 1px solid var(--line); background: none; color: var(--leise); border-radius: var(--radius-pille); padding: 0.05rem 0.5rem; font: inherit; font-size: 0.7rem; cursor: pointer; }
 .pq-netz.an { border-color: var(--accent-rand); color: var(--accent); }
 .pq-adr-rechts { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.pq-uebergabe-zeile { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; font-size: 0.75rem; color: var(--muted); margin-top: 0.35rem; }
+.pq-link-knopf { background: none; border: 0; color: var(--accent); font: inherit; font-size: 0.75rem; cursor: pointer; padding: 0; display: inline-flex; gap: 0.3rem; align-items: center; }
+.pq-vorschlag { background: var(--accent-flaeche); border-radius: var(--radius-pille); padding: 0 0.45rem; margin-left: 0.25rem; }
+.pq-uebergabe { margin-top: 0.5rem; padding: 0.6rem; border: 1px dashed var(--accent-rand); border-radius: var(--radius-knopf); background: var(--panel-soft); }
+.pq-netz:disabled { opacity: 0.35; cursor: not-allowed; }
+.pq-datum { background: var(--bg); border: 1px solid var(--line-stark); border-radius: var(--radius-knopf); color: var(--text); padding: 0.2rem 0.45rem; font: inherit; font-size: 0.8rem; margin-left: 0.35rem; }
 .pq-plus { margin-top: 0.6rem; background: none; border: 1px dashed var(--line-stark); color: var(--muted); border-radius: var(--radius-knopf); padding: 0.55rem; width: 100%; font: inherit; font-size: 0.85rem; cursor: pointer; display: flex; gap: 0.4rem; justify-content: center; align-items: center; }
 .pq-plus:hover { border-color: var(--accent); color: var(--accent); }
 .pq-eth-kopf { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.35rem; }

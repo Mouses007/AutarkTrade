@@ -18,6 +18,7 @@ import { getKnex } from '../database.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from './steuer-rechnung.js'
 import { tagesKursUsd, fxAm, gleicherCoin } from './kurse.js'
 import { STABIL, FIAT } from './normal.js'
+import { uebergaben } from './uebergabe.js'
 
 const SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
     'transferMit', 'einordnung', 'chfWert', 'sicherheit', 'kontrakt', 'kette']
@@ -121,9 +122,24 @@ export async function berechneSteuerjahr(jahr) {
     const unbelegt = alle.filter((q) => !vollstaendig.has(q))
     if (laufend) {
         // Laufendes Jahr: unvollständige Quellen mit ihrem HEUTIGEN Bestand (provisorisch).
-        for (const z of await k('portfolio_bestaende').whereIn('quelle', unbelegt)) {
+        const heuteBestand = await k('portfolio_bestaende').select('quelle', 'asset', 'menge')
+        for (const z of heuteBestand.filter((x) => unbelegt.includes(x.quelle))) {
             const key = `${z.quelle}\u0000${z.asset}`
             mengen.set(key, (mengen.get(key) || 0) + Number(z.menge))
+        }
+        // Übergabe Import → Live: was die Adresse heute meldet, ersetzt den
+        // Import-Ort (sonst stünde z. B. das XRP des Ledgers zweimal da).
+        const adrZeilen = await k('portfolio_adressen').select('id', 'importOrte', 'liveAb')
+        const stZeilen = await k('portfolio_quellen').select('quelle', 'status', 'stand')
+        const { ersetzt } = uebergaben(heuteBestand, adrZeilen, new Map(stZeilen.map((q) => [q.quelle, q])))
+        for (const [iq, e] of ersetzt) {
+            // Vollständige Live-Quelle (xpub): Import bis liveAb + Live-Bewegungen danach
+            // ergeben den Stand schon richtig — nichts ersetzen.
+            if (e.alle || (e.liveAb && e.liveAb > bis)) continue
+            for (const key of [...mengen.keys()]) {
+                const [q, asset] = key.split('\u0000')
+                if (q === iq && (e.alle || e.assets.has(asset))) mengen.delete(key)
+            }
         }
         hinweise.push({ art: 'laufend', text: `Das Jahr ${jahr} ist nicht abgeschlossen: Bestände und Kurse sind provisorisch (Stand heute, Kurse vom 31.12. sobald verfügbar).` })
     } else if (unbelegt.length) {

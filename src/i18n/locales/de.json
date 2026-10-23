@@ -6349,7 +6349,7 @@
     "wirdGelesen": "wird gelesen …",
     "weitereAdresse": "Weitere Adresse",
     "ersteAdresse": "Adresse oder xpub der {typ} einfügen",
-    "adressePlatzhalter": "zpub…, bc1q…, 0x… oder Solana-Adresse",
+    "adressePlatzhalter": "zpub…, bc1q…, 0x…, r… (XRP) oder Solana-Adresse",
     "adresseHilfe": "Die Kette wird erkannt. Bitcoin: am besten den xpub/zpub des Kontos (Ledger Live → Konto → Bearbeiten → Erweitert), sonst nur die eine Adresse.",
     "netze": "Netze:",
     "labelPlatzhalter": "Bezeichnung (optional)",
@@ -6438,6 +6438,17 @@
     "stKritDerivateKeine": "Keine Futures-Trades im Journal in diesem Jahr.",
     "stKritSelbst": "Aus den Daten nicht entscheidbar — bitte selbst prüfen.",
     "stAbweichungInfo": "Die Summe der Bewegungen weicht heute vom Bestand der Börse ab — eine Bewegung fehlt in der Historie; der Wert ist nicht belegt.",
-    "imErsetzen": "Vorhandene Orte aus der Datei ersetzen (korrigierte Zeilen übernehmen). Eigene Einordnungen bei diesen Orten gehen verloren."
+    "imErsetzen": "Vorhandene Orte aus der Datei ersetzen (korrigierte Zeilen übernehmen). Eigene Einordnungen bei diesen Orten gehen verloren.",
+    "ueUebernehmen": "Historie aus Import übernehmen",
+    "ueVorschlag": "{n} passend",
+    "ueHistorie": "Historie aus Import: {orte} · live ab {ab}",
+    "ueAendern": "ändern",
+    "ueErkl": "Bis zum Stichtag zählt die Historie der gewählten importierten Orte, danach liest die App diese Adresse live. Was live gemeldet wird, ersetzt den Import; Token, die live nicht lesbar sind (EVM ohne Etherscan-Schlüssel), bleiben aus dem Import stehen.",
+    "ueSchonVergeben": "schon einer anderen Adresse übergeben",
+    "ueAb": "Live ab (Ende des Tages):",
+    "ueLoesen": "Übergabe lösen",
+    "ueAn": "→ live: {an}",
+    "ueInfo": "Was diese Adresse live meldet, ersetzt den Import; der Rest bleibt aus dem Import.",
+    "ueAlles": "Bestand wird live gelesen — die Historie hier zählt für die Steuerjahre."
   }
 }

@@ -23,6 +23,7 @@ import { getDecryptedPionexConfig, getBotOrders } from '../pionex-api.js'
 import { pionexRequest } from '../pionex-transport.js'
 import { ausBitgetSteuer, ausBitunixOrders, ausPionexFills, ausBitpandaOperationen, ausEvm, ausBtc, saldiere } from './normal.js'
 import { leseXpub, leseAdresse } from './btc.js'
+
 import { EVM_NETZE } from '../../shared/portfolio-adresse.js'
 import { fxHeute } from './kurse.js'
 
@@ -361,6 +362,11 @@ export async function holeEvm(adresse, netze) {
         const netz = EVM_NETZE.find((n) => n.id === Number(id))
         if (!netz) continue
         const ort = `evm:${netz.id}`
+        if (netz.nurBestand) {
+            try { bestand.push(...(await holeVechain(adresse))) } catch (e) { hinweise.push(`${netz.name}: ${e.message}`) }
+            vollstaendig = false
+            continue
+        }
         if (key) {
             try {
                 const saldo = Number(await etherscan(key, netz.id, { module: 'account', action: 'balance', address: adresse, tag: 'latest' })) / 1e18
@@ -394,6 +400,40 @@ export async function holeEvm(adresse, netze) {
     }
     if (nurNativ.length) hinweise.unshift(`Ohne Etherscan-Schlüssel nur die Hauptwährung (${nurNativ.join(', ')}) — keine Token, keine Historie.`)
     return { bestand, bewegungen, vollstaendig, hinweis: hinweise.join(' · ') || null }
+}
+
+// ── VeChain (nur Bestand) ────────────────────────────────────────────────
+
+/** VET und VTHO (Energie, entsteht passiv aus gehaltenem VET) — gemessen 23.10.2026. */
+async function holeVechain(adresse) {
+    const r = await fetch(`https://mainnet.vechain.org/accounts/${adresse}`, { signal: AbortSignal.timeout(15000) })
+    if (!r.ok) throw new Error(`VeChain ${r.status}`)
+    const d = await r.json()
+    const aus = []
+    const vet = Number(BigInt(d.balance || '0x0')) / 1e18
+    const vtho = Number(BigInt(d.energy || '0x0')) / 1e18
+    if (vet > 0) aus.push({ ort: 'evm:100009', asset: 'VET', menge: vet })
+    if (vtho > 0) aus.push({ ort: 'evm:100009', asset: 'VTHO', menge: vtho })
+    return aus
+}
+
+// ── XRP (nur Bestand) ────────────────────────────────────────────────────
+
+export async function holeXrp(adresse) {
+    const r = await fetch('https://xrplcluster.com', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ method: 'account_info', params: [{ account: adresse, ledger_index: 'validated' }] }),
+        signal: AbortSignal.timeout(15000),
+    })
+    const d = await r.json()
+    if (d.result?.error === 'actNotFound') return { bestand: [], bewegungen: [], vollstaendig: false, hinweis: 'Konto noch nicht aktiviert.' }
+    if (!d.result?.account_data) throw new Error(d.result?.error_message || d.result?.error || 'XRPL ohne Antwort')
+    const xrp = Number(d.result.account_data.Balance) / 1e6
+    return {
+        bestand: xrp > 0 ? [{ ort: 'xrp', asset: 'XRP', menge: xrp }] : [],
+        bewegungen: [], vollstaendig: false,
+        hinweis: 'XRP: nur der Bestand (inkl. Reserve), keine Historie.',
+    }
 }
 
 // ── Bitcoin ──────────────────────────────────────────────────────────────

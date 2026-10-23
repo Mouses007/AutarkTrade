@@ -14,6 +14,7 @@
  */
 import { leseImportCsv } from './import.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from './steuer-rechnung.js'
+import { uebergaben, ohneUebernommene } from './uebergabe.js'
 
 let bestanden = 0, fehlgeschlagen = 0
 function check(name, ok, detail) {
@@ -120,6 +121,34 @@ console.log('\nFIFO, Haltedauer, Transfers')
     check('Volumen 2.3× ≤ 5× erfüllt', kr.volumen.erfuellt === true && nah(kr.volumen.wert, 2.335))
     check('Futures-Handel: Derivate-Kriterium nicht erfüllt', kr.derivate.erfuellt === false)
     check('Einkommen/Fremdfinanzierung: nicht aus Daten entscheidbar', kr.einkommen.erfuellt === null && kr.fremdfinanzierung.erfuellt === null)
+}
+
+console.log('\nÜbergabe Import → Live')
+{
+    const bestaende = [
+        { quelle: 'i:Ledger ETH', asset: 'ETH', menge: 1 }, { quelle: 'i:Ledger ETH', asset: 'USDC', menge: 0.23 },
+        { quelle: 'i:Ledger BSC', asset: 'BNB', menge: 0.009 },
+        { quelle: 'a7', asset: 'ETH', menge: 1.01 }, { quelle: 'a7', asset: 'BNB', menge: 0.009 },
+        { quelle: 'i:Ledger BTC', asset: 'BTC', menge: 0.02 }, { quelle: 'a8', asset: 'BTC', menge: 0.021 },
+        { quelle: 'i:Ledger XRP', asset: 'XRP', menge: 2277 },
+    ]
+    const adressen = [
+        { id: 7, importOrte: '["Ledger ETH","Ledger BSC"]', liveAb: 1 },
+        { id: 8, importOrte: ['Ledger BTC'], liveAb: 1 },
+        { id: 9, importOrte: ['Ledger XRP'], liveAb: 1 },
+    ]
+    const stand = new Map([
+        ['a7', { status: 'ok', stand: '{"vollstaendig":false}' }],
+        ['a8', { status: 'ok', stand: '{"vollstaendig":true}' }],
+        ['a9', { status: 'fehler', stand: '{}' }],
+    ])
+    const { ersetzt } = uebergaben(bestaende, adressen, stand)
+    const rest = ohneUebernommene(bestaende, ersetzt)
+    const hat = (q, a) => rest.some((b) => b.quelle === q && b.asset === a)
+    check('Live meldet ETH/BNB → Import-ETH/BNB fallen weg', !hat('i:Ledger ETH', 'ETH') && !hat('i:Ledger BSC', 'BNB') && hat('a7', 'ETH'))
+    check('Token, den live niemand liest (USDC ohne Schlüssel), bleibt aus dem Import', hat('i:Ledger ETH', 'USDC'))
+    check('Vollständige Live-Quelle (xpub) ersetzt den Import ganz', !hat('i:Ledger BTC', 'BTC') && hat('a8', 'BTC'))
+    check('Noch nie erfolgreich gelesen → Import bleibt stehen', hat('i:Ledger XRP', 'XRP'))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

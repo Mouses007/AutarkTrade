@@ -14,7 +14,7 @@
 import { getKnex } from '../database.js'
 import { decrypt } from '../crypto.js'
 import { beansprucheAufgabe } from '../db-claim.js'
-import { holeBitget, holeBitunix, holePionex, holeBitpanda, holeEvm, holeBtc, holeSol, NichtEingerichtet } from './quellen.js'
+import { holeBitget, holeBitunix, holePionex, holeBitpanda, holeEvm, holeBtc, holeSol, holeXrp, NichtEingerichtet } from './quellen.js'
 import { ordneTransfers } from './normal.js'
 import { fxAm, tagesKursUsd } from './kurse.js'
 import { berechneUebersicht } from './uebersicht.js'
@@ -75,6 +75,7 @@ async function holeQuelle(q, seit, altStand = {}) {
         return holeEvm(wert, netze)
     }
     if (a.kette === 'sol') return holeSol(wert)
+    if (a.kette === 'xrp') return holeXrp(wert)
     throw new Error(`Unbekannte Kette ${a.kette}`)
 }
 
@@ -214,6 +215,10 @@ export async function rufeAb({ nur = null } = {}) {
                 // die Bewegungen des abgebrochenen Laufs fehlen sonst für immer.
                 if (stand?.status === 'fehler') altStand = {}
                 const erg = await holeQuelle(q, Number(stand?.letzteBewegung) || null, altStand)
+                // Übergabe: die Historie bis `liveAb` kommt aus dem Import — live
+                // nur, was danach geschah, sonst wäre jede alte Bewegung doppelt.
+                const liveAb = Number(q.adresse?.liveAb) || 0
+                if (liveAb) erg.bewegungen = erg.bewegungen.filter((b) => Number(b.zeit) > liveAb)
                 await speichere(q.quelle, erg)
                 ergebnis.ok.push(q.quelle)
             } catch (e) {

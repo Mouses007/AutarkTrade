@@ -225,6 +225,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                         <div class="pf-ort-kopf">
                             <span class="pf-ort-titel">{{ q.name }}</span>
                             <Pille ton="neutral" :title="q.meldung || ''">{{ t('portfolio.ausDatei') }}</Pille>
+                            <Pille v-if="q.uebergeben" ton="akzent" :title="t('portfolio.ueInfo')">{{ t('portfolio.ueAn', { an: q.uebergeben.an }) }}</Pille>
                             <b class="at-ml-auto">{{ chf(q.chf) }}</b>
                         </div>
                         <div v-for="p in postenSichtbar(sortiert(q.posten))" :key="p.schluessel + p.ort" class="pf-ort">
@@ -232,7 +233,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span class="at-gedaempft">{{ menge(p.menge) }}</span>
                             <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
                         </div>
-                        <p v-if="!q.posten.length" class="pf-meldung">{{ t('portfolio.leerGeraeumt') }}</p>
+                        <p v-if="!q.posten.length" class="pf-meldung">{{ q.uebergeben ? t('portfolio.ueAlles') : t('portfolio.leerGeraeumt') }}</p>
                     </Karte>
                 </section>
                 <section v-if="wallets.length">

@@ -111,10 +111,17 @@ export function setupPortfolioRoutes(app) {
         try {
             const k = getKnex()
             const wallets = await k('portfolio_wallets').select('*').orderBy([{ column: 'sortierung' }, { column: 'id' }])
-            const adressen = await k('portfolio_adressen').select('id', 'walletId', 'kette', 'art', 'anzeige', 'netze', 'label').orderBy('id')
+            const adressen = await k('portfolio_adressen').select('id', 'walletId', 'kette', 'art', 'anzeige', 'netze', 'label', 'importOrte', 'liveAb').orderBy('id')
+            const importOrte = (await k('portfolio_quellen').where('quelle', 'like', 'i:%').select('quelle', 'letzteBewegung'))
+                .map((z) => ({ ort: z.quelle.slice(2), bis: Number(z.letzteBewegung) || null }))
             res.json({
-                ok: true, typen: WALLET_TYPEN, netze: EVM_NETZE, netzVorgabe: EVM_VORGABE,
-                wallets: wallets.map((w) => ({ ...w, adressen: adressen.filter((a) => a.walletId === w.id).map((a) => ({ ...a, netze: JSON.parse(a.netze || '[]') })) })),
+                ok: true, typen: WALLET_TYPEN, netze: EVM_NETZE, netzVorgabe: EVM_VORGABE, importOrte,
+                wallets: wallets.map((w) => ({
+                    ...w,
+                    adressen: adressen.filter((a) => a.walletId === w.id).map((a) => ({
+                        ...a, netze: JSON.parse(a.netze || '[]'), importOrte: JSON.parse(a.importOrte || '[]'), liveAb: Number(a.liveAb) || null,
+                    })),
+                })),
             })
         } catch (e) { fehler(res, e) }
     })
@@ -187,8 +194,27 @@ export function setupPortfolioRoutes(app) {
             const upd = {}
             if (Array.isArray(req.body?.netze)) upd.netze = JSON.stringify(req.body.netze.map(Number).filter((n) => EVM_NETZE.some((x) => x.id === n)))
             if (req.body?.label !== undefined) upd.label = String(req.body.label || '').trim().slice(0, 40) || null
+            // Übergabe Import → Live
+            if (req.body?.importOrte !== undefined) {
+                const orte = Array.isArray(req.body.importOrte) ? req.body.importOrte.map(String).filter(Boolean) : []
+                upd.importOrte = orte.length ? JSON.stringify(orte) : null
+                upd.liveAb = orte.length ? (Number(req.body.liveAb) || Date.now()) : null
+            }
             if (!Object.keys(upd).length) return fehler(res, 'Nichts zu ändern', 400)
-            await getKnex()('portfolio_adressen').where('id', Number(req.params.id)).update(upd)
+            const k = getKnex()
+            const id = Number(req.params.id)
+            await k.transaction(async (trx) => {
+                await trx('portfolio_adressen').where('id', id).update(upd)
+                // Schon live gelesene Bewegungen bis zum Stichtag stehen im Import —
+                // weg damit, sonst zählen sie doppelt.
+                if (upd.liveAb) {
+                    const ids = (await trx('portfolio_bewegungen').where('quelle', `a${id}`).where('zeit', '<=', upd.liveAb).select('id')).map((z) => z.id)
+                    for (let i = 0; i < ids.length; i += 500) {
+                        await trx('portfolio_bewegungen').whereIn('transferMit', ids.slice(i, i + 500)).update({ transferMit: null, transferSicher: null })
+                        await trx('portfolio_bewegungen').whereIn('id', ids.slice(i, i + 500)).del()
+                    }
+                }
+            })
             res.json({ ok: true })
         } catch (e) { fehler(res, e) }
     })

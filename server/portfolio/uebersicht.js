@@ -19,6 +19,7 @@ import { kurseFuer } from './kurse.js'
 import { saldiere } from './normal.js'
 import { boersenWahl, laufStand, BOERSEN } from './abruf.js'
 import { WALLET_TYPEN, EVM_NETZE, KETTEN } from '../../shared/portfolio-adresse.js'
+import { uebergaben, ohneUebernommene } from './uebergabe.js'
 
 const BOERSEN_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', bitpanda: 'Bitpanda' }
 
@@ -30,13 +31,16 @@ function kettenName(kette) {
 
 export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     const k = getKnex()
-    const [bestaende, quellenStand, wallets, adressen, settings] = await Promise.all([
+    const [alleBestaende, quellenStand, wallets, adressen, settings] = await Promise.all([
         k('portfolio_bestaende').select('*'),
         k('portfolio_quellen').select('*'),
         k('portfolio_wallets').select('*').orderBy([{ column: 'sortierung' }, { column: 'id' }]),
-        k('portfolio_adressen').select('id', 'walletId', 'kette', 'art', 'anzeige', 'netze', 'label').orderBy('id'),
+        k('portfolio_adressen').select('id', 'walletId', 'kette', 'art', 'anzeige', 'netze', 'label', 'importOrte', 'liveAb').orderBy('id'),
         k('settings').select('portfolioStaubChf').where('id', 1).first(),
     ])
+    // Übergabe Import → Live: was eine Adresse live meldet, ersetzt den Import.
+    const { ersetzt } = uebergaben(alleBestaende, adressen, new Map(quellenStand.map((q) => [q.quelle, q])))
+    const bestaende = ohneUebernommene(alleBestaende, ersetzt)
     const staubChf = Number(settings?.portfolioStaubChf ?? 1)
     const wahl = await boersenWahl()
 
@@ -146,10 +150,14 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
 
     // Importierte Orte (Datei): Bestand aus den Bewegungen, keine API.
     for (const st of quellenStand.filter((q) => q.quelle.startsWith('i:'))) {
+        const ue = ersetzt.get(st.quelle)
+        const adr = ue ? adressen.find((a) => a.id === ue.adressId) : null
+        const w = adr ? wallets.find((x) => x.id === adr.walletId) : null
         quellen.push({
             quelle: st.quelle, gruppe: 'import', name: st.quelle.slice(2), chf: jeQuelle.get(st.quelle)?.chf || 0,
             posten: jeQuelle.get(st.quelle)?.posten || [], status: st.status || 'ok', meldung: st.meldung || null,
             letzterAbruf: Number(st.letzterAbruf) || null, abgleich: null,
+            uebergeben: ue ? { an: `${w?.name || 'Wallet'} · ${adr.label || KETTEN[adr.kette]?.name || adr.kette}`, ab: ue.liveAb, alle: ue.alle } : null,
         })
     }
 

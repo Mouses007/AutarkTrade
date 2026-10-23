@@ -6349,7 +6349,7 @@
     "wirdGelesen": "fetching …",
     "weitereAdresse": "Another address",
     "ersteAdresse": "Paste an address or xpub of the {typ}",
-    "adressePlatzhalter": "zpub…, bc1q…, 0x… or Solana address",
+    "adressePlatzhalter": "zpub…, bc1q…, 0x…, r… (XRP) or Solana address",
     "adresseHilfe": "The chain is detected automatically. Bitcoin: preferably the account xpub/zpub (Ledger Live → Account → Edit → Advanced), otherwise just that one address.",
     "netze": "Networks:",
     "labelPlatzhalter": "Label (optional)",
@@ -6438,6 +6438,17 @@
     "stKritDerivateKeine": "No futures trades in the journal this year.",
     "stKritSelbst": "Cannot be decided from the data — please check yourself.",
     "stAbweichungInfo": "The sum of movements differs from the exchange balance today — a movement is missing in the history; the value is not evidenced.",
-    "imErsetzen": "Replace existing places from the file (take corrected rows). Your own classifications for these places are lost."
+    "imErsetzen": "Replace existing places from the file (take corrected rows). Your own classifications for these places are lost.",
+    "ueUebernehmen": "Take over history from import",
+    "ueVorschlag": "{n} matching",
+    "ueHistorie": "History from import: {orte} · live from {ab}",
+    "ueAendern": "change",
+    "ueErkl": "Up to the reference date the history of the selected imported places counts; after that the app reads this address live. What is reported live replaces the import; tokens that cannot be read live (EVM without an Etherscan key) stay from the import.",
+    "ueSchonVergeben": "already handed over to another address",
+    "ueAb": "Live from (end of day):",
+    "ueLoesen": "Undo hand-over",
+    "ueAn": "→ live: {an}",
+    "ueInfo": "What this address reports live replaces the import; the rest stays from the import.",
+    "ueAlles": "Balance is read live — the history here counts for the tax years."
   }
 }
