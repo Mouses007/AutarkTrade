@@ -80,12 +80,13 @@ function markiere(key) {
 
 // ── Orte ──
 const boersen = computed(() => (u.value?.quellen || []).filter((q) => q.gruppe === 'boerse'))
+const importe = computed(() => (u.value?.quellen || []).filter((q) => q.gruppe === 'import'))
 const wallets = computed(() => (u.value?.wallets || []))
 const fehlerQuellen = computed(() => (u.value?.quellen || []).filter((q) => q.status === 'fehler'))
 const ortName = (quelle) => {
     const q = (u.value?.quellen || []).find((x) => x.quelle === quelle)
     if (!q) return quelle
-    if (q.gruppe === 'boerse') return q.name
+    if (q.gruppe === 'boerse' || q.gruppe === 'import') return q.name
     const w = wallets.value.find((x) => x.id === q.walletId)
     return w ? `${w.name} · ${q.name}` : q.name
 }
@@ -216,6 +217,22 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
                         </div>
                         <p v-if="q.meldung && q.status !== 'fehler'" class="pf-meldung">{{ q.meldung }}</p>
+                    </Karte>
+                </section>
+                <section v-if="importe.length">
+                    <h3 class="pf-gruppe">{{ t('portfolio.importiert') }}</h3>
+                    <Karte v-for="q in importe" :key="q.quelle" dicht class="pf-ort-karte">
+                        <div class="pf-ort-kopf">
+                            <span class="pf-ort-titel">{{ q.name }}</span>
+                            <Pille ton="neutral" :title="q.meldung || ''">{{ t('portfolio.ausDatei') }}</Pille>
+                            <b class="at-ml-auto">{{ chf(q.chf) }}</b>
+                        </div>
+                        <div v-for="p in postenSichtbar(sortiert(q.posten))" :key="p.schluessel + p.ort" class="pf-ort">
+                            <span><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}</span>
+                            <span class="at-gedaempft">{{ menge(p.menge) }}</span>
+                            <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
+                        </div>
+                        <p v-if="!q.posten.length" class="pf-meldung">{{ t('portfolio.leerGeraeumt') }}</p>
                     </Karte>
                 </section>
                 <section v-if="wallets.length">

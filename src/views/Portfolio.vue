@@ -11,11 +11,12 @@ import { ladeUebersicht, uebersicht, laedt, ladeFehler } from '../stores/portfol
 import PortfolioUebersicht from '../components/portfolio/PortfolioUebersicht.vue'
 import PortfolioBewegungen from '../components/portfolio/PortfolioBewegungen.vue'
 import PortfolioQuellen from '../components/portfolio/PortfolioQuellen.vue'
+import PortfolioSteuer from '../components/portfolio/PortfolioSteuer.vue'
 import { Hinweis, Kreisel } from '../components/basis/index.js'
 
 const { t } = useI18n()
 const route = useRoute()
-const reiter = computed(() => (['bewegungen', 'quellen'].includes(route.params.reiter) ? route.params.reiter : 'uebersicht'))
+const reiter = computed(() => (['bewegungen', 'quellen', 'steuer'].includes(route.params.reiter) ? route.params.reiter : 'uebersicht'))
 
 onMounted(ladeUebersicht)
 </script>
@@ -28,6 +29,7 @@ onMounted(ladeUebersicht)
         <template v-else>
             <PortfolioUebersicht v-if="reiter === 'uebersicht'" />
             <PortfolioBewegungen v-else-if="reiter === 'bewegungen'" />
+            <PortfolioSteuer v-else-if="reiter === 'steuer'" />
             <PortfolioQuellen v-else />
         </template>
     </div>

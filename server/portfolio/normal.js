@@ -15,10 +15,10 @@
  *
  * Arten (fein, weil sie sich steuerlich unterscheiden):
  *   kauf, verkauf, tausch, einzahlung, auszahlung, umbuchung, staking,
- *   airdrop, belohnung, gebuehr, sonstiges
+ *   airdrop, belohnung, gebuehr, sonstiges, bestand (Eröffnungsbestand aus einem Import)
  */
 
-export const ARTEN = ['kauf', 'verkauf', 'tausch', 'einzahlung', 'auszahlung', 'umbuchung', 'staking', 'airdrop', 'belohnung', 'gebuehr', 'sonstiges']
+export const ARTEN = ['kauf', 'verkauf', 'tausch', 'einzahlung', 'auszahlung', 'umbuchung', 'staking', 'airdrop', 'belohnung', 'gebuehr', 'sonstiges', 'bestand']
 
 const zahl = (v) => {
     if (v === null || v === undefined || v === '') return null

@@ -19,6 +19,12 @@
  *   POST   /schluessel       {name, wert}
  *   DELETE /schluessel/:name
  *   POST   /bitpanda/test    {wert?}
+ *   POST   /import           {text, nurPruefen?}  Datei-Import (Format: import.js)
+ *   DELETE /import/:ort                    einen importierten Ort entfernen
+ *   GET    /steuer?jahr=                   Steuerjahr (Vermögen 31.12., Einkommen, Abgänge, Kriterien)
+ *   GET    /steuer.csv?jahr=               dasselbe als CSV
+ *   GET    /steuer/jahre                   Jahre mit Bewegungen
+ *   PUT    /steuerkurs       {jahr, asset, chf|null, quelle}
  */
 
 import crypto from 'crypto'
@@ -28,7 +34,9 @@ import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } fro
 import { berechneUebersicht } from './uebersicht.js'
 import { rufeAb, laufStand } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
-import { ARTEN, FIAT } from './normal.js'
+import { ARTEN, FIAT, saldiere } from './normal.js'
+import { leseImportCsv, importQuelle } from './import.js'
+import { berechneSteuerjahr, steuerCsv } from './steuer.js'
 
 const SCHLUESSEL_NAMEN = ['bitpanda', 'etherscan']
 const EINORDNUNGEN = ['transfer', 'kauf', 'einkommen', 'ignorieren']
@@ -191,6 +199,117 @@ export function setupPortfolioRoutes(app) {
         } catch (e) { fehler(res, e) }
     })
 
+    // ── Datei-Import ──
+    app.post('/api/portfolio/import', async (req, res) => {
+        try {
+            const text = String(req.body?.text || '')
+            if (!text.trim()) return fehler(res, 'Datei ist leer', 400)
+            if (text.length > 20 * 1024 * 1024) return fehler(res, 'Datei zu gross (max. 20 MB)', 400)
+            const r = leseImportCsv(text)
+            const orte = Object.entries(r.orte).map(([ort, o]) => ({ ort, quelle: importQuelle(ort), ...o }))
+            if (r.fehler.length) return res.json({ ok: false, fehler: r.fehler.slice(0, 200), anzahlFehler: r.fehler.length, zeilen: r.zeilen.length, orte })
+            const k = getKnex()
+            // Vorschau: Bestand je Ort, wie er nach dem Import aussähe — und ob ein Ort schon da ist.
+            const vorhanden = new Set((await k('portfolio_quellen').where('quelle', 'like', 'i:%').select('quelle')).map((z) => z.quelle))
+            const vorschau = orte.map((o) => {
+                const s = saldiere(r.zeilen.filter((z) => z.ort === o.ort && z.einordnung !== 'ignorieren'))
+                const bestand = [...s.entries()].filter(([, m]) => Math.abs(m) > 1e-9).map(([key, menge]) => ({ asset: key.split('|')[0], menge }))
+                // Negatives Fiat heisst nur: die Bankeinzahlungen stehen nicht in der Datei — kein Loch.
+                return { ...o, vorhanden: vorhanden.has(o.quelle), bestand, negativ: bestand.filter((b) => b.menge < 0 && !FIAT.includes(b.asset)) }
+            })
+            if (req.body?.nurPruefen) return res.json({ ok: true, vorschau, zeilen: r.zeilen.length })
+
+            const jetzt = Date.now()
+            let neu = 0
+            const ergebnis = []
+            await k.transaction(async (trx) => {
+                for (let i = 0; i < r.zeilen.length; i += 200) {
+                    const teil = r.zeilen.slice(i, i + 200).map((z) => ({
+                        quelle: z.quelle, externeId: z.externeId, zeit: z.zeit, art: z.art, asset: z.asset, menge: z.menge,
+                        gegenAsset: z.gegenAsset, gegenMenge: z.gegenMenge, gebuehrAsset: z.gebuehrAsset, gebuehrMenge: z.gebuehrMenge,
+                        txHash: z.txHash, kette: z.kette, kontrakt: z.kontrakt, einordnung: z.einordnung,
+                        chfWert: z.chfWert, chfQuelle: z.chfWert != null ? 'Import' : null,
+                        sicherheit: z.sicherheit, notiz: z.notiz, createdAt: jetzt,
+                    }))
+                    const vorher = await trx('portfolio_bewegungen').whereIn('quelle', [...new Set(teil.map((t) => t.quelle))]).count({ n: '*' }).first()
+                    await trx('portfolio_bewegungen').insert(teil).onConflict(['quelle', 'externeId']).ignore()
+                    const nachher = await trx('portfolio_bewegungen').whereIn('quelle', [...new Set(teil.map((t) => t.quelle))]).count({ n: '*' }).first()
+                    neu += Number(nachher.n) - Number(vorher.n)
+                }
+                for (const o of orte) {
+                    const negativ = await bestandAusImport(trx, o.quelle)
+                    const n = await trx('portfolio_bewegungen').where('quelle', o.quelle).count({ n: '*' }).first()
+                    await trx('portfolio_quellen').insert({
+                        quelle: o.quelle, letzterAbruf: jetzt, letzteBewegung: o.bis, status: 'ok',
+                        meldung: `Import: ${n.n} Bewegungen${negativ.length ? ` · negativ: ${negativ.join(', ')}` : ''}`,
+                        stand: JSON.stringify({ art: 'import', vollstaendig: true, ort: o.ort }),
+                    }).onConflict('quelle').merge()
+                    ergebnis.push({ ort: o.ort, negativ })
+                }
+            })
+            res.json({ ok: true, neu, uebersprungen: r.zeilen.length - neu, orte: ergebnis })
+        } catch (e) { fehler(res, e) }
+    })
+
+    app.delete('/api/portfolio/import/:ort', async (req, res) => {
+        try {
+            const quelle = importQuelle(req.params.ort)
+            const k = getKnex()
+            await k.transaction(async (trx) => {
+                const ids = (await trx('portfolio_bewegungen').where('quelle', quelle).select('id')).map((z) => z.id)
+                for (let i = 0; i < ids.length; i += 500) {
+                    await trx('portfolio_bewegungen').whereIn('transferMit', ids.slice(i, i + 500)).update({ transferMit: null, transferSicher: null })
+                }
+                await trx('portfolio_bewegungen').where('quelle', quelle).del()
+                await trx('portfolio_bestaende').where('quelle', quelle).del()
+                await trx('portfolio_quellen').where('quelle', quelle).del()
+            })
+            res.json({ ok: true })
+        } catch (e) { fehler(res, e) }
+    })
+
+    // ── Steuer ──
+    app.get('/api/portfolio/steuer/jahre', async (req, res) => {
+        try {
+            const z = await getKnex()('portfolio_bewegungen').min({ von: 'zeit' }).first()
+            const erstes = z?.von ? new Date(Number(z.von)).getUTCFullYear() : new Date().getFullYear()
+            const jahre = []
+            for (let j = new Date().getFullYear(); j >= erstes; j--) jahre.push(j)
+            res.json({ ok: true, jahre })
+        } catch (e) { fehler(res, e) }
+    })
+    app.get('/api/portfolio/steuer', async (req, res) => {
+        try {
+            const jahr = Number(req.query.jahr) || new Date().getFullYear() - 1
+            res.json({ ok: true, ...(await berechneSteuerjahr(jahr)) })
+        } catch (e) { fehler(res, e) }
+    })
+    app.get('/api/portfolio/steuer.csv', async (req, res) => {
+        try {
+            const jahr = Number(req.query.jahr) || new Date().getFullYear() - 1
+            const csv = steuerCsv(await berechneSteuerjahr(jahr))
+            res.setHeader('Content-Type', 'text/csv; charset=utf-8')
+            res.setHeader('Content-Disposition', `attachment; filename="krypto-steuer-${jahr}.csv"`)
+            res.send(csv)
+        } catch (e) { fehler(res, e) }
+    })
+    app.put('/api/portfolio/steuerkurs', async (req, res) => {
+        try {
+            const jahr = Number(req.body?.jahr), asset = String(req.body?.asset || '').toUpperCase()
+            if (!jahr || !asset) return fehler(res, 'Jahr und Asset nötig', 400)
+            const k = getKnex()
+            if (req.body?.chf == null || req.body.chf === '') {
+                await k('portfolio_steuerkurse').where({ jahr, asset }).del()
+            } else {
+                const chf = Number(req.body.chf)
+                if (!(chf >= 0)) return fehler(res, 'Kurs ungültig', 400)
+                await k('portfolio_steuerkurse').insert({ jahr, asset, chf, quelle: req.body.quelle === 'estv' ? 'estv' : 'manuell', updatedAt: Date.now() })
+                    .onConflict(['jahr', 'asset']).merge()
+            }
+            res.json({ ok: true })
+        } catch (e) { fehler(res, e) }
+    })
+
     // ── Zugänge ──
     app.get('/api/portfolio/schluessel', async (req, res) => {
         try {
@@ -221,6 +340,23 @@ export function setupPortfolioRoutes(app) {
             res.json({ ok: true })
         } catch (e) { fehler(res, e) }
     })
+}
+
+/** Bestand eines importierten Orts aus seinen Bewegungen (eine API gibt es nicht). */
+async function bestandAusImport(trx, quelle) {
+    const bew = await trx('portfolio_bewegungen').where('quelle', quelle)
+        .select('asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge', 'kontrakt', 'einordnung')
+    const s = saldiere(bew.filter((b) => b.einordnung !== 'ignorieren'))
+    await trx('portfolio_bestaende').where('quelle', quelle).del()
+    const zeilen = []
+    const negativ = []
+    for (const [key, menge] of s) {
+        const [asset, kontrakt] = key.split('|')
+        if (menge < -1e-9 && !FIAT.includes(asset)) negativ.push(`${asset} ${menge}`)
+        if (menge > 1e-12) zeilen.push({ quelle, ort: 'import', asset, kontrakt: kontrakt || null, menge, zeit: Date.now() })
+    }
+    if (zeilen.length) await trx('portfolio_bestaende').insert(zeilen)
+    return negativ
 }
 
 async function loescheAdresse(trx, id) {

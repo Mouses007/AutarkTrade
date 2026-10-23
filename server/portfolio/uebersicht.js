@@ -144,6 +144,15 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         quellen.push(q)
     }
 
+    // Importierte Orte (Datei): Bestand aus den Bewegungen, keine API.
+    for (const st of quellenStand.filter((q) => q.quelle.startsWith('i:'))) {
+        quellen.push({
+            quelle: st.quelle, gruppe: 'import', name: st.quelle.slice(2), chf: jeQuelle.get(st.quelle)?.chf || 0,
+            posten: jeQuelle.get(st.quelle)?.posten || [], status: st.status || 'ok', meldung: st.meldung || null,
+            letzterAbruf: Number(st.letzterAbruf) || null, abgleich: null,
+        })
+    }
+
     let verlauf = []
     if (!ohneVerlauf) {
         verlauf = (await k('portfolio_verlauf').select('datum', 'wertChf').orderBy('datum', 'desc').limit(400)).reverse()

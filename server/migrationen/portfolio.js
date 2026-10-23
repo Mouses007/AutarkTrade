@@ -116,6 +116,20 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
             t.text('stand')                          // JSON: Quellen-eigene Zusatzinfos
         })
     }
+    // Import (Datei): wie belegt eine Zeile ist, und die Notiz der Rekonstruktion.
+    await addColumnIfNotExists('portfolio_bewegungen', 'sicherheit', (t) => t.string('sicherheit'))
+    await addColumnIfNotExists('portfolio_bewegungen', 'notiz', (t) => t.text('notiz'))
+    // Steuerkurse je Jahr und Asset (ESTV-Kursliste oder von Hand); fehlt einer, gilt der Jahresschlusskurs.
+    if (!(await knex.schema.hasTable('portfolio_steuerkurse'))) {
+        await knex.schema.createTable('portfolio_steuerkurse', (t) => {
+            t.integer('jahr').notNullable()
+            t.string('asset').notNullable()
+            t.double('chf').notNullable()
+            t.string('quelle')                       // estv | manuell
+            t.bigInteger('updatedAt')
+            t.primary(['jahr', 'asset'])
+        })
+    }
     // Kurs, den die Quelle selbst nennt (Bitpanda `currency_balance` / Menge) — Ersatz, wenn keine Börse den Coin führt.
     await addColumnIfNotExists('portfolio_bestaende', 'kursUsd', (t) => t.double('kursUsd'))
     await addColumnIfNotExists('settings', 'modusPortfolioAn', (t) => t.integer('modusPortfolioAn').defaultTo(1))

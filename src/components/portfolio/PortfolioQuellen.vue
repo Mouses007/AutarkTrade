@@ -15,6 +15,7 @@ import { appEinstellungen } from '../../stores/settings.js'
 import { dbUpdateSettings } from '../../utils/db.js'
 import { Karte, Knopf, Pille, Symbol, Hinweis } from '../basis/index.js'
 import AdressEingabe from './AdressEingabe.vue'
+import ImportKarte from './ImportKarte.vue'
 
 const { t } = useI18n()
 
@@ -160,6 +161,7 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
                     <small class="at-gedaempft">{{ t('portfolio.paareHilfe') }}</small>
                 </div>
             </Karte>
+            <ImportKarte />
         </section>
 
         <!-- ── Wallets ── -->
