@@ -6449,6 +6449,20 @@
     "ueLoesen": "Undo hand-over",
     "ueAn": "→ live: {an}",
     "ueInfo": "What this address reports live replaces the import; the rest stays from the import.",
-    "ueAlles": "Balance is read live — the history here counts for the tax years."
+    "ueAlles": "Balance is read live — the history here counts for the tax years.",
+    "biTitel": "Balance (for information)",
+    "biRein": "Net cash in",
+    "biHeute": "Value today",
+    "biDifferenz": "Difference",
+    "biBargeld": "Cash",
+    "biEingezahlt": "Deposited (CHF, EUR, USD)",
+    "biKarte": "Paid directly by card",
+    "biAusgezahlt": "Back to the bank",
+    "biNetto": "Net put in",
+    "biAbgeleitet": "Of which {v} reconstructed (Crypto.com from the Delta book and CoinTracking).",
+    "biWert": "Value today",
+    "biSpot": "Spot portfolio",
+    "biJeJahr": "Deposited per year",
+    "biInfo": "For information only, not for tax. EUR and USD at the ECB rate of the deposit date; futures balances at today’s rate. What went to a futures exchange as stablecoin is part of the balance there."
   }
 }

@@ -17,6 +17,7 @@ import { useRouter } from 'vue-router'
 import { uebersicht, abrufLaeuft, abrufQuelle, starteAbruf, staubZeigen, setzeStaub, verborgen, schalteVerborgen,
     chf, menge, prozent, vorZeit, farbeVon } from '../../stores/portfolio.js'
 import { Karte, Knopf, Reiter, Hinweis, Leerzustand, Symbol, Pille } from '../basis/index.js'
+import BilanzKarte from './BilanzKarte.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -143,6 +144,8 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                 </button>
             </div>
         </Karte>
+
+        <BilanzKarte v-if="u.quellen.length" />
 
         <Hinweis v-for="q in fehlerQuellen" :key="q.quelle" art="fehler" class="at-mo-3" :titel="t('portfolio.quelleFehler', { q: ortName(q.quelle) })">
             {{ q.meldung }} <span class="at-gedaempft">· {{ t('portfolio.zeigtLetzten') }}</span>

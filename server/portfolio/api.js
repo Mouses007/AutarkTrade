@@ -32,6 +32,7 @@ import { getKnex } from '../database.js'
 import { encrypt } from '../crypto.js'
 import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } from '../../shared/portfolio-adresse.js'
 import { berechneUebersicht } from './uebersicht.js'
+import { berechneBilanz } from './bilanz.js'
 import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
 import { ARTEN, FIAT } from './normal.js'
@@ -50,6 +51,14 @@ const fingerabdruck = (s) => crypto.createHash('sha256').update(String(s).trim()
 export function setupPortfolioRoutes(app) {
     app.get('/api/portfolio/uebersicht', async (req, res) => {
         try { res.json({ ok: true, ...(await berechneUebersicht()) }) } catch (e) { fehler(res, e) }
+    })
+
+    // Bilanz zur Info: Bargeld rein ↔ Wert heute (Spot + Futures-Konten).
+    app.get('/api/portfolio/bilanz', async (req, res) => {
+        try {
+            const u = await berechneUebersicht({ ohneVerlauf: true })
+            res.json({ ok: true, ...(await berechneBilanz({ spotChf: u.gesamt.chf, usdChf: u.fx.chf })) })
+        } catch (e) { fehler(res, e) }
     })
 
     app.post('/api/portfolio/abruf', async (req, res) => {

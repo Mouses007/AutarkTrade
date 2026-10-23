@@ -6449,6 +6449,20 @@
     "ueLoesen": "Übergabe lösen",
     "ueAn": "→ live: {an}",
     "ueInfo": "Was diese Adresse live meldet, ersetzt den Import; der Rest bleibt aus dem Import.",
-    "ueAlles": "Bestand wird live gelesen — die Historie hier zählt für die Steuerjahre."
+    "ueAlles": "Bestand wird live gelesen — die Historie hier zählt für die Steuerjahre.",
+    "biTitel": "Bilanz (zur Info)",
+    "biRein": "Bargeld netto rein",
+    "biHeute": "Wert heute",
+    "biDifferenz": "Differenz",
+    "biBargeld": "Bargeld",
+    "biEingezahlt": "Eingezahlt (CHF, EUR, USD)",
+    "biKarte": "Direkt mit Karte bezahlt",
+    "biAusgezahlt": "Auf die Bank zurück",
+    "biNetto": "Netto hineingesteckt",
+    "biAbgeleitet": "Davon {v} rekonstruiert (Crypto.com aus Delta-Buch und CoinTracking).",
+    "biWert": "Wert heute",
+    "biSpot": "Spot-Portfolio",
+    "biJeJahr": "Eingezahlt je Jahr",
+    "biInfo": "Nur zur Information, nicht für die Steuer. EUR und USD zum EZB-Kurs des Einzahlungstags; Futures-Guthaben zum heutigen Kurs. Was als Stablecoin auf eine Futures-Börse ging, steckt im Guthaben dort."
   }
 }
