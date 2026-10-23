@@ -48,6 +48,14 @@ console.log('\nBIP49 (ypub, 3…)')
     check('Empfang 0', leiteAb(ypub, 0, 0, 1)[0] === '37VucYSaXLCAsxYyAPfbSi9eh4iEcbShgf', leiteAb(ypub, 0, 0, 1)[0])
 }
 
+console.log('\nGenerischer xpub mit erzwungener Adressart (Ledger)')
+{
+    // Ledger zeigt den BIP84-Kontoschlüssel als „xpub" — dieselben Bytes, andere Versionszahl.
+    const xpubAus84 = HDKey.fromMasterSeed(seed).derive("m/84'/0'/0'").publicExtendedKey
+    check('xpub des BIP84-Kontos + p2wpkh = bc1q-Testvektor', leiteAb(xpubAus84, 0, 0, 1, 'p2wpkh')[0] === 'bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu')
+    check('ohne Angabe wäre es eine (falsche) Legacy-Adresse', leiteAb(xpubAus84, 0, 0, 1)[0].startsWith('1'))
+}
+
 console.log('\nNetto-Wirkung')
 {
     const eigene = new Set(['A', 'B'])

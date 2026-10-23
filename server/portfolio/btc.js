@@ -54,11 +54,19 @@ export function adresseAusSchluessel(pub, ableitung) {
  * @param {number} von
  * @param {number} anzahl
  */
-export function leiteAb(xpub, zweig, von, anzahl) {
+export const ABLEITUNGEN = ['p2wpkh', 'p2sh-p2wpkh', 'p2pkh']
+
+/**
+ * @param {string} [ableitungErzwungen]  Ledger zeigt für JEDES Konto einen
+ *   generischen „xpub", auch für Native SegWit (bc1q…) — das Präfix sagt
+ *   dann nichts über die Adressart. Wer die Art kennt (`erkenneAbleitung`),
+ *   gibt sie hier mit.
+ */
+export function leiteAb(xpub, zweig, von, anzahl, ableitungErzwungen = null) {
     const art = String(xpub).slice(0, 4)
     const v = VERSIONEN[art]
     if (!v) throw new Error('Kein xpub/ypub/zpub')
-    const ableitung = art === 'zpub' ? 'p2wpkh' : art === 'ypub' ? 'p2sh-p2wpkh' : 'p2pkh'
+    const ableitung = ableitungErzwungen || (art === 'zpub' ? 'p2wpkh' : art === 'ypub' ? 'p2sh-p2wpkh' : 'p2pkh')
     const konto = HDKey.fromExtendedKey(xpub, v)
     const z = konto.deriveChild(zweig)
     const aus = []
@@ -175,14 +183,34 @@ export function nettoWirkung(tx, eigene) {
  *   Historie wird nur für Adressen geholt, deren Zahl sich geändert hat —
  *   eine viel benutzte Wallet kostet sonst bei jedem Lauf Minuten.
  */
-export async function leseXpub(xpub, vorher = {}) {
+/**
+ * Welche Adressart benutzt dieses Konto? Für ein `xpub` (bei Ledger auch für
+ * SegWit-Konten) werden die ersten Empfangsadressen in allen drei Arten
+ * gefragt; die Art mit Transaktionen gewinnt. ypub/zpub sind eindeutig.
+ * @returns {Promise<string|null>}  null = keine Art hat je eine Transaktion
+ */
+export async function erkenneAbleitung(xpub) {
+    const art = String(xpub).slice(0, 4)
+    if (art === 'zpub') return 'p2wpkh'
+    if (art === 'ypub') return 'p2sh-p2wpkh'
+    for (const ableitung of ABLEITUNGEN) {
+        for (const a of leiteAb(xpub, 0, 0, 5, ableitung)) {
+            const st = await adressStand(a)
+            await warte(PAUSE_MS)
+            if (st.txAnzahl > 0) return ableitung
+        }
+    }
+    return null
+}
+
+export async function leseXpub(xpub, vorher = {}, ableitung = null) {
     const benutzt = []
     const zaehler = {}
     let sats = 0
     for (const zweig of [0, 1]) {
         let leer = 0
         for (let i = 0; i < MAX_ADRESSEN && leer < LUECKE; i += 10) {
-            const block = leiteAb(xpub, zweig, i, 10)
+            const block = leiteAb(xpub, zweig, i, 10, ableitung)
             for (const a of block) {
                 const st = await adressStand(a)
                 await warte(PAUSE_MS)
@@ -192,7 +220,7 @@ export async function leseXpub(xpub, vorher = {}) {
         }
     }
     const geaendert = benutzt.filter((a) => vorher[a] !== zaehler[a])
-    return { sats, adressen: benutzt.length, zaehler, bewegungen: await bewegungenFuer(benutzt, geaendert) }
+    return { sats, adressen: benutzt.length, zaehler, ableitung, bewegungen: await bewegungenFuer(benutzt, geaendert) }
 }
 
 /** Einzelne Adresse lesen (wer keinen xpub hat). */

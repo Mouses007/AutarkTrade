@@ -22,7 +22,7 @@ import { getDecryptedConfig as bitunixConfig, bitunixRequest, BITUNIX_SPOT_URL }
 import { getDecryptedPionexConfig, getBotOrders } from '../pionex-api.js'
 import { pionexRequest } from '../pionex-transport.js'
 import { ausBitgetSteuer, ausBitunixOrders, ausPionexFills, ausBitpandaOperationen, ausEvm, ausBtc, saldiere } from './normal.js'
-import { leseXpub, leseAdresse } from './btc.js'
+import { leseXpub, leseAdresse, erkenneAbleitung } from './btc.js'
 
 import { EVM_NETZE } from '../../shared/portfolio-adresse.js'
 import { fxHeute } from './kurse.js'
@@ -438,15 +438,26 @@ export async function holeXrp(adresse) {
 
 // ── Bitcoin ──────────────────────────────────────────────────────────────
 
+const ART_TEXT = { p2wpkh: 'Native SegWit', 'p2sh-p2wpkh': 'Nested SegWit', p2pkh: 'Legacy' }
+
 export async function holeBtc(wert, art, stand = {}) {
     const vorher = stand.zaehler || {}
-    const d = art === 'adresse' ? await leseAdresse(wert, vorher) : await leseXpub(wert, vorher)
+    if (art === 'adresse') {
+        const d = await leseAdresse(wert, vorher)
+        return { bestand: d.sats > 0 ? [{ ort: 'btc', asset: 'BTC', menge: d.sats / 1e8 }] : [], bewegungen: ausBtc(d.bewegungen), vollstaendig: true, stand: { zaehler: d.zaehler }, hinweis: null }
+    }
+    // Adressart einmal erkennen und merken (Ledger: generischer xpub auch für bc1q-Konten).
+    const ableitung = stand.ableitung || (await erkenneAbleitung(wert))
+    if (!ableitung) {
+        return { bestand: [], bewegungen: [], vollstaendig: true, stand: {}, hinweis: 'Auf keiner Adressart (bc1q, 3…, 1…) eine Transaktion gefunden — richtiger Kontoschlüssel?' }
+    }
+    const d = await leseXpub(wert, vorher, ableitung)
     return {
         bestand: d.sats > 0 ? [{ ort: 'btc', asset: 'BTC', menge: d.sats / 1e8 }] : [],
         bewegungen: ausBtc(d.bewegungen),
         vollstaendig: true,
-        stand: { zaehler: d.zaehler },
-        hinweis: art === 'adresse' ? null : `${d.adressen} benutzte Adressen`,
+        stand: { zaehler: d.zaehler, ableitung },
+        hinweis: `${ART_TEXT[ableitung]}, ${d.adressen} benutzte Adressen`,
     }
 }
 
