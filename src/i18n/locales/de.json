@@ -5193,7 +5193,8 @@
     "legendeZu": "Legende einklappen",
     "legendeAuf": "Legende ausklappen",
     "schublade": {
-      "imChart": "Im Chart zeigen"
+      "imChart": "Im Chart zeigen",
+      "werkzeuge": "Zeichenwerkzeuge"
     },
     "coinTabs": {
       "titel": "Offene Coins",

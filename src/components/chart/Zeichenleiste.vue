@@ -25,6 +25,8 @@ const props = defineProps({
     werkzeug: { type: String, default: null },
     magnet: { type: Boolean, default: false },
     versteckt: { type: Boolean, default: false },
+    /** Handy-Schublade: immer mit Namen, ohne Ein-/Ausklappen. */
+    immerOffen: { type: Boolean, default: false },
 })
 const emit = defineEmits(['werkzeug', 'magnet', 'versteckt', 'alleLoeschen'])
 const { t } = useI18n()
@@ -58,20 +60,21 @@ const SCHLUESSEL = 'chartWerkzeugeOffen'
 function lese() {
     try { return localStorage.getItem(SCHLUESSEL) === '1' } catch { return false }
 }
-const offen = ref(lese())
+const offenGemerkt = ref(lese())
+const offen = computed(() => props.immerOffen || offenGemerkt.value)
 function umschalten() {
-    offen.value = !offen.value
-    try { localStorage.setItem(SCHLUESSEL, offen.value ? '1' : '0') } catch { /* kein Speicher */ }
+    offenGemerkt.value = !offenGemerkt.value
+    try { localStorage.setItem(SCHLUESSEL, offenGemerkt.value ? '1' : '0') } catch { /* kein Speicher */ }
 }
 </script>
 
 <template>
     <div class="zeichenleiste" :class="{ offen }">
-        <button class="w klappe" :title="t(offen ? 'chart.wzKurz.einklappen' : 'chart.wzKurz.ausklappen')" @click="umschalten" :aria-label="t(offen ? 'chart.wzKurz.einklappen' : 'chart.wzKurz.ausklappen')">
+        <button v-if="!immerOffen" class="w klappe" :title="t(offen ? 'chart.wzKurz.einklappen' : 'chart.wzKurz.ausklappen')" @click="umschalten" :aria-label="t(offen ? 'chart.wzKurz.einklappen' : 'chart.wzKurz.ausklappen')">
             <Symbol :name="offen ? 'doppelLinks' : 'doppelRechts'" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.einklappen') }}</span>
         </button>
-        <hr />
+        <hr v-if="!immerOffen" />
         <button class="w" :class="{ an: !werkzeug }" :title="t('chart.wz.zeiger')" @click="emit('werkzeug', null)" :aria-label="t('chart.wz.zeiger')">
             <Symbol name="maus" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wz.zeiger') }}</span>
