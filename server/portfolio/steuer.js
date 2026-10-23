@@ -40,33 +40,37 @@ async function quellenStand() {
 }
 
 /** Steuerkurs (CHF je Einheit) eines Assets am Jahresende, mit Quelle. */
-async function steuerkurs(asset, jahr, manuell, fxCache, token) {
+async function steuerkurs(asset, jahr, manuell, fxCache, token, datum = `${jahr}-12-31`) {
     const m = manuell.get(asset)
     if (m) return { chf: m.chf, quelle: m.quelle === 'estv' ? 'ESTV-Kursliste' : 'von Hand' }
     if (asset === 'CHF') return { chf: 1, quelle: 'CHF' }
-    const datum = `${jahr}-12-31`
+    const tag = datum.slice(8, 10) + '.' + datum.slice(5, 7) + '.'
     if (!fxCache.chf) fxCache.chf = await fxAm(datum, 'CHF')
     if (!fxCache.chf) return { chf: null, quelle: 'kein Wechselkurs' }
     if (asset === 'EUR') {
         if (!fxCache.eur) fxCache.eur = await fxAm(datum, 'EUR')
-        return fxCache.eur ? { chf: fxCache.chf / fxCache.eur, quelle: 'EZB 31.12.' } : { chf: null, quelle: 'kein Wechselkurs' }
+        return fxCache.eur ? { chf: fxCache.chf / fxCache.eur, quelle: `EZB ${tag}` } : { chf: null, quelle: 'kein Wechselkurs' }
     }
-    if (asset in STABIL) return { chf: fxCache.chf, quelle: 'Stablecoin · EZB 31.12.' }
+    if (asset in STABIL) return { chf: fxCache.chf, quelle: `Stablecoin · EZB ${tag}` }
     // Ein Wallet-Token, der nur wie ein Börsen-Coin heisst, bekommt dessen Kurs NICHT.
     if (token && !(await gleicherCoin(asset, token.kontrakt, token.kette))) {
         return { chf: null, quelle: 'Token ohne Börsenkurs' }
     }
     const t = await tagesKursUsd(asset, datum)
-    return t.usd != null ? { chf: t.usd * fxCache.chf, quelle: `${t.quelle} 31.12. · EZB` } : { chf: null, quelle: 'kein Kurs' }
+    return t.usd != null ? { chf: t.usd * fxCache.chf, quelle: `${t.quelle} ${tag} · EZB` } : { chf: null, quelle: 'kein Kurs' }
 }
 
-async function bewerte(mengen, jahr, tokens = new Map()) {
+/**
+ * @param {string} [datum]  Bewertungstag; im laufenden Jahr gestern (den
+ *   31.12. gibt es noch nicht — das Vermögen wäre sonst 0), sonst der 31.12.
+ */
+async function bewerte(mengen, jahr, tokens = new Map(), datum = `${jahr}-12-31`) {
     const k = getKnex()
     const manuell = new Map((await k('portfolio_steuerkurse').where('jahr', jahr)).map((z) => [z.asset, z]))
     const fxCache = {}
     const kurse = new Map()
     for (const asset of new Set([...mengen.keys()].map((k2) => k2.split('\u0000')[1]))) {
-        kurse.set(asset, await steuerkurs(asset, jahr, manuell, fxCache, tokens.get(asset)))
+        kurse.set(asset, await steuerkurs(asset, jahr, manuell, fxCache, tokens.get(asset), datum))
     }
     return kurse
 }
@@ -148,7 +152,8 @@ export async function berechneSteuerjahr(jahr) {
     // Rundungsreste (Bitpanda: SHIB −1.4e-9) sind kein Bestand und kein Loch.
     for (const [key, m] of mengen) if (Math.abs(m) < 1e-8) mengen.delete(key)
     const tokens = tokenVertraege(bew)
-    const kurse = await bewerte(mengen, jahr, tokens)
+    const gestern = new Date(jetzt - 86400e3).toISOString().slice(0, 10)
+    const kurse = await bewerte(mengen, jahr, tokens, laufend ? gestern : `${jahr}-12-31`)
     const sicherheitJe = new Map()
     for (const b of belegbar) {
         if (b.zeit > bis || !b.sicherheit || b.sicherheit === 'beleg') continue
