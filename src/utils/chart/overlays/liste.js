@@ -5,16 +5,18 @@
  * Journal und offene Positionen sind ab Werk an: deretwegen gibt es diesen
  * Chart. Was Netz oder Rechenzeit kostet, ist ab Werk aus.
  */
+// Reihenfolge = Anzeige (Kopfleiste und Handy-Schublade): offene Positionen
+// zuoberst, die Strategie-Schicht zuunterst (Wunsch 23.10.2026).
 export const OVERLAYS = [
-    { id: 'journal', vorgabe: true },
     { id: 'positionen', vorgabe: true },
-    // Nur Datenbank, kein Fremdabruf — deshalb ebenfalls ab Werk an.
-    { id: 'strategie', vorgabe: true },
+    { id: 'journal', vorgabe: true },
     // Kosten Abrufe (Orderbuch alle 10 s, Gewicht 10) oder sind ein Modell —
     // deshalb ab Werk aus.
     { id: 'liquidationen', vorgabe: false },
     { id: 'hebelzonen', vorgabe: false },
     { id: 'orderbuch', vorgabe: false },
+    // Nur Datenbank, kein Fremdabruf — deshalb ab Werk an.
+    { id: 'strategie', vorgabe: true },
 ]
 
 export function overlayAn(panel, id) {
