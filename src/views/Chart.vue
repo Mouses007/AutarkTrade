@@ -1022,11 +1022,13 @@ watch(sichtbareAnzahl, async () => {
                             <IndikatorSchalter :panel="aktivesPanel" @aendere="vvSchalten"
                                 @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
                                 @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
+                            <hr class="schubTrenner" />
                             <div class="schubAktionen">
                                 <button type="button" class="schubKnopf" @click="schublade = null; oeffneIndikatoren()">
                                     <Symbol name="plus" /> {{ t('chart.indikatorenTitel') }}</button>
                                 <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="vorlageAnwenden" />
                             </div>
+                            <hr class="schubTrenner" />
                             <div class="schubGruppe">
                                 <div class="schubTitel">{{ t('chart.schublade.imChart') }}</div>
                                 <div class="schubChips">
@@ -1752,7 +1754,7 @@ watch(sichtbareAnzahl, async () => {
     border-right: 1px solid var(--line);
 }
 
-/* Feine Linie in der Hausfarbe zwischen Vorlagen und Watchlist */
+/* Feine Linie in der Hausfarbe zwischen den Abschnitten einer Schublade */
 .schubTrenner {
     width: 100%;
     margin: 4px 0;
