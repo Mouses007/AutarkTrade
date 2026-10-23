@@ -63,14 +63,18 @@ const sichtbareAnzahl = computed(() => (telefon.value ? 1 : PANELS_JE_RASTER[dat
  * Wo der Browser es erlaubt, zusätzlich echtes Vollbild (ohne Adressleiste);
  * iPhone-Safari kennt das für Seiten nicht, dort bleibt es beim CSS-Vollbild.
  * Zurück: noch einmal doppelt, Esc, oder das Verlassen des echten Vollbilds.
+ * Als installierte App (eigenes Fenster) nur CSS: dort gibt es keine Adressleiste
+ * zu verstecken, und echtes Vollbild brächte nur die Browser-Meldung „zum Beenden
+ * von oben wischen", die sich von der Seite aus nicht abschalten lässt.
  */
 const vollbild = ref(false)
+const alsApp = () => window.matchMedia?.('(display-mode: standalone), (display-mode: fullscreen)').matches === true
 function schalteVollbild(i) {
     if (!vollbild.value) {
         fokus(i)
         vollbild.value = true
         const el = document.documentElement
-        if (el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => { /* nur CSS */ })
+        if (!alsApp() && el.requestFullscreen && !document.fullscreenElement) el.requestFullscreen().catch(() => { /* nur CSS */ })
     } else {
         vollbild.value = false
         if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
