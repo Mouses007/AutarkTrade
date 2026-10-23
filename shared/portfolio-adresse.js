@@ -49,7 +49,8 @@ export const WALLET_TYPEN = {
 }
 
 const XPUB_ART = {
-    xpub: { ableitung: 'p2pkh', bip: 44, text: 'Legacy (1…)' },
+    // Ledger & Co. zeigen für JEDES Konto einen xpub; die Adressart erkennt der Abruf.
+    xpub: { ableitung: 'p2pkh', bip: 44, text: 'Adressart wird beim Lesen erkannt (bc1q / 3… / 1…)' },
     ypub: { ableitung: 'p2sh-p2wpkh', bip: 49, text: 'Nested SegWit (3…)' },
     zpub: { ableitung: 'p2wpkh', bip: 84, text: 'Native SegWit (bc1q…)' },
 }
