@@ -1054,6 +1054,7 @@ watch(sichtbareAnzahl, async () => {
                             <div class="schubAktionen">
                                 <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="(v) => { vorlageAnwenden(v); schublade = null }" />
                             </div>
+                            <hr class="schubTrenner" />
                             <div class="reiterTitel">{{ t('chart.schublade.favoriten') }}</div>
                             <WatchlistReiter :watchlists="watchlists" :aktives-symbol="aktivesPanel.symbol" :aktiver-markt="aktivesPanel.markt"
                                 @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); schublade = null"
@@ -1749,6 +1750,15 @@ watch(sichtbareAnzahl, async () => {
 .schublade.links {
     left: 0;
     border-right: 1px solid var(--line);
+}
+
+/* Feine Linie in der Hausfarbe zwischen Vorlagen und Watchlist */
+.schubTrenner {
+    width: 100%;
+    margin: 4px 0;
+    border: none;
+    border-top: 1px solid var(--accent);
+    opacity: 0.6;
 }
 
 /* Werkzeuge: schmal, die Leiste bringt ihre Breite selbst mit */
