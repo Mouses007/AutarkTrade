@@ -83,7 +83,7 @@ function schalteVollbild(i) {
 /*
  * Im Vollbild: vom linken Rand hereinwischen → obere Hälfte Indikator-Kurzwahl, untere
  * Hälfte Zeichenwerkzeuge (die Wahl schliesst die Schublade); vom rechten
- * Rand → Momentum Radar, als Schublade über dem Chart. Zu: Tipp daneben, zurück
+ * Rand oben → Favoriten (Vorlagen + Watchlist, eine Wahl schliesst), unten → Momentum Radar, als Schublade über dem Chart. Zu: Tipp daneben, zurück
  * zum Rand wischen oder Esc. Die Randzone ist 60 px breit, damit man knapp
  * NEBEN der Rückgeste von Android ansetzen kann (die schluckt den äussersten Rand).
  * Ein Wisch aus der Randzone erreicht den Chart nicht: Lightweight Charts hört
@@ -91,8 +91,10 @@ function schalteVollbild(i) {
  * Schublade aufgehen zu lassen (Brave/Android, 21.10.2026). Rechts gilt das erst,
  * wenn die Bewegung waagrecht ist — senkrecht zieht man dort die Preisachse.
  */
-// Links teilt die Höhe: oben die Indikatoren, unten die Zeichenwerkzeuge (Wunsch 23.10.2026).
-const schublade = ref(null)          // null | 'links' | 'werkzeuge' | 'rechts'
+// Beide Ränder teilen die Höhe (Wunsch 23.10.2026): links oben Indikatoren, links unten
+// Zeichenwerkzeuge; rechts oben Favoriten (Watchlist + Vorlagen), rechts unten Momentum Radar.
+const schublade = ref(null)          // null | 'links' | 'werkzeuge' | 'favoriten' | 'rechts'
+const RECHTS = new Set(['rechts', 'favoriten'])
 const RAND = 60
 const WISCH = 50
 let wisch = null
@@ -101,12 +103,12 @@ function wischStart(e) {
     const x = e.touches[0].clientX, y = e.touches[0].clientY
     if (schublade.value) { wisch = { x, y, zu: true }; return }
     const breite = window.innerWidth
-    const linksUnten = y > window.innerHeight / 2
-    wisch = x <= RAND ? { x, y, seite: linksUnten ? 'werkzeuge' : 'links' } : x >= breite - RAND ? { x, y, seite: 'rechts' } : null
+    const unten = y > window.innerHeight / 2
+    wisch = x <= RAND ? { x, y, seite: unten ? 'werkzeuge' : 'links' } : x >= breite - RAND ? { x, y, seite: unten ? 'rechts' : 'favoriten' } : null
     // Links liegt nur Kerzenfläche: sofort abschirmen, sonst schiebt der Chart mit.
     // Rechts liegt die Preisachse — dort entscheidet erst die Richtung (siehe wischZug),
     // sonst liesse sich die Achse im Vollbild nicht mehr ziehen (21.10.2026).
-    if (wisch && wisch.seite !== 'rechts') { wisch.fest = true; e.stopPropagation() }
+    if (wisch && !RECHTS.has(wisch.seite)) { wisch.fest = true; e.stopPropagation() }
 }
 function wischZug(e) {
     if (!wisch || e.touches.length !== 1) return
@@ -136,8 +138,8 @@ function wischAuswerten(x, y) {
     // Nur eine Bewegung in die passende Richtung entscheidet; ein Ausreisser in die
     // Gegenrichtung beendet die Geste nicht.
     if (wisch.zu) {
-        if ((schublade.value !== 'rechts' && dx < 0) || (schublade.value === 'rechts' && dx > 0)) { schublade.value = null; wisch = null }
-    } else if ((wisch.seite !== 'rechts' && dx > 0) || (wisch.seite === 'rechts' && dx < 0)) {
+        if ((!RECHTS.has(schublade.value) && dx < 0) || (RECHTS.has(schublade.value) && dx > 0)) { schublade.value = null; wisch = null }
+    } else if ((!RECHTS.has(wisch.seite) && dx > 0) || (RECHTS.has(wisch.seite) && dx < 0)) {
         schublade.value = wisch.seite
         wisch = null
     }
@@ -1044,6 +1046,19 @@ watch(sichtbareAnzahl, async () => {
                                 @magnet="daten.zeichnen = { ...(daten.zeichnen || {}), magnet: !daten.zeichnen?.magnet }"
                                 @versteckt="daten.zeichnen = { ...(daten.zeichnen || {}), versteckt: !daten.zeichnen?.versteckt }"
                                 @alle-loeschen="alleLoeschen" />
+                        </aside>
+                    </Transition>
+                    <Transition name="schubRechts">
+                        <aside v-if="schublade === 'favoriten'" class="schublade rechts" :aria-label="t('chart.schublade.favoriten')">
+                            <div class="reiterTitel">{{ t('chart.schublade.vorlagen') }}</div>
+                            <div class="schubAktionen">
+                                <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="(v) => { vorlageAnwenden(v); schublade = null }" />
+                            </div>
+                            <div class="reiterTitel">{{ t('chart.schublade.favoriten') }}</div>
+                            <WatchlistReiter :watchlists="watchlists" :aktives-symbol="aktivesPanel.symbol" :aktiver-markt="aktivesPanel.markt"
+                                @waehle="setzePanel({ symbol: $event.symbol, markt: $event.markt }); schublade = null"
+                                @neuer-tab="(s) => coinInNeuemTab(s.symbol, s.markt)" @aendere="watchlistAendern"
+                                @neu="watchlistNeu" @loesche="watchlistLoeschen" />
                         </aside>
                     </Transition>
                     <Transition name="schubRechts">

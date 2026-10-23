@@ -5194,7 +5194,9 @@
     "legendeAuf": "Legende ausklappen",
     "schublade": {
       "imChart": "Im Chart zeigen",
-      "werkzeuge": "Zeichenwerkzeuge"
+      "werkzeuge": "Zeichenwerkzeuge",
+      "favoriten": "Favoriten",
+      "vorlagen": "Indikator-Vorlagen"
     },
     "coinTabs": {
       "titel": "Offene Coins",
