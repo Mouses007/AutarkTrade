@@ -251,7 +251,7 @@ export function setupPortfolioRoutes(app) {
                 const s = saldoJeAsset(r.zeilen.filter((z) => z.ort === o.ort))
                 const bestand = [...s.entries()].filter(([, e]) => Math.abs(e.menge) > 1e-9).map(([asset, e]) => ({ asset, menge: e.menge }))
                 // Negatives Fiat heisst nur: die Bankeinzahlungen stehen nicht in der Datei — kein Loch.
-                return { ...o, vorhanden: vorhanden.has(o.quelle), bestand, negativ: bestand.filter((b) => b.menge < 0 && !FIAT.includes(b.asset)) }
+                return { ...o, vorhanden: vorhanden.has(o.quelle), bestand, negativ: bestand.filter((b) => b.menge < -1e-7 && !FIAT.includes(b.asset)) }
             })
             if (req.body?.nurPruefen) return res.json({ ok: true, vorschau, zeilen: r.zeilen.length })
 
@@ -428,7 +428,8 @@ async function bestandAusImport(trx, quelle) {
     const zeilen = []
     const negativ = []
     for (const [asset, { menge, kontrakt, kette }] of s) {
-        if (menge < -1e-9 && !FIAT.includes(asset)) negativ.push(`${asset} ${menge}`)
+        // Rundungsreste (−1e-8 aus Tauschen mit 18 Dezimalen) sind kein Loch.
+        if (menge < -1e-7 && !FIAT.includes(asset)) negativ.push(`${asset} ${menge}`)
         // Token mit Vertrag und bekannter Kette: `ort` = Kette, damit die Übersicht
         // ihn über den Vertrag bewertet (DexScreener, mit Liquiditätsschwelle).
         if (menge > 1e-12) zeilen.push({ quelle, ort: kontrakt && kette ? kette : 'import', asset, kontrakt: kontrakt && kette ? kontrakt : null, menge, zeit: Date.now() })
