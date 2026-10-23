@@ -185,6 +185,27 @@ export const MODES = [
     { id: 'lernen', titleKey: 'modes.lernen', symbol: 'lernen', home: '/lernen', enabled: true, flag: 'modusLernenAn' },
 ]
 
+/*
+ * Reihenfolge und Gruppen der Modi in der Kopfleiste (Wunsch 23.10.2026):
+ * eigenes Geld (Portfolio, Journal) | Markt (Chart, Live-Analyse, Research) |
+ * Werkzeuge (Strategien, Lernen), getrennt durch einen feinen Strich in der
+ * Hausfarbe. Ein Modus, der hier fehlt, hängt hinten an; `portfolio` steht
+ * schon da, damit der Modus aus `test/spot-portfolio` beim Zusammenführen an
+ * die erste Stelle rückt.
+ */
+export const MODUS_GRUPPEN = [['portfolio', 'journal'], ['start', 'live', 'research'], ['agent', 'lernen']]
+
+/** Modi in Kopfleisten-Reihenfolge, jeder mit `gruppe` (Index in MODUS_GRUPPEN, sonst ans Ende). */
+export function modiGeordnet(modi) {
+    const rang = (id) => {
+        const g = MODUS_GRUPPEN.findIndex((x) => x.includes(id))
+        return g < 0 ? [MODUS_GRUPPEN.length, 0] : [g, MODUS_GRUPPEN[g].indexOf(id)]
+    }
+    return modi.map((m, i) => ({ ...m, gruppe: rang(m.id)[0], _r: [...rang(m.id), i] }))
+        .sort((a, b) => a._r[0] - b._r[0] || a._r[1] - b._r[1] || a._r[2] - b._r[2])
+        .map(({ _r, ...m }) => m)
+}
+
 export const pageById = (id) => PAGES.find(p => p.id === id) || null
 
 export const pagesForMode = (mode) => PAGES.filter(p => p.mode === mode && p.group)

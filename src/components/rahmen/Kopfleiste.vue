@@ -22,7 +22,7 @@ import Symbol from '../basis/Symbol.vue'
 import Titelzeile from './Titelzeile.vue'
 import { appMode, seitenId, bildschirmTyp } from '../../stores/ui.js'
 import { appEinstellungen } from '../../stores/settings.js'
-import { MODES, modeHome, pageById, istModusAn } from '../../config/menu.js'
+import { MODES, modeHome, pageById, istModusAn, modiGeordnet } from '../../config/menu.js'
 
 defineProps({
     /** Seitentitel samt Titelzeilen-Knöpfen rechts einblenden (Desktop mit Menü). */
@@ -36,7 +36,7 @@ const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'en
 const route = useRoute()
 // Auf der Startseite (/start) ist kein Modus aktiv.
 const aktiverModus = computed(() => (route.meta?.mode === 'uebersicht' ? null : appMode.value))
-const modi = computed(() => MODES.filter((m) => istModusAn(m.id, appEinstellungen.value)))
+const modi = computed(() => modiGeordnet(MODES.filter((m) => istModusAn(m.id, appEinstellungen.value))))
 const mobil = computed(() => bildschirmTyp.value === 'mobile')
 
 function beschriftung(m) {
@@ -74,13 +74,16 @@ onMounted(async () => {
             <Logo :groesse="42" />
         </a>
         <nav class="modi" :aria-label="t('app.modi')">
-            <a v-for="m in modi" :key="m.id" :href="modeHome(m.id)" :class="{ aktiv: aktiverModus === m.id }"
+            <template v-for="(m, i) in modi" :key="m.id">
+            <span v-if="i > 0 && modi[i - 1].gruppe !== m.gruppe" class="trenner" aria-hidden="true"></span>
+            <a :href="modeHome(m.id)" :class="{ aktiv: aktiverModus === m.id }"
                 :aria-current="aktiverModus === m.id ? 'page' : undefined" :aria-label="beschriftung(m)"
                 :title="m.beta ? beschriftung(m) + ' — ' + t(m.betaHintKey || 'modes.betaHint') : beschriftung(m)" @click="wechsle(m, $event)">
                 <Symbol :name="SYMBOL[m.id] || 'info'" :groesse="18" />
                 <span class="name">{{ beschriftung(m) }}</span>
                 <span v-if="m.beta" class="beta">Beta</span>
             </a>
+            </template>
         </nav>
         <div class="rechts">
             <Titelzeile v-if="mitTitel" in-kopf />
@@ -144,6 +147,15 @@ onMounted(async () => {
     border-bottom: 2px solid transparent;
     padding-top: 2px;
     transition: color 0.15s;
+}
+
+/* Feiner senkrechter Strich in der Hausfarbe zwischen den Modus-Gruppen */
+.modi .trenner {
+    flex: 0 0 1px;
+    align-self: center;
+    height: 1.4rem;
+    background: var(--accent);
+    opacity: 0.55;
 }
 
 .modi a:hover {
