@@ -12,17 +12,13 @@
  */
 import { getKnex } from '../database.js'
 import { fxAm } from './kurse.js'
-import { futuresKonten } from './bilanz.js'
+import { futuresKontenGemerkt } from './bilanz.js'
 import { flacheTrades, futuresJahr, nettoNach, stichtagSaldo } from './futures-rechnung.js'
 
 const NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
-let kontenSpeicher = null
-
 async function kontenHeute() {
-    if (kontenSpeicher && Date.now() - kontenSpeicher.zeit < 120e3) return kontenSpeicher.wert
     const m = new Map()
-    for (const f of await futuresKonten()) m.set(f.boerse, { usd: f.usd, fehler: f.fehler })
-    kontenSpeicher = { zeit: Date.now(), wert: m }
+    for (const f of await futuresKontenGemerkt()) m.set(f.boerse, { usd: f.usd, fehler: f.fehler })
     return m
 }
 

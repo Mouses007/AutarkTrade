@@ -120,6 +120,15 @@ export async function futuresKonten() {
     return aus
 }
 
+let kontenSpeicher = null
+/** Futures-Konten mit 2-min-Speicher — Übersicht, Bilanz und Steuer fragen kurz nacheinander. */
+export async function futuresKontenGemerkt() {
+    if (kontenSpeicher && Date.now() - kontenSpeicher.zeit < 120e3) return kontenSpeicher.wert
+    const wert = await futuresKonten()
+    kontenSpeicher = { zeit: Date.now(), wert }
+    return wert
+}
+
 /**
  * @param {{ spotChf: number, usdChf: number }} jetzt  aus der Übersicht
  */
@@ -128,7 +137,7 @@ export async function berechneBilanz({ spotChf, usdChf }) {
         return { ...speicher.wert, spotChf, wertChf: spotChf + speicher.wert.futuresChf, differenzChf: spotChf + speicher.wert.futuresChf - speicher.wert.nettoChf }
     }
     const b = await bargeld()
-    const futures = await futuresKonten()
+    const futures = await futuresKontenGemerkt()
     const futuresChf = futures.reduce((s, f) => s + (f.usd || 0), 0) * usdChf
     const nettoChf = b.ein - b.aus + b.karte
     const wert = {

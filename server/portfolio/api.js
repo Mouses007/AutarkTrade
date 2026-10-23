@@ -33,7 +33,7 @@ import { getKnex } from '../database.js'
 import { encrypt } from '../crypto.js'
 import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } from '../../shared/portfolio-adresse.js'
 import { berechneUebersicht } from './uebersicht.js'
-import { berechneBilanz } from './bilanz.js'
+import { berechneBilanz, futuresKontenGemerkt } from './bilanz.js'
 import { setzeFuturesStichtag } from './futures-steuer.js'
 import { BOERSEN } from './futures-rechnung.js'
 import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
@@ -41,7 +41,7 @@ import { testeBitpanda } from './quellen.js'
 import { ARTEN, FIAT } from './normal.js'
 import { leseImportCsv, importQuelle } from './import.js'
 import { berechneSteuerjahr, steuerCsv } from './steuer.js'
-import { ketteNorm } from './kurse.js'
+import { ketteNorm, fxHeute } from './kurse.js'
 
 const SCHLUESSEL_NAMEN = ['bitpanda', 'etherscan']
 const EINORDNUNGEN = ['transfer', 'kauf', 'einkommen', 'ignorieren']
@@ -54,6 +54,15 @@ const fingerabdruck = (s) => crypto.createHash('sha256').update(String(s).trim()
 export function setupPortfolioRoutes(app) {
     app.get('/api/portfolio/uebersicht', async (req, res) => {
         try { res.json({ ok: true, ...(await berechneUebersicht()) }) } catch (e) { fehler(res, e) }
+    })
+
+    // Futures-Konten (Handelskapital) — die Übersicht zeigt sie als eigene Gruppe.
+    app.get('/api/portfolio/futures', async (req, res) => {
+        try {
+            const fx = await fxHeute()
+            const konten = (await futuresKontenGemerkt()).map((f) => ({ ...f, chf: f.usd != null ? f.usd * fx.chf : null }))
+            res.json({ ok: true, konten, chf: konten.reduce((s, f) => s + (f.chf || 0), 0) })
+        } catch (e) { fehler(res, e) }
     })
 
     // Bilanz zur Info: Bargeld rein ↔ Wert heute (Spot + Futures-Konten).

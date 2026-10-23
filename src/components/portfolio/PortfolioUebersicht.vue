@@ -8,10 +8,16 @@
  * hervor. Die Liste kann man nach Coin oder nach Ort lesen; dieselben Zahlen,
  * zwei Fragen („was habe ich?" / „wo liegt es?").
  *
+ * Futures-Konten (Handelskapital) zählen zum Gesamtvermögen und stehen als
+ * eigene Zeile darunter — die Journal-Seite „Konten" zeigt dann nur noch sie,
+ * damit kein Bestand an zwei Stellen mit zwei Summen steht. Kurve und
+ * „seit gestern" bleiben Spot: der Tagesverlauf kennt nur den Spot-Wert.
+ *
  * Kleinstbestände (unter der Staubgrenze) und Posten ohne Kurs stehen nicht
  * im Weg, verschwinden aber auch nicht: eine Zeile sagt, wie viele es sind.
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { uebersicht, abrufLaeuft, abrufQuelle, starteAbruf, staubZeigen, setzeStaub, verborgen, schalteVerborgen,
@@ -28,6 +34,17 @@ function setzeSicht(v) { sicht.value = v; try { localStorage.setItem('at.portfol
 const markiert = ref(null)
 const offen = ref(new Set())
 function klappe(k) { const s = new Set(offen.value); s.has(k) ? s.delete(k) : s.add(k); offen.value = s }
+
+// ── Futures-Konten (eigener Abruf, die Börsen antworten langsamer als die DB) ──
+const futures = ref(null)
+async function ladeFutures() {
+    try { futures.value = (await axios.get('/api/portfolio/futures')).data } catch { futures.value = null }
+}
+onMounted(ladeFutures)
+watch(abrufLaeuft, (l, vorher) => { if (vorher && !l) ladeFutures() })
+const futuresChf = computed(() => futures.value?.chf || 0)
+const futuresKonten = computed(() => (futures.value?.konten || []).filter((k) => k.usd == null || k.usd > 0.005))
+const gesamtChf = computed(() => (u.value?.gesamt.chf || 0) + futuresChf.value)
 
 const letzterAbruf = computed(() => Math.max(0, ...(u.value?.quellen || []).map((q) => q.letzterAbruf || 0)) || null)
 
@@ -108,7 +125,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
         <!-- ── Kopf: Gesamtwert ── -->
         <Karte class="pf-held">
             <div class="pf-held-oben">
-                <span class="pf-etikett">{{ t('portfolio.gesamtwert') }}</span>
+                <span class="pf-etikett">{{ futuresChf ? t('portfolio.gesamtvermoegen') : t('portfolio.gesamtwert') }}</span>
                 <div class="pf-held-knoepfe">
                     <Knopf art="leise" klein nur-symbol :symbol="verborgen ? 'augeAus' : 'auge'" :titel="t('portfolio.verbergen')" @click="schalteVerborgen" />
                     <Knopf klein symbol="aktualisieren" :laedt="abrufLaeuft" @click="starteAbruf()">
@@ -117,7 +134,11 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                     </Knopf>
                 </div>
             </div>
-            <div class="pf-wert">{{ chf(u.gesamt.chf) }}</div>
+            <div class="pf-wert">{{ chf(gesamtChf) }}</div>
+            <div v-if="futuresChf" class="pf-aufteilung">
+                <span>{{ t('portfolio.anteilSpot') }} <b>{{ chf(u.gesamt.chf) }}</b></span>
+                <span>{{ t('portfolio.anteilFutures') }} <b>{{ chf(futuresChf) }}</b></span>
+            </div>
             <div class="pf-unterzeile">
                 <span v-if="delta != null" :class="delta >= 0 ? 'at-gut' : 'at-schlecht'">
                     {{ chf(delta, { vorzeichen: true }) }}
@@ -144,6 +165,16 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                 </button>
             </div>
         </Karte>
+
+        <!-- Futures-Konten: Handelskapital, Details im Journal unter „Konten" -->
+        <router-link v-if="futuresKonten.length" to="/accounts" class="pf-futures" :title="t('portfolio.futuresKontenInfo')">
+            <span class="pf-futures-titel"><Symbol name="linie" :groesse="15" />{{ t('portfolio.futuresKonten') }}</span>
+            <span v-for="k in futuresKonten" :key="k.boerse" class="pf-futures-konto">
+                {{ k.name.replace(/ Futures.*$/, '') }}
+                <b v-if="k.chf != null">{{ chf(k.chf) }}</b><span v-else class="at-warn">—</span>
+            </span>
+            <span class="pf-futures-summe">{{ chf(futuresChf) }}<Symbol name="pfeilRechts" :groesse="14" /></span>
+        </router-link>
 
         <BilanzKarte v-if="u.quellen.length" />
 
@@ -269,6 +300,13 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
 </template>
 
 <style scoped>
+.pf-aufteilung { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font-size: 0.85rem; color: var(--muted); margin-top: 0.15rem; }
+.pf-aufteilung b { color: var(--text); font-variant-numeric: tabular-nums; }
+.pf-futures { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.2rem; margin-top: 0.75rem; padding: 0.7rem 1rem; border: 1px solid var(--line); border-radius: var(--radius-karte, 12px); background: var(--panel); color: var(--muted); text-decoration: none; font-size: 0.85rem; }
+.pf-futures:hover { border-color: var(--accent-rand); }
+.pf-futures-titel { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--leise); }
+.pf-futures-konto b { color: var(--text); margin-left: 0.3rem; font-variant-numeric: tabular-nums; }
+.pf-futures-summe { margin-left: auto; display: inline-flex; align-items: center; gap: 0.3rem; color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
 .pf-held { border-left: 3px solid var(--accent); }
 .pf-held-oben { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .pf-held-knoepfe { display: flex; gap: 0.4rem; align-items: center; }

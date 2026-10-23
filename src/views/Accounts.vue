@@ -7,6 +7,7 @@ import { brokers } from '../stores/filters.js'
 import SeiteLaedt from '../components/SeiteLaedt.vue'
 import { seiteLaedt } from '../stores/ui.js'
 import { Karte, Knopf, Kreisel, Hinweis, Symbol } from '../components/basis/index.js'
+import { appEinstellungen } from '../stores/settings.js'
 
 const { t } = useI18n()
 
@@ -22,13 +23,20 @@ const FIELD_LABELS = {
 
 const cards = ref([])   // [{ broker, label, color, loading, error, data }]
 
-const totalEquity = computed(() => cards.value.reduce((s, c) => s + (c.data?.totalUsd || 0), 0))
-const fundedCards = computed(() => cards.value.filter(c => c.data && c.data.totalUsd > 0))
+// Ist das Spot-Portfolio an, ist es die eine Gesamtsicht: hier steht dann nur
+// das Handelskapital (Futures + Bots), der Spot-Bestand steht dort — sonst
+// erschienen ICP, CRO … an zwei Stellen mit zwei Summen.
+const portfolioAn = computed(() => Number(appEinstellungen.value?.modusPortfolioAn ?? 0) === 1)
+const zeigeWallet = (w) => !(portfolioAn.value && w.key === 'spot')
+const kartenUsd = (c) => (c.data?.wallets || []).filter(zeigeWallet).reduce((s, w) => s + (Number(w.usd) || 0), 0)
+const spotUsd = computed(() => cards.value.reduce((s, c) => s + (c.data?.wallets || []).filter((w) => w.key === 'spot').reduce((a, w) => a + (Number(w.usd) || 0), 0), 0))
+const totalEquity = computed(() => cards.value.reduce((s, c) => s + (portfolioAn.value ? kartenUsd(c) : (c.data?.totalUsd || 0)), 0))
+const fundedCards = computed(() => cards.value.filter(c => c.data && (portfolioAn.value ? kartenUsd(c) : c.data.totalUsd) > 0))
 
 function fmtUsd(v) { return '$ ' + Number(v || 0).toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 function fmtAmt(v) { return Number(v || 0).toLocaleString('de-CH', { maximumFractionDigits: 6 }) }
 function fmtTime(ts) { return ts ? dayjs(Number(ts)).format('DD.MM.YY HH:mm') : '' }
-function pct(c) { return totalEquity.value > 0 ? (c.data.totalUsd / totalEquity.value * 100) : 0 }
+function pct(c) { return totalEquity.value > 0 ? ((portfolioAn.value ? kartenUsd(c) : c.data.totalUsd) / totalEquity.value * 100) : 0 }
 function fieldLabel(k) { return FIELD_LABELS[k] || k }
 
 async function load() {
@@ -69,7 +77,7 @@ onMounted(load)
             <Karte class="acc-summary at-mu-3">
                 <div class="at-flex at-verteilt at-unten at-umbruch at-luecke-2">
                     <div>
-                        <div class="acc-summary-label">{{ t('accounts.totalEquity') }}</div>
+                        <div class="acc-summary-label">{{ portfolioAn ? t('accounts.handelskapital') : t('accounts.totalEquity') }}</div>
                         <div class="acc-summary-value">{{ fmtUsd(totalEquity) }}</div>
                     </div>
                     <Knopf klein symbol="aktualisieren" @click="load">{{ t('accounts.refresh') }}</Knopf>
@@ -86,6 +94,13 @@ onMounted(load)
                 </div>
             </Karte>
 
+            <!-- Spot liegt im Portfolio -->
+            <router-link v-if="portfolioAn && spotUsd > 0" to="/portfolio" class="acc-portfolio at-mu-3">
+                <Symbol name="muenzen" />
+                <span>{{ t('accounts.spotImPortfolio', { v: fmtUsd(spotUsd) }) }}</span>
+                <Symbol name="pfeilRechts" class="at-ml-auto" />
+            </router-link>
+
             <!-- Hinweis, wenn keine Börse konfiguriert -->
             <div v-if="!cards.length" class="at-gedaempft at-mittig at-py-5">
                 {{ t('accounts.noBrokers') }}
@@ -97,7 +112,7 @@ onMounted(load)
                     <!-- Header -->
                     <div class="at-flex at-verteilt at-mitte acc-card-head">
                         <span class="acc-card-title"><span class="acc-dot" :style="{ background: card.color }"></span>{{ card.label }}</span>
-                        <span v-if="card.data" class="acc-card-total">{{ fmtUsd(card.data.totalUsd) }}</span>
+                        <span v-if="card.data" class="acc-card-total">{{ fmtUsd(portfolioAn ? kartenUsd(card) : card.data.totalUsd) }}</span>
                     </div>
 
                     <!-- Loading / Error -->
@@ -108,7 +123,7 @@ onMounted(load)
 
                     <template v-else-if="card.data">
                         <!-- Wallets -->
-                        <div v-for="w in card.data.wallets" :key="w.key" class="acc-wallet at-mo-2">
+                        <div v-for="w in card.data.wallets.filter(zeigeWallet)" :key="w.key" class="acc-wallet at-mo-2">
                             <div class="at-flex at-verteilt acc-wallet-head">
                                 <span class="acc-wallet-label">{{ w.label }}</span>
                                 <span class="acc-wallet-usd">{{ fmtUsd(w.usd) }}</span>
@@ -184,6 +199,8 @@ onMounted(load)
 .acc-card { border-top: 3px solid var(--acc, var(--line)); }
 .acc-card-head { padding-bottom: 0.5rem; border-bottom: 1px solid var(--line); }
 .acc-card-title { font-size: 1.1rem; font-weight: 700; display: inline-flex; align-items: center; }
+.acc-portfolio { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border: 1px dashed var(--line-stark); border-radius: var(--radius-karte, 12px); color: var(--muted); text-decoration: none; font-size: 0.9rem; }
+.acc-portfolio:hover { color: var(--accent); border-color: var(--accent); }
 .acc-card-total { font-size: 1.15rem; font-weight: 700; color: var(--text); }
 
 .acc-wallet { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
