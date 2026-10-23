@@ -23,6 +23,11 @@ import * as bitgetMarkt from '../marktdaten/bitget.js'
 import { STABIL } from './normal.js'
 
 const MIN_LIQUIDITAET = 10000
+// Darunter (dünner Pool) gilt der Preis nur, wenn der Bestand höchstens ein
+// Viertel der Pool-Liquidität wert ist: ein Rest von 5 USD in einem 200-USD-Pool
+// ist realistisch bewertet, 60'000 Spam-Token zu einem Fantasiepreis nicht.
+const MIN_LIQ_DUENN = 100
+const DUENN_ANTEIL = 0.25
 const FX_TTL = 60 * 60e3
 const MARKT_TTL = 60e3
 
@@ -61,8 +66,16 @@ const KANON = {
         '0x767fe9edc9e0df98e07454847909b5e959d7ca0e': 'ILV', '0x4e15361fd6b4bb609fa63c81a2be19d873717870': 'FTM',
         '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 'WBTC', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 'WETH',
         '0x514910771af9ca656af840dff83e8264ecf986ca': 'LINK', '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984': 'UNI',
+        '0x64d0f55cd8c7133a9d7102b13987235f486f2224': 'BORG',
     },
 }
+
+/**
+ * Coins, die keine der Börsen (Binance, Bitget) als Spot-Paar führt, aber auf
+ * einer DEX handeln: Bestand ohne Kontrakt (z. B. BORG im SwissBorg-Import)
+ * wird über den kanonischen Vertrag bewertet.
+ */
+const NUR_DEX = { BORG: { kette: 'evm:1', kontrakt: '0x64d0f55cd8c7133a9d7102b13987235f486f2224' } }
 
 export async function gleicherCoin(asset, kontrakt, kette) {
     const k = ketteNorm(kette)
@@ -181,9 +194,10 @@ async function dexKurse(kette, kontrakte) {
                 const kk = kette === 'sol' ? k : k.toLowerCase()
                 const liq = Number(p.liquidity?.usd) || 0
                 const preis = Number(p.priceUsd)
-                if (!Number.isFinite(preis) || liq < MIN_LIQUIDITAET) continue
+                if (!Number.isFinite(preis) || preis <= 0 || liq < MIN_LIQ_DUENN) continue
+                const duenn = liq < MIN_LIQUIDITAET
                 const alt = aus.get(kk)
-                if (!alt || liq > alt.liq) aus.set(kk, { usd: preis, liq, symbol: p.baseToken?.symbol, quelle: 'DexScreener' })
+                if (!alt || liq > alt.liq) aus.set(kk, { usd: preis, liq, duenn, symbol: p.baseToken?.symbol, quelle: duenn ? 'DexScreener (dünner Pool)' : 'DexScreener' })
             }
         } catch { /* Kette bleibt ohne Kurs */ }
     }
@@ -218,11 +232,22 @@ export async function kurseFuer(posten) {
         for (const p of posten) {
             if (p.kette !== kette || !p.kontrakt) continue
             const key = `${String(p.asset).toUpperCase()}|${p.kontrakt}`
-            const t = d.get(p.kontrakt)
+            let t = d.get(kette === 'sol' ? p.kontrakt : String(p.kontrakt).toLowerCase()) || d.get(p.kontrakt)
+            if (t?.duenn) {
+                const menge = posten.filter((x) => x.kontrakt === p.kontrakt && x.kette === kette).reduce((s, x) => s + Math.abs(Number(x.menge) || 0), 0)
+                if (!(menge > 0) || menge * t.usd > t.liq * DUENN_ANTEIL) t = null
+            }
             // Ein bekannter Stablecoin MIT Kontrakt bekommt trotzdem nur dann
             // 1 USD, wenn DexScreener ihn kennt — „USDT" kann jeder Token heissen.
             kurse.set(key, t ? { usd: t.usd, quelle: t.quelle, symbol: t.symbol } : { usd: null, quelle: 'kein verlässlicher Kurs' })
         }
+    }
+    // Ohne Börsenpaar, aber mit bekanntem DEX-Vertrag (BORG): dort nachfragen.
+    const nurDex = [...kurse].filter(([key, k]) => k.usd == null && !key.includes('|') && NUR_DEX[ALIAS[key] || key])
+    for (const [key] of nurDex) {
+        const v = NUR_DEX[ALIAS[key] || key]
+        const t = (await dexKurse(v.kette, [v.kontrakt])).get(v.kontrakt)
+        if (t && !t.duenn) kurse.set(key, { usd: t.usd, quelle: 'DexScreener' })
     }
     return { kurse, fx, marktFehler: markt.fehler }
 }

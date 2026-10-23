@@ -45,7 +45,7 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     const wahl = await boersenWahl()
 
     // Kurse für alles, was im Bestand liegt
-    const posten = bestaende.map((b) => ({ asset: b.asset, kontrakt: b.kontrakt, kette: b.kontrakt ? (b.ort === 'sol' ? 'sol' : b.ort) : null }))
+    const posten = bestaende.map((b) => ({ asset: b.asset, kontrakt: b.kontrakt, kette: b.kontrakt ? (b.ort === 'sol' ? 'sol' : b.ort) : null, menge: b.menge }))
     const { kurse, fx, marktFehler } = await kurseFuer(posten)
 
     const keyVon = (b) => (b.kontrakt ? `${b.asset}|${b.kontrakt}` : b.asset)
@@ -61,6 +61,9 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     for (const b of bestaende) {
         const key = keyVon(b)
         let kurs = kurse.get(key) || { usd: null, quelle: 'kein Kurs' }
+        // Rechenreste aus Importen (CHSB 6e-12, OCC 4e-6) sind kein Bestand: ohne
+        // Kurs würden sie als „0 · kein Kurs" in der Liste stehen.
+        if (kurs.usd == null && !quellKurs.has(key) && Math.abs(b.menge) < 1e-5) continue
         // Ohne Börsenkurs: den Kurs, den eine Quelle selbst nennt (Bitpanda) —
         // für ALLE Orte dieses Coins, denn derselbe Coin hat überall denselben
         // Wert (CSPR bei Bitget ohne Kurs, bei Bitpanda bewertet).
