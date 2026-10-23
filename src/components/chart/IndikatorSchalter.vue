@@ -85,8 +85,10 @@ function schalte(i, s) {
                 <template v-if="i.sichtbar !== false && (UNTER[i.typ].length > 1 || UNTER[i.typ][0].g)">
                     <div v-for="(z, n) in UNTER[i.typ]" :key="n" class="zeile">
                         <span class="gruppe">{{ z.g ? t(z.g) : '' }}</span>
-                        <button v-for="s in z.schalter" :key="s.key" class="chip" :class="{ an: an(i, s) }" :aria-pressed="an(i, s)"
-                            :title="s.tipp ? t(s.tipp) : ''" @click="schalte(i, s)">{{ t(s.text) }}</button>
+                        <div class="chips">
+                            <button v-for="s in z.schalter" :key="s.key" class="chip" :class="{ an: an(i, s) }" :aria-pressed="an(i, s)"
+                                :title="s.tipp ? t(s.tipp) : ''" @click="schalte(i, s)">{{ t(s.text) }}</button>
+                        </div>
                     </div>
                 </template>
             </div>
@@ -145,6 +147,22 @@ function schalte(i, s) {
     width: 46px;
     flex-shrink: 0;
     color: var(--muted);
+}
+/* Beschrieb links, Schalter rechtsbündig (auch beim Umbruch) */
+.zeile:has(> .chips) {
+    flex-wrap: nowrap;
+    align-items: flex-start;
+}
+.zeile > .gruppe {
+    padding-top: 3px;
+}
+.chips {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 4px;
 }
 .chip {
     border: 1px solid var(--line-stark);
