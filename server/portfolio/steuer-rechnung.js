@@ -140,9 +140,11 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
         } else if (m > 0 && (istEinkommen(b) || ['einzahlung', 'bestand', 'kauf', 'sonstiges'].includes(b.art))) {
             zugang(b.asset, m, wert, zeit)
         } else if (m < 0) {
-            // Auszahlung ohne Transfer-Einordnung, Gebühr, Sonstiges: Abgang. Ein Erlös ist
-            // nur bei Verkauf bekannt; sonst (Bezahlung, Abgang an Unbekannt) zählt der Wert.
-            abgang(b.asset, -m, wert, zeit, b, b.art)
+            // Auszahlung ohne Transfer-Einordnung (Bezahlung, Kartenaufladung, Abgang an
+            // Unbekannt): Abgang zum Wert der Zeile. `sonstiges` ist ein Verlust ohne
+            // Erlös (falsch adressiert, Projekt eingestellt) — der CHF-Wert der Zeile
+            // nennt dann, was verloren ging, nicht was hereinkam.
+            abgang(b.asset, -m, b.art === 'sonstiges' ? 0 : wert, zeit, b, b.art === 'sonstiges' ? 'verlust' : b.art)
         }
         if (b.gebuehrAsset && Number(b.gebuehrMenge) > 0) abgang(b.gebuehrAsset, Number(b.gebuehrMenge), 0, zeit, b, 'gebuehr')
     }

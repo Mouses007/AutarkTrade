@@ -103,7 +103,11 @@ console.log('\nFIFO, Haltedauer, Transfers')
         { id: 6, quelle: 'i:CDC', asset: 'ETH', art: 'verkauf', menge: -1, gegenAsset: 'CHF', gegenMenge: 1800, chfWert: 1800, zeit: T('2023-02-01T00:00:00Z') },
         { id: 7, quelle: 'i:CDC', asset: 'XRP', art: 'verkauf', menge: -100, gegenAsset: 'CHF', gegenMenge: 50, chfWert: 50, zeit: T('2023-05-01T00:00:00Z') },
     ]
+    b.push({ id: 8, quelle: 'i:Verloren', asset: 'XRP', art: 'einzahlung', menge: 1000, einordnung: 'transfer', zeit: T('2023-06-01T00:00:00Z') })
+    b.push({ id: 9, quelle: 'i:Verloren', asset: 'XRP', art: 'sonstiges', menge: -1000, chfWert: 729, zeit: T('2023-06-01T00:00:01Z') })
     const { abgaenge } = fifo(b, { von: T('2023-01-01T00:00:00Z'), bis: T('2023-12-31T23:59:59Z') })
+    const verlust = abgaenge.find((a) => a.id === 9)
+    check('Verlust (sonstiges) hat Erlös 0, nicht den CHF-Wert der Zeile', verlust && verlust.erloes === 0 && verlust.art === 'verlust', JSON.stringify(verlust))
     const btc = abgaenge.find((a) => a.id === 4)
     check('Transfer startet das Los nicht neu: BTC-Verkauf langfristig', btc.kurzfristigAnteil === 0, String(btc.kurzfristigAnteil))
     check('Einstand aus dem Kauf 2021: 0.5 × 10000 = 5000, Gewinn 15000', nah(btc.kosten, 5000) && nah(btc.gewinn, 15000))
@@ -112,7 +116,7 @@ console.log('\nFIFO, Haltedauer, Transfers')
     const xrp = abgaenge.find((a) => a.id === 7)
     check('XRP ohne Zugang: Einstand unbekannt, nicht 0', xrp.kosten === null && xrp.gewinn === null && xrp.ungedeckt === 100)
     const v = veraeusserungen(abgaenge)
-    check('Summen: Erlös 21850, Gewinn 15300 (ohne XRP)', nah(v.erloes, 21850) && nah(v.gewinn, 15300) && v.ohneEinstand === 1, JSON.stringify(v))
+    check('Summen: Erlös 21850, Gewinn 15300 (ohne XRP)', nah(v.erloes, 21850) && nah(v.gewinn, 15300) && v.ohneEinstand === 2, JSON.stringify(v))
     check('Netzgebühr des Transfers ist ein Abgang (nicht im Jahr gezählt)', !abgaenge.some((a) => a.art === 'gebuehr'))
 
     const k = gewerbsKriterien({ volumen: 21850 + 1500, vermoegenAnfang: 10000, kurzfristigErloes: v.kurzfristigErloes, erloes: v.erloes, futuresTrades: 12 })
