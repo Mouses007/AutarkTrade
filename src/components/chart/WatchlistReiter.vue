@@ -183,8 +183,10 @@ function loescheListe() {
                 :class="{ an: s.symbol === aktivesSymbol && s.markt === aktiverMarkt }" @click="emit('waehle', s)"
                 @mousedown.middle.prevent @auxclick.middle.prevent="emit('neuerTab', s)">
                 <span class="sym"><span class="symName">{{ s.symbol }}<small v-if="s.markt === 'spot'"> Spot</small></span>
-                    <a v-for="b in boersen(s)" :key="b.id" class="boerse" :class="b.id" :href="b.url" target="_blank" rel="noopener"
-                        :title="t('chart.watchlistBoerse', { boerse: b.name })" @click.stop>{{ b.kurz }}</a>
+                    <span v-if="boersen(s).length" class="boersen">
+                        <a v-for="b in boersen(s)" :key="b.id" class="boerse" :class="b.id" :href="b.url" target="_blank" rel="noopener"
+                            :title="t('chart.watchlistBoerse', { boerse: b.name })" @click.stop>{{ b.kurz }}</a>
+                    </span>
                 </span>
                 <span class="preis">{{ kurs(s) ? kurs(s).c.toFixed(stellen(kurs(s).c)) : '—' }}</span>
                 <span class="delta" :class="aenderung(s) == null ? '' : aenderung(s) >= 0 ? 'gewinnWert' : 'verlustWert'">
@@ -318,6 +320,14 @@ function loescheListe() {
     text-overflow: ellipsis;
     max-width: 100%;
     margin-right: 4px;
+}
+
+/* Die Kürzel brechen nur ALS GRUPPE um — einzeln standen sie verteilt
+   (BX hinter dem Namen, BG/PX darunter), Laptop mit kleiner Auflösung 23.10.2026. */
+.boersen {
+    display: inline-flex;
+    gap: 4px;
+    white-space: nowrap;
 }
 
 .boerse {
