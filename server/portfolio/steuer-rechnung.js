@@ -60,7 +60,9 @@ export function einkommen(bewegungen, von, bis) {
     let summe = 0, ohneWert = 0
     const jeArt = {}, jeAsset = {}
     for (const b of zeilen) {
-        const art = b.einordnung === 'einkommen' ? 'eingeordnet' : b.art
+        // Ist die Art selbst schon Einkommen, bleibt sie stehen; „eingeordnet" nur für Zuflüsse,
+        // die erst die Einordnung des Nutzers zum Einkommen macht (z. B. eine Einzahlung).
+        const art = ['staking', 'airdrop', 'belohnung'].includes(b.art) ? b.art : 'eingeordnet'
         if (b.chfWert == null) { ohneWert++; continue }
         summe += Number(b.chfWert)
         jeArt[art] = (jeArt[art] || 0) + Number(b.chfWert)

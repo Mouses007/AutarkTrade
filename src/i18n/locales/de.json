@@ -6437,6 +6437,7 @@
     "stKritDerivateWert": "{n} Futures-Trades im Journal in diesem Jahr — Futures-Handel ist kein reines Absichern.",
     "stKritDerivateKeine": "Keine Futures-Trades im Journal in diesem Jahr.",
     "stKritSelbst": "Aus den Daten nicht entscheidbar — bitte selbst prüfen.",
-    "stAbweichungInfo": "Die Summe der Bewegungen weicht heute vom Bestand der Börse ab — eine Bewegung fehlt in der Historie; der Wert ist nicht belegt."
+    "stAbweichungInfo": "Die Summe der Bewegungen weicht heute vom Bestand der Börse ab — eine Bewegung fehlt in der Historie; der Wert ist nicht belegt.",
+    "imErsetzen": "Vorhandene Orte aus der Datei ersetzen (korrigierte Zeilen übernehmen). Eigene Einordnungen bei diesen Orten gehen verloren."
   }
 }

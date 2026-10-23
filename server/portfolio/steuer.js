@@ -16,11 +16,11 @@
  */
 import { getKnex } from '../database.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from './steuer-rechnung.js'
-import { tagesKursUsd, fxAm } from './kurse.js'
+import { tagesKursUsd, fxAm, gleicherCoin } from './kurse.js'
 import { STABIL, FIAT } from './normal.js'
 
 const SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
-    'transferMit', 'einordnung', 'chfWert', 'sicherheit']
+    'transferMit', 'einordnung', 'chfWert', 'sicherheit', 'kontrakt', 'kette']
 
 export function jahrGrenzen(jahr) {
     return { von: Date.parse(`${jahr}-01-01T00:00:00+01:00`), bis: Date.parse(`${jahr}-12-31T23:59:59+01:00`) }
@@ -39,7 +39,7 @@ async function quellenStand() {
 }
 
 /** Steuerkurs (CHF je Einheit) eines Assets am Jahresende, mit Quelle. */
-async function steuerkurs(asset, jahr, manuell, fxCache) {
+async function steuerkurs(asset, jahr, manuell, fxCache, token) {
     const m = manuell.get(asset)
     if (m) return { chf: m.chf, quelle: m.quelle === 'estv' ? 'ESTV-Kursliste' : 'von Hand' }
     if (asset === 'CHF') return { chf: 1, quelle: 'CHF' }
@@ -51,19 +51,30 @@ async function steuerkurs(asset, jahr, manuell, fxCache) {
         return fxCache.eur ? { chf: fxCache.chf / fxCache.eur, quelle: 'EZB 31.12.' } : { chf: null, quelle: 'kein Wechselkurs' }
     }
     if (asset in STABIL) return { chf: fxCache.chf, quelle: 'Stablecoin · EZB 31.12.' }
+    // Ein Wallet-Token, der nur wie ein Börsen-Coin heisst, bekommt dessen Kurs NICHT.
+    if (token && !(await gleicherCoin(asset, token.kontrakt, token.kette))) {
+        return { chf: null, quelle: 'Token ohne Börsenkurs' }
+    }
     const t = await tagesKursUsd(asset, datum)
     return t.usd != null ? { chf: t.usd * fxCache.chf, quelle: `${t.quelle} 31.12. · EZB` } : { chf: null, quelle: 'kein Kurs' }
 }
 
-async function bewerte(mengen, jahr) {
+async function bewerte(mengen, jahr, tokens = new Map()) {
     const k = getKnex()
     const manuell = new Map((await k('portfolio_steuerkurse').where('jahr', jahr)).map((z) => [z.asset, z]))
     const fxCache = {}
     const kurse = new Map()
     for (const asset of new Set([...mengen.keys()].map((k2) => k2.split('\u0000')[1]))) {
-        kurse.set(asset, await steuerkurs(asset, jahr, manuell, fxCache))
+        kurse.set(asset, await steuerkurs(asset, jahr, manuell, fxCache, tokens.get(asset)))
     }
     return kurse
+}
+
+/** Assets, die irgendwo als Token mit Vertrag gebucht sind → { kontrakt, kette }. */
+function tokenVertraege(bew) {
+    const m = new Map()
+    for (const b of bew) if (b.kontrakt && b.kette && !m.has(b.asset)) m.set(b.asset, { kontrakt: b.kontrakt, kette: b.kette })
+    return m
 }
 
 async function futuresTrades(von, bis) {
@@ -120,7 +131,8 @@ export async function berechneSteuerjahr(jahr) {
     }
     // Rundungsreste (Bitpanda: SHIB −1.4e-9) sind kein Bestand und kein Loch.
     for (const [key, m] of mengen) if (Math.abs(m) < 1e-8) mengen.delete(key)
-    const kurse = await bewerte(mengen, jahr)
+    const tokens = tokenVertraege(bew)
+    const kurse = await bewerte(mengen, jahr, tokens)
     const sicherheitJe = new Map()
     for (const b of belegbar) {
         if (b.zeit > bis || !b.sicherheit || b.sicherheit === 'beleg') continue
@@ -173,7 +185,7 @@ export async function berechneSteuerjahr(jahr) {
     try {
         const m0 = bestandAm(belegbar, vorjahr.bis)
         for (const [key, m] of m0) if (m <= 0) m0.delete(key)
-        const k0 = await bewerte(m0, jahr - 1)
+        const k0 = await bewerte(m0, jahr - 1, tokens)
         vermoegenAnfang = 0
         for (const [key, m] of m0) { const kurs = k0.get(key.split('\u0000')[1]); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
     } catch { vermoegenAnfang = null }
@@ -186,7 +198,7 @@ export async function berechneSteuerjahr(jahr) {
         vermoegen, vermoegenSumme, ohneKurs: vermoegen.filter((p) => p.chf == null).map((p) => p.asset),
         einkommen: {
             summe: ek.summe, ohneWert: ek.ohneWert, jeArt: ek.jeArt, jeAsset: ek.jeAsset,
-            zeilen: ek.zeilen.map((b) => ({ id: b.id, zeit: b.zeit, quelle: name(b.quelle), art: b.einordnung === 'einkommen' ? 'eingeordnet' : b.art, asset: b.asset, menge: b.menge, chfWert: b.chfWert, sicherheit: b.sicherheit })),
+            zeilen: ek.zeilen.map((b) => ({ id: b.id, zeit: b.zeit, quelle: name(b.quelle), art: ['staking', 'airdrop', 'belohnung'].includes(b.art) ? b.art : 'eingeordnet', asset: b.asset, menge: b.menge, chfWert: b.chfWert, sicherheit: b.sicherheit })),
         },
         veraeusserungen: { ...vs, abgaenge: abgaenge.filter((a) => a.art !== 'gebuehr').map((a) => ({ ...a, quelle: name(a.quelle) })) },
         kriterien: kriterien.map((x) => (x.id === 'volumen' ? { ...x, volumen, vermoegenAnfang } : x)),

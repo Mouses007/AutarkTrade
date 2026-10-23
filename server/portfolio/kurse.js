@@ -27,10 +27,54 @@ const FX_TTL = 60 * 60e3
 const MARKT_TTL = 60e3
 
 /** Umbenennungen und verpackte Coins → das Symbol, unter dem es einen Kurs gibt. */
-const ALIAS = { BTT: 'BTTC', WETH: 'ETH', WBTC: 'BTC', WBNB: 'BNB', WPOL: 'POL', WMATIC: 'POL', MATIC: 'POL', WAVAX: 'AVAX', WSOL: 'SOL', BTCB: 'BTC', CHSB: 'BORG' }
+const ALIAS = { BTT: 'BTTC', MIOTA: 'IOTA', WETH: 'ETH', WBTC: 'BTC', WBNB: 'BNB', WPOL: 'POL', WMATIC: 'POL', MATIC: 'POL', WAVAX: 'AVAX', WSOL: 'SOL', BTCB: 'BTC', CHSB: 'BORG' }
 
 /** DexScreener-Namen der Ketten. */
 export const DEX_KETTE = { 'evm:1': 'ethereum', 'evm:42161': 'arbitrum', 'evm:8453': 'base', 'evm:10': 'optimism', 'evm:56': 'bsc', 'evm:137': 'polygon', 'evm:43114': 'avalanche', sol: 'solana' }
+
+/** Kettenname einer Datei/Quelle → interner Schlüssel (evm:<chainid> bzw. sol). */
+const KETTEN_NAMEN = { ethereum: 'evm:1', eth: 'evm:1', bsc: 'evm:56', bnb: 'evm:56', polygon: 'evm:137', matic: 'evm:137', arbitrum: 'evm:42161', base: 'evm:8453', optimism: 'evm:10', avalanche: 'evm:43114', solana: 'sol', sol: 'sol' }
+export function ketteNorm(k) {
+    const t = String(k || '').trim().toLowerCase()
+    if (!t) return null
+    if (/^evm:\d+$/.test(t)) return t
+    return KETTEN_NAMEN[t] || null
+}
+
+/**
+ * Ist ein Token (Vertrag auf einer Kette) derselbe Coin wie das gleichnamige
+ * Börsenpaar? Viele Wallet-Token heissen wie ein Börsen-Coin, sind es aber
+ * nicht („AI", „MAGA", „SOUTH"). Belegt wird es über den HEUTIGEN Preis:
+ * DexScreener für den Vertrag gegen den Börsenkurs des Symbols, ±25 %.
+ * Unbekannt (einer der beiden fehlt) heisst: nicht derselbe.
+ */
+/*
+ * Verträge, die nachweislich DER Coin des Börsenpaars sind (Ethereum-Mainnet).
+ * Für sie fehlt sonst der Kurs, wenn DexScreener keinen liquiden Pool findet —
+ * gehandelt wird BNT, GRT, ILV … an den Börsen, nicht auf der Kette.
+ */
+const KANON = {
+    'evm:1': {
+        '0xdac17f958d2ee523a2206206994597c13d831ec7': 'USDT', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'USDC',
+        '0xae7ab96520de3a18e5e111b5eaab095312d7fe84': 'STETH', '0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0': 'MATIC',
+        '0xc944e90c64b2c07662a292be6244bdf05cda44a7': 'GRT', '0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c': 'BNT',
+        '0x767fe9edc9e0df98e07454847909b5e959d7ca0e': 'ILV', '0x4e15361fd6b4bb609fa63c81a2be19d873717870': 'FTM',
+        '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 'WBTC', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 'WETH',
+        '0x514910771af9ca656af840dff83e8264ecf986ca': 'LINK', '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984': 'UNI',
+    },
+}
+
+export async function gleicherCoin(asset, kontrakt, kette) {
+    const k = ketteNorm(kette)
+    if (!kontrakt || !k) return false
+    if (KANON[k]?.[String(kontrakt).toLowerCase()] === String(asset).toUpperCase()) return true
+    const { kurse } = await kurseFuer([{ asset, kontrakt, kette: k }, { asset }])
+    const dex = kurse.get(`${String(asset).toUpperCase()}|${kontrakt}`)?.usd
+    const boerse = kurse.get(String(asset).toUpperCase())?.usd
+    if (!(dex > 0) || !(boerse > 0)) return false
+    const r = dex / boerse
+    return r > 0.8 && r < 1.25
+}
 
 const heute = () => new Date().toISOString().slice(0, 10)
 

@@ -34,9 +34,10 @@ import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } fro
 import { berechneUebersicht } from './uebersicht.js'
 import { rufeAb, laufStand } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
-import { ARTEN, FIAT, saldiere } from './normal.js'
+import { ARTEN, FIAT } from './normal.js'
 import { leseImportCsv, importQuelle } from './import.js'
 import { berechneSteuerjahr, steuerCsv } from './steuer.js'
+import { ketteNorm } from './kurse.js'
 
 const SCHLUESSEL_NAMEN = ['bitpanda', 'etherscan']
 const EINORDNUNGEN = ['transfer', 'kauf', 'einkommen', 'ignorieren']
@@ -212,8 +213,8 @@ export function setupPortfolioRoutes(app) {
             // Vorschau: Bestand je Ort, wie er nach dem Import aussähe — und ob ein Ort schon da ist.
             const vorhanden = new Set((await k('portfolio_quellen').where('quelle', 'like', 'i:%').select('quelle')).map((z) => z.quelle))
             const vorschau = orte.map((o) => {
-                const s = saldiere(r.zeilen.filter((z) => z.ort === o.ort && z.einordnung !== 'ignorieren'))
-                const bestand = [...s.entries()].filter(([, m]) => Math.abs(m) > 1e-9).map(([key, menge]) => ({ asset: key.split('|')[0], menge }))
+                const s = saldoJeAsset(r.zeilen.filter((z) => z.ort === o.ort))
+                const bestand = [...s.entries()].filter(([, e]) => Math.abs(e.menge) > 1e-9).map(([asset, e]) => ({ asset, menge: e.menge }))
                 // Negatives Fiat heisst nur: die Bankeinzahlungen stehen nicht in der Datei — kein Loch.
                 return { ...o, vorhanden: vorhanden.has(o.quelle), bestand, negativ: bestand.filter((b) => b.menge < 0 && !FIAT.includes(b.asset)) }
             })
@@ -223,6 +224,18 @@ export function setupPortfolioRoutes(app) {
             let neu = 0
             const ergebnis = []
             await k.transaction(async (trx) => {
+                // „Ersetzen": die Orte der Datei vorher leeren — sonst überspringt der
+                // Import korrigierte Zeilen mit bekannter externe_id. Eigene Einordnungen
+                // in der App für diese Orte gehen dabei verloren (die UI sagt es).
+                if (req.body?.ersetzen) {
+                    for (const o of orte) {
+                        const ids = (await trx('portfolio_bewegungen').where('quelle', o.quelle).select('id')).map((z) => z.id)
+                        for (let i = 0; i < ids.length; i += 500) {
+                            await trx('portfolio_bewegungen').whereIn('transferMit', ids.slice(i, i + 500)).update({ transferMit: null, transferSicher: null })
+                        }
+                        await trx('portfolio_bewegungen').where('quelle', o.quelle).del()
+                    }
+                }
                 for (let i = 0; i < r.zeilen.length; i += 200) {
                     const teil = r.zeilen.slice(i, i + 200).map((z) => ({
                         quelle: z.quelle, externeId: z.externeId, zeit: z.zeit, art: z.art, asset: z.asset, menge: z.menge,
@@ -342,18 +355,45 @@ export function setupPortfolioRoutes(app) {
     })
 }
 
+/**
+ * Saldo je Coin eines importierten Orts. Bewusst je ASSET, nicht je Vertrag:
+ * eine Rekonstruktion bucht denselben Token mal mit, mal ohne Vertrags-
+ * adresse (Kette vs. Börsen-Export) — getrennt entstanden daraus zwei Töpfe,
+ * einer zu hoch, einer negativ (gemessen 23.10.2026: USDT bei MetaMask,
+ * stETH bei beiden Ledger-Konten). Der Vertrag wird übernommen, wenn eine
+ * Zeile ihn nennt.
+ */
+function saldoJeAsset(zeilen) {
+    const m = new Map()
+    const add = (asset, menge, kontrakt, kette) => {
+        if (!asset || !menge) return
+        const e = m.get(asset) || { menge: 0, kontrakt: null, kette: null }
+        e.menge += menge
+        if (kontrakt && !e.kontrakt) { e.kontrakt = kontrakt; e.kette = ketteNorm(kette) }
+        m.set(asset, e)
+    }
+    for (const b of zeilen) {
+        if (b.einordnung === 'ignorieren') continue
+        add(b.asset, Number(b.menge) || 0, b.kontrakt, b.kette)
+        if (b.gegenAsset) add(b.gegenAsset, Number(b.gegenMenge) || 0, null)
+        if (b.gebuehrAsset) add(b.gebuehrAsset, -(Number(b.gebuehrMenge) || 0), null)
+    }
+    return m
+}
+
 /** Bestand eines importierten Orts aus seinen Bewegungen (eine API gibt es nicht). */
 async function bestandAusImport(trx, quelle) {
     const bew = await trx('portfolio_bewegungen').where('quelle', quelle)
-        .select('asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge', 'kontrakt', 'einordnung')
-    const s = saldiere(bew.filter((b) => b.einordnung !== 'ignorieren'))
+        .select('asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge', 'kontrakt', 'kette', 'einordnung')
+    const s = saldoJeAsset(bew)
     await trx('portfolio_bestaende').where('quelle', quelle).del()
     const zeilen = []
     const negativ = []
-    for (const [key, menge] of s) {
-        const [asset, kontrakt] = key.split('|')
+    for (const [asset, { menge, kontrakt, kette }] of s) {
         if (menge < -1e-9 && !FIAT.includes(asset)) negativ.push(`${asset} ${menge}`)
-        if (menge > 1e-12) zeilen.push({ quelle, ort: 'import', asset, kontrakt: kontrakt || null, menge, zeit: Date.now() })
+        // Token mit Vertrag und bekannter Kette: `ort` = Kette, damit die Übersicht
+        // ihn über den Vertrag bewertet (DexScreener, mit Liquiditätsschwelle).
+        if (menge > 1e-12) zeilen.push({ quelle, ort: kontrakt && kette ? kette : 'import', asset, kontrakt: kontrakt && kette ? kontrakt : null, menge, zeit: Date.now() })
     }
     if (zeilen.length) await trx('portfolio_bestaende').insert(zeilen)
     return negativ

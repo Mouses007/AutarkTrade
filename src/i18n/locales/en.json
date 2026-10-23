@@ -6437,6 +6437,7 @@
     "stKritDerivateWert": "{n} futures trades in the journal this year — futures trading is not pure hedging.",
     "stKritDerivateKeine": "No futures trades in the journal this year.",
     "stKritSelbst": "Cannot be decided from the data — please check yourself.",
-    "stAbweichungInfo": "The sum of movements differs from the exchange balance today — a movement is missing in the history; the value is not evidenced."
+    "stAbweichungInfo": "The sum of movements differs from the exchange balance today — a movement is missing in the history; the value is not evidenced.",
+    "imErsetzen": "Replace existing places from the file (take corrected rows). Your own classifications for these places are lost."
   }
 }

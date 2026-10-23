@@ -20,6 +20,8 @@ const laedt = ref(false)
 const ergebnis = ref(null)
 const loeschFrage = ref(null)
 const feld = ref(null)
+const ersetzen = ref(false)
+const hatVorhandene = computed(() => (pruefung.value?.vorschau || []).some((o) => o.vorhanden))
 
 const importe = computed(() => (uebersicht.value?.quellen || []).filter((q) => q.gruppe === 'import'))
 
@@ -41,7 +43,7 @@ async function pruefe() {
 async function importiere() {
     laedt.value = true
     try {
-        ergebnis.value = (await axios.post('/api/portfolio/import', { text: text.value })).data
+        ergebnis.value = (await axios.post('/api/portfolio/import', { text: text.value, ersetzen: ersetzen.value })).data
         pruefung.value = null
         text.value = ''
         await ladeUebersicht()
@@ -87,6 +89,10 @@ const datum = (ms) => new Date(ms).toLocaleDateString('de-CH')
                         <span v-if="!o.bestand.length" class="at-gedaempft">{{ t('portfolio.imLeer') }}</span>
                     </div>
                 </div>
+                <label v-if="hatVorhandene" class="ik-ersetzen">
+                    <input v-model="ersetzen" type="checkbox" />
+                    <span>{{ t('portfolio.imErsetzen') }}</span>
+                </label>
                 <div class="ik-aktionen">
                     <Knopf art="haupt" :laedt="laedt" @click="importiere">{{ t('portfolio.imImportieren', { n: pruefung.zeilen }) }}</Knopf>
                     <Knopf art="leise" @click="pruefung = null; text = ''">{{ t('common.cancel') }}</Knopf>
@@ -122,6 +128,8 @@ const datum = (ms) => new Date(ms).toLocaleDateString('de-CH')
 .ik-bestand .neg { color: var(--bad); }
 .ik-aktionen { display: flex; gap: 0.5rem; margin-top: 0.75rem; flex-wrap: wrap; }
 .ik-liste { margin-top: 0.6rem; }
+.ik-ersetzen { display: flex; gap: 0.45rem; align-items: flex-start; font-size: 0.82rem; margin-top: 0.6rem; color: var(--muted); cursor: pointer; }
+.ik-ersetzen input { accent-color: var(--accent); margin-top: 0.15rem; }
 .ik-eintrag { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.6rem; align-items: center; padding: 0.4rem 0; border-top: 1px solid var(--line); font-size: 0.85rem; }
 .ik-wert { font-variant-numeric: tabular-nums; }
 </style>
