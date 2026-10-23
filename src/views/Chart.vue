@@ -1703,14 +1703,17 @@ watch(sichtbareAnzahl, async () => {
     margin-bottom: 6px;
 }
 
+/* „Im Chart zeigen": untereinander, je eine Zeile (Wunsch 23.10.2026) */
 .schubChips {
     display: flex;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
     gap: 6px;
 }
 
 .schubChip {
-    padding: 4px 10px;
+    text-align: left;
+    padding: 6px 12px;
     border: 1px solid var(--line);
     border-radius: 999px;
     background: transparent;
