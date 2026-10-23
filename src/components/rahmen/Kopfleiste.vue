@@ -149,13 +149,13 @@ onMounted(async () => {
     transition: color 0.15s;
 }
 
-/* Feiner senkrechter Strich in der Hausfarbe zwischen den Modus-Gruppen */
+/* Kräftiger senkrechter Strich in der Hausfarbe zwischen den Modus-Gruppen */
 .modi .trenner {
-    flex: 0 0 1px;
+    flex: 0 0 3px;
     align-self: center;
-    height: 1.4rem;
+    height: 1.6rem;
+    border-radius: 2px;
     background: var(--accent);
-    opacity: 0.55;
 }
 
 .modi a:hover {
