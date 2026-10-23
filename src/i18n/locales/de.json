@@ -829,7 +829,7 @@
     "speicherModul": {
       "journal": "Journal",
       "screenshots": "Screenshots",
-      "liveAnalyse": "Live-Analyse",
+      "liveAnalyse": "Analyse",
       "nachrichten": "Nachrichten",
       "research": "Research",
       "strategien": "Strategien",
@@ -838,7 +838,7 @@
       "system": "System"
     },
     "area_journal": "Journal",
-    "area_live": "Live-Analyse",
+    "area_live": "Analyse",
     "area_agent": "Agent",
     "deleteFailed": "Löschen fehlgeschlagen.",
     "schluesselGeleert": "Gespeichert. Die Adresse hat sich geändert — der bisherige Schlüssel wurde dafür gelöscht. Bitte den Schlüssel neu eingeben.",
@@ -922,7 +922,7 @@
     "modeResearchInfo": "Hype-Radar (junge Projekte draussen) und Coin-Radar (was das eigene Konto heute handeln kann).",
     "modeStrategyInfo": "Der Strategien-Modus handelt selbstständig. Aus: Instanzen laufen nicht weiter, und die Seiten sind nicht erreichbar.",
     "modeLernenInfo": "Der Lern-Karteikasten für Fachbegriffe. Aus: der Tab verschwindet, gespeicherter Lernfortschritt bleibt aber erhalten.",
-    "livetradingModeOffHint": "Der Modus „Live-Analyse“ ist ausgeschaltet — diese Einstellung wirkt erst wieder, wenn er an ist. Ihr Wert bleibt erhalten.",
+    "livetradingModeOffHint": "Der Modus „Analyse“ ist ausgeschaltet — diese Einstellung wirkt erst wieder, wenn er an ist. Ihr Wert bleibt erhalten.",
     "info": {
       "customTimeframe": "Eigener Zeitrahmen für die Trade-Einteilung, z.B. „Swing 3d“.\nDie Vorgaben Scalp/Daytrade richten sich nach den Minuten- und Stundengrenzen darüber; ein eigener Rahmen wird von Hand vergeben.",
       "fluxModel": "Welches FLUX-Modell den Hintergrund der Share-Card malt.\nGrössere Modelle kosten je Bild mehr und brauchen länger; für eine Karte, die als Vorschaubild endet, lohnt das selten.",
@@ -1566,7 +1566,7 @@
       "xSuche": "Nachrichten: X-Suche",
       "video": "Nachrichten: Videoanalyse",
       "strategie": "Strategie: Veto-Agenten und Baukästen",
-      "radar": "Live-Analyse: Lage, Handelslage, Mechanik, Rangliste",
+      "radar": "Analyse: Lage, Handelslage, Mechanik, Rangliste",
       "chart": "Chart: KI-Analyse",
       "coinRadar": "Coin-Radar: Einordnung",
       "bild": "Bilder (Share-Karten)",
@@ -1899,7 +1899,7 @@
   "modes": {
     "start": "Chart",
     "journal": "Journal",
-    "live": "Live-Analyse",
+    "live": "Analyse",
     "liveShort": "Live",
     "agent": "Strategien",
     "agentShort": "Strategie",

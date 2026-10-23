@@ -829,7 +829,7 @@
     "speicherModul": {
       "journal": "Journal",
       "screenshots": "Screenshots",
-      "liveAnalyse": "Live analysis",
+      "liveAnalyse": "Analysis",
       "nachrichten": "News",
       "research": "Research",
       "strategien": "Strategies",
@@ -838,7 +838,7 @@
       "system": "System"
     },
     "area_journal": "Journal",
-    "area_live": "Live analysis",
+    "area_live": "Analysis",
     "area_agent": "Agent",
     "deleteFailed": "Deleting failed.",
     "schluesselGeleert": "Saved. The address changed, so the previous key was removed. Please enter the key again.",
@@ -922,7 +922,7 @@
     "modeResearchInfo": "Hype radar (young projects out there) and coin radar (what your own account can trade today).",
     "modeStrategyInfo": "The strategy mode trades on its own. Off: instances stop running and the pages are unreachable.",
     "modeLernenInfo": "The flashcard box for trading terminology. Off: the tab disappears, but saved learning progress is kept.",
-    "livetradingModeOffHint": "The \"Live analysis\" mode is switched off — this setting takes effect again once it is on. Its value is kept.",
+    "livetradingModeOffHint": "The \"Analysis\" mode is switched off — this setting takes effect again once it is on. Its value is kept.",
     "info": {
       "customTimeframe": "Your own time frame for classifying trades, e.g. \"Swing 3d\".\nThe built-in Scalp/Daytrade categories follow the minute and hour limits above; a custom frame is assigned by hand.",
       "fluxModel": "Which FLUX model paints the share card background.\nLarger models cost more per image and take longer; for a card that ends up as a thumbnail that rarely pays off.",
@@ -1566,7 +1566,7 @@
       "xSuche": "News: X search",
       "video": "News: video analysis",
       "strategie": "Strategy: veto agents and builders",
-      "radar": "Live analysis: overview, trading picture, mechanics, ranking",
+      "radar": "Analysis: overview, trading picture, mechanics, ranking",
       "chart": "Chart: AI analysis",
       "coinRadar": "Coin radar: summary",
       "bild": "Images (share cards)",
@@ -1899,7 +1899,7 @@
   "modes": {
     "start": "Chart",
     "journal": "Journal",
-    "live": "Live analysis",
+    "live": "Analysis",
     "liveShort": "Live",
     "agent": "Strategies",
     "agentShort": "Strategy",

@@ -78,10 +78,9 @@ onMounted(async () => {
             <span v-if="i > 0 && modi[i - 1].gruppe !== m.gruppe" class="trenner" aria-hidden="true"></span>
             <a :href="modeHome(m.id)" :class="{ aktiv: aktiverModus === m.id }"
                 :aria-current="aktiverModus === m.id ? 'page' : undefined" :aria-label="beschriftung(m)"
-                :title="m.beta ? beschriftung(m) + ' — ' + t(m.betaHintKey || 'modes.betaHint') : beschriftung(m)" @click="wechsle(m, $event)">
+                :title="beschriftung(m)" @click="wechsle(m, $event)">
                 <Symbol :name="SYMBOL[m.id] || 'info'" :groesse="18" />
                 <span class="name">{{ beschriftung(m) }}</span>
-                <span v-if="m.beta" class="beta">Beta</span>
             </a>
             </template>
         </nav>
@@ -171,17 +170,6 @@ onMounted(async () => {
     color: var(--accent);
 }
 
-.beta {
-    font-size: 0.68rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    padding: 0.05rem 0.4rem;
-    border-radius: var(--radius-pille);
-    background: var(--warn-flaeche);
-    color: var(--warn);
-}
-
 .rechts {
     display: flex;
     align-items: center;
@@ -198,8 +186,7 @@ onMounted(async () => {
         gap: 0.9rem;
     }
 
-    .modi a .name,
-    .modi a .beta {
+    .modi a .name {
         display: none;
     }
 }
