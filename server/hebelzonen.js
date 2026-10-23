@@ -48,7 +48,10 @@
  * wenn die Zeile am interessantesten wäre.
  */
 
-import { buildLeverageMap, LEVERAGE_TIERS } from '../shared/leverageMap.js'
+import { buildLeverageMap, buildLeverageHistory, LEVERAGE_TIERS } from '../shared/leverageMap.js'
+import { sollIstZonen } from '../shared/hebelSollIst.js'
+import { leseLiquidationen } from './live-recorder.js'
+import { getKnex } from './database.js'
 import { pickBucketSize, grobeTickgroesse } from '../shared/priceBins.js'
 import { holeLeverageMapPunkte } from './binance-api.js'
 import { holeMarginRate } from './margin-rates.js'
@@ -297,7 +300,27 @@ export function verdichteHebelkarte(map, { mid, bandPct = BAND_PCT, spannePct = 
  *
  * @returns {Promise<object|null>} `null` bei jeder Unsicherheit
  */
-export async function holeHebelzonen(symbol) {
+/**
+ * Aufgezeichnete Binance-Liquidationen ab `von`, oder `null`, wenn der Rekorder
+ * das Symbol in diesem Fenster gar nicht mitschrieb — „keine Liquidation" und
+ * „nicht hingeschaut" müssen sich unterscheiden (sonst wäre jede Zone „leer").
+ */
+async function liquidationenSeit(sym, von) {
+    const stunde = Math.floor(von / 3_600_000) * 3_600_000
+    const zeile = await getKnex()('live_recordings').where({ symbol: sym, market: 'futures', kind: 'liq' })
+        .andWhere('hourStart', '>=', stunde).first('id')
+    if (!zeile) return null
+    return leseLiquidationen(sym, von, Date.now(), { venue: 'binance' })
+}
+
+/**
+ * @param {string} symbol
+ * @param {object} [o]
+ * @param {boolean} [o.sollIst]  zusätzlich Soll/Ist je Preiszone (Chart): Verlauf
+ *   der Hebelkarte samt abgeräumter Masse gegen die aufgezeichneten Liquidationen.
+ *   Nur für den Chart — die Handelslage braucht es nicht und soll keine DB lesen.
+ */
+export async function holeHebelzonen(symbol, { sollIst = false } = {}) {
     const sym = String(symbol || '').toUpperCase()
     if (!sym) return null
 
@@ -347,6 +370,23 @@ export async function holeHebelzonen(symbol) {
     const befund = verdichteHebelkarte(map, { mid })
     if (!befund) return null
 
+    let soll = null
+    if (sollIst) {
+        try {
+            const hist = buildLeverageHistory(punkte, {
+                mid, bucketSize, spanPct: SPANNE_PCT, mmr: rate.mmr,
+                maxHebel: Number(rate.maxHebel) || 0, tiers: LEVERAGE_TIERS, seed: false,
+            })
+            const events = await liquidationenSeit(sym, Number(punkte[0].t) || Date.now()).catch((e) => {
+                logWarn('hebelzonen', `Liquidationen für ${sym}: ${e.message}`)
+                return null
+            })
+            soll = sollIstZonen(hist, events, { mid, spannePct: SPANNE_PCT })
+        } catch (e) {
+            logWarn('hebelzonen', `Soll/Ist für ${sym}: ${e.message}`)
+        }
+    }
+
     return {
         ...befund,
         symbol: sym,
@@ -356,5 +396,6 @@ export async function holeHebelzonen(symbol) {
         mmrErsatz: rate.ersatz === true,
         mmrVeraltet: rate.veraltet === true,
         maxHebel: Number(rate.maxHebel) || null,
+        ...(sollIst ? { sollIst: soll } : {}),
     }
 }

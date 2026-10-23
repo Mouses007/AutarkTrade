@@ -5352,6 +5352,12 @@
         "kurz": "Long %",
         "text": "Anteil der Binance-Konten mit Long-Position (stündlich) — eine Stimmung, kein Volumen."
       },
+      "liquidationen": {
+        "name": "Liquidationen",
+        "kurz": "Liquidationen",
+        "text": "Aufgezeichnete Liquidationen je Kerze: Shorts nach oben, Longs nach unten.",
+        "info": "Aufgezeichnete Liquidationen je Kerze: Shorts nach oben (türkis), Longs nach unten (rot). Nur für Coins, die der Rekorder mitschreibt, und eine Stichprobe: Binance meldet höchstens eine Liquidation pro Sekunde — in einer Kaskade fehlt das meiste."
+      },
       "funding": {
         "name": "Funding",
         "kurz": "Funding %",
@@ -5832,6 +5838,9 @@
       "liqKeine": "Liquidationen: nicht aufgezeichnet",
       "hebelModell": "Hebelzonen: Modell",
       "hebelDuenn": "Hebelzonen: Modell, dünne Datenlage",
+      "sollIstTreffer": "Hebelzonen Soll/Ist · Treffer {b} von {n} ({h} h)",
+      "sollIstOhne": "Hebelzonen Soll/Ist · ohne Aufzeichnung",
+      "sollIstInfo": "Rechts je Preiszone ein Balken. Blass: wie viele Liquidationen die Hebelkarte dort erwartet (Modell aus dem Open Interest). Kräftig: wie viel dort wirklich liquidiert wurde (eigene Aufzeichnung, Binance). Rot = Longs (Zwangsverkäufe), türkis = Shorts (Zwangskäufe). ✓ bestätigt, ○ leer — nur für Zonen, die der Kurs durchlaufen hat. Die Trefferquote zählt die durchlaufenen Zonen im Fenster des Modells. Das Ist ist relativ: Binance meldet höchstens eine Liquidation pro Sekunde, Dollar-Beträge wären zu niedrig.",
       "hebelKeine": "Hebelzonen: keine",
       "momentumTf": "Momentum nur auf 5m/15m/1h/4h",
       "titel": {

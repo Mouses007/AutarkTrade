@@ -5352,6 +5352,12 @@
         "kurz": "Long %",
         "text": "Share of Binance accounts holding a long (hourly) — sentiment, not volume."
       },
+      "liquidationen": {
+        "name": "Liquidations",
+        "kurz": "Liquidations",
+        "text": "Recorded liquidations per candle: shorts up, longs down.",
+        "info": "Recorded liquidations per candle: shorts up (turquoise), longs down (red). Only for coins the recorder captures, and a sample: Binance reports at most one liquidation per second — most of a cascade is missing."
+      },
       "funding": {
         "name": "Funding",
         "kurz": "Funding %",
@@ -5832,6 +5838,9 @@
       "liqKeine": "Liquidations: not recorded",
       "hebelModell": "Leverage zones: model",
       "hebelDuenn": "Leverage zones: model, thin data",
+      "sollIstTreffer": "Leverage zones expected/actual · hits {b} of {n} ({h} h)",
+      "sollIstOhne": "Leverage zones expected/actual · not recorded",
+      "sollIstInfo": "One bar per price zone on the right. Pale: how many liquidations the leverage map expects there (model from open interest). Solid: how much was actually liquidated there (own recording, Binance). Red = longs (forced sells), turquoise = shorts (forced buys). ✓ confirmed, ○ empty — only for zones the price has passed. The hit rate counts passed zones in the model window. Actual is relative: Binance reports at most one liquidation per second, so dollar amounts would be too low.",
       "hebelKeine": "Leverage zones: none",
       "momentumTf": "Momentum only on 5m/15m/1h/4h",
       "titel": {

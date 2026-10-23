@@ -493,6 +493,7 @@ export function buildLeverageHistory(points, opts) {
         o: new Float64Array(0), h: new Float64Array(0), l: new Float64Array(0),
         long: new Float32Array(0), short: new Float32Array(0),
         swept: new Float32Array(0), sweptUntil: new Int32Array(0), max: 0, oi: 0,
+        sweptLong: new Float32Array(rows), sweptShort: new Float32Array(rows),
         tiers: usable, tiersNominal: nominale,
     }
     if (!n || !usable.length) return leer
@@ -624,6 +625,9 @@ export function buildLeverageHistory(points, opts) {
         rows, cols: n, base, bucketSize, ts, mid: midArr,
         o: oArr, h: hArr, l: lArr,
         long, short, swept, sweptUntil, max,
+        // Abgeräumte Masse am Ende, je Seite getrennt (Soll/Ist im Chart,
+        // `shared/hebelSollIst.js`): `swept` oben summiert beide Seiten.
+        sweptLong: Float32Array.from(abLong), sweptShort: Float32Array.from(abShort),
         // Offenes Interesse am Ende — Bezug für die Abdeckung in der Legende
         oi: points[n - 1].oi,
         tiers: usable,

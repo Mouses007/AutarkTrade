@@ -23,6 +23,8 @@ import { zeitZuLogisch, logischZuX } from '../zeichnungen/geometrie.js'
 
 const ROT = '255,105,96'
 const GRUEN = '38,166,154'
+// Hausfarbe — Shorts im Soll/Ist-Profil (Wunsch 23.10.2026)
+const HAUS = '31,214,196'
 const SCHRIFT = '10px -apple-system, "Segoe UI", Roboto, sans-serif'
 
 export function usdKurz(v) {
@@ -203,6 +205,7 @@ export class MarktEbene {
         if (!this.zonen) return
         ctx.save()
         ctx.font = SCHRIFT
+        if (this.zonen.sollIst?.zonen?.length) { this.zeichneSollIst(ctx, groesse.width, this.zonen.sollIst); ctx.restore(); return }
         // Unter dem Kurs würden Longs liquidiert (Zwangsverkäufe), darüber Shorts (Zwangskäufe).
         this.zeichneBalken(ctx, groesse.width, [
             ...(this.zonen.unten || []).map((z) => ({ ...z, rgb: ROT, vorsilbe: `${this.texte.liqLong} ~` })),
@@ -214,8 +217,8 @@ export class MarktEbene {
     oben(ctx, groesse) {
         ctx.save()
         ctx.font = SCHRIFT
+        if (this.zonen?.sollIst?.zonen?.length) this.zeichneSollIstMarken(ctx, groesse.width, this.zonen.sollIst)
         if (this.waende) this.zeichneWaende(ctx, groesse.width)
-        if (this.liqKerzen.length && this.zeiten.length) this.zeichneLiq(ctx, groesse.width)
         ctx.restore()
     }
 
@@ -276,6 +279,51 @@ export class MarktEbene {
                 ctx.fillText(text, b.x - w / 2, b.long ? b.y + r + 10 : b.y - r - 4)
             }
         }
+    }
+
+    /**
+     * Soll/Ist je Preiszone (`shared/hebelSollIst.js`): ein feiner Balken vom
+     * rechten Rand, blass so lang wie die Vorhersage, kräftig so weit, wie dort
+     * wirklich liquidiert wurde. ✓ bestätigt, ○ leer — nur für Zonen, die der
+     * Kurs durchlaufen hat. Long rot, Short in der Hausfarbe. Teilen sich Long
+     * und Short ein Band, liegen sie 2 px versetzt.
+     */
+    zeichneSollIst(ctx, breite, si) {
+        const lang = Math.min(130, breite * 0.2)
+        const dicke = breite < 500 ? 3 : 4
+        for (const z of si.zonen) {
+            const y0 = this.zuY(z.preis)
+            if (y0 == null) continue
+            const y = y0 + (z.seite === 'long' ? 1 : -1) * (dicke / 2 + 1)
+            const rgb = z.seite === 'long' ? ROT : HAUS
+            const l = Math.max(3, z.soll * lang)
+            ctx.fillStyle = `rgba(${rgb},0.26)`
+            ctx.fillRect(breite - l, y - dicke / 2, l, dicke)
+            if (z.ist > 0) {
+                ctx.fillStyle = `rgba(${rgb},0.95)`
+                ctx.fillRect(breite - Math.max(1, z.ist * lang), y - dicke / 2, Math.max(1, z.ist * lang), dicke)
+            }
+        }
+    }
+
+    /** ✓/○ VOR den Kerzen — die Balken liegen dahinter, die Zeichen sonst auch (unsichtbar am Kurs). */
+    zeichneSollIstMarken(ctx, breite, si) {
+        const lang = Math.min(130, breite * 0.2)
+        const dicke = breite < 500 ? 3 : 4
+        for (const z of si.zonen) {
+            if (!z.zaehlt || (z.status !== 'bestaetigt' && z.status !== 'leer')) continue
+            const y0 = this.zuY(z.preis)
+            if (y0 == null) continue
+            const y = y0 + (z.seite === 'long' ? 1 : -1) * (dicke / 2 + 1)
+            const x = breite - Math.max(3, z.soll * lang) - 12
+            const zeichen = z.status === 'bestaetigt' ? '✓' : '○'
+            ctx.font = 'bold 12px -apple-system, "Segoe UI", Roboto, sans-serif'
+            ctx.fillStyle = 'rgba(10,14,22,0.8)'
+            ctx.fillRect(x - 3, y - 8, 14, 14)
+            ctx.fillStyle = z.status === 'bestaetigt' ? 'rgba(232,244,246,0.95)' : 'rgba(142,165,175,0.95)'
+            ctx.fillText(zeichen, x, y + 4)
+        }
+        ctx.font = SCHRIFT
     }
 
     /** Balken vom rechten Rand nach links, Länge ∝ USD; Beschriftung bei den grössten. */

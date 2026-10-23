@@ -51,7 +51,17 @@ check('RSI im Chart == RSI der Detektoren', gleich(rechneIndikator('rsi', kerzen
 const extern = {
     oi: kerzen.filter((_, i) => i % 1 === 0).map((k, i) => ({ t: k.t, oi: 1000 + i, longPct: 50 + (i % 10) })),
     funding: kerzen.filter((_, i) => i % 8 === 0).map((k) => ({ t: k.t + 60_000, rate: 0.0001 })),
+    // Liquidationen: abwechselnd Short (isBuy) und Long, je 1000 USD
+    liquidationen: kerzen.filter((_, i) => i % 3 === 0).map((k, i) => ({ t: k.t + 1000, price: 100, qty: 10, isBuy: i % 2 === 0 })),
     momentum: { t: kerzen.map((k) => k.t), w1: kerzen.map((_, i) => Math.sin(i / 5) * 50), w2: kerzen.map((_, i) => Math.sin(i / 5 - 0.3) * 50), mf: kerzen.map((_, i) => Math.cos(i / 7) * 20) },
+}
+
+{
+    const l = rechneIndikator('liquidationen', kerzen, {}, extern)
+    check('Liquidationen: Shorts positiv, Longs negativ, je Kerze in USD',
+        l.short.filter((x) => x != null).every((x) => x === 1000) && l.long.filter((x) => x != null).every((x) => x === -1000)
+        && l.short.filter((x) => x != null).length > 0 && l.long.filter((x) => x != null).length > 0)
+    check('Liquidationen: nicht in „Indikator hinzufügen"', INDIKATOREN.liquidationen.intern === true)
 }
 
 console.log('\nJede Ausgabe so lang wie die Kerzenreihe\n')

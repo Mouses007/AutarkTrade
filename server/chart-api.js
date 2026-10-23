@@ -750,8 +750,8 @@ export function setupChartRoutes(app) {
             await marktdaten.binanceRest('oiHistorie', 'futures')
             // `ausCache` verteilt die Antwort per Spread — deshalb verpackt,
             // sonst würde aus `null` ein leeres Objekt mit Zeitstempel.
-            const { zonen, veraltet } = await ausCache(`chart_hebelzonen|${symbol}`, 2 * 60 * 1000,
-                async () => ({ zonen: await holeHebelzonen(symbol) }))
+            const { zonen, veraltet } = await ausCache(`chart_hebelzonen2|${symbol}`, 2 * 60 * 1000,
+                async () => ({ zonen: await holeHebelzonen(symbol, { sollIst: true }) }))
             res.json({ symbol, zonen: zonen || null, veraltet: !!veraltet })
         } catch (e) {
             if (marktdaten.sendeWennAus(res, e)) return

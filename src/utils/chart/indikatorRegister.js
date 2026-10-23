@@ -525,6 +525,29 @@ export const INDIKATOREN = {
             return { wert, delta: veraenderung(wert) }
         },
     },
+    // Aufgezeichnete Liquidationen je Kerze (USD): Shorts nach oben in der
+    // Hausfarbe, Longs nach unten rot. Kein Eintrag in „Indikator hinzufügen" —
+    // das Fenster erscheint über den Schalter „Liquidationen" (Overlay) und
+    // ersetzt dort seit 23.10.2026 die Blasen im Kursbild.
+    liquidationen: {
+        ort: 'eigen',
+        extern: 'liquidationen',
+        intern: true,
+        params: [],
+        ausgaben: [
+            { key: 'short', art: 'histogramm', farbe: '#1fd6c4' },
+            { key: 'long', art: 'histogramm', farbe: '#e0574c' },
+        ],
+        kompakt: true,
+        linien: [0],
+        rechne: (k, _p, ext) => {
+            const ev = Array.isArray(ext) ? ext : []
+            const usd = (e) => ({ t: e.t, v: e.price * e.qty })
+            const short = jeKerzeSumme(k, ev.filter((e) => e.isBuy).map(usd), 'v')
+            const long = jeKerzeSumme(k, ev.filter((e) => !e.isBuy).map(usd), 'v').map((v) => (v == null ? null : -v))
+            return { short, long }
+        },
+    },
     longShort: {
         ort: 'eigen',
         extern: 'oi',

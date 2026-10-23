@@ -305,7 +305,7 @@ function setzeDaten(liste) {
     kerzenSerie.value?.setData(liste.map(kerzenPunkt))
     volumenSerie.value?.setData(liste.map(volumenBalken))
     legende.value = letzteLegende()
-    zeichner?.setze(props.panel.indikatoren, liste)
+    zeichner?.setze(mitLiqFenster(props.panel.indikatoren), liste)
     if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
     ebene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
@@ -320,10 +320,23 @@ function hinweis(name, text) {
     marktHinweise.value = { ...marktHinweise.value, [name]: text }
 }
 
+/*
+ * Liquidationen je Kerze als eigenes Datenfenster unter dem Chart (statt Blasen
+ * im Kursbild, Wunsch 23.10.2026). Das Fenster hängt am Overlay-Schalter, nicht
+ * an der Indikatorliste: es wird als unsichtbare Instanz angehängt und nie
+ * gespeichert.
+ */
+const LIQ_FENSTER = { id: '__liquidationen', typ: 'liquidationen', sichtbar: true, params: {} }
+function mitLiqFenster(inst) {
+    const an = overlayAn('liquidationen') && props.panel.markt !== 'spot'
+    return an ? [...(inst || []), LIQ_FENSTER] : (inst || [])
+}
+
 async function ladeLiquidationen() {
     if (!marktEbene) return
+    zeichner?.setze(mitLiqFenster(props.panel.indikatoren), kerzen.value)
     if (!overlayAn('liquidationen') || props.panel.markt === 'spot' || !kerzen.value.length) {
-        marktEbene.setzeLiquidationen([]); hinweis('liquidationen', null); return
+        marktEbene.setzeLiquidationen([]); zeichner?.setzeExtern('liquidationen', null); hinweis('liquidationen', null); return
     }
     const symbol = props.panel.symbol
     // Höchstens eine Woche: der Rekorder hält eine Stichprobe je Sekunde, und
@@ -333,6 +346,8 @@ async function ladeLiquidationen() {
         const { data } = await axios.get('/api/live/liquidations', { params: { symbol, from: von, to: Date.now(), venue: 'binance' } })
         if (symbol !== props.panel.symbol) return
         marktEbene.setzeLiquidationen(data.events)
+        zeichner?.setzeExtern('liquidationen', data.events)
+        if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
         hinweis('liquidationen', data.events.length ? t('chart.markt.liqAnzahl', { n: data.events.length }) : t('chart.markt.liqKeine'))
     } catch { hinweis('liquidationen', t('chart.markt.liqKeine')) }
 }
@@ -347,7 +362,11 @@ async function ladeHebelzonen() {
         // OI-Historie nur mit Marktdatenquelle Binance (S12)
         if (data?.aus) { marktEbene.setzeZonen(null); hinweis('hebelzonen', t('chart.markt.quelleAus', { was: t('chart.markt.hebelName') })); return }
         marktEbene.setzeZonen(data.zonen)
-        hinweis('hebelzonen', data.zonen ? t(data.zonen.duenn ? 'chart.markt.hebelDuenn' : 'chart.markt.hebelModell') : t('chart.markt.hebelKeine'))
+        const si = data.zonen?.sollIst
+        hinweis('hebelzonen', !data.zonen ? t('chart.markt.hebelKeine')
+            : si?.treffer ? t('chart.markt.sollIstTreffer', { b: si.treffer.bestaetigt, n: si.treffer.durchlaufen, h: si.stunden })
+                : si && !si.erfasst ? t('chart.markt.sollIstOhne')
+                    : t(data.zonen.duenn ? 'chart.markt.hebelDuenn' : 'chart.markt.hebelModell'))
     } catch { marktEbene.setzeZonen(null); hinweis('hebelzonen', t('chart.markt.hebelKeine')) }
 }
 
@@ -1237,7 +1256,7 @@ watch(() => [props.panel.symbol, props.panel.markt, props.panel.interval], () =>
 })
 watch(() => props.panel.skala, wendeSkalaAn)
 watch(() => props.panel.indikatoren, (inst) => {
-    zeichner?.setze(inst, kerzen.value)
+    zeichner?.setze(mitLiqFenster(inst), kerzen.value)
     if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
 }, { deep: true })
 
@@ -1331,7 +1350,7 @@ defineExpose({
             </button>
             <template v-if="!legendeZu">
             <template v-for="(text, name) in marktHinweise" :key="name">
-                <span v-if="text" class="marktHinweis" :title="t('chart.markt.titel.' + name)">{{ text }}</span>
+                <span v-if="text" class="marktHinweis" :title="t('chart.markt.titel.' + name)">{{ text }}<InfoTipp v-if="name === 'hebelzonen'" schluessel="chart.markt.sollIstInfo" breit /></span>
             </template>
             <span v-if="journalInfo && journalInfo.anzahl" class="journalHinweis" :title="t('chart.journalHinweis')">
                 <Symbol name="buch" /> {{ journalInfo.anzahl }}{{ journalInfo.gekappt ? '+' : '' }}
@@ -1577,6 +1596,10 @@ defineExpose({
 .marktHinweis {
     color: var(--warn);
     font-size: 10px;
+}
+
+.marktHinweis :deep(.infoTipp), .marktHinweis > :last-child:not(:first-child) {
+    margin-left: 4px;
 }
 
 .quelleHinweis {

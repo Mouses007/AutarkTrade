@@ -66,7 +66,7 @@ const optionName = (p, o) => (p.optionLabel?.[o] ? t(p.optionLabel[o]) : p.roh ?
 
 const liste = computed(() => {
     const q = suche.value.trim().toLowerCase()
-    return Object.keys(INDIKATOREN)
+    return Object.keys(INDIKATOREN).filter((typ) => !INDIKATOREN[typ].intern)
         .map((typ) => ({ typ, name: t(`chart.ind.${typ}.name`), text: t(`chart.ind.${typ}.text`), ort: INDIKATOREN[typ].ort }))
         .filter((x) => !q || x.name.toLowerCase().includes(q) || x.typ.toLowerCase().includes(q))
 })
