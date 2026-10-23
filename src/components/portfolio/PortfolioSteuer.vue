@@ -6,7 +6,8 @@
  * die (privat steuerfreien) Veräusserungen. Darunter aufklappbar: das
  * Wertschriftenverzeichnis (jeder Kurs nachtragbar, z. B. aus der
  * ESTV-Kursliste), die Zuflüsse, die Abgänge mit FIFO-Einstand und die fünf
- * Kriterien zur Gewerbsmässigkeit als Ampel. CSV und Druckansicht für die
+ * Kriterien zur Gewerbsmässigkeit als Ampel. Futures (aus dem Journal):
+ * Guthaben am Stichtag (rückgerechnet oder laut Auszug) und Jahresergebnis. CSV und Druckansicht für die
  * Steuererklärung bzw. den Treuhänder.
  *
  * Keine Steuerberatung — das steht auch auf der Seite.
@@ -76,10 +77,31 @@ const ampel = (e) => (e === true ? 'gut' : e === false ? 'schlecht' : 'neutral')
 const ampelSymbol = (e) => (e === true ? 'hakenKreis' : e === false ? 'warnung' : 'frage')
 function kriteriumWert(k) {
     if (k.id === 'haltedauer') return t('portfolio.stKritHaltedauerWert', { p: (k.wert * 100).toFixed(0) })
-    if (k.id === 'volumen') return k.wert != null ? t('portfolio.stKritVolumenWert', { x: k.wert.toFixed(1), v: chf(k.volumen), a: chf(k.vermoegenAnfang) }) : t('portfolio.stKritVolumenOhne')
+    if (k.id === 'volumen') {
+        const text = k.wert != null ? t('portfolio.stKritVolumenWert', { x: k.wert.toFixed(1), v: chf(k.volumen), a: chf(k.vermoegenAnfang) }) : t('portfolio.stKritVolumenOhne')
+        return k.volumenFutures ? `${text} ${t('portfolio.stKritVolumenTeile', { s: chf(k.volumenSpot), f: chf(k.volumenFutures) })}` : text
+    }
     if (k.id === 'derivate') return k.wert ? t('portfolio.stKritDerivateWert', { n: k.wert }) : t('portfolio.stKritDerivateKeine')
     return t('portfolio.stKritSelbst')
 }
+// ── Futures-Guthaben am Stichtag von Hand (Kontoauszug der Börse) ──
+const futBearbeite = ref(null)
+const futEingabe = ref('')
+function starteFutures(g) {
+    futBearbeite.value = g.boerse
+    futEingabe.value = g.usd != null ? String(Math.round(g.usd * 100) / 100) : ''
+    nextTick(() => document.querySelector('.ps-futform input')?.focus())
+}
+async function speichereFutures(boerse, loeschen = false) {
+    await axios.put('/api/portfolio/futures-stichtag', { jahr: jahr.value, boerse, usd: loeschen ? null : futEingabe.value.replace(/['\s]/g, '').replace(',', '.'), quelle: 'Kontoauszug' })
+    futBearbeite.value = null
+    await lade()
+}
+const usd = (v) => (v == null ? '—' : `${v.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USDT`)
+const fut = computed(() => (daten.value?.futures && !daten.value.futures.fehler ? daten.value.futures : null))
+const futSichtbar = computed(() => fut.value && (fut.value.boersen.length || fut.value.guthaben.some((g) => g.usd != null || !fut.value.vorJournal)))
+const futGrund = (g) => t('portfolio.stFutGrund_' + (g.grund || 'heute'))
+
 const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung', eingeordnet: 'eingeordnet' }
 </script>
 
@@ -106,8 +128,8 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
             <div class="ps-kacheln" :class="{ laedt }">
                 <Karte class="ps-kachel">
                     <span class="ps-etikett">{{ t('portfolio.stVermoegen', { j: daten.jahr }) }}</span>
-                    <b class="ps-zahl">{{ chf(daten.vermoegenSumme) }}</b>
-                    <small class="at-gedaempft">{{ t('portfolio.stVermoegenUnter', { n: daten.vermoegen.length }) }}<template v-if="daten.ohneKurs.length"> · <span class="at-warn">{{ t('portfolio.stOhneKurs', { n: daten.ohneKurs.length }) }}</span></template></small>
+                    <b class="ps-zahl">{{ chf(daten.vermoegenGesamt ?? daten.vermoegenSumme) }}</b>
+                    <small class="at-gedaempft">{{ t('portfolio.stVermoegenUnter', { n: daten.vermoegen.length }) }}<template v-if="fut?.guthabenChf"> · {{ t('portfolio.stDavonFutures', { v: chf(fut.guthabenChf) }) }}</template><template v-if="daten.ohneKurs.length"> · <span class="at-warn">{{ t('portfolio.stOhneKurs', { n: daten.ohneKurs.length }) }}</span></template></small>
                 </Karte>
                 <Karte class="ps-kachel">
                     <span class="ps-etikett">{{ t('portfolio.stEinkommen') }}</span>
@@ -228,6 +250,56 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                 </div>
             </section>
 
+            <!-- ── Futures ── -->
+            <section v-if="futSichtbar" class="ps-abschnitt">
+                <button type="button" class="ps-kopf" @click="klappe('futures')">
+                    <Symbol name="runter" :groesse="16" :class="{ zu: !offen.has('futures') }" />
+                    <h3>{{ t('portfolio.stFuturesTitel') }}</h3>
+                    <span class="at-gedaempft">{{ chf(fut.guthabenChf) }} · {{ t('portfolio.stFutTrades', { n: fut.summe.n }) }}</span>
+                </button>
+                <div v-if="offen.has('futures')" class="ps-inhalt">
+                    <p class="ps-erkl">{{ t('portfolio.stFuturesErkl') }}</p>
+                    <h4 class="ps-unter">{{ t('portfolio.stFutGuthaben', { j: daten.jahr }) }}</h4>
+                    <div class="ps-tabelle">
+                        <div v-for="g in fut.guthaben" :key="g.boerse" class="ps-posten">
+                            <div class="ps-zeile" :class="{ ohne: g.usd == null }">
+                                <span class="ps-coin">{{ g.name }}</span>
+                                <span>
+                                    <button type="button" class="ps-kurs" :title="t('portfolio.stFutEintragen')" @click="starteFutures(g)">{{ g.usd != null ? usd(g.usd) : t('portfolio.stKursEintragen') }}</button>
+                                </span>
+                                <span>
+                                    <Pille :ton="g.sicherheit === 'beleg' ? 'gut' : g.sicherheit === 'abgeleitet' ? 'warn' : 'schlecht'">{{ g.sicherheit === 'beleg' ? t('portfolio.stFutAuszug') : g.sicherheit }}</Pille>
+                                    <small v-if="g.sicherheit === 'abgeleitet'" class="ps-kursquelle">{{ t('portfolio.stFutRechnung', { h: usd(g.heuteUsd), n: usd(g.nachUsd) }) }}</small>
+                                    <small v-else-if="g.sicherheit === 'unbekannt'" class="ps-kursquelle">{{ futGrund(g) }}</small>
+                                </span>
+                                <span><b v-if="g.chf != null">{{ chf(g.chf) }}</b><span v-else class="at-warn">—</span></span>
+                            </div>
+                            <div v-if="futBearbeite === g.boerse" class="ps-kursform ps-futform">
+                                <input v-model="futEingabe" inputmode="decimal" placeholder="USDT" @keydown.enter="speichereFutures(g.boerse)" @keydown.esc="futBearbeite = null" />
+                                <Knopf art="haupt" klein @click="speichereFutures(g.boerse)">{{ t('common.save') }}</Knopf>
+                                <Knopf v-if="g.sicherheit === 'beleg'" art="leise" klein @click="speichereFutures(g.boerse, true)">{{ t('portfolio.stFutZurueck') }}</Knopf>
+                                <Knopf art="leise" klein @click="futBearbeite = null">{{ t('common.cancel') }}</Knopf>
+                            </div>
+                        </div>
+                        <div class="ps-zeile summe"><span>Total</span><span></span><span><small v-if="fut.stichtagKurs" class="at-gedaempft">USD/CHF {{ fut.stichtagKurs.toFixed(4) }}</small></span><span>{{ chf(fut.guthabenChf) }}</span></div>
+                    </div>
+                    <template v-if="fut.boersen.length">
+                        <h4 class="ps-unter">{{ t('portfolio.stFutErgebnis') }}</h4>
+                        <div class="ps-tabelle">
+                            <div class="ps-zeile fuenf kopf"><span>{{ t('portfolio.stFutBoerse') }}</span><span>Trades</span><span>{{ t('portfolio.stFutGebuehren') }}</span><span>{{ t('portfolio.stFutVolumen') }}</span><span>{{ t('portfolio.stFutNetto') }}</span></div>
+                            <div v-for="b in fut.boersen" :key="b.boerse" class="ps-zeile fuenf">
+                                <span class="ps-coin">{{ b.name }}</span>
+                                <span>{{ b.n }}<small v-if="b.bots" class="at-gedaempft"> · {{ t('portfolio.stFutBots', { n: b.bots }) }}</small></span>
+                                <span>{{ usd(b.gebuehrUsd) }}<small v-if="b.fundingUsd" class="ps-kursquelle">Funding {{ usd(b.fundingUsd) }}</small></span>
+                                <span>{{ chf(b.volumenChf) }}</span>
+                                <span :class="b.nettoChf >= 0 ? 'at-gut' : 'at-schlecht'">{{ chf(b.nettoChf, { vorzeichen: true }) }}</span>
+                            </div>
+                            <div class="ps-zeile fuenf summe"><span>Total</span><span>{{ fut.summe.n }}</span><span>{{ usd(fut.summe.gebuehrUsd) }}</span><span>{{ chf(fut.summe.volumenChf) }}</span><span>{{ chf(fut.summe.nettoChf, { vorzeichen: true }) }}</span></div>
+                        </div>
+                    </template>
+                </div>
+            </section>
+
             <!-- ── Gewerbsmässigkeit ── -->
             <section class="ps-abschnitt">
                 <button type="button" class="ps-kopf" @click="klappe('kriterien')">
@@ -274,6 +346,7 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
 .ps-kopf svg.zu { transform: rotate(-90deg); }
 .ps-kopf svg { transition: transform 0.2s; color: var(--leise); }
 .ps-inhalt { padding-bottom: 0.5rem; }
+.ps-unter { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--leise); margin: 1rem 0 0.25rem; }
 .ps-erkl { font-size: 0.82rem; color: var(--muted); margin: 0 0 0.75rem; max-width: 62rem; }
 
 .ps-tabelle { display: flex; flex-direction: column; }

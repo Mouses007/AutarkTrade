@@ -74,24 +74,24 @@ async function bargeld() {
 }
 
 /** Guthaben auf den Futures-Börsen (USD), je Börse einzeln — eine fehlende bricht nichts. */
-async function futuresKonten() {
+export async function futuresKonten() {
     const aus = []
     try {
         const c = await bitunixConfig()
         if (c?.apiKey) {
             const r = await bitunixRequest('GET', '/api/v1/futures/account', c.apiKey, c.secretKey, { marginCoin: 'USDT' })
             const a = Array.isArray(r.data) ? r.data[0] : r.data
-            if (a) aus.push({ name: 'Bitunix Futures', usd: ['available', 'margin', 'crossUnrealizedPNL', 'isolationUnrealizedPNL'].reduce((s, f) => s + Number(a[f] || 0), 0) - Number(a.bonus || 0) })
+            if (a) aus.push({ boerse: 'bitunix', name: 'Bitunix Futures', usd: ['available', 'margin', 'crossUnrealizedPNL', 'isolationUnrealizedPNL'].reduce((s, f) => s + Number(a[f] || 0), 0) - Number(a.bonus || 0) })
         }
-    } catch (e) { aus.push({ name: 'Bitunix Futures', usd: null, fehler: e.message }) }
+    } catch (e) { aus.push({ boerse: 'bitunix', name: 'Bitunix Futures', usd: null, fehler: e.message }) }
     try {
         const c = await getDecryptedBitgetConfig()
         if (c?.apiKey) {
             const r = await bitgetRequest('GET', '/api/v2/account/all-account-balance', c.apiKey, c.secretKey, c.passphrase)
             const usd = (r.data || []).filter((x) => ['futures', 'margin', 'bots'].includes(x.accountType)).reduce((s, x) => s + Number(x.usdtBalance || 0), 0)
-            aus.push({ name: 'Bitget Futures', usd })
+            aus.push({ boerse: 'bitget', name: 'Bitget Futures', usd })
         }
-    } catch (e) { aus.push({ name: 'Bitget Futures', usd: null, fehler: e.message }) }
+    } catch (e) { aus.push({ boerse: 'bitget', name: 'Bitget Futures', usd: null, fehler: e.message }) }
     try {
         const c = await getDecryptedPionexConfig()
         if (c?.apiKey) {
@@ -114,9 +114,9 @@ async function futuresKonten() {
                     if (p) { usd += wert * p; hinweise.push(`Bot ${wert.toFixed(4)} ${muenze}`) }
                 }
             }
-            aus.push({ name: 'Pionex Futures & Bots', usd, hinweis: hinweise.join(', ') || null })
+            aus.push({ boerse: 'pionex', name: 'Pionex Futures & Bots', usd, hinweis: hinweise.join(', ') || null })
         }
-    } catch (e) { aus.push({ name: 'Pionex Futures & Bots', usd: null, fehler: e.message }) }
+    } catch (e) { aus.push({ boerse: 'pionex', name: 'Pionex Futures & Bots', usd: null, fehler: e.message }) }
     return aus
 }
 

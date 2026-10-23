@@ -142,4 +142,6 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
     await addColumnIfNotExists('settings', 'portfolioStaubChf', (t) => t.double('portfolioStaubChf').defaultTo(1))
     // Zusätzliche Handelspaare für Bitunix/Pionex (die Börsen liefern Historie nur je Paar).
     await addColumnIfNotExists('settings', 'portfolioPaare', (t) => t.text('portfolioPaare'))
+    // { "2025": { pionex: { usd, quelle } } } — Futures-Guthaben am 31.12. laut Kontoauszug (ersetzt die Rückrechnung).
+    await addColumnIfNotExists('settings', 'portfolioFuturesStichtag', (t) => t.text('portfolioFuturesStichtag'))
 }

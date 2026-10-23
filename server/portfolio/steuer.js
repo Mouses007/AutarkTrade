@@ -19,6 +19,7 @@ import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from '.
 import { tagesKursUsd, fxAm, gleicherCoin } from './kurse.js'
 import { STABIL, FIAT } from './normal.js'
 import { uebergaben } from './uebergabe.js'
+import { futuresSteuerjahr } from './futures-steuer.js'
 
 const SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
     'transferMit', 'einordnung', 'chfWert', 'sicherheit', 'kontrakt', 'kette']
@@ -210,9 +211,25 @@ export async function berechneSteuerjahr(jahr) {
         vermoegenAnfang = 0
         for (const [key, m] of m0) { const kurs = k0.get(key.split('\u0000')[1]); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
     } catch { vermoegenAnfang = null }
-    const volumen = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.chfWert != null)
+    const volumenSpot = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.chfWert != null)
         .reduce((s, b) => s + Math.abs(Number(b.chfWert)), 0)
-    const kriterien = gewerbsKriterien({ volumen, vermoegenAnfang, kurzfristigErloes: vs.kurzfristigErloes, erloes: vs.erloes, futuresTrades: await futuresTrades(von, bis) })
+    // Futures: Ergebnis, Volumen, Guthaben am Stichtag. Fällt das Journal aus,
+    // bleibt der Spot-Bericht stehen.
+    let futures = null
+    try { futures = await futuresSteuerjahr(jahr, { von, bis, laufend }) } catch (e) { futures = { fehler: e.message } }
+    const volumenFutures = futures?.summe?.volumenChf || 0
+    const volumen = volumenSpot + volumenFutures
+    // Vermögen am Anfang inkl. Futures-Guthaben des Vorjahrs (sonst wäre das Volumen-Verhältnis zu streng).
+    if (vermoegenAnfang != null) {
+        try {
+            const fv = await futuresSteuerjahr(jahr - 1, { von: vorjahr.von, bis: vorjahr.bis, laufend: false })
+            vermoegenAnfang += fv.guthabenChf || 0
+        } catch { /* Spot allein */ }
+    }
+    const kriterien = gewerbsKriterien({ volumen, vermoegenAnfang, kurzfristigErloes: vs.kurzfristigErloes, erloes: vs.erloes, futuresTrades: futures?.summe?.n ?? await futuresTrades(von, bis) })
+    if (futures?.guthaben?.some((g) => g.sicherheit === 'abgeleitet')) {
+        hinweise.push({ art: 'futuresAbgeleitet', text: 'Futures-Guthaben am Stichtag ist zurückgerechnet (heute − Ergebnis seither). Ein- und Auszahlungen nach dem Stichtag sind darin nicht abgezogen — mit dem Kontoauszug der Börse prüfen und den Wert eintragen.' })
+    }
 
     return {
         jahr, stichtag: bis, laufend,
@@ -222,7 +239,9 @@ export async function berechneSteuerjahr(jahr) {
             zeilen: ek.zeilen.map((b) => ({ id: b.id, zeit: b.zeit, quelle: name(b.quelle), art: ['staking', 'airdrop', 'belohnung'].includes(b.art) ? b.art : 'eingeordnet', asset: b.asset, menge: b.menge, chfWert: b.chfWert, sicherheit: b.sicherheit })),
         },
         veraeusserungen: { ...vs, abgaenge: abgaenge.filter((a) => a.art !== 'gebuehr').map((a) => ({ ...a, quelle: name(a.quelle) })) },
-        kriterien: kriterien.map((x) => (x.id === 'volumen' ? { ...x, volumen, vermoegenAnfang } : x)),
+        kriterien: kriterien.map((x) => (x.id === 'volumen' ? { ...x, volumen, volumenSpot, volumenFutures, vermoegenAnfang } : x)),
+        futures,
+        vermoegenGesamt: vermoegenSumme + (futures?.guthabenChf || 0),
         hinweise,
     }
 }
@@ -239,5 +258,15 @@ export function steuerCsv(s) {
     zeilen.push(['Total', '', '', '', '', s.einkommen.summe, ''].map(z).join(';'), '', 'VERÄUSSERUNGEN (privat steuerfrei, zur Information);Datum;Ort;Art;Menge;Erlös CHF;Einstand CHF (FIFO);Gewinn CHF;Anteil < 6 Monate')
     for (const a of s.veraeusserungen.abgaenge) zeilen.push([a.asset, d(a.zeit), a.quelle, a.art, a.menge, a.erloes, a.kosten, a.gewinn, a.kurzfristigAnteil].map(z).join(';'))
     zeilen.push(['Total', '', '', '', '', s.veraeusserungen.erloes, s.veraeusserungen.kosten, s.veraeusserungen.gewinn, ''].map(z).join(';'))
+    const f = s.futures
+    if (f && !f.fehler && (f.boersen.length || f.guthaben.length)) {
+        zeilen.push('', 'FUTURES-GUTHABEN AM STICHTAG (Vermögen);Wert USDT;Kurs USD/CHF;Wert CHF;Sicherheit')
+        for (const g of f.guthaben) zeilen.push([g.name, g.usd, f.stichtagKurs, g.chf, g.sicherheit === 'beleg' ? `Auszug${g.quelle ? ` (${g.quelle})` : ''}` : g.sicherheit].map(z).join(';'))
+        zeilen.push(['Total', '', '', f.guthabenChf, ''].map(z).join(';'))
+        zeilen.push('', 'FUTURES-ERGEBNIS (privat steuerfrei, zur Information);Trades;davon Bots;Netto USDT;Gebühren USDT;Funding USDT;Netto CHF;Volumen CHF')
+        for (const b of f.boersen) zeilen.push([b.name, b.n, b.bots, b.nettoUsd, b.gebuehrUsd, b.fundingUsd, b.nettoChf, b.volumenChf].map(z).join(';'))
+        zeilen.push(['Total', f.summe.n, '', '', f.summe.gebuehrUsd, f.summe.fundingUsd, f.summe.nettoChf, f.summe.volumenChf].map(z).join(';'))
+    }
+    zeilen.push('', 'Keine Steuerberatung. Methode: FIFO je Coin über alle Orte; Stichtag 31.12. 23:59:59 Europe/Zurich; Kurse siehe Spalte Kursquelle; USD/CHF und EUR/CHF der EZB.')
     return '﻿' + zeilen.join('\n') + '\n'
 }

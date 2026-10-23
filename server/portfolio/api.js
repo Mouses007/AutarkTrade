@@ -25,6 +25,7 @@
  *   GET    /steuer.csv?jahr=               dasselbe als CSV
  *   GET    /steuer/jahre                   Jahre mit Bewegungen
  *   PUT    /steuerkurs       {jahr, asset, chf|null, quelle}
+ *   PUT    /futures-stichtag {jahr, boerse, usd|null, quelle}  Futures-Guthaben 31.12. laut Auszug
  */
 
 import crypto from 'crypto'
@@ -33,6 +34,8 @@ import { encrypt } from '../crypto.js'
 import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } from '../../shared/portfolio-adresse.js'
 import { berechneUebersicht } from './uebersicht.js'
 import { berechneBilanz } from './bilanz.js'
+import { setzeFuturesStichtag } from './futures-steuer.js'
+import { BOERSEN } from './futures-rechnung.js'
 import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
 import { ARTEN, FIAT } from './normal.js'
@@ -357,6 +360,17 @@ export function setupPortfolioRoutes(app) {
                 await k('portfolio_steuerkurse').insert({ jahr, asset, chf, quelle: req.body.quelle === 'estv' ? 'estv' : 'manuell', updatedAt: Date.now() })
                     .onConflict(['jahr', 'asset']).merge()
             }
+            res.json({ ok: true })
+        } catch (e) { fehler(res, e) }
+    })
+
+    app.put('/api/portfolio/futures-stichtag', async (req, res) => {
+        try {
+            const jahr = Number(req.body?.jahr), boerse = String(req.body?.boerse || '').toLowerCase()
+            if (!jahr || !BOERSEN.includes(boerse)) return fehler(res, 'Jahr und Börse nötig', 400)
+            const usd = req.body?.usd
+            if (usd != null && usd !== '' && !(Number(usd) >= 0)) return fehler(res, 'Betrag ungültig', 400)
+            await setzeFuturesStichtag(jahr, boerse, usd === '' ? null : usd, String(req.body?.quelle || '').slice(0, 80) || null)
             res.json({ ok: true })
         } catch (e) { fehler(res, e) }
     })
