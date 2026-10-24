@@ -53,11 +53,16 @@ export const KAND = {
     PERIODE_MIN_KERZEN: 5,     // Tages-/Wochenprofil erst ab so vielen Kerzen der Periode
     KANAL_FENSTER: [80, 60, 45, 30, 20],
     KANAL_MIN_BREITE_ATR: 1,
-    KANAL_MAX_BREITE_ATR: 8,
+    KANAL_MAX_BREITE_ATR: 6,   // breiter deckt er den halben Chart ab und sagt nichts mehr
     KANAL_MIN_STEIG_ATR: 1.5,  // Steigung über das Fenster: flacher ist es eine Spanne, kein Kanal
     KANAL_BERUEHR_ATR: 0.35,   // Abstand zur Kante, der als Berührung zählt
     FLAGGE_STANGE_ATR: 4,      // Fahnenstange vor der Flagge: mindestens so viele ATR …
     FLAGGE_STANGE_BREITE: 2,   // … und mindestens das Doppelte der Kanalbreite
+    KANAL_UEBERSCHUSS_ATR: 0.6, // Wendepunkt bis so weit über die Kante hinaus zählt noch als Berührung
+    KANAL_DOCHT_ATR: 1,        // ein Schluss weiter draussen bricht den Kanal (ein Docht nicht)
+    KANAL_MAX_FOLGE: 2,        // Schlüsse ausserhalb hintereinander, danach gilt der Kanal als gebrochen
+    KANAL_MAX_AUSSEN: 0.1,     // Anteil der Schlüsse ausserhalb im ganzen Kanal
+    KANAL_MIN_SUMME: 6,        // Berührungen beider Kanten zusammen (je Kante ≥ 2)
 }
 
 /**
@@ -99,63 +104,113 @@ export function periodenAbschnitte(kerzen, art, { max = KAND.PROFIL_MAX, minKerz
 }
 
 /**
- * Kanäle: über die jüngsten 20–80 Kerzen eine Regressionsgerade der Schlüsse,
- * die Kanten parallel dazu durch das höchste Hoch und das tiefste Tief. Ein
- * Kanal braucht ≥ 2 Berührungen je Kante (Pivots nahe der Kante), eine Breite
- * von 1–8 ATR und eine Steigung, die ihn von einer Spanne unterscheidet.
- * Flagge: davor eine Fahnenstange (≥ 4 ATR und ≥ 2 Kanalbreiten) in die
- * Gegenrichtung des Kanals — Stange auf + Kanal ab/flach = Bull-Flagge,
- * Stange ab + Kanal auf/flach = Bear-Flagge; eine Flagge darf flacher sein.
- * Liefert höchstens einen Kanal (Flaggen zuerst, dann die meisten Berührungen).
+ * Kanäle — gesucht wie von Hand gezeichnet (24.10.2026; vorher Regression der
+ * Schlüsse mit Kanten durch die Extremwerte, so dass ein einziger Docht den
+ * Kanal unbrauchbar breit machte und praktisch nie einer entstand):
+ *
+ *   Grundlinie  durch ZWEI echte Wendepunkte derselben Seite (Tiefs oder Hochs,
+ *               je zwei Kerzen links und rechts), mindestens ein Viertel des
+ *               Fensters auseinander, im Fenster der letzten 20–80 Kerzen.
+ *   Gegenkante  parallel dazu dort, wo die MEISTEN Wendepunkte der anderen
+ *               Seite liegen (Band von ±0,35 ATR) — nicht am Extrem.
+ *   Berührung   Wendepunkt höchstens 0,35 ATR innen vor der Kante oder bis
+ *               `KANAL_UEBERSCHUSS_ATR` darüber hinaus (kurzes Überschiessen
+ *               und zurück zählt als Kontakt). Je Kante ≥ 2, zusammen ≥ 6.
+ *   Spielraum   Schlüsse jenseits einer Kante (mehr als 0,35 ATR) sind erlaubt,
+ *               wenn höchstens `KANAL_MAX_FOLGE` hintereinander und höchstens
+ *               `KANAL_MAX_AUSSEN` (Anteil) des Fensters — danach muss der Kurs
+ *               zurück sein. Ein Docht darf beliebig weit hinausstechen, wenn
+ *               er zurückkommt; ein SCHLUSS mehr als 1 ATR draussen oder zu
+ *               lange draussen = gebrochen. Der jüngste Schluss liegt im
+ *               Kanal (oder gerade erst kurz draussen).
+ *   Form        Breite 1–6 ATR; Steigung über das Fenster ≥ 1,5 ATR, sonst eine
+ *               Spanne (eine Flagge darf flacher sein).
+ *   Flagge      davor eine Fahnenstange (≥ 4 ATR und ≥ 2 Kanalbreiten) in die
+ *               Gegenrichtung: Stange auf + Kanal ab/flach = Bull-Flagge,
+ *               Stange ab + Kanal auf/flach = Bear-Flagge.
+ *
+ * Gewählt wird der Kanal mit den meisten Berührungen (Flagge +4, wenig
+ * Überschiessen, länger bei Gleichstand); höchstens einer.
  */
 export function kandidatenKanaele(kerzen, A) {
     const n = kerzen?.length || 0
     if (n < 30 || !(A > 0)) return []
-    const ph = new Set(pivotHighs(kerzen, 2, 2).map((p) => p.index))
-    const pl = new Set(pivotLows(kerzen, 2, 2).map((p) => p.index))
+    const hochs = pivotHighs(kerzen, 2, 2).map((p) => p.index)
+    const tiefs = pivotLows(kerzen, 2, 2).map((p) => p.index)
+    const tol = KAND.KANAL_BERUEHR_ATR * A
+    const ueber = KAND.KANAL_UEBERSCHUSS_ATR * A
+    const docht = KAND.KANAL_DOCHT_ATR * A
     const funde = []
+    const kurs = kerzen[n - 1].c
+
     for (const L of KAND.KANAL_FENSTER) {
         if (L > n - 10) continue
         const s = n - L
-        let sx = 0, sy = 0, sxx = 0, sxy = 0
-        for (let i = 0; i < L; i++) { const y = kerzen[s + i].c; sx += i; sy += y; sxx += i * i; sxy += i * y }
-        const m = (L * sxy - sx * sy) / (L * sxx - sx * sx)
-        const b = (sy - m * sx) / L
-        const linie = (i) => b + m * (i - s)
-        let ob = -Infinity, un = Infinity
-        for (let i = s; i < n; i++) { ob = Math.max(ob, kerzen[i].h - linie(i)); un = Math.min(un, kerzen[i].l - linie(i)) }
-        const W = ob - un
-        if (W < KAND.KANAL_MIN_BREITE_ATR * A || W > KAND.KANAL_MAX_BREITE_ATR * A) continue
-        const tol = KAND.KANAL_BERUEHR_ATR * A
-        let oben = 0, unten = 0
-        for (let i = s; i < n; i++) {
-            if (ph.has(i) && kerzen[i].h >= linie(i) + ob - tol) oben++
-            if (pl.has(i) && kerzen[i].l <= linie(i) + un + tol) unten++
+        const H = hochs.filter((i) => i >= s), T = tiefs.filter((i) => i >= s)
+        for (const unten of [true, false]) {
+            const basis = unten ? T : H, gegen = unten ? H : T
+            const wert = (i) => (unten ? kerzen[i].l : kerzen[i].h)
+            const gwert = (i) => (unten ? kerzen[i].h : kerzen[i].l)
+            for (let x = 0; x < basis.length; x++) {
+                for (let y = x + 1; y < basis.length; y++) {
+                    const i1 = basis[x], i2 = basis[y]
+                    if (i2 - i1 < L / 4) continue
+                    const m = (wert(i2) - wert(i1)) / (i2 - i1)
+                    const g = (i) => wert(i1) + m * (i - i1)
+                    // Gegenkante: Versatz mit den meisten Wendepunkten der anderen Seite im ±tol-Band
+                    const d = gegen.map((i) => gwert(i) - g(i)).filter((v) => (unten ? v > 0 : v < 0))
+                    if (d.length < 2) continue
+                    let bestW = null, bestZ = 0
+                    for (const w of d) {
+                        const z = d.filter((v) => Math.abs(v - w) <= tol).length
+                        if (z > bestZ || (z === bestZ && Math.abs(w) > Math.abs(bestW))) { bestZ = z; bestW = w }
+                    }
+                    const W = Math.abs(bestW)
+                    if (W < KAND.KANAL_MIN_BREITE_ATR * A || W > KAND.KANAL_MAX_BREITE_ATR * A) continue
+                    const lo = (i) => (unten ? g(i) : g(i) + bestW)       // untere Kante
+                    const hi = (i) => (unten ? g(i) + bestW : g(i))       // obere Kante
+                    // Berührungen ab dem ersten Kontakt, mit kurzem Überschiessen
+                    const anfang = Math.min(i1, ...gegen.filter((i) => Math.abs(gwert(i) - (unten ? hi(i) : lo(i))) <= tol))
+                    const zaehle = (liste, kante, oben) => liste.filter((i) => i >= anfang && (oben
+                        ? kerzen[i].h >= kante(i) - tol && kerzen[i].h <= kante(i) + ueber
+                        : kerzen[i].l <= kante(i) + tol && kerzen[i].l >= kante(i) - ueber)).length
+                    const bOben = zaehle(H, hi, true), bUnten = zaehle(T, lo, false)
+                    if (bOben < 2 || bUnten < 2 || bOben + bUnten < KAND.KANAL_MIN_SUMME) continue
+                    // Spielraum: kurze Ausflüge erlaubt, lange oder weite nicht
+                    let aussen = 0, folge = 0, maxFolge = 0, weit = false
+                    for (let i = anfang; i < n; i++) {
+                        const k = kerzen[i]
+                        const raus = k.c > hi(i) + tol || k.c < lo(i) - tol
+                        if (raus) { aussen++; folge++; maxFolge = Math.max(maxFolge, folge) } else folge = 0
+                        if (k.c > hi(i) + docht || k.c < lo(i) - docht) weit = true   // Schluss weit draussen = Bruch
+                    }
+                    const spanne = n - anfang
+                    if (weit || maxFolge > KAND.KANAL_MAX_FOLGE || aussen > KAND.KANAL_MAX_AUSSEN * spanne) continue
+                    if (folge > KAND.KANAL_MAX_FOLGE) continue          // jetzt schon zu lange draussen = gebrochen
+                    const steig = m * (n - 1 - anfang)
+                    const P = Math.min(spanne, anfang)
+                    const bewegung = P > 0 ? kerzen[anfang].c - kerzen[anfang - P].c : 0
+                    const stange = Math.abs(bewegung) >= Math.max(KAND.FLAGGE_STANGE_ATR * A, KAND.FLAGGE_STANGE_BREITE * W)
+                    let muster = null
+                    if (stange && bewegung > 0 && steig <= 0.5 * A) muster = 'bullFlagge'
+                    else if (stange && bewegung < 0 && steig >= -0.5 * A) muster = 'bearFlagge'
+                    if (!muster && Math.abs(steig) < KAND.KANAL_MIN_STEIG_ATR * A) continue
+                    const ext = Math.max(3, Math.round(spanne * 0.25))
+                    const iv = (kerzen[n - 1].t - kerzen[anfang].t) / Math.max(1, spanne - 1)
+                    const mitte = (lo(n - 1) + hi(n - 1)) / 2
+                    funde.push({
+                        quelle: 'kanal', richtung: steig >= 0 ? 'auf' : 'ab', muster, laenge: spanne,
+                        t1: kerzen[anfang].t, p1: lo(anfang), t2: kerzen[n - 1].t, p2: lo(n - 1),
+                        tEnde: kerzen[n - 1].t + ext * iv, pEnde: lo(n - 1 + ext),
+                        breite: W, breiteAtr: W / A, beruehrOben: bOben, beruehrUnten: bUnten, ausserhalb: aussen,
+                        untenJetzt: lo(n - 1), obenJetzt: hi(n - 1),
+                        preis: mitte, abstandAtr: (mitte - kurs) / A,
+                        stangeAtr: muster ? Math.abs(bewegung) / A : null,
+                        wert: bOben + bUnten + (muster ? 4 : 0) - aussen * 0.5 + spanne / 200,
+                    })
+                }
+            }
         }
-        if (oben < 2 || unten < 2) continue
-        const steig = m * (L - 1)
-        // Fahnenstange: die Bewegung über die Länge des Kanals davor
-        const P = Math.min(L, s)
-        const bewegung = P > 0 ? kerzen[s].c - kerzen[s - P].c : 0
-        const stange = Math.abs(bewegung) >= Math.max(KAND.FLAGGE_STANGE_ATR * A, KAND.FLAGGE_STANGE_BREITE * W)
-        let muster = null
-        if (stange && bewegung > 0 && steig <= 0.5 * A) muster = 'bullFlagge'
-        else if (stange && bewegung < 0 && steig >= -0.5 * A) muster = 'bearFlagge'
-        if (!muster && Math.abs(steig) < KAND.KANAL_MIN_STEIG_ATR * A) continue
-        const ext = Math.max(3, Math.round(L * 0.25))
-        const iv = (kerzen[n - 1].t - kerzen[s].t) / (L - 1)
-        const kurs = kerzen[n - 1].c
-        const mitte = linie(n - 1) + (ob + un) / 2
-        funde.push({
-            quelle: 'kanal', richtung: steig >= 0 ? 'auf' : 'ab', muster, laenge: L,
-            t1: kerzen[s].t, p1: linie(s) + un, t2: kerzen[n - 1].t, p2: linie(n - 1) + un,
-            tEnde: kerzen[n - 1].t + ext * iv, pEnde: linie(n - 1 + ext) + un,
-            breite: W, breiteAtr: W / A, beruehrOben: oben, beruehrUnten: unten,
-            untenJetzt: linie(n - 1) + un, obenJetzt: linie(n - 1) + ob,
-            preis: mitte, abstandAtr: (mitte - kurs) / A,
-            stangeAtr: muster ? Math.abs(bewegung) / A : null,
-            wert: oben + unten + (muster ? 4 : 0) + L / 100,
-        })
     }
     funde.sort((a, b) => b.wert - a.wert)
     return funde.slice(0, 1).map(({ wert, ...k }) => k)

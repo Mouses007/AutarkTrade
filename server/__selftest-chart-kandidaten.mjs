@@ -139,6 +139,7 @@ console.log('\nProfil-Abschnitte\n')
     check('je Abschnitt POC/VAH/VAL mit Zeitraum, A1 = jüngster', v.length === 9 && v[0].abschnitt === 'A1' && v[0].t2 === k[89].t && v[0].t1 === k[59].t, JSON.stringify(v.slice(0, 3)))
 }
 
+const kerzenIndex = (k, t) => k.findIndex((x) => x.t === t)
 console.log('\nKonsolidierungen, Tage/Wochen, Kanäle und Flaggen (24.10.2026)\n')
 {
     const H = 3_600_000
@@ -174,6 +175,14 @@ console.log('\nKonsolidierungen, Tage/Wochen, Kanäle und Flaggen (24.10.2026)\n
     const k2 = Array.from({ length: 80 }, (_, i) => kerze(i, 100 + i * 0.1 + zick(i)))
     const [a] = kandidatenKanaele(k2, 1)
     check('steigender Kanal ohne Stange: „Aufsteigender Kanal"', a?.muster === null && a.richtung === 'auf' && kanalName(a).startsWith('Aufsteigender Kanal'))
+    // Kurzes Überschiessen am mittleren Kontakt (Docht 1,6, zwei Schlüsse draussen) bricht den Kanal nicht
+    const k5 = k2.map((x) => ({ ...x }))
+    k5[45] = { ...k5[45], h: k5[45].h + 1.6, c: k5[45].c + 1.0 }
+    k5[46] = { ...k5[46], c: k5[46].c + 0.9, h: k5[46].h + 0.9 }
+    const [ue] = kandidatenKanaele(k5, 1)
+    check('kurzes Überschiessen am mittleren Kontakt: Kanal besteht weiter (über den Ausreisser hinweg)', ue && ue.laenge >= 40 && ue.ausserhalb >= 1 && kerzenIndex(k5, ue.t1) < 45, JSON.stringify(ue && { L: ue.laenge, a: ue.ausserhalb }))
+    const k6 = k2.map((x, i) => (i >= 70 ? { ...x, o: x.o + 5, c: x.c + 5, h: x.h + 5, l: x.l + 5 } : x))
+    check('Gegenprobe: Kurs bleibt 5 ATR draussen → gebrochen, kein Kanal', kandidatenKanaele(k6, 1).length === 0)
     check('Gegenprobe: flache Spanne ist kein Kanal', kandidatenKanaele(Array.from({ length: 80 }, (_, i) => kerze(i, 100 + zick(i))), 1).length === 0)
     check('Kanal im Paket als K1', baueKandidaten({ kerzen: k, interval: '1h' }).kandidaten.some((x) => x.id === 'K1' && x.quelle === 'kanal'))
 }
