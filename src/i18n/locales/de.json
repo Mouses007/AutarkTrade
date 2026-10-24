@@ -5879,7 +5879,8 @@
       "art": {
         "unterstuetzung": "Unterstützung",
         "widerstand": "Widerstand",
-        "trend": "Trend"
+        "trend": "Trend",
+        "kanal": "Kanal"
       },
       "zone": "Zone",
       "verworfen": "{n} Vorschläge verworfen (ausserhalb der Kerzen oder Prognose)",
@@ -5924,6 +5925,7 @@
         "zonen": "Zonen",
         "volumen": "Volumenprofil",
         "htf": "Höhere Zeiteinheit",
+        "kanal": "Kanäle / Flaggen",
         "bedingungen": "Bedingungen",
         "hebel": "Liquidationszonen"
       },
@@ -5931,12 +5933,24 @@
         "niveaus": "Waagerechte Unterstützungen und Widerstände aus geclusterten Hochs und Tiefs (N…)",
         "trend": "Ungebrochene Trendlinien an Hochs bzw. Tiefs (T…)",
         "zonen": "Bereiche statt einzelner Linien (aus Niveaus, Volumenprofil oder höherer Zeiteinheit)",
-        "volumen": "Point of Control und Value Area des Bereichs (V…)",
+        "volumen": "Point of Control und Value Area (V…) — über Konsolidierungen, Tagen oder Wochen, als Fixed-Range-Profil eingezeichnet",
         "htf": "Marken der nächsthöheren Zeiteinheit, z. B. 1d für einen 4h-Chart (D…)",
+        "kanal": "Aufsteigende und absteigende Kanäle; mit Fahnenstange davor als Bull- oder Bear-Flagge benannt. Der Code misst und zeichnet sie selbst ein (K…)",
         "bedingungen": "Wenn-dann-Sätze an einer Marke („4h-Schluss über …\")",
         "hebel": "Geschätzte Liquidationszonen aus Open Interest als Kontext für die KI"
       },
-      "optLeer": "Mindestens Niveaus, Trendlinien, Volumenprofil oder höhere Zeiteinheit wählen."
+      "optLeer": "Mindestens Niveaus, Trendlinien, Volumenprofil, höhere Zeiteinheit oder Kanäle wählen.",
+      "profilArt": {
+        "titel": "Profil über",
+        "konsolidierung": "Konsolidierungen",
+        "tag": "Tage",
+        "woche": "Wochen",
+        "tipp": {
+          "konsolidierung": "Seitwärtsphasen, in denen alle Kerzenkörper in einem schmalen Band liegen — die jüngsten drei",
+          "tag": "Je Tag (UTC) ein Profil — die letzten drei Tage",
+          "woche": "Je Woche (ab Montag, UTC) ein Profil — die letzten drei Wochen"
+        }
+      }
     },
     "indAktiv": "Aktiv in diesem Chart",
     "indHinzu": "Hinzufügen",

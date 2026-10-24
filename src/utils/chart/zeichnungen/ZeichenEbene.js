@@ -668,6 +668,11 @@ export class ZeichenEbene {
                 this.linie(ctx, a1.x, a1.y, b1.x, b1.y, s)
                 this.linie(ctx, a2.x, a2.y, b2.x, b2.y, s)
                 this.linie(ctx, a1.x, (a1.y + a2.y) / 2, b1.x, (b1.y + b2.y) / 2, { ...s, strich: 'gestrichelt', breite: 1 })
+                // Name (z. B. „Bull-Flagge" der KI-Analyse) über der oberen Kante, an ihrem Anfang
+                if (s.text) {
+                    const oben = a2.y < a1.y ? a2 : a1
+                    this.beschriftung(ctx, s.text, oben.x + 4, oben.y - 5, s.farbe, { hinten: 'rgba(0,0,0,0.55)' })
+                }
                 break
             }
             case 'rechteck': {

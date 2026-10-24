@@ -13,6 +13,7 @@ const farbeVon = (art) => KI_FARBEN[art] || FARBE
 const mitId = (label, id) => (id && !String(label || '').includes(id) ? `${label || ''} (${id})`.trim() : label)
 
 export function linieAlsZeichnung(l) {
+    if (l.art === 'kanal') return kanalAlsZeichnung(l)
     const stil = { farbe: farbeVon(l.art), breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt', text: mitId(l.label, l.id) }
     // Waagerechte Marke: als Strahl ab ihrem ersten Punkt — sie gilt ab dort. Unterstützung und
     // Widerstand sind IMMER waagerecht, auch wenn eine ältere Analyse (vor 18.10.2026) zwei
@@ -22,6 +23,21 @@ export function linieAlsZeichnung(l) {
         return { typ: 'strahlH', punkte: [{ t: Math.min(l.t1, l.t2 ?? l.t1), p }], stil: { ...stil, textPos: 'rechts' } }
     }
     return { typ: 'trendlinie', ...trendPunkte(l), stil: { ...stil, textPos: 'ende', rechts: !Number.isFinite(l.tEnde) } }
+}
+
+/*
+ * Kanal bzw. Flagge als Parallelkanal (Werkzeug `kanal`): untere Kante vom
+ * ersten Punkt bis `tEnde`, dritter Punkt = obere Kante über dem ersten.
+ * Bull-Flagge grün, Bear-Flagge rot, sonst im KI-Lila; Name vom Code.
+ */
+export function kanalAlsZeichnung(l) {
+    const farbe = l.muster === 'bullFlagge' ? KI_FARBEN.unterstuetzung : l.muster === 'bearFlagge' ? KI_FARBEN.widerstand : FARBE
+    const t2 = Number.isFinite(l.tEnde) ? l.tEnde : l.t2, p2 = Number.isFinite(l.pEnde) ? l.pEnde : l.p2
+    return {
+        typ: 'kanal',
+        punkte: [{ t: l.t1, p: l.p1 }, { t: t2, p: p2 }, { t: l.t1, p: l.p1 + (l.breite || 0) }],
+        stil: { farbe, breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt', fuellung: true, text: mitId(l.label, l.id) },
+    }
 }
 
 /*
@@ -56,7 +72,8 @@ export function kandidatenVorschau(analyse) {
     const gewaehlt = new Set([...(analyse.linien || []).map((l) => l.id), ...(analyse.zonen || []).flatMap((z) => z.ids || [])])
     const stil = (text) => ({ farbe: '#8a9199', breite: 1, strich: 'gepunktet', text })
     // V-Kandidaten gehören zum Profil, nicht als einzelne graue Linien
-    return k.filter((x) => !gewaehlt.has(x.id) && x.quelle !== 'volumenprofil').map((x, i) => {
+    // Kanäle zeichnet der Code ohnehin ein — kein grauer Doppelgänger
+    return k.filter((x) => !gewaehlt.has(x.id) && x.quelle !== 'volumenprofil' && x.quelle !== 'kanal').map((x, i) => {
         if (x.quelle === 'trend') return { id: -300 - i, typ: 'trendlinie', ...trendPunkte(x), stil: { ...stil(x.id), textPos: 'ende', rechts: !Number.isFinite(x.tEnde) } }
         return { id: -300 - i, typ: 'strahlH', punkte: [{ t: x.t1 ?? analyse.kerzenVon, p: x.preis }], stil: { ...stil(x.name ? `${x.id} ${x.name}` : x.id), textPos: 'rechts' } }
     })

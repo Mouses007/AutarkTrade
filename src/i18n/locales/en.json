@@ -5879,7 +5879,8 @@
       "art": {
         "unterstuetzung": "Support",
         "widerstand": "Resistance",
-        "trend": "Trend"
+        "trend": "Trend",
+        "kanal": "Channel"
       },
       "zone": "Zone",
       "verworfen": "{n} suggestions discarded (outside the candles or a forecast)",
@@ -5924,6 +5925,7 @@
         "zonen": "Zones",
         "volumen": "Volume profile",
         "htf": "Higher timeframe",
+        "kanal": "Channels / flags",
         "bedingungen": "Conditions",
         "hebel": "Liquidation zones"
       },
@@ -5931,12 +5933,24 @@
         "niveaus": "Horizontal support and resistance from clustered highs and lows (N…)",
         "trend": "Unbroken trend lines at highs or lows (T…)",
         "zonen": "Areas instead of single lines (from levels, volume profile or higher timeframe)",
-        "volumen": "Point of control and value area of the range (V…)",
+        "volumen": "Point of control and value area (V…) — over consolidations, days or weeks, drawn as fixed-range profiles",
         "htf": "Marks of the next higher timeframe, e.g. 1d for a 4h chart (D…)",
+        "kanal": "Ascending and descending channels; with a flagpole before them named bull or bear flag. Measured and drawn by the code (K…)",
         "bedingungen": "If/then sentences at a mark (\"4h close above …\")",
         "hebel": "Estimated liquidation zones from open interest as context for the AI"
       },
-      "optLeer": "Choose at least levels, trend lines, volume profile or higher timeframe."
+      "optLeer": "Choose at least levels, trend lines, volume profile, higher timeframe or channels.",
+      "profilArt": {
+        "titel": "Profile over",
+        "konsolidierung": "Consolidations",
+        "tag": "Days",
+        "woche": "Weeks",
+        "tipp": {
+          "konsolidierung": "Sideways phases in which all candle bodies stay in a narrow band — the latest three",
+          "tag": "One profile per day (UTC) — the last three days",
+          "woche": "One profile per week (from Monday, UTC) — the last three weeks"
+        }
+      }
     },
     "indAktiv": "Active in this chart",
     "indHinzu": "Add",

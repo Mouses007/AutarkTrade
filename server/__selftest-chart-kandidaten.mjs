@@ -7,7 +7,7 @@
  * falsch gruppierte Marke oder eine Linie, durch die Kerzen wachsen, kann es
  * nur noch auswählen, nicht mehr korrigieren.
  */
-import { profilAbschnitte, kandidatenNiveaus, waehleNiveaus, kandidatenTrendlinien, marktstruktur, baueKandidaten, kandidatenText, KAND } from './chart-kandidaten.js'
+import { profilAbschnitte, konsolidierungen, periodenAbschnitte, kandidatenKanaele, kanalName, kandidatenNiveaus, waehleNiveaus, kandidatenTrendlinien, marktstruktur, baueKandidaten, kandidatenText, KAND } from './chart-kandidaten.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -137,6 +137,45 @@ console.log('\nProfil-Abschnitte\n')
     const p = baueKandidaten({ kerzen: k, interval: '1h' })
     const v = p.kandidaten.filter((x) => x.quelle === 'volumenprofil')
     check('je Abschnitt POC/VAH/VAL mit Zeitraum, A1 = jüngster', v.length === 9 && v[0].abschnitt === 'A1' && v[0].t2 === k[89].t && v[0].t1 === k[59].t, JSON.stringify(v.slice(0, 3)))
+}
+
+console.log('\nKonsolidierungen, Tage/Wochen, Kanäle und Flaggen (24.10.2026)\n')
+{
+    const H = 3_600_000
+    const kerze = (t, m, sp = 0.5) => ({ t: t * H, o: m - 0.1, h: m + sp, l: m - sp, c: m + 0.1, v: 100 })
+    const zick = (i) => { const p = i % 10; return (p < 5 ? p : 10 - p) * 0.6 - 1.5 }
+    // Anstieg 100→129, dann seitwärts um 129
+    const k3 = []
+    for (let i = 0; i < 30; i++) k3.push(kerze(i, 100 + i))
+    for (let i = 0; i < 30; i++) k3.push(kerze(k3.length, 129 + (i % 3) * 0.4))
+    const ko = konsolidierungen(k3, 1)
+    check('Seitwärtsphase nach dem Anstieg ist eine Konsolidierung, der Anstieg nicht', ko.length === 1 && ko[0].bis === 59 && ko[0].von >= 25 && ko[0].von <= 30, JSON.stringify(ko))
+    const kv = baueKandidaten({ kerzen: k3, interval: '1h' }).kandidaten.filter((x) => x.quelle === 'volumenprofil')
+    check('Volumenprofil über der Konsolidierung (bereich konsolidierung, Zeitraum der Phase)', kv.length === 3 && kv[0].bereich === 'konsolidierung' && kv[0].t1 === k3[ko[0].von].t && kv[0].t2 === k3[59].t, JSON.stringify(kv.slice(0, 1)))
+    // Drei Tage Stundenkerzen
+    const k4 = Array.from({ length: 72 }, (_, i) => kerze(i, 100))
+    const tage = periodenAbschnitte(k4, 'tag')
+    check('Tage: drei Abschnitte à 24 Kerzen (UTC)', tage.length === 3 && tage.every((x) => x.bis - x.von === 23))
+    check('Woche ab Montag: 01.–03.01.1970 liegen in derselben Woche', periodenAbschnitte(k4, 'woche').length === 1)
+    const wk = baueKandidaten({ kerzen: k4.map((x, i) => ({ ...x, c: 100 + (i % 5) * 0.2 })), interval: '1h', profilArt: 'tag' }).kandidaten.filter((x) => x.quelle === 'volumenprofil')
+    check('profilArt tag → je Tag ein Profil', new Set(wk.map((x) => x.abschnitt)).size === 3 && wk.every((x) => x.bereich === 'tag'))
+    // Fahnenstange 100→129, danach fallender Kanal mit Zickzack: Bull-Flagge
+    const k = []
+    for (let i = 0; i < 30; i++) k.push(kerze(k.length, 100 + i))
+    for (let i = 0; i < 40; i++) k.push(kerze(k.length, 129 - i * 0.12 + zick(i)))
+    const [f] = kandidatenKanaele(k, 1)
+    check('Stange auf + fallender Kanal = Bull-Flagge', f?.muster === 'bullFlagge' && f.richtung === 'ab' && f.beruehrOben >= 2 && f.beruehrUnten >= 2, JSON.stringify(f && { m: f.muster, r: f.richtung, o: f.beruehrOben, u: f.beruehrUnten }))
+    check('Name vom Code', kanalName(f) === `Bull-Flagge (${f.beruehrOben}/${f.beruehrUnten} Berührungen)`)
+    check('Kanten parallel: unten jetzt + Breite = oben jetzt', Math.abs(f.untenJetzt + f.breite - f.obenJetzt) < 1e-9)
+    // Gespiegelt: Bear-Flagge
+    const g = k.map((x) => ({ ...x, o: 300 - x.o, c: 300 - x.c, h: 300 - x.l, l: 300 - x.h }))
+    check('gespiegelt: Stange ab + steigender Kanal = Bear-Flagge', kandidatenKanaele(g, 1)[0]?.muster === 'bearFlagge')
+    // Steigender Kanal ohne Stange: kein Muster, aber Kanal
+    const k2 = Array.from({ length: 80 }, (_, i) => kerze(i, 100 + i * 0.1 + zick(i)))
+    const [a] = kandidatenKanaele(k2, 1)
+    check('steigender Kanal ohne Stange: „Aufsteigender Kanal"', a?.muster === null && a.richtung === 'auf' && kanalName(a).startsWith('Aufsteigender Kanal'))
+    check('Gegenprobe: flache Spanne ist kein Kanal', kandidatenKanaele(Array.from({ length: 80 }, (_, i) => kerze(i, 100 + zick(i))), 1).length === 0)
+    check('Kanal im Paket als K1', baueKandidaten({ kerzen: k, interval: '1h' }).kandidaten.some((x) => x.id === 'K1' && x.quelle === 'kanal'))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

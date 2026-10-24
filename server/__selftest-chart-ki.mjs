@@ -10,7 +10,7 @@
  * jede Ablehnung steht deshalb eine Gegenprobe daneben, die durchgehen MUSS.
  */
 import { baueChartEingabe, pruefeChartAuswahl, systemText, normAuswahl, filterePaket, auswahlLeer } from './chart-ki.js'
-import { zeitText } from './chart-kandidaten.js'
+import { zeitText, baueKandidaten } from './chart-kandidaten.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -36,7 +36,7 @@ console.log('\nEingabe\n')
         hebelzonen: { oben: [{ preis: 110, usd: 12e6 }], unten: [{ preis: 95, usd: 8e6 }] },
         trades: [{ richtung: 'long', einstieg: { t: T0 + 5 * H, p: 100.4 }, ausstieg: null }],
     })
-    check('Kandidaten mit IDs statt Roh-Kerzen', /^N1 \|/m.test(e) && /VOLUMENPROFILE je Abschnitt/.test(e) && /^A1 .*V1 POC/m.test(e))
+    check('Kandidaten mit IDs statt Roh-Kerzen', /^N1 \|/m.test(e) && /VOLUMENPROFILE je /.test(e) && /^A1 .*V1 POC/m.test(e))
     check('nur die letzten 12 Kerzen roh, nicht alle 60', e.split('\n').filter((z) => /^\d\d\.\d\d\. \d\d:\d\d,/.test(z)).length === 12)
     check('eigene Linie als U-Bezug mit Beschriftung, Fibonacci weggelassen', /U1 \| horizontale bei 102 „Wochenhoch"/.test(e) && !/fib/.test(e))
     check('Hebelzonen als Modell gekennzeichnet', e.includes('Modell') && e.includes('~12 Mio USD Shorts'))
@@ -144,16 +144,36 @@ console.log('\nAuswahl (Kästchen im Reiter)\n')
 {
     check('ohne Angabe: alles an', Object.values(normAuswahl(null)).every(Boolean))
     check('ohne Niveaus, Volumenprofil und höhere Zeiteinheit gibt es keine Zonen', normAuswahl({ niveaus: false, volumen: false, htf: false }).zonen === false)
-    check('nur Zonen ohne Quellen → leer (Knopf gesperrt)', auswahlLeer(normAuswahl({ niveaus: false, trend: false, volumen: false, htf: false })))
+    check('nur Zonen ohne Quellen → leer (Knopf gesperrt)', auswahlLeer(normAuswahl({ niveaus: false, trend: false, volumen: false, htf: false, kanal: false })))
+    check('Kanäle allein sind eine Quelle', !auswahlLeer(normAuswahl({ niveaus: false, trend: false, volumen: false, htf: false })))
+    check('Bedingungen und Liquidationszonen fest an (24.10.2026), auch wenn abgewählt', normAuswahl({ bedingungen: false, hebel: false }).bedingungen === true && normAuswahl({ hebel: false }).hebel === true)
+    check('Profilart: Vorgabe Konsolidierung, Tag/Woche wählbar, Unsinn → Vorgabe', normAuswahl(null).profilArt === 'konsolidierung' && normAuswahl({ profilArt: 'woche' }).profilArt === 'woche' && normAuswahl({ profilArt: 'x' }).profilArt === 'konsolidierung')
     const nurTrend = filterePaket(paket, normAuswahl({ niveaus: false, volumen: false, htf: false }))
     check('Paket ohne Niveaus/V/D enthält nur noch Trendlinien', nurTrend.kandidaten.every((k) => k.quelle === 'trend') && nurTrend.kandidaten.length === 1)
     const sys = systemText(false, normAuswahl({ zonen: false, bedingungen: false, trend: false }))
-    check('System ohne Zonen/Bedingungen sagt es und nennt T nicht als Linie', sys.includes('Keine Zonen') && sys.includes('Keine Bedingungen') && !sys.includes('T (Trendlinie)'))
+    check('System ohne Zonen sagt es, nennt T nicht als Linie, Bedingungen bleiben', sys.includes('Keine Zonen') && !sys.includes('Keine Bedingungen') && !sys.includes('T (Trendlinie)'))
     check('Gegenprobe: Standard-System nennt Zonen und Bedingungen', systemText(false).includes('"ids"') && systemText(false).includes('"richtung"'))
     const ohne = pruefeChartAuswahl({ linien: [{ id: 'N2', label: 'a' }], zonen: [{ ids: ['N5'], label: 'z' }], bedingungen: [{ id: 'N2', richtung: 'ueber', dann: 'x' }] }, paket, { auswahl: { zonen: false, bedingungen: false } })
-    check('abgewählte Zonen und Bedingungen werden nicht übernommen, auch wenn das Modell sie liefert', ohne.zonen.length === 0 && ohne.bedingungen.length === 0 && ohne.linien.length === 1)
+    check('abgewählte Zonen werden nicht übernommen; Bedingungen sind fest dabei', ohne.zonen.length === 0 && ohne.bedingungen.length === 1 && ohne.linien.length === 1)
     const ohneHebel = baueChartEingabe({ symbol: 'X', interval: '1h', kerzen, hebelzonen: null })
     check('Liquidationszonen abgewählt → nicht in der Eingabe', !ohneHebel.includes('LIQUIDATIONSZONEN'))
+}
+
+console.log('\nKanäle zeichnet der Code (24.10.2026)\n')
+{
+    const H2 = 3_600_000
+    const kz = (t, m) => ({ t: t * H2, o: m - 0.1, h: m + 0.5, l: m - 0.5, c: m + 0.1, v: 100 })
+    const zick = (i) => { const p = i % 10; return (p < 5 ? p : 10 - p) * 0.6 - 1.5 }
+    const kk = []
+    for (let i = 0; i < 30; i++) kk.push(kz(kk.length, 100 + i))
+    for (let i = 0; i < 40; i++) kk.push(kz(kk.length, 129 - i * 0.12 + zick(i)))
+    const pk = baueKandidaten({ kerzen: kk, interval: '1h' })
+    const mit = pruefeChartAuswahl({ text: 'Die Lage [K1].', linien: [{ id: 'K1', label: 'vom Modell' }] }, pk, {})
+    const kanal = mit.linien.filter((l) => l.art === 'kanal')
+    check('Kanal erscheint ohne Wahl des Modells, einmal, mit Namen vom Code', kanal.length === 1 && kanal[0].label.startsWith('Bull-Flagge') && kanal[0].breite > 0, JSON.stringify(kanal.map((l) => l.label)))
+    check('[K1] im Text wird durch Name und Kanten ersetzt', /Bull-Flagge .*K1 \(Kanten jetzt/.test(mit.text), mit.text)
+    const ohneK = pruefeChartAuswahl({ text: 'x', linien: [] }, filterePaket(pk, normAuswahl({ kanal: false })), { auswahl: { kanal: false } })
+    check('Kanäle abgewählt → kein Kanal', !ohneK.linien.some((l) => l.art === 'kanal'))
 }
 
 console.log('\nBeschriftung, Länge, Ortszeit (20.10.2026)\n')

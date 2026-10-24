@@ -38,7 +38,7 @@ import { holeHebelzonen } from './hebelzonen.js'
 import { pruefeEinordnung } from './coin-radar/einordnung.js'
 import { tradesAusZeilen } from './chart-journal.js'
 import { sendeWennAus } from './quellen/aus.js'
-import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText } from './chart-kandidaten.js'
+import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText, kanalName } from './chart-kandidaten.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 const KERZEN = 150
@@ -84,17 +84,24 @@ export function baueChartEingabe({ symbol, interval, kerzen, kerzenHtf = null, z
  * kommen gar nicht erst in die Eingabe: das Modell kann sie weder wählen noch
  * erfinden, und die Eingabe wird kürzer.
  */
-export const AUSWAHL_STANDARD = { niveaus: true, trend: true, zonen: true, volumen: true, htf: true, bedingungen: true, hebel: true }
-const QUELLE_ZU_AUSWAHL = { niveau: 'niveaus', trend: 'trend', volumenprofil: 'volumen', htf: 'htf' }
+export const AUSWAHL_STANDARD = { niveaus: true, trend: true, zonen: true, volumen: true, htf: true, kanal: true, bedingungen: true, hebel: true, profilArt: 'konsolidierung' }
+const QUELLE_ZU_AUSWAHL = { niveau: 'niveaus', trend: 'trend', volumenprofil: 'volumen', htf: 'htf', kanal: 'kanal' }
+export const PROFIL_ARTEN = ['konsolidierung', 'tag', 'woche']
+// Seit 24.10.2026 fest dabei, ohne Kästchen: Bedingungen und die Liquidationszonen als Kontext.
+const IMMER_AN = ['bedingungen', 'hebel']
 
 export function normAuswahl(roh) {
     const a = { ...AUSWAHL_STANDARD }
-    if (roh && typeof roh === 'object') for (const k of Object.keys(a)) if (roh[k] !== undefined) a[k] = roh[k] !== false
+    if (roh && typeof roh === 'object') {
+        for (const k of Object.keys(a)) if (k !== 'profilArt' && roh[k] !== undefined) a[k] = roh[k] !== false
+        if (PROFIL_ARTEN.includes(roh.profilArt)) a.profilArt = roh.profilArt
+    }
+    for (const k of IMMER_AN) a[k] = true
     // Zonen entstehen aus Niveaus (N) oder Marken der höheren Zeiteinheit (D)
     if (!a.niveaus && !a.htf && !a.volumen) a.zonen = false
     return a
 }
-export const auswahlLeer = (a) => !a.niveaus && !a.trend && !a.volumen && !a.htf
+export const auswahlLeer = (a) => !a.niveaus && !a.trend && !a.volumen && !a.htf && !a.kanal
 
 /** Paket auf die gewählten Quellen beschränken (rein). */
 export function filterePaket(paket, a) {
@@ -105,7 +112,7 @@ export function filterePaket(paket, a) {
 export function systemText(englisch, auswahl = AUSWAHL_STANDARD) {
     const a = normAuswahl(auswahl)
     const sprache = englisch ? 'Write all texts in English.' : 'Schreibe alle Texte auf Deutsch.'
-    const quellen = [a.niveaus && 'Niveaus (N…)', a.volumen && 'Volumenprofil-Marken (V…)', a.trend && 'ungebrochene Trendlinien (T…)', a.htf && 'Marken der höheren Zeiteinheit (D…)'].filter(Boolean).join(', ')
+    const quellen = [a.niveaus && 'Niveaus (N…)', a.volumen && 'Volumenprofil-Marken (V…)', a.trend && 'ungebrochene Trendlinien (T…)', a.htf && 'Marken der höheren Zeiteinheit (D…)', a.kanal && 'Kanäle und Flaggen (K…)'].filter(Boolean).join(', ')
     const waagerecht = [a.niveaus && 'N', a.volumen && 'V', a.htf && 'D'].filter(Boolean)
     const linienIds = [...waagerecht.length ? [`${waagerecht.join(', ')} (waagerecht)`] : [], ...a.trend ? ['T (Trendlinie)'] : []].join(' oder ')
     const regeln = [
@@ -115,6 +122,7 @@ export function systemText(englisch, auswahl = AUSWAHL_STANDARD) {
         a.zonen ? '- Zonen: "ids" mit einer ID (deren Band) oder zwei benachbarten N/D-IDs (Bereich dazwischen). Nur wo der Kurs mehrfach reagiert hat. Eine Marke ist entweder Linie oder Zone, nicht beides.' : '- Keine Zonen — der Nutzer möchte nur Linien. Gib "zonen": [] zurück.',
         '- Gewicht: eine Trendlinie mit nur 2 Berührungen ist unbestätigt — höchstens "mittel". "stark" nur bei ≥ 3 Berührungen oder Übereinstimmung zweier Quellen (z. B. N und T, N und V oder N und D nahe beieinander). Nenne die Übereinstimmung im Grund.',
         a.niveaus ? '- Niveaus mit vielen Durchquerungen sind Drehpunkte der Spanne, keine harte Grenze — sag das.' : null,
+        a.kanal ? '- Kanäle (K): der Code hat Richtung, Kanten und Muster (Bull-/Bear-Flagge) gemessen und zeichnet sie selbst ein. Nicht in "linien" aufführen; im Text als [K1] nennen, wenn der Kanal für die Lage wichtig ist, und beschreiben, was ein Bruch einer Kante bedeuten würde.' : null,
         a.bedingungen ? '- Bedingungen: an eine ID gebunden; "richtung" ueber/unter meint einen Schluss der Zeiteinheit jenseits der Marke; "ziel" (optional) ist die nächste ID in dieser Richtung.' : '- Keine Bedingungen. Gib "bedingungen": [] zurück.',
         '- Stütze dich NUR auf die Eingabe. Keine Nachrichten, kein Allgemeinwissen über den Coin.',
         `- KEINE Prognose, KEIN Kursziel, KEINE Handelsempfehlung, kein "dürfte", kein "wird steigen/fallen", kein "kaufen/verkaufen".${a.bedingungen ? ' "ziel" ist die nächste Marke, kein Kursziel —' : ''} beschreibe, was ein Bruch bedeuten würde.`,
@@ -176,6 +184,7 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
         let unbekannt = false
         const aus = String(t ?? '').replace(ID_RE, (_, id) => {
             const k = karte.get(id.toUpperCase())
+            if (k?.quelle === 'kanal') return `${kanalName(k, englisch)} ${k.id} (Kanten jetzt ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)})`
             if (k) return k.quelle === 'trend' ? `Trendlinie ${k.id} (jetzt ${zahl(k.wertJetzt)})` : `${zahl(k.preis)} (${k.id})`
             if (nutzerIds.has(id.toUpperCase())) return `eigene Linie ${id.toUpperCase()}`
             unbekannt = true
@@ -185,7 +194,7 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
         return unbekannt ? null : aus.replace(/\b(?:Trendlinie|trend ?line)\s+(?=Trendlinie T\d)/gi, '')
     }
     // Zahlen, die zu keiner Marke passen — protokollieren
-    const marken = [...paket.kandidaten.flatMap((k) => (k.quelle === 'trend' ? [k.wertJetzt, k.p1, k.p2] : [k.preis, k.tief, k.hoch])),
+    const marken = [...paket.kandidaten.flatMap((k) => (k.quelle === 'trend' ? [k.wertJetzt, k.p1, k.p2] : k.quelle === 'kanal' ? [k.untenJetzt, k.obenJetzt, k.p1, k.p2] : [k.preis, k.tief, k.hoch])),
         ...paket.roh.flatMap((r) => [r.h, r.l]), paket.spanne?.tief, paket.spanne?.hoch].filter(Number.isFinite)
     const pruefeZahlen = (t, wo) => {
         for (const m of String(t).matchAll(/\d[\d'’ ]*(?:[.,]\d+)?/g)) {
@@ -215,7 +224,7 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
         const label = ohneZeit(z?.label)
         const ks = ids.map((id) => karte.get(id))
         if (!ids.length || ids.length > 2 || ks.some((k) => !k)) { verworfen.push({ art: 'zone', grund: 'unbekannteId', inhalt: ids.join('+') || label }); continue }
-        if (ks.some((k) => k.quelle === 'trend')) { verworfen.push({ art: 'zone', grund: 'zoneAusTrend', inhalt: ids.join('+') }); continue }
+        if (ks.some((k) => k.quelle === 'trend' || k.quelle === 'kanal')) { verworfen.push({ art: 'zone', grund: 'zoneAusTrend', inhalt: ids.join('+') }); continue }
         if (ks.length === 2) {
             const [a, b] = [...ks].sort((x, y) => x.preis - y.preis)
             const nb = ks.every((k) => k.quelle === 'niveau' || k.quelle === 'htf')
@@ -246,6 +255,7 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
         // das Modell schrieb „3 Berührungen", wo zwei davon dieselbe Welle waren.
         const label = k?.quelle === 'trend' ? trendLabel(k, englisch) : ohneZeit(l?.label)
         if (!k) { verworfen.push({ art: 'linie', grund: 'unbekannteId', inhalt: id || label }); continue }
+        if (k.quelle === 'kanal') continue     // Kanäle zeichnet der Code selbst (unten)
         if (linien.some((x) => x.id === id)) continue
         if (zonenIds.has(id)) { verworfen.push({ art: 'linie', grund: 'doppelt', inhalt: id }); continue }
         const trend = k.quelle === 'trend'
@@ -260,6 +270,22 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
         const basis = { id, quelle: k.quelle, label: label || id, grund: wort(grund, 200), gewicht }
         if (trend) linien.push({ ...basis, art: 'trend', rolle: k.rolle, beruehrungen: k.beruehrungen, t1: k.t1, p1: k.p1, t2: k.t2, p2: k.p2, ...(Number.isFinite(k.tEnde) ? { tEnde: k.tEnde, pEnde: k.pEnde } : {}) })
         else linien.push({ ...basis, art: artNachLage(k.preis), t1: k.t1 ?? paket.vonT, p1: k.preis, t2: paket.bisT, p2: k.preis, ...(k.abschnitt ? { abschnitt: k.abschnitt, profilBis: k.t2 } : {}) })
+    }
+
+    // Kanäle und Flaggen zeichnet der Code ein, nicht das Modell: Kanten, Richtung und
+    // Muster sind gemessen, der Name kommt aus `kanalName`. Zählen nicht gegen MAX_LINIEN.
+    if (wahl.kanal) {
+        for (const k of paket.kandidaten.filter((x) => x.quelle === 'kanal')) {
+            const stange = k.stangeAtr ? (englisch ? `, flagpole ${k.stangeAtr.toFixed(1)} ATR` : `, Fahnenstange ${k.stangeAtr.toFixed(1)} ATR`) : ''
+            const grund = englisch
+                ? `Measured: width ${k.breiteAtr.toFixed(1)} ATR over ${k.laenge} candles${stange}; edges now ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)}.`
+                : `Gemessen: Breite ${k.breiteAtr.toFixed(1)} ATR über ${k.laenge} Kerzen${stange}; Kanten jetzt ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)}.`
+            linien.push({
+                id: k.id, quelle: 'kanal', art: 'kanal', label: kanalName(k, englisch), grund, gewicht: k.muster ? 'stark' : 'mittel',
+                muster: k.muster, richtung: k.richtung, breite: k.breite,
+                t1: k.t1, p1: k.p1, t2: k.t2, p2: k.p2, tEnde: k.tEnde, pEnde: k.pEnde,
+            })
+        }
     }
 
     const bedingungen = []
@@ -308,7 +334,8 @@ export function kandidatenKurz(paket) {
             t1: k.t1 ?? null, p1: k.p1 ?? null, t2: k.t2 ?? null, p2: k.p2 ?? null, wertJetzt: k.wertJetzt ?? null,
             tEnde: k.tEnde ?? null, pEnde: k.pEnde ?? null, beruehrT: k.beruehrT ?? null, gegen: k.gegen ?? null,
             beruehrungen: k.beruehrungen ?? null, durchquerungen: k.durchquerungen ?? null, letzteT: k.letzteT ?? null,
-            abstandAtr: k.abstandAtr ?? null, rolle: k.rolle ?? null, deckt: k.deckt ?? null, abschnitt: k.abschnitt ?? null,
+            abstandAtr: k.abstandAtr ?? null, rolle: k.rolle ?? null, deckt: k.deckt ?? null, abschnitt: k.abschnitt ?? null, bereich: k.bereich ?? null,
+            breite: k.breite ?? null, muster: k.muster ?? null, richtung: k.richtung ?? null,
         })),
     }
 }
@@ -387,7 +414,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         const vonT = kerzen[0].t
         const bisT = kerzen[kerzen.length - 1].t
         // Der Code vermisst, das Modell wählt aus (chart-kandidaten.js).
-        const paket = filterePaket(baueKandidaten({ kerzen, kerzenHtf: wahl.htf ? kerzenHtf : null, interval, intervalHtf, zeichnungen, zeitzone }), wahl)
+        const paket = filterePaket(baueKandidaten({ kerzen, kerzenHtf: wahl.htf ? kerzenHtf : null, interval, intervalHtf, zeichnungen, zeitzone, profilArt: wahl.profilArt }), wahl)
         if (!paket) throw new Error('Zu wenige Kerzen für eine Vermessung')
 
         const cfg = await ladeLlmConfigFuerAufgabe('chart-analyse')

@@ -47,6 +47,127 @@ export const KAND = {
     PROFIL_SCHWELLE_ATR: 5,    // Wendepunkt für einen Profil-Abschnitt: Gegenbewegung ab so vielen ATR
     PROFIL_MIN_KERZEN: 15,     // kürzere Abschnitte gehen im Nachbarn auf
     PROFIL_MAX: 3,             // die jüngsten so vielen Abschnitte
+    KONS_BREITE_ATR: 3,        // Konsolidierung: alle Kerzenkörper in einem Band so breit
+    KONS_MIN_KERZEN: 15,
+    KONS_MAX: 3,
+    PERIODE_MIN_KERZEN: 5,     // Tages-/Wochenprofil erst ab so vielen Kerzen der Periode
+    KANAL_FENSTER: [80, 60, 45, 30, 20],
+    KANAL_MIN_BREITE_ATR: 1,
+    KANAL_MAX_BREITE_ATR: 8,
+    KANAL_MIN_STEIG_ATR: 1.5,  // Steigung über das Fenster: flacher ist es eine Spanne, kein Kanal
+    KANAL_BERUEHR_ATR: 0.35,   // Abstand zur Kante, der als Berührung zählt
+    FLAGGE_STANGE_ATR: 4,      // Fahnenstange vor der Flagge: mindestens so viele ATR …
+    FLAGGE_STANGE_BREITE: 2,   // … und mindestens das Doppelte der Kanalbreite
+}
+
+/**
+ * Konsolidierungen: Strecken, in denen alle Kerzenkörper in einem Band von
+ * höchstens `breite` × ATR liegen (Dochte zählen nicht — ein Stich bricht
+ * keine Seitwärtsphase). Von hinten gesucht, je Ende die längste Strecke,
+ * die jüngsten `max`, ältester zuerst: [{ von, bis }] als Indizes.
+ */
+export function konsolidierungen(kerzen, A, { breite = KAND.KONS_BREITE_ATR, minKerzen = KAND.KONS_MIN_KERZEN, max = KAND.KONS_MAX } = {}) {
+    const n = kerzen?.length || 0
+    if (n < minKerzen || !(A > 0)) return []
+    const teile = []
+    let e = n - 1
+    while (e >= minKerzen - 1 && teile.length < max) {
+        let hoch = -Infinity, tief = Infinity, s = e
+        for (let i = e; i >= 0; i--) {
+            const o = Math.max(kerzen[i].o, kerzen[i].c), u = Math.min(kerzen[i].o, kerzen[i].c)
+            const h2 = Math.max(hoch, o), t2 = Math.min(tief, u)
+            if (h2 - t2 > breite * A) break
+            hoch = h2; tief = t2; s = i
+        }
+        if (e - s + 1 >= minKerzen) { teile.push({ von: s, bis: e }); e = s - 1 } else e--
+    }
+    return teile.reverse()
+}
+
+/** Tage bzw. Wochen (UTC, Woche ab Montag): die jüngsten `max` mit genug Kerzen, ältester zuerst. */
+export function periodenAbschnitte(kerzen, art, { max = KAND.PROFIL_MAX, minKerzen = KAND.PERIODE_MIN_KERZEN } = {}) {
+    const n = kerzen?.length || 0
+    const nummer = (t) => { const tag = Math.floor(t / 86_400_000); return art === 'woche' ? Math.floor((tag + 3) / 7) : tag }
+    const teile = []
+    for (let i = 0; i < n; i++) {
+        const p = nummer(kerzen[i].t)
+        const letzt = teile[teile.length - 1]
+        if (letzt && letzt.p === p) letzt.bis = i
+        else teile.push({ p, von: i, bis: i })
+    }
+    return teile.filter((x) => x.bis - x.von + 1 >= minKerzen).slice(-max).map(({ von, bis }) => ({ von, bis }))
+}
+
+/**
+ * Kanäle: über die jüngsten 20–80 Kerzen eine Regressionsgerade der Schlüsse,
+ * die Kanten parallel dazu durch das höchste Hoch und das tiefste Tief. Ein
+ * Kanal braucht ≥ 2 Berührungen je Kante (Pivots nahe der Kante), eine Breite
+ * von 1–8 ATR und eine Steigung, die ihn von einer Spanne unterscheidet.
+ * Flagge: davor eine Fahnenstange (≥ 4 ATR und ≥ 2 Kanalbreiten) in die
+ * Gegenrichtung des Kanals — Stange auf + Kanal ab/flach = Bull-Flagge,
+ * Stange ab + Kanal auf/flach = Bear-Flagge; eine Flagge darf flacher sein.
+ * Liefert höchstens einen Kanal (Flaggen zuerst, dann die meisten Berührungen).
+ */
+export function kandidatenKanaele(kerzen, A) {
+    const n = kerzen?.length || 0
+    if (n < 30 || !(A > 0)) return []
+    const ph = new Set(pivotHighs(kerzen, 2, 2).map((p) => p.index))
+    const pl = new Set(pivotLows(kerzen, 2, 2).map((p) => p.index))
+    const funde = []
+    for (const L of KAND.KANAL_FENSTER) {
+        if (L > n - 10) continue
+        const s = n - L
+        let sx = 0, sy = 0, sxx = 0, sxy = 0
+        for (let i = 0; i < L; i++) { const y = kerzen[s + i].c; sx += i; sy += y; sxx += i * i; sxy += i * y }
+        const m = (L * sxy - sx * sy) / (L * sxx - sx * sx)
+        const b = (sy - m * sx) / L
+        const linie = (i) => b + m * (i - s)
+        let ob = -Infinity, un = Infinity
+        for (let i = s; i < n; i++) { ob = Math.max(ob, kerzen[i].h - linie(i)); un = Math.min(un, kerzen[i].l - linie(i)) }
+        const W = ob - un
+        if (W < KAND.KANAL_MIN_BREITE_ATR * A || W > KAND.KANAL_MAX_BREITE_ATR * A) continue
+        const tol = KAND.KANAL_BERUEHR_ATR * A
+        let oben = 0, unten = 0
+        for (let i = s; i < n; i++) {
+            if (ph.has(i) && kerzen[i].h >= linie(i) + ob - tol) oben++
+            if (pl.has(i) && kerzen[i].l <= linie(i) + un + tol) unten++
+        }
+        if (oben < 2 || unten < 2) continue
+        const steig = m * (L - 1)
+        // Fahnenstange: die Bewegung über die Länge des Kanals davor
+        const P = Math.min(L, s)
+        const bewegung = P > 0 ? kerzen[s].c - kerzen[s - P].c : 0
+        const stange = Math.abs(bewegung) >= Math.max(KAND.FLAGGE_STANGE_ATR * A, KAND.FLAGGE_STANGE_BREITE * W)
+        let muster = null
+        if (stange && bewegung > 0 && steig <= 0.5 * A) muster = 'bullFlagge'
+        else if (stange && bewegung < 0 && steig >= -0.5 * A) muster = 'bearFlagge'
+        if (!muster && Math.abs(steig) < KAND.KANAL_MIN_STEIG_ATR * A) continue
+        const ext = Math.max(3, Math.round(L * 0.25))
+        const iv = (kerzen[n - 1].t - kerzen[s].t) / (L - 1)
+        const kurs = kerzen[n - 1].c
+        const mitte = linie(n - 1) + (ob + un) / 2
+        funde.push({
+            quelle: 'kanal', richtung: steig >= 0 ? 'auf' : 'ab', muster, laenge: L,
+            t1: kerzen[s].t, p1: linie(s) + un, t2: kerzen[n - 1].t, p2: linie(n - 1) + un,
+            tEnde: kerzen[n - 1].t + ext * iv, pEnde: linie(n - 1 + ext) + un,
+            breite: W, breiteAtr: W / A, beruehrOben: oben, beruehrUnten: unten,
+            untenJetzt: linie(n - 1) + un, obenJetzt: linie(n - 1) + ob,
+            preis: mitte, abstandAtr: (mitte - kurs) / A,
+            stangeAtr: muster ? Math.abs(bewegung) / A : null,
+            wert: oben + unten + (muster ? 4 : 0) + L / 100,
+        })
+    }
+    funde.sort((a, b) => b.wert - a.wert)
+    return funde.slice(0, 1).map(({ wert, ...k }) => k)
+}
+
+/** Name eines Kanals, vom Code vergeben (nicht vom Modell). */
+export function kanalName(k, englisch = false) {
+    const b = `${k.beruehrOben}/${k.beruehrUnten}`
+    if (k.muster === 'bullFlagge') return englisch ? `Bull flag (${b} touches)` : `Bull-Flagge (${b} Berührungen)`
+    if (k.muster === 'bearFlagge') return englisch ? `Bear flag (${b} touches)` : `Bear-Flagge (${b} Berührungen)`
+    const auf = k.richtung === 'auf'
+    return englisch ? `${auf ? 'Ascending' : 'Descending'} channel (${b} touches)` : `${auf ? 'Aufsteigender' : 'Absteigender'} Kanal (${b} Berührungen)`
 }
 
 /**
@@ -248,7 +369,7 @@ export function spanneLetzte(kerzen, n, atrWert) {
 }
 
 /** Alles zusammen, mit stabilen IDs. */
-export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, intervalHtf = null, zeichnungen = [], zeitzone = 'UTC' }) {
+export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, intervalHtf = null, zeichnungen = [], zeitzone = 'UTC', profilArt = 'konsolidierung' }) {
     const n = kerzen.length
     if (n < 30) return null
     const A = letzteAtr(kerzen)
@@ -262,10 +383,13 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
     niveaus.forEach((x, i) => kandidaten.push({ id: `N${i + 1}`, quelle: 'niveau', ...x, t1: x.ersteT }))
     const nListe = kandidaten.slice()
 
-    // Je Abschnitt ein Profil (jüngster = A1); V-IDs laufen über alle Abschnitte.
+    // Je Bereich ein Profil (jüngster = A1); V-IDs laufen über alle Bereiche. Bereiche:
+    // Konsolidierungen (Vorgabe), Tage oder Wochen. Ohne Konsolidierung die Abschnitte
+    // zwischen den grossen Wendepunkten, ohne die ein Profil über alles.
     let v = 1
-    // Ohne grosse Wendepunkte (ruhiger Bereich): ein Profil über alles.
-    const gefunden = profilAbschnitte(kerzen, A)
+    let bereich = profilArt === 'tag' || profilArt === 'woche' ? profilArt : 'konsolidierung'
+    let gefunden = bereich === 'konsolidierung' ? konsolidierungen(kerzen, A) : periodenAbschnitte(kerzen, bereich)
+    if (!gefunden.length && bereich === 'konsolidierung') { gefunden = profilAbschnitte(kerzen, A); bereich = 'abschnitt' }
     const abschnitte = (gefunden.length ? gefunden : [{ von: 0, bis: n - 1 }]).reverse()
     abschnitte.forEach((ab, j) => {
         const vp = volumenprofil(kerzen.slice(ab.von, ab.bis + 1), { zeilen: 48 })
@@ -273,13 +397,14 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
         for (const [name, preis] of [['POC', vp.poc], ['VAH', vp.vah], ['VAL', vp.val]]) {
             const deckt = nahAnN(preis, nListe)
             kandidaten.push({
-                id: `V${v++}`, quelle: 'volumenprofil', name, abschnitt: `A${j + 1}`, preis, tief: preis - KAND.BAND_MIN_ATR * A, hoch: preis + KAND.BAND_MIN_ATR * A,
+                id: `V${v++}`, quelle: 'volumenprofil', name, abschnitt: `A${j + 1}`, bereich, preis, tief: preis - KAND.BAND_MIN_ATR * A, hoch: preis + KAND.BAND_MIN_ATR * A,
                 t1: kerzen[ab.von].t, t2: kerzen[ab.bis].t, abstandAtr: (preis - kurs) / A, deckt: deckt?.id || null,
             })
         }
     })
 
     kandidatenTrendlinien(kerzen, A).forEach((x, i) => kandidaten.push({ id: `T${i + 1}`, quelle: 'trend', ...x }))
+    kandidatenKanaele(kerzen, A).forEach((x, i) => kandidaten.push({ id: `K${i + 1}`, ...x }))
 
     if (Array.isArray(kerzenHtf) && kerzenHtf.length >= 30) {
         const Ah = letzteAtr(kerzenHtf)
@@ -351,7 +476,8 @@ export function kandidatenText(paket) {
     }
     const v = paket.kandidaten.filter((k) => k.quelle === 'volumenprofil')
     if (v.length) {
-        z.push('', 'VOLUMENPROFILE je Abschnitt zwischen den grossen Wendepunkten (A1 = der jüngste, reicht bis jetzt):')
+        const ueber = { konsolidierung: 'je Konsolidierung (Seitwärtsphase)', tag: 'je Tag (UTC)', woche: 'je Woche (UTC, ab Montag)', abschnitt: 'je Abschnitt zwischen den grossen Wendepunkten' }[v[0].bereich] || 'je Abschnitt'
+        z.push('', `VOLUMENPROFILE ${ueber} (A1 = der jüngste):`)
         for (const ab of [...new Set(v.map((x) => x.abschnitt))]) {
             const xs = v.filter((x) => x.abschnitt === ab)
             z.push(`${ab} ${zeit(xs[0].t1)} → ${zeit(xs[0].t2)}: ` + xs.map((x) => `${x.id} ${x.name} ${zahl(x.preis)} (${atrText(x.abstandAtr)} ATR${x.deckt ? `, deckt sich mit ${x.deckt}` : ''})`).join(' | '))
@@ -366,6 +492,11 @@ export function kandidatenText(paket) {
             z.push(`${x.id} | ${rolle} | ${zeit(x.t1)} ${zahl(x.p1)} → ${zeit(x.t2)} ${zahl(x.p2)} | ${ber} | ${zahl(x.wertJetzt)} | ${atrText(x.abstandAtr)}${x.gegen ? ' | Gegenlinie (Kanal-/Keilkante, entfernt sich vom Kurs, sobald er abdreht)' : ''}`)
         }
     } else z.push('', 'TRENDLINIEN: keine ungebrochene Linie mit genug Berührungen.')
+    const kk = paket.kandidaten.filter((k) => k.quelle === 'kanal')
+    if (kk.length) {
+        z.push('', 'KANÄLE — vom Code gemessen und eingezeichnet (id | Name | von → bis | Breite in ATR | Kante unten jetzt / oben jetzt | Abstand der Mitte in ATR):')
+        for (const x of kk) z.push(`${x.id} | ${kanalName(x)}${x.stangeAtr ? `, Fahnenstange ${x.stangeAtr.toFixed(1)} ATR` : ''} | ${zeit(x.t1)} → ${zeit(x.t2)} | ${x.breiteAtr.toFixed(1)} | ${zahl(x.untenJetzt)} / ${zahl(x.obenJetzt)} | ${atrText(x.abstandAtr)}`)
+    }
     if (struktur) {
         const folge = (l) => l.map((p) => `${zahl(p.p)}${p.art ? ` ${p.art}` : ''} (${zeit(p.t)})`).join(' → ')
         z.push('', `STRUKTUR: Hochs ${folge(struktur.hochs) || '—'}; Tiefs ${folge(struktur.tiefs) || '—'}; Zustand ${ZUSTAND[struktur.zustand]}${struktur.bruch ? `; letzter Bruch ${struktur.bruch.richtung === 'auf' ? 'aufwärts über' : 'abwärts unter'} ${zahl(struktur.bruch.marke)} am ${zeit(struktur.bruch.t)}` : ''}`)

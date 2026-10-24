@@ -44,15 +44,23 @@ function setzeModus(m) { modus.value = m; try { localStorage.setItem(MODUS_SCHLU
 /*
  * Was die Analyse liefern soll (Kästchen) — eine Vorliebe, kein Layout-Teil,
  * daher im Browser gemerkt. Abgewähltes bekommt die KI gar nicht zu sehen.
+ * Bedingungen und Liquidationszonen sind seit 24.10.2026 fest dabei (ohne
+ * Kästchen). Beim Volumenprofil wählt man, worüber es gerechnet wird:
+ * Konsolidierungen (Vorgabe), Tage oder Wochen.
  */
-const OPTIONEN = ['niveaus', 'trend', 'zonen', 'volumen', 'htf', 'bedingungen', 'hebel']
+const OPTIONEN = ['niveaus', 'trend', 'zonen', 'volumen', 'htf', 'kanal']
+const PROFIL_ARTEN = ['konsolidierung', 'tag', 'woche']
 const optionen = ref((() => {
-    const a = Object.fromEntries(OPTIONEN.map((k) => [k, true]))
-    try { Object.assign(a, JSON.parse(localStorage.getItem('chartKiOptionen') || '{}')) } catch { /* Vorgabe */ }
+    const a = { ...Object.fromEntries(OPTIONEN.map((k) => [k, true])), profilArt: 'konsolidierung' }
+    try {
+        const roh = JSON.parse(localStorage.getItem('chartKiOptionen') || '{}') || {}
+        for (const k of OPTIONEN) if (typeof roh[k] === 'boolean') a[k] = roh[k]
+        if (PROFIL_ARTEN.includes(roh.profilArt)) a.profilArt = roh.profilArt
+    } catch { /* Vorgabe */ }
     return a
 })())
 watch(optionen, (v) => { try { localStorage.setItem('chartKiOptionen', JSON.stringify(v)) } catch { /* kein Speicher */ } }, { deep: true })
-const keineQuelle = computed(() => !optionen.value.niveaus && !optionen.value.trend && !optionen.value.volumen && !optionen.value.htf)
+const keineQuelle = computed(() => !optionen.value.niveaus && !optionen.value.trend && !optionen.value.volumen && !optionen.value.htf && !optionen.value.kanal)
 // Zonen entstehen aus Niveaus, Volumenprofil oder höherer Zeiteinheit
 const zonenMoeglich = computed(() => optionen.value.niveaus || optionen.value.volumen || optionen.value.htf)
 
@@ -98,7 +106,7 @@ async function erstelle() {
     try {
         const { data } = await axios.post('/api/chart/ki-analyse', {
             symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt,
-            auswahl: { ...optionen.value, zonen: optionen.value.zonen && zonenMoeglich.value },
+            auswahl: { ...optionen.value, zonen: optionen.value.zonen && zonenMoeglich.value, bedingungen: true, hebel: true },
         })
         // Inzwischen anderes Symbol: verwerfen. Der Server hat sie abgelegt — zurück
         // auf dem alten Symbol zeigt der Reiter sie wieder, ohne neu zu bezahlen.
@@ -176,6 +184,11 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                 {{ t('chart.ki.opt.' + o) }}
             </label>
         </div>
+        <div v-if="optionen.volumen" class="profilArt" role="group" :aria-label="t('chart.ki.profilArt.titel')">
+            <span>{{ t('chart.ki.profilArt.titel') }}</span>
+            <button v-for="p in PROFIL_ARTEN" :key="p" type="button" :class="{ an: optionen.profilArt === p }" :aria-pressed="optionen.profilArt === p"
+                :title="t('chart.ki.profilArt.tipp.' + p)" @click="optionen.profilArt = p">{{ t('chart.ki.profilArt.' + p) }}</button>
+        </div>
         <div v-if="keineQuelle" class="fehler">{{ t('chart.ki.optLeer') }}</div>
         <div class="hinweis">{{ t('chart.ki.hinweis') }}</div>
         <div v-if="fehler" class="fehler">{{ fehler }}</div>
@@ -243,6 +256,30 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 </template>
 
 <style scoped>
+.profilArt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    color: var(--muted);
+}
+
+.profilArt button {
+    padding: 1px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pille);
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.profilArt button.an {
+    border-color: var(--accent);
+    background: var(--accent-schwach);
+    color: var(--text);
+}
+
 .kiReiter {
     display: flex;
     flex-direction: column;
