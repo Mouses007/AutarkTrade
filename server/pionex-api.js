@@ -506,9 +506,16 @@ async function computePionexBalance(apiKey, secretKey) {
             const mb = parseFloat(d.marginBalance || 0)
             const inv = parseFloat(d.initQuoteInvestment || 0)
             const gp = parseFloat(d.gridProfit || 0)
-            const value = mb > 0 ? mb : (inv + gp)
+            let value = mb > 0 ? mb : (inv + gp)
+            // Coin-M-Bots (USDTSOL u. a.) melden den Wert in der Margin-Münze,
+            // nicht in USDT: 4.37 SOL standen hier als 4.37 USD.
+            const muenze = String(d.investCoin || 'USDT').toUpperCase()
+            if (value && muenze !== 'USDT' && muenze !== 'USDC') {
+                const preis = await fetchTickerPrice(`${muenze}_USDT`)
+                value = preis > 0 ? value * preis : 0
+            }
             botEquity += value
-            runningBots.push({ id: o.buOrderId, type: o.buOrderType, value })
+            runningBots.push({ id: o.buOrderId, type: o.buOrderType, value, muenze })
         }
     } catch (e) { console.warn(' -> Pionex running bots fail:', e.message) }
     // 3) Futures-Perp unrealisiert

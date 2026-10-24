@@ -9,7 +9,7 @@ Betriebssystem des Container-Images: NOTICE.md.
 Erzeugt von scripts/drittlizenzen.mjs aus package-lock.json und den Lizenzdateien
 der Pakete. Nicht von Hand bearbeiten.
 
-225 Pakete: 196 MIT, 10 ISC, 6 BSD-3-Clause, 5 Apache-2.0, 1 (MPL-2.0 OR Apache-2.0), 1 BSD-2-Clause, 1 (MIT OR WTFPL), 1 MIT-0, 1 (MIT AND Zlib), 1 (BSD-2-Clause OR MIT OR Apache-2.0), 1 MIT OR SEE LICENSE IN FEEL-FREE.md, 1 0BSD
+229 Pakete: 200 MIT, 10 ISC, 6 BSD-3-Clause, 5 Apache-2.0, 1 (MPL-2.0 OR Apache-2.0), 1 BSD-2-Clause, 1 (MIT OR WTFPL), 1 MIT-0, 1 (MIT AND Zlib), 1 (BSD-2-Clause OR MIT OR Apache-2.0), 1 MIT OR SEE LICENSE IN FEEL-FREE.md, 1 0BSD
 
 ================================================================================
 ÜBERSICHT
@@ -24,6 +24,10 @@ der Pakete. Nicht von Hand bearbeiten.
 @intlify/message-compiler@9.14.5  —  MIT
 @intlify/shared@9.14.5  —  MIT
 @jridgewell/sourcemap-codec@1.6.0  —  MIT
+@noble/curves@1.8.2  —  MIT
+@noble/hashes@1.7.2  —  MIT
+@scure/base@1.2.4  —  MIT
+@scure/bip32@1.6.2  —  MIT
 @types/pako@2.0.4  —  MIT
 @types/raf@3.4.3  —  MIT
 @types/trusted-types@2.0.7  —  MIT
@@ -387,6 +391,78 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+================================================================================
+@noble/curves@1.8.2
+Lizenz: MIT
+================================================================================
+
+--- LICENSE ---
+
+The MIT License (MIT)
+
+Copyright (c) 2022 Paul Miller (https://paulmillr.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+================================================================================
+@noble/hashes@1.7.2
+Lizenz: MIT
+================================================================================
+
+LICENSE: gleicher Wortlaut wie bei @noble/curves@1.8.2, LICENSE (oben).
+
+================================================================================
+@scure/base@1.2.4
+Lizenz: MIT
+================================================================================
+
+LICENSE: gleicher Wortlaut wie bei @noble/curves@1.8.2, LICENSE (oben).
+
+================================================================================
+@scure/bip32@1.6.2
+Lizenz: MIT
+================================================================================
+
+--- LICENSE ---
+
+The MIT License (MIT)
+
+Copyright (c) 2022 Patricio Palladino, Paul Miller (paulmillr.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the “Software”), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
 
 ================================================================================
 @types/pako@2.0.4

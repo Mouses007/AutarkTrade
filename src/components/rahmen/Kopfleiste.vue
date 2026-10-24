@@ -31,7 +31,7 @@ defineProps({
 
 const { t } = useI18n()
 
-const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'entdecken', agent: 'agent', lernen: 'lernen' }
+const SYMBOL = { journal: 'journal', start: 'chart', live: 'live', research: 'entdecken', agent: 'agent', lernen: 'lernen', portfolio: 'muenzen' }
 
 const route = useRoute()
 // Auf der Startseite (/start) ist kein Modus aktiv.

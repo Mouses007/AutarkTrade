@@ -17,6 +17,8 @@ import { useI18n } from 'vue-i18n'
 import Symbol from '../basis/Symbol.vue'
 import { seitenId } from '../../stores/ui.js'
 import { gewaehlteBoerse, brokers, selectedTradeCategory, BOT_BROKERS } from '../../stores/filters.js'
+import { appEinstellungen } from '../../stores/settings.js'
+import { futuresAus } from '../../utils/boersenZugang.js'
 
 // Das Filterpanel zieht viel Journal-Code nach sich; geladen wird es erst,
 // wenn das Journal-Menü wirklich erscheint.
@@ -43,8 +45,10 @@ async function ladeKonfigurierte() {
 }
 
 const boersen = computed(() => {
-    const liste = brokers.filter((b) => konfiguriert.value.includes(b.value))
-    return liste.length ? liste : brokers
+    // Futures in den API-Einstellungen abgeschaltet → nicht im Journal.
+    const an = brokers.filter((b) => !futuresAus(b.value, appEinstellungen.value))
+    const liste = an.filter((b) => konfiguriert.value.includes(b.value))
+    return liste.length ? liste : an.length ? an : brokers
 })
 
 function waehleBoerse(wert) {

@@ -14,6 +14,8 @@ import Pille from '@/components/basis/Pille.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Eingabe from '@/components/basis/Eingabe.vue'
 import Symbol from '@/components/basis/Symbol.vue'
+import MarktWahl from '@/components/portfolio/MarktWahl.vue'
+import BitpandaZugang from '@/components/portfolio/BitpandaZugang.vue'
 
 const { t } = useI18n()
 
@@ -279,6 +281,7 @@ onMounted(async () => {
             <template #kopf>
                 <Pille v-if="bitunixApiKey" ton="gut">{{ t('common.configured') }}</Pille>
             </template>
+            <MarktWahl boerse="bitunix" />
             <div class="felder">
                 <Eingabe v-model="bitunixApiKey" :label="t('settings.apiKeyLabel')" :platzhalter="t('settings.apiKeyPlaceholder')" />
                 <Eingabe v-model="bitunixSecretKey" art="password" :label="t('settings.secretKeyLabel')" :platzhalter="t('settings.secretKeyPlaceholder')" />
@@ -299,6 +302,7 @@ onMounted(async () => {
             <template #kopf>
                 <Pille v-if="bitgetApiKey" ton="gut">{{ t('common.configured') }}</Pille>
             </template>
+            <MarktWahl boerse="bitget" />
             <div class="felder">
                 <Eingabe v-model="bitgetApiKey" :label="t('settings.apiKeyLabel')" :platzhalter="t('settings.apiKeyPlaceholder')" />
                 <Eingabe v-model="bitgetSecretKey" art="password" :label="t('settings.secretKeyLabel')" :platzhalter="t('settings.secretKeyPlaceholder')" />
@@ -334,6 +338,7 @@ onMounted(async () => {
             <template #kopf>
                 <Pille v-if="pionexApiKey" ton="gut">{{ t('common.configured') }}</Pille>
             </template>
+            <MarktWahl boerse="pionex" />
             <div class="felder">
                 <Eingabe v-model="pionexApiKey" :label="t('settings.apiKeyLabel')" :platzhalter="t('settings.apiKeyPlaceholder')" />
                 <Eingabe v-model="pionexSecretKey" art="password" :label="t('settings.secretKeyLabel')" :platzhalter="t('settings.secretKeyPlaceholder')" />
@@ -361,6 +366,9 @@ onMounted(async () => {
                 </div>
             </Hinweis>
         </Abschnitt>
+
+        <!-- BITPANDA (Spot-Portfolio, Testzweig) -->
+        <BitpandaZugang v-if="Number(appEinstellungen?.modusPortfolioAn ?? 1) === 1" />
     </Abschnitt>
 </template>
 
