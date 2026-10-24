@@ -69,7 +69,7 @@ Links im Seitenmenü: Börsen-Umschalter (Bitunix/Bitget/Pionex), Pille „Konto
 - **Playbook** — eigene Setups/Strategien als Playbook-Einträge definieren; Trades lassen sich ihnen zuordnen, die Auswertung rechnet je Playbook.
 - **Auswertung** — tiefere Analysen über den gewählten Zeitraum (Zeiten, Symbole, Verhalten).
 - **Screenshots** — Chart-Screenshots ablegen, mit Markierungen versehen und Trades zuordnen; auf Wunsch bewertet die KI ein Bild.
-- **Pendente Trades** — offene Positionen live von der Börse, inklusive SL/TP-Änderungsprotokoll.
+- **Pendente Trades** — offene Positionen live von der Börse, inklusive SL/TP-Änderungsprotokoll. Fehlt bei einer offenen Position der Stop-Loss oder liegt er hinter dem Liquidationspreis (Long: Stop unter dem Liq-Preis, Short: darüber — die Position würde liquidiert, bevor der Stop greift), steht oben auf jeder Seite eine rote Warnleiste mit „Im Chart öffnen" und „Schliessen"; geprüft wird alle 30 Sekunden, eine Minute nach dem Einstieg zum ersten Mal, und nur, wenn die Börse antwortet. Weggeklickt bleibt sie je Position und Grund weg.
 - **Kontoübersicht** — Kontostände und Verlauf je Börse.
 - **Manueller Import** — einzelne Trades von Hand erfassen (z.B. Börse ohne API).
 - **KI-Coach** — siehe Thema "ki".`,

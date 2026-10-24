@@ -6506,5 +6506,11 @@
     "biSpot": "Spot-Portfolio",
     "biJeJahr": "Eingezahlt je Jahr",
     "biInfo": "Nur zur Information, nicht für die Steuer. EUR und USD zum EZB-Kurs des Einzahlungstags; Futures-Guthaben zum heutigen Kurs. Was als Stablecoin auf eine Futures-Börse ging, steckt im Guthaben dort."
+  },
+  "positionsWarnung": {
+    "ohneSl": "{symbol} {seite}: kein Stop-Loss gesetzt.",
+    "hinterLiq": "{symbol} {seite}: Stop-Loss {sl} liegt hinter dem Liquidationspreis {liq} — die Position wird liquidiert, bevor der Stop greift.",
+    "oeffnen": "Im Chart öffnen",
+    "schliessen": "Schliessen"
   }
 }

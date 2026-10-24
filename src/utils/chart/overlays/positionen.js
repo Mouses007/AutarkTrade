@@ -21,6 +21,10 @@ const TPSL_ALTER_MS = 30_000
 
 async function tpslVon(pos) {
     const alt = tpslZwischenspeicher.get(pos.positionId)
+    // TP/SL lesen kann der Code nur bei Bitunix und Bitget; alles andere (Pionex)
+    // ist unbekannt, nicht „ohne Stop".
+    const broker = pos.broker || 'bitunix'
+    if (broker !== 'bitunix' && broker !== 'bitget') return { ts: Date.now(), sl: null, tp: null, unbekannt: true }
     if (alt && Date.now() - alt.ts < TPSL_ALTER_MS) return alt
     try {
         const orders = await holeTpSlOrders(pos.broker || 'bitunix', pos.positionId, pos.symbol)
@@ -32,7 +36,8 @@ async function tpslVon(pos) {
         // Kein Schlüssel oder Börse weg: ohne SL/TP zeichnen, nicht ohne
         // Position. Auch der Fehlschlag wird gemerkt — sonst fragte jedes
         // Panel alle 15 s erneut eine Börse, die gerade Nein gesagt hat.
-        const leer = { ts: Date.now(), sl: null, tp: null }
+        // `unbekannt`: kein SL heisst hier NICHT ohne Stop - die Warnleiste schweigt dann.
+        const leer = { ts: Date.now(), sl: null, tp: null, unbekannt: true }
         tpslZwischenspeicher.set(pos.positionId, leer)
         return leer
     }
@@ -94,7 +99,7 @@ export async function ladeAlleOffenen() {
 
 async function ausZeile(p) {
     const roh = p.bitunixData || {}
-    const { sl, tp } = await tpslVon(p)
+    const { sl, tp, unbekannt } = await tpslVon(p)
     return {
         id: p.positionId,
         symbol: normSymbol(p.symbol),
@@ -107,6 +112,7 @@ async function ausZeile(p) {
         upnl: Number(p.unrealizedPNL) || 0,
         sl,
         tp,
+        slUnbekannt: !!unbekannt,
         // Einstiegszeit von der Börse (Bitunix `ctime`), sonst die erste Erfassung
         einstiegT: Number(roh.ctime) || Date.parse(p.createdAt) || null,
         tpslVerlauf: tpslVerlaufVon(p.tpslHistory),

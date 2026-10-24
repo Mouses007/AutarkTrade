@@ -6506,5 +6506,11 @@
     "biSpot": "Spot portfolio",
     "biJeJahr": "Deposited per year",
     "biInfo": "For information only, not for tax. EUR and USD at the ECB rate of the deposit date; futures balances at today’s rate. What went to a futures exchange as stablecoin is part of the balance there."
+  },
+  "positionsWarnung": {
+    "ohneSl": "{symbol} {seite}: no stop-loss set.",
+    "hinterLiq": "{symbol} {seite}: stop-loss {sl} is beyond the liquidation price {liq} — the position gets liquidated before the stop triggers.",
+    "oeffnen": "Open in chart",
+    "schliessen": "Close"
   }
 }

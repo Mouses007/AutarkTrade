@@ -29,6 +29,7 @@ import NachObenKnopf from '../components/NachObenKnopf.vue'
 import TradeEvalPopup from '../components/TradeEvalPopup.vue'
 import PageInfo from '../components/PageInfo.vue'
 import BetaHinweis from '../components/BetaHinweis.vue'
+import PositionsWarnung from '../components/rahmen/PositionsWarnung.vue'
 
 import { seitenId, bildschirmTyp, seitenmenueMobilOffen, appMode, privacyMode } from '../stores/ui.js'
 import { sideMenuEingeklappt } from '../stores/app/rahmen.js'
@@ -242,6 +243,8 @@ onBeforeUnmount(() => {
                         <BetaHinweis />
                     </div>
                 </div>
+                <!-- Offene Position ohne Stop oder mit Stop hinter dem Liq-Preis: über jeder Seite -->
+                <PositionsWarnung />
                 <slot />
             </main>
         </div>
