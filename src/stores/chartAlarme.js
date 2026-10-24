@@ -12,7 +12,7 @@ import axios from 'axios'
 import { sendNotification } from '../utils/notify.js'
 
 export const alarme = ref([])
-export const neueAusloesungen = ref([])     // [{ id, symbol, text, t }]
+export const neueAusloesungen = ref([])     // [{ id, symbol, text, t, ziel: { symbol, markt, tf } }]
 
 let uhr = null
 let nutzer = 0
@@ -30,7 +30,12 @@ export async function ladeAlarme() {
                 const text = a.art === 'momentum' && letzte?.treffer?.length
                     ? letzte.treffer.map(trefferText).join(' · ')
                     : `${a.symbol}: ${beschreibe(a)}${letzte ? ` — ${letzte.p}` : ''}`
-                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, text, t: a.ausgeloestAm }].slice(-5)
+                // Wohin ein Klick auf den Hinweis führt: Momentum → der (erste) Treffer mit
+                // seiner Zeiteinheit; Preis/Linie/Zone → das Symbol des Alarms (Zeiteinheit bleibt).
+                const tr = a.art === 'momentum' ? letzte?.treffer?.[0] : null
+                const ziel = tr ? { symbol: tr.symbol, markt: tr.markt || 'futures', tf: tr.tf || null }
+                    : a.symbol ? { symbol: a.symbol, markt: a.markt || 'futures', tf: null } : null
+                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, text, t: a.ausgeloestAm, ziel }].slice(-5)
                 sendNotification('chartAlarm', `Alarm ${symbol}`, text)
             }
         }

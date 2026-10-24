@@ -5793,6 +5793,8 @@
       "testOk": "Testmeldung verschickt.",
       "loeschenFrage": "Alarm „{was}“ löschen?",
       "quittieren": "Klick zum Schliessen",
+      "oeffnen": "Klick öffnet den Chart",
+      "schliessen": "Hinweis schliessen",
       "hier": "Alarm bei diesem Preis",
       "testFehler": "Kein Kanal hat zugestellt",
       "testKeinKanal": "Kein Push-Kanal eingeschaltet — einrichten unter Einstellungen › Benachrichtigungen › „Push aufs Handy\" (ntfy, Telegram oder Webhook).",

@@ -285,6 +285,19 @@ function coinInNeuemTab(symbol, markt = 'futures') {
     oeffneCoinTab(symbol, markt)
     setzePanel({ symbol, markt })
 }
+/**
+ * Klick auf einen Alarm-Hinweis: den Coin im eigenen Tab zeigen (einen
+ * vorhandenen nehmen, sonst einen neuen anlegen), bei Momentum-Alarmen auf
+ * der Zeiteinheit des Treffers. Danach ist der Hinweis erledigt.
+ */
+function oeffneAusloesung(n) {
+    const z = n.ziel
+    if (z?.symbol) {
+        coinInNeuemTab(z.symbol, z.markt || 'futures')
+        if (z.tf && INTERVALLE.includes(z.tf) && z.tf !== aktivesPanel.value?.interval) setzePanel({ interval: z.tf })
+    }
+    quittiere(n.id)
+}
 function waehleCoinTab(i) {
     const tab = coinTabs.value[i]
     if (!tab) return
@@ -1005,8 +1018,10 @@ watch(sichtbareAnzahl, async () => {
             </div>
 
             <div v-for="n in neueAusloesungen" :key="n.id + '-' + n.t" class="leistenMeldung alarmBanner"
-                @click="quittiere(n.id)">
-                <Symbol name="glocke" /> {{ n.text }} <small>({{ t('chart.alarm.quittieren') }})</small></div>
+                @click="oeffneAusloesung(n)">
+                <Symbol name="glocke" /> {{ n.text }} <small>({{ t(n.ziel ? 'chart.alarm.oeffnen' : 'chart.alarm.quittieren') }})</small>
+                <button v-if="n.ziel" type="button" class="bannerZu" :title="t('chart.alarm.schliessen')" :aria-label="t('chart.alarm.schliessen')"
+                    @click.stop="quittiere(n.id)"><Symbol name="schliessen" /></button></div>
             <div v-if="fehlerMeldung" class="leistenMeldung" @click="fehlerSchliessen">
                 {{ t('chart.zeichnungFehler') }}: {{ fehlerMeldung }}</div>
 
@@ -1559,6 +1574,20 @@ watch(sichtbareAnzahl, async () => {
 
 .leistenMeldung > :first-child {
     color: var(--warn);
+}
+
+.bannerZu {
+    margin-left: auto;
+    display: inline-flex;
+    padding: 2px;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.bannerZu:hover {
+    color: var(--text);
 }
 
 .laden {

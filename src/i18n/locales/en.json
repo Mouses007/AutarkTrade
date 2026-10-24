@@ -5793,6 +5793,8 @@
       "testOk": "Test message sent.",
       "loeschenFrage": "Delete alert “{was}”?",
       "quittieren": "click to dismiss",
+      "oeffnen": "Click opens the chart",
+      "schliessen": "Dismiss",
       "hier": "Alert at this price",
       "testFehler": "No channel delivered",
       "testKeinKanal": "No push channel enabled — set one up under Settings › Notifications › “Push to your phone” (ntfy, Telegram or webhook).",
