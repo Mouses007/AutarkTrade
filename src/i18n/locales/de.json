@@ -531,7 +531,7 @@
         "maxLev": "Hebel-Obergrenze",
         "maxLevHint": "Deckelt den Hebel jeder Instanz in der Simulation. Die Menge bemisst sich immer am Stopabstand, nie am Hebel — der Hebel bestimmt nur, wie viel Marge die simulierte Position bindet und wo sie liquidiert würde.",
         "budget": "KI-Budget pro Tag (USD)",
-        "budgetHint": "Obergrenze für die optionalen Sentiment-/Portfolio-Agenten. Ist sie erreicht, wird das Setup übersprungen statt ungeprüft gehandelt."
+        "budgetHint": "Obergrenze für die optionalen Sentiment-/Portfolio-Agenten, gilt für alle Instanzen zusammen. Ist sie erreicht, wird das Setup übersprungen statt ungeprüft gehandelt; 0 heisst: kein Budget, Setups mit eingeschalteten Agenten werden übersprungen."
       },
       "news": {
         "title": "Lagebericht · KI",
@@ -2098,6 +2098,8 @@
     "reason_below_min_rr": "Chance/Risiko zu niedrig",
     "reason_no_target": "Kein brauchbares Ziel (Anker auf der falschen Seite)",
     "reason_size_too_small": "Positionsgrösse unter dem Mindestwert",
+    "reason_agent_veto": "Vom KI-Agenten abgelehnt",
+    "reason_agent_error": "KI-Agent nicht erreichbar — Setup übersprungen",
     "reason_no_equity": "Kein Kontostand hinterlegt",
     "reason_invalid_levels": "Einstieg, Stop oder Ziel unplausibel",
     "reason_price_deviation": "Preis weicht zu stark von der Referenz ab",

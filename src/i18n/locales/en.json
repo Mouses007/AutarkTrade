@@ -531,7 +531,7 @@
         "maxLev": "Leverage cap",
         "maxLevHint": "Caps the leverage of every instance in the simulation. Size always follows the stop distance, never the leverage — leverage only sets how much margin the simulated position ties up and where it would be liquidated.",
         "budget": "AI budget per day (USD)",
-        "budgetHint": "Cap for the optional sentiment/portfolio agents. Once reached, the setup is skipped rather than traded unchecked."
+        "budgetHint": "Cap for the optional sentiment/portfolio agents, shared by all instances. Once reached, the setup is skipped rather than traded unchecked; 0 means no budget, setups with agents switched on are skipped."
       },
       "news": {
         "title": "Briefing · AI",
@@ -2098,6 +2098,8 @@
     "reason_below_min_rr": "Reward/risk too low",
     "reason_no_target": "No usable target (anchor on the wrong side)",
     "reason_size_too_small": "Position size below the minimum",
+    "reason_agent_veto": "Rejected by the AI agent",
+    "reason_agent_error": "AI agent unavailable — setup skipped",
     "reason_no_equity": "No account balance available",
     "reason_invalid_levels": "Entry, stop or target implausible",
     "reason_price_deviation": "Price deviates too far from the reference",

@@ -105,7 +105,7 @@ export const RISK_PARAMS = [
 export const AGENT_DEFAULTS = {
     sentiment: { enabled: false, provider: '', model: '', sources: { fearGreed: true, funding: true, news: false } },
     portfolio: { enabled: false, provider: '', model: '' },
-    dailyBudgetUsd: 1.0,
+    dailyBudgetUsd: 1.0,              // nur ohne Einstellung `strategyLlmBudgetUsd` (budgetDeckel)
     onBudgetExceeded: 'skip_trade',   // skip_trade | trade_without_agents
 }
 

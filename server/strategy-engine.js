@@ -18,6 +18,7 @@
  *   4. ausführen
  */
 
+import { vetoFaktor } from './strategy-agents-regeln.js'
 import { getKnex } from './database.js'
 import { logError, logWarn } from './logger.js'
 import { getStrategy, validateParams, validateRisk, AGENT_DEFAULTS, normalisiereTimeframes } from './strategies/index.js'
@@ -517,7 +518,9 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
                 return beenden('reject_agent', 'agent_veto', veto.reason)
             }
             // Ein Faktor > 1 wäre eine Vergrösserung — das dürfen die Agenten nicht.
-            sizeFactor = Math.min(Math.max(Number(veto.sizeFactor) || 1, 0), 1)
+            // Eine 0 heisst „Grösse null" und ist damit eine Ablehnung.
+            sizeFactor = vetoFaktor(veto.sizeFactor)
+            if (sizeFactor === 0) return beenden('reject_agent', 'agent_veto', String(veto.reason || 'Agent: Grösse 0').slice(0, 200))
         } catch (e) {
             // Der Nutzer hat das Veto ausdrücklich eingeschaltet. Bei einem
             // Ausfall trotzdem zu handeln hiesse, genau die Prüfung zu
