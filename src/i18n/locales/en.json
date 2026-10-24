@@ -5793,7 +5793,7 @@
       "testOk": "Test message sent.",
       "loeschenFrage": "Delete alert “{was}”?",
       "quittieren": "click to dismiss",
-      "oeffnen": "Click opens the chart",
+      "oeffnen": "Open",
       "schliessen": "Dismiss",
       "hier": "Alert at this price",
       "testFehler": "No channel delivered",

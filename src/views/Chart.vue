@@ -1017,11 +1017,13 @@ watch(sichtbareAnzahl, async () => {
                     :aria-label="t('chart.coinTabs.neu')" @click="neuerCoinTab"><Symbol name="plus" /></button>
             </div>
 
-            <div v-for="n in neueAusloesungen" :key="n.id + '-' + n.t" class="leistenMeldung alarmBanner"
-                @click="oeffneAusloesung(n)">
-                <Symbol name="glocke" /> {{ n.text }} <small>({{ t(n.ziel ? 'chart.alarm.oeffnen' : 'chart.alarm.quittieren') }})</small>
-                <button v-if="n.ziel" type="button" class="bannerZu" :title="t('chart.alarm.schliessen')" :aria-label="t('chart.alarm.schliessen')"
-                    @click.stop="quittiere(n.id)"><Symbol name="schliessen" /></button></div>
+            <!-- Alarm-Hinweis: zwei Wege — den Coin öffnen (Tab + Zeiteinheit) oder nur schliessen -->
+            <div v-for="n in neueAusloesungen" :key="n.id + '-' + n.t" class="leistenMeldung alarmBanner">
+                <Symbol name="glocke" /> <span class="bannerText">{{ n.text }}</span>
+                <span class="bannerKnoepfe">
+                    <button v-if="n.ziel" type="button" class="bannerKnopf haupt" @click="oeffneAusloesung(n)">{{ t('chart.alarm.oeffnen') }}</button>
+                    <button type="button" class="bannerKnopf" @click="quittiere(n.id)">{{ t('chart.alarm.schliessen') }}</button>
+                </span></div>
             <div v-if="fehlerMeldung" class="leistenMeldung" @click="fehlerSchliessen">
                 {{ t('chart.zeichnungFehler') }}: {{ fehlerMeldung }}</div>
 
@@ -1576,18 +1578,38 @@ watch(sichtbareAnzahl, async () => {
     color: var(--warn);
 }
 
-.bannerZu {
+.alarmBanner {
+    cursor: default;
+}
+
+.bannerText {
+    min-width: 0;
+}
+
+.bannerKnoepfe {
     margin-left: auto;
     display: inline-flex;
-    padding: 2px;
-    border: none;
+    gap: var(--abstand-1);
+    flex-shrink: 0;
+}
+
+.bannerKnopf {
+    padding: 2px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pille);
     background: transparent;
-    color: var(--muted);
+    color: var(--text);
+    font-size: 0.8rem;
     cursor: pointer;
 }
 
-.bannerZu:hover {
-    color: var(--text);
+.bannerKnopf:hover {
+    border-color: var(--accent);
+}
+
+.bannerKnopf.haupt {
+    border-color: var(--accent);
+    background: var(--accent-schwach);
 }
 
 .laden {
