@@ -27,6 +27,7 @@ import KiReiter from '../components/chart/KiReiter.vue'
 import AlarmDialog from '../components/chart/AlarmDialog.vue'
 import MomentumBox from '../components/chart/MomentumBox.vue'
 import IndikatorSchalter from '../components/chart/IndikatorSchalter.vue'
+import { indBoxOffen } from '../stores/chartIndBox.js'
 import VorlagenMenue from '../components/chart/VorlagenMenue.vue'
 import { OVERLAYS, overlayAn } from '../utils/chart/overlays/liste.js'
 import OffeneReiter from '../components/chart/OffeneReiter.vue'
@@ -1177,11 +1178,12 @@ watch(sichtbareAnzahl, async () => {
                             @pointerdown.prevent.stop="eckStart($event, 'reiter')" @pointermove="eckZiehen" @pointerup="eckEnde"
                             @pointercancel="eckEnde" @dblclick.stop="eckZurueck('reiter')"></span>
                     </div>
-                    <div v-if="!telefon" class="karte vvKarte" :class="{ fest: kartenHoehe.indikatoren }" :style="kartenStil('indikatoren')">
+                    <!-- Zugeklappt nur die Kopfzeile: die gezogene Höhe gilt erst wieder, wenn die Box offen ist. -->
+                    <div v-if="!telefon" class="karte vvKarte" :class="{ fest: indBoxOffen && kartenHoehe.indikatoren }" :style="indBoxOffen ? kartenStil('indikatoren') : null">
                         <IndikatorSchalter class="vvSchalter" :panel="aktivesPanel" @aendere="vvSchalten"
                             @umschalten="(id) => indikatorAktion(aktivIndex, { aktion: 'umschalten', id })"
                             @volumen="indikatorAktion(aktivIndex, { aktion: 'volumen' })" />
-                        <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
+                        <span v-if="indBoxOffen" class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
                             @pointerdown.prevent.stop="eckStart($event, 'indikatoren')" @pointermove="eckZiehen" @pointerup="eckEnde"
                             @pointercancel="eckEnde" @dblclick.stop="eckZurueck('indikatoren')"></span>
                     </div>

@@ -10,7 +10,8 @@
   die Box ein und aus (im Browser gemerkt).
 -->
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { indBoxOffen } from '../../stores/chartIndBox.js'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { kurzname, saubereParams } from '../../utils/chart/indikatorRegister.js'
 import { Symbol } from '../basis'
@@ -39,9 +40,8 @@ const UNTER = {
     gussCv: [{ g: null, schalter: [IB('long', ['zeigeLong']), IB('short', ['zeigeShort']), IB('emas', ['zeigeEmas'])] }],
 }
 
-const SPEICHER = 'ctj.chart.indBoxOffen'
-const offen = ref((() => { try { return localStorage.getItem(SPEICHER) !== '0' } catch { return true } })())
-watch(offen, (v) => { try { localStorage.setItem(SPEICHER, v ? '1' : '0') } catch { /* privat */ } })
+// Auf/Zu geteilt mit der Karte in der Seitenleiste (zugeklappt ohne feste Höhe)
+const offen = indBoxOffen
 
 const liste = computed(() => props.panel?.indikatoren || [])
 const volumenAn = computed(() => props.panel?.volumen !== false)
