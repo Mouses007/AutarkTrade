@@ -306,8 +306,10 @@ async function darfNochSenden() {
  */
 /**
  * Ereignisse, deren Mail einen KI-Text trägt (S12, EU AI Act Art. 50): sie
- * bekommen eine Label-Zeile vor den Text und den Kopf `X-AI-Generated: true`.
- * Hier zentral statt beim Aufrufer — ein neuer Aufrufer vergisse es sonst.
+ * bekommen den Kopf `X-AI-Generated: true`. Hier zentral statt beim Aufrufer —
+ * ein neuer Aufrufer vergässe es sonst. Die sichtbare Zeile „KI-generiert –
+ * keine Anlageberatung – Fakten prüfen." vor dem Text ist seit 24.10.2026 auf
+ * Wunsch des Nutzers weg (`KI_MAIL_ZEILE` bleibt für andere Stellen exportiert).
  */
 const KI_EREIGNISSE = new Set(['lageberichtFertig'])
 export const KI_MAIL_ZEILE = 'KI-generiert – keine Anlageberatung – Fakten prüfen.'
@@ -345,7 +347,7 @@ export async function melde(id, { betreff, text, schluessel = '', ttlMs = 12 * 6
 
         try {
             const ki = kiGeneriert || KI_EREIGNISSE.has(id)
-            const inhalt = ki ? `${KI_MAIL_ZEILE}\n\n${text || ''}` : text
+            const inhalt = text
             await sendeMail(s, { ...gestalteteMail(s, id, { betreff, text: inhalt }), an, ...(ki ? { kopf: KI_MAIL_KOPF } : {}) })
         } catch (e) {
             /*

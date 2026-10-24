@@ -300,6 +300,21 @@ console.log('\nBericht als Mailtext')
     const einzeln = berichtAlsMailText({ ...daten, inhalt: 'voll', markt: [{ was: 'Dominanz', wert: '58 %' }] })
     pruefe('einzelner Marktwert bekommt keinen Abschnitt', !einzeln.includes('## Marktstand'))
 
+    // Funding mit Liste (seit 24.10.2026): eigene Tabelle, eine Zeile je Markt
+    const fu = berichtAlsMailText({ ...daten, inhalt: 'mittel', markt: [
+        { was: 'Fear & Greed', wert: '51 (neutral)' },
+        { was: 'Funding deine Märkte', wert: 'BTC 3 % p.a., ETH 4 % p.a.', zusatz: 'aus 14 selbst gehandelten Märkten',
+            liste: [{ symbol: 'BTC', wert: '+3 % p.a.' }, { symbol: 'ETH', wert: '+4 % p.a.' }] },
+        { was: 'Funding-Extreme (grosse Märkte)', wert: 'oben IRYS …', zusatz: 'unten BIRB …', hinweis: 'nur Märkte über 250 Mio USD Tagesumsatz',
+            liste: [{ symbol: 'IRYS', wert: '+137 % p.a. (+0,016 % je 1 h)', richtung: 'oben' }, { symbol: 'BIRB', wert: '-1286 % p.a. (-0,587 % je 4 h)', richtung: 'unten' }] },
+    ] })
+    pruefe('Funding: eigene Tabelle, eine Zeile je Markt',
+        fu.includes('## Funding deine Märkte\n\nBTC: +3 % p.a.\nETH: +4 % p.a.'), JSON.stringify(fu))
+    pruefe('Funding-Extreme: ▲/▼ vor dem Symbol, Hinweis darunter',
+        fu.includes('▲ IRYS: +137 % p.a. (+0,016 % je 1 h)\n▼ BIRB: -1286 % p.a.') && fu.includes('Nur Märkte über 250 Mio USD Tagesumsatz.'))
+    pruefe('Funding mit Liste nicht doppelt in der Haupttabelle', !fu.includes('Funding deine Märkte: '))
+    pruefe('übrige Werte bleiben im Marktstand', fu.includes('## Marktstand\n\nFear & Greed: 51 (neutral)'))
+
     pruefe('leere Eingabe wirft nicht', berichtAlsMailText() === '')
     pruefe('kaputte Kapitel werfen nicht',
         typeof berichtAlsMailText({ lage: 'x', kapitel: [null, { punkte: 'kaputt' }], inhalt: 'voll' }) === 'string')

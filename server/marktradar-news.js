@@ -1337,6 +1337,14 @@ async function holeMarktdatenBlock() {
         const fmt = r => `${kurzSym(r.symbol)} ${zahl(r.rate * 100, 3)} % je ${r.intervallStunden || 8} h`
             + (Number.isFinite(r.jahresRate) ? ` (${zahl(r.jahresRate * 100, 0)} % p.a.)` : '')
         const knapp = r => `${kurzSym(r.symbol)} ${zahl(r.jahresRate * 100, 0)} % p.a.`
+        // Je Markt eine Zeile für die Mail (`berichtAlsMailText`): sechs Märkte in
+        // einer Tabellenzelle waren kaum zu lesen (Nutzer, 24.10.2026).
+        const vorzeichen = (t) => (t && !t.startsWith('-') && t !== '0' ? '+' + t : t)
+        const eintrag = (r, mitTakt) => ({
+            symbol: kurzSym(r.symbol),
+            wert: `${vorzeichen(zahl(r.jahresRate * 100, 0))} % p.a.`
+                + (mitTakt ? ` (${vorzeichen(zahl(r.rate * 100, 3))} % je ${r.intervallStunden || 8} h)` : ''),
+        })
 
         /*
          * ZUERST die eigenen Märkte — das ist die Zeile, die etwas bedeutet.
@@ -1362,6 +1370,7 @@ async function holeMarktdatenBlock() {
                 was: 'Funding deine Märkte',
                 wert: [...leit, ...rest].map(knapp).join(', '),
                 zusatz: `aus ${eigene.length} selbst gehandelten Märkten`,
+                liste: [...leit, ...rest].map(r => eintrag(r, false)),
             })
         }
 
@@ -1387,6 +1396,11 @@ async function holeMarktdatenBlock() {
                 wert: `oben ${grosse.slice(0, 3).map(fmt).join(', ')}`,
                 zusatz: `unten ${grosse.slice(-3).reverse().map(fmt).join(', ')}`
                     + ` — nur Märkte über ${Math.round(FUNDING_MIN_UMSATZ / 1e6)} Mio USD Tagesumsatz`,
+                liste: [
+                    ...grosse.slice(0, 3).map(r => ({ ...eintrag(r, true), richtung: 'oben' })),
+                    ...grosse.slice(-3).reverse().map(r => ({ ...eintrag(r, true), richtung: 'unten' })),
+                ],
+                hinweis: `nur Märkte über ${Math.round(FUNDING_MIN_UMSATZ / 1e6)} Mio USD Tagesumsatz`,
             })
         }
     } catch (e) { logWarn('news', `Marktdaten Funding: ${e.message}`) }
@@ -1829,10 +1843,22 @@ export function berichtAlsMailText({ lage = '', kapitel = [], markt = [], lagen 
     if (inhalt === 'mittel' || inhalt === 'voll') {
         // Marktstand zuerst: er ist der gemessene Boden, gegen den die
         // Meldungen darunter gelesen werden — und als Tabelle zwei Zeilen kurz.
-        const marktZeilen = (Array.isArray(markt) ? markt : [])
-            .filter(w => w?.was && w?.wert)
+        const alleMarkt = (Array.isArray(markt) ? markt : []).filter(w => w?.was && w?.wert)
+        // Funding-Zeilen mit `liste` (seit 24.10.2026) stehen als eigene Tabelle,
+        // eine Zeile je Markt; ältere Berichte ohne Liste bleiben in der Haupttabelle.
+        const mitListe = alleMarkt.filter(w => Array.isArray(w.liste) && w.liste.length)
+        const marktZeilen = alleMarkt
+            .filter(w => !mitListe.includes(w))
             .map(w => `${label(w.was)}: ${w.wert}${w.zusatz ? ` — ${w.zusatz}` : ''}`)
-        if (marktZeilen.length >= 2) teile.push('## Marktstand', marktZeilen.join('\n'))
+        if (marktZeilen.length + mitListe.length >= 2) {
+            if (marktZeilen.length) teile.push('## Marktstand', marktZeilen.join('\n'))
+            for (const w of mitListe) {
+                const pfeil = (e) => (e.richtung === 'oben' ? '▲ ' : e.richtung === 'unten' ? '▼ ' : '')
+                teile.push(`## ${label(w.was)}`, w.liste.map(e => `${pfeil(e)}${label(e.symbol)}: ${e.wert}`).join('\n'))
+                const fuss = w.hinweis || (w.zusatz && !w.zusatz.startsWith('unten') ? w.zusatz : '')
+                if (fuss) teile.push(fuss.charAt(0).toUpperCase() + fuss.slice(1) + '.')
+            }
+        }
 
         /*
          * Die eigene Einordnung direkt hinter den Marktstand: erst was gemessen
