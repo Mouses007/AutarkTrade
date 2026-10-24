@@ -85,7 +85,7 @@ export const VALID_SETTINGS_KEYS = [
     'radarNewsPromptZusatz', 'radarNewsFokusAn', 'radarNewsFokusWoerter', 'radarNewsAktivesProfil',
     'livetradingAn', 'betaAusblenden', 'livetradingMobil', 'startseiteAn',
     'erweiterteInfos', 'spendenAn', 'spendenKaffeeUrl', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
-    // Spot-Portfolio (Testzweig)
+    // Spot-Portfolio
     'modusPortfolioAn', 'portfolioBoersen', 'portfolioStaubChf', 'portfolioPaare',
     // Anbieter/Modell je KI-Funktion; leer = global
     'aiBerichtProvider', 'aiBerichtModell', 'aiAgentProvider', 'aiAgentModell',

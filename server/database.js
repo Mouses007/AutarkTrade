@@ -3615,7 +3615,7 @@ async function runMigrations(knex, client) {
     // S12-Einstellungen, siehe `server/migrationen/s15.js`. Additiv.
     await migriereS15(knex, addColumnIfNotExists)
 
-    // ── Spot-Portfolio (Testzweig, additiv, ohne SCHEMA_VERSION) ───────
+    // ── Spot-Portfolio (additiv, ohne SCHEMA_VERSION) ───────
     await migrierePortfolio(knex, addColumnIfNotExists)
 
     /*

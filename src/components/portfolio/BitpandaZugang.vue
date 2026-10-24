@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Bitpanda in den API-Einstellungen (Spot-Portfolio, Testzweig).
+ * Bitpanda in den API-Einstellungen (Spot-Portfolio).
  *
  * Ein Schlüssel, Kopfzeile `X-Api-Key`. Bitpanda vergibt Scopes; der
  * Portfolio-Abruf braucht nur „Read". Beim Speichern prüft der Server den

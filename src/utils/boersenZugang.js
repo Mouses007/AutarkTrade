@@ -14,7 +14,7 @@ import axios from 'axios'
 import { brokers } from '../stores/filters.js'
 import { appEinstellungen } from '../stores/settings.js'
 
-/** Futures für diese Börse abgeschaltet (Einstellung `portfolioBoersen`, Testzweig)? */
+/** Futures für diese Börse abgeschaltet (Einstellung `portfolioBoersen`)? */
 export function futuresAus(boerse, einstellungen = appEinstellungen.value) {
     try { return Number(JSON.parse(einstellungen?.portfolioBoersen || '{}')?.[boerse]?.futures ?? 1) === 0 } catch { return false }
 }

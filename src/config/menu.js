@@ -130,7 +130,7 @@ export const PAGES = [
     { id: 'lernenKarten', mode: 'lernen', path: '/lernen/karten', symbol: 'liste', titleKey: 'lernen.tabKarten', group: 'lernenGruppe' },
     { id: 'lernenStatistik', mode: 'lernen', path: '/lernen/statistik', symbol: 'torte', titleKey: 'lernen.tabStatistik', group: 'lernenGruppe' },
 
-    // Spot-Portfolio (Testzweig `test/spot-portfolio`): Bestände aller Börsen
+    // Spot-Portfolio (Beta): Bestände aller Börsen
     // und Hardware-Wallets an einem Ort. Drei Einträge auf einer Route wie
     // beim Lernen — der Wechsel zwischen den Ansichten lädt nichts neu.
     { id: 'portfolio', mode: 'portfolio', path: '/portfolio', symbol: 'torte', titleKey: 'nav.portfolio', menuKey: 'portfolio.menuUebersicht', menuSymbol: 'torte', group: 'portfolioGruppe' },
@@ -191,7 +191,7 @@ export const MODES = [
     // Journal selbst laufend vorkommen. Kein Betrieb, keine Live-Daten — darf
     // deshalb auch am Telefon voll bedient werden.
     { id: 'lernen', titleKey: 'modes.lernen', symbol: 'lernen', home: '/lernen', enabled: true, flag: 'modusLernenAn' },
-    // Spot-Portfolio — nur auf dem Testzweig, geht in kein Release.
+    // Spot-Portfolio — Beta, über `modusPortfolioAn` abschaltbar.
     { id: 'portfolio', titleKey: 'modes.portfolio', symbol: 'muenzen', home: '/portfolio', enabled: true, beta: true, betaHintKey: 'portfolio.betaHinweis', flag: 'modusPortfolioAn' },
 ]
 

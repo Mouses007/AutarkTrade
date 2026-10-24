@@ -1,5 +1,5 @@
 /**
- * Spot-Portfolio (Testzweig `test/spot-portfolio`, 22.10.2026).
+ * Spot-Portfolio (seit 22.10.2026, auf master seit 24.10.2026).
  *
  * Additiv und idempotent, OHNE neue SCHEMA_VERSION: der Zweig geht nicht in
  * ein Release, und eine Versionsnummer, die master später für etwas anderes

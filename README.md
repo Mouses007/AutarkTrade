@@ -340,6 +340,13 @@ presented as a finding — three sessions on a Tuesday are noise.
 - **Lab** — backtests, parameter runs, Monte Carlo, walk-forward, coin ranking; **Performance** — key figures, setup funnel, MAE/MFE.
 - **Emergency stop** — halts all instances and can close open simulated positions.
 
+### Portfolio (beta)
+- **Everything you hold in one place** — spot balances of Bitunix, Bitget, Pionex and Bitpanda (API, read only) plus hardware and browser wallets (Ledger, SafePal, MetaMask): Bitcoin xpub/ypub/zpub or addresses, EVM addresses (Ethereum, BNB Chain, Polygon, Arbitrum, Base …), XRP, Solana, VeChain. Only public keys — a pasted seed or private key is refused, not stored. The futures accounts count towards the total; the journal page "Accounts" then shows only the trading capital.
+- **History by file import** for exchanges whose API has no full history (CSV format in `server/portfolio/import.js`); a wallet hands over from imported history to live reading at a chosen date.
+- **Swiss tax view (no tax advice)** — wealth at 31 Dec in CHF (ESTV rate where entered, otherwise year-end close × ECB rate), income from staking/airdrops at the CHF value on receipt, disposals with FIFO cost basis (private gains are tax-free; shown for information), futures balance at 31 Dec and futures result per year from the journal, and the five KS-36 criteria for professional trading. CSV and print view for the tax return.
+- **Balance for information** — cash paid in vs. value today, not for tax purposes.
+- Switch the mode off under Settings like any other mode.
+
 ### Import & Broker Support (read only)
 - **Bitunix** — API integration (positions, balance, trades)
 - **Bitget** — API integration (positions, balance, fills)

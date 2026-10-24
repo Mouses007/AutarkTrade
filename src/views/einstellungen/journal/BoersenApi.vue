@@ -367,7 +367,7 @@ onMounted(async () => {
             </Hinweis>
         </Abschnitt>
 
-        <!-- BITPANDA (Spot-Portfolio, Testzweig) -->
+        <!-- BITPANDA (Spot-Portfolio) -->
         <BitpandaZugang v-if="Number(appEinstellungen?.modusPortfolioAn ?? 1) === 1" />
     </Abschnitt>
 </template>

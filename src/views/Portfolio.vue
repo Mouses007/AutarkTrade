@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Spot-Portfolio (Testzweig): drei Ansichten auf einer Route — Übersicht,
+ * Spot-Portfolio (Beta): drei Ansichten auf einer Route — Übersicht,
  * Bewegungen, Quellen. Das Seitenmenü schaltet über den Pfad; die Seite
  * bleibt stehen, ein laufender Abruf auch.
  */

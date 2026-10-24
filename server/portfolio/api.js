@@ -1,5 +1,5 @@
 /**
- * Spot-Portfolio: Routen unter /api/portfolio (Testzweig).
+ * Spot-Portfolio: Routen unter /api/portfolio.
  *
  *   GET    /uebersicht                 Stand aus der DB + Kurse (kein Börsenabruf)
  *   POST   /abruf            {quelle?} Abruf im Hintergrund starten (202)
