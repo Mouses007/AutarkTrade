@@ -277,8 +277,23 @@ export class ZeichenEbene {
                     { x: x1, y: Y(pk[0].p) },
                 ]
             }
+            case 'kanal': {
+                // Ecken der Grundlinie, dazu je Kante ein Mittelpunkt: daran verschiebt man
+                // die Kante parallel. Der dritte Punkt bleibt unsichtbar, er trägt nur den Abstand.
+                const g = this.kanalGeraden(pk)
+                if (!g) return pk.slice(0, 2).map((q) => ({ x: X(q.t), y: Y(q.p) }))
+                const [[a1, b1], [a2, b2]] = g
+                return [a1, b1, { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2 }, { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2 }]
+            }
             default: return pk.map((q) => ({ x: X(q.t), y: Y(q.p) }))
         }
+    }
+
+    /** Abstand der zweiten Kante zur Grundlinie (Preis), aus dem dritten Punkt. */
+    kanalVersatz(pk) {
+        const [a, b, c] = pk
+        if (!c) return 0
+        return c.p - preisAufGerade(this.zuL(c.t), this.zuL(a.t), a.p, this.zuL(b.t), b.p)
     }
 
     /** Was liegt unter (x, y)? Anker der Auswahl zuerst, dann jüngste Zeichnung zuerst. */
@@ -485,6 +500,24 @@ export class ZeichenEbene {
             else if (z.anker === 2) neu[2] = { t: orig[2].t, p: pt.p }
             else if (pt.t > orig[0].t) { neu[1] = { t: pt.t, p: orig[1].p }; neu[2] = { t: pt.t, p: orig[2].p } }
             return neu
+        }
+        if (z.typ === 'kanal') {
+            // Anker 0/1: Ecken der Grundlinie; 2: Grundlinie parallel verschieben; 3: zweite Kante
+            // parallel verschieben. Der dritte Punkt sitzt danach immer über dem ersten Eckpunkt,
+            // im Abstand der zweiten Kante — so bleibt sie parallel, egal welche Ecke man zieht.
+            let versatz = this.kanalVersatz(orig)
+            const [a, b] = orig
+            let na = { ...a }, nb = { ...b }
+            if (z.anker === 0) na = pt
+            else if (z.anker === 1) nb = pt
+            else if (z.anker === 2) {
+                const dp = Number.isFinite(z.p0) ? pt.p - z.p0 : 0
+                na = { ...a, p: a.p + dp }; nb = { ...b, p: b.p + dp }
+                versatz -= dp
+            } else if (z.anker === 3) {
+                versatz = pt.p - preisAufGerade(this.zuL(pt.t), this.zuL(a.t), a.p, this.zuL(b.t), b.p)
+            }
+            return [na, nb, { t: na.t, p: na.p + versatz }]
         }
         if (z.typ === 'horizontale') return [{ t: orig[0].t, p: pt.p }]
         if (z.typ === 'vertikale') return [{ t: pt.t, p: orig[0].p }]
