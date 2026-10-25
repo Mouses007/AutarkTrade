@@ -15,6 +15,7 @@
  */
 
 import { totalverluste, TOTALVERLUST } from './totalverlust.js'
+import { spamPruefer } from './spam.js'
 import { getKnex } from '../database.js'
 import { kurseFuer } from './kurse.js'
 import { saldiere } from './normal.js'
@@ -44,6 +45,7 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     const bestaende = ohneUebernommene(alleBestaende, ersetzt)
     const staubChf = Number(settings?.portfolioStaubChf ?? 1)
     const tot = await totalverluste()
+    const istSpam = await spamPruefer()
     const wahl = await boersenWahl()
 
     // Kurse für alles, was im Bestand liegt
@@ -62,7 +64,9 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     let gesamtUsd = 0, ohneKurs = 0
     for (const b of bestaende) {
         const key = keyVon(b)
-        let kurs = kurse.get(key) || { usd: null, quelle: 'kein Kurs' }
+        const spam = istSpam(b.asset, b.kontrakt)
+        // Spam hat keinen Wert, auch wenn ein Fantasie-Pool einen Preis nennt.
+        let kurs = spam ? { usd: null, quelle: 'Spam' } : (kurse.get(key) || { usd: null, quelle: 'kein Kurs' })
         // Rechenreste aus Importen (CHSB 6e-12, OCC 4e-6) sind kein Bestand: ohne
         // Kurs würden sie als „0 · kein Kurs" in der Liste stehen.
         if (kurs.usd == null && !quellKurs.has(key) && Math.abs(b.menge) < 1e-5) continue
@@ -77,7 +81,7 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         const anzeigeName = b.name === 'ohneSymbol' ? (kurs.symbol || `${b.asset}…`) : b.asset
         const p = jeAsset.get(key) || {
             schluessel: key, asset: anzeigeName, kontrakt: b.kontrakt, kette: b.kontrakt ? b.ort : null,
-            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, totalverlust: !!kurs.totalverlust, orte: [],
+            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, totalverlust: !!kurs.totalverlust, spam, orte: [],
         }
         p.menge += b.menge
         if (usd != null) { p.usd += usd; p.chf += chf }
@@ -86,7 +90,7 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
 
         const q = jeQuelle.get(b.quelle) || { chf: 0, usd: 0, posten: [] }
         if (usd != null) { q.chf += chf; q.usd += usd }
-        q.posten.push({ schluessel: key, asset: anzeigeName, ort: b.ort, ortName: kettenName(b.ort) || b.name, menge: b.menge, chf, ohneKurs: usd == null })
+        q.posten.push({ schluessel: key, asset: anzeigeName, ort: b.ort, ortName: kettenName(b.ort) || b.name, menge: b.menge, chf, ohneKurs: usd == null, spam })
         jeQuelle.set(b.quelle, q)
     }
     const gesamtChf = gesamtUsd * fx.chf

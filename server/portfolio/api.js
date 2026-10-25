@@ -27,6 +27,7 @@
  *   PUT    /steuerkurs       {jahr, asset, chf|null, quelle}
  *   PUT    /futures-stichtag {jahr, boerse, usd|null, quelle}  Futures-Guthaben 31.12. laut Auszug
  *   PUT    /totalverlust     {asset, an}  Coin als Totalverlust markieren (Wert 0, wo kein Kurs)
+ *   PUT    /spam             {asset, spam: true|false|null}  Spam von Hand (null = Regel)
  */
 
 import crypto from 'crypto'
@@ -37,6 +38,7 @@ import { berechneUebersicht } from './uebersicht.js'
 import { berechneBilanz, futuresKontenGemerkt } from './bilanz.js'
 import { setzeFuturesStichtag } from './futures-steuer.js'
 import { setzeTotalverlust } from './totalverlust.js'
+import { setzeSpam } from './spam.js'
 import { BOERSEN } from './futures-rechnung.js'
 import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
@@ -375,6 +377,15 @@ export function setupPortfolioRoutes(app) {
         } catch (e) { fehler(res, e) }
     })
 
+    app.put('/api/portfolio/spam', async (req, res) => {
+        try {
+            const asset = String(req.body?.asset ?? '')
+            if (!asset || asset.length > 200) return fehler(res, 'Asset fehlt', 400)
+            const w = req.body?.spam
+            await setzeSpam(asset, w === null || w === undefined ? null : !!w)
+            res.json({ ok: true })
+        } catch (e) { fehler(res, e) }
+    })
     app.put('/api/portfolio/totalverlust', async (req, res) => {
         try {
             const asset = String(req.body?.asset || '').trim()

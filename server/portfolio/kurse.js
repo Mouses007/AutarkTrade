@@ -59,6 +59,8 @@ export function ketteNorm(k) {
  * gehandelt wird BNT, GRT, ILV … an den Börsen, nicht auf der Kette.
  */
 const KANON = {
+    // Fiat24 (SafePal-Karte): auf der Kette geprüft 25.10.2026 — name „Fiat24 CHF“, 2 Dezimalen.
+    'evm:42161': { '0xd41f1f0cf89fd239ca4c1f8e8ada46345c86b0a4': 'CHF24' },
     'evm:1': {
         '0xdac17f958d2ee523a2206206994597c13d831ec7': 'USDT', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'USDC',
         '0xae7ab96520de3a18e5e111b5eaab095312d7fe84': 'STETH', '0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0': 'MATIC',
@@ -76,6 +78,19 @@ const KANON = {
  * wird über den kanonischen Vertrag bewertet.
  */
 const NUR_DEX = { BORG: { kette: 'evm:1', kontrakt: '0x64d0f55cd8c7133a9d7102b13987235f486f2224' } }
+
+/**
+ * Geld-Tokens mit festem Wert: Fiat24 bucht Franken als CHF24 auf Arbitrum. Gilt
+ * nur für den kanonischen Vertrag (KANON) — „CHF24“ kann jeder Token heissen.
+ */
+export const GELD_TOKEN = { CHF24: 'CHF' }
+export function geldTokenWaehrung(asset, kontrakt, kette) {
+    const a = String(asset ?? '').toUpperCase()
+    const w = GELD_TOKEN[a]
+    if (!w) return null
+    if (kontrakt && KANON[ketteNorm(kette)]?.[String(kontrakt).toLowerCase()] !== a) return null
+    return w
+}
 
 export async function gleicherCoin(asset, kontrakt, kette) {
     const k = ketteNorm(kette)
@@ -232,6 +247,8 @@ export async function kurseFuer(posten) {
         for (const p of posten) {
             if (p.kette !== kette || !p.kontrakt) continue
             const key = `${String(p.asset).toUpperCase()}|${p.kontrakt}`
+            const geld = geldTokenWaehrung(p.asset, p.kontrakt, kette)
+            if (geld) { kurse.set(key, { usd: geld === 'CHF' ? 1 / fx.chf : 1 / fx.eur, quelle: `Fiat24 · 1 ${p.asset} = 1 ${geld}` }); continue }
             let t = d.get(kette === 'sol' ? p.kontrakt : String(p.kontrakt).toLowerCase()) || d.get(p.kontrakt)
             if (t?.duenn) {
                 const menge = posten.filter((x) => x.kontrakt === p.kontrakt && x.kette === kette).reduce((s, x) => s + Math.abs(Number(x.menge) || 0), 0)

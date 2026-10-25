@@ -146,6 +146,8 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
     await addColumnIfNotExists('settings', 'portfolioFuturesStichtag', (t) => t.text('portfolioFuturesStichtag'))
     // { ASSET: { am } } — als Totalverlust markierte Coins (`totalverlust.js`).
     await addColumnIfNotExists('settings', 'portfolioTotalverlust', (t) => t.text('portfolioTotalverlust'))
+    // { ASSET: true|false } — Spam von Hand (`spam.js`); sonst entscheidet die Namensregel.
+    await addColumnIfNotExists('settings', 'portfolioSpam', (t) => t.text('portfolioSpam'))
     // Solana-Verträge wurden bis 25.10.2026 kleingeschrieben gespeichert (Base58
     // unterscheidet Gross/Klein — so fand keine Börse den Token). Bekannte zurück.
     for (const echt of ['rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof']) {

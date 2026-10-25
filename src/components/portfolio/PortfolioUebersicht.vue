@@ -20,7 +20,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { uebersicht, abrufLaeuft, abrufQuelle, starteAbruf, staubZeigen, setzeStaub, verborgen, schalteVerborgen, setzeTotalverlust,
+import { uebersicht, abrufLaeuft, abrufQuelle, starteAbruf, staubZeigen, setzeStaub, verborgen, schalteVerborgen, setzeTotalverlust, setzeSpam,
     chf, menge, prozent, vorZeit, farbeVon } from '../../stores/portfolio.js'
 import { Karte, Knopf, Reiter, Hinweis, Leerzustand, Symbol, Pille } from '../basis/index.js'
 import BilanzKarte from './BilanzKarte.vue'
@@ -77,8 +77,13 @@ const alle = computed(() => u.value?.posten || [])
 // dort nicht mehr gehandelt) und bleibt sichtbar; ein Token auf der Kette
 // ohne verlässlichen Kurs ist fast immer ungefragt zugeschickter Spam.
 const verbergen = (p) => p.staub || (p.ohneKurs && p.kontrakt)
-const sichtbar = computed(() => alle.value.filter((p) => staubZeigen.value || !verbergen(p)))
-const versteckt = computed(() => alle.value.length - sichtbar.value.length)
+// Spam (Werbe-Airdrops) steht nie in der Liste, auch nicht mit „Kleinstbestände
+// zeigen" — nur zugeklappt am Ende, mit „kein Spam" für Fehltreffer.
+const spamListe = computed(() => alle.value.filter((p) => p.spam))
+const ohneSpam = computed(() => alle.value.filter((p) => !p.spam))
+const sichtbar = computed(() => ohneSpam.value.filter((p) => staubZeigen.value || !verbergen(p)))
+const versteckt = computed(() => ohneSpam.value.length - sichtbar.value.length)
+const spamOffen = ref(false)
 const band = computed(() => {
     const mitWert = alle.value.filter((p) => p.chf > 0)
     const top = mitWert.slice(0, 7)
@@ -123,7 +128,7 @@ const ortName = (quelle) => {
     const w = wallets.value.find((x) => x.id === q.walletId)
     return w ? `${w.name} · ${q.name}` : q.name
 }
-const postenSichtbar = (liste) => liste.filter((p) => staubZeigen.value || (p.ohneKurs ? !p.schluessel.includes('|') : (p.chf ?? 0) >= (u.value?.staubChf ?? 1)))
+const postenSichtbar = (liste) => liste.filter((p) => !p.spam && (staubZeigen.value || (p.ohneKurs ? !p.schluessel.includes('|') : (p.chf ?? 0) >= (u.value?.staubChf ?? 1))))
 const sortiert = (liste) => [...liste].sort((a, b) => (b.chf || 0) - (a.chf || 0))
 
 function abgleichText(a) {
@@ -247,7 +252,26 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <button v-if="p.ohneKurs || p.totalverlust" type="button" class="pf-totalverlust" :title="t('portfolio.totalverlustInfo')" @click="setzeTotalverlust(p.asset, !p.totalverlust)">
                                 {{ p.totalverlust ? t('portfolio.totalverlustAufheben') : t('portfolio.totalverlustMarkieren') }}
                             </button>
+                            <button v-if="p.kontrakt && (p.ohneKurs || p.totalverlust)" type="button" class="pf-totalverlust" :title="t('portfolio.spamInfo')" @click="setzeSpam(p.asset, true)">
+                                {{ t('portfolio.spamMarkieren') }}
+                            </button>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Spam: zugeklappt, nie in der Liste ── -->
+            <div v-if="spamListe.length" class="pf-spam">
+                <button type="button" class="pf-spam-kopf" :aria-expanded="spamOffen" @click="spamOffen = !spamOffen">
+                    <Symbol :name="spamOffen ? 'runter' : 'pfeilRechts'" :groesse="14" />
+                    {{ t('portfolio.spamTitel', { n: spamListe.length }) }}
+                    <span class="at-gedaempft">· {{ t('portfolio.spamText') }}</span>
+                </button>
+                <div v-if="spamOffen" class="pf-spam-liste">
+                    <div v-for="p in spamListe" :key="p.schluessel" class="pf-spam-zeile">
+                        <span class="pf-spam-name" :title="p.asset">{{ p.asset }}</span>
+                        <span class="at-gedaempft">{{ menge(p.menge) }}</span>
+                        <button type="button" class="pf-totalverlust" :title="t('portfolio.keinSpamInfo')" @click="setzeSpam(p.asset, false)">{{ t('portfolio.keinSpam') }}</button>
                     </div>
                 </div>
             </div>
@@ -332,6 +356,11 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
 </template>
 
 <style scoped>
+.pf-spam { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 0.6rem; }
+.pf-spam-kopf { display: flex; align-items: center; gap: 0.4rem; background: none; border: 0; color: var(--muted); font: inherit; font-size: 0.85rem; cursor: pointer; padding: 0.2rem 0; text-align: left; flex-wrap: wrap; }
+.pf-spam-liste { display: flex; flex-direction: column; margin-top: 0.4rem; }
+.pf-spam-zeile { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.75rem; align-items: center; padding: 0.3rem 0; border-bottom: 1px dashed var(--line); font-size: 0.8rem; color: var(--muted); }
+.pf-spam-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: line-through; text-decoration-color: var(--line-stark); }
 .pf-totalverlust { background: none; border: 1px solid var(--line-stark); border-radius: var(--radius-pille); color: var(--muted); font: inherit; font-size: 0.78rem; padding: 0.15rem 0.7rem; cursor: pointer; }
 .pf-totalverlust:hover { color: var(--bad); border-color: var(--bad); }
 .pf-aufteilung { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font-size: 0.85rem; color: var(--muted); margin-top: 0.15rem; }

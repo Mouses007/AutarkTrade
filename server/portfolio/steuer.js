@@ -16,8 +16,9 @@
  */
 import { getKnex } from '../database.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration } from './steuer-rechnung.js'
-import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf, coingeckoKursChf } from './kurse.js'
+import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf, coingeckoKursChf, GELD_TOKEN } from './kurse.js'
 import { totalverluste, TOTALVERLUST } from './totalverlust.js'
+import { spamPruefer } from './spam.js'
 import { STABIL, FIAT } from './normal.js'
 import { uebergaben } from './uebergabe.js'
 import { futuresSteuerjahr } from './futures-steuer.js'
@@ -45,7 +46,7 @@ async function quellenStand() {
 async function steuerkurs(asset, jahr, manuell, fxCache, datum = `${jahr}-12-31`) {
     const m = manuell.get(asset)
     if (m) return { chf: m.chf, quelle: m.quelle === 'estv' ? 'ESTV-Kursliste' : 'von Hand' }
-    if (asset === 'CHF') return { chf: 1, quelle: 'CHF' }
+    if (asset === 'CHF' || GELD_TOKEN[asset] === 'CHF') return { chf: 1, quelle: asset === 'CHF' ? 'CHF' : `Fiat24 · 1 ${asset} = 1 CHF` }
     const tag = datum.slice(8, 10) + '.' + datum.slice(5, 7) + '.'
     if (!fxCache.chf) fxCache.chf = await fxAm(datum, 'CHF')
     if (!fxCache.chf) return { chf: null, quelle: 'kein Wechselkurs' }
@@ -145,7 +146,11 @@ export async function berechneSteuerjahr(jahr) {
     const { von, bis } = jahrGrenzen(jahr)
     const jetzt = Date.now()
     const laufend = bis > jetzt
+    // Spam-Tokens (Werbe-Airdrops) gehören in keinen Steuerbericht — weder als
+    // Vermögen noch als Einkommen ohne Wert.
+    const istSpam = await spamPruefer()
     const bew = (await k('portfolio_bewegungen').select(SPALTEN)).map((b) => ({ ...b, zeit: Number(b.zeit) }))
+        .filter((b) => !istSpam(b.asset, b.kontrakt))
     const { alle, vollstaendig } = await quellenStand()
     const [wallets, adressen] = await Promise.all([k('portfolio_wallets').select('*'), k('portfolio_adressen').select('id', 'walletId', 'kette', 'label')])
     const name = namenVon(alle, wallets, adressen)
@@ -157,7 +162,7 @@ export async function berechneSteuerjahr(jahr) {
     const unbelegt = alle.filter((q) => !vollstaendig.has(q))
     if (laufend) {
         // Laufendes Jahr: unvollständige Quellen mit ihrem HEUTIGEN Bestand (provisorisch).
-        const heuteBestand = await k('portfolio_bestaende').select('quelle', 'asset', 'menge')
+        const heuteBestand = (await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt')).filter((x) => !istSpam(x.asset, x.kontrakt))
         for (const z of heuteBestand.filter((x) => unbelegt.includes(x.quelle))) {
             const key = `${z.quelle}\u0000${z.asset}`
             mengen.set(key, (mengen.get(key) || 0) + Number(z.menge))
