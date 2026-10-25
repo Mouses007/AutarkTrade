@@ -37,6 +37,7 @@ import axios from 'axios'
 import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { StrategieEbene } from '../../utils/chart/overlays/StrategieEbene.js'
 import { MarktEbene, waendeAusBuch } from '../../utils/chart/overlays/MarktEbene.js'
+import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
 import { benoetigteQuellen, vwapVectorQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
 import { positionenAus } from '../../stores/chartPositionen.js'
@@ -114,6 +115,7 @@ const strategieDaten = shallowRef(null)  // Antwort von /api/chart/strategie (f�
 const strategieVorschau = shallowRef(null)
 const strategieBacktest = shallowRef(null)
 let marktEbene = null
+let kerzenUhr = null
 let marktTakt = null
 let marktZaehler = 0
 const marktHinweise = ref({})          // liquidationen/hebelzonen/momentum → Text für die Legende
@@ -255,6 +257,8 @@ function baueChart() {
         chart: c, serie: ks,
         texte: { kauf: t('chart.markt.kaufwand'), verkauf: t('chart.markt.verkaufswand'), liqLong: t('chart.markt.liqLong'), liqShort: t('chart.markt.liqShort') },
     })
+    // Restzeit der laufenden Kerze unter der Kursmarke
+    kerzenUhr = new KerzenUhr(ks, { farbe: blau, textFarbe: farbe('--on-accent', '#02201d') })
     strategieEbene = new StrategieEbene({ chart: c, serie: ks, formatPreis: (p) => ks.priceFormatter().format(p) })
     journalEbene = new JournalEbene({ chart: c, serie: ks, formatPreis: (p) => ks.priceFormatter().format(p) })
     c.subscribeClick((p) => {
@@ -311,6 +315,7 @@ function setzeDaten(liste) {
     journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     strategieEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     marktEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
+    kerzenUhr?.setze(liste[liste.length - 1], INTERVALL_MS[props.panel.interval], props.panel.interval)
     planeJournal()
     emit('kerzen', liste)
 }
@@ -1176,6 +1181,7 @@ function starteLive(nr) {
             }
             kerzenSerie.value?.update(kerzenPunkt(bar, liste.length - 1))
             volumenSerie.value?.update(volumenBalken(bar))
+            kerzenUhr?.setze(bar, INTERVALL_MS[props.panel.interval], props.panel.interval)
             if (!extern) legende.value = letzteLegende()
             planeNachfuehren()
             emit('kerzen', liste)
@@ -1307,6 +1313,8 @@ onBeforeUnmount(() => {
     externNochmal.clear()
     marktEbene?.abbauen()
     marktEbene = null
+    kerzenUhr?.abbauen()
+    kerzenUhr = null
     live?.stop()
     chart.value?.remove()
     chart.value = null
