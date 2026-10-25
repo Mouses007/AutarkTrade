@@ -8,7 +8,7 @@
  * Nie mitten in der Arbeit: nicht im Live-Trading/Cockpit, nicht im Chart-Vollbild,
  * nicht im Browser-Vollbild, und erst einige Sekunden nach dem Seitenwechsel.
  */
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { Dialog, Knopf, Symbol } from '../basis'
@@ -19,6 +19,21 @@ import qrPaypal from '../../assets/spenden-paypal.jpg'
 
 const { t } = useI18n()
 const route = useRoute()
+
+// Steht auch im QR-Code (aus dem Bild gelesen, Prüfsumme geprüft 25.10.2026).
+const BTC_ADRESSE = '1JKwCo7wyyzpfjPL3eBzNLPH56aqT9jPzf'
+const kopiert = ref(false)
+const adressFeld = ref(null)
+async function kopiereAdresse() {
+    try {
+        // Über http im Heimnetz (NAS) gibt es keine Zwischenablage-API — dann
+        // den Text markieren und den alten Kopierbefehl nehmen.
+        if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(BTC_ADRESSE)
+        else { adressFeld.value?.select(); document.execCommand('copy') }
+        kopiert.value = true
+        setTimeout(() => { kopiert.value = false }, 2000)
+    } catch { adressFeld.value?.select() }
+}
 
 const an = computed(() => Number(appEinstellungen.value?.spendenAn ?? 1) === 1)
 const kaffeeUrl = computed(() => {
@@ -78,6 +93,14 @@ const istDank = computed(() => spendenFrage.value?.art === 'dank')
                     <figcaption>PayPal</figcaption>
                 </figure>
             </div>
+
+            <div class="adresse">
+                <span class="adresse-etikett">{{ t('spenden.btcAdresse') }}</span>
+                <div class="adresse-zeile">
+                    <input ref="adressFeld" :value="BTC_ADRESSE" readonly spellcheck="false" aria-label="Bitcoin-Adresse" @focus="$event.target.select()" />
+                    <Knopf klein :symbol="kopiert ? 'haken' : 'kopieren'" @click="kopiereAdresse">{{ kopiert ? t('spenden.kopiert') : t('spenden.kopieren') }}</Knopf>
+                </div>
+            </div>
         </template>
 
         <template #fuss>
@@ -136,6 +159,35 @@ const istDank = computed(() => spendenFrage.value?.art === 'dank')
     width: 100%;
     border-radius: 10px;
     background: #fff;
+}
+
+.adresse {
+    margin-top: 14px;
+}
+
+.adresse-etikett {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 4px;
+}
+
+.adresse-zeile {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.adresse-zeile input {
+    flex: 1;
+    min-width: 0;
+    background: var(--bg);
+    border: 1px solid var(--line-stark);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
 }
 
 .qr figcaption {
