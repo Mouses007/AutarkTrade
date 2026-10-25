@@ -35,6 +35,37 @@ export function istTransfer(b) {
 }
 
 /**
+ * Token-Umstellungen: der alte Coin wird vom Projekt in den neuen getauscht —
+ * kein Verkauf, nur ein neuer Name (bzw. eine neue Stückelung). Einstand und
+ * Kaufdatum gehen auf den neuen Coin über.
+ * - CHSB → BORG 1:1, SwissBorg, Fenster bis 21.10.2023, in der App automatisch
+ * - MATIC → POL 1:1, Polygon, ab 04.09.2024
+ * `faktor` = neue Stück je altem Stück.
+ */
+export const MIGRATIONEN = {
+    CHSB: { nach: 'BORG', faktor: 1 },
+    MATIC: { nach: 'POL', faktor: 1 },
+}
+
+/**
+ * Ist diese Bewegung eine Umstellung? Ein Tausch zwischen einem bekannten Paar
+ * im erwarteten Verhältnis (±1 %), oder ausdrücklich `einordnung: 'migration'`.
+ * Bis 25.10.2026 zählte die CHSB→BORG-Umstellung als Verkauf: 728 CHF Erlös
+ * und Handelsvolumen, die es nie gab.
+ * @returns {{ von, nach, faktor }|null}
+ */
+export function istMigration(b) {
+    if (b.art !== 'tausch' || !b.gegenAsset) return null
+    const m = Number(b.menge) || 0, g = Number(b.gegenMenge) || 0
+    const [alt, altMenge, neu, neuMenge] = m < 0 ? [b.asset, -m, b.gegenAsset, g] : [b.gegenAsset, -g, b.asset, m]
+    if (!(altMenge > 0 && neuMenge > 0)) return null
+    if (b.einordnung === 'migration') return { von: alt, nach: neu, faktor: neuMenge / altMenge }
+    const regel = MIGRATIONEN[String(alt).toUpperCase()]
+    if (!regel || regel.nach !== String(neu).toUpperCase()) return null
+    return Math.abs(neuMenge / altMenge / regel.faktor - 1) <= 0.01 ? { von: alt, nach: neu, faktor: neuMenge / altMenge } : null
+}
+
+/**
  * Bestand je Ort und Asset bis einschliesslich `bis` (ms).
  * @returns {Map<string, number>}  `${quelle}\u0000${asset}` → Menge
  */
@@ -131,7 +162,25 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
             if (b.gebuehrAsset && Number(b.gebuehrMenge) > 0) abgang(b.gebuehrAsset, Number(b.gebuehrMenge), 0, zeit, b, 'gebuehr')
             continue
         }
-        if (['kauf', 'verkauf', 'tausch'].includes(b.art) && b.gegenAsset) {
+        const mig = istMigration(b)
+        if (mig) {
+            // Lose umhängen: gleiche Kosten, gleiches Kaufdatum, Menge × Faktor.
+            const alt = lose.get(mig.von) || []
+            let rest = Math.abs(mig.von === b.asset ? m : g)
+            const neu = lose.get(mig.nach) || []
+            while (rest > 1e-12 && alt.length) {
+                const los = alt[0]
+                const nimm = Math.min(los.menge, rest)
+                neu.push({ menge: nimm * mig.faktor, kostenJe: los.kostenJe != null ? los.kostenJe / mig.faktor : null, zeit: los.zeit })
+                los.menge -= nimm
+                rest -= nimm
+                if (los.menge <= 1e-12) alt.shift()
+            }
+            // Mehr umgestellt als je zugegangen: der Rest kommt ohne bekannten Einstand.
+            if (rest > 1e-9) neu.push({ menge: rest * mig.faktor, kostenJe: null, zeit })
+            neu.sort((x, y) => x.zeit - y.zeit)
+            lose.set(mig.nach, neu)
+        } else if (['kauf', 'verkauf', 'tausch'].includes(b.art) && b.gegenAsset) {
             // Je Seite: was reinkommt, wird Los; was rausgeht, wird Abgang.
             for (const [asset, menge] of [[b.asset, m], [b.gegenAsset, g]]) {
                 if (menge > 0) zugang(asset, menge, wert, zeit)

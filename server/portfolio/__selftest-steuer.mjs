@@ -13,7 +13,7 @@
  *     sonst wird aus einer Haltedauer von zwei Jahren eine von zwei Tagen.
  */
 import { leseImportCsv } from './import.js'
-import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from './steuer-rechnung.js'
+import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration } from './steuer-rechnung.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
 
 let bestanden = 0, fehlgeschlagen = 0
@@ -153,6 +153,26 @@ console.log('\nÜbergabe Import → Live')
     check('Token, den live niemand liest (USDC ohne Schlüssel), bleibt aus dem Import', hat('i:Ledger ETH', 'USDC'))
     check('Vollständige Live-Quelle (xpub) ersetzt den Import ganz', !hat('i:Ledger BTC', 'BTC') && hat('a8', 'BTC'))
     check('Noch nie erfolgreich gelesen → Import bleibt stehen', hat('i:Ledger XRP', 'XRP'))
+}
+
+{
+    // Umstellung CHSB → BORG 1:1 (18.10.2023): kein Verkauf, Lose wandern mit
+    const b = [
+        { id: 1, quelle: 'i:SwissBorg', zeit: T('2021-03-01'), art: 'kauf', asset: 'CHSB', menge: 1000, gegenAsset: 'CHF', gegenMenge: -500, chfWert: 500 },
+        { id: 2, quelle: 'i:SwissBorg', zeit: T('2023-10-18'), art: 'tausch', asset: 'BORG', menge: 1000, gegenAsset: 'CHSB', gegenMenge: -1000, chfWert: 170 },
+        { id: 3, quelle: 'i:SwissBorg', zeit: T('2024-02-01'), art: 'verkauf', asset: 'BORG', menge: -400, gegenAsset: 'CHF', gegenMenge: 120, chfWert: 120 },
+    ]
+    check('Umstellung erkannt', istMigration(b[1])?.nach === 'BORG' && istMigration(b[1])?.faktor === 1)
+    check('normaler Tausch ist keine Umstellung', istMigration({ art: 'tausch', asset: 'ETH', menge: 1, gegenAsset: 'BTC', gegenMenge: -0.05 }) === null)
+    check('falsches Verhältnis ist keine Umstellung', istMigration({ art: 'tausch', asset: 'BORG', menge: 500, gegenAsset: 'CHSB', gegenMenge: -1000 }) === null)
+    check('einordnung migration gilt auch ohne bekanntes Paar', istMigration({ art: 'tausch', einordnung: 'migration', asset: 'NEU', menge: 10, gegenAsset: 'ALT', gegenMenge: -1000 })?.faktor === 0.01)
+    const { abgaenge } = fifo(b)
+    check('Umstellung erzeugt keinen Abgang', !abgaenge.some((a) => a.id === 2), JSON.stringify(abgaenge))
+    const v = abgaenge.find((a) => a.id === 3)
+    check('Verkauf BORG nimmt den CHSB-Einstand (0.50/Stk)', v && nah(v.kosten, 200), JSON.stringify(v))
+    check('Haltedauer zählt ab CHSB-Kauf (> 6 Monate)', v && v.kurzfristigAnteil === 0)
+    const bestand = bestandAm(b, T('2024-12-31'))
+    check('Bestand nach Umstellung: 600 BORG, 0 CHSB', nah(bestand.get('i:SwissBorg\u0000BORG'), 600) && nah(bestand.get('i:SwissBorg\u0000CHSB') || 0, 0))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

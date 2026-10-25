@@ -15,7 +15,7 @@
  * zählt ihr heutiger Bestand (provisorisch).
  */
 import { getKnex } from '../database.js'
-import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from './steuer-rechnung.js'
+import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration } from './steuer-rechnung.js'
 import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf, coingeckoKursChf } from './kurse.js'
 import { totalverluste, TOTALVERLUST } from './totalverlust.js'
 import { STABIL, FIAT } from './normal.js'
@@ -244,7 +244,7 @@ export async function berechneSteuerjahr(jahr) {
         vermoegenAnfang = 0
         for (const [key, m] of m0) { const kurs = kursAn(k0, tokenOrte, key); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
     } catch { vermoegenAnfang = null }
-    const volumenSpot = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.chfWert != null)
+    const volumenSpot = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.chfWert != null && !istMigration(b))
         .reduce((s, b) => s + Math.abs(Number(b.chfWert)), 0)
     // Futures: Ergebnis, Volumen, Guthaben am Stichtag. Fällt das Journal aus,
     // bleibt der Spot-Bericht stehen.
