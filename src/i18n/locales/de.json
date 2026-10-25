@@ -5207,6 +5207,7 @@
       "vorlagen": "Indikator-Vorlagen"
     },
     "coinTabs": {
+      "ziehen": "Klicken wechselt, ziehen sortiert um (am Handy: kurz halten)",
       "titel": "Offene Coins",
       "neu": "Coin in neuem Tab öffnen",
       "schliessen": "Tab schliessen"

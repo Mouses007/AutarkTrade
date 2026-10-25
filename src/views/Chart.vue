@@ -308,11 +308,77 @@ function oeffneAusloesung(n) {
     quittiere(n.id, n.t)
 }
 function waehleCoinTab(i) {
+    if (tabKlickSperre) return
     const tab = coinTabs.value[i]
     if (!tab) return
     setzeTabs([...coinTabs.value], i)
     setzePanel({ symbol: tab.symbol, markt: tab.markt })
 }
+/*
+ * Tabs umsortieren (24.10.2026): mit der Maus anfassen und ziehen, am Handy kurz
+ * halten (350 ms) und dann ziehen — sonst würde jedes Wischen durch die
+ * Tableiste einen Tab mitnehmen. Abgelegt wird VOR dem Tab, über dessen Mitte
+ * der Zeiger steht. Die Reihenfolge ist Teil des Layouts, gilt also auf allen
+ * Geräten; der aktive Tab bleibt aktiv, wo immer er landet.
+ */
+const tabZieht = ref(null)        // Index des gezogenen Tabs
+const tabZiel = ref(null)         // Einfügestelle (0 … Anzahl)
+let tabZug = null
+let tabKlickSperre = false
+function tabZugStart(e, i) {
+    if (e.button > 0 || e.target.closest('.coinTabZu') || coinTabs.value.length < 2) return
+    const leiste = e.currentTarget.parentElement
+    tabZug = { i, x: e.clientX, aktiv: false, leiste, touch: e.pointerType === 'touch', uhr: null }
+    if (tabZug.touch) tabZug.uhr = setTimeout(() => { if (tabZug) { tabZug.aktiv = true; tabZieht.value = tabZug.i; tabZiel.value = tabZug.i } }, 350)
+    window.addEventListener('pointermove', tabZugBewegt)
+    window.addEventListener('pointerup', tabZugEnde)
+    window.addEventListener('pointercancel', tabZugEnde)
+}
+function tabZugBewegt(e) {
+    if (!tabZug) return
+    const weg = Math.abs(e.clientX - tabZug.x)
+    if (!tabZug.aktiv) {
+        // Finger bewegt sich vor Ablauf des Haltens: das ist Wischen, kein Ziehen.
+        if (tabZug.touch) { if (weg > 8) tabZugEnde(); return }
+        if (weg < 6) return
+        tabZug.aktiv = true
+        tabZieht.value = tabZug.i
+    }
+    const tabs = [...tabZug.leiste.querySelectorAll('.coinTab')]
+    let ziel = tabs.length
+    for (let k = 0; k < tabs.length; k++) {
+        const r = tabs[k].getBoundingClientRect()
+        if (e.clientX < r.left + r.width / 2) { ziel = k; break }
+    }
+    tabZiel.value = ziel
+}
+// Während des Ziehens am Handy darf die Leiste nicht scrollen.
+function tabTouchBewegt(e) { if (tabZug?.aktiv) e.preventDefault() }
+function tabZugEnde() {
+    window.removeEventListener('pointermove', tabZugBewegt)
+    window.removeEventListener('pointerup', tabZugEnde)
+    window.removeEventListener('pointercancel', tabZugEnde)
+    const z = tabZug
+    tabZug = null
+    if (z?.uhr) clearTimeout(z.uhr)
+    if (z?.aktiv) {
+        if (tabZiel.value != null) verschiebeCoinTab(z.i, tabZiel.value)
+        // Der Klick, der auf das Loslassen folgt, wechselt sonst den Tab.
+        tabKlickSperre = true
+        setTimeout(() => { tabKlickSperre = false }, 0)
+    }
+    tabZieht.value = null
+    tabZiel.value = null
+}
+function verschiebeCoinTab(von, vor) {
+    const liste = [...coinTabs.value]
+    if (von === vor || von + 1 === vor) return
+    const aktiverTab = liste[coinTabAktiv.value]
+    const [tab] = liste.splice(von, 1)
+    liste.splice(vor > von ? vor - 1 : vor, 0, tab)
+    setzeTabs(liste, Math.max(0, liste.indexOf(aktiverTab)))
+}
+
 // „+": das nächste gewählte Symbol kommt in einen neuen Tab. Bricht man die
 // Suche ab, entsteht kein Tab.
 let neuerTabWartet = false
@@ -992,6 +1058,7 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', passeHoehe)
     hoehenWaechter?.disconnect()
     window.removeEventListener('keydown', taste)
+    tabZugEnde()
     document.removeEventListener('fullscreenchange', vollbildVerlassen)
     document.removeEventListener('visibilitychange', sichtbarAbgleich)
     window.removeEventListener('focus', gleicheLayoutAb)
@@ -1024,9 +1091,13 @@ watch(sichtbareAnzahl, async () => {
                 @layout-neu="layoutNeu" @layout-umbenennen="layoutUmbenennen" @layout-loeschen="layoutLoeschen"
                 @seitenleiste="daten.seitenleiste.offen = !daten.seitenleiste.offen" @foto="foto" />
 
-            <div v-if="!vollbild" class="coinTabs" role="tablist" :aria-label="t('chart.coinTabs.titel')">
-                <div v-for="(tab, i) in coinTabs" :key="tab.symbol + '|' + tab.markt" class="coinTab" :class="{ an: i === coinTabAktiv }"
-                    role="tab" :aria-selected="i === coinTabAktiv" tabindex="0"
+            <div v-if="!vollbild" class="coinTabs" :class="{ zieht: tabZieht !== null }" role="tablist" :aria-label="t('chart.coinTabs.titel')"
+                @touchmove="tabTouchBewegt">
+                <div v-for="(tab, i) in coinTabs" :key="tab.symbol + '|' + tab.markt" class="coinTab"
+                    :class="{ an: i === coinTabAktiv, gezogen: i === tabZieht, zielVor: tabZieht !== null && i === tabZiel && i !== tabZieht && i !== tabZieht + 1,
+                        zielNach: tabZieht !== null && i === coinTabs.length - 1 && tabZiel === coinTabs.length && i !== tabZieht }"
+                    role="tab" :aria-selected="i === coinTabAktiv" tabindex="0" :title="t('chart.coinTabs.ziehen')"
+                    @pointerdown="tabZugStart($event, i)" @contextmenu="tabZieht !== null && $event.preventDefault()"
                     @click="waehleCoinTab(i)" @keydown.enter="waehleCoinTab(i)" @auxclick.middle.prevent="schliesseCoinTab(i)">
                     <span class="coinTabName">{{ tabName(tab) }}</span>
                     <button v-if="coinTabs.length > 1" type="button" class="coinTabZu" :title="t('chart.coinTabs.schliessen')"
@@ -1727,6 +1798,25 @@ watch(sichtbareAnzahl, async () => {
 
 .coinTab:hover {
     color: var(--text);
+}
+
+/* Umsortieren: gezogener Tab blass, Einfügestelle als Strich in der Hausfarbe */
+.coinTabs.zieht .coinTab {
+    cursor: grabbing;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.coinTab.gezogen {
+    opacity: 0.45;
+}
+
+.coinTab.zielVor {
+    box-shadow: -3px 0 0 var(--accent);
+}
+
+.coinTab.zielNach {
+    box-shadow: 3px 0 0 var(--accent);
 }
 
 .coinTab.an {

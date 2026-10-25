@@ -5207,6 +5207,7 @@
       "vorlagen": "Indicator templates"
     },
     "coinTabs": {
+      "ziehen": "Click to switch, drag to reorder (on phones: press and hold)",
       "titel": "Open coins",
       "neu": "Open coin in new tab",
       "schliessen": "Close tab"
