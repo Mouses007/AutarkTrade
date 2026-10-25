@@ -20,6 +20,12 @@ export const abrufQuelle = ref(null)
 let abfrage = null
 let nachgeholt = false
 
+/** Coin als Totalverlust markieren bzw. die Markierung aufheben, danach neu laden. */
+export async function setzeTotalverlust(asset, an) {
+    await axios.put('/api/portfolio/totalverlust', { asset, an })
+    await ladeUebersicht()
+}
+
 export async function ladeUebersicht() {
     laedt.value = !uebersicht.value
     try {

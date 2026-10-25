@@ -20,7 +20,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { uebersicht, abrufLaeuft, abrufQuelle, starteAbruf, staubZeigen, setzeStaub, verborgen, schalteVerborgen,
+import { uebersicht, abrufLaeuft, abrufQuelle, starteAbruf, staubZeigen, setzeStaub, verborgen, schalteVerborgen, setzeTotalverlust,
     chf, menge, prozent, vorZeit, farbeVon } from '../../stores/portfolio.js'
 import { Karte, Knopf, Reiter, Hinweis, Leerzustand, Symbol, Pille } from '../basis/index.js'
 import BilanzKarte from './BilanzKarte.vue'
@@ -244,6 +244,9 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span v-else>{{ p.kursQuelle }}</span>
                             <span v-if="p.kontrakt" class="pf-kontrakt" :title="p.kontrakt">{{ p.kontrakt.slice(0, 8) }}…</span>
                             <router-link :to="{ path: '/portfolio/bewegungen', query: { asset: p.asset } }">{{ t('portfolio.bewegungenZu', { a: p.asset }) }} →</router-link>
+                            <button v-if="p.ohneKurs || p.totalverlust" type="button" class="pf-totalverlust" :title="t('portfolio.totalverlustInfo')" @click="setzeTotalverlust(p.asset, !p.totalverlust)">
+                                {{ p.totalverlust ? t('portfolio.totalverlustAufheben') : t('portfolio.totalverlustMarkieren') }}
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -329,6 +332,8 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
 </template>
 
 <style scoped>
+.pf-totalverlust { background: none; border: 1px solid var(--line-stark); border-radius: var(--radius-pille); color: var(--muted); font: inherit; font-size: 0.78rem; padding: 0.15rem 0.7rem; cursor: pointer; }
+.pf-totalverlust:hover { color: var(--bad); border-color: var(--bad); }
 .pf-aufteilung { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font-size: 0.85rem; color: var(--muted); margin-top: 0.15rem; }
 .pf-aufteilung b { color: var(--text); font-variant-numeric: tabular-nums; }
 .pf-futures { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 1.2rem; margin-top: 0.75rem; padding: 0.7rem 1rem; border: 1px solid var(--line); border-radius: var(--radius-karte, 12px); background: var(--panel); color: var(--muted); text-decoration: none; font-size: 0.85rem; }

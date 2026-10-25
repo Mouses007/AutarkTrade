@@ -144,6 +144,8 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
     await addColumnIfNotExists('settings', 'portfolioPaare', (t) => t.text('portfolioPaare'))
     // { "2025": { pionex: { usd, quelle } } } — Futures-Guthaben am 31.12. laut Kontoauszug (ersetzt die Rückrechnung).
     await addColumnIfNotExists('settings', 'portfolioFuturesStichtag', (t) => t.text('portfolioFuturesStichtag'))
+    // { ASSET: { am } } — als Totalverlust markierte Coins (`totalverlust.js`).
+    await addColumnIfNotExists('settings', 'portfolioTotalverlust', (t) => t.text('portfolioTotalverlust'))
     // Solana-Verträge wurden bis 25.10.2026 kleingeschrieben gespeichert (Base58
     // unterscheidet Gross/Klein — so fand keine Börse den Token). Bekannte zurück.
     for (const echt of ['rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof']) {

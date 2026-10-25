@@ -26,6 +26,7 @@
  *   GET    /steuer/jahre                   Jahre mit Bewegungen
  *   PUT    /steuerkurs       {jahr, asset, chf|null, quelle}
  *   PUT    /futures-stichtag {jahr, boerse, usd|null, quelle}  Futures-Guthaben 31.12. laut Auszug
+ *   PUT    /totalverlust     {asset, an}  Coin als Totalverlust markieren (Wert 0, wo kein Kurs)
  */
 
 import crypto from 'crypto'
@@ -35,6 +36,7 @@ import { erkenneEingabe, kurzAdresse, WALLET_TYPEN, EVM_NETZE, EVM_VORGABE } fro
 import { berechneUebersicht } from './uebersicht.js'
 import { berechneBilanz, futuresKontenGemerkt } from './bilanz.js'
 import { setzeFuturesStichtag } from './futures-steuer.js'
+import { setzeTotalverlust } from './totalverlust.js'
 import { BOERSEN } from './futures-rechnung.js'
 import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
@@ -373,6 +375,14 @@ export function setupPortfolioRoutes(app) {
         } catch (e) { fehler(res, e) }
     })
 
+    app.put('/api/portfolio/totalverlust', async (req, res) => {
+        try {
+            const asset = String(req.body?.asset || '').trim()
+            if (!asset || asset.length > 60) return fehler(res, 'Asset fehlt', 400)
+            await setzeTotalverlust(asset, !!req.body?.an)
+            res.json({ ok: true })
+        } catch (e) { fehler(res, e) }
+    })
     app.put('/api/portfolio/futures-stichtag', async (req, res) => {
         try {
             const jahr = Number(req.body?.jahr), boerse = String(req.body?.boerse || '').toLowerCase()

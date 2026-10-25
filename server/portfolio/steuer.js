@@ -16,7 +16,8 @@
  */
 import { getKnex } from '../database.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from './steuer-rechnung.js'
-import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf } from './kurse.js'
+import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf, coingeckoKursChf } from './kurse.js'
+import { totalverluste, TOTALVERLUST } from './totalverlust.js'
 import { STABIL, FIAT } from './normal.js'
 import { uebergaben } from './uebergabe.js'
 import { futuresSteuerjahr } from './futures-steuer.js'
@@ -56,7 +57,7 @@ async function steuerkurs(asset, jahr, manuell, fxCache, datum = `${jahr}-12-31`
     const t = await tagesKursUsd(asset, datum)
     if (t.usd != null) return { chf: t.usd * fxCache.chf, quelle: `${t.quelle} ${tag} · EZB` }
     // Weder Binance noch Bitget: Bitpanda führt manche Coins allein (CSPR, WSI, DUEL).
-    const b = await bitpandaKursChf(asset, datum)
+    const b = await bitpandaKursChf(asset, datum) || await coingeckoKursChf(asset, datum)
     return b ? { chf: b.chf, quelle: `${b.quelle} ${tag}` } : { chf: null, quelle: 'kein Kurs' }
 }
 
@@ -77,6 +78,11 @@ async function bewerte(mengen, jahr, tokens = new Map(), datum = `${jahr}-12-31`
         if (token && !manuell.has(asset) && !(await gleicherCoin(asset, token.kontrakt, token.kette))) {
             kurse.set(asset + TOKEN, { chf: null, quelle: 'Token ohne Börsenkurs' })
         }
+    }
+    // Als Totalverlust markiert: 0 statt „kein Kurs" — ein echter Kurs gewinnt.
+    const tot = await totalverluste()
+    for (const [key, kurs] of kurse) {
+        if (kurs.chf == null && tot.has(key.split('\u0000')[0])) kurse.set(key, { chf: 0, quelle: TOTALVERLUST })
     }
     return kurse
 }

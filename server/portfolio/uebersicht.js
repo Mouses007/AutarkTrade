@@ -14,6 +14,7 @@
  * dort heisst die Abweichung „Historie unvollständig", nicht „Fehler".
  */
 
+import { totalverluste, TOTALVERLUST } from './totalverlust.js'
 import { getKnex } from '../database.js'
 import { kurseFuer } from './kurse.js'
 import { saldiere } from './normal.js'
@@ -42,6 +43,7 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     const { ersetzt } = uebergaben(alleBestaende, adressen, new Map(quellenStand.map((q) => [q.quelle, q])))
     const bestaende = ohneUebernommene(alleBestaende, ersetzt)
     const staubChf = Number(settings?.portfolioStaubChf ?? 1)
+    const tot = await totalverluste()
     const wahl = await boersenWahl()
 
     // Kurse für alles, was im Bestand liegt
@@ -68,13 +70,14 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         // für ALLE Orte dieses Coins, denn derselbe Coin hat überall denselben
         // Wert (CSPR bei Bitget ohne Kurs, bei Bitpanda bewertet).
         if (kurs.usd == null && quellKurs.has(key)) kurs = quellKurs.get(key)
+        if (kurs.usd == null && tot.has(String(b.asset).toUpperCase())) kurs = { usd: 0, quelle: TOTALVERLUST, totalverlust: true }
         const usd = kurs.usd != null ? b.menge * kurs.usd : null
         const chf = usd != null ? usd * fx.chf : null
         if (usd != null) gesamtUsd += usd; else ohneKurs++
         const anzeigeName = b.name === 'ohneSymbol' ? (kurs.symbol || `${b.asset}…`) : b.asset
         const p = jeAsset.get(key) || {
             schluessel: key, asset: anzeigeName, kontrakt: b.kontrakt, kette: b.kontrakt ? b.ort : null,
-            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, orte: [],
+            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, totalverlust: !!kurs.totalverlust, orte: [],
         }
         p.menge += b.menge
         if (usd != null) { p.usd += usd; p.chf += chf }

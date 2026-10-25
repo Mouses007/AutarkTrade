@@ -58,6 +58,11 @@ function starteKurs(p) {
     kursQuelle.value = 'estv'
     nextTick(() => document.querySelector('.ps-kursform input')?.focus())
 }
+async function totalverlust(asset, an) {
+    await axios.put('/api/portfolio/totalverlust', { asset, an })
+    bearbeite.value = null
+    await lade()
+}
 async function speichereKurs(asset, loeschen = false) {
     await axios.put('/api/portfolio/steuerkurs', { jahr: jahr.value, asset, chf: loeschen ? null : kursEingabe.value.replace(/['\s]/g, '').replace(',', '.'), quelle: kursQuelle.value })
     bearbeite.value = null
@@ -177,6 +182,8 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                                 <select v-model="kursQuelle"><option value="estv">ESTV-Kursliste</option><option value="manuell">{{ t('portfolio.stVonHand') }}</option></select>
                                 <Knopf art="haupt" klein @click="speichereKurs(p.asset)">{{ t('common.save') }}</Knopf>
                                 <Knopf v-if="/ESTV|von Hand/.test(p.kursQuelle)" art="leise" klein @click="speichereKurs(p.asset, true)">{{ t('portfolio.stKursZurueck') }}</Knopf>
+                                <Knopf v-if="p.kursQuelle === 'Totalverlust (markiert)'" art="leise" klein @click="totalverlust(p.asset, false)">{{ t('portfolio.totalverlustAufheben') }}</Knopf>
+                                <Knopf v-else-if="p.chf == null" art="leise" klein :titel="t('portfolio.totalverlustInfo')" @click="totalverlust(p.asset, true)">{{ t('portfolio.totalverlustMarkieren') }}</Knopf>
                                 <Knopf art="leise" klein @click="bearbeite = null">{{ t('common.cancel') }}</Knopf>
                             </div>
                             <div class="ps-orte">

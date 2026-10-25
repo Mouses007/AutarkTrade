@@ -317,6 +317,24 @@ export async function bitpandaKursChf(asset, datum) {
     return null
 }
 
+// ── CoinGecko: Coins, die keine unserer Börsen und Bitpanda nicht führt ──
+// Nur mit bekannter CoinGecko-ID — ein Kürzel allein ist dort mehrdeutig.
+// Ohne eigenen Schlüssel reicht der Verlauf 365 Tage zurück (gemessen 25.10.2026).
+const COINGECKO_ID = { BORG: 'swissborg', CHSB: 'swissborg' }
+
+/** Kurs in CHF am Tag `datum` laut CoinGecko, oder null. */
+export async function coingeckoKursChf(asset, datum) {
+    const id = COINGECKO_ID[String(asset).toUpperCase()]
+    if (!id) return null
+    try {
+        const { cgHole } = await import('../quellen/coingecko.js')
+        const [j, m, t] = datum.split('-')
+        const d = await cgHole(`/coins/${id}/history`, { date: `${t}-${m}-${j}`, localization: 'false' })
+        const chf = Number(d?.market_data?.current_price?.chf)
+        return chf > 0 ? { chf, quelle: 'CoinGecko' } : null
+    } catch { return null }   // Schlüssel fehlt, Schalter aus, älter als 365 Tage
+}
+
 /**
  * Tagesschlusskurs in USD (für die eingefrorene CHF-Bewertung einer Bewegung).
  * Nur Börsen-Coins; ein Token ohne Börsenpaar bleibt `null`.
