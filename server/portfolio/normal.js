@@ -40,9 +40,21 @@ function bewegung(b) {
         gebuehrMenge: b.gebuehrMenge || null,
         txHash: b.txHash || null,
         kette: b.kette || null,
-        kontrakt: b.kontrakt ? String(b.kontrakt).toLowerCase() : null,
+        kontrakt: normKontrakt(b.kontrakt),
         roh: b.roh ?? null,
     }
+}
+
+/**
+ * Vertragsadresse vereinheitlichen: EVM-Adressen (0x…) klein — dort ist die
+ * Schreibweise nur eine Prüfsumme. Alles andere bleibt, wie es ist: eine
+ * Solana-Adresse ist Base58, Gross/Klein gehört zur Adresse (RENDER war
+ * kleingeschrieben für keine Börse mehr auffindbar, 25.10.2026).
+ */
+export function normKontrakt(k) {
+    const s = String(k ?? '').trim()
+    if (!s) return null
+    return /^0x[0-9a-f]+$/i.test(s) ? s.toLowerCase() : s
 }
 
 // ── Bitget: /api/v2/tax/spot-record ──────────────────────────────────────

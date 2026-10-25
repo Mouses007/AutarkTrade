@@ -6498,6 +6498,7 @@
     "stWert": "Tax value CHF",
     "stKursAendern": "Enter price from the ESTV list",
     "stKursEintragen": "Enter price",
+    "stTokenInfo": "Token of the same name in a wallet whose contract matches no exchange coin — it does not get that coin's price. A manual price applies to all places.",
     "stKursPlatzhalter": "CHF per unit",
     "stVonHand": "manual",
     "stKursZurueck": "Delete own price",

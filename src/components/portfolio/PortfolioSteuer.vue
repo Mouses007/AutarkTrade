@@ -53,7 +53,7 @@ watch(jahr, lade)
 onMounted(async () => { await ladeJahre(); })
 
 function starteKurs(p) {
-    bearbeite.value = p.asset
+    bearbeite.value = p.asset + (p.token ? '·t' : '')
     kursEingabe.value = p.kursChf != null ? String(Number(p.kursChf.toPrecision(8))) : ''
     kursQuelle.value = 'estv'
     nextTick(() => document.querySelector('.ps-kursform input')?.focus())
@@ -160,9 +160,9 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                     <p class="ps-erkl">{{ t('portfolio.stWertschriftenErkl') }}</p>
                     <div class="ps-tabelle">
                         <div class="ps-zeile kopf"><span>Coin</span><span>{{ t('portfolio.stMenge') }}</span><span>{{ t('portfolio.stKurs') }}</span><span>{{ t('portfolio.stWert') }}</span></div>
-                        <div v-for="p in daten.vermoegen" :key="p.asset" class="ps-posten">
+                        <div v-for="p in daten.vermoegen" :key="p.asset + (p.token ? '·t' : '')" class="ps-posten">
                             <div class="ps-zeile" :class="{ ohne: p.chf == null }">
-                                <span class="ps-coin"><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}</span>
+                                <span class="ps-coin"><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}<Pille v-if="p.token" ton="neutral" :title="t('portfolio.stTokenInfo')">Token</Pille></span>
                                 <span>{{ menge(p.menge) }}</span>
                                 <span>
                                     <button type="button" class="ps-kurs" :title="t('portfolio.stKursAendern')" @click="starteKurs(p)">
@@ -172,7 +172,7 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                                 </span>
                                 <span><b v-if="p.chf != null">{{ chf(p.chf) }}</b><span v-else class="at-warn">—</span></span>
                             </div>
-                            <div v-if="bearbeite === p.asset" class="ps-kursform">
+                            <div v-if="bearbeite === p.asset + (p.token ? '·t' : '')" class="ps-kursform">
                                 <input v-model="kursEingabe" inputmode="decimal" :placeholder="t('portfolio.stKursPlatzhalter')" @keydown.enter="speichereKurs(p.asset)" @keydown.esc="bearbeite = null" />
                                 <select v-model="kursQuelle"><option value="estv">ESTV-Kursliste</option><option value="manuell">{{ t('portfolio.stVonHand') }}</option></select>
                                 <Knopf art="haupt" klein @click="speichereKurs(p.asset)">{{ t('common.save') }}</Knopf>

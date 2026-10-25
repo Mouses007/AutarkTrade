@@ -264,6 +264,59 @@ function kursEinfach(asset, fx, { karte, ersatz }) {
     return Number.isFinite(e) && e > 0 ? { usd: e, quelle: 'Bitget Spot' } : { usd: null, quelle: 'kein Kurs' }
 }
 
+// ── Bitpanda: Kurse für Coins, die weder Binance noch Bitget führen ──
+// (CSPR, WSI, DUEL …). Öffentlicher Endpunkt, gemessen 25.10.2026:
+// `/v3/ohlc/{coin}/CHF/year` = Tageskerzen der letzten 365 Tage,
+// `/five-years` = Wochenkerzen. Von/Bis werden ignoriert. Kerzenbeginn ist
+// 00:00 UTC. Der Kurs kommt direkt in CHF, ohne Umweg über USD.
+const BITPANDA_OHLC = 'https://api.bitpanda.com/v3/ohlc'
+const bitpandaSpeicher = new Map()   // `${coin}|${zeitraum}` → { zeit, kerzen }
+
+/**
+ * Kerze für einen Kalendertag (rein). Tageskerzen: die Kerze, die an diesem Tag
+ * (UTC) beginnt, Schlusskurs. Wochenkerzen: die Woche, die den Tag enthält —
+ * ihr Eröffnungskurs, also bis zu sechs Tage vor dem Stichtag (deshalb `ungefaehr`).
+ * @param {{t:number, o:number, c:number}[]} kerzen  t = Beginn in ms
+ */
+export function waehleBitpandaKerze(kerzen, datum, art) {
+    const tag = Date.parse(datum + 'T00:00:00Z')
+    if (art === 'tag') {
+        const k = kerzen.find((x) => x.t === tag)
+        return k && k.c > 0 ? { chf: k.c, ungefaehr: false } : null
+    }
+    const k = kerzen.find((x) => x.t <= tag && tag < x.t + 7 * 86400e3)
+    return k && k.o > 0 ? { chf: k.o, ungefaehr: true } : null
+}
+
+async function bitpandaKerzen(coin, zeitraum) {
+    const key = `${coin}|${zeitraum}`
+    const alt = bitpandaSpeicher.get(key)
+    if (alt && Date.now() - alt.zeit < 3600e3) return alt.kerzen
+    const r = await fetch(`${BITPANDA_OHLC}/${encodeURIComponent(coin)}/CHF/${zeitraum}`, { signal: AbortSignal.timeout(15000) })
+    if (!r.ok) { bitpandaSpeicher.set(key, { zeit: Date.now(), kerzen: [] }); return [] }
+    const d = await r.json()
+    const kerzen = (d?.data || []).map((x) => ({
+        t: Number(x.attributes?.time?.unix) * 1000, o: Number(x.attributes?.open), c: Number(x.attributes?.close),
+    })).filter((x) => Number.isFinite(x.t))
+    bitpandaSpeicher.set(key, { zeit: Date.now(), kerzen })
+    return kerzen
+}
+
+/** Kurs in CHF am Tag `datum` laut Bitpanda, oder null. */
+export async function bitpandaKursChf(asset, datum) {
+    const coin = String(asset).toUpperCase()
+    const tag = Date.parse(datum + 'T00:00:00Z')
+    try {
+        if (Date.now() - tag < 360 * 86400e3) {
+            const k = waehleBitpandaKerze(await bitpandaKerzen(coin, 'year'), datum, 'tag')
+            if (k) return { ...k, quelle: 'Bitpanda Tageskerze' }
+        }
+        const k = waehleBitpandaKerze(await bitpandaKerzen(coin, 'five-years'), datum, 'woche')
+        if (k) return { ...k, quelle: 'Bitpanda Wochenkerze (≈)' }
+    } catch { /* Bitpanda nicht erreichbar → kein Kurs */ }
+    return null
+}
+
 /**
  * Tagesschlusskurs in USD (für die eingefrorene CHF-Bewertung einer Bewegung).
  * Nur Börsen-Coins; ein Token ohne Börsenpaar bleibt `null`.

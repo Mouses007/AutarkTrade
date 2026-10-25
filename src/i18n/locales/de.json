@@ -6498,6 +6498,7 @@
     "stWert": "Steuerwert CHF",
     "stKursAendern": "Kurs aus der ESTV-Kursliste eintragen",
     "stKursEintragen": "Kurs eintragen",
+    "stTokenInfo": "Gleichnamiger Token auf einer Wallet, dessen Vertrag zu keinem Börsen-Coin passt — er bekommt dessen Kurs nicht. Kurs von Hand eintragen gilt für alle Orte.",
     "stKursPlatzhalter": "CHF je Einheit",
     "stVonHand": "von Hand",
     "stKursZurueck": "Eigenen Kurs löschen",

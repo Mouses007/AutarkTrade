@@ -16,7 +16,7 @@
  */
 import { getKnex } from '../database.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien } from './steuer-rechnung.js'
-import { tagesKursUsd, fxAm, gleicherCoin } from './kurse.js'
+import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf } from './kurse.js'
 import { STABIL, FIAT } from './normal.js'
 import { uebergaben } from './uebergabe.js'
 import { futuresSteuerjahr } from './futures-steuer.js'
@@ -41,7 +41,7 @@ async function quellenStand() {
 }
 
 /** Steuerkurs (CHF je Einheit) eines Assets am Jahresende, mit Quelle. */
-async function steuerkurs(asset, jahr, manuell, fxCache, token, datum = `${jahr}-12-31`) {
+async function steuerkurs(asset, jahr, manuell, fxCache, datum = `${jahr}-12-31`) {
     const m = manuell.get(asset)
     if (m) return { chf: m.chf, quelle: m.quelle === 'estv' ? 'ESTV-Kursliste' : 'von Hand' }
     if (asset === 'CHF') return { chf: 1, quelle: 'CHF' }
@@ -53,12 +53,11 @@ async function steuerkurs(asset, jahr, manuell, fxCache, token, datum = `${jahr}
         return fxCache.eur ? { chf: fxCache.chf / fxCache.eur, quelle: `EZB ${tag}` } : { chf: null, quelle: 'kein Wechselkurs' }
     }
     if (asset in STABIL) return { chf: fxCache.chf, quelle: `Stablecoin · EZB ${tag}` }
-    // Ein Wallet-Token, der nur wie ein Börsen-Coin heisst, bekommt dessen Kurs NICHT.
-    if (token && !(await gleicherCoin(asset, token.kontrakt, token.kette))) {
-        return { chf: null, quelle: 'Token ohne Börsenkurs' }
-    }
     const t = await tagesKursUsd(asset, datum)
-    return t.usd != null ? { chf: t.usd * fxCache.chf, quelle: `${t.quelle} ${tag} · EZB` } : { chf: null, quelle: 'kein Kurs' }
+    if (t.usd != null) return { chf: t.usd * fxCache.chf, quelle: `${t.quelle} ${tag} · EZB` }
+    // Weder Binance noch Bitget: Bitpanda führt manche Coins allein (CSPR, WSI, DUEL).
+    const b = await bitpandaKursChf(asset, datum)
+    return b ? { chf: b.chf, quelle: `${b.quelle} ${tag}` } : { chf: null, quelle: 'kein Kurs' }
 }
 
 /**
@@ -71,9 +70,34 @@ async function bewerte(mengen, jahr, tokens = new Map(), datum = `${jahr}-12-31`
     const fxCache = {}
     const kurse = new Map()
     for (const asset of new Set([...mengen.keys()].map((k2) => k2.split('\u0000')[1]))) {
-        kurse.set(asset, await steuerkurs(asset, jahr, manuell, fxCache, tokens.get(asset), datum))
+        kurse.set(asset, await steuerkurs(asset, jahr, manuell, fxCache, datum))
+        // Ein Wallet-Token, der nur wie ein Börsen-Coin heisst, bekommt dessen
+        // Kurs NICHT — aber nur an den Orten, wo er als Token liegt (siehe kursAn).
+        const token = tokens.get(asset)
+        if (token && !manuell.has(asset) && !(await gleicherCoin(asset, token.kontrakt, token.kette))) {
+            kurse.set(asset + TOKEN, { chf: null, quelle: 'Token ohne Börsenkurs' })
+        }
     }
     return kurse
+}
+
+const TOKEN = '\u0000token'
+
+/**
+ * Kurs einer Position (`quelle\0asset`). Bis 25.10.2026 galt die Token-Prüfung
+ * für das ganze Asset: weil RENDER auch auf einer Solana-Wallet lag, verloren
+ * die 152 RENDER bei Crypto.com ihren Börsenkurs.
+ */
+function kursAn(kurse, tokenOrte, key) {
+    const asset = key.split('\u0000')[1]
+    return (tokenOrte.has(key) && kurse.get(asset + TOKEN)) || kurse.get(asset)
+}
+
+/** Orte, an denen ein Asset als Token mit Vertrag gebucht ist (`quelle\0asset`). */
+function tokenOrteVon(bew) {
+    const s = new Set()
+    for (const b of bew) if (b.kontrakt && b.kette) s.add(`${b.quelle}\u0000${b.asset}`)
+    return s
 }
 
 /** Assets, die irgendwo als Token mit Vertrag gebucht sind → { kontrakt, kette }. */
@@ -153,6 +177,7 @@ export async function berechneSteuerjahr(jahr) {
     // Rundungsreste (Bitpanda: SHIB −1.4e-9) sind kein Bestand und kein Loch.
     for (const [key, m] of mengen) if (Math.abs(m) < 1e-8) mengen.delete(key)
     const tokens = tokenVertraege(bew)
+    const tokenOrte = tokenOrteVon(bew)
     const gestern = new Date(jetzt - 86400e3).toISOString().slice(0, 10)
     const kurse = await bewerte(mengen, jahr, tokens, laufend ? gestern : `${jahr}-12-31`)
     const sicherheitJe = new Map()
@@ -183,12 +208,14 @@ export async function berechneSteuerjahr(jahr) {
             if (!(quelle.startsWith('i:') && FIAT.includes(asset))) negativ.push({ quelle: name(quelle), asset, menge })
             continue
         }
-        const kurs = kurse.get(asset)
-        const p = jeAsset.get(asset) || { asset, menge: 0, kursChf: kurs.chf, kursQuelle: kurs.quelle, chf: kurs.chf != null ? 0 : null, orte: [] }
+        const kurs = kursAn(kurse, tokenOrte, key)
+        // Ein namensgleicher Token ohne Kurs steht als eigene Zeile neben dem Börsen-Coin.
+        const gruppe = kurs === kurse.get(asset + TOKEN) ? asset + TOKEN : asset
+        const p = jeAsset.get(gruppe) || { asset, token: gruppe !== asset, menge: 0, kursChf: kurs.chf, kursQuelle: kurs.quelle, chf: kurs.chf != null ? 0 : null, orte: [] }
         p.menge += menge
         if (kurs.chf != null) p.chf += menge * kurs.chf
         p.orte.push({ quelle, name: name(quelle), menge, sicherheit: sicherheitJe.get(key) || 'beleg' })
-        jeAsset.set(asset, p)
+        jeAsset.set(gruppe, p)
     }
     const vermoegen = [...jeAsset.values()].sort((a, b) => (b.chf ?? -1) - (a.chf ?? -1))
     const vermoegenSumme = vermoegen.reduce((s, p) => s + (p.chf || 0), 0)
@@ -209,7 +236,7 @@ export async function berechneSteuerjahr(jahr) {
         for (const [key, m] of m0) if (m <= 0) m0.delete(key)
         const k0 = await bewerte(m0, jahr - 1, tokens)
         vermoegenAnfang = 0
-        for (const [key, m] of m0) { const kurs = k0.get(key.split('\u0000')[1]); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
+        for (const [key, m] of m0) { const kurs = kursAn(k0, tokenOrte, key); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
     } catch { vermoegenAnfang = null }
     const volumenSpot = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.chfWert != null)
         .reduce((s, b) => s + Math.abs(Number(b.chfWert)), 0)

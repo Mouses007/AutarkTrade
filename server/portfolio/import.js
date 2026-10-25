@@ -17,7 +17,7 @@
  * Einzahlung, ist aber keine und erscheint nicht in der Prüfliste).
  */
 
-import { ARTEN } from './normal.js'
+import { ARTEN, normKontrakt } from './normal.js'
 
 export const IMPORT_ARTEN = ARTEN
 export const EINORDNUNGEN = ['transfer', 'kauf', 'einkommen', 'ignorieren']
@@ -120,7 +120,7 @@ export function leseImportCsv(text) {
             gegenAsset, gegenMenge: gegenAsset ? gegenMenge : null,
             gebuehrAsset: gebuehrMenge ? gebuehrAsset : null, gebuehrMenge: gebuehrMenge || null,
             chfWert, txHash: wert(f, 'txhash') || null, kette: wert(f, 'kette') || null,
-            kontrakt: wert(f, 'kontrakt') ? wert(f, 'kontrakt').toLowerCase() : null,
+            kontrakt: normKontrakt(wert(f, 'kontrakt')),
             einordnung, sicherheit, notiz: wert(f, 'notiz') || null,
         })
         const o = orte[ort] || (orte[ort] = { n: 0, von: zeit, bis: zeit })
