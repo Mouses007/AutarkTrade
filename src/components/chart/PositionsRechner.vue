@@ -5,11 +5,14 @@
  * Gebühr. Gerechnet wird in `shared/tradeRechner.js`; die Zeichnung zeigt das
  * Ergebnis im Chart, hier stehen die Eingaben und eine Kurzfassung.
  *
+ * Ein Fenster an der Position: offen nach dem Anlegen und per Doppelklick auf
+ * die Zeichnung (`ChartPanel.vue` `oeffneRechner`), zu mit × oder Esc.
+ *
  * Gespeichert in `stil.rechner` der Zeichnung — geändert wird beim Verlassen
  * eines Feldes bzw. mit Enter, nicht bei jedem Tastendruck (jede Änderung ist
  * ein Speichern).
  */
-import { computed } from 'vue'
+import { computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { rechnePosition, rechnerEingabe, MODI } from '../../../shared/tradeRechner.js'
 import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
@@ -19,7 +22,7 @@ const props = defineProps({
     mmr: { type: Number, default: 0.004 },
     formatPreis: { type: Function, default: (p) => String(p) },
 })
-const emit = defineEmits(['aendere'])
+const emit = defineEmits(['aendere', 'schliesse'])
 const { t } = useI18n()
 
 const ein = computed(() => rechnerEingabe(stilFuer(props.zeichnung).rechner || {}))
@@ -34,11 +37,19 @@ function setze(feld, wert) {
     emit('aendere', { stil: { ...(props.zeichnung.stil || {}), rechner: neu } })
 }
 const aus = (e) => e.target.value
+// Esc schliesst — im Erfassungsmodus, vor der Chart-Tastatur (dort hiesse Esc „Auswahl weg")
+function esc(e) { if (e.key === 'Escape') { e.stopPropagation(); emit('schliesse') } }
+onMounted(() => window.addEventListener('keydown', esc, true))
+onBeforeUnmount(() => window.removeEventListener('keydown', esc, true))
 const zahl = (v, st = 2) => (v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('de-CH', { maximumFractionDigits: st, minimumFractionDigits: st }))
 </script>
 
 <template>
-    <div class="rechner" @mousedown.stop @pointerdown.stop @keydown.stop>
+    <div class="rechner" @mousedown.stop @pointerdown.stop @keydown.stop @dblclick.stop>
+        <div class="kopf">
+            <b>{{ t('chart.rechner.titel') }}</b>
+            <button type="button" class="zu" :title="t('common.close')" :aria-label="t('common.close')" @click="emit('schliesse')">×</button>
+        </div>
         <label class="feld">
             <select class="at-feld klein" :value="ein.modus" @change="setze('modus', aus($event))">
                 <option v-for="m in MODI" :key="m" :value="m">{{ t('chart.rechner.modus.' + m) }}</option>
@@ -81,22 +92,42 @@ const zahl = (v, st = 2) => (v == null || !Number.isFinite(v) ? '—' : v.toLoca
 
 <style scoped>
 .rechner {
-    /* Unten links über der Zeitachse — oben stehen Legende und Stil-Leiste */
+    /* Fenster an der Position; left/top setzt das Panel */
     position: absolute;
-    bottom: 34px;
-    left: 8px;
-    z-index: 6;
+    z-index: 7;
+    width: 300px;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 6px 10px;
     padding: 6px 8px;
-    max-width: min(560px, calc(100% - 86px));
+    max-width: calc(100% - 16px);
     background: var(--panel);
     border: 1px solid var(--line-stark);
     border-radius: var(--radius-klein);
     box-shadow: var(--schatten);
     font-size: 12px;
+}
+
+.kopf {
+    flex-basis: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text);
+}
+
+.zu {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.zu:hover {
+    color: var(--text);
 }
 
 .feld {

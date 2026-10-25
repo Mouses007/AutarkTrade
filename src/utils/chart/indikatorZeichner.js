@@ -346,6 +346,26 @@ export class IndikatorZeichner {
         else e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand())
     }
 
+    /**
+     * Welche LSOB-Box (Indikator „LSOB-Boxen", nur gültige, nur gezeigte Seiten)
+     * liegt unter Zeit `t` (ms; null = rechts der Daten) und Preis? Bei mehreren
+     * die schmalste. → { box: {seite, t, tief, hoch}, params } oder null.
+     */
+    lsobBoxBei(t, preis) {
+        let best = null
+        for (const e of this.eintraege) {
+            if (e.instanz.typ !== 'lsobCv' || e.instanz.sichtbar === false) continue
+            const p = e.instanz.params || {}
+            for (const b of e.werte?._cv?.boxen || []) {
+                if (!b.gueltig || (b.seite === 'short' ? p.cvShort === false : p.cvLong === false)) continue
+                if (t != null && t < b.t) continue
+                if (!(preis >= b.tief && preis <= b.hoch)) continue
+                if (!best || b.hoch - b.tief < best.box.hoch - best.box.tief) best = { box: { seite: b.seite, t: b.t, tief: b.tief, hoch: b.hoch }, params: { ...p } }
+            }
+        }
+        return best
+    }
+
     /** Vektorkerzen: Farben an das Panel geben; ohne VWAP Vector einmal null (zurück zur Vorgabe). */
     farbenMelden(nurLetzte) {
         const e = this.eintraege.find((x) => x.def.zeichner === 'vwapVector' && x.werte._vv?.stufen)

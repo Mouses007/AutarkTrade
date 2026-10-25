@@ -475,7 +475,19 @@ export class ZeichenEbene {
         if (t && (t.z.typ === 'text' || t.z.typ === 'horizontale' || t.z.typ === 'strahlH' || t.z.typ === 'rechteck')) {
             e.stopPropagation()
             this.rueckruf.textBearbeiten?.(t.z.id)
+        } else if (t?.z.typ === 'position') {
+            // Doppelklick auf eine Long/Short-Position öffnet den Positionsrechner
+            e.stopPropagation()
+            this.rueckruf.positionOeffnen?.(t.z.id)
         }
+    }
+
+    /** Pixel des Einstiegs einer Position (für das Rechner-Fenster) — null, wenn nicht im Bild. */
+    positionPixel(z) {
+        const pk = this.punkteVon(z)
+        if (!pk?.length) return null
+        const x1 = this.zuX(pk[0].t), x2 = this.zuX(pk[1]?.t), y = this.zuY(pk[0].p)
+        return x1 == null || y == null ? null : { links: Math.min(x1, x2 ?? x1), rechts: Math.max(x1, x2 ?? x1), y }
     }
 
     /** Neue Punkte beim Ziehen: ganzer Körper oder ein Anker. */

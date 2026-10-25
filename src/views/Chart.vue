@@ -776,11 +776,16 @@ function alarmMomentum() {
 /**
  * LSOB-Alarm: wie Momentum. Hat das Panel den Indikator „LSOB-Boxen", nimmt der
  * Alarm dessen Einstellungen — er soll dieselben Boxen melden, die der Chart zeigt.
+ * Mit `treffer` (Rechtsklick auf eine Box): ein Alarm auf genau diese Box.
  */
-function alarmLsob() {
+function alarmLsob(treffer = null) {
     const p = aktivesPanel.value
     const inst = (p.indikatoren || []).find((x) => x.typ === 'lsobCv' && x.sichtbar !== false) || (p.indikatoren || []).find((x) => x.typ === 'lsobCv')
-    alarmVorlage.value = { symbol: p.symbol, markt: p.markt, art: 'lsob', interval: p.interval, lsobParams: inst?.params ? { ...inst.params } : null }
+    const params = treffer?.params || inst?.params
+    alarmVorlage.value = {
+        symbol: p.symbol, markt: p.markt, art: 'lsob', interval: p.interval,
+        lsobParams: params ? { ...params } : null, box: treffer?.box || null,
+    }
 }
 
 function alarmBearbeiten(a) {
@@ -1216,7 +1221,7 @@ watch(sichtbareAnzahl, async () => {
                         :zeichnungen-versteckt="!!daten.zeichnen?.versteckt" @werkzeug-fertig="werkzeug = null"
                         :alarm-linien="alarmLinienFuer(p)" @alarm-bei-preis="(x) => { fokus(i); alarmBeiPreis(x) }"
                         @alarm-auf-zeichnung="(z) => { fokus(i); alarmAufZeichnung(z) }"
-                        @alarm-momentum="() => { fokus(i); alarmMomentum() }" @alarm-lsob="() => { fokus(i); alarmLsob() }"
+                        @alarm-momentum="() => { fokus(i); alarmMomentum() }" @alarm-lsob="(tr) => { fokus(i); alarmLsob(tr) }"
                         @alle-loeschen="() => { fokus(i); alleLoeschen() }"
                         @panel="(patch) => Object.assign(daten.panels[i], patch)" />
                 </div>
@@ -1270,7 +1275,7 @@ watch(sichtbareAnzahl, async () => {
                         @backtest="(b) => aktivesPanelRef?.setzeBacktest(b)" />
                     <AlarmReiter v-else-if="daten.seitenleiste.reiter === 'alarme'" :symbol="aktivesPanel.symbol"
                         :markt="aktivesPanel.markt" :kurs="aktuellerKurs" :watchlists="watchlists"
-                        @neu="alarmBeiPreis" @neu-momentum="alarmMomentum" @neu-lsob="alarmLsob" @bearbeite="alarmBearbeiten" />
+                        @neu="alarmBeiPreis" @neu-momentum="alarmMomentum" @neu-lsob="alarmLsob()" @bearbeite="alarmBearbeiten" />
                     <KiReiter v-else-if="daten.seitenleiste.reiter === 'ki'" :panel="aktivesPanel"
                         :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis" />
                     </div>

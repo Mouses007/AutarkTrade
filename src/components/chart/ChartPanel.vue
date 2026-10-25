@@ -252,6 +252,7 @@ function baueChart() {
             auswahl: (id) => { auswahlId.value = id },
             werkzeugFertig: () => emit('werkzeugFertig'),
             textBearbeiten: textBearbeiten,
+            positionOeffnen: (id) => { auswahlId.value = id; ebene?.setzeAuswahl(id); oeffneRechner(id) },
             kiKlick: (schluessel, x, y) => { kiWahl.value = schluessel ? { schluessel, x, y } : null },
         },
     })
@@ -671,7 +672,10 @@ function rechtsklick(e) {
     } catch { /* ohne Treffer */ }
     // Zeit unter dem Zeiger (für „Position hier"); rechts der Daten null → letzte Kerze
     const zeitT = chart.value?.timeScale().coordinateToTime(e.clientX - r.left)
-    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung, zeit: zeitT != null ? vonLwc(zeitT) : null }
+    const zeit = zeitT != null ? vonLwc(zeitT) : null
+    // Liegt eine LSOB-Box unter dem Zeiger? Dann bietet das Menü einen Alarm auf genau diese Box an.
+    const lsob = zeichner?.lsobBoxBei(zeit, preis) || null
+    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung, zeit, lsob }
 }
 
 /** Liegt y (px im Panel) im Fenster eines Momentum-Radar-Indikators? */
@@ -883,7 +887,31 @@ async function zeichnungNeu({ typ, punkte, stil: vorgabeStil = {} }) {
     }
     const z = await legeAn({ symbol: props.panel.symbol, typ, punkte, stil, sichtbarAuf: null, gesperrt: false, versteckt: false })
     if (z) { auswahlId.value = z.id; ebene?.setzeAuswahl(z.id) }
+    // Neue Position: gleich den Rechner öffnen — Grösse/Verlust und Hebel gehören zum Anlegen
+    if (z && typ === 'position') oeffneRechner(z.id)
 }
+
+/*
+ * Positionsrechner als Fenster an der Position: offen nach dem Anlegen und auf
+ * Doppelklick, zu mit ×, Esc oder wenn eine andere Zeichnung gewählt wird.
+ * Die Lage wird beim Öffnen einmal bestimmt (rechts neben der Box, sonst links).
+ */
+const rechnerFenster = ref(null)     // { id, x, y }
+function oeffneRechner(id) {
+    const z = alleZeichnungen.value.find((x) => x.id === id)
+    if (!z || z.typ !== 'position') return
+    if (!z.stil?.rechner) aendere(props.panel.symbol, id, { stil: { ...(z.stil || {}), rechner: { ...(letzterStil('position').rechner || RECHNER_VORGABE) } } })
+    const breite = huelle.value?.clientWidth || 800
+    const hoehe = huelle.value?.clientHeight || 500
+    const px = ebene?.positionPixel(z)
+    const B = 300, H = 230
+    let x = px ? px.rechts + 12 : 60
+    if (x + B > breite - 70) x = px ? px.links - B - 12 : 60
+    x = Math.max(8, Math.min(x, breite - B - 70))
+    const y = Math.max(8, Math.min((px?.y ?? 80) - 40, hoehe - H - 30))
+    rechnerFenster.value = { id, x, y }
+}
+watch(auswahlId, (id) => { if (rechnerFenster.value && rechnerFenster.value.id !== id) rechnerFenster.value = null })
 
 function textBearbeiten(id) {
     const z = alleZeichnungen.value.find((x) => x.id === id)
@@ -1439,8 +1467,9 @@ defineExpose({
             :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
             @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />
-        <PositionsRechner v-if="ausgewaehlt?.typ === 'position' && ausgewaehlt.stil?.rechner" :zeichnung="ausgewaehlt" :mmr="mmr"
-            :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)" @aendere="aendereAuswahl" />
+        <PositionsRechner v-if="rechnerFenster && ausgewaehlt?.id === rechnerFenster.id && ausgewaehlt.stil?.rechner" :zeichnung="ausgewaehlt" :mmr="mmr"
+            :style="{ left: rechnerFenster.x + 'px', top: rechnerFenster.y + 'px' }"
+            :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)" @aendere="aendereAuswahl" @schliesse="rechnerFenster = null" />
 
         <!-- Klick auf einen gestrichelten KI-Vorschlag: übernehmen oder verwerfen, ohne den Reiter zu öffnen. -->
         <div v-if="kiWahlInfo" class="kiWahl" data-ki-generiert="true" :style="{ left: kiWahlInfo.links + 'px', top: kiWahlInfo.oben + 'px' }"
@@ -1474,7 +1503,7 @@ defineExpose({
                 <hr />
             </template>
             <button @click="alarmHier"><Symbol name="glocke" /> {{ t('chart.alarm.hier') }}</button>
-            <button v-if="(panel.indikatoren || []).some((i) => i.typ === 'lsobCv')" @click="kontext = null; emit('alarmLsob')">
+            <button v-if="kontext.lsob" @click="emit('alarmLsob', kontext.lsob); kontext = null">
                 <Symbol name="glocke" /> {{ t('chart.alarm.lsobHier') }}</button>
             <button @click="positionHier('long')"><Symbol name="hoch" /> {{ t('chart.rechner.longHier') }}</button>
             <button @click="positionHier('short')"><Symbol name="runter" /> {{ t('chart.rechner.shortHier') }}</button>

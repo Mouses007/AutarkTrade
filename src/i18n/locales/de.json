@@ -5856,10 +5856,14 @@
         "divAlle": "allen Divergenzen"
       },
       "momentumHier": "Momentum-Alarm …",
-      "lsobHier": "LSOB-Alarm …",
+      "lsobHier": "LSOB-Alarm auf diese Box …",
       "neuLsob": "LSOB-Alarm (Symbol oder Watchlists)",
       "lsob": {
         "ereignis": "Auslösen bei",
+        "boxUngueltig": "Box ungültig — abgeschaltet",
+        "dieseBox": "diese Box ({box})",
+        "boxHinweis": "Meldet, wenn der Kurs wieder in die Box läuft (eine {tf}-Kerze berührt sie, die vorige nicht), und wenn die Box gebrochen wird — dann schaltet sich der Alarm ab. Für Watchlists oben umstellen.",
+        "boxTfFehlt": "Auf {tf} gibt es keinen LSOB-Alarm — Chart auf 5m, 15m, 1h, 4h, 1d oder 1w stellen.",
         "retest": "Retest einer Box (Docht berührt, Körper bleibt drin)",
         "box": "neuer Box (Sweep bestätigt)",
         "beide": "Retest und neuer Box",

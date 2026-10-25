@@ -51,7 +51,7 @@ export async function ladeAlarme() {
 }
 
 const MEHRFACH = ['momentum', 'lsob']
-const LSOB_WAS = { retest: 'Retest', box: 'neue Box' }
+const LSOB_WAS = { retest: 'Retest', box: 'neue Box', beruehrt: 'Box berührt', bruch: 'Box gebrochen' }
 
 /**
  * Ein Treffer eines Momentum-Alarms: „BTCUSDT 15m ● Long" (● gross, • klein);
@@ -72,6 +72,10 @@ export function beschreibe(a) {
         const groesse = a.punktgroesse === 'alle' ? '●• grosse + kleine' : '● grosse'
         const r = b.richtung === 'long' ? ' Long' : b.richtung === 'short' ? ' Short' : ''
         return `Momentum ${groesse}${b.divergenz ? ' mit Divergenz' : ''}${r} · ${(a.zeiteinheiten || []).join(', ')}`
+    }
+    if (a.art === 'lsob' && b.box) {
+        const z = (p) => Number(Number(p).toPrecision(7))
+        return `LSOB ${b.box.seite === 'long' ? 'Long' : 'Short'}-Box ${z(b.box.tief)}–${z(b.box.hoch)} · ${(a.zeiteinheiten || []).join(', ')}`
     }
     if (a.art === 'lsob') {
         const was = { retest: 'Retest', box: 'neue Box', beide: 'Retest + neue Box' }[b.ereignis] || 'Retest'

@@ -49,7 +49,7 @@ import {
     pruefeMomentum, faellig, alarmPaare, reihenFuer, neuerStand, momentumText, paarSchluessel, letzteGeschlossene,
     MOMENTUM_ZEITEBENEN, OHNE_GROSSE, MOMENTUM_RICHTUNGEN, PUNKTGROESSEN, KERZEN_JE_ABRUF, MAX_PAARE, MAX_SYMBOLE, MAX_WATCHLISTS,
 } from './chart-alarm-momentum.js'
-import { pruefeLsob, lsobText, lsobParams, LSOB_ZEITEBENEN, LSOB_RICHTUNGEN, LSOB_EREIGNISSE, LSOB_KERZEN } from './chart-alarm-lsob.js'
+import { pruefeLsob, pruefeLsobBox, boxEingabe, lsobText, lsobParams, LSOB_ZEITEBENEN, LSOB_RICHTUNGEN, LSOB_EREIGNISSE, LSOB_KERZEN } from './chart-alarm-lsob.js'
 import { getClosedCandles } from './market-data.js'
 import { seitenGewicht } from './marktdaten/binance.js'
 import { stelleZu } from './hype-radar/zustellung.js'
@@ -135,6 +135,11 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
             bed.ereignis = LSOB_EREIGNISSE.includes(b.ereignis) ? b.ereignis : 'retest'
             const params = lsobParams(b.params)
             if (Object.keys(params).length) bed.params = params
+            if (b.box != null) {
+                const box = boxEingabe(b.box)
+                if (!box) return { fehler: 'Box ungültig' }
+                bed.box = box
+            }
         }
         if (b.schwere !== undefined) bed.schwere = ['info', 'warnung', 'kritisch'].includes(b.schwere) ? b.schwere : 'warnung'
         aus.bedingung = JSON.stringify(bed)
@@ -211,6 +216,12 @@ async function pruefeMehrfachFelder(roh, knex, teilweise, aus, art) {
     const alt = roh.id ? alarmZeile(await knex('chart_alarme').where('id', roh.id).first()) : null
     const tfsJetzt = daten.zeiteinheiten ? JSON.parse(daten.zeiteinheiten) : alt?.zeiteinheiten || []
     const groesseJetzt = daten.punktgroesse || alt?.punktgroesse || 'gross'
+    // Alarm auf eine Box: die Box liegt auf einem Symbol in einer Zeiteinheit
+    const boxJetzt = aus.bedingung ? parse(aus.bedingung, {}).box : alt?.bedingung?.box
+    if (art === 'lsob' && boxJetzt) {
+        const ids = daten.watchlistIds ? JSON.parse(daten.watchlistIds) : alt?.watchlistIds || []
+        if (ids.length || tfsJetzt.length !== 1) return { fehler: 'Ein Alarm auf eine Box gilt für ein Symbol in einer Zeiteinheit — für Watchlists die Box abwählen' }
+    }
     if (momentum && groesseJetzt === 'gross' && tfsJetzt.some((tf) => OHNE_GROSSE.includes(tf))) {
         return { fehler: 'Auf 1w gibt es keine grossen Punkte (keine höhere Zeiteinheit stimmt zu) — eine Wahl ohne „grosse" nehmen oder 1w abwählen' }
     }
@@ -479,11 +490,12 @@ const ARTEN = {
     lsob: {
         reihen: (p) => [{ symbol: p.symbol, markt: p.markt, tf: p.tf, n: LSOB_KERZEN }],
         pruefe: (a, p, kerzen, jetzt) => {
-            const erg = pruefeLsob({
-                bedingung: a.bedingung, tf: p.tf, kerzen, jetzt,
-                gemeldetBis: a.stand?.k?.[paarSchluessel(p)], abMs: a.stand?.ab || a.erstelltAm,
-            })
-            return erg.ausloesen ? { ...p, kerzeT: erg.kerzeT, ereignisse: erg.ereignisse, preis: erg.preis } : null
+            const zeit = { tf: p.tf, kerzen, jetzt, gemeldetBis: a.stand?.k?.[paarSchluessel(p)], abMs: a.stand?.ab || a.erstelltAm }
+            const erg = a.bedingung?.box
+                ? pruefeLsobBox({ box: a.bedingung.box, params: a.bedingung.params, ...zeit })
+                : pruefeLsob({ bedingung: a.bedingung, ...zeit })
+            if (erg.nurAbschalten) return { nurAbschalten: true }
+            return erg.ausloesen ? { ...p, kerzeT: erg.kerzeT, ereignisse: erg.ereignisse, preis: erg.preis, abschalten: !!erg.abschalten } : null
         },
         text: (a, treffer) => lsobText(a, treffer, zahl),
         daten: (tr) => ({ symbol: tr.symbol, markt: tr.markt, tf: tr.tf, ereignisse: tr.ereignisse, preis: tr.preis }),
@@ -575,20 +587,31 @@ export async function momentumTakt() {
         for (const { a, paare, alle } of jeAlarm) {
             const def = ARTEN[a.art]
             const treffer = []
+            let abschalten = false
             for (const p of paare) {
                 if (!faelligSet.has(artPaar(a.art, p)) || !vollstaendig(a.art, p)) continue
                 const kerzen = Object.fromEntries(def.reihen(p).map((r) => [r.tf, reihen.get(reiheSchluessel(r))]))
                 const tr = def.pruefe(a, p, kerzen, jetzt)
-                if (tr) treffer.push(tr)
+                if (tr?.nurAbschalten) abschalten = true
+                else if (tr) treffer.push(tr)
             }
-            if (!treffer.length) continue
+            if (!treffer.length) {
+                // Box ungültig geworden, ohne dass es eine Kerze gemeldet hätte (Server war aus): still aus.
+                if (abschalten) {
+                    await knex('chart_alarme').where('id', a.id).update({
+                        aktiv: 0, verlauf: JSON.stringify([...a.verlauf, { t: jetzt, hinweis: 'boxUngueltig' }].slice(-MAX_VERLAUF)),
+                    })
+                }
+                continue
+            }
             // Führung vor dem Melden verlängern (wie im Preis-Takt) — sonst meldete ein zweiter Prozess dasselbe.
             if (!(await verlaengereFuehrung(FUEHRUNG_KEY))) break
             const t = Date.now()
             const patch = {
                 stand: JSON.stringify(neuerStand(a.stand, treffer, alle)),
                 letzteZeit: t, ausgeloestAm: t, anzahlAusgeloest: a.anzahlAusgeloest + treffer.length,
-                ...(a.einmalig ? { aktiv: 0 } : {}),
+                // Box gebrochen: der Alarm hat nichts mehr zu bewachen
+                ...(a.einmalig || treffer.some((tr) => tr.abschalten) ? { aktiv: 0 } : {}),
             }
             // Nur melden, wenn niemand die Zeile seit dem Lesen geändert hat (letzteZeit ist der Stempel).
             const getroffen = await knex('chart_alarme').where({ id: a.id, letzteZeit: a.letzteZeit }).update(patch)

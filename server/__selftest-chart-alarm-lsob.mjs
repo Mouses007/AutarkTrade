@@ -12,7 +12,7 @@
 import fs from 'node:fs'
 import { lsobCv } from '../shared/lsobCv.js'
 import {
-    pruefeLsob, lsobEreignisse, lsobParams, passtEreignis, lsobText, LSOB_KERZEN, LSOB_MIN_KERZEN,
+    pruefeLsob, pruefeLsobBox, boxEingabe, lsobEreignisse, lsobParams, passtEreignis, lsobText, LSOB_KERZEN, LSOB_MIN_KERZEN,
 } from './chart-alarm-lsob.js'
 import { TF_MS, VERZUG_MS, MAX_VERSPAETUNG_MS } from './chart-alarm-momentum.js'
 
@@ -90,6 +90,41 @@ check('Einstellungen: Unsinn ergibt nichts', Object.keys(lsobParams('x')).length
 const mitP = lsobEreignisse(bis(kerzen.length - 1), { pivotLaenge: 3 })
 const ohneP = lsobCv(bis(kerzen.length - 1), { pivotLaenge: 3 })
 check('Einstellungen kommen in der Rechnung an', mitP.every((e) => e.typ !== 'retest' || ohneP.signale.some((s) => s.boxT === e.boxT)))
+
+// ── Alarm auf eine Box ──────────────────────────────────────────────────────
+// Eine Box mit Retest: der Retest ist eine Berührung (die Kerze davor lag ausserhalb oder nicht?)
+// Boxen mit Retest: bis zum Retest ist die Box sicher gültig. Gesucht: eine Kerze, die die
+// Box berührt, deren Vorgänger nicht — der Kurs läuft wieder hinein.
+const beruehrtB = (k, b) => k.l <= b.hoch && k.h >= b.tief
+let boxR = null
+let eintritt = -1
+for (const b of voll.boxen.filter((x) => x.signalT != null && x.i > 60)) {
+    for (let i = b.i + 6; i <= idx(b.signalT); i++) if (beruehrtB(kerzen[i], b) && !beruehrtB(kerzen[i - 1], b)) { eintritt = i; break }
+    if (eintritt > 0) { boxR = { seite: b.seite, t: b.t, tief: b.tief, hoch: b.hoch }; break }
+}
+const beruehrtK = (k) => beruehrtB(k, boxR)
+check('Fixture: Box mit Eintritt gefunden', eintritt > 0)
+const ein = pruefeLsobBox({ box: boxR, tf: '1h', kerzen: { '1h': bis(eintritt) }, jetzt: nach(eintritt) })
+check('Box: Kurs läuft in die Box → „berührt"', ein.ausloesen && ein.ereignisse[0].typ === 'beruehrt' && ein.ereignisse[0].boxT === boxR.t, JSON.stringify(ein).slice(0, 160))
+if (beruehrtK(kerzen[eintritt + 1])) {
+    const drin = pruefeLsobBox({ box: boxR, tf: '1h', kerzen: { '1h': bis(eintritt + 1) }, jetzt: nach(eintritt + 1) })
+    check('Box: nächste Kerze noch drin → keine zweite Meldung', !drin.ausloesen && drin.grund === 'schonDrin', drin.grund)
+}
+const davor = pruefeLsobBox({ box: boxR, tf: '1h', kerzen: { '1h': bis(eintritt - 1) }, jetzt: nach(eintritt - 1) })
+check('Box: Kerze davor (ausserhalb) meldet nichts', !davor.ausloesen)
+// Bruch
+const gebrochen = voll.boxen.find((b) => !b.gueltig && b.endeT != null && idx(b.endeT) > 60)
+const boxB = { seite: gebrochen.seite, t: gebrochen.t, tief: gebrochen.tief, hoch: gebrochen.hoch }
+const ib = idx(gebrochen.endeT)
+const bruch = pruefeLsobBox({ box: boxB, tf: '1h', kerzen: { '1h': bis(ib) }, jetzt: nach(ib) })
+check('Box: Kerze, die sie ungültig macht → „gebrochen" und abschalten', bruch.ausloesen && bruch.ereignisse[0].typ === 'bruch' && bruch.abschalten)
+const spaeter = pruefeLsobBox({ box: boxB, tf: '1h', kerzen: { '1h': bis(ib + 3) }, jetzt: nach(ib + 3) })
+check('Box: schon länger gebrochen (Server war aus) → still abschalten', !spaeter.ausloesen && spaeter.nurAbschalten)
+check('Box: dieselbe Kerze nicht zweimal', pruefeLsobBox({ box: boxR, tf: '1h', kerzen: { '1h': bis(eintritt) }, jetzt: nach(eintritt), gemeldetBis: kerzen[eintritt].t }).grund === 'schonGemeldet')
+check('Box-Eingabe: Tief ≥ Hoch, falsche Seite → null', boxEingabe({ seite: 'long', t: 1, tief: 2, hoch: 2 }) === null && boxEingabe({ seite: 'x', t: 1, tief: 1, hoch: 2 }) === null)
+check('Box-Eingabe: gültig', JSON.stringify(boxEingabe({ seite: 'short', t: 5, tief: '1', hoch: 2, foo: 1 })) === '{"seite":"short","t":5,"tief":1,"hoch":2}')
+const bt = lsobText({}, [{ symbol: 'ETHUSDT', markt: 'futures', tf: '15m', preis: 2500, ereignisse: [{ typ: 'beruehrt', seite: 'long', tief: 2490, hoch: 2510 }] }])
+check('Box-Text', bt.titel === 'LSOB ETHUSDT 15m: Long-Box berührt' && bt.text.startsWith('ETHUSDT 15m: Long-Box 2490–2510 berührt'), bt.titel + ' | ' + bt.text)
 
 // ── Text ────────────────────────────────────────────────────────────────────
 const { titel, text } = lsobText({ notiz: 'Plan A' }, [{ symbol: 'ETHUSDT', markt: 'futures', tf: '1h', preis: 2500, ereignisse: [{ typ: 'retest', seite: 'short', tief: 2490, hoch: 2510 }] }])

@@ -5856,10 +5856,14 @@
         "divAlle": "all divergences"
       },
       "momentumHier": "Momentum alert …",
-      "lsobHier": "LSOB alert …",
+      "lsobHier": "LSOB alert on this box …",
       "neuLsob": "LSOB alert (symbol or watchlists)",
       "lsob": {
         "ereignis": "Trigger on",
+        "boxUngueltig": "Box invalid — switched off",
+        "dieseBox": "this box ({box})",
+        "boxHinweis": "Notifies when price runs back into the box (a {tf} candle touches it, the previous one did not) and when the box breaks — then the alert switches off. Switch above for watchlists.",
+        "boxTfFehlt": "There is no LSOB alert on {tf} — set the chart to 5m, 15m, 1h, 4h, 1d or 1w.",
         "retest": "box retest (wick touches, body stays inside)",
         "box": "new box (sweep confirmed)",
         "beide": "retest and new box",
