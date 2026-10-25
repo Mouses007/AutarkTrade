@@ -5690,9 +5690,9 @@
         "marge": "Marge"
       },
       "hebel": "Hebel",
-      "konto": "Konto",
+      "konto": "Kontostand",
       "kontoTipp": "Kontostand in USDT (optional) — dann steht das Risiko auch in % vom Konto",
-      "optional": "optional",
+      "optional": "für % Risiko",
       "gebuehr": "Gebühr",
       "gebuehrTipp": "Gebühr je Seite in % (Taker, z. B. 0,06) — beim max. Verlust eingerechnet",
       "liq": "Liq",

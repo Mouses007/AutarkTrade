@@ -440,6 +440,8 @@ export class ZeichenEbene {
             if (neu) {
                 this.ziehen.bewegt = true
                 this.vorschau.set(this.ziehen.id, neu)
+                // Wer mitrechnet (Positionsrechner), bekommt die Punkte schon während des Ziehens
+                this.rueckruf.ziehen?.(this.ziehen.id, neu)
                 this.requestUpdate()
             }
             return
@@ -465,6 +467,7 @@ export class ZeichenEbene {
         // ist ein Abbruch, kein Loslassen — die halbe Ziehvorschau wurde sonst gespeichert.
         if (z.bewegt && neu && e.type !== 'pointercancel') this.rueckruf.aendern?.(z.id, { punkte: neu })
         else this.vorschau.delete(z.id)
+        this.rueckruf.ziehen?.(z.id, null)
         this.requestUpdate()
     }
 

@@ -252,6 +252,7 @@ function baueChart() {
             auswahl: (id) => { auswahlId.value = id },
             werkzeugFertig: () => emit('werkzeugFertig'),
             textBearbeiten: textBearbeiten,
+            ziehen: (id, punkte) => { ziehPunkte.value = punkte ? { id, punkte } : null },
             positionOeffnen: (id) => { auswahlId.value = id; ebene?.setzeAuswahl(id); oeffneRechner(id) },
             kiKlick: (schluessel, x, y) => { kiWahl.value = schluessel ? { schluessel, x, y } : null },
         },
@@ -897,6 +898,12 @@ async function zeichnungNeu({ typ, punkte, stil: vorgabeStil = {} }) {
  * gewählt wird.
  */
 const rechnerFenster = ref(null)     // { id }
+// Punkte der Zeichnung, die gerade gezogen wird — der Rechner rechnet damit, bevor gespeichert ist
+const ziehPunkte = shallowRef(null)  // { id, punkte }
+const rechnerZeichnung = computed(() => {
+    const z = ausgewaehlt.value
+    return z && ziehPunkte.value?.id === z.id ? { ...z, punkte: ziehPunkte.value.punkte } : z
+})
 function oeffneRechner(id) {
     const z = alleZeichnungen.value.find((x) => x.id === id)
     if (!z || z.typ !== 'position') return
@@ -1459,7 +1466,7 @@ defineExpose({
             :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
             @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />
-        <PositionsRechner v-if="rechnerFenster && ausgewaehlt?.id === rechnerFenster.id && ausgewaehlt.stil?.rechner" :zeichnung="ausgewaehlt" :mmr="mmr"
+        <PositionsRechner v-if="rechnerFenster && ausgewaehlt?.id === rechnerFenster.id && ausgewaehlt.stil?.rechner" :zeichnung="rechnerZeichnung" :mmr="mmr"
             :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)" @aendere="aendereAuswahl" @schliesse="rechnerFenster = null" />
 
         <!-- Klick auf einen gestrichelten KI-Vorschlag: übernehmen oder verwerfen, ohne den Reiter zu öffnen. -->

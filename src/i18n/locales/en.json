@@ -5690,9 +5690,9 @@
         "marge": "Margin"
       },
       "hebel": "Leverage",
-      "konto": "Account",
+      "konto": "Balance",
       "kontoTipp": "Account balance in USDT (optional) — then the risk is also shown in % of the account",
-      "optional": "optional",
+      "optional": "for % risk",
       "gebuehr": "Fee",
       "gebuehrTipp": "Fee per side in % (taker, e.g. 0.06) — included in the max. loss",
       "liq": "Liq",
