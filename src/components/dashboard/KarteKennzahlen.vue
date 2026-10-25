@@ -23,6 +23,14 @@ const pa = (feld) => gewinnAnalyse[F.value + feld]
 /** NaN, null und undefined zeigen „-" (null warf früher beim Formatieren). */
 const leer = (x) => x === null || x === undefined || Number.isNaN(Number(x))
 const zwei = (x) => (leer(x) ? '-' : Number(x).toFixed(2))
+// P/L-Ratio ohne Verlusttrade: die Rechnung liefert 0 (Teilen durch null), das
+// liest sich als „kein Vorteil". Gezeigt wird ∞ wie beim Profitfaktor, ohne
+// Gewinn und Verlust „–" (Audit FIN-03).
+const plRatioText = computed(() => {
+    const verlust = Number(pa('AvLossPerShare')) || 0
+    if (verlust === 0) return (Number(pa('AvWinPerShare')) || 0) > 0 ? '∞' : '-'
+    return zwei(pa('R'))
+})
 const waehrung = (x) => (leer(x) ? '-' : formGeld2(x))
 const nurPositiv = (x) => (Number(x) > 0 ? formGeld2(x) : '-')
 
@@ -44,7 +52,7 @@ const mfeR = computed(() => pa('MfeR'))
                 </tr>
                 <tr>
                     <td>{{ t('dashboard.plRatio') }} <InfoTipp schluessel="dashboard.plRatioTooltip" /></td>
-                    <td class="zahl at-fett">{{ zwei(pa('R')) }}</td>
+                    <td class="zahl at-fett">{{ plRatioText }}</td>
                 </tr>
                 <tr v-if="mfeR !== null && mfeR !== undefined">
                     <td>{{ t('dashboard.mfePlRatio') }} <InfoTipp schluessel="dashboard.mfePlRatioTooltip" /></td>

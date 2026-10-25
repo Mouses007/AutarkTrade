@@ -38,9 +38,11 @@ export function kontostand({ benutzer, broker, allTimeNetPnL, positionen, bonus 
 }
 
 /**
- * Trades von heute im aktuellen Filter. `td` ist der Tagesstempel des
- * Imports — liegt die Handelszeitzone westlich von UTC, fällt ein heutiger
- * Trade heraus (offener Punkt der Spezifikation, bewusst nachgebildet).
+ * Trades von heute im aktuellen Filter, nach der SCHLUSSZEIT (`exitTime`) in
+ * der Handelszeitzone. Bis 24.10.2026 zählte der Tagesstempel `td` (UTC-
+ * Mitternacht): westlich von UTC fiel ein heutiger Trade heraus, östlich kam
+ * kurz nach Mitternacht einer von gestern dazu (Audit FIN-05). Ohne
+ * Schlusszeit bleibt `td` der Rückfall.
  */
 export function heuteZaehler(trades, zone, jetzt = dayjs()) {
     const tz = zone || 'Europe/Brussels'
@@ -48,7 +50,8 @@ export function heuteZaehler(trades, zone, jetzt = dayjs()) {
     const bis = jetzt.tz(tz).endOf('day').unix()
     let anzahl = 0, gewinner = 0, verlierer = 0, pnl = 0
     for (const t of trades || []) {
-        if (!(t?.td >= von && t.td <= bis)) continue
+        const zeit = Number(t?.exitTime) || Number(t?.td)
+        if (!(zeit >= von && zeit <= bis)) continue
         const wert = zahl(t.netProceeds ?? t.grossProceeds ?? 0)
         anzahl += 1
         pnl += wert
@@ -102,7 +105,7 @@ export function ratio(art, totals, fall) {
 
 /**
  * Verlust-Trades, die zwischenzeitlich im Gewinn waren (MFE). Nenner sind
- * ALLE Verlust-Trades, auch die ohne Exkursion — die Quote sagt also, wie oft
+ * ALLE Verlust-Trades ausser Bots, auch die ohne Exkursion — die Quote sagt also, wie oft
  * es nachweislich passiert ist, nicht wie oft unter den gemessenen.
  */
 export function mfeAnalyse(trades, exkursionen, fall) {
@@ -115,6 +118,10 @@ export function mfeAnalyse(trades, exkursionen, fall) {
     for (const t of trades) {
         const erloes = zahl(t[`${fall}Proceeds`])
         if (erloes >= 0) continue
+        // Bots nicht: ihre Menge ist USDT-Volumen, Menge × Kursabstand ergab
+        // „10'000 USDT verschenkt" bei einem Verlust von 20 (Audit FIN-02) —
+        // dieselbe Ausnahme wie `mengeFuerR` in mfe-kern.js.
+        if (t.botType || t.category === 'bot') continue
         verlustTrades += 1
         const ex = nachTrade.get(t.id)
         if (!ex || !ex.mfePrice) continue

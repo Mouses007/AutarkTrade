@@ -103,7 +103,9 @@ export async function refreshAccountBalance({ broker, force = false } = {}) {
                             vol = qty * price
                         }
                         totalVol += vol
-                        if (day.dateUnix >= cutoff30d) {
+                        // Nach der Schlusszeit, nicht nach dem Tagesstempel (UTC-Mitternacht):
+                        // sonst fiel ein Trade bis zu 24 h zu früh aus dem Fenster (Audit FIN-06).
+                        if ((Number(trade.exitTime) || day.dateUnix) >= cutoff30d) {
                             vol30d += vol
                         }
                     }

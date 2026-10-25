@@ -85,6 +85,16 @@ function botCoin(t) {
     return null
 }
 function isCoinM(t) { return botCoin(t) !== null }
+// Seit 24.10.2026 (Audit FIN-01) werden Coin-M-Trades beim Import bzw. per
+// Migration in USDT umgeschrieben (`shared/coinM.js`, `einheitUsdt`); die
+// Coin-Werte stehen dann in netCoin/feeCoin/fundingCoin. Nur ein NOCH NICHT
+// umgerechneter Coin-M-Trade braucht die Umrechnung hier.
+const inCoin = (t) => isCoinM(t) && !t.einheitUsdt
+/** Betrag in der Coin: umgerechnete Trades aus *Coin, alte direkt. */
+function coinBetrag(t, feld) {
+    if (!t.einheitUsdt) return t[feld] ?? 0
+    return { netSharePL: t.netCoin, grossSharePL: t.grossCoin, tradingFee: t.feeCoin, fundingFee: t.fundingCoin }[feld] ?? 0
+}
 
 // Börsen mit Bot-Unterstützung. Bitunix/Bitget bieten (noch) keine Bots →
 // eigene "Coming soon"-Ansicht statt leerer Tabelle.
@@ -111,11 +121,11 @@ function pl(t) {
 // ===== USD-Sicht (für die zusammengefassten Statistiken) =====
 // Coin-M-Bots werden mit ihrem echten USD-Wert eingerechnet (pnlUsdt invers
 // gerechnet; SOL-Komponenten via Schlusskurs quoteCloseP). USDT-Bots: nativ.
-function netUsd(t)    { return isCoinM(t) ? parseFloat(t.pnlUsdt ?? 0) : (t.netSharePL ?? 0) }
+function netUsd(t)    { return inCoin(t) ? parseFloat(t.pnlUsdt ?? 0) : (t.netSharePL ?? 0) }
 function investUsd(t) { return isCoinM(t) ? parseFloat(t.investUsdt ?? 0) : (t.investment ?? 0) }
-function feeUsd(t)    { const f = t.tradingFee ?? 0; return isCoinM(t) ? f * (parseFloat(t.quoteCloseP) || 0) : f }
-function fundUsd(t)   { const f = t.fundingFee ?? 0; return isCoinM(t) ? f * (parseFloat(t.quoteCloseP) || 0) : f }
-function grossUsd(t)  { return isCoinM(t) ? (netUsd(t) + feeUsd(t) - fundUsd(t)) : (t.grossSharePL ?? 0) }
+function feeUsd(t)    { const f = t.tradingFee ?? 0; return inCoin(t) ? f * (parseFloat(t.quoteCloseP) || 0) : f }
+function fundUsd(t)   { const f = t.fundingFee ?? 0; return inCoin(t) ? f * (parseFloat(t.quoteCloseP) || 0) : f }
+function grossUsd(t)  { return inCoin(t) ? (netUsd(t) + feeUsd(t) - fundUsd(t)) : (t.grossSharePL ?? 0) }
 function plUsd(t)     { return isNet.value ? netUsd(t) : grossUsd(t) }
 
 // Coin-M-Bots je Coin (SOL/BTC) nativ aggregieren
@@ -125,12 +135,12 @@ const coinMGroups = computed(() => {
         const coin = botCoin(t) || '?'
         const e = map.get(coin) || { coin, count: 0, net: 0, gross: 0, fees: 0, funding: 0, usdt: 0, wins: 0, losses: 0 }
         e.count++
-        e.net += t.netSharePL ?? 0
-        e.gross += t.grossSharePL ?? 0
-        e.fees += t.tradingFee ?? 0
-        e.funding += t.fundingFee ?? 0
+        e.net += coinBetrag(t, 'netSharePL')
+        e.gross += coinBetrag(t, 'grossSharePL')
+        e.fees += coinBetrag(t, 'tradingFee')
+        e.funding += coinBetrag(t, 'fundingFee')
         e.usdt += parseFloat(t.pnlUsdt ?? 0)   // echter USD-Wert (invers gerechnet)
-        const p = pl(t)
+        const p = isNet.value ? coinBetrag(t, 'netSharePL') : coinBetrag(t, 'grossSharePL')
         if (p > 0) e.wins++; else if (p < 0) e.losses++
         map.set(coin, e)
     }
@@ -156,9 +166,10 @@ const closedBotsList = computed(() => {
         .sort((a, b) => (b.exitTime ?? 0) - (a.exitTime ?? 0))
         .map(t => {
             const coin = botCoin(t)            // null ⇒ USDT-margined
-            const net = t.netSharePL ?? 0
+            // Coin-M: Beträge in der Coin (umgerechnete Trades tragen sie in *Coin)
+            const net = coin ? coinBetrag(t, 'netSharePL') : (t.netSharePL ?? 0)
             const grid = t.gridProfit          // undefined bei Alt-Importen (kein Backfill)
-            const funding = t.fundingFee ?? 0
+            const funding = coin ? coinBetrag(t, 'fundingFee') : (t.fundingFee ?? 0)
             return {
                 id: t.id,
                 symbol: displaySymbol(t.symbol),
@@ -167,7 +178,7 @@ const closedBotsList = computed(() => {
                 net,
                 grid: grid ?? 0,
                 funding,
-                tradingFee: t.tradingFee ?? 0,
+                tradingFee: coin ? coinBetrag(t, 'tradingFee') : (t.tradingFee ?? 0),
                 trend: net - (grid ?? 0) - funding,   // Pionex-Definition (inkl. Trading-Fee)
                 hasGrid: grid !== undefined,
                 // USDT-Sekundärwert (nur Coin-M); sonst == net

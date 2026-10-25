@@ -46,7 +46,11 @@ function ringAnteile(id) {
         const zufrieden = liste.filter(x => x.satisfaction == true || x.satisfaction == 1).length
         const unzufrieden = liste.filter(x => x.satisfaction == false || x.satisfaction == 0).length
         /* eslint-enable eqeqeq */
-        return [zufrieden / liste.length, unzufrieden / liste.length]
+        // Dritte Stufe (2 = ✊ gemischt) als eigenes Segment: vorher fiel sie aus
+        // beiden Zählern, blieb aber im Nenner — der Mitteltext sagte 33 %, die
+        // Fläche zeigte 50/50 (Audit FIN-04). Jetzt addieren sich die drei zu 1.
+        const gemischt = liste.length - zufrieden - unzufrieden
+        return [zufrieden / liste.length, unzufrieden / liste.length, gemischt / liste.length]
     }
     const r = gewinnAnalyse[`${f}R`]
     if (!r || Number.isNaN(r) || !(r > 0)) return null
@@ -64,7 +68,7 @@ export async function zeichneDiagramme(param) {
         }
         if (param !== 'init' || !sichtbar(knoten)) continue
         const anteile = ringAnteile(id)
-        if (anteile) await ringDiagramm(id, anteile[0], anteile[1])
+        if (anteile) await ringDiagramm(id, anteile[0], anteile[1], anteile[2] || 0)
     }
 
     if (typeof document === 'undefined') return

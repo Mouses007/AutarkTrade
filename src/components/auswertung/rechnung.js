@@ -1,16 +1,22 @@
 /**
  * Rechnungen der Auswertungsseite (Spezifikation ansichten.md W.2–W.6).
  *
- * Rein: Eingaben herein, Zahlen heraus. „Gewinner" heisst hier überall
- * `trade[fall + 'Wins'] > 0` — Break-even zählt damit als Verlierer, anders
- * als auf dem Dashboard (`istGewinn`). Das ist die gespeicherte Rechenregel
- * dieser Seite und bleibt, bis jemand sie bewusst umstellt.
+ * Rein: Eingaben herein, Zahlen heraus. „Gewinner" heisst hier dasselbe wie
+ * auf dem Dashboard: Break-even zählt als Gewinn (`istGewinn`, Kanon in
+ * `shared/gewinn.js`). Bis 24.10.2026 stand hier `trade[fall + 'Wins'] > 0` —
+ * ein Trade mit 0 war damit auf dem Dashboard ein Gewinn und hier ein Verlust,
+ * und die Win-Rates beider Seiten wichen ab (Audit FIN-07).
  */
+import { istGewinn } from '../../../shared/gewinn.js'
 
 const rund = (x) => Math.round(x)
 
 export function istGewinner(trade, fall) {
-    return Number(trade?.[`${fall}Wins`]) > 0
+    // Der Import hat die Entscheidung schon getroffen (`…WinsCount`); ältere
+    // Zeilen ohne Zähler entscheiden am Ergebnis selbst.
+    const zaehler = trade?.[`${fall}WinsCount`]
+    if (zaehler !== undefined && zaehler !== null) return Number(zaehler) > 0
+    return istGewinn(trade?.[`${fall}SharePL`] ?? trade?.[`${fall}Proceeds`])
 }
 
 /** Tag-Liste eines Eintrags aus `tags`: Liste, JSON-Text oder nichts. */

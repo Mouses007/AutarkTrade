@@ -11,6 +11,7 @@ import { migriereS12 } from './migrationen/s12.js'
 import { migriereS13 } from './migrationen/s13.js'
 import { migriereS15 } from './migrationen/s15.js'
 import { migrierePortfolio } from './migrationen/portfolio.js'
+import { migriereCoinMUsdt } from './migrationen/coinm-usdt.js'
 
 let knex = null
 
@@ -3614,6 +3615,9 @@ async function runMigrations(knex, client) {
     // Schalter `quellenOhneFreigabe` (Vorgabe an) und Rückführung der
     // S12-Einstellungen, siehe `server/migrationen/s15.js`. Additiv.
     await migriereS15(knex, addColumnIfNotExists)
+
+    // Coin-M-Bots in USDT (Audit FIN-01): gespeicherte Pionex-Tage einmal umrechnen. Idempotent.
+    await migriereCoinMUsdt(knex)
 
     // ── Spot-Portfolio (additiv, ohne SCHEMA_VERSION) ───────
     await migrierePortfolio(knex, addColumnIfNotExists)

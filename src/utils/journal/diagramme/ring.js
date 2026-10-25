@@ -25,7 +25,7 @@ function mittelText(id, gruen) {
  * Ring zeichnen. Datenpunkte tragen nur `value` — die Farbe kommt über die
  * Reihe, damit die Werte unverändert (nicht normiert) bleiben.
  */
-export function ringDiagramm(id, gruen, rot) {
+export function ringDiagramm(id, gruen, rot, grau = 0) {
     const knoten = element(id)
     if (!knoten) return Promise.resolve()
     const p = palette()
@@ -40,7 +40,8 @@ export function ringDiagramm(id, gruen, rot) {
             emphasis: { disabled: true, scale: false },
             silent: true,
             itemStyle: {
-                color: (punkt) => (punkt.dataIndex === 0 ? p.good : mitDeckkraft(p.bad, 0.85)),
+                // drittes Segment (Zufriedenheit „gemischt"): gedämpft
+                color: (punkt) => (punkt.dataIndex === 0 ? p.good : punkt.dataIndex === 2 ? mitDeckkraft(p.muted, 0.6) : mitDeckkraft(p.bad, 0.85)),
                 borderColor: p.panel,
                 borderWidth: 2,
             },
@@ -54,7 +55,7 @@ export function ringDiagramm(id, gruen, rot) {
                 },
             },
             labelLine: { show: false },
-            data: [{ value: gruen }, { value: rot }],
+            data: grau > 0 ? [{ value: gruen }, { value: rot }, { value: grau }] : [{ value: gruen }, { value: rot }],
         }],
     })
     return Promise.resolve()

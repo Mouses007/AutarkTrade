@@ -1,3 +1,4 @@
+import { tradeInUsdt } from '../../shared/coinM.js'
 import axios from 'axios'
 import dayjs from './journal/zeit.js'
 import { dbCreate, dbFind, dbDelete, dbUpdate as dbUpdateRecord, dbFindTradeIdByPositionId } from './db.js'
@@ -493,7 +494,9 @@ function createPionexTradeObj(pos, i) {
     } else {
         obj.category = 'futures'
     }
-    return obj
+    // Coin-M: Beträge in USDT umschreiben, sonst summiert das Journal SOL als USDT
+    // (Audit FIN-01). Coin-Werte bleiben in netCoin/feeCoin/… für die Bot-Seite.
+    return tradeInUsdt(obj)
 }
 
 /**
