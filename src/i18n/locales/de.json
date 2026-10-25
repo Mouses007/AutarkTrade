@@ -3,7 +3,7 @@
     "name": "AutarkTrade",
     "teil1": "Autark",
     "teil2": "Trade",
-    "claim": "Dein Trading-Journal, lokal und unabhängig",
+    "claim": "Deine Trading-Software, lokal und unabhängig",
     "testbetrieb": "Testbetrieb",
     "testbetriebText": "Kopie der Live-Datenbank – keine Hintergrund-Takte, keine Mails, kein Push. Knöpfe funktionieren.",
     "modi": "Modi",
@@ -15,7 +15,8 @@
       "live": "Marktradar, Nachrichten, Orderbuch und Live-Trading.",
       "research": "Hype-Radar und Coin-Radar: Neues finden, Handelbares messen.",
       "agent": "Strategien bauen, testen und im Papierbetrieb laufen lassen.",
-      "lernen": "Fachbegriffe und Zusammenhänge im Karteikasten."
+      "lernen": "Fachbegriffe und Zusammenhänge im Karteikasten.",
+      "portfolio": "Bestände aller Börsen und Wallets, Bilanz und Steuerauszug für die Schweiz."
     },
     "version": "Version {v}"
   },

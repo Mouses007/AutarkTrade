@@ -3,7 +3,7 @@
     "name": "AutarkTrade",
     "teil1": "Autark",
     "teil2": "Trade",
-    "claim": "Your trading journal, local and independent",
+    "claim": "Your trading software, local and independent",
     "testbetrieb": "Test mode",
     "testbetriebText": "Copy of the live database – no background jobs, no mail, no push. Buttons still work.",
     "modi": "Modes",
@@ -15,7 +15,8 @@
       "live": "Market radar, news, order book and live trading.",
       "research": "Hype radar and coin radar: find what is new, measure what is tradable.",
       "agent": "Build, test and paper-trade strategies.",
-      "lernen": "Terms and market mechanics as flash cards."
+      "lernen": "Terms and market mechanics as flash cards.",
+      "portfolio": "Holdings across all exchanges and wallets, balance and Swiss tax statement."
     },
     "version": "Version {v}"
   },
