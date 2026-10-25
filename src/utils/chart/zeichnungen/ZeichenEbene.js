@@ -482,14 +482,6 @@ export class ZeichenEbene {
         }
     }
 
-    /** Pixel des Einstiegs einer Position (für das Rechner-Fenster) — null, wenn nicht im Bild. */
-    positionPixel(z) {
-        const pk = this.punkteVon(z)
-        if (!pk?.length) return null
-        const x1 = this.zuX(pk[0].t), x2 = this.zuX(pk[1]?.t), y = this.zuY(pk[0].p)
-        return x1 == null || y == null ? null : { links: Math.min(x1, x2 ?? x1), rechts: Math.max(x1, x2 ?? x1), y }
-    }
-
     /** Neue Punkte beim Ziehen: ganzer Körper oder ein Anker. */
     gezogen(x, y, shift, magnetAn = this.magnetAn) {
         const z = this.ziehen

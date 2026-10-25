@@ -892,24 +892,16 @@ async function zeichnungNeu({ typ, punkte, stil: vorgabeStil = {} }) {
 }
 
 /*
- * Positionsrechner als Fenster an der Position: offen nach dem Anlegen und auf
- * Doppelklick, zu mit ×, Esc oder wenn eine andere Zeichnung gewählt wird.
- * Die Lage wird beim Öffnen einmal bestimmt (rechts neben der Box, sonst links).
+ * Positionsrechner: steht unter der Stil-Leiste (oben rechts), offen nach dem
+ * Anlegen und auf Doppelklick, zu mit ×, Esc oder wenn eine andere Zeichnung
+ * gewählt wird.
  */
-const rechnerFenster = ref(null)     // { id, x, y }
+const rechnerFenster = ref(null)     // { id }
 function oeffneRechner(id) {
     const z = alleZeichnungen.value.find((x) => x.id === id)
     if (!z || z.typ !== 'position') return
     if (!z.stil?.rechner) aendere(props.panel.symbol, id, { stil: { ...(z.stil || {}), rechner: { ...(letzterStil('position').rechner || RECHNER_VORGABE) } } })
-    const breite = huelle.value?.clientWidth || 800
-    const hoehe = huelle.value?.clientHeight || 500
-    const px = ebene?.positionPixel(z)
-    const B = 300, H = 230
-    let x = px ? px.rechts + 12 : 60
-    if (x + B > breite - 70) x = px ? px.links - B - 12 : 60
-    x = Math.max(8, Math.min(x, breite - B - 70))
-    const y = Math.max(8, Math.min((px?.y ?? 80) - 40, hoehe - H - 30))
-    rechnerFenster.value = { id, x, y }
+    rechnerFenster.value = { id }
 }
 watch(auswahlId, (id) => { if (rechnerFenster.value && rechnerFenster.value.id !== id) rechnerFenster.value = null })
 
@@ -1468,7 +1460,6 @@ defineExpose({
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
             @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />
         <PositionsRechner v-if="rechnerFenster && ausgewaehlt?.id === rechnerFenster.id && ausgewaehlt.stil?.rechner" :zeichnung="ausgewaehlt" :mmr="mmr"
-            :style="{ left: rechnerFenster.x + 'px', top: rechnerFenster.y + 'px' }"
             :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)" @aendere="aendereAuswahl" @schliesse="rechnerFenster = null" />
 
         <!-- Klick auf einen gestrichelten KI-Vorschlag: übernehmen oder verwerfen, ohne den Reiter zu öffnen. -->
