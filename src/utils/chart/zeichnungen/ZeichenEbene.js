@@ -17,6 +17,7 @@ import {
 } from './geometrie.js'
 import { werkzeug, stilFuer } from './werkzeuge.js'
 import { volumenprofil } from '../../../../shared/volumenprofil.js'
+import { rechnePosition } from '../../../../shared/tradeRechner.js'
 
 const ANKER = 5
 const TREFFER = 6
@@ -52,6 +53,7 @@ export class ZeichenEbene {
         this.serie = serie
         this.rueckruf = rueckruf
         this.formatPreis = formatPreis || ((p) => String(p))
+        this.mmr = 0.004
         this.zeiten = []
         this.kerzen = []
         this.iv = 3_600_000
@@ -796,6 +798,7 @@ export class ZeichenEbene {
                 this.beschriftung(ctx, `${w.long ? 'Long' : 'Short'} · ${w.rr != null ? w.rr.toFixed(2) : '—'} R${w.stimmig ? '' : ' ⚠'}`, l + 4, ye - 4, '#e0e0e0', { hinten: 'rgba(0,0,0,0.55)' })
                 this.beschriftung(ctx, `Ziel ${this.formatPreis(pk[1].p)} (${pct(w.zielPct)})`, l + 4, yz + (yz < ye ? 13 : -4), '#26a69a', { hinten: 'rgba(0,0,0,0.55)' })
                 this.beschriftung(ctx, `Stop ${this.formatPreis(pk[2].p)} (${pct(w.stopPct)})`, l + 4, ys + (ys < ye ? 13 : -4), '#ff6960', { hinten: 'rgba(0,0,0,0.55)' })
+                if (s.rechner) this.zeichneRechner(ctx, pk, s.rechner, l, b, ye, ys, hoehe, ausgewaehlt)
                 break
             }
             case 'text': {
@@ -821,6 +824,48 @@ export class ZeichenEbene {
             }
         }
         if (ausgewaehlt) this.zeichneAnker(ctx, z, breite)
+    }
+
+    /** Wartungsmarge des Symbols (Bruch) für den Positionsrechner. */
+    setzeMmr(mmr) {
+        this.mmr = mmr > 0 ? mmr : 0.004
+        this.requestUpdate()
+    }
+
+    /**
+     * Positionsrechner (`shared/tradeRechner.js`): Liq-Linie gestrichelt über die
+     * Box, daneben Menge, Nominal, Marge, Verlust/Gewinn — unter der Stop-Seite.
+     * Ausgewählt steht das alles im Rechner-Feld (`PositionsRechner.vue`), im
+     * Chart dann nur die Liq-Linie und eine Warnung.
+     */
+    zeichneRechner(ctx, pk, eingabe, l, b, ye, ys, hoehe, ausgewaehlt = false) {
+        const r = rechnePosition({ einstieg: pk[0].p, ziel: pk[1].p, stop: pk[2].p, eingabe, mmr: this.mmr })
+        if (!r) return
+        const orange = '#ff9800'
+        const yl = this.zuY(r.liq)
+        if (yl != null && r.haltbar) {
+            this.linie(ctx, l, yl, l + b, yl, { farbe: orange, breite: 1, strich: 'gestrichelt' })
+            this.beschriftung(ctx, `Liq ${this.formatPreis(r.liq)} (${r.liqPct >= 0 ? '+' : ''}${r.liqPct.toFixed(2)} %)`, l + b - 4 - ctx.measureText(`Liq ${this.formatPreis(r.liq)} (+00.00 %)`).width, yl - 4, orange, { hinten: 'rgba(0,0,0,0.55)' })
+        }
+        const zahl = (v, st = 2) => (v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('de-CH', { maximumFractionDigits: st, minimumFractionDigits: st }))
+        const vz = (v) => (v == null ? '—' : `${v >= 0 ? '+' : ''}${zahl(v)}`)
+        const menge = r.menge >= 100 ? zahl(r.menge, 0) : r.menge >= 1 ? zahl(r.menge, 3) : zahl(r.menge, 6)
+        const zeilen = [
+            `Menge ${menge} · Nominal ${zahl(r.nominal)} USDT`,
+            `Marge ${zahl(r.marge)} USDT · ${r.hebel}×${r.margeKontoPct != null ? ` (${zahl(r.margeKontoPct, 1)} % Konto)` : ''}`,
+            `Stop ${vz(r.verlustStop)} USDT${r.kontoRisikoPct != null ? ` (${zahl(r.kontoRisikoPct, 2)} % Konto)` : ''} · Ziel ${vz(r.gewinnZiel)} USDT`,
+        ]
+        if (ausgewaehlt) zeilen.length = 0
+        if (r.liqVorStop) zeilen.push(r.haltbar ? `⚠ Liq vor dem Stop — Verlust ${vz(r.verlustLiq)} USDT` : '⚠ Hebel nicht haltbar (Wartungsmarge)')
+        // Unter die Stop-Seite der Box; reicht der Platz nicht, darüber.
+        const zh = 15
+        const unten = ys > ye
+        let y0 = unten ? ys + 18 : ys - 6 - (zeilen.length - 1) * zh
+        if (unten && y0 + zeilen.length * zh > hoehe) y0 = ys - 6 - (zeilen.length - 1) * zh - 14
+        zeilen.forEach((text, i) => {
+            const warn = text.startsWith('⚠')
+            this.beschriftung(ctx, text, l + 4, y0 + i * zh, warn ? orange : '#e0e0e0', { hinten: warn ? 'rgba(80,40,0,0.85)' : 'rgba(0,0,0,0.65)' })
+        })
     }
 
     zeichneAnker(ctx, z, breite) {

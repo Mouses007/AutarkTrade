@@ -9,6 +9,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FARBEN, stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { Symbol } from '../basis'
+import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
 
 const props = defineProps({
     zeichnung: { type: Object, required: true },
@@ -75,6 +76,8 @@ function nurDieseZeiteinheit() {
             @click="stil({ marken: s.marken === false })" :aria-label="t('chart.stil.marken')">POC</button>
         <button v-if="hatFuellung" class="k" :class="{ an: s.fuellung }" :title="t('chart.stil.fuellung')"
             @click="stil({ fuellung: !s.fuellung })" :aria-label="t('chart.stil.fuellung')"><Symbol name="tropfen" /></button>
+        <button v-if="typ === 'position'" class="k" :class="{ an: !!s.rechner }" :title="t('chart.rechner.titel')"
+            @click="stil({ rechner: s.rechner ? null : { ...RECHNER_VORGABE } })" :aria-label="t('chart.rechner.titel')"><Symbol name="rechner" /></button>
         <button v-if="hatText" class="k" :title="t('chart.stil.text')" @click="emit('text')" :aria-label="t('chart.stil.text')"><Symbol name="text" /></button>
         <span class="trenn"></span>
         <button class="k" :class="{ an: nurHier }" :title="t('chart.stil.nurHier', { tf: interval })" @click="nurDieseZeiteinheit" :aria-label="t('chart.stil.nurHier', { tf: interval })">

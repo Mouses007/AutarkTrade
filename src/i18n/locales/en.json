@@ -5680,6 +5680,31 @@
       "alleLoeschen": "Delete all drawings on this symbol",
       "volprofil": "Fixed Range Volume Profile"
     },
+    "rechner": {
+      "titel": "Position calculator (size, margin, liq)",
+      "longHier": "Long position here",
+      "shortHier": "Short position here",
+      "modus": {
+        "risiko": "Max. loss",
+        "groesse": "Position size",
+        "marge": "Margin"
+      },
+      "hebel": "Leverage",
+      "konto": "Account",
+      "kontoTipp": "Account balance in USDT (optional) — then the risk is also shown in % of the account",
+      "optional": "optional",
+      "gebuehr": "Fee",
+      "gebuehrTipp": "Fee per side in % (taker, e.g. 0.06) — included in the max. loss",
+      "liq": "Liq",
+      "menge": "Quantity",
+      "nominal": "Notional",
+      "marge": "Margin",
+      "stop": "At stop",
+      "ziel": "At target",
+      "liqVorStop": "Liq before the stop — the exchange closes before the stop fires. Lower the leverage.",
+      "nichtHaltbar": "Leverage not sustainable — the margin does not even cover the maintenance margin.",
+      "mmr": "Isolated, maintenance margin {pct} % — cross margin not modelled"
+    },
     "stil": {
       "breite": "Line width",
       "strich": {

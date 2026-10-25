@@ -28,6 +28,7 @@ import { ZeichenEbene } from '../../utils/chart/zeichnungen/ZeichenEbene.js'
 import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { zeichnungenVon, legeAn, aendere, loesche } from '../../stores/chartZeichnungen.js'
 import ZeichnungStil from './ZeichnungStil.vue'
+import PositionsRechner from './PositionsRechner.vue'
 import { kiVorschau } from '../../utils/chart/kiZeichnungen.js'
 import { kiVorschauDaten, kiVorschlag, uebernimmKi, verwirfKi } from '../../stores/chartKi.js'
 import TradeKarte from './TradeKarte.vue'
@@ -42,6 +43,8 @@ import { benoetigteQuellen, vwapVectorQuellen, INTRA_BUDGET, saubereParams, INDI
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
 import { positionenAus } from '../../stores/chartPositionen.js'
 import { letzterStil, merkeStil } from '../../stores/zeichenStil.js'
+import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
+import { atr } from '../../../shared/indicators.js'
 import { overlayAn as overlayAnFuer } from '../../utils/chart/overlays/liste.js'
 
 const props = defineProps({
@@ -666,7 +669,9 @@ function rechtsklick(e) {
         const tr = l?.innen ? ebene.trefferTest(l.x, l.y) : null
         if (tr?.z) zeichnung = { id: tr.z.id, gesperrt: !!tr.z.gesperrt, alarm: ALARM_TYPEN.includes(tr.z.typ), z: tr.z }
     } catch { /* ohne Treffer */ }
-    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung }
+    // Zeit unter dem Zeiger (für „Position hier"); rechts der Daten null → letzte Kerze
+    const zeitT = chart.value?.timeScale().coordinateToTime(e.clientX - r.left)
+    kontext.value = { x: Math.max(4, x), y: Math.max(4, yMenue), preis, zeichnung, zeit: zeitT != null ? vonLwc(zeitT) : null }
 }
 
 /** Liegt y (px im Panel) im Fenster eines Momentum-Radar-Indikators? */
@@ -684,6 +689,42 @@ function alarmHier() {
     if (kontext.value) emit('alarmBeiPreis', Number(kontext.value.preis.toFixed(preisStellen.value)))
     kontext.value = null
 }
+
+/**
+ * Rechtsklick „Long/Short hier": Einstieg am geklickten Preis und an der
+ * geklickten Kerze (rechts der Daten: die letzte), Stop 1 ATR(14) dahinter
+ * (ohne genug Kerzen 1 %), Ziel bei 2 R, 20 Kerzen breit. Danach ist sie ausgewählt — Stop/Ziel ziehen, Grösse unten
+ * im Rechner eingeben.
+ */
+function positionHier(richtung) {
+    if (!kontext.value) return
+    const liste = kerzen.value
+    const k = liste[liste.length - 1]
+    const e = kontext.value.preis
+    const t0 = kontext.value.zeit != null && kontext.value.zeit <= k?.t ? kontext.value.zeit : k?.t
+    kontext.value = null
+    if (!k || !(e > 0)) return
+    const a = atr(liste.slice(-200), 14)
+    const abstand = Number.isFinite(a?.[a.length - 1]) && a[a.length - 1] > 0 ? a[a.length - 1] : e * 0.01
+    const vz = richtung === 'long' ? 1 : -1
+    const iv = INTERVALL_MS[props.panel.interval] || 60_000
+    const ende = t0 + 20 * iv
+    const rund = (p) => Number(p.toFixed(preisStellen.value))
+    zeichnungNeu({ typ: 'position', punkte: [{ t: t0, p: rund(e) }, { t: ende, p: rund(e + vz * 2 * abstand) }, { t: ende, p: rund(e - vz * abstand) }] })
+}
+
+const mmr = ref(0.004)
+/** Wartungsmarge des Symbols für den Positionsrechner (Liq-Preis); ohne Antwort die Vorgabe. */
+async function ladeMmr() {
+    const symbol = props.panel.symbol
+    try {
+        const { data } = await axios.get('/api/margin-rate', { params: { symbol } })
+        if (symbol !== props.panel.symbol) return
+        mmr.value = Number(data?.mmr) > 0 ? Number(data.mmr) : 0.004
+    } catch { mmr.value = 0.004 }
+    ebene?.setzeMmr(mmr.value)
+}
+watch(() => props.panel.symbol, ladeMmr)
 
 function zeichnungHier(typ) {
     if (!kontext.value) return
@@ -833,6 +874,8 @@ watch(() => props.panel.symbol, () => { auswahlId.value = null; ebene?.setzeAusw
 async function zeichnungNeu({ typ, punkte, stil: vorgabeStil = {} }) {
     // Mit dem zuletzt benutzten Stil dieses Werkzeugs starten, nicht mit den Werksfarben.
     let stil = { ...letzterStil(typ), ...vorgabeStil }
+    // Positionen rechnen immer mit (Menge, Marge, Liq) — mit den zuletzt benutzten Eingaben
+    if (typ === 'position' && !stil.rechner) stil = { ...stil, rechner: { ...RECHNER_VORGABE } }
     if (typ === 'text') {
         const text = window.prompt(t('chart.textEingeben'), '')
         if (!text) return
@@ -1280,6 +1323,7 @@ function wertText(w, typ) {
 onMounted(() => {
     baueChart()
     ladeNeu()
+    ladeMmr()
     starteTakte()
     clearTimeout(marktNeuUhr)
     marktNeuUhr = setTimeout(marktNeu, 1500)
@@ -1395,6 +1439,8 @@ defineExpose({
             :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
             @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />
+        <PositionsRechner v-if="ausgewaehlt?.typ === 'position' && ausgewaehlt.stil?.rechner" :zeichnung="ausgewaehlt" :mmr="mmr"
+            :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)" @aendere="aendereAuswahl" />
 
         <!-- Klick auf einen gestrichelten KI-Vorschlag: übernehmen oder verwerfen, ohne den Reiter zu öffnen. -->
         <div v-if="kiWahlInfo" class="kiWahl" data-ki-generiert="true" :style="{ left: kiWahlInfo.links + 'px', top: kiWahlInfo.oben + 'px' }"
@@ -1430,6 +1476,8 @@ defineExpose({
             <button @click="alarmHier"><Symbol name="glocke" /> {{ t('chart.alarm.hier') }}</button>
             <button v-if="(panel.indikatoren || []).some((i) => i.typ === 'lsobCv')" @click="kontext = null; emit('alarmLsob')">
                 <Symbol name="glocke" /> {{ t('chart.alarm.lsobHier') }}</button>
+            <button @click="positionHier('long')"><Symbol name="hoch" /> {{ t('chart.rechner.longHier') }}</button>
+            <button @click="positionHier('short')"><Symbol name="runter" /> {{ t('chart.rechner.shortHier') }}</button>
             <button @click="zeichnungHier('horizontale')"><Symbol name="minus" /> {{ t('chart.wz.horizontale') }}</button>
             <button @click="zeichnungHier('strahlH')"><Symbol name="pfeilRechts" /> {{ t('chart.wz.strahlH') }}</button>
             <hr />

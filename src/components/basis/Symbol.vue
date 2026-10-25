@@ -72,6 +72,7 @@ const PFADE = {
     doppelRechts: ['M13 6l6 6-6 6', 'M6 6l6 6-6 6'],
     pfeilLinks: ['M19 12H5', 'M11 6l-6 6 6 6'],
     pfeilRechts: ['M5 12h14', 'M13 6l6 6-6 6'],
+    rechner: ['M6 3h12v18H6z', 'M9 6.5h6v3H9z', 'M9 13h.01M12 13h.01M15 13h.01M9 16.5h.01M12 16.5h.01M15 16.5h.01'],
     pfeilAnschlagLinks: ['M21 12H8', 'M13 7l-5 5 5 5', 'M4 5v14'],
     pfeilAnschlagRechts: ['M3 12h13', 'M11 7l5 5-5 5', 'M20 5v14'],
     raster: ['M4 4h6v6H4z', 'M14 4h6v6h-6z', 'M4 14h6v6H4z', 'M14 14h6v6h-6z'],

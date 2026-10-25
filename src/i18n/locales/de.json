@@ -5680,6 +5680,31 @@
       "alleLoeschen": "Alle Zeichnungen dieses Symbols löschen",
       "volprofil": "Volumenprofil Fixed-Range"
     },
+    "rechner": {
+      "titel": "Positionsrechner (Menge, Marge, Liq)",
+      "longHier": "Long-Position hier",
+      "shortHier": "Short-Position hier",
+      "modus": {
+        "risiko": "Max. Verlust",
+        "groesse": "Positionsgrösse",
+        "marge": "Marge"
+      },
+      "hebel": "Hebel",
+      "konto": "Konto",
+      "kontoTipp": "Kontostand in USDT (optional) — dann steht das Risiko auch in % vom Konto",
+      "optional": "optional",
+      "gebuehr": "Gebühr",
+      "gebuehrTipp": "Gebühr je Seite in % (Taker, z. B. 0,06) — beim max. Verlust eingerechnet",
+      "liq": "Liq",
+      "menge": "Menge",
+      "nominal": "Nominal",
+      "marge": "Marge",
+      "stop": "Am Stop",
+      "ziel": "Am Ziel",
+      "liqVorStop": "Liq vor dem Stop — die Börse schliesst, bevor der Stop greift. Hebel senken.",
+      "nichtHaltbar": "Hebel nicht haltbar — die Marge deckt nicht einmal die Wartungsmarge.",
+      "mmr": "Isoliert, Wartungsmarge {pct} % — Cross Margin nicht abgebildet"
+    },
     "stil": {
       "breite": "Strichstärke",
       "strich": {
