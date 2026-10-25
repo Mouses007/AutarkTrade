@@ -23,7 +23,6 @@ onMounted(ladeUebersicht)
 
 <template>
     <div class="pf">
-        <Hinweis art="warn" class="pf-test" schliessbar :titel="t('portfolio.testTitel')">{{ t('portfolio.testText') }}</Hinweis>
         <Hinweis v-if="ladeFehler" art="fehler">{{ ladeFehler }}</Hinweis>
         <div v-if="laedt && !uebersicht" class="at-mittig at-py-5"><Kreisel /></div>
         <template v-else>
@@ -38,5 +37,4 @@ onMounted(ladeUebersicht)
 <style scoped>
 .pf { padding: 0 1rem 3rem; max-width: 1180px; }
 @media (min-width: 768px) { .pf { padding: 0 1.5rem 3rem; } }
-.pf-test { margin-bottom: 1rem; }
 </style>

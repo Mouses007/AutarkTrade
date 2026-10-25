@@ -99,6 +99,21 @@ function markiere(key) {
 // ── Orte ──
 const boersen = computed(() => (u.value?.quellen || []).filter((q) => q.gruppe === 'boerse'))
 const importe = computed(() => (u.value?.quellen || []).filter((q) => q.gruppe === 'import'))
+/*
+ * Datei-Quellen ohne heutigen Bestand (leer geräumt oder an eine Live-Wallet
+ * übergeben) tragen nur Historie für die Steuerjahre. Als eigene Karten
+ * machten sie die Ansicht unübersichtlich (24.10.2026: 15 von 20 Karten mit
+ * CHF 0.00) — sie stehen jetzt gesammelt in EINER eingeklappten Karte.
+ */
+// „Mit Bestand" heisst: mit einer SICHTBAREN Zeile — nur Staub (ausgeblendet) zählt als Historie.
+const importeMitBestand = computed(() => importe.value.filter((q) => postenSichtbar(q.posten).length))
+const nurHistorie = computed(() => importe.value.filter((q) => !postenSichtbar(q.posten).length))
+const HISTORIE_SCHLUESSEL = 'portfolioNurHistorieOffen'
+const historieOffen = ref((() => { try { return localStorage.getItem(HISTORIE_SCHLUESSEL) === '1' } catch { return false } })())
+function schalteHistorie() {
+    historieOffen.value = !historieOffen.value
+    try { localStorage.setItem(HISTORIE_SCHLUESSEL, historieOffen.value ? '1' : '0') } catch { /* kein Speicher */ }
+}
 const wallets = computed(() => (u.value?.wallets || []))
 const fehlerQuellen = computed(() => (u.value?.quellen || []).filter((q) => q.status === 'fehler'))
 const ortName = (quelle) => {
@@ -255,7 +270,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                 </section>
                 <section v-if="importe.length">
                     <h3 class="pf-gruppe">{{ t('portfolio.importiert') }}</h3>
-                    <Karte v-for="q in importe" :key="q.quelle" dicht class="pf-ort-karte">
+                    <Karte v-for="q in importeMitBestand" :key="q.quelle" dicht class="pf-ort-karte">
                         <div class="pf-ort-kopf">
                             <span class="pf-ort-titel">{{ q.name }}</span>
                             <Pille ton="neutral" :title="q.meldung || ''">{{ t('portfolio.ausDatei') }}</Pille>
@@ -267,7 +282,21 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span class="at-gedaempft">{{ menge(p.menge) }}</span>
                             <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
                         </div>
-                        <p v-if="!q.posten.length" class="pf-meldung">{{ q.uebergeben ? t('portfolio.ueAlles') : t('portfolio.leerGeraeumt') }}</p>
+                    </Karte>
+                    <!-- Nur Historie: Datei-Quellen ohne heutigen Bestand, gesammelt und eingeklappt -->
+                    <Karte v-if="nurHistorie.length" dicht class="pf-ort-karte">
+                        <button type="button" class="pf-historie-kopf" :aria-expanded="historieOffen" @click="schalteHistorie">
+                            <Symbol :name="historieOffen ? 'runter' : 'pfeilRechts'" />
+                            <span class="pf-ort-titel">{{ t('portfolio.nurHistorie', { n: nurHistorie.length }) }}</span>
+                            <span class="at-gedaempft pf-historie-text">{{ t('portfolio.nurHistorieText') }}</span>
+                        </button>
+                        <template v-if="historieOffen">
+                            <div v-for="q in nurHistorie" :key="q.quelle" class="pf-historie-zeile">
+                                <span>{{ q.name }}</span>
+                                <Pille v-if="q.uebergeben" ton="akzent" :title="t('portfolio.ueInfo')">{{ t('portfolio.ueAn', { an: q.uebergeben.an }) }}</Pille>
+                                <span v-else class="at-gedaempft">{{ t('portfolio.heuteLeer') }}</span>
+                            </div>
+                        </template>
                     </Karte>
                 </section>
                 <section v-if="wallets.length">
@@ -380,4 +409,32 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
 .pf-kette-kopf code { font-weight: 400; font-size: 0.75rem; }
 .pf-kette .pf-ort { padding-left: 0.75rem; }
 .pf-meldung { font-size: 0.75rem; color: var(--leise); margin: 0.35rem 0 0; }
+
+.pf-historie-kopf {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+}
+
+.pf-historie-text {
+    font-size: 0.8rem;
+}
+
+.pf-historie-zeile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 0;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
+}
 </style>
