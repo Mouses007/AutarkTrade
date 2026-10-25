@@ -5753,7 +5753,8 @@
         "preis": "Price alert",
         "linie": "Line alert",
         "zone": "Zone alert",
-        "momentum": "Momentum alert"
+        "momentum": "Momentum alert",
+        "lsob": "LSOB alert"
       },
       "bedingung": "Trigger when price",
       "richtung": {
@@ -5829,6 +5830,17 @@
         "divAlle": "all divergences"
       },
       "momentumHier": "Momentum alert …",
+      "lsobHier": "LSOB alert …",
+      "neuLsob": "LSOB alert (symbol or watchlists)",
+      "lsob": {
+        "ereignis": "Trigger on",
+        "retest": "box retest (wick touches, body stays inside)",
+        "box": "new box (sweep confirmed)",
+        "beide": "retest and new box",
+        "ausChart": "Box settings as the “LSOB boxes” indicator on this chart.",
+        "vorgaben": "Box settings: defaults of the “LSOB boxes” indicator (for your own: add the indicator to the chart, then create the alert here).",
+        "hinweis": "Checked on the server, even with the page closed — on closed candles only, over the last 1000 candles per timeframe, at most one notification per symbol, timeframe and candle. The notification names timeframe and box; “Open” jumps to the coin on that timeframe. A candle that closed more than 10 min ago is not reported late."
+      },
       "profilLinie": "Profile line",
       "profilHinweis": "The level is taken as the profile currently stands on the chart. If you move the range or change the row count, the alert switches off — then set it again.",
       "profilFehlt": "The profile is not computed on this chart (no candles in the range) — adjust the chart so it is visible.",

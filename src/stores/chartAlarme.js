@@ -14,7 +14,7 @@ import { sendNotification } from '../utils/notify.js'
 export const alarme = ref([])
 // Bis zu 50 Hinweise gemerkt; die Leiste zeigt fünf, der Rest ist darunter scrollbar.
 const MAX_HINWEISE = 50
-export const neueAusloesungen = ref([])     // [{ id, symbol, text, t, ziel: { symbol, markt, tf } }]
+export const neueAusloesungen = ref([])     // [{ id, symbol, titel, text, t, ziel: { symbol, markt, tf } }]
 
 let uhr = null
 let nutzer = 0
@@ -28,25 +28,40 @@ export async function ladeAlarme() {
             gesehenBis = Math.max(...neu.map((a) => a.ausgeloestAm))
             for (const a of neu) {
                 const letzte = a.verlauf[a.verlauf.length - 1]
-                const symbol = a.symbol || letzte?.treffer?.[0]?.symbol || 'Momentum'
-                const text = a.art === 'momentum' && letzte?.treffer?.length
+                const mehrfach = MEHRFACH.includes(a.art)
+                const symbol = a.symbol || letzte?.treffer?.[0]?.symbol || (a.art === 'lsob' ? 'LSOB' : 'Momentum')
+                const kurz = mehrfach && letzte?.treffer?.length
                     ? letzte.treffer.map(trefferText).join(' · ')
                     : `${a.symbol}: ${beschreibe(a)}${letzte ? ` — ${letzte.p}` : ''}`
-                // Wohin ein Klick auf den Hinweis führt: Momentum → der (erste) Treffer mit
+                // Leiste und Desktop-Meldung sagen dasselbe wie Push und Handy (Text vom Server, seit 22.10.2026
+                // im Verlauf); ältere Einträge ohne Text: die Kurzform.
+                const text = letzte?.text ? letzte.text.split('\n').filter(Boolean).join(' · ') : kurz
+                // Wohin ein Klick auf den Hinweis führt: Momentum/LSOB → der (erste) Treffer mit
                 // seiner Zeiteinheit; Preis/Linie/Zone → das Symbol des Alarms (Zeiteinheit bleibt).
-                const tr = a.art === 'momentum' ? letzte?.treffer?.[0] : null
+                const tr = mehrfach ? letzte?.treffer?.[0] : null
                 const ziel = tr ? { symbol: tr.symbol, markt: tr.markt || 'futures', tf: tr.tf || null }
                     : a.symbol ? { symbol: a.symbol, markt: a.markt || 'futures', tf: null } : null
-                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, text, t: a.ausgeloestAm, ziel }].slice(-MAX_HINWEISE)
-                sendNotification('chartAlarm', `Alarm ${symbol}`, text)
+                const titel = letzte?.titel || `Alarm ${symbol}`
+                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, titel, text, t: a.ausgeloestAm, ziel }].slice(-MAX_HINWEISE)
+                sendNotification('chartAlarm', titel, letzte?.text || kurz, { tag: `chartAlarm-${a.id}-${a.ausgeloestAm}` })
             }
         }
         alarme.value = data
     } catch { /* nächster Versuch in zehn Sekunden */ }
 }
 
-/** Ein Treffer eines Momentum-Alarms: „BTCUSDT 15m ● Long" (● gross, • klein). */
+const MEHRFACH = ['momentum', 'lsob']
+const LSOB_WAS = { retest: 'Retest', box: 'neue Box' }
+
+/**
+ * Ein Treffer eines Momentum-Alarms: „BTCUSDT 15m ● Long" (● gross, • klein);
+ * eines LSOB-Alarms: „BTCUSDT 1h LSOB Retest Long".
+ */
 export function trefferText(tr) {
+    if (Array.isArray(tr.ereignisse)) {
+        const was = tr.ereignisse.map((e) => `${LSOB_WAS[e.typ] || e.typ} ${e.seite === 'long' ? 'Long' : 'Short'}`).join(', ')
+        return `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf} LSOB ${was}`
+    }
     return `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf} ${tr.stark ? '●' : '•'} ${tr.seite === 'long' ? 'Long' : 'Short'}${tr.divergenz ? ' Div' : ''}`
 }
 
@@ -57,6 +72,11 @@ export function beschreibe(a) {
         const groesse = a.punktgroesse === 'alle' ? '●• grosse + kleine' : '● grosse'
         const r = b.richtung === 'long' ? ' Long' : b.richtung === 'short' ? ' Short' : ''
         return `Momentum ${groesse}${b.divergenz ? ' mit Divergenz' : ''}${r} · ${(a.zeiteinheiten || []).join(', ')}`
+    }
+    if (a.art === 'lsob') {
+        const was = { retest: 'Retest', box: 'neue Box', beide: 'Retest + neue Box' }[b.ereignis] || 'Retest'
+        const r = b.richtung === 'long' ? ' Long' : b.richtung === 'short' ? ' Short' : ''
+        return `LSOB ${was}${r} · ${(a.zeiteinheiten || []).join(', ')}`
     }
     const r = { ueber: '↑ über', unter: '↓ unter', kreuzt: '↕ kreuzt', betreten: '→ Zone betreten', verlassen: '← Zone verlassen' }[b.richtung || (a.art === 'zone' ? 'betreten' : 'kreuzt')]
     if (a.art === 'preis') return `${r} ${b.preis}`

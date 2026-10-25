@@ -5753,7 +5753,8 @@
         "preis": "Preis-Alarm",
         "linie": "Linien-Alarm",
         "zone": "Zonen-Alarm",
-        "momentum": "Momentum-Alarm"
+        "momentum": "Momentum-Alarm",
+        "lsob": "LSOB-Alarm"
       },
       "bedingung": "Auslösen, wenn der Kurs",
       "richtung": {
@@ -5829,6 +5830,17 @@
         "divAlle": "allen Divergenzen"
       },
       "momentumHier": "Momentum-Alarm …",
+      "lsobHier": "LSOB-Alarm …",
+      "neuLsob": "LSOB-Alarm (Symbol oder Watchlists)",
+      "lsob": {
+        "ereignis": "Auslösen bei",
+        "retest": "Retest einer Box (Docht berührt, Körper bleibt drin)",
+        "box": "neuer Box (Sweep bestätigt)",
+        "beide": "Retest und neuer Box",
+        "ausChart": "Box-Einstellungen wie der Indikator „LSOB-Boxen“ in diesem Chart.",
+        "vorgaben": "Box-Einstellungen: Vorgaben des Indikators „LSOB-Boxen“ (für eigene: Indikator in den Chart legen, dann hier anlegen).",
+        "hinweis": "Geprüft wird auf dem Server, auch bei geschlossener Seite — nur auf geschlossenen Kerzen, über die letzten 1000 Kerzen je Zeiteinheit, je Symbol, Zeiteinheit und Kerze höchstens eine Meldung. Die Meldung nennt Zeiteinheit und Box; „Öffnen“ springt in den Coin auf dieser Zeiteinheit. Eine Kerze, die vor über 10 min schloss, wird nicht nachgemeldet."
+      },
       "profilLinie": "Linie des Profils",
       "profilHinweis": "Die Höhe wird so übernommen, wie das Profil jetzt im Chart steht. Verschiebst du den Bereich oder änderst die Zeilenzahl, schaltet sich der Alarm ab — dann neu setzen.",
       "profilFehlt": "Das Profil ist in diesem Chart nicht berechnet (keine Kerzen im Bereich) — Chart so einstellen, dass es sichtbar ist.",

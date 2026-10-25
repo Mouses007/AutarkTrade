@@ -8,6 +8,9 @@
  *   momentum  Signalpunkte des Momentum Radar (nur grosse oder alle, optional eine
  *          Richtung) auf dem Symbol oder auf Watchlists, in mehreren Zeiteinheiten
  *          zugleich; gerechnet auf geschlossenen Kerzen (`server/chart-alarm-momentum.js`)
+ *   lsob   Retest oder neue Box des Indikators „LSOB-Boxen", ebenso über Symbol oder
+ *          Watchlists und mehrere Zeiteinheiten (`server/chart-alarm-lsob.js`); die
+ *          Box-Einstellungen kommen aus dem LSOB-Boxen-Indikator des Charts (`lsobParams`)
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -32,13 +35,15 @@ const istNeu = !props.vorlage.id
 const v = props.vorlage
 const zeichnungTyp = v.zeichnung?.typ || null
 const art = v.art
-const richtung = ref(v.bedingung?.richtung || (art === 'zone' ? 'betreten' : art === 'momentum' ? 'beide' : 'kreuzt'))
+// Momentum und LSOB: Symbol ODER Watchlists, mehrere Zeiteinheiten, je Kerzenschluss geprüft
+const mehrfach = art === 'momentum' || art === 'lsob'
+const richtung = ref(v.bedingung?.richtung || (art === 'zone' ? 'betreten' : mehrfach ? 'beide' : 'kreuzt'))
 const preis = ref(v.bedingung?.preis ?? v.preis ?? '')
 const profil = v.zeichnung?.profil || null      // Volumenprofil: { poc, vah, val } wie im Chart
 const kante = ref(v.bedingung?.kante || (zeichnungTyp === 'volprofil' ? 'poc' : 'oben'))
 const PROFIL_NAME = { poc: 'POC', vah: 'VAH', val: 'VAL' }
 // Ein Momentum-Alarm über Watchlists soll weiterlaufen — je Kerze meldet er ohnehin nur einmal.
-const einmalig = ref(v.einmalig ?? art !== 'momentum')
+const einmalig = ref(v.einmalig ?? !mehrfach)
 const sperreMin = ref(v.bedingung?.sperreMin ?? 15)
 const schwere = ref(v.bedingung?.schwere || 'warnung')
 const push = ref(v.kanaele?.push !== false)
@@ -47,7 +52,7 @@ const notiz = ref(v.notiz || '')
 const fehler = ref('')
 const speichert = ref(false)
 
-const richtungen = computed(() => (art === 'zone' ? ['betreten', 'verlassen'] : art === 'momentum' ? ['beide', 'long', 'short'] : ['kreuzt', 'ueber', 'unter']))
+const richtungen = computed(() => (art === 'zone' ? ['betreten', 'verlassen'] : mehrfach ? ['beide', 'long', 'short'] : ['kreuzt', 'ueber', 'unter']))
 
 // ── Momentum ──
 const ZEITEINHEITEN = ['5m', '15m', '1h', '4h', '1d', '1w']
@@ -60,9 +65,13 @@ const zeiteinheiten = ref(v.zeiteinheiten?.length ? [...v.zeiteinheiten] : [ZEIT
 const ausloeser = ref((v.bedingung?.divergenz ? 'div' : '') + ((v.punktgroesse || 'gross') === 'alle' ? (v.bedingung?.divergenz ? 'Alle' : 'alle') : (v.bedingung?.divergenz ? 'Gross' : 'gross')))
 const punktgroesse = computed(() => (/alle$/i.test(ausloeser.value) ? 'alle' : 'gross'))
 const divergenz = computed(() => ausloeser.value.startsWith('div'))
+// ── LSOB ──
+const ereignis = ref(v.bedingung?.ereignis || 'retest')
+// Gespeicherte Einstellungen beim Ändern, sonst die des LSOB-Boxen-Indikators im Chart (oder Vorgaben)
+const lsobParams = v.bedingung?.params || v.lsobParams || null
 /** Wen der Alarm überwacht — im Titel: das Symbol, oder bei Watchlists deren Namen statt des Coins. */
 const zielName = computed(() => {
-    if (art !== 'momentum' || ziel.value !== 'listen') return `${v.symbol || symbolZiel}${v.markt === 'spot' ? ' Spot' : ''}`
+    if (!mehrfach || ziel.value !== 'listen') return `${v.symbol || symbolZiel}${v.markt === 'spot' ? ' Spot' : ''}`
     const namen = props.watchlists.filter((w) => listenIds.value.includes(w.id)).map((w) => w.name)
     return namen.length ? namen.join(', ') : t('chart.alarm.momentum.listen')
 })
@@ -75,7 +84,7 @@ const paare = computed(() => {
 })
 // Auf 1w gibt es keine grossen Punkte (keine höhere Zeiteinheit) — der Server lehnt das ab, hier schon sagen.
 const wocheOhneGrosse = computed(() => art === 'momentum' && punktgroesse.value === 'gross' && zeiteinheiten.value.includes('1w'))
-const momentumUnvollstaendig = computed(() => art === 'momentum' && (!zeiteinheiten.value.length || !paare.value || wocheOhneGrosse.value))
+const momentumUnvollstaendig = computed(() => mehrfach && (!zeiteinheiten.value.length || !paare.value || wocheOhneGrosse.value))
 
 async function speichern() {
     fehler.value = ''
@@ -83,20 +92,21 @@ async function speichern() {
     const bedingung = { richtung: richtung.value, schwere: schwere.value }
     if (art === 'preis') bedingung.preis = Number(preis.value)
     if (art === 'momentum' && divergenz.value) bedingung.divergenz = true
+    if (art === 'lsob') { bedingung.ereignis = ereignis.value; if (lsobParams) bedingung.params = lsobParams }
     if (zeichnungTyp === 'kanal' && art === 'linie') bedingung.kante = kante.value
     if (zeichnungTyp === 'volprofil' && profil) { bedingung.kante = kante.value; bedingung.niveau = profil[kante.value] }
-    if (!einmalig.value && art !== 'momentum') bedingung.sperreMin = Number(sperreMin.value) || 0
+    if (!einmalig.value && !mehrfach) bedingung.sperreMin = Number(sperreMin.value) || 0
     const gemeinsam = { bedingung, einmalig: einmalig.value, kanaele: { push: push.value, mail: mail.value }, notiz: notiz.value }
-    if (art === 'momentum') {
+    if (mehrfach) {
         Object.assign(gemeinsam, {
             watchlistIds: ziel.value === 'listen' ? listenIds.value : [],
             zeiteinheiten: ZEITEINHEITEN.filter((z) => zeiteinheiten.value.includes(z)),
-            punktgroesse: punktgroesse.value,
+            ...(art === 'momentum' ? { punktgroesse: punktgroesse.value } : {}),
             ...(ziel.value === 'symbol' ? { symbol: symbolZiel } : {}),
         })
     }
     try {
-        if (art === 'momentum' && istNeu) {
+        if (mehrfach && istNeu) {
             await legeAlarmAn({ markt: v.markt, art, ...gemeinsam })
         } else if (istNeu) {
             await legeAlarmAn({ symbol: v.symbol, markt: v.markt, art, zeichnungId: v.zeichnung?.id ?? null, ...gemeinsam })
@@ -120,8 +130,14 @@ async function speichern() {
                 <button type="button" class="zu" :aria-label="t('common.close')" :title="t('common.close')" @click="emit('schliesse')"><Symbol name="schliessen" /></button>
             </div>
             <div class="art">{{ t('chart.alarm.art.' + art) }}<template v-if="zeichnungTyp"> · {{ t('chart.wz.' + zeichnungTyp) }}</template></div>
-            <template v-if="art === 'momentum'">
-                <label class="zeile">
+            <template v-if="mehrfach">
+                <label v-if="art === 'lsob'" class="zeile">
+                    <span>{{ t('chart.alarm.lsob.ereignis') }}</span>
+                    <select v-model="ereignis" class="at-feld klein">
+                        <option v-for="e in ['retest', 'box', 'beide']" :key="e" :value="e">{{ t('chart.alarm.lsob.' + e) }}</option>
+                    </select>
+                </label>
+                <label v-else class="zeile">
                     <span>{{ t('chart.alarm.momentum.punkte') }}</span>
                     <select v-model="ausloeser" class="at-feld klein">
                         <option value="gross">{{ t('chart.alarm.momentum.gross') }}</option>
@@ -149,9 +165,10 @@ async function speichern() {
                     <small class="leise">{{ t('chart.alarm.momentum.paare', { n: paare }, paare) }}</small>
                     <small v-if="wocheOhneGrosse" class="fehler">{{ t('chart.alarm.momentum.wocheOhneGrosse') }}</small>
                 </div>
+                <small v-if="art === 'lsob'" class="leise">{{ t(lsobParams ? 'chart.alarm.lsob.ausChart' : 'chart.alarm.lsob.vorgaben') }}</small>
             </template>
             <label class="zeile">
-                <span>{{ t(art === 'momentum' ? 'chart.alarm.momentum.richtungTitel' : 'chart.alarm.bedingung') }}</span>
+                <span>{{ t(mehrfach ? 'chart.alarm.momentum.richtungTitel' : 'chart.alarm.bedingung') }}</span>
                 <select v-model="richtung" class="at-feld klein">
                     <option v-for="r in richtungen" :key="r" :value="r">{{ t('chart.alarm.richtung.' + r) }}</option>
                 </select>
@@ -181,7 +198,7 @@ async function speichern() {
                 </select>
             </label>
             <label class="haken"><input v-model="einmalig" type="checkbox" /> {{ t('chart.alarm.einmalig') }}</label>
-            <label v-if="!einmalig && art !== 'momentum'" class="zeile">
+            <label v-if="!einmalig && !mehrfach" class="zeile">
                 <span>{{ t('chart.alarm.sperre') }}</span>
                 <input v-model="sperreMin" type="number" min="0" class="at-feld klein" />
             </label>
@@ -198,7 +215,7 @@ async function speichern() {
                 <label><input v-model="mail" type="checkbox" /> {{ t('chart.alarm.mail') }}</label>
             </div>
             <input v-model="notiz" class="at-feld klein" maxlength="300" :placeholder="t('chart.alarm.notiz')" />
-            <div class="hinweis">{{ t(art === 'momentum' ? 'chart.alarm.momentum.hinweis' : 'chart.alarm.hinweis') }}</div>
+            <div class="hinweis">{{ t(art === 'lsob' ? 'chart.alarm.lsob.hinweis' : art === 'momentum' ? 'chart.alarm.momentum.hinweis' : 'chart.alarm.hinweis') }}</div>
             <div v-if="fehler" class="fehler">{{ fehler }}</div>
             <div class="fuss">
                 <Knopf art="leise" klein @click="emit('schliesse')">{{ t('chart.alarm.abbrechen') }}</Knopf>

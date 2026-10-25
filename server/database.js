@@ -3496,7 +3496,7 @@ async function runMigrations(knex, client) {
             t.increments('id').primary()
             t.string('symbol').notNullable()
             t.string('markt').defaultTo('futures')   // futures | spot
-            t.string('art').notNullable()            // preis | linie | zone | momentum (v32)
+            t.string('art').notNullable()            // preis | linie | zone | momentum (v32) | lsob
             t.text('bedingung').defaultTo('{}')      // JSON je Art
             t.integer('zeichnungId')                 // Linien-/Zonenalarm: Quelle der Geometrie
             t.text('kanaele')                        // JSON; null = Vorgabe

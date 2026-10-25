@@ -57,7 +57,7 @@ const props = defineProps({
     // Handy: „A" passt immer ein — Preis und Zeitachse (neueste Kerzen).
     zeitMitEinpassen: { type: Boolean, default: false },
 })
-const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alleLoeschen', 'panel', 'vollbild'])
+const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alleLoeschen', 'panel', 'vollbild'])
 const { t, te, locale } = useI18n()
 
 const huelle = ref(null)
@@ -1420,6 +1420,8 @@ defineExpose({
                 <hr />
             </template>
             <button @click="alarmHier"><Symbol name="glocke" /> {{ t('chart.alarm.hier') }}</button>
+            <button v-if="(panel.indikatoren || []).some((i) => i.typ === 'lsobCv')" @click="kontext = null; emit('alarmLsob')">
+                <Symbol name="glocke" /> {{ t('chart.alarm.lsobHier') }}</button>
             <button @click="zeichnungHier('horizontale')"><Symbol name="minus" /> {{ t('chart.wz.horizontale') }}</button>
             <button @click="zeichnungHier('strahlH')"><Symbol name="pfeilRechts" /> {{ t('chart.wz.strahlH') }}</button>
             <hr />

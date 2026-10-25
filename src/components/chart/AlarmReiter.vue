@@ -17,14 +17,15 @@ const props = defineProps({
     kurs: { type: Number, default: null },
     watchlists: { type: Array, default: () => [] },
 })
-const emit = defineEmits(['neu', 'neuMomentum', 'bearbeite'])
+const emit = defineEmits(['neu', 'neuMomentum', 'neuLsob', 'bearbeite'])
 const { t } = useI18n()
 
 const alle = ref(false)
 const offen = ref(null)
 const testStand = ref('')
 
-const aufListen = (a) => a.art === 'momentum' && a.watchlistIds?.length > 0
+const MEHRFACH = ['momentum', 'lsob']
+const aufListen = (a) => MEHRFACH.includes(a.art) && a.watchlistIds?.length > 0
 const liste = computed(() => (alle.value ? alarme.value : alarme.value.filter((a) => a.symbol === props.symbol || aufListen(a))))
 /** Wen der Alarm überwacht: das Symbol oder die Namen seiner Watchlists. */
 function ziel(a) {
@@ -60,6 +61,9 @@ function loesche(a) {
         <Knopf klein symbol="glocke" class="neuKnopf" @click="emit('neuMomentum')">
             {{ t('chart.alarm.neuMomentum') }}
         </Knopf>
+        <Knopf klein symbol="glocke" class="neuKnopf" @click="emit('neuLsob')">
+            {{ t('chart.alarm.neuLsob') }}
+        </Knopf>
         <div class="tipp">{{ t('chart.alarm.tipp') }}</div>
         <label class="alle"><input v-model="alle" type="checkbox" /> {{ t('chart.alarm.alleSymbole') }}</label>
         <div v-if="!liste.length" class="leer">{{ t('chart.alarm.leer') }}</div>
@@ -76,7 +80,7 @@ function loesche(a) {
                 </span>
             </div>
             <div v-if="offen === a.id" class="details">
-                <div>{{ a.einmalig ? t('chart.alarm.einmalig') : a.art === 'momentum' ? t('chart.alarm.momentum.jeKerze') : t('chart.alarm.wiederholend', { min: a.bedingung.sperreMin ?? 15 }) }}</div>
+                <div>{{ a.einmalig ? t('chart.alarm.einmalig') : MEHRFACH.includes(a.art) ? t('chart.alarm.momentum.jeKerze') : t('chart.alarm.wiederholend', { min: a.bedingung.sperreMin ?? 15 }) }}</div>
                 <div v-if="a.notiz">{{ a.notiz }}</div>
                 <div>{{ t('chart.alarm.zuletzt') }}: {{ zeit(a.ausgeloestAm) }} ({{ a.anzahlAusgeloest }}×)</div>
                 <div v-for="(v, i) in [...a.verlauf].reverse().slice(0, 5)" :key="i" class="verlauf">{{ zeit(v.t) }}<template v-if="v.treffer?.length"> · {{ v.treffer.map(trefferText).join(', ') }}</template><template v-else-if="v.p != null"> · {{ v.p }}</template><template v-if="v.hinweis === 'geometrieEndet'"> · {{ t('chart.alarm.geometrieEndet') }}</template><template v-else-if="v.hinweis === 'profilGeaendert'"> · {{ t('chart.alarm.profilGeaendert') }}</template><template v-else-if="v.hinweis === 'watchlistLeer'"> · {{ t('chart.alarm.momentum.watchlistLeer') }}</template><template v-else-if="v.zugestellt === false"> · <span class="at-warn">{{ t('chart.alarm.nichtZugestellt') }}</span></template></div>

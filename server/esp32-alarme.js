@@ -1,7 +1,7 @@
 /**
  * Auslösungen der Chart-Alarme für Abrufer ohne Sitzung (Android-Widget).
  *
- *   GET /api/esp32/alarme?seit=<ms>&arten=preis,linie,zone,momentum   (Route in esp32-api.js)
+ *   GET /api/esp32/alarme?seit=<ms>&arten=preis,linie,zone,momentum,lsob   (Route in esp32-api.js)
  *
  * Rein: Zeilen von `chart_alarme` → flache Liste der Auslösungen. Eine eigene
  * Tabelle gibt es nicht und braucht es nicht — jede Auslösung steht ohnehin im
@@ -21,7 +21,9 @@
  */
 import { momentumText } from './chart-alarm-momentum.js'
 
-export const ARTEN = ['preis', 'linie', 'zone', 'momentum']
+export const ARTEN = ['preis', 'linie', 'zone', 'momentum', 'lsob']
+/** Arten über mehrere Symbole/Zeiteinheiten: Symbol und Markt stehen in den Treffern. */
+const MEHRFACH = new Set(['momentum', 'lsob'])
 export const MAX_ANTWORT = 50
 const SEITE = { long: 'Long', short: 'Short' }
 
@@ -81,15 +83,16 @@ export function ausloesungenAus(zeilen, { seit = 0, arten = new Set(ARTEN), gren
             // Hinweise (z. B. „Linie endet, Alarm aus") sind keine Auslösung.
             if (e.hinweis) continue
             const { titel, text } = e.titel ? { titel: e.titel, text: e.text || e.titel } : ersatzText(alarm, e)
-            const symbole = art === 'momentum'
+            const symbole = MEHRFACH.has(art)
                 ? [...new Set((e.treffer || []).map((x) => x.symbol).filter(Boolean))]
                 : [alarm.symbol].filter(Boolean)
-            const markt = art === 'momentum' ? (e.treffer?.[0]?.markt === 'spot' ? 'spot' : 'futures') : alarm.markt
+            const markt = MEHRFACH.has(art) ? (e.treffer?.[0]?.markt === 'spot' ? 'spot' : 'futures') : alarm.markt
             aus.push({
                 id: `${alarm.id}-${t}`, alarmId: alarm.id, art, zeit: t,
                 symbol: symbole[0] || '', symbole, markt,
                 preis: Number.isFinite(Number(e.p)) ? Number(e.p) : null,
                 niveau: Number.isFinite(e.niveau) ? e.niveau : null,
+                tf: MEHRFACH.has(art) ? e.treffer?.[0]?.tf || null : null,
                 titel, text,
             })
         }

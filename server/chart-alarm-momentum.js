@@ -145,6 +145,25 @@ export function reihenFuer(paar) {
 }
 
 /**
+ * Regeln 2 und 3 für eine geschlossene Reihe: ist ihre letzte Kerze die jüngste
+ * geschlossene, nicht zu spät, nach der Anlage und noch nicht gemeldet?
+ * Gemeinsam mit den LSOB-Alarmen (`chart-alarm-lsob.js`).
+ * @returns {{ letzte: object } | { grund: string, kerzeT?: number }}
+ */
+export function juengsteKerze({ tf, chart, jetzt, gemeldetBis = 0, abMs = 0, minKerzen = MIN_KERZEN }) {
+    if (!chart || chart.length < minKerzen) return { grund: 'zuWenigKerzen' }
+    const letzte = chart[chart.length - 1]
+    // Die Reihe muss bis zur jüngsten geschlossenen Kerze reichen — sonst ist sie veraltet,
+    // und ihr letzter Punkt wäre eine alte Neuigkeit.
+    if (letzte.t !== letzteGeschlossene(tf, jetzt)) return { grund: 'veraltet', kerzeT: letzte.t }
+    const schluss = letzte.t + TF_MS[tf]
+    if (jetzt - schluss > MAX_VERSPAETUNG_MS) return { grund: 'zuSpaet', kerzeT: letzte.t }
+    if (schluss < abMs) return { grund: 'vorAnlage', kerzeT: letzte.t }
+    if (Number(gemeldetBis) >= letzte.t) return { grund: 'schonGemeldet', kerzeT: letzte.t }
+    return { letzte }
+}
+
+/**
  * Meldet das Paar auf seiner jüngsten geschlossenen Kerze?
  *
  * @param {object} o
@@ -161,16 +180,9 @@ export function pruefeMomentum({ bedingung, tf, kerzen, jetzt, gemeldetBis = 0, 
     if (!ms || !MOMENTUM_ZEITEBENEN.includes(tf)) return { ausloesen: false, grund: 'zeiteinheit' }
     const geschlossen = {}
     for (const z of benoetigteZeitebenen(tf)) geschlossen[z] = nurGeschlossene(kerzen?.[z], z, jetzt)
-    const chart = geschlossen[tf]
-    if (chart.length < MIN_KERZEN) return { ausloesen: false, grund: 'zuWenigKerzen' }
-    const letzte = chart[chart.length - 1]
-    // Die Reihe muss bis zur jüngsten geschlossenen Kerze reichen — sonst ist sie veraltet,
-    // und ihr letzter Punkt wäre eine alte Neuigkeit.
-    if (letzte.t !== letzteGeschlossene(tf, jetzt)) return { ausloesen: false, grund: 'veraltet', kerzeT: letzte.t }
-    const schluss = letzte.t + ms
-    if (jetzt - schluss > MAX_VERSPAETUNG_MS) return { ausloesen: false, grund: 'zuSpaet', kerzeT: letzte.t }
-    if (schluss < abMs) return { ausloesen: false, grund: 'vorAnlage', kerzeT: letzte.t }
-    if (Number(gemeldetBis) >= letzte.t) return { ausloesen: false, grund: 'schonGemeldet', kerzeT: letzte.t }
+    const lage = juengsteKerze({ tf, chart: geschlossen[tf], jetzt, gemeldetBis, abMs })
+    if (lage.grund) return { ausloesen: false, ...lage }
+    const letzte = lage.letzte
     const punkte = momentumPunkte({ kerzen: geschlossen, chartTf: tf })
     const p = punkte.length && punkte[punkte.length - 1].t === letzte.t ? punkte[punkte.length - 1] : null
     if (!p) return { ausloesen: false, grund: 'keinPunkt', kerzeT: letzte.t }
