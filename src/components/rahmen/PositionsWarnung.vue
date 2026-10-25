@@ -8,11 +8,12 @@
  * Liq), meldet sie sich wieder.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Symbol } from '../basis'
 import { ladeAlleOffenen } from '../../utils/chart/overlays/positionen.js'
-import { positionsWarnungen } from '../../utils/positionsWarnung.js'
+import { positionsWarnungen, fuehreOhneSlSeit } from '../../utils/positionsWarnung.js'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -31,10 +32,41 @@ const text = (w) => t('positionsWarnung.' + w.art, {
 })
 
 let uhr = null
+let ohneSlSeit = {}
+const hatteSl = new Set()   // Positionen, die in dieser Sitzung schon mit SL gesehen wurden
+
+/*
+ * Bevor „ohne SL" erscheint: ist die Position bei der Börse wirklich noch offen?
+ * Die Zeile in der Datenbank schliesst erst der Positions-Abgleich (60 s, mit
+ * abgeschalteten Trade-Popups gar nicht) — nach einem ausgelösten Stop stand sie
+ * sonst als „offen ohne SL" da. Antwortet die Börse nicht oder nur zum Teil:
+ * keine Warnung (unbekannt ist nicht „ohne").
+ */
+async function nochOffen(liste) {
+    const boersen = [...new Set(liste.map((w) => w.broker || 'bitunix'))]
+    const offen = new Set()
+    for (const b of boersen) {
+        try {
+            const { data } = await axios.get(`/api/${b}/open-positions`)
+            if (!data?.ok || data.unvollstaendig) continue
+            for (const p of data.positions || []) offen.add(`${b}|${p.positionId ?? p.id}`)
+        } catch { /* Börse stumm: ihre Warnungen fallen weg */ }
+    }
+    return liste.filter((w) => offen.has(`${w.broker || 'bitunix'}|${w.id}`))
+}
 async function pruefe() {
     if (document.hidden) return
     try {
-        warnungen.value = positionsWarnungen(await ladeAlleOffenen())
+        // „ohne SL" muss bestehen (ausgelöster Stop: Order weg, Position noch kurz offen) — seit wann, je Position
+        const liste = await ladeAlleOffenen()
+        const jetzt = Date.now()
+        for (const p of liste) if (p.sl > 0) hatteSl.add(String(p.id))
+        ohneSlSeit = fuehreOhneSlSeit(liste, ohneSlSeit, jetzt)
+        const roh = positionsWarnungen(liste, { jetzt, seit: ohneSlSeit, hatteSl })
+            .map((w) => ({ ...w, broker: liste.find((p) => p.id === w.id)?.broker }))
+        const ohne = roh.filter((w) => w.art === 'ohneSl')
+        const bestaetigt = ohne.length ? new Set((await nochOffen(ohne)).map((w) => w.schluessel)) : new Set()
+        warnungen.value = roh.filter((w) => w.art !== 'ohneSl' || bestaetigt.has(w.schluessel))
         // Weggeklicktes für Positionen, die es nicht mehr gibt, vergessen
         const aktuell = new Set(warnungen.value.map((w) => w.schluessel))
         const rest = weg.value.filter((k) => aktuell.has(k))

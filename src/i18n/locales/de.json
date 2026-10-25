@@ -5798,6 +5798,8 @@
       "testOk": "Testmeldung verschickt.",
       "loeschenFrage": "Alarm „{was}“ löschen?",
       "quittieren": "Klick zum Schliessen",
+      "hinweiseAnzahl": "{n} Alarme",
+      "alleSchliessen": "Alle schliessen",
       "oeffnen": "Öffnen",
       "schliessen": "Schliessen",
       "hier": "Alarm bei diesem Preis",

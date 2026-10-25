@@ -32,7 +32,7 @@ import VorlagenMenue from '../components/chart/VorlagenMenue.vue'
 import { OVERLAYS, overlayAn } from '../utils/chart/overlays/liste.js'
 import OffeneReiter from '../components/chart/OffeneReiter.vue'
 import { Symbol, Hinweis, Kreisel } from '../components/basis'
-import { alarme, abonniereAlarme, neueAusloesungen, quittiere } from '../stores/chartAlarme.js'
+import { alarme, abonniereAlarme, neueAusloesungen, quittiere, alleQuittieren } from '../stores/chartAlarme.js'
 import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoeschen, macheRueckgaengig, macheWiederholen, fehlerMeldung } from '../stores/chartZeichnungen.js'
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
 import { useIstTelefon } from '../utils/geraet.js'
@@ -291,13 +291,21 @@ function coinInNeuemTab(symbol, markt = 'futures') {
  * vorhandenen nehmen, sonst einen neuen anlegen), bei Momentum-Alarmen auf
  * der Zeiteinheit des Treffers. Danach ist der Hinweis erledigt.
  */
+/** Zeitpunkt eines Alarm-Hinweises: heute nur die Uhrzeit, sonst mit Datum. */
+function alarmZeit(t) {
+    const d = new Date(t)
+    if (!Number.isFinite(d.getTime())) return ''
+    const heute = new Date().toDateString() === d.toDateString()
+    const uhr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return heute ? uhr : `${d.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${uhr}`
+}
 function oeffneAusloesung(n) {
     const z = n.ziel
     if (z?.symbol) {
         coinInNeuemTab(z.symbol, z.markt || 'futures')
         if (z.tf && INTERVALLE.includes(z.tf) && z.tf !== aktivesPanel.value?.interval) setzePanel({ interval: z.tf })
     }
-    quittiere(n.id)
+    quittiere(n.id, n.t)
 }
 function waehleCoinTab(i) {
     const tab = coinTabs.value[i]
@@ -1019,12 +1027,23 @@ watch(sichtbareAnzahl, async () => {
             </div>
 
             <!-- Alarm-Hinweis: zwei Wege — den Coin öffnen (Tab + Zeiteinheit) oder nur schliessen -->
-            <div v-for="n in neueAusloesungen" :key="n.id + '-' + n.t" class="leistenMeldung alarmBanner">
-                <Symbol name="glocke" /> <span class="bannerText">{{ n.text }}</span>
-                <span class="bannerKnoepfe">
-                    <button v-if="n.ziel" type="button" class="bannerKnopf haupt" @click="oeffneAusloesung(n)">{{ t('chart.alarm.oeffnen') }}</button>
-                    <button type="button" class="bannerKnopf" @click="quittiere(n.id)">{{ t('chart.alarm.schliessen') }}</button>
-                </span></div>
+            <!-- Neueste oben, höchstens fünf sichtbar, der Rest scrollt; Zeitpunkt der Auslösung rechts. -->
+            <div v-if="neueAusloesungen.length" class="alarmListe">
+                <div v-if="neueAusloesungen.length > 1" class="alarmKopf">
+                    <span>{{ t('chart.alarm.hinweiseAnzahl', { n: neueAusloesungen.length }) }}</span>
+                    <button type="button" class="bannerKnopf" @click="alleQuittieren">{{ t('chart.alarm.alleSchliessen') }}</button>
+                </div>
+                <div class="alarmZeilen">
+                    <div v-for="n in [...neueAusloesungen].reverse()" :key="n.id + '-' + n.t" class="leistenMeldung alarmBanner">
+                        <span class="bannerLinks"><Symbol name="glocke" /> <span class="bannerText">{{ n.text }}</span></span>
+                        <span class="bannerKnoepfe">
+                            <button v-if="n.ziel" type="button" class="bannerKnopf haupt" @click="oeffneAusloesung(n)">{{ t('chart.alarm.oeffnen') }}</button>
+                            <button type="button" class="bannerKnopf" @click="quittiere(n.id, n.t)">{{ t('chart.alarm.schliessen') }}</button>
+                        </span>
+                        <time class="bannerZeit" :datetime="new Date(n.t).toISOString()">{{ alarmZeit(n.t) }}</time>
+                    </div>
+                </div>
+            </div>
             <div v-if="fehlerMeldung" class="leistenMeldung" @click="fehlerSchliessen">
                 {{ t('chart.zeichnungFehler') }}: {{ fehlerMeldung }}</div>
 
@@ -1580,19 +1599,68 @@ watch(sichtbareAnzahl, async () => {
     color: var(--warn);
 }
 
+.alarmListe {
+    margin: var(--abstand-1) 0;
+}
+
+.alarmKopf {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--abstand-1);
+    padding: 0 2px 2px;
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+/* fünf Zeilen hoch, darunter scrollen */
+.alarmZeilen {
+    max-height: calc(5 * 2.4rem + 4 * var(--abstand-1));
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--abstand-1);
+}
+
+.alarmZeilen > .leistenMeldung {
+    margin: 0;
+    flex-shrink: 0;
+    min-height: 2.4rem;
+}
+
+/* links Text, Knöpfe in der Mitte der Zeile, rechts die Zeit */
 .alarmBanner {
     cursor: default;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+}
+
+.bannerLinks {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--abstand-1);
+    min-width: 0;
 }
 
 .bannerText {
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .bannerKnoepfe {
-    margin-left: auto;
     display: inline-flex;
     gap: var(--abstand-1);
-    flex-shrink: 0;
+    justify-self: center;
+}
+
+.bannerZeit {
+    justify-self: end;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .bannerKnopf {

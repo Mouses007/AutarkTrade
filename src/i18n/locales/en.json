@@ -5798,6 +5798,8 @@
       "testOk": "Test message sent.",
       "loeschenFrage": "Delete alert “{was}”?",
       "quittieren": "click to dismiss",
+      "hinweiseAnzahl": "{n} alerts",
+      "alleSchliessen": "Dismiss all",
       "oeffnen": "Open",
       "schliessen": "Dismiss",
       "hier": "Alert at this price",

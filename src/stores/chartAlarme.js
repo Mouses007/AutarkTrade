@@ -12,6 +12,8 @@ import axios from 'axios'
 import { sendNotification } from '../utils/notify.js'
 
 export const alarme = ref([])
+// Bis zu 50 Hinweise gemerkt; die Leiste zeigt fünf, der Rest ist darunter scrollbar.
+const MAX_HINWEISE = 50
 export const neueAusloesungen = ref([])     // [{ id, symbol, text, t, ziel: { symbol, markt, tf } }]
 
 let uhr = null
@@ -35,7 +37,7 @@ export async function ladeAlarme() {
                 const tr = a.art === 'momentum' ? letzte?.treffer?.[0] : null
                 const ziel = tr ? { symbol: tr.symbol, markt: tr.markt || 'futures', tf: tr.tf || null }
                     : a.symbol ? { symbol: a.symbol, markt: a.markt || 'futures', tf: null } : null
-                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, text, t: a.ausgeloestAm, ziel }].slice(-5)
+                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, text, t: a.ausgeloestAm, ziel }].slice(-MAX_HINWEISE)
                 sendNotification('chartAlarm', `Alarm ${symbol}`, text)
             }
         }
@@ -94,6 +96,11 @@ export async function loescheAlarm(id) {
     alarme.value = alarme.value.filter((a) => a.id !== id)
 }
 
-export function quittiere(id) {
-    neueAusloesungen.value = neueAusloesungen.value.filter((x) => x.id !== id)
+/** Einen Hinweis schliessen — mit `t` genau diesen (ein wiederholender Alarm kann mehrere haben), ohne alle des Alarms. */
+export function quittiere(id, t = null) {
+    neueAusloesungen.value = neueAusloesungen.value.filter((x) => !(x.id === id && (t == null || x.t === t)))
+}
+
+export function alleQuittieren() {
+    neueAusloesungen.value = []
 }
