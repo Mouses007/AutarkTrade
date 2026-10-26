@@ -5288,76 +5288,91 @@
     "ind": {
       "sma": {
         "name": "Simple Moving Average (SMA)",
+        "info": "Simple moving average: the mean of the closes of the last n candles. Price above it means the trend over that period is up. The longer, the slower and the more it acts as support/resistance (e.g. 200).",
         "kurz": "SMA",
         "text": "Plain average of the last n candles."
       },
       "ema": {
         "name": "Exponential Moving Average (EMA)",
+        "info": "Exponential moving average: like the SMA but weighting recent candles more, so it reacts faster. Price above the EMA = upward momentum; several EMAs stacked (21 over 50 over 200) show an orderly trend.",
         "kurz": "EMA",
         "text": "Weights recent candles more, reacts faster than the SMA."
       },
       "bb": {
         "name": "Bollinger Bands",
+        "info": "Bollinger Bands: middle line (SMA) plus/minus a multiple of the standard deviation. Narrow bands = little movement, often before a breakout; wide bands = high volatility. Price at the upper band means strong, not automatically expensive.",
         "kurz": "BB",
         "text": "Average ± a multiple of the standard deviation — how far price is from normal."
       },
       "vwap": {
         "name": "VWAP",
+        "info": "VWAP: volume-weighted average price since the anchor (day, week, month, swing). Shows where trading happened on average. Price above VWAP = buyers have the edge; the bands show how far price has moved away.",
         "kurz": "VWAP",
         "text": "Volume-weighted average price from the anchor (day, week, month, swing), optionally with bands."
       },
       "rsi": {
         "name": "RSI",
+        "info": "RSI (relative strength): ratio of up to down moves over the last n candles, 0–100.\nAbove 70 overbought, below 30 oversold (filled green/red) — in a trend it stays there for long, which is not a reversal signal by itself. Above 50 = upward momentum.\nRed/green lines marked “Div” show divergences: price makes a new high (low), the RSI does not.\nThe table shows zone, since when, trend and the cross with the moving line.",
         "kurz": "RSI",
         "text": "Wilder's relative strength, 0–100; marks at 70 and 30."
       },
       "macd": {
         "name": "MACD",
+        "info": "MACD: distance of a fast to a slow EMA (blue), its signal line (orange) and the histogram as the difference.\nMACD above zero = fast EMA above slow (uptrend). MACD above signal = short-term upward momentum.\nHistogram in four colours: strong = momentum growing, pale = fading — this often precedes a cross.\nThe table shows trend, position vs signal, momentum and the latest crosses.",
         "kurz": "MACD",
         "text": "Distance between two EMAs, signal line and histogram."
       },
       "stoch": {
         "name": "Stochastic",
+        "info": "Stochastic: where the close sits within the high–low range of the last n candles, 0–100. %K (blue) is the value, %D (orange) its average.\nAbove 80 / below 20 = at the top / bottom of the range (filled green/red). %K crossing %D in the extreme zone often marks a short-term turn.\n“Div” lines mark divergences to price. The table shows zone, %K vs %D and the last cross.",
         "kurz": "Stoch",
         "text": "Where the close sits within the range of the last n candles, 0–100."
       },
       "stochRsi": {
         "name": "Stochastic RSI",
+        "info": "Stochastic RSI: the stochastic applied to the RSI instead of price — where the RSI sits within its own range.\nFaster and more extreme than the stochastic and often pinned at 0 or 100: early on momentum turns, but with more false signals.\nFilled green/red above 80 / below 20, “Div” lines for divergences, the table with zone, %K vs %D and cross.",
         "kurz": "StochRSI",
         "text": "Stochastic applied to the RSI instead of price — hits the extremes more often."
       },
       "atr": {
         "name": "ATR",
+        "info": "ATR (Average True Range): average range of a candle over the last n candles, gaps included — how far price typically moves. No direction.\nLine colour: blue = quiet, grey = normal, orange = elevated, red = high (rank among the last 200 candles).\nThe table shows ATR in % of price, stop distances at 1/1.5/2 ATR and how much of a usual day has already run.",
         "kurz": "ATR",
         "text": "Average true range — how much price moves per candle."
       },
       "adx": {
         "name": "ADX / DMI",
+        "info": "ADX/DMI: the ADX (thick) measures trend strength without direction, +DI (green) and −DI (red) show who is pushing.\nBackground: grey below 20 = no trend, tinted from 25 = trend. The ADX line is grey without trend, green with buying, red with selling pressure.\nRising ADX = trend gaining strength; falling ADX above 40 = often exhaustion. The table sums this up in a reading.",
         "kurz": "ADX",
         "text": "Trend strength (ADX) and direction (+DI/−DI); mark at 25."
       },
       "mfi": {
         "name": "Money Flow Index",
+        "info": "MFI (Money Flow Index): an RSI with volume — the share of money that flowed on rising prices, 0–100.\nAbove 80 / below 20 = overbought / oversold (filled), above 50 = net inflow.\n“Div” lines: price makes a new high (low), money flow does not follow. The table shows zone, flow, trend and divergence.",
         "kurz": "MFI",
         "text": "Volume-weighted RSI, 0–100."
       },
       "obv": {
         "name": "On Balance Volume",
+        "info": "OBV (On Balance Volume): adds the volume of rising candles and subtracts that of falling ones. The level itself means nothing — it depends on where the history starts; the direction counts.\nColour: green = OBV rising over 20 candles, red = falling, orange = price and OBV moving against each other (distribution or accumulation).\nThe table shows the net volume of the last 20 candles and whether it confirms price.",
         "kurz": "OBV",
         "text": "Cumulative volume signed by price change — the direction matters, not the level."
       },
       "volSma": {
         "name": "Volume with average",
+        "info": "Volume with average: bars per candle, green on rising, red on falling candles; strong when volume is at least twice the average of the previous candles. The line is the moving average.\nThe table shows the relative volume of the last candle, the running candle so far, the rank and the volume trend.",
         "kurz": "Vol",
         "text": "Volume in its own pane with a moving average."
       },
       "oi": {
         "name": "Open interest",
+        "info": "Open interest: number of open futures contracts (area), below it the change per candle (green = positions added, red = closed).\nMeaningful only with price: price ↑ OI ↑ = new longs, price ↑ OI ↓ = short covering, price ↓ OI ↑ = new shorts, price ↓ OI ↓ = long exit. The table shows this for the last candle and 20 candles.",
         "kurz": "OI",
         "text": "Open contracts (Binance, hourly, last ~21 days) — OI rising with price means new positions. The bars below show the change per candle: green = positions added, red = positions closed."
       },
       "longShort": {
         "name": "Long share of accounts",
+        "info": "Long share of accounts (Binance, hourly): how many accounts are long — sentiment, not volume.\nArea green above 50, red below; the line turns orange when the share is extreme against its own history (rank ≥ 90 or ≤ 10): crowding on one side is fuel for a squeeze the other way.\nThe table shows share, rank and change over 20 candles.",
         "kurz": "Long %",
         "text": "Share of Binance accounts holding a long (hourly) — sentiment, not volume."
       },
@@ -5369,6 +5384,7 @@
       },
       "funding": {
         "name": "Funding",
+        "info": "Funding: payment between longs and shorts per funding time in percent (Binance). Positive = longs pay shorts.\nBar colour: muted = normal (about 0.01 % per 8 h), orange = elevated, red = high (longs crowded), violet = negative (shorts crowded).\nThe table shows the last payment, the sum over 24 h and 7 days and the annualised rate — the cost of holding a position.",
         "kurz": "Funding %",
         "text": "Funding rate per payment in percent (Binance, 180 days); several payments within one candle are summed."
       },
@@ -5380,26 +5396,31 @@
       },
       "vwapVector": {
         "name": "VWAP Vector",
+        "info": "VWAP Vector: PVSRA vector candles (candles with notable volume coloured), anchored VWAPs with swing fan, EMAs also from higher timeframes, Fibonacci, engulfing, naked POCs, candle POC, vector candle zones and daily open. Each part can be switched in the settings.",
         "kurz": "VWAP Vector",
         "text": "PVSRA vector candles, anchored VWAPs with swing fan, EMAs (also from higher timeframes), Fibonacci, engulfing, naked POCs, candle POC, vector candle zones and daily open."
       },
       "lsob": {
         "name": "LSOB (old strategy signals)",
+        "info": "Old signals of the LSOB strategy (sweep mark, order block zone, entry with stop and target), computed like the backtest. Replaced by the “LSOB” indicator; only kept in existing layouts.",
         "kurz": "LSOB old",
         "text": "Signals of the LSOB strategy over the loaded history: sweep level, order block zone, entry with stop and target, outcome. Computed like the backtest, with default parameters."
       },
       "guss": {
         "name": "EMA Bounce — pullback to the EMA",
+        "info": "Signals of the EMA Bounce strategy: new high, clean pullback to the EMA 50, entry with stop and target; plus the EMAs 21/50/200. Computed like the backtest with default parameters.",
         "kurz": "EMA Bounce",
         "text": "Signals of the EMA Bounce strategy: new high, clean pullback to the EMA 50, entry with stop and target. Plus EMA 21/50/200."
       },
       "lsobCv": {
         "name": "LSOB",
+        "info": "LSOB (Liquidity Sweep Order Block): a box forms at a pivot high (short) or low (long) that exceeds the previous one — liquidity was taken there. The box is the whole candle.\nIt becomes invalid when a candle body penetrates beyond the tolerance; a signal (drop) comes on the first retest: wick in the box, body stays outside. Optionally a warning line in front of it.\nRight-click a box to set an alert on exactly that box.",
         "kurz": "LSOB",
         "text": "Liquidity sweep boxes at pivot highs/lows that exceed the previous pivot; box = whole candle, invalid when a body penetrates beyond the tolerance; signal on the first retest; pre-warn line."
       },
       "gussCv": {
         "name": "EMA Bounce pullback (start/entry)",
+        "info": "EMA bounce pullback: start at the highest/lowest close of recent candles in EMA trend order, with ATR distances between the EMAs, and a clean pullback to the target EMA (counter-candle logic). Labels start/entry.",
         "kurz": "EMA Bounce run",
         "text": "Start at the highest/lowest close of the last candles with EMAs in trend order and ATR distances, clean pullback to the target EMA (counter candle logic), start/entry labels."
       }

@@ -25,6 +25,18 @@ export const TAGE = 10
 export const MIN_TAGE = 5
 const TAG_MS = 86_400_000
 
+/**
+ * Rang von `v` unter `liste` in Prozent (0–100), Gleichstände zählen halb
+ * (Mittelrang) — sonst läge ein Wert in einer gleichförmigen Reihe bei 0 %
+ * („sehr ruhig") statt in der Mitte.
+ */
+export function rangProzent(liste, v) {
+    if (!liste?.length || liste.length < 2) return null
+    let unter = 0, gleich = 0
+    for (const x of liste) { if (x < v) unter++; else if (x === v) gleich++ }
+    return Math.round(((unter + Math.max(0, gleich - 1) / 2) / (liste.length - 1)) * 100)
+}
+
 /** Einstufung eines Perzentils (0–100). */
 export function stufe(perzentil) {
     if (perzentil == null) return null
@@ -56,8 +68,7 @@ export function atrKennzahlen(kerzen, atrReihe, ivMs) {
     if (!(atr > 0) || !(k.c > 0)) return null
 
     const fenster = atrReihe.slice(Math.max(0, n - FENSTER), n).filter((v) => v > 0)
-    const unter = fenster.filter((v) => v < atr).length
-    const perzentil = fenster.length >= 20 ? Math.round((unter / (fenster.length - 1 || 1)) * 100) : null
+    const perzentil = fenster.length >= 20 ? rangProzent(fenster, atr) : null
     const med = fenster.length >= 20 ? median(fenster) : null
 
     const vorher = atrReihe[n - 1 - RICHTUNG_KERZEN]
@@ -438,7 +449,7 @@ export function longAnteilKennzahlen(werte) {
     if (j < 0) return null
     const v = werte[j]
     const fenster = werte.slice(Math.max(0, j - FENSTER + 1), j + 1).filter(Number.isFinite)
-    const perzentil = fenster.length >= 20 ? Math.round((fenster.filter((x) => x < v).length / (fenster.length - 1 || 1)) * 100) : null
+    const perzentil = fenster.length >= 20 ? rangProzent(fenster, v) : null
     const vorher = werte[j - 20]
     return {
         wert: v, perzentil,
@@ -463,7 +474,7 @@ export function volumenKennzahlen(kerzen, laenge = 20) {
     const schnitt = basis.reduce((s, x) => s + x, 0) / laenge
     if (!(schnitt > 0)) return null
     const fenster = v.slice(Math.max(0, zu - FENSTER + 1), zu + 1)
-    const perzentil = fenster.length >= 20 ? Math.round((fenster.filter((x) => x < v[zu]).length / (fenster.length - 1 || 1)) * 100) : null
+    const perzentil = fenster.length >= 20 ? rangProzent(fenster, v[zu]) : null
     const alt = v.slice(Math.max(0, zu - 2 * laenge), zu - laenge)
     const schnittAlt = alt.length === laenge ? alt.reduce((s, x) => s + x, 0) / laenge : null
     return {

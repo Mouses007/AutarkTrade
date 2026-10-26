@@ -155,6 +155,86 @@ class FensterTitel {
 }
 
 /**
+ * Waagrechte Hintergrund-Zonen eines Fensters (`def.zonen`: [{ von, bis, farbe }]) —
+ * z. B. beim ADX „kein Trend" unter 20 grau, „Trend" ab 25 getönt.
+ */
+class ZonenZeichnung {
+    constructor(serie, zonen) {
+        this.serie = serie
+        this.zonen = zonen
+        this.requestUpdate = () => {}
+        this._ansichten = [{
+            zOrder: () => 'bottom',
+            renderer: () => ({ draw: (ziel) => ziel.useMediaCoordinateSpace(({ context, mediaSize }) => this.zeichne(context, mediaSize)) }),
+        }]
+        serie.attachPrimitive(this)
+    }
+    attached({ requestUpdate }) { this.requestUpdate = requestUpdate }
+    detached() { this.requestUpdate = () => {} }
+    paneViews() { return this._ansichten }
+    updateAllViews() {}
+    zeichne(ctx, g) {
+        for (const z of this.zonen) {
+            const y1 = this.serie.priceToCoordinate(z.bis), y2 = this.serie.priceToCoordinate(z.von)
+            if (y1 == null || y2 == null) continue
+            const oben = Math.max(0, Math.min(y1, y2)), unten = Math.min(g.height, Math.max(y1, y2))
+            if (unten <= oben) continue
+            ctx.fillStyle = z.farbe
+            ctx.fillRect(0, oben, g.width, unten - oben)
+        }
+    }
+    abbauen() { try { this.serie.detachPrimitive(this) } catch { /* Chart schon weg */ } }
+}
+
+/**
+ * Divergenz-Linien im Oszillator-Fenster (`_div`, `divergenzen` in
+ * fensterFarben.js): rot = bärisch, grün = bullisch, mit kleinem Schild.
+ */
+class DivergenzZeichnung {
+    constructor(chart, serie) {
+        this.chart = chart
+        this.serie = serie
+        this.linien = []
+        this.requestUpdate = () => {}
+        this._ansichten = [{
+            zOrder: () => 'top',
+            renderer: () => ({ draw: (ziel) => ziel.useMediaCoordinateSpace(({ context }) => this.zeichne(context)) }),
+        }]
+        serie.attachPrimitive(this)
+    }
+    attached({ requestUpdate }) { this.requestUpdate = requestUpdate }
+    detached() { this.requestUpdate = () => {} }
+    paneViews() { return this._ansichten }
+    updateAllViews() {}
+    setze(linien) { this.linien = linien || []; this.requestUpdate() }
+    zeichne(ctx) {
+        if (!this.linien.length) return
+        const ts = this.chart.timeScale()
+        ctx.save()
+        ctx.lineWidth = 1.5
+        ctx.font = '600 9px -apple-system, "Segoe UI", Roboto, sans-serif'
+        ctx.textBaseline = 'middle'
+        for (const d of this.linien) {
+            const x1 = logischZuX(ts, d.i1), x2 = logischZuX(ts, d.i2)
+            const y1 = this.serie.priceToCoordinate(d.v1), y2 = this.serie.priceToCoordinate(d.v2)
+            if ([x1, x2, y1, y2].some((v) => v == null)) continue
+            const farbe = d.art === 'baerisch' ? '#ef5350' : '#26a69a'
+            ctx.strokeStyle = farbe
+            ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
+            const text = d.art === 'baerisch' ? 'Div ▼' : 'Div ▲'
+            const b = ctx.measureText(text).width + 6
+            const y = d.art === 'baerisch' ? y2 - 9 : y2 + 9
+            ctx.fillStyle = farbe
+            ctx.fillRect(x2 - b / 2, y - 6, b, 12)
+            ctx.fillStyle = '#fff'
+            ctx.fillText(text, x2 - b / 2 + 3, y)
+        }
+        ctx.restore()
+    }
+    abbauen() { try { this.serie.detachPrimitive(this) } catch { /* Chart schon weg */ } }
+}
+
+/**
  * Tabelle oben links im Fenster, unter dem Titel: Kennzahlen in Klartext
  * (`fensterTabelle.js`). Fast deckend — die Linien sollen die Schrift nicht
  * kreuzen; zu niedrige Fenster zeigen nur so viele Zeilen, wie hineinpassen.
@@ -327,7 +407,9 @@ export class IndikatorZeichner {
                             : null
             const titel = def.ort === 'eigen' && erste && this.titelFuer ? new FensterTitel(erste, this.titelFuer(instanz)) : null
             const tabelle = def.tabelle && erste && this.tabellenText ? new TabellenZeichnung(erste) : null
-            this.eintraege.push({ instanz, def, ausgaben, serien, werte: {}, zeichnung, titel, band, tabelle })
+            const zonen = def.zonen && erste ? new ZonenZeichnung(erste, def.zonen) : null
+            const divergenz = def.params?.some((p) => p.key === 'divergenzen') && erste ? new DivergenzZeichnung(this.chart, erste) : null
+            this.eintraege.push({ instanz, def, ausgaben, serien, werte: {}, zeichnung, titel, band, tabelle, zonen, divergenz })
         }
         // Das Kerzen-Pane soll den Löwenanteil behalten.
         const panes = this.chart.panes()
@@ -361,6 +443,8 @@ export class IndikatorZeichner {
             e.zeichnung?.abbauen()
             e.titel?.abbauen()
             e.tabelle?.abbauen()
+            e.zonen?.abbauen()
+            e.divergenz?.abbauen()
             e.band?.abbauen()
             for (const s of Object.values(e.serien)) {
                 try { this.chart.removeSeries(s) } catch { /* Chart schon weg */ }
@@ -375,6 +459,9 @@ export class IndikatorZeichner {
         const time = this.zuLwc(kerzen[i].t)
         if (wert == null || !Number.isFinite(wert)) return { time }
         const a = e.ausgaben.find((x) => x.key === key)
+        // Farbe je Punkt aus dem Register (`_farbe_<key>`, fensterFarben.js) — vor den festen Regeln
+        const f = e.werte['_farbe_' + key]?.[i]
+        if (f) return a?.art === 'flaeche' ? { time, value: wert, lineColor: f } : { time, value: wert, color: f }
         if (a?.vierFarben) return { time, value: wert, color: vierFarben(wert, e.werte[key]?.[i - 1]) }
         if (a?.art === 'histogramm' && a.vorzeichen) return { time, value: wert, color: wert >= 0 ? '#26a69a' : '#ef5350' }
         if (a?.art === 'histogramm' && key === 'hist') return { time, value: wert, color: wert >= 0 ? GRUEN : ROT }
@@ -396,6 +483,7 @@ export class IndikatorZeichner {
 
     zeichnungSetzen(e) {
         if (e.tabelle) e.tabelle.setze(this.tabellenText(e.instanz.typ, e.werte._tab))
+        if (e.divergenz) e.divergenz.setze(e.werte._div)
         if (e.band) e.band.setze(e.werte[e.def.band.linie])
         if (e.def.zeichner === 'vwapVector') e.zeichnung?.setze(e.werte._vv, this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'cv') e.zeichnung?.setze(e.werte._cv, this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))

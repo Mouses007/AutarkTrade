@@ -39,6 +39,7 @@ import {
     atrKennzahlen, adxKennzahlen, mfiKennzahlen, obvKennzahlen, oiKennzahlen, rsiKennzahlen, stochKennzahlen,
     macdKennzahlen, fundingKennzahlen, longAnteilKennzahlen, volumenKennzahlen,
 } from './fensterKennzahlen.js'
+import { adxFarben, atrFarben, obvFarben, volumenFarben, fundingFarben, longAnteilFarben, divergenzen } from './fensterFarben.js'
 
 /*
  * Tabelle im Fenster (alle Oszillatoren und Datenfenster ausser dem Momentum
@@ -47,6 +48,8 @@ import {
  * `fensterTabelle.js`). Abschaltbar je Indikator; `_tab` trägt die Kennzahlen.
  */
 const P_TABELLE = { key: 'tabelle', typ: 'schalter', vorgabe: true }
+// Divergenz-Linien zwischen Kurs und Oszillator (`divergenzen` in fensterFarben.js)
+const P_DIVERGENZ = { key: 'divergenzen', typ: 'schalter', vorgabe: true }
 const ivAus = (k) => (k.length > 1 ? k[k.length - 1].t - k[k.length - 2].t : 0)
 
 /** Preisquelle — wie bei TradingView wählbar. */
@@ -411,7 +414,7 @@ export const INDIKATOREN = {
         params: [P_LAENGE(14), P_QUELLE,
             { key: 'maAn', typ: 'schalter', vorgabe: true },
             // Nicht im Legendennamen: „RSI 14 14" liest sich wie ein Tippfehler.
-            { key: 'maLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 200, schritt: 1, nichtImNamen: true }, P_TABELLE],
+            { key: 'maLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 200, schritt: 1, nichtImNamen: true }, P_TABELLE, P_DIVERGENZ],
         tabelle: true,
         ausgaben: [
             { key: 'wert', art: 'linie', farbe: '#7e57c2', breite: 1 },
@@ -428,7 +431,7 @@ export const INDIKATOREN = {
         rechne: (k, p) => {
             const wert = rsi(mitQuelle(k, p.quelle), p.laenge)
             const ma = p.maAn ? smaSerie(wert, p.maLaenge) : null
-            return { wert, ...(ma ? { ma } : {}), _tab: p.tabelle ? rsiKennzahlen(k, wert, ma) : null }
+            return { wert, ...(ma ? { ma } : {}), _tab: p.tabelle ? rsiKennzahlen(k, wert, ma) : null, _div: p.divergenzen ? divergenzen(k, wert) : null }
         },
     },
     macd: {
@@ -462,7 +465,7 @@ export const INDIKATOREN = {
         // Vorgabe wie TradingView: %K 14, %K-Glättung 1, %D 3 (vorher 3 — eine „Slow"-Stochastik
         // unter dem Namen der normalen, und die Werte wichen vom TradingView-Chart ab).
         params: [P_LAENGE(14), { key: 'glaettK', typ: 'zahl', vorgabe: 1, min: 1, max: 20, schritt: 1 },
-            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE],
+            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE, P_DIVERGENZ],
         ausgaben: [
             { key: 'k', art: 'linie', farbe: '#2962ff', breite: 1 },
             { key: 'd', art: 'linie', farbe: '#ff6d00', breite: 1 },
@@ -473,7 +476,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const r = stochastic(k, { period: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD })
-            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null }
+            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null, _div: p.divergenzen ? divergenzen(k, r.k) : null }
         },
     },
     stochRsi: {
@@ -482,7 +485,7 @@ export const INDIKATOREN = {
             { key: 'rsiLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 100, schritt: 1 },
             P_LAENGE(14, 100),
             { key: 'glaettK', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 },
-            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE],
+            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE, P_DIVERGENZ],
         ausgaben: [
             { key: 'k', art: 'linie', farbe: '#2962ff', breite: 1 },
             { key: 'd', art: 'linie', farbe: '#ff6d00', breite: 1 },
@@ -493,7 +496,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const r = stochRsi(k, { rsiPeriod: p.rsiLaenge, stochPeriod: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD })
-            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null }
+            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null, _div: p.divergenzen ? divergenzen(k, r.k) : null }
         },
     },
     atr: {
@@ -503,7 +506,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const wert = atr(k, p.laenge)
-            return { wert, _tab: p.tabelle ? atrKennzahlen(k, wert, ivAus(k)) : null }
+            return { wert, _farbe_wert: atrFarben(wert), _tab: p.tabelle ? atrKennzahlen(k, wert, ivAus(k)) : null }
         },
     },
     adx: {
@@ -516,15 +519,17 @@ export const INDIKATOREN = {
             { key: 'minus', art: 'linie', farbe: '#ef5350', breite: 1 },
         ],
         linien: [25],
+        // Hintergrund nach Trendstärke: unter 20 kein Trend (grau), ab 25 Trend (grün getönt)
+        zonen: [{ von: 0, bis: 20, farbe: 'rgba(120,123,134,0.10)' }, { von: 25, bis: 200, farbe: 'rgba(38,166,154,0.07)' }],
         rechne: (k, p) => {
             const a = adx(k, p.laenge)
             const aus = { adx: a.adx, plus: a.plusDI, minus: a.minusDI }
-            return { ...aus, _tab: p.tabelle ? adxKennzahlen(aus) : null }
+            return { ...aus, _farbe_adx: adxFarben(aus.adx, aus.plus, aus.minus), _tab: p.tabelle ? adxKennzahlen(aus) : null }
         },
     },
     mfi: {
         ort: 'eigen',
-        params: [P_LAENGE(14), P_TABELLE],
+        params: [P_LAENGE(14), P_TABELLE, P_DIVERGENZ],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#00bcd4', breite: 1 }],
         linien: [80, 20],
         band: { oben: 80, unten: 20, linie: 'wert' },
@@ -532,7 +537,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const wert = mfi(k, p.laenge)
-            return { wert, _tab: p.tabelle ? mfiKennzahlen(k, wert) : null }
+            return { wert, _tab: p.tabelle ? mfiKennzahlen(k, wert) : null, _div: p.divergenzen ? divergenzen(k, wert) : null }
         },
     },
     obv: {
@@ -542,7 +547,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const wert = obv(k)
-            return { wert, _tab: p.tabelle ? obvKennzahlen(k, wert) : null }
+            return { wert, _farbe_wert: obvFarben(k, wert), _tab: p.tabelle ? obvKennzahlen(k, wert) : null }
         },
     },
     // ── Daten-Fenster aus eigenen Quellen ────────────────────────────────
@@ -593,10 +598,12 @@ export const INDIKATOREN = {
         params: [P_TABELLE],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#26a69a', breite: 2 }],
         linien: [50],
+        // Fläche über 50 grün, darunter rot (wie das Band der Oszillatoren, nur mit einer Grenze)
+        band: { oben: 50, unten: 50, linie: 'wert' },
         tabelle: true,
         rechne: (k, _p, ext) => {
             const wert = aufKerzen(k, ext, 'longPct', { amSchluss: true })
-            return { wert, _tab: _p.tabelle ? longAnteilKennzahlen(wert) : null }
+            return { wert, _farbe_wert: longAnteilFarben(wert), _tab: _p.tabelle ? longAnteilKennzahlen(wert) : null }
         },
     },
     funding: {
@@ -609,7 +616,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, _p, ext) => {
             const hist = jeKerzeSumme(k, ext, 'rate', 100)
-            return { hist, _tab: _p.tabelle ? fundingKennzahlen(k, hist) : null }
+            return { hist, _farbe_hist: fundingFarben(hist), _tab: _p.tabelle ? fundingKennzahlen(k, hist) : null }
         },
     },
     momentum: {
@@ -720,7 +727,7 @@ export const INDIKATOREN = {
             { key: 'wert', art: 'linie', farbe: '#ffb74d', breite: 1 },
         ],
         tabelle: true,
-        rechne: (k, p) => ({ vol: k.map((x) => x.v), wert: volumeSma(k, p.laenge), _tab: p.tabelle ? volumenKennzahlen(k, p.laenge) : null }),
+        rechne: (k, p) => ({ vol: k.map((x) => x.v), _farbe_vol: volumenFarben(k, p.laenge), wert: volumeSma(k, p.laenge), _tab: p.tabelle ? volumenKennzahlen(k, p.laenge) : null }),
     },
 }
 

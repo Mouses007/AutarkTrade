@@ -5288,76 +5288,91 @@
     "ind": {
       "sma": {
         "name": "Gleitender Durchschnitt (SMA)",
+        "info": "Einfacher gleitender Durchschnitt: der Mittelwert der Schlusskurse der letzten n Kerzen. Liegt der Kurs darüber, ist der Trend über diesen Zeitraum aufwärts. Je länger, desto träger und desto eher wirkt er als Unterstützung/Widerstand (z. B. 200).",
         "kurz": "SMA",
         "text": "Einfacher Durchschnitt der letzten n Kerzen."
       },
       "ema": {
         "name": "Exponentieller Durchschnitt (EMA)",
+        "info": "Exponentieller gleitender Durchschnitt: wie der SMA, gewichtet aber jüngere Kerzen stärker und reagiert dadurch schneller. Kurs über der EMA = Aufwärtsschwung; mehrere EMAs übereinander (21 über 50 über 200) zeigen einen geordneten Trend.",
         "kurz": "EMA",
         "text": "Gewichtet jüngere Kerzen stärker, reagiert schneller als der SMA."
       },
       "bb": {
         "name": "Bollinger-Bänder",
+        "info": "Bollinger-Bänder: Mittellinie (SMA) plus/minus ein Vielfaches der Standardabweichung. Enge Bänder = wenig Bewegung, oft vor einem Ausbruch; weite Bänder = hohe Schwankung. Kurs am oberen Band heisst stark, nicht automatisch teuer.",
         "kurz": "BB",
         "text": "Durchschnitt ± Vielfaches der Standardabweichung — zeigt, wie weit der Kurs vom Üblichen weg ist."
       },
       "vwap": {
         "name": "VWAP",
+        "info": "VWAP: volumengewichteter Durchschnittspreis ab dem Anker (Tag, Woche, Monat, Swing). Zeigt, wo im Schnitt gehandelt wurde. Kurs über dem VWAP = Käufer im Vorteil; die Bänder zeigen, wie weit sich der Kurs davon entfernt hat.",
         "kurz": "VWAP",
         "text": "Volumengewichteter Durchschnittspreis ab dem Anker (Tag, Woche, Monat, Swing), wahlweise mit Bändern."
       },
       "rsi": {
         "name": "RSI",
+        "info": "RSI (Relative Stärke): Verhältnis der Aufwärts- zu den Abwärtsbewegungen der letzten n Kerzen, 0–100.\nÜber 70 überkauft, unter 30 überverkauft (grün/rot gefüllt) — in einem Trend bleibt er dort lange, das ist allein kein Umkehrsignal. Über 50 = Aufwärtsschwung.\nRote/grüne Linien mit „Div“ markieren Divergenzen: Kurs macht ein neues Hoch (Tief), der RSI nicht.\nDie Tabelle nennt Zone, seit wann, Tendenz und Kreuzung mit der gleitenden Linie.",
         "kurz": "RSI",
         "text": "Relative Stärke nach Wilder, 0–100; Marken bei 70 und 30."
       },
       "macd": {
         "name": "MACD",
+        "info": "MACD: Abstand einer schnellen zu einer langsamen EMA (blau), dazu deren Signallinie (orange) und das Histogramm als Differenz.\nMACD über Null = schnelle EMA über der langsamen (Aufwärtstrend). MACD über Signal = kurzfristiger Schwung nach oben.\nHistogramm in vier Farben: kräftig = Schwung wächst, blass = Schwung lässt nach — das kündigt eine Kreuzung oft an.\nDie Tabelle nennt Trend, Lage zum Signal, Schwung und die letzten Kreuzungen.",
         "kurz": "MACD",
         "text": "Abstand zweier EMAs, Signallinie und Histogramm."
       },
       "stoch": {
         "name": "Stochastik",
+        "info": "Stochastik: wo der Schlusskurs innerhalb von Hoch und Tief der letzten n Kerzen liegt, 0–100. %K (blau) ist der Wert, %D (orange) sein Durchschnitt.\nÜber 80 / unter 20 = am oberen / unteren Rand der Spanne (grün/rot gefüllt). Kreuzt %K %D in der Extremzone, dreht der Kurs oft kurzfristig.\n„Div“-Linien markieren Divergenzen zum Kurs. Die Tabelle nennt Zone, %K gegen %D und die letzte Kreuzung.",
         "kurz": "Stoch",
         "text": "Lage des Schlusskurses in der Spanne der letzten n Kerzen, 0–100."
       },
       "stochRsi": {
         "name": "Stochastik-RSI",
+        "info": "Stochastik-RSI: die Stochastik, angewendet auf den RSI statt auf den Kurs — wo der RSI innerhalb seiner eigenen Spanne steht.\nReagiert schneller und extremer als die Stochastik und klebt oft an 0 oder 100: früh bei Wendungen im Schwung, aber mit mehr Fehlsignalen.\nGrün/rot gefüllt über 80 / unter 20, „Div“-Linien für Divergenzen, die Tabelle mit Zone, %K gegen %D und Kreuzung.",
         "kurz": "StochRSI",
         "text": "Stochastik auf den RSI statt auf den Kurs — schlägt häufiger an den Rändern an."
       },
       "atr": {
         "name": "ATR",
+        "info": "ATR (Average True Range): durchschnittliche Spanne einer Kerze der letzten n Kerzen, Lücken eingerechnet — wie weit sich der Kurs typischerweise bewegt. Keine Richtung.\nFarbe der Linie: blau = ruhig, grau = normal, orange = erhöht, rot = hoch (Rang unter den letzten 200 Kerzen).\nDie Tabelle nennt den ATR in % vom Kurs, Stop-Abstände bei 1/1,5/2 ATR und wie viel vom üblichen Tag schon gelaufen ist.",
         "kurz": "ATR",
         "text": "Durchschnittliche wahre Spanne — wie viel sich der Kurs je Kerze bewegt."
       },
       "adx": {
         "name": "ADX / DMI",
+        "info": "ADX/DMI: der ADX (dick) misst die Trendstärke ohne Richtung, +DI (grün) und −DI (rot) zeigen, wer drückt.\nHintergrund: grau unter 20 = kein Trend, getönt ab 25 = Trend. Die ADX-Linie ist grau ohne Trend, grün bei Käufer-, rot bei Verkäufer-Druck.\nSteigender ADX = der Trend gewinnt Kraft; fallender ADX über 40 = oft Erschöpfung. Die Tabelle fasst das in einer Lesart zusammen.",
         "kurz": "ADX",
         "text": "Trendstärke (ADX) und Richtung (+DI/−DI); Marke bei 25."
       },
       "mfi": {
         "name": "Money Flow Index",
+        "info": "MFI (Money Flow Index): ein RSI mit Volumen — Anteil des Geldes, das bei steigenden Preisen floss, 0–100.\nÜber 80 / unter 20 = überkauft / überverkauft (gefüllt), über 50 = netto Zufluss.\n„Div“-Linien: der Kurs macht ein neues Hoch (Tief), der Geldfluss läuft nicht mit. Die Tabelle nennt Zone, Geldfluss, Tendenz und Divergenz.",
         "kurz": "MFI",
         "text": "RSI mit Volumengewicht, 0–100."
       },
       "obv": {
         "name": "On Balance Volume",
+        "info": "OBV (On Balance Volume): addiert das Volumen steigender Kerzen und zieht das fallender ab. Der Stand selbst bedeutet nichts — er hängt davon ab, wo die Historie beginnt; zählt die Richtung.\nFarbe: grün = OBV steigt über 20 Kerzen, rot = fällt, orange = Kurs und OBV laufen gegeneinander (Verteilung oder Akkumulation).\nDie Tabelle nennt das Netto-Volumen der letzten 20 Kerzen und ob es den Kurs bestätigt.",
         "kurz": "OBV",
         "text": "Kumuliertes Volumen mit dem Vorzeichen der Kursänderung — aussagekräftig ist die Richtung, nicht die Höhe."
       },
       "volSma": {
         "name": "Volumen mit Durchschnitt",
+        "info": "Volumen mit Durchschnitt: Balken je Kerze, grün bei steigender, rot bei fallender Kerze; kräftig, wenn das Volumen mindestens doppelt so hoch ist wie der Schnitt der vorigen Kerzen. Die Linie ist der gleitende Durchschnitt.\nDie Tabelle nennt das relative Volumen der letzten Kerze, die laufende Kerze bisher, den Rang und den Volumen-Trend.",
         "kurz": "Vol",
         "text": "Volumen als eigenes Fenster mit gleitendem Durchschnitt."
       },
       "oi": {
         "name": "Open Interest",
+        "info": "Open Interest: Zahl der offenen Futures-Kontrakte (Fläche), darunter die Veränderung je Kerze (grün = Positionen kommen dazu, rot = sie werden geschlossen).\nAussagekräftig erst mit dem Kurs: Kurs ↑ OI ↑ = neue Longs, Kurs ↑ OI ↓ = Short-Eindeckung, Kurs ↓ OI ↑ = neue Shorts, Kurs ↓ OI ↓ = Long-Ausstieg. Die Tabelle nennt das für die letzte Kerze und 20 Kerzen.",
         "kurz": "OI",
         "text": "Offene Kontrakte (Binance, stündlich, letzte ~21 Tage) — steigt OI mit dem Preis, kommen neue Positionen dazu. Die Balken unten zeigen die Veränderung je Kerze: grün = Positionen kommen dazu, rot = sie werden geschlossen."
       },
       "longShort": {
         "name": "Long-Anteil der Konten",
+        "info": "Long-Anteil der Konten (Binance, stündlich): wie viele Konten long sind — eine Stimmung, kein Volumen.\nFläche grün über 50, rot darunter; die Linie wird orange, wenn der Anteil gegen die eigene Geschichte extrem ist (Rang ≥ 90 oder ≤ 10): Gedränge auf einer Seite ist Brennstoff für einen Squeeze in die Gegenrichtung.\nDie Tabelle nennt Anteil, Rang und Änderung über 20 Kerzen.",
         "kurz": "Long %",
         "text": "Anteil der Binance-Konten mit Long-Position (stündlich) — eine Stimmung, kein Volumen."
       },
@@ -5369,6 +5384,7 @@
       },
       "funding": {
         "name": "Funding",
+        "info": "Funding: Zahlung zwischen Long und Short je Funding-Termin in Prozent (Binance). Positiv = Longs zahlen Shorts.\nFarbe der Balken: gedämpft = normal (um 0,01 % je 8 h), orange = erhöht, rot = hoch (Longs gedrängt), violett = negativ (Shorts gedrängt).\nDie Tabelle nennt die letzte Zahlung, die Summe über 24 h und 7 Tage und die Hochrechnung aufs Jahr — die Kosten, eine Position zu halten.",
         "kurz": "Funding %",
         "text": "Funding-Satz je Zahlung in Prozent (Binance, 180 Tage); fallen mehrere Zahlungen in eine Kerze, summiert."
       },
@@ -5380,26 +5396,31 @@
       },
       "vwapVector": {
         "name": "VWAP Vector",
+        "info": "VWAP Vector: PVSRA-Vektorkerzen (Kerzen mit auffälligem Volumen eingefärbt), Anchored VWAPs mit Swing-Fächer, EMAs auch aus höheren Zeiteinheiten, Fibonacci, Engulfing, naked POCs, Candle-POC, Vektorkerzen-Zonen und Daily Open. Die Teile lassen sich einzeln in den Einstellungen schalten.",
         "kurz": "VWAP Vector",
         "text": "PVSRA-Vektorkerzen, Anchored VWAPs mit Swing-Fächer, EMAs (auch aus höheren Zeiteinheiten), Fibonacci, Engulfing, naked POCs, Candle-POC, Vektorkerzen-Zonen und Daily Open."
       },
       "lsob": {
         "name": "LSOB (alte Strategie-Signale)",
+        "info": "Alte Strategie-Signale der Strategie LSOB (Sweep-Marke, Order-Block-Zone, Einstieg mit Stop und Ziel), gerechnet wie im Backtest. Ersetzt durch den Indikator „LSOB“; nur noch in bestehenden Layouts.",
         "kurz": "LSOB alt",
         "text": "Signale der Strategie LSOB über den geladenen Verlauf: Sweep-Marke, Order-Block-Zone, Einstieg mit Stop und Ziel, Ausgang. Gerechnet wie im Backtest, mit den Standardparametern."
       },
       "guss": {
         "name": "EMA Bounce — Rücklauf an die EMA",
+        "info": "Signale der Strategie EMA Bounce: neues Hoch, saubere Korrektur an die EMA 50, Einstieg mit Stop und Ziel; dazu die EMAs 21/50/200. Gerechnet wie im Backtest mit den Standardparametern.",
         "kurz": "EMA Bounce",
         "text": "Signale der Strategie EMA Bounce: neues Hoch, saubere Korrektur an die EMA 50, Einstieg mit Stop und Ziel. Dazu EMA 21/50/200."
       },
       "lsobCv": {
         "name": "LSOB",
+        "info": "LSOB (Liquidity Sweep Order Block): eine Box entsteht an einem Pivot-Hoch (Short) bzw. -Tief (Long), das das vorige überbietet — dort wurde Liquidität abgeholt. Die Box ist die ganze Kerze.\nUngültig wird sie, wenn ein Kerzenkörper über die Toleranz eindringt; ein Signal (Tropfen) gibt es beim ersten Retest: Docht in der Box, Körper bleibt draussen. Optional eine Vorwarnlinie davor.\nRechtsklick in eine Box legt einen Alarm auf genau diese Box.",
         "kurz": "LSOB",
         "text": "Liquidity-Sweep-Boxen an Pivot-Hochs/-Tiefs, die das vorige Pivot überbieten; Box = ganze Kerze, ungültig bei Körper-Eindringen über die Toleranz; Signal beim ersten Retest; Vorwarnlinie."
       },
       "gussCv": {
         "name": "EMA-Bounce-Rücklauf (Start/Entry)",
+        "info": "EMA-Bounce-Rücklauf: Start beim höchsten/tiefsten Schluss der letzten Kerzen in EMA-Trendordnung, mit ATR-Abständen zwischen den EMAs, und eine saubere Korrektur an die Ziel-EMA (Gegenkerzen-Logik). Labels Start/Entry.",
         "kurz": "EMA-Bounce-Lauf",
         "text": "Start beim höchsten/tiefsten Schluss der letzten Kerzen in EMA-Trendordnung mit ATR-Abständen, saubere Korrektur an die Ziel-EMA (Gegenkerzen-Logik), Label Start/Entry."
       }

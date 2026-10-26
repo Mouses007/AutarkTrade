@@ -3,7 +3,7 @@
  *
  *   node src/utils/__selftest-fenster-kennzahlen.mjs
  */
-import { atrKennzahlen, stufe, FENSTER, adxKennzahlen, adxStufe, mfiKennzahlen, obvKennzahlen, oiKennzahlen, letzteKreuzung, rsiKennzahlen, stochKennzahlen, macdKennzahlen, fundingKennzahlen, fundingStufe, longAnteilKennzahlen, volumenKennzahlen } from './chart/fensterKennzahlen.js'
+import { atrKennzahlen, stufe, FENSTER, adxKennzahlen, adxStufe, mfiKennzahlen, obvKennzahlen, oiKennzahlen, letzteKreuzung, rsiKennzahlen, stochKennzahlen, macdKennzahlen, fundingKennzahlen, fundingStufe, longAnteilKennzahlen, volumenKennzahlen, rangProzent } from './chart/fensterKennzahlen.js'
 import { atr, obv } from '../../shared/indicators.js'
 
 let bestanden = 0
@@ -157,6 +157,8 @@ check('ADX: ohne Werte null', adxKennzahlen({ adx: [null], plus: [null], minus: 
     check('Volumen: letzte geschlossene 4× Schnitt, laufende 0,5×', nah(v.rvol, 4) && nah(v.laufend, 0.5) && v.perzentil === 100, JSON.stringify(v))
     check('Volumen: zu wenig Kerzen null', volumenKennzahlen(ks.slice(0, 10), 20) === null)
 }
+
+check('Rang: gleichförmige Reihe liegt in der Mitte (50 %), nicht bei 0', rangProzent([5, 5, 5, 5, 5], 5) === 50 && rangProzent([1, 2, 3, 4, 5], 5) === 100 && rangProzent([1, 2, 3, 4, 5], 1) === 0)
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 process.exit(fehlgeschlagen ? 1 : 0)
