@@ -34,7 +34,7 @@ function naechsteZeilen() {
 // „Fortlaufend": reicht immer bis zur aktuellen Kerze — schliesst „nach rechts verlängern" (bis zum Rand) aus
 const hatFortlaufend = computed(() => FORTLAUFEND_TYPEN.includes(typ.value))
 const hatFuellung = computed(() => ['rechteck', 'kanal'].includes(typ.value))
-const hatText = computed(() => ['text', 'horizontale', 'strahlH', 'rechteck'].includes(typ.value))
+const hatText = computed(() => ['text', 'horizontale', 'strahlH', 'rechteck', 'trendlinie', 'kanal'].includes(typ.value))
 const nurHier = computed(() => Array.isArray(props.zeichnung.sichtbarAuf) && props.zeichnung.sichtbarAuf.length > 0)
 
 function stil(patch) {

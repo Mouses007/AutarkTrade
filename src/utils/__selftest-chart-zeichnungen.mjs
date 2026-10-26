@@ -141,6 +141,39 @@ console.log('\nEreignisse in ihrer Kerze (Journal)\n')
     check('andere Typen unverändert', fortlaufendePunkte('fib', linie, 200, zuL) === linie)
 }
 
+// ── Rechteck: acht Griffe, Beschriftung ─────────────────────────────────────
+{
+    const { rechteckGezogen, textInBox, textAnLinie } = await import('./chart/zeichnungen/geometrie.js')
+    const box = [{ t: 100, p: 50 }, { t: 200, p: 60 }]
+    const pt = { t: 150, p: 55 }
+    const j = (x) => JSON.stringify(x)
+    check('Ecke 0/1: der gezogene Punkt ersetzt die Ecke', j(rechteckGezogen(box, 0, pt)) === j([pt, box[1]]) && j(rechteckGezogen(box, 1, pt)) === j([box[0], pt]))
+    check('Ecke 2 (Zeit von 0, Preis von 1)', j(rechteckGezogen(box, 2, pt)) === j([{ t: 150, p: 50 }, { t: 200, p: 55 }]))
+    check('Ecke 3 (Zeit von 1, Preis von 0)', j(rechteckGezogen(box, 3, pt)) === j([{ t: 100, p: 55 }, { t: 150, p: 60 }]))
+    check('Kantenmitte 4/5: nur die senkrechte Kante, Preise bleiben', j(rechteckGezogen(box, 4, pt)) === j([{ t: 150, p: 50 }, box[1]]) && j(rechteckGezogen(box, 5, pt)) === j([box[0], { t: 150, p: 60 }]))
+    check('Kantenmitte 6/7: nur die waagrechte Kante, Zeiten bleiben', j(rechteckGezogen(box, 6, pt)) === j([{ t: 100, p: 55 }, box[1]]) && j(rechteckGezogen(box, 7, pt)) === j([box[0], { t: 200, p: 55 }]))
+    check('Original bleibt unverändert', box[0].t === 100 && box[1].p === 60)
+    const b = { links: 0, oben: 0, rechts: 200, unten: 100 }
+    check('Text oben links (Vorgabe) innen', j(textInBox(b, {}, 40, 12)) === j({ x: 6, y: 15 }))
+    check('Text Mitte/Mitte zentriert', j(textInBox(b, { textH: 'mitte', textV: 'mitte' }, 40, 12)) === j({ x: 80, y: 50 + 12 * 0.35 }))
+    check('Text unter der Box rechts', j(textInBox(b, { textH: 'rechts', textV: 'unter' }, 40, 12)) === j({ x: 154, y: 115 }))
+    check('Text über der Box', textInBox(b, { textV: 'ueber' }, 40, 12).y === -5)
+    check('Linie: rechts unter der Linie', j(textAnLinie(0, 300, 50, { textH: 'rechts', textV: 'unten' }, 40, 12)) === j({ x: 254, y: 65 }))
+}
+
+// ── Rechteck-Griffe in Pixeln (ankerVon) ────────────────────────────────────
+{
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    e.vorschau = new Map()
+    e.zuX = (t) => t
+    e.zuY = (p) => 1000 - p
+    const anker = e.ankerVon({ id: 1, typ: 'rechteck', punkte: [{ t: 100, p: 50 }, { t: 200, p: 60 }], stil: {} }, 800)
+    check('Rechteck: acht Griffe, Kantenmitten in der Mitte der Kanten', anker.length === 8 && anker[4].x === 100 && anker[4].y === 945 && anker[6].x === 150 && anker[6].y === 950, JSON.stringify(anker))
+    const r = e.ankerVon({ id: 2, typ: 'rechteck', punkte: [{ t: 100, p: 50 }, { t: 200, p: 60 }], stil: { rechts: true } }, 800)
+    check('Rechteck nach rechts verlängert: rechte Griffe am Rand', r[1].x === 800 && r[5].x === 800)
+}
+
 // ── Deckkraft ───────────────────────────────────────────────────────────────
 {
     const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')

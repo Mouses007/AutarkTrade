@@ -14,6 +14,7 @@
 import {
     zeitZuLogisch, logischZuZeit, logischZuX, abstandZuStrecke, verlaengere, preisAufGerade,
     fibPreise, positionWerte, magnet, imRechteck, messung, dauerText, fortlaufendePunkte,
+    textInBox, textAnLinie, rechteckGezogen,
 } from './geometrie.js'
 import { werkzeug, stilFuer } from './werkzeuge.js'
 import { volumenprofil } from '../../../../shared/volumenprofil.js'
@@ -286,6 +287,17 @@ export class ZeichenEbene {
                     { x: x1, y: Y(pk[0].p) },
                 ]
             }
+            case 'rechteck': {
+                // Vier Ecken und vier Kantenmitten (Reihenfolge wie `rechteckGezogen`):
+                // an einer Kantenmitte verschiebt man nur diese Kante.
+                const xa = X(pk[0].t), xb = stilFuer(z).rechts ? breite : X(pk[1].t), ya = Y(pk[0].p), yb = Y(pk[1].p)
+                const xm = xa != null && xb != null ? (xa + xb) / 2 : null
+                const ym = ya != null && yb != null ? (ya + yb) / 2 : null
+                return [
+                    { x: xa, y: ya }, { x: xb, y: yb }, { x: xa, y: yb }, { x: xb, y: ya },
+                    { x: xa, y: ym }, { x: xb, y: ym }, { x: xm, y: ya }, { x: xm, y: yb },
+                ]
+            }
             case 'kanal': {
                 // Ecken der Grundlinie, dazu je Kante ein Mittelpunkt: daran verschiebt man
                 // die Kante parallel. Der dritte Punkt bleibt unsichtbar, er trägt nur den Abstand.
@@ -485,7 +497,7 @@ export class ZeichenEbene {
         const { x, y, innen } = this.lokal(e)
         if (!innen || this.werkzeugTyp) return
         const t = this.trefferTest(x, y)
-        if (t && (t.z.typ === 'text' || t.z.typ === 'horizontale' || t.z.typ === 'strahlH' || t.z.typ === 'rechteck')) {
+        if (t && ['text', 'horizontale', 'strahlH', 'rechteck', 'trendlinie', 'kanal'].includes(t.z.typ)) {
             e.stopPropagation()
             this.rueckruf.textBearbeiten?.(t.z.id)
         } else if (t?.z.typ === 'position') {
@@ -538,6 +550,7 @@ export class ZeichenEbene {
             }
             return [na, nb, { t: na.t, p: na.p + versatz }]
         }
+        if (z.typ === 'rechteck') return rechteckGezogen(orig, z.anker, pt)
         if (z.typ === 'horizontale') return [{ t: orig[0].t, p: pt.p }]
         if (z.typ === 'vertikale') return [{ t: pt.t, p: orig[0].p }]
         if (shift && (z.typ === 'trendlinie' || z.typ === 'strahl')) pt.p = orig[1 - z.anker].p
@@ -637,16 +650,29 @@ export class ZeichenEbene {
         ctx.setLineDash([])
     }
 
-    beschriftung(ctx, text, x, y, farbe, { hinten = null, rechtsbuendig = false } = {}) {
+    beschriftung(ctx, text, x, y, farbe, { hinten = null, rechtsbuendig = false, groesse = 11 } = {}) {
         if (!text) return
         const b = ctx.measureText(text).width
         const xx = rechtsbuendig ? x - b - 6 : x
         if (hinten) {
             ctx.fillStyle = hinten
-            ctx.fillRect(xx - 3, y - 11, b + 6, 15)
+            ctx.fillRect(xx - 3, y - groesse, b + 6, groesse + 4)
         }
         ctx.fillStyle = farbe
         ctx.fillText(text, xx, y)
+    }
+
+    /**
+     * Beschriftung einer Zeichnung mit ihrer eigenen Grösse (`stil.groesse`) und Lage
+     * (`stil.textH`/`stil.textV`). `lage(w, g)` liefert die Grundlinie aus Breite und Grösse.
+     */
+    eigenerText(ctx, s, lage, hinten = 'rgba(0,0,0,0.45)') {
+        if (!s.text) return
+        const g = Number(s.groesse) > 0 ? Number(s.groesse) : 11
+        ctx.font = `${g}px -apple-system, "Segoe UI", Roboto, sans-serif`
+        const { x, y } = lage(ctx.measureText(s.text).width, g)
+        this.beschriftung(ctx, s.text, x, y, s.farbe, { hinten, groesse: g })
+        ctx.font = SCHRIFT
     }
 
     /** Volumenprofil der geladenen Kerzen zwischen den beiden Zeitpunkten (zwischengespeichert). */
@@ -686,7 +712,7 @@ export class ZeichenEbene {
                 const y = Y(pk[0].p)
                 if (fehlt(y)) return
                 this.linie(ctx, 0, y, breite, y, s)
-                if (s.text) this.beschriftung(ctx, s.text, 8, y - 4, s.farbe)
+                this.eigenerText(ctx, s, (w, g) => textAnLinie(2, breite, y, s, w, g), null)
                 break
             }
             case 'strahlH': {
@@ -694,8 +720,8 @@ export class ZeichenEbene {
                 if (fehlt(x, y)) return
                 this.linie(ctx, x, y, breite, y, s)
                 // `textPos: 'rechts'` (KI-Vorschläge): am rechten Rand neben der Preisachse, nicht über den Kerzen
-                if (s.text && s.textPos === 'rechts') this.beschriftung(ctx, s.text, breite - 4, y - 4, s.farbe, { rechtsbuendig: true, hinten: 'rgba(0,0,0,0.45)' })
-                else if (s.text) this.beschriftung(ctx, s.text, x + 6, y - 4, s.farbe)
+                if (s.text && s.textPos === 'rechts' && !s.textH) this.beschriftung(ctx, s.text, breite - 4, y - 4, s.farbe, { rechtsbuendig: true, hinten: 'rgba(0,0,0,0.45)' })
+                else this.eigenerText(ctx, s, (w, g) => textAnLinie(x, breite, y, s, w, g), null)
                 break
             }
             case 'vertikale': {
@@ -719,7 +745,7 @@ export class ZeichenEbene {
                     const ex = Math.min(v.bx, breite), ey = v.bx !== v.ax ? v.ay + (v.by - v.ay) * (ex - v.ax) / (v.bx - v.ax) : v.by
                     const x = ex + 6 + w <= breite - 4 ? ex + 6 : Math.max(4, ex - w - 6)
                     this.beschriftung(ctx, s.text, x, Math.max(14, Math.min(hoehe - 4, ey - 6)), s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
-                } else if (s.text) this.beschriftung(ctx, s.text, bx + 6, by - 4, s.farbe, { hinten: 'rgba(0,0,0,0.45)' })
+                } else this.eigenerText(ctx, s, () => ({ x: bx + 6, y: by - 4 }))
                 break
             }
             case 'kanal': {
@@ -738,7 +764,7 @@ export class ZeichenEbene {
                 // Name (z. B. „Bull-Flagge" der KI-Analyse) über der oberen Kante, an ihrem Anfang
                 if (s.text) {
                     const oben = a2.y < a1.y ? a2 : a1
-                    this.beschriftung(ctx, s.text, oben.x + 4, oben.y - 5, s.farbe, { hinten: 'rgba(0,0,0,0.55)' })
+                    this.eigenerText(ctx, s, () => ({ x: oben.x + 4, y: oben.y - 5 }), 'rgba(0,0,0,0.55)')
                 }
                 break
             }
@@ -755,7 +781,7 @@ export class ZeichenEbene {
                 ctx.setLineDash(strichMuster(s.strich, s.breite || 1))
                 ctx.strokeRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1), Math.abs(y2 - y1))
                 ctx.setLineDash([])
-                if (s.text) this.beschriftung(ctx, s.text, Math.min(x1, x2) + 6, Math.min(y1, y2) + 14, s.farbe)
+                this.eigenerText(ctx, s, (w, g) => textInBox({ links: Math.min(x1, x2), oben: Math.min(y1, y2), rechts: Math.max(x1, x2), unten: Math.max(y1, y2) }, s, w, g), null)
                 break
             }
             case 'volprofil': {

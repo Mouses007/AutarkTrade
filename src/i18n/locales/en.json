@@ -5937,7 +5937,23 @@
       "entsperren": "Unlock",
       "zeilen": "Volume profile rows",
       "einfarbig": "Single colour (no buy/sell split)",
-      "marken": "Show POC, VAH and VAL as lines"
+      "marken": "Show POC, VAH and VAL as lines",
+      "textTitel": "Label",
+      "textPlatzhalter": "Text (empty = none)",
+      "textGroesse": "Size",
+      "textLage": "Position",
+      "textV": {
+        "ueber": "above the box",
+        "oben": "top",
+        "mitte": "middle",
+        "unten": "bottom",
+        "unter": "below the box"
+      },
+      "textH": {
+        "links": "left",
+        "mitte": "centre",
+        "rechts": "right"
+      }
     },
     "textEingeben": "Text:",
     "alleLoeschenFrage": "Delete one drawing on {symbol}? Locked ones stay. | Delete {n} drawings on {symbol}? Locked ones stay.",

@@ -29,6 +29,7 @@ import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { zeichnungenVon, legeAn, aendere, loesche } from '../../stores/chartZeichnungen.js'
 import ZeichnungStil from './ZeichnungStil.vue'
 import PositionsRechner from './PositionsRechner.vue'
+import TextStil from './TextStil.vue'
 import { kiVorschau } from '../../utils/chart/kiZeichnungen.js'
 import { kiVorschauDaten, kiVorschlag, uebernimmKi, verwirfKi } from '../../stores/chartKi.js'
 import TradeKarte from './TradeKarte.vue'
@@ -944,13 +945,15 @@ function oeffneRechner(id) {
 }
 watch(auswahlId, (id) => { if (rechnerFenster.value && rechnerFenster.value.id !== id) rechnerFenster.value = null })
 
+// Beschriftung bearbeiten (Text-Knopf der Stil-Leiste oder Doppelklick): das Feld `TextStil`
+// unter der Stil-Leiste, mit Grösse und Lage — kein Browser-Dialog mehr.
+const textOffen = ref(null)       // id der Zeichnung, deren Textfeld offen ist
 function textBearbeiten(id) {
-    const z = alleZeichnungen.value.find((x) => x.id === id)
-    if (!z) return
-    const text = window.prompt(t('chart.textEingeben'), z.stil?.text || '')
-    if (text === null) return
-    aendere(props.panel.symbol, id, { stil: { ...(z.stil || {}), text: text.slice(0, 200) } })
+    auswahlId.value = id
+    ebene?.setzeAuswahl(id)
+    textOffen.value = id
 }
+watch(auswahlId, (id) => { if (textOffen.value && textOffen.value !== id) textOffen.value = null })
 
 function aendereAuswahl(patch) {
     if (!ausgewaehlt.value) return
@@ -1496,8 +1499,9 @@ defineExpose({
 
         <ZeichnungStil v-if="ausgewaehlt" :zeichnung="ausgewaehlt" :interval="panel.interval"
             :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)"
-            @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textBearbeiten(ausgewaehlt.id)"
+            @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textOffen = textOffen === ausgewaehlt.id ? null : ausgewaehlt.id"
             @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />
+        <TextStil v-if="textOffen && ausgewaehlt?.id === textOffen" :zeichnung="ausgewaehlt" @aendere="aendereAuswahl" @schliesse="textOffen = null" />
         <PositionsRechner v-if="rechnerFenster && ausgewaehlt?.id === rechnerFenster.id && ausgewaehlt.stil?.rechner" :zeichnung="rechnerZeichnung" :mmr="mmr"
             :format-preis="(p) => kerzenSerie?.priceFormatter().format(p) ?? String(p)" @aendere="aendereAuswahl" @schliesse="rechnerFenster = null" />
 

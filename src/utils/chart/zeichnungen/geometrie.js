@@ -217,3 +217,53 @@ export function dauerText(ms) {
     if (h) return `${h}h ${m}m`
     return `${m}m`
 }
+
+// ── Beschriftung: Grösse und Lage ─────────────────────────────────────────
+/** Wählbare Textgrössen (px) und Lagen der Beschriftung einer Zeichnung. */
+export const TEXT_GROESSEN = [9, 10, 11, 12, 14, 16, 18, 20, 24, 28]
+export const TEXT_H = ['links', 'mitte', 'rechts']
+export const TEXT_V_BOX = ['ueber', 'oben', 'mitte', 'unten', 'unter']
+export const TEXT_V_LINIE = ['oben', 'unten']
+
+/**
+ * Wo der Text in/an einem Rechteck steht: `textH` links/mitte/rechts,
+ * `textV` ueber (ausserhalb, über der Oberkante) / oben / mitte / unten (innen) /
+ * unter (ausserhalb). Liefert die Grundlinie (x, y) für `fillText`.
+ * @param {number} w  gemessene Textbreite, @param {number} g  Schriftgrösse
+ */
+export function textInBox({ links, oben, rechts, unten }, { textH = 'links', textV = 'oben' } = {}, w, g) {
+    const x = textH === 'rechts' ? rechts - 6 - w : textH === 'mitte' ? (links + rechts) / 2 - w / 2 : links + 6
+    const y = textV === 'ueber' ? oben - 5
+        : textV === 'unter' ? unten + g + 3
+            : textV === 'mitte' ? (oben + unten) / 2 + g * 0.35
+                : textV === 'unten' ? unten - 5
+                    : oben + g + 3
+    return { x, y }
+}
+
+/** Text an einer waagrechten Linie von x0 bis x1: links/mitte/rechts, über oder unter der Linie. */
+export function textAnLinie(x0, x1, y, { textH = 'links', textV = 'oben' } = {}, w, g) {
+    const x = textH === 'rechts' ? x1 - 6 - w : textH === 'mitte' ? (x0 + x1) / 2 - w / 2 : x0 + 6
+    return { x, y: textV === 'unten' ? y + g + 3 : y - 4 }
+}
+
+/**
+ * Rechteck an einem seiner acht Griffe ziehen. Die Ecken sind die beiden
+ * gespeicherten Punkte (0, 1) und die beiden anderen (2 = Zeit von 0 + Preis von 1,
+ * 3 = Zeit von 1 + Preis von 0); die Kantenmitten bewegen nur eine Kante:
+ * 4/5 die senkrechte Kante bei Zeit 0/1, 6/7 die waagrechte bei Preis 0/1.
+ */
+export function rechteckGezogen(orig, anker, pt) {
+    const [a, b] = orig.map((q) => ({ ...q }))
+    switch (anker) {
+        case 0: return [{ ...pt }, b]
+        case 1: return [a, { ...pt }]
+        case 2: return [{ t: pt.t, p: a.p }, { t: b.t, p: pt.p }]
+        case 3: return [{ t: a.t, p: pt.p }, { t: pt.t, p: b.p }]
+        case 4: return [{ t: pt.t, p: a.p }, b]
+        case 5: return [a, { t: pt.t, p: b.p }]
+        case 6: return [{ t: a.t, p: pt.p }, b]
+        case 7: return [a, { t: b.t, p: pt.p }]
+        default: return [a, b]
+    }
+}
