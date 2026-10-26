@@ -363,6 +363,13 @@
     "src/views/einstellungen/live/Marktradar.vue|af56a140fb84": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "vite.config.js|5d47e06eeef9": "Gerüst von Vue, Router, Vite",
     "server/update-api.js|91ba38c394c9": "Folge von Konsolenmeldungen (Ergebnis der Update-Prüfung beim Start)",
-    "server/chart-alarm-momentum.js|09ce19ce918b": "Allerwelts-Muster: gültige Schlüssel als Set, Einträge ausserhalb davon aus einem Objekt löschen (30 Tokens, eigener Zusammenhang: Momentum-Alarm-Zustand je Paar)"
+    "server/chart-alarm-momentum.js|09ce19ce918b": "Allerwelts-Muster: gültige Schlüssel als Set, Einträge ausserhalb davon aus einem Objekt löschen (30 Tokens, eigener Zusammenhang: Momentum-Alarm-Zustand je Paar)",
+    "server/portfolio/api.js|67ff4525c863": "Abfragefilter aus Query-Parametern (if (req.query.x) q.where(…), je Feld eine Zeile; Gerüst von Knex/Express)",
+    "server/portfolio/pdf-text.js|1e082550a1a7": "Zählschleife mit Elementzugriff und Bedingung (übliche Form)",
+    "src/components/portfolio/PortfolioBewegungen.vue|0336fde7c90a": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/portfolio/PortfolioQuellen.vue|7a9f1ce75546": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/portfolio/PortfolioSteuer.vue|35107b2e52c4": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/rahmen/PositionsWarnung.vue|c3fcf62cc593": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/utils/chart/fensterFarben.js|f2512106d4d8": "Reihe abbilden mit Index und Zahl-Prüfung (arr.map((v, i) => { if (!Number.isFinite(v)) … }), übliche Form)"
   }
 }
