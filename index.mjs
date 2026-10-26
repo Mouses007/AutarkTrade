@@ -96,6 +96,13 @@ const CSP = [
     "form-action 'self'",
     "frame-ancestors 'none'",
 ].join('; ')
+// API-Antworten sind Live-Daten: nie zwischenspeichern, keine ETags. Mit ETag
+// fragte der Browser bedingt nach und reichte bei einem nicht vertrauten
+// Zertifikat die nackte 304 an die Seite durch („Request failed with status
+// code 304", 26.10.2026). Statische Dateien behalten ihre ETags (express.static).
+app.set('etag', false)
+app.use('/api', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next() })
+
 app.use(function sicherheitsKoepfe(req, res, next) {
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.setHeader('X-Frame-Options', 'DENY')
