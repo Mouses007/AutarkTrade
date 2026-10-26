@@ -99,7 +99,7 @@ export function linienPreis(z, t, kante = 'oben', bedingung = null) {
         case 'trendlinie': {
             if (pk.length < 2) return null
             if (t < pk[0].t && !stil.links) return null
-            if (t > pk[1].t && !stil.rechts) return null
+            if (t > pk[1].t && !stil.rechts && !stil.fortlaufend) return null
             return geradePreis(pk[0], pk[1], t, log)
         }
         case 'volprofil': {
@@ -124,7 +124,8 @@ export function kanalBei(z, t) {
     if (!a || !b) return null
     const stil = z?.stil || {}
     if (t < a.t && !stil.links) return null
-    if (t > b.t && !stil.rechts) return null
+    // „fortlaufend" reicht immer bis zur aktuellen Kerze — für den Alarm, der jetzt prüft, wie verlängert
+    if (t > b.t && !stil.rechts && !stil.fortlaufend) return null
     const log = stil.skala === 'log' && a.p > 0 && b.p > 0 && (!c || c.p > 0)
     const basis = geradePreis(a, b, t, log)
     // Auf der Log-Skala ist der Abstand der Parallelen ein FAKTOR, kein Betrag.
@@ -140,7 +141,7 @@ export function zoneBei(z, t) {
     if (z?.typ === 'kanal') return kanalBei(z, t)
     if (z?.typ !== 'rechteck' || pk.length < 2) return null
     const von = Math.min(pk[0].t, pk[1].t)
-    const bis = z.stil?.rechts ? Infinity : Math.max(pk[0].t, pk[1].t)
+    const bis = z.stil?.rechts || z.stil?.fortlaufend ? Infinity : Math.max(pk[0].t, pk[1].t)
     if (t < von || t > bis) return null
     return { unten: Math.min(pk[0].p, pk[1].p), oben: Math.max(pk[0].p, pk[1].p) }
 }

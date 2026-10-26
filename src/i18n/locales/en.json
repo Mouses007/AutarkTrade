@@ -5706,6 +5706,8 @@
       "mmr": "Isolated, maintenance margin {pct} % — cross margin not modelled"
     },
     "stil": {
+      "fortlaufend": "Continuous: always reaches the current candle",
+      "fortlaufendAn": "Continuous on — always reaches the current candle (click: fixed at the end point)",
       "breite": "Line width",
       "strich": {
         "voll": "Solid",

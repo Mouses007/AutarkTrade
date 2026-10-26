@@ -75,6 +75,8 @@ const PFADE = {
     rechner: ['M6 3h12v18H6z', 'M9 6.5h6v3H9z', 'M9 13h.01M12 13h.01M15 13h.01M9 16.5h.01M12 16.5h.01M15 16.5h.01'],
     pfeilAnschlagLinks: ['M21 12H8', 'M13 7l-5 5 5 5', 'M4 5v14'],
     pfeilAnschlagRechts: ['M3 12h13', 'M11 7l5 5-5 5', 'M20 5v14'],
+    // Linie, die bis zur aktuellen Kerze mitläuft
+    fortlaufend: ['M3 17l11-7', 'M14 10l2.5-1.5', 'M19 4v3M19 15v3', 'M17.5 7h3v8h-3z'],
     raster: ['M4 4h6v6H4z', 'M14 4h6v6h-6z', 'M4 14h6v6H4z', 'M14 14h6v6h-6z'],
     quadrat: ['M4 4h16v16H4z'],
     spalten: ['M4 4h16v16H4z', 'M12 4v16'],

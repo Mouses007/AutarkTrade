@@ -122,6 +122,25 @@ console.log('\nEreignisse in ihrer Kerze (Journal)\n')
     check('Reihenfolge in derselben Kerze bleibt (Einstieg 01:00 vor Ausstieg 20:00)', a < b && Math.round(a) === 1 && Math.round(b) === 1)
 }
 
+// ── Fortlaufend: bis zur aktuellen Kerze ────────────────────────────────────
+{
+    const { fortlaufendePunkte } = await import('./chart/zeichnungen/geometrie.js')
+    const zuL = (t) => t / 10          // 10 ms je Kerze
+    const linie = [{ t: 0, p: 100 }, { t: 100, p: 110 }]
+    const f = fortlaufendePunkte('trendlinie', linie, 200, zuL)
+    check('Linie: Endpunkt rückt zur aktuellen Kerze, entlang der Geraden', f[1].t === 200 && Math.abs(f[1].p - 120) < 1e-9 && f[0].t === 0 && f[0].p === 100)
+    const rueck = fortlaufendePunkte('trendlinie', [linie[1], linie[0]], 200, zuL)
+    check('Linie rückwärts gezeichnet: der spätere Punkt rückt vor', rueck[0].t === 200 && Math.abs(rueck[0].p - 120) < 1e-9 && rueck[1].t === 0)
+    check('endet schon rechts der aktuellen Kerze: bleibt', fortlaufendePunkte('trendlinie', linie, 50, zuL) === linie)
+    const log = fortlaufendePunkte('trendlinie', [{ t: 0, p: 100 }, { t: 100, p: 200 }], 200, zuL, true)
+    check('Log-Skala: im Logarithmus verlängert (×2 je Strecke → 400)', Math.abs(log[1].p - 400) < 1e-6, log[1].p)
+    const kanal = fortlaufendePunkte('kanal', [{ t: 0, p: 100 }, { t: 100, p: 110 }, { t: 0, p: 90 }], 200, zuL)
+    check('Kanal: Grundlinie verlängert, dritter Punkt (Abstand) bleibt', kanal[1].t === 200 && Math.abs(kanal[1].p - 120) < 1e-9 && kanal[2].p === 90)
+    const re = fortlaufendePunkte('rechteck', [{ t: 0, p: 100 }, { t: 100, p: 110 }], 200, zuL)
+    check('Rechteck: nur die rechte Kante rückt vor, Preise bleiben', re[1].t === 200 && re[1].p === 110 && re[0].p === 100)
+    check('andere Typen unverändert', fortlaufendePunkte('fib', linie, 200, zuL) === linie)
+}
+
 // ── Gesperrte liegen hinten (Treffertest) ───────────────────────────────────
 {
     const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')

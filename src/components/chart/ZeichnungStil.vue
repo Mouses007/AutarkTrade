@@ -8,6 +8,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FARBEN, stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
+import { FORTLAUFEND_TYPEN } from '../../utils/chart/zeichnungen/geometrie.js'
 import { Symbol } from '../basis'
 import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
 
@@ -30,6 +31,8 @@ function naechsteZeilen() {
     const jetzt = s.value.zeilen || 24
     stil({ zeilen: ZEILEN[(ZEILEN.indexOf(jetzt) + 1) % ZEILEN.length] })
 }
+// „Fortlaufend": reicht immer bis zur aktuellen Kerze — schliesst „nach rechts verlängern" (bis zum Rand) aus
+const hatFortlaufend = computed(() => FORTLAUFEND_TYPEN.includes(typ.value))
 const hatFuellung = computed(() => ['rechteck', 'kanal'].includes(typ.value))
 const hatText = computed(() => ['text', 'horizontale', 'strahlH', 'rechteck'].includes(typ.value))
 const nurHier = computed(() => Array.isArray(props.zeichnung.sichtbarAuf) && props.zeichnung.sichtbarAuf.length > 0)
@@ -67,7 +70,9 @@ function nurDieseZeiteinheit() {
             {{ s.strich === 'gestrichelt' ? '╌' : s.strich === 'gepunktet' ? '┈' : '─' }}
         </button>
         <button v-if="hatVerlaengern" class="k" :class="{ an: s.rechts }" :title="t('chart.stil.rechts')"
-            @click="stil({ rechts: !s.rechts })" :aria-label="t('chart.stil.rechts')"><Symbol name="pfeilAnschlagRechts" /></button>
+            @click="stil({ rechts: !s.rechts, ...(s.rechts ? {} : { fortlaufend: false }) })" :aria-label="t('chart.stil.rechts')"><Symbol name="pfeilAnschlagRechts" /></button>
+        <button v-if="hatFortlaufend" class="k" :class="{ an: s.fortlaufend }" :title="t(s.fortlaufend ? 'chart.stil.fortlaufendAn' : 'chart.stil.fortlaufend')"
+            @click="stil({ fortlaufend: !s.fortlaufend, ...(s.fortlaufend ? {} : { rechts: false }) })" :aria-label="t('chart.stil.fortlaufend')"><Symbol name="fortlaufend" /></button>
         <button v-if="typ === 'trendlinie'" class="k" :class="{ an: s.links }" :title="t('chart.stil.links')"
             @click="stil({ links: !s.links })" :aria-label="t('chart.stil.links')"><Symbol name="pfeilAnschlagLinks" /></button>
  <button v-if="typ === 'volprofil'" class="k" :title="t('chart.stil.zeilen')" @click="naechsteZeilen" :aria-label="t('chart.stil.zeilen')">

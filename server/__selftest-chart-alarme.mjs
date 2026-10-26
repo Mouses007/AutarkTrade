@@ -45,6 +45,12 @@ console.log('\nLinien\n')
     check('Trendlinie hinter ihrem Ende existiert nicht', linienPreis(tl, T + 150 * M) === null)
     const tlR = { ...tl, stil: { rechts: true } }
     check('nach rechts verlängert: Preis in der Zukunft', nahe(linienPreis(tlR, T + 150 * M), 115))
+    const tlF = { ...tl, stil: { fortlaufend: true } }
+    check('fortlaufend: Linie läuft bis jetzt weiter (Alarm prüft jetzt)', nahe(linienPreis(tlF, T + 150 * M), 115))
+    check('fortlaufend: Linie ist nie „vorbei"', !geometrieVorbei({ art: 'linie', bedingung: {} }, tlF, T + 500 * M))
+    const kF = { typ: 'kanal', punkte: [a, b, { t: T, p: 90 }], stil: { fortlaufend: true } }
+    check('fortlaufend: Kanal existiert hinter seinem Endpunkt', kanalBei(kF, T + 150 * M) != null && kanalBei({ ...kF, stil: {} }, T + 150 * M) === null)
+    check('fortlaufend: Rechteck existiert hinter seiner Kante', zoneBei({ typ: 'rechteck', punkte: [a, b], stil: { fortlaufend: true } }, T + 150 * M) != null)
     check('Strahl vor seinem Anfang existiert nicht', linienPreis({ typ: 'strahl', punkte: [a, b] }, T - M) === null)
     check('horizontaler Strahl erst ab seinem Punkt', linienPreis({ typ: 'strahlH', punkte: [a] }, T - M) === null && linienPreis({ typ: 'strahlH', punkte: [a] }, T + M) === 100)
 

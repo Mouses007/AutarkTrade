@@ -122,6 +122,36 @@ export function preisAufGerade(L, La, pa, Lb, pb) {
     return pa + ((pb - pa) * (L - La)) / (Lb - La)
 }
 
+/** Zeichnungen, die „fortlaufend" sein können: sie reichen immer bis zur aktuellen Kerze. */
+export const FORTLAUFEND_TYPEN = ['trendlinie', 'kanal', 'rechteck']
+
+/**
+ * „Fortlaufend": der spätere Endpunkt rückt bis zur aktuellen Kerze `letzteT`
+ * vor — bei Linie und Kanal entlang der Geraden (auf der Log-Skala im
+ * Logarithmus, so wie die Linie im Bild liegt), beim Rechteck nur die rechte
+ * Kante. Endet die Zeichnung schon rechts davon, bleibt sie, wie sie ist.
+ * Gespeichert wird das nie — nur gezeichnet und getroffen; die Anker bleiben.
+ * @param {function} zuL  Zeit → logischer Index (Kerzen zählen, nicht Millisekunden)
+ */
+export function fortlaufendePunkte(typ, pk, letzteT, zuL, log = false) {
+    if (!FORTLAUFEND_TYPEN.includes(typ) || !pk || pk.length < 2 || !Number.isFinite(letzteT)) return pk
+    const iEnde = pk[1].t >= pk[0].t ? 1 : 0
+    const ende = pk[iEnde], start = pk[1 - iEnde]
+    if (!(letzteT > ende.t)) return pk
+    const neu = pk.map((q) => ({ ...q }))
+    if (typ === 'rechteck') {
+        neu[iEnde] = { t: letzteT, p: ende.p }
+        return neu
+    }
+    const La = zuL(start.t), Lb = zuL(ende.t), L = zuL(letzteT)
+    if (La == null || Lb == null || L == null) return pk
+    const p = log && start.p > 0 && ende.p > 0
+        ? Math.exp(preisAufGerade(L, La, Math.log(start.p), Lb, Math.log(ende.p)))
+        : preisAufGerade(L, La, start.p, Lb, ende.p)
+    neu[iEnde] = { t: letzteT, p }
+    return neu
+}
+
 /** Fibonacci-Retracement: Stufe 0 am Endpunkt, 1 am Startpunkt (wie TradingView). */
 export const FIB_STUFEN = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.618]
 

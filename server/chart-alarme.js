@@ -161,7 +161,7 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
         }
         // Eine Linie/Zone, die schon zu Ende ist, kann nie auslösen — sagen statt still anlegen.
         if (geometrieVorbei({ art: aus.art, bedingung: parse(aus.bedingung, {}) }, geo, Date.now())) {
-            return { fehler: 'Die Linie bzw. Zone endet vor jetzt — „Nach rechts verlängern" einschalten, sonst kann der Alarm nie auslösen' }
+            return { fehler: 'Die Linie bzw. Zone endet vor jetzt — „Fortlaufend" oder „Nach rechts verlängern" einschalten, sonst kann der Alarm nie auslösen' }
         }
         aus.zeichnungId = id
     }

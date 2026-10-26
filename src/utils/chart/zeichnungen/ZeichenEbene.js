@@ -13,7 +13,7 @@
  */
 import {
     zeitZuLogisch, logischZuZeit, logischZuX, abstandZuStrecke, verlaengere, preisAufGerade,
-    fibPreise, positionWerte, magnet, imRechteck, messung, dauerText,
+    fibPreise, positionWerte, magnet, imRechteck, messung, dauerText, fortlaufendePunkte,
 } from './geometrie.js'
 import { werkzeug, stilFuer } from './werkzeuge.js'
 import { volumenprofil } from '../../../../shared/volumenprofil.js'
@@ -258,6 +258,13 @@ export class ZeichenEbene {
 
     punkteVon(z) { return this.vorschau.get(z.id) || z.punkte }
 
+    /** Punkte, wie sie gezeichnet und getroffen werden: „fortlaufend" bis zur aktuellen Kerze verlängert. */
+    bildPunkte(z, pk) {
+        const s = z.stil || {}
+        if (!s.fortlaufend || s.rechts || !this.zeiten.length) return pk
+        return fortlaufendePunkte(z.typ, pk, this.zeiten[this.zeiten.length - 1], (t) => this.zuL(t), s.skala === 'log')
+    }
+
     // ── Anker und Treffer ────────────────────────────────────────────────
     /** Anfasspunkte einer Zeichnung in Pixeln. */
     ankerVon(z, breite) {
@@ -323,7 +330,7 @@ export class ZeichenEbene {
     }
 
     trifft(z, x, y, breite) {
-        const pk = this.punkteVon(z)
+        const pk = this.bildPunkte(z, this.punkteVon(z))
         const s = stilFuer(z)
         const X = (t) => this.zuX(t)
         const Y = (p) => this.zuY(p)
@@ -656,6 +663,7 @@ export class ZeichenEbene {
     }
 
     zeichneEine(ctx, z, pk, breite, hoehe, ausgewaehlt) {
+        pk = this.bildPunkte(z, pk)
         const s = stilFuer(z)
         const X = (t) => this.zuX(t)
         const Y = (p) => this.zuY(p)
