@@ -176,6 +176,20 @@ Je Instanz wird die **Börse** gewählt, deren Regeln der Schattenbetrieb anlegt
 
 Trades der Strategie-Instanzen stehen NICHT im normalen Journal — der KI-Agent hat dafür eigene Abfrage-Werkzeuge. Der ganze Modus lässt sich unter Einstellungen → Layout & Stil → „Modi ein-/ausblenden" abschalten.`,
     },
+    portfolio: {
+        titel: 'Portfolio (Beta): Bestände, Spam, Totalverluste, Steuern',
+        text: `Das Portfolio zeigt, was auf allen Börsen und Wallets liegt — in CHF. Es **liest nur**: es wird nie gehandelt oder etwas verschoben. Quellen sind die Börsen-APIs (Bitunix, Bitget, Pionex, Bitpanda, Spot), öffentliche Wallet-Adressen bzw. xpub (Ledger, SafePal, MetaMask: Bitcoin, EVM-Ketten, XRP, Solana, VeChain) und Datei-Importe für Konten ohne volle Historie. Eingefügt werden nur öffentliche Schlüssel; eine Wiederherstellungsphrase (Seed) lehnt das Feld ab.
+
+Seiten: **Übersicht** (Gesamtvermögen inkl. Futures-Konten, je Coin Menge, Wert, **Ø-Kaufkurs**, Einstand und unrealisierter Gewinn/Verlust; aufgeklappt die einzelnen Käufe mit Kaufkurs), **Bewegungen**, **Steuern**, **Totalverluste**, **Börsen & Wallets**.
+
+**Spam:** Ungefragt geschickte Werbe-Tokens („VISIT … TO CLAIM“) werden am Namen erkannt und stehen zugeklappt unter „Spam“ — weder im Portfolio noch in der Steuer. Nicht anklicken, nichts signieren. Fehltreffer lassen sich mit „Kein Spam“ zurückholen, übersehene mit „Spam“ markieren.
+
+**Totalverluste:** Ein totes Projekt (Konkurs, eingestellter Token) markiert man in der Übersicht (aufgeklappte Zeile) oder beim Kurs-Eintragen in der Steuer-Ansicht. Es verschwindet aus dem Portfolio und ab dem gewählten Steuerjahr aus dem Vermögen im Steuerbericht; frühere Jahre bleiben. Die Seite Totalverluste zeigt das verlorene Kapital (Einstand der noch gehaltenen Käufe), je Jahr und den Anteil am Einstand; dort lässt sich das Startjahr ändern oder die Markierung aufheben.
+
+**Steuern:** Der Bericht rechnet je Steuerjahr das Vermögen am 31.12., Erträge (Staking, Airdrops — Rubrik B), Veräusserungen (FIFO, privat steuerfrei, zur Information), Futures-Guthaben und die fünf Kriterien zur Gewerbsmässigkeit. Kurse: zuerst die **ESTV-Kursliste** (wird für abgeschlossene Jahre ab 2023 automatisch geholt, mit Valorennummer), sonst der Tagesschlusskurs der Börse, Bitpanda oder CoinGecko; fehlt alles, kann man den Kurs eintragen. Oben wählt man den **Wohnkanton**: dann zeigt „Übertrag ins Formular“, in welches Formular, welche Rubrik bzw. welchen Code (z. B. Zug und Aargau „KR“, Solothurn Ziffer 740) die Werte gehören, welche Belege der Kanton verlangt, welcher Ersatzkurs gilt und ob der Kaufpreis als letzte Stufe zählt; der Thurgau rechnet die Haltedauer mit 12 statt 6 Monaten. CSV und Druckansicht für die Steuererklärung oder die Treuhand.
+
+**Keine Steuerberatung.** AutarkTrade ist kein von einer Steuerbehörde anerkanntes oder zertifiziertes Tool — eine solche Anerkennung gibt es in der Schweiz nicht. Alle Angaben selbst prüfen; im Zweifel Steueramt oder Treuhand fragen.`,
+    },
     ki: {
         titel: 'KI-Funktionen: Coach, Agent, Berichte, Nachrichten, Bilder',
         text: `Alle KI-Funktionen laufen über die in den Einstellungen hinterlegten Anbieter (Ollama lokal, Anthropic/Claude, OpenAI, Google Gemini, xAI/Grok, Perplexity, Mistral, Qwen, Kimi, GLM, OpenRouter oder bis zu zwei eigene OpenAI-kompatible Endpunkte, deren Adresse man selbst einträgt). Einige Aufgaben können nur bestimmte Anbieter: YouTube-Videos öffnet nur Gemini, die X-Suche läuft nur über Grok, die Web-Recherche mit Belegen läuft über Perplexity (Vorgabe) oder wahlweise — nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" — über die DeepSeek-Suche mit einem Schreibmodell (KI → Nachrichten → „Recherche: DeepSeek-Suche + Haiku“; ohne Schalter fällt diese Wahl auf Perplexity zurück): rund viermal billiger, die Treffer sind aber weniger tagesaktuell, und das Kapitel Chartanalyse bleibt bei Perplexity, weil nur dort Chart-Bilder mitkommen. Unter Einstellungen → KI gibt es Unter-Reiter: **Zugang** (Schlüssel je Anbieter, Modellverwaltung), **Berichte**, **Nachrichten**, **Agent**, **Strategie** und **Bilder** — Anbieter und Modell sind je Funktion getrennt wählbar. Jeder Aufruf gegen einen Bezahl-Anbieter kostet Geld; die Token-Verbräuche werden mitgezählt und angezeigt.
@@ -254,6 +268,7 @@ const MODE_ZU_THEMA = {
     research: 'entdecken',
     agent: 'strategien',
     lernen: 'lernen',
+    portfolio: 'portfolio',
 }
 
 const SEITEN_ZU_MODUS = {
@@ -267,6 +282,7 @@ const SEITEN_ZU_MODUS = {
     agentStrategies: 'agent', agentSetups: 'agent', agentEditor: 'agent', agentBuilder: 'agent',
     agentPerformance: 'agent', agentLab: 'agent', coinRangliste: 'agent',
     lernen: 'lernen', lernenKarten: 'lernen', lernenStatistik: 'lernen',
+    portfolio: 'portfolio', portfolioBewegungen: 'portfolio', portfolioSteuer: 'portfolio', portfolioQuellen: 'portfolio', portfolioTotalverluste: 'portfolio',
     einstellungen: null,
 }
 

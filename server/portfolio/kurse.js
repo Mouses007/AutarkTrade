@@ -356,12 +356,20 @@ export async function coingeckoKursChf(asset, datum) {
  * Tagesschlusskurs in USD (für die eingefrorene CHF-Bewertung einer Bewegung).
  * Nur Börsen-Coins; ein Token ohne Börsenpaar bleibt `null`.
  */
+// „Kein Paar an dieser Börse" merken: sonst fragt jede Steuerrechnung für jeden
+// Coin ohne Börsenpaar wieder Binance UND Bitget (gemessen ~0,5 s je Coin und
+// Jahr — 30 tote Coins × 2 Stichtage = eine halbe Minute, 26.10.2026).
+const KEIN_KURS_TTL = 6 * 3600e3
+const keinKurs = new Map()   // `${asset}|${datum}` → Zeitpunkt
+
 export async function tagesKursUsd(asset, datum) {
     const a = ALIAS[String(asset).toUpperCase()] || String(asset).toUpperCase()
     if (a in STABIL && a !== 'EUR' && a !== 'CHF') return { usd: 1, quelle: 'Stablecoin' }
     const k = getKnex()
     const z = await k('portfolio_kurse').where({ schluessel: a, datum }).first().catch(() => null)
     if (z) return { usd: z.usd, quelle: z.quelle }
+    const merkKey = `${a}|${datum}`
+    if (Date.now() - (keinKurs.get(merkKey) || 0) < KEIN_KURS_TTL) return { usd: null, quelle: 'kein Kurs' }
     try {
         const t = Date.parse(datum + 'T00:00:00Z')
         const kz = await marktKerzen(`${a}USDT`, '1d', { markt: 'spot', start: t, ende: t + 86400e3 - 1, limit: 1 })
@@ -380,5 +388,6 @@ export async function tagesKursUsd(asset, datum) {
             return { usd: c, quelle: 'Tageskerze Bitget' }
         }
     } catch { /* auch dort nicht */ }
+    keinKurs.set(merkKey, Date.now())
     return { usd: null, quelle: 'kein Kurs' }
 }

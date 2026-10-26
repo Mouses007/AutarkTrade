@@ -26,7 +26,10 @@
  *   GET    /steuer/jahre                   Jahre mit Bewegungen
  *   PUT    /steuerkurs       {jahr, asset, chf|null, quelle}
  *   PUT    /futures-stichtag {jahr, boerse, usd|null, quelle}  Futures-Guthaben 31.12. laut Auszug
- *   PUT    /totalverlust     {asset, an}  Coin als Totalverlust markieren (Wert 0, wo kein Kurs)
+ *   PUT    /totalverlust     {asset, an, abJahr}  Coin als Totalverlust markieren (raus aus Portfolio, Steuer ab abJahr)
+ *   GET    /totalverluste                  Seite Totalverluste (Zeilen + Statistik)
+ *   PUT    /kanton           {kz|null}     Wohnkanton für den Steuerbericht
+ *   POST   /estv/:jahr                     ESTV-Kursliste eines Jahres neu holen
  *   PUT    /spam             {asset, spam: true|false|null}  Spam von Hand (null = Regel)
  */
 
@@ -39,6 +42,9 @@ import { berechneBilanz, futuresKontenGemerkt } from './bilanz.js'
 import { setzeFuturesStichtag } from './futures-steuer.js'
 import { setzeTotalverlust } from './totalverlust.js'
 import { setzeSpam } from './spam.js'
+import { totalverlustUebersicht } from './totalverlust-seite.js'
+import { importiereKursliste, kurslisteStand } from './estv-kursliste.js'
+import { kanton as kantonVon } from '../../shared/steuer-kantone.js'
 import { BOERSEN } from './futures-rechnung.js'
 import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
@@ -377,6 +383,27 @@ export function setupPortfolioRoutes(app) {
         } catch (e) { fehler(res, e) }
     })
 
+    app.get('/api/portfolio/totalverluste', async (req, res) => {
+        try { res.json({ ok: true, ...(await totalverlustUebersicht()) }) } catch (e) { fehler(res, e) }
+    })
+    app.put('/api/portfolio/kanton', async (req, res) => {
+        try {
+            const kz = req.body?.kz ? String(req.body.kz).toUpperCase() : null
+            if (kz && !kantonVon(kz)) return fehler(res, 'Kanton unbekannt', 400)
+            const k = getKnex()
+            const s = await k('settings').first('id')
+            await k('settings').where({ id: s.id }).update({ portfolioKanton: kz })
+            res.json({ ok: true, kz })
+        } catch (e) { fehler(res, e) }
+    })
+    app.post('/api/portfolio/estv/:jahr', async (req, res) => {
+        try {
+            const jahr = Number(req.params.jahr)
+            if (!(jahr >= 2023 && jahr < new Date().getFullYear())) return fehler(res, 'Jahr ohne ESTV-Kursliste', 400)
+            const r = await importiereKursliste(jahr)
+            res.json({ ok: true, ...r, stand: await kurslisteStand(jahr) })
+        } catch (e) { fehler(res, e) }
+    })
     app.put('/api/portfolio/spam', async (req, res) => {
         try {
             const asset = String(req.body?.asset ?? '')
@@ -390,7 +417,7 @@ export function setupPortfolioRoutes(app) {
         try {
             const asset = String(req.body?.asset || '').trim()
             if (!asset || asset.length > 60) return fehler(res, 'Asset fehlt', 400)
-            await setzeTotalverlust(asset, !!req.body?.an)
+            await setzeTotalverlust(asset, !!req.body?.an, req.body?.abJahr)
             res.json({ ok: true })
         } catch (e) { fehler(res, e) }
     })

@@ -13,7 +13,9 @@
  *     sonst wird aus einer Haltedauer von zwei Jahren eine von zwei Tagen.
  */
 import { leseImportCsv } from './import.js'
-import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration } from './steuer-rechnung.js'
+import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset } from './steuer-rechnung.js'
+import { totalverlustStatistik } from './totalverlust-seite.js'
+import { abJahrVon } from './totalverlust.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
 
 let bestanden = 0, fehlgeschlagen = 0
@@ -173,6 +175,43 @@ console.log('\nÜbergabe Import → Live')
     check('Haltedauer zählt ab CHSB-Kauf (> 6 Monate)', v && v.kurzfristigAnteil === 0)
     const bestand = bestandAm(b, T('2024-12-31'))
     check('Bestand nach Umstellung: 600 BORG, 0 CHSB', nah(bestand.get('i:SwissBorg\u0000BORG'), 600) && nah(bestand.get('i:SwissBorg\u0000CHSB') || 0, 0))
+}
+
+{
+    // Einstand / Ø-Kaufkurs aus den FIFO-Losen
+    const b = [
+        { id: 1, quelle: 'i:X', zeit: T('2024-01-10'), art: 'kauf', asset: 'ETH', menge: 1, gegenAsset: 'CHF', gegenMenge: -2000, chfWert: 2000 },
+        { id: 2, quelle: 'i:X', zeit: T('2024-06-10'), art: 'kauf', asset: 'ETH', menge: 1, gegenAsset: 'CHF', gegenMenge: -3000, chfWert: 3000 },
+        { id: 3, quelle: 'i:X', zeit: T('2024-09-10'), art: 'verkauf', asset: 'ETH', menge: -0.5, gegenAsset: 'CHF', gegenMenge: 1500, chfWert: 1500 },
+        { id: 4, quelle: 'i:X', zeit: T('2024-10-01'), art: 'bestand', asset: 'ETH', menge: 0.5, chfWert: null },
+    ]
+    const e = einstandJeAsset(fifo(b).lose).get('ETH')
+    check('Einstand: Menge nach FIFO-Verkauf', nah(e.menge, 2), JSON.stringify(e))
+    check('Einstand: Kosten der Restlose (0.5×2000 + 1×3000)', nah(e.kosten, 4000))
+    check('Ø-Kaufkurs nur über bekannte Kosten (4000/1.5)', nah(e.schnitt, 4000 / 1.5))
+    check('Menge ohne Kosten ausgewiesen', nah(e.ohneKostenMenge, 0.5))
+    check('erster Kauf = ältestes Restlos', e.ersterKauf === T('2024-01-10'))
+    check('Lose mit Kaufkurs', e.lose.length === 3 && nah(e.lose[1].kursChf, 3000))
+    check('leere Lose fallen weg', !einstandJeAsset(new Map([['X', [{ menge: 0, kostenJe: 1, zeit: 0 }]]])).has('X'))
+
+    // Haltedauer je Kanton: Verkauf nach 8 Monaten — kurzfristig im TG (12), nicht nach KS 36 (6)
+    const h = [
+        { id: 1, quelle: 'i:X', zeit: T('2024-01-01'), art: 'kauf', asset: 'BTC', menge: 1, gegenAsset: 'CHF', gegenMenge: -100, chfWert: 100 },
+        { id: 2, quelle: 'i:X', zeit: T('2024-09-01'), art: 'verkauf', asset: 'BTC', menge: -1, gegenAsset: 'CHF', gegenMenge: 150, chfWert: 150 },
+    ]
+    check('KS 36: 8 Monate sind nicht kurzfristig', fifo(h).abgaenge[0].kurzfristigAnteil === 0)
+    check('TG: 8 Monate sind kurzfristig', fifo(h, { halteMonate: 12 }).abgaenge[0].kurzfristigAnteil === 1)
+
+    // Totalverlust-Statistik und Startjahr
+    const st = totalverlustStatistik([
+        { asset: 'MBTN', abJahr: 2025, einstandChf: 30 }, { asset: 'BLOK', abJahr: 2024, einstandChf: 70 }, { asset: 'X', abJahr: 2025, einstandChf: null },
+    ], 900)
+    check('Statistik: Summe ohne unbekannte', nah(st.verlorenChf, 100) && st.ohneEinstand === 1 && st.anzahl === 3)
+    check('Statistik: je Jahr', nah(st.jeJahr[2025], 30) && nah(st.jeJahr[2024], 70))
+    check('Statistik: grösster', st.groesster.asset === 'BLOK')
+    check('Statistik: Anteil 100/(100+900)', nah(st.anteilAmEinstand, 0.1))
+    check('Startjahr gesetzt', abJahrVon({ am: T('2026-10-25'), abJahr: 2024 }) === 2024)
+    check('alte Markierung ohne Startjahr: Vorjahr der Markierung', abJahrVon({ am: T('2026-10-25') }) === 2025)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

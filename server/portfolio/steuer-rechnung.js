@@ -20,7 +20,6 @@
  * Los nicht neu starten. Unbekannter Einstand bleibt unbekannt (nie 0).
  */
 
-const MONAT6 = 182.5 * 86400e3
 
 /** Welche Bewegungen sind Einkommen? */
 export function istEinkommen(b) {
@@ -115,7 +114,9 @@ export function einkommen(bewegungen, von, bis) {
  *           Abgang an Unbekannt).
  * Fiat (CHF/EUR/USD) und Transfers bilden keine Lose.
  */
-export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity, bis = Infinity } = {}) {
+export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity, bis = Infinity, halteMonate = 6 } = {}) {
+    // Haltedauer-Grenze des Kriterienkatalogs: KS 36 sechs Monate, Thurgau zwölf.
+    const kurzGrenze = (halteMonate * 365 / 12) * 86400e3
     const istFiat = (a) => fiat.includes(a)
     const lose = new Map()           // asset → [{ menge, kostenJe|null, zeit }]
     const abgaenge = []
@@ -133,7 +134,7 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
             const los = l[0]
             const nimm = Math.min(los.menge, rest)
             if (los.kostenJe == null) kostenBekannt = false; else kosten += nimm * los.kostenJe
-            if (zeit - los.zeit < MONAT6) kurzMenge += nimm
+            if (zeit - los.zeit < kurzGrenze) kurzMenge += nimm
             gedeckt += nimm
             los.menge -= nimm
             rest -= nimm
@@ -198,6 +199,34 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
         if (b.gebuehrAsset && Number(b.gebuehrMenge) > 0) abgang(b.gebuehrAsset, Number(b.gebuehrMenge), 0, zeit, b, 'gebuehr')
     }
     return { abgaenge, lose }
+}
+
+/**
+ * Einstand je Asset aus den noch gehaltenen FIFO-Losen: Ø-Kaufkurs, Kostenbasis,
+ * erster Kauf. Lose ohne bekannte Kosten (Import ohne CHF-Wert, Quelle ohne volle
+ * Historie) zählen in `ohneKostenMenge` und NICHT in den Durchschnitt — ein
+ * Durchschnitt über „0 CHF“ würde den Kaufkurs schönrechnen.
+ * @param {Map<string, {menge, kostenJe, zeit}[]>} lose  aus `fifo()`
+ * @returns {Map<string, { menge, kosten, mitKostenMenge, ohneKostenMenge, schnitt, ersterKauf, letzterKauf, lose }>}
+ */
+export function einstandJeAsset(lose) {
+    const aus = new Map()
+    for (const [asset, liste] of lose) {
+        const l = liste.filter((x) => x.menge > 1e-12)
+        if (!l.length) continue
+        let menge = 0, kosten = 0, mitKosten = 0
+        for (const x of l) {
+            menge += x.menge
+            if (x.kostenJe != null) { kosten += x.menge * x.kostenJe; mitKosten += x.menge }
+        }
+        aus.set(asset, {
+            menge, kosten: mitKosten > 0 ? kosten : null, mitKostenMenge: mitKosten, ohneKostenMenge: menge - mitKosten,
+            schnitt: mitKosten > 0 ? kosten / mitKosten : null,
+            ersterKauf: Math.min(...l.map((x) => x.zeit)), letzterKauf: Math.max(...l.map((x) => x.zeit)),
+            lose: l.map((x) => ({ zeit: x.zeit, menge: x.menge, kursChf: x.kostenJe })),
+        })
+    }
+    return aus
 }
 
 /** Summen der Abgänge eines Jahres. */

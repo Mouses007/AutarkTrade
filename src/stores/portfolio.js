@@ -21,8 +21,9 @@ let abfrage = null
 let nachgeholt = false
 
 /** Coin als Totalverlust markieren bzw. die Markierung aufheben, danach neu laden. */
-export async function setzeTotalverlust(asset, an) {
-    await axios.put('/api/portfolio/totalverlust', { asset, an })
+/** @param {number} [abJahr]  erstes Steuerjahr ohne den Coin (Vorgabe Vorjahr) */
+export async function setzeTotalverlust(asset, an, abJahr) {
+    await axios.put('/api/portfolio/totalverlust', { asset, an, abJahr })
     await ladeUebersicht()
 }
 

@@ -14,11 +14,12 @@
  * dort heisst die Abweichung „Historie unvollständig", nicht „Fehler".
  */
 
-import { totalverluste, TOTALVERLUST } from './totalverlust.js'
+import { totalverluste } from './totalverlust.js'
+import { fifo, einstandJeAsset } from './steuer-rechnung.js'
 import { spamPruefer } from './spam.js'
 import { getKnex } from '../database.js'
 import { kurseFuer } from './kurse.js'
-import { saldiere } from './normal.js'
+import { saldiere, FIAT } from './normal.js'
 import { boersenWahl, laufStand, BOERSEN } from './abruf.js'
 import { WALLET_TYPEN, EVM_NETZE, KETTEN } from '../../shared/portfolio-adresse.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
@@ -29,6 +30,47 @@ function kettenName(kette) {
     if (!kette) return ''
     if (kette.startsWith('evm:')) return EVM_NETZE.find((n) => `evm:${n.id}` === kette)?.name || kette
     return KETTEN[kette]?.name || kette
+}
+
+const FIFO_SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
+    'transferMit', 'einordnung', 'chfWert', 'kontrakt']
+
+/** Einstand je Asset (heute) aus allen Bewegungen, ohne Spam. */
+export async function einstandHeute(istSpam = () => null) {
+    const bew = (await getKnex()('portfolio_bewegungen').select(FIFO_SPALTEN)).filter((b) => !istSpam(b.asset, b.kontrakt))
+    return einstandJeAsset(fifo(bew, { fiat: FIAT }).lose)
+}
+
+/**
+ * Bestände ohne doppelt Gezähltes: was eine Adresse live meldet, ersetzt ihren
+ * Import-Ort (Übergabe Import → Live). Geteilt mit der Totalverlust-Seite —
+ * dort stand BLOK sonst mit der doppelten Menge (Import + Live).
+ */
+export async function bestaendeOhneDoppelte() {
+    const k = getKnex()
+    const [alleBestaende, quellenStand, adressen] = await Promise.all([
+        k('portfolio_bestaende').select('*'),
+        k('portfolio_quellen').select('*'),
+        k('portfolio_adressen').select('id', 'walletId', 'kette', 'art', 'anzeige', 'netze', 'label', 'importOrte', 'liveAb'),
+    ])
+    const { ersetzt } = uebergaben(alleBestaende, adressen, new Map(quellenStand.map((q) => [q.quelle, q])))
+    return ohneUebernommene(alleBestaende, ersetzt)
+}
+
+/**
+ * Kaufkurs-Felder einer Position. Der Ø gilt für den ganzen Bestand; fehlt für
+ * einen Teil der Einstand (Quelle ohne volle Historie, Import ohne CHF-Wert),
+ * heisst das `einstandTeilweise` — die Zahl ist dann eine Schätzung.
+ */
+export function einstandFuer(e, p) {
+    if (!e || e.schnitt == null) return { kaufkurs: null, einstandChf: null, unrealisiertChf: null, einstandTeilweise: false, lose: e?.lose?.slice(-20) || [] }
+    const einstandChf = e.schnitt * p.menge
+    const teilweise = e.ohneKostenMenge > p.menge * 0.001 || e.mitKostenMenge < p.menge * 0.99
+    return {
+        kaufkurs: e.schnitt, einstandChf, ersterKauf: e.ersterKauf, einstandTeilweise: teilweise,
+        unrealisiertChf: p.ohneKurs ? null : p.chf - einstandChf,
+        lose: e.lose.slice(-20),     // die jüngsten 20 Lose für die aufgeklappte Zeile
+    }
 }
 
 export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
@@ -64,6 +106,8 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     let gesamtUsd = 0, ohneKurs = 0
     for (const b of bestaende) {
         const key = keyVon(b)
+        // Totalverlust: gehört nicht mehr ins Portfolio, sondern auf die eigene Seite.
+        if (tot.has(String(b.asset).toUpperCase())) continue
         const spam = istSpam(b.asset, b.kontrakt)
         // Spam hat keinen Wert, auch wenn ein Fantasie-Pool einen Preis nennt.
         let kurs = spam ? { usd: null, quelle: 'Spam' } : (kurse.get(key) || { usd: null, quelle: 'kein Kurs' })
@@ -74,14 +118,13 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         // für ALLE Orte dieses Coins, denn derselbe Coin hat überall denselben
         // Wert (CSPR bei Bitget ohne Kurs, bei Bitpanda bewertet).
         if (kurs.usd == null && quellKurs.has(key)) kurs = quellKurs.get(key)
-        if (kurs.usd == null && tot.has(String(b.asset).toUpperCase())) kurs = { usd: 0, quelle: TOTALVERLUST, totalverlust: true }
         const usd = kurs.usd != null ? b.menge * kurs.usd : null
         const chf = usd != null ? usd * fx.chf : null
         if (usd != null) gesamtUsd += usd; else ohneKurs++
         const anzeigeName = b.name === 'ohneSymbol' ? (kurs.symbol || `${b.asset}…`) : b.asset
         const p = jeAsset.get(key) || {
             schluessel: key, asset: anzeigeName, kontrakt: b.kontrakt, kette: b.kontrakt ? b.ort : null,
-            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, totalverlust: !!kurs.totalverlust, spam, orte: [],
+            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, spam, orte: [],
         }
         p.menge += b.menge
         if (usd != null) { p.usd += usd; p.chf += chf }
@@ -94,8 +137,10 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         jeQuelle.set(b.quelle, q)
     }
     const gesamtChf = gesamtUsd * fx.chf
+    // Kaufkurs: FIFO über alle Bewegungen, Ø der noch gehaltenen Lose (CHF).
+    const einstand = await einstandHeute(istSpam)
     const postenListe = [...jeAsset.values()]
-        .map((p) => ({ ...p, anteil: gesamtChf > 0 ? p.chf / gesamtChf : 0, staub: !p.ohneKurs && p.chf < staubChf }))
+        .map((p) => ({ ...p, ...einstandFuer(einstand.get(String(p.asset).toUpperCase()), p), anteil: gesamtChf > 0 ? p.chf / gesamtChf : 0, staub: !p.ohneKurs && p.chf < staubChf }))
         .sort((a, b) => (b.chf || 0) - (a.chf || 0) || a.asset.localeCompare(b.asset))
 
     // Abgleich: Bewegungen saldiert gegen den gemeldeten Bestand

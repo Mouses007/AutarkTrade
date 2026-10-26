@@ -136,6 +136,7 @@ export const PAGES = [
     { id: 'portfolio', mode: 'portfolio', path: '/portfolio', symbol: 'torte', titleKey: 'nav.portfolio', menuKey: 'portfolio.menuUebersicht', menuSymbol: 'torte', group: 'portfolioGruppe' },
     { id: 'portfolioBewegungen', mode: 'portfolio', path: '/portfolio/bewegungen', symbol: 'verlauf', titleKey: 'portfolio.menuBewegungen', group: 'portfolioGruppe' },
     { id: 'portfolioSteuer', mode: 'portfolio', path: '/portfolio/steuer', symbol: 'waage', titleKey: 'portfolio.menuSteuer', group: 'portfolioGruppe' },
+    { id: 'portfolioTotalverluste', mode: 'portfolio', path: '/portfolio/totalverluste', symbol: 'archiv', titleKey: 'portfolio.menuTotalverluste', group: 'portfolioGruppe' },
     { id: 'portfolioQuellen', mode: 'portfolio', path: '/portfolio/quellen', symbol: 'geldboerse', titleKey: 'portfolio.menuQuellen', group: 'portfolioGruppe' },
 
     // ── modusübergreifend ───────────────────────────────────

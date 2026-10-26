@@ -45,6 +45,9 @@ export const LANGSAME_PFADE = [
     // Gesamtlage-Kachel: ~30 s, mit trägem Anbieter auch mehr
     { muster: /\/api\/marktradar\/lage$/, ms: 5 * MIN },
     { muster: /\/api\/marktradar\/mechanik-erklaerung/, ms: 3 * MIN },
+    // Steuerbericht: Jahresendkurse aller Coins (Börse, Bitpanda, CoinGecko) und beim
+    // ersten Öffnen eines Jahres die ESTV-Kursliste — gemessen bis ~70 s kalt
+    { muster: /\/api\/portfolio\/(steuer|estv)/, ms: 3 * MIN },
     // Radar-Läufe: eigene Fremdabrufe plus KI-Einordnung
     { muster: /\/api\/(coin-radar|hype-radar)\//, ms: 15 * MIN },
     // KI-Berichte, Rückfragen, Agent, Baukasten

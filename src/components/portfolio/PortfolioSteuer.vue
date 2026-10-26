@@ -17,6 +17,8 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { chf, menge, farbeVon } from '../../stores/portfolio.js'
 import { Karte, Knopf, Hinweis, Kreisel, Symbol, Pille } from '../basis/index.js'
+import { KANTONE, ERSATZKURS_TEXT, MINING_TEXT } from '../../../shared/steuer-kantone.js'
+import { appEinstellungen } from '../../stores/settings.js'
 
 const { t } = useI18n()
 const jahre = ref([])
@@ -24,12 +26,40 @@ const jahr = ref(null)
 const daten = ref(null)
 const laedt = ref(false)
 const fehler = ref('')
-const offen = ref(new Set(['vermoegen']))
+const offen = ref(new Set(['kanton', 'vermoegen']))
 const bearbeite = ref(null)       // Asset, dessen Kurs gerade eingetragen wird
 const kursEingabe = ref('')
 const kursQuelle = ref('estv')
 const alleZufluesse = ref(false)
 const alleAbgaenge = ref(false)
+
+// ── Kanton ──
+const kanton = ref(appEinstellungen.value?.portfolioKanton || '')
+const kantoneSortiert = [...KANTONE].sort((a, b) => a.name.localeCompare(b.name, 'de'))
+async function setzeKanton(kz) {
+    kanton.value = kz
+    await axios.put('/api/portfolio/kanton', { kz: kz || null })
+    if (appEinstellungen.value) appEinstellungen.value.portfolioKanton = kz || null
+    await lade()
+}
+const kt = computed(() => daten.value?.kanton || null)
+// Der Bericht kennt den gespeicherten Kanton auch dann, wenn die Einstellungen
+// beim Seitenaufbau das Feld noch nicht hatten.
+watch(kt, (k) => { if (k?.kz && !kanton.value) kanton.value = k.kz })
+const kaufpreisText = (v) => (v === true ? t('portfolio.stKtKaufpreisJa') : v === false ? t('portfolio.stKtKaufpreisNein') : v === 'widerspruch' ? t('portfolio.stKtWiderspruch') : t('portfolio.stKtNichtGeregelt'))
+
+// ── ESTV-Kursliste ──
+const estvLaedt = ref(false)
+const estvMeldung = ref('')
+async function ladeEstv() {
+    estvLaedt.value = true
+    estvMeldung.value = ''
+    try {
+        const { data } = await axios.post(`/api/portfolio/estv/${jahr.value}`)
+        estvMeldung.value = data.erschienen ? t('portfolio.stEstvGeladen', { n: data.anzahl, d: data.datei }) : t('portfolio.stEstvNochNicht')
+        await lade()
+    } catch (e) { estvMeldung.value = e.response?.data?.error || e.message } finally { estvLaedt.value = false }
+}
 
 function klappe(id) { const s = new Set(offen.value); s.has(id) ? s.delete(id) : s.add(id); offen.value = s }
 
@@ -56,10 +86,12 @@ function starteKurs(p) {
     bearbeite.value = p.asset + (p.token ? '·t' : '')
     kursEingabe.value = p.kursChf != null ? String(Number(p.kursChf.toPrecision(8))) : ''
     kursQuelle.value = 'estv'
+    tvJahr.value = jahr.value
     nextTick(() => document.querySelector('.ps-kursform input')?.focus())
 }
+const tvJahr = ref(null)
 async function totalverlust(asset, an) {
-    await axios.put('/api/portfolio/totalverlust', { asset, an })
+    await axios.put('/api/portfolio/totalverlust', { asset, an, abJahr: tvJahr.value || jahr.value })
     bearbeite.value = null
     await lade()
 }
@@ -81,7 +113,7 @@ const abgaenge = computed(() => {
 const ampel = (e) => (e === true ? 'gut' : e === false ? 'schlecht' : 'neutral')
 const ampelSymbol = (e) => (e === true ? 'hakenKreis' : e === false ? 'warnung' : 'frage')
 function kriteriumWert(k) {
-    if (k.id === 'haltedauer') return t('portfolio.stKritHaltedauerWert', { p: (k.wert * 100).toFixed(0) })
+    if (k.id === 'haltedauer') return t('portfolio.stKritHaltedauerWert', { p: (k.wert * 100).toFixed(0), m: k.monate || 6 }) + (k.monate === 12 ? ` ${t('portfolio.stKritHaltedauerTg')}` : '')
     if (k.id === 'volumen') {
         const text = k.wert != null ? t('portfolio.stKritVolumenWert', { x: k.wert.toFixed(1), v: chf(k.volumen), a: chf(k.vermoegenAnfang) }) : t('portfolio.stKritVolumenOhne')
         return k.volumenFutures ? `${text} ${t('portfolio.stKritVolumenTeile', { s: chf(k.volumenSpot), f: chf(k.volumenFutures) })}` : text
@@ -118,17 +150,28 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                 <button v-for="j in jahre" :key="j" type="button" role="tab" :aria-selected="jahr === j" class="ps-jahr" :class="{ aktiv: jahr === j }" @click="jahr = j">{{ j }}</button>
             </div>
             <div class="ps-aktionen">
+                <label class="ps-kanton">
+                    <span>{{ t('portfolio.stKanton') }}</span>
+                    <select :value="kanton" @change="setzeKanton($event.target.value)">
+                        <option value="">{{ t('portfolio.stKantonWaehlen') }}</option>
+                        <option v-for="k in kantoneSortiert" :key="k.kz" :value="k.kz">{{ k.name }} ({{ k.kz }})</option>
+                    </select>
+                </label>
                 <Knopf klein symbol="herunterladen" :href="csvLink" :disabled="!daten">CSV</Knopf>
                 <Knopf klein symbol="dokument" :disabled="!daten" @click="drucke">{{ t('portfolio.stDrucken') }}</Knopf>
             </div>
         </div>
-        <p class="ps-recht"><Symbol name="info" :groesse="14" />{{ t('portfolio.stRecht') }}</p>
+        <Hinweis art="warn" class="ps-rechtshinweis at-mo-3" :titel="t('portfolio.stRechtTitel')">{{ t('portfolio.stRechtText') }}</Hinweis>
 
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
         <div v-if="laedt && !daten" class="at-mittig at-py-5"><Kreisel /><p class="at-gedaempft">{{ t('portfolio.stRechnet') }}</p></div>
 
         <template v-if="daten">
-            <div class="ps-druckkopf">{{ t('portfolio.stDruckTitel', { j: daten.jahr }) }}</div>
+            <div class="ps-druckkopf">
+                {{ t('portfolio.stDruckTitel', { j: daten.jahr }) }}<template v-if="kt"> · {{ t('portfolio.stKanton') }} {{ kt.name }}</template>
+                <small>{{ t('portfolio.stRechtTitel') }} — {{ t('portfolio.stRechtText') }}</small>
+            </div>
+            <Hinweis v-if="!kt" art="info" class="at-mo-3">{{ t('portfolio.stKantonFehlt') }}</Hinweis>
             <!-- ── Drei Zahlen ── -->
             <div class="ps-kacheln" :class="{ laedt }">
                 <Karte class="ps-kachel">
@@ -152,7 +195,40 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                 {{ h.text }}
                 <span v-if="h.quellen" class="ps-liste">{{ h.quellen.join(' · ') }}</span>
                 <span v-if="h.liste" class="ps-liste">{{ h.liste.map((x) => `${x.quelle}: ${x.asset} ${menge(x.menge)}`).join(' · ') }}</span>
+                <span v-if="h.coins" class="ps-liste">{{ h.coins.map((x) => `${x.asset} ${chf(x.chf)}`).join(' · ') }}</span>
             </Hinweis>
+
+            <!-- ── Übertrag ins Formular (Kanton) ── -->
+            <section v-if="kt" class="ps-abschnitt">
+                <button type="button" class="ps-kopf" @click="klappe('kanton')">
+                    <Symbol name="runter" :groesse="16" :class="{ zu: !offen.has('kanton') }" />
+                    <h3>{{ t('portfolio.stUebertrag', { k: kt.name }) }}</h3>
+                    <span class="at-gedaempft">{{ kt.code ? `Code ${kt.code}` : kt.kz }}</span>
+                </button>
+                <div v-if="offen.has('kanton')" class="ps-inhalt ps-kt">
+                    <dl class="ps-kt-liste">
+                        <dt>{{ t('portfolio.stKtFormular') }}</dt><dd>{{ kt.formular || t('portfolio.stKtNichtGeregelt') }}</dd>
+                        <dt>{{ t('portfolio.stKtRubrik') }}</dt><dd>{{ kt.rubrik || t('portfolio.stKtNichtGeregelt') }}<template v-if="kt.code"> · <b>Code {{ kt.code }}</b></template></dd>
+                        <dt>{{ t('portfolio.stKtSteuerwert') }}</dt><dd><b>{{ chf(daten.vermoegenGesamt ?? daten.vermoegenSumme) }}</b> <small class="at-gedaempft">{{ t('portfolio.stKtSteuerwertInfo') }}</small></dd>
+                        <dt>{{ t('portfolio.stKtErtrag') }}</dt><dd><b>{{ chf(daten.einkommen.summe) }}</b> <small class="at-gedaempft">{{ t('portfolio.stKtErtragInfo') }}</small></dd>
+                        <dt>{{ t('portfolio.stKtErsatzkurs') }}</dt><dd>{{ kt.ersatzkurs ? ERSATZKURS_TEXT[kt.ersatzkurs] : t('portfolio.stKtNichtGeregelt') }} · {{ kaufpreisText(kt.kaufpreis) }}</dd>
+                        <dt>{{ t('portfolio.stKtErtraege') }}</dt><dd>{{ kt.ertraege || t('portfolio.stKtNichtGeregelt') }}<template v-if="kt.ertragZeitpunkt"> · {{ t('portfolio.stKtZeitpunkt') }}: {{ kt.ertragZeitpunkt }}</template></dd>
+                        <dt>Mining</dt><dd>{{ kt.mining ? MINING_TEXT[kt.mining] : t('portfolio.stKtNichtGeregelt') }}</dd>
+                        <dt>{{ t('portfolio.stKtGewerbs') }}</dt><dd>{{ kt.gewerbs || t('portfolio.stKtNichtGeregelt') }}</dd>
+                        <dt v-if="kt.software">Software</dt><dd v-if="kt.software">{{ kt.software }}</dd>
+                    </dl>
+                    <div v-if="kt.belege.length" class="ps-kt-block">
+                        <b>{{ t('portfolio.stKtBelege') }}</b>
+                        <ul><li v-for="b in kt.belege" :key="b">{{ b }}</li></ul>
+                    </div>
+                    <div v-if="kt.hinweise.length" class="ps-kt-block"><ul><li v-for="h in kt.hinweise" :key="h">{{ h }}</li></ul></div>
+                    <Hinweis v-if="kt.unsicher.length" art="warn" :titel="t('portfolio.stKtUnsicher')"><ul class="ps-kt-ul"><li v-for="u in kt.unsicher" :key="u">{{ u }}</li></ul></Hinweis>
+                    <p class="ps-kt-quellen">
+                        {{ t('portfolio.stKtQuellen') }}:
+                        <a v-for="q in kt.quellen" :key="q.url" :href="q.url" target="_blank" rel="noopener noreferrer">{{ q.name }} ({{ q.fassung }})</a>
+                    </p>
+                </div>
+            </section>
 
             <!-- ── Vermögen ── -->
             <section class="ps-abschnitt">
@@ -163,17 +239,29 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                 </button>
                 <div v-if="offen.has('vermoegen')" class="ps-inhalt">
                     <p class="ps-erkl">{{ t('portfolio.stWertschriftenErkl') }}</p>
+                    <p v-if="!daten.laufend && daten.jahr >= 2023" class="ps-estv">
+                        <Symbol name="dokument" :groesse="14" />
+                        <span v-if="daten.estv?.anzahl">{{ t('portfolio.stEstvStand', { n: daten.estv.anzahl }) }}</span>
+                        <span v-else class="at-warn">{{ t('portfolio.stEstvFehlt') }}</span>
+                        <Knopf klein art="leise" :laedt="estvLaedt" @click="ladeEstv">{{ t('portfolio.stEstvNeu') }}</Knopf>
+                        <small v-if="estvMeldung" class="at-gedaempft">{{ estvMeldung }}</small>
+                    </p>
                     <div class="ps-tabelle">
-                        <div class="ps-zeile kopf"><span>Coin</span><span>{{ t('portfolio.stMenge') }}</span><span>{{ t('portfolio.stKurs') }}</span><span>{{ t('portfolio.stWert') }}</span></div>
+                        <div class="ps-zeile verm kopf"><span>Coin</span><span>{{ t('portfolio.stMenge') }}</span><span>{{ t('portfolio.stKurs') }}</span><span>{{ t('portfolio.stKaufkurs') }}</span><span>{{ t('portfolio.stWert') }}</span></div>
                         <div v-for="p in daten.vermoegen" :key="p.asset + (p.token ? '·t' : '')" class="ps-posten">
-                            <div class="ps-zeile" :class="{ ohne: p.chf == null }">
-                                <span class="ps-coin"><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}<Pille v-if="p.token" ton="neutral" :title="t('portfolio.stTokenInfo')">Token</Pille></span>
+                            <div class="ps-zeile verm" :class="{ ohne: p.chf == null }">
+                                <span class="ps-coin"><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}<Pille v-if="p.token" ton="neutral" :title="t('portfolio.stTokenInfo')">Token</Pille><small v-if="p.valor" class="ps-valor">Valor {{ p.valor }}</small></span>
                                 <span>{{ menge(p.menge) }}</span>
                                 <span>
                                     <button type="button" class="ps-kurs" :title="t('portfolio.stKursAendern')" @click="starteKurs(p)">
                                         {{ p.kursChf != null ? p.kursChf.toLocaleString('de-CH', { maximumSignificantDigits: 6 }) : t('portfolio.stKursEintragen') }}
                                     </button>
                                     <small class="ps-kursquelle">{{ p.kursQuelle }}</small>
+                                </span>
+                                <span>
+                                    <template v-if="p.kaufkurs != null">{{ p.kaufkurs.toLocaleString('de-CH', { maximumSignificantDigits: 6 }) }}<small v-if="p.einstandTeilweise" class="at-warn" :title="t('portfolio.einstandTeilweiseInfo')"> *</small></template>
+                                    <span v-else class="at-gedaempft">—</span>
+                                    <small v-if="p.unrealisiert != null" class="ps-kursquelle" :class="p.unrealisiert >= 0 ? 'at-gut' : 'at-schlecht'">{{ chf(p.unrealisiert, { vorzeichen: true }) }}</small>
                                 </span>
                                 <span><b v-if="p.chf != null">{{ chf(p.chf) }}</b><span v-else class="at-warn">—</span></span>
                             </div>
@@ -182,8 +270,10 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                                 <select v-model="kursQuelle"><option value="estv">ESTV-Kursliste</option><option value="manuell">{{ t('portfolio.stVonHand') }}</option></select>
                                 <Knopf art="haupt" klein @click="speichereKurs(p.asset)">{{ t('common.save') }}</Knopf>
                                 <Knopf v-if="/ESTV|von Hand/.test(p.kursQuelle)" art="leise" klein @click="speichereKurs(p.asset, true)">{{ t('portfolio.stKursZurueck') }}</Knopf>
-                                <Knopf v-if="p.kursQuelle === 'Totalverlust (markiert)'" art="leise" klein @click="totalverlust(p.asset, false)">{{ t('portfolio.totalverlustAufheben') }}</Knopf>
-                                <Knopf v-else-if="p.chf == null" art="leise" klein :titel="t('portfolio.totalverlustInfo')" @click="totalverlust(p.asset, true)">{{ t('portfolio.totalverlustMarkieren') }}</Knopf>
+                                <span class="ps-tv">
+                                    <Knopf art="leise" klein :titel="t('portfolio.totalverlustInfo')" @click="totalverlust(p.asset, true)">{{ t('portfolio.totalverlustMarkieren') }}</Knopf>
+                                    <label>{{ t('portfolio.tvAbJahr') }} <select v-model.number="tvJahr"><option v-for="j in jahre" :key="j" :value="j">{{ j }}</option></select></label>
+                                </span>
                                 <Knopf art="leise" klein @click="bearbeite = null">{{ t('common.cancel') }}</Knopf>
                             </div>
                             <div class="ps-orte">
@@ -194,7 +284,7 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                                 </span>
                             </div>
                         </div>
-                        <div class="ps-zeile summe"><span>Total</span><span></span><span></span><span>{{ chf(daten.vermoegenSumme) }}</span></div>
+                        <div class="ps-zeile verm summe"><span>Total</span><span></span><span></span><span><small class="at-gedaempft">{{ t('portfolio.stKostenbasis') }} {{ chf(daten.kostenbasisSumme) }}</small></span><span>{{ chf(daten.vermoegenSumme) }}</span></div>
                     </div>
                 </div>
             </section>
@@ -337,7 +427,18 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
 .ps-jahr { border: 1px solid var(--line-stark); background: var(--panel); color: var(--muted); border-radius: var(--radius-pille); padding: 0.3rem 0.85rem; font: inherit; font-size: 0.85rem; cursor: pointer; font-variant-numeric: tabular-nums; }
 .ps-jahr.aktiv { border-color: var(--accent); color: var(--accent); background: var(--accent-flaeche); font-weight: 700; }
 .ps-aktionen { display: flex; gap: 0.4rem; }
-.ps-recht { font-size: 0.78rem; color: var(--leise); display: flex; gap: 0.35rem; align-items: center; margin: 0.6rem 0 0; }
+.ps-kanton { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); }
+.ps-kanton select, .ps-tv select { background: var(--bg); border: 1px solid var(--line-stark); border-radius: var(--radius-knopf); color: var(--text); padding: 0.25rem 0.5rem; font: inherit; font-size: 0.82rem; }
+.ps-tv { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); }
+.ps-valor { display: block; font-weight: 400; font-size: 0.7rem; color: var(--leise); margin-left: 0.4rem; }
+.ps-estv { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--muted); margin: 0 0 0.6rem; }
+.ps-kt-liste { display: grid; grid-template-columns: minmax(9rem, max-content) 1fr; gap: 0.4rem 1rem; margin: 0 0 0.8rem; font-size: 0.86rem; }
+.ps-kt-liste dt { color: var(--leise); }
+.ps-kt-liste dd { margin: 0; }
+.ps-kt-block { font-size: 0.84rem; margin-bottom: 0.6rem; }
+.ps-kt-block ul, .ps-kt-ul { margin: 0.25rem 0 0; padding-left: 1.2rem; }
+.ps-kt-quellen { font-size: 0.75rem; color: var(--leise); display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
+.ps-kt-quellen a { color: var(--accent); }
 .ps-druckkopf { display: none; }
 
 .ps-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: 0.75rem; margin-top: 1rem; transition: opacity 0.2s; }
@@ -362,6 +463,7 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
 .ps-zeile.kopf { font-size: 0.72rem; color: var(--leise); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--line); }
 .ps-zeile.summe { border-top: 2px solid var(--line-stark); font-weight: 700; }
 .ps-zeile.ohne { color: var(--muted); }
+.ps-zeile.verm { grid-template-columns: minmax(6rem, 1fr) minmax(6rem, 1fr) minmax(8rem, 1.2fr) minmax(7rem, 1fr) minmax(7rem, 1fr); }
 .ps-zeile.zwei { grid-template-columns: 1fr auto; border-bottom: 1px dashed var(--line); }
 .ps-zeile.vier { grid-template-columns: 6rem minmax(0, 1.4fr) minmax(0, 1fr) 7rem; border-bottom: 1px dashed var(--line); }
 .ps-zeile.fuenf { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) 7rem 7rem 7rem; border-bottom: 1px dashed var(--line); }
@@ -394,11 +496,13 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
 @media (max-width: 640px) {
     .ps-zeile { grid-template-columns: 1fr 1fr; }
     .ps-zeile.kopf { display: none; }
-    .ps-zeile.vier, .ps-zeile.fuenf { grid-template-columns: 1fr 1fr; }
+    .ps-zeile.vier, .ps-zeile.fuenf, .ps-zeile.verm { grid-template-columns: 1fr 1fr; }
 }
 @media print {
     .ps-leiste, .ps-mehr, .ps-kursform { display: none !important; }
     .ps-druckkopf { display: block; font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .ps-druckkopf small { display: block; font-size: 0.75rem; font-weight: 400; margin-top: 0.3rem; }
+    .ps-rechtshinweis, .ps-estv .knopf { display: none !important; }
     .ps * { color: #000 !important; }
 }
 </style>

@@ -84,6 +84,9 @@ const ohneSpam = computed(() => alle.value.filter((p) => !p.spam))
 const sichtbar = computed(() => ohneSpam.value.filter((p) => staubZeigen.value || !verbergen(p)))
 const versteckt = computed(() => ohneSpam.value.length - sichtbar.value.length)
 const spamOffen = ref(false)
+const vorjahr = new Date().getFullYear() - 1
+// Kurs je Einheit: kleine Coins brauchen mehr Stellen als zwei Rappen.
+const chfKurs = (v) => `CHF ${Number(v).toLocaleString('de-CH', { maximumSignificantDigits: Math.abs(v) >= 1 ? 6 : 4, minimumFractionDigits: Math.abs(v) >= 1 ? 2 : 0 })}`
 const band = computed(() => {
     const mitWert = alle.value.filter((p) => p.chf > 0)
     const top = mitWert.slice(0, 7)
@@ -228,13 +231,14 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                         <span class="pf-coin" :style="{ '--f': farbeVon(p.asset) }">{{ p.asset.slice(0, 1) }}</span>
                         <span class="pf-name">
                             <b>{{ p.asset }}</b>
-                            <small class="at-gedaempft">{{ menge(p.menge) }}<template v-if="p.orte.length > 1"> · {{ t('portfolio.anOrten', { n: p.orte.length }) }}</template></small>
+                            <small class="at-gedaempft">{{ menge(p.menge) }}<template v-if="p.orte.length > 1"> · {{ t('portfolio.anOrten', { n: p.orte.length }) }}</template><template v-if="p.kaufkurs != null"> · Ø {{ chfKurs(p.kaufkurs) }}</template></small>
                         </span>
                         <span class="pf-anteil" :title="prozent(p.anteil)"><span :style="{ width: Math.max(2, p.anteil * 100) + '%', background: farbeVon(p.asset) }" /></span>
                         <span class="pf-betrag">
                             <b v-if="!p.ohneKurs">{{ chf(p.chf) }}</b>
                             <span v-else class="at-gedaempft" :title="p.kursQuelle">{{ t('portfolio.keinKurs') }}</span>
-                            <small class="at-gedaempft">{{ p.ohneKurs ? '' : prozent(p.anteil) }}</small>
+                            <small v-if="p.unrealisiertChf != null" :class="p.unrealisiertChf >= 0 ? 'at-gut' : 'at-schlecht'" :title="t('portfolio.unrealisiertInfo')">{{ chf(p.unrealisiertChf, { vorzeichen: true }) }}<template v-if="p.einstandTeilweise">*</template></small>
+                            <small v-else class="at-gedaempft">{{ p.ohneKurs ? '' : prozent(p.anteil) }}</small>
                         </span>
                         <Symbol name="runter" :groesse="16" class="pf-pfeil" />
                     </button>
@@ -244,15 +248,29 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <span class="at-gedaempft">{{ menge(o.menge) }}</span>
                             <span>{{ chf(o.chf) }}</span>
                         </div>
+                        <div v-if="p.kaufkurs != null" class="pf-einstand">
+                            <span>{{ t('portfolio.kaufkursSchnitt') }} <b>{{ chfKurs(p.kaufkurs) }}</b></span>
+                            <span>{{ t('portfolio.einstand') }} <b>{{ chf(p.einstandChf) }}</b></span>
+                            <span v-if="p.unrealisiertChf != null">{{ t('portfolio.unrealisiert') }} <b :class="p.unrealisiertChf >= 0 ? 'at-gut' : 'at-schlecht'">{{ chf(p.unrealisiertChf, { vorzeichen: true }) }}</b></span>
+                            <span v-if="p.einstandTeilweise" class="at-warn" :title="t('portfolio.einstandTeilweiseInfo')">{{ t('portfolio.einstandTeilweise') }}</span>
+                        </div>
+                        <details v-if="p.lose?.length" class="pf-lose">
+                            <summary>{{ t('portfolio.loseTitel', { n: p.lose.length }) }}</summary>
+                            <div v-for="(l, i) in [...p.lose].reverse()" :key="i" class="pf-los">
+                                <span>{{ new Date(l.zeit).toLocaleDateString('de-CH') }}</span>
+                                <span class="at-gedaempft">{{ menge(l.menge) }}</span>
+                                <span>{{ l.kursChf != null ? chfKurs(l.kursChf) : t('portfolio.kaufkursUnbekannt') }}</span>
+                            </div>
+                        </details>
                         <div class="pf-ort-fuss at-gedaempft">
                             <span v-if="p.usdKurs != null">1 {{ p.asset }} = {{ p.usdKurs.toLocaleString('de-CH', { maximumSignificantDigits: 6 }) }} USD · {{ p.kursQuelle }}</span>
                             <span v-else>{{ p.kursQuelle }}</span>
                             <span v-if="p.kontrakt" class="pf-kontrakt" :title="p.kontrakt">{{ p.kontrakt.slice(0, 8) }}…</span>
                             <router-link :to="{ path: '/portfolio/bewegungen', query: { asset: p.asset } }">{{ t('portfolio.bewegungenZu', { a: p.asset }) }} →</router-link>
-                            <button v-if="p.ohneKurs || p.totalverlust" type="button" class="pf-totalverlust" :title="t('portfolio.totalverlustInfo')" @click="setzeTotalverlust(p.asset, !p.totalverlust)">
-                                {{ p.totalverlust ? t('portfolio.totalverlustAufheben') : t('portfolio.totalverlustMarkieren') }}
+                            <button type="button" class="pf-totalverlust" :title="t('portfolio.totalverlustInfoUebersicht', { j: vorjahr })" @click="setzeTotalverlust(p.asset, true, vorjahr)">
+                                {{ t('portfolio.totalverlustMarkieren') }}
                             </button>
-                            <button v-if="p.kontrakt && (p.ohneKurs || p.totalverlust)" type="button" class="pf-totalverlust" :title="t('portfolio.spamInfo')" @click="setzeSpam(p.asset, true)">
+                            <button v-if="p.kontrakt && p.ohneKurs" type="button" class="pf-totalverlust" :title="t('portfolio.spamInfo')" @click="setzeSpam(p.asset, true)">
                                 {{ t('portfolio.spamMarkieren') }}
                             </button>
                         </div>
@@ -356,6 +374,11 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
 </template>
 
 <style scoped>
+.pf-einstand { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; font-size: 0.8rem; color: var(--muted); margin-top: 0.4rem; }
+.pf-einstand b { color: var(--text); font-variant-numeric: tabular-nums; }
+.pf-lose { margin-top: 0.35rem; font-size: 0.78rem; color: var(--muted); }
+.pf-lose summary { cursor: pointer; color: var(--accent); }
+.pf-los { display: grid; grid-template-columns: 6rem 1fr auto; gap: 0.75rem; padding: 0.15rem 0; font-variant-numeric: tabular-nums; }
 .pf-spam { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: 0.6rem; }
 .pf-spam-kopf { display: flex; align-items: center; gap: 0.4rem; background: none; border: 0; color: var(--muted); font: inherit; font-size: 0.85rem; cursor: pointer; padding: 0.2rem 0; text-align: left; flex-wrap: wrap; }
 .pf-spam-liste { display: flex; flex-direction: column; margin-top: 0.4rem; }
