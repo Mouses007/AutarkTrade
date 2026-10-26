@@ -662,7 +662,20 @@ export class ZeichenEbene {
         return vp
     }
 
+    /**
+     * Eine Zeichnung mit ihrer Deckkraft (`stil.deckkraft`, 0,1–1; ohne = voll).
+     * Gilt für alles der Zeichnung — Linien, Flächen, Beschriftungen —, nicht für
+     * die Anker der Auswahl: die bleiben voll sichtbar, sonst fände man sie nicht.
+     */
     zeichneEine(ctx, z, pk, breite, hoehe, ausgewaehlt) {
+        const d = Number(z.stil?.deckkraft)
+        ctx.save()
+        if (Number.isFinite(d) && d > 0 && d < 1) ctx.globalAlpha *= d
+        try { this.zeichneInhalt(ctx, z, pk, breite, hoehe, ausgewaehlt) } finally { ctx.restore() }
+        if (ausgewaehlt) this.zeichneAnker(ctx, z, breite)
+    }
+
+    zeichneInhalt(ctx, z, pk, breite, hoehe, ausgewaehlt) {
         pk = this.bildPunkte(z, pk)
         const s = stilFuer(z)
         const X = (t) => this.zuX(t)
@@ -842,7 +855,6 @@ export class ZeichenEbene {
                 break
             }
         }
-        if (ausgewaehlt) this.zeichneAnker(ctx, z, breite)
     }
 
     /** Wartungsmarge des Symbols (Bruch) für den Positionsrechner. */

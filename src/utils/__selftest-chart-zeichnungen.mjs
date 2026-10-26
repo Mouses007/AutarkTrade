@@ -141,6 +141,26 @@ console.log('\nEreignisse in ihrer Kerze (Journal)\n')
     check('andere Typen unverändert', fortlaufendePunkte('fib', linie, 200, zuL) === linie)
 }
 
+// ── Deckkraft ───────────────────────────────────────────────────────────────
+{
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    const stapel = []
+    const ctx = { globalAlpha: 1, save() { stapel.push(this.globalAlpha) }, restore() { this.globalAlpha = stapel.pop() } }
+    let innen = null, anker = null
+    e.zeichneInhalt = (c) => { innen = c.globalAlpha }
+    e.zeichneAnker = (c) => { anker = c.globalAlpha }
+    e.zeichneEine(ctx, { id: 1, typ: 'trendlinie', stil: { deckkraft: 0.4 } }, [], 800, 400, true)
+    check('Deckkraft 40 %: die Zeichnung mit 0,4, die Anker voll, danach zurück auf 1', innen === 0.4 && anker === 1 && ctx.globalAlpha === 1, `${innen} ${anker} ${ctx.globalAlpha}`)
+    e.zeichneEine(ctx, { id: 2, typ: 'trendlinie', stil: {} }, [], 800, 400, false)
+    check('ohne Deckkraft: voll', innen === 1)
+    e.zeichneEine(ctx, { id: 3, typ: 'trendlinie', stil: { deckkraft: 'x' } }, [], 800, 400, false)
+    check('Unsinn als Deckkraft: voll', innen === 1)
+    e.zeichneInhalt = () => { throw new Error('kaputt') }
+    try { e.zeichneEine(ctx, { id: 4, typ: 'trendlinie', stil: { deckkraft: 0.5 } }, [], 800, 400, false) } catch { /* erwartet */ }
+    check('Fehler beim Zeichnen: Deckkraft trotzdem zurückgesetzt', ctx.globalAlpha === 1)
+}
+
 // ── Gesperrte liegen hinten (Treffertest) ───────────────────────────────────
 {
     const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')

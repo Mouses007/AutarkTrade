@@ -5,7 +5,7 @@
  * Zeiteinheit, Sperren, Alarm, Löschen. Jede Änderung geht direkt an den
  * Speicher — es gibt keinen „Übernehmen"-Knopf, wie bei TradingView.
  */
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FARBEN, stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { FORTLAUFEND_TYPEN } from '../../utils/chart/zeichnungen/geometrie.js'
@@ -41,6 +41,21 @@ function stil(patch) {
     emit('aendere', { stil: { ...(props.zeichnung.stil || {}), ...patch } })
 }
 
+/*
+ * Deckkraft (10–100 %, gespeichert als Bruch `stil.deckkraft`) — für jede Zeichnung.
+ * Beim Ziehen sieht man sie sofort; gespeichert wird höchstens alle 150 ms und
+ * beim Loslassen, nicht bei jedem Pixel (jede Änderung ist ein Speichern).
+ */
+const deckProzent = ref(Math.round((s.value.deckkraft ?? 1) * 100))
+watch(() => props.zeichnung.id, () => { deckProzent.value = Math.round((stilFuer(props.zeichnung).deckkraft ?? 1) * 100) })
+let deckUhr = null
+function setzeDeckkraft(wert, sofort = false) {
+    deckProzent.value = Math.max(10, Math.min(100, Number(wert) || 100))
+    clearTimeout(deckUhr)
+    const speichern = () => stil({ deckkraft: deckProzent.value >= 100 ? 1 : deckProzent.value / 100 })
+    if (sofort) speichern(); else deckUhr = setTimeout(speichern, 150)
+}
+
 function naechsteBreite() {
     const b = s.value.breite || 1
     stil({ breite: b >= 4 ? 1 : b + 1 })
@@ -63,6 +78,12 @@ function nurDieseZeiteinheit() {
                 @click="stil({ farbe: f })"></button>
             <span class="trenn"></span>
         </template>
+        <label class="deck" :title="t('chart.stil.deckkraft')">
+            <input type="range" min="10" max="100" step="5" :value="deckProzent" :aria-label="t('chart.stil.deckkraft')"
+                @input="setzeDeckkraft($event.target.value)" @change="setzeDeckkraft($event.target.value, true)" />
+            <span>{{ deckProzent }}%</span>
+        </label>
+        <span class="trenn"></span>
         <button v-if="hatStrich" class="k" :title="t('chart.stil.breite')" @click="naechsteBreite" :aria-label="t('chart.stil.breite')">
             <span class="breite" :style="{ height: (s.breite || 1) + 'px' }"></span>
         </button>
@@ -163,6 +184,25 @@ function nurDieseZeiteinheit() {
     display: block;
     width: 16px;
     background: currentColor;
+}
+
+.deck {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+
+.deck input {
+    width: 64px;
+    accent-color: var(--accent);
+}
+
+.deck span {
+    min-width: 30px;
+    text-align: right;
 }
 
 .trenn {

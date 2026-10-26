@@ -5918,6 +5918,7 @@
       "mmr": "Isoliert, Wartungsmarge {pct} % — Cross Margin nicht abgebildet"
     },
     "stil": {
+      "deckkraft": "Deckkraft der Zeichnung",
       "fortlaufend": "Fortlaufend: reicht immer bis zur aktuellen Kerze",
       "fortlaufendAn": "Fortlaufend an — reicht immer bis zur aktuellen Kerze (Klick: fest am Endpunkt)",
       "breite": "Strichstärke",
