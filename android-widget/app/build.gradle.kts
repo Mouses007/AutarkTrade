@@ -11,8 +11,8 @@ android {
         applicationId = "com.autarktrade.widget"
         minSdk = 31
         targetSdk = 35
-        versionCode = 25
-        versionName = "4.1.0-25"
+        versionCode = 26
+        versionName = "4.1.0-26"
     }
 
     buildTypes {

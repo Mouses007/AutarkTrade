@@ -95,6 +95,15 @@ console.log('\nAltbestand ohne Text\n')
     check('Momentum-Markt aus dem Treffer (spot)', spot.markt === 'spot')
 }
 
+console.log('\nDringlichkeit\n')
+{
+    const mit = (bedingung) => ausloesungenAus([{ id: 9, art: 'preis', symbol: 'X', bedingung, verlauf: [{ t: 5, p: 1 }] }])[0].schwere
+    check('Dringlichkeit aus der Bedingung (Text-JSON)', mit('{"schwere":"einstieg"}') === 'einstieg')
+    check('… auch als Objekt', mit({ schwere: 'info' }) === 'info')
+    check('altes „kritisch“ heisst jetzt „einstieg“', mit({ schwere: 'kritisch' }) === 'einstieg')
+    check('ohne Angabe: warnung', mit(undefined) === 'warnung' && mit({ schwere: 'quatsch' }) === 'warnung')
+}
+
 console.log('\nRobustheit\n')
 {
     check('kaputter Verlauf wirft nicht', ausloesungenAus([{ id: 9, art: 'preis', symbol: 'X', verlauf: '{kaputt' }]).length === 0)

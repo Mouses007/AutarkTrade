@@ -146,6 +146,12 @@ object Prefs {
     fun sofortLetzte(ctx: Context): Long = sp(ctx).getLong("sofort_letzte", 0L)
     fun setSofortLetzte(ctx: Context, t: Long) { sp(ctx).edit().putLong("sofort_letzte", t).apply() }
 
+    // --- Sprachausgabe (Vorgabe aus; vorgelesen wird ab der gewählten Dringlichkeit) ---
+    fun spracheAn(ctx: Context): Boolean = sp(ctx).getBoolean("sprache_an", false)
+    fun setSpracheAn(ctx: Context, an: Boolean) { sp(ctx).edit().putBoolean("sprache_an", an).apply() }
+    fun spracheAb(ctx: Context): String = sp(ctx).getString("sprache_ab", "einstieg") ?: "einstieg"
+    fun setSpracheAb(ctx: Context, stufe: String) { sp(ctx).edit().putString("sprache_ab", stufe).apply() }
+
     fun alarmLetzterAbruf(ctx: Context): Long = sp(ctx).getLong("alarm_abruf", 0L)
     fun alarmFehler(ctx: Context): String? = sp(ctx).getString("alarm_fehler", null)
     fun saveAlarmFehler(ctx: Context, msg: String) {

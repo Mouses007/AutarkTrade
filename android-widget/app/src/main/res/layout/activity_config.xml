@@ -173,6 +173,24 @@
                     android:textColor="@color/muted"
                     android:textSize="12sp" />
 
+                <TextView style="@style/FieldLabel" android:layout_marginTop="12dp" android:text="@string/cfg_sprache_titel" />
+                <CheckBox android:id="@+id/sprache_an" style="@style/Haken" android:text="@string/cfg_sprache" />
+                <LinearLayout
+                    android:id="@+id/sprache_details"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <TextView style="@style/FieldLabel" android:text="@string/cfg_sprache_ab" />
+                    <Spinner
+                        android:id="@+id/in_sprache_ab"
+                        style="@style/Auswahl" />
+                    <Button
+                        android:id="@+id/btn_sprache_test"
+                        style="@style/KnopfNeben"
+                        android:layout_marginTop="8dp"
+                        android:text="@string/cfg_sprache_test" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/alarm_hinweis"
                     android:layout_width="match_parent"

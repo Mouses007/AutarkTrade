@@ -59,6 +59,13 @@
     <string name="cfg_genau_aus">Genaue Wecker erlauben (pünktlicher)</string>
     <string name="cfg_akku">Akku-Optimierung für die App abschalten…</string>
     <string name="cfg_testmeldung">Testmeldung senden</string>
+    <string name="cfg_sprache_titel">Sprachausgabe</string>
+    <string name="cfg_sprache">Alarme vorlesen — still bei lautlos, Vibration, „Bitte nicht stören" und während Anrufen</string>
+    <string name="cfg_sprache_ab">Vorlesen ab Dringlichkeit</string>
+    <string name="sprache_info">Info (alle Alarme)</string>
+    <string name="sprache_warnung">ab Warnung</string>
+    <string name="sprache_einstieg">nur Trade-Einstieg</string>
+    <string name="cfg_sprache_test">Sprachausgabe testen</string>
     <string name="cfg_stand_nie">Noch kein Abruf.</string>
     <string name="cfg_stand">Letzter Abruf %1$s</string>
     <string name="cfg_stand_fehler">Letzter Abruf %1$s — Fehler: %2$s</string>

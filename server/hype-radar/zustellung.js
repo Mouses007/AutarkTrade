@@ -18,7 +18,8 @@ import { logWarn } from '../logger.js'
 import { versandGesperrt, versandSperrFehler } from '../testbetrieb.js'
 
 const ABRUF_TIMEOUT_MS = 10000
-const RANG = { info: 0, warnung: 1, kritisch: 2 }
+// `einstieg` (Chart-Alarm „Trade-Einstieg“) steht gleichauf mit `kritisch`
+const RANG = { info: 0, warnung: 1, kritisch: 2, einstieg: 2 }
 
 /** Erreicht die Schwere die Mindest-Schwere des Kanals? */
 export function erreichtSchwere(schwere, minSchwere) {
@@ -110,8 +111,8 @@ export function ntfyNachricht(alarm, fav, topic = 'hype-radar') {
         topic,
         title: alarm.titel || `${fav?.symbol || '?'} (${alarm.regel})`,
         message: alarm.meldung,
-        priority: { kritisch: 5, warnung: 4, info: 3 }[alarm.schwere] || 3,
-        tags: [alarm.schwere === 'kritisch' ? 'rotating_light' : 'chart_with_downwards_trend'],
+        priority: { kritisch: 5, einstieg: 5, warnung: 4, info: 3 }[alarm.schwere] || 3,
+        tags: [{ kritisch: 'rotating_light', einstieg: 'dart' }[alarm.schwere] || 'chart_with_downwards_trend'],
     }
 }
 
@@ -120,7 +121,7 @@ async function telegram(alarm, fav, kanal, geheim) {
     if (!geheim.telegramToken) throw new Error('kein Bot-Token hinterlegt')
     const chatId = String(kanal.chatId || '').trim()
     if (!chatId) throw new Error('keine Chat-Id hinterlegt')
-    const zeichen = { kritisch: '🚨', warnung: '⚠️', info: 'ℹ️' }[alarm.schwere] || ''
+    const zeichen = { kritisch: '🚨', einstieg: '🎯', warnung: '⚠️', info: 'ℹ️' }[alarm.schwere] || ''
     await post(`https://api.telegram.org/bot${geheim.telegramToken}/sendMessage`, {
         kopf: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text: `${zeichen} ${alarm.meldung}` }),

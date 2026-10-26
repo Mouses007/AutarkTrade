@@ -56,6 +56,8 @@ object ChartAlarme {
     data class Ausloesung(
         val id: String, val art: String, val zeit: Long, val symbol: String,
         val markt: String, val titel: String, val text: String,
+        /** Dringlichkeit aus dem Alarm-Dialog: info, warnung, einstieg (ältere Server: warnung). */
+        val schwere: String = "warnung",
     )
 
     // ── Kanäle ───────────────────────────────────────────────────────────
@@ -175,6 +177,7 @@ object ChartAlarme {
             id = id, art = a.optString("art"), zeit = a.optLong("zeit"),
             symbol = a.optString("symbol"), markt = a.optString("markt", "futures"),
             titel = a.optString("titel"), text = a.optString("text"),
+            schwere = a.optString("schwere", "warnung"),
         )
     }
 
@@ -219,6 +222,7 @@ object ChartAlarme {
         val einzeln = neu.take(MAX_EINZELN).reversed()
         for (a in einzeln) nm.notify(a.id.hashCode(), baue(ctx, a))
         if (neu.size > 1) nm.notify(ID_SAMMEL, sammel(ctx, neu))
+        Sprache.vorlesen(ctx, neu)
     }
 
     /** Tipp → Web-App im Browser auf /chart?symbol=…; ohne Symbol der Chart-Arbeitsplatz. */

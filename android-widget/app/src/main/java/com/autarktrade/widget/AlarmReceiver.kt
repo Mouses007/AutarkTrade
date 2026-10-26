@@ -23,7 +23,10 @@ class AlarmReceiver : BroadcastReceiver() {
             ChartAlarme.ACTION_ABRUF -> {
                 val pending = goAsync()
                 thread(name = "alarm-abruf") {
-                    try { ChartAlarme.abrufen(ctx) } finally {
+                    try {
+                        ChartAlarme.abrufen(ctx)
+                        Sprache.abwarten()   // sonst endet der Prozess womöglich mitten in der Ansage
+                    } finally {
                         ChartAlarme.planen(ctx)
                         pending.finish()
                     }

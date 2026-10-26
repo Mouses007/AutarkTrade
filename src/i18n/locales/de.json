@@ -5809,7 +5809,7 @@
       "schweren": {
         "info": "Info",
         "warnung": "Warnung",
-        "kritisch": "Kritisch"
+        "einstieg": "Trade-Einstieg"
       },
       "push": "Push (ntfy/Telegram/Webhook)",
       "mail": "Mail",

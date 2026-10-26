@@ -141,7 +141,8 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
                 bed.box = box
             }
         }
-        if (b.schwere !== undefined) bed.schwere = ['info', 'warnung', 'kritisch'].includes(b.schwere) ? b.schwere : 'warnung'
+        // „kritisch“ hiess bis 26.10.2026 die oberste Stufe, heute „Trade-Einstieg“
+        if (b.schwere !== undefined) bed.schwere = b.schwere === 'kritisch' ? 'einstieg' : ['info', 'warnung', 'einstieg'].includes(b.schwere) ? b.schwere : 'warnung'
         aus.bedingung = JSON.stringify(bed)
     }
     if (!teilweise && (aus.art === 'linie' || aus.art === 'zone')) {
@@ -318,7 +319,7 @@ async function stelleMeldungZu(alarm, titel, text, daten, t) {
     if (kanaele.push !== false) {
         try {
             zustellung.push = await stelleZu({
-                regel: 'chartAlarm', schwere: alarm.bedingung?.schwere || 'warnung',
+                regel: 'chartAlarm', schwere: (alarm.bedingung?.schwere === 'kritisch' ? 'einstieg' : alarm.bedingung?.schwere) || 'warnung',
                 meldung: text, titel, quelle: 'chart', daten,
             }, { symbol: daten.symbol || 'Momentum', chain: alarm.markt }, await leseEinstellungen())
         } catch (e) { logWarn('chart-alarme', `Push: ${e.message}`); zustellung.push = { fehler: e.message } }
@@ -736,7 +737,7 @@ export function setupChartAlarmRoutes(app) {
             // Ergebnis je Kanal zurückgeben — vorher hiess es „verschickt", auch wenn alle Kanäle aus waren.
             // Die Mindest-Schwere gilt beim Test nicht: wer drückt, will wissen, ob der Draht steht.
             const ergebnis = await stelleZu({
-                regel: 'chartAlarm', schwere: 'kritisch', quelle: 'chart',
+                regel: 'chartAlarm', schwere: 'einstieg', quelle: 'chart',
                 titel: 'Chart-Alarm: Test', meldung: 'Testmeldung vom Chart-Arbeitsplatz — die Zustellung funktioniert.',
                 daten: { test: true },
             }, { symbol: 'TEST', chain: '—' }, await leseEinstellungen(), { alleSchweren: true })

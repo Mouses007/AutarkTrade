@@ -48,7 +48,7 @@ const PROFIL_NAME = { poc: 'POC', vah: 'VAH', val: 'VAL' }
 // Ein Momentum-Alarm über Watchlists soll weiterlaufen — je Kerze meldet er ohnehin nur einmal.
 const einmalig = ref(v.einmalig ?? !mehrfach)
 const sperreMin = ref(v.bedingung?.sperreMin ?? 15)
-const schwere = ref(v.bedingung?.schwere || 'warnung')
+const schwere = ref((v.bedingung?.schwere === 'kritisch' ? 'einstieg' : v.bedingung?.schwere) || 'warnung')
 const push = ref(v.kanaele?.push !== false)
 const mail = ref(v.kanaele?.mail !== false)
 const notiz = ref(v.notiz || '')
@@ -223,7 +223,7 @@ async function speichern() {
                 <select v-model="schwere" class="at-feld klein">
                     <option value="info">{{ t('chart.alarm.schweren.info') }}</option>
                     <option value="warnung">{{ t('chart.alarm.schweren.warnung') }}</option>
-                    <option value="kritisch">{{ t('chart.alarm.schweren.kritisch') }}</option>
+                    <option value="einstieg">{{ t('chart.alarm.schweren.einstieg') }}</option>
                 </select>
             </label>
             <div class="haken">

@@ -120,6 +120,25 @@ class WidgetConfigActivity : AppCompatActivity() {
         sofortBox = findViewById(R.id.sofort_an)
         sofortBox.isChecked = Prefs.sofortAn(this)
         sofortBox.setOnCheckedChangeListener { _, _ -> zeigeAlarmDetails() }
+
+        // Sprachausgabe: gilt sofort, ohne Speichern (nur ein Schalter am Gerät)
+        val spracheBox = findViewById<CheckBox>(R.id.sprache_an)
+        val spracheSpin = findViewById<Spinner>(R.id.in_sprache_ab)
+        val spracheDetails = findViewById<View>(R.id.sprache_details)
+        setupSpinner(spracheSpin, listOf(R.string.sprache_info, R.string.sprache_warnung, R.string.sprache_einstieg).map { getString(it) })
+        spracheSpin.setSelection(Sprache.STUFEN.indexOf(Prefs.spracheAb(this)).let { if (it < 0) 2 else it })
+        spracheBox.isChecked = Prefs.spracheAn(this)
+        spracheDetails.visibility = if (spracheBox.isChecked) View.VISIBLE else View.GONE
+        spracheBox.setOnCheckedChangeListener { _, an ->
+            Prefs.setSpracheAn(this, an)
+            spracheDetails.visibility = if (an) View.VISIBLE else View.GONE
+        }
+        spracheSpin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) =
+                Prefs.setSpracheAb(this@WidgetConfigActivity, Sprache.STUFEN[pos])
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        findViewById<Button>(R.id.btn_sprache_test).setOnClickListener { Sprache.test(this) }
         alarmeAn.setOnCheckedChangeListener { _, an ->
             zeigeAlarmDetails()
             // Ab Android 13 muss die App fragen, bevor sie melden darf.

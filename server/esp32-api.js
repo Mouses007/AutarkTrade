@@ -320,7 +320,7 @@ export function setupEsp32Routes(app) {
             const seit = Math.max(0, Number(req.query.seit) || 0)
             const zeilen = await getKnex()('chart_alarme')
                 .where('ausgeloestAm', '>', seit)
-                .select('id', 'art', 'symbol', 'markt', 'notiz', 'kanaele', 'verlauf')
+                .select('id', 'art', 'symbol', 'markt', 'notiz', 'kanaele', 'bedingung', 'verlauf')
             res.json({ jetzt: Date.now(), alarme: ausloesungenAus(zeilen, { seit, arten: leseArten(req.query.arten) }) })
         } catch (e) {
             console.error('ESP32 alarme error:', e)
