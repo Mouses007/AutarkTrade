@@ -126,13 +126,18 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         // für ALLE Orte dieses Coins, denn derselbe Coin hat überall denselben
         // Wert (CSPR bei Bitget ohne Kurs, bei Bitpanda bewertet).
         if (kurs.usd == null && quellKurs.has(key)) kurs = quellKurs.get(key)
+        // Zweite Regel: ohne Kurs und ohne eigene Herkunft (nie gekauft, getauscht,
+        // selbst geschickt) ist ein Token ungefragt zugeschickt.
+        const ungefragt = !spam && kurs.usd == null ? istSpam(b.asset, b.kontrakt, { ohneKurs: true }) : null
+        if (ungefragt) kurs = { usd: null, quelle: 'Spam' }
+        const spamGrund = spam || ungefragt
         const usd = kurs.usd != null ? b.menge * kurs.usd : null
         const chf = usd != null ? usd * fx.chf : null
         if (usd != null) gesamtUsd += usd; else ohneKurs++
         const anzeigeName = b.name === 'ohneSymbol' ? (kurs.symbol || `${b.asset}…`) : b.asset
         const p = jeAsset.get(key) || {
             schluessel: key, asset: anzeigeName, kontrakt: b.kontrakt, kette: b.kontrakt ? b.ort : null,
-            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, spam, orte: [],
+            menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, spam: spamGrund, orte: [],
         }
         p.menge += b.menge
         if (usd != null) { p.usd += usd; p.chf += chf }
@@ -141,7 +146,7 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
 
         const q = jeQuelle.get(b.quelle) || { chf: 0, usd: 0, posten: [] }
         if (usd != null) { q.chf += chf; q.usd += usd }
-        q.posten.push({ schluessel: key, asset: anzeigeName, ort: b.ort, ortName: kettenName(b.ort) || b.name, menge: b.menge, chf, ohneKurs: usd == null, spam })
+        q.posten.push({ schluessel: key, asset: anzeigeName, ort: b.ort, ortName: kettenName(b.ort) || b.name, menge: b.menge, chf, ohneKurs: usd == null, spam: spamGrund })
         jeQuelle.set(b.quelle, q)
     }
     const gesamtChf = gesamtUsd * fx.chf

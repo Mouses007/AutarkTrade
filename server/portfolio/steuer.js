@@ -282,6 +282,8 @@ export async function berechneSteuerjahr(jahr) {
             continue
         }
         const kurs = kursAn(kurse, tokenOrte, key)
+        // Token ohne Kurs und ohne eigene Herkunft = ungefragt zugeschickt (Spam).
+        if (kurs.chf == null && tokenOrte.has(key) && istSpam(asset, tokens.get(asset)?.kontrakt, { ohneKurs: true })) continue
         // Ein namensgleicher Token ohne Kurs steht als eigene Zeile neben dem Börsen-Coin.
         const gruppe = kurs === kurse.get(asset + TOKEN) ? asset + TOKEN : asset
         const p = jeAsset.get(gruppe) || { asset, token: gruppe !== asset, valor: kurs.valor || null, menge: 0, kursChf: kurs.chf, kursQuelle: kurs.quelle, chf: kurs.chf != null ? 0 : null, orte: [] }

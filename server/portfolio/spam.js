@@ -10,7 +10,9 @@
  * Erkannt wird nur am NAMEN, und nur bei Tokens mit Vertrag (ein Coin an einer
  * Börse ist kein Airdrop). Echte Kürzel sind kurz, ohne Leerzeichen, ohne
  * Webadresse; „USDC.e“ bleibt echt (Endung zu kurz für eine Domain).
- * Daneben gilt die Hand des Nutzers: `settings.portfolioSpam` { ASSET: true|false }.
+ * Zweite Regel (`assetsMitHerkunft`): Token ohne Kurs, die nie gekauft, getauscht
+ * oder selbst hingeschickt wurden. Daneben gilt die Hand des Nutzers:
+ * `settings.portfolioSpam` { ASSET: true|false }.
  */
 import { getKnex } from '../database.js'
 
@@ -45,13 +47,51 @@ async function lese() {
     } catch { return {} }
 }
 
-/** Entscheid für ein Asset: die Hand des Nutzers vor der Regel. */
+/**
+ * Assets mit eigener Herkunft (rein): mindestens eine Bewegung, die man selbst
+ * ausgelöst hat oder die einen Wert hat — Kauf, Tausch, Abgang, Umbuchung mit
+ * Gegenstück, erfasster Anfangsbestand, Ertrag mit CHF-Wert. Ein Eingang ohne
+ * Wert und ohne Gegenbuchung ist KEINE Herkunft: so kommen Werbe-Airdrops.
+ *
+ * Zweite Spam-Regel (26.10.2026): FIRE, FISH, KEKIUS, SHIT … — je genau 1 Stück,
+ * harmlose Namen, aber keine einzige Bewegung, nur in der Live-Abfrage der
+ * Wallet. Der Name allein verrät sie nicht.
+ */
+export function assetsMitHerkunft(bewegungen) {
+    const s = new Set()
+    for (const b of bewegungen) {
+        if (b.einordnung === 'ignorieren') continue
+        const seiten = [[b.asset, Number(b.menge) || 0]]
+        if (b.gegenAsset) seiten.push([b.gegenAsset, Number(b.gegenMenge) || 0])
+        for (const [asset, menge] of seiten) {
+            if (!asset) continue
+            const ungefragt = menge > 0 && ['einzahlung', 'airdrop', 'sonstiges'].includes(b.art)
+                && !(Number(b.chfWert) > 0) && !b.transferMit && b.einordnung !== 'transfer'
+            if (!ungefragt) s.add(String(asset).toUpperCase())
+        }
+    }
+    return s
+}
+
+/**
+ * Entscheid für ein Asset: die Hand des Nutzers vor den Regeln.
+ * `istSpam(asset, kontrakt, { ohneKurs })` — mit `ohneKurs: true` greift auch die
+ * Herkunftsregel (Token mit Vertrag, ohne Kurs, ohne eigene Herkunft).
+ */
 export async function spamPruefer() {
     const hand = await lese()
-    return (asset, kontrakt) => {
+    let herkunft = new Set()
+    try {
+        herkunft = assetsMitHerkunft(await getKnex()('portfolio_bewegungen')
+            .select('asset', 'gegenAsset', 'art', 'menge', 'gegenMenge', 'chfWert', 'transferMit', 'einordnung'))
+    } catch { /* ohne Herkunft nur die Namensregel */ }
+    return (asset, kontrakt, { ohneKurs = false } = {}) => {
         const key = String(asset ?? '').toUpperCase()
         if (key in hand) return hand[key] ? 'hand' : null
-        return spamGrund(asset, kontrakt)
+        const grund = spamGrund(asset, kontrakt)
+        if (grund) return grund
+        if (ohneKurs && kontrakt && !herkunft.has(key)) return 'ungefragt'
+        return null
     }
 }
 
