@@ -152,6 +152,9 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
     await addColumnIfNotExists('portfolio_steuerkurse', 'valor', (t) => t.string('valor'))
     // Wohnkanton (KZ, z. B. 'ZH') für Rubrik, Ersatzkurs und Kriterien im Steuerbericht (`shared/steuer-kantone.js`).
     await addColumnIfNotExists('settings', 'portfolioKanton', (t) => t.string('portfolioKanton'))
+    // Ort nicht mehr genutzt (Konto aufgelöst, Wallet aufgegeben): ab diesem Zeitpunkt
+    // (ms, Ende des Tages) nicht in der aktuellen Ansicht und nicht im Vermögen späterer Stichtage.
+    await addColumnIfNotExists('portfolio_quellen', 'genutztBis', (t) => t.bigInteger('genutztBis'))
     // Solana-Verträge wurden bis 25.10.2026 kleingeschrieben gespeichert (Base58
     // unterscheidet Gross/Klein — so fand keine Börse den Token). Bekannte zurück.
     for (const echt of ['rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof']) {

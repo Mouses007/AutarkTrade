@@ -16,6 +16,7 @@ import { leseImportCsv } from './import.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset } from './steuer-rechnung.js'
 import { totalverlustStatistik } from './totalverlust-seite.js'
 import { abJahrVon } from './totalverlust.js'
+import { beendeteQuellen } from './uebersicht.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
 
 let bestanden = 0, fehlgeschlagen = 0
@@ -212,6 +213,14 @@ console.log('\nÜbergabe Import → Live')
     check('Statistik: Anteil 100/(100+900)', nah(st.anteilAmEinstand, 0.1))
     check('Startjahr gesetzt', abJahrVon({ am: T('2026-10-25'), abJahr: 2024 }) === 2024)
     check('alte Markierung ohne Startjahr: Vorjahr der Markierung', abJahrVon({ am: T('2026-10-25') }) === 2025)
+}
+
+{
+    const q = [{ quelle: 'i:Binance', genutztBis: T('2021-11-28T23:59:59+01:00') }, { quelle: 'i:KuCoin', genutztBis: null }, { quelle: 'i:Crypto.com', genutztBis: T('2026-01-07T23:59:59+01:00') }]
+    const heute = beendeteQuellen(q, T('2026-10-27'))
+    check('genutzt bis: vorbei → beendet', heute.has('i:Binance') && heute.has('i:Crypto.com'))
+    check('genutzt bis: leer → aktiv', !heute.has('i:KuCoin'))
+    check('genutzt bis: am Tag selbst noch aktiv', !beendeteQuellen(q, T('2026-01-07T12:00:00+01:00')).has('i:Crypto.com'))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

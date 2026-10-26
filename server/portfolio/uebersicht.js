@@ -41,6 +41,11 @@ export async function einstandHeute(istSpam = () => null) {
     return einstandJeAsset(fifo(bew, { fiat: FIAT }).lose)
 }
 
+/** Quellen, deren „genutzt bis“ vor `zeit` liegt. */
+export function beendeteQuellen(quellen, zeit = Date.now()) {
+    return new Set(quellen.filter((q) => Number(q.genutztBis) > 0 && Number(q.genutztBis) < zeit).map((q) => q.quelle))
+}
+
 /**
  * Bestände ohne doppelt Gezähltes: was eine Adresse live meldet, ersetzt ihren
  * Import-Ort (Übergabe Import → Live). Geteilt mit der Totalverlust-Seite —
@@ -54,7 +59,8 @@ export async function bestaendeOhneDoppelte() {
         k('portfolio_adressen').select('id', 'walletId', 'kette', 'art', 'anzeige', 'netze', 'label', 'importOrte', 'liveAb'),
     ])
     const { ersetzt } = uebergaben(alleBestaende, adressen, new Map(quellenStand.map((q) => [q.quelle, q])))
-    return ohneUebernommene(alleBestaende, ersetzt)
+    const beendet = beendeteQuellen(quellenStand)
+    return ohneUebernommene(alleBestaende, ersetzt).filter((b) => !beendet.has(b.quelle))
 }
 
 /**
@@ -84,7 +90,9 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     ])
     // Übergabe Import → Live: was eine Adresse live meldet, ersetzt den Import.
     const { ersetzt } = uebergaben(alleBestaende, adressen, new Map(quellenStand.map((q) => [q.quelle, q])))
-    const bestaende = ohneUebernommene(alleBestaende, ersetzt)
+    // Nicht mehr genutzte Orte (Konto aufgelöst): nicht in der aktuellen Ansicht.
+    const beendet = beendeteQuellen(quellenStand)
+    const bestaende = ohneUebernommene(alleBestaende, ersetzt).filter((b) => !beendet.has(b.quelle))
     const staubChf = Number(settings?.portfolioStaubChf ?? 1)
     const tot = await totalverluste()
     const istSpam = await spamPruefer()
@@ -210,6 +218,7 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         const w = adr ? wallets.find((x) => x.id === adr.walletId) : null
         quellen.push({
             quelle: st.quelle, gruppe: 'import', name: st.quelle.slice(2), chf: jeQuelle.get(st.quelle)?.chf || 0,
+            genutztBis: Number(st.genutztBis) || null, beendet: beendet.has(st.quelle),
             posten: jeQuelle.get(st.quelle)?.posten || [], status: st.status || 'ok', meldung: st.meldung || null,
             letzterAbruf: Number(st.letzterAbruf) || null, abgleich: null,
             uebergeben: ue ? { an: `${w?.name || 'Wallet'} · ${adr.label || KETTEN[adr.kette]?.name || adr.kette}`, ab: ue.liveAb, alle: ue.alle } : null,

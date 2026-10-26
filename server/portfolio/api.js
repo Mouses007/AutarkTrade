@@ -30,6 +30,7 @@
  *   PUT    /totalverlust     {asset, an, abJahr}  Coin als Totalverlust markieren (raus aus Portfolio, Steuer ab abJahr)
  *   GET    /totalverluste                  Seite Totalverluste (Zeilen + Statistik)
  *   PUT    /kanton           {kz|null}     Wohnkanton für den Steuerbericht
+ *   PUT    /quellen/genutzt-bis {quelle, datum|null}  Ort nicht mehr genutzt ab (raus aus aktueller Ansicht)
  *   POST   /estv/:jahr                     ESTV-Kursliste eines Jahres neu holen
  *   PUT    /spam             {asset, spam: true|false|null}  Spam von Hand (null = Regel)
  */
@@ -405,6 +406,19 @@ export function setupPortfolioRoutes(app) {
 
     app.get('/api/portfolio/totalverluste', async (req, res) => {
         try { res.json({ ok: true, ...(await totalverlustUebersicht()) }) } catch (e) { fehler(res, e) }
+    })
+    app.put('/api/portfolio/quellen/genutzt-bis', async (req, res) => {
+        try {
+            const quelle = String(req.body?.quelle || '')
+            const d = req.body?.datum ? String(req.body.datum) : null
+            if (!quelle) return fehler(res, 'Quelle fehlt', 400)
+            if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) return fehler(res, 'Datum ungültig', 400)
+            // Ende des Tages Schweizer Zeit: am genannten Tag zählt der Ort noch.
+            const ms = d ? Date.parse(`${d}T23:59:59+01:00`) : null
+            const n = await getKnex()('portfolio_quellen').where({ quelle }).update({ genutztBis: ms })
+            if (!n) return fehler(res, 'Quelle unbekannt', 404)
+            res.json({ ok: true, genutztBis: ms })
+        } catch (e) { fehler(res, e) }
     })
     app.put('/api/portfolio/kanton', async (req, res) => {
         try {

@@ -23,7 +23,14 @@ const feld = ref(null)
 const ersetzen = ref(false)
 const hatVorhandene = computed(() => (pruefung.value?.vorschau || []).some((o) => o.vorhanden))
 
-const importe = computed(() => (uebersicht.value?.quellen || []).filter((q) => q.gruppe === 'import'))
+// Aktive zuerst; nicht mehr genutzte (Konto aufgelöst) ausgegraut am Ende.
+const importe = computed(() => (uebersicht.value?.quellen || []).filter((q) => q.gruppe === 'import')
+    .sort((a, b) => Number(!!a.beendet) - Number(!!b.beendet)))
+const isoTag = (ms) => (ms ? new Date(ms).toLocaleDateString('sv-SE', { timeZone: 'Europe/Zurich' }) : '')
+async function setzeGenutztBis(q, datum) {
+    await axios.put('/api/portfolio/quellen/genutzt-bis', { quelle: q.quelle, datum: datum || null })
+    await ladeUebersicht()
+}
 
 async function waehle(e) {
     const f = e.target.files?.[0]
@@ -105,9 +112,14 @@ const datum = (ms) => new Date(ms).toLocaleDateString('de-CH')
 
         <!-- Vorhandene Importe -->
         <div v-if="importe.length" class="ik-liste">
-            <div v-for="q in importe" :key="q.quelle" class="ik-eintrag">
-                <span><b>{{ q.name }}</b> <small class="at-gedaempft">{{ q.meldung }} · {{ vorZeit(q.letzterAbruf) }}</small></span>
-                <span class="ik-wert">{{ chf(q.chf) }}</span>
+            <div v-for="q in importe" :key="q.quelle" class="ik-eintrag" :class="{ beendet: q.beendet }">
+                <span><b>{{ q.name }}</b> <small class="at-gedaempft">{{ q.meldung }} · {{ vorZeit(q.letzterAbruf) }}</small>
+                    <small v-if="q.beendet" class="ik-beendet">{{ t('portfolio.genutztBisVorbei', { d: datum(q.genutztBis) }) }}</small></span>
+                <label class="ik-bis" :title="t('portfolio.genutztBisInfo')">
+                    <span>{{ t('portfolio.genutztBis') }}</span>
+                    <input type="date" :value="isoTag(q.genutztBis)" @change="setzeGenutztBis(q, $event.target.value)" />
+                </label>
+                <span class="ik-wert">{{ q.beendet ? '—' : chf(q.chf) }}</span>
                 <Knopf art="leise" klein nur-symbol :symbol="loeschFrage === q.quelle ? 'warnung' : 'muell'"
                     :titel="loeschFrage === q.quelle ? t('portfolio.nochmalLoeschen') : t('portfolio.imEntfernen')" @click="entferne(q)" />
             </div>
@@ -117,6 +129,10 @@ const datum = (ms) => new Date(ms).toLocaleDateString('de-CH')
 
 <style scoped>
 .ik { margin-top: 0.75rem; }
+.ik-eintrag.beendet { opacity: 0.55; }
+.ik-beendet { display: block; font-size: 0.72rem; color: var(--leise); }
+.ik-bis { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.72rem; color: var(--leise); white-space: nowrap; }
+.ik-bis input { background: var(--bg); border: 1px solid var(--line-stark); border-radius: var(--radius-knopf); color: var(--text); padding: 0.15rem 0.35rem; font: inherit; font-size: 0.78rem; color-scheme: dark; }
 .ik-kopf { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
 .ik-klein { font-size: 0.8rem; margin: 0.4rem 0; }
 .ik-vorschau { margin-top: 0.6rem; padding: 0.75rem; border: 1px dashed var(--line-stark); border-radius: var(--radius-knopf); background: var(--panel-soft); }
@@ -130,6 +146,6 @@ const datum = (ms) => new Date(ms).toLocaleDateString('de-CH')
 .ik-liste { margin-top: 0.6rem; }
 .ik-ersetzen { display: flex; gap: 0.45rem; align-items: flex-start; font-size: 0.82rem; margin-top: 0.6rem; color: var(--muted); cursor: pointer; }
 .ik-ersetzen input { accent-color: var(--accent); margin-top: 0.15rem; }
-.ik-eintrag { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 0.6rem; align-items: center; padding: 0.4rem 0; border-top: 1px solid var(--line); font-size: 0.85rem; }
+.ik-eintrag { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 0.6rem; align-items: center; padding: 0.4rem 0; border-top: 1px solid var(--line); font-size: 0.85rem; }
 .ik-wert { font-variant-numeric: tabular-nums; }
 </style>

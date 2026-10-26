@@ -186,12 +186,17 @@ export async function berechneSteuerjahr(jahr) {
     const mengen = bestandAm(belegbar, bis)
     const hinweise = []
     const unbelegt = alle.filter((q) => !vollstaendig.has(q))
+    // Token-Bestände, die nur live gemeldet werden (Wallet ohne Bewegungen): auch
+    // sie brauchen die Prüfung „namensgleicher Token?“ — sonst bekamen 4 Mio.
+    // „AI“ auf MetaMask den Kurs des Börsen-Coins AI (63'874 CHF, 26.10.2026).
+    const liveTokens = []
     if (laufend) {
         // Laufendes Jahr: unvollständige Quellen mit ihrem HEUTIGEN Bestand (provisorisch).
-        const heuteBestand = (await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt')).filter((x) => !istSpam(x.asset, x.kontrakt))
+        const heuteBestand = (await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt', 'ort')).filter((x) => !istSpam(x.asset, x.kontrakt))
         for (const z of heuteBestand.filter((x) => unbelegt.includes(x.quelle))) {
             const key = `${z.quelle}\u0000${z.asset}`
             mengen.set(key, (mengen.get(key) || 0) + Number(z.menge))
+            if (z.kontrakt) liveTokens.push({ key, asset: z.asset, kontrakt: z.kontrakt, kette: z.ort })
         }
         // Übergabe Import → Live: was die Adresse heute meldet, ersetzt den
         // Import-Ort (sonst stünde z. B. das XRP des Ledgers zweimal da).
@@ -225,8 +230,27 @@ export async function berechneSteuerjahr(jahr) {
         return [...weg]
     }
     const ausgeblendet = ohneTotalverluste(mengen, jahr)
+    // Nicht mehr genutzte Orte: nach ihrem Datum kein Vermögen mehr. Steht dort noch
+    // etwas, fehlt in den Daten der Abgang — sagen, nicht still mitzählen.
+    const genutztBis = new Map((await k('portfolio_quellen').whereNotNull('genutztBis').select('quelle', 'genutztBis')).map((q) => [q.quelle, Number(q.genutztBis)]))
+    const ohneBeendete = (m, stichtag) => {
+        const rest = []
+        for (const [key, menge] of [...m]) {
+            const q = key.split('\u0000')[0]
+            const bis = genutztBis.get(q)
+            if (!bis || bis >= stichtag) continue
+            if (Math.abs(menge) > 1e-8) rest.push({ quelle: name(q), asset: key.split('\u0000')[1], menge })
+            m.delete(key)
+        }
+        return rest
+    }
+    const nachEnde = ohneBeendete(mengen, bis)
     const tokens = tokenVertraege(bew)
     const tokenOrte = tokenOrteVon(bew)
+    for (const t of liveTokens) {
+        tokenOrte.add(t.key)
+        if (!tokens.has(t.asset)) tokens.set(t.asset, { kontrakt: t.kontrakt, kette: t.kette })
+    }
     const gestern = new Date(jetzt - 86400e3).toISOString().slice(0, 10)
     const kurse = await bewerte(mengen, jahr, tokens, laufend ? gestern : `${jahr}-12-31`)
     const sicherheitJe = new Map()
@@ -291,6 +315,7 @@ export async function berechneSteuerjahr(jahr) {
             text: `Ohne Kurs bewertet zum Kaufpreis (Kanton ${kz} erlaubt es): ${mitKaufpreis.length} Coins, zusammen ${Math.round(mitKaufpreis.reduce((a, p) => a + p.chf, 0))} CHF. Ist ein Projekt tot, als Totalverlust markieren — sonst zählt der Einstand als Vermögen.`,
         })
     }
+    if (nachEnde.length) hinweise.push({ art: 'beendet', liste: nachEnde, text: 'Bestand an Orten, die nicht mehr genutzt werden — nach ihrem „genutzt bis“ nicht gezählt. Fehlt der Abgang (Verkauf, Auszahlung) in den Daten?' })
     if (ausgeblendet.length) hinweise.push({ art: 'totalverlust', text: `Als Totalverlust markiert und für ${jahr} nicht im Vermögen: ${ausgeblendet.join(', ')}.` })
     if (estv.fehler) hinweise.push({ art: 'estv', text: `ESTV-Kursliste ${jahr} konnte nicht gelesen werden (${estv.fehler}) — es gelten Börsenkurse; Kurse der ESTV von Hand eintragen.` })
     else if (estv.nichtErschienen) hinweise.push({ art: 'estv', text: `Die ESTV-Kursliste ${jahr} ist noch nicht erschienen (jeweils am 1. Januar) — bis dahin gelten Börsenkurse.` })
@@ -309,6 +334,7 @@ export async function berechneSteuerjahr(jahr) {
         const m0 = bestandAm(belegbar, vorjahr.bis)
         for (const [key, m] of m0) if (m <= 0) m0.delete(key)
         ohneTotalverluste(m0, jahr - 1)
+        ohneBeendete(m0, vorjahr.bis)
         const k0 = await bewerte(m0, jahr - 1, tokens)
         vermoegenAnfang = 0
         for (const [key, m] of m0) { const kurs = kursAn(k0, tokenOrte, key); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
