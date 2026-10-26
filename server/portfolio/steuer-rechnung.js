@@ -105,7 +105,7 @@ export function einkommen(bewegungen, von, bis) {
  * FIFO-Lose über die ganze Historie; liefert die Abgänge eines Jahres mit
  * Erlös, Einstand und Haltedauer.
  *
- * Zugänge:  kauf/tausch (empfangene Seite), Einkommen, nicht eingeordnete
+ * Zugänge:  kauf/tausch (empfangene Seite, auch Swap-Hälften ohne Gegen-Asset), Einkommen, nicht eingeordnete
  *           oder als „kauf" eingeordnete Einzahlungen, `bestand`.
  *           Einstand = chfWert der Zeile (bei Tausch/Kauf der Wert des
  *           Gekauften), sonst unbekannt.
@@ -198,7 +198,10 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
                 if (menge > 0) zugang(asset, menge, wert, zeit)
                 else if (menge < 0) abgang(asset, -menge, wert, zeit, b, b.art)
             }
-        } else if (m > 0 && (istEinkommen(b) || ['einzahlung', 'bestand', 'kauf', 'sonstiges'].includes(b.art))) {
+        } else if (m > 0 && (istEinkommen(b) || ['einzahlung', 'bestand', 'kauf', 'tausch', 'sonstiges'].includes(b.art))) {
+            // `tausch` ohne Gegen-Asset: Bitpanda bucht einen Swap (Crypto-Index,
+            // VSN) als zwei Zeilen. Bis 26.10.2026 wurde nur der Abgang gebucht,
+            // der Zugang bildete kein Los → 2021: 222 Verkäufe „ohne Einstand".
             zugang(b.asset, m, wert, zeit)
         } else if (m < 0) {
             // Auszahlung ohne Transfer-Einordnung (Bezahlung, Kartenaufladung, Abgang an

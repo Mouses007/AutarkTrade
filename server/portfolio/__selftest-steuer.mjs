@@ -273,6 +273,15 @@ console.log('\nAudit 26.10.2026')
     const hk = assetsMitHerkunft([{ asset: 'D2T', art: 'einzahlung', menge: 1000, chfWert: null, einordnung: 'kauf' }])
     check('Herkunft: Presale (Einzahlung als Kauf) zählt', hk.has('D2T'))
 
+    // A2: Bitpanda-Swap in zwei Zeilen ohne Gegen-Asset — der Zugang ist ein Los.
+    const sw = [
+        { id: 1, quelle: 'bp', art: 'tausch', asset: 'BCI5', menge: 10, chfWert: 100, zeit: T('2021-01-05') },
+        { id: 2, quelle: 'bp', art: 'tausch', asset: 'EUR', menge: -100, chfWert: 100, zeit: T('2021-01-05') },
+        { id: 3, quelle: 'bp', art: 'tausch', asset: 'BCI5', menge: -10, chfWert: 150, zeit: T('2021-06-05') },
+    ]
+    const aSw = fifo(sw, { von: T('2021-01-01'), bis: T('2021-12-31') }).abgaenge.filter((x) => x.asset === 'BCI5')
+    check('Swap-Hälfte ohne Gegen-Asset bildet ein Los', aSw.length === 1 && nah(aSw[0].kosten, 100) && nah(aSw[0].gewinn, 50), JSON.stringify(aSw))
+
     // Stichtag: die letzte Millisekunde des Jahres zählt mit.
     check('Stichtag bis 23:59:59.999', jahrGrenzen(2025).bis === Date.parse('2025-12-31T23:59:59.999+01:00'))
 
