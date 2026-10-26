@@ -32,7 +32,7 @@
 import {
     sma, ema, bollinger, vwap, vwapBand, rsi, macd, stochastic, stochRsi, atr, adx, obv, mfi, volumeSma, smaSerie,
 } from '../../../shared/indicators.js'
-import { rechneVwapVector } from './vwapVector.js'
+import { rechneVwapVector, emaHoehereTf, TF_MS } from './vwapVector.js'
 import { lsobCv } from '../../../shared/lsobCv.js'
 import { gussCv } from '../../../shared/gussCv.js'
 import {
@@ -149,6 +149,34 @@ function nachZeit(kerzen, zeiten, werte) {
 
 const P_LAENGE = (vorgabe, max = 500) => ({ key: 'laenge', typ: 'zahl', vorgabe, min: 1, max, schritt: 1 })
 const P_QUELLE = { key: 'quelle', typ: 'wahl', vorgabe: 'c', optionen: Object.keys(QUELLEN) }
+// ── EMA (3 + 3 MTF) ─────────
+const EMA_TFS = ['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '3d', '1w', '1M']
+const EMA_PARAMS = [
+    { key: 'an1', typ: 'schalter', vorgabe: true, gruppe: 'emaChart' },
+    { key: 'laenge', typ: 'zahl', vorgabe: 21, min: 1, max: 1000, schritt: 1, gruppe: 'emaChart', mit: true },
+    { key: 'farbe1', typ: 'farbe', vorgabe: '#29b6f6', gruppe: 'emaChart', mit: true },
+    { key: 'an2', typ: 'schalter', vorgabe: false, gruppe: 'emaChart' },
+    { key: 'laenge2', typ: 'zahl', vorgabe: 50, min: 1, max: 1000, schritt: 1, gruppe: 'emaChart', mit: true },
+    { key: 'farbe2', typ: 'farbe', vorgabe: '#f5c542', gruppe: 'emaChart', mit: true },
+    { key: 'an3', typ: 'schalter', vorgabe: false, gruppe: 'emaChart' },
+    { key: 'laenge3', typ: 'zahl', vorgabe: 200, min: 1, max: 1000, schritt: 1, gruppe: 'emaChart', mit: true },
+    { key: 'farbe3', typ: 'farbe', vorgabe: '#ab47bc', gruppe: 'emaChart', mit: true },
+    { ...P_QUELLE, gruppe: 'emaChart' },
+    ...[[1, '4h', 50, '#26a69a'], [2, '1d', 50, '#ff9800'], [3, '1d', 200, '#e91e63']].flatMap(([x, tf, laenge, farbe]) => [
+        { key: `mtfAn${x}`, typ: 'schalter', vorgabe: false, gruppe: 'emaMtf' },
+        { key: `mtfLaenge${x}`, typ: 'zahl', vorgabe: laenge, min: 1, max: 1000, schritt: 1, gruppe: 'emaMtf', mit: true },
+        { key: `mtfTf${x}`, typ: 'wahl', vorgabe: tf, optionen: EMA_TFS, gruppe: 'emaMtf', roh: true, mit: true },
+        { key: `mtfFarbe${x}`, typ: 'farbe', vorgabe: farbe, gruppe: 'emaMtf', mit: true },
+    ]),
+]
+
+/** Höhere Zeiteinheiten, die die EMA-Instanzen brauchen (nur solche, die wirklich höher sind). */
+export function emaMtfQuellen(p, ivMs) {
+    const aus = new Set()
+    for (const x of [1, 2, 3]) if (p[`mtfAn${x}`] && TF_MS[p[`mtfTf${x}`]] > ivMs) aus.add(p[`mtfTf${x}`])
+    return [...aus]
+}
+
 // ── VWAP Vector (Rechnung in vwapVector.js) ─────────
 const TFS = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
 const S = (key, vorgabe, gruppe) => ({ key, typ: 'schalter', vorgabe, gruppe })
@@ -368,11 +396,46 @@ export const INDIKATOREN = {
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#f5c542', breite: 1 }],
         rechne: (k, p) => ({ wert: sma(mitQuelle(k, p.quelle), p.laenge) }),
     },
+    // Drei EMAs der Chart-Zeiteinheit plus drei aus höheren Zeiteinheiten (wie TradingView
+    // „Multi EMA" mit MTF). Linie 1 behält die alten Schlüssel `laenge`/`quelle` — ein
+    // gespeichertes einfaches EMA zeigt weiter genau seine eine Linie: Linien 2 und 3 sind
+    // für bestehende Instanzen aus und nur für NEUE an (`neu`).
     ema: {
         ort: 'preis',
-        params: [P_LAENGE(21), P_QUELLE],
+        extern: 'emaMtf',
+        params: EMA_PARAMS,
+        neu: { an2: true, an3: true },
+        // Linie 1 heisst weiter `wert` — sonst ginge eine im Layout gemerkte Farbe verloren
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#29b6f6', breite: 1 }],
-        rechne: (k, p) => ({ wert: ema(mitQuelle(k, p.quelle), p.laenge) }),
+        ausgabenFuer: (p) => [
+            ...(p.an1 !== false ? [{ key: 'wert', art: 'linie', farbe: p.farbe1, breite: 1 }] : []),
+            ...(p.an2 ? [{ key: 'e2', art: 'linie', farbe: p.farbe2, breite: 1 }] : []),
+            ...(p.an3 ? [{ key: 'e3', art: 'linie', farbe: p.farbe3, breite: 2 }] : []),
+            ...[1, 2, 3].filter((x) => p[`mtfAn${x}`]).map((x) => ({ key: `m${x}`, art: 'linie', farbe: p[`mtfFarbe${x}`], breite: 2, strich: 'gestrichelt' })),
+        ],
+        kurz: (p, name) => {
+            const chart = [p.an1 !== false && p.laenge, p.an2 && p.laenge2, p.an3 && p.laenge3].filter(Boolean)
+            const mtf = [1, 2, 3].filter((x) => p[`mtfAn${x}`]).map((x) => `${p[`mtfLaenge${x}`]} ${p[`mtfTf${x}`]}`)
+            const q = p.quelle && p.quelle !== 'c' ? ` ${p.quelle}` : ''
+            return `${name} ${[...chart, ...mtf].join(' · ')}${q}`.trim()
+        },
+        rechne: (k, p, ext) => {
+            const kk = mitQuelle(k, p.quelle)
+            const aus = {}
+            if (p.an1 !== false) aus.wert = ema(kk, p.laenge)
+            if (p.an2) aus.e2 = ema(kk, p.laenge2)
+            if (p.an3) aus.e3 = ema(kk, p.laenge3)
+            const ivMs = ivAus(k)
+            for (const x of [1, 2, 3]) {
+                if (!p[`mtfAn${x}`]) continue
+                const tf = p[`mtfTf${x}`], laenge = p[`mtfLaenge${x}`]
+                // Eine „höhere" Zeiteinheit, die gar nicht höher ist, rechnet der Chart selbst.
+                aus[`m${x}`] = TF_MS[tf] > ivMs
+                    ? emaHoehereTf(k, ext?.htf?.[tf], laenge, TF_MS[tf], ivMs)
+                    : ema(k, laenge)
+            }
+            return aus
+        },
     },
     bb: {
         ort: 'preis',
@@ -791,6 +854,7 @@ export function benoetigteQuellen(instanzen) {
 export function kurzname(typ, params, name) {
     if (INDIKATOREN[typ]?.kurzOhneParams) return name
     const p = saubereParams(typ, params)
+    if (INDIKATOREN[typ]?.kurz) return INDIKATOREN[typ].kurz(p, name)
     const zahlen = (INDIKATOREN[typ]?.params || []).filter((x) => x.typ === 'zahl' && !x.nichtImNamen).map((x) => p[x.key])
     const quelle = p.quelle && p.quelle !== 'c' ? ` ${p.quelle}` : ''
     const anker = p.anker ? ` ${p.anker}` : ''
@@ -800,5 +864,6 @@ export function kurzname(typ, params, name) {
 let laufNr = 0
 /** Neue Instanz für ein Layout. `id` nur innerhalb des Panels eindeutig. */
 export function neueInstanz(typ) {
-    return { id: `${typ}-${Date.now().toString(36)}-${(laufNr++).toString(36)}`, typ, params: vorgaben(typ), farben: {}, sichtbar: true }
+    // `neu`: Vorgaben nur für neu angelegte Instanzen (gespeicherte behalten ihr Bild)
+    return { id: `${typ}-${Date.now().toString(36)}-${(laufNr++).toString(36)}`, typ, params: { ...vorgaben(typ), ...(INDIKATOREN[typ]?.neu || {}) }, farben: {}, sichtbar: true }
 }

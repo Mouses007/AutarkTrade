@@ -5294,7 +5294,7 @@
       },
       "ema": {
         "name": "Exponentieller Durchschnitt (EMA)",
-        "info": "Exponentieller gleitender Durchschnitt: wie der SMA, gewichtet aber jüngere Kerzen stärker und reagiert dadurch schneller. Kurs über der EMA = Aufwärtsschwung; mehrere EMAs übereinander (21 über 50 über 200) zeigen einen geordneten Trend.",
+        "info": "EMA (exponentieller gleitender Durchschnitt): gewichtet jüngere Kerzen stärker als der SMA und reagiert dadurch schneller.\nBis zu drei EMAs dieser Zeiteinheit (Vorgabe 21/50/200) und drei EMAs aus höheren Zeiteinheiten (gestrichelt, z. B. EMA 50 auf 4h oder 1d). Die MTF-Linie nimmt nur höhere Kerzen, die beim Schluss der Chartkerze schon geschlossen waren — die laufende höhere Kerze zählt nur an der letzten Kerze mit dem aktuellen Kurs (kein Blick in die Zukunft).\nKurs über den EMAs und die EMAs geordnet (21 über 50 über 200) = sauberer Aufwärtstrend; eine EMA einer höheren Zeiteinheit wirkt oft als Unterstützung oder Widerstand.",
         "kurz": "EMA",
         "text": "Gewichtet jüngere Kerzen stärker, reagiert schneller als der SMA."
       },
@@ -5604,7 +5604,27 @@
       "ziel50": "Ziel EMA 50",
       "ziel200": "Ziel EMA 200",
       "maxGegenkerzen": "Max. Gegenkerzen in Folge",
-      "maxGegenkerzenAtr": "Max. Gegenkerzenkörper (ATR)"
+      "maxGegenkerzenAtr": "Max. Gegenkerzenkörper (ATR)",
+      "an1": "EMA 1",
+      "farbe1": "Farbe",
+      "an2": "EMA 2",
+      "laenge2": "Länge",
+      "farbe2": "Farbe",
+      "an3": "EMA 3",
+      "laenge3": "Länge",
+      "farbe3": "Farbe",
+      "mtfAn1": "MTF-EMA 1",
+      "mtfLaenge1": "Länge",
+      "mtfTf1": "Zeiteinheit",
+      "mtfFarbe1": "Farbe",
+      "mtfAn2": "MTF-EMA 2",
+      "mtfLaenge2": "Länge",
+      "mtfTf2": "Zeiteinheit",
+      "mtfFarbe2": "Farbe",
+      "mtfAn3": "MTF-EMA 3",
+      "mtfLaenge3": "Länge",
+      "mtfTf3": "Zeiteinheit",
+      "mtfFarbe3": "Farbe"
     },
     "indWahl": {
       "c": "Schluss",
@@ -6219,7 +6239,9 @@
       "gcvEma": "EMA-Logik",
       "gcvAtr": "ATR-Abstandsfilter",
       "gcvZiel": "EMA-Bounce-Ziele",
-      "gcvGegen": "Gegenkerzen"
+      "gcvGegen": "Gegenkerzen",
+      "emaChart": "EMAs dieser Zeiteinheit",
+      "emaMtf": "EMAs höherer Zeiteinheiten (MTF)"
     },
     "indHilfe": {
       "showVector": "Färbt die Kerzen nach VOLUMEN statt nur grün/rot — dort, wo ungewöhnlich viel gehandelt wurde, waren grosse Marktteilnehmer aktiv.",

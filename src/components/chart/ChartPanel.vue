@@ -39,7 +39,7 @@ import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
 import { StrategieEbene } from '../../utils/chart/overlays/StrategieEbene.js'
 import { MarktEbene, waendeAusBuch } from '../../utils/chart/overlays/MarktEbene.js'
 import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
-import { benoetigteQuellen, vwapVectorQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams } from '../../utils/chart/indikatorRegister.js'
+import { benoetigteQuellen, vwapVectorQuellen, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
 import { positionenAus } from '../../stores/chartPositionen.js'
 import { letzterStil, merkeStil } from '../../stores/zeichenStil.js'
@@ -467,6 +467,8 @@ async function ladeExtern(nurWelche = null) {
                 }
             } else if (quelle === 'vwapVector') {
                 await ladeVwapVector()
+            } else if (quelle === 'emaMtf') {
+                await ladeEmaMtf()
             } else if (quelle === 'momentum') {
                 if (!MOMENTUM_TF.includes(interval)) {
                     zeichner.setzeExtern('momentum', null)
@@ -496,6 +498,33 @@ async function ladeExtern(nurWelche = null) {
  * Candle-POC. „auto" wählt die Auflösung so, dass das Budget reicht.
  */
 const vvCache = { schluessel: '', htf: {}, intra: [] }
+/*
+ * Kerzen der höheren Zeiteinheiten für die MTF-Linien des EMA-Indikators
+ * (je Zeiteinheit 1000 Kerzen, gemerkt je Symbol/Markt/Zeiteinheit des Charts).
+ */
+const emaCache = { schluessel: '', htf: {} }
+async function ladeEmaMtf() {
+    const { symbol, markt, interval } = props.panel
+    const ivMs = INTERVALL_MS[interval]
+    const tfs = new Set()
+    for (const i of (props.panel.indikatoren || []).filter((x) => x.typ === 'ema' && x.sichtbar !== false)) {
+        emaMtfQuellen(saubereParams('ema', i.params), ivMs).forEach((tf) => tfs.add(tf))
+    }
+    const schluessel = `${symbol}|${markt}|${interval}`
+    if (emaCache.schluessel !== schluessel) { emaCache.schluessel = schluessel; emaCache.htf = {} }
+    const m = markt === 'spot' ? 'spot' : 'futures'
+    await Promise.all([...tfs].map(async (tf) => {
+        try {
+            // Einmal tief laden, danach nur die jüngsten Kerzen nachziehen (der Takt fragt alle paar Minuten)
+            const da = emaCache.htf[tf]
+            const k = await ladeKerzen({ symbol, markt: m, interval: tf, limit: da?.length ? 5 : 1000 })
+            if (emaCache.schluessel === schluessel) emaCache.htf[tf] = da?.length ? fuegeZusammen(da, k) : k
+        } catch { /* Linie bleibt leer */ }
+    }))
+    if (emaCache.schluessel !== schluessel || symbol !== props.panel.symbol || interval !== props.panel.interval) return
+    zeichner.setzeExtern('emaMtf', { htf: { ...emaCache.htf } })
+}
+
 async function ladeVwapVector() {
     const { symbol, markt, interval } = props.panel
     const ivMs = INTERVALL_MS[interval]
@@ -550,7 +579,7 @@ function marktTick() {
     const n = marktZaehler++
     ladeWaende()
     if (n % 3 === 0) ladeLiquidationen()
-    if (n % 6 === 0) ladeExtern(['momentum', 'vwapVector', 'signale_lsob', 'signale_ema_touch'])
+    if (n % 6 === 0) ladeExtern(['momentum', 'vwapVector', 'emaMtf', 'signale_lsob', 'signale_ema_touch'])
     if (n % 12 === 0) ladeHebelzonen()
     if (n % 30 === 0) ladeExtern(['oi'])
     if (n % 60 === 0) ladeExtern(['funding'])
@@ -837,6 +866,8 @@ watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => INDIKAT
 // VWAP Vector: andere Zeiteinheiten (MTF-EMA, Fib, Intrabar) brauchen neue Kerzen.
 watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => i.typ === 'vwapVector').map((i) => [i.sichtbar, i.params])),
     () => ladeExtern(['vwapVector']))
+watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => i.typ === 'ema').map((i) => [i.sichtbar, i.params])),
+    () => ladeExtern(['emaMtf']))
 watch(() => props.panel.symbol, () => {
     gewaehlterTrade.value = null
     entfernePositionsLinien()

@@ -5294,7 +5294,7 @@
       },
       "ema": {
         "name": "Exponential Moving Average (EMA)",
-        "info": "Exponential moving average: like the SMA but weighting recent candles more, so it reacts faster. Price above the EMA = upward momentum; several EMAs stacked (21 over 50 over 200) show an orderly trend.",
+        "info": "EMA (exponential moving average): weights recent candles more than the SMA and reacts faster.\nUp to three EMAs of this timeframe (default 21/50/200) and three EMAs of higher timeframes (dashed, e.g. EMA 50 on 4h or 1d). The MTF line only uses higher candles that had closed by the close of the chart candle — the running higher candle only counts on the last candle with the current price (no look-ahead).\nPrice above the EMAs with the EMAs in order (21 over 50 over 200) = clean uptrend; an EMA of a higher timeframe often acts as support or resistance.",
         "kurz": "EMA",
         "text": "Weights recent candles more, reacts faster than the SMA."
       },
@@ -5604,7 +5604,27 @@
       "ziel50": "Target EMA 50",
       "ziel200": "Target EMA 200",
       "maxGegenkerzen": "Max consecutive counter candles",
-      "maxGegenkerzenAtr": "Max counter candle body (ATR)"
+      "maxGegenkerzenAtr": "Max counter candle body (ATR)",
+      "an1": "EMA 1",
+      "farbe1": "Colour",
+      "an2": "EMA 2",
+      "laenge2": "Length",
+      "farbe2": "Colour",
+      "an3": "EMA 3",
+      "laenge3": "Length",
+      "farbe3": "Colour",
+      "mtfAn1": "MTF EMA 1",
+      "mtfLaenge1": "Length",
+      "mtfTf1": "Timeframe",
+      "mtfFarbe1": "Colour",
+      "mtfAn2": "MTF EMA 2",
+      "mtfLaenge2": "Length",
+      "mtfTf2": "Timeframe",
+      "mtfFarbe2": "Colour",
+      "mtfAn3": "MTF EMA 3",
+      "mtfLaenge3": "Length",
+      "mtfTf3": "Timeframe",
+      "mtfFarbe3": "Colour"
     },
     "indWahl": {
       "c": "Close",
@@ -6219,7 +6239,9 @@
       "gcvEma": "EMA logic",
       "gcvAtr": "ATR distance filter",
       "gcvZiel": "EMA Bounce targets",
-      "gcvGegen": "Counter candles"
+      "gcvGegen": "Counter candles",
+      "emaChart": "EMAs of this timeframe",
+      "emaMtf": "EMAs of higher timeframes (MTF)"
     },
     "indHilfe": {
       "showVector": "Colours candles by VOLUME — where unusually much traded, large participants were active.",
