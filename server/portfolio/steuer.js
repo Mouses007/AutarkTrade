@@ -37,7 +37,7 @@ const SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 
     'transferMit', 'einordnung', 'chfWert', 'sicherheit', 'kontrakt', 'kette']
 
 export function jahrGrenzen(jahr) {
-    return { von: Date.parse(`${jahr}-01-01T00:00:00+01:00`), bis: Date.parse(`${jahr}-12-31T23:59:59+01:00`) }
+    return { von: Date.parse(`${jahr}-01-01T00:00:00+01:00`), bis: Date.parse(`${jahr + 1}-01-01T00:00:00+01:00`) - 1 }   // bis 23:59:59.999
 }
 
 async function quellenStand() {
@@ -76,46 +76,51 @@ async function steuerkurs(asset, jahr, manuell, fxCache, datum = `${jahr}-12-31`
  * @param {string} [datum]  Bewertungstag; im laufenden Jahr gestern (den
  *   31.12. gibt es noch nicht — das Vermögen wäre sonst 0), sonst der 31.12.
  */
-async function bewerte(mengen, jahr, tokens = new Map(), datum = `${jahr}-12-31`) {
+async function bewerte(mengen, jahr, tokenOrte = new Map(), datum = `${jahr}-12-31`) {
     const k = getKnex()
     const manuell = new Map((await k('portfolio_steuerkurse').where('jahr', jahr)).map((z) => [z.asset, z]))
     const fxCache = {}
     const kurse = new Map()
     for (const asset of new Set([...mengen.keys()].map((k2) => k2.split('\u0000')[1]))) {
         kurse.set(asset, await steuerkurs(asset, jahr, manuell, fxCache, datum))
-        // Ein Wallet-Token, der nur wie ein Börsen-Coin heisst, bekommt dessen
-        // Kurs NICHT — aber nur an den Orten, wo er als Token liegt (siehe kursAn).
-        const token = tokens.get(asset)
-        if (token && !manuell.has(asset) && !(await gleicherCoin(asset, token.kontrakt, token.kette))) {
-            kurse.set(asset + TOKEN, { chf: null, quelle: 'Token ohne Börsenkurs' })
-        }
+    }
+    // Ein Wallet-Token, der nur wie ein Börsen-Coin heisst, bekommt dessen
+    // Kurs NICHT — aber nur an den Orten, wo er als Token liegt (siehe kursAn).
+    // Geprüft wird je Vertrag: derselbe Name kann echt (USDT) und gefälscht sein.
+    // Ein Kurs von Hand gilt auch für den Token (EPIK); der ESTV-Kurs nicht —
+    // er gehört zum Coin mit Valor, nicht zu einem namensgleichen Token.
+    const geprueft = new Set()
+    for (const [key, t] of tokenOrte) {
+        const asset = key.split('\u0000')[1]
+        const id = asset + TOKEN + t.kontrakt
+        if (geprueft.has(id) || !mengen.has(key)) continue
+        geprueft.add(id)
+        if (manuell.get(asset) && manuell.get(asset).quelle !== 'estv') continue
+        if (!(await gleicherCoin(asset, t.kontrakt, t.kette))) kurse.set(id, { chf: null, quelle: 'Token ohne Börsenkurs', token: true })
     }
     return kurse
 }
 
-const TOKEN = '\u0000token'
+export const TOKEN = '\u0000token\u0000'
 
 /**
  * Kurs einer Position (`quelle\0asset`). Bis 25.10.2026 galt die Token-Prüfung
  * für das ganze Asset: weil RENDER auch auf einer Solana-Wallet lag, verloren
  * die 152 RENDER bei Crypto.com ihren Börsenkurs.
  */
-function kursAn(kurse, tokenOrte, key) {
+export function kursAn(kurse, tokenOrte, key) {
     const asset = key.split('\u0000')[1]
-    return (tokenOrte.has(key) && kurse.get(asset + TOKEN)) || kurse.get(asset)
+    const t = tokenOrte.get(key)
+    return (t && kurse.get(asset + TOKEN + t.kontrakt)) || kurse.get(asset)
 }
 
-/** Orte, an denen ein Asset als Token mit Vertrag gebucht ist (`quelle\0asset`). */
-function tokenOrteVon(bew) {
-    const s = new Set()
-    for (const b of bew) if (b.kontrakt && b.kette) s.add(`${b.quelle}\u0000${b.asset}`)
-    return s
-}
-
-/** Assets, die irgendwo als Token mit Vertrag gebucht sind → { kontrakt, kette }. */
-function tokenVertraege(bew) {
+/** Orte, an denen ein Asset als Token mit Vertrag gebucht ist: `quelle\0asset` → { kontrakt, kette }. */
+export function tokenOrteVon(bew) {
     const m = new Map()
-    for (const b of bew) if (b.kontrakt && b.kette && !m.has(b.asset)) m.set(b.asset, { kontrakt: b.kontrakt, kette: b.kette })
+    for (const b of bew) {
+        const key = `${b.quelle}\u0000${b.asset}`
+        if (b.kontrakt && b.kette && !m.has(key)) m.set(key, { kontrakt: b.kontrakt, kette: b.kette })
+    }
     return m
 }
 
@@ -245,14 +250,10 @@ export async function berechneSteuerjahr(jahr) {
         return rest
     }
     const nachEnde = ohneBeendete(mengen, bis)
-    const tokens = tokenVertraege(bew)
     const tokenOrte = tokenOrteVon(bew)
-    for (const t of liveTokens) {
-        tokenOrte.add(t.key)
-        if (!tokens.has(t.asset)) tokens.set(t.asset, { kontrakt: t.kontrakt, kette: t.kette })
-    }
+    for (const t of liveTokens) if (!tokenOrte.has(t.key)) tokenOrte.set(t.key, { kontrakt: t.kontrakt, kette: t.kette })
     const gestern = new Date(jetzt - 86400e3).toISOString().slice(0, 10)
-    const kurse = await bewerte(mengen, jahr, tokens, laufend ? gestern : `${jahr}-12-31`)
+    const kurse = await bewerte(mengen, jahr, tokenOrte, laufend ? gestern : `${jahr}-12-31`)
     const sicherheitJe = new Map()
     for (const b of belegbar) {
         if (b.zeit > bis || !b.sicherheit || b.sicherheit === 'beleg') continue
@@ -283,9 +284,9 @@ export async function berechneSteuerjahr(jahr) {
         }
         const kurs = kursAn(kurse, tokenOrte, key)
         // Token ohne Kurs und ohne eigene Herkunft = ungefragt zugeschickt (Spam).
-        if (kurs.chf == null && tokenOrte.has(key) && istSpam(asset, tokens.get(asset)?.kontrakt, { ohneKurs: true })) continue
+        if (kurs.chf == null && tokenOrte.has(key) && istSpam(asset, tokenOrte.get(key).kontrakt, { ohneKurs: true })) continue
         // Ein namensgleicher Token ohne Kurs steht als eigene Zeile neben dem Börsen-Coin.
-        const gruppe = kurs === kurse.get(asset + TOKEN) ? asset + TOKEN : asset
+        const gruppe = kurs.token ? asset + TOKEN + tokenOrte.get(key).kontrakt : asset
         const p = jeAsset.get(gruppe) || { asset, token: gruppe !== asset, valor: kurs.valor || null, menge: 0, kursChf: kurs.chf, kursQuelle: kurs.quelle, chf: kurs.chf != null ? 0 : null, orte: [] }
         p.menge += menge
         if (kurs.chf != null) p.chf += menge * kurs.chf
@@ -300,7 +301,8 @@ export async function berechneSteuerjahr(jahr) {
         p.kaufkurs = e?.schnitt ?? null
         p.kostenbasis = p.kaufkurs != null ? p.kaufkurs * p.menge : null
         p.einstandTeilweise = !!e && (e.ohneKostenMenge > p.menge * 0.001 || e.mitKostenMenge < p.menge * 0.99)
-        if (p.chf == null && p.kostenbasis != null && kaufpreisErlaubt(kz)) {
+        // Nicht für namensgleiche Token: ihre Lose sind mit denen des Börsen-Coins vermischt.
+        if (p.chf == null && !p.token && p.kostenbasis != null && kaufpreisErlaubt(kz)) {
             p.chf = p.kostenbasis
             p.kursChf = p.kaufkurs
             p.kursQuelle = `Kaufpreis (Ø-Einstand, Kanton ${kz} erlaubt)`
@@ -337,11 +339,11 @@ export async function berechneSteuerjahr(jahr) {
         for (const [key, m] of m0) if (m <= 0) m0.delete(key)
         ohneTotalverluste(m0, jahr - 1)
         ohneBeendete(m0, vorjahr.bis)
-        const k0 = await bewerte(m0, jahr - 1, tokens)
+        const k0 = await bewerte(m0, jahr - 1, tokenOrte)
         vermoegenAnfang = 0
         for (const [key, m] of m0) { const kurs = kursAn(k0, tokenOrte, key); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
     } catch { vermoegenAnfang = null }
-    const volumenSpot = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.chfWert != null && !istMigration(b))
+    const volumenSpot = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.einordnung !== 'ignorieren' && b.chfWert != null && !istMigration(b))
         .reduce((s, b) => s + Math.abs(Number(b.chfWert)), 0)
     // Futures: Ergebnis, Volumen, Guthaben am Stichtag. Fällt das Journal aus,
     // bleibt der Spot-Bericht stehen.
@@ -356,7 +358,7 @@ export async function berechneSteuerjahr(jahr) {
             vermoegenAnfang += fv.guthabenChf || 0
         } catch { /* Spot allein */ }
     }
-    const kriterien = gewerbsKriterien({ volumen, vermoegenAnfang, kurzfristigErloes: vs.kurzfristigErloes, erloes: vs.erloes, futuresTrades: futures?.summe?.n ?? await futuresTrades(von, bis) })
+    const kriterien = gewerbsKriterien({ volumen, vermoegenAnfang, kurzfristigErloes: vs.kurzfristigErloes, haltedauerUnbekanntErloes: vs.haltedauerUnbekanntErloes, erloes: vs.erloes, futuresTrades: futures?.summe?.n ?? await futuresTrades(von, bis) })
     if (futures?.guthaben?.some((g) => g.sicherheit === 'abgeleitet')) {
         hinweise.push({ art: 'futuresAbgeleitet', text: 'Futures-Guthaben am Stichtag ist zurückgerechnet (heute − Ergebnis seither). Ein- und Auszahlungen nach dem Stichtag sind darin nicht abgezogen — mit dem Kontoauszug der Börse prüfen und den Wert eintragen.' })
     }
@@ -384,7 +386,11 @@ export const RECHTSHINWEIS = 'AutarkTrade ist kein von einer Steuerbehörde aner
 
 /** CSV für die Steuererklärung / den Treuhänder. */
 export function steuerCsv(s) {
-    const z = (v) => (v == null ? '' : typeof v === 'number' ? String(Math.round(v * 1e8) / 1e8) : `"${String(v).replace(/"/g, '""')}"`)
+    // Zahlen ohne Exponent (5e-7 liest Excel als Text) und Texte, die mit = + - @
+    // beginnen, mit Apostroph: ein Token-Name wie „=HYPERLINK(…)“ wäre sonst eine Formel.
+    const zahl = (v) => (Number.isFinite(v) ? v.toLocaleString('en-US', { maximumFractionDigits: 12, useGrouping: false }) : '')
+    const text = (v) => `"${(/^[=+\-@\t\r]/.test(v) ? "'" : '') + v.replace(/"/g, '""')}"`
+    const z = (v) => (v == null ? '' : typeof v === 'number' ? zahl(v) : text(String(v)))
     const d = (ms) => new Date(ms).toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })
     const kt = s.kanton
     const zeilen = [z(`Keine Steuerberatung. ${RECHTSHINWEIS}`), '',

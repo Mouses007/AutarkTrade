@@ -102,7 +102,8 @@ export function leseImportCsv(text) {
         const chfWert = zahl(wert(f, 'chf_wert'))
         if (chfWert !== null && !Number.isFinite(chfWert)) { melde('chf_wert unlesbar'); continue }
         const einordnung = wert(f, 'einordnung').toLowerCase() || null
-        if (einordnung && !EINORDNUNGEN.includes(einordnung)) { melde(`unbekannte einordnung „${einordnung}"`); continue }
+        if (einordnung && !EINORDNUNGEN.includes(einordnung) && einordnung !== 'migration') { melde(`unbekannte einordnung „${einordnung}"`); continue }
+        if (einordnung === 'migration' && !(art === 'tausch' && gegenAsset)) { melde('einordnung migration nur für tausch mit gegen_asset'); continue }
         const sicherheit = wert(f, 'sicherheit').toLowerCase() || 'beleg'
         if (!SICHERHEITEN.includes(sicherheit)) { melde(`unbekannte sicherheit „${sicherheit}"`); continue }
 

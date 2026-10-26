@@ -140,7 +140,12 @@ export function setupPortfolioRoutes(app) {
     app.put('/api/portfolio/bewegungen/:id', async (req, res) => {
         try {
             const e = req.body?.einordnung
-            if (e !== null && !EINORDNUNGEN.includes(e)) return fehler(res, 'Unbekannte Einordnung', 400)
+            // `migration` (Umstellung, kein Verkauf — z. B. CHSB→BORG) nur für einen Tausch
+            // und nur einzeln, nie per Sammel-Einordnung.
+            if (e !== null && !EINORDNUNGEN.includes(e) && e !== 'migration') return fehler(res, 'Unbekannte Einordnung', 400)
+            const z = await getKnex()('portfolio_bewegungen').where('id', Number(req.params.id)).first('art', 'gegenAsset')
+            if (!z) return fehler(res, 'Bewegung nicht gefunden', 404)
+            if (e === 'migration' && !(z.art === 'tausch' && z.gegenAsset)) return fehler(res, 'Umstellung nur für einen Tausch', 400)
             await getKnex()('portfolio_bewegungen').where('id', Number(req.params.id)).update({ einordnung: e })
             res.json({ ok: true })
         } catch (err) { fehler(res, err) }

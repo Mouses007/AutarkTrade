@@ -18,6 +18,8 @@ import { totalverlustStatistik } from './totalverlust-seite.js'
 import { abJahrVon } from './totalverlust.js'
 import { beendeteQuellen } from './uebersicht.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
+import { kursAn, tokenOrteVon, TOKEN, steuerCsv, jahrGrenzen } from './steuer.js'
+import { spamEntscheid, assetsMitHerkunft } from './spam.js'
 
 let bestanden = 0, fehlgeschlagen = 0
 function check(name, ok, detail) {
@@ -221,6 +223,64 @@ console.log('\nÜbergabe Import → Live')
     check('genutzt bis: vorbei → beendet', heute.has('i:Binance') && heute.has('i:Crypto.com'))
     check('genutzt bis: leer → aktiv', !heute.has('i:KuCoin'))
     check('genutzt bis: am Tag selbst noch aktiv', !beendeteQuellen(q, T('2026-01-07T12:00:00+01:00')).has('i:Crypto.com'))
+}
+
+console.log('\nAudit 26.10.2026')
+{
+    // B4: Toleranz relativ — 110 Mio. Token in zwei Käufen, die Börse meldet den
+    // Verkauf als Dezimalzahl: Summe der Käufe liegt 1.5e-8 darunter (Fliesskomma).
+    const teile = [30365682.4500147, 79568534.3309023]
+    const summe = 109934216.780917
+    const bew = teile.map((m, i) => ({ id: i + 1, quelle: 'b', art: 'kauf', asset: 'SHIB', menge: m, gegenAsset: 'CHF', gegenMenge: -m * 1e-5, chfWert: m * 1e-5, zeit: T('2024-01-01') + i }))
+    bew.push({ id: 9, quelle: 'b', art: 'verkauf', asset: 'SHIB', menge: -summe, gegenAsset: 'CHF', gegenMenge: summe * 2e-5, chfWert: summe * 2e-5, zeit: T('2025-06-01') })
+    const { abgaenge } = fifo(bew, { von: T('2025-01-01'), bis: T('2025-12-31') })
+    check('FIFO: grosse Mengen ohne Rundungs-„ungedeckt"', abgaenge.length === 1 && abgaenge[0].ungedeckt === 0 && abgaenge[0].kosten != null, JSON.stringify(abgaenge[0]))
+
+    // B7: Zugang und Abgang in derselben Millisekunde (Bitpanda-Tausch in zwei Zeilen).
+    const z = T('2025-03-01T10:00:00Z')
+    const b7 = [
+        { id: 1, quelle: 'bp', art: 'auszahlung', asset: 'ETH', menge: -1, chfWert: 3000, zeit: z },
+        { id: 2, quelle: 'bp', art: 'einzahlung', asset: 'ETH', menge: 1, chfWert: 2900, einordnung: 'kauf', zeit: z },
+    ]
+    const a7 = fifo(b7, { von: T('2025-01-01'), bis: T('2025-12-31') }).abgaenge
+    check('FIFO: gleiche Zeit → Zugang zuerst', a7.length === 1 && a7[0].ungedeckt === 0 && nah(a7[0].kosten, 2900), JSON.stringify(a7))
+
+    // B5: Verkauf ohne belegten Zugang → Haltedauer nicht entscheidbar (null), nicht „erfüllt".
+    const b5 = [{ id: 1, quelle: 'b', art: 'verkauf', asset: 'BTC', menge: -1, gegenAsset: 'CHF', gegenMenge: 50000, chfWert: 50000, zeit: T('2025-05-01') }]
+    const a5 = fifo(b5, { von: T('2025-01-01'), bis: T('2025-12-31') }).abgaenge
+    const v5 = veraeusserungen(a5)
+    const h5 = gewerbsKriterien({ volumen: 50000, vermoegenAnfang: 100000, kurzfristigErloes: v5.kurzfristigErloes, haltedauerUnbekanntErloes: v5.haltedauerUnbekanntErloes, erloes: v5.erloes, futuresTrades: 0 }).find((x) => x.id === 'haltedauer')
+    check('Haltedauer: ungedeckter Verkauf → nicht entscheidbar', h5.erfuellt === null && nah(h5.unbekannt, 1), JSON.stringify(h5))
+    const h5b = gewerbsKriterien({ volumen: 0, vermoegenAnfang: 1, kurzfristigErloes: 0, erloes: 100, futuresTrades: 0 }).find((x) => x.id === 'haltedauer')
+    check('Haltedauer: alles lang gehalten → erfüllt', h5b.erfuellt === true)
+
+    // B3: Token-Prüfung je Ort und Vertrag; ein echter und ein falscher USDT.
+    const orte = tokenOrteVon([
+        { quelle: 'a1', asset: 'USDT', kontrakt: '0xecht', kette: 'eth' },
+        { quelle: 'a2', asset: 'USDT', kontrakt: '0xfalsch', kette: 'bsc' },
+        { quelle: 'bitget', asset: 'USDT' },
+    ])
+    const kurse = new Map([['USDT', { chf: 0.8 }], ['USDT' + TOKEN + '0xfalsch', { chf: null, token: true }]])
+    check('Token je Vertrag: echter USDT behält Kurs', kursAn(kurse, orte, 'a1\u0000USDT').chf === 0.8)
+    check('Token je Vertrag: falscher USDT ohne Kurs', kursAn(kurse, orte, 'a2\u0000USDT').chf === null)
+    check('Token je Vertrag: Börse unberührt', kursAn(kurse, orte, 'bitget\u0000USDT').chf === 0.8)
+
+    // B9: Hand-Spam nur für Tokens mit Vertrag.
+    const ist = spamEntscheid({ AI: true }, new Set())
+    check('Hand-Spam trifft den Token', ist('AI', '0x' + 'a'.repeat(40)) === 'hand')
+    check('Hand-Spam lässt den Börsen-Coin', ist('AI', null) === null)
+    // Presale: als Kauf eingeordnete Einzahlung ohne Wert ist eigene Herkunft.
+    const hk = assetsMitHerkunft([{ asset: 'D2T', art: 'einzahlung', menge: 1000, chfWert: null, einordnung: 'kauf' }])
+    check('Herkunft: Presale (Einzahlung als Kauf) zählt', hk.has('D2T'))
+
+    // Stichtag: die letzte Millisekunde des Jahres zählt mit.
+    check('Stichtag bis 23:59:59.999', jahrGrenzen(2025).bis === Date.parse('2025-12-31T23:59:59.999+01:00'))
+
+    // CSV: keine Exponenten, keine Formeln.
+    const csv = steuerCsv({ jahr: 2025, vermoegen: [{ asset: '=HYPERLINK("x")', menge: 5e-7, kursChf: 1, chf: 5e-7, kursQuelle: 'x', orte: [] }], vermoegenSumme: 5e-7, kostenbasisSumme: 0,
+        einkommen: { zeilen: [], summe: 0 }, veraeusserungen: { abgaenge: [], erloes: 0, kosten: 0, gewinn: 0 }, kriterien: [] })
+    check('CSV: kein Exponent', csv.includes('0.0000005') && !/\de-\d/.test(csv))
+    check('CSV: Formel entschärft', csv.includes(`"'=HYPERLINK(""x"")"`))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

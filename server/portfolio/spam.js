@@ -50,7 +50,8 @@ async function lese() {
 /**
  * Assets mit eigener Herkunft (rein): mindestens eine Bewegung, die man selbst
  * ausgelöst hat oder die einen Wert hat — Kauf, Tausch, Abgang, Umbuchung mit
- * Gegenstück, erfasster Anfangsbestand, Ertrag mit CHF-Wert. Ein Eingang ohne
+ * Gegenstück, erfasster Anfangsbestand, Ertrag mit CHF-Wert, als „Kauf“
+ * eingeordnete Einzahlung (Presale: bezahlt anderswo, Token kommt später). Ein Eingang ohne
  * Wert und ohne Gegenbuchung ist KEINE Herkunft: so kommen Werbe-Airdrops.
  *
  * Zweite Spam-Regel (26.10.2026): FIRE, FISH, KEKIUS, SHIT … — je genau 1 Stück,
@@ -66,7 +67,7 @@ export function assetsMitHerkunft(bewegungen) {
         for (const [asset, menge] of seiten) {
             if (!asset) continue
             const ungefragt = menge > 0 && ['einzahlung', 'airdrop', 'sonstiges'].includes(b.art)
-                && !(Number(b.chfWert) > 0) && !b.transferMit && b.einordnung !== 'transfer'
+                && !(Number(b.chfWert) > 0) && !b.transferMit && !['transfer', 'kauf'].includes(b.einordnung)
             if (!ungefragt) s.add(String(asset).toUpperCase())
         }
     }
@@ -79,15 +80,21 @@ export function assetsMitHerkunft(bewegungen) {
  * Herkunftsregel (Token mit Vertrag, ohne Kurs, ohne eigene Herkunft).
  */
 export async function spamPruefer() {
-    const hand = await lese()
     let herkunft = new Set()
     try {
         herkunft = assetsMitHerkunft(await getKnex()('portfolio_bewegungen')
             .select('asset', 'gegenAsset', 'art', 'menge', 'gegenMenge', 'chfWert', 'transferMit', 'einordnung'))
     } catch { /* ohne Herkunft nur die Namensregel */ }
+    return spamEntscheid(await lese(), herkunft)
+}
+
+/** Reiner Teil von `spamPruefer`: Hand-Liste und Herkunft → Prüffunktion. */
+export function spamEntscheid(hand, herkunft) {
     return (asset, kontrakt, { ohneKurs = false } = {}) => {
         const key = String(asset ?? '').toUpperCase()
-        if (key in hand) return hand[key] ? 'hand' : null
+        // Von Hand als Spam markiert gilt nur für Tokens mit Vertrag: der Werbe-Token
+        // „AI“ auf der Wallet darf den Börsen-Coin AI bei Bitget nicht mitnehmen.
+        if (key in hand && (!hand[key] || kontrakt)) return hand[key] ? 'hand' : null
         const grund = spamGrund(asset, kontrakt)
         if (grund) return grund
         if (ohneKurs && kontrakt && !herkunft.has(key)) return 'ungefragt'

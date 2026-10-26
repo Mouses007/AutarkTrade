@@ -130,7 +130,10 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
         if (!asset || istFiat(asset) || !(menge > 0)) return
         const l = lose.get(asset) || []
         let rest = menge, kosten = 0, kostenBekannt = true, kurzMenge = 0, gedeckt = 0
-        while (rest > 1e-12 && l.length) {
+        // Toleranz relativ zur Menge: bei Mengen in Millionen (SHIB, PEPE) liegt der
+        // Rundungsrest von Fliesskommazahlen über einer festen Grenze von 1e-9.
+        const tol = Math.max(1e-12, menge * 1e-10)
+        while (rest > tol && l.length) {
             const los = l[0]
             const nimm = Math.min(los.menge, rest)
             if (los.kostenJe == null) kostenBekannt = false; else kosten += nimm * los.kostenJe
@@ -138,22 +141,29 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
             gedeckt += nimm
             los.menge -= nimm
             rest -= nimm
-            if (los.menge <= 1e-12) l.shift()
+            if (los.menge <= tol) l.shift()
         }
-        if (rest > 1e-9) kostenBekannt = false     // mehr abgegeben als je zugegangen → Historie lückenhaft
+        const ungedeckt = rest > tol ? rest : 0
+        if (ungedeckt) kostenBekannt = false     // mehr abgegeben als je zugegangen → Historie lückenhaft
         if (zeit >= von && zeit <= bis) {
             abgaenge.push({
                 id: b.id, zeit, quelle: b.quelle, asset, menge, art,
                 erloes: erloes ?? null,
                 kosten: kostenBekannt ? kosten : null,
                 gewinn: kostenBekannt && erloes != null ? erloes - kosten : null,
+                // Ungedeckter Teil: Kaufdatum unbekannt → Haltedauer nicht entscheidbar.
                 kurzfristigAnteil: menge > 0 ? kurzMenge / menge : 0,
-                ungedeckt: rest > 1e-9 ? rest : 0,
+                unbekanntAnteil: menge > 0 ? ungedeckt / menge : 0,
+                ungedeckt,
             })
         }
     }
 
-    const sortiert = [...bewegungen].filter((b) => b.einordnung !== 'ignorieren').sort((a, b) => Number(a.zeit) - Number(b.zeit) || (a.id || 0) - (b.id || 0))
+    // Gleiche Zeit: Zugänge vor Abgängen — Kauf und sofortiger Verkauf in derselben
+    // Sekunde (Bitpanda-Tausch in zwei Zeilen) sonst „ungedeckt".
+    const zuerst = (b) => (Number(b.menge) > 0 && !b.gegenAsset ? 0 : 1)
+    const sortiert = [...bewegungen].filter((b) => b.einordnung !== 'ignorieren')
+        .sort((a, b) => Number(a.zeit) - Number(b.zeit) || zuerst(a) - zuerst(b) || (a.id || 0) - (b.id || 0))
     for (const b of sortiert) {
         const zeit = Number(b.zeit)
         const m = Number(b.menge) || 0
@@ -168,17 +178,18 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
             // Lose umhängen: gleiche Kosten, gleiches Kaufdatum, Menge × Faktor.
             const alt = lose.get(mig.von) || []
             let rest = Math.abs(mig.von === b.asset ? m : g)
+            const tol = Math.max(1e-12, rest * 1e-10)
             const neu = lose.get(mig.nach) || []
-            while (rest > 1e-12 && alt.length) {
+            while (rest > tol && alt.length) {
                 const los = alt[0]
                 const nimm = Math.min(los.menge, rest)
                 neu.push({ menge: nimm * mig.faktor, kostenJe: los.kostenJe != null ? los.kostenJe / mig.faktor : null, zeit: los.zeit })
                 los.menge -= nimm
                 rest -= nimm
-                if (los.menge <= 1e-12) alt.shift()
+                if (los.menge <= tol) alt.shift()
             }
             // Mehr umgestellt als je zugegangen: der Rest kommt ohne bekannten Einstand.
-            if (rest > 1e-9) neu.push({ menge: rest * mig.faktor, kostenJe: null, zeit })
+            if (rest > tol) neu.push({ menge: rest * mig.faktor, kostenJe: null, zeit })
             neu.sort((x, y) => x.zeit - y.zeit)
             lose.set(mig.nach, neu)
         } else if (['kauf', 'verkauf', 'tausch'].includes(b.art) && b.gegenAsset) {
@@ -232,12 +243,13 @@ export function einstandJeAsset(lose) {
 /** Summen der Abgänge eines Jahres. */
 export function veraeusserungen(abgaenge) {
     const handel = abgaenge.filter((a) => a.art !== 'gebuehr')
-    const s = { anzahl: handel.length, erloes: 0, kosten: 0, gewinn: 0, ohneEinstand: 0, ohneErloes: 0, kurzfristigErloes: 0 }
+    const s = { anzahl: handel.length, erloes: 0, kosten: 0, gewinn: 0, ohneEinstand: 0, ohneErloes: 0, kurzfristigErloes: 0, haltedauerUnbekanntErloes: 0 }
     for (const a of handel) {
         if (a.erloes == null) s.ohneErloes++; else s.erloes += a.erloes
         if (a.kosten == null) s.ohneEinstand++; else s.kosten += a.kosten
         if (a.gewinn != null) s.gewinn += a.gewinn
         if (a.erloes != null) s.kurzfristigErloes += a.erloes * a.kurzfristigAnteil
+        if (a.erloes != null) s.haltedauerUnbekanntErloes += a.erloes * (a.unbekanntAnteil || 0)
     }
     return s
 }
@@ -246,13 +258,15 @@ export function veraeusserungen(abgaenge) {
  * Die fünf Kriterien (ESTV KS 36, analog Krypto) als Ampel. `null` = nicht
  * aus den Daten entscheidbar — die Oberfläche sagt dann, was zu prüfen ist.
  *
- * @param {{ volumen:number, vermoegenAnfang:number|null, kurzfristigErloes:number, erloes:number,
+ * @param {{ volumen:number, vermoegenAnfang:number|null, kurzfristigErloes:number, haltedauerUnbekanntErloes?:number, erloes:number,
  *           futuresTrades:number }} m
  */
 export function gewerbsKriterien(m) {
     const haltedauer = m.erloes > 0 ? m.kurzfristigErloes / m.erloes : 0
     return [
-        { id: 'haltedauer', erfuellt: haltedauer === 0 ? true : haltedauer < 0.0001 ? true : false, wert: haltedauer },
+        // Kurzfristig verkauft → nicht erfüllt. Sonst: Erlös aus Losen mit unbekanntem
+        // Kaufdatum (mehr verkauft als belegt zugegangen) → nicht entscheidbar.
+        { id: 'haltedauer', erfuellt: haltedauer >= 0.0001 ? false : (m.haltedauerUnbekanntErloes > 0.0001 * m.erloes ? null : true), wert: haltedauer, unbekannt: m.erloes > 0 ? (m.haltedauerUnbekanntErloes || 0) / m.erloes : 0 },
         { id: 'volumen', erfuellt: m.vermoegenAnfang > 0 ? m.volumen <= 5 * m.vermoegenAnfang : (m.volumen > 0 ? null : true), wert: m.vermoegenAnfang > 0 ? m.volumen / m.vermoegenAnfang : null },
         { id: 'einkommen', erfuellt: null, wert: null },
         { id: 'fremdfinanzierung', erfuellt: null, wert: null },

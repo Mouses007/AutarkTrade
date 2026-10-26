@@ -34,6 +34,22 @@ export function flacheTrades(zeilen) {
     return aus
 }
 
+/** Börse eines Journal-Trades (wie in futuresJahr). */
+export function boerseVon(x) { return String(x.broker || x.account || 'andere').toLowerCase() }
+
+/**
+ * Börsen, deren Journal erst über einen Monat nach dem Stichtag beginnt (oder
+ * die gar keine Trades haben): dort trägt die Rückrechnung nicht.
+ */
+export function vorJournalJe(trades, boersen, bis) {
+    const erst = new Map()
+    for (const x of trades) {
+        const b = boerseVon(x), ms = Number(x.exitTime) * 1000
+        if (!(erst.get(b) <= ms)) erst.set(b, ms)
+    }
+    return new Set(boersen.filter((b) => !(erst.get(b) <= bis + 31 * 86400e3)))
+}
+
 export function tradeVolumen(x) {
     if (x.category === 'bot') return Math.abs(Number(x.buyQuantity) || 0)
     return Math.abs((Number(x.entryPrice) || 0) * (Number(x.buyQuantity) || 0))
@@ -51,7 +67,7 @@ export function futuresJahr(trades, { von, bis }) {
     for (const x of trades) {
         const ms = Number(x.exitTime) * 1000
         if (ms < von || ms > bis) continue
-        const b = String(x.broker || x.account || 'andere').toLowerCase()
+        const b = boerseVon(x)
         const e = je.get(b) || { boerse: b, n: 0, bots: 0, nettoUsd: 0, bruttoUsd: 0, gebuehrUsd: 0, fundingUsd: 0, volumenUsd: 0, gewinne: 0, verluste: 0, tage: new Map() }
         const netto = Number(x.netProceeds) || 0
         const vol = tradeVolumen(x)
@@ -92,6 +108,9 @@ export function nettoNach(trades, bis) {
  * @returns {{boerse, usd, sicherheit: 'beleg'|'abgeleitet'|'unbekannt', grund?}[]}
  */
 export function stichtagSaldo(heute, nach, manuell = {}, { vorJournal = false } = {}) {
+    // `vorJournal`: true für alle Börsen, oder ein Set der Börsen, deren erster
+    // Journal-Trade nach dem Stichtag liegt (je Börse — Bitunix kam erst 2025 dazu).
+    const vor = (b) => (vorJournal instanceof Set ? vorJournal.has(b) : !!vorJournal)
     const namen = new Set([...heute.keys(), ...nach.keys(), ...Object.keys(manuell)])
     const aus = []
     for (const b of [...namen].sort((x, y) => BOERSEN.indexOf(x) - BOERSEN.indexOf(y))) {
@@ -99,7 +118,7 @@ export function stichtagSaldo(heute, nach, manuell = {}, { vorJournal = false } 
         if (m && Number.isFinite(Number(m.usd))) { aus.push({ boerse: b, usd: Number(m.usd), sicherheit: 'beleg', quelle: m.quelle || 'Auszug' }); continue }
         // Vor dem ersten Journal-Trade deckt die Rückrechnung den Zeitraum nicht ab —
         // „heute − 0" wäre der heutige Kontostand, nicht der von damals.
-        if (vorJournal) { aus.push({ boerse: b, usd: null, sicherheit: 'unbekannt', grund: 'vorJournal' }); continue }
+        if (vor(b)) { aus.push({ boerse: b, usd: null, sicherheit: 'unbekannt', grund: 'vorJournal' }); continue }
         const h = heute.get(b)
         if (h?.usd == null) { aus.push({ boerse: b, usd: null, sicherheit: 'unbekannt', grund: 'heute' }); continue }
         const wert = h.usd - (nach.get(b) || 0)

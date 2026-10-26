@@ -13,7 +13,7 @@
 import { getKnex } from '../database.js'
 import { fxAm } from './kurse.js'
 import { futuresKontenGemerkt } from './bilanz.js'
-import { flacheTrades, futuresJahr, nettoNach, stichtagSaldo } from './futures-rechnung.js'
+import { flacheTrades, futuresJahr, nettoNach, stichtagSaldo, vorJournalJe } from './futures-rechnung.js'
 
 const NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
 async function kontenHeute() {
@@ -72,7 +72,13 @@ export async function futuresSteuerjahr(jahr, { von, bis, laufend }) {
     const stichtagKurs = await usdChf(laufend ? new Date(Date.now() - 86400e3).toISOString().slice(0, 10) : `${jahr}-12-31`)
     const ersterTrade = trades.length ? Math.min(...trades.map((x) => Number(x.exitTime) * 1000)) : null
     const vorJournal = !laufend && (ersterTrade == null || bis < ersterTrade)
-    const guthaben = stichtagSaldo(heute, nach, await manuelleWerte(jahr), { vorJournal })
+    // Je Börse: beginnt ihr Journal erst Monate nach dem Stichtag, wurde das Konto
+    // meist später eröffnet und eingezahlt — „heute − Ergebnis seither" wäre der
+    // heutige Stand (Pionex, eröffnet 2025: 4'800 USDT für den 31.12.2024).
+    // Ein erster Trade kurz nach dem Stichtag (Bitunix 01.01.2026) zeigt ein
+    // Konto, das am Stichtag schon bestand; die Rückrechnung trägt.
+    const vorJe = laufend ? new Set() : vorJournalJe(trades, [...heute.keys(), ...nach.keys()], bis)
+    const guthaben = stichtagSaldo(heute, nach, await manuelleWerte(jahr), { vorJournal: vorJournal || vorJe })
         .filter((g) => heute.has(g.boerse) || g.sicherheit === 'beleg' || jahrDaten.some((e) => e.boerse === g.boerse))
         .map((g) => ({ ...g, name: NAME[g.boerse] || g.boerse, chf: g.usd != null && stichtagKurs ? g.usd * stichtagKurs : null, fehler: heute.get(g.boerse)?.fehler }))
     const summe = boersen.reduce((s, b) => ({

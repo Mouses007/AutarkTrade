@@ -1,7 +1,7 @@
 /**
  * Selbsttest Futures im Steuerjahr (futures-rechnung.js, rein).
  */
-import { flacheTrades, futuresJahr, nettoNach, stichtagSaldo, tradeVolumen } from './futures-rechnung.js'
+import { flacheTrades, futuresJahr, nettoNach, stichtagSaldo, tradeVolumen, vorJournalJe } from './futures-rechnung.js'
 
 let ok = 0, fail = 0
 const pruefe = (name, bed) => { if (bed) ok++; else { fail++; console.error('✗', name) } }
@@ -51,6 +51,16 @@ pruefe('negative Rückrechnung (Einzahlung seither) → unbekannt', g3[0].usd ==
 
 const g4 = stichtagSaldo(heute, new Map(), { bitget: { usd: 7 } }, { vorJournal: true })
 pruefe('vor dem Journal: nicht der heutige Stand', g4.find((x) => x.boerse === 'bitunix').usd === null && g4.find((x) => x.boerse === 'bitunix').grund === 'vorJournal')
+const g5 = stichtagSaldo(heute, new Map(), {}, { vorJournal: new Set(['bitunix']) })
+pruefe('vor dem Journal je Börse: nur Bitunix unbekannt', g5.find((x) => x.boerse === 'bitunix').grund === 'vorJournal' && g5.filter((x) => x.grund === 'vorJournal').length === 1)
+{
+    const bis = Date.parse('2025-01-01T00:00:00+01:00') - 1
+    const tr = [{ broker: 'bitunix', exitTime: Date.parse('2025-01-01T14:27:00+01:00') / 1000 }, { broker: 'pionex', exitTime: Date.parse('2025-08-29T00:00:00Z') / 1000 }]
+    const vj = vorJournalJe(tr, ['bitunix', 'pionex', 'bitget'], bis)
+    pruefe('Journal-Beginn kurz nach Stichtag: Rückrechnung trägt', !vj.has('bitunix'))
+    pruefe('Journal-Beginn Monate später: unbekannt', vj.has('pionex'))
+    pruefe('Börse ohne Trades: unbekannt', vj.has('bitget'))
+}
 pruefe('vor dem Journal: Auszugswert gilt trotzdem', g4.find((x) => x.boerse === 'bitget').usd === 7)
 
 console.log(`Futures-Steuer: ${ok} ok, ${fail} Fehler`)
