@@ -301,7 +301,10 @@ export class ZeichenEbene {
     /** Was liegt unter (x, y)? Anker der Auswahl zuerst, dann jüngste Zeichnung zuerst. */
     trefferTest(x, y) {
         const breite = this.chart.timeScale().width()
-        const reihe = [...this.zeichnungen].reverse()
+        // Gesperrte liegen hinten: erst alle offenen (jüngste zuerst), dann die gesperrten —
+        // ein gesperrter grosser Kanal mit Füllung schluckte sonst jeden Klick auf die Zeichnungen in ihm.
+        const offen = [...this.zeichnungen].reverse()
+        const reihe = [...offen.filter((z) => !z.gesperrt), ...offen.filter((z) => z.gesperrt)]
         const ausgewaehlt = reihe.find((z) => z.id === this.auswahlId)
         if (ausgewaehlt && !ausgewaehlt.gesperrt) {
             const a = this.ankerVon(ausgewaehlt, breite).findIndex((q) => q.x != null && q.y != null && Math.hypot(q.x - x, q.y - y) <= ANKER + 3)
@@ -583,7 +586,8 @@ export class ZeichenEbene {
         ctx.save()
         ctx.font = SCHRIFT
         for (const z of this.temporaer) this.zeichneEine(ctx, z, z.punkte, breite, hoehe, false)
-        for (const z of this.zeichnungen) {
+        // Gesperrte zuerst — sie liegen im Hintergrund, die offenen darüber
+        for (const z of [...this.zeichnungen.filter((x) => x.gesperrt), ...this.zeichnungen.filter((x) => !x.gesperrt)]) {
             this.zeichneEine(ctx, z, this.punkteVon(z), breite, hoehe, z.id === this.auswahlId)
         }
         if (this.entwurf) this.zeichneEine(ctx, { id: -1, typ: this.entwurf.typ, stil: {} }, this.entwurfPunkte(), breite, hoehe, true)

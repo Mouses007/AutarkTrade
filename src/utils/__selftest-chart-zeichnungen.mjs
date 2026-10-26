@@ -122,5 +122,21 @@ console.log('\nEreignisse in ihrer Kerze (Journal)\n')
     check('Reihenfolge in derselben Kerze bleibt (Einstieg 01:00 vor Ausstieg 20:00)', a < b && Math.round(a) === 1 && Math.round(b) === 1)
 }
 
+// ── Gesperrte liegen hinten (Treffertest) ───────────────────────────────────
+{
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    e.chart = { timeScale: () => ({ width: () => 800 }) }
+    e.auswahlId = null
+    // alles trifft überall — es zählt nur die Reihenfolge
+    e.trifft = () => true
+    e.zeichnungen = [{ id: 1, typ: 'trendlinie' }, { id: 2, typ: 'kanal', gesperrt: true }]
+    check('gesperrter Kanal über (jünger als) einer Linie: die Linie wird getroffen', e.trefferTest(10, 10)?.z.id === 1)
+    e.zeichnungen = [{ id: 2, typ: 'kanal', gesperrt: true }, { id: 3, typ: 'rechteck', gesperrt: true }]
+    check('nur Gesperrte: die jüngste wird getroffen (zum Entsperren)', e.trefferTest(10, 10)?.z.id === 3)
+    e.zeichnungen = [{ id: 1, typ: 'trendlinie' }, { id: 4, typ: 'rechteck' }]
+    check('ohne Gesperrte: wie bisher die jüngste', e.trefferTest(10, 10)?.z.id === 4)
+}
+
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 if (fehlgeschlagen) { console.log('Fehler:', fehler.join(', ')); process.exit(1) }
