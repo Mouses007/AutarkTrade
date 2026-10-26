@@ -68,11 +68,11 @@ if ! command -v curl &>/dev/null; then
     sudo apt-get install -y curl
 fi
 
-# Node.js 20+
+# Node.js 22+
 NEED_NODE=0
 if command -v node &>/dev/null; then
     NODE_MAJOR=$(node -v | sed 's/v//' | cut -d. -f1)
-    if [ "$NODE_MAJOR" -lt 20 ]; then
+    if [ "$NODE_MAJOR" -lt 22 ]; then
         NEED_NODE=1
     fi
 else
@@ -80,8 +80,8 @@ else
 fi
 
 if [ "$NEED_NODE" = "1" ]; then
-    echo -e "  ${CYAN}→ Installiere Node.js 20+...${RESET}"
-    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    echo -e "  ${CYAN}→ Installiere Node.js 22+...${RESET}"
+    curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
     sudo apt-get install -y nodejs
 fi
 echo -e "  ${GREEN}[OK]${RESET}  Node.js            $(node -v)"
@@ -95,8 +95,8 @@ echo ""
 echo -e "  ${BOLD}[2/5] Lade Projekt herunter...${RESET}"
 echo ""
 
-# Die Paketquelle ist privat: Zugangsschlüssel aus der Lizenz-Mail als AT_UPDATE_TOKEN
-# übergeben (AT_UPDATE_TOKEN=… ./setup-remote.sh), sonst fragt git nach Benutzer/Passwort.
+# Die Paketquelle ist öffentlich (AGPL-3.0-or-later), ein Zugang ist nicht nötig. Nur für
+# einen eigenen privaten Fork: AT_UPDATE_TOKEN=… ./setup-remote.sh (GitHub-Token, nur Lesen).
 # Gleiches Verfahren wie scripts/paketquelle.sh — das gibt es vor dem Klonen noch nicht.
 if [ -n "${AT_UPDATE_TOKEN:-}" ]; then
     export GIT_CONFIG_COUNT=1
@@ -130,7 +130,10 @@ echo ""
 echo -e "  ${BOLD}[3/5] Installiere Abhaengigkeiten...${RESET}"
 echo ""
 
-npm install
+# npm ci nach package-lock.json; paketquelle_npm nimmt vorher das Update-Token
+# (GIT_CONFIG_*, AT_UPDATE_TOKEN) aus der Umgebung (SEC-OPS-008).
+. ./scripts/paketquelle.sh
+paketquelle_npm
 if [ $? -ne 0 ]; then
     echo -e "  ${RED}FEHLER bei npm install!${RESET}"
     echo -e "  ${GRAY}Versuche: sudo apt-get install -y build-essential python3${RESET}"

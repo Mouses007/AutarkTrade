@@ -37,35 +37,9 @@ class TradingWidgetProvider : AppWidgetProvider() {
         triggerRefresh(context)
     }
 
-    override fun onReceive(context: Context, intent: Intent) {
-        super.onReceive(context, intent)
-        val awm = AppWidgetManager.getInstance(context)
-        when (intent.action) {
-            ACTION_REFRESH -> {
-                // Sofort-Feedback: Spinner an, dann Expedited-Job (läuft auch im
-                // Hintergrund mit Netz — anders als ein normaler Receiver/Worker, den
-                // der Pixel einfriert → Spinner drehte endlos).
-                android.util.Log.d("TJWidget", "↻ Tap → Refresh angestoßen")
-                val ids = awm.getAppWidgetIds(ComponentName(context, TradingWidgetProvider::class.java))
-                for (id in ids) setRefreshing(context, awm, id)
-                triggerRefresh(context, force = true)   // Nutzer-Tap: nie entprellen
-            }
-            ACTION_TOGGLE_BALANCE -> {
-                val id = intent.getIntExtra(
-                    AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID)
-                if (id != AppWidgetManager.INVALID_APPWIDGET_ID) {
-                    Prefs.setHideBalance(context, id, !Prefs.hideBalance(context, id))
-                    updateWidget(context, awm, id)   // kein Netz nötig, nur Re-Render
-                }
-            }
-            ACTION_ALARM -> {
-                // 15-min-Auto-Refresh: jetzt aktualisieren + nächsten Alarm planen
-                // (setAndAllowWhileIdle ist one-shot → muss neu gesetzt werden).
-                triggerRefresh(context)
-                scheduleAlarm(context)
-            }
-        }
-    }
+    // Die eigenen Aktionen (Aktualisieren, Auge, Wecker) laufen über den nicht
+    // exportierten WidgetAktionReceiver (SEC-AND-002); hier nur noch die
+    // AppWidget-Broadcasts des Systems (onReceive der Basisklasse).
 
     override fun onEnabled(context: Context) = scheduleAlarm(context)
 
@@ -86,11 +60,13 @@ class TradingWidgetProvider : AppWidgetProvider() {
         private const val PERIODIC_WORK = "trading_refresh_periodic"
         private const val ONESHOT_WORK = "trading_refresh_oneshot"
         private const val REFRESH_INTERVAL_MS = 15 * 60 * 1000L
+        // Ab drei verpassten Abrufintervallen gilt der Stand als veraltet (FUN-GER-001).
+        private const val VERALTET_AB_MS = 3 * REFRESH_INTERVAL_MS
         // Mindestabstand zwischen Auto-Refreshes (onUpdate/Alarm) — Loop-Schutz.
         private const val AUTO_REFRESH_DEBOUNCE_MS = 5_000L
 
         private fun alarmIntent(context: Context): PendingIntent {
-            val i = Intent(context, TradingWidgetProvider::class.java).setAction(ACTION_ALARM)
+            val i = Intent(context, WidgetAktionReceiver::class.java).setAction(ACTION_ALARM)
             return PendingIntent.getBroadcast(
                 context, 99, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         }
@@ -108,11 +84,16 @@ class TradingWidgetProvider : AppWidgetProvider() {
         }
 
         fun cancelAlarm(context: Context) {
-            context.getSystemService(AlarmManager::class.java)?.cancel(alarmIntent(context))
+            val am = context.getSystemService(AlarmManager::class.java) ?: return
+            am.cancel(alarmIntent(context))
+            // Wecker aus Versionen bis 4.1.0-26 zielte noch auf den Provider.
+            val alt = Intent(context, TradingWidgetProvider::class.java).setAction(ACTION_ALARM)
+            PendingIntent.getBroadcast(context, 99, alt, PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE)
+                ?.let { am.cancel(it); it.cancel() }
         }
 
         /** Zeigt sofort den Lade-Spinner + "Aktualisiere…" (Tap-Feedback). */
-        private fun setRefreshing(context: Context, awm: AppWidgetManager, id: Int) {
+        fun setRefreshing(context: Context, awm: AppWidgetManager, id: Int) {
             val rv = RemoteViews(context.packageName, R.layout.widget_main)
             rv.setViewVisibility(R.id.btn_refresh, View.GONE)
             rv.setViewVisibility(R.id.refreshing, View.VISIBLE)
@@ -145,8 +126,8 @@ class TradingWidgetProvider : AppWidgetProvider() {
                 )
             )
 
-            // Refresh button → broadcast back to this provider.
-            val refreshIntent = Intent(context, TradingWidgetProvider::class.java)
+            // Refresh button → expliziter Broadcast an den nicht exportierten Aktions-Empfänger.
+            val refreshIntent = Intent(context, WidgetAktionReceiver::class.java)
                 .setAction(ACTION_REFRESH)
             rv.setOnClickPendingIntent(
                 R.id.btn_refresh,
@@ -157,7 +138,7 @@ class TradingWidgetProvider : AppWidgetProvider() {
             )
 
             // Eye toggle → broadcast (Saldo zensieren/zeigen), trägt die Widget-id mit.
-            val eyeIntent = Intent(context, TradingWidgetProvider::class.java)
+            val eyeIntent = Intent(context, WidgetAktionReceiver::class.java)
                 .setAction(ACTION_TOGGLE_BALANCE)
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
                 .setData(Uri.parse("tradingwidget://eye/$id"))
@@ -237,12 +218,36 @@ class TradingWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            // Immer nur die Uhrzeit der letzten erfolgreichen Aktualisierung. Kein
-            // "offline"-Hinweis mehr (verwirrte nur) — bleibt ein Refresh erfolglos,
-            // steht einfach die alte Uhrzeit da, das sieht man am Timestamp.
+            // Zeit der letzten erfolgreichen Aktualisierung. Liegt sie mehr als drei
+            // Abrufintervalle zurück (FUN-GER-001), steht sie rot mit Alter da — sonst
+            // sähen Stunden alte Positionen und PnL aktuell aus. Ein einzelner Fehlschlag
+            // bleibt still (verwirrte nur), das Alter zählt.
             val ts = Prefs.updatedAt(context, id)
-            val tstr = if (ts > 0) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ts)) else "–"
-            rv.setTextViewText(R.id.updated, context.getString(R.string.w_updated, tstr))
+            val jetzt = System.currentTimeMillis()
+            val heute = ts > 0 && SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(Date(ts)) ==
+                SimpleDateFormat("yyyyMMdd", Locale.ROOT).format(Date(jetzt))
+            val tstr = when {
+                ts <= 0 -> "–"
+                heute -> SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ts))
+                else -> SimpleDateFormat("dd.MM. HH:mm", Locale.getDefault()).format(Date(ts))
+            }
+            if (ts > 0 && jetzt - ts > VERALTET_AB_MS) {
+                rv.setTextViewText(R.id.updated, context.getString(R.string.w_veraltet, tstr, alterText(jetzt - ts)))
+                rv.setTextColor(R.id.updated, ContextCompat.getColor(context, R.color.loss))
+            } else {
+                rv.setTextViewText(R.id.updated, context.getString(R.string.w_updated, tstr))
+                rv.setTextColor(R.id.updated, ContextCompat.getColor(context, R.color.text_muted))
+            }
+        }
+
+        /** „12 min", „3 h", „2 Tg" — grob genug für einen Blick. */
+        private fun alterText(ms: Long): String {
+            val min = ms / 60_000
+            return when {
+                min < 90 -> "$min min"
+                min < 48 * 60 -> "${min / 60} h"
+                else -> "${min / (24 * 60)} Tg"
+            }
         }
 
         /** Welche Börse oben gezeigt wird: getippte (transient) → Default-Config → Primär → erste. */

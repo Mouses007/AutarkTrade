@@ -26,6 +26,7 @@
 
 import { holeCoinGecko } from '../hype-radar/quellen.js'
 import { logWarn } from '../logger.js'
+import { ohneTags } from '../html-zerlegen.js'
 import { quelleErlaubt } from '../quellen/freigabe.js'
 
 /** Projektinfos ändern sich kaum — ein Tag Cache ist grosszügig, nicht knapp. */
@@ -96,7 +97,8 @@ async function holeCoinInfoRoh(symbol) {
         symbol: String(j?.symbol || basis).toUpperCase(),
         bild: j?.image?.small || treffer.thumb || '',
         // CoinGecko liefert die Beschreibung mit HTML-Links; angezeigt wird Text.
-        beschreibung: String(j?.description?.en || '').replace(/<[^>]*>/g, '').trim(),
+        // Linear statt `<[^>]*>` (SEC-SRV-001: quadratisch bei `<` ohne `>`).
+        beschreibung: ohneTags(String(j?.description?.en || ''), '', { leer: true }).trim(),
         kategorien: Array.isArray(j?.categories) ? j.categories.filter(Boolean) : [],
         marketCapRang: j?.market_cap_rank ?? treffer.market_cap_rank ?? null,
         homepage: (j?.links?.homepage || []).find(Boolean) || '',

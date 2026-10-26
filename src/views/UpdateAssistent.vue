@@ -13,12 +13,15 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import OnboardingAssistent from '../components/onboarding/OnboardingAssistent.vue'
+import { internerPfad } from '../utils/interneAdresse.js'
 
 const route = useRoute()
 const { t } = useI18n()
 
 const kontext = computed(() => ['setup', 'update', 'manuell'].includes(route.query.kontext) ? route.query.kontext : 'update')
-const rueckkehrPfad = computed(() => route.query.rueckkehr || '/journal')
+// Nur interne Pfade (Audit SEC-WEB-003) — sonst führte ein präparierter Link
+// nach „Fertig" auf eine fremde Seite.
+const rueckkehrPfad = computed(() => internerPfad(route.query.rueckkehr, window.location.origin) || '/journal')
 
 const releaseNotes = ref('')
 const releaseName = ref('')

@@ -6,6 +6,7 @@
  */
 import { gefilterteTradesFlach } from '../../../stores/trades.js'
 import { formGeld2, formGeld0 } from '../format.js'
+import { escHtml } from '../../escHtml.js'
 import { fall, festkomma, element, instanzFuer, sichereGroessenanpassung, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft, vorzeichenFarbe, vorzeichenHover } from './gestaltung.js'
 
@@ -62,7 +63,8 @@ export function usePerfChart(id) {
                     const wert = x.seriesIndex === 0 ? echt[i] : x.value
                     return `${x.marker}${x.seriesName}: ${formGeld2(wert)}`
                 })
-                return [punkte[0]?.axisValue ?? '', ...zeilen].join('<br>')
+                // Kategorie enthält das Symbol — als HTML eingesetzt, also escapen (Audit SEC-WEB-002)
+                return [escHtml(punkte[0]?.axisValue ?? ''), ...zeilen].join('<br>')
             },
         },
         dataZoom: [

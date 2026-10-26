@@ -16,6 +16,7 @@ import * as echarts from 'echarts'
 import { liveSymbol } from '../../stores/live.js'
 import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { BOERSE_NAME, boerseUrl, aktivierteBoersen } from '../../utils/boersenLinks.js'
+import { escHtml } from '../../utils/escHtml.js'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -58,7 +59,7 @@ const kurz = (s) => s.replace(/USDT$/, '')
  */
 function boersenLinksZeilen(symbol) {
     return aktivierteBoersen(appEinstellungen.value?.boersenLinks).map((b) =>
-        `<a href="${boerseUrl(b, symbol)}" target="_blank" rel="noopener noreferrer" `
+        `<a href="${escHtml(boerseUrl(b, symbol))}" target="_blank" rel="noopener noreferrer" `
         + `style="color:#4da3ff">${t('marktradar.rsi.openBoerse', { boerse: BOERSE_NAME[b] })}</a>`,
     ).join('<br/>')
 }
@@ -101,7 +102,8 @@ function zeichne() {
                 const mcapZeile = eintrag.mcap
                     ? `<span style="opacity:.6">${t('marktradar.markt.mcap')}: ${gross(eintrag.mcap)} $</span><br/>`
                     : ''
-                return `<b>${kurz(eintrag.symbol)}</b> · ${props.daten.tf}<br/>`
+                // Symbol aus der Börsenliste — der Tooltip ist HTML (Audit SEC-WEB-002)
+                return `<b>${escHtml(kurz(eintrag.symbol))}</b> · ${escHtml(props.daten.tf)}<br/>`
                     + `RSI <b>${eintrag.rsi}</b> — ${t('marktradar.rsi.zone_' + z.key)}<br/>`
                     + `<span style="opacity:.6">${t('marktradar.funding.volume')}: ${gross(eintrag.volumen24h)}</span><br/>`
                     + mcapZeile

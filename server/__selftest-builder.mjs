@@ -42,7 +42,9 @@ const boesartig = {
         { key: 'a; rm -rf /', type: 'number', default: 1, min: 0, max: 2 },
         { key: 'kaputt', type: 'zauberei', default: 1 },
         { key: 'ohneGrenzen', type: 'number', default: 'abc' },
-        { key: 'gut', type: 'number', default: 25, min: 5, max: 60, group: 'entry' },
+        // U+2028 ist für ECMAScript ein Zeilenende (SEC-SRV-010): brach aus
+        // dem //-Kommentar aus, obwohl \r und \n ersetzt wurden.
+        { key: 'gut', type: 'number', default: 25, min: 5, max: 60, group: 'entry', hint: 'Abstand in ATR\u2028globalThis.AUSGEFUEHRT_2028 = true' },
         { key: 'gut', type: 'number', default: 1, min: 0, max: 2 },
         { key: 'wahl', type: 'select', options: ['a', 'b'], default: 'z' },
         // Zeilenumbruch im hint: brach früher aus dem //-Kommentar der
@@ -50,7 +52,8 @@ const boesartig = {
         { key: 'zeilig', type: 'number', default: 1, min: 0, max: 2, hint: `Zeile eins\nfs.writeFileSync('${MARKER}', 'x')` },
     ],
     rules: { context: 'x */ evil() /*', entryLong: ['Schritt eins'], entryShort: [],
-             invalidations: [{ code: 'Zu Tief!!', description: 'y' }], stopLoss: 's', takeProfit: 't' },
+             invalidations: [{ code: 'Zu Tief!!', description: 'y\u2029globalThis.AUSGEFUEHRT_2029 = true' }],
+             stopLoss: 's\u000b\u0085\u202e*\u2028/ evil()', takeProfit: 't' },
     detectPseudocode: ['Prüfe X'],
 }
 
@@ -88,6 +91,12 @@ check('Import führt keinen fremden Code aus', !fs.existsSync(MARKER),
     'Marker-Datei wurde angelegt — Code aus dem Modelltext lief!')
 check('hint mit Zeilenumbruch bleibt im Zeilenkommentar', !/^\s*fs\.writeFileSync/m.test(quelltext),
     'Payload aus dem hint steht als eigene Zeile in der Datei')
+check('U+2028 im hint führt keinen Code aus', globalThis.AUSGEFUEHRT_2028 === undefined)
+check('U+2029 in einer Invalidierung führt keinen Code aus', globalThis.AUSGEFUEHRT_2029 === undefined)
+check('kein Steuer-, Format- oder Trennzeichen in der erzeugten Datei',
+    !/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/u.test(quelltext),
+    JSON.stringify(quelltext.match(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]/u)))
+check('Kommentarende über ein entferntes Zeichen hinweg bleibt entschärft', !quelltext.includes('*/ evil()'))
 
 if (modul) {
     // 3 gültige Parameter: gut, wahl, zeilig — der Rest wird abgewiesen.

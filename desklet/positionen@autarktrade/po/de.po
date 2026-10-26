@@ -143,10 +143,6 @@ msgstr "IP oder Hostname, z.B. 192.168.178.100 oder localhost"
 msgid "Server port"
 msgstr "Server-Port"
 
-#. settings-schema.json->server-port->tooltip
-msgid "Default: 8080"
-msgstr "Standard: 8080"
-
 #. settings-schema.json->api-key->description
 msgid "ESP32 API key"
 msgstr "ESP32-API-Key"
@@ -226,3 +222,103 @@ msgstr "Hintergrund-Transparenz (0 = unsichtbar, 100 = voll)"
 #. settings-schema.json->min-width->description
 msgid "Width"
 msgstr "Breite"
+
+#: desklet.js
+msgid "Certificate answer unreadable"
+msgstr "Zertifikats-Antwort unlesbar"
+
+#: desklet.js
+msgid "Server sent no CA certificate"
+msgstr "Server liefert kein CA-Zertifikat"
+
+#: desklet.js
+msgid "Fingerprint mismatch — connection tampered?"
+msgstr "Fingerabdruck widersprüchlich — Verbindung manipuliert?"
+
+#: desklet.js
+msgid "Fetching…"
+msgstr "Hole…"
+
+#: desklet.js
+msgid "Server too old — /api/esp32/ca missing (404)"
+msgstr "Server zu alt — /api/esp32/ca fehlt (404)"
+
+#: desklet.js
+msgid "Compare the fingerprint with Settings › General › HTTPS in the web app:"
+msgstr "Fingerabdruck mit Einstellungen › Allgemein › HTTPS in der Web-App vergleichen:"
+
+#: desklet.js
+msgid "Then press \"Fingerprint matches\" in the desklet settings."
+msgstr "Dann in den Desklet-Einstellungen „Fingerabdruck stimmt“ drücken."
+
+#: desklet.js
+msgid "Fetch the server certificate first"
+msgstr "Zuerst das Server-Zertifikat holen"
+
+#: desklet.js
+msgid "Host changed — fetch the certificate again"
+msgstr "Host geändert — Zertifikat neu holen"
+
+#: desklet.js
+msgid "Could not save the certificate:"
+msgstr "Zertifikat konnte nicht gespeichert werden:"
+
+#: desklet.js
+msgid "HTTPS is on but not paired yet.\nSettings → \"Fetch server certificate\", compare, confirm."
+msgstr "HTTPS ist an, aber noch nicht gekoppelt.\nEinstellungen → „Server-Zertifikat holen“, vergleichen, bestätigen."
+
+#: desklet.js
+msgid "Certificate does not match — pair again\n(or the host is not in the server certificate)"
+msgstr "Zertifikat passt nicht — neu koppeln\n(oder der Host steht nicht im Server-Zertifikat)"
+
+#: desklet.js
+msgid "HTTPS connection failed — check the HTTPS port"
+msgstr "HTTPS-Verbindung fehlgeschlagen — HTTPS-Port prüfen"
+
+#. settings-schema.json->use-https->description
+msgid "Encrypted (HTTPS, port 8443)"
+msgstr "Verschlüsselt (HTTPS, Port 8443)"
+
+#. settings-schema.json->use-https->tooltip
+msgid "Talks to AutarkTrade over HTTPS and trusts only the server certificate you paired below. Without it the API key and your account data travel unencrypted. The port above (8080) is still used to fetch the certificate when pairing."
+msgstr "Spricht AutarkTrade über HTTPS an und vertraut nur dem unten gekoppelten Server-Zertifikat. Ohne HTTPS gehen API-Key und Kontodaten unverschlüsselt übers Netz. Der Port oben (8080) dient weiter zum Abholen des Zertifikats beim Koppeln."
+
+#. settings-schema.json->https-port->description
+msgid "HTTPS port"
+msgstr "HTTPS-Port"
+
+#. settings-schema.json->ca-fetch->description
+msgid "1. Fetch server certificate"
+msgstr "1. Server-Zertifikat holen"
+
+#. settings-schema.json->ca-fetch->tooltip
+msgid "Fetches the AutarkTrade CA over http://host:port/api/esp32/ca and shows its SHA-256 fingerprint below."
+msgstr "Holt die AutarkTrade-CA über http://host:port/api/esp32/ca und zeigt ihren SHA-256-Fingerabdruck darunter."
+
+#. settings-schema.json->ca-pending->description
+msgid "Fingerprint to compare"
+msgstr "Fingerabdruck zum Vergleichen"
+
+#. settings-schema.json->ca-pending->tooltip
+msgid "Must match Settings › General › HTTPS in the AutarkTrade web app. Only then confirm."
+msgstr "Muss mit Einstellungen › Allgemein › HTTPS in der AutarkTrade-Web-App übereinstimmen. Nur dann bestätigen."
+
+#. settings-schema.json->ca-confirm->description
+msgid "2. Fingerprint matches — pair"
+msgstr "2. Fingerabdruck stimmt — koppeln"
+
+#. settings-schema.json->ca-confirm->tooltip
+msgid "Stores the certificate (0600) next to the desklet settings. From then on only this certificate is trusted."
+msgstr "Speichert das Zertifikat (0600) neben den Desklet-Einstellungen. Ab dann zählt nur noch dieses Zertifikat."
+
+#. settings-schema.json->ca-paired->description
+msgid "Paired certificate (SHA-256)"
+msgstr "Gekoppeltes Zertifikat (SHA-256)"
+
+#. settings-schema.json->ca-paired->tooltip
+msgid "Empty = not paired. If the server certificate changes, pair again with the two buttons above."
+msgstr "Leer = nicht gekoppelt. Ändert sich das Server-Zertifikat, mit den beiden Knöpfen oben neu koppeln."
+
+#. settings-schema.json->server-port->tooltip
+msgid "Default: 8080 (HTTP). With HTTPS on it is only used to fetch the certificate when pairing."
+msgstr "Standard: 8080 (HTTP). Mit HTTPS dient er nur zum Abholen des Zertifikats beim Koppeln."

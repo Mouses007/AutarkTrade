@@ -27,9 +27,12 @@ export async function setzeTotalverlust(asset, an, abJahr) {
     await ladeUebersicht()
 }
 
-/** Spam von Hand: true = Spam, false = kein Spam, null = die Namensregel entscheidet. */
-export async function setzeSpam(asset, spam) {
-    await axios.put('/api/portfolio/spam', { asset, spam })
+/**
+ * Spam von Hand: true = Spam, false = kein Spam, null = die Namensregel entscheidet.
+ * Mit Vertrag gilt die Wahl nur für diesen Token (ein falscher „USDT“ neben dem echten).
+ */
+export async function setzeSpam(asset, spam, kontrakt = null) {
+    await axios.put('/api/portfolio/spam', { asset, spam, kontrakt })
     await ladeUebersicht()
 }
 

@@ -4,8 +4,11 @@
  */
 import { seitenId } from '../../../stores/ui.js'
 import { formProzent1 } from '../format.js'
-import { element, instanzFuer } from './grundlagen.js'
+import { element, instanzFuer, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
+
+/** Ø RRR aus dem Gewinnanteil des Rings: 1:x. */
+const rrrText = (gruen) => `1:${gruen > 0 && gruen < 1 ? (gruen / (1 - gruen)).toFixed(1) : '0'}`
 
 /** Text in der Ringmitte, je nach Seite und Ring. */
 function mittelText(id, gruen) {
@@ -13,12 +16,20 @@ function mittelText(id, gruen) {
     if (seitenId.value === 'journalUebersicht') {
         if (id === 'ringGewinnquote') return `${prozent}\nWin rate`
         if (id === 'ringZufriedenheit') return `${prozent}\nSatisfaction`
-        if (id === 'ringChanceRisiko') {
-            const r = gruen > 0 && gruen < 1 ? (gruen / (1 - gruen)).toFixed(1) : '0'
-            return `1:${r}\nØ RRR`
-        }
+        if (id === 'ringChanceRisiko') return `${rrrText(gruen)}\nØ RRR`
     }
     return prozent
+}
+
+/*
+ * Zugänglicher Name (Cursor-Audit A11Y-01): der Ring ist `silent`, sein
+ * Mitteltext steckt im Canvas — ein Screenreader fand nichts. Darum trägt der
+ * Container `role="img"` und ein `aria-label` mit Name und Wert.
+ */
+function zugaenglicherName(id, gruen) {
+    if (id === 'ringChanceRisiko') return `Ø RRR: ${rrrText(gruen)}`
+    const name = id === 'ringZufriedenheit' ? t('options.satisfaction') : t('dashboard.winRate')
+    return `${name}: ${formProzent1(gruen)}`
 }
 
 /**
@@ -31,6 +42,9 @@ export function ringDiagramm(id, gruen, rot, grau = 0) {
     const p = palette()
     const text = mittelText(id, gruen)
     const [oben, unten] = text.split('\n')
+    // `?.`: im Golden Master ist der Knoten eine Attrappe ohne DOM
+    knoten.setAttribute?.('role', 'img')
+    knoten.setAttribute?.('aria-label', zugaenglicherName(id, gruen))
     instanzFuer(knoten).setOption({
         ...grundOption(p),
         series: [{

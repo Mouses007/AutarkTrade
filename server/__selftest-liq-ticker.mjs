@@ -9,7 +9,7 @@
  * sie festgenagelt: `1 = SHORT liquidiert`, `0 = LONG liquidiert`.
  */
 
-import { merkeLiq, lies, _leere, _grenzen } from './liq-ticker.js'
+import { merkeLiq, lies, _leere, _grenzen, liqEintragBinance } from './liq-ticker.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -224,6 +224,26 @@ console.log('\nRobustheit')
         && Array.isArray(leer.groesste) && Array.isArray(leer.letzte))
     check('… und keine Quelle gemeldet',
         leer.quellen.binance === false && leer.quellen.bybit === false)
+}
+
+// ── Binance-forceOrder → Eintrag (SEC-SRV-019) ──────────────────────────
+console.log('\nBinance-Liquidation einlesen')
+{
+    const gut = liqEintragBinance({ T: T0, ap: '64000.5', p: '63990', l: '0.25', q: '0.3', S: 'BUY' })
+    check('gefüllte Order: Durchschnittspreis, gefüllte Menge, BUY = Short liquidiert',
+        JSON.stringify(gut) === JSON.stringify([T0, 64000.5, 0.25, 1]), JSON.stringify(gut))
+    const leer = liqEintragBinance({ T: T0, ap: '0', p: '63990', l: '0', q: '0.3', S: 'SELL' })
+    check('ap="0": Orderpreis und Ordermenge, SELL = Long liquidiert',
+        JSON.stringify(leer) === JSON.stringify([T0, 63990, 0.3, 0]), JSON.stringify(leer))
+    check('Preis keine Zahl → verworfen', liqEintragBinance({ T: T0, ap: 'abc', p: 'xyz', l: '1', S: 'BUY' }) === null)
+    check('Menge keine Zahl → verworfen', liqEintragBinance({ T: T0, ap: '1', l: 'NaN', q: 'x', S: 'BUY' }) === null)
+    check('Zeit fehlt → verworfen', liqEintragBinance({ ap: '1', l: '1', S: 'BUY' }) === null)
+    check('Unendlich → verworfen', liqEintragBinance({ T: T0, ap: '1e999', l: '1', S: 'BUY' }) === null)
+    check('kein Objekt → verworfen', liqEintragBinance(undefined) === null && liqEintragBinance('x') === null)
+    const fs = await import('fs')
+    const rekorder = fs.readFileSync(new URL('./live-recorder.js', import.meta.url), 'utf8')
+    check('Aufzeichner: beide Binance-Wege lesen über liqEintragBinance',
+        (rekorder.match(/liqEintragBinance\(/g) || []).length >= 2 && !/\+o\.ap \|\| \+o\.p/.test(rekorder))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

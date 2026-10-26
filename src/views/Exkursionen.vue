@@ -77,7 +77,8 @@ const pufferWort = computed(() => (Number(tageReserve.value) > 1 ? t('excursions
 const fehlendeText = computed(() => fehlendeTage.value.map(d => formDatum(d)).join(', '))
 
 function waehleApi() {
-    const mitSchluessel = (anbieter) => apis.findIndex(a => a.provider === anbieter && a.key)
+    // Die Sitzung trägt nur noch `keySet`, nicht den Schlüssel (Audit SEC-WEB-006).
+    const mitSchluessel = (anbieter) => apis.findIndex(a => a.provider === anbieter && (a.keySet || a.key))
     const db = mitSchluessel('databento')
     const pg = mitSchluessel('polygon')
     if (db >= 0) { boersenIndex.value = db; apiQuelle.value = 'databento' }

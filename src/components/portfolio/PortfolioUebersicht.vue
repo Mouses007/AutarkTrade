@@ -270,7 +270,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <button type="button" class="pf-totalverlust" :title="t('portfolio.totalverlustInfoUebersicht', { j: vorjahr })" @click="setzeTotalverlust(p.asset, true, vorjahr)">
                                 {{ t('portfolio.totalverlustMarkieren') }}
                             </button>
-                            <button v-if="p.kontrakt && p.ohneKurs" type="button" class="pf-totalverlust" :title="t('portfolio.spamInfo')" @click="setzeSpam(p.asset, true)">
+                            <button v-if="p.kontrakt && p.ohneKurs" type="button" class="pf-totalverlust" :title="t('portfolio.spamInfo')" @click="setzeSpam(p.schluessel.split('|')[0], true, p.kontrakt)">
                                 {{ t('portfolio.spamMarkieren') }}
                             </button>
                         </div>
@@ -289,7 +289,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                     <div v-for="p in spamListe" :key="p.schluessel" class="pf-spam-zeile">
                         <span class="pf-spam-name" :title="p.asset">{{ p.asset }}</span>
                         <span class="at-gedaempft">{{ menge(p.menge) }}</span>
-                        <button type="button" class="pf-totalverlust" :title="t('portfolio.keinSpamInfo')" @click="setzeSpam(p.asset, false)">{{ t('portfolio.keinSpam') }}</button>
+                        <button type="button" class="pf-totalverlust" :title="t('portfolio.keinSpamInfo')" @click="setzeSpam(p.schluessel.split('|')[0], false, p.kontrakt)">{{ t('portfolio.keinSpam') }}</button>
                     </div>
                 </div>
             </div>
@@ -356,6 +356,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <div class="pf-kette-kopf">
                                 <span>{{ a.name }} <code class="at-gedaempft">{{ a.anzeige }}</code></span>
                                 <Pille :ton="statusTon(a.status)" :title="a.meldung || ''">{{ a.status === 'ok' ? vorZeit(a.letzterAbruf) : (abrufLaeuft && a.status === 'neu' ? t('portfolio.wirdGelesen') : t('portfolio.status_' + a.status)) }}</Pille>
+                                <Pille v-if="a.abgeschnitten?.length" ton="warn" :title="t('portfolio.historieAbgeschnittenInfo', { netze: a.abgeschnitten.join(', ') })">{{ t('portfolio.historieAbgeschnitten') }}</Pille>
                                 <span class="at-ml-auto">{{ chf(a.chf) }}</span>
                             </div>
                             <div v-for="p in postenSichtbar(sortiert(a.posten))" :key="p.schluessel + p.ort" class="pf-ort">

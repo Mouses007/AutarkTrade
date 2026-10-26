@@ -32,7 +32,7 @@
  *   PUT    /kanton           {kz|null}     Wohnkanton für den Steuerbericht
  *   PUT    /quellen/genutzt-bis {quelle, datum|null}  Ort nicht mehr genutzt ab (raus aus aktueller Ansicht)
  *   POST   /estv/:jahr                     ESTV-Kursliste eines Jahres neu holen
- *   PUT    /spam             {asset, spam: true|false|null}  Spam von Hand (null = Regel)
+ *   PUT    /spam             {asset, kontrakt?, spam: true|false|null}  Spam von Hand je Vertrag (null = Regel)
  */
 
 import crypto from 'crypto'
@@ -448,7 +448,9 @@ export function setupPortfolioRoutes(app) {
             const asset = String(req.body?.asset ?? '')
             if (!asset || asset.length > 200) return fehler(res, 'Asset fehlt', 400)
             const w = req.body?.spam
-            await setzeSpam(asset, w === null || w === undefined ? null : !!w)
+            const kontrakt = req.body?.kontrakt ? String(req.body.kontrakt) : null
+            if (kontrakt && kontrakt.length > 200) return fehler(res, 'Vertrag zu lang', 400)
+            await setzeSpam(asset, w === null || w === undefined ? null : !!w, kontrakt)
             res.json({ ok: true })
         } catch (e) { fehler(res, e) }
     })

@@ -16,6 +16,8 @@
  *   portfolio_schluessel  Zugangsdaten (Bitpanda, Etherscan, Solana-RPC), verschlüsselt
  *   portfolio_quellen     Stand je Quelle: letzter Abruf, Fehler, Cursor
  */
+import { spamHandUmschreiben, normKontrakt } from '../portfolio/token-id.js'
+
 export async function migrierePortfolio(knex, addColumnIfNotExists) {
     const s = { hasTable: (t) => knex.schema.hasTable(t), createTable: (t, f) => knex.schema.createTable(t, f) }
     if (!(await s.hasTable('portfolio_wallets'))) {
@@ -161,5 +163,38 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
         for (const tabelle of ['portfolio_bewegungen', 'portfolio_bestaende']) {
             await knex(tabelle).where('kontrakt', echt.toLowerCase()).update({ kontrakt: echt }).catch(() => {})
         }
+    }
+    await spamJeVertrag(knex)
+}
+
+/*
+ * Spam von Hand je Vertrag (Audit FUN-PRT-001, 26.10.2026): Einträge mit reinem
+ * Kürzel („USDT“: true) trafen jeden Token dieses Namens, auch den echten.
+ * Eindeutige (genau ein Vertrag mit dem Kürzel) werden auf `ASSET|kontrakt`
+ * umgeschrieben; mehrdeutige bleiben und gelten als Rückfall (`spam.js`).
+ * Idempotent: ein zweiter Lauf findet keine eindeutigen Kürzel-Einträge mehr.
+ */
+async function spamJeVertrag(knex) {
+    try {
+        const s = await knex('settings').where('id', 1).first('portfolioSpam')
+        let hand = {}
+        try { hand = JSON.parse(s?.portfolioSpam || '{}') || {} } catch { return }
+        if (!Object.keys(hand).some((k) => !k.includes('|'))) return
+        const vertraege = new Map()
+        for (const t of ['portfolio_bestaende', 'portfolio_bewegungen']) {
+            for (const z of await knex(t).whereNotNull('kontrakt').distinct('asset', 'kontrakt')) {
+                const a = String(z.asset || '').toUpperCase()
+                const k = normKontrakt(z.kontrakt)
+                if (!a || !k) continue
+                if (!vertraege.has(a)) vertraege.set(a, new Set())
+                vertraege.get(a).add(k)
+            }
+        }
+        const r = spamHandUmschreiben(hand, vertraege)
+        if (!r.geaendert) return
+        await knex('settings').where('id', 1).update({ portfolioSpam: JSON.stringify(r.hand) })
+        console.log(` -> Portfolio: ${r.geaendert} Spam-Einträge von Hand auf ihren Vertrag umgeschrieben`)
+    } catch (e) {
+        console.warn(' -> Portfolio: Spam je Vertrag nicht umgeschrieben:', e.message)
     }
 }

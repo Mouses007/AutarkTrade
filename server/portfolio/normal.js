@@ -18,6 +18,10 @@
  *   airdrop, belohnung, gebuehr, sonstiges, bestand (Eröffnungsbestand aus einem Import)
  */
 
+import { normKontrakt, istKanon, kanonKennt, ketteNorm } from './token-id.js'
+
+export { normKontrakt }
+
 export const ARTEN = ['kauf', 'verkauf', 'tausch', 'einzahlung', 'auszahlung', 'umbuchung', 'staking', 'airdrop', 'belohnung', 'gebuehr', 'sonstiges', 'bestand']
 
 const zahl = (v) => {
@@ -45,17 +49,9 @@ function bewegung(b) {
     }
 }
 
-/**
- * Vertragsadresse vereinheitlichen: EVM-Adressen (0x…) klein — dort ist die
- * Schreibweise nur eine Prüfsumme. Alles andere bleibt, wie es ist: eine
- * Solana-Adresse ist Base58, Gross/Klein gehört zur Adresse (RENDER war
- * kleingeschrieben für keine Börse mehr auffindbar, 25.10.2026).
- */
-export function normKontrakt(k) {
-    const s = String(k ?? '').trim()
-    if (!s) return null
-    return /^0x[0-9a-f]+$/i.test(s) ? s.toLowerCase() : s
-}
+// `normKontrakt` (Vertragsadresse vereinheitlichen) steht seit dem Audit
+// FUN-PRT-001 in `token-id.js`: EVM klein, Solana (Base58) unverändert —
+// RENDER war kleingeschrieben für keine Börse mehr auffindbar (25.10.2026).
 
 // ── Bitget: /api/v2/tax/spot-record ──────────────────────────────────────
 
@@ -394,13 +390,40 @@ export function saldiere(bewegungen) {
 // ── Transfers zwischen eigenen Konten ────────────────────────────────────
 
 /**
+ * Ein Vertrag, der sicher NICHT der Coin des Kürzels ist: KANON kennt das
+ * Kürzel auf dieser Kette unter einem anderen Vertrag (falscher „USDT“).
+ */
+function sicherFremd(z) {
+    return !!z.kontrakt && kanonKennt(z.asset, z.kette) && !istKanon(z.asset, z.kontrakt, z.kette)
+}
+
+/**
+ * Passen zwei Seiten eines möglichen Transfers vom Vertrag her? Gleiche Kette:
+ * gleicher Vertrag. Eine Seite ohne Vertrag (Börse, Import): der Token der
+ * anderen darf nicht sicher fremd sein. Verschiedene Ketten (Bridge): keiner
+ * sicher fremd.
+ */
+function vertragPasst(o, r) {
+    const ko = normKontrakt(o.kontrakt), kr = normKontrakt(r.kontrakt)
+    if (ko && kr && ketteNorm(o.kette) && ketteNorm(o.kette) === ketteNorm(r.kette)) return ko === kr
+    return !sicherFremd(o) && !sicherFremd(r)
+}
+
+/** Rang eines Kandidaten: ohne Vertrag oder kanonisch vor unbekanntem Vertrag. */
+const vertragsRang = (z) => (!z.kontrakt || istKanon(z.asset, z.kontrakt, z.kette) ? 0 : 1)
+
+/**
  * Paart Abgänge (`auszahlung`) mit Zugängen (`einzahlung`) an einem ANDEREN
  * Ort: gleiche txHash → sicher; sonst gleiches Asset, Eingang 0–6 h nach dem
  * Abgang (10 min Uhrenspiel), Eingang ≤ Abgang und ≥ 97 % davon (Netzgebühr).
  * Jede Zeile wird höchstens einmal gepaart; bei mehreren Kandidaten gewinnt
- * der zeitlich nächste.
+ * der mit belegtem Vertrag (keiner/kanonisch), dann der zeitlich nächste.
  *
- * @param {Array<{id, ort, art, asset, menge, zeit, txHash}>} zeilen
+ * Seit dem Audit FUN-PRT-001 zählt der Vertrag: Address-Poisoning schickt kurz
+ * nach einer echten Auszahlung einen falschen „USDT“ gleicher Menge — zeitlich
+ * näher als der echte Eingang. Ein sicher fremder Vertrag wird nie gepaart.
+ *
+ * @param {Array<{id, ort, art, asset, menge, zeit, txHash, kontrakt?, kette?}>} zeilen
  * @returns {Array<{ raus: id, rein: id, sicher: boolean }>}
  */
 export function ordneTransfers(zeilen) {
@@ -413,7 +436,7 @@ export function ordneTransfers(zeilen) {
     for (const r of rein) if (r.txHash) reinNachHash.set(`${r.txHash}|${r.asset}`, r)
     for (const o of raus) {
         const r = o.txHash && reinNachHash.get(`${o.txHash}|${o.asset}`)
-        if (r && r.ort !== o.ort && !vergeben.has(r.id)) {
+        if (r && r.ort !== o.ort && !vergeben.has(r.id) && vertragPasst(o, r)) {
             paare.push({ raus: o.id, rein: r.id, sicher: true })
             vergeben.add(r.id); vergeben.add(o.id)
         }
@@ -425,12 +448,13 @@ export function ordneTransfers(zeilen) {
         const ab = Math.abs(Number(o.menge))
         let best = null
         for (const r of rein) {
-            if (vergeben.has(r.id) || r.ort === o.ort || r.asset !== o.asset) continue
+            if (vergeben.has(r.id) || r.ort === o.ort || r.asset !== o.asset || !vertragPasst(o, r)) continue
             const dt = r.zeit - o.zeit
             if (dt < -10 * 60e3 || dt > 6 * STUNDE) continue
             const m = Number(r.menge)
             if (m > ab * 1.000001 || m < ab * 0.97) continue
-            if (!best || Math.abs(dt) < Math.abs(best.zeit - o.zeit)) best = r
+            const rang = vertragsRang(r) - (best ? vertragsRang(best) : 99)
+            if (!best || rang < 0 || (rang === 0 && Math.abs(dt) < Math.abs(best.zeit - o.zeit))) best = r
         }
         if (best) {
             paare.push({ raus: o.id, rein: best.id, sicher: false })

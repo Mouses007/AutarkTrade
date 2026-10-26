@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import { getKnex } from './database.js'
 import { loadDbConfig, saveDbConfig } from './db-config.js'
 import { setupEsp32AdminRoutes } from './esp32-api.js'
-import { encrypt, maskKey, decrypt, isEncrypted } from './crypto.js'
+import { encrypt, maskKey, isEncrypted } from './crypto.js'
 import { isLocalRequest, getLocalVersion, compareSemver } from './update-api.js'
 import { logError } from './logger.js'
 import { GEHEIME_SETTINGS, ZIEL_SETTINGS } from './geheimnisse.js'
@@ -99,25 +99,52 @@ export const VALID_SETTINGS_KEYS = [
 /*
  * Polygon-/Databento-Schlüssel in `settings.apis` (JSON-Liste {provider, key}).
  *
- * Bis F2 (A2-07) standen sie im Klartext in der DB und im Backup. Der Browser
- * braucht sie weiterhin (er ruft Databento selbst und reicht den Polygon-
- * Schlüssel an /api/polygon weiter) — deshalb liefert die Sitzung sie
- * entschlüsselt aus, gespeichert und gesichert werden sie verschlüsselt bzw.
- * redigiert.
+ * Bis F2 (A2-07) standen sie im Klartext in der DB und im Backup. Bis zum
+ * Audit vom 26.10.2026 (SEC-WEB-006) lieferte die Sitzung sie noch
+ * ENTSCHLÜSSELT aus, weil der Browser Databento selbst aufrief und den
+ * Polygon-Schlüssel an /api/polygon weiterreichte. Jetzt rufen beide
+ * Server-Routen (`polygon-api.js`, `databento-api.js`) mit dem gespeicherten
+ * Schlüssel ab, und der Browser bekommt — wie bei allen anderen Schlüsseln —
+ * nur `keySet`.
  */
 export function apisSchluesselVerschluesseln(liste) {
     if (!Array.isArray(liste)) return liste
     return liste.map((a) => (a && typeof a.key === 'string' && a.key && !isEncrypted(a.key)
         ? { ...a, key: encrypt(a.key) } : a))
 }
-function apisSchluesselEntschluesseln(liste) {
+
+/** Für die Sitzung: Schlüssel weg, nur ob einer gesetzt ist (rein). */
+export function apisOhneSchluessel(liste) {
     if (!Array.isArray(liste)) return liste
-    return liste.map((a) => (a && typeof a.key === 'string' && isEncrypted(a.key)
-        ? { ...a, key: decrypt(a.key) } : a))
+    return liste.map((a) => {
+        if (!a || typeof a !== 'object') return a
+        const { key, ...rest } = a
+        return { ...rest, keySet: !!key }
+    })
 }
+
+/**
+ * Eingehende Liste mit der gespeicherten zusammenführen (rein): ein Eintrag
+ * ohne (oder mit maskiertem) `key` behält den gespeicherten Schlüssel seines
+ * Anbieters. Sonst löschte jedes Zurückschreiben der ausgelieferten Liste —
+ * die ja keinen Schlüssel mehr trägt — die Schlüssel.
+ */
+export function apisZusammenfuehren(neu, alt) {
+    if (!Array.isArray(neu)) return neu
+    const gespeichert = Array.isArray(alt) ? alt : []
+    return neu.map((a) => {
+        if (!a || typeof a !== 'object') return a
+        const { keySet, ...rest } = a
+        const k = typeof rest.key === 'string' ? rest.key : ''
+        if (k && !k.includes('•')) return rest
+        const vorher = gespeichert.find((g) => g?.provider === rest.provider && g.key)
+        return vorher ? { ...rest, key: vorher.key } : { ...rest, key: '' }
+    })
+}
+
 function settingsAusliefern(row) {
     const parsed = parseJsonColumns('settings', row)
-    if (parsed && Array.isArray(parsed.apis)) parsed.apis = apisSchluesselEntschluesseln(parsed.apis)
+    if (parsed && Array.isArray(parsed.apis)) parsed.apis = apisOhneSchluessel(parsed.apis)
     return redactSettings(parsed)
 }
 
@@ -254,7 +281,12 @@ export function registriereApiRouten(app) {
         try {
             const body = { ...(req.body || {}) }
             if (typeof body.apis === 'string') { try { body.apis = JSON.parse(body.apis) } catch { /* bleibt Text */ } }
-            if (Array.isArray(body.apis)) body.apis = apisSchluesselVerschluesseln(body.apis)
+            if (Array.isArray(body.apis)) {
+                const alt = await knex('settings').where('id', 1).select('apis').first()
+                let altListe = []
+                try { altListe = JSON.parse(alt?.apis || '[]') } catch { altListe = [] }
+                body.apis = apisSchluesselVerschluesseln(apisZusammenfuehren(body.apis, altListe))
+            }
             const data = stringifyJsonColumns('settings', body)
             // Only allow known settings keys (whitelist), and NEVER accept sensitive
             // secrets here — those go through dedicated, encrypting endpoints.

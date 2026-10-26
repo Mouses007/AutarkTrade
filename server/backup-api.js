@@ -2,7 +2,7 @@ import fs from 'fs'
 import { getKnex } from './database.js'
 import { loadDbConfig, getConfigPath, saveDbConfig } from './db-config.js'
 import { SETTINGS_SENSITIVE_FIELDS, isAllowedDbHost } from './api-routes.js'
-import { BEHALTEN_BEIM_IMPORT, BOERSEN_GEHEIMNISSE } from './geheimnisse.js'
+import { BEHALTEN_BEIM_IMPORT, BOERSEN_GEHEIMNISSE, PORTFOLIO_GEHEIMNISSE } from './geheimnisse.js'
 import { loadAuthConfig } from './auth.js'
 
 /*
@@ -32,7 +32,7 @@ const PRESERVE_SETTINGS_FIELDS = [...new Set([...REDACTED_SETTINGS_KEYS, ...BEHA
  * Klartext. Die Tabellen stehen weiter im Export (redigiert, zeigt, welche
  * Börse eingerichtet war), beim Import bleiben die bestehenden Zeilen.
  */
-const IMPORT_UEBERSPRINGEN = new Set(Object.keys(BOERSEN_GEHEIMNISSE))
+const IMPORT_UEBERSPRINGEN = new Set([...Object.keys(BOERSEN_GEHEIMNISSE), ...PORTFOLIO_GEHEIMNISSE.map(([t]) => t)])
 
 /*
  * Hype-Radar-Einstellungen, die ein Ziel bestimmen: die Alarmkanäle (ntfy-
@@ -139,6 +139,28 @@ const BACKUP_TABLES = [
     // sind Handarbeit bzw. Lernverlauf — beides sonst nirgends rekonstruierbar.
     'quiz_karten',
     'quiz_fortschritt',
+    // ── Spot-Portfolio (Audit FUN-BAK-001, 26.10.2026) ────────────────────
+    /*
+     * Die Bewegungen sind DIE Wahrheit des Steuerteils — mit Einordnungen von
+     * Hand, Datei-Importen geschlossener Konten und eingefrorenen CHF-Werten.
+     * Dazu Wallets, Quellenstand („genutzt bis“), Steuerkurse (ESTV/Hand) und
+     * der Tagesverlauf (Beleg zum 31.12.). `portfolio_kurse` bleibt draussen:
+     * ein Kurs-Cache, jederzeit neu holbar.
+     *
+     * Verschlüsselt (wie die Börsenschlüssel, `PORTFOLIO_GEHEIMNISSE`):
+     * Wallet-Adressen/xpubs und die Zugangsschlüssel (Bitpanda, Etherscan).
+     * Sie gehen redigiert hinaus, und ein Import behält die bestehenden Zeilen
+     * — nach einem Restore in eine leere DB also Adressen neu eintragen; ihre
+     * Bewegungen (Quelle `a<id>`) stehen im Backup.
+     */
+    'portfolio_wallets',
+    'portfolio_adressen',
+    'portfolio_schluessel',
+    'portfolio_quellen',
+    'portfolio_bewegungen',
+    'portfolio_bestaende',
+    'portfolio_steuerkurse',
+    'portfolio_verlauf',
 ]
 
 /**
@@ -158,6 +180,15 @@ const BACKUP_TABLES = [
 // rollt die GANZE Rücksicherung zurück. Der Selbsttest `__selftest-backup.mjs`
 // hält beide Listen deckungsgleich.
 const DELETE_ORDER = [
+    // Portfolio: Bewegungen/Bestände (fachlich an Adressen) vor Adressen vor Wallets.
+    'portfolio_verlauf',
+    'portfolio_steuerkurse',
+    'portfolio_bestaende',
+    'portfolio_bewegungen',
+    'portfolio_quellen',
+    'portfolio_schluessel',
+    'portfolio_adressen',
+    'portfolio_wallets',
     // Fortschritt (verweist auf Karten) vor den Karten selbst.
     'quiz_fortschritt',
     'quiz_karten',
@@ -205,71 +236,90 @@ const DELETE_ORDER = [
     'settings',
 ]
 
+/**
+ * Der JSON-Export — für den Knopf (`GET /api/db-export`) und die tägliche
+ * Sicherung (`sicherung.js`) derselbe, damit beide dasselbe redigieren.
+ */
+export async function baueExport() {
+    const knex = getKnex()
+    const dbConfig = loadDbConfig()
+    const tables = {}
+
+    for (const table of BACKUP_TABLES) {
+        try {
+            const hasTable = await knex.schema.hasTable(table)
+            if (hasTable) {
+                tables[table] = await knex(table).select('*')
+            }
+        } catch (e) {
+            console.warn(`Backup: Tabelle "${table}" übersprungen:`, e.message)
+        }
+    }
+
+    // Sensitive Felder redaktieren
+    if (tables.settings && tables.settings.length > 0) {
+        for (const key of REDACTED_SETTINGS_KEYS) {
+            if (tables.settings[0][key]) tables.settings[0][key] = '[REDACTED]'
+        }
+        // Polygon-/Databento-Schlüssel in `apis` (A2-07)
+        try {
+            const apis = JSON.parse(tables.settings[0].apis || '[]')
+            if (Array.isArray(apis)) {
+                tables.settings[0].apis = JSON.stringify(apis.map((a) => (a?.key ? { ...a, key: '[REDACTED]' } : a)))
+            }
+        } catch { tables.settings[0].apis = '[]' }
+    }
+    for (const configTable of ['bitunix_config', 'bitget_config']) {
+        if (tables[configTable]) {
+            for (const row of tables[configTable]) {
+                if (row.apiKey) row.apiKey = '[REDACTED]'
+                if (row.secretKey) row.secretKey = '[REDACTED]'
+                if (row.passphrase) row.passphrase = '[REDACTED]'
+            }
+        }
+    }
+    redigierePortfolio(tables)
+
+    // db-config.json mitlesen (Datenbankverbindung)
+    let dbConfigFile = null
+    try {
+        const configPath = getConfigPath()
+        if (fs.existsSync(configPath)) {
+            dbConfigFile = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
+            // DB-Passwort redaktieren
+            if (dbConfigFile && dbConfigFile.password) {
+                dbConfigFile = { ...dbConfigFile, password: '[REDACTED]' }
+            }
+        }
+    } catch (e) {
+        // Kein db-config.json vorhanden (SQLite default)
+    }
+
+    return {
+        exportedAt: new Date().toISOString(),
+        version: '2.2.0',
+        dbType: dbConfig?.type || 'sqlite',
+        dbConfig: dbConfigFile,
+        tables
+    }
+}
+
+/** Verschlüsselte Portfolio-Spalten (Adressen, Zugangsschlüssel) im Export unkenntlich machen. */
+export function redigierePortfolio(tables) {
+    for (const [tabelle, spalten] of PORTFOLIO_GEHEIMNISSE) {
+        for (const row of tables[tabelle] || []) {
+            for (const s of spalten) if (row[s]) row[s] = '[REDACTED]'
+        }
+    }
+    return tables
+}
+
 export function setupBackupRoutes(app) {
 
     // ==================== EXPORT ====================
     app.get('/api/db-export', async (req, res) => {
         try {
-            const knex = getKnex()
-            const dbConfig = loadDbConfig()
-            const tables = {}
-
-            for (const table of BACKUP_TABLES) {
-                try {
-                    const hasTable = await knex.schema.hasTable(table)
-                    if (hasTable) {
-                        tables[table] = await knex(table).select('*')
-                    }
-                } catch (e) {
-                    console.warn(`Backup: Tabelle "${table}" übersprungen:`, e.message)
-                }
-            }
-
-            // Sensitive Felder redaktieren
-            if (tables.settings && tables.settings.length > 0) {
-                for (const key of REDACTED_SETTINGS_KEYS) {
-                    if (tables.settings[0][key]) tables.settings[0][key] = '[REDACTED]'
-                }
-                // Polygon-/Databento-Schlüssel in `apis` (A2-07)
-                try {
-                    const apis = JSON.parse(tables.settings[0].apis || '[]')
-                    if (Array.isArray(apis)) {
-                        tables.settings[0].apis = JSON.stringify(apis.map((a) => (a?.key ? { ...a, key: '[REDACTED]' } : a)))
-                    }
-                } catch { tables.settings[0].apis = '[]' }
-            }
-            for (const configTable of ['bitunix_config', 'bitget_config']) {
-                if (tables[configTable]) {
-                    for (const row of tables[configTable]) {
-                        if (row.apiKey) row.apiKey = '[REDACTED]'
-                        if (row.secretKey) row.secretKey = '[REDACTED]'
-                        if (row.passphrase) row.passphrase = '[REDACTED]'
-                    }
-                }
-            }
-
-            // db-config.json mitlesen (Datenbankverbindung)
-            let dbConfigFile = null
-            try {
-                const configPath = getConfigPath()
-                if (fs.existsSync(configPath)) {
-                    dbConfigFile = JSON.parse(fs.readFileSync(configPath, 'utf-8'))
-                    // DB-Passwort redaktieren
-                    if (dbConfigFile && dbConfigFile.password) {
-                        dbConfigFile = { ...dbConfigFile, password: '[REDACTED]' }
-                    }
-                }
-            } catch (e) {
-                // Kein db-config.json vorhanden (SQLite default)
-            }
-
-            res.json({
-                exportedAt: new Date().toISOString(),
-                version: '2.2.0',
-                dbType: dbConfig?.type || 'sqlite',
-                dbConfig: dbConfigFile,
-                tables
-            })
+            res.json(await baueExport())
         } catch (e) {
             console.error('Backup export error:', e)
             res.status(500).json({ error: e.message || 'Export fehlgeschlagen' })

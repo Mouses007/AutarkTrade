@@ -94,8 +94,11 @@ function verschluesseln(text, key) {
 // Seit F2 (Audit A2-28) aus `geheimnisse.js` abgeleitet: die Handliste hier
 // vergass Perplexity, Moonshot, Z.ai, MiniMax, CryptoQuant, das Mail-Passwort
 // und alle `hype*` — nach einer Secret-Rotation waren sie still unlesbar.
-const { ALLE_VERSCHLUESSELTEN } = await import('./geheimnisse.js')
-const FELDER = ALLE_VERSCHLUESSELTEN.map(([tabelle, spalten]) => [tabelle, 'id', spalten])
+// Seit dem Audit vom 26.10.2026 (SEC-SRV-015) mit Schlüsselspalte je Tabelle:
+// `portfolio_schluessel` hat keine `id`-Spalte, ihr Primärschlüssel ist `name`.
+// Dazu die Werte IN JSON-Spalten (`settings.apis`: Polygon, Databento).
+const { ALLE_VERSCHLUESSELTEN, JSON_GEHEIMNISSE } = await import('./geheimnisse.js')
+const FELDER = ALLE_VERSCHLUESSELTEN.map(([tabelle, spalten, idSpalte = 'id']) => [tabelle, idSpalte, spalten])
 
 // ── Datenbank ───────────────────────────────────────────────────────────
 function baueKnex() {
@@ -120,7 +123,13 @@ function baueKnex() {
 }
 
 const knex = baueKnex()
-const kurz = (s) => (s.length <= 8 ? '•'.repeat(s.length) : `${s.slice(0, 4)}…${s.slice(-3)}`)
+/*
+ * Nur die letzten 4 Zeichen (Audit SEC-SRV-017), wie die Masken der
+ * Oberfläche (`crypto.js` maske). Bis 26.10.2026 druckte das Skript je
+ * Klartextschlüssel die ersten 4 und letzten 3 Zeichen — sieben Zeichen
+ * eines Geheimnisses gehören nicht in ein Terminal-Protokoll.
+ */
+const kurz = (s) => (s.length <= 8 ? '•'.repeat(s.length) : `••••${s.slice(-4)}`)
 
 const befunde = []
 
@@ -130,6 +139,7 @@ for (const [tabelle, idSpalte, spalten] of FELDER) {
     try { zeilen = await knex(tabelle).select('*') } catch { continue }
 
     for (const zeile of zeilen) {
+        if (!(idSpalte in zeile)) continue
         for (const spalte of spalten) {
             const wert = zeile[spalte]
             if (!wert) continue
@@ -155,6 +165,36 @@ for (const [tabelle, idSpalte, spalten] of FELDER) {
     }
 }
 
+/** Zustand eines einzelnen verschlüsselten Werts. */
+function zustandVon(wert) {
+    if (!istVerschluesselt(wert)) return { zustand: 'klartext', klartext: String(wert) }
+    let klartext
+    if ((klartext = entschluesseln(wert, ZIEL)) !== null) return { zustand: 'ok', klartext }
+    if ((klartext = entschluesseln(wert, MASCHINE)) !== null) return { zustand: 'umzuschluesseln', klartext }
+    return { zustand: 'fremd', klartext: null }
+}
+
+// Werte in JSON-Spalten ([{…, key}]) — je Listeneintrag ein Befund mit `index`.
+for (const [tabelle, spalte, feld] of JSON_GEHEIMNISSE) {
+    if (!(await knex.schema.hasTable(tabelle))) continue
+    let zeilen
+    try { zeilen = await knex(tabelle).select('id', spalte) } catch { continue }
+    for (const zeile of zeilen) {
+        let liste
+        try { liste = JSON.parse(zeile[spalte] || '[]') } catch { continue }
+        if (!Array.isArray(liste)) continue
+        liste.forEach((eintrag, index) => {
+            const wert = eintrag?.[feld]
+            if (!wert || typeof wert !== 'string') return
+            const { zustand, klartext } = zustandVon(wert)
+            befunde.push({
+                tabelle, idSpalte: 'id', id: zeile.id, spalte, json: { feld, index }, zustand,
+                klartext, laenge: klartext?.length || 0,
+            })
+        })
+    }
+}
+
 // ── Bericht ─────────────────────────────────────────────────────────────
 const BESCHRIFTUNG = {
     ok: '✓ bereits richtig',
@@ -164,14 +204,15 @@ const BESCHRIFTUNG = {
 }
 
 console.log(`\nDatenbank: ${knex.client.config.client}`)
-console.log(`Ziel-Schlüssel: AT_SECRET (${zielSecret.slice(0, 6)}…)\n`)
+// Kein Anfang des Secrets im Protokoll (SEC-SRV-017) — nur die Länge.
+console.log(`Ziel-Schlüssel: AT_SECRET (${zielSecret.length} Zeichen)\n`)
 
 for (const zustand of ['umzuschluesseln', 'fremd', 'klartext', 'ok']) {
     const treffer = befunde.filter((b) => b.zustand === zustand)
     if (!treffer.length) continue
     console.log(`${BESCHRIFTUNG[zustand]} (${treffer.length})`)
     for (const b of treffer) {
-        const wo = `${b.tabelle}.${b.spalte}`.padEnd(34)
+        const wo = `${b.tabelle}.${b.spalte}${b.json ? `[${b.json.index}].${b.json.feld}` : ''}`.padEnd(34)
         console.log(`  ${wo} ${b.laenge ? `${b.laenge} Zeichen (${kurz(b.klartext)})` : ''}`)
     }
     console.log('')
@@ -199,15 +240,24 @@ fs.writeFileSync(sicherung, JSON.stringify(
         idSpalte,
         zeilen: (await knex.schema.hasTable(t)) ? await knex(t).select('*') : [],
         spalten,
-    }))), null, 2))
+    }))), null, 2))   // settings.apis steckt mit `select('*')` schon in der settings-Zeile
 fs.chmodSync(sicherung, 0o600)
 console.log(`Sicherung: ${sicherung} (enthält die alten Werte — nach dem Prüfen löschen)\n`)
 
 let geschrieben = 0
 for (const b of zuTun) {
-    await knex(b.tabelle).where(b.idSpalte, b.id)
-        .update({ [b.spalte]: verschluesseln(b.klartext, ZIEL) })
-    console.log(`  umgeschlüsselt: ${b.tabelle}.${b.spalte}`)
+    if (b.json) {
+        // JSON-Spalte frisch lesen, nur den einen Eintrag ersetzen.
+        const zeile = await knex(b.tabelle).where(b.idSpalte, b.id).first()
+        const liste = JSON.parse(zeile[b.spalte] || '[]')
+        liste[b.json.index] = { ...liste[b.json.index], [b.json.feld]: verschluesseln(b.klartext, ZIEL) }
+        await knex(b.tabelle).where(b.idSpalte, b.id).update({ [b.spalte]: JSON.stringify(liste) })
+        console.log(`  umgeschlüsselt: ${b.tabelle}.${b.spalte}[${b.json.index}].${b.json.feld}`)
+    } else {
+        await knex(b.tabelle).where(b.idSpalte, b.id)
+            .update({ [b.spalte]: verschluesseln(b.klartext, ZIEL) })
+        console.log(`  umgeschlüsselt: ${b.tabelle}.${b.spalte}`)
+    }
     geschrieben++
 }
 
@@ -216,7 +266,8 @@ console.log('\nGegenprobe:')
 let fehler = 0
 for (const b of zuTun) {
     const zeile = await knex(b.tabelle).where(b.idSpalte, b.id).first()
-    const jetzt = entschluesseln(zeile[b.spalte], ZIEL)
+    const roh = b.json ? JSON.parse(zeile[b.spalte] || '[]')[b.json.index]?.[b.json.feld] : zeile[b.spalte]
+    const jetzt = entschluesseln(roh, ZIEL)
     const gleich = jetzt === b.klartext
     if (!gleich) fehler++
     console.log(`  ${gleich ? '✓' : '✗'} ${b.tabelle}.${b.spalte}${gleich ? '' : ' — WEICHT AB, Sicherung zurückspielen!'}`)

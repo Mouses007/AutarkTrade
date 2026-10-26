@@ -259,7 +259,8 @@ export async function laufeNewsAbruf({ manuell = false } = {}) {
     async function speichereEintrag(zeile) {
         // Eine Stelle für alle Quellen (RSS, Telegram, X, Truth, YouTube):
         // Liste, Belege und Videolinks hängen alle an diesen beiden Feldern.
-        zeile = { ...zeile, url: sichereUrl(zeile.url), bild: sichereUrl(zeile.bild) }
+        // Bilder nur über https (FUN-WEB-001, siehe `nurHttpsBild`).
+        zeile = { ...zeile, url: sichereUrl(zeile.url), bild: nurHttpsBild(sichereUrl(zeile.bild)) }
         const da = await knex('news_items')
             .where({ sourceId: zeile.sourceId, extId: zeile.extId }).select('id').first()
         if (da) {
@@ -967,6 +968,31 @@ trägt — als eigenen, klar benannten Punkt am ANFANG des passenden Kapitels.
 }
 
 /**
+ * Vorschaubild nur, wenn es über https kommt — sonst leer.
+ *
+ * Die Content-Security-Policy (`index.mjs`, `img-src 'self' data: blob:
+ * https:`) lässt kein http-Bild zu. Ein Vorschaubild aus einem reinen
+ * http-Feed blockte der Browser bis zum Gesamtaudit vom 26.10.2026
+ * (FUN-WEB-001) stillschweigend: die Karte zeigte ein leeres Bildfeld, und
+ * niemand sah, warum. Die CSP aufzuweichen hiesse, der Seite jede
+ * unverschlüsselte Quelle zu öffnen; ein Bilder-Proxy wäre ein zweiter
+ * Abrufweg für Fremdinhalte. Also wird ein http-Bild gar nicht erst
+ * ausgeliefert — dann zeigt die Karte keines, statt eines kaputten.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function nurHttpsBild(url) {
+    const text = String(url || '').trim()
+    if (!text) return ''
+    try {
+        return new URL(text).protocol === 'https:' ? text : ''
+    } catch {
+        return ''
+    }
+}
+
+/**
  * Was heute schon berichtet wurde — als Prompt-Block für die Zwischenmeldung.
  *
  * Die Aktualisierung schreibt den Tagesbericht NICHT fort, sie meldet, was
@@ -997,8 +1023,7 @@ export function kompaktVorbericht(zeile, offset = 0) {
     const nrVon = new Map(alteBelege.map((b, i) => [b?.url, i + 1 + offset]))
 
     const zeit = new Date(Number(zeile.erstelltAm) || Date.now()).toISOString().slice(0, 16)
-    const zeilen = [`BEREITS BERICHTET (Tagesbericht, Stand ${zeit} UTC) — nicht wiederholen:`,
-        `Überschrift: ${zeile.ueberschrift || ''}`,
+    const zeilen = [`Überschrift: ${zeile.ueberschrift || ''}`,
         `Lage: ${zeile.lage || ''}`]
 
     const punkt = (p) => {
@@ -1017,9 +1042,18 @@ export function kompaktVorbericht(zeile, offset = 0) {
     } else {
         for (const p of lies(zeile.punkte, '[]')) zeilen.push(punkt(p))
     }
-    // Deckel gegen einen Bericht, der sich selbst aufbläht: der Vorbericht ist
-    // Eingabe, die bei JEDER Aktualisierung mitbezahlt wird.
-    return zeilen.join('\n').slice(0, 24000)
+    /*
+     * Als Zitatblock (Gesamtaudit 26.10.2026, SEC-SRV-012): der Vorbericht
+     * wurde selbst aus Fremdtext geschrieben — was ein Beitrag dem Modell
+     * heute Morgen untergeschoben hat, stünde sonst ungekennzeichnet zwischen
+     * den Anweisungen der Zwischenmeldung. Die Überschrift bleibt ausserhalb:
+     * sie stammt von uns und sagt, was das Modell gleich liest.
+     *
+     * Deckel gegen einen Bericht, der sich selbst aufbläht: der Vorbericht ist
+     * Eingabe, die bei JEDER Aktualisierung mitbezahlt wird.
+     */
+    return zitatBlock(`BEREITS BERICHTET (Tagesbericht, Stand ${zeit} UTC) — nicht wiederholen`,
+        zeilen.join('\n').slice(0, 24000))
 }
 
 /**
@@ -2694,7 +2728,10 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
                             // (stopReason=MAX_TOKENS bei 131 Token).
                             visionCfg.maxTokens = 1200 + DENKRESERVE
                             if (visionCfg.apiKey) {
-                                const p = await pruefeChartBilder(r.bilder, visionCfg)
+                                // Nur https: ein http-Bild zeigt der Browser
+                                // ohnehin nicht (CSP, FUN-WEB-001) — es zu
+                                // prüfen kostete Tokens für nichts.
+                                const p = await pruefeChartBilder(r.bilder.filter((b) => nurHttpsBild(b?.url)), visionCfg)
                                 gepruefteBilder = p.bilder
                                 rechercheKostenUsd += p.kostenUsd
                                 rechercheTokens += p.tokens
@@ -2891,7 +2928,8 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
             // Das Vorschaubild des Belegs — daraus nimmt die Karte ihr
             // Bild. Geteilte Charts und Börsen-Screenshots kommen so
             // in den Bericht, ohne dass etwas erzeugt werden müsste.
-            bild: b.bild || '',
+            // Nur https — ein http-Bild blockt die CSP (FUN-WEB-001).
+            bild: nurHttpsBild(b.bild),
         })),
         ...rechercheZitate,
         // Die Belege des bisherigen Berichts, in unveränderter Reihenfolge —
@@ -3344,7 +3382,8 @@ export function setupNewsRoutes(app) {
                     // Auszug für die Vorschau. 400 Zeichen reichen für drei
                     // Zeilen; alles Weitere steht beim Original.
                     auszug: (z.inhalt || '').slice(0, 400),
-                    bild: z.bild || '',
+                    // Gespeicherte http-Bilder aus der Zeit davor (FUN-WEB-001)
+                    bild: nurHttpsBild(z.bild),
                     status: z.status,
                     quelle: nachId.get(z.sourceId)?.name || '',
                     art: nachId.get(z.sourceId)?.art || 'rss',

@@ -626,7 +626,13 @@ function quelleTrifft(genannt, name) {
  * Zusammenfassung von Belegen, nicht eine eigene Bildstrecke.
  */
 function punktBild(p) {
-    return (p?.belege || []).find(b => b.bild)?.bild || ''
+    // Nur https: ein http-Bild blockt die CSP still (FUN-WEB-001) — gespeicherte
+    // Berichte aus der Zeit davor tragen solche noch.
+    return (p?.belege || []).find(b => istHttps(b.bild))?.bild || ''
+}
+
+function istHttps(url) {
+    return /^https:\/\//i.test(String(url || ''))
 }
 
 /**
@@ -643,7 +649,7 @@ function punktBild(p) {
  */
 function weitereBilder(k) {
     const verwendet = new Set((k?.punkte || []).map(p => punktBild(p)).filter(Boolean))
-    return (k?.bilder || []).filter(b => b.url && !verwendet.has(b.url))
+    return (k?.bilder || []).filter(b => istHttps(b.url) && !verwendet.has(b.url))
 }
 
 const belegeZumPunkt = computed(() => {
@@ -1071,7 +1077,7 @@ function schliesseBildBeiEsc(e) {
  * nur nebeneinander in der Kapitelansicht.
  */
 function oeffneBildZuPunkt(p) {
-    const beleg = (p?.belege || []).find(b => b.bild)
+    const beleg = (p?.belege || []).find(b => istHttps(b.bild))
     if (!beleg) return
     grossesBild.value = { url: beleg.bild, quelle: beleg.quelle || '', titel: p.titel, text: p.text }
 }

@@ -50,3 +50,22 @@ scripts/.v2-container.env
 
 # Secret nativer Installationen (server/crypto.js) — nie ins Image
 .at-secret
+
+# Audit SEC-OPS-011: was ein lokaler `docker build` sonst in die Builder-Stufe
+# (und damit in den Build-Cache) mitnimmt. Die NAS-Skripte und ihre .env
+# (kann den ESP32-Schlüssel enthalten), gebaute APKs samt Gradle-Ständen und
+# local.properties, PlatformIO-Bauordner, Prüf- und Werkzeugordner.
+**/.env
+scripts/umzug/
+scripts/nas-deploy.sh
+scripts/v2-container.sh
+*.apk
+**/local.properties
+android-widget/.gradle/
+android-widget/.kotlin/
+android-widget/build/
+android-widget/app/build/
+ESP32-2432S028/.pio/
+ESP32-Waveshare/.pio/
+cursor/
+audit-tests/

@@ -96,7 +96,13 @@ console.log('\nA2-07: Geheimnis-Spalten in der Redaktionsliste\n')
     const roh = await knex('settings').where('id', 1).first()
     check('apis-Schlüssel liegt verschlüsselt in der DB', !String(roh.apis).includes('POLY-KLAR') && /"key":"[0-9a-f]{32}:/.test(roh.apis), roh.apis)
     const g = await api('GET', '/api/db/settings')
-    check('… und kommt in der Sitzung entschlüsselt zurück (der Browser braucht ihn)', g.json.apis?.[0]?.key === 'POLY-KLAR')
+    // Bis zum Audit vom 26.10.2026 (SEC-WEB-006) kam er hier entschlüsselt
+    // zurück; jetzt rufen Server-Routen mit ihm ab, die Sitzung sieht nur keySet.
+    check('… und kommt in der Sitzung NICHT zurück, nur keySet', g.json.apis?.[0]?.keySet === true && !('key' in (g.json.apis?.[0] || {}))
+        && !JSON.stringify(g.json).includes('POLY-KLAR'), JSON.stringify(g.json.apis))
+    await api('PUT', '/api/db/settings', { apis: g.json.apis })
+    const zurueck = await knex('settings').where('id', 1).first()
+    check('Zurückschreiben der ausgelieferten Liste behält den Schlüssel', decrypt(JSON.parse(zurueck.apis)[0].key) === 'POLY-KLAR', zurueck.apis)
     const exp = await api('GET', '/api/db-export')
     const expText = JSON.stringify(exp.json)
     check('Backup-Export enthält weder apis-Schlüssel noch Geheimtexte',

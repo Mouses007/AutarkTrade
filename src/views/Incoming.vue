@@ -56,6 +56,7 @@ useVerlassenSchutz(() => {
 // ===== COMPOUND/FILLS TRACKING =====
 import axios from 'axios'
 import { holeTpSlOrders, aggregiereTpSl, istBotPosition } from '../utils/positionTpsl.js'
+import { vereinigeVerlauf, bereinigeVerlauf } from '../utils/tpslVerlauf.js'
 import { erzeugeChartBild, chartZeiteinheit, strategieAusTags } from '../utils/chart/tradeBild.js'
 const positionFills = ref({}) // Map: positionId → { loading, trades[], error }
 
@@ -286,73 +287,49 @@ function toggleFillGroup(key) {
 const positionTpSl = ref({}) // Map: positionId → { loading, orders[], error }
 const tpSlHistory = ref({}) // Map: positionId → [{ time, type, oldVal, newVal }]
 
-// Load history from localStorage
+/*
+ * Verlauf laden: die DB (`incoming_positions.tpslHistory`) ist die Quelle
+ * (Audit FUN-TRD-002). Bis Audit B las diese Seite die DB nur bei LEEREM
+ * localStorage — ein Browser mit altem Stand überschrieb dann den Verlauf eines
+ * anderen Geräts. Jetzt wird der DB-Stand mit dem vereinigt, was dieser Tab
+ * schon im Speicher hat (`vereinigeVerlauf`), jedes Mal wenn die Positionsliste
+ * einen neuen DB-Stand bringt. Der localStorage wird nicht mehr geschrieben;
+ * ein Altbestand `tpsl_history_<id>` wird einmal übernommen, in die DB
+ * geschrieben und dann gelöscht.
+ */
+const dbStandGesehen = new Map() // positionId → zuletzt vereinigtes DB-Array (Referenz)
 function loadTpSlHistory(positionId) {
-    if (tpSlHistory.value[positionId]) return tpSlHistory.value[positionId]
-    try {
-        // 1. Try localStorage (fast, same-origin cache)
-        const stored = localStorage.getItem(`tpsl_history_${positionId}`)
-        let history = stored ? JSON.parse(stored) : []
+    const pos = incomingPositions.find(p => p.positionId === positionId)
+    const db = Array.isArray(pos?.tpslHistory) ? pos.tpslHistory : null
+    const imSpeicher = tpSlHistory.value[positionId]
+    if (imSpeicher && dbStandGesehen.get(positionId) === db) return imSpeicher
+    dbStandGesehen.set(positionId, db)
 
-        // 2. DB fallback — if localStorage empty, load from incoming_positions.tpslHistory
-        if (history.length === 0) {
-            const pos = incomingPositions.find(p => p.positionId === positionId)
-            const dbHistory = pos?.tpslHistory
-            if (Array.isArray(dbHistory) && dbHistory.length > 0) {
-                history = dbHistory
-                // Sync back to localStorage for fast access
-                localStorage.setItem(`tpsl_history_${positionId}`, JSON.stringify(history))
-            }
-        }
+    const altSchluessel = `tpsl_history_${positionId}`
+    let alt = []
+    try { alt = JSON.parse(localStorage.getItem(altSchluessel) || '[]') || [] } catch { alt = [] }
 
-        // Deduplicate: per type, skip entries with same action+oldVal+newVal as previous of same type
-        const norm = v => (v === undefined || v === null || v === '' || v === 0) ? null : String(v)
-        if (history.length > 1) {
-            const clean = []
-            const lastByType = {}
-            for (const curr of history) {
-                const key = curr.type
-                const prev = lastByType[key]
-                if (prev && curr.action === prev.action &&
-                    norm(curr.oldVal) === norm(prev.oldVal) &&
-                    norm(curr.newVal) === norm(prev.newVal)) {
-                    continue
-                }
-                clean.push(curr)
-                lastByType[key] = { action: curr.action, oldVal: curr.oldVal, newVal: curr.newVal }
-            }
-            if (clean.length !== history.length) {
-                history = clean
-                localStorage.setItem(`tpsl_history_${positionId}`, JSON.stringify(history))
-            }
-        }
-        tpSlHistory.value[positionId] = history
-        return history
-    } catch { return [] }
+    const history = vereinigeVerlauf(db || [], imSpeicher || [], alt)
+    tpSlHistory.value[positionId] = history
+    if (alt.length) {
+        // Altbestand: nicht während des Zeichnens schreiben, sondern gleich danach
+        setTimeout(() => saveTpSlHistory(positionId, tpSlHistory.value[positionId] || history, altSchluessel), 0)
+    }
+    return history
 }
 
-function saveTpSlHistory(positionId, history) {
-    // Always dedup before saving
-    const norm = v => (v === undefined || v === null || v === '' || v === 0) ? null : String(v)
-    const clean = []
-    const lastByType = {}
-    for (const curr of history) {
-        const prev = lastByType[curr.type]
-        if (prev && curr.action === prev.action &&
-            norm(curr.oldVal) === norm(prev.oldVal) &&
-            norm(curr.newVal) === norm(prev.newVal)) {
-            continue
-        }
-        clean.push(curr)
-        lastByType[curr.type] = { action: curr.action, oldVal: curr.oldVal, newVal: curr.newVal }
-    }
+function saveTpSlHistory(positionId, history, altSchluessel = null) {
+    const clean = bereinigeVerlauf(history)
     tpSlHistory.value[positionId] = clean
-    localStorage.setItem(`tpsl_history_${positionId}`, JSON.stringify(clean))
 
-    // Persist to DB (non-blocking) — ensures history survives browser/port switches
+    // In die DB — die einzige dauerhafte Quelle, übersteht Browser-/Portwechsel
     const pos = incomingPositions.find(p => p.positionId === positionId)
     if (pos?.objectId) {
         dbUpdate('incoming_positions', pos.objectId, { tpslHistory: clean })
+            .then(() => {
+                // Altbestand erst löschen, wenn er sicher in der DB steht
+                if (altSchluessel) { try { localStorage.removeItem(altSchluessel) } catch { /* egal */ } }
+            })
             .catch(err => console.warn('tpslHistory DB save failed:', err.message))
     }
 }

@@ -43,7 +43,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=AutarkTrade
             org.opencontainers.image.description=AutarkTrade – Trading-Journal und Analyse-Arbeitsplatz für Krypto-Futures
-            org.opencontainers.image.licenses=LicenseRef-AutarkTrade-proprietary
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3

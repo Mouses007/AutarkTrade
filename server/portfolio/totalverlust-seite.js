@@ -33,7 +33,7 @@ export async function totalverlustUebersicht() {
     const tot = await totalverluste()
     if (!tot.size) return { zeilen: [], statistik: totalverlustStatistik([], 0) }
     const istSpam = await spamPruefer()
-    const einstand = await einstandHeute(istSpam)
+    const { einstand } = await einstandHeute(istSpam)
     const bestand = new Map()
     for (const b of await bestaendeOhneDoppelte()) {
         const a = String(b.asset).toUpperCase()

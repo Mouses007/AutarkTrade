@@ -337,6 +337,59 @@ async function etherscan(key, chainId, params) {
     throw new Error('Etherscan: Ratenlimit')
 }
 
+/*
+ * Blättern statt abschneiden (Audit FUN-PRT-002, 26.10.2026). Bis dahin fragte
+ * jeder Abruf `startblock 0 … endblock 99999999`, `page 1`, `offset 10000`:
+ * Arbitrum ist seit 2023 über Block 100 Mio., Optimism beginnt nach Bedrock bei
+ * 105 Mio. — dort fehlte alles Neuere, und spamreiche Wallets verloren nach
+ * 10 000 Zeilen den Rest. `vollstaendig` blieb trotzdem true.
+ *
+ * Jetzt ohne feste Obergrenze (`endblock` sehr hoch) und seitenweise nach Block:
+ * ist eine Seite voll, beginnt die nächste beim LETZTEN Block der Seite (nicht
+ * +1 — eine Seite kann mitten in einem Block enden, dessen Rest sonst fehlte);
+ * die Zeilen dieses Blocks fallen aus der vollen Seite weg und kommen mit der
+ * nächsten vollständig. Doppelte an der Grenze werden zusätzlich entfernt.
+ * Nach `ETHERSCAN_MAX_SEITEN` Seiten ist Schluss: `abgeschnitten: true`.
+ */
+export const ETHERSCAN_SEITE = 10000
+export const ETHERSCAN_MAX_SEITEN = 10
+const ENDBLOCK = 9999999999
+
+/** Eindeutiger Schlüssel einer Etherscan-Zeile (eine Transaktion trägt mehrere Token-/interne Zeilen). */
+const zeilenSchluessel = (z) => [z.hash, z.logIndex ?? '', z.traceId ?? '', z.contractAddress ?? '', z.from, z.to, z.value].join('|')
+
+/**
+ * Alle Zeilen einer Etherscan-Liste (txlist/tokentx/txlistinternal), aufsteigend.
+ * @returns {Promise<{ zeilen: Array, abgeschnitten: boolean, seiten: number }>}
+ */
+export async function etherscanAlle(key, chainId, params, { seite = ETHERSCAN_SEITE, maxSeiten = ETHERSCAN_MAX_SEITEN } = {}) {
+    const zeilen = []
+    const gesehen = new Set()
+    let start = 0
+    for (let n = 1; n <= maxSeiten; n++) {
+        const teil = await etherscan(key, chainId, { ...params, startblock: start, endblock: ENDBLOCK, sort: 'asc', page: 1, offset: seite })
+        const liste = Array.isArray(teil) ? teil : []
+        const voll = liste.length >= seite
+        let nimm = liste
+        let letzter = null
+        if (voll) {
+            letzter = Number(liste[liste.length - 1].blockNumber)
+            nimm = liste.filter((z) => Number(z.blockNumber) < letzter)
+            // Eine ganze Seite in EINEM Block: weiterblättern geht nicht.
+            if (!nimm.length) return { zeilen: [...zeilen, ...liste.filter((z) => !gesehen.has(zeilenSchluessel(z)))], abgeschnitten: true, seiten: n }
+        }
+        for (const z of nimm) {
+            const s = zeilenSchluessel(z)
+            if (gesehen.has(s)) continue
+            gesehen.add(s)
+            zeilen.push(z)
+        }
+        if (!voll) return { zeilen, abgeschnitten: false, seiten: n }
+        start = letzter
+    }
+    return { zeilen, abgeschnitten: true, seiten: maxSeiten }
+}
+
 async function rpcSaldo(chainId, adresse) {
     const r = await fetch(RPC[chainId], {
         method: 'POST', headers: { 'content-type': 'application/json' },
@@ -356,7 +409,7 @@ async function rpcSaldo(chainId, adresse) {
  */
 export async function holeEvm(adresse, netze) {
     const key = await schluessel('etherscan')
-    const bestand = [], bewegungen = [], hinweise = [], nurNativ = []
+    const bestand = [], bewegungen = [], hinweise = [], nurNativ = [], abgeschnitten = []
     let vollstaendig = true
     for (const id of netze) {
         const netz = EVM_NETZE.find((n) => n.id === Number(id))
@@ -370,11 +423,21 @@ export async function holeEvm(adresse, netze) {
         if (key) {
             try {
                 const saldo = Number(await etherscan(key, netz.id, { module: 'account', action: 'balance', address: adresse, tag: 'latest' })) / 1e18
-                const gemeinsam = { module: 'account', address: adresse, startblock: 0, endblock: 99999999, sort: 'asc', page: 1, offset: 10000 }
-                const txlist = await etherscan(key, netz.id, { ...gemeinsam, action: 'txlist' })
-                const tokentx = await etherscan(key, netz.id, { ...gemeinsam, action: 'tokentx' })
-                const intern = await etherscan(key, netz.id, { ...gemeinsam, action: 'txlistinternal' })
-                const b = ausEvm({ adresse, chainId: netz.id, nativ: netz.nativ, txlist, tokentx, intern })
+                const gemeinsam = { module: 'account', address: adresse }
+                const listen = {}
+                let zuViel = false
+                for (const action of ['txlist', 'tokentx', 'txlistinternal']) {
+                    const r = await etherscanAlle(key, netz.id, { ...gemeinsam, action })
+                    listen[action] = r.zeilen
+                    zuViel ||= r.abgeschnitten
+                }
+                if (zuViel) {
+                    // Historie unvollständig: Bestand aus ihr ist nicht belegt — sagen, nicht still rechnen.
+                    vollstaendig = false
+                    abgeschnitten.push(netz.name)
+                    hinweise.push(`${netz.name}: mehr als ${ETHERSCAN_MAX_SEITEN * ETHERSCAN_SEITE} Zeilen — Historie abgeschnitten, Token-Bestand unvollständig`)
+                }
+                const b = ausEvm({ adresse, chainId: netz.id, nativ: netz.nativ, txlist: listen.txlist, tokentx: listen.tokentx, intern: listen.txlistinternal })
                 bewegungen.push(...b)
                 if (saldo > 0) bestand.push({ ort, asset: netz.nativ, menge: saldo })
                 // Token-Bestand aus der Historie (der Gratis-Tarif hat keinen Token-Saldo-Abruf).
@@ -402,7 +465,7 @@ export async function holeEvm(adresse, netze) {
         }
     }
     if (nurNativ.length) hinweise.unshift(`Ohne Etherscan-Schlüssel nur die Hauptwährung (${nurNativ.join(', ')}) — keine Token, keine Historie.`)
-    return { bestand, bewegungen, vollstaendig, hinweis: hinweise.join(' · ') || null }
+    return { bestand, bewegungen, vollstaendig, hinweis: hinweise.join(' · ') || null, stand: abgeschnitten.length ? { abgeschnitten } : undefined }
 }
 
 // ── VeChain (nur Bestand) ────────────────────────────────────────────────

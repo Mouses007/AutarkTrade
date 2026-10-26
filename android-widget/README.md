@@ -17,19 +17,33 @@ app's optional password gate.
 2. An **ESP32 API key**: in AutarkTrade open **Einstellungen → Externe Anzeigen →
    „Key generieren"** and copy the key (shown once).
 3. AutarkTrade must be reachable from the phone. Your phone's VPN is always on when off
-   Wi-Fi, so `http://<server-ip>:8080` is reachable everywhere — use that host/port.
+   Wi-Fi, so the server's LAN IP is reachable everywhere — the app talks HTTPS to port
+   `8443` and uses port `8080` only to fetch the server certificate when pairing.
 
 ## Build & install
 
-1. Open the `android-widget/` folder in Android Studio (`File → Open`). On first open it
-   will sync Gradle and, if asked, set up the Gradle wrapper (Gradle 8.9) automatically.
-2. Connect your phone with USB debugging enabled, or build an APK:
-   - **APK:** `Build → Build Bundle(s)/APK(s) → Build APK(s)`, then copy
-     `app/build/outputs/apk/debug/autarktrade-widget-<version>-debug.apk` to the phone and open it
-     (allow „install from unknown sources").
-   - **Direct run:** select your device and press ▶.
-3. From a terminal you can also run (after Android Studio created the wrapper):
-   `./gradlew assembleDebug`.
+**Since 4.2.0-28 the APK is a release build signed with our own key** (before: debug
+signature). Android refuses an update whose signature differs, so **once** uninstall the
+old widget (long-press the app → *Uninstall*), install the new APK and set it up again.
+The package name `com.autarktrade.widget` stays the same.
+
+1. Headless build: `./_build-apk.sh` (JDK 17, SDK and Gradle 8.9 under `~/android-build` /
+   `~/Android/Sdk`, downloaded on first run). It builds `assembleRelease`, copies
+   `autarktrade-widget-<version>.apk` next to the project and prints the signing
+   certificate (`apksigner verify --print-certs`).
+2. **Signing key** — never in the repo: `~/.config/autarktrade/android-release.jks`
+   (PKCS12, alias `autarktrade`, RSA 4096, valid 30 years) and its passwords in
+   `~/.config/autarktrade/android-release.properties` (`storeFile`, `storePassword`,
+   `keyAlias`, `keyPassword`; folder 0700, files 0600). Another location:
+   `AT_ANDROID_SIGNIERUNG=/path/to/file.properties ./_build-apk.sh`. Without the file the
+   release build stops with a clear message — it never falls back to the debug key.
+   **Back up both files** (offline, e.g. password manager + USB stick): without them no
+   further update can be installed over the existing app, only uninstall + reinstall.
+   Certificate SHA-256 of the current key:
+   `CB:6A:31:63:06:BC:96:03:09:54:AA:39:86:AC:BD:48:BC:12:CB:EA:D0:1C:81:00:1E:D3:7D:73:C1:18:DF:65`.
+3. Copy the APK to the phone and open it (allow „install from unknown sources").
+4. Android Studio still works for development (`File → Open`, ▶ / `assembleDebug`, debug
+   key); a debug build cannot update a release install either.
 
 ## Add & configure the widget
 
@@ -37,17 +51,28 @@ app's optional password gate.
 2. The config screen opens: enter **Host** (e.g. `192.168.178.100`), **Port** (`8080`),
    the **ESP32 key**, and a **time range**. Tap **Verbindung testen** to verify, then
    **Speichern**.
-3. Tap a coin to open its chart in AutarkTrade; tap an exchange header to show that exchange's
+3. **HTTPS pairing** („Verschlüsselt (HTTPS, Port 8443)", on by default for new setups):
+   on the first test/save the app fetches the server's own AutarkTrade CA over
+   `http://host:8080/api/esp32/ca` (no key needed), computes its SHA-256 fingerprint itself
+   and shows the first and last groups. Compare them with **Einstellungen › Allgemein › HTTPS** in
+   the web app; only when you confirm is the CA stored (encrypted with the KeyStore key,
+   like the device key). From then on **every** call (`/api/esp32/display`, `/alarme`,
+   `/push`) goes to `https://host:8443` and trusts **only** that CA — not the system CAs,
+   not user-installed ones; host name / IP must be in the server certificate. There is
+   no fallback to http while HTTPS is on: an error says „Zertifikat passt nicht — neu
+   koppeln" (server CA changed → tap **Neu koppeln**), „Zertifikat gilt nicht für diese
+   Adresse" (host not in the certificate) or „HTTPS-Port nicht erreichbar". A different
+   host asks for pairing again. Switching HTTPS off is possible (plain http as before,
+   with a warning) — cleartext therefore stays allowed in `network_security_config.xml`.
+4. Tap a coin to open its chart in AutarkTrade; tap an exchange header to show that exchange's
    KPIs at the top. Links go to the **installed web app** if you enter its address under
-   „Adresse der installierten Web-App" (e.g. `https://192.168.178.100:8443`): install AutarkTrade
-   in Chrome over HTTPS with „Installieren" (a WebAPK — over http it is only a shortcut, which
-   cannot receive links). The status line below the field says whether such an app was found;
-   without one, links open in the browser. Alarm notifications use the same address. Links go to the **installed web app** if you enter its address under
-   „Adresse der installierten Web-App" (e.g. `https://192.168.178.100:8443`): install AutarkTrade
-   in Chrome over HTTPS with „Installieren" (a WebAPK — over http it is only a shortcut, which
-   cannot receive links). The status line below the field says whether such an app was found;
-   without one, links open in the browser. Alarm notifications use the same address.
-4. The widget refreshes automatically (~every 15 min, Android's minimum for background
+   „Adresse der installierten Web-App" (e.g. `https://192.168.178.100:8443`); left empty they
+   go to `https://host:8443` with HTTPS on (`http://host:port` with it off). Install
+   AutarkTrade in Chrome over HTTPS with „Installieren" (a WebAPK — over http it is only a
+   shortcut, which cannot receive links). The status line below the field says whether such
+   an app was found; without one, links open in the browser. Alarm notifications use the
+   same address.
+5. The widget refreshes automatically (~every 15 min, Android's minimum for background
    widget updates) and on demand via the **↻ button**. Tap the **title** to reopen config.
 
 ## Chart alarms as notifications
@@ -55,7 +80,7 @@ app's optional password gate.
 Open the app from the launcher (or tap the widget title), switch on **Chart-Alarme**, pick
 the polling interval (1–15 min, default 2) and which alarm kinds you want, then **Speichern**.
 Android asks once for permission to post notifications. „Testmeldung senden" shows what an
-alarm looks like; tapping a notification opens `http://<host>:<port>/chart?symbol=…` in the
+alarm looks like; tapping a notification opens `https://<host>:8443/chart?symbol=…` (or the web-app address) in the
 browser. Sound, vibration and importance can be changed per channel in Android's app
 settings (two channels: *Chart-Alarme* and *Momentum-Alarme*).
 
@@ -69,6 +94,11 @@ alarm. Measured in the emulator: 0.8 s from server to notification. ntfy holds o
 for all its topics; turn off battery optimisation for ntfy as it asks. If no phone is connected
 at that moment, ntfy.sh answers 507 and drops the message — the polling below then delivers it.
 Duplicates between both paths are filtered by id.
+The server keeps at most five devices; the same address or device name replaces its own entry,
+a new device on a full list is refused (409) — remove one in AutarkTrade under
+Einstellungen › Journal › ESP32 › Push-Geräte. Push addresses on loopback, `169.254/16`,
+`0.0.0.0/8`, link-local IPv6 or multicast are refused; the private LAN (own ntfy) stays allowed.
+After 20 wrong keys per minute from one address the `/api/esp32/*` routes answer 429.
 
 **Why polling, and what it costs in delay.** A self-hosted server without Firebase cannot
 wake a phone; only a connection the phone itself keeps open can (that is what the ntfy app
@@ -92,7 +122,10 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## How it works (for maintenance)
 
-- `ApiClient` — one OkHttp GET with the `X-ESP32-Key` header; returns raw JSON.
+- `ApiClient` — one OkHttp GET with the `X-ESP32-Key` header; returns raw JSON. `ziel()` picks
+  `https://host:8443` with a client that trusts only the paired CA, or plain http.
+- `Kopplung` — pure part of the pairing (PEM → DER, SHA-256 fingerprint, check of the
+  `/api/esp32/ca` answer, `SSLContext` from a KeyStore holding only that CA); only `java.*`.
 - `RefreshWorker` (WorkManager `CoroutineWorker`) — fetches off the main thread, caches the
   JSON per widget in `Prefs`, then re-binds widgets and reloads the list.
 - `TradingWidgetProvider` (`AppWidgetProvider`) — builds the header/KPIs, wires the list
@@ -126,8 +159,22 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## Versioning
 
-`versionName` tracks the AutarkTrade version plus the build number (currently **4.1.0-25**);
+`versionName` tracks the AutarkTrade version plus the build number (currently **4.2.0-28**);
 the APK file carries it in its name.
+
+Since 4.2.0-28: HTTPS with the paired AutarkTrade CA as the only trust anchor (default for
+new setups, no http fallback while on; see „HTTPS pairing" above), web links default to
+`https://host:8443`, and the APK is a release build signed with the own key — uninstall the
+older debug-signed app once before installing.
+
+Since 4.1.0-27 (audit D): the device key and the push secret are stored AES-GCM encrypted
+with a key from the Android KeyStore (older plaintext values are migrated on first read),
+`allowBackup` is off and nothing goes into cloud backup or device transfer; the widget's
+own actions (refresh, eye, 15-min alarm) go to a non-exported receiver; alarm notifications
+show only „AutarkTrade: Chart-Alarm" on the lock screen (speech output is unchanged);
+the settings screen blocks screenshots; a WebAPK only receives links when its address,
+install source (Google Play or its browser) and pinned signing certificate check out;
+and a stand older than three refresh intervals is shown in red with its age.
 
 ## Licence
 

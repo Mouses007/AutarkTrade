@@ -16,7 +16,7 @@
 
 import { istLoopbackHost, setzeBindungsModus, offenerBetriebErlaubt, sessionCookieMiddleware, apiAuthMiddleware, istErlaubterHost, getSessionCookieString, hatGueltigeSession, entwerteAlleSitzungen } from './auth.js'
 import { pruefeKiEndpunkt } from './ollama-url.js'
-import { clientIp, setupAuthRoutes, _authFuerTest, _zaehlerLeeren, _einrichtungsCode } from './auth.js'
+import { clientIp, setupAuthRoutes, _authFuerTest, _zaehlerLeeren, _einrichtungsCode, _ruecksetzCode } from './auth.js'
 import { isLocalRequest, istFremdeHerkunft } from './update-api.js'
 import { umgebung, umgebungAn, alteSicherheitsSchalter } from './umgebung.js'
 import express from 'express'
@@ -271,8 +271,28 @@ await mitServer(async (basis) => {
     check('Reset cross-site (auch mit JSON) → 403', r.status === 403, String(r.status))
     r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'text/plain' }, body: 'x' })
     check('Reset ohne JSON (no-cors-Form) → 415', r.status === 415, String(r.status))
+    // Audit SEC-SRV-009 (26.10.2026): lokal + JSON reicht nicht mehr — vorher
+    // schaltete genau dieser curl-Aufruf jedes Gate ab.
+    const warn = console.warn
+    const log = []
+    console.warn = (...a) => log.push(a.join(' '))
     r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-    check('Reset aus der App (lokal, JSON) erreicht die DB-Stufe', r.status === 500 || r.status === 200, String(r.status))
+    let j = await r.json()
+    console.warn = warn
+    const code = _ruecksetzCode()
+    check('Reset ohne Rücksetzcode → 403 codeNoetig', r.status === 403 && j.codeNoetig === true, String(r.status))
+    check('… und der Code steht im Server-Log, nicht in der Antwort', !!code && log.some((z) => z.includes(code)) && !JSON.stringify(j).includes(code))
+    _zaehlerLeeren()
+    r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: 'AAAA-BBBB' }) })
+    check('falscher Rücksetzcode → 403', r.status === 403)
+    r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'application/json', origin: 'https://evil.example' }, body: JSON.stringify({ code }) })
+    check('richtiger Code von fremder Seite → 403', r.status === 403)
+    r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code: code.toLowerCase() }) })
+    check('Reset mit Code aus dem Log (lokal, JSON) erreicht die DB-Stufe', r.status === 500 || r.status === 200, String(r.status))
+    check('Code gilt nur einmal', _ruecksetzCode() === null)
+    r = await fetch(basis + '/api/auth/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
+    check('derselbe Code ein zweites Mal → 403', r.status === 403)
+    _zaehlerLeeren()
 
     console.log('\nA2-01: Rebinding-Kette per HTTP\n')
     // fetch überschreibt den Host-Kopf nicht — deshalb http.request.

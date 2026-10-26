@@ -77,7 +77,57 @@
                 android:id="@+id/in_key"
                 style="@style/Field"
                 android:hint="@string/cfg_key_hint"
-                android:inputType="textNoSuggestions" />
+                android:inputType="textPassword|textNoSuggestions" />
+
+            <!-- HTTPS mit gekoppelter AutarkTrade-CA (Vorgabe an) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="4dp">
+
+                <TextView
+                    style="@style/FieldLabel"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_marginBottom="0dp"
+                    android:text="@string/cfg_tls" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/in_tls"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:theme="@style/AkzentSchalter" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/tls_details"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView style="@style/FieldLabel" android:text="@string/cfg_tls_port" />
+                <EditText
+                    android:id="@+id/in_tls_port"
+                    style="@style/Field"
+                    android:text="8443"
+                    android:inputType="number" />
+
+                <Button
+                    android:id="@+id/btn_koppeln"
+                    style="@style/KnopfNeben"
+                    android:text="@string/cfg_koppeln" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tls_stand"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:layout_marginBottom="14dp"
+                android:textColor="@color/muted"
+                android:textSize="12sp" />
 
             <TextView style="@style/FieldLabel" android:text="@string/cfg_web" />
             <EditText

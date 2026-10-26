@@ -15,7 +15,7 @@
  */
 import crypto from 'crypto'
 import { getKnex } from './database.js'
-import { isLocalRequest } from './update-api.js'
+import { isLocalRequest, istFremdeHerkunft } from './update-api.js'
 import { logWarn } from './logger.js'
 import { umgebung, umgebungAn } from './umgebung.js'
 import { hauptGeheimnis } from './crypto.js'
@@ -221,10 +221,14 @@ export async function maybeResetAuthFromEnv() {
     }
 }
 
-/** True, wenn der Request über HTTPS kommt (auch hinter Reverse-Proxy). */
-function isHttps(req) {
+/**
+ * True, wenn der Request über HTTPS kommt: direkt über den eigenen
+ * HTTPS-Server (`server/tls/dienst.js`, Socket verschlüsselt) oder hinter
+ * einem Reverse-Proxy (X-Forwarded-Proto).
+ */
+export function isHttps(req) {
     if (!req) return false
-    if (req.secure) return true
+    if (req.socket?.encrypted || req.secure) return true
     const xfp = req.headers && req.headers['x-forwarded-proto']
     return typeof xfp === 'string' && xfp.split(',')[0].trim() === 'https'
 }
@@ -324,6 +328,15 @@ export function hostGuardMiddleware(req, res, next) {
 }
 
 /**
+ * Darf das Sitzungs-Cookie ohne Anmeldung verteilt werden? Nur ohne Gate und
+ * nur, wenn offener Betrieb erlaubt ist. EINE Regel für die Middleware und den
+ * Vite-Proxy im Entwicklungsbetrieb (Audit SEC-SRV-014: der prüfte nur das Gate).
+ */
+export function cookieAutomatischErlaubt() {
+    return !authConfig.enabled && offenerBetriebErlaubt()
+}
+
+/**
  * Middleware: set session cookie on any non-API request.
  * Im Passwort-Gate-Modus wird KEIN Cookie automatisch gesetzt — nur nach Login.
  *
@@ -333,10 +346,62 @@ export function hostGuardMiddleware(req, res, next) {
  * verschlossen als jedem im LAN das Cookie in die Hand drücken.
  */
 export function sessionCookieMiddleware(req, res, next) {
-    if (!req.url.startsWith('/api/') && !authConfig.enabled && offenerBetriebErlaubt()) {
+    if (!req.url.startsWith('/api/') && cookieAutomatischErlaubt()) {
         res.setHeader('Set-Cookie', getSessionCookieString(req))
     }
     next()
+}
+
+// ==================== Herkunftsprüfung (CSRF derselben Site) ====================
+
+/*
+ * Audit SEC-SRV-002 (26.10.2026): `SameSite=Strict` trennt nach SITE, nicht
+ * nach Herkunft. Eine Seite auf derselben IP mit anderem Port (DSM auf der
+ * NAS, ein anderer Container, ein lokaler Dev-Server) ist same-site, ihre
+ * Anfragen tragen das Cookie mit — und konnten bezahlte KI-Läufe starten,
+ * alle Geräte abmelden oder Strategievorschläge übernehmen. Lesen konnte sie
+ * nichts (CORS), schreiben schon.
+ *
+ * Jetzt wird jede ändernde Anfrage unter /api abgewiesen, wenn der Browser
+ * eine fremde Herkunft meldet (`istFremdeHerkunft`, dieselbe Prüfung wie bei
+ * `isLocalRequest`). Fehlen `Sec-Fetch-Site` UND `Origin` — curl, Skripte,
+ * ESP32, Android-Widget —, geht sie durch: ohne Browser gibt es kein
+ * mitgeschicktes Cookie, das man missbrauchen könnte.
+ *
+ * Hinter Caddy (8443) kommt der Host-Kopf unverändert an; sollte ein Proxy
+ * ihn umschreiben, zählt sein `X-Forwarded-Host` — aber nur, wenn die
+ * Verbindung von einem vertrauten Proxy kommt (gleiche Regel wie
+ * `X-Forwarded-For` in `clientIp`). Sonst könnte jede Seite den Kopf selbst
+ * setzen … was sie per CORS-Preflight zwar nicht darf, aber die Regel soll
+ * nicht davon abhängen.
+ */
+const SICHERE_METHODEN = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+/** `X-Forwarded-Host` des unmittelbaren, vertrauten Proxys — sonst keiner. */
+async function vertrauterWeitergeleiteterHost(req) {
+    const xfh = String(req.headers?.['x-forwarded-host'] || '')
+    if (!xfh || !umgebungAn('TRUST_PROXY')) return []
+    const peer = normIp(req.socket?.remoteAddress || '')
+    if (!(await vertrauteProxyIps()).has(peer)) return []
+    const letzter = xfh.split(',').map((s) => s.trim()).filter(Boolean).pop()
+    return letzter ? [letzter] : []
+}
+
+/**
+ * Middleware vor den /api-Routen: ändernde Anfragen fremder Herkunft → 403.
+ * Die ESP32-Routen mit eigenem Schlüssel (display, alarme, push) liegen
+ * davor und sind damit ausgenommen.
+ */
+export async function herkunftMiddleware(req, res, next) {
+    if (SICHERE_METHODEN.has(req.method)) return next()
+    try {
+        if (!istFremdeHerkunft(req)) return next()
+        const weitere = await vertrauterWeitergeleiteterHost(req)
+        if (weitere.length && !istFremdeHerkunft(req, weitere)) return next()
+    } catch (e) {
+        logWarn('auth', 'Herkunftsprüfung fehlgeschlagen', e)
+    }
+    res.status(403).json({ error: 'Anfrage von fremder Herkunft abgewiesen. Bitte die App direkt öffnen.' })
 }
 
 /**
@@ -665,6 +730,48 @@ function codePasst(eingabe) {
     return a.length === b.length && crypto.timingSafeEqual(a, b)
 }
 
+// ==================== Rücksetzcode ====================
+
+/*
+ * Rücksetzcode (Audit SEC-SRV-009, 26.10.2026).
+ *
+ * Bis dahin reichte für `/api/auth/reset` „kommt von 127.0.0.1, ohne fremde
+ * Herkunft, mit JSON" — also JEDEM Prozess und JEDEM Benutzer auf dem
+ * Server-Rechner: ein `curl -X POST -H 'Content-Type: application/json' -d '{}'`
+ * schaltete das Gate ab. Jetzt braucht es zusätzlich einen Einmal-Code, den
+ * der Server erst auf Anfrage ins Log schreibt (wie den Einrichtungscode):
+ * wer das Log lesen kann, ist der Betreiber. Der Code lebt nur im Prozess,
+ * gilt RUECKSETZ_GUELTIG_MS und genau einmal. Der andere Weg bleibt der
+ * Startschalter `AT_RESET_AUTH=1` (maybeResetAuthFromEnv).
+ */
+const RUECKSETZ_GUELTIG_MS = 15 * 60 * 1000
+let ruecksetzCode = null   // { code, bis }
+
+/** Gültigen Rücksetzcode liefern, sonst einen neuen erzeugen. */
+function aktuellerRuecksetzCode(jetzt = Date.now()) {
+    if (!ruecksetzCode || jetzt > ruecksetzCode.bis) {
+        ruecksetzCode = { code: erzeugeCode(), bis: jetzt + RUECKSETZ_GUELTIG_MS }
+    }
+    return ruecksetzCode
+}
+
+function meldeRuecksetzCode() {
+    const { code } = aktuellerRuecksetzCode()
+    console.warn('\n  🔑  Rücksetzcode für „Passwort vergessen": ' + code)
+    console.warn('      Gilt 15 Minuten und einmal. Wer das nicht angefordert hat: ignorieren.\n')
+}
+
+function ruecksetzCodePasst(eingabe, jetzt = Date.now()) {
+    if (!ruecksetzCode || jetzt > ruecksetzCode.bis) return false
+    const norm = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+    const a = Buffer.from(norm(eingabe))
+    const b = Buffer.from(norm(ruecksetzCode.code))
+    return a.length > 0 && a.length === b.length && crypto.timingSafeEqual(a, b)
+}
+
+/** Nur für den Selbsttest. */
+export function _ruecksetzCode() { return ruecksetzCode?.code || null }
+
 // ==================== Auth-Routen ====================
 
 export function setupAuthRoutes(app) {
@@ -774,9 +881,9 @@ export function setupAuthRoutes(app) {
         }
     })
 
-    // Passwort vergessen / Reset (öffentlich, aber NUR von localhost).
-    // Kein aktuelles Passwort nötig — wer lokal am Server sitzt, gilt als
-    // Eigentümer (gleiches Vertrauensmodell wie Update/Restart).
+    // Passwort vergessen / Reset (öffentlich, aber NUR von localhost und mit
+    // dem Rücksetzcode aus dem Server-Log). Kein aktuelles Passwort nötig —
+    // wer am Server sitzt UND dessen Log lesen kann, gilt als Eigentümer.
     app.post('/api/auth/reset', async (req, res) => {
         /*
          * Drei Riegel seit F2 (Audit A2-01/A2-02):
@@ -795,6 +902,27 @@ export function setupAuthRoutes(app) {
         if (!req.is('application/json')) {
             return res.status(415).json({ error: 'Zurücksetzen nur aus der App heraus.' })
         }
+        /*
+         * Vierter Riegel seit dem Audit vom 26.10.2026 (SEC-SRV-009): der
+         * Einmal-Code aus dem Server-Log. Ohne Code wird er dort ausgegeben
+         * und die Oberfläche fragt danach; ein falscher zählt als Fehlversuch.
+         */
+        const code = req.body?.code
+        if (!code) {
+            meldeRuecksetzCode()
+            return res.status(403).json({
+                error: 'Rücksetzcode erforderlich. Er steht jetzt im Server-Log (Terminal bzw. Container-Protokoll).',
+                codeNoetig: true,
+            })
+        }
+        const ip = await clientIp(req)
+        if (isRateLimited(ip)) return res.status(429).json(ZU_VIELE)
+        if (!ruecksetzCodePasst(code)) {
+            registerFailure(ip)
+            return res.status(403).json({ error: 'Rücksetzcode falsch oder abgelaufen.', codeNoetig: true })
+        }
+        ruecksetzCode = null   // einmal
+        clearFailures(ip)
         try {
             const knex = getKnex()
             await knex('settings').where('id', 1).update({

@@ -33,6 +33,7 @@ import SchrittMailKonfiguration from './SchrittMailKonfiguration.vue'
 import Knopf from '../basis/Knopf.vue'
 import Symbol from '../basis/Symbol.vue'
 import Hinweis from '../basis/Hinweis.vue'
+import { internerPfad } from '../../utils/interneAdresse.js'
 
 const props = defineProps({
     kontext: { type: String, default: 'manuell' }, // 'setup' | 'update' | 'manuell'
@@ -75,7 +76,9 @@ async function beenden() {
         fehler.value = e.response?.data?.error || e.message || t('onboarding.saveError')
         return
     }
-    window.location.href = props.rueckkehrPfad
+    // Zweite Sperre (Audit SEC-WEB-003): auch ein künftiger Aufrufer kann hier
+    // keine fremde Adresse durchreichen.
+    window.location.href = internerPfad(props.rueckkehrPfad, window.location.origin) || '/journal'
 }
 </script>
 

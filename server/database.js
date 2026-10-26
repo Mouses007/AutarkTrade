@@ -3,6 +3,7 @@
  * Supports SQLite (default) and PostgreSQL (optional).
  */
 import Knex from 'knex'
+import fs from 'fs'
 import { loadDbConfig } from './db-config.js'
 import { seedDefaultTemplates, korrigiereVorlagenKategorien } from './default-templates.js'
 import { seedDefaultLernkarten } from './default-lernkarten.js'
@@ -12,6 +13,8 @@ import { migriereS13 } from './migrationen/s13.js'
 import { migriereS15 } from './migrationen/s15.js'
 import { migrierePortfolio } from './migrationen/portfolio.js'
 import { migriereCoinMUsdt } from './migrationen/coinm-usdt.js'
+import { migriereDouble } from './migrationen/double.js'
+import { migriereTls } from './migrationen/tls.js'
 
 let knex = null
 
@@ -35,6 +38,9 @@ export async function initDb() {
 
     await runMigrations(knex, config.client)
 
+    // Nach den Migrationen: dann gibt es auch -wal/-shm (Audit SEC-SRV-009).
+    if (config.client === 'better-sqlite3') schuetzeDbDatei(config.connection?.filename)
+
     // Fix PostgreSQL sequences after migration/import
     if (config.client === 'pg') {
         await fixPostgresSequences(knex)
@@ -44,6 +50,33 @@ export async function initDb() {
     console.log(` -> ${clientLabel} database initialized`)
 
     return knex
+}
+
+/**
+ * SQLite-Datei nur für den Eigentümer lesbar machen (Audit SEC-SRV-009).
+ *
+ * `better-sqlite3` legt die Datei mit der umask des Prozesses an — bei den
+ * meisten Systemen `-rw-r--r--`. Damit las auf einem geteilten Rechner jeder
+ * Benutzer Journal, Einstellungen und die (verschlüsselten) Schlüssel direkt
+ * aus der Datei. Jetzt 0600 für Datei, WAL und Shared-Memory, sobald Gruppe
+ * oder andere Rechte haben. Unter Windows wirkt chmod nur auf das
+ * Schreibschutz-Bit — dort bleibt alles beim Alten, ein Fehler wird geschluckt.
+ *
+ * @param {string} datei Pfad der SQLite-Datei (':memory:' und leer: nichts zu tun)
+ * @returns {string[]} die geänderten Dateien
+ */
+export function schuetzeDbDatei(datei) {
+    const geaendert = []
+    if (!datei || datei === ':memory:' || process.platform === 'win32') return geaendert
+    for (const f of [datei, `${datei}-wal`, `${datei}-shm`]) {
+        try {
+            if (!fs.existsSync(f)) continue
+            if ((fs.statSync(f).mode & 0o077) === 0) continue
+            fs.chmodSync(f, 0o600)
+            geaendert.push(f)
+        } catch { /* fremde Datei oder kein Recht: nicht schlimmer als vorher */ }
+    }
+    return geaendert
 }
 
 /**
@@ -453,9 +486,9 @@ async function runMigrations(knex, client) {
             t.increments('id').primary()
             t.bigInteger('dateUnix')
             t.text('tradeId').defaultTo('')
-            t.float('stopLoss').defaultTo(0)
-            t.float('maePrice').defaultTo(0)
-            t.float('mfePrice').defaultTo(0)
+            t.double('stopLoss').defaultTo(0)
+            t.double('maePrice').defaultTo(0)
+            t.double('mfePrice').defaultTo(0)
             t.timestamp('createdAt').defaultTo(knex.fn.now())
             t.timestamp('updatedAt').defaultTo(knex.fn.now())
             t.index('tradeId', 'idx_excursions_tradeId')
@@ -520,11 +553,11 @@ async function runMigrations(knex, client) {
             t.text('positionId').notNullable().unique()
             t.text('symbol').defaultTo('')
             t.text('side').defaultTo('')
-            t.float('entryPrice').defaultTo(0)
-            t.float('leverage').defaultTo(0)
-            t.float('quantity').defaultTo(0)
-            t.float('unrealizedPNL').defaultTo(0)
-            t.float('markPrice').defaultTo(0)
+            t.double('entryPrice').defaultTo(0)
+            t.double('leverage').defaultTo(0)
+            t.double('quantity').defaultTo(0)
+            t.double('unrealizedPNL').defaultTo(0)
+            t.double('markPrice').defaultTo(0)
             t.text('playbook').defaultTo('')
             t.integer('stressLevel').defaultTo(0)
             t.text('feelings').defaultTo('')
@@ -667,9 +700,9 @@ async function runMigrations(knex, client) {
     // settings additions
     await addColumnIfNotExists('settings', 'showTradePopups', (t) => t.integer('showTradePopups').defaultTo(1))
     await addColumnIfNotExists('settings', 'username', (t) => t.text('username').defaultTo(''))
-    await addColumnIfNotExists('settings', 'startBalance', (t) => t.float('startBalance').defaultTo(0))
+    await addColumnIfNotExists('settings', 'startBalance', (t) => t.double('startBalance').defaultTo(0))
     await addColumnIfNotExists('settings', 'startBalanceDate', (t) => t.bigInteger('startBalanceDate').defaultTo(0))
-    await addColumnIfNotExists('settings', 'currentBalance', (t) => t.float('currentBalance').defaultTo(0))
+    await addColumnIfNotExists('settings', 'currentBalance', (t) => t.double('currentBalance').defaultTo(0))
     await addColumnIfNotExists('settings', 'tradeTimeframes', (t) => t.text('tradeTimeframes').defaultTo('[]'))
     await addColumnIfNotExists('settings', 'customTimeframes', (t) => t.text('customTimeframes').defaultTo('[]'))
     await addColumnIfNotExists('settings', 'enableBinanceChart', (t) => t.integer('enableBinanceChart').defaultTo(0))
@@ -678,7 +711,7 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'aiProvider', (t) => t.text('aiProvider').defaultTo('ollama'))
     await addColumnIfNotExists('settings', 'aiModel', (t) => t.text('aiModel').defaultTo(''))
     await addColumnIfNotExists('settings', 'aiApiKey', (t) => t.text('aiApiKey').defaultTo(''))
-    await addColumnIfNotExists('settings', 'aiTemperature', (t) => t.float('aiTemperature').defaultTo(0.7))
+    await addColumnIfNotExists('settings', 'aiTemperature', (t) => t.double('aiTemperature').defaultTo(0.7))
     await addColumnIfNotExists('settings', 'aiMaxTokens', (t) => t.integer('aiMaxTokens').defaultTo(1500))
     await addColumnIfNotExists('settings', 'aiOllamaUrl', (t) => t.text('aiOllamaUrl').defaultTo('http://localhost:11434'))
     await addColumnIfNotExists('settings', 'aiScreenshots', (t) => t.integer('aiScreenshots').defaultTo(0))
@@ -862,7 +895,7 @@ async function runMigrations(knex, client) {
     // ==================== SETTINGS: LIVE-ANALYSE (Heatmap / Bookmap) ====================
     await addColumnIfNotExists('settings', 'liveSymbol', (t) => t.text('liveSymbol').defaultTo(''))
     await addColumnIfNotExists('settings', 'liveMarket', (t) => t.text('liveMarket').defaultTo('futures'))
-    await addColumnIfNotExists('settings', 'liveViewPct', (t) => t.float('liveViewPct').defaultTo(0.5))
+    await addColumnIfNotExists('settings', 'liveViewPct', (t) => t.double('liveViewPct').defaultTo(0.5))
     await addColumnIfNotExists('settings', 'liveFrameMs', (t) => t.integer('liveFrameMs').defaultTo(500))
     await addColumnIfNotExists('settings', 'liveHistoryMin', (t) => t.integer('liveHistoryMin').defaultTo(30))
     await addColumnIfNotExists('settings', 'liveRamp', (t) => t.text('liveRamp').defaultTo('bookmap'))
@@ -870,11 +903,11 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'livePauseInBackground', (t) => t.integer('livePauseInBackground').defaultTo(1))
     // Farbskala: 'auto' normiert rollend aufs 95. Perzentil, 'fixed' nutzt liveColorRef
     await addColumnIfNotExists('settings', 'liveColorMode', (t) => t.text('liveColorMode').defaultTo('auto'))
-    await addColumnIfNotExists('settings', 'liveColorRef', (t) => t.float('liveColorRef').defaultTo(0))
+    await addColumnIfNotExists('settings', 'liveColorRef', (t) => t.double('liveColorRef').defaultTo(0))
     // Preisachse: 1 = folgt dem Mittelkurs, 0 = bleibt stehen (manuell zoom/pan)
     await addColumnIfNotExists('settings', 'liveAutoFollow', (t) => t.integer('liveAutoFollow').defaultTo(1))
     // Blendet Zellen unterhalb dieses Anteils der Farbskala aus (0 = alles zeigen)
-    await addColumnIfNotExists('settings', 'liveThreshold', (t) => t.float('liveThreshold').defaultTo(0))
+    await addColumnIfNotExists('settings', 'liveThreshold', (t) => t.double('liveThreshold').defaultTo(0))
     await addColumnIfNotExists('settings', 'liveShowLiquidations', (t) => t.integer('liveShowLiquidations').defaultTo(1))
     // Vorlauf aus der eigenen Aufzeichnung beim Öffnen (Minuten, 0 = aus)
     await addColumnIfNotExists('settings', 'livePrefillMin', (t) => t.integer('livePrefillMin').defaultTo(15))
@@ -886,15 +919,15 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'liveRecordDays', (t) => t.integer('liveRecordDays').defaultTo(14))
     await addColumnIfNotExists('settings', 'liveRecordFrameMs', (t) => t.integer('liveRecordFrameMs').defaultTo(1000))
     await addColumnIfNotExists('settings', 'liveRecordRows', (t) => t.integer('liveRecordRows').defaultTo(200))
-    await addColumnIfNotExists('settings', 'liveRecordRangePct', (t) => t.float('liveRecordRangePct').defaultTo(1))
+    await addColumnIfNotExists('settings', 'liveRecordRangePct', (t) => t.double('liveRecordRangePct').defaultTo(1))
     await addColumnIfNotExists('settings', 'liveRecordAllLiq', (t) => t.integer('liveRecordAllLiq').defaultTo(0))
     await addColumnIfNotExists('settings', 'liveDotStep', (t) => t.integer('liveDotStep').defaultTo(11))
     await addColumnIfNotExists('settings', 'liveProfileW', (t) => t.integer('liveProfileW').defaultTo(74))
     await addColumnIfNotExists('settings', 'liveShowVolumeBars', (t) => t.integer('liveShowVolumeBars').defaultTo(0))
     await addColumnIfNotExists('settings', 'levMapTier', (t) => t.string('levMapTier').defaultTo('all'))
     await addColumnIfNotExists('settings', 'levMapHours', (t) => t.integer('levMapHours').defaultTo(48))
-    await addColumnIfNotExists('settings', 'levMapSpanPct', (t) => t.float('levMapSpanPct').defaultTo(8))
-    await addColumnIfNotExists('settings', 'levMapMmr', (t) => t.float('levMapMmr').defaultTo(0.004))
+    await addColumnIfNotExists('settings', 'levMapSpanPct', (t) => t.double('levMapSpanPct').defaultTo(8))
+    await addColumnIfNotExists('settings', 'levMapMmr', (t) => t.double('levMapMmr').defaultTo(0.004))
     // Woher die Wartungsmarge kommt: 'bybit' | 'manuell'. Die alte feste 0,004
     // stimmte nur für BTC/ETH und lag bei allen anderen Coins deutlich zu tief.
     // 'binance' las einen undokumentierten bapi-Endpunkt und ist seit S12 weg
@@ -902,7 +935,7 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'levMapMmrQuelle', (t) => t.string('levMapMmrQuelle').defaultTo('binance'))
     await addColumnIfNotExists('settings', 'levMapWeights', (t) => t.string('levMapWeights').defaultTo('40,30,20,10'))
     await addColumnIfNotExists('settings', 'levMapView', (t) => t.string('levMapView').defaultTo('dist'))
-    await addColumnIfNotExists('settings', 'levMapThreshold', (t) => t.float('levMapThreshold').defaultTo(0))
+    await addColumnIfNotExists('settings', 'levMapThreshold', (t) => t.double('levMapThreshold').defaultTo(0))
     await addColumnIfNotExists('settings', 'levMapProfileW', (t) => t.integer('levMapProfileW').defaultTo(74))
 
     // ==================== LIVE-AUFZEICHNUNGEN ====================
@@ -920,8 +953,8 @@ async function runMigrations(knex, client) {
             t.integer('frameMs').notNullable()
             t.integer('rows').notNullable()
             t.integer('cols').notNullable()
-            t.float('bucketSize').notNullable()
-            t.float('quantRef').notNullable()
+            t.double('bucketSize').notNullable()
+            t.double('quantRef').notNullable()
             t.integer('bytes').notNullable().defaultTo(0)
             t.binary('payload')
             t.bigInteger('createdAt')
@@ -1785,7 +1818,7 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'strategyHiddenTemplates', (t) => t.text('strategyHiddenTemplates').defaultTo('[]'))
     await addColumnIfNotExists('settings', 'strategyMaxLeverage', (t) => t.integer('strategyMaxLeverage').defaultTo(10))
     await addColumnIfNotExists('settings', 'strategyMinPaperTrades', (t) => t.integer('strategyMinPaperTrades').defaultTo(20))
-    await addColumnIfNotExists('settings', 'strategyLlmBudgetUsd', (t) => t.float('strategyLlmBudgetUsd').defaultTo(1))
+    await addColumnIfNotExists('settings', 'strategyLlmBudgetUsd', (t) => t.double('strategyLlmBudgetUsd').defaultTo(1))
     // Modell-Listen je Anbieter (JSON) — bearbeitbar statt fest im Frontend
     await addColumnIfNotExists('settings', 'aiModels', (t) => t.text('aiModels'))
     // Eigener, OpenAI-kompatibler Anbieter (Groq, OpenRouter, vLLM, LM Studio …)
@@ -1808,7 +1841,7 @@ async function runMigrations(knex, client) {
             t.increments('id').primary()
             t.string('kind').notNullable()
             t.bigInteger('dayUnix').notNullable()   // UTC-Mitternacht in ms
-            t.float('value').notNullable()
+            t.double('value').notNullable()
             t.text('extra').defaultTo('{}')
             t.bigInteger('createdAt').defaultTo(0)
             // Der Unique-Index deckt dieselben Spalten in derselben
@@ -1846,7 +1879,7 @@ async function runMigrations(knex, client) {
             t.increments('id').primary()
             t.string('symbol').notNullable()
             t.bigInteger('t').notNullable()      // Minutengrenze in ms
-            t.float('oi').notNullable()          // offenes Interesse in Coins
+            t.double('oi').notNullable()          // offenes Interesse in Coins
             t.unique(['symbol', 't'])
         })
         console.log(' -> Created table: oi_minute')
@@ -2036,7 +2069,7 @@ async function runMigrations(knex, client) {
             t.integer('beitraege').defaultTo(0)
             t.integer('videos').defaultTo(0)
             t.integer('tokens').defaultTo(0)
-            t.float('kostenUsd').defaultTo(0)
+            t.double('kostenUsd').defaultTo(0)
             t.string('ausloeser').defaultTo('auto')   // auto | manuell
             // Alle Beiträge, aus denen der Bericht entstand — als JSON.
             // Nötig, damit auch ein Punkt ohne Einzelbeleg auf echte Verweise
@@ -2591,7 +2624,7 @@ async function runMigrations(knex, client) {
             t.string('market').defaultTo('futures')
             t.string('status').defaultTo('laufend')       // laufend | beendet | abgebrochen
             // Der Plan wird VOR der Sitzung gefasst — das ist der ganze Sinn
-            t.float('planMaxVerlustUsd').defaultTo(0)
+            t.double('planMaxVerlustUsd').defaultTo(0)
             t.integer('planMaxTrades').defaultTo(0)
             t.text('planNotiz').defaultTo('')
             t.text('notizen').defaultTo('')
@@ -2599,7 +2632,7 @@ async function runMigrations(knex, client) {
             t.text('protokoll').defaultTo('[]')           // JSON [{t, art, text, daten}]
             t.text('kacheln').defaultTo('{}')             // JSON: Layout-Schnappschuss
             t.text('trades').defaultTo('[]')              // JSON, beim Beenden eingefroren
-            t.float('pnlUsd').defaultTo(0)
+            t.double('pnlUsd').defaultTo(0)
             t.integer('tradeAnzahl').defaultTo(0)
             t.integer('planVerletzt').defaultTo(0)
             // ZWINGEND `timestamp`, nicht bigInteger: die generische CRUD-Route
@@ -2634,8 +2667,8 @@ async function runMigrations(knex, client) {
      * Frage, ob eine Sitzung an der Richtung oder an der Gebühr gescheitert
      * ist, stellt sich bei Skalpsitzungen regelmässig.
      */
-    await addColumnIfNotExists('live_sessions', 'gebuehrenUsd', (t) => t.float('gebuehrenUsd').defaultTo(0))
-    await addColumnIfNotExists('live_sessions', 'fundingUsd', (t) => t.float('fundingUsd').defaultTo(0))
+    await addColumnIfNotExists('live_sessions', 'gebuehrenUsd', (t) => t.double('gebuehrenUsd').defaultTo(0))
+    await addColumnIfNotExists('live_sessions', 'fundingUsd', (t) => t.double('fundingUsd').defaultTo(0))
 
     /*
      * Nachzug für Datenbanken, die die erste Fassung dieser Tabelle bekommen
@@ -3621,6 +3654,14 @@ async function runMigrations(knex, client) {
 
     // ── Spot-Portfolio (additiv, ohne SCHEMA_VERSION) ───────
     await migrierePortfolio(knex, addColumnIfNotExists)
+
+    // ── HTTPS in der App + ESP32-Anzeige-Schlüssel (additiv, ohne SCHEMA_VERSION) ──
+    // Tabelle `tls_zertifikat` (eigene CA, Server-Zertifikat), `settings.esp32AnzeigeKey`.
+    await migriereTls(knex, addColumnIfNotExists)
+
+    // PostgreSQL: `real` (Float32 aus t.float) → double precision (Audit FUN-DB-001).
+    // Nach allen Tabellen, damit auch eben angelegte erfasst sind. Ohne SCHEMA_VERSION.
+    await migriereDouble(knex)
 
     /*
      * Quellen-Frage beim ersten Start (Rechtsaudit 10/2026, B-2, Variante B).

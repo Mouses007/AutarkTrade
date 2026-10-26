@@ -14,8 +14,17 @@
  * Quelle festgehalten und angezeigt, statt den ganzen Lauf scheitern zu lassen.
  */
 
+import { ohneTags, ersetzeZwischen, elementInhalt, bloeckeVon, zeichenAusVerweis } from './html-zerlegen.js'
+
 const MAX_EINTRAEGE = 50
 const MAX_TEXT = 4000
+/*
+ * Obergrenze für das, was zerlegt wird (SEC-SRV-011). net-guard lässt 2 MB
+ * durch; ein Feed mit 50 Einträgen samt `content:encoded` bleibt weit
+ * darunter. Was darüber liegt, wird abgeschnitten, nicht abgelehnt — die
+ * ersten Einträge sind die neuesten.
+ */
+const MAX_FEED = 2 * 1024 * 1024
 
 /** Nur die fünf Standard-Entities und numerische Verweise — keine DTD. */
 function entschluessle(text) {
@@ -30,30 +39,40 @@ function entschluessle(text) {
         .replace(/&nbsp;/g, ' ')
         .replace(/&ndash;/g, '–').replace(/&mdash;/g, '—')
         .replace(/&hellip;/g, '…').replace(/&laquo;/g, '«').replace(/&raquo;/g, '»')
-        .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-        .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+        // Nicht `String.fromCodePoint` direkt: ab 0x110000 wirft es, und ein
+        // einziges `&#x110000;` liess den ganzen Feed ausfallen (SEC-SRV-011).
+        .replace(/&#x([0-9a-f]+);/gi, (_, h) => zeichenAusVerweis(parseInt(h, 16)))
+        .replace(/&#(\d+);/g, (_, d) => zeichenAusVerweis(Number(d)))
         // &amp; zuletzt, sonst würde „&amp;lt;" zu „<" statt zu „&lt;"
         .replace(/&amp;/g, '&')
 }
 
-const cdataWeg = (s) => String(s || '').replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+/*
+ * Die Zerlegung läuft seit dem Gesamtaudit vom 26.10.2026 (SEC-SRV-011) über
+ * `html-zerlegen.js`: die Regexe davor (`<!\[CDATA\[[\s\S]*?\]\]>`,
+ * `<tag…>[\s\S]*?</tag>`, `<[^>]+>`) suchten bei fehlendem Abschluss von
+ * jeder Fundstelle bis zum Ende — 60 000 offene `<item>` (360 kB) hielten die
+ * Event-Loop 3 s an, 2 MB rund 90 s. Gleiches Ergebnis, linear.
+ */
+const cdataWeg = (s) => ersetzeZwischen(s, '<![CDATA[', ']]>', (inhalt) => inhalt)
 
 function textVon(block, tag) {
-    const m = block.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)</${tag}>`, 'i'))
-    return m ? entschluessle(cdataWeg(m[1])).trim() : ''
+    const inhalt = elementInhalt(block, tag)
+    return inhalt === null ? '' : entschluessle(cdataWeg(inhalt)).trim()
 }
 
 function attributVon(block, tag, attr) {
-    const m = block.match(new RegExp(`<${tag}[^>]*\\s${attr}=["']([^"']+)["']`, 'i'))
+    // `[^<>]` statt `[^>]`: sonst liefe jede Fundstelle über `<` hinweg bis
+    // zum nächsten `>` quer durch den Block.
+    const m = block.match(new RegExp(`<${tag}[^<>]*\\s${attr}=["']([^"']+)["']`, 'i'))
     return m ? entschluessle(m[1]) : ''
 }
 
 /** HTML aus Beschreibungen entfernen — wir wollen Text, keine Auszeichnung. */
 function nurText(html) {
-    return String(html || '')
+    return ohneTags(String(html || '')
         .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/p>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
+        .replace(/<\/p>/gi, '\n'), '')
         .replace(/\n{3,}/g, '\n\n')
         .trim()
         .slice(0, MAX_TEXT)
@@ -79,16 +98,16 @@ function nurText(html) {
  * Frühphase) fragen vorher `quelleErlaubt('telegram')`.
  */
 export function leseTelegram(html) {
-    const roh = String(html || '')
+    const roh = String(html || '').slice(0, MAX_FEED)
     if (!roh.includes('tgme_widget_message')) return []
 
     return roh.split('tgme_widget_message_wrap').slice(1).map((block) => {
         const post = (block.match(/data-post="([^"]+)"/) || [])[1]
         if (!post) return null
 
-        const zeitText = (block.match(/<time[^>]+datetime="([^"]+)"/) || [])[1]
+        const zeitText = (block.match(/<time[^<>]+datetime="([^"]+)"/) || [])[1]
         const zeit = zeitText ? Date.parse(zeitText) : null
-        const rohText = (block.match(/message_text[^>]*>([\s\S]*?)<\/div>/) || [])[1] || ''
+        const rohText = textBlockTelegram(block)
         // Telegram legt Fotos als Hintergrundbild an, nicht als <img>
         const bild = (block.match(/background-image:url\(['"]?([^)'"]+)/) || [])[1] || ''
         const text = entschluessle(nurText(rohText))
@@ -111,6 +130,22 @@ export function leseTelegram(html) {
 }
 
 /**
+ * Der Textblock eines Telegram-Beitrags: vom ersten `message_text…>` bis zum
+ * nächsten `</div>` — wie früher `message_text[^>]*>([\s\S]*?)<\/div>`, aber
+ * ohne den quadratischen Fall (viele `message_text` ohne `>` oder `</div>`).
+ */
+function textBlockTelegram(block) {
+    // Nach dem ersten `message_text` das erste `>`: fehlt es dort, fehlt es
+    // auch hinter jedem späteren — kein Weitersuchen.
+    const i = block.indexOf('message_text')
+    if (i === -1) return ''
+    const start = block.indexOf('>', i)
+    if (start === -1) return ''
+    const ende = block.indexOf('</div>', start + 1)
+    return ende === -1 ? '' : block.slice(start + 1, ende)
+}
+
+/**
  * Kanalnamen, Profil- oder Vorschauadresse auf die Vorschauseite bringen.
  * Der Nutzer soll nicht wissen müssen, dass es das `/s/` braucht.
  */
@@ -125,15 +160,15 @@ export function telegramUrl(eingabe) {
  *            inhalt:string, videoId:string}[]}
  */
 export function leseFeed(xml) {
-    const roh = String(xml || '')
+    const roh = String(xml || '').slice(0, MAX_FEED)
     if (!roh.trim()) return []
 
     // Atom nutzt <entry>, RSS <item> — sonst ist der Aufbau nah genug beieinander
     const istAtom = /<feed[\s>]/i.test(roh)
     const tag = istAtom ? 'entry' : 'item'
-    const bloecke = roh.match(new RegExp(`<${tag}[\\s>][\\s\\S]*?</${tag}>`, 'gi')) || []
+    const bloecke = bloeckeVon(roh, tag, MAX_EINTRAEGE)
 
-    return bloecke.slice(0, MAX_EINTRAEGE).map((b) => {
+    return bloecke.map((b) => {
         const titel = textVon(b, 'title')
         // Atom hat den Verweis im Attribut, RSS im Elementtext
         const link = textVon(b, 'link') || attributVon(b, 'link', 'href')

@@ -22,6 +22,10 @@ const error = ref('')
 const info = ref('')
 const loading = ref(false)
 const resetting = ref(false)
+// „Passwort vergessen" braucht seit dem Audit vom 26.10.2026 (SEC-SRV-009)
+// den Rücksetzcode, den der Server auf Anfrage in sein Log schreibt.
+const resetCodeFeld = ref(false)
+const resetCode = ref('')
 
 async function submit() {
     if (loading.value) return
@@ -65,23 +69,34 @@ async function submit() {
 
 async function forgotPassword() {
     if (resetting.value) return
-    if (!confirm('Passwortschutz zurücksetzen? Funktioniert nur, wenn du diese Seite direkt am Server (localhost) geöffnet hast.')) return
+    // Erster Schritt: fragen, dann fordert der Server den Code an (er steht
+    // danach in seinem Log). Zweiter Schritt: mit Code zurücksetzen.
+    if (!resetCodeFeld.value && !confirm('Passwortschutz zurücksetzen? Funktioniert nur, wenn du diese Seite direkt am Server (localhost) geöffnet hast und das Server-Log lesen kannst.')) return
     error.value = ''
     info.value = ''
     resetting.value = true
     try {
         // JSON-Körper ist Pflicht: der Server nimmt den Reset nur so an, weil
         // eine fremde Seite JSON nicht ohne Preflight schicken kann (A2-02).
-        const { data } = await axios.post('/api/auth/reset', { zuruecksetzen: true })
+        const body = { zuruecksetzen: true }
+        if (resetCodeFeld.value && resetCode.value.trim()) body.code = resetCode.value.trim()
+        const { data } = await axios.post('/api/auth/reset', body)
         if (data.ok) {
             info.value = 'Passwortschutz zurückgesetzt. Seite wird neu geladen…'
             setTimeout(() => window.location.reload(), 1200)
             return
         }
     } catch (e) {
-        error.value = e.response?.status === 403
-            ? 'Zurücksetzen nur direkt am Server (localhost) möglich.'
-            : (e.response?.data?.error || 'Zurücksetzen fehlgeschlagen.')
+        if (e.response?.status === 403 && e.response?.data?.codeNoetig) {
+            const warSchonOffen = resetCodeFeld.value
+            resetCodeFeld.value = true
+            if (warSchonOffen && resetCode.value.trim()) error.value = e.response.data.error
+            else info.value = 'Der Rücksetzcode steht jetzt im Server-Log (Terminal bzw. Container-Protokoll). Hier eingeben und erneut auf „Zurücksetzen" klicken.'
+        } else {
+            error.value = e.response?.status === 403
+                ? 'Zurücksetzen nur direkt am Server (localhost) möglich. Sonst den Server einmal mit AT_RESET_AUTH=1 starten.'
+                : (e.response?.data?.error || 'Zurücksetzen fehlgeschlagen.')
+        }
     } finally {
         resetting.value = false
     }
@@ -131,8 +146,18 @@ async function forgotPassword() {
                     {{ loading ? (setup ? 'Speichern…' : 'Anmelden…') : (setup ? 'Passwort festlegen' : 'Anmelden') }}
                 </Knopf>
             </form>
+            <input
+                v-if="!setup && resetCodeFeld"
+                v-model="resetCode"
+                type="text"
+                class="at-feld login-input login-reset-code"
+                placeholder="Rücksetzcode (Server-Log)"
+                aria-label="Rücksetzcode aus dem Server-Log"
+                autocomplete="off"
+                spellcheck="false"
+            />
             <button v-if="!setup" type="button" class="login-forgot" :disabled="resetting" @click="forgotPassword">
-                {{ resetting ? 'Zurücksetzen…' : 'Passwort vergessen?' }}
+                {{ resetting ? 'Zurücksetzen…' : (resetCodeFeld ? 'Zurücksetzen' : 'Passwort vergessen?') }}
             </button>
         </div>
     </div>
@@ -183,6 +208,9 @@ async function forgotPassword() {
     color: var(--good);
     font-size: 0.85rem;
     margin-bottom: 0.75rem;
+}
+.login-reset-code {
+    margin: 1rem 0 0;
 }
 .login-code-hinweis {
     margin: -0.5rem 0 1rem;

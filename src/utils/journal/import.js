@@ -8,7 +8,7 @@
 import axios from 'axios'
 import dayjs from './zeit.js'
 import { dbFind, dbCreate } from '../db.js'
-import { appEinstellungen, tradeZeitzone, abfrageGrenzeVorhanden } from '../../stores/app/rahmen.js'
+import { tradeZeitzone, abfrageGrenzeVorhanden } from '../../stores/app/rahmen.js'
 import { seiteLaedt } from '../../stores/app/laden.js'
 import { gewaehlteBoerse } from '../../stores/journal/filter.js'
 import { blotter, pAndL, executions, trades, tradeId, vorhandeneTradeTage, vorhandeneTradeTageGeladen, marktSchluss } from '../../stores/journal/import.js'
@@ -25,7 +25,6 @@ async function ladePapa() {
     return papa
 }
 
-const schluesselVon = (anbieter) => appEinstellungen.value?.apis?.find(a => a.provider === anbieter)?.key
 const nieErfuellt = () => new Promise(() => {})
 
 // ── Vorhandene Tage ────────────────────────────────────────────────────────
@@ -81,7 +80,8 @@ function databentoRumpf(eintrag, endeSek) {
         pretty_px: 'true',
         pretty_ts: 'true',
         map_symbols: 'true',
-        username: schluesselVon('databento'),
+        // Kein `username` mehr (Audit SEC-WEB-006): das war der Schlüssel. Der
+        // Server (`/api/databento`) ruft mit dem gespeicherten ab.
     }
 }
 
@@ -112,21 +112,18 @@ export async function holeImportKerzen(quelle, modus, symbole, von, bis) {
         return new Promise((erfuellt, abgelehnt) => {
             for (const eintrag of anfrage.symbole) {
                 const rumpf = databentoRumpf(eintrag, endeSek)
-                if (modus === 'api') {
-                    const auth = globalThis.Buffer.from(rumpf.username + ':').toString('base64')
-                    axios.post('https://hist.databento.com/v0/timeseries.get_range', new URLSearchParams(rumpf).toString(), {
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ' + auth },
-                    }).then(async (antwort) => {
-                        await kerzenAusCsv(antwort.data, { symbol: eintrag.symbol, ohlcv: [] })
-                        erfuellt()
-                    }).catch(abgelehnt)
-                } else {
-                    // nicht abwarten: alle Anfragen gehen sofort raus
-                    axios.post('/api/databento', rumpf).then(async (antwort) => {
-                        await kerzenAusCsv(antwort.data, { symbol: eintrag.symbol, ohlcv: [] })
-                        erfuellt(kerzen)
-                    }).catch(abgelehnt)
-                }
+                /*
+                 * Beide Modi über den Server-Proxy (SEC-WEB-006): der Browser
+                 * kennt den Databento-Schlüssel nicht mehr. Der frühere
+                 * `api`-Zweig rief Databento direkt aus dem Browser, mit dem Schlüssel
+                 * im Basic-Auth-Kopf; er erfüllte ohne Wert (§7-Verhalten),
+                 * das bleibt so.
+                 */
+                // nicht abwarten: alle Anfragen gehen sofort raus
+                axios.post('/api/databento', rumpf).then(async (antwort) => {
+                    await kerzenAusCsv(antwort.data, { symbol: eintrag.symbol, ohlcv: [] })
+                    erfuellt(modus === 'api' ? undefined : kerzen)
+                }).catch(abgelehnt)
             }
         })
     }
@@ -143,7 +140,6 @@ export async function holeImportKerzen(quelle, modus, symbole, von, bis) {
                             ticker: eintrag.symbol, from: anfrage.von * 1000, to: endeSek * 1000,
                             interval: 1, span: 'minute', adjusted: true, sort: 'asc', limit: 50000,
                         },
-                        headers: { 'x-polygon-api-key': schluesselVon('polygon') },
                         retry: 5,
                         retryDelay: 60000,
                     })

@@ -20,8 +20,14 @@ echo   [OK] Node.js gefunden
 echo.
 echo   [1/4] Datenbank-Backup...
 
+:: Per VACUUM INTO statt copy (Audit SEC-OPS-015): die Datenbank laeuft im
+:: WAL-Modus, ein copy der Datei allein verliert, was noch in -wal steht.
 if exist "autarktrade.db" (
-    copy /Y "autarktrade.db" "autarktrade.db.backup" >nul
+    node scripts\sqlite-sicherung.mjs autarktrade.db autarktrade.db.backup
+    if errorlevel 1 (
+        echo   [X] Backup fehlgeschlagen -- Update abgebrochen.
+        goto :error
+    )
     echo   [OK] Backup erstellt: autarktrade.db.backup
 ) else (
     echo   [!] Keine Datenbank gefunden -- Neuinstallation? Kein Backup noetig.
@@ -64,17 +70,33 @@ if errorlevel 1 (
 :: Alte Historie entfernen (nur der ausgelieferte Stand bleibt)
 call scripts\paketquelle-flach.bat >nul 2>nul
 echo   [OK] Code aktualisiert
+:: git ist fertig: Zugang aus der Umgebung nehmen, npm und seine Skripte sehen ihn nicht (SEC-OPS-008)
+set "GIT_CONFIG_COUNT="
+set "GIT_CONFIG_KEY_0="
+set "GIT_CONFIG_VALUE_0="
+set "AT_BASIC="
+set "AT_UPDATE_TOKEN="
+set "AT_UPDATE_BENUTZER="
 
 :: npm install
 :npm_install
 echo.
 echo   [3/4] Abhaengigkeiten aktualisieren...
-echo     npm install...
+echo     npm ci...
 
-call npm install
-if errorlevel 1 (
-    echo   [X] npm install fehlgeschlagen!
-    goto :error
+:: npm ci nach package-lock.json (genau die geprueften Versionen), sonst npm install
+set "NPM_OK=0"
+if exist "package-lock.json" (
+    call npm ci
+    if not errorlevel 1 set "NPM_OK=1"
+    if "!NPM_OK!"=="0" echo     npm ci fehlgeschlagen -- versuche npm install
+)
+if "!NPM_OK!"=="0" (
+    call npm install
+    if errorlevel 1 (
+        echo   [X] npm install fehlgeschlagen!
+        goto :error
+    )
 )
 echo   [OK] Abhaengigkeiten aktualisiert
 

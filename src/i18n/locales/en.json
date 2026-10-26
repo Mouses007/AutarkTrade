@@ -76,8 +76,8 @@
   },
   "nav": {
     "exchange": "EXCHANGE",
-    "hideNumbers": "Hide numbers",
-    "showNumbers": "Show numbers again",
+    "hideNumbers": "Privacy screen (display only): blur numbers",
+    "showNumbers": "Privacy screen (display only) off: show numbers again",
     "tradeCategory": "TYPE",
     "categoryAll": "All",
     "analyze": "ANALYZE",
@@ -364,7 +364,7 @@
     "schwellePunkte": "from {n} points p.a.",
     "esp32Titel": "External displays · ESP32 / widget / desklet",
     "esp32Aktiv": "active",
-    "esp32Beschreibung": "Show your trading data on external displays: ESP32 TFT displays, the Android home-screen widget and the Linux desklet. All of them use the same read-only endpoint with the API key below — they also work with password protection enabled.",
+    "esp32Beschreibung": "Show your trading data on external displays: ESP32 TFT displays, the Android home-screen widget and the Linux desklet. All read the same read-only endpoint — ESP32 displays with the display key, phone app and widget with the main key (which also opens alarms and push). Both work with password protection enabled.",
     "esp32Boards": "ESP32 boards (firmware in the repo)",
     "esp32SpalteBoard": "Board",
     "esp32SpalteDisplay": "Display",
@@ -392,8 +392,25 @@
     "esp32KeyNeu": "Regenerate key",
     "esp32KeyErzeugen": "Generate key",
     "esp32KeyLoeschen": "Delete key",
+    "esp32PushTitel": "Push devices ({anzahl} of {max})",
+    "esp32PushBeschreibung": "Devices registered with the ESP32 key for instant delivery of chart alerts (Android widget via ntfy). At most {max}; when the list is full the server accepts no new device. Remove an unknown device and generate a new key.",
+    "esp32PushLeer": "No device registered.",
+    "esp32PushSpalteGeraet": "Device",
+    "esp32PushSpalteHost": "Distributor (host)",
+    "esp32PushSpalteSeit": "Registered",
+    "esp32PushOhneName": "unnamed",
+    "esp32PushEntfernen": "Remove",
+    "esp32PushEntfernenFrage": "Remove device \"{name}\" from instant delivery?",
     "esp32FilterGespeichert": "Filter saved — displays pick it up on their next fetch.",
     "esp32KeyNeuHinweis": "New key generated — visible only once. Copy it now!",
+    "esp32Anzeige": {
+      "titel": "Display key (ESP32 displays only)",
+      "text": "A display sits in the open and sends its key over HTTP. The display key therefore ONLY opens the display data (GET /api/esp32/display) — no alarms, no push registration. ESP32 displays get this key, the phone app and the widget get the main key above. The main key keeps working for the display too.",
+      "label": "Display key",
+      "erzeugen": "Generate display key",
+      "neu": "Regenerate display key",
+      "loeschen": "Delete display key"
+    },
     "sicherheit": {
       "titel": "Security · Password protection",
       "aktiv": "on",
@@ -421,6 +438,67 @@
       "istDeaktiviert": "Password protection disabled.",
       "deaktivierenFrage": "Really disable password protection? Afterwards anyone with network access has full access."
     },
+    "tls": {
+      "titel": "HTTPS · Certificate",
+      "aktivPort": "active · port {port}",
+      "aus": "off",
+      "einleitung": "AutarkTrade manages its HTTPS certificate itself: its own root CA (one per database) issues the server certificate and renews it automatically. Each device trusts the CA once — and from then on every new certificate. Plain HTTP on port 8080 stays for ESP32 displays.",
+      "httpTitel": "You are using HTTP",
+      "httpText": "Password and session travel unencrypted. After installing the CA, better open it via HTTPS:",
+      "fehlerTitel": "HTTPS not ready",
+      "abgeschaltet": "HTTPS is switched off (AT_TLS_PORT=aus). The CA is still managed.",
+      "fingerabdruck": "CA fingerprint (SHA-256)",
+      "fingerabdruckHilfe": "Compare with this value when installing on the device. If it does not match, do NOT install.",
+      "kopieren": "Copy",
+      "kopiert": "Fingerprint copied.",
+      "caName": "CA",
+      "caGueltig": "CA valid until",
+      "serverGueltig": "Server certificate valid until",
+      "restTage": "{tage} days left",
+      "erneuertAm": "Issued on",
+      "automatisch": "Renewed automatically when fewer than {tage} days are left or a name is missing (checked daily, no restart).",
+      "herunterladen": "Download CA",
+      "erneuern": "Renew now",
+      "erneuert": "New server certificate active.",
+      "namenTitel": "Names and addresses in the certificate",
+      "namenHilfe": "The browser checks that the address in the address bar is in the certificate. The NAS IP belongs here (or in AT_TLS_NAMEN).",
+      "herkunftBasis": "always",
+      "herkunftEigen": "own entry",
+      "entfernen": "Remove {name}",
+      "hinzufuegen": "Add name or IP",
+      "hinzufuegenPlatzhalter": "e.g. 192.168.178.100 or nas.fritz.box",
+      "aufnehmen": "Add",
+      "verwerfen": "Dismiss",
+      "namenGespeichert": "Saved — new certificate active.",
+      "vorschlaegeTitel": "Suggestions",
+      "vorschlaegeHilfe": "AutarkTrade was opened under these addresses, but they are not in the certificate. Only add what you know.",
+      "gesehen": "last {datum}",
+      "anleitungTitel": "Install the CA on your devices",
+      "anleitungEinleitung": "Once per device: \"Download CA\", install, compare the fingerprint. Then open https://<address>:8443.",
+      "anleitung": {
+        "android": {
+          "titel": "Android",
+          "text": "Download the CA, then Settings › Security › Encryption & credentials › Install a certificate › CA certificate and pick the file AutarkTrade-CA-….crt (confirm the warning). The path differs slightly by vendor (search: \"install certificate\"). Chrome then uses the Android store. Firefox for Android: Settings › About Firefox, tap the logo five times, then Settings › Secret settings › enable \"Use third party CA certificates\"."
+        },
+        "windows": {
+          "titel": "Windows (Chrome, Edge)",
+          "text": "Double-click the .crt file › Install certificate › Current user › \"Place all certificates in the following store\" › Trusted Root Certification Authorities › Finish, confirm the security warning with Yes. Restart Chrome and Edge. Firefox: see Linux / Firefox."
+        },
+        "linux": {
+          "titel": "Linux / Firefox",
+          "text": "Firefox (any OS): Settings › Privacy & Security › Certificates › View certificates › Authorities › Import, pick the file, tick \"Trust this CA to identify websites\".\nChrome/Chromium on Linux: chrome://settings/certificates › Authorities › Import. System-wide (Debian/Ubuntu/Mint): sudo cp AutarkTrade-CA-*.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates"
+        },
+        "apple": {
+          "titel": "macOS / iOS",
+          "text": "macOS: double-click the file (Keychain Access, keychain \"System\"), open the certificate › Trust › \"When using this certificate: Always Trust\".\niOS/iPadOS: in Safari tap \"Download CA\" › Settings › Profile downloaded › Install. Then Settings › General › About › Certificate Trust Settings › enable \"AutarkTrade Lokale CA\"."
+        }
+      },
+      "caNeuTitel": "Create a new CA",
+      "caNeuText": "Only needed if the CA key is unreadable (AT_SECRET changed) or may have fallen into the wrong hands. ALL devices then have to trust the new CA again — until then they show a certificate warning, and devices with a pinned fingerprint no longer connect.",
+      "caNeu": "Create new CA",
+      "caNeuFrage": "Really create a NEW CA?\n\nAll devices (browsers, phone app, ESP32) must trust the new CA again. The old CA can then be removed from the devices.",
+      "caNeuFertig": "New CA active — now install it again on all devices."
+    },
     "neustartNurLokal": "Restart is only possible directly on the server (localhost).",
     "importLoeschFehler": "Error while deleting: ",
     "language": "Language",
@@ -444,6 +522,8 @@
     "zugangAbgelehnt": "{boerse} rejects the stored API key.",
     "zugangSeit": "Since {zeit}. Create a new key at the exchange and enter it below — the notice disappears on the next successful call.",
     "apiConnectionDescription": "Connect your exchange accounts to import trades automatically.",
+    "nurLeserechteTitel": "Grant read-only access",
+    "nurLeserechteText": "AutarkTrade only reads and never places orders. Create the API keys at the exchange with read permission only — no trading and no withdrawal rights — and, where the exchange offers it, add this server's IP address to the whitelist.",
     "apiKey": "API Key",
     "apiKeyPlaceholder": "Enter API Key",
     "secretKey": "Secret Key",
@@ -978,8 +1058,11 @@
     "push": {
       "titel": "Push to your phone",
       "einleitung": "ntfy, Telegram or webhook — used by all alerts: chart (price, line, zone, momentum), hype radar, early phase, exchange watcher, sell-off. Each channel has a minimum urgency; chart alerts default to “warning”.",
-      "ntfyKurz": "simplest: install the app, address https://ntfy.sh and your own hard-to-guess topic"
-    }
+      "ntfyKurz": "simplest: install the app, address https://ntfy.sh and your own hard-to-guess topic",
+      "ntfyTopicLeer": "Without a topic nothing is sent via ntfy.",
+      "ntfyTopicSchwach": "On ntfy.sh a topic is public: anyone who knows the name reads your alerts and can send their own. Use a long random topic (at least {n} characters, not “hype-radar”) — or a reserved topic with an access token, or your own ntfy server."
+    },
+    "startDepositUngueltig": "Please enter a number (e.g. 1000 or 1000.50; 0 is allowed). Nothing was saved."
   },
   "setup": {
     "welcome": "Welcome!",
@@ -1147,6 +1230,7 @@
     "alreadyImported": "The following data has already been imported:",
     "noPositionsFound": "No positions found for the selected time period.",
     "manualSymbolMissing": "Symbol is missing.",
+    "manualSymbolUngueltig": "The symbol may only contain letters, digits and . _ / - (at most 30 characters), e.g. BTCUSDT.",
     "manualNetPLMissing": "Net PnL is missing.",
     "manualNotANumber": "{feld}: not a valid number.",
     "manualFieldNetPL": "Net PnL",
@@ -4328,7 +4412,13 @@
       "planVerletzt": "Plan exceeded",
       "planGehalten": "Plan kept",
       "einklappen": "Collapse",
-      "ausklappen": "Expand"
+      "ausklappen": "Expand",
+      "fehlerVerlust": "Max. loss: please enter a number of 0 or more (e.g. 200 or 150.5).",
+      "fehlerTrades": "Max. trades: please enter a whole number of 0 or more.",
+      "ohneGrenzeTitel": "Start without a loss limit?",
+      "ohneGrenzeText": "No maximum loss is set. The plan cannot be changed once the session is running.",
+      "ohneGrenzeStarten": "Start without limit",
+      "grenzeEintragen": "Set a limit"
     },
     "indizes": {
       "title": "Indices (intraday)",
@@ -6607,6 +6697,8 @@
     "abgleichStimmtInfo": "The sum of all {n} transactions equals the reported balance.",
     "abgleichTeilweise": "History incomplete",
     "abgleichTeilweiseInfo": "This exchange provides no deposits/withdrawals and spot history only per trading pair — the balance cannot be fully reconstructed from the transactions.",
+    "historieAbgeschnitten": "History truncated",
+    "historieAbgeschnittenInfo": "Etherscan returned more rows than are read per fetch ({netze}) — newer transactions and tokens may be missing. The tax report treats this address as not evidenced.",
     "abgleichAbweichung": "{n} mismatch(es)",
     "status_ok": "current",
     "status_fehler": "Error",

@@ -7,12 +7,26 @@
     <string name="cfg_title">Widget und Chart-Alarme — Einstellungen</string>
     <string name="cfg_host">Server-Host / IP</string>
     <string name="cfg_host_hint">z.B. 192.168.178.100</string>
-    <string name="cfg_port">Port</string>
+    <string name="cfg_port">Port (HTTP — zum Koppeln und für unverschlüsselten Betrieb)</string>
+    <string name="cfg_tls">Verschlüsselt (HTTPS, Port 8443)</string>
+    <string name="cfg_tls_port">HTTPS-Port</string>
+    <string name="cfg_koppeln">Neu koppeln</string>
+    <string name="cfg_koppeln_laeuft">Hole das Server-Zertifikat…</string>
+    <string name="cfg_koppeln_titel">Server-Zertifikat bestätigen</string>
+    <string name="cfg_koppeln_text">Fingerabdruck der AutarkTrade-CA von %1$s:\n\n%2$s\n\nvollständig:\n%3$s\n\nStimmt mit Einstellungen › Allgemein › HTTPS in der Web-App überein?</string>
+    <string name="cfg_koppeln_ja">Ja, stimmt überein</string>
+    <string name="cfg_koppeln_nein">Nein, abbrechen</string>
+    <string name="cfg_koppeln_abgebrochen">Nicht gekoppelt — ohne bestätigtes Zertifikat läuft HTTPS nicht.</string>
+    <string name="cfg_koppeln_fehler">Koppeln fehlgeschlagen: %1$s</string>
+    <string name="cfg_gekoppelt">Gekoppelt ✓</string>
+    <string name="cfg_tls_stand">Gekoppelt mit %1$s — CA %2$s</string>
+    <string name="cfg_tls_ungekoppelt">Noch nicht gekoppelt — beim Speichern oder Testen holt die App das Zertifikat über HTTP und fragt nach.</string>
+    <string name="cfg_tls_aus">Unverschlüsselt: Schlüssel und Kontodaten gehen im Klartext übers Netz. Nur in einem vertrauenswürdigen Netz oder VPN ausschalten.</string>
     <string name="cfg_key">ESP32-API-Key</string>
     <string name="cfg_key_hint">aus AutarkTrade → Einstellungen → Externe Anzeigen</string>
     <string name="cfg_filter">Zeitraum (für „Heute/Gesamt")</string>
     <string name="cfg_default_broker">Standard-Börse oben (nach Aktualisieren)</string>
-    <string name="cfg_web">Adresse der installierten Web-App (für Links, optional)</string>
+    <string name="cfg_web">Adresse der installierten Web-App (für Links, optional — leer: mit HTTPS https://host:8443)</string>
     <string name="cfg_web_hint">z.B. https://192.168.178.100:8443</string>
     <string name="cfg_web_app">Installierte AutarkTrade-App gefunden ✓ — Coins und Alarme öffnen dort.</string>
     <string name="cfg_web_browser">Keine installierte App für diese Adresse — Links öffnen im Browser. Die App über HTTPS in Chrome mit „Installieren" einrichten und genau diese Adresse hier eintragen.</string>
@@ -30,6 +44,8 @@
     <string name="w_futures">Futures</string>
     <string name="w_bots">Bots</string>
     <string name="w_updated">Aktualisiert %1$s</string>
+    <!-- FUN-GER-001: Stand älter als drei Abrufintervalle -->
+    <string name="w_veraltet">⚠ Veraltet: Stand %1$s (vor %2$s)</string>
     <string name="w_refreshing">Aktualisiere…</string>
     <string name="w_tap_config">Tippen zum Einrichten</string>
     <string name="w_toggle_balance">Saldo ein-/ausblenden</string>
@@ -85,6 +101,8 @@
     <string name="kanal_momentum">Momentum-Alarme</string>
     <string name="kanal_momentum_info">Momentum-Punkte auf Watchlists und Zeiteinheiten</string>
     <string name="n_sammel">%1$d Chart-Alarme</string>
+    <!-- Fassung für den Sperrbildschirm (SEC-AND-004): ohne Symbol, Preise, Beträge -->
+    <string name="n_oeffentlich">AutarkTrade: Chart-Alarm</string>
     <string name="n_weitere">und %1$d weitere</string>
     <string name="n_test_titel">BTCUSDT steigt über 100 000 (Test)</string>
     <string name="n_test_text">Testmeldung aus den Widget-Einstellungen. So sieht ein Chart-Alarm aus; abgefragt wird alle %1$s min.</string>

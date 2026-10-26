@@ -14,10 +14,11 @@
  * maskiert zurück; ein unangetastetes Feld überschreibt den gespeicherten
  * Schlüssel nicht (der Server übernimmt nur Werte ohne Maskierungspunkte).
  */
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { Knopf, Kreisel } from '@/components/basis/index.js'
+import { ntfyTopicSchwach, NTFY_MIN_LAENGE } from '../../../shared/ntfy.js'
 
 const { t } = useI18n()
 
@@ -40,6 +41,14 @@ onMounted(async () => {
         fehler.value = e.response?.data?.error || e.message
     }
 })
+
+/*
+ * Warnung zum ntfy-Topic (Gesamtaudit 26.10.2026, SEC-SRV-013): auf ntfy.sh
+ * liest und schreibt jeder mit, der das Topic kennt. Ein leeres Topic sendet
+ * gar nicht (der Server fällt nicht mehr still auf `hype-radar` zurück).
+ */
+const ntfyTopicLeer = computed(() => !String(kanaele.value?.ntfy?.topic || '').trim())
+const ntfyWarnung = computed(() => Boolean(kanaele.value?.ntfy) && !ntfyTopicLeer.value && ntfyTopicSchwach(kanaele.value.ntfy))
 
 async function speichern() {
     fehler.value = ''
@@ -88,6 +97,8 @@ async function testen() {
                         <option value="warnung">{{ t('hype.abWarnung') }}</option>
                         <option value="kritisch">{{ t('hype.abKritisch') }}</option>
                     </select>
+                    <div v-if="ntfyTopicLeer" class="warnung ganz" role="alert">{{ t('settings.push.ntfyTopicLeer') }}</div>
+                    <div v-else-if="ntfyWarnung" class="warnung ganz" role="alert">{{ t('settings.push.ntfyTopicSchwach', { n: NTFY_MIN_LAENGE }) }}</div>
                 </div>
             </div>
 
@@ -182,6 +193,11 @@ async function testen() {
 
 .fehler {
     color: var(--bad);
+}
+
+.warnung {
+    color: var(--warn);
+    font-size: 0.82rem;
 }
 
 @media (max-width: 600px) {

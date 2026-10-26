@@ -25,6 +25,17 @@ fi
 cp -r "${DESKLET_SRC}" "${DEST}"
 echo "    Dateien kopiert."
 
+# Die Einstellungen enthalten den Geräteschlüssel im Klartext. Cinnamon legt sie
+# gruppenlesbar an (0664) — nur der eigene Benutzer soll sie lesen (Audit SEC-DSK-001).
+# Der Desklet zieht die Rechte bei jedem Start selbst nach; hier für bestehende Dateien.
+for CFG_DIR in "${HOME}/.config/cinnamon/spices/${DESKLET_UUID}" "${HOME}/.cinnamon/configs/${DESKLET_UUID}"; do
+    if [ -d "${CFG_DIR}" ]; then
+        chmod 700 "${CFG_DIR}"
+        find "${CFG_DIR}" -maxdepth 1 -type f \( -name '*.json' -o -name '*.pem' \) -exec chmod 600 {} +
+        echo "    Einstellungen nur für dich lesbar: ${CFG_DIR} (700, *.json/*.pem 600)"
+    fi
+done
+
 # Cinnamon-Einstellungen: Desklet zur enabled-Liste hinzufügen (falls noch nicht vorhanden)
 SETTINGS_FILE="${HOME}/.cinnamon/configs/org.cinnamon/org.cinnamon.json"
 
@@ -61,6 +72,9 @@ echo ""
 echo "==> Installation abgeschlossen!"
 echo ""
 echo "    Nach der Aktivierung:"
-echo "    - Rechtsklick auf Desklet → Einstellungen → Port ggf. anpassen (Standard: 8080)"
+echo "    - Rechtsklick auf Desklet → Einstellungen → Host, Port (Standard: 8080) und API-Key eintragen"
+echo "    - HTTPS (Port 8443) ist voreingestellt: einmal koppeln mit „1. Server-Zertifikat holen“,"
+echo "      Fingerabdruck mit Einstellungen › Allgemein › HTTPS in der Web-App vergleichen,"
+echo "      dann „2. Fingerabdruck stimmt — koppeln“"
 echo "    - Desklet aktualisiert sich automatisch alle 30 Sekunden"
 echo ""

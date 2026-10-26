@@ -17,11 +17,12 @@
  */
 import dgram from 'node:dgram'
 import os from 'node:os'
-import { MDNS_ADRESSE, MDNS_PORT, normName, gueltigerName, leseAnfrage, fragtNach, baueAntwort, waehleIp } from './mdns-kern.js'
+import { MDNS_ADRESSE, MDNS_PORT, normName, gueltigerName, leseAnfrage, fragtNach, baueAntwort, waehleIp, netzmaskeVon, imEigenenNetz } from './mdns-kern.js'
 
 const roh = process.env.AT_MDNS_NAME ?? 'autarktrade.local'
 const NAME = normName(roh)
 const IP = (process.env.AT_MDNS_IP || '').trim() || waehleIp(os.networkInterfaces())
+const MASKE = IP ? netzmaskeVon(os.networkInterfaces(), IP) : null
 
 function untaetig(grund) {
     console.log(`[mdns] ${grund} — Dienst bleibt untätig`)
@@ -43,7 +44,10 @@ function starte() {
         const anfrage = leseAnfrage(buf)
         if (!fragtNach(anfrage, NAME)) return
         if (rinfo.port !== MDNS_PORT) {
-            // Altanfrage (einfacher Resolver, RFC 6762 §6.7): direkt an den Fragenden
+            // Altanfrage (einfacher Resolver, RFC 6762 §6.7): direkt an den Fragenden —
+            // aber nur im eigenen Netz (RFC 6762 §11, Audit SEC-OPS-017). Eine Unicast-
+            // Antwort an eine gefälschte, fremde Absenderadresse wäre ein Reflektor.
+            if (!imEigenenNetz(rinfo.address, IP, MASKE)) return
             sock.send(baueAntwort(NAME, IP, { id: anfrage.id, mitFrage: true }), rinfo.port, rinfo.address)
         } else {
             sock.send(multicast, MDNS_PORT, MDNS_ADRESSE)
@@ -59,7 +63,7 @@ function starte() {
         try { sock.setMulticastInterface(IP) } catch { /* Standardschnittstelle */ }
         sock.setMulticastTTL(255)
         sock.setMulticastLoopback(true)
-        console.log(`[mdns] kündige ${NAME} → ${IP} an`)
+        console.log(`[mdns] kündige ${NAME} → ${IP} an (Altanfragen nur aus ${IP}/${MASKE})`)
         // Ankündigung beim Start (RFC 6762 §8.3: mindestens zweimal, 1 s Abstand)
         sock.send(multicast, MDNS_PORT, MDNS_ADRESSE)
         setTimeout(() => sock.send(multicast, MDNS_PORT, MDNS_ADRESSE), 1000)

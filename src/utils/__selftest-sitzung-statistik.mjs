@@ -263,6 +263,10 @@ console.log('\nGesamtaufruf')
     check('Gewinner gezählt', a.gesamt.gewinner === 5)
     check('Gesamtgruppe nicht dünn', a.gesamt.duenn === false)
 
+    // Audit FUN-WEB-003: Break-even zählt wie im Dashboard (`istGewinn`, >= 0)
+    const be = werteAus([s({ pnlUsd: 0 }), s({ pnlUsd: 5 }), s({ pnlUsd: -3 })])
+    check('Break-even zählt als Gewinner ([0, 5, −3] → 2)', be.gesamt.gewinner === 2, String(be.gesamt.gewinner))
+
     const kaputt = werteAus([s({ pnlUsd: 'abc', tradeAnzahl: null })])
     check('unlesbare Beträge werden zu 0, nicht NaN',
         kaputt.gesamt.pnlUsd === 0 && !Number.isNaN(kaputt.gesamt.pnlUsd))

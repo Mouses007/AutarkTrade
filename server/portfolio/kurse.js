@@ -21,6 +21,9 @@ import { getKnex } from '../database.js'
 import { preise as marktPreise, kerzen as marktKerzen } from '../marktdaten/index.js'
 import * as bitgetMarkt from '../marktdaten/bitget.js'
 import { STABIL } from './normal.js'
+import { ketteNorm, istKanon } from './token-id.js'
+
+export { ketteNorm }
 
 const MIN_LIQUIDITAET = 10000
 // Darunter (dünner Pool) gilt der Preis nur, wenn der Bestand höchstens ein
@@ -28,6 +31,10 @@ const MIN_LIQUIDITAET = 10000
 // ist realistisch bewertet, 60'000 Spam-Token zu einem Fantasiepreis nicht.
 const MIN_LIQ_DUENN = 100
 const DUENN_ANTEIL = 0.25
+// Ab der Schwelle (liquider Pool) gilt der Preis nur, solange der Bestand
+// höchstens die ganze Pool-Liquidität wert ist (Audit FUN-PRT-001): 250'000
+// falsche USDT in einem 30'000-USD-Pool zu 1 USD wären reine Fantasie.
+const LIQ_ANTEIL = 1
 const FX_TTL = 60 * 60e3
 const MARKT_TTL = 60e3
 
@@ -37,40 +44,9 @@ const ALIAS = { BTT: 'BTTC', MIOTA: 'IOTA', WETH: 'ETH', WBTC: 'BTC', WBNB: 'BNB
 /** DexScreener-Namen der Ketten. */
 export const DEX_KETTE = { 'evm:1': 'ethereum', 'evm:42161': 'arbitrum', 'evm:8453': 'base', 'evm:10': 'optimism', 'evm:56': 'bsc', 'evm:137': 'polygon', 'evm:43114': 'avalanche', sol: 'solana' }
 
-/** Kettenname einer Datei/Quelle → interner Schlüssel (evm:<chainid> bzw. sol). */
-const KETTEN_NAMEN = { ethereum: 'evm:1', eth: 'evm:1', bsc: 'evm:56', bnb: 'evm:56', polygon: 'evm:137', matic: 'evm:137', arbitrum: 'evm:42161', base: 'evm:8453', optimism: 'evm:10', avalanche: 'evm:43114', solana: 'sol', sol: 'sol' }
-export function ketteNorm(k) {
-    const t = String(k || '').trim().toLowerCase()
-    if (!t) return null
-    if (/^evm:\d+$/.test(t)) return t
-    return KETTEN_NAMEN[t] || null
-}
+// `ketteNorm` und `KANON` (Verträge, die nachweislich der Börsen-Coin sind)
+// stehen seit dem Audit FUN-PRT-001 in `token-id.js`.
 
-/**
- * Ist ein Token (Vertrag auf einer Kette) derselbe Coin wie das gleichnamige
- * Börsenpaar? Viele Wallet-Token heissen wie ein Börsen-Coin, sind es aber
- * nicht („AI", „MAGA", „SOUTH"). Belegt wird es über den HEUTIGEN Preis:
- * DexScreener für den Vertrag gegen den Börsenkurs des Symbols, ±25 %.
- * Unbekannt (einer der beiden fehlt) heisst: nicht derselbe.
- */
-/*
- * Verträge, die nachweislich DER Coin des Börsenpaars sind (Ethereum-Mainnet).
- * Für sie fehlt sonst der Kurs, wenn DexScreener keinen liquiden Pool findet —
- * gehandelt wird BNT, GRT, ILV … an den Börsen, nicht auf der Kette.
- */
-const KANON = {
-    // Fiat24 (SafePal-Karte): auf der Kette geprüft 25.10.2026 — name „Fiat24 CHF“, 2 Dezimalen.
-    'evm:42161': { '0xd41f1f0cf89fd239ca4c1f8e8ada46345c86b0a4': 'CHF24' },
-    'evm:1': {
-        '0xdac17f958d2ee523a2206206994597c13d831ec7': 'USDT', '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48': 'USDC',
-        '0xae7ab96520de3a18e5e111b5eaab095312d7fe84': 'STETH', '0x7d1afa7b718fb893db30a3abc0cfc608aacfebb0': 'MATIC',
-        '0xc944e90c64b2c07662a292be6244bdf05cda44a7': 'GRT', '0x1f573d6fb3f13d689ff844b4ce37794d79a7ff1c': 'BNT',
-        '0x767fe9edc9e0df98e07454847909b5e959d7ca0e': 'ILV', '0x4e15361fd6b4bb609fa63c81a2be19d873717870': 'FTM',
-        '0x2260fac5e5542a773aa44fbcfedf7c193bc2c599': 'WBTC', '0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2': 'WETH',
-        '0x514910771af9ca656af840dff83e8264ecf986ca': 'LINK', '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984': 'UNI',
-        '0x64d0f55cd8c7133a9d7102b13987235f486f2224': 'BORG',
-    },
-}
 
 /**
  * Coins, die keine der Börsen (Binance, Bitget) als Spot-Paar führt, aber auf
@@ -88,15 +64,24 @@ export function geldTokenWaehrung(asset, kontrakt, kette) {
     const a = String(asset ?? '').toUpperCase()
     const w = GELD_TOKEN[a]
     if (!w) return null
-    if (kontrakt && KANON[ketteNorm(kette)]?.[String(kontrakt).toLowerCase()] !== a) return null
+    if (kontrakt && !istKanon(a, kontrakt, kette)) return null
     return w
 }
 
-export async function gleicherCoin(asset, kontrakt, kette) {
+/**
+ * Ist ein Token (Vertrag auf einer Kette) derselbe Coin wie das gleichnamige
+ * Börsenpaar? Viele Wallet-Token heissen wie ein Börsen-Coin, sind es aber
+ * nicht („AI", „MAGA", „SOUTH"). Belegt wird es über KANON oder den HEUTIGEN
+ * Preis: DexScreener für den Vertrag gegen den Börsenkurs des Symbols, ±25 %.
+ * Unbekannt (einer der beiden fehlt) heisst: nicht derselbe. Mit `menge` greift
+ * der Deckel gegen die Pool-Liquidität (ein falscher „USDT“ in einem Pool, der
+ * 1 USD zeigt, ist nicht derselbe, wenn sein Bestand den Pool übersteigt).
+ */
+export async function gleicherCoin(asset, kontrakt, kette, menge = 0) {
     const k = ketteNorm(kette)
     if (!kontrakt || !k) return false
-    if (KANON[k]?.[String(kontrakt).toLowerCase()] === String(asset).toUpperCase()) return true
-    const { kurse } = await kurseFuer([{ asset, kontrakt, kette: k }, { asset }])
+    if (istKanon(asset, kontrakt, k)) return true
+    const { kurse } = await kurseFuer([{ asset, kontrakt, kette: k, menge }, { asset }])
     const dex = kurse.get(`${String(asset).toUpperCase()}|${kontrakt}`)?.usd
     const boerse = kurse.get(String(asset).toUpperCase())?.usd
     if (!(dex > 0) || !(boerse > 0)) return false
@@ -220,6 +205,18 @@ async function dexKurse(kette, kontrakte) {
 }
 
 /**
+ * Gilt der Pool-Kurs für diese Menge? (rein) Dünner Pool: nur mit bekannter
+ * Menge und höchstens einem Viertel der Liquidität. Liquider Pool: höchstens
+ * die ganze Liquidität — ohne bekannte Menge wie bisher.
+ * @param {{usd:number, liq:number, duenn:boolean}} t
+ */
+export function poolKursGilt(t, menge) {
+    if (!t) return false
+    if (t.duenn) return menge > 0 && menge * t.usd <= t.liq * DUENN_ANTEIL
+    return !(menge * t.usd > t.liq * LIQ_ANTEIL)
+}
+
+/**
  * Kurse für eine Liste von Posten.
  * @param {Array<{asset, kontrakt?, kette?}>} posten
  * @returns {Promise<{ kurse: Map<string, {usd, quelle}>, fx, marktFehler }>}
@@ -249,13 +246,15 @@ export async function kurseFuer(posten) {
             const key = `${String(p.asset).toUpperCase()}|${p.kontrakt}`
             const geld = geldTokenWaehrung(p.asset, p.kontrakt, kette)
             if (geld) { kurse.set(key, { usd: geld === 'CHF' ? 1 / fx.chf : 1 / fx.eur, quelle: `Fiat24 · 1 ${p.asset} = 1 ${geld}` }); continue }
+            // Kanonischer Stablecoin (Herausgeber-Vertrag): fest 1 USD wie an der Börse.
+            if (STABIL[String(p.asset).toUpperCase()] && istKanon(p.asset, p.kontrakt, kette)) { kurse.set(key, { usd: 1, quelle: 'Stablecoin (Herausgeber-Vertrag)' }); continue }
             let t = d.get(kette === 'sol' ? p.kontrakt : String(p.kontrakt).toLowerCase()) || d.get(p.kontrakt)
-            if (t?.duenn) {
+            if (t) {
                 const menge = posten.filter((x) => x.kontrakt === p.kontrakt && x.kette === kette).reduce((s, x) => s + Math.abs(Number(x.menge) || 0), 0)
-                if (!(menge > 0) || menge * t.usd > t.liq * DUENN_ANTEIL) t = null
+                if (!poolKursGilt(t, menge)) t = null
             }
-            // Ein bekannter Stablecoin MIT Kontrakt bekommt trotzdem nur dann
-            // 1 USD, wenn DexScreener ihn kennt — „USDT" kann jeder Token heissen.
+            // Ein bekannter Stablecoin mit FREMDEM Kontrakt bekommt nie fest 1 USD,
+            // nur den Pool-Kurs — „USDT" kann jeder Token heissen.
             kurse.set(key, t ? { usd: t.usd, quelle: t.quelle, symbol: t.symbol } : { usd: null, quelle: 'kein verlässlicher Kurs' })
         }
     }

@@ -62,10 +62,14 @@ export async function bitgetRequest(method, path, apiKey, secretKey, passphrase,
         'locale': 'en-US'
     }
 
+    // Zeitgrenze wie bei Bitunix (Audit SEC-SRV-005): ohne sie hielt ein
+    // hängender Aufruf ESP32, Widget, Börsenwacht und Portfolio-Abruf bis zum
+    // undici-Standard (~300 s) fest.
     const response = await fetch(url, {
         method,
         headers,
-        body: method !== 'GET' ? bodyString || undefined : undefined
+        body: method !== 'GET' ? bodyString || undefined : undefined,
+        signal: AbortSignal.timeout(15000),
     })
 
     const data = await response.json().catch(() => null)
@@ -241,7 +245,8 @@ export async function testConnection(apiKey, secretKey, passphrase) {
                         'ACCESS-PASSPHRASE': passphrase,
                         'locale': 'en-US',
                         'paptrading': '1'
-                    }
+                    },
+                    signal: AbortSignal.timeout(15000),
                 })
                 const diagData = await diagResponse.json().catch(() => null)
 
@@ -250,7 +255,8 @@ export async function testConnection(apiKey, secretKey, passphrase) {
                 if (diagData && diagData.code === '40099') {
                     throw new Error('Signatur ist korrekt, aber der API-Key wird abgelehnt. ' +
                         'Wahrscheinlich ist deine IP-Adresse nicht in der API-Key-Whitelist auf Bitget eingetragen. ' +
-                        'Gehe zu Bitget → API Management → bearbeite den Key → entferne die IP-Beschränkung oder füge deine Server-IP hinzu.')
+                        'Gehe zu Bitget → API Management → bearbeite den Key → trage die Server-IP in der Whitelist ein. ' +
+                        'Die IP-Beschränkung nicht entfernen: sie ist der beste Schutz, falls der Schlüssel abhanden kommt.')
                 }
             } catch (diagError) {
                 // If diag error is our custom message, throw it

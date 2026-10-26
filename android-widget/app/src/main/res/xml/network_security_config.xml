@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  The AutarkTrade server is self-hosted and reached over a private LAN / VPN
-  via plain HTTP (no TLS). Allow cleartext traffic. This is a personal, single-user
-  app talking only to the user's own server — not a public-facing client.
+  Seit 4.2.0-28 ist HTTPS der Standardweg: die App spricht den eigenen AutarkTrade-Server
+  über https://host:8443 an und vertraut dabei NUR der beim Koppeln bestätigten
+  AutarkTrade-CA (eigener TrustManager in Kopplung.kt / ApiClient.kt — diese Datei und
+  die System-CAs spielen für diese Aufrufe keine Rolle). Ist HTTPS eingeschaltet, gibt es
+  keinen Rückfall auf http.
+
+  Klartext bleibt hier trotzdem erlaubt, weil diese Datei statisch ist und nicht vom
+  Schalter in den Einstellungen abhängen kann. Gebraucht wird er
+    - zum Koppeln: die CA wird über http://host:8080/api/esp32/ca geholt; geschützt
+      durch den Fingerabdruck-Abgleich mit der Web-App, den der Nutzer bestätigt;
+    - für den Altbetrieb, wenn der Nutzer HTTPS bewusst ausschaltet (dann gehen
+      Geräteschlüssel und Daten unverschlüsselt übers Netz — die App warnt davor).
+  Die Server-Adresse ist frei eingebbar (IP im LAN/VPN), darum keine domain-config.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">

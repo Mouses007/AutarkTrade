@@ -17,13 +17,57 @@
     "step": 1,
     "units": "",
     "description": "Server port",
-    "tooltip": "Default: 8080"
+    "tooltip": "Default: 8080 (HTTP). With HTTPS on it is only used to fetch the certificate when pairing."
   },
   "api-key": {
     "type": "entry",
     "default": "",
     "description": "ESP32 API key",
     "tooltip": "From AutarkTrade → Settings → ESP32 Display → Generate key. Works even with the password gate enabled."
+  },
+  "use-https": {
+    "type": "checkbox",
+    "default": true,
+    "description": "Encrypted (HTTPS, port 8443)",
+    "tooltip": "Talks to AutarkTrade over HTTPS and trusts only the server certificate you paired below. Without it the API key and your account data travel unencrypted. The port above (8080) is still used to fetch the certificate when pairing."
+  },
+  "https-port": {
+    "type": "spinbutton",
+    "default": 8443,
+    "min": 1024,
+    "max": 65535,
+    "step": 1,
+    "units": "",
+    "description": "HTTPS port",
+    "dependency": "use-https"
+  },
+  "ca-fetch": {
+    "type": "button",
+    "description": "1. Fetch server certificate",
+    "callback": "onCaHolen",
+    "tooltip": "Fetches the AutarkTrade CA over http://host:port/api/esp32/ca and shows its SHA-256 fingerprint below.",
+    "dependency": "use-https"
+  },
+  "ca-pending": {
+    "type": "entry",
+    "default": "",
+    "description": "Fingerprint to compare",
+    "tooltip": "Must match Settings › General › HTTPS in the AutarkTrade web app. Only then confirm.",
+    "dependency": "use-https"
+  },
+  "ca-confirm": {
+    "type": "button",
+    "description": "2. Fingerprint matches — pair",
+    "callback": "onCaBestaetigen",
+    "tooltip": "Stores the certificate (0600) next to the desklet settings. From then on only this certificate is trusted.",
+    "dependency": "use-https"
+  },
+  "ca-paired": {
+    "type": "entry",
+    "default": "",
+    "description": "Paired certificate (SHA-256)",
+    "tooltip": "Empty = not paired. If the server certificate changes, pair again with the two buttons above.",
+    "dependency": "use-https"
   },
   "refresh-interval": {
     "type": "spinbutton",

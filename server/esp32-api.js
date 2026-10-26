@@ -7,15 +7,28 @@
  * Auth: Static API key stored encrypted in settings.esp32ApiKey
  * Header: X-ESP32-Key: <plaintext-key>
  *
+ * Zwei Schlüssel (Audit SEC-GER-001, 26.10.2026):
+ *   - Hauptschlüssel `esp32ApiKey` — Handy-App/Widget: display, alarme, push.
+ *   - Anzeige-Schlüssel `esp32AnzeigeKey` — ESP32-Displays: NUR display.
+ * Ein Display steht offen im Raum, sein Schlüssel liegt im Flash und geht
+ * im Klartext über HTTP. Mit ihm soll man höchstens die Anzeige lesen, nicht
+ * die Alarmliste oder ein eigenes Push-Gerät eintragen. Der Hauptschlüssel
+ * gilt weiter auch für display (alte Firmware).
+ *
  * Public endpoints (no session required):
  *   GET /api/esp32/display
  *   GET /api/esp32/alarme?seit=<ms>&arten=…   Auslösungen der Chart-Alarme (Android-Widget)
  *   POST/DELETE /api/esp32/push                Sofort-Zustellung per UnifiedPush an-/abmelden
+ *   GET /api/esp32/ca                          CA-Zertifikat {pem, sha256} (ohne Schlüssel,
+ *                                              registriert in server/tls/dienst.js)
  *
  * Admin endpoints (behind session auth, via setupEsp32AdminRoutes):
- *   GET    /api/esp32/settings  — key presence flag
- *   POST   /api/esp32/settings  — generate or set key
- *   DELETE /api/esp32/key       — clear key
+ *   GET    /api/esp32/settings  — key presence flags (Haupt- und Anzeige-Schlüssel)
+ *   POST   /api/esp32/settings  — generate or set key (von Hand: ≥ 32 Zeichen);
+ *                                 `art: 'anzeige'` erzeugt den Anzeige-Schlüssel
+ *   DELETE /api/esp32/key       — clear key (`?art=anzeige`: den Anzeige-Schlüssel)
+ *   GET    /api/esp32/geraete        — eingetragene Push-Geräte (ohne Schlüssel)
+ *   DELETE /api/esp32/geraete/:id    — ein Push-Gerät austragen
  */
 import crypto from 'crypto'
 import { getKnex } from './database.js'
@@ -25,7 +38,8 @@ import { getCurrentPositions as getBitgetCurrentPositions } from './bitget-api.j
 import { getRunningBotPositions } from './pionex-api.js'
 import { ausCache } from './marktradar-api.js'
 import { ausloesungenAus, leseArten } from './esp32-alarme.js'
-import { pruefeGeraet, mitGeraet, ohneGeraet, ladeGeraete, speichereGeraete } from './esp32-push.js'
+import { pruefeGeraet, mitGeraet, ohneGeraet, ladeGeraete, speichereGeraete, geraeteUebersicht, geraeteId, MAX_GERAETE } from './esp32-push.js'
+import { clientIp } from './auth.js'
 import dayjs from 'dayjs'
 import dayjsUtc from 'dayjs/plugin/utc.js'
 import dayjsTimezone from 'dayjs/plugin/timezone.js'
@@ -48,24 +62,107 @@ function timingSafeCompare(a, b) {
     }
 }
 
-async function verifyEsp32Key(req) {
+/** Gespeicherten Schlüssel entschlüsseln; '' wenn keiner da oder unlesbar. */
+function gespeichert(wert) {
+    if (!wert) return ''
+    try { return decrypt(wert) || '' } catch { return '' }
+}
+
+/**
+ * Schlüssel prüfen. `anzeige: true` lässt zusätzlich den Anzeige-Schlüssel
+ * gelten (nur GET /api/esp32/display).
+ */
+async function verifyEsp32Key(req, { anzeige = false } = {}) {
     const provided = req.headers['x-esp32-key']
     if (!provided) return false
 
     const knex = getKnex()
-    const row = await knex('settings').where('id', 1).select('esp32ApiKey').first()
-    if (!row?.esp32ApiKey) return false
+    const row = await knex('settings').where('id', 1).select('esp32ApiKey', 'esp32AnzeigeKey').first()
+    const haupt = gespeichert(row?.esp32ApiKey)
+    const nurAnzeige = anzeige ? gespeichert(row?.esp32AnzeigeKey) : ''
+    // Beide vergleichen (kein früher Ausstieg), damit die Laufzeit nicht verrät, welcher passte.
+    const a = haupt ? timingSafeCompare(provided, haupt) : false
+    const b = nurAnzeige ? timingSafeCompare(provided, nurAnzeige) : false
+    return a || b
+}
 
-    let stored
-    try {
-        stored = decrypt(row.esp32ApiKey)
-    } catch {
+// ============================================================
+// Fehlversuchsbremse (Audit SEC-SRV-004, 26.10.2026)
+// ============================================================
+
+/*
+ * Bis dahin gaben 40 falsche Schlüssel in Folge 40× 401, ohne Bremse — ein
+ * von Hand gesetzter, kurzer Schlüssel wäre zu erraten gewesen. Jetzt zählen
+ * NUR Fehlschläge: wer in einem Fenster von einer Minute FEHLER_MAX
+ * Fehlversuche hat, bekommt bis zum Ende des Fensters 429 — auch mit dem
+ * richtigen Schlüssel, sonst verriete gerade die Bremse den Treffer. Gültige
+ * Abrufe zählen nie: das Widget fragt minütlich, das Display alle paar
+ * Sekunden. Dazu eine globale Grenze über alle Adressen (IPv6-Präfixe,
+ * rotierende Absender), wie beim Login.
+ */
+export const ESP32_FEHLER_MAX = 20
+export const ESP32_FEHLER_GLOBAL_MAX = 100
+const ESP32_FENSTER_MS = 60 * 1000
+
+/** Reine Bremse (für den Selbsttest ohne Server). */
+export function erstelleBremse({ max = ESP32_FEHLER_MAX, globalMax = ESP32_FEHLER_GLOBAL_MAX, fensterMs = ESP32_FENSTER_MS } = {}) {
+    const je = new Map()   // ip -> [zeitpunkte]
+    let alle = []
+    const frisch = (liste, jetzt) => liste.filter((t) => t > jetzt - fensterMs)
+    return {
+        gesperrt(ip, jetzt = Date.now()) {
+            alle = frisch(alle, jetzt)
+            if (alle.length >= globalMax) return true
+            const l = frisch(je.get(ip) || [], jetzt)
+            if (l.length) je.set(ip, l); else je.delete(ip)
+            return l.length >= max
+        },
+        fehler(ip, jetzt = Date.now()) {
+            alle.push(jetzt)
+            // Abgelaufene Einträge auskehren, sonst wächst die Map mit jeder Adresse.
+            if (je.size > 1000) for (const [k, l] of je) if (!frisch(l, jetzt).length) je.delete(k)
+            je.set(ip, [...frisch(je.get(ip) || [], jetzt), jetzt])
+        },
+        leeren() { je.clear(); alle = [] },
+    }
+}
+
+const bremse = erstelleBremse()
+
+/** Nur für den Selbsttest. */
+export function _esp32BremseLeeren() { bremse.leeren() }
+
+/**
+ * Schlüssel prüfen, mit Bremse. Antwortet selbst mit 429/401 und liefert dann
+ * false; bei Erfolg true.
+ */
+async function zugangGeprueft(req, res, { anzeige = false } = {}) {
+    const ip = await clientIp(req)
+    if (bremse.gesperrt(ip)) {
+        res.status(429).json({ error: 'Too many failed attempts' })
         return false
     }
-    if (!stored) return false
-
-    return timingSafeCompare(provided, stored)
+    if (await verifyEsp32Key(req, { anzeige })) return true
+    bremse.fehler(ip)
+    res.status(401).json({ error: 'Unauthorized' })
+    return false
 }
+
+/*
+ * Zulässige Zeiträume der Anzeige (SEC-SRV-004). Bis dahin ging `filter` frei
+ * in den Cache-Schlüssel `esp32|${filter}` — jeder neue Wert verfehlte den
+ * Cache und löste drei signierte Börsenabrufe aus.
+ */
+export const ESP32_FILTER = ['month', 'week', 'year', 'all']
+
+/** Zeitraum aus Anfrage und Einstellung (rein); Unbekanntes wird `all`. */
+export function waehleFilter({ force, abfrage, einstellung }) {
+    const roh = force ? (abfrage || 'all') : (einstellung || abfrage || 'month')
+    return ESP32_FILTER.includes(roh) ? roh : 'all'
+}
+
+/** Mindestlänge eines von Hand gesetzten Schlüssels (die Oberfläche erzeugt 64 Hex-Zeichen). */
+export const ESP32_KEY_MIN = 32
 
 // ============================================================
 // Public routes — registered BEFORE apiAuthMiddleware
@@ -75,10 +172,8 @@ export function setupEsp32Routes(app) {
 
     app.get('/api/esp32/display', async (req, res) => {
         try {
-            const ok = await verifyEsp32Key(req)
-            if (!ok) {
-                return res.status(401).json({ error: 'Unauthorized' })
-            }
+            // Einzige Route, die auch der Anzeige-Schlüssel öffnet (SEC-GER-001).
+            if (!(await zugangGeprueft(req, res, { anzeige: true }))) return
 
             const knex = getKnex()
 
@@ -102,9 +197,11 @@ export function setupEsp32Routes(app) {
             // A client can opt out with ?force=1 and pick its own period (the Android
             // widget sends force=1 + its configured filter).
             const forced = req.query.force === '1' || req.query.force === 'true'
-            const filter = forced
-                ? (req.query.filter || 'all')
-                : (settings?.esp32Filter || req.query.filter || 'month')
+            const filter = waehleFilter({
+                force: forced,
+                abfrage: typeof req.query.filter === 'string' ? req.query.filter : '',
+                einstellung: settings?.esp32Filter,
+            })
 
             /*
              * Teuren Teil cachen und bündeln: Dies war der einzige Poll-Endpunkt
@@ -316,7 +413,7 @@ export function setupEsp32Routes(app) {
      */
     app.get('/api/esp32/alarme', async (req, res) => {
         try {
-            if (!(await verifyEsp32Key(req))) return res.status(401).json({ error: 'Unauthorized' })
+            if (!(await zugangGeprueft(req, res))) return
             const seit = Math.max(0, Number(req.query.seit) || 0)
             const zeilen = await getKnex()('chart_alarme')
                 .where('ausgeloestAm', '>', seit)
@@ -332,12 +429,16 @@ export function setupEsp32Routes(app) {
     // UnifiedPush-Verteiler (ntfy) gegeben hat, samt Web-Push-Schlüssel.
     app.post('/api/esp32/push', async (req, res) => {
         try {
-            if (!(await verifyEsp32Key(req))) return res.status(401).json({ error: 'Unauthorized' })
+            if (!(await zugangGeprueft(req, res))) return
             const { fehler, daten } = pruefeGeraet(req.body || {})
             if (fehler) return res.status(400).json({ error: fehler })
-            const liste = mitGeraet(await ladeGeraete(), daten)
-            await speichereGeraete(liste)
-            res.json({ ok: true, geraete: liste.length })
+            const erg = mitGeraet(await ladeGeraete(), daten)
+            if (erg.fehler === 'voll') {
+                // Kein Verdrängen mehr (SEC-SRV-003) — Platz schafft man in den Einstellungen.
+                return res.status(409).json({ error: `Bereits ${MAX_GERAETE} Geräte eingetragen. In AutarkTrade unter Einstellungen › ESP32 eines entfernen.`, voll: true })
+            }
+            await speichereGeraete(erg.liste)
+            res.json({ ok: true, geraete: erg.liste.length })
         } catch (e) {
             console.error('ESP32 push POST error:', e)
             res.status(500).json({ error: 'Internal server error' })
@@ -346,7 +447,7 @@ export function setupEsp32Routes(app) {
 
     app.delete('/api/esp32/push', async (req, res) => {
         try {
-            if (!(await verifyEsp32Key(req))) return res.status(401).json({ error: 'Unauthorized' })
+            if (!(await zugangGeprueft(req, res))) return
             const endpoint = String(req.body?.endpoint || '')
             const liste = ohneGeraet(await ladeGeraete(), endpoint)
             await speichereGeraete(liste)
@@ -370,8 +471,8 @@ export function setupEsp32AdminRoutes(app) {
     app.get('/api/esp32/settings', async (req, res) => {
         try {
             const knex = getKnex()
-            const row = await knex('settings').where('id', 1).select('esp32ApiKey').first()
-            res.json({ esp32ApiKeySet: !!(row?.esp32ApiKey) })
+            const row = await knex('settings').where('id', 1).select('esp32ApiKey', 'esp32AnzeigeKey').first()
+            res.json({ esp32ApiKeySet: !!(row?.esp32ApiKey), esp32AnzeigeKeySet: !!(row?.esp32AnzeigeKey) })
         } catch (e) {
             console.error('ESP32 settings GET error:', e)
             res.status(500).json({ error: 'Interner Serverfehler' })
@@ -383,6 +484,13 @@ export function setupEsp32AdminRoutes(app) {
         try {
             const knex = getKnex()
 
+            // Anzeige-Schlüssel (SEC-GER-001): nur erzeugt, nie von Hand gesetzt.
+            if (req.body.regenerate && req.body.art === 'anzeige') {
+                const plainKey = crypto.randomBytes(32).toString('hex')
+                await knex('settings').where('id', 1).update({ esp32AnzeigeKey: encrypt(plainKey) })
+                return res.json({ esp32AnzeigeKeySet: true, plainKey })
+            }
+
             if (req.body.regenerate) {
                 // Generate a new random 32-byte hex key
                 const plainKey = crypto.randomBytes(32).toString('hex')
@@ -392,9 +500,14 @@ export function setupEsp32AdminRoutes(app) {
                 return res.json({ esp32ApiKeySet: true, plainKey })
             }
 
-            // Save a manually entered key (if not masked)
+            // Save a manually entered key (if not masked) — nur mit Mindestlänge
+            // (SEC-SRV-004): ohne sie nahm die Route auch „1234" an.
             if (req.body.esp32ApiKey && !req.body.esp32ApiKey.includes('•')) {
-                const encrypted = encrypt(req.body.esp32ApiKey)
+                const eigen = String(req.body.esp32ApiKey).trim()
+                if (eigen.length < ESP32_KEY_MIN) {
+                    return res.status(400).json({ error: `Der Schlüssel braucht mindestens ${ESP32_KEY_MIN} Zeichen. Besser: „Schlüssel erzeugen".` })
+                }
+                const encrypted = encrypt(eigen)
                 await knex('settings').where('id', 1).update({ esp32ApiKey: encrypted })
             }
 
@@ -405,11 +518,41 @@ export function setupEsp32AdminRoutes(app) {
         }
     })
 
+    /*
+     * Eingetragene Push-Geräte (SEC-SRV-003): bis dahin gab es keine Stelle,
+     * an der man sah, wer sich für die Sofort-Zustellung eingetragen hat.
+     * Nur Name, Host und Datum — weder Web-Push-Schlüssel noch die volle
+     * Adresse (bei ntfy ist das Topic im Pfad die Berechtigung).
+     */
+    app.get('/api/esp32/geraete', async (req, res) => {
+        try {
+            res.json({ max: MAX_GERAETE, geraete: geraeteUebersicht(await ladeGeraete()) })
+        } catch (e) {
+            console.error('ESP32 geraete GET error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
+    app.delete('/api/esp32/geraete/:id', async (req, res) => {
+        try {
+            const liste = await ladeGeraete()
+            const ziel = liste.find((g) => geraeteId(g.endpoint) === String(req.params.id))
+            if (!ziel) return res.status(404).json({ error: 'Gerät nicht gefunden' })
+            const rest = ohneGeraet(liste, ziel.endpoint)
+            await speichereGeraete(rest)
+            res.json({ ok: true, geraete: geraeteUebersicht(rest) })
+        } catch (e) {
+            console.error('ESP32 geraete DELETE error:', e)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
     // DELETE /api/esp32/key — remove key
     app.delete('/api/esp32/key', async (req, res) => {
         try {
             const knex = getKnex()
-            await knex('settings').where('id', 1).update({ esp32ApiKey: '' })
+            const spalte = req.query.art === 'anzeige' ? 'esp32AnzeigeKey' : 'esp32ApiKey'
+            await knex('settings').where('id', 1).update({ [spalte]: '' })
             res.json({ ok: true })
         } catch (e) {
             console.error('ESP32 key DELETE error:', e)

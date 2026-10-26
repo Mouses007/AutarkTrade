@@ -408,6 +408,11 @@ pruefe('Vorschau hat Tage gespeichert', ergebnis.vorschau.gespeichert.length >= 
 pruefe('Vorschau sortiert den vorhandenen Tag aus', ergebnis.vorschau.vorhandeneImporte.length === 1)
 pruefe('Databento-CSV ergibt 40 Kerzen', ergebnis.databentoCsv.ohlcv.length === 40)
 pruefe('Polygon: alle drei Symbole nach dem Warten', ergebnis.ohlcvPolygon.ohlcv.length === 3)
+// Audit SEC-WEB-006 (26.10.2026): die Schlüssel bleiben auf dem Server — keine
+// Anfrage des Browsers trägt sie, weder als Kopf noch im Databento-Rumpf.
+pruefe('kein Polygon-/Databento-Schlüssel in den Anfragen des Browsers',
+    !/poly-test|db-test/.test(JSON.stringify(ergebnis.anfragen)) && ergebnis.anfragen.every(a => a.url.startsWith('/api/')),
+    JSON.stringify(ergebnis.anfragen).slice(0, 200))
 {
     const einstieg = new Map(TRADES.map(t => [t.id, t.entryPrice]))
     const preise = ergebnis.mfe['America/New_York'].preise

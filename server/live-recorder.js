@@ -22,10 +22,14 @@ import { logWarn, logError } from './logger.js'
 import { melde } from './benachrichtigungen.js'
 import * as marktdaten from './marktdaten/index.js'
 import { BYBIT_LIQ_WS, BYBIT_PING_MS, BYBIT_PONG_LIMIT_MS, bybitSubscribeMsg, normalisiereBybitLiq } from './bybit-liq.js'
-import { merkeLiq } from './liq-ticker.js'
+import { merkeLiq, liqEintragBinance } from './liq-ticker.js'
 import { beansprucheFuehrung, gibFuehrungFrei } from './db-claim.js'
 import { umgebungAn } from './umgebung.js'
 import { istTestbetrieb } from './umgebung.js'
+
+// Börsen-Streams liefern Nachrichten von wenigen kB; die ws-Vorgabe (100 MiB)
+// liesse einen gestörten oder fremden Endpunkt den Speicher füllen (Audit SEC-SRV-019).
+const WS_OPTIONEN = { maxPayload: 4 * 1024 * 1024 }
 
 const gzip = promisify(zlib.gzip)
 const gunzip = promisify(zlib.gunzip)
@@ -286,7 +290,7 @@ class SymbolRecorder {
         clearTimeout(this.liqReconnect)
         this.liqReconnect = null
         loeseSocket(this.liqWs)
-        const liqWs = new WebSocket(SIDE_WS[this.market](this.symbol.toLowerCase()))
+        const liqWs = new WebSocket(SIDE_WS[this.market](this.symbol.toLowerCase()), WS_OPTIONEN)
         this.liqWs = liqWs
 
         liqWs.on('open', () => {
@@ -325,18 +329,13 @@ class SymbolRecorder {
                 this.tradeUnsaved++
                 return
             }
-            const o = data.o
-            if (!o) return
             // Kompakt als Array: Zeit, Preis, Menge, Seite (1 = Short liquidiert).
             // +ap statt (ap || p): der String "0" ist truthy — eine ungefüllte
             // Order (ap="0", l="0") landete sonst mit Preis und Menge 0 in der
             // Aufzeichnung und fiel in der Wiedergabe still aus dem Plot.
-            const eintrag = [
-                Number(o.T),
-                +o.ap || +o.p,
-                +o.l || +o.q,
-                o.S === 'BUY' ? 1 : 0,
-            ]
+            // Unzahlen fliegen raus (SEC-SRV-019), wie im Sammelstrom.
+            const eintrag = liqEintragBinance(data.o)
+            if (!eintrag) return
             this.liqEvents.push(eintrag)
             // Harte Obergrenze: bleibt das Wegschreiben dauerhaft hängen, soll
             // der Prozess nicht am Speicher sterben. Das älteste Ereignis wird
@@ -363,7 +362,7 @@ class SymbolRecorder {
         this.reconnectTimer = null
         loeseSocket(this.ws)
         const stream = `${this.symbol.toLowerCase()}@depth@100ms`
-        const ws = new WebSocket(WS_BASE[this.market] + stream)
+        const ws = new WebSocket(WS_BASE[this.market] + stream, WS_OPTIONEN)
         this.ws = ws
 
         ws.on('open', () => {
@@ -965,7 +964,7 @@ class MarketLiquidationCollector {
         clearTimeout(this.reconnect)
         this.reconnect = null
         loeseSocket(this.ws)
-        const ws = new WebSocket(`${LIQ_WS_BASE}!forceOrder@arr`)
+        const ws = new WebSocket(`${LIQ_WS_BASE}!forceOrder@arr`, WS_OPTIONEN)
         this.ws = ws
 
         ws.on('open', () => {
@@ -991,15 +990,13 @@ class MarketLiquidationCollector {
                 // denselben Stream ohnehin mit.
                 if (active.has(`${symbol}|futures`)) continue
 
-                const t = Number(o.T)
-                // Wie im SymbolRecorder: "0" ist truthy, +x || +y greift richtig
-                const preis = +o.ap || +o.p
-                const menge = +o.l || +o.q
-                if (!Number.isFinite(t) || !Number.isFinite(preis) || !Number.isFinite(menge)) continue
+                // Dieselbe Umsetzung wie im SymbolRecorder (liq-ticker.js)
+                const liq = liqEintragBinance(o)
+                if (!liq) continue
+                const [t, preis, menge, seite] = liq
 
                 let puffer = this.buffers.get(symbol)
                 if (!puffer) this.buffers.set(symbol, puffer = [])
-                const seite = o.S === 'BUY' ? 1 : 0
                 puffer.push([t, preis, menge, seite])
                 merkeLiq('binance', symbol, t, preis, menge, seite)
                 if (seite === 1) this.seiten.short++; else this.seiten.long++
@@ -1125,7 +1122,7 @@ class BybitLiquidationCollector {
         clearTimeout(this.reconnect)
         this.reconnect = null
         loeseSocket(this.ws)
-        const ws = new WebSocket(BYBIT_LIQ_WS)
+        const ws = new WebSocket(BYBIT_LIQ_WS, WS_OPTIONEN)
         this.ws = ws
 
         ws.on('open', () => {

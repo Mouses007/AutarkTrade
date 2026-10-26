@@ -23,6 +23,8 @@ export const VERSCHLUESSELTE_SETTINGS = [...new Set([
     'aiApiKey',
     ...KEY_SPALTEN,
     'fluxApiKey', 'geminiImageApiKey', 'esp32ApiKey',
+    // Nur-Anzeige-Schlüssel der ESP32-Displays (SEC-GER-001): gilt nur für /api/esp32/display.
+    'esp32AnzeigeKey',
     'cryptoquantApiKey', 'mailPasswort',
     // Hype-Radar: Zustellgeheimnisse und Zusatzquellen. Die Webhook-Adresse
     // gehört dazu: bei Home Assistant IST die Adresse das Geheimnis.
@@ -73,12 +75,51 @@ export const BOERSEN_GEHEIMNISSE = {
 }
 
 /**
- * Alle verschlüsselten Stellen als [tabelle, spalten] — für die Umschlüsselung
- * und die Schlüssel-Migration nativer Installationen.
+ * Portfolio-Modus: verschlüsselte Spalten mit ihrer Schlüsselspalte
+ * (Audit SEC-SRV-015). `portfolio_schluessel` hat keine `id`, ihr
+ * Primärschlüssel ist `name` (bitpanda | etherscan | solanaRpc). Bis zum
+ * Audit vom 26.10.2026 fehlten beide Tabellen hier — nach einer Rotation von
+ * `AT_SECRET` waren Bitpanda-/Etherscan-Schlüssel, Wallet-Adressen und xpubs
+ * still unlesbar (`decrypt` liefert dann ''). Im Backup wie die Börsenschlüssel:
+ * redigiert hinaus, beim Import bleiben die bestehenden Zeilen (FUN-BAK-001).
+ */
+export const PORTFOLIO_GEHEIMNISSE = [
+    ['portfolio_schluessel', ['wert'], 'name'],
+    ['portfolio_adressen', ['adresse'], 'id'],
+]
+
+/**
+ * HTTPS (`server/tls/dienst.js`): private Schlüssel der eigenen Stamm-CA und
+ * des Server-Zertifikats. Die Tabelle steht NICHT im Backup (`backup-api.js`,
+ * `BACKUP_TABLES`) — wer den CA-Schlüssel hat, kann jedem Gerät, das ihr
+ * vertraut, jede Seite vorspielen. Hier steht sie, damit Umschlüsselung und
+ * Start-Migration die Spalten mitnehmen.
+ */
+export const TLS_GEHEIMNISSE = [
+    ['tls_zertifikat', ['caSchluessel', 'serverSchluessel'], 'id'],
+]
+
+/**
+ * Alle verschlüsselten Stellen als [tabelle, spalten, schluesselSpalte] — für
+ * die Umschlüsselung und die Schlüssel-Migration nativer Installationen.
+ * Fehlt die Schlüsselspalte, ist es `id`.
  */
 export const ALLE_VERSCHLUESSELTEN = [
-    ['settings', VERSCHLUESSELTE_SETTINGS],
-    ...Object.entries(BOERSEN_GEHEIMNISSE),
+    ['settings', VERSCHLUESSELTE_SETTINGS, 'id'],
+    ...Object.entries(BOERSEN_GEHEIMNISSE).map(([t, sp]) => [t, sp, 'id']),
+    ...PORTFOLIO_GEHEIMNISSE,
+    ...TLS_GEHEIMNISSE,
+]
+
+/**
+ * Verschlüsselte Werte INNERHALB einer JSON-Spalte: [tabelle, spalte, feld].
+ * `settings.apis` ist eine Liste `[{provider, key}]` (Polygon, Databento);
+ * verschlüsselt ist nur `key`, nicht die ganze Spalte — deshalb steht sie
+ * nicht in ALLE_VERSCHLUESSELTEN (die Migration verschlüsselte sonst den
+ * ganzen JSON-Text). Umschlüsselung und Start-Migration lesen beide Listen.
+ */
+export const JSON_GEHEIMNISSE = [
+    ['settings', 'apis', 'key'],
 ]
 
 /** Namensmuster, das der Selbsttest als „sieht geheim aus" wertet. */

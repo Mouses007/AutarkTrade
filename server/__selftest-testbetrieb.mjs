@@ -10,6 +10,7 @@
  * die Schaltfunktion, sondern auch, dass in index.mjs KEIN Takt am Schalter
  * vorbei gestartet wird (ein neuer `startXTakt()` landet sonst still daneben).
  */
+import crypto from 'crypto'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
@@ -81,6 +82,32 @@ pruefe('Testbetrieb: jeder Kanal meldet die Sperre',
 delete process.env.AT_TESTBETRIEB
 await stelleZu({ regel: 't', schwere: 'kritisch', meldung: 'm' }, { symbol: 'X' }, einst, { alleSchweren: true })
 pruefe('Gegenprobe Normalbetrieb: die Kanäle senden', abrufe === 3, `${abrufe} Abrufe`)
+
+/*
+ * Web-Push ans Android-Widget (Gesamtaudit 26.10.2026, SEC-SRV-016): prüfte
+ * `versandGesperrt()` nicht, geschützt nur dadurch, dass die Alarm-Takte im
+ * Testbetrieb nicht laufen.
+ */
+console.log('Kein Web-Push ans Handy im Testbetrieb')
+{
+    const { sendeAnGeraete } = await import('./esp32-push.js')
+    const ua = crypto.createECDH('prime256v1'); ua.generateKeys()
+    const b64url = (b) => Buffer.from(b).toString('base64url')
+    const geraet = { endpoint: 'https://ntfy.example/up123', p256dh: b64url(ua.getPublicKey()), auth: b64url(crypto.randomBytes(16)), geraet: 'Handy' }
+    const zeile = { id: 7, art: 'preis', symbol: 'BTCUSDT', markt: 'futures', kanaele: '{}' }
+    const eintrag = { t: 1_700_000_000_000, p: 64000, titel: 'BTCUSDT kreuzt 64 000', text: 'nach oben' }
+    let geladen = 0
+    const laden = async () => { geladen++; return [geraet] }
+    abrufe = 0
+    process.env.AT_TESTBETRIEB = '1'
+    const gesperrt = await sendeAnGeraete(zeile, eintrag, { laden })
+    pruefe('Testbetrieb: kein Abruf an ein Gerät', abrufe === 0, `${abrufe} Abrufe`)
+    pruefe('Testbetrieb: die Sperre wird gemeldet', /Testbetrieb/.test(String(gesperrt?.fehler)), JSON.stringify(gesperrt))
+    pruefe('Testbetrieb: die Geräteliste wird gar nicht erst gelesen', geladen === 0)
+    delete process.env.AT_TESTBETRIEB
+    const offen = await sendeAnGeraete(zeile, eintrag, { laden })
+    pruefe('Gegenprobe Normalbetrieb: das Gerät bekommt den Push', abrufe === 1 && offen?.Handy === 'ok', JSON.stringify(offen))
+}
 globalThis.fetch = echterFetch
 
 console.log('index.mjs startet keinen Takt am Schalter vorbei')
@@ -89,7 +116,7 @@ const nackt = [...index.matchAll(/^\s*(start\w*Takt)\s*\(\s*\)\s*;?\s*$/gm)].map
 pruefe('kein direkter start…Takt()-Aufruf', nackt.length === 0, nackt.join(', '))
 for (const name of ['startNewsTakt', 'startHypeTakt', 'startWachhundTakt', 'startFruehTakt', 'startBoersenTakt',
     'startCoinRadarTakt', 'startErgebnisTakt', 'startAbverkaufTakt', 'startOiArchivTakt', 'startChartAlarmTakt',
-    'startBenachrichtigungsTakt', 'startRanglisteTakt']) {
+    'startBenachrichtigungsTakt', 'startRanglisteTakt', 'startSicherungsTakt']) {
     pruefe(`${name} steht in einer starteTakte-Liste`, new RegExp(`\\[\\s*'[^']+'\\s*,\\s*${name}\\s*\\]`).test(index))
 }
 pruefe('Strategie-Engine fragt den Testbetrieb', /NO_ENGINE'\)\s*\|\|\s*istTestbetrieb\(\)/.test(index))

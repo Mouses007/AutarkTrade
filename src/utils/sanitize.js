@@ -1,4 +1,5 @@
 import DOMPurify from 'dompurify'
+import { istEigenesBild } from './interneAdresse.js'
 
 // Erlaubte CSS-Properties (Quill-Formatierung), alles andere wird entfernt
 const ALLOWED_CSS_PROPERTIES = [
@@ -81,8 +82,7 @@ export function sanitizeKiHtml(dirty) {
         RETURN_DOM_FRAGMENT: true,
     })
     for (const img of sauber.querySelectorAll('img')) {
-        const src = img.getAttribute('src') || ''
-        if (!/^\/(?!\/)/.test(src)) img.remove()
+        if (!istEigenesBild(img.getAttribute('src'), window.location.origin)) img.remove()
     }
     const huelle = document.createElement('div')
     huelle.appendChild(sauber)

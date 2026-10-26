@@ -45,8 +45,8 @@ server/templates/sharecard-*.png
 # Persönliche NAS-Zugangsdaten für scripts/nas-deploy.sh
 scripts/.nas-deploy.env
 
-# mkcert-Zertifikat + privater Schlüssel für den Caddy-HTTPS-Zugang (DOCKER.md) —
-# maschinenspezifisch, gehört nie ins Repository
+# Früher: mkcert-Zertifikat + Schlüssel für Caddy (seit 26.10.2026 macht die App
+# HTTPS selbst). Bleibt ignoriert, damit ein alter Ordner nie ins Repository gerät.
 certs/
 scripts/.v2-container.env
 
@@ -72,3 +72,8 @@ scripts/umzug/
 scripts/v2-container.sh
 scripts/historie-neu-wurzeln.sh
 .github/DOCKER-SETUP.md
+cursor/
+audit-tests/
+reports/
+# Tägliche Sicherungen (server/sicherung.js): Trades und Portfolio — nie ins Repo
+/data/sicherungen/

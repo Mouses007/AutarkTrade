@@ -88,8 +88,12 @@ export function ohneAdresse(fehler, url) {
  */
 async function ntfy(alarm, fav, kanal, geheim) {
     const basis = String(kanal.url || '').replace(/\/+$/, '')
-    const topic = String(kanal.topic || 'hype-radar').trim()
+    const topic = String(kanal.topic || '').trim()
     if (!basis) throw new Error('keine ntfy-Adresse hinterlegt')
+    // Kein stiller Rückfall auf ein festes Topic mehr (SEC-SRV-013): bis
+    // 26.10.2026 ging ein leeres Feld an `hype-radar` — auf ntfy.sh öffentlich
+    // und von jeder Installation mit der Vorgabe geteilt.
+    if (!topic) throw new Error('kein ntfy-Topic hinterlegt')
     await post(basis, {
         kopf: {
             'Content-Type': 'application/json',
@@ -106,7 +110,8 @@ async function ntfy(alarm, fav, kanal, geheim) {
  * Preis-Alarme über dieselben Kanäle, und „BTCUSDT (linie)" sagt dort weniger
  * als „BTCUSDT kreuzt 64 000 nach oben".
  */
-export function ntfyNachricht(alarm, fav, topic = 'hype-radar') {
+export function ntfyNachricht(alarm, fav, topic) {
+    if (!String(topic || '').trim()) throw new Error('kein ntfy-Topic hinterlegt')
     return {
         topic,
         title: alarm.titel || `${fav?.symbol || '?'} (${alarm.regel})`,

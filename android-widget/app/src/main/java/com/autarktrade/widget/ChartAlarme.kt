@@ -78,6 +78,7 @@ object ChartAlarme {
                 enableLights(true)
                 lightColor = ContextCompat.getColor(ctx, R.color.accent)
                 setSound(ton, audio)
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE   // SEC-AND-004 (nur neue Kanäle)
             }
         nm.createNotificationChannel(kanal(KANAL_CHART, ctx.getString(R.string.kanal_chart), ctx.getString(R.string.kanal_chart_info)))
         nm.createNotificationChannel(kanal(KANAL_MOMENTUM, ctx.getString(R.string.kanal_momentum), ctx.getString(R.string.kanal_momentum_info)))
@@ -147,7 +148,8 @@ object ChartAlarme {
             val seitAlt = Prefs.alarmSeit(ctx)
             val erster = seitAlt == 0L
             val seit = if (erster) 0L else (seitAlt - UEBERLAPPUNG_MS).coerceAtLeast(0L)
-            val json = ApiClient.fetchAlarme(Prefs.alarmHost(ctx), Prefs.alarmPort(ctx), Prefs.alarmKey(ctx), seit, Prefs.alarmArten(ctx))
+            val json = ApiClient.fetchAlarme(ApiClient.ziel(ctx, Prefs.alarmHost(ctx), Prefs.alarmPort(ctx)),
+                Prefs.alarmKey(ctx), seit, Prefs.alarmArten(ctx))
             val obj = JSONObject(json)
             val liste = parse(obj)
             val gesehen = Prefs.alarmGesehen(ctx)
@@ -204,7 +206,7 @@ object ChartAlarme {
         val endpoint = Prefs.sofortEndpoint(ctx)
         if (endpoint.isBlank() || !Prefs.alarmVerbunden(ctx)) return
         try {
-            ApiClient.meldePush(Prefs.alarmHost(ctx), Prefs.alarmPort(ctx), Prefs.alarmKey(ctx), an,
+            ApiClient.meldePush(ApiClient.ziel(ctx, Prefs.alarmHost(ctx), Prefs.alarmPort(ctx)), Prefs.alarmKey(ctx), an,
                 endpoint, Prefs.sofortP256dh(ctx), Prefs.sofortAuth(ctx), android.os.Build.MODEL ?: "")
             Prefs.saveSofortStatus(ctx, if (an) "eingetragen" else "ausgetragen")
         } catch (e: Exception) {
@@ -235,10 +237,24 @@ object ChartAlarme {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
+    /**
+     * Fassung für den gesperrten Bildschirm (SEC-AND-004): nur „AutarkTrade: Chart-Alarm",
+     * ohne Symbol, Preisniveau, Notiz oder Beträge. Die volle Meldung erscheint erst
+     * nach dem Entsperren. Die Sprachausgabe (Sprache.kt) bleibt davon unberührt.
+     */
+    private fun oeffentlich(ctx: Context, kanal: String): Notification =
+        Notification.Builder(ctx, kanal)
+            .setSmallIcon(R.drawable.ic_stat_alarm)
+            .setColor(ContextCompat.getColor(ctx, R.color.accent))
+            .setContentTitle(ctx.getString(R.string.n_oeffentlich))
+            .build()
+
     fun baue(ctx: Context, a: Ausloesung): Notification {
         val kanal = if (a.art == "momentum") KANAL_MOMENTUM else KANAL_CHART
         val farbe = ContextCompat.getColor(ctx, R.color.accent)
         return Notification.Builder(ctx, kanal)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(oeffentlich(ctx, kanal))
             .setSmallIcon(R.drawable.ic_stat_alarm)
             .setColor(farbe)
             .setContentTitle(a.titel.ifBlank { a.symbol })
@@ -259,6 +275,8 @@ object ChartAlarme {
         neu.take(MAX_EINZELN).forEach { stil.addLine(it.titel) }
         if (neu.size > MAX_EINZELN) stil.setSummaryText(ctx.getString(R.string.n_weitere, neu.size - MAX_EINZELN))
         return Notification.Builder(ctx, KANAL_CHART)
+            .setVisibility(Notification.VISIBILITY_PRIVATE)
+            .setPublicVersion(oeffentlich(ctx, KANAL_CHART))
             .setSmallIcon(R.drawable.ic_stat_alarm)
             .setColor(ContextCompat.getColor(ctx, R.color.accent))
             .setContentTitle(ctx.getString(R.string.n_sammel, neu.size))

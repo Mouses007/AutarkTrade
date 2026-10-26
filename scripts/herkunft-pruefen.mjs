@@ -70,6 +70,7 @@ const AKZEPTIERT = [
     ['Gerüst von Vue, Router, Vite', /^(const props = defineProps\(\{|onMounted\(async \(\) => \{|onBeforeMount\(async \(\) => \{|const route = useRoute\(\)|const app = createApp\(App\)|const router = createRouter\(\{|export default router|export default defineConfig\(\{|\/\/ https:\/\/vitejs\.dev\/config\/|'@': fileURLToPath\(new URL\('\.\/src', import\.meta\.url\)\)|<meta charset="utf-8">|<meta name="viewport" content="width=device-width, initial-scale=1">|<div id="app"><\/div>|<script type="module" src="\/src\/main\.js"><\/script>)$/],
     ['JavaScript-Standardform', /^(return new Promise\(\(resolve, reject\) => \{|for \(const line of lines\) \{|if \(error\.response\) \{|\} else if \(error\.request\) \{|dayjs\.extend\(timezone\)|expandedId\.value = null)$/],
     ['Optionen von ECharts und Quill', /^(splitLine|axisTick|axisLine): \{ show: false \},$|^type: 'candlestick',$|^radius: \['70%', '100%'\],$|^avoidLabelOverlap: false,$|^\[\{ header: \[1, 2, 3, false\] \}\],$/],
+    ['Gerüst von Express und HTTP', /^app\.use\(\(req, res, next\) => \{$|^app\.post\('\/api\/databento', async \(req, res\) => \{$|^'Content-Type': 'application\/x-www-form-urlencoded',$/],
     ['Datenbegriff', /^export const (trades|totals|screenshots|pAndL|notes|layoutStyle|imports|groups|executions|excursions|blotter|apis) = (ref|reactive)\((\[\]|\{\})\)$|^(screenshots|excursions)\.length = 0$|^excursion\.(stopLoss|maePrice|mfePrice) = null$/],
 ]
 /** Prüfung 2: Arten generischer Zeilen in Textdateien. */

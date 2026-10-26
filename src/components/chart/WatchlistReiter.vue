@@ -9,7 +9,7 @@
  * Liste `/api/chart/ticker` alle 15 s ab (Bitget, Server-Cache 10 s). Bei
  * „aus" liefert der Server `{ aus: true }`, und die Kurse bleiben „—".
  */
-import { ref, computed, watch, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BinanceStream, buildMiniTickerUrl } from '../../utils/binanceStream.js'
 import axios from 'axios'
@@ -29,7 +29,13 @@ const emit = defineEmits(['waehle', 'neuerTab', 'aendere', 'neu', 'loesche'])
 const { t } = useI18n()
 
 const listeId = ref(null)
-const kurse = ref({})            // `${markt}|${symbol}` → { c, o }
+/*
+ * `${markt}|${symbol}` → { c, o }. `reactive` statt `ref({...})` (Audit
+ * FUN-WEB-004): vorher kopierte jeder Stream-Tick die ganze Map, und jede Zeile
+ * wurde neu gezeichnet. Jetzt ändert ein Tick nur seinen Schlüssel; entfernte
+ * Symbole räumt `verbinde` weg.
+ */
+const kurse = reactive({})
 let streams = []
 let abfrageUhr = null
 const ABFRAGE_MS = 15_000
@@ -47,11 +53,9 @@ function holeKurse(markt, syms, ueberschreiben) {
     if (!syms.length) return
     axios.get('/api/chart/ticker', { params: { markt, symbole: syms.join(',') } }).then(({ data }) => {
         if (data?.aus) return
-        const neu = { ...kurse.value }
         for (const [sym, k] of Object.entries(data.kurse || {})) {
-            if (ueberschreiben || !neu[`${markt}|${sym}`]) neu[`${markt}|${sym}`] = k
+            if (ueberschreiben || !kurse[`${markt}|${sym}`]) kurse[`${markt}|${sym}`] = k
         }
-        kurse.value = neu
     }).catch(() => { /* nächster Abruf oder Stream füllt nach */ })
 }
 
@@ -65,6 +69,9 @@ async function verbinde() {
     // Die URL-Bauer brauchen die Wahl der Marktdatenquelle.
     await ladeMarktdaten()
     if (nr !== verbindeNr) return
+    // Kurse entfernter Symbole nicht mitschleppen
+    const behalten = new Set(symbole.value.map((s) => `${s.markt}|${s.symbol}`))
+    for (const k of Object.keys(kurse)) if (!behalten.has(k)) delete kurse[k]
     const ohneStream = []
     for (const markt of ['futures', 'spot']) {
         const syms = symbole.value.filter((s) => s.markt === markt).map((s) => s.symbol)
@@ -79,7 +86,7 @@ async function verbinde() {
             onMessage: (m) => {
                 const d = m?.data
                 if (!d?.s) return
-                kurse.value = { ...kurse.value, [`${markt}|${d.s}`]: { c: Number(d.c), o: Number(d.o) } }
+                kurse[`${markt}|${d.s}`] = { c: Number(d.c), o: Number(d.o) }
             },
         })
         st.connect()
@@ -106,7 +113,7 @@ function boersen(s) {
 }
 
 function kurs(s) {
-    return kurse.value[`${s.markt}|${s.symbol}`]
+    return kurse[`${s.markt}|${s.symbol}`]
 }
 
 function stellen(c) {

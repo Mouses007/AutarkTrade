@@ -70,8 +70,9 @@ fi
 # npm install
 echo ""
 echo -e "${CYAN}[3/4]${RESET} Abhaengigkeiten aktualisieren..."
-echo -e "${GRAY}  npm install...${RESET}"
-npm install
+echo -e "${GRAY}  npm ci...${RESET}"
+# npm ci nach package-lock.json, ohne Update-Token in der Umgebung (SEC-OPS-008)
+paketquelle_npm
 if [ $? -ne 0 ]; then
     echo -e "${RED}[X] npm install fehlgeschlagen!${RESET}"
     exit 1

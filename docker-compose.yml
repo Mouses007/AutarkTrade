@@ -12,6 +12,9 @@ services:
       # im Browser schaltet die API frei; bewusst offen: AT_ALLOW_INSECURE=1).
       # Nur lokal am Host: - "127.0.0.1:${AT_PORT:-8080}:8080"
       - "${AT_PORT:-8080}:8080"
+      # HTTPS macht die App selbst (eigene CA, Zertifikat in der Datenbank —
+      # DOCKER.md, Abschnitt HTTPS). 443 ist auf einer Synology belegt, daher 8443.
+      - "${AT_TLS_PORT:-8443}:8443"
     environment:
       - AT_SECRET=${AT_SECRET}
       - DB_TYPE=${DB_TYPE:-postgresql}
@@ -24,18 +27,18 @@ services:
       # Der App-Update-Button im Docker-Modus uebergibt diesen Pfad an
       # den Helfer-Container, damit compose das richtige Projekt findet.
       - AT_HOST_COMPOSE_DIR=${AT_HOST_COMPOSE_DIR}
-      # Hinter Caddy tragen alle Klienten dieselbe Peer-IP — der Login-
-      # Fehlversuchs-Zähler würde zu EINEM Eimer kollabieren und fremde
-      # Fehlversuche sperrten den Eigentümer aus. Mit =1 liest NUR dieser
-      # Zähler die vom Proxy angehängte X-Forwarded-For-Adresse; alle
-      # anderen Prüfungen (isLocalRequest) bleiben bei der Peer-IP.
-      # Seit F2 (Audit A2-03) zählt der Kopf NUR, wenn die Verbindung von
-      # AT_TRUSTED_PROXY kommt (Namen oder IPs, Komma-getrennt; Vorgabe: die
-      # Compose-Namen caddy,autarktrade-caddy). Wer 8080 direkt anspricht,
-      # kann sich damit keine neue Adresse je Versuch mehr ausdenken. Heisst
-      # der Caddy-Dienst anders (Synology-Projekt), hier seinen Namen eintragen.
-      - AT_TRUST_PROXY=${AT_TRUST_PROXY:-1}
-      - AT_TRUSTED_PROXY=${AT_TRUSTED_PROXY:-caddy,autarktrade-caddy}
+      # HTTPS-Port IM Container: immer 8443 (das Mapping oben bestimmt den
+      # Host-Port über AT_TLS_PORT in der .env). Abschalten: hier `aus` und
+      # die Mapping-Zeile entfernen.
+      - AT_TLS_PORT=8443
+      # Zusätzliche Namen/IPs fürs Zertifikat (Komma-Liste), vor allem die
+      # Adresse des Hosts — die kennt die App im Container nicht. Ohne Eintrag
+      # schlägt die Oberfläche die Adressen vor, unter denen sie aufgerufen wurde.
+      - AT_TLS_NAMEN=${AT_TLS_NAMEN:-}
+      # Kein Proxy davor: X-Forwarded-For zählt nicht (Login-Sperre nach
+      # Peer-IP). Nur wer selbst einen Reverse-Proxy vorschaltet, setzt
+      # AT_TRUST_PROXY=1 und AT_TRUSTED_PROXY=<Name des Proxy-Dienstes>.
+      - AT_TRUST_PROXY=${AT_TRUST_PROXY:-0}
     # Kein Docker-Socket mehr in der Vorgabe (Audit A2-10, F2 20.10.2026).
     # Er war root-äquivalent auf dem Host und brachte nichts: das Klick-Update
     # verlangt eine Anfrage von localhost, und im Container ist der Peer nie
@@ -44,35 +47,31 @@ services:
     # Die App läuft im Container als Benutzer `node`, nicht als root.
     env_file:
       - .env
-    restart: unless-stopped
-
-  # TLS-Termination für den LAN-Zugriff (siehe Caddyfile + DOCKER.md). Rein
-  # additiv: "journal" bleibt unverändert per HTTP auf AT_PORT erreichbar
-  # (u.a. für das ESP32-Display, das kein TLS spricht) — Caddy kommt als
-  # zweiter, unabhängiger Eingang dazu, erreicht "journal" über den internen
-  # Compose-Netzwerknamen.
-  caddy:
-    image: caddy:2-alpine
-    container_name: autarktrade-caddy
-    ports:
-      # 443 ist auf der NAS bereits durch die DSM (nginx) belegt, deshalb ein
-      # eigener Port statt des HTTPS-Standardports.
-      - "${AT_TLS_PORT:-8443}:443"
-    environment:
-      # Wohin Caddy weiterreicht. Hier heisst der Service "journal"; im Projekt
-      # des Synology Container Managers heisst er "trading-journal" — dort also
-      # AT_UPSTREAM=trading-journal:8080 setzen.
-      - AT_UPSTREAM=${AT_UPSTREAM:-journal:8080}
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./certs:/certs:ro
-      - caddy_data:/data
-    depends_on:
-      - journal
+      # Datenordner: SQLite-Datei (DB_TYPE=sqlite) und die vom Einstieg erzeugte
+      # db-config.json. Ohne Volume ginge ein SQLite-Bestand beim Neuerstellen
+      # verloren (Audit SEC-OPS-014). Bei PostgreSQL liegt hier nur die Konfiguration.
+      - autarktrade_data:/app/data
+    # Härtung (Audit SEC-OPS-005): keine neuen Rechte über setuid-Programme und nur
+    # die Fähigkeiten, die der Einstieg als root braucht — ein altes Volume übernehmen
+    # (CHOWN, FOWNER, DAC_OVERRIDE) und die Rechte an `node` abgeben (SETUID, SETGID).
+    # Die App selbst läuft danach als `node` ganz ohne Fähigkeiten. `read_only` bleibt
+    # vorerst aus: die Strategie-Ablage (server/strategies) wird zur Laufzeit beschrieben,
+    # und ein schreibgeschütztes Wurzeldateisystem ist am Gerät noch nicht erprobt.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETUID
+      - SETGID
     restart: unless-stopped
 
 volumes:
-  caddy_data:
+  autarktrade_data:
 
 # Auto-Updates (Watchtower) sind bewusst NICHT Teil dieses Compose-Files.
 # Updates: "docker compose pull && docker compose up -d" auf dem Host.

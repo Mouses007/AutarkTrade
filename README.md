@@ -4,7 +4,7 @@ Trading journal and analysis workstation for **crypto futures** on **Bitunix**, 
 Runs locally or via Docker — no cloud, no account.
 Vue 3 + Express, SQLite or PostgreSQL.
 
-> **Status:** 4.2.0 (beta) — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
+> **Status:** 4.3.0 (beta) — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
 > (redesign, rebuilt code, AGPL-3.0). Origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
 
 > **AutarkTrade does not trade by itself.** It reads trades, positions and balances from your
@@ -375,7 +375,7 @@ Your open positions outside the browser — all three companions live in this re
 
 - **Android home-screen widget** ([android-widget/](android-widget/)) — open positions and P&L on your phone, per-exchange KPIs, configurable refresh. Built with Gradle; see its README for the build script.
 - **Linux Mint / Cinnamon desklet** ([desklet/](desklet/), UUID `positionen@autarktrade`, MIT) — positions directly on the desktop. Install it with `desklet/install.sh`. The entry "Trading Positions" in the [Cinnamon Spices](https://cinnamon-spices.linuxmint.com/desklets) repository is the predecessor for the Crypto Trading Journal; `desklet/spices/` holds the renamed copy for a new submission.
-- **ESP32 hardware displays** ([ESP32-2432S028/](ESP32-2432S028/), [ESP32-Waveshare/](ESP32-Waveshare/)) — a cheap always-on display next to your monitor, fed by a read-only endpoint protected with its own API key (PlatformIO projects, `pio run`; MIT, see `LIZENZEN.md` there — the Arduino core is LGPL, so the firmware source stays open for relinking). Setup Wi-Fi: `AutarkTrade-Setup`.
+- **ESP32 hardware displays** ([ESP32-2432S028/](ESP32-2432S028/), [ESP32-Waveshare/](ESP32-Waveshare/)) — a cheap always-on display next to your monitor, fed by a read-only endpoint protected with its own API key (PlatformIO projects, `pio run`; MIT, see `LIZENZEN.md` there — the Arduino core is LGPL, so the firmware source stays open for relinking). Setup Wi-Fi: `AutarkTrade-Setup`, WPA2 with a per-device password shown on the display. Since firmware 3.5.0 the setup portal runs only in setup mode — on first start without configuration, after three boots without Wi-Fi, or when the screen or the BOOT button is held for 3 s right after power-on; stored Wi-Fi password and device key are never shown again (empty field = unchanged). A stale display (no successful fetch for three intervals) shows a red „VERALTET – Stand vor …“ banner.
 
 The Android widget (`com.autarktrade.widget`) is part of AutarkTrade and under its licence; its third-party notices ship inside the APK. From 4.0.0 on it is a new app id — uninstall the old "Trading Journal" widget first.
 
@@ -401,7 +401,7 @@ The Android widget (`com.autarktrade.widget`) is part of AutarkTrade and under i
 
 #### Requirements
 
-- [Node.js 20+](https://nodejs.org/) (LTS recommended)
+- [Node.js 22+](https://nodejs.org/) (LTS recommended)
 - [Git](https://git-scm.com/) (required for installation and auto-updates)
 - Python 3 + Build Tools (for native npm modules)
 
@@ -429,7 +429,7 @@ npm start
 
 1. Download or clone this repository
 2. Double-click **`install.bat`** — checks all prerequisites:
-   - **Node.js 20+** — [Download](https://nodejs.org/)
+   - **Node.js 22+** — [Download](https://nodejs.org/)
    - **Git** — [Download](https://git-scm.com/download/win) (required for updates)
    - **Python 3** — [Download](https://www.python.org/downloads/) (check "Add to PATH")
    - **Visual Studio Build Tools** — [Download](https://aka.ms/vs/17/release/vs_BuildTools.exe) (select "Desktop development with C++")
@@ -490,7 +490,7 @@ docker compose pull && docker compose up -d
 
 Copy `docker-compose.yml` and your `.env` to the NAS and create a project in Container Manager. See [DOCKER.md](DOCKER.md) for details.
 
-**HTTPS for LAN access**: `docker-compose.yml` includes an optional Caddy container that terminates TLS with a self-issued [mkcert](https://github.com/FiloSottile/mkcert) certificate — needed for the browser's Notification permission prompt, which Chrome refuses on plain HTTP (except `localhost`). Purely additive; port 8080/HTTP keeps working unchanged. See [DOCKER.md](DOCKER.md#https-für-den-lan-zugriff-caddy--mkcert) for setup.
+**HTTPS for LAN access** (built in since 26.10.2026, no Caddy, no mkcert): on first start the app creates its own root CA („AutarkTrade Lokale CA", ECDSA P-256, stored in the database, private keys encrypted with `AT_SECRET`, never in the backup) and issues itself a server certificate (397 days, renewed automatically < 30 days or when a name is missing, without restart). HTTPS listens next to HTTP on `AT_TLS_PORT` (default 8443, `aus` = off); port 8080/HTTP stays for ESP32 displays. Names in the certificate: `localhost`, `127.0.0.1`, `::1`, the mDNS name, `AT_TLS_NAMEN` (comma list, e.g. the NAS IP) and the names confirmed under Settings › General › HTTPS (which also suggests the addresses the app was opened under). Trust the CA once per device: „Download CA" there (`GET /api/tls/ca.crt`, public), compare the SHA-256 fingerprint; short guides for Android, Windows, Linux/Firefox, macOS/iOS are on the same page. JSON for devices: `GET /api/tls/ca` and `GET /api/esp32/ca` → `{pem, sha256}`. See [DOCKER.md](DOCKER.md#https-für-den-lan-zugriff-eingebaut-eigene-ca).
 
 ---
 
@@ -578,8 +578,12 @@ AT_SECRET=your_generated_secret
 ### Access protection (since F2, 20.10.2026)
 
 - The first password from the network requires the **setup code** printed in the server/container log („Einrichtungscode"); at the server itself (localhost) it is not needed. Passwords need at least 10 characters (existing shorter ones stay valid).
-- `AT_TRUST_PROXY=1` evaluates `X-Forwarded-For` **only** for connections from `AT_TRUSTED_PROXY` (names or IPs, comma-separated; default `caddy,autarktrade-caddy`). Direct access to port 8080 can no longer invent a new address per login attempt.
-- „Passwort vergessen" (`/api/auth/reset`) works only from the server itself, from the app's own page (no foreign `Origin`/`Sec-Fetch-Site`) and with a JSON body; it invalidates every session. Settings › General › Security has „Überall abmelden".
+- `AT_TRUST_PROXY=1` evaluates `X-Forwarded-For` **only** for connections from `AT_TRUSTED_PROXY` (names or IPs, comma-separated; default `caddy,autarktrade-caddy`). Direct access to port 8080 can no longer invent a new address per login attempt. Since the app does HTTPS itself (26.10.2026) the compose default is `AT_TRUST_PROXY=0`; set it only behind your own reverse proxy.
+- ESP32 keys (audit SEC-GER-001): the **display key** (`settings.esp32AnzeigeKey`, Settings › Journal › ESP32) opens only `GET /api/esp32/display` — for ESP32 displays. `/api/esp32/alarme` and `/api/esp32/push` need the **main key** (phone app/widget), which keeps working for the display too.
+- „Passwort vergessen" (`/api/auth/reset`) works only from the server itself, from the app's own page (no foreign `Origin`/`Sec-Fetch-Site`), with a JSON body and — since the audit of 26.10.2026 — with the one-time **reset code** („Rücksetzcode") that the server prints to its log when the reset is requested (valid 15 minutes, once); it invalidates every session. Without access to the server log: start the server once with `AT_RESET_AUTH=1` and remove it again. Settings › General › Security has „Überall abmelden".
+- The SQLite file (`autarktrade.db` plus `-wal`/`-shm`) is set to `0600` (owner only) on every start.
+- Requests that change something (`POST`/`PUT`/`PATCH`/`DELETE` under `/api`) are rejected with 403 when the browser reports a foreign origin (`Sec-Fetch-Site` other than `same-origin`/`none`, or an `Origin` whose host:port differs from `Host`). Clients without these headers (curl, scripts, ESP32, Android widget) are unaffected; the key-authenticated `/api/esp32/display|alarme|push` routes are exempt.
+- `AT_SECRET` shorter than 32 characters triggers a loud warning at start. `AT_KEIN_UPDATECHECK=1` (and test mode) skip the update check at start.
 - The container runs as user `node`; the Docker socket is no longer mounted (the one-click update was never reachable inside the container). Update the container with `docker compose pull && docker compose up -d`.
 - Production responses carry a Content-Security-Policy (scripts only from the app, no eval).
 

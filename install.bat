@@ -21,17 +21,17 @@ echo.
 echo   Pruefe System-Voraussetzungen...
 echo.
 
-REM CHECK 1: Node.js 20+
+REM CHECK 1: Node.js 22+
 where node >nul 2>nul
 if !errorlevel! equ 0 (
     for /f "tokens=*" %%v in ('node -v 2^>nul') do set "NODE_VER=%%v"
     for /f "tokens=1 delims=." %%a in ("!NODE_VER!") do set "NODE_RAW=%%a"
     set "NODE_MAJOR=!NODE_RAW:v=!"
-    if !NODE_MAJOR! GEQ 20 (
+    if !NODE_MAJOR! GEQ 22 (
         set "NODE_OK=1"
         echo   [OK]  Node.js            !NODE_VER!
     ) else (
-        echo   [!!]  Node.js            !NODE_VER! ^(Version 20+ erforderlich^)
+        echo   [!!]  Node.js            !NODE_VER! ^(Version 22+ erforderlich^)
         set "MANDATORY_MISSING=1"
     )
 ) else (
@@ -145,7 +145,7 @@ REM Pflicht-Komponenten fehlen?
 if "!MANDATORY_MISSING!"=="1" (
     echo   Fehlende Pflicht-Komponenten gefunden:
     echo.
-    if "!NODE_OK!"=="0"    echo     * Node.js 20+
+    if "!NODE_OK!"=="0"    echo     * Node.js 22+
     if "!PYTHON_OK!"=="0"  echo     * Python 3
     if "!VSBUILD_OK!"=="0" echo     * Visual Studio Build Tools
     if "!GIT_OK!"=="0"     echo     * Git
@@ -176,7 +176,7 @@ echo   Installiere fehlende Pakete...
 echo.
 
 if "!NODE_OK!"=="0" (
-    echo   → Installiere Node.js 20 LTS...
+    echo   → Installiere Node.js LTS (22+)...
     winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements -h
     if !errorlevel! neq 0 (
         echo   [!] Node.js Installation fehlgeschlagen
@@ -302,7 +302,7 @@ echo   Bitte installiere die fehlenden Pakete:
 echo.
 
 if "!NODE_OK!"=="0" (
-    echo   Node.js 20+ ^(LTS^)
+    echo   Node.js 22+ ^(LTS^)
     echo     https://nodejs.org/
     echo     Waehle die LTS-Version und aktiviere "Add to PATH"
     echo.
@@ -365,11 +365,11 @@ if "!NODE_OK!"=="0" (
         for /f "tokens=*" %%v in ('node -v 2^>nul') do set "NODE_VER=%%v"
         for /f "tokens=1 delims=." %%a in ("!NODE_VER!") do set "NODE_RAW=%%a"
         set "NODE_MAJOR=!NODE_RAW:v=!"
-        if !NODE_MAJOR! GEQ 20 (
+        if !NODE_MAJOR! GEQ 22 (
             set "NODE_OK=1"
             echo   [OK]  Node.js            !NODE_VER!
         ) else (
-            echo   [!!]  Node.js            !NODE_VER! ^(Version 20+ erforderlich^)
+            echo   [!!]  Node.js            !NODE_VER! ^(Version 22+ erforderlich^)
         )
     ) else (
         echo   [!!]  Node.js            Immer noch nicht gefunden
@@ -497,7 +497,20 @@ echo.
 
 echo   [1/2] Installiere Abhaengigkeiten...
 echo.
-call npm install
+:: git ist fertig: Zugang aus der Umgebung nehmen (SEC-OPS-008)
+set "GIT_CONFIG_COUNT="
+set "GIT_CONFIG_KEY_0="
+set "GIT_CONFIG_VALUE_0="
+set "AT_BASIC="
+set "AT_UPDATE_TOKEN="
+set "AT_UPDATE_BENUTZER="
+:: npm ci nach package-lock.json, sonst npm install
+set "NPM_RC=1"
+if exist "package-lock.json" (
+    call npm ci
+    set "NPM_RC=!errorlevel!"
+)
+if not "!NPM_RC!"=="0" call npm install
 if !errorlevel! neq 0 (
     echo.
     echo   FEHLER bei npm install!

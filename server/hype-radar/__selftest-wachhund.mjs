@@ -8,8 +8,9 @@
  * Aufruf: node server/hype-radar/__selftest-wachhund.mjs
  */
 import { pruefeRegeln, pruefeRegelnBoerse, naechsteBasis, STANDARD_ALARM_REGELN, SPERRFRIST_MS } from './wachhund.js'
-import { erreichtSchwere, ntfyNachricht } from './zustellung.js'
-import { bereinigeEinstellungen } from './einstellungen.js'
+import { erreichtSchwere, ntfyNachricht, stelleZu } from './zustellung.js'
+import { bereinigeEinstellungen, ntfyTopicErgaenzt, VORGABEN } from './einstellungen.js'
+import { ntfyTopicSchwach, neuesNtfyTopic, NTFY_ALTES_TOPIC } from '../../shared/ntfy.js'
 
 let fehler = 0
 let bestanden = 0
@@ -218,8 +219,58 @@ p('Umsatz halbiert gegenüber dem Höchststand meldet',
 
 // ntfy: Titel mit Nicht-Latin-1-Zeichen gehen über JSON.
 {
-    const n = ntfyNachricht({ regel: 'liqAbfluss', schwere: 'kritisch', meldung: 'm' }, { symbol: '币安' })
+    const n = ntfyNachricht({ regel: 'liqAbfluss', schwere: 'kritisch', meldung: 'm' }, { symbol: '币安' }, 'autarktrade-abc')
     p('ntfy-Titel darf UTF-8 tragen', n.title === '币安 (liqAbfluss)' && n.priority === 5)
+}
+
+/*
+ * ntfy-Topic (Gesamtaudit 26.10.2026, SEC-SRV-013): die Vorgabe war
+ * `hype-radar` — auf ntfy.sh öffentlich und von jeder Installation geteilt —,
+ * und ein leeres Feld fiel still darauf zurück.
+ */
+{
+    p('Vorgabe trägt kein festes Topic mehr', VORGABEN.alarmKanaele.ntfy.topic === '')
+    const t1 = neuesNtfyTopic()
+    const t2 = neuesNtfyTopic()
+    p('neues Topic: autarktrade- + 24 Hex', /^autarktrade-[0-9a-f]{24}$/.test(t1), t1)
+    p('neues Topic ist jedes Mal anders', t1 !== t2)
+    p('neues Topic gilt auf ntfy.sh nicht als schwach', !ntfyTopicSchwach({ url: 'https://ntfy.sh', topic: t1 }))
+
+    const neu = ntfyTopicErgaenzt(undefined, () => 'autarktrade-zufall')
+    p('neue Installation bekommt ein zufälliges Topic',
+        neu?.ntfy?.topic === 'autarktrade-zufall' && neu.ntfy.an === false && neu.ntfy.minSchwere === 'info', JSON.stringify(neu))
+    const nurTelegram = ntfyTopicErgaenzt({ telegram: { an: true, chatId: '1' } }, () => 'autarktrade-zufall')
+    p('ntfy nie angefasst: Topic ergänzt, Telegram bleibt',
+        nurTelegram?.ntfy?.topic === 'autarktrade-zufall' && nurTelegram.telegram.chatId === '1')
+    p('gespeichertes hype-radar bleibt unangetastet',
+        ntfyTopicErgaenzt({ ntfy: { an: true, url: 'https://ntfy.sh', topic: 'hype-radar' } }) === null)
+    p('gespeichertes eigenes Topic bleibt unangetastet', ntfyTopicErgaenzt({ ntfy: { an: false, topic: 'mein-topic' } }) === null)
+    p('gespeichertes LEERES Topic bleibt leer (kein Umbenennen)', ntfyTopicErgaenzt({ ntfy: { an: true, topic: '' } }) === null)
+    const alt = ntfyTopicErgaenzt({ ntfy: { an: true, url: 'https://ntfy.sh' } }, () => 'autarktrade-zufall')
+    p('eingeschaltet ohne Topic-Feld: bleibt beim bisherigen Ziel hype-radar', alt?.ntfy?.topic === NTFY_ALTES_TOPIC, JSON.stringify(alt))
+
+    p('Warnung: ntfy.sh mit hype-radar', ntfyTopicSchwach({ url: 'https://ntfy.sh/', topic: 'hype-radar' }))
+    p('Warnung: ntfy.sh mit kurzem Topic', ntfyTopicSchwach({ url: 'https://ntfy.sh', topic: 'mein-alarm' }))
+    p('Warnung: ntfy.sh mit leerem Topic', ntfyTopicSchwach({ url: 'https://ntfy.sh', topic: '' }))
+    p('keine Warnung: eigener Server mit kurzem Topic', !ntfyTopicSchwach({ url: 'https://ntfy.example.org', topic: 'alarm' }))
+    p('keine Warnung: ntfy.sh mit 20+ Zeichen', !ntfyTopicSchwach({ url: 'https://ntfy.sh', topic: 'abcdefghij-klmnopqrs' }))
+    p('keine Warnung: Adresse kaputt', !ntfyTopicSchwach({ url: 'kein url', topic: 'x' }))
+
+    let warf = ''
+    try { ntfyNachricht({ regel: 'x', schwere: 'info', meldung: 'm' }, { symbol: 'X' }, '') } catch (e) { warf = e.message }
+    p('ntfy-Rumpf ohne Topic gibt es nicht', /Topic/.test(warf), warf)
+
+    const echterFetch = globalThis.fetch
+    const ziele = []
+    globalThis.fetch = async (url, o) => { ziele.push(JSON.parse(o.body).topic); return { ok: true, status: 200 } }
+    const einst = (topic) => ({ alarmKanaele: { ntfy: { an: true, url: 'https://ntfy.sh', topic, minSchwere: 'info' } }, schluessel: {} })
+    const leer = await stelleZu({ regel: 't', schwere: 'kritisch', meldung: 'm' }, { symbol: 'X' }, einst(''), { alleSchweren: true })
+    p('leeres Topic: nichts gesendet, Fehler gemeldet', ziele.length === 0 && /Topic/.test(String(leer?.ntfy)), JSON.stringify(leer))
+    await stelleZu({ regel: 't', schwere: 'kritisch', meldung: 'm' }, { symbol: 'X' }, einst('  '), { alleSchweren: true })
+    p('Leerzeichen-Topic: nichts gesendet', ziele.length === 0)
+    const ok = await stelleZu({ regel: 't', schwere: 'kritisch', meldung: 'm' }, { symbol: 'X' }, einst('autarktrade-abc'), { alleSchweren: true })
+    p('Gegenprobe: mit Topic wird gesendet, an genau dieses', ziele.join() === 'autarktrade-abc' && ok?.ntfy === 'ok', JSON.stringify(ok))
+    globalThis.fetch = echterFetch
 }
 
 /*

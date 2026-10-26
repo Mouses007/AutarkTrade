@@ -63,10 +63,12 @@ export async function pionexRequest(method, path, apiKey, secretKey, params = {}
         'PIONEX-SIGNATURE': sign,
     }
 
+    // Zeitgrenze wie bei Bitunix (Audit SEC-SRV-005).
     const response = await fetch(url, {
         method,
         headers,
         body: method !== 'GET' ? (bodyString || undefined) : undefined,
+        signal: AbortSignal.timeout(15000),
     })
 
     const data = await response.json().catch(() => null)

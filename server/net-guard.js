@@ -75,7 +75,7 @@ export function istPrivatV4(ip) {
  * IPv6-Adresse in ihre acht 16-Bit-Gruppen zerlegen (`::` aufgefüllt, eine
  * IPv4-Endung in zwei Gruppen umgerechnet). `null` bei Unsinn.
  */
-function v6Gruppen(ip) {
+export function v6Gruppen(ip) {
     let s = String(ip).toLowerCase().split('%')[0]
     const v4 = s.match(/^(.*:)(\d+\.\d+\.\d+\.\d+)$/)
     if (v4) {
@@ -111,6 +111,33 @@ export function istPrivatV6(ip) {
     if (nullBis(5) && (g[5] === 0xffff || g[5] === 0)) return istPrivatV4(v4aus(g[6], g[7]))
     // NAT64 (64:ff9b::/96) zeigt auf eine IPv4-Adresse
     if (g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((x) => x === 0)) return istPrivatV4(v4aus(g[6], g[7]))
+    /*
+     * Zwei weitere Präfixe mit eingebetteter IPv4 (Gesamtaudit 26.10.2026,
+     * SEC-SRV-020) — vorher gingen `[::ffff:0:7f00:1]` und `64:ff9b:1::…` als
+     * „öffentlich" durch. Linux bildet sie nicht auf IPv4 ab, ein NAT64- oder
+     * SIIT-Gateway im Netz aber sehr wohl.
+     *
+     * ::ffff:0:0/96 — IPv4-übersetzt (SIIT, RFC 7915), IPv4 in den letzten 32 Bit.
+     */
+    if (nullBis(4) && g[4] === 0xffff && g[5] === 0) return istPrivatV4(v4aus(g[6], g[7]))
+    /*
+     * 64:ff9b:1::/48 — lokales NAT64 (RFC 8215). Wo die IPv4 steht, hängt an
+     * der Präfixlänge, die der Betreiber wählt (RFC 6052: /48, /56, /64, /96).
+     * Die kennen wir nicht — also jede Lage prüfen, die die Adresse zulässt
+     * (Byte 8 frei und alles hinter der IPv4 null; /96 passt immer). Ist eine
+     * davon intern, ist die Adresse zu.
+     */
+    if (g[0] === 0x64 && g[1] === 0xff9b && g[2] === 1) {
+        const b = g.flatMap((x) => [x >> 8, x & 255])
+        const nullAb = (i) => b.slice(i).every((x) => x === 0)
+        const lagen = [
+            [[6, 7, 9, 10], b[8] === 0 && nullAb(11)],      // /48
+            [[7, 9, 10, 11], b[8] === 0 && nullAb(12)],     // /56
+            [[9, 10, 11, 12], b[8] === 0 && nullAb(13)],    // /64
+            [[12, 13, 14, 15], true],                       // /96
+        ]
+        return lagen.some(([l, moeglich]) => moeglich && istPrivatV4(l.map((i) => b[i]).join('.')))
+    }
     if ((g[0] & 0xfe00) === 0xfc00) return true        // fc00::/7 eindeutig lokal
     if ((g[0] & 0xffc0) === 0xfe80) return true        // fe80::/10 verbindungslokal
     if ((g[0] & 0xffc0) === 0xfec0) return true        // fec0::/10 site-local (veraltet)

@@ -28,6 +28,8 @@
  * sagt dann etwas über die Geschichte, nichts über den Token.
  */
 
+import { HTML_MAX, ohneTags, ohneBloecke, ersetzeZwischen, elementInhalt, zeichenAusVerweis } from '../html-zerlegen.js'
+
 /**
  * Regelstand. Eine gespeicherte Prüfung mit anderem Stand gilt als abgelaufen —
  * sonst stünden nach einer Regeländerung bis zu einen Tag lang Noten nach den
@@ -246,35 +248,71 @@ const ENTITAETEN = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' '
 
 function entitaeten(text) {
     return text
-        .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
-        .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+        // `zeichenAusVerweis` statt `String.fromCodePoint`: ein `&#x110000;`
+        // warf sonst einen RangeError, und die ganze Seite galt als unlesbar.
+        .replace(/&#x([0-9a-f]+);/gi, (_, h) => zeichenAusVerweis(parseInt(h, 16)))
+        .replace(/&#(\d+);/g, (_, d) => zeichenAusVerweis(Number(d)))
         .replace(/&([a-z0-9#]+);/gi, (m, n) => ENTITAETEN[n.toLowerCase()] ?? m)
 }
 
-/** Sichtbarer Text: ohne Skripte, Stile, SVG, Kommentare und Tags. */
+/**
+ * Obergrenze für die Rohseite. net-guard lässt 2 MB durch; mehr als das wird
+ * hier gar nicht erst angefasst, falls ein anderer Weg je mehr liefert.
+ */
+const ROH_MAX = 2 * 1024 * 1024
+
+/**
+ * Sichtbarer Text: ohne Skripte, Stile, SVG, Kommentare und Tags.
+ *
+ * Bis zum Gesamtaudit vom 26.10.2026 (SEC-SRV-001) mit fünf `replace`-Regexen,
+ * deren erster und letzter (`<!--[\s\S]*?-->`, `<[^>]+>`) auf `<<<…` oder
+ * `<!--<!--…` ohne Abschluss quadratisch liefen: 200 kB → 12,6 s Stillstand
+ * des ganzen Servers, ausgelöst von einer Webseite, die ein Token-Ersteller
+ * einträgt. Jetzt linear (`html-zerlegen.js`), mit demselben Ergebnis.
+ *
+ * Gekürzt wird NACH dem Entfernen von Kommentaren und Skriptblöcken: eine
+ * Next.js-Seite trägt oft hunderte Kilobyte Inline-Skript vor dem ersten Satz
+ * — ein Schnitt davor hätte genau den Text abgeschnitten, den wir lesen
+ * wollen. Beide Schritte sind linear; die Tag-Zerlegung danach sieht höchstens
+ * `HTML_MAX` (256 kB).
+ */
 export function sichtbarerText(html) {
-    return entitaeten(String(html || '')
-        .replace(/<!--[\s\S]*?-->/g, ' ')
-        .replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1>/gi, ' ')
+    const ohneSkript = ohneBloecke(
+        ersetzeZwischen(String(html || '').slice(0, ROH_MAX), '<!--', '-->', () => ' '),
+        ['script', 'style', 'noscript', 'svg', 'template', 'iframe'])
+    return entitaeten(ohneTags(ohneSkript.slice(0, HTML_MAX)
         .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/(p|div|h[1-6]|li|section|article|header|footer)>/gi, '\n')
-        .replace(/<[^>]+>/g, ' '))
+        .replace(/<\/(p|div|h[1-6]|li|section|article|header|footer)>/gi, '\n')))
         .replace(/[ \t\r\f\v]+/g, ' ')
         .replace(/\n\s*/g, '\n')
         .trim()
 }
 
+/*
+ * Die Muster unten lesen Tags mit `[^<>]` statt `[^>]` (SEC-SRV-001): ein
+ * `[^>]` läuft über jedes `<` hinweg bis zum nächsten `>` — auf `<meta<meta…`
+ * ohne `>` von jeder Fundstelle bis ans Ende, also quadratisch. Ein echtes
+ * Attribut enthält kein rohes `<`.
+ */
 const metaInhalt = (html, name) => {
-    const re = new RegExp(`<meta[^>]+(?:name|property)=["']${name}["'][^>]*>`, 'i')
+    const re = new RegExp(`<meta[^<>]+(?:name|property)=["']${name}["'][^<>]*>`, 'i')
     const tag = String(html).match(re)?.[0] || ''
     return entitaeten(tag.match(/content=["']([^"']*)["']/i)?.[1] || '').trim()
 }
 
+/*
+ * Höchstens so viele Verweise je Seite. Eine Projektseite hat ein paar Dutzend,
+ * eine Marktliste einige Hundert; 100 000 präparierte `<a href>` hätten danach
+ * je Kanal-Art noch einmal 100 000 URLs zerlegt (SEC-SRV-001).
+ */
+const MAX_VERWEISE = 2000
+
 /** Alle `href`-Ziele einer Seite, absolut gemacht. */
 function verweise(html, basis) {
     const raus = []
-    for (const m of String(html).matchAll(/<a\b[^>]*\bhref=["']([^"'#][^"']*)["']/gi)) {
+    for (const m of String(html).matchAll(/<a\b[^<>]*\bhref=["']([^"'#][^"']*)["']/gi)) {
         try { raus.push(new URL(entitaeten(m[1]), basis || undefined).toString()) } catch { /* kaputter Link */ }
+        if (raus.length >= MAX_VERWEISE) break
     }
     return raus
 }
@@ -364,7 +402,7 @@ function zaehleAdressen(roh) {
  * @returns {object} Fakten, alle beobachtbar und ohne Wertung
  */
 export function leseWebseite(html, { contract = '', url = '' } = {}) {
-    const roh = String(html || '')
+    const roh = String(html || '').slice(0, ROH_MAX)
     const text = sichtbarerText(roh)
     const woerter = (text.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length
     const links = verweise(roh, url)
@@ -391,7 +429,7 @@ export function leseWebseite(html, { contract = '', url = '' } = {}) {
      */
     const skripte = (roh.match(/<script\b/gi) || []).length
     const nurSkript = woerter < 60
-        && (/<div[^>]+id=["'](root|app|__next|__nuxt)["']/i.test(roh) || skripte >= 3)
+        && (/<div[^<>]+id=["'](root|app|__next|__nuxt)["']/i.test(roh) || skripte >= 3)
 
     const adressen = zaehleAdressen(roh)
     const sammelseite = adressen >= SAMMEL_AB
@@ -411,7 +449,9 @@ export function leseWebseite(html, { contract = '', url = '' } = {}) {
     const jahre = [...text.matchAll(/(?:©|\(c\)|copyright)\s*(?:\d{4}\s*[-–]\s*)?(\d{4})/gi)]
         .map((m) => Number(m[1])).filter((j) => j >= 2009 && j <= 2100)
 
-    const titel = entitaeten((roh.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || '').replace(/\s+/g, ' ').trim()).slice(0, 200)
+    // `elementInhalt` statt `<title[^>]*>([\s\S]*?)<\/title>`: ohne `</title>`
+    // lief der Regex von jedem `<title` bis ans Ende (SEC-SRV-001).
+    const titel = entitaeten((elementInhalt(roh, 'title') || '').replace(/\s+/g, ' ').trim()).slice(0, 200)
     const beschreibung = (metaInhalt(roh, 'description') || metaInhalt(roh, 'og:description')).slice(0, 400)
     // „$SYMBOL" in Titel, Beschreibung oder Text — klein geschrieben, ohne „$".
     const cashtagsIn = (t) => [...new Set([...String(t).matchAll(/(?:^|[^\w$])\$([A-Za-z][A-Za-z0-9]{1,14})\b/g)]

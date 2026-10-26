@@ -54,6 +54,25 @@ paketquelle_flach() {
     unset _at_zweig _at_ref
 }
 
+# Zugang wieder aus der Umgebung nehmen, sobald git fertig ist (Audit SEC-OPS-008):
+# alles, was danach läuft (npm, Install-Skripte der Abhängigkeiten, vite), soll das
+# Token nicht sehen.
+paketquelle_zugang_weg() {
+    unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0 AT_UPDATE_TOKEN AT_UPDATE_BENUTZER
+}
+
+# Abhängigkeiten installieren: `npm ci` nach package-lock.json (genau die geprüften
+# Versionen statt der Semver-Bereiche), Rückfall auf `npm install`, wenn ci scheitert
+# oder keine Sperrdatei da ist. Immer ohne Update-Token in der Umgebung.
+paketquelle_npm() {
+    paketquelle_zugang_weg
+    if [ -f package-lock.json ]; then
+        npm ci && return 0
+        echo "  npm ci fehlgeschlagen — versuche npm install"
+    fi
+    npm install
+}
+
 paketquelle_hinweis() {
     echo "  Die Paketquelle ist github.com/Mouses007/AutarkTrade — Internetverbindung prüfen."
     echo "  Für einen privaten Fork: AT_UPDATE_TOKEN=<github-token> $0"

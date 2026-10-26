@@ -5,7 +5,7 @@
  */
 import {
     normName, gueltigerName, ipBytes, leseName, leseAnfrage, schreibeName, fragtNach,
-    baueAntwort, baueFrage, waehleIp, TYP_A, TTL,
+    baueAntwort, baueFrage, waehleIp, netzmaskeVon, imEigenenNetz, TYP_A, TTL,
 } from './mdns-kern.js'
 
 let ok = 0, fehler = 0
@@ -69,6 +69,22 @@ const nets = {
 pruefe(waehleIp(nets) === '192.168.178.100', 'IP-Wahl: LAN-Adresse, nicht Docker-Brücke')
 pruefe(waehleIp({ docker0: nets.docker0, lo: nets.lo }) === null, 'Gegenprobe: nur Docker/Loopback → keine IP')
 pruefe(waehleIp({ eth1: [{ address: '10.0.0.5', family: 4, internal: false }], eth0: nets.eth0 }) === '192.168.178.100', 'IP-Wahl: 192.168.* vor 10.*')
+
+// Altanfragen nur aus dem eigenen Netz (RFC 6762 §11, Audit SEC-OPS-017)
+const netze = {
+    eth0: [{ address: '192.168.178.100', netmask: '255.255.255.0', family: 'IPv4', internal: false }],
+    eth1: [{ address: '10.1.2.3', netmask: '255.255.0.0', family: 4, internal: false }],
+}
+pruefe(netzmaskeVon(netze, '192.168.178.100') === '255.255.255.0', 'Netzmaske der Schnittstelle mit der IP')
+pruefe(netzmaskeVon(netze, '10.1.2.3') === '255.255.0.0', 'Netzmaske: zweite Schnittstelle, family als Zahl')
+pruefe(netzmaskeVon(netze, '192.168.1.5') === '255.255.255.0', 'Netzmaske unbekannt → /24')
+pruefe(imEigenenNetz('192.168.178.23', '192.168.178.100', '255.255.255.0'), 'Quelle im eigenen /24 → beantworten')
+pruefe(!imEigenenNetz('192.168.179.23', '192.168.178.100', '255.255.255.0'), 'Gegenprobe: Nachbarnetz → nicht beantworten')
+pruefe(!imEigenenNetz('8.8.8.8', '192.168.178.100', '255.255.255.0'), 'Gegenprobe: öffentliche Adresse → nicht beantworten')
+pruefe(imEigenenNetz('10.1.200.9', '10.1.2.3', '255.255.0.0'), 'Quelle im eigenen /16 → beantworten')
+pruefe(!imEigenenNetz('10.2.0.1', '10.1.2.3', '255.255.0.0'), 'Gegenprobe: anderes /16 → nicht beantworten')
+pruefe(!imEigenenNetz('::ffff:192.168.178.23', '192.168.178.100', '255.255.255.0'), 'Gegenprobe: unlesbare Quelle → nicht beantworten')
+pruefe(!imEigenenNetz('192.168.178.23', '192.168.178.100', null), 'Gegenprobe: fehlende Maske → nicht beantworten')
 
 console.log(`mdns: ${ok} bestanden, ${fehler} fehlgeschlagen`)
 process.exit(fehler ? 1 : 0)

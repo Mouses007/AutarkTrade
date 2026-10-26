@@ -163,6 +163,27 @@ for (const ip of ['::ffff:7f00:1', '::ffff:a9fe:a9fe', '::ffff:c0a8:b264', '::7f
     pruefe(`${ip} bleibt gesperrt`, istPrivatV6(ip) === true)
 }
 pruefe('::ffff:808:808 (8.8.8.8) kommt durch', istPrivatV6('::ffff:808:808') === false)
+
+/*
+ * 6b) SEC-SRV-020 (Gesamtaudit 26.10.2026): SIIT `::ffff:0:0/96` und lokales
+ * NAT64 `64:ff9b:1::/48` tragen ebenfalls eine IPv4 — vorher „öffentlich".
+ */
+for (const ip of ['::ffff:0:7f00:1', '::ffff:0:a9fe:a9fe', '::ffff:0:c0a8:1', '::ffff:0:127.0.0.1',
+    '64:ff9b:1::7f00:1', '64:ff9b:1::a9fe:a9fe',
+    '64:ff9b:1:7f00:1::',       // /48: 127.0.1.0
+    '64:ff9b:1:c0:a8:100::',    // /56: 192.168.1.0
+    '64:ff9b:1:0:a:0:100::',    // /64: 10.0.0.1
+]) {
+    pruefe(`${ip} wird gesperrt`, istPrivatV6(ip) === true)
+}
+for (const ip of ['::ffff:0:808:808', '64:ff9b:1::808:808', '64:ff9b:1:0:8:808:800:808']) {
+    pruefe(`${ip} (öffentlich eingebettet) kommt durch`, istPrivatV6(ip) === false)
+}
+for (const url of ['http://[::ffff:0:7f00:1]/', 'http://[64:ff9b:1::a9fe:a9fe]/']) {
+    let gesperrt = false
+    try { await pruefeOeffentlicheUrl(url) } catch (e) { gesperrt = e.art === 'gesperrt' }
+    pruefe(`${url} wird abgewiesen`, gesperrt)
+}
 for (const url of ['http://[::ffff:127.0.0.1]/', 'http://[::ffff:a9fe:a9fe]/', 'http://[::ffff:192.168.178.1]/', 'http://[::1]/']) {
     let gesperrt = false
     try { await pruefeOeffentlicheUrl(url) } catch (e) { gesperrt = e.art === 'gesperrt' }

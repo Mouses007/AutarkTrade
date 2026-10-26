@@ -16,6 +16,7 @@ import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
@@ -51,6 +52,8 @@ class WidgetConfigActivity : AppCompatActivity() {
     private lateinit var port: EditText
     private lateinit var key: EditText
     private lateinit var web: EditText
+    private lateinit var tlsSchalter: SwitchCompat
+    private lateinit var tlsPort: EditText
     private lateinit var status: TextView
     private lateinit var alarmeAn: SwitchCompat
     private lateinit var taktSpin: Spinner
@@ -67,6 +70,9 @@ class WidgetConfigActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         // Default result = canceled, so dismissing the dialog removes a freshly-added widget.
         setResult(Activity.RESULT_CANCELED)
+        // Der Geräteschlüssel steht hier im Feld: keine Screenshots, keine Bildschirmaufnahme,
+        // leere Vorschau in den letzten Apps (SEC-AND-004).
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
         setContentView(R.layout.activity_config)
 
         widgetId = intent?.extras?.getInt(
@@ -79,6 +85,19 @@ class WidgetConfigActivity : AppCompatActivity() {
         web = findViewById(R.id.in_web)
         web.setText(Prefs.webAdresse(this))
         web.setOnFocusChangeListener { _, fokus -> if (!fokus) zeigeWebStand() }
+        tlsSchalter = findViewById(R.id.in_tls)
+        tlsPort = findViewById(R.id.in_tls_port)
+        tlsSchalter.isChecked = Prefs.tlsAn(this)
+        tlsPort.setText(Prefs.tlsPort(this))
+        tlsSchalter.setOnCheckedChangeListener { _, _ -> zeigeTlsStand(); zeigeWebStand() }
+        findViewById<Button>(R.id.btn_koppeln).setOnClickListener {
+            val h = host.text.toString().trim()
+            if (h.isBlank()) { status.text = getString(R.string.cfg_need_fields); return@setOnClickListener }
+            koppeln(h, port.text.toString().trim().ifBlank { "8080" }) {
+                Prefs.saveTls(this, true, tlsPortWert())
+                status.text = getString(R.string.cfg_gekoppelt)
+            }
+        }
         status = findViewById(R.id.status)
         val filterSpin = findViewById<Spinner>(R.id.in_filter)
         val brokerSpin = findViewById<Spinner>(R.id.in_broker)
@@ -169,17 +188,23 @@ class WidgetConfigActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_test).setOnClickListener {
             val (h, p, k) = verbindung() ?: return@setOnClickListener
             val f = if (mitWidget) filterVals[filterSpin.selectedItemPosition.coerceAtLeast(0)] else "all"
-            status.text = getString(R.string.cfg_testing)
-            thread {
-                val msg = try {
-                    ApiClient.fetch(h, p, k, f)
-                    // Den Alarm-Endpunkt gleich mitprüfen: ein älterer Server hat ihn nicht (404).
-                    if (alarmeAn.isChecked) { ApiClient.fetchAlarme(h, p, k, System.currentTimeMillis(), Prefs.ALLE_ARTEN.toSet()); getString(R.string.cfg_alarm_test_ok) }
-                    else getString(R.string.cfg_test_ok)
-                } catch (e: Exception) {
-                    getString(R.string.cfg_test_fail, e.message ?: "?")
+            val tls = tlsSchalter.isChecked
+            val tp = tlsPortWert()
+            // HTTPS an und noch nicht gekoppelt → erst koppeln (mit Bestätigung), dann testen.
+            mitKopplung(h, p) {
+                status.text = getString(R.string.cfg_testing)
+                thread {
+                    val msg = try {
+                        val ziel = ApiClient.ziel(applicationContext, h, p, tls, tp)
+                        ApiClient.fetch(ziel, k, f)
+                        // Den Alarm-Endpunkt gleich mitprüfen: ein älterer Server hat ihn nicht (404).
+                        if (alarmeAn.isChecked) { ApiClient.fetchAlarme(ziel, k, System.currentTimeMillis(), Prefs.ALLE_ARTEN.toSet()); getString(R.string.cfg_alarm_test_ok) }
+                        else getString(R.string.cfg_test_ok)
+                    } catch (e: Exception) {
+                        getString(R.string.cfg_test_fail, e.message ?: "?")
+                    }
+                    runOnUiThread { status.text = msg }
                 }
-                runOnUiThread { status.text = msg }
             }
         }
 
@@ -192,45 +217,51 @@ class WidgetConfigActivity : AppCompatActivity() {
             Prefs.setWebAdresse(this, webNeu)
             val gewaehlt = artBoxen.filterValues { it.isChecked }.keys
             if (alarmeAn.isChecked && gewaehlt.isEmpty()) { status.text = getString(R.string.cfg_keine_art); return@setOnClickListener }
-            Prefs.saveAlarmConfig(this, alarmeAn.isChecked, taktVals[taktSpin.selectedItemPosition.coerceAtLeast(0)],
-                gewaehlt.ifEmpty { Prefs.ALLE_ARTEN.toSet() }, h, p, k)
-            if (alarmeAn.isChecked) ChartAlarme.kanaeleAnlegen(this)
-            sofortUmstellen(alarmeAn.isChecked && sofortBox.isChecked)
-            status.text = getString(R.string.cfg_testing)
+            // HTTPS an und (für diesen Host) noch nicht gekoppelt → erst koppeln, dann speichern.
+            // Abgebrochen → nichts gespeichert.
+            mitKopplung(h, p) {
+                Prefs.saveTls(this, tlsSchalter.isChecked, tlsPortWert())
+                Prefs.saveAlarmConfig(this, alarmeAn.isChecked, taktVals[taktSpin.selectedItemPosition.coerceAtLeast(0)],
+                    gewaehlt.ifEmpty { Prefs.ALLE_ARTEN.toSet() }, h, p, k)
+                if (alarmeAn.isChecked) ChartAlarme.kanaeleAnlegen(this)
+                sofortUmstellen(alarmeAn.isChecked && sofortBox.isChecked)
+                status.text = getString(R.string.cfg_testing)
 
-            thread {
-                // Erster Alarm-Abruf gleich hier: merkt den Stand still, damit ab jetzt nur Neues kommt.
-                ChartAlarme.abrufen(applicationContext)
-                ChartAlarme.planen(applicationContext)
-                if (mitWidget) {
-                    val f = filterVals[filterSpin.selectedItemPosition.coerceAtLeast(0)]
-                    val db = brokerVals[brokerSpin.selectedItemPosition.coerceAtLeast(0)]
-                    Prefs.saveConfig(this, widgetId, h, p, k, f, db)
-                    // Daten gleich hier holen + cachen, damit das Widget sofort befüllt
-                    // ist — unabhängig davon, ob der WorkManager-Job (Hintergrund) auf
-                    // diesem Gerät zeitnah/überhaupt läuft (Akku-Restriktionen etc.).
-                    try {
-                        val json = ApiClient.fetch(h, p, k, f)
-                        DisplayData.parse(json)
-                        Prefs.saveCache(applicationContext, widgetId, json, System.currentTimeMillis())
-                        Prefs.clearSelectedBroker(applicationContext, widgetId)
-                    } catch (e: Exception) {
-                        Prefs.saveError(applicationContext, widgetId, e.message ?: "Fehler")
-                    }
-                }
-                runOnUiThread {
-                    // Alle Widgets neu zeichnen — die Glocke im Titel hängt am globalen Schalter.
-                    val awm = AppWidgetManager.getInstance(applicationContext)
-                    for (id in awm.getAppWidgetIds(ComponentName(applicationContext, TradingWidgetProvider::class.java))) {
-                        TradingWidgetProvider.updateWidget(applicationContext, awm, id)
-                    }
+                thread {
+                    // Erster Alarm-Abruf gleich hier: merkt den Stand still, damit ab jetzt nur Neues kommt.
+                    ChartAlarme.abrufen(applicationContext)
+                    ChartAlarme.planen(applicationContext)
                     if (mitWidget) {
-                        TradingWidgetProvider.triggerRefresh(applicationContext, force = true)
-                        setResult(Activity.RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
-                        finish()
-                    } else {
-                        status.text = getString(R.string.cfg_gespeichert)
-                        zeigeAlarmDetails()
+                        val f = filterVals[filterSpin.selectedItemPosition.coerceAtLeast(0)]
+                        val db = brokerVals[brokerSpin.selectedItemPosition.coerceAtLeast(0)]
+                        Prefs.saveConfig(this, widgetId, h, p, k, f, db)
+                        // Daten gleich hier holen + cachen, damit das Widget sofort befüllt
+                        // ist — unabhängig davon, ob der WorkManager-Job (Hintergrund) auf
+                        // diesem Gerät zeitnah/überhaupt läuft (Akku-Restriktionen etc.).
+                        try {
+                            val json = ApiClient.fetch(ApiClient.ziel(applicationContext, h, p), k, f)
+                            DisplayData.parse(json)
+                            Prefs.saveCache(applicationContext, widgetId, json, System.currentTimeMillis())
+                            Prefs.clearSelectedBroker(applicationContext, widgetId)
+                        } catch (e: Exception) {
+                            Prefs.saveError(applicationContext, widgetId, e.message ?: "Fehler")
+                        }
+                    }
+                    runOnUiThread {
+                        // Alle Widgets neu zeichnen — die Glocke im Titel hängt am globalen Schalter.
+                        val awm = AppWidgetManager.getInstance(applicationContext)
+                        for (id in awm.getAppWidgetIds(ComponentName(applicationContext, TradingWidgetProvider::class.java))) {
+                            TradingWidgetProvider.updateWidget(applicationContext, awm, id)
+                        }
+                        if (mitWidget) {
+                            TradingWidgetProvider.triggerRefresh(applicationContext, force = true)
+                            setResult(Activity.RESULT_OK, Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId))
+                            finish()
+                        } else {
+                            status.text = getString(R.string.cfg_gespeichert)
+                            zeigeAlarmDetails()
+                            zeigeTlsStand()
+                        }
                     }
                 }
             }
@@ -242,13 +273,72 @@ class WidgetConfigActivity : AppCompatActivity() {
         // Zurück aus den System-Einstellungen (genaue Wecker / Akku) → Stand neu zeigen.
         zeigeAlarmDetails()
         zeigeWebStand()
+        zeigeTlsStand()
+    }
+
+    private fun tlsPortWert(): String = tlsPort.text.toString().trim().ifBlank { Prefs.TLS_PORT_VORGABE }
+
+    /**
+     * [weiter] sofort, wenn HTTPS aus ist oder für [h] schon eine CA gekoppelt ist —
+     * sonst erst koppeln. Ein anderer Host heisst womöglich ein anderer Server: neu fragen.
+     */
+    private fun mitKopplung(h: String, p: String, weiter: () -> Unit) {
+        if (!tlsSchalter.isChecked || (Prefs.tlsCa(this).isNotBlank() && Prefs.tlsCaHost(this) == h)) weiter()
+        else koppeln(h, p, weiter)
+    }
+
+    /**
+     * Trust on first use mit Bestätigung: CA über http://h:p/api/esp32/ca holen, den
+     * selbst gerechneten Fingerabdruck zeigen und erst nach „Ja" speichern. Danach
+     * vertraut die App nur noch dieser CA (ApiClient.ziel).
+     */
+    private fun koppeln(h: String, p: String, weiter: () -> Unit) {
+        status.text = getString(R.string.cfg_koppeln_laeuft)
+        thread {
+            val ergebnis = try { Result.success(ApiClient.holeCa(h, p)) } catch (e: Exception) { Result.failure(e) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                val (pem, fp) = ergebnis.getOrElse {
+                    status.text = getString(R.string.cfg_koppeln_fehler, it.message ?: "?"); return@runOnUiThread
+                }
+                AlertDialog.Builder(this)
+                    .setTitle(R.string.cfg_koppeln_titel)
+                    .setMessage(getString(R.string.cfg_koppeln_text, h, Kopplung.kurz(fp), fp))
+                    .setCancelable(false)
+                    .setPositiveButton(R.string.cfg_koppeln_ja) { _, _ ->
+                        Prefs.saveKopplung(this, h, pem, fp)
+                        zeigeTlsStand()
+                        weiter()
+                    }
+                    .setNegativeButton(R.string.cfg_koppeln_nein) { _, _ ->
+                        status.text = getString(R.string.cfg_koppeln_abgebrochen)
+                    }
+                    .show()
+            }
+        }
+    }
+
+    /** Schalterstand, Kopplung oder Klartext-Warnung unter dem HTTPS-Schalter. */
+    private fun zeigeTlsStand() {
+        if (!::tlsSchalter.isInitialized) return
+        val an = tlsSchalter.isChecked
+        findViewById<View>(R.id.tls_details).visibility = if (an) View.VISIBLE else View.GONE
+        val fp = Prefs.tlsCaFingerabdruck(this)
+        findViewById<TextView>(R.id.tls_stand).text = when {
+            !an -> getString(R.string.cfg_tls_aus)
+            Prefs.tlsCa(this).isNotBlank() && fp.isNotBlank() -> getString(R.string.cfg_tls_stand, Prefs.tlsCaHost(this), Kopplung.kurz(fp))
+            else -> getString(R.string.cfg_tls_ungekoppelt)
+        }
     }
 
     /** Öffnen Links in einer installierten App oder im Browser? (für die eingetragene bzw. API-Adresse) */
     private fun zeigeWebStand() {
         if (!::web.isInitialized) return
         val eingabe = web.text.toString().trim().trimEnd('/')
-        val basis = eingabe.ifBlank { "http://${host.text.toString().trim()}:${port.text.toString().trim().ifBlank { "8080" }}" }
+        val basis = eingabe.ifBlank {
+            WebApp.vorgabe(host.text.toString().trim(), port.text.toString().trim().ifBlank { "8080" },
+                ::tlsSchalter.isInitialized && tlsSchalter.isChecked, if (::tlsPort.isInitialized) tlsPortWert() else Prefs.TLS_PORT_VORGABE)
+        }
         val uri = Uri.parse("$basis/chart")
         findViewById<TextView>(R.id.web_stand).text = getString(
             if (WebApp.webApk(this, uri) != null) R.string.cfg_web_app else R.string.cfg_web_browser)

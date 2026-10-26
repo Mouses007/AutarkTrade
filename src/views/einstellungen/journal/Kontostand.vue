@@ -9,11 +9,14 @@ import { dbUpdateSettings, dbFind } from '@/utils/db.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Knopf from '@/components/basis/Knopf.vue'
+import { pruefeZahl } from '@/utils/zahlEingabe.js'
 
 const { t } = useI18n()
 
 let balanceExpanded = ref(false)
 let startBalance = ref(0)
+/** Sichtbarer Fehler statt still 0 zu speichern (Audit FUN-LIV-001). */
+const eingabeFehler = ref('')
 
 /* KONTOSTAND (per broker) */
 const balanceLoading = ref(false)
@@ -66,7 +69,19 @@ async function loadBalanceFromApi() {
 async function saveBalances() {
     try {
         const broker = gewaehlteBoerse.value || 'bitunix'
-        const start = parseFloat(startBalance.value) || 0
+        /*
+         * Textfeld statt `type="number"`: „1000,50" bei englischer Browsersprache
+         * oder „1'000" ergab ein leeres `value`, `parseFloat('') || 0` speicherte 0
+         * und die Kontostand-Karte verschwand. Jetzt: Komma wie Punkt, leer oder
+         * Unsinn wird NICHT gespeichert. 0 ist erlaubt, muss aber getippt werden.
+         */
+        const pruef = pruefeZahl(startBalance.value, { leerErlaubt: false })
+        if (!pruef.ok) {
+            eingabeFehler.value = t('settings.startDepositUngueltig')
+            return
+        }
+        eingabeFehler.value = ''
+        const start = pruef.wert
 
         // Save start balance per broker (no offset needed — Dashboard calculates current from P&L)
         const existingBalances = appEinstellungen.value?.balances || {}
@@ -104,11 +119,13 @@ ausEinstellungen()
 
         <Feld :label="t('settings.startDeposit')" fuer="kontostand-start">
             <div class="reihe">
-                <input id="kontostand-start" type="number" class="eingabe" v-model="startBalance"
-                    :placeholder="t('settings.startDepositPlaceholder')" step="0.01" />
+                <input id="kontostand-start" type="text" inputmode="decimal" class="eingabe" v-model="startBalance"
+                    :class="{ fehlerhaft: eingabeFehler }" :aria-invalid="!!eingabeFehler"
+                    :placeholder="t('settings.startDepositPlaceholder')" @input="eingabeFehler = ''" />
                 <Knopf symbol="download" :laedt="balanceLoading" @click="loadBalanceFromApi">{{ t('settings.calculateFromApi') }}</Knopf>
             </div>
-            <p v-if="apiBalanceValue !== null" class="notiz gut">{{ t('settings.apiBalance', { value: apiBalanceValue.toFixed(2) }) }}</p>
+            <p v-if="eingabeFehler" class="notiz fehler" role="alert">{{ eingabeFehler }}</p>
+            <p v-else-if="apiBalanceValue !== null" class="notiz gut">{{ t('settings.apiBalance', { value: apiBalanceValue.toFixed(2) }) }}</p>
             <p v-else class="notiz">{{ t('settings.manualOrApi') }}</p>
         </Feld>
 
@@ -144,5 +161,7 @@ ausEinstellungen()
 }
 .notiz { margin: 0.3rem 0 0; color: var(--muted); font-size: 0.82rem; }
 .notiz.gut { color: var(--good); }
+.notiz.fehler { color: var(--bad); }
+.eingabe.fehlerhaft { border-color: var(--bad); }
 .aktionen { margin-top: var(--abstand-3); }
 </style>

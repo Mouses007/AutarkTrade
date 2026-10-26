@@ -1,8 +1,21 @@
 import axios from 'axios'
+import { gespeicherterApiSchluessel } from './databento-api.js'
 
 const POLYGON_BASE_URL = 'https://api.polygon.io'
 
-function getApiKey(req) {
+/*
+ * Seit dem Audit vom 26.10.2026 (SEC-WEB-006) nimmt die Route den
+ * GESPEICHERTEN Schlüssel aus `settings.apis` — der Browser bekommt ihn nicht
+ * mehr. Ein mitgeschickter Kopf (Werkzeuge, ein frisch eingegebener
+ * Schlüssel) hat weiter Vorrang.
+ */
+async function getApiKey(req) {
+    const gesendet = kopfSchluessel(req)
+    if (gesendet) return gesendet
+    try { return await gespeicherterApiSchluessel('polygon') } catch { return '' }
+}
+
+function kopfSchluessel(req) {
     const headerKey = req.get('x-polygon-api-key')
     if (headerKey) return headerKey.trim()
 
@@ -16,7 +29,7 @@ function getApiKey(req) {
 export function setupPolygonRoutes(app) {
     app.get('/api/polygon/aggs', async (req, res) => {
         try {
-            const apiKey = getApiKey(req)
+            const apiKey = await getApiKey(req)
             if (!apiKey) {
                 return res.status(400).json({ error: 'Polygon API-Key fehlt' })
             }

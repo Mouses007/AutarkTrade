@@ -26,6 +26,27 @@ export const SPALTEN = ['externe_id', 'datum_utc', 'ort', 'art', 'asset', 'menge
     'gebuehr_asset', 'gebuehr_menge', 'chf_wert', 'txhash', 'kette', 'kontrakt', 'einordnung', 'sicherheit', 'notiz']
 const PFLICHT = ['externe_id', 'datum_utc', 'ort', 'art', 'asset', 'menge']
 
+/**
+ * `datum_utc` lesen — ohne Zone als UTC (Audit FUN-PRT-003, 26.10.2026).
+ * `Date.parse('2024-12-31 23:30:00')` liest Ortszeit: auf einer nativen
+ * Installation (Europe/Zurich) wurde daraus 22:30Z, im Container (UTC) 23:30Z —
+ * eine Bewegung um den Jahreswechsel landete je nach Installation im anderen
+ * Steuerjahr. ISO ohne Zone gilt jetzt als UTC (wie die Spalte heisst), ISO mit
+ * Zone wie angegeben; andere Formen nur mit ausdrücklicher Zone, sonst NaN.
+ * @returns {number} ms oder NaN
+ */
+export function leseDatumUtc(roh) {
+    const s = String(roh ?? '').trim()
+    const iso = s.match(/^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?))?\s*(Z|[+-]\d{2}:?\d{2})?$/i)
+    if (iso) {
+        const [, tag, uhr, zone] = iso
+        const z = !zone ? 'Z' : zone.toUpperCase() === 'Z' ? 'Z' : zone.includes(':') ? zone : `${zone.slice(0, 3)}:${zone.slice(3)}`
+        return Date.parse(`${tag}T${uhr || '00:00:00'}${z}`)
+    }
+    // Andere Schreibweisen nur mit ausdrücklicher Zone — ohne wären sie wieder Ortszeit.
+    return /(Z|GMT|UTC|[+-]\d{2}:?\d{2})$/i.test(s) ? Date.parse(s) : NaN
+}
+
 /** Quelle-Schlüssel eines importierten Orts (in `portfolio_bewegungen.quelle`). */
 export const importQuelle = (ort) => `i:${String(ort).trim()}`
 
@@ -81,7 +102,7 @@ export function leseImportCsv(text) {
         const externeId = wert(f, 'externe_id')
         const art = wert(f, 'art').toLowerCase()
         const asset = wert(f, 'asset').toUpperCase()
-        const zeit = Date.parse(wert(f, 'datum_utc'))
+        const zeit = leseDatumUtc(wert(f, 'datum_utc'))
         const menge = zahl(wert(f, 'menge'))
         if (!ort) { melde('ort fehlt'); continue }
         if (!externeId) { melde('externe_id fehlt'); continue }

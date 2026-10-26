@@ -1,5 +1,5 @@
 <script setup>
-/** Journal → ESP32-Display: API-Schlüssel und Zeitraum-Filter der Anzeige. */
+/** Journal → ESP32-Display: API-Schlüssel, Zeitraum-Filter der Anzeige und eingetragene Push-Geräte. */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -11,6 +11,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Tabelle from '@/components/basis/Tabelle.vue'
 import Symbol from '@/components/basis/Symbol.vue'
+import dayjs from 'dayjs'
 
 const { t } = useI18n()
 
@@ -38,10 +39,56 @@ const boardZeilen = computed(() => [
 /* Klartext-Key ist nur direkt nach dem Erzeugen sichtbar, sonst Punkte. */
 const keySichtbar = computed(() => !!esp32ApiKeyDisplay.value && !esp32ApiKeyDisplay.value.startsWith('•'))
 
+/*
+ * Nur-Anzeige-Schlüssel (Audit SEC-GER-001): öffnet NUR /api/esp32/display.
+ * ESP32-Displays bekommen ihn, die Handy-App den Hauptschlüssel (Alarme, Push).
+ */
+const anzeigeKeySet = ref(false)
+const anzeigeKeyAnzeige = ref('')
+const anzeigeLaedt = ref(false)
+const anzeigeSichtbar = computed(() => !!anzeigeKeyAnzeige.value && !anzeigeKeyAnzeige.value.startsWith('•'))
+
+async function erzeugeAnzeigeKey() {
+    anzeigeLaedt.value = true
+    esp32SaveResult.value = null
+    try {
+        const res = await axios.post('/api/esp32/settings', { regenerate: true, art: 'anzeige' })
+        anzeigeKeyAnzeige.value = res.data.plainKey || ''
+        anzeigeKeySet.value = true
+        esp32SaveResult.value = { success: true, message: t('settings.esp32KeyNeuHinweis') }
+        setTimeout(() => esp32SaveResult.value = null, 10000)
+    } catch (e) {
+        esp32SaveResult.value = { success: false, message: e.response?.data?.error || e.message }
+    }
+    anzeigeLaedt.value = false
+}
+
+async function kopiereAnzeigeKey() {
+    try {
+        await navigator.clipboard.writeText(anzeigeKeyAnzeige.value)
+        esp32SaveResult.value = { success: true, message: t('settings.esp32Kopiert') }
+        setTimeout(() => esp32SaveResult.value = null, 3000)
+    } catch (e) {
+        esp32SaveResult.value = { success: false, message: e.message }
+    }
+}
+
+async function loescheAnzeigeKey() {
+    try {
+        await axios.delete('/api/esp32/key', { params: { art: 'anzeige' } })
+        anzeigeKeySet.value = false
+        anzeigeKeyAnzeige.value = ''
+    } catch (e) {
+        esp32SaveResult.value = { success: false, message: e.response?.data?.error || e.message }
+    }
+}
+
 async function loadEsp32Settings() {
     try {
         const res = await axios.get('/api/esp32/settings')
         esp32KeySet.value = res.data.esp32ApiKeySet || false
+        anzeigeKeySet.value = res.data.esp32AnzeigeKeySet || false
+        if (anzeigeKeySet.value && !anzeigeKeyAnzeige.value) anzeigeKeyAnzeige.value = '••••••••••••••••••••••••••••••••'
         if (esp32KeySet.value && !esp32ApiKeyDisplay.value) {
             esp32ApiKeyDisplay.value = '••••••••••••••••••••••••••••••••'
         }
@@ -96,8 +143,51 @@ async function clearEsp32Key() {
     }
 }
 
+/*
+ * Push-Geräte (Audit SEC-SRV-003): wer sich mit dem ESP32-Schlüssel für die
+ * Sofort-Zustellung eingetragen hat. Der Server liefert nur Name, Host und
+ * Datum; ist die Liste voll, nimmt er kein neues Gerät mehr an — hier wird
+ * Platz geschaffen.
+ */
+const pushGeraete = ref([])
+const pushMax = ref(5)
+const pushFehler = ref('')
+const pushSpalten = computed(() => [
+    { schluessel: 'geraet', titel: t('settings.esp32PushSpalteGeraet') },
+    { schluessel: 'host', titel: t('settings.esp32PushSpalteHost') },
+    { schluessel: 'seit', titel: t('settings.esp32PushSpalteSeit') },
+    { schluessel: 'aktion', titel: '' },
+])
+const pushZeilen = computed(() => pushGeraete.value.map((g) => ({
+    ...g,
+    geraet: g.geraet || t('settings.esp32PushOhneName'),
+    seit: g.seit ? dayjs(g.seit).format('DD.MM.YYYY HH:mm') : '—',
+})))
+
+async function ladePushGeraete() {
+    pushFehler.value = ''
+    try {
+        const { data } = await axios.get('/api/esp32/geraete')
+        pushGeraete.value = Array.isArray(data?.geraete) ? data.geraete : []
+        pushMax.value = data?.max || 5
+    } catch (e) {
+        pushFehler.value = e.response?.data?.error || e.message
+    }
+}
+
+async function entfernePushGeraet(zeile) {
+    if (!confirm(t('settings.esp32PushEntfernenFrage', { name: zeile.geraet }))) return
+    pushFehler.value = ''
+    try {
+        const { data } = await axios.delete('/api/esp32/geraete/' + encodeURIComponent(zeile.id))
+        pushGeraete.value = Array.isArray(data?.geraete) ? data.geraete : []
+    } catch (e) {
+        pushFehler.value = e.response?.data?.error || e.message
+    }
+}
+
 esp32Filter.value = appEinstellungen.value?.esp32Filter || 'month'
-onMounted(loadEsp32Settings)
+onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
 </script>
 
 <template>
@@ -168,10 +258,46 @@ onMounted(loadEsp32Settings)
             <Knopf v-if="esp32KeySet" art="gefahr" @click="clearEsp32Key">{{ t('settings.esp32KeyLoeschen') }}</Knopf>
         </div>
 
+        <!-- Nur-Anzeige-Schlüssel für ESP32-Displays (SEC-GER-001) -->
+        <div class="kasten anzeige">
+            <h4 class="kasten-titel">{{ t('settings.esp32Anzeige.titel') }}</h4>
+            <p class="leise anzeige-text">{{ t('settings.esp32Anzeige.text') }}</p>
+            <Feld :label="t('settings.esp32Anzeige.label')" fuer="esp32-anzeige-key">
+                <div class="reihe">
+                    <input id="esp32-anzeige-key" type="text" class="eingabe mono"
+                        :value="anzeigeKeyAnzeige"
+                        readonly
+                        :placeholder="anzeigeKeySet ? t('settings.esp32KeyGesetzt') : t('settings.esp32KeinKey')" />
+                    <Knopf v-if="anzeigeSichtbar" @click="kopiereAnzeigeKey">{{ t('settings.esp32Kopieren') }}</Knopf>
+                </div>
+            </Feld>
+            <div class="aktionen">
+                <Knopf :laedt="anzeigeLaedt" @click="erzeugeAnzeigeKey">
+                    {{ anzeigeKeySet ? t('settings.esp32Anzeige.neu') : t('settings.esp32Anzeige.erzeugen') }}
+                </Knopf>
+                <Knopf v-if="anzeigeKeySet" art="gefahr" @click="loescheAnzeigeKey">{{ t('settings.esp32Anzeige.loeschen') }}</Knopf>
+            </div>
+        </div>
+
         <p v-if="esp32SaveResult" :class="['ergebnis', esp32SaveResult.success ? 'gut' : 'schlecht']" role="status">
             <Symbol :name="esp32SaveResult.success ? 'haken' : 'warnung'" :groesse="16" />
             {{ esp32SaveResult.message }}
         </p>
+
+        <!-- Push-Geräte der Sofort-Zustellung (Android-Widget) -->
+        <div class="kasten push">
+            <h4 class="kasten-titel">{{ t('settings.esp32PushTitel', { anzahl: pushGeraete.length, max: pushMax }) }}</h4>
+            <p class="leise push-text">{{ t('settings.esp32PushBeschreibung', { max: pushMax }) }}</p>
+            <Tabelle :spalten="pushSpalten" :zeilen="pushZeilen" schluessel-feld="id" dicht :leer-text="t('settings.esp32PushLeer')">
+                <template #zelle-host="{ wert }"><code>{{ wert || '—' }}</code></template>
+                <template #zelle-aktion="{ zeile }">
+                    <Knopf art="gefahr" klein @click="entfernePushGeraet(zeile)">{{ t('settings.esp32PushEntfernen') }}</Knopf>
+                </template>
+            </Tabelle>
+            <p v-if="pushFehler" class="ergebnis schlecht" role="status">
+                <Symbol name="warnung" :groesse="16" /> {{ pushFehler }}
+            </p>
+        </div>
     </Abschnitt>
 </template>
 
@@ -199,6 +325,10 @@ onMounted(loadEsp32Settings)
     border-top: 1px solid var(--line);
 }
 .clients-titel { margin: 0 0 0.25rem; color: var(--text); }
+.push { margin-top: var(--abstand-3); }
+.anzeige { margin-top: var(--abstand-3); }
+.anzeige-text { margin: 0 0 var(--abstand-2); }
+.push-text { margin: 0 0 var(--abstand-2); }
 .clients ul { margin: 0; padding-left: 1.1rem; color: var(--muted); }
 .api-info {
     display: grid;

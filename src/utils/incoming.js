@@ -74,7 +74,32 @@ export async function useUpdatePendingCounts() {
  * view shows every broker at once (grouped per exchange), so we no longer
  * limit this to gewaehlteBoerse.
  */
-export async function useFetchOpenPositions() {
+/*
+ * Audit FUN-TRD-001: der Abgleich läuft aus mehreren Stellen (globales Polling,
+ * Pendente Trades, Journal, Chart) und in jedem offenen Tab. Liefen zwei
+ * gleichzeitig, legten beide die erste Tageszeile an oder einer überschrieb
+ * die Trade-Liste des anderen (doppelter PnL bzw. ein fehlender Trade).
+ *
+ *  - im selben Tab: ein laufender Abgleich wird geteilt statt doppelt gestartet
+ *  - über Tabs derselben Adresse: `navigator.locks` (Web Locks) reiht die
+ *    Abgleiche hintereinander; der wartende findet danach den Trade und
+ *    überspringt ihn (Dedup 2)
+ *  - über Geräte/Adressen hinweg: siehe `fetchRecentlyClosed` — die Position
+ *    wird über den eindeutigen `incoming_positions.positionId` beansprucht,
+ *    BEVOR der Trade angelegt wird
+ */
+let laufenderAbgleich = null
+const SPERRE = 'autarktrade-positionsabgleich'
+
+export function useFetchOpenPositions() {
+    if (laufenderAbgleich) return laufenderAbgleich
+    const locks = globalThis.navigator?.locks
+    const lauf = locks?.request ? locks.request(SPERRE, () => abgleichOffenerPositionen()) : abgleichOffenerPositionen()
+    laufenderAbgleich = lauf.finally(() => { laufenderAbgleich = null })
+    return laufenderAbgleich
+}
+
+async function abgleichOffenerPositionen() {
     // Nur Börsen mit Schlüssel. Ohne eingerichtete Börse wird nichts gefragt —
     // bis 20.10.2026 fiel das auf Bitunix zurück und erntete alle 60 s HTTP 400
     // (Audit A4-06).
@@ -371,32 +396,55 @@ async function fetchRecentlyClosed(broker) {
                 quantity: parseFloat(histPos.maxQty || histPos.closeTotalPos || histPos.openTotalPos || 0),
             }
 
-            // Create trade record (skipMetadata = true — no opening metadata yet)
-            await createTradeFromClosedPosition(histPos, incomingStub, true, broker)
+            /*
+             * Erst beanspruchen, dann anlegen (Audit FUN-TRD-001). Bis Audit B
+             * kam der Trade zuerst und der `incoming_positions`-Eintrag danach —
+             * zwei Clients (zweites Gerät, andere Adresse) fanden beide noch
+             * nichts und legten beide den Trade an. `positionId` ist in
+             * `incoming_positions` eindeutig: wer die Zeile anlegen kann, hat die
+             * Position; wer am UNIQUE scheitert, überlässt sie dem anderen.
+             * Ohne Popups wird die Zeile nach dem Anlegen wieder entfernt —
+             * danach greift Dedup 2 (Trade im Journal).
+             */
+            let anspruch
+            try {
+                anspruch = await dbCreate('incoming_positions', {
+                    positionId: positionId,
+                    symbol: histPos.symbol || '',
+                    side: normalizedSide,
+                    entryPrice: parseFloat(histPos.entryPrice || histPos.openAvgPrice || 0),
+                    leverage: parseFloat(histPos.leverage || 0),
+                    quantity: parseFloat(histPos.maxQty || histPos.closeTotalPos || histPos.openTotalPos || 0),
+                    unrealizedPNL: 0,
+                    markPrice: 0,
+                    status: 'pending_evaluation',
+                    broker: broker,
+                    historyData: histPos,
+                    bitunixData: histPos
+                })
+            } catch (err) {
+                // UNIQUE: ein anderer Client war schneller — seine Sache
+                if (!err?.message?.includes('UNIQUE') && err?.response?.status !== 500 && err?.response?.status !== 409) {
+                    console.error(' -> Fehler beim Anlegen der geschlossenen Position:', err?.response?.data ?? err?.message ?? err)
+                }
+                continue
+            }
+            const anspruchId = anspruch?.objectId ?? anspruch?.id ?? null
+
+            try {
+                // Create trade record (skipMetadata = true — no opening metadata yet)
+                await createTradeFromClosedPosition(histPos, incomingStub, true, broker)
+            } catch (err) {
+                // Anspruch freigeben, sonst bliebe die Position dauerhaft ohne Trade
+                // (Dedup 1 würde sie beim nächsten Durchlauf überspringen)
+                if (anspruchId) await dbDelete('incoming_positions', anspruchId).catch(() => {})
+                throw err
+            }
 
             if (popupsEnabled) {
-                try {
-                    await dbCreate('incoming_positions', {
-                        positionId: positionId,
-                        symbol: histPos.symbol || '',
-                        side: normalizedSide,
-                        entryPrice: parseFloat(histPos.entryPrice || histPos.openAvgPrice || 0),
-                        leverage: parseFloat(histPos.leverage || 0),
-                        quantity: parseFloat(histPos.maxQty || histPos.closeTotalPos || histPos.openTotalPos || 0),
-                        unrealizedPNL: 0,
-                        markPrice: 0,
-                        status: 'pending_evaluation',
-                        broker: broker,
-                        historyData: histPos,
-                        bitunixData: histPos
-                    })
-                    console.log(` -> Neue geschlossene Position in Pendente Trades: ${histPos.symbol} ${normalizedSide}`)
-                } catch (err) {
-                    if (!err?.message?.includes('UNIQUE') && err?.response?.status !== 500) {
-                        console.error(' -> Fehler beim Anlegen der geschlossenen Position:', err?.response?.data ?? err?.message ?? err)
-                    }
-                }
+                console.log(` -> Neue geschlossene Position in Pendente Trades: ${histPos.symbol} ${normalizedSide}`)
             } else {
+                if (anspruchId) await dbDelete('incoming_positions', anspruchId).catch(() => {})
                 console.log(` -> Geschlossene Position ${histPos.symbol} als Trade importiert (Popups deaktiviert)`)
             }
         }

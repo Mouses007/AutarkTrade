@@ -24,6 +24,7 @@ import { STANDARD_GEWICHTE, STANDARD_NARRATIVE } from './bewertung.js'
 import { STANDARD_SICHERHEIT } from './sicherheit.js'
 import { smartWalletListe } from './fruehphase-bewertung.js'
 import { freigabeAn, freigabeAnSofort } from '../quellen/freigabe.js'
+import { neuesNtfyTopic, NTFY_ALTES_TOPIC } from '../../shared/ntfy.js'
 
 /** Spalten in `settings`, in denen die Schlüssel der Zusatzquellen liegen. */
 const SCHLUESSEL_SPALTEN = {
@@ -95,7 +96,14 @@ export const VORGABEN = {
      */
     alarmRegeln: {},
     alarmKanaele: {
-        ntfy: { an: false, url: '', topic: 'hype-radar', minSchwere: 'info' },
+        /*
+         * Topic bewusst LEER (Gesamtaudit 26.10.2026, SEC-SRV-013): bis dahin
+         * stand hier `hype-radar` — auf ntfy.sh ein öffentliches Topic, das
+         * jede Installation teilte. `leseEinstellungen` setzt beim ersten Lesen
+         * ein zufälliges (`ntfyTopicErgaenzt`) und speichert es, damit es nach
+         * einem Neustart dasselbe bleibt.
+         */
+        ntfy: { an: false, url: '', topic: '', minSchwere: 'info' },
         telegram: { an: false, chatId: '', minSchwere: 'warnung' },
         webhook: { an: false, minSchwere: 'info' },
     },
@@ -250,6 +258,23 @@ export async function leseEinstellungen() {
     }
 
     /*
+     * ntfy-Topic beim ersten Lesen setzen und speichern (SEC-SRV-013).
+     * Schlägt das Speichern fehl, gilt das Topic für dieses Lesen, und das
+     * nächste versucht es wieder — gesendet wird ohnehin erst, wenn jemand
+     * ntfy einschaltet, und das speichert die Kanäle samt Topic.
+     */
+    const ergaenzt = ntfyTopicErgaenzt(gespeichert.alarmKanaele)
+    if (ergaenzt) {
+        e.alarmKanaele = { ...V.alarmKanaele, ...ergaenzt }
+        try {
+            await knex('hype_settings')
+                .insert({ schluessel: 'alarmKanaele', wert: JSON.stringify(ergaenzt), aktualisiertAm: Date.now() })
+                .onConflict('schluessel')
+                .merge(['wert', 'aktualisiertAm'])
+        } catch { /* nächstes Lesen */ }
+    }
+
+    /*
      * Quellen, die es nicht mehr gibt, aus dem Gespeicherten werfen.
      *
      * Das Auffüllen oben behält jeden gespeicherten Schlüssel — auch die drei
@@ -273,6 +298,30 @@ export async function leseEinstellungen() {
 
     e.schluessel = await leseSchluessel()
     return e
+}
+
+/**
+ * Gespeicherte Push-Kanäle um ein ntfy-Topic ergänzen — rein, ohne Datenbank.
+ *
+ * `null`, wenn ein Topic gespeichert ist (auch ein leeres oder `hype-radar`:
+ * bestehende Topics werden NIE geändert — das Handy hört dort). Sonst die
+ * Kanäle mit Topic:
+ *
+ *   - nichts zu ntfy gespeichert (neue Installation, oder ntfy nie
+ *     angefasst) → zufälliges Topic `autarktrade-…`
+ *   - ntfy gespeichert und EINGESCHALTET, aber ohne Topic-Feld → das alte
+ *     `hype-radar`, auf das die Zustellung bisher still zurückfiel. Genau
+ *     dorthin gingen die Nachrichten bisher; die Oberfläche warnt davor.
+ *
+ * @param {object|null|undefined} gespeichert  `hype_settings.alarmKanaele`
+ * @param {() => string} [neu]                 Topic-Erzeuger (Selbsttest)
+ */
+export function ntfyTopicErgaenzt(gespeichert, neu = neuesNtfyTopic) {
+    const basis = gespeichert && typeof gespeichert === 'object' && !Array.isArray(gespeichert) ? gespeichert : {}
+    const ntfy = basis.ntfy && typeof basis.ntfy === 'object' ? basis.ntfy : null
+    if (ntfy && ntfy.topic !== undefined) return null
+    const topic = ntfy?.an ? NTFY_ALTES_TOPIC : neu()
+    return { ...basis, ntfy: { ...VORGABEN.alarmKanaele.ntfy, ...(ntfy || {}), topic } }
 }
 
 /** Entschlüsselte Schlüssel der Zusatzquellen. */

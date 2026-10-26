@@ -12,7 +12,7 @@
  *   - FIFO: ein Transfer Börse → Ledger darf das Los NICHT neu starten,
  *     sonst wird aus einer Haltedauer von zwei Jahren eine von zwei Tagen.
  */
-import { leseImportCsv } from './import.js'
+import { leseImportCsv, leseDatumUtc } from './import.js'
 import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset } from './steuer-rechnung.js'
 import { totalverlustStatistik } from './totalverlust-seite.js'
 import { abJahrVon } from './totalverlust.js'
@@ -61,6 +61,30 @@ console.log('\nImport-Leser')
     check('unbekannte Art abgelehnt (Zeile 6)', zeilen.includes(6))
     check('doppelte externe_id abgelehnt (Zeile 8)', zeilen.includes(8) && !zeilen.includes(7))
     check('Kopf ohne Pflichtspalten abgelehnt', leseImportCsv('a;b;c\n1;2;3').fehler[0].zeile === 1)
+}
+
+console.log('\nImport: datum_utc ohne Zone ist UTC (FUN-PRT-003)')
+{
+    // Die Prüfung muss in jeder Zeitzone des Prozesses gleich ausgehen — sie läuft
+    // einmal hier und einmal in einem Kindprozess mit TZ=Europe/Zurich.
+    const ziel = Date.parse('2024-12-31T23:30:00Z')
+    check('„2024-12-31 23:30:00" = 23:30Z', leseDatumUtc('2024-12-31 23:30:00') === ziel, new Date(leseDatumUtc('2024-12-31 23:30:00')).toISOString())
+    check('„2024-12-31T23:30:00" = 23:30Z', leseDatumUtc('2024-12-31T23:30:00') === ziel)
+    check('mit Z unverändert', leseDatumUtc('2024-12-31T23:30:00Z') === ziel)
+    check('mit Offset +01:00 = 22:30Z', leseDatumUtc('2024-12-31T23:30:00+01:00') === ziel - 3600e3)
+    check('mit Offset +0100 = 22:30Z', leseDatumUtc('2024-12-31 23:30:00+0100') === ziel - 3600e3)
+    check('nur Datum = 00:00Z', leseDatumUtc('2024-12-31') === Date.parse('2024-12-31T00:00:00Z'))
+    check('Millisekunden', leseDatumUtc('2024-12-31 23:30:00.250') === ziel + 250)
+    check('fremde Form ohne Zone abgelehnt', Number.isNaN(leseDatumUtc('12/31/2024 23:30')))
+    check('fremde Form mit Zone gelesen', leseDatumUtc('Tue, 31 Dec 2024 23:30:00 GMT') === ziel)
+    const r = leseImportCsv('externe_id;datum_utc;ort;art;asset;menge\nz1;2024-12-31 23:30:00;X;einzahlung;BTC;1')
+    check('Import-Zeile landet im Jahr 2024 (nicht je nach Installation)', r.zeilen[0]?.zeit === ziel)
+    if (!process.env.AT_TZ_KIND) {
+        const { spawnSync } = await import('node:child_process')
+        const kind = spawnSync(process.execPath, ['-e', `import('${new URL('./import.js', import.meta.url).href}').then((m) => process.stdout.write(String(m.leseDatumUtc('2024-12-31 23:30:00'))))`],
+            { env: { ...process.env, TZ: 'Europe/Zurich', AT_TZ_KIND: '1' }, encoding: 'utf8' })
+        check('auch mit TZ=Europe/Zurich 23:30Z', Number(kind.stdout) === ziel, kind.stdout + kind.stderr)
+    }
 }
 
 console.log('\nStichtag')
@@ -254,15 +278,17 @@ console.log('\nAudit 26.10.2026')
     const h5b = gewerbsKriterien({ volumen: 0, vermoegenAnfang: 1, kurzfristigErloes: 0, erloes: 100, futuresTrades: 0 }).find((x) => x.id === 'haltedauer')
     check('Haltedauer: alles lang gehalten → erfüllt', h5b.erfuellt === true)
 
-    // B3: Token-Prüfung je Ort und Vertrag; ein echter und ein falscher USDT.
+    // B3: Token-Prüfung je Ort und Vertrag; ein echter (Herausgeber-Vertrag) und ein falscher USDT.
+    // Seit FUN-PRT-001 steht der fremde Vertrag im Schlüssel, der echte zählt beim Kürzel.
     const orte = tokenOrteVon([
-        { quelle: 'a1', asset: 'USDT', kontrakt: '0xecht', kette: 'eth' },
-        { quelle: 'a2', asset: 'USDT', kontrakt: '0xfalsch', kette: 'bsc' },
+        { quelle: 'a1', asset: 'USDT', kontrakt: '0xdac17f958d2ee523a2206206994597c13d831ec7', kette: 'evm:1' },
+        { quelle: 'a2', asset: 'USDT', kontrakt: '0xfalsch', kette: 'evm:56' },
         { quelle: 'bitget', asset: 'USDT' },
     ])
     const kurse = new Map([['USDT', { chf: 0.8 }], ['USDT' + TOKEN + '0xfalsch', { chf: null, token: true }]])
+    check('Token je Vertrag: echter USDT ohne Token-Eintrag', !orte.has('a1\u0000USDT') && orte.size === 1)
     check('Token je Vertrag: echter USDT behält Kurs', kursAn(kurse, orte, 'a1\u0000USDT').chf === 0.8)
-    check('Token je Vertrag: falscher USDT ohne Kurs', kursAn(kurse, orte, 'a2\u0000USDT').chf === null)
+    check('Token je Vertrag: falscher USDT ohne Kurs', kursAn(kurse, orte, 'a2\u0000USDT\u00000xfalsch').chf === null)
     check('Token je Vertrag: Börse unberührt', kursAn(kurse, orte, 'bitget\u0000USDT').chf === 0.8)
 
     // B9: Hand-Spam nur für Tokens mit Vertrag.

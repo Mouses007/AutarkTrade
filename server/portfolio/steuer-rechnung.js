@@ -18,7 +18,12 @@
  * Einstand und Haltedauer über FIFO-Lose — über ALLE Orte gemeinsam, denn
  * ein eigener Transfer (Börse → Ledger) ist keine Veräusserung und darf das
  * Los nicht neu starten. Unbekannter Einstand bleibt unbekannt (nie 0).
+ *
+ * Identität eines Coins: `token-id.js` (seit Audit FUN-PRT-001). Bestand und
+ * Lose zählen je `ASSET|kontrakt`, sobald ein Vertrag fremd ist — ein falscher
+ * „USDT“ an derselben Adresse ist ein eigener Posten, kein Teil des echten.
  */
+import { tokenIdentitaet } from './token-id.js'
 
 
 /** Welche Bewegungen sind Einkommen? */
@@ -65,21 +70,30 @@ export function istMigration(b) {
 }
 
 /**
- * Bestand je Ort und Asset bis einschliesslich `bis` (ms).
- * @returns {Map<string, number>}  `${quelle}\u0000${asset}` → Menge
+ * Schlüssel eines Postens je Ort: `quelle\0ASSET`, bei fremdem Vertrag
+ * `quelle\0ASSET\0kontrakt`. Teil [1] ist immer das Kürzel.
  */
-export function bestandAm(bewegungen, bis) {
+export function ortSchluessel(quelle, asset, fremd = null) {
+    return fremd ? `${quelle}\u0000${asset}\u0000${fremd}` : `${quelle}\u0000${asset}`
+}
+
+/**
+ * Bestand je Ort und Asset bis einschliesslich `bis` (ms). Echte und falsche
+ * Token gleichen Kürzels an derselben Adresse bleiben getrennt.
+ * @param {ReturnType<typeof tokenIdentitaet>} [ident]  Vorgabe: aus `bewegungen`
+ * @returns {Map<string, number>}  `ortSchluessel` → Menge
+ */
+export function bestandAm(bewegungen, bis, ident = tokenIdentitaet(bewegungen)) {
     const m = new Map()
-    const add = (q, a, v) => {
+    const add = (q, a, f, v) => {
         if (!a || !v) return
-        const k = `${q}\u0000${a}`
+        const k = ortSchluessel(q, a, f)
         m.set(k, (m.get(k) || 0) + v)
     }
     for (const b of bewegungen) {
         if (Number(b.zeit) > bis || b.einordnung === 'ignorieren') continue
-        add(b.quelle, b.asset, Number(b.menge) || 0)
-        if (b.gegenAsset) add(b.quelle, b.gegenAsset, Number(b.gegenMenge) || 0)
-        if (b.gebuehrAsset) add(b.quelle, b.gebuehrAsset, -(Number(b.gebuehrMenge) || 0))
+        for (const s of ident.seiten(b)) add(b.quelle, s.asset, s.fremd, s.menge)
+        if (b.gebuehrAsset) add(b.quelle, b.gebuehrAsset, null, -(Number(b.gebuehrMenge) || 0))
     }
     return m
 }
@@ -113,12 +127,13 @@ export function einkommen(bewegungen, von, bis) {
  *           nicht als Transfer eingeordnete Auszahlungen (Bezahlung,
  *           Abgang an Unbekannt).
  * Fiat (CHF/EUR/USD) und Transfers bilden keine Lose.
+ * Lose je Identität (`token-id.js`): `ASSET` bzw. `ASSET|kontrakt` für fremde Verträge.
  */
-export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity, bis = Infinity, halteMonate = 6 } = {}) {
+export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity, bis = Infinity, halteMonate = 6, ident = tokenIdentitaet(bewegungen) } = {}) {
     // Haltedauer-Grenze des Kriterienkatalogs: KS 36 sechs Monate, Thurgau zwölf.
     const kurzGrenze = (halteMonate * 365 / 12) * 86400e3
     const istFiat = (a) => fiat.includes(a)
-    const lose = new Map()           // asset → [{ menge, kostenJe|null, zeit }]
+    const lose = new Map()           // Identität → [{ menge, kostenJe|null, zeit }]
     const abgaenge = []
     const zugang = (asset, menge, kosten, zeit) => {
         if (!asset || istFiat(asset) || !(menge > 0)) return
@@ -128,6 +143,7 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
     }
     const abgang = (asset, menge, erloes, zeit, b, art) => {
         if (!asset || istFiat(asset) || !(menge > 0)) return
+        const trenn = asset.indexOf('|')
         const l = lose.get(asset) || []
         let rest = menge, kosten = 0, kostenBekannt = true, kurzMenge = 0, gedeckt = 0
         // Toleranz relativ zur Menge: bei Mengen in Millionen (SHIB, PEPE) liegt der
@@ -147,7 +163,8 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
         if (ungedeckt) kostenBekannt = false     // mehr abgegeben als je zugegangen → Historie lückenhaft
         if (zeit >= von && zeit <= bis) {
             abgaenge.push({
-                id: b.id, zeit, quelle: b.quelle, asset, menge, art,
+                id: b.id, zeit, quelle: b.quelle, asset: trenn < 0 ? asset : asset.slice(0, trenn), menge, art,
+                ...(trenn < 0 ? {} : { kontrakt: asset.slice(trenn + 1) }),
                 erloes: erloes ?? null,
                 kosten: kostenBekannt ? kosten : null,
                 gewinn: kostenBekannt && erloes != null ? erloes - kosten : null,
@@ -169,17 +186,22 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
         const m = Number(b.menge) || 0
         const g = Number(b.gegenMenge) || 0
         const wert = b.chfWert != null ? Number(b.chfWert) : null
+        const gebuehrId = b.gebuehrAsset ? ident.id(b.gebuehrAsset) : null
         if (istTransfer(b)) {
-            if (b.gebuehrAsset && Number(b.gebuehrMenge) > 0) abgang(b.gebuehrAsset, Number(b.gebuehrMenge), 0, zeit, b, 'gebuehr')
+            if (b.gebuehrAsset && Number(b.gebuehrMenge) > 0) abgang(gebuehrId, Number(b.gebuehrMenge), 0, zeit, b, 'gebuehr')
             continue
         }
+        const [seiteA, seiteG] = ident.seiten(b)
+        const idA = seiteA?.id, idG = seiteG?.id
         const mig = istMigration(b)
         if (mig) {
             // Lose umhängen: gleiche Kosten, gleiches Kaufdatum, Menge × Faktor.
-            const alt = lose.get(mig.von) || []
-            let rest = Math.abs(mig.von === b.asset ? m : g)
+            const vonA = m < 0      // wie in istMigration: die abgegebene Seite ist die alte
+            const [vonId, nachId] = vonA ? [idA, idG] : [idG, idA]
+            const alt = lose.get(vonId) || []
+            let rest = Math.abs(vonA ? m : g)
             const tol = Math.max(1e-12, rest * 1e-10)
-            const neu = lose.get(mig.nach) || []
+            const neu = lose.get(nachId) || []
             while (rest > tol && alt.length) {
                 const los = alt[0]
                 const nimm = Math.min(los.menge, rest)
@@ -191,10 +213,10 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
             // Mehr umgestellt als je zugegangen: der Rest kommt ohne bekannten Einstand.
             if (rest > tol) neu.push({ menge: rest * mig.faktor, kostenJe: null, zeit })
             neu.sort((x, y) => x.zeit - y.zeit)
-            lose.set(mig.nach, neu)
+            lose.set(nachId, neu)
         } else if (['kauf', 'verkauf', 'tausch'].includes(b.art) && b.gegenAsset) {
             // Je Seite: was reinkommt, wird Los; was rausgeht, wird Abgang.
-            for (const [asset, menge] of [[b.asset, m], [b.gegenAsset, g]]) {
+            for (const [asset, menge] of [[idA, m], [idG, g]]) {
                 if (menge > 0) zugang(asset, menge, wert, zeit)
                 else if (menge < 0) abgang(asset, -menge, wert, zeit, b, b.art)
             }
@@ -202,15 +224,15 @@ export function fifo(bewegungen, { fiat = ['CHF', 'EUR', 'USD'], von = -Infinity
             // `tausch` ohne Gegen-Asset: Bitpanda bucht einen Swap (Crypto-Index,
             // VSN) als zwei Zeilen. Bis 26.10.2026 wurde nur der Abgang gebucht,
             // der Zugang bildete kein Los → 2021: 222 Verkäufe „ohne Einstand".
-            zugang(b.asset, m, wert, zeit)
+            zugang(idA, m, wert, zeit)
         } else if (m < 0) {
             // Auszahlung ohne Transfer-Einordnung (Bezahlung, Kartenaufladung, Abgang an
             // Unbekannt): Abgang zum Wert der Zeile. `sonstiges` ist ein Verlust ohne
             // Erlös (falsch adressiert, Projekt eingestellt) — der CHF-Wert der Zeile
             // nennt dann, was verloren ging, nicht was hereinkam.
-            abgang(b.asset, -m, b.art === 'sonstiges' ? 0 : wert, zeit, b, b.art === 'sonstiges' ? 'verlust' : b.art)
+            abgang(idA, -m, b.art === 'sonstiges' ? 0 : wert, zeit, b, b.art === 'sonstiges' ? 'verlust' : b.art)
         }
-        if (b.gebuehrAsset && Number(b.gebuehrMenge) > 0) abgang(b.gebuehrAsset, Number(b.gebuehrMenge), 0, zeit, b, 'gebuehr')
+        if (b.gebuehrAsset && Number(b.gebuehrMenge) > 0) abgang(gebuehrId, Number(b.gebuehrMenge), 0, zeit, b, 'gebuehr')
     }
     return { abgaenge, lose }
 }
@@ -241,6 +263,25 @@ export function einstandJeAsset(lose) {
         })
     }
     return aus
+}
+
+/**
+ * Einstand mehrerer Identitäten zusammen (eine Zeile im Vermögen kann den
+ * Börsen-Coin und einen gleich bewerteten Token desselben Kürzels tragen).
+ * @returns {object|undefined}  dieselbe Form wie ein Eintrag von `einstandJeAsset`
+ */
+export function einstandZusammen(einstand, ids) {
+    const teile = [...new Set(ids)].map((i) => einstand.get(i)).filter(Boolean)
+    if (teile.length <= 1) return teile[0]
+    const menge = teile.reduce((s, e) => s + e.menge, 0)
+    const mitKosten = teile.reduce((s, e) => s + e.mitKostenMenge, 0)
+    const kosten = teile.reduce((s, e) => s + (e.kosten || 0), 0)
+    const lose = teile.flatMap((e) => e.lose).sort((x, y) => x.zeit - y.zeit)
+    return {
+        menge, kosten: mitKosten > 0 ? kosten : null, mitKostenMenge: mitKosten, ohneKostenMenge: menge - mitKosten,
+        schnitt: mitKosten > 0 ? kosten / mitKosten : null,
+        ersterKauf: Math.min(...teile.map((e) => e.ersterKauf)), letzterKauf: Math.max(...teile.map((e) => e.letzterKauf)), lose,
+    }
 }
 
 /** Summen der Abgänge eines Jahres. */

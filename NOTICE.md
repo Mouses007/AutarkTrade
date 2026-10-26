@@ -67,7 +67,7 @@ Container-Image (nächster Abschnitt).
 
 ## Container-Image
 
-Das Image baut auf `node:20-slim` (Debian) auf. Es enthält damit Pakete des Betriebssystems
+Das Image baut auf `node:22-slim` (Debian) auf. Es enthält damit Pakete des Betriebssystems
 unter eigenen Lizenzen, darunter GPL und LGPL (etwa die GNU C Library). Ihre Lizenztexte
 liegen im Image unter `/usr/share/doc/*/copyright`; Node.js selbst (MIT, mit den Lizenzen
 seiner Bestandteile) unter `/usr/local/include/node/` bzw. in der Node-Distribution.

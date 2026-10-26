@@ -23,6 +23,7 @@ import { saldiere, FIAT } from './normal.js'
 import { boersenWahl, laufStand, BOERSEN } from './abruf.js'
 import { WALLET_TYPEN, EVM_NETZE, KETTEN } from '../../shared/portfolio-adresse.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
+import { tokenIdentitaet, ladeGegenKontrakte } from './token-id.js'
 
 const BOERSEN_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', bitpanda: 'Bitpanda' }
 
@@ -33,12 +34,19 @@ function kettenName(kette) {
 }
 
 const FIFO_SPALTEN = ['id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge',
-    'transferMit', 'einordnung', 'chfWert', 'kontrakt']
+    'transferMit', 'einordnung', 'chfWert', 'kontrakt', 'kette']
 
-/** Einstand je Asset (heute) aus allen Bewegungen, ohne Spam. */
+/**
+ * Einstand je Identität (heute) aus allen Bewegungen, ohne Spam. Schlüssel wie
+ * `token-id.js`: `ASSET` bzw. `ASSET|kontrakt` für einen fremden Vertrag —
+ * `ident.id(asset, kontrakt)` findet den Eintrag eines Postens.
+ * @returns {Promise<{ einstand: Map, ident }>}
+ */
 export async function einstandHeute(istSpam = () => null) {
-    const bew = (await getKnex()('portfolio_bewegungen').select(FIFO_SPALTEN)).filter((b) => !istSpam(b.asset, b.kontrakt))
-    return einstandJeAsset(fifo(bew, { fiat: FIAT }).lose)
+    const k = getKnex()
+    const bew = (await ladeGegenKontrakte(k, await k('portfolio_bewegungen').select(FIFO_SPALTEN))).filter((b) => !istSpam(b.asset, b.kontrakt))
+    const ident = tokenIdentitaet(bew)
+    return { einstand: einstandJeAsset(fifo(bew, { fiat: FIAT, ident }).lose), ident }
 }
 
 /** Quellen, deren „genutzt bis“ vor `zeit` liegt. */
@@ -151,9 +159,11 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
     }
     const gesamtChf = gesamtUsd * fx.chf
     // Kaufkurs: FIFO über alle Bewegungen, Ø der noch gehaltenen Lose (CHF).
-    const einstand = await einstandHeute(istSpam)
+    const { einstand, ident } = await einstandHeute(istSpam)
+    // `schluessel` trägt das gespeicherte Kürzel (p.asset kann der Anzeigename sein).
+    const einstandVon = (p) => einstand.get(ident.id(p.schluessel.split('|')[0], p.kontrakt, p.kette))
     const postenListe = [...jeAsset.values()]
-        .map((p) => ({ ...p, ...einstandFuer(einstand.get(String(p.asset).toUpperCase()), p), anteil: gesamtChf > 0 ? p.chf / gesamtChf : 0, staub: !p.ohneKurs && p.chf < staubChf }))
+        .map((p) => ({ ...p, ...einstandFuer(einstandVon(p), p), anteil: gesamtChf > 0 ? p.chf / gesamtChf : 0, staub: !p.ohneKurs && p.chf < staubChf }))
         .sort((a, b) => (b.chf || 0) - (a.chf || 0) || a.asset.localeCompare(b.asset))
 
     // Abgleich: Bewegungen saldiert gegen den gemeldeten Bestand
@@ -205,11 +215,14 @@ export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
         const st = standVon.get(quelle)
         let netze = []
         try { netze = JSON.parse(a.netze || '[]') } catch { netze = [] }
+        // Netze, deren Etherscan-Historie an der Seiten-Obergrenze endete (FUN-PRT-002).
+        let abgeschnitten = null
+        try { abgeschnitten = JSON.parse(st?.stand || '{}').abgeschnitten || null } catch { abgeschnitten = null }
         const q = {
             quelle, gruppe: 'wallet', walletId: w.id, adressId: a.id, kette: a.kette, art: a.art, anzeige: a.anzeige, label: a.label,
             netze, name: a.label || KETTEN[a.kette]?.name || a.kette, chf: jeQuelle.get(quelle)?.chf || 0,
             posten: jeQuelle.get(quelle)?.posten || [], status: st?.status || 'neu', meldung: st?.meldung || null,
-            letzterAbruf: Number(st?.letzterAbruf) || null, abgleich: a.kette === 'btc' ? abgleich(quelle) : null,
+            letzterAbruf: Number(st?.letzterAbruf) || null, abgleich: a.kette === 'btc' ? abgleich(quelle) : null, abgeschnitten,
         }
         w.adressen.push(q)
         w.chf += q.chf

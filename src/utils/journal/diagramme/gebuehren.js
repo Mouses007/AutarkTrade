@@ -8,6 +8,7 @@
 import { gefilterteTradesFlach } from '../../../stores/trades.js'
 import { formGeld2 } from '../format.js'
 import { splitFunding } from '../../funding.js'
+import { escHtml } from '../../escHtml.js'
 import { festkomma, element, instanzFuer, t } from './grundlagen.js'
 import { palette, grundOption, tooltipStil, kategorieAchse, wertAchse, mitDeckkraft } from './gestaltung.js'
 
@@ -97,7 +98,8 @@ export function useFeesChart(id) {
             formatter: (punkte) => {
                 const i = punkte[0]?.dataIndex ?? 0
                 const zeilenText = punkte.filter(x => x.value !== 0).map(x => `${x.marker}${x.seriesName}: ${formGeld2(x.value)}`)
-                return [zeilen[i]?.symbol, ...zeilenText, `Netto: ${formGeld2(zeilen[i]?.netto ?? 0)}`].join('<br>')
+                // Symbol aus Handeingabe/Backup — ECharts setzt den Text als HTML ein (Audit SEC-WEB-002)
+                return [escHtml(zeilen[i]?.symbol), ...zeilenText, `Netto: ${formGeld2(zeilen[i]?.netto ?? 0)}`].join('<br>')
             },
         },
         xAxis: wertAchse(p, { axisLabel: { ...wertAchse(p).axisLabel, formatter: (v) => formGeld2(v) } }),

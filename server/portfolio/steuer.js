@@ -22,7 +22,8 @@
  * zählt ihr heutiger Bestand (provisorisch).
  */
 import { getKnex } from '../database.js'
-import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset } from './steuer-rechnung.js'
+import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset, einstandZusammen, ortSchluessel } from './steuer-rechnung.js'
+import { tokenIdentitaet, ladeGegenKontrakte } from './token-id.js'
 import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf, coingeckoKursChf, GELD_TOKEN } from './kurse.js'
 import { totalverluste } from './totalverlust.js'
 import { importiereKursliste, kurslisteStand } from './estv-kursliste.js'
@@ -44,12 +45,14 @@ async function quellenStand() {
     const k = getKnex()
     const zeilen = await k('portfolio_quellen').select('quelle', 'stand')
     const vollstaendig = new Set()
+    const abgeschnitten = new Map()      // Quelle → Netze, deren Historie an der Seitengrenze endet (FUN-PRT-002)
     for (const z of zeilen) {
         let st = {}
         try { st = JSON.parse(z.stand || '{}') } catch { st = {} }
         if (st.vollstaendig || z.quelle.startsWith('i:')) vollstaendig.add(z.quelle)
+        if (Array.isArray(st.abgeschnitten) && st.abgeschnitten.length) abgeschnitten.set(z.quelle, st.abgeschnitten)
     }
-    return { alle: zeilen.map((z) => z.quelle), vollstaendig }
+    return { alle: zeilen.map((z) => z.quelle), vollstaendig, abgeschnitten }
 }
 
 /** Steuerkurs (CHF je Einheit) eines Assets am Jahresende, mit Quelle. */
@@ -89,6 +92,13 @@ async function bewerte(mengen, jahr, tokenOrte = new Map(), datum = `${jahr}-12-
     // Geprüft wird je Vertrag: derselbe Name kann echt (USDT) und gefälscht sein.
     // Ein Kurs von Hand gilt auch für den Token (EPIK); der ESTV-Kurs nicht —
     // er gehört zum Coin mit Valor, nicht zu einem namensgleichen Token.
+    // Menge je Vertrag (über alle Orte): ab der Pool-Liquidität gedeckelt (`kurse.js`).
+    const mengeJe = new Map()
+    for (const [key, t] of tokenOrte) {
+        if (!mengen.has(key)) continue
+        const id = key.split('\u0000')[1] + TOKEN + t.kontrakt
+        mengeJe.set(id, (mengeJe.get(id) || 0) + Math.abs(mengen.get(key)))
+    }
     const geprueft = new Set()
     for (const [key, t] of tokenOrte) {
         const asset = key.split('\u0000')[1]
@@ -96,7 +106,7 @@ async function bewerte(mengen, jahr, tokenOrte = new Map(), datum = `${jahr}-12-
         if (geprueft.has(id) || !mengen.has(key)) continue
         geprueft.add(id)
         if (manuell.get(asset) && manuell.get(asset).quelle !== 'estv') continue
-        if (!(await gleicherCoin(asset, t.kontrakt, t.kette))) kurse.set(id, { chf: null, quelle: 'Token ohne Börsenkurs', token: true })
+        if (!(await gleicherCoin(asset, t.kontrakt, t.kette, mengeJe.get(id)))) kurse.set(id, { chf: null, quelle: 'Token ohne Börsenkurs', token: true })
     }
     return kurse
 }
@@ -114,12 +124,24 @@ export function kursAn(kurse, tokenOrte, key) {
     return (t && kurse.get(asset + TOKEN + t.kontrakt)) || kurse.get(asset)
 }
 
-/** Orte, an denen ein Asset als Token mit Vertrag gebucht ist: `quelle\0asset` → { kontrakt, kette }. */
-export function tokenOrteVon(bew) {
+/**
+ * Orte, an denen ein Asset als Token mit FREMDEM Vertrag gebucht ist:
+ * `quelle\0asset\0kontrakt` → { kontrakt, kette }. Bis zum Audit FUN-PRT-001
+ * galt je Ort und Kürzel der erste Vertrag — echter und falscher USDT an
+ * derselben Adresse wurden summiert und bekamen den Kurs des ersten.
+ * Kanonische und per Transfer belegte Verträge zählen beim Kürzel (kein Eintrag).
+ */
+export function tokenOrteVon(bew, ident = tokenIdentitaet(bew)) {
     const m = new Map()
     for (const b of bew) {
-        const key = `${b.quelle}\u0000${b.asset}`
-        if (b.kontrakt && b.kette && !m.has(key)) m.set(key, { kontrakt: b.kontrakt, kette: b.kette })
+        // Ohne Kette (Datei-Import ohne Spalte `kette`) wie bisher keine Token-Prüfung:
+        // der Kurs kommt dann über das Kürzel — getrennt bleibt der Bestand trotzdem.
+        if (!b.kette) continue
+        for (const s of ident.seiten(b)) {
+            if (!s.fremd) continue
+            const key = ortSchluessel(b.quelle, s.asset, s.fremd)
+            if (!m.has(key)) m.set(key, { kontrakt: s.fremd, kette: b.kette })
+        }
     }
     return m
 }
@@ -180,15 +202,18 @@ export async function berechneSteuerjahr(jahr) {
     // Spam-Tokens (Werbe-Airdrops) gehören in keinen Steuerbericht — weder als
     // Vermögen noch als Einkommen ohne Wert.
     const istSpam = await spamPruefer()
-    const bew = (await k('portfolio_bewegungen').select(SPALTEN)).map((b) => ({ ...b, zeit: Number(b.zeit) }))
-        .filter((b) => !istSpam(b.asset, b.kontrakt))
-    const { alle, vollstaendig } = await quellenStand()
+    const roh = (await k('portfolio_bewegungen').select(SPALTEN)).map((b) => ({ ...b, zeit: Number(b.zeit) }))
+    const bew = (await ladeGegenKontrakte(k, roh)).filter((b) => !istSpam(b.asset, b.kontrakt))
+    // Identität je Token (Kürzel oder Kürzel|Vertrag) — einmal aus ALLEN Bewegungen,
+    // denn der Transfer-Beleg kann an einer unvollständigen Quelle hängen.
+    const ident = tokenIdentitaet(bew)
+    const { alle, vollstaendig, abgeschnitten } = await quellenStand()
     const [wallets, adressen] = await Promise.all([k('portfolio_wallets').select('*'), k('portfolio_adressen').select('id', 'walletId', 'kette', 'label')])
     const name = namenVon(alle, wallets, adressen)
 
     // ── Vermögen am Stichtag ──
     const belegbar = bew.filter((b) => vollstaendig.has(b.quelle))
-    const mengen = bestandAm(belegbar, bis)
+    const mengen = bestandAm(belegbar, bis, ident)
     const hinweise = []
     const unbelegt = alle.filter((q) => !vollstaendig.has(q))
     // Token-Bestände, die nur live gemeldet werden (Wallet ohne Bewegungen): auch
@@ -199,9 +224,10 @@ export async function berechneSteuerjahr(jahr) {
         // Laufendes Jahr: unvollständige Quellen mit ihrem HEUTIGEN Bestand (provisorisch).
         const heuteBestand = (await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt', 'ort')).filter((x) => !istSpam(x.asset, x.kontrakt))
         for (const z of heuteBestand.filter((x) => unbelegt.includes(x.quelle))) {
-            const key = `${z.quelle}\u0000${z.asset}`
+            const fremd = ident.fremd(z.asset, z.kontrakt, z.ort)
+            const key = ortSchluessel(z.quelle, z.asset, fremd)
             mengen.set(key, (mengen.get(key) || 0) + Number(z.menge))
-            if (z.kontrakt) liveTokens.push({ key, asset: z.asset, kontrakt: z.kontrakt, kette: z.ort })
+            if (fremd) liveTokens.push({ key, asset: z.asset, kontrakt: fremd, kette: z.ort })
         }
         // Übergabe Import → Live: was die Adresse heute meldet, ersetzt den
         // Import-Ort (sonst stünde z. B. das XRP des Ledgers zweimal da).
@@ -220,6 +246,12 @@ export async function berechneSteuerjahr(jahr) {
         hinweise.push({ art: 'laufend', text: `Das Jahr ${jahr} ist nicht abgeschlossen: Bestände und Kurse sind provisorisch (Stand heute, Kurse vom 31.12. sobald verfügbar).` })
     } else if (unbelegt.length) {
         hinweise.push({ art: 'unbelegt', quellen: unbelegt.map(name), text: 'Diese Quellen liefern keine vollständige Historie; ihr Bestand am Stichtag ist nicht belegbar und fehlt unten. Für Vorjahre per Datei-Import ergänzen.' })
+    }
+    if (abgeschnitten.size) {
+        hinweise.push({
+            art: 'abgeschnitten', quellen: [...abgeschnitten].map(([q, netze]) => `${name(q)} (${netze.join(', ')})`),
+            text: 'Bei diesen Wallets endete die Etherscan-Historie an der Seiten-Obergrenze: neuere Bewegungen fehlen, der Bestand ist nicht belegt. Fehlendes per Datei-Import ergänzen.',
+        })
     }
     // Rundungsreste (Bitpanda: SHIB −1.4e-9) sind kein Bestand und kein Loch.
     for (const [key, m] of mengen) if (Math.abs(m) < 1e-8) mengen.delete(key)
@@ -250,24 +282,28 @@ export async function berechneSteuerjahr(jahr) {
         return rest
     }
     const nachEnde = ohneBeendete(mengen, bis)
-    const tokenOrte = tokenOrteVon(bew)
+    const tokenOrte = tokenOrteVon(bew, ident)
     for (const t of liveTokens) if (!tokenOrte.has(t.key)) tokenOrte.set(t.key, { kontrakt: t.kontrakt, kette: t.kette })
     const gestern = new Date(jetzt - 86400e3).toISOString().slice(0, 10)
     const kurse = await bewerte(mengen, jahr, tokenOrte, laufend ? gestern : `${jahr}-12-31`)
     const sicherheitJe = new Map()
     for (const b of belegbar) {
         if (b.zeit > bis || !b.sicherheit || b.sicherheit === 'beleg') continue
-        for (const a of [b.asset, b.gegenAsset]) if (a) sicherheitJe.set(`${b.quelle}\u0000${a}`, b.sicherheit === 'offen' ? 'offen' : (sicherheitJe.get(`${b.quelle}\u0000${a}`) === 'offen' ? 'offen' : 'abgeleitet'))
+        for (const s of ident.seiten(b)) {
+            if (!s.asset) continue
+            const key = ortSchluessel(b.quelle, s.asset, s.fremd)
+            sicherheitJe.set(key, b.sicherheit === 'offen' ? 'offen' : (sicherheitJe.get(key) === 'offen' ? 'offen' : 'abgeleitet'))
+        }
     }
     // Weicht bei einer API-Quelle die Summe aller Bewegungen HEUTE vom gemeldeten
     // Bestand ab (Bitpanda: EUR +40, eine Bankbewegung fehlt), ist auch der
     // Stichtag für dieses Asset nicht belegt → markieren statt still mitzählen.
     const heute = new Map()
-    for (const z of await k('portfolio_bestaende').select('quelle', 'asset', 'menge')) {
-        const key = `${z.quelle}\u0000${z.asset}`
+    for (const z of await k('portfolio_bestaende').select('quelle', 'asset', 'menge', 'kontrakt', 'ort')) {
+        const key = ortSchluessel(z.quelle, z.asset, ident.fremd(z.asset, z.kontrakt, z.ort))
         heute.set(key, (heute.get(key) || 0) + Number(z.menge))
     }
-    const jetztSaldo = bestandAm(belegbar, Infinity)
+    const jetztSaldo = bestandAm(belegbar, Infinity, ident)
     for (const [key, m] of jetztSaldo) {
         if (key.startsWith('i:') || Math.abs(m) < 1e-8) continue
         const h = heute.get(key) || 0
@@ -276,7 +312,7 @@ export async function berechneSteuerjahr(jahr) {
     const jeAsset = new Map()
     const negativ = []
     for (const [key, menge] of mengen) {
-        const [quelle, asset] = key.split('\u0000')
+        const [quelle, asset, fremd] = key.split('\u0000')
         if (menge < 0) {
             // Importierte Konten ohne Bankbuchungen: negatives Fiat ist erwartet, kein Loch.
             if (!(quelle.startsWith('i:') && FIAT.includes(asset))) negativ.push({ quelle: name(quelle), asset, menge })
@@ -287,7 +323,9 @@ export async function berechneSteuerjahr(jahr) {
         if (kurs.chf == null && tokenOrte.has(key) && istSpam(asset, tokenOrte.get(key).kontrakt, { ohneKurs: true })) continue
         // Ein namensgleicher Token ohne Kurs steht als eigene Zeile neben dem Börsen-Coin.
         const gruppe = kurs.token ? asset + TOKEN + tokenOrte.get(key).kontrakt : asset
-        const p = jeAsset.get(gruppe) || { asset, token: gruppe !== asset, valor: kurs.valor || null, menge: 0, kursChf: kurs.chf, kursQuelle: kurs.quelle, chf: kurs.chf != null ? 0 : null, orte: [] }
+        const p = jeAsset.get(gruppe) || { asset, token: gruppe !== asset, valor: kurs.valor || null, menge: 0, kursChf: kurs.chf, kursQuelle: kurs.quelle, chf: kurs.chf != null ? 0 : null, orte: [], ids: new Set() }
+        // Identitäten dieser Zeile (für den Einstand aus den Losen)
+        p.ids.add(fremd ? `${String(asset).toUpperCase()}|${fremd}` : String(asset).toUpperCase())
         p.menge += menge
         if (kurs.chf != null) p.chf += menge * kurs.chf
         p.orte.push({ quelle, name: name(quelle), menge, sicherheit: sicherheitJe.get(key) || 'beleg' })
@@ -295,13 +333,15 @@ export async function berechneSteuerjahr(jahr) {
     }
     // Kaufkurs am Stichtag: FIFO-Lose bis 31.12. → Ø-Einstand, Kostenbasis, unrealisiert.
     // Ohne Kurs und mit Kanton, der den Kaufpreis zulässt: Steuerwert = Kostenbasis.
-    const einstand = einstandJeAsset(fifo(bew.filter((b) => b.zeit <= bis), { fiat: FIAT, halteMonate }).lose)
+    const einstand = einstandJeAsset(fifo(bew.filter((b) => b.zeit <= bis), { fiat: FIAT, halteMonate, ident }).lose)
     for (const p of jeAsset.values()) {
-        const e = einstand.get(p.asset)
+        const e = einstandZusammen(einstand, [...p.ids])
+        delete p.ids
         p.kaufkurs = e?.schnitt ?? null
         p.kostenbasis = p.kaufkurs != null ? p.kaufkurs * p.menge : null
         p.einstandTeilweise = !!e && (e.ohneKostenMenge > p.menge * 0.001 || e.mitKostenMenge < p.menge * 0.99)
-        // Nicht für namensgleiche Token: ihre Lose sind mit denen des Börsen-Coins vermischt.
+        // Nicht für namensgleiche Token: ihr Einstand stammt meist aus einer Bewertung
+        // über den NAMEN (vor FUN-PRT-001) — als Steuerwert nicht belastbar.
         if (p.chf == null && !p.token && p.kostenbasis != null && kaufpreisErlaubt(kz)) {
             p.chf = p.kostenbasis
             p.kursChf = p.kaufkurs
@@ -328,14 +368,14 @@ export async function berechneSteuerjahr(jahr) {
     const ek = einkommen(bew, von, bis)
 
     // ── Abgänge (FIFO über die ganze Historie) ──
-    const { abgaenge } = fifo(bew, { fiat: FIAT, von, bis, halteMonate })
+    const { abgaenge } = fifo(bew, { fiat: FIAT, von, bis, halteMonate, ident })
     const vs = veraeusserungen(abgaenge)
 
     // ── Kriterien ──
     const vorjahr = jahrGrenzen(jahr - 1)
     let vermoegenAnfang = null
     try {
-        const m0 = bestandAm(belegbar, vorjahr.bis)
+        const m0 = bestandAm(belegbar, vorjahr.bis, ident)
         for (const [key, m] of m0) if (m <= 0) m0.delete(key)
         ohneTotalverluste(m0, jahr - 1)
         ohneBeendete(m0, vorjahr.bis)

@@ -24,11 +24,11 @@ Passe die `.env` an deine PostgreSQL-Zugangsdaten an:
 ```env
 AT_PORT=8080
 DB_TYPE=postgresql
-DB_HOST=192.168.178.100
-DB_PORT=5433
-DB_USER=tradejournal
+DB_HOST=<adresse-der-datenbank>
+DB_PORT=5432
+DB_USER=autarktrade
 DB_PASSWORD=dein_passwort
-DB_NAME=tradejournal
+DB_NAME=autarktrade
 ```
 
 ```bash
@@ -75,66 +75,96 @@ Das holt das neueste Image und startet den Container neu. Wer selbst baut: `git 
 
 - **Benutzer:** Die App läuft im Container als `node` (uid 1000), nicht als root. Der Einstieg übernimmt beim ersten Start ein bestehendes, root-eigenes `/app/data` automatisch (`chown`), danach gibt er die Rechte ab. Lässt ein eingebundenes Verzeichnis das nicht zu (z. B. NFS mit root_squash), steht eine Warnung im Log; dann in Compose `user: "<uid>:<gid>"` des Verzeichnis-Besitzers setzen — der Einstieg läuft dann gleich unter diesem Benutzer.
 - **Docker-Socket:** steht nicht mehr in der `docker-compose.yml`. Er war root-gleich auf dem Host, und das Klick-Update war im Container nie auslösbar (es verlangt localhost). Update: `docker compose pull && docker compose up -d` bzw. wie oben neu bauen. Eine alte Compose-Datei mit dem Mount funktioniert weiter; der Mount bringt nur nichts.
-- **Proxy:** `AT_TRUST_PROXY=1` wertet `X-Forwarded-For` nur noch für Verbindungen von `AT_TRUSTED_PROXY` aus (Vorgabe `caddy,autarktrade-caddy`). Heisst der Caddy-Dienst anders (Synology-Projekt), dessen Namen eintragen — sonst zählt die Login-Sperre hinter Caddy wieder alle Klienten in einem Eimer (sperrt, aber nicht aus). Port 8080 bleibt im LAN erreichbar (ESP32-Display).
+- **Proxy:** Seit 26.10.2026 macht die App HTTPS selbst (Abschnitt unten), die Vorgabe ist `AT_TRUST_PROXY=0`: die Login-Sperre zählt nach Peer-IP. Wer trotzdem einen eigenen Reverse-Proxy vorschaltet, setzt `AT_TRUST_PROXY=1` und in `AT_TRUSTED_PROXY` dessen Dienstnamen oder IP — `X-Forwarded-For` zählt nur von dort (sonst landen alle Klienten hinter dem Proxy in einem Eimer). Port 8080 bleibt im LAN erreichbar (ESP32-Display).
 - **Erstes Passwort:** Ein neuer Container ohne Passwort verlangt beim „Passwort festlegen" den Einrichtungscode aus `docker compose logs journal`.
 - **Bestehende Installationen** mit gesetztem Passwort und `AT_SECRET` merken nichts: Anmeldung, Börsenschlüssel und Sitzungen bleiben gültig.
+
+## Sicherheit (seit Audit D, 26.10.2026)
+
+- **Laufzeit:** Node 22 LTS (`node:22-slim`); Node 20 bekommt seit 30.04.2026 keine Sicherheitsupdates mehr.
+- **Dateirechte im Image:** `/app` und alles darin gehört root, die App liest es nur. Schreiben darf `node` nur in `/app/data` (SQLite, `db-config.json`) und in `server/strategies` (Strategie-Baukasten). `/app/db-config.json`, `/app/autarktrade.db` und `/app/tradenote.db` sind root-eigene Verweise in den Datenordner. Der Einstieg schreibt `db-config.json` selbst als `node` (per `JSON.stringify`, Sonderzeichen im Passwort sind kein Problem mehr).
+- **Compose-Härtung:** `no-new-privileges` und `cap_drop: [ALL]`. `journal` behält nur, was der Einstieg als root braucht (`CHOWN`, `DAC_OVERRIDE`, `FOWNER`, `SETUID`, `SETGID`); HTTPS auf 8443 braucht keine zusätzliche Fähigkeit. Wer eine eigene Compose-Datei pflegt, kann die Zeilen übernehmen.
 
 ## Hinweise
 
 - Der Container bindet auf `0.0.0.0`, ist also im Netzwerk erreichbar
 - Über `AT_PORT` in der `.env` kann der Port geändert werden
 - Die `.env`-Datei ist in `.gitignore` und wird nicht committed
-- Wenn `DB_TYPE` nicht gesetzt oder leer ist, verwendet der Container SQLite (lokal im Container — nur für Tests geeignet)
+- **Datenbank:** Die `docker-compose.yml` setzt `DB_TYPE=postgresql`, wenn die `.env` nichts anderes sagt (auch bei leerem Wert). Für SQLite `DB_TYPE=sqlite` in die `.env` schreiben; die Datei liegt dann im Volume `autarktrade_data` (`/app/data`) und übersteht `docker compose up -d --force-recreate` und Updates. Nur ein `docker compose down -v` löscht sie. Wer den Container ohne diese Compose-Datei startet und weder `DB_TYPE` noch ein Volume setzt, bekommt SQLite im Container — das geht beim Neuerstellen verloren.
 
-## HTTPS für den LAN-Zugriff (Caddy + mkcert)
+## HTTPS für den LAN-Zugriff (eingebaut, eigene CA)
 
 `http://<nas-ip>:8080` reicht zum Ansehen, aber Browser verweigern darüber
-zwei Dinge: das Anfragen der Notification-Berechtigung (Chrome erlaubt
-`Notification.requestPermission()` nur in einem „secure context" — HTTPS
-oder `localhost`) und markieren die Adresse als „Nicht sicher". Docker-Compose
-bringt dafür optional einen [Caddy](https://caddyserver.com/)-Container mit,
-der TLS mit einem selbst erzeugten [mkcert](https://github.com/FiloSottile/mkcert)-Zertifikat
-terminiert und intern an `journal:8080` weiterreicht. Rein additiv: Port 8080
-bleibt unverändert per HTTP erreichbar (u.a. fürs ESP32-Display, das kein TLS
-spricht).
+einiges: Benachrichtigungen (Chrome erlaubt `Notification.requestPermission()`
+nur in einem „secure context" — HTTPS oder `localhost`), und Passwort und
+Sitzung gehen unverschlüsselt durchs Netz. Seit 26.10.2026 macht die App HTTPS
+selbst — ohne Caddy, ohne mkcert, ohne Zertifikatsdateien:
 
-### 1. Zertifikat erzeugen (auf dem Rechner, der das Dashboard im Browser öffnet)
+- Beim ersten Start legt sie eine eigene **Stamm-CA** an („AutarkTrade Lokale
+  CA (<ID>)", ECDSA P-256, 10 Jahre) und stellt sich damit ein
+  **Server-Zertifikat** aus (397 Tage). Beides liegt in der Datenbank (Tabelle
+  `tls_zertifikat`), die privaten Schlüssel verschlüsselt mit `AT_SECRET`. Ein
+  Volume ist dafür nicht nötig. Teilen sich zwei Prozesse eine PostgreSQL,
+  entsteht trotzdem nur eine CA.
+- Ein **HTTPS-Server** lauscht neben HTTP auf `AT_TLS_PORT` (Vorgabe `8443`,
+  `aus` schaltet ab) — dieselbe App, derselbe Passwortschutz. Port 8080 bleibt
+  für ESP32-Displays und alte Klienten; die Oberfläche weist auf HTTPS hin.
+- Das Server-Zertifikat wird **automatisch erneuert** (täglich geprüft: weniger
+  als 30 Tage Rest oder ein fehlender Name) und ohne Neustart aktiv.
+- Das Backup (JSON-Export) enthält die CA **nicht** — ihr Schlüssel verlässt
+  die Datenbank nie. Nach einer Rücksicherung in eine leere Datenbank entsteht
+  eine neue CA, die Geräte vertrauen ihr einmal neu.
 
-```bash
-# mkcert installieren (Ubuntu/Debian/Mint; für macOS: brew install mkcert)
-sudo apt-get install -y mkcert libnss3-tools
+### 1. Namen und IPs im Zertifikat
 
-# Lokale CA anlegen und im System- sowie Firefox/Chrome-Truststore vertrauen
-mkcert -install
+Immer drin: `localhost`, `127.0.0.1`, `::1` und der mDNS-Name (`AT_MDNS_NAME`,
+Vorgabe `autarktrade.local`). Im Container kennt die App die Adresse des Hosts
+nicht — deshalb:
 
-# Zertifikat für die NAS-Adresse erzeugen (im Projektordner)
-mkcert -cert-file certs/nas.pem -key-file certs/nas-key.pem 192.168.178.100 localhost
-```
+- `AT_TLS_NAMEN` in der `.env` (Komma-Liste), z. B. `AT_TLS_NAMEN=192.168.178.100`;
+- oder unter **Einstellungen › Allgemein › HTTPS** eintragen. Dort stehen auch
+  **Vorschläge**: die Adressen, unter denen die App tatsächlich aufgerufen wurde
+  (nur was der Host-Schutz zulässt). Aufgenommen wird ein Vorschlag erst nach
+  Bestätigung.
 
-`certs/` ist in `.gitignore` — Zertifikat und Schlüssel bleiben lokal.
+### 2. Der CA einmal je Gerät vertrauen
 
-Für JEDES weitere Gerät, das das grüne Schloss zeigen soll (Handy, anderer
-Laptop): die Root-CA (`rootCA.pem`, Pfad über `mkcert -CAROOT`) dorthin
-kopieren und dort ebenfalls installieren/vertrauen — mkcert kennt nur das
-Gerät, auf dem `-install` lief. Ohne diesen Schritt bleibt es dort bei einer
-einmaligen Klick-durch-Warnung, das ist bei einer selbst verwalteten CA nicht
-zu vermeiden (eine öffentlich vertrauenswürdige CA wie Let's Encrypt scheidet
-ohne öffentlichen Domainnamen aus).
+Unter **Einstellungen › Allgemein › HTTPS** „CA herunterladen" (die Datei
+`AutarkTrade-CA-<ID>.crt`), installieren und den dort angezeigten
+**Fingerabdruck** (SHA-256) vergleichen. Kurze Anleitungen für Android,
+Windows, Linux/Firefox und macOS/iOS stehen gleich daneben. Danach
+`https://<nas-ip>:8443` öffnen.
 
-### 2. Auf die NAS bringen
+Ohne Sitzung abrufbar (ein CA-Zertifikat ist öffentlich, Geräte brauchen es
+vor der Anmeldung):
 
-`Caddyfile` sowie `certs/nas.pem` + `certs/nas-key.pem` neben die
-`docker-compose.yml` im NAS-Projektordner kopieren, dann:
+| Pfad | Antwort |
+|---|---|
+| `GET /api/tls/ca.crt` | DER, `application/x-x509-ca-cert`, Dateiname `AutarkTrade-CA-<ID>.crt` |
+| `GET /api/tls/ca` | JSON `{ "pem": "-----BEGIN CERTIFICATE-----…", "sha256": "AB:CD:…" }` |
+| `GET /api/esp32/ca` | dasselbe JSON (Pfad der Geräte) |
 
-```bash
-docker compose up -d
-```
-
-Das startet nur den neu hinzugekommenen `caddy`-Container — der laufende
-`journal`-Container wird nicht neu gestartet.
+`sha256` ist SHA-256 über das DER des CA-Zertifikats, hex in Grossbuchstaben
+mit Doppelpunkten — derselbe Wert wie `openssl x509 -noout -fingerprint -sha256`.
 
 ### 3. Port
 
-Caddy hört standardmässig auf `8443` (`AT_TLS_PORT` in der `.env`), NICHT auf
-443 — die Synology-DSM belegt 443 (und 80) bereits selbst mit ihrem eigenen
-nginx. Das Journal ist danach unter `https://<nas-ip>:8443` erreichbar.
+Die App lauscht im Container auf `8443`; den Host-Port bestimmt `AT_TLS_PORT`
+in der `.env` (Mapping `${AT_TLS_PORT:-8443}:8443`). NICHT 443 — die
+Synology-DSM belegt 443 (und 80) selbst mit ihrem nginx.
+
+### 4. Neue CA
+
+Nur wenn der CA-Schlüssel unlesbar ist (`AT_SECRET` geändert) oder in fremde
+Hände geraten sein könnte: Einstellungen › Allgemein › HTTPS › „Neue CA
+erzeugen". Danach muss JEDES Gerät der neuen CA neu vertrauen.
+
+### Umstieg von Caddy + mkcert
+
+Den `caddy`-Dienst und sein Volume aus der Compose-Datei entfernen, an der App
+`"${AT_TLS_PORT:-8443}:8443"` veröffentlichen, `AT_TLS_NAMEN=<nas-ip>` setzen
+und `AT_TRUST_PROXY` abschalten (kein Proxy mehr davor). `Caddyfile` und
+`certs/` werden nicht mehr gebraucht. Die alte mkcert-CA kann auf den Geräten
+entfernt werden, sobald sie der neuen vertrauen. Wer lieber weiter einen
+eigenen Reverse-Proxy betreibt, kann das — mit `AT_TLS_PORT=aus`,
+`AT_TRUST_PROXY=1` und `AT_TRUSTED_PROXY=<Proxy-Name>`.

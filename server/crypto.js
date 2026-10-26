@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { umgebung } from './umgebung.js'
+import { logWarn } from './logger.js'
 
 // Verschlüsselungs-Key: bevorzugt aus ENV, sonst aus der Secret-Datei (F2)
 const ENV_SECRET = umgebung('SECRET')
@@ -73,6 +74,35 @@ if (!ENV_SECRET) {
     if (!DATEI_SECRET) {
         console.warn('[CRYPTO] Kein AT_SECRET gesetzt – verwende maschinenspezifischen Schlüssel. Für höhere Sicherheit AT_SECRET als Umgebungsvariable setzen.')
     }
+}
+
+/*
+ * Mindestlänge für `AT_SECRET` (Audit SEC-SRV-007).
+ *
+ * Schlüssel und Sitzungs-Cookie hängen ohne KDF direkt am Secret
+ * (sha256 bzw. HMAC). Wer ein Cookie mitliest, kann ein kurzes Secret
+ * offline mit SHA-256-Geschwindigkeit raten. Nur WARNEN, nicht abbrechen und
+ * nichts an der Ableitung ändern: eine neue Ableitung machte jeden
+ * gespeicherten Schlüssel unlesbar, ein Abbruch legte bestehende
+ * Installationen still. Die Secret-Datei wird schon beim Lesen auf ≥ 32
+ * Zeichen geprüft.
+ */
+export const SECRET_MIN = 32
+
+/** Ist dieses `AT_SECRET` zu kurz? Leer zählt nicht (dann gilt die Secret-Datei). Rein. */
+export function secretZuKurz(wert) {
+    const s = String(wert ?? '')
+    return s.length > 0 && s.length < SECRET_MIN
+}
+
+/** Beim Start: laut warnen, wenn `AT_SECRET` kürzer als SECRET_MIN ist. Liefert true bei Warnung. */
+export function warneSchwachesSecret(wert = ENV_SECRET) {
+    if (!secretZuKurz(wert)) return false
+    logWarn('crypto', `⚠️  AT_SECRET ist nur ${String(wert).length} Zeichen lang (empfohlen: mindestens ${SECRET_MIN}). `
+        + 'Ein kurzes Secret lässt sich aus einem mitgelesenen Cookie offline erraten — danach sind alle '
+        + 'gespeicherten Schlüssel lesbar. Neues Secret z. B. mit `openssl rand -hex 32` erzeugen und die '
+        + 'Schlüssel mit `node server/reencrypt-keys.mjs` umschlüsseln.')
+    return true
 }
 
 /** Das Hauptgeheimnis der Installation (für die Sitzungs-Ableitung in auth.js), oder null. */
@@ -182,12 +212,13 @@ export function maskKey(encryptedKey) {
  */
 export async function migriereAltSchluessel(knex, stellen) {
     const zaehler = { umgeschluesselt: 0, verschluesselt: 0, geleert: 0 }
-    for (const [tabelle, spalten] of stellen) {
+    for (const [tabelle, spalten, schluesselSpalte = 'id'] of stellen) {
         if (!(await knex.schema.hasTable(tabelle))) continue
         const vorhanden = Object.keys(await knex(tabelle).columnInfo())
         const felder = spalten.filter((sp) => vorhanden.includes(sp))
-        if (!felder.length) continue
-        const zeilen = await knex(tabelle).select(['id', ...felder])
+        if (!felder.length || !vorhanden.includes(schluesselSpalte)) continue
+        // Schlüsselspalte je Tabelle (SEC-SRV-015): portfolio_schluessel hat `name` statt `id`.
+        const zeilen = await knex(tabelle).select([schluesselSpalte, ...felder])
         for (const z of zeilen) {
             const aenderung = {}
             for (const sp of felder) {
@@ -202,7 +233,7 @@ export async function migriereAltSchluessel(knex, stellen) {
                     zaehler.umgeschluesselt++
                 } catch { /* fremder Schlüssel: nicht anfassen */ }
             }
-            if (Object.keys(aenderung).length) await knex(tabelle).where('id', z.id).update(aenderung)
+            if (Object.keys(aenderung).length) await knex(tabelle).where(schluesselSpalte, z[schluesselSpalte]).update(aenderung)
         }
     }
     // settings.apis: [{provider, key}] als JSON-Text

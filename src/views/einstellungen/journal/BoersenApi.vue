@@ -268,6 +268,12 @@ onMounted(async () => {
     <Abschnitt :titel="t('settings.apiConnection')" symbol="gebaeude" v-model:offen="apiExpanded">
         <p class="beschreibung">{{ t('settings.apiConnectionDescription') }}</p>
 
+        <!-- Audit SEC-SRV-006: AutarkTrade sendet keine Orders (S13) — ein
+             Schlüssel mit Handels- oder Auszahlungsrecht wäre nur Risiko. -->
+        <Hinweis art="info" :titel="t('settings.nurLeserechteTitel')" class="zugang">
+            {{ t('settings.nurLeserechteText') }}
+        </Hinweis>
+
         <!-- Zugang abgelehnt: der Server merkt es beim Abrufen, die Meldung
              gehört dorthin, wo der neue Schlüssel eingetragen wird. -->
         <Hinweis v-for="z in boersenZugangKaputt" :key="'zugang_' + z.broker" art="warn"

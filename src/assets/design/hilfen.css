@@ -221,8 +221,10 @@ div.at-check > label {
    Nachrichten). */
 .klickZiel { cursor: pointer; }
 
-/* Zensurmodus des Journals: utils/privacy.js setzt `tj-censor` an jedes
-   Zahlen-Blatt und `privacy-on` an <body>. Alle ECharts-Flächen verwischen,
-   ausser den Quoten-Donuts (nur Prozente). */
+/* Sichtschutz des Journals (nur Anzeige): utils/privacy.js setzt `tj-censor`
+   an jedes Zahlen-Blatt und `privacy-on` an <body>. Alle ECharts-Flächen
+   verwischen — seit Audit B (SEC-WEB-007) auch die Quoten-Donuts: ihr
+   Mitteltext (Gewinnquote, Ø RRR) steht im Canvas und lässt sich nur mit dem
+   ganzen Ring verwischen. Tooltips liegen im Diagramm-Element und gehen mit. */
 .tj-censor { filter: blur(6px); user-select: none; pointer-events: none; transition: filter 0.2s; }
-body.privacy-on [_echarts_instance_]:not(.diagrammKarteFlaeche) { filter: blur(8px); }
+body.privacy-on [_echarts_instance_] { filter: blur(8px); }

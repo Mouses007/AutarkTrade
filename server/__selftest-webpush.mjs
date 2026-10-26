@@ -77,10 +77,12 @@ console.log('\nGeräteangaben\n')
     check('fehlendes Auth abgelehnt', !!pruefeGeraet({ ...gut, auth: '' }).fehler)
 
     let liste = []
-    for (let i = 0; i < MAX_GERAETE + 2; i++) liste = mitGeraet(liste, { ...g.daten, endpoint: `https://ntfy.sh/up${i}` }, i)
-    check(`höchstens ${MAX_GERAETE} Geräte, die ältesten fliegen`, liste.length === MAX_GERAETE && liste[0].endpoint === 'https://ntfy.sh/up2')
+    for (let i = 0; i < MAX_GERAETE; i++) liste = mitGeraet(liste, { ...g.daten, geraet: `Handy ${i}`, endpoint: `https://ntfy.sh/up${i}` }, i).liste
+    // Seit dem Audit vom 26.10.2026 (SEC-SRV-003): kein Verdrängen mehr.
+    const voll = mitGeraet(liste, { ...g.daten, geraet: 'Fremd', endpoint: 'https://ntfy.sh/fremd' }, 50)
+    check(`höchstens ${MAX_GERAETE} Geräte, ein neues bei voller Liste wird abgelehnt`, liste.length === MAX_GERAETE && voll.fehler === 'voll' && liste[0].endpoint === 'https://ntfy.sh/up0')
     const n = liste.length
-    liste = mitGeraet(liste, { ...g.daten, endpoint: 'https://ntfy.sh/up3' }, 99)
+    liste = mitGeraet(liste, { ...g.daten, geraet: 'Handy 3', endpoint: 'https://ntfy.sh/up3' }, 99).liste
     check('gleiche Adresse frischt auf statt zu verdoppeln', liste.length === n && liste.at(-1).endpoint === 'https://ntfy.sh/up3' && liste.at(-1).seit === 99)
     check('Abmelden entfernt genau dieses Gerät', ohneGeraet(liste, 'https://ntfy.sh/up3').length === n - 1)
 }

@@ -18,7 +18,12 @@ import os from 'os'
 import https from 'https'
 import http from 'http'
 import { fileURLToPath } from 'url'
-import { umgebung } from './umgebung.js'
+import { umgebung, umgebungAn, istTestbetrieb } from './umgebung.js'
+
+/** Soll der Server beim Start selbst nach Updates fragen? (SEC-OPS-018) */
+export function updateCheckBeimStart() {
+    return !istTestbetrieb() && !umgebungAn('KEIN_UPDATECHECK')
+}
 
 /** Zugangsdaten zur Paketquelle aus der Umgebung; `null` ohne (dann öffentlich). Nie an die Oberfläche. */
 function updateZugang() {
@@ -142,12 +147,18 @@ export function isLocalRequest(req) {
  * fälschbar); erlaubt sind nur `same-origin` und `none` (Adresszeile,
  * Lesezeichen). Fehlt der Kopf, entscheidet `Origin`: fehlt auch der, ist es
  * kein Browser-Aufruf über Seitengrenzen (curl, Skripte, ältere Browser bei
- * gleicher Herkunft); ist er da, muss sein Host gleich dem Host-Kopf sein.
+ * gleicher Herkunft); ist er da, muss sein Host samt Port gleich dem Host-Kopf
+ * sein — oder einem der `weitereHosts` (seit dem Audit vom 26.10.2026: der
+ * `X-Forwarded-Host` eines VERTRAUTEN Proxys, den `herkunftMiddleware` in
+ * auth.js nur nach Prüfung der Peer-IP übergibt; `isLocalRequest` übergibt
+ * nie welche). Der Standard-Port des Schemas zählt wie keiner
+ * (`https://nas` = `nas:443`).
  *
  * @param {import('express').Request} req
+ * @param {string[]} [weitereHosts]
  * @returns {boolean}
  */
-export function istFremdeHerkunft(req) {
+export function istFremdeHerkunft(req, weitereHosts = []) {
     const h = req?.headers || {}
     const sfs = String(h['sec-fetch-site'] || '').toLowerCase()
     if (sfs && sfs !== 'same-origin' && sfs !== 'none') return true
@@ -156,7 +167,11 @@ export function istFremdeHerkunft(req) {
     // `Origin: null` kommt aus Sandbox-Frames und file:-Seiten — nie die App.
     try {
         const o = new URL(String(origin))
-        return o.host.toLowerCase() !== String(h.host || '').toLowerCase()
+        const norm = (host) => {
+            try { return new URL(`${o.protocol}//${String(host || '').trim()}`).host.toLowerCase() } catch { return null }
+        }
+        const ziel = o.host.toLowerCase()
+        return ![h.host, ...weitereHosts].some((x) => x && norm(x) === ziel)
     } catch {
         return true
     }
@@ -664,21 +679,33 @@ export function setupUpdateRoutes(app) {
             lastCheck = null
             lastCheckTime = 0
 
+            /*
+             * `npm ci` wie beim Update (Audit SEC-SRV-017): der zurückgeholte
+             * Stand bringt sein eigenes package-lock.json mit, und genau diese
+             * Versionen sollen es sein — `npm install` folgte Semver-Bereichen
+             * und konnte beim Rollback neuere Pakete holen als der alte Stand
+             * je hatte. Ohne Lockfile (sehr alter Stand) bleibt `npm install`.
+             */
+            const mitLock = existsSync(path.join(PROJECT_ROOT, 'package-lock.json'))
             if (IS_WINDOWS) {
                 steps.push({ step: 'npm install + build', output: 'Wird in neuem Fenster ausgeführt...' })
-                spawnWindowsUpdateScript(['npm install', 'npm run build'], 'Rollback')
+                spawnWindowsUpdateScript([mitLock ? 'npm ci || npm install' : 'npm install', 'npm run build'], 'Rollback')
                 res.json({ ok: true, steps, restoredVersion })
                 setTimeout(() => {
                     console.log('\n🔄 Rollback — Server wird beendet, externes Script übernimmt...')
                     process.exit(0)
                 }, 1500)
             } else {
-                const npmOutput = execSync('npm install', {
-                    cwd: PROJECT_ROOT,
-                    encoding: 'utf8',
-                    timeout: 120000
-                }).trim()
-                steps.push({ step: 'npm install', output: npmOutput })
+                let npmOutput
+                let npmSchritt = mitLock ? 'npm ci' : 'npm install'
+                try {
+                    npmOutput = execSync(npmSchritt, { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 300000 }).trim()
+                } catch (e) {
+                    if (!mitLock) throw e
+                    npmSchritt = 'npm install (Rückfall, npm ci scheiterte)'
+                    npmOutput = execSync('npm install', { cwd: PROJECT_ROOT, encoding: 'utf8', timeout: 300000 }).trim()
+                }
+                steps.push({ step: npmSchritt, output: npmOutput })
 
                 const buildOutput = execSync('npm run build', {
                     cwd: PROJECT_ROOT,
@@ -707,6 +734,16 @@ export function setupUpdateRoutes(app) {
     })
 
     // ── Startup check (non-blocking) ───────────────────────────────
+    /*
+     * Nicht im Testbetrieb und nicht mit AT_KEIN_UPDATECHECK=1 (Audit
+     * SEC-OPS-018): die Prüfinstanz fragte beim Start von selbst GitHub nach
+     * Releases — der einzige Netzabruf, den sie ohne Knopfdruck machte. Der
+     * Knopf in den Einstellungen (`GET /api/update/check`) bleibt.
+     */
+    if (!updateCheckBeimStart()) {
+        console.log(' -> Update-Prüfung beim Start ausgelassen (' + (istTestbetrieb() ? 'Testbetrieb' : 'AT_KEIN_UPDATECHECK=1') + ')')
+        return
+    }
     setTimeout(async () => {
         try {
             const stand = await pruefeAufUpdate(true)

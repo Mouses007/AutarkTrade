@@ -39,12 +39,12 @@ else
 fi
 
 # ══════════════════════════════════════════
-#  CHECK 2: Node.js 20+
+#  CHECK 2: Node.js 22+
 # ══════════════════════════════════════════
 if command -v node &>/dev/null; then
     NODE_VER=$(node -v)
     NODE_MAJOR=$(echo "$NODE_VER" | sed 's/v//' | cut -d. -f1)
-    if [ "$NODE_MAJOR" -ge 20 ]; then
+    if [ "$NODE_MAJOR" -ge 22 ]; then
         echo -e "  ${GREEN}[OK]${RESET}  Node.js            ${NODE_VER}"
     else
         echo -e "  ${RED}[!!]${RESET}  Node.js            ${NODE_VER} ${RED}(Version 20+ erforderlich)${RESET}"
@@ -130,7 +130,7 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
     NEED_NODE=0
     NEED_PYTHON=0
 
-    if ! command -v node &>/dev/null || [ "${NODE_MAJOR:-0}" -lt 20 ]; then
+    if ! command -v node &>/dev/null || [ "${NODE_MAJOR:-0}" -lt 22 ]; then
         NEED_NODE=1
     fi
     if [ "$PY_OK" = "0" ]; then
@@ -140,7 +140,7 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
     # Fehlende Pakete auflisten
     echo -e "  ${YELLOW}${BOLD}Fehlende Pflicht-Komponenten gefunden:${RESET}"
     echo ""
-    [ "$NEED_NODE" = "1" ] && echo -e "    ${CYAN}•${RESET} Node.js 20+"
+    [ "$NEED_NODE" = "1" ] && echo -e "    ${CYAN}•${RESET} Node.js 22+"
     [ "$NEED_PYTHON" = "1" ] && echo -e "    ${CYAN}•${RESET} Python 3"
     echo ""
 
@@ -160,13 +160,13 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
             echo -e "  ${BOLD}Installiere fehlende Pakete...${RESET}"
             echo ""
 
-            # ── Node.js 20+ ──
+            # ── Node.js 22+ ──
             if [ "$NEED_NODE" = "1" ]; then
-                echo -e "  ${CYAN}→ Installiere Node.js 20+...${RESET}"
-                brew install node@20
-                # Sicherstellen dass node@20 im PATH ist
-                if [ -d "$(brew --prefix)/opt/node@20/bin" ]; then
-                    export PATH="$(brew --prefix)/opt/node@20/bin:$PATH"
+                echo -e "  ${CYAN}→ Installiere Node.js 22+...${RESET}"
+                brew install node@22
+                # Sicherstellen dass node@22 im PATH ist
+                if [ -d "$(brew --prefix)/opt/node@22/bin" ]; then
+                    export PATH="$(brew --prefix)/opt/node@22/bin:$PATH"
                 fi
                 echo ""
             fi
@@ -188,7 +188,7 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
             if command -v node &>/dev/null; then
                 NEW_NODE_VER=$(node -v)
                 NEW_NODE_MAJOR=$(echo "$NEW_NODE_VER" | sed 's/v//' | cut -d. -f1)
-                if [ "$NEW_NODE_MAJOR" -ge 20 ]; then
+                if [ "$NEW_NODE_MAJOR" -ge 22 ]; then
                     echo -e "  ${GREEN}[OK]${RESET}  Node.js            ${NEW_NODE_VER}"
                 else
                     echo -e "  ${RED}[!!]${RESET}  Node.js            ${NEW_NODE_VER} ${RED}(immer noch < 20)${RESET}"
@@ -222,7 +222,7 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
             # Benutzer will nicht → manuelle Befehle zeigen
             echo -e "  ${BOLD}Bitte installiere die Pakete manuell:${RESET}"
             echo ""
-            [ "$NEED_NODE" = "1" ] && echo -e "  ${CYAN}Node.js 20+:${RESET}  brew install node@20" && echo ""
+            [ "$NEED_NODE" = "1" ] && echo -e "  ${CYAN}Node.js 22+:${RESET}  brew install node@22" && echo ""
             [ "$NEED_PYTHON" = "1" ] && echo -e "  ${CYAN}Python 3:${RESET}     brew install python3" && echo ""
             echo -e "  ${GRAY}Danach dieses Script erneut starten.${RESET}"
             echo ""
@@ -256,10 +256,10 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
 
                 # Jetzt fehlende Pakete installieren
                 if [ "$NEED_NODE" = "1" ]; then
-                    echo -e "  ${CYAN}→ Installiere Node.js 20+...${RESET}"
-                    brew install node@20
-                    if [ -d "$(brew --prefix)/opt/node@20/bin" ]; then
-                        export PATH="$(brew --prefix)/opt/node@20/bin:$PATH"
+                    echo -e "  ${CYAN}→ Installiere Node.js 22+...${RESET}"
+                    brew install node@22
+                    if [ -d "$(brew --prefix)/opt/node@22/bin" ]; then
+                        export PATH="$(brew --prefix)/opt/node@22/bin:$PATH"
                     fi
                     echo ""
                 fi
@@ -279,7 +279,7 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
                 if command -v node &>/dev/null; then
                     NEW_NODE_VER=$(node -v)
                     NEW_NODE_MAJOR=$(echo "$NEW_NODE_VER" | sed 's/v//' | cut -d. -f1)
-                    if [ "$NEW_NODE_MAJOR" -ge 20 ]; then
+                    if [ "$NEW_NODE_MAJOR" -ge 22 ]; then
                         echo -e "  ${GREEN}[OK]${RESET}  Node.js            ${NEW_NODE_VER}"
                     else
                         echo -e "  ${RED}[!!]${RESET}  Node.js            ${NEW_NODE_VER} ${RED}(immer noch < 20)${RESET}"
@@ -313,7 +313,7 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
                 echo -e "  ${RED}Homebrew-Installation fehlgeschlagen.${RESET}"
                 echo -e "  ${BOLD}Bitte manuell installieren:${RESET}"
                 echo ""
-                [ "$NEED_NODE" = "1" ] && echo -e "  ${CYAN}Node.js 20+:${RESET}  https://nodejs.org/"
+                [ "$NEED_NODE" = "1" ] && echo -e "  ${CYAN}Node.js 22+:${RESET}  https://nodejs.org/"
                 [ "$NEED_PYTHON" = "1" ] && echo -e "  ${CYAN}Python 3:${RESET}     https://www.python.org/downloads/"
                 echo ""
                 exit 1
@@ -322,7 +322,7 @@ if [ "$MANDATORY_MISSING" = "1" ]; then
             # Kein Homebrew, kein Auto-Install → manuelle Links
             echo -e "  ${BOLD}Bitte installiere die Pakete manuell:${RESET}"
             echo ""
-            [ "$NEED_NODE" = "1" ] && echo -e "  ${CYAN}Node.js 20+:${RESET}  https://nodejs.org/" && echo ""
+            [ "$NEED_NODE" = "1" ] && echo -e "  ${CYAN}Node.js 22+:${RESET}  https://nodejs.org/" && echo ""
             [ "$NEED_PYTHON" = "1" ] && echo -e "  ${CYAN}Python 3:${RESET}     https://www.python.org/downloads/" && echo ""
             echo -e "  ${GRAY}Danach dieses Script erneut starten.${RESET}"
             echo ""
@@ -374,7 +374,9 @@ echo ""
 
 echo -e "  [1/2] Installiere Abhaengigkeiten..."
 echo ""
-npm install
+# npm ci nach package-lock.json, ohne Update-Token in der Umgebung (SEC-OPS-008)
+. ./scripts/paketquelle.sh
+paketquelle_npm
 if [ $? -ne 0 ]; then
     echo ""
     echo -e "  ${RED}FEHLER bei npm install!${RESET}"

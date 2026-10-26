@@ -3,6 +3,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import { loescheFinanzdaten } from '@/utils/finanzSpeicher.js'
 import { Knopf, Pille } from '@/components/basis/index.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
@@ -59,6 +60,8 @@ async function logout() {
     try {
         await axios.post('/api/logout')
     } catch (e) { /* egal — danach neu laden */ }
+    // Positions-/Kontodaten nicht im Browser liegen lassen (Audit SEC-WEB-005)
+    loescheFinanzdaten()
     window.location.reload()
 }
 
@@ -68,6 +71,7 @@ async function logoutEverywhere() {
     try {
         await axios.post('/api/auth/ueberall-abmelden')
     } catch (e) { /* egal — danach neu laden */ }
+    loescheFinanzdaten()
     window.location.reload()
 }
 

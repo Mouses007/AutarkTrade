@@ -1,5 +1,10 @@
 /**
- * Datenschutz-/Zensur-Modus für das Journal.
+ * Sichtschutz für das Journal (bis Audit B „Datenschutz-/Zensur-Modus").
+ *
+ * NUR ANZEIGE: die Werte werden verwischt, sie stehen weiter im DOM und in den
+ * API-Antworten (Audit SEC-WEB-007 / PRIV-01). Gegen einen Blick über die
+ * Schulter oder eine Bildschirmfreigabe, nicht gegen jemanden am Gerät — darum
+ * heisst er in der Oberfläche „Sichtschutz (nur Anzeige)".
  *
  * Zahlen und Geldwerte tragen im Journal keine gemeinsame CSS-Klasse (Mischung
  * aus gewinnWert/verlustWert/text-warning und Bootstrap-Utilities). Statt jede
@@ -10,6 +15,10 @@
  * So werden „$ 573.62", „-57.9%", „215", „$ 16'610", „1:1.2" verwischt, aber
  * „Kontostand" oder „P/L Ratio" bleiben lesbar.
  *
+ * Seit Audit B zusätzlich Blätter MIT Buchstaben, wenn sie einen Geld- oder
+ * Prozentwert tragen („Gross: 12$", „Net 1'200 USDT", „Win rate 57 %") — die
+ * blieben vorher lesbar, weil sie eine Beschriftung enthalten.
+ *
  * Ein MutationObserver markiert nach jedem Vue-Re-Render nach. Er beobachtet nur
  * childList/characterData (nicht Attribute), damit das Setzen unserer Klasse ihn
  * nicht selbst auslöst.
@@ -18,14 +27,26 @@
 const CENSOR_CLASS = 'tj-censor'
 const HAT_ZIFFER = /\d/
 const HAT_BUCHSTABE = /[A-Za-zÀ-ÖØ-öø-ÿ]/
+/** Ein Betrag mit Währung oder Prozent, davor oder dahinter: „$ 12", „12$", „-3,5 %", „1'200 USDT". */
+const GELD_ODER_PROZENT = /(?:[$€£]|\b(?:USDT?|USDC|CHF|EUR)\b)\s*[-−+]?\d|\d[\d'’.,]*\s*(?:[$€£%]|\b(?:USDT?|USDC|CHF|EUR)\b)/
+
+/**
+ * Ist dieser Text (eines Blattes) ein Wert, der verwischt wird?
+ * Ohne DOM, damit der Selbsttest ihn prüfen kann.
+ *
+ * @param {string} text
+ */
+export function istZensurText(text) {
+    const t = String(text ?? '').trim()
+    if (!t || !HAT_ZIFFER.test(t)) return false
+    if (!HAT_BUCHSTABE.test(t)) return t.length <= 24
+    // Beschriftung mit Betrag: nur wenn wirklich ein Geld-/Prozentwert drinsteht
+    return t.length <= 60 && GELD_ODER_PROZENT.test(t)
+}
 
 function istZahlenBlatt(el) {
     if (el.children.length) return false
-    const t = (el.textContent || '').trim()
-    if (!t || t.length > 24) return false
-    if (!HAT_ZIFFER.test(t)) return false
-    if (HAT_BUCHSTABE.test(t)) return false
-    return true
+    return istZensurText(el.textContent)
 }
 
 function markiere(root) {

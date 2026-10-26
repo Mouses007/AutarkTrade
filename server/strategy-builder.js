@@ -192,8 +192,18 @@ export function pruefeSpec(roh) {
  * Macht Text kommentarsicher: ein `*​/` würde den Block vorzeitig schliessen,
  * und ein Zeilenumbruch würde aus einem `//`-Zeilenkommentar ausbrechen — der
  * Folgetext stünde dann als Code in der erzeugten Datei.
+ *
+ * Zeilenumbruch heisst für ECMAScript auch U+2028 und U+2029 (Gesamtaudit
+ * 26.10.2026, SEC-SRV-010): bis dahin wurden nur `\r` und `\n` ersetzt, und
+ * ein Hinweis „Abstand in ATR<U+2028>globalThis.X = true" stand als
+ * ausführbare Zeile im Entwurf — unsichtbar im Editor. Deshalb jetzt alle
+ * Steuer- und Formatzeichen (`\p{Cc}`, `\p{Cf}` — darunter auch die
+ * Bidi-Umschalter, mit denen Code anders aussieht, als er läuft) und beide
+ * Trenner (`\p{Zl}`, `\p{Zp}`): je Folge ein Leerzeichen.
  */
-const alsKommentar = (text) => String(text || '').replace(/\*\//g, '* /').replace(/\r\n|[\r\n]/g, ' ')
+const alsKommentar = (text) => String(text || '')
+    .replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]+/gu, ' ')
+    .replace(/\*\//g, '* /')
 
 const zeilen = (arr, praefix) => (arr.length
     ? arr.map((z, i) => ` * ${praefix}${i + 1}. ${alsKommentar(z)}`).join('\n')

@@ -11,6 +11,7 @@ import { setupBinanceRoutes } from './server/binance-api.js'
 import { setupQuellenRoutes } from './server/quellen/routen.js'
 import { setupMarginRateRoutes } from './server/margin-rates.js'
 import { setupPolygonRoutes } from './server/polygon-api.js'
+import { setupDatabentoRoutes } from './server/databento-api.js'
 import { setupMarktradarRoutes, stopMarktradar } from './server/marktradar-api.js'
 import { setupKalenderRoutes, stopKalender } from './server/marktradar-kalender.js'
 import { setupLivetradingRoutes } from './server/livetrading-api.js'
@@ -51,12 +52,14 @@ import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engin
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
 import { setupPortfolioRoutes } from './server/portfolio/api.js'
 import { startePortfolioTakt, stoppePortfolioTakt } from './server/portfolio/abruf.js'
+import { startSicherungsTakt, stoppeSicherungsTakt } from './server/sicherung.js'
 import { logError } from './server/logger.js'
-import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession, meldeEinrichtungsCode } from './server/auth.js'
+import { sessionCookieMiddleware, apiAuthMiddleware, getSessionCookieString, setupAuthRoutes, loadAuthConfig, isAuthEnabled, maybeResetAuthFromEnv, istLoopbackHost, setzeBindungsModus, hostGuardMiddleware, hatGueltigeSession, meldeEinrichtungsCode, herkunftMiddleware, cookieAutomatischErlaubt, isHttps } from './server/auth.js'
 import { umgebung, umgebungAn, alteSicherheitsSchalter } from './server/umgebung.js'
 import { starteTakte, istTestbetrieb } from './server/testbetrieb.js'
-import { migriereAltSchluessel } from './server/crypto.js'
+import { migriereAltSchluessel, warneSchwachesSecret } from './server/crypto.js'
 import { ALLE_VERSCHLUESSELTEN } from './server/geheimnisse.js'
+import { setupTlsOeffentlich, setupTlsRoutes, merkeHostMiddleware, stelleTlsSicher, starteHttps, startTlsTakt, stopTlsTakt } from './server/tls/dienst.js'
 
 const app = express();
 app.disable('x-powered-by')
@@ -98,9 +101,9 @@ app.use(function sicherheitsKoepfe(req, res, next) {
     res.setHeader('X-Frame-Options', 'DENY')
     res.setHeader('Referrer-Policy', 'no-referrer')
     if (process.env.NODE_ENV !== 'dev') res.setHeader('Content-Security-Policy', CSP)
-    // HSTS nur über HTTPS sinnvoll (sonst ignoriert / kontraproduktiv im LAN)
-    const xfp = req.headers['x-forwarded-proto']
-    if (req.secure || (typeof xfp === 'string' && xfp.split(',')[0].trim() === 'https')) {
+    // HSTS nur über HTTPS sinnvoll (sonst ignoriert / kontraproduktiv im LAN) —
+    // direkt über den eigenen HTTPS-Server oder hinter einem Proxy (isHttps).
+    if (isHttps(req)) {
         res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains')
     }
     next()
@@ -110,12 +113,21 @@ app.use(function sicherheitsKoepfe(req, res, next) {
 // lokaler Peer-IP an — erkennbar ist sie nur am Host-Header. Vor ALLEN Routen,
 // auch vor dem ESP32-Endpunkt (der Guard lässt Anfragen ohne Host-Header durch).
 app.use(hostGuardMiddleware)
+// Namen, unter denen die App aufgerufen wird, fürs HTTPS-Zertifikat vorschlagen
+// (nur was der Host-Schutz durchlässt; aufgenommen wird erst nach Bestätigung).
+app.use(merkeHostMiddleware)
 
 // ESP32 display endpoint — registered BEFORE auth middleware (uses own key-based auth)
 setupEsp32Routes(app)
+// Das CA-Zertifikat ist öffentlich: ein Gerät braucht es, BEVOR es der App
+// vertrauen und sich anmelden kann (/api/tls/ca.crt, /api/tls/ca, /api/esp32/ca).
+setupTlsOeffentlich(app)
 
 // Security: Session cookie + API auth
 app.use(sessionCookieMiddleware)
+// Ändernde Anfragen fremder Herkunft abweisen (Audit SEC-SRV-002) — NACH den
+// ESP32-Routen mit eigenem Schlüssel, damit Display/Widget ausgenommen sind.
+app.use('/api', herkunftMiddleware)
 app.use('/api', apiAuthMiddleware)
 
 const port = umgebung('PORT') || process.env.PORT || 8080;
@@ -142,6 +154,10 @@ async function starteServer() {
         logError('start', 'Schlüssel-Migration fehlgeschlagen', e)
     }
 
+    // Kurzes AT_SECRET laut melden (Audit SEC-SRV-007) — nur warnen: eine
+    // andere Ableitung machte die gespeicherten Schlüssel unlesbar.
+    warneSchwachesSecret()
+
     // Sicherheitsschalter unter altem Namen laut melden (Audit A2-30): sie
     // wirken weiter, solange AT_X fehlt, aber niemand soll es übersehen.
     for (const alt of alteSicherheitsSchalter()) {
@@ -150,6 +166,11 @@ async function starteServer() {
     if (umgebungAn('TRUST_PROXY') && !umgebung('TRUSTED_PROXY')) {
         console.log('[AUTH] AT_TRUST_PROXY=1 ohne AT_TRUSTED_PROXY: X-Forwarded-For zählt nur von den Compose-Namen caddy/autarktrade-caddy.')
     }
+
+    // HTTPS: eigene CA beim ersten Start anlegen, Server-Zertifikat prüfen
+    // (auch im Testbetrieb — es geht nichts hinaus). Wirft nie: ohne
+    // Zertifikat läuft eben nur HTTP.
+    await stelleTlsSicher()
 
     // Notfall-Reset per AT_RESET_AUTH=1 (vor dem Laden), dann Auth-Konfig laden
     await maybeResetAuthFromEnv()
@@ -203,6 +224,7 @@ async function starteServer() {
     setupBinanceRoutes(app);
     setupMarginRateRoutes(app);
     setupPolygonRoutes(app);
+    setupDatabentoRoutes(app);
     setupMarktradarRoutes(app);
     // Eigene Datei statt in setupMarktradarRoutes: das Lagebild greift auf die
     // Kachel-Funktionen zu — die umgekehrte Richtung wäre ein Ringschluss
@@ -238,6 +260,8 @@ async function starteServer() {
     setupUpdateRoutes(app);
     setupRechtlichesRoutes(app);
     setupSpeicherRoutes(app);
+    // HTTPS: Status, Namen, Erneuern, neue CA (server/tls/dienst.js)
+    setupTlsRoutes(app);
     // Betriebsart für die Oberfläche (Banner „Testbetrieb", gesperrte Automatiken)
     app.get('/api/system/modus', (req, res) => {
         res.json({ testbetrieb: istTestbetrieb() })
@@ -277,6 +301,8 @@ async function starteServer() {
         // (Führung über db-claim) — NAS und Testcontainer teilen eine Datenbank.
         ['Chart-Alarm', startChartAlarmTakt],
         ['Benachrichtigungen', startBenachrichtigungsTakt],
+        // HTTPS-Zertifikat: täglich prüfen/erneuern, Wechsel anderer Prozesse nachladen.
+        ['TLS', startTlsTakt],
     ]);
 
     // Strategie-Engine: der Takt läuft immer, gearbeitet wird nur für Instanzen,
@@ -306,6 +332,11 @@ async function starteServer() {
     // letzte Abruf älter als 15 min ist (`stores/portfolio.js`).
     starteTakte([['Portfolio', startePortfolioTakt]]);
 
+    // Tägliche Sicherung (Audit FUN-BAK-001): SQLite per VACUUM INTO, PostgreSQL
+    // als JSON-Export, 14 Tage. Ziel AT_SICHERUNG_ORDNER; im Container ohne
+    // eingebundenen Ordner aus. Ein Prozess je DB (Anspruch), im Testbetrieb keiner.
+    starteTakte([['Sicherung', startSicherungsTakt]]);
+
     const entwicklung = process.env.NODE_ENV === 'dev'
     if (entwicklung) {
         // Vite ZUERST starten, dann den Proxy auf den Port richten, den es
@@ -331,9 +362,13 @@ async function starteServer() {
         const proxy = Proxy.createProxyServer({ target: { host: 'localhost', port: vitePort } })
 
         // Inject session cookie into proxied responses (Vite dev server) —
-        // außer wenn das Passwort-Gate aktiv ist (dann nur nach Login).
+        // außer wenn das Passwort-Gate aktiv ist (dann nur nach Login) ODER
+        // der Dienst im Netz lauscht, ohne dass offener Betrieb erlaubt ist.
+        // Dieselbe Regel wie sessionCookieMiddleware (Audit SEC-SRV-014): bis
+        // 26.10.2026 prüfte der Haken nur das Gate und verteilte mit
+        // NODE_ENV=dev und AT_HOST=0.0.0.0 das Cookie an jeden im LAN.
         proxy.on('proxyRes', (proxyRes, req) => {
-            if (isAuthEnabled()) return
+            if (!cookieAutomatischErlaubt()) return
             const existing = proxyRes.headers['set-cookie'] || []
             const arr = Array.isArray(existing) ? existing : [existing].filter(Boolean)
             arr.push(getSessionCookieString(req))
@@ -412,6 +447,17 @@ async function starteServer() {
         server.on('error', reject)
     })
 
+    // HTTPS neben HTTP, dieselbe App (AT_TLS_PORT, Vorgabe 8443; `aus` schaltet
+    // ab). HTTP bleibt für ESP32-Displays und alte Klienten. Ein belegter Port
+    // hält den Start nicht auf.
+    await starteHttps(app, {
+        host,
+        upgrade: (req, socket, head) => {
+            if (viteProxy) viteProxy.ws(req, socket, head)
+            else socket.destroy()
+        },
+    })
+
     // Beim Beenden die angefangene Aufzeichnungs-Stunde noch wegschreiben,
     // sonst geht sie beim Container-Neustart verloren.
     let shuttingDown = false
@@ -428,6 +474,8 @@ async function starteServer() {
         // ist einzeln gesichert, der nächste Start nimmt ihn wieder auf.
         try { stopRanglisteTakt() } catch (e) { /* trotzdem beenden */ }
         try { stoppePortfolioTakt() } catch (e) { /* trotzdem beenden */ }
+        try { stoppeSicherungsTakt() } catch (e) { /* trotzdem beenden */ }
+        try { stopTlsTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopOiArchivTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopChartAlarmTakt() } catch (e) { /* trotzdem beenden */ }
         try { stopMarktradar() } catch (e) { /* trotzdem beenden */ }

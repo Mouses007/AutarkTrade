@@ -29,10 +29,17 @@ XPT2046_Touchscreen ts(TOUCH_CS_PIN, TOUCH_IRQ_PIN);
 #define LIGHT_SLEEP_TIMEOUT 60        // Sekunden ohne Touch → Light Sleep + WiFi aus
 #define BOOT_GRACE_MS    300000       // 5 Min nach Boot kein Light Sleep (für Flash-Vorgang)
 #define PREF_NAMESPACE      "tjcfg"
+#define AP_NAMESPACE        "tjap"    // eigener Namensraum: das AP-Passwort überlebt /reset
+#define WIFI_MAX_FEHLVERSUCHE 3       // so viele Boots ohne WLAN, dann Setup-AP statt Neustartschleife
+#define SETUP_TIMEOUT_MS    600000    // Setup mit vorhandener Konfiguration: nach 10 Min neu versuchen
+#define SETUP_FENSTER_MS    2000      // Fenster nach dem Boot, in dem die Setup-Geste beginnen kann
+#define SETUP_HALTEN_MS     3000      // so lange Bildschirm bzw. BOOT-Taste halten
+#define BOOT_TASTE_PIN      0         // BOOT-Taste (GPIO0, beide Boards), nach dem Start frei lesbar
+#define VERALTET_AB_MS      (3UL * ACTIVE_INTERVAL * 1000UL)   // drei Abrufintervalle ohne Erfolg
 #define WIFI_TIMEOUT_MS     12000
 #define DISPLAY_ROTATION    3
 #define TFT_BL_PIN          21        // Backlight-Pin ESP32-2432S028 (CYD)
-#define FW_VERSION          "3.4.1-CYD"
+#define FW_VERSION          "3.5.0-CYD"
 
 // ── Farben RGB565 — Tokens der AutarkTrade-Web-App ───────────────────────
 // Umgerechnet r>>3 | g>>2 | b>>3; die Namen bleiben, damit der Zeichencode
@@ -68,6 +75,13 @@ int    activeScreen = 0;          // 0 = Dashboard, 1 = Positionen, 2 = Filter
 unsigned long lastUpdate    = 0;
 unsigned long lastTouchTime = 0;
 bool          inStandby     = false;
+unsigned long lastOkMs     = 0;      // millis() des letzten erfolgreichen Abrufs (0 = noch keiner)
+
+// Setup-Portal (SEC-ESP-001/002): läuft NUR im Setup-Modus, nie im Heimnetz.
+String formToken;                     // pro Boot zufällig, Pflicht für POST /save und /reset
+String apPass;                        // WPA2-Passwort des Setup-AP, je Gerät zufällig, auf dem Display
+bool   setupMitKonfig = false;        // Setup bei vorhandener Konfiguration → Zeitlimit, dann Neustart
+unsigned long portalAktivMs = 0;      // letzte Anfrage ans Portal
 
 // Touch-Kalibrierung für XPT2046 in Landscape Rotation 3 (ESP32-2432S028)
 uint16_t touchCalData[5] = {275, 3620, 264, 3532, 1};
@@ -184,7 +198,59 @@ void saveConfig(String ssid, String pass, String host, String port, String key) 
   prefs.putString("host", host);
   prefs.putString("port", port);
   prefs.putString("key",  key);
+  prefs.putUChar("wfail", 0);
   prefs.end();
+}
+
+// Zufallstext aus esp_random() — erst nach WiFi.mode() aufrufen, dann
+// speist das Funkteil den Zufallsgenerator (sonst nur Pseudozufall).
+String zufallsText(int len, const char* zeichen) {
+  String s;
+  int n = strlen(zeichen);
+  for (int i = 0; i < len; i++) s += zeichen[esp_random() % n];
+  return s;
+}
+
+// WPA2-Passwort des Setup-AP: einmal je Gerät erzeugt, im eigenen
+// NVS-Namensraum (clearConfig() löscht es nicht, das Display zeigt es).
+void ladeApPasswort() {
+  prefs.begin(AP_NAMESPACE, false);
+  apPass = prefs.getString("pass", "");
+  if (apPass.length() < 8) {
+    apPass = zufallsText(10, "abcdefghjkmnpqrstuvwxyz23456789");
+    prefs.putString("pass", apPass);
+  }
+  prefs.end();
+}
+
+// Fehlversuche beim WLAN-Verbinden über Neustarts hinweg zählen.
+uint8_t leseFehlversuche() {
+  prefs.begin(PREF_NAMESPACE, true);
+  uint8_t n = prefs.getUChar("wfail", 0);
+  prefs.end();
+  return n;
+}
+
+void schreibeFehlversuche(uint8_t n) {
+  prefs.begin(PREF_NAMESPACE, false);
+  if (prefs.getUChar("wfail", 0) != n) prefs.putUChar("wfail", n);   // Flash schonen
+  prefs.end();
+}
+
+// ── Datenalter (FUN-GER-001) ─────────────────────────────
+// millis() läuft auch im Light Sleep weiter; ohne NTP ist es die einzige
+// verlässliche Uhr des Geräts.
+bool datenVeraltet() {
+  return lastOkMs == 0 || millis() - lastOkMs > VERALTET_AB_MS;
+}
+
+String alterText() {
+  if (lastOkMs == 0) return "nie";
+  unsigned long s = (millis() - lastOkMs) / 1000;
+  if (s < 90)     return String(s) + " s";
+  if (s < 5400)   return String(s / 60) + " min";
+  if (s < 172800) return String(s / 3600) + " h";
+  return String(s / 86400) + " Tg";
 }
 
 void clearConfig() {
@@ -278,8 +344,8 @@ void drawNavBar() {
   tft.setCursor(251, ny + 12);
   tft.print("Info");
 
-  // Offline-Indikator: kleiner roter Punkt rechts unten wenn keine Daten
-  if (!data.valid) {
+  // Offline-Indikator: kleiner roter Punkt rechts unten wenn Daten fehlen oder veraltet sind
+  if (!data.valid || datenVeraltet()) {
     tft.fillCircle(313, ny + 26, 4, COLOR_RED);
   }
 }
@@ -315,18 +381,22 @@ void drawDonut(int cx, int cy, int r, int ir, float pct, uint16_t color,
 void drawScreen1() {
   tft.fillRect(0, 0, 320, 207, COLOR_BG);
 
-  // ── Offline-Banner wenn keine Daten ───────────────
-  if (!data.valid) {
-    tft.fillRoundRect(4, 2, 312, 20, 4, COLOR_GREY_DARK);
-    tft.setTextColor(COLOR_RED, COLOR_GREY_DARK);
+  // ── Banner, wenn keine oder alte Daten (FUN-GER-001) ───
+  // Nach einem Fehlschlag bleibt der letzte Stand stehen — dann muss sein
+  // Alter sichtbar sein, sonst sehen Stunden alte Positionen aktuell aus.
+  bool banner = !data.valid || datenVeraltet();
+  if (banner) {
+    tft.fillRoundRect(4, 2, 312, 20, 4, COLOR_RED);
+    tft.setTextColor(COLOR_WHITE, COLOR_RED);
     tft.setTextSize(1);
     tft.setCursor(8, 8);
-    tft.print("OFFLINE — API nicht erreichbar");
+    if (lastOkMs == 0) tft.print("OFFLINE - keine Daten vom Server");
+    else               tft.print("VERALTET - Stand vor " + alterText() + ", Server nicht erreicht");
   }
 
   // ── Kontostand-Karte ──────────────────────────────
-  int cardY = data.valid ? 2 : 26;
-  int cardH = data.valid ? 62 : 38;
+  int cardY = banner ? 26 : 2;
+  int cardH = banner ? 38 : 62;
   fillCard(4, cardY, 312, cardH);
 
   // Label + Filter
@@ -479,7 +549,13 @@ void drawScreen2() {
   if (nFut == 0 && nBot == 0) {
     tft.setTextColor(COLOR_GREY, COLOR_BG);
     tft.setCursor(8, 110);
-    tft.print("Keine offenen Positionen");
+    tft.print(datenVeraltet() ? "Keine Positionen im letzten Stand" : "Keine offenen Positionen");
+    if (datenVeraltet()) {
+      tft.setTextColor(COLOR_RED, COLOR_BG);
+      tft.setCursor(8, 125);
+      tft.print("VERALTET - Stand vor " + alterText());
+      tft.setTextColor(COLOR_GREY, COLOR_BG);
+    }
     tft.setCursor(270, 193);
     tft.print("v" FW_VERSION);
     return;
@@ -605,16 +681,18 @@ void drawScreen2() {
     }
   }
 
-  // ── Footer ────────────────────────────────────────
-  time_t now = time(nullptr);
-  struct tm* t = localtime(&now);
-  char timeStr[16];
-  strftime(timeStr, sizeof(timeStr), "%H:%M:%S", t);
-
+  // ── Footer: Alter des Stands (die Uhr läuft ohne NTP, daher kein Zeitpunkt) ──
+  if (datenVeraltet()) {
+    tft.fillRect(0, 189, 262, 16, COLOR_RED);
+    tft.setTextColor(COLOR_WHITE, COLOR_RED);
+    tft.setCursor(8, 193);
+    tft.print("VERALTET - Stand vor " + alterText());
+  } else {
+    tft.setTextColor(COLOR_GREY, COLOR_BG);
+    tft.setCursor(8, 193);
+    tft.print("Stand: vor " + alterText());
+  }
   tft.setTextColor(COLOR_GREY, COLOR_BG);
-  tft.setCursor(8, 193);
-  tft.print("Aktual.: ");
-  tft.print(timeStr);
   tft.setCursor(270, 193);
   tft.print("v" FW_VERSION);
 }
@@ -775,6 +853,7 @@ const char CONFIG_HTML[] PROGMEM = R"rawliteral(
 <p class="sub">ESP32-2432S028 CYD Setup</p>
 
 <form action="/save" method="POST">
+  <input type="hidden" name="t" value="%TOKEN%">
   <div class="card">
     <h2>WLAN</h2>
     <button type="button" class="scan-btn" onclick="scanWifi()">Netzwerke suchen...</button>
@@ -783,7 +862,7 @@ const char CONFIG_HTML[] PROGMEM = R"rawliteral(
     <label>SSID</label>
     <input name="ssid" id="ssid" type="text" value="%SSID%" required autocomplete="off">
     <label>Passwort</label>
-    <input name="pass" id="pass" type="password" value="%PASS%" autocomplete="off">
+    <input name="pass" id="pass" type="password" value="" placeholder="%PASSHINT%" autocomplete="off">
   </div>
   <div class="card">
     <h2>AutarkTrade API</h2>
@@ -793,11 +872,13 @@ const char CONFIG_HTML[] PROGMEM = R"rawliteral(
     <label>Port</label>
     <input name="port" type="text" value="%PORT%" placeholder="8080" required>
     <label>ESP32 API-Key</label>
-    <input name="key" type="text" value="%KEY%" placeholder="Hex-String aus Settings" required>
+    <input name="key" type="password" value="" placeholder="%KEYHINT%" autocomplete="off" %KEYREQ%>
+    <div class="info">Gespeicherte Passw&ouml;rter und Schl&uuml;ssel werden nie angezeigt. Leeres Feld = bleibt unver&auml;ndert.</div>
   </div>
   <button type="submit">Speichern und Verbinden</button>
 </form>
 <form action="/reset" method="POST" style="margin-top:8px">
+  <input type="hidden" name="t" value="%TOKEN%">
   <button class="reset" type="submit">Konfiguration loeschen</button>
 </form>
 
@@ -839,6 +920,7 @@ window.onload=scanWifi;
 // ── WiFi-Scan Handler ────────────────────────────────────
 
 void handleScan() {
+  portalAktivMs = millis();
   int n = WiFi.scanNetworks();
   JsonDocument doc;
   JsonArray arr = doc.to<JsonArray>();
@@ -858,22 +940,41 @@ void handleScan() {
 
 String buildHtml() {
   String html = String(CONFIG_HTML);
+  // WLAN-Passwort und Geräteschlüssel gehen NIE zurück ins Formular (SEC-ESP-001).
   html.replace("%SSID%", htmlEscape(cfgSSID));
-  html.replace("%PASS%", htmlEscape(cfgPass));
   html.replace("%HOST%", htmlEscape(cfgHost));
   html.replace("%PORT%", htmlEscape(cfgPort));
-  html.replace("%KEY%",  htmlEscape(cfgKey));
+  html.replace("%PASSHINT%", cfgPass.isEmpty() ? "" : "gespeichert - leer lassen = unveraendert");
+  html.replace("%KEYHINT%",  cfgKey.isEmpty() ? "Hex-String aus Settings" : "gespeichert - leer lassen = unveraendert");
+  html.replace("%KEYREQ%",   cfgKey.isEmpty() ? "required" : "");
+  html.replace("%TOKEN%",    formToken);
   return html;
 }
 
-void handleRoot()  { server.send(200, "text/html; charset=utf-8", buildHtml()); }
+// Formular-Token: pro Boot zufällig, nur im ausgelieferten Formular. Eine
+// fremde Webseite kennt ihn nicht und kann /save oder /reset nicht auslösen.
+bool tokenOk() {
+  portalAktivMs = millis();
+  return formToken.length() >= 16 && server.arg("t") == formToken;
+}
+
+void handleRoot()  {
+  portalAktivMs = millis();
+  server.sendHeader("Cache-Control", "no-store");
+  server.send(200, "text/html; charset=utf-8", buildHtml());
+}
 
 void handleSave() {
+  if (!tokenOk()) { server.send(403, "text/plain", "Formular abgelaufen - Seite neu laden"); return; }
   String ssid = server.arg("ssid"), pass = server.arg("pass");
   String host = server.arg("host"), port = server.arg("port");
   String key  = server.arg("key");
   ssid.trim(); pass.trim(); host.trim(); port.trim(); key.trim();
 
+  // Leeres Feld = gespeicherter Wert bleibt (das Formular zeigt ihn nie).
+  // Das WLAN-Passwort nur bei gleicher SSID — ein anderes Netz ohne Passwort ist offen.
+  if (key.isEmpty()) key = cfgKey;
+  if (pass.isEmpty() && ssid == cfgSSID) pass = cfgPass;
   if (ssid.isEmpty() || host.isEmpty() || key.isEmpty()) {
     server.send(400, "text/plain", "Fehlende Felder"); return;
   }
@@ -895,6 +996,7 @@ void handleSave() {
 }
 
 void handleReset() {
+  if (!tokenOk()) { server.send(403, "text/plain", "Formular abgelaufen - Seite neu laden"); return; }
   clearConfig();
   server.send(200, "text/html; charset=utf-8",
     "<html><head><meta charset='UTF-8'></head><body style='background:#05080a;color:#e8f4f6;font-family:sans-serif;padding:30px'>"
@@ -932,7 +1034,7 @@ bool fetchData() {
 
   String payload = http.getString();
   http.end();
-  Serial.println("[API] Response: " + payload);
+  Serial.printf("[API] OK, %u Bytes\n", (unsigned)payload.length());   // Inhalt nie auf Serial (SEC-ESP-003)
 
   JsonDocument doc;
   if (deserializeJson(doc, payload) != DeserializationError::Ok) {
@@ -997,7 +1099,100 @@ bool fetchData() {
   }
 
   data.valid = true;
+  lastOkMs = millis();
+  if (lastOkMs == 0) lastOkMs = 1;
   return true;
+}
+
+// ── Setup-Modus ──────────────────────────────────────────
+
+void zeichneSetupSchirm(const char* grund) {
+  tft.fillScreen(COLOR_BG);
+  tft.setTextColor(COLOR_YELLOW, COLOR_BG);
+  tft.setTextSize(2);
+  tft.setCursor(10, 20);
+  tft.print("SETUP MODUS");
+  drawMarke(296, 26, 16);
+  tft.drawFastVLine(160, 50, 120, COLOR_GREY_DARK);
+  tft.setTextColor(COLOR_GREY, COLOR_BG);
+  tft.setTextSize(1);
+  tft.setCursor(10, 58);  tft.print("1. WLAN verbinden:");
+  tft.setTextColor(COLOR_GREEN, COLOR_BG);
+  tft.setCursor(10, 74);  tft.print(AP_SSID);
+  tft.setTextColor(COLOR_GREY, COLOR_BG);
+  tft.setCursor(10, 92);  tft.print("Passwort:");
+  tft.setTextColor(COLOR_YELLOW, COLOR_BG);
+  tft.setTextSize(2);
+  tft.setCursor(10, 106); tft.print(apPass);
+  tft.setTextSize(1);
+  tft.setTextColor(COLOR_GREY, COLOR_BG);
+  tft.setCursor(172, 58); tft.print("2. Browser:");
+  tft.setTextColor(COLOR_YELLOW, COLOR_BG);
+  tft.setCursor(172, 74); tft.print("192.168.4.1");
+  tft.setTextColor(COLOR_GREY, COLOR_BG);
+  if (setupMitKonfig) {
+    tft.setCursor(10, 180);
+    tft.print("Ohne Eingabe: nach 10 Min. Neustart");
+  }
+  if (grund) {
+    tft.setTextColor(COLOR_WHITE_DIM, COLOR_BG);
+    tft.setCursor(10, 192);
+    tft.print(grund);
+  }
+  tft.drawFastHLine(0, 207, 320, COLOR_GREY_DARK);
+  tft.setTextColor(COLOR_GREY, COLOR_BG);
+  tft.setCursor(10, 217); tft.print("AutarkTrade ESP32 v" FW_VERSION);
+}
+
+// Setup-AP mit WPA2 (SEC-ESP-002) und Portal. Nur hier läuft der Webserver.
+void starteSetupModus(const char* grund) {
+  configMode = true;
+  setupMitKonfig = !(cfgSSID.isEmpty() || cfgKey.isEmpty());
+  WiFi.setAutoReconnect(false);
+  WiFi.disconnect();                 // STA-Versuche würden den AP-Kanal stören
+  WiFi.mode(WIFI_AP_STA);            // STA nur für den Netz-Scan
+  formToken = zufallsText(32, "0123456789abcdef");
+  ladeApPasswort();
+  WiFi.softAP(AP_SSID, apPass.c_str());
+  Serial.printf("[AP] Setup-Modus auf %s\n", WiFi.softAPIP().toString().c_str());
+  setupRoutes();
+  portalAktivMs = millis();
+  zeichneSetupSchirm(grund);
+}
+
+// Lokale Geste: in den ersten Sekunden nach dem Boot den Bildschirm oder die
+// BOOT-Taste SETUP_HALTEN_MS lang halten. Nur wer am Gerät steht, kommt so
+// ins Portal. Kurze Lücken im Touch-Signal (der kapazitive Chip meldet nicht
+// jede Abfrage) brechen das Halten nicht ab.
+bool lokalGedrueckt() {
+  int x, y;
+  return digitalRead(BOOT_TASTE_PIN) == LOW || mapTouch(&x, &y);
+}
+
+bool setupGesteBeimStart() {
+  pinMode(BOOT_TASTE_PIN, INPUT_PULLUP);
+  tft.fillScreen(COLOR_BG);
+  tft.setTextColor(COLOR_GREY, COLOR_BG);
+  tft.setTextSize(1);
+  tft.setCursor(10, 100);
+  tft.print("Setup: Bildschirm oder BOOT-Taste 3 s halten");
+  unsigned long t0 = millis();
+  while (millis() - t0 < SETUP_FENSTER_MS) {
+    if (lokalGedrueckt()) {
+      tft.setTextColor(COLOR_YELLOW, COLOR_BG);
+      tft.setCursor(10, 120);
+      tft.print("Halten ...");
+      unsigned long h0 = millis(), zuletzt = millis();
+      while (millis() - zuletzt < 400) {
+        if (lokalGedrueckt()) zuletzt = millis();
+        if (millis() - h0 >= SETUP_HALTEN_MS) return true;
+        delay(30);
+      }
+      return false;   // losgelassen: normal starten
+    }
+    delay(30);
+  }
+  return false;
 }
 
 // ── Setup ────────────────────────────────────────────────
@@ -1026,34 +1221,13 @@ void setup() {
   loadConfig();
 
   // ── Setup-Modus ──────────────────────────────────
+  // Nur ohne Konfiguration oder per lokaler Geste (SEC-ESP-001) — nie aus dem Netz.
   if (cfgSSID.isEmpty() || cfgKey.isEmpty()) {
-    configMode = true;
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(AP_SSID);
-    Serial.printf("[AP] %s\n", WiFi.softAPIP().toString().c_str());
-    setupRoutes();
-
-    // Setup-Screen (Landscape 320×240)
-    tft.fillScreen(COLOR_BG);
-    tft.setTextColor(COLOR_YELLOW, COLOR_BG);
-    tft.setTextSize(2);
-    tft.setCursor(10, 20);
-    tft.print("SETUP MODUS");
-    drawMarke(296, 26, 16);
-    tft.drawFastVLine(160, 50, 155, COLOR_GREY_DARK);
-    tft.setTextColor(COLOR_GREY, COLOR_BG);
-    tft.setTextSize(1);
-    tft.setCursor(10, 58);  tft.print("1. WLAN verbinden:");
-    tft.setTextColor(COLOR_GREEN, COLOR_BG);
-    tft.setCursor(10, 74);  tft.print(AP_SSID);
-    tft.setTextColor(COLOR_GREY, COLOR_BG);
-    tft.setCursor(10, 90);  tft.print("(kein Passwort)");
-    tft.setCursor(172, 58); tft.print("2. Browser:");
-    tft.setTextColor(COLOR_YELLOW, COLOR_BG);
-    tft.setCursor(172, 74); tft.print("192.168.4.1");
-    tft.drawFastHLine(0, 207, 320, COLOR_GREY_DARK);
-    tft.setTextColor(COLOR_GREY, COLOR_BG);
-    tft.setCursor(10, 217); tft.print("AutarkTrade ESP32 v" FW_VERSION);
+    starteSetupModus(nullptr);
+    return;
+  }
+  if (setupGesteBeimStart()) {
+    starteSetupModus("Per Geste geoeffnet");
     return;
   }
 
@@ -1077,14 +1251,27 @@ void setup() {
   }
 
   if (WiFi.status() != WL_CONNECTED) {
-    drawStartupError("WiFi Fehler", "Zugangsdaten pruefen (Setup: 192.168.4.1)");
+    // Nach WIFI_MAX_FEHLVERSUCHE Boots ohne WLAN in den Setup-AP, statt
+    // endlos neu zu starten (falsche SSID wäre sonst nur per USB zu lösen).
+    // Dort nach 10 Min. ohne Eingabe neuer Versuch — etwa nach Router-Ausfall.
+    uint8_t fehl = leseFehlversuche() + 1;
+    if (fehl >= WIFI_MAX_FEHLVERSUCHE) {
+      schreibeFehlversuche(0);
+      starteSetupModus("WLAN nicht erreichbar - Daten pruefen");
+      return;
+    }
+    schreibeFehlversuche(fehl);
+    char det[64];
+    snprintf(det, sizeof(det), "Versuch %u/%u, danach Setup-WLAN", fehl, WIFI_MAX_FEHLVERSUCHE);
+    drawStartupError("WiFi Fehler", det);
     delay(10000);
     ESP.restart();
     return;
   }
+  schreibeFehlversuche(0);
 
   Serial.printf("[WiFi] %s\n", WiFi.localIP().toString().c_str());
-  setupRoutes();
+  // Kein Webserver im Heimnetz (SEC-ESP-001) — Setup nur per Geste beim Boot.
 
   drawConnecting("Lade Daten...");
   bool ok = fetchData();
@@ -1110,9 +1297,17 @@ static void ensureWiFi() {
 }
 
 void loop() {
-  server.handleClient();
-
-  if (configMode) return;
+  if (configMode) {
+    server.handleClient();
+    // Mit vorhandener Konfiguration nicht ewig im Setup hängen bleiben.
+    if (setupMitKonfig && millis() - portalAktivMs > SETUP_TIMEOUT_MS) {
+      Serial.println("[AP] Setup-Zeitlimit, Neustart");
+      delay(100);
+      ESP.restart();
+    }
+    delay(2);
+    return;
+  }
 
   unsigned long now = millis();
 
@@ -1181,7 +1376,8 @@ void loop() {
     setBacklight(true);
     drawConnecting("Lade Daten...");
     ensureWiFi();
-    if (fetchData()) drawCurrentScreen();
+    fetchData();
+    drawCurrentScreen();   // auch bei Fehlschlag: alter Stand mit Altersbanner
     lastUpdate = millis();
     delay(150);   // Touch-Event abklingen lassen
     return;
@@ -1196,7 +1392,8 @@ void loop() {
   // ── Aktiv: Daten alle ACTIVE_INTERVAL Sekunden aktualisieren ───
   if (now - lastUpdate >= (unsigned long)ACTIVE_INTERVAL * 1000) {
     ensureWiFi();
-    if (fetchData()) drawCurrentScreen();
+    fetchData();
+    drawCurrentScreen();   // auch bei Fehlschlag: alter Stand mit Altersbanner
     lastUpdate = millis();
     return;
   }

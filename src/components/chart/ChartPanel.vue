@@ -15,7 +15,8 @@
  */
 import { ref, shallowRef, watch, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import dayjs from 'dayjs'
+import dayjs from '../../utils/journal/zeit.js'
+import { tradeZeitzone } from '../../stores/ui.js'
 import {
     createChart, CandlestickSeries, HistogramSeries, CrosshairMode, PriceScaleMode, LineStyle, ColorType,
     createTextWatermark,
@@ -144,9 +145,29 @@ function farbe(name, ersatz) {
 
 const istTagOderMehr = computed(() => (INTERVALL_MS[props.panel.interval] || 0) >= 86_400_000)
 
+/*
+ * Zeitzone der Beschriftung (Audit FUN-WEB-002). Bis Audit B formatierte der
+ * Chart in Browserzeit, das Journal in `settings.timeZone` — dieselbe Kerze
+ * trug in Chart und Journal verschiedene Uhrzeiten. Jetzt:
+ *  - unter einem Tag: die Handelszeitzone der Einstellungen (wie das Journal)
+ *  - Tageskerzen und grösser: UTC. Eine Tageskerze der Börse beginnt um 00:00
+ *    UTC; in einer Zone westlich von UTC trüge sie sonst das Datum des Vortags.
+ * Intern bleibt die Zeit, wie sie ist — nur die Beschriftung ändert sich.
+ */
+const anzeigeZone = () => (istTagOderMehr.value ? 'UTC' : (tradeZeitzone.value || dayjs.tz.guess()))
+function inZone(sek) {
+    const zone = anzeigeZone()
+    try {
+        return { d: zone === 'UTC' ? dayjs.unix(sek).utc() : dayjs.unix(sek).tz(zone), zone }
+    } catch {
+        // Unbekannte Zone in den Einstellungen: lieber Browserzeit als gar nichts
+        return { d: dayjs.unix(sek), zone: undefined }
+    }
+}
+
 function zeitText(sek) {
-    const d = dayjs.unix(sek)
-    const tag = d.toDate().toLocaleString(locale.value, { weekday: 'short' })
+    const { d, zone } = inZone(sek)
+    const tag = new Date(sek * 1000).toLocaleString(locale.value, { weekday: 'short', timeZone: zone })
     return istTagOderMehr.value ? `${tag} ${d.format('DD.MM.YY')}` : `${tag} ${d.format('DD.MM.YY HH:mm')}`
 }
 
@@ -193,12 +214,12 @@ function baueChart() {
             secondsVisible: false,
             rightOffset: 8,
             tickMarkFormatter: (zeit, art) => {
-                const d = dayjs.unix(zeit)
+                const { d, zone } = inZone(zeit)
                 // 0 Jahr, 1 Monat, 2 Tag, 3 Uhrzeit, 4 Uhrzeit mit Sekunden.
                 // Monatsnamen über Intl in der App-Sprache — dayjs steht global
                 // auf Englisch und schrieb „Oct".
                 if (art === 0) return d.format('YYYY')
-                if (art === 1) return d.toDate().toLocaleString(locale.value, { month: 'short' })
+                if (art === 1) return new Date(zeit * 1000).toLocaleString(locale.value, { month: 'short', timeZone: zone })
                 if (art === 2) return d.format('DD.')
                 return d.format('HH:mm')
             },

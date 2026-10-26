@@ -370,6 +370,8 @@
     "src/components/portfolio/PortfolioQuellen.vue|7a9f1ce75546": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/portfolio/PortfolioSteuer.vue|35107b2e52c4": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/rahmen/PositionsWarnung.vue|c3fcf62cc593": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/utils/chart/fensterFarben.js|f2512106d4d8": "Reihe abbilden mit Index und Zahl-Prüfung (arr.map((v, i) => { if (!Number.isFinite(v)) … }), übliche Form)"
+    "src/utils/chart/fensterFarben.js|f2512106d4d8": "Reihe abbilden mit Index und Zahl-Prüfung (arr.map((v, i) => { if (!Number.isFinite(v)) … }), übliche Form)",
+    "server/tls/__selftest-tls-server.mjs|d20e35805363": "Testserver-Gerüst: express.json() einhängen und eine Middleware mit (req, res, next) (Express-Dokumentation; eigener Zusammenhang: HTTPS-Integrationstest)",
+    "server/tls/__selftest-tls-zertifikat.mjs|6996a2cbbad4": "Wegwerf-Ordner per fs.mkdtempSync(path.join(os.tmpdir(), …)) anlegen, wenn ein Werkzeug fehlt überspringen (Node-Standardform; eigener Zusammenhang: openssl-Gegenprobe)"
   }
 }

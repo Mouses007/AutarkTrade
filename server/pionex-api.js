@@ -20,7 +20,9 @@ export async function getBalances(apiKey, secretKey) {
  */
 async function fetchTickerPrice(symbol) {
     try {
-        const r = await fetch(`${BASE_URL}/api/v1/market/tickers?symbol=${encodeURIComponent(symbol)}`)
+        const r = await fetch(`${BASE_URL}/api/v1/market/tickers?symbol=${encodeURIComponent(symbol)}`, {
+            signal: AbortSignal.timeout(15000),   // wie Bitunix (SEC-SRV-005)
+        })
         const d = await r.json()
         const t = d?.data?.tickers?.[0]
         const p = parseFloat(t?.close ?? t?.last ?? 0)

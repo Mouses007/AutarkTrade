@@ -26,6 +26,16 @@ instance directly on your desktop, with live PnL — grouped by exchange.
    - **Server host / IP** (e.g. `192.168.178.100`) and **port** (default `8080`)
    - **ESP32 API key** (from the AutarkTrade settings above)
    - Optional: refresh interval, which columns to show, font sizes, opacity, width
+3. **Encrypted (HTTPS, port 8443)** is on by default. Pair once:
+   press **1. Fetch server certificate** — the desklet fetches the AutarkTrade CA over
+   `http://host:8080/api/esp32/ca` and shows its SHA-256 fingerprint. Compare it with
+   **Settings › General › HTTPS** in the AutarkTrade web app; only if it matches press
+   **2. Fingerprint matches — pair**. The certificate is stored (mode 0600) next to the
+   desklet settings, and from then on the desklet talks HTTPS to port 8443 and trusts
+   only that certificate — never the system CAs, and never falling back to plain HTTP.
+   If the server's certificate changes, the desklet says „Certificate does not match —
+   pair again"; repeat the two steps. Switching HTTPS off sends the API key unencrypted
+   (only for a trusted LAN/VPN).
 
 ## Licence
 MIT (`LICENSE` in the desklet folder). The desklet is a separate program; AutarkTrade itself is under its own licence.

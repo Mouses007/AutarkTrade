@@ -64,7 +64,7 @@ class RefreshWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ct
                 android.util.Log.d("TJWidget", "  fetch id=$id → ${Prefs.host(ctx, id)}:${Prefs.port(ctx, id)}")
                 try {
                     val json = ApiClient.fetch(
-                        Prefs.host(ctx, id), Prefs.port(ctx, id),
+                        ApiClient.ziel(ctx, Prefs.host(ctx, id), Prefs.port(ctx, id)),
                         Prefs.key(ctx, id), Prefs.filter(ctx, id)
                     )
                     DisplayData.parse(json)   // validate before caching

@@ -16,6 +16,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { rechnePosition, rechnerEingabe, MODI } from '../../../shared/tradeRechner.js'
 import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
+import { zahlAus } from '../../utils/zahlEingabe.js'
 
 const props = defineProps({
     zeichnung: { type: Object, required: true },
@@ -47,10 +48,6 @@ watch(() => [props.zeichnung.id, JSON.stringify(ein.value)], () => {
     if (fokus) neu[fokus] = entwurf.value[fokus]
     entwurf.value = neu
 })
-const zahlAus = (text) => {
-    const t = String(text ?? '').replace(/[\s'’]/g, '').replace(',', '.')
-    return t === '' ? null : Number(t)
-}
 const eingabeJetzt = computed(() => {
     const e = { ...ein.value }
     for (const f of FELDER) {

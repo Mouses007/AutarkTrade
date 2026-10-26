@@ -1,5 +1,7 @@
 # ── Build-Stage ──────────────────────────────────────────────
-FROM node:20-slim AS builder
+# Node 22 LTS (Audit SEC-OPS-001: Node 20 ist seit 30.04.2026 ohne Sicherheitsupdates).
+# better-sqlite3 wird hier per `npm ci` gegen genau diese Node-Version gebaut.
+FROM node:22-slim AS builder
 
 # Build-Tools für native Module (better-sqlite3)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -18,12 +20,12 @@ RUN node scripts/drittlizenzen.mjs
 RUN npm prune --omit=dev
 
 # ── Production-Stage ────────────────────────────────────────
-FROM node:20-slim
+FROM node:22-slim
 
 # Keine Schriftpakete mehr: die Share-Card setzt seit S10 der Browser zusammen
 # (sharp/libvips ist raus, NOTICE.md).
 LABEL org.opencontainers.image.title="AutarkTrade" \
-      org.opencontainers.image.licenses="LicenseRef-AutarkTrade-proprietary" \
+      org.opencontainers.image.licenses="AGPL-3.0-or-later" \
       org.opencontainers.image.source="https://github.com/Mouses007/AutarkTrade"
 
 WORKDIR /app
@@ -35,17 +37,28 @@ COPY --from=builder /app/package.json ./
 # „Rechtliches" liest sie zur Laufzeit (server/rechtliches.js).
 COPY LICENSE NOTICE.md HAFTUNGSAUSSCHLUSS.md ./
 COPY --from=builder /app/THIRD-PARTY-NOTICES ./
-# server/ gehört dem Dienstbenutzer: der Strategie-Baukasten legt dort
-# erzeugte Strategien ab (strategy-builder.js). node_modules und dist bleiben
-# root — die App liest sie nur.
-COPY --chown=node:node server/ ./server/
+# Alles unter /app gehört root, die App liest es nur (Audit SEC-OPS-004: gehörte
+# /app dem Dienstbenutzer, könnte er jeden Eintrag ersetzen — auch den Einstieg,
+# der beim nächsten Start als root läuft). Schreibbar für `node` sind nur
+# /app/data und server/strategies (der Strategie-Baukasten legt dort erzeugte
+# Strategien ab, strategy-builder.js).
+COPY server/ ./server/
 # Von Server und Frontend gemeinsam genutzte Logik (Orderbuch-Sync, Preis-Binning)
 COPY shared/ ./shared/
 COPY src/assets/icon.png ./src/assets/icon.png
 COPY index.mjs ./
 COPY docker-entrypoint.sh ./
-RUN chmod +x docker-entrypoint.sh \
-    && mkdir -p /app/data && chown node:node /app /app/data
+# db-config.json und die SQLite-Dateien liegen im Datenordner; die Verweise im
+# Projektordner gehören root, damit server/db-config.js die gewohnten Pfade
+# behält und `node` die Dateien dort trotzdem schreiben kann. SQLite löst den
+# Verweis auf (-wal/-shm entstehen im Datenordner).
+RUN chmod 755 docker-entrypoint.sh \
+    && mkdir -p /app/data \
+    && chown root:root /app && chmod 755 /app \
+    && chown node:node /app/data /app/server/strategies \
+    && ln -s /app/data/db-config.json /app/db-config.json \
+    && ln -s /app/data/autarktrade.db /app/autarktrade.db \
+    && ln -s /app/data/tradenote.db /app/tradenote.db
 
 ENV AT_HOST=0.0.0.0
 ENV AT_PORT=8080
@@ -53,7 +66,7 @@ ENV AT_PORT=8080
 # Secret wären die verschlüsselten API-Schlüssel an einen ableitbaren
 # Maschinen-Fallback gebunden.
 ENV NODE_ENV=production
-EXPOSE 8080
+EXPOSE 8080 8443
 
 # Die App läuft als `node` (uid 1000), nicht als root (Audit A2-10, F2
 # 20.10.2026). Der Einstieg startet als root, nur um db-config.json zu

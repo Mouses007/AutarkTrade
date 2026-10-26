@@ -20,6 +20,7 @@ import {
 } from '../../stores/journal/filter.js'
 import { tags, verfuegbareTags } from '../../stores/journal/tagebuch.js'
 import { ladeTags, ladeVerfuegbareTags } from './tagebuch.js'
+import { csvAusZeilen, CSV_BOM } from './csv.js'
 
 const t = (k) => i18n.global.t(k)
 
@@ -241,10 +242,9 @@ export async function exportiereDaten(art, name, zusatz, daten) {
         typ = 'application/json'
         endung = '.json'
     } else if (art === 'csv') {
-        const spalten = Object.keys(daten[0] || {})
-        const zeilen = [spalten.join(';'), ...daten.map(o => spalten.map(s => o[s]).join(';'))]
-        inhalt = zeilen.join('\n')
-        typ = 'text/csv'
+        // Quoting, Formel-Entschärfung, alle Spalten: `csv.js` (Audit SEC-WEB-004)
+        inhalt = CSV_BOM + csvAusZeilen(daten)
+        typ = 'text/csv;charset=utf-8'
         endung = '.csv'
     } else {
         return

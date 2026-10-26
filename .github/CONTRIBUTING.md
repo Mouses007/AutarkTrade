@@ -4,7 +4,7 @@ Issues and pull requests are welcome — in English or German.
 
 ## Development setup
 
-Node.js 20+ is required. Run `npm install`, then `npm run dev` for the Vite dev server with
+Node.js 22+ is required. Run `npm install`, then `npm run dev` for the Vite dev server with
 hot reload (proxied through the Express backend on port 8080). SQLite needs no configuration;
 the database file is created on first start.
 

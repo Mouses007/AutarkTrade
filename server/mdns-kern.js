@@ -160,3 +160,30 @@ export function waehleIp(schnittstellen) {
     kandidaten.sort((a, b) => a.rang - b.rang)
     return kandidaten[0]?.ip || null
 }
+
+/**
+ * Netzmaske der Schnittstelle, die `ip` trägt — aus os.networkInterfaces().
+ * Unbekannt (z. B. AT_MDNS_IP von Hand auf eine fremde Adresse) → '255.255.255.0',
+ * das engste übliche Heimnetz: lieber ein Gerät zu wenig beantworten als eines zu viel.
+ */
+export function netzmaskeVon(schnittstellen, ip) {
+    for (const liste of Object.values(schnittstellen || {})) {
+        for (const a of liste || []) {
+            if ((a.family === 'IPv4' || a.family === 4) && a.address === ip && ipBytes(a.netmask)) return a.netmask
+        }
+    }
+    return '255.255.255.0'
+}
+
+/**
+ * Liegt `quelle` im selben IPv4-Netz wie `ip`/`maske`? RFC 6762 §11: Anfragen von
+ * ausserhalb des eigenen Netzes werden nicht beantwortet — sonst kann ein Absender
+ * mit gefälschter Adresse die Antwort an ein fremdes Ziel lenken (Audit SEC-OPS-017).
+ * Ungültige Angaben → false.
+ */
+export function imEigenenNetz(quelle, ip, maske) {
+    const q = ipBytes(quelle), e = ipBytes(ip), m = ipBytes(maske)
+    if (!q || !e || !m) return false
+    for (let i = 0; i < 4; i++) if ((q[i] & m[i]) !== (e[i] & m[i])) return false
+    return true
+}

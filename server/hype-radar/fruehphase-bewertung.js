@@ -22,6 +22,7 @@
 
 import { pruefe, summeTop10, SKALA_PROZENT } from './sicherheit.js'
 import { kanalAus, ordneWebseite } from './projekt-bewertung.js'
+import { ohneTags } from '../html-zerlegen.js'
 
 /** Höchstens so viele Momentaufnahmen je Token. Bei 15 min sind das zwölf Stunden. */
 export const MAX_VERLAUF = 48
@@ -179,7 +180,8 @@ export function leseBizKatalog(json) {
     const raus = []
     for (const seite of seiten) {
         for (const f of seite?.threads || []) {
-            const text = `${f?.sub || ''} ${String(f?.com || '').replace(/<br\s*\/?>/gi, ' ').replace(/<[^>]+>/g, ' ')}`
+            // `ohneTags` statt `<[^>]+>`: linear auch auf `<<<…` ohne `>` (SEC-SRV-001).
+            const text = `${f?.sub || ''} ${ohneTags(String(f?.com || '').replace(/<br\s*\/?>/gi, ' '), ' ')}`
                 .replace(/&#039;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&gt;/g, '>').replace(/&lt;/g, '<')
             raus.push({ text, antworten: Number(f?.replies) || 0, zeit: (Number(f?.last_modified) || 0) * 1000 })
         }

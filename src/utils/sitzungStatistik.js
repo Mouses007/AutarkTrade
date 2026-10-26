@@ -23,6 +23,7 @@
  */
 
 import { median } from '../../shared/statistik.js'
+import { istGewinn } from '../../shared/gewinn.js'
 
 /** Ab wie vielen Sitzungen eine Gruppe als Aussage gilt. */
 export const MIN_GRUPPE = 4
@@ -113,7 +114,12 @@ function bilanz(gruppe) {
          */
         pnlMedian: median(gruppe.map((s) => zahl(s.pnlUsd))),
         trades,
-        gewinner: gruppe.filter(s => zahl(s.pnlUsd) > 0).length,
+        /*
+         * Break-even zählt als Gewinner — Kanon `istGewinn` (`shared/gewinn.js`),
+         * wie Dashboard und Journal (Audit FUN-WEB-003). Bis Audit B stand hier
+         * `> 0`: dieselbe Null-Sitzung war im Dashboard grün und hier keine.
+         */
+        gewinner: gruppe.filter(s => istGewinn(zahl(s.pnlUsd))).length,
         mitPlan: mitPlan.length,
         gehalten,
         /** null statt 0, wenn keine Sitzung der Gruppe eine Grenze hatte. */

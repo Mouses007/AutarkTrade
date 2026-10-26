@@ -118,6 +118,12 @@ async function speichereManuell() {
         meldung.value = t('addTrades.manualSymbolMissing')
         return
     }
+    // Nur Zeichen, die ein Börsensymbol hat — das Symbol landet später in
+    // Diagramm-Tooltips und Exporten (Audit SEC-WEB-002).
+    if (!/^[A-Z0-9._/-]{1,30}$/.test(symbol)) {
+        meldung.value = t('addTrades.manualSymbolUngueltig')
+        return
+    }
 
     const fehler = []
     const netPL = leseZahl(form.netPL, 'addTrades.manualFieldNetPL', fehler)

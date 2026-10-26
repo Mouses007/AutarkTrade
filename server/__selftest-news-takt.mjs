@@ -18,7 +18,9 @@ import {
     kompaktVorbericht, berichtAlsMailText, berichtsKette, aufbewahrungMs,
     videoFensterAb,
     waehleBeitraege, abdeckungText, aktualitaetFuer, leseChartFrische, CHART_FRISCHE,
+    nurHttpsBild,
 } from './marktradar-news.js'
+import fs from 'fs'
 
 let fehler = 0
 // Auch die bestandenen zählen: `scripts/run-selftests.mjs` liest das Zahlenpaar
@@ -594,6 +596,25 @@ const T = (tag, stunde) => Date.UTC(2026, 8, tag, stunde, 0, 0)
     pruefe('ein Chartvideo VOR der Zwischenmeldung wäre verloren',
         T(4, 14) < videoFensterAb(jetzt, '', update16)
         && T(4, 14) >= videoFensterAb(jetzt, '', gestern10))
+}
+
+// ── Vorschaubilder nur über https (FUN-WEB-001) ──────────────────────────
+// Die CSP lässt `img-src … https:` zu, kein http — ein http-Bild aus einem
+// reinen http-Feed blockte der Browser still, die Karte blieb leer.
+console.log('\nVorschaubilder nur über https')
+{
+    pruefe('https-Bild bleibt', nurHttpsBild('https://img.example/a.jpg') === 'https://img.example/a.jpg')
+    pruefe('http-Bild fällt weg', nurHttpsBild('http://img.example/a.jpg') === '')
+    pruefe('HTTP gross geschrieben fällt auch weg', nurHttpsBild('HTTP://img.example/a.jpg') === '')
+    pruefe('javascript: fällt weg', nurHttpsBild('javascript:alert(1)') === '')
+    pruefe('data: fällt weg', nurHttpsBild('data:image/png;base64,AAAA') === '')
+    pruefe('Unsinn fällt weg', nurHttpsBild('kein bild') === '' && nurHttpsBild(null) === '' && nurHttpsBild('') === '')
+    const quelle = fs.readFileSync(new URL('./marktradar-news.js', import.meta.url), 'utf8')
+    pruefe('gespeichert, ausgeliefert und in Belegen nur über nurHttpsBild',
+        /bild: nurHttpsBild\(sichereUrl\(zeile\.bild\)\)/.test(quelle)
+        && /bild: nurHttpsBild\(z\.bild\)/.test(quelle)
+        && /bild: nurHttpsBild\(b\.bild\)/.test(quelle)
+        && !/bild: (z|b)\.bild \|\| ''/.test(quelle))
 }
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)

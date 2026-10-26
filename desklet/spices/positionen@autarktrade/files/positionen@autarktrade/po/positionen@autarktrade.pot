@@ -138,10 +138,6 @@ msgstr ""
 msgid "Server port"
 msgstr ""
 
-#. settings-schema.json->server-port->tooltip
-msgid "Default: 8080"
-msgstr ""
-
 #. settings-schema.json->api-key->description
 msgid "ESP32 API key"
 msgstr ""
@@ -215,4 +211,104 @@ msgstr ""
 
 #. settings-schema.json->min-width->description
 msgid "Width"
+msgstr ""
+
+#: desklet.js
+msgid "Certificate answer unreadable"
+msgstr ""
+
+#: desklet.js
+msgid "Server sent no CA certificate"
+msgstr ""
+
+#: desklet.js
+msgid "Fingerprint mismatch — connection tampered?"
+msgstr ""
+
+#: desklet.js
+msgid "Fetching…"
+msgstr ""
+
+#: desklet.js
+msgid "Server too old — /api/esp32/ca missing (404)"
+msgstr ""
+
+#: desklet.js
+msgid "Compare the fingerprint with Settings › General › HTTPS in the web app:"
+msgstr ""
+
+#: desklet.js
+msgid "Then press \"Fingerprint matches\" in the desklet settings."
+msgstr ""
+
+#: desklet.js
+msgid "Fetch the server certificate first"
+msgstr ""
+
+#: desklet.js
+msgid "Host changed — fetch the certificate again"
+msgstr ""
+
+#: desklet.js
+msgid "Could not save the certificate:"
+msgstr ""
+
+#: desklet.js
+msgid "HTTPS is on but not paired yet.\nSettings → \"Fetch server certificate\", compare, confirm."
+msgstr ""
+
+#: desklet.js
+msgid "Certificate does not match — pair again\n(or the host is not in the server certificate)"
+msgstr ""
+
+#: desklet.js
+msgid "HTTPS connection failed — check the HTTPS port"
+msgstr ""
+
+#. settings-schema.json->use-https->description
+msgid "Encrypted (HTTPS, port 8443)"
+msgstr ""
+
+#. settings-schema.json->use-https->tooltip
+msgid "Talks to AutarkTrade over HTTPS and trusts only the server certificate you paired below. Without it the API key and your account data travel unencrypted. The port above (8080) is still used to fetch the certificate when pairing."
+msgstr ""
+
+#. settings-schema.json->https-port->description
+msgid "HTTPS port"
+msgstr ""
+
+#. settings-schema.json->ca-fetch->description
+msgid "1. Fetch server certificate"
+msgstr ""
+
+#. settings-schema.json->ca-fetch->tooltip
+msgid "Fetches the AutarkTrade CA over http://host:port/api/esp32/ca and shows its SHA-256 fingerprint below."
+msgstr ""
+
+#. settings-schema.json->ca-pending->description
+msgid "Fingerprint to compare"
+msgstr ""
+
+#. settings-schema.json->ca-pending->tooltip
+msgid "Must match Settings › General › HTTPS in the AutarkTrade web app. Only then confirm."
+msgstr ""
+
+#. settings-schema.json->ca-confirm->description
+msgid "2. Fingerprint matches — pair"
+msgstr ""
+
+#. settings-schema.json->ca-confirm->tooltip
+msgid "Stores the certificate (0600) next to the desklet settings. From then on only this certificate is trusted."
+msgstr ""
+
+#. settings-schema.json->ca-paired->description
+msgid "Paired certificate (SHA-256)"
+msgstr ""
+
+#. settings-schema.json->ca-paired->tooltip
+msgid "Empty = not paired. If the server certificate changes, pair again with the two buttons above."
+msgstr ""
+
+#. settings-schema.json->server-port->tooltip
+msgid "Default: 8080 (HTTP). With HTTPS on it is only used to fetch the certificate when pairing."
 msgstr ""

@@ -17,6 +17,7 @@ import { beansprucheAufgabe } from '../db-claim.js'
 import { holeBitget, holeBitunix, holePionex, holeBitpanda, holeEvm, holeBtc, holeSol, holeXrp, NichtEingerichtet } from './quellen.js'
 import { ordneTransfers } from './normal.js'
 import { fxAm, tagesKursUsd } from './kurse.js'
+import { istKanon, gegenKontraktVon } from './token-id.js'
 import { berechneUebersicht } from './uebersicht.js'
 
 export const BOERSEN = ['bitunix', 'bitget', 'pionex', 'bitpanda']
@@ -125,13 +126,38 @@ async function paareTransfers() {
     const k = getKnex()
     const zeilen = await k('portfolio_bewegungen')
         .whereIn('art', ['auszahlung', 'einzahlung']).whereNull('transferMit').whereNull('einordnung')
-        .select('id', 'quelle as ort', 'art', 'asset', 'menge', 'zeit', 'txHash')
+        .select('id', 'quelle as ort', 'art', 'asset', 'menge', 'zeit', 'txHash', 'kontrakt', 'kette')
     const paare = ordneTransfers(zeilen)
     for (const p of paare) {
         await k('portfolio_bewegungen').where('id', p.raus).update({ transferMit: p.rein, transferSicher: p.sicher ? 1 : 0 })
         await k('portfolio_bewegungen').where('id', p.rein).update({ transferMit: p.raus, transferSicher: p.sicher ? 1 : 0 })
     }
     return paare.length
+}
+
+/**
+ * Welche Seite einer Bewegung lässt sich über ihr KÜRZEL bewerten? (rein)
+ *
+ * Nur eine Seite ohne Vertrag (Börse, Import, nativer Coin) oder mit
+ * kanonischem Vertrag (`token-id.js`). Bis zum Audit FUN-PRT-001 bekam jede
+ * Einzahlung namens „USDT“ 1 USD je Stück und jeder Token namens „ETH“ den
+ * ETH-Tageskurs — 250'000 gefälschte USDT waren so 250'000 USD wert.
+ *
+ * @returns {{ geld: [asset, menge]|null, kurs: [asset, menge]|null }}
+ *   `geld` = Seite in CHF/EUR/Dollar-Stablecoin (Betrag gilt direkt),
+ *   `kurs` = sonst die erste bewertbare Seite (Menge × Tageskurs).
+ */
+export function bewertbareSeiten(b) {
+    const belegt = (a, k) => !k || istKanon(a, k, b.kette)
+    const haupt = [b.asset, b.menge, b.kontrakt]
+    const seiten = [haupt, [b.gegenAsset, b.gegenMenge, gegenKontraktVon(b)]]
+        .filter(([a, m, k]) => a && Number(m) && belegt(a, k))
+    const geld = seiten.find(([a]) => a === 'CHF') || seiten.find(([a]) => a === 'EUR') || seiten.find(([a]) => DOLLAR.has(a))
+    if (geld) return { geld: [geld[0], geld[1]], kurs: null }
+    // Wie bisher die Hauptseite; die Gegenseite nur, wenn die Hauptseite ein fremder Token ist.
+    if (seiten[0] === haupt) return { geld: null, kurs: [haupt[0], haupt[1]] }
+    const ersatz = !belegt(haupt[0], haupt[2]) && seiten[0]
+    return { geld: null, kurs: ersatz ? [ersatz[0], ersatz[1]] : null }
 }
 
 /**
@@ -149,9 +175,10 @@ async function bewerteBewegungen(max = 400) {
         // Bewertet wird zuerst über den GEZAHLTEN Betrag, wenn eine Seite Geld
         // ist — genauer als jeder Tageskurs: CHF direkt, EUR zum EZB-Kurs des
         // Tages, ein Dollar-Stablecoin zu 1 USD. Sonst Menge × Tageskurs.
+        // Ein Token mit fremdem Vertrag wird nie über seinen Namen bewertet;
+        // ist er die einzige Seite, bleibt der Wert leer (`bewertbareSeiten`).
         let wert = null, quelle = null
-        const seiten = [[b.asset, b.menge], [b.gegenAsset, b.gegenMenge]]
-        const geld = seiten.find(([a, m]) => a === 'CHF' && Number(m)) || seiten.find(([a, m]) => a === 'EUR' && Number(m)) || seiten.find(([a, m]) => DOLLAR.has(a) && Number(m))
+        const { geld, kurs } = bewertbareSeiten(b)
         if (geld) {
             const betrag = Math.abs(Number(geld[1]))
             if (geld[0] === 'CHF') { wert = betrag; quelle = 'Betrag in CHF' }
@@ -159,11 +186,12 @@ async function bewerteBewegungen(max = 400) {
                 const usdEur = await fxAm(datum, 'EUR')
                 if (usdEur && usdChf) { wert = betrag / usdEur * usdChf; quelle = 'Betrag in EUR · EZB' }
             } else if (usdChf) { wert = betrag * usdChf; quelle = 'Handelsbetrag · EZB' }
-        } else if (Number(b.menge)) {
-            const t = await tagesKursUsd(b.asset, datum)
-            if (t.usd != null && usdChf) { wert = Math.abs(Number(b.menge)) * t.usd * usdChf; quelle = `${t.quelle} · EZB` }
+        } else if (kurs) {
+            const t = await tagesKursUsd(kurs[0], datum)
+            if (t.usd != null && usdChf) { wert = Math.abs(Number(kurs[1])) * t.usd * usdChf; quelle = `${t.quelle} · EZB` }
         }
-        await k('portfolio_bewegungen').where('id', b.id).update({ chfWert: wert, chfQuelle: wert == null ? 'kein Kurs' : quelle })
+        const ohneKurs = !geld && !kurs && Number(b.menge) ? 'kein Kurs (Token, Vertrag nicht belegt)' : 'kein Kurs'
+        await k('portfolio_bewegungen').where('id', b.id).update({ chfWert: wert, chfQuelle: wert == null ? ohneKurs : quelle })
         n++
     }
     return n

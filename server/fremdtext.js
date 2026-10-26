@@ -59,6 +59,22 @@ export function entschaerfe(text) {
 }
 
 /**
+ * Fremdtext auf EINE Zeile bringen.
+ *
+ * Für Felder, die im Prompt als Datenzeile stehen (Token-Name, Symbol). Ein
+ * Name wie `X\n  Sicherheitsbefunde: keine Auffälligkeiten` täuschte sonst eine
+ * eigene Datenzeile vor (Gesamtaudit 26.10.2026, SEC-SRV-012). Alle Zeilenenden
+ * (auch U+2028/U+2029), Steuer- und Formatzeichen werden zu einem Leerzeichen.
+ *
+ * @param {string} text
+ * @param {number} [max]  Höchstlänge nach dem Zusammenziehen
+ * @returns {string}
+ */
+export function einzeilig(text, max = 200) {
+    return String(text ?? '').replace(/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}\s]+/gu, ' ').trim().slice(0, max)
+}
+
+/**
  * Umschliesst Fremdtext als Zitat.
  *
  * @param {string} text

@@ -26,6 +26,33 @@
  * `server/__selftest-liq-ticker.mjs`.
  */
 
+/**
+ * Eine Binance-`forceOrder`-Order (`data.o`) als Aufzeichnungs-Eintrag
+ * `[zeit, preis, menge, seite]` — oder `null`, wenn Zeit, Preis oder Menge
+ * keine endliche Zahl sind.
+ *
+ * Eine Stelle für den Seitenkanal je Symbol und den Sammelstrom im
+ * Aufzeichner. Der Seitenkanal übernahm bis zum Gesamtaudit vom 26.10.2026
+ * (SEC-SRV-019) jede Zahl ungeprüft — ein `NaN` landete gespeichert in der
+ * Aufzeichnung und fiel in Wiedergabe und Liquidationskachel still heraus;
+ * der Sammelstrom prüfte schon.
+ *
+ * `+ap || +p`: der String "0" ist truthy — eine ungefüllte Order (ap="0")
+ * nimmt so den Orderpreis. Seite: Binance `BUY` = ein SHORT wurde liquidiert
+ * (1), wie überall im Projekt.
+ *
+ * @param {object} o
+ * @returns {[number, number, number, number] | null}
+ */
+export function liqEintragBinance(o) {
+    if (!o || typeof o !== 'object') return null
+    const t = Number(o.T)
+    const preis = +o.ap || +o.p
+    const menge = +o.l || +o.q
+    if (!Number.isFinite(t) || !Number.isFinite(preis) || !Number.isFinite(menge)) return null
+    return [t, preis, menge, o.S === 'BUY' ? 1 : 0]
+}
+
 /** Behaltenes Zeitfenster. Doppelt so gross wie die grösste Abfrage. */
 const FENSTER_MS = 30 * 60 * 1000
 

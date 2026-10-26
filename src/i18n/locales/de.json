@@ -76,8 +76,8 @@
   },
   "nav": {
     "exchange": "BÖRSE",
-    "hideNumbers": "Zahlen verbergen",
-    "showNumbers": "Zahlen wieder anzeigen",
+    "hideNumbers": "Sichtschutz (nur Anzeige): Zahlen verwischen",
+    "showNumbers": "Sichtschutz (nur Anzeige) aus: Zahlen wieder zeigen",
     "tradeCategory": "ART",
     "categoryAll": "Alle",
     "analyze": "ANALYSIEREN",
@@ -364,7 +364,7 @@
     "schwellePunkte": "ab {n} Punkten p.a.",
     "esp32Titel": "Externe Anzeigen · ESP32 / Widget / Desklet",
     "esp32Aktiv": "aktiv",
-    "esp32Beschreibung": "Zeige deine Trading-Daten auf externen Anzeigen: ESP32-TFT-Displays, dem Android-Homescreen-Widget und dem Linux-Desklet. Alle nutzen denselben read-only Endpoint mit dem API-Key unten — sie funktionieren auch bei aktivem Passwortschutz.",
+    "esp32Beschreibung": "Zeige deine Trading-Daten auf externen Anzeigen: ESP32-TFT-Displays, dem Android-Homescreen-Widget und dem Linux-Desklet. Alle lesen denselben read-only Endpoint — ESP32-Displays mit dem Anzeige-Schlüssel, Handy-App und Widget mit dem Hauptschlüssel (der auch Alarme und Push öffnet). Beide funktionieren auch bei aktivem Passwortschutz.",
     "esp32Boards": "ESP32-Boards (Firmware im Repo)",
     "esp32SpalteBoard": "Board",
     "esp32SpalteDisplay": "Display",
@@ -392,8 +392,25 @@
     "esp32KeyNeu": "Key neu generieren",
     "esp32KeyErzeugen": "Key generieren",
     "esp32KeyLoeschen": "Key löschen",
+    "esp32PushTitel": "Push-Geräte ({anzahl} von {max})",
+    "esp32PushBeschreibung": "Geräte, die sich mit dem ESP32-Schlüssel für die Sofort-Zustellung der Chart-Alarme eingetragen haben (Android-Widget über ntfy). Höchstens {max}; ist die Liste voll, nimmt der Server kein neues Gerät an. Ein unbekanntes Gerät entfernen und den Schlüssel neu erzeugen.",
+    "esp32PushLeer": "Kein Gerät eingetragen.",
+    "esp32PushSpalteGeraet": "Gerät",
+    "esp32PushSpalteHost": "Verteiler (Host)",
+    "esp32PushSpalteSeit": "Eingetragen",
+    "esp32PushOhneName": "ohne Namen",
+    "esp32PushEntfernen": "Entfernen",
+    "esp32PushEntfernenFrage": "Gerät „{name}\" aus der Sofort-Zustellung entfernen?",
     "esp32FilterGespeichert": "Filter gespeichert — Anzeigen übernehmen beim nächsten Abruf.",
     "esp32KeyNeuHinweis": "Neuer Key generiert — einmalig sichtbar. Jetzt kopieren!",
+    "esp32Anzeige": {
+      "titel": "Anzeige-Schlüssel (nur für ESP32-Displays)",
+      "text": "Ein Display steht offen herum und schickt seinen Schlüssel über HTTP. Der Anzeige-Schlüssel öffnet deshalb NUR die Anzeige (GET /api/esp32/display) — keine Alarme, keine Push-Anmeldung. ESP32-Displays bekommen diesen Schlüssel, die Handy-App und das Widget den Hauptschlüssel oben. Der Hauptschlüssel gilt weiter auch für die Anzeige.",
+      "label": "Anzeige-Schlüssel",
+      "erzeugen": "Anzeige-Schlüssel erzeugen",
+      "neu": "Anzeige-Schlüssel neu erzeugen",
+      "loeschen": "Anzeige-Schlüssel löschen"
+    },
     "sicherheit": {
       "titel": "Sicherheit · Passwortschutz",
       "aktiv": "aktiv",
@@ -421,6 +438,67 @@
       "istDeaktiviert": "Passwortschutz deaktiviert.",
       "deaktivierenFrage": "Passwortschutz wirklich deaktivieren? Danach hat jeder mit Zugriff aufs Netzwerk vollen Zugang."
     },
+    "tls": {
+      "titel": "HTTPS · Zertifikat",
+      "aktivPort": "aktiv · Port {port}",
+      "aus": "aus",
+      "einleitung": "AutarkTrade verwaltet sein HTTPS-Zertifikat selbst: eine eigene Stamm-CA (einmal je Datenbank) stellt das Server-Zertifikat aus und erneuert es automatisch. Jedes Gerät vertraut der CA einmal — danach jedem neuen Zertifikat. HTTP auf Port 8080 bleibt für ESP32-Displays.",
+      "httpTitel": "Du nutzt HTTP",
+      "httpText": "Passwort und Sitzung gehen so unverschlüsselt durchs Netz. Nach dem Installieren der CA lieber über HTTPS öffnen:",
+      "fehlerTitel": "HTTPS nicht bereit",
+      "abgeschaltet": "HTTPS ist abgeschaltet (AT_TLS_PORT=aus). Die CA wird trotzdem verwaltet.",
+      "fingerabdruck": "Fingerabdruck der CA (SHA-256)",
+      "fingerabdruckHilfe": "Beim Installieren auf dem Gerät mit diesem Wert vergleichen. Stimmt er nicht überein, NICHT installieren.",
+      "kopieren": "Kopieren",
+      "kopiert": "Fingerabdruck kopiert.",
+      "caName": "CA",
+      "caGueltig": "CA gültig bis",
+      "serverGueltig": "Server-Zertifikat gültig bis",
+      "restTage": "noch {tage} Tage",
+      "erneuertAm": "Ausgestellt am",
+      "automatisch": "Wird automatisch erneuert, wenn weniger als {tage} Tage übrig sind oder ein Name fehlt (täglich geprüft, ohne Neustart).",
+      "herunterladen": "CA herunterladen",
+      "erneuern": "Jetzt erneuern",
+      "erneuert": "Neues Server-Zertifikat aktiv.",
+      "namenTitel": "Namen und Adressen im Zertifikat",
+      "namenHilfe": "Der Browser prüft, ob die Adresse in der Adresszeile im Zertifikat steht. Die NAS-IP gehört hierher (oder in AT_TLS_NAMEN).",
+      "herkunftBasis": "immer",
+      "herkunftEigen": "eigener Eintrag",
+      "entfernen": "{name} entfernen",
+      "hinzufuegen": "Name oder IP hinzufügen",
+      "hinzufuegenPlatzhalter": "z. B. 192.168.178.100 oder nas.fritz.box",
+      "aufnehmen": "Aufnehmen",
+      "verwerfen": "Verwerfen",
+      "namenGespeichert": "Gespeichert — neues Zertifikat aktiv.",
+      "vorschlaegeTitel": "Vorschläge",
+      "vorschlaegeHilfe": "Unter diesen Adressen wurde AutarkTrade aufgerufen, sie stehen aber nicht im Zertifikat. Nur aufnehmen, was du kennst.",
+      "gesehen": "zuletzt {datum}",
+      "anleitungTitel": "CA auf den Geräten installieren",
+      "anleitungEinleitung": "Einmal je Gerät: „CA herunterladen\", installieren, Fingerabdruck vergleichen. Danach https://<Adresse>:8443 öffnen.",
+      "anleitung": {
+        "android": {
+          "titel": "Android",
+          "text": "CA herunterladen, dann Einstellungen › Sicherheit › Verschlüsselung & Anmeldedaten › Zertifikat installieren › CA-Zertifikat und die Datei AutarkTrade-CA-….crt wählen (Warnung bestätigen). Je nach Hersteller heisst der Weg leicht anders (Suche: „Zertifikat installieren\"). Chrome nutzt danach den Android-Speicher. Firefox für Android: Einstellungen › Über Firefox, fünfmal aufs Logo tippen, dann unter Einstellungen › Geheime Einstellungen „Use third party CA certificates\" einschalten."
+        },
+        "windows": {
+          "titel": "Windows (Chrome, Edge)",
+          "text": "Die .crt-Datei doppelklicken › Zertifikat installieren › Aktueller Benutzer › „Alle Zertifikate in folgendem Speicher speichern\" › Vertrauenswürdige Stammzertifizierungsstellen › Fertig stellen, Sicherheitswarnung mit Ja bestätigen. Chrome und Edge neu starten. Firefox: siehe Linux / Firefox."
+        },
+        "linux": {
+          "titel": "Linux / Firefox",
+          "text": "Firefox (jedes System): Einstellungen › Datenschutz & Sicherheit › Zertifikate › Zertifikate anzeigen › Zertifizierungsstellen › Importieren, Datei wählen, „Dieser CA vertrauen, um Websites zu identifizieren\" ankreuzen.\nChrome/Chromium unter Linux: chrome://settings/certificates › Zertifizierungsstellen › Importieren. Systemweit (Debian/Ubuntu/Mint): sudo cp AutarkTrade-CA-*.crt /usr/local/share/ca-certificates/ && sudo update-ca-certificates"
+        },
+        "apple": {
+          "titel": "macOS / iOS",
+          "text": "macOS: Datei doppelklicken (Schlüsselbundverwaltung, Schlüsselbund „System\"), dann das Zertifikat öffnen › Vertrauen › „Bei Verwendung dieses Zertifikats: Immer vertrauen\".\niOS/iPadOS: In Safari „CA herunterladen\" › Einstellungen › Profil geladen › Installieren. Danach Einstellungen › Allgemein › Info › Zertifikatsvertrauenseinstellungen › „AutarkTrade Lokale CA\" einschalten."
+        }
+      },
+      "caNeuTitel": "Neue CA erzeugen",
+      "caNeuText": "Nur nötig, wenn der CA-Schlüssel unlesbar ist (AT_SECRET geändert) oder in fremde Hände geraten sein könnte. ALLE Geräte müssen danach der neuen CA neu vertrauen — bis dahin melden sie eine Zertifikatswarnung, und Geräte mit fest hinterlegtem Fingerabdruck verbinden sich nicht mehr.",
+      "caNeu": "Neue CA erzeugen",
+      "caNeuFrage": "Wirklich eine NEUE CA erzeugen?\n\nAlle Geräte (Browser, Handy-App, ESP32) müssen der neuen CA danach neu vertrauen. Die alte CA kann danach von den Geräten entfernt werden.",
+      "caNeuFertig": "Neue CA aktiv — jetzt auf allen Geräten neu installieren."
+    },
     "neustartNurLokal": "Neustart nur direkt auf dem Server (localhost) möglich.",
     "importLoeschFehler": "Fehler beim Löschen: ",
     "language": "Sprache",
@@ -444,6 +522,8 @@
     "zugangAbgelehnt": "{boerse} weist den hinterlegten API-Schlüssel zurück.",
     "zugangSeit": "Seit {zeit}. Neuen Schlüssel bei der Börse erzeugen und unten eintragen — der Hinweis verschwindet beim nächsten erfolgreichen Abruf.",
     "apiConnectionDescription": "Verbinde deine Börsen-Konten, um Trades automatisch zu importieren.",
+    "nurLeserechteTitel": "Nur Leserechte vergeben",
+    "nurLeserechteText": "AutarkTrade liest nur und sendet keine Orders. Lege die API-Schlüssel bei der Börse ausschliesslich mit Leserechten an — ohne Handels- und ohne Auszahlungsrecht — und trage, wo die Börse es anbietet, die IP-Adresse dieses Servers in der Whitelist ein.",
     "apiKey": "API Key",
     "apiKeyPlaceholder": "API Key eingeben",
     "secretKey": "Secret Key",
@@ -978,8 +1058,11 @@
     "push": {
       "titel": "Push aufs Handy",
       "einleitung": "ntfy, Telegram oder Webhook — gilt für alle Alarme: Chart (Preis, Linie, Zone, Momentum), Hype-Radar, Frühphase, Börsen-Beobachter, Abverkauf. Je Kanal eine Mindest-Dringlichkeit; ein Chart-Alarm hat als Vorgabe „Warnung\".",
-      "ntfyKurz": "am einfachsten: App installieren, Adresse https://ntfy.sh und ein eigenes, schwer erratbares Topic"
-    }
+      "ntfyKurz": "am einfachsten: App installieren, Adresse https://ntfy.sh und ein eigenes, schwer erratbares Topic",
+      "ntfyTopicLeer": "Ohne Topic wird über ntfy nichts gesendet.",
+      "ntfyTopicSchwach": "Auf ntfy.sh ist ein Topic öffentlich: wer den Namen kennt, liest deine Alarme mit und kann selbst welche schicken. Nimm ein langes, zufälliges Topic (mindestens {n} Zeichen, nicht „hype-radar\") — oder ein reserviertes Topic mit Zugriffstoken bzw. einen eigenen ntfy-Server."
+    },
+    "startDepositUngueltig": "Bitte eine Zahl eingeben (z. B. 1000 oder 1000,50; 0 ist erlaubt). Nichts gespeichert."
   },
   "setup": {
     "welcome": "Willkommen!",
@@ -1147,6 +1230,7 @@
     "alreadyImported": "Folgende Daten sind bereits importiert:",
     "noPositionsFound": "Keine Positionen für den ausgewählten Zeitraum gefunden.",
     "manualSymbolMissing": "Symbol fehlt.",
+    "manualSymbolUngueltig": "Das Symbol darf nur Buchstaben, Ziffern und . _ / - enthalten (höchstens 30 Zeichen), z. B. BTCUSDT.",
     "manualNetPLMissing": "Netto-PnL fehlt.",
     "manualNotANumber": "{feld}: keine gültige Zahl.",
     "manualFieldNetPL": "Netto-PnL",
@@ -4328,7 +4412,13 @@
       "planVerletzt": "Plan überschritten",
       "planGehalten": "Plan eingehalten",
       "einklappen": "Einklappen",
-      "ausklappen": "Ausklappen"
+      "ausklappen": "Ausklappen",
+      "fehlerVerlust": "Max. Verlust: bitte eine Zahl ab 0 eingeben (z. B. 200 oder 150,5).",
+      "fehlerTrades": "Max. Trades: bitte eine ganze Zahl ab 0 eingeben.",
+      "ohneGrenzeTitel": "Ohne Verlustgrenze starten?",
+      "ohneGrenzeText": "Es ist kein Höchstverlust eingetragen. Während der Sitzung lässt sich der Plan nicht mehr ändern.",
+      "ohneGrenzeStarten": "Ohne Grenze starten",
+      "grenzeEintragen": "Grenze eintragen"
     },
     "indizes": {
       "title": "Indizes (Intraday)",
@@ -6607,6 +6697,8 @@
     "abgleichStimmtInfo": "Die Summe aller {n} Bewegungen ergibt genau den gemeldeten Bestand.",
     "abgleichTeilweise": "Historie unvollständig",
     "abgleichTeilweiseInfo": "Diese Börse liefert keine Ein-/Auszahlungen und Spot-Historie nur je Handelspaar — der Bestand lässt sich aus den Bewegungen nicht vollständig nachrechnen.",
+    "historieAbgeschnitten": "Historie abgeschnitten",
+    "historieAbgeschnittenInfo": "Etherscan lieferte mehr Zeilen, als je Abruf gelesen werden ({netze}) — neuere Bewegungen und Token können fehlen. Für den Steuerbericht gilt diese Adresse als nicht belegt.",
     "abgleichAbweichung": "{n} Abweichung(en)",
     "status_ok": "aktuell",
     "status_fehler": "Fehler",

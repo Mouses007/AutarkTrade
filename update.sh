@@ -51,7 +51,8 @@ git reset --hard FETCH_HEAD
 paketquelle_flach || echo "  Hinweis: alte Historie nicht entfernt (Update trotzdem aktuell)"
 
 echo -e "  ${CYAN}[3/4] Installiere Abhaengigkeiten...${RESET}"
-npm install
+# npm ci nach package-lock.json, ohne Update-Token in der Umgebung (SEC-OPS-008)
+paketquelle_npm
 
 echo -e "  ${CYAN}[4/4] Baue Frontend...${RESET}"
 npm run build

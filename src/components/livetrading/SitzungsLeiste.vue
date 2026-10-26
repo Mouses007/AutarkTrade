@@ -25,7 +25,9 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/journal/zeit.js'
 import Symbol from '../basis/Symbol.vue'
+import Hinweis from '../basis/Hinweis.vue'
 import { oeffneLivetradingFenster } from '../../utils/livetradingFenster.js'
+import { pruefeZahl } from '../../utils/zahlEingabe.js'
 import { useVerlassenSchutz } from '../../composables/useVerlassenSchutz.js'
 import { liveSymbol, liveMarket } from '../../stores/live.js'
 import {
@@ -50,6 +52,22 @@ const beschaeftigt = ref(false)
 const letzteBilanz = ref(null)
 
 const laeuft = computed(() => !!aktiveSitzung.value)
+
+/*
+ * Textfelder statt `type="number"` (Audit FUN-LIV-001): ein Zahlenfeld lieferte
+ * bei „150,5" in englischer Browsersprache oder „1'000" ein leeres `value`, und
+ * `Number('') || 0` startete die Sitzung still OHNE Grenze — danach nicht mehr
+ * änderbar. Jetzt: Komma wie Punkt, Unsinn ist ein sichtbarer Fehler und sperrt
+ * den Start, das Mausrad verstellt nichts mehr.
+ */
+const verlustPruef = computed(() => pruefeZahl(planMaxVerlust.value, { min: 0 }))
+const tradesPruef = computed(() => pruefeZahl(planMaxTrades.value, { min: 0, ganz: true }))
+const planFehler = computed(() => [
+    verlustPruef.value.ok ? '' : t('livetrading.sitzung.fehlerVerlust'),
+    tradesPruef.value.ok ? '' : t('livetrading.sitzung.fehlerTrades'),
+].filter(Boolean))
+/** Keine Verlustgrenze (leer oder 0) — das muss man vor dem Start ausdrücklich wollen. */
+const frageOhneGrenze = ref(false)
 
 /*
  * Der Plan wird erst beim Klick auf „Starten" geschrieben und ist danach nicht
@@ -95,14 +113,23 @@ const planText = computed(() => {
  * `ladeLaufende()` von selbst — und ein Popup-Blocker kostet höchstens das
  * Fenster, nie die Sitzung.
  */
-async function starten() {
+async function starten(ohneGrenzeBestaetigt = false) {
+    if (planFehler.value.length) return
+    const maxVerlust = verlustPruef.value.wert ?? 0
+    if (maxVerlust === 0 && !ohneGrenzeBestaetigt) {
+        // Eigener Hinweis in der Leiste statt `window.confirm`: bleibt im
+        // Cockpit-Fenster sichtbar und lässt sich nicht wegklicken, ohne zu wählen.
+        frageOhneGrenze.value = true
+        return
+    }
+    frageOhneGrenze.value = false
     beschaeftigt.value = true
     letzteBilanz.value = null
     await starteSitzung({
         symbol: liveSymbol.value,
         market: liveMarket.value,
-        planMaxVerlustUsd: Number(planMaxVerlust.value) || 0,
-        planMaxTrades: Number(planMaxTrades.value) || 0,
+        planMaxVerlustUsd: maxVerlust,
+        planMaxTrades: tradesPruef.value.wert ?? 0,
         planNotiz: planNotiz.value,
         kacheln: leseLayout(),
     })
@@ -144,6 +171,12 @@ async function beenden() {
     if (istCockpit.value) {
         setTimeout(() => { try { window.close() } catch { /* egal */ } }, 2000)
     }
+}
+
+/** „Grenze eintragen": zurück ins Feld, die Frage verschwindet. */
+function grenzeEintragen() {
+    frageOhneGrenze.value = false
+    document.getElementById('st-max-verlust')?.focus()
 }
 
 /** Das Fazit-Feld gehört zum Ausführlichen — wer beenden will, sieht es. */
@@ -194,21 +227,38 @@ onBeforeUnmount(speichereJetzt)
             <div v-if="!zu" class="stZeile stPlan">
                 <label class="stFeld">
                     <span>{{ t('livetrading.sitzung.maxVerlust') }}</span>
-                    <input v-model="planMaxVerlust" type="number" min="0" step="10" class="stInput" placeholder="200" />
+                    <input id="st-max-verlust" v-model="planMaxVerlust" type="text" inputmode="decimal" class="stInput"
+                        :class="{ stInputFehler: !verlustPruef.ok }" :aria-invalid="!verlustPruef.ok" placeholder="200"
+                        @input="frageOhneGrenze = false" />
                 </label>
                 <label class="stFeld">
                     <span>{{ t('livetrading.sitzung.maxTrades') }}</span>
-                    <input v-model="planMaxTrades" type="number" min="0" step="1" class="stInput stInputSchmal" placeholder="5" />
+                    <input v-model="planMaxTrades" type="text" inputmode="numeric" class="stInput stInputSchmal"
+                        :class="{ stInputFehler: !tradesPruef.ok }" :aria-invalid="!tradesPruef.ok" placeholder="5" />
                 </label>
                 <label class="stFeld stFeldBreit">
                     <span>{{ t('livetrading.sitzung.planNotiz') }}</span>
                     <input v-model="planNotiz" type="text" class="stInput"
                         :placeholder="t('livetrading.sitzung.planNotizHint')" />
                 </label>
-                <button type="button" class="ctl-pill stStart" :disabled="beschaeftigt" @click="starten">
+                <button type="button" class="ctl-pill stStart" :disabled="beschaeftigt || planFehler.length > 0" @click="starten()">
                     <Symbol name="play" />{{ t('livetrading.sitzung.starten') }}
                 </button>
             </div>
+            <div v-if="!zu && planFehler.length" class="stFehler" role="alert">
+                <div v-for="f in planFehler" :key="f">{{ f }}</div>
+            </div>
+            <Hinweis v-if="!zu && frageOhneGrenze" art="warn" :titel="t('livetrading.sitzung.ohneGrenzeTitel')">
+                {{ t('livetrading.sitzung.ohneGrenzeText') }}
+                <div class="stFrage">
+                    <button type="button" class="ctl-pill" :disabled="beschaeftigt" @click="starten(true)">
+                        {{ t('livetrading.sitzung.ohneGrenzeStarten') }}
+                    </button>
+                    <button type="button" class="ctl-pill stStart" @click="grenzeEintragen">
+                        {{ t('livetrading.sitzung.grenzeEintragen') }}
+                    </button>
+                </div>
+            </Hinweis>
         </template>
 
         <!-- ── 2. Läuft ── -->
@@ -378,6 +428,14 @@ onBeforeUnmount(speichereJetzt)
 }
 
 .stInputSchmal { max-width: 5rem; }
+.stInputFehler { border-color: #ff6b7a; }
+
+.stFrage {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.4rem;
+}
 
 .stStart { background: rgba(78, 201, 160, 0.18); color: #4ec9a0; }
 .stAbbruch { color: #ff6b7a; }

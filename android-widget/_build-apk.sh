@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Headless APK build: JDK 17 + Android cmdline-tools + Gradle 8.9 -> autarktrade-widget-<version>-debug.apk
+# Headless APK build: JDK 17 + Android cmdline-tools + Gradle 8.9 -> autarktrade-widget-<version>.apk
+# Release-Build, signiert mit dem eigenen Schlüssel aus ~/.config/autarktrade/android-release.properties
+# (anderer Pfad: AT_ANDROID_SIGNIERUNG=/pfad/zur/datei.properties). Ohne die Datei bricht Gradle ab.
 set -euo pipefail
 
 BUILD="$HOME/android-build"
@@ -59,12 +61,15 @@ log "Gradle: $($GRADLE --version | grep -i '^Gradle' | head -1)"
 # ---------- 5) Build APK ----------
 cd "$PROJ"
 echo "sdk.dir=$SDK" > local.properties
-log "Building debug APK…"
-"$GRADLE" --no-daemon assembleDebug
+log "Building release APK…"
+"$GRADLE" --no-daemon assembleRelease
 
-APK="$(ls -t "$PROJ"/app/build/outputs/apk/debug/*.apk 2>/dev/null | head -1)"
+APK="$(ls -t "$PROJ"/app/build/outputs/apk/release/autarktrade-widget-*.apk 2>/dev/null | head -1)"
 if [ -n "$APK" ] && [ -f "$APK" ]; then
-  log "SUCCESS: $APK ($(du -h "$APK" | cut -f1))"
+  # Neben das Projekt legen (*.apk ist in .gitignore) und die Signatur prüfen.
+  cp -f "$APK" "$PROJ/"
+  log "SUCCESS: $PROJ/$(basename "$APK") ($(du -h "$APK" | cut -f1))"
+  "$SDK/build-tools/35.0.0/apksigner" verify --print-certs "$PROJ/$(basename "$APK")" | grep -E 'Signer #1 certificate (DN|SHA-256)'
 else
   log "BUILD FINISHED but APK not found!"; exit 2
 fi
