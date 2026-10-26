@@ -1,5 +1,5 @@
 /**
- * Zeichnung der Indikatoren „LSOB-Boxen" und „GUSS-Rücklauf" (shared/lsobCv.js,
+ * Zeichnung der Indikatoren „LSOB" und „GUSS-Rücklauf" (shared/lsobCv.js,
  * shared/gussCv.js) im Kerzen-Pane — so nah am gewohnten TradingView-Bild, dass man beide
  * nebeneinander lesen kann:
  *

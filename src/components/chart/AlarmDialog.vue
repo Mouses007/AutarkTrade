@@ -8,9 +8,9 @@
  *   momentum  Signalpunkte des Momentum Radar (nur grosse oder alle, optional eine
  *          Richtung) auf dem Symbol oder auf Watchlists, in mehreren Zeiteinheiten
  *          zugleich; gerechnet auf geschlossenen Kerzen (`server/chart-alarm-momentum.js`)
- *   lsob   Retest oder neue Box des Indikators „LSOB-Boxen", ebenso über Symbol oder
+ *   lsob   Retest oder neue Box des Indikators „LSOB", ebenso über Symbol oder
  *          Watchlists und mehrere Zeiteinheiten (`server/chart-alarm-lsob.js`); die
- *          Box-Einstellungen kommen aus dem LSOB-Boxen-Indikator des Charts (`lsobParams`).
+ *          Box-Einstellungen kommen aus dem LSOB-Indikator des Charts (`lsobParams`).
  *          Per Rechtsklick auf eine Box (`vorlage.box`): Alarm auf GENAU diese Box —
  *          Symbol und Zeiteinheit des Charts, meldet Berühren und Bruch; umstellen
  *          auf Watchlists macht daraus den allgemeinen LSOB-Alarm.
@@ -73,7 +73,7 @@ const punktgroesse = computed(() => (/alle$/i.test(ausloeser.value) ? 'alle' : '
 const divergenz = computed(() => ausloeser.value.startsWith('div'))
 // ── LSOB ──
 const ereignis = ref(v.bedingung?.ereignis || 'retest')
-// Gespeicherte Einstellungen beim Ändern, sonst die des LSOB-Boxen-Indikators im Chart (oder Vorgaben)
+// Gespeicherte Einstellungen beim Ändern, sonst die des LSOB-Indikators im Chart (oder Vorgaben)
 const lsobParams = v.bedingung?.params || v.lsobParams || null
 const zahl = (p) => Number(Number(p).toPrecision(7))
 const boxName = box ? `${box.seite === 'long' ? 'Long' : 'Short'}-Box ${zahl(box.tief)}–${zahl(box.hoch)} · ${boxTf}` : ''

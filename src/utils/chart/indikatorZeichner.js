@@ -404,7 +404,7 @@ export class IndikatorZeichner {
     }
 
     /**
-     * Welche LSOB-Box (Indikator „LSOB-Boxen", nur gültige, nur gezeigte Seiten)
+     * Welche LSOB-Box (Indikator „LSOB", nur gültige, nur gezeigte Seiten)
      * liegt unter Zeit `t` (ms; null = rechts der Daten) und Preis? Bei mehreren
      * die schmalste. → { box: {seite, t, tief, hoch}, params } oder null.
      */

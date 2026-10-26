@@ -5384,8 +5384,8 @@
         "text": "PVSRA vector candles, anchored VWAPs with swing fan, EMAs (also from higher timeframes), Fibonacci, engulfing, naked POCs, candle POC, vector candle zones and daily open."
       },
       "lsob": {
-        "name": "LSOB — Liquidity Sweep + Order Block",
-        "kurz": "LSOB",
+        "name": "LSOB (old strategy signals)",
+        "kurz": "LSOB old",
         "text": "Signals of the LSOB strategy over the loaded history: sweep level, order block zone, entry with stop and target, outcome. Computed like the backtest, with default parameters."
       },
       "guss": {
@@ -5394,8 +5394,8 @@
         "text": "Signals of the EMA Bounce strategy: new high, clean pullback to the EMA 50, entry with stop and target. Plus EMA 21/50/200."
       },
       "lsobCv": {
-        "name": "LSOB boxes (sweep + retest)",
-        "kurz": "LSOB box",
+        "name": "LSOB",
+        "kurz": "LSOB",
         "text": "Liquidity sweep boxes at pivot highs/lows that exceed the previous pivot; box = whole candle, invalid when a body penetrates beyond the tolerance; signal on the first retest; pre-warn line."
       },
       "gussCv": {
@@ -6040,8 +6040,8 @@
         "retest": "box retest (wick touches, body stays inside)",
         "box": "new box (sweep confirmed)",
         "beide": "retest and new box",
-        "ausChart": "Box settings as the “LSOB boxes” indicator on this chart.",
-        "vorgaben": "Box settings: defaults of the “LSOB boxes” indicator (for your own: add the indicator to the chart, then create the alert here).",
+        "ausChart": "Box settings as the “LSOB” indicator on this chart.",
+        "vorgaben": "Box settings: defaults of the “LSOB” indicator (for your own: add the indicator to the chart, then create the alert here).",
         "hinweis": "Checked on the server, even with the page closed — on closed candles only, over the last 1000 candles per timeframe, at most one notification per symbol, timeframe and candle. The notification names timeframe and box; “Open” jumps to the coin on that timeframe. A candle that closed more than 10 min ago is not reported late."
       },
       "profilLinie": "Profile line",

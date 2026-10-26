@@ -2,7 +2,7 @@
  * LSOB-Alarme des Chart-Arbeitsplatzes — rein, ohne Netz und Datenbank
  * (Selbsttest: `server/__selftest-chart-alarm-lsob.mjs`).
  *
- * Ein LSOB-Alarm meldet, was der Indikator „LSOB-Boxen" (`shared/lsobCv.js`)
+ * Ein LSOB-Alarm meldet, was der Indikator „LSOB" (`shared/lsobCv.js`)
  * auf der jüngsten geschlossenen Kerze zeigt:
  *
  *   retest  der Docht berührt eine gültige Box, der Körper bleibt drin —
@@ -14,7 +14,7 @@
  * Watchlists, mehrere Zeiteinheiten, je Paar Symbol × Zeiteinheit; nur
  * geschlossene Kerzen, nur die jüngste, eine Kerze meldet einmal
  * (`juengsteKerze`). Die Box-Einstellungen nimmt der Dialog aus dem
- * LSOB-Boxen-Indikator des Charts, sonst gelten die Vorgaben — so meldet der
+ * LSOB-Indikator des Charts, sonst gelten die Vorgaben — so meldet der
  * Alarm dieselben Boxen, die der Chart zeichnet.
  *
  * Alarm auf EINE Box (`bedingung.box`, angelegt per Rechtsklick auf die Box im

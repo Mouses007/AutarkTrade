@@ -314,7 +314,7 @@ export const GUSS_PARAMS = [
     { key: 'gussEmas', typ: 'schalter', vorgabe: true, gruppe: 'sigBild' },
     ...SIGNAL_DARSTELLUNG,
 ]
-// ── LSOB-Boxen / GUSS-Rücklauf ──
+// ── LSOB (Boxen) / GUSS-Rücklauf ──
 /** Letzte Kerze weglassen, wenn sie noch läuft (ihr Schluss liegt in der Zukunft). */
 function laufendRaus(k) {
     if (k.length < 2) return k
@@ -653,7 +653,7 @@ export const INDIKATOREN = {
     lsob: {
         ort: 'preis',
         extern: 'signale_lsob',
-        // Nicht mehr in „Indikator hinzufügen" (26.10.2026): „LSOB-Boxen" (`lsobCv`) ist der
+        // Nicht mehr in „Indikator hinzufügen" (26.10.2026): „LSOB" (`lsobCv`) ist der
         // gegen die Referenz geprüfte LSOB-Indikator; bestehende Layouts behalten diesen.
         intern: true,
         zeichner: 'signale',

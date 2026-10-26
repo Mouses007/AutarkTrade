@@ -774,7 +774,7 @@ function alarmMomentum() {
 }
 
 /**
- * LSOB-Alarm: wie Momentum. Hat das Panel den Indikator „LSOB-Boxen", nimmt der
+ * LSOB-Alarm: wie Momentum. Hat das Panel den Indikator „LSOB", nimmt der
  * Alarm dessen Einstellungen — er soll dieselben Boxen melden, die der Chart zeigt.
  * Mit `treffer` (Rechtsklick auf eine Box): ein Alarm auf genau diese Box.
  */

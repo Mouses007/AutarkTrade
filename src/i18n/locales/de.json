@@ -5384,8 +5384,8 @@
         "text": "PVSRA-Vektorkerzen, Anchored VWAPs mit Swing-Fächer, EMAs (auch aus höheren Zeiteinheiten), Fibonacci, Engulfing, naked POCs, Candle-POC, Vektorkerzen-Zonen und Daily Open."
       },
       "lsob": {
-        "name": "LSOB — Liquidity Sweep + Order Block",
-        "kurz": "LSOB",
+        "name": "LSOB (alte Strategie-Signale)",
+        "kurz": "LSOB alt",
         "text": "Signale der Strategie LSOB über den geladenen Verlauf: Sweep-Marke, Order-Block-Zone, Einstieg mit Stop und Ziel, Ausgang. Gerechnet wie im Backtest, mit den Standardparametern."
       },
       "guss": {
@@ -5394,8 +5394,8 @@
         "text": "Signale der Strategie EMA Bounce: neues Hoch, saubere Korrektur an die EMA 50, Einstieg mit Stop und Ziel. Dazu EMA 21/50/200."
       },
       "lsobCv": {
-        "name": "LSOB-Boxen (Sweep + Retest)",
-        "kurz": "LSOB-Box",
+        "name": "LSOB",
+        "kurz": "LSOB",
         "text": "Liquidity-Sweep-Boxen an Pivot-Hochs/-Tiefs, die das vorige Pivot überbieten; Box = ganze Kerze, ungültig bei Körper-Eindringen über die Toleranz; Signal beim ersten Retest; Vorwarnlinie."
       },
       "gussCv": {
@@ -6040,8 +6040,8 @@
         "retest": "Retest einer Box (Docht berührt, Körper bleibt drin)",
         "box": "neuer Box (Sweep bestätigt)",
         "beide": "Retest und neuer Box",
-        "ausChart": "Box-Einstellungen wie der Indikator „LSOB-Boxen“ in diesem Chart.",
-        "vorgaben": "Box-Einstellungen: Vorgaben des Indikators „LSOB-Boxen“ (für eigene: Indikator in den Chart legen, dann hier anlegen).",
+        "ausChart": "Box-Einstellungen wie der Indikator „LSOB“ in diesem Chart.",
+        "vorgaben": "Box-Einstellungen: Vorgaben des Indikators „LSOB“ (für eigene: Indikator in den Chart legen, dann hier anlegen).",
         "hinweis": "Geprüft wird auf dem Server, auch bei geschlossener Seite — nur auf geschlossenen Kerzen, über die letzten 1000 Kerzen je Zeiteinheit, je Symbol, Zeiteinheit und Kerze höchstens eine Meldung. Die Meldung nennt Zeiteinheit und Box; „Öffnen“ springt in den Coin auf dieser Zeiteinheit. Eine Kerze, die vor über 10 min schloss, wird nicht nachgemeldet."
       },
       "profilLinie": "Linie des Profils",

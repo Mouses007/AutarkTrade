@@ -32,7 +32,7 @@
  * geschlossenen Reihe steht `warteAufGewicht` (nur bei Binance).
  *
  * LSOB-Alarme (Art `lsob`, rein in `chart-alarm-lsob.js`: Retest oder neue Box
- * des Indikators „LSOB-Boxen") laufen im selben Takt nach denselben Regeln —
+ * des Indikators „LSOB") laufen im selben Takt nach denselben Regeln —
  * nur mit einer Reihe je Paar, dafür `LSOB_KERZEN` lang.
  *
  * Watchlists und mehrere Zeiteinheiten gibt es NUR für Momentum- und LSOB-Alarme: ein
