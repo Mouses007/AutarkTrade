@@ -5533,6 +5533,7 @@
       "lblOffDO": "Label offset (candles)",
       "maAn": "Moving average (SMA of RSI)",
       "maLaenge": "Moving average length",
+      "tabelle": "Table in the pane",
       "gussEmas": "Show EMA 21/50/200",
       "sigLong": "Long setups",
       "sigShort": "Short setups",
@@ -5679,6 +5680,176 @@
       "allesVerstecken": "Hide/show all drawings",
       "alleLoeschen": "Delete all drawings on this symbol",
       "volprofil": "Fixed Range Volume Profile"
+    },
+    "tab": {
+      "steigt": "rising",
+      "faellt": "falling",
+      "flach": "flat",
+      "inKerzen": "in {n} candles",
+      "kerzen": "{n} candle | {n} candles",
+      "lesart": "Reading",
+      "tendenz": "Trend",
+      "divergenz": "Divergence",
+      "kurs": "Price ({n} candles)",
+      "kursKurz": "Price",
+      "stufe": {
+        "sehrRuhig": "very quiet",
+        "ruhig": "quiet",
+        "normal": "normal",
+        "erhoeht": "elevated",
+        "hoch": "high"
+      },
+      "atr": {
+        "wert": "ATR",
+        "einordnung": "Context",
+        "einordnungWert": "{stufe} · {p}th percentile (200 candles) · {x}× median",
+        "richtung": "Direction (5 candles)",
+        "kerze": "running candle",
+        "stops": "Stop distance",
+        "tag": "Day so far",
+        "tagWert": "{pct} % of a usual day · range {spanne} / median {median} ({n} days)"
+      },
+      "adx": {
+        "trend": "Trend strength",
+        "druck": "Pressure",
+        "kraft": "Momentum",
+        "kreuzung": "Cross",
+        "kaeufer": "buyers",
+        "verkaeufer": "sellers",
+        "ausgeglichen": "balanced",
+        "kreuzungLong": "+DI above −DI {wann}",
+        "kreuzungShort": "−DI above +DI {wann}",
+        "stufe": {
+          "keinTrend": "no trend",
+          "entsteht": "trend forming",
+          "trend": "trend",
+          "stark": "strong trend",
+          "sehrStark": "very strong trend"
+        },
+        "lesart": {
+          "seitwaerts": "Sideways — trend-following signals are unreliable here",
+          "entsteht": "A trend is building — pressure shows the side",
+          "schwach": "Weak trend without momentum",
+          "erschoepfung": "Strong trend losing strength — often exhaustion, not necessarily a reversal",
+          "laesstNach": "Trend is fading",
+          "trendLong": "Uptrend with strength",
+          "trendShort": "Downtrend with strength"
+        }
+      },
+      "mfi": {
+        "fluss": "Money flow",
+        "zufluss": "inflow (above 50)",
+        "abfluss": "outflow (below 50)",
+        "ausgeglichen": "balanced",
+        "seit": "in this zone for",
+        "zone": {
+          "ueberkauft": "overbought",
+          "ueberverkauft": "oversold",
+          "neutral": "neutral"
+        }
+      },
+      "div": {
+        "keine": "none",
+        "baerisch": "bearish — price at high, money flow not",
+        "bullisch": "bullish — price at low, money flow not"
+      },
+      "obv": {
+        "netto": "Net volume ({n} candles)",
+        "abgleich": "Check",
+        "lage": "vs avg{n}",
+        "bestaetigt": "confirms price",
+        "verteilung": "Distribution — price holds, volume leaves",
+        "akkumulation": "Accumulation — price weak, volume comes in",
+        "unklar": "no clear direction",
+        "lage_ueber": "above average (buying pressure)",
+        "lage_unter": "below average (selling pressure)",
+        "lage_gleich": "at average"
+      },
+      "oi": {
+        "letzte": "last candle",
+        "neueLongs": "new longs",
+        "shortEindeckung": "short covering",
+        "neueShorts": "new shorts",
+        "longAusstieg": "long exit",
+        "oiFlach": "OI barely changed",
+        "aufbau": "positions opened without price direction",
+        "abbau": "positions closed without price direction"
+      },
+      "wert": "Value",
+      "punkte": "points",
+      "zoneHinweis": "often long in a trend — not a reversal signal by itself",
+      "rsi": {
+        "mitte": "Midline 50",
+        "mitte_ueber": "above — upward momentum",
+        "mitte_unter": "below — downward momentum",
+        "mitte_auf": "right at 50",
+        "ma": "vs moving line",
+        "maOben": "RSI above its line {wann}",
+        "maUnten": "RSI below its line {wann}"
+      },
+      "stoch": {
+        "kUeber": "%K above %D ({d}) — turning up",
+        "kUnter": "%K below %D ({d}) — turning down",
+        "kreuzOben": "%K above %D {wann}",
+        "kreuzUnten": "%K below %D {wann}",
+        "inZone": "fresh in the extreme zone"
+      },
+      "macd": {
+        "trend": "Trend",
+        "ueberNull": "above zero — fast EMA above slow",
+        "unterNull": "below zero — fast EMA below slow",
+        "aufNull": "at zero",
+        "linie": "vs signal",
+        "ueberSignal": "MACD above signal",
+        "unterSignal": "MACD below signal",
+        "schwung": "Momentum",
+        "schwung_waechst": "histogram growing — momentum building",
+        "schwung_schrumpft": "histogram shrinking — momentum fading",
+        "schwung_gekreuzt": "histogram just changed side",
+        "schwung_wechselnd": "mixed",
+        "kreuzung": "Signal cross",
+        "kreuzungOben": "upward {wann}",
+        "kreuzungUnten": "downward {wann}",
+        "null": "Zero cross",
+        "nullOben": "above zero {wann}",
+        "nullUnten": "below zero {wann}"
+      },
+      "funding": {
+        "letzte": "last payment",
+        "zahlt": "who pays",
+        "longsZahlen": "longs pay shorts",
+        "shortsZahlen": "shorts pay longs",
+        "niemand": "nobody",
+        "woche": "7 days",
+        "jahr": "{pct} % per year",
+        "stufe": {
+          "negativ": "negative — shorts crowded",
+          "normal": "normal",
+          "erhoeht": "elevated",
+          "hoch": "high — longs crowded"
+        }
+      },
+      "long": {
+        "anteil": "Long share",
+        "konten": "of accounts",
+        "einordnung": "Context",
+        "perzentil": "{p}th percentile (loaded history)",
+        "aenderung": "20 candles",
+        "lesart_normal": "sentiment within the usual range",
+        "lesart_vieleLongs": "unusually many longs — fuel for a long squeeze",
+        "lesart_wenigeLongs": "unusually few longs — fuel for a short squeeze"
+      },
+      "vol": {
+        "letzte": "last candle",
+        "rvol": "{x}× average ({n} candles)",
+        "laufend": "running candle",
+        "bisher": "so far",
+        "rang": "Rank",
+        "perzentil": "{p}th percentile (200 candles)",
+        "trend": "Volume trend"
+      },
+      "jetzt": "on the last candle",
+      "vor": "{n} candle ago | {n} candles ago"
     },
     "rechner": {
       "titel": "Position calculator (size, margin, liq)",

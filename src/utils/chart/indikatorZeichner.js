@@ -154,6 +154,58 @@ class FensterTitel {
     abbauen() { try { this.serie.detachPrimitive(this) } catch { /* Chart schon weg */ } }
 }
 
+/**
+ * Tabelle oben links im Fenster, unter dem Titel: Kennzahlen in Klartext
+ * (`fensterTabelle.js`). Fast deckend — die Linien sollen die Schrift nicht
+ * kreuzen; zu niedrige Fenster zeigen nur so viele Zeilen, wie hineinpassen.
+ * Ausschalten je Indikator über „Tabelle im Fenster“.
+ */
+const TON = { gut: '#26a69a', schlecht: '#ef5350', warn: '#ffb74d' }
+class TabellenZeichnung {
+    constructor(serie) {
+        this.serie = serie
+        this.zeilen = []
+        this.requestUpdate = () => {}
+        this._ansichten = [{
+            zOrder: () => 'top',
+            renderer: () => ({ draw: (ziel) => ziel.useMediaCoordinateSpace(({ context, mediaSize }) => this.zeichne(context, mediaSize)) }),
+        }]
+        serie.attachPrimitive(this)
+    }
+    attached({ requestUpdate }) { this.requestUpdate = requestUpdate }
+    detached() { this.requestUpdate = () => {} }
+    paneViews() { return this._ansichten }
+    updateAllViews() {}
+    setze(zeilen) { this.zeilen = zeilen || []; this.requestUpdate() }
+    zeichne(ctx, g) {
+        if (!this.zeilen.length) return
+        const H = 15, oben = 26
+        const passen = Math.max(0, Math.floor((g.height - oben - 6) / H))
+        const zeilen = this.zeilen.slice(0, passen)
+        if (!zeilen.length) return
+        ctx.save()
+        ctx.font = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
+        const bt = Math.max(...zeilen.map((z) => ctx.measureText(z.titel).width))
+        const bw = Math.max(...zeilen.map((z) => ctx.measureText(z.wert).width))
+        const breite = Math.min(g.width - 80, bt + bw + 26)
+        ctx.fillStyle = 'rgba(10,14,22,0.88)'
+        ctx.beginPath()
+        const h = zeilen.length * H + 6
+        if (ctx.roundRect) ctx.roundRect(4, oben, breite, h, 4); else ctx.rect(4, oben, breite, h)
+        ctx.fill()
+        ctx.textBaseline = 'middle'
+        zeilen.forEach((z, i) => {
+            const y = oben + 3 + i * H + H / 2
+            ctx.fillStyle = 'rgba(160,165,175,0.9)'
+            ctx.fillText(z.titel, 10, y)
+            ctx.fillStyle = TON[z.ton] || 'rgba(225,228,235,0.95)'
+            ctx.fillText(z.wert, 16 + bt, y)
+        })
+        ctx.restore()
+    }
+    abbauen() { try { this.serie.detachPrimitive(this) } catch { /* Chart schon weg */ } }
+}
+
 export class IndikatorZeichner {
     /**
      * @param {object} chart  Lightweight-Charts-Instanz
@@ -169,6 +221,8 @@ export class IndikatorZeichner {
         this.zuLwc = zuLwc
         this.kerzenSerie = o.kerzenSerie || null
         this.faerbeKerzen = o.faerbeKerzen || (() => {})
+        // (typ, kennzahlen) → Tabellenzeilen; ohne (Prüfskripte) keine Tabellen
+        this.tabellenText = o.tabellenText || null
         this.hatteFarben = false
         this.titelFuer = titelFuer   // instanz → Text für den Fenstertitel (i18n kommt von aussen)
         this.signatur = ''
@@ -272,7 +326,8 @@ export class IndikatorZeichner {
                             ? new CvZeichnung({ chart: this.chart, serie: this.kerzenSerie })
                             : null
             const titel = def.ort === 'eigen' && erste && this.titelFuer ? new FensterTitel(erste, this.titelFuer(instanz)) : null
-            this.eintraege.push({ instanz, def, ausgaben, serien, werte: {}, zeichnung, titel, band })
+            const tabelle = def.tabelle && erste && this.tabellenText ? new TabellenZeichnung(erste) : null
+            this.eintraege.push({ instanz, def, ausgaben, serien, werte: {}, zeichnung, titel, band, tabelle })
         }
         // Das Kerzen-Pane soll den Löwenanteil behalten.
         const panes = this.chart.panes()
@@ -305,6 +360,7 @@ export class IndikatorZeichner {
         for (const e of this.eintraege) {
             e.zeichnung?.abbauen()
             e.titel?.abbauen()
+            e.tabelle?.abbauen()
             e.band?.abbauen()
             for (const s of Object.values(e.serien)) {
                 try { this.chart.removeSeries(s) } catch { /* Chart schon weg */ }
@@ -339,6 +395,7 @@ export class IndikatorZeichner {
     }
 
     zeichnungSetzen(e) {
+        if (e.tabelle) e.tabelle.setze(this.tabellenText(e.instanz.typ, e.werte._tab))
         if (e.band) e.band.setze(e.werte[e.def.band.linie])
         if (e.def.zeichner === 'vwapVector') e.zeichnung?.setze(e.werte._vv, this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'cv') e.zeichnung?.setze(e.werte._cv, this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
@@ -395,7 +452,7 @@ export class IndikatorZeichner {
                 if (neueKerze && n > 1) serie.update(this.punkt(e, key, n - 2, kerzen))
                 serie.update(this.punkt(e, key, n - 1, kerzen))
             }
-            if (neueKerze || e.def.zeichner === 'vwapVector' || e.band) this.zeichnungSetzen(e)
+            if (neueKerze || e.def.zeichner === 'vwapVector' || e.band || e.tabelle) this.zeichnungSetzen(e)
         }
         this.farbenMelden(!neueKerze)
     }

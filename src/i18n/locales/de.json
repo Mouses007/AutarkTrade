@@ -5533,6 +5533,7 @@
       "lblOffDO": "Schild-Abstand (Kerzen)",
       "maAn": "Gleitende Linie (SMA des RSI)",
       "maLaenge": "Länge der gleitenden Linie",
+      "tabelle": "Tabelle im Fenster",
       "gussEmas": "EMA 21/50/200 zeigen",
       "sigLong": "Long-Setups",
       "sigShort": "Short-Setups",
@@ -5679,6 +5680,176 @@
       "allesVerstecken": "Alle Zeichnungen aus-/einblenden",
       "alleLoeschen": "Alle Zeichnungen dieses Symbols löschen",
       "volprofil": "Volumenprofil Fixed-Range"
+    },
+    "tab": {
+      "steigt": "steigt",
+      "faellt": "fällt",
+      "flach": "flach",
+      "inKerzen": "in {n} Kerzen",
+      "kerzen": "{n} Kerze | {n} Kerzen",
+      "lesart": "Lesart",
+      "tendenz": "Tendenz",
+      "divergenz": "Divergenz",
+      "kurs": "Kurs ({n} Kerzen)",
+      "kursKurz": "Kurs",
+      "stufe": {
+        "sehrRuhig": "sehr ruhig",
+        "ruhig": "ruhig",
+        "normal": "normal",
+        "erhoeht": "erhöht",
+        "hoch": "hoch"
+      },
+      "atr": {
+        "wert": "ATR",
+        "einordnung": "Einordnung",
+        "einordnungWert": "{stufe} · {p}. Perzentil (200 Kerzen) · {x}× Median",
+        "richtung": "Richtung (5 Kerzen)",
+        "kerze": "laufende Kerze",
+        "stops": "Stop-Abstand",
+        "tag": "Tag bisher",
+        "tagWert": "{pct} % eines üblichen Tages · Spanne {spanne} / Median {median} ({n} Tage)"
+      },
+      "adx": {
+        "trend": "Trendstärke",
+        "druck": "Druck",
+        "kraft": "Kraft",
+        "kreuzung": "Kreuzung",
+        "kaeufer": "Käufer",
+        "verkaeufer": "Verkäufer",
+        "ausgeglichen": "ausgeglichen",
+        "kreuzungLong": "+DI über −DI {wann}",
+        "kreuzungShort": "−DI über +DI {wann}",
+        "stufe": {
+          "keinTrend": "kein Trend",
+          "entsteht": "Trend entsteht",
+          "trend": "Trend",
+          "stark": "starker Trend",
+          "sehrStark": "sehr starker Trend"
+        },
+        "lesart": {
+          "seitwaerts": "Seitwärts — Trendfolge-Signale sind hier wenig verlässlich",
+          "entsteht": "Ein Trend baut sich auf — die Seite zeigt der Druck",
+          "schwach": "Schwacher Trend ohne Schwung",
+          "erschoepfung": "Starker Trend verliert Kraft — oft Erschöpfung, nicht zwingend Wende",
+          "laesstNach": "Trend lässt nach",
+          "trendLong": "Aufwärtstrend mit Kraft",
+          "trendShort": "Abwärtstrend mit Kraft"
+        }
+      },
+      "mfi": {
+        "fluss": "Geldfluss",
+        "zufluss": "Zufluss (über 50)",
+        "abfluss": "Abfluss (unter 50)",
+        "ausgeglichen": "ausgeglichen",
+        "seit": "in dieser Zone seit",
+        "zone": {
+          "ueberkauft": "überkauft",
+          "ueberverkauft": "überverkauft",
+          "neutral": "neutral"
+        }
+      },
+      "div": {
+        "keine": "keine",
+        "baerisch": "bärisch — Kurs auf Hoch, Geldfluss nicht",
+        "bullisch": "bullisch — Kurs auf Tief, Geldfluss nicht"
+      },
+      "obv": {
+        "netto": "Netto-Volumen ({n} Kerzen)",
+        "abgleich": "Abgleich",
+        "lage": "gegen Ø{n}",
+        "bestaetigt": "bestätigt den Kurs",
+        "verteilung": "Verteilung — Kurs hält, Volumen geht raus",
+        "akkumulation": "Akkumulation — Kurs schwach, Volumen kommt rein",
+        "unklar": "keine klare Richtung",
+        "lage_ueber": "über dem Schnitt (Kaufdruck)",
+        "lage_unter": "unter dem Schnitt (Verkaufsdruck)",
+        "lage_gleich": "am Schnitt"
+      },
+      "oi": {
+        "letzte": "letzte Kerze",
+        "neueLongs": "neue Longs",
+        "shortEindeckung": "Short-Eindeckung",
+        "neueShorts": "neue Shorts",
+        "longAusstieg": "Long-Ausstieg",
+        "oiFlach": "OI kaum verändert",
+        "aufbau": "Positionsaufbau ohne Kursrichtung",
+        "abbau": "Positionsabbau ohne Kursrichtung"
+      },
+      "wert": "Wert",
+      "punkte": "Punkte",
+      "zoneHinweis": "im Trend oft lange — allein kein Umkehrsignal",
+      "rsi": {
+        "mitte": "Mitte 50",
+        "mitte_ueber": "darüber — Aufwärtsschwung",
+        "mitte_unter": "darunter — Abwärtsschwung",
+        "mitte_auf": "genau auf 50",
+        "ma": "gegen gleitende Linie",
+        "maOben": "RSI über seine Linie {wann}",
+        "maUnten": "RSI unter seine Linie {wann}"
+      },
+      "stoch": {
+        "kUeber": "%K über %D ({d}) — dreht hoch",
+        "kUnter": "%K unter %D ({d}) — dreht runter",
+        "kreuzOben": "%K über %D {wann}",
+        "kreuzUnten": "%K unter %D {wann}",
+        "inZone": "frisch in der Extremzone"
+      },
+      "macd": {
+        "trend": "Trend",
+        "ueberNull": "über Null — schnelle EMA über langsamer",
+        "unterNull": "unter Null — schnelle EMA unter langsamer",
+        "aufNull": "auf Null",
+        "linie": "gegen Signal",
+        "ueberSignal": "MACD über Signal",
+        "unterSignal": "MACD unter Signal",
+        "schwung": "Schwung",
+        "schwung_waechst": "Histogramm wächst — Schwung nimmt zu",
+        "schwung_schrumpft": "Histogramm schrumpft — Schwung lässt nach",
+        "schwung_gekreuzt": "Histogramm hat gerade die Seite gewechselt",
+        "schwung_wechselnd": "uneinheitlich",
+        "kreuzung": "Signal-Kreuzung",
+        "kreuzungOben": "nach oben {wann}",
+        "kreuzungUnten": "nach unten {wann}",
+        "null": "Null-Kreuzung",
+        "nullOben": "über Null {wann}",
+        "nullUnten": "unter Null {wann}"
+      },
+      "funding": {
+        "letzte": "letzte Zahlung",
+        "zahlt": "wer zahlt",
+        "longsZahlen": "Longs zahlen Shorts",
+        "shortsZahlen": "Shorts zahlen Longs",
+        "niemand": "niemand",
+        "woche": "7 Tage",
+        "jahr": "{pct} % aufs Jahr",
+        "stufe": {
+          "negativ": "negativ — Shorts gedrängt",
+          "normal": "normal",
+          "erhoeht": "erhöht",
+          "hoch": "hoch — Longs gedrängt"
+        }
+      },
+      "long": {
+        "anteil": "Long-Anteil",
+        "konten": "der Konten",
+        "einordnung": "Einordnung",
+        "perzentil": "{p}. Perzentil (geladene Historie)",
+        "aenderung": "20 Kerzen",
+        "lesart_normal": "Stimmung im üblichen Rahmen",
+        "lesart_vieleLongs": "ungewöhnlich viele Longs — Brennstoff für einen Long-Squeeze",
+        "lesart_wenigeLongs": "ungewöhnlich wenige Longs — Brennstoff für einen Short-Squeeze"
+      },
+      "vol": {
+        "letzte": "letzte Kerze",
+        "rvol": "{x}× Schnitt ({n} Kerzen)",
+        "laufend": "laufende Kerze",
+        "bisher": "bisher",
+        "rang": "Rang",
+        "perzentil": "{p}. Perzentil (200 Kerzen)",
+        "trend": "Volumen-Trend"
+      },
+      "jetzt": "auf der letzten Kerze",
+      "vor": "vor {n} Kerze | vor {n} Kerzen"
     },
     "rechner": {
       "titel": "Positionsrechner (Menge, Marge, Liq)",

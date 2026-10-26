@@ -44,6 +44,7 @@ import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
 import { positionenAus } from '../../stores/chartPositionen.js'
 import { letzterStil, merkeStil } from '../../stores/zeichenStil.js'
 import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
+import { tabellenZeilen } from '../../utils/chart/fensterTabelle.js'
 import { atr } from '../../../shared/indicators.js'
 import { overlayAn as overlayAnFuer } from '../../utils/chart/overlays/liste.js'
 
@@ -240,7 +241,7 @@ function baueChart() {
     kerzenSerie.value = ks
     volumenSerie.value = vs
     zeichner = new IndikatorZeichner(c, zuLwc, (ind) => kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.name')),
-        { kerzenSerie: ks, faerbeKerzen })
+        { kerzenSerie: ks, faerbeKerzen, tabellenText: (typ, kz) => tabellenZeilen(typ, kz, t) })
     ebene = new ZeichenEbene({
         huelle: huelle.value,
         chart: c,

@@ -35,6 +35,19 @@ import {
 import { rechneVwapVector } from './vwapVector.js'
 import { lsobCv } from '../../../shared/lsobCv.js'
 import { gussCv } from '../../../shared/gussCv.js'
+import {
+    atrKennzahlen, adxKennzahlen, mfiKennzahlen, obvKennzahlen, oiKennzahlen, rsiKennzahlen, stochKennzahlen,
+    macdKennzahlen, fundingKennzahlen, longAnteilKennzahlen, volumenKennzahlen,
+} from './fensterKennzahlen.js'
+
+/*
+ * Tabelle im Fenster (alle Oszillatoren und Datenfenster ausser dem Momentum
+ * Radar, der seine eigene Box hat): die nackte Linie sagt wenig —
+ * die Tabelle ordnet ein (Kennzahlen in `fensterKennzahlen.js`, Texte in
+ * `fensterTabelle.js`). Abschaltbar je Indikator; `_tab` trägt die Kennzahlen.
+ */
+const P_TABELLE = { key: 'tabelle', typ: 'schalter', vorgabe: true }
+const ivAus = (k) => (k.length > 1 ? k[k.length - 1].t - k[k.length - 2].t : 0)
 
 /** Preisquelle — wie bei TradingView wählbar. */
 export const QUELLEN = {
@@ -398,7 +411,8 @@ export const INDIKATOREN = {
         params: [P_LAENGE(14), P_QUELLE,
             { key: 'maAn', typ: 'schalter', vorgabe: true },
             // Nicht im Legendennamen: „RSI 14 14" liest sich wie ein Tippfehler.
-            { key: 'maLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 200, schritt: 1, nichtImNamen: true }],
+            { key: 'maLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 200, schritt: 1, nichtImNamen: true }, P_TABELLE],
+        tabelle: true,
         ausgaben: [
             { key: 'wert', art: 'linie', farbe: '#7e57c2', breite: 1 },
             { key: 'ma', art: 'linie', farbe: '#f7df1e', breite: 1 },
@@ -413,7 +427,8 @@ export const INDIKATOREN = {
         bereich: [0, 100],
         rechne: (k, p) => {
             const wert = rsi(mitQuelle(k, p.quelle), p.laenge)
-            return p.maAn ? { wert, ma: smaSerie(wert, p.maLaenge) } : { wert }
+            const ma = p.maAn ? smaSerie(wert, p.maLaenge) : null
+            return { wert, ...(ma ? { ma } : {}), _tab: p.tabelle ? rsiKennzahlen(k, wert, ma) : null }
         },
     },
     macd: {
@@ -422,8 +437,9 @@ export const INDIKATOREN = {
             { key: 'schnell', typ: 'zahl', vorgabe: 12, min: 1, max: 200, schritt: 1 },
             { key: 'langsam', typ: 'zahl', vorgabe: 26, min: 1, max: 400, schritt: 1 },
             { key: 'signal', typ: 'zahl', vorgabe: 9, min: 1, max: 100, schritt: 1 },
-            P_QUELLE,
+            P_QUELLE, P_TABELLE,
         ],
+        tabelle: true,
         ausgaben: [
             { key: 'hist', art: 'histogramm', farbe: '#26a69a', vierFarben: true },
             { key: 'macd', art: 'linie', farbe: '#2962ff', breite: 1 },
@@ -433,11 +449,12 @@ export const INDIKATOREN = {
         rechne: (k, p) => {
             const kk = mitQuelle(k, p.quelle)
             const o = { fast: p.schnell, slow: p.langsam, signal: p.signal }
-            return {
+            const aus = {
                 macd: macd(kk, { ...o, line: 'macd' }),
                 signal: macd(kk, { ...o, line: 'signal' }),
                 hist: macd(kk, { ...o, line: 'hist' }),
             }
+            return { ...aus, _tab: p.tabelle ? macdKennzahlen(aus.macd, aus.signal, aus.hist) : null }
         },
     },
     stoch: {
@@ -445,7 +462,7 @@ export const INDIKATOREN = {
         // Vorgabe wie TradingView: %K 14, %K-Glättung 1, %D 3 (vorher 3 — eine „Slow"-Stochastik
         // unter dem Namen der normalen, und die Werte wichen vom TradingView-Chart ab).
         params: [P_LAENGE(14), { key: 'glaettK', typ: 'zahl', vorgabe: 1, min: 1, max: 20, schritt: 1 },
-            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }],
+            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE],
         ausgaben: [
             { key: 'k', art: 'linie', farbe: '#2962ff', breite: 1 },
             { key: 'd', art: 'linie', farbe: '#ff6d00', breite: 1 },
@@ -453,7 +470,11 @@ export const INDIKATOREN = {
         linien: [80, 20],
         band: { oben: 80, unten: 20, linie: 'k' },
         bereich: [0, 100],
-        rechne: (k, p) => stochastic(k, { period: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD }),
+        tabelle: true,
+        rechne: (k, p) => {
+            const r = stochastic(k, { period: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD })
+            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null }
+        },
     },
     stochRsi: {
         ort: 'eigen',
@@ -461,8 +482,7 @@ export const INDIKATOREN = {
             { key: 'rsiLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 100, schritt: 1 },
             P_LAENGE(14, 100),
             { key: 'glaettK', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 },
-            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 },
-        ],
+            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE],
         ausgaben: [
             { key: 'k', art: 'linie', farbe: '#2962ff', breite: 1 },
             { key: 'd', art: 'linie', farbe: '#ff6d00', breite: 1 },
@@ -470,17 +490,26 @@ export const INDIKATOREN = {
         linien: [80, 20],
         band: { oben: 80, unten: 20, linie: 'k' },
         bereich: [0, 100],
-        rechne: (k, p) => stochRsi(k, { rsiPeriod: p.rsiLaenge, stochPeriod: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD }),
+        tabelle: true,
+        rechne: (k, p) => {
+            const r = stochRsi(k, { rsiPeriod: p.rsiLaenge, stochPeriod: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD })
+            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null }
+        },
     },
     atr: {
         ort: 'eigen',
-        params: [P_LAENGE(14)],
+        params: [P_LAENGE(14), P_TABELLE],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#ef5350', breite: 1 }],
-        rechne: (k, p) => ({ wert: atr(k, p.laenge) }),
+        tabelle: true,
+        rechne: (k, p) => {
+            const wert = atr(k, p.laenge)
+            return { wert, _tab: p.tabelle ? atrKennzahlen(k, wert, ivAus(k)) : null }
+        },
     },
     adx: {
         ort: 'eigen',
-        params: [P_LAENGE(14, 100)],
+        params: [P_LAENGE(14, 100), P_TABELLE],
+        tabelle: true,
         ausgaben: [
             { key: 'adx', art: 'linie', farbe: '#ff9800', breite: 2 },
             { key: 'plus', art: 'linie', farbe: '#26a69a', breite: 1 },
@@ -489,29 +518,39 @@ export const INDIKATOREN = {
         linien: [25],
         rechne: (k, p) => {
             const a = adx(k, p.laenge)
-            return { adx: a.adx, plus: a.plusDI, minus: a.minusDI }
+            const aus = { adx: a.adx, plus: a.plusDI, minus: a.minusDI }
+            return { ...aus, _tab: p.tabelle ? adxKennzahlen(aus) : null }
         },
     },
     mfi: {
         ort: 'eigen',
-        params: [P_LAENGE(14)],
+        params: [P_LAENGE(14), P_TABELLE],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#00bcd4', breite: 1 }],
         linien: [80, 20],
         band: { oben: 80, unten: 20, linie: 'wert' },
         bereich: [0, 100],
-        rechne: (k, p) => ({ wert: mfi(k, p.laenge) }),
+        tabelle: true,
+        rechne: (k, p) => {
+            const wert = mfi(k, p.laenge)
+            return { wert, _tab: p.tabelle ? mfiKennzahlen(k, wert) : null }
+        },
     },
     obv: {
         ort: 'eigen',
-        params: [],
+        params: [P_TABELLE],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#8d6e63', breite: 1 }],
-        rechne: (k) => ({ wert: obv(k) }),
+        tabelle: true,
+        rechne: (k, p) => {
+            const wert = obv(k)
+            return { wert, _tab: p.tabelle ? obvKennzahlen(k, wert) : null }
+        },
     },
     // ── Daten-Fenster aus eigenen Quellen ────────────────────────────────
     oi: {
         ort: 'eigen',
         extern: 'oi',
-        params: [],
+        params: [P_TABELLE],
+        tabelle: true,
         // Fläche mit Verlauf für den Bestand, darunter die Veränderung je Kerze
         // als Balken (grün = Positionen kommen dazu, rot = sie werden
         // geschlossen) — die Veränderung ist die eigentliche Aussage.
@@ -522,7 +561,7 @@ export const INDIKATOREN = {
         kompakt: true,
         rechne: (k, _p, ext) => {
             const wert = aufKerzen(k, ext, 'oi', { amSchluss: true })
-            return { wert, delta: veraenderung(wert) }
+            return { wert, delta: veraenderung(wert), _tab: _p.tabelle ? oiKennzahlen(k, wert) : null }
         },
     },
     // Aufgezeichnete Liquidationen je Kerze (USD): Shorts nach oben in der
@@ -551,19 +590,27 @@ export const INDIKATOREN = {
     longShort: {
         ort: 'eigen',
         extern: 'oi',
-        params: [],
+        params: [P_TABELLE],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#26a69a', breite: 2 }],
         linien: [50],
-        rechne: (k, _p, ext) => ({ wert: aufKerzen(k, ext, 'longPct', { amSchluss: true }) }),
+        tabelle: true,
+        rechne: (k, _p, ext) => {
+            const wert = aufKerzen(k, ext, 'longPct', { amSchluss: true })
+            return { wert, _tab: _p.tabelle ? longAnteilKennzahlen(wert) : null }
+        },
     },
     funding: {
         ort: 'eigen',
         extern: 'funding',
-        params: [],
+        params: [P_TABELLE],
         ausgaben: [{ key: 'hist', art: 'histogramm', farbe: '#26a69a' }],
         linien: [0],
         // In Prozent je Zahlung; mehrere Zahlungen in einer Kerze summiert.
-        rechne: (k, _p, ext) => ({ hist: jeKerzeSumme(k, ext, 'rate', 100) }),
+        tabelle: true,
+        rechne: (k, _p, ext) => {
+            const hist = jeKerzeSumme(k, ext, 'rate', 100)
+            return { hist, _tab: _p.tabelle ? fundingKennzahlen(k, hist) : null }
+        },
     },
     momentum: {
         ort: 'eigen',
@@ -606,6 +653,9 @@ export const INDIKATOREN = {
     lsob: {
         ort: 'preis',
         extern: 'signale_lsob',
+        // Nicht mehr in „Indikator hinzufügen" (26.10.2026): „LSOB-Boxen" (`lsobCv`) ist der
+        // gegen die Referenz geprüfte LSOB-Indikator; bestehende Layouts behalten diesen.
+        intern: true,
         zeichner: 'signale',
         kurzOhneParams: true,
         params: LSOB_PARAMS,
@@ -664,12 +714,13 @@ export const INDIKATOREN = {
     },
     volSma: {
         ort: 'eigen',
-        params: [P_LAENGE(20)],
+        params: [P_LAENGE(20), P_TABELLE],
         ausgaben: [
             { key: 'vol', art: 'histogramm', farbe: 'rgba(120,123,134,0.5)' },
             { key: 'wert', art: 'linie', farbe: '#ffb74d', breite: 1 },
         ],
-        rechne: (k, p) => ({ vol: k.map((x) => x.v), wert: volumeSma(k, p.laenge) }),
+        tabelle: true,
+        rechne: (k, p) => ({ vol: k.map((x) => x.v), wert: volumeSma(k, p.laenge), _tab: p.tabelle ? volumenKennzahlen(k, p.laenge) : null }),
     },
 }
 
