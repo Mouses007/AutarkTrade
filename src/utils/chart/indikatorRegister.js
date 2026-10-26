@@ -153,18 +153,18 @@ const P_QUELLE = { key: 'quelle', typ: 'wahl', vorgabe: 'c', optionen: Object.ke
 const EMA_TFS = ['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d', '3d', '1w', '1M']
 const EMA_PARAMS = [
     { key: 'an1', typ: 'schalter', vorgabe: true, gruppe: 'emaChart' },
-    { key: 'laenge', typ: 'zahl', vorgabe: 21, min: 1, max: 1000, schritt: 1, gruppe: 'emaChart', mit: true },
+    { key: 'laenge', typ: 'zahl', vorgabe: 21, min: 1, max: 500, schritt: 1, gruppe: 'emaChart', mit: true },
     { key: 'farbe1', typ: 'farbe', vorgabe: '#29b6f6', gruppe: 'emaChart', mit: true },
     { key: 'an2', typ: 'schalter', vorgabe: false, gruppe: 'emaChart' },
-    { key: 'laenge2', typ: 'zahl', vorgabe: 50, min: 1, max: 1000, schritt: 1, gruppe: 'emaChart', mit: true },
+    { key: 'laenge2', typ: 'zahl', vorgabe: 50, min: 1, max: 500, schritt: 1, gruppe: 'emaChart', mit: true },
     { key: 'farbe2', typ: 'farbe', vorgabe: '#f5c542', gruppe: 'emaChart', mit: true },
     { key: 'an3', typ: 'schalter', vorgabe: false, gruppe: 'emaChart' },
-    { key: 'laenge3', typ: 'zahl', vorgabe: 200, min: 1, max: 1000, schritt: 1, gruppe: 'emaChart', mit: true },
+    { key: 'laenge3', typ: 'zahl', vorgabe: 200, min: 1, max: 500, schritt: 1, gruppe: 'emaChart', mit: true },
     { key: 'farbe3', typ: 'farbe', vorgabe: '#ab47bc', gruppe: 'emaChart', mit: true },
     { ...P_QUELLE, gruppe: 'emaChart' },
     ...[[1, '4h', 50, '#26a69a'], [2, '1d', 50, '#ff9800'], [3, '1d', 200, '#e91e63']].flatMap(([x, tf, laenge, farbe]) => [
         { key: `mtfAn${x}`, typ: 'schalter', vorgabe: false, gruppe: 'emaMtf' },
-        { key: `mtfLaenge${x}`, typ: 'zahl', vorgabe: laenge, min: 1, max: 1000, schritt: 1, gruppe: 'emaMtf', mit: true },
+        { key: `mtfLaenge${x}`, typ: 'zahl', vorgabe: laenge, min: 1, max: 500, schritt: 1, gruppe: 'emaMtf', mit: true },
         { key: `mtfTf${x}`, typ: 'wahl', vorgabe: tf, optionen: EMA_TFS, gruppe: 'emaMtf', roh: true, mit: true },
         { key: `mtfFarbe${x}`, typ: 'farbe', vorgabe: farbe, gruppe: 'emaMtf', mit: true },
     ]),
@@ -403,6 +403,8 @@ export const INDIKATOREN = {
     ema: {
         ort: 'preis',
         extern: 'emaMtf',
+        // Höhere Kerzen nur laden, wenn eine MTF-Linie an ist
+        externWenn: (p) => [1, 2, 3].some((x) => p[`mtfAn${x}`]),
         params: EMA_PARAMS,
         neu: { an2: true, an3: true },
         // Linie 1 heisst weiter `wert` — sonst ginge eine im Layout gemerkte Farbe verloren
@@ -847,7 +849,9 @@ export function ausgabenVon(typ, params) {
 
 /** Welche fremden Datenquellen braucht eine Indikatorliste? */
 export function benoetigteQuellen(instanzen) {
-    return [...new Set((instanzen || []).filter((i) => i.sichtbar !== false).map((i) => INDIKATOREN[i.typ]?.extern).filter(Boolean))]
+    return [...new Set((instanzen || []).filter((i) => i.sichtbar !== false)
+        .filter((i) => !INDIKATOREN[i.typ]?.externWenn || INDIKATOREN[i.typ].externWenn(saubereParams(i.typ, i.params)))
+        .map((i) => INDIKATOREN[i.typ]?.extern).filter(Boolean))]
 }
 
 /** Kurzbeschriftung für die Legende, z. B. „EMA 21" oder „BB 20 2". */

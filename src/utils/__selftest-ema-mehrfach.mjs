@@ -6,7 +6,7 @@
  * Wichtigster Fall: ein gespeichertes einfaches EMA (nur `laenge`/`quelle`) zeigt
  * nach dem Umbau genau seine eine Linie, mit derselben Rechnung wie vorher.
  */
-import { INDIKATOREN, rechneIndikator, saubereParams, neueInstanz, kurzname, emaMtfQuellen } from './chart/indikatorRegister.js'
+import { INDIKATOREN, rechneIndikator, saubereParams, neueInstanz, kurzname, emaMtfQuellen, benoetigteQuellen } from './chart/indikatorRegister.js'
 import { ema } from '../../shared/indicators.js'
 import { emaHoehereTf } from './chart/vwapVector.js'
 
@@ -59,6 +59,8 @@ check('Name mit MTF', kurzname('ema', mtf, 'EMA') === 'EMA 21 · 50 · 200 · 20
 // MTF ohne geladene Kerzen: leere Linie, kein Fehler
 const ohne = rechneIndikator('ema', k, mtf, {})
 check('MTF ohne geladene Kerzen: leer statt Fehler', ohne.m1.every((v) => v == null))
+
+check('EMA ohne MTF braucht keine Fremddaten, mit MTF schon', benoetigteQuellen([{ typ: 'ema', params: neu.params }]).length === 0 && benoetigteQuellen([{ typ: 'ema', params: mtf }]).join() === 'emaMtf')
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 process.exit(fehlgeschlagen ? 1 : 0)
