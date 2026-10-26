@@ -23,6 +23,7 @@
  *   DELETE /import/:ort                    einen importierten Ort entfernen
  *   GET    /steuer?jahr=                   Steuerjahr (Vermögen 31.12., Einkommen, Abgänge, Kriterien)
  *   GET    /steuer.csv?jahr=               dasselbe als CSV
+ *   GET    /steuer/bericht?jahr=           dasselbe als Dokument zum Drucken / PDF (+ bericht.css, bericht.js)
  *   GET    /steuer/jahre                   Jahre mit Bewegungen
  *   PUT    /steuerkurs       {jahr, asset, chf|null, quelle}
  *   PUT    /futures-stichtag {jahr, boerse, usd|null, quelle}  Futures-Guthaben 31.12. laut Auszug
@@ -43,6 +44,8 @@ import { setzeFuturesStichtag } from './futures-steuer.js'
 import { setzeTotalverlust } from './totalverlust.js'
 import { setzeSpam } from './spam.js'
 import { totalverlustUebersicht } from './totalverlust-seite.js'
+import { steuerBerichtHtml, BERICHT_CSS, BERICHT_JS } from './steuer-bericht.js'
+import fs from 'fs'
 import { importiereKursliste, kurslisteStand } from './estv-kursliste.js'
 import { kanton as kantonVon } from '../../shared/steuer-kantone.js'
 import { BOERSEN } from './futures-rechnung.js'
@@ -50,13 +53,18 @@ import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
 import { ARTEN, FIAT } from './normal.js'
 import { leseImportCsv, importQuelle } from './import.js'
-import { berechneSteuerjahr, steuerCsv } from './steuer.js'
+import { berechneSteuerjahr, steuerCsv, RECHTSHINWEIS } from './steuer.js'
 import { ketteNorm, fxHeute } from './kurse.js'
 
 const SCHLUESSEL_NAMEN = ['bitpanda', 'etherscan']
 const EINORDNUNGEN = ['transfer', 'kauf', 'einkommen', 'ignorieren']
 /** „Zu prüfen": Ein-/Ausgänge ohne erkannten Gegenpart und Unbekanntes. Airdrops sind ihrer Art nach klar. */
 const OFFENE_ARTEN = ['einzahlung', 'auszahlung', 'sonstiges']
+
+// Version für den Kopf des Steuerberichts (einmal beim Laden gelesen).
+const APP_VERSION = (() => {
+    try { return JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version } catch { return '' }
+})()
 
 const fehler = (res, e, code = 500) => res.status(code).json({ ok: false, error: String(e?.message || e) })
 const fingerabdruck = (s) => crypto.createHash('sha256').update(String(s).trim()).digest('hex')
@@ -357,6 +365,18 @@ export function setupPortfolioRoutes(app) {
             res.json({ ok: true, ...(await berechneSteuerjahr(jahr)) })
         } catch (e) { fehler(res, e) }
     })
+    // Steuerbericht als eigenes Dokument (Druck / PDF) — Stil und Druckknopf als
+    // eigene Dateien, weil die CSP Inline-Skripte sperrt.
+    app.get('/api/portfolio/steuer/bericht', async (req, res) => {
+        try {
+            const jahr = Number(req.query.jahr) || new Date().getFullYear() - 1
+            const [s, tv] = await Promise.all([berechneSteuerjahr(jahr), totalverlustUebersicht()])
+            res.setHeader('Content-Type', 'text/html; charset=utf-8')
+            res.send(steuerBerichtHtml(s, { erstellt: Date.now(), version: APP_VERSION, totalverluste: tv.zeilen, rechtshinweis: RECHTSHINWEIS }))
+        } catch (e) { res.status(500).type('text/plain').send(`Bericht nicht erstellt: ${e.message}`) }
+    })
+    app.get('/api/portfolio/steuer/bericht.css', (req, res) => { res.type('text/css').send(BERICHT_CSS) })
+    app.get('/api/portfolio/steuer/bericht.js', (req, res) => { res.type('application/javascript').send(BERICHT_JS) })
     app.get('/api/portfolio/steuer.csv', async (req, res) => {
         try {
             const jahr = Number(req.query.jahr) || new Date().getFullYear() - 1

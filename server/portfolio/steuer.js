@@ -352,14 +352,14 @@ export async function berechneSteuerjahr(jahr) {
 }
 
 /** Steht im Bericht, im Druck und in der CSV — nicht abschaltbar. */
-export const RECHTSHINWEIS = 'Keine Steuerberatung. AutarkTrade ist kein von einer Steuerbehörde anerkanntes oder zertifiziertes Tool — eine amtliche Anerkennung für Krypto-Steuer-Tools gibt es in der Schweiz nicht (Luzern akzeptiert Tool-Berichte nur als Beleg). Alle Angaben selbst prüfen; im Zweifel Steueramt oder Treuhand fragen.'
+export const RECHTSHINWEIS = 'AutarkTrade ist kein von einer Steuerbehörde anerkanntes oder zertifiziertes Tool — eine amtliche Anerkennung für Krypto-Steuer-Tools gibt es in der Schweiz nicht. Alle Angaben selbst prüfen; im Zweifel Steueramt oder Treuhand fragen.'
 
 /** CSV für die Steuererklärung / den Treuhänder. */
 export function steuerCsv(s) {
     const z = (v) => (v == null ? '' : typeof v === 'number' ? String(Math.round(v * 1e8) / 1e8) : `"${String(v).replace(/"/g, '""')}"`)
     const d = (ms) => new Date(ms).toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })
     const kt = s.kanton
-    const zeilen = [z(RECHTSHINWEIS), '',
+    const zeilen = [z(`Keine Steuerberatung. ${RECHTSHINWEIS}`), '',
         `Steuerjahr ${s.jahr} — Stichtag 31.12.${s.jahr}${s.laufend ? ' (provisorisch)' : ''}`,
         kt ? z(`Kanton ${kt.name} (${kt.kz}): ${[kt.formular, kt.rubrik, kt.code ? `Code ${kt.code}` : null].filter(Boolean).join(' · ')}`) : 'Kanton: nicht gewählt',
         s.estv?.anzahl ? `ESTV-Kursliste ${s.jahr}: ${s.estv.anzahl} Coins` : '', '',
@@ -384,6 +384,6 @@ export function steuerCsv(s) {
     }
     zeilen.push('', 'Methode: FIFO je Coin über alle Orte; Stichtag 31.12. 23:59:59 Europe/Zurich; Kurse: ESTV-Kursliste, sonst Tagesschlusskurs der Börse (Spalte Kursquelle); USD/CHF und EUR/CHF der EZB.')
     if (kt?.quellen?.length) zeilen.push(z(`Kantonsangaben: ${kt.quellen.map((q) => `${q.name} (${q.fassung}) ${q.url}`).join(' | ')}`))
-    zeilen.push(z(RECHTSHINWEIS))
+    zeilen.push(z(`Keine Steuerberatung. ${RECHTSHINWEIS}`))
     return '﻿' + zeilen.join('\n') + '\n'
 }

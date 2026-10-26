@@ -90,6 +90,11 @@ function starteKurs(p) {
     nextTick(() => document.querySelector('.ps-kursform input')?.focus())
 }
 const tvJahr = ref(null)
+// Aus der Box „Zu prüfen“: tot ab dem angezeigten Steuerjahr.
+async function totalverlustDirekt(asset) {
+    await axios.put('/api/portfolio/totalverlust', { asset, an: true, abJahr: jahr.value })
+    await lade()
+}
 async function totalverlust(asset, an) {
     await axios.put('/api/portfolio/totalverlust', { asset, an, abJahr: tvJahr.value || jahr.value })
     bearbeite.value = null
@@ -102,7 +107,7 @@ async function speichereKurs(asset, loeschen = false) {
 }
 
 const csvLink = computed(() => `/api/portfolio/steuer.csv?jahr=${jahr.value}`)
-const drucke = () => window.print()
+const berichtLink = computed(() => `/api/portfolio/steuer/bericht?jahr=${jahr.value}`)
 const datum = (ms) => new Date(ms).toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })
 const zufluesse = computed(() => (alleZufluesse.value ? daten.value?.einkommen.zeilen : daten.value?.einkommen.zeilen.slice(-25).reverse()) || [])
 const einkommenJeAsset = computed(() => Object.entries(daten.value?.einkommen.jeAsset || {}).sort((a, b) => b[1] - a[1]))
@@ -158,7 +163,7 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                     </select>
                 </label>
                 <Knopf klein symbol="herunterladen" :href="csvLink" :disabled="!daten">CSV</Knopf>
-                <Knopf klein symbol="dokument" :disabled="!daten" @click="drucke">{{ t('portfolio.stDrucken') }}</Knopf>
+                <Knopf klein art="haupt" symbol="dokument" :href="berichtLink" target="_blank" rel="noopener" :disabled="!daten">{{ t('portfolio.stBericht') }}</Knopf>
             </div>
         </div>
         <Hinweis art="warn" class="ps-rechtshinweis at-mo-3" :titel="t('portfolio.stRechtTitel')">{{ t('portfolio.stRechtText') }}</Hinweis>
@@ -191,11 +196,21 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
                 </Karte>
             </div>
 
-            <Hinweis v-for="(h, i) in daten.hinweise" :key="i" :art="h.art === 'laufend' ? 'info' : 'warn'" class="at-mo-3">
-                {{ h.text }}
-                <span v-if="h.quellen" class="ps-liste">{{ h.quellen.join(' · ') }}</span>
-                <span v-if="h.liste" class="ps-liste">{{ h.liste.map((x) => `${x.quelle}: ${x.asset} ${menge(x.menge)}`).join(' · ') }}</span>
-                <span v-if="h.coins" class="ps-liste">{{ h.coins.map((x) => `${x.asset} ${chf(x.chf)}`).join(' · ') }}</span>
+            <!-- Eine Box statt einer Warnbox je Punkt; im Bericht (PDF) stehen sie nicht -->
+            <Hinweis v-if="daten.hinweise.length" art="warn" class="at-mo-3" :titel="t('portfolio.stZuPruefen', { n: daten.hinweise.length })">
+                <ul class="ps-pruefen">
+                    <li v-for="(h, i) in daten.hinweise" :key="i">
+                        {{ h.text }}
+                        <span v-if="h.quellen" class="ps-liste">{{ h.quellen.join(' · ') }}</span>
+                        <span v-if="h.liste" class="ps-liste">{{ h.liste.map((x) => `${x.quelle}: ${x.asset} ${menge(x.menge)}`).join(' · ') }}</span>
+                        <span v-if="h.coins" class="ps-coins">
+                            <span v-for="c in h.coins" :key="c.asset" class="ps-coin-tv">
+                                {{ c.asset }} {{ chf(c.chf) }}
+                                <button type="button" class="ps-tv-knopf" :title="t('portfolio.totalverlustInfo')" @click="totalverlustDirekt(c.asset)">{{ t('portfolio.stTvKurz') }}</button>
+                            </span>
+                        </span>
+                    </li>
+                </ul>
             </Hinweis>
 
             <!-- ── Übertrag ins Formular (Kanton) ── -->
@@ -427,6 +442,11 @@ const ARTNAME = { staking: 'Staking', airdrop: 'Airdrop', belohnung: 'Belohnung'
 .ps-jahr { border: 1px solid var(--line-stark); background: var(--panel); color: var(--muted); border-radius: var(--radius-pille); padding: 0.3rem 0.85rem; font: inherit; font-size: 0.85rem; cursor: pointer; font-variant-numeric: tabular-nums; }
 .ps-jahr.aktiv { border-color: var(--accent); color: var(--accent); background: var(--accent-flaeche); font-weight: 700; }
 .ps-aktionen { display: flex; gap: 0.4rem; }
+.ps-pruefen { margin: 0.2rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.45rem; }
+.ps-coins { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; margin-top: 0.3rem; font-size: 0.8rem; }
+.ps-coin-tv { display: inline-flex; align-items: center; gap: 0.35rem; }
+.ps-tv-knopf { background: none; border: 1px solid var(--line-stark); border-radius: var(--radius-pille); color: var(--muted); font: inherit; font-size: 0.72rem; padding: 0 0.5rem; cursor: pointer; }
+.ps-tv-knopf:hover { color: var(--bad); border-color: var(--bad); }
 .ps-kanton { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); }
 .ps-kanton select, .ps-tv select { background: var(--bg); border: 1px solid var(--line-stark); border-radius: var(--radius-knopf); color: var(--text); padding: 0.25rem 0.5rem; font: inherit; font-size: 0.82rem; }
 .ps-tv { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.8rem; color: var(--muted); }

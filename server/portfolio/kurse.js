@@ -340,16 +340,34 @@ export async function bitpandaKursChf(asset, datum) {
 const COINGECKO_ID = { BORG: 'swissborg', CHSB: 'swissborg' }
 
 /** Kurs in CHF am Tag `datum` laut CoinGecko, oder null. */
+// Ein vergangener Tageskurs ändert sich nicht mehr: gefundene merken. Der
+// öffentliche Zugang erlaubt nur wenige Abfragen je Minute — auf der NAS fiel
+// BORG am 26.10.2026 deshalb auf den Kaufpreis zurück (907 statt 378 CHF).
+const cgGemerkt = new Map()   // `${id}|${datum}` → { chf, quelle }
+
 export async function coingeckoKursChf(asset, datum) {
     const id = COINGECKO_ID[String(asset).toUpperCase()]
     if (!id) return null
-    try {
-        const { cgHole } = await import('../quellen/coingecko.js')
-        const [j, m, t] = datum.split('-')
-        const d = await cgHole(`/coins/${id}/history`, { date: `${t}-${m}-${j}`, localization: 'false' })
-        const chf = Number(d?.market_data?.current_price?.chf)
-        return chf > 0 ? { chf, quelle: 'CoinGecko' } : null
-    } catch { return null }   // Schlüssel fehlt, Schalter aus, älter als 365 Tage
+    const key = `${id}|${datum}`
+    if (cgGemerkt.has(key)) return cgGemerkt.get(key)
+    const { cgHole } = await import('../quellen/coingecko.js')
+    const [j, m, t] = datum.split('-')
+    for (let versuch = 0; versuch < 2; versuch++) {
+        try {
+            const d = await cgHole(`/coins/${id}/history`, { date: `${t}-${m}-${j}`, localization: 'false' })
+            const chf = Number(d?.market_data?.current_price?.chf)
+            if (!(chf > 0)) return null
+            const r = { chf, quelle: 'CoinGecko' }
+            if (datum < new Date().toISOString().slice(0, 10)) cgGemerkt.set(key, r)
+            return r
+        } catch (e) {
+            // Mengenlimit (429): einmal kurz warten; Schlüssel fehlt / älter als 365 Tage: aufgeben
+            const status = e?.response?.status
+            if (status !== 429 && status < 500) return null
+            if (versuch === 0) await new Promise((r) => setTimeout(r, 2500))
+        }
+    }
+    return null
 }
 
 /**
