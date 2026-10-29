@@ -34,7 +34,7 @@
 
         <!-- Die Zahl, auf die es ankommt: wie früh war der Radar? -->
         <div v-if="daten?.statistik" class="bwStatistik">
-            <!-- Die Sprosse „Alpha" nur, wenn der Server sie zählt (Schalter „Quellen ohne Verkaufsfreigabe", S15). -->
+            <!-- Die Sprosse „Alpha" nur, wenn der Server sie zählt (Schalter „Quellen mit eingeschränkten Nutzungsbedingungen", S15). -->
             <div v-for="s in ['alpha', 'mittel', 'gross'].filter((x) => daten.statistik[x])" :key="s" class="bwKachel">
                 <div class="bwKachelTitel">{{ t('hypeBoersen.stufe_' + s) }}</div>
                 <div class="bwKachelZahl">{{ daten.statistik[s].erkannt }} / {{ daten.statistik[s].neu }}</div>
@@ -208,7 +208,7 @@ const props = defineProps({
 const { t, locale } = useI18n()
 
 const daten = ref(null)
-/** Schalter „Quellen ohne Verkaufsfreigabe" (S15): Alpha, Upbit, OKX, MEXC und ihre Links. */
+/** Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15): Alpha, Upbit, OKX, MEXC und ihre Links. */
 const frei = computed(() => freigabeAn())
 ladeFreigabe()
 const OHNE_FREIGABE = ['binance-alpha', 'upbit', 'okx', 'mexc']

@@ -39,6 +39,7 @@ import { beansprucheAufgabe, meldeFehler, leseAufgabe } from './db-claim.js'
 import { holeJson, holeText, sendRadarError } from './marktradar-api.js'
 import { istTestbetrieb } from './umgebung.js'
 import { quelleErlaubt } from './quellen/freigabe.js'
+import { kalenderLaenderVorgabe } from '../shared/kalender-laender.js'
 import {
     FED_URL, BEA_URL, EUROSTAT_URL, KALENDER_QUELLEN,
     fedTermine, beaTermine, eurostatTermine,
@@ -150,11 +151,13 @@ async function holeForexFactory(knex) {
 }
 
 /**
- * Vorgabe der Länderauswahl, wenn der Nutzer nichts eingestellt hat. Bis S12
- * war es `USD,JPY` — für Japan gibt es ohne ForexFactory keine Quelle mehr,
- * für den Euroraum jetzt Eurostat.
+ * Länderauswahl: gespeicherter Wert, sonst die Vorgabe nach dem Schalter
+ * `quellenOhneFreigabe` (ForexFactory) — dieselbe Regel wie im Browser
+ * (`shared/kalender-laender.js`).
  */
-export const KALENDER_LAENDER_VORGABE = 'USD,EUR'
+export async function kalenderLaenderAus(s) {
+    return s?.radarKalenderLaender ?? kalenderLaenderVorgabe(await quelleErlaubt('forexfactory'))
+}
 
 /**
  * Name des Anspruchs in `radar_fetch_state`. Er heisst noch nach der alten
@@ -313,7 +316,7 @@ export function setupKalenderRoutes(app) {
             const daten = await leseKalender({
                 von: req.query.von,
                 bis: req.query.bis,
-                laender: req.query.laender ?? s?.radarKalenderLaender ?? KALENDER_LAENDER_VORGABE,
+                laender: req.query.laender ?? await kalenderLaenderAus(s),
                 impact: req.query.impact ?? s?.radarKalenderImpact ?? 'medium',
             })
             res.set('Cache-Control', 'no-store')

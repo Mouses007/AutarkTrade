@@ -1,5 +1,11 @@
 <script setup>
-/** KI → Allgemein: Anbieter, Schlüssel, Modell, Guthaben-Vermerke, Grundschalter. */
+/**
+ * KI → Zugang: Anbieter, Schlüssel, Modell, Guthaben-Vermerke, Grundschalter —
+ * und darunter das Modell je Aufgabe für die Aufgaben ohne eigene Seite
+ * (Chart, Marktradar, Handelslage, Mechanik, Rangliste, Coin-Radar,
+ * Recherche-Schreiber). Aufgaben mit eigener Seite liefert der Server gar
+ * nicht erst mit.
+ */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ModelManager from '@/components/ModelManager.vue'
@@ -12,6 +18,7 @@ import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
 import { appEinstellungen } from '@/stores/settings.js'
 import { kiBereichWechseln } from '../gemeinsam/useKiBereich.js'
+import { kiSpeichern } from '../gemeinsam/speichern.js'
 import { useKiAnbieter } from '../gemeinsam/useKiAnbieter.js'
 import { fluxApiKey, geminiImageApiKey, shareCardProvider } from '../gemeinsam/useShareCard.js'
 
@@ -23,8 +30,8 @@ let kiExpanded = ref(true)   // eigener Unter-Reiter: offen starten
 const kiAn = computed(() => appEinstellungen.value?.aiEnabled !== false && appEinstellungen.value?.aiEnabled !== 0)
 
 const {
-    aiKeys, aiMaxTokens, aiModel, aiOllamaUrl, aiProvider, aiTemperature, aiTestLoading, aiTestResult,
-    aktuellerAnbieter, anbieterListe, anbieterName, anbieterUrl, bereichsNamen, getModelsForProvider,
+    aiKeys, aiMaxTokens, aiModel, aiOllamaUrl, aiProvider, aiTaskProviders, aiTemperature, aiTestLoading, aiTestResult,
+    aktuellerAnbieter, anbieterListe, anbieterName, anbieterUrl, aufgabenListe, bereichsNamen, getModelsForProvider,
     guthabenListe, guthabenZuruecksetzen, ladeGuthaben, modellOhneTemperatur, modelleGeaendert,
     ollamaModels, onProviderChange, saveAiSettings, testAiConnection, toggleAiEnabled, zeitpunkt,
 } = useKiAnbieter()
@@ -32,7 +39,7 @@ const {
 
 <template>
     <div>
-        <Abschnitt :titel="t('settings.kiAgent')" symbol="ki" v-model:offen="kiExpanded">
+        <Abschnitt :titel="t('settings.kiZugangAnbieter')" symbol="ki" v-model:offen="kiExpanded">
             <!-- KI aktivieren/deaktivieren -->
             <Schalter :model-value="kiAn" :label="t('settings.aiEnabled')" :hilfe="t('settings.aiEnabledHint')"
                 @change="toggleAiEnabled" />
@@ -136,7 +143,7 @@ const {
                         <div class="liste-zeile">
                             <span class="liste-name">
                                 FLUX.2 <span class="leise">(Black Forest Labs)</span>
-                                <Pille v-if="shareCardProvider === 'flux'" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
+                                <Pille v-if="shareCardProvider === 'flux'" ton="neutral">{{ t('settings.ki.imageProviderActive') }}</Pille>
                                 <InfoTipp schluessel="kiHinweis.anbieter.flux" immer breit />
                             </span>
                             <span class="liste-mitte">
@@ -154,7 +161,7 @@ const {
                         <div class="liste-zeile">
                             <span class="liste-name">
                                 Google Gemini <span class="leise">(Nano Banana)</span>
-                                <Pille v-if="shareCardProvider === 'gemini'" ton="neutral">{{ t('settings.ki.mainProvider') }}</Pille>
+                                <Pille v-if="shareCardProvider === 'gemini'" ton="neutral">{{ t('settings.ki.imageProviderActive') }}</Pille>
                                 <InfoTipp schluessel="kiHinweis.anbieter.gemini" immer breit />
                             </span>
                             <span class="liste-mitte">
@@ -236,7 +243,7 @@ const {
                     <div class="reihe">
                         <input id="kiTemperatur" type="range" v-model="aiTemperature"
                             min="0" max="1" step="0.1" :disabled="modellOhneTemperatur" />
-                        <Pille ton="neutral" class="temperatur">{{ aiTemperature }}</Pille>
+                        <Pille ton="neutral" class="temperatur">{{ Number(aiTemperature).toFixed(1) }}</Pille>
                     </div>
                     <span v-if="modellOhneTemperatur" class="leise warn block">
                         {{ t('settings.temperatureIgnored', { model: aiModel }) }}
@@ -262,6 +269,31 @@ const {
                 </div>
             </div><!-- /v-show aiEnabled -->
         </Abschnitt>
+
+        <!-- Modell je Aufgabe: nur Aufgaben ohne eigene Seite. Stand bis
+             29.10.2026 unter Agent, obwohl kaum eine davon den Agenten betrifft. -->
+        <Abschnitt v-if="aufgabenListe.length" kennung="ki-aufgaben" :titel="t('settings.ki.taskModelsTitle')" symbol="liste">
+            <p class="leise">{{ t('settings.ki.taskModelsHint') }}</p>
+            <div class="liste">
+                <div class="liste-zeile kopfzeile">
+                    <span class="liste-name">{{ t('settings.ki.taskCol') }}</span>
+                    <span class="liste-mitte">{{ t('settings.ki.taskCurrentCol') }}</span>
+                    <span class="aendern">{{ t('settings.ki.taskChangeCol') }}</span>
+                </div>
+                <div v-for="a in aufgabenListe" :key="a.id" class="liste-zeile aufgabe">
+                    <span class="liste-name">
+                        <span :title="a.beschreibung">{{ a.name }}</span>
+                        <span v-if="a.nur && a.nur.length === 1" class="leise">· {{ t('settings.ki.taskOnly', { was: a.nur[0] }) }}</span>
+                    </span>
+                    <span class="liste-mitte"><code>{{ aiTaskProviders[a.id] || (a.rueckfall ? '(' + a.rueckfall + ')' : '(global)') }}</code></span>
+                    <span class="aendern">
+                        <input type="text" :aria-label="t('settings.ki.taskChangeCol') + ': ' + a.name"
+                            :placeholder="a.empfohlen || 'anbieter/modell'" v-model="aiTaskProviders[a.id]"
+                            @blur="kiSpeichern('aiTaskProviders', JSON.stringify(aiTaskProviders))" />
+                    </span>
+                </div>
+            </div>
+        </Abschnitt>
     </div>
 </template>
 
@@ -273,6 +305,22 @@ const {
 .warnung { color: var(--warn); }
 .betrifft { font-size: 0.75rem; margin-top: 0.15rem; }
 .temperatur { min-width: 2.75rem; justify-content: center; }
+.kopfzeile {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    background: var(--panel-soft);
+}
+.aufgabe { font-size: 0.85rem; }
+.aendern {
+    flex: 0 1 16rem;
+    min-width: 0;
+}
+.aendern input { font-size: 0.82rem; padding: 0.3rem 0.55rem; }
+@media (max-width: 575.98px) {
+    .kopfzeile { display: none; }
+    .aendern { flex-basis: 100%; }
+}
 .link {
     display: inline-flex;
     align-items: center;

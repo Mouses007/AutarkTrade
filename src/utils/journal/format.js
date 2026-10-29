@@ -7,11 +7,27 @@
  */
 import dayjs, { anzeige } from './zeit.js'
 import { tradeZeitzone, appEinstellungen } from '../../stores/app/rahmen.js'
+import { anzeigeKurs } from '../../stores/app/waehrung.js'
 
 // ── Kosten in der Anzeigewährung ───────────────────────────────────────────
 
-/** Gültiger Umrechnungsfaktor aus den Einstellungen oder null. */
+/** Gewählte Anzeigewährung; leer oder unbekannt = USD. */
+function gewaehlteWaehrung() {
+    const c = String(appEinstellungen.value?.waehrungCode || '').trim().toUpperCase()
+    return ['CHF', 'EUR'].includes(c) ? c : 'USD'
+}
+
+/**
+ * Faktor USD → Anzeigewährung oder null (= in USD anzeigen). Vorrang hat der
+ * Kurs vom Server (`stores/app/waehrung.js`), sonst der gespeicherte Faktor —
+ * der nur für CHF, für die er gespeichert wurde.
+ */
 function waehrungsFaktor() {
+    const code = gewaehlteWaehrung()
+    if (code === 'USD') return null
+    const kurs = anzeigeKurs.value
+    if (kurs?.code === code && Number(kurs.faktor) > 0) return Number(kurs.faktor)
+    if (code !== 'CHF') return null
     const f = Number(appEinstellungen.value?.waehrungFaktor)
     return Number.isFinite(f) && f > 0 ? f : null
 }
@@ -24,7 +40,7 @@ export function useKostenZahl(usd, stellen = 2) {
 }
 
 export function useWaehrungCode() {
-    return waehrungsFaktor() === null ? 'USD' : String(appEinstellungen.value?.waehrungCode || 'CHF')
+    return waehrungsFaktor() === null ? 'USD' : gewaehlteWaehrung()
 }
 
 export function useKostenAnzeige(usd, stellen = 2) {

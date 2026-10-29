@@ -19,7 +19,7 @@
  * for production applications" (Verkaufs-Prüfung Z. 67); ein verkauftes
  * Programm, das alle Kunden darüber schickt, ist genau das. Ohne eigene
  * Adresse ist Smart Money aus (`QuelleAus('Solana-RPC', 'schluesselFehlt')`).
- * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID
+ * S15: Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (ID
  * `solanaRpcOeffentlich`) ist der öffentliche Knoten wieder die Vorgabe wie
  * vor S12 — gedrosselt, für eine Handvoll Wallets genug.
  * Die Adresse kommt vom Nutzer und läuft deshalb durch `net-guard` — sonst

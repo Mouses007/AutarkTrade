@@ -134,8 +134,9 @@ export function setupNewsProfilRoutes(app) {
      */
     const AUFFAELLIGE_FELDER = new Set([
         'radarNewsMailAktiv', 'radarNewsMailAn', 'radarNewsMailInhalt',
-        'radarNewsModel', 'radarNewsXModell', 'radarNewsRechercheModell',
+        'radarNewsModel', 'radarNewsXModell', 'radarNewsRechercheModell', 'radarNewsRechercheDeepseek',
         'radarNewsBerichtProvider', 'radarNewsBerichtModell',
+        'radarNewsUpdateProvider', 'radarNewsUpdateModell', 'radarNewsPruefProvider', 'radarNewsPruefModell',
     ])
 
     app.post('/api/marktradar/news-profile/:id/anwenden', async (req, res) => {

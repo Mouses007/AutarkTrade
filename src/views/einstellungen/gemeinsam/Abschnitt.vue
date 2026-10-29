@@ -7,9 +7,13 @@
  * den Zustand selbst zu halten (z. B. `?section=api` öffnet die Börsen-API).
  *
  *   <Abschnitt titel="Kontostand" symbol="geldboerse" v-model:offen="kontoOffen">…</Abschnitt>
+ *
+ * Mit `kennung` ist der Abschnitt ein Sprungziel (`springeZu`, `?abschnitt=`):
+ * er klappt auf und rollt sich ins Bild.
  */
-import { ref, watch, useId } from 'vue'
+import { ref, watch, nextTick, useId } from 'vue'
 import Symbol from '@/components/basis/Symbol.vue'
+import { sprungZiel } from './sprung.js'
 
 const props = defineProps({
     titel: { type: String, required: true },
@@ -18,6 +22,8 @@ const props = defineProps({
     offen: { type: Boolean, default: undefined },
     /** Kleinere Unterüberschrift innerhalb eines Abschnitts. */
     unter: { type: Boolean, default: false },
+    /** Sprungziel: eindeutig über alle Einstellungsseiten. */
+    kennung: { type: String, default: '' },
 })
 const emit = defineEmits(['update:offen'])
 
@@ -28,10 +34,21 @@ function umschalten() {
     intern.value = !intern.value
     emit('update:offen', intern.value)
 }
+
+const wurzel = ref(null)
+watch(sprungZiel, (ziel) => {
+    if (!props.kennung || ziel !== props.kennung) return
+    sprungZiel.value = ''
+    intern.value = true
+    emit('update:offen', true)
+    // Der Reiter darüber wird im selben Takt erst sichtbar (v-show) —
+    // vorher hat der Abschnitt keine Lage, an die man rollen könnte.
+    nextTick(() => setTimeout(() => wurzel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80))
+}, { immediate: true })
 </script>
 
 <template>
-    <section :class="['ein-abschnitt', { unter, offen: intern }]">
+    <section ref="wurzel" :class="['ein-abschnitt', { unter, offen: intern }]" :data-abschnitt="kennung || undefined">
         <button type="button" class="kopf" :aria-expanded="intern" :aria-controls="id" @click="umschalten">
             <Symbol :name="intern ? 'runter' : 'ausklappen'" class="pfeil" />
             <Symbol v-if="symbol" :name="symbol" class="sym" />
@@ -47,6 +64,7 @@ function umschalten() {
 
 <style scoped>
 .ein-abschnitt {
+    scroll-margin-top: var(--abstand-5);
     background: var(--panel);
     border: 1px solid var(--line);
     border-radius: var(--radius);

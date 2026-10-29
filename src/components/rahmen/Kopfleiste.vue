@@ -21,7 +21,7 @@ import { loescheFinanzdaten } from '../../utils/finanzSpeicher.js'
 import Logo from '../basis/Logo.vue'
 import Symbol from '../basis/Symbol.vue'
 import Titelzeile from './Titelzeile.vue'
-import { appMode, seitenId, bildschirmTyp } from '../../stores/ui.js'
+import { appMode, seitenId } from '../../stores/ui.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { MODES, modeHome, pageById, istModusAn, modiGeordnet } from '../../config/menu.js'
 
@@ -38,10 +38,11 @@ const route = useRoute()
 // Auf der Startseite (/start) ist kein Modus aktiv.
 const aktiverModus = computed(() => (route.meta?.mode === 'uebersicht' ? null : appMode.value))
 const modi = computed(() => modiGeordnet(MODES.filter((m) => istModusAn(m.id, appEinstellungen.value))))
-const mobil = computed(() => bildschirmTyp.value === 'mobile')
 
+/* Überall dieselben Namen wie am Desktop und bei den Modus-Schaltern — die
+   Leiste rollt am Telefon ohnehin waagrecht. */
 function beschriftung(m) {
-    return mobil.value ? t(m.shortKey || m.titleKey) : t(m.titleKey)
+    return t(m.titleKey)
 }
 
 function wechsle(m, e) {

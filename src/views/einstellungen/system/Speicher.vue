@@ -1,5 +1,5 @@
 <script setup>
-/** Allgemein → Speicherverbrauch je Modul, mit Aufräumen. */
+/** System → Speicherverbrauch je Modul, mit Aufräumen. */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -118,8 +118,10 @@ async function aufraeumLoeschen(modulId) {
                         <span>{{ tb.bytes != null ? fmtBytes(tb.bytes) : '—' }} · {{ fmtZahl(tb.zeilen) }} {{ t('settings.speicherZeilen') }}</span>
                     </div>
 
-                    <!-- Aufräumen (nur Module mit begründeter Regel; zweistufig) -->
-                    <template v-if="AUFRAEUMEN_JE_MODUL[m.id]">
+                    <!-- Aufräumen (nur Module mit begründeter Regel; zweistufig).
+                         Löscht endgültig — darum als Gefahr abgesetzt wie „Neue CA" unter HTTPS. -->
+                    <div v-if="AUFRAEUMEN_JE_MODUL[m.id]" class="kasten gefahr">
+                        <h4 class="kasten-titel"><Symbol name="warnung" :groesse="16" /> {{ t('settings.aufraeumenTitel') }}</h4>
                         <p class="hinweis aufraeumen">{{ t('settings.aufraeumenAktion.' + AUFRAEUMEN_JE_MODUL[m.id]) }}</p>
                         <div class="aufraeum-zeile">
                             <span>{{ t('settings.aufraeumenAelterAls') }}</span>
@@ -137,7 +139,7 @@ async function aufraeumLoeschen(modulId) {
                         </div>
                         <p v-if="aufraeumMeldung[m.id]" class="meldung"
                             :class="aufraeumMeldung[m.id].ok ? 'gut' : 'schlecht'">{{ aufraeumMeldung[m.id].text }}</p>
-                    </template>
+                    </div>
                 </div>
             </div>
 
@@ -161,7 +163,24 @@ async function aufraeumLoeschen(modulId) {
     color: var(--muted);
     font-size: 0.88rem;
 }
-.hinweis.aufraeumen { margin: var(--abstand-2) 0 0.3rem; font-size: 0.82rem; }
+.hinweis.aufraeumen { margin: 0 0 0.3rem; font-size: 0.82rem; }
+.kasten {
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    padding: var(--abstand-3);
+    margin: var(--abstand-2) 0;
+}
+.kasten.gefahr { border-color: var(--bad); }
+.kasten-titel {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin: 0 0 var(--abstand-2);
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text);
+}
 .gedaempft { color: var(--muted); }
 .laedt { padding: var(--abstand-2) 0; color: var(--muted); }
 .kreisel {

@@ -258,7 +258,7 @@ const reihe = (n, f) => Array.from({ length: n }, (_, i) => f(i))
     p('Frühphase: Kurvenabschluss zählt nur, wer am Start noch darauf war', kurveNichtAufKurve.spitze.kurve.n === 0)
     p('Frühphase: unter zehn Paaren kein Urteil', werteAusFrueh(paare.slice(0, 18), '1d').urteil[0] === 'zuWenig')
     /*
-     * S15: Der Regelstand hängt am Schalter „Quellen ohne Verkaufsfreigabe" —
+     * S15: Der Regelstand hängt am Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" —
      * an = 2 (wie vor S12), aus = 3. Ausgewertet wird nur der geltende Stand,
      * der andere steht als Altbestand daneben; gemischt wird nie.
      */

@@ -37,6 +37,13 @@
             <h6 class="kuTitel">{{ t('kiUebersicht.verlaufTitel') }}</h6>
             <p class="kuHinweis">{{ t('kiUebersicht.verlaufHinweis') }}</p>
             <div v-if="hatVerlauf" ref="verlaufEl" class="kuVerlauf"></div>
+            <!-- Eigene Legende: die des Diagramms schnitt den letzten Eintrag ab
+                 und zeigte die Buchungsschlüssel statt Namen. -->
+            <ul v-if="hatVerlauf && legende.length" class="kuLegende">
+                <li v-for="l in legende" :key="l.schluessel">
+                    <span class="kuFarbe" :style="{ background: l.farbe }"></span>{{ l.name }}
+                </li>
+            </ul>
             <p v-else class="at-gedaempft at-klein at-mu-4">{{ t('kiUebersicht.keinVerbrauch') }}</p>
 
             <!-- ── Funktionen ─────────────────────────────────────────── -->
@@ -58,7 +65,7 @@
                             <td>
                                 <!-- Die Sammelzeile hat kein Modell, sondern die Schlüssel,
                                      unter denen gebucht wurde — sonst stünde dort nur „—". -->
-                                <span v-if="f.schluessel" class="kuModell">{{ f.schluessel.join(', ') }}</span>
+                                <span v-if="f.schluessel" class="kuModell">{{ f.schluessel.map(funktionsName).join(', ') }}</span>
                                 <template v-else>
                                     <span class="kuModell">{{ anbieterAnzeige(f.provider, t) || '—' }}<template v-if="f.modell">/{{ f.modell }}</template></span>
                                     <Pille v-if="f.folgtGlobal" ton="neutral" class="at-ml-2 kuBadge">
@@ -74,7 +81,7 @@
                                 <span v-else class="at-gedaempft">—</span>
                             </td>
                             <td class="at-rechtsbuendig">
-                                <a v-if="f.bereich" href="#" class="kuLink" @click.prevent="$emit('gehe-zu', f.bereich)">
+                                <a v-if="f.bereich" href="#" class="kuLink" @click.prevent="$emit('gehe-zu', f.bereich, f.abschnitt)">
                                     {{ t('kiUebersicht.einstellen') }}
                                 </a>
                             </td>
@@ -115,11 +122,11 @@
                                 <span v-if="a.letzterLauf">{{ zeitpunkt(a.letzterLauf) }}</span>
                                 <span v-else class="at-gedaempft">{{ t('kiUebersicht.nochNie') }}</span>
                                 <span v-if="a.fehler" class="kuFehler at-block" :title="a.fehler">
-                                    <Symbol name="warnung" /> {{ a.fehler.slice(0, 60) }}
+                                    <Symbol name="warnung" /> {{ fehlerText(a.fehler) }}
                                 </span>
                             </td>
                             <td class="at-rechtsbuendig">
-                                <a v-if="a.bereich" href="#" class="kuLink" @click.prevent="$emit('gehe-zu', a.bereich)">
+                                <a v-if="a.bereich" href="#" class="kuLink" @click.prevent="$emit('gehe-zu', a.bereich, a.abschnitt)">
                                     {{ t('kiUebersicht.einstellen') }}
                                 </a>
                             </td>
@@ -151,7 +158,7 @@ import Hinweis from '../basis/Hinweis.vue'
 import Pille from '../basis/Pille.vue'
 import Symbol from '../basis/Symbol.vue'
 
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
 defineEmits(['gehe-zu'])
 
 const laedt = ref(true)
@@ -169,6 +176,23 @@ const laeuftWas = computed(() =>
     Boolean(daten.value?.laeuft?.agent) || Number(daten.value?.laeuft?.engine?.aktiveLaeufe) > 0)
 
 const hatVerlauf = computed(() => (daten.value?.verbrauch?.verlauf || []).length > 0)
+const legende = ref([])
+
+/** Buchungsschlüssel (`ai_usage.funktion`) → Name; unbekannt bleibt der Schlüssel. */
+function funktionsName(schluessel) {
+    const k = 'kiUebersicht.schluessel.' + String(schluessel).replace(/-/g, '_')
+    return te(k) ? t(k) : schluessel
+}
+
+/*
+ * Fehlertexte der Automatiken kommen roh vom Server — ein Abbruch wegen
+ * Zeitüberschreitung stand als „This operation was aborted" da.
+ */
+function fehlerText(f) {
+    const s = String(f || '')
+    if (/aborted|AbortError|timed? ?out|timeout|ETIMEDOUT/i.test(s)) return t('kiUebersicht.fehlerAbbruch')
+    return s.slice(0, 60)
+}
 
 function zeitpunkt(ms) {
     if (!ms) return ''
@@ -225,7 +249,7 @@ function zeichne() {
 
     const funktionen = [...new Set(verlauf.flatMap((v) => Object.keys(v.jeFunktion)))]
     const serien = funktionen.map((f) => ({
-        name: f,
+        name: funktionsName(f),
         type: 'bar',
         stack: 'gesamt',
         emphasis: { focus: 'series' },
@@ -235,12 +259,12 @@ function zeichne() {
     diagramm?.dispose()
     diagramm = echarts.init(verlaufEl.value)
     diagramm.setOption({
-        grid: { left: 50, right: 12, top: 30, bottom: 40 },
+        grid: { left: 50, right: 12, top: 12, bottom: 30 },
         tooltip: {
             trigger: 'axis', axisPointer: { type: 'shadow' },
             valueFormatter: (v) => `${Number(v).toFixed(2)} ${code}`,
         },
-        legend: { type: 'scroll', top: 0, textStyle: { color: '#9aa0a6', fontSize: 10 } },
+        legend: { show: false },
         xAxis: {
             type: 'category',
             data: verlauf.map((v) => v.tag.slice(5)),
@@ -253,6 +277,8 @@ function zeichne() {
         },
         series: serien,
     })
+    const farben = diagramm.getOption().color || []
+    legende.value = funktionen.map((f, i) => ({ schluessel: f, name: funktionsName(f), farbe: farben[i % farben.length] }))
 }
 
 const beiGroesse = () => diagramm?.resize()
@@ -342,7 +368,30 @@ defineExpose({ laden })
 .kuVerlauf {
     width: 100%;
     height: 220px;
-    margin-bottom: 1.25rem;
+}
+
+.kuLegende {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .25rem .9rem;
+    margin: .4rem 0 1.25rem;
+    padding: 0;
+    list-style: none;
+    font-size: .72rem;
+    color: var(--muted);
+}
+
+.kuLegende li {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+}
+
+.kuFarbe {
+    width: .6rem;
+    height: .6rem;
+    border-radius: 2px;
+    flex: none;
 }
 
 .kuTabelle {

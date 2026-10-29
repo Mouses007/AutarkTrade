@@ -67,7 +67,7 @@ const klemme = (n) => {
  * Die Stärke der vorhandenen Signale zählt, keine Beschleunigung — der erste
  * Lauf hat keinen Vergleichswert (siehe `sozialVeraenderung`).
  *
- * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (`ohneFreigabe`) ist
+ * S15: Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (`ohneFreigabe`) ist
  * Reddit wieder die eigene Sozialquelle des Hauptlaufs, und die Rechnung ist
  * die von vor S12: kein Signal heisst 0, nicht unbekannt — Reddit hat dann ja
  * gefragt und den Token nicht gefunden.

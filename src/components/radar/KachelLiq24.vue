@@ -147,7 +147,8 @@ watch(() => props.daten, zeichne, { flush: 'post' })
         <div v-if="!daten.aktiv" class="lqAus">
             <Symbol name="aufnahme" />
             <p>{{ t('marktradar.liq.inactive') }}</p>
-            <a href="/einstellungen/live" class="ctl-pill">{{ t('marktradar.liq.activate') }}</a>
+            <!-- Router statt href (kein Neuladen), direkt zum aufgeklappten Abschnitt -->
+            <router-link to="/einstellungen/live?abschnitt=aufzeichnung" class="ctl-pill" @click.stop>{{ t('marktradar.liq.activate') }}</router-link>
         </div>
 
         <template v-else>

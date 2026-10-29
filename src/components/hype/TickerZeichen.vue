@@ -12,7 +12,7 @@
  * Nur Design-Tokens: der Ton ist eine Mischung aus Akzent, Text und Warnfarbe
  * mit der Fläche — Grün und Rot bleiben Gewinn und Verlust vorbehalten.
  *
- * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `tokenbilder`)
+ * S15: Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (ID `tokenbilder`)
  * zeigt das Zeichen wieder das Logo, wenn der Server eines mitliefert
  * (`bild`) — wie vor S12. Lädt es nicht, bleiben die Initialen. Mit Schalter
  * aus wird kein Bild geladen, auch wenn eine Adresse da ist.

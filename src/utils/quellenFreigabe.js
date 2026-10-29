@@ -1,5 +1,5 @@
 /**
- * Schalter „Quellen ohne Verkaufsfreigabe" im Browser (S15, Gegenstück zu
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" im Browser (S15, Gegenstück zu
  * `server/quellen/freigabe.js`). Einmal je Seitenaufruf geladen und geteilt.
  * Unbekannt (noch nicht geladen, Fehler) gilt als AN — die Vorgabe.
  */

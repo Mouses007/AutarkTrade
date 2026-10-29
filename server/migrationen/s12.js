@@ -16,7 +16,7 @@ export async function migriereS12(knex, addColumnIfNotExists) {
     await addColumnIfNotExists('settings', 'marktdatenQuelle', (t) => t.string('marktdatenQuelle').defaultTo('binance'))
     // CoinGecko-Tarif des Kundenschlüssels (server/quellen/coingecko.js).
     await addColumnIfNotExists('settings', 'coingeckoTarif', (t) => t.string('coingeckoTarif').defaultTo('demo'))
-    // S15: Mit „Quellen ohne Verkaufsfreigabe" an (Vorgabe) schalten diese
+    // S15: Mit „Quellen mit eingeschränkten Nutzungsbedingungen" an (Vorgabe) schalten diese
     // Schritte nichts mehr ab — sonst wären Telegram-Quellen, Kalender-Länder
     // und Wartungsmarge nach jedem Start wieder auf dem Stand nach S12.
     const ohneFreigabe = await schalterAn(knex)

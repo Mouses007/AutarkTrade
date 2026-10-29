@@ -58,8 +58,14 @@ export function istVollbildJetzt() {
     // und nahm Kopfleiste und Seitentitel weg.
     if (window.matchMedia?.('(pointer: coarse)').matches) return false
     if (window.matchMedia?.('(display-mode: standalone)').matches) return false
+    // Ein schmales Fenster ist kein F11: Bei 390 px ohne Touch (schmales
+    // Desktop-Fenster, Geräte-Emulation mit Bildschirm = Fenster) hielt der
+    // Höhenvergleich es für Vollbild — Kopfleiste und Navigation waren weg,
+    // und es gab keinen Weg mehr zu einer anderen Seite.
+    if (window.innerWidth < SCHMAL) return false
     const h = window.screen?.height
-    return !!h && Math.abs(window.innerHeight - h) <= 2
+    const b = window.screen?.width
+    return !!h && Math.abs(window.innerHeight - h) <= 2 && (!b || Math.abs(window.innerWidth - b) <= 2)
 }
 
 /** Reaktive Fassung; hört auf beide Wege ins Vollbild. */

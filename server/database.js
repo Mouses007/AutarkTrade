@@ -15,6 +15,8 @@ import { migrierePortfolio } from './migrationen/portfolio.js'
 import { migriereCoinMUsdt } from './migrationen/coinm-usdt.js'
 import { migriereDouble } from './migrationen/double.js'
 import { migriereTls } from './migrationen/tls.js'
+import { migriereTradePopups } from './migrationen/trade-popups.js'
+import { migriereKiAufgaben, migriereProfil, migriereKartenName, migriereLiveFelder } from './migrationen/einstellungen-ordnung.js'
 
 let knex = null
 
@@ -237,7 +239,7 @@ async function fixPostgresSequences(knex) {
 // pausiert, Live-Positionen nur markiert (Status bleibt, nichts geschlossen).
 // Ein älterer Codestand ignoriert die Spalte; seine Live-Instanzen fände er
 // pausiert auf Papier vor.
-// v30: Spenden zurück (`settings.spendenAn/spendenStufe/spendenBei/spendenKaffeeUrl`).
+// v30: Spenden zurück (`settings.spendenAn/spendenStufe/spendenBei`; spendenKaffeeUrl seit 29.10.2026 ungenutzt).
 // Rein additiv.
 // v31: Spenden-Rhythmus (`spendenStatus/Meilenstein/Seit/Letzte/Version/Dank`). Rein additiv.
 // v32: Momentum-Alarme im Chart — `chart_alarme.watchlistIds`, `zeiteinheiten`,
@@ -1933,8 +1935,10 @@ async function runMigrations(knex, client) {
      * Kacheln werden gar nicht erst geladen).
      */
     await addColumnIfNotExists('settings', 'livetradingAn', (t) => t.integer('livetradingAn').defaultTo(1))
-    // Layout & Stil: Beta-Modi (Strategien/Research) im Umschalter ausblenden,
-    // und das Live-Trading-Fenster auch auf dem Telefon zeigen (sonst nur Desktop).
+    // Früher unter „Layout & Stil": Beta-Modi (Strategien/Research) im Umschalter
+    // ausblenden (heute die Modus-Schalter unter Allgemein › Bedienung & Menü),
+    // und das Live-Trading-Fenster auch auf dem Telefon zeigen (Chart & Analyse
+    // › Live-Trading-Fenster).
     await addColumnIfNotExists('settings', 'betaAusblenden', (t) => t.integer('betaAusblenden').defaultTo(0))
     await addColumnIfNotExists('settings', 'livetradingMobil', (t) => t.integer('livetradingMobil').defaultTo(0))
     // Startseite (konfigurierbares Kachelraster) als Landing-Page + Modus-Tab.
@@ -1962,7 +1966,7 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'spendenAn', (t) => t.integer('spendenAn').defaultTo(1))
     await addColumnIfNotExists('settings', 'spendenStufe', (t) => t.integer('spendenStufe').defaultTo(0))
     await addColumnIfNotExists('settings', 'spendenBei', (t) => t.integer('spendenBei').defaultTo(0))
-    await addColumnIfNotExists('settings', 'spendenKaffeeUrl', (t) => t.text('spendenKaffeeUrl').defaultTo(''))
+    await addColumnIfNotExists('settings', 'spendenKaffeeUrl', (t) => t.text('spendenKaffeeUrl').defaultTo(''))  // seit 29.10.2026 ungenutzt (Link-Feld entfernt), Spalte bleibt
     // Zweite Fassung (Meilensteine 50/200/500/1000, Zeit, Update, 30-Tage-Sperre)
     await addColumnIfNotExists('settings', 'spendenStatus', (t) => t.text('spendenStatus').defaultTo(''))
     await addColumnIfNotExists('settings', 'spendenMeilenstein', (t) => t.integer('spendenMeilenstein').defaultTo(0))
@@ -2248,14 +2252,14 @@ async function runMigrations(knex, client) {
     // sein dürfen UND welchen Horizont die Frage verlangt.
     await addColumnIfNotExists('settings', 'radarNewsChartFrische',
         (t) => t.text('radarNewsChartFrische').defaultTo('woche'))            // tag|woche|monat
-    // Der Ruhe-Filter (bis 24.08.2026 „Arschlochfilter"): Truth Social
-    // automatisch plus frei wählbare Stichwörter (eines je Zeile). Er wirkt
+    // Der Ruhe-Filter: Truth Social automatisch plus frei wählbare
+    // Stichwörter (eines je Zeile), ab Werk leer. Er wirkt
     // auf Liste UND Berichtsgrundlage, aber nicht beim Abruf — die Beiträge
     // bleiben gespeichert, damit eine geänderte Wörterliste rückwirkend
     // greift. Der Sammelschalter `radarNewsQuellenAusschluss` („Temporär
     // ausschliessen") ist davon getrennt und wirkt schon beim Abruf.
     await addColumnIfNotExists('settings', 'radarNewsRuheAn', (t) => t.integer('radarNewsRuheAn').defaultTo(1))
-    await addColumnIfNotExists('settings', 'radarNewsRuheWoerter', (t) => t.text('radarNewsRuheWoerter').defaultTo('Donald Trump\nMichael Saylor'))
+    await addColumnIfNotExists('settings', 'radarNewsRuheWoerter', (t) => t.text('radarNewsRuheWoerter').defaultTo(''))
     // X-Suche läuft über die xAI Responses API — Modellname drifted, daher Feld.
     // Grok holt die X-Posts nur ab, zusammengefasst wird hier — dafür reicht das
     // günstigere Modell (1,25 statt 2 USD je Mio. Eingabe-Token).
@@ -2356,8 +2360,8 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'radarNewsAktivesProfil', (t) => t.integer('radarNewsAktivesProfil').defaultTo(0))
 
     /*
-     * Umbenennung 24.08.2026: „Arschlochfilter" heisst jetzt „Ruhe-Filter",
-     * und alle drei Spalten rücken unter das radarNews-Präfix, damit die
+     * Umbenennung 24.08.2026: Der Filter heisst jetzt „Ruhe-Filter" (die
+     * alten Spaltennamen stehen nur noch hier), und alle drei Spalten rücken unter das radarNews-Präfix, damit die
      * Profil-Feldliste (`news-profil-felder.js`) sie ohne Sonderfall erfasst.
      * Werte einmalig übernehmen, alte Spalten entfernen. Gespeicherte
      * News-Profile tragen dieselben Schlüssel in ihrem JSON — die ziehen mit
@@ -2699,13 +2703,14 @@ async function runMigrations(knex, client) {
 
     /*
      * Anzeigewährung für KI-Kosten. Die Anbieter rechnen in USD; angezeigt
-     * wurde CHF mit einem Faktor, der an sechs Stellen im Quelltext stand.
-     * Bewusst ein fester Faktor und kein Kursdienst: die Beträge sind ohnehin
-     * Schätzungen aus Listenpreisen, ein tagesaktueller Kurs wäre
-     * Scheingenauigkeit. Faktor 0 oder leer heisst „in USD anzeigen".
+     * wird in der gewählten Währung (USD/CHF/EUR) zum EZB-Kurs
+     * (`server/waehrung.js`). Bis 10/2026 war es fest CHF mit dem Faktor 0.8.
+     * Neue Installationen beginnen mit USD und ohne Faktor; bestehende
+     * behalten ihren gespeicherten Code, der Faktor bleibt Rückfall, wenn
+     * kein Kurs zu bekommen ist.
      */
-    await addColumnIfNotExists('settings', 'waehrungCode', (t) => t.text('waehrungCode').defaultTo('CHF'))
-    await addColumnIfNotExists('settings', 'waehrungFaktor', (t) => t.double('waehrungFaktor').defaultTo(0.8))
+    await addColumnIfNotExists('settings', 'waehrungCode', (t) => t.text('waehrungCode').defaultTo('USD'))
+    await addColumnIfNotExists('settings', 'waehrungFaktor', (t) => t.double('waehrungFaktor'))
 
     // ── Coin-Radar ───────────────────────────────────────────────────────
 
@@ -3668,6 +3673,19 @@ async function runMigrations(knex, client) {
     // PostgreSQL: `real` (Float32 aus t.float) → double precision (Audit FUN-DB-001).
     // Nach allen Tabellen, damit auch eben angelegte erfasst sind. Ohne SCHEMA_VERSION.
     await migriereDouble(knex)
+
+    // Neuordnung der Einstellungen (29.10.2026): KI-Modell je Aufgabe nur noch
+    // auf der Seite der Funktion. Bei jedem Start, idempotent.
+    await migriereKiAufgaben(knex, addColumnIfNotExists)
+    // Felder der Live-Ansicht, die nie eine Spalte hatten (additiv)
+    await migriereLiveFelder(addColumnIfNotExists)
+    // Share-Karte liest Name/Bild aus dem Profil; einmal übernehmen.
+    await migriereProfil(knex, addColumnIfNotExists)
+    // Name auf der Karte nur, wo bisher einer stand (einmalig).
+    await migriereKartenName(knex, addColumnIfNotExists)
+    // Trade-Bewertungs-Popup: gemeldet/neu steht in der DB; der Altbestand
+    // gilt beim ersten Lauf als gemeldet (additiv, ohne SCHEMA_VERSION).
+    await migriereTradePopups(knex, addColumnIfNotExists)
 
     /*
      * Quellen-Frage beim ersten Start (Rechtsaudit 10/2026, B-2, Variante B).

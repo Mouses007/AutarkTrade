@@ -68,5 +68,5 @@ export async function migriereS15(knex, addColumnIfNotExists) {
         if (n) meldungen.push('Wartungsmarge Binance (automatisch)')
     }
     await knex('settings').where('id', 1).update({ s15Migriert: 1 })
-    console.log(` -> S15: Quellen ohne Verkaufsfreigabe an${meldungen.length ? ' — ' + meldungen.join(', ') : ''}`)
+    console.log(` -> S15: Quellen mit eingeschränkten Nutzungsbedingungen an${meldungen.length ? ' — ' + meldungen.join(', ') : ''}`)
 }

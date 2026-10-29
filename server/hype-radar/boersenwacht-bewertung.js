@@ -13,7 +13,7 @@
  * Marktdaten) und ohne Binance Alpha (undokumentierter `bapi`-Endpunkt des
  * Web-Frontends). Die Sprosse „Alpha" gibt es damit nicht mehr.
  *
- * S15 (19.10.2026): Mit dem Schalter „Quellen ohne Verkaufsfreigabe" sind sie
+ * S15 (19.10.2026): Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" sind sie
  * wieder da wie vor S12 — `ALLE_BOERSEN` mit `freigabe` (ID in
  * `server/quellen/freigabe.js`), `boersenFuer(ohneFreigabe)` wählt die Liste.
  * Die Leiter lautet dann wieder: DEX, Binance Alpha oder mittlere Börsen
@@ -158,14 +158,14 @@ export const LESER = {
 
 // ── Handelsstart ────────────────────────────────────────────────────────
 /*
- * Drei Börsen (mit dem Schalter „Quellen ohne Verkaufsfreigabe" vier) nennen in derselben Liste, WANN ein Paar zu handeln beginnt —
+ * Drei Börsen (mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" vier) nennen in derselben Liste, WANN ein Paar zu handeln beginnt —
  * auch für Paare, die angelegt, aber noch nicht offen sind. Geprüft gegen die
  * Live-Antworten am 12.10.2026:
  *
  *   Binance Futures  `onboardDate` (ms), `status: PENDING_TRADING` vor dem Start
  *                    (GAIBUSDT stand fünf Wochen vorher drin)
  *   OKX              `listTime` (ms), `state: preopen` vor dem Start (S15, nur
- *                    mit dem Schalter „Quellen ohne Verkaufsfreigabe")
+ *                    mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen")
  *   Gate             `buy_start` (s), `trade_status: sellable` bis Kaufstart
  *   Bitget           `openTime` (ms); angekündigte Paare stehen nicht drin
  *

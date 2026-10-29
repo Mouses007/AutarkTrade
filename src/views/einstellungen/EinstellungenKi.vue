@@ -19,6 +19,7 @@ import { useI18n } from 'vue-i18n'
 import Reiter from '@/components/basis/Reiter.vue'
 import KiUebersicht from '@/components/ki/KiUebersicht.vue'
 import { KI_BEREICHE, kiBereich, kiBereichWechseln } from './gemeinsam/useKiBereich.js'
+import { springeZu } from './gemeinsam/sprung.js'
 import { useKiAnbieter } from './gemeinsam/useKiAnbieter.js'
 import { useShareCard } from './gemeinsam/useShareCard.js'
 import KiZugang from './ki/KiZugang.vue'
@@ -43,6 +44,12 @@ const KI_KOMPONENTEN = {
 const kiReiter = computed(() => KI_BEREICHE.map(b => ({
     id: b.id, titel: t('settings.ki.tab_' + b.id), symbol: b.symbol,
 })))
+/** Sprung aus der Übersicht: Unter-Reiter und, falls genannt, der Abschnitt darin. */
+function geheZu(bereich, abschnitt) {
+    kiBereichWechseln(bereich)
+    if (abschnitt) springeZu(abschnitt)
+}
+
 /** Unter-Reiter, die schon einmal offen waren (bleiben aufgebaut). */
 const besucht = reactive(new Set())
 watch(kiBereich, (b) => { if (KI_KOMPONENTEN[b]) besucht.add(b) }, { immediate: true })
@@ -63,7 +70,7 @@ onBeforeMount(async () => {
 
         <!--=============== ÜBERSICHT ===============-->
         <div v-show="kiBereich === 'uebersicht'">
-            <KiUebersicht v-if="kiBereich === 'uebersicht'" @gehe-zu="kiBereichWechseln" />
+            <KiUebersicht v-if="kiBereich === 'uebersicht'" @gehe-zu="geheZu" />
         </div>
 
         <template v-for="(komponente, id) in KI_KOMPONENTEN" :key="id">

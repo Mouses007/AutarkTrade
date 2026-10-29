@@ -28,6 +28,8 @@
  */
 
 import { logWarn } from './logger.js'
+import { zeitzoneAus } from '../shared/zeitzone.js'
+import { kontostand } from '../shared/kontostand.js'
 import { STRATEGY_TOOLS, STRATEGY_TOOL_IMPL } from './strategy-tools.js'
 import { hilfeUebersicht, hilfeThema, HILFE_THEMEN } from './app-hilfe.js'
 import { sammleKacheln, normSymbol } from './marktradar-lage.js'
@@ -154,7 +156,7 @@ export const AGENT_TOOLS = [
     },
     {
         name: 'query_settings',
-        description: 'Read app settings: timezone, broker config, available tag groups, playbook names, trade timeframes, balances. Does NOT return API keys or sensitive data.',
+        description: 'Read app settings: timezone, broker config, available tag groups, playbook names, trade timeframes, start deposit and current account balance per exchange (kontostaende: start + net P&L of the journal trades). Does NOT return API keys or sensitive data.',
         parameters: {
             type: 'object',
             properties: {}
@@ -951,6 +953,42 @@ async function toolAnalyzeSlTpPatterns(knex, params) {
     }
 }
 
+/**
+ * Kontostand je Börse wie im Journal: Start-Einzahlung (`balances[boerse].start`,
+ * Rückfall `startBalance`) + Σ `pAndL.netProceeds` der Trade-Tage dieser Börse.
+ * Nur Börsen mit Start-Einzahlung oder Trades; offene Positionen zählen nicht.
+ */
+/**
+ * Kontostand je Börse mit DERSELBEN Funktion wie die Dashboard-Karte
+ * (`shared/kontostand.js`): Start-Einzahlung der Börse (ohne Eintrag die alte
+ * Sammel-Einzahlung) plus Netto-Ergebnis ihrer Trades. Offene Positionen und
+ * Bonus kennt nur der Browser; ohne Start-Einzahlung gibt es keinen Stand.
+ */
+async function kontostaendeJeBoerse(knex, balances, startAlt) {
+    const netto = {}
+    const zeilen = await knex('trades').select('broker', 'pAndL').catch(() => [])
+    for (const z of zeilen) {
+        let p = z.pAndL
+        if (typeof p === 'string') { try { p = JSON.parse(p) } catch { p = null } }
+        const np = Number(p?.netProceeds)
+        if (!Number.isFinite(np)) continue
+        const b = z.broker || 'bitunix'
+        netto[b] = (netto[b] || 0) + np
+    }
+    const boersen = new Set([...Object.keys(balances || {}), ...Object.keys(netto)])
+    const ergebnis = {}
+    for (const b of boersen) {
+        const n = netto[b] || 0
+        const k = kontostand({ benutzer: { balances, startBalance: startAlt }, broker: b, allTimeNetPnL: n, positionen: [], bonus: 0 })
+        ergebnis[b] = {
+            startEinzahlung: k ? k.start : 0,
+            nettoErgebnis: Math.round(n * 100) / 100,
+            kontostand: k ? Math.round(k.aktuell * 100) / 100 : null,
+        }
+    }
+    return ergebnis
+}
+
 async function toolQuerySettings(knex) {
     const settings = await knex('settings').where('id', 1).first()
     if (!settings) return { error: 'No settings found' }
@@ -963,12 +1001,15 @@ async function toolQuerySettings(knex) {
     try { balances = JSON.parse(settings.balances || '{}') } catch { balances = {} }
 
     return {
-        timeZone: settings.timeZone || '',
+        timeZone: zeitzoneAus(settings.timeZone),
         language: settings.language || 'de',
         startBalance: settings.startBalance || 0,
-        startBalanceDate: settings.startBalanceDate || 0,
-        currentBalance: settings.currentBalance || 0,
         balances,
+        // Bis 10/2026 standen hier `startBalanceDate`/`currentBalance` — Spalten,
+        // die nie jemand schrieb, also immer 0. Der Kontostand entsteht wie im
+        // Journal (Einstellungen › Journal › Kontostand, Dashboard): Start-
+        // Einzahlung der Börse plus Summe der Netto-Ergebnisse ihrer Trades.
+        kontostaende: await kontostaendeJeBoerse(knex, balances, settings.startBalance),
         tagGroups: tags.map(g => ({
             name: g.name,
             tags: (g.tags || []).map(t => t.name)
@@ -1149,6 +1190,12 @@ async function toolGetOpenrouterModels(knex, params) {
     }
 }
 
+/** Beschriftung der KI-Unter-Reiter (wie `settings.ki.tab_*` in de.json). */
+const KI_REITER_NAMEN = {
+    allgemein: 'Zugang', berichte: 'Trade-Berichte', nachrichten: 'Nachrichten',
+    agent: 'Agent', strategie: 'Strategie', bilder: 'Bilder',
+}
+
 /**
  * Empfiehlt beste Modell-Zuordnung für alle Aufgaben.
  */
@@ -1200,6 +1247,11 @@ async function toolRecommendModelAllocation(knex, params) {
         if (selected) {
             recommendations[taskId] = {
                 aufgabe: task.name,
+                // Wo man sie einträgt: eigene Seite oder die Tabelle unter Zugang
+                // — mit der Beschriftung des Reiters, nicht seiner Kennung
+                einstellen: task.seite
+                    ? `Einstellungen › KI › ${KI_REITER_NAMEN[task.seite.reiter] || task.seite.reiter}`
+                    : `Einstellungen › KI › Zugang › Modell je Aufgabe (${task.id})`,
                 empfohleneModelle: {
                     eins: selected.fullName,
                     alternativ: candidates.filter(c => c !== selected).map(c => c.fullName),
@@ -1217,8 +1269,8 @@ async function toolRecommendModelAllocation(knex, params) {
         optimierungsziel: optimizeFor,
         empfehlungen: recommendations,
         einstellungen: {
-            pfad: 'Einstellungen → KI → OpenRouter-Modelle',
-            spalte: 'aiTaskProviders',
+            pfad: 'je Aufgabe unter „einstellen" — Seite der Funktion oder Einstellungen › KI › Zugang › Modell je Aufgabe',
+            spalte: 'aiTaskProviders (nur Aufgaben ohne eigene Seite)',
         },
     }
 }

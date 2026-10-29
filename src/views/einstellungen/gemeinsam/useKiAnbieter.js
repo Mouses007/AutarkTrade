@@ -65,14 +65,20 @@ export let aiBerichtModell = ref('')
 export let aiAgentProvider = ref('')
 export let aiAgentModell = ref('')
 export let aiAgentTokenBudget = ref(80000)
-export let modelAnalysisRunning = ref(false)
-export let modelAnalysisResult = ref(null)
 export let aiTaskProviders = ref({})
 /** Zeilen der Aufgaben-Tabelle — vom Server (`AI_TASKS`), nicht von Hand gepflegt. */
 export const aufgabenListe = ref([])
 export let aiStrategieProvider = ref('')
 export let aiStrategieModell = ref('')
 export let radarNewsRechercheModell = ref('sonar')
+/** 1 = Recherche über die DeepSeek-Suche; das Modellfeld bleibt das Perplexity-Modell. */
+export let radarNewsRechercheDeepseek = ref(0)
+/* Eigene Felder der Trade-Analyse (KI › Trade-Berichte; leer = wie die
+   Berichte) und des Sentiment-Vetos (KI › Strategie; leer = global). */
+export let aiTradeAnalyseProvider = ref('')
+export let aiTradeAnalyseModell = ref('')
+export let aiStrategieVetoProvider = ref('')
+export let aiStrategieVetoModell = ref('')
 
 /* Guthaben-Status je Anbieter. Die Anbieter verraten ihr Restguthaben nicht
    über den API-Key — gezeigt wird, was der Server weiss: hinterlegter
@@ -220,7 +226,7 @@ export function useKiAnbieter() {
                 aiCustomUrl: aiCustomUrl.value.trim(),
                 aiQwenUrl: aiQwenUrl.value.trim(),
                 aiDeepseekUrl: aiDeepseekUrl.value.trim(),
-                aiTemperature: parseFloat(aiTemperature.value) || 0.7,
+                aiTemperature: Math.round((parseFloat(aiTemperature.value) || 0.7) * 10) / 10,
                 aiMaxTokens: parseInt(aiMaxTokens.value) || 1500,
                 aiScreenshots: aiScreenshots.value,
                 aiChatEnabled: aiChatEnabled.value,
@@ -353,7 +359,8 @@ export function useKiAnbieter() {
             aiCustomUrl.value = s.aiCustomUrl || ''
             aiQwenUrl.value = s.aiQwenUrl || ''
             aiDeepseekUrl.value = s.aiDeepseekUrl || ''
-            aiTemperature.value = s.aiTemperature ?? 0.7
+            // Gerundet: die Spalte ist eine Gleitkommazahl, 0.7 kam als 0.699999988079071 zurück
+            aiTemperature.value = Math.round(Number(s.aiTemperature ?? 0.7) * 10) / 10
             aiMaxTokens.value = s.aiMaxTokens || 1500
             aiScreenshots.value = s.aiScreenshots || false
             aiChatEnabled.value = s.aiChatEnabled !== false
@@ -388,6 +395,11 @@ export function useKiAnbieter() {
             aiStrategieProvider.value = cu.aiStrategieProvider || ''
             aiStrategieModell.value = cu.aiStrategieModell || ''
             radarNewsRechercheModell.value = cu.radarNewsRechercheModell || 'sonar'
+            radarNewsRechercheDeepseek.value = Number(cu.radarNewsRechercheDeepseek) === 1 ? 1 : 0
+            aiTradeAnalyseProvider.value = cu.aiTradeAnalyseProvider || ''
+            aiTradeAnalyseModell.value = cu.aiTradeAnalyseModell || ''
+            aiStrategieVetoProvider.value = cu.aiStrategieVetoProvider || ''
+            aiStrategieVetoModell.value = cu.aiStrategieVetoModell || ''
             ladeGuthaben()
         } catch (e) {
             console.error('Fehler beim Laden der KI-Settings:', e)
@@ -418,8 +430,9 @@ export function useKiAnbieter() {
         aiScreenshots, aiChatEnabled, aiReportPrompt, aiReportPromptPreset, aiTestLoading, aiTestResult,
         ollamaModels, modellListen, bildModellListen, bildStandardListen, anbieterListe, ohneSampling,
         aiBerichtProvider, aiBerichtModell, aiAgentProvider, aiAgentModell, aiAgentTokenBudget,
-        modelAnalysisRunning, modelAnalysisResult, aiTaskProviders, aufgabenListe,
-        aiStrategieProvider, aiStrategieModell, radarNewsRechercheModell, guthabenListe,
+        aiTaskProviders, aufgabenListe,
+        aiStrategieProvider, aiStrategieModell, radarNewsRechercheModell, radarNewsRechercheDeepseek, guthabenListe,
+        aiTradeAnalyseProvider, aiTradeAnalyseModell, aiStrategieVetoProvider, aiStrategieVetoModell,
         // Abgeleitetes und Funktionen
         promptPresets, onPromptPresetChange, currentApiKey, loadModelLists, aktuellerAnbieter, anbieterUrl,
         providerListe, getModelsForProvider, modellOhneTemperatur, modelleGeaendert, loadOllamaModels,

@@ -100,7 +100,7 @@
     "rollback": "Rollback...",
     "changes": "Changes:",
     "updateBackupWarning": "⚠️ Create a backup before updating!",
-    "updateBackupPath": "Settings → Database → Backup → Export",
+    "updateBackupPath": "Settings → System → Database → Backup → Export",
     "updateConfirm": "Have you created a backup and want to continue?",
     "rollbackConfirm": "Do you want to return to the previous version?",
     "addExcursions": "Add Excursions",
@@ -213,7 +213,7 @@
     "3M": "3 Months",
     "6M": "6 Months",
     "12M": "12 Months",
-    "addCustom": "+ Timeframe",
+    "addCustom": "Timeframe",
     "egCustom": "e.g. 8 Hours"
   },
   "dashboard": {
@@ -374,12 +374,12 @@
     "esp32Resistiv": "Resistive",
     "esp32Kapazitiv": "Capacitive",
     "esp32Flash": "Flashing:",
-    "esp32WeitereClients": "Other clients (same key):",
+    "esp32WeitereClients": "Other displays (with the main key):",
     "esp32AndroidWidget": "home-screen widget",
     "esp32Desklet": "Cinnamon desklet",
     "esp32LiefertTitel": "Returns",
     "esp32Liefert": "today's PnL, total PnL, win rate, open positions, running bots",
-    "esp32KeyGesetzt": "(set — regenerate to show)",
+    "esp32KeyGesetzt": "(set — create a new one to show it)",
     "esp32KeinKey": "(no key set)",
     "esp32Kopieren": "Copy",
     "esp32Kopiert": "Key copied to the clipboard.",
@@ -389,8 +389,8 @@
     "esp32Woche": "Current week",
     "esp32Jahr": "Current year",
     "esp32Gesamt": "All time",
-    "esp32KeyNeu": "Regenerate key",
-    "esp32KeyErzeugen": "Generate key",
+    "esp32KeyNeu": "Create a new key",
+    "esp32KeyErzeugen": "Create key",
     "esp32KeyLoeschen": "Delete key",
     "esp32PushTitel": "Push devices ({anzahl} of {max})",
     "esp32PushBeschreibung": "Devices registered with the ESP32 key for instant delivery of chart alerts (Android widget via ntfy). At most {max}; when the list is full the server accepts no new device. Remove an unknown device and generate a new key.",
@@ -402,7 +402,7 @@
     "esp32PushEntfernen": "Remove",
     "esp32PushEntfernenFrage": "Remove device \"{name}\" from instant delivery?",
     "esp32FilterGespeichert": "Filter saved — displays pick it up on their next fetch.",
-    "esp32KeyNeuHinweis": "New key generated — visible only once. Copy it now!",
+    "esp32KeyNeuHinweis": "New key created — visible only now. Copy it now!",
     "esp32Anzeige": {
       "titel": "Display key (ESP32 displays only)",
       "text": "A display sits in the open and sends its key over HTTP. The display key therefore ONLY opens the display data (GET /api/esp32/display) — no alarms, no push registration. ESP32 displays get this key, the phone app and the widget get the main key above. The main key keeps working for the display too.",
@@ -466,7 +466,7 @@
       "herkunftEigen": "own entry",
       "entfernen": "Remove {name}",
       "hinzufuegen": "Add name or IP",
-      "hinzufuegenPlatzhalter": "e.g. 192.168.178.100 or nas.fritz.box",
+      "hinzufuegenPlatzhalter": "e.g. 192.168.1.50 or myserver.local",
       "aufnehmen": "Add",
       "verwerfen": "Dismiss",
       "namenGespeichert": "Saved — new certificate active.",
@@ -503,7 +503,6 @@
     "importLoeschFehler": "Error while deleting: ",
     "language": "Language",
     "languageLabel": "App Language",
-    "layoutAndStyle": "Layout & Style",
     "startpageOn": "Show home page",
     "startpageOnHint": "Shows the configurable home page as landing page and its own mode tab. Off: the app starts directly in the journal.",
     "livetradingMobile": "Live trading on mobile",
@@ -518,7 +517,6 @@
     "calculateFromApi": "Calculate from API",
     "apiBalance": "API Balance: {value} USDT",
     "manualOrApi": "Enter manually or calculate automatically from the API.",
-    "apiConnection": "API Connection",
     "zugangAbgelehnt": "{boerse} rejects the stored API key.",
     "zugangSeit": "Since {zeit}. Create a new key at the exchange and enter it below — the notice disappears on the next successful call.",
     "apiConnectionDescription": "Connect your exchange accounts to import trades automatically.",
@@ -538,7 +536,8 @@
     "pionexSaved": "Pionex API settings saved",
     "evaluation": "Evaluation",
     "tagsSection": "Tags",
-    "tagsDescription": "Create tag groups and tags to categorize your trades.",
+    "tagsDescription": "Create tag groups and tags to categorize your trades. Drag a tag to another position to change the order.",
+    "tagZiehen": "Drag to reorder (keyboard: Alt + arrow)",
     "newTagPlaceholder": "New tag...",
     "newGroupPlaceholder": "New group...",
     "timeframesSection": "Timeframes",
@@ -548,12 +547,10 @@
     "scalpMaxMinutes": "Scalp max. (minutes)",
     "daytradeMaxHours": "Day trade max. (hours)",
     "tradeTypeThresholdHint": "Everything above the day trade threshold is detected as swing trade.",
-    "popupsAndNotifications": "Popups & Notifications",
-    "popupsDescription": "Show trade evaluation popups when opening and closing positions.",
+    "popupsDescription": "Announce newly opened and newly closed positions once in a popup – on every page except the live trading cockpit, where the notice waits for the next page. When switched on, only trades from that moment count. When off, closed positions go straight into the journal without a closing evaluation.",
     "enablePopups": "Enable evaluation popups",
     "browserNotifications": "Browser Notifications",
     "browserNotificationsHint": "Desktop notification when an AI report is ready or an API import is complete (only when tab is not focused).",
-    "kiAgent": "AI settings",
     "promptTextShort": "Keep the report short and to the point. At most 3-4 sentences per section. Focus on the most important findings.",
     "promptTextStandard": "Write a balanced trading report covering all key metrics, strengths, weaknesses and concrete suggestions for improvement. Use factual, professional language.",
     "promptTextCoach": "Be very direct and critical. Do not sugarcoat anything. Name weaknesses and mistakes plainly. Give concrete suggestions like a strict trading coach.",
@@ -607,7 +604,7 @@
         "title": "Strategy agents",
         "killActive": "emergency stop on",
         "intro": "Global switches for the strategy agents (simulation only, no orders). The strategies themselves and their parameters are configured under",
-        "link": "Agent → Strategies",
+        "link": "Strategies › Instances",
         "intro2": "These switches take precedence: no individual instance can bypass them.",
         "kill": "Emergency stop",
         "killHint": "While active, nothing is detected and no simulated position is opened.",
@@ -626,7 +623,6 @@
         "autoHint": "Daily, weekly or not at all (\"manual only\"). Off: by button only. Posts are collected daily regardless.",
         "daily": "daily",
         "weekly": "weekly",
-        "localTime": "local time",
         "wd1": "Monday",
         "wd2": "Tuesday",
         "wd3": "Wednesday",
@@ -642,7 +638,7 @@
         "researchLabel": "Research & X search",
         "researchHint": "With a Perplexity key the briefing additionally researches each topic on the web (sources included); with an xAI key, X sources are fetched via Grok — once a day. Both keys live under Access. Without a key the respective step is skipped silently.",
         "grokModel": "Grok model for the X search:",
-        "perplexityModel": "Research:",
+        "perplexityModel": "Perplexity model:",
         "videosLabel": "Videos per run to Gemini",
         "videosHint": "Video is the most expensive input type — billed by length. 0 = watch no videos; the briefing then uses only titles and video descriptions.",
         "geminiDefault": "Gemini default",
@@ -728,11 +724,11 @@
         "updateProfileTitle": "Snapshot the current settings into this profile again",
         "updateProfileBtn": "Update",
         "noProfiles": "No profiles created yet.",
-        "newProfileNamePlaceholder": "Name, e.g. 'BTC important news only'",
+        "newProfileNamePlaceholder": "Profile name, e.g. BTC only",
         "saveAsProfileBtn": "+ Save from current settings",
         "sourcesTitle": "News sources",
         "sourcesDescription": "YouTube channels, RSS feeds, Telegram channels, and X accounts for the news page. Anything you mark as exclude gets hidden by \"Temporarily exclude\" — and isn't fetched at all. Only title, link, and timestamp are stored, never full text.",
-        "xSourceHint": "About X: runs via the paid Grok search (xAI) — just the handle is enough as the address, e.g. {'@'}saylor. All X sources together cost ONE search per fetch run (roughly $0.005 plus tokens), throttled to at most one search every four hours. Requires an xAI key under \"AI settings\". Free workarounds (Nitter mirrors) are dead — checked 2026-08-16.",
+        "xSourceHint": "About X: runs via the paid Grok search (xAI) — just the handle is enough as the address, e.g. {'@'}saylor. All X sources together cost ONE search per fetch run (roughly $0.005 plus tokens), throttled to at most one search every four hours. Requires an xAI key under AI › Access. Free workarounds (Nitter mirrors) are dead — checked 2026-08-16.",
         "tempExcludeLabel": "Temporarily exclude",
         "tempExcludeOn": "On — sources marked as excluded stay out",
         "tempExcludeOff": "Off — all active sources are fetched",
@@ -758,26 +754,36 @@
         "lagenAn": "Include in the report",
         "lagenSymbol": "Trading situation for",
         "lagenSymbolHint": "A Binance perpetual, e.g. BTCUSDT or SOLUSDT — the trading situation measures this one market.",
-        "lagenSymbolUnbekannt": "Binance does not list {symbol} as a perpetual — the trading situation would be missing from the report."
+        "lagenSymbolUnbekannt": "Binance does not list {symbol} as a perpetual — the trading situation would be missing from the report.",
+        "researchWay": "Route:",
+        "likeReport": "Same as the briefing",
+        "updateModelLabel": "Model for the interim notes",
+        "updateModelHint": "Empty = the same model as the briefing. \"Global provider\" follows the provider set under AI › Access.",
+        "checkModelLabel": "Model for the instruction check",
+        "checkModelHint": "Checks your own instruction before it goes to the briefing. Empty = the same model as the briefing — whoever checks should also follow it later.",
+        "contentTitle": "Content & length",
+        "modelsTitle": "Models",
+        "keepTitle": "Retention",
+        "filterTitle": "Filters",
+        "rhythmTitle": "Schedule & updates"
       },
       "agentBudget": "Token budget per run",
       "agentBudgetHint": "Upper limit for one agent run across all reasoning rounds (input + output). When reached, the agent summarises what it has found so far. More budget = deeper analyses, but higher cost per question.",
-      "modelOptimization": "Model optimisation",
-      "modelOptimizationHint": "Optimise OpenRouter models per task",
-      "analysisStart": "Start agent analysis",
-      "analysisRunning": "Analysing models …",
-      "analysisDone": "{n} recommendations generated",
-      "taskModelsTitle": "Task-specific models",
-      "taskModelsHint": "Format provider/model (e.g. anthropic/claude-haiku-5-5, openrouter/anthropic/claude-opus-5.5) or just provider for its default model. A line here beats the function's own field; empty = own field, otherwise the global model. The greyed-out value is the recommendation.",
+      "taskModelsTitle": "Model per task",
+      "taskModelsHint": "For tasks without their own page. Situation report incl. interim notes and instruction check, video, X search, research, trade analysis, agent, strategy and sentiment veto are set on their own page. Format provider/model (e.g. anthropic/claude-haiku-5-5, openrouter/anthropic/claude-opus-5.5) or just provider for its default model; empty = the value in brackets, otherwise the global model. The greyed-out value is the recommendation.",
       "taskCol": "Task",
       "taskCurrentCol": "Current",
       "taskChangeCol": "Change",
       "taskOnly": "only {was}",
-      "costTitle": "Cost overview",
-      "costEstimate": "Estimated monthly cost:",
-      "costHint": "Use the agent analysis above to find the best model per task and save costs.",
       "deepseekSearch": "DeepSeek search + Haiku (cheaper)",
-      "keineEmpfehlungen": "AI texts are labelled and are not investment advice."
+      "keineEmpfehlungen": "AI texts are labelled and are not investment advice.",
+      "kostenVerweis": "What the AI functions actually cost is shown in the overview (measured, per function and day).",
+      "imageProviderActive": "image provider",
+      "tradeAnalyseLabel": "Model for the trade analysis",
+      "tradeAnalyseHint": "The quick first assessment of a closed trade. Empty = the same as the trade reports above.",
+      "likeReports": "Same as reports",
+      "vetoLabel": "Model for the sentiment veto",
+      "vetoHint": "The sentiment and portfolio agents check a setup before a strategy trades it (simulated). Empty = the generally configured provider; an instance's role setting takes precedence."
     },
     "aiEnabled": "AI features enabled",
     "aiEnabledHint": "Off: AI disappears from menu and dashboard.",
@@ -787,7 +793,7 @@
     "ollamaUrlHint": "Default: http://localhost:11434 — Change the URL if Ollama is running on a different server.",
     "model": "Model",
     "loadModelsHint": "Click \"Test connection\" to load the models.",
-    "apiKeyLabel": "API Key",
+    "apiKeyLabel": "API key",
     "apiKeyInputPlaceholder": "Enter API key...",
     "deleteKey": "Delete key",
     "encryptedStored": "Stored encrypted.",
@@ -806,13 +812,9 @@
     "dbType": "Database Type",
     "sqliteLocal": "SQLite (local)",
     "postgresRemote": "PostgreSQL (remote)",
-    "pgProviderTitle": "Free PostgreSQL Providers",
-    "pgProviderDesc": "No own server? These providers offer free PostgreSQL databases:",
-    "pgProvider": "Provider",
-    "pgFeature": "Feature",
-    "pgAivenFeature": "EU locations (GDPR)",
+    "pgHosting": "No server of your own? PostgreSQL also runs on online database services (hosted PostgreSQL, some with a free tier) or on a rented virtual private server (VPS). Take host, port, user, password and database from there and enter them above. Your data is then stored with that provider.",
     "host": "Host",
-    "hostPlaceholder": "e.g. 192.168.1.100",
+    "hostPlaceholder": "e.g. 192.168.1.50",
     "port": "Port",
     "user": "User",
     "password": "Password",
@@ -855,11 +857,8 @@
     "fluxApiKeyHint": "From api.bfl.ai",
     "fluxModel": "Image Model",
     "fluxModelHint": "Higher quality models cost more per image.",
-    "fluxDisplayName": "Display Name",
-    "fluxDisplayNameHint": "Shown on the share card.",
-    "fluxAvatar": "Avatar",
-    "fluxUseCustomAvatar": "Use custom profile picture",
-    "fluxAvatarHint": "Default: App logo. Optionally upload your own image.",
+    "fluxAvatar": "Name and picture",
+    "fluxUseCustomAvatar": "Show the profile picture on the card (otherwise the app logo)",
     "fetchFromProvider": "Fetch from provider",
     "providerOffers": "{n} models available at the provider",
     "providerOffersFiltered": "{n} of {gesamt} models match the search",
@@ -921,7 +920,7 @@
       "system": "System"
     },
     "area_journal": "Journal",
-    "area_live": "Analysis",
+    "area_live": "Chart & analysis",
     "area_agent": "Agent",
     "deleteFailed": "Deleting failed.",
     "schluesselGeleert": "Saved. The address changed, so the previous key was removed. Please enter the key again.",
@@ -993,12 +992,13 @@
       "schriftSehrGross": "Extra large",
       "mailSecurityNone": "none",
       "typ_chartAlarm": "Chart alert (price, line, zone, momentum)",
-      "hinweis_chartAlarm": "You create the alerts on the chart — this only decides whether they also arrive by mail. Push (ntfy, Telegram, webhook) is set up further down under “Push to your phone”."
+      "hinweis_chartAlarm": "You create the alerts on the chart — this only decides whether they also arrive by mail. Push (ntfy, Telegram, webhook) is set up further down under “Push to your phone”.",
+      "anderswoLink": "Go to AI › News →"
     },
     "erweiterteInfos": "Extended info",
     "erweiterteInfosHint": "Shows a small \"i\" next to values and controls. Hover (tap on phone) explains what the number means.",
     "kerzenFarben": "Candle colours in the chart",
-    "kerzenFarbenHint": "Rising candles are drawn hollow with a coloured border, falling ones filled. Applies to all charts, the volume bars and the trade image.",
+    "kerzenFarbenHint": "Rising candles are drawn hollow with a coloured border, falling ones filled. Applies to all charts, the volume bars and the trade image. Quicker: double-click a candle in the chart.",
     "kerzeSteigend": "Rising",
     "kerzeFallend": "Falling",
     "kerzenVorgabe": "Default",
@@ -1039,8 +1039,8 @@
     "pionexCauseIpWhitelist": "IP whitelist: your server IP is not allowed (optional on Pionex)",
     "pionexCausePermissions": "Permissions: the API key needs \"Enable Reading\" (Read)",
     "tagsCountSuffix": "Tags",
-    "addTagBtn": "+ Tag",
-    "addGroupBtn": "+ Group",
+    "addTagBtn": "Tag",
+    "addGroupBtn": "Group",
     "shareCardsTitle": "Share Cards",
     "shareCardsDescription": "Create stylish share images for your trades using AI image generation.",
     "imageProviderLabel": "Image provider",
@@ -1052,7 +1052,6 @@
     "shareCardTemplateDeleteConfirm": "Really delete this template?",
     "hostLabel": "Host",
     "portLabel": "Port",
-    "freeTierCol": "Free tier",
     "ohlcChart": "OHLC chart",
     "dayLabel": "day",
     "daysLabel": "days",
@@ -1069,7 +1068,101 @@
       "ntfyTopicLeer": "Without a topic nothing is sent via ntfy.",
       "ntfyTopicSchwach": "On ntfy.sh a topic is public: anyone who knows the name reads your alerts and can send their own. Use a long random topic (at least {n} characters, not “hype-radar”) — or a reserved topic with an access token, or your own ntfy server."
     },
-    "startDepositUngueltig": "Please enter a number (e.g. 1000 or 1000.50; 0 is allowed). Nothing was saved."
+    "startDepositUngueltig": "Please enter a number (e.g. 1000 or 1000.50; 0 is allowed). Nothing was saved.",
+    "waehrungLabel": "Display currency for costs",
+    "waehrungHint": "Providers bill AI costs and budgets in USD. For CHF or EUR AutarkTrade converts at the ECB reference rate (refreshed hourly). Portfolio and tax report calculate independently of this.",
+    "waehrungKurs": "Rate: 1 USD = {kurs} {code} ({quelle}).",
+    "waehrungKursGespeichert": "No current rate available — the stored factor 1 USD = {kurs} {code} applies.",
+    "waehrungKursFehlt": "No rate available — costs are shown in USD for now.",
+    "fluxProfilHint": "Name and picture on the card come from your profile: Settings › General › Profile & language.",
+    "fluxOhneName": "The card shows no name (switch off or no username in the profile).",
+    "area_geraete": "Devices",
+    "area_system": "System",
+    "profilSprache": "Profile & language",
+    "profilHint": "Name and picture appear in the side menu and on the share card. Saved when you leave the field or pick the picture.",
+    "bedienungMenue": "Controls & menu",
+    "boersenLinks": "Exchange links",
+    "boersenLinksHint": "Which trading pages are linked next to a coin — in Coin Radar, Hype Radar and the market radar tiles RSI/market overview.",
+    "chartAbschnitt": "Chart",
+    "boersenKonten": "Exchange accounts",
+    "bewertungsPopups": "Evaluation popups",
+    "kiZugangAnbieter": "Access & providers",
+    "aufraeumenTitel": "Clean up — deletes permanently",
+    "live": {
+      "fensterTitel": "Live trading window",
+      "fensterEinleitung": "A workspace of its own for the hours you actually trade — a tile grid with its own layout, independent of the market radar. If you only watch, switch the page off here; the start button on the market radar and the menu entry disappear with it.",
+      "fensterAnzeigen": "Show the live trading window",
+      "heatmap": {
+        "titel": "Heatmap / Bookmap",
+        "einleitung": "Defaults for the live view. Changes in the side menu of the live analysis end up here too — both write the same settings. The data comes live from the public Binance market data stream; nothing is recorded, the history starts when you open the page.",
+        "markt": "Market",
+        "marktFutures": "USDⓈ-M futures (perpetual)",
+        "marktSpot": "Spot",
+        "preisband": "Price band",
+        "preisbandHilfe": "Visible range around the mid price",
+        "spaltentakt": "Column interval",
+        "spaltentaktHilfe": "Time one pixel column covers",
+        "historie": "History in memory",
+        "historieHilfe": "Longer = more memory",
+        "historieAuto": "Automatic (twice the visible span)",
+        "minuten": "{n} minutes",
+        "farbrampe": "Colour ramp",
+        "rampeViridis": "Viridis (violet → green → yellow)",
+        "rampeKlassisch": "Classic (blue → green → yellow → red)",
+        "rampeJournal": "Journal (blue tone)",
+        "farbskala": "Colour scale",
+        "farbskalaHilfe": "Fixed = pictures comparable across time and symbols",
+        "skalaAuto": "Automatic (95th percentile)",
+        "skalaFest": "Fixed saturation value",
+        "skalaPlatzhalter": "e.g. 50",
+        "vorlauf": "Prefill on open",
+        "vorlaufHilfe": "Only from your own recording — Binance does not provide past order book depth. When on, the full history length is always loaded: the server folds the answer to about 900 columns anyway, fetching less saves nothing and leaves the map empty on the left.",
+        "vorlaufAus": "Off (start empty)",
+        "schwelle": "Liquidity threshold",
+        "schwelleHilfe": "Hides weak liquidity — only the walls remain",
+        "punkte": "Merge dots",
+        "punkteHilfe": "Bundles trade dots into bubbles and sets their size at the same time. All the way left every column stays separate — the dots then merge into a band.",
+        "punkteAus": "off",
+        "verhalten": "Behaviour",
+        "folgen": "Price axis follows the mid price",
+        "folgenHilfe": "Off = fixed axis, movable by dragging in the chart",
+        "profil": "Show volume profile",
+        "liquidationen": "Draw forced liquidations",
+        "liquidationenHilfe": "Futures only — liquidations actually executed, as diamonds",
+        "pause": "Pause in the background",
+        "pauseHilfe": "Recommended: the browser throttles hidden tabs, otherwise the time axis gets distorted"
+      },
+      "radar": {
+        "titel": "Market radar · tiles",
+        "einleitung": "Applies to the tiles on the \"Market radar\" page and in the live trading window. What is visible, how large and in which order is set right there — it is stored per device.",
+        "rsiSymbole": "RSI symbols",
+        "rsiHilfe": "Leave empty: the tile takes the highest-volume markets or your own trades. A list here (e.g. BTCUSDT, ETHUSDT) overrides both.",
+        "kalenderLaender": "Calendar · countries",
+        "kalenderLaenderHilfe": "Currency codes of the economic calendar, e.g. USD, JPY, EUR.",
+        "kalenderWirkung": "Calendar · minimum impact",
+        "kalenderWirkungHilfe": "\"Medium\" includes high impact — it is a lower bound.",
+        "wirkungAlle": "All events",
+        "wirkungMittel": "Medium and high",
+        "wirkungHoch": "High impact only",
+        "kalenderStand": "Last fetched: {wann} · {n} events in stock (−3 to +14 days)",
+        "nochNie": "never",
+        "standLaedt": "Loading status …",
+        "erneutHolen": "Fetch again",
+        "letzterFehler": "Last error: {fehler}",
+        "kalenderZuFrueh": "Fetched just recently — the feed is not asked more often than every few minutes.",
+        "kalenderGeholt": "{gesehen} events seen, {neu} new."
+      }
+    },
+    "fluxNameZeigen": "Show the profile name on the card",
+    "modePortfolioInfo": "Spot holdings of all exchanges and wallets, plus the tax report (beta, read only).\nOff: the tab disappears and holdings are no longer fetched; stored data is kept.",
+    "zeitzoneLabel": "Time zone",
+    "zeitzoneHint": "Used for the day boundaries of trades in the journal and for times in the briefing, in mails and on the ESP32 display.",
+    "zeitzoneBrowser": "This browser is set to {zone}.",
+    "zeitzoneUebernehmen": "use it",
+    "profilBildTyp": "The profile picture must be PNG, JPEG, GIF or WebP.",
+    "profilBildGross": "The picture is larger than {mb} MB.",
+    "profilBildUnlesbar": "The picture cannot be read.",
+    "esp32HauptLabel": "Main key (phone app, widget, desklet)"
   },
   "setup": {
     "welcome": "Welcome!",
@@ -1135,7 +1228,7 @@
     "news": {
       "title": "News sources",
       "intro": "Sources you already added stay untouched — this is only for adding new ones.",
-      "telegramEntfernt": "Telegram is off (the \"sources without sales clearance\" switch (Settings › Data sources) is off) — Telegram prohibits reading public channels. The source can be deleted but not re-enabled.",
+      "telegramEntfernt": "Telegram is off (the \"sources with restricted terms of use\" switch (Settings › Data sources) is off) — Telegram prohibits reading public channels. The source can be deleted but not re-enabled.",
       "eigeneQuellen": "No sources are pre-filled: you choose which feeds and channels are read and summarised by the AI. Mind the terms of use of each source."
     },
     "mail": {
@@ -1163,7 +1256,7 @@
     "lastUpdated": "Last updated:",
     "brokerAusfall": "{boerse} is not responding — all positions from this exchange are missing here.",
     "brokerTeilausfall": "Part of the answer came through, the rest did not; only what arrived is shown.",
-    "brokerAusfallHinweis": "If the exchange reports an expired or invalid key, only a new one helps: Settings → Exchanges.",
+    "brokerAusfallHinweis": "If the exchange reports an expired or invalid key, only a new one helps: Settings › Journal › Exchange accounts.",
     "refresh": "Refresh",
     "futuresSection": "Futures",
     "botsSection": "Bots",
@@ -1543,14 +1636,14 @@
     "cgSchluesselFehlt": "No key stored — CoinGecko trending, new pools and buyer counts are off.",
     "boerse_coinbase": "Coinbase",
     "boerse_gate": "Gate",
-    "boersenWahlHinweis": "Coinbase, Kraken, KuCoin and Gate are off by default: their terms do not visibly allow using their market data in a sold program — enable at your own responsibility. Upbit, OKX, MEXC and Binance Alpha were removed for licensing reasons.",
+    "boersenWahlHinweis": "Coinbase, Kraken, KuCoin and Gate are off by default: their terms do not explicitly allow automated use of their market data — enable at your own responsibility. Upbit, OKX, MEXC and Binance Alpha stay off while \"sources with restricted terms of use\" is off.",
     "quellenAbgeschaltet": "Off (no key or switched off): {q}.",
     "quelleDaten": "Data:",
     "boerse_bitget": "Bitget",
     "rugcheckAn": "Use RugCheck (Solana: insider networks, liquidity lock, fallback when GoPlus fails)",
     "boerse_bybit": "Bybit",
     "rugcheckHinweis": "RugCheck's terms of use are unclear (keys and paid tiers possible) — hence off by default. Without RugCheck GoPlus checks alone: insider networks stay unknown, and on Solana the liquidity lock is unknown — with \"liquidity must be locked\" Solana finds then fail.",
-    "quellenEntferntHinweis": "pump.fun, CoinPaprika and Reddit are no longer connected: their terms do not allow use in a sold program. CoinGecko and its on-chain pools (formerly GeckoTerminal) only run with your own CoinGecko key.",
+    "quellenEntferntHinweis": "pump.fun, CoinPaprika and Reddit are off: their terms do not allow automated use, or only with restrictions (switch \"sources with restricted terms of use\", Settings › Data sources). CoinGecko and its on-chain pools (formerly GeckoTerminal) then only run with your own CoinGecko key.",
     "boerse_binance-futures": "Binance futures (only with Binance as market data source)",
     "boerse_kucoin": "KuCoin",
     "quelleName_dexscreener": "DexScreener — profiles, boosts, pairs",
@@ -1614,10 +1707,10 @@
     "boerse_upbit": "Upbit",
     "boerse_okx": "OKX",
     "boerse_mexc": "MEXC",
-    "quellenFreiHinweis": "Sources without sales clearance are on (Settings › Data sources): pump.fun, CoinPaprika and Reddit run as before; CoinGecko and GeckoTerminal without your own key via the public endpoints with a tight limit — your own key takes precedence.",
+    "quellenFreiHinweis": "Sources with restricted terms of use are on (Settings › Data sources): pump.fun, CoinPaprika and Reddit run as before; CoinGecko and GeckoTerminal without your own key via the public endpoints with a tight limit — your own key takes precedence.",
     "cgOeffentlich": "No own key — CoinGecko trends and on-chain pools run via the public endpoints (CoinGecko, GeckoTerminal), throttled.",
-    "rugcheckHinweisFrei": "RugCheck runs by default (sources without sales clearance on): insider networks and the liquidity lock on Solana. Without RugCheck, GoPlus checks alone — then both are unknown.",
-    "boersenWahlHinweisFrei": "With \"sources without sales clearance\" on, all exchanges are on by default, including Binance Alpha, Upbit, OKX and MEXC. Binance spot and futures additionally follow the market data source.",
+    "rugcheckHinweisFrei": "RugCheck runs by default (sources with restricted terms of use on): insider networks and the liquidity lock on Solana. Without RugCheck, GoPlus checks alone — then both are unknown.",
+    "boersenWahlHinweisFrei": "With \"sources with restricted terms of use\" on, all exchanges are on by default, including Binance Alpha, Upbit, OKX and MEXC. Binance spot and futures additionally follow the market data source.",
     "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko on-chain — new pools with buyer count",
     "kanaeleUmgezogen": "The channels (ntfy, Telegram, webhook) apply to all alerts and therefore live under",
     "kanaeleZiel": "Settings › Notifications"
@@ -1629,9 +1722,9 @@
     "monat": "Cost this month",
     "tokens30": "Tokens (30 days)",
     "laeufe": "{n} runs",
-    "aktiveAutomatiken": "Active paid jobs",
+    "aktiveAutomatiken": "Paid jobs switched on",
     "laeuftGerade": "running now",
-    "ruhe": "nothing active",
+    "ruhe": "none running right now",
     "verlaufTitel": "History",
     "verlaufHinweis": "Cost per day over the last 30 days, split by function.",
     "keinVerbrauch": "No usage recorded yet.",
@@ -1661,12 +1754,13 @@
       "recherche": "News: topic research",
       "xSuche": "News: X search",
       "video": "News: video analysis",
-      "strategie": "Strategy: veto agents and builders",
+      "strategie": "Strategy: builders",
       "radar": "Analysis: overview, trading picture, mechanics, ranking",
       "chart": "Chart: AI analysis",
       "coinRadar": "Coin radar: summary",
       "bild": "Images (share cards)",
-      "uebrige": "Other (no dedicated row yet)"
+      "uebrige": "Other (no dedicated row yet)",
+      "strategieVeto": "Strategy: sentiment veto"
     },
     "auto": {
       "newsAbruf": "Fetch news",
@@ -1689,7 +1783,38 @@
       "sekunden15": "every 15 seconds",
       "laufend": "continuous"
     },
-    "zeitplanManuell": "by hand only"
+    "zeitplanManuell": "by hand only",
+    "schluessel": {
+      "bericht": "Trade report",
+      "coach_chat": "Coach follow-ups",
+      "trade_analyse": "Trade analysis",
+      "trade_chat": "Trade follow-ups",
+      "agent": "AI agent",
+      "chart_chat": "Chart chat",
+      "lagebericht": "Briefing",
+      "lagebericht_update": "Briefing interim note",
+      "lagebericht_pruefung": "Instruction check",
+      "recherche": "Topic research",
+      "recherche_schreiber": "Research writer",
+      "x_suche": "X search",
+      "hype_x": "Hype radar: X search",
+      "hype_bericht": "Hype radar: report",
+      "video": "Video analysis",
+      "chartbild_pruefung": "Chart image check",
+      "chartbild_judge": "Chart image verdict",
+      "strategie_veto": "Sentiment veto",
+      "regel_baukasten": "Rule builder",
+      "strategie_baukasten": "Strategy builder",
+      "lage": "Market radar overview",
+      "handelslage": "Trading picture",
+      "mechanik": "Market mechanics",
+      "rangliste": "Universe ranking",
+      "chart_analyse": "Chart AI analysis",
+      "coin_radar": "Coin radar summary",
+      "bild": "Share card",
+      "hype_recherche": "Hype radar: research"
+    },
+    "fehlerAbbruch": "Aborted: the request timed out"
   },
   "kiAgent": {
     "createReport": "Create AI Report",
@@ -1905,7 +2030,7 @@
     "tpslEntfernt": "removed",
     "orderbuch": "Order book for this trade",
     "orderbuchFehlt": "Order book not recorded",
-    "orderbuchFehltInfo": "You can turn recording on under Settings → Live recording.",
+    "orderbuchFehltInfo": "You can turn recording on under Settings › Chart & analysis › Live recording.",
     "chartZuViele": "Too many requests, please try again later.",
     "chartNichtVerfuegbar": "Chart not available for this symbol.",
     "vorheriger": "Previous trade",
@@ -1996,9 +2121,7 @@
     "start": "Chart",
     "journal": "Journal",
     "live": "Analysis",
-    "liveShort": "Live",
     "agent": "Strategies",
-    "agentShort": "Strategy",
     "research": "Research",
     "lernen": "Learn",
     "comingSoon": "Coming soon",
@@ -3026,7 +3149,7 @@
       "noHistory": "Own curve starts today · full history in the large view",
       "ownSeries": "Own record since {seit} · {n} days",
       "ownSeriesEmpty": "The own recording starts today — the curve grows from here, one day at a time.",
-      "source": "With the \"sources without sales clearance\" switch (Settings › Data sources): curve and current value from our own stock, imported once from CoinMarketCap and topped up daily from the same source, CoinGecko as fallback. Without the switch: current value from CoinGecko, the curve from our own daily snapshots — it grows day by day. Dominance says which share of the crypto market sits in Bitcoin — if it rises while prices fall, money is fleeing altcoins into BTC rather than entering the market.",
+      "source": "With the \"sources with restricted terms of use\" switch (Settings › Data sources): curve and current value from our own stock, imported once from CoinMarketCap and topped up daily from the same source, CoinGecko as fallback. Without the switch: current value from CoinGecko, the curve from our own daily snapshots — it grows day by day. Dominance says which share of the crypto market sits in Bitcoin — if it rises while prices fall, money is fleeing altcoins into BTC rather than entering the market.",
       "rest": "Others",
       "range": {
         "d30": "30 days",
@@ -3116,7 +3239,7 @@
       "caveat": "This is a curve fitted to the past, not a forecast. The bands shift with every new price — what reads as \"cheap\" today may be the middle in a year. Useful as a multi-year mood gauge, not as a trading signal.",
       "params": "ln(price) ≈ {a} · ln(days since genesis) + {b}, residual spread {s}, {n} points",
       "info": "Where the Bitcoin price sits long-term relative to its historical range, from \"sell-off\" to \"bubble\".\nThe bands shift with every new price — what reads as \"cheap\" today can be the middle in a year. A mood gauge across years, too coarse for a single trading decision.",
-      "seit": "Price series from {datum} (daily candles of the market data source). The series from 2009 (blockchain.info) only runs with the \"sources without sales clearance\" switch (Settings › Data sources) — over the shorter span the curve comes out flatter."
+      "seit": "Price series from {datum} (daily candles of the market data source). The series from 2009 (blockchain.info) only runs with the \"sources with restricted terms of use\" switch (Settings › Data sources) — over the shorter span the curve comes out flatter."
     },
     "top": "Top",
     "liq": {
@@ -3164,8 +3287,8 @@
       "domFromPrice": "from price moves",
       "domHint": "Dominance on its own cannot be read: it rises even when only prices fall. Only the split shows whether money actually moved.",
       "source": "Stablecoin flow is the change in USDT and USDC supply (CoinGecko, your own key) — deliberately not \"USDT dominance\", which rises mechanically whenever crypto falls and then merely repeats the price drop. Inflow or outflow shows real money entering or leaving the market. The dominance decomposition uses total market cap from our own daily CoinGecko snapshots and appears once enough days have been recorded.",
-      "info": "The view from outside the crypto market: US equity futures, the dollar index, stablecoin flow.\nThe headline is the CORRELATION BTC↔Nasdaq, not the price. Colour shows tailwind or headwind FOR crypto — a rising dollar is therefore red, even though the dollar itself is \"up\".\nEquities and the dollar come from Yahoo Finance and only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the stablecoin flow remains.",
-      "indizesEntfernt": "Equity futures and dollar index off (Yahoo Finance, \"sources without sales clearance\" switch (Settings › Data sources))",
+      "info": "The view from outside the crypto market: US equity futures, the dollar index, stablecoin flow.\nThe headline is the CORRELATION BTC↔Nasdaq, not the price. Colour shows tailwind or headwind FOR crypto — a rising dollar is therefore red, even though the dollar itself is \"up\".\nEquities and the dollar come from Yahoo Finance and only run with the \"sources with restricted terms of use\" switch (Settings › Data sources); without it the stablecoin flow remains.",
+      "indizesEntfernt": "Equity futures and dollar index off (Yahoo Finance, \"sources with restricted terms of use\" switch (Settings › Data sources))",
       "domWaechst": "The stablecoin dominance decomposition appears once our own daily snapshots of the total market have two points about 30 days apart.",
       "sourceMitIndizes": "Equities as FUTURES (ES/NQ/RTY), not cash indices: the index stands still overnight and on weekends while the future trades nearly around the clock — only that makes the comparison with the non-stop crypto market honest. Colour shows tailwind or headwind FOR CRYPTO, not the direction of the market itself: a rising dollar is therefore red. Stablecoin flow is the change in USDT and USDC supply — deliberately not \"USDT dominance\", which rises arithmetically whenever crypto falls and merely restates the price drop. Inflow or outflow, by contrast, shows real money entering or leaving the market. The Russell 2000 sits next to the Nasdaq as a cross-check: if both move together it is a liquidity or rates move that reaches crypto too; if only the Nasdaq moves it is rotation into a few large caps and rarely carries over.",
       "stableUnvollstaendig": "Not all stablecoin series arrived – a partial sum would not be a measurement."
@@ -3258,7 +3381,7 @@
       "alarm": "Crossover on {datum}: the 111-day line crossed above the doubled 350-day line.",
       "vorwarnung": "Early warning: the short line is only {pct} % below the long one (threshold {schwelle} %).",
       "info": "A historical signal that has coincided with a Bitcoin cycle top in the past.\nThree hits on three occasions is an observation, not a rule — an early warning for \"careful with leverage\", not an exit signal for a single position.",
-      "seit": "Price series from {datum} (daily candles of the market data source); the 2013 and 2017 crossings lie before it and are missing. With the \"sources without sales clearance\" switch (Settings › Data sources) the card uses the series from 2010 (blockchain.info)."
+      "seit": "Price series from {datum} (daily candles of the market data source); the 2013 and 2017 crossings lie before it and are missing. With the \"sources with restricted terms of use\" switch (Settings › Data sources) the card uses the series from 2010 (blockchain.info)."
     },
     "altseason": {
       "title": "Altcoin season index",
@@ -3304,7 +3427,7 @@
         "aus": "Away from an exchange — potential accumulation",
         "unbekannt": "Direction unknown"
       },
-      "info": "Large crypto transactions from our own Telegram sources (Whale Alert, Lookonchain, …), detected automatically — no extra network call.\nRed = movement toward an exchange (potential sell pressure), green = movement away from an exchange (potential accumulation). Wallet-to-wallet moves stay grey because the direction isn't guessed there.\nTelegram only runs with the \"sources without sales clearance\" switch (Settings › Data sources) — Telegram prohibits reading public channels this way; without the switch the tile says \"off\"."
+      "info": "Large crypto transactions from our own Telegram sources (Whale Alert, Lookonchain, …), detected automatically — no extra network call.\nRed = movement toward an exchange (potential sell pressure), green = movement away from an exchange (potential accumulation). Wallet-to-wallet moves stay grey because the direction isn't guessed there.\nTelegram only runs with the \"sources with restricted terms of use\" switch (Settings › Data sources) — Telegram prohibits reading public channels this way; without the switch the tile says \"off\"."
     },
     "status_aus": "Source off",
     "mcapErsatz": "Market cap needs your own CoinGecko key — sorted by 24h volume instead."
@@ -3347,7 +3470,7 @@
         },
         {
           "h": "BTC DOMINANCE",
-          "p": "What share of the entire crypto market belongs to Bitcoin. The curve comes from our own store — about six years of history, imported once from CoinMarketCap and updated daily; three series are shown: Bitcoin, Ethereum and all the rest. The spot value comes from the same series, with CoinGecko only as a fallback. Reading: rising dominance with falling prices means a flight out of altcoins into BTC; falling dominance with rising prices means fresh money is spreading out. In practice: an altcoin long against rising dominance is swimming upstream, however good the coin's chart looks. That applies with the \"sources without sales clearance\" switch (Settings › Data sources); without it the current value comes from CoinGecko (own key) and the curve from our own daily snapshots, growing from day one."
+          "p": "What share of the entire crypto market belongs to Bitcoin. The curve comes from our own store — about six years of history, imported once from CoinMarketCap and updated daily; three series are shown: Bitcoin, Ethereum and all the rest. The spot value comes from the same series, with CoinGecko only as a fallback. Reading: rising dominance with falling prices means a flight out of altcoins into BTC; falling dominance with rising prices means fresh money is spreading out. In practice: an altcoin long against rising dominance is swimming upstream, however good the coin's chart looks. That applies with the \"sources with restricted terms of use\" switch (Settings › Data sources); without it the current value comes from CoinGecko (own key) and the curve from our own daily snapshots, growing from day one."
         },
         {
           "h": "FUNDING RATES",
@@ -3359,7 +3482,7 @@
         },
         {
           "h": "MACRO BACKDROP",
-          "p": "The only tile that looks outside the crypto market — and therefore the only one that can explain a move whose cause does not sit here at all. It shows the S&P 500 and Nasdaq 100 futures, the dollar index and the stablecoin flow. Three notes: first, these are deliberately FUTURES and not cash indices — the index stands still overnight and on weekends while the future trades nearly around the clock; a frozen value is tagged \"closed\". Second, the headline is the COUPLING (correlation of daily returns BTC↔Nasdaq over 30 days), not the price: \"Nasdaq −1 %\" only means something if your market is currently tied to it, and that coupling varies a lot. Third, colour shows tailwind or headwind FOR CRYPTO rather than the direction of the market itself — a rising dollar appears red because a strong dollar means tighter global liquidity. The stablecoin flow is deliberately the change in USDT and USDC supply, not \"USDT dominance\": the latter rises arithmetically whenever crypto falls and merely restates the price drop, while supply shows real money flowing in or being pulled out. The enlarged view does show dominance — but only DECOMPOSED. An example with round numbers: a total market of 2170bn including 245bn of stablecoins gives 11.3 % dominance. If the rest of the market falls 10 % without a single USDT being minted or redeemed, dominance reads 12.4 % — a jump of 1.1 points although not one dollar moved. That is why the tile splits the change into \"from real flows\" and \"from price moves\"; the two add up exactly to the total change. If the price part alone accounts for the swing, it was an optical illusion. Conversely a genuine inflow can coincide with FALLING dominance during a rally — the split makes that visible too. Equity futures and the dollar index come from Yahoo Finance and only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card shows only the money flow."
+          "p": "The only tile that looks outside the crypto market — and therefore the only one that can explain a move whose cause does not sit here at all. It shows the S&P 500 and Nasdaq 100 futures, the dollar index and the stablecoin flow. Three notes: first, these are deliberately FUTURES and not cash indices — the index stands still overnight and on weekends while the future trades nearly around the clock; a frozen value is tagged \"closed\". Second, the headline is the COUPLING (correlation of daily returns BTC↔Nasdaq over 30 days), not the price: \"Nasdaq −1 %\" only means something if your market is currently tied to it, and that coupling varies a lot. Third, colour shows tailwind or headwind FOR CRYPTO rather than the direction of the market itself — a rising dollar appears red because a strong dollar means tighter global liquidity. The stablecoin flow is deliberately the change in USDT and USDC supply, not \"USDT dominance\": the latter rises arithmetically whenever crypto falls and merely restates the price drop, while supply shows real money flowing in or being pulled out. The enlarged view does show dominance — but only DECOMPOSED. An example with round numbers: a total market of 2170bn including 245bn of stablecoins gives 11.3 % dominance. If the rest of the market falls 10 % without a single USDT being minted or redeemed, dominance reads 12.4 % — a jump of 1.1 points although not one dollar moved. That is why the tile splits the change into \"from real flows\" and \"from price moves\"; the two add up exactly to the total change. If the price part alone accounts for the swing, it was an optical illusion. Conversely a genuine inflow can coincide with FALLING dominance during a rally — the split makes that visible too. Equity futures and the dollar index come from Yahoo Finance and only run with the \"sources with restricted terms of use\" switch (Settings › Data sources); without it the card shows only the money flow."
         },
         {
           "h": "MARKET MECHANICS",
@@ -3383,11 +3506,11 @@
         },
         {
           "h": "RAINBOW (BTC)",
-          "p": "A logarithmic curve fitted to Bitcoin's entire price history, with bands from \"fire sale\" to \"bubble\". The thing to understand: the bands shift with every new price because the fit is recalculated — what counts as \"cheap\" today can be the middle band a year from now. A usable mood gauge across years, far too coarse for a trading decision. The full history from 2009 (blockchain.info) only runs with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card uses daily candles from 2017 and the curve comes out flatter."
+          "p": "A logarithmic curve fitted to Bitcoin's entire price history, with bands from \"fire sale\" to \"bubble\". The thing to understand: the bands shift with every new price because the fit is recalculated — what counts as \"cheap\" today can be the middle band a year from now. A usable mood gauge across years, far too coarse for a trading decision. The full history from 2009 (blockchain.info) only runs with the \"sources with restricted terms of use\" switch (Settings › Data sources); without it the card uses daily candles from 2017 and the curve comes out flatter."
         },
         {
           "h": "PI CYCLE TOP (BTC)",
-          "p": "When the 111-day moving average crosses the doubled 350-day average from below, that historically landed close to a cycle top. The card shows the distance between the two lines and whether a crossing has triggered. Three hits in three opportunities is an observation, not a rule — treat it as an early warning to be careful with leverage, not as an exit signal. With the \"sources without sales clearance\" switch (Settings › Data sources) it uses the series from 2010 (blockchain.info); without it daily candles from 2017 — the 350-day line then starts in mid-2018, and the 2013 and 2017 crossings are missing."
+          "p": "When the 111-day moving average crosses the doubled 350-day average from below, that historically landed close to a cycle top. The card shows the distance between the two lines and whether a crossing has triggered. Three hits in three opportunities is an observation, not a rule — treat it as an early warning to be careful with leverage, not as an exit signal. With the \"sources with restricted terms of use\" switch (Settings › Data sources) it uses the series from 2010 (blockchain.info); without it daily candles from 2017 — the 350-day line then starts in mid-2018, and the 2013 and 2017 crossings are missing."
         },
         {
           "h": "YOUR TRADES × MARKET REGIME",
@@ -3395,7 +3518,7 @@
         },
         {
           "h": "ETF FLOW (BTC)",
-          "p": "How many bitcoin the spot ETFs hold in total and how that changes day by day. The inflow IS the change in holdings — there is no second number for it. Shown in BTC, not dollars: multiplied by the daily price, the \"inflow\" would move on days when not a single share was created. Enlarged, the tile lists the individual funds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) and reports the remainder as \"Other funds\" — the total comes from the source and is never summed up from the individual ones. Requires a CryptoQuant key (the free tier is enough), entered under Settings → Marktradar. The source only reaches back 30 days; everything older the journal collects itself, so the curve grows over time. A warning triangle next to the 7- or 30-day sum means some days in the window have no value and the sum rests on fewer days."
+          "p": "How many bitcoin the spot ETFs hold in total and how that changes day by day. The inflow IS the change in holdings — there is no second number for it. Shown in BTC, not dollars: multiplied by the daily price, the \"inflow\" would move on days when not a single share was created. Enlarged, the tile lists the individual funds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) and reports the remainder as \"Other funds\" — the total comes from the source and is never summed up from the individual ones. Requires a CryptoQuant key (the free tier is enough), entered under Settings › Data sources › CryptoQuant. The source only reaches back 30 days; everything older the journal collects itself, so the curve grows over time. A warning triangle next to the 7- or 30-day sum means some days in the window have no value and the sum rests on fewer days."
         },
         {
           "h": "OVERALL PICTURE (AI)",
@@ -3633,7 +3756,7 @@
         },
         {
           "h": "THE CALENDAR",
-          "p": " With the \"sources without sales clearance\" switch (Settings › Data sources) the ForexFactory weekly feed is added — eight currency areas, with forecast, previous and actual; an event listed by both sources appears once."
+          "p": " With the \"sources with restricted terms of use\" switch (Settings › Data sources) the ForexFactory weekly feed is added — eight currency areas, with forecast, previous and actual; an event listed by both sources appears once."
         },
         {
           "h": "THE POSTS",
@@ -3654,7 +3777,7 @@
         },
         {
           "h": "WHY THE CALENDAR GROWS",
-          "p": " ForexFactory (only with the \"sources without sales clearance\" switch (Settings › Data sources)) by contrast only lists the current week — there an empty second week means \"not collected yet\"."
+          "p": " ForexFactory (only with the \"sources with restricted terms of use\" switch (Settings › Data sources)) by contrast only lists the current week — there an empty second week means \"not collected yet\"."
         },
         {
           "g": "In daily use",
@@ -3710,7 +3833,7 @@
     },
     "livetrading": {
       "title": "Live trading — the workspace during a session",
-      "intro": "The tile grid for the hours you actually trade. Its own layout, independent of the market radar, and a check interval of three seconds instead of thirty so fast tiles refresh on time. Desktop only — an order book and a candle chart cannot be operated on 375 pixels. Can be switched off under Settings → Live.",
+      "intro": "The tile grid for the hours you actually trade. Its own layout, independent of the market radar, and a check interval of three seconds instead of thirty so fast tiles refresh on time. Desktop only — an order book and a candle chart cannot be operated on 375 pixels. Can be switched off under Settings › Chart & analysis.",
       "sections": [
         {
           "g": "How a session runs",
@@ -3740,7 +3863,7 @@
         },
         {
           "h": "INDICES, FUNDING, LONG/SHORT, MACRO",
-          "p": "Indices shows ES=F, NQ=F, RTY=F and the dollar index as intraday candles from Yahoo. Funding, long/short + open interest and the macro environment are the same tiles as in the market radar — funding and long/short follow the symbol choice. The indices only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card says so."
+          "p": "Indices shows ES=F, NQ=F, RTY=F and the dollar index as intraday candles from Yahoo. Funding, long/short + open interest and the macro environment are the same tiles as in the market radar — funding and long/short follow the symbol choice. The indices only run with the \"sources with restricted terms of use\" switch (Settings › Data sources); without it the card says so."
         },
         {
           "h": "BOOKMAP & LEVERAGE MAP",
@@ -4106,7 +4229,7 @@
         {
           "g": "HOW THE WATCHER WORKS",
           "h": "WHAT IS COMPARED",
-          "p": "The public market lists of Binance (spot and futures — only with Binance as market data source), Coinbase, Bybit and Kraken (large exchanges), KuCoin, Gate and Bitget (mid-sized) — all without keys. Coinbase, Kraken, KuCoin and Gate are off by default because their terms are unclear for a sold program. The first compare sets the baseline; new is what appears afterwards. An exchange that does not answer or returns only part of its list keeps its last good state — otherwise the next complete fetch would produce hundreds of seemingly new listings."
+          "p": "The public market lists of Binance (spot and futures — only with Binance as market data source), Coinbase, Bybit and Kraken (large exchanges), KuCoin, Gate and Bitget (mid-sized) — all without keys. Coinbase, Kraken, KuCoin and Gate are off by default because their terms do not explicitly allow automated use. The first compare sets the baseline; new is what appears afterwards. An exchange that does not answer or returns only part of its list keeps its last good state — otherwise the next complete fetch would produce hundreds of seemingly new listings."
         },
         {
           "h": "REMOVED EXCHANGES",
@@ -4466,7 +4589,7 @@
       "keineKerzen": "No candles in range",
       "alt": "{min} min old",
       "verzoegertCa": "approx. {min} min delayed",
-      "info": "How US equity futures and the dollar are moving right now, while crypto keeps trading.\nCrypto often tracks the risk appetite of traditional markets — falling futures and a rising dollar are usually headwinds, even while the crypto price itself still looks calm.\nThe candles come from Yahoo Finance and only run with the \"sources without sales clearance\" switch (Settings › Data sources); without it the card says \"off\"."
+      "info": "How US equity futures and the dollar are moving right now, while crypto keeps trading.\nCrypto often tracks the risk appetite of traditional markets — falling futures and a rising dollar are usually headwinds, even while the crypto price itself still looks calm.\nThe candles come from Yahoo Finance and only run with the \"sources with restricted terms of use\" switch (Settings › Data sources); without it the card says \"off\"."
     },
     "liq": {
       "title": "Liquidations (live)",
@@ -4521,7 +4644,7 @@
       "impact_medium": "medium impact",
       "impact_low": "low impact",
       "impact_holiday": "holiday",
-      "info": "When the next important economic release is due, with a countdown — from the calendars of the Federal Reserve, the U.S. Bureau of Economic Analysis and Eurostat. With the \"sources without sales clearance\" switch (Settings › Data sources) ForexFactory is added.\nA high-impact event is a good reason not to open a new position just before it — the move afterwards is often too fast for a clean entry."
+      "info": "When the next important economic release is due, with a countdown — from the calendars of the Federal Reserve, the U.S. Bureau of Economic Analysis and Eurostat. With the \"sources with restricted terms of use\" switch (Settings › Data sources) ForexFactory is added.\nA high-impact event is a good reason not to open a new position just before it — the move afterwards is often too fast for a clean entry."
     },
     "positionen": {
       "title": "Positions & plan",
@@ -5521,7 +5644,7 @@
         "name": "Momentum Radar",
         "kurz": "Momentum",
         "text": "Wave (WaveTrend) and money flow from the live-trading momentum radar — only 5m, 15m, 1h, 4h.",
-        "info": "Momentum Radar — what the colours mean:\nLIGHT BLUE AREA = the wave (WaveTrend), dark blue behind it = its signal line. Light crossing above dark means momentum turns up.\nBARS = money flow per candle: green in, red out, violet = only futures are driving, the move runs on leverage. WHITE LINE = spot money flow; below the bars means futures are ahead.\nLINES: ±50 (bold, adjustable under Settings › General) overbought/oversold, ±100 extreme, 0 dashed.\nDOTS on the wave: green = look for longs, red = look for shorts; large = higher timeframes plus money flow back the signal (≥ 60 %). Orange diamond = extreme beyond ±100, exhausted, no entry.\nRAILS at +115 (short) and −115 (long): signals of the higher timeframes — 1h orange small, 4h violet, day white, week yellow large.\nDIV line: divergence between wave and price (red bearish, green bullish).\nCOLOUR BAR at the bottom: money flow of the last closed 4h candle (green in, red out).\nClosed candles only. The radar says WHEN, not WHERE."
+        "info": "Momentum Radar — what the colours mean:\nLIGHT BLUE AREA = the wave (WaveTrend), dark blue behind it = its signal line. Light crossing above dark means momentum turns up.\nBARS = money flow per candle: green in, red out, violet = only futures are driving, the move runs on leverage. WHITE LINE = spot money flow; below the bars means futures are ahead.\nLINES: ±50 (bold, adjustable under Settings › Chart & analysis › Market radar · tiles) overbought/oversold, ±100 extreme, 0 dashed.\nDOTS on the wave: green = look for longs, red = look for shorts; large = higher timeframes plus money flow back the signal (≥ 60 %). Orange diamond = extreme beyond ±100, exhausted, no entry.\nRAILS at +115 (short) and −115 (long): signals of the higher timeframes — 1h orange small, 4h violet, day white, week yellow large.\nDIV line: divergence between wave and price (red bearish, green bullish).\nCOLOUR BAR at the bottom: money flow of the last closed 4h candle (green in, red out).\nClosed candles only. The radar says WHEN, not WHERE."
       },
       "vwapVector": {
         "name": "VWAP Vector",
@@ -6298,7 +6421,7 @@
       "hebelKeine": "Leverage zones: none",
       "momentumTf": "Momentum only on 5m/15m/1h/4h",
       "titel": {
-        "liquidationen": "Recorded forced liquidations (Binance, sample: at most one per second). Only for symbols the recorder records (Settings → Live analysis).",
+        "liquidationen": "Recorded forced liquidations (Binance, sample: at most one per second). Only for symbols the recorder records (Settings › Chart & analysis › Live recording).",
         "hebelzonen": "Estimated liquidation zones from open-interest history and candles — a model, not a measurement. Below price long liquidations (forced sells), above shorts (forced buys).",
         "momentum": "Momentum Radar only computes on 5m, 15m, 1h and 4h.",
         "orderbuch": "Resting walls from the Binance order book (500 levels per side, every 10 s). A wall is a price zone with at least 2.5× the typical zone of its side AND at least 2 minutes of average turnover — \"· 9 min\" on the label means: that long the market would need on average to clear it. The snapshot reaches no further than ±… % — for BTC only a few hundredths of a percent."
@@ -6572,7 +6695,8 @@
     "farbeEigene": "Custom colour …",
     "quelleUmgestellt": "The market data source is not Binance — panels with Binance candles now show {quelle} (futures).",
     "objektBearbeiten": "Edit: select in the chart, the style bar opens",
-    "objektRechner": "Open position calculator: leverage, loss, size, margin"
+    "objektRechner": "Open position calculator: leverage, loss, size, margin",
+    "kerzenFarbenMenue": "Candle colours …"
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade is free software (AGPL-3.0). The source code of this version is available here:",
@@ -6651,7 +6775,7 @@
       "marktdatenAusText": "Public market data is switched off — so {was} is unavailable.",
       "zuEinstellungen": "Settings › Data sources",
       "ohneFreigabe": "{quelle}: switched off",
-      "ohneFreigabeText": "This source has no clearance for a sale and only runs with the switch \"Sources without sales clearance\" (Settings › Data sources)."
+      "ohneFreigabeText": "The terms of this source do not allow automated use, or only with restrictions. It only runs with the switch \"Sources with restricted terms of use\" (Settings › Data sources)."
     },
     "faehigkeit": {
       "kerzen": "Candles (futures)",
@@ -6697,23 +6821,55 @@
       "geloescht": "Key deleted — CoinGecko features are now off.",
       "demoHinweis": "You enter into the agreement with CoinGecko yourself. Whether the free demo plan covers your use is governed by CoinGecko's terms; if in doubt, choose a paid plan.",
       "oeffentlich": "Public endpoint",
-      "unterOffen": "With your own API key — without a key via the public endpoint while “Sources without sales clearance” is on."
+      "unterOffen": "With your own API key — without a key via the public endpoint while “Sources with restricted terms of use” is on."
     },
     "andere": {
       "titel": "Other keys",
-      "ki": "AI providers: Settings › AI.",
-      "cryptoquant": "CryptoQuant (ETF flows): in the ETF tile of the market radar.",
-      "solana": "Solana RPC (smart money): Hype radar › Settings — without your own RPC URL smart money stays off.",
-      "boersen": "Exchange accounts (Bitunix, Bitget, Pionex): Settings › Journal.",
-      "solanaOffen": "Solana RPC (smart money): Hype-Radar › Settings — without an own RPC address via the public node while “Sources without sales clearance” is on."
+      "ki": "AI providers:",
+      "solana": "Solana RPC (smart money):",
+      "boersen": "Exchange accounts (Bitunix, Bitget, Pionex, Bitpanda):",
+      "kiPfad": "Settings › AI › Access",
+      "solanaPfad": "Hype radar › Settings",
+      "solanaRest": "without your own RPC URL smart money stays off.",
+      "solanaOffenRest": "without your own RPC URL via the public node while “Sources with restricted terms of use” is on.",
+      "boersenPfad": "Settings › Journal › Exchange accounts"
     },
     "of": {
-      "titel": "Sources without sales clearance",
-      "unter": "Analysis sources whose terms do not allow selling AutarkTrade or are unclear. On for personal use.",
-      "schalter": "Use sources without sales clearance",
-      "anText": "On: these sources run in full. Whether your use is covered by their terms is for you to check and your responsibility.",
-      "ausText": "Off: AutarkTrade behaves like a sales version — these sources and the functions only they provide are off and say why.",
-      "zeilen": "Sales review, row {zeilen}"
+      "titel": "Sources with restricted terms of use",
+      "unter": "Some analysis sources are unofficial interfaces or are only cleared for personal use.",
+      "schalter": "Use sources with restricted terms of use",
+      "anText": "On: these sources run in full. Their terms still apply — whether your use is covered is for you to check and your responsibility.",
+      "ausText": "Off: these sources and the functions only they provide are off and say why. Everything else keeps working."
+    },
+    "cq": {
+      "titel": "CryptoQuant (ETF flow)",
+      "unter": "For the \"ETF flow\" tile: how many bitcoin the spot ETFs hold and how that changes daily. Only with your own API key.",
+      "hinterlegt": "Key stored",
+      "keiner": "No key — the ETF tile stays empty",
+      "tarif": "The free plan (\"Basic\") is enough: CryptoQuant counts fund data as market data. It only reaches back 30 days and allows 10 requests per minute — so fetching happens in the background, at most every six hours, and everything fetched is kept. The tile itself never asks CryptoQuant.",
+      "schluessel": "API key",
+      "speichern": "Save",
+      "pruefen": "Check key",
+      "nachfuehren": "Update now",
+      "fortschritt": "{fertig} of {gesamt} funds",
+      "holen": "Get a key from CryptoQuant",
+      "gueltig": "Key valid — {btc} BTC across all funds ({tag}).",
+      "uebersprungen": "Skipped: {grund}",
+      "fertig": "Done — {tage} days stored.",
+      "laeuftWeiter": "Still running in the background — reload the page later.",
+      "bestand": "{tage} days stored, latest {tag}.",
+      "nochNichts": "Nothing stored yet — the first run fetches 30 days.",
+      "ohneSchluessel": "No key stored, the tile stays empty.",
+      "letzterFehler": "Last error ({fonds}): {text}"
+    },
+    "kerzen": {
+      "titel": "Candles for excursions (Polygon, Databento)",
+      "unter": "For the MFE prices of excursions the journal needs minute candles — with your own key at Polygon.io or Databento. The key is stored encrypted and never leaves the server; the server fetches the data.",
+      "hinterlegt": "Key stored",
+      "keiner": "No key",
+      "schluessel": "{name} API key",
+      "holen": "Get a key ↗",
+      "geloescht": "Key deleted."
     }
   },
   "spenden": {
@@ -6722,7 +6878,7 @@
     "frageUpdate": "AutarkTrade was updated to version {version}. If the work on it is worth something to you, a coffee is much appreciated.",
     "frageDank": "Thank you for supporting AutarkTrade! It keeps going — thanks to you too.",
     "titelDank": "Thank you",
-    "menue": "Buy me a coffee",
+    "menue": "Donate",
     "titel": "Donate",
     "btcAdresse": "Bitcoin address",
     "kopieren": "Copy",
@@ -6733,14 +6889,10 @@
     "spaeter": "Maybe later",
     "schonGespendet": "I already donated",
     "definitivNicht": "Definitely not",
-    "schliessen": "Close",
-    "schalter": "Donations in the menu",
-    "schalterHilfe": "Menu entry, coffee button at the top and rare prompts (50/200/500/1000 rated trades, after updates, every few months; at most once in 30 days).",
-    "kaffeeLink": "Buy me a coffee link",
-    "kaffeeUngueltig": "Expected: https://buymeacoffee.com/name"
+    "schliessen": "Close"
   },
   "quellenFrage": {
-    "titel": "Data sources without permission",
+    "titel": "Sources with restricted terms of use",
     "text": "Some analyses fetch data from sources whose terms do not allow automated access, or only with restrictions. Do you want to use them anyway? This is at your own responsibility; the providers' terms still apply.",
     "hinweis": "Without these sources the listed displays are missing; everything else works. You can change this at any time under Settings › Data sources.",
     "an": "Use them (own responsibility)",

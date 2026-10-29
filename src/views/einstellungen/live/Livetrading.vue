@@ -1,9 +1,11 @@
 <script setup>
-/** Live → Live-Trading-Fenster: Seite ein-/ausschalten. */
+/** Chart & Analyse → Live-Trading-Fenster: Seite ein-/ausschalten, auch auf dem Handy. */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
+import { appEinstellungen } from '@/stores/settings.js'
+import { kiSpeichern } from '../gemeinsam/speichern.js'
 import { modusLiveAn } from '../gemeinsam/useModi.js'
 import { livetradingAn, useRadarEinstellungen } from '../gemeinsam/useRadarEinstellungen.js'
 
@@ -11,16 +13,21 @@ const { t } = useI18n()
 const { radarSpeichern } = useRadarEinstellungen()
 
 let livetradingExpanded = ref(false)
+// Live-Trading-Fenster auch am Telefon zeigen
+const livetradingMobil = ref(Number(appEinstellungen.value?.livetradingMobil ?? 0) === 1)
 </script>
 
 <template>
-    <Abschnitt titel="Live-Trading-Fenster" symbol="live" v-model:offen="livetradingExpanded">
-        <p class="einleitung">Ein eigener Arbeitsplatz für die Stunden, in denen du tatsächlich handelst — Kachelraster mit eigenem Layout, unabhängig vom Marktradar. Wer nur beobachtet, schaltet die Seite hier ab; dann verschwinden auch der Startknopf auf dem Marktradar und der Menüeintrag.</p>
+    <Abschnitt :titel="t('settings.live.fensterTitel')" symbol="live" v-model:offen="livetradingExpanded">
+        <p class="einleitung">{{ t('settings.live.fensterEinleitung') }}</p>
 
         <Schalter v-model="livetradingAn" :disabled="!modusLiveAn"
-            label="Live-Trading-Fenster anzeigen" @change="radarSpeichern('livetradingAn')" />
+            :label="t('settings.live.fensterAnzeigen')" @change="radarSpeichern('livetradingAn')" />
+        <Schalter v-model="livetradingMobil" :disabled="!modusLiveAn" :label="t('settings.livetradingMobile')"
+            :hilfe="t('settings.livetradingMobileHint')"
+            @change="(v) => kiSpeichern('livetradingMobil', v ? 1 : 0)" />
         <!-- Der Modus steht über der Seite: ist er aus, ist auch diese Seite
-             weg. Der Schalter behält seinen Wert und kommt unverändert
+             weg. Die Schalter behalten ihren Wert und kommen unverändert
              zurück, sobald der Modus wieder an ist — deshalb ausgrauen und
              nicht heimlich mit umschalten. -->
         <p v-if="!modusLiveAn" class="warnung">{{ t('settings.livetradingModeOffHint') }}</p>

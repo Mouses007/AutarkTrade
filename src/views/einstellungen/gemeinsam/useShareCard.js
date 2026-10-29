@@ -13,9 +13,8 @@ import { bildModellListen, bildStandardListen } from './useKiAnbieter.js'
 export let shareCardProvider = ref('flux')
 export let fluxApiKey = ref('')
 export let fluxModel = ref('flux-2-pro')
-export let fluxDisplayName = ref('')
-export let fluxAvatar = ref('')
 export let fluxUseCustomAvatar = ref(false)
+export let fluxNameZeigen = ref(false)
 export let fluxTestLoading = ref(false)
 export let fluxTestResult = ref(null)
 export let geminiImageApiKey = ref('')
@@ -112,9 +111,8 @@ export function useShareCard() {
             shareCardProvider.value = res.data.shareCardProvider || 'flux'
             fluxApiKey.value = res.data.fluxApiKey || ''
             fluxModel.value = gueltigesFluxModell(res.data.fluxModel)
-            fluxDisplayName.value = res.data.fluxDisplayName || ''
-            fluxAvatar.value = res.data.fluxAvatar || ''
             fluxUseCustomAvatar.value = !!res.data.fluxUseCustomAvatar
+            fluxNameZeigen.value = !!res.data.fluxNameZeigen
             geminiImageApiKey.value = res.data.geminiImageApiKey || ''
             geminiImageModel.value = gueltigesBildmodell(res.data.geminiImageModel)
         } catch (e) {
@@ -184,9 +182,8 @@ export function useShareCard() {
                 shareCardProvider: shareCardProvider.value,
                 fluxApiKey: fluxApiKey.value,
                 fluxModel: fluxModel.value,
-                fluxDisplayName: fluxDisplayName.value,
-                fluxAvatar: fluxAvatar.value,
                 fluxUseCustomAvatar: fluxUseCustomAvatar.value,
+                fluxNameZeigen: fluxNameZeigen.value,
                 geminiImageApiKey: geminiImageApiKey.value,
                 geminiImageModel: geminiImageModel.value
             })
@@ -222,23 +219,12 @@ export function useShareCard() {
         geminiTestLoading.value = false
     }
 
-    function onFluxAvatarUpload(event) {
-        const file = event.target.files[0]
-        if (!file) return
-        const reader = new FileReader()
-        reader.onload = (e) => {
-            fluxAvatar.value = e.target.result
-        }
-        reader.readAsDataURL(file)
-    }
-
     return {
-        shareCardProvider, fluxApiKey, fluxModel, fluxDisplayName, fluxAvatar, fluxUseCustomAvatar,
+        shareCardProvider, fluxApiKey, fluxModel, fluxUseCustomAvatar,
         fluxTestLoading, fluxTestResult, geminiImageApiKey, geminiImageModel, geminiTestLoading, geminiTestResult,
         shareCardTemplates, templatesLoading, editingTemplateId, editTemplateName, savingTemplateEdit, deletingTemplateId,
         fluxModels, geminiImageModels, gueltigesBildmodell, gueltigesFluxModell, fluxModelleGeaendert,
         geminiBildModelleGeaendert, loadFluxSettings, loadShareCardTemplates, startEditTemplate, cancelEditTemplate,
         saveTemplateEdit, deleteShareCardTemplate, saveFluxSettings, testFluxConnection, testGeminiConnection,
-        onFluxAvatarUpload,
     }
 }

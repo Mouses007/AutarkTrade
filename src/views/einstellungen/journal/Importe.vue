@@ -1,5 +1,5 @@
 <script setup>
-/** Allgemein → Importe: importierte Handelstage je Monat, einzeln löschbar. */
+/** Journal → Importe: importierte Handelstage je Monat, einzeln löschbar. */
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'

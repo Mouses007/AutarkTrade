@@ -9,7 +9,7 @@
  *
  * Aufruf: node server/__selftest-aufgaben.mjs
  */
-import { aufgabenWahl, aufgabeNachId, AI_TASKS, ohneFreigabeSicht } from './ai-task-config.js'
+import { aufgabenWahl, aufgabeNachId, AI_TASKS, ohneFreigabeSicht, seitenFeldUmzug } from './ai-task-config.js'
 import {
     aufwandFelder, lehntSamplingAb, samplingFelder, standardModell, ANBIETER_REG,
 } from './ai-models.js'
@@ -31,30 +31,34 @@ const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 // ── aufgabenWahl ─────────────────────────────────────────────────────────
 {
     const roh = JSON.stringify({
-        agent: 'anthropic/claude-opus-5-5',
-        lagebericht: 'anthropic',
-        'x-suche': 'gemini/gemini-3.8-flash',     // falscher Anbieter für X
-        video: 'gemini',
+        'trade-analyse': 'anthropic/claude-opus-5-5',
+        'marktradar-lage': 'anthropic',
+        agent: 'anthropic/claude-opus-5-5',        // Aufgabe mit eigener Seite
+        'x-suche': 'xai/grok-4.7',                 // dito
         rangliste: 'erfunden/modell',
         'chart-analyse': 'openrouter/anthropic/claude-opus-5.5',
         mechanik: '   ',
     })
     pruefe('anbieter/modell wird getrennt',
-        gleich(aufgabenWahl(roh, 'agent'), { provider: 'anthropic', model: 'claude-opus-5-5' }))
+        gleich(aufgabenWahl(roh, 'chart-analyse'), { provider: 'openrouter', model: 'anthropic/claude-opus-5.5' }))
+    pruefe('Trade-Analyse hat seit 29.10.2026 eine eigene Seite: keine Zeile',
+        aufgabenWahl(roh, 'trade-analyse') === null)
     pruefe('nur Anbieter → dessen Standardmodell, nicht das globale',
-        gleich(aufgabenWahl(roh, 'lagebericht'), { provider: 'anthropic', model: standardModell('anthropic') }))
-    pruefe('Anbieter, der die Aufgabe nicht kann, zählt als leer',
-        aufgabenWahl(roh, 'x-suche') === null)
-    pruefe('Video nur mit Gemini, dort das Standardmodell',
-        gleich(aufgabenWahl(roh, 'video'), { provider: 'gemini', model: standardModell('gemini') }))
+        gleich(aufgabenWahl(roh, 'marktradar-lage'), { provider: 'anthropic', model: standardModell('anthropic') }))
+    pruefe('Aufgabe mit eigener Seite liest keine Zeile (Agent)', aufgabenWahl(roh, 'agent') === null)
+    pruefe('Aufgabe mit eigener Seite liest keine Zeile (X-Suche)', aufgabenWahl(roh, 'x-suche') === null)
+    pruefe('Anbieter, der die Aufgabe nicht kann, wirkt auch beim Umzug nicht',
+        !('radarNewsXModell' in seitenFeldUmzug({ aiTaskProviders: { 'x-suche': 'gemini/gemini-3.8-flash' } }).patch))
+    pruefe('Video: nur Anbieter → Gemini-Standardmodell ins Feld',
+        seitenFeldUmzug({ aiTaskProviders: { video: 'gemini' } }).patch.radarNewsModel === standardModell('gemini'))
     pruefe('unbekannter Anbieter zählt als leer', aufgabenWahl(roh, 'rangliste') === null)
     pruefe('nur am ersten / getrennt — OpenRouter behält sein Modell',
         gleich(aufgabenWahl(roh, 'chart-analyse'), { provider: 'openrouter', model: 'anthropic/claude-opus-5.5' }))
     pruefe('Leerzeichen sind leer', aufgabenWahl(roh, 'mechanik') === null)
     pruefe('fehlende Zeile ist leer', aufgabenWahl(roh, 'coin-radar') === null)
     pruefe('Objekt statt Zeichenkette geht auch',
-        aufgabenWahl({ agent: 'gemini/gemini-4-argon' }, 'agent')?.model === 'gemini-4-argon')
-    pruefe('kaputtes JSON wirft nicht', aufgabenWahl('{kaputt', 'agent') === null)
+        aufgabenWahl({ mechanik: 'gemini/gemini-4-argon' }, 'mechanik')?.model === 'gemini-4-argon')
+    pruefe('kaputtes JSON wirft nicht', aufgabenWahl('{kaputt', 'mechanik') === null)
     pruefe('ohne Aufgabe nichts', aufgabenWahl(roh, '') === null)
 }
 
@@ -66,11 +70,23 @@ const gleich = (a, b) => JSON.stringify(a) === JSON.stringify(b)
     for (const id of ['coin-radar', 'chart-analyse', 'livetrading-handelslage', 'marktradar-lage']) {
         pruefe(`Aufgabe ${id} ist registriert`, !!aufgabeNachId(id))
     }
-    // Jede Empfehlung muss so, wie sie dasteht, eintragbar sein.
+    // Jede Empfehlung muss so, wie sie dasteht, eintragbar sein — in die
+    // Tabelle oder (Aufgaben mit eigener Seite) über den Umzug ins Feld.
     for (const t of Object.values(AI_TASKS)) {
+        if (t.id === 'regel-baukasten') continue   // Zeile wurde nie gelesen
         for (const e of t.recommendedModels || []) {
-            const w = aufgabenWahl({ [t.id]: e }, t.id)
-            pruefe(`Empfehlung ${e} für ${t.id} ist gültig`, !!w && w.model === e.slice(e.indexOf('/') + 1))
+            const modell = e.slice(e.indexOf('/') + 1)
+            if (t.seite) {
+                const p = seitenFeldUmzug({ aiTaskProviders: { [t.id]: e } }).patch
+                // DeepSeek-Weg der Recherche: nur der Weg, das Perplexity-Modell bleibt
+                const ok = t.seite.deepseek && e.startsWith('deepseek/')
+                    ? p[t.seite.deepseek] === 1 && !(t.seite.modell in p)
+                    : p[t.seite.modell] === modell
+                pruefe(`Empfehlung ${e} für ${t.id} landet im Feld`, ok)
+            } else {
+                const w = aufgabenWahl({ [t.id]: e }, t.id)
+                pruefe(`Empfehlung ${e} für ${t.id} ist gültig`, !!w && w.model === modell)
+            }
         }
     }
     pruefe('Agent kann mehr als Anthropic/OpenAI/OpenRouter',

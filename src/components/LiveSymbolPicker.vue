@@ -585,7 +585,7 @@ onMounted(async () => {
 
             <label class="lpLabel lpOben">{{ t('levmap.mmr') }}</label>
             <select v-model="levMapMmrQuelle" class="sidebar-select lpUnten" :title="t('levmap.mmrSourceTitle')">
-                <!-- Binance-bapi nur mit Schalter „Quellen ohne Verkaufsfreigabe" (S15). -->
+                <!-- Binance-bapi nur mit Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15). -->
                 <option v-if="freigabeAn()" value="binance">{{ t('levmap.mmrSourceBinance') }}</option>
                 <option value="bybit">{{ t('levmap.mmrSourceBybit') }}</option>
                 <option value="manuell">{{ t('levmap.mmrSourceManual') }}</option>

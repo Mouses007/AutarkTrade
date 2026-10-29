@@ -38,4 +38,26 @@ export function zieheSpeicherUm(speicher) {
     return n
 }
 
-try { if (typeof localStorage !== 'undefined') zieheSpeicherUm(localStorage) } catch { /* privater Modus */ }
+/**
+ * Schlüssel, die nichts mehr bedeuten und einmal weggeräumt werden.
+ * `evalNotifiedPositionIds`: gemeldete Trades stehen seit 29.10.2026 in der
+ * Datenbank (`server/trade-popups.js`).
+ */
+export const SPEICHER_ENTFALLEN = ['evalNotifiedPositionIds']
+
+export function raeumeSpeicherAuf(speicher) {
+    let n = 0
+    for (const k of SPEICHER_ENTFALLEN) {
+        if (speicher.getItem(k) === null) continue
+        speicher.removeItem(k)
+        n++
+    }
+    return n
+}
+
+try {
+    if (typeof localStorage !== 'undefined') {
+        zieheSpeicherUm(localStorage)
+        raeumeSpeicherAuf(localStorage)
+    }
+} catch { /* privater Modus */ }

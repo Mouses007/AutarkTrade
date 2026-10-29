@@ -1,5 +1,6 @@
 <script setup>
 /** KI → Berichte: Anbieter/Modell, Prompt-Vorlage, Chat und Screenshots der KI-Berichte. */
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AnbieterWahl from '@/components/AnbieterWahl.vue'
 import Knopf from '@/components/basis/Knopf.vue'
@@ -12,9 +13,15 @@ const { t } = useI18n()
 
 const {
     aiBerichtModell, aiBerichtProvider, aiChatEnabled, aiModel, aiProvider, aiReportPrompt,
-    aiReportPromptPreset, aiScreenshots, aiTestResult, modellListen, onPromptPresetChange,
-    promptPresets, saveAiSettings,
+    aiReportPromptPreset, aiScreenshots, aiTestResult, aiTradeAnalyseModell, aiTradeAnalyseProvider,
+    modellListen, onPromptPresetChange, promptPresets, saveAiSettings,
 } = useKiAnbieter()
+
+/* Was für die Berichte gilt — die Trade-Analyse zeigt es, wenn sie leer ist. */
+const berichtGilt = computed(() => ({
+    provider: aiBerichtProvider.value || aiProvider.value,
+    modell: aiBerichtModell.value || (aiBerichtProvider.value ? '' : aiModel.value),
+}))
 </script>
 
 <template>
@@ -29,6 +36,16 @@ const {
                 :modell-listen="modellListen" :global-provider="aiProvider" :global-modell="aiModel"
                 @update:provider="w => { aiBerichtProvider = w; aiBerichtModell = ''; kiSpeichern('aiBerichtProvider', w); kiSpeichern('aiBerichtModell', '') }"
                 @update:modell="w => { aiBerichtModell = w; kiSpeichern('aiBerichtModell', w) }" />
+        </Feld>
+
+        <!-- Schnelle Erstbewertung eines abgeschlossenen Trades: bis 10/2026
+             eine Zeile der Aufgaben-Tabelle unter Agent. Leer = wie oben. -->
+        <Feld :label="t('settings.ki.tradeAnalyseLabel')" :hilfe="t('settings.ki.tradeAnalyseHint')">
+            <AnbieterWahl :provider="aiTradeAnalyseProvider" :modell="aiTradeAnalyseModell"
+                :modell-listen="modellListen" :global-provider="berichtGilt.provider" :global-modell="berichtGilt.modell"
+                :leer-text="t('settings.ki.likeReports')"
+                @update:provider="w => { aiTradeAnalyseProvider = w; aiTradeAnalyseModell = ''; kiSpeichern('aiTradeAnalyseProvider', w); kiSpeichern('aiTradeAnalyseModell', '') }"
+                @update:modell="w => { aiTradeAnalyseModell = w; kiSpeichern('aiTradeAnalyseModell', w) }" />
         </Feld>
 
         <!-- Bericht-Prompt -->

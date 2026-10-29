@@ -122,14 +122,14 @@ Vorgabe `autarktrade.local`). Im Container kennt die App die Adresse des Hosts
 nicht — deshalb:
 
 - `AT_TLS_NAMEN` in der `.env` (Komma-Liste), z. B. `AT_TLS_NAMEN=192.168.178.100`;
-- oder unter **Einstellungen › Allgemein › HTTPS** eintragen. Dort stehen auch
+- oder unter **Einstellungen › System › HTTPS** eintragen. Dort stehen auch
   **Vorschläge**: die Adressen, unter denen die App tatsächlich aufgerufen wurde
   (nur was der Host-Schutz zulässt). Aufgenommen wird ein Vorschlag erst nach
   Bestätigung.
 
 ### 2. Der CA einmal je Gerät vertrauen
 
-Unter **Einstellungen › Allgemein › HTTPS** „CA herunterladen" (die Datei
+Unter **Einstellungen › System › HTTPS** „CA herunterladen" (die Datei
 `AutarkTrade-CA-<ID>.crt`), installieren und den dort angezeigten
 **Fingerabdruck** (SHA-256) vergleichen. Kurze Anleitungen für Android,
 Windows, Linux/Firefox und macOS/iOS stehen gleich daneben. Danach
@@ -156,7 +156,7 @@ Synology-DSM belegt 443 (und 80) selbst mit ihrem nginx.
 ### 4. Neue CA
 
 Nur wenn der CA-Schlüssel unlesbar ist (`AT_SECRET` geändert) oder in fremde
-Hände geraten sein könnte: Einstellungen › Allgemein › HTTPS › „Neue CA
+Hände geraten sein könnte: Einstellungen › System › HTTPS › „Neue CA
 erzeugen". Danach muss JEDES Gerät der neuen CA neu vertrauen.
 
 ### Umstieg von Caddy + mkcert

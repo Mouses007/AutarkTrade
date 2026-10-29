@@ -88,7 +88,7 @@ const MIN_VOL_BASIS_USD = 1000
  * King of the Hill ist ein Ereignis, kein Zustand: Bis 10.10.2026 wurde es
  * fortgeschrieben und zählte als Momentum 60–80, auch Tage später und nach
  * einem Absturz. Es gilt so lange nach dem Erreichen. (pump.fun, S15 nur mit
- * dem Schalter „Quellen ohne Verkaufsfreigabe" — ohne ihn fehlt das Feld.)
+ * dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" — ohne ihn fehlt das Feld.)
  */
 const KOTH_GILT_MS = 3 * 3600e3
 
@@ -436,7 +436,7 @@ export function momentaufnahme(markt = {}, sozial = {}, ts = Date.now(), { fenst
         /*
          * Bewertung in fester Reihenfolge: Marktkapitalisierung vor FDV, beide
          * von DexScreener bzw. CoinGecko On-Chain, pump.fun zuletzt (nur mit
-         * dem Schalter „Quellen ohne Verkaufsfreigabe", S15). Bis 10.10.2026
+         * dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen", S15). Bis 10.10.2026
          * kam pump.fun zuerst, sobald der Token in einer pump.fun-Liste stand —
          * Momentum und Einbruch rechneten dann zwischen zwei Quellen statt über
          * die Zeit.

@@ -7,7 +7,7 @@
  * Kopieren und ein zweiter Container. Jetzt erzeugt die App beim ersten Start
  * eine eigene Stamm-CA, stellt sich damit ein Server-Zertifikat aus und
  * erneuert es selbst (`server/tls/dienst.js`). Geräte vertrauen EINMAL der CA
- * (Download unter Einstellungen › Allgemein › HTTPS), danach jedem neuen
+ * (Download unter Einstellungen › System › HTTPS), danach jedem neuen
  * Server-Zertifikat.
  *
  * Schlüssel: ECDSA P-256 (überall unterstützt, auch ESP32/mbedTLS und

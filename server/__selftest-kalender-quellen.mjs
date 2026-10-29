@@ -16,7 +16,7 @@
  * 3. **Regenbogen auf kürzerer Reihe** (`wochenpunkte`, `regression`): der
  *    jüngste Tag muss in der Stichprobe sein, sonst steht „jetzt" auf einem
  *    bis zu sechs Tage alten Kurs.
- * 4. **Schalter „Quellen ohne Verkaufsfreigabe"** (S15): ForexFactory lesen
+ * 4. **Schalter „Quellen mit eingeschränkten Nutzungsbedingungen"** (S15): ForexFactory lesen
  *    und gegen die amtlichen Termine entdoppeln; mit Schalter AUS geht keine
  *    Anfrage an Yahoo, blockchain.info, CoinMarketCap oder ForexFactory, und
  *    die Wal-Kachel sagt „ohneFreigabe" — mit Schalter AN laufen die alten
@@ -205,7 +205,7 @@ console.log('\nForexFactory (Schalter an) und Entdoppeln')
     pruefe('Quellenhinweis „ForexFactory"', FF_QUELLE.name === 'ForexFactory' && FF_QUELLE.art === 'quelle')
 }
 
-console.log('\nSchalter „Quellen ohne Verkaufsfreigabe"')
+console.log('\nSchalter „Quellen mit eingeschränkten Nutzungsbedingungen"')
 {
     // Jede Anfrage wird abgefangen und mitgeschrieben — nichts geht ins Netz.
     const gesehen = []

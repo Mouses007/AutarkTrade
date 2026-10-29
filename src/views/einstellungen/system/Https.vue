@@ -1,6 +1,6 @@
 <script setup>
 /**
- * Allgemein → HTTPS: die eigene Stamm-CA der App (`server/tls/dienst.js`).
+ * System → HTTPS: die eigene Stamm-CA der App (`server/tls/dienst.js`).
  *
  * Fingerabdruck zum Vergleichen beim Installieren, Download der CA, Namen und
  * IPs im Server-Zertifikat (mit Vorschlägen aus den Adressen, unter denen die

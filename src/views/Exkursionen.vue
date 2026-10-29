@@ -72,7 +72,8 @@ const meldungen = ref([])         // { art, text }
 const gespeichertAnzahl = ref(0)
 
 const hatSchluessel = computed(() => boersenIndex.value >= 0)
-const einstellungsLink = computed(() => `<a href="/einstellungen/journal">${t('nav.settings')}</a>`)
+// Die Schlüssel stehen unter Datenquellen (Abschnitt „Kerzen für Exkursionen")
+const einstellungsLink = computed(() => `<a href="/einstellungen/datenquellen?abschnitt=kerzen-schluessel">${t('nav.settings')}</a>`)
 const pufferWort = computed(() => (Number(tageReserve.value) > 1 ? t('excursions.dayBufferMehr') : t('excursions.dayBuffer')))
 const fehlendeText = computed(() => fehlendeTage.value.map(d => formDatum(d)).join(', '))
 

@@ -100,7 +100,7 @@
     "rollback": "Rollback...",
     "changes": "Änderungen:",
     "updateBackupWarning": "⚠️ Vor dem Update ein Backup erstellen!",
-    "updateBackupPath": "Einstellungen → Datenbank → Backup → Export",
+    "updateBackupPath": "Einstellungen → System → Datenbank → Backup → Export",
     "updateConfirm": "Hast du ein Backup erstellt und möchtest fortfahren?",
     "rollbackConfirm": "Möchtest du zur vorherigen Version zurückkehren?",
     "addExcursions": "Exkursionen hinzufügen",
@@ -213,7 +213,7 @@
     "3M": "3 Monate",
     "6M": "6 Monate",
     "12M": "12 Monate",
-    "addCustom": "+ Timeframe",
+    "addCustom": "Timeframe",
     "egCustom": "z.B. 8 Stunden"
   },
   "dashboard": {
@@ -237,7 +237,7 @@
     "gains": "Gewinne",
     "losses": "Verluste",
     "plRatio": "P/L Ratio",
-    "plRatioTooltip": "Verhältnis von Ø Gewinn zu Ø Verlust pro Trade. Wert > 1 bedeutet, dass Gewinntrades im Schnitt größer sind als Verlusttrades.",
+    "plRatioTooltip": "Verhältnis von Ø Gewinn zu Ø Verlust pro Trade. Wert > 1 bedeutet, dass Gewinntrades im Schnitt grösser sind als Verlusttrades.",
     "mfePlRatio": "MFE P/L Ratio",
     "mfePlRatioTooltip": "Maximum Favorable Excursion / P&L.\nZeigt wie viel vom maximalen Gewinnpotenzial tatsächlich realisiert wurde.\nHoher Wert = Gewinne werden zu früh mitgenommen.\nWert nahe 1 = optimaler Ausstieg.",
     "avgWinPerTrade": "Ø Gewinn/Trade",
@@ -251,7 +251,7 @@
     "feeShareOfGross": "Anteil an Bruttogewinnen",
     "avgPerTrade": "Ø pro Trade",
     "tradingFees": "Trading Fees",
-    "tradingFeesTooltip": "Gebühren für das Eröffnen und Schließen von Positionen (Maker/Taker Fees).",
+    "tradingFeesTooltip": "Gebühren für das Eröffnen und Schliessen von Positionen (Maker/Taker Fees).",
     "fundingFees": "Funding Fees",
     "fundingFeesTooltip": "Periodische Finanzierungsgebühren für das Halten offener Futures-Positionen. Werden alle 8 Stunden berechnet. Negative Werte = erhaltene Funding.",
     "fundingPaid": "Funding bezahlt",
@@ -374,24 +374,24 @@
     "esp32Resistiv": "Resistiv",
     "esp32Kapazitiv": "Kapazitiv",
     "esp32Flash": "Flash-Anleitung:",
-    "esp32WeitereClients": "Weitere Clients (gleicher Key):",
+    "esp32WeitereClients": "Weitere Anzeigen (mit dem Hauptschlüssel):",
     "esp32AndroidWidget": "Homescreen-Widget",
     "esp32Desklet": "Cinnamon-Desklet",
     "esp32LiefertTitel": "Liefert",
     "esp32Liefert": "heutiger PnL, Gesamt-PnL, Win-Rate, offene Positionen, laufende Bots",
-    "esp32KeyGesetzt": "(gesetzt — neu generieren zum Anzeigen)",
-    "esp32KeinKey": "(kein Key gesetzt)",
+    "esp32KeyGesetzt": "(gesetzt — neu erzeugen zum Anzeigen)",
+    "esp32KeinKey": "(kein Schlüssel gesetzt)",
     "esp32Kopieren": "Kopieren",
-    "esp32Kopiert": "Key in die Zwischenablage kopiert.",
+    "esp32Kopiert": "Schlüssel in die Zwischenablage kopiert.",
     "esp32Zeitraum": "Zeitraum",
     "esp32ZeitraumHilfe": "Anzeigen übernehmen automatisch",
     "esp32Monat": "Aktueller Monat",
     "esp32Woche": "Aktuelle Woche",
     "esp32Jahr": "Aktuelles Jahr",
     "esp32Gesamt": "Gesamtzeitraum",
-    "esp32KeyNeu": "Key neu generieren",
-    "esp32KeyErzeugen": "Key generieren",
-    "esp32KeyLoeschen": "Key löschen",
+    "esp32KeyNeu": "Schlüssel neu erzeugen",
+    "esp32KeyErzeugen": "Schlüssel erzeugen",
+    "esp32KeyLoeschen": "Schlüssel löschen",
     "esp32PushTitel": "Push-Geräte ({anzahl} von {max})",
     "esp32PushBeschreibung": "Geräte, die sich mit dem ESP32-Schlüssel für die Sofort-Zustellung der Chart-Alarme eingetragen haben (Android-Widget über ntfy). Höchstens {max}; ist die Liste voll, nimmt der Server kein neues Gerät an. Ein unbekanntes Gerät entfernen und den Schlüssel neu erzeugen.",
     "esp32PushLeer": "Kein Gerät eingetragen.",
@@ -402,7 +402,7 @@
     "esp32PushEntfernen": "Entfernen",
     "esp32PushEntfernenFrage": "Gerät „{name}\" aus der Sofort-Zustellung entfernen?",
     "esp32FilterGespeichert": "Filter gespeichert — Anzeigen übernehmen beim nächsten Abruf.",
-    "esp32KeyNeuHinweis": "Neuer Key generiert — einmalig sichtbar. Jetzt kopieren!",
+    "esp32KeyNeuHinweis": "Neuer Schlüssel erzeugt — nur jetzt sichtbar. Jetzt kopieren!",
     "esp32Anzeige": {
       "titel": "Anzeige-Schlüssel (nur für ESP32-Displays)",
       "text": "Ein Display steht offen herum und schickt seinen Schlüssel über HTTP. Der Anzeige-Schlüssel öffnet deshalb NUR die Anzeige (GET /api/esp32/display) — keine Alarme, keine Push-Anmeldung. ESP32-Displays bekommen diesen Schlüssel, die Handy-App und das Widget den Hauptschlüssel oben. Der Hauptschlüssel gilt weiter auch für die Anzeige.",
@@ -466,7 +466,7 @@
       "herkunftEigen": "eigener Eintrag",
       "entfernen": "{name} entfernen",
       "hinzufuegen": "Name oder IP hinzufügen",
-      "hinzufuegenPlatzhalter": "z. B. 192.168.178.100 oder nas.fritz.box",
+      "hinzufuegenPlatzhalter": "z. B. 192.168.1.50 oder meinserver.local",
       "aufnehmen": "Aufnehmen",
       "verwerfen": "Verwerfen",
       "namenGespeichert": "Gespeichert — neues Zertifikat aktiv.",
@@ -503,7 +503,6 @@
     "importLoeschFehler": "Fehler beim Löschen: ",
     "language": "Sprache",
     "languageLabel": "App-Sprache",
-    "layoutAndStyle": "Layout & Stil",
     "startpageOn": "Startseite anzeigen",
     "startpageOnHint": "Zeigt die konfigurierbare Startseite als Landing-Page und eigenen Modus-Tab. Aus: die App startet direkt im Journal.",
     "livetradingMobile": "Live-Trading auf dem Handy",
@@ -518,7 +517,6 @@
     "calculateFromApi": "Von API berechnen",
     "apiBalance": "API-Balance: {value} USDT",
     "manualOrApi": "Manuell eingeben oder automatisch von der API berechnen lassen.",
-    "apiConnection": "API Anbindung",
     "zugangAbgelehnt": "{boerse} weist den hinterlegten API-Schlüssel zurück.",
     "zugangSeit": "Seit {zeit}. Neuen Schlüssel bei der Börse erzeugen und unten eintragen — der Hinweis verschwindet beim nächsten erfolgreichen Abruf.",
     "apiConnectionDescription": "Verbinde deine Börsen-Konten, um Trades automatisch zu importieren.",
@@ -538,7 +536,8 @@
     "pionexSaved": "Pionex API Einstellungen gespeichert",
     "evaluation": "Bewertung",
     "tagsSection": "Tags",
-    "tagsDescription": "Erstelle Tag-Gruppen und Tags, um deine Trades zu kategorisieren.",
+    "tagsDescription": "Erstelle Tag-Gruppen und Tags, um deine Trades zu kategorisieren. Die Reihenfolge änderst du, indem du einen Tag an eine andere Stelle ziehst.",
+    "tagZiehen": "Ziehen zum Umsortieren (Tastatur: Alt + Pfeil)",
     "newTagPlaceholder": "Neuer Tag...",
     "newGroupPlaceholder": "Neue Gruppe...",
     "timeframesSection": "Timeframes",
@@ -548,12 +547,10 @@
     "scalpMaxMinutes": "Scalp max. (Minuten)",
     "daytradeMaxHours": "Daytrade max. (Stunden)",
     "tradeTypeThresholdHint": "Alles über dem Daytrade-Schwellwert wird als Swingtrade erkannt.",
-    "popupsAndNotifications": "Popups & Benachrichtigungen",
-    "popupsDescription": "Trade-Bewertungs-Popups beim Öffnen und Schließen von Positionen anzeigen.",
+    "popupsDescription": "Neu eröffnete und neu geschlossene Positionen einmal als Popup melden – auf jeder Seite ausser im Live-Trading-Cockpit; dort wartet die Meldung bis zur nächsten Seite. Beim Einschalten zählen nur Trades ab diesem Moment. Ausgeschaltet gehen geschlossene Positionen ohne Abschlussbewertung direkt ins Journal.",
     "enablePopups": "Bewertungs-Popups aktivieren",
     "browserNotifications": "Browser-Benachrichtigungen",
     "browserNotificationsHint": "Desktop-Benachrichtigung wenn ein KI-Bericht fertig ist oder ein API-Import abgeschlossen wurde (nur wenn Tab nicht im Fokus).",
-    "kiAgent": "KI-Einstellungen",
     "promptTextShort": "Halte den Bericht kurz und prägnant. Maximal 3-4 Sätze pro Abschnitt. Fokussiere dich auf die wichtigsten Erkenntnisse.",
     "promptTextStandard": "Erstelle einen ausgewogenen Trading-Bericht mit allen wichtigen Kennzahlen, Stärken, Schwächen und konkreten Verbesserungsvorschlägen. Nutze eine sachliche, professionelle Sprache.",
     "promptTextCoach": "Sei sehr direkt und kritisch. Beschönige nichts. Sprich Schwächen und Fehler klar an. Gib konkrete Verbesserungsvorschläge wie ein strenger Trading-Coach.",
@@ -607,7 +604,7 @@
         "title": "Strategie-Agenten",
         "killActive": "Not-Aus aktiv",
         "intro": "Globale Schalter für die Strategie-Agenten (nur Simulation, keine Orders). Die Strategien selbst und ihre Parameter werden eingestellt unter",
-        "link": "Agent → Strategien",
+        "link": "Strategien › Instanzen",
         "intro2": "Diese Schalter wirken übergeordnet: keine einzelne Instanz kann sie umgehen.",
         "kill": "Not-Aus",
         "killHint": "Solange aktiv, wird nichts erkannt und keine simulierte Position eröffnet.",
@@ -626,7 +623,6 @@
         "autoHint": "Täglich, wöchentlich oder gar nicht („nur manuell\"). Aus: nur noch per Knopf. Beiträge werden unabhängig davon täglich gesammelt.",
         "daily": "täglich",
         "weekly": "wöchentlich",
-        "localTime": "lokale Zeit",
         "wd1": "Montag",
         "wd2": "Dienstag",
         "wd3": "Mittwoch",
@@ -636,13 +632,13 @@
         "wd7": "Sonntag",
         "topicsLabel": "Themen des Berichts",
         "topicsHint": "Je Thema ein Kapitel. Der Krypto-Teil bekommt die Marktradar-Messwerte (Fear & Greed, Dominanz, Funding, Long/Short) gleich mit.",
-        "topicCrypto": "Crypto",
+        "topicCrypto": "Krypto",
         "topicFinance": "Finanzen",
         "topicTech": "Tech-Branche",
         "researchLabel": "Recherche & X-Suche",
         "researchHint": "Mit Perplexity-Schlüssel recherchiert der Bericht je Thema zusätzlich im Web (Belege inklusive); mit xAI-Schlüssel werden X-Quellen über Grok geholt — einmal am Tag. Beide Schlüssel stehen unter Zugang. Ohne Schlüssel entfällt der jeweilige Schritt still.",
         "grokModel": "Grok-Modell für die X-Suche:",
-        "perplexityModel": "Recherche:",
+        "perplexityModel": "Perplexity-Modell:",
         "videosLabel": "Videos je Lauf an Gemini",
         "videosHint": "Video ist der teuerste Eingabetyp — abgerechnet nach Länge. 0 = keine Videos ansehen, dann nutzt der Bericht nur Titel und Videobeschreibung.",
         "geminiDefault": "Gemini-Vorgabe",
@@ -728,11 +724,11 @@
         "updateProfileTitle": "Aktuelle Einstellungen erneut in dieses Profil einschnappen",
         "updateProfileBtn": "Aktualisieren",
         "noProfiles": "Noch keine Profile angelegt.",
-        "newProfileNamePlaceholder": "Name, z.B. 'Nur BTC wichtige News'",
+        "newProfileNamePlaceholder": "Profilname, z. B. Nur BTC",
         "saveAsProfileBtn": "+ Aus aktuellen Einstellungen speichern",
         "sourcesTitle": "Nachrichtenquellen",
         "sourcesDescription": "YouTube-Kanäle, RSS-Adressen, Telegram-Kanäle und X-Accounts für die Nachrichten-Seite. Was du als Ausschluss markierst, blendet „Temporär ausschliessen\" aus — und holt es gar nicht erst ab. Es werden nur Titel, Verweis und Zeitpunkt gespeichert, keine Volltexte.",
-        "xSourceHint": "Zu X: läuft über die bezahlte Grok-Suche (xAI) — als Adresse genügt der Handle, z.B. {'@'}saylor. Alle X-Quellen zusammen kosten EINE Suche je Abruflauf (rund 0,5 Rappen plus Token), gedrosselt auf höchstens eine Suche alle vier Stunden. Voraussetzung ist ein xAI-Schlüssel unter „KI-Einstellungen\". Gratis-Umwege (Nitter-Spiegel) sind tot — geprüft am 16.08.2026.",
+        "xSourceHint": "Zu X: läuft über die bezahlte Grok-Suche (xAI) — als Adresse genügt der Handle, z.B. {'@'}saylor. Alle X-Quellen zusammen kosten EINE Suche je Abruflauf (rund 0,5 Rappen plus Token), gedrosselt auf höchstens eine Suche alle vier Stunden. Voraussetzung ist ein xAI-Schlüssel unter KI › Zugang. Gratis-Umwege (Nitter-Spiegel) sind tot — geprüft am 16.08.2026.",
         "tempExcludeLabel": "Temporär ausschliessen",
         "tempExcludeOn": "An — als Ausschluss markierte Quellen bleiben aussen vor",
         "tempExcludeOff": "Aus — alle aktiven Quellen werden geholt",
@@ -758,26 +754,36 @@
         "lagenAn": "Im Bericht mitschicken",
         "lagenSymbol": "Handelslage für",
         "lagenSymbolHint": "Binance-Perpetual, z. B. BTCUSDT oder SOLUSDT — die Handelslage misst diesen einen Markt.",
-        "lagenSymbolUnbekannt": "{symbol} führt Binance nicht als Perpetual — die Handelslage würde im Bericht fehlen."
+        "lagenSymbolUnbekannt": "{symbol} führt Binance nicht als Perpetual — die Handelslage würde im Bericht fehlen.",
+        "researchWay": "Weg:",
+        "likeReport": "Wie der Bericht",
+        "updateModelLabel": "Modell für die Zwischenmeldungen",
+        "updateModelHint": "Leer = dasselbe Modell wie der Bericht. „Globaler Anbieter\" folgt dem unter KI › Zugang eingestellten Anbieter.",
+        "checkModelLabel": "Modell für die Anweisungsprüfung",
+        "checkModelHint": "Prüft die eigene Anweisung, bevor sie an den Bericht geht. Leer = dasselbe Modell wie der Bericht — wer prüft, soll später auch befolgen.",
+        "contentTitle": "Inhalt & Länge",
+        "modelsTitle": "Modelle",
+        "keepTitle": "Aufbewahrung",
+        "filterTitle": "Filter",
+        "rhythmTitle": "Rhythmus & Updates"
       },
       "agentBudget": "Token-Budget je Lauf",
       "agentBudgetHint": "Obergrenze für einen Agenten-Lauf über alle Denkrunden (Eingabe + Ausgabe). Ist sie erreicht, fasst der Agent die bis dahin gesammelten Ergebnisse zusammen. Mehr Budget = tiefere Analysen, aber höhere Kosten je Frage.",
-      "modelOptimization": "Modell-Optimierung",
-      "modelOptimizationHint": "OpenRouter-Modelle pro Aufgabe optimieren",
-      "analysisStart": "Agent-Analyse starten",
-      "analysisRunning": "Analysiere Modelle …",
-      "analysisDone": "{n} Empfehlungen generiert",
-      "taskModelsTitle": "Aufgaben-spezifische Modelle",
-      "taskModelsHint": "Format anbieter/modell (z. B. anthropic/claude-haiku-5-5, openrouter/anthropic/claude-opus-5.5) oder nur anbieter für dessen Standardmodell. Eine Zeile hier schlägt das Einzelfeld der Funktion; leer = Einzelfeld, sonst das globale Modell. Der grau vorgeschlagene Wert ist die Empfehlung.",
+      "taskModelsTitle": "Modell je Aufgabe",
+      "taskModelsHint": "Für Aufgaben ohne eigene Seite. Lagebericht samt Zwischenmeldung und Anweisungsprüfung, Video, X-Suche, Recherche, Trade-Analyse, Agent, Strategie und Sentiment-Veto stellst du auf ihrer Seite ein. Format anbieter/modell (z. B. anthropic/claude-haiku-5-5, openrouter/anthropic/claude-opus-5.5) oder nur anbieter für dessen Standardmodell; leer = der Wert in Klammern, sonst das globale Modell. Der grau vorgeschlagene Wert ist die Empfehlung.",
       "taskCol": "Aufgabe",
       "taskCurrentCol": "Aktuell",
       "taskChangeCol": "Ändern",
       "taskOnly": "nur {was}",
-      "costTitle": "Kosten-Übersicht",
-      "costEstimate": "Geschätzte monatliche Kosten:",
-      "costHint": "Nutze die Agent-Analyse oben, um optimale Modelle pro Aufgabe zu finden und Kosten zu sparen.",
       "deepseekSearch": "DeepSeek-Suche + Haiku (billiger)",
-      "keineEmpfehlungen": "KI-Texte sind gekennzeichnet und keine Anlageberatung."
+      "keineEmpfehlungen": "KI-Texte sind gekennzeichnet und keine Anlageberatung.",
+      "kostenVerweis": "Was die KI-Funktionen tatsächlich kosten, zeigt die Übersicht (gemessen, je Funktion und Tag).",
+      "imageProviderActive": "Bildanbieter",
+      "tradeAnalyseLabel": "Modell für die Trade-Analyse",
+      "tradeAnalyseHint": "Die schnelle Erstbewertung eines abgeschlossenen Trades. Leer = dasselbe wie die Trade-Berichte oben.",
+      "likeReports": "Wie die Berichte",
+      "vetoLabel": "Modell für das Sentiment-Veto",
+      "vetoHint": "Der Sentiment- und der Portfolio-Agent prüfen ein Setup, bevor eine Strategie es (simuliert) handelt. Leer = der allgemein eingestellte Anbieter; die Rollen-Einstellung einer Instanz hat Vorrang."
     },
     "aiEnabled": "KI-Funktionen aktiviert",
     "aiEnabledHint": "Aus: KI verschwindet aus Menü und Dashboard.",
@@ -787,7 +793,7 @@
     "ollamaUrlHint": "Standard: http://localhost:11434 — Ändere die URL wenn Ollama auf einem anderen Server läuft.",
     "model": "Modell",
     "loadModelsHint": "Klicke auf \"Verbindung testen\" um die Modelle zu laden.",
-    "apiKeyLabel": "API-Key",
+    "apiKeyLabel": "API-Schlüssel",
     "apiKeyInputPlaceholder": "API-Key eingeben...",
     "deleteKey": "Key löschen",
     "encryptedStored": "Verschlüsselt gespeichert.",
@@ -806,13 +812,9 @@
     "dbType": "Datenbank-Typ",
     "sqliteLocal": "SQLite (lokal)",
     "postgresRemote": "PostgreSQL (remote)",
-    "pgProviderTitle": "Kostenlose PostgreSQL-Anbieter",
-    "pgProviderDesc": "Kein eigener Server? Diese Anbieter bieten kostenlose PostgreSQL-Datenbanken:",
-    "pgProvider": "Anbieter",
-    "pgFeature": "Besonderheit",
-    "pgAivenFeature": "EU-Standorte (DSGVO)",
+    "pgHosting": "Kein eigener Server? PostgreSQL läuft auch bei Online-Datenbankdiensten (gehostetes PostgreSQL, teils mit kostenlosem Einstieg) oder auf einem gemieteten virtuellen Server (VPS) im Internet. Dort Host, Port, Benutzer, Passwort und Datenbank abholen und oben eintragen. Die Daten liegen dann beim jeweiligen Anbieter.",
     "host": "Host",
-    "hostPlaceholder": "z.B. 192.168.1.100",
+    "hostPlaceholder": "z. B. 192.168.1.50",
     "port": "Port",
     "user": "Benutzer",
     "password": "Passwort",
@@ -855,11 +857,8 @@
     "fluxApiKeyHint": "Von api.bfl.ai",
     "fluxModel": "Bild-Modell",
     "fluxModelHint": "Höhere Qualität kostet mehr pro Bild.",
-    "fluxDisplayName": "Anzeigename",
-    "fluxDisplayNameHint": "Wird auf der Share-Karte angezeigt.",
-    "fluxAvatar": "Avatar",
-    "fluxUseCustomAvatar": "Eigenes Profilbild verwenden",
-    "fluxAvatarHint": "Standard: App-Logo. Optional eigenes Bild hochladen.",
+    "fluxAvatar": "Name und Bild",
+    "fluxUseCustomAvatar": "Profilbild auf der Karte zeigen (sonst das App-Logo)",
     "fetchFromProvider": "Vom Anbieter holen",
     "providerOffers": "{n} Modelle beim Anbieter verfügbar",
     "providerOffersFiltered": "{n} von {gesamt} Modellen passen zur Suche",
@@ -921,7 +920,7 @@
       "system": "System"
     },
     "area_journal": "Journal",
-    "area_live": "Analyse",
+    "area_live": "Chart & Analyse",
     "area_agent": "Agent",
     "deleteFailed": "Löschen fehlgeschlagen.",
     "schluesselGeleert": "Gespeichert. Die Adresse hat sich geändert — der bisherige Schlüssel wurde dafür gelöscht. Bitte den Schlüssel neu eingeben.",
@@ -949,7 +948,7 @@
       "divergenzHinweis": "Leer: deine eigenen Märkte.",
       "nurBrowser": "Dieses Ereignis entsteht nur bei geöffneter App — eine E-Mail darüber käme genau dann, wenn du ohnehin davorsitzt.",
       "kanalHinweis": "Ein Strich in der E-Mail-Spalte heisst: Dieses Ereignis kann der Server nicht allein erkennen. Die E-Mail-Häkchen sind erst wählbar, wenn der Versand unten eingeschaltet ist.",
-      "anderswo": "{was} wird unter KI → Nachrichten eingestellt — dort mit eigener Empfängerliste.",
+      "anderswo": "{was} wird unter KI › Nachrichten eingestellt — dort mit eigener Empfängerliste.",
       "gruppe_markt": "Markt",
       "gruppe_system": "System",
       "typ_picycleKreuzung": "Pi-Cycle-Kreuzung",
@@ -993,12 +992,13 @@
       "schriftSehrGross": "Sehr gross",
       "mailSecurityNone": "ohne",
       "typ_chartAlarm": "Chart-Alarm (Preis, Linie, Zone, Momentum)",
-      "hinweis_chartAlarm": "Die Alarme selbst legst du im Chart an — hier steht nur, ob sie auch per Mail kommen. Push (ntfy, Telegram, Webhook) richtest du weiter unten unter „Push aufs Handy\" ein."
+      "hinweis_chartAlarm": "Die Alarme selbst legst du im Chart an — hier steht nur, ob sie auch per Mail kommen. Push (ntfy, Telegram, Webhook) richtest du weiter unten unter „Push aufs Handy\" ein.",
+      "anderswoLink": "Zu KI › Nachrichten →"
     },
     "erweiterteInfos": "Erweiterte Infos",
     "erweiterteInfosHint": "Zeigt ein kleines „i“ an Werten und Bedienelementen. Mauszeiger darüber (am Telefon: antippen) erklärt, was die Zahl bedeutet.",
     "kerzenFarben": "Kerzenfarben im Chart",
-    "kerzenFarbenHint": "Steigende Kerzen werden hohl mit farbigem Rand gezeichnet, fallende gefüllt. Gilt für alle Charts, die Volumenbalken und das Trade-Bild.",
+    "kerzenFarbenHint": "Steigende Kerzen werden hohl mit farbigem Rand gezeichnet, fallende gefüllt. Gilt für alle Charts, die Volumenbalken und das Trade-Bild. Schneller: im Chart doppelt auf eine Kerze klicken.",
     "kerzeSteigend": "Steigend",
     "kerzeFallend": "Fallend",
     "kerzenVorgabe": "Standard",
@@ -1039,8 +1039,8 @@
     "pionexCauseIpWhitelist": "IP-Whitelist: Dein Server-IP ist nicht freigegeben (optional bei Pionex)",
     "pionexCausePermissions": "Berechtigungen: Der API Key braucht \"Lesen aktivieren\" (Read)",
     "tagsCountSuffix": "Tags",
-    "addTagBtn": "+ Tag",
-    "addGroupBtn": "+ Gruppe",
+    "addTagBtn": "Tag",
+    "addGroupBtn": "Gruppe",
     "shareCardsTitle": "Share-Karten",
     "shareCardsDescription": "Erstelle stylische Share-Bilder für deine Trades mit KI-Bildgenerierung.",
     "imageProviderLabel": "Bild-Provider",
@@ -1052,7 +1052,6 @@
     "shareCardTemplateDeleteConfirm": "Vorlage wirklich löschen?",
     "hostLabel": "Host",
     "portLabel": "Port",
-    "freeTierCol": "Kostenlos bis",
     "ohlcChart": "OHLC-Chart",
     "dayLabel": "Tag",
     "daysLabel": "Tage",
@@ -1069,7 +1068,101 @@
       "ntfyTopicLeer": "Ohne Topic wird über ntfy nichts gesendet.",
       "ntfyTopicSchwach": "Auf ntfy.sh ist ein Topic öffentlich: wer den Namen kennt, liest deine Alarme mit und kann selbst welche schicken. Nimm ein langes, zufälliges Topic (mindestens {n} Zeichen, nicht „hype-radar\") — oder ein reserviertes Topic mit Zugriffstoken bzw. einen eigenen ntfy-Server."
     },
-    "startDepositUngueltig": "Bitte eine Zahl eingeben (z. B. 1000 oder 1000,50; 0 ist erlaubt). Nichts gespeichert."
+    "startDepositUngueltig": "Bitte eine Zahl eingeben (z. B. 1000 oder 1000,50; 0 ist erlaubt). Nichts gespeichert.",
+    "waehrungLabel": "Anzeigewährung für Kosten",
+    "waehrungHint": "KI-Kosten und Budgets rechnen die Anbieter in USD. In CHF oder EUR rechnet AutarkTrade mit dem EZB-Referenzkurs um (stündlich aufgefrischt). Portfolio und Steuerbericht rechnen davon unabhängig.",
+    "waehrungKurs": "Kurs: 1 USD = {kurs} {code} ({quelle}).",
+    "waehrungKursGespeichert": "Kein aktueller Kurs erreichbar — es gilt der gespeicherte Faktor 1 USD = {kurs} {code}.",
+    "waehrungKursFehlt": "Kein Kurs erreichbar — Kosten erscheinen vorerst in USD.",
+    "fluxProfilHint": "Name und Bild der Karte kommen aus dem Profil: Einstellungen › Allgemein › Profil & Sprache.",
+    "fluxOhneName": "Die Karte zeigt keinen Namen (Schalter aus oder kein Benutzername im Profil).",
+    "area_geraete": "Geräte",
+    "area_system": "System",
+    "profilSprache": "Profil & Sprache",
+    "profilHint": "Name und Bild stehen im Seitenmenü und auf der Share-Karte. Gespeichert wird beim Verlassen des Feldes bzw. beim Wählen des Bildes.",
+    "bedienungMenue": "Bedienung & Menü",
+    "boersenLinks": "Börsen-Verlinkung",
+    "boersenLinksHint": "Welche Handelsseiten neben einem Coin angezeigt werden — in Coin-Radar, Hype-Radar und den Marktradar-Kacheln RSI/Marktübersicht.",
+    "chartAbschnitt": "Chart",
+    "boersenKonten": "Börsen-Konten",
+    "bewertungsPopups": "Bewertungs-Popups",
+    "kiZugangAnbieter": "Zugang & Anbieter",
+    "aufraeumenTitel": "Aufräumen — löscht endgültig",
+    "live": {
+      "fensterTitel": "Live-Trading-Fenster",
+      "fensterEinleitung": "Ein eigener Arbeitsplatz für die Stunden, in denen du tatsächlich handelst — Kachelraster mit eigenem Layout, unabhängig vom Marktradar. Wer nur beobachtet, schaltet die Seite hier ab; dann verschwinden auch der Startknopf auf dem Marktradar und der Menüeintrag.",
+      "fensterAnzeigen": "Live-Trading-Fenster anzeigen",
+      "heatmap": {
+        "titel": "Heatmap / Bookmap",
+        "einleitung": "Standardwerte für die Live-Ansicht. Änderungen im Seitenmenü der Live-Analyse landen ebenfalls hier — beides schreibt in dieselben Einstellungen. Die Daten kommen live vom öffentlichen Binance-Marktdaten-Stream; es wird nichts aufgezeichnet, die Historie beginnt beim Öffnen der Seite.",
+        "markt": "Markt",
+        "marktFutures": "USDⓈ-M Futures (Perpetual)",
+        "marktSpot": "Spot",
+        "preisband": "Preisband",
+        "preisbandHilfe": "Sichtbarer Bereich um den Mittelkurs",
+        "spaltentakt": "Spaltentakt",
+        "spaltentaktHilfe": "Zeit, die eine Pixelspalte abdeckt",
+        "historie": "Historie im Speicher",
+        "historieHilfe": "Länger = mehr Arbeitsspeicher",
+        "historieAuto": "Automatisch (doppelte Zeitspanne)",
+        "minuten": "{n} Minuten",
+        "farbrampe": "Farbrampe",
+        "rampeViridis": "Viridis (violett → grün → gelb)",
+        "rampeKlassisch": "Klassisch (blau → grün → gelb → rot)",
+        "rampeJournal": "Journal (Blauton)",
+        "farbskala": "Farbskala",
+        "farbskalaHilfe": "Fest = Bilder über Zeit und Symbole vergleichbar",
+        "skalaAuto": "Automatisch (95. Perzentil)",
+        "skalaFest": "Fester Sättigungswert",
+        "skalaPlatzhalter": "z. B. 50",
+        "vorlauf": "Vorlauf beim Öffnen",
+        "vorlaufHilfe": "Nur aus eigener Aufzeichnung — Binance liefert keine vergangene Orderbuch-Tiefe. Eingeschaltet wird immer die volle Historienlänge geladen: der Server faltet die Antwort ohnehin auf rund 900 Spalten, weniger zu holen spart nichts und lässt die Karte links leer.",
+        "vorlaufAus": "Aus (leer starten)",
+        "schwelle": "Liquiditätsschwelle",
+        "schwelleHilfe": "Blendet schwache Liquidität aus — nur die Wände bleiben",
+        "punkte": "Punkte zusammenfassen",
+        "punkteHilfe": "Bündelt Handelspunkte zu Blasen und bestimmt zugleich deren Grösse. Ganz links bleibt jede Spalte einzeln — dann verschmelzen die Punkte zu einem Band.",
+        "punkteAus": "aus",
+        "verhalten": "Verhalten",
+        "folgen": "Preisachse folgt dem Mittelkurs",
+        "folgenHilfe": "Aus = feste Achse, im Chart mit Ziehen verschiebbar",
+        "profil": "Volumenprofil einblenden",
+        "liquidationen": "Zwangsliquidationen einzeichnen",
+        "liquidationenHilfe": "Nur Futures — tatsächlich ausgeführte Liquidationen als Rauten",
+        "pause": "Im Hintergrund pausieren",
+        "pauseHilfe": "Empfohlen: der Browser drosselt versteckte Tabs, sonst verzerrt sich die Zeitachse"
+      },
+      "radar": {
+        "titel": "Marktradar · Kacheln",
+        "einleitung": "Betrifft die Kacheln auf der Seite „Marktradar\" und im Live-Trading-Fenster. Was sichtbar ist, wie gross und in welcher Reihenfolge, stellst du direkt dort ein — das bleibt je Gerät gespeichert.",
+        "rsiSymbole": "RSI-Symbole",
+        "rsiHilfe": "Leer lassen: die Kachel nimmt die umsatzstärksten Märkte oder deine eigenen Trades. Eine Liste hier (z. B. BTCUSDT, ETHUSDT) sticht beides.",
+        "kalenderLaender": "Kalender · Länder",
+        "kalenderLaenderHilfe": "Währungskürzel des Wirtschaftskalenders, z. B. USD, JPY, EUR.",
+        "kalenderWirkung": "Kalender · ab welcher Wirkung",
+        "kalenderWirkungHilfe": "„Mittel\" schliesst hohe Wirkung mit ein — es ist eine Untergrenze.",
+        "wirkungAlle": "Alle Termine",
+        "wirkungMittel": "Mittel und hoch",
+        "wirkungHoch": "Nur hohe Wirkung",
+        "kalenderStand": "Zuletzt geholt: {wann} · {n} Termine im Bestand (−3 bis +14 Tage)",
+        "nochNie": "noch nie",
+        "standLaedt": "Stand wird geladen …",
+        "erneutHolen": "Erneut holen",
+        "letzterFehler": "Letzter Fehler: {fehler}",
+        "kalenderZuFrueh": "Zuletzt vor Kurzem geholt — häufiger als alle paar Minuten fragt der Feed nicht.",
+        "kalenderGeholt": "{gesehen} Termine gesehen, {neu} neu."
+      }
+    },
+    "fluxNameZeigen": "Profilnamen auf der Karte zeigen",
+    "modePortfolioInfo": "Spot-Bestände aller Börsen und Wallets, dazu der Steuerbericht (Beta, nur lesend).\nAus: der Tab verschwindet, Bestände werden nicht mehr abgerufen; gespeicherte Daten bleiben.",
+    "zeitzoneLabel": "Zeitzone",
+    "zeitzoneHint": "Gilt für die Tagesgrenzen der Trades im Journal, die Uhrzeiten im Lagebericht, in Mails und auf dem ESP32-Display.",
+    "zeitzoneBrowser": "Dieser Browser steht auf {zone}.",
+    "zeitzoneUebernehmen": "übernehmen",
+    "profilBildTyp": "Als Profilbild gehen PNG, JPEG, GIF oder WebP.",
+    "profilBildGross": "Das Bild ist grösser als {mb} MB.",
+    "profilBildUnlesbar": "Das Bild lässt sich nicht lesen.",
+    "esp32HauptLabel": "Hauptschlüssel (Handy-App, Widget, Desklet)"
   },
   "setup": {
     "welcome": "Willkommen!",
@@ -1135,7 +1228,7 @@
     "news": {
       "title": "Nachrichtenquellen",
       "intro": "Bereits eingetragene Quellen bleiben unangetastet — hier lassen sich neue hinzufügen.",
-      "telegramEntfernt": "Telegram ist aus (Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) ist aus) — Telegram verbietet das Auslesen öffentlicher Kanäle. Die Quelle lässt sich löschen, aber nicht wieder einschalten.",
+      "telegramEntfernt": "Telegram ist aus (Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen) ist aus) — Telegram verbietet das Auslesen öffentlicher Kanäle. Die Quelle lässt sich löschen, aber nicht wieder einschalten.",
       "eigeneQuellen": "Es sind keine Quellen vorbelegt: welche Feeds und Kanäle gelesen und von der KI zusammengefasst werden, trägst du selbst ein. Beachte die Nutzungsbedingungen der jeweiligen Quelle."
     },
     "mail": {
@@ -1163,7 +1256,7 @@
     "lastUpdated": "Zuletzt aktualisiert:",
     "brokerAusfall": "{boerse} antwortet nicht — von dieser Börse fehlen hier alle Positionen.",
     "brokerTeilausfall": "Ein Teil der Antwort kam durch, der Rest nicht; angezeigt wird nur, was ankam.",
-    "brokerAusfallHinweis": "Meldet die Börse einen abgelaufenen oder ungültigen Schlüssel, hilft nur ein neuer: Einstellungen → Börsen.",
+    "brokerAusfallHinweis": "Meldet die Börse einen abgelaufenen oder ungültigen Schlüssel, hilft nur ein neuer: Einstellungen › Journal › Börsen-Konten.",
     "refresh": "Aktualisieren",
     "futuresSection": "Futures",
     "botsSection": "Bots",
@@ -1173,13 +1266,13 @@
     "liquidation": "Liq:",
     "marketPrice": "Kurs:",
     "margin": "Marge:",
-    "positionSize": "Positionsgröße",
+    "positionSize": "Positionsgrösse",
     "fills": "Positionen",
     "fillEntries": "Einträge",
     "fillInitial": "Initial",
     "fillCompound": "Nachkauf",
-    "fillPartialClose": "Teilschließung",
-    "fillClose": "Schließung",
+    "fillPartialClose": "Teilschliessung",
+    "fillClose": "Schliessung",
     "fillAvgPrice": "Ø Preis",
     "fillTotal": "Gesamt",
     "fillFee": "Fee",
@@ -1203,7 +1296,7 @@
     "closingNote": "Abschlussnotiz (alt)",
     "satisfaction": "Zufriedenheit",
     "skipEvaluation": "Trade nicht bewerten",
-    "completeEvaluation": "Bewertung abschließen",
+    "completeEvaluation": "Bewertung abschliessen",
     "screenshotLinked": "Screenshot verknüpft",
     "errorUpdatingCounters": "Fehler beim Aktualisieren der Zähler",
     "errorFetchingPositions": "Fehler beim Abrufen offener Positionen",
@@ -1543,14 +1636,14 @@
     "cgSchluesselFehlt": "Kein Schlüssel hinterlegt — CoinGecko-Trends, neue Pools und Käuferzahlen sind aus.",
     "boerse_coinbase": "Coinbase",
     "boerse_gate": "Gate",
-    "boersenWahlHinweis": "Coinbase, Kraken, KuCoin und Gate sind ab Werk aus: Ihre Bedingungen erlauben die Nutzung ihrer Marktdaten in einem verkauften Programm nicht erkennbar — einschalten auf eigene Verantwortung. Upbit, OKX, MEXC und Binance Alpha sind aus Lizenzgründen entfernt.",
+    "boersenWahlHinweis": "Coinbase, Kraken, KuCoin und Gate sind ab Werk aus: Ihre Bedingungen erlauben die automatische Nutzung ihrer Marktdaten nicht ausdrücklich — einschalten auf eigene Verantwortung. Upbit, OKX, MEXC und Binance Alpha sind ausgeschaltet, solange „Quellen mit eingeschränkten Nutzungsbedingungen\" aus ist.",
     "quellenAbgeschaltet": "Aus (ohne Schlüssel oder abgeschaltet): {q}.",
     "quelleDaten": "Daten:",
     "boerse_bitget": "Bitget",
     "rugcheckAn": "RugCheck nutzen (Solana: Insider-Netzwerke, Liquiditätssperre, Rückfall bei GoPlus-Ausfall)",
     "boerse_bybit": "Bybit",
     "rugcheckHinweis": "Die Nutzungsbedingungen von RugCheck sind ungeklärt (Schlüssel und Bezahltarife möglich) — deshalb ab Werk aus. Ohne RugCheck prüft GoPlus allein: Insider-Netzwerke bleiben unbekannt, und auf Solana ist die Liquiditätssperre unbekannt — mit „Liquidität muss gesperrt sein\" fallen Solana-Funde dann durch.",
-    "quellenEntferntHinweis": "pump.fun, CoinPaprika und Reddit sind nicht mehr angebunden: ihre Bedingungen erlauben die Nutzung in einem verkauften Programm nicht. CoinGecko und dessen On-Chain-Pools (vormals GeckoTerminal) laufen nur mit deinem eigenen CoinGecko-Schlüssel.",
+    "quellenEntferntHinweis": "pump.fun, CoinPaprika und Reddit sind aus: ihre Bedingungen erlauben die automatische Nutzung nicht oder nur eingeschränkt (Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\", Einstellungen › Datenquellen). CoinGecko und dessen On-Chain-Pools (vormals GeckoTerminal) laufen dann nur mit deinem eigenen CoinGecko-Schlüssel.",
     "boerse_binance-futures": "Binance Futures (nur mit Binance als Marktdatenquelle)",
     "boerse_kucoin": "KuCoin",
     "quelleName_dexscreener": "DexScreener — Profile, Boosts, Paare",
@@ -1614,10 +1707,10 @@
     "boerse_upbit": "Upbit",
     "boerse_okx": "OKX",
     "boerse_mexc": "MEXC",
-    "quellenFreiHinweis": "Quellen ohne Verkaufsfreigabe sind an (Einstellungen › Datenquellen): pump.fun, CoinPaprika und Reddit laufen wie früher; CoinGecko und GeckoTerminal ohne eigenen Schlüssel über die öffentlichen Endpunkte mit engem Limit — ein eigener Schlüssel hat Vorrang.",
+    "quellenFreiHinweis": "Quellen mit eingeschränkten Nutzungsbedingungen sind an (Einstellungen › Datenquellen): pump.fun, CoinPaprika und Reddit laufen wie früher; CoinGecko und GeckoTerminal ohne eigenen Schlüssel über die öffentlichen Endpunkte mit engem Limit — ein eigener Schlüssel hat Vorrang.",
     "cgOeffentlich": "Kein eigener Schlüssel — CoinGecko-Trends und On-Chain-Pools laufen über die öffentlichen Endpunkte (CoinGecko, GeckoTerminal), gedrosselt.",
-    "rugcheckHinweisFrei": "RugCheck läuft ab Werk mit (Quellen ohne Verkaufsfreigabe an): für Solana Insider-Netzwerke und die Liquiditätssperre. Ohne RugCheck prüft GoPlus allein — dann sind beide unbekannt.",
-    "boersenWahlHinweisFrei": "Mit „Quellen ohne Verkaufsfreigabe\" an sind alle Börsen ab Werk an, auch Binance Alpha, Upbit, OKX und MEXC. Binance Spot und Futures folgen zusätzlich der Marktdatenquelle.",
+    "rugcheckHinweisFrei": "RugCheck läuft ab Werk mit (Quellen mit eingeschränkten Nutzungsbedingungen an): für Solana Insider-Netzwerke und die Liquiditätssperre. Ohne RugCheck prüft GoPlus allein — dann sind beide unbekannt.",
+    "boersenWahlHinweisFrei": "Mit „Quellen mit eingeschränkten Nutzungsbedingungen\" an sind alle Börsen ab Werk an, auch Binance Alpha, Upbit, OKX und MEXC. Binance Spot und Futures folgen zusätzlich der Marktdatenquelle.",
     "fruehQuelle_geckoterminalNeuFrei": "GeckoTerminal / CoinGecko On-Chain — neue Pools mit Käuferzahl",
     "kanaeleUmgezogen": "Die Kanäle (ntfy, Telegram, Webhook) gelten für alle Alarme und stehen deshalb unter",
     "kanaeleZiel": "Einstellungen › Benachrichtigungen"
@@ -1629,9 +1722,9 @@
     "monat": "Kosten diesen Monat",
     "tokens30": "Tokens (30 Tage)",
     "laeufe": "{n} Läufe",
-    "aktiveAutomatiken": "Aktive Kostenläufe",
+    "aktiveAutomatiken": "Eingeschaltete Kostenläufe",
     "laeuftGerade": "läuft gerade",
-    "ruhe": "nichts aktiv",
+    "ruhe": "gerade kein Lauf",
     "verlaufTitel": "Verlauf",
     "verlaufHinweis": "Kosten je Tag der letzten 30 Tage, aufgeteilt nach Funktion.",
     "keinVerbrauch": "Noch kein Verbrauch aufgezeichnet.",
@@ -1661,12 +1754,13 @@
       "recherche": "Nachrichten: Themen-Recherche",
       "xSuche": "Nachrichten: X-Suche",
       "video": "Nachrichten: Videoanalyse",
-      "strategie": "Strategie: Veto-Agenten und Baukästen",
+      "strategie": "Strategie: Baukästen",
       "radar": "Analyse: Lage, Handelslage, Mechanik, Rangliste",
       "chart": "Chart: KI-Analyse",
       "coinRadar": "Coin-Radar: Einordnung",
       "bild": "Bilder (Share-Karten)",
-      "uebrige": "Übrige (noch ohne eigene Zeile)"
+      "uebrige": "Übrige (noch ohne eigene Zeile)",
+      "strategieVeto": "Strategie: Sentiment-Veto"
     },
     "auto": {
       "newsAbruf": "Nachrichten abrufen",
@@ -1689,7 +1783,38 @@
       "sekunden15": "alle 15 Sekunden",
       "laufend": "laufend"
     },
-    "zeitplanManuell": "nur von Hand"
+    "zeitplanManuell": "nur von Hand",
+    "schluessel": {
+      "bericht": "Trade-Bericht",
+      "coach_chat": "Coach-Rückfragen",
+      "trade_analyse": "Trade-Analyse",
+      "trade_chat": "Trade-Rückfragen",
+      "agent": "KI-Agent",
+      "chart_chat": "Chart-Chat",
+      "lagebericht": "Lagebericht",
+      "lagebericht_update": "Lagebericht-Zwischenmeldung",
+      "lagebericht_pruefung": "Anweisungsprüfung",
+      "recherche": "Themen-Recherche",
+      "recherche_schreiber": "Recherche-Schreiber",
+      "x_suche": "X-Suche",
+      "hype_x": "Hype-Radar: X-Suche",
+      "hype_bericht": "Hype-Radar: Bericht",
+      "video": "Videoanalyse",
+      "chartbild_pruefung": "Chartbild-Prüfung",
+      "chartbild_judge": "Chartbild-Urteil",
+      "strategie_veto": "Sentiment-Veto",
+      "regel_baukasten": "Regel-Baukasten",
+      "strategie_baukasten": "Strategie-Baukasten",
+      "lage": "Marktradar-Gesamtlage",
+      "handelslage": "Handelslage",
+      "mechanik": "Markt-Mechanik",
+      "rangliste": "Universum-Rangliste",
+      "chart_analyse": "Chart-KI-Analyse",
+      "coin_radar": "Coin-Radar-Einordnung",
+      "bild": "Share-Karte",
+      "hype_recherche": "Hype-Radar: Recherche"
+    },
+    "fehlerAbbruch": "Abgebrochen: Zeitüberschreitung beim Abruf"
   },
   "kiAgent": {
     "createReport": "KI-Bericht erstellen",
@@ -1857,8 +1982,8 @@
     "mfePrice": "MFE Preis",
     "mfeTooltip": "Maximum Favorable Excursion: Bester Preis während des Trades. Long = höchster High, Short = tiefster Low. Wird automatisch aus Binance 1m-Daten berechnet.",
     "note": "Notiz",
-    "closeAndSave": "Schließen & Speichern",
-    "closeModal": "Schließen",
+    "closeAndSave": "Schliessen & Speichern",
+    "closeModal": "Schliessen",
     "shareCard": "Share-Karte",
     "shareCardGenerate": "Bild generieren",
     "shareCardGenerating": "Bild wird generiert...",
@@ -1905,7 +2030,7 @@
     "tpslEntfernt": "entfernt",
     "orderbuch": "Orderbuch zum Trade",
     "orderbuchFehlt": "Orderbuch nicht aufgezeichnet",
-    "orderbuchFehltInfo": "Aufzeichnung aktivierst du unter Einstellungen → Live-Aufzeichnung.",
+    "orderbuchFehltInfo": "Aufzeichnung aktivierst du unter Einstellungen › Chart & Analyse › Live-Aufzeichnung.",
     "chartZuViele": "Zu viele Anfragen, versuche es später erneut.",
     "chartNichtVerfuegbar": "Chart nicht verfügbar für dieses Symbol.",
     "vorheriger": "Vorheriger Trade",
@@ -1996,9 +2121,7 @@
     "start": "Chart",
     "journal": "Journal",
     "live": "Analyse",
-    "liveShort": "Live",
     "agent": "Strategien",
-    "agentShort": "Strategie",
     "research": "Research",
     "lernen": "Lernen",
     "comingSoon": "Kommt später",
@@ -2480,9 +2603,9 @@
     "tp_rr": "Festes Chance/Risiko",
     "tp_anchor": "An einem Bezugspunkt",
     "tp_none": "Kein festes Ziel",
-    "op_gt": "größer als",
+    "op_gt": "grösser als",
     "op_lt": "kleiner als",
-    "op_gte": "größer/gleich",
+    "op_gte": "grösser/gleich",
     "op_lte": "kleiner/gleich",
     "op_distancePctGt": "weiter darüber als (%)",
     "op_distancePctLt": "näher darunter als (%)",
@@ -3026,7 +3149,7 @@
       "noHistory": "Eigene Kurve beginnt heute · volle Historie in der Gross-Ansicht",
       "ownSeries": "Eigener Bestand seit {seit} · {n} Tage",
       "ownSeriesEmpty": "Die eigene Aufzeichnung beginnt heute — die Kurve wächst ab jetzt mit jedem Tag.",
-      "source": "Mit Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen): Kurve und Momentwert aus dem eigenen Bestand, einmalig von CoinMarketCap eingelagert und täglich aus derselben Quelle nachgeführt, CoinGecko als Rückfall. Ohne Schalter: Momentwert von CoinGecko, die Kurve aus den eigenen täglichen Schnappschüssen — sie wächst Tag für Tag. Die Dominanz sagt, welcher Anteil des Kryptomarkts auf Bitcoin entfällt — steigt sie bei fallenden Kursen, wird eher aus Altcoins in BTC geflüchtet als neues Geld investiert.",
+      "source": "Mit Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen): Kurve und Momentwert aus dem eigenen Bestand, einmalig von CoinMarketCap eingelagert und täglich aus derselben Quelle nachgeführt, CoinGecko als Rückfall. Ohne Schalter: Momentwert von CoinGecko, die Kurve aus den eigenen täglichen Schnappschüssen — sie wächst Tag für Tag. Die Dominanz sagt, welcher Anteil des Kryptomarkts auf Bitcoin entfällt — steigt sie bei fallenden Kursen, wird eher aus Altcoins in BTC geflüchtet als neues Geld investiert.",
       "rest": "Rest",
       "range": {
         "d30": "30 Tage",
@@ -3116,7 +3239,7 @@
       "caveat": "Das ist eine Kurvenanpassung an die Vergangenheit, keine Prognose. Die Bänder verschieben sich mit jedem neuen Kurs — was heute „günstig\" heisst, kann in einem Jahr die Mitte sein. Als Stimmungsmesser über Jahre brauchbar, als Handelssignal nicht.",
       "params": "ln(Preis) ≈ {a} · ln(Tage seit Genesis) + {b}, Reststreuung {s}, {n} Stützpunkte",
       "info": "Wo der Bitcoin-Kurs langfristig im Verhältnis zu seiner historischen Bandbreite steht, von „Ausverkauf“ bis „Blase“.\nDie Bänder verschieben sich mit jedem neuen Kurs — was heute „günstig“ heisst, kann in einem Jahr die Mitte sein. Über Jahre ein Stimmungsmesser, für eine einzelne Handelsentscheidung zu grob.",
-      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle). Die Reihe ab 2009 von blockchain.info läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) — über die kürzere Zeit ist die Kurve flacher gerechnet."
+      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle). Die Reihe ab 2009 von blockchain.info läuft nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen) — über die kürzere Zeit ist die Kurve flacher gerechnet."
     },
     "top": "Top",
     "liq": {
@@ -3164,8 +3287,8 @@
       "domFromPrice": "aus Kursbewegung",
       "domHint": "Die Dominanz allein ist nicht deutbar: sie steigt schon, wenn nur die Kurse fallen. Erst die Aufteilung zeigt, ob wirklich Geld geflossen ist.",
       "source": "Der Stablecoin-Fluss ist die Mengenänderung von USDT und USDC (CoinGecko, eigener Schlüssel) — bewusst nicht die „USDT-Dominanz\", denn die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang. Zu- oder Abfluss dagegen zeigt echtes Geld, das in den Markt kommt oder ihn verlässt. Die Zerlegung der Dominanz rechnet mit dem Gesamtmarkt aus den eigenen täglichen CoinGecko-Schnappschüssen und erscheint, sobald dort genug Tage liegen.",
-      "info": "Der Blick von aussen auf den Kryptomarkt: US-Aktienfutures, Dollar-Index, Stablecoin-Fluss.\nDie Kopfzeile ist die KOPPLUNG BTC↔Nasdaq, nicht der Kurs. Die Farbe zeigt Rückenwind oder Gegenwind FÜR Krypto — ein steigender Dollar ist deshalb rot, auch wenn der Dollar selbst „steigt“.\nAktien und Dollar kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn bleibt der Stablecoin-Fluss.",
-      "indizesEntfernt": "Aktien-Futures und Dollar-Index aus (Yahoo Finance, Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen))",
+      "info": "Der Blick von aussen auf den Kryptomarkt: US-Aktienfutures, Dollar-Index, Stablecoin-Fluss.\nDie Kopfzeile ist die KOPPLUNG BTC↔Nasdaq, nicht der Kurs. Die Farbe zeigt Rückenwind oder Gegenwind FÜR Krypto — ein steigender Dollar ist deshalb rot, auch wenn der Dollar selbst „steigt“.\nAktien und Dollar kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen); ohne ihn bleibt der Stablecoin-Fluss.",
+      "indizesEntfernt": "Aktien-Futures und Dollar-Index aus (Yahoo Finance, Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen))",
       "domWaechst": "Die Zerlegung der Stablecoin-Dominanz erscheint, sobald die eigenen täglichen Schnappschüsse des Gesamtmarkts zwei Punkte im Abstand von rund 30 Tagen haben.",
       "sourceMitIndizes": "Aktien als FUTURES (ES/NQ/RTY), nicht als Kassa-Index: der Index steht nachts und am Wochenende still, der Future läuft fast durch — nur so ist der Vergleich mit dem durchlaufenden Krypto-Markt ehrlich. Die Farbe zeigt Rückenwind oder Gegenwind FÜR KRYPTO, nicht die Richtung des Marktes: ein steigender Dollar ist deshalb rot. Der Stablecoin-Fluss ist die Mengenänderung von USDT und USDC — bewusst nicht die „USDT-Dominanz\", denn die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang. Zu- oder Abfluss dagegen zeigt echtes Geld, das in den Markt kommt oder ihn verlässt. Der Russell 2000 steht als Gegenprobe zur Nasdaq daneben: laufen beide zusammen, ist es eine Liquiditäts- oder Zinsbewegung, die Krypto mitbetrifft; läuft nur die Nasdaq, ist es Rotation in wenige grosse Werte und trägt selten hierher.",
       "stableUnvollstaendig": "Nicht alle Stablecoin-Reihen kamen an – eine Teilsumme wäre keine Messung."
@@ -3258,7 +3381,7 @@
       "alarm": "Kreuzung am {datum}: Die 111-Tage-Linie hat die doppelte 350-Tage-Linie von unten geschnitten.",
       "vorwarnung": "Vorwarnung: Die kurze Linie ist nur noch {pct} % von der langen entfernt (Schwelle {schwelle} %).",
       "info": "Ein historisches Signal, das in der Vergangenheit nahe an einem Bitcoin-Zyklushoch auftrat.\nDrei Treffer bei drei Gelegenheiten sind eine Beobachtung, keine Regel — eine Frühwarnung für „Vorsicht mit Hebel“, kein Ausstiegssignal für eine einzelne Position.",
-      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle); die Kreuzungen 2013 und 2017 liegen davor und fehlen deshalb. Mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) rechnet die Kachel mit der Reihe ab 2010 von blockchain.info."
+      "seit": "Kursreihe ab {datum} (Tageskerzen der Marktdatenquelle); die Kreuzungen 2013 und 2017 liegen davor und fehlen deshalb. Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen) rechnet die Kachel mit der Reihe ab 2010 von blockchain.info."
     },
     "altseason": {
       "title": "Altcoin-Season-Index",
@@ -3304,7 +3427,7 @@
         "aus": "von Börse weg — potenzielle Verwahrung",
         "unbekannt": "Richtung unbekannt"
       },
-      "info": "Grosse Krypto-Transaktionen aus den eigenen Telegram-Quellen (Whale Alert, Lookonchain, …), automatisch erkannt — kein zusätzlicher Netzabruf.\nRot = Bewegung Richtung Börse (potenzieller Verkaufsdruck), Grün = Bewegung von einer Börse weg (potenzielle Verwahrung). Wallet-zu-Wallet-Bewegungen bleiben grau, weil die Richtung dort nicht geraten wird.\nTelegram läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) — Telegram verbietet das Auslesen öffentlicher Kanäle; ohne Schalter sagt die Kachel „aus\"."
+      "info": "Grosse Krypto-Transaktionen aus den eigenen Telegram-Quellen (Whale Alert, Lookonchain, …), automatisch erkannt — kein zusätzlicher Netzabruf.\nRot = Bewegung Richtung Börse (potenzieller Verkaufsdruck), Grün = Bewegung von einer Börse weg (potenzielle Verwahrung). Wallet-zu-Wallet-Bewegungen bleiben grau, weil die Richtung dort nicht geraten wird.\nTelegram läuft nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen) — Telegram verbietet das Auslesen öffentlicher Kanäle; ohne Schalter sagt die Kachel „aus\"."
     },
     "status_aus": "Quelle aus",
     "mcapErsatz": "Marktkapitalisierung braucht einen eigenen CoinGecko-Schlüssel — sortiert wird deshalb nach 24h-Umsatz."
@@ -3347,7 +3470,7 @@
         },
         {
           "h": "BTC-DOMINANZ",
-          "p": "Welcher Anteil des gesamten Kryptomarkts auf Bitcoin entfällt. Die Kurve stammt aus dem eigenen Bestand — rund sechs Jahre Historie, einmalig von CoinMarketCap eingelagert und täglich nachgeführt; gezeigt werden drei Reihen: Bitcoin, Ethereum und der ganze Rest. Der Momentwert kommt aus derselben Reihe, CoinGecko dient nur als Rückfall. Lesart: steigende Dominanz bei fallenden Kursen heisst Flucht aus Altcoins in BTC, fallende Dominanz bei steigenden Kursen heisst, dass frisches Geld in die Breite geht. Praktisch: ein Altcoin-Long gegen steigende Dominanz schwimmt gegen den Strom, auch wenn der Chart des Coins gut aussieht. Das gilt mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn kommt der Momentwert von CoinGecko (eigener Schlüssel) und die Kurve aus eigenen täglichen Schnappschüssen, die ab dem ersten Tag wächst."
+          "p": "Welcher Anteil des gesamten Kryptomarkts auf Bitcoin entfällt. Die Kurve stammt aus dem eigenen Bestand — rund sechs Jahre Historie, einmalig von CoinMarketCap eingelagert und täglich nachgeführt; gezeigt werden drei Reihen: Bitcoin, Ethereum und der ganze Rest. Der Momentwert kommt aus derselben Reihe, CoinGecko dient nur als Rückfall. Lesart: steigende Dominanz bei fallenden Kursen heisst Flucht aus Altcoins in BTC, fallende Dominanz bei steigenden Kursen heisst, dass frisches Geld in die Breite geht. Praktisch: ein Altcoin-Long gegen steigende Dominanz schwimmt gegen den Strom, auch wenn der Chart des Coins gut aussieht. Das gilt mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen); ohne ihn kommt der Momentwert von CoinGecko (eigener Schlüssel) und die Kurve aus eigenen täglichen Schnappschüssen, die ab dem ersten Tag wächst."
         },
         {
           "h": "FUNDING-RATEN",
@@ -3359,7 +3482,7 @@
         },
         {
           "h": "MAKRO-UMFELD",
-          "p": "Die einzige Kachel, die aus dem Krypto-Markt herausschaut — und damit die einzige, die eine Bewegung erklären kann, die ihre Ursache gar nicht hier hat. Gezeigt werden S&P-500- und Nasdaq-100-Future, der Dollar-Index und der Stablecoin-Fluss. Drei Dinge dazu: Erstens sind es bewusst FUTURES und keine Kassa-Indizes — der Index steht nachts und am Wochenende still, der Future läuft fast durch; ein stehender Wert bekommt das Kürzel „zu\". Zweitens ist die Kopfzeile die KOPPLUNG (Korrelation der Tagesrenditen BTC↔Nasdaq über 30 Tage), nicht der Kurs: „Nasdaq −1 %\" sagt erst dann etwas, wenn dein Markt gerade daran hängt, und diese Kopplung schwankt stark. Drittens zeigt die Farbe Rückenwind oder Gegenwind FÜR KRYPTO und nicht die Richtung des Marktes — ein steigender Dollar erscheint deshalb rot, weil ein starker Dollar knappere globale Liquidität bedeutet. Der Stablecoin-Fluss ist bewusst die Mengenänderung von USDT und USDC und nicht die „USDT-Dominanz\": die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang; die Menge dagegen zeigt echtes Geld, das zufliesst oder abgezogen wird. In der Gross-Ansicht steht die Dominanz trotzdem — aber nur ZERLEGT: Ein Beispiel mit runden Zahlen: Gesamtmarkt 2170 Mrd, davon 245 Mrd Stablecoins, macht 11,3 % Dominanz. Fällt der übrige Markt um 10 %, ohne dass ein einziger USDT geprägt oder eingelöst wird, steht die Dominanz bei 12,4 % — ein Sprung von 1,1 Punkten, obwohl kein Franken bewegt wurde. Genau deshalb teilt die Kachel die Veränderung in „aus echten Flüssen\" und „aus Kursbewegung\" auf; beide zusammen ergeben exakt die Gesamtveränderung. Steht der Kursanteil allein für den Ausschlag, war es eine optische Täuschung. Umgekehrt kann ein echter Zufluss in einer Rally sogar mit FALLENDER Dominanz einhergehen — auch das macht die Aufteilung sichtbar. Aktien-Futures und Dollar-Index kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn zeigt die Kachel nur den Geldfluss."
+          "p": "Die einzige Kachel, die aus dem Krypto-Markt herausschaut — und damit die einzige, die eine Bewegung erklären kann, die ihre Ursache gar nicht hier hat. Gezeigt werden S&P-500- und Nasdaq-100-Future, der Dollar-Index und der Stablecoin-Fluss. Drei Dinge dazu: Erstens sind es bewusst FUTURES und keine Kassa-Indizes — der Index steht nachts und am Wochenende still, der Future läuft fast durch; ein stehender Wert bekommt das Kürzel „zu\". Zweitens ist die Kopfzeile die KOPPLUNG (Korrelation der Tagesrenditen BTC↔Nasdaq über 30 Tage), nicht der Kurs: „Nasdaq −1 %\" sagt erst dann etwas, wenn dein Markt gerade daran hängt, und diese Kopplung schwankt stark. Drittens zeigt die Farbe Rückenwind oder Gegenwind FÜR KRYPTO und nicht die Richtung des Marktes — ein steigender Dollar erscheint deshalb rot, weil ein starker Dollar knappere globale Liquidität bedeutet. Der Stablecoin-Fluss ist bewusst die Mengenänderung von USDT und USDC und nicht die „USDT-Dominanz\": die steigt schon rein rechnerisch, wenn Krypto fällt, und wiederholt dann nur den Kursrückgang; die Menge dagegen zeigt echtes Geld, das zufliesst oder abgezogen wird. In der Gross-Ansicht steht die Dominanz trotzdem — aber nur ZERLEGT: Ein Beispiel mit runden Zahlen: Gesamtmarkt 2170 Mrd, davon 245 Mrd Stablecoins, macht 11,3 % Dominanz. Fällt der übrige Markt um 10 %, ohne dass ein einziger USDT geprägt oder eingelöst wird, steht die Dominanz bei 12,4 % — ein Sprung von 1,1 Punkten, obwohl kein Franken bewegt wurde. Genau deshalb teilt die Kachel die Veränderung in „aus echten Flüssen\" und „aus Kursbewegung\" auf; beide zusammen ergeben exakt die Gesamtveränderung. Steht der Kursanteil allein für den Ausschlag, war es eine optische Täuschung. Umgekehrt kann ein echter Zufluss in einer Rally sogar mit FALLENDER Dominanz einhergehen — auch das macht die Aufteilung sichtbar. Aktien-Futures und Dollar-Index kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen); ohne ihn zeigt die Kachel nur den Geldfluss."
         },
         {
           "h": "MARKTMECHANIK",
@@ -3383,11 +3506,11 @@
         },
         {
           "h": "REGENBOGEN (BTC)",
-          "p": "Eine logarithmische Kurvenanpassung an die gesamte Preisgeschichte von Bitcoin, mit Bändern von „Ausverkauf\" bis „Blase\". Wichtig zu verstehen: die Bänder verschieben sich mit jedem neuen Kurs, weil die Anpassung neu gerechnet wird — was heute „günstig\" heisst, kann in einem Jahr die Mitte sein. Über Jahre ein brauchbarer Stimmungsmesser, für eine Handelsentscheidung zu grob. Die ganze Historie ab 2009 (blockchain.info) läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn rechnet die Kachel mit Tageskerzen ab 2017, und die Kurve fällt flacher aus."
+          "p": "Eine logarithmische Kurvenanpassung an die gesamte Preisgeschichte von Bitcoin, mit Bändern von „Ausverkauf\" bis „Blase\". Wichtig zu verstehen: die Bänder verschieben sich mit jedem neuen Kurs, weil die Anpassung neu gerechnet wird — was heute „günstig\" heisst, kann in einem Jahr die Mitte sein. Über Jahre ein brauchbarer Stimmungsmesser, für eine Handelsentscheidung zu grob. Die ganze Historie ab 2009 (blockchain.info) läuft nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen); ohne ihn rechnet die Kachel mit Tageskerzen ab 2017, und die Kurve fällt flacher aus."
         },
         {
           "h": "PI-CYCLE-TOP (BTC)",
-          "p": "Schneidet die 111-Tage-Linie die doppelte 350-Tage-Linie von unten, lag das in der Vergangenheit nahe an einem Zyklushoch. Die Kachel zeigt den Abstand beider Linien und ob eine Kreuzung ausgelöst hat. Drei Treffer bei drei Gelegenheiten sind eine Beobachtung, keine Regel — behandle das Ding als Frühwarnung für „Vorsicht mit Hebel\", nicht als Ausstiegssignal. Mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) rechnet sie mit der Reihe ab 2010 (blockchain.info); ohne ihn mit Tageskerzen ab 2017 — dann beginnt die 350-Tage-Linie Mitte 2018, und die Kreuzungen 2013 und 2017 fehlen."
+          "p": "Schneidet die 111-Tage-Linie die doppelte 350-Tage-Linie von unten, lag das in der Vergangenheit nahe an einem Zyklushoch. Die Kachel zeigt den Abstand beider Linien und ob eine Kreuzung ausgelöst hat. Drei Treffer bei drei Gelegenheiten sind eine Beobachtung, keine Regel — behandle das Ding als Frühwarnung für „Vorsicht mit Hebel\", nicht als Ausstiegssignal. Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen) rechnet sie mit der Reihe ab 2010 (blockchain.info); ohne ihn mit Tageskerzen ab 2017 — dann beginnt die 350-Tage-Linie Mitte 2018, und die Kreuzungen 2013 und 2017 fehlen."
         },
         {
           "h": "DEINE TRADES × MARKTREGIME",
@@ -3395,7 +3518,7 @@
         },
         {
           "h": "ETF-FLUSS (BTC)",
-          "p": "Wie viele Bitcoin die Spot-ETFs zusammen halten und wie sich das täglich ändert. Der Zufluss IST die Bestandsänderung — eine zweite Zahl dafür gibt es nicht. Angezeigt wird in BTC, nicht in Dollar: mal Tageskurs gerechnet bewegte sich der „Zufluss\" auch an Tagen, an denen kein einziger Anteil geschaffen wurde. Gross zeigt die Kachel die einzelnen Fonds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) und weist als „Übrige Fonds\" aus, was auf die nicht einzeln abgefragten entfällt — die Gesamtsumme kommt von der Quelle und wird nie aus den Einzelnen addiert. Braucht einen CryptoQuant-Schlüssel (Gratis-Tarif genügt), einzutragen unter Einstellungen → Marktradar. Die Quelle gibt nur 30 Tage Rückblick her; alles Ältere sammelt das Journal selbst, die Kurve wächst also mit der Zeit. Ein Warndreieck an der 7- oder 30-Tage-Summe heisst: für einzelne Tage im Fenster fehlt ein Wert, die Summe beruht auf weniger Tagen."
+          "p": "Wie viele Bitcoin die Spot-ETFs zusammen halten und wie sich das täglich ändert. Der Zufluss IST die Bestandsänderung — eine zweite Zahl dafür gibt es nicht. Angezeigt wird in BTC, nicht in Dollar: mal Tageskurs gerechnet bewegte sich der „Zufluss\" auch an Tagen, an denen kein einziger Anteil geschaffen wurde. Gross zeigt die Kachel die einzelnen Fonds (IBIT, FBTC, GBTC, Grayscale Mini, BITB, ARKB) und weist als „Übrige Fonds\" aus, was auf die nicht einzeln abgefragten entfällt — die Gesamtsumme kommt von der Quelle und wird nie aus den Einzelnen addiert. Braucht einen CryptoQuant-Schlüssel (Gratis-Tarif genügt), einzutragen unter Einstellungen › Datenquellen › CryptoQuant. Die Quelle gibt nur 30 Tage Rückblick her; alles Ältere sammelt das Journal selbst, die Kurve wächst also mit der Zeit. Ein Warndreieck an der 7- oder 30-Tage-Summe heisst: für einzelne Tage im Fenster fehlt ein Wert, die Summe beruht auf weniger Tagen."
         },
         {
           "h": "GESAMTLAGE (KI)",
@@ -3633,7 +3756,7 @@
         },
         {
           "h": "DIE TERMINE",
-          "p": "Der Wirtschaftskalender, nach Tagen gruppiert, aus amtlichen Kalendern: Federal Reserve Board (FOMC, Beige Book), U.S. Bureau of Economic Analysis (BIP, Einkommen und Ausgaben inkl. PCE, Handelsbilanz) und Eurostat (Inflation, BIP, Arbeitslosigkeit, Industrie und Einzelhandel im Euroraum). Je Termin siehst du Uhrzeit in deiner Zeitzone, Währungsraum und Wirkungsstufe. Prognosen und Vorwerte liefern diese Quellen nicht — sie stammen aus Umfragen, die Bezahlanbieter verkaufen. Die US-Arbeitsmarkt- und Inflationsdaten (BLS) fehlen, weil das BLS automatische Abrufe sperrt. Die Quellen stehen unter der Liste. Mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) kommt der Wochen-Feed von ForexFactory dazu — acht Währungsräume, mit Prognose, Vorwert und Ist-Wert; ein Termin, der in beiden Quellen steht, erscheint einmal."
+          "p": "Der Wirtschaftskalender, nach Tagen gruppiert, aus amtlichen Kalendern: Federal Reserve Board (FOMC, Beige Book), U.S. Bureau of Economic Analysis (BIP, Einkommen und Ausgaben inkl. PCE, Handelsbilanz) und Eurostat (Inflation, BIP, Arbeitslosigkeit, Industrie und Einzelhandel im Euroraum). Je Termin siehst du Uhrzeit in deiner Zeitzone, Währungsraum und Wirkungsstufe. Prognosen und Vorwerte liefern diese Quellen nicht — sie stammen aus Umfragen, die Bezahlanbieter verkaufen. Die US-Arbeitsmarkt- und Inflationsdaten (BLS) fehlen, weil das BLS automatische Abrufe sperrt. Die Quellen stehen unter der Liste. Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen) kommt der Wochen-Feed von ForexFactory dazu — acht Währungsräume, mit Prognose, Vorwert und Ist-Wert; ein Termin, der in beiden Quellen steht, erscheint einmal."
         },
         {
           "h": "DIE BEITRÄGE",
@@ -3654,7 +3777,7 @@
         },
         {
           "h": "WARUM DER KALENDER MITWÄCHST",
-          "p": "Die Behörden veröffentlichen ihre Kalender unterschiedlich weit im Voraus — die Fed Monate, Eurostat und das BEA für das laufende und folgende Jahr. Das Journal sammelt jeden gesehenen Termin dauerhaft ein, statt ihn nur durchzureichen, und fragt alle sechs Stunden nach. Unter der Liste steht, bis wann der Bestand im gewählten Zeitraum reicht; eine leere Strecke danach heisst „noch nicht veröffentlicht\", nicht „nichts los\". ForexFactory (nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen)) führt dagegen immer nur die laufende Woche — dort heisst eine leere zweite Woche „noch nicht eingesammelt\"."
+          "p": "Die Behörden veröffentlichen ihre Kalender unterschiedlich weit im Voraus — die Fed Monate, Eurostat und das BEA für das laufende und folgende Jahr. Das Journal sammelt jeden gesehenen Termin dauerhaft ein, statt ihn nur durchzureichen, und fragt alle sechs Stunden nach. Unter der Liste steht, bis wann der Bestand im gewählten Zeitraum reicht; eine leere Strecke danach heisst „noch nicht veröffentlicht\", nicht „nichts los\". ForexFactory (nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen)) führt dagegen immer nur die laufende Woche — dort heisst eine leere zweite Woche „noch nicht eingesammelt\"."
         },
         {
           "g": "Im Alltag",
@@ -3710,7 +3833,7 @@
     },
     "livetrading": {
       "title": "Live-Trading — der Arbeitsplatz während der Sitzung",
-      "intro": "Das Kachelraster für die Stunden, in denen du tatsächlich handelst. Eigenes Layout, unabhängig vom Marktradar, und ein Prüftakt von drei Sekunden statt dreissig, damit schnelle Kacheln pünktlich nachladen. Nur am Rechner — ein Orderbuch und ein Kerzenchart lassen sich auf 375 Pixeln nicht bedienen. Abschaltbar unter Einstellungen → Live.",
+      "intro": "Das Kachelraster für die Stunden, in denen du tatsächlich handelst. Eigenes Layout, unabhängig vom Marktradar, und ein Prüftakt von drei Sekunden statt dreissig, damit schnelle Kacheln pünktlich nachladen. Nur am Rechner — ein Orderbuch und ein Kerzenchart lassen sich auf 375 Pixeln nicht bedienen. Abschaltbar unter Einstellungen › Chart & Analyse.",
       "sections": [
         {
           "g": "Ablauf einer Sitzung",
@@ -3740,7 +3863,7 @@
         },
         {
           "h": "INDIZES, FUNDING, LONG/SHORT, MAKRO",
-          "p": "Indizes zeigt ES=F, NQ=F, RTY=F und den Dollar-Index als Intraday-Kerzen von Yahoo. Funding, Long/Short + offenes Interesse und Makro-Umfeld sind dieselben Kacheln wie im Marktradar — Funding und Long/Short folgen der Symbolwahl. Die Indizes laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn sagt die Kachel das."
+          "p": "Indizes zeigt ES=F, NQ=F, RTY=F und den Dollar-Index als Intraday-Kerzen von Yahoo. Funding, Long/Short + offenes Interesse und Makro-Umfeld sind dieselben Kacheln wie im Marktradar — Funding und Long/Short folgen der Symbolwahl. Die Indizes laufen nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen); ohne ihn sagt die Kachel das."
         },
         {
           "h": "BOOKMAP & HEBELKARTE",
@@ -4106,7 +4229,7 @@
         {
           "g": "SO ARBEITET DER BEOBACHTER",
           "h": "WAS ABGEGLICHEN WIRD",
-          "p": "Die öffentlichen Marktlisten von Binance (Spot und Futures — nur mit Binance als Marktdatenquelle), Coinbase, Bybit und Kraken (grosse Börsen), KuCoin, Gate und Bitget (mittlere) — alle ohne Schlüssel. Coinbase, Kraken, KuCoin und Gate sind ab Werk aus, weil ihre Bedingungen für ein verkauftes Programm ungeklärt sind. Der erste Abgleich setzt die Grundlinie; als neu gilt, was danach dazukommt. Eine Börse, die nicht antwortet oder nur einen Teil ihrer Liste liefert, behält ihren letzten guten Stand — sonst gäbe es beim nächsten vollständigen Abruf hunderte scheinbar neue Listungen."
+          "p": "Die öffentlichen Marktlisten von Binance (Spot und Futures — nur mit Binance als Marktdatenquelle), Coinbase, Bybit und Kraken (grosse Börsen), KuCoin, Gate und Bitget (mittlere) — alle ohne Schlüssel. Coinbase, Kraken, KuCoin und Gate sind ab Werk aus, weil ihre Bedingungen die automatische Nutzung nicht ausdrücklich erlauben. Der erste Abgleich setzt die Grundlinie; als neu gilt, was danach dazukommt. Eine Börse, die nicht antwortet oder nur einen Teil ihrer Liste liefert, behält ihren letzten guten Stand — sonst gäbe es beim nächsten vollständigen Abruf hunderte scheinbar neue Listungen."
         },
         {
           "h": "ENTFERNTE BÖRSEN",
@@ -4466,7 +4589,7 @@
       "keineKerzen": "Keine Kerzen im Zeitraum",
       "alt": "{min} Min. alt",
       "verzoegertCa": "ca. {min} Min. verzögert",
-      "info": "Wie sich US-Aktienfutures und der Dollar gerade bewegen, während Krypto weiterläuft.\nKrypto hängt oft am Risikoappetit der traditionellen Märkte — fallende Futures und ein steigender Dollar sind meist Gegenwind, auch wenn der Krypto-Kurs selbst noch ruhig aussieht.\nDie Kerzen kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen); ohne ihn sagt die Kachel „aus\"."
+      "info": "Wie sich US-Aktienfutures und der Dollar gerade bewegen, während Krypto weiterläuft.\nKrypto hängt oft am Risikoappetit der traditionellen Märkte — fallende Futures und ein steigender Dollar sind meist Gegenwind, auch wenn der Krypto-Kurs selbst noch ruhig aussieht.\nDie Kerzen kommen aus Yahoo Finance und laufen nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen); ohne ihn sagt die Kachel „aus\"."
     },
     "liq": {
       "title": "Liquidationen (live)",
@@ -4521,7 +4644,7 @@
       "impact_medium": "mittlere Wirkung",
       "impact_low": "geringe Wirkung",
       "impact_holiday": "Feiertag",
-      "info": "Wann der nächste wichtige Wirtschaftstermin fällig ist, mit Countdown — aus den Kalendern von Federal Reserve, U.S. Bureau of Economic Analysis und Eurostat, mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen) zusätzlich aus ForexFactory.\nEin Termin mit hoher erwarteter Wirkung ist ein guter Grund, kurz davor keine neue Position mehr zu eröffnen — die Bewegung danach ist oft zu schnell für einen sauberen Einstieg."
+      "info": "Wann der nächste wichtige Wirtschaftstermin fällig ist, mit Countdown — aus den Kalendern von Federal Reserve, U.S. Bureau of Economic Analysis und Eurostat, mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen) zusätzlich aus ForexFactory.\nEin Termin mit hoher erwarteter Wirkung ist ein guter Grund, kurz davor keine neue Position mehr zu eröffnen — die Bewegung danach ist oft zu schnell für einen sauberen Einstieg."
     },
     "positionen": {
       "title": "Positionen & Plan",
@@ -5521,7 +5644,7 @@
         "name": "Momentum Radar",
         "kurz": "Momentum",
         "text": "Welle (WaveTrend) und Geldfluss aus dem Momentum-Radar des Live-Tradings — nur 5m, 15m, 1h, 4h.",
-        "info": "Momentum Radar — was die Farben bedeuten:\nHELLBLAUE FLÄCHE = die Welle (WaveTrend), dunkelblau dahinter = ihre Signallinie. Läuft hell über dunkel, dreht das Momentum nach oben.\nBALKEN = Geldfluss je Kerze: grün rein, rot raus, violett = nur die Futures treiben, die Bewegung läuft auf Hebel. WEISSE LINIE = Geldfluss am Spotmarkt; liegt sie unter den Balken, sind die Futures voraus.\nLINIEN: ±50 (kräftig, einstellbar unter Einstellungen › Allgemein) überkauft/überverkauft, ±100 Extrem, 0 gestrichelt.\nPUNKTE auf der Welle: grün = Long suchen, rot = Short suchen; gross = die höheren Zeitebenen plus Geldfluss stützen das Signal (≥ 60 %). Orange Raute = Extremwert jenseits ±100, ausgereizt, kein Einstieg.\nSCHIENEN bei +115 (Short) und −115 (Long): Signale der höheren Zeitebenen — 1h orange klein, 4h violett, Tag weiss, Woche gelb gross.\nDIV-Linie: Divergenz zwischen Welle und Kurs (rot bärisch, grün bullisch).\nFARBLEISTE ganz unten: Geldfluss der letzten geschlossenen 4h-Kerze (grün rein, rot raus).\nNur geschlossene Kerzen. Der Radar sagt WANN, nicht WO."
+        "info": "Momentum Radar — was die Farben bedeuten:\nHELLBLAUE FLÄCHE = die Welle (WaveTrend), dunkelblau dahinter = ihre Signallinie. Läuft hell über dunkel, dreht das Momentum nach oben.\nBALKEN = Geldfluss je Kerze: grün rein, rot raus, violett = nur die Futures treiben, die Bewegung läuft auf Hebel. WEISSE LINIE = Geldfluss am Spotmarkt; liegt sie unter den Balken, sind die Futures voraus.\nLINIEN: ±50 (kräftig, einstellbar unter Einstellungen › Chart & Analyse › Marktradar · Kacheln) überkauft/überverkauft, ±100 Extrem, 0 gestrichelt.\nPUNKTE auf der Welle: grün = Long suchen, rot = Short suchen; gross = die höheren Zeitebenen plus Geldfluss stützen das Signal (≥ 60 %). Orange Raute = Extremwert jenseits ±100, ausgereizt, kein Einstieg.\nSCHIENEN bei +115 (Short) und −115 (Long): Signale der höheren Zeitebenen — 1h orange klein, 4h violett, Tag weiss, Woche gelb gross.\nDIV-Linie: Divergenz zwischen Welle und Kurs (rot bärisch, grün bullisch).\nFARBLEISTE ganz unten: Geldfluss der letzten geschlossenen 4h-Kerze (grün rein, rot raus).\nNur geschlossene Kerzen. Der Radar sagt WANN, nicht WO."
       },
       "vwapVector": {
         "name": "VWAP Vector",
@@ -6298,7 +6421,7 @@
       "hebelKeine": "Hebelzonen: keine",
       "momentumTf": "Momentum nur auf 5m/15m/1h/4h",
       "titel": {
-        "liquidationen": "Aufgezeichnete Zwangsliquidationen (Binance, Stichprobe: höchstens eine je Sekunde). Nur für Symbole, die der Rekorder aufzeichnet (Einstellungen → Live-Analyse).",
+        "liquidationen": "Aufgezeichnete Zwangsliquidationen (Binance, Stichprobe: höchstens eine je Sekunde). Nur für Symbole, die der Rekorder aufzeichnet (Einstellungen › Chart & Analyse › Live-Aufzeichnung).",
         "hebelzonen": "Geschätzte Liquidationszonen aus Open-Interest-Verlauf und Kerzen — ein Modell, keine Messung. Unter dem Preis Long-Liquidationen (Zwangsverkäufe), darüber Shorts (Zwangskäufe).",
         "momentum": "Momentum Radar rechnet nur auf 5m, 15m, 1h und 4h.",
         "orderbuch": "Ruhende Wände aus dem Binance-Orderbuch (500 Stufen je Seite, alle 10 s). Eine Wand ist eine Preiszone, die mindestens das 2,5-Fache der üblichen Zone ihrer Seite UND mindestens 2 Minuten durchschnittlichen Umsatzes trägt — „· 9 min\" am Schild heisst: so lange bräuchte der Markt im Schnitt, um sie abzuräumen. Weiter als ±… % reicht der Snapshot nicht — bei BTC sind das nur wenige Hundertstel Prozent."
@@ -6572,7 +6695,8 @@
     "farbeEigene": "Eigene Farbe …",
     "quelleUmgestellt": "Die Marktdatenquelle ist nicht Binance — Panels mit Binance-Kerzen zeigen jetzt {quelle} (Futures).",
     "objektBearbeiten": "Bearbeiten: im Chart auswählen, Stil-Leiste öffnet sich",
-    "objektRechner": "Positionsrechner öffnen: Hebel, Verlust, Grösse, Marge"
+    "objektRechner": "Positionsrechner öffnen: Hebel, Verlust, Grösse, Marge",
+    "kerzenFarbenMenue": "Kerzenfarben …"
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade ist freie Software (AGPL-3.0). Den Quellcode dieser Fassung gibt es hier:",
@@ -6651,7 +6775,7 @@
       "marktdatenAusText": "Öffentliche Marktdaten sind ausgeschaltet — {was} gibt es deshalb nicht.",
       "zuEinstellungen": "Einstellungen › Datenquellen",
       "ohneFreigabe": "{quelle}: abgeschaltet",
-      "ohneFreigabeText": "Diese Quelle hat keine Freigabe für einen Verkauf und läuft nur mit dem Schalter „Quellen ohne Verkaufsfreigabe\" (Einstellungen › Datenquellen)."
+      "ohneFreigabeText": "Die Nutzungsbedingungen dieser Quelle erlauben die automatische Nutzung nicht oder nur eingeschränkt. Sie läuft nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen\" (Einstellungen › Datenquellen)."
     },
     "faehigkeit": {
       "kerzen": "Kerzen (Futures)",
@@ -6697,23 +6821,55 @@
       "geloescht": "Schlüssel gelöscht — CoinGecko-Funktionen sind jetzt aus.",
       "demoHinweis": "Du schliesst den Vertrag mit CoinGecko selbst ab. Ob der kostenlose Demo-Tarif deine Nutzung abdeckt, regeln die CoinGecko-Bedingungen; im Zweifel einen Bezahltarif wählen.",
       "oeffentlich": "Öffentlicher Endpunkt",
-      "unterOffen": "Mit deinem eigenen API-Schlüssel — ohne Schlüssel über den öffentlichen Endpunkt, solange „Quellen ohne Verkaufsfreigabe\" an ist."
+      "unterOffen": "Mit deinem eigenen API-Schlüssel — ohne Schlüssel über den öffentlichen Endpunkt, solange „Quellen mit eingeschränkten Nutzungsbedingungen\" an ist."
     },
     "andere": {
       "titel": "Weitere Schlüssel",
-      "ki": "KI-Anbieter: Einstellungen › KI.",
-      "cryptoquant": "CryptoQuant (ETF-Fluss): in der ETF-Kachel des Marktradars.",
-      "solana": "Solana-RPC (Smart Money): Hype-Radar › Einstellungen — ohne eigene RPC-Adresse bleibt Smart Money aus.",
-      "boersen": "Börsen-Konten (Bitunix, Bitget, Pionex): Einstellungen › Journal.",
-      "solanaOffen": "Solana-RPC (Smart Money): Hype-Radar › Einstellungen — ohne eigene RPC-Adresse über den öffentlichen Knoten, solange „Quellen ohne Verkaufsfreigabe\" an ist."
+      "ki": "KI-Anbieter:",
+      "solana": "Solana-RPC (Smart Money):",
+      "boersen": "Börsen-Konten (Bitunix, Bitget, Pionex, Bitpanda):",
+      "kiPfad": "Einstellungen › KI › Zugang",
+      "solanaPfad": "Hype-Radar › Einstellungen",
+      "solanaRest": "ohne eigene RPC-Adresse bleibt Smart Money aus.",
+      "solanaOffenRest": "ohne eigene RPC-Adresse über den öffentlichen Knoten, solange „Quellen mit eingeschränkten Nutzungsbedingungen\" an ist.",
+      "boersenPfad": "Einstellungen › Journal › Börsen-Konten"
     },
     "of": {
-      "titel": "Quellen ohne Verkaufsfreigabe",
-      "unter": "Analysequellen, deren Bedingungen einen Verkauf von AutarkTrade nicht erlauben oder ungeklärt sind. Für den Eigengebrauch an.",
-      "schalter": "Quellen ohne Verkaufsfreigabe nutzen",
-      "anText": "An: Diese Quellen laufen im vollen Umfang. Ob deine Nutzung von ihren Bedingungen gedeckt ist, prüfst und verantwortest du selbst.",
-      "ausText": "Aus: AutarkTrade verhält sich wie eine Verkaufsversion — diese Quellen und die Funktionen, die nur sie haben, sind aus und sagen warum.",
-      "zeilen": "Verkaufsprüfung, Zeile {zeilen}"
+      "titel": "Quellen mit eingeschränkten Nutzungsbedingungen",
+      "unter": "Einige Analysequellen sind inoffizielle Schnittstellen oder nur für den privaten Gebrauch freigegeben.",
+      "schalter": "Quellen mit eingeschränkten Nutzungsbedingungen nutzen",
+      "anText": "An: Diese Quellen laufen im vollen Umfang. Ihre Nutzungsbedingungen gelten weiter — ob deine Nutzung davon gedeckt ist, prüfst und verantwortest du selbst.",
+      "ausText": "Aus: Diese Quellen und die Funktionen, die nur sie haben, sind aus und sagen warum. Alles andere läuft."
+    },
+    "cq": {
+      "titel": "CryptoQuant (ETF-Fluss)",
+      "unter": "Für die Kachel „ETF-Fluss\": wie viele Bitcoin die Spot-ETFs halten und wie sich das täglich ändert. Nur mit deinem eigenen API-Schlüssel.",
+      "hinterlegt": "Schlüssel hinterlegt",
+      "keiner": "Kein Schlüssel — die ETF-Kachel bleibt leer",
+      "tarif": "Der Gratis-Tarif („Basic\") reicht: die Fondsdaten zählen bei CryptoQuant als Marktdaten. Er gibt nur 30 Tage Rückblick her und erlaubt 10 Anfragen je Minute — geholt wird deshalb im Hintergrund, höchstens alle sechs Stunden, und alles Geholte bleibt gespeichert. Die Kachel selbst fragt nie bei CryptoQuant nach.",
+      "schluessel": "API-Schlüssel",
+      "speichern": "Speichern",
+      "pruefen": "Schlüssel prüfen",
+      "nachfuehren": "Jetzt nachführen",
+      "fortschritt": "{fertig} von {gesamt} Fonds",
+      "holen": "Schlüssel bei CryptoQuant holen",
+      "gueltig": "Schlüssel gültig — {btc} BTC in allen Fonds ({tag}).",
+      "uebersprungen": "Übersprungen: {grund}",
+      "fertig": "Fertig — {tage} Tage eingelagert.",
+      "laeuftWeiter": "Läuft weiter im Hintergrund — Seite später neu laden.",
+      "bestand": "{tage} Tage eingelagert, letzter Stand {tag}.",
+      "nochNichts": "Noch nichts eingelagert — der erste Lauf holt 30 Tage.",
+      "ohneSchluessel": "Kein Schlüssel hinterlegt, die Kachel bleibt leer.",
+      "letzterFehler": "Letzter Fehler ({fonds}): {text}"
+    },
+    "kerzen": {
+      "titel": "Kerzen für Exkursionen (Polygon, Databento)",
+      "unter": "Für die MFE-Preise der Exkursionen braucht das Journal Minutenkerzen — mit einem eigenen Schlüssel bei Polygon.io oder Databento. Der Schlüssel wird verschlüsselt gespeichert und verlässt den Server nie; abgerufen wird vom Server aus.",
+      "hinterlegt": "Schlüssel hinterlegt",
+      "keiner": "Kein Schlüssel",
+      "schluessel": "API-Schlüssel {name}",
+      "holen": "Schlüssel holen ↗",
+      "geloescht": "Schlüssel gelöscht."
     }
   },
   "spenden": {
@@ -6722,7 +6878,7 @@
     "frageUpdate": "AutarkTrade wurde auf Version {version} aktualisiert. Wenn dir die Arbeit daran etwas wert ist, freue ich mich über einen Kaffee.",
     "frageDank": "Danke, dass du AutarkTrade unterstützt hast! Es läuft weiter — auch dank dir.",
     "titelDank": "Danke",
-    "menue": "Buy me a coffee",
+    "menue": "Spenden",
     "titel": "Spenden",
     "btcAdresse": "Bitcoin-Adresse",
     "kopieren": "Kopieren",
@@ -6733,14 +6889,10 @@
     "spaeter": "Vielleicht später",
     "schonGespendet": "Ich habe schon gespendet",
     "definitivNicht": "Ich will definitiv nicht",
-    "schliessen": "Schliessen",
-    "schalter": "Spenden im Menü",
-    "schalterHilfe": "Menüeintrag, Kaffee-Knopf oben und seltene Nachfragen (50/200/500/1000 bewertete Trades, nach Updates, alle paar Monate; höchstens einmal in 30 Tagen).",
-    "kaffeeLink": "Buy-me-a-coffee-Link",
-    "kaffeeUngueltig": "Erwartet: https://buymeacoffee.com/name"
+    "schliessen": "Schliessen"
   },
   "quellenFrage": {
-    "titel": "Datenquellen ohne Freigabe",
+    "titel": "Quellen mit eingeschränkten Nutzungsbedingungen",
     "text": "Einige Analysen holen Daten aus Quellen, deren Nutzungsbedingungen das automatische Abfragen nicht oder nur eingeschränkt erlauben. Willst du sie trotzdem nutzen? Das geschieht auf deine eigene Verantwortung; die Bedingungen der Anbieter gelten weiter.",
     "hinweis": "Ohne diese Quellen fehlen die genannten Anzeigen; alles andere läuft. Ändern kannst du das jederzeit unter Einstellungen › Datenquellen.",
     "an": "Nutzen (eigene Verantwortung)",

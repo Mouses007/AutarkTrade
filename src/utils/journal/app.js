@@ -13,6 +13,8 @@ import {
     seitenId, appEinstellungen, tradeZeitzone, seitenmenueMobilOffen, bildschirmTyp, istGescrollt,
 } from '../../stores/app/rahmen.js'
 import { apis } from '../../stores/app/einstellungen.js'
+import { ladeAnzeigeKurs } from '../../stores/app/waehrung.js'
+import { zeitzoneAus } from '../../../shared/zeitzone.js'
 import {
     zeitraumListe, dashReiter, gewaehlterZeitraum, gewaehlteRichtungen, gewaehlterZeitrahmen, gewaehlteKennzahl,
     gewaehltesKonto, gewaehltBruttoNetto, gewaehltPlOderZufriedenheit, gewaehlteBoerse, datumsBereich, gewaehlterMonat,
@@ -40,6 +42,8 @@ export async function starteApp() {
             selectedTradeTimeframes.length = 0
             for (const tf of einstellungen.tradeTimeframes) selectedTradeTimeframes.push(tf)
         }
+        // Kurs der Anzeigewährung im Hintergrund: der Start wartet nicht auf die EZB.
+        ladeAnzeigeKurs()
     } catch (e) {
         console.warn('Einstellungen nicht lesbar:', e)
         appEinstellungen.value = {}
@@ -51,9 +55,9 @@ export async function holeEinstellungen() {
 }
 export const pruefeEinstellungen = () => holeEinstellungen()
 
+/** Zeitzone des Journals; leer oder ungültig = die gemeinsame Vorgabe (shared/zeitzone.js). */
 export function leseZeitzone() {
-    const u = appEinstellungen.value
-    tradeZeitzone.value = u && Object.prototype.hasOwnProperty.call(u, 'timeZone') ? u.timeZone : 'America/New_York'
+    tradeZeitzone.value = zeitzoneAus(appEinstellungen.value?.timeZone)
 }
 
 export async function ladeApis() {

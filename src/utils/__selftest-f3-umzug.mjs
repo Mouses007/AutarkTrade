@@ -9,7 +9,7 @@
  * alten Schlüssel werden einmal übernommen, ohne einen neueren zu überschreiben.
  */
 import { readFileSync } from 'node:fs'
-import { SPEICHER_UMZUG, zieheSpeicherUm } from './speicherUmzug.js'
+import { SPEICHER_UMZUG, zieheSpeicherUm, raeumeSpeicherAuf } from './speicherUmzug.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -36,6 +36,12 @@ console.log('\nSpeicherschlüssel\n')
     check('zwei übernommen', n === 2, String(n))
     check('zweiter Lauf ändert nichts', zieheSpeicherUm(s) === 0)
     check('alle neuen Schlüssel im eigenen Namensraum', Object.values(SPEICHER_UMZUG).every(k => k.startsWith('at.journal.')))
+}
+{
+    // Gemeldete Trades stehen seit 29.10.2026 in der DB: die alte Liste geht einmal.
+    const s = new Speicher({ evalNotifiedPositionIds: '["open_1"]', fremd: 'x' })
+    check('alte Popup-Liste wird entfernt', raeumeSpeicherAuf(s) === 1 && s.getItem('evalNotifiedPositionIds') === null)
+    check('Aufräumen lässt Fremdes stehen, zweiter Lauf ändert nichts', s.getItem('fremd') === 'x' && raeumeSpeicherAuf(s) === 0)
 }
 
 console.log('\nAlte Adressen\n')

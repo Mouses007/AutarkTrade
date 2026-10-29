@@ -23,7 +23,9 @@ import { engineStatus } from './strategy-engine.js'
 import { leseUpdateStunden, leseRhythmus } from './marktradar-news.js'
 import { KI_FUNKTIONEN, anbieterVon } from './ki-funktionen.js'
 import { aufgabenWahl } from './ai-task-config.js'
+import { zeitzoneAus } from '../shared/zeitzone.js'
 import { logWarn } from './logger.js'
+import { anzeigeWaehrung } from './waehrung.js'
 
 const TAG_MS = 24 * 60 * 60 * 1000
 
@@ -66,7 +68,7 @@ const AUTOMATIKEN = [
     {
         id: 'xSuche', titelKey: 'kiUebersicht.auto.xSuche',
         anspruch: 'news_x_suche', taktKey: 'kiUebersicht.takt.zweiStunden', kostet: true,
-        schalter: 'radarNewsAuto', bereich: 'nachrichten',
+        schalter: 'radarNewsAuto', bereich: 'nachrichten', abschnitt: 'news-modelle',
     },
     {
         id: 'strategie', titelKey: 'kiUebersicht.auto.strategie',
@@ -127,6 +129,19 @@ function loeseAnbieter(eintrag, s) {
     // Aufgaben-Zeile gesetzt → sie gilt, genau wie zur Laufzeit.
     const wahl = eintrag.aufgabe ? aufgabenWahl(s?.aiTaskProviders, eintrag.aufgabe) : null
     if (wahl) return { provider: wahl.provider, modell: wahl.model, folgtGlobal: false }
+
+    // Eigenes Feld vor der Rolle (Trade-Analyse, Sentiment-Veto)
+    if (eintrag.vorrang && String(s?.[eintrag.vorrang.provider] || '').trim()) {
+        return {
+            provider,
+            modell: String(s?.[eintrag.vorrang.modell] || '').trim() || standardModell(provider),
+            folgtGlobal: false,
+        }
+    }
+    // DeepSeek-Weg der Recherche: das Feld hält das Perplexity-Modell
+    if (eintrag.umschalter && provider === eintrag.umschalter.provider) {
+        return { provider, modell: eintrag.umschalter.wert, folgtGlobal: false }
+    }
 
     if (eintrag.fest) {
         // `feldJeProvider`/`standardJeProvider` (mehrere Anbieter mit je
@@ -242,7 +257,7 @@ export function setupAiUebersichtRoutes(app) {
             const knex = getKnex()
             const s = await knex('settings').where('id', 1).first() || {}
 
-            const heuteVon = tagesBeginn(s.timeZone)
+            const heuteVon = tagesBeginn(zeitzoneAus(s?.timeZone))
             const monatVon = (() => { const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d.getTime() })()
 
             const [heute, monat, dreissig, zustaende] = await Promise.all([
@@ -268,6 +283,7 @@ export function setupAiUebersichtRoutes(app) {
                 id: f.id,
                 titelKey: f.titelKey,
                 bereich: f.bereich,
+                abschnitt: f.abschnitt || null,
                 ...loeseAnbieter(f, s),
                 verbrauch30: summe(dreissig, f.funktionen),
             }))
@@ -313,6 +329,7 @@ export function setupAiUebersichtRoutes(app) {
                     taktKey: a.taktKey,
                     kostet: a.kostet,
                     bereich: a.bereich ?? null,
+                    abschnitt: a.abschnitt ?? null,
                     an,
                     letzterLauf: Number(z?.fetchedAt) || 0,
                     haelt: z?.claimedBy || '',
@@ -341,10 +358,7 @@ export function setupAiUebersichtRoutes(app) {
                     agent: istAgentAktiv(),
                     engine: engine ? { ...engine, aktiveLaeufe: engine.aktiveLaeufe?.length || 0 } : null,
                 },
-                waehrung: {
-                    code: s.waehrungCode || 'CHF',
-                    faktor: Number(s.waehrungFaktor) > 0 ? Number(s.waehrungFaktor) : 0,
-                },
+                waehrung: await anzeigeWaehrung(s),
             })
         } catch (e) {
             logWarn('ai-uebersicht', `Übersicht fehlgeschlagen: ${e.message}`)

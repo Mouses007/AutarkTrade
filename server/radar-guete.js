@@ -403,7 +403,7 @@ function urteileHype(spitze, verworfen, feld) {
 export const FRUEH_REGEL_AUSWERTUNG = 3
 
 /**
- * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" kommen King of the
+ * S15: Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" kommen King of the
  * Hill, die Kommentare, die Ersteller-Bilanz und `complete` von pump.fun
  * zurück — die Note und „durch die Kurve" sind dann wieder die von Regel 2.
  * Deshalb hängt der Stand am Schalter statt einen Stand 4 zu erfinden: Paare,

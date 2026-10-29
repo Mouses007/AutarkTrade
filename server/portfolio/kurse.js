@@ -93,7 +93,14 @@ const heute = () => new Date().toISOString().slice(0, 10)
 
 // ── Wechselkurs ──────────────────────────────────────────────────────────
 
-let fxSpeicher = null   // { zeit, chf, eur, quelle }
+let fxSpeicher = null   // { zeit, chf, eur, quelle, datum, ersatz, eurAusChf }
+let fxLaeuft = null     // laufender Abruf: parallele Aufrufer warten auf denselben
+/*
+ * Ein Ersatzkurs (Frankfurter nicht erreichbar) gilt nur kurz: Mit der vollen
+ * Stunde blieb nach einem Aussetzer eine Stunde lang der alte Kurs stehen,
+ * ohne dass es jemand neu versuchte.
+ */
+const FX_ERSATZ_TTL = 5 * 60e3
 
 async function frankfurter(params) {
     const r = await fetch(`https://api.frankfurter.dev/v2/rates?base=USD&quotes=CHF,EUR&${params}`, { signal: AbortSignal.timeout(15000) })
@@ -101,9 +108,20 @@ async function frankfurter(params) {
     return r.json()
 }
 
-/** USD → CHF und USD → EUR, heute. */
+/**
+ * USD → CHF und USD → EUR, heute. Gebündelt: Wer fragt, während ein Abruf
+ * läuft, wartet auf denselben.
+ *
+ * `eurAusChf`: Es gab keinen EUR-Kurs, `eur` ist der CHF-Wert (Rückfall des
+ * Portfolios, unverändert). Die Anzeigewährung nimmt ihn deshalb nicht.
+ */
 export async function fxHeute() {
-    if (fxSpeicher && Date.now() - fxSpeicher.zeit < FX_TTL) return fxSpeicher
+    if (fxSpeicher && Date.now() - fxSpeicher.zeit < (fxSpeicher.ersatz ? FX_ERSATZ_TTL : FX_TTL)) return fxSpeicher
+    if (!fxLaeuft) fxLaeuft = holeFx().finally(() => { fxLaeuft = null })
+    return fxLaeuft
+}
+
+async function holeFx() {
     try {
         const d = await frankfurter('')
         const chf = d.find((x) => x.quote === 'CHF')?.rate
@@ -116,18 +134,31 @@ export async function fxHeute() {
         }
     } catch { /* weiter zum Ersatz */ }
     // Ersatz 1: letzter gespeicherter Kurs
-    const k = getKnex()
-    const alt = await k('portfolio_kurse').where('schluessel', 'usdchf').orderBy('datum', 'desc').first().catch(() => null)
-    const altEur = await k('portfolio_kurse').where('schluessel', 'usdeur').orderBy('datum', 'desc').first().catch(() => null)
-    if (alt?.usd > 0) {
-        fxSpeicher = { zeit: Date.now(), chf: alt.usd, eur: altEur?.usd || alt.usd, quelle: `EZB vom ${alt.datum}`, datum: alt.datum }
+    const gemerkt = await fxGemerkt()
+    if (gemerkt) {
+        fxSpeicher = { zeit: Date.now(), ...gemerkt }
         return fxSpeicher
     }
     // Ersatz 2: manueller Faktor der Einstellungen
-    const s = await k('settings').select('waehrungFaktor').where('id', 1).first().catch(() => null)
+    const s = await getKnex()('settings').select('waehrungFaktor').where('id', 1).first().catch(() => null)
     const f = Number(s?.waehrungFaktor) > 0 ? Number(s.waehrungFaktor) : 0.8
-    fxSpeicher = { zeit: Date.now(), chf: f, eur: f, quelle: 'Einstellung', datum: null }
+    fxSpeicher = { zeit: Date.now(), chf: f, eur: f, quelle: 'Einstellung', datum: null, ersatz: true, eurAusChf: true }
     return fxSpeicher
+}
+
+/**
+ * Letzter gespeicherter EZB-Kurs, ohne Netz (null = keiner). `eur` fällt —
+ * wie bisher im Portfolio — auf den CHF-Wert zurück, dann mit `eurAusChf`.
+ */
+export async function fxGemerkt() {
+    const k = getKnex()
+    const alt = await k('portfolio_kurse').where('schluessel', 'usdchf').orderBy('datum', 'desc').first().catch(() => null)
+    if (!(alt?.usd > 0)) return null
+    const altEur = await k('portfolio_kurse').where('schluessel', 'usdeur').orderBy('datum', 'desc').first().catch(() => null)
+    return {
+        chf: alt.usd, eur: altEur?.usd || alt.usd, quelle: `EZB vom ${alt.datum}`, datum: alt.datum,
+        ersatz: true, eurAusChf: !(altEur?.usd > 0),
+    }
 }
 
 /** USD → CHF an einem Tag (für die eingefrorene Bewertung einer Bewegung). */

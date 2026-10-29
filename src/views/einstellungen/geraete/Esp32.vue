@@ -1,5 +1,5 @@
 <script setup>
-/** Journal → ESP32-Display: API-Schlüssel, Zeitraum-Filter der Anzeige und eingetragene Push-Geräte. */
+/** Geräte → ESP32-Display: API-Schlüssel, Zeitraum-Filter der Anzeige und eingetragene Push-Geräte. */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -228,7 +228,7 @@ onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
             <dt>{{ t('settings.esp32LiefertTitel') }}</dt><dd>{{ t('settings.esp32Liefert') }}</dd>
         </dl>
 
-        <Feld :label="t('settings.apiKeyLabel')" fuer="esp32-key">
+        <Feld :label="t('settings.esp32HauptLabel')" fuer="esp32-key">
             <div class="reihe">
                 <input id="esp32-key" type="text" class="eingabe mono"
                     :value="esp32ApiKeyDisplay"

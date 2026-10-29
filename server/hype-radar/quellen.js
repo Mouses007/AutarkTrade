@@ -28,7 +28,7 @@
  * CryptoPanic und LunarCrush standen hier bis zum 21.08.2026 und sind entfernt
  * worden, weil beide ihren Gratis-Tarif abgeschafft haben.
  *
- * S15 (19.10.2026): Mit dem Schalter „Quellen ohne Verkaufsfreigabe" an
+ * S15 (19.10.2026): Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" an
  * (`server/quellen/freigabe.js`, Vorgabe) laufen pump.fun, CoinPaprika und
  * Reddit-RSS wieder wie vor S12, CoinGecko-Trend ohne Schlüssel über den
  * öffentlichen Endpunkt und die On-Chain-Pools über api.geckoterminal.com
@@ -79,7 +79,7 @@ export const ERLAUBTE_HOSTS = new Set([
     'api.exchange.coinbase.com', 'api.bybit.com', 'api.kraken.com', 'api.kucoin.com',
     'api.gateio.ws', 'api.bitget.com',
     /*
-     * S15: Quellen ohne Verkaufsfreigabe — erlaubte Hosts nur, solange der
+     * S15: Quellen mit eingeschränkten Nutzungsbedingungen — erlaubte Hosts nur, solange der
      * Schalter an ist (`HOST_FREIGABE`, geprüft vor jedem Abruf).
      */
     'api.geckoterminal.com', 'www.reddit.com', 'frontend-api-v3.pump.fun', 'api.coinpaprika.com',
@@ -87,7 +87,7 @@ export const ERLAUBTE_HOSTS = new Set([
 ])
 
 /**
- * Hosts, die nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" erreicht
+ * Hosts, die nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" erreicht
  * werden dürfen: Host → ID in `QUELLEN_OHNE_FREIGABE`. Binance Alpha läuft
  * über `server/marktdaten/binance.js`, RugCheck und die gelben Börsen sind
  * nur in der VORGABE betroffen (`einstellungen.js`).
@@ -288,7 +288,7 @@ export const ONCHAIN_NETZ = { solana: 'solana', ethereum: 'eth', base: 'base', b
 
 /**
  * Ein einzelner pump.fun-Coin, über `/coins-v2/{mint}` (S15: nur mit dem
- * Schalter „Quellen ohne Verkaufsfreigabe", sonst wirft `holeJson`
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen", sonst wirft `holeJson`
  * `QuelleAus(…, 'ohneFreigabe')`).
  *
  * `/coins/{mint}` antwortet für JEDEN Coin mit 404 — gemessen am 10.10.2026
@@ -366,7 +366,7 @@ export function fund({ symbol, name = '', chain = '', contract = '', pair = '', 
 
 /**
  * CoinGecko: wonach gerade gesucht wird. Mit Kundenschlüssel — oder, mit dem
- * Schalter „Quellen ohne Verkaufsfreigabe" (S15), über den öffentlichen
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15), über den öffentlichen
  * Endpunkt wie vor S12 (`server/quellen/coingecko.js`).
  */
 export async function ausCoinGecko() {
@@ -715,7 +715,7 @@ function ausPaarBasis(p, seite) {
             /*
              * Token-Bild: Logos sind fremde Inhalte (Verkaufs-Prüfung Z. 58).
              * Die Adresse wird mitgeliefert, angezeigt wird sie nur mit dem
-             * Schalter „Quellen ohne Verkaufsfreigabe" (ID `tokenbilder`,
+             * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (ID `tokenbilder`,
              * `TickerZeichen.vue`) — sonst Ticker-Initialen.
              */
             bild: quelleErlaubtSofort('tokenbilder') ? (p?.info?.imageUrl || '') : '',
@@ -867,7 +867,7 @@ export async function ausGeckoTerminal(ketten = ['solana', 'eth', 'base', 'bsc']
  * Vertragsadressen gezogen. Gemessen an r/CryptoMoonShots: aus 25 Beiträgen
  * 7 Symbole, 5 Solana- und 8 EVM-Adressen.
  *
- * S15: nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `reddit`);
+ * S15: nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (ID `reddit`);
  * sonst wirft `holeText` `QuelleAus`, und der Lauf führt Reddit als „aus".
  *
  * Bis S12 war das die EINZIGE Quelle der Domäne `social` — Menschen, die reden, statt
@@ -934,7 +934,7 @@ export async function ausReddit(unterforen = ['CryptoMoonShots', 'SolanaMemeCoin
  * Der alte Host `frontend-api.pump.fun` ist abgeschaltet (HTTP 530); der
  * v3-Host antwortet ohne Schlüssel.
  *
- * S15: nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `pumpfun`).
+ * S15: nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (ID `pumpfun`).
  *
  * Domäne bleibt `onchain`: Auch eine Bindungskurve ist gehandelte Kette, nur
  * an einem anderen Ort. Als eigene Bestätigung neben DexScreener zu zählen
@@ -983,7 +983,7 @@ export async function ausPumpFun(anzahl = 50) {
  *
  * Gemessen: 61'083 Coins, davon 14'974 aktiv und 71 mit `is_new`-Marke.
  *
- * S15: nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `coinpaprika`).
+ * S15: nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (ID `coinpaprika`).
  *
  * ⚠ Die Antwort ist 7,4 MB gross, und `limit` wird ignoriert (geprüft). Bei
  * einem Lauf alle sechs Stunden sind das rund 30 MB am Tag — vertretbar, aber
@@ -1154,7 +1154,7 @@ const QUELL_DOMAENE = {
     fruehphase: 'onchain',
     biz: 'social',
     /*
-     * S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe": wie vor S12.
+     * S15, nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen": wie vor S12.
      * Auch eine Bindungskurve ist gehandelte Kette — nur an anderem Ort.
      */
     pumpfun: 'onchain',
@@ -1254,7 +1254,7 @@ export async function sammle({ ketten, quellen = {} } = {}) {
     if (an('dexscreener')) aufgaben.push(['dexscreener', () => ausDexScreener()])
     if (an('geckoterminal')) aufgaben.push(['geckoterminal', () => ausGeckoTerminal(ketten)])
     /*
-     * S15: die Quellen ohne Verkaufsfreigabe. Mit dem Schalter aus laufen sie
+     * S15: die Quellen mit eingeschränkten Nutzungsbedingungen. Mit dem Schalter aus laufen sie
      * gar nicht erst an (kein „aus" im Stand — es gibt sie dann nicht, wie nach
      * S12); `holeJson` sperrt zusätzlich je Host.
      */

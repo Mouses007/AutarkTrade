@@ -59,7 +59,7 @@ pruefe('fehlendes Paar wird nachgetragen', pepe.pair === 'p1')
 pruefe('Boost wird nicht doppelt gezählt', pepe.sozial.boostGesamt === 15, String(pepe.sozial.boostGesamt))
 
 /*
- * Schalter „Quellen ohne Verkaufsfreigabe" AUS (Stand S12): `redditRang` wirkt
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" AUS (Stand S12): `redditRang` wirkt
  * nicht auf die Sozialnote. Dass Reddit, pump.fun und CoinPaprika dann gar
  * keine Funde liefern, prüft `__selftest-quellen-s12.mjs` (am Abruf).
  */
@@ -226,7 +226,7 @@ const dreiDomaenen = fuehreZusammen([
 pruefe('Handel, Entdeckung und Gerede sind drei Belege',
     dreiDomaenen[0].quellenAnzahl === 3, JSON.stringify(dreiDomaenen[0].evidenzDomaenen))
 /*
- * Schalter an (S15): die Quellen ohne Verkaufsfreigabe in ihren Domänen wie
+ * Schalter an (S15): die Quellen mit eingeschränkten Nutzungsbedingungen in ihren Domänen wie
  * vor S12. pump.fun ist bewusst KEINE eigene Domäne: Eine Bindungskurve ist
  * gehandelte Kette wie ein Raydium-Pool. Sie getrennt zu zählen wäre derselbe
  * Fehler, den das Audit bei DexScreener und GeckoTerminal behoben hat.

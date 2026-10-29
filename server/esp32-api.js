@@ -32,6 +32,7 @@
  */
 import crypto from 'crypto'
 import { getKnex } from './database.js'
+import { zeitzoneAus } from '../shared/zeitzone.js'
 import { encrypt, decrypt } from './crypto.js'
 import { getPendingPositions } from './bitunix-api.js'
 import { getCurrentPositions as getBitgetCurrentPositions } from './bitget-api.js'
@@ -179,7 +180,7 @@ export function setupEsp32Routes(app) {
 
             // Load all needed settings in one query
             const settings = await knex('settings').where('id', 1).select('timeZone', 'startBalance', 'balances', 'esp32Filter').first()
-            const tz = settings?.timeZone || 'Europe/Berlin'
+            const tz = zeitzoneAus(settings?.timeZone)
 
             // Per-broker start balances from settings.balances; primary = default
             let balances = {}
@@ -435,7 +436,7 @@ export function setupEsp32Routes(app) {
             const erg = mitGeraet(await ladeGeraete(), daten)
             if (erg.fehler === 'voll') {
                 // Kein Verdrängen mehr (SEC-SRV-003) — Platz schafft man in den Einstellungen.
-                return res.status(409).json({ error: `Bereits ${MAX_GERAETE} Geräte eingetragen. In AutarkTrade unter Einstellungen › ESP32 eines entfernen.`, voll: true })
+                return res.status(409).json({ error: `Bereits ${MAX_GERAETE} Geräte eingetragen. In AutarkTrade unter Einstellungen › Geräte eines entfernen.`, voll: true })
             }
             await speichereGeraete(erg.liste)
             res.json({ ok: true, geraete: erg.liste.length })

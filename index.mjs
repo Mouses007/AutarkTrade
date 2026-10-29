@@ -5,6 +5,7 @@ import { initDb, getKnex } from './server/database.js'
 import { registriereApiRouten } from './server/api-routes.js'
 import { setupBitunixRoutes } from './server/bitunix-api.js'
 import { setupSpendenRoutes } from './server/spenden.js'
+import { setupTradePopupRoutes } from './server/trade-popups.js'
 import { setupBitgetRoutes } from './server/bitget-api.js'
 import { setupPionexRoutes } from './server/pionex-api.js'
 import { setupBinanceRoutes } from './server/binance-api.js'
@@ -228,6 +229,8 @@ async function starteServer() {
     setupPionexRoutes(app);
     setupQuellenRoutes(app);
     setupSpendenRoutes(app);
+    // Bewertungs-Popup: was neu ist und was quittiert, steht in der DB
+    setupTradePopupRoutes(app);
     setupBinanceRoutes(app);
     setupMarginRateRoutes(app);
     setupPolygonRoutes(app);

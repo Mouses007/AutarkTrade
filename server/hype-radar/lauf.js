@@ -131,7 +131,7 @@ export async function scanne(einst, melde = () => {}) {
      */
     melde({ schritt: 'listungen' })
     const listen = await ladeListungen()
-    // S15: mit dem Schalter „Quellen ohne Verkaufsfreigabe" die Sozialrechnung von vor S12.
+    // S15: mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" die Sozialrechnung von vor S12.
     const ohneFreigabe = await freigabeAn()
 
     // ── Stufe 2, endgültig ──────────────────────────────────────────────

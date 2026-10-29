@@ -10,7 +10,7 @@ import { sichereUrl } from '@/utils/sanitize.js'
  *
  * S12: Ohne CoinGecko-Schlüssel antwortet die Suche nach Symbol mit
  * `{aus: true, …}` — dann steht hier der Grund. Kein Coin-Logo (Initialen) —
- * ausser mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15, ID
+ * ausser mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15, ID
  * `tokenbilder`), und unten die Quellenzeile mit den Pflicht-Attributionen.
  */
 import { computed } from 'vue'
@@ -52,7 +52,7 @@ const devText = (r) => (r.devPct !== null && r.devPct !== undefined ? pct(r.devP
         <template v-else>
             <!-- Welcher Coin gefunden wurde: bei Suche über das Kürzel kann es ein anderer sein als gemeint. -->
             <div v-if="mitKopf && (daten.coin?.name || daten.coin?.symbol)" class="tsKopf">
-                <!-- Logo nur mit Schalter „Quellen ohne Verkaufsfreigabe" (S15, ID `tokenbilder`), sonst Initialen. -->
+                <!-- Logo nur mit Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15, ID `tokenbilder`), sonst Initialen. -->
                 <TickerZeichen :symbol="daten.coin.symbol || daten.coin.name" :bild="daten.coin.bild || ''" klein />
                 <strong>{{ daten.coin.name || daten.coin.symbol }}</strong>
                 <span v-if="daten.coin.symbol" class="tsGrau">{{ daten.coin.symbol }}</span>

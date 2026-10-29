@@ -3,7 +3,7 @@
  *
  * Läuft ohne Netz — geprüft wird, ob aus den beiden Antwortformaten die
  * richtige STUFE gezogen wird, und welche Börse je Stand des Schalters
- * „Quellen ohne Verkaufsfreigabe" überhaupt gefragt wird (S15; axios ist
+ * „Quellen mit eingeschränkten Nutzungsbedingungen" überhaupt gefragt wird (S15; axios ist
  * dafür attrappiert). Genau das ist die Stelle, an der ein Fehler
  * nicht auffällt: eine Rate aus Stufe 3 sieht aus wie eine gültige Zahl, und
  * die Karte zeichnet damit anstandslos Zonen an der falschen Stelle.
@@ -124,7 +124,7 @@ pruefe('Vorgabe bleibt 0,004', MMR_VORGABE === 0.004)
 const quelle = readFileSync(new URL('./margin-rates.js', import.meta.url), 'utf8')
 pruefe('keine Binance-Adresse in margin-rates.js', !/https?:\/\/[^'"`]*binance\.com/.test(quelle))
 
-// ── Schalter „Quellen ohne Verkaufsfreigabe" (S15) ──────────────────────
+// ── Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15) ──────────────────────
 // axios attrappieren: jede Anfrage wird mitgeschrieben, bapi und Bybit
 // antworten mit den Beispielen oben. Die DB fehlt — der Persist ist weich.
 const abrufe = []

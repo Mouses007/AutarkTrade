@@ -2,33 +2,39 @@
 /**
  * Hinweis auf neue Trade-Bewertungen (Spezifikation ansichten.md X.1–X.4).
  *
- * `utils/incoming.js` füllt `evalNeu` mit den noch nie gemeldeten Positionen
- * und setzt `evalNotificationShown`/`evalNotificationDismissed`. Früher hing
- * das Öffnen allein am Wechsel von `evalNotificationShown` — das wird aber nie
- * wieder falsch, also erschien nach dem ersten Popup einer Seitenlebenszeit
- * keins mehr. Jetzt wird auf „nicht verworfen UND etwas Neues" beobachtet;
- * jede neue Meldung bringt ein neues `evalNeu`-Objekt und damit ein neues
- * Popup.
+ * Hängt im Rahmen, also auf jeder Seite ausser Setup und Update-Assistent.
+ * `evalMeldungen` kommt vom Server (`utils/tradePopups.js`): was dort steht,
+ * ist neu und noch nicht quittiert. Das Popup öffnet, sobald etwas darin steht
+ * und die Seite es zulässt; es zeigt den aktuellen Stand der Liste, auch wenn
+ * während es offen ist eine weitere Meldung dazukommt.
  *
- * Nativer <dialog> über den Baustein `Dialog` — kein Bootstrap-Objekt, das
- * ohne CDN fehlte und das Einhängen werfen liess.
+ * Nicht geöffnet wird im Live-Trading-Cockpit (`?cockpit=1`) und auf
+ * „Pendente Trades" selbst. Die Meldung bleibt dort offen und erscheint auf
+ * der nächsten anderen Seite. Quittiert wird nur durch Schliessen (×, Esc,
+ * Hintergrund) oder „Zu Pendente Trades" — ein Popup, das niemand gesehen
+ * hat, verbraucht nichts.
+ *
+ * Nativer <dialog> über den Baustein `Dialog` (oberste Ebene: auch über dem
+ * Chart-Vollbild sichtbar).
  */
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
-import { evalNeu, evalNotificationShown, evalNotificationDismissed } from '../stores/trades.js'
+import { useRoute, useRouter } from 'vue-router'
+import { evalMeldungen } from '../stores/trades.js'
+import { zusammenfassen, quittiereBewertungen, holeNeueBewertungen } from '../utils/tradePopups.js'
 import Dialog from '@/components/basis/Dialog.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 
 const { t } = useI18n()
+const route = useRoute()
 const router = useRouter()
 
 const offen = ref(false)
 
-const oeffnung = computed(() => evalNeu.value?.oeffnung || { anzahl: 0, jeBroker: {} })
-const schluss = computed(() => evalNeu.value?.schluss || { anzahl: 0, jeBroker: {} })
-const etwasNeues = computed(() => oeffnung.value.anzahl > 0 || schluss.value.anzahl > 0)
+const stand = computed(() => zusammenfassen(evalMeldungen.value))
+const oeffnung = computed(() => stand.value.oeffnung)
+const schluss = computed(() => stand.value.schluss)
 
 const NAMEN = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex' }
 function brokerName(b) {
@@ -36,21 +42,40 @@ function brokerName(b) {
     return NAMEN[b] || b.charAt(0).toUpperCase() + b.slice(1)
 }
 
-watch([evalNotificationShown, evalNotificationDismissed, evalNeu], async () => {
-    if (evalNotificationShown.value && !evalNotificationDismissed.value && etwasNeues.value) {
-        await nextTick()
-        offen.value = true
-    }
-}, { immediate: true })
+const darfZeigen = computed(() => route.query?.cockpit !== '1' && route.path !== '/incoming')
 
-/** Jede Art zu schliessen (×, Esc, Hintergrund) verwirft die Meldung. */
-function verworfen() {
-    evalNotificationDismissed.value = true
+/*
+ * Schliesst das Programm (Liste leer, Seite gesperrt), meldet der Dialog
+ * trotzdem `zu` — das darf nicht quittieren.
+ */
+let stillZu = false
+function zuOhneQuittung() {
+    if (!offen.value) return
+    stillZu = true
     offen.value = false
 }
 
+watch([evalMeldungen, darfZeigen], () => {
+    if (!evalMeldungen.value.length || !darfZeigen.value) zuOhneQuittung()
+    else offen.value = true
+}, { immediate: true })
+
+// Von einer gesperrten Seite weg: erst nachfragen, ob noch alles offen ist
+// (dort kann eben bewertet worden sein), dann öffnet der Watch oben.
+watch(darfZeigen, (jetzt, vorher) => {
+    if (jetzt && !vorher && evalMeldungen.value.length) holeNeueBewertungen()
+})
+
+/** Jede Art zu schliessen (×, Esc, Hintergrund) quittiert die gezeigten Meldungen. */
+function verworfen() {
+    if (stillZu) { stillZu = false; return }
+    offen.value = false
+    quittiereBewertungen(evalMeldungen.value)
+}
+
 function zuDenTrades() {
-    verworfen()
+    quittiereBewertungen(evalMeldungen.value)
+    zuOhneQuittung()
     router.push('/incoming')
 }
 </script>

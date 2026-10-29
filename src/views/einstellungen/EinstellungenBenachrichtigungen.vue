@@ -4,14 +4,17 @@
  * (mit Schwellen und den Märkten des Divergenz-Alarms), die Push-Kanäle
  * (ntfy/Telegram/Webhook, `PushKanaele.vue`) und der Mail-Zugang.
  * Register, Kanalwahl und Mail-Zugang lädt Einstellungen.vue beim Öffnen der Seite
- * (useBenachrichtigungen) — KI → Nachrichten liest sie ebenfalls.
+ * (useBenachrichtigungen) — KI → Nachrichten liest sie ebenfalls. Drei
+ * aufklappbare Abschnitte wie auf den übrigen Seiten; die Tabelle wird am
+ * Telefon zu Karten je Ereignis (777 px Tabelle passen nicht in 306 px).
  */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import SchrittMailKonfiguration from '@/components/onboarding/SchrittMailKonfiguration.vue'
 import PushKanaele from '@/components/benachrichtigung/PushKanaele.vue'
 import { loadSymbolMeta } from '@/utils/liveSymbols.js'
-import { Karte, Symbol } from '@/components/basis/index.js'
+import { Symbol } from '@/components/basis/index.js'
+import Abschnitt from './gemeinsam/Abschnitt.vue'
 import Schalter from './gemeinsam/Schalter.vue'
 import {
     browserNotifications, saveNotificationSetting, meldeTypen, kanalAn, setzeKanal, mail,
@@ -26,6 +29,7 @@ const { radarSpeichern } = useRadarEinstellungen()
 /* Ref auf <SchrittMailKonfiguration>. Den Mail-Stand für die übrigen
    Lesestellen lädt inzwischen `ladeMail()` (useBenachrichtigungen). */
 const mailKonfigRef = ref(null)
+const meldungenOffen = ref(true)   // der Hauptteil der Seite
 
 /** Reihenfolge der Gruppen in der Anzeige. */
 const MELDE_GRUPPEN = ['markt', 'system']
@@ -132,7 +136,8 @@ async function divergenzLeeren() {
 
 <template>
     <div class="benachrichtigungen">
-        <Karte :titel="t('settings.benachrichtigungen.titel')" :unter="t('settings.benachrichtigungen.einleitung')">
+        <Abschnitt v-model:offen="meldungenOffen" kennung="meldungen" :titel="t('settings.benachrichtigungen.titel')" symbol="glocke">
+            <p class="einleitung">{{ t('settings.benachrichtigungen.einleitung') }}</p>
             <!-- Hauptschalter: ohne ihn ist der ganze Browser-Kanal stumm -->
             <Schalter v-model="browserNotifications" :label="t('settings.browserNotifications')"
                 :hilfe="t('settings.browserNotificationsHint')" @change="saveNotificationSetting" />
@@ -153,23 +158,23 @@ async function divergenzLeeren() {
                         <tr>
                             <td colspan="5" class="gruppe">{{ t('settings.benachrichtigungen.gruppe_' + g.id) }}</td>
                         </tr>
-                        <tr v-for="typ in g.typen" :key="typ.id">
-                            <td>
+                        <tr v-for="typ in g.typen" :key="typ.id" class="ereignis">
+                            <td class="name">
                                 {{ t('settings.benachrichtigungen.typ_' + typ.id) }}
                                 <span class="unterzeile">{{ t('settings.benachrichtigungen.hinweis_' + typ.id) }}</span>
                             </td>
-                            <td class="mitte">
+                            <td class="mitte" :data-titel="t('settings.benachrichtigungen.browser')">
                                 <input class="haken" type="checkbox" :aria-label="t('settings.benachrichtigungen.browser')"
                                     :checked="kanalAn(typ.id, 'browser')" :disabled="!browserNotifications"
                                     @change="setzeKanal(typ.id, 'browser', $event.target.checked)">
                             </td>
-                            <td class="mitte">
+                            <td class="mitte" :data-titel="t('settings.benachrichtigungen.email')">
                                 <input v-if="typ.email" class="haken" type="checkbox" :aria-label="t('settings.benachrichtigungen.email')"
                                     :checked="kanalAn(typ.id, 'email')" :disabled="!mail.mailAktiv"
                                     @change="setzeKanal(typ.id, 'email', $event.target.checked)">
                                 <span v-else class="gedaempft" :title="t('settings.benachrichtigungen.nurBrowser')">—</span>
                             </td>
-                            <td>
+                            <td :class="{ leer: !SCHWELLEN[typ.id] }" :data-titel="t('settings.benachrichtigungen.schwelle')">
                                 <select v-if="SCHWELLEN[typ.id]" class="wahl"
                                     :aria-label="t('settings.benachrichtigungen.schwelle') + ': ' + t('settings.benachrichtigungen.typ_' + typ.id)"
                                     v-model.number="SCHWELLEN[typ.id].ref().value"
@@ -180,7 +185,7 @@ async function divergenzLeeren() {
                             </td>
                             <!-- Märkte: bisher nur die Divergenz beobachtet
                                  einzelne Coins. Leer = die eigenen Märkte. -->
-                            <td>
+                            <td :class="{ leer: typ.id !== 'fundingDivergenz' }" :data-titel="t('settings.benachrichtigungen.maerkte')">
                                 <div v-if="typ.id === 'fundingDivergenz'" class="div-wahl">
                                     <button type="button" class="wahl div-knopf"
                                         :disabled="!radarFundingDivergenz" @click="divergenzOeffnen">
@@ -230,19 +235,26 @@ async function divergenzLeeren() {
                 <Symbol name="info" :groesse="14" />
                 <span>{{ t('settings.benachrichtigungen.anderswo', {
                     was: meldeAnderswo.map(typ => t('settings.benachrichtigungen.typ_' + typ.id)).join(', ')
-                }) }}</span>
+                }) }}
+                    <!-- Direkt in den Unter-Reiter springen, statt den Weg zu beschreiben -->
+                    <router-link to="/einstellungen/ki?ki=nachrichten&abschnitt=news-versand" class="sprung">
+                        {{ t('settings.benachrichtigungen.anderswoLink') }}
+                    </router-link>
+                </span>
             </p>
-        </Karte>
+        </Abschnitt>
 
         <!--=============== PUSH ===============-->
-        <Karte :titel="t('settings.push.titel')" :unter="t('settings.push.einleitung')">
+        <Abschnitt kennung="push" :titel="t('settings.push.titel')" symbol="nachricht">
+            <p class="einleitung">{{ t('settings.push.einleitung') }}</p>
             <PushKanaele />
-        </Karte>
+        </Abschnitt>
 
         <!--=============== E-MAIL ===============-->
-        <Karte :titel="t('settings.benachrichtigungen.mailTitel')" :unter="t('settings.benachrichtigungen.mailEinleitung')">
+        <Abschnitt kennung="mail" :titel="t('settings.benachrichtigungen.mailTitel')" symbol="eingang">
+            <p class="einleitung">{{ t('settings.benachrichtigungen.mailEinleitung') }}</p>
             <SchrittMailKonfiguration v-model:mail="mail" ref="mailKonfigRef" />
-        </Karte>
+        </Abschnitt>
     </div>
 </template>
 
@@ -250,7 +262,11 @@ async function divergenzLeeren() {
 .benachrichtigungen {
     display: flex;
     flex-direction: column;
-    gap: var(--abstand-3);
+}
+.einleitung {
+    margin: 0 0 var(--abstand-3);
+    color: var(--muted);
+    font-size: 0.85rem;
 }
 
 /* Matrix: scrollt am Telefon in sich, nie die Seite. */
@@ -325,6 +341,12 @@ async function divergenzLeeren() {
     align-items: flex-start;
     gap: 0.35rem;
 }
+.sprung {
+    color: var(--accent);
+    text-decoration: none;
+    white-space: nowrap;
+}
+.sprung:hover { text-decoration: underline; }
 
 /* Coin-Auswahl des Divergenz-Alarms. Eigenes Aufklappfeld statt eines
    <select multiple>: aus über 500 Perps sucht man ohne Suchfeld nicht, und
@@ -407,5 +429,39 @@ async function divergenzLeeren() {
     padding: 0.4rem 0.3rem 0.2rem;
     color: var(--muted);
     font-size: 0.75rem;
+}
+
+/* Telefon: je Ereignis eine Karte, die Spalten als beschriftete Zeilen —
+   die Tabelle war 777 px breit, E-Mail, Schwelle und Märkte lagen
+   ausserhalb des Bildes. */
+@media (max-width: 575.98px) {
+    .matrix-rahmen { overflow-x: visible; }
+    .matrix, .matrix tbody, .matrix tr, .matrix td { display: block; width: 100%; }
+    .matrix thead { display: none; }
+    .matrix tr.ereignis {
+        margin: 0 0 var(--abstand-2);
+        padding: var(--abstand-2) var(--abstand-3);
+        background: var(--panel-soft);
+        border-radius: var(--radius-knopf);
+    }
+    .matrix td { border-bottom: 0; padding: 0.3rem 0; }
+    .matrix td.leer { display: none; }
+    .matrix td[data-titel] {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--abstand-2);
+        text-align: left;
+    }
+    .matrix td[data-titel]::before {
+        content: attr(data-titel);
+        flex: none;
+        color: var(--muted);
+        font-size: 0.78rem;
+    }
+    .matrix td[data-titel] > .wahl,
+    .matrix td[data-titel] > .div-wahl { flex: 1 1 auto; min-width: 0; max-width: 14rem; }
+    .sp-ereignis, .sp-wahl { min-width: 0; }
+    .div-liste { right: 0; max-width: calc(100vw - 3rem); }
 }
 </style>

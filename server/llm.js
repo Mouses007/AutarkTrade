@@ -29,7 +29,7 @@ import { assertAllowedOllamaUrl } from './ollama-url.js'
 import { logWarn } from './logger.js'
 import { schaetzeKosten } from './ai-preise.js'
 import { merkeVerbrauch } from './ai-usage.js'
-import { aufgabenWahl } from './ai-task-config.js'
+import { aufgabenWahl, feldWahl } from './ai-task-config.js'
 
 const DEFAULT_TIMEOUT_MS = 30000
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
@@ -552,8 +552,10 @@ export async function callLLMJson(cfg, {
  * LLM-Konfiguration für eine KI-Aufgabe.
  *
  * Rangfolge überall gleich: Zeile der Aufgaben-Tabelle (`aiTaskProviders`) →
- * das ältere Einzelfeld der Funktion (`rueckfall`, vom Aufrufer gelesen) →
- * der globale Anbieter. Die Auswahl selbst ist `aufgabenWahl` in
+ * das Einzelfeld der Funktion (`rueckfall`, vom Aufrufer gelesen) → der
+ * globale Anbieter. Aufgaben mit eigener Seite (`seite` in `ai-task-config.js`)
+ * haben keine Zeile mehr — für sie gilt ihr Seitenfeld (`feldWahl`), leer
+ * dann `rueckfall`. Die Auswahl selbst ist `aufgabenWahl`/`feldWahl` in
  * `ai-task-config.js` (rein, selbstgetestet).
  *
  * @param {string} aufgabenId  z. B. 'lagebericht', 'video', 'x-suche'
@@ -561,8 +563,8 @@ export async function callLLMJson(cfg, {
  * @returns {Promise<{provider, model, apiKey, temperature, maxTokens, ollamaUrl, endpunkt}>}
  */
 export async function ladeLlmConfigFuerAufgabe(aufgabenId = '', rueckfall = {}) {
-    const s = await getKnex()('settings').select('aiTaskProviders').where('id', 1).first()
-    const wahl = aufgabenWahl(s?.aiTaskProviders, aufgabenId)
+    const s = await getKnex()('settings').where('id', 1).first()
+    const wahl = aufgabenWahl(s?.aiTaskProviders, aufgabenId) || feldWahl(s, aufgabenId)
     return ladeLlmConfig(wahl || rueckfall || {})
 }
 

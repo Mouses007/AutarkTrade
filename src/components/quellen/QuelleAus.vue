@@ -8,7 +8,7 @@
  *
  * Gründe: schluesselFehlt (nur mit eigenem API-Schlüssel), entfernt (aus
  * Lizenzgründen nicht mehr angebunden), aus (abgeschaltet), marktdaten
- * (die gewählte Marktdatenquelle kann das nicht). Wo der Kunde etwas tun
+ * (die gewählte Marktdatenquelle kann das nicht). Wo man selbst etwas tun
  * kann, verlinkt der Kasten auf Einstellungen › Datenquellen.
  *
  * Bewusst KEIN Fehlerkasten: nichts ist kaputt, die Funktion ist aus.

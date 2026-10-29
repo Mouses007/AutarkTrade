@@ -42,7 +42,7 @@ p('Bybit', LESER.bybit({ result: { list: [{ baseCoin: 'A', status: 'Trading' }] 
 p('KuCoin: nur handelbar', LESER.kucoin({ data: [{ baseCurrency: 'A', enableTrading: true }, { baseCurrency: 'B', enableTrading: false }] }).join() === 'A')
 p('fremde Form ergibt eine leere Liste', LESER.bybit({ fehler: 1 }).length === 0 && LESER.coinbase(null).length === 0)
 
-// ── Schalter „Quellen ohne Verkaufsfreigabe" AUS (Stand S12) ─────────────
+// ── Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" AUS (Stand S12) ─────────────
 {
     const liste = boersenFuer(false)
     const ids = liste.map((b) => b.id)

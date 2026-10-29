@@ -1,11 +1,10 @@
 /**
  * Offene Positionen (Incoming) und die Hinweise „Trade bewerten".
  *
- * Welche Positionen schon gemeldet wurden, steht in localStorage
- * `evalNotifiedPositionIds` als JSON-Liste.
+ * Was neu und was schon gemeldet ist, weiss der Server
+ * (`server/trade-popups.js`); `evalMeldungen` hält seine letzte Antwort.
  */
 import { ref, reactive } from 'vue'
-import { lokal, lokalSchreiben } from '../app/ablage.js'
 
 export const incomingPositions = reactive([])
 export const incomingPollingActive = ref(false)
@@ -17,36 +16,8 @@ export const pendingClosingCount = ref(0)
 /** Börse → Anzahl. */
 export const pendingOpeningByBroker = ref({})
 export const pendingClosingByBroker = ref({})
-export const evalNotificationShown = ref(false)
-export const evalNotificationDismissed = ref(false)
-export const evalNeu = ref({ oeffnung: { anzahl: 0, jeBroker: {} }, schluss: { anzahl: 0, jeBroker: {} } })
-
-const SCHLUESSEL_GEMELDET = 'evalNotifiedPositionIds'
-
-export function getNotifiedPositionIds() {
-    try {
-        const liste = JSON.parse(lokal(SCHLUESSEL_GEMELDET))
-        return new Set(Array.isArray(liste) ? liste : [])
-    } catch {
-        return new Set()
-    }
-}
-
-function merkeGemeldet(menge) {
-    lokalSchreiben(SCHLUESSEL_GEMELDET, JSON.stringify([...menge]))
-}
-
-export function addNotifiedPositionIds(ids) {
-    const menge = getNotifiedPositionIds()
-    for (const id of ids) menge.add(id)
-    merkeGemeldet(menge)
-}
-
-export function removeNotifiedPositionIds(ids) {
-    const menge = getNotifiedPositionIds()
-    for (const id of ids) menge.delete(id)
-    merkeGemeldet(menge)
-}
+/** Offene Meldungen des Bewertungs-Popups: `{positionId, broker, art: 'open'|'close'}`. */
+export const evalMeldungen = ref([])
 
 /** Positions-ID der aufgeklappten Incoming-Karte (null = keine). */
 export const aufgeklapptePosition = ref(null)

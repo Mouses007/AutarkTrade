@@ -1,5 +1,6 @@
 /**
- * Kerzenfarben des Charts — einstellbar unter Einstellungen › Allgemein, gilt für
+ * Kerzenfarben des Charts — einstellbar per Doppelklick auf eine Kerze oder unter
+ * Einstellungen › Chart & Analyse › Chart, gilt für
  * alle Panels und das Trade-Bild. Vorgabe: steigend in der Hausfarbe (hohl mit
  * farbigem Rand, wie bisher), fallend grau und gefüllt. Gespeichert als zwei
  * Hex-Werte in `settings.chartKerzeSteigend`/`chartKerzeFallend`; leer oder
@@ -33,4 +34,17 @@ export function kerzenOptionen(f) {
 
 export function volumenFarbe(f, steigt) {
     return mitDeckkraft(steigt ? f.steigend : f.fallend, 0.28)
+}
+
+/**
+ * Liegt der Zeiger auf einer Kerze? Alles in Pixeln des Panels: `mitteX` der Kerze,
+ * `hochY`/`tiefY` von Hoch und Tief, `breite` = Abstand zweier Kerzen. Ein paar
+ * Pixel Rand, damit auch ein Docht oder eine flache Kerze zu treffen ist — daneben
+ * bleibt der Doppelklick beim Vollbild.
+ */
+export function trifftKerze(x, y, { mitteX, hochY, tiefY, breite }) {
+    if (![x, y, mitteX, hochY, tiefY].every(Number.isFinite)) return false
+    const halb = Math.max(3, (Number(breite) || 0) * 0.45)
+    const oben = Math.min(hochY, tiefY) - 4, unten = Math.max(hochY, tiefY) + 4
+    return Math.abs(x - mitteX) <= halb && y >= oben && y <= unten
 }

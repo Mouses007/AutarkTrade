@@ -1,18 +1,16 @@
 <script setup>
-/** Bereich „Journal" — die Sektionen in der bisherigen Reihenfolge. */
+/** Bereich „Journal" — Kontostand, Börsen-Konten, Importe, Bewertung. */
 import Kontostand from './journal/Kontostand.vue'
 import BoersenApi from './journal/BoersenApi.vue'
+import Importe from './journal/Importe.vue'
 import Bewertung from './journal/Bewertung.vue'
-import Esp32 from './journal/Esp32.vue'
-import OhlcChart from './journal/OhlcChart.vue'
 </script>
 
 <template>
     <div>
         <Kontostand />
         <BoersenApi />
+        <Importe />
         <Bewertung />
-        <Esp32 />
-        <OhlcChart />
     </div>
 </template>

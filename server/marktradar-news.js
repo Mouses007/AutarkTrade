@@ -32,7 +32,8 @@ import {
     holeMarkt,
 } from './marktradar-api.js'
 import { ladeLlmConfig, ladeLlmConfigFuerAufgabe, callLLMJson, istGuthabenFehler, merkeKiGuthaben, schaetzeKosten } from './llm.js'
-import { aufgabenWahl } from './ai-task-config.js'
+import { aufgabenWahl, feldWahl } from './ai-task-config.js'
+import { zeitzoneAus } from '../shared/zeitzone.js'
 /*
  * Die beiden KI-Kacheln. Der Bericht laesst sie neu rechnen statt einen
  * Knopfdruck von gestern zu uebernehmen — Einzelheiten in `holeLagenBlock`.
@@ -69,7 +70,7 @@ const ARTEN = ['youtube', 'rss', 'truth', 'telegram', 'x']
 export const ARTEN_ENTFERNT = ['telegram']
 export const TELEGRAM_HINWEIS = 'Telegram-Abruf entfernt (Lizenz: Telegram verbietet das Auslesen öffentlicher Kanäle)'
 /** Antwort der Routen mit Schalter aus (S15). */
-export const TELEGRAM_AUS = 'Telegram ist aus (Einstellungen › Datenquellen › Quellen ohne Verkaufsfreigabe)'
+export const TELEGRAM_AUS = 'Telegram ist aus (Einstellungen › Datenquellen › Quellen mit eingeschränkten Nutzungsbedingungen)'
 
 /** Arten, die gerade nicht laufen dürfen: mit Schalter `[]`, ohne `ARTEN_ENTFERNT`. */
 export async function artenEntfernt() {
@@ -288,7 +289,7 @@ export async function laufeNewsAbruf({ manuell = false } = {}) {
     // „Jetzt holen"-Knopf jedes Mal eine bezahlte Suche auslöst.
     const xQuellen = liste.filter(q => q.art === 'x' && !(filterAn && Number(q.laerm) === 1))
     if (xQuellen.length && (await beansprucheTagesaufgabe('news_x_suche', {
-        tagesbeginn: tagesbeginn(Date.now(), s?.timeZone),
+        tagesbeginn: tagesbeginn(Date.now(), zeitzoneAus(s?.timeZone)),
         wiederholungMs: X_WIEDERHOLUNG_MS,
     }))) {
         try {
@@ -2190,7 +2191,7 @@ export async function erzeugeLagebericht({ manuell = false, aktualisierung = fal
         // automatischen NICHT blockieren, deshalb ein eigener Schlüssel.
         if (!(await beansprucheAufgabe(BERICHT_MANUELL, 5 * 60 * 1000))) return { uebersprungen: true }
     } else if (!(await beansprucheTagesaufgabe(autoSchluessel, {
-        tagesbeginn: tagesbeginn(Date.now(), s?.timeZone),
+        tagesbeginn: tagesbeginn(Date.now(), zeitzoneAus(s?.timeZone)),
         wiederholungMs: WIEDERHOLUNG_MS,
     }))) {
         return { uebersprungen: true }
@@ -2433,7 +2434,7 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
             const letzterBericht = await knex('news_digests')
                 .whereNot('art', 'update')
                 .orderBy('erstelltAm', 'desc').first().catch(() => null)
-            const heuteAb = videoFensterAb(Date.now(), s?.timeZone, Number(letzterBericht?.erstelltAm) || 0)
+            const heuteAb = videoFensterAb(Date.now(), zeitzoneAus(s?.timeZone), Number(letzterBericht?.erstelltAm) || 0)
             const videos = []
             for (const v of videoKandidaten) {
                 if (videos.length >= 1) break
@@ -2587,12 +2588,11 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
         const pCfg = await ladeLlmConfig({ provider: 'perplexity' })
         /*
          * Zwei Wege: Perplexity (Vorgabe) oder DeepSeek-Suche + Schreibmodell.
-         * Gewählt über die Aufgaben-Zeile „recherche" (`deepseek`) oder im
-         * Nachrichten-Reiter (`radarNewsRechercheModell = deepseek-suche`).
-         * Die Chartanalyse braucht Bilder, die nur Perplexity liefert — sie
-         * bleibt dort, solange ein Perplexity-Schlüssel da ist.
+         * Gewählt im Nachrichten-Reiter (`radarNewsRechercheDeepseek = 1`, alt:
+         * `radarNewsRechercheModell = deepseek-suche`). Die Chartanalyse
+         * braucht Bilder, die nur Perplexity liefert — sie bleibt dort, solange
+         * ein Perplexity-Schlüssel da ist, mit dem Modell aus dem Feld.
          */
-        const rWahl = aufgabenWahl(s?.aiTaskProviders, 'recherche')
         /*
          * Der DeepSeek-Weg hat keine Verkaufsfreigabe (Verkaufs-Prüfung Z. 89d:
          * DeepSeek verbietet die Nutzung seines Namens, im Produkt nur als
@@ -2603,10 +2603,9 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
          * Perplexity zurück, statt die Recherche ausfallen zu lassen.
          */
         const dsWeg = (await quelleErlaubt('deepseekSuche'))
-            && (rWahl ? rWahl.provider === 'deepseek' : s?.radarNewsRechercheModell === DEEPSEEK_SUCHE)
-        const pModell = rWahl?.provider === 'perplexity' ? rWahl.model
-            : (s?.radarNewsRechercheModell && s.radarNewsRechercheModell !== DEEPSEEK_SUCHE
-                ? s.radarNewsRechercheModell : undefined)
+            && (Number(s?.radarNewsRechercheDeepseek) === 1 || s?.radarNewsRechercheModell === DEEPSEEK_SUCHE)
+        const pModell = s?.radarNewsRechercheModell && s.radarNewsRechercheModell !== DEEPSEEK_SUCHE
+            ? s.radarNewsRechercheModell : undefined
         const dsCfg = dsWeg ? await ladeLlmConfig({ provider: 'deepseek' }) : null
         const schreiberCfg = dsWeg
             ? await ladeLlmConfigFuerAufgabe('recherche-schreiber', { provider: 'anthropic', model: 'claude-haiku-5-5' })
@@ -2851,12 +2850,13 @@ async function baueLagebericht(s, { manuell = false, basis = null } = {}) {
         istUpdate ? 'NEUE BEITRÄGE (seit dem bisherigen Bericht)' : 'BEITRÄGE',
         zeilen.join('\n---\n')))
 
-    // Aufgaben-Zeile (Bericht oder Zwischenmeldung) → eigene Modellwahl des
-    // Berichts → der allgemein eingestellte Anbieter des Journals
-    const cfg = await ladeLlmConfigFuerAufgabe(istUpdate ? 'lagebericht-update' : 'lagebericht', {
+    // Zwischenmeldung: ihr eigenes Feld (`ALLGEMEIN` = der allgemeine Anbieter)
+    // → das Modell des Berichts → der allgemein eingestellte Anbieter
+    const berichtWahl = {
         provider: s?.radarNewsBerichtProvider || undefined,
         model: s?.radarNewsBerichtModell || undefined,
-    })
+    }
+    const cfg = await ladeLlmConfigFuerAufgabe(istUpdate ? 'lagebericht-update' : 'lagebericht', berichtWahl)
     /*
      * Token-Budget für die Antwort.
      *
@@ -3462,7 +3462,7 @@ export function setupNewsRoutes(app) {
             const jung = await knex('news_digests').orderBy('erstelltAm', 'desc').limit(5)
                 .select('id', 'erstelltAm', 'ueberschrift', 'art', 'updateNr', 'basisId', 'beitraege')
             const { kette, vomVortag } = berichtsKette(jung, {
-                tagesbeginn: tagesbeginn(Date.now(), s?.timeZone),
+                tagesbeginn: tagesbeginn(Date.now(), zeitzoneAus(s?.timeZone)),
             })
             // Offen ist die jüngste der Kette — und nach Mitternacht keine:
             // der Vortag ist archiviert, nicht gelöscht.
@@ -3579,11 +3579,10 @@ export function setupNewsRoutes(app) {
             const s = await getKnex()('settings').where('id', 1).first()
             // Geprüft wird von dem Modell, das die Anweisung später auch
             // befolgen muss — ein anderes könnte etwas zusagen, woran sich der
-            // Schreiber nicht hält. Darum: eigene Zeile nur, wenn ausdrücklich
+            // Schreiber nicht hält. Darum: eigenes Feld nur, wenn ausdrücklich
             // gesetzt, sonst dieselbe Wahl wie der Bericht.
             const cfg = await ladeLlmConfig(
-                aufgabenWahl(s?.aiTaskProviders, 'lagebericht-pruefung')
-                || aufgabenWahl(s?.aiTaskProviders, 'lagebericht')
+                feldWahl(s, 'lagebericht-pruefung')
                 || {
                     provider: s?.radarNewsBerichtProvider || undefined,
                     model: s?.radarNewsBerichtModell || undefined,
@@ -3663,9 +3662,7 @@ export function startNewsTakt() {
 
             const jetzt = new Date()
             // Zeitzone des Journals, nicht die des Servers
-            const lokal = s?.timeZone
-                ? new Date(jetzt.toLocaleString('en-US', { timeZone: s.timeZone }))
-                : jetzt
+            const lokal = new Date(jetzt.toLocaleString('en-US', { timeZone: zeitzoneAus(s?.timeZone) }))
 
             await laufeNewsAbruf().catch(() => { })
 

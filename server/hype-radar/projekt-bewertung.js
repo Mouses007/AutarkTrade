@@ -37,7 +37,7 @@ import { HTML_MAX, ohneTags, ohneBloecke, ersetzeZwischen, elementInhalt, zeiche
  *
  * 3 seit S12 (19.10.2026): ohne Ersteller-Bilanz (pump.fun entfernt).
  *
- * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" kommt die
+ * S15: Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" kommt die
  * Ersteller-Bilanz zurück, und es gelten wieder die Regeln von Stand 2. Der
  * Stand hängt deshalb am Schalter (`projektRegeln`), statt einen Stand 4 zu
  * erfinden: Eine vor S12 gespeicherte Prüfung (Stand 2, MIT Bilanz) ist mit
@@ -49,7 +49,7 @@ import { HTML_MAX, ohneTags, ohneBloecke, ersetzeZwischen, elementInhalt, zeiche
 export const PROJEKT_REGELN = 3
 export const PROJEKT_REGELN_OHNE_FREIGABE = 2
 
-/** Regelstand je Schalter „Quellen ohne Verkaufsfreigabe". */
+/** Regelstand je Schalter „Quellen mit eingeschränkten Nutzungsbedingungen". */
 export const projektRegeln = (ohneFreigabe) => (ohneFreigabe ? PROJEKT_REGELN_OHNE_FREIGABE : PROJEKT_REGELN)
 
 // ── Webseite ────────────────────────────────────────────────────────────

@@ -17,7 +17,6 @@ import {
 import { anbieterBereiche, nachrichtenAnbieter } from './ki-funktionen.js'
 import { merkeVerbrauch, verbrauchJeFunktion } from './ai-usage.js'
 import { PREISE, BILD_PREISE } from './ai-preise.js'
-import { aufgabenWahl } from './ai-task-config.js'
 
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
 
@@ -83,8 +82,9 @@ const KI_SPALTEN = [
     'aiOllamaUrl', 'aiScreenshots', 'aiReportPrompt', 'aiChatEnabled',
     'aiBerichtProvider', 'aiBerichtModell', 'aiAgentProvider', 'aiAgentModell',
     'aiStrategieProvider', 'aiStrategieModell',
-    // Fehlte bis 18.10.2026 — die Zeile „trade-analyse" der Aufgaben-Tabelle
-    // wurde darum nie gelesen, egal was dort stand.
+    // Modell der Trade-Analyse (KI › Trade-Berichte; bis 29.10.2026 eine
+    // Zeile der Aufgaben-Tabelle)
+    'aiTradeAnalyseProvider', 'aiTradeAnalyseModell',
     'aiTaskProviders',
     ...KEY_SPALTEN, ...KI_URL_SPALTEN,
 ]
@@ -511,8 +511,11 @@ export function setupOllamaRoutes(app) {
                 knex('tags').where('tradeId', tradeId).first(),
             ])
 
-            // Aufgaben-Zeile „trade-analyse" → Berichts-Anbieter → global
-            let { provider, model } = aufgabenWahl(settings.aiTaskProviders, 'trade-analyse') || {}
+            // Eigenes Feld der Trade-Analyse → Berichts-Anbieter → global
+            let provider = '', model = ''
+            if (String(settings?.aiTradeAnalyseProvider || '').trim()) {
+                ({ provider, model } = waehleAnbieter(settings, 'TradeAnalyse'))
+            }
 
             if (!provider) {
                 // Fallback zu globalem Anbieter (für Berichte ist meist gute Wahl)

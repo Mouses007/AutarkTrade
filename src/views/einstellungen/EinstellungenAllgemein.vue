@@ -1,20 +1,12 @@
 <script setup>
-/** Bereich „Allgemein" — die Sektionen in der bisherigen Reihenfolge. */
-import LayoutStil from './allgemein/LayoutStil.vue'
-import Sicherheit from './allgemein/Sicherheit.vue'
-import Https from './allgemein/Https.vue'
-import Datenbank from './allgemein/Datenbank.vue'
-import Speicher from './allgemein/Speicher.vue'
-import Importe from './allgemein/Importe.vue'
+/** Bereich „Allgemein" — Profil & Sprache, Bedienung & Menü. */
+import ProfilSprache from './allgemein/ProfilSprache.vue'
+import Bedienung from './allgemein/Bedienung.vue'
 </script>
 
 <template>
     <div>
-        <LayoutStil />
-        <Sicherheit />
-        <Https />
-        <Datenbank />
-        <Speicher />
-        <Importe />
+        <ProfilSprache />
+        <Bedienung />
     </div>
 </template>

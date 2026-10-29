@@ -1,6 +1,6 @@
 /**
  * Einstellungen › Datenquellen: Marktdatenquelle und die Schlüssel der
- * Quellen, die nur mit Kundenschlüssel laufen (Verkaufs-Prüfung S12).
+ * Quellen, die nur mit eigenem Schlüssel laufen (S12).
  *
  *   GET  /api/quellen               Wahl + was die Quelle kann, CoinGecko-Status
  *   PUT  /api/marktdaten/quelle     { wahl }               (marktdaten/index.js)
@@ -32,7 +32,7 @@ export function setupQuellenRoutes(app) {
         res.json({ marktdaten: await beschreibung(), coingecko: await cgStatus(), ohneFreigabe: await freigabe.freigabeStand() })
     })
 
-    // Schalter „Quellen ohne Verkaufsfreigabe" (S15, `freigabe.js`).
+    // Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15, `freigabe.js`).
     app.get('/api/quellen/ohne-freigabe', async (req, res) => {
         res.json(await freigabe.freigabeStand())
     })

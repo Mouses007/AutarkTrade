@@ -32,7 +32,7 @@ import { getClosedCandles } from './market-data.js'
 import { holeHebelzonen } from './hebelzonen.js'
 import { lies as liesLiqTicker } from './liq-ticker.js'
 import { lageZu } from '../shared/handelszeiten.js'
-import { leseKalender, KALENDER_LAENDER_VORGABE } from './marktradar-kalender.js'
+import { leseKalender, kalenderLaenderAus } from './marktradar-kalender.js'
 import {
     holeMechanik, holeFunding, holeLsOi, holeMakro, holeRsi, holeMarkt,
 } from './marktradar-api.js'
@@ -141,7 +141,7 @@ async function holeTermine(stunden) {
     const daten = await leseKalender({
         von: jetzt - 60 * 60 * 1000,
         bis: jetzt + stunden * 60 * 60 * 1000,
-        laender: s?.radarKalenderLaender ?? KALENDER_LAENDER_VORGABE,
+        laender: await kalenderLaenderAus(s),
         impact: s?.radarKalenderImpact ?? 'medium',
     })
     const ereignisse = (daten.ereignisse || []).map(e => ({

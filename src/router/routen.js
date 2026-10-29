@@ -19,7 +19,7 @@
  */
 
 /** Die Unterseiten der Einstellungen (`/einstellungen/:bereich`). Ohne Angabe: die erste. */
-export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'ki', 'live', 'benachrichtigungen', 'datenquellen', 'rechtliches']
+export const EINSTELLUNGS_BEREICHE = ['allgemein', 'journal', 'live', 'datenquellen', 'ki', 'benachrichtigungen', 'geraete', 'system', 'rechtliches']
 
 /** Seite mit dem gemeinsamen Layout. */
 function seite(path, name, laden, meta = {}, extra = {}) {
@@ -42,13 +42,55 @@ function startziel() {
     return an === '0' ? '/journal' : '/chart'
 }
 
-/** Ein unbekannter Bereich fällt auf „Allgemein" — sonst stünde eine leere Einstellungsseite da. */
+/**
+ * Frühere Bereiche und Unterseiten der Einstellungen → wo sie heute stehen.
+ * Bis 10/2026 gab es oben die Reiter „Agent" und „Lizenz", ESP32 stand unter
+ * Journal, Sicherheit/HTTPS/Datenbank/Speicher unter Allgemein; Lesezeichen,
+ * alte Links und Texte („Einstellungen › ESP32") sollen weiter treffen.
+ * `ki` = Unter-Reiter im KI-Bereich.
+ */
+export const ALTE_BEREICHE = {
+    agent: { bereich: 'ki', ki: 'agent' },
+    strategie: { bereich: 'ki', ki: 'strategie' },
+    strategien: { bereich: 'ki', ki: 'strategie' },
+    nachrichten: { bereich: 'ki', ki: 'nachrichten' },
+    lagebericht: { bereich: 'ki', ki: 'nachrichten' },
+    berichte: { bereich: 'ki', ki: 'berichte' },
+    bilder: { bereich: 'ki', ki: 'bilder' },
+    zugang: { bereich: 'ki', ki: 'allgemein' },
+    esp32: { bereich: 'geraete' },
+    widget: { bereich: 'geraete' },
+    android: { bereich: 'geraete' },
+    sicherheit: { bereich: 'system' },
+    https: { bereich: 'system' },
+    datenbank: { bereich: 'system' },
+    speicher: { bereich: 'system' },
+    backup: { bereich: 'system' },
+    importe: { bereich: 'journal' },
+    konten: { bereich: 'journal' },
+    boersen: { bereich: 'journal' },
+    layout: { bereich: 'allgemein' },
+    profil: { bereich: 'allgemein' },
+    bedienung: { bereich: 'allgemein' },
+    marktradar: { bereich: 'live' },
+    chart: { bereich: 'live' },
+    quellen: { bereich: 'datenquellen' },
+    lizenz: { bereich: 'rechtliches' },
+}
+
+/**
+ * Ein früherer Bereichsname führt dorthin, wo er heute steht; ein ganz
+ * unbekannter fällt auf „Allgemein" — sonst stünde eine leere Seite da.
+ */
 function pruefeBereich(to) {
     const b = to.params.bereich
-    if (b && !EINSTELLUNGS_BEREICHE.includes(b)) {
-        return { path: '/einstellungen/' + EINSTELLUNGS_BEREICHE[0], query: to.query, hash: to.hash }
+    if (!b || EINSTELLUNGS_BEREICHE.includes(b)) return true
+    const ziel = ALTE_BEREICHE[String(b).toLowerCase()]
+    if (ziel) {
+        const query = ziel.ki ? { ...to.query, ki: ziel.ki } : to.query
+        return { path: '/einstellungen/' + ziel.bereich, query, hash: to.hash }
     }
-    return true
+    return { path: '/einstellungen/' + EINSTELLUNGS_BEREICHE[0], query: to.query, hash: to.hash }
 }
 
 export const routen = [
@@ -97,7 +139,7 @@ export const routen = [
         { title: 'Einstellungen', titleKey: 'nav.settings', mode: 'any' }, { beforeEnter: pruefeBereich }),
     // Alte Adresse der Einstellungen, samt Bereich (`/settings/ki` → `/einstellungen/ki`).
     { path: '/settings/:bereich?', redirect: (to) => ({ path: '/einstellungen' + (to.params.bereich ? '/' + to.params.bereich : ''), query: to.query, hash: to.hash }) },
-    // Die Börsen-API-Schlüssel stehen im Journal-Bereich.
+    // Importe und Börsen-Konten stehen im Journal-Bereich.
     weiter('/imports', '/einstellungen/journal'),
 
     // ── Live-Analyse ────────────────────────────────────────

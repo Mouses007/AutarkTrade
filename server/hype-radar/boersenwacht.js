@@ -25,7 +25,7 @@
  * Jede Börse fällt einzeln aus; ein Ausfall oder eine halbe Antwort
  * überschreibt nie den letzten guten Stand.
  *
- * S15 (19.10.2026): Mit dem Schalter „Quellen ohne Verkaufsfreigabe" an
+ * S15 (19.10.2026): Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" an
  * (Vorgabe) beobachtet der Wächter wieder alle Börsen wie vor S12 —
  * zusätzlich Upbit, OKX (mit Handelsstart), MEXC und Binance Alpha (Token-
  * Liste des Web-Frontends, `bapiAlphaListe` in `server/marktdaten/binance.js`,
@@ -62,7 +62,7 @@ export const QUELLEN = {
     kucoin: 'https://api.kucoin.com/api/v2/symbols',
     gate: 'https://api.gateio.ws/api/v4/spot/currency_pairs',
     bitget: 'https://api.bitget.com/api/v2/spot/public/symbols',
-    // S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (`HOST_FREIGABE` in quellen.js sperrt zusätzlich).
+    // S15, nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (`HOST_FREIGABE` in quellen.js sperrt zusätzlich).
     upbit: 'https://api.upbit.com/v1/market/all',
     okx: 'https://www.okx.com/api/v5/public/instruments?instType=SPOT',
     mexc: 'https://api.mexc.com/api/v3/defaultSymbols',

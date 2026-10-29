@@ -80,7 +80,7 @@ export const liveSaettigung = ref(3)
 export const liveShowBuch = ref(true)
 export const liveBuchW = ref(96)              // Breite der Buch-Leiter in px
 /*
- * Fremde Börsen (Bybit, mit Schalter „Quellen ohne Verkaufsfreigabe" auch
+ * Fremde Börsen (Bybit, mit Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" auch
  * OKX) in der Leiter mitzeigen — als eigener Balken, nicht aufaddiert. Warum
  * nicht summiert: siehe server/fremdbuch.js.
  * Vorgabe wie vor S12 AN, solange der Schalter an ist; mit Schalter AUS die
@@ -104,7 +104,7 @@ export const levMapHours = ref(48)            // gewünschtes Zeitfenster
 export const levMapSpanPct = ref(8)           // Preisspanne um den Mid, einseitig
 export const levMapMmr = ref(0.004)           // Maintenance-Margin-Rate, Stufe 1
 // 'binance' | 'bybit' | 'manuell'. 'binance' (undokumentierter bapi-Endpunkt,
-// Verkaufs-Prüfung Zeile 34) nur mit Schalter „Quellen ohne Verkaufsfreigabe"
+// Verkaufs-Prüfung Zeile 34) nur mit Schalter „Quellen mit eingeschränkten Nutzungsbedingungen"
 // an (S15, wie vor S12); mit Schalter AUS zieht `hydrateLiveSettings` ihn
 // auf 'bybit' (Stand S12), ohne zu speichern.
 export const levMapMmrQuelle = ref('binance')
@@ -236,7 +236,7 @@ export function hydrateLiveSettings() {
 }
 
 /**
- * Schalter „Quellen ohne Verkaufsfreigabe" (S15): mit AUS gilt der Stand S12 —
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15): mit AUS gilt der Stand S12 —
  * Wartungsmarge 'binance' → 'bybit', Fremdbuch-Vorgabe aus, wenn nichts
  * gespeichert ist. Beides still, also nicht zurückgeschrieben: legt der
  * Nutzer den Schalter wieder an, gilt wieder seine eigene Wahl.

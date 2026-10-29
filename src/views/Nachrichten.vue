@@ -67,7 +67,7 @@ const STUFEN = [
     { wert: 'all', key: 'all' },
 ]
 /*
- * Mit Schalter „Quellen ohne Verkaufsfreigabe" (S15) läuft ForexFactory
+ * Mit Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15) läuft ForexFactory
  * zusätzlich und führt die acht Währungsräume wie vor S12. Ohne ihn kommen
  * Termine nur aus amtlichen Quellen (Fed, BEA, Eurostat —
  * `server/kalender-quellen.js`); für andere Währungsräume gibt es keine.

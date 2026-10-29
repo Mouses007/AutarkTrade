@@ -11,6 +11,7 @@ import Symbol from '@/components/basis/Symbol.vue'
 import { allTradeTimeframes, selectedTradeTimeframes } from '@/stores/filters.js'
 import { appEinstellungen } from '@/stores/settings.js'
 import { dbUpdateSettings, dbGetSettings } from '@/utils/db.js'
+import { meldeSchalter } from '@/utils/tradePopups.js'
 
 const { t } = useI18n()
 
@@ -131,15 +132,62 @@ function removeTag(group, tagId) {
     }
 }
 
+/* REIHENFOLGE: einen Tag ziehen (Maus, Finger, Stift) und innerhalb seiner Gruppe
+   ablegen; gespeichert wird beim Loslassen. Erst ab 6 px Weg zählt es als Ziehen,
+   damit ein Klick auf das × nicht verschiebt. Tastatur: Alt + Pfeil links/rechts. */
+const ziehen = ref(null)   // { gruppe, id, x, y, aktiv, geaendert }
+
+function tagGreifen(e, group, tag) {
+    if (e.button !== 0 || e.target.closest('.tag-weg')) return
+    ziehen.value = { gruppe: group.id, id: tag.id, x: e.clientX, y: e.clientY, aktiv: false, geaendert: false }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+}
+
+function tagZiehen(e, group) {
+    const z = ziehen.value
+    if (!z || z.gruppe !== group.id) return
+    if (!z.aktiv && Math.hypot(e.clientX - z.x, e.clientY - z.y) < 6) return
+    z.aktiv = true
+    const ziel = document.elementFromPoint(e.clientX, e.clientY)?.closest('[data-tag-id]')
+    if (!ziel || ziel.dataset.gruppe !== group.id || ziel.dataset.tagId === z.id) return
+    const von = group.tags.findIndex(t => t.id === z.id)
+    const nach = group.tags.findIndex(t => t.id === ziel.dataset.tagId)
+    if (von < 0 || nach < 0) return
+    group.tags.splice(nach, 0, ...group.tags.splice(von, 1))
+    z.geaendert = true
+}
+
+function tagLoslassen() {
+    const z = ziehen.value
+    ziehen.value = null
+    if (z?.geaendert) speichereKatalog()
+}
+
+function tagVerschieben(group, tag, schritt) {
+    const von = group.tags.findIndex(t => t.id === tag.id)
+    const nach = von + schritt
+    if (von < 0 || nach < 0 || nach >= group.tags.length) return
+    group.tags.splice(nach, 0, ...group.tags.splice(von, 1))
+    speichereKatalog()
+}
+
 /* POPUP SETTING */
 async function loadPopupSetting() {
     showTradePopups.value = appEinstellungen.value?.showTradePopups !== 0
 }
 
+/*
+ * Wirkt sofort: der Rahmen beobachtet `appEinstellungen.showTradePopups`
+ * (Polling an/aus), andere Tabs hören über `meldeSchalter`. Beim Einschalten
+ * setzt der Server die Grenze neu — gemeldet wird nur, was ab jetzt kommt.
+ * Aus heisst zudem: Schliessungen gehen ohne Abschlussbewertung direkt ins
+ * Journal (utils/incoming.js) — das steht so im Beschreibungstext.
+ */
 async function savePopupSetting() {
     try {
         await dbUpdateSettings({ showTradePopups: showTradePopups.value ? 1 : 0 })
         appEinstellungen.value.showTradePopups = showTradePopups.value ? 1 : 0
+        meldeSchalter(showTradePopups.value)
         console.log(' -> Popup-Einstellung gespeichert:', showTradePopups.value)
     } catch (error) {
         console.error(' -> Fehler beim Speichern der Popup-Einstellung:', error)
@@ -268,7 +316,14 @@ onMounted(loadTags)
                     </div>
 
                     <ul v-if="group.tags.length" class="tags">
-                        <li v-for="tag in group.tags" :key="tag.id" class="tag">
+                        <li v-for="tag in group.tags" :key="tag.id"
+                            :class="['tag', { zieht: ziehen?.aktiv && ziehen.id === tag.id }]"
+                            :data-tag-id="tag.id" :data-gruppe="group.id" tabindex="0"
+                            :title="t('settings.tagZiehen')"
+                            @pointerdown="tagGreifen($event, group, tag)" @pointermove="tagZiehen($event, group)"
+                            @pointerup="tagLoslassen" @pointercancel="tagLoslassen"
+                            @keydown.alt.left.prevent="tagVerschieben(group, tag, -1)"
+                            @keydown.alt.right.prevent="tagVerschieben(group, tag, 1)">
                             <span>{{ tag.name }}</span>
                             <button type="button" class="tag-weg" :title="t('common.remove')" :aria-label="t('common.remove') + ': ' + tag.name"
                                 @click="removeTag(group, tag.id)">
@@ -343,7 +398,7 @@ onMounted(loadTags)
         <!-- Popups. Der Hauptschalter für Benachrichtigungen steht im eigenen
              Bereich „Benachrichtigungen", zusammen mit der Kanalwahl je
              Ereignis und dem E-Mail-Versand. -->
-        <Abschnitt :titel="t('settings.popupsAndNotifications')" unter v-model:offen="subPopupsExpanded">
+        <Abschnitt :titel="t('settings.bewertungsPopups')" unter v-model:offen="subPopupsExpanded">
             <p class="beschreibung">{{ t('settings.popupsDescription') }}</p>
             <Schalter v-model="showTradePopups" :label="t('settings.enablePopups')" @change="savePopupSetting" />
         </Abschnitt>
@@ -437,6 +492,14 @@ onMounted(loadTags)
     border-radius: var(--radius-pille);
     background: var(--panel-soft);
     font-size: 0.82rem;
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+.tag.zieht {
+    cursor: grabbing;
+    opacity: 0.6;
+    outline: 1px dashed var(--gruppe);
 }
 .tag-weg, .tf-weg {
     display: inline-flex;

@@ -265,7 +265,7 @@ onMounted(async () => {
 </script>
 
 <template>
-    <Abschnitt :titel="t('settings.apiConnection')" symbol="gebaeude" v-model:offen="apiExpanded">
+    <Abschnitt :titel="t('settings.boersenKonten')" symbol="gebaeude" v-model:offen="apiExpanded">
         <p class="beschreibung">{{ t('settings.apiConnectionDescription') }}</p>
 
         <!-- Audit SEC-SRV-006: AutarkTrade sendet keine Orders (S13) — ein

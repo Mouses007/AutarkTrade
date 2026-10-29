@@ -22,13 +22,10 @@ import { useI18n } from 'vue-i18n'
 import Symbol from '../basis/Symbol.vue'
 import { oeffneRechtliches } from '../../stores/rechtliches.js'
 import { oeffneSpenden } from '../../stores/spenden.js'
-import { appEinstellungen } from '../../stores/settings.js'
-import { computed } from 'vue'
 
 const { t } = useI18n()
 
 const version = __APP_VERSION__
-const spendenAn = computed(() => Number(appEinstellungen.value?.spendenAn ?? 1) === 1)
 const RELEASES_URL = 'https://github.com/Mouses007/AutarkTrade/releases'
 
 const stand = ref(null)            // Antwort von /api/update/check
@@ -110,8 +107,8 @@ onMounted(ladeStand)
 
 <template>
     <footer class="at-menue-fuss">
-        <button v-if="spendenAn" type="button" class="fuss-eintrag" @click="oeffneSpenden()">
-            <Symbol name="kaffee" />{{ t('spenden.menue') }}
+        <button type="button" class="fuss-eintrag" @click="oeffneSpenden()">
+            <Symbol name="herz" />{{ t('spenden.menue') }}
         </button>
         <button type="button" class="fuss-eintrag" @click="oeffneRechtliches()">
             <Symbol name="waage" />{{ t('rechtliches.titel') }}

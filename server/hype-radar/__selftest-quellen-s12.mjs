@@ -4,7 +4,7 @@
  * Ohne Netz. Ein `fetch`, der jeden Aufruf protokolliert und scheitert, deckt
  * auf, wohin eine Anfrage gegangen WÄRE.
  *
- * Schalter „Quellen ohne Verkaufsfreigabe" AUS (Stand S12, Verkaufs-Prüfung
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" AUS (Stand S12, Verkaufs-Prüfung
  * vom 19.10.2026): entfernte Quellen (pump.fun, Reddit, CoinPaprika,
  * GeckoTerminal ohne Schlüssel, Upbit, OKX, MEXC, Telegram, öffentlicher
  * Solana-Knoten) werden nicht gefragt; Quellen, die einen Kundenschlüssel
@@ -45,7 +45,7 @@ const aufrufe = []
 globalThis.fetch = async (url, opts = {}) => { aufrufe.push({ url: String(url), kopf: opts.headers || {} }); throw new Error('kein Netz im Selbsttest') }
 const urls = () => aufrufe.map((a) => a.url)
 
-/** Hosts der Quellen ohne Verkaufsfreigabe, die über `holeJson`/`holeText` laufen. */
+/** Hosts der Quellen mit eingeschränkten Nutzungsbedingungen, die über `holeJson`/`holeText` laufen. */
 const GESPERRTE_HOSTS = ['frontend-api-v3.pump.fun', 'www.reddit.com', 'api.coinpaprika.com', 'api.geckoterminal.com',
     'api.upbit.com', 'www.okx.com', 'api.mexc.com']
 const trifftGesperrt = (u) => GESPERRTE_HOSTS.some((h) => new URL(u).hostname === h)

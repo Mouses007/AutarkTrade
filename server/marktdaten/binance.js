@@ -219,7 +219,7 @@ export function seitenGewicht(m, seite) {
 // ── Web-Backend (bapi) — keine Marktdaten-Fähigkeit ─────────────────────
 // Steht hier nur, damit keine Binance-Adresse ausserhalb dieser Datei liegt.
 // Undokumentiert und für einen Verkauf rot (Verkaufs-Prüfung Zeile 34);
-// läuft nur hinter dem Schalter „Quellen ohne Verkaufsfreigabe"
+// läuft nur hinter dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen"
 // (`server/quellen/freigabe.js`, ID `binanceBrackets`) — das prüft der Aufrufer.
 
 /** Wartungsmargen-Klammern aller USDⓈ-M-Symbole, ohne Schlüssel (~1,6 MB; 19.10.2026 per curl geprüft: antwortet). */

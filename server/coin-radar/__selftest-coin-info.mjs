@@ -1,6 +1,6 @@
 /**
  * Selbsttest: Projekt-Infos des Coin-Radars (`coin-info.js`) je Stand des
- * Schalters „Quellen ohne Verkaufsfreigabe" (S15).
+ * Schalters „Quellen mit eingeschränkten Nutzungsbedingungen" (S15).
  *
  *   an   ohne eigenen Schlüssel über den öffentlichen CoinGecko-Endpunkt,
  *        mit Coin-Logo (`bild`) wie vor S12

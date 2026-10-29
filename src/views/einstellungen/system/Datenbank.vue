@@ -1,33 +1,24 @@
 <script setup>
-/** Allgemein → Datenbank: SQLite/PostgreSQL, Neustart, Export und Import. */
+/**
+ * System → Datenbank (SQLite/PostgreSQL, Neustart) und, als eigener
+ * Abschnitt, Sicherung (Export und Import) — die stand bis 10/2026 versteckt
+ * am Ende des Datenbank-Abschnitts.
+ */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import InfoTipp from '@/components/InfoTipp.vue'
-import { Knopf, Pille, Eingabe, Tabelle, Symbol } from '@/components/basis/index.js'
+import { Knopf, Pille, Eingabe } from '@/components/basis/index.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 
 const { t } = useI18n()
 
 let dbExpanded = ref(false)
-let pgProvidersExpanded = ref(false)
 
 const DB_TYPEN = computed(() => [
     { wert: 'sqlite', text: t('settings.sqliteLocal') },
     { wert: 'postgresql', text: t('settings.postgresRemote') },
-])
-
-/* Anbieter mit kostenlosem PostgreSQL — nur zur Orientierung. */
-const pgSpalten = computed(() => [
-    { schluessel: 'name', titel: t('settings.pgProvider') },
-    { schluessel: 'frei', titel: t('settings.freeTierCol') },
-    { schluessel: 'merkmal', titel: t('settings.pgFeature') },
-])
-const pgAnbieter = computed(() => [
-    { name: 'Neon', url: 'https://neon.tech', frei: '512 MB', merkmal: 'Branching, Autoscaling' },
-    { name: 'Supabase', url: 'https://supabase.com', frei: '500 MB', merkmal: 'Auth, API, Realtime' },
-    { name: 'Aiven', url: 'https://aiven.io', frei: '1 GB', merkmal: t('settings.pgAivenFeature') },
 ])
 
 /* DATENBANK-KONFIGURATION */
@@ -42,6 +33,7 @@ let dbTestLoading = ref(false)
 let dbTestResult = ref(null)
 let dbSaveResult = ref(null)
 let dbRestartLoading = ref(false)
+let sicherungOffen = ref(false)
 let dbExportLoading = ref(false)
 let dbImportLoading = ref(false)
 let dbMigrationResult = ref(null)
@@ -197,19 +189,6 @@ onMounted(loadDbConfig)
             <Eingabe v-model="dbType" art="auswahl" :optionen="DB_TYPEN" />
         </Feld>
 
-        <!-- PostgreSQL Provider-Info -->
-        <Abschnitt v-if="dbType === 'postgresql'" v-model:offen="pgProvidersExpanded" unter
-            :titel="t('settings.pgProviderTitle')" symbol="info">
-            <p class="hinweis">{{ t('settings.pgProviderDesc') }}</p>
-            <Tabelle :spalten="pgSpalten" :zeilen="pgAnbieter" schluessel-feld="name" dicht>
-                <template #zelle-name="{ zeile }">
-                    <a :href="zeile.url" target="_blank" rel="noopener" class="anbieter">
-                        {{ zeile.name }} <Symbol name="extern" :groesse="12" />
-                    </a>
-                </template>
-            </Tabelle>
-        </Abschnitt>
-
         <!-- PostgreSQL-Felder -->
         <template v-if="dbType === 'postgresql'">
             <Feld :label="t('settings.hostLabel')">
@@ -253,9 +232,13 @@ onMounted(loadDbConfig)
             </Knopf>
         </div>
 
-        <!-- Export / Import -->
-        <div class="sicherung">
-            <h3 class="zwischentitel">{{ t('settings.backup') }}</h3>
+        <!-- Wo PostgreSQL laufen kann, wenn kein eigener Server da ist — bewusst ohne Anbieternamen -->
+        <p v-if="dbType === 'postgresql'" class="hinweis hosting">{{ t('settings.pgHosting') }}</p>
+    </Abschnitt>
+
+    <!--=============== SICHERUNG ===============-->
+    <Abschnitt v-model:offen="sicherungOffen" kennung="sicherung" :titel="t('settings.backup')" symbol="herunterladen">
+        <div>
             <p class="hinweis">{{ t('settings.backupDescription') }}</p>
             <div class="knoepfe">
                 <Knopf klein symbol="download" :laedt="dbExportLoading" @click="exportDb">
@@ -279,12 +262,7 @@ onMounted(loadDbConfig)
     font-size: 0.88rem;
 }
 .label { color: var(--text); }
-.anbieter {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    text-decoration: none;
-}
+.hosting { margin-top: var(--abstand-3); }
 .knoepfe {
     display: flex;
     flex-wrap: wrap;
@@ -299,14 +277,4 @@ onMounted(loadDbConfig)
 .knoepfe .meldung { margin: 0; }
 .meldung.gut { color: var(--good); }
 .meldung.schlecht { color: var(--bad); }
-.sicherung {
-    margin-top: var(--abstand-4);
-    padding-top: var(--abstand-3);
-    border-top: 1px solid var(--line);
-}
-.zwischentitel {
-    margin: 0 0 0.2rem;
-    font-size: 0.95rem;
-    font-weight: 600;
-}
 </style>

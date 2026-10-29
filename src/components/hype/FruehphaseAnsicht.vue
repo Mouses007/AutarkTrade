@@ -135,7 +135,7 @@
 
         <p class="fpHinweis">{{ t('hypeFrueh.erklaerung') }}</p>
         <!-- Seit S12 ohne pump.fun, Telegram und Reddit — die Spur vor dem ersten Pool ist schmaler. -->
-        <!-- S15: mit dem Schalter „Quellen ohne Verkaufsfreigabe" ist die Spur wieder die alte — dann kein Hinweis. -->
+        <!-- S15: mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" ist die Spur wieder die alte — dann kein Hinweis. -->
         <p v-if="!frei" class="fpHinweis">{{ t('hypeFrueh.spurHinweis') }}</p>
 
         <div v-if="ladeFehler" class="at-schlecht at-klein">{{ ladeFehler }}</div>
@@ -426,7 +426,7 @@ const ohneSchluessel = computed(() => {
     return q ? { aus: true, grund: q.grund, quelle: q.quelle, meldung: q.meldung || q.fehler } : null
 })
 
-/** Schalter „Quellen ohne Verkaufsfreigabe" (S15): pump.fun, Telegram, Reddit, King of the Hill … */
+/** Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15): pump.fun, Telegram, Reddit, King of the Hill … */
 const frei = computed(() => freigabeAn())
 ladeFreigabe()
 
@@ -434,7 +434,7 @@ ladeFreigabe()
 const quellenZeile = computed(() => {
     const qs = stand.value?.letzter?.quellenStand || {}
     const q = ['dexscreener']
-    // S15: die Quellen ohne Verkaufsfreigabe, die in diesem Lauf geliefert haben.
+    // S15: die Quellen mit eingeschränkten Nutzungsbedingungen, die in diesem Lauf geliefert haben.
     for (const id of ['pumpfun', 'telegram', 'reddit']) if (qs[id]?.ok) q.push(id)
     if (qs.geckoterminal?.ok || qs.kaeufer?.ok) q.push(frei.value && !props.einst?.coingeckoEigen ? 'geckoterminal' : 'coingecko')
     if (qs.biz?.ok || qs.biz === undefined) q.push('biz')
@@ -781,7 +781,7 @@ function kaeuferText(s) {
 }
 
 // Telegram und Reddit bis S12 — ihre alten Nennungen zeigt die Liste nicht mehr.
-// Telegram und Reddit nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15); aus, zeigt die Liste ihre alten Nennungen nicht.
+// Telegram und Reddit nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15); aus, zeigt die Liste ihre alten Nennungen nicht.
 const SOZIAL = ['biz', 'x']
 const SOZIAL_FREI = ['telegram', 'biz', 'reddit', 'x']
 const sozialVon = (z) => (frei.value ? SOZIAL_FREI : SOZIAL).filter((p) => (z.quellen || []).includes(p))

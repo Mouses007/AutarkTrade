@@ -1,5 +1,5 @@
 /**
- * Selbsttest: Schalter „Quellen ohne Verkaufsfreigabe" (S15, `freigabe.js`).
+ * Selbsttest: Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15, `freigabe.js`).
  *
  * Ohne Netz und ohne DB. Geprüft wird:
  *   - der Schalter liest sich robust (Vorgabe AN bei fehlender Spalte,
@@ -34,7 +34,7 @@ const p = (name, bedingung, zusatz = '') => {
 }
 const wirft = async (fn) => { try { await fn(); return null } catch (e) { return e } }
 
-console.log('Quellen ohne Verkaufsfreigabe (S15)')
+console.log('Quellen mit eingeschränkten Nutzungsbedingungen (S15)')
 
 // ── Schalter lesen ──────────────────────────────────────────────────────
 p('Vorgabe ist AN', VORGABE === true)
@@ -68,7 +68,7 @@ const e = await wirft(() => fordereQuelle('forexfactory'))
 p('AUS: fordereQuelle wirft QuelleAus', e && istAus(e))
 p('AUS: Grund ohneFreigabe, Name aus der Liste', e?.grund === 'ohneFreigabe' && e?.quelle === 'ForexFactory')
 const a = e ? ausAntwort(e) : {}
-p('ausAntwort ist ein Zustand', a.aus === true && a.grund === 'ohneFreigabe' && /Verkaufsfreigabe/.test(a.meldung))
+p('ausAntwort ist ein Zustand', a.aus === true && a.grund === 'ohneFreigabe' && /eingeschränkten Nutzungsbedingungen/.test(a.meldung))
 let gesendet = null
 const res = { json: (d) => { gesendet = d } }
 p('sendeWennAus antwortet (HTTP 200)', sendeWennAus(res, e) === true && gesendet?.grund === 'ohneFreigabe')

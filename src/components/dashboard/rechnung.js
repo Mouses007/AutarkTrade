@@ -13,29 +13,8 @@ const zahl = (x) => {
     return Number.isFinite(n) ? n : 0
 }
 
-/**
- * Kontostand der gewählten Börse. Der Bonus geht nur in den angezeigten Stand
- * ein, damit er mit dem Wallet übereinstimmt; Performance bleibt bonusfrei,
- * sonst sähe ein geschenkter Bonus wie Handelserfolg aus.
- */
-export function kontostand({ benutzer, broker, allTimeNetPnL, positionen, bonus }) {
-    const b = broker || 'bitunix'
-    const eintrag = benutzer?.balances?.[b]
-    const start = eintrag ? zahl(eintrag.start) : zahl(benutzer?.startBalance)
-    if (start === 0) return null
-    let unrealisiert = 0
-    for (const p of positionen || []) {
-        if (p?.status !== 'open') continue
-        if (p.broker && p.broker !== b) continue
-        const u = Number(p.unrealizedPNL)
-        if (Number.isFinite(u)) unrealisiert += u
-    }
-    const B = zahl(bonus)
-    const aktuell = start + zahl(allTimeNetPnL) + unrealisiert + B
-    const pnl = aktuell - start - B
-    const performance = start > 0 ? ((aktuell - B) / start - 1) * 100 : 0
-    return { start, unrealisiert, bonus: B, aktuell, pnl, performance }
-}
+/** Kontostand der gewählten Börse — liegt in shared/, der KI-Agent rechnet dieselbe Regel. */
+export { kontostand } from '../../../shared/kontostand.js'
 
 /**
  * Trades von heute im aktuellen Filter, nach der SCHLUSSZEIT (`exitTime`) in

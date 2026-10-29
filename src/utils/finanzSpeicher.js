@@ -15,9 +15,9 @@
  *
  * Bewusst NICHT gelöscht (Einstellungen dieses Bildschirms, keine Beträge):
  * Layout, Kachelreihenfolge, Filter wie `at.journal.konten` (nur Börsennamen),
- * `ctj.chart.positionenAus` (nur ausgeblendete Positions-IDs),
- * `evalNotifiedPositionIds` (nur IDs — sonst käme jede Meldung nach dem
- * Anmelden neu), Sprache, Sichtschutz.
+ * `ctj.chart.positionenAus` (nur ausgeblendete Positions-IDs), Sprache,
+ * Sichtschutz. (Welche Trades schon gemeldet sind, steht seit 29.10.2026 in
+ * der Datenbank, nicht mehr hier.)
  */
 
 export const FINANZ_SCHLUESSEL = ['chartKiMarken', 'positionsWarnungWeg']

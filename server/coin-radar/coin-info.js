@@ -5,7 +5,7 @@
  * Quelle ist CoinGecko (`search` zum Auflösen des Handelssymbols auf eine
  * CoinGecko-Id, `coins/{id}` für die eigentlichen Angaben) — NUR mit dem
  * Schlüssel des Kunden (Verkaufs-Prüfung Z. 87, S12) oder — seit S15 mit dem
- * Schalter „Quellen ohne Verkaufsfreigabe" an — über den öffentlichen
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" an — über den öffentlichen
  * Endpunkt wie vor S12 (zentral in `server/quellen/coingecko.js`). Ist beides
  * nicht da, wirft der Abruf `QuelleAus('CoinGecko', 'schluesselFehlt')`, und
  * die Route sagt das.

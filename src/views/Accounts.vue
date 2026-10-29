@@ -26,7 +26,8 @@ const cards = ref([])   // [{ broker, label, color, loading, error, data }]
 // Ist das Spot-Portfolio an, ist es die eine Gesamtsicht: hier steht dann nur
 // das Handelskapital (Futures + Bots), der Spot-Bestand steht dort — sonst
 // erschienen ICP, CRO … an zwei Stellen mit zwei Summen.
-const portfolioAn = computed(() => Number(appEinstellungen.value?.modusPortfolioAn ?? 0) === 1)
+// Vorgabe an, wie die Spalte und alle übrigen Leser
+const portfolioAn = computed(() => Number(appEinstellungen.value?.modusPortfolioAn ?? 1) === 1)
 const zeigeWallet = (w) => !(portfolioAn.value && w.key === 'spot')
 const kartenUsd = (c) => (c.data?.wallets || []).filter(zeigeWallet).reduce((s, w) => s + (Number(w.usd) || 0), 0)
 const spotUsd = computed(() => cards.value.reduce((s, c) => s + (c.data?.wallets || []).filter((w) => w.key === 'spot').reduce((a, w) => a + (Number(w.usd) || 0), 0), 0))

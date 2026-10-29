@@ -1,14 +1,16 @@
 <script setup>
-/** KI → Nachrichten, erster Teil: News-Profile, Quellen, Filter, Rhythmus und Zwischenmeldungen. */
+/** KI → Nachrichten, erster Teil: News-Profile, Quellen, Filter, Rhythmus & Updates — je ein aufklappbarer Abschnitt. */
 import { ref, computed } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import InfoTipp from '@/components/InfoTipp.vue'
 import Knopf from '@/components/basis/Knopf.vue'
+import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
 import SchrittNewsQuellen from '@/components/onboarding/SchrittNewsQuellen.vue'
 import { appEinstellungen } from '@/stores/settings.js'
+import { zeitzoneAus } from '../../../../shared/zeitzone.js'
 import { dbGetSettings } from '@/utils/db.js'
 import {
     newsProfile, radarNewsQuellenAusschluss, radarNewsRuheAn, radarNewsRuheWoerter, radarNewsFokusAn,
@@ -136,12 +138,9 @@ async function profilLoeschen(p) {
              schnappt einfach ein, was hier gerade eingestellt ist —
              kein zweites Formular, das dieselben ~30 Felder noch
              einmal abfragt. -->
-        <div class="flaeche">
-            <h4 class="profil-titel">
-                {{ t('settings.ki.news.profilesTitle') }}
-                <InfoTipp schluessel="settings.info.newsProfile" />
-            </h4>
-            <p class="leise">{{ t('settings.ki.news.profilesDescription') }}</p>
+        <Abschnitt kennung="news-profile" :titel="t('settings.ki.news.profilesTitle')" symbol="lesezeichen">
+            <!-- Der InfoTipp ist ein Knopf und darf nicht in den Kopf-Knopf -->
+            <p class="leise">{{ t('settings.ki.news.profilesDescription') }} <InfoTipp schluessel="settings.info.newsProfile" /></p>
             <div v-if="newsProfile.length" class="liste profile">
                 <div v-for="p in newsProfile" :key="p.id" class="liste-zeile">
                     <span class="liste-name profil-name">
@@ -193,135 +192,136 @@ async function profilLoeschen(p) {
             <p v-if="profilMeldung" class="meldung" :class="profilFehler ? 'schlecht' : 'leise'">
                 {{ profilMeldung }}
             </p>
-        </div>
+        </Abschnitt>
 
-        <!--=============== NACHRICHTENQUELLEN ===============-->
-        <h3 class="zwischentitel">{{ t('settings.ki.news.sourcesTitle') }}</h3>
-        <p class="einleitung">{{ t('settings.ki.news.sourcesDescription') }}</p>
-        <p class="leise">{{ t('settings.ki.news.xSourceHint') }}</p>
+        <Abschnitt kennung="news-quellen" :titel="t('settings.ki.news.sourcesTitle')" symbol="zeitung">
+            <p class="einleitung">{{ t('settings.ki.news.sourcesDescription') }}</p>
+            <p class="leise">{{ t('settings.ki.news.xSourceHint') }}</p>
 
-        <Feld>
-            <template #label>
-                <span>{{ t('settings.ki.news.tempExcludeLabel') }}</span><InfoTipp schluessel="settings.info.laermfilter" />
-            </template>
-            <Schalter v-model="radarNewsQuellenAusschluss"
-                :label="radarNewsQuellenAusschluss ? t('settings.ki.news.tempExcludeOn') : t('settings.ki.news.tempExcludeOff')"
-                @change="radarSpeichern('radarNewsQuellenAusschluss')" />
-        </Feld>
+            <SchrittNewsQuellen :key="newsQuellenKey" />
 
-        <!-- Der NEUE Ruhe-Filter: automatisch Truth Social, dazu
-             Stichwörter. Wirkt auf Liste UND Berichtsgrundlage —
-             gespeichert bleibt alles, eine geänderte Liste greift
-             also auch rückwirkend. -->
-        <Feld :hilfe="t('settings.ki.news.quietFilterHint')">
-            <template #label>
-                <span>{{ t('settings.ki.news.quietFilterLabel') }}</span><InfoTipp schluessel="settings.info.wortfilter" />
-            </template>
-            <div class="stapel">
-                <Schalter v-model="radarNewsRuheAn" @change="radarSpeichern('radarNewsRuheAn')" />
-                <textarea class="breit" rows="3"
-                    v-model="radarNewsRuheWoerter" :disabled="!radarNewsRuheAn"
-                    :aria-label="t('settings.ki.news.quietFilterLabel')"
-                    placeholder="Donald Trump&#10;Michael Saylor"
-                    @change="radarSpeichern('radarNewsRuheWoerter')"></textarea>
-            </div>
-        </Feld>
+        </Abschnitt>
 
-        <!-- Fokus-Filter: das Gegenstück. Wer ihn anschaltet, will
-             NUR NOCH Beiträge zu seinen Stichwörtern sehen — sonst
-             genau wie der Ruhe-Filter aufgebaut. -->
-        <Feld :hilfe="t('settings.ki.news.focusFilterHint')">
-            <template #label>
-                <span>{{ t('settings.ki.news.focusFilterLabel') }}</span><InfoTipp schluessel="settings.info.fokusfilter" />
-            </template>
-            <div class="stapel">
-                <Schalter v-model="radarNewsFokusAn" @change="radarSpeichern('radarNewsFokusAn')" />
-                <textarea class="breit" rows="3"
-                    v-model="radarNewsFokusWoerter" :disabled="!radarNewsFokusAn"
-                    :aria-label="t('settings.ki.news.focusFilterLabel')"
-                    placeholder="Bitcoin&#10;BTC"
-                    @change="radarSpeichern('radarNewsFokusWoerter')"></textarea>
-            </div>
-        </Feld>
+        <Abschnitt kennung="news-filter" :titel="t('settings.ki.news.filterTitle')" symbol="filterAus">
+            <Feld>
+                <template #label>
+                    <span>{{ t('settings.ki.news.tempExcludeLabel') }}</span><InfoTipp schluessel="settings.info.laermfilter" />
+                </template>
+                <Schalter v-model="radarNewsQuellenAusschluss"
+                    :label="radarNewsQuellenAusschluss ? t('settings.ki.news.tempExcludeOn') : t('settings.ki.news.tempExcludeOff')"
+                    @change="radarSpeichern('radarNewsQuellenAusschluss')" />
+            </Feld>
 
-        <SchrittNewsQuellen :key="newsQuellenKey" />
+            <!-- Der NEUE Ruhe-Filter: automatisch Truth Social, dazu
+                 Stichwörter. Wirkt auf Liste UND Berichtsgrundlage —
+                 gespeichert bleibt alles, eine geänderte Liste greift
+                 also auch rückwirkend. -->
+            <Feld :hilfe="t('settings.ki.news.quietFilterHint')">
+                <template #label>
+                    <span>{{ t('settings.ki.news.quietFilterLabel') }}</span><InfoTipp schluessel="settings.info.wortfilter" />
+                </template>
+                <div class="stapel">
+                    <Schalter v-model="radarNewsRuheAn" @change="radarSpeichern('radarNewsRuheAn')" />
+                    <textarea class="breit" rows="3"
+                        v-model="radarNewsRuheWoerter" :disabled="!radarNewsRuheAn"
+                        :aria-label="t('settings.ki.news.quietFilterLabel')"
+                        placeholder="Memecoin&#10;Airdrop"
+                        @change="radarSpeichern('radarNewsRuheWoerter')"></textarea>
+                </div>
+            </Feld>
 
-        <Feld :label="t('settings.ki.news.autoLabel')" :hilfe="t('settings.ki.news.autoHint')">
-            <div class="reihe">
-                <Schalter v-model="radarNewsAuto" @change="radarSpeichern('radarNewsAuto')" />
-                <select v-model="radarNewsRhythmus" :disabled="!radarNewsAuto"
-                    :aria-label="t('settings.ki.news.autoLabel')" @change="radarSpeichern('radarNewsRhythmus')">
-                    <option value="taeglich">{{ t('settings.ki.news.daily') }}</option>
-                    <option value="woechentlich">{{ t('settings.ki.news.weekly') }}</option>
-                    <option value="manuell">{{ t('settings.ki.news.manual') }}</option>
-                </select>
-                <InfoTipp schluessel="settings.info.newsRhythmus" />
-                <select v-if="radarNewsRhythmus === 'woechentlich'"
-                    v-model.number="radarNewsWochentag" :disabled="!radarNewsAuto" @change="radarSpeichern('radarNewsWochentag')">
-                    <option v-for="(tag, i) in wochentagNamen" :key="i" :value="i + 1">{{ tag }}</option>
-                </select>
-                <!-- Bei „nur manuell" gibt es keine Stunde: Der Takt
-                     erzeugt nichts, ein Uhrzeitfeld daneben würde
-                     etwas anderes behaupten. -->
-                <select v-if="radarNewsRhythmus !== 'manuell'"
-                    v-model.number="radarNewsStunde" :disabled="!radarNewsAuto" @change="radarSpeichern('radarNewsStunde')">
-                    <option v-for="h in 24" :key="h - 1" :value="h - 1">
-                            {{ String(h - 1).padStart(2, '0') }}:00
-                        </option>
-                </select>
-                <span v-if="radarNewsRhythmus !== 'manuell'" class="leise">
-                    {{ appEinstellungen?.timeZone || t('settings.ki.news.localTime') }}
-                </span>
-                <span v-else class="leise">{{ t('settings.ki.news.manualHint') }}</span>
-            </div>
-        </Feld>
+            <!-- Fokus-Filter: das Gegenstück. Wer ihn anschaltet, will
+                 NUR NOCH Beiträge zu seinen Stichwörtern sehen — sonst
+                 genau wie der Ruhe-Filter aufgebaut. -->
+            <Feld :hilfe="t('settings.ki.news.focusFilterHint')">
+                <template #label>
+                    <span>{{ t('settings.ki.news.focusFilterLabel') }}</span><InfoTipp schluessel="settings.info.fokusfilter" />
+                </template>
+                <div class="stapel">
+                    <Schalter v-model="radarNewsFokusAn" @change="radarSpeichern('radarNewsFokusAn')" />
+                    <textarea class="breit" rows="3"
+                        v-model="radarNewsFokusWoerter" :disabled="!radarNewsFokusAn"
+                        :aria-label="t('settings.ki.news.focusFilterLabel')"
+                        placeholder="Bitcoin&#10;BTC"
+                        @change="radarSpeichern('radarNewsFokusWoerter')"></textarea>
+                </div>
+            </Feld>
 
-        <!-- Zwischenmeldungen. Sie setzen auf dem Bericht des Tages auf —
-             nicht um ihn umzuschreiben, sondern um zu melden, was
-             seither dazukam. Bei „nur manuell" nicht wählbar: ohne
-             automatischen Bericht gibt es nichts, worauf sie
-             aufsetzen könnten. Von Hand geht es weiterhin über den
-             Knopf auf der Nachrichtenseite. -->
-        <Feld v-if="radarNewsRhythmus !== 'manuell'" :label="t('settings.ki.news.updatesLabel')"
-            :hilfe="t('settings.ki.news.updatesHint')">
-            <div class="reihe">
-                <select v-model.number="radarNewsUpdates" :disabled="!radarNewsAuto"
-                    :aria-label="t('settings.ki.news.updatesLabel')"
-                    @change="radarSpeichern('radarNewsUpdates')">
-                    <option :value="0">{{ t('settings.ki.news.updates0') }}</option>
-                    <option :value="1">{{ t('settings.ki.news.updates1') }}</option>
-                    <option :value="2">{{ t('settings.ki.news.updates2') }}</option>
-                </select>
-                <select v-if="radarNewsUpdates >= 1"
-                    v-model.number="radarNewsUpdateStunde1" :disabled="!radarNewsAuto"
-                    @change="radarSpeichern('radarNewsUpdateStunden')">
-                    <option v-for="h in 24" :key="h - 1" :value="h - 1">
-                            {{ String(h - 1).padStart(2, '0') }}:00
-                        </option>
-                </select>
-                <select v-if="radarNewsUpdates >= 2"
-                    v-model.number="radarNewsUpdateStunde2" :disabled="!radarNewsAuto"
-                    @change="radarSpeichern('radarNewsUpdateStunden')">
-                    <option v-for="h in 24" :key="h - 1" :value="h - 1">
-                            {{ String(h - 1).padStart(2, '0') }}:00
-                        </option>
-                </select>
-                <span v-if="radarNewsUpdates" class="leise">
-                    {{ t('settings.ki.news.updatesCost') }}
-                </span>
-            </div>
-        </Feld>
+        </Abschnitt>
+
+        <Abschnitt kennung="news-rhythmus" :titel="t('settings.ki.news.rhythmTitle')" symbol="uhr">
+            <Feld :label="t('settings.ki.news.autoLabel')" :hilfe="t('settings.ki.news.autoHint')">
+                <div class="reihe">
+                    <Schalter v-model="radarNewsAuto" @change="radarSpeichern('radarNewsAuto')" />
+                    <select v-model="radarNewsRhythmus" :disabled="!radarNewsAuto"
+                        :aria-label="t('settings.ki.news.autoLabel')" @change="radarSpeichern('radarNewsRhythmus')">
+                        <option value="taeglich">{{ t('settings.ki.news.daily') }}</option>
+                        <option value="woechentlich">{{ t('settings.ki.news.weekly') }}</option>
+                        <option value="manuell">{{ t('settings.ki.news.manual') }}</option>
+                    </select>
+                    <InfoTipp schluessel="settings.info.newsRhythmus" />
+                    <select v-if="radarNewsRhythmus === 'woechentlich'"
+                        v-model.number="radarNewsWochentag" :disabled="!radarNewsAuto" @change="radarSpeichern('radarNewsWochentag')">
+                        <option v-for="(tag, i) in wochentagNamen" :key="i" :value="i + 1">{{ tag }}</option>
+                    </select>
+                    <!-- Bei „nur manuell" gibt es keine Stunde: Der Takt
+                         erzeugt nichts, ein Uhrzeitfeld daneben würde
+                         etwas anderes behaupten. -->
+                    <select v-if="radarNewsRhythmus !== 'manuell'"
+                        v-model.number="radarNewsStunde" :disabled="!radarNewsAuto" @change="radarSpeichern('radarNewsStunde')">
+                        <option v-for="h in 24" :key="h - 1" :value="h - 1">
+                                {{ String(h - 1).padStart(2, '0') }}:00
+                            </option>
+                    </select>
+                    <span v-if="radarNewsRhythmus !== 'manuell'" class="leise">
+                        {{ zeitzoneAus(appEinstellungen?.timeZone) }}
+                    </span>
+                    <span v-else class="leise">{{ t('settings.ki.news.manualHint') }}</span>
+                </div>
+            </Feld>
+
+            <!-- Zwischenmeldungen. Sie setzen auf dem Bericht des Tages auf —
+                 nicht um ihn umzuschreiben, sondern um zu melden, was
+                 seither dazukam. Bei „nur manuell" nicht wählbar: ohne
+                 automatischen Bericht gibt es nichts, worauf sie
+                 aufsetzen könnten. Von Hand geht es weiterhin über den
+                 Knopf auf der Nachrichtenseite. -->
+            <Feld v-if="radarNewsRhythmus !== 'manuell'" :label="t('settings.ki.news.updatesLabel')"
+                :hilfe="t('settings.ki.news.updatesHint')">
+                <div class="reihe">
+                    <select v-model.number="radarNewsUpdates" :disabled="!radarNewsAuto"
+                        :aria-label="t('settings.ki.news.updatesLabel')"
+                        @change="radarSpeichern('radarNewsUpdates')">
+                        <option :value="0">{{ t('settings.ki.news.updates0') }}</option>
+                        <option :value="1">{{ t('settings.ki.news.updates1') }}</option>
+                        <option :value="2">{{ t('settings.ki.news.updates2') }}</option>
+                    </select>
+                    <select v-if="radarNewsUpdates >= 1"
+                        v-model.number="radarNewsUpdateStunde1" :disabled="!radarNewsAuto"
+                        @change="radarSpeichern('radarNewsUpdateStunden')">
+                        <option v-for="h in 24" :key="h - 1" :value="h - 1">
+                                {{ String(h - 1).padStart(2, '0') }}:00
+                            </option>
+                    </select>
+                    <select v-if="radarNewsUpdates >= 2"
+                        v-model.number="radarNewsUpdateStunde2" :disabled="!radarNewsAuto"
+                        @change="radarSpeichern('radarNewsUpdateStunden')">
+                        <option v-for="h in 24" :key="h - 1" :value="h - 1">
+                                {{ String(h - 1).padStart(2, '0') }}:00
+                            </option>
+                    </select>
+                    <span v-if="radarNewsUpdates" class="leise">
+                        {{ t('settings.ki.news.updatesCost') }}
+                    </span>
+                </div>
+            </Feld>
+        </Abschnitt>
+
     </div>
 </template>
 
 <style scoped src="./ki-formular.css"></style>
 <style scoped>
-.profil-titel {
-    margin: 0 0 var(--abstand-1);
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--text);
-}
 .profile { margin-bottom: var(--abstand-3); background: var(--panel); }
 .profil-name { flex-basis: 14rem; }
 .neu { margin-top: var(--abstand-2); }

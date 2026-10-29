@@ -2,6 +2,7 @@
 /** KI → Bilder: Share-Karten (FLUX.2 + Gemini) und ihre Prompt-Vorlagen. */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { appEinstellungen } from '@/stores/settings.js'
 import InfoTipp from '@/components/InfoTipp.vue'
 import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
@@ -17,9 +18,9 @@ let fluxExpanded = ref(true) // eigener Unter-Reiter: offen starten
 
 const {
     cancelEditTemplate, deleteShareCardTemplate, deletingTemplateId, editTemplateName, editingTemplateId,
-    fluxApiKey, fluxAvatar, fluxDisplayName, fluxModel, fluxModelleGeaendert, fluxModels, fluxTestLoading,
-    fluxTestResult, fluxUseCustomAvatar, geminiBildModelleGeaendert, geminiImageApiKey, geminiImageModel,
-    geminiImageModels, geminiTestLoading, geminiTestResult, onFluxAvatarUpload, saveFluxSettings,
+    fluxApiKey, fluxModel, fluxModelleGeaendert, fluxModels, fluxTestLoading,
+    fluxNameZeigen, fluxTestResult, fluxUseCustomAvatar, geminiBildModelleGeaendert, geminiImageApiKey, geminiImageModel,
+    geminiImageModels, geminiTestLoading, geminiTestResult, saveFluxSettings,
     saveTemplateEdit, savingTemplateEdit, shareCardProvider, shareCardTemplates, startEditTemplate,
     templatesLoading, testFluxConnection, testGeminiConnection,
 } = useShareCard()
@@ -102,23 +103,23 @@ const {
             <!-- Shared settings (always visible) -->
             <hr class="trenner" />
 
-            <!-- Display Name -->
-            <Feld :label="t('settings.fluxDisplayName')" :hilfe="t('settings.fluxDisplayNameHint')" fuer="kiFluxName">
-                <input id="kiFluxName" type="text" v-model="fluxDisplayName" :placeholder="t('settings.usernamePlaceholder')" />
-            </Feld>
-
-            <!-- Avatar -->
-            <Feld :label="t('settings.fluxAvatar')">
+            <!-- Name und Bild der Karte kommen aus dem Profil (Allgemein › Profil & Sprache);
+                 hier bleibt nur die Wahl Profilbild oder App-Logo. -->
+            <Feld :label="t('settings.fluxAvatar')" :hilfe="t('settings.fluxProfilHint')">
                 <div class="stapel">
+                    <!-- Name nur auf Wunsch: Bis 10/2026 stand nur ein eigens
+                         gesetzter Kartenname auf dem Bild, sonst gar keiner. -->
+                    <label class="reihe ankreuzen">
+                        <input type="checkbox" v-model="fluxNameZeigen" />
+                        <span>{{ t('settings.fluxNameZeigen') }}</span>
+                    </label>
                     <label class="reihe ankreuzen">
                         <input type="checkbox" v-model="fluxUseCustomAvatar" />
                         <span>{{ t('settings.fluxUseCustomAvatar') }}</span>
                     </label>
-                    <div v-if="fluxUseCustomAvatar" class="reihe">
-                        <img v-if="fluxAvatar" :src="fluxAvatar" class="avatar" alt="" />
-                        <input type="file" accept="image/*" @change="onFluxAvatarUpload" />
-                        <Knopf v-if="fluxAvatar" art="leise" symbol="schliessen" nur-symbol klein
-                            :titel="t('common.remove')" @click="fluxAvatar = ''" />
+                    <div class="reihe">
+                        <img v-if="fluxUseCustomAvatar && appEinstellungen?.avatar" :src="appEinstellungen.avatar" class="avatar" alt="" />
+                        <span class="leise">{{ fluxNameZeigen && appEinstellungen?.username ? appEinstellungen.username : t('settings.fluxOhneName') }}</span>
                     </div>
                 </div>
             </Feld>

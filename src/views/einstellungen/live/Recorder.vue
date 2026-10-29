@@ -1,5 +1,5 @@
 <script setup>
-/** Live → Live-Recorder: serverseitige Aufzeichnung von Orderbuch, Liquidationen, Trades. */
+/** Chart & Analyse → Live-Aufzeichnung: serverseitige Aufzeichnung von Orderbuch, Liquidationen, Trades. */
 import { ref, computed, onMounted } from 'vue'
 import axios from 'axios'
 import { appEinstellungen } from '@/stores/settings.js'
@@ -112,7 +112,7 @@ onMounted(loadRecorderStatus)
 </script>
 
 <template>
-    <Abschnitt titel="Live-Aufzeichnung · Orderbuch mitschneiden" symbol="verlauf" v-model:offen="recExpanded">
+    <Abschnitt kennung="aufzeichnung" titel="Live-Aufzeichnung · Orderbuch mitschneiden" symbol="verlauf" v-model:offen="recExpanded">
         <template #kopf>
             <Pille v-if="recStatus?.laufend?.length" ton="gut">{{ recStatus.laufend.length }} aktiv</Pille>
         </template>

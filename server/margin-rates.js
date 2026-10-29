@@ -256,7 +256,7 @@ async function ausBybit(symbol) {
  * soll nicht stehenbleiben, aber sie soll auch nicht so tun, als käme die Zahl
  * von der Börse, auf die man gerade schaut.
  *
- * Ohne Wunsch: Binance, wenn der Schalter „Quellen ohne Verkaufsfreigabe" an
+ * Ohne Wunsch: Binance, wenn der Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" an
  * ist (wie vor S12), sonst Bybit. Mit Schalter AUS wird Binance nie gefragt;
  * ein Wunsch 'binance' wird dann von Bybit bedient und als `ersatz`
  * gekennzeichnet (Stand S12).

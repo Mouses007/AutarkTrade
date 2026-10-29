@@ -449,7 +449,7 @@ p('echte Null bleibt eine Null', de(0) === '0' && de(0, 2) === '0,00')
 }
 
 /*
- * Schalter „Quellen ohne Verkaufsfreigabe" (S15): Telegram als News-Quelle
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15): Telegram als News-Quelle
  * und die vorbelegten Vorschläge (Verlags-RSS, Truth Social, Telegram-Kanäle,
  * Verkaufs-Prüfung Z. 31/46/52/53). AUS = wie nach S12 (nichts vorbelegt,
  * Telegram entfernt), AN = wie vor S12.

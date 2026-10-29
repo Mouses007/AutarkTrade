@@ -112,6 +112,29 @@ function buildShareCardPrompt(trade) {
 // SVG Overlay Builder
 // ============================================================
 
+/**
+ * Profilbild für die Karte — nur ein Bild als Daten-URL (so legt es die
+ * Profilseite ab). Alles andere (ein beliebiger Text aus `settings.avatar`)
+ * käme sonst ungeprüft in ein SVG-Attribut.
+ */
+function kartenBild(avatar) {
+    const a = String(avatar || '')
+    return /^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(a) ? a : ''
+}
+
+/**
+ * Name und Bild der Share-Karte aus dem Profil (Einstellungen › Allgemein).
+ * Der Name nur mit Schalter `fluxNameZeigen` (KI › Bilder): Bis 10/2026
+ * druckte die Karte nur einen eigens gesetzten Kartennamen — ohne ihn stand
+ * kein Name auf dem Bild, und dabei bleibt es, wer es so hatte.
+ */
+function kartenProfil(settings) {
+    return {
+        displayName: settings?.fluxNameZeigen ? String(settings?.username || '').trim() : '',
+        avatarDataUrl: settings?.fluxUseCustomAvatar ? kartenBild(settings?.avatar) : '',
+    }
+}
+
 function buildOverlaySvg(trade, displayName, avatarDataUrl, width, height, opts = {}) {
     const { hidePnlAmount, showTags, showRrr, comment } = opts
     const isWin = (trade.netProceeds || 0) > 0
@@ -140,8 +163,9 @@ function buildOverlaySvg(trade, displayName, avatarDataUrl, width, height, opts 
     // Direction color
     const dirColor = trade.strategy === 'long' ? '#26a69a' : '#ef5350'
 
-    // Logo (top right): use default app logo — 140px
-    const logo = defaultAvatarDataUrl
+    // Bild oben rechts (140px): Profilbild, wenn gewählt, sonst das App-Logo.
+    // Bis 10/2026 kam hier immer das Logo hin — die Wahl „Profilbild" wirkte nicht.
+    const logo = avatarDataUrl || defaultAvatarDataUrl
     const logoSize = 140
     const logoX = width - logoSize - 20
     const logoY = 10
@@ -425,7 +449,7 @@ export async function setupFluxRoutes(app) {
         try {
             const knex = getKnex()
             const settings = await knex('settings')
-                .select('fluxApiKey', 'fluxModel', 'fluxDisplayName', 'fluxAvatar', 'fluxUseCustomAvatar',
+                .select('fluxApiKey', 'fluxModel', 'fluxUseCustomAvatar', 'fluxNameZeigen',
                     'shareCardProvider', 'geminiImageApiKey', 'geminiImageModel')
                 .where('id', 1).first()
 
@@ -433,9 +457,8 @@ export async function setupFluxRoutes(app) {
                 shareCardProvider: settings?.shareCardProvider || 'flux',
                 fluxApiKey: maskKey(settings?.fluxApiKey),
                 fluxModel: settings?.fluxModel || 'flux-2-pro',
-                fluxDisplayName: settings?.fluxDisplayName || '',
-                fluxAvatar: settings?.fluxAvatar || '',
                 fluxUseCustomAvatar: !!settings?.fluxUseCustomAvatar,
+                fluxNameZeigen: !!settings?.fluxNameZeigen,
                 geminiImageApiKey: maskKey(settings?.geminiImageApiKey),
                 geminiImageModel: settings?.geminiImageModel || 'gemini-3.1-flash-image'
             })
@@ -449,7 +472,8 @@ export async function setupFluxRoutes(app) {
     app.post('/api/flux/settings', async (req, res) => {
         try {
             const knex = getKnex()
-            const { fluxApiKey, fluxModel, fluxDisplayName, fluxAvatar, fluxUseCustomAvatar,
+            // Name und Bild der Karte kommen aus dem Profil, nicht von hier.
+            const { fluxApiKey, fluxModel, fluxUseCustomAvatar, fluxNameZeigen,
                 shareCardProvider, geminiImageApiKey, geminiImageModel } = req.body
             const update = {}
 
@@ -461,9 +485,8 @@ export async function setupFluxRoutes(app) {
                 update.shareCardProvider = shareCardProvider
             }
             if (fluxModel !== undefined) update.fluxModel = fluxModel
-            if (fluxDisplayName !== undefined) update.fluxDisplayName = fluxDisplayName
-            if (fluxAvatar !== undefined) update.fluxAvatar = fluxAvatar
             if (fluxUseCustomAvatar !== undefined) update.fluxUseCustomAvatar = fluxUseCustomAvatar ? 1 : 0
+            if (fluxNameZeigen !== undefined) update.fluxNameZeigen = fluxNameZeigen ? 1 : 0
             if (geminiImageModel !== undefined) update.geminiImageModel = geminiImageModel
 
             // Only update keys if not masked
@@ -554,13 +577,12 @@ export async function setupFluxRoutes(app) {
 
             const knex = getKnex()
             const settings = await knex('settings')
-                .select('fluxApiKey', 'fluxModel', 'fluxDisplayName', 'fluxAvatar', 'fluxUseCustomAvatar',
+                .select('fluxApiKey', 'fluxModel', 'username', 'avatar', 'fluxUseCustomAvatar', 'fluxNameZeigen',
                     'shareCardProvider', 'geminiImageApiKey', 'geminiImageModel')
                 .where('id', 1).first()
 
             const provider = settings?.shareCardProvider || 'flux'
-            const displayName = settings?.fluxDisplayName || ''
-            const avatarDataUrl = (settings?.fluxUseCustomAvatar && settings?.fluxAvatar) ? settings.fluxAvatar : ''
+            const { displayName, avatarDataUrl } = kartenProfil(settings)
             const tradeData = req.body.trade
             const customPrompt = req.body.prompt
             const hidePnlAmount = !!req.body.hidePnlAmount
@@ -594,9 +616,10 @@ export async function setupFluxRoutes(app) {
                 // in die PNG-Metadaten (`src/utils/shareCardBild.js`) — die Metadaten
                 // des Anbieters gehen beim Zusammensetzen auf der Leinwand verloren.
                 kiGeneriert: true,
+                // Dieselbe Vorgabe wie beim Erzeugen — leer stünde sonst kein Modell da
                 kiQuelle: provider === 'gemini'
-                    ? `Google Gemini ${settings?.geminiImageModel || ''}`.trim()
-                    : `FLUX.2 (Black Forest Labs) ${settings?.fluxModel || ''}`.trim(),
+                    ? `Google Gemini ${settings?.geminiImageModel || 'gemini-3.1-flash-image'}`
+                    : `FLUX.2 (Black Forest Labs) ${settings?.fluxModel || 'flux-2-pro'}`,
             })
         } catch (e) {
             console.error('Share card generate error:', e)
@@ -620,11 +643,10 @@ export async function setupFluxRoutes(app) {
 
             // Load display settings
             const settings = await knex('settings')
-                .select('fluxDisplayName', 'fluxAvatar', 'fluxUseCustomAvatar')
+                .select('username', 'avatar', 'fluxUseCustomAvatar', 'fluxNameZeigen')
                 .where('id', 1).first()
 
-            const displayName = settings?.fluxDisplayName || ''
-            const avatarDataUrl = (settings?.fluxUseCustomAvatar && settings?.fluxAvatar) ? settings.fluxAvatar : ''
+            const { displayName, avatarDataUrl } = kartenProfil(settings)
 
             // Decode stored background
             const bgBuffer = Buffer.from(template.imageBase64, 'base64')

@@ -1,7 +1,7 @@
 <script setup>
 /**
- * Spenden: QR-Codes für BTC und PayPal, dazu „Buy me a coffee", sobald in den
- * Einstellungen ein Link hinterlegt ist. Aus Menü oder Kaffee-Knopf geöffnet zum
+ * Spenden: QR-Codes für BTC und PayPal (feste Konten des Entwicklers, nicht
+ * einstellbar). Aus Menü oder Kaffee-Knopf geöffnet zum
  * Ansehen; als Nachfrage (Update, Meilenstein, Zeit, Dank — `server/spenden.js`)
  * mit Antwortknöpfen. Jede Antwort, auch das Schliessen, zählt als beantwortet.
  *
@@ -11,7 +11,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { Dialog, Knopf, Symbol } from '../basis'
+import { Dialog, Knopf } from '../basis'
 import { appEinstellungen } from '../../stores/settings.js'
 import { spendenOffen, spendenFrage, spendenAntwort, pruefeSpendenFrage } from '../../stores/spenden.js'
 import qrBtc from '../../assets/spenden-btc.png'
@@ -35,12 +35,6 @@ async function kopiereAdresse() {
     } catch { adressFeld.value?.select() }
 }
 
-const an = computed(() => Number(appEinstellungen.value?.spendenAn ?? 1) === 1)
-const kaffeeUrl = computed(() => {
-    const u = String(appEinstellungen.value?.spendenKaffeeUrl || '').trim()
-    return /^https:\/\/(www\.)?buymeacoffee\.com\/[A-Za-z0-9_-]+\/?$/.test(u) ? u : ''
-})
-
 function stoert() {
     const p = route.path || ''
     return p.startsWith('/livetrading') || route.query?.cockpit === '1'
@@ -52,7 +46,7 @@ let gefragt = false
 let uhr = null
 function planeVersuch() {
     clearTimeout(uhr)
-    if (gefragt || !appEinstellungen.value || !an.value) return
+    if (gefragt || !appEinstellungen.value) return
     uhr = setTimeout(async () => {
         if (gefragt || stoert() || spendenOffen.value) return
         gefragt = true
@@ -79,10 +73,6 @@ const istDank = computed(() => spendenFrage.value?.art === 'dank')
         <p class="frage">{{ frageText }}</p>
 
         <template v-if="!istDank">
-            <a v-if="kaffeeUrl" class="kaffee" :href="kaffeeUrl" target="_blank" rel="noopener noreferrer">
-                <Symbol name="kaffee" /> Buy me a coffee
-            </a>
-
             <div class="qr">
                 <figure>
                     <img :src="qrBtc" alt="Bitcoin QR-Code" />
@@ -122,23 +112,6 @@ const istDank = computed(() => spendenFrage.value?.art === 'dank')
     margin: 0 0 12px;
     color: var(--text);
     line-height: 1.5;
-}
-
-.kaffee {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 14px;
-    padding: 9px 16px;
-    border-radius: 10px;
-    background: #ffdd00;
-    color: #0d0c22;
-    font-weight: 700;
-    text-decoration: none;
-}
-
-.kaffee:hover {
-    filter: brightness(1.05);
 }
 
 .qr {

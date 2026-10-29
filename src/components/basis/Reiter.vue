@@ -4,7 +4,12 @@
  * `v-model` ist die id des aktiven Reiters.
  *
  *   <Reiter v-model="ansicht" :reiter="[{ id: 'liste', titel: 'Liste' }, { id: 'karte', titel: 'Karte', symbol: 'chart' }]" />
+ *
+ * Passt die Leiste nicht in die Breite (Telefon), rollt sie waagrecht: der
+ * aktive Reiter wird ins Bild gerollt, und ein weicher Rand zeigt, dass links
+ * oder rechts noch Reiter liegen.
  */
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import Symbol from './Symbol.vue'
 
 const props = defineProps({
@@ -17,6 +22,39 @@ function waehle(r) {
     if (r.aus) return
     emit('update:modelValue', r.id)
 }
+
+const leiste = ref(null)
+const mehrLinks = ref(false)
+const mehrRechts = ref(false)
+
+function pruefeRand() {
+    const el = leiste.value
+    if (!el) return
+    mehrLinks.value = el.scrollLeft > 2
+    mehrRechts.value = el.scrollLeft + el.clientWidth < el.scrollWidth - 2
+}
+
+/* Nur waagrecht rollen — `scrollIntoView` zöge auch die Seite mit. */
+function aktivInSicht(weich = true) {
+    const el = leiste.value
+    const aktiv = el?.querySelector('button.aktiv')
+    if (!el || !aktiv || el.scrollWidth <= el.clientWidth) return pruefeRand()
+    const a = aktiv.getBoundingClientRect()
+    const l = el.getBoundingClientRect()
+    const ziel = el.scrollLeft + (a.left - l.left) - (l.width - a.width) / 2
+    el.scrollTo({ left: Math.max(0, ziel), behavior: weich ? 'smooth' : 'auto' })
+}
+
+let beobachter = null
+onMounted(() => {
+    nextTick(() => aktivInSicht(false))
+    if (typeof ResizeObserver !== 'undefined' && leiste.value) {
+        beobachter = new ResizeObserver(() => pruefeRand())
+        beobachter.observe(leiste.value)
+    }
+})
+onBeforeUnmount(() => beobachter?.disconnect())
+watch(() => props.modelValue, () => nextTick(() => aktivInSicht()))
 
 /** Pfeiltasten wandern zwischen den Reitern (WAI-ARIA tabs). */
 function taste(e, i) {
@@ -32,7 +70,8 @@ function taste(e, i) {
 </script>
 
 <template>
-    <div class="at-reiter" role="tablist">
+    <div ref="leiste" :class="['at-reiter', { 'mehr-links': mehrLinks, 'mehr-rechts': mehrRechts }]" role="tablist"
+        @scroll.passive="pruefeRand">
         <button v-for="(r, i) in reiter" :key="r.id" type="button" role="tab"
             :aria-selected="modelValue === r.id" :tabindex="modelValue === r.id ? 0 : -1"
             :disabled="r.aus" :class="{ aktiv: modelValue === r.id }"
@@ -51,6 +90,20 @@ function taste(e, i) {
     border-bottom: 1px solid var(--line);
     overflow-x: auto;
     scrollbar-width: none;
+}
+
+/* Weicher Rand, wo noch Reiter ausserhalb des Bildes liegen */
+.at-reiter.mehr-rechts {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 2.5rem), transparent);
+}
+.at-reiter.mehr-links {
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to left, #000 calc(100% - 2.5rem), transparent);
+}
+.at-reiter.mehr-links.mehr-rechts {
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 2.5rem, #000 calc(100% - 2.5rem), transparent);
 }
 
 button {

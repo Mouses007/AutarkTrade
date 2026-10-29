@@ -676,7 +676,7 @@ async function messeFrueh(a) {
         ? Number(a.pumpFun) === 1
         : a.chain === 'solana' && /pump$/i.test(String(a.contract))
     /*
-     * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" wie vor S12 über
+     * S15: Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" wie vor S12 über
      * `pumpCoin` (`/coins-v2`; `/coins/{mint}` antwortet für jeden Coin mit
      * 404). Ein Ausfall WIRFT — bis 10.10.2026 wurde jeder Fehler zu „pump.fun
      * kennt ihn nicht", und ohne DexScreener-Paar daraus „tot".

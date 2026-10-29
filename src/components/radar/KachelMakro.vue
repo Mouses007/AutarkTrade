@@ -75,7 +75,7 @@ const punkte = (v) => (!Number.isFinite(v) ? '—' : `${v > 0 ? '+' : v < 0 ? '�
 </script>
 
 <template>
-    <!-- Mit Yahoo (Schalter „Quellen ohne Verkaufsfreigabe" an): wie vor S12 -->
+    <!-- Mit Yahoo (Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" an): wie vor S12 -->
     <div v-if="daten && mitIndizes" class="mkWrap" :class="{ gross }">
         <!-- Die eigentliche Aussage: hängt Krypto gerade an den Aktien? -->
         <div class="mkKopplung">

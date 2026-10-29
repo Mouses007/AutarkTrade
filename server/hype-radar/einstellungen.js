@@ -193,7 +193,7 @@ export const VORGABEN = {
 }
 
 /**
- * Was mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15, Vorgabe an)
+ * Was mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15, Vorgabe an)
  * ANDERS ist als in `VORGABEN` — die Vorgaben von vor S12 (`def88a3`).
  * `VORGABEN` selbst bleibt der Stand nach S12 (Schalter aus).
  *
@@ -292,7 +292,7 @@ export async function leseEinstellungen() {
     }
     /*
      * Die Telegram-Kanäle der Frühphase bleiben gespeichert; gelesen werden sie
-     * nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15).
+     * nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15).
      */
     if (!('fruehTelegram' in V)) delete e.fruehTelegram
 
@@ -376,7 +376,7 @@ export async function schreibeEinstellungen(neu = {}, zusatzVorgaben = {}) {
 const NUR_ABWEICHUNGEN = new Set(['alarmRegeln', 'sicherheit', 'gewichte', 'boersenwachtBoersen'])
 
 /*
- * S15: Diese Vorgaben hängen am Schalter „Quellen ohne Verkaufsfreigabe".
+ * S15: Diese Vorgaben hängen am Schalter „Quellen mit eingeschränkten Nutzungsbedingungen".
  * Gespeichert wird nur, was von der GERADE geltenden Vorgabe abweicht — sonst
  * fröre ein Speichern bei Schalter an `rugcheckAn: true` und „Coinbase an" als
  * eigene Wahl ein, und nach dem Ausschalten liefen sie weiter wie mit Schalter.
@@ -452,7 +452,7 @@ export function bereinigeEinstellungen(neu = {}, zusatzVorgaben = {}, { ohneFrei
 
 /**
  * Telegram-Kanäle der Frühphase: nur Kanalnamen, höchstens fünfzehn
- * (S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe").
+ * (S15, nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen").
  *
  * Angenommen wird, was jemand aus der Adresszeile kopiert — `@name`,
  * `t.me/name`, `https://t.me/s/name`. Gespeichert wird nur der Name; was

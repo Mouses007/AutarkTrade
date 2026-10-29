@@ -1,35 +1,41 @@
 <script setup>
 /**
- * Einstellungen › Datenquellen (S12, Verkaufs-Prüfung Massnahmen 1 und 5).
+ * Einstellungen › Datenquellen (S12).
  *
- * Zwei Dinge, die der KUNDE entscheidet und verantwortet, nicht AutarkTrade:
+ * Zwei Dinge, die der Nutzer entscheidet und verantwortet:
  *
  *   1. Die Marktdatenquelle. Öffentliche Kurse, Kerzen und Orderbücher kommen
- *      direkt von der Börse auf diesen Rechner. Keine Börse erlaubt das
- *      ausdrücklich für ein verkauftes Programm; ob die eigene Nutzung von den
- *      Bedingungen gedeckt ist, prüft der Kunde selbst. Darum ist die Quelle
- *      wählbar — auch „aus".
- *   2. Schlüssel für Quellen, die nur mit Kundenschlüssel laufen (CoinGecko).
- *      Ohne Schlüssel ist die Funktion aus und sagt warum.
+ *      direkt von der Börse auf diesen Rechner. Ob die eigene Nutzung von den
+ *      Bedingungen der Börse gedeckt ist, prüft jeder selbst. Darum ist die
+ *      Quelle wählbar — auch „aus".
+ *   2. Schlüssel für Quellen, die nur mit eigenem Schlüssel laufen (CoinGecko,
+ *      CryptoQuant für die ETF-Kachel). Ohne Schlüssel ist die Funktion aus
+ *      und sagt warum.
  *
  * Der Schlüssel verlässt den Server nie im Klartext: angezeigt werden nur
- * „hinterlegt" und die letzten vier Zeichen.
+ * „hinterlegt" und die letzten vier Zeichen. Dazu die Kerzen-Schlüssel der
+ * Exkursionen (Polygon, Databento). Jeder Block ist ein aufklappbarer
+ * Abschnitt wie auf den übrigen Seiten.
  *
- * S15: Schalter „Quellen ohne Verkaufsfreigabe" (Vorgabe an) — die Liste,
+ * S15: Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (Vorgabe an) — die Liste,
  * was darunter fällt, kommt vom Server (`server/quellen/freigabe.js`).
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import { Karte, Knopf, Hinweis, Pille, Quellenhinweis } from '@/components/basis/index.js'
+import { Knopf, Hinweis, Pille, Quellenhinweis } from '@/components/basis/index.js'
 import { setzeMarktdaten } from '@/utils/marktdaten.js'
 import { setzeFreigabe } from '@/utils/quellenFreigabe.js'
+import Abschnitt from './gemeinsam/Abschnitt.vue'
 import Schalter from './gemeinsam/Schalter.vue'
+import CryptoQuant from './datenquellen/CryptoQuant.vue'
+import KerzenSchluessel from './datenquellen/KerzenSchluessel.vue'
 
 const { t } = useI18n()
 
 const stand = ref(null)
 const fehler = ref('')
+const mdOffen = ref(true)   // die Quelle ist das Erste, was man hier sucht
 const speichertWahl = ref(false)
 
 const cgSchluessel = ref('')
@@ -123,7 +129,8 @@ async function cgSpeichern(loeschen = false) {
     <div class="datenquellen">
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
 
-        <Karte :titel="t('datenquellen.md.titel')" :unter="t('datenquellen.md.unter')">
+        <Abschnitt v-model:offen="mdOffen" kennung="marktdaten" :titel="t('datenquellen.md.titel')" symbol="chart">
+            <p class="leise unter">{{ t('datenquellen.md.unter') }}</p>
             <Hinweis art="warn" :titel="t('datenquellen.md.verantwortungTitel')">
                 {{ t('datenquellen.md.verantwortung') }}
             </Hinweis>
@@ -147,26 +154,24 @@ async function cgSpeichern(loeschen = false) {
                 </button>
             </div>
             <p class="leise">{{ t('datenquellen.md.weiterhin') }}</p>
-        </Karte>
+        </Abschnitt>
 
-        <Karte v-if="stand?.ohneFreigabe" :titel="t('datenquellen.of.titel')" :unter="t('datenquellen.of.unter')">
+        <Abschnitt v-if="stand?.ohneFreigabe" kennung="ohne-freigabe" :titel="t('datenquellen.of.titel')" symbol="schildWarnung">
+            <p class="leise unter">{{ t('datenquellen.of.unter') }}</p>
             <Schalter :model-value="stand.ohneFreigabe.an" :label="t('datenquellen.of.schalter')"
                 :disabled="freigabeLaeuft" @change="freigabeSetzen" />
             <Hinweis art="warn" :titel="t('datenquellen.md.verantwortungTitel')">
                 {{ t(stand.ohneFreigabe.an ? 'datenquellen.of.anText' : 'datenquellen.of.ausText') }}
             </Hinweis>
             <ul class="of-liste">
-                <!-- Die Zeilen der Verkaufsprüfung sind ein Arbeitsvermerk, kein
-                     Nutzertext — nur noch als Tooltip (Audit A4-18). -->
-                <li v-for="q in stand.ohneFreigabe.quellen" :key="q.id" :class="{ aus: !stand.ohneFreigabe.an }"
-                    :title="t('datenquellen.of.zeilen', { zeilen: q.zeilen.join(', ') })">
+                <li v-for="q in stand.ohneFreigabe.quellen" :key="q.id" :class="{ aus: !stand.ohneFreigabe.an }">
                     <strong>{{ q.name }}</strong> — {{ q.was }}
                 </li>
             </ul>
-        </Karte>
+        </Abschnitt>
 
-        <Karte :titel="t('datenquellen.cg.titel')"
-            :unter="t(stand?.ohneFreigabe?.an ? 'datenquellen.cg.unterOffen' : 'datenquellen.cg.unter')">
+        <Abschnitt kennung="coingecko" :titel="t('datenquellen.cg.titel')" symbol="muenzen">
+            <p class="leise unter">{{ t(stand?.ohneFreigabe?.an ? 'datenquellen.cg.unterOffen' : 'datenquellen.cg.unter') }}</p>
             <p class="status">
                 <Pille v-if="stand?.coingecko?.hinterlegt" ton="gut">
                     {{ t('datenquellen.cg.hinterlegt', { ende: stand.coingecko.ende, tarif: stand.coingecko.tarif }) }}
@@ -203,16 +208,32 @@ async function cgSpeichern(loeschen = false) {
             <Hinweis v-if="cgMeldung" :art="cgMeldung.art">{{ cgMeldung.text }}</Hinweis>
             <p class="leise">{{ t('datenquellen.cg.demoHinweis') }}</p>
             <Quellenhinweis :quellen="[{ name: 'CoinGecko', url: 'https://www.coingecko.com/', art: 'powered' }]" />
-        </Karte>
+        </Abschnitt>
 
-        <Karte :titel="t('datenquellen.andere.titel')">
+        <!-- Schlüssel der ETF-Kachel (vorher unter Analyse › Marktradar) -->
+        <CryptoQuant />
+
+        <!-- Kerzen für die Exkursionen (MFE-Preise) -->
+        <KerzenSchluessel />
+
+        <!-- Wo die übrigen Schlüssel stehen — als Verweise, nicht als Text -->
+        <Abschnitt kennung="weitere-schluessel" :titel="t('datenquellen.andere.titel')" symbol="verknuepfung">
             <ul class="andere">
-                <li>{{ t('datenquellen.andere.ki') }}</li>
-                <li>{{ t('datenquellen.andere.cryptoquant') }}</li>
-                <li>{{ t(stand?.ohneFreigabe?.an ? 'datenquellen.andere.solanaOffen' : 'datenquellen.andere.solana') }}</li>
-                <li>{{ t('datenquellen.andere.boersen') }}</li>
+                <li>
+                    {{ t('datenquellen.andere.ki') }}
+                    <router-link to="/einstellungen/ki?ki=allgemein">{{ t('datenquellen.andere.kiPfad') }}</router-link>
+                </li>
+                <li>
+                    {{ t('datenquellen.andere.solana') }}
+                    <router-link to="/hype-radar">{{ t('datenquellen.andere.solanaPfad') }}</router-link>
+                    — {{ t(stand?.ohneFreigabe?.an ? 'datenquellen.andere.solanaOffenRest' : 'datenquellen.andere.solanaRest') }}
+                </li>
+                <li>
+                    {{ t('datenquellen.andere.boersen') }}
+                    <router-link to="/einstellungen/journal?section=api">{{ t('datenquellen.andere.boersenPfad') }}</router-link>
+                </li>
             </ul>
-        </Karte>
+        </Abschnitt>
     </div>
 </template>
 
@@ -220,8 +241,8 @@ async function cgSpeichern(loeschen = false) {
 .datenquellen {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
 }
+.unter { margin: 0 0 0.6rem; }
 
 .wahlen {
     display: grid;
@@ -377,4 +398,6 @@ async function cgSpeichern(loeschen = false) {
     font-size: 0.85rem;
     line-height: 1.6;
 }
+.andere a { color: var(--accent); text-decoration: none; }
+.andere a:hover { text-decoration: underline; }
 </style>

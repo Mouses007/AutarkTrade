@@ -3,8 +3,8 @@
  *
  * Diese Felder hängen alle an EINER Speicherfunktion (`radarSpeichern`, ein
  * Feld je Schreibvorgang) und einem Lader (`loadRadarSettings`), werden aber
- * aus vier Sektionen bedient: Live → Live-Trading-Fenster und Marktradar,
- * KI → Nachrichten, Benachrichtigungen (Schwellen und Märkte des
+ * aus fünf Sektionen bedient: Chart & Analyse → Live-Trading-Fenster und
+ * Marktradar, Allgemein → Bedienung (Börsen-Links), KI → Nachrichten, Benachrichtigungen (Schwellen und Märkte des
  * Divergenz-Alarms). Einstellungen.vue lädt sie beim Öffnen der Seite, bevor eine
  * Bereichskomponente gemountet wird.
  */
@@ -14,6 +14,8 @@ import axios from 'axios'
 import { dbUpdateSettings } from '@/utils/db.js'
 import { appEinstellungen } from '@/stores/settings.js'
 import { loadSymbolMeta } from '@/utils/liveSymbols.js'
+import { freigabeAn } from '@/utils/quellenFreigabe.js'
+import { kalenderLaenderVorgabe } from '../../../../shared/kalender-laender.js'
 
 /* Vorgabe an — die Seite kostet nichts, solange man sie nicht öffnet. Wer nur
    beobachtet und nicht handelt, schaltet sie hier weg; dann verschwinden auch
@@ -37,6 +39,12 @@ export let radarNewsModel = ref('')
 export let radarNewsAufloesung = ref('niedrig')
 export let radarNewsBerichtProvider = ref('')
 export let radarNewsBerichtModell = ref('')
+/* Zwischenmeldung und Anweisungsprüfung: leer = wie der Bericht;
+   Zwischenmeldung `allgemein` = der allgemeine Anbieter. */
+export let radarNewsUpdateProvider = ref('')
+export let radarNewsUpdateModell = ref('')
+export let radarNewsPruefProvider = ref('')
+export let radarNewsPruefModell = ref('')
 /* Zuschnitt des Berichts: Rhythmus (täglich/wöchentlich + Wochentag), Themen
    als Kapitel und Länge. Themen als Array — gespeichert wird CSV. */
 export let radarNewsRhythmus = ref('taeglich')
@@ -143,7 +151,9 @@ export function useRadarEinstellungen() {
         boersenLinks.value = String(s.boersenLinks || 'bitunix,bitget,pionex,tradingview').split(',')
             .map(b => b.trim()).filter(b => ['bitunix', 'bitget', 'pionex', 'tradingview'].includes(b))
         if (!boersenLinks.value.length) boersenLinks.value = ['bitunix', 'bitget', 'pionex', 'tradingview']
-        radarKalenderLaender.value = s.radarKalenderLaender || 'USD,JPY'
+        // Gleiche Regel wie der Server (shared/kalender-laender.js); eine
+        // gespeicherte leere Liste („alle Länder") bleibt leer
+        radarKalenderLaender.value = s.radarKalenderLaender ?? kalenderLaenderVorgabe(freigabeAn())
         radarKalenderImpact.value = s.radarKalenderImpact || 'medium'
         radarNewsQuellenAusschluss.value = Number(s.radarNewsQuellenAusschluss ?? 1) === 1
         livetradingAn.value = Number(s.livetradingAn ?? 1) === 1
@@ -154,6 +164,10 @@ export function useRadarEinstellungen() {
         radarNewsAufloesung.value = s.radarNewsAufloesung || 'niedrig'
         radarNewsBerichtProvider.value = s.radarNewsBerichtProvider || ''
         radarNewsBerichtModell.value = s.radarNewsBerichtModell || ''
+        radarNewsUpdateProvider.value = s.radarNewsUpdateProvider || ''
+        radarNewsUpdateModell.value = s.radarNewsUpdateModell || ''
+        radarNewsPruefProvider.value = s.radarNewsPruefProvider || ''
+        radarNewsPruefModell.value = s.radarNewsPruefModell || ''
         radarNewsRhythmus.value = ['woechentlich', 'manuell'].includes(s.radarNewsRhythmus)
             ? s.radarNewsRhythmus : 'taeglich'
         radarNewsWochentag.value = Math.max(1, Math.min(7, Number(s.radarNewsWochentag ?? 1)))
@@ -198,7 +212,7 @@ export function useRadarEinstellungen() {
             ? s.radarNewsVideoTiefe : 'normal'
         radarNewsVideoTokens.value = Math.max(0, Math.min(4000, Number(s.radarNewsVideoTokens) || 0))
         radarNewsRuheAn.value = Number(s.radarNewsRuheAn ?? 1) === 1
-        radarNewsRuheWoerter.value = s.radarNewsRuheWoerter ?? 'Donald Trump'
+        radarNewsRuheWoerter.value = s.radarNewsRuheWoerter ?? ''
         radarNewsFokusAn.value = Number(s.radarNewsFokusAn ?? 0) === 1
         radarNewsFokusWoerter.value = s.radarNewsFokusWoerter || ''
         radarPicycleSchwelle.value = Number(s.radarPicycleSchwelle ?? 0)
@@ -238,6 +252,15 @@ export function useRadarEinstellungen() {
             radarNewsAufloesung: radarNewsAufloesung.value,
             radarNewsBerichtProvider: radarNewsBerichtProvider.value,
             radarNewsBerichtModell: radarNewsBerichtModell.value.trim(),
+            radarNewsUpdateProvider: radarNewsUpdateProvider.value,
+            radarNewsUpdateModell: radarNewsUpdateModell.value.trim(),
+            radarNewsPruefProvider: radarNewsPruefProvider.value,
+            radarNewsPruefModell: radarNewsPruefModell.value.trim(),
+            // Fehlten bis 29.10.2026 — Schalter und Symbol der eigenen
+            // Markteinordnung wurden nie gespeichert (und beim Speichern eines
+            // anderen Feldes nicht einmal lokal nachgezogen).
+            radarNewsLagenAn: radarNewsLagenAn.value ? 1 : 0,
+            radarNewsLagenSymbol: String(radarNewsLagenSymbol.value || '').trim().toUpperCase() || 'BTCUSDT',
             radarNewsRhythmus: radarNewsRhythmus.value,
             radarNewsWochentag: Math.max(1, Math.min(7, Number(radarNewsWochentag.value) || 1)),
             radarNewsUpdates: Math.max(0, Math.min(2, Number(radarNewsUpdates.value) || 0)),

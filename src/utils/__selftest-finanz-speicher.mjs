@@ -36,7 +36,6 @@ const s = new Speicher({
     appLanguage: 'de',
     privacyMode: '1',
     'ctj.chart.positionenAus': '["9"]',
-    evalNotifiedPositionIds: '["9"]',
 })
 const weg = loescheFinanzdaten(s)
 check('vier Schlüssel gelöscht', weg.length === 4, weg.join(','))
@@ -47,7 +46,6 @@ check('Filter bleibt', s.getItem('at.journal.konten') === 'bitunix,bitget')
 check('Layout bleibt', s.getItem('dashboard_hidden_cards') === '[]')
 check('Sprache und Sichtschutz bleiben', s.getItem('appLanguage') === 'de' && s.getItem('privacyMode') === '1')
 check('ausgeblendete Positions-IDs bleiben', s.getItem('ctj.chart.positionenAus') === '["9"]')
-check('gemeldete Positions-IDs bleiben', s.getItem('evalNotifiedPositionIds') === '["9"]')
 check('nur Präfix, nicht Teilstring', !istFinanzSchluessel('alt_tpsl_history_1'))
 check('ohne Speicher kein Absturz', Array.isArray(loescheFinanzdaten(undefined)))
 

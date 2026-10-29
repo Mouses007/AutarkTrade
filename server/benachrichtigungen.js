@@ -32,6 +32,7 @@ import { decrypt, encrypt } from './crypto.js'
 import { beansprucheAufgabe, gibAufgabeFrei, merkeAufgabenFehler } from './db-claim.js'
 import { logWarn, logError } from './logger.js'
 import { empfaengerListe, EMPFAENGER_MAX } from '../shared/empfaenger.js'
+import { zeitzoneAus } from '../shared/zeitzone.js'
 import { baueMail, logoAnhang, STUFEN, STUFE_VORGABE } from './mail-vorlage.js'
 import { versandGesperrt, versandSperrFehler } from './testbetrieb.js'
 
@@ -268,7 +269,7 @@ function gestalteteMail(s, id, { betreff, text }) {
         nutzer: s?.username || '',
         // Der Container läuft auf UTC — ohne diese Zone trägt die Mail eine
         // Uhrzeit, die zwei Stunden vor der steht, die der Nutzer erlebt hat.
-        zeitzone: s?.timeZone || '',
+        zeitzone: zeitzoneAus(s?.timeZone),
         mitLogo: Boolean(logo),
         groesse: schriftStufe(s),
     })
@@ -752,7 +753,7 @@ export function setupBenachrichtigungsRoutes(app) {
                 ton: 'gut',
                 bereich: 'System · Test',
                 nutzer: s?.username || '',
-                zeitzone: s?.timeZone || '',
+                zeitzone: zeitzoneAus(s?.timeZone),
                 mitLogo: Boolean(logo),
                 groesse: schriftStufe(s),
             })

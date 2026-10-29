@@ -31,7 +31,8 @@ const hinweis = computed(() => {
     return k ? t(k) : ''
 })
 /** Gespeichert, aber nicht mehr angeboten (z. B. MiniMax): bleibt sichtbar statt leer. */
-const ausgeblendet = computed(() => !!props.provider && !anbieter.value.includes(props.provider))
+const ausgeblendet = computed(() => !!props.provider && !anbieter.value.includes(props.provider)
+    && !props.extra.some((e) => e.wert === props.provider))
 
 const props = defineProps({
     /** Gewählter Anbieter, '' = global */
@@ -45,12 +46,25 @@ const props = defineProps({
     globalModell: { type: String, default: '' },
     /** false blendet den „Global"-Eintrag aus (für die globale Wahl selbst) */
     erlaubeGlobal: { type: Boolean, default: true },
+    /** Beschriftung des leeren Eintrags (Vorgabe „Globaler Anbieter") */
+    leerText: { type: String, default: '' },
+    /**
+     * Weitere Einträge ohne eigenen Anbieter, je {wert, text, provider, modell}:
+     * gewählt wie „leer", mit eigenem „gilt"-Stand (z. B. `allgemein` bei der
+     * Zwischenmeldung, deren Leer-Eintrag „wie der Bericht" heisst).
+     */
+    extra: { type: Array, default: () => [] },
     disabled: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:provider', 'update:modell'])
 
 const anbieter = computed(() => Object.keys(props.modellListen))
+
+/** Gewählter Extra-Eintrag (dann kein eigener Anbieter, Modell gesperrt). */
+const extraWahl = computed(() => props.extra.find((e) => e.wert === props.provider) || null)
+/** Kein eigener Anbieter gewählt — leer oder ein Extra-Eintrag. */
+const ohneEigenen = computed(() => (!props.provider && props.erlaubeGlobal) || !!extraWahl.value)
 
 /**
  * Modelle des gewählten Anbieters. Ein gespeichertes Modell, das der Katalog
@@ -75,13 +89,14 @@ function setzeAnbieter(wert) {
     <div class="at-flex at-luecke-2 at-umbruch at-mitte">
         <select class="at-feld klein" style="max-width:12rem;" :disabled="disabled"
             :value="provider" @change="setzeAnbieter($event.target.value)">
-            <option v-if="erlaubeGlobal" value="">{{ t('settings.ki.useGlobal') }}</option>
+            <option v-if="erlaubeGlobal" value="">{{ leerText || t('settings.ki.useGlobal') }}</option>
+            <option v-for="e in extra" :key="e.wert" :value="e.wert">{{ e.text }}</option>
             <option v-for="a in anbieter" :key="a" :value="a">{{ nameVon(a) }}</option>
             <option v-if="ausgeblendet" :value="provider">{{ nameVon(provider) }} ({{ t('settings.providerRetired') }})</option>
         </select>
 
         <select class="at-feld klein" style="max-width:16rem;"
-            :disabled="disabled || (!provider && erlaubeGlobal)"
+            :disabled="disabled || ohneEigenen"
             :value="modell" @change="emit('update:modell', $event.target.value)">
             <option value="">{{ t('settings.ki.defaultModel') }}</option>
             <option v-for="m in modelle" :key="m" :value="m">{{ m }}</option>
@@ -89,10 +104,10 @@ function setzeAnbieter(wert) {
 
         <!-- Was tatsächlich greift. Ohne diese Zeile ist „Global" eine
              Behauptung, die man nur durch Ausprobieren prüfen kann. -->
-        <small v-if="!provider && erlaubeGlobal" class="at-gedaempft">
+        <small v-if="ohneEigenen" class="at-gedaempft">
             {{ t('settings.ki.currentlyGlobal', {
-                anbieter: globalProvider ? nameVon(globalProvider) : '—',
-                modell: globalModell || t('settings.ki.defaultModel'),
+                anbieter: (extraWahl ? extraWahl.provider : globalProvider) ? nameVon(extraWahl ? extraWahl.provider : globalProvider) : '—',
+                modell: (extraWahl ? extraWahl.modell : globalModell) || t('settings.ki.defaultModel'),
             }) }}
         </small>
         <!-- Pflichthinweis des gewählten Anbieters (server/ai-models.js `hinweis`). -->

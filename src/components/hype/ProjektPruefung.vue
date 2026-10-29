@@ -120,7 +120,7 @@ const befunde = computed(() => [...(daten.value?.befunde || [])]
     .sort((a, b) => REIHE.indexOf(a.art) - REIHE.indexOf(b.art)))
 
 /**
- * Schalter „Quellen ohne Verkaufsfreigabe" (S15): mit ihm misst die Prüfung
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15): mit ihm misst die Prüfung
  * wieder die Ersteller-Bilanz von pump.fun (der Server liefert `ersteller`).
  */
 const frei = computed(() => freigabeAn())

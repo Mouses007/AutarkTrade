@@ -1,6 +1,6 @@
 /**
- * Spenden: Menüeintrag, Kaffee-Knopf in der Kopfleiste, Dialog mit QR-Codes
- * (BTC, PayPal) und „Buy me a coffee" — und seltene Nachfragen an guten Momenten.
+ * Spenden: Menüeintrag, Dialog mit QR-Codes (BTC, PayPal) — und seltene
+ * Nachfragen an guten Momenten.
  *
  * Wann gefragt wird (`naechsteNachfrage`, rein und im Selbsttest):
  *   update      nach einem Update auf eine neue Fassung (einmal je Fassung)
@@ -14,7 +14,8 @@
  *   - wo nicht gefragt wird (Live-Trading, Vollbild), entscheidet die Oberfläche.
  *
  * „Bewertet" = ein Trade mit Zufriedenheit (Daumen) in `satisfactions`.
- * Der Schalter `spendenAn` (Vorgabe an) blendet Menüeintrag, Knopf und Nachfragen aus.
+ * Der Menüeintrag ist immer da; die Spalte `spendenAn` wird seit 29.10.2026 nicht
+ * mehr gelesen (wer nicht gefragt werden will, wählt im Dialog „definitiv nicht").
  */
 import fs from 'fs'
 import path from 'path'
@@ -80,7 +81,7 @@ async function lies(knex) {
     // Übernahme aus der ersten Fassung (Stufe 1 = nach 50 gefragt, 2 = nach 200)
     const altMeilenstein = Number(s?.spendenStufe) >= 2 ? 200 : Number(s?.spendenStufe) === 1 ? 50 : 0
     return {
-        an: Number(s?.spendenAn ?? 1) === 1,
+        an: true,
         status: s?.spendenStatus || '',
         meilenstein: Math.max(Number(s?.spendenMeilenstein) || 0, altMeilenstein),
         seit: Number(s?.spendenSeit) || 0,

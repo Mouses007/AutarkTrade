@@ -68,7 +68,7 @@ export const PAGES = [
     // Seiten darüber beantworten „wie steht der Markt", diese hier begleitet
     // die Stunden, in denen man tatsächlich Geld riskiert.
     // `mobilFlag`: Nur-Desktop-Sperre lässt sich per Einstellung fürs Telefon
-    // aufheben (Layout & Stil → „Live-Trading auf dem Handy").
+    // aufheben (Chart & Analyse → Live-Trading-Fenster → „Live-Trading auf dem Handy").
     { id: 'livetrading', mode: 'live', path: '/livetrading', symbol: 'fadenkreuz', titleKey: 'nav.livetrading', group: 'liveTrade', flag: 'livetradingAn', nurDesktop: true, mobilFlag: 'livetradingMobil' },
     // Archiv und Auswertung sind bewusst NICHT `nurDesktop`: nachlesen und
     // auswerten geht am Telefon, nur das Handeln selbst braucht Platz.
@@ -147,11 +147,6 @@ export const PAGES = [
  * Top-Level-Modi. `home` = Startseite beim Umschalten.
  * `enabled: false` → Button sichtbar, aber deaktiviert.
  */
-/**
- * `shortKey` ist das Label im Umschalter: die Tabs sind bei fünf Modi nur
- * ~45px breit, „Live-Analyse" und „Strategien" passen dort nicht mehr rein.
- * Ohne shortKey gilt titleKey.
- */
 // `flag` nennt — wie bei PAGES — eine Einstellungsspalte, die den Modus ein-
 // und ausschaltet. Fehlt das Feld, ist der Modus nicht abschaltbar: das gilt
 // genau für `journal`, den Kern der App. Alles andere darf weg, für den, der
@@ -168,7 +163,7 @@ export const MODES = [
     // Einstellungen und im localStorage bestehender Installationen.
     { id: 'journal', titleKey: 'modes.journal', symbol: 'journal', home: '/journal', enabled: true },
     { id: 'start', titleKey: 'modes.start', symbol: 'chart', home: '/chart', enabled: true, flag: 'startseiteAn' },
-    { id: 'live', titleKey: 'modes.live', shortKey: 'modes.liveShort', symbol: 'live', home: '/marktradar', enabled: true, flag: 'modusLiveAn' },
+    { id: 'live', titleKey: 'modes.live', symbol: 'live', home: '/marktradar', enabled: true, flag: 'modusLiveAn' },
     /*
      * Entdecken: was es noch nicht ins Journal geschafft hat. Bislang ein
      * Platzhalter, jetzt von Hype-Radar und Coin-Radar bewohnt.
@@ -187,7 +182,7 @@ export const MODES = [
     // `BetaHinweis.vue` auf jeder seiner Seiten, und der scharfe Betrieb hängt
     // zusätzlich an der dreifachen Freigabekette (globaler Schalter, Freigabe je
     // Instanz, Mindestzahl Papier-Trades).
-    { id: 'agent', titleKey: 'modes.agent', shortKey: 'modes.agentShort', symbol: 'agent', home: '/agent/strategies', enabled: true, beta: true, flag: 'modusStrategieAn' },
+    { id: 'agent', titleKey: 'modes.agent', symbol: 'agent', home: '/agent/strategies', enabled: true, beta: true, flag: 'modusStrategieAn' },
     // Leitner-Karteikasten: Fachbegriffe und Marktzusammenhänge lernen, die im
     // Journal selbst laufend vorkommen. Kein Betrieb, keine Live-Daten — darf
     // deshalb auch am Telefon voll bedient werden.

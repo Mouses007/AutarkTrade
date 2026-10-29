@@ -1,5 +1,5 @@
 /**
- * Speicherverbrauch je Modul — reine Info für Einstellungen → Allgemein.
+ * Speicherverbrauch je Modul — reine Info für Einstellungen → System → Speicher.
  *
  * Liefert Tabellengrössen (inklusive Indizes) und Zeilenzahlen, gruppiert zu
  * den Modulen der Oberfläche, damit man das Wachstum im Blick behält (die

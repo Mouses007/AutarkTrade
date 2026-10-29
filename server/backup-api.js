@@ -4,6 +4,7 @@ import { loadDbConfig, getConfigPath, saveDbConfig } from './db-config.js'
 import { SETTINGS_SENSITIVE_FIELDS, isAllowedDbHost } from './api-routes.js'
 import { BEHALTEN_BEIM_IMPORT, BOERSEN_GEHEIMNISSE, PORTFOLIO_GEHEIMNISSE } from './geheimnisse.js'
 import { loadAuthConfig } from './auth.js'
+import { migriereKiAufgaben } from './migrationen/einstellungen-ordnung.js'
 
 /*
  * Sensible Felder, die im Export unkenntlich gemacht werden.
@@ -491,6 +492,11 @@ export function setupBackupRoutes(app) {
                     }
                 }
             }
+
+            // Ein Backup von vor der Neuordnung trägt noch Zeilen der
+            // Aufgaben-Tabelle: gleich umziehen, nicht erst beim nächsten Start
+            // — bis dahin galten sonst die alten Seitenfelder des Backups.
+            await migriereKiAufgaben(knex)
 
             // Gate und Generation aus der (unveränderten) Zeile 1 neu laden.
             await loadAuthConfig()

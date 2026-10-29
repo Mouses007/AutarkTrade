@@ -82,7 +82,7 @@ console.log('Hype-Radar: Frühphase')
     p('fehlende Liquidität bleibt null, nicht 0', s.liq === null)
     /*
      * pump.fun-Felder (`marktKapUsd`, King of the Hill, Kommentare) gibt es nur
-     * mit dem Schalter „Quellen ohne Verkaufsfreigabe" (S15) — dann wirken sie
+     * mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15) — dann wirken sie
      * wie vor S12. Mit Schalter aus kommen sie nie an (der Abruf läuft nicht,
      * `__selftest-quellen-s12.mjs`), und ohne sie ist die Aufnahme die von S12.
      */

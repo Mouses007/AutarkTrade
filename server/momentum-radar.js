@@ -35,7 +35,7 @@ export const NEAR_PCT = 70
 export const OV_LVL = 100
 /*
  * Grenzlinie überkauft/überverkauft: einstellbar (`settings.momentumGrenze`,
- * Einstellungen › Allgemein), Vorgabe 50 wie in der Vorlage. Sie entscheidet,
+ * Einstellungen › Chart & Analyse › Marktradar · Kacheln), Vorgabe 50 wie in der Vorlage. Sie entscheidet,
  * ob eine Wende ein Punkt ist, und — über die Zone „fast" (70 % davon) — wie
  * die höheren Zeitebenen für die Punktstärke abstimmen. ±100 (Extrem) bleibt fest.
  */

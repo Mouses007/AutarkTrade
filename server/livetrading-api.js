@@ -17,7 +17,7 @@
  */
 
 import { ausCache, sendeRadar, sendRadarError, holeJson, verwerfeCache } from './marktradar-api.js'
-import { leseKalender, KALENDER_LAENDER_VORGABE } from './marktradar-kalender.js'
+import { leseKalender, kalenderLaenderAus } from './marktradar-kalender.js'
 import { QuelleAus, ausAntwort } from './quellen/aus.js'
 import { quelleErlaubt } from './quellen/freigabe.js'
 import { ohlcAusChart } from './makro.js'
@@ -443,7 +443,7 @@ export function setupLivetradingRoutes(app) {
             const stunden = Math.max(1, Math.min(48, Number(req.query.stunden) || 8))
             const knex = getKnex()
             const s = await knex('settings').where('id', 1).first().catch(() => null)
-            const laender = req.query.laender ?? s?.radarKalenderLaender ?? KALENDER_LAENDER_VORGABE
+            const laender = req.query.laender ?? await kalenderLaenderAus(s)
             const impact = req.query.impact ?? s?.radarKalenderImpact ?? 'medium'
             const key = `lt_kalender|${stunden}|${laender}|${impact}`
             if (req.query.force) verwerfeCache(key)

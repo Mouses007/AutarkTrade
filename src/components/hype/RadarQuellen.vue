@@ -10,7 +10,7 @@
  *   dexscreener  „Daten: DexScreener" (keine Pflicht, Z. 57)
  *   rugcheck     „Daten: RugCheck" (nur wenn eingeschaltet)
  *
- * S15 — Quellen ohne Verkaufsfreigabe (nur mit dem Schalter an, der Aufrufer
+ * S15 — Quellen mit eingeschränkten Nutzungsbedingungen (nur mit dem Schalter an, der Aufrufer
  * entscheidet, ob sie gelaufen sind):
  *   pumpfun, reddit, coinpaprika, geckoterminal, telegram   je „Daten: …"
  *   binance-alpha, upbit, okx, mexc                         Börsenlisten
@@ -35,7 +35,7 @@ const RADAR_QUELLEN = {
     biz: { name: '4chan /biz/', url: 'https://boards.4chan.org/biz/', art: 'quelle' },
     dexscreener: { name: 'DexScreener', url: 'https://dexscreener.com/', art: 'daten' },
     rugcheck: { name: 'RugCheck', url: 'https://rugcheck.xyz/', art: 'daten' },
-    // S15, Quellen ohne Verkaufsfreigabe:
+    // S15, Quellen mit eingeschränkten Nutzungsbedingungen:
     pumpfun: { name: 'pump.fun', url: 'https://pump.fun/', art: 'daten' },
     reddit: { name: 'Reddit', url: 'https://www.reddit.com/', art: 'daten' },
     coinpaprika: { name: 'CoinPaprika', url: 'https://coinpaprika.com/', art: 'daten' },

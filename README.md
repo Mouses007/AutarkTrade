@@ -4,7 +4,7 @@ Trading journal and analysis workstation for **crypto futures** on **Bitunix**, 
 Runs locally or via Docker — no cloud, no account.
 Vue 3 + Express, SQLite or PostgreSQL.
 
-> **Status:** 4.3.2 (beta) — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
+> **Status:** 4.3.3 (beta) — AutarkTrade is the rebuilt successor of the former Crypto Trading Journal
 > (redesign, rebuilt code, AGPL-3.0). Origin of the code: [`HERKUNFT.md`](HERKUNFT.md).
 
 > **AutarkTrade does not trade by itself.** It reads trades, positions and balances from your
@@ -77,7 +77,7 @@ A TradingView-style chart workspace built on TradingView's free [Lightweight Cha
 - **Overall picture (AI)**: one button turns everything the other tiles currently show into a five-line read — a market state, three to four points, the contradictions between the tiles and what to watch. The AI only ever sees the readings from the tiles (they are listed under "Basis" in the enlarged view), it looks nothing up and gives no trading recommendation. Nothing is generated without pressing the button.
 - Only crypto: perpetuals are filtered to actual coins (Binance `underlyingType`, Bitget `isRwa`), so tokenised equities and commodities never show up
 - **Your choice of market data**: exchange data (candles, tickers, order books, funding, streams) comes from the source you pick under Settings › Data sources — Binance (full scope), Bitget (basics; Bookmap, recorder, liquidations and open-interest history stay off) or none. The data goes straight from the exchange to your computer; whether its terms cover your use is yours to check. A tile without its source says why instead of staying empty.
-- **Sources without sales clearance** (Settings › Data sources, **on by default**): the analysis sources whose terms do not cover a *sale* of AutarkTrade — Yahoo Finance (Makro, indices), ForexFactory (calendar), CoinMarketCap (dominance history), blockchain.info (Rainbow, Pi Cycle), CoinGecko/GeckoTerminal without a key, pump.fun, Telegram, Reddit, CoinPaprika, Upbit/MEXC/OKX/Binance Alpha, the Binance margin brackets and more (full list on the settings page, with the row of the sales review). On, they run as in the old journal and you are responsible for their terms; off, AutarkTrade behaves like a sales version and those functions say they are off. Your own CoinGecko key is always used first.
+- **Sources with restricted terms of use** (Settings › Data sources, **on by default**): analysis sources that are unofficial interfaces or are only cleared for personal use — Yahoo Finance (Makro, indices), ForexFactory (calendar), CoinMarketCap (dominance history), blockchain.info (Rainbow, Pi Cycle), CoinGecko/GeckoTerminal without a key, pump.fun, Telegram, Reddit, CoinPaprika, Upbit/MEXC/OKX/Binance Alpha, the Binance margin brackets and more (full list on the settings page). On, they run in full and you check their terms yourself; off, those functions say they are off and everything else keeps working. Your own CoinGecko key is always used first.
 - Every AI text, chat answer and share image is labelled „KI-generiert – keine Anlageberatung – Fakten prüfen" (also machine-readable)
 
 ### Hype-Radar and Coin-Radar (Entdecken)
@@ -254,7 +254,7 @@ else should be one mouse move away — that is the same idea as writing the plan
 down beforehand. **Desktop only**: eleven tiles, an order book and a candle
 chart cannot be operated on a phone, and a tool that only half works leads to
 decisions on half the information. Can be switched off entirely under
-Settings → Live; then the start button, the menu entry and the page all
+Settings → Chart & analysis; then the start button, the menu entry and the page all
 disappear.
 
 - **Trading hours** — which session is running (Asia / London / US pre-market / cash / after-hours), a countdown to the next mark, and an explicit red band for the windows that are *bad* to trade: five minutes before to fifteen after the US cash open, the macro-data and FOMC slots (only when the calendar actually carries an event), the close, and the daily CME break. Every session is computed in its own time zone — the US and EU switch to summer time weeks apart, so a fixed local time is wrong two to three times a year.
@@ -364,7 +364,7 @@ presented as a finding — three sessions on a Tuesday are noise.
 - **Rollback** — revert to previous version if needed
 - **First-Run Setup** — guided initial configuration wizard
 - **Multi-Language** — German (default) and English
-- **Extended info** — a small "i" next to values and controls; hover (tap on phones) explains what the number means. Switchable off in one place for the whole app (Settings → General → Layout & Style); button labels and the full info panels at the top of each page stay either way.
+- **Extended info** — a small "i" next to values and controls; hover (tap on phones) explains what the number means. Switchable off in one place for the whole app (Settings → General → Controls & menu); button labels and the full info panels at the top of each page stay either way.
 - **Switch modes off** — every mode except the journal can be turned off individually (Chart, Live-Analyse, Research, Strategien). Off means off, not hidden: the tab disappears, the side menu renders nothing, and even a direct link leads back to the journal. For anyone who only wants the journal.
 
 ---
@@ -490,7 +490,7 @@ docker compose pull && docker compose up -d
 
 Copy `docker-compose.yml` and your `.env` to the NAS and create a project in Container Manager. See [DOCKER.md](DOCKER.md) for details.
 
-**HTTPS for LAN access** (built in since 26.10.2026, no Caddy, no mkcert): on first start the app creates its own root CA („AutarkTrade Lokale CA", ECDSA P-256, stored in the database, private keys encrypted with `AT_SECRET`, never in the backup) and issues itself a server certificate (397 days, renewed automatically < 30 days or when a name is missing, without restart). HTTPS listens next to HTTP on `AT_TLS_PORT` (default 8443, `aus` = off); port 8080/HTTP stays for ESP32 displays. Names in the certificate: `localhost`, `127.0.0.1`, `::1`, the mDNS name, `AT_TLS_NAMEN` (comma list, e.g. the NAS IP) and the names confirmed under Settings › General › HTTPS (which also suggests the addresses the app was opened under). Trust the CA once per device: „Download CA" there (`GET /api/tls/ca.crt`, public), compare the SHA-256 fingerprint; short guides for Android, Windows, Linux/Firefox, macOS/iOS are on the same page. JSON for devices: `GET /api/tls/ca` and `GET /api/esp32/ca` → `{pem, sha256}`. See [DOCKER.md](DOCKER.md#https-für-den-lan-zugriff-eingebaut-eigene-ca).
+**HTTPS for LAN access** (built in since 26.10.2026, no Caddy, no mkcert): on first start the app creates its own root CA („AutarkTrade Lokale CA", ECDSA P-256, stored in the database, private keys encrypted with `AT_SECRET`, never in the backup) and issues itself a server certificate (397 days, renewed automatically < 30 days or when a name is missing, without restart). HTTPS listens next to HTTP on `AT_TLS_PORT` (default 8443, `aus` = off); port 8080/HTTP stays for ESP32 displays. Names in the certificate: `localhost`, `127.0.0.1`, `::1`, the mDNS name, `AT_TLS_NAMEN` (comma list, e.g. the NAS IP) and the names confirmed under Settings › System › HTTPS (which also suggests the addresses the app was opened under). Trust the CA once per device: „Download CA" there (`GET /api/tls/ca.crt`, public), compare the SHA-256 fingerprint; short guides for Android, Windows, Linux/Firefox, macOS/iOS are on the same page. JSON for devices: `GET /api/tls/ca` and `GET /api/esp32/ca` → `{pem, sha256}`. See [DOCKER.md](DOCKER.md#https-für-den-lan-zugriff-eingebaut-eigene-ca).
 
 ---
 
@@ -498,7 +498,7 @@ Copy `docker-compose.yml` and your `.env` to the NAS and create a project in Con
 
 Your database is preserved during every update. Updates come from the **private** package source (`Mouses007/AutarkTrade`, `ghcr.io/mouses007/autarktrade`) — the old public repository (Crypto Trading Journal, GPL, 3.x) is no longer an update channel.
 
-Access: the licence key (Settings › General › Licence) can carry the access token for the package source; `AT_UPDATE_TOKEN` (+ optional `AT_UPDATE_BENUTZER`) overrides it. The licence key's **"Updates bis"** date decides which releases may be installed: any release published on or before that day. Without a key (test mode) new versions are shown but not installed; the installed version keeps running.
+Access: while the package source is private, `AT_UPDATE_TOKEN` (+ optional `AT_UPDATE_BENUTZER`) carries the access token. There is no licence key and no install gate since the switch to the AGPL (22.10.2026): every newer release is installable.
 
 ### In-App Update (recommended)
 
@@ -579,8 +579,8 @@ AT_SECRET=your_generated_secret
 
 - The first password from the network requires the **setup code** printed in the server/container log („Einrichtungscode"); at the server itself (localhost) it is not needed. Passwords need at least 10 characters (existing shorter ones stay valid).
 - `AT_TRUST_PROXY=1` evaluates `X-Forwarded-For` **only** for connections from `AT_TRUSTED_PROXY` (names or IPs, comma-separated; default `caddy,autarktrade-caddy`). Direct access to port 8080 can no longer invent a new address per login attempt. Since the app does HTTPS itself (26.10.2026) the compose default is `AT_TRUST_PROXY=0`; set it only behind your own reverse proxy.
-- ESP32 keys (audit SEC-GER-001): the **display key** (`settings.esp32AnzeigeKey`, Settings › Journal › ESP32) opens only `GET /api/esp32/display` — for ESP32 displays. `/api/esp32/alarme` and `/api/esp32/push` need the **main key** (phone app/widget), which keeps working for the display too.
-- „Passwort vergessen" (`/api/auth/reset`) works only from the server itself, from the app's own page (no foreign `Origin`/`Sec-Fetch-Site`), with a JSON body and — since the audit of 26.10.2026 — with the one-time **reset code** („Rücksetzcode") that the server prints to its log when the reset is requested (valid 15 minutes, once); it invalidates every session. Without access to the server log: start the server once with `AT_RESET_AUTH=1` and remove it again. Settings › General › Security has „Überall abmelden".
+- ESP32 keys (audit SEC-GER-001): the **display key** (`settings.esp32AnzeigeKey`, Settings › Devices) opens only `GET /api/esp32/display` — for ESP32 displays. `/api/esp32/alarme` and `/api/esp32/push` need the **main key** (phone app/widget), which keeps working for the display too.
+- „Passwort vergessen" (`/api/auth/reset`) works only from the server itself, from the app's own page (no foreign `Origin`/`Sec-Fetch-Site`), with a JSON body and — since the audit of 26.10.2026 — with the one-time **reset code** („Rücksetzcode") that the server prints to its log when the reset is requested (valid 15 minutes, once); it invalidates every session. Without access to the server log: start the server once with `AT_RESET_AUTH=1` and remove it again. Settings › System › Security has „Überall abmelden".
 - The SQLite file (`autarktrade.db` plus `-wal`/`-shm`) is set to `0600` (owner only) on every start.
 - Requests that change something (`POST`/`PUT`/`PATCH`/`DELETE` under `/api`) are rejected with 403 when the browser reports a foreign origin (`Sec-Fetch-Site` other than `same-origin`/`none`, or an `Origin` whose host:port differs from `Host`). Clients without these headers (curl, scripts, ESP32, Android widget) are unaffected; the key-authenticated `/api/esp32/display|alarme|push` routes are exempt.
 - `AT_SECRET` shorter than 32 characters triggers a loud warning at start. `AT_KEIN_UPDATECHECK=1` (and test mode) skip the update check at start.

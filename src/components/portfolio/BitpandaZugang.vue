@@ -48,7 +48,7 @@ onMounted(lade)
     <Abschnitt titel="Bitpanda" unter v-model:offen="offen">
         <template #kopf>
             <Pille v-if="hat" ton="gut">{{ t('common.configured') }}</Pille>
-            <Pille ton="warn">Test</Pille>
+            <Pille ton="warn">Beta</Pille>
         </template>
         <MarktWahl boerse="bitpanda" />
         <p class="bp-text">{{ t('portfolio.bitpandaText') }}</p>

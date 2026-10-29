@@ -1,9 +1,9 @@
 /**
- * Modus-Schalter (Live, Research, Strategie, Lernen) — Modul-Singleton.
+ * Modus-Schalter (Live, Research, Strategie, Lernen, Portfolio) — Modul-Singleton.
  *
- * Geteilt, weil drei Sektionen sie lesen: Allgemein → Layout & Stil (die
+ * Geteilt, weil drei Sektionen sie lesen: Allgemein → Bedienung & Menü (die
  * Schalter selbst), KI → Strategie (Link nur bei aktivem Modus) und Live →
- * Live-Trading-Fenster. Einstellungen.vue lädt den Stand beim Öffnen der Seite
+ * Live-Trading-Fenster (Chart & Analyse). Einstellungen.vue lädt den Stand beim Öffnen der Seite
  * (`ladeModi`), bevor eine Bereichskomponente gemountet wird.
  */
 import { ref } from 'vue'
@@ -18,6 +18,8 @@ export let modusLiveAn = ref(true)
 export let modusResearchAn = ref(true)
 export let modusStrategieAn = ref(true)
 export let modusLernenAn = ref(true)
+// Portfolio (Beta): Vorgabe an wie die Spalte (`migrationen/portfolio.js`)
+export let modusPortfolioAn = ref(true)
 
 /** Stand aus den gerade geladenen Einstellungen übernehmen. */
 export function ladeModi() {
@@ -26,6 +28,7 @@ export function ladeModi() {
         modusResearchAn.value = Number(settings.modusResearchAn ?? 1) === 1
         modusStrategieAn.value = Number(settings.modusStrategieAn ?? 1) === 1
         modusLernenAn.value = Number(settings.modusLernenAn ?? 1) === 1
+        modusPortfolioAn.value = Number(settings.modusPortfolioAn ?? 1) === 1
 }
 
 /**

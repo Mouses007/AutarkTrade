@@ -10,8 +10,9 @@
  * Aufgaben:
  *   - Einstellungen und Sprache laden, Bildschirmart messen (auch bei
  *     Grössenänderung)
- *   - im Journal: Zeiträume, Tags, Pending-Zähler und ihr Polling, Popups,
- *     Wache für einen laufenden KI-Bericht
+ *   - im Journal: Zeiträume, Tags, Wache für einen laufenden KI-Bericht
+ *   - auf allen Seiten: Positions-Abgleich, Pending-Zähler und das
+ *     Bewertungs-Popup (nicht im Cockpit geöffnet, siehe TradeEvalPopup.vue)
  *   - Wache für abgeschaltete Modi (siehe unten, warum hier und nicht im Router)
  *   - Cockpit (`?cockpit=1`) und Vollbild: ohne Kopfleiste, Menü und Titelzeile
  *   - Zensur-Modus, Zurück-Geste für das Handy-Menü
@@ -40,7 +41,9 @@ import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
 import { starteApp, leseZeitzone, leseBildschirmTyp, ladeZeitraeume, setzeFilterwerte, schliesseMobilMenue, schalteMobilMenue } from '../utils/journal/app.js'
 import { wischErgebnis } from '../utils/menueWisch.js'
 import { ladeVerfuegbareTags } from '../utils/journal/tagebuch.js'
-import { useUpdatePendingCounts, useStartGlobalPolling, useStopGlobalPolling } from '../utils/incoming.js'
+import { useUpdatePendingCounts, useStartGlobalPolling, useStopGlobalPolling, abgleichWennFaellig } from '../utils/incoming.js'
+import { holeNeueBewertungen } from '../utils/tradePopups.js'
+import { evalMeldungen } from '../stores/trades.js'
 import { requestNotificationPermission } from '../utils/notify.js'
 import { logWarn } from '../utils/logger.js'
 import { ebeneAuf, ebeneZu } from '../composables/useZurueckGeste.js'
@@ -56,7 +59,7 @@ const router = useRouter()
 /* ── Abgeleitete Zustände ─────────────────────────────── */
 
 /**
- * Journal-Ballast (Perioden, Tags, Pending-Zähler, Popups, KI-Bericht) nur
+ * Journal-Ballast (Perioden, Tags, KI-Bericht) nur
  * dort, wo er gebraucht wird. Die Einstellungen (`any`) zählen dazu; Chart,
  * Startseite, Live, Entdecken, Agent und Lernen brauchen keine Trade-Daten.
  */
@@ -94,19 +97,38 @@ async function starteJournal() {
     journalGestartet = true
     await ladeZeitraeume()
     await setzeFilterwerte()
-    await ladeVerfuegbareTags()   // für das Bewertungs-Popup
+    await ladeVerfuegbareTags()
     const u = appEinstellungen.value
-    // Nur eine ausdrückliche 0 schaltet ab; fehlt der Wert, gilt er als an.
-    const aus = (v) => v === 0 || v === '0'
     if (!aus(u?.browserNotifications)) requestNotificationPermission()
-    // Erst nach dem Laden der Einstellungen, damit die Popup-Einstellung greift.
-    if (!aus(u?.showTradePopups)) {
-        await useUpdatePendingCounts()
-        useStartGlobalPolling()
-    }
 }
 
+// Nur eine ausdrückliche 0 schaltet ab; fehlt der Wert, gilt er als an.
+const aus = (v) => v === 0 || v === '0'
+
+/* ── Positions-Abgleich und Bewertungs-Popup (alle Seiten) ── */
+/*
+ * Bis 29.10.2026 nur über eine Journal-Route gestartet: wer im Chart oder im
+ * Marktradar blieb, bekam keinen Abgleich und kein Popup. Jetzt auf jeder
+ * Rahmen-Seite, sobald die Einstellungen da sind, und der Schalter wirkt
+ * sofort (Einstellungsseite, anderer Tab über `holeNeueBewertungen`).
+ */
+function startePositionsWache() {
+    if (aus(appEinstellungen.value?.showTradePopups)) {
+        useStopGlobalPolling()
+        evalMeldungen.value = []
+        return
+    }
+    holeNeueBewertungen()                   // Offenes zuerst, ohne Börsenabruf
+    useUpdatePendingCounts()
+    useStartGlobalPolling()
+    abgleichWennFaellig()
+}
 const grundBereit = ref(false)
+
+// Schalter umgelegt (Einstellungsseite, anderer Tab, anderes Gerät): sofort wirksam.
+watch(() => appEinstellungen.value?.showTradePopups, () => {
+    if (grundBereit.value) startePositionsWache()
+})
 
 onBeforeMount(async () => {
     ladeSystemModus()                       // Testbetrieb-Flag, ohne zu warten
@@ -117,6 +139,7 @@ onBeforeMount(async () => {
     leseBildschirmTyp()
     hydrateLiveSettings()                   // auch im Journal: die Einstellungsseite zeigt die Live-Werte
     grundBereit.value = true
+    startePositionsWache()
     if (istJournal.value) await starteJournal()
 })
 
@@ -177,8 +200,20 @@ async function frischeZeitraeume() {
         logWarn('layout', 'Zeiträume nicht aufgefrischt', e?.message || e)
     }
 }
+/** Zurück im Tab: Meldungen und — war der Tab länger weg — Positionen nachholen. */
+function beiRueckkehr() {
+    if (!grundBereit.value) return
+    holeNeueBewertungen()
+    abgleichWennFaellig()
+}
 function beiSichtbarkeit() {
-    if (document.visibilityState === 'visible') frischeZeitraeume()
+    if (document.visibilityState !== 'visible') return
+    frischeZeitraeume()
+    beiRueckkehr()
+}
+function beiFokus() {
+    frischeZeitraeume()
+    beiRueckkehr()
 }
 
 /* ── Zurück-Geste schliesst das Handy-Menü ────────────── */
@@ -223,7 +258,7 @@ onMounted(() => {
     window.addEventListener('resize', beiGroesse)
     window.addEventListener('orientationchange', beiGroesse)
     document.addEventListener('visibilitychange', beiSichtbarkeit)
-    window.addEventListener('focus', frischeZeitraeume)
+    window.addEventListener('focus', beiFokus)
 })
 
 onBeforeUnmount(() => {
@@ -237,7 +272,7 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', beiGroesse)
     window.removeEventListener('orientationchange', beiGroesse)
     document.removeEventListener('visibilitychange', beiSichtbarkeit)
-    window.removeEventListener('focus', frischeZeitraeume)
+    window.removeEventListener('focus', beiFokus)
 })
 </script>
 
@@ -283,7 +318,7 @@ onBeforeUnmount(() => {
 
     <BildVollbild />
     <BildMarkierung />
-    <TradeEvalPopup v-if="istJournal" />
+    <TradeEvalPopup />
 </template>
 
 <style scoped>

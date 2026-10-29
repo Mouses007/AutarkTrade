@@ -185,6 +185,8 @@ onBeforeUnmount(() => {
     cursor: help;
     outline: none;
     flex: 0 0 auto;
+    /* Abstand zum Text davor — an Feldtiteln klebte das „i" am letzten Buchstaben */
+    margin-left: 0.3em;
 }
 
 .infoTipp:hover,

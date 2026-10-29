@@ -26,7 +26,7 @@
  * `pump-fun`) oder jemand seinen Vertrag auf /biz/ oder X nennt. King of the
  * Hill, Kommentarzahl und die Ersteller-Bilanz gibt es nicht mehr.
  *
- * S15 (19.10.2026): Mit dem Schalter „Quellen ohne Verkaufsfreigabe" an
+ * S15 (19.10.2026): Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" an
  * (`server/quellen/freigabe.js`, Vorgabe) läuft die Frühphase wieder wie vor
  * S12: pump.fun (die neuesten Starts und was gerade auf der Kurve gehandelt
  * wird — mit Ersteller, Kommentarzahl, King of the Hill und den Links aus den
@@ -247,7 +247,7 @@ async function jeDrei(liste, fn) {
     await Promise.all(Array.from({ length: Math.min(3, liste.length) }, arbeiter))
 }
 
-/** pump.fun-Listen (S15, nur mit dem Schalter „Quellen ohne Verkaufsfreigabe", ID `pumpfun`). */
+/** pump.fun-Listen (S15, nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen", ID `pumpfun`). */
 async function pumpfun(einst) {
     const q = einst.fruehQuellen || {}
     const listen = []
@@ -1144,7 +1144,7 @@ async function raeumeAuf(knex, jetzt) {
 
 /**
  * Plattformen, auf denen Menschen reden — im Gegensatz zu Ketten, die handeln.
- * Telegram und Reddit nur mit dem Schalter „Quellen ohne Verkaufsfreigabe"
+ * Telegram und Reddit nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen"
  * (S15); mit Schalter aus zählen ihre alten Nennungen nicht (S12).
  */
 const SOZIALE_PLATTFORMEN = ['biz', 'x']

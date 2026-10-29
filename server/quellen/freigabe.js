@@ -1,24 +1,24 @@
 /**
- * Quellen ohne Verkaufsfreigabe (S15, 19.10.2026).
+ * Quellen mit eingeschränkten Nutzungsbedingungen (S15, 19.10.2026).
  *
- * S12 hat alles entfernt, was `docs/VERKAUFS-PRUEFUNG.md` für einen VERKAUF
- * rot oder ungeklärt nennt. Für den Eigengebrauch sind das aber wichtige
- * Analysequellen (Makro, Kalender, Dominanz, Rainbow, Hype-Radar …), und das
- * Entfernen war nie verlangt. Darum kommen sie zurück — hinter EINEM Schalter
+ * Einige Analysequellen (Makro, Kalender, Dominanz, Rainbow, Hype-Radar …)
+ * sind inoffizielle Schnittstellen oder nach ihren Bedingungen nur für den
+ * privaten Gebrauch freigegeben. Sie laufen hinter EINEM Schalter
  * `settings.quellenOhneFreigabe` (Einstellungen › Datenquellen), Vorgabe AN:
  *
- *   an   alle Quellen dieser Liste laufen wie im alten Journal
- *   aus  die App verhält sich wie nach S12 (für eine spätere Verkaufsversion)
+ *   an   alle Quellen dieser Liste laufen im vollen Umfang
+ *   aus  diese Quellen und die Funktionen, die nur sie haben, sind aus
+ *        und sagen warum (Stand nach S12)
  *
  * Diese Liste ist die EINE Stelle, die sagt, welche Quelle unter den Schalter
- * fällt; `zeilen` verweist auf die Spalte „#" der Tabelle in
- * `docs/VERKAUFS-PRUEFUNG.md`. Code fragt immer nach einer ID dieser Liste
+ * fällt; `zeilen` sind interne Prüfvermerke (Zeilen der Quellenprüfung, nur für
+ * den Selbsttest, nirgends angezeigt). Code fragt immer nach einer ID dieser Liste
  * (`quelleErlaubt('yahoo')`), nie direkt nach dem Schalter — eine unbekannte
  * ID wirft, damit ein Tippfehler nicht still „erlaubt" heisst.
  *
  * Die Bedingungen der Anbieter ändern sich durch den Schalter nicht: Wer ihn
- * anlässt, nutzt diese Quellen auf eigene Verantwortung (Hinweis in der
- * Einstellung).
+ * anlässt, prüft sie selbst und nutzt diese Quellen auf eigene Verantwortung
+ * (Hinweis in der Einstellung).
  */
 
 import { QuelleAus } from './aus.js'
@@ -28,7 +28,7 @@ export const VORGABE = true
 
 /**
  * id → { name, zeilen, was }. `was` ist die kurze Beschreibung für die
- * Einstellungsseite (deutsch, wie die Prüfung).
+ * Einstellungsseite (deutsch).
  */
 export const QUELLEN_OHNE_FREIGABE = {
     yahoo: { name: 'Yahoo Finance', zeilen: ['28', '39', '32', '42'], was: 'Makro (ES/NQ/RTY/DXY), Indizes-Kachel, Live-Trading-Indizes, Gesamt-/Handelslage' },

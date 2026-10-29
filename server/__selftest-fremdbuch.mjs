@@ -1,6 +1,6 @@
 /**
  * Selbsttest: Fremdbücher der Buch-Leiter (`fremdbuch.js`) je Stand des
- * Schalters „Quellen ohne Verkaufsfreigabe" (S15).
+ * Schalters „Quellen mit eingeschränkten Nutzungsbedingungen" (S15).
  *
  *   aus  nur Bybit, und KEIN Abruf an okx.com (Stand S12, Verkaufs-Prüfung Z. 38)
  *   an   Bybit + OKX wie vor S12; OKX-Mengen in Kontrakten × ctVal

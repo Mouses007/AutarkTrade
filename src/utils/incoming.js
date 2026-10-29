@@ -1,7 +1,7 @@
 import axios from 'axios'
 import dayjs from './journal/zeit.js'
 import { dbFind, dbFirst, dbCreate, dbUpdate, dbDelete, dbFindTradeIdByPositionId } from './db.js'
-import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, pendingOpeningCount, pendingClosingCount, pendingOpeningByBroker, pendingClosingByBroker, evalNotificationShown, evalNotificationDismissed, evalNeu, getNotifiedPositionIds, addNotifiedPositionIds, removeNotifiedPositionIds } from '../stores/trades.js'
+import { incomingPositions, incomingPollingActive, incomingLastFetched, incomingBrokerFehler, pendingOpeningCount, pendingClosingCount, pendingOpeningByBroker, pendingClosingByBroker } from '../stores/trades.js'
 import { aufgeklapptePosition } from '../stores/journal/offenePositionen.js'
 import { appEinstellungen } from '../stores/settings.js'
 import { gewaehlteBoerse } from '../stores/filters.js'
@@ -9,12 +9,14 @@ import { refreshAccountBalance } from '../stores/accountBalance.js'
 import { eingerichteteBoersen, pruefeNichtEingerichtet } from './boersenZugang.js'
 import { istGewinn } from '../../shared/gewinn.js'
 import i18n from '../i18n'
+import { holeNeueBewertungen } from './tradePopups.js'
 
 let globalPollingInterval = null
 
 /**
- * Update the pending evaluation counters from the database.
- * Called after each sync cycle and on page load.
+ * Zähler der pendenten Bewertungen (Abzeichen) aus der Datenbank.
+ * Was davon NEU ist und ein Popup bekommt, entscheidet der Server
+ * (`holeNeueBewertungen`, `server/trade-popups.js`).
  */
 export async function useUpdatePendingCounts() {
     try {
@@ -24,7 +26,6 @@ export async function useUpdatePendingCounts() {
         pendingOpeningCount.value = openPositions.length
         pendingClosingCount.value = pendingPositions.length
 
-        // Aufschlüsselung je Börse (für das Bewertungs-Popup)
         const byBroker = (list) => list.reduce((acc, p) => {
             const b = p.broker || 'unbekannt'
             acc[b] = (acc[b] || 0) + 1
@@ -32,37 +33,6 @@ export async function useUpdatePendingCounts() {
         }, {})
         pendingOpeningByBroker.value = byBroker(openPositions)
         pendingClosingByBroker.value = byBroker(pendingPositions)
-
-        // Collect all current position IDs that need evaluation
-        const currentIds = new Set([
-            ...openPositions.map(p => 'open_' + p.positionId),
-            ...pendingPositions.map(p => 'close_' + p.positionId),
-        ])
-
-        // Compare with already-notified IDs from localStorage
-        const alreadyNotified = getNotifiedPositionIds()
-        const brandNewIds = [...currentIds].filter(id => !alreadyNotified.has(id))
-
-        // Clean up notified IDs that are no longer pending (position was evaluated/deleted)
-        const staleIds = [...alreadyNotified].filter(id => !currentIds.has(id))
-        if (staleIds.length > 0) {
-            removeNotifiedPositionIds(staleIds)
-        }
-
-        // Only show popup if there are truly new (never-before-notified) positions
-        if (brandNewIds.length > 0) {
-            // Mark them as notified so popup won't fire again for these
-            addNotifiedPositionIds(brandNewIds)
-            const neu = new Set(brandNewIds)
-            const neuOffen = openPositions.filter(p => neu.has('open_' + p.positionId))
-            const neuSchluss = pendingPositions.filter(p => neu.has('close_' + p.positionId))
-            evalNeu.value = {
-                oeffnung: { anzahl: neuOffen.length, jeBroker: byBroker(neuOffen) },
-                schluss: { anzahl: neuSchluss.length, jeBroker: byBroker(neuSchluss) },
-            }
-            evalNotificationShown.value = true
-            evalNotificationDismissed.value = false
-        }
     } catch (error) {
         console.error(' -> Fehler beim Aktualisieren der Zähler:', error)
     }
@@ -166,6 +136,8 @@ async function abgleichOffenerPositionen() {
 
         // Update counters after sync
         await useUpdatePendingCounts()
+        // Neue Eröffnungen/Schliessungen fürs Bewertungs-Popup
+        await holeNeueBewertungen()
 
         incomingLastFetched.value = new Date()
     } finally {
@@ -871,10 +843,14 @@ export async function useDeleteIncomingPosition(objectId) {
     }
 }
 
+const TAKT_MS = 60000
+let letzterStart = 0
+
 /**
- * Start global polling for position changes (used in the frame layout).
- * Runs every 60 seconds. Detects new/closed positions and updates counters.
- * Only active when showTradePopups is enabled.
+ * Globales Positions-Polling (im Rahmen, auf allen Seiten). Alle 60 s ein
+ * Abgleich, solange `showTradePopups` an ist. Ein verborgener Tab fragt
+ * nicht — beim Zurückkommen holt `abgleichWennFaellig` nach; der Web Lock in
+ * `useFetchOpenPositions` reiht die Abgleiche mehrerer Tabs hintereinander.
  */
 export function useStartGlobalPolling() {
     if (globalPollingInterval) {
@@ -889,14 +865,28 @@ export function useStartGlobalPolling() {
     globalPollingInterval = setInterval(async () => {
         // Don't poll if already polling (e.g., from Incoming.vue)
         if (incomingPollingActive.value) return
+        if (typeof document !== 'undefined' && document.hidden) return
 
         try {
+            letzterStart = Date.now()
             await useFetchOpenPositions()
         } catch (error) {
             // Silent fail — don't spam console on network errors
             console.log(' -> Globales Polling fehlgeschlagen:', error.message)
         }
-    }, 60000)
+    }, TAKT_MS)
+}
+
+/**
+ * Abgleich, wenn der letzte länger als ein Takt her ist (Start, Rückkehr in
+ * den Tab). Gezählt wird der Versuch, nicht der Erfolg: ohne eingerichtete
+ * Börse oder bei Netzausfall soll nicht jeder Fokuswechsel neu fragen.
+ */
+export function abgleichWennFaellig() {
+    if (appEinstellungen.value?.showTradePopups === 0) return
+    if (Date.now() - letzterStart < TAKT_MS) return
+    letzterStart = Date.now()
+    useFetchOpenPositions().catch((e) => console.log(' -> Abgleich fehlgeschlagen:', e?.message || e))
 }
 
 /**

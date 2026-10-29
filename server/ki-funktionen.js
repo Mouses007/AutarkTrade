@@ -18,7 +18,9 @@
  * Die KI-Funktionen des Hauses.
  *
  * `bereich` ist der Unter-Reiter der Einstellungen, in dem die Funktion
- * eingestellt wird — die Oberfläche macht daraus den Sprung dorthin. `rolle`
+ * eingestellt wird — die Oberfläche macht daraus den Sprung dorthin,
+ * `abschnitt` (falls gesetzt) ist der Abschnitt darin. `vorrang` ist ein
+ * eigenes Anbieter-/Modellfeld, das vor der Rolle gilt. `rolle`
  * benennt den `waehleAnbieter`-Bereich; leer heisst „nimmt den globalen
  * Anbieter". `funktionen` sind die Schlüssel, unter denen der Verbrauch
  * gebucht wird (mehrere, wo ein Vorgang aus Teilschritten besteht).
@@ -29,15 +31,17 @@ export const KI_FUNKTIONEN = [
         rolle: 'Bericht', funktionen: ['bericht', 'coach-chat'],
     },
     {
+        // Eigenes Feld auf KI › Trade-Berichte (`vorrang`), leer = der Bericht
         id: 'tradeAnalyse', titelKey: 'kiUebersicht.fn.tradeAnalyse', bereich: 'berichte',
-        rolle: 'Bericht', aufgabe: 'trade-analyse', funktionen: ['trade-analyse', 'trade-chat'],
+        vorrang: { provider: 'aiTradeAnalyseProvider', modell: 'aiTradeAnalyseModell' },
+        rolle: 'Bericht', funktionen: ['trade-analyse', 'trade-chat'],
     },
     {
         id: 'agent', titelKey: 'kiUebersicht.fn.agent', bereich: 'agent',
         rolle: 'Agent', aufgabe: 'agent', funktionen: ['agent', 'chart-chat'],
     },
     {
-        id: 'lagebericht', titelKey: 'kiUebersicht.fn.lagebericht', bereich: 'nachrichten',
+        id: 'lagebericht', titelKey: 'kiUebersicht.fn.lagebericht', bereich: 'nachrichten', abschnitt: 'news-modelle',
         // Die Nachrichten wählen ihren Anbieter über eigene Felder statt über
         // `waehleAnbieter` — deshalb hier ausdrücklich benannt.
         felder: { provider: 'radarNewsBerichtProvider', modell: 'radarNewsBerichtModell' },
@@ -48,25 +52,25 @@ export const KI_FUNKTIONEN = [
         funktionen: ['lagebericht', 'lagebericht-update', 'lagebericht-pruefung'],
     },
     {
-        id: 'recherche', titelKey: 'kiUebersicht.fn.recherche', bereich: 'nachrichten',
+        id: 'recherche', titelKey: 'kiUebersicht.fn.recherche', bereich: 'nachrichten', abschnitt: 'news-modelle',
         fest: { provider: 'perplexity', feld: 'radarNewsRechercheModell', standard: 'sonar' },
         aufgabe: 'recherche',
-        // `deepseek-suche` im Modellfeld heisst: Recherche über DeepSeek — nur
-        // mit Schalter `quellenOhneFreigabe` (S15, ID `deepseekSuche`); ohne
-        // ihn fällt der Bericht auf Perplexity zurück, und so zeigt es auch
-        // die Übersicht.
-        umschalter: { wert: 'deepseek-suche', provider: 'deepseek', schalter: 'quellenOhneFreigabe' },
+        // `radarNewsRechercheDeepseek = 1` (alt: `deepseek-suche` im Modellfeld)
+        // heisst: Recherche über DeepSeek — nur mit Schalter
+        // `quellenOhneFreigabe` (S15, ID `deepseekSuche`); ohne ihn fällt der
+        // Bericht auf Perplexity zurück, und so zeigt es auch die Übersicht.
+        umschalter: { wert: 'deepseek-suche', weg: 'radarNewsRechercheDeepseek', provider: 'deepseek', schalter: 'quellenOhneFreigabe' },
         funktionen: ['recherche'],
     },
     {
-        id: 'xSuche', titelKey: 'kiUebersicht.fn.xSuche', bereich: 'nachrichten',
+        id: 'xSuche', titelKey: 'kiUebersicht.fn.xSuche', bereich: 'nachrichten', abschnitt: 'news-modelle',
         fest: { provider: 'xai', feld: 'radarNewsXModell', standard: 'grok-4.20-0309-non-reasoning' },
         // Die Hype-Frühphase nutzt dieselbe Suche mit demselben Modell —
         // eine Kostenzeile für „X", eine Stelle für das Modell.
         funktionen: ['x-suche', 'hype-x'],
     },
     {
-        id: 'video', titelKey: 'kiUebersicht.fn.video', bereich: 'nachrichten',
+        id: 'video', titelKey: 'kiUebersicht.fn.video', bereich: 'nachrichten', abschnitt: 'news-modelle',
         // Nur Gemini öffnet eine YouTube-Adresse selbst. Deckt auch die
         // Chartbild-Prüfung ab, die denselben Anbieter benutzt.
         fest: { provider: 'gemini', feld: 'radarNewsModel', standard: 'gemini-3.5-flash-lite' },
@@ -75,20 +79,27 @@ export const KI_FUNKTIONEN = [
     {
         id: 'strategie', titelKey: 'kiUebersicht.fn.strategie', bereich: 'strategie',
         rolle: 'Strategie', aufgabe: 'strategie-baukasten',
-        funktionen: ['strategie-veto', 'regel-baukasten', 'strategie-baukasten'],
+        funktionen: ['regel-baukasten', 'strategie-baukasten'],
     },
     {
-        id: 'radar', titelKey: 'kiUebersicht.fn.radar', bereich: 'allgemein',
+        // Eigenes Feld auf KI › Strategie, leer = der allgemeine Anbieter. Die
+        // Rollen-Einstellung einer Instanz hat Vorrang — die kennt nur die Instanz.
+        id: 'strategieVeto', titelKey: 'kiUebersicht.fn.strategieVeto', bereich: 'strategie',
+        vorrang: { provider: 'aiStrategieVetoProvider', modell: 'aiStrategieVetoModell' },
+        rolle: '', funktionen: ['strategie-veto'],
+    },
+    {
+        id: 'radar', titelKey: 'kiUebersicht.fn.radar', bereich: 'allgemein', abschnitt: 'ki-aufgaben',
         rolle: '', aufgabe: 'marktradar-lage', funktionen: ['lage', 'handelslage', 'mechanik', 'rangliste'],
     },
     {
-        id: 'chart', titelKey: 'kiUebersicht.fn.chart', bereich: 'allgemein',
+        id: 'chart', titelKey: 'kiUebersicht.fn.chart', bereich: 'allgemein', abschnitt: 'ki-aufgaben',
         rolle: '', aufgabe: 'chart-analyse', funktionen: ['chart-analyse'],
     },
     {
         // Hing bis 18.10.2026 nur an der Editor-Rolle des Hype-Radars — und
         // fehlte hier ganz, obwohl er der grösste Einzelposten im Verbrauch war.
-        id: 'coinRadar', titelKey: 'kiUebersicht.fn.coinRadar', bereich: 'allgemein',
+        id: 'coinRadar', titelKey: 'kiUebersicht.fn.coinRadar', bereich: 'allgemein', abschnitt: 'ki-aufgaben',
         rolle: '', aufgabe: 'coin-radar', funktionen: ['coin-radar'],
     },
     {
@@ -138,7 +149,12 @@ export function anbieterVon(eintrag, settings) {
         const wert = String(karte?.[eintrag.aufgabe] || '').trim()
         if (wert) return wert.split('/')[0].trim()
     }
-    if (eintrag.umschalter && s[eintrag.fest?.feld] === eintrag.umschalter.wert
+    if (eintrag.vorrang) {
+        const eigen = String(s[eintrag.vorrang.provider] || '').trim()
+        if (eigen) return eigen
+    }
+    if (eintrag.umschalter && (s[eintrag.fest?.feld] === eintrag.umschalter.wert
+        || Number(s[eintrag.umschalter.weg]) === 1)
         && schalterAn(eintrag.umschalter.schalter ? s[eintrag.umschalter.schalter] : true)) {
         return eintrag.umschalter.provider
     }

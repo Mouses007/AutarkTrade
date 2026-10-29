@@ -183,7 +183,7 @@
                         </label>
                     </div>
                 </div>
-                <!-- S15: mit dem Schalter „Quellen ohne Verkaufsfreigabe" laufen die alten Quellen wieder. -->
+                <!-- S15: mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" laufen die alten Quellen wieder. -->
                 <p class="hypHinweis at-mo-1">{{ frei ? t('hype.quellenFreiHinweis') : t('hype.quellenEntferntHinweis') }}</p>
 
                 <!-- Der CoinGecko-Schlüssel gilt für Marktradar, Coin-Radar und
@@ -207,7 +207,7 @@
                 </div>
 
                 <!-- RugCheck: Bedingungen ungeklärt (Verkaufs-Prüfung Z. 66) — ab Werk aus,
-                     mit dem Schalter „Quellen ohne Verkaufsfreigabe" ab Werk an (S15). -->
+                     mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" ab Werk an (S15). -->
                 <div class="at-check schalter at-mo-3">
                     <input id="hypRugcheck" type="checkbox" v-model="einst.rugcheckAn" @change="speichern">
                     <label class="at-klein" for="hypRugcheck">{{ t('hype.rugcheckAn') }}</label>
@@ -292,7 +292,7 @@
                     <div class="at-wachsen hypHinweis at-mu-0">{{ t('hype.fruehXHinweis') }}</div>
                 </div>
                 <!-- Telegram-Kanäle der Frühphase — nur mit dem Schalter
-                     „Quellen ohne Verkaufsfreigabe" (S15); aus, bleibt die
+                     „Quellen mit eingeschränkten Nutzungsbedingungen" (S15); aus, bleibt die
                      gespeicherte Liste liegen und wird nicht gelesen. -->
                 <template v-if="frei">
                     <label class="at-label at-mo-2" for="hypFruehTg">{{ t('hype.fruehTelegram') }}</label>
@@ -1612,7 +1612,7 @@ const offenerBericht = ref(null)
 const einst = ref(null)
 const stufen = ref([])
 /**
- * Schalter „Quellen ohne Verkaufsfreigabe" (S15, Einstellungen › Datenquellen):
+ * Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15, Einstellungen › Datenquellen):
  * an → pump.fun, CoinPaprika, Reddit, Telegram, Binance Alpha … wie vor S12.
  * Bis geladen gilt die Vorgabe (an).
  */
@@ -1622,7 +1622,7 @@ const frei = computed(() => freigabeAn())
 const uebersichtQuellen = computed(() => {
     const e = einst.value || {}
     const q = e.quellen || {}
-    // S15: die Quellen ohne Verkaufsfreigabe tragen ebenfalls ihre Zeile, solange sie laufen.
+    // S15: die Quellen mit eingeschränkten Nutzungsbedingungen tragen ebenfalls ihre Zeile, solange sie laufen.
     const ohneFreigabe = frei.value
         ? [...(q.pumpfun !== false ? ['pumpfun'] : []), ...(q.coinpaprika !== false ? ['coinpaprika'] : []),
             ...(q.reddit !== false ? ['reddit'] : []),

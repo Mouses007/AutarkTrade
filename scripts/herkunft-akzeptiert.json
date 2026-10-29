@@ -203,6 +203,7 @@
     "server/bitget-api.js|451bd028bd37": "Optionen weiterreichen (if (x.a) y.a = x.a, je Feld eine Zeile)",
     "server/bitget-api.js|c87abd0138e1": "Optionen weiterreichen (if (x.a) y.a = x.a, je Feld eine Zeile)",
     "server/bitget-api.js|f32ec273d9cd": "Optionen weiterreichen (if (x.a) y.a = x.a, je Feld eine Zeile)",
+    "server/trade-popups.js|d21b8f86c487": "Express-Route mit Fehlerantwort (Gerüst von Express)",
     "server/bitunix-api.js|4c30c453ae6f": "Optionen weiterreichen (if (x.a) y.a = x.a, je Feld eine Zeile)",
     "server/bitunix-api.js|6e9211c42a0f": "Optionen weiterreichen (if (x.a) y.a = x.a, je Feld eine Zeile)",
     "server/bitunix-api.js|7f0a6c5a6eb8": "Optionen weiterreichen (if (x.a) y.a = x.a, je Feld eine Zeile)",
@@ -348,9 +349,9 @@
     "src/views/Tagesansicht.vue|796d8a10844e": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/Tagesansicht.vue|b097ed9a587b": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/einstellungen/EinstellungenBenachrichtigungen.vue|a356e6219f14": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/views/einstellungen/allgemein/Importe.vue|b689c30a57b6": "CSS-Eigenschaften in Folge (je Eigenschaft die einzige Schreibweise)",
-    "src/views/einstellungen/allgemein/Importe.vue|e943a3b83f00": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/views/einstellungen/allgemein/Speicher.vue|b689c30a57b6": "CSS-Eigenschaften in Folge (je Eigenschaft die einzige Schreibweise)",
+    "src/views/einstellungen/journal/Importe.vue|b689c30a57b6": "CSS-Eigenschaften in Folge (je Eigenschaft die einzige Schreibweise)",
+    "src/views/einstellungen/journal/Importe.vue|e943a3b83f00": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/views/einstellungen/system/Speicher.vue|b689c30a57b6": "CSS-Eigenschaften in Folge (je Eigenschaft die einzige Schreibweise)",
     "src/views/einstellungen/gemeinsam/Schalter.vue|3f5b6a279e64": "CSS-Eigenschaften in Folge (je Eigenschaft die einzige Schreibweise)",
     "src/views/einstellungen/gemeinsam/useKiAnbieter.js|7b475709f418": "Vorbelegung eines Auswahlfelds (passende Vorlage suchen, sonst Standard) — eigene KI-Einstellung, nur die if/else-Form ist gleich",
     "src/views/einstellungen/journal/Bewertung.vue|4a0e051984ac": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
@@ -360,7 +361,7 @@
     "src/views/einstellungen/ki/KiNewsBericht.vue|c5d14f5a9e42": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/einstellungen/ki/KiNewsQuellen.vue|2d44893f71aa": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/einstellungen/ki/KiNewsQuellen.vue|4772b047befa": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/views/einstellungen/live/Marktradar.vue|af56a140fb84": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/views/einstellungen/allgemein/Bedienung.vue|af56a140fb84": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "vite.config.js|5d47e06eeef9": "Gerüst von Vue, Router, Vite",
     "server/update-api.js|91ba38c394c9": "Folge von Konsolenmeldungen (Ergebnis der Update-Prüfung beim Start)",
     "server/chart-alarm-momentum.js|09ce19ce918b": "Allerwelts-Muster: gültige Schlüssel als Set, Einträge ausserhalb davon aus einem Objekt löschen (30 Tokens, eigener Zusammenhang: Momentum-Alarm-Zustand je Paar)",
@@ -374,6 +375,9 @@
     "server/tls/__selftest-tls-server.mjs|d20e35805363": "Testserver-Gerüst: express.json() einhängen und eine Middleware mit (req, res, next) (Express-Dokumentation; eigener Zusammenhang: HTTPS-Integrationstest)",
     "server/tls/__selftest-tls-zertifikat.mjs|6996a2cbbad4": "Wegwerf-Ordner per fs.mkdtempSync(path.join(os.tmpdir(), …)) anlegen, wenn ein Werkzeug fehlt überspringen (Node-Standardform; eigener Zusammenhang: openssl-Gegenprobe)",
     "server/chart-kandidaten.js|ba3c52477b69": "Allerwelts-Muster: Hoch/Tief über eine Kerzenreihe suchen (for-Schleife, Vergleich mit h/l), in eigenem Zusammenhang",
-    "src/utils/chart/tradeBildAusschnitt.js|86078e70707c": "Allerwelts-Muster: Hoch/Tief über eine Kerzenreihe suchen (for-Schleife, Vergleich mit h/l), in eigenem Zusammenhang"
+    "src/utils/chart/tradeBildAusschnitt.js|86078e70707c": "Allerwelts-Muster: Hoch/Tief über eine Kerzenreihe suchen (for-Schleife, Vergleich mit h/l), in eigenem Zusammenhang",
+    "src/components/onboarding/SchrittNewsQuellen.vue|ee5f870c7b7a": "Allerwelts-Vorlagengerüst: Ende des Skripts, Tabelle mit v-if-Hülle, thead/tr/th (Vue-Standardform); eigene Quellentabelle, Klasse für die Kartenansicht am Telefon dazugekommen",
+    "src/views/einstellungen/ki/KiNewsQuellen.vue|b906380e9bf6": "Allerwelts-Vorlagengerüst: Absatz, Liste mit v-if und v-for/:key, Zeile mit span (Vue-Standardform); eigene Liste der News-Profile, nur in einen Abschnitt verschoben",
+    "src/views/einstellungen/live/Marktradar.vue|af56a140fb84": "Allerwelts-Muster: Ankreuzliste per v-for/:key mit input type=checkbox, :value und v-model (Vue-Standardform); die Börsen-Verlinkung, unverändert aus Bedienung.vue hierher verschoben"
   }
 }

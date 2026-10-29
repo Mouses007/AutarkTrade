@@ -506,7 +506,8 @@ export function setupAiModelRoutes(app) {
             res.json({
                 // Die Aufgaben-Tabelle der Einstellungen wird hieraus gebaut,
                 // damit jede Zeile, die dort steht, auch eine Funktion steuert.
-                aufgaben: aufgabenSicht.map((t) => ({
+                // Aufgaben mit eigener Seite (`seite`) stehen nicht darin.
+                aufgaben: aufgabenSicht.filter((t) => !t.seite).map((t) => ({
                     id: t.id,
                     name: t.name,
                     beschreibung: t.description,

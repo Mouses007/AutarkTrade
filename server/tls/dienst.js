@@ -136,7 +136,7 @@ async function legeCaAn(knex) {
  */
 async function stelleAus(zeile, namen, extra = {}) {
     const z = entpacke(zeile)
-    if (!z.caSchluessel) throw new Error('Der Schlüssel der CA ist nicht lesbar (AT_SECRET geändert?). Unter Einstellungen › Allgemein › HTTPS eine neue CA erzeugen.')
+    if (!z.caSchluessel) throw new Error('Der Schlüssel der CA ist nicht lesbar (AT_SECRET geändert?). Unter Einstellungen › System › HTTPS eine neue CA erzeugen.')
     const jetzt = Date.now()
     const server = erzeugeServerZertifikat({ caPem: z.caPem, caSchluessel: z.caSchluessel, namen, jetzt })
     const n = await getKnex()(TABELLE).where({ id: 1, stand: z.stand }).update({

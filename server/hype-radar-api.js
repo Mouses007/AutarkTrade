@@ -83,7 +83,7 @@ export function setupHypeRadarRoutes(app) {
                 coingeckoSchluessel: await coingeckoDa(),
                 // S15: nutzbar heisst mit Schalter an auch „öffentlicher Endpunkt" — das Panel unterscheidet.
                 coingeckoEigen: await coingeckoEigen(),
-                // S15: Schalter „Quellen ohne Verkaufsfreigabe" — die Oberfläche zeigt danach pump.fun, Telegram, Alpha …
+                // S15: Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" — die Oberfläche zeigt danach pump.fun, Telegram, Alpha …
                 quellenOhneFreigabe: await freigabeAn(),
                 stufen: stufenNach(req.query.ordnung === 'guete' ? 'guete' : 'preis'),
                 fehlendeSchluessel: await fehlendeSchluessel(e),
@@ -124,7 +124,7 @@ export function setupHypeRadarRoutes(app) {
                 coingeckoSchluessel: await coingeckoDa(),
                 // S15: nutzbar heisst mit Schalter an auch „öffentlicher Endpunkt" — das Panel unterscheidet.
                 coingeckoEigen: await coingeckoEigen(),
-                // S15: Schalter „Quellen ohne Verkaufsfreigabe" — die Oberfläche zeigt danach pump.fun, Telegram, Alpha …
+                // S15: Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" — die Oberfläche zeigt danach pump.fun, Telegram, Alpha …
                 quellenOhneFreigabe: await freigabeAn(),
                 fehlendeSchluessel: await fehlendeSchluessel(e),
             })
@@ -189,7 +189,7 @@ export function setupHypeRadarRoutes(app) {
                     .catch(() => null)
                 const m = sicherParse(zeile?.marktDaten, {})
                 kandidat.links = m.links || null
-                // Ersteller (pump.fun) — nur mit dem Schalter „Quellen ohne Verkaufsfreigabe" genutzt (projekt.js).
+                // Ersteller (pump.fun) — nur mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" genutzt (projekt.js).
                 kandidat.ersteller = m.ersteller || ''
                 const f = await getKnex()('hype_frueh').where('contract', kandidat.contract).first().catch(() => null)
                 if (!kandidat.links) {
@@ -413,7 +413,7 @@ export function setupHypeRadarRoutes(app) {
             const zeilen = await getKnex()('radar_ergebnisse')
                 .where('art', 'frueh').andWhere('erstelltAm', '>=', seit)
             const horizonte = Object.keys(HORIZONTE.frueh).filter((h) => zeilen.some((z) => z.horizont === h))
-            // Ausgewertet wird der Regelstand des Schalters „Quellen ohne Verkaufsfreigabe" (S15).
+            // Ausgewertet wird der Regelstand des Schalters „Quellen mit eingeschränkten Nutzungsbedingungen" (S15).
             const regel = fruehRegelFuer(await freigabeAn())
             res.json({
                 seit, tage, gesamt: zeilen.length, regel,

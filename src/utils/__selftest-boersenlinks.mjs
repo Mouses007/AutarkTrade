@@ -21,7 +21,7 @@ for (const b of BOERSEN) {
 }
 p('Gate mit Unterstrich', listungUrl('gate', 'TQQQX') === 'https://www.gate.com/trade/TQQQX_USDT')
 p('Binance Futures als Perp', listungUrl('binance-futures', 'zcsh') === 'https://www.binance.com/en/futures/ZCSHUSDT')
-// Schalter „Quellen ohne Verkaufsfreigabe" aus (S12): keine Links zu Upbit, OKX, MEXC und Binance Alpha.
+// Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" aus (S12): keine Links zu Upbit, OKX, MEXC und Binance Alpha.
 const aus = { ohneFreigabe: false }
 p('Schalter aus: keine Links zu Börsen ohne Freigabe', ['upbit', 'okx', 'mexc', 'binance-alpha'].every((b) => listungUrl(b, 'X', { ...aus, contract: '0xabc' }) === null))
 p('Schalter aus: die übrigen Links bleiben', listungUrl('gate', 'TQQQX', aus) === 'https://www.gate.com/trade/TQQQX_USDT')

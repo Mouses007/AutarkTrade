@@ -18,7 +18,8 @@ import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/journal/zeit.js'
 import { tradeZeitzone } from '../../stores/ui.js'
 import { appEinstellungen } from '../../stores/settings.js'
-import { kerzenFarben as kerzenFarbenAus, kerzenOptionen, volumenFarbe } from '../../utils/chart/kerzenFarben.js'
+import { kerzenFarben as kerzenFarbenAus, kerzenOptionen, volumenFarbe, trifftKerze } from '../../utils/chart/kerzenFarben.js'
+import KerzenFarbFelder from './KerzenFarbFelder.vue'
 import {
     createChart, CandlestickSeries, HistogramSeries, CrosshairMode, PriceScaleMode, LineStyle, ColorType,
     createTextWatermark,
@@ -1159,7 +1160,7 @@ function meldeAutoSkala() {
 }
 /*
  * Doppelklick (Maus) bzw. Doppeltipp (Finger) auf die Kerzenfläche schaltet das
- * Vollbild. NICHT auf den Achsen — dort setzt der Doppelklick die Skala zurück —,
+ * Vollbild — liegt er genau auf einer Kerze, öffnet er die Kerzenfarben. NICHT auf den Achsen — dort setzt der Doppelklick die Skala zurück —,
  * nicht mit gewähltem Zeichenwerkzeug, und nicht auf einer Zeichnung: deren
  * Doppelklick (Text bearbeiten) hält die Zeichenebene in der Capture-Phase an.
  * Ein Doppeltipp löst in manchen Browsern ZUSÄTZLICH ein dblclick aus — die Sperre
@@ -1177,8 +1178,35 @@ function imKerzenFeld(e) {
     try { achseUnten = chart.value.timeScale().height() } catch { /* ohne Zeitachse */ }
     return x >= 0 && y >= 0 && x < r.width - achseRechts && y < r.height - achseUnten
 }
+/*
+ * Doppelklick genau auf eine Kerze öffnet stattdessen die Kerzenfarben — dort
+ * sucht man sie, nicht in den Einstellungen. Treffer = Körper oder Docht der
+ * Kerze unter dem Zeiger (pur: `trifftKerze`).
+ */
+const kerzenWahl = ref(null)   // {x, y} im Panel, solange das Farbfenster offen ist
+function kerzeUnterZeiger(e) {
+    const el = huelle.value, ks = kerzenSerie.value, ts = chart.value?.timeScale()
+    if (!el || !ks || !ts) return false
+    const r = el.getBoundingClientRect()
+    const x = e.clientX - r.left, y = e.clientY - r.top
+    const L = ts.coordinateToLogical(x)
+    const i = L == null ? -1 : Math.round(L)
+    const k = kerzen.value[i]
+    if (!k) return false
+    const a = ts.logicalToCoordinate(i), b = ts.logicalToCoordinate(i + 1)
+    return trifftKerze(x, y, { mitteX: a, hochY: ks.priceToCoordinate(k.h), tiefY: ks.priceToCoordinate(k.l), breite: a != null && b != null ? b - a : 6 })
+}
+function oeffneKerzenWahl(e) {
+    const r = huelle.value.getBoundingClientRect()
+    kontext.value = null
+    kerzenWahl.value = {
+        x: Math.max(4, Math.min(e.clientX - r.left, r.width - 260)),
+        y: Math.max(4, Math.min(e.clientY - r.top, r.height - 110)),
+    }
+}
 function vollbildWechsel(e) {
     if (!imKerzenFeld(e)) return
+    if (kerzeUnterZeiger(e)) { oeffneKerzenWahl(e); return }
     const jetzt = Date.now()
     if (jetzt - letzterVollbildWechsel < 500) return
     letzterVollbildWechsel = jetzt
@@ -1636,10 +1664,19 @@ defineExpose({
             <button @click="positionHier('short')"><Symbol name="runter" /> {{ t('chart.rechner.shortHier') }}</button>
             <button @click="zeichnungHier('horizontale')"><Symbol name="minus" /> {{ t('chart.wz.horizontale') }}</button>
             <button @click="zeichnungHier('strahlH')"><Symbol name="pfeilRechts" /> {{ t('chart.wz.strahlH') }}</button>
+            <button @click="kerzenWahl = { x: kontext.x, y: kontext.y }; kontext = null"><Symbol name="palette" /> {{ t('chart.kerzenFarbenMenue') }}</button>
             <hr />
             <!-- Fragt nach (Chart.vue) und lässt gesperrte Zeichnungen stehen — wie der Mülleimer in der Werkzeugleiste. -->
             <button class="gefahr" @click="kontext = null; emit('alleLoeschen')"><Symbol name="muell" /> {{ t('chart.wzKurz.alleZeichnungenLoeschen') }}</button>
             </template>
+        </div>
+
+        <div v-if="kerzenWahl" class="kontextHintergrund" @mousedown.stop="kerzenWahl = null" @contextmenu.prevent="kerzenWahl = null"></div>
+        <div v-if="kerzenWahl" class="kontextMenue kerzenWahl" :style="{ left: kerzenWahl.x + 'px', top: kerzenWahl.y + 'px' }"
+            @mousedown.stop @dblclick.stop @keydown.esc="kerzenWahl = null">
+            <div class="kopfzeile">{{ t('settings.kerzenFarben') }}
+                <button class="zu" :title="t('chart.schliessen')" :aria-label="t('chart.schliessen')" @click="kerzenWahl = null"><Symbol name="schliessen" /></button></div>
+            <KerzenFarbFelder />
         </div>
 
         <div v-if="laedt" class="hinweis"><Kreisel /></div>
@@ -1797,6 +1834,22 @@ defineExpose({
     border: none;
     border-top: 1px solid var(--line-stark);
     opacity: 1;
+}
+
+.kontextMenue.kerzenWahl {
+    min-width: 0;
+    padding: 6px 10px 10px;
+}
+
+.kontextMenue.kerzenWahl .kopfzeile {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.kontextMenue.kerzenWahl .zu {
+    padding: 2px;
 }
 
 .kontextMenue button.gefahr:hover {

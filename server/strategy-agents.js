@@ -200,7 +200,7 @@ export async function agentenVeto({ instance, setup }) {
     if (sentimentAn) {
         sentimentDaten = await sammleSentiment(setup.symbol, konf.sentiment.sources || {})
         try {
-            // Rolle der Instanz → Aufgaben-Zeile „strategie-veto" → global
+            // Rolle der Instanz → Feld „Sentiment-Veto" (KI › Strategie) → global
             const cfg = konf.sentiment.provider
                 ? await ladeLlmConfig({ provider: konf.sentiment.provider, model: konf.sentiment.model || undefined })
                 : await ladeLlmConfigFuerAufgabe('strategie-veto')

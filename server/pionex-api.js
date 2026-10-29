@@ -1,6 +1,7 @@
 import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
 import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText, nichtEingerichtet } from './boersen-status.js'
+import { setzeBoersenAnker } from './trade-popups.js'
 import { BASE_URL, pionexRequest } from './pionex-transport.js'
 import { journalSymbol } from './pionex-symbole.js'
 
@@ -586,6 +587,8 @@ export function setupPionexRoutes(app) {
             // Neue Zugangsdaten → alter Zugangs-Vermerk ist hinfällig. Ob die
             // neuen taugen, weiss erst der nächste Abruf.
             loescheBoersenVermerk('pionex').catch(() => { })
+            // Neuer Schlüssel: was dieses Konto schon hat, meldet das Bewertungs-Popup nicht.
+            if (apiKey && !apiKey.includes('•')) await setzeBoersenAnker('pionex')
             res.json({ ok: true })
         } catch (error) {
             res.status(500).json({ error: 'Interner Serverfehler' })

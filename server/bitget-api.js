@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { getKnex } from './database.js'
 import { encrypt, decrypt, maskKey } from './crypto.js'
 import { merkeBoersenStatus, loescheBoersenVermerk, fehlerText, nichtEingerichtet } from './boersen-status.js'
+import { setzeBoersenAnker } from './trade-popups.js'
 import { umgebungAn } from './umgebung.js'
 
 // Rohantworten der Börsen enthalten Positionen, Kontostände, PnL und IDs.
@@ -424,6 +425,8 @@ export function setupBitgetRoutes(app) {
             // Neue Zugangsdaten → alter Zugangs-Vermerk ist hinfällig. Ob die
             // neuen taugen, weiss erst der nächste Abruf.
             loescheBoersenVermerk('bitget').catch(() => { })
+            // Neuer Schlüssel: was dieses Konto schon hat, meldet das Bewertungs-Popup nicht.
+            if (apiKey && !apiKey.includes('•')) await setzeBoersenAnker('bitget')
             res.json({ ok: true })
         } catch (error) {
             res.status(500).json({ error: 'Interner Serverfehler' })

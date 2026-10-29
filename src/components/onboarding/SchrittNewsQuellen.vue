@@ -104,12 +104,15 @@ async function vorschlagUebernehmen(v) {
 }
 
 onMounted(() => { ladeFreigabe(); ladeNewsQuellen() })
+
+/* Art einer Quelle mit demselben Namen wie im Auswahlfeld unten, nicht als Rohwert */
+const ART_NAMEN = { youtube: 'YouTube', rss: 'RSS', telegram: 'Telegram', truth: 'Truth Social', x: 'X (via Grok)' }
 </script>
 
 <template>
     <div>
         <div v-if="newsQuellen.length" class="at-tabelle-huelle at-mu-3">
-            <table class="at-tabelle dicht">
+            <table class="at-tabelle dicht quellen">
                 <thead>
                     <tr>
                         <th class="sp-art">{{ t('settings.ki.news.colType') }}</th>
@@ -124,31 +127,31 @@ onMounted(() => { ladeFreigabe(); ladeNewsQuellen() })
                 </thead>
                 <tbody>
                     <tr v-for="q in newsQuellen" :key="q.id">
-                        <td class="at-gedaempft">{{ q.art }}</td>
-                        <td>{{ q.name || '—' }}</td>
+                        <td class="at-gedaempft art">{{ ART_NAMEN[q.art] || q.art }}</td>
+                        <td class="name">{{ q.name || '—' }}</td>
                         <td class="at-kuerzen sp-adresse">
                             <span :title="q.url">{{ q.url }}</span>
                             <div v-if="q.letzterFehler" class="at-klein at-warn">
                                 {{ q.letzterFehler }}
                             </div>
                         </td>
-                        <td class="at-mittig">
+                        <td class="at-mittig" :data-titel="t('settings.ki.news.colActive')">
                             <input type="checkbox" :checked="!!q.enabled" :disabled="ENTFERNT.includes(q.art)"
                                 :title="ENTFERNT.includes(q.art) ? t('onboarding.news.telegramEntfernt') : ''"
                                 @change="quelleAendern(q, { enabled: $event.target.checked ? 1 : 0 })">
                         </td>
-                        <td class="at-mittig">
+                        <td class="at-mittig" :data-titel="t('settings.ki.news.colExclude')">
                             <input type="checkbox" :checked="!!q.laerm"
                                 @change="quelleAendern(q, { laerm: $event.target.checked ? 1 : 0 })">
                         </td>
-                        <td class="at-mittig">
+                        <td class="at-mittig" :class="{ leer: q.art !== 'youtube' }" :data-titel="t('settings.ki.news.colVideos')">
                             <input v-if="q.art === 'youtube'" type="checkbox"
                                 :checked="Number(q.videoAnalyse ?? 1) === 1"
                                 @change="quelleAendern(q, { videoAnalyse: $event.target.checked ? 1 : 0 })">
                             <span v-else class="at-gedaempft">—</span>
                         </td>
                         <td class="at-rechtsbuendig">
-                            <Knopf art="gefahr" klein nur-symbol symbol="muell" titel="Löschen" @click="quelleLoeschen(q)" />
+                            <Knopf art="gefahr" klein nur-symbol symbol="muell" :titel="t('common.delete')" @click="quelleLoeschen(q)" />
                         </td>
                     </tr>
                 </tbody>
@@ -224,5 +227,39 @@ td input[type='checkbox'] {
     .neu-art,
     .neu-name,
     .neu-url { flex-basis: 100%; max-width: none; }
+
+    /* Telefon: je Quelle eine Karte statt einer Tabelle, deren Spalten
+       Aktiv/Ausschliessen/Videos ausserhalb des Bildes lagen */
+    .quellen, .quellen tbody, .quellen tr, .quellen td { display: block; width: 100%; }
+    .quellen thead { display: none; }
+    .quellen tr {
+        position: relative;
+        margin-bottom: var(--abstand-2);
+        padding: var(--abstand-2) 3rem var(--abstand-2) var(--abstand-3);
+        background: var(--panel-soft);
+        border-radius: var(--radius-knopf);
+    }
+    .quellen td { border: 0; padding: 0.15rem 0; text-align: left; }
+    .quellen td.leer { display: none; }
+    .quellen td.art { font-size: 0.75rem; }
+    .quellen td.name { font-weight: 600; }
+    .quellen .sp-adresse { max-width: none; }
+    .quellen td[data-titel] {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--abstand-2);
+    }
+    .quellen td[data-titel]::before {
+        content: attr(data-titel);
+        color: var(--muted);
+        font-size: 0.78rem;
+    }
+    .quellen td:last-child {
+        position: absolute;
+        top: var(--abstand-2);
+        right: var(--abstand-2);
+        width: auto;
+    }
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup>
-/** KI → Strategie: Anbieter/Modell der Strategie-KI und globale Schalter der (simulierten) Strategie-Agenten. */
+/** KI → Strategie: Anbieter/Modell der Baukästen und des Sentiment-Vetos, globale Schalter der (simulierten) Strategie-Agenten. */
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AnbieterWahl from '@/components/AnbieterWahl.vue'
@@ -16,7 +16,10 @@ import { useKiAnbieter } from '../gemeinsam/useKiAnbieter.js'
 
 const { t } = useI18n()
 
-const { aiModel, aiProvider, aiStrategieModell, aiStrategieProvider, modellListen } = useKiAnbieter()
+const {
+    aiModel, aiProvider, aiStrategieModell, aiStrategieProvider, aiStrategieVetoModell, aiStrategieVetoProvider,
+    modellListen,
+} = useKiAnbieter()
 
 /* STRATEGIE-AGENTEN — globale Schutzschalter. Bewusst hier und nicht in der
    Instanz-Konfiguration: sie stehen ÜBER jeder einzelnen Strategie, damit eine
@@ -68,6 +71,16 @@ loadAgentSettings()
                 @update:modell="w => { aiStrategieModell = w; kiSpeichern('aiStrategieModell', w) }" />
         </Feld>
 
+        <!-- Sentiment-/Portfolio-Agent vor einem simulierten Trade: bis 10/2026
+             eine Zeile der Aufgaben-Tabelle unter Agent. Leer = global; die
+             Rollen-Einstellung einer Instanz hat Vorrang. -->
+        <Feld :label="t('settings.ki.vetoLabel')" :hilfe="t('settings.ki.vetoHint')">
+            <AnbieterWahl :provider="aiStrategieVetoProvider" :modell="aiStrategieVetoModell"
+                :modell-listen="modellListen" :global-provider="aiProvider" :global-modell="aiModel"
+                @update:provider="w => { aiStrategieVetoProvider = w; aiStrategieVetoModell = ''; kiSpeichern('aiStrategieVetoProvider', w); kiSpeichern('aiStrategieVetoModell', '') }"
+                @update:modell="w => { aiStrategieVetoModell = w; kiSpeichern('aiStrategieVetoModell', w) }" />
+        </Feld>
+
         <!--=============== STRATEGIE-AGENTEN ===============-->
         <Abschnitt class="abstand-oben" :titel="t('settings.ki.strat.title')" symbol="agent" v-model:offen="agentExpanded">
             <template #kopf>
@@ -77,7 +90,7 @@ loadAgentSettings()
             <p class="einleitung">
                 <!-- Link nur, wenn der Strategien-Modus an ist — sonst führt er auf
                      eine Route, die die Wache im Layout sofort wieder abprallen lässt. -->
-                {{ t('settings.ki.strat.intro') }} <a v-if="modusStrategieAn" href="/agent/strategies">{{ t('settings.ki.strat.link') }}</a><span v-else>{{ t('settings.ki.strat.link') }}</span>. {{ t('settings.ki.strat.intro2') }}
+                {{ t('settings.ki.strat.intro') }} <router-link v-if="modusStrategieAn" to="/agent/strategies">{{ t('settings.ki.strat.link') }}</router-link><span v-else>{{ t('settings.ki.strat.link') }}</span>. {{ t('settings.ki.strat.intro2') }}
             </p>
 
             <Feld :label="t('settings.ki.strat.kill')">

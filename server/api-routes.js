@@ -7,6 +7,9 @@ import { isLocalRequest, getLocalVersion, compareSemver } from './update-api.js'
 import { logError } from './logger.js'
 import { GEHEIME_SETTINGS, ZIEL_SETTINGS } from './geheimnisse.js'
 import { istLokalesZiel } from './ollama-url.js'
+import { anzeigeWaehrung, normWaehrung } from './waehrung.js'
+import { ohneSeitenZeilen } from './ai-task-config.js'
+import { felderBeimAnlegen, felderBeimSchliessen, baselineBeimEinschalten, setzeBoersenAnker } from './trade-popups.js'
 
 const VALID_TABLES = [
     'trades', 'diaries', 'screenshots', 'satisfactions', 'tags', 'notes', 'excursions',
@@ -50,10 +53,15 @@ function redactSettings(parsed) {
     return safe
 }
 
-// Whitelist of allowed settings keys (from schema + migrations)
+// Whitelist of allowed settings keys (from schema + migrations). Spalten, die
+// nur noch für alte Migrationen stehen (betaAusblenden, radarNewsMailVoll,
+// radarPicycleAlarm, radarRsiTfs, startBalanceDate, currentBalance,
+// fluxDisplayName, fluxAvatar, layoutStyle) oder interne Merker sind, fehlen
+// hier bewusst — ebenso `aiModels`/`aiOpenrouterCatalog`: die schreibt nur der
+// Server über seine eigenen Routen (`ai-models.js`), nie der Browser.
 export const VALID_SETTINGS_KEYS = [
-    'timeZone', 'waehrungCode', 'waehrungFaktor', 'accounts', 'tags', 'apis', 'layoutStyle', 'avatar',
-    'showTradePopups', 'username', 'startBalance', 'startBalanceDate', 'currentBalance',
+    'timeZone', 'waehrungCode', 'waehrungFaktor', 'accounts', 'tags', 'apis', 'avatar',
+    'showTradePopups', 'username', 'startBalance',
     'tradeTimeframes', 'customTimeframes', 'enableBinanceChart',
     // KI-Schlüssel und -Adressen NICHT hier (A2-05c/A2-24): Schlüssel nur über
     // /api/ai/settings (verschlüsselt), Adressen nur dort mit pruefeKiEndpunkt —
@@ -62,29 +70,36 @@ export const VALID_SETTINGS_KEYS = [
     'aiProvider', 'aiModel', 'aiTemperature', 'aiMaxTokens',
     'aiScreenshots',
     'aiEnabled', 'aiReportPrompt', 'aiChatEnabled', 'browserNotifications', 'setupComplete', 'balances', 'language',
-    'fluxModel', 'fluxDisplayName', 'fluxAvatar', 'fluxUseCustomAvatar',
+    // Name/Bild der Share-Karte kommen aus `username`/`avatar` (Profil);
+    // `fluxDisplayName`/`fluxAvatar` sind nur noch Altspalten.
+    'fluxModel', 'fluxUseCustomAvatar',
     'shareCardProvider', 'geminiImageModel',
     'esp32Filter',
     'liveSymbol', 'liveMarket', 'liveViewPct', 'liveFrameMs', 'liveHistoryMin', 'liveRamp',
+    'liveSpanneMin', 'livePreisFaltung', 'liveSaettigung', 'liveShowBuch', 'liveBuchW', 'liveFremdBuch',
+    'liveShowDelta', 'liveShowAbsorption',
     'liveShowProfile', 'livePauseInBackground', 'liveColorMode', 'liveColorRef', 'liveAutoFollow',
     'liveThreshold', 'liveShowLiquidations', 'livePrefillMin', 'liveDotStep', 'liveProfileW', 'liveShowVolumeBars',
     'levMapTier', 'levMapHours', 'levMapSpanPct', 'levMapMmr', 'levMapMmrQuelle', 'levMapWeights', 'levMapView', 'levMapThreshold', 'levMapProfileW',
     'liveRecordEnabled', 'liveRecordSymbols', 'liveRecordDays', 'liveRecordFrameMs',
     'liveRecordRows', 'liveRecordRangePct', 'liveRecordAllLiq',
-    'scalpMaxMinutes', 'daytradeMaxHours', 'feeFixMigrated',
+    // `feeFixMigrated` NICHT: interner Merker einer Migration, von aussen nicht setzbar.
+    'scalpMaxMinutes', 'daytradeMaxHours',
     'strategyKillSwitch', 'strategyMaxLeverage', 'strategyHiddenTemplates',
-    'strategyLlmBudgetUsd', 'aiModels',
-    'aiOpenrouterCatalog', 'aiTaskProviders',
-    'radarRsiSymbols', 'radarRsiTfs', 'radarKalenderLaender', 'radarKalenderImpact', 'radarNewsQuellenAusschluss', 'radarNewsAuto', 'radarNewsStunde', 'radarNewsVideos', 'radarNewsModel', 'radarNewsAufloesung', 'radarNewsBerichtProvider', 'radarNewsBerichtModell', 'radarPicycleAlarm', 'radarPicycleSchwelle', 'radarFundingDivergenz', 'radarDivergenzSymbole', 'boersenLinks',
+    'strategyLlmBudgetUsd', 'aiTaskProviders',
+    'radarRsiSymbols', 'radarKalenderLaender', 'radarKalenderImpact', 'radarNewsQuellenAusschluss', 'radarNewsAuto', 'radarNewsStunde', 'radarNewsVideos', 'radarNewsModel', 'radarNewsAufloesung', 'radarNewsBerichtProvider', 'radarNewsBerichtModell', 'radarPicycleSchwelle', 'radarFundingDivergenz', 'radarDivergenzSymbole', 'boersenLinks',
     'radarNewsRhythmus', 'radarNewsWochentag', 'radarNewsThemen', 'radarNewsLaenge', 'radarNewsRuheAn', 'radarNewsRuheWoerter', 'radarNewsXModell',
-    'radarNewsUpdates', 'radarNewsUpdateStunden', 'radarNewsMailVoll', 'radarNewsMailInhalt', 'radarNewsMailAktiv', 'radarNewsMailAn',
+    'radarNewsUpdates', 'radarNewsUpdateStunden', 'radarNewsMailInhalt', 'radarNewsMailAktiv', 'radarNewsMailAn',
     'radarNewsBerichtAufbewahrung', 'radarNewsChartFrische',
-    'radarNewsRechercheModell',
+    'radarNewsRechercheModell', 'radarNewsRechercheDeepseek',
+    // Seitenfelder der Aufgaben ohne Tabellen-Zeile (Neuordnung 29.10.2026)
+    'radarNewsUpdateProvider', 'radarNewsUpdateModell', 'radarNewsPruefProvider', 'radarNewsPruefModell',
+    'aiTradeAnalyseProvider', 'aiTradeAnalyseModell', 'aiStrategieVetoProvider', 'aiStrategieVetoModell',
     'radarNewsTokenBudget', 'radarNewsPunkte', 'radarNewsMeldungsTiefe', 'radarNewsVideoTiefe', 'radarNewsVideoTokens', 'radarNewsLayout',
     'radarNewsLagenAn', 'radarNewsLagenSymbol',
     'radarNewsPromptZusatz', 'radarNewsFokusAn', 'radarNewsFokusWoerter', 'radarNewsAktivesProfil',
-    'livetradingAn', 'betaAusblenden', 'livetradingMobil', 'startseiteAn',
-    'erweiterteInfos', 'chartKerzeSteigend', 'chartKerzeFallend', 'momentumGrenze', 'spendenAn', 'spendenKaffeeUrl', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
+    'livetradingAn', 'livetradingMobil', 'startseiteAn',
+    'erweiterteInfos', 'chartKerzeSteigend', 'chartKerzeFallend', 'momentumGrenze', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
     // Spot-Portfolio
     'modusPortfolioAn', 'portfolioBoersen', 'portfolioStaubChf', 'portfolioPaare',
     // Anbieter/Modell je KI-Funktion; leer = global
@@ -295,7 +310,18 @@ export function registriereApiRouten(app) {
             for (const key of VALID_SETTINGS_KEYS) {
                 if (!blocked.has(key) && data[key] !== undefined) updateData[key] = data[key]
             }
+            if (updateData.waehrungCode !== undefined) updateData.waehrungCode = normWaehrung(updateData.waehrungCode)
+            // Zeilen von Aufgaben mit eigener Seite nie wieder annehmen (offener
+            // Reiter mit dem Stand vor der Neuordnung): Der nächste Start schöbe
+            // sie sonst über das, was auf der Seite eingestellt ist.
+            if (updateData.aiTaskProviders !== undefined) updateData.aiTaskProviders = ohneSeitenZeilen(updateData.aiTaskProviders)
             if (Object.keys(updateData).length === 0) return res.json({ ok: true })
+            // Bewertungs-Popups wieder an: nur Trades ab jetzt melden, kein Rückstau
+            // (`server/trade-popups.js`). Hier statt im Browser, damit es jeder Weg tut.
+            if (updateData.showTradePopups !== undefined) {
+                const alt = await knex('settings').select('showTradePopups').where('id', 1).first()
+                Object.assign(updateData, baselineBeimEinschalten(alt?.showTradePopups, updateData.showTradePopups, Date.now()))
+            }
 
             updateData.updatedAt = knex.fn.now()
             await knex('settings').where('id', 1).update(updateData)
@@ -303,6 +329,17 @@ export function registriereApiRouten(app) {
             res.json(settingsAusliefern(row))
         } catch (error) {
             console.error('Settings update error:', error)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
+    // Anzeigewährung: wirksamer Kurs USD → gewählte Währung (`server/waehrung.js`)
+    app.get('/api/waehrung', async (req, res) => {
+        try {
+            const row = await knex('settings').where('id', 1).select('waehrungCode', 'waehrungFaktor').first()
+            res.json(await anzeigeWaehrung(row))
+        } catch (error) {
+            console.error('Waehrung read error:', error)
             res.status(500).json({ error: 'Internal server error' })
         }
     })
@@ -415,6 +452,7 @@ export function registriereApiRouten(app) {
             if (req.body.apiImportStartDate !== undefined) updateData.apiImportStartDate = req.body.apiImportStartDate
 
             await knex('bitunix_config').where('id', 1).update(updateData)
+            if (req.body.apiKey && !String(req.body.apiKey).includes('•')) await setzeBoersenAnker('bitunix')
             const row = await knex('bitunix_config').where('id', 1).first()
             const { secretKey: _s, apiKey: _a, ...safe } = row || {}
             res.json({ ...safe, apiKey: maskKey(_a), hasSecret: !!_s })
@@ -726,6 +764,9 @@ function numerischeId(id) {
             if (Object.keys(data).length === 0) {
                 return res.status(400).json({ error: 'No data provided' })
             }
+            // Börsenzeit für das Bewertungs-Popup — gesetzt vom Server, nicht
+            // vom Browser (auch ein Tab mit altem Codestand liefert sie so).
+            if (table === 'incoming_positions') Object.assign(data, felderBeimAnlegen(req.body, Date.now()))
 
             const isPg = knex.client.config.client === 'pg'
             const id = isPg
@@ -759,6 +800,10 @@ function numerischeId(id) {
             }, {})
             if (Object.keys(data).length === 0) {
                 return res.status(400).json({ error: 'No data provided' })
+            }
+            if (table === 'incoming_positions' && data.status === 'pending_evaluation') {
+                const alt = await knex(table).select('status', 'closedAt').where('id', nr).first()
+                Object.assign(data, felderBeimSchliessen(alt, req.body, Date.now()))
             }
             data.updatedAt = knex.fn.now()
             const count = await knex(table).where('id', nr).update(data)

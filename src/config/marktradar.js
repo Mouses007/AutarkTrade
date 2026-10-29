@@ -54,7 +54,7 @@ export const Q = {
     cryptoquant: { name: 'CryptoQuant', url: 'https://cryptoquant.com/', art: 'daten' },
     marktdaten: { marktdaten: true },
     /*
-     * Quellen ohne Verkaufsfreigabe (S15, `server/quellen/freigabe.js`): nur
+     * Quellen mit eingeschränkten Nutzungsbedingungen (S15, `server/quellen/freigabe.js`): nur
      * angezeigt, solange der Schalter `quellenOhneFreigabe` an ist
      * (`freigabe: true`, siehe `loeseQuellen`).
      */

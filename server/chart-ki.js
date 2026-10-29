@@ -39,6 +39,7 @@
  * `server/__selftest-chart-ki.mjs`).
  */
 import { getKnex } from './database.js'
+import { zeitzoneAus } from '../shared/zeitzone.js'
 import { logWarn } from './logger.js'
 import { ladeLlmConfigFuerAufgabe, callLLMJson } from './llm.js'
 import { kannBilder } from './ai-models.js'
@@ -446,7 +447,7 @@ export async function ladeChartDaten({ symbol, interval, markt = 'futures', anza
     return {
         kerzen, zeichnungen, hebel, trades,
         englisch: s?.language === 'en',
-        zeitzone: s?.timeZone || 'UTC',
+        zeitzone: zeitzoneAus(s?.timeZone),
     }
 }
 

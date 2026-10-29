@@ -26,7 +26,7 @@
  * Jeder Teil fällt einzeln aus — dann bleibt er „unbekannt" und kostet keine
  * Punkte.
  *
- * S15: Mit dem Schalter „Quellen ohne Verkaufsfreigabe" (ID `pumpfun`) ist die
+ * S15: Mit dem Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (ID `pumpfun`) ist die
  * Ersteller-Bilanz wieder da wie vor S12: bei pump.fun alle Coins derselben
  * Wallet und ob einer davon die Kurve geschafft hat — für Token ohne Seite und
  * ohne Code die einzige Spur zum „Team". Die pump.fun-Pfade stammen aus dem
@@ -67,7 +67,7 @@ export const schluesselFuer = (k) => (k.contract
 /** Wie lange etwas her ist, in Tagen. */
 const tageSeit = (ms) => (Number.isFinite(ms) ? Math.max(0, (Date.now() - ms) / 86400e3) : null)
 
-/** Der Regelstand, der gerade gilt — hängt am Schalter „Quellen ohne Verkaufsfreigabe" (S15). */
+/** Der Regelstand, der gerade gilt — hängt am Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15). */
 async function aktuelleRegel() {
     return projektRegeln(await freigabeAn())
 }

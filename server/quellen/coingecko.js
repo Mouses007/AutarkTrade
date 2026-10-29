@@ -18,7 +18,7 @@
  * Pro → pro-api.coingecko.com + `x-cg-pro-api-key`.
  *
  * S15: Ohne Schlüssel läuft CoinGecko wieder über den öffentlichen Endpunkt
- * wie im alten Journal, solange der Schalter „Quellen ohne Verkaufsfreigabe"
+ * wie im alten Journal, solange der Schalter „Quellen mit eingeschränkten Nutzungsbedingungen"
  * an ist (`freigabe.js`, IDs `coingeckoOeffentlich` und `geckoterminal`).
  * Die `/onchain/…`-Pfade gehen dann an api.geckoterminal.com/api/v2 — die
  * On-Chain-API von CoinGecko ist dieselbe GeckoTerminal-API mit gleichem
