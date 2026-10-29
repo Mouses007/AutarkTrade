@@ -133,6 +133,12 @@ const struktur = computed(() => daten.value?.struktur || null)
 const ZUSTAND = { long: 'zLong', short: 'zShort', fastLong: 'zFastLong', fastShort: 'zFastShort', neutral: 'zNeutral' }
 const zustand = (z) => (z.zustand ? t('chart.mbox.' + (ZUSTAND[z.zustand] || 'zNeutral')) : '—')
 const zeitebenen = computed(() => daten.value?.zeitebenen || [])
+// Grenzlinie aus den Einstellungen (vom Server mitgeliefert): die farbigen Zonen der Leiste folgen ihr
+const grenze = computed(() => daten.value?.grenze || 50)
+const bahnStil = computed(() => {
+    const a = 50 - grenze.value / 2, b = 50 + grenze.value / 2
+    return { background: `linear-gradient(90deg, rgba(76, 175, 80, 0.4) 0%, rgba(76, 175, 80, 0.4) ${a}%, rgba(255, 255, 255, 0.07) ${a}%, rgba(255, 255, 255, 0.07) ${b}%, rgba(239, 83, 80, 0.4) ${b}%, rgba(239, 83, 80, 0.4) 100%)` }
+})
 /** Position auf der Leiste −100…+100 (über ±100 = ausgereizt, am Rand festgehalten). */
 const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) : null)
 </script>
@@ -206,10 +212,10 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
 
             <!-- Zeitebenen: Welle auf der Leiste −100 … +100 -->
             <div class="kachel leiter" :title="t('chart.mbox.tipTf')">
-                <div class="klein zeile"><span>{{ t('chart.mbox.zeitebenen') }}</span><span class="skala">Long −50 · 0 · +50 Short</span></div>
+                <div class="klein zeile"><span>{{ t('chart.mbox.zeitebenen') }}</span><span class="skala">Long −{{ grenze }} · 0 · +{{ grenze }} Short</span></div>
                 <div v-for="z in zeitebenen" :key="z.tf" class="tf" :title="`${NAME[z.tf] || z.tf}: ${z.wert != null ? z.wert.toFixed(1) : '—'} · ${zustand(z)}`">
                     <span class="tfName" :style="{ color: TF_FARBE[z.tf] || '#bdbdbd', borderColor: TF_FARBE[z.tf] || '#bdbdbd' }">{{ NAME[z.tf] || z.tf }}</span>
-                    <div class="bahn">
+                    <div class="bahn" :style="bahnStil">
                         <div class="null"></div>
                         <div v-if="position(z.wert) != null" class="wert" :class="'w-' + seite(z.dir)" :style="{ left: position(z.wert) + '%' }"></div>
                     </div>
@@ -474,29 +480,27 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
 
 .tf {
     display: grid;
-    grid-template-columns: 30px 1fr 84px;
+    grid-template-columns: 40px 1fr 84px;
     align-items: center;
     gap: 7px;
-    height: 20px;
+    height: 24px;
 }
 
 .tfName {
     font-weight: 700;
-    font-size: 10.5px;
+    font-size: 11.5px;
     text-align: center;
-    border-left: 2px solid;
-    padding-left: 2px;
+    /* Farbblock der Zeitebene (gleiche Farbe wie ihre Schienen-Punkte) — gross genug zum Unterscheiden */
+    border-left: 7px solid;
+    padding: 1px 0 1px 4px;
+    line-height: 14px;
 }
 
 .bahn {
     position: relative;
-    height: 8px;
-    border-radius: 4px;
-    /* −100…−50 Long-Zone (grün), −50…+50 neutral, +50…+100 Short-Zone (rot) */
-    background: linear-gradient(90deg,
-        rgba(76, 175, 80, 0.32) 0%, rgba(76, 175, 80, 0.32) 25%,
-        rgba(255, 255, 255, 0.06) 25%, rgba(255, 255, 255, 0.06) 75%,
-        rgba(239, 83, 80, 0.32) 75%, rgba(239, 83, 80, 0.32) 100%);
+    height: 12px;
+    border-radius: 6px;
+    /* Long-Zone (grün) bis −Grenze, neutral, Short-Zone (rot) ab +Grenze — Verlauf in `bahnStil` */
 }
 
 .bahn .null {
@@ -511,8 +515,8 @@ const position = (w) => (istZahl(w) ? Math.max(0, Math.min(100, (w + 100) / 2)) 
 .bahn .wert {
     position: absolute;
     top: 50%;
-    width: 10px;
-    height: 10px;
+    width: 15px;
+    height: 15px;
     border-radius: 50%;
     transform: translate(-50%, -50%);
     border: 2px solid #151a26;

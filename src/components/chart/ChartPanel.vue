@@ -17,6 +17,8 @@ import { ref, shallowRef, watch, onMounted, onBeforeUnmount, computed } from 'vu
 import { useI18n } from 'vue-i18n'
 import dayjs from '../../utils/journal/zeit.js'
 import { tradeZeitzone } from '../../stores/ui.js'
+import { appEinstellungen } from '../../stores/settings.js'
+import { kerzenFarben as kerzenFarbenAus, kerzenOptionen, volumenFarbe } from '../../utils/chart/kerzenFarben.js'
 import {
     createChart, CandlestickSeries, HistogramSeries, CrosshairMode, PriceScaleMode, LineStyle, ColorType,
     createTextWatermark,
@@ -28,6 +30,8 @@ import { kurzname } from '../../utils/chart/indikatorRegister.js'
 import { ZeichenEbene } from '../../utils/chart/zeichnungen/ZeichenEbene.js'
 import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { zeichnungenVon, legeAn, aendere, loesche } from '../../stores/chartZeichnungen.js'
+import { fadenkreuzTouch, istTouchGeraet } from '../../stores/chartBedienung.js'
+import { boersenKonto, ladeBoersenKonto } from '../../stores/boersenKonto.js'
 import ZeichnungStil from './ZeichnungStil.vue'
 import PositionsRechner from './PositionsRechner.vue'
 import TextStil from './TextStil.vue'
@@ -64,7 +68,7 @@ const props = defineProps({
     // Handy: „A" passt immer ein — Preis und Zeitachse (neueste Kerzen).
     zeitMitEinpassen: { type: Boolean, default: false },
 })
-const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alleLoeschen', 'panel', 'vollbild'])
+const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alarmVerschieben', 'alarmAendern', 'alarmBearbeiten', 'alleLoeschen', 'panel', 'vollbild'])
 const { t, te, locale } = useI18n()
 
 const huelle = ref(null)
@@ -172,8 +176,6 @@ function zeitText(sek) {
 }
 
 function baueChart() {
-    const gruen = farbe('--good', '#26a69a')
-    const rot = farbe('--bad', '#FF6960')
     const text = farbe('--muted', '#8a9199')
     const blau = farbe('--accent', '#1fd6c4')
     const schrift = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif'
@@ -228,10 +230,8 @@ function baueChart() {
     })
 
     const ks = c.addSeries(CandlestickSeries, {
-        // Steigende Kerzen hohl mit farbigem Rand, fallende gefüllt — so liest
-        // sich der Chart auch ohne Farbsinn und sieht nicht aus wie die Vorgabe.
-        upColor: 'rgba(38,166,154,0.12)', downColor: rot, borderUpColor: gruen, borderDownColor: rot,
-        wickUpColor: gruen, wickDownColor: rot,
+        // Farben aus den Einstellungen (kerzenFarben.js): steigend hohl, fallend gefüllt
+        ...kerzenOptionen(kerzenStil.value),
         priceLineColor: blau, priceLineStyle: LineStyle.Dotted,
     })
     wasserzeichen = createTextWatermark(c.panes()[0], wasserzeichenOptionen(schrift))
@@ -278,6 +278,14 @@ function baueChart() {
             ziehen: (id, punkte) => { ziehPunkte.value = punkte ? { id, punkte } : null },
             positionOeffnen: (id) => { auswahlId.value = id; ebene?.setzeAuswahl(id); oeffneRechner(id) },
             kiKlick: (schluessel, x, y) => { kiWahl.value = schluessel ? { schluessel, x, y } : null },
+            alarmPreis: (p) => emit('alarmBeiPreis', Number(p.toFixed(preisStellen.value))),
+            alarmZiehen: (id, p) => {
+                const l = alarmPreisLinien.find((x) => x.id === id)
+                const a = props.alarmLinien.find((x) => x.id === id)
+                if (l && a) l.linie.applyOptions({ price: p ?? a.bedingung.preis })
+            },
+            alarmVerschoben: (id, p) => { alarmMenue.value = null; emit('alarmVerschieben', { id, preis: Number(p.toFixed(preisStellen.value)) }) },
+            alarmKlick: (id, x, y) => { kontext.value = null; alarmMenue.value = { id, x, y } },
         },
     })
     zeigeKi()
@@ -295,6 +303,7 @@ function baueChart() {
         gewaehlterTrade.value = tr
         journalEbene?.hebeHervor(tr?.id ?? null)
     })
+    ebene.setzeFadenkreuz(fadenkreuzTouch.value, istTouchGeraet())
     ebene.setzeWerkzeug(props.werkzeug)
     ebene.setzeMagnet(props.magnet)
     ebene.setzeZeichnungen(sichtbareZeichnungen.value)
@@ -307,8 +316,15 @@ function letzteLegende() {
 }
 
 function volumenBalken(k) {
-    return { time: zuLwc(k.t), value: k.v, color: k.c >= k.o ? 'rgba(38,166,154,0.28)' : 'rgba(255,105,96,0.28)' }
+    return { time: zuLwc(k.t), value: k.v, color: volumenFarbe(kerzenStil.value, k.c >= k.o) }
 }
+
+/** Kerzenfarben aus den Einstellungen — eine Änderung dort färbt offene Charts sofort um. */
+const kerzenStil = computed(() => kerzenFarbenAus(appEinstellungen.value))
+watch(kerzenStil, (f) => {
+    kerzenSerie.value?.applyOptions(kerzenOptionen(f))
+    volumenSerie.value?.setData(kerzen.value.map(volumenBalken))
+})
 
 /** Volumenbalken unter den Kerzen — je Panel im Layout, fehlt der Eintrag: an. */
 const volumenAn = computed(() => props.panel.volumen !== false)
@@ -674,11 +690,40 @@ const kontext = ref(null)              // { x, y, preis } — Rechtsklick-Menü
 function zeichneAlarmLinien() {
     const serie = kerzenSerie.value
     if (!serie) return
-    for (const l of alarmPreisLinien) { try { serie.removePriceLine(l) } catch { /* weg */ } }
-    alarmPreisLinien = props.alarmLinien.map((a) => serie.createPriceLine({
-        price: a.bedingung.preis, color: '#ff9800', lineWidth: 1, lineStyle: LineStyle.SparseDotted,
-        axisLabelVisible: true, title: '⏰',
+    for (const l of alarmPreisLinien) { try { serie.removePriceLine(l.linie) } catch { /* weg */ } }
+    alarmPreisLinien = props.alarmLinien.map((a) => ({
+        id: a.id,
+        linie: serie.createPriceLine({
+            price: a.bedingung.preis, color: '#ff9800', lineWidth: 1, lineStyle: LineStyle.SparseDotted,
+            axisLabelVisible: true, title: a.bedingung.gesperrt ? '🔒⏰' : '⏰',
+        }),
     }))
+    ebene?.setzeAlarme(props.alarmLinien.map((a) => ({ id: a.id, preis: a.bedingung.preis, gesperrt: !!a.bedingung.gesperrt })))
+}
+
+/*
+ * Menü einer angetippten Preis-Alarmlinie: sperren/entsperren (gesperrt lässt
+ * sie sich nicht mehr ziehen), bearbeiten, löschen. Ziehen braucht kein Menü:
+ * die Linie im Chart oder an der Preisskala greifen und schieben.
+ */
+const alarmMenue = ref(null)          // { id, x, y }
+const alarmMenueInfo = computed(() => {
+    const m = alarmMenue.value
+    const a = m && props.alarmLinien.find((x) => x.id === m.id)
+    if (!a) return null
+    const breite = huelle.value?.clientWidth || 600
+    return { a, links: Math.max(4, Math.min(m.x + 10, breite - 220)), oben: Math.max(4, m.y + 10) }
+})
+function alarmMenueAktion(was) {
+    const info = alarmMenueInfo.value
+    alarmMenue.value = null
+    if (!info) return
+    if (was === 'sperren') emit('alarmAendern', { id: info.a.id, bedingung: { ...info.a.bedingung, gesperrt: !info.a.bedingung.gesperrt } })
+    else if (was === 'loeschen') {
+        const preis = kerzenSerie.value?.priceFormatter().format(info.a.bedingung.preis) ?? info.a.bedingung.preis
+        if (window.confirm(t('chart.alarm.loeschenFrage', { was: `${info.a.symbol} ⏰ ${preis}` }))) emit('alarmAendern', { id: info.a.id, loeschen: true })
+    }
+    else emit('alarmBearbeiten', info.a)
 }
 watch(() => props.alarmLinien, zeichneAlarmLinien, { deep: true })
 
@@ -921,6 +966,11 @@ function schliesseTrade() {
 
 // ── Zeichnungen ──────────────────────────────────────────────────────────
 const alleZeichnungen = computed(() => zeichnungenVon(props.panel.symbol).value)
+
+// Kontostand der Börse für das Risiko in % — nur abgefragt, wenn eine Position mit Rechner da ist
+const mitRechner = computed(() => alleZeichnungen.value.some((z) => z.typ === 'position' && z.stil?.rechner))
+watch(mitRechner, (ja) => { if (ja) ladeBoersenKonto() }, { immediate: true })
+watch(boersenKonto, (k) => ebene?.setzeKonto(k?.wert || 0))
 const sichtbareZeichnungen = computed(() => (props.zeichnungenVersteckt ? [] : alleZeichnungen.value.filter((z) =>
     !z.versteckt && (!Array.isArray(z.sichtbarAuf) || !z.sichtbarAuf.length || z.sichtbarAuf.includes(props.panel.interval)))))
 const ausgewaehlt = computed(() => sichtbareZeichnungen.value.find((z) => z.id === auswahlId.value) || null)
@@ -928,6 +978,7 @@ const ausgewaehlt = computed(() => sichtbareZeichnungen.value.find((z) => z.id =
 watch(sichtbareZeichnungen, (l) => ebene?.setzeZeichnungen(l))
 watch(() => props.werkzeug, (w) => { ebene?.setzeWerkzeug(w); if (w) auswahlId.value = null })
 watch(() => props.magnet, (m) => ebene?.setzeMagnet(m))
+watch(fadenkreuzTouch, (an) => ebene?.setzeFadenkreuz(an, istTouchGeraet()))
 watch(() => props.panel.symbol, () => { auswahlId.value = null; ebene?.setzeAuswahl(null) })
 
 async function zeichnungNeu({ typ, punkte, stil: vorgabeStil = {} }) {
@@ -994,6 +1045,7 @@ function loescheAuswahl() {
 /** Escape: laufende Zeichnung oder Messung verwerfen, sonst Auswahl lösen. */
 function abbrechen() {
     if (kiWahl.value) { kiWahl.value = null; return true }
+    if (alarmMenue.value) { alarmMenue.value = null; return true }
     if (ebene?.abbrechen()) return true
     if (auswahlId.value != null) { auswahlId.value = null; ebene?.setzeAuswahl(null); return true }
     return false
@@ -1043,6 +1095,12 @@ function kiWahlVerwerfen() {
 function waehleZeichnung(id) {
     auswahlId.value = id
     ebene?.setzeAuswahl(id)
+}
+
+/** „Bearbeiten" im Reiter Zeichnungen: auswählen (Stil-Leiste erscheint), bei einer Position gleich den Rechner öffnen. */
+function bearbeiteZeichnung(id) {
+    waehleZeichnung(id)
+    oeffneRechner(id)
 }
 
 /*
@@ -1407,6 +1465,7 @@ onMounted(() => {
     baueChart()
     ladeNeu()
     ladeMmr()
+    ebene?.setzeKonto(boersenKonto.value?.wert || 0)
     starteTakte()
     clearTimeout(marktNeuUhr)
     marktNeuUhr = setTimeout(marktNeu, 1500)
@@ -1450,7 +1509,7 @@ onBeforeUnmount(() => {
 defineExpose({
     chart, kerzenSerie, kerzen, zuLwc, vonLwc, kerzeBei,
     setzeKreuz, setzeZeitraum, sichtbarerZeitraum, zurJetztzeit, bildschirmfoto, ladeNeu,
-    loescheAuswahl, abbrechen, waehleZeichnung, auswahlId, setzeKiVorschau,
+    loescheAuswahl, abbrechen, waehleZeichnung, bearbeiteZeichnung, auswahlId, setzeKiVorschau,
     strategieDaten, strategieVorschau, strategieBacktest, setzeStrategieVorschau, setzeBacktest, ladeStrategie,
 })
 </script>
@@ -1535,6 +1594,19 @@ defineExpose({
                 <Knopf klein @click="kiWahlUebernehmen">{{ t('chart.ki.uebernehmen') }}</Knopf>
                 <Knopf klein @click="kiWahlVerwerfen">{{ t('chart.ki.verwerfen') }}</Knopf>
                 <button type="button" class="kiWahlZu" :title="t('chart.ki.schliessen')" :aria-label="t('chart.ki.schliessen')" @click="kiWahl = null"><Symbol name="schliessen" /></button>
+            </div>
+        </div>
+
+        <div v-if="alarmMenueInfo" class="kiWahl alarmMenue" :style="{ left: alarmMenueInfo.links + 'px', top: alarmMenueInfo.oben + 'px' }"
+            @mousedown.stop @pointerdown.stop>
+            <div class="kiWahlKopf"><Symbol name="glocke" /> {{ t('chart.alarm.linieKopf', { preis: kerzenSerie?.priceFormatter().format(alarmMenueInfo.a.bedingung.preis) }) }}</div>
+            <div class="kiWahlText">{{ t(alarmMenueInfo.a.bedingung.gesperrt ? 'chart.alarm.linieGesperrt' : 'chart.alarm.linieZiehen') }}</div>
+            <div class="kiWahlKnoepfe">
+                <Knopf klein :symbol="alarmMenueInfo.a.bedingung.gesperrt ? 'schlossOffen' : 'schloss'" @click="alarmMenueAktion('sperren')">
+                    {{ t(alarmMenueInfo.a.bedingung.gesperrt ? 'chart.stil.entsperren' : 'chart.stil.sperren') }}</Knopf>
+                <Knopf klein symbol="stift" @click="alarmMenueAktion('bearbeiten')">{{ t('chart.einstellungen') }}</Knopf>
+                <button type="button" class="kiWahlZu" :title="t('chart.entfernen')" :aria-label="t('chart.entfernen')" @click="alarmMenueAktion('loeschen')"><Symbol name="muell" /></button>
+                <button type="button" class="kiWahlZu" :title="t('chart.ki.schliessen')" :aria-label="t('chart.ki.schliessen')" @click="alarmMenue = null"><Symbol name="schliessen" /></button>
             </div>
         </div>
 

@@ -5,7 +5,7 @@
  *
  * Die Rechnung kommt fertig vom Server (`server/momentum-radar.js`, Konstanten
  * 1:1 aus der Vorlage); hier wird nur gezeichnet, in der Reihenfolge der Vorlage:
- *   unten   Marken ±100/±50/0, Schienen ±115, Schatten (Signallinie als Fläche),
+ *   unten   Marken ±100/±Grenze (Vorgabe 50)/0, Schienen ±115, Schatten (Signallinie als Fläche),
  *           helle Wellenfläche, Geldfluss je Kerze (violett = Futures treiben),
  *           weisse Spot-Linie, 4h-Farbleiste am unteren Rand
  *   (dazwischen zeichnet die Bibliothek Welle und Signallinie als Serien)
@@ -33,7 +33,8 @@ export const MOMENTUM_FARBEN = {
     extrem: '#ffa726',
 }
 const TF_FARBE = { '1h': '#ffa726', '4h': '#ba68c8', '1d': '#ffffff', '1w': '#ffd54f' }
-const TF_RADIUS = { '1h': 2.5, '4h': 3.5, '1d': 4.5, '1w': 5.5 }
+// Schienen-Punkte der höheren Zeitebenen: gross genug, dass die Farbe zu erkennen ist
+const TF_RADIUS = { '1h': 3.5, '4h': 4.5, '1d': 5.5, '1w': 6.5 }
 const F = MOMENTUM_FARBEN
 
 /** Wertebereich des Fensters: Schienen bei ±115, Farbleiste darunter — wie in der Vorlage. */
@@ -142,11 +143,13 @@ export class MomentumZeichnung {
     unten(ctx, groesse) {
         const v = this.v
         const breite = groesse.width
-        // Marken wie in der Vorlage: ±100 Extrem, ±50 überkauft/-verkauft (kräftig), 0 gestrichelt.
+        // Marken wie in der Vorlage: ±100 Extrem, ±Grenze überkauft/-verkauft (kräftig,
+        // Vorgabe 50, eingestellt in den Einstellungen — der Server liefert sie mit), 0 gestrichelt.
+        const g = v?.grenze || 50
         this.waagerecht(ctx, 100, breite, alpha('#e0e0e0', 0.65), 1)
         this.waagerecht(ctx, -100, breite, alpha('#e0e0e0', 0.65), 1)
-        this.waagerecht(ctx, 50, breite, 'rgba(255,255,255,0.75)', 2)
-        this.waagerecht(ctx, -50, breite, 'rgba(255,255,255,0.75)', 2)
+        this.waagerecht(ctx, g, breite, 'rgba(255,255,255,0.75)', 2)
+        this.waagerecht(ctx, -g, breite, 'rgba(255,255,255,0.75)', 2)
         this.waagerecht(ctx, 0, breite, alpha('#787b86', 0.55), 1, [4, 4])
         this.waagerecht(ctx, SCHIENE, breite, alpha(F.short, 0.45), 1)
         this.waagerecht(ctx, -SCHIENE, breite, alpha(F.long, 0.45), 1)
@@ -230,7 +233,7 @@ export class MomentumZeichnung {
         for (const sp of v.schienen || []) {
             const x = this.X(sp.i), y = this.Y(sp.seite === 'long' ? -SCHIENE : SCHIENE)
             if (x == null || y == null) continue
-            ctx.beginPath(); ctx.arc(x, y, (TF_RADIUS[sp.tf] || 3) * faktor, 0, Math.PI * 2)
+            ctx.beginPath(); ctx.arc(x, y, (TF_RADIUS[sp.tf] || 3) * Math.max(1, faktor), 0, Math.PI * 2)
             ctx.fillStyle = TF_FARBE[sp.tf] || '#ffffff'
             ctx.fill()
         }

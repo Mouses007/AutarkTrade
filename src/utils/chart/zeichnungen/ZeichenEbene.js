@@ -14,7 +14,7 @@
 import {
     zeitZuLogisch, logischZuZeit, logischZuX, abstandZuStrecke, verlaengere, preisAufGerade,
     fibPreise, positionWerte, magnet, imRechteck, messung, dauerText, fortlaufendePunkte,
-    textInBox, textAnLinie, rechteckGezogen,
+    textInBox, textAnLinie, freieZeile, rechteckGezogen, kreuzVerschoben, istTipp,
 } from './geometrie.js'
 import { werkzeug, stilFuer } from './werkzeuge.js'
 import { volumenprofil } from '../../../../shared/volumenprofil.js'
@@ -55,6 +55,7 @@ export class ZeichenEbene {
         this.rueckruf = rueckruf
         this.formatPreis = formatPreis || ((p) => String(p))
         this.mmr = 0.004
+        this.konto = 0
         this.zeiten = []
         this.kerzen = []
         this.iv = 3_600_000
@@ -65,6 +66,12 @@ export class ZeichenEbene {
         this.entwurf = null           // { typ, punkte }
         this.messErgebnis = null      // [a, b] nach einer Messung
         this.magnetAn = false
+        this.fadenkreuzAn = true      // Touch: Finger schiebt ein Fadenkreuz, Tippen setzt den Punkt
+        this.touchGeraet = false      // Hauptzeiger ist ein Finger → Fadenkreuz schon beim Wählen des Werkzeugs
+        this.kreuz = null             // { x, y } Fadenkreuz in Pixeln, solange per Fadenkreuz gezeichnet wird
+        this.finger = null            // { id, x0, y0, start, seit } laufende Berührung im Fadenkreuz-Modus
+        this.alarme = []              // Preis-Alarme als Linien: [{ id, preis, gesperrt }] — ziehbar, Tipp öffnet ihr Menü
+        this.alarmZug = null          // { id, pointerId, y0, preis, gesperrt, bewegt }
         this.ziehen = null            // { id, anker, x0, y0, L0, p0, orig }
         this.vorschau = new Map()     // id → punkte während des Ziehens
         this.temporaer = []           // Vorschau (KI-Analyse): gezeichnet, nur anklickbar (rueckruf.kiKlick), nicht verschiebbar
@@ -113,6 +120,10 @@ export class ZeichenEbene {
     hitTest(x, y) {
         if (this.werkzeugTyp) return { cursorStyle: 'crosshair', externalId: 'zeichnen', zOrder: 'top' }
         const t = this.trefferTest(x, y)
+        if (!t) {
+            const al = this.alarmTreffer(y)
+            if (al) return { cursorStyle: al.gesperrt ? 'pointer' : 'ns-resize', externalId: 'alarm' + al.id, zOrder: 'top' }
+        }
         if (!t) return this.kiTreffer(x, y) ? { cursorStyle: 'pointer', externalId: 'ki', zOrder: 'top' } : null
         const z = t.z
         return { cursorStyle: z.gesperrt ? 'default' : t.anker != null ? 'grab' : 'move', externalId: String(z.id), zOrder: 'top' }
@@ -154,6 +165,9 @@ export class ZeichenEbene {
     setzeWerkzeug(typ) {
         this.werkzeugTyp = typ || null
         this.entwurf = null
+        this.finger = null
+        // Auf dem Handy steht das Fadenkreuz sofort in der Mitte — man sieht, wo der erste Punkt landet.
+        this.kreuz = typ && this.fadenkreuzAn && this.touchGeraet ? this.mitte() : null
         if (!typ) this.fang = null
         if (typ) this.auswahlId = null
         this.requestUpdate()
@@ -181,6 +195,8 @@ export class ZeichenEbene {
     abbrechen() {
         const etwas = !!(this.entwurf || this.messErgebnis || this.werkzeugTyp)
         this.entwurf = null
+        this.finger = null
+        if (this.kreuz) this.kreuz = this.werkzeugTyp && this.touchGeraet ? this.kreuz : null
         this.messErgebnis = null
         this.requestUpdate()
         return etwas
@@ -416,10 +432,80 @@ export class ZeichenEbene {
         return y >= Math.min(y1, y2) && y <= Math.max(y1, y2)
     }
 
+    /** Preis-Alarme dieses Panels (die Linien zeichnet das Panel als Preislinien, hier nur greifen). */
+    setzeAlarme(liste) {
+        this.alarme = (liste || []).filter((a) => Number.isFinite(a?.preis))
+        if (this.alarmZug && !this.alarme.some((a) => a.id === this.alarmZug.id)) this.alarmZug = null
+    }
+
+    /** Alarmlinie auf Höhe y (Maus ±6 px, Finger ±14 px) — die nächste. */
+    alarmTreffer(y, toleranz = 6) {
+        let best = null
+        for (const a of this.alarme) {
+            const ay = this.zuY(a.preis)
+            if (ay == null) continue
+            const d = Math.abs(ay - y)
+            if (d <= toleranz && (!best || d < best.d)) best = { ...a, d }
+        }
+        return best
+    }
+
+    setzeFadenkreuz(an, touchGeraet = this.touchGeraet) {
+        this.fadenkreuzAn = !!an
+        this.touchGeraet = !!touchGeraet
+        if (!this.fadenkreuzAn) { this.kreuz = null; this.finger = null }
+        else if (this.werkzeugTyp && this.touchGeraet && !this.kreuz) this.kreuz = this.mitte()
+        this.requestUpdate()
+    }
+
+    mitte() {
+        const breite = this.chart.timeScale().width()
+        const hoehe = this.chart.panes()[0]?.getHeight() ?? 0
+        return breite > 0 && hoehe > 0 ? { x: Math.round(breite / 2), y: Math.round(hoehe / 2) } : null
+    }
+
+    /** Fadenkreuz steht an (x, y): Fangpunkt und der wandernde Punkt des Entwurfs folgen ihm. */
+    folgeKreuz(e) {
+        const { x, y } = this.kreuz
+        this.merkeFang(x, y, e)
+        if (this.entwurf) {
+            const pt = this.punktAus(x, y, this.magnetFuer(e))
+            if (pt) this.entwurf.punkte[this.entwurf.punkte.length - 1] = pt
+        }
+        this.requestUpdate()
+    }
+
     // ── Bedienung ────────────────────────────────────────────────────────
     zeigerUnten(e) {
         if (e.button !== undefined && e.button !== 0) return
         const { x, y, innen } = this.lokal(e)
+        if (this.werkzeugTyp && this.fadenkreuzAn && e.pointerType === 'touch') {
+            // Fadenkreuz-Modus: die Berührung setzt nichts, erst das Loslassen entscheidet (Tippen oder Schieben).
+            // Wo der Finger liegt, ist egal (auch auf der Preisachse) — gezeichnet wird am Fadenkreuz.
+            this.verschlucke = true
+            e.stopPropagation()
+            e.preventDefault()
+            if (!this.kreuz) {
+                this.kreuz = kreuzVerschoben({ x, y }, 0, 0, this.chart.timeScale().width(), this.chart.panes()[0]?.getHeight() ?? 0)
+                this.folgeKreuz(e)
+            }
+            this.finger = { id: e.pointerId, x0: x, y0: y, start: { ...this.kreuz }, seit: performance.now() }
+            try { this.huelle.setPointerCapture(e.pointerId) } catch { /* egal */ }
+            return
+        }
+        // Preis-Alarmlinie greifen — im Kerzenbereich (wenn dort keine Zeichnung liegt) und auf der Preisskala
+        if (!this.werkzeugTyp && this.alarme.length) {
+            const hoehe = this.chart.panes()[0]?.getHeight() ?? 0
+            const al = y >= 0 && y < hoehe && x >= 0 && !(innen && this.trefferTest(x, y)) ? this.alarmTreffer(y, e.pointerType === 'touch' ? 14 : 6) : null
+            if (al) {
+                this.verschlucke = true
+                e.stopPropagation()
+                e.preventDefault()
+                try { this.huelle.setPointerCapture(e.pointerId) } catch { /* egal */ }
+                this.alarmZug = { id: al.id, pointerId: e.pointerId, y0: y, preis: al.preis, gesperrt: !!al.gesperrt, bewegt: false, x, y }
+                return
+            }
+        }
         if (!innen) return
         if (this.werkzeugTyp) {
             this.verschlucke = true
@@ -454,6 +540,28 @@ export class ZeichenEbene {
 
     zeigerBewegt(e) {
         const { x, y, innen } = this.lokal(e)
+        if (this.alarmZug) {
+            const z = this.alarmZug
+            if (e.pointerId !== z.pointerId) return
+            e.stopPropagation()
+            if (z.gesperrt) return
+            if (!z.bewegt && Math.abs(y - z.y0) < 4) return
+            const p = this.vonY(y)
+            if (p == null || !(p > 0)) return
+            z.bewegt = true
+            z.preis = p
+            this.rueckruf.alarmZiehen?.(z.id, p)
+            return
+        }
+        if (this.finger) {
+            if (e.pointerId !== this.finger.id) return
+            e.stopPropagation()
+            const breite = this.chart.timeScale().width()
+            const hoehe = this.chart.panes()[0]?.getHeight() ?? 0
+            this.kreuz = kreuzVerschoben(this.finger.start, x - this.finger.x0, y - this.finger.y0, breite, hoehe)
+            this.folgeKreuz(e)
+            return
+        }
         if (innen || this.ziehen) this.merkeFang(x, y, e)
         else if (this.fang) { this.fang = null; this.requestUpdate() }
         if (this.ziehen) {
@@ -480,6 +588,28 @@ export class ZeichenEbene {
 
     zeigerOben(e) {
         this.verschlucke = false
+        if (this.alarmZug) {
+            const z = this.alarmZug
+            if (e.pointerId !== z.pointerId) return
+            this.alarmZug = null
+            try { this.huelle.releasePointerCapture(e.pointerId) } catch { /* egal */ }
+            if (e.type === 'pointercancel') { this.rueckruf.alarmZiehen?.(z.id, null); return }
+            if (z.bewegt) this.rueckruf.alarmVerschoben?.(z.id, z.preis)
+            else this.rueckruf.alarmKlick?.(z.id, z.x, z.y)
+            return
+        }
+        if (this.finger) {
+            const f = this.finger
+            if (e.pointerId !== f.id) return
+            this.finger = null
+            try { this.huelle.releasePointerCapture(e.pointerId) } catch { /* egal */ }
+            const { x, y } = this.lokal(e)
+            if (e.type !== 'pointercancel' && this.kreuz && istTipp(x - f.x0, y - f.y0, performance.now() - f.seit)) {
+                const { x: kx, y: ky } = this.kreuz
+                this.klick(kx, ky, this.magnetFuer(e))
+            }
+            return
+        }
         if (!this.ziehen) return
         const z = this.ziehen
         this.ziehen = null
@@ -578,7 +708,11 @@ export class ZeichenEbene {
     fertig(punkte) {
         const typ = this.werkzeugTyp
         this.entwurf = null
-        if (typ === 'messen') {
+        this.kreuz = null
+        if (typ === 'alarm') {
+            // Werkzeug „Preis-Alarm": der Punkt (am Fadenkreuz, mit Magnet) ist der Preis — der Dialog übernimmt
+            this.rueckruf.alarmPreis?.(punkte[0].p)
+        } else if (typ === 'messen') {
             this.messErgebnis = punkte
         } else {
             let pk = punkte
@@ -605,7 +739,12 @@ export class ZeichenEbene {
         const hoehe = groesse.height
         ctx.save()
         ctx.font = SCHRIFT
+        // KI-Vorschau: alle Beschriftungen stehen am Kursende — sie weichen einander
+        // senkrecht aus (HBAR 4h, 29.10.2026: fünf Labels übereinander, keines lesbar).
+        this._belegt = []
+        this._hoehe = hoehe
         for (const z of this.temporaer) this.zeichneEine(ctx, z, z.punkte, breite, hoehe, false)
+        this._belegt = null
         // Gesperrte zuerst — sie liegen im Hintergrund, die offenen darüber
         for (const z of [...this.zeichnungen.filter((x) => x.gesperrt), ...this.zeichnungen.filter((x) => !x.gesperrt)]) {
             this.zeichneEine(ctx, z, this.punkteVon(z), breite, hoehe, z.id === this.auswahlId)
@@ -625,6 +764,27 @@ export class ZeichenEbene {
                 ctx.stroke()
             }
         }
+        if (this.kreuz && this.werkzeugTyp) this.zeichneKreuz(ctx, breite, hoehe)
+        ctx.restore()
+    }
+
+    /** Fadenkreuz des Touch-Zeichnens: über die ganze Fläche, Mitte als Ring (der Finger liegt woanders). */
+    zeichneKreuz(ctx, breite, hoehe) {
+        const { x, y } = this.kreuz
+        ctx.save()
+        ctx.strokeStyle = 'rgba(31,214,196,0.75)'
+        ctx.lineWidth = 1
+        ctx.setLineDash([5, 4])
+        ctx.beginPath()
+        ctx.moveTo(0, y + 0.5); ctx.lineTo(breite, y + 0.5)
+        ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, hoehe)
+        ctx.stroke()
+        ctx.setLineDash([])
+        ctx.beginPath()
+        ctx.arc(x, y, 9, 0, Math.PI * 2)
+        ctx.lineWidth = 1.5
+        ctx.strokeStyle = '#1fd6c4'
+        ctx.stroke()
         ctx.restore()
     }
 
@@ -654,6 +814,11 @@ export class ZeichenEbene {
         if (!text) return
         const b = ctx.measureText(text).width
         const xx = rechtsbuendig ? x - b - 6 : x
+        if (this._belegt) {
+            const box = { x: xx - 3, y: y - groesse, w: b + 6, h: groesse + 4 }
+            y += freieZeile(box, this._belegt, { oben: 0, unten: this._hoehe })
+            this._belegt.push({ ...box, y: y - groesse })
+        }
         if (hinten) {
             ctx.fillStyle = hinten
             ctx.fillRect(xx - 3, y - groesse, b + 6, groesse + 4)
@@ -889,6 +1054,12 @@ export class ZeichenEbene {
         this.requestUpdate()
     }
 
+    /** Kontostand der Börse: gilt, wo die Position selbst keinen hat (`stores/boersenKonto.js`). */
+    setzeKonto(wert) {
+        this.konto = wert > 0 ? wert : 0
+        this.requestUpdate()
+    }
+
     /**
      * Positionsrechner (`shared/tradeRechner.js`): Liq-Linie gestrichelt über die
      * Box, daneben Menge, Nominal, Marge, Verlust/Gewinn — unter der Stop-Seite.
@@ -896,7 +1067,8 @@ export class ZeichenEbene {
      * Chart dann nur die Liq-Linie und eine Warnung.
      */
     zeichneRechner(ctx, pk, eingabe, l, b, ye, ys, hoehe, ausgewaehlt = false) {
-        const r = rechnePosition({ einstieg: pk[0].p, ziel: pk[1].p, stop: pk[2].p, eingabe, mmr: this.mmr })
+        const mitKonto = eingabe.konto > 0 || !this.konto ? eingabe : { ...eingabe, konto: this.konto }
+        const r = rechnePosition({ einstieg: pk[0].p, ziel: pk[1].p, stop: pk[2].p, eingabe: mitKonto, mmr: this.mmr })
         if (!r) return
         const orange = '#ff9800'
         const yl = this.zuY(r.liq)
@@ -958,6 +1130,11 @@ export class ZeichenEbene {
                 if (z.typ === 'position') { aus.push(etikett(pk[1].p, '#26a69a')); aus.push(etikett(pk[2].p, '#ff6960')); aus.push(etikett(pk[0].p, '#787b86')) }
                 else if (z.typ !== 'vertikale') for (const q of pk) aus.push(etikett(q.p, '#29b6f6'))
             }
+        }
+        // Fadenkreuz (Touch): sein Preis an der Achse — mit Magnet der Fangpreis, an dem der Punkt landet
+        if (this.kreuz && this.werkzeugTyp) {
+            const p = this.fang?.p ?? this.vonY(this.kreuz.y)
+            if (p != null) aus.push(etikett(p, '#1fd6c4'))
         }
         return aus
     }

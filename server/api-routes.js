@@ -84,7 +84,7 @@ export const VALID_SETTINGS_KEYS = [
     'radarNewsLagenAn', 'radarNewsLagenSymbol',
     'radarNewsPromptZusatz', 'radarNewsFokusAn', 'radarNewsFokusWoerter', 'radarNewsAktivesProfil',
     'livetradingAn', 'betaAusblenden', 'livetradingMobil', 'startseiteAn',
-    'erweiterteInfos', 'spendenAn', 'spendenKaffeeUrl', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
+    'erweiterteInfos', 'chartKerzeSteigend', 'chartKerzeFallend', 'momentumGrenze', 'spendenAn', 'spendenKaffeeUrl', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
     // Spot-Portfolio
     'modusPortfolioAn', 'portfolioBoersen', 'portfolioStaubChf', 'portfolioPaare',
     // Anbieter/Modell je KI-Funktion; leer = global

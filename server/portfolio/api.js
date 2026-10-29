@@ -45,7 +45,7 @@ import { setzeFuturesStichtag } from './futures-steuer.js'
 import { setzeTotalverlust } from './totalverlust.js'
 import { setzeSpam } from './spam.js'
 import { totalverlustUebersicht } from './totalverlust-seite.js'
-import { steuerBerichtHtml, BERICHT_CSS, BERICHT_JS } from './steuer-bericht.js'
+import { steuerBerichtHtml, berichtCss, BERICHT_JS } from './steuer-bericht.js'
 import fs from 'fs'
 import { importiereKursliste, kurslisteStand } from './estv-kursliste.js'
 import { kanton as kantonVon } from '../../shared/steuer-kantone.js'
@@ -54,7 +54,7 @@ import { rufeAb, laufStand, bewerteAlles } from './abruf.js'
 import { testeBitpanda } from './quellen.js'
 import { ARTEN, FIAT } from './normal.js'
 import { leseImportCsv, importQuelle } from './import.js'
-import { berechneSteuerjahr, steuerCsv, RECHTSHINWEIS } from './steuer.js'
+import { berechneSteuerjahr, steuerCsv } from './steuer.js'
 import { ketteNorm, fxHeute } from './kurse.js'
 
 const SCHLUESSEL_NAMEN = ['bitpanda', 'etherscan']
@@ -378,10 +378,14 @@ export function setupPortfolioRoutes(app) {
             const jahr = Number(req.query.jahr) || new Date().getFullYear() - 1
             const [s, tv] = await Promise.all([berechneSteuerjahr(jahr), totalverlustUebersicht()])
             res.setHeader('Content-Type', 'text/html; charset=utf-8')
-            res.send(steuerBerichtHtml(s, { erstellt: Date.now(), version: APP_VERSION, totalverluste: tv.zeilen, rechtshinweis: RECHTSHINWEIS }))
+            res.send(steuerBerichtHtml(s, { erstellt: Date.now(), version: APP_VERSION, totalverluste: tv.zeilen }))
         } catch (e) { res.status(500).type('text/plain').send(`Bericht nicht erstellt: ${e.message}`) }
     })
-    app.get('/api/portfolio/steuer/bericht.css', (req, res) => { res.type('text/css').send(BERICHT_CSS) })
+    app.get('/api/portfolio/steuer/bericht.css', (req, res) => {
+        const jahr = Number(req.query.jahr)
+        const kt = kantonVon(String(req.query.kt || ''))
+        res.type('text/css').send(berichtCss({ jahr: Number.isInteger(jahr) ? jahr : null, kanton: kt?.name || null, laufend: req.query.laufend === '1' }))
+    })
     app.get('/api/portfolio/steuer/bericht.js', (req, res) => { res.type('application/javascript').send(BERICHT_JS) })
     app.get('/api/portfolio/steuer.csv', async (req, res) => {
         try {

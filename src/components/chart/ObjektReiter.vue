@@ -14,7 +14,7 @@ const props = defineProps({
     zeichnungen: { type: Array, default: () => [] },
     auswahlId: { type: Number, default: null },
 })
-const emit = defineEmits(['waehle', 'aendere', 'loesche'])
+const emit = defineEmits(['waehle', 'bearbeite', 'aendere', 'loesche'])
 const { t } = useI18n()
 
 const zeilen = computed(() => [...props.zeichnungen].sort((a, b) => b.erstelltAm - a.erstelltAm))
@@ -42,6 +42,9 @@ function beschreibung(z) {
             <span class="info">{{ beschreibung(z) }}</span>
             <span v-if="Array.isArray(z.sichtbarAuf) && z.sichtbarAuf.length" class="tf">{{ z.sichtbarAuf.join(',') }}</span>
             <span class="werkzeug" @click.stop>
+                <button type="button" :title="t(z.typ === 'position' ? 'chart.objektRechner' : 'chart.objektBearbeiten')"
+                    @click="emit('bearbeite', z)" :aria-label="t(z.typ === 'position' ? 'chart.objektRechner' : 'chart.objektBearbeiten')">
+                    <Symbol :name="z.typ === 'position' ? 'rechner' : 'stift'" /></button>
                 <button type="button" :title="t(z.versteckt ? 'chart.einblenden' : 'chart.ausblenden')"
                     @click="emit('aendere', z, { versteckt: !z.versteckt })" :aria-label="t(z.versteckt ? 'chart.einblenden' : 'chart.ausblenden')">
                     <Symbol :name="z.versteckt ? 'augeAus' : 'auge'" /></button>

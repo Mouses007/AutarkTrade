@@ -19,6 +19,7 @@ import { MomentumZeichnung } from './momentumZeichnung.js'
 import { VwapVectorZeichnung, vektorFarben } from './vwapVectorZeichnung.js'
 import { SignalZeichnung } from './signalZeichnung.js'
 import { CvZeichnung } from './cvZeichnung.js'
+import { VrvpZeichnung } from './vrvpZeichnung.js'
 import { logischZuX } from './zeichnungen/geometrie.js'
 
 const GRUEN = 'rgba(38,166,154,0.7)'
@@ -404,7 +405,9 @@ export class IndikatorZeichner {
                         ? new SignalZeichnung({ chart: this.chart, serie: this.kerzenSerie })
                         : def.zeichner === 'cv' && this.kerzenSerie
                             ? new CvZeichnung({ chart: this.chart, serie: this.kerzenSerie })
-                            : null
+                            : def.zeichner === 'vrvp' && this.kerzenSerie
+                                ? new VrvpZeichnung({ chart: this.chart, serie: this.kerzenSerie })
+                                : null
             const titel = def.ort === 'eigen' && erste && this.titelFuer ? new FensterTitel(erste, this.titelFuer(instanz)) : null
             const tabelle = def.tabelle && erste && this.tabellenText ? new TabellenZeichnung(erste) : null
             const zonen = def.zonen && erste ? new ZonenZeichnung(erste, def.zonen) : null
@@ -486,6 +489,7 @@ export class IndikatorZeichner {
         if (e.divergenz) e.divergenz.setze(e.werte._div)
         if (e.band) e.band.setze(e.werte[e.def.band.linie])
         if (e.def.zeichner === 'vwapVector') e.zeichnung?.setze(e.werte._vv, this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
+        else if (e.def.zeichner === 'vrvp') e.zeichnung?.setze(this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'cv') e.zeichnung?.setze(e.werte._cv, this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'signale') e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
         else e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand())
@@ -540,7 +544,7 @@ export class IndikatorZeichner {
                 if (neueKerze && n > 1) serie.update(this.punkt(e, key, n - 2, kerzen))
                 serie.update(this.punkt(e, key, n - 1, kerzen))
             }
-            if (neueKerze || e.def.zeichner === 'vwapVector' || e.band || e.tabelle) this.zeichnungSetzen(e)
+            if (neueKerze || e.def.zeichner === 'vwapVector' || e.def.zeichner === 'vrvp' || e.band || e.tabelle) this.zeichnungSetzen(e)
         }
         this.farbenMelden(!neueKerze)
     }

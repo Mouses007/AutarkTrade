@@ -61,7 +61,29 @@ export function spanne(z) {
     return hoch - tief
 }
 
-const gemessen = (zeilen) => zeilen.filter((z) => z.status === 'gemessen' && spanne(z) !== null)
+/**
+ * Ab wann eine Coin-Radar-Messung dem Horizont folgt: 07.10.2026 18:00 UTC.
+ *
+ * Bis dahin reichte das Fenster von der Aussage bis zum Zeitpunkt der Messung
+ * (siehe `rechneFenster` in `radar-ergebnisse.js`). Mit dem damaligen
+ * Rückstand von rund 25 Tagen lag der Median von |Rendite| bei allen drei
+ * Horizonten gleich bei gut 7 % und die Spanne bei 19 % — gemessen am
+ * 29.10.2026 auf der NAS, 404 290 Zeilen. Der Schnitt hängt an `gemessenAm`,
+ * nicht an `erstelltAm`: Ältere Aufträge, die der neue Code einlöste, sind
+ * richtig gemessen. Die neue Fassung lief ab 15:50 UTC, eine alte Instanz
+ * schrieb aber bis 17:55 noch dazwischen — die paar hundert richtigen Zeilen
+ * dieser zwei Stunden fallen mit heraus, das ist billiger als ein Raten je Zeile.
+ * Die Altzeilen löscht `radar-aufraeumen.js` nach 180 Tagen von selbst.
+ */
+export const MESSFENSTER_SEIT = Date.UTC(2026, 9, 7, 18, 0, 0)
+
+/** Gemessen, aber noch über „bis jetzt" statt über den Horizont. */
+const istAltmessung = (z) => {
+    const am = zahl(z?.gemessenAm)
+    return am !== null && am > 0 && am < MESSFENSTER_SEIT
+}
+
+const gemessen = (zeilen) => zeilen.filter((z) => z.status === 'gemessen' && !istAltmessung(z) && spanne(z) !== null)
 
 /** Gehört die Zeile zur Kontrollgruppe? Altbestand kennt keine — er hat `spitze`. */
 const istKontrolle = (z) => z.gruppe === 'kontrolle'
@@ -252,6 +274,7 @@ export function werteAus(zeilen = [], horizont = '') {
         anzahl: gemessen(zeilen).length,
         offen: zeilen.filter((z) => z.status === 'offen').length,
         fehlgeschlagen: zeilen.filter((z) => z.status === 'fehlgeschlagen').length,
+        altmessungen: zeilen.filter((z) => z.status === 'gemessen' && istAltmessung(z)).length,
         laeufe: laeufe.length,
         laeufeMitKontrolle: abstaende.length,
         precision10: mittel(laeufe.map((l) => l.precision10.wert)),

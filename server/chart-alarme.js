@@ -40,6 +40,7 @@
  * Zeichnung liegt auf genau einem Symbol, und Kreuzen prüft der 5-s-Takt am
  * laufenden Kurs — dafür gibt es keine Zeiteinheit.
  */
+import { leseMomentumGrenze } from './momentum-grenze.js'
 import { getKnex } from './database.js'
 import { beansprucheFuehrung, verlaengereFuehrung } from './db-claim.js'
 import { warteAufGewicht } from './binance-takt.js'
@@ -131,6 +132,8 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
         if (b.niveau !== undefined && Number(b.niveau) > 0) bed.niveau = Number(b.niveau)
         if (b.sperreMin !== undefined) bed.sperreMin = Math.max(MIN_SPERRE_MIN, Math.min(10080, Number(b.sperreMin) || 0))
         if (a === 'momentum' && b.divergenz) bed.divergenz = true
+        // Preis-Alarm gesperrt: die Linie lässt sich im Chart nicht mehr ziehen (nur die Oberfläche fragt danach)
+        if (a === 'preis' && b.gesperrt) bed.gesperrt = true
         if (a === 'lsob') {
             bed.ereignis = LSOB_EREIGNISSE.includes(b.ereignis) ? b.ereignis : 'retest'
             const params = lsobParams(b.params)
@@ -480,7 +483,7 @@ const ARTEN = {
         pruefe: (a, p, kerzen, jetzt) => {
             const erg = pruefeMomentum({
                 bedingung: { ...a.bedingung, punktgroesse: a.punktgroesse }, tf: p.tf, kerzen, jetzt,
-                gemeldetBis: a.stand?.k?.[paarSchluessel(p)], abMs: a.stand?.ab || a.erstelltAm,
+                gemeldetBis: a.stand?.k?.[paarSchluessel(p)], abMs: a.stand?.ab || a.erstelltAm, grenze: momentumGrenze,
             })
             return erg.ausloesen ? { ...p, kerzeT: erg.kerzeT, punkt: erg.punkt, preis: erg.preis } : null
         },
@@ -512,6 +515,8 @@ const artPaar = (art, p) => `${art}|${paarSchluessel(p)}`
  * Prüfskripte; sonst ruft ihn nur der Takt). Beide prüfen je Kerzenschluss —
  * gleiche Reihen teilen den Abruf, das Paar-Limit gilt über beide zusammen.
  */
+// Grenzlinie des laufenden Takts — dieselbe wie in Chart und Kachel
+let momentumGrenze = 50
 export async function momentumTakt() {
     if (momentumLaeuft) return
     momentumLaeuft = true
@@ -520,6 +525,7 @@ export async function momentumTakt() {
         const roh = await knex('chart_alarme').where('aktiv', 1).whereIn('art', MEHRFACH).orderBy('id')
         if (!roh.length) return
         const alarme = roh.map(alarmZeile)
+        momentumGrenze = await leseMomentumGrenze()
         const jetzt = Date.now()
         const listen = await watchlistKarte(knex)
 
@@ -709,6 +715,11 @@ export function setupChartAlarmRoutes(app) {
             if (daten.bedingung && alt.art === 'linie') {
                 const altB = parse(alt.bedingung, {})
                 if (altB.profil) daten.bedingung = JSON.stringify({ ...JSON.parse(daten.bedingung), niveau: altB.niveau, profil: altB.profil, kante: altB.kante })
+            }
+            // Preis-Alarm im Chart verschoben: neu ansetzen — die letzte Messung galt der alten
+            // Höhe, und ein Vergleich damit meldete eine Kreuzung, die es so nie gab.
+            if (daten.bedingung && alt.art === 'preis' && JSON.parse(daten.bedingung).preis !== parse(alt.bedingung, {}).preis) {
+                daten.letzterPreis = null; daten.letzteZeit = 0; messung.delete(id)
             }
             // Wieder eingeschaltet: neu ansetzen. Der gespeicherte Preis ist
             // womöglich Tage alt, und ein Vergleich damit wäre eine Kreuzung,

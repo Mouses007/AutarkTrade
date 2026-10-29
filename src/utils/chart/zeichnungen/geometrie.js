@@ -248,6 +248,22 @@ export function textAnLinie(x0, x1, y, { textH = 'links', textV = 'oben' } = {},
 }
 
 /**
+ * Senkrechter Versatz, damit eine Beschriftung (`box` {x, y oben, w, h}) keine schon
+ * gezeichnete (`belegt`, gleiche Form) überdeckt: probiert 0, eine Zeile höher, eine
+ * tiefer, zwei höher … bis `stufen` Zeilen; bleibt innerhalb [oben, unten]. Ist nirgends
+ * Platz, 0 — dann lieber überdeckt als weit weg von ihrer Linie.
+ */
+export function freieZeile(box, belegt, { oben = 0, unten = Infinity, stufen = 3 } = {}) {
+    const schritt = box.h + 2
+    const frei = (y) => y >= oben && y + box.h <= unten
+        && !belegt.some((b) => box.x < b.x + b.w && b.x < box.x + box.w && y < b.y + b.h && b.y < y + box.h)
+    for (let i = 0; i <= stufen; i++) {
+        for (const dy of i ? [-i * schritt, i * schritt] : [0]) if (frei(box.y + dy)) return dy
+    }
+    return 0
+}
+
+/**
  * Rechteck an einem seiner acht Griffe ziehen. Die Ecken sind die beiden
  * gespeicherten Punkte (0, 1) und die beiden anderen (2 = Zeit von 0 + Preis von 1,
  * 3 = Zeit von 1 + Preis von 0); die Kantenmitten bewegen nur eine Kante:
@@ -266,4 +282,24 @@ export function rechteckGezogen(orig, anker, pt) {
         case 7: return [a, { t: b.t, p: pt.p }]
         default: return [a, b]
     }
+}
+
+/*
+ * Fadenkreuz-Zeichnen auf dem Handy: der Finger schiebt das Fadenkreuz um seinen
+ * eigenen Weg (wie ein Trackpad), statt dass der Punkt unter dem Finger landet —
+ * dort verdeckt ihn der Finger, und auf einer 15m-Kerze von 4 px trifft niemand.
+ * Ein kurzes Tippen ohne nennenswerte Bewegung setzt den Punkt am Fadenkreuz.
+ */
+export const TIPP_PX = 8          // so weit darf der Finger wandern, und es ist noch ein Tippen
+export const TIPP_MS = 500        // länger gehalten ist ein Schieben, kein Tippen
+
+/** Fadenkreuz um (dx, dy) verschoben, im Zeichenbereich gehalten. */
+export function kreuzVerschoben(start, dx, dy, breite, hoehe) {
+    const klemme = (v, max) => Math.min(Math.max(v, 0), Math.max(max - 1, 0))
+    return { x: klemme(start.x + dx, breite), y: klemme(start.y + dy, hoehe) }
+}
+
+/** War die Berührung ein Tippen (Punkt setzen) oder ein Schieben? */
+export function istTipp(dx, dy, dauerMs) {
+    return Math.hypot(dx, dy) <= TIPP_PX && dauerMs <= TIPP_MS
 }

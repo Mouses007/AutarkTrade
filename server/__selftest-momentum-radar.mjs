@@ -18,7 +18,7 @@
 
 import {
     welle, signale, zustand, setup, geldfluss, herkunft, richteAus,
-    periodenBeginn, vwapSeit, struktur, zaehltFuerStaerke, werteAus,
+    periodenBeginn, vwapSeit, struktur, zaehltFuerStaerke, werteAus, grenzeAus, momentumPunkte,
 } from './momentum-radar.js'
 
 let bestanden = 0
@@ -232,6 +232,28 @@ console.log('\nGesamtauswertung')
     let geworfen = false
     try { werteAus({ kerzen: { ...kerzen, '15m': kerzen['15m'].slice(0, 10) }, chartTf: '15m' }) } catch { geworfen = true }
     check('zu wenige Chart-Kerzen → Fehler statt leerer Aussage', geworfen)
+}
+
+// ── Grenzlinie einstellbar (settings.momentumGrenze) ─────────────────────
+{
+    check('grenzeAus: leer/Unsinn = 50', grenzeAus(null) === 50 && grenzeAus('') === 50 && grenzeAus('x') === 50)
+    check('grenzeAus: begrenzt auf 30–80 und ganzzahlig', grenzeAus(10) === 30 && grenzeAus(99) === 80 && grenzeAus('42.4') === 42)
+    // Welle: −45 kreuzt nach oben — mit 50 kein Punkt, mit 40 ein Long-Punkt
+    const w1 = [-60, -55, -48, -45], w2 = [-50, -50, -47, -46]
+    check('Kreuz bei −45: mit Grenze 50 kein Signal', !signale(w1, w2)[3].long)
+    check('Kreuz bei −45: mit Grenze 40 Long-Signal', signale(w1, w2, 40)[3].long)
+    check('Zustand −30: mit 50 neutral, mit 40 fast Long (70 % = −28)',
+        zustand(-30).code === 'neutral' && zustand(-30, 40).code === 'fastLong')
+    check('Zustand −45: mit 50 fast Long, mit 40 Long', zustand(-45).code === 'fastLong' && zustand(-45, 40).code === 'long')
+    // Ganze Rechnung: mit kleinerer Grenze nie weniger Punkte, Vorgabe unverändert
+    let s0 = 77
+    const zufall = () => (s0 = (s0 * 16807) % 2147483647) / 2147483647
+    const reihe = (n, ms) => { let p = 100; return Array.from({ length: n }, (_, i) => { const o = p; p *= 1 + (zufall() - 0.5) * 0.02; return { t: i * ms, o, h: Math.max(o, p) * 1.002, l: Math.min(o, p) * 0.998, c: p, v: 100 + zufall() * 50 } }) }
+    const k = { '15m': reihe(800, 9e5), '1h': reihe(300, 36e5), '4h': reihe(100, 144e5), '1d': reihe(30, 864e5) }
+    const p50 = momentumPunkte({ kerzen: k, chartTf: '15m' })
+    const p40 = momentumPunkte({ kerzen: k, chartTf: '15m', grenze: 40 })
+    check('Grenze 40 liefert mindestens so viele Punkte wie 50', p40.length >= p50.length && p40.length > 0, `${p40.length} / ${p50.length}`)
+    check('ohne Angabe = Grenze 50', JSON.stringify(p50) === JSON.stringify(momentumPunkte({ kerzen: k, chartTf: '15m', grenze: 50 })))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

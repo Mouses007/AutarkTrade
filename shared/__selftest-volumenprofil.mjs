@@ -34,5 +34,16 @@ console.log('\nVolumenprofil\n')
     check('leere Eingabe → null', volumenprofil([]) === null && volumenprofil(null) === null)
 }
 
+{
+    // Zeilen nach Preis je Zeile (TradingView „Ticks pro Zeile"): Spanne 100–110, je Zeile 0,5 → 20 Zeilen
+    const vp = volumenprofil([k(100, 110, 100, 105, 100)], { schritt: 0.5 })
+    check('Preis je Zeile: Zeilenzahl folgt der Spanne', vp.zeilen.length === 20 && Math.abs(vp.schritt - 0.5) < 1e-9, String(vp.zeilen.length))
+    const fein = volumenprofil([k(100, 110, 100, 105, 100)], { schritt: 0.001 })
+    check('Preis je Zeile: höchstens 1000 Zeilen, dann breiter', fein.zeilen.length === 1000)
+    check('150 Zeilen gehen (VRVP-Vorgabe)', volumenprofil([k(100, 110, 100, 105, 100)], { zeilen: 150 }).zeilen.length === 150)
+    const voll = volumenprofil([k(100, 110, 100, 101, 10), k(104, 105, 104, 105, 50)], { zeilen: 10, va: 1 })
+    check('Value Area 100 % umfasst alle Zeilen mit Volumen', voll.vaVon === 0 && voll.vaBis === 9)
+}
+
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 if (fehlgeschlagen) { console.log('Fehler:', fehler.join(', ')); process.exit(1) }

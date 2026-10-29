@@ -372,6 +372,8 @@
     "src/components/rahmen/PositionsWarnung.vue|c3fcf62cc593": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/utils/chart/fensterFarben.js|f2512106d4d8": "Reihe abbilden mit Index und Zahl-Prüfung (arr.map((v, i) => { if (!Number.isFinite(v)) … }), übliche Form)",
     "server/tls/__selftest-tls-server.mjs|d20e35805363": "Testserver-Gerüst: express.json() einhängen und eine Middleware mit (req, res, next) (Express-Dokumentation; eigener Zusammenhang: HTTPS-Integrationstest)",
-    "server/tls/__selftest-tls-zertifikat.mjs|6996a2cbbad4": "Wegwerf-Ordner per fs.mkdtempSync(path.join(os.tmpdir(), …)) anlegen, wenn ein Werkzeug fehlt überspringen (Node-Standardform; eigener Zusammenhang: openssl-Gegenprobe)"
+    "server/tls/__selftest-tls-zertifikat.mjs|6996a2cbbad4": "Wegwerf-Ordner per fs.mkdtempSync(path.join(os.tmpdir(), …)) anlegen, wenn ein Werkzeug fehlt überspringen (Node-Standardform; eigener Zusammenhang: openssl-Gegenprobe)",
+    "server/chart-kandidaten.js|ba3c52477b69": "Allerwelts-Muster: Hoch/Tief über eine Kerzenreihe suchen (for-Schleife, Vergleich mit h/l), in eigenem Zusammenhang",
+    "src/utils/chart/tradeBildAusschnitt.js|86078e70707c": "Allerwelts-Muster: Hoch/Tief über eine Kerzenreihe suchen (for-Schleife, Vergleich mit h/l), in eigenem Zusammenhang"
   }
 }

@@ -33,7 +33,9 @@ export const KAND = {
     CLUSTER_MAX_ATR: 1,        // Gesamtbreite einer Gruppe
     BAND_MIN_ATR: 0.15,        // halbe Mindestbreite des Bands um den Preis
     REAKTION_KERZEN: 10,
-    MAX_NIVEAUS: 8,
+    MAX_NIVEAUS: 6,
+    NIVEAU_MAX_DURCH_ANTEIL: 0.5, // mehr Durchquerungen als die Hälfte der Berührungen: keine Marke, höchstens Drehpunkt
+    NIVEAU_MAX_DURCH_FEST: 2,
     NAH_JE_SEITE: 2,
     TREND_JE_SEITE: 2,
     TREND_MIN_DELTA_ATR: 0.75, // flacher ist es eine waagerechte Marke
@@ -42,7 +44,7 @@ export const KAND = {
     SPANNE_KERZEN: 30,
     HTF_MAX: 4,
     HTF_ABSTAND_ATR_HTF: 3,
-    DECKT_ATR: 0.2,            // V/D so nah an einem N → nicht doppelt aufführen
+    DECKT_ATR: 0.4,            // V/D so nah an einem N → nicht doppelt aufführen (0,2 liess VAL und Marke 0,4 ATR auseinander beide stehen)
     ROH_KERZEN: 12,
     PROFIL_SCHWELLE_ATR: 5,    // Wendepunkt für einen Profil-Abschnitt: Gegenbewegung ab so vielen ATR
     PROFIL_MIN_KERZEN: 15,     // kürzere Abschnitte gehen im Nachbarn auf
@@ -50,14 +52,39 @@ export const KAND = {
     KONS_BREITE_ATR: 3,        // Konsolidierung: alle Kerzenkörper in einem Band so breit
     KONS_MIN_KERZEN: 15,
     KONS_MAX: 3,
+    PHASE_ZICKZACK_ATR: 3,     // Seitwärtsphase: Wendepunkte ab so vielen ATR Gegenbewegung
+    PHASE_SPIELRAUM_ATR: 1,    // neuer Wendepunkt bis so weit ausserhalb des Kastens gehört noch dazu
+    PHASE_MIN_WENDE: 4,        // mindestens zwei Hochs und zwei Tiefs
+    PHASE_MIN_KERZEN: 30,
     PERIODE_MIN_KERZEN: 5,     // Tages-/Wochenprofil erst ab so vielen Kerzen der Periode
-    KANAL_FENSTER: [80, 60, 45, 30, 20],
+    // Fenster für Kanäle/Flaggen; lange (ab KANAL_LANG_AB) mit stärkeren Wendepunkten und
+    // wachsendem Massstab (√(L / KANAL_BASIS_KERZEN) × ATR), seit 26.10.2026 — vorher nur bis 80
+    KANAL_FENSTER: [320, 240, 160, 120, 80, 60, 45, 30, 20],
+    // dazu eine Leiter vom ganzen Fenster abwärts, je Stufe 15 % kürzer (29.10.2026): wer herauszoomt,
+    // will den übergeordneten Kanal. Feste Anteile (100/75/50/33 %) liessen Lücken — HBAR 4h auf
+    // 800 Kerzen prüfte nichts zwischen 160 und 240, der Kanal über 177 Kerzen fiel durch.
+    KANAL_LEITER: 0.85,
+    KANAL_LANG_ANTEIL: 0.33,   // ein Kanal ab diesem Anteil des Fensters ist „übergeordnet" und bekommt einen eigenen Platz
+    // Massstab des Fensters (29.10.2026): bis 150 Kerzen wie bisher, darüber wachsen
+    // Wendepunkt-Stärke, Toleranzen und Abstandsgrenzen der Trendlinien und die
+    // Wendepunkt-Stärke der Niveaus mit √(n / 150). Vorher fand der Code auf 150 und
+    // 1000 Kerzen dieselben Linien — ein grösserer Ausschnitt änderte nichts.
+    MASSSTAB_BASIS: 150,
+    MASSSTAB_MAX: 3,
+    KANAL_BASIS_KERZEN: 80,
+    KANAL_LANG_AB: 120,
     KANAL_MIN_BREITE_ATR: 1,
     KANAL_MAX_BREITE_ATR: 6,   // breiter deckt er den halben Chart ab und sagt nichts mehr
     KANAL_MIN_STEIG_ATR: 1.5,  // Steigung über das Fenster: flacher ist es eine Spanne, kein Kanal
     KANAL_BERUEHR_ATR: 0.35,   // Abstand zur Kante, der als Berührung zählt
     FLAGGE_STANGE_ATR: 4,      // Fahnenstange vor der Flagge: mindestens so viele ATR …
     FLAGGE_STANGE_BREITE: 2,   // … und mindestens das Doppelte der Kanalbreite
+    FLAGGE_STANGE_MAX_KERZEN: 15, // … in höchstens so vielen Kerzen (ein Impuls, kein Trend)
+    FLAGGE_STANGE_SPIEL: 3,    // die Stange endet höchstens so viele Kerzen vor/nach dem Flaggenbeginn
+    FLAGGE_MAX_KERZEN: 40,     // eine Flagge ist kurz; länger ist es ein Kanal
+    FLAGGE_LAENGE_FAKTOR: 4,   // … und höchstens so viel mal so lang wie die Stange
+    FLAGGE_MAX_RUECKLAUF: 0.5, // die Flagge holt höchstens die Hälfte der Stange zurück
+    RANGE_STEIG_ATR: 1,        // Flagge, die über ihre Länge weniger steigt/fällt: waagerechte Range
     KANAL_UEBERSCHUSS_ATR: 0.6, // Wendepunkt bis so weit über die Kante hinaus zählt noch als Berührung
     KANAL_DOCHT_ATR: 1,        // ein Schluss weiter draussen bricht den Kanal (ein Docht nicht)
     KANAL_MAX_FOLGE: 2,        // Schlüsse ausserhalb hintereinander, danach gilt der Kanal als gebrochen
@@ -87,6 +114,91 @@ export function konsolidierungen(kerzen, A, { breite = KAND.KONS_BREITE_ATR, min
         if (e - s + 1 >= minKerzen) { teile.push({ von: s, bis: e }); e = s - 1 } else e--
     }
     return teile.reverse()
+}
+
+/**
+ * Seitwärtsphasen wie von Hand gesehen (26.10.2026 — vorher `konsolidierungen`
+ * mit allen Kerzenkörpern in 3 ATR: das fand nur die letzten paar Stunden, drei
+ * verschachtelte Mini-Profile an derselben Stelle):
+ *
+ *   Zickzack  Wendepunkte ab `zickzack` × ATR Gegenbewegung (ATR = Median über
+ *             das Fenster, ein einzelner Ausschlag verschiebt den Massstab nicht).
+ *   Kasten    Hoch/Tief der Wendepunkte einer Phase. Solange der nächste
+ *             Wendepunkt innerhalb des Kastens ± `spielraum` × ATR liegt, läuft
+ *             die Phase weiter; liegt er draussen (Ausbruch), endet sie mit dem
+ *             letzten Wendepunkt davor, und die nächste beginnt am Ausbruchspunkt.
+ *             Ein Ausbruch zählt nur, wenn der nächste Wendepunkt NICHT in den Kasten
+ *             zurückkommt — ein kurzer Stich bleibt in der Phase.
+ *   Phase     erst ab `minWende` Wendepunkten (zwei Hochs, zwei Tiefs: ein Trend
+ *             erzeugt keine, weil jedes neue Extrem den Kasten sprengt) und
+ *             `minKerzen` Kerzen. Die jüngste Phase reicht bis zur letzten Kerze,
+ *             wenn der Kurs noch im Kasten ist.
+ *
+ * Phasen überschneiden sich nie. Liefert die jüngsten `max`, älteste zuerst.
+ */
+export function seitwaertsPhasen(kerzen, { zickzack = KAND.PHASE_ZICKZACK_ATR, spielraum = KAND.PHASE_SPIELRAUM_ATR, minWende = KAND.PHASE_MIN_WENDE, minKerzen = KAND.PHASE_MIN_KERZEN, max = KAND.KONS_MAX } = {}) {
+    const n = kerzen?.length || 0
+    if (n < minKerzen) return []
+    const a = atr(kerzen, 14).filter((v) => v > 0).sort((x, y) => x - y)
+    const A = a[Math.floor(a.length / 2)]
+    if (!(A > 0)) return []
+    // Zickzack: abwechselnd Hoch und Tief, Wendepunkt ab S Gegenbewegung
+    const S = zickzack * A
+    const wende = []
+    let richtung = 0, hI = 0, lI = 0
+    for (let i = 1; i < n; i++) {
+        const x = kerzen[i]
+        if (x.h >= kerzen[hI].h) hI = i
+        if (x.l <= kerzen[lI].l) lI = i
+        if (richtung >= 0 && kerzen[hI].h - x.l >= S && hI < i) { wende.push({ i: hI, p: kerzen[hI].h, hoch: true }); richtung = -1; lI = i; hI = i }
+        else if (richtung <= 0 && x.h - kerzen[lI].l >= S && lI < i) { wende.push({ i: lI, p: kerzen[lI].l, hoch: false }); richtung = 1; hI = i; lI = i }
+    }
+    // Der erste Punkt des Fensters ist kein Wendepunkt, nur der Anfang der Daten
+    while (wende.length && wende[0].i === 0) wende.shift()
+    const R = spielraum * A
+    const phasen = []
+    let von = 0, hoch = -Infinity, tief = Infinity
+    const schliesse = (bis) => {
+        const w = wende.slice(von, bis + 1)
+        if (w.length >= minWende && w[w.length - 1].i - w[0].i + 1 >= minKerzen) phasen.push({ von: w[0].i, bis: w[w.length - 1].i, hoch, tief })
+    }
+    for (let k = 0; k < wende.length; k++) {
+        const w = wende[k]
+        // Eine noch unbekannte Seite des Kastens (±Infinity) begrenzt nicht
+        const imKasten = (p) => (hoch === -Infinity || p <= hoch + R) && (tief === Infinity || p >= tief - R)
+        const drin = k === von || imKasten(w.p)
+        // Stich: draussen, aber der NÄCHSTE Wendepunkt ist wieder im Kasten — kein Ausbruch, der
+        // Kasten wird davon auch nicht breiter (22.10.2026 16:45 BTC 15m: ein Docht unter die Spanne)
+        // Nur an einer BELEGTEN Seite (zwei Wendepunkte): vorher erweitert ein neues Extrem den
+        // Kasten — direkt nach einem Ausbruch kennt er seine Unterkante noch nicht.
+        const belegt = wende.slice(von, k).filter((x) => x.hoch === w.hoch).length >= 2
+        // … es sei denn, es liegt mehr als einen Zickzack-Schritt draussen: dann läuft der Trend
+        // weiter, und der Kasten beginnt dort neu (sonst begänne die Phase vor dem Absturz).
+        if (!drin && !belegt) {
+            const weit = w.hoch ? w.p - hoch > S : tief - w.p > S
+            if (weit) { von = k; hoch = w.hoch ? w.p : -Infinity; tief = w.hoch ? Infinity : w.p; continue }
+            if (w.hoch) hoch = Math.max(hoch, w.p); else tief = Math.min(tief, w.p)
+            continue
+        }
+        if (!drin && k + 1 < wende.length && imKasten(wende[k + 1].p)) continue
+        if (!drin) {
+            // Ausbruch: die Phase endet beim letzten Wendepunkt im Kasten; die nächste beginnt
+            // HIER (am Ausbruchspunkt) — begänne sie davor, läge die ganze Ausbruchsbewegung in ihr.
+            schliesse(k - 1)
+            von = k
+            hoch = -Infinity; tief = Infinity
+        }
+        if (w.hoch) hoch = Math.max(hoch, w.p); else tief = Math.min(tief, w.p)
+    }
+    // jüngste Phase: läuft bis jetzt, solange die letzten Kerzen im Kasten sind
+    const w = wende.slice(von)
+    if (w.length >= minWende) {
+        const letzte = kerzen[n - 1]
+        const imKasten = letzte.c <= hoch + R && letzte.c >= tief - R
+        const bis = imKasten ? n - 1 : w[w.length - 1].i
+        if (bis - w[0].i + 1 >= minKerzen) phasen.push({ von: w[0].i, bis, hoch, tief, laufend: imKasten })
+    }
+    return phasen.slice(-max).map(({ von, bis, laufend }) => ({ von, bis, ...(laufend ? { laufend: true } : {}) }))
 }
 
 /** Tage bzw. Wochen (UTC, Woche ab Montag): die jüngsten `max` mit genug Kerzen, ältester zuerst. */
@@ -125,9 +237,20 @@ export function periodenAbschnitte(kerzen, art, { max = KAND.PROFIL_MAX, minKerz
  *               Kanal (oder gerade erst kurz draussen).
  *   Form        Breite 1–6 ATR; Steigung über das Fenster ≥ 1,5 ATR, sonst eine
  *               Spanne (eine Flagge darf flacher sein).
- *   Flagge      davor eine Fahnenstange (≥ 4 ATR und ≥ 2 Kanalbreiten) in die
- *               Gegenrichtung: Stange auf + Kanal ab/flach = Bull-Flagge,
- *               Stange ab + Kanal auf/flach = Bear-Flagge.
+ *   Flagge      davor eine Fahnenstange in die Gegenrichtung (`fahnenstange`):
+ *               Stange auf + Kanal ab/flach = Bull-Flagge, Stange ab + Kanal
+ *               auf/flach = Bear-Flagge. Bis 27.10.2026 galt als „Stange" die
+ *               Bewegung über gleich viele Kerzen VOR dem Kanal, wie er lang war —
+ *               damit wurde ein Monat Abwärtstrend über 160 Kerzen und 11 ATR
+ *               Breite zur „Bull-Flagge" (HBARUSDT 4h, 500 Kerzen).
+ *   Range       steigt bzw. fällt eine Flagge über ihre ganze Länge weniger als
+ *               `RANGE_STEIG_ATR`, ist sie eine Seitwärts-Range und wird WAAGERECHT
+ *               eingezeichnet: Kanten am Median der Hochs bzw. Tiefs, die die
+ *               schräge Suche als Berührung zählte, dann neu geprüft (`form:
+ *               'range'`). Bis 27.10.2026 stand HBARUSDT 4h — 22 Kerzen seitwärts
+ *               nach dem Abverkauf — als schräg steigender Kanal im Chart.
+ *   Bruch       schliesst die jüngste Kerze schon jenseits einer Kante, sagt
+ *               es der Name (`bruch` oben/unten).
  *
  * Gewählt wird der Kanal mit den meisten Berührungen (Flagge +4, wenig
  * Überschiessen, länger bei Gleichstand); höchstens einer.
@@ -135,16 +258,25 @@ export function periodenAbschnitte(kerzen, art, { max = KAND.PROFIL_MAX, minKerz
 export function kandidatenKanaele(kerzen, A) {
     const n = kerzen?.length || 0
     if (n < 30 || !(A > 0)) return []
-    const hochs = pivotHighs(kerzen, 2, 2).map((p) => p.index)
-    const tiefs = pivotLows(kerzen, 2, 2).map((p) => p.index)
-    const tol = KAND.KANAL_BERUEHR_ATR * A
-    const ueber = KAND.KANAL_UEBERSCHUSS_ATR * A
-    const docht = KAND.KANAL_DOCHT_ATR * A
+    // Wendepunkte je Stärke einmal: kurze Fenster mit 2, lange mit 4 Kerzen zu beiden Seiten
+    // (sonst zählt in 300 Kerzen jedes Zittern als Berührung)
+    const wp = {}
+    const wendepunkte = (k) => (wp[k] ||= { H: pivotHighs(kerzen, k, k).map((p) => p.index), T: pivotLows(kerzen, k, k).map((p) => p.index) })
     const funde = []
     const kurs = kerzen[n - 1].c
 
-    for (const L of KAND.KANAL_FENSTER) {
-        if (L > n - 10) continue
+    const leiter = []
+    for (let L = n - 10; L >= 20; L = Math.round(L * KAND.KANAL_LEITER)) leiter.push(L)
+    const fenster = [...new Set([...leiter, ...KAND.KANAL_FENSTER])]
+        .filter((L) => L >= 20 && L <= n - 10).sort((a, b) => b - a)
+    for (const L of fenster) {
+        // Massstab wächst mit der Länge (√): ein Kanal über 300 Kerzen ist natürlich breiter als
+        // einer über 30 — mit dem ATR der letzten 14 Kerzen wäre jeder lange Kanal „zu breit".
+        const Aw = A * Math.max(1, Math.sqrt(L / KAND.KANAL_BASIS_KERZEN))
+        const tol = KAND.KANAL_BERUEHR_ATR * Aw
+        const ueber = KAND.KANAL_UEBERSCHUSS_ATR * Aw
+        const docht = KAND.KANAL_DOCHT_ATR * Aw
+        const { H: hochs, T: tiefs } = wendepunkte(L >= KAND.KANAL_LANG_AB ? Math.max(4, Math.round(4 * Math.sqrt(L / 320))) : 2)
         const s = n - L
         const H = hochs.filter((i) => i >= s), T = tiefs.filter((i) => i >= s)
         for (const unten of [true, false]) {
@@ -166,7 +298,7 @@ export function kandidatenKanaele(kerzen, A) {
                         if (z > bestZ || (z === bestZ && Math.abs(w) > Math.abs(bestW))) { bestZ = z; bestW = w }
                     }
                     const W = Math.abs(bestW)
-                    if (W < KAND.KANAL_MIN_BREITE_ATR * A || W > KAND.KANAL_MAX_BREITE_ATR * A) continue
+                    if (W < KAND.KANAL_MIN_BREITE_ATR * Aw || W > KAND.KANAL_MAX_BREITE_ATR * Aw) continue
                     const lo = (i) => (unten ? g(i) : g(i) + bestW)       // untere Kante
                     const hi = (i) => (unten ? g(i) + bestW : g(i))       // obere Kante
                     // Berührungen ab dem ersten Kontakt, mit kurzem Überschiessen
@@ -188,41 +320,147 @@ export function kandidatenKanaele(kerzen, A) {
                     if (weit || maxFolge > KAND.KANAL_MAX_FOLGE || aussen > KAND.KANAL_MAX_AUSSEN * spanne) continue
                     if (folge > KAND.KANAL_MAX_FOLGE) continue          // jetzt schon zu lange draussen = gebrochen
                     const steig = m * (n - 1 - anfang)
-                    const P = Math.min(spanne, anfang)
-                    const bewegung = P > 0 ? kerzen[anfang].c - kerzen[anfang - P].c : 0
-                    const stange = Math.abs(bewegung) >= Math.max(KAND.FLAGGE_STANGE_ATR * A, KAND.FLAGGE_STANGE_BREITE * W)
-                    let muster = null
-                    if (stange && bewegung > 0 && steig <= 0.5 * A) muster = 'bullFlagge'
-                    else if (stange && bewegung < 0 && steig >= -0.5 * A) muster = 'bearFlagge'
-                    if (!muster && Math.abs(steig) < KAND.KANAL_MIN_STEIG_ATR * A) continue
+                    const st = fahnenstange(kerzen, anfang, A, W, steig, Aw)
+                    const muster = st?.muster || null
+                    if (!muster && Math.abs(steig) < KAND.KANAL_MIN_STEIG_ATR * Aw) continue
+                    // Kaum Steigung: waagerecht neu anlegen statt eine Schräge zu zeichnen, die nicht da ist
+                    let form = 'kanal', untenF = lo, obenF = hi, Wf = W, bO = bOben, bU = bUnten, aus = aussen
+                    if (muster && Math.abs(steig) < KAND.RANGE_STEIG_ATR * Aw) {
+                        const r = waagerecht(kerzen, anfang, H, T, lo, hi, tol, ueber, docht)
+                        if (!r || r.W < KAND.KANAL_MIN_BREITE_ATR * Aw || r.W > KAND.KANAL_MAX_BREITE_ATR * Aw) continue
+                        form = 'range'; untenF = () => r.unten; obenF = () => r.oben; Wf = r.W; bO = r.bOben; bU = r.bUnten; aus = r.aussen
+                    }
+                    const c = kerzen[n - 1].c
+                    const bruch = c < untenF(n - 1) - tol ? 'unten' : c > obenF(n - 1) + tol ? 'oben' : null
                     const ext = Math.max(3, Math.round(spanne * 0.25))
                     const iv = (kerzen[n - 1].t - kerzen[anfang].t) / Math.max(1, spanne - 1)
-                    const mitte = (lo(n - 1) + hi(n - 1)) / 2
+                    const mitte = (untenF(n - 1) + obenF(n - 1)) / 2
                     funde.push({
-                        quelle: 'kanal', richtung: steig >= 0 ? 'auf' : 'ab', muster, laenge: spanne,
-                        t1: kerzen[anfang].t, p1: lo(anfang), t2: kerzen[n - 1].t, p2: lo(n - 1),
-                        tEnde: kerzen[n - 1].t + ext * iv, pEnde: lo(n - 1 + ext),
-                        breite: W, breiteAtr: W / A, beruehrOben: bOben, beruehrUnten: bUnten, ausserhalb: aussen,
-                        untenJetzt: lo(n - 1), obenJetzt: hi(n - 1),
+                        quelle: 'kanal', richtung: form === 'range' ? 'seitwaerts' : steig >= 0 ? 'auf' : 'ab', form, muster, laenge: spanne,
+                        t1: kerzen[anfang].t, p1: untenF(anfang), t2: kerzen[n - 1].t, p2: untenF(n - 1),
+                        tEnde: kerzen[n - 1].t + ext * iv, pEnde: untenF(n - 1 + ext),
+                        breite: Wf, breiteAtr: Wf / A, beruehrOben: bO, beruehrUnten: bU, ausserhalb: aus,
+                        untenJetzt: untenF(n - 1), obenJetzt: obenF(n - 1),
                         preis: mitte, abstandAtr: (mitte - kurs) / A,
-                        stangeAtr: muster ? Math.abs(bewegung) / A : null,
-                        wert: bOben + bUnten + (muster ? 4 : 0) - aussen * 0.5 + spanne / 200,
+                        stangeAtr: st ? st.groesse / A : null, stangeKerzen: st?.kerzen ?? null,
+                        ruecklaufPct: st ? st.ruecklauf * 100 : null, bruch,
+                        wert: bO + bU + (muster ? 4 : 0) - aus * 0.5 + spanne / 200,
                     })
                 }
             }
         }
     }
     funde.sort((a, b) => b.wert - a.wert)
-    return funde.slice(0, 1).map(({ wert, ...k }) => k)
+    // Zwei Plätze (29.10.2026): der beste kurze am Kurs (K1) und der beste übergeordnete über
+    // einen grossen Teil des Fensters (K2) — sonst verdrängt der eine immer den anderen.
+    const grenze = KAND.KANAL_LANG_ANTEIL * n
+    const lang = funde.find((k) => k.laenge >= grenze)
+    const kurz = funde.find((k) => k.laenge < grenze && (!lang || k.laenge * 2 <= lang.laenge))
+    return [kurz, lang].filter(Boolean).map(({ wert, ...k }) => k)
+}
+
+const median = (a) => { const b = [...a].sort((x, y) => x - y); const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2 }
+
+/**
+ * Waagerechte Kanten für einen Kanal ohne nennenswerte Steigung: Median der
+ * Hochs bzw. Tiefs, die an der schrägen Kante als Berührung zählten; danach
+ * dieselben Prüfungen wie für den schrägen Kanal (Berührungen je Kante ≥ 2,
+ * zusammen ≥ `KANAL_MIN_SUMME`, Schlüsse draussen). `null`, wenn es waagerecht
+ * nicht hält.
+ */
+function waagerecht(kerzen, anfang, H, T, lo, hi, tol, ueber, docht) {
+    const n = kerzen.length
+    const hochs = H.filter((i) => i >= anfang && kerzen[i].h >= hi(i) - tol && kerzen[i].h <= hi(i) + ueber).map((i) => kerzen[i].h)
+    const tiefs = T.filter((i) => i >= anfang && kerzen[i].l <= lo(i) + tol && kerzen[i].l >= lo(i) - ueber).map((i) => kerzen[i].l)
+    if (hochs.length < 2 || tiefs.length < 2) return null
+    const oben = median(hochs), unten = median(tiefs)
+    if (!(oben > unten)) return null
+    const bOben = H.filter((i) => i >= anfang && Math.abs(kerzen[i].h - oben) <= Math.max(tol, ueber)).length
+    const bUnten = T.filter((i) => i >= anfang && Math.abs(kerzen[i].l - unten) <= Math.max(tol, ueber)).length
+    if (bOben < 2 || bUnten < 2 || bOben + bUnten < KAND.KANAL_MIN_SUMME) return null
+    let aussen = 0, folge = 0, maxFolge = 0
+    for (let i = anfang; i < n; i++) {
+        const c = kerzen[i].c
+        if (c > oben + docht || c < unten - docht) {
+            if (i < n - 1) return null                        // weit draussen und zurück = keine Range
+        }
+        const raus = c > oben + tol || c < unten - tol
+        if (raus) { aussen++; folge++; maxFolge = Math.max(maxFolge, folge) } else folge = 0
+    }
+    if (maxFolge > KAND.KANAL_MAX_FOLGE || aussen > KAND.KANAL_MAX_AUSSEN * (n - anfang)) return null
+    return { oben, unten, W: oben - unten, bOben, bUnten, aussen }
+}
+
+/**
+ * Fahnenstange vor einem Kanal, der bei Kerze `anfang` beginnt: ein Impuls in
+ * höchstens `FLAGGE_STANGE_MAX_KERZEN` Kerzen, dessen Extrem höchstens
+ * `FLAGGE_STANGE_SPIEL` Kerzen vom Flaggenbeginn entfernt liegt, mindestens
+ * `FLAGGE_STANGE_ATR` × ATR und `FLAGGE_STANGE_BREITE` Kanalbreiten gross. Die
+ * Flagge danach ist höchstens `FLAGGE_MAX_KERZEN` und `FLAGGE_LAENGE_FAKTOR` ×
+ * Stange lang und holt höchstens `FLAGGE_MAX_RUECKLAUF` der Stange zurück.
+ * Bull: Stange auf, Kanal ab oder flach; Bear gespiegelt. Sonst `null`.
+ */
+export function fahnenstange(kerzen, anfang, A, W, steig, Aw = A) {
+    const n = kerzen.length
+    const laenge = n - anfang
+    if (laenge > KAND.FLAGGE_MAX_KERZEN || anfang < 2) return null
+    const mindest = Math.max(KAND.FLAGGE_STANGE_ATR * A, KAND.FLAGGE_STANGE_BREITE * W)
+    let beste = null
+    for (const auf of [true, false]) {
+        if (auf ? steig > 0.5 * Aw : steig < -0.5 * Aw) continue
+        // Ende der Stange: Extrem in Stangenrichtung rund um den Flaggenbeginn …
+        let e = Math.max(0, anfang - KAND.FLAGGE_STANGE_SPIEL)
+        for (let i = e; i <= Math.min(n - 1, anfang + KAND.FLAGGE_STANGE_SPIEL); i++) if (auf ? kerzen[i].h > kerzen[e].h : kerzen[i].l < kerzen[e].l) e = i
+        // … Start: das Gegen-Extrem in den Kerzen davor
+        const von = Math.max(0, e - KAND.FLAGGE_STANGE_MAX_KERZEN)
+        let j = e
+        for (let i = von; i < e; i++) if (auf ? kerzen[i].l < kerzen[j].l : kerzen[i].h > kerzen[j].h) j = i
+        if (j >= e) continue
+        const groesse = auf ? kerzen[e].h - kerzen[j].l : kerzen[j].h - kerzen[e].l
+        if (groesse < mindest) continue
+        if (n - e > KAND.FLAGGE_LAENGE_FAKTOR * Math.max(e - j, 2)) continue
+        let gegen = auf ? Infinity : -Infinity
+        for (let i = e; i < n; i++) gegen = auf ? Math.min(gegen, kerzen[i].l) : Math.max(gegen, kerzen[i].h)
+        const ruecklauf = (auf ? kerzen[e].h - gegen : gegen - kerzen[e].l) / groesse
+        if (ruecklauf > KAND.FLAGGE_MAX_RUECKLAUF) continue
+        if (!beste || groesse > beste.groesse) beste = { muster: auf ? 'bullFlagge' : 'bearFlagge', groesse, kerzen: e - j, ruecklauf }
+    }
+    return beste
+}
+
+const BRUCH_TEXT = {
+    flagge: { unten: [', nach unten gebrochen', ', broken down'], oben: [', nach oben gebrochen', ', broken up'] },
+    kanal: { unten: [', nach unten verlassen', ', left downwards'], oben: [', nach oben verlassen', ', left upwards'] },
+}
+
+/** Kurzer Name ohne Zahlen („Bear-Flagge", „aufsteigender Kanal") — für jede weitere Nennung im Text. */
+export function kanalKurz(k, englisch = false) {
+    if (k.form === 'range') return englisch ? 'sideways range' : 'Seitwärts-Range'
+    if (k.muster === 'bullFlagge') return englisch ? 'bull flag' : 'Bull-Flagge'
+    if (k.muster === 'bearFlagge') return englisch ? 'bear flag' : 'Bear-Flagge'
+    const auf = k.richtung === 'auf'
+    return englisch ? `${auf ? 'ascending' : 'descending'} channel` : `${auf ? 'aufsteigender' : 'absteigender'} Kanal`
+}
+
+/** Beschriftung im Chart: kurzer Name plus Bruch, ohne Berührungszahlen (die stehen im Reiter). */
+export function kanalBeschriftung(k, englisch = false) {
+    const br = k.bruch ? BRUCH_TEXT[k.muster && k.form !== 'range' ? 'flagge' : 'kanal'][k.bruch][englisch ? 1 : 0] : ''
+    const kurz = kanalKurz(k, englisch)
+    return kurz.charAt(0).toUpperCase() + kurz.slice(1) + br
 }
 
 /** Name eines Kanals, vom Code vergeben (nicht vom Modell). */
 export function kanalName(k, englisch = false) {
     const b = `${k.beruehrOben}/${k.beruehrUnten}`
-    if (k.muster === 'bullFlagge') return englisch ? `Bull flag (${b} touches)` : `Bull-Flagge (${b} Berührungen)`
-    if (k.muster === 'bearFlagge') return englisch ? `Bear flag (${b} touches)` : `Bear-Flagge (${b} Berührungen)`
+    const br = k.bruch ? BRUCH_TEXT[k.muster && k.form !== 'range' ? 'flagge' : 'kanal'][k.bruch][englisch ? 1 : 0] : ''
+    if (k.form === 'range') {
+        const nach = k.muster === 'bullFlagge' ? (englisch ? ' after an up impulse' : ' nach Aufwärts-Impuls') : k.muster === 'bearFlagge' ? (englisch ? ' after a down impulse' : ' nach Abwärts-Impuls') : ''
+        return englisch ? `Sideways range${nach} (${b} touches${br})` : `Seitwärts-Range${nach} (${b} Berührungen${br})`
+    }
+    if (k.muster === 'bullFlagge') return englisch ? `Bull flag (${b} touches${br})` : `Bull-Flagge (${b} Berührungen${br})`
+    if (k.muster === 'bearFlagge') return englisch ? `Bear flag (${b} touches${br})` : `Bear-Flagge (${b} Berührungen${br})`
     const auf = k.richtung === 'auf'
-    return englisch ? `${auf ? 'Ascending' : 'Descending'} channel (${b} touches)` : `${auf ? 'Aufsteigender' : 'Absteigender'} Kanal (${b} Berührungen)`
+    return englisch ? `${auf ? 'Ascending' : 'Descending'} channel (${b} touches${br})` : `${auf ? 'Aufsteigender' : 'Absteigender'} Kanal (${b} Berührungen${br})`
 }
 
 /**
@@ -264,13 +502,24 @@ export const HTF_VON = {
 
 const letzteAtr = (kerzen) => { const a = atr(kerzen, 14); return a[a.length - 1] }
 
+/** Massstab des Fensters: 1 bis `MASSSTAB_BASIS` Kerzen, darüber √(n / Basis), höchstens `MASSSTAB_MAX`. */
+export function massstab(n) {
+    return Math.min(KAND.MASSSTAB_MAX, Math.max(1, Math.sqrt((n || 0) / KAND.MASSSTAB_BASIS)))
+}
+
 /**
  * Wendepunkte zu Niveaus gruppieren. Absolutes Hoch und Tief zählen mit, auch
  * wenn sie am Rand liegen (ein Pivot braucht K Kerzen danach).
  */
-export function kandidatenNiveaus(kerzen, { atrWert = letzteAtr(kerzen), k = KAND.PIVOT_K } = {}) {
+export function kandidatenNiveaus(kerzen, { atrWert = letzteAtr(kerzen), k = KAND.PIVOT_K, M = 1 } = {}) {
     const n = kerzen.length
     const A = atrWert
+    // Breite der Zonen im Massstab des Fensters (29.10.2026): auf 1000 Kerzen HBAR 4h zerfielen
+    // die Zonen bei 1 ATR (der letzten 14 Kerzen) in Einzelpunkte — übrig blieben Hoch, Tief und
+    // eine Marke, während der Kurs an einer Zone mit 9 Berührungen stand. Reaktion und Abstand
+    // bleiben im ATR der Chart-Zeiteinheit.
+    const B = A * M
+    const reaktKerzen = Math.round(KAND.REAKTION_KERZEN * M)
     if (n < 2 * k + 2 || !(A > 0)) return []
     const pts = [
         ...pivotHighs(kerzen, k, k).map((p) => ({ i: p.index, preis: p.price, art: 'hoch' })),
@@ -283,7 +532,7 @@ export function kandidatenNiveaus(kerzen, { atrWert = letzteAtr(kerzen), k = KAN
     // Reaktion: wie weit lief der Kurs in den REAKTION_KERZEN danach weg (in ATR)?
     for (const p of pts) {
         let ext = null
-        for (let j = p.i + 1; j <= Math.min(n - 1, p.i + KAND.REAKTION_KERZEN); j++) {
+        for (let j = p.i + 1; j <= Math.min(n - 1, p.i + reaktKerzen); j++) {
             const w = p.art === 'hoch' ? kerzen[j].l : kerzen[j].h
             ext = ext == null ? w : (p.art === 'hoch' ? Math.min(ext, w) : Math.max(ext, w))
         }
@@ -293,7 +542,7 @@ export function kandidatenNiveaus(kerzen, { atrWert = letzteAtr(kerzen), k = KAN
     const gruppen = []
     let g = []
     for (const p of pts) {
-        if (g.length && p.preis - g[g.length - 1].preis <= KAND.CLUSTER_ATR * A && p.preis - g[0].preis <= KAND.CLUSTER_MAX_ATR * A) g.push(p)
+        if (g.length && p.preis - g[g.length - 1].preis <= KAND.CLUSTER_ATR * B && p.preis - g[0].preis <= KAND.CLUSTER_MAX_ATR * B) g.push(p)
         else { if (g.length) gruppen.push(g); g = [p] }
     }
     if (g.length) gruppen.push(g)
@@ -303,8 +552,8 @@ export function kandidatenNiveaus(kerzen, { atrWert = letzteAtr(kerzen), k = KAN
         const preis = preise[Math.floor(preise.length / 2)]
         const re = gr.map((p) => p.reakt).sort((a, b) => a - b)
         const ersterI = Math.min(...gr.map((p) => p.i)), letzterI = Math.max(...gr.map((p) => p.i))
-        const tief = Math.min(preise[0], preis - KAND.BAND_MIN_ATR * A)
-        const hoch = Math.max(preise[preise.length - 1], preis + KAND.BAND_MIN_ATR * A)
+        const tief = Math.min(preise[0], preis - KAND.BAND_MIN_ATR * B)
+        const hoch = Math.max(preise[preise.length - 1], preis + KAND.BAND_MIN_ATR * B)
         // Durchquerungen erst AB der ersten Berührung — davor war die Marke noch keine.
         const durch = durchquerungen(kerzen.slice(ersterI), { tief, hoch })
         const hochs = gr.filter((p) => p.art === 'hoch').length
@@ -331,7 +580,15 @@ export function kandidatenNiveaus(kerzen, { atrWert = letzteAtr(kerzen), k = KAN
  * eine deutliche Einzelreaktion ohne viele Durchquerungen.
  */
 export function waehleNiveaus(niveaus, kurs, { max = KAND.MAX_NIVEAUS, nah = KAND.NAH_JE_SEITE } = {}) {
-    const zugelassen = niveaus.filter((x) => x.beruehrungen >= 2 || x.extrem || (x.reaktionMaxAtr >= 3 && x.durchquerungen <= 2))
+    // Saubere Marken (26.10.2026, nach „9 Berührungen, 7 Durchquerungen" als Widerstand und
+    // einer „Zwischenunterstützung" mit EINER Berührung): mindestens zwei Berührungen und
+    // höchstens halb so viele Durchquerungen — oder das Hoch/Tief des Bereichs. Eine oft
+    // durchquerte Marke bleibt nur als EIN Drehpunkt (die mit den meisten Berührungen).
+    const sauber = (x) => x.beruehrungen >= 2 && x.durchquerungen <= Math.max(KAND.NIVEAU_MAX_DURCH_FEST, x.beruehrungen * KAND.NIVEAU_MAX_DURCH_ANTEIL)
+    // … und auch der nur, wenn er nicht öfter durchquert als berührt wird (sonst ist er bloss die Mitte)
+    const drehpunkt = niveaus.filter((x) => x.rolle === 'wechsel' && x.beruehrungen >= 3 && !sauber(x) && x.durchquerungen <= x.beruehrungen)
+        .sort((a, b) => b.beruehrungen - a.beruehrungen)[0]
+    const zugelassen = niveaus.filter((x) => x.extrem || sauber(x) || x === drehpunkt)
     const wahl = new Set()
     const oben = zugelassen.filter((x) => x.preis > kurs).sort((a, b) => a.preis - b.preis).slice(0, nah)
     const unten = zugelassen.filter((x) => x.preis <= kurs).sort((a, b) => b.preis - a.preis).slice(0, nah)
@@ -355,18 +612,20 @@ export function kandidatenTrendlinien(kerzen, atrWert, { jeSeite = KAND.TREND_JE
     if (n < 2 * KAND.PIVOT_K + MIN_ABSTAND || !(atrWert > 0)) return []
     const kurs = kerzen[n - 1].c
     const iv = n > 1 ? kerzen[n - 1].t - kerzen[n - 2].t : 0
+    const M = massstab(n), Am = atrWert * M
+    const opt = { tol: TOL_ATR * Am, atr: Am, k: Math.round(KAND.PIVOT_K * M), minAbstand: Math.round(MIN_ABSTAND * M), minSpanneZwei: Math.round(20 * M) }
     const aus = []
     for (const seite of ['hoch', 'tief']) {
         const liste = []
-        for (const c of alleTrendlinien(kerzen, seite, { tol: TOL_ATR * atrWert, atr: atrWert })) {
-            if (Math.abs(c.p2 - c.p1) < KAND.TREND_MIN_DELTA_ATR * atrWert) continue
+        for (const c of alleTrendlinien(kerzen, seite, opt)) {
+            if (Math.abs(c.p2 - c.p1) < KAND.TREND_MIN_DELTA_ATR * Am) continue
             const steigung = (c.p2 - c.p1) / (c.i2 - c.i1)
             const wertJetzt = c.p1 + steigung * (n - 1 - c.i1)
             const abstandAtr = (wertJetzt - kurs) / atrWert
             // Gegenlinien entfernen sich vom Kurs, sobald er abdreht — für sie gilt die enge Grenze.
             const gegen = istGegenlinie(seite, c.p1, c.p2)
             const grenze = c.beruehrungen < 3 || gegen ? KAND.TREND_MAX_ABSTAND_ZWEI_ATR : KAND.TREND_MAX_ABSTAND_ATR
-            if (Math.abs(abstandAtr) > grenze) continue
+            if (Math.abs(abstandAtr) > grenze * M) continue
             const ext = verlaengerung(n, c.i1)
             liste.push({
                 seite, richtung: steigung < 0 ? 'ab' : 'auf',
@@ -382,7 +641,7 @@ export function kandidatenTrendlinien(kerzen, atrWert, { jeSeite = KAND.TREND_JE
         liste.sort((x, y) => y.beruehrungen - x.beruehrungen || Number(x.gegen) - Number(y.gegen) || Math.abs(x.abstandAtr) - Math.abs(y.abstandAtr))
         const gewaehlt = []
         for (const c of liste) {
-            if (gewaehlt.some((d) => Math.abs(d.wertJetzt - c.wertJetzt) < 0.5 * atrWert)) continue
+            if (gewaehlt.some((d) => Math.abs(d.wertJetzt - c.wertJetzt) < 0.5 * Am)) continue
             gewaehlt.push(c)
             if (gewaehlt.length >= jeSeite) break
         }
@@ -434,16 +693,18 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
     const kandidaten = []
     const nahAnN = (preis, niveaus) => niveaus.find((x) => Math.abs(x.preis - preis) < KAND.DECKT_ATR * A)
 
-    const niveaus = waehleNiveaus(kandidatenNiveaus(kerzen, { atrWert: A }), kurs)
+    const niveaus = waehleNiveaus(kandidatenNiveaus(kerzen, { atrWert: A, k: Math.round(KAND.PIVOT_K * massstab(n)), M: massstab(n) }), kurs)
     niveaus.forEach((x, i) => kandidaten.push({ id: `N${i + 1}`, quelle: 'niveau', ...x, t1: x.ersteT }))
     const nListe = kandidaten.slice()
 
     // Je Bereich ein Profil (jüngster = A1); V-IDs laufen über alle Bereiche. Bereiche:
-    // Konsolidierungen (Vorgabe), Tage oder Wochen. Ohne Konsolidierung die Abschnitte
-    // zwischen den grossen Wendepunkten, ohne die ein Profil über alles.
+    // Seitwärtsphasen (Vorgabe, `seitwaertsPhasen`), Tage oder Wochen. Ohne Phase die
+    // Abschnitte zwischen den grossen Wendepunkten, ohne die ein Profil über alles.
     let v = 1
     let bereich = profilArt === 'tag' || profilArt === 'woche' ? profilArt : 'konsolidierung'
-    let gefunden = bereich === 'konsolidierung' ? konsolidierungen(kerzen, A) : periodenAbschnitte(kerzen, bereich)
+    // Ein Band enger als der Zickzack (3 ATR) hat keine Wendepunkte: dann die enge Konsolidierung
+    let gefunden = bereich === 'konsolidierung' ? seitwaertsPhasen(kerzen) : periodenAbschnitte(kerzen, bereich)
+    if (!gefunden.length && bereich === 'konsolidierung') gefunden = konsolidierungen(kerzen, A)
     if (!gefunden.length && bereich === 'konsolidierung') { gefunden = profilAbschnitte(kerzen, A); bereich = 'abschnitt' }
     const abschnitte = (gefunden.length ? gefunden : [{ von: 0, bis: n - 1 }]).reverse()
     abschnitte.forEach((ab, j) => {
@@ -550,7 +811,7 @@ export function kandidatenText(paket) {
     const kk = paket.kandidaten.filter((k) => k.quelle === 'kanal')
     if (kk.length) {
         z.push('', 'KANÄLE — vom Code gemessen und eingezeichnet (id | Name | von → bis | Breite in ATR | Kante unten jetzt / oben jetzt | Abstand der Mitte in ATR):')
-        for (const x of kk) z.push(`${x.id} | ${kanalName(x)}${x.stangeAtr ? `, Fahnenstange ${x.stangeAtr.toFixed(1)} ATR` : ''} | ${zeit(x.t1)} → ${zeit(x.t2)} | ${x.breiteAtr.toFixed(1)} | ${zahl(x.untenJetzt)} / ${zahl(x.obenJetzt)} | ${atrText(x.abstandAtr)}`)
+        for (const x of kk) z.push(`${x.id} | ${kanalName(x)}${x.stangeAtr ? `, Fahnenstange ${x.stangeAtr.toFixed(1)} ATR in ${x.stangeKerzen} Kerzen` : ''} | ${zeit(x.t1)} → ${zeit(x.t2)} | ${x.breiteAtr.toFixed(1)} | ${zahl(x.untenJetzt)} / ${zahl(x.obenJetzt)} | ${atrText(x.abstandAtr)}`)
     }
     if (struktur) {
         const folge = (l) => l.map((p) => `${zahl(p.p)}${p.art ? ` ${p.art}` : ''} (${zeit(p.t)})`).join(' → ')

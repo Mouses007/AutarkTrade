@@ -34,6 +34,9 @@ const folge = new Map()          // id → Nummer der jüngsten Änderung (nur d
 let schrittKette = Promise.resolve()
 
 export const fehlerMeldung = ref('')
+/** Wie viele Schritte zurück und vor möglich sind — für die Knöpfe der Zeichenleiste (die Stapel selbst sind nicht reaktiv). */
+export const verlaufStand = ref({ zurueck: 0, vor: 0 })
+function zaehle() { verlaufStand.value = { zurueck: rueckgaengig.length, vor: wiederholen.length } }
 
 export function zeichnungenVon(symbol) {
     if (!bestand.has(symbol)) bestand.set(symbol, ref([]))
@@ -66,6 +69,7 @@ function merke(schritt) {
     rueckgaengig.push(schritt)
     if (rueckgaengig.length > MAX_SCHRITTE) rueckgaengig.shift()
     wiederholen.length = 0
+    zaehle()
 }
 
 function felder(z) {
@@ -172,6 +176,7 @@ function inReihe(arbeit) {
 export function macheRueckgaengig() {
     return inReihe(async () => {
         const s = rueckgaengig.pop()
+        zaehle()
         if (!s) return false
         if (s.art === 'neu') {
             const weg = await loesche(s.nachher.symbol, s.nachher.id, { merken: false })
@@ -182,6 +187,7 @@ export function macheRueckgaengig() {
             if (neu) s.vorher = neu
         }
         wiederholen.push(s)
+        zaehle()
         return true
     })
 }
@@ -189,6 +195,7 @@ export function macheRueckgaengig() {
 export function macheWiederholen() {
     return inReihe(async () => {
         const s = wiederholen.pop()
+        zaehle()
         if (!s) return false
         if (s.art === 'neu') {
             const neu = await stelleWiederHer(s.nachher, s.alarme)
@@ -199,6 +206,7 @@ export function macheWiederholen() {
             s.alarme = weg || s.alarme || []
         }
         rueckgaengig.push(s)
+        zaehle()
         return true
     })
 }

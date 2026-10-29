@@ -152,6 +152,8 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
     await addColumnIfNotExists('settings', 'portfolioSpam', (t) => t.text('portfolioSpam'))
     // Valorennummer aus der ESTV-Kursliste (`estv-kursliste.js`) — gehört ins Wertschriftenverzeichnis.
     await addColumnIfNotExists('portfolio_steuerkurse', 'valor', (t) => t.string('valor'))
+    // Voller Name aus der ESTV-Kursliste (Steuerbericht: „VXV“ allein sagt dem Steueramt nichts).
+    await addColumnIfNotExists('portfolio_steuerkurse', 'name', (t) => t.string('name'))
     // Wohnkanton (KZ, z. B. 'ZH') für Rubrik, Ersatzkurs und Kriterien im Steuerbericht (`shared/steuer-kantone.js`).
     await addColumnIfNotExists('settings', 'portfolioKanton', (t) => t.string('portfolioKanton'))
     // Ort nicht mehr genutzt (Konto aufgelöst, Wallet aufgegeben): ab diesem Zeitpunkt

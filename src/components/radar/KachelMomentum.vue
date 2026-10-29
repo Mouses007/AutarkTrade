@@ -51,6 +51,8 @@ const TF_NAME = { '1w': 'W', '1d': 'D', '4h': '4h', '1h': '1h', '15m': '15m', '5
 
 const tf = computed(() => props.daten?.chartTf || props.params?.tf || '15m')
 const v = computed(() => props.daten?.verlauf || null)
+// Grenzlinie aus den Einstellungen (Server rechnet die Punkte damit), Vorgabe 50
+const grenze = computed(() => props.daten?.grenze || v.value?.grenze || 50)
 
 // ── Zeichenfläche ──────────────────────────────────────────────────────────
 const flaeche = ref(null)
@@ -152,7 +154,7 @@ const schienen = computed(() => (v.value?.schienen || []).map(s => ({
     ...s,
     cx: x(s.i),
     cy: y(s.seite === 'long' ? -115 : 115),
-    r: TF_RADIUS[s.tf] * (props.gross ? 1.25 : 0.9),
+    r: TF_RADIUS[s.tf] * (props.gross ? 1.5 : 1.2),
     farbe: TF_FARBE[s.tf],
 })))
 
@@ -352,16 +354,16 @@ const strNeben = computed(() => {
         <div ref="flaeche" class="mrFlaeche" :style="gross ? { height: hoehe + 'px' } : null"
             @mousemove="beiBewegung" @mouseleave="zeiger = null">
             <svg v-if="v && n > 1" :width="breite" :height="hoehe" class="mrSvg">
-                <!-- Linien: Extrem ±100, Zonen ±50, Null, Schienen ±115 -->
+                <!-- Linien: Extrem ±100, Zonen ±Grenze (Vorgabe 50), Null, Schienen ±115 -->
                 <line v-for="w in [100, -100]" :key="'ov' + w" x1="0" :x2="breite - RAND_R" :y1="y(w)" :y2="y(w)"
                     class="mrLinieExtrem" />
-                <line v-for="w in [50, -50]" :key="'z' + w" x1="0" :x2="breite - RAND_R" :y1="y(w)" :y2="y(w)"
+                <line v-for="w in [grenze, -grenze]" :key="'z' + w" x1="0" :x2="breite - RAND_R" :y1="y(w)" :y2="y(w)"
                     class="mrLinieZone" />
                 <line x1="0" :x2="breite - RAND_R" :y1="y(0)" :y2="y(0)" class="mrLinieNull" />
                 <line x1="0" :x2="breite - RAND_R" :y1="y(115)" :y2="y(115)" class="mrSchiene" :style="{ stroke: F.short }" />
                 <line x1="0" :x2="breite - RAND_R" :y1="y(-115)" :y2="y(-115)" class="mrSchiene" :style="{ stroke: F.long }" />
-                <text :x="breite - RAND_R + 4" :y="y(50) + 3" class="mrSkala">+50</text>
-                <text :x="breite - RAND_R + 4" :y="y(-50) + 3" class="mrSkala">−50</text>
+                <text :x="breite - RAND_R + 4" :y="y(grenze) + 3" class="mrSkala">+{{ grenze }}</text>
+                <text :x="breite - RAND_R + 4" :y="y(-grenze) + 3" class="mrSkala">−{{ grenze }}</text>
                 <text v-if="gross" :x="breite - RAND_R + 4" :y="y(100) + 3" class="mrSkala">+100</text>
                 <text v-if="gross" :x="breite - RAND_R + 4" :y="y(-100) + 3" class="mrSkala">−100</text>
 

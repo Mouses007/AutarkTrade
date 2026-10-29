@@ -1949,6 +1949,12 @@ async function runMigrations(knex, client) {
      */
     await addColumnIfNotExists('settings', 'erweiterteInfos', (t) => t.integer('erweiterteInfos').defaultTo(1))
 
+    // Kerzenfarben des Charts (src/utils/chart/kerzenFarben.js); leer = Vorgabe
+    await addColumnIfNotExists('settings', 'chartKerzeSteigend', (t) => t.string('chartKerzeSteigend'))
+    await addColumnIfNotExists('settings', 'chartKerzeFallend', (t) => t.string('chartKerzeFallend'))
+    // Grenzlinie des Momentum Radars (server/momentum-radar.js grenzeAus); leer = 50
+    await addColumnIfNotExists('settings', 'momentumGrenze', (t) => t.integer('momentumGrenze'))
+
     /*
      * Spenden (server/spenden.js): Menüeintrag und zwei Nachfragen (50 / 200
      * bewertete Trades). `spendenStufe`/`spendenBei` schreibt nur der Server.

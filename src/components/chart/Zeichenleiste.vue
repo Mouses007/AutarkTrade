@@ -18,6 +18,8 @@ import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { useI18n } from 'vue-i18n'
 import { WERKZEUGE } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { Symbol } from '../basis'
+import { macheRueckgaengig, macheWiederholen, verlaufStand } from '../../stores/chartZeichnungen.js'
+import { fadenkreuzTouch, istTouchGeraet } from '../../stores/chartBedienung.js'
 
 const props = defineProps({
     symbol: { type: String, default: '' },
@@ -48,6 +50,7 @@ const WERKZEUG_SYMBOL = {
     position: 'fadenkreuz',
     text: 'text',
     messen: 'regler',
+    alarm: 'glocke',
 }
 
 ladeHandelbar()
@@ -60,6 +63,10 @@ const SCHLUESSEL = 'chartWerkzeugeOffen'
 function lese() {
     try { return localStorage.getItem(SCHLUESSEL) === '1' } catch { return false }
 }
+/** Schalter fürs Fadenkreuz-Zeichnen nur, wo es Touch gibt (Handy-Schublade oder Finger als Zeiger). */
+const touch = computed(() => props.immerOffen || istTouchGeraet())
+function schalteFadenkreuz() { fadenkreuzTouch.value = !fadenkreuzTouch.value }
+
 const offenGemerkt = ref(lese())
 const offen = computed(() => props.immerOffen || offenGemerkt.value)
 function umschalten() {
@@ -89,9 +96,23 @@ function umschalten() {
             </button>
         </template>
         <hr />
+        <!-- Zurück / Vorwärts (auch Strg+Z / Strg+Y): Zeichnen, Verschieben, Stil, Löschen -->
+        <button class="w" :disabled="!verlaufStand.zurueck" :title="t('chart.wz.zurueck')" @click="macheRueckgaengig()" :aria-label="t('chart.wz.zurueck')">
+            <Symbol name="rueckgaengig" class="zeichen" />
+            <span v-if="offen" class="name">{{ t('chart.wzKurz.zurueck') }}</span>
+        </button>
+        <button class="w" :disabled="!verlaufStand.vor" :title="t('chart.wz.vor')" @click="macheWiederholen()" :aria-label="t('chart.wz.vor')">
+            <Symbol name="wiederholen" class="zeichen" />
+            <span v-if="offen" class="name">{{ t('chart.wzKurz.vor') }}</span>
+        </button>
+        <hr />
         <button class="w" :class="{ an: magnet }" :title="t('chart.wz.magnet')" @click="emit('magnet')" :aria-label="t('chart.wz.magnet')">
             <Symbol name="magnet" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.magnet') }}</span>
+        </button>
+        <button v-if="touch" class="w" :class="{ an: fadenkreuzTouch }" :title="t('chart.wz.fadenkreuz')" @click="schalteFadenkreuz" :aria-label="t('chart.wz.fadenkreuz')">
+            <Symbol name="fadenkreuz" class="zeichen" />
+            <span v-if="offen" class="name">{{ t('chart.wzKurz.fadenkreuz') }}</span>
         </button>
         <button class="w" :class="{ an: versteckt }" :title="t('chart.wz.allesVerstecken')" @click="emit('versteckt')" :aria-label="t('chart.wz.allesVerstecken')">
             <Symbol :name="versteckt ? 'augeAus' : 'auge'" class="zeichen" />
@@ -145,6 +166,11 @@ function umschalten() {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+}
+
+.w:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .offen .w {

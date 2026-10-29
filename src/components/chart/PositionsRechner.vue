@@ -17,6 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { rechnePosition, rechnerEingabe, MODI } from '../../../shared/tradeRechner.js'
 import { stilFuer } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { zahlAus } from '../../utils/zahlEingabe.js'
+import { boersenKonto, ladeBoersenKonto } from '../../stores/boersenKonto.js'
 
 const props = defineProps({
     zeichnung: { type: Object, required: true },
@@ -57,9 +58,18 @@ const eingabeJetzt = computed(() => {
     }
     return rechnerEingabe(e)
 })
-const r = computed(() => (pk.value.length >= 3
-    ? rechnePosition({ einstieg: pk.value[0].p, ziel: pk.value[1].p, stop: pk.value[2].p, eingabe: eingabeJetzt.value, mmr: props.mmr })
-    : null))
+// Leeres Kontostand-Feld: gerechnet wird mit dem Stand der Börse, gespeichert bleibt 0
+ladeBoersenKonto()
+const kontoVonBoerse = computed(() => (eingabeJetzt.value.konto > 0 ? null : boersenKonto.value))
+const r = computed(() => {
+    if (pk.value.length < 3) return null
+    const eingabe = kontoVonBoerse.value ? { ...eingabeJetzt.value, konto: kontoVonBoerse.value.wert } : eingabeJetzt.value
+    return rechnePosition({ einstieg: pk.value[0].p, ziel: pk.value[1].p, stop: pk.value[2].p, eingabe, mmr: props.mmr })
+})
+const kontoPlatzhalter = computed(() => (boersenKonto.value ? zahl(boersenKonto.value.wert, 0) : t('chart.rechner.optional')))
+const kontoTitel = computed(() => (boersenKonto.value
+    ? t('chart.rechner.kontoBoerse', { boerse: boersenKonto.value.boerse.charAt(0).toUpperCase() + boersenKonto.value.boerse.slice(1) })
+    : t('chart.rechner.kontoTipp')))
 
 function speichere() {
     const neu = eingabeJetzt.value
@@ -103,9 +113,9 @@ const zahl = (v, st = 2) => (v == null || !Number.isFinite(v) ? '—' : v.toLoca
                 @focus="$event.target.select()" @blur="fertig('hebel')" @keyup.enter="$event.target.blur()" />
             <small>×</small>
         </label>
-        <label class="feld" :title="t('chart.rechner.kontoTipp')">
+        <label class="feld" :title="kontoTitel">
             <span>{{ t('chart.rechner.konto') }}</span>
-            <input v-model="entwurf.konto" data-feld="konto" class="at-feld klein zahl" type="text" inputmode="decimal" autocomplete="off" :placeholder="t('chart.rechner.optional')"
+            <input v-model="entwurf.konto" data-feld="konto" class="at-feld klein zahl" type="text" inputmode="decimal" autocomplete="off" :placeholder="kontoPlatzhalter"
                 @focus="$event.target.select()" @blur="fertig('konto')" @keyup.enter="$event.target.blur()" />
         </label>
         <label class="feld" :title="t('chart.rechner.gebuehrTipp')">
@@ -142,7 +152,8 @@ const zahl = (v, st = 2) => (v == null || !Number.isFinite(v) ? '—' : v.toLoca
     align-items: center;
     gap: 6px 10px;
     padding: 6px 8px;
-    max-width: calc(100% - 16px);
+    /* rechts stehen 70 px Preisachse frei, links 8 px Rand — sonst ragte es auf dem Handy links hinaus */
+    max-width: calc(100% - 78px);
     background: var(--panel);
     border: 1px solid var(--line-stark);
     border-radius: var(--radius-klein);

@@ -98,7 +98,7 @@ export async function importiereKursliste(jahr) {
     const zeilen = []
     for (const e of l.eintraege) {
         for (const asset of [e.ticker, ...(ESTV_AUCH[e.ticker] || [])]) {
-            if (!hand.has(asset)) zeilen.push({ jahr, asset, chf: e.chf, quelle: 'estv', valor: e.valor, updatedAt: jetzt })
+            if (!hand.has(asset)) zeilen.push({ jahr, asset, chf: e.chf, quelle: 'estv', valor: e.valor, name: e.name, updatedAt: jetzt })
         }
     }
     await k.transaction(async (trx) => {
@@ -110,6 +110,6 @@ export async function importiereKursliste(jahr) {
 
 /** Stand je Jahr: wie viele ESTV-Kurse, wann geholt. */
 export async function kurslisteStand(jahr) {
-    const r = await getKnex()('portfolio_steuerkurse').where({ jahr, quelle: 'estv' }).countDistinct('valor as n').max('updatedAt as am').first()
-    return { anzahl: Number(r?.n) || 0, am: r?.am ? Number(r.am) : null }
+    const r = await getKnex()('portfolio_steuerkurse').where({ jahr, quelle: 'estv' }).countDistinct('valor as n').count('name as namen').max('updatedAt as am').first()
+    return { anzahl: Number(r?.n) || 0, am: r?.am ? Number(r.am) : null, ohneNamen: Number(r?.n) > 0 && !(Number(r?.namen) > 0) }
 }

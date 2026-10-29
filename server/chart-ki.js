@@ -3,7 +3,7 @@
  * und Bedingungen als JSON — der Chart zeichnet sie.
  *
  *   GET  /api/chart/ki-analyse?symbol=&interval=   letzte Analyse (kostet nichts, erzeugt nichts)
- *   POST /api/chart/ki-analyse {symbol, interval, markt}  erzeugt — kostet einen KI-Aufruf
+ *   POST /api/chart/ki-analyse {symbol, interval, markt, bild?}  erzeugt — kostet einen KI-Aufruf
  *
  * Dieselben Grundregeln wie Gesamtlage und Handelslage:
  *   1. Die KI liest ab, sie recherchiert nicht — alles, worauf sie sich
@@ -27,21 +27,38 @@
  * 150 Roh-Kerzen und erfand Geometrie: Schrägen aus zwei Preisen einer Marke,
  * Trendlinien, durch die die Kerzen wuchsen.
  *
+ * Seit 27.10.2026 schickt der Browser ein Bild des sichtbaren Charts mit
+ * (`bild`), sofern der Anbieter Bilder versteht (`kannBilder`). Das Modell
+ * VERMISST damit nichts — Preise und Zeiten bleiben die des Codes —, es legt
+ * nur Einspruch ein: ein Kanal (K) oder eine Trendlinie (T), die im Bild nicht
+ * zu sehen ist, landet in `einwaende` und wird nicht gezeichnet. Anlass:
+ * HBARUSDT 4h, wo der Code eine Seitwärts-Range als schräge Flagge vermessen
+ * hatte — ein Blick aufs Bild hätte das gesehen, die Zahlenliste nicht.
+ *
  * `baueChartEingabe` und `pruefeChartAuswahl` sind rein (Selbsttest:
  * `server/__selftest-chart-ki.mjs`).
  */
 import { getKnex } from './database.js'
 import { logWarn } from './logger.js'
 import { ladeLlmConfigFuerAufgabe, callLLMJson } from './llm.js'
-import { getClosedCandles, isValidTimeframe } from './market-data.js'
+import { kannBilder } from './ai-models.js'
+import { getClosedCandles, isValidTimeframe, TIMEFRAME_MS } from './market-data.js'
 import { holeHebelzonen } from './hebelzonen.js'
 import { pruefeEinordnung } from './coin-radar/einordnung.js'
 import { tradesAusZeilen } from './chart-journal.js'
 import { sendeWennAus } from './quellen/aus.js'
-import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText, kanalName } from './chart-kandidaten.js'
+import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText, kanalName, kanalKurz, kanalBeschriftung } from './chart-kandidaten.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
-const KERZEN = 150
+/*
+ * Fenster der Analyse: was im Chart SICHTBAR ist (vom Browser geschickt), mindestens
+ * `KERZEN_MIN`, höchstens `KERZEN_MAX`; ohne Angabe `KERZEN`. Bis 26.10.2026 fest 150 —
+ * auf 15m gut 37 Stunden: alle Marken begannen am rechten Rand, das Tief zwei Tage
+ * vorher fehlte, und die Seitwärtsphase davor lag gar nicht im Fenster.
+ */
+const KERZEN = 500
+const KERZEN_MIN = 150
+const KERZEN_MAX = 1000
 const TTL_MS = 30 * 60 * 1000
 const SPERRE_MS = 45 * 1000
 const CACHE_MAX = 12
@@ -50,6 +67,21 @@ const MAX_TRENDS = 3
 const MAX_ZONEN = 3
 const MAX_BEDINGUNGEN = 4
 const HTF_KERZEN = 120
+// Bild des Charts: JPEG oder PNG, base64 höchstens ~2,2 MB (der Browser schickt ~1280 px JPEG, typisch 150–300 kB)
+const BILD_MAX_ZEICHEN = 3_000_000
+const BILD_TYPEN = ['image/jpeg', 'image/png']
+// Einspruch nur gegen gemessene GEOMETRIE — Niveaus sind gezählte Berührungen, da sieht das Bild nicht mehr
+const EINSPRUCH_QUELLEN = ['kanal', 'trend']
+
+/** Bild aus dem Request prüfen — rein. Ungültig → null (die Analyse läuft dann ohne Bild). */
+export function pruefeBild(roh) {
+    if (!roh || typeof roh !== 'object') return null
+    const mediaType = String(roh.mediaType || '')
+    const base64 = typeof roh.base64 === 'string' ? roh.base64 : ''
+    if (!BILD_TYPEN.includes(mediaType) || base64.length < 100 || base64.length > BILD_MAX_ZEICHEN) return null
+    if (!/^[A-Za-z0-9+/]+=*$/.test(base64)) return null
+    return { kind: 'image', mediaType, base64, name: 'chart' }
+}
 
 
 /**
@@ -109,8 +141,9 @@ export function filterePaket(paket, a) {
     return { ...paket, kandidaten: paket.kandidaten.filter((k) => a[QUELLE_ZU_AUSWAHL[k.quelle]] !== false) }
 }
 
-export function systemText(englisch, auswahl = AUSWAHL_STANDARD) {
+export function systemText(englisch, auswahl = AUSWAHL_STANDARD, { mitBild = false } = {}) {
     const a = normAuswahl(auswahl)
+    const geprueft = [a.kanal && 'Kanal (K)', a.trend && 'Trendlinie (T)'].filter(Boolean)
     const sprache = englisch ? 'Write all texts in English.' : 'Schreibe alle Texte auf Deutsch.'
     const quellen = [a.niveaus && 'Niveaus (N…)', a.volumen && 'Volumenprofil-Marken (V…)', a.trend && 'ungebrochene Trendlinien (T…)', a.htf && 'Marken der höheren Zeiteinheit (D…)', a.kanal && 'Kanäle und Flaggen (K…)'].filter(Boolean).join(', ')
     const waagerecht = [a.niveaus && 'N', a.volumen && 'V', a.htf && 'D'].filter(Boolean)
@@ -122,8 +155,9 @@ export function systemText(englisch, auswahl = AUSWAHL_STANDARD) {
         a.zonen ? '- Zonen: "ids" mit einer ID (deren Band) oder zwei benachbarten N/D-IDs (Bereich dazwischen). Nur wo der Kurs mehrfach reagiert hat. Eine Marke ist entweder Linie oder Zone, nicht beides.' : '- Keine Zonen — der Nutzer möchte nur Linien. Gib "zonen": [] zurück.',
         '- Gewicht: eine Trendlinie mit nur 2 Berührungen ist unbestätigt — höchstens "mittel". "stark" nur bei ≥ 3 Berührungen oder Übereinstimmung zweier Quellen (z. B. N und T, N und V oder N und D nahe beieinander). Nenne die Übereinstimmung im Grund.',
         a.niveaus ? '- Niveaus mit vielen Durchquerungen sind Drehpunkte der Spanne, keine harte Grenze — sag das.' : null,
-        a.kanal ? '- Kanäle (K): der Code hat Richtung, Kanten und Muster (Bull-/Bear-Flagge) gemessen und zeichnet sie selbst ein. Nicht in "linien" aufführen; im Text als [K1] nennen, wenn der Kanal für die Lage wichtig ist, und beschreiben, was ein Bruch einer Kante bedeuten würde.' : null,
+        a.kanal ? '- Kanäle (K): der Code hat Richtung, Kanten und Muster (Bull-/Bear-Flagge, Seitwärts-Range nach einem Impuls) gemessen und zeichnet sie selbst ein. Eine Seitwärts-Range ist waagerecht: nicht als steigenden oder fallenden Kanal beschreiben. Nicht in "linien" aufführen; im Text als [K1] nennen, wenn der Kanal für die Lage wichtig ist, und beschreiben, was ein Bruch einer Kante bedeuten würde.' : null,
         a.bedingungen ? '- Bedingungen: an eine ID gebunden; "richtung" ueber/unter meint einen Schluss der Zeiteinheit jenseits der Marke; "ziel" (optional) ist die nächste ID in dieser Richtung.' : '- Keine Bedingungen. Gib "bedingungen": [] zurück.',
+        mitBild && geprueft.length ? `- Bild: Du bekommst zusätzlich ein Bild des sichtbaren Charts (rechte Achse Preis, untere Achse Zeit; Linien im Bild können eigene Zeichnungen des Nutzers oder eine frühere Vorschau sein — sie sind keine Kandidaten). Prüfe damit jeden ${geprueft.join(' und jede ')} gegen den Augenschein: Richtung, steigend/fallend oder seitwärts, Flagge nach einem Impuls, Berührungen an den Kanten. Widerspricht das Bild der Vermessung klar, trage die ID in "einwaende" ein, mit kurzem Grund, was im Bild zu sehen ist. Eine ID mit Einwand wird nicht gezeichnet — wähle sie nicht und nenne sie nicht im Text. Keinen Einwand aus Vorsicht, nur bei klarem Widerspruch. Preise liest du NICHT aus dem Bild ab; sie kommen aus der Liste.` : null,
         '- Stütze dich NUR auf die Eingabe. Keine Nachrichten, kein Allgemeinwissen über den Coin.',
         `- KEINE Prognose, KEIN Kursziel, KEINE Handelsempfehlung, kein "dürfte", kein "wird steigen/fallen", kein "kaufen/verkaufen".${a.bedingungen ? ' "ziel" ist die nächste Marke, kein Kursziel —' : ''} beschreibe, was ein Bruch bedeuten würde.`,
         `- Höchstens ${MAX_LINIEN} Linien${a.trend ? ` (davon höchstens ${MAX_TRENDS} Trendlinien)` : ''}${a.zonen ? `, ${MAX_ZONEN} Zonen` : ''}${a.bedingungen ? `, ${MAX_BEDINGUNGEN} Bedingungen` : ''}. Lieber wenige gute.`,
@@ -134,7 +168,8 @@ export function systemText(englisch, auswahl = AUSWAHL_STANDARD) {
         '{"text": "2–4 Sätze zur Lage, Marken als [ID]",',
         ' "linien": [{"id": "N4", "label": "...", "grund": "...", "gewicht": "stark|mittel|schwach"}],',
         a.zonen ? ' "zonen": [{"ids": ["N3"], "label": "...", "grund": "...", "gewicht": "stark|mittel|schwach"}],' : ' "zonen": [],',
-        a.bedingungen ? ' "bedingungen": [{"id": "N4", "richtung": "ueber|unter", "dann": "...", "ziel": "N2"}]}' : ' "bedingungen": []}',
+        a.bedingungen ? ' "bedingungen": [{"id": "N4", "richtung": "ueber|unter", "dann": "...", "ziel": "N2"}]' : ' "bedingungen": []',
+        mitBild && geprueft.length ? ' ,"einwaende": [{"id": "K1", "grund": "..."}]}' : '}',
     ]
     return `Du bist ein nüchterner technischer Analyst. Der Code hat den Chart bereits vermessen: ${quellen}, dazu Marktstruktur und Spanne. Jede Marke ist an den Kerzen geprüft. Deine Aufgabe: AUSWÄHLEN, GEWICHTEN, ERKLÄREN — nicht vermessen.
 
@@ -166,7 +201,7 @@ const ID_RE = /\[([A-Za-z]\d{1,2})\]/g
  * zu keiner Marke passen, kommen nur in `warnungen` (erst beobachten, dann
  * scharf schalten).
  */
-export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, englisch = false } = {}) {
+export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, englisch = false, mitBild = false } = {}) {
     const wahl = normAuswahl(auswahl)
     const verworfen = []
     const warnungen = []
@@ -179,19 +214,44 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
     const karte = new Map(paket.kandidaten.map((k) => [k.id, k]))
     const nutzerIds = new Set(paket.nutzer.map((u) => u.id))
 
+    // Einwände aus dem Bild (nur mit Bild, nur gegen Kanäle und Trendlinien): diese IDs
+    // werden weder gezeichnet noch im Text genannt — ein Satz, der eine nennt, fällt weg.
+    const einwaende = []
+    const eingewandt = new Set()
+    for (const e of mitBild && Array.isArray(json?.einwaende) ? json.einwaende : []) {
+        const id = idVon(e?.id)
+        const k = karte.get(id)
+        if (!k || !EINSPRUCH_QUELLEN.includes(k.quelle) || eingewandt.has(id)) continue
+        const grund = wort(String(e?.grund ?? '').replace(ID_RE, '$1'), 200)
+        if (grund && !textOk(grund)) continue
+        eingewandt.add(id)
+        einwaende.push({ id, art: k.quelle, name: k.quelle === 'kanal' ? kanalName(k, englisch) : trendLabel(k, englisch), grund })
+    }
+
     // [ID] → Preis. Unbekannte ID: `null` (der Aufrufer entscheidet, was dann geschieht).
+    // Ein Kanal wird nur beim ersten Nennen voll ausgeschrieben (Name, Berührungen, Kanten),
+    // danach kurz — vorher stand „Bear-Flagge (3/3 Berührungen) K1 (Kanten jetzt …)" bis zu
+    // viermal in einem Absatz (27.10.2026). Über alle Texte einer Antwort hinweg.
+    const genannt = new Set()
     const setzeEin = (t) => {
         let unbekannt = false
         const aus = String(t ?? '').replace(ID_RE, (_, id) => {
             const k = karte.get(id.toUpperCase())
-            if (k?.quelle === 'kanal') return `${kanalName(k, englisch)} ${k.id} (Kanten jetzt ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)})`
+            if (k && eingewandt.has(k.id)) { unbekannt = true; return '' }
+            if (k?.quelle === 'kanal') {
+                if (genannt.has(k.id)) return `${kanalKurz(k, englisch)} ${k.id}`
+                genannt.add(k.id)
+                return `${kanalName(k, englisch)} ${k.id} (${englisch ? 'edges now' : 'Kanten jetzt'} ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)})`
+            }
             if (k) return k.quelle === 'trend' ? `Trendlinie ${k.id} (jetzt ${zahl(k.wertJetzt)})` : `${zahl(k.preis)} (${k.id})`
             if (nutzerIds.has(id.toUpperCase())) return `eigene Linie ${id.toUpperCase()}`
             unbekannt = true
             return ''
         })
         // „die Trendlinie [T1]" → nicht „die Trendlinie Trendlinie T1 (…)"
+        // „die Bear-Flagge [K1]" → nicht „die Bear-Flagge Bear-Flagge (…)"
         return unbekannt ? null : aus.replace(/\b(?:Trendlinie|trend ?line)\s+(?=Trendlinie T\d)/gi, '')
+            .replace(/(?:\b(?:Bull|Bear|Seitwärts|Sideways)[- ])?(?:Flagge|flag|Kanal|channel|Range|range)\s+(?=(?:Bull|Bear|Aufsteigender|Absteigender|Ascending|Descending|Seitwärts|Sideways)[- ](?:Flagge|flag|Kanal|channel|Range|range)\b[^.]*?\bK\d)/gi, '')
     }
     // Zahlen, die zu keiner Marke passen — protokollieren
     const marken = [...paket.kandidaten.flatMap((k) => (k.quelle === 'trend' ? [k.wertJetzt, k.p1, k.p2] : k.quelle === 'kanal' ? [k.untenJetzt, k.obenJetzt, k.p1, k.p2] : [k.preis, k.tief, k.hoch])),
@@ -256,6 +316,7 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
         const label = k?.quelle === 'trend' ? trendLabel(k, englisch) : ohneZeit(l?.label)
         if (!k) { verworfen.push({ art: 'linie', grund: 'unbekannteId', inhalt: id || label }); continue }
         if (k.quelle === 'kanal') continue     // Kanäle zeichnet der Code selbst (unten)
+        if (eingewandt.has(id)) { verworfen.push({ art: 'linie', grund: 'bildEinwand', inhalt: id }); continue }
         if (linien.some((x) => x.id === id)) continue
         if (zonenIds.has(id)) { verworfen.push({ art: 'linie', grund: 'doppelt', inhalt: id }); continue }
         const trend = k.quelle === 'trend'
@@ -275,13 +336,15 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
     // Kanäle und Flaggen zeichnet der Code ein, nicht das Modell: Kanten, Richtung und
     // Muster sind gemessen, der Name kommt aus `kanalName`. Zählen nicht gegen MAX_LINIEN.
     if (wahl.kanal) {
-        for (const k of paket.kandidaten.filter((x) => x.quelle === 'kanal')) {
-            const stange = k.stangeAtr ? (englisch ? `, flagpole ${k.stangeAtr.toFixed(1)} ATR` : `, Fahnenstange ${k.stangeAtr.toFixed(1)} ATR`) : ''
+        for (const k of paket.kandidaten.filter((x) => x.quelle === 'kanal' && !eingewandt.has(x.id))) {
+            const stange = k.stangeAtr ? (englisch
+                ? `, flagpole ${k.stangeAtr.toFixed(1)} ATR in ${k.stangeKerzen} candles, retraced ${Math.round(k.ruecklaufPct)} %`
+                : `, Fahnenstange ${k.stangeAtr.toFixed(1)} ATR in ${k.stangeKerzen} Kerzen, davon ${Math.round(k.ruecklaufPct)} % zurückgeholt`) : ''
             const grund = englisch
                 ? `Measured: width ${k.breiteAtr.toFixed(1)} ATR over ${k.laenge} candles${stange}; edges now ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)}.`
                 : `Gemessen: Breite ${k.breiteAtr.toFixed(1)} ATR über ${k.laenge} Kerzen${stange}; Kanten jetzt ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)}.`
             linien.push({
-                id: k.id, quelle: 'kanal', art: 'kanal', label: kanalName(k, englisch), grund, gewicht: k.muster ? 'stark' : 'mittel',
+                id: k.id, quelle: 'kanal', art: 'kanal', label: kanalName(k, englisch), labelKurz: kanalBeschriftung(k, englisch), grund, gewicht: k.muster ? 'stark' : 'mittel',
                 muster: k.muster, richtung: k.richtung, breite: k.breite,
                 t1: k.t1, p1: k.p1, t2: k.t2, p2: k.p2, tEnde: k.tEnde, pEnde: k.pEnde,
             })
@@ -294,6 +357,7 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
         const id = idVon(b?.id)
         const k = karte.get(id)
         if (!k) { verworfen.push({ art: 'bedingung', grund: 'unbekannteId', inhalt: id }); continue }
+        if (eingewandt.has(id) || eingewandt.has(idVon(b?.ziel))) { verworfen.push({ art: 'bedingung', grund: 'bildEinwand', inhalt: id }); continue }
         const richtung = b?.richtung === 'unter' ? 'unter' : b?.richtung === 'ueber' ? 'ueber' : null
         if (!richtung) { verworfen.push({ art: 'bedingung', grund: 'richtung', inhalt: id }); continue }
         const schwelle = preisVon(k)
@@ -320,7 +384,7 @@ export function pruefeChartAuswahl(json, paket, { auswahl = AUSWAHL_STANDARD, en
     }
 
     const leer = !text && !linien.length && !zonen.length && !bedingungen.length
-    return { text, linien, zonen, bedingungen, verworfen, warnungen, leer }
+    return { text, linien, zonen, bedingungen, verworfen, warnungen, leer, einwaende }
 }
 
 /** Kompakte Kandidatenliste für den Reiter (was zur Wahl stand). */
@@ -386,15 +450,29 @@ export async function ladeChartDaten({ symbol, interval, markt = 'futures', anza
     }
 }
 
-export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures', auswahl = null }) {
+/**
+ * Sichtbarer Bereich → Kerzenzahl und rechter Rand. Liegt der rechte Rand hinter der
+ * letzten Kerze (Platz rechts im Chart), zählt bis jetzt. Ohne Angabe `KERZEN`.
+ */
+export function fensterAus(fenster, ivMs, jetzt = Date.now()) {
+    const vonT = Number(fenster?.vonT), bisT = Number(fenster?.bisT)
+    if (!(ivMs > 0) || !Number.isFinite(vonT) || !Number.isFinite(bisT) || bisT <= vonT) return { anzahl: KERZEN, bisT: null }
+    const rechts = Math.min(bisT, jetzt)
+    const anzahl = Math.max(KERZEN_MIN, Math.min(KERZEN_MAX, Math.round((rechts - vonT) / ivMs)))
+    return { anzahl, bisT: bisT < jetzt - ivMs ? bisT : null }
+}
+
+export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures', auswahl = null, fenster = null, bild = null }) {
     const wahl = normAuswahl(auswahl)
+    const fen = fensterAus(fenster, TIMEFRAME_MS[interval])
     if (auswahlLeer(wahl)) { const e = new Error('Mindestens Niveaus, Trendlinien, Volumenprofil oder höhere Zeiteinheit wählen'); e.status = 400; throw e }
-    const wahlText = JSON.stringify(wahl)
+    // Anderer Ausschnitt = andere Analyse: die Sperre gilt nur für dieselbe Auswahl UND dasselbe Fenster
+    const wahlText = JSON.stringify({ ...wahl, fenster: fen })
     const schluessel = schluesselVon(symbol, interval, markt)
     // Der Cache hält die LETZTE Analyse je Chart; die Sperre greift nur bei gleicher Auswahl —
     // wer ein Kästchen umstellt, will eine andere Analyse, nicht die eben bezahlte.
     const alt = cache.get(schluessel)
-    if (alt && Date.now() - alt.ts < SPERRE_MS && JSON.stringify(alt.payload.optionen || AUSWAHL_STANDARD) === wahlText) return { ...alt.payload, stand: alt.ts, alterMs: Date.now() - alt.ts, aus: 'sperre' }
+    if (alt && Date.now() - alt.ts < SPERRE_MS && JSON.stringify({ ...(alt.payload.optionen || AUSWAHL_STANDARD), fenster: alt.payload.fenster || null }) === wahlText) return { ...alt.payload, stand: alt.ts, alterMs: Date.now() - alt.ts, aus: 'sperre' }
     const laufSchluessel = `${schluessel}|${wahlText}`
     if (laufend.has(laufSchluessel)) return laufend.get(laufSchluessel)
     const fehl = fehlschlaege.get(schluessel)
@@ -407,7 +485,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
     const lauf = (async () => {
         const intervalHtf = HTF_VON[interval] || null
         const [{ kerzen, zeichnungen, hebel, trades, englisch, zeitzone }, kerzenHtf] = await Promise.all([
-            ladeChartDaten({ symbol, interval, markt }),
+            ladeChartDaten({ symbol, interval, markt, anzahl: fen.anzahl, bisT: fen.bisT }),
             intervalHtf && wahl.htf ? getClosedCandles(symbol, intervalHtf, HTF_KERZEN, { market: markt }).catch(() => null) : null,
         ])
         if (kerzen.length < 30) throw new Error('Zu wenige Kerzen für eine Analyse')
@@ -423,25 +501,41 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         // Inhalt bei voller Rechnung — deshalb grosszügig, und bei
         // abgeschnittenem JSON einmal mit doppeltem Deckel.
         cfg.maxTokens = 3000
-        const system = systemText(englisch, wahl)
+        // Bildprüfung: nur wenn der Browser ein Bild schickte, der Anbieter Bilder versteht
+        // und es überhaupt Geometrie zu prüfen gibt (Kanäle oder Trendlinien im Paket).
+        const zuPruefen = paket.kandidaten.some((k) => EINSPRUCH_QUELLEN.includes(k.quelle))
+        let bildPruefung = !bild ? 'ohneBild' : !kannBilder(cfg.provider) ? 'anbieterOhneBild' : !zuPruefen ? 'nichtsZuPruefen' : 'an'
         const user = baueChartEingabe({ symbol, interval, paket, hebelzonen: wahl.hebel ? hebel : null, trades })
         const buchung = { zweck: 'chart-analyse', ausloeser: 'manuell', bezug: { typ: 'symbol', id: symbol } }
-        let antwort = await callLLMJson(cfg, { system, user, timeoutMs: 90000, ...buchung })
+        const frage = () => {
+            const mitBild = bildPruefung === 'an'
+            return callLLMJson(cfg, { system: systemText(englisch, wahl, { mitBild }), user, timeoutMs: 90000, anhaenge: mitBild ? [bild] : [], ...buchung })
+        }
+        let antwort
+        try { antwort = await frage() } catch (e) {
+            // Ein Modell ohne Bildverständnis (z. B. ein lokales Textmodell unter Ollama) lehnt den
+            // Anhang ab — dann einmal ohne Bild, statt die ganze Analyse scheitern zu lassen.
+            if (bildPruefung !== 'an') throw e
+            logWarn('chart-ki', `${symbol} ${interval}: Bild abgelehnt (${e.message}) — ohne Bild`)
+            bildPruefung = 'fehlgeschlagen'
+            antwort = await frage()
+        }
         // Kosten beider Aufrufe zusammen anzeigen — bei abgeschnittener Antwort wurde der erste auch bezahlt.
         let kosten = antwort.costUsd ?? null
         if (!antwort.json && antwort.abgeschnitten) {
             cfg.maxTokens = 6000
-            antwort = await callLLMJson(cfg, { system, user, timeoutMs: 90000, ...buchung })
+            antwort = await frage()
             if (antwort.costUsd != null) kosten = (kosten ?? 0) + antwort.costUsd
         }
-        const ergebnis = pruefeChartAuswahl(antwort.json, paket, { auswahl: wahl, englisch })
+        const ergebnis = pruefeChartAuswahl(antwort.json, paket, { auswahl: wahl, englisch, mitBild: bildPruefung === 'an' })
+        for (const e of ergebnis.einwaende) logWarn('chart-ki', `${symbol} ${interval}: Bild widerspricht ${e.id} (${e.name}) — ${e.grund}`)
         for (const v of ergebnis.verworfen) logWarn('chart-ki', `${symbol} ${interval}: ${v.art} verworfen (${v.grund}) — ${v.inhalt}`)
         for (const w of ergebnis.warnungen) logWarn('chart-ki', `${symbol} ${interval}: Zahl ${w.zahl} in ${w.wo} passt zu keiner Marke`)
         if (ergebnis.leer) throw new Error('Die KI hat keine verwertbare Analyse geliefert')
 
         const payload = {
-            symbol, interval, ...ergebnis, kerzenVon: vonT, kerzenBis: bisT, auswahl: kandidatenKurz(paket), optionen: wahl,
-            markt, provider: cfg.provider, model: cfg.model, costUsd: kosten,
+            symbol, interval, ...ergebnis, kerzenVon: vonT, kerzenBis: bisT, auswahl: kandidatenKurz(paket), optionen: wahl, fenster: fen,
+            markt, provider: cfg.provider, model: cfg.model, costUsd: kosten, bildPruefung,
             kiGeneriert: true,
         }
         cache.set(schluessel, { ts: Date.now(), payload })
@@ -474,7 +568,7 @@ export function setupChartKiRoutes(app) {
         if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'symbol ungültig' })
         if (!isValidTimeframe(interval)) return res.status(400).json({ error: `Zeiteinheit ${interval} wird nicht unterstützt` })
         try {
-            res.json(await erzeugeChartAnalyse({ symbol, interval, markt: req.body?.markt === 'spot' ? 'spot' : 'futures', auswahl: req.body?.auswahl }))
+            res.json(await erzeugeChartAnalyse({ symbol, interval, markt: req.body?.markt === 'spot' ? 'spot' : 'futures', auswahl: req.body?.auswahl, fenster: req.body?.fenster, bild: pruefeBild(req.body?.bild) }))
         } catch (e) {
             if (sendeWennAus(res, e)) return
             logWarn('chart-ki', `${symbol} ${interval}: ${e.message}`)

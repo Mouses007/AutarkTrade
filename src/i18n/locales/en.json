@@ -997,6 +997,13 @@
     },
     "erweiterteInfos": "Extended info",
     "erweiterteInfosHint": "Shows a small \"i\" next to values and controls. Hover (tap on phone) explains what the number means.",
+    "kerzenFarben": "Candle colours in the chart",
+    "kerzenFarbenHint": "Rising candles are drawn hollow with a coloured border, falling ones filled. Applies to all charts, the volume bars and the trade image.",
+    "kerzeSteigend": "Rising",
+    "kerzeFallend": "Falling",
+    "kerzenVorgabe": "Default",
+    "momentumGrenze": "Momentum Radar: boundary line",
+    "momentumGrenzeHint": "Wave value from which the market counts as overbought (+) or oversold (−). A dot appears only when the wave turns beyond this line; 70 % of it is \"almost long/short\" for the dot strength. Smaller = more and earlier signals, including more weak ones. Applies to the chart, the live-trading tile and momentum alerts (within 30 s).",
     "erweiterteInfosInfo": "Affects only the explanations of values.\nButton labels stay visible either way, as do the large info panels at the top of each page.",
     "modesTitle": "Show/hide modes",
     "modesHint": "Which areas appear in the bar above the page title. Off really means off: the area disappears from navigation, and even a direct link leads back to the journal.",
@@ -2846,7 +2853,39 @@
     "simulationOnlyHint": "AutarkTrade sends no orders to an exchange. Instances run in paper or shadow mode; you place trades yourself on your exchange.",
     "reason_mode_ausgelagert": "Live mode has been removed — switch the instance to paper or shadow",
     "liveAusgelagertHint": "Position from before live trading was removed. AutarkTrade no longer queries the exchange and closes nothing — check on the exchange whether it still exists.",
-    "statusFilter": "Status"
+    "statusFilter": "Status",
+    "reason_trend_against": "Signal against the higher-timeframe trend",
+    "reason_trend_unknown": "Higher-timeframe trend unknown (candles missing)",
+    "reason_limit_expired": "Limit was not reached while valid",
+    "momentum_swing": {
+      "limitAnteil": "Limit towards the stop (share of the distance)",
+      "limitGueltigKerzen": "Limit valid for (candles)",
+      "scanWindowCandles": "Scan window (candles)",
+      "htfTrendFilter": "Higher-timeframe trend filter",
+      "htfTimeframe": "Trend filter timeframe",
+      "htfEmaPeriod": "Trend filter EMA length",
+      "sperreWochenende": "No signals at the weekend (UTC)",
+      "stopKerzen": "Stop beyond the extreme of the last candles",
+      "slBufferPct": "Stop buffer (%)",
+      "tpRR": "Target (R)",
+      "maxHoldCandles": "Max. holding time (candles)",
+      "breakEvenAtR": "Break-even from (R)"
+    },
+    "liq_kerze": {
+      "volFaktor": "Volume at least (× mean)",
+      "volLaenge": "Volume mean over (candles)",
+      "spannenFaktor": "Range at least (× ATR)",
+      "atrLaenge": "ATR length",
+      "scanWindowCandles": "Scan window (candles)",
+      "htfTrendFilter": "Higher-timeframe trend filter",
+      "htfTimeframe": "Trend filter timeframe",
+      "htfEmaPeriod": "Trend filter EMA length",
+      "sperreWochenende": "No entry at the weekend (UTC)",
+      "stopAtr": "Stop below the close (× ATR)",
+      "tpRR": "Target (R, 0 = none)",
+      "maxHoldCandles": "Max. holding time (candles)",
+      "breakEvenAtR": "Break-even from (R)"
+    }
   },
   "levmap": {
     "title": "Liquidation zones",
@@ -5482,7 +5521,7 @@
         "name": "Momentum Radar",
         "kurz": "Momentum",
         "text": "Wave (WaveTrend) and money flow from the live-trading momentum radar — only 5m, 15m, 1h, 4h.",
-        "info": "Momentum Radar — what the colours mean:\nLIGHT BLUE AREA = the wave (WaveTrend), dark blue behind it = its signal line. Light crossing above dark means momentum turns up.\nBARS = money flow per candle: green in, red out, violet = only futures are driving, the move runs on leverage. WHITE LINE = spot money flow; below the bars means futures are ahead.\nLINES: ±50 (bold) overbought/oversold, ±100 extreme, 0 dashed.\nDOTS on the wave: green = look for longs, red = look for shorts; large = higher timeframes plus money flow back the signal (≥ 60 %). Orange diamond = extreme beyond ±100, exhausted, no entry.\nRAILS at +115 (short) and −115 (long): signals of the higher timeframes — 1h orange small, 4h violet, day white, week yellow large.\nDIV line: divergence between wave and price (red bearish, green bullish).\nCOLOUR BAR at the bottom: money flow of the last closed 4h candle (green in, red out).\nClosed candles only. The radar says WHEN, not WHERE."
+        "info": "Momentum Radar — what the colours mean:\nLIGHT BLUE AREA = the wave (WaveTrend), dark blue behind it = its signal line. Light crossing above dark means momentum turns up.\nBARS = money flow per candle: green in, red out, violet = only futures are driving, the move runs on leverage. WHITE LINE = spot money flow; below the bars means futures are ahead.\nLINES: ±50 (bold, adjustable under Settings › General) overbought/oversold, ±100 extreme, 0 dashed.\nDOTS on the wave: green = look for longs, red = look for shorts; large = higher timeframes plus money flow back the signal (≥ 60 %). Orange diamond = extreme beyond ±100, exhausted, no entry.\nRAILS at +115 (short) and −115 (long): signals of the higher timeframes — 1h orange small, 4h violet, day white, week yellow large.\nDIV line: divergence between wave and price (red bearish, green bullish).\nCOLOUR BAR at the bottom: money flow of the last closed 4h candle (green in, red out).\nClosed candles only. The radar says WHEN, not WHERE."
       },
       "vwapVector": {
         "name": "VWAP Vector",
@@ -5513,6 +5552,12 @@
         "info": "EMA bounce pullback: start at the highest/lowest close of recent candles in EMA trend order, with ATR distances between the EMAs, and a clean pullback to the target EMA (counter-candle logic). Labels start/entry.",
         "kurz": "EMA Bounce run",
         "text": "Start at the highest/lowest close of the last candles with EMAs in trend order and ATR distances, clean pullback to the target EMA (counter candle logic), start/entry labels."
+      },
+      "vrvp": {
+        "name": "VRVP (visible range volume profile)",
+        "kurz": "VRVP",
+        "text": "Volume profile over the visible candles, on the right edge.",
+        "info": "VRVP – Visible Range Volume Profile: how much volume traded at which price, over exactly the candles currently in view. Scrolling or zooming recalculates it. Bars from the right edge inwards, stronger inside the value area, red the POC (price with the most volume).\nEstimated from candles: each candle's volume is spread evenly over its range, buy/sell by candle colour. \"Total\" shows the whole volume per row, \"Up/Down\" buying and selling side by side, \"Delta\" the surplus."
       }
     },
     "indParam": {
@@ -5714,7 +5759,21 @@
       "mtfAn3": "MTF EMA 3",
       "mtfLaenge3": "Length",
       "mtfTf3": "Timeframe",
-      "mtfFarbe3": "Colour"
+      "mtfFarbe3": "Colour",
+      "zeilenLayout": "Row layout",
+      "zeilen": "Row size",
+      "volumen": "Volume",
+      "va": "Value area volume (%)",
+      "breite": "Width (% of chart)",
+      "platz": "Placement",
+      "cAuf": "Up volume",
+      "cAb": "Down volume",
+      "vaDeck": "Value area opacity (%)",
+      "aussenDeck": "Outside opacity (%)",
+      "zeigePoc": "POC",
+      "cPoc": "POC colour",
+      "zeigeVa": "VAH/VAL lines",
+      "cVa": "VAH/VAL colour"
     },
     "indWahl": {
       "c": "Close",
@@ -5735,7 +5794,14 @@
       "atl": "All-time low",
       "gestrichelt": "Dashed",
       "durchgezogen": "Solid",
-      "gepunktet": "Dotted"
+      "gepunktet": "Dotted",
+      "anzahl": "Number of rows",
+      "ticks": "Ticks per row",
+      "gesamt": "Total",
+      "aufAb": "Up/Down",
+      "delta": "Delta",
+      "rechts": "Right",
+      "links": "Left"
     },
     "indAusgabe": {
       "delta": "Change",
@@ -5786,15 +5852,21 @@
       "favoritWeg": "Remove from the bar"
     },
     "wzKurz": {
+      "zurueck": "Back",
+      "vor": "Forward",
       "alleZeichnungenLoeschen": "Delete all drawings",
       "ausklappen": "Expand toolbar (with names)",
       "einklappen": "Collapse",
       "magnet": "Magnet",
       "ausblenden": "Hide all",
       "einblenden": "Show all",
-      "alleLoeschen": "Delete all"
+      "alleLoeschen": "Delete all",
+      "fadenkreuz": "Crosshair",
+      "alarm": "Alert"
     },
     "wz": {
+      "zurueck": "Back (Ctrl+Z) — undo the last change to a drawing",
+      "vor": "Forward (Ctrl+Y) — redo",
       "zeiger": "Pointer (Esc)",
       "trendlinie": "Trend line",
       "strahl": "Ray",
@@ -5810,7 +5882,9 @@
       "magnet": "Magnet (snaps to open/high/low/close; hold Ctrl to invert)",
       "allesVerstecken": "Hide/show all drawings",
       "alleLoeschen": "Delete all drawings on this symbol",
-      "volprofil": "Fixed Range Volume Profile"
+      "volprofil": "Fixed Range Volume Profile",
+      "fadenkreuz": "Crosshair drawing (touch): drag moves the crosshair, tap sets the point",
+      "alarm": "Set price alert"
     },
     "tab": {
       "steigt": "rising",
@@ -5994,6 +6068,7 @@
       "hebel": "Leverage",
       "konto": "Balance",
       "kontoTipp": "Account balance in USDT (optional) — then the risk is also shown in % of the account",
+      "kontoBoerse": "Empty = {boerse} account balance (exchange, refreshed every minute). Your own value applies to this position only.",
       "optional": "for % risk",
       "gebuehr": "Fee",
       "gebuehrTipp": "Fee per side in % (taker, e.g. 0.06) — included in the max. loss",
@@ -6043,7 +6118,8 @@
         "links": "left",
         "mitte": "centre",
         "rechts": "right"
-      }
+      },
+      "farbe": "Colour"
     },
     "textEingeben": "Text:",
     "alleLoeschenFrage": "Delete one drawing on {symbol}? Locked ones stay. | Delete {n} drawings on {symbol}? Locked ones stay.",
@@ -6195,7 +6271,10 @@
       "profilLinie": "Profile line",
       "profilHinweis": "The level is taken as the profile currently stands on the chart. If you move the range or change the row count, the alert switches off — then set it again.",
       "profilFehlt": "The profile is not computed on this chart (no candles in the range) — adjust the chart so it is visible.",
-      "profilGeaendert": "Profile changed — set the alert again"
+      "profilGeaendert": "Profile changed — set the alert again",
+      "linieKopf": "Price alert {preis}",
+      "linieZiehen": "Grab the line in the chart or on the price scale and drag it to change the price.",
+      "linieGesperrt": "Locked: the line cannot be moved."
     },
     "quelle": {
       "titel": "Price source: Binance (live via websocket, deep history — only with market data source Binance) or your trading exchange's prices (polled)",
@@ -6305,6 +6384,13 @@
         "bedingungen": "If/then sentences at a mark (\"4h close above …\")",
         "hebel": "Estimated liquidation zones from open interest as context for the AI"
       },
+      "bild": "Send image for a cross-check",
+      "bildTipp": "An image of the visible chart is sent along. The AI objects where a measured channel or trendline cannot be seen in the image — that one is then not drawn. Costs a little more per analysis; only for providers that understand images.",
+      "einwaende": "Not confirmed by the image (not drawn)",
+      "bildStatus": {
+        "anbieterOhneBild": "Image check not possible: {anbieter} does not understand images — analysis without image.",
+        "fehlgeschlagen": "The model rejected the image — analysis without image check."
+      },
       "optLeer": "Choose at least levels, trend lines, volume profile, higher timeframe or channels.",
       "profilArt": {
         "titel": "Profile over",
@@ -6348,7 +6434,9 @@
       "gcvZiel": "EMA Bounce targets",
       "gcvGegen": "Counter candles",
       "emaChart": "EMAs of this timeframe",
-      "emaMtf": "EMAs of higher timeframes (MTF)"
+      "emaMtf": "EMAs of higher timeframes (MTF)",
+      "vrvpEin": "Inputs",
+      "vrvpStil": "Style"
     },
     "indHilfe": {
       "showVector": "Colours candles by VOLUME — where unusually much traded, large participants were active.",
@@ -6471,7 +6559,7 @@
       "tipHerkunft": "Right: split of trading volume between perpetual and spot. Left: the verdict — a signal is only a SHIFT of the ratio against its 200-candle average (1.5× as skewed, three candles in a row). \"Spot share high\" says nothing about direction; it is followed by whether spot buys or sells.",
       "tipVwap": "Is price above or below the weekly and monthly VWAP? The radar says WHEN, this row whether the big picture fits. Right: money flow as a number (violet = futures driving).",
       "tipStruktur": "BOS = break of a high/low WITH the trend, CHoCH = break AGAINST it. Then the broken level, how many candles ago, and the position relative to EMA50 — computed on 4h.",
-      "tipTf": "Where is the wave of this timeframe? Long zone below −50, short zone above +50, \"near\" = 70 % of the way. Closed candles only.",
+      "tipTf": "Where is the wave of this timeframe? Long zone below −50, short zone above +50 (boundary adjustable), \"near\" = 70 % of the way. Closed candles only.",
       "zeitebenen": "Timeframes"
     },
     "watchlistCoinHinzu": "Add coin",
@@ -6482,7 +6570,9 @@
     "richtungShort": "Short",
     "playbook": "Playbook",
     "farbeEigene": "Custom colour …",
-    "quelleUmgestellt": "The market data source is not Binance — panels with Binance candles now show {quelle} (futures)."
+    "quelleUmgestellt": "The market data source is not Binance — panels with Binance candles now show {quelle} (futures).",
+    "objektBearbeiten": "Edit: select in the chart, the style bar opens",
+    "objektRechner": "Open position calculator: leverage, loss, size, margin"
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade is free software (AGPL-3.0). The source code of this version is available here:",

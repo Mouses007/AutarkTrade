@@ -33,6 +33,19 @@ export const OB_LVL = 50
 export const OS_LVL = -50
 export const NEAR_PCT = 70
 export const OV_LVL = 100
+/*
+ * Grenzlinie überkauft/überverkauft: einstellbar (`settings.momentumGrenze`,
+ * Einstellungen › Allgemein), Vorgabe 50 wie in der Vorlage. Sie entscheidet,
+ * ob eine Wende ein Punkt ist, und — über die Zone „fast" (70 % davon) — wie
+ * die höheren Zeitebenen für die Punktstärke abstimmen. ±100 (Extrem) bleibt fest.
+ */
+export const GRENZE_MIN = 30
+export const GRENZE_MAX = 80
+/** Gespeicherter Wert → gültige Grenze; leer/Unsinn = Vorgabe. */
+export function grenzeAus(w) {
+    const n = Number(w)
+    return w != null && w !== '' && Number.isFinite(n) ? Math.round(Math.min(GRENZE_MAX, Math.max(GRENZE_MIN, n))) : OB_LVL
+}
 export const STR_PCT = 0.6
 export const EXT_LOOK = 4
 export const MF_LEN = 60
@@ -94,10 +107,10 @@ const kreuztRunter = (a, b, i) => i > 0 && ok(a[i]) && ok(b[i]) && ok(a[i - 1]) 
  * Signale einer Zeitebene je Kerze (Vorlage `f_sig`): Kreuz nach oben IN der
  * Long-Zone (≤ −50), Kreuz nach unten IN der Short-Zone (≥ +50).
  */
-export function signale(w1, w2) {
+export function signale(w1, w2, grenze = OB_LVL) {
     return w1.map((_, i) => ({
-        long: kreuztHoch(w1, w2, i) && w1[i] <= OS_LVL,
-        short: kreuztRunter(w1, w2, i) && w1[i] >= OB_LVL,
+        long: kreuztHoch(w1, w2, i) && w1[i] <= -grenze,
+        short: kreuztRunter(w1, w2, i) && w1[i] >= grenze,
     }))
 }
 
@@ -105,12 +118,12 @@ export function signale(w1, w2) {
  * Zustand aus dem Wellenwert (Vorlage `f_state`). `dir` 1 = Long-Seite,
  * −1 = Short-Seite, 0 = neutral. `null` heisst unbekannt, nicht neutral.
  */
-export function zustand(w) {
+export function zustand(w, grenze = OB_LVL) {
     if (!ok(w)) return { code: null, dir: 0 }
-    const nahTief = OS_LVL * NEAR_PCT / 100
-    const nahHoch = OB_LVL * NEAR_PCT / 100
-    if (w <= OS_LVL) return { code: 'long', dir: 1 }
-    if (w >= OB_LVL) return { code: 'short', dir: -1 }
+    const nahTief = -grenze * NEAR_PCT / 100
+    const nahHoch = grenze * NEAR_PCT / 100
+    if (w <= -grenze) return { code: 'long', dir: 1 }
+    if (w >= grenze) return { code: 'short', dir: -1 }
     if (w <= nahTief) return { code: 'fastLong', dir: 1 }
     if (w >= nahHoch) return { code: 'fastShort', dir: -1 }
     return { code: 'neutral', dir: 0 }
@@ -316,11 +329,11 @@ export function zaehltFuerStaerke(tf, chartTf) {
 }
 
 /** Welle, Signale und Zustand einer Zeitebene. */
-function zeitebene(kerzen, ms) {
+function zeitebene(kerzen, ms, grenze = OB_LVL) {
     const k = kerzen || []
     const { w1, w2 } = welle(k)
     const w = w1.length ? w1[w1.length - 1] : null
-    return { kerzen: k, ms, w1, w2, sig: signale(w1, w2), zustand: zustand(w), w }
+    return { kerzen: k, ms, w1, w2, sig: signale(w1, w2, grenze), zustand: zustand(w, grenze), w, grenze }
 }
 
 /**
@@ -335,7 +348,7 @@ function punkteAus(je, chartTf, mf) {
     const ausrichtung = Object.fromEntries(zaehlende.map(tf => [tf, richteAus(chart, je[tf].kerzen, je[tf].ms)]))
     const dirAn = (tf, i) => {
         const j = ausrichtung[tf][i]
-        return j >= 0 ? zustand(je[tf].w1[j]).dir : 0
+        return j >= 0 ? zustand(je[tf].w1[j], je[tf].grenze).dir : 0
     }
     const { w1, sig } = je[chartTf]
     const punkte = []
@@ -392,10 +405,11 @@ export function benoetigteZeitebenen(chartTf) {
  * `divergenz` = an diesem Punkt endet eine Divergenz (`divergenzenAus`, wie in der Kachel).
  * @returns {Array<{ i, t, seite: 'long'|'short', stark: boolean, w, divergenz: boolean }>}
  */
-export function momentumPunkte({ kerzen, chartTf }) {
+export function momentumPunkte({ kerzen, chartTf, grenze = OB_LVL }) {
     if (!TF_MS[chartTf]) throw new Error(`Unbekannte Zeitebene ${chartTf}`)
+    const g = grenzeAus(grenze)
     const je = {}
-    for (const tf of benoetigteZeitebenen(chartTf)) je[tf] = zeitebene(kerzen[tf], TF_MS[tf])
+    for (const tf of benoetigteZeitebenen(chartTf)) je[tf] = zeitebene(kerzen[tf], TF_MS[tf], g)
     const chart = je[chartTf].kerzen
     const { punkte } = punkteAus(je, chartTf, geldfluss(chart))
     const enden = new Set(divergenzenAus(chart, je[chartTf].w1, punkte).map(d => d.i2))
@@ -412,14 +426,15 @@ export function momentumPunkte({ kerzen, chartTf }) {
  * @param {Array} [o.vwapKerzen] Kerzen für Wochen-/Monats-VWAP (1h)
  * @param {number} [o.punkte=150] wie viele Chart-Kerzen der Verlauf zeigt
  */
-export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punkte = 150 }) {
+export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punkte = 150, grenze = OB_LVL }) {
+    const g = grenzeAus(grenze)
     const chart = kerzen[chartTf] || []
     if (chart.length < 30) throw new Error(`Zu wenig ${chartTf}-Kerzen (${chart.length})`)
     const istDay = TF_MS[chartTf] <= TF_MS['15m']
 
     // Je Zeitebene: Welle, Signale, Zustand der letzten geschlossenen Kerze
     const je = {}
-    for (const { tf, ms } of ZEITEBENEN) je[tf] = zeitebene(kerzen[tf], ms)
+    for (const { tf, ms } of ZEITEBENEN) je[tf] = zeitebene(kerzen[tf], ms, g)
 
     const zeitebenen = ZEITEBENEN.map(({ tf }) => {
         const z = je[tf]
@@ -490,6 +505,7 @@ export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punk
     const imFenster = (x) => x.i >= ab
     const verschiebe = (x) => ({ ...x, i: x.i - ab })
     const verlauf = {
+        grenze: g,
         t: chart.slice(ab).map(k => k.t),
         // Kerzen der Chart-Zeitebene für den Kurschart über der Welle (grosse
         // Ansicht): [o, h, l, c], auf denselben Indizes wie w1 — so liest man
@@ -523,6 +539,7 @@ export function werteAus({ kerzen, spot = null, chartTf, vwapKerzen = null, punk
 
     return {
         chartTf,
+        grenze: g,
         modus: istDay ? 'day' : 'swing',
         status,
         swing,

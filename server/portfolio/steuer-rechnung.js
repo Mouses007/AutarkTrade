@@ -317,3 +317,85 @@ export function gewerbsKriterien(m) {
         { id: 'derivate', erfuellt: m.futuresTrades > 0 ? false : true, wert: m.futuresTrades },
     ]
 }
+
+/**
+ * Bestandesrechnung eines Jahres je Coin über alle Orte: Anfang + Zugänge −
+ * Abgänge = Ende. Eigene Umbuchungen heben sich über die Orte auf; was dabei
+ * hängen bleibt (Netzgebühr), zählt netto als Zu- oder Abgang. Eine Gebühr in
+ * Coins ist ein Abgang.
+ *
+ * `anfang`/`ende` sind die Bestände, die der Bericht tatsächlich ausweist
+ * (`identität` → Menge, nach Totalverlust, beendeten Orten, Live-Beständen).
+ * Was zwischen dieser Rechnung aus Bewegungen und dem ausgewiesenen Ende
+ * fehlt, steht als `uebrige` da — so geht jede Zeile auf.
+ *
+ * @param {Map<string, number>} anfang  Identität (`ASSET` / `ASSET|kontrakt`) → Menge 1.1.
+ * @param {Map<string, number>} ende    dasselbe am 31.12.
+ * @returns {{ id, asset, kontrakt, anfang, zugang, abgang, uebrige, ende }[]}
+ */
+export function bestandesrechnung(bewegungen, von, bis, anfang, ende, ident = tokenIdentitaet(bewegungen)) {
+    const z = new Map()
+    const zeile = (id) => {
+        if (!z.has(id)) z.set(id, { zugang: 0, abgang: 0, umbuchung: 0 })
+        return z.get(id)
+    }
+    for (const b of bewegungen) {
+        const t = Number(b.zeit)
+        if (t < von || t > bis || b.einordnung === 'ignorieren') continue
+        const eigen = istTransfer(b)
+        for (const s of ident.seiten(b)) {
+            if (!s.asset || !s.menge) continue
+            const r = zeile(s.id)
+            if (eigen) r.umbuchung += s.menge
+            else if (s.menge > 0) r.zugang += s.menge
+            else r.abgang -= s.menge
+        }
+        const g = Number(b.gebuehrMenge) || 0
+        if (b.gebuehrAsset && g) zeile(String(b.gebuehrAsset).toUpperCase()).abgang += g
+    }
+    const ids = new Set([...z.keys(), ...anfang.keys(), ...ende.keys()])
+    const aus = []
+    for (const id of ids) {
+        const r = z.get(id) || { zugang: 0, abgang: 0, umbuchung: 0 }
+        let zugang = r.zugang, abgang = r.abgang
+        if (r.umbuchung > 0) zugang += r.umbuchung
+        else abgang -= r.umbuchung
+        const a = anfang.get(id) || 0, e = ende.get(id) || 0
+        const uebrige = e - (a + zugang - abgang)
+        const winzig = (v) => Math.abs(v) < Math.max(1e-8, Math.abs(e) * 1e-9, Math.abs(a) * 1e-9)
+        if (winzig(a) && winzig(e) && winzig(zugang) && winzig(abgang)) continue
+        const [asset, kontrakt = null] = id.split('|')
+        aus.push({ id, asset, kontrakt, anfang: a, zugang, abgang, uebrige: winzig(uebrige) ? 0 : uebrige, ende: e })
+    }
+    return aus.sort((x, y) => x.asset.localeCompare(y.asset) || String(x.kontrakt).localeCompare(String(y.kontrakt)))
+}
+
+/** Arten, die als Veränderung im Bericht stehen (Erträge haben ihren eigenen Abschnitt). */
+export const VERAENDERUNG_ART = { kauf: 'Kauf', verkauf: 'Verkauf', tausch: 'Tausch', einzahlung: 'Einzahlung', auszahlung: 'Auszahlung', sonstiges: 'Sonstiges' }
+
+/**
+ * Käufe, Verkäufe, Tausche und Ein-/Auszahlungen von aussen im Steuerjahr —
+ * die „Veränderungen samt Herkunft“, die die Belege zeigen sollen (LU SteuerPraxis
+ * 4/2024 Ziff. 3). Nur Fakten: Datum, Ort, was ab- und was zuging, Wert in CHF.
+ * Eigene Transfers, Erträge, Gebühren und Ignoriertes fehlen bewusst.
+ * @returns {Array<{ id, zeit, quelle, art, ab: {asset, menge, token}|null, zu: {asset, menge, token}|null, chfWert: number|null }>}
+ */
+export function veraenderungen(bewegungen, von, bis, ident = tokenIdentitaet(bewegungen)) {
+    const aus = []
+    for (const b of bewegungen) {
+        const t = Number(b.zeit)
+        if (t < von || t > bis || b.einordnung === 'ignorieren' || istTransfer(b) || istEinkommen(b)) continue
+        const art = istMigration(b) ? 'Umstellung' : VERAENDERUNG_ART[b.art]
+        if (!art) continue
+        let ab = null, zu = null
+        for (const s of ident.seiten(b)) {
+            if (!s.asset || !s.menge) continue
+            const seite = { asset: s.asset, menge: Math.abs(s.menge), token: !!s.fremd }
+            if (s.menge < 0) ab = seite
+            else zu = seite
+        }
+        if (!ab && !zu) continue
+        aus.push({ id: b.id, zeit: t, quelle: b.quelle, art, ab, zu, chfWert: b.chfWert != null ? Math.abs(Number(b.chfWert)) : null })
+    }
+    return aus.sort((x, y) => x.zeit - y.zeit || (x.id ?? 0) - (y.id ?? 0))
+}

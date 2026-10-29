@@ -173,9 +173,10 @@ export function juengsteKerze({ tf, chart, jetzt, gemeldetBis = 0, abMs = 0, min
  * @param {number} o.jetzt
  * @param {number} [o.gemeldetBis] Öffnungszeit der zuletzt gemeldeten Kerze dieses Paars
  * @param {number} [o.abMs]      Kerzen, die vorher schlossen, zählen nicht (Anlage/Wiedereinschalten)
+ * @param {number} [o.grenze]    Grenzlinie (`settings.momentumGrenze`), leer = 50
  * @returns {{ ausloesen: boolean, grund?: string, kerzeT?: number, punkt?: object, preis?: number }}
  */
-export function pruefeMomentum({ bedingung, tf, kerzen, jetzt, gemeldetBis = 0, abMs = 0 }) {
+export function pruefeMomentum({ bedingung, tf, kerzen, jetzt, gemeldetBis = 0, abMs = 0, grenze }) {
     const ms = TF_MS[tf]
     if (!ms || !MOMENTUM_ZEITEBENEN.includes(tf)) return { ausloesen: false, grund: 'zeiteinheit' }
     const geschlossen = {}
@@ -183,7 +184,7 @@ export function pruefeMomentum({ bedingung, tf, kerzen, jetzt, gemeldetBis = 0, 
     const lage = juengsteKerze({ tf, chart: geschlossen[tf], jetzt, gemeldetBis, abMs })
     if (lage.grund) return { ausloesen: false, ...lage }
     const letzte = lage.letzte
-    const punkte = momentumPunkte({ kerzen: geschlossen, chartTf: tf })
+    const punkte = momentumPunkte({ kerzen: geschlossen, chartTf: tf, grenze })
     const p = punkte.length && punkte[punkte.length - 1].t === letzte.t ? punkte[punkte.length - 1] : null
     if (!p) return { ausloesen: false, grund: 'keinPunkt', kerzeT: letzte.t }
     const punkt = { seite: p.seite, stark: p.stark, divergenz: !!p.divergenz, w: Number.isFinite(p.w) ? Math.round(p.w * 10) / 10 : null }

@@ -13,7 +13,8 @@
  *     sonst wird aus einer Haltedauer von zwei Jahren eine von zwei Tagen.
  */
 import { leseImportCsv, leseDatumUtc } from './import.js'
-import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset } from './steuer-rechnung.js'
+import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset, bestandesrechnung, veraenderungen, ortSchluessel } from './steuer-rechnung.js'
+import { coinName } from '../../shared/coin-namen.js'
 import { totalverlustStatistik } from './totalverlust-seite.js'
 import { abJahrVon } from './totalverlust.js'
 import { beendeteQuellen } from './uebersicht.js'
@@ -316,6 +317,53 @@ console.log('\nAudit 26.10.2026')
         einkommen: { zeilen: [], summe: 0 }, veraeusserungen: { abgaenge: [], erloes: 0, kosten: 0, gewinn: 0 }, kriterien: [] })
     check('CSV: kein Exponent', csv.includes('0.0000005') && !/\de-\d/.test(csv))
     check('CSV: Formel entschärft', csv.includes(`"'=HYPERLINK(""x"")"`))
+}
+
+console.log('\nBestandesrechnung (27.10.2026)')
+{
+    const J = jahrGrenzen(2025)
+    const bew = [
+        { id: 1, quelle: 'bitpanda', zeit: T('2024-05-01'), art: 'kauf', asset: 'BTC', menge: 0.5, gegenAsset: 'EUR', gegenMenge: -20000 },
+        { id: 2, quelle: 'bitpanda', zeit: T('2025-02-01'), art: 'kauf', asset: 'BTC', menge: 0.2, gegenAsset: 'EUR', gegenMenge: -15000, gebuehrAsset: 'BTC', gebuehrMenge: 0.001 },
+        // eigener Transfer Bitpanda → Ledger, 0.0002 Netzgebühr bleibt hängen
+        { id: 3, quelle: 'bitpanda', zeit: T('2025-03-01'), art: 'auszahlung', asset: 'BTC', menge: -0.3, transferMit: 4 },
+        { id: 4, quelle: 'a1', zeit: T('2025-03-01'), art: 'einzahlung', asset: 'BTC', menge: 0.2998, transferMit: 3 },
+        { id: 5, quelle: 'bitpanda', zeit: T('2025-06-01'), art: 'verkauf', asset: 'BTC', menge: -0.1, gegenAsset: 'CHF', gegenMenge: 9000 },
+        { id: 6, quelle: 'bitpanda', zeit: T('2025-07-01'), art: 'staking', asset: 'ETH', menge: 0.01 },
+        { id: 7, quelle: 'bitpanda', zeit: T('2025-08-01'), art: 'kauf', asset: 'XYZ', menge: 5, einordnung: 'ignorieren' },
+        { id: 8, quelle: 'bitpanda', zeit: T('2026-01-02'), art: 'kauf', asset: 'BTC', menge: 9 },
+    ]
+    const proId = (m) => { const o = new Map(); for (const [k, v] of m) { if (!(v > 0)) continue; const [, a] = k.split('\u0000'); o.set(a, (o.get(a) || 0) + v) } return o }
+    const anfang = proId(bestandAm(bew, J.von - 1)), ende = proId(bestandAm(bew, J.bis))
+    const br = bestandesrechnung(bew, J.von, J.bis, anfang, ende)
+    const btc = br.find((z) => z.asset === 'BTC')
+    check('Anfang 0.5, Ende 0.5988', nah(btc.anfang, 0.5) && nah(btc.ende, 0.5988), JSON.stringify(btc))
+    check('Zugang nur der Kauf (Transfer hebt sich auf)', nah(btc.zugang, 0.2), btc.zugang)
+    check('Abgang = Gebühr + Verkauf + Netzgebühr', nah(btc.abgang, 0.001 + 0.1 + 0.0002), btc.abgang)
+    check('geht auf: keine übrige Veränderung', btc.uebrige === 0, btc.uebrige)
+    check('Bewegung nach dem Jahr zählt nicht', btc.zugang < 1)
+    check('Ertrag ist Zugang', nah(br.find((z) => z.asset === 'ETH').zugang, 0.01))
+
+    // Veränderungen fürs Steueramt: Käufe/Verkäufe, keine Transfers, Erträge, Ignoriertes, kein Folgejahr.
+    const vg = veraenderungen(bew, J.von, J.bis)
+    check('Veränderungen: nur Kauf (2) und Verkauf (5)', vg.map((v) => v.id).join(',') === '2,5', vg.map((v) => v.id).join(','))
+    check('Kauf: Abgang EUR, Zugang BTC', vg[0].art === 'Kauf' && vg[0].ab?.asset === 'EUR' && nah(vg[0].ab.menge, 15000) && vg[0].zu?.asset === 'BTC' && nah(vg[0].zu.menge, 0.2))
+    check('Verkauf: Abgang BTC, Zugang CHF', vg[1].art === 'Verkauf' && vg[1].ab?.asset === 'BTC' && vg[1].zu?.asset === 'CHF')
+    const um = veraenderungen([{ id: 9, quelle: 'sb', zeit: T('2025-04-01'), art: 'tausch', asset: 'BORG', menge: 100, gegenAsset: 'CHSB', gegenMenge: -100 }], J.von, J.bis)
+    check('Token-Umstellung heisst Umstellung', um[0]?.art === 'Umstellung')
+    const csvV = steuerCsv({ jahr: 2025, vermoegen: [], vermoegenSumme: 0, einkommen: { zeilen: [], summe: 0 }, veraenderungen: vg })
+    check('CSV: Veränderungen, ohne Gewinn/KS 36/Rechtshinweis', csvV.includes('VERÄNDERUNGEN') && !/Gewinn|Einstand|Kostenbasis|Steuerberatung|Gewerbs|Monate/.test(csvV))
+    check('„ignorieren“ zählt nicht', !br.some((z) => z.asset === 'XYZ'))
+    // Totalverlust: im ausgewiesenen Ende fehlt der Bestand → „übrige“
+    const ohneBtc = new Map(ende); ohneBtc.delete('BTC')
+    const br2 = bestandesrechnung(bew, J.von, J.bis, anfang, ohneBtc)
+    check('ausgebuchter Bestand steht als übrige', nah(br2.find((z) => z.asset === 'BTC').uebrige, -0.5988))
+    // Fremder Vertrag: eigene Zeile mit kontrakt
+    const tok = [{ id: 9, quelle: 'a2', zeit: T('2025-04-01'), art: 'einzahlung', asset: 'USDT', menge: 50, kontrakt: '0xabc0000000000000000000000000000000000001', kette: 'bsc' }]
+    const br3 = bestandesrechnung(tok, J.von, J.bis, new Map(), new Map())
+    check('fremder Token: eigene Zeile mit Vertrag', br3.length === 1 && br3[0].kontrakt && br3[0].asset === 'USDT', JSON.stringify(br3))
+    check('Coin-Name: ESTV vor Liste, Token ohne Namen', coinName('xrp', new Map([['XRP', 'Ripple']])) === 'Ripple' && coinName('VXV') === 'Vectorspace AI' && coinName('BTC', new Map(), true) === null && coinName('ZZZQ') === null)
+    void ortSchluessel
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

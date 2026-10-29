@@ -14,7 +14,7 @@ import {
     fibPreise, positionWerte, magnet, imRechteck, messung, dauerText,
 } from './chart/zeichnungen/geometrie.js'
 import { WERKZEUGE, stilFuer, STANDARD_STIL } from './chart/zeichnungen/werkzeuge.js'
-import { ereignisZuLogisch } from './chart/zeichnungen/geometrie.js'
+import { ereignisZuLogisch, kreuzVerschoben, istTipp, freieZeile } from './chart/zeichnungen/geometrie.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -208,6 +208,103 @@ console.log('\nEreignisse in ihrer Kerze (Journal)\n')
     check('nur Gesperrte: die jüngste wird getroffen (zum Entsperren)', e.trefferTest(10, 10)?.z.id === 3)
     e.zeichnungen = [{ id: 1, typ: 'trendlinie' }, { id: 4, typ: 'rechteck' }]
     check('ohne Gesperrte: wie bisher die jüngste', e.trefferTest(10, 10)?.z.id === 4)
+}
+
+// ── Fadenkreuz-Zeichnen per Touch ──
+{
+    check('Fadenkreuz wandert um den Weg des Fingers', JSON.stringify(kreuzVerschoben({ x: 100, y: 100 }, 30, -20, 400, 300)) === '{"x":130,"y":80}')
+    check('Fadenkreuz bleibt im Zeichenbereich', JSON.stringify(kreuzVerschoben({ x: 390, y: 5 }, 50, -50, 400, 300)) === '{"x":399,"y":0}')
+    check('Kurz und ruhig = Tippen', istTipp(3, 4, 120))
+    check('Weit bewegt = Schieben, kein Punkt', !istTipp(20, 0, 120))
+    check('Lange gehalten = Schieben, kein Punkt', !istTipp(0, 0, 900))
+}
+
+// Ablauf: Werkzeug wählen → Fadenkreuz in der Mitte → schieben → tippen setzt Start → schieben → tippen setzt Ziel
+{
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    const achse = { width: () => 400, coordinateToLogical: (x) => x / 10, logicalToCoordinate: (L) => L * 10 }
+    Object.assign(e, {
+        chart: { timeScale: () => achse, panes: () => [{ getHeight: () => 300 }] },
+        serie: { coordinateToPrice: (y) => 1000 - y, priceToCoordinate: (p) => 1000 - p },
+        huelle: { getBoundingClientRect: () => ({ left: 0, top: 0, height: 300 }), setPointerCapture() {}, releasePointerCapture() {} },
+        zeiten: Array.from({ length: 40 }, (_, i) => t0 + i * H), kerzen: [], iv: H,
+        zeichnungen: [], vorschau: new Map(), temporaer: [], magnetAn: false, rueckruf: {}, requestUpdate() {},
+        fadenkreuzAn: true, touchGeraet: true,
+    })
+    const neu = []
+    e.rueckruf = { neu: (z) => neu.push(z), werkzeugFertig() {} }
+    e.setzeWerkzeug('volprofil')
+    check('Fadenkreuz steht nach der Werkzeugwahl in der Mitte', e.kreuz?.x === 200 && e.kreuz?.y === 150)
+    let jetzt = 0
+    const alt = performance.now
+    performance.now = () => jetzt
+    const ev = (x, y, type = 'pointermove') => ({ type, pointerId: 1, pointerType: 'touch', clientX: x, clientY: y, button: 0, stopPropagation() {}, preventDefault() {} })
+    try {
+        e.zeigerUnten(ev(300, 250)); e.zeigerBewegt(ev(250, 250)); jetzt = 300; e.zeigerOben(ev(250, 250, 'pointerup'))
+        check('Schieben setzt keinen Punkt', !e.entwurf && neu.length === 0 && e.kreuz.x === 150)
+        jetzt = 400; e.zeigerUnten(ev(10, 10)); jetzt = 450; e.zeigerOben(ev(12, 11, 'pointerup'))
+        check('Tippen setzt den Start am Fadenkreuz, nicht unter dem Finger', e.entwurf?.punkte[0].t === t0 + 15 * H)
+        jetzt = 500; e.zeigerUnten(ev(100, 100)); e.zeigerBewegt(ev(160, 100))
+        check('Entwurf folgt dem Fadenkreuz', e.entwurf?.punkte[1].t === t0 + 21 * H)
+        jetzt = 700; e.zeigerOben(ev(160, 100, 'pointerup'))
+        jetzt = 800; e.zeigerUnten(ev(5, 5)); jetzt = 850; e.zeigerOben(ev(5, 5, 'pointerup'))
+        check('Zweites Tippen zeichnet das Profil von Start bis Ziel', neu.length === 1 && neu[0].punkte[0].t === t0 + 15 * H && neu[0].punkte[1].t === t0 + 21 * H, JSON.stringify(neu))
+        check('Danach ist das Fadenkreuz weg', e.kreuz === null)
+        e.setzeFadenkreuz(false)
+        e.setzeWerkzeug('horizontale')
+        e.zeigerUnten(ev(50, 40, 'pointerdown'))
+        check('Abgeschaltet: Tippen zeichnet wie bisher unter dem Finger', neu.length === 2 && neu[1].punkte[0].p === 960)
+    } finally { performance.now = alt }
+}
+
+// ── Preis-Alarmlinien: ziehen, sperren, Werkzeug „Alarm" ──
+{
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    const achse = { width: () => 400, coordinateToLogical: (x) => x / 10, logicalToCoordinate: (L) => L * 10 }
+    const log = []
+    Object.assign(e, {
+        chart: { timeScale: () => achse, panes: () => [{ getHeight: () => 300 }] },
+        serie: { coordinateToPrice: (y) => 1000 - y, priceToCoordinate: (p) => 1000 - p },
+        huelle: { getBoundingClientRect: () => ({ left: 0, top: 0, height: 300 }), setPointerCapture() {}, releasePointerCapture() {} },
+        zeiten: Array.from({ length: 40 }, (_, i) => t0 + i * H), kerzen: [], iv: H,
+        zeichnungen: [], vorschau: new Map(), temporaer: [], magnetAn: false, requestUpdate() {},
+        fadenkreuzAn: true, touchGeraet: false, alarme: [], alarmZug: null, finger: null,
+        rueckruf: {
+            alarmZiehen: (id, p) => log.push(['ziehen', id, p]), alarmVerschoben: (id, p) => log.push(['verschoben', id, p]),
+            alarmKlick: (id) => log.push(['klick', id]), alarmPreis: (p) => log.push(['preis', p]), werkzeugFertig() {},
+        },
+    })
+    const ev = (type, x, y) => ({ type, pointerId: 2, pointerType: 'mouse', clientX: x, clientY: y, button: 0, stopPropagation() {}, preventDefault() {} })
+    e.setzeAlarme([{ id: 7, preis: 900, gesperrt: false }, { id: 8, preis: 850, gesperrt: true }])
+    e.zeigerUnten(ev('pointerdown', 200, 102)); e.zeigerBewegt(ev('pointermove', 200, 120)); e.zeigerOben(ev('pointerup', 200, 120))
+    check('Alarmlinie ziehen: neuer Preis beim Loslassen', log.some((x) => x[0] === 'verschoben' && x[1] === 7 && x[2] === 880), JSON.stringify(log))
+    log.length = 0
+    e.zeigerUnten(ev('pointerdown', 430, 100)); e.zeigerBewegt(ev('pointermove', 430, 60)); e.zeigerOben(ev('pointerup', 430, 60))
+    check('Auch an der Preisskala greifbar', log.some((x) => x[0] === 'verschoben' && x[2] === 940), JSON.stringify(log))
+    log.length = 0
+    e.zeigerUnten(ev('pointerdown', 200, 150)); e.zeigerBewegt(ev('pointermove', 200, 190)); e.zeigerOben(ev('pointerup', 200, 190))
+    check('Gesperrte Alarmlinie bewegt sich nicht, Loslassen = Tipp (Menü)', !log.some((x) => x[0] === 'verschoben') && log.some((x) => x[0] === 'klick' && x[1] === 8), JSON.stringify(log))
+    log.length = 0
+    e.zeigerUnten(ev('pointerdown', 200, 101)); e.zeigerOben(ev('pointerup', 200, 101))
+    check('Tipp ohne Ziehen öffnet das Menü der Linie', log.length === 1 && log[0][0] === 'klick' && log[0][1] === 7, JSON.stringify(log))
+    log.length = 0
+    e.setzeWerkzeug('alarm')
+    e.zeigerUnten(ev('pointerdown', 200, 40))
+    check('Werkzeug „Alarm": Klick gibt den Preis an den Dialog, keine Zeichnung', log.length === 1 && log[0][0] === 'preis' && log[0][1] === 960, JSON.stringify(log))
+}
+
+console.log('\nBeschriftungen weichen einander aus\n')
+{
+    const box = { x: 100, y: 50, w: 80, h: 15 }
+    check('frei: bleibt, wo sie ist', freieZeile(box, []) === 0)
+    check('belegt: eine Zeile höher', freieZeile(box, [{ x: 120, y: 52, w: 80, h: 15 }]) === -17)
+    check('oben kein Platz: eine Zeile tiefer', freieZeile({ ...box, y: 5 }, [{ x: 100, y: 5, w: 80, h: 15 }], { oben: 0 }) === 17)
+    check('daneben (andere x) stört nicht', freieZeile(box, [{ x: 300, y: 50, w: 80, h: 15 }]) === 0)
+    const voll = [-3, -2, -1, 0, 1, 2, 3].map((i) => ({ x: 100, y: 50 + i * 17, w: 80, h: 15 }))
+    check('nirgends Platz: bleibt (lieber überdeckt als weit weg)', freieZeile(box, voll) === 0)
+    check('zwei Zeilen höher, wenn eine nicht reicht', freieZeile(box, voll.slice(2, 5).concat([{ x: 100, y: 84, w: 80, h: 15 }])) === -34)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

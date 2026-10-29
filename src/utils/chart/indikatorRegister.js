@@ -784,6 +784,27 @@ export const INDIKATOREN = {
             }
         },
     },
+    // VRVP: Volumenprofil des sichtbaren Bereichs — gerechnet beim Zeichnen (vrvpZeichnung.js),
+    // weil es beim Scrollen und Zoomen mitgehen muss, nicht nur bei einer neuen Kerze.
+    vrvp: {
+        ort: 'preis',
+        zeichner: 'vrvp',
+        kurzOhneParams: true,
+        params: [
+            W('zeilenLayout', 'anzahl', ['anzahl', 'ticks'], 'vrvpEin'),
+            Z('zeilen', 150, 1, 1000, 1, 'vrvpEin'),
+            W('volumen', 'gesamt', ['gesamt', 'aufAb', 'delta'], 'vrvpEin'),
+            Z('va', 100, 0, 100, 1, 'vrvpEin'),
+            Z('breite', 30, 5, 100, 5, 'vrvpStil'),
+            W('platz', 'rechts', ['rechts', 'links'], 'vrvpStil'),
+            F('cAuf', '#5b9cf6', 'vrvpStil'), M(F('cAb', '#fbc02d', 'vrvpStil')),
+            Z('vaDeck', 70, 0, 100, 5, 'vrvpStil'), Z('aussenDeck', 30, 0, 100, 5, 'vrvpStil'),
+            S('zeigePoc', true, 'vrvpStil'), M(F('cPoc', '#ff5252', 'vrvpStil')),
+            S('zeigeVa', false, 'vrvpStil'), M(F('cVa', '#9598a1', 'vrvpStil')),
+        ],
+        ausgaben: [],
+        rechne: () => ({}),
+    },
     volSma: {
         ort: 'eigen',
         params: [P_LAENGE(20), P_TABELLE],

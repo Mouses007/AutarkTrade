@@ -66,16 +66,29 @@ function naechsterStrich() {
     stil({ strich: reihe[(reihe.indexOf(s.value.strich || 'voll') + 1) % reihe.length] })
 }
 
+/*
+ * Farbe: nur EIN Punkt in der aktuellen Farbe; ein Klick klappt die Palette darunter
+ * auf, die Wahl klappt sie wieder zu. Acht Punkte nebeneinander nahmen auf dem Handy
+ * die halbe Leiste ein und schoben Sperren/Löschen aus dem Bild.
+ */
+const paletteOffen = ref(false)
+watch(() => props.zeichnung.id, () => { paletteOffen.value = false })
+function waehleFarbe(f) {
+    stil({ farbe: f })
+    paletteOffen.value = false
+}
+
 function nurDieseZeiteinheit() {
     emit('aendere', { sichtbarAuf: nurHier.value ? null : [props.interval] })
 }
 </script>
 
 <template>
-    <div class="stilLeiste" @mousedown.stop @pointerdown.stop>
+    <div class="stilRahmen" @mousedown.stop @pointerdown.stop>
+    <div class="stilLeiste">
         <template v-if="hatFarbe">
-            <button v-for="f in FARBEN" :key="f" class="farbe" :class="{ an: s.farbe === f }" :style="{ background: f }"
-                @click="stil({ farbe: f })"></button>
+            <button class="farbe aktuell" :class="{ offen: paletteOffen }" :style="{ background: s.farbe }" :title="t('chart.stil.farbe')"
+                :aria-label="t('chart.stil.farbe')" :aria-expanded="paletteOffen" @click="paletteOffen = !paletteOffen"></button>
             <span class="trenn"></span>
         </template>
         <label class="deck" :title="t('chart.stil.deckkraft')">
@@ -116,15 +129,54 @@ function nurDieseZeiteinheit() {
         <button class="k" :title="t('chart.ausblenden')" @click="emit('aendere', { versteckt: true })" :aria-label="t('chart.ausblenden')"><Symbol name="augeAus" /></button>
         <button class="k loeschen" :title="t('chart.entfernen')" @click="emit('loesche')" :aria-label="t('chart.entfernen')"><Symbol name="muell" /></button>
     </div>
+    <div v-if="paletteOffen && hatFarbe" class="palette" role="listbox" :aria-label="t('chart.stil.farbe')">
+        <button v-for="f in FARBEN" :key="f" class="farbe" :class="{ an: s.farbe === f }" :style="{ background: f }"
+            role="option" :aria-selected="s.farbe === f" :aria-label="f" @click="waehleFarbe(f)"></button>
+    </div>
+    </div>
 </template>
 
 <style scoped>
-.stilLeiste {
+.stilRahmen {
     /* Rechts oben, vor der Preisachse: links oben steht die Legende. */
     position: absolute;
     top: 6px;
     right: 70px;
-    z-index: 6;
+    z-index: 7;
+    max-width: calc(100% - 86px);
+}
+
+/* Die Palette liegt ausserhalb der Leiste: die scrollt waagrecht und schnitte sie sonst ab. */
+.palette {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    display: grid;
+    grid-template-columns: repeat(4, 22px);
+    gap: 8px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
+    box-shadow: var(--schatten);
+}
+
+.palette .farbe {
+    width: 22px;
+    height: 22px;
+}
+
+.farbe.aktuell {
+    width: 18px;
+    height: 18px;
+    border-color: var(--line-stark);
+}
+
+.farbe.aktuell.offen {
+    border-color: var(--text);
+}
+
+.stilLeiste {
     display: flex;
     align-items: center;
     gap: 3px;
@@ -133,7 +185,6 @@ function nurDieseZeiteinheit() {
     border: 1px solid var(--line-stark);
     border-radius: var(--radius-klein);
     box-shadow: var(--schatten);
-    max-width: calc(100% - 86px);
     overflow-x: auto;
 }
 

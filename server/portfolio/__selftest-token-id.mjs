@@ -63,6 +63,22 @@ check('ohne Beleg bleibt ein unbekannter Vertrag eigen', ident.id('PEPE', PEPE) 
 const vonHand = tokenIdentitaet([{ id: 20, quelle: 'i:Ledger', art: 'einzahlung', asset: 'PEPE', menge: 1, kontrakt: PEPE, einordnung: 'transfer' }])
 check('als eigener Transfer eingeordnet (Import/Hand) belegt den Vertrag', vonHand.id('PEPE', PEPE) === 'PEPE')
 check('Import ohne Kette: keine Token-Prüfung (Kurs übers Kürzel wie bisher)', tokenOrteVon([{ quelle: 'i:X', asset: 'PEPE', kontrakt: PEPE, menge: 1 }]).size === 0)
+{
+    // MetaMask-Import 2024: Kauf mit Vertrag, Tausch nach SOUTH ohne Gegenvertrag.
+    const M = '0x857de36f92330e1b9a21e8745c692f2ce13866cb', S = '0xcd24ba0e3364233ee9301c1d608a14753c8739c5'
+    const imp = [
+        { id: 30, quelle: 'i:MM', art: 'einzahlung', asset: 'MEMAGX', menge: 100, kontrakt: M, kette: 'ethereum', einordnung: 'kauf', zeit: 1 },
+        { id: 31, quelle: 'i:MM', art: 'tausch', asset: 'SOUTH', menge: 2, kontrakt: S, kette: 'ethereum', gegenAsset: 'MEMAGX', gegenMenge: -100, zeit: 2 },
+    ]
+    const ii = tokenIdentitaet(imp)
+    check('Import-Tausch ohne Gegenvertrag: Vertrag aus derselben Quelle', ii.seiten(imp[1])[1].id === `MEMAGX|${M}`, ii.seiten(imp[1])[1].id)
+    const m = bestandAm(imp, Infinity, ii)
+    check('… kein Phantom-Bestand nach dem Tausch', [...m.entries()].filter(([k]) => k.includes('MEMAGX')).every(([, v]) => nah(v, 0)), JSON.stringify([...m]))
+    const zwei = tokenIdentitaet([...imp, { id: 32, quelle: 'i:MM', art: 'einzahlung', asset: 'MEMAGX', menge: 1, zeit: 3 }])
+    check('… nicht, wenn die Quelle das Kürzel auch ohne Vertrag führt', zwei.seiten(imp[1])[1].id === 'MEMAGX')
+    const andere = tokenIdentitaet([imp[0], { ...imp[1], quelle: 'i:Andere' }])
+    check('… nicht über Quellen hinweg', andere.seiten({ ...imp[1], quelle: 'i:Andere' })[1].id === 'MEMAGX')
+}
 check('Gegenkontrakt aus dem Rohfeld (Text)', gegenKontraktVon({ roh: JSON.stringify({ gegenKontrakt: ECHT.toUpperCase().replace('0X', '0x') }) }) === ECHT)
 
 console.log('\nBestand am Stichtag')

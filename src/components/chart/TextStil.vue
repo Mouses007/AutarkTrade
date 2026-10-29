@@ -100,7 +100,8 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', esc, true); speich
     right: 70px;
     z-index: 6;
     width: 240px;
-    max-width: calc(100% - 16px);
+    /* rechts stehen 70 px Preisachse frei, links 8 px Rand — sonst ragte es auf dem Handy links hinaus */
+    max-width: calc(100% - 78px);
     display: flex;
     flex-direction: column;
     gap: 6px;

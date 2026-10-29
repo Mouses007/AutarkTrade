@@ -28,6 +28,7 @@ import { logWarn } from './logger.js'
 import { berechneSitzung } from './sitzung-rechnung.js'
 import { getClosedCandles } from './market-data.js'
 import { werteAus as werteMomentumAus, CHART_ZEITEBENEN } from './momentum-radar.js'
+import { leseMomentumGrenze } from './momentum-grenze.js'
 
 /**
  * Liest ALLE geschlossenen Positionen im Fenster, nicht nur die erste Seite.
@@ -484,7 +485,8 @@ export function setupLivetradingRoutes(app) {
              * Die Kachel bleibt bei 150 (eigener Cache-Eintrag).
              */
             const lang = req.query.lang === '1'
-            const key = `lt_momentum|${symbol}|${tf}${lang ? '|lang' : ''}`
+            const grenze = await leseMomentumGrenze()
+            const key = `lt_momentum|${symbol}|${tf}|${grenze}${lang ? '|lang' : ''}`
             if (req.query.force) verwerfeCache(key)
             const nutzlast = await ausCache(key, 30 * 1000, async () => {
                 const LIMIT = { '1w': 300, '1d': 500, '4h': 500, '1h': 1000, '15m': 500, '5m': 500 }
@@ -513,7 +515,7 @@ export function setupLivetradingRoutes(app) {
                 }
                 return {
                     symbol,
-                    ...werteMomentumAus({ kerzen, spot, chartTf: tf, ...(lang ? { punkte: kerzen[tf]?.length || 1499 } : {}) }),
+                    ...werteMomentumAus({ kerzen, spot, chartTf: tf, grenze, ...(lang ? { punkte: kerzen[tf]?.length || 1499 } : {}) }),
                     spotVerfuegbar: spotStatus === 'ok', spotStatus,
                 }
             })

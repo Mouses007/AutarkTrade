@@ -16,6 +16,7 @@
 import {
     precisionAt, rangGegenErgebnis, werteAus, werteLaufAus, werteAusHype, werteAusFrueh, spanne, median,
     schwelleFuer, vorzeichenTest, MIN_LAEUFE, fisherExakt, FRUEH_REGEL_AUSWERTUNG, fruehRegelFuer,
+    MESSFENSTER_SEIT,
 } from './radar-guete.js'
 
 let fehler = 0
@@ -267,6 +268,28 @@ const reihe = (n, f) => Array.from({ length: n }, (_, i) => f(i))
     p('Schalter an: Paare nach Regel 2 werden ausgewertet', an.paare === 14 && an.altbestand === 2, `${an.paare}/${an.altbestand}`)
     const ausMitZwei = werteAusFrueh(alsZwei, '1d', fruehRegelFuer(false))
     p('Schalter aus: Paare nach Regel 2 sind Altbestand', ausMitZwei.paare === 0 && ausMitZwei.spitze.n === 0)
+}
+
+/*
+ * Altmessungen: Bis zum 07.10.2026 18:00 UTC reichte das Messfenster bis
+ * „jetzt". Solche Zeilen dürfen nichts mehr beitragen — weder Precision noch
+ * Korrelation noch die Anzahl. Der Schnitt hängt an `gemessenAm`: Ein alter
+ * Auftrag, den der neue Code einlöste, zählt.
+ */
+{
+    const vorher = MESSFENSTER_SEIT - 60e3
+    const nachher = MESSFENSTER_SEIT + 60e3
+    p('Stichtag ist 07.10.2026 18:00 UTC', new Date(MESSFENSTER_SEIT).toISOString() === '2026-10-07T18:00:00.000Z')
+    const alt = Array.from({ length: 10 }, (_, i) => z(i + 1, 20, -0.1, 'gemessen', { laufId: 1, gemessenAm: vorher }))
+    const neu = Array.from({ length: 10 }, (_, i) => z(i + 1, 0.2, -0.1, 'gemessen', { laufId: 2, gemessenAm: nachher, erstelltAm: vorher }))
+    const a = werteAus([...alt, ...neu], '1h')
+    p('Altmessungen zählen nicht als gemessen', a.anzahl === 10, String(a.anzahl))
+    p('Altmessungen werden ausgewiesen', a.altmessungen === 10, String(a.altmessungen))
+    p('Altmessungen bilden keinen Lauf', a.laeufe === 1, String(a.laeufe))
+    p('Precision kommt nur aus richtigen Messungen', a.precision10 === 0, String(a.precision10))
+    p('alter Auftrag, neu gemessen, zählt', precisionAt(neu).n === 10)
+    p('ohne Messzeitpunkt (Prüfdaten) zählt die Zeile', precisionAt([z(1, 5, -1)]).n === 1)
+    p('genau am Stichtag gemessen zählt', precisionAt([z(1, 5, -1, 'gemessen', { gemessenAm: MESSFENSTER_SEIT })]).n === 1)
 }
 
 console.log(`  ${bestanden} bestanden, ${fehler} fehlgeschlagen`)

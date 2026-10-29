@@ -278,22 +278,6 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                 </div>
             </div>
 
-            <!-- ── Spam: zugeklappt, nie in der Liste ── -->
-            <div v-if="spamListe.length" class="pf-spam">
-                <button type="button" class="pf-spam-kopf" :aria-expanded="spamOffen" @click="spamOffen = !spamOffen">
-                    <Symbol :name="spamOffen ? 'runter' : 'pfeilRechts'" :groesse="14" />
-                    {{ t('portfolio.spamTitel', { n: spamListe.length }) }}
-                    <span class="at-gedaempft">· {{ t('portfolio.spamText') }}</span>
-                </button>
-                <div v-if="spamOffen" class="pf-spam-liste">
-                    <div v-for="p in spamListe" :key="p.schluessel" class="pf-spam-zeile">
-                        <span class="pf-spam-name" :title="p.asset">{{ p.asset }}</span>
-                        <span class="at-gedaempft">{{ menge(p.menge) }}</span>
-                        <button type="button" class="pf-totalverlust" :title="t('portfolio.keinSpamInfo')" @click="setzeSpam(p.schluessel.split('|')[0], false, p.kontrakt)">{{ t('portfolio.keinSpam') }}</button>
-                    </div>
-                </div>
-            </div>
-
             <!-- ── Nach Ort ── -->
             <div v-else class="pf-orte-raster">
                 <section v-if="boersen.length">
@@ -369,6 +353,24 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                         <p v-if="!w.adressen.length" class="pf-meldung">{{ t('portfolio.walletLeer') }}</p>
                     </Karte>
                 </section>
+            </div>
+
+            <!-- Spam steht NACH beiden Ansichten: zwischen „Nach Coin“ und „Nach Ort“ hängte
+                 sich das v-else der Orts-Ansicht an den Spam-Block (25.–26.10.2026: „Nach Ort“ leer). -->
+            <!-- ── Spam: zugeklappt, nie in der Liste ── -->
+            <div v-if="spamListe.length" class="pf-spam">
+                <button type="button" class="pf-spam-kopf" :aria-expanded="spamOffen" @click="spamOffen = !spamOffen">
+                    <Symbol :name="spamOffen ? 'runter' : 'pfeilRechts'" :groesse="14" />
+                    {{ t('portfolio.spamTitel', { n: spamListe.length }) }}
+                    <span class="at-gedaempft">· {{ t('portfolio.spamText') }}</span>
+                </button>
+                <div v-if="spamOffen" class="pf-spam-liste">
+                    <div v-for="p in spamListe" :key="p.schluessel" class="pf-spam-zeile">
+                        <span class="pf-spam-name" :title="p.asset">{{ p.asset }}</span>
+                        <span class="at-gedaempft">{{ menge(p.menge) }}</span>
+                        <button type="button" class="pf-totalverlust" :title="t('portfolio.keinSpamInfo')" @click="setzeSpam(p.schluessel.split('|')[0], false, p.kontrakt)">{{ t('portfolio.keinSpam') }}</button>
+                    </div>
+                </div>
             </div>
         </template>
     </div>

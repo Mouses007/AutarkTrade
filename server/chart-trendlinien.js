@@ -99,7 +99,14 @@ export function pruefeTrend(kerzen, i1, p1, i2, p2, seite, tol, pivots, { atr: a
         if (jenseits(k.c, um(y, tol * 0.25)) || jenseits(seite === 'hoch' ? k.h : k.l, um(y, tol))) return { ok: false, grund: 'bruch', beruehrungen: 0, beruehrIdx: [] }
     }
     const links = Math.max(0, i1 - Math.ceil(TREND.LINKS_ANTEIL * (i2 - i1)))
-    for (let i = links; i < i1; i++) {
+    // Eine klassische Linie (fallend an Hochs, steigend an Tiefs) beginnt nach dem Top bzw. Boden
+    // links von ihr: die Prüfung nach links endet an der ersten Kerze, die über den ersten Anker
+    // hinausreicht (29.10.2026, HBAR 4h: Linie vom ersten tieferen Hoch nach dem Pump auf 0.131 —
+    // die Schlüsse des Pumps lagen über der nach links verlängerten Linie, und die Linie, die jeder
+    // Trader so zieht, fiel durch). Gegenlinien prüfen weiter die ganze Hälfte.
+    const klassisch = seite === 'hoch' ? p2 < p1 : p2 > p1
+    for (let i = i1 - 1; i >= links; i--) {
+        if (klassisch && jenseits(seite === 'hoch' ? kerzen[i].h : kerzen[i].l, um(p1, tol))) break
         if (jenseits(kerzen[i].c, um(L(i), tol))) return { ok: false, grund: 'links', beruehrungen: 0, beruehrIdx: [] }
     }
     const wert = (i) => (seite === 'hoch' ? kerzen[i].h : kerzen[i].l)
@@ -130,8 +137,8 @@ export const istGegenlinie = (seite, p1, p2) => (seite === 'hoch' ? p2 > p1 : p2
  * zweiter Anker, dann früherer erster Anker (längere Spanne).
  * @param {{ tol: number, atr?: number, richtung?: 'auf'|'ab'|null, minAbstand?: number }} opt
  */
-export function alleTrendlinien(kerzen, seite, { tol, atr: atrWert = tol / TOL_ATR, richtung = null, minAbstand = MIN_ABSTAND } = {}) {
-    const pv = wendepunkte(kerzen, seite)
+export function alleTrendlinien(kerzen, seite, { tol, atr: atrWert = tol / TOL_ATR, richtung = null, minAbstand = MIN_ABSTAND, k = PIVOT_K, minSpanneZwei = TREND.MIN_SPANNE_ZWEI } = {}) {
+    const pv = wendepunkte(kerzen, seite, k)
     const wert = (i) => (seite === 'hoch' ? kerzen[i].h : kerzen[i].l)
     const aus = []
     for (let a = 0; a < pv.length; a++) {
@@ -144,7 +151,7 @@ export function alleTrendlinien(kerzen, seite, { tol, atr: atrWert = tol / TOL_A
             if (Math.abs(p2 - p1) / (i2 - i1) > TREND.MAX_STEIL_ATR * atrWert) continue
             const r = pruefeTrend(kerzen, i1, p1, i2, p2, seite, tol, pv, { atr: atrWert })
             if (!r.ok || r.beruehrungen < 2) continue
-            if (r.beruehrungen === 2 && i2 - i1 < TREND.MIN_SPANNE_ZWEI) continue
+            if (r.beruehrungen === 2 && i2 - i1 < minSpanneZwei) continue
             if (istGegenlinie(seite, p1, p2) && r.beruehrungen < TREND.GEGEN_MIN_BER) continue
             aus.push({ i1, p1, i2, p2, beruehrungen: r.beruehrungen, beruehrIdx: r.beruehrIdx })
         }

@@ -342,9 +342,14 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     let htfCandles = null
     if (p.htfTrendFilter && p.htfTimeframe && p.htfTimeframe !== timeframe) {
         const noetig = (p.htfEmaPeriod || 50) + 5
+        // `htfKerzen` im Manifest: eine Strategie, deren EMA ausgeschwungen sein
+        // muss, holt mehr als die knappe Vorgabe. Der Backtest reicht die ganze
+        // Historie durch — mit nur Periode + 20 Kerzen rechnete der Papierbetrieb
+        // eine andere EMA als das Labor.
+        const anzahl = Math.max((p.htfEmaPeriod || 50) + 20, Number(instance.strategie.htfKerzen) || 0)
         try {
             htfCandles = await getClosedCandles(
-                symbol, p.htfTimeframe, (p.htfEmaPeriod || 50) + 20, { market: instance.market },
+                symbol, p.htfTimeframe, anzahl, { market: instance.market },
             )
         } catch (e) {
             htfCandles = null

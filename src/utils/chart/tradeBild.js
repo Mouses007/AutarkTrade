@@ -24,6 +24,9 @@ import { SignalZeichnung } from './signalZeichnung.js'
 import { ZeichenEbene } from './zeichnungen/ZeichenEbene.js'
 import { ema } from '../../../shared/indicators.js'
 import { normSymbol } from '../../../shared/symbol.js'
+import { zeitAusschnitt, preisAusschnitt } from './tradeBildAusschnitt.js'
+import { kerzenFarben, kerzenOptionen } from './kerzenFarben.js'
+import { appEinstellungen } from '../../stores/settings.js'
 
 /** Zeiteinheit der Bewertung (1D, 1W, 2m …) → Zeiteinheit des Charts. */
 const TF_KARTE = {
@@ -99,8 +102,7 @@ export async function erzeugeTradeBild({ symbol, interval, richtung, einstiegT, 
     try {
         const zuLwc = (t) => Math.floor(t / 1000)
         const serie = chart.addSeries(CandlestickSeries, {
-            upColor: 'rgba(38,166,154,0.12)', downColor: '#ef5350', borderUpColor: '#26a69a', borderDownColor: '#ef5350',
-            wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+            ...kerzenOptionen(kerzenFarben(appEinstellungen.value)),
         })
         serie.setData(kerzen.map((k) => ({ time: zuLwc(k.t), open: k.o, high: k.h, low: k.l, close: k.c })))
 
@@ -154,10 +156,10 @@ export async function erzeugeTradeBild({ symbol, interval, richtung, einstiegT, 
             ],
         })
 
-        // Ausschnitt: ~120 Kerzen vor dem Einstieg bis zur letzten (höchstens 220 sichtbar)
-        const bis = kerzen.length - 1
-        const von = Math.max(0, Math.min(iE - 120, bis - 220))
-        chart.timeScale().setVisibleLogicalRange({ from: von, to: bis + 6 })
+        // Ausschnitt nach Einstieg und Zeiteinheit, Preisachse nach Kerzen und Trade (tradeBildAusschnitt.js)
+        const { von, bis } = zeitAusschnitt({ zeiten: kerzen.map((k) => k.t), interval, einstiegT })
+        chart.timeScale().setVisibleLogicalRange({ from: von, to: bis })
+        passePreisachse(chart.priceScale('right'), kerzen, von, bis, [einstiegP, sl, tp])
         await warteFrame(); await warteFrame()
         return chart.takeScreenshot(true).toDataURL('image/jpeg', 0.88)
     } finally {
@@ -189,7 +191,15 @@ export async function erzeugeChartBild(o) {
 const STRATEGIE_INDIKATOR = { lsob: 'lsob', ema_touch: 'guss' }
 const pause = (ms) => new Promise((r) => setTimeout(r, ms))
 
-async function chartBildAusPanel({ symbol, interval, strategie = null, breite = 1600, hoehe = 900 }) {
+/** Preisachse fest auf Kerzen + Trade-Marken; ohne brauchbaren Bereich bleibt sie automatisch. */
+function passePreisachse(skala, kerzen, von, bis, marken) {
+    const bereich = preisAusschnitt({ kerzen, von, bis, marken })
+    if (!bereich) return
+    skala.applyOptions({ autoScale: false })
+    skala.setVisibleRange(bereich)
+}
+
+async function chartBildAusPanel({ symbol, interval, einstiegT = null, einstiegP = null, sl = null, tp = null, strategie = null, breite = 1600, hoehe = 900 }) {
     const [{ createApp, h, ref }, { default: ChartPanel }, { default: i18n }, { neueInstanz, INDIKATOREN }] = await Promise.all([
         import('vue'), import('../../components/chart/ChartPanel.vue'), import('../../i18n/index.js'), import('./indikatorRegister.js'),
     ])
@@ -226,9 +236,12 @@ async function chartBildAusPanel({ symbol, interval, strategie = null, breite = 
         const p = panelRef.value
         if (!(p?.kerzen?.length > 20)) throw new Error('keine Kerzen')
         await pause(3500)
-        const n = p.kerzen.length
-        // Rechts Platz für die Box (20 Kerzen) und ihre Schilder.
-        p.chart.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 160), to: n + 32 })
+        // Ausschnitt um den Einstieg, rechts Platz für die Box und ihre Schilder; die Preisachse
+        // nach Kerzen und Trade — sonst zogen ferne Zonen und der Monats-VWAP sie auf (SOLUSDT 28.10.2026).
+        const kerzen = p.kerzen
+        const aus = zeitAusschnitt({ zeiten: kerzen.map((k) => k.t), interval, einstiegT })
+        p.chart.timeScale().setVisibleLogicalRange({ from: aus.von, to: aus.bis })
+        passePreisachse(p.chart.priceScale('right', 0), kerzen, aus.von, aus.bis, [einstiegP, sl, tp])
         await warteFrame(); await warteFrame(); await pause(150)
         const leinwand = p.bildschirmfoto()
         if (!leinwand) throw new Error('kein Bild')

@@ -37,7 +37,8 @@ import { appEinstellungen } from '../stores/settings.js'
 import { ladeSystemModus } from '../stores/system.js'
 import { hydrateLiveSettings } from '../stores/live.js'
 import { istModusAn, ersterAktiverModus, modeHome } from '../config/menu.js'
-import { starteApp, leseZeitzone, leseBildschirmTyp, ladeZeitraeume, setzeFilterwerte, schliesseMobilMenue } from '../utils/journal/app.js'
+import { starteApp, leseZeitzone, leseBildschirmTyp, ladeZeitraeume, setzeFilterwerte, schliesseMobilMenue, schalteMobilMenue } from '../utils/journal/app.js'
+import { wischErgebnis } from '../utils/menueWisch.js'
 import { ladeVerfuegbareTags } from '../utils/journal/tagebuch.js'
 import { useUpdatePendingCounts, useStartGlobalPolling, useStopGlobalPolling } from '../utils/incoming.js'
 import { requestNotificationPermission } from '../utils/notify.js'
@@ -191,8 +192,34 @@ watch(seitenmenueMobilOffen, (offen) => {
 useKiBerichtWache(istJournal, t)
 
 /* ── Auf- und Abbau ───────────────────────────────────── */
+/*
+ * Handy: Seitenmenü vom linken Rand hereinwischen, nach links wieder hinaus.
+ * Nicht im Chart-Vollbild — dort öffnet der linke Rand die Zeichen- und
+ * Indikator-Schubladen (Chart.vue).
+ */
+let wischStart = null
+function wischBeginn(e) {
+    wischStart = null
+    if (desktop.value || !mitMenue.value || e.touches.length !== 1) return
+    if (e.target?.closest?.('.chartSeite.vollbild')) return
+    wischStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+}
+function wischZug(e) {
+    if (!wischStart || e.touches.length !== 1) return
+    const was = wischErgebnis(wischStart, { x: e.touches[0].clientX, y: e.touches[0].clientY }, seitenmenueMobilOffen.value)
+    if (!was) return
+    wischStart = null
+    if (was === 'oeffnen') schalteMobilMenue()
+    else schliesseMobilMenue()
+}
+function wischEnde() { wischStart = null }
+
 onMounted(() => {
     bewerteZensur()
+    document.addEventListener('touchstart', wischBeginn, { passive: true })
+    document.addEventListener('touchmove', wischZug, { passive: true })
+    document.addEventListener('touchend', wischEnde, { passive: true })
+    document.addEventListener('touchcancel', wischEnde, { passive: true })
     window.addEventListener('resize', beiGroesse)
     window.addEventListener('orientationchange', beiGroesse)
     document.addEventListener('visibilitychange', beiSichtbarkeit)
@@ -203,6 +230,10 @@ onBeforeUnmount(() => {
     useStopGlobalPolling()
     if (zensurStopp) { zensurStopp(); zensurStopp = null }
     clearTimeout(groesseTakt)
+    document.removeEventListener('touchstart', wischBeginn)
+    document.removeEventListener('touchmove', wischZug)
+    document.removeEventListener('touchend', wischEnde)
+    document.removeEventListener('touchcancel', wischEnde)
     window.removeEventListener('resize', beiGroesse)
     window.removeEventListener('orientationchange', beiGroesse)
     document.removeEventListener('visibilitychange', beiSichtbarkeit)

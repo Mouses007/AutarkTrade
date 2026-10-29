@@ -36,7 +36,7 @@ export function kanalAlsZeichnung(l) {
     return {
         typ: 'kanal',
         punkte: [{ t: l.t1, p: l.p1 }, { t: t2, p: p2 }, { t: l.t1, p: l.p1 + (l.breite || 0) }],
-        stil: { farbe, breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt', fuellung: true, text: mitId(l.label, l.id) },
+        stil: { farbe, breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt', fuellung: true, text: mitId(l.labelKurz || l.label, l.id) },
     }
 }
 
@@ -96,7 +96,9 @@ export function hatProfil(analyse) {
     return (analyse?.linien || []).some(istProfilLinie) || (analyse?.zonen || []).some(istProfilZone)
 }
 export function profileAlsZeichnungen(analyse, basis = {}) {
-    const stil = { ...PROFIL_STIL, ...basis }
+    // POC/VAH/VAL immer nach rechts verlängert und am Rand beschriftet (26.10.2026, Wunsch nach
+    // dem Bild mit zwei Phasenprofilen): die Marke gilt bis jetzt, nicht nur über der Phase.
+    const stil = { ...PROFIL_STIL, ...basis, rechts: true, marken: true }
     const kand = new Map((analyse?.auswahl?.kandidaten || []).map((k) => [k.id, k]))
     const ids = [...(analyse?.linien || []).filter(istProfilLinie).map((l) => l.id), ...(analyse?.zonen || []).flatMap((z) => (z.ids || []).filter(istV))]
     const bereiche = new Map()

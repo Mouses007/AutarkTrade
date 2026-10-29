@@ -168,6 +168,28 @@ console.log('\nEchte Fälle: der Fall des Nutzers (BTCUSDT 15m, 20.10.2026 20:45
     check('in diesem Seitwärtsbereich bietet der Code ehrlich KEINE Trendlinie an', t.length === 0, kurz(t))
 }
 
+console.log('\nEchte Fälle: HBARUSDT 4h, Linie nach dem Pump (29.10.2026)\n')
+{
+    // Der Nutzer zieht die fallende Linie vom 30.09. (0.10999) über den 21.10. (0.08643) — das erste
+    // tiefere Hoch nach dem Top bei 0.131. Links davon liegen die Schlüsse des Pumps über der
+    // verlängerten Linie; die Prüfung nach links endet am Top.
+    const r = JSON.parse(readFileSync(new URL('./fixtures/chart-hbar-4h-linie.json', import.meta.url), 'utf8')).kerzen.map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }))
+    const A = letzteAtr(r), M = Math.sqrt(400 / 150)
+    const i1 = r.findIndex((x) => x.h === 0.10999), i2 = r.findIndex((x) => x.h === 0.08643)
+    const pv = wendepunkte(r, 'hoch', Math.round(3 * M))
+    const t = pruefeTrend(r, i1, 0.10999, i2, 0.08643, 'hoch', TREND.TOL_ATR * A * M, pv, { atr: A * M })
+    check('Linie des Nutzers hält, mit mindestens 3 Berührungen', t.ok && t.beruehrungen >= 3, JSON.stringify(t))
+    const k = kandidatenTrendlinien(r, A)
+    check('… und der Code bietet sie an (Anker 30.09. nach dem Top)', k.some((x) => x.seite === 'hoch' && x.p1 === 0.10999 && x.beruehrungen >= 4), kurz(k))
+    // Gebaute Reihe: Top bei i = 5 (Schluss 118), ab i = 10 Hochs auf einer fallenden Linie
+    const hz = (i) => (i === 5 ? 120 : i < 10 ? 100.5 : 100.5 - 0.05 * (i - 10))
+    const z = Array.from({ length: 40 }, (_, i) => ({ t: T0 + i * H, o: hz(i) - 0.5, h: hz(i), l: hz(i) - 1, c: i === 5 ? 118 : hz(i) - 0.5 }))
+    const fallend = pruefeTrend(z, 10, 100.5, 30, 99.5, 'hoch', 0.3, [10, 30], { atr: 1 })
+    check('fallende Linie nach dem Top: der Top-Schluss links stört nicht', fallend.ok, JSON.stringify(fallend))
+    const gegen = pruefeTrend(z, 10, 100.5, 30, 101.5, 'hoch', 0.3, [10, 30], { atr: 1 })
+    check('Gegenlinie (steigend an Hochs): Ausnahme gilt nicht', !gegen.ok && gegen.grund === 'links', JSON.stringify(gegen))
+}
+
 console.log('\nEchte Fälle: gute Linie bleibt, beliebige fällt weg\n')
 const ERWARTET = [
     // [Fall, bleibt [seite, p1, p2, min. Berührungen] | null, fällt weg [seite, p1, p2]]

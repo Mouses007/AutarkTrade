@@ -28,6 +28,10 @@ const props = defineProps({
     panel: { type: Object, required: true },
     // rechter Rand des sichtbaren Bereichs (ms) — für den Chat
     sichtbarBis: { type: Function, default: null },
+    // linker Rand des sichtbaren Bereichs (ms) — die Analyse rechnet über das, was man sieht
+    sichtbarVon: { type: Function, default: null },
+    // Leinwand mit dem Bild des Charts — geht als Gegenprüfung an die KI (siehe bildFuerKi)
+    bild: { type: Function, default: null },
 })
 const { t } = useI18n()
 
@@ -60,6 +64,34 @@ const optionen = ref((() => {
     return a
 })())
 watch(optionen, (v) => { try { localStorage.setItem('chartKiOptionen', JSON.stringify(v)) } catch { /* kein Speicher */ } }, { deep: true })
+
+/*
+ * Bildprüfung (Versuch seit 27.10.2026): ein Bild des sichtbaren Charts geht mit, und die
+ * KI legt Einspruch ein, wo ein gemessener Kanal oder eine Trendlinie im Bild nicht zu
+ * sehen ist. Kostet je Analyse etwas mehr (ein Bild ≈ 1–2 Tsd. Eingabe-Tokens), daher
+ * abschaltbar und im Browser gemerkt.
+ */
+const BILD_SCHLUESSEL = 'chartKiBild'
+const mitBild = ref((() => { try { return localStorage.getItem(BILD_SCHLUESSEL) !== 'aus' } catch { return true } })())
+watch(mitBild, (v) => { try { localStorage.setItem(BILD_SCHLUESSEL, v ? 'an' : 'aus') } catch { /* kein Speicher */ } })
+const BILD_BREITE = 1280
+
+/** Leinwand → JPEG (höchstens 1280 px breit), als {mediaType, base64}; ohne Bild null. */
+function bildFuerKi() {
+    if (!mitBild.value || !(optionen.value.kanal || optionen.value.trend)) return null
+    try {
+        const quelle = props.bild?.()
+        if (!quelle?.width) return null
+        const f = Math.min(1, BILD_BREITE / quelle.width)
+        const l = document.createElement('canvas')
+        l.width = Math.round(quelle.width * f)
+        l.height = Math.round(quelle.height * f)
+        l.getContext('2d').drawImage(quelle, 0, 0, l.width, l.height)
+        const url = l.toDataURL('image/jpeg', 0.82)
+        const i = url.indexOf(',')
+        return i > 0 ? { mediaType: 'image/jpeg', base64: url.slice(i + 1) } : null
+    } catch { return null }
+}
 const keineQuelle = computed(() => !optionen.value.niveaus && !optionen.value.trend && !optionen.value.volumen && !optionen.value.htf && !optionen.value.kanal)
 // Zonen entstehen aus Niveaus, Volumenprofil oder höherer Zeiteinheit
 const zonenMoeglich = computed(() => optionen.value.niveaus || optionen.value.volumen || optionen.value.htf)
@@ -97,6 +129,14 @@ async function ladeLetzte() {
     } catch { if (meine === nr) setzeKiAnalyse(null) }
 }
 
+/** Sichtbarer Bereich des Charts (ms); der Server zählt daraus die Kerzen (150–1000). */
+function sichtbarFenster() {
+    try {
+        const vonT = props.sichtbarVon?.(), bisT = props.sichtbarBis?.()
+        return Number.isFinite(vonT) && Number.isFinite(bisT) && bisT > vonT ? { vonT, bisT } : null
+    } catch { return null }
+}
+
 async function erstelle() {
     const meine = ++nr
     const fuer = stand()
@@ -107,6 +147,8 @@ async function erstelle() {
         const { data } = await axios.post('/api/chart/ki-analyse', {
             symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt,
             auswahl: { ...optionen.value, zonen: optionen.value.zonen && zonenMoeglich.value, bedingungen: true, hebel: true },
+            fenster: sichtbarFenster(),
+            bild: bildFuerKi(),
         })
         // Inzwischen anderes Symbol: verwerfen. Der Server hat sie abgelegt — zurück
         // auf dem alten Symbol zeigt der Reiter sie wieder, ohne neu zu bezahlen.
@@ -189,6 +231,10 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
             <button v-for="p in PROFIL_ARTEN" :key="p" type="button" :class="{ an: optionen.profilArt === p }" :aria-pressed="optionen.profilArt === p"
                 :title="t('chart.ki.profilArt.tipp.' + p)" @click="optionen.profilArt = p">{{ t('chart.ki.profilArt.' + p) }}</button>
         </div>
+        <label class="option bildOption" :class="{ aus: !optionen.kanal && !optionen.trend }" :title="t('chart.ki.bildTipp')">
+            <input v-model="mitBild" type="checkbox" :disabled="!optionen.kanal && !optionen.trend" />
+            {{ t('chart.ki.bild') }}
+        </label>
         <div v-if="keineQuelle" class="fehler">{{ t('chart.ki.optLeer') }}</div>
         <div class="hinweis">{{ t('chart.ki.hinweis') }}</div>
         <div v-if="fehler" class="fehler">{{ fehler }}</div>
@@ -202,6 +248,11 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
             <KiHinweis klein />
             <div v-if="analyse.auswahl" class="struktur">{{ struktur(analyse) }}</div>
             <p v-if="analyse.text" class="text" data-ki-generiert="true">{{ analyse.text }}</p>
+            <div v-if="analyse.einwaende?.length" class="abschnitt">{{ t('chart.ki.einwaende') }}</div>
+            <div v-for="e in analyse.einwaende" :key="'e' + e.id" class="einwand" data-ki-generiert="true">
+                <span class="id">{{ e.id }}</span> <s>{{ e.name }}</s><small v-if="e.grund"> — {{ e.grund }}</small>
+            </div>
+            <div v-if="['anbieterOhneBild', 'fehlgeschlagen'].includes(analyse.bildPruefung)" class="hinweis">{{ t('chart.ki.bildStatus.' + analyse.bildPruefung, { anbieter: analyse.provider }) }}</div>
 
             <div v-if="analyse.bedingungen?.length" class="abschnitt">{{ t('chart.ki.bedingungen') }}</div>
             <div v-for="(b, i) in analyse.bedingungen" :key="'b' + i" class="bedingung" data-ki-generiert="true">
@@ -256,6 +307,17 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 </template>
 
 <style scoped>
+.bildOption {
+    margin-top: 2px;
+}
+.einwand {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 2px 0;
+}
+.einwand s {
+    color: var(--text);
+}
 .profilArt {
     display: flex;
     flex-wrap: wrap;

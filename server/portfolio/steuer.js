@@ -22,12 +22,13 @@
  * zählt ihr heutiger Bestand (provisorisch).
  */
 import { getKnex } from '../database.js'
-import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset, einstandZusammen, ortSchluessel } from './steuer-rechnung.js'
+import { bestandAm, einkommen, fifo, veraeusserungen, gewerbsKriterien, istMigration, einstandJeAsset, einstandZusammen, ortSchluessel, bestandesrechnung, veraenderungen } from './steuer-rechnung.js'
 import { tokenIdentitaet, ladeGegenKontrakte } from './token-id.js'
 import { tagesKursUsd, fxAm, gleicherCoin, bitpandaKursChf, coingeckoKursChf, GELD_TOKEN } from './kurse.js'
 import { totalverluste } from './totalverlust.js'
 import { importiereKursliste, kurslisteStand } from './estv-kursliste.js'
 import { kanton as kantonVon, kaufpreisErlaubt, haltedauerMonate } from '../../shared/steuer-kantone.js'
+import { coinName } from '../../shared/coin-namen.js'
 import { beansprucheAufgabe } from '../db-claim.js'
 import { spamPruefer } from './spam.js'
 import { STABIL, FIAT } from './normal.js'
@@ -178,13 +179,16 @@ function namenVon(quellen, wallets, adressen) {
 async function sorgeFuerKursliste(jahr, laufend) {
     if (laufend || jahr < 2023) return { anzahl: 0, am: null, nichtVorgesehen: true }
     const st = await kurslisteStand(jahr)
-    if (st.anzahl > 0) return st
+    if (st.anzahl > 0 && !st.ohneNamen) return st
     // Höchstens alle 6 h ein Versuch — auch wenn die Liste noch nicht erschienen ist.
-    if (!(await beansprucheAufgabe(`portfolio_estv_${jahr}`, 6 * 3600e3))) return { ...st, wartet: true }
+    // Vor dem 27.10.2026 geholte Listen tragen keine Namen: einmal neu holen; klappt
+    // das nicht, gelten die gespeicherten Kurse weiter.
+    const nachholen = st.anzahl > 0
+    if (!(await beansprucheAufgabe(`portfolio_estv_${jahr}${nachholen ? '_namen' : ''}`, 6 * 3600e3))) return nachholen ? st : { ...st, wartet: true }
     try {
         const r = await importiereKursliste(jahr)
-        return r.erschienen ? { ...(await kurslisteStand(jahr)), datei: r.datei } : { ...st, nichtErschienen: true }
-    } catch (e) { return { ...st, fehler: e.message } }
+        return r.erschienen ? { ...(await kurslisteStand(jahr)), datei: r.datei } : nachholen ? st : { ...st, nichtErschienen: true }
+    } catch (e) { return nachholen ? st : { ...st, fehler: e.message } }
 }
 
 /**
@@ -210,6 +214,9 @@ export async function berechneSteuerjahr(jahr) {
     const { alle, vollstaendig, abgeschnitten } = await quellenStand()
     const [wallets, adressen] = await Promise.all([k('portfolio_wallets').select('*'), k('portfolio_adressen').select('id', 'walletId', 'kette', 'label')])
     const name = namenVon(alle, wallets, adressen)
+    // Voller Coin-Name: ESTV-Kursliste (neuestes Jahr gewinnt), sonst `shared/coin-namen.js`.
+    const estvNamen = new Map()
+    for (const z of await k('portfolio_steuerkurse').whereNotNull('name').orderBy('jahr').select('asset', 'name')) if (z.name) estvNamen.set(String(z.asset).toUpperCase(), z.name)
 
     // ── Vermögen am Stichtag ──
     const belegbar = bew.filter((b) => vollstaendig.has(b.quelle))
@@ -311,6 +318,7 @@ export async function berechneSteuerjahr(jahr) {
     }
     const jeAsset = new Map()
     const negativ = []
+    const spamOrte = new Set()
     for (const [key, menge] of mengen) {
         const [quelle, asset, fremd] = key.split('\u0000')
         if (menge < 0) {
@@ -320,7 +328,7 @@ export async function berechneSteuerjahr(jahr) {
         }
         const kurs = kursAn(kurse, tokenOrte, key)
         // Token ohne Kurs und ohne eigene Herkunft = ungefragt zugeschickt (Spam).
-        if (kurs.chf == null && tokenOrte.has(key) && istSpam(asset, tokenOrte.get(key).kontrakt, { ohneKurs: true })) continue
+        if (kurs.chf == null && tokenOrte.has(key) && istSpam(asset, tokenOrte.get(key).kontrakt, { ohneKurs: true })) { spamOrte.add(key); continue }
         // Ein namensgleicher Token ohne Kurs steht als eigene Zeile neben dem Börsen-Coin.
         const gruppe = kurs.token ? asset + TOKEN + tokenOrte.get(key).kontrakt : asset
         const p = jeAsset.get(gruppe) || { asset, token: gruppe !== asset, valor: kurs.valor || null, menge: 0, kursChf: kurs.chf, kursQuelle: kurs.quelle, chf: kurs.chf != null ? 0 : null, orte: [], ids: new Set() }
@@ -337,6 +345,7 @@ export async function berechneSteuerjahr(jahr) {
     for (const p of jeAsset.values()) {
         const e = einstandZusammen(einstand, [...p.ids])
         delete p.ids
+        p.name = coinName(p.asset, estvNamen, p.token)
         p.kaufkurs = e?.schnitt ?? null
         p.kostenbasis = p.kaufkurs != null ? p.kaufkurs * p.menge : null
         p.einstandTeilweise = !!e && (e.ohneKostenMenge > p.menge * 0.001 || e.mitKostenMenge < p.menge * 0.99)
@@ -345,7 +354,7 @@ export async function berechneSteuerjahr(jahr) {
         if (p.chf == null && !p.token && p.kostenbasis != null && kaufpreisErlaubt(kz)) {
             p.chf = p.kostenbasis
             p.kursChf = p.kaufkurs
-            p.kursQuelle = `Kaufpreis (Ø-Einstand, Kanton ${kz} erlaubt)`
+            p.kursQuelle = 'Kaufpreis'
         }
         p.unrealisiert = p.chf != null && p.kostenbasis != null ? p.chf - p.kostenbasis : null
     }
@@ -366,6 +375,16 @@ export async function berechneSteuerjahr(jahr) {
 
     // ── Einkommen ──
     const ek = einkommen(bew, von, bis)
+    const jeCoin = new Map()
+    for (const b of ek.zeilen) {
+        const a = String(b.asset).toUpperCase()
+        const z = jeCoin.get(a) || { asset: b.asset, name: coinName(a, estvNamen), menge: 0, chf: 0, n: 0, ohneWert: 0 }
+        z.menge += Number(b.menge) || 0
+        z.n++
+        if (b.chfWert == null) z.ohneWert++
+        else z.chf += Number(b.chfWert)
+        jeCoin.set(a, z)
+    }
 
     // ── Abgänge (FIFO über die ganze Historie) ──
     const { abgaenge } = fifo(bew, { fiat: FIAT, von, bis, halteMonate, ident })
@@ -374,15 +393,42 @@ export async function berechneSteuerjahr(jahr) {
     // ── Kriterien ──
     const vorjahr = jahrGrenzen(jahr - 1)
     let vermoegenAnfang = null
+    let m0 = new Map(), k0 = null
     try {
-        const m0 = bestandAm(belegbar, vorjahr.bis, ident)
+        m0 = bestandAm(belegbar, vorjahr.bis, ident)
         for (const [key, m] of m0) if (m <= 0) m0.delete(key)
         ohneTotalverluste(m0, jahr - 1)
         ohneBeendete(m0, vorjahr.bis)
-        const k0 = await bewerte(m0, jahr - 1, tokenOrte)
+        k0 = await bewerte(m0, jahr - 1, tokenOrte)
         vermoegenAnfang = 0
         for (const [key, m] of m0) { const kurs = kursAn(k0, tokenOrte, key); if (kurs?.chf != null) vermoegenAnfang += m * kurs.chf }
     } catch { vermoegenAnfang = null }
+
+    // ── Bestandesrechnung 1.1. → 31.12. je Coin (über alle Orte) ──
+    // Anfang und Ende genau so, wie der Bericht sie ausweist (Spam ohne Kurs, negative Orte weg).
+    const jeId = (m, kx, spam) => {
+        const aus = new Map()
+        for (const [key, menge] of m) {
+            if (!(menge > 0) || spam(key, kx)) continue
+            const [, asset, fremd] = key.split('\u0000')
+            const id = fremd ? `${String(asset).toUpperCase()}|${fremd}` : String(asset).toUpperCase()
+            aus.set(id, (aus.get(id) || 0) + menge)
+        }
+        return aus
+    }
+    const spamAm = (key, kx) => {
+        const t = tokenOrte.get(key)
+        return !!t && (!kx || kursAn(kx, tokenOrte, key)?.chf == null) && istSpam(key.split('\u0000')[1], t.kontrakt, { ohneKurs: true })
+    }
+    const bestandJahr = bestandesrechnung(belegbar, von, bis, jeId(m0, k0, spamAm), jeId(mengen, kurse, (key) => spamOrte.has(key)), ident)
+        .map((z) => ({ ...z, name: coinName(z.asset, estvNamen, !!z.kontrakt) }))
+    const veraenderungJahr = veraenderungen(belegbar, von, bis, ident).map((v) => ({ ...v, quelle: name(v.quelle) }))
+
+    // ── Devisenkurse am Bewertungstag (EZB) ──
+    const fxTag = laufend ? gestern : `${jahr}-12-31`
+    const usdChf = await fxAm(fxTag, 'CHF').catch(() => null)
+    const usdEur = await fxAm(fxTag, 'EUR').catch(() => null)
+    const devisen = { datum: fxTag, usdChf, eurChf: usdChf && usdEur ? usdChf / usdEur : null, quelle: 'EZB' }
     const volumenSpot = bew.filter((b) => b.zeit >= von && b.zeit <= bis && ['kauf', 'verkauf', 'tausch'].includes(b.art) && b.einordnung !== 'ignorieren' && b.chfWert != null && !istMigration(b))
         .reduce((s, b) => s + Math.abs(Number(b.chfWert)), 0)
     // Futures: Ergebnis, Volumen, Guthaben am Stichtag. Fällt das Journal aus,
@@ -408,12 +454,13 @@ export async function berechneSteuerjahr(jahr) {
         vermoegen, vermoegenSumme, ohneKurs: vermoegen.filter((p) => p.chf == null).map((p) => p.asset),
         einkommen: {
             summe: ek.summe, ohneWert: ek.ohneWert, jeArt: ek.jeArt, jeAsset: ek.jeAsset,
+            jeCoin: [...jeCoin.values()].sort((a, b) => b.chf - a.chf),
             zeilen: ek.zeilen.map((b) => ({ id: b.id, zeit: b.zeit, quelle: name(b.quelle), art: ['staking', 'airdrop', 'belohnung'].includes(b.art) ? b.art : 'eingeordnet', asset: b.asset, menge: b.menge, chfWert: b.chfWert, sicherheit: b.sicherheit })),
         },
         veraeusserungen: { ...vs, abgaenge: abgaenge.filter((a) => a.art !== 'gebuehr').map((a) => ({ ...a, quelle: name(a.quelle) })) },
         kriterien: kriterien.map((x) => (x.id === 'volumen' ? { ...x, volumen, volumenSpot, volumenFutures, vermoegenAnfang }
             : x.id === 'haltedauer' ? { ...x, monate: halteMonate } : x)),
-        kanton: kt, estv, totalverlustAusgeblendet: ausgeblendet,
+        kanton: kt, estv, totalverlustAusgeblendet: ausgeblendet, bestandesrechnung: bestandJahr, veraenderungen: veraenderungJahr, devisen,
         kostenbasisSumme: vermoegen.reduce((s, p) => s + (p.kostenbasis || 0), 0),
         futures,
         vermoegenGesamt: vermoegenSumme + (futures?.guthabenChf || 0),
@@ -421,10 +468,11 @@ export async function berechneSteuerjahr(jahr) {
     }
 }
 
-/** Steht im Bericht, im Druck und in der CSV — nicht abschaltbar. */
-export const RECHTSHINWEIS = 'AutarkTrade ist kein von einer Steuerbehörde anerkanntes oder zertifiziertes Tool — eine amtliche Anerkennung für Krypto-Steuer-Tools gibt es in der Schweiz nicht. Alle Angaben selbst prüfen; im Zweifel Steueramt oder Treuhand fragen.'
-
-/** CSV für die Steuererklärung / den Treuhänder. */
+/**
+ * CSV als Beilage zur Steuererklärung — derselbe Inhalt wie der Bericht: nur, was
+ * die Steuerämter verlangen (Bestand, Kurs, Steuerwert, Erträge, Veränderungen).
+ * Gewinne, Einstand und die KS-36-Kriterien stehen nur in der App.
+ */
 export function steuerCsv(s) {
     // Zahlen ohne Exponent (5e-7 liest Excel als Text) und Texte, die mit = + - @
     // beginnen, mit Apostroph: ein Token-Name wie „=HYPERLINK(…)“ wäre sonst eine Formel.
@@ -433,31 +481,36 @@ export function steuerCsv(s) {
     const z = (v) => (v == null ? '' : typeof v === 'number' ? zahl(v) : text(String(v)))
     const d = (ms) => new Date(ms).toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' })
     const kt = s.kanton
-    const zeilen = [z(`Keine Steuerberatung. ${RECHTSHINWEIS}`), '',
+    const zeilen = [
         `Steuerjahr ${s.jahr} — Stichtag 31.12.${s.jahr}${s.laufend ? ' (provisorisch)' : ''}`,
         kt ? z(`Kanton ${kt.name} (${kt.kz}): ${[kt.formular, kt.rubrik, kt.code ? `Code ${kt.code}` : null].filter(Boolean).join(' · ')}`) : 'Kanton: nicht gewählt',
-        s.estv?.anzahl ? `ESTV-Kursliste ${s.jahr}: ${s.estv.anzahl} Coins` : '', '',
-        'VERMÖGEN (Wertschriftenverzeichnis);Valor;Menge;Kurs CHF 31.12.;Steuerwert CHF;Kursquelle;Ø-Kaufkurs CHF;Kostenbasis CHF;Unrealisiert CHF;Orte']
+        s.estv?.anzahl ? `ESTV-Kursliste ${s.jahr}: ${s.estv.anzahl} Coins` : '',
+        s.devisen?.usdChf ? `Devisenkurse EZB zum ${s.devisen.datum.split('-').reverse().join('.')}: USD/CHF ${zahl(s.devisen.usdChf)}; EUR/CHF ${zahl(s.devisen.eurChf)}` : '', '',
+        'VERMÖGEN (Wertschriftenverzeichnis);Name;Valor;Menge;Kurs CHF 31.12.;Steuerwert CHF;Kursquelle;Orte']
     for (const p of s.vermoegen) {
-        zeilen.push([p.asset + (p.token ? ' (Token)' : ''), p.valor, p.menge, p.kursChf, p.chf, p.kursQuelle, p.kaufkurs, p.kostenbasis, p.unrealisiert,
-            p.orte.map((o) => `${o.name} ${o.menge}${o.sicherheit !== 'beleg' ? ` (${o.sicherheit})` : ''}`).join(' | ')].map(z).join(';'))
+        zeilen.push([p.asset + (p.token ? ' (Token)' : ''), p.name, p.valor, p.menge, p.kursChf, p.chf, p.kursQuelle,
+            p.orte.map((o) => `${o.name} ${o.menge}`).join(' | ')].map(z).join(';'))
     }
-    zeilen.push(['Total', '', '', '', s.vermoegenSumme, '', '', s.kostenbasisSumme, '', ''].map(z).join(';'), '', 'EINKOMMEN (Staking, Airdrops, Belohnungen) — Rubrik B;Datum;Ort;Art;Menge;Wert CHF beim Zufluss;Sicherheit')
-    for (const e of s.einkommen.zeilen) zeilen.push([e.asset, d(e.zeit), e.quelle, e.art, e.menge, e.chfWert, e.sicherheit || 'beleg'].map(z).join(';'))
-    zeilen.push(['Total', '', '', '', '', s.einkommen.summe, ''].map(z).join(';'), '', `VERÄUSSERUNGEN (privat steuerfrei, zur Information);Datum;Ort;Art;Menge;Erlös CHF;Einstand CHF (FIFO);Gewinn CHF;Anteil < ${s.kriterien.find((x) => x.id === 'haltedauer')?.monate || 6} Monate`)
-    for (const a of s.veraeusserungen.abgaenge) zeilen.push([a.asset, d(a.zeit), a.quelle, a.art, a.menge, a.erloes, a.kosten, a.gewinn, a.kurzfristigAnteil].map(z).join(';'))
-    zeilen.push(['Total', '', '', '', '', s.veraeusserungen.erloes, s.veraeusserungen.kosten, s.veraeusserungen.gewinn, ''].map(z).join(';'))
+    zeilen.push(['Total', '', '', '', '', s.vermoegenSumme, '', ''].map(z).join(';'))
     const f = s.futures
-    if (f && !f.fehler && (f.boersen.length || f.guthaben.length)) {
-        zeilen.push('', 'FUTURES-GUTHABEN AM STICHTAG (Vermögen);Wert USDT;Kurs USD/CHF;Wert CHF;Sicherheit')
-        for (const g of f.guthaben) zeilen.push([g.name, g.usd, f.stichtagKurs, g.chf, g.sicherheit === 'beleg' ? `Auszug${g.quelle ? ` (${g.quelle})` : ''}` : g.sicherheit].map(z).join(';'))
-        zeilen.push(['Total', '', '', f.guthabenChf, ''].map(z).join(';'))
-        zeilen.push('', 'FUTURES-ERGEBNIS (privat steuerfrei, zur Information);Trades;davon Bots;Netto USDT;Gebühren USDT;Funding USDT;Netto CHF;Volumen CHF')
-        for (const b of f.boersen) zeilen.push([b.name, b.n, b.bots, b.nettoUsd, b.gebuehrUsd, b.fundingUsd, b.nettoChf, b.volumenChf].map(z).join(';'))
-        zeilen.push(['Total', f.summe.n, '', '', f.summe.gebuehrUsd, f.summe.fundingUsd, f.summe.nettoChf, f.summe.volumenChf].map(z).join(';'))
+    if (f && !f.fehler && f.guthaben?.length) {
+        zeilen.push('', 'GUTHABEN AUF FUTURES-BÖRSEN AM STICHTAG (Vermögen);Wert USDT;Kurs USD/CHF;Wert CHF')
+        for (const g of f.guthaben) zeilen.push([g.name, g.usd, f.stichtagKurs, g.chf].map(z).join(';'))
+        zeilen.push(['Total', '', '', f.guthabenChf].map(z).join(';'))
     }
-    zeilen.push('', 'Methode: FIFO je Coin über alle Orte; Stichtag 31.12. 23:59:59 Europe/Zurich; Kurse: ESTV-Kursliste, sonst Tagesschlusskurs der Börse (Spalte Kursquelle); USD/CHF und EUR/CHF der EZB.')
-    if (kt?.quellen?.length) zeilen.push(z(`Kantonsangaben: ${kt.quellen.map((q) => `${q.name} (${q.fassung}) ${q.url}`).join(' | ')}`))
-    zeilen.push(z(`Keine Steuerberatung. ${RECHTSHINWEIS}`))
-    return '﻿' + zeilen.join('\n') + '\n'
+    if (s.bestandesrechnung?.length) {
+        zeilen.push('', 'BESTANDESRECHNUNG (über alle Orte);Name;Bestand 1.1.;Zugänge;Abgänge;Übrige;Bestand 31.12.')
+        for (const b of s.bestandesrechnung) zeilen.push([b.asset + (b.kontrakt ? ` (Token ${b.kontrakt})` : ''), b.name, b.anfang, b.zugang, b.abgang, b.uebrige, b.ende].map(z).join(';'))
+    }
+    if (s.einkommen.jeCoin?.length) {
+        zeilen.push('', 'ERTRÄGE JE COIN — Rubrik B;Name;Zuflüsse;Menge;Wert CHF')
+        for (const c of s.einkommen.jeCoin) zeilen.push([c.asset, c.name, c.n, c.menge, c.chf].map(z).join(';'))
+    }
+    zeilen.push('', 'ERTRÄGE (Staking, Airdrops, Belohnungen) — Rubrik B;Datum;Ort;Art;Menge;Wert CHF beim Zufluss')
+    for (const e of s.einkommen.zeilen) zeilen.push([e.asset, d(e.zeit), e.quelle, e.art, e.menge, e.chfWert].map(z).join(';'))
+    zeilen.push(['Total', '', '', '', '', s.einkommen.summe].map(z).join(';'))
+    zeilen.push('', 'VERÄNDERUNGEN (Käufe, Verkäufe, Tausch, Ein- und Auszahlungen);Ort;Art;Abgang Coin;Abgang Menge;Zugang Coin;Zugang Menge;Wert CHF')
+    for (const v of s.veraenderungen || []) zeilen.push([d(v.zeit), v.quelle, v.art, v.ab?.asset, v.ab?.menge, v.zu?.asset, v.zu?.menge, v.chfWert].map(z).join(';'))
+    zeilen.push('', 'Methode: Stichtag 31.12. 23:59:59 Europe/Zurich; Kurse: ESTV-Kursliste, sonst Tagesschlusskurs der Börse (Spalte Kursquelle); USD/CHF und EUR/CHF der EZB.')
+    return '\ufeff' + zeilen.join('\n') + '\n'
 }

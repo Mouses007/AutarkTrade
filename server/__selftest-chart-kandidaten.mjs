@@ -7,7 +7,9 @@
  * falsch gruppierte Marke oder eine Linie, durch die Kerzen wachsen, kann es
  * nur noch auswählen, nicht mehr korrigieren.
  */
-import { profilAbschnitte, konsolidierungen, periodenAbschnitte, kandidatenKanaele, kanalName, kandidatenNiveaus, waehleNiveaus, kandidatenTrendlinien, marktstruktur, baueKandidaten, kandidatenText, KAND } from './chart-kandidaten.js'
+import fs from 'node:fs'
+import { atr as atrReihe } from '../shared/indicators.js'
+import { profilAbschnitte, konsolidierungen, periodenAbschnitte, kandidatenKanaele, kanalName, kanalKurz, kanalBeschriftung, fahnenstange, kandidatenNiveaus, waehleNiveaus, kandidatenTrendlinien, marktstruktur, baueKandidaten, kandidatenText, KAND, seitwaertsPhasen, massstab } from './chart-kandidaten.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -185,6 +187,99 @@ console.log('\nKonsolidierungen, Tage/Wochen, Kanäle und Flaggen (24.10.2026)\n
     check('Gegenprobe: Kurs bleibt 5 ATR draussen → gebrochen, kein Kanal', kandidatenKanaele(k6, 1).length === 0)
     check('Gegenprobe: flache Spanne ist kein Kanal', kandidatenKanaele(Array.from({ length: 80 }, (_, i) => kerze(i, 100 + zick(i))), 1).length === 0)
     check('Kanal im Paket als K1', baueKandidaten({ kerzen: k, interval: '1h' }).kandidaten.some((x) => x.id === 'K1' && x.quelle === 'kanal'))
+}
+
+console.log('\nSeitwärtsphasen, saubere Marken, lange Kanäle (26.10.2026)\n')
+{
+    const H = 3_600_000
+    // Hoch 100, dann zweimal 100↔110 hin und her (Wendepunkte je ~10 bei ATR ~1), dann Absturz auf 80, dann 80↔88
+    const k = []
+    const lauf = (von, bis, schritte) => { for (let i = 1; i <= schritte; i++) { const m = von + (bis - von) * i / schritte; k.push({ t: k.length * H, o: m - 0.3, h: m + 0.5, l: m - 0.5, c: m + 0.3, v: 100 }) } }
+    lauf(90, 110, 20); lauf(110, 100, 10); lauf(100, 110, 10); lauf(110, 100, 10); lauf(100, 110, 10); lauf(110, 80, 15)
+    lauf(80, 88, 10); lauf(88, 80, 10); lauf(80, 88, 10); lauf(88, 81, 10); lauf(81, 85, 8)
+    const ph = seitwaertsPhasen(k, { zickzack: 3, spielraum: 1, minKerzen: 20 })
+    check('zwei Seitwärtsphasen (100–110 und 80–88), der Absturz dazwischen keine', ph.length === 2 && k[ph[0].bis].h >= 109 && k[ph[1].von].l <= 81, JSON.stringify(ph))
+    check('Phasen überschneiden sich nicht, die jüngste läuft bis jetzt', ph[0].bis <= ph[1].von && ph[1].bis === k.length - 1 && ph[1].laufend)
+    // Stich unter den Kasten und zurück: bleibt EINE Phase
+    const ks = []
+    const lauf2 = (von, bis, schritte) => { for (let i = 1; i <= schritte; i++) { const m = von + (bis - von) * i / schritte; ks.push({ t: ks.length * H, o: m - 0.3, h: m + 0.5, l: m - 0.5, c: m + 0.3, v: 100 }) } }
+    // Unterkante 100 zweimal belegt, dann ein Stich auf 94 und zurück
+    lauf2(90, 110, 20); lauf2(110, 100, 10); lauf2(100, 110, 10); lauf2(110, 100, 10); lauf2(100, 110, 10); lauf2(110, 94, 10); lauf2(94, 110, 12); lauf2(110, 100, 10); lauf2(100, 108, 10)
+    const st = seitwaertsPhasen(ks, { zickzack: 3, spielraum: 1, minKerzen: 20 })
+    check('kurzer Stich unter die belegte Unterkante und zurück: eine Phase, kein Ausbruch', st.length === 1 && st[0].bis === ks.length - 1, JSON.stringify(st))
+    // Gleich weit, aber die Unterkante ist noch nicht belegt und es geht weiter abwärts: Trend, die Phase beginnt unten
+    const kt = []
+    const lauf3 = (von, bis, schritte) => { for (let i = 1; i <= schritte; i++) { const m = von + (bis - von) * i / schritte; kt.push({ t: kt.length * H, o: m - 0.3, h: m + 0.5, l: m - 0.5, c: m + 0.3, v: 100 }) } }
+    lauf3(120, 100, 20); lauf3(100, 104, 6); lauf3(104, 88, 16); lauf3(88, 96, 10); lauf3(96, 88, 10); lauf3(88, 96, 10); lauf3(96, 89, 10); lauf3(89, 94, 8)
+    const tr = seitwaertsPhasen(kt, { zickzack: 3, spielraum: 1, minKerzen: 20 })
+    check('Absturz in Stufen: die Phase beginnt erst am Tief, nicht davor', tr.length === 1 && kt[tr[0].von].l <= 88, JSON.stringify(tr))
+    const trend = []
+    for (let i = 0; i < 120; i++) { const m = 100 + i * 0.5 + Math.sin(i / 3) * 2; trend.push({ t: i * H, o: m, h: m + 0.6, l: m - 0.6, c: m, v: 1 }) }
+    check('Gegenprobe: ein stetiger Trend ist keine Seitwärtsphase', seitwaertsPhasen(trend, { minKerzen: 20 }).length === 0, JSON.stringify(seitwaertsPhasen(trend, { minKerzen: 20 })))
+    const nv = (preis, b, d, extra = {}) => ({ preis, beruehrungen: b, durchquerungen: d, guete: b, rolle: 'widerstand', ...extra })
+    const w = waehleNiveaus([nv(110, 9, 7, { rolle: 'wechsel' }), nv(108, 2, 0), nv(106, 1, 0), nv(104, 11, 13, { rolle: 'wechsel' }), nv(95, 1, 0, { extrem: 'tief' }), nv(102, 4, 1)], 100)
+    const preise = w.map((x) => x.preis).sort((a, b) => a - b).join()
+    check('saubere Marken bleiben, einmal berührte und oft durchquerte fallen weg (ein Drehpunkt bleibt)', preise === '95,102,108,110', preise)
+}
+
+console.log('\nFlaggen: Stange ist ein Impuls, Flagge kurz, Bruch im Namen (27.10.2026)\n')
+{
+    const H = 3_600_000
+    const kerze = (t, m, sp = 0.5) => ({ t: t * H, o: m - 0.1, h: m + sp, l: m - sp, c: m + 0.1, v: 100 })
+    const zick = (i) => { const p = i % 10; return (p < 5 ? p : 10 - p) * 0.6 - 1.5 }
+    const flagge = (stange, schritt, lang) => {
+        const k = []
+        for (let i = 0; i < 20; i++) k.push(kerze(k.length, 100))
+        for (let i = 0; i < stange.n; i++) k.push(kerze(k.length, 100 + (i + 1) * stange.je))
+        const oben = k[k.length - 1].c
+        for (let i = 0; i < lang; i++) k.push(kerze(k.length, oben - i * schritt + zick(i)))
+        return k
+    }
+    const gut = kandidatenKanaele(flagge({ n: 12, je: 1.2 }, 0.12, 30), 1)[0]
+    check('Impuls 14 ATR in 12 Kerzen + kurzer fallender Kanal = Bull-Flagge mit Stangenlänge', gut?.muster === 'bullFlagge' && gut.stangeKerzen <= 15 && gut.ruecklaufPct < 50, JSON.stringify(gut && { m: gut.muster, k: gut.stangeKerzen, r: gut.ruecklaufPct }))
+    const langsam = kandidatenKanaele(flagge({ n: 60, je: 0.2 }, 0.12, 30), 1)[0]
+    check('Gegenprobe: 12 ATR, aber über 60 Kerzen (Trend, kein Impuls) → keine Flagge', langsam && langsam.muster === null, JSON.stringify(langsam && { m: langsam.muster, s: langsam.stangeAtr }))
+    const tief = kandidatenKanaele(flagge({ n: 12, je: 1.2 }, 0.35, 30), 1)[0]
+    check('Gegenprobe: Kanal holt mehr als die Hälfte der Stange zurück → keine Flagge', !tief || tief.muster === null, JSON.stringify(tief && { m: tief.muster, r: tief.ruecklaufPct }))
+    const lang = kandidatenKanaele(flagge({ n: 12, je: 1.2 }, 0.05, 70), 1)[0]
+    check('Gegenprobe: 70 Kerzen nach der Stange sind keine Flagge mehr', !lang || lang.muster === null, JSON.stringify(lang && { m: lang.muster, L: lang.laenge }))
+    check('fahnenstange: Kanal steigt steil → keine Bull-Flagge', fahnenstange(flagge({ n: 12, je: 1.2 }, 0.12, 30), 32, 1, 2, 5) === null)
+    check('Name mit Bruch', kanalName({ muster: 'bearFlagge', beruehrOben: 3, beruehrUnten: 3, bruch: 'unten' }) === 'Bear-Flagge (3/3 Berührungen, nach unten gebrochen)'
+        && kanalName({ muster: null, richtung: 'auf', beruehrOben: 2, beruehrUnten: 4, bruch: 'oben' }) === 'Aufsteigender Kanal (2/4 Berührungen, nach oben verlassen)'
+        && kanalKurz({ muster: 'bullFlagge' }) === 'Bull-Flagge')
+    check('Beschriftung im Chart: kurz, mit Bruch, ohne Zahlen', kanalBeschriftung({ muster: null, richtung: 'ab', beruehrOben: 5, beruehrUnten: 3, bruch: 'unten' }) === 'Absteigender Kanal, nach unten verlassen'
+        && kanalBeschriftung({ muster: 'bearFlagge', bruch: 'unten' }) === 'Bear-Flagge, nach unten gebrochen'
+        && kanalBeschriftung({ form: 'range', muster: 'bearFlagge' }) === 'Seitwärts-Range')
+
+    // Echter Fall: HBARUSDT 4h, KI-Analyse vom 27.10.2026 16:32
+    const roh = JSON.parse(fs.readFileSync(new URL('./fixtures/chart-hbar-4h-flagge.json', import.meta.url))).kerzen
+    const alle = roh.map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }))
+    const lauf = (N) => { const k = alle.slice(-N); const a = atrReihe(k, 14); return kandidatenKanaele(k, a[a.length - 1])[0] }
+    const k200 = lauf(200)
+    check('HBAR 200 Kerzen: Range nach Abwärts-Impuls ≤ 15 Kerzen, nach unten verlassen', k200?.muster === 'bearFlagge' && k200.stangeKerzen <= 15 && k200.bruch === 'unten' && k200.laenge <= 40, JSON.stringify(k200 && { m: k200.muster, k: k200.stangeKerzen, b: k200.bruch, L: k200.laenge }))
+    check('HBAR: seitwärts heisst waagerecht — kein steigender Kanal (Kanten 0.0762 / 0.0781)', k200.form === 'range' && k200.richtung === 'seitwaerts' && k200.p1 === k200.p2 && k200.pEnde === k200.p1
+        && Math.abs(k200.untenJetzt - 0.07621) < 0.0002 && Math.abs(k200.obenJetzt - 0.07814) < 0.0002, JSON.stringify(k200 && { f: k200.form, u: k200.untenJetzt, o: k200.obenJetzt }))
+    check('HBAR: Name sagt Range, nicht Flagge', kanalName(k200) === `Seitwärts-Range nach Abwärts-Impuls (${k200.beruehrOben}/${k200.beruehrUnten} Berührungen, nach unten verlassen)` && kanalKurz(k200) === 'Seitwärts-Range', kanalName(k200))
+    check('Gegenprobe: deutlich fallende Flagge bleibt schräg', gut.form === 'kanal' && gut.p1 !== gut.p2)
+    const k490 = lauf(490)
+    // 29.10.2026: das Fenster bestimmt den Massstab — vorher fanden 150 und 1000 Kerzen dieselben Linien
+    check('Massstab: bis 150 Kerzen 1, dann √(n/150), höchstens 3', massstab(100) === 1 && massstab(150) === 1 && Math.abs(massstab(600) - 2) < 1e-9 && massstab(5000) === 3)
+    const kanaele = (N) => { const k = alle.slice(-N); const a = atrReihe(k, 14); return kandidatenKanaele(k, a[a.length - 1]) }
+    const g490 = kanaele(490)
+    const lang490 = g490.find((k) => k.laenge >= KAND.KANAL_LANG_ANTEIL * 490)
+    check('HBAR 490 Kerzen: übergeordneter Kanal über ≥ ⅓ des Fensters neben dem kurzen', g490.length === 2 && lang490 && g490[0].laenge * 2 <= lang490.laenge, JSON.stringify(g490.map((k) => k.laenge)))
+    check('… der kurze steht zuerst (K1), der übergeordnete danach (K2)', g490[0].laenge < g490[1].laenge)
+    const tl = (N) => { const k = alle.slice(-N); const a = atrReihe(k, 14); return kandidatenTrendlinien(k, a[a.length - 1]).map((x) => `${x.t1}|${x.t2}`).join() }
+    // Weites Fenster: Zonen wachsen mit, sonst zerfallen sie in Einzelpunkte
+    {
+        const k = alle.slice(-490); const a = atrReihe(k, 14); const A = a[a.length - 1]; const M = massstab(490)
+        const eng = kandidatenNiveaus(k, { atrWert: A, k: Math.round(3 * M) }), weit = kandidatenNiveaus(k, { atrWert: A, k: Math.round(3 * M), M })
+        const mehr = (l) => l.filter((x) => x.beruehrungen >= 4).length
+        check('HBAR 490 Kerzen: mit Zonen im Massstab mehr Marken mit ≥ 4 Berührungen', mehr(weit) > mehr(eng), `${mehr(eng)} → ${mehr(weit)}`)
+        check('… Band ist mindestens BAND_MIN × Massstab breit', weit.every((x) => x.hoch - x.tief >= 2 * KAND.BAND_MIN_ATR * A * M - 1e-12))
+    }
+    check('grösseres Fenster, andere Trendlinien', tl(150) !== tl(490), tl(150))
+    check('HBAR 490 Kerzen: der Monat Abwärtstrend ist keine „Bull-Flagge" mehr', k490 && k490.muster !== 'bullFlagge', JSON.stringify(k490 && { m: k490.muster, L: k490.laenge }))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

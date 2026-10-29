@@ -32,7 +32,7 @@ import VorlagenMenue from '../components/chart/VorlagenMenue.vue'
 import { OVERLAYS, overlayAn } from '../utils/chart/overlays/liste.js'
 import OffeneReiter from '../components/chart/OffeneReiter.vue'
 import { Symbol, Hinweis, Kreisel } from '../components/basis'
-import { alarme, abonniereAlarme, neueAusloesungen, quittiere, alleQuittieren } from '../stores/chartAlarme.js'
+import { alarme, abonniereAlarme, neueAusloesungen, quittiere, alleQuittieren, aendereAlarm, loescheAlarm, ladeAlarme } from '../stores/chartAlarme.js'
 import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoeschen, macheRueckgaengig, macheWiederholen, fehlerMeldung } from '../stores/chartZeichnungen.js'
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
 import { useIstTelefon } from '../utils/geraet.js'
@@ -146,6 +146,21 @@ function wischAuswerten(x, y) {
     }
 }
 watch(vollbild, (v) => { if (!v) schublade.value = null; else tfFavoriten.value = leseTfFavoriten() })
+
+/*
+ * Im Vollbild gehört das Zwei-Finger-Zoomen dem Chart, nicht der Seite: ohne
+ * Sperre vergrösserte der Browser je nachdem, welcher Finger zuerst lag, die
+ * ganze Seite. Der Viewport verbietet dann das Seiten-Zoomen (und setzt einen
+ * schon gezoomten Stand auf 1 zurück), `touch-action` im CSS hält den Browser
+ * zusätzlich aus der Geste heraus — die Charts zoomen mit ihrer eigenen.
+ */
+const VIEWPORT_NORMAL = 'width=device-width, initial-scale=1'
+const VIEWPORT_GESPERRT = 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no'
+function seitenZoom(gesperrt) {
+    const m = document.querySelector('meta[name="viewport"]')
+    if (m) m.setAttribute('content', gesperrt ? VIEWPORT_GESPERRT : VIEWPORT_NORMAL)
+}
+watch(vollbild, (v) => seitenZoom(v))
 
 /*
  * Handy-Vollbild: die Kopfleiste ist weg, die Zeiteinheit soll trotzdem dezent
@@ -761,6 +776,27 @@ function alarmBeiPreis(preis) {
     alarmVorlage.value = { symbol: p.symbol, markt: p.markt, art: 'preis', preis }
 }
 
+/*
+ * Preis-Alarmlinie im Chart gezogen: neuer Preis, sonst alles wie es war. Erst
+ * hier ersetzen, dann speichern — sonst spränge die Linie bis zur Antwort zurück.
+ */
+async function alarmVerschieben({ id, preis }) {
+    const a = alarme.value.find((x) => x.id === id)
+    if (!a || a.bedingung?.gesperrt || !(preis > 0)) return
+    const bedingung = { ...a.bedingung, preis }
+    alarme.value = alarme.value.map((x) => (x.id === id ? { ...x, bedingung } : x))
+    try { await aendereAlarm(id, { bedingung }) } catch (e) { await ladeAlarme(); alarmFehler(e) }
+}
+async function alarmAusChart({ id, bedingung, loeschen }) {
+    try {
+        if (loeschen) await loescheAlarm(id)
+        else await aendereAlarm(id, { bedingung })
+    } catch (e) { alarmFehler(e) }
+}
+function alarmFehler(e) {
+    console.warn('Alarm nicht gespeichert:', e?.response?.data?.error || e?.message)
+}
+
 function alarmAufZeichnung(z) {
     const p = aktivesPanel.value
     const art = z.typ === 'rechteck' || z.typ === 'kanal' ? 'zone' : 'linie'
@@ -805,6 +841,13 @@ function strategieFilter(f) {
 function objektWaehlen(z) {
     if (z.versteckt) zeichnungAendern(z.symbol, z.id, { versteckt: false })
     panelRefs.value[aktivIndex.value]?.waehleZeichnung(z.id)
+}
+
+/** Bearbeiten aus dem Reiter: im Chart auswählen, Position mit Rechner — auf dem Handy schliesst der Reiter, damit der Chart zu sehen ist. */
+function objektBearbeiten(z) {
+    if (z.versteckt) zeichnungAendern(z.symbol, z.id, { versteckt: false })
+    panelRefs.value[aktivIndex.value]?.bearbeiteZeichnung(z.id)
+    mobilReiter.value = null
 }
 
 // ── Indikatoren ─────────────────────────────────────────────────────────
@@ -1060,6 +1103,7 @@ onMounted(() => {
     alarmAbo = abonniereAlarme()
 })
 onBeforeUnmount(() => {
+    seitenZoom(false)
     window.removeEventListener('resize', passeHoehe)
     hoehenWaechter?.disconnect()
     window.removeEventListener('keydown', taste)
@@ -1220,6 +1264,7 @@ watch(sichtbareAnzahl, async () => {
                         :werkzeug="i === aktivIndex ? werkzeug : null" :magnet="!!daten.zeichnen?.magnet"
                         :zeichnungen-versteckt="!!daten.zeichnen?.versteckt" @werkzeug-fertig="werkzeug = null"
                         :alarm-linien="alarmLinienFuer(p)" @alarm-bei-preis="(x) => { fokus(i); alarmBeiPreis(x) }"
+                        @alarm-verschieben="alarmVerschieben" @alarm-aendern="alarmAusChart" @alarm-bearbeiten="alarmBearbeiten"
                         @alarm-auf-zeichnung="(z) => { fokus(i); alarmAufZeichnung(z) }"
                         @alarm-momentum="() => { fokus(i); alarmMomentum() }" @alarm-lsob="(tr) => { fokus(i); alarmLsob(tr) }"
                         @alle-loeschen="() => { fokus(i); alleLoeschen() }"
@@ -1265,7 +1310,7 @@ watch(sichtbareAnzahl, async () => {
                         @neuer-tab="(s) => coinInNeuemTab(s, 'futures')"
                         @overlay="(an) => { aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), positionen: an } }" />
                     <ObjektReiter v-else-if="daten.seitenleiste.reiter === 'objekte'" :symbol="aktivesPanel.symbol"
-                        :zeichnungen="aktiveZeichnungen" :auswahl-id="aktiveAuswahl" @waehle="objektWaehlen"
+                        :zeichnungen="aktiveZeichnungen" :auswahl-id="aktiveAuswahl" @waehle="objektWaehlen" @bearbeite="objektBearbeiten"
                         @aendere="(z, patch) => zeichnungAendern(z.symbol, z.id, patch)"
                         @loesche="(z) => zeichnungLoeschen(z.symbol, z.id)" />
                     <StrategieReiter v-else-if="daten.seitenleiste.reiter === 'strategien'" :panel="aktivesPanel"
@@ -1277,7 +1322,9 @@ watch(sichtbareAnzahl, async () => {
                         :markt="aktivesPanel.markt" :kurs="aktuellerKurs" :watchlists="watchlists"
                         @neu="alarmBeiPreis" @neu-momentum="alarmMomentum" @neu-lsob="alarmLsob()" @bearbeite="alarmBearbeiten" />
                     <KiReiter v-else-if="daten.seitenleiste.reiter === 'ki'" :panel="aktivesPanel"
-                        :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis" />
+                        :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis"
+                        :sichtbar-von="() => aktivesPanelRef?.sichtbarerZeitraum()?.von"
+                        :bild="() => aktivesPanelRef?.bildschirmfoto()" />
                     </div>
                         <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
                             @pointerdown.prevent.stop="eckStart($event, 'reiter')" @pointermove="eckZiehen" @pointerup="eckEnde"
@@ -2051,6 +2098,11 @@ watch(sichtbareAnzahl, async () => {
 }
 
 /* Vollbild: das Panel deckt den ganzen Bildschirm, alles andere tritt zurück. */
+.chartSeite.vollbild {
+    /* Wischen ja, Seiten-Zoom nein (Begründung bei seitenZoom) */
+    touch-action: pan-x pan-y;
+}
+
 .chartSeite.vollbild .arbeitsflaeche {
     position: fixed;
     inset: 0;

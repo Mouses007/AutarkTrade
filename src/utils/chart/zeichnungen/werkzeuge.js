@@ -21,6 +21,8 @@ export const WERKZEUGE = [
     { typ: 'position', klicks: 2, gruppe: 'handel' },
     { typ: 'text', klicks: 1, gruppe: 'notiz' },
     { typ: 'messen', klicks: 2, gruppe: 'notiz', fluechtig: true },
+    // Preis-Alarm: ein Klick (am Handy: Fadenkreuz + Tippen) öffnet den Alarm-Dialog mit diesem Preis
+    { typ: 'alarm', klicks: 1, gruppe: 'alarm', fluechtig: true },
 ]
 
 export const werkzeug = (typ) => WERKZEUGE.find((w) => w.typ === typ) || null

@@ -15,16 +15,23 @@
 
 /**
  * @param {Array<{o,h,l,c,v}>} kerzen
- * @param {{ zeilen?: number, va?: number }} opt
+ * @param {{ zeilen?: number, va?: number, schritt?: number }} opt
+ *   `schritt` (Preis je Zeile, z. B. Ticks × Tickgrösse) statt einer festen
+ *   Zeilenzahl — so rechnet TradingView mit „Ticks pro Zeile"; höchstens
+ *   MAX_ZEILEN Zeilen, darüber wird die Zeile breiter.
  * @returns {null | { unten, oben, schritt, zeilen: Array<{von,bis,auf,ab,summe}>, poc, pocIndex, vah, val, summe }}
  */
-export function volumenprofil(kerzen, { zeilen = 24, va = 0.7 } = {}) {
+export const MAX_ZEILEN = 1000
+
+export function volumenprofil(kerzen, { zeilen = 24, va = 0.7, schritt: jeZeile = null } = {}) {
     const k = (kerzen || []).filter((x) => Number.isFinite(x?.h) && Number.isFinite(x?.l) && x.h >= x.l && Number(x.v) > 0)
     if (!k.length) return null
-    const n = Math.max(2, Math.min(200, Math.round(Number(zeilen) || 24)))
-    const unten = Math.min(...k.map((x) => x.l))
-    const oben = Math.max(...k.map((x) => x.h))
+    let unten = Infinity, oben = -Infinity
+    for (const x of k) { if (x.l < unten) unten = x.l; if (x.h > oben) oben = x.h }
     if (!(oben > unten)) return null
+    const n = jeZeile > 0
+        ? Math.max(1, Math.min(MAX_ZEILEN, Math.ceil((oben - unten) / jeZeile - 1e-9)))
+        : Math.max(2, Math.min(MAX_ZEILEN, Math.round(Number(zeilen) || 24)))
     const schritt = (oben - unten) / n
     const reihe = Array.from({ length: n }, (_, i) => ({ von: unten + i * schritt, bis: unten + (i + 1) * schritt, auf: 0, ab: 0, summe: 0 }))
     for (const x of k) {

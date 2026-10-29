@@ -121,6 +121,26 @@ export function tokenIdentitaet(bewegungen = []) {
         const p = nachId.get(b.transferMit)
         if (p && !normKontrakt(p.kontrakt) && gross(p.asset) === gross(b.asset)) belegt.add(`${gross(b.asset)}|${k}`)
     }
+    // Datei-Importe kennen nur einen Vertrag je Zeile: beim Tausch fehlt er auf der
+    // Gegenseite. Führt dieselbe Quelle das Kürzel sonst nur mit genau einem Vertrag
+    // (und nie ohne), gehört die Seite ohne Vertrag zu ihm.
+    const vertraege = new Map()
+    const merke = (quelle, asset, k) => {
+        const key = `${quelle}\u0000${gross(asset)}`
+        const v = vertraege.get(key) || { k: new Set(), ohne: false }
+        if (k) v.k.add(k); else v.ohne = true
+        vertraege.set(key, v)
+    }
+    for (const b of bewegungen) {
+        if (b.asset) merke(b.quelle, b.asset, normKontrakt(b.kontrakt))
+        const gk = b.gegenAsset ? gegenKontraktVon(b) : null
+        if (gk) merke(b.quelle, b.gegenAsset, gk)
+    }
+    const ergaenze = (quelle, asset, k) => {
+        if (k) return k
+        const v = vertraege.get(`${quelle}\u0000${gross(asset)}`)
+        return v && !v.ohne && v.k.size === 1 ? [...v.k][0] : null
+    }
     const fremd = (asset, kontrakt, kette = null) => {
         const k = normKontrakt(kontrakt)
         if (!k || istKanon(asset, k, kette) || belegt.has(`${gross(asset)}|${k}`)) return null
@@ -135,7 +155,7 @@ export function tokenIdentitaet(bewegungen = []) {
         const f0 = b.asset ? fremd(b.asset, b.kontrakt, b.kette) : null
         const aus = [{ asset: b.asset || null, menge: Number(b.menge) || 0, kontrakt: normKontrakt(b.kontrakt), fremd: f0, id: !b.asset ? null : f0 ? `${gross(b.asset)}|${f0}` : gross(b.asset) }]
         if (b.gegenAsset) {
-            const gk = gegenKontraktVon(b)
+            const gk = ergaenze(b.quelle, b.gegenAsset, gegenKontraktVon(b))
             const f = fremd(b.gegenAsset, gk, b.kette)
             aus.push({ asset: b.gegenAsset, menge: Number(b.gegenMenge) || 0, kontrakt: gk, fremd: f, id: f ? `${gross(b.gegenAsset)}|${f}` : gross(b.gegenAsset) })
         }

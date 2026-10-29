@@ -18,6 +18,8 @@ import lsob from './lsob.js'
 import emaTouch from './ema_touch.js'
 import trendlinienBreakout from './trendlinien_breakout.js'
 import setAndForget from './set_and_forget.js'
+import momentumSwing from './momentum_swing.js'
+import liqKerze from './liq_kerze.js'
 import { alsManifest } from './rule-engine.js'
 import { pruefeRegeln } from './rule-validate.js'
 import { TIMEFRAME_MS } from '../market-data.js'
@@ -321,6 +323,8 @@ registerStrategy(lsob)
 registerStrategy(emaTouch)
 registerStrategy(trendlinienBreakout)
 registerStrategy(setAndForget)
+registerStrategy(momentumSwing)
+registerStrategy(liqKerze)
 
 export const EINGEBAUT = new Set([...registry.keys()])
 export const istEingebaut = (id) => EINGEBAUT.has(id)

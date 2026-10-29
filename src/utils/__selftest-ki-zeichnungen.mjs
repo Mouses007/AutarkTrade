@@ -6,7 +6,7 @@
  * Ältere Analysen (vor dem Umbau auf IDs, 18.10.2026) liegen bis zu 30 min im
  * Cache und müssen genauso gezeichnet werden wie bisher.
  */
-import { linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil, anzeigeAnalyse, vorschauAnalyse, leereMarken, markenSchluessel } from './chart/kiZeichnungen.js'
+import { kanalAlsZeichnung, linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil, anzeigeAnalyse, vorschauAnalyse, leereMarken, markenSchluessel } from './chart/kiZeichnungen.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -116,6 +116,14 @@ console.log('\nÜbernehmen, verwerfen, erledigt, zurücksetzen (22.10.2026)\n')
     check('„Analyse zurücksetzen": Reiter leer, Vorschau leer', anzeigeAnalyse(a, { ...fertig, zurueck: true }) === null && vorschauAnalyse(a, { ...fertig, zurueck: true }) === null)
     check('Schlüssel je Analyse: Symbol, Zeiteinheit, Markt, Zeitpunkt', markenSchluessel(a) === 'BTCUSDT|1h|futures|123' && markenSchluessel({ ...a, stand: 124 }) !== markenSchluessel(a))
     check('ohne Analyse nichts', anzeigeAnalyse(null) === null && vorschauAnalyse(null) === null)
+}
+
+console.log('\nKanal-Beschriftung\n')
+{
+    const k = { id: 'K1', art: 'kanal', richtung: 'ab', t1: 10, p1: 100, t2: 40, p2: 95, breite: 2 }
+    const kurz = kanalAlsZeichnung({ ...k, label: 'Absteigender Kanal (5/3 Berührungen, nach unten verlassen)', labelKurz: 'Absteigender Kanal, nach unten verlassen' })
+    check('im Chart der kurze Name ohne Berührungszahlen', kurz.stil.text === 'Absteigender Kanal, nach unten verlassen (K1)', kurz.stil.text)
+    check('ältere Analyse ohne labelKurz: langer Name', kanalAlsZeichnung({ ...k, label: 'Absteigender Kanal (5/3 Berührungen)' }).stil.text === 'Absteigender Kanal (5/3 Berührungen) (K1)')
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

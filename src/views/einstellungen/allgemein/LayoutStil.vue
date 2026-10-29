@@ -16,6 +16,8 @@ import { dbUpdateSettings } from '@/utils/db.js'
 import { merkeErweiterteInfos } from '@/composables/useErweiterteInfos.js'
 import { setLocale } from '@/i18n'
 import { kiSpeichern } from '../gemeinsam/speichern.js'
+import FarbWahl from '@/components/chart/FarbWahl.vue'
+import { KERZEN_STANDARD, kerzenFarben } from '@/utils/chart/kerzenFarben.js'
 import {
     modusLiveAn, modusResearchAn, modusStrategieAn, modusLernenAn, modusSpeichern,
 } from '../gemeinsam/useModi.js'
@@ -37,6 +39,15 @@ async function changeLanguage(lang) {
 }
 
 let username = ref('')
+// Kerzenfarben des Charts — gespeichert wird nur eine Abweichung von der Vorgabe
+const kerzen = computed(() => kerzenFarben(appEinstellungen.value))
+function kerzeSpeichern(feld, wert, vorgabe) { kiSpeichern(feld, wert.toLowerCase() === vorgabe ? null : wert) }
+function kerzenVorgabe() { kiSpeichern('chartKerzeSteigend', null); kiSpeichern('chartKerzeFallend', null) }
+const kerzenSindVorgabe = computed(() => kerzen.value.steigend === KERZEN_STANDARD.steigend && kerzen.value.fallend === KERZEN_STANDARD.fallend)
+// Grenzlinie des Momentum Radars (Chart, Kachel, Momentum-Alarme) — leer = 50
+const MOMENTUM_GRENZEN = [30, 35, 40, 45, 50, 55, 60, 70, 80].map((w) => ({ wert: w, text: w === 50 ? `±50 (${t('settings.kerzenVorgabe')})` : `±${w}` }))
+const momentumGrenze = ref(Number(appEinstellungen.value?.momentumGrenze) || 50)
+function momentumGrenzeSpeichern(w) { kiSpeichern('momentumGrenze', Number(w) === 50 ? null : Number(w)) }
 // Layout & Stil
 let livetradingMobil = ref(false)    // Live-Trading-Fenster auch am Telefon zeigen
 let startseiteAn = ref(true)         // Startseite als Landing-Page + Modus-Tab
@@ -148,6 +159,27 @@ ausEinstellungen()
             <input type="file" class="datei" @change="bildGewaehlt" />
         </Feld>
 
+        <!-- Kerzenfarben des Charts (Chart-Arbeitsplatz und Trade-Bild) -->
+        <div class="block">
+            <h3 class="zwischentitel">{{ t('settings.kerzenFarben') }}</h3>
+            <p class="hinweis">{{ t('settings.kerzenFarbenHint') }}</p>
+            <div class="kerzen-zeile">
+                <label>{{ t('settings.kerzeSteigend') }}
+                    <FarbWahl :model-value="kerzen.steigend" :titel="t('settings.kerzeSteigend')"
+                        @update:model-value="(f) => kerzeSpeichern('chartKerzeSteigend', f, KERZEN_STANDARD.steigend)" /></label>
+                <label>{{ t('settings.kerzeFallend') }}
+                    <FarbWahl :model-value="kerzen.fallend" :titel="t('settings.kerzeFallend')"
+                        @update:model-value="(f) => kerzeSpeichern('chartKerzeFallend', f, KERZEN_STANDARD.fallend)" /></label>
+                <Knopf klein :disabled="kerzenSindVorgabe" @click="kerzenVorgabe">{{ t('settings.kerzenVorgabe') }}</Knopf>
+            </div>
+        </div>
+
+        <!-- Grenzlinie des Momentum Radars -->
+        <Feld :label="t('settings.momentumGrenze')" :hilfe="t('settings.momentumGrenzeHint')">
+            <Eingabe v-model="momentumGrenze" art="auswahl" :optionen="MOMENTUM_GRENZEN"
+                @update:model-value="momentumGrenzeSpeichern" />
+        </Feld>
+
         <!-- Erweiterte Infos: das kleine „i" an Werten und Bedienelementen -->
         <div class="block">
             <Schalter v-model="erweiterteInfosAn" :label="t('settings.erweiterteInfos')"
@@ -256,4 +288,6 @@ ausEinstellungen()
 .fuss {
     margin-top: var(--abstand-4);
 }
+.kerzen-zeile { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.kerzen-zeile label { display: inline-flex; align-items: center; gap: 8px; }
 </style>

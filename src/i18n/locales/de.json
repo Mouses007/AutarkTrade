@@ -997,6 +997,13 @@
     },
     "erweiterteInfos": "Erweiterte Infos",
     "erweiterteInfosHint": "Zeigt ein kleines „i“ an Werten und Bedienelementen. Mauszeiger darüber (am Telefon: antippen) erklärt, was die Zahl bedeutet.",
+    "kerzenFarben": "Kerzenfarben im Chart",
+    "kerzenFarbenHint": "Steigende Kerzen werden hohl mit farbigem Rand gezeichnet, fallende gefüllt. Gilt für alle Charts, die Volumenbalken und das Trade-Bild.",
+    "kerzeSteigend": "Steigend",
+    "kerzeFallend": "Fallend",
+    "kerzenVorgabe": "Standard",
+    "momentumGrenze": "Momentum Radar: Grenzlinie",
+    "momentumGrenzeHint": "Ab welchem Wellenwert der Markt als überkauft (+) bzw. überverkauft (−) gilt. Ein Punkt entsteht nur, wenn die Welle jenseits dieser Linie dreht; 70 % davon ist „fast Long/Short\" für die Punktstärke. Kleiner = mehr und früher Signale, darunter mehr schwache. Gilt für Chart, Live-Trading-Kachel und Momentum-Alarme (nach spätestens 30 s).",
     "erweiterteInfosInfo": "Betrifft nur die Erklärungen zu Werten.\nDie Beschriftungen der Knöpfe bleiben immer sichtbar, ebenso die grossen Info-Tafeln oben auf den Seiten.",
     "modesTitle": "Modi ein-/ausblenden",
     "modesHint": "Welche Bereiche in der Leiste über dem Seitentitel erscheinen. Ausgeschaltet heisst wirklich aus: der Bereich verschwindet aus der Navigation, und auch ein direkt aufgerufener Link führt zurück ins Journal.",
@@ -2846,7 +2853,39 @@
     "simulationOnlyHint": "AutarkTrade sendet keine Orders an eine Börse. Instanzen laufen im Papier- oder Schattenbetrieb; handeln tust du selbst an deiner Börse.",
     "reason_mode_ausgelagert": "Betriebsart live ist ausgelagert — Instanz auf Papier oder Schatten stellen",
     "liveAusgelagertHint": "Position aus der Zeit vor der Auslagerung des scharfen Handels. AutarkTrade fragt die Börse nicht mehr und schliesst nichts — ob sie dort noch besteht, an der Börse prüfen.",
-    "statusFilter": "Zustand"
+    "statusFilter": "Zustand",
+    "reason_trend_against": "Signal gegen den Trend der höheren Zeiteinheit",
+    "reason_trend_unknown": "Trend der höheren Zeiteinheit unbekannt (Kerzen fehlen)",
+    "reason_limit_expired": "Limit wurde in der Gültigkeit nicht erreicht",
+    "momentum_swing": {
+      "limitAnteil": "Limit Richtung Stop (Anteil der Strecke)",
+      "limitGueltigKerzen": "Limit gültig (Kerzen)",
+      "scanWindowCandles": "Suchfenster (Kerzen)",
+      "htfTrendFilter": "Trendfilter der höheren Zeiteinheit",
+      "htfTimeframe": "Zeiteinheit des Trendfilters",
+      "htfEmaPeriod": "EMA-Länge des Trendfilters",
+      "sperreWochenende": "Keine Signale am Wochenende (UTC)",
+      "stopKerzen": "Stop hinter dem Extrem der letzten Kerzen",
+      "slBufferPct": "Stop-Puffer (%)",
+      "tpRR": "Ziel (R)",
+      "maxHoldCandles": "Max. Haltedauer (Kerzen)",
+      "breakEvenAtR": "Break-Even ab (R)"
+    },
+    "liq_kerze": {
+      "volFaktor": "Volumen mindestens (× Mittel)",
+      "volLaenge": "Volumen-Mittel über (Kerzen)",
+      "spannenFaktor": "Spanne mindestens (× ATR)",
+      "atrLaenge": "ATR-Länge",
+      "scanWindowCandles": "Suchfenster (Kerzen)",
+      "htfTrendFilter": "Trendfilter der höheren Zeiteinheit",
+      "htfTimeframe": "Zeiteinheit des Trendfilters",
+      "htfEmaPeriod": "EMA-Länge des Trendfilters",
+      "sperreWochenende": "Kein Einstieg am Wochenende (UTC)",
+      "stopAtr": "Stop unter dem Schluss (× ATR)",
+      "tpRR": "Ziel (R, 0 = ohne)",
+      "maxHoldCandles": "Max. Haltedauer (Kerzen)",
+      "breakEvenAtR": "Break-Even ab (R)"
+    }
   },
   "levmap": {
     "title": "Liquidationszonen",
@@ -5482,7 +5521,7 @@
         "name": "Momentum Radar",
         "kurz": "Momentum",
         "text": "Welle (WaveTrend) und Geldfluss aus dem Momentum-Radar des Live-Tradings — nur 5m, 15m, 1h, 4h.",
-        "info": "Momentum Radar — was die Farben bedeuten:\nHELLBLAUE FLÄCHE = die Welle (WaveTrend), dunkelblau dahinter = ihre Signallinie. Läuft hell über dunkel, dreht das Momentum nach oben.\nBALKEN = Geldfluss je Kerze: grün rein, rot raus, violett = nur die Futures treiben, die Bewegung läuft auf Hebel. WEISSE LINIE = Geldfluss am Spotmarkt; liegt sie unter den Balken, sind die Futures voraus.\nLINIEN: ±50 (kräftig) überkauft/überverkauft, ±100 Extrem, 0 gestrichelt.\nPUNKTE auf der Welle: grün = Long suchen, rot = Short suchen; gross = die höheren Zeitebenen plus Geldfluss stützen das Signal (≥ 60 %). Orange Raute = Extremwert jenseits ±100, ausgereizt, kein Einstieg.\nSCHIENEN bei +115 (Short) und −115 (Long): Signale der höheren Zeitebenen — 1h orange klein, 4h violett, Tag weiss, Woche gelb gross.\nDIV-Linie: Divergenz zwischen Welle und Kurs (rot bärisch, grün bullisch).\nFARBLEISTE ganz unten: Geldfluss der letzten geschlossenen 4h-Kerze (grün rein, rot raus).\nNur geschlossene Kerzen. Der Radar sagt WANN, nicht WO."
+        "info": "Momentum Radar — was die Farben bedeuten:\nHELLBLAUE FLÄCHE = die Welle (WaveTrend), dunkelblau dahinter = ihre Signallinie. Läuft hell über dunkel, dreht das Momentum nach oben.\nBALKEN = Geldfluss je Kerze: grün rein, rot raus, violett = nur die Futures treiben, die Bewegung läuft auf Hebel. WEISSE LINIE = Geldfluss am Spotmarkt; liegt sie unter den Balken, sind die Futures voraus.\nLINIEN: ±50 (kräftig, einstellbar unter Einstellungen › Allgemein) überkauft/überverkauft, ±100 Extrem, 0 gestrichelt.\nPUNKTE auf der Welle: grün = Long suchen, rot = Short suchen; gross = die höheren Zeitebenen plus Geldfluss stützen das Signal (≥ 60 %). Orange Raute = Extremwert jenseits ±100, ausgereizt, kein Einstieg.\nSCHIENEN bei +115 (Short) und −115 (Long): Signale der höheren Zeitebenen — 1h orange klein, 4h violett, Tag weiss, Woche gelb gross.\nDIV-Linie: Divergenz zwischen Welle und Kurs (rot bärisch, grün bullisch).\nFARBLEISTE ganz unten: Geldfluss der letzten geschlossenen 4h-Kerze (grün rein, rot raus).\nNur geschlossene Kerzen. Der Radar sagt WANN, nicht WO."
       },
       "vwapVector": {
         "name": "VWAP Vector",
@@ -5513,6 +5552,12 @@
         "info": "EMA-Bounce-Rücklauf: Start beim höchsten/tiefsten Schluss der letzten Kerzen in EMA-Trendordnung, mit ATR-Abständen zwischen den EMAs, und eine saubere Korrektur an die Ziel-EMA (Gegenkerzen-Logik). Labels Start/Entry.",
         "kurz": "EMA-Bounce-Lauf",
         "text": "Start beim höchsten/tiefsten Schluss der letzten Kerzen in EMA-Trendordnung mit ATR-Abständen, saubere Korrektur an die Ziel-EMA (Gegenkerzen-Logik), Label Start/Entry."
+      },
+      "vrvp": {
+        "name": "VRVP (Volumenprofil sichtbarer Bereich)",
+        "kurz": "VRVP",
+        "text": "Volumenprofil über die gerade sichtbaren Kerzen, am rechten Rand.",
+        "info": "VRVP – Visible Range Volume Profile: wie viel Volumen auf welchem Preis gehandelt wurde, über genau die Kerzen, die gerade im Bild sind. Scrollen oder Zoomen rechnet es neu. Balken vom rechten Rand nach innen, kräftig in der Value Area, rot der POC (Preis mit dem meisten Volumen).\nAus Kerzen geschätzt: das Volumen jeder Kerze wird gleichmässig auf ihre Spanne verteilt, Kauf/Verkauf nach Kerzenfarbe. „Gesamt“ zeigt das ganze Volumen je Zeile, „Auf/Ab“ Kauf und Verkauf nebeneinander, „Delta“ den Überhang."
       }
     },
     "indParam": {
@@ -5714,7 +5759,21 @@
       "mtfAn3": "MTF-EMA 3",
       "mtfLaenge3": "Länge",
       "mtfTf3": "Zeiteinheit",
-      "mtfFarbe3": "Farbe"
+      "mtfFarbe3": "Farbe",
+      "zeilenLayout": "Zeilenlayout",
+      "zeilen": "Zeilengrösse",
+      "volumen": "Volumen",
+      "va": "Value Area Volumen (%)",
+      "breite": "Breite (% des Charts)",
+      "platz": "Platzierung",
+      "cAuf": "Auf-Volumen",
+      "cAb": "Ab-Volumen",
+      "vaDeck": "Deckkraft Value Area (%)",
+      "aussenDeck": "Deckkraft ausserhalb (%)",
+      "zeigePoc": "POC",
+      "cPoc": "Farbe POC",
+      "zeigeVa": "VAH/VAL-Linien",
+      "cVa": "Farbe VAH/VAL"
     },
     "indWahl": {
       "c": "Schluss",
@@ -5735,7 +5794,14 @@
       "atl": "Allzeittief",
       "gestrichelt": "Gestrichelt",
       "durchgezogen": "Durchgezogen",
-      "gepunktet": "Gepunktet"
+      "gepunktet": "Gepunktet",
+      "anzahl": "Zeilenanzahl",
+      "ticks": "Ticks pro Zeile",
+      "gesamt": "Gesamt",
+      "aufAb": "Auf/Ab",
+      "delta": "Delta",
+      "rechts": "Rechts",
+      "links": "Links"
     },
     "indAusgabe": {
       "delta": "Veränderung",
@@ -5786,15 +5852,21 @@
       "favoritWeg": "Aus der Leiste nehmen"
     },
     "wzKurz": {
+      "zurueck": "Zurück",
+      "vor": "Vorwärts",
       "alleZeichnungenLoeschen": "Alle Zeichnungen löschen",
       "ausklappen": "Werkzeugleiste ausklappen (mit Namen)",
       "einklappen": "Einklappen",
       "magnet": "Magnet",
       "ausblenden": "Alle ausblenden",
       "einblenden": "Alle einblenden",
-      "alleLoeschen": "Alle löschen"
+      "alleLoeschen": "Alle löschen",
+      "fadenkreuz": "Fadenkreuz",
+      "alarm": "Alarm"
     },
     "wz": {
+      "zurueck": "Zurück (Strg+Z) — letzte Änderung an einer Zeichnung rückgängig",
+      "vor": "Vorwärts (Strg+Y) — wiederholen",
       "zeiger": "Zeiger (Esc)",
       "trendlinie": "Trendlinie",
       "strahl": "Strahl",
@@ -5810,7 +5882,9 @@
       "magnet": "Magnet (rastet auf Eröffnung/Hoch/Tief/Schluss ein; Strg gedrückt halten kehrt ihn um)",
       "allesVerstecken": "Alle Zeichnungen aus-/einblenden",
       "alleLoeschen": "Alle Zeichnungen dieses Symbols löschen",
-      "volprofil": "Volumenprofil Fixed-Range"
+      "volprofil": "Volumenprofil Fixed-Range",
+      "fadenkreuz": "Fadenkreuz-Zeichnen (Touch): Finger schiebt das Fadenkreuz, Tippen setzt den Punkt",
+      "alarm": "Preis-Alarm setzen"
     },
     "tab": {
       "steigt": "steigt",
@@ -5994,6 +6068,7 @@
       "hebel": "Hebel",
       "konto": "Kontostand",
       "kontoTipp": "Kontostand in USDT (optional) — dann steht das Risiko auch in % vom Konto",
+      "kontoBoerse": "Leer = Kontostand von {boerse} (Börse, jede Minute frisch). Eigener Wert gilt nur für diese Position.",
       "optional": "für % Risiko",
       "gebuehr": "Gebühr",
       "gebuehrTipp": "Gebühr je Seite in % (Taker, z. B. 0,06) — beim max. Verlust eingerechnet",
@@ -6043,7 +6118,8 @@
         "links": "links",
         "mitte": "Mitte",
         "rechts": "rechts"
-      }
+      },
+      "farbe": "Farbe"
     },
     "textEingeben": "Text:",
     "alleLoeschenFrage": "Eine Zeichnung auf {symbol} löschen? Gesperrte bleiben stehen. | {n} Zeichnungen auf {symbol} löschen? Gesperrte bleiben stehen.",
@@ -6195,7 +6271,10 @@
       "profilLinie": "Linie des Profils",
       "profilHinweis": "Die Höhe wird so übernommen, wie das Profil jetzt im Chart steht. Verschiebst du den Bereich oder änderst die Zeilenzahl, schaltet sich der Alarm ab — dann neu setzen.",
       "profilFehlt": "Das Profil ist in diesem Chart nicht berechnet (keine Kerzen im Bereich) — Chart so einstellen, dass es sichtbar ist.",
-      "profilGeaendert": "Profil geändert — Alarm neu setzen"
+      "profilGeaendert": "Profil geändert — Alarm neu setzen",
+      "linieKopf": "Preis-Alarm {preis}",
+      "linieZiehen": "Linie im Chart oder an der Preisskala greifen und schieben, um den Preis zu ändern.",
+      "linieGesperrt": "Gesperrt: die Linie lässt sich nicht verschieben."
     },
     "quelle": {
       "titel": "Kursquelle: Binance (live per Websocket, tiefe Historie — nur mit Marktdatenquelle Binance) oder die Kurse deiner Handelsbörse (per Abfrage)",
@@ -6305,6 +6384,13 @@
         "bedingungen": "Wenn-dann-Sätze an einer Marke („4h-Schluss über …\")",
         "hebel": "Geschätzte Liquidationszonen aus Open Interest als Kontext für die KI"
       },
+      "bild": "Bild zur Gegenprüfung mitschicken",
+      "bildTipp": "Ein Bild des sichtbaren Charts geht mit. Die KI widerspricht, wo ein gemessener Kanal oder eine Trendlinie im Bild nicht zu sehen ist — die wird dann nicht gezeichnet. Kostet etwas mehr je Analyse; nur bei Anbietern, die Bilder verstehen.",
+      "einwaende": "Im Bild nicht bestätigt (nicht gezeichnet)",
+      "bildStatus": {
+        "anbieterOhneBild": "Bildprüfung nicht möglich: {anbieter} versteht keine Bilder — Analyse ohne Bild.",
+        "fehlgeschlagen": "Das Modell hat das Bild abgelehnt — Analyse ohne Bildprüfung."
+      },
       "optLeer": "Mindestens Niveaus, Trendlinien, Volumenprofil, höhere Zeiteinheit oder Kanäle wählen.",
       "profilArt": {
         "titel": "Profil über",
@@ -6348,7 +6434,9 @@
       "gcvZiel": "EMA-Bounce-Ziele",
       "gcvGegen": "Gegenkerzen",
       "emaChart": "EMAs dieser Zeiteinheit",
-      "emaMtf": "EMAs höherer Zeiteinheiten (MTF)"
+      "emaMtf": "EMAs höherer Zeiteinheiten (MTF)",
+      "vrvpEin": "Eingaben",
+      "vrvpStil": "Stil"
     },
     "indHilfe": {
       "showVector": "Färbt die Kerzen nach VOLUMEN statt nur grün/rot — dort, wo ungewöhnlich viel gehandelt wurde, waren grosse Marktteilnehmer aktiv.",
@@ -6471,7 +6559,7 @@
       "tipHerkunft": "Rechts die Aufteilung des Handelsvolumens zwischen Perpetual und Spotmarkt. Links das Urteil: ein Signal ist erst die VERSCHIEBUNG des Verhältnisses gegen seinen Schnitt der letzten 200 Kerzen (1,5-mal so schief, drei Kerzen am Stück). „Spot-Anteil hoch\" sagt nichts über die Richtung — dahinter steht, ob der Spot kauft oder verkauft.",
       "tipVwap": "Steht der Kurs über oder unter dem Wochen- und Monats-VWAP? Das Umfeld: der Radar sagt WANN, diese Zeile, ob das grosse Bild passt. Rechts der Geldfluss als Zahl (violett = Futures treiben).",
       "tipStruktur": "BOS = Bruch eines Hochs/Tiefs IN Trendrichtung, CHoCH = Bruch GEGEN die bisherige Richtung. Dahinter das gebrochene Niveau, wie viele Kerzen her, und die Lage zur EMA50 — gerechnet auf 4h.",
-      "tipTf": "Wo steht die Welle dieser Zeitebene? Long-Zone unter −50, Short-Zone über +50, „fast\" = 70 % des Weges dorthin. Gelesen nur über geschlossene Kerzen.",
+      "tipTf": "Wo steht die Welle dieser Zeitebene? Long-Zone unter −50, Short-Zone über +50 (Grenze einstellbar), „fast\" = 70 % des Weges dorthin. Gelesen nur über geschlossene Kerzen.",
       "zeitebenen": "Zeitebenen"
     },
     "watchlistCoinHinzu": "Coin hinzufügen",
@@ -6482,7 +6570,9 @@
     "richtungShort": "Short",
     "playbook": "Playbook",
     "farbeEigene": "Eigene Farbe …",
-    "quelleUmgestellt": "Die Marktdatenquelle ist nicht Binance — Panels mit Binance-Kerzen zeigen jetzt {quelle} (Futures)."
+    "quelleUmgestellt": "Die Marktdatenquelle ist nicht Binance — Panels mit Binance-Kerzen zeigen jetzt {quelle} (Futures).",
+    "objektBearbeiten": "Bearbeiten: im Chart auswählen, Stil-Leiste öffnet sich",
+    "objektRechner": "Positionsrechner öffnen: Hebel, Verlust, Grösse, Marge"
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade ist freie Software (AGPL-3.0). Den Quellcode dieser Fassung gibt es hier:",

@@ -9,7 +9,8 @@
  * Format kommt nicht durch. Zu streng frisst es bezahlte, gute Auswahl — für
  * jede Ablehnung steht deshalb eine Gegenprobe daneben, die durchgehen MUSS.
  */
-import { baueChartEingabe, pruefeChartAuswahl, systemText, normAuswahl, filterePaket, auswahlLeer } from './chart-ki.js'
+import fs from 'node:fs'
+import { baueChartEingabe, pruefeChartAuswahl, systemText, normAuswahl, filterePaket, auswahlLeer, pruefeBild } from './chart-ki.js'
 import { zeitText, baueKandidaten } from './chart-kandidaten.js'
 
 let bestanden = 0
@@ -172,6 +173,38 @@ console.log('\nKanäle zeichnet der Code (24.10.2026)\n')
     const kanal = mit.linien.filter((l) => l.art === 'kanal')
     check('Kanal erscheint ohne Wahl des Modells, einmal, mit Namen vom Code', kanal.length === 1 && kanal[0].label.startsWith('Bull-Flagge') && kanal[0].breite > 0, JSON.stringify(kanal.map((l) => l.label)))
     check('[K1] im Text wird durch Name und Kanten ersetzt', /Bull-Flagge .*K1 \(Kanten jetzt/.test(mit.text), mit.text)
+    const oft = pruefeChartAuswahl({ text: 'Die Bull-Flagge [K1] hält. Ein Bruch von [K1] wäre neu. Die Flagge [K1] bleibt.', linien: [] }, pk, {}).text
+    check('[K1] nur beim ersten Nennen voll, danach kurz, kein doppelter Name', (oft.match(/Kanten jetzt/g) || []).length === 1 && (oft.match(/Berührungen/g) || []).length === 1
+        && !/Flagge\s+Bull-Flagge/.test(oft) && /Bruch von Bull-Flagge K1/.test(oft) && /Die Bull-Flagge K1 bleibt/.test(oft), oft)
+    {
+        const roh = JSON.parse(fs.readFileSync(new URL('./fixtures/chart-hbar-4h-flagge.json', import.meta.url))).kerzen.slice(-200)
+        const ph = baueKandidaten({ kerzen: roh.map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v })), interval: '4h' })
+        const r = pruefeChartAuswahl({ text: 'Die Range [K1] wurde verlassen. Zurück in [K1] wäre ein Fehlausbruch.', linien: [] }, ph, {})
+        const kl = r.linien.find((l) => l.art === 'kanal')
+        check('HBAR: Seitwärts-Range waagerecht im Chart, Text ohne Doppelnamen', kl && kl.p1 === kl.p2 && kl.label.startsWith('Seitwärts-Range') && !/Range\s+Seitwärts/.test(r.text) && /Zurück in Seitwärts-Range K1/.test(r.text), r.text)
+    }
+
+    // Bildprüfung: ein Einwand gegen K1 nimmt den Kanal aus Zeichnung, Text und Bedingungen
+    const kid = pk.kandidaten.find((k) => k.quelle === 'kanal').id
+    const nid = pk.kandidaten.find((k) => k.quelle === 'niveau')?.id
+    const antwortE = { text: `Die Flagge [${kid}] ist wichtig. Die Spanne ist eng.`, linien: [], bedingungen: nid ? [{ id: kid, richtung: 'unter', dann: 'Muster gebrochen' }] : [],
+        einwaende: [{ id: kid, grund: 'Im Bild seitwärts, keine Fahnenstange davor' }, { id: 'K99', grund: 'gibt es nicht' }, ...(nid ? [{ id: nid, grund: 'Niveau ist keine Geometrie' }] : [])] }
+    const mitE = pruefeChartAuswahl(antwortE, pk, { mitBild: true })
+    check('Bild-Einwand: Kanal wird nicht gezeichnet', !mitE.linien.some((l) => l.id === kid), JSON.stringify(mitE.linien.map((l) => l.id)))
+    check('Bild-Einwand: Satz mit der ID fällt weg, der Rest bleibt', mitE.text === 'Die Spanne ist eng.', mitE.text)
+    check('Bild-Einwand: Bedingung an der ID verworfen', !mitE.bedingungen.length)
+    check('Bild-Einwand: nur bekannte Kanal/Trend-IDs, mit Name und Grund', mitE.einwaende.length === 1 && mitE.einwaende[0].id === kid && mitE.einwaende[0].name.includes('Flagge') && /seitwärts/.test(mitE.einwaende[0].grund), JSON.stringify(mitE.einwaende))
+    const ohneBildE = pruefeChartAuswahl(antwortE, pk, {})
+    check('Gegenprobe: ohne Bild zählt kein Einwand', ohneBildE.linien.some((l) => l.id === kid) && !ohneBildE.einwaende.length)
+    const prognoseE = pruefeChartAuswahl({ ...antwortE, einwaende: [{ id: kid, grund: 'der Kurs dürfte steigen' }] }, pk, { mitBild: true })
+    check('Einwand mit Prognose im Grund gilt nicht', prognoseE.linien.some((l) => l.id === kid))
+    check('Prompt mit Bild verlangt Einwände, ohne Bild nicht', systemText(false, undefined, { mitBild: true }).includes('"einwaende"') && !systemText(false).includes('einwaende'))
+    check('Prompt mit Bild: Preise nicht aus dem Bild ablesen', systemText(false, undefined, { mitBild: true }).includes('Preise liest du NICHT aus dem Bild ab'))
+    check('Prompt ohne Kanäle und Trends: keine Bildregel', !systemText(false, { kanal: false, trend: false }, { mitBild: true }).includes('einwaende'))
+    check('pruefeBild: gültiges JPEG', pruefeBild({ mediaType: 'image/jpeg', base64: 'A'.repeat(200) })?.kind === 'image')
+    check('pruefeBild: falscher Typ, Müll, zu gross → null', pruefeBild({ mediaType: 'image/gif', base64: 'A'.repeat(200) }) === null
+        && pruefeBild({ mediaType: 'image/png', base64: '<script>'.repeat(30) }) === null
+        && pruefeBild({ mediaType: 'image/png', base64: 'A'.repeat(3_000_001) }) === null && pruefeBild(null) === null)
     const ohneK = pruefeChartAuswahl({ text: 'x', linien: [] }, filterePaket(pk, normAuswahl({ kanal: false })), { auswahl: { kanal: false } })
     check('Kanäle abgewählt → kein Kanal', !ohneK.linien.some((l) => l.art === 'kanal'))
 }
