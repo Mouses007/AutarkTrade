@@ -101,6 +101,13 @@ export function signalVerlauf({ strategie, candles, params, htfCandles = null, l
             setup.status = ev.status
             setup.endeT = ev.triggeredAt || ev.candleTime || kerze.t
             if (ev.invalidReason) setup.invalidReason = ev.invalidReason
+            // Wie im Backtest: ein Auslöser auf einer älteren Kerze war damals
+            // nicht bekannt und ist kein Signal, sondern ein Nachtrag.
+            if (ev.status === 'triggered' && ev.candleTime != null && ev.candleTime < kerze.t) {
+                setup.status = 'rejected'
+                setup.invalidReason = 'zu_spaet_erkannt'
+                continue
+            }
             if (ev.status !== 'triggered') continue
             setup.triggeredAt = ev.triggeredAt || kerze.t
             if (Number.isFinite(ev.entry) && ev.entry > 0) setup.entry = ev.entry

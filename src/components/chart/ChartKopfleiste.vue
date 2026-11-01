@@ -20,8 +20,8 @@ const props = defineProps({
     seitenleisteOffen: { type: Boolean, default: true },
     telefon: { type: Boolean, default: false },
 })
-const emit = defineEmits(['panel', 'indikatoren', 'raster', 'sync', 'layoutWechsel', 'layoutNeu', 'layoutUmbenennen', 'layoutLoeschen', 'seitenleiste', 'foto', 'vorlage'])
-const { t } = useI18n()
+const emit = defineEmits(['panel', 'indikatoren', 'raster', 'sync', 'layoutWechsel', 'layoutNeu', 'layoutUmbenennen', 'layoutLoeschen', 'seitenleiste', 'foto', 'vorlage', 'teilen', 'kerzenArt'])
+const { t, te } = useI18n()
 
 const suche = ref(null)
 const mehrOffen = ref(false)
@@ -47,12 +47,24 @@ const RASTER = [
 const OVERLAY_SYMBOL = {
     journal: 'buch',
     positionen: 'fadenkreuz',
-    strategie: 'ki',
     liquidationen: 'feuer',
     hebelzonen: 'ebenen',
     orderbuch: 'liste',
 }
 const SKALEN = ['normal', 'log', 'prozent']
+// Kerzenansicht: normal, Breite nach Volumen (panel.volumenBreite) oder Footprint (sichtbarer Footprint-Indikator)
+const KERZEN_ARTEN = ['normal', 'volumen', 'footprint']
+const kerzenArt = computed(() => {
+    if ((props.panel.indikatoren || []).some((i) => i.typ === 'footprint' && i.sichtbar !== false)) return 'footprint'
+    return props.panel.volumenBreite === true ? 'volumen' : 'normal'
+})
+
+/* Titel eines Overlay-Knopfs: Name, Schaltzustand und — wo es eine gibt — die Erklärung, was man da sieht. */
+function overlayTitel(id) {
+    const kopf = t('chart.overlay.' + id) + ' — ' + t(overlayAn(props.panel, id) ? 'chart.ausblenden' : 'chart.einblenden')
+    const info = 'chart.overlay.info.' + id
+    return te(info) ? kopf + '\n\n' + t(info) : kopf
+}
 
 /*
  * Favoriten: welche Zeiteinheiten direkt in der Leiste stehen. Gewählt im
@@ -158,18 +170,25 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
                 @click="emit('panel', { autoSkala: panel.autoSkala === false })" :aria-label="t(panel.autoSkala !== false ? 'chart.autoAn' : 'chart.autoAus')">{{ t('chart.autoKurz') }}</button>
         </div>
 
+        <div v-if="!telefon" class="gruppe">
+            <select class="quelle" :value="kerzenArt" :title="t('chart.kerzenArt.titel')" :aria-label="t('chart.kerzenArt.titel')"
+                @change="emit('kerzenArt', $event.target.value)">
+                <option v-for="a in KERZEN_ARTEN" :key="a" :value="a">{{ t('chart.kerzenArt.' + a) }}</option>
+            </select>
+        </div>
+
         <div class="gruppe">
             <button class="tf" :title="t('chart.indikatorenTitel')" @click="emit('indikatoren')" :aria-label="t('chart.indikatorenTitel')">
                 <Symbol name="wachstum" /><template v-if="!telefon"> {{ t('chart.indikatoren') }}</template>
             </button>
-            <VorlagenMenue v-if="!telefon" :aktuelle="panel.indikatoren || []" @anwenden="emit('vorlage', $event)" />
+            <VorlagenMenue v-if="!telefon" :aktuelle="panel.indikatoren || []" :aktiv="panel.vorlageId ?? null" @anwenden="emit('vorlage', $event)" />
         </div>
 
         <!-- Eigene Daten als Schnellschalter: ein Klick statt Menü öffnen, Häkchen setzen, zuklicken. -->
         <div v-if="!telefon" class="gruppe schnell" :title="t('chart.overlaysTitel')">
             <button v-for="o in OVERLAYS" :key="o.id" class="tf" :class="{ an: overlayAn(panel, o.id) }"
-                :title="t('chart.overlay.' + o.id) + ' — ' + t(overlayAn(panel, o.id) ? 'chart.ausblenden' : 'chart.einblenden')"
-                @click="schalteOverlay(o.id, !overlayAn(panel, o.id))" :aria-label="t('chart.overlay.' + o.id) + ' — ' + t(overlayAn(panel, o.id) ? 'chart.ausblenden' : 'chart.einblenden')"><Symbol :name="OVERLAY_SYMBOL[o.id] || 'ebenen'" /></button>
+                :title="overlayTitel(o.id)"
+                @click="schalteOverlay(o.id, !overlayAn(panel, o.id))" :aria-label="overlayTitel(o.id)"><Symbol :name="OVERLAY_SYMBOL[o.id] || 'ebenen'" groesse="16px" /></button>
         </div>
 
         <slot v-if="!telefon" />
@@ -215,6 +234,7 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
             </div>
 
             <button v-if="!telefon" class="tf" :title="t('chart.foto')" @click="emit('foto')" :aria-label="t('chart.foto')"><Symbol name="kamera" /></button>
+            <button class="tf" :title="t('chart.teilen.knopf')" @click="emit('teilen')" :aria-label="t('chart.teilen.knopf')"><Symbol name="teilen" /></button>
             <button class="tf" :class="{ an: seitenleisteOffen }" :title="t('chart.seitenleiste')"
                 @click="emit('seitenleiste')" :aria-label="t('chart.seitenleiste')"><Symbol name="seitenleiste" /></button>
         </div>
@@ -292,6 +312,11 @@ defineExpose({ oeffneSuche: () => suche.value?.oeffne() })
 
 .aufklapp {
     position: relative;
+}
+
+/* Schnellschalter: grössere Symbole und Trefferfläche (Wunsch 31.10.2026). */
+.schnell .tf {
+    padding: 4px 7px;
 }
 
 .menue {

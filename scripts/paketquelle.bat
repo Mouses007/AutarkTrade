@@ -22,4 +22,11 @@ if not "%AT_BASIC%"=="" (
     set "GIT_CONFIG_KEY_0=http.https://github.com/.extraheader"
     set "GIT_CONFIG_VALUE_0=AUTHORIZATION: basic %AT_BASIC%"
 )
+:: Was geholt wird (Audit FUN-S3-002): das neueste Release-Tag vX.Y.Z, wie es die
+:: Update-Pruefung meldet und Docker baut - nicht master, das nach einem Release schon
+:: unfertige Commits tragen kann. Vorabversionen (Tag mit "-") zaehlen nicht. Ohne
+:: Release-Tag in der Quelle bleibt es master. Gleiches Verfahren wie paketquelle_ziel
+:: in scripts/paketquelle.sh. Ergebnis in der Variablen AT_ZIEL.
+set "AT_ZIEL=master"
+for /f "usebackq delims=" %%t in (`powershell -NoProfile -Command "$t = git ls-remote --tags --refs origin 'v*' | ForEach-Object { ($_ -split 'refs/tags/')[1] } | Where-Object { $_ -match '^v\d+\.\d+\.\d+$' } | Sort-Object { [version]$_.Substring(1) } | Select-Object -Last 1; if ($t) { 'refs/tags/' + $t }"`) do set "AT_ZIEL=%%t"
 exit /b 0

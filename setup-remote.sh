@@ -104,12 +104,19 @@ if [ -n "${AT_UPDATE_TOKEN:-}" ]; then
     export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf '%s:%s' "${AT_UPDATE_BENUTZER:-x-access-token}" "$AT_UPDATE_TOKEN" | base64 | tr -d '\n')"
 fi
 
+# Neuestes Release-Tag vX.Y.Z statt master (Audit FUN-S3-002, wie paketquelle_ziel in
+# scripts/paketquelle.sh): master kann nach einem Release unfertige Commits tragen.
+AT_TAG=$(git ls-remote --tags --refs "$REPO_URL" 'v*' 2>/dev/null \
+    | sed -n 's#^[0-9a-f]*[[:space:]]*refs/tags/\(v[0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$#\1#p' \
+    | sort -t. -k1.2,1n -k2,2n -k3,3n | tail -n 1)
+AT_ZWEIG="${AT_TAG:-master}"
+
 if [ -d "$INSTALL_DIR" ]; then
     echo -e "  ${YELLOW}Ordner existiert bereits: $INSTALL_DIR${RESET}"
     echo -e "  ${CYAN}→ Aktualisiere mit git fetch + reset...${RESET}"
     cd "$INSTALL_DIR"
     git remote set-url origin "$REPO_URL" 2>/dev/null || git remote add origin "$REPO_URL"
-    git fetch --depth 1 --no-tags origin master
+    git fetch --depth 1 --no-tags origin "$AT_ZWEIG"
     git reset --hard FETCH_HEAD
     # Erst nach dem reset einlesen: eine alte Installation hat die Datei noch nicht
     . ./scripts/paketquelle.sh
@@ -117,8 +124,10 @@ if [ -d "$INSTALL_DIR" ]; then
 else
     # Nur der aktuelle Stand, keine Historie (Audit A3-28)
     echo -e "  ${CYAN}→ Klone Repository...${RESET}"
-    git clone --depth 1 --no-tags --single-branch --branch master "$REPO_URL" "$INSTALL_DIR"
+    git clone --depth 1 --no-tags --single-branch --branch "$AT_ZWEIG" "$REPO_URL" "$INSTALL_DIR"
     cd "$INSTALL_DIR"
+    # Ein Tag-Klon steht abgekoppelt — als Zweig master weiterführen wie bei update.sh
+    git checkout -q -B master
 fi
 
 echo -e "  ${GREEN}[OK]${RESET}  Projekt in $INSTALL_DIR"

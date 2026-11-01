@@ -205,14 +205,27 @@ export function neuerStand(stand, treffer, paare) {
     return { ...(stand || {}), k }
 }
 
+/*
+ * Zeiteinheit für Meldungen ausgeschrieben: „15 Min" statt „15m" — die
+ * Sprachausgabe am Handy las „15m" als „15 Meter" (31.10.2026). Der Chart
+ * selbst bleibt bei der kurzen Form.
+ */
+const TF_WORT = { m: ['Min', 'Min'], h: ['Std', 'Std'], d: ['Tag', 'Tage'], w: ['Woche', 'Wochen'], M: ['Monat', 'Monate'] }
+export function tfText(tf) {
+    const m = /^(\d+)([mhdwM])$/.exec(String(tf || ''))
+    if (!m) return String(tf || '')
+    const n = Number(m[1])
+    return `${n} ${TF_WORT[m[2]][n === 1 ? 0 : 1]}`
+}
+
 const SEITE = { long: 'Long', short: 'Short' }
 const art = (p) => `${p.stark ? 'grosser' : 'kleiner'} ${SEITE[p.seite]}-Punkt${p.divergenz ? ' mit Divergenz' : ''}`
 
 /** Text einer (gebündelten) Auslösung. */
 export function momentumText(alarm, treffer, zahl = String) {
-    const zeile = (tr) => `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf}: ${art(tr.punkt)} — ${zahl(tr.preis)}`
+    const zeile = (tr) => `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tfText(tr.tf)}: ${art(tr.punkt)} — ${zahl(tr.preis)}`
     const titel = treffer.length === 1
-        ? `Momentum ${treffer[0].symbol} ${treffer[0].tf}: ${art(treffer[0].punkt)}`
+        ? `Momentum ${treffer[0].symbol} ${tfText(treffer[0].tf)}: ${art(treffer[0].punkt)}`
         : `Momentum: ${treffer.length} Signale`
     const text = `${treffer.map(zeile).join('\n')}${alarm.notiz ? `\n${alarm.notiz}` : ''}`
     return { titel, text }

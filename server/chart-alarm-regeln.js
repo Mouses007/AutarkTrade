@@ -40,8 +40,11 @@ export function geradePreis(a, b, t, log = false) {
  * über den zweiten GEZEICHNETEN Punkt, der Alarm über den späteren: eine von
  * rechts nach links gezogene Trendlinie mit „rechts" wuchs im Bild nach links,
  * der Alarm rechnete nach rechts, wo nichts zu sehen war.
- * Ausgenommen: Strahl (die Richtung IST die Aussage) und Fibonacci (die
- * Reihenfolge legt fest, wo 0 und 1 liegen).
+ * Ausgenommen: Strahl (die Richtung IST die Aussage), Fibonacci-Retracement
+ * und -Extension (die Reihenfolge legt fest, wo 0 und 1 liegen; bei der
+ * Extension ist sie Start → Ende → Rücksetzer), Pfeil (Spitze am zweiten
+ * Punkt) und Pinsel (die Reihenfolge IST der Strich). Die Ellipse ist
+ * symmetrisch und braucht keine Ordnung.
  */
 export function ordnePunkte(typ, punkte) {
     if (!Array.isArray(punkte) || punkte.length < 2) return punkte
@@ -53,6 +56,7 @@ export function ordnePunkte(typ, punkte) {
         // a, b = Basislinie, c = Versatzpunkt — nur a/b tauschen
         return punkte[0].t <= punkte[1].t ? punkte : [punkte[1], punkte[0], ...punkte.slice(2)]
     }
+    // pfeil, fibExt, pinsel, pfad: in der gezeichneten Reihenfolge — sie hat eine Bedeutung
     return punkte
 }
 

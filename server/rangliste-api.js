@@ -436,7 +436,10 @@ export function setupRanglisteRoutes(app) {
                 params: JSON.stringify(params),
                 risk: JSON.stringify(risk),
                 maxLeverage: await hebelDeckel(),
-                startEquity: Number(b.startEquity) || 1000,
+                // Wie im Einzeltest: ohne `startEquity` das Risikofeld
+                // „Startkapital (USDT)" — das Labor schickt nur dieses
+                // (FUN-L5-001; bis 31.10.2026 galt hier immer 1000).
+                startEquity: Number(b.startEquity) > 0 ? Number(b.startEquity) : (Number(risk.startEquityUsdt) || 1000),
                 status: 'wartet',
                 gesamt: symbole.length,
                 createdAt: jetzt(),

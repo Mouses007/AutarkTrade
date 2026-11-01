@@ -21,7 +21,6 @@ import { kachelById } from '../../config/marktradar.js'
 import { liveSymbol } from '../../stores/live.js'
 import Symbol from '@/components/basis/Symbol.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -210,8 +209,6 @@ async function erzeuge(erzwingen = false) {
                 </p>
                 <p v-if="fehler" class="lgFehler">{{ fehler }}</p>
             </template>
-            <!-- S12: Pflichtlabel an jedem KI-Text, klein wie gross. -->
-            <KiHinweis klein :anbieter="daten.provider" :modell="gross ? daten.model : ''" />
         </template>
     </div>
 </template>

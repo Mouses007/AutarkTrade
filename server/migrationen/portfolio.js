@@ -17,6 +17,7 @@
  *   portfolio_quellen     Stand je Quelle: letzter Abruf, Fehler, Cursor
  */
 import { spamHandUmschreiben, normKontrakt } from '../portfolio/token-id.js'
+import { bitpandaHandel, handelsZeile } from '../portfolio/normal.js'
 
 export async function migrierePortfolio(knex, addColumnIfNotExists) {
     const s = { hasTable: (t) => knex.schema.hasTable(t), createTable: (t, f) => knex.schema.createTable(t, f) }
@@ -166,7 +167,55 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
             await knex(tabelle).where('kontrakt', echt.toLowerCase()).update({ kontrakt: echt }).catch(() => {})
         }
     }
+    // Sparplan: id der Gegenzeile (Lastschrift ↔ Kauf), gesetzt vom Abruf (`ordneSparplaene`).
+    await addColumnIfNotExists('portfolio_bewegungen', 'sparplanMit', (t) => t.integer('sparplanMit'))
     await spamJeVertrag(knex)
+    await bitpandaGebuehrZusammen(knex)
+}
+
+/*
+ * Bitpanda-Käufe mit Gebühr in VSN/BEST (drei Assets in EINER Operation) lagen
+ * bis 01.11.2026 als drei „Tausch“-Zeilen `op:ASSET` ohne Gegenseite vor —
+ * Feb.–Juni 2026 acht Sparplan-Käufe BTC. Sie werden zu der einen Zeile, die
+ * `ausBitpandaOperationen` heute liefert, MIT deren externeId: sonst stünde
+ * der Kauf nach einem vollen Neuabruf doppelt da. Behalten wird die Zeile des
+ * gekauften Coins; ihr CHF-Wert wird neu bewertet (jetzt über den bezahlten
+ * Betrag). Eine Operation mit Einordnung oder Partner bleibt, wie sie ist.
+ * Idempotent: danach gibt es für die Operation keine `op:`-Zeilen mehr.
+ */
+async function bitpandaGebuehrZusammen(knex) {
+    try {
+        const zeilen = await knex('portfolio_bewegungen').where('quelle', 'bitpanda').where('externeId', 'like', '%:%')
+            .select('id', 'externeId', 'asset', 'menge', 'gegenAsset', 'einordnung', 'transferMit', 'sparplanMit')
+        const jeOp = new Map()
+        for (const z of zeilen) {
+            const op = z.externeId.slice(0, z.externeId.lastIndexOf(':'))
+            if (!jeOp.has(op)) jeOp.set(op, [])
+            jeOp.get(op).push(z)
+        }
+        let n = 0
+        for (const [op, liste] of jeOp) {
+            if (liste.length !== 3 || liste.some((z) => z.gegenAsset || z.einordnung || z.transferMit || z.sparplanMit)) continue
+            const h = bitpandaHandel(liste.map((z) => [z.asset, Number(z.menge)]))
+            if (!h?.gebuehr) continue
+            const behalten = liste.find((z) => z.asset === h.plus[0])
+            const weg = liste.filter((z) => z !== behalten).map((z) => z.id)
+            await knex.transaction(async (trx) => {
+                // Schon da (Neuabruf mit dem neuen Code): nur die geteilten Zeilen entfernen.
+                if (await trx('portfolio_bewegungen').where({ quelle: 'bitpanda', externeId: op }).first('id')) {
+                    await trx('portfolio_bewegungen').whereIn('id', liste.map((z) => z.id)).del()
+                    return
+                }
+                await trx('portfolio_bewegungen').whereIn('id', weg).del()
+                await trx('portfolio_bewegungen').where('id', behalten.id)
+                    .update({ externeId: op, ...handelsZeile(h), chfWert: null, chfQuelle: null })
+            })
+            n++
+        }
+        if (n) console.log(` -> Portfolio: Bitpanda-Käufe mit Gebühr in VSN/BEST zu je einer Zeile zusammengelegt: ${n}`)
+    } catch (e) {
+        console.warn(' -> Portfolio: Bitpanda-Gebührenzeilen nicht zusammengelegt:', e.message)
+    }
 }
 
 /*

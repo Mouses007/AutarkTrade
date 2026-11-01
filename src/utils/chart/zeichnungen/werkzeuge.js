@@ -6,26 +6,67 @@
  * `klicks` = Punkte, die beim Zeichnen gesetzt werden. Die Position braucht
  * zwei Klicks (Einstieg, Ziel), legt aber drei Punkte an — der Stop entsteht
  * gespiegelt bei 1R und wird danach gezogen.
+ *
+ * `frei: true` (Pinsel) zeichnet nicht per Klick, sondern solange man zieht:
+ * die Punkte sammelt `ZeichenEbene` und dünnt sie beim Loslassen aus.
+ *
+ * `mehr: true` (Pfad) nimmt beliebig viele Klicks, mindestens `klicks`, höchstens
+ * PFAD_MAX; fertig ist er mit einem Klick auf den letzten Punkt (Doppelklick, am
+ * Handy erneut tippen), Enter oder Esc.
  */
+export const PFAD_MAX = 30
+
+/** Die Auswahl des Smiley-Werkzeugs (`emoji`), in drei Gruppen. */
+export const SMILEYS = [
+    ['stimmung', ['🙂', '😐', '😟', '😱', '🤔', '😎']],
+    ['markt', ['🐂', '🐻', '🚀', '🔥', '🎯', '💰']],
+    ['markierung', ['👀', '⚠️', '✅', '❌', '❓', '⭐']],
+]
+export const SMILEY_LISTE = SMILEYS.flatMap(([, z]) => z)
 export const WERKZEUGE = [
     { typ: 'trendlinie', klicks: 2, gruppe: 'linien' },
     { typ: 'strahl', klicks: 2, gruppe: 'linien' },
     { typ: 'horizontale', klicks: 1, gruppe: 'linien' },
     { typ: 'strahlH', klicks: 1, gruppe: 'linien' },
     { typ: 'vertikale', klicks: 1, gruppe: 'linien' },
+    // Anchored VWAP: ein Klick setzt den Anker (nur die Zeit zählt), die Linie rechnet sich aus den Kerzen
+    { typ: 'avwap', klicks: 1, gruppe: 'linien' },
+    // Pfeil: Spitze am zweiten Punkt
+    { typ: 'pfeil', klicks: 2, gruppe: 'linien' },
+    // Pfad: Linienzug durch beliebig viele Punkte, Pfeilspitze am letzten
+    { typ: 'pfad', klicks: 2, gruppe: 'linien', mehr: true },
     { typ: 'kanal', klicks: 3, gruppe: 'formen' },
     { typ: 'rechteck', klicks: 2, gruppe: 'formen' },
     { typ: 'fib', klicks: 2, gruppe: 'formen' },
+    // Trendbasierte Fib-Extension: Impuls-Start, Impuls-Ende, Rücksetzer
+    { typ: 'fibExt', klicks: 3, gruppe: 'formen' },
+    { typ: 'ellipse', klicks: 2, gruppe: 'formen' },
     // Fixed-Range-Volumenprofil: zwei Klicks setzen Anfang und Ende des Bereichs (der Preis ist egal)
     { typ: 'volprofil', klicks: 2, gruppe: 'formen' },
     { typ: 'position', klicks: 2, gruppe: 'handel' },
     { typ: 'text', klicks: 1, gruppe: 'notiz' },
+    // Smiley/Symbol aus SMILEYS, ein Klick setzt es; gewählt wird in der Stilleiste
+    { typ: 'emoji', klicks: 1, gruppe: 'notiz' },
+    { typ: 'pinsel', klicks: 0, gruppe: 'notiz', frei: true },
     { typ: 'messen', klicks: 2, gruppe: 'notiz', fluechtig: true },
     // Preis-Alarm: ein Klick (am Handy: Fadenkreuz + Tippen) öffnet den Alarm-Dialog mit diesem Preis
     { typ: 'alarm', klicks: 1, gruppe: 'alarm', fluechtig: true },
 ]
 
 export const werkzeug = (typ) => WERKZEUGE.find((w) => w.typ === typ) || null
+
+/**
+ * Wie viele Punkte eine gespeicherte Zeichnung mindestens hat: die Klicks,
+ * bei der Position drei (der Stop entsteht beim Anlegen), beim Pinsel zwei
+ * (ein Tippen ist kein Strich). Weniger kann die Oberfläche nicht anlegen —
+ * nur ein direkter API-Aufruf oder eine veränderte Sicherung; der Server
+ * prüft dieselben Zahlen (`MIN_PUNKTE` in server/chart-api.js).
+ */
+export function mindestPunkte(typ) {
+    const w = werkzeug(typ)
+    if (!w) return 1
+    return typ === 'position' ? 3 : w.frei ? 2 : Math.max(1, w.klicks)
+}
 
 export const FARBEN = ['#29b6f6', '#2962ff', '#26a69a', '#ef5350', '#ff9800', '#f5c542', '#ab47bc', '#e0e0e0']
 
@@ -35,9 +76,19 @@ export const STANDARD_STIL = {
     horizontale: { farbe: '#f5c542', breite: 1, strich: 'voll', text: '' },
     strahlH: { farbe: '#f5c542', breite: 1, strich: 'voll', text: '' },
     vertikale: { farbe: '#e0e0e0', breite: 1, strich: 'gestrichelt' },
+    // baender: 0 = nur VWAP, 1 = ±1σ, 2 = ±1σ und ±2σ
+    avwap: { farbe: '#ff9800', breite: 2, strich: 'voll', baender: 0 },
     kanal: { farbe: '#2962ff', breite: 1, strich: 'voll', fuellung: true },
     rechteck: { farbe: '#ab47bc', breite: 1, strich: 'voll', fuellung: true, rechts: false, text: '' },
     fib: { farbe: '#8a9199', breite: 1, strich: 'voll', rechts: false },
+    // Stufen/Farben beider Fibonacci-Werkzeuge stehen in `stil.stufen` ([{w, an, farbe}]); ohne = Vorgaben
+    fibExt: { farbe: '#8a9199', breite: 1, strich: 'voll', rechts: false },
+    pfeil: { farbe: '#f5c542', breite: 2, strich: 'voll', text: '' },
+    // spitze: Pfeilspitze am letzten Punkt
+    pfad: { farbe: '#ec407a', breite: 2, strich: 'voll', spitze: true },
+    emoji: { zeichen: '🙂', groesse: 28 },
+    ellipse: { farbe: '#ab47bc', breite: 1, strich: 'voll', fuellung: true },
+    pinsel: { farbe: '#ff9800', breite: 2 },
     // Einfarbig in der Hausfarbe, POC gelb. rechts = POC/VAH/VAL bis zum rechten Rand verlängern.
     volprofil: { farbe: '#1fd6c4', zeilen: 24, rechts: true, marken: true },
     position: { breite: 1 },

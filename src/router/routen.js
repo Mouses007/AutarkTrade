@@ -160,14 +160,26 @@ export const routen = [
     seite('/hype-radar/:reiter?', 'hypeRadar', () => import('../views/HypeRadar.vue'), { title: 'Hype-Radar', titleKey: 'nav.hypeRadar', mode: 'research' }),
     seite('/coin-radar/:reiter?', 'coinRadar', () => import('../views/CoinRadar.vue'), { title: 'Coin-Radar', titleKey: 'nav.coinRadar', mode: 'research' }),
 
-    // ── Strategien (Agent) ──────────────────────────────────
-    seite('/agent/strategies', 'agentStrategies', () => import('../views/AgentStrategies.vue'), { title: 'Instanzen', titleKey: 'nav.agentStrategies', mode: 'agent' }),
-    seite('/agent/setups', 'agentSetups', () => import('../views/AgentSetups.vue'), { title: 'Setups', titleKey: 'nav.agentSetups', mode: 'agent' }),
-    seite('/agent/performance', 'agentPerformance', () => import('../views/AgentPerformance.vue'), { title: 'Auswertung', titleKey: 'nav.agentPerformance', mode: 'agent' }),
-    seite('/agent/editor', 'agentEditor', () => import('../views/AgentEditor.vue'), { title: 'Strategie-Editor', titleKey: 'nav.agentEditor', mode: 'agent' }),
-    seite('/agent/builder', 'agentBuilder', () => import('../views/AgentBuilder.vue'), { title: 'Neue Strategie', titleKey: 'nav.agentBuilder', mode: 'agent' }),
-    seite('/agent/lab', 'agentLab', () => import('../views/AgentLab.vue'), { title: 'Labor', titleKey: 'nav.agentLab', mode: 'agent' }),
-    seite('/agent/rangliste', 'coinRangliste', () => import('../views/CoinRangliste.vue'), { title: 'Coin-Rangliste', titleKey: 'nav.coinRangliste', mode: 'agent' }),
+    // ── Strategien ──────────────────────────────────────────
+    // Strategie → prüfen → laufen lassen: Bibliothek, Labor, Instanzen.
+    // Bibliothek: Liste, „neu" und der Editor einer Strategie auf einer Route
+    // (bis 01.11.2026 „Strategie-Editor" und „Neue Strategie").
+    seite('/strategien/bibliothek/:id?', 'strategieBibliothek', () => import('../views/StrategieBibliothek.vue'), { title: 'Bibliothek', titleKey: 'nav.strategieBibliothek', mode: 'agent' }),
+    weiter('/agent/editor', '/strategien/bibliothek'),
+    weiter('/agent/builder', '/strategien/bibliothek/neu'),
+    // Labor: Test, Viele Coins, Läufe als Reiter einer Route (bis 01.11.2026
+    // „Labor" und „Coin-Rangliste" als eigene Seiten).
+    seite('/strategien/labor/:reiter?', 'strategieLabor', () => import('../views/StrategieLabor.vue'), { title: 'Labor', titleKey: 'nav.strategieLabor', mode: 'agent' }),
+    weiter('/agent/lab', '/strategien/labor/test'),
+    weiter('/agent/rangliste', '/strategien/labor/viele'),
+    // Instanzen: Liste, „neu" und die Ansicht EINER Instanz auf einer Route —
+    // Setups und Auswertung gehören zur Instanz (bis 01.11.2026 eigene Seiten).
+    seite('/strategien/instanzen/:id?/:reiter?', 'strategieInstanzen', () => import('../views/StrategieInstanzen.vue'), { title: 'Instanzen', titleKey: 'nav.strategieInstanzen', mode: 'agent' }),
+    weiter('/agent/strategies', '/strategien/instanzen'),
+    weiter('/agent/setups', '/strategien/instanzen'),
+    { path: '/agent/performance', redirect: (to) => (to.query.instanceId
+        ? { path: `/strategien/instanzen/${Number(to.query.instanceId)}/auswertung` }
+        : { path: '/strategien/instanzen' }) },
 
     // ── Lernen ──────────────────────────────────────────────
     // Ein Eintrag für Sitzung/Karten/Statistik: eine laufende Lernsitzung

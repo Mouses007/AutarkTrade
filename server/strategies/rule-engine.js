@@ -547,6 +547,34 @@ function spiegleMarken(regeln) {
 }
 
 /**
+ * Wie viele Kerzen braucht ein Indikator, bis er den ersten Wert liefert?
+ * Parameter-Referenzen werden mit den übergebenen Werten aufgelöst.
+ */
+function indikatorVorlauf(def, params) {
+    const periode = Math.max(1, Math.round(zahl(def.period, params, 14)))
+    switch (def.type) {
+        case 'macd': case 'macdSignal': case 'macdHist':
+            return Math.round(zahl(def.slow, params, 26)) + Math.round(zahl(def.signal, params, 9))
+        case 'adx': case 'plusDI': case 'minusDI':
+            return 2 * periode
+        case 'stochK':
+            return periode + Math.round(zahl(def.smoothK, params, 3))
+        case 'stochD':
+            return periode + Math.round(zahl(def.smoothK, params, 3)) + Math.round(zahl(def.smoothD, params, 3))
+        case 'vwap': case 'vwapBand':
+            // Kalender- und ATH-Anker zählt `ankerSichtKerzen`; hier nur das
+            // gleitende Fenster und die Pivot-Stärke der Swing-Anker.
+            if (def.anchor === 'rolling') return periode
+            if (def.anchor === 'swingHigh' || def.anchor === 'swingLow') return 2 * Math.round(zahl(def.pivot, params, 20))
+            return 0
+        case 'dayOpen':
+            return 0
+        default:
+            return periode
+    }
+}
+
+/**
  * Wie viele Kerzen muss der Aufrufer mindestens zeigen, damit alle Linien
  * dieses Regelwerks vollständig sind?
  *
@@ -554,16 +582,60 @@ function spiegleMarken(regeln) {
  * Ein Monats-VWAP braucht auf 15m aber gut 2900 Kerzen — ohne diese Auskunft
  * bekäme er ein Fenster von ein paar Hundert und bliebe dauerhaft leer.
  *
+ * Seit 31.10.2026 zählen auch die Indikatorperioden und die Rückblickfenster
+ * der Berührungszähler mit: eine EMA 600 als Kreuzungspartner blieb im
+ * Fenster von 550 Kerzen `null`, und die Strategie fand still kein einziges
+ * Signal — auch live nicht (Audit 4.3.4, FUN-S4-003). Bedarf ist der längste
+ * Vorlauf plus das Scan-Fenster (dort werden Signale gesucht) plus Reserve.
+ * Für die Vorgaben der Vorlagen bleibt das unter dem bisherigen Fenster; es
+ * ändert sich also nur dort etwas, wo eine Linie bisher in den Scan hineinlief.
+ *
+ * @param {object} regeln
+ * @param {number} timeframeMs
+ * @param {object} [params]   aufgelöste Parameterwerte (für `{param}`-Perioden)
+ * @param {object} [opts]     `endlich: true` lässt ATH/ATL aus — für die
+ *                            Engine, die keine ganze Historie halten kann
  * @returns {number} Kerzen; `Infinity` heisst „die ganze geladene Historie"
  */
-export function sichtBedarfKerzen(regeln, timeframeMs) {
+export function sichtBedarfKerzen(regeln, timeframeMs, params = {}, { endlich = false } = {}) {
     let bedarf = 0
+    let vorlauf = 0
     for (const def of regeln?.indicators || []) {
-        if (def.type !== 'vwap' && def.type !== 'vwapBand') continue
-        const n = ankerSichtKerzen(def.anchor || 'session', timeframeMs)
-        if (n > bedarf) bedarf = n
+        if (def.type === 'vwap' || def.type === 'vwapBand') {
+            const n = ankerSichtKerzen(def.anchor || 'session', timeframeMs)
+            if (n === Infinity && endlich) continue
+            if (n > bedarf) bedarf = n
+        }
+        vorlauf = Math.max(vorlauf, indikatorVorlauf(def, params))
+    }
+    // Rückblickfenster: Berührungen zählen nur innerhalb von `window` Kerzen.
+    const fensterVon = (b) => Math.max(0, Math.round(zahl(b?.window, params, 200)))
+    if (regeln?.signal?.type === 'levelTouch') vorlauf = Math.max(vorlauf, fensterVon(regeln.signal))
+    if (regeln?.signal?.type === 'pivotHigh' || regeln?.signal?.type === 'pivotLow') {
+        vorlauf = Math.max(vorlauf, Math.round(zahl(regeln.signal.left, params, 5)) + Math.round(zahl(regeln.signal.right, params, 2)))
+    }
+    for (const b of [...(regeln?.signalFilters || []), ...(regeln?.entryFilters || []),
+        ...(regeln?.invalidations || []).map((v) => v.when || v)]) {
+        if (b?.op === 'priorTouchesGte') vorlauf = Math.max(vorlauf, fensterVon(b))
+    }
+    if (vorlauf > 0) {
+        const scan = Math.round(zahl(regeln?.scanWindowCandles, params, 200))
+        bedarf = Math.max(bedarf, vorlauf + scan + 10)
     }
     return bedarf
+}
+
+/**
+ * Abstand zweier Kerzen in ms — der kleinste unter den ersten paar, damit eine
+ * einzelne Datenlücke am Anfang die Zeiteinheit nicht verdoppelt.
+ */
+function kerzenAbstandMs(candles) {
+    let ms = Infinity
+    for (let i = 1; i < Math.min(candles.length, 20); i++) {
+        const d = candles[i].t - candles[i - 1].t
+        if (d > 0 && d < ms) ms = d
+    }
+    return Number.isFinite(ms) ? ms : 0
 }
 
 /**
@@ -591,7 +663,7 @@ export function detectMitRegeln(regeln, eingabe) {
         )
         const a = lauf('long')
         const b = lauf('short')
-        const zusammen = { sweepsFound: 0, setupsCreated: 0, rejected: {}, rejections: [] }
+        const zusammen = { sweepsFound: 0, setupsCreated: 0, rejected: Object.create(null), rejections: [] }
         for (const d of [a.diagnostics, b.diagnostics]) {
             zusammen.sweepsFound += d.sweepsFound
             zusammen.setupsCreated += d.setupsCreated
@@ -610,7 +682,9 @@ export function detectMitRegeln(regeln, eingabe) {
     const { candles, params, openSetups = [], knownSetupKeys = [], historieVerkuerzt = false } = eingabe
     const setups = []
     const events = []
-    const diagnostics = { sweepsFound: 0, setupsCreated: 0, rejected: {}, rejections: [] }
+    // `rejected` ohne Prototyp — die Gründe sind Codes aus dem Regelwerk
+    // (BUG-S4-004, siehe `sichererCode` in rule-validate.js).
+    const diagnostics = { sweepsFound: 0, setupsCreated: 0, rejected: Object.create(null), rejections: [] }
     const reject = (grund, key) => {
         diagnostics.rejected[grund] = (diagnostics.rejected[grund] || 0) + 1
         diagnostics.rejections.push({ reason: grund, key })
@@ -701,6 +775,7 @@ export function detectMitRegeln(regeln, eingabe) {
 
     // ══ Phase B: wartende Setups fortschreiben ════════════════════════════
     const timeoutRegel = (regeln.invalidations || []).find((v) => v.type === 'timeout')
+    const kerzeMs = kerzenAbstandMs(candles)
     const bedingungen = (regeln.invalidations || []).filter((v) => v.type !== 'timeout')
 
     for (const s of openSetups) {
@@ -720,34 +795,45 @@ export function detectMitRegeln(regeln, eingabe) {
             prevSignalPrice: Number(s.sweepLevel),
             entry: 0,
         }
+        // Laufende Extreme (`correctionLow`/`correctionHigh`) ab der Kerze vor
+        // dem Beobachtungsbeginn — und immer nur bis zur Vorkerze der geprüften:
+        // was die Kerze selbst noch tut, ist beim Platzieren nicht bekannt.
         const laufend = { tief: Infinity, hoch: -Infinity }
+        if (start > 0) { laufend.tief = candles[start - 1].l; laufend.hoch = candles[start - 1].h }
         ctx.laufend = laufend
 
+        // Wartezeit in Kerzen seit dem Beobachtungsbeginn. Liegt der schon
+        // VOR dem Sichtfenster, zählt die Uhr ab dem Zeitstempel weiter statt
+        // bei der ersten Fensterkerze neu: bis 31.10.2026 endete die Zählung
+        // bei jedem Takt an der Fenstergrösse (549), ein Zeitablauf ab 550
+        // Kerzen griff nie, und ein Setup wurde noch 1700 Kerzen nach dem
+        // Signal gefüllt (Audit 4.3.4, FUN-S4-002).
         let gewartet = 0
+        if (start === 0 && kerzeMs > 0) gewartet = Math.max(0, Math.round((candles[0].t - ab) / kerzeMs))
         let fertig = false
         const maxKerzen = timeoutRegel ? Math.round(zahl(timeoutRegel.candles, params, 20)) : 0
 
-        for (let i = start; i < candles.length && !fertig; i++) {
+        for (let i = Math.max(start, 1); i < candles.length && !fertig; i++) {
             const k = candles[i]
+            // Alles, was die Order bestimmt (Anker, Filter, Stop, Ziel), steht
+            // mit dem Schluss der VORKERZE fest. Bis 01.11.2026 las der
+            // Interpreter es an der Füllkerze selbst — mit ihrem Schluss, den
+            // beim Füllen niemand kennt — und prüfte die Abbruchbedingungen
+            // VOR der Berührung: eine Kerze, die das Limit füllte und dann grün
+            // schloss, galt als „ungültig" statt als Trade.
+            const vor = i - 1
             gewartet++
-            if (k.l < laufend.tief) laufend.tief = k.l
-            if (k.h > laufend.hoch) laufend.hoch = k.h
 
-            // (1) Abbruchbedingungen
-            let gebrochen = null
-            for (const v of bedingungen) {
-                if (pruefe(v.when || v, ctx, i)) { gebrochen = v.code || 'invalidated'; break }
-            }
-            if (gebrochen) {
-                events.push({ id: s.id, status: 'invalidated', invalidReason: gebrochen, candleTime: k.t })
-                fertig = true; break
-            }
-
-            // (2) Einstieg
+            // (1) Einstieg
             const e = regeln.entry || {}
             let ausgeloest = false
             let entryPreis = null
             let fillAmOpen = false
+            // Kommt der Kurs zum Anker ZURÜCK (Long von oben, Short von unten),
+            // ist es ein Limit. Läuft er durch ihn HINDURCH (Long von unten,
+            // Short von oben), ist es eine Stop-Order: Taker, und eine Lücke
+            // füllt zur Eröffnung (siehe fill-simulator `einstiegsPreis`).
+            let stopOrder = false
 
             // Der Index der Kerze, an der tatsächlich eingestiegen wird —
             // bei `immediate` ist das nicht die Auslösekerze (siehe unten).
@@ -765,19 +851,16 @@ export function detectMitRegeln(regeln, eingabe) {
                 einstiegIdx = i
                 fillAmOpen = true
             } else {
-                const anker = loese(e.anchor, ctx, i)
+                const anker = loese(e.anchor, ctx, vor)
                 if (anker !== null) {
                     // Von oben kommend berührt der Kurs den Anker mit dem Tief,
-                    // von unten mit dem Hoch.
+                    // von unten mit dem Hoch. Springt die Kerze über den Anker
+                    // hinweg, gilt das ebenfalls: eine ruhende Order wird dann
+                    // zur Eröffnung gefüllt. Bis 01.11.2026 hiess das
+                    // „anchor_missed", und der Trade fehlte.
                     const vonOben = e.from !== 'below'
+                    stopOrder = (richtung === 'long') !== vonOben
                     const beruehrt = vonOben ? k.l <= anker : k.h >= anker
-                    // Liegt die ganze Kerze jenseits des Ankers, war ein Fill
-                    // dort nie möglich — der Kurs ist vorbeigesprungen.
-                    const vorbei = vonOben ? k.h < anker : k.l > anker
-                    if (vorbei) {
-                        events.push({ id: s.id, status: 'invalidated', invalidReason: 'anchor_missed', candleTime: k.t })
-                        fertig = true; break
-                    }
                     if (beruehrt) { ausgeloest = true; entryPreis = anker }
                 }
             }
@@ -808,17 +891,16 @@ export function detectMitRegeln(regeln, eingabe) {
                 // noch auslösen.
                 const wochentagBlockiert = (params.sperreSamstag || params.sperreSonntag || params.sperreMontag)
                     && tagGesperrt(k.t, params)
-                if (wochentagBlockiert || !alleErfuellt(regeln.entryFilters, ctx, i)) {
-                    // Bedingung am Einstieg nicht erfüllt — weiter warten,
-                    // das Setup bleibt gültig.
-                    if (maxKerzen > 0 && gewartet > maxKerzen) {
-                        events.push({ id: s.id, status: 'expired', invalidReason: timeoutRegel.code || 'timeout', candleTime: k.t })
-                        fertig = true
-                    }
-                    continue
+                if (wochentagBlockiert || !alleErfuellt(regeln.entryFilters, ctx, vor)) {
+                    // Bedingung am Einstieg nicht erfüllt — keine Order in
+                    // dieser Kerze; sie wird geprüft wie ohne Berührung.
+                    ausgeloest = false
+                    entryPreis = null
                 }
+            }
 
-                const stopLoss = berechneStop(regeln, ctx, i, richtung)
+            if (ausgeloest && entryPreis !== null) {
+                const stopLoss = berechneStop(regeln, ctx, vor, richtung)
                 if (stopLoss === null
                     || (richtung === 'long' && stopLoss >= entryPreis)
                     || (richtung === 'short' && stopLoss <= entryPreis)) {
@@ -826,7 +908,7 @@ export function detectMitRegeln(regeln, eingabe) {
                     fertig = true; break
                 }
 
-                const takeProfit = berechneZiel(regeln, ctx, i, richtung, entryPreis, stopLoss)
+                const takeProfit = berechneZiel(regeln, ctx, vor, richtung, entryPreis, stopLoss)
                 // Nur wenn die Regel überhaupt ein Ziel vorsieht, muss eines
                 // herauskommen. `mode: 'none'` ist bewusst zielfrei.
                 const zielGewollt = (regeln.takeProfit?.mode || 'none') !== 'none'
@@ -857,13 +939,30 @@ export function detectMitRegeln(regeln, eingabe) {
                     // dieser Kerze liegt — ihr Verlauf muss deshalb noch
                     // gegen Stop und Ziel geprüft werden.
                     entryAtOpen: fillAmOpen,
-                    confirmations: { waitedCandles: gewartet },
+                    ...(fillAmOpen ? { entryTrigger: 'market' } : stopOrder ? { entryTrigger: 'stop' } : {}),
+                    confirmations: {
+                        waitedCandles: gewartet,
+                        ...(fillAmOpen ? { entryTrigger: 'market' } : stopOrder ? { entryTrigger: 'stop' } : {}),
+                    },
                 })
                 fertig = true; break
             }
 
+            // (2) Nicht gefüllt: jetzt entscheidet der Schluss dieser Kerze,
+            //     ob das Setup weiterlebt.
+            let gebrochen = null
+            for (const v of bedingungen) {
+                if (pruefe(v.when || v, ctx, i)) { gebrochen = v.code || 'invalidated'; break }
+            }
+            if (gebrochen) {
+                events.push({ id: s.id, status: 'invalidated', invalidReason: gebrochen, candleTime: k.t })
+                fertig = true; break
+            }
+            if (k.l < laufend.tief) laufend.tief = k.l
+            if (k.h > laufend.hoch) laufend.hoch = k.h
+
             // (3) Zeitablauf
-            if (maxKerzen > 0 && gewartet > maxKerzen) {
+            if (maxKerzen > 0 && gewartet >= maxKerzen) {   // N Kerzen, nicht N+1 (01.11.2026)
                 events.push({ id: s.id, status: 'expired', invalidReason: timeoutRegel.code || 'timeout', candleTime: k.t })
                 fertig = true; break
             }

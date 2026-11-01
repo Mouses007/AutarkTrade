@@ -53,8 +53,8 @@ if errorlevel 1 (
 
 :: Git fetch + reset (funktioniert auch bei frischer Installation ohne Commits)
 call scripts\paketquelle.bat
-echo     git fetch --depth 1 origin master...
-git fetch --depth 1 --no-tags origin master
+echo     git fetch --depth 1 origin %AT_ZIEL%...
+git fetch --depth 1 --no-tags origin %AT_ZIEL%
 if errorlevel 1 (
     echo   [X] Git fetch fehlgeschlagen!
     echo     Tipp: Keine Internetverbindung? Zugang zur Paketquelle?

@@ -175,14 +175,24 @@ async function toolBacktest(knex, p) {
     }
 
     backtestZaehler++
+    // Markt und Hebeldeckel wie bei jedem anderen Lauf: der Agent soll messen,
+    // was die Instanz auf Papier täte. Ohne den Deckel rechnete er mit einem
+    // Hebel, den der Betrieb nie zulässt (bis 01.11.2026).
+    const instanz = Number(p.instanceId) > 0
+        ? await knex('strategy_instances').where('id', Number(p.instanceId)).select('market').first().catch(() => null)
+        : null
+    const market = instanz?.market === 'spot' ? 'spot' : 'futures'
+    const deckel = await knex('settings').select('strategyMaxLeverage').where('id', 1).first().catch(() => null)
     const r = await runBacktest({
         strategyId: p.strategyId,
         params: p.params || {},
         risk: p.risk || {},
         symbol: String(p.symbol || '').toUpperCase(),
         timeframe: p.timeframe,
+        market,
         fromTs, toTs,
-        startEquity: 1000,
+        // Ohne Angabe rechnet runBacktest mit `risk.startEquityUsdt` (Vorgabe 1000).
+        maxLeverage: Number(deckel?.strategyMaxLeverage) || 10,
     })
 
     // Ergebnis sichern, damit ein Vorschlag darauf verweisen kann
@@ -193,14 +203,11 @@ async function toolBacktest(knex, p) {
         label: 'Agent-Prüfung',
         symbol: String(p.symbol || '').toUpperCase(),
         timeframe: p.timeframe,
-        market: 'futures',
+        market,
         fromTs, toTs,
         params: JSON.stringify(r.meta?.params || {}),
-        // Das Kostenmodell gehoert zum Ergebnis, nicht zur Umgebung. Fehlte es
-        // hier, rechnete der Lauf zwar mit den Vorgaben (feeTakerBps 6), aber
-        // das Freigabe-Tor `lauf_mit_kosten` sah einen Lauf ohne Gebuehren und
-        // lehnte ihn ab — genau das ist den LSOB-15m-Laeufen #47–#49 passiert.
-        // Dieselbe Zeile steht in strategy-api.js; sie war hier nie nachgezogen.
+        // Das Kostenmodell gehört zum Ergebnis, nicht zur Umgebung — dieselbe
+        // Zeile wie in strategy-api.js.
         risk: JSON.stringify(r.meta?.risk || {}),
         stats: JSON.stringify({ ...r.stats, funnel: r.funnel }),
         trades: JSON.stringify(r.trades.slice(0, 200)),
@@ -222,6 +229,11 @@ async function toolBacktest(knex, p) {
 async function toolPropose(knex, p) {
     const row = await knex('strategy_instances').where('id', Number(p.instanceId)).first()
     if (!row) return { error: 'Instanz nicht gefunden' }
+    // Ein Archiv nimmt keine Änderungen mehr an — ein Vorschlag dort liesse
+    // sich nur noch ablehnen (FUN-S2-001). Die Kopie heisst `nachfolger`.
+    if (Number(row.archiviert)) {
+        return { error: `Instanz ${row.id} ist archiviert${Number(row.nachfolger) ? ` — Vorschläge an die Nachfolgerin #${row.nachfolger} richten` : ''}` }
+    }
 
     // Gegen das Schema prüfen, BEVOR der Vorschlag entsteht — ein Vorschlag mit
     // unmöglichen Werten wäre für den Nutzer nur Arbeit.

@@ -27,7 +27,7 @@ const { setupOllamaRoutes } = await import('./ollama-api.js')
 const { setupBenachrichtigungsRoutes } = await import('./benachrichtigungen.js')
 const { setupHypeRadarRoutes } = await import('./hype-radar-api.js')
 const { encrypt, decrypt, isEncrypted, migriereAltSchluessel, maskKey } = await import('./crypto.js')
-const { ALLE_VERSCHLUESSELTEN, GEHEIME_SETTINGS, VERDAECHTIG } = await import('./geheimnisse.js')
+const { ALLE_VERSCHLUESSELTEN, GEHEIME_SETTINGS, VERDAECHTIG, fehlendeGeheimnisse, OHNE_GEHEIMNIS } = await import('./geheimnisse.js')
 const { getConfigPath } = await import('./db-config.js')
 const express = (await import('express')).default
 const http = await import('node:http')
@@ -70,13 +70,29 @@ const LAUSCHER = `http://127.0.0.1:${lauscher.address().port}`
 
 console.log('\nA2-07: Geheimnis-Spalten in der Redaktionsliste\n')
 {
-    const spalten = Object.keys(await knex('settings').columnInfo())
-    const verdaechtig = spalten.filter((s) => VERDAECHTIG.test(s))
-    // Zähl-, Budget- und Schalterfelder sind keine Geheimnisse.
-    const KEIN_GEHEIMNIS = /TokenBudget|VideoTokens|MaxTokens|Tokens$/i
-    const fehlen = verdaechtig.filter((s) => !KEIN_GEHEIMNIS.test(s) && !GEHEIME_SETTINGS.includes(s))
+    // Scan über ALLE Tabellen (SEC-S3-003; vorher nur settings, Muster nur englisch).
+    const tabellen = (await knex.raw("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'knex_%'")).map((r) => r.name)
+    const spaltenJe = {}
+    for (const t of tabellen) spaltenJe[t] = Object.keys(await knex(t).columnInfo())
+    const fehlen = fehlendeGeheimnisse(spaltenJe)
     // Vor F2: aiKeyOpenrouter, aiKeyMoonshot, aiKeyZai, aiKeyMinimax, hypeKey*, hypeAlarm* fehlten.
-    check('jede Spalte mit Geheimnis-Namen steht in der Liste', fehlen.length === 0, fehlen.join(', '))
+    check('jede Spalte mit Geheimnis-Namen steht in der Liste (alle Tabellen)', fehlen.length === 0, fehlen.join(', '))
+    check('Ausnahmen gibt es wirklich (keine veralteten Einträge)',
+        [...OHNE_GEHEIMNIS.keys()].every((n) => { const [t, sp] = n.split('.'); return spaltenJe[t]?.includes(sp) }),
+        [...OHNE_GEHEIMNIS.keys()].filter((n) => { const [t, sp] = n.split('.'); return !spaltenJe[t]?.includes(sp) }).join(', '))
+    // Deutsch benannte Geheimnisse und andere Tabellen: vor SEC-S3-003 blieb der Test hier grün.
+    for (const n of ['totpGeheimnis', 'caSchluessel', 'serverSchluessel', 'pushGeheimnis', 'webauthnVerbraucht', 'credentialId']) {
+        check(`Muster erkennt ${n}`, VERDAECHTIG.test(n))
+    }
+    const kuenftig = fehlendeGeheimnisse({
+        ...spaltenJe,
+        settings: [...spaltenJe.settings, 'pushGeheimnis', 'xyzSchluessel', 'neuesApiToken'],
+        tls_zertifikat: [...spaltenJe.tls_zertifikat, 'neuerSchluessel'],
+        neue_tabelle: ['zugangGeheimnis', 'name'],
+    })
+    check('neue, nicht gelistete Geheimnis-Spalten fallen auf (auch ausserhalb von settings)',
+        ['settings.pushGeheimnis', 'settings.xyzSchluessel', 'settings.neuesApiToken', 'tls_zertifikat.neuerSchluessel', 'neue_tabelle.zugangGeheimnis']
+            .every((n) => kuenftig.includes(n)) && kuenftig.length === 5, kuenftig.join(', '))
     check('Redaktion = abgeleitete Liste', GEHEIME_SETTINGS.every((f) => SETTINGS_SENSITIVE_FIELDS.includes(f)))
 
     await knex('settings').where('id', 1).update({
@@ -107,6 +123,45 @@ console.log('\nA2-07: Geheimnis-Spalten in der Redaktionsliste\n')
     const expText = JSON.stringify(exp.json)
     check('Backup-Export enthält weder apis-Schlüssel noch Geheimtexte',
         !expText.includes('POLY-KLAR') && !expText.includes(roh.apis) && !/"key":"[0-9a-f]{32}:/.test(expText))
+}
+
+console.log('\nZweiter Faktor (30.10.2026): Redaktion, generische Routen, Backup-Export\n')
+{
+    await knex('settings').where('id', 1).update({
+        totpGeheimnis: encrypt('JBSWY3DPEHPK3PXP'), totpAn: 1, totpLetzterSchritt: 59999999,
+        webauthnVerbraucht: JSON.stringify([['einmal-id', Date.now() + 60000]]),
+    })
+    await knex('auth_schluessel').insert({ credentialId: 'EIGENER-SCHLUESSEL', publicKey: 'pQECAyYgASFYIA', signCount: 7, rpId: 'autarktrade.local', name: 'YubiKey', erstelltAm: Date.now() })
+    const g = await api('GET', '/api/db/settings')
+    const text = JSON.stringify(g.json)
+    check('GET /api/db/settings zeigt weder TOTP-Geheimnis noch Schritt noch Challenge-Merker',
+        !('totpGeheimnis' in g.json) && !('totpLetzterSchritt' in g.json) && !('webauthnVerbraucht' in g.json)
+        && !text.includes('59999999') && !text.includes('einmal-id'), text.slice(0, 200))
+    check('… nur, dass ein Geheimnis gesetzt ist', g.json.totpGeheimnisSet === true)
+    await api('PUT', '/api/db/settings', { totpAn: 0, totpGeheimnis: 'ANGREIFER', totpLetzterSchritt: 0, webauthnVerbraucht: '' })
+    const z = await knex('settings').where('id', 1).first()
+    check('PUT /api/db/settings schreibt keines der Felder', z.totpAn === 1 && decrypt(z.totpGeheimnis) === 'JBSWY3DPEHPK3PXP'
+        && Number(z.totpLetzterSchritt) === 59999999 && z.webauthnVerbraucht.includes('einmal-id'))
+    const tab = await api('GET', '/api/db/auth_schluessel')
+    check('auth_schluessel ist über /api/db/* nicht erreichbar', tab.status >= 400, String(tab.status))
+    const ein = await api('POST', '/api/db/auth_schluessel', { credentialId: 'FREMD', publicKey: 'x', rpId: 'autarktrade.local' })
+    check('… auch nicht schreibbar', ein.status >= 400 && Number((await knex('auth_schluessel').count({ n: '*' }).first()).n) === 1, String(ein.status))
+    const exp = await api('GET', '/api/db-export')
+    const expText = JSON.stringify(exp.json)
+    check('Backup-Export ohne auth_schluessel', exp.status === 200 && !('auth_schluessel' in (exp.json?.tables || {})) && !expText.includes('EIGENER-SCHLUESSEL'))
+    check('Backup-Export ohne TOTP-Geheimnis (auch kein Geheimtext)', !expText.includes(z.totpGeheimnis) && exp.json.tables.settings[0].totpGeheimnis === '[REDACTED]')
+    // Ein fremdes Backup mit eigenem Schlüssel und abgeschaltetem App-Code darf nichts davon setzen.
+    const fremd = JSON.parse(JSON.stringify(exp.json))
+    fremd.tables.settings[0] = { ...fremd.tables.settings[0], totpAn: 0, totpGeheimnis: 'FREMDGEHEIMNIS', totpLetzterSchritt: 0 }
+    fremd.tables.auth_schluessel = [{ id: 9, credentialId: 'ANGREIFER', publicKey: 'x', signCount: 0, rpId: 'autarktrade.local' }]
+    const imp = await api('POST', '/api/db-import', fremd)
+    const nach = await knex('settings').where('id', 1).first()
+    const zeilen = await knex('auth_schluessel').select('credentialId')
+    check('Backup-Import lässt App-Code und Schlüssel unberührt', imp.status === 200 && nach.totpAn === 1
+        && decrypt(nach.totpGeheimnis) === 'JBSWY3DPEHPK3PXP' && zeilen.map((x) => x.credentialId).join() === 'EIGENER-SCHLUESSEL',
+    `${imp.status} ${nach.totpAn} ${zeilen.map((x) => x.credentialId).join()}`)
+    await knex('auth_schluessel').del()
+    await knex('settings').where('id', 1).update({ totpGeheimnis: '', totpAn: 0, totpLetzterSchritt: 0, webauthnVerbraucht: '' })
 }
 
 console.log('\nA2-24/A2-05c: KI-Adressen und -Schlüssel über die generische Route\n')

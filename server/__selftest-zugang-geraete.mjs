@@ -31,7 +31,7 @@ const { encrypt, decrypt, secretZuKurz, warneSchwachesSecret, SECRET_MIN, migrie
 const { herkunftMiddleware, cookieAutomatischErlaubt, setzeBindungsModus, _authFuerTest } = await import('./auth.js')
 const { setupEsp32Routes, setupEsp32AdminRoutes, waehleFilter, erstelleBremse, _esp32BremseLeeren, ESP32_FEHLER_MAX } = await import('./esp32-api.js')
 const { pruefeGeraet, mitGeraet, geraeteUebersicht, istGesperrtesPushZiel, MAX_GERAETE } = await import('./esp32-push.js')
-const { ALLE_VERSCHLUESSELTEN, JSON_GEHEIMNISSE, VERDAECHTIG } = await import('./geheimnisse.js')
+const { ALLE_VERSCHLUESSELTEN, JSON_GEHEIMNISSE, VERDAECHTIG, OHNE_GEHEIMNIS } = await import('./geheimnisse.js')
 const { updateCheckBeimStart } = await import('./update-api.js')
 const { gespeicherterApiSchluessel, pruefeDatabentoRumpf } = await import('./databento-api.js')
 const { apisOhneSchluessel, apisZusammenfuehren } = await import('./api-routes.js')
@@ -288,8 +288,9 @@ console.log('\nSEC-SRV-014: Cookie im Entwicklungs-Proxy\n')
 
 // ── SEC-SRV-015 ───────────────────────────────────────────────────────────
 console.log('\nSEC-SRV-015: Portfolio-Geheimnisse\n')
-/** Portfolio-Spalten, deren Name verdächtig klingt, die aber kein Geheimnis tragen. */
-const OHNE_GEHEIMNIS = new Set(['portfolio_bewegungen.txHash'])   // öffentliche Transaktionskennung
+// Portfolio-Spalten, deren Name verdächtig klingt, die aber kein Geheimnis tragen,
+// stehen mit Grund in OHNE_GEHEIMNIS (geheimnisse.js; der Scan über alle Tabellen
+// läuft in __selftest-f2-sicherheit.mjs).
 {
     const tabellen = ALLE_VERSCHLUESSELTEN.map(([t]) => t)
     check('portfolio_schluessel.wert mit Schlüsselspalte name', ALLE_VERSCHLUESSELTEN.some(([t, sp, id]) => t === 'portfolio_schluessel' && sp.includes('wert') && id === 'name'))

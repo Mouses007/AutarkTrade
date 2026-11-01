@@ -9,6 +9,12 @@
  *   groesse  Positionsgrösse (Nominal) in USDT
  *   marge    eingesetzte Marge in USDT → Nominal = Marge × Hebel
  *
+ * Den Betrag gibt es in USDT oder (`einheit: 'prozent'`) in % vom Kontostand:
+ * „Max. Verlust 2 %" ist die übliche Risikoregel — die Grösse folgt aus dem
+ * Stop-Abstand, der Hebel ändert nur Marge und Liq. „Marge 2 %" dagegen setzt
+ * 2 % als Pfand ein, die Grösse wächst mit dem Hebel. Ohne Kontostand ist ein
+ * Prozentbetrag 0 (`kontoFehlt`), nicht geraten.
+ *
  * Liquidation über `liquidation.js` (Börsenformel, isoliert, Stufe 1) mit der
  * Wartungsmarge des Symbols. Ein Liq-Preis, der VOR dem Stop liegt, heisst:
  * die Börse schliesst die Position, bevor der Stop greift — der Verlust ist
@@ -20,7 +26,8 @@
 import { liqPreis, hebelHaltbar } from './liquidation.js'
 
 export const MODI = ['risiko', 'groesse', 'marge']
-export const RECHNER_VORGABE = { modus: 'risiko', betrag: 50, hebel: 10, konto: 0, gebuehrPct: 0.06 }
+export const EINHEITEN = ['usdt', 'prozent']
+export const RECHNER_VORGABE = { modus: 'risiko', betrag: 50, einheit: 'usdt', hebel: 10, konto: 0, gebuehrPct: 0.06 }
 export const MAX_HEBEL = 200
 
 /** Eingaben säubern: bekannte Felder in ihren Grenzen, Unsinn → Vorgabe. */
@@ -32,6 +39,7 @@ export function rechnerEingabe(roh = {}) {
     return {
         modus: MODI.includes(roh.modus) ? roh.modus : RECHNER_VORGABE.modus,
         betrag: zahl(roh.betrag, 0, 1e12, RECHNER_VORGABE.betrag),
+        einheit: EINHEITEN.includes(roh.einheit) ? roh.einheit : RECHNER_VORGABE.einheit,
         hebel: zahl(roh.hebel, 1, MAX_HEBEL, RECHNER_VORGABE.hebel),
         konto: zahl(roh.konto, 0, 1e12, 0),
         gebuehrPct: zahl(roh.gebuehrPct, 0, 1, RECHNER_VORGABE.gebuehrPct),
@@ -39,11 +47,23 @@ export function rechnerEingabe(roh = {}) {
 }
 
 /**
+ * Betrag beim Umschalten USDT ↔ % vom Konto umrechnen, so dass die Position
+ * gleich gross bleibt. Sechs gültige Stellen statt zwei Nachkommastellen:
+ * 15 USDT bei 200 000 Konto wurden 0,01 % (= 20 USDT, +33 %), 9 USDT gar 0 %
+ * und damit Menge 0 (Audit FUN-F2B-004). Ohne Kontostand bleibt die Zahl.
+ */
+export function betragUmrechnen(betrag, konto, nachProzent) {
+    if (!(konto > 0) || !(betrag > 0)) return betrag
+    const roh = nachProzent ? (betrag / konto) * 100 : (betrag / 100) * konto
+    return Number(roh.toPrecision(6))
+}
+
+/**
  * @param {object} o
  * @param {number} o.einstieg
  * @param {number} o.stop
  * @param {number} o.ziel
- * @param {object} o.eingabe   { modus, betrag, hebel, konto, gebuehrPct }
+ * @param {object} o.eingabe   { modus, betrag, einheit, hebel, konto, gebuehrPct }
  * @param {number} [o.mmr]     Wartungsmarge als BRUCH (0.004 = 0,4 %)
  * @returns {object|null}  null, wenn Einstieg oder Stop fehlen
  */
@@ -57,15 +77,18 @@ export function rechnePosition({ einstieg, stop, ziel, eingabe, mmr = 0.004 }) {
     const stimmig = long ? s < e : s > e
     const g = ein.gebuehrPct / 100
     const stopAbstand = Math.abs(e - s)
+    const inProzent = ein.einheit === 'prozent'
+    const kontoFehlt = inProzent && !(ein.konto > 0)
+    const betrag = inProzent ? (kontoFehlt ? 0 : (ein.betrag / 100) * ein.konto) : ein.betrag
 
     let menge = 0
     if (ein.modus === 'risiko') {
         const jeEinheit = stopAbstand + g * (e + s)
-        menge = jeEinheit > 0 ? ein.betrag / jeEinheit : 0
+        menge = jeEinheit > 0 ? betrag / jeEinheit : 0
     } else if (ein.modus === 'groesse') {
-        menge = ein.betrag / e
+        menge = betrag / e
     } else {
-        menge = (ein.betrag * ein.hebel) / e
+        menge = (betrag * ein.hebel) / e
     }
     if (!Number.isFinite(menge) || menge < 0) menge = 0
 
@@ -84,6 +107,8 @@ export function rechnePosition({ einstieg, stop, ziel, eingabe, mmr = 0.004 }) {
 
     return {
         richtung, stimmig, menge, nominal, marge, hebel: ein.hebel, haltbar,
+        // der Betrag in USDT, auch wenn er in % eingegeben wurde
+        betragUsdt: betrag, kontoFehlt,
         liq, liqPct: pct(liq), liqVorStop,
         stopPct: pct(s), zielPct: z > 0 ? pct(z) : null,
         verlustStop, gewinnZiel,

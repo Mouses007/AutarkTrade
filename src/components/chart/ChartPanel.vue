@@ -11,7 +11,7 @@
  *
  * Das Panel holt seine Kerzen selbst (Symbol, Markt, Zeiteinheit kommen als
  * Prop). Was darüber liegt — Indikatoren, Zeichnungen, Journal- und
- * Strategie-Overlays — hängt sich über `defineExpose` an.
+ * Markt-Overlays — hängt sich über `defineExpose` an.
  */
 import { ref, shallowRef, watch, onMounted, onBeforeUnmount, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -20,12 +20,15 @@ import { tradeZeitzone } from '../../stores/ui.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { kerzenFarben as kerzenFarbenAus, kerzenOptionen, volumenFarbe, trifftKerze } from '../../utils/chart/kerzenFarben.js'
 import KerzenFarbFelder from './KerzenFarbFelder.vue'
+import { VolumenKerzenZeichnung } from '../../utils/chart/volumenKerzen.js'
 import {
     createChart, CandlestickSeries, HistogramSeries, CrosshairMode, PriceScaleMode, LineStyle, ColorType,
     createTextWatermark,
 } from 'lightweight-charts'
 import { ladeKerzen, LiveKerze, RestKerze, fuegeZusammen, INTERVALL_MS, istRestQuelle, QUELLEN_MAX, boerseFuer } from '../../utils/chart/kerzenQuelle.js'
-import { loadSymbolMeta } from '../../utils/liveSymbols.js'
+import { autoStufe } from '../../../shared/footprint.js'
+import { hatKaufvolumen, quelleJeKerze } from '../../utils/chart/orderflow.js'
+import { loadSymbolMeta, tickSizeFor } from '../../utils/liveSymbols.js'
 import { IndikatorZeichner } from '../../utils/chart/indikatorZeichner.js'
 import { kurzname } from '../../utils/chart/indikatorRegister.js'
 import { ZeichenEbene } from '../../utils/chart/zeichnungen/ZeichenEbene.js'
@@ -43,11 +46,12 @@ import { Symbol, Kreisel, Knopf } from '../basis'
 import InfoTipp from '../InfoTipp.vue'
 import axios from 'axios'
 import { JournalEbene } from '../../utils/chart/overlays/JournalEbene.js'
-import { StrategieEbene } from '../../utils/chart/overlays/StrategieEbene.js'
+import { InstanzEbene } from '../../utils/chart/overlays/InstanzEbene.js'
 import { MarktEbene, waendeAusBuch } from '../../utils/chart/overlays/MarktEbene.js'
 import { KerzenUhr } from '../../utils/chart/overlays/KerzenUhr.js'
-import { benoetigteQuellen, vwapVectorQuellen, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams } from '../../utils/chart/indikatorRegister.js'
+import { benoetigteQuellen, vwapVectorQuellen, emaMtfQuellen, INTRA_BUDGET, saubereParams, INDIKATOREN, strategieParams, intrabarTf } from '../../utils/chart/indikatorRegister.js'
 import { ladeOffenePositionen } from '../../utils/chart/overlays/positionen.js'
+import { positionsTitel as positionsTitelFuer } from '../../utils/chart/overlays/positionsTitel.js'
 import { positionenAus } from '../../stores/chartPositionen.js'
 import { letzterStil, merkeStil } from '../../stores/zeichenStil.js'
 import { RECHNER_VORGABE } from '../../../shared/tradeRechner.js'
@@ -68,8 +72,15 @@ const props = defineProps({
     seiteScrollt: { type: Boolean, default: false },
     // Handy: „A" passt immer ein — Preis und Zeitachse (neueste Kerzen).
     zeitMitEinpassen: { type: Boolean, default: false },
+    // Strategien-Modus: derselbe Chart, aber nur zum Ansehen. Kein Zeichnen,
+    // keine Alarme, kein Rechtsklick-Anlegen, keine KI-Vorschau; eigene
+    // Zeichnungen sind sichtbar und gesperrt. Gezeichnet wird im Chart-Arbeitsplatz.
+    ansicht: { type: Boolean, default: false },
+    // Setups, Positionen und Trades einer Instanz oder eines Testlaufs
+    // (Form: shared/strategieChart.js) — gezeichnet von der InstanzEbene.
+    strategieDaten: { type: Object, default: null },
 })
-const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alarmVerschieben', 'alarmAendern', 'alarmBearbeiten', 'alleLoeschen', 'panel', 'vollbild'])
+const emit = defineEmits(['fokus', 'kreuz', 'bereich', 'kerzen', 'indikator', 'werkzeugFertig', 'alarmAufZeichnung', 'alarmBeiPreis', 'alarmMomentum', 'alarmLsob', 'alarmVerschieben', 'alarmAendern', 'alarmBearbeiten', 'alleLoeschen', 'panel', 'vollbild', 'strategieKlick'])
 const { t, te, locale } = useI18n()
 
 const huelle = ref(null)
@@ -95,9 +106,32 @@ let zeichner = null
 const fensterTitel = ref([])
 let titelUhr = null
 function titelAbgleich() {
+    skalaAbgleich()
     if (!zeichner) { fensterTitel.value = []; return }
-    const neu = zeichner.fensterTitel().filter((f) => te('chart.ind.' + f.typ + '.info'))
+    const neu = zeichner.fensterTitel().filter((f) => f.tabelle || te('chart.ind.' + f.typ + '.info'))
     if (JSON.stringify(neu) !== JSON.stringify(fensterTitel.value)) fensterTitel.value = neu
+    for (const f of neu) if (f.tabelle) zeichner.tabelleZeigen(f.id, tabelleOffen(f.id))
+}
+// Kennzahlen-Tabellen: in schmalen Panels (Handy) zu, sonst offen — ein Tipp auf den
+// Knopf neben dem Titel dreht das um. Gemerkt je Indikatortyp im Browser
+// (`chartTabellenZu`): eine Vorlage legt beim Wechsel neue Instanzen an, je Instanz
+// gemerkt sprang jede zugeklappte Tabelle wieder auf.
+const SCHMAL = 640
+const TABELLEN_SCHLUESSEL = 'chartTabellenZu'
+const tabellenWahl = ref((() => { try { return JSON.parse(localStorage.getItem(TABELLEN_SCHLUESSEL) || '{}') || {} } catch { return {} } })())
+const typVon = (id) => fensterTitel.value.find((f) => f.id === id)?.typ
+function tabelleOffen(id) {
+    const zu = tabellenWahl.value[typVon(id)]
+    return zu != null ? !zu : (huelle.value?.clientWidth || 999) >= SCHMAL
+}
+function tabelleUmschalten(id) {
+    const typ = typVon(id)
+    if (!typ) return
+    const offen = !tabelleOffen(id)
+    tabellenWahl.value = { ...tabellenWahl.value, [typ]: !offen }
+    try { localStorage.setItem(TABELLEN_SCHLUESSEL, JSON.stringify(tabellenWahl.value)) } catch { /* nur Komfort */ }
+    // gilt für alle Fenster dieses Typs im Panel
+    for (const f of fensterTitel.value) if (f.typ === typ && f.tabelle) zeichner?.tabelleZeigen(f.id, offen)
 }
 let wasserzeichen = null
 
@@ -114,6 +148,7 @@ function wasserzeichenOptionen(schrift) {
 let ebene = null
 const auswahlId = ref(null)
 let journalEbene = null
+let instanzEbene = null
 const gewaehlterTrade = ref(null)
 const journalInfo = ref(null)          // { anzahl, gekappt } für die Legende
 let journalUhr = null
@@ -121,16 +156,13 @@ let journalTakt = null
 let positionsTakt = null
 let positionsLinien = []               // [{ linie, art, pos }]
 let positionen = []
-let strategieEbene = null
-const strategieDaten = shallowRef(null)  // Antwort von /api/chart/strategie (für die Seitenleiste)
-const strategieVorschau = shallowRef(null)
-const strategieBacktest = shallowRef(null)
 let marktEbene = null
 let kerzenUhr = null
+let volumenKerzen = null
 let marktTakt = null
 let marktZaehler = 0
 const marktHinweise = ref({})          // liquidationen/hebelzonen/momentum → Text für die Legende
-const MOMENTUM_TF = ['5m', '15m', '1h', '4h']
+const MOMENTUM_TF = ['5m', '15m', '1h', '4h', '1d', '1w']
 let kreuzZeit = null                 // t (ms) unter dem Fadenkreuz; null = letzte Kerze
 let nachfuehrUhr = null
 
@@ -232,9 +264,15 @@ function baueChart() {
 
     const ks = c.addSeries(CandlestickSeries, {
         // Farben aus den Einstellungen (kerzenFarben.js): steigend hohl, fallend gefüllt
-        ...kerzenOptionen(kerzenStil.value),
+        ...kerzenSerienOptionen(),
         priceLineColor: blau, priceLineStyle: LineStyle.Dotted,
     })
+    // Volumen-Kerzen zuerst anhängen: sie ersetzen die Kerzen und liegen unter allen anderen Ebenen
+    volumenKerzen = new VolumenKerzenZeichnung({
+        chart: c, serie: ks, kerzen: () => kerzen.value, stil: () => kerzenStil.value,
+        farbeJe: (i) => kerzenFarben?.[i] || null,
+    })
+    volumenKerzen.setzeAn(volumenBreite.value)
     wasserzeichen = createTextWatermark(c.panes()[0], wasserzeichenOptionen(schrift))
     const vs = c.addSeries(HistogramSeries, {
         priceScaleId: 'vol',
@@ -249,6 +287,7 @@ function baueChart() {
         const bar = p?.time != null ? p.seriesData?.get(ks) : null
         legende.value = bar ? { ...bar, t: vonLwc(p.time) } : letzteLegende()
         kreuzZeit = p?.time != null ? vonLwc(p.time) : null
+        zeichner?.footprintZeiger(p?.point && (p.paneIndex ?? 0) === 0 ? p.point : null)
         if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
         if (extern) return
         if (p?.time == null || !p.point) { emit('kreuz', null); return }
@@ -258,13 +297,15 @@ function baueChart() {
         if (!bereich) return
         emit('bereich', bereich)
         if (bereich.from < 30) ladeAeltere()
+        planeFootprint(bereich)
     })
 
     chart.value = c
     kerzenSerie.value = ks
     volumenSerie.value = vs
     zeichner = new IndikatorZeichner(c, zuLwc, (ind) => kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.name')),
-        { kerzenSerie: ks, faerbeKerzen, tabellenText: (typ, kz) => tabellenZeilen(typ, kz, t) })
+        { kerzenSerie: ks, faerbeKerzen, tabellenText: (typ, kz) => tabellenZeilen(typ, kz, t),
+            kerzenStil: () => kerzenStil.value, footprintZellen: (an) => { footprintZellen.value = an } })
     ebene = new ZeichenEbene({
         huelle: huelle.value,
         chart: c,
@@ -273,7 +314,7 @@ function baueChart() {
         rueckruf: {
             neu: zeichnungNeu,
             aendern: (id, patch) => aendere(props.panel.symbol, id, patch),
-            auswahl: (id) => { auswahlId.value = id },
+            auswahl: (id) => { if (!props.ansicht) auswahlId.value = id },
             werkzeugFertig: () => emit('werkzeugFertig'),
             textBearbeiten: textBearbeiten,
             ziehen: (id, punkte) => { ziehPunkte.value = punkte ? { id, punkte } : null },
@@ -296,10 +337,24 @@ function baueChart() {
     })
     // Restzeit der laufenden Kerze unter der Kursmarke
     kerzenUhr = new KerzenUhr(ks, { farbe: blau, textFarbe: farbe('--on-accent', '#02201d') })
-    strategieEbene = new StrategieEbene({ chart: c, serie: ks, formatPreis: (p) => ks.priceFormatter().format(p) })
     journalEbene = new JournalEbene({ chart: c, serie: ks, formatPreis: (p) => ks.priceFormatter().format(p) })
+    instanzEbene = new InstanzEbene({ chart: c, serie: ks, formatPreis: (p) => ks.priceFormatter().format(p) })
+    instanzEbene.setzeDaten(props.strategieDaten)
     c.subscribeClick((p) => {
         if (!p?.point || props.werkzeug) return
+        const pane = p.paneIndex ?? 0
+        // Klick auf ein Indikator-Schild (z. B. „EMA 21", „POC 1D", „LSOB ▲", „Div ▼"): dessen Einstellungen öffnen —
+        // ausser es liegt eine eigene Zeichnung darunter, die geht vor
+        const zeichnungDa = pane === 0 && ebene?.trefferTest(p.point.x, p.point.y)?.z
+        const ind = !zeichnungDa && zeichner?.instanzBeiSchild(pane, p.point.x, p.point.y)
+        if (ind) { emit('indikator', { aktion: 'bearbeiten', id: ind }); return }
+        // Ein Setup oder Trade der Strategie: die Seite zeigt ihn in ihrer Liste.
+        const st = instanzEbene?.trefferTest(p.point.x, p.point.y) || null
+        if (st) {
+            instanzEbene.hebeHervor(st.art + ':' + st.id)
+            emit('strategieKlick', st)
+            return
+        }
         const tr = journalEbene?.trefferTest(p.point.x, p.point.y) || null
         gewaehlterTrade.value = tr
         journalEbene?.hebeHervor(tr?.id ?? null)
@@ -322,14 +377,35 @@ function volumenBalken(k) {
 
 /** Kerzenfarben aus den Einstellungen — eine Änderung dort färbt offene Charts sofort um. */
 const kerzenStil = computed(() => kerzenFarbenAus(appEinstellungen.value))
-watch(kerzenStil, (f) => {
-    kerzenSerie.value?.applyOptions(kerzenOptionen(f))
+watch(kerzenStil, () => {
+    kerzenSerie.value?.applyOptions(kerzenSerienOptionen())
     volumenSerie.value?.setData(kerzen.value.map(volumenBalken))
 })
 
 /** Volumenbalken unter den Kerzen — je Panel im Layout, fehlt der Eintrag: an. */
 const volumenAn = computed(() => props.panel.volumen !== false)
 watch(volumenAn, (an) => volumenSerie.value?.applyOptions({ visible: an }))
+
+/*
+ * Breite nach Volumen — je Panel im Layout (`panel.volumenBreite`). Dann zeichnet
+ * VolumenKerzenZeichnung die Kerzen, und die Serie wird durchsichtig (sie bleibt
+ * für Preisachse, Fadenkreuz und Legende).
+ */
+const volumenBreite = computed(() => props.panel.volumenBreite === true)
+// Footprint mit Zellen zeichnet die Kerzen selbst (schmaler Balken neben den Zellen)
+const footprintZellen = ref(false)
+const kerzenSelbst = computed(() => volumenBreite.value || footprintZellen.value)
+const DURCHSICHTIG = 'rgba(0,0,0,0)'
+function kerzenSerienOptionen() {
+    return kerzenSelbst.value
+        ? { upColor: DURCHSICHTIG, downColor: DURCHSICHTIG, borderUpColor: DURCHSICHTIG, borderDownColor: DURCHSICHTIG, wickUpColor: DURCHSICHTIG, wickDownColor: DURCHSICHTIG }
+        : kerzenOptionen(kerzenStil.value)
+}
+watch(kerzenSelbst, () => {
+    kerzenSerie.value?.applyOptions(kerzenSerienOptionen())
+    if (kerzenSerie.value && kerzen.value.length) kerzenSerie.value.setData(kerzen.value.map(kerzenPunkt))
+})
+watch(volumenBreite, (an) => volumenKerzen?.setzeAn(an))
 
 /*
  * Vektorkerzen (VWAP Vector): Farbe je Kerze für Körper, Rand und Docht —
@@ -339,7 +415,7 @@ let kerzenFarben = null
 function kerzenPunkt(k, i) {
     const f = kerzenFarben?.[i]
     const p = { time: zuLwc(k.t), open: k.o, high: k.h, low: k.l, close: k.c }
-    return f ? { ...p, color: f, borderColor: f, wickColor: f } : p
+    return f && !kerzenSelbst.value ? { ...p, color: f, borderColor: f, wickColor: f } : p
 }
 function faerbeKerzen(farben, nurLetzte) {
     kerzenFarben = farben
@@ -358,7 +434,7 @@ function setzeDaten(liste) {
     if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
     ebene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
-    strategieEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
+    instanzEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     marktEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     kerzenUhr?.setze(liste[liste.length - 1], INTERVALL_MS[props.panel.interval], props.panel.interval)
     planeJournal()
@@ -402,6 +478,16 @@ async function ladeLiquidationen() {
     } catch { hinweis('liquidationen', t('chart.markt.liqKeine')) }
 }
 
+/*
+ * Abgeholte Hebelzonen (Soll/Ist mit ✓/○) ein- oder ausblenden; aus = nur die
+ * noch offene, erwartete Masse (Wunsch 31.10.2026: das Abgeholte irritierte,
+ * weil sich in derselben Zone neue Masse aufbaut). Im Layout je Panel.
+ */
+const abgeholtAn = computed(() => props.panel.overlays?.hebelAbgeholt === true)
+function abgeholtUmschalten() {
+    emit('panel', { overlays: { ...(props.panel.overlays || {}), hebelAbgeholt: !abgeholtAn.value } })
+}
+
 async function ladeHebelzonen() {
     if (!marktEbene) return
     if (!overlayAn('hebelzonen') || props.panel.markt === 'spot') { marktEbene.setzeZonen(null); hinweis('hebelzonen', null); return }
@@ -412,8 +498,10 @@ async function ladeHebelzonen() {
         // OI-Historie nur mit Marktdatenquelle Binance (S12)
         if (data?.aus) { marktEbene.setzeZonen(null); hinweis('hebelzonen', t('chart.markt.quelleAus', { was: t('chart.markt.hebelName') })); return }
         marktEbene.setzeZonen(data.zonen)
+        marktEbene.setzeAbgeholt(abgeholtAn.value)
         const si = data.zonen?.sollIst
         hinweis('hebelzonen', !data.zonen ? t('chart.markt.hebelKeine')
+            : si && !abgeholtAn.value ? t('chart.markt.hebelOffen', { h: si.stunden ?? 42 })
             : si?.treffer ? t('chart.markt.sollIstTreffer', { b: si.treffer.bestaetigt, n: si.treffer.durchlaufen, h: si.stunden })
                 : si && !si.erfasst ? t('chart.markt.sollIstOhne')
                     : t(data.zonen.duenn ? 'chart.markt.hebelDuenn' : 'chart.markt.hebelModell'))
@@ -481,6 +569,8 @@ function externGeladen(quelle) {
 async function ladeExtern(nurWelche = null) {
     if (!zeichner) return
     const { symbol, interval } = props.panel
+    // Footprint ausgeblendet oder entfernt: sein Hinweis („nur 1m bis 4h" …) geht mit
+    if (!benoetigteQuellen(props.panel.indikatoren).includes('footprint') && marktHinweise.value.footprint) hinweis('footprint', null)
     for (const quelle of benoetigteQuellen(props.panel.indikatoren)) {
         if (nurWelche && !nurWelche.includes(quelle)) continue
         try {
@@ -498,12 +588,22 @@ async function ladeExtern(nurWelche = null) {
                 const sp = inst ? strategieParams(inst.typ, inst.params) : {}
                 try {
                     const { data } = await axios.get('/api/chart/signale', { params: { strategie, symbol, interval, markt: props.panel.markt, params: JSON.stringify(sp) } })
-                    if (symbol === props.panel.symbol && interval === props.panel.interval) { zeichner.setzeExtern(quelle, data); hinweis(quelle, null) }
+                    if (symbol === props.panel.symbol && interval === props.panel.interval) {
+                        // Marktdatenquelle hat die Kerzen nicht (S12): `{aus: true}` — sagen, statt still keine Setups zu zeigen
+                        if (data?.aus) {
+                            zeichner.setzeExtern(quelle, null)
+                            hinweis(quelle, t('chart.markt.quelleAus', { was: inst ? t('chart.ind.' + inst.typ + '.kurz') : strategie }))
+                        } else { zeichner.setzeExtern(quelle, data); hinweis(quelle, null) }
+                    }
                 } catch (e) {
                     if (e.response?.status !== 400) throw e
                     zeichner.setzeExtern(quelle, null)
                     hinweis(quelle, e.response.data?.error || null)
                 }
+            } else if (quelle === 'footprint') {
+                await ladeFootprint()
+            } else if (quelle === 'cvd') {
+                await ladeCvd()
             } else if (quelle === 'vwapVector') {
                 await ladeVwapVector()
             } else if (quelle === 'emaMtf') {
@@ -525,6 +625,136 @@ async function ladeExtern(nurWelche = null) {
         } catch { externSpaeter(quelle) }
     }
     if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
+}
+
+/*
+ * Footprint aus der eigenen aggTrade-Aufzeichnung (`/api/chart/footprint`):
+ * vom linken Rand des sichtbaren Bereichs (etwas davor) bis jetzt, höchstens
+ * 48 h. Die Preisstufe rechnet der Browser (`autoStufe` oder Ticks × Tick),
+ * damit Zeilen und Kerzen zusammenpassen. Nur Binance (aufgezeichnet wird von
+ * dort), nur 1m–4h; sonst ein Hinweis statt einer Schätzung.
+ *
+ * Den Tick holt der Footprint selbst aus den Symbol-Daten: die Preisskala
+ * trägt ihn erst, wenn `wendePreisformatAn()` fertig ist — der erste Abruf
+ * nach dem Laden lief vorher mit dem Tick des alten Symbols bzw. 0.01. Jeder
+ * Abruf hat eine Nummer; eine ältere Antwort, die später ankommt, zählt nicht.
+ */
+const FOOTPRINT_TF = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h']
+let footprintVon = Infinity
+let footprintNummer = 0
+async function ladeFootprint() {
+    const nr = ++footprintNummer
+    const inst = (props.panel.indikatoren || []).find((i) => i.sichtbar !== false && i.typ === 'footprint')
+    if (!inst || !zeichner || !kerzen.value.length) return
+    const { symbol, interval, markt } = props.panel
+    const meins = () => nr === footprintNummer && symbol === props.panel.symbol && interval === props.panel.interval
+    // Kann er nicht, steht der Grund IM Chart (FootprintZeichnung) — in der eingeklappten
+    // Legende allein sah ihn niemand (01.11.2026: Bitunix-Chart, „Footprint" gewählt, leer).
+    const aus = (text) => { zeichner.setzeExtern('footprint', text ? { kerzen: [], hinweis: text } : null); hinweis('footprint', text) }
+    if (!FOOTPRINT_TF.includes(interval)) return aus(t('chart.footprint.tf'))
+    // Aufgezeichnet werden Binance-Trades; auf einem Bitunix-/Bitget-Chart zeigt er diese
+    // (wie der CVD) — die Preise liegen dort meist nur wenige Ticks auseinander.
+    const fremd = boerseVon() !== 'binance'
+    const p = saubereParams('footprint', inst.params)
+    const tick = Number(await tickSizeFor(symbol, markt === 'spot' ? 'spot' : 'futures')) || 0
+    if (!meins() || !zeichner) return
+    const stufe = p.stufeArt === 'ticks' && tick > 0 ? p.ticks * tick : autoStufe(kerzen.value, { tick })
+    if (!(stufe > 0)) return aus(null)
+    const jetzt = Date.now()
+    const sb = sichtbarerZeitraum()
+    const von = Math.max((sb?.von ?? jetzt) - 10 * INTERVALL_MS[interval], jetzt - 48 * 3_600_000)
+    const { data } = await axios.get('/api/chart/footprint', { params: { symbol, markt, interval, stufe, von, bis: jetzt } })
+    if (!meins() || !zeichner) return
+    footprintVon = von
+    if (!data.aufgezeichnet) return aus(t('chart.footprint.keineAufzeichnung', { symbol }))
+    if (data.zuFein) return aus(t('chart.footprint.zuFein'))
+    zeichner.setzeExtern('footprint', data)
+    const erste = data.kerzen[0]?.t
+    const ab = erste && sb && erste > sb.von + INTERVALL_MS[interval]
+        ? t('chart.footprint.ab', { zeit: new Date(erste).toLocaleString(undefined, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })
+        : null
+    hinweis('footprint', [fremd ? t('chart.footprint.ausBinance') : null, ab].filter(Boolean).join(' · ') || null)
+}
+// Nach links gescrollt, vor den geladenen Footprint (innerhalb der 48 h): nachladen, entprellt
+let footprintUhr = null
+function planeFootprint(bereich) {
+    if (!(props.panel.indikatoren || []).some((i) => i.sichtbar !== false && i.typ === 'footprint')) return
+    const k = kerzen.value[Math.max(0, Math.floor(bereich.from))]
+    if (!k || k.t >= footprintVon || k.t < Date.now() - 48 * 3_600_000) return
+    clearTimeout(footprintUhr)
+    footprintUhr = setTimeout(() => ladeExtern(['footprint']), 600)
+}
+
+/*
+ * CVD: das Kaufvolumen kommt aus den Kerzen. Zeigt der Chart Bitunix oder
+ * Bitget (ohne Kaufvolumen) und ist „CVD immer von Binance" an, holt das Panel
+ * dieselben Kerzen von Binance — nur für den CVD, wie der VWAP Vector seine
+ * höheren Zeiteinheiten. Für die Dochte der CVD-Kerzen kommen Intrabar-Kerzen
+ * (1m …) dazu, höchstens INTRA_BUDGET, nur so weit zurück wie der Chart.
+ * Auf 3d holt es Binance-1d statt -3d: die 3d-Kerzen von Binance beginnen an
+ * anderen Tagen als die von Bitunix/Bitget, keine Startzeit traf, und der CVD
+ * blieb ohne Grund leer. Die Tage werden je Chart-Kerze summiert; passt
+ * trotzdem keine Zeit, steht ein Hinweis da.
+ */
+const cvdCache = { schluessel: '', kerzen: null, intra: [] }
+async function ladeCvd() {
+    const inst = (props.panel.indikatoren || []).find((i) => i.sichtbar !== false && i.typ === 'cvd')
+    if (!inst || !zeichner || !kerzen.value.length) return
+    const p = saubereParams('cvd', inst.params)
+    const { symbol, interval, markt } = props.panel
+    const ivMs = INTERVALL_MS[interval]
+    const fremd = boerseVon() !== 'binance' && p.binance
+    const quelleTf = interval === '3d' ? '1d' : interval
+    const intraTf = p.modus !== 'kerzen' || p.intra === 'aus' ? null
+        : p.intra === 'auto' ? intrabarTf('auto', ivMs, INTERVALL_MS, kerzen.value.length)
+            : INTERVALL_MS[p.intra] < ivMs ? p.intra : null
+    const schluessel = `${symbol}|${markt}|${interval}|${fremd}|${intraTf}`
+    if (cvdCache.schluessel !== schluessel) Object.assign(cvdCache, { schluessel, kerzen: null, intra: [] })
+    const meins = () => cvdCache.schluessel === schluessel && symbol === props.panel.symbol && interval === props.panel.interval
+    const m = markt === 'spot' ? 'spot' : 'futures'
+    const lade = (o) => ladeKerzen({ symbol, markt: m, boerse: 'binance', ...o })
+    try {
+        if (fremd) {
+            const neu = cvdCache.kerzen ? await lade({ interval: quelleTf, limit: 5 }) : await lade({ interval: quelleTf, limit: 1000 })
+            if (meins()) cvdCache.kerzen = cvdCache.kerzen ? fuegeZusammen(cvdCache.kerzen, neu) : neu
+        }
+        if (intraTf) {
+            if (!cvdCache.intra.length) {
+                let liste = await lade({ interval: intraTf, limit: 1500 })
+                const ab = kerzen.value[0]?.t ?? 0
+                for (let n = 1; n * 1500 < INTRA_BUDGET && liste.length && liste[0].t > ab; n++) {
+                    const alt = await lade({ interval: intraTf, limit: 1500, endTime: liste[0].t - 1 })
+                    if (!alt.length) break
+                    liste = fuegeZusammen(alt, liste)
+                }
+                if (meins()) cvdCache.intra = liste
+            } else {
+                const neu = await lade({ interval: intraTf, limit: 200 })
+                if (meins()) cvdCache.intra = fuegeZusammen(cvdCache.intra, neu)
+            }
+        }
+        if (!meins()) return
+        const quelleMs = INTERVALL_MS[quelleTf]
+        const keinTreffer = fremd && cvdCache.kerzen?.length && !quelleJeKerze(kerzen.value, cvdCache.kerzen, { quelleMs, ivMs, interval }).some(Boolean)
+        hinweis('cvd', keinTreffer ? t('chart.cvd.zeitenPassenNicht') : null)
+    } catch (e) {
+        if (!meins()) return
+        // Binance nicht als Marktdatenquelle gewählt (S12) oder Symbol dort unbekannt
+        hinweis('cvd', fremd ? t('chart.cvd.binanceFehlt') : null)
+    }
+    zeichner.setzeExtern('cvd', { kerzen: fremd ? cvdCache.kerzen : null, quelleMs: INTERVALL_MS[quelleTf], intra: intraTf ? cvdCache.intra : null, ivMs, interval })
+    pruefeOrderflow()
+}
+
+/*
+ * CVD und Delta-Volumen brauchen das Kaufvolumen der Kerzen — das liefert nur
+ * Binance. Ohne steht ein Hinweis, statt eines leeren Fensters ohne Grund
+ * (der CVD mit „immer von Binance" holt es sich selbst, siehe ladeCvd).
+ */
+function pruefeOrderflow() {
+    const cvdFremd = (i) => i.typ === 'cvd' && saubereParams('cvd', i.params).binance && cvdCache.kerzen?.length
+    const braucht = (props.panel.indikatoren || []).some((i) => i.sichtbar !== false && (i.typ === 'cvd' || i.typ === 'deltaVol') && !cvdFremd(i))
+    hinweis('orderflow', braucht && kerzen.value.length && !hatKaufvolumen(kerzen.value) ? t('chart.orderflow.ohneKaufvolumen') : null)
 }
 
 /*
@@ -618,6 +848,7 @@ function marktTick() {
     const n = marktZaehler++
     ladeWaende()
     if (n % 3 === 0) ladeLiquidationen()
+    if (n % 2 === 0) ladeExtern(['footprint', 'cvd'])
     if (n % 6 === 0) ladeExtern(['momentum', 'vwapVector', 'emaMtf', 'signale_lsob', 'signale_ema_touch'])
     if (n % 12 === 0) ladeHebelzonen()
     if (n % 30 === 0) ladeExtern(['oi'])
@@ -636,53 +867,12 @@ function marktNeu() {
 // ── Journal und offene Positionen ────────────────────────────────────────
 const overlayAn = (name) => overlayAnFuer(props.panel, name)
 
-/** Journal und Strategie für den geladenen Zeitraum holen — entprellt, weil Nachladen und Live-Neuaufbau kurz hintereinander kommen. */
+/** Journal für den geladenen Zeitraum holen — entprellt, weil Nachladen und Live-Neuaufbau kurz hintereinander kommen.
+ *  Die Strategie-Schicht ist seit 31.10.2026 aus dem Chart (sie gehört auf die Strategien-Seite). */
 function planeJournal() {
     clearTimeout(journalUhr)
-    journalUhr = setTimeout(() => { ladeJournal(); ladeStrategie() }, 300)
+    journalUhr = setTimeout(() => { ladeJournal() }, 300)
 }
-
-// ── Strategie-Schicht ────────────────────────────────────────────────────
-function strategieGefiltert() {
-    const d = strategieDaten.value
-    if (!d) return { setups: [], positionen: [], trades: [] }
-    const f = props.panel.strategieFilter || {}
-    const verborgen = new Set(f.verborgen || [])
-    const passt = (x) => !verborgen.has(x.instanceId) && (f.alleZeiteinheiten || !x.timeframe || x.timeframe === props.panel.interval)
-    return { setups: d.setups.filter(passt), positionen: d.positionen.filter(passt), trades: d.trades.filter(passt) }
-}
-
-function zeigeStrategie() {
-    if (!strategieEbene) return
-    const namen = new Map((strategieDaten.value?.instanzen || []).map((i) => [i.id, i.strategieName]))
-    strategieEbene.setzeDaten(overlayAn('strategie') ? strategieGefiltert() : null, namen)
-}
-
-async function ladeStrategie() {
-    if (!strategieEbene || !kerzen.value.length) return
-    if (!overlayAn('strategie')) { strategieDaten.value = null; zeigeStrategie(); return }
-    const nr = ladeNummer
-    try {
-        const { data } = await axios.get('/api/chart/strategie', {
-            params: { symbol: props.panel.symbol, von: kerzen.value[0].t, bis: Date.now() + (INTERVALL_MS[props.panel.interval] || 0) },
-        })
-        if (nr !== ladeNummer) return
-        strategieDaten.value = data
-        zeigeStrategie()
-    } catch { /* Beiwerk */ }
-}
-
-function setzeStrategieVorschau(v) {
-    strategieVorschau.value = v
-    strategieEbene?.setzeVorschau(v)
-}
-
-function setzeBacktest(b) {
-    strategieBacktest.value = b
-    strategieEbene?.setzeBacktest(b)
-}
-
-watch(() => props.panel.strategieFilter, zeigeStrategie, { deep: true })
 
 // ── Alarme ───────────────────────────────────────────────────────────────
 let alarmPreisLinien = []
@@ -743,6 +933,7 @@ function fuerAlarm(z) {
 }
 
 function rechtsklick(e) {
+    if (props.ansicht) return
     const r = huelle.value.getBoundingClientRect()
     const y = e.clientY - r.top
     const hoehe = chart.value?.panes()[0]?.getHeight() ?? r.height
@@ -760,7 +951,7 @@ function rechtsklick(e) {
     // Am rechten oder unteren Rand nach innen klappen — das Panel schneidet
     // über seinen Rand hinausragende Teile ab.
     const x = Math.min(e.clientX - r.left, r.width - 190)
-    const yMenue = Math.min(y, r.height - 160)
+    const yMenue = Math.min(y, r.height - 330)
     // Liegt eine Zeichnung unter dem Zeiger? Dann kann man sie hier sperren/entsperren
     // und — für Linien und Zonen — einen Alarm auf sie legen.
     let zeichnung = null
@@ -864,11 +1055,10 @@ function entfernePositionsLinien() {
     positionsLinien = []
 }
 
+// Während des KI-Fotos (`bildschirmfoto({ ohneKontowerte })`) nur die Richtung im Titel.
+let fotoModus = false
 function positionsTitel(pos, kurs) {
-    const r = pos.richtung === 'long' ? 'Long' : 'Short'
-    if (!kurs || !pos.einstieg || !pos.menge) return `${r} ${pos.menge ?? ''}`
-    const pnl = (pos.richtung === 'long' ? kurs - pos.einstieg : pos.einstieg - kurs) * pos.menge
-    return `${r} ${pos.menge} · ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}`
+    return positionsTitelFuer(pos, kurs, { foto: fotoModus })
 }
 
 async function ladePositionen() {
@@ -911,7 +1101,7 @@ function starteTakte() {
     clearInterval(journalTakt)
     clearInterval(positionsTakt)
     // Neue Trades kommen über den Import ins Journal; alle zwei Minuten reicht.
-    journalTakt = setInterval(() => { if (!document.hidden) { ladeJournal(); ladeStrategie() } }, 120_000)
+    journalTakt = setInterval(() => { if (!document.hidden) ladeJournal() }, 120_000)
     positionsTakt = setInterval(() => { if (!document.hidden) ladePositionen() }, 15_000)
     ladePositionen()
 }
@@ -926,7 +1116,7 @@ function sichtbarkeitGeaendert() {
 }
 
 watch(positionenAus, () => ladePositionen())
-watch(() => props.panel.overlays, () => { ladeJournal(); ladePositionen(); ladeStrategie(); marktNeu() }, { deep: true })
+watch(() => props.panel.overlays, () => { ladeJournal(); ladePositionen(); marktNeu() }, { deep: true })
 watch(() => benoetigteQuellen(props.panel.indikatoren).join(), () => ladeExtern())
 // LSOB/GUSS: geänderte Strategie-Einstellungen → Signale neu rechnen lassen
 watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => INDIKATOREN[i.typ]?.zeichner === 'signale').map((i) => [i.typ, strategieParams(i.typ, i.params)])),
@@ -936,14 +1126,19 @@ watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => i.typ =
     () => ladeExtern(['vwapVector']))
 watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => i.typ === 'ema').map((i) => [i.sichtbar, i.params])),
     () => ladeExtern(['emaMtf']))
+// Footprint: andere Stufe → neu bündeln lassen; CVD/Delta an- oder abgeschaltet → Hinweis prüfen
+watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => i.typ === 'footprint').map((i) => [i.sichtbar, i.params?.stufeArt, i.params?.ticks])),
+    () => { footprintVon = Infinity; ladeExtern(['footprint']) })
+watch(() => (props.panel.indikatoren || []).filter((i) => i.typ === 'cvd' || i.typ === 'deltaVol').map((i) => i.sichtbar).join(), pruefeOrderflow)
+// CVD: andere Quelle, Darstellung oder Intrabar-Auflösung → Binance-/Intrabar-Kerzen neu
+watch(() => JSON.stringify((props.panel.indikatoren || []).filter((i) => i.typ === 'cvd').map((i) => [i.sichtbar, i.params?.binance, i.params?.modus, i.params?.intra])),
+    () => { cvdCache.schluessel = ''; ladeExtern(['cvd']) })
 watch(() => props.panel.symbol, () => {
     gewaehlterTrade.value = null
     entfernePositionsLinien()
     ladePositionen()
-    setzeStrategieVorschau(null)
-    setzeBacktest(null)
 })
-watch(() => [props.panel.interval, props.panel.symbol, props.panel.markt], () => { setzeStrategieVorschau(null); zeigeKi() })
+watch(() => [props.panel.interval, props.panel.symbol, props.panel.markt], () => { zeigeKi() })
 let marktNeuUhr = null
 watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], () => {
     marktEbene?.setzeLiquidationen([])
@@ -973,7 +1168,9 @@ const mitRechner = computed(() => alleZeichnungen.value.some((z) => z.typ === 'p
 watch(mitRechner, (ja) => { if (ja) ladeBoersenKonto() }, { immediate: true })
 watch(boersenKonto, (k) => ebene?.setzeKonto(k?.wert || 0))
 const sichtbareZeichnungen = computed(() => (props.zeichnungenVersteckt ? [] : alleZeichnungen.value.filter((z) =>
-    !z.versteckt && (!Array.isArray(z.sichtbarAuf) || !z.sichtbarAuf.length || z.sichtbarAuf.includes(props.panel.interval)))))
+    !z.versteckt && (!Array.isArray(z.sichtbarAuf) || !z.sichtbarAuf.length || z.sichtbarAuf.includes(props.panel.interval)))
+    // In der Ansicht nur zum Ansehen: gesperrt lässt sich nichts verschieben.
+    .map((z) => (props.ansicht ? { ...z, gesperrt: true } : z))))
 const ausgewaehlt = computed(() => sichtbareZeichnungen.value.find((z) => z.id === auswahlId.value) || null)
 
 watch(sichtbareZeichnungen, (l) => ebene?.setzeZeichnungen(l))
@@ -1000,8 +1197,9 @@ async function zeichnungNeu({ typ, punkte, stil: vorgabeStil = {} }) {
 
 /*
  * Positionsrechner: steht unter der Stil-Leiste (oben rechts), offen nach dem
- * Anlegen und auf Doppelklick, zu mit ×, Esc oder wenn eine andere Zeichnung
- * gewählt wird.
+ * Anlegen, auf Doppelklick und über den Rechner-Knopf der Stil-Leiste (am Handy
+ * der einzige Weg — ein Doppeltipp kommt dort nicht an), zu mit ×, Esc, dem
+ * Knopf oder wenn eine andere Zeichnung gewählt wird.
  */
 const rechnerFenster = ref(null)     // { id }
 // Punkte der Zeichnung, die gerade gezogen wird — der Rechner rechnet damit, bevor gespeichert ist
@@ -1054,6 +1252,7 @@ function abbrechen() {
 
 /** KI-Vorschläge gestrichelt einblenden (oder mit null entfernen) — nur auf dem Chart, für den die Analyse gilt. */
 function setzeKiVorschau(analyse) {
+    if (props.ansicht) { ebene?.setzeTemporaer([]); return }
     const passt = analyse && analyse.symbol === props.panel.symbol && analyse.interval === props.panel.interval
         && (analyse.markt === 'spot') === (props.panel.markt === 'spot')
     ebene?.setzeTemporaer(passt ? kiVorschau(analyse, { profilStil: letzterStil('volprofil') }) : [])
@@ -1146,13 +1345,52 @@ function wendeSkalaAn() {
  * Mausrad über der Achse), schaltet das Einpassen ab — es bliebe sonst auch
  * nach einem Symbolwechsel aus (ETH auf der BTC-Skala 77 000–87 500, also
  * leer). Darum ist es bei jedem Öffnen und Neuladen wieder an; der Knopf „A"
- * unten rechts und „Auto" in der Kopfleiste zeigen und schalten es.
+ * je Fenster links unten in der Preisachse und „Auto" in der Kopfleiste zeigen und schalten es.
  */
 const autoSkala = ref(props.panel.autoSkala !== false)
 function preisSkalen() {
     const c = chart.value
     if (!c) return []
     return c.panes().map((_, i) => c.priceScale('right', i))
+}
+/*
+ * Je Fenster (Kerzen und jedes Indikator-Fenster) ein eigenes „A", links unten
+ * in dessen Preisachse. Der Zustand kommt aus der Skala selbst — Ziehen an der
+ * Achse schaltet Auto dort ab, ohne Ereignis; der Abgleich alle 0,5 s holt es.
+ * Das „A" steht in einem Streifen über die ganze Achsenbreite, der die
+ * Beschriftung darunter abdeckt — sonst lief die Skala durch das „A" hindurch.
+ * Seine Farbe ist die des Chart-Hintergrunds an dieser Höhe (Verlauf oben → unten).
+ */
+const SKALA_FUSS = 24
+const skalaKnoepfe = ref([])   // [{i, oben, links, breite, farbe, an}]
+function hintergrundBei(anteil) {
+    const oben = [0x10, 0x18, 0x26], unten = [0x0a, 0x0e, 0x16]
+    const a = Math.max(0, Math.min(1, anteil))
+    return `rgb(${oben.map((v, k) => Math.round(v + (unten[k] - v) * a)).join(',')})`
+}
+function skalaAbgleich() {
+    const c = chart.value, el = huelle.value
+    if (!c || !el) { skalaKnoepfe.value = []; return }
+    const neu = []
+    let oben = 0
+    const breite = el.clientWidth
+    const gesamt = el.clientHeight || 1
+    // Die Achsen aller Fenster sind gleich breit; ein leeres Fenster meldet aber 0.
+    let sw = 0
+    try { sw = c.priceScale('right', 0).width() } catch { /* ohne Skala */ }
+    c.panes().forEach((p, i) => {
+        const h = p.getHeight()
+        let an = true
+        try { an = !!c.priceScale('right', i).options().autoScale } catch { /* ohne Skala */ }
+        if (sw && h >= 40) {
+            const y = oben + h - SKALA_FUSS
+            neu.push({ i, oben: y, links: breite - sw, breite: sw, farbe: hintergrundBei((y + SKALA_FUSS / 2) / gesamt), an })
+        }
+        oben += h + 1
+    })
+    if (JSON.stringify(neu) !== JSON.stringify(skalaKnoepfe.value)) skalaKnoepfe.value = neu
+    const a0 = neu[0]?.an
+    if (a0 != null && a0 !== autoSkala.value) { autoSkala.value = a0; meldeAutoSkala() }
 }
 /** Zustand ins Layout melden (`panel.autoSkala`) — dort liest ihn der „Auto"-Schalter der Kopfleiste. */
 function meldeAutoSkala() {
@@ -1205,10 +1443,11 @@ function oeffneKerzenWahl(e) {
     }
 }
 function vollbildWechsel(e) {
-    if (!imKerzenFeld(e)) return
+    // Ansicht: kein Vollbild, keine Kerzenfarben-Wahl — beides gehört dem Arbeitsplatz.
+    if (props.ansicht || !imKerzenFeld(e)) return
     if (kerzeUnterZeiger(e)) { oeffneKerzenWahl(e); return }
     const jetzt = Date.now()
-    if (jetzt - letzterVollbildWechsel < 500) return
+    if (jetzt - letzterVollbildWechsel < 500 || props.ansicht) return
     letzterVollbildWechsel = jetzt
     emit('vollbild')
 }
@@ -1244,11 +1483,31 @@ function autoEinpassen(an = true) {
  * verzogener Chart ist dort mit einem Tipp wieder lesbar. Aus geht Auto am
  * Handy wie überall, sobald man die Preisachse zieht.
  */
-function autoKnopf() {
-    if (props.zeitMitEinpassen) { autoEinpassen(true); zeigeNeueste(); return }
-    autoEinpassen(!autoSkala.value)
+function autoKnopf(i = 0) {
+    if (props.zeitMitEinpassen && i === 0) { autoEinpassen(true); zeigeNeueste(); return }
+    const sk = preisSkalen()[i]
+    if (!sk) return
+    const an = props.zeitMitEinpassen || !sk.options().autoScale
+    sk.applyOptions({ autoScale: an })
+    if (i === 0) { autoSkala.value = an; meldeAutoSkala() }
+    skalaAbgleich()
 }
 /** Die jüngsten ~150 Kerzen zeigen — dieselbe Ansicht wie nach dem Laden. */
+/*
+ * Footprint eingeschaltet (Kopfleiste oder Indikatoren): so weit hineinzoomen, dass
+ * die Zahlen stehen (FootprintZeichnung AB_ZAHLEN, 64 px je Kerze) — vorher sah man
+ * bei normalem Zoom nur Farbflächen und hielt ihn für leer. Nur beim Einschalten,
+ * nicht beim Laden eines Layouts, das ihn schon hat.
+ */
+const footprintAn = computed(() => (props.panel.indikatoren || []).some((i) => i.typ === 'footprint' && i.sichtbar !== false))
+watch(footprintAn, (an, vorher) => {
+    const n = kerzen.value.length
+    if (!an || vorher || !n || !chart.value) return
+    const breite = (huelle.value?.clientWidth || 800) - 70
+    const anzahl = Math.max(6, Math.floor(breite / 80))
+    chart.value.timeScale().setVisibleLogicalRange({ from: n - anzahl, to: n + 1 })
+})
+
 function zeigeNeueste() {
     const n = kerzen.value.length
     if (n) chart.value?.timeScale().setVisibleLogicalRange({ from: Math.max(0, n - 150), to: n + 8 })
@@ -1327,6 +1586,8 @@ async function ladeNeu() {
         autoEinpassen(true)
         wendePreisformatAn()
         starteLive(nr)
+        pruefeOrderflow()
+        ladeExtern(['footprint', 'cvd'])
     } catch (e) {
         if (nr !== ladeNummer) return
         setzeDaten([])
@@ -1382,13 +1643,13 @@ function starteLive(nr) {
             const liste = kerzen.value
             const letzte = liste[liste.length - 1]
             if (letzte && k.t < letzte.t) return
-            const bar = { t: k.t, o: k.o, h: k.h, l: k.l, c: k.c, v: k.v }
+            const bar = { t: k.t, o: k.o, h: k.h, l: k.l, c: k.c, v: k.v, ...(k.vb !== undefined ? { vb: k.vb } : {}) }
             if (letzte && k.t === letzte.t) liste[liste.length - 1] = bar
             else {
                 liste.push(bar)
                 ebene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
                 journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
-                strategieEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
+                instanzEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
                 marktEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
             }
             kerzenSerie.value?.update(kerzenPunkt(bar, liste.length - 1))
@@ -1457,8 +1718,26 @@ function zurJetztzeit() {
     chart.value?.timeScale().scrollToRealTime()
 }
 
-function bildschirmfoto() {
-    return chart.value?.takeScreenshot(true)
+/**
+ * Bild des Charts. `ohneKontowerte` (Bild für die Chart-KI, SEC-L6-001): Positionsrechner
+ * und Journal-Trades ohne Beträge, offene Positionen an der Einstiegslinie nur mit
+ * „Long"/„Short" (ohne Menge und Live-P&L) — `takeScreenshot` zeichnet synchron neu,
+ * danach zurück.
+ */
+function bildschirmfoto({ ohneKontowerte = false } = {}) {
+    if (!ohneKontowerte) return chart.value?.takeScreenshot(true)
+    ebene?.setzeFoto(true)
+    journalEbene?.setzeFoto(true)
+    fotoModus = true
+    try {
+        aktualisierePositionsTitel()
+        return chart.value?.takeScreenshot(true)
+    } finally {
+        fotoModus = false
+        aktualisierePositionsTitel()
+        ebene?.setzeFoto(false)
+        journalEbene?.setzeFoto(false)
+    }
 }
 
 const fmt = (x) => (x == null || !Number.isFinite(Number(x)) ? '—' : Number(x).toFixed(preisStellen.value))
@@ -1519,8 +1798,8 @@ onBeforeUnmount(() => {
     clearInterval(positionsTakt)
     journalEbene?.abbauen()
     journalEbene = null
-    strategieEbene?.abbauen()
-    strategieEbene = null
+    instanzEbene?.abbauen()
+    instanzEbene = null
     clearInterval(marktTakt)
     clearTimeout(marktNeuUhr)
     for (const x of externNochmal.values()) clearTimeout(x.uhr)
@@ -1529,24 +1808,35 @@ onBeforeUnmount(() => {
     marktEbene = null
     kerzenUhr?.abbauen()
     kerzenUhr = null
+    volumenKerzen?.abbauen()
+    volumenKerzen = null
     live?.stop()
     chart.value?.remove()
     chart.value = null
 })
 
+// Strategie-Ebene: neue Daten zeichnen, und eine Hervorhebung von aussen
+// (Klick in der Liste der Seite).
+watch(() => props.strategieDaten, (d) => instanzEbene?.setzeDaten(d))
+function hebeStrategieHervor(schluessel) { instanzEbene?.hebeHervor(schluessel) }
+
 defineExpose({
+    hebeStrategieHervor,
     chart, kerzenSerie, kerzen, zuLwc, vonLwc, kerzeBei,
     setzeKreuz, setzeZeitraum, sichtbarerZeitraum, zurJetztzeit, bildschirmfoto, ladeNeu,
-    loescheAuswahl, abbrechen, waehleZeichnung, bearbeiteZeichnung, auswahlId, setzeKiVorschau,
-    strategieDaten, strategieVorschau, strategieBacktest, setzeStrategieVorschau, setzeBacktest, ladeStrategie,
+    loescheAuswahl, abbrechen, pfadFertig: () => !!ebene?.pfadFertig(), waehleZeichnung, bearbeiteZeichnung, auswahlId, setzeKiVorschau,
 })
 </script>
 
 <template>
     <div class="chartPanel" :class="{ aktiv }" @mousedown="emit('fokus')" @touchstart.passive="emit('fokus')">
         <div ref="huelle" class="flaeche" @pointerup="tippEnde" @wheel.passive="pruefeAutoSkala" @dblclick="doppelklick"></div>
-        <button class="autoKnopf" :class="{ an: autoSkala }" :title="t(autoSkala ? 'chart.autoAn' : 'chart.autoAus')"
-            @click.stop="autoKnopf" :aria-label="t(autoSkala ? 'chart.autoAn' : 'chart.autoAus')">A</button>
+        <div v-for="k in skalaKnoepfe" :key="k.i" class="skalaFuss"
+            :style="{ top: k.oben + 'px', left: k.links + 'px', width: k.breite + 'px', height: SKALA_FUSS + 'px', background: k.farbe }">
+            <button class="autoKnopf" :class="{ an: k.an }"
+                :title="t(k.an ? 'chart.autoAn' : 'chart.autoAus')" :aria-label="t(k.an ? 'chart.autoAn' : 'chart.autoAus')"
+                @click.stop="autoKnopf(k.i)">A</button>
+        </div>
 
         <div class="legende">
             <span class="sym">{{ panel.symbol }}</span>
@@ -1572,7 +1862,9 @@ defineExpose({
             </button>
             <template v-if="!legendeZu">
             <template v-for="(text, name) in marktHinweise" :key="name">
-                <span v-if="text" class="marktHinweis" :title="t('chart.markt.titel.' + name)">{{ text }}<InfoTipp v-if="name === 'hebelzonen'" schluessel="chart.markt.sollIstInfo" breit /></span>
+                <span v-if="text" class="marktHinweis" :title="t('chart.markt.titel.' + name)">{{ text }}<InfoTipp v-if="name === 'hebelzonen'" schluessel="chart.markt.sollIstInfo" breit />
+                    <button v-if="name === 'hebelzonen'" type="button" class="abgeholtKnopf" :class="{ an: abgeholtAn }" @click.stop="abgeholtUmschalten"
+                        :title="t(abgeholtAn ? 'chart.markt.abgeholtAusTitel' : 'chart.markt.abgeholtAnTitel')">✓ {{ t('chart.markt.abgeholt') }}</button></span>
             </template>
             <span v-if="journalInfo && journalInfo.anzahl" class="journalHinweis" :title="t('chart.journalHinweis')">
                 <Symbol name="buch" /> {{ journalInfo.anzahl }}{{ journalInfo.gekappt ? '+' : '' }}
@@ -1602,11 +1894,14 @@ defineExpose({
 
         <!-- „i" neben den Titeln der Indikator-Fenster (z. B. Momentum Radar); der Titel selbst ist Canvas. -->
         <span v-for="f in fensterTitel" :key="f.id" class="fensterInfo" :style="{ top: f.oben + 5 + 'px', left: 4 + f.breite + 6 + 'px' }">
-            <InfoTipp :schluessel="'chart.ind.' + f.typ + '.info'" breit />
+            <InfoTipp v-if="te('chart.ind.' + f.typ + '.info')" :schluessel="'chart.ind.' + f.typ + '.info'" breit />
+            <button v-if="f.tabelle" class="tabellenKnopf" @click.stop="tabelleUmschalten(f.id)"
+                :title="t(tabelleOffen(f.id) ? 'chart.tabelleZu' : 'chart.tabelleAuf')" :aria-label="t(tabelleOffen(f.id) ? 'chart.tabelleZu' : 'chart.tabelleAuf')"><Symbol :name="tabelleOffen(f.id) ? 'runter' : 'ausklappen'" /></button>
         </span>
 
         <ZeichnungStil v-if="ausgewaehlt" :zeichnung="ausgewaehlt" :interval="panel.interval"
-            :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)"
+            :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)" :rechner-offen="rechnerFenster?.id === ausgewaehlt.id"
+            @rechner="rechnerFenster?.id === ausgewaehlt.id ? (rechnerFenster = null) : oeffneRechner(ausgewaehlt.id)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textOffen = textOffen === ausgewaehlt.id ? null : ausgewaehlt.id"
             @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />
         <TextStil v-if="textOffen && ausgewaehlt?.id === textOffen" :zeichnung="ausgewaehlt" @aendere="aendereAuswahl" @schliesse="textOffen = null" />
@@ -1677,6 +1972,9 @@ defineExpose({
             <div class="kopfzeile">{{ t('settings.kerzenFarben') }}
                 <button class="zu" :title="t('chart.schliessen')" :aria-label="t('chart.schliessen')" @click="kerzenWahl = null"><Symbol name="schliessen" /></button></div>
             <KerzenFarbFelder />
+            <label class="breiteSchalter"><input type="checkbox" :checked="volumenBreite"
+                @change="emit('indikator', { aktion: 'volumenBreite' })" /> {{ t('chart.volumenBreite') }}
+                <InfoTipp schluessel="chart.volumenBreiteInfo" breit /></label>
         </div>
 
         <div v-if="laedt" class="hinweis"><Kreisel /></div>
@@ -1689,10 +1987,15 @@ defineExpose({
 </template>
 
 <style scoped>
-.autoKnopf {
+.skalaFuss {
     position: absolute;
-    right: 6px;
-    bottom: 5px;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    padding-left: 3px;
+}
+
+.autoKnopf {
     z-index: 6;
     width: 20px;
     height: 18px;
@@ -1757,6 +2060,22 @@ defineExpose({
     border-radius: 4px;
     background: rgba(10, 14, 22, 0.78);
 }
+.tabellenKnopf {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 18px;
+    padding: 0;
+    margin-left: 2px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+}
+.tabellenKnopf:hover { color: var(--accent); background: var(--panel-soft); }
+.tabellenKnopf :deep(svg) { width: 15px; height: 15px; stroke-width: 2.4; }
 
 .legendeKnopf {
     pointer-events: auto;
@@ -1841,6 +2160,13 @@ defineExpose({
     padding: 6px 10px 10px;
 }
 
+.kontextMenue.kerzenWahl .breiteSchalter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+}
+
 .kontextMenue.kerzenWahl .kopfzeile {
     display: flex;
     align-items: center;
@@ -1871,6 +2197,24 @@ defineExpose({
 
 .quelleHinweis {
     color: var(--warn);
+}
+
+.abgeholtKnopf {
+    margin-left: 6px;
+    padding: 0 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-pille);
+    background: none;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 15px;
+    cursor: pointer;
+    pointer-events: auto;
+}
+.abgeholtKnopf:hover { color: var(--text); }
+.abgeholtKnopf.an {
+    border-color: var(--accent);
+    color: var(--accent);
 }
 
 .journalHinweis {

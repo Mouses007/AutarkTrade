@@ -153,6 +153,20 @@ Die App lauscht im Container auf `8443`; den Host-Port bestimmt `AT_TLS_PORT`
 in der `.env` (Mapping `${AT_TLS_PORT:-8443}:8443`). NICHT 443 — die
 Synology-DSM belegt 443 (und 80) selbst mit ihrem nginx.
 
+### YubiKey (zweiter Faktor)
+
+Ein YubiKey geht nur unter einem **Namen** über HTTPS, nie über eine IP
+(WebAuthn erlaubt keine IP als RP-ID). Der Name muss durch den Host-Schutz:
+`AT_MDNS_NAME` (nur `.local`, z. B. `autarktrade.local`) oder ein Eintrag in
+`AT_ALLOWED_HOSTS` — und im LAN auflösen (mDNS-Dienst `server/mdns-name.mjs`
+mit `network_mode: host`, oder ein DNS-Eintrag im Router). Ohne solchen Namen
+nennt die App keinen Link, sondern diese beiden Variablen (seit Audit 4.3.4,
+FUN-S1-004 — vorher zeigte sie `https://autarktrade.local:8443`, den der
+Host-Schutz mit 421 abwies). Den Port des Links nimmt sie aus der Adresszeile,
+wenn die Seite schon über HTTPS offen ist; sonst ist es der Port im Container
+(`8443`) — bei einem anderen Host-Port (`AT_TLS_PORT`) die Seite einmal über
+`https://<nas-ip>:<port>` öffnen.
+
 ### 4. Neue CA
 
 Nur wenn der CA-Schlüssel unlesbar ist (`AT_SECRET` geändert) oder in fremde

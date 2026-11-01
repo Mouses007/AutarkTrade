@@ -420,7 +420,11 @@ function replay(candles, params, htf) {
         zonen.some((z) => z.tief <= 100.1 && z.hoch >= 100.4), JSON.stringify(zonen))
 
     // Stundenkerzen: Anlauf von oben auf 100, Hammer, dann Eröffnung darüber.
+    // Vor dem Hammer stehen mindestens `pivotLinks + pivotRechts + 10` Kerzen:
+    // seit Version 2 ist nur die jüngste Kerze ein Kandidat, und bis dahin
+    // fand dieser Test den Hammer erst drei Kerzen später — rückwirkend.
     const ltf = reihe([
+        [116, 116, 116, 116], [115, 115, 115, 115], [114, 114, 114, 114], [113, 113, 113, 113],
         [112, 112, 112, 112], [111, 111.2, 110, 110.5], [110, 110.2, 109, 109.5],
         [109, 109.2, 108, 108.5], [108, 108.2, 107, 107.5], [107, 107.2, 106, 106.5],
         [106, 106.2, 105, 105.5], [105, 105.2, 103, 103.5], [103, 103.2, 101, 101.5],
@@ -428,7 +432,7 @@ function replay(candles, params, htf) {
         [100.8, 103, 100.7, 102.5],      // Einstiegskerze — Eröffnung 100.8
         [102.5, 106, 102, 105.5],
         [105.5, 108, 105, 107.5],
-    ], TF, 25 * tag)   // 26.01.1970 — ein Montag, damit die Sperre prüfbar ist
+    ], TF, 25 * tag - 4 * TF)   // Hammer am 26.01.1970 — ein Montag, damit die Sperre prüfbar ist
 
     const trades = replay(ltf, p, htf)
     check('ein Long-Setup wird ausgelöst', trades.length === 1, JSON.stringify(trades.map((t) => t.confirmations)))
@@ -442,6 +446,30 @@ function replay(candles, params, htf) {
     check('Ziel folgt dem eingestellten Chance/Risiko',
         t && Math.abs((t.takeProfit - t.entry) / (t.entry - t.stopLoss) - p.tpRR) < 0.01,
         `${t?.entry} / ${t?.stopLoss} / ${t?.takeProfit}`)
+
+    // Nur die jüngste Kerze ist ein Kandidat (Version 2): auf der GANZEN Reihe
+    // aufgerufen, liegt der Hammer drei Kerzen zurück und darf kein Setup mehr
+    // ergeben — sonst entstünde es aus Zonen und Trend von später.
+    const spaet = strategie.detect({ candles: ltf, params: p, openSetups: [], knownSetupKeys: [], htfCandles: htf })
+    check('kein Setup aus einer älteren Kerze', !spaet.setups.some((s) => s.obCandleTime === ltf[13].t),
+        JSON.stringify(spaet.setups.map((s) => s.obCandleTime)))
+    check('Einstieg zur Eröffnung prüft die Einstiegskerze (entryAtOpen)', t?.entryAtOpen === true)
+
+    // Dasselbe HTF-Fenster wie im Betrieb: ältere Kerzen davor ändern nichts.
+    {
+        const { snfHtfFenster, zonenLage } = await import('./set_and_forget.js')
+        const vorne = Array.from({ length: snfHtfFenster(p) + 50 }, (_, i) => ({
+            t: htf[0].t - (snfHtfFenster(p) + 50 - i) * tag, o: 140 + (i % 7), h: 141 + (i % 7), l: 139 + (i % 7), c: 140 + (i % 5), v: 100,
+        }))
+        // Mit zweiter Ebene: sie wurde aus ALLEN übergebenen HTF-Kerzen
+        // aggregiert, im Backtest also aus mehr als im Betrieb.
+        const p2 = { ...p, zweiteEbene: true }
+        const kurz = zonenLage({ candles: ltf, params: p2, htfCandles: [...vorne.slice(-(snfHtfFenster(p2) - htf.length)), ...htf] })
+        const lang = zonenLage({ candles: ltf, params: p2, htfCandles: [...vorne, ...htf] })
+        check('Zonen und beide Trendebenen hängen nur vom festen HTF-Fenster ab',
+            JSON.stringify(kurz.zonen) === JSON.stringify(lang.zonen) && kurz.trend1 === lang.trend1 && kurz.trend2 === lang.trend2,
+            `${kurz.trend2} / ${lang.trend2}`)
+    }
 
     // Gegen den Trend wird nicht gehandelt.
     const short = replay(ltf, { ...p, direction: 'short' }, htf)
@@ -458,7 +486,7 @@ function replay(candles, params, htf) {
     check('unter dem Mindest-Chance/Risiko wird nicht gehandelt', streng.length === 0, String(streng.length))
 
     // Wochentagssperre trifft den EINSTIEG.
-    const tagDerKerze = new Date(ltf[10].t).getUTCDay()
+    const tagDerKerze = new Date(ltf[14].t).getUTCDay()
     const sperrSchalter = { 0: 'sperreSonntag', 1: 'sperreMontag', 6: 'sperreSamstag' }[tagDerKerze]
     if (sperrSchalter) {
         const gesperrt = replay(ltf, { ...p, [sperrSchalter]: true }, htf)

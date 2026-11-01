@@ -35,6 +35,13 @@ services:
       # Adresse des Hosts — die kennt die App im Container nicht. Ohne Eintrag
       # schlägt die Oberfläche die Adressen vor, unter denen sie aufgerufen wurde.
       - AT_TLS_NAMEN=${AT_TLS_NAMEN:-}
+      # Eigener Name im LAN, z. B. autarktrade.local (nur .local). Erst mit
+      # diesem Eintrag lässt der Host-Schutz den Namen zu — Voraussetzung für
+      # den YubiKey, der nie über eine IP geht, und für den Hinweis-Link darauf.
+      # Ansagen muss den Namen jemand im LAN: der mDNS-Dienst
+      # (server/mdns-name.mjs, eigener Dienst mit network_mode: host) oder der
+      # Router. Leer = kein Name (DOCKER.md › HTTPS › YubiKey).
+      - AT_MDNS_NAME=${AT_MDNS_NAME:-}
       # Kein Proxy davor: X-Forwarded-For zählt nicht (Login-Sperre nach
       # Peer-IP). Nur wer selbst einen Reverse-Proxy vorschaltet, setzt
       # AT_TRUST_PROXY=1 und AT_TRUSTED_PROXY=<Name des Proxy-Dienstes>.

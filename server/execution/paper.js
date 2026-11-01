@@ -13,6 +13,30 @@
 
 import { getKnex } from '../database.js'
 import { createPosition, stepCandle, closePosition } from '../fill-simulator.js'
+import { getFundingHistory, timeframeMs, isValidTimeframe } from '../market-data.js'
+import { fundingAusVerlauf } from './zwischenstand.js'
+
+/**
+ * Echte Funding-Summe einer Position bis `bis` — dieselbe Rechnung wie der
+ * Zwischenstand offener Positionen und der Backtest. Bis 01.11.2026 zeigte der
+ * Zwischenstand echtes Funding, der gebuchte Trade aber die Annahme
+ * (Vorgabe 0): beim Schliessen „verschwand" das Funding.
+ *
+ * `undefined` heisst unbekannt (Abruf gescheitert, Spot) — dann rechnet
+ * `closePosition` mit der Annahme aus den Kosten.
+ */
+async function echtesFunding(instance, pos, bis) {
+    if (instance?.market === 'spot') return undefined
+    try {
+        const verlauf = await getFundingHistory(pos.symbol, pos.entryTime, bis)
+        if (!Array.isArray(verlauf)) return undefined
+        return fundingAusVerlauf(verlauf, {
+            qty: pos.qty, direction: pos.direction, entryTime: pos.entryTime, bis, ersatzPreis: pos.entryPrice,
+        })
+    } catch {
+        return undefined
+    }
+}
 
 /**
  * Kontostand einer Instanz im Papierbetrieb:
@@ -36,7 +60,7 @@ export async function getPaperEquity(instance) {
  * Setup läuft in den Unique-Konflikt und öffnet keine zweite Position. Das ist
  * dieselbe Idempotenz-Zusage wie später im Live-Pfad.
  */
-export async function openPaperPosition({ instance, setup, size, entryPrice, entryTime, costs, clientOrderId, status = 'open' }) {
+export async function openPaperPosition({ instance, setup, size, entryPrice, entryTime, costs, clientOrderId, abKerze = null }) {
     const knex = getKnex()
 
     const pos = createPosition({
@@ -67,11 +91,18 @@ export async function openPaperPosition({ instance, setup, size, entryPrice, ent
         externalOrderId: '',
         maePrice: pos.maePrice,
         mfePrice: pos.mfePrice,
-        lastCandleTime: entryTime,
+        // Bis hierhin ist die Position bewertet. Ein Einstieg zur Eröffnung
+        // lässt die Einstiegskerze selbst noch offen (`abKerze`).
+        lastCandleTime: abKerze ?? entryTime,
         breakEvenDone: 0,
-        // 'pending' = Reservierung VOR der Live-Order (Idempotenz zuerst),
-        // 'open' erst nach bestätigter Ausführung. Papier bucht direkt 'open'.
-        status,
+        // Unter welchem Stand die Position entstand — der Trade wird damit
+        // gebucht, auch wenn die Instanz bis zum Schliessen eine neue
+        // Version bekommt (FUN-L2-002, BUG-L2-004).
+        paramsVersion: Number(instance.paramsVersion) || 1,
+        ruleVersion: Number(instance.strategie?.regelFassung) || 0,
+        // Papier und Schatten buchen direkt 'open'. ('pending' war die
+        // Reservierung vor einer Live-Order — seit S13 gibt es keine.)
+        status: 'open',
     }
 
     const isPg = knex.client.config.client === 'pg'
@@ -86,6 +117,18 @@ export async function openPaperPosition({ instance, setup, size, entryPrice, ent
             return { ok: false, reason: 'duplicate_order', detail: clientOrderId }
         }
         throw e
+    }
+}
+
+/**
+ * Versionen, unter denen ein Trade gebucht wird: die der Position (beim
+ * Eröffnen gemerkt). Altbestand ohne Eintrag fällt auf den Stand der Instanz
+ * zurück — so wurde bis 31.10.2026 immer gebucht.
+ */
+function versionenDerPosition(row, instance) {
+    return {
+        paramsVersion: Number(row.paramsVersion) || Number(instance.paramsVersion) || 1,
+        ruleVersion: Number(row.ruleVersion) || 0,
     }
 }
 
@@ -156,7 +199,10 @@ export async function stepPaperPositions({ instance, symbol, timeframe = '', can
 
         let exit = null
         for (const k of neue) {
-            const r = stepCandle(pos, k, { breakEvenAtR, maxHoldMs, partialTpR, partialTpPct, maintenanceMarginPct, costs })
+            const r = stepCandle(pos, k, {
+                breakEvenAtR, maxHoldMs, partialTpR, partialTpPct, maintenanceMarginPct, costs,
+                kerzeMs: isValidTimeframe(row.timeframe) ? timeframeMs(row.timeframe) : 0,
+            })
             if (r.exit) { exit = r.exit; break }
         }
 
@@ -179,7 +225,8 @@ export async function stepPaperPositions({ instance, symbol, timeframe = '', can
             continue
         }
 
-        const trade = closePosition(pos, exit, costs)
+        const funding = await echtesFunding(instance, pos, exit.time)
+        const trade = closePosition(pos, exit, costs, funding === undefined ? {} : { funding })
         let doppelt = false
         await knex.transaction(async (trx) => {
             const beansprucht = await trx('strategy_positions')
@@ -214,7 +261,7 @@ export async function stepPaperPositions({ instance, symbol, timeframe = '', can
                 maeR: trade.maeR,
                 mfeR: trade.mfeR,
                 holdingMinutes: trade.holdingMinutes,
-                paramsVersion: instance.paramsVersion,
+                ...versionenDerPosition(row, instance),
             })
             await trx('strategy_positions').where('id', row.id).update({
                 stopLoss: pos.stopLoss,
@@ -245,7 +292,8 @@ export async function closePaperPositionManually({ instance, positionRow, price,
     }
     const knex = getKnex()
     const pos = zuPosition(positionRow)
-    const trade = closePosition(pos, { price, reason, time }, costs)
+    const funding = await echtesFunding(instance, pos, time)
+    const trade = closePosition(pos, { price, reason, time }, costs, funding === undefined ? {} : { funding })
 
     await knex.transaction(async (trx) => {
         // Atomarer Claim: nur wer die Zeile von 'open' wegbewegt, darf den
@@ -286,7 +334,7 @@ export async function closePaperPositionManually({ instance, positionRow, price,
             maeR: trade.maeR,
             mfeR: trade.mfeR,
             holdingMinutes: trade.holdingMinutes,
-            paramsVersion: instance.paramsVersion,
+            ...versionenDerPosition(positionRow, instance),
         })
         await trx('strategy_setups').where('id', positionRow.setupId).update({
             status: 'closed', updatedAt: knex.fn.now(),

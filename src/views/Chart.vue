@@ -21,7 +21,10 @@ import WatchlistReiter from '../components/chart/WatchlistReiter.vue'
 import IndikatorDialog from '../components/chart/IndikatorDialog.vue'
 import Zeichenleiste from '../components/chart/Zeichenleiste.vue'
 import ObjektReiter from '../components/chart/ObjektReiter.vue'
-import StrategieReiter from '../components/chart/StrategieReiter.vue'
+import FlashNewsReiter from '../components/chart/FlashNewsReiter.vue'
+import TeilenDialog from '../components/chart/TeilenDialog.vue'
+import { baueChartBild, leinwandZuBlob } from '../utils/chart/chartBild.js'
+import axios from 'axios'
 import AlarmReiter from '../components/chart/AlarmReiter.vue'
 import KiReiter from '../components/chart/KiReiter.vue'
 import AlarmDialog from '../components/chart/AlarmDialog.vue'
@@ -36,14 +39,16 @@ import { alarme, abonniereAlarme, neueAusloesungen, quittiere, alleQuittieren, a
 import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoeschen, macheRueckgaengig, macheWiederholen, fehlerMeldung } from '../stores/chartZeichnungen.js'
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
 import { useIstTelefon } from '../utils/geraet.js'
-import { api, standardLayout, vervollstaendige, passeAnRaster, PANELS_JE_RASTER, STANDARD_WATCHLIST } from '../utils/chart/arbeitsplatz.js'
+import { appEinstellungen } from '../stores/settings.js'
+import { api, vorlagenInhalt, standardLayout, vervollstaendige, passeAnRaster, PANELS_JE_RASTER, STANDARD_WATCHLIST } from '../utils/chart/arbeitsplatz.js'
 import { passePanelAn, vorgabeBoerse, waehlbareBoersen, INTERVALLE, INTERVALLE_SICHTBAR, QUELLEN_OHNE, boerseFuer } from '../utils/chart/kerzenQuelle.js'
 import { ladeMarktdaten } from '../utils/marktdaten.js'
 import { useFetchOpenPositions } from '../utils/incoming.js'
 import { incomingPollingActive } from '../stores/journal/offenePositionen.js'
 import { fuehreZusammen } from '../utils/chart/layoutZusammenfuehren.js'
+import { radarTfFuer } from '../utils/chart/radarTf.js'
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 const telefon = useIstTelefon()
 
 const layouts = ref([])
@@ -96,6 +101,8 @@ function schalteVollbild(i) {
 // Zeichenwerkzeuge; rechts oben Favoriten (Watchlist), rechts unten Momentum Radar.
 const schublade = ref(null)          // null | 'links' | 'werkzeuge' | 'favoriten' | 'rechts'
 const RECHTS = new Set(['rechts', 'favoriten'])
+// Teilen-Dialog (Kopfleiste und Vollbild-Schublade)
+const teilenOffen = ref(false)
 const RAND = 60
 const WISCH = 50
 let wisch = null
@@ -148,6 +155,36 @@ function wischAuswerten(x, y) {
 watch(vollbild, (v) => { if (!v) schublade.value = null; else tfFavoriten.value = leseTfFavoriten() })
 
 /*
+ * Desktop-Vollbild (31.10.2026): eine Maus wischt nicht. Deshalb stehen an beiden
+ * Rändern Griffe — je oben und unten, wie die Wischzonen am Handy — die dieselbe
+ * Schublade öffnen: Klick, oder am Griff nach innen ziehen. Am Handy bleiben sie weg,
+ * dort wischt man.
+ */
+const GRIFFE = [
+    { seite: 'links', symbol: 'wachstum', titel: 'chart.indBox.titel' },
+    { seite: 'werkzeuge', symbol: 'stift', titel: 'chart.schublade.werkzeuge' },
+    { seite: 'favoriten', symbol: 'stern', titel: 'chart.schublade.favoriten' },
+    { seite: 'rechts', symbol: 'tacho', titel: 'chart.mbox.titel' },
+]
+let griffZug = null
+function griffStart(e, seite) {
+    griffZug = { x: e.clientX, seite }
+    e.currentTarget.setPointerCapture?.(e.pointerId)
+}
+function griffEnde(e) {
+    if (!griffZug) return
+    const dx = e.clientX - griffZug.x
+    // Klick (kaum bewegt) oder Zug nach innen öffnet; ein Zug nach aussen nicht
+    const innen = RECHTS.has(griffZug.seite) ? dx <= 4 : dx >= -4
+    if (innen) schublade.value = griffZug.seite
+    griffZug = null
+}
+// Tastatur: Enter/Leertaste auf dem fokussierten Griff lösen nur `click` aus (detail 0),
+// kein pointerdown/up — ohne das blieb ohne Maus nur Escape (Audit BUG-F2B-006).
+// Ein Mausklick (detail ≥ 1) ist schon über griffEnde gelaufen.
+function griffTaste(e, seite) { if (e.detail === 0) schublade.value = seite }
+
+/*
  * Im Vollbild gehört das Zwei-Finger-Zoomen dem Chart, nicht der Seite: ohne
  * Sperre vergrösserte der Browser je nachdem, welcher Finger zuerst lag, die
  * ganze Seite. Der Viewport verbietet dann das Seiten-Zoomen (und setzt einen
@@ -187,8 +224,9 @@ const aktivesPanel = computed(() => daten.value.panels[aktivIndex.value])
 const rasterKlasse = computed(() => (telefon.value || vollbild.value ? 'r1' : 'r' + daten.value.raster))
 
 /*
- * Seitenleisten-Reiter. Weitere (Journal, Strategien, Alarme, Objekte) kommen
- * mit ihren Ausbaustufen dazu; ein leerer Reiter wird gar nicht erst gezeigt.
+ * Seitenleisten-Reiter. Den Strategien-Reiter ersetzt seit 30.10.2026 „Flash-News"
+ * (`news`) — Strategien gehören auf die Strategien-Seite; ein gespeichertes
+ * `strategien` biegt `vervollstaendige` (arbeitsplatz.js) um.
  */
 /*
  * Handy: die Reiterleiste steht ÜBER dem Chart (auch im Vollbild); ein Tipp
@@ -206,7 +244,7 @@ const REITER = [
     { id: 'watchlist', icon: 'stern' },
     { id: 'offen', icon: 'fadenkreuz' },
     { id: 'objekte', icon: 'ebenen' },
-    { id: 'strategien', icon: 'ki' },
+    { id: 'news', icon: 'blitz' },
     { id: 'alarme', icon: 'glocke' },
     { id: 'ki', icon: 'gehirn' },
 ]
@@ -834,10 +872,6 @@ const aktuellerKurs = computed(() => {
     return k?.length ? k[k.length - 1].c : null
 })
 
-function strategieFilter(f) {
-    daten.value.panels[aktivIndex.value].strategieFilter = f
-}
-
 function objektWaehlen(z) {
     if (z.versteckt) zeichnungAendern(z.symbol, z.id, { versteckt: false })
     panelRefs.value[aktivIndex.value]?.waehleZeichnung(z.id)
@@ -858,9 +892,25 @@ function oeffneIndikatoren() {
     dialog.value = { panel: aktivIndex.value, instanz: null }
 }
 
+/**
+ * Kerzenansicht aus der Kopfleiste: normal, Breite nach Volumen oder Footprint.
+ * Footprint ist ein Indikator — vorhanden wird er sichtbar geschaltet, sonst
+ * angelegt; bei den anderen Ansichten wird er nur ausgeblendet (Einstellungen bleiben).
+ */
+function setzeKerzenArt(art) {
+    const p = daten.value.panels[aktivIndex.value]
+    if (!p) return
+    p.volumenBreite = art === 'volumen'
+    const fp = (p.indikatoren || []).find((x) => x.typ === 'footprint')
+    if (art === 'footprint') {
+        if (fp) fp.sichtbar = true
+        else p.indikatoren = [...(p.indikatoren || []), neueInstanz('footprint', appEinstellungen.value?.chartIndikatorStandard?.footprint)]
+    } else if (fp) fp.sichtbar = false
+}
+
 function indikatorHinzu(typ) {
     const p = daten.value.panels[dialog.value.panel]
-    p.indikatoren = [...(p.indikatoren || []), neueInstanz(typ)]
+    p.indikatoren = [...(p.indikatoren || []), neueInstanz(typ, appEinstellungen.value?.chartIndikatorStandard?.[typ])]
     dialog.value = null
 }
 
@@ -883,8 +933,9 @@ function indikatorSpeichern(instanz) {
  * trügen zwei Panels dieselbe. Typen, die dieser Stand nicht kennt (Vorlage
  * von einem neueren Codestand), fallen weg statt ein leeres Fenster zu bauen.
  */
-function vorlageAnwenden({ indikatoren, modus }) {
-    const p = daten.value.panels[aktivIndex.value]
+function vorlageAnwenden({ indikatoren, modus, id }) {
+    const i = aktivIndex.value
+    const p = daten.value.panels[i]
     if (!p) return
     const neu = (indikatoren || []).filter((x) => INDIKATOREN[x.typ]).map((x) => ({
         ...neueInstanz(x.typ),
@@ -893,11 +944,57 @@ function vorlageAnwenden({ indikatoren, modus }) {
         sichtbar: x.sichtbar !== false,
     }))
     p.indikatoren = modus === 'hinzu' ? [...(p.indikatoren || []), ...neu] : neu
+    // Ersetzen macht die Vorlage zur aktiven des Panels; Dazunehmen ändert nur die aktive (die merkt es dann).
+    if (modus !== 'hinzu' && id != null) {
+        p.vorlageId = id
+        vorlagenStand.set(i + '|' + id, JSON.stringify(vorlagenInhalt(p.indikatoren)))
+    }
+}
+
+/*
+ * Die aktive Vorlage merkt mit: jede Änderung an den Indikatoren eines Panels
+ * (Einstellungen, Farben, ein-/ausblenden, hinzufügen, entfernen) wird in die
+ * Vorlage geschrieben, die zuletzt ersetzend darauf angewendet wurde — sonst
+ * stand nach einem Wechsel Clean → Standard → Clean wieder der alte Stand da.
+ * Ein Layoutwechsel ist keine Änderung: dort wird nur der Stand neu gemerkt,
+ * sonst schriebe ein älteres Layout seinen veralteten Stand in die Vorlage.
+ */
+const vorlagenStand = new Map()   // 'panel|vorlageId' → zuletzt gespeicherter Inhalt (JSON)
+let vorlagenUhr = 0
+let vorlagenLayout   // undefined: der erste Blick merkt nur, speichert nichts
+function vorlagenBlick() {
+    return (daten.value?.panels || []).map((p, i) => (p.vorlageId != null
+        ? { schluessel: i + '|' + p.vorlageId, id: p.vorlageId, inhalt: JSON.stringify(vorlagenInhalt(p.indikatoren)) }
+        : null))
+}
+watch(vorlagenBlick, (blick) => {
+    clearTimeout(vorlagenUhr)
+    if (vorlagenLayout !== layoutId.value) {
+        vorlagenLayout = layoutId.value
+        vorlagenStand.clear()
+        for (const b of blick) if (b) vorlagenStand.set(b.schluessel, b.inhalt)
+        return
+    }
+    vorlagenUhr = setTimeout(() => schreibeVorlagen(blick), 800)
+}, { immediate: true })
+async function schreibeVorlagen(blick) {
+    for (const b of blick) {
+        // Leer gibt es als Vorlage nicht (der Server lehnt ab) — dann bleibt die Vorlage, wie sie war.
+        if (!b || b.inhalt === '[]' || vorlagenStand.get(b.schluessel) === b.inhalt) continue
+        vorlagenStand.set(b.schluessel, b.inhalt)
+        try {
+            await api.vorlageSpeichern(b.id, { indikatoren: JSON.parse(b.inhalt) })
+        } catch (e) {
+            // Vorlage gelöscht: das Panel merkt nicht länger mit.
+            if (e.response?.status === 404) for (const p of daten.value.panels) if (p.vorlageId === b.id) delete p.vorlageId
+        }
+    }
 }
 
 function indikatorAktion(i, { aktion, id }) {
     const p = daten.value.panels[i]
     if (aktion === 'volumen') { p.volumen = p.volumen === false; return }
+    if (aktion === 'volumenBreite') { p.volumenBreite = !p.volumenBreite; return }
     const inst = (p.indikatoren || []).find((x) => x.id === id)
     if (!inst) return
     if (aktion === 'entfernen') p.indikatoren = p.indikatoren.filter((x) => x.id !== id)
@@ -959,6 +1056,49 @@ async function watchlistLoeschen(id) {
 }
 
 // ── Sonstiges ───────────────────────────────────────────────────────────
+/*
+ * Bild zum Teilen: Bildschirmfoto des aktiven Panels (alle Fenster samt Momentum
+ * Radar) mit Kopfzeile und — für Futures — einer Zeile aus dem Momentum Radar,
+ * derselben Quelle wie die Momentum-Box (serverseitig zwischengespeichert), auf
+ * derselben Zeitebene (`radarTfFuer`, utils/chart/radarTf.js).
+ */
+async function momentumZeile(p) {
+    if (p.markt === 'spot') return null
+    const tf = radarTfFuer(p.interval)
+    try {
+        const { data: d } = await axios.get('/api/livetrading/momentum', { params: { symbol: p.symbol, tf }, timeout: 8000 })
+        const status = t('livetrading.momentum.status_' + (d.status > 0 ? 'long' : d.status < 0 ? 'short' : 'warten'))
+        const modus = t('livetrading.momentum.modus_' + (d.modus || 'swing'))
+        const mf = d.geldfluss?.wert
+        const NAME = { '1w': 'W', '1d': 'D' }
+        const ebenen = (d.zeitebenen || []).filter((z) => z.wert != null)
+            .map((z) => `${NAME[z.tf] || z.tf} ${z.wert >= 0 ? '+' : ''}${z.wert.toFixed(0)}`).join('  ')
+        return [`Momentum Radar (${tf}): ${status} · ${modus}${mf != null ? ` · ${t('chart.teilen.geldfluss')} ${mf >= 0 ? '+' : ''}${mf.toFixed(1)}` : ''}`, ebenen].filter(Boolean)
+    } catch { return null }
+}
+const teilenName = computed(() => {
+    const p = aktivesPanel.value
+    return `${p.symbol}_${p.interval}_${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}`
+})
+const teilenBetreff = computed(() => `${aktivesPanel.value.symbol} ${aktivesPanel.value.interval} — AutarkTrade`)
+async function teilenBild() {
+    const pr = panelRefs.value[aktivIndex.value]
+    const leinwand = pr?.bildschirmfoto()
+    if (!leinwand) throw new Error(t('chart.teilen.keinChart'))
+    const p = aktivesPanel.value
+    const k = pr.kerzen || []
+    const letzte = k[k.length - 1]
+    const kurs = letzte ? (pr.kerzenSerie?.priceFormatter().format(letzte.c) ?? String(letzte.c)) : ''
+    const zeit = new Date().toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    const c = baueChartBild(leinwand, {
+        titel: `${p.symbol} · ${p.interval} · ${p.markt === 'spot' ? 'Spot' : 'Futures'}`,
+        unter: [zeit, kurs].filter(Boolean).join(' · '),
+        zeilen: (await momentumZeile(p)) || [],
+        fuss: 'Charts: TradingView Lightweight Charts™',
+    })
+    return leinwandZuBlob(c)
+}
+
 function foto() {
     const leinwand = panelRefs.value[aktivIndex.value]?.bildschirmfoto()
     if (!leinwand) return
@@ -998,6 +1138,8 @@ function taste(e) {
         werkzeug.value = null
         return
     }
+    // Enter schliesst einen Pfad ab (wie ein Klick auf den letzten Punkt)
+    if (e.key === 'Enter' && panel?.pfadFertig?.()) { e.preventDefault(); return }
     if (e.key === 'Delete' || e.key === 'Backspace') {
         if (panel?.loescheAuswahl()) e.preventDefault()
         return
@@ -1136,9 +1278,9 @@ watch(sichtbareAnzahl, async () => {
         <template v-if="bereit">
             <ChartKopfleiste ref="kopf" :panel="aktivesPanel" :raster="daten.raster" :sync="daten.sync" :layouts="layouts"
                 :layout-id="layoutId" :seitenleiste-offen="daten.seitenleiste.offen" :telefon="telefon"
-                @panel="setzePanel" @indikatoren="oeffneIndikatoren" @vorlage="vorlageAnwenden" @raster="setzeRaster" @sync="setzeSync" @layout-wechsel="layoutWechsel"
+                @panel="setzePanel" @kerzen-art="setzeKerzenArt" @indikatoren="oeffneIndikatoren" @vorlage="vorlageAnwenden" @raster="setzeRaster" @sync="setzeSync" @layout-wechsel="layoutWechsel"
                 @layout-neu="layoutNeu" @layout-umbenennen="layoutUmbenennen" @layout-loeschen="layoutLoeschen"
-                @seitenleiste="daten.seitenleiste.offen = !daten.seitenleiste.offen" @foto="foto" />
+                @seitenleiste="daten.seitenleiste.offen = !daten.seitenleiste.offen" @foto="foto" @teilen="teilenOffen = true" />
 
             <div v-if="!vollbild" class="coinTabs" :class="{ zieht: tabZieht !== null }" role="tablist" :aria-label="t('chart.coinTabs.titel')"
                 @touchmove="tabTouchBewegt">
@@ -1184,12 +1326,18 @@ watch(sichtbareAnzahl, async () => {
                     <Transition name="schubHg">
                         <div v-if="schublade" class="schubladeHg" @click="schublade = null"></div>
                     </Transition>
+                    <template v-if="!telefon && !schublade">
+                        <button v-for="g in GRIFFE" :key="g.seite" type="button" class="schubGriff" :class="['g-' + g.seite, RECHTS.has(g.seite) ? 'rechts' : 'links']"
+                            :title="t(g.titel)" :aria-label="t(g.titel)"
+                            @pointerdown.stop="griffStart($event, g.seite)" @pointerup.stop="griffEnde" @pointercancel="griffZug = null" @click="griffTaste($event, g.seite)">
+                            <Symbol :name="g.symbol" :groesse="18" /></button>
+                    </template>
                     <Transition name="schubLinks">
                         <aside v-if="schublade === 'links'" class="schublade links" :aria-label="t('chart.indBox.titel')">
                             <div class="schubZeile">
                                 <span class="schubTitel">{{ t('chart.schublade.vorlagen') }}</span>
                                 <div class="schubKnoepfe">
-                                    <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" @anwenden="(v) => { vorlageAnwenden(v); schublade = null }" />
+                                    <VorlagenMenue :aktuelle="aktivesPanel.indikatoren || []" :aktiv="aktivesPanel.vorlageId ?? null" @anwenden="(v) => { vorlageAnwenden(v); schublade = null }" />
                                 </div>
                             </div>
                             <hr class="schubTrenner" />
@@ -1200,6 +1348,8 @@ watch(sichtbareAnzahl, async () => {
                             <div class="schubAktionen">
                                 <button type="button" class="schubKnopf" @click="schublade = null; oeffneIndikatoren()">
                                     <Symbol name="plus" /> {{ t('chart.indikatorenTitel') }}</button>
+                                <button type="button" class="schubKnopf" @click="schublade = null; teilenOffen = true">
+                                    <Symbol name="teilen" /> {{ t('chart.teilen.kurz') }}</button>
                             </div>
                             <hr class="schubTrenner" />
                             <div class="schubGruppe">
@@ -1208,7 +1358,8 @@ watch(sichtbareAnzahl, async () => {
                                     <button v-for="o in OVERLAYS" :key="o.id" type="button" class="schubChip"
                                         :class="{ an: overlayAn(aktivesPanel, o.id) }" :aria-pressed="overlayAn(aktivesPanel, o.id)"
                                         @click="aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), [o.id]: !overlayAn(aktivesPanel, o.id) }">
-                                        {{ t('chart.overlay.' + o.id) }}</button>
+                                        {{ t('chart.overlay.' + o.id) }}
+                                        <span v-if="te('chart.overlay.kurz.' + o.id)" class="chipErklaerung">{{ t('chart.overlay.kurz.' + o.id) }}</span></button>
                                 </div>
                             </div>
                         </aside>
@@ -1313,18 +1464,14 @@ watch(sichtbareAnzahl, async () => {
                         :zeichnungen="aktiveZeichnungen" :auswahl-id="aktiveAuswahl" @waehle="objektWaehlen" @bearbeite="objektBearbeiten"
                         @aendere="(z, patch) => zeichnungAendern(z.symbol, z.id, patch)"
                         @loesche="(z) => zeichnungLoeschen(z.symbol, z.id)" />
-                    <StrategieReiter v-else-if="daten.seitenleiste.reiter === 'strategien'" :panel="aktivesPanel"
-                        :daten="aktivesPanelRef?.strategieDaten" :vorschau="aktivesPanelRef?.strategieVorschau"
-                        :backtest="aktivesPanelRef?.strategieBacktest" @filter="strategieFilter"
-                        @vorschau="(v) => aktivesPanelRef?.setzeStrategieVorschau(v)"
-                        @backtest="(b) => aktivesPanelRef?.setzeBacktest(b)" />
+                    <FlashNewsReiter v-else-if="daten.seitenleiste.reiter === 'news'" :panel="aktivesPanel" />
                     <AlarmReiter v-else-if="daten.seitenleiste.reiter === 'alarme'" :symbol="aktivesPanel.symbol"
                         :markt="aktivesPanel.markt" :kurs="aktuellerKurs" :watchlists="watchlists"
                         @neu="alarmBeiPreis" @neu-momentum="alarmMomentum" @neu-lsob="alarmLsob()" @bearbeite="alarmBearbeiten" />
                     <KiReiter v-else-if="daten.seitenleiste.reiter === 'ki'" :panel="aktivesPanel"
                         :sichtbar-bis="() => aktivesPanelRef?.sichtbarerZeitraum()?.bis"
                         :sichtbar-von="() => aktivesPanelRef?.sichtbarerZeitraum()?.von"
-                        :bild="() => aktivesPanelRef?.bildschirmfoto()" />
+                        :bild="(o) => aktivesPanelRef?.bildschirmfoto(o)" @waehle="(id) => aktivesPanelRef?.waehleZeichnung(id)" />
                     </div>
                         <span class="eckGriff" :title="t('chart.eckGriff')" role="separator" :aria-label="t('chart.eckGriff')"
                             @pointerdown.prevent.stop="eckStart($event, 'reiter')" @pointermove="eckZiehen" @pointerup="eckEnde"
@@ -1368,6 +1515,7 @@ watch(sichtbareAnzahl, async () => {
 
             </div>
         </template>
+        <TeilenDialog v-model="teilenOffen" :erzeuge="teilenBild" :dateiname="teilenName" :betreff="teilenBetreff" />
         <AlarmDialog v-if="alarmVorlage" :vorlage="alarmVorlage" :watchlists="watchlists" @schliesse="alarmVorlage = null" />
         <IndikatorDialog v-if="dialog" :key="dialog.instanz?.id || 'neu'" :instanz="dialog.instanz"
             :aktive="daten.panels[dialog.panel]?.indikatoren || []" @hinzu="indikatorHinzu" @speichere="indikatorSpeichern"
@@ -1796,6 +1944,35 @@ watch(sichtbareAnzahl, async () => {
     font-variant-numeric: tabular-nums;
 }
 
+/*
+ * Handy: der Text bekommt die ganze Breite und bricht um, Knöpfe und Zeit stehen
+ * darunter. Einzeilig blieb von „ETHUSDT 1 Std: grosser Long-Punkt …“ nur „ETHUSDT …“.
+ */
+@media (max-width: 767px) {
+    .alarmZeilen {
+        max-height: 45vh;
+    }
+
+    .alarmBanner {
+        grid-template-columns: 1fr auto;
+        row-gap: 6px;
+    }
+
+    .bannerLinks {
+        grid-column: 1 / -1;
+        align-items: flex-start;
+    }
+
+    .bannerText {
+        white-space: normal;
+        overflow: visible;
+    }
+
+    .bannerKnoepfe {
+        justify-self: start;
+    }
+}
+
 .bannerKnopf {
     padding: 2px 10px;
     border: 1px solid var(--line);
@@ -1984,6 +2161,17 @@ watch(sichtbareAnzahl, async () => {
     gap: 6px;
 }
 
+.schubChip .chipErklaerung {
+    display: block;
+    margin-top: 2px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: normal;
+    line-height: 1.35;
+    text-align: left;
+    white-space: normal;
+}
+
 .schubChip {
     text-align: left;
     padding: 6px 12px;
@@ -2007,6 +2195,60 @@ watch(sichtbareAnzahl, async () => {
     inset: 0;
     z-index: 20;
     background: rgba(0, 0, 0, 0.45);
+}
+
+/*
+ * Griffe am Rand im Desktop-Vollbild. Bis 31.10.2026 grau, halb durchsichtig und
+ * 22 px breit — auf dem schwarzen Chart nicht zu finden. Jetzt türkis umrandet
+ * mit türkisem Symbol, beim Überfahren gefüllt.
+ */
+.schubGriff {
+    position: absolute;
+    z-index: 19;
+    width: 30px;
+    height: 88px;
+    margin-top: -44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid var(--accent);
+    background: var(--panel);
+    color: var(--accent);
+    opacity: 0.9;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.6);
+    transition: opacity 0.15s, width 0.15s, background 0.15s, color 0.15s;
+}
+
+.schubGriff:hover,
+.schubGriff:focus-visible {
+    opacity: 1;
+    width: 38px;
+    background: var(--accent);
+    color: var(--on-accent);
+}
+
+.schubGriff.links {
+    left: 0;
+    border-left: none;
+    border-radius: 0 var(--radius-klein) var(--radius-klein) 0;
+}
+
+.schubGriff.rechts {
+    right: 0;
+    border-right: none;
+    border-radius: var(--radius-klein) 0 0 var(--radius-klein);
+}
+
+.schubGriff.g-links,
+.schubGriff.g-favoriten {
+    top: 25%;
+}
+
+.schubGriff.g-werkzeuge,
+.schubGriff.g-rechts {
+    top: 75%;
 }
 
 .schublade {

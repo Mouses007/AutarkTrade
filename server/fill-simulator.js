@@ -168,6 +168,36 @@ export function istMarktEinstieg(setup) {
 }
 
 /**
+ * Steigt dieses Setup zum SCHLUSS der Auslösekerze ein (eine Bestätigung, die
+ * erst mit dem Schluss feststeht — Richtungs- oder Ablehnungskerze)?
+ *
+ * Dann betrifft der Verlauf der Kerze VOR ihrem Schluss den Trade nicht: ein
+ * Docht, der den Stop schon gestreift hat, war vor dem Einstieg. Ohne diese
+ * Unterscheidung buchte `entryIsValid` solche Einstiege als sofortigen Verlust.
+ */
+export function istSchlussEinstieg(setup) {
+    if (!setup) return false
+    if (setup.entryAtClose === true) return true
+    let conf = setup.confirmations
+    if (typeof conf === 'string') {
+        try { conf = JSON.parse(conf) } catch { conf = null }
+    }
+    return conf?.entryAtClose === true
+}
+
+/**
+ * Einstiegszeit einer Position: Beginn der Auslösekerze, bei einem Einstieg
+ * zum Schluss (`entryAtClose`) ihr Ende. Engine und Backtest nutzen dieselbe
+ * Regel; bewertet wird die Position in beiden Fällen erst ab der Folgekerze.
+ * Bis 31.10.2026 galt auch beim Schluss-Einstieg der Kerzenbeginn: der
+ * Zeitausstieg kam eine Kerze zu früh, und auf 1d zählten die Funding-
+ * Abrechnungen 08:00 und 16:00 der Auslösekerze mit (Audit 4.3.4, FUN-F1-005).
+ */
+export function einstiegsZeit(ev, setup, kerzeT, tfMs) {
+    return ev?.entryAtClose === true || istSchlussEinstieg(setup) ? kerzeT + (Number(tfMs) || 0) : kerzeT
+}
+
+/**
  * Ordersorte des Einstiegs. Vorgabe Limit — siehe `entryOrder` in RISK_PARAMS.
  * Eine Stop-Order nimmt immer Liquidität: sie wird zum Marktpreis ausgeführt,
  * sobald das Niveau fällt, und zahlt damit Taker — unabhängig davon, was in
@@ -451,9 +481,14 @@ export function stepCandle(pos, candle, opts = {}) {
 
     // Zeitausstieg: eine Position ohne festes Ziel darf nicht ewig laufen.
     // Wird zuletzt geprüft, damit Stop und Ziel Vorrang behalten.
+    // Geschlossen wird zum SCHLUSS der Kerze, mit der die Haltedauer erreicht
+    // ist — Zeitpunkt ist ihr Ende, nicht ihr Beginn. Bis 01.11.2026 zählte
+    // der Beginn: aus „48 Kerzen" wurden 49, und die Strategien glichen das mit
+    // 47 statt 48 aus. `kerzeMs` fehlt nur in alten Aufrufen (dann wie bisher).
     const maxHoldMs = Number(opts.maxHoldMs) || 0
-    if (maxHoldMs > 0 && candle.t - pos.entryTime >= maxHoldMs) {
-        return { exit: { price: candle.c, reason: 'timeout', time: candle.t } }
+    const kerzeMs = Number(opts.kerzeMs) || 0
+    if (maxHoldMs > 0 && candle.t + kerzeMs - pos.entryTime >= maxHoldMs) {
+        return { exit: { price: candle.c, reason: 'timeout', time: candle.t + kerzeMs } }
     }
 
     // Break-Even erst nach der Ausstiegsprüfung und nur auf Schlusskursbasis
@@ -559,6 +594,9 @@ export function closePosition(pos, { price, reason, time }, costs, extra = {}) {
  */
 export function entryIsValid(setup, candle) {
     const long = setup.direction === 'long'
+    // Einstieg zum Schluss: der Preis IST der Schluss dieser Kerze, und alles,
+    // was sie vorher tat, liegt vor dem Einstieg (siehe istSchlussEinstieg).
+    if (istSchlussEinstieg(setup)) return { ok: true }
     // Der Einstieg liegt an der Zonenkante; die Kerze muss sie berührt haben.
     // Bei einer Stop-Order liegt er auf der anderen Seite des Marktes: dort
     // löst erst das Überschreiten aus, nicht das Zurückkommen.

@@ -49,6 +49,7 @@
     <string name="w_refreshing">Aktualisiere…</string>
     <string name="w_tap_config">Tippen zum Einrichten</string>
     <string name="w_toggle_balance">Saldo ein-/ausblenden</string>
+    <string name="w_toggle_sprache">Sprachausgabe der Alarme ein-/ausschalten</string>
     <string name="w_alarme_an">Chart-Alarme an</string>
 
     <!-- Einstellungen: Karten -->

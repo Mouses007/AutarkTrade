@@ -410,8 +410,6 @@
                     <div>
                         <p class="at-mu-0">{{ lauf.einordnung }}</p>
                         <span class="crQuelle">{{ t('coinradar.einordnungQuelle') }}</span>
-                        <!-- S12: Pflichtlabel an der KI-Einordnung. -->
-                        <KiHinweis klein />
                     </div>
                 </div>
 
@@ -1044,7 +1042,6 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const { t } = useI18n()
 const istTelefon = useIstTelefon()

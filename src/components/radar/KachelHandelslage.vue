@@ -26,7 +26,6 @@ import { aktiveSitzung } from '../../stores/livetrading.js'
 import { testbetrieb } from '../../stores/system.js'
 import Symbol from '@/components/basis/Symbol.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -337,8 +336,6 @@ async function erzeuge(erzwingen = false, auto = false) {
                 </p>
                 <p v-if="fehler" class="hlFehler">{{ fehler }}</p>
             </template>
-            <!-- S12: Pflichtlabel an jedem KI-Text, klein wie gross. -->
-            <KiHinweis klein :anbieter="daten.provider" :modell="gross ? daten.model : ''" />
         </template>
     </div>
 </template>

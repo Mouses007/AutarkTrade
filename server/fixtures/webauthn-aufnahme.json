@@ -1,0 +1,47 @@
+{
+  "hinweis": "Erzeugt von __selftest-webauthn.mjs mit WEBAUTHN_AUFNAHME_SCHREIBEN=1 (Software-Authenticator, P-256, ohne PIN).",
+  "rpId": "autarktrade.local",
+  "origin": "https://autarktrade.local:8443",
+  "tokRegistrieren": "aufnahme-registrieren-token",
+  "reg": {
+    "id": "aOqZvSH3k8IVGMYVd09x8-H2R6CVj94xyZx5t59qxm8",
+    "rawId": "aOqZvSH3k8IVGMYVd09x8-H2R6CVj94xyZx5t59qxm8",
+    "type": "public-key",
+    "response": {
+      "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uY3JlYXRlIiwiY2hhbGxlbmdlIjoiWVhWbWJtRm9iV1V0Y21WbmFYTjBjbWxsY21WdUxYUnZhMlZ1Iiwib3JpZ2luIjoiaHR0cHM6Ly9hdXRhcmt0cmFkZS5sb2NhbDo4NDQzIiwiY3Jvc3NPcmlnaW4iOmZhbHNlfQ",
+      "attestationObject": "o2NmbXRkbm9uZWdhdHRTdG10oGhhdXRoRGF0YViksBIv9bkmczLjlz_kwKA8k5USDI-3EL9d09ezf5Di9l5BAAAAAAAAAAAAAAAAAAAAAAAAAAAAIGjqmb0h95PCFRjGFXdPcfPh9keglY_eMcmcebefasZvpQECAyYgASFYIFdOvilXcoMIOrSRXvNJNFvKNrzA2l2D09biAcaIwrBoIlggo2vlRpkkO3_CgnG6tTF7Hm_wY0gFF1Fcy9axfB6nv80",
+      "transports": [
+        "usb",
+        "nfc"
+      ]
+    },
+    "clientExtensionResults": {},
+    "authenticatorAttachment": "cross-platform"
+  },
+  "tok1": "aufnahme-login-1",
+  "login1": {
+    "id": "aOqZvSH3k8IVGMYVd09x8-H2R6CVj94xyZx5t59qxm8",
+    "rawId": "aOqZvSH3k8IVGMYVd09x8-H2R6CVj94xyZx5t59qxm8",
+    "type": "public-key",
+    "response": {
+      "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiWVhWbWJtRm9iV1V0Ykc5bmFXNHRNUSIsIm9yaWdpbiI6Imh0dHBzOi8vYXV0YXJrdHJhZGUubG9jYWw6ODQ0MyIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+      "authenticatorData": "sBIv9bkmczLjlz_kwKA8k5USDI-3EL9d09ezf5Di9l4BAAAAAQ",
+      "signature": "MEQCIAkbRX_Vg6Gx1t2X8sSmynpgvY-sdh5w2osyn-cYX5z9AiBnXv5ZHkoYmM_kZeRgg6HUa3cGP6AMMCzTtXgFkOpebw"
+    },
+    "clientExtensionResults": {},
+    "authenticatorAttachment": "cross-platform"
+  },
+  "tok2": "aufnahme-login-2",
+  "login2": {
+    "id": "aOqZvSH3k8IVGMYVd09x8-H2R6CVj94xyZx5t59qxm8",
+    "rawId": "aOqZvSH3k8IVGMYVd09x8-H2R6CVj94xyZx5t59qxm8",
+    "type": "public-key",
+    "response": {
+      "clientDataJSON": "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiWVhWbWJtRm9iV1V0Ykc5bmFXNHRNZyIsIm9yaWdpbiI6Imh0dHBzOi8vYXV0YXJrdHJhZGUubG9jYWw6ODQ0MyIsImNyb3NzT3JpZ2luIjpmYWxzZX0",
+      "authenticatorData": "sBIv9bkmczLjlz_kwKA8k5USDI-3EL9d09ezf5Di9l4BAAAAAg",
+      "signature": "MEUCIF0mJuofHSKkEf4cPHUg1HHuVqlj7oPDB5BGnVK4aUsYAiEA4ic-tgz_7tsudx1a7dhFGdffe_Lip_6KIJJu3yHbxNw"
+    },
+    "clientExtensionResults": {},
+    "authenticatorAttachment": "cross-platform"
+  }
+}

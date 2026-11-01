@@ -6,7 +6,7 @@
  * Ältere Analysen (vor dem Umbau auf IDs, 18.10.2026) liegen bis zu 30 min im
  * Cache und müssen genauso gezeichnet werden wie bisher.
  */
-import { kanalAlsZeichnung, linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil, anzeigeAnalyse, vorschauAnalyse, leereMarken, markenSchluessel } from './chart/kiZeichnungen.js'
+import { dreieckAlsZeichnungen, kanalAlsZeichnung, linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil, anzeigeAnalyse, vorschauAnalyse, leereMarken, markenSchluessel } from './chart/kiZeichnungen.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -124,6 +124,18 @@ console.log('\nKanal-Beschriftung\n')
     const kurz = kanalAlsZeichnung({ ...k, label: 'Absteigender Kanal (5/3 Berührungen, nach unten verlassen)', labelKurz: 'Absteigender Kanal, nach unten verlassen' })
     check('im Chart der kurze Name ohne Berührungszahlen', kurz.stil.text === 'Absteigender Kanal, nach unten verlassen (K1)', kurz.stil.text)
     check('ältere Analyse ohne labelKurz: langer Name', kanalAlsZeichnung({ ...k, label: 'Absteigender Kanal (5/3 Berührungen)' }).stil.text === 'Absteigender Kanal (5/3 Berührungen) (K1)')
+}
+
+// Dreieck/Keil: zwei Kanten als Trendlinien, beide mit demselben Vorschlags-Schlüssel
+{
+    const d = { id: 'M1', art: 'dreieck', form: 'fallenderKeil', label: 'Fallender Keil (3/4 Berührungen)', labelKurz: 'Fallender Keil', gewicht: 'stark',
+        tA: 1000, obenA: 120, untenA: 100, tE: 9000, obenE: 104, untenE: 98, p1: 99, p2: 105, t1: 1000, t2: 9000 }
+    const zz = dreieckAlsZeichnungen(d)
+    check('Dreieck: zwei Trendlinien, obere mit Namen, grün (fallender Keil)', zz.length === 2 && zz.every((z) => z.typ === 'trendlinie') && zz[0].stil.text.includes('Fallender Keil') && !zz[1].stil.text && zz[0].stil.farbe === KI_FARBEN.unterstuetzung)
+    check('Dreieck: Kanten vom Beginn bis zum Ende', zz[0].punkte[0].p === 120 && zz[0].punkte[1].p === 104 && zz[1].punkte[1].t === 9000)
+    const v = kiVorschau({ linien: [d], zonen: [], kerzenVon: 0, kerzenBis: 9000 })
+    check('Vorschau: zwei Zeichnungen, ein Schlüssel, eindeutige ids', v.length === 2 && v.every((z) => z.ki === 'linie0') && new Set(v.map((z) => z.id)).size === 2)
+    check('grauer Kandidat: Dreiecke nicht doppelt', !kandidatenVorschau({ auswahl: { kandidaten: [{ id: 'M2', quelle: 'dreieck' }] }, linien: [], zonen: [] }).length)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

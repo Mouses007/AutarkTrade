@@ -18,9 +18,11 @@ import { setupKalenderRoutes, stopKalender } from './server/marktradar-kalender.
 import { setupLivetradingRoutes } from './server/livetrading-api.js'
 import { setupFremdbuchRoute } from './server/fremdbuch.js'
 import { setupChartRoutes } from './server/chart-api.js'
-import { setupChartStrategieRoutes } from './server/chart-strategie.js'
 import { setupChartAlarmRoutes, startChartAlarmTakt, stopChartAlarmTakt } from './server/chart-alarme.js'
 import { setupChartKiRoutes } from './server/chart-ki.js'
+import { setupFlashNewsRoutes } from './server/flash-news.js'
+import { setupChartTeilenRoutes } from './server/chart-teilen.js'
+import { setupChartFootprintRoutes } from './server/chart-footprint.js'
 import { setupLageRoutes } from './server/marktradar-lage.js'
 import { setupHandelslageRoutes } from './server/handelslage.js'
 import { setupNewsRoutes, startNewsTakt, stopNews } from './server/marktradar-news.js'
@@ -47,7 +49,6 @@ import { setupEsp32Routes } from './server/esp32-api.js'
 import { setupLiveRecorder, stopLiveRecorder } from './server/live-recorder.js'
 import { setupLiqKalibrierungRoutes } from './server/liq-kalibrierung.js'
 import { setupStrategyRoutes, ladeAlleRegelStrategien } from './server/strategy-api.js'
-import { setupStrategyBuilderRoutes } from './server/strategy-builder.js'
 import { setupRuleBuilderRoutes } from './server/rule-builder.js'
 import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engine.js'
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
@@ -244,9 +245,11 @@ async function starteServer() {
     // `leseKalender` mit, statt eine zweite Abfrage aufzubauen.
     setupLivetradingRoutes(app);
     setupChartRoutes(app);
-    setupChartStrategieRoutes(app);
     setupChartAlarmRoutes(app);
     setupChartKiRoutes(app);
+    setupFlashNewsRoutes(app);
+    setupChartTeilenRoutes(app);
+    setupChartFootprintRoutes(app);
     // Fremde Orderbücher zum Vergleich — bewusst NICHT in die Karte gemischt,
     // die Begründung steht im Kopf von server/fremdbuch.js.
     setupFremdbuchRoute(app);
@@ -283,7 +286,6 @@ async function starteServer() {
     // weil sie dessen Leselogik benutzt.
     setupLiqKalibrierungRoutes(app);
     setupStrategyRoutes(app);
-    setupStrategyBuilderRoutes(app);
     setupRuleBuilderRoutes(app);
     setupRanglisteRoutes(app);
     setupPortfolioRoutes(app);

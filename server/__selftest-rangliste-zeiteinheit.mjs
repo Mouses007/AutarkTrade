@@ -40,11 +40,15 @@ console.log('Stufe 0 — Sperren')
     const r = leiteZeiteinheitAb('lsob', { ...tage(180), backtests: [], instanzen: [] })
     const gesperrt = r.gesperrt.map((g) => g.timeframe)
 
-    // 180 Tage auf 5m sind 51 840 Kerzen — der Abruf würde hinten abschneiden
-    // und still einen kürzeren Zeitraum messen als bestellt.
-    check('5m über 180 Tage ist gesperrt', gesperrt.includes('5m'), JSON.stringify(gesperrt))
+    // 270 Tage auf 5m sind 77 760 Kerzen, über der Grenze von 75 000 (seit
+    // 01.11.2026; vorher 20 000, da war schon 5m über 180 Tage gesperrt) — der
+    // Abruf würde hinten abschneiden und still einen kürzeren Zeitraum messen.
+    const lang = leiteZeiteinheitAb('lsob', { ...tage(270), backtests: [], instanzen: [] })
+    check('5m über 270 Tage ist gesperrt', lang.gesperrt.some((g) => g.timeframe === '5m'),
+        JSON.stringify(lang.gesperrt.map((g) => g.timeframe)))
     check('… mit nachvollziehbarem Grund',
-        r.gesperrt.find((g) => g.timeframe === '5m')?.grund === 'zu_viele_kerzen')
+        lang.gesperrt.find((g) => g.timeframe === '5m')?.grund === 'zu_viele_kerzen')
+    check('5m über 180 Tage geht seit der höheren Grenze', !gesperrt.includes('5m'), JSON.stringify(gesperrt))
 
     // 1d wäre OHNE den Vorlauf-Kunstgriff unmöglich (90 Kerzen je Hälfte gegen
     // 300 Vorlauf). Weil jede Hälfte ihren eigenen Vorlauf bekommt, läuft sie —
@@ -64,8 +68,8 @@ console.log('Stufe 0 — Sperren')
         JSON.stringify(kurz.gesperrt.map((g) => `${g.timeframe}:${g.grund}`)))
 
     check('gesperrte Zeiteinheiten stehen nicht unter den Kandidaten',
-        !r.kandidaten.includes('5m'), r.kandidaten.join(','))
-    check('die Sperre steht auch im Begründungssatz', /5m ist gesperrt/.test(r.begruendung))
+        !lang.kandidaten.includes('5m'), lang.kandidaten.join(','))
+    check('die Sperre steht auch im Begründungssatz', /5m ist gesperrt/.test(lang.begruendung))
 }
 
 // ── Stufe 2: der Altbestand ohne `belastbar` ─────────────────────────────
@@ -79,7 +83,7 @@ console.log('\nStufe 2 — was bestanden hätte')
         ...Array.from({ length: 4 }, () => lauf('1h', 12, 0.8)),
         ...Array.from({ length: 4 }, () => lauf('4h', 8, 1.2)),
     ]
-    const r = leiteZeiteinheitAb('lsob', { ...tage(180), backtests, instanzen: [] })
+    const r = leiteZeiteinheitAb('lsob', { ...tage(270), backtests, instanzen: [] })
 
     check('1h gewinnt', r.timeframe === '1h', `${r.timeframe} [${r.quelle}]`)
     check('die Quelle ist „bestanden"', r.quelle === 'bestanden', r.quelle)
@@ -95,7 +99,7 @@ console.log('\nStufe 2 — was bestanden hätte')
 
     // Gleichstand bei der Anzahl → höherer Median entscheidet
     const gleich = leiteZeiteinheitAb('lsob', {
-        ...tage(180),
+        ...tage(270),
         backtests: [lauf('1h', 40, 0.2), lauf('4h', 40, 0.9)],
         instanzen: [],
     })
@@ -109,19 +113,19 @@ console.log('\nStufe 1 — übernommen schlägt alles')
         ...Array.from({ length: 17 }, () => lauf('1h', 45, 0.43)),
         lauf('4h', 31, 0.05, 'uebernommen'),
     ]
-    const r = leiteZeiteinheitAb('lsob', { ...tage(180), backtests, instanzen: [] })
+    const r = leiteZeiteinheitAb('lsob', { ...tage(270), backtests, instanzen: [] })
     check('eine getroffene Entscheidung schlägt die Statistik',
         r.timeframe === '4h' && r.quelle === 'uebernommen', `${r.timeframe} [${r.quelle}]`)
 
     // Ohne ein einziges `uebernommen` — der echte Zustand — fällt es durch.
     const ohne = leiteZeiteinheitAb('lsob', {
-        ...tage(180), backtests: backtests.map((b) => ({ ...b, entscheidung: 'offen' })), instanzen: [],
+        ...tage(270), backtests: backtests.map((b) => ({ ...b, entscheidung: 'offen' })), instanzen: [],
     })
     check('ohne Übernahme fällt es sauber auf Stufe 2 durch', ohne.quelle === 'bestanden', ohne.quelle)
 
     // Eine übernommene, aber gesperrte Zeiteinheit darf nicht gewinnen.
     const gesperrtUebernommen = leiteZeiteinheitAb('lsob', {
-        ...tage(180), backtests: [lauf('5m', 900, 0.3, 'uebernommen'), lauf('1h', 45, 0.4)], instanzen: [],
+        ...tage(270), backtests: [lauf('5m', 900, 0.3, 'uebernommen'), lauf('1h', 45, 0.4)], instanzen: [],
     })
     check('eine gesperrte Zeiteinheit gewinnt auch als übernommene nicht',
         gesperrtUebernommen.timeframe === '1h', gesperrtUebernommen.timeframe)
@@ -131,7 +135,7 @@ console.log('\nStufe 1 — übernommen schlägt alles')
 console.log('\nStufe 3 — laufende Instanzen')
 {
     const eine = leiteZeiteinheitAb('lsob', {
-        ...tage(180), backtests: [], instanzen: [{ timeframe: '15m', timeframes: [] }],
+        ...tage(270), backtests: [], instanzen: [{ timeframe: '15m', timeframes: [] }],
     })
     check('genau eine Zeiteinheit im Betrieb → die', eine.timeframe === '15m' && eine.quelle === 'instanz',
         `${eine.timeframe} [${eine.quelle}]`)
@@ -140,7 +144,7 @@ console.log('\nStufe 3 — laufende Instanzen')
     // fünf laufen, sagt über die beste GAR NICHTS — hier darf nicht entschieden
     // werden, sonst gewinnt der Zufall der Sortierreihenfolge.
     const fuenf = leiteZeiteinheitAb('lsob', {
-        ...tage(180), backtests: [],
+        ...tage(270), backtests: [],
         instanzen: ['1d', '5m', '1h', '15m', '4h'].map((t) => ({ timeframe: t, timeframes: [] })),
     })
     check('fünf Instanzen auf fünf Zeiteinheiten → keine Entscheidung',
@@ -154,12 +158,12 @@ console.log('\nStufe 3 — laufende Instanzen')
 
     check('mehrere Zeiteinheiten EINER Instanz zählen genauso',
         leiteZeiteinheitAb('lsob', {
-            ...tage(180), backtests: [], instanzen: [{ timeframe: '1h', timeframes: ['1h', '4h'] }],
+            ...tage(270), backtests: [], instanzen: [{ timeframe: '1h', timeframes: ['1h', '4h'] }],
         }).quelle === 'nichts')
 
     // Backtests schlagen Instanzen
     const beides = leiteZeiteinheitAb('lsob', {
-        ...tage(180), backtests: [lauf('1h', 45, 0.4)],
+        ...tage(270), backtests: [lauf('1h', 45, 0.4)],
         instanzen: [{ timeframe: '15m', timeframes: [] }],
     })
     check('ein aussagekräftiger Backtest schlägt die Instanz', beides.timeframe === '1h', beides.timeframe)
@@ -168,7 +172,7 @@ console.log('\nStufe 3 — laufende Instanzen')
 // ── Stufe 4 und Randfälle ────────────────────────────────────────────────
 console.log('\nStufe 4 und Randfälle')
 {
-    const nichts = leiteZeiteinheitAb('lsob', { ...tage(180), backtests: [], instanzen: [] })
+    const nichts = leiteZeiteinheitAb('lsob', { ...tage(270), backtests: [], instanzen: [] })
     check('ohne jede Datenlage kein Vorschlag', nichts.timeframe === '' && nichts.quelle === 'nichts',
         `${nichts.timeframe} [${nichts.quelle}]`)
     check('… aber Kandidaten zur Auswahl', nichts.kandidaten.length > 0, nichts.kandidaten.join(','))
@@ -183,7 +187,7 @@ console.log('\nStufe 4 und Randfälle')
 
     // Läufe mit kaputtem stats-JSON dürfen nicht durchschlagen
     const kaputt = leiteZeiteinheitAb('lsob', {
-        ...tage(180), backtests: [{ timeframe: '1h', entscheidung: 'offen', stats: '{kaputt' }], instanzen: [],
+        ...tage(270), backtests: [{ timeframe: '1h', entscheidung: 'offen', stats: '{kaputt' }], instanzen: [],
     })
     check('unlesbares stats-JSON zählt als nicht bestanden statt zu werfen',
         kaputt.quelle === 'nichts', kaputt.quelle)

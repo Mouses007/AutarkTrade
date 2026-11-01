@@ -18,16 +18,27 @@
  * Der Rollback-Commit (Stand vor dem Update) bleibt unter `ROLLBACK_REF` erreichbar,
  * sonst würde ihn Schritt 3 mitnehmen und `/api/update/rollback` liefe ins Leere.
  *
+ * `holeRelease` holt dabei das gemeldete Release-Tag, nicht master (Audit FUN-S3-002):
+ * Die Update-Prüfung meldet `releases/latest` (z. B. v1.1.0), Docker baut aus Tags —
+ * master-HEAD kann danach schon unfertige Commits tragen. Nach dem reset muss die
+ * Fassung in package.json der gemeldeten entsprechen, sonst geht es zurück.
+ *
  * Nur git, kein Netz. Selbsttest: `server/__selftest-update-flach.mjs`.
  */
 import { execFileSync } from 'child_process'
-import { writeFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import path from 'path'
 
 export const ROLLBACK_REF = 'refs/autarktrade/rollback'
 
 /** Argumente für `git fetch`: genau ein Commit, keine Tags. */
 export const FETCH_FLACH = ['--depth', '1', '--no-tags']
+
+/**
+ * Erlaubte Release-Tags: `v1.2.3` bzw. `1.2.3`, optional mit Zusatz (`-rc.1`). Mehr
+ * nicht — der Name geht als Refspec an git und kommt aus einer Netzantwort.
+ */
+export const TAG_MUSTER = /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/
 
 function git(cwd, args, opts = {}) {
     return execFileSync('git', args, { cwd, encoding: 'utf8', timeout: 120000, stdio: ['ignore', 'pipe', 'pipe'], ...opts }).trim()
@@ -72,4 +83,32 @@ export function macheFlach(cwd, { rollback = null } = {}) {
 
     const commits = Number(git(cwd, ['rev-list', '--all', '--count']))
     return { commits, geloescht }
+}
+
+function fassungIn(cwd) {
+    try { return JSON.parse(readFileSync(path.join(cwd, 'package.json'), 'utf8')).version || null } catch { return null }
+}
+
+/**
+ * Das gemeldete Release holen und auschecken: `git fetch --depth 1 --no-tags <url>
+ * refs/tags/<tag>` + `reset --hard FETCH_HEAD`. Passt die Fassung in package.json
+ * danach nicht zu `fassung`, wird auf `zurueck` (Stand vor dem Update) zurückgesetzt
+ * und ein Fehler geworfen — installiert wird nur, was gemeldet war.
+ *
+ * @param {string} cwd Projektordner mit `.git`
+ * @param {{url: string, tag: string, fassung: string, zurueck?: string|null, env?: object}} opt
+ * @returns {{fetch: string, reset: string}} Ausgaben der beiden git-Schritte
+ */
+export function holeRelease(cwd, { url, tag, fassung, zurueck = null, env }) {
+    if (!TAG_MUSTER.test(String(tag || ''))) throw new Error(`Release-Tag ungültig: ${JSON.stringify(tag)}`)
+    const opts = env ? { env } : {}
+    const fetch = git(cwd, ['fetch', ...FETCH_FLACH, url, `refs/tags/${tag}`], opts)
+    const reset = git(cwd, ['reset', '--hard', 'FETCH_HEAD'])
+    const ist = fassungIn(cwd)
+    if (ist !== fassung) {
+        if (zurueck) git(cwd, ['reset', '--hard', zurueck])
+        throw new Error(`Release ${tag} trägt Fassung ${ist ?? 'unbekannt'} statt ${fassung}` +
+            (zurueck ? ' — auf den Stand davor zurückgesetzt' : ''))
+    }
+    return { fetch, reset }
 }

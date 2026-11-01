@@ -33,7 +33,6 @@ import RadarOverlay from '../components/RadarOverlay.vue'
 import Quellenhinweis from '@/components/basis/Quellenhinweis.vue'
 import PageInfo from '../components/PageInfo.vue'
 import Symbol from '@/components/basis/Symbol.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 import { ladeFreigabe, freigabeAn } from '@/utils/quellenFreigabe.js'
 
 const { t, locale } = useI18n()
@@ -1275,7 +1274,6 @@ onBeforeUnmount(() => {
                 <p class="nwLage">{{ bericht.lage }}</p>
                 <!-- S12: Pflichtlabel oben, nicht nur im Fuss — gilt für Bericht,
                      Zwischenmeldung und jeden geöffneten Archivbericht. -->
-                <KiHinweis :anbieter="bericht.provider" :modell="bericht.modell" />
 
                 <!-- Eigene Markteinordnung: zwei Blickwinkel, die sich nicht
                      überschneiden — Zyklus links, Handelstag rechts. Steht vor
@@ -1692,7 +1690,6 @@ onBeforeUnmount(() => {
         <RadarOverlay v-if="punktImFenster" :titel="punktImFenster.titel"
             :quelle="t('news.evidenceSource')" @schliessen="offenerPunkt = -1">
             <div class="nwFenster" data-ki-generiert="true">
-                <KiHinweis klein />
                 <p v-if="punktImFenster.wichtigkeit === 'hoch'" class="nwWichtigGross">
                     {{ t('news.important') }}
                 </p>
@@ -1896,8 +1893,6 @@ onBeforeUnmount(() => {
                         <Symbol :name="aufgeklappt.includes(b.id) ? 'hoch' : 'runter'" />
                         {{ aufgeklappt.includes(b.id) ? t('news.collapse') : t('news.expand') }}
                     </button>
-                    <!-- S12: Video-Stichpunkte sind KI-Text (Gemini) — Pflichtlabel. -->
-                    <KiHinweis v-if="b.zusammenfassung" klein />
                 </a>
                 </div>
 

@@ -12,7 +12,11 @@
  *     Objekte sind weg, der Rollback funktioniert;
  *   - dasselbe nach einer neuen Wurzel (Orphan-Commit, scripts/historie-neu-wurzeln.sh);
  *   - die Shell-Fassung `paketquelle_flach` macht dasselbe;
- *   - kein `git fetch`/`git clone` in den Liefer-Skripten ohne `--depth 1`.
+ *   - kein `git fetch`/`git clone` in den Liefer-Skripten ohne `--depth 1`;
+ *   - geholt wird das gemeldete Release-Tag, nicht master-HEAD (Audit FUN-S3-002):
+ *     `holeRelease` und die Shell-Fassung `paketquelle_holen` landen auf v1.10.0,
+ *     auch wenn master schon unfertige Commits trägt; passt die Fassung nicht, geht
+ *     es zurück.
  */
 import fs from 'fs'
 import os from 'os'
@@ -37,7 +41,7 @@ try {
     process.exit(0)
 }
 
-const { macheFlach, ROLLBACK_REF, FETCH_FLACH } = await import('./update-flach.js')
+const { macheFlach, holeRelease, TAG_MUSTER, ROLLBACK_REF, FETCH_FLACH } = await import('./update-flach.js')
 
 const env = {
     ...process.env,
@@ -139,6 +143,68 @@ try {
     execFileSync('bash', ['-c', `. "${path.join(wurzel, 'scripts/paketquelle.sh')}" && paketquelle_flach`], { cwd: sh, env, stdio: ['ignore', 'pipe', 'pipe'] })
     pruefe('Shell: ein Commit, eine Referenz', zahl(sh) === 1 && git(sh, 'for-each-ref', '--format=%(refname)') === 'refs/heads/master',
         git(sh, 'for-each-ref', '--format=%(refname)'))
+
+    console.log('Release-Tag statt master (FUN-S3-002)')
+    const rel = path.join(tmp, 'rel')
+    fs.mkdirSync(rel)
+    const fassung = (cwd, v) => { fs.writeFileSync(path.join(cwd, 'package.json'), JSON.stringify({ version: v }) + '\n') }
+    git(rel, 'init', '-q', '-b', 'master')
+    fassung(rel, '1.0.0'); git(rel, 'add', '.'); git(rel, 'commit', '-q', '-m', '1.0.0'); git(rel, 'tag', 'v1.0.0')
+    const relUrl = 'file://' + rel
+    const rk = path.join(tmp, 'rk')
+    fs.mkdirSync(rk)
+    git(rk, 'init', '-q', '-b', 'master'); git(rk, 'remote', 'add', 'origin', relUrl)
+    git(rk, 'fetch', ...FETCH_FLACH, relUrl, 'refs/tags/v1.0.0'); git(rk, 'reset', '-q', '--hard', 'FETCH_HEAD')
+    fassung(rel, '1.9.0'); git(rel, 'add', '.'); git(rel, 'commit', '-q', '-m', '1.9.0'); git(rel, 'tag', 'v1.9.0')
+    fassung(rel, '1.10.0'); git(rel, 'add', '.'); git(rel, 'commit', '-q', '-m', '1.10.0'); git(rel, 'tag', '-a', '-m', 'Release', 'v1.10.0')
+    const v110 = git(rel, 'rev-parse', 'v1.10.0^{commit}')
+    fassung(rel, '2.0.0-rc.1'); git(rel, 'add', '.'); git(rel, 'commit', '-q', '-m', 'rc'); git(rel, 'tag', 'v2.0.0-rc.1')
+    fs.writeFileSync(path.join(rel, 'wip.txt'), 'unfertig\n')
+    fassung(rel, '2.0.0-wip'); git(rel, 'add', '.'); git(rel, 'commit', '-q', '-m', 'WIP')
+
+    const vorRel = git(rk, 'rev-parse', 'HEAD')
+    holeRelease(rk, { url: relUrl, tag: 'v1.10.0', fassung: '1.10.0', zurueck: vorRel, env })
+    pruefe('holeRelease landet auf dem gemeldeten Tag', git(rk, 'rev-parse', 'HEAD') === v110, git(rk, 'log', '-1', '--format=%s'))
+    pruefe('kein unfertiger master-Stand', !fs.existsSync(path.join(rk, 'wip.txt')))
+    pruefe('holeRelease legt keine Tags an', git(rk, 'tag') === '')
+    const fr = macheFlach(rk, { rollback: vorRel })
+    pruefe('nach holeRelease: macheFlach mit Rollback', fr.commits === 2, String(fr.commits))
+    git(rk, 'checkout', vorRel, '--', '.')
+    pruefe('nach holeRelease: Rollback stellt 1.0.0 her', JSON.parse(fs.readFileSync(path.join(rk, 'package.json'), 'utf8')).version === '1.0.0')
+    git(rk, 'reset', '-q', '--hard', 'HEAD')
+
+    // Gemeldete Fassung passt nicht zum Tag: zurück auf den Stand davor
+    git(rel, 'tag', 'v1.11.0', 'v1.10.0^{commit}')
+    const vorFalsch = git(rk, 'rev-parse', 'HEAD')
+    let falsch = ''
+    try { holeRelease(rk, { url: relUrl, tag: 'v1.11.0', fassung: '1.11.0', zurueck: vorFalsch, env }) } catch (e) { falsch = e.message }
+    pruefe('falsche Fassung wird abgewiesen', /1\.10\.0 statt 1\.11\.0/.test(falsch), falsch)
+    pruefe('… und auf den Stand davor zurückgesetzt', git(rk, 'rev-parse', 'HEAD') === vorFalsch)
+    git(rel, 'tag', '-d', 'v1.11.0')
+    for (const t of ['master', 'v1.0.0;rm -rf x', '../v1.0.0', 'v1.0', '', null, 'refs/tags/v1.0.0', 'v1.0.0 x']) {
+        pruefe(`Tag-Muster weist ${JSON.stringify(t)} ab`, !TAG_MUSTER.test(String(t ?? '')))
+    }
+    for (const t of ['v4.3.4', '4.3.4', 'v2.0.0-rc.1']) pruefe(`Tag-Muster nimmt ${t}`, TAG_MUSTER.test(t))
+    let ungueltig = ''
+    try { holeRelease(rk, { url: relUrl, tag: 'master', fassung: '2.0.0-wip', env }) } catch (e) { ungueltig = e.message }
+    pruefe('holeRelease holt kein master', /ungültig/.test(ungueltig) && git(rk, 'rev-parse', 'HEAD') === vorFalsch, ungueltig)
+
+    console.log('Shell: paketquelle_holen nimmt das neueste Release-Tag')
+    const rs = path.join(tmp, 'rs')
+    fs.mkdirSync(rs)
+    git(rs, 'init', '-q', '-b', 'master'); git(rs, 'remote', 'add', 'origin', relUrl)
+    const ziel = execFileSync('bash', ['-c', `. "${path.join(wurzel, 'scripts/paketquelle.sh')}" && paketquelle_ziel`],
+        { cwd: rs, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+    pruefe('paketquelle_ziel: v1.10.0 (nicht v1.9.0, keine Vorabversion)', ziel === 'refs/tags/v1.10.0', ziel)
+    execFileSync('bash', ['-c', `. "${path.join(wurzel, 'scripts/paketquelle.sh')}" && paketquelle_holen 2>/dev/null && git reset -q --hard FETCH_HEAD && paketquelle_flach`],
+        { cwd: rs, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    pruefe('Shell landet auf v1.10.0, ohne WIP', git(rs, 'rev-parse', 'HEAD') === v110 && !fs.existsSync(path.join(rs, 'wip.txt')))
+    let shFehler = false
+    try {
+        execFileSync('bash', ['-c', `. "${path.join(wurzel, 'scripts/paketquelle.sh')}" && git remote set-url origin file://${tmp}/gibtsnicht && paketquelle_holen`],
+            { cwd: rs, env, stdio: ['ignore', 'pipe', 'pipe'] })
+    } catch { shFehler = true }
+    pruefe('Shell: Quelle unerreichbar → Fehler statt stillem master', shFehler)
 } finally {
     fs.rmSync(tmp, { recursive: true, force: true })
 }
@@ -156,6 +222,12 @@ for (const datei of dateien) {
 }
 const api = fs.readFileSync(path.join(wurzel, 'server/update-api.js'), 'utf8')
 pruefe('update-api ruft macheFlach mit dem Rollback-Punkt', /macheFlach\(PROJECT_ROOT, \{ rollback: preUpdateCommit \}\)/.test(api))
+pruefe('update-api holt das gemeldete Tag (holeRelease mit remoteTag)', /holeRelease\(PROJECT_ROOT,[\s\S]{0,80}tag: stand\.remoteTag/.test(api))
+pruefe('update-api holt nicht master', !/\bmaster['`]?\s*[\],`]/.test(api.split('\n').filter(z => /git|FETCH/.test(z) && !/^\s*(\/\/|\*)/.test(z)).join('\n')))
+for (const datei of ['update.bat', 'install.bat']) {
+    pruefe(`${datei} holt AT_ZIEL statt master`, /git fetch --depth 1 --no-tags origin [%!]AT_ZIEL[%!]/.test(fs.readFileSync(path.join(wurzel, datei), 'utf8')))
+}
+pruefe('setup-remote.sh holt das Release-Tag', /--branch "\$AT_ZWEIG"/.test(fs.readFileSync(path.join(wurzel, 'setup-remote.sh'), 'utf8')))
 for (const datei of ['update.sh', 'update-mac.command']) {
     pruefe(`${datei} macht flach`, /^\s*paketquelle_flach\b/m.test(fs.readFileSync(path.join(wurzel, datei), 'utf8')))
 }

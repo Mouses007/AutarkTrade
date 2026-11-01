@@ -58,7 +58,15 @@ export class CvZeichnung {
     Y(p) { return p == null || !Number.isFinite(p) ? null : this.serie.priceToCoordinate(p) }
     preis(p) { try { return this.serie.priceFormatter().format(p) } catch { return String(p) } }
 
+    /** Schild zeichnen und seine Fläche merken (Klick darauf öffnet die Einstellungen). */
+    schild(ctx, o) {
+        const b = zeichneSchild(ctx, o)
+        this.schilder.push(b)
+        return b
+    }
+
     zeichne(ctx, groesse) {
+        this.schilder = []
         const d = this.daten
         if (!d) return
         ctx.save()
@@ -84,7 +92,7 @@ export class CvZeichnung {
             ctx.beginPath(); ctx.moveTo(x1, short ? yu : yo); ctx.lineTo(rechts, short ? yu : yo); ctx.stroke()
             ctx.strokeStyle = rgba(farbe, 0.45)
             ctx.strokeRect(x1, yo, rechts - x1, yu - yo)
-            if (p.cvLabels !== false) zeichneSchild(ctx, { text: short ? 'LSOB ▼' : 'LSOB ▲', x: x1 + 26, y: short ? yo : yu, farbe, art: 'kontur', seite: short ? 'oben' : 'unten', abstand: 5 })
+            if (p.cvLabels !== false) this.schild(ctx, { text: short ? 'LSOB ▼' : 'LSOB ▲', x: x1 + 26, y: short ? yo : yu, farbe, art: 'kontur', seite: short ? 'oben' : 'unten', abstand: 5 })
         }
         if (p.cvVorwarn) {
             ctx.strokeStyle = p.cvVorwarnFarbe || '#2962ff'
@@ -123,10 +131,10 @@ export class CvZeichnung {
             const farbe = lang ? '#26a69a' : '#ef5350'
             // Start: Kontur (blass, solange kein Einstieg kam); Entry: volle Fläche mit Ziel-EMA und Preis.
             const xs = this.X(e.startT), ys = this.Y(e.startP)
-            if (xs != null && ys != null) zeichneSchild(ctx, { text: `${name} Start`, x: xs, y: ys, farbe, art: 'kontur', blass: e.status !== 'entry', seite: lang ? 'oben' : 'unten' })
+            if (xs != null && ys != null) this.schild(ctx, { text: `${name} Start`, x: xs, y: ys, farbe, art: 'kontur', blass: e.status !== 'entry', seite: lang ? 'oben' : 'unten' })
             if (e.status !== 'entry') continue
             const xe = this.X(e.entryT), ye = this.Y(e.entryP)
-            if (xe != null && ye != null) zeichneSchild(ctx, { text: `${name} Entry`, zeile2: `${e.ziel} · ${this.preis(e.entryP)}`, x: xe, y: ye, farbe, art: 'voll', seite: lang ? 'unten' : 'oben' })
+            if (xe != null && ye != null) this.schild(ctx, { text: `${name} Entry`, zeile2: `${e.ziel} · ${this.preis(e.entryP)}`, x: xe, y: ye, farbe, art: 'voll', seite: lang ? 'unten' : 'oben' })
         }
     }
 }

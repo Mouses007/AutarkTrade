@@ -196,6 +196,8 @@ export class MarktEbene {
     }
     setzeLiquidationen(l) { this.liq = l || []; this.liqKerzen = liqJeKerze(this.liq, this.zeiten); this.requestUpdate() }
     setzeZonen(z) { this.zonen = z; this.requestUpdate() }
+    /** Abgeholte Zonen (Soll/Ist mit ✓/○) zeigen — sonst nur die noch offene, erwartete Masse. */
+    setzeAbgeholt(an) { this.abgeholt = !!an; this.requestUpdate() }
     setzeWaende(w) { this.waende = w; this.requestUpdate() }
 
     zuX(t) { return logischZuX(this.chart.timeScale(), zeitZuLogisch(t, this.zeiten, this.iv)) }
@@ -205,7 +207,12 @@ export class MarktEbene {
         if (!this.zonen) return
         ctx.save()
         ctx.font = SCHRIFT
-        if (this.zonen.sollIst?.zonen?.length) { this.zeichneSollIst(ctx, groesse.width, this.zonen.sollIst); ctx.restore(); return }
+        if (this.zonen.sollIst?.zonen?.length) {
+            if (this.abgeholt) this.zeichneSollIst(ctx, groesse.width, this.zonen.sollIst)
+            else this.zeichneErwartet(ctx, groesse.width, this.zonen.sollIst.erwartet || [])
+            ctx.restore()
+            return
+        }
         // Unter dem Kurs würden Longs liquidiert (Zwangsverkäufe), darüber Shorts (Zwangskäufe).
         this.zeichneBalken(ctx, groesse.width, [
             ...(this.zonen.unten || []).map((z) => ({ ...z, rgb: ROT, vorsilbe: `${this.texte.liqLong} ~` })),
@@ -217,7 +224,7 @@ export class MarktEbene {
     oben(ctx, groesse) {
         ctx.save()
         ctx.font = SCHRIFT
-        if (this.zonen?.sollIst?.zonen?.length) this.zeichneSollIstMarken(ctx, groesse.width, this.zonen.sollIst)
+        if (this.abgeholt && this.zonen?.sollIst?.zonen?.length) this.zeichneSollIstMarken(ctx, groesse.width, this.zonen.sollIst)
         if (this.waende) this.zeichneWaende(ctx, groesse.width)
         ctx.restore()
     }
@@ -303,6 +310,20 @@ export class MarktEbene {
                 ctx.fillStyle = `rgba(${rgb},0.95)`
                 ctx.fillRect(breite - Math.max(1, z.ist * lang), y - dicke / 2, Math.max(1, z.ist * lang), dicke)
             }
+        }
+    }
+
+    /** Nur das Erwartete: je Zone ein Balken, so lang wie die noch offene Masse (Anteil an der grössten). */
+    zeichneErwartet(ctx, breite, zonen) {
+        const lang = Math.min(130, breite * 0.2)
+        const dicke = breite < 500 ? 3 : 4
+        for (const z of zonen) {
+            const y0 = this.zuY(z.preis)
+            if (y0 == null) continue
+            const y = y0 + (z.seite === 'long' ? 1 : -1) * (dicke / 2 + 1)
+            const l = Math.max(3, z.anteil * lang)
+            ctx.fillStyle = `rgba(${z.seite === 'long' ? ROT : HAUS},0.6)`
+            ctx.fillRect(breite - l, y - dicke / 2, l, dicke)
         }
     }
 

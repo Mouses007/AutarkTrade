@@ -14,7 +14,7 @@
 
 import momentum, { INVALID_REASONS as GRUND_M, trendBei, istWochenende } from './momentum_swing.js'
 import liq, { INVALID_REASONS as GRUND_L } from './liq_kerze.js'
-import { getStrategy, validateParams } from './index.js'
+import { getStrategy, validateParams, htfBedarf, htfZeiteinheitFehler } from './index.js'
 import { ema } from './indicators.js'
 import { welle, signale } from '../momentum-radar.js'
 import { einstiegsSorte, MARKT } from '../fill-simulator.js'
@@ -99,10 +99,20 @@ function abspielen(m, kerzen, p, htf = null, ab = 60) {
 console.log('\nRegistry')
 check('momentum_swing ist registriert', getStrategy('momentum_swing') === momentum)
 check('liq_kerze ist registriert', getStrategy('liq_kerze') === liq)
+// Trendfilter-Zeiteinheit muss ÜBER der gehandelten liegen (01.11.2026): bei
+// gleicher Zeiteinheit verwarfen diese beiden Strategien still jedes Setup.
+check('Zeiteinheiten: Momentum Swing nur 4h, Liquidations-Kerze nur 1h',
+    JSON.stringify(momentum.supportedTimeframes) === '["4h"]' && JSON.stringify(liq.supportedTimeframes) === '["1h"]')
+check('HTF gleich der gehandelten Zeiteinheit wird abgewiesen',
+    typeof htfZeiteinheitFehler('lsob', { htfTrendFilter: true, htfTimeframe: '4h' }, ['1h', '4h']) === 'string')
+check('HTF über der gehandelten Zeiteinheit ist in Ordnung',
+    htfZeiteinheitFehler('lsob', { htfTrendFilter: true, htfTimeframe: '4h' }, ['15m', '1h']) === null)
+check('ohne Trendfilter gibt es nichts zu prüfen',
+    htfZeiteinheitFehler('lsob', { htfTrendFilter: false, htfTimeframe: '1h' }, ['4h']) === null)
 for (const m of [momentum, liq]) {
     const { errors } = validateParams(m.id, {})
     check(`${m.id}: Vorgaben sind gültig`, errors.length === 0, errors.join('; '))
-    check(`${m.id}: holt genug Tageskerzen für eine ausgeschwungene EMA`, m.htfKerzen >= 4 * vorgaben(m).htfEmaPeriod)
+    check(`${m.id}: holt genug Tageskerzen für eine ausgeschwungene EMA`, htfBedarf(m, vorgaben(m)) >= 4 * vorgaben(m).htfEmaPeriod)
 }
 
 // ── Momentum Swing ───────────────────────────────────────────────────────

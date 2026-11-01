@@ -10,8 +10,10 @@
  * CoinGecko, Solana-RPC …) und gingen als Geheimtext an jede Sitzung und in
  * jedes Backup; die Umschlüsselung vergass Perplexity, Mail und alle `hype*`.
  * Jetzt werden die KI-Schlüssel aus der Anbieter-Registry ABGELEITET, und der
- * Selbsttest (`__selftest-geheimnisse.mjs`) schlägt an, sobald eine neue
- * Spalte mit verdächtigem Namen nicht hier steht.
+ * Selbsttest (`__selftest-f2-sicherheit.mjs`) schlägt an, sobald eine Spalte
+ * mit verdächtigem Namen — in IRGENDEINER Tabelle, auch deutsch benannt
+ * (`…Geheimnis`, `…Schluessel`) — weder hier steht noch in `OHNE_GEHEIMNIS`
+ * begründet ist (`fehlendeGeheimnisse`, Audit SEC-S3-003).
  */
 import { KEY_SPALTEN, KI_URL_SPALTEN } from './ai-models.js'
 
@@ -30,6 +32,8 @@ export const VERSCHLUESSELTE_SETTINGS = [...new Set([
     // gehört dazu: bei Home Assistant IST die Adresse das Geheimnis.
     'hypeAlarmNtfyToken', 'hypeAlarmTelegramToken', 'hypeAlarmWebhookUrl',
     'hypeKeySolanaRpc', 'hypeKeyCoingecko', 'hypeKeyCryptopanic', 'hypeKeyLunarcrush',
+    // Zweiter Faktor: Geheimnis der Authenticator-App (wer es hat, erzeugt die Codes).
+    'totpGeheimnis',
 ])]
 
 /**
@@ -37,7 +41,15 @@ export const VERSCHLUESSELTE_SETTINGS = [...new Set([
  * Sitzungs-Generation, Lizenzschlüssel (kann Zugangsdaten der Paketquelle
  * tragen). Werden genauso wenig ausgeliefert.
  */
-export const SONSTIGE_GEHEIME_SETTINGS = ['authPasswordHash', 'sessionGeneration', 'lizenzSchluessel', 'esp32PushGeraete']
+export const SONSTIGE_GEHEIME_SETTINGS = [
+    'authPasswordHash', 'sessionGeneration', 'lizenzSchluessel', 'esp32PushGeraete',
+    // Zweiter Faktor: zuletzt angenommener Code-Schritt und eingelöste
+    // YubiKey-Challenges. Kein Schlüssel, verrät aber, wann sich jemand anmeldete.
+    'totpLetzterSchritt', 'webauthnVerbraucht',
+    // Kontoweite Code-Bremse (Audit 4.3.4 SEC-S1-003): verrät Angriffe und
+    // darf aus keinem Backup zurückkommen (eine alte Sperre bzw. ein Nullstand).
+    'totpFehlZahl', 'totpFehlAb', 'totpSperreBis',
+]
 
 /** Alles, was `GET /api/db/settings` und das Backup nie im Wert zeigen. */
 export const GEHEIME_SETTINGS = [...VERSCHLUESSELTE_SETTINGS, ...SONSTIGE_GEHEIME_SETTINGS]
@@ -58,7 +70,8 @@ export const ZIEL_SETTINGS = [...new Set([
 ])]
 
 /** Zugangs- und Rechtsstand: nie aus einem Backup. */
-export const ZUGANGS_SETTINGS = ['authEnabled', 'rechtlichesZustimmung', 'quellenOhneFreigabe']
+// `schluesselDirekt` (SEC-S1-002): passwortloser YubiKey-Login, nur über seine eigene Route mit Passwort.
+export const ZUGANGS_SETTINGS = ['authEnabled', 'rechtlichesZustimmung', 'quellenOhneFreigabe', 'totpAn', 'schluesselDirekt']
 
 /** Beim Backup-Import immer den bestehenden Wert behalten. */
 export const BEHALTEN_BEIM_IMPORT = [...new Set([
@@ -100,6 +113,17 @@ export const TLS_GEHEIMNISSE = [
 ]
 
 /**
+ * Zweiter Faktor (`server/migrationen/zweifaktor.js`): registrierte YubiKeys
+ * bzw. Passkeys. Nichts darin ist verschlüsselt — ein öffentlicher Schlüssel
+ * ist öffentlich —, aber wer hier eine Zeile einschleust, meldet sich mit
+ * seinem eigenen Schlüssel ohne Passwort an. Deshalb steht die Tabelle wie
+ * `tls_zertifikat` NICHT in `BACKUP_TABLES` und NICHT in `VALID_TABLES`;
+ * geschrieben wird sie nur über `/api/auth/schluessel/*` (`auth.js`). Die
+ * Rücksetzwege (Reset, Deaktivieren, AT_RESET_AUTH) leeren sie.
+ */
+export const ZUGANGS_TABELLEN = ['auth_schluessel']
+
+/**
  * Alle verschlüsselten Stellen als [tabelle, spalten, schluesselSpalte] — für
  * die Umschlüsselung und die Schlüssel-Migration nativer Installationen.
  * Fehlt die Schlüsselspalte, ist es `id`.
@@ -122,5 +146,59 @@ export const JSON_GEHEIMNISSE = [
     ['settings', 'apis', 'key'],
 ]
 
-/** Namensmuster, das der Selbsttest als „sieht geheim aus" wertet. */
-export const VERDAECHTIG = /key|token|pass|secret|webhook|rpc|hash|lizenz/i
+/**
+ * Namensmuster, das der Selbsttest als „sieht geheim aus" wertet. Bis zum
+ * Audit 4.3.4 (SEC-S3-003) nur englische Wörter: `totpGeheimnis`,
+ * `caSchluessel` oder eine künftige `pushGeheimnis` rutschten durch, und
+ * gescannt wurde nur `settings` (später auch `portfolio_*`).
+ */
+export const VERDAECHTIG = /key|token|pass|secret|webhook|rpc|hash|lizenz|geheim|schluessel|totp|webauthn|credential|session/i
+
+/** Zähl- und Budgetfelder der KI-Abrechnung: „Tokens" ist hier eine Menge, kein Zugang. */
+export const KEIN_GEHEIMNIS_MUSTER = /Tokens$|TokenBudget$/i
+
+/**
+ * Spalten, deren Name verdächtig klingt, die aber nichts Geheimes tragen —
+ * `tabelle.spalte` mit Grund. Eine neue Spalte kommt hier nur mit Begründung
+ * hinein; sonst gehört sie in eine der Listen oben.
+ */
+export const OHNE_GEHEIMNIS = new Map([
+    ['settings.totpAn', 'Schalter, ob der zweite Faktor an ist'],
+    ['settings.schluesselDirekt', 'Schalter für den Direkt-Login mit YubiKey (Zugangsfeld, nie aus dem Backup)'],
+    ['ai_agent_messages.sessionId', 'Gesprächs-Kennung des KI-Agenten, keine Anmeldung'],
+    ['api_cache.key', 'Name des Zwischenspeicher-Eintrags'],
+    ['radar_fetch_state.key', 'Name der periodischen Aufgabe'],
+    ['coinradar_settings.schluessel', 'Name der Einstellung (Schlüssel-Wert-Tabelle)'],
+    ['hype_settings.schluessel', 'Name der Einstellung; Zustellgeheimnisse liegen in settings.hype*'],
+    ['hype_projekt.schluessel', 'chain|contract bzw. sym|SYMBOL, öffentlich'],
+    ['quiz_karten.schluessel', 'stabiler Name einer eingebauten Karte'],
+    ['portfolio_kurse.schluessel', 'Asset bzw. Währungspaar'],
+    ['portfolio_bewegungen.txHash', 'öffentliche Transaktionskennung'],
+    ['coinradar_zeilen.atrPct', 'ATR in Prozent (trifft „rpc")'],
+    ['radar_ergebnisse.atrPct', 'ATR in Prozent (trifft „rpc")'],
+])
+
+/**
+ * Spalten mit Geheimnis-Namen, die in keiner Liste stehen. `tabellen` ist
+ * `{tabelle: [spalten]}` aus der echten Datenbank. Gelistet heisst: in
+ * `settings` unter `GEHEIME_SETTINGS`, sonst in `ALLE_VERSCHLUESSELTEN` oder
+ * `JSON_GEHEIMNISSE`, oder die ganze Tabelle ist eine `ZUGANGS_TABELLEN`.
+ * @returns {string[]} `tabelle.spalte`
+ */
+export function fehlendeGeheimnisse(tabellen) {
+    const fehlen = []
+    for (const [tabelle, spalten] of Object.entries(tabellen)) {
+        if (ZUGANGS_TABELLEN.includes(tabelle)) continue
+        for (const s of spalten) {
+            if (!VERDAECHTIG.test(s) || KEIN_GEHEIMNIS_MUSTER.test(s)) continue
+            const name = `${tabelle}.${s}`
+            if (OHNE_GEHEIMNIS.has(name)) continue
+            const gelistet = tabelle === 'settings'
+                ? GEHEIME_SETTINGS.includes(s)
+                : ALLE_VERSCHLUESSELTEN.some(([t, sp]) => t === tabelle && sp.includes(s))
+                    || JSON_GEHEIMNISSE.some(([t, sp]) => t === tabelle && sp === s)
+            if (!gelistet) fehlen.push(name)
+        }
+    }
+    return fehlen
+}

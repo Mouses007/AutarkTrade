@@ -1,8 +1,8 @@
 /**
- * Kerzenchart eines einzelnen Trades (Tagesansicht-Modal, Bot-Trades).
+ * Kerzenchart eines einzelnen Trades (Tagesansicht-Modal).
  *
  * Eingabe der Kerzen in AUFRUFERFORM [Schluss, Eröffnung, Tief, Hoch]
- * (Tagesansicht.vue, botChart.js). ECharts erwartet [Eröffnung, Schluss, Tief, Hoch]
+ * (Tagesansicht.vue). ECharts erwartet [Eröffnung, Schluss, Tief, Hoch]
  * — umgestellt wird hier an genau einer Stelle (`zuEcharts`), damit steigende
  * Kerzen auch als steigend gefärbt sind (Spec 6.1).
  */

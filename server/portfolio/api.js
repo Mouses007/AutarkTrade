@@ -5,6 +5,9 @@
  *   POST   /abruf            {quelle?} Abruf im Hintergrund starten (202)
  *   GET    /abruf                      läuft gerade einer?
  *   GET    /bewegungen       ?quelle&asset&arten&offen&vor&limit
+ *   GET    /staking                    Staking-Produkte je Ort und Coin (Einsatz, Erträge, gemessene Rendite)
+ *   GET    /dca                        DCA-Portfolio: nur Sparplan-/DCA-Käufe, je Coin und Plan
+ *   GET    /dca/verlauf                dasselbe als Monatsverlauf (eingesetzt ↔ Wert), 6 h im Speicher
  *   PUT    /bewegungen/:id   {einordnung}
  *   POST   /bewegungen/sammel {quelle, einordnung, art?}
  *   GET    /wallets
@@ -45,6 +48,9 @@ import { setzeFuturesStichtag } from './futures-steuer.js'
 import { setzeTotalverlust } from './totalverlust.js'
 import { setzeSpam } from './spam.js'
 import { totalverlustUebersicht } from './totalverlust-seite.js'
+import { stakingUebersicht } from './staking.js'
+import { istDcaKauf, dcaArt, dcaUebersicht, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon } from './dca.js'
+import { kerzen as marktKerzen } from '../marktdaten/index.js'
 import { steuerBerichtHtml, berichtCss, BERICHT_JS } from './steuer-bericht.js'
 import fs from 'fs'
 import { importiereKursliste, kurslisteStand } from './estv-kursliste.js'
@@ -55,12 +61,20 @@ import { testeBitpanda } from './quellen.js'
 import { ARTEN, FIAT } from './normal.js'
 import { leseImportCsv, importQuelle } from './import.js'
 import { berechneSteuerjahr, steuerCsv } from './steuer.js'
-import { ketteNorm, fxHeute } from './kurse.js'
+import { ketteNorm, fxHeute, fxAm, tagesKursUsd, ALIAS as KURS_ALIAS } from './kurse.js'
 
 const SCHLUESSEL_NAMEN = ['bitpanda', 'etherscan']
 const EINORDNUNGEN = ['transfer', 'kauf', 'einkommen', 'ignorieren']
 /** „Zu prüfen": Ein-/Ausgänge ohne erkannten Gegenpart und Unbekanntes. Airdrops sind ihrer Art nach klar. */
 const OFFENE_ARTEN = ['einzahlung', 'auszahlung', 'sonstiges']
+/**
+ * Dieselbe Regel je Zeile, ohne die Einordnung: braucht die Zeile eine (oder
+ * hätte sie eine gebraucht)? Fiat nie — Geld vom eigenen Bankkonto zählt ohne
+ * Einordnung richtig (Bargeld rein, kein Einkommen), und „Einkommen“ auf einer
+ * Lastschrift wäre ein Fehler im Steuerbericht. Bis 01.11.2026 kannte nur der
+ * Server diese Ausnahme, die Liste bot bei jedem CHF-Eingang „Einordnen“ an.
+ */
+const pruefbar = (z) => !z.transferMit && !z.sparplanMit && OFFENE_ARTEN.includes(z.art) && !FIAT.includes(z.asset)
 
 // Version für den Kopf des Steuerberichts (einmal beim Laden gelesen).
 const APP_VERSION = (() => {
@@ -69,6 +83,30 @@ const APP_VERSION = (() => {
 
 const fehler = (res, e, code = 500) => res.status(code).json({ ok: false, error: String(e?.message || e) })
 const fingerabdruck = (s) => crypto.createHash('sha256').update(String(s).trim()).digest('hex')
+
+/** Anzeigename eines Orts aus der Übersicht (Börse, „Wallet · Adresse“, Import ohne „i:“). */
+function ortNameVon(u) {
+    return (quelle) => {
+        const q = u.quellen.find((x) => x.quelle === quelle)
+        if (!q) return quelle.startsWith('i:') ? quelle.slice(2) : quelle
+        return q.gruppe === 'wallet' ? `${u.wallets.find((w) => w.id === q.walletId)?.name || ''} · ${q.name}` : q.name
+    }
+}
+
+/** Die DCA-Käufe aller Orte (Bitpanda-Sparplan oder `roh.dca`). */
+async function dcaKaeufe(k) {
+    const zeilen = await k('portfolio_bewegungen').where('art', 'kauf')
+        .where((w) => w.where('roh', 'like', '%savings_plan%').orWhere('roh', 'like', '%"dca"%'))
+        .select('quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'chfWert', 'roh')
+    return zeilen.filter(istDcaKauf)
+}
+
+/** Umstellungen eingestellter Coins (Bitpanda `merger_crypto`): AGIX → FET, BEST → VSN, MIOTA → IOTA. */
+async function dcaUmstellungen(k) {
+    return umstellungenAus(await k('portfolio_bewegungen').where('art', 'tausch').where('roh', 'like', '%merger_crypto%')
+        .select('zeit', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'roh'))
+}
+let dcaVerlaufSpeicher = null   // { schluessel, zeit, punkte }
 
 export function setupPortfolioRoutes(app) {
     app.get('/api/portfolio/uebersicht', async (req, res) => {
@@ -104,7 +142,7 @@ export function setupPortfolioRoutes(app) {
         try {
             const k = getKnex()
             const q = k('portfolio_bewegungen').select('id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge',
-                'gebuehrAsset', 'gebuehrMenge', 'txHash', 'kette', 'kontrakt', 'transferMit', 'transferSicher', 'einordnung', 'chfWert', 'chfQuelle')
+                'gebuehrAsset', 'gebuehrMenge', 'txHash', 'kette', 'kontrakt', 'transferMit', 'transferSicher', 'sparplanMit', 'einordnung', 'chfWert', 'chfQuelle', 'roh')
             if (req.query.quelle) q.where('quelle', String(req.query.quelle))
             if (req.query.asset) q.where((w) => w.where('asset', String(req.query.asset).toUpperCase()).orWhere('gegenAsset', String(req.query.asset).toUpperCase()))
             if (req.query.arten) {
@@ -118,9 +156,123 @@ export function setupPortfolioRoutes(app) {
             if (req.query.vor) q.where('zeit', '<', Number(req.query.vor))
             const limit = Math.min(Number(req.query.limit) || 100, 500)
             const zeilen = await q.orderBy('zeit', 'desc').orderBy('id', 'desc').limit(limit)
+            // Sparplan: der gekaufte Coin steht an beiden Zeilen (die Lastschrift kennt ihn nur über den Kauf).
+            const kaufIds = zeilen.filter((z) => z.sparplanMit && z.art !== 'kauf').map((z) => z.sparplanMit)
+            const kaufCoin = new Map(kaufIds.length
+                ? (await k('portfolio_bewegungen').whereIn('id', kaufIds).select('id', 'asset')).map((x) => [x.id, x.asset]) : [])
+            for (const z of zeilen) {
+                z.pruefbar = pruefbar(z)
+                if (z.sparplanMit) z.sparplan = z.art === 'kauf' ? z.asset : kaufCoin.get(z.sparplanMit) || null
+                // Als DCA markiert, aber kein Bitpanda-Sparplan (Crypto.com-Kartenkäufe): eigene Pille.
+                else if (istDcaKauf(z)) z.dca = dcaArt(z)
+                delete z.roh
+            }
             const offen = await k('portfolio_bewegungen').whereNull('einordnung').whereNull('transferMit')
                 .whereIn('art', OFFENE_ARTEN).whereNotIn('asset', FIAT).count({ n: '*' }).first()
             res.json({ ok: true, zeilen, offen: Number(offen?.n || 0), weitere: zeilen.length === limit })
+        } catch (e) { fehler(res, e) }
+    })
+
+    // Staking-Produkte: Bestand und Kurs aus der Übersicht, damit beide Seiten dasselbe zeigen.
+    // Mit Verlauf: dann teilt sie die Rechnung, die die Seite im selben Moment anstösst.
+    app.get('/api/portfolio/staking', async (req, res) => {
+        try {
+            const u = await berechneUebersicht()
+            const bew = await getKnex()('portfolio_bewegungen').whereIn('art', ['staking', 'umbuchung'])
+                .select('quelle', 'zeit', 'art', 'asset', 'menge', 'chfWert', 'einordnung', 'roh')
+            const bestand = new Map()
+            for (const q of u.quellen) for (const p of q.posten) if (!p.spam) bestand.set(`${q.quelle}|${p.schluessel}`, { menge: p.menge, chf: p.chf })
+            const kurs = new Map(u.posten.filter((p) => !p.ohneKurs && !p.spam && p.menge > 0).map((p) => [p.schluessel, p.chf / p.menge]))
+            const erg = stakingUebersicht(bew, {
+                bestandVon: (quelle, asset) => bestand.get(`${quelle}|${asset}`) || null,
+                kursChfVon: (asset) => kurs.get(asset) ?? null,
+            })
+            const ortName = ortNameVon(u)
+            for (const p of erg.produkte) p.ortName = ortName(p.quelle)
+            res.json({ ok: true, ...erg })
+        } catch (e) { fehler(res, e) }
+    })
+
+    // DCA-Portfolio: Kurs und heutiger Bestand aus der Übersicht (dieselbe Rechnung, die die Seite schon anstösst).
+    app.get('/api/portfolio/dca', async (req, res) => {
+        try {
+            const k = getKnex()
+            const [u, kaeufe, umstellungen] = await Promise.all([berechneUebersicht(), dcaKaeufe(k), dcaUmstellungen(k)])
+            const ortName = ortNameVon(u)
+            const posten = new Map(u.posten.filter((p) => !p.kontrakt && !p.spam).map((p) => [p.schluessel, p]))
+            const kurs = new Map()
+            for (const a of new Set(kaeufe.map((z) => heutigerCoin(z.asset, umstellungen).asset))) {
+                const p = posten.get(a)
+                if (p && !p.ohneKurs && p.usdKurs != null) { kurs.set(a, p.usdKurs * u.fx.chf); continue }
+                // Nicht mehr gehalten: Tageskerze von heute (ein Abruf je Coin, danach im Kurs-Cache).
+                const t = await tagesKursUsd(a, new Date().toISOString().slice(0, 10)).catch(() => null)
+                if (t?.usd != null) kurs.set(a, t.usd * u.fx.chf)
+            }
+            res.json({
+                ok: true,
+                ...dcaUebersicht(kaeufe, {
+                    umstellungen, quelleName: ortName,
+                    kursChfVon: (a) => kurs.get(a) ?? null,
+                    bestandVon: (a) => {
+                        const p = posten.get(a)
+                        if (!p) return null
+                        const orte = p.orte.filter((o) => Math.abs(o.menge) > p.menge * 1e-6).sort((a, b) => b.menge - a.menge)
+                        return { menge: p.menge, chf: p.ohneKurs ? null : p.chf, orte: orte.map((o) => ({ name: ortName(o.quelle), menge: o.menge, chf: o.chf })) }
+                    },
+                }),
+            })
+        } catch (e) { fehler(res, e) }
+    })
+
+    // Monatsverlauf: Monatskerzen je Coin (ein Abruf je Coin) × USD/CHF am Monatsende. Teuer beim
+    // ersten Mal, darum 6 h im Speicher — und nur neu, wenn ein DCA-Kauf dazukam.
+    app.get('/api/portfolio/dca/verlauf', async (req, res) => {
+        try {
+            const k = getKnex()
+            const [kaeufe, umstellungen] = await Promise.all([dcaKaeufe(k), dcaUmstellungen(k)])
+            const schluessel = `${kaeufe.length}|${Math.max(0, ...kaeufe.map((z) => Number(z.zeit)))}`
+            if (dcaVerlaufSpeicher?.schluessel === schluessel && Date.now() - dcaVerlaufSpeicher.zeit < 6 * 3600e3) {
+                return res.json({ ok: true, punkte: dcaVerlaufSpeicher.punkte, ohneKerzen: dcaVerlaufSpeicher.ohneKerzen })
+            }
+            if (!kaeufe.length) return res.json({ ok: true, punkte: [], ohneKerzen: [] })
+            const start = Date.parse(monatVon(Math.min(...kaeufe.map((z) => Number(z.zeit)))) + '-01T00:00:00Z')
+            const assets = new Set()
+            for (const z of kaeufe) {
+                const a = String(z.asset).toUpperCase()
+                assets.add(a)
+                if (umstellungen[a]) assets.add(umstellungen[a].nach)
+            }
+            // USD → CHF am Monatsende (für den laufenden Monat: heute). Fehlt einer (EZB nicht
+            // erreichbar), gilt der des Vormonats — ein fehlender Kurs liesse sonst den Coin auf
+            // „geschätzt“ fallen, obwohl die Kerze da ist.
+            const fxMonat = new Map()
+            let letzteFx = null
+            const heute = new Date().toISOString().slice(0, 10)
+            const monatsKurse = new Map()
+            const ohneKerzen = []
+            for (const a of assets) {
+                const sym = KURS_ALIAS[a] || a
+                let kz = []
+                try { kz = await marktKerzen(`${sym}USDT`, '1M', { markt: 'spot', start, ende: Date.now(), limit: 200 }) } catch { kz = [] }
+                if (!kz?.length) { ohneKerzen.push(a); continue }
+                const m = new Map()
+                for (const c of kz) {
+                    const monat = monatVon(c.t)
+                    if (!fxMonat.has(monat)) {
+                        const [j, mo] = monat.split('-').map(Number)
+                        const ende = new Date(Date.UTC(j, mo, 0)).toISOString().slice(0, 10)
+                        const fx = await fxAm(ende < heute ? ende : heute, 'CHF').catch(() => null)
+                        fxMonat.set(monat, fx || letzteFx)
+                    }
+                    letzteFx = fxMonat.get(monat) || letzteFx
+                    const fx = fxMonat.get(monat)
+                    if (Number.isFinite(c.c) && fx) m.set(monat, c.c * fx)
+                }
+                monatsKurse.set(a, m)
+            }
+            const punkte = dcaVerlauf(kaeufe, monatsKurse, { umstellungen })
+            dcaVerlaufSpeicher = { schluessel, zeit: Date.now(), punkte, ohneKerzen }
+            res.json({ ok: true, punkte, ohneKerzen })
         } catch (e) { fehler(res, e) }
     })
 

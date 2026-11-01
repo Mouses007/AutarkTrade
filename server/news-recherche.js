@@ -20,6 +20,7 @@
 import { schaetzeKosten, callLLMJson } from './llm.js'
 import { merkeVerbrauch } from './ai-usage.js'
 import { logWarn } from './logger.js'
+import { ohneUnsichtbares, ohneUnsichtbaresFuerJson, saeubereJson } from '../shared/unsichtbar.js'
 
 // Pauschale je Suchaufruf laut Anbieter-Preisliste (5 $ je 1000). Die Token
 // kommen über `schaetzeKosten` dazu; zusammen ist das die ehrliche Zahl für
@@ -61,10 +62,62 @@ function parseJsonListe(text) {
     try { const j = JSON.parse(roh.slice(von, bis + 1)); return Array.isArray(j) ? j : null } catch { return null }
 }
 
+/**
+ * Die Post-Liste aus Groks Antworttext — erst parsen, dann säubern. Rein.
+ *
+ * `roh` ist der UNGEFILTERTE Text (`leseXAntwort(j).roh`). Bis 01.11.2026
+ * lief der Filter vor `JSON.parse`: ein roh ausgegebenes U+2028 im Post-Text
+ * (gültiges JSON) wurde dabei ein echtes Zeilenende, und alle Posts des Laufs
+ * waren verloren; ein als `\u200B` geschriebenes Zeichen sah der Filter nicht,
+ * erst `JSON.parse` machte es — und es blieb in Adresse, Kürzel und Post-URL.
+ * Jetzt: zuerst der Rohtext; scheitert er (ein Zeichen ZWISCHEN den JSON-Teilen
+ * ist kein JSON-Leerraum), der gefilterte. Danach jedes Feld durch den Filter.
+ *
+ * @returns {Array|null}
+ */
+export function leseXListe(roh) {
+    const liste = parseJsonListe(roh) ?? parseJsonListe(ohneUnsichtbaresFuerJson(roh))
+    return liste ? liste.map(saeubereJson) : null
+}
+
 /** Tweet-ID aus einer Status-URL — sie ist der stabile Dedupe-Schlüssel. */
 function tweetId(url) {
     const m = String(url || '').match(/status(?:es)?\/(\d+)/)
     return m ? m[1] : ''
+}
+
+/*
+ * Zeitpunkt eines Posts aus seiner ID: X vergibt seit November 2010
+ * „Snowflake"-IDs, deren obere Bits die Millisekunden seit 04.11.2010
+ * 01:42:54.657 UTC tragen. Das ist die einzige Zeitangabe, die nicht vom
+ * Modell stammt — das Feld `datum` schreibt Grok selbst, und es kann falsch
+ * oder ohne Zone sein.
+ */
+const SNOWFLAKE_EPOCHE = 1288834974657n
+// Ein Tag nach der Epoche: kleinere Werte stammen von fortlaufenden IDs vor
+// Snowflake (bis Nov. 2010) oder aus erfundenen Nummern — keine Zeit.
+const SNOWFLAKE_AB = 1288834974657 + 864e5
+/** Spielraum am Rand des Fensters: Groks „letzte Stunde" ist keine Stoppuhr. */
+export const X_ZEIT_SPIELRAUM_MS = 15 * 60 * 1000
+
+/** Millisekunden aus einer Post-ID, oder null, wenn sie keine Snowflake-ID ist. Rein. */
+export function tweetZeit(id) {
+    const s = String(id ?? '')
+    if (!/^\d{1,20}$/.test(s)) return null
+    const ms = Number((BigInt(s) >> 22n) + SNOWFLAKE_EPOCHE)
+    return ms >= SNOWFLAKE_AB ? ms : null
+}
+
+/**
+ * Liegt der Post mit dieser ID in den letzten `stunden` (plus Spielraum)? Rein.
+ * Die X-Suche kennt nur Kalendertage (`from_date` gestern), die Stunden stehen
+ * bloss in der Frage — ohne diese Prüfung kam ein Post von gestern als
+ * Meldung der letzten Stunde durch, sobald Grok ihn heutig datierte.
+ */
+export function xImFenster(id, stunden, jetzt = Date.now()) {
+    const zeit = tweetZeit(id)
+    if (zeit == null) return false
+    return zeit >= jetzt - stunden * 3600e3 - X_ZEIT_SPIELRAUM_MS && zeit <= jetzt + X_ZEIT_SPIELRAUM_MS
 }
 
 /**
@@ -116,11 +169,10 @@ export async function sucheXPosts({ handles, vonIso, bisIso, modell, apiKey, tim
     if (!r.ok) throw new Error(`xAI HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`)
     const j = await r.json()
 
-    const { text } = leseXAntwort(j)
-    const roh = parseJsonListe(text) || []
+    const { text, roh } = leseXAntwort(j)
 
     const posts = []
-    for (const p of roh) {
+    for (const p of (leseXListe(roh) || [])) {
         const url = String(p?.url || '').trim()
         const inhalt = String(p?.text || '').trim()
         if (!inhalt) continue
@@ -152,21 +204,42 @@ export async function sucheXPosts({ handles, vonIso, bisIso, modell, apiKey, tim
  * in den `output_text`-Teilen der Nachricht (`output_text` auf oberster Ebene
  * gibt es je nach SDK-Stand auch — beides abklappern). Die Quellen, die die
  * Suche wirklich gesehen hat, stehen als `citations` auf oberster Ebene und
- * als `url_citation`-Anmerkungen am Text.
+ * als `url_citation`-Anmerkungen am Text. URLs laufen durch
+ * `ohneUnsichtbares`, der Text durch `ohneUnsichtbaresFuerJson` (U+2028 wird
+ * ein Leerzeichen, kein Zeilenende — sonst wäre er kein JSON mehr); `roh` ist
+ * derselbe Text ungefiltert — für `leseXListe`, die erst parst und dann filtert.
  */
 export function leseXAntwort(j) {
     const teile = []
+    const rohTeile = []
     const zitiert = new Set()
-    const merke = (u) => { const id = tweetId(typeof u === 'string' ? u : u?.url); if (id) zitiert.add(id) }
+    const urls = new Set()
+    const merke = (u) => {
+        const url = ohneUnsichtbares(typeof u === 'string' ? u : u?.url)
+        if (url) urls.add(url)
+        const id = tweetId(url); if (id) zitiert.add(id)
+    }
     for (const item of (Array.isArray(j?.output) ? j.output : [])) {
         for (const c of (Array.isArray(item?.content) ? item.content : [])) {
-            if (c?.type === 'output_text' && c.text) teile.push(c.text)
+            if (c?.type === 'output_text' && c.text) { rohTeile.push(String(c.text)); teile.push(ohneUnsichtbaresFuerJson(c.text)) }
             for (const a of (Array.isArray(c?.annotations) ? c.annotations : [])) merke(a)
         }
     }
     for (const u of (Array.isArray(j?.citations) ? j.citations : [])) merke(u)
-    return { text: teile.join('\n') || j?.output_text || '', zitierteIds: zitiert }
+    return {
+        text: teile.join('\n') || ohneUnsichtbaresFuerJson(j?.output_text),
+        roh: rohTeile.join('\n') || String(j?.output_text ?? ''),
+        zitierteIds: zitiert,
+        zitierteUrls: [...urls],
+    }
 }
+
+/*
+ * `ohneUnsichtbares` (Grok-Wasserzeichen, siehe dort) liegt seit 01.11.2026 in
+ * `shared/unsichtbar.js` — `llm.js` braucht es auch, und ein Import von hier
+ * wäre ein Kreis. Hier unter dem alten Namen weitergereicht.
+ */
+export { ohneUnsichtbares }
 
 /**
  * Kosten einer X-Suche: Suchpauschale je tatsächlich abgesetzter Suche plus
@@ -175,7 +248,7 @@ export function leseXAntwort(j) {
  * Pauschale ist der grössere Posten — deshalb der fertige Preis statt einer
  * Tokenrechnung, die ihn unterschlagen würde.
  */
-function xKosten(j, modell, funktion) {
+function xKosten(j, modell, funktion, ausloeser = 'auto') {
     const m = modell || X_STANDARDMODELL
     const suchen = Math.max(1, (Array.isArray(j?.output) ? j.output : [])
         .filter((o) => String(o?.type || '').includes('x_search')).length)
@@ -185,6 +258,7 @@ function xKosten(j, modell, funktion) {
     const kostenUsd = suchen * X_SUCHE_USD + schaetzeKosten(m, ein, aus)
     merkeVerbrauch({
         funktion,
+        ausloeser,
         provider: 'xai',
         modell: m,
         usage: { promptTokens: ein, completionTokens: aus, totalTokens: tokens },
@@ -203,7 +277,8 @@ function xKosten(j, modell, funktion) {
  * Grok gibt die Posts wörtlich zurück; ZÄHLEN tut der Aufrufer selbst
  * (`xNennungen` in `hype-radar/fruehphase-bewertung.js`) — nur Posts, die die
  * Suche zitiert hat und deren Text die Adresse wirklich enthält. Eine vom
- * Modell genannte Zahl wäre eine Behauptung, keine Messung.
+ * Modell genannte Zahl wäre eine Behauptung, keine Messung. Posts ausserhalb
+ * der letzten `stunden` (Zeit aus der Post-ID, `xImFenster`) fallen weg.
  *
  * @param {object} p
  * @param {Array<{symbol:string, contract:string}>} p.token  höchstens 15
@@ -236,23 +311,89 @@ export async function sucheXErwaehnungen({ token = [], stunden = 6, modell, apiK
     if (!r.ok) throw new Error(`xAI HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`)
     const j = await r.json()
 
-    const { text, zitierteIds } = leseXAntwort(j)
+    const { text, roh, zitierteIds } = leseXAntwort(j)
     const posts = []
-    for (const p of (parseJsonListe(text) || [])) {
+    const jetzt = Date.now()
+    for (const p of (leseXListe(roh) || [])) {
         const url = String(p?.url || '').trim()
         const inhalt = String(p?.text || '').trim()
         const id = tweetId(url)
-        if (!inhalt || !id) continue
+        if (!inhalt || !id || !xImFenster(id, stunden, jetzt)) continue
         posts.push({
             handle: String(p?.handle || '').replace(/^@/, '').trim().toLowerCase()
                 || (url.match(/x\.com\/([^/]+)\/status/i) || [])[1]?.toLowerCase() || '',
             id, url, text: inhalt.slice(0, 2000),
-            zeit: Date.parse(p?.datum || '') || null,
+            zeit: tweetZeit(id),
         })
     }
     const { kostenUsd } = xKosten(j, modell, 'hype-x')
     if (!posts.length && text && text.trim() !== '[]') logWarn('news-recherche', `X-Nennungen ohne verwertbare Posts (${text.slice(0, 120)})`)
     return { posts, zitierteIds, kostenUsd }
+}
+
+/**
+ * X nach Meldungen zu EINEM Coin der letzten Stunden durchsuchen — für die
+ * Flash-News im Chart (`flash-news.js`), ausgelöst per Knopf.
+ *
+ * Gefragt wird nach Ursachen einer Bewegung, nicht nach Stimmung: Listungen,
+ * Hacks, Unlocks, Ankündigungen. Zurück kommen nur Posts, die die Suche
+ * ZITIERT hat — ein Post, den das Modell nur nennt, könnte erfunden sein, und
+ * hier wird der Link später angeklickt. Und nur Posts aus den letzten
+ * `stunden`: die Zeit kommt aus der Post-ID, nicht aus Groks `datum`
+ * (`xImFenster`) — bis 01.11.2026 stand ein Post von gestern mit heutigem
+ * Datum als Meldung der letzten Stunde da.
+ *
+ * @returns {{posts:Array<{handle,url,text,zeit}>, kostenUsd:number}}
+ */
+export async function sucheXZuCoin({ coin, name = '', stunden = 1, modell, apiKey, timeoutMs = 90000, ausloeser = 'manuell' }) {
+    if (!apiKey) throw new Error('Kein xAI-Schlüssel hinterlegt')
+    const wer = `$${coin}${name && name.toUpperCase() !== coin ? ` (${name})` : ''}`
+    const anweisung = `Suche auf X nach Posts der letzten ${stunden} Stunde${stunden === 1 ? '' : 'n'} zum Krypto-Coin ${wer}, `
+        + 'die eine ungewöhnliche Kursbewegung erklären könnten: Listungen oder Delistings, Börsen-Ankündigungen, Hacks oder Exploits, '
+        + 'Token-Unlocks, Partnerschaften, Regulierung, grosse Wal- oder ETF-Bewegungen, Gerüchte dazu. '
+        + 'Bevorzuge offizielle Accounts (Projekt, Börsen) und bekannte Nachrichten-Accounts. Lass reine Kurskommentare, Chartanalysen, Gewinnspiele und Werbung weg.\n'
+        + 'Gib die Posts WÖRTLICH wieder, höchstens 20, neueste zuerst. Antworte NUR mit einer JSON-Liste, ohne Kommentar:\n'
+        + '[{"handle": "name_ohne_at", "url": "https://x.com/…/status/…", "datum": "ISO-Zeitpunkt", "text": "voller Wortlaut"}]\n'
+        + 'Erfinde nichts; findest du nichts, antworte mit [].'
+    const heute = new Date()
+    const von = new Date(heute.getTime() - Math.max(stunden, 24) * 3600e3)
+    const r = await fetchMitTimeout('https://api.x.ai/v1/responses', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({
+            model: modell || X_STANDARDMODELL,
+            input: anweisung,
+            // Das Werkzeug kennt nur Kalendertage; die Stunden stehen in der Frage.
+            tools: [{ type: 'x_search', from_date: von.toISOString().slice(0, 10), to_date: heute.toISOString().slice(0, 10) }],
+        }),
+    }, timeoutMs)
+    if (!r.ok) throw new Error(`xAI HTTP ${r.status}: ${(await r.text()).slice(0, 200)}`)
+    const j = await r.json()
+    const { kostenUsd } = xKosten(j, modell, 'flash-news-x', ausloeser)
+
+    const { roh, zitierteIds } = leseXAntwort(j)
+    const posts = []
+    const jetzt = Date.now()
+    for (const p of (leseXListe(roh) || [])) {
+        const url = String(p?.url || '').trim()
+        const inhalt = String(p?.text || '').trim()
+        const id = tweetId(url)
+        // Nur zitierte Posts: was die Suche nicht gesehen hat, kann das Modell erfunden haben.
+        // Nennt die Antwort gar keine Zitate (älterer API-Stand), bleibt nur der Wortlaut als Kontrolle.
+        if (!inhalt || !id || (zitierteIds.size && !zitierteIds.has(id))) continue
+        // Ausserhalb des Fensters (Zeit aus der ID) — die Suche reicht bis gestern zurück.
+        if (!xImFenster(id, stunden, jetzt)) continue
+        const handle = (String(p?.handle || '').replace(/^@/, '').trim()
+            || (url.match(/(?:x|twitter)\.com\/([^/]+)\/status/i) || [])[1] || '').replace(/[^A-Za-z0-9_]/g, '')
+        posts.push({
+            handle,
+            // Aus der ID neu gebaut: der Link führt sicher zu X, egal was im Feld stand.
+            url: `https://x.com/${handle || 'i'}/status/${id}`,
+            text: inhalt.slice(0, 1000),
+            zeit: tweetZeit(id),
+        })
+    }
+    return { posts, kostenUsd }
 }
 
 /** Deutsche Themennamen — auch der Prompt-Baustein für die Sonar-Frage. */
@@ -275,7 +416,7 @@ export const THEMEN_NAMEN = {
  * @returns {{text: string, citations: string[], bilder: Array<{url: string, quelle: string}>, tokens: number, kostenUsd: number}}
  */
 export async function rechercheThema({ thema, zeitraumText, apiKey, modell = 'sonar', timeoutMs = 60000,
-    frage = '', mitBildern = false, aktualitaet = 'day' }) {
+    frage = '', mitBildern = false, aktualitaet = 'day', ausloeser = 'auto', funktion = 'recherche' }) {
     if (!apiKey) throw new Error('Kein Perplexity-Schlüssel hinterlegt')
     const was = THEMEN_NAMEN[thema] || thema
 
@@ -338,7 +479,8 @@ export async function rechercheThema({ thema, zeitraumText, apiKey, modell = 'so
     const kostenUsd = SONAR_ANFRAGE_USD + schaetzeKosten(modell, promptTokens, completionTokens)
 
     merkeVerbrauch({
-        funktion: 'recherche',
+        funktion,
+        ausloeser,
         provider: 'perplexity',
         modell,
         usage: { promptTokens, completionTokens, totalTokens: promptTokens + completionTokens },

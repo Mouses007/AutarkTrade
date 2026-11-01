@@ -203,6 +203,67 @@ console.log('\nVerdrahtung im Abrufpfad')
         `${livePfad.length} Zeichen abgegrenzt`)
 }
 
+// ── Livepfad im Verhalten, nicht nur im Quelltext ────────────────────────
+//
+// Die Quelltext-Prüfung oben war grün, während `getClosedCandles` über 1499
+// Kerzen in `getHistoricalCandles` blätterte — und dort auf das Budget des
+// Labors wartete, nach einer 418 fünf Minuten lang (Audit 4.3.4, BUG-R0-003).
+// Ohne Netz: axios.get liefert Kerzen aus der Rechnung.
+console.log('\nLivepfad im Verhalten')
+{
+    const axios = (await import('axios')).default
+    const marktdaten = await import('./marktdaten/index.js')
+    const { getClosedCandles } = await import('./market-data.js')
+    marktdaten._setzeLeser(async () => 'binance')
+    const getAlt = axios.get
+    let abrufe = 0
+    axios.get = async (url, { params }) => {
+        abrufe++
+        await new Promise((r) => setTimeout(r, 5))
+        const step = 900000
+        const rows = []
+        let t = params.startTime ?? (Math.floor(Date.now() / step) * step - (params.limit - 1) * step)
+        const ende = params.endTime ?? Infinity
+        for (let i = 0; i < params.limit && t <= ende; i++, t += step) rows.push([t, '1', '2', '0.5', '1.5', '10', t + step - 1])
+        return { data: rows, headers: {} }
+    }
+    const jetzt = Date.now()
+
+    neueUmgebung()
+    for (let i = 0; i < 100; i++) await warteAufGewicht(GEWICHT_KLINES)
+    geschlafen = []
+    const k = await getClosedCandles('SOLUSDT', '15m', 3072, { now: jetzt })
+    check('Monats-VWAP (3072, blättert) wartet nicht auf das volle Laborbudget',
+        k.length === 3072 && geschlafen.length === 0, `${k.length} Kerzen, gewartet ${geschlafen.join('+') || 0} ms`)
+
+    neueUmgebung()
+    melde429(418, {})
+    let fehlerText = ''
+    try { await getClosedCandles('XRPUSDT', '15m', 3072, { now: jetzt }) } catch (e) { fehlerText = e.message }
+    check('bei laufender Strafe bricht der blätternde Livepfad sofort ab',
+        /Strafe/.test(fehlerText) && geschlafen.length === 0, fehlerText || `gewartet ${geschlafen.join('+')} ms`)
+
+    // In-Flight-Teilung (FUN-R0-002): ein kleinerer laufender Abruf darf einem
+    // grösseren nicht seine Kerzen unterschieben.
+    neueUmgebung()
+    const [a, b] = await Promise.all([
+        getClosedCandles('BTCUSDT', '15m', 300),
+        getClosedCandles('BTCUSDT', '15m', 2900),
+    ])
+    check('paralleler Abruf 300 + 2900: der grössere bekommt 2900', a.length === 300 && b.length === 2900, `${a.length}/${b.length}`)
+    abrufe = 0
+    const [c, d] = await Promise.all([
+        getClosedCandles('ETHUSDT', '15m', 2900),
+        getClosedCandles('ETHUSDT', '15m', 300),
+    ])
+    check('grösserer zuerst: der kleinere teilt ihn ohne eigenen Abruf',
+        c.length === 2900 && d.length === 300 && abrufe === 2, `${c.length}/${d.length}, ${abrufe} Abrufe`)
+
+    axios.get = getAlt
+    _setzeUhr(null, null)
+    _zuruecksetzen()
+}
+
 console.log(`\n${fehlgeschlagen === 0 ? '\x1b[32m' : '\x1b[31m'}${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen\x1b[0m`)
 if (fehlgeschlagen) { console.log('Fehlgeschlagen:'); for (const f of fehler) console.log(`  · ${f}`) }
 process.exit(fehlgeschlagen ? 1 : 0)

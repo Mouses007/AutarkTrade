@@ -49,6 +49,8 @@ export const meldeTypen = ref([])
 export const kanalWahl = ref({})
 
 export function kanalAn(id, kanal) {
+    // Ereignis ohne Browser-Sender (Register `browser: false`, FUN-F5-003): nie „an"
+    if (kanal === 'browser' && meldeTypen.value.find(m => m.id === id)?.browser === false) return false
     const e = kanalWahl.value[id] || {}
     // Ohne gespeicherte Wahl: Browser an, E-Mail aus — E-Mail ist immer eine
     // bewusste Entscheidung, sonst verschickt ein Update ungefragt Post.

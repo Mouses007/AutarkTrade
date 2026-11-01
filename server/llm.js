@@ -30,6 +30,7 @@ import { logWarn } from './logger.js'
 import { schaetzeKosten } from './ai-preise.js'
 import { merkeVerbrauch } from './ai-usage.js'
 import { aufgabenWahl, feldWahl } from './ai-task-config.js'
+import { ohneUnsichtbares, ohneUnsichtbaresFuerJson, saeubereJson } from '../shared/unsichtbar.js'
 
 const DEFAULT_TIMEOUT_MS = 30000
 const DEFAULT_OLLAMA_URL = 'http://localhost:11434'
@@ -241,6 +242,32 @@ export function parseJsonAntwort(text) {
     try { return JSON.parse(roh.slice(von, bis + 1)) } catch { return null }
 }
 
+/**
+ * Grok — bei xAI direkt oder über einen Vermittler (OpenRouter, eigener Endpunkt).
+ * Dessen Antworten laufen durch `ohneUnsichtbares` (Wasserzeichen ab 07.11.2026,
+ * Form unbekannt; Kopf von `shared/unsichtbar.js`).
+ */
+export function istGrok(cfg) {
+    return cfg?.provider === 'xai' || /grok/i.test(String(cfg?.model || ''))
+}
+
+/**
+ * JSON aus einer Antwort, die unsichtbare Zeichen tragen kann — rein.
+ *
+ * Erst wie immer parsen, dann jede Zeichenkette säubern: so verschwindet auch ein
+ * Zeichen, das als Escape kam oder als U+2028 roh im String stand (gültiges JSON —
+ * vorher gefiltert würde es ein echter Zeilenumbruch, und `JSON.parse` scheitert).
+ * Scheitert das Parsen, weil ein Zeichen ZWISCHEN den JSON-Teilen steht (ein
+ * Nullbreite-Zeichen ist kein JSON-Leerraum), noch einmal mit gefiltertem Text —
+ * dort Zeilentrenner zu Leerzeichen, damit ein String, der sie trägt, gültig bleibt.
+ * Bis 01.11.2026 ging der Grok-Text ungefiltert in `parseJsonAntwort`: ein
+ * Zeichen zwischen den Teilen → `json: null`, bezahlt, und die Chart-KI fragte nach.
+ */
+export function parseJsonOhneUnsichtbare(text) {
+    const json = parseJsonAntwort(text) ?? parseJsonAntwort(ohneUnsichtbaresFuerJson(text))
+    return json == null ? null : saeubereJson(json)
+}
+
 // ── Anhänge ──────────────────────────────────────────────────────────────
 
 /**
@@ -248,8 +275,8 @@ export function parseJsonAntwort(text) {
  * Anbieter sie nativ versteht — das Projekt hat bewusst keine PDF-Bibliothek.
  *
  * Die Angaben stehen im Anbieter-Verzeichnis (`ANBIETER_REG`); hier bleibt nur
- * die abgeleitete Sicht, weil `rule-builder` und `strategy-builder` sie unter
- * diesem Namen importieren.
+ * die abgeleitete Sicht, weil `rule-builder` sie unter
+ * diesem Namen importiert.
  */
 export const ANHANG_UNTERSTUETZUNG = Object.fromEntries(
     Object.entries(ANBIETER_REG).map(([id, reg]) => [id, reg.anhang]),
@@ -493,7 +520,9 @@ export async function callLLMJson(cfg, {
     // Erfolg vermerken — bewusst ohne await, der Status ist kein Blocker
     merkeKiGuthaben(cfg.provider).catch(() => { })
 
-    const json = parseJsonAntwort(antwort.text)
+    // Grok: unsichtbare Zeichen raus (`parseJsonOhneUnsichtbare`); die anderen Anbieter unverändert
+    const grok = istGrok(cfg)
+    const json = grok ? parseJsonOhneUnsichtbare(antwort.text) : parseJsonAntwort(antwort.text)
 
     // Bei Fehlschlag muss erkennbar sein WARUM. Der mit Abstand häufigste Grund
     // ist eine abgeschnittene Antwort (`max_tokens` erreicht) — dann fehlt dem
@@ -540,7 +569,7 @@ export async function callLLMJson(cfg, {
 
     return {
         json,
-        text: antwort.text,
+        text: grok ? ohneUnsichtbares(antwort.text) : antwort.text,
         stopReason: antwort.stopReason,
         abgeschnitten,
         usage,

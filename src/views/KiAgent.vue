@@ -18,7 +18,6 @@ import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
 import Reiter from '@/components/basis/Reiter.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const { t } = useI18n()
 
@@ -860,8 +859,6 @@ onBeforeMount(async () => {
 
                     <!-- Bericht-Text -->
                     <div class="report-content" data-ki-generiert="true" v-html="markdownToHtml(report.report)"></div>
-                    <!-- S12: Pflichtlabel an jedem KI-Bericht. -->
-                    <KiHinweis :anbieter="report.provider" :modell="report.model" />
 
                     <!-- Token-Verbrauch -->
                     <div class="at-flex at-mitte at-luecke-3 at-mo-2 at-po-2 at-gedaempft at-klein" style="border-top: 1px solid var(--line);">
@@ -892,7 +889,6 @@ onBeforeMount(async () => {
                                 <div v-if="msg.role === 'user'" class="chat-bubble chat-bubble-user">{{ msg.content }}</div>
                                 <template v-else>
                                     <div class="chat-bubble chat-bubble-ai report-content" data-ki-generiert="true" v-html="markdownToHtml(msg.content)"></div>
-                                    <KiHinweis klein />
                                 </template>
                             </div>
                         </div>
@@ -1048,8 +1044,6 @@ onBeforeMount(async () => {
                                             <span class="at-klein at-fett">{{ t('kiAgent.agent') }}</span>
                                         </div>
                                         <div class="chat-bubble chat-bubble-ai report-content" data-ki-generiert="true" v-html="markdownToHtml(msg.content)"></div>
-                                        <!-- S12: jede KI-Antwort trägt das Pflichtlabel. -->
-                                        <KiHinweis klein />
                                     </div>
                                 </template>
 

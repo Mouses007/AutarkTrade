@@ -94,7 +94,11 @@ export const KI_FUNKTIONEN = [
     },
     {
         id: 'chart', titelKey: 'kiUebersicht.fn.chart', bereich: 'allgemein', abschnitt: 'ki-aufgaben',
-        rolle: '', aufgabe: 'chart-analyse', funktionen: ['chart-analyse'],
+        rolle: '', aufgabe: 'chart-analyse', funktionen: ['chart-analyse', 'chart-analyse-eigene'],
+    },
+    {
+        id: 'flashNews', titelKey: 'kiUebersicht.fn.flashNews', bereich: 'allgemein', abschnitt: 'ki-aufgaben',
+        rolle: '', aufgabe: 'flash-news', funktionen: ['flash-news', 'flash-news-x', 'flash-news-web'],
     },
     {
         // Hing bis 18.10.2026 nur an der Editor-Rolle des Hype-Radars — und

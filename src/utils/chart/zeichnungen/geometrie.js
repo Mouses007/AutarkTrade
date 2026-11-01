@@ -303,3 +303,120 @@ export function kreuzVerschoben(start, dx, dy, breite, hoehe) {
 export function istTipp(dx, dy, dauerMs) {
     return Math.hypot(dx, dy) <= TIPP_PX && dauerMs <= TIPP_MS
 }
+
+// ── Fibonacci-Extension, Stufen-Einstellung ─────────────────────────────────
+
+/** Trendbasierte Fibonacci-Extension: Stufe 0 am Rücksetzer, 1 = eine ganze Impulslänge weiter. */
+export const FIB_EXT_STUFEN = [0, 0.618, 1, 1.272, 1.618, 2, 2.618]
+
+/**
+ * Preise der Extension aus drei Punkten: a = Impuls-Start, b = Impuls-Ende,
+ * c = Rücksetzer. Projiziert wird die Impulslänge (b − a) ab c — wie
+ * TradingView „Trend-Based Fib Extension": Stufe s liegt bei c + (b − a) · s.
+ */
+export function fibExtPreise(a, b, c, stufen = FIB_EXT_STUFEN) {
+    return stufen.map((s) => ({ stufe: s, preis: c + (b - a) * s }))
+}
+
+/** Vorgabefarben der Stufen, der Reihe nach (Retracement und Extension). */
+export const FIB_FARBEN = ['#787b86', '#f23645', '#ff9800', '#4caf50', '#089981', '#00bcd4', '#787b86', '#2962ff', '#ab47bc', '#f5c542']
+
+/**
+ * Welche Stufen gezeichnet werden, mit Farbe. `eigene` = `stil.stufen`
+ * ([{w, an, farbe}], vom Stufen-Editor); fehlt sie, gelten die Vorgaben.
+ * Unsinnige Einträge (keine Zahl, ausserhalb −5…10) fallen weg, doppelte
+ * Werte zählen einmal, sortiert wird aufsteigend.
+ */
+export function fibStufenAus(eigene, vorgabe) {
+    const liste = Array.isArray(eigene) && eigene.length
+        ? eigene
+        : vorgabe.map((w, i) => ({ w, an: true, farbe: FIB_FARBEN[i % FIB_FARBEN.length] }))
+    const gesehen = new Set()
+    const aus = []
+    liste.forEach((e, i) => {
+        const w = Number(e?.w)
+        if (!Number.isFinite(w) || w < -5 || w > 10 || e?.an === false || gesehen.has(w)) return
+        gesehen.add(w)
+        const farbe = /^#[0-9a-f]{6}$/i.test(e?.farbe || '') ? e.farbe : FIB_FARBEN[i % FIB_FARBEN.length]
+        aus.push({ w, farbe })
+    })
+    return aus.sort((x, y) => x.w - y.w)
+}
+
+// ── Pfeil, Ellipse, Pinsel ──────────────────────────────────────────────────
+
+/** Die zwei Flügel der Pfeilspitze bei b (Richtung a → b), Länge mit der Strichstärke wachsend. */
+export function pfeilSpitze(ax, ay, bx, by, breite = 1) {
+    const laenge = 8 + 3 * breite
+    const w = Math.atan2(by - ay, bx - ax)
+    const spreiz = Math.PI / 7
+    return [
+        { x: bx - laenge * Math.cos(w - spreiz), y: by - laenge * Math.sin(w - spreiz) },
+        { x: bx - laenge * Math.cos(w + spreiz), y: by - laenge * Math.sin(w + spreiz) },
+    ]
+}
+
+/**
+ * Ellipse im umschliessenden Rechteck (x1,y1)–(x2,y2): Abstand des Punkts zum
+ * Umriss in Pixeln und ob er innen liegt. Der Abstand nimmt den Umrisspunkt
+ * im selben Winkel (gestaucht) — beim Kreis exakt, bei flachen Ellipsen eine
+ * Näherung, die für einen Treffer von ±6 px reicht.
+ */
+export function ellipseLage(px, py, x1, y1, x2, y2) {
+    const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2
+    const a = Math.abs(x2 - x1) / 2, b = Math.abs(y2 - y1) / 2
+    const dx = px - cx, dy = py - cy
+    if (a < 1e-9 || b < 1e-9) {
+        // zur Strecke entartet
+        return { abstand: abstandZuStrecke(px, py, cx - a, cy - b, cx + a, cy + b), innen: false }
+    }
+    const r = Math.hypot(dx / a, dy / b)
+    const w = Math.atan2(dy / b, dx / a)
+    const ux = cx + a * Math.cos(w), uy = cy + b * Math.sin(w)
+    return { abstand: Math.hypot(px - ux, py - uy), innen: r <= 1 }
+}
+
+/** Kleinster Abstand eines Punkts zu einem Linienzug (Pixel). */
+export function abstandZuZug(px, py, zug) {
+    if (!zug.length) return Infinity
+    if (zug.length === 1) return Math.hypot(px - zug[0].x, py - zug[0].y)
+    let d = Infinity
+    for (let i = 1; i < zug.length; i++) d = Math.min(d, abstandZuStrecke(px, py, zug[i - 1].x, zug[i - 1].y, zug[i].x, zug[i].y))
+    return d
+}
+
+/** Höchstens so viele Punkte hat ein Pinselstrich (Server: `MAX_PINSEL_PUNKTE`). */
+export const PINSEL_MAX = 200
+
+/**
+ * Pinselstrich ausdünnen (Ramer-Douglas-Peucker in PIXELN, eps in px): Punkte,
+ * die vom Zug kaum abweichen, fallen weg; Anfang und Ende bleiben. Bleiben es
+ * mehr als `max`, wird eps verdoppelt, bis es passt — ein langer Strich wird
+ * gröber statt abgeschnitten. Gibt die behaltenen INDIZES zurück, damit der
+ * Aufrufer die zugehörigen Zeit/Preis-Punkte nimmt (gespeichert werden nie Pixel).
+ */
+export function duenneStrich(zug, eps = 1.5, max = PINSEL_MAX) {
+    const n = zug.length
+    if (n <= 2) return zug.map((_, i) => i)
+    const rdp = (e) => {
+        const behalten = new Uint8Array(n)
+        behalten[0] = behalten[n - 1] = 1
+        const stapel = [[0, n - 1]]
+        while (stapel.length) {
+            const [i, j] = stapel.pop()
+            let best = -1, dMax = 0
+            for (let k = i + 1; k < j; k++) {
+                const d = abstandZuStrecke(zug[k].x, zug[k].y, zug[i].x, zug[i].y, zug[j].x, zug[j].y)
+                if (d > dMax) { dMax = d; best = k }
+            }
+            if (best >= 0 && dMax > e) { behalten[best] = 1; stapel.push([i, best], [best, j]) }
+        }
+        const idx = []
+        for (let k = 0; k < n; k++) if (behalten[k]) idx.push(k)
+        return idx
+    }
+    let e = eps
+    let idx = rdp(e)
+    for (let r = 0; idx.length > max && r < 30; r++) { e *= 2; idx = rdp(e) }
+    return idx
+}

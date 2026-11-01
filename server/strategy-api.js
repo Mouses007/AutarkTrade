@@ -14,11 +14,11 @@ import { logError, logWarn } from './logger.js'
 import {
     listStrategies, getStrategy, validateParams, validateRisk,
     defaultsFromSchema, RISK_PARAMS, AGENT_DEFAULTS,
-    ladeRegelStrategien, istEingebaut,
-    normalisiereTimeframes, MAX_TIMEFRAMES,
+    istEingebaut,
+    normalisiereTimeframes, MAX_TIMEFRAMES, htfZeiteinheitFehler,
 } from './strategies/index.js'
 import { kostenAus } from './fill-simulator.js'
-import { BAUSTEINE } from './strategies/rule-engine.js'
+import { BAUSTEINE, alsManifest } from './strategies/rule-engine.js'
 import { pruefeRegeln, regelnUnterscheidenSich } from './strategies/rule-validate.js'
 import { regelnAlsSaetze } from './strategies/rule-text.js'
 import { VORLAGEN } from './strategies/rule-templates.js'
@@ -27,12 +27,14 @@ import { zuPosition } from './execution/paper.js'
 import { fundingAusVerlauf, zwischenstandPosition, summiereJeInstanz } from './execution/zwischenstand.js'
 import {
     runBacktest, berechneStatistik, MAX_BACKTEST_CANDLES, schaetzeKerzen,
-    berechneBuyHoldBaseline, schaetzeFloatingDrawdownAusTrades,
+    berechneBuyHoldBaseline, schaetzeFloatingDrawdownAusTrades, ENTWURF_ZEITBUDGET_MS,
 } from './strategy-backtest.js'
 import { monteCarlo, parameterStabilitaet, stabilitaetsMatrix, walkForward, MAX_STUFEN } from './robustness.js'
-import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliessePositionManuell, BETRIEBSARTEN } from './strategy-engine.js'
+import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliessePositionManuell, BETRIEBSARTEN, ladeRegelStrategienAusDb } from './strategy-engine.js'
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
-import { spiegleInsJournal, entferneAusJournal } from './journal-bridge.js'
+import { neustartInstanz } from './strategie-neustart.js'
+import { sendeWennAus } from './quellen/aus.js'
+import { setupAus, positionAus, tradeAus } from '../shared/strategieChart.js'
 
 const MAX_SYMBOLS = 20
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
@@ -72,6 +74,47 @@ async function zwischenFunding(symbol, abTs) {
     return wert
 }
 
+/**
+ * `?limit=` als ganze Zahl in 1..max, sonst die Vorgabe. `Math.min(-1, 2000)`
+ * ergab −1 — und LIMIT −1 heisst auf SQLite „unbegrenzt" (BUG-S2-002).
+ */
+export function begrenzeLimit(wert, vorgabe, max) {
+    const n = Math.trunc(Number(wert))
+    return Number.isFinite(n) && n > 0 ? Math.min(n, max) : vorgabe
+}
+
+/**
+ * Startkapital eines Labor-Laufs: `startEquity` im Rumpf, sonst das Feld
+ * „Startkapital (USDT)" der Risikowerte (`risk.startEquityUsdt`), sonst 1000.
+ * Bis 31.10.2026 galt ohne `startEquity` immer 1000, und das Labor schickte
+ * fest 1000 — angezeigt und übergeben wurde das Risikofeld (FUN-L5-001).
+ */
+function startkapitalAus(b) {
+    const angegeben = Number(b?.startEquity)
+    if (angegeben > 0) return angegeben
+    const ausRisiko = Number(validateRisk(b?.risk || {}).values.startEquityUsdt)
+    return ausRisiko > 0 ? ausRisiko : 1000
+}
+
+/** Aktuelle Fassung je Regelstrategie (`strategyId` → `version`). */
+async function aktuelleRegelFassungen(knex) {
+    const zeilen = await knex('rule_strategies').select('strategyId', 'version')
+    return new Map(zeilen.map((z) => [z.strategyId, Number(z.version) || 1]))
+}
+
+/**
+ * Wie ein gespeicherter Lauf zum heutigen Stand seiner Strategie steht:
+ * `currentRuleVersion` (0 = eingebaute Strategie) und `strategieBekannt`.
+ * Damit warnen Labor und „Als Instanz starten", wenn die Regeln seit dem
+ * Lauf geändert wurden oder die Strategie gelöscht ist (FUN-L5-003).
+ */
+function standDerStrategie(strategyId, fassungen) {
+    return {
+        currentRuleVersion: fassungen.get(strategyId) || 0,
+        strategieBekannt: Boolean(getStrategy(strategyId)),
+    }
+}
+
 /** DB-Zeile → API-Form (JSON geparst, objectId wie überall im Projekt). */
 function instanzNachAussen(row) {
     return {
@@ -94,6 +137,45 @@ function instanzNachAussen(row) {
         risk: validateRisk(parseJson(row.risk, {})).values,
         agents: parseJson(row.agents, {}),
     }
+}
+
+/**
+ * Vergleichszahlen je Instanz für die Liste und den Kopf der Instanz-Ansicht:
+ * offene Positionen, Trades, Treffer, Ø R, Σ R, netto, offene Vorschläge.
+ * Bis 01.11.2026 lieferte die Liste nur offene Positionen, Zahl und Netto —
+ * einen Vergleich zwischen Instanzen gab es nirgends.
+ */
+async function kennzahlenJeInstanz(knex, ids = null) {
+    const nur = (q) => (ids ? q.whereIn('instanceId', ids) : q)
+    const [offen, summen, vorschlaege] = await Promise.all([
+        nur(knex('strategy_positions').whereIn('status', ['open', 'closing']))
+            .select('instanceId').count({ n: '*' }).groupBy('instanceId'),
+        nur(knex('strategy_trades'))
+            .select('instanceId')
+            .count({ n: '*' })
+            .sum({ pnl: 'netPnl', summeR: 'rMultiple' })
+            .select(knex.raw('sum(case when ?? > 0 then 1 else 0 end) as ??', ['netPnl', 'gewinne']))
+            .groupBy('instanceId'),
+        nur(knex('strategy_suggestions').where('status', 'pending'))
+            .select('instanceId').count({ n: '*' }).groupBy('instanceId'),
+    ])
+    const je = new Map()
+    const zeile = (id) => {
+        if (!je.has(id)) je.set(id, { openPositions: 0, totalTrades: 0, totalNetPnl: 0, summeR: 0, avgR: null, winRate: null, offeneVorschlaege: 0 })
+        return je.get(id)
+    }
+    for (const o of offen) zeile(Number(o.instanceId)).openPositions = Number(o.n)
+    for (const v of vorschlaege) zeile(Number(v.instanceId)).offeneVorschlaege = Number(v.n)
+    for (const s of summen) {
+        const z = zeile(Number(s.instanceId))
+        const n = Number(s.n) || 0
+        z.totalTrades = n
+        z.totalNetPnl = Number(s.pnl) || 0
+        z.summeR = Number(s.summeR) || 0
+        z.avgR = n ? z.summeR / n : null
+        z.winRate = n ? (Number(s.gewinne) || 0) / n * 100 : null
+    }
+    return (id) => je.get(Number(id)) || zeile(Number(id))
 }
 
 /** Gemeinsame Prüfung für Anlegen und Ändern. */
@@ -162,6 +244,8 @@ function pruefeInstanzEingabe(body, vorhanden = null) {
     if (params.errors.length || risk.errors.length) {
         return { fehler: [...params.errors, ...risk.errors] }
     }
+    const htfFehler = htfZeiteinheitFehler(strategyId, params.values, timeframes)
+    if (htfFehler) return { fehler: [htfFehler] }
 
     // Den Broker pruefen, statt ihn zu uebernehmen. Ein Tippfehler wuerde sonst
     // erst im Schattenbetrieb auffallen, wenn die Rundungsregeln fehlen.
@@ -224,25 +308,10 @@ export function setupStrategyRoutes(app) {
         try {
             const knex = getKnex()
             const rows = await knex('strategy_instances').orderBy('id', 'desc')
-
             // Kennzahlen je Instanz gleich mitliefern — die Übersicht soll ohne
             // n weitere Abrufe auskommen.
-            const [offen, summen] = await Promise.all([
-                knex('strategy_positions').whereIn('status', ['open', 'closing'])
-                    .select('instanceId').count({ n: '*' }).groupBy('instanceId'),
-                knex('strategy_trades')
-                    .select('instanceId').count({ n: '*' }).sum({ pnl: 'netPnl' })
-                    .groupBy('instanceId'),
-            ])
-            const offenMap = Object.fromEntries(offen.map((r) => [r.instanceId, Number(r.n)]))
-            const summeMap = Object.fromEntries(summen.map((r) => [r.instanceId, r]))
-
-            res.json(rows.map((r) => ({
-                ...instanzNachAussen(r),
-                openPositions: offenMap[r.id] || 0,
-                totalTrades: Number(summeMap[r.id]?.n) || 0,
-                totalNetPnl: Number(summeMap[r.id]?.pnl) || 0,
-            })))
+            const kz = await kennzahlenJeInstanz(knex)
+            res.json(rows.map((r) => ({ ...instanzNachAussen(r), ...kz(r.id) })))
         } catch (e) {
             logError('strategy-api', 'Instanzen laden fehlgeschlagen', e)
             res.status(500).json({ error: 'Instanzen konnten nicht geladen werden' })
@@ -279,11 +348,88 @@ export function setupStrategyRoutes(app) {
         }
     })
 
+    /** Eine Instanz mit ihren Kennzahlen — der Kopf der Instanz-Ansicht. */
+    app.get('/api/strategies/instances/:id', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const row = await knex('strategy_instances').where('id', Number(req.params.id)).first()
+            if (!row) return res.status(404).json({ error: 'Instanz nicht gefunden' })
+            const kz = await kennzahlenJeInstanz(knex, [row.id])
+            res.json({ ...instanzNachAussen(row), ...kz(row.id) })
+        } catch (e) {
+            logError('strategy-api', 'Instanz laden fehlgeschlagen', e)
+            res.status(500).json({ error: 'Instanz konnte nicht geladen werden' })
+        }
+    })
+
+    /**
+     * Was die Instanz-Ansicht im Chart zeichnet: Setups, offene Positionen und
+     * Trades EINES Symbols im sichtbaren Zeitraum (`von`/`bis` in ms). Ein
+     * wartendes Setup gehört immer dazu, auch wenn es älter ist.
+     */
+    app.get('/api/strategies/instances/:id/chart', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const id = Number(req.params.id)
+            const symbol = String(req.query.symbol || '').toUpperCase()
+            if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'Ungültiges Symbol' })
+            const timeframe = req.query.timeframe && isValidTimeframe(String(req.query.timeframe)) ? String(req.query.timeframe) : null
+            const bis = Number(req.query.bis) || Date.now()
+            const von = Number(req.query.von) || (bis - 30 * 86400000)
+            const tfFilter = (q) => (timeframe ? q.where('timeframe', timeframe) : q)
+
+            const [setups, positionen, trades] = await Promise.all([
+                tfFilter(knex('strategy_setups').where({ instanceId: id, symbol }))
+                    .where((q) => q.whereBetween('obCandleTime', [von, bis])
+                        .orWhereBetween('triggeredAt', [von, bis])
+                        .orWhereIn('status', ['armed', 'waiting_retest']))
+                    .orderBy('obCandleTime').limit(2000),
+                tfFilter(knex('strategy_positions').where({ instanceId: id, symbol }))
+                    .whereIn('status', ['open', 'closing']),
+                tfFilter(knex('strategy_trades').where({ instanceId: id, symbol }))
+                    .where((q) => q.where('exitTime', '>=', von).orWhereBetween('entryTime', [von, bis]))
+                    .orderBy('entryTime').limit(2000),
+            ])
+            res.json({
+                setups: setups.map(setupAus),
+                positionen: positionen.map(positionAus),
+                trades: trades.map((t) => tradeAus(t)),
+            })
+        } catch (e) {
+            // Kein `sendeWennAus`: die Route liest nur aus der DB, Marktdaten
+            // „aus" kann hier nicht auftreten (toter Zweig bis 31.10.2026).
+            logError('strategy-api', 'Chart-Daten der Instanz fehlgeschlagen', e)
+            res.status(500).json({ error: 'Chart-Daten konnten nicht geladen werden' })
+        }
+    })
+
+    /**
+     * Neu starten: archivieren und als Kopie von vorn zählen (strategie-neustart.js).
+     * Nach einer Korrektur am Rechenweg die ehrliche Art, nicht Äpfel mit
+     * Birnen zu mischen.
+     */
+    app.post('/api/strategies/instances/:id/neustart', async (req, res) => {
+        try {
+            const r = await neustartInstanz(getKnex(), Number(req.params.id))
+            if (!r.ok) {
+                return res.status(r.grund === 'nicht_gefunden' ? 404 : 409).json({
+                    error: r.grund === 'nicht_gefunden' ? 'Instanz nicht gefunden' : 'Instanz ist schon archiviert',
+                })
+            }
+            resetSymbolCache(r.altId)
+            res.json(r)
+        } catch (e) {
+            logError('strategy-api', 'Neustart fehlgeschlagen', e)
+            res.status(500).json({ error: 'Instanz konnte nicht neu gestartet werden' })
+        }
+    })
+
     app.put('/api/strategies/instances/:id', async (req, res) => {
         try {
             const knex = getKnex()
             const vorhanden = await knex('strategy_instances').where('id', req.params.id).first()
             if (!vorhanden) return res.status(404).json({ error: 'Instanz nicht gefunden' })
+            if (Number(vorhanden.archiviert)) return res.status(409).json({ error: 'Archivierte Instanzen werden nicht mehr geändert' })
 
             const geprueft = pruefeInstanzEingabe(req.body || {}, vorhanden)
             if (geprueft.fehler) return res.status(400).json({ error: geprueft.fehler.join('; ') })
@@ -343,7 +489,16 @@ export function setupStrategyRoutes(app) {
             if (Number(offen?.n) > 0) {
                 return res.status(409).json({ error: 'Instanz hat offene Positionen — erst schliessen' })
             }
-            await knex('strategy_instances').where('id', id).delete()
+            // Alles, was zu ihr gehört, geht mit. Bis 01.11.2026 blieben Trades,
+            // Setups und Läufe liegen und tauchten in jeder Auswertung ohne
+            // Instanzfilter weiter auf (123 Trades der gelöschten #8).
+            await knex.transaction(async (trx) => {
+                for (const tabelle of ['strategy_trades', 'strategy_setups', 'strategy_runs',
+                    'strategy_positions', 'strategy_param_history', 'strategy_suggestions']) {
+                    await trx(tabelle).where('instanceId', id).delete()
+                }
+                await trx('strategy_instances').where('id', id).delete()
+            })
             resetSymbolCache(id)
             res.json({ ok: true })
         } catch (e) {
@@ -361,6 +516,9 @@ export function setupStrategyRoutes(app) {
             if (!row) return res.status(404).json({ error: 'Instanz nicht gefunden' })
 
             const an = Boolean(req.body?.enabled)
+            if (an && Number(row.archiviert)) {
+                return res.status(409).json({ error: 'Archivierte Instanzen laufen nicht mehr — die Kopie läuft weiter' })
+            }
             if (an) {
                 const instance = ladeInstanz(row)
                 if (!instance) return res.status(400).json({ error: 'Instanz ist nicht lauffähig (Strategie/Zeiteinheit prüfen)' })
@@ -419,75 +577,6 @@ export function setupStrategyRoutes(app) {
     })
 
     /**
-     * Geschlossene Trades einer Instanz ins Journal spiegeln.
-     *
-     * Sie landen dort in einer EIGENEN Kategorie („Agent") und sind nur
-     * sichtbar, wenn man sie ausdrücklich wählt — die normale Ansicht und die
-     * Bilanz bleiben unberührt. Ohne diese Trennung würde simuliertes Geld in
-     * echte Kennzahlen laufen.
-     *
-     * Der Aufruf ist wiederholbar: bereits gespiegelte Trades werden erkannt.
-     */
-    app.post('/api/strategies/instances/:id/mirror-journal', async (req, res) => {
-        try {
-            const knex = getKnex()
-            const inst = await knex('strategy_instances').where('id', req.params.id).first()
-            if (!inst) return res.status(404).json({ error: 'Instanz nicht gefunden' })
-
-            // Auswahl ist der Normalfall, „alle" die Ausnahme: wer 500 Trades
-            // hat, will selten alle spiegeln.
-            const auswahl = Array.isArray(req.body?.tradeIds)
-                ? req.body.tradeIds.map(Number).filter(Number.isFinite) : []
-            const trades = await knex('strategy_trades')
-                .where({ instanceId: inst.id })
-                .whereNot('exitTime', 0)
-                .modify((q) => { if (auswahl.length) q.whereIn('id', auswahl) })
-                .orderBy('exitTime')
-            if (!trades.length) return res.json({ gespiegelt: 0, uebersprungen: 0, tage: 0 })
-
-            // Kontoname macht im Journal sichtbar, WOHER die Trades stammen und
-            // dass sie nicht echt sind.
-            const account = `agent-${inst.mode}`
-            const ergebnis = await spiegleInsJournal(knex, trades, { account })
-
-            // Rückverweis setzen: `journalTradeId` stand seit jeher im Schema
-            // („>0 = ins Journal übernommen") und wurde nie gefüllt.
-            if (ergebnis.gespiegelt > 0) {
-                await knex('strategy_trades').where({ instanceId: inst.id })
-                    .whereNot('exitTime', 0)
-                    .modify((q) => { if (auswahl.length) q.whereIn('id', auswahl) })
-                    .update({ journalTradeId: 1 })
-            }
-            res.json({ ...ergebnis, account })
-        } catch (e) {
-            logError('strategy-api', 'Spiegeln ins Journal fehlgeschlagen', e)
-            res.status(500).json({ error: `Spiegeln fehlgeschlagen: ${e.message}` })
-        }
-    })
-
-    /**
-     * Gespiegelte Trades wieder aus dem Journal nehmen.
-     *
-     * Ohne Auswahl werden ALLE Agenten-Trades entfernt — auch die anderer
-     * Instanzen. Das ist Absicht: „aufräumen" soll aufräumen. Mit `tradeIds`
-     * trifft es genau die genannten.
-     */
-    app.post('/api/strategies/journal/unmirror', async (req, res) => {
-        try {
-            const knex = getKnex()
-            const ids = Array.isArray(req.body?.tradeIds)
-                ? req.body.tradeIds.map(Number).filter(Number.isFinite) : []
-            const ergebnis = await entferneAusJournal(knex, ids)
-            if (ids.length) await knex('strategy_trades').whereIn('id', ids).update({ journalTradeId: 0 })
-            else await knex('strategy_trades').update({ journalTradeId: 0 })
-            res.json(ergebnis)
-        } catch (e) {
-            logError('strategy-api', 'Entspiegeln fehlgeschlagen', e)
-            res.status(500).json({ error: `Entfernen fehlgeschlagen: ${e.message}` })
-        }
-    })
-
-    /**
      * Ein Trade und die Fassung, unter der er entstand.
      *
      * Das ist die Brücke zurück: `paramsVersion` steht am Trade, die Werte
@@ -506,13 +595,28 @@ export function setupStrategyRoutes(app) {
             const stand = await knex('strategy_param_history')
                 .where({ instanceId: trade.instanceId, paramsVersion: trade.paramsVersion }).first()
 
-            // Regelfassung: die zum Zeitpunkt des Trades jüngste, die nicht
-            // NACH ihm entstanden ist. Eine spätere Fassung hat ihn nicht erzeugt.
-            let regelStand = null
+            // Regelfassung: seit 31.10.2026 steht sie am Trade (`ruleVersion`,
+            // beim Eröffnen der Position gemerkt). Altbestand: die jüngste
+            // Fassung, die nicht NACH dem Einstieg entstand — verglichen mit
+            // `entryTime` (ms). Bis dahin wurde `createdAt` verglichen, auf
+            // SQLite ein Text: `Number()` ergab NaN, und es kam immer die
+            // älteste Fassung (BUG-L2-004). Liegt der Einstieg vor jeder
+            // bekannten Fassung, ist der Rückfall auf die älteste nur eine
+            // Vermutung — `ruleVersionUnsicher` sagt das der Oberfläche.
             const regelZeilen = await knex('rule_strategy_history')
                 .where('strategyId', trade.strategyId).orderBy('version', 'desc')
-            regelStand = regelZeilen.find((z) => Number(z.createdAt) <= Number(trade.createdAt || Date.now()))
-                || regelZeilen[regelZeilen.length - 1] || null
+            let regelStand = Number(trade.ruleVersion) > 0
+                ? regelZeilen.find((z) => Number(z.version) === Number(trade.ruleVersion)) || null
+                : null
+            let ruleVersionUnsicher = false
+            if (!regelStand && regelZeilen.length) {
+                const einstieg = Number(trade.entryTime) || Number(trade.exitTime) || 0
+                regelStand = regelZeilen.find((z) => Number(z.createdAt) <= einstieg) || null
+                if (!regelStand) {
+                    regelStand = regelZeilen[regelZeilen.length - 1]
+                    ruleVersionUnsicher = true
+                }
+            }
 
             const regeln = regelStand ? parseJson(regelStand.rules, null) : getStrategy(trade.strategyId)?.regeln
             res.json({
@@ -523,6 +627,7 @@ export function setupStrategyRoutes(app) {
                 risk: stand ? parseJson(stand.risk, {}) : null,
                 quelle: stand?.source || null,
                 ruleVersion: regelStand ? Number(regelStand.version) : null,
+                ruleVersionUnsicher,
                 saetze: regeln ? regelnAlsSaetze(regeln) : [],
             })
         } catch (e) {
@@ -563,6 +668,8 @@ export function setupStrategyRoutes(app) {
         }
         const symbol = String(b.symbol || '').toUpperCase()
         if (!SYMBOL_RE.test(symbol)) return { fehler: 'Ungültiges Symbol' }
+        const htfFehler = htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
+        if (htfFehler) return { fehler: htfFehler }
         const toTs = Number(b.toTs) || Date.now()
         const fromTs = Number(b.fromTs) || (toTs - 180 * 86400000)
         if (fromTs >= toTs) return { fehler: 'Zeitraum ist leer' }
@@ -571,7 +678,7 @@ export function setupStrategyRoutes(app) {
                 strategyId: b.strategyId, params: b.params || {}, risk: b.risk || {},
                 symbol, timeframe: b.timeframe,
                 market: b.market === 'spot' ? 'spot' : 'futures',
-                fromTs, toTs, startEquity: Number(b.startEquity) || 1000,
+                fromTs, toTs, startEquity: startkapitalAus(b),
                 // Der Deckel wird bei jedem Robustheitslauf mitgegeben, sonst
                 // rechnen Monte Carlo, Stabilität und Walk-forward mit einem
                 // Hebel, den der Betrieb gar nicht zulässt.
@@ -599,11 +706,17 @@ export function setupStrategyRoutes(app) {
                 stats: lauf.stats,
                 monteCarlo: monteCarlo(lauf.trades, {
                     startEquity: basis.startEquity,
+                    // Gemischt wird in R mit dem Risikoanteil, den jeder Trade
+                    // des Laufs wirklich hatte (`risikoAnteil`, nach Deckel und
+                    // Rundung). Der eingestellte Prozentsatz ist nur der
+                    // Rückfall für Trades ohne diese Angabe.
+                    risikoPct: Number(lauf.meta?.risk?.riskPerTradePct) || 1,
                     laeufe: Number(b.laeufe) || 1000,
                     aussaat: Number(b.aussaat) || 1,
                 }),
             })
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Monte Carlo fehlgeschlagen', e)
             res.status(500).json({ error: `Monte Carlo fehlgeschlagen: ${e.message}` })
         }
@@ -627,6 +740,7 @@ export function setupStrategyRoutes(app) {
             }
             res.json(await parameterStabilitaet(basis, String(b.paramKey || ''), werte))
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Stabilitätslauf fehlgeschlagen', e)
             res.status(500).json({ error: `Stabilitätslauf fehlgeschlagen: ${e.message}` })
         }
@@ -655,6 +769,7 @@ export function setupStrategyRoutes(app) {
             }
             res.json(await stabilitaetsMatrix(basis, String(b.paramKey || ''), werte, { symbole }))
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Stabilitätsmatrix fehlgeschlagen', e)
             res.status(500).json({ error: `Stabilitätsmatrix fehlgeschlagen: ${e.message}` })
         }
@@ -685,16 +800,30 @@ export function setupStrategyRoutes(app) {
             }
             res.json(await walkForward(basis, String(b.paramKey || ''), werte, { fenster: Number(b.fenster) || 4 }))
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Walk-forward fehlgeschlagen', e)
             res.status(500).json({ error: `Walk-forward fehlgeschlagen: ${e.message}` })
         }
     })
 
     // ── Backtest ─────────────────────────────────────────────────────────
+    // Höchstens EIN Entwurf-Backtest gleichzeitig (SEC-S4-001): jeder Klick im
+    // Editor startete bisher einen weiteren Lauf, und die stapelten sich.
+    let entwurfLaeuft = false
     app.post('/api/strategies/backtest', async (req, res) => {
+        let entwurfBelegt = false
         try {
             const b = req.body || {}
-            const strategie = getStrategy(b.strategyId)
+            // Mit `rules`: der Entwurf aus dem Regel-Editor, geprüft wie beim
+            // Speichern (samt Komplexitätsgrenzen), aber nicht registriert und
+            // nicht gesichert.
+            let entwurf = null
+            if (b.rules && typeof b.rules === 'object') {
+                const g = pruefeRegeln({ ...b.rules, id: String(b.strategyId || 'entwurf') })
+                if (!g.ok) return res.status(400).json({ error: `Regelwerk noch nicht gültig: ${g.fehler.join('; ')}` })
+                entwurf = alsManifest(g.regeln)
+            }
+            const strategie = entwurf || getStrategy(b.strategyId)
             if (!strategie) return res.status(400).json({ error: 'Unbekannte Strategie' })
 
             const symbol = String(b.symbol || '').toUpperCase()
@@ -703,6 +832,9 @@ export function setupStrategyRoutes(app) {
             if (!strategie.supportedTimeframes.includes(b.timeframe)) {
                 return res.status(400).json({ error: `${strategie.name} unterstützt ${b.timeframe} nicht` })
             }
+
+            const htfFehler = entwurf ? null : htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
+            if (htfFehler) return res.status(400).json({ error: htfFehler })
 
             const toTs = Number(b.toTs) || Date.now()
             const fromTs = Number(b.fromTs) || (toTs - 90 * 86400000)
@@ -715,20 +847,42 @@ export function setupStrategyRoutes(app) {
                 })
             }
 
+            // Entwurf: einer zur Zeit, mit Rechenzeit-Grenze, und Schluss, sobald
+            // die Verbindung zu ist (`res`, nicht `req` — `req` meldet `close`
+            // schon, wenn der Rumpf gelesen ist).
+            let getrennt = false
+            if (entwurf) {
+                if (entwurfLaeuft) {
+                    return res.status(429).json({ error: 'Es läuft schon ein Test eines Entwurfs — bitte warten, bis er fertig ist.' })
+                }
+                entwurfLaeuft = true
+                entwurfBelegt = true
+                res.on('close', () => { if (!res.writableEnded) getrennt = true })
+            }
+
             const ergebnis = await runBacktest({
                 strategyId: b.strategyId,
+                strategie: entwurf || undefined,
                 params: b.params || {},
                 risk: b.risk || {},
                 symbol, timeframe: b.timeframe,
                 market: b.market === 'spot' ? 'spot' : 'futures',
                 fromTs, toTs,
-                startEquity: Number(b.startEquity) || 1000,
+                startEquity: startkapitalAus(b),
                 maxLeverage: await globalerHebelDeckel(),
+                ...(entwurf ? { zeitBudgetMs: ENTWURF_ZEITBUDGET_MS, abbrechen: () => getrennt } : {}),
             })
+            if (ergebnis.stats?.abgebrochen === 'abbruch') return
+            if (ergebnis.stats?.abgebrochen === 'zeit') {
+                return res.status(422).json({
+                    error: `Der Entwurf ist zu rechenintensiv: ${ergebnis.stats.hinweis}. `
+                        + 'Kürzeren Zeitraum wählen, Perioden und Fenster verkleinern oder eine Abbruchbedingung (Zeitablauf) setzen.',
+                })
+            }
 
             // Ergebnis sichern, damit ein Optimizer-Vorschlag darauf zeigen kann
             let backtestId = 0
-            if (b.save !== false && ergebnis.trades.length >= 0) {
+            if (b.save !== false && !entwurf) {
                 const knex = getKnex()
                 const isPg = knex.client.config.client === 'pg'
                 // Fassung der Regelstrategie festhalten: ohne sie zeigt ein alter
@@ -760,8 +914,11 @@ export function setupStrategyRoutes(app) {
 
             res.json({ ...ergebnis, backtestId })
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Backtest fehlgeschlagen', e)
             res.status(500).json({ error: `Backtest fehlgeschlagen: ${e.message}` })
+        } finally {
+            if (entwurfBelegt) entwurfLaeuft = false
         }
     })
 
@@ -798,6 +955,8 @@ export function setupStrategyRoutes(app) {
             // Jeder Lauf holt Kerzen und rechnet sie durch; ohne Deckel wartet
             // der Nutzer minutenlang auf eine Antwort, die längst abgebrochen ist.
             if (symbole.length > 6) return res.status(400).json({ error: 'Höchstens 6 Symbole je Durchlauf' })
+            const htfFehler = htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
+            if (htfFehler) return res.status(400).json({ error: htfFehler })
 
             const toTs = Number(b.toTs) || Date.now()
             const fromTs = Number(b.fromTs) || (toTs - 360 * 86400000)
@@ -818,7 +977,7 @@ export function setupStrategyRoutes(app) {
 
             const risk = b.risk || {}
             const market = b.market === 'spot' ? 'spot' : 'futures'
-            const startEquity = Number(b.startEquity) || 1000
+            const startEquity = startkapitalAus(b)
             const maxLeverage = await globalerHebelDeckel()
 
             const lauf = async (params, symbol, f) => {
@@ -880,6 +1039,7 @@ export function setupStrategyRoutes(app) {
                     + 'sonst wurde er auf einem Fenster ausgewählt und dort gemessen.',
             })
         } catch (e) {
+            if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Mehrfach-Test fehlgeschlagen', e)
             res.status(500).json({ error: `Mehrfach-Test fehlgeschlagen: ${e.message}` })
         }
@@ -891,12 +1051,13 @@ export function setupStrategyRoutes(app) {
             let q = knex('strategy_backtests')
                 .select('id', 'strategyId', 'instanceId', 'label', 'symbol', 'timeframe', 'fromTs', 'toTs',
                     'stats', 'risk', 'ruleVersion', 'entscheidung', 'entschiedenAm', 'notiz', 'variantenGeprueft', 'createdAt')
-                .orderBy('id', 'desc').limit(Math.min(Number(req.query.limit) || 50, 200))
+                .orderBy('id', 'desc').limit(begrenzeLimit(req.query.limit, 50, 200))
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
-            const rows = await q
+            const [rows, fassungen] = await Promise.all([q, aktuelleRegelFassungen(knex)])
             res.json(rows.map((r) => ({
                 ...r, objectId: String(r.id),
                 stats: parseJson(r.stats, {}), risk: parseJson(r.risk, {}),
+                ...standDerStrategie(r.strategyId, fassungen),
             })))
         } catch (e) {
             logError('strategy-api', 'Backtests laden fehlgeschlagen', e)
@@ -945,7 +1106,10 @@ export function setupStrategyRoutes(app) {
             if (!row) return res.status(404).json({ error: 'Nicht gefunden' })
             res.json({
                 ...row, objectId: String(row.id),
+                ...standDerStrategie(row.strategyId, await aktuelleRegelFassungen(knex)),
                 params: parseJson(row.params, {}),
+                // Das Risiko gehört zum Lauf — „Als Instanz starten" übernimmt es.
+                risk: parseJson(row.risk, {}),
                 stats: parseJson(row.stats, {}),
                 trades: parseJson(row.trades, []),
             })
@@ -963,7 +1127,7 @@ export function setupStrategyRoutes(app) {
     app.get('/api/strategies/trades', async (req, res) => {
         try {
             const knex = getKnex()
-            let q = knex('strategy_trades').orderBy('exitTime', 'desc').limit(100)
+            let q = knex('strategy_trades').orderBy('exitTime', 'desc').limit(begrenzeLimit(req.query.limit, 100, 2000))
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
             if (req.query.symbol) q = q.where('symbol', String(req.query.symbol).toUpperCase())
             const rows = await q
@@ -989,7 +1153,7 @@ export function setupStrategyRoutes(app) {
         try {
             const knex = getKnex()
             let q = knex('strategy_setups').orderBy('id', 'desc')
-                .limit(Math.min(Number(req.query.limit) || 100, 500))
+                .limit(begrenzeLimit(req.query.limit, 100, 500))
             if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
             if (req.query.symbol) q = q.where('symbol', String(req.query.symbol).toUpperCase())
             if (req.query.status) q = q.whereIn('status', String(req.query.status).split(','))
@@ -1056,7 +1220,13 @@ export function setupStrategyRoutes(app) {
     app.get('/api/strategies/positions/zwischenstand', async (req, res) => {
         try {
             const knex = getKnex()
-            const rows = await knex('strategy_positions').whereIn('status', ['open', 'closing'])
+            // 'pending' nur als Waise (Altbestand vor S13 ohne Instanz): so
+            // erscheint sie in der Instanzenliste und lässt sich ausbuchen.
+            const rows = await knex('strategy_positions')
+                .where((q) => q.whereIn('status', ['open', 'closing'])
+                    .orWhere((p) => p.where('status', 'pending')
+                        .whereNotIn('instanceId', knex('strategy_instances').select('id'))))
+                .modify((q) => { if (req.query.instanceId) q.where('instanceId', Number(req.query.instanceId)) })
             const instRows = rows.length
                 ? await knex('strategy_instances').whereIn('id', [...new Set(rows.map((r) => r.instanceId))])
                 : []
@@ -1088,6 +1258,8 @@ export function setupStrategyRoutes(app) {
                 }
                 return {
                     id: row.id, instanceId: row.instanceId, instanz: instRow?.name || '',
+                    // Waise (FUN-L3-002): die Instanzenliste bietet „Ausbuchen" an
+                    ohneInstanz: !instRow,
                     mode: row.mode, status: row.status, symbol: row.symbol, timeframe: row.timeframe,
                     direction: row.direction, qty: Number(row.qty), entryPrice: Number(row.entryPrice),
                     entryTime: Number(row.entryTime), stopLoss: Number(row.stopLoss),
@@ -1120,12 +1292,42 @@ export function setupStrategyRoutes(app) {
             if (row.mode === 'live') {
                 return res.status(409).json({ error: 'Live-Position aus der Zeit vor der Auslagerung — an der Börse prüfen, hier wird nichts gebucht' })
             }
+
+            const instRow = await knex('strategy_instances').where('id', row.instanceId).first()
+            /*
+             * Waise: die Instanz gibt es nicht mehr (Rücksicherung eines
+             * älteren Backups, FUN-L3-002). Schliessen geht nicht — ohne
+             * Instanz keine Kosten und kein Konto, und ein Trade ohne Instanz
+             * wäre selbst eine Waise. Bis 31.10.2026 endete das hier in einem
+             * TypeError (HTTP 500). Jetzt 409 mit `ohneInstanz`, und mit
+             * `ausbuchen: true` wird die Position ohne Trade geschlossen
+             * (danach zählt sie nirgends mehr; der nächste Start räumt die
+             * Zeile mit den übrigen Waisen weg).
+             * Vor der Prüfung auf 'closing': auch Waisen im Altstatus
+             * 'closing' oder 'pending' (vor S13) zählen als offen (Not-Aus,
+             * Import) — ohne Instanz schliesst sie niemand mehr, also müssen
+             * auch sie auszubuchen sein.
+             */
+            if (!instRow) {
+                if (!['open', 'closing', 'pending'].includes(row.status)) {
+                    return res.status(409).json({ error: 'Position ist bereits geschlossen' })
+                }
+                if (req.body?.ausbuchen !== true) {
+                    return res.status(409).json({
+                        error: 'Die Instanz dieser Position gibt es nicht mehr — schliessen geht nicht, nur ausbuchen (ohne Trade)',
+                        ohneInstanz: true,
+                    })
+                }
+                const n = await knex('strategy_positions').where('id', row.id)
+                    .whereIn('status', ['open', 'closing', 'pending'])
+                    .update({ status: 'closed', updatedAt: knex.fn.now() })
+                if (!n) return res.status(409).json({ error: 'Position ist bereits geschlossen' })
+                return res.json({ ok: true, ausgebucht: true })
+            }
             if (row.status === 'closing') {
                 return res.status(409).json({ error: 'Position wird gerade geschlossen — bitte kurz warten' })
             }
             if (row.status !== 'open') return res.status(409).json({ error: 'Position ist bereits geschlossen' })
-
-            const instRow = await knex('strategy_instances').where('id', row.instanceId).first()
             const instance = ladeInstanz(instRow)
             if (!instance) return res.status(400).json({ error: 'Instanz ist nicht lauffähig' })
 
@@ -1178,6 +1380,10 @@ export function setupStrategyRoutes(app) {
 
             const instanz = await knex('strategy_instances').where('id', vorschlag.instanceId).first()
             if (!instanz) return res.status(404).json({ error: 'Instanz nicht gefunden' })
+            // Wie PUT instances: ein Archiv bleibt, wie es war. Die Oberfläche
+            // sperrt den Knopf; per API oder aus einer veralteten Ansicht kam
+            // man bis 31.10.2026 trotzdem durch (FUN-S2-001).
+            if (Number(instanz.archiviert)) return res.status(409).json({ error: 'Archivierte Instanzen werden nicht mehr geändert' })
 
             const vorgeschlagen = parseJson(vorschlag.proposedParams, {})
             const geprueft = pruefeInstanzEingabe({ params: vorgeschlagen }, instanz)
@@ -1334,11 +1540,17 @@ export function setupStrategyRoutes(app) {
     app.get('/api/strategies/rules', async (req, res) => {
         try {
             const rows = await getKnex()('rule_strategies').orderBy('id', 'desc')
-            res.json(rows.map((r) => ({
-                ...r, objectId: String(r.id), enabled: Boolean(r.enabled),
-                rules: parseJson(r.rules, {}),
-                geladen: Boolean(getStrategy(r.strategyId)),
-            })))
+            res.json(rows.map((r) => {
+                const rules = parseJson(r.rules, {})
+                // Die Sätze gleich mit: die Bibliothek zeigt, was eine Strategie
+                // tut, ohne je Zeile eine Prüfung anzufragen.
+                let saetze = []
+                try { saetze = regelnAlsSaetze(rules) } catch { saetze = [] }
+                return {
+                    ...r, objectId: String(r.id), enabled: Boolean(r.enabled),
+                    rules, saetze, geladen: Boolean(getStrategy(r.strategyId)),
+                }
+            }))
         } catch (e) {
             logError('strategy-api', 'Regelstrategien laden fehlgeschlagen', e)
             res.status(500).json({ error: 'Regelstrategien konnten nicht geladen werden' })
@@ -1369,9 +1581,10 @@ export function setupStrategyRoutes(app) {
             if (!g.ok) return res.status(400).json({ error: g.fehler.join('; '), fehler: g.fehler })
 
             const isPg = knex.client.config.client === 'pg'
+            const entwurfId = Number(b.entwurfId) || 0
             const datensatz = {
                 strategyId, name: g.regeln.name, description: g.regeln.description,
-                enabled: 1, rules: JSON.stringify(g.regeln), source: 'user',
+                enabled: 1, rules: JSON.stringify(g.regeln), source: entwurfId ? 'chat' : 'user',
             }
             let id
             try {
@@ -1390,6 +1603,11 @@ export function setupStrategyRoutes(app) {
                 strategyId, version: 1, name: g.regeln.name, description: g.regeln.description,
                 rules: JSON.stringify(g.regeln), source: 'angelegt', createdAt: Date.now(),
             }).catch(() => {})
+            // Das Gespräch, aus dem sie entstand, hängt ab jetzt an ihr (rule-builder.js).
+            if (entwurfId) {
+                await knex('strategy_drafts').where('id', entwurfId)
+                    .update({ strategyId, status: 'generated', updatedAt: knex.fn.now() }).catch(() => {})
+            }
             await ladeAlleRegelStrategien()
             res.status(201).json({ id, strategyId, version: 1, hinweise: g.hinweise })
         } catch (e) {
@@ -1417,12 +1635,15 @@ export function setupStrategyRoutes(app) {
                     })
                 }
             }
+            // Komplexitätsgrenzen nur, wenn neue Regeln kommen: Umbenennen oder
+            // Abschalten einer älteren Strategie, die über einer Grenze liegt,
+            // soll nicht scheitern (SEC-S4-001).
             const g = pruefeRegeln({
                 ...(b.rules || parseJson(row.rules, {})),
                 id: row.strategyId,
                 name: b.name ?? row.name,
                 description: b.description ?? row.description,
-            })
+            }, { komplexitaet: Boolean(b.rules) })
             if (!g.ok) return res.status(400).json({ error: g.fehler.join('; '), fehler: g.fehler })
 
             // Nur eine echte Regeländerung zählt als neue Version. Umbenennen
@@ -1455,8 +1676,12 @@ export function setupStrategyRoutes(app) {
                 // deshalb mitwandern — sonst landen Trades von vorher und nachher
                 // in derselben Schublade und niemand kann sie mehr trennen.
                 // Und die Live-Freigabe galt für die ALTE Logik: sie erlischt.
+                // Archivierte Instanzen nicht: ein Archiv bleibt, wie es war
+                // (wie PUT instances). Ihre offenen Positionen verwaltet die
+                // Engine mit der Fassung vom Archivieren weiter (FUN-L2-001).
                 const instanzen = await knex('strategy_instances')
                     .where('strategyId', row.strategyId)
+                    .where((q) => q.where('archiviert', 0).orWhereNull('archiviert'))
                     .select('id', 'paramsVersion', 'params', 'risk')
                 for (const inst of instanzen) {
                     const neueVersion = (Number(inst.paramsVersion) || 1) + 1
@@ -1518,6 +1743,7 @@ export function setupStrategyRoutes(app) {
                 })
             }
             await knex('rule_strategies').where('id', row.id).delete()
+            await knex('strategy_drafts').where('strategyId', row.strategyId).delete().catch(() => {})
             await ladeAlleRegelStrategien()
             res.json({ ok: true })
         } catch (e) {
@@ -1637,6 +1863,21 @@ function normalisiereTrade(t) {
     }
 }
 
+/**
+ * Startkapital für die Auswertung: `filter.startEquity`, sonst das der Instanz
+ * (`risk.startEquityUsdt`, wie `getPaperEquity`), sonst 1000.
+ */
+async function startkapitalFuerAuswertung(knex, filter) {
+    const angegeben = Number(filter.startEquity)
+    if (angegeben > 0) return angegeben
+    if (filter.instanceId) {
+        const row = await knex('strategy_instances').where('id', Number(filter.instanceId)).first('risk')
+        const wert = Number(parseJson(row?.risk, {})?.startEquityUsdt)
+        if (wert > 0) return wert
+    }
+    return 1000
+}
+
 export async function ladePerformance(filter = {}) {
     const knex = getKnex()
 
@@ -1653,8 +1894,12 @@ export async function ladePerformance(filter = {}) {
 
     const trades = await anwenden(knex('strategy_trades'), 'exitTime').orderBy('exitTime', 'asc')
 
-    // Kapitalkurve aus den Trades — dieselbe Rechnung wie im Backtest
-    const startEquity = Number(filter.startEquity) || 1000
+    // Kapitalkurve aus den Trades — dieselbe Rechnung wie im Backtest.
+    // Startkapital: ausdrücklich übergeben, sonst bei einer Instanz deren
+    // `risk.startEquityUsdt` (dieselbe Basis wie der Papier-Kontostand), sonst
+    // 1000. Bis 31.10.2026 galt ohne Angabe immer 1000 — eine Instanz mit
+    // 10000 USDT zeigte dann alle Prozentwerte zehnfach zu gross.
+    const startEquity = await startkapitalFuerAuswertung(knex, filter)
     let equity = startEquity
     const equityCurve = []
     for (const t of trades) {
@@ -1735,10 +1980,21 @@ export async function ladePerformance(filter = {}) {
     }))
 
     // ── Setup-Trichter ───────────────────────────────────────────────
+    // Dieselben Filter wie bei den Trades — bis 01.11.2026 kannte der Trichter
+    // nur Instanz, Symbol und Zeiteinheit, und mit Datums- oder Versionsfilter
+    // passten seine Prozente nicht zu den Trades darunter. Der Zeitraum gilt
+    // für die Kerze, auf der das Setup entstand.
     let setupQ = knex('strategy_setups')
     if (filter.instanceId) setupQ = setupQ.where('instanceId', Number(filter.instanceId))
     if (filter.symbol) setupQ = setupQ.where('symbol', String(filter.symbol).toUpperCase())
     if (filter.timeframe) setupQ = setupQ.where('timeframe', String(filter.timeframe))
+    if (filter.paramsVersion) setupQ = setupQ.where('paramsVersion', Number(filter.paramsVersion))
+    if (filter.from) setupQ = setupQ.where('obCandleTime', '>=', Number(filter.from))
+    if (filter.to) setupQ = setupQ.where('obCandleTime', '<=', Number(filter.to))
+    if (filter.mode) {
+        setupQ = setupQ.whereIn('instanceId', knex('strategy_instances')
+            .whereIn('mode', String(filter.mode).split(',')).select('id'))
+    }
     const setupStatus = await setupQ.clone()
         .select('status').count({ n: '*' }).groupBy('status')
     const invalidGruende = await setupQ.clone()
@@ -1808,8 +2064,9 @@ export async function ladePerformance(filter = {}) {
  */
 export async function ladeAlleRegelStrategien() {
     try {
-        const rows = await getKnex()('rule_strategies').where('enabled', 1)
-        const r = ladeRegelStrategien(rows)
+        // Über die Engine, damit sie den Stand kennt und ihn im nächsten Takt
+        // nicht für eine fremde Änderung hält (Abgleich zwischen Prozessen).
+        const r = await ladeRegelStrategienAusDb()
         if (r.fehlerhaft.length) {
             for (const f of r.fehlerhaft) {
                 logError('strategy-api', `Regelstrategie "${f.strategyId}" nicht ladbar: ${f.fehler.join('; ')}`, new Error('ungültig'))

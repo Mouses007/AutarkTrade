@@ -3,7 +3,7 @@
  *
  *   node src/utils/__selftest-fenster-farben.mjs
  */
-import { adxFarben, atrFarben, obvFarben, volumenFarben, fundingFarben, longAnteilFarben, divergenzen, FARBE } from './chart/fensterFarben.js'
+import { adxFarben, atrFarben, obvFarben, volumenFarben, fundingFarben, longAnteilFarben, divergenzen, divArtenAus, DIV_ARTEN, FARBE } from './chart/fensterFarben.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -53,6 +53,46 @@ check('Long-Anteil: Extrem orange, darunter 50 rot oder Extrem', lf[40] === FARB
     // Ein Pivot ganz am Ende (weniger als L Kerzen rechts) ist noch nicht bestätigt
     const spaet = divergenzen(kurs.slice(0, 43), osz.slice(0, 43))
     check('Pivot ohne 5 Kerzen rechts: noch keine Linie (kein Blick in die Zukunft)', spaet.length === 0)
+}
+
+// Doppel-Tief mit exakt gleichem Oszillatorwert (RENDERUSDT 1h, 30.10.2026): das tiefste
+// Tief muss Pivot bleiben — sonst wird die Divergenz darüber hinweg vom Tief davor gezogen.
+{
+    const n = 70
+    const kurs = Array.from({ length: n }, (_, i) => ({ h: 110, l: 100 - (i === 15 ? 5 : 0) - (i === 35 || i === 36 ? 12 : 0) - (i === 55 ? 8 : 0) }))
+    const osz = Array.from({ length: n }, (_, i) => 50 - (i === 15 ? 18 : 0) - (i === 35 || i === 36 ? 26 : 0) - (i === 55 ? 12 : 0))
+    const d = divergenzen(kurs, osz)
+    check('Doppel-Tief gleich: keine Divergenz über das tiefste Tief hinweg', !d.some((x) => x.i1 === 15 && x.i2 === 55), JSON.stringify(d))
+    const ohneDoppel = osz.map((v, i) => (i === 36 ? v + 0.5 : v))
+    check('gleiches Ergebnis wie ohne Gleichstand', JSON.stringify(divergenzen(kurs, ohneDoppel)) === JSON.stringify(d))
+}
+
+// Weitere Arten (31.10.2026): versteckt und übertrieben, nur wenn gewählt, nie zwei Arten für ein Paar
+{
+    const n = 60
+    const hochs = (k20, k40) => Array.from({ length: n }, (_, i) => ({ h: 100 + (i === 20 ? k20 : 0) + (i === 40 ? k40 : 0), l: 90 }))
+    const osz = (o20, o40) => Array.from({ length: n }, (_, i) => 50 + (i === 20 ? o20 : 0) + (i === 40 ? o40 : 0))
+    const alle = { arten: DIV_ARTEN }
+    // Kurs tieferes Hoch (110 → 106), Oszillator höheres (80 → 90): versteckt bärisch
+    const vb = divergenzen(hochs(10, 6), osz(30, 40), alle)
+    check('versteckt bärisch: tieferes Kurs-Hoch, höheres Oszillator-Hoch', vb.length === 1 && vb[0].typ === 'versteckt' && vb[0].art === 'baerisch', JSON.stringify(vb))
+    check('Gegenprobe: versteckt nicht gewählt → nichts', divergenzen(hochs(10, 6), osz(30, 40)).length === 0)
+    // Doppelhoch (110 / 110.5, Spanne 10 → Toleranz 1.5), Oszillator schwächer: übertrieben bärisch
+    const ub = divergenzen(hochs(10, 10.5), osz(30, 20), alle)
+    check('übertrieben bärisch: gleiches Hoch, Oszillator tiefer', ub.length === 1 && ub[0].typ === 'uebertrieben' && ub[0].art === 'baerisch', JSON.stringify(ub))
+    const rb = divergenzen(hochs(10, 16), osz(30, 20), alle)
+    check('Gegenprobe: deutlich höheres Hoch bleibt regulär, nicht zusätzlich übertrieben', rb.length === 1 && rb[0].typ === 'regulaer')
+    const tiefs = (k20, k40) => Array.from({ length: n }, (_, i) => ({ h: 110, l: 100 - (i === 20 ? k20 : 0) - (i === 40 ? k40 : 0) }))
+    const oszT = (o20, o40) => Array.from({ length: n }, (_, i) => 50 - (i === 20 ? o20 : 0) - (i === 40 ? o40 : 0))
+    const vu = divergenzen(tiefs(10, 6), oszT(20, 30), alle)
+    check('versteckt bullisch: höheres Kurs-Tief, tieferes Oszillator-Tief', vu.length === 1 && vu[0].typ === 'versteckt' && vu[0].art === 'bullisch', JSON.stringify(vu))
+    const uu = divergenzen(tiefs(10, 10.2), oszT(30, 20), alle)
+    check('übertrieben bullisch: gleiches Tief, Oszillator höher', uu.length === 1 && uu[0].typ === 'uebertrieben' && uu[0].art === 'bullisch', JSON.stringify(uu))
+    check('divArtenAus: Vorgabe nur regulär, Schalter einzeln', divArtenAus({}).join() === 'regulaer' && divArtenAus({ divRegulaer: false, divVersteckt: true, divUebertrieben: true }).join() === 'versteckt,uebertrieben')
+    check('keine Art gewählt → keine Linie', divergenzen(hochs(10, 16), osz(30, 20), { arten: [] }).length === 0)
+    // MACD-ähnliche Werte (Grössenordnung 0,001): absoluter Mindestunterschied 1 fände nichts, relativer schon
+    const klein = osz(30, 20).map((v) => (v - 50) * 0.0001 + 0.0005)
+    check('kleine Werte: minDiffRel statt fester Punkte', divergenzen(hochs(10, 16), klein).length === 0 && divergenzen(hochs(10, 16), klein, { minDiffRel: 0.05 }).length === 1)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

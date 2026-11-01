@@ -8,7 +8,7 @@
  * Mal, der Punkt auf der laufenden Kerze, die verspätete Kerze.
  */
 import {
-    pruefeMomentum, passtPunkt, faellig, nurGeschlossene, alarmPaare, reihenFuer, neuerStand, momentumText,
+    pruefeMomentum, passtPunkt, faellig, nurGeschlossene, alarmPaare, reihenFuer, neuerStand, momentumText, tfText,
     letzteGeschlossene, laufendeKerze, paarSchluessel, TF_MS, VERZUG_MS, MAX_VERSPAETUNG_MS,
 } from './chart-alarm-momentum.js'
 import { momentumPunkte, werteAus, benoetigteZeitebenen } from './momentum-radar.js'
@@ -209,9 +209,11 @@ console.log('\nGleich wie die Kachel\n')
 console.log('\nMeldungstext\n')
 {
     const tr = [{ symbol: 'BTCUSDT', markt: 'futures', tf: '1h', punkt: { seite: 'long', stark: true }, preis: 100 }]
-    check('ein Treffer: Symbol, Zeiteinheit, Grösse, Seite im Titel', momentumText({}, tr).titel === 'Momentum BTCUSDT 1h: grosser Long-Punkt')
+    check('ein Treffer: Symbol, Zeiteinheit, Grösse, Seite im Titel', momentumText({}, tr).titel === 'Momentum BTCUSDT 1 Std: grosser Long-Punkt')
     const zwei = momentumText({ notiz: 'Favoriten' }, [...tr, { symbol: 'SOLUSDT', markt: 'spot', tf: '15m', punkt: { seite: 'short', stark: false }, preis: 5 }])
-    check('mehrere Treffer werden gebündelt', zwei.titel === 'Momentum: 2 Signale' && zwei.text.split('\n').length === 3 && zwei.text.includes('SOLUSDT Spot 15m: kleiner Short-Punkt'))
+    check('mehrere Treffer werden gebündelt', zwei.titel === 'Momentum: 2 Signale' && zwei.text.split('\n').length === 3 && zwei.text.includes('SOLUSDT Spot 15 Min: kleiner Short-Punkt'))
+    check('Zeiteinheit ausgeschrieben (Sprachausgabe las „15m" als Meter)', tfText('15m') === '15 Min' && tfText('1h') === '1 Std' && tfText('4h') === '4 Std'
+        && tfText('1d') === '1 Tag' && tfText('3d') === '3 Tage' && tfText('1w') === '1 Woche' && tfText('1M') === '1 Monat' && tfText('x') === 'x')
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

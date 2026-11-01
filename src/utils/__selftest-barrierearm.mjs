@@ -11,7 +11,10 @@
  * Geprüft wird jede Vorlage mit dem Vue-Compiler (AST, kein Rendern):
  *  - `<button>`, dessen Inhalt nur aus `<Symbol>`/`<Kreisel>` besteht, braucht
  *    `aria-label` oder `title` (statisch oder gebunden);
- *  - `<Knopf nurSymbol>` braucht `titel`.
+ *  - `<Knopf nurSymbol>` braucht `titel`;
+ *  - ein `<button>` mit `@pointerdown`/`@pointerup` braucht auch `@click`: Enter
+ *    und Leertaste lösen nur `click` aus, die Vollbild-Griffe im Chart liessen
+ *    sich deshalb nicht per Tastatur öffnen (Audit BUG-F2B-006).
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -57,6 +60,11 @@ function nurSymbole(knoten) {
     return lauf(knoten) !== false && symbol
 }
 
+/** Hört das Element auf ein Ereignis (`@name`, `v-on:name`, mit oder ohne Modifikatoren)? */
+function hoert(knoten, name) {
+    return knoten.props.some((p) => p.type === 7 && p.name === 'on' && p.arg?.content === name)
+}
+
 /** Alle Mängel einer Vorlage als Liste „Zeile: Beschreibung". */
 export function maengel(quelle, dateiname = 'x.vue') {
     const { descriptor } = parse(quelle, { filename: dateiname })
@@ -71,6 +79,9 @@ export function maengel(quelle, dateiname = 'x.vue') {
             if (k.tag === 'Knopf' && (hat(k, 'nurSymbol') || hat(k, 'nur-symbol')) && !hat(k, 'titel')) {
                 aus.push(`${zeile}: <Knopf nurSymbol> ohne titel`)
             }
+            if (k.tag === 'button' && (hoert(k, 'pointerdown') || hoert(k, 'pointerup')) && !hoert(k, 'click')) {
+                aus.push(`${zeile}: <button> nur über Zeigerereignisse, ohne @click (Tastatur)`)
+            }
         }
         for (const c of k.children || []) lauf(c)
         for (const z of k.branches || []) lauf(z)
@@ -82,11 +93,13 @@ export function maengel(quelle, dateiname = 'x.vue') {
 // ── Gegenprobe ──────────────────────────────────────────────────────────────
 {
     const schlecht = maengel(`<template><button class="zu" @click="x"><Symbol name="schliessen" /></button>
-<Knopf nurSymbol symbol="nachricht" @click="y" /></template>`)
-    pruefe(schlecht.length === 2, 'Gegenprobe: Symbol-Knopf und Knopf nurSymbol ohne Namen werden gemeldet — ' + JSON.stringify(schlecht))
+<Knopf nurSymbol symbol="nachricht" @click="y" />
+<button title="Griff" @pointerdown.stop="a" @pointerup.stop="b">x</button></template>`)
+    pruefe(schlecht.length === 3, 'Gegenprobe: Symbol-Knopf und Knopf nurSymbol ohne Namen werden gemeldet — ' + JSON.stringify(schlecht))
     const gut = maengel(`<template><button :aria-label="t('a')"><Symbol name="x" /></button>
 <button title="Zu"><Symbol name="x" /></button><button><Symbol name="x" /> Speichern</button>
-<button>{{ n }}</button><Knopf nur-symbol :titel="t('b')" symbol="x" /></template>`)
+<button>{{ n }}</button><Knopf nur-symbol :titel="t('b')" symbol="x" />
+<button title="Griff" @pointerdown.stop="a" @pointerup.stop="b" @click="c">x</button></template>`)
     pruefe(gut.length === 0, 'Gegenprobe: benannte Knöpfe und Knöpfe mit Text bleiben still — ' + JSON.stringify(gut))
 }
 

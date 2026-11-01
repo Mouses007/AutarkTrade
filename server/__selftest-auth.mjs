@@ -12,6 +12,10 @@
  *
  * `authConfig` steht ohne `loadAuthConfig()` auf { enabled: false } — also
  * genau der Fall, den diese Prüfungen brauchen.
+ *
+ * Seit Audit 4.3.4 (SEC-S1-001) frischen die beiden Middlewares die
+ * Konfiguration aus der Datenbank auf und sind deshalb asynchron: die
+ * Attrappen warten auf sie. Ohne Datenbank bleibt der Stand stehen.
  */
 
 import { istLoopbackHost, setzeBindungsModus, offenerBetriebErlaubt, sessionCookieMiddleware, apiAuthMiddleware, istErlaubterHost, getSessionCookieString, hatGueltigeSession, entwerteAlleSitzungen } from './auth.js'
@@ -31,10 +35,10 @@ function check(name, ok, detail) {
 }
 
 /** Minimal-Attrappe für res: merkt sich nur die gesetzten Kopfzeilen. */
-function laufe(url) {
+async function laufe(url) {
     const kopf = {}
     let weiter = false
-    sessionCookieMiddleware(
+    await sessionCookieMiddleware(
         { url },
         { setHeader: (k, v) => { kopf[k] = v } },
         () => { weiter = true },
@@ -59,15 +63,15 @@ console.log('\nCookie-Vergabe ohne Passwortschutz\n')
 
     setzeBindungsModus(true)
     check('lokal gebunden: Betrieb ohne Gate ist erlaubt', offenerBetriebErlaubt() === true)
-    const lokal = laufe('/journal')
+    const lokal = await laufe('/journal')
     check('lokal gebunden: Seitenaufruf bekommt ein Cookie', lokal.cookie.includes('at_session='), lokal.cookie)
     check('Cookie ist httpOnly und SameSite=Strict',
         lokal.cookie.includes('HttpOnly') && lokal.cookie.includes('SameSite=Strict'), lokal.cookie)
-    check('API-Aufrufe bekommen nie ein Cookie zugeteilt', laufe('/api/db/trades').cookie === '')
+    check('API-Aufrufe bekommen nie ein Cookie zugeteilt', (await laufe('/api/db/trades')).cookie === '')
 
     setzeBindungsModus(false)
     check('netzwerkweit gebunden: offener Betrieb ist nicht erlaubt', offenerBetriebErlaubt() === false)
-    const netz = laufe('/journal')
+    const netz = await laufe('/journal')
     check('netzwerkweit ohne Gate: KEIN Cookie mehr', netz.cookie === '', netz.cookie)
     check('die Middleware ruft trotzdem next()', netz.weiter === true)
 
@@ -75,7 +79,7 @@ console.log('\nCookie-Vergabe ohne Passwortschutz\n')
     // stünde jemand, der es bewusst so will, plötzlich vor verschlossener Tür.
     process.env.AT_ALLOW_INSECURE = '1'
     check('AT_ALLOW_INSECURE=1 erlaubt den offenen Betrieb wieder', offenerBetriebErlaubt() === true)
-    check('und verteilt dann auch wieder Cookies', laufe('/journal').cookie.includes('at_session='))
+    check('und verteilt dann auch wieder Cookies', (await laufe('/journal')).cookie.includes('at_session='))
 
     process.env.AT_ALLOW_INSECURE = '0'
     check('jeder andere Wert zählt nicht als Freigabe', offenerBetriebErlaubt() === false)
@@ -89,10 +93,10 @@ console.log('\nErst-Einrichtung (gesperrter Netzbetrieb)\n')
 
 {
     // Attrappe für die API-Auth: prüft nur, ob die Middleware durchlässt.
-    const apiLauf = (url) => {
+    const apiLauf = async (url) => {
         let weiter = false
         let status = 0
-        apiAuthMiddleware(
+        await apiAuthMiddleware(
             { originalUrl: url, url, headers: {} },
             { status: (s) => { status = s; return { json: () => {} } } },
             () => { weiter = true },
@@ -103,10 +107,10 @@ console.log('\nErst-Einrichtung (gesperrter Netzbetrieb)\n')
     // Gate ist aus (authConfig ohne loadAuthConfig = { enabled: false }):
     // das ERSTE Passwort darf ohne Session gesetzt werden — sonst käme ein
     // netzgebundener Container (keine Cookie-Vergabe) nie aus der Sperre.
-    const setzen = apiLauf('/api/auth/set-password')
+    const setzen = await apiLauf('/api/auth/set-password')
     check('Gate aus: /api/auth/set-password geht ohne Session durch', setzen.weiter === true)
-    check('andere API-Routen bleiben ohne Session gesperrt', apiLauf('/api/db/trades').status === 401)
-    check('Login-Flow-Routen bleiben öffentlich', apiLauf('/api/auth/status').weiter === true)
+    check('andere API-Routen bleiben ohne Session gesperrt', (await apiLauf('/api/db/trades')).status === 401)
+    check('Login-Flow-Routen bleiben öffentlich', (await apiLauf('/api/auth/status')).weiter === true)
 }
 
 console.log('\nHost-Header (DNS-Rebinding)\n')

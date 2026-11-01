@@ -1,7 +1,8 @@
 <script setup>
 /**
  * Bereich „Benachrichtigungen": Browser-Hauptschalter, Kanalwahl je Ereignis
- * (mit Schwellen und den Märkten des Divergenz-Alarms), die Push-Kanäle
+ * (mit Schwellen und den Märkten des Divergenz-Alarms; ein Ereignis ohne
+ * Browser-Sender — `browser: false` im Register — zeigt dort „—"), die Push-Kanäle
  * (ntfy/Telegram/Webhook, `PushKanaele.vue`) und der Mail-Zugang.
  * Register, Kanalwahl und Mail-Zugang lädt Einstellungen.vue beim Öffnen der Seite
  * (useBenachrichtigungen) — KI → Nachrichten liest sie ebenfalls. Drei
@@ -164,9 +165,12 @@ async function divergenzLeeren() {
                                 <span class="unterzeile">{{ t('settings.benachrichtigungen.hinweis_' + typ.id) }}</span>
                             </td>
                             <td class="mitte" :data-titel="t('settings.benachrichtigungen.browser')">
-                                <input class="haken" type="checkbox" :aria-label="t('settings.benachrichtigungen.browser')"
+                                <!-- `browser: false`: entsteht nur auf dem Server, der Browser
+                                     erfährt nichts davon (FUN-F5-003) — kein Häkchen ohne Wirkung -->
+                                <input v-if="typ.browser !== false" class="haken" type="checkbox" :aria-label="t('settings.benachrichtigungen.browser')"
                                     :checked="kanalAn(typ.id, 'browser')" :disabled="!browserNotifications"
                                     @change="setzeKanal(typ.id, 'browser', $event.target.checked)">
+                                <span v-else class="gedaempft" :title="t('settings.benachrichtigungen.nurMail')">—</span>
                             </td>
                             <td class="mitte" :data-titel="t('settings.benachrichtigungen.email')">
                                 <input v-if="typ.email" class="haken" type="checkbox" :aria-label="t('settings.benachrichtigungen.email')"

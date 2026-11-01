@@ -8,16 +8,22 @@
  * sie hinzu. Gespeichert wird in der Datenbank (`/api/chart/vorlagen`), damit
  * eine Vorlage auf NAS, Rechner und Handy dieselbe ist.
  *
+ * Die zuletzt ersetzend angewendete Vorlage eines Panels merkt mit: Chart.vue
+ * schreibt jede Änderung an dessen Indikatoren in sie zurück (`vorlageId` am
+ * Panel). Darum holt Anwenden die Vorlage frisch, statt die beim Öffnen
+ * geladene Liste zu nehmen — die Favoriten-Knöpfe laden sonst nie neu.
+ *
  * Favoriten (Stern) stehen als Knöpfe direkt in der Kopfleiste — ein Klick
  * wendet sie an, wie die Zeiteinheit-Favoriten. Gemerkt im Browser, wie dort.
  */
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { api } from '../../utils/chart/arbeitsplatz.js'
+import { api, vorlagenInhalt as nurInhalt } from '../../utils/chart/arbeitsplatz.js'
 import { Symbol } from '../basis'
 
 const props = defineProps({
     aktuelle: { type: Array, default: () => [] },   // Indikatoren des aktiven Panels
+    aktiv: { type: Number, default: null },          // Vorlage, die gerade mitmerkt
 })
 const emit = defineEmits(['anwenden'])
 const { t } = useI18n()
@@ -41,10 +47,6 @@ const wurzel = ref(null)
 
 async function lade() {
     try { vorlagen.value = await api.vorlagen() } catch { /* Liste bleibt, wie sie war */ }
-}
-
-function nurInhalt(liste) {
-    return (liste || []).map((i) => ({ typ: i.typ, params: i.params || {}, farben: i.farben || {}, sichtbar: i.sichtbar !== false }))
 }
 
 async function speichern() {
@@ -75,9 +77,11 @@ async function loeschen(v) {
     try { await api.vorlageLoeschen(v.id); await lade() } catch (e) { fehler.value = e.response?.data?.error || e.message }
 }
 
-function anwenden(v, modus) {
-    emit('anwenden', { indikatoren: v.indikatoren, modus })
+async function anwenden(v, modus) {
     offen.value = false
+    await lade()
+    const frisch = vorlagen.value.find((x) => x.id === v.id) || v
+    emit('anwenden', { indikatoren: frisch.indikatoren, modus, id: frisch.id })
 }
 
 function umschalten() {
@@ -100,7 +104,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
         <div v-if="offen" class="menue vorlagenMenue">
             <div class="kopf">{{ t('chart.vorlage.titel') }}</div>
             <div v-if="!vorlagen.length" class="leer">{{ t('chart.vorlage.leer') }}</div>
-            <div v-for="v in vorlagen" :key="v.id" class="zeile">
+            <div v-for="v in vorlagen" :key="v.id" class="zeile" :class="{ aktiv: v.id === aktiv }">
                 <button class="name" :title="t('chart.vorlage.anwendenTitel', { n: v.indikatoren.length })" @click="anwenden(v, 'ersetzen')" :aria-label="t('chart.vorlage.anwendenTitel', { n: v.indikatoren.length })">
                     {{ v.name }} <small>{{ v.indikatoren.length }}</small>
                 </button>
@@ -120,7 +124,7 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
         </div>
     </div>
     <!-- Favoriten direkt in der Leiste: ein Klick ersetzt die Indikatoren des aktiven Charts. -->
-    <button v-for="v in favoritVorlagen" :key="'fav' + v.id" class="tf favorit"
+    <button v-for="v in favoritVorlagen" :key="'fav' + v.id" class="tf favorit" :class="{ an: v.id === aktiv }"
         :title="t('chart.vorlage.anwendenTitel', { n: v.indikatoren.length })" @click="anwenden(v, 'ersetzen')" :aria-label="t('chart.vorlage.anwendenTitel', { n: v.indikatoren.length })">
         <Symbol name="stern" gefuellt class="favSymbol" /> {{ v.name }}
     </button>
@@ -240,6 +244,8 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', draussen))
     font-size: 12px;
     cursor: pointer;
 }
+
+.zeile.aktiv .name { color: var(--accent); }
 
 .zeile .name small {
     color: var(--muted);

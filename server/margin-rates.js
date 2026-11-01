@@ -289,15 +289,25 @@ export async function holeMarginRate(symbol, quelle) {
  * (siehe Einheiten-Kanon in `shared/liquidation.js`).
  */
 export async function wartungsmargePctFuer(symbol, override = 0) {
+    return (await wartungsmargeMitQuelle(symbol, override)).pct
+}
+
+/**
+ * Wartungsmarge mit ihrer Herkunft: `vorgabe` (aus dem Formular), `boerse`
+ * (abgerufen) oder `pauschal` (Abruf gescheitert, Rückfall). Bis 01.11.2026
+ * stand im Backtest auch beim Rückfall „boerse" — eine Annahme, die sich als
+ * Messung ausgab.
+ */
+export async function wartungsmargeMitQuelle(symbol, override = 0) {
     const eigen = Number(override)
-    if (Number.isFinite(eigen) && eigen > 0) return eigen
+    if (Number.isFinite(eigen) && eigen > 0) return { pct: eigen, quelle: 'vorgabe' }
     try {
         const treffer = await holeMarginRate(symbol)
-        if (treffer?.mmr > 0) return treffer.mmr * 100
+        if (treffer?.mmr > 0) return { pct: treffer.mmr * 100, quelle: 'boerse' }
     } catch (fehler) {
         logWarn('margin-rates', `Wartungsmarge ${symbol} nicht abrufbar: ${fehler.message}`)
     }
-    return MMR_VORGABE * 100
+    return { pct: MMR_VORGABE * 100, quelle: 'pauschal' }
 }
 
 export function setupMarginRateRoutes(app) {

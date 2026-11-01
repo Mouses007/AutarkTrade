@@ -19,7 +19,6 @@ import Pille from './basis/Pille.vue'
 import Symbol from './basis/Symbol.vue'
 import Hinweis from './basis/Hinweis.vue'
 import Kreisel from './basis/Kreisel.vue'
-import KiHinweis from './quellen/KiHinweis.vue'
 import { appEinstellungen } from '../stores/app/rahmen.js'
 
 const { t } = useI18n()
@@ -466,7 +465,6 @@ function closeModal() {
             <div v-if="generatedImage && !generating" class="vorschau" data-ki-generiert="true">
                 <img :src="generatedImage" :alt="t('kiHinweis.bild')" />
                 <!-- S12: das Label steht auch IM Bild und in den PNG-Metadaten (shareCardBild.js). -->
-                <KiHinweis />
             </div>
 
             <!-- Als Vorlage speichern (nur nach neu erzeugtem Bild) -->

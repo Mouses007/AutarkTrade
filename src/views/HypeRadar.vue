@@ -956,8 +956,6 @@
             <div v-if="offenerBericht" class="hypBericht" data-ki-generiert="true">
                 <h4 class="hypBerichtUeberschrift">{{ offenerBericht.ueberschrift }}</h4>
                 <p class="hypMarktkontext">{{ offenerBericht.marktkontext }}</p>
-                <!-- S12: Pflichtlabel am Hype-KI-Bericht. -->
-                <KiHinweis />
 
                 <div v-for="k in offenerBericht.kandidaten" :key="k.symbol" class="hypKandidat">
                     <div class="hypKandidatKopf">
@@ -1096,7 +1094,6 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import Hinweis from '@/components/basis/Hinweis.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 import { ladeFreigabe, freigabeAn } from '../utils/quellenFreigabe.js'
 
 const { t, te, locale } = useI18n()

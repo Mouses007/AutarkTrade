@@ -31,6 +31,7 @@
 import { atr, ema, volumeSma } from './indicators.js'
 import { MARKT } from '../fill-simulator.js'
 import { kerzenMs, istWochenende, trendBei } from './momentum_swing.js'
+import { htfFensterEma, htfAusschnitt } from './htf.js'
 
 export const DETECTOR_VERSION = 1
 
@@ -60,9 +61,9 @@ const params = [
     { key: 'stopAtr', type: 'number', default: 1.5, min: 0.25, max: 10, step: 0.25, group: 'exit' },
     // Kein Ziel: der Gewinn kommt aus wenigen langen Läufen. 0 = ohne Ziel.
     { key: 'tpRR', type: 'number', default: 0, min: 0, max: 20, step: 0.5, group: 'exit' },
-    // 47 = Schluss der 48. Kerze ab der Einstiegskerze (die Engine schliesst
-    // zum Schluss der Kerze, die `maxHoldCandles` Kerzen nach dem Einstieg beginnt).
-    { key: 'maxHoldCandles', type: 'integer', default: 47, min: 1, max: 2000, step: 1, group: 'exit' },
+    // 48 Stunden auf 1h: Schluss der 48. Kerze ab der Einstiegskerze. (Bis
+    // 01.11.2026 stand hier 47, weil der Zeitausstieg eine Kerze zu spät kam.)
+    { key: 'maxHoldCandles', type: 'integer', default: 48, min: 1, max: 2000, step: 1, group: 'exit' },
     { key: 'breakEvenAtR', type: 'number', default: 0, min: 0, max: 10, step: 0.1, group: 'exit' },
 ]
 
@@ -76,7 +77,9 @@ const paramGroups = [
  * @param {object} input  wie bei den anderen Strategien (siehe momentum_swing.js)
  * @returns {{ setups: Array, events: Array, diagnostics: object }}
  */
-function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfCandles = null }) {
+function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfCandles: htfRoh = null }) {
+    // Dasselbe HTF-Fenster wie im Betrieb (`htfKerzen`), siehe htf.js
+    const htfCandles = htfAusschnitt(htfRoh, htfFensterEma(p.htfEmaPeriod))
     const setups = []
     const events = []
     const diagnostics = { sweepsFound: 0, setupsCreated: 0, rejected: {}, rejections: [] }
@@ -169,6 +172,9 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
         events.push({
             id: s.id, status: 'triggered', triggeredAt: k.t, candleTime: k.t,
             entry, stopLoss: s.stopLoss, takeProfit, rr: p.tpRR,
+            // Eingestiegen wird zur Eröffnung: Hoch und Tief DIESER Kerze
+            // können Stop oder Ziel schon berühren und werden geprüft.
+            entryAtOpen: true,
             confirmations: { ...(s.confirmations || {}), entryTrigger: MARKT },
         })
     }
@@ -181,9 +187,11 @@ export default {
     name: 'Liquidations-Kerze',
     description: 'Long nach einer grünen Kerze mit Volumen- und Spannenspitze (Short-Liquidationen) im Tagestrend, Ausstieg nach Zeit.',
     version: DETECTOR_VERSION,
-    supportedTimeframes: ['15m', '1h', '4h'],
+    // Nur 1h: Volumen- und Spannenschwelle und der Ausstieg nach 48 Kerzen sind
+    // für 1h gemessen (Forschung K2).
+    supportedTimeframes: ['1h'],
     warmupCandles: 100,
-    htfKerzen: 300,
+    htfKerzen: (p) => htfFensterEma(p.htfEmaPeriod),
     params,
     paramGroups,
     detect,

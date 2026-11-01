@@ -15,7 +15,7 @@
  * Ausgang bemessen.
  */
 
-import { computePositionSize, RISK_REASONS } from './risk-engine.js'
+import { computePositionSize, RISK_REASONS, rundeMenge, stellenVon } from './risk-engine.js'
 
 let bestanden = 0
 let fehler = 0
@@ -92,6 +92,19 @@ const basis = { equity: 1000, riskPerTradePct: 1, entry: 100, stopLoss: 99, leve
         computePositionSize({ ...basis, equity: 0, costs: {} }).reason === RISK_REASONS.NO_EQUITY)
     pruefe('fehlendes costs-Objekt bricht nicht',
         nah(computePositionSize({ ...basis }).qty, 10))
+}
+
+// Schrittweiten ohne Zehnerpotenz (0,5 / 0,25 / 0,05): abrunden in ganzen
+// Schritten, nie über toFixed wieder aufrunden (Audit 4.3.4, FUN-F1-006).
+{
+    pruefe('Schritt 0,5: 2,7 → 2,5', rundeMenge(2.7, 100, { stepSize: 0.5 }).qty === 2.5)
+    pruefe('Schritt 0,25: 0,8 → 0,75', rundeMenge(0.8, 100, { stepSize: 0.25 }).qty === 0.75)
+    pruefe('Schritt 0,05: 0,16 → 0,15', rundeMenge(0.16, 100, { stepSize: 0.05 }).qty === 0.15)
+    pruefe('Schritt 5: 12 → 10', rundeMenge(12, 100, { stepSize: 5 }).qty === 10)
+    pruefe('Schritt 0,001 unverändert', rundeMenge(0.123456, 100, { stepSize: 0.001 }).qty === 0.123)
+    const m = rundeMenge(2.9, 100, { stepSize: 0.5, maxQty: 2.6 })
+    pruefe('Höchstmenge 2,6 bei Schritt 0,5 → 2,5', m.qty === 2.5 && m.capped, JSON.stringify(m))
+    pruefe('Stellen aus der Schrittweite', stellenVon(0.25) === 2 && stellenVon(5) === 0 && stellenVon(1e-8) === 8 && stellenVon(2.5e-7) === 8)
 }
 
 // Short: der Stopabstand zählt, nicht die Richtung.

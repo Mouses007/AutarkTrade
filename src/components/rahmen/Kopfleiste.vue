@@ -18,6 +18,7 @@ import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { loescheFinanzdaten } from '../../utils/finanzSpeicher.js'
+import { merkeAbmeldung } from '../../utils/webauthn.js'
 import Logo from '../basis/Logo.vue'
 import Symbol from '../basis/Symbol.vue'
 import Titelzeile from './Titelzeile.vue'
@@ -61,6 +62,7 @@ async function abmelden() {
     try { await axios.post('/api/logout') } catch { /* egal — neu laden zeigt das Gate */ }
     // Positions-/Kontodaten nicht im Browser liegen lassen (Audit SEC-WEB-005)
     loescheFinanzdaten()
+    merkeAbmeldung()
     window.location.reload()
 }
 

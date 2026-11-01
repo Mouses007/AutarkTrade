@@ -13,6 +13,9 @@
  *
  * Aufruf: node server/__selftest-benachrichtigungen.mjs
  */
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
 import {
     REGISTER, kanalWahl, mailKonfigVollstaendig, pruefeMailKonfig,
     empfaengerListe, empfaengerFuer, EMPFAENGER_MAX,
@@ -43,8 +46,48 @@ pruefe('Pi-Cycle-Kreuzung kann mailen',
 // ein Update darf nicht ungefragt Post verschicken.
 for (const e of REGISTER) {
     const w = kanalWahl({}, e.id)
-    pruefe(`${e.id}: Browser ist voreingestellt an`, w.browser === true)
+    if (e.browser !== false) pruefe(`${e.id}: Browser ist voreingestellt an`, w.browser === true)
     pruefe(`${e.id}: E-Mail ist voreingestellt aus`, w.email === false)
+}
+
+// ── 2b) Browser-Kanal nur, wo es einen Sender gibt (FUN-F5-003) ──────────
+// Bis zum Audit 4.3.4 standen „Neue Version", „Aufzeichnung stumm" und
+// „Lagebericht fertig" mit einem Browser-Häkchen (ab Werk an) in der Matrix,
+// obwohl im Frontend nie ein `sendNotification` mit dieser Kennung stand.
+{
+    const wurzel = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+    const sender = new Set()
+    const dynamisch = []
+    const lies = (ordner) => {
+        for (const n of fs.readdirSync(ordner, { withFileTypes: true })) {
+            const p = path.join(ordner, n.name)
+            if (n.isDirectory()) { lies(p); continue }
+            if (!/\.(vue|js|mjs)$/.test(n.name) || /__selftest/.test(n.name) || p.endsWith(path.join('utils', 'notify.js'))) continue
+            for (const m of fs.readFileSync(p, 'utf8').matchAll(/sendNotification\(\s*([^,)]+)/g)) {
+                const lit = m[1].trim().match(/^['"`]([A-Za-z]+)['"`]$/)
+                if (lit) sender.add(lit[1]); else dynamisch.push(`${path.relative(wurzel, p)}: ${m[1].trim()}`)
+            }
+        }
+    }
+    lies(path.join(wurzel, 'src'))
+    pruefe('keine sendNotification mit errechneter Kennung (sonst ist der Abgleich blind)', dynamisch.length === 0, dynamisch.join('; '))
+    for (const e of REGISTER) {
+        if (e.browser === false) {
+            pruefe(`${e.id}: ohne Browser-Sender — kein Sender im Frontend`, !sender.has(e.id))
+            pruefe(`${e.id}: Browser-Kanal nie an, auch gespeichert nicht`,
+                kanalWahl({ benachrichtigungen: JSON.stringify({ [e.id]: { browser: true } }) }, e.id).browser === false && kanalWahl({}, e.id).browser === false)
+        } else {
+            pruefe(`${e.id}: Browser-Kanal hat einen Sender im Frontend`, sender.has(e.id))
+        }
+    }
+    for (const id of sender) pruefe(`Sender „${id}" steht im Register`, REGISTER.some(e => e.id === id))
+    for (const id of ['neueVersion', 'aufzeichnungStumm', 'lageberichtFertig']) {
+        pruefe(`${id}: im Register ohne Browser-Sender`, REGISTER.find(e => e.id === id)?.browser === false)
+    }
+    const kiNews = fs.readFileSync(path.join(wurzel, 'src/views/einstellungen/ki/KiNewsBericht.vue'), 'utf8')
+    pruefe('KiNewsBericht: kein Schalter „Hinweis im Browser" mehr', !/kanalAn\(\s*'lageberichtFertig'\s*,\s*'browser'/.test(kiNews))
+    const matrix = fs.readFileSync(path.join(wurzel, 'src/views/einstellungen/EinstellungenBenachrichtigungen.vue'), 'utf8')
+    pruefe('Matrix blendet das Browser-Häkchen bei browser: false aus', /v-if="typ\.browser !== false"/.test(matrix))
 }
 
 // ── 3) Kanalwahl: gespeicherte Werte ─────────────────────────────────────

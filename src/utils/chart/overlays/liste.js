@@ -16,7 +16,6 @@ export const OVERLAYS = [
     { id: 'hebelzonen', vorgabe: false },
     { id: 'orderbuch', vorgabe: false },
     // Nur Datenbank, kein Fremdabruf — deshalb ab Werk an.
-    { id: 'strategie', vorgabe: true },
 ]
 
 export function overlayAn(panel, id) {

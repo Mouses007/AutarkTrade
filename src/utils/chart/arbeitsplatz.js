@@ -46,6 +46,8 @@ export function vervollstaendige(daten) {
     const d = { ...std, ...(daten || {}) }
     d.sync = { ...std.sync, ...(daten?.sync || {}) }
     d.seitenleiste = { ...std.seitenleiste, ...(daten?.seitenleiste || {}) }
+    // Der Strategien-Reiter wurde am 30.10.2026 zu „Flash-News" — sonst stünde eine leere Karte da.
+    if (d.seitenleiste.reiter === 'strategien') d.seitenleiste.reiter = 'news'
     d.panels = Array.isArray(daten?.panels) && daten.panels.length
         ? daten.panels.map((p) => ({ ...neuesPanel(p), ...p }))
         : std.panels
@@ -62,6 +64,11 @@ export function passeAnRaster(d, raster) {
     }
     if (d.aktiv >= n) d.aktiv = 0
     return d
+}
+
+/** Was eine Indikator-Vorlage von einem Indikator speichert: Typ, Einstellungen, Farben, sichtbar — keine ID. */
+export function vorlagenInhalt(liste) {
+    return (liste || []).map((i) => ({ typ: i.typ, params: i.params || {}, farben: i.farben || {}, sichtbar: i.sichtbar !== false }))
 }
 
 export const api = {

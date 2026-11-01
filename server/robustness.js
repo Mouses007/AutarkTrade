@@ -18,7 +18,113 @@
  * Backtest, den sie beurteilen soll.
  */
 
-import { runBacktest, berechneStatistik, MIN_TRADES_BELASTBAR } from './strategy-backtest.js'
+import { runBacktest, berechneStatistik, MIN_TRADES_BELASTBAR, MAX_BACKTEST_CANDLES } from './strategy-backtest.js'
+import { getStrategy, validateParams, htfBedarf } from './strategies/index.js'
+import { getHistoricalCandles, getFundingHistory, getSymbolMeta, timeframeMs } from './market-data.js'
+
+/** Mindestzahl Trades, ab der ein Wert im Walk-forward überhaupt gewählt wird. */
+export const WF_MIN_TRADES = 10
+
+/** Vorlauf (ms), damit ein Lauf ab `fromTs` handelt statt erst nach dem Warmup. */
+function vorlaufMs(basis) {
+    const strategie = getStrategy(basis.strategyId)
+    if (!strategie || !basis.timeframe) return 0
+    return (strategie.warmupCandles || 200) * timeframeMs(basis.timeframe)
+}
+
+/**
+ * HTF-Vorlauf (Kerzen) für einen Parametersatz — 0, wenn der Trendfilter aus
+ * ist oder keine eigene höhere Zeiteinheit verlangt wird.
+ */
+function htfVorlaufKerzen(strategie, basis, params) {
+    if (!strategie) return { tf: null, kerzen: 0 }
+    const p = validateParams(basis.strategyId, params || {}).values
+    if (!(p.htfTrendFilter && p.htfTimeframe && p.htfTimeframe !== basis.timeframe)) return { tf: null, kerzen: 0 }
+    return { tf: p.htfTimeframe, kerzen: htfBedarf(strategie, p) }
+}
+
+/**
+ * Daten EINES Symbols für den ganzen Zeitraum, einmal geladen: Kerzen (mit
+ * Vorlauf), die HTF-Kerzen, Funding-Verlauf, Börsenregeln.
+ *
+ * Bis 01.11.2026 holte jede Stufe jedes Laufs ihre Kerzen selbst neu — eine
+ * Matrix über 8 Symbole, zwei Hälften und 25 Stufen waren bis zu 400 Abrufe
+ * derselben Daten, und jedes Fenster verlor seine ersten 200 Kerzen an den
+ * Warmup.
+ *
+ * Der HTF-Vorlauf richtet sich nach der Stufe, die am meisten braucht
+ * (`stufen`: die Parametersätze aller Stufen). Bis 31.10.2026 kam er allein
+ * aus den Grundparametern: eine Stufe `zonenFensterHtf: 1000` (Bedarf 1010
+ * Tageskerzen) rechnete mit 290 Tagen Vorlauf und damit andere Trades als
+ * Einzel-Backtest und Papier — bei Seed 2 ein scheinbar tragendes Plateau
+ * (+1,06/+3,18 R) gegen −1,14/−0,45 R im Einzellauf (Audit 4.3.4, FUN-L4-002).
+ */
+export async function ladeVorrat(basis, { stufen = [] } = {}) {
+    const market = basis.market === 'spot' ? 'spot' : 'futures'
+    const vorlauf = vorlaufMs(basis)
+    const vorrat = {
+        symbol: basis.symbol,
+        vorlauf,
+        candles: await getHistoricalCandles(basis.symbol, basis.timeframe,
+            Number(basis.fromTs) - vorlauf, basis.toTs, { market, maxCandles: MAX_BACKTEST_CANDLES }),
+        marketMeta: null, fundingVerlauf: null, htf: null,
+    }
+    try { vorrat.marketMeta = await getSymbolMeta(basis.symbol, { market }) } catch { vorrat.marketMeta = null }
+    if (market === 'futures') {
+        try { vorrat.fundingVerlauf = await getFundingHistory(basis.symbol, Number(basis.fromTs) - vorlauf, basis.toTs) } catch { vorrat.fundingVerlauf = null }
+    }
+    const strategie = getStrategy(basis.strategyId)
+    const grund = htfVorlaufKerzen(strategie, basis, basis.params)
+    if (grund.tf) {
+        // Grösster Bedarf über Grundparameter und alle Stufen derselben
+        // höheren Zeiteinheit — Stufen mit einer anderen holen selbst.
+        let kerzen = grund.kerzen
+        for (const params of stufen) {
+            const stufe = htfVorlaufKerzen(strategie, basis, params)
+            if (stufe.tf === grund.tf && stufe.kerzen > kerzen) kerzen = stufe.kerzen
+        }
+        const htfVorlauf = kerzen * timeframeMs(grund.tf)
+        try {
+            vorrat.htf = {
+                tf: grund.tf,
+                vorlauf: htfVorlauf,
+                candles: await getHistoricalCandles(basis.symbol, grund.tf,
+                    Number(basis.fromTs) - vorlauf - htfVorlauf, basis.toTs, { market, maxCandles: MAX_BACKTEST_CANDLES }),
+            }
+        } catch { vorrat.htf = null }
+    }
+    return vorrat
+}
+
+/**
+ * Ein Backtest über einen Ausschnitt des Vorrats: Kerzen ab `von − Vorlauf`,
+ * gehandelt wird ab `von`. HTF-Kerzen nur, wenn die Stufe dieselbe höhere
+ * Zeiteinheit nutzt wie der Vorrat UND sein Vorlauf für ihren Bedarf reicht —
+ * sonst holt der Lauf sie selbst, mit dem Vorlauf, den Einzel-Backtest und
+ * Papier auch hätten. Geschnitten wird auf den Bedarf DIESER Stufe.
+ */
+function ausVorrat(vorrat, basis, params, von, bis) {
+    const ab = von - vorrat.vorlauf
+    const candles = vorrat.candles.filter((k) => k.t >= ab && k.t < bis)
+    const opts = {
+        ...basis, params, fromTs: ab, toTs: bis, candles,
+        marketMeta: vorrat.marketMeta, fundingVerlauf: vorrat.fundingVerlauf,
+    }
+    const stufe = htfVorlaufKerzen(getStrategy(basis.strategyId), basis, params)
+    if (vorrat.htf && stufe.tf === vorrat.htf.tf) {
+        const stufenVorlauf = stufe.kerzen * timeframeMs(stufe.tf)
+        if (stufenVorlauf <= vorrat.htf.vorlauf) {
+            const htfAb = ab - stufenVorlauf
+            opts.htfCandles = vorrat.htf.candles.filter((k) => k.t >= htfAb && k.t < bis)
+        }
+    }
+    return runBacktest(opts)
+}
+
+/** Die Parametersätze aller Stufen — für den HTF-Vorlauf des Vorrats. */
+function stufenParams(basis, paramKey, stufen) {
+    return paramKey ? stufen.map((wert) => ({ ...basis.params, [paramKey]: wert })) : []
+}
 
 /** Deckel, damit ein Klick den Server nicht für Stunden beschäftigt. */
 export const MAX_STUFEN = 25
@@ -57,13 +163,19 @@ export function perzentil(werte, p) {
  * Verlauf einer Kapitalkurve aus einer Trade-Folge: Endstand und grösster
  * Rückgang. Arbeitet auf Geldbeträgen, nicht auf R — der Rückgang, der wehtut,
  * ist der in Prozent vom Kapital.
+ *
+ * Jeder Eintrag ist `{ r, anteil }`: das Ergebnis in R und der Anteil des
+ * Kontos, der bei diesem Trade im Risiko stand.
  */
-function verlauf(betraege, startEquity) {
+function verlauf(folge, startEquity) {
     let equity = startEquity
     let hoch = startEquity
     let maxDd = 0
-    for (const b of betraege) {
-        equity += b
+    for (const { r, anteil } of folge) {
+        // Fester Anteil vom JEWEILIGEN Kontostand je R — so bemisst auch der
+        // Backtest seine Positionen. Gemischte Dollarbeträge aus einem
+        // wachsenden Konto hätten späte, grosse Trades an den Anfang gestellt.
+        equity += equity * anteil * r
         if (equity > hoch) hoch = equity
         const dd = hoch > 0 ? ((hoch - equity) / hoch) * 100 : 0
         if (dd > maxDd) maxDd = dd
@@ -72,7 +184,18 @@ function verlauf(betraege, startEquity) {
 }
 
 /**
- * Monte Carlo über eine vorhandene Trade-Liste.
+ * Monte Carlo über eine vorhandene Trade-Liste — in R, je Trade mit dem
+ * Risikoanteil, den der Backtest wirklich eingegangen ist (`risikoAnteil` am
+ * Trade). Seit 01.11.2026; vorher wurden die Dollarbeträge gemischt, die aus
+ * einem wachsenden Konto stammten.
+ *
+ * Der Risikoanteil kommt seit 31.10.2026 vom Trade selbst und nicht mehr aus
+ * `risikoPct`: der Notional-Deckel, die Marge und die Mengenrundung
+ * verkleinern die Position, `rMultiple` bezieht sich auf dieses kleinere
+ * Risiko. Mit dem vollen Prozentsatz bildete der Pfad „original" den Backtest
+ * nicht nach (Endstand 914 statt 979, Rückgang 16,7 % statt 4,5 % bei einem
+ * Deckel, der das Risiko auf ein Viertel drückte). `risikoPct` gilt nur noch
+ * für Trades ohne diese Angabe (ältere gespeicherte Läufe, Selbsttests).
  *
  * Zwei Fragen, zwei Verfahren — sie beantworten NICHT dasselbe:
  *
@@ -83,13 +206,17 @@ function verlauf(betraege, startEquity) {
  *   Endstand schwankt. Antwort auf: „wie sähe ein anderer Durchgang derselben
  *   Strategie aus?"
  *
- * @param {Array} trades      abgeschlossene Trades mit `netPnl`
- * @param {object} opts       { startEquity, laeufe, aussaat }
+ * @param {Array} trades      abgeschlossene Trades mit `rMultiple` (und `risikoAnteil`)
+ * @param {object} opts       { startEquity, laeufe, aussaat, risikoPct }
  */
-export function monteCarlo(trades, { startEquity = 1000, laeufe = 1000, aussaat = 1 } = {}) {
+export function monteCarlo(trades, { startEquity = 1000, laeufe = 1000, aussaat = 1, risikoPct = 1 } = {}) {
+    const ersatzAnteil = (Number(risikoPct) > 0 ? Number(risikoPct) : 1) / 100
     const betraege = (trades || [])
         .filter((t) => t.exitReason !== 'open_at_end')
-        .map((t) => Number(t.netPnl) || 0)
+        .map((t) => ({
+            r: Number(t.rMultiple) || 0,
+            anteil: Number(t.risikoAnteil) > 0 ? Number(t.risikoAnteil) : ersatzAnteil,
+        }))
 
     if (betraege.length < 2) {
         return { trades: betraege.length, hinweis: 'Zu wenige Trades für eine Verteilung', laeufe: 0 }
@@ -133,10 +260,15 @@ export function monteCarlo(trades, { startEquity = 1000, laeufe = 1000, aussaat 
         anteilVerlust: enden.filter((e) => e < startEquity).length / enden.length,
     })
 
+    // Mittlerer Risikoanteil, wie er wirklich gerechnet wurde — weicht er vom
+    // eingestellten Prozentsatz ab, hat ein Deckel gegriffen.
+    const mittel = betraege.reduce((s, b) => s + b.anteil, 0) / betraege.length
     return {
         trades: betraege.length,
         laeufe: n,
         aussaat,
+        risikoPct: mittel * 100,
+        risikoPctEingestellt: ersatzAnteil * 100,
         original,
         reihenfolge: auswertung(endMisch, ddMisch),
         ziehen: auswertung(endZiehen, ddZiehen),
@@ -157,13 +289,12 @@ export async function parameterStabilitaet(basis, paramKey, werte, opts = {}) {
         return { fehler: 'Mindestens drei Werte nötig, um eine Nachbarschaft zu beurteilen' }
     }
 
+    const vorrat = opts.vorrat || await ladeVorrat(basis, { stufen: stufenParams(basis, paramKey, stufen) })
+    const von = Number(opts.von ?? basis.fromTs)
+    const bis = Number(opts.bis ?? basis.toTs)
     const punkte = []
     for (const wert of stufen) {
-        const r = await runBacktest({
-            ...basis,
-            params: { ...basis.params, [paramKey]: wert },
-            candles: opts.candles,
-        })
+        const r = await ausVorrat(vorrat, basis, { ...basis.params, [paramKey]: wert }, von, bis)
         punkte.push({
             wert,
             // Abdeckung mitführen: eine Stufe ohne Trades kann bedeuten „nichts
@@ -294,9 +425,11 @@ export async function stabilitaetsMatrix(basis, paramKey, werte, { symbole = [] 
 
     const zellen = []
     for (const symbol of syms) {
+        const vorrat = await ladeVorrat({ ...basis, symbol }, { stufen: stufenParams(basis, paramKey, stufen) })
         for (const f of fenster) {
             const r = await parameterStabilitaet(
                 { ...basis, symbol, fromTs: f.von, toTs: f.bis }, paramKey, stufen,
+                { vorrat, von: f.von, bis: f.bis },
             )
             zellen.push({ symbol, fenster: f.name, von: f.von, bis: f.bis, punkte: r.punkte || [], urteil: r.urteil })
         }
@@ -323,7 +456,7 @@ export async function stabilitaetsMatrix(basis, paramKey, werte, { symbole = [] 
  * und ein Test, der dafür online sein muss, wird nicht geschrieben. Voreinstellung
  * ist immer `runBacktest` — der Betrieb merkt von diesem Parameter nichts.
  */
-export async function walkForward(basis, paramKey, werte, { fenster = 4, backtest = runBacktest } = {}) {
+export async function walkForward(basis, paramKey, werte, { fenster = 4, backtest = null, minTrades = WF_MIN_TRADES } = {}) {
     const stufen = (Array.isArray(werte) ? werte : []).slice(0, MAX_STUFEN)
     const n = Math.max(2, Math.min(Number(fenster) || 4, MAX_WF_FENSTER))
     if (!paramKey || stufen.length < 2) {
@@ -335,22 +468,45 @@ export async function walkForward(basis, paramKey, werte, { fenster = 4, backtes
     const breite = Math.floor((bis - von) / n)
     if (!(breite > 0)) return { fehler: 'Zeitraum zu kurz für diese Zahl von Fenstern' }
 
+    // Ein echter Lauf lädt die Daten EINMAL und gibt jedem Fenster Vorlauf
+    // (es handelt ab seinem Beginn). Ein eingespeister Backtest (Selbsttest)
+    // bekommt die Fenstergrenzen unverändert.
+    const vorrat = backtest ? null : await ladeVorrat(basis, { stufen: stufenParams(basis, paramKey, stufen) })
+    const fensterLauf = (params, a, b) => (backtest
+        ? backtest({ ...basis, params, fromTs: a, toTs: b })
+        : ausVorrat(vorrat, basis, params, a, b))
+
     const abschnitte = []
     for (let i = 0; i < n - 1; i++) {
         const optVon = von + i * breite
         const optBis = optVon + breite
         const pruefBis = Math.min(optBis + breite, bis)
 
-        // Auswahl auf dem Optimierungsabschnitt
+        // Auswahl auf dem Optimierungsabschnitt — nur unter Werten mit
+        // genug Trades. Ein Wert mit zwei Glückstreffern hatte bis 01.11.2026
+        // dieselben Chancen wie einer mit vierzig, und meist gewann er.
         let bester = null
+        let meisteTrades = 0
         for (const wert of stufen) {
-            const r = await backtest({ ...basis, params: { ...basis.params, [paramKey]: wert }, fromTs: optVon, toTs: optBis })
+            const r = await fensterLauf({ ...basis.params, [paramKey]: wert }, optVon, optBis)
             const punkt = { wert, expectancyR: r.stats.expectancyR || 0, trades: r.stats.trades || 0 }
+            meisteTrades = Math.max(meisteTrades, punkt.trades)
+            if (punkt.trades < minTrades) continue
             if (!bester || punkt.expectancyR > bester.expectancyR) bester = punkt
+        }
+        if (!bester) {
+            abschnitte.push({
+                optVon, optBis, pruefVon: optBis, pruefBis,
+                // `null` statt 0: geprüft wurde hier nichts. Eine 0 erschien
+                // bis 31.10.2026 als „0.00 R" in Gewinnfarbe (FUN-L5-002).
+                gewaehlt: null, keineAuswahl: true, optTrades: meisteTrades,
+                pruefExpectancyR: null, pruefTrades: 0, pruefReturnPct: null, pruefTradesListe: [],
+            })
+            continue
         }
 
         // Prüfung auf dem FOLGENDEN Abschnitt — dieser Wert war dort nie gesehen
-        const pruef = await backtest({ ...basis, params: { ...basis.params, [paramKey]: bester.wert }, fromTs: optBis, toTs: pruefBis })
+        const pruef = await fensterLauf({ ...basis.params, [paramKey]: bester.wert }, optBis, pruefBis)
         abschnitte.push({
             optVon, optBis, pruefVon: optBis, pruefBis,
             gewaehlt: bester.wert,
@@ -384,15 +540,27 @@ export async function walkForward(basis, paramKey, werte, { fenster = 4, backtes
 
     // Wechselt die Auswahl in jedem Abschnitt, ist der Parameter nicht stabil —
     // dann optimiert man Rauschen, egal wie gut die Summe aussieht.
-    const gewaehlte = abschnitte.map((a) => a.gewaehlt)
+    //
+    // „Stabil" verlangt seit 31.10.2026 auch, dass es überhaupt etwas zu
+    // vergleichen gibt: mindestens zwei Abschnitte mit Auswahl, und zwar mehr
+    // als die Hälfte. Vorher genügte eine einzige Auswahl unter drei
+    // Abschnitten für ein grünes „Auswahl stabil" (FUN-L5-002) — eine Aussage
+    // über Stabilität ohne einen einzigen Vergleich.
+    const gewaehlte = abschnitte.filter((a) => !a.keineAuswahl).map((a) => a.gewaehlt)
     const verschieden = new Set(gewaehlte).size
+    const genugAuswahl = gewaehlte.length >= 2 && gewaehlte.length * 2 > abschnitte.length
+    const auswahlStabil = genugAuswahl && verschieden <= Math.max(1, Math.ceil(gewaehlte.length / 2))
 
     return {
         paramKey,
         fenster: n,
+        minTrades,
+        ohneAuswahl: abschnitte.filter((a) => a.keineAuswahl).length,
         abschnitte: abschnitte.map(({ pruefTradesListe, ...rest }) => rest),
         gesamt,
         gewaehlteWerte: gewaehlte,
-        auswahlStabil: verschieden <= Math.max(1, Math.ceil(abschnitte.length / 2)),
+        auswahlStabil,
+        // 'stabil' | 'springt' | 'zu_wenige' (zu wenige Abschnitte mit Auswahl)
+        auswahlUrteil: !genugAuswahl ? 'zu_wenige' : (auswahlStabil ? 'stabil' : 'springt'),
     }
 }

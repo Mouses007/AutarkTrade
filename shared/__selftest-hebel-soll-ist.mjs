@@ -31,6 +31,13 @@ pruefe(e.treffer.bestaetigt === 1 && e.treffer.durchlaufen === 2, 'Trefferquote 
 pruefe(e.stunden === 41, 'Fenster in Stunden')
 pruefe(bei(e, 79000, 'long').ist <= bei(e, 79000, 'long').soll, 'Ist nie länger als das Soll')
 
+// Nur Erwartetes (Schalter „Abgeholte“ aus): nur offene Masse, eigener Massstab
+const ew = (erg, preis, seite) => erg.erwartet.find((z) => z.seite === seite && Math.abs(z.preis - preis) < 60)
+pruefe(!ew(e, 79000, 'long') && !ew(e, 78000, 'long'), 'Erwartet: ganz abgeräumte Zonen fallen weg')
+pruefe(ew(e, 81500, 'short')?.anteil === 1, 'Erwartet: grösste offene Zone voll lang')
+const teil = sollIstZonen(hist({ offenLong: { 79000: 2 }, gefegtLong: { 79000: 8 }, offenShort: { 81500: 4 } }), null, opt)
+pruefe(Math.abs(ew(teil, 79000, 'long').anteil - (2 * 79000) / (4 * 81500)) < 1e-9, 'Erwartet: teils abgeholte Zone zählt nur ihren offenen Rest')
+
 // Gegenprobe Skala: Binance meldet zehnmal weniger — gleiches Urteil
 const e10 = sollIstZonen(h, ereignisse.map((x) => ({ ...x, qty: x.qty / 10 })), opt)
 pruefe(bei(e10, 79000, 'long').status === 'bestaetigt' && bei(e10, 78000, 'long').status === 'leer', 'Skalen-Gegenprobe: zehnmal weniger gemeldet, gleiches Urteil')

@@ -73,8 +73,8 @@ function merke(schritt) {
 }
 
 function felder(z) {
-    const { symbol, typ, punkte, stil, sichtbarAuf, gesperrt, versteckt } = z
-    return { symbol, typ, punkte, stil, sichtbarAuf, gesperrt, versteckt }
+    const { symbol, typ, punkte, stil, sichtbarAuf, gesperrt, versteckt, gruppe } = z
+    return { symbol, typ, punkte, stil, sichtbarAuf, gesperrt, versteckt, gruppe: gruppe ?? null }
 }
 
 /** Neue Zeichnung anlegen. Gibt die gespeicherte Zeile (mit id) zurück. */

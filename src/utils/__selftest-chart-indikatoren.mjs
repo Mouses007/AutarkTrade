@@ -9,7 +9,7 @@
  * gegen die Kerzen), dass die Preisquelle wirklich wirkt, und dass kaputte
  * gespeicherte Parameter nicht durchschlagen.
  */
-import { INDIKATOREN, rechneIndikator, saubereParams, vorgaben, kurzname, neueInstanz, aufKerzen, jeKerzeSumme, benoetigteQuellen, veraenderung } from './chart/indikatorRegister.js'
+import { INDIKATOREN, rechneIndikator, saubereParams, vorgaben, kurzname, neueInstanz, standardVon, aufKerzen, jeKerzeSumme, benoetigteQuellen, veraenderung } from './chart/indikatorRegister.js'
 import { ema, rsi, macd, bollinger } from '../../shared/indicators.js'
 import { ema as serverEma } from '../../server/strategies/indicators.js'
 
@@ -29,7 +29,8 @@ const kerzen = Array.from({ length: 300 }, (_, i) => {
     const basis = 100 + i * 0.05 + Math.sin(i / 7) * 3
     const o = basis + Math.sin(i / 3)
     const c = basis + Math.cos(i / 4)
-    return { t: 1_700_000_000_000 + i * 3_600_000, o, h: Math.max(o, c) + 0.8, l: Math.min(o, c) - 0.6, c, v: 1000 + (i % 17) * 40 }
+    // vb: Kaufvolumen wie in Binance-Kerzen (CVD, Delta-Volumen)
+    return { t: 1_700_000_000_000 + i * 3_600_000, o, h: Math.max(o, c) + 0.8, l: Math.min(o, c) - 0.6, c, v: 1000 + (i % 17) * 40, vb: 500 + (i % 13) * 30 }
 })
 
 console.log('\nEine Rechnung für Chart und Strategie\n')
@@ -149,6 +150,21 @@ console.log('\nEingaben säubern\n')
     check('leeres Feld ergibt die Vorgabe, nicht das Minimum (EMA 1)', saubereParams('ema', { laenge: '' }).laenge === vorgaben('ema').laenge && saubereParams('ema', { laenge: null }).laenge === vorgaben('ema').laenge)
     check('Gegenprobe: Faktor mit Schritt 0.1 bleibt wie eingegeben (2.25)', saubereParams('bb', { mult: 2.25 }).mult === 2.25)
     check('shared/ema rundet selbst (Strategien mit gebrochener Länge)', ema(k, 14.5)[99] === ema(k, 15)[99])
+}
+
+// ── Eigener Standard („Als Standard speichern“) ──
+{
+    const eigen = standardVon({ typ: 'rsi', params: { laenge: 21, unbekannt: 5 }, farben: { wert: '#ff0000' } })
+    check('Standard: Unbekanntes fällt weg', !('unbekannt' in eigen.params))
+    check('Standard: keine ID', !('id' in eigen))
+    const n = neueInstanz('rsi', eigen)
+    check('Neue Instanz mit eigenem Standard', n.params.laenge === 21 && n.farben.wert === '#ff0000')
+    const w = neueInstanz('rsi')
+    check('Ohne eigenen Standard: Werksvorgaben', w.params.laenge === vorgaben('rsi').laenge && !Object.keys(w.farben).length)
+    const alt = neueInstanz('rsi', { params: { laenge: 99999 } })
+    check('Gespeicherter Standard wird gesäubert (Bereich)', alt.params.laenge === INDIKATOREN.rsi.params.find((x) => x.key === 'laenge').max)
+    n.farben.wert = '#00ff00'
+    check('Neue Instanz teilt die Farben nicht mit dem Standard', eigen.farben.wert === '#ff0000')
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

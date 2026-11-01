@@ -13,6 +13,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import InfoTipp from '@/components/InfoTipp.vue'
+import KiHinweis from '@/components/quellen/KiHinweis.vue'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
 import Schalter from '../gemeinsam/Schalter.vue'
@@ -44,8 +45,12 @@ const {
             <Schalter :model-value="kiAn" :label="t('settings.aiEnabled')" :hilfe="t('settings.aiEnabledHint')"
                 @change="toggleAiEnabled" />
 
-            <!-- S12: KI-Ausgaben geben nie Handelsempfehlungen, Kursziele oder
-                 Prognosen; den früheren Schalter dafür gibt es nicht mehr. -->
+            <!-- KI-Kennzeichnung: seit 30.10.2026 auf Wunsch des Eigentümers EINMAL hier statt an
+                 jedem Ergebnis (nahm in Kacheln und Reitern nur Platz weg). Maschinenlesbar bleibt
+                 `data-ki-generiert` an jedem KI-Text. Eine Verkaufsversion bringt das Label zurück
+                 (S12, EU AI Act Art. 50) — der Baustein `quellen/KiHinweis.vue` ist noch da.
+                 KI-Ausgaben geben nie Handelsempfehlungen, Kursziele oder Prognosen. -->
+            <KiHinweis />
             <p class="leise block abstand">{{ t('settings.ki.keineEmpfehlungen') }}</p>
 
             <div v-show="kiAn">

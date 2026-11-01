@@ -4,9 +4,11 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { loescheFinanzdaten } from '@/utils/finanzSpeicher.js'
+import { merkeAbmeldung } from '@/utils/webauthn.js'
 import { Knopf, Pille } from '@/components/basis/index.js'
 import Abschnitt from '../gemeinsam/Abschnitt.vue'
 import Feld from '../gemeinsam/Feld.vue'
+import ZweiterFaktor from './ZweiterFaktor.vue'
 
 const { t } = useI18n()
 
@@ -18,6 +20,8 @@ let authNewPassword = ref('')
 let authNewPassword2 = ref('')
 let authSaveLoading = ref(false)
 let authSaveResult = ref(null)
+// Zweiter Faktor: nach Passwort-Änderungen neu laden (Gate an/aus)
+const zweiterFaktor = ref(null)
 
 async function loadAuthStatus() {
     try {
@@ -49,6 +53,7 @@ async function saveAuthPassword() {
         authNewPassword.value = ''
         authNewPassword2.value = ''
         authSaveResult.value = { success: true, message: t('settings.sicherheit.istAktiv') }
+        zweiterFaktor.value?.neuLaden()
         setTimeout(() => authSaveResult.value = null, 5000)
     } catch (e) {
         authSaveResult.value = { success: false, message: e.response?.data?.error || e.message }
@@ -62,6 +67,7 @@ async function logout() {
     } catch (e) { /* egal — danach neu laden */ }
     // Positions-/Kontodaten nicht im Browser liegen lassen (Audit SEC-WEB-005)
     loescheFinanzdaten()
+    merkeAbmeldung()
     window.location.reload()
 }
 
@@ -72,6 +78,9 @@ async function logoutEverywhere() {
         await axios.post('/api/auth/ueberall-abmelden')
     } catch (e) { /* egal — danach neu laden */ }
     loescheFinanzdaten()
+    // Wie beim Abmelden: die Login-Seite fragt danach nicht sofort wieder
+    // nach dem YubiKey (Audit 4.3.4 FUN-S1-005 — ein Antippen meldete an).
+    merkeAbmeldung()
     window.location.reload()
 }
 
@@ -84,6 +93,7 @@ async function disableAuth() {
         authEnabled.value = false
         authCurrentPassword.value = ''
         authSaveResult.value = { success: true, message: t('settings.sicherheit.istDeaktiviert') }
+        zweiterFaktor.value?.neuLaden()
         setTimeout(() => authSaveResult.value = null, 5000)
     } catch (e) {
         authSaveResult.value = { success: false, message: e.response?.data?.error || e.message }
@@ -140,6 +150,9 @@ onMounted(loadAuthStatus)
             {{ authSaveResult.message }}
         </p>
     </Abschnitt>
+
+    <!-- Zweiter Faktor: Authenticator-App und YubiKey -->
+    <ZweiterFaktor ref="zweiterFaktor" :auth-enabled="authEnabled" />
 </template>
 
 <style scoped>

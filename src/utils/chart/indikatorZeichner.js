@@ -13,13 +13,15 @@
  * Bei der laufenden Kerze wird neu gerechnet (ein paar tausend Werte, im
  * Millisekundenbereich) und nur der letzte Punkt jeder Serie aktualisiert.
  */
-import { LineSeries, HistogramSeries, AreaSeries, LineStyle } from 'lightweight-charts'
+import { LineSeries, HistogramSeries, AreaSeries, CandlestickSeries, LineStyle } from 'lightweight-charts'
 import { INDIKATOREN, rechneIndikator, ausgabenVon, saubereParams } from './indikatorRegister.js'
 import { MomentumZeichnung } from './momentumZeichnung.js'
 import { VwapVectorZeichnung, vektorFarben } from './vwapVectorZeichnung.js'
 import { SignalZeichnung } from './signalZeichnung.js'
 import { CvZeichnung } from './cvZeichnung.js'
 import { VrvpZeichnung } from './vrvpZeichnung.js'
+import { SessionVpZeichnung } from './sessionVpZeichnung.js'
+import { FootprintZeichnung } from './footprintZeichnung.js'
 import { logischZuX } from './zeichnungen/geometrie.js'
 
 const GRUEN = 'rgba(38,166,154,0.7)'
@@ -191,11 +193,54 @@ class ZonenZeichnung {
  * Divergenz-Linien im Oszillator-Fenster (`_div`, `divergenzen` in
  * fensterFarben.js): rot = bärisch, grün = bullisch, mit kleinem Schild.
  */
+/*
+ * Dezente Spalten über die ganze Höhe eines Fensters an einzelnen Kerzen —
+ * beim CVD die Kerze, an der nach einem Reset ein neuer Abschnitt beginnt.
+ */
+class SpaltenZeichnung {
+    constructor(chart, serie) {
+        this.chart = chart
+        this.serie = serie
+        this.indizes = []
+        this.requestUpdate = () => {}
+        this._ansichten = [{
+            zOrder: () => 'bottom',
+            renderer: () => ({ draw: (ziel) => ziel.useMediaCoordinateSpace(({ context, mediaSize }) => this.zeichne(context, mediaSize)) }),
+        }]
+        serie.attachPrimitive(this)
+    }
+    attached({ requestUpdate }) { this.requestUpdate = requestUpdate }
+    detached() { this.requestUpdate = () => {} }
+    paneViews() { return this._ansichten }
+    updateAllViews() {}
+    abbauen() { try { this.serie.detachPrimitive(this) } catch { /* weg */ } }
+    setze(indizes) { this.indizes = indizes || []; this.requestUpdate() }
+    zeichne(ctx, { height }) {
+        if (!this.indizes.length) return
+        const ts = this.chart.timeScale()
+        const x0 = ts.logicalToCoordinate(0), x1 = ts.logicalToCoordinate(1)
+        const breite = x0 != null && x1 != null && x1 > x0 ? x1 - x0 : 6
+        ctx.fillStyle = 'rgba(120,123,134,0.16)'
+        for (const i of this.indizes) {
+            const x = logischZuX(ts, i)
+            if (x != null) ctx.fillRect(x - breite / 2, 0, breite, height)
+        }
+    }
+}
+
+// Farbe und Schild je Art: regulär grün/rot, versteckt (Fortsetzung) blau/orange und
+// gestrichelt, übertrieben (Doppelhoch/-tief) violett/gelb gepunktet.
+export const DIV_STIL = {
+    regulaer: { bullisch: '#26a69a', baerisch: '#ef5350', text: 'Div', strich: [] },
+    versteckt: { bullisch: '#42a5f5', baerisch: '#ff9800', text: 'vDiv', strich: [5, 3] },
+    uebertrieben: { bullisch: '#ab47bc', baerisch: '#f5c542', text: 'üDiv', strich: [2, 3] },
+}
 class DivergenzZeichnung {
     constructor(chart, serie) {
         this.chart = chart
         this.serie = serie
         this.linien = []
+        this.schilder = []
         this.requestUpdate = () => {}
         this._ansichten = [{
             zOrder: () => 'top',
@@ -209,6 +254,7 @@ class DivergenzZeichnung {
     updateAllViews() {}
     setze(linien) { this.linien = linien || []; this.requestUpdate() }
     zeichne(ctx) {
+        this.schilder = []
         if (!this.linien.length) return
         const ts = this.chart.timeScale()
         ctx.save()
@@ -219,14 +265,18 @@ class DivergenzZeichnung {
             const x1 = logischZuX(ts, d.i1), x2 = logischZuX(ts, d.i2)
             const y1 = this.serie.priceToCoordinate(d.v1), y2 = this.serie.priceToCoordinate(d.v2)
             if ([x1, x2, y1, y2].some((v) => v == null)) continue
-            const farbe = d.art === 'baerisch' ? '#ef5350' : '#26a69a'
+            const stil = DIV_STIL[d.typ] || DIV_STIL.regulaer
+            const farbe = stil[d.art] || stil.bullisch
             ctx.strokeStyle = farbe
+            ctx.setLineDash(stil.strich)
             ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke()
-            const text = d.art === 'baerisch' ? 'Div ▼' : 'Div ▲'
+            ctx.setLineDash([])
+            const text = `${stil.text} ${d.art === 'baerisch' ? '▼' : '▲'}`
             const b = ctx.measureText(text).width + 6
             const y = d.art === 'baerisch' ? y2 - 9 : y2 + 9
             ctx.fillStyle = farbe
             ctx.fillRect(x2 - b / 2, y - 6, b, 12)
+            this.schilder.push({ x: x2 - b / 2, y: y - 6, w: b, h: 12 })
             ctx.fillStyle = '#fff'
             ctx.fillText(text, x2 - b / 2 + 3, y)
         }
@@ -246,6 +296,7 @@ class TabellenZeichnung {
     constructor(serie) {
         this.serie = serie
         this.zeilen = []
+        this.offen = true
         this.requestUpdate = () => {}
         this._ansichten = [{
             zOrder: () => 'top',
@@ -258,8 +309,9 @@ class TabellenZeichnung {
     paneViews() { return this._ansichten }
     updateAllViews() {}
     setze(zeilen) { this.zeilen = zeilen || []; this.requestUpdate() }
+    zeigen(an) { if (this.offen !== !!an) { this.offen = !!an; this.requestUpdate() } }
     zeichne(ctx, g) {
-        if (!this.zeilen.length) return
+        if (!this.offen || !this.zeilen.length) return
         const H = 15, oben = 26
         const passen = Math.max(0, Math.floor((g.height - oben - 6) / H))
         const zeilen = this.zeilen.slice(0, passen)
@@ -302,6 +354,9 @@ export class IndikatorZeichner {
         this.zuLwc = zuLwc
         this.kerzenSerie = o.kerzenSerie || null
         this.faerbeKerzen = o.faerbeKerzen || (() => {})
+        // Footprint: Kerzenfarben und Rückmeldung, wenn er die Kerzen selbst zeichnet
+        this.kerzenStil = o.kerzenStil || null
+        this.footprintZellen = o.footprintZellen || null
         // (typ, kennzahlen) → Tabellenzeilen; ohne (Prüfskripte) keine Tabellen
         this.tabellenText = o.tabellenText || null
         this.hatteFarben = false
@@ -373,6 +428,11 @@ export class IndikatorZeichner {
                         ...(a.unten ? { priceScaleId: `unten-${instanz.id}`, lastValueVisible: false } : {}),
                     }, pane)
                     if (a.unten) serien[a.key].priceScale().applyOptions({ scaleMargins: { top: 0.72, bottom: 0 } })
+                } else if (a.art === 'kerzen') {
+                    // Kerzen eines Werts (CVD): Eröffnung/Hoch/Tief aus `<key>_o/_h/_l`, Schluss = `<key>`
+                    serien[a.key] = this.chart.addSeries(CandlestickSeries, {
+                        ...gemeinsam, ...(format || {}), upColor: farbe, downColor: farbe, borderVisible: false, wickVisible: true,
+                    }, pane)
                 } else if (a.art === 'flaeche') {
                     serien[a.key] = this.chart.addSeries(AreaSeries, {
                         ...gemeinsam, ...(format || {}),
@@ -384,7 +444,7 @@ export class IndikatorZeichner {
                     serien[a.key] = this.chart.addSeries(LineSeries, { ...gemeinsam, ...(format || {}), color: farbe, lineWidth: a.breite || 1, ...(a.strich === 'gestrichelt' ? { lineStyle: LineStyle.Dashed } : {}) }, pane)
                 }
             }
-            const erste = serien[ausgaben.find((a) => a.art === 'linie' || a.art === 'flaeche')?.key] || Object.values(serien)[0]
+            const erste = serien[ausgaben.find((a) => a.art === 'kerzen' || a.art === 'linie' || a.art === 'flaeche')?.key] || Object.values(serien)[0]
             for (const marke of def.linien || []) {
                 // Mit Band: Grenzen gestrichelt, Mitte gepunktet — wie TradingView.
                 const mitte = def.band && marke !== def.band.oben && marke !== def.band.unten
@@ -407,12 +467,17 @@ export class IndikatorZeichner {
                             ? new CvZeichnung({ chart: this.chart, serie: this.kerzenSerie })
                             : def.zeichner === 'vrvp' && this.kerzenSerie
                                 ? new VrvpZeichnung({ chart: this.chart, serie: this.kerzenSerie })
-                                : null
+                                : def.zeichner === 'sessionVp' && this.kerzenSerie
+                                    ? new SessionVpZeichnung({ chart: this.chart, serie: this.kerzenSerie })
+                                    : def.zeichner === 'footprint' && this.kerzenSerie
+                                        ? new FootprintZeichnung({ chart: this.chart, serie: this.kerzenSerie, stil: this.kerzenStil, zellen: this.footprintZellen })
+                                        : null
             const titel = def.ort === 'eigen' && erste && this.titelFuer ? new FensterTitel(erste, this.titelFuer(instanz)) : null
             const tabelle = def.tabelle && erste && this.tabellenText ? new TabellenZeichnung(erste) : null
             const zonen = def.zonen && erste ? new ZonenZeichnung(erste, def.zonen) : null
             const divergenz = def.params?.some((p) => p.key === 'divergenzen') && erste ? new DivergenzZeichnung(this.chart, erste) : null
-            this.eintraege.push({ instanz, def, ausgaben, serien, werte: {}, zeichnung, titel, band, tabelle, zonen, divergenz })
+            const spalten = def.params?.some((p) => p.key === 'resetMarke') && erste ? new SpaltenZeichnung(this.chart, erste) : null
+            this.eintraege.push({ instanz, def, ausgaben, serien, werte: {}, zeichnung, titel, band, tabelle, zonen, divergenz, spalten, pane })
         }
         // Das Kerzen-Pane soll den Löwenanteil behalten.
         const panes = this.chart.panes()
@@ -436,9 +501,19 @@ export class IndikatorZeichner {
             try { idx = s.getPane().paneIndex() } catch { continue }
             let oben = 0
             for (let i = 0; i < idx; i++) oben += panes[i].getHeight() + 1
-            aus.push({ id: e.instanz.id, typ: e.instanz.typ, text: e.titel.text, oben, breite: e.titel.breite || 0 })
+            aus.push({ id: e.instanz.id, typ: e.instanz.typ, text: e.titel.text, oben, breite: e.titel.breite || 0, tabelle: !!e.tabelle })
         }
         return aus
+    }
+
+    /** Zeiger im Kerzen-Pane an den Footprint (Tooltip einer Zeile); null = weg. */
+    footprintZeiger(punkt) {
+        for (const e of this.eintraege) if (e.def.zeichner === 'footprint') e.zeichnung?.setzeZeiger?.(punkt)
+    }
+
+    /** Tabelle im Fenster einer Instanz ein-/ausblenden (Handy: zu, bis man sie aufklappt). */
+    tabelleZeigen(id, an) {
+        for (const e of this.eintraege) if (e.instanz.id === id) e.tabelle?.zeigen(an)
     }
 
     abbauen() {
@@ -448,6 +523,7 @@ export class IndikatorZeichner {
             e.tabelle?.abbauen()
             e.zonen?.abbauen()
             e.divergenz?.abbauen()
+            e.spalten?.abbauen()
             e.band?.abbauen()
             for (const s of Object.values(e.serien)) {
                 try { this.chart.removeSeries(s) } catch { /* Chart schon weg */ }
@@ -462,6 +538,11 @@ export class IndikatorZeichner {
         const time = this.zuLwc(kerzen[i].t)
         if (wert == null || !Number.isFinite(wert)) return { time }
         const a = e.ausgaben.find((x) => x.key === key)
+        if (a?.art === 'kerzen') {
+            const w = e.werte
+            const f = w['_farbe_' + key]?.[i] || a.farbe
+            return { time, open: w[key + '_o'][i], high: w[key + '_h'][i], low: w[key + '_l'][i], close: wert, color: f, wickColor: f }
+        }
         // Farbe je Punkt aus dem Register (`_farbe_<key>`, fensterFarben.js) — vor den festen Regeln
         const f = e.werte['_farbe_' + key]?.[i]
         if (f) return a?.art === 'flaeche' ? { time, value: wert, lineColor: f } : { time, value: wert, color: f }
@@ -487,9 +568,11 @@ export class IndikatorZeichner {
     zeichnungSetzen(e) {
         if (e.tabelle) e.tabelle.setze(this.tabellenText(e.instanz.typ, e.werte._tab))
         if (e.divergenz) e.divergenz.setze(e.werte._div)
+        if (e.spalten) e.spalten.setze(e.werte._spalten)
         if (e.band) e.band.setze(e.werte[e.def.band.linie])
         if (e.def.zeichner === 'vwapVector') e.zeichnung?.setze(e.werte._vv, this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
-        else if (e.def.zeichner === 'vrvp') e.zeichnung?.setze(this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
+        else if (e.def.zeichner === 'vrvp' || e.def.zeichner === 'sessionVp') e.zeichnung?.setze(this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
+        else if (e.def.zeichner === 'footprint') e.zeichnung?.setze(this.extern.footprint, this.kerzen, saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'cv') e.zeichnung?.setze(e.werte._cv, this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
         else if (e.def.zeichner === 'signale') e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand(), saubereParams(e.instanz.typ, e.instanz.params))
         else e.zeichnung?.setze(this.extern[e.def.extern], this.zeiten, this.kerzenAbstand())
@@ -544,9 +627,23 @@ export class IndikatorZeichner {
                 if (neueKerze && n > 1) serie.update(this.punkt(e, key, n - 2, kerzen))
                 serie.update(this.punkt(e, key, n - 1, kerzen))
             }
-            if (neueKerze || e.def.zeichner === 'vwapVector' || e.def.zeichner === 'vrvp' || e.band || e.tabelle) this.zeichnungSetzen(e)
+            if (neueKerze || ['vwapVector', 'vrvp', 'sessionVp'].includes(e.def.zeichner) || e.band || e.tabelle) this.zeichnungSetzen(e)
         }
         this.farbenMelden(!neueKerze)
+    }
+
+    /**
+     * Welcher Indikator hat an (x, y) im Fenster `pane` ein Schild (VWAP-Vector-Marken,
+     * LSOB/GUSS, Signale, Divergenzen)? Seine Instanz-id oder null — ein Klick darauf
+     * öffnet die Einstellungen.
+     */
+    instanzBeiSchild(pane, x, y, rand = 3) {
+        for (const e of this.eintraege) {
+            if ((e.pane ?? 0) !== pane) continue
+            const boxen = [...(e.zeichnung?.schilder || []), ...(e.divergenz?.schilder || [])]
+            if (boxen.some((b) => x >= b.x - rand && x <= b.x + b.w + rand && y >= b.y - rand && y <= b.y + b.h + rand)) return e.instanz.id
+        }
+        return null
     }
 
     /** Werte unter dem Fadenkreuz (oder der letzten Kerze) für die Legende. */

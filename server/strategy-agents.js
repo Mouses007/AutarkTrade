@@ -83,7 +83,15 @@ export async function sammleSentiment(symbol, quellen = {}) {
  */
 async function heutigeKosten() {
     const knex = getKnex()
-    const seit = new Date(startOfDayUtc(Date.now()))
+    const beginn = new Date(startOfDayUtc(Date.now()))
+    // SQLite legt `createdAt` als Text ('YYYY-MM-DD HH:MM:SS', UTC) ab, und
+    // better-sqlite3 bindet ein Date als Zahl — Text ist in SQLite immer
+    // grösser als eine Zahl, die Bedingung war also stets wahr und das Budget
+    // galt seit dem ersten Lauf (bis 01.11.2026). PostgreSQL vergleicht den
+    // Zeitstempel richtig.
+    const seit = knex.client.config.client === 'pg'
+        ? beginn
+        : beginn.toISOString().slice(0, 19).replace('T', ' ')
     const row = await knex('strategy_runs')
         .where('createdAt', '>=', seit)
         .sum({ summe: 'costUsd' }).first()

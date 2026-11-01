@@ -93,6 +93,19 @@ watch(sprungZiel, (ziel) => {
     font-size: 0.95rem;
     padding: var(--abstand-2) var(--abstand-3);
 }
+/*
+ * Der Titel darf schmaler werden als sein längstes Wort und bricht dann um
+ * (Audit 4.3.4 BUG-F5-005): als Flex-Element war er sonst mindestens so breit
+ * wie „Sicherheitsschlüssel", und am Handy (375 px) schob er die Pille
+ * „1 registriert" über den Kartenrand — die Seite scrollte waagrecht. Die
+ * Pille selbst schrumpft nicht (sie bricht nie um).
+ */
+.titel {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+}
+.kopf :slotted(.at-pille) { flex: none; }
 .kopf:hover .titel { color: var(--accent); }
 .pfeil { color: var(--muted); flex: none; }
 .sym { color: var(--accent); flex: none; }

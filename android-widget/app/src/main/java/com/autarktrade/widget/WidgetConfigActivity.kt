@@ -150,6 +150,7 @@ class WidgetConfigActivity : AppCompatActivity() {
         spracheDetails.visibility = if (spracheBox.isChecked) View.VISIBLE else View.GONE
         spracheBox.setOnCheckedChangeListener { _, an ->
             Prefs.setSpracheAn(this, an)
+            TradingWidgetProvider.updateAll(this)   // Lautsprecher im Widget nachziehen
             spracheDetails.visibility = if (an) View.VISIBLE else View.GONE
         }
         spracheSpin.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {

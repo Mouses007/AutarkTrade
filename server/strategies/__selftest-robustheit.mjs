@@ -9,6 +9,7 @@
  */
 
 import { monteCarlo, beurteilePlateau, beurteileMatrix, perzentil, zufall, walkForward } from '../robustness.js'
+import { runBacktest } from '../strategy-backtest.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -46,12 +47,13 @@ console.log('\nMonte Carlo')
     const r = monteCarlo(trades, { startEquity: 1000, laeufe: 300, aussaat: 7 })
 
     check('Trades werden gezählt', r.trades === 10, String(r.trades))
-    // Mischen ändert die Reihenfolge, nicht die Summe — der Endstand MUSS
-    // deshalb bei jedem Durchgang identisch sein. Wäre er es nicht, würde die
-    // Mischung Beträge verlieren oder doppeln.
+    // Mischen ändert die Reihenfolge, nicht das Produkt — der Endstand MUSS
+    // deshalb bei jedem Durchgang derselbe sein (bis auf Rundung: seit
+    // 01.11.2026 wird in R bei festem Risiko-Anteil multipliziert). Wäre er es
+    // nicht, würde die Mischung Trades verlieren oder doppeln.
     check('Mischen lässt den Endstand unverändert',
-        r.reihenfolge.endEquity.p5 === r.reihenfolge.endEquity.p95
-        && Math.abs(r.reihenfolge.endEquity.p50 - r.original.endEquity) < 1e-9,
+        Math.abs(r.reihenfolge.endEquity.p5 - r.reihenfolge.endEquity.p95) < 1e-6
+        && Math.abs(r.reihenfolge.endEquity.p50 - r.original.endEquity) < 1e-6,
         `p5=${r.reihenfolge.endEquity.p5} p95=${r.reihenfolge.endEquity.p95} orig=${r.original.endEquity}`)
     check('Mischen verändert dagegen den Rückgang',
         r.reihenfolge.maxDrawdownPct.p95 > r.reihenfolge.maxDrawdownPct.p50,
@@ -81,6 +83,56 @@ console.log('\nMonte Carlo')
     // Am Ende offene Positionen sind keine abgeschlossenen Trades.
     const gemischt = monteCarlo([trade(100), trade(-50), { netPnl: 999, exitReason: 'open_at_end' }], { startEquity: 1000, laeufe: 50 })
     check('offene Positionen am Testende zählen nicht mit', gemischt.trades === 2, String(gemischt.trades))
+}
+
+{
+    // Audit 4.3.4, FUN-F1-002: der Pfad „original" soll den Backtest
+    // nachbilden — auch wenn der Notional-Deckel das Risiko verkleinert.
+    // Vorgaben 1000 USDT, 1 %, Deckel 500, Stop 0,5 %: echtes Risiko ~0,25 %.
+    // Bis 31.10.2026 rechnete Monte Carlo jedes R mit 1 % (Endstand 914 statt
+    // 979, Rückgang 16,7 % statt 4,5 %).
+    const H = 3600000
+    const T0 = Date.UTC(2026, 0, 1)
+    let saat = 7
+    const rnd = () => (saat = (saat * 16807) % 2147483647) / 2147483647
+    const kerzen = Array.from({ length: 2000 }, (_, i) => ({ t: T0 + i * H, o: 100, h: 100.01, l: 99.99, c: 100, v: 1 }))
+    const sl = 99.5
+    const tp = 100.75
+    for (let i = 40; i + 2 < kerzen.length; i += 25) {
+        if (rnd() < 0.45) kerzen[i + 2].h = tp + 0.01
+        else kerzen[i + 2].l = sl - 0.01
+    }
+    const manifest = {
+        id: 'mc_deckel', name: 'MC-Deckel', params: [], supportedTimeframes: ['1h'], warmupCandles: 20,
+        detect({ candles: sicht, openSetups }) {
+            const idx = Math.round((sicht[sicht.length - 1].t - T0) / H)
+            const setups = []
+            const events = []
+            for (const s of openSetups) {
+                if (idx === s._ausloeser) events.push({ id: s.id, status: 'triggered', candleTime: sicht[sicht.length - 1].t, triggeredAt: sicht[sicht.length - 1].t })
+            }
+            if (idx >= 40 && (idx - 40) % 25 === 0 && idx + 2 < kerzen.length) {
+                setups.push({ direction: 'long', entry: 100, stopLoss: sl, takeProfit: tp, obCandleTime: sicht[sicht.length - 1].t, _ausloeser: idx + 1 })
+            }
+            return { setups, events, diagnostics: {} }
+        },
+    }
+    const lauf = await runBacktest({
+        strategyId: 'mc_deckel', strategie: manifest, symbol: 'TESTUSDT', timeframe: '1h', market: 'spot',
+        risk: { riskPerTradePct: 1, maxNotionalUsdt: 500, leverage: 3, minRR: 1, maintenanceMarginPct: 0.5, cooldownMinutes: 0 },
+        startEquity: 1000, candles: kerzen, marketMeta: {}, fundingVerlauf: null, fromTs: T0, toTs: T0 + 2000 * H,
+    })
+    const mc = monteCarlo(lauf.trades, { startEquity: 1000, risikoPct: 1, laeufe: 200, aussaat: 1 })
+    const ende = lauf.stats.endEquity
+    check('Trades tragen ihren echten Risikoanteil (Deckel greift: unter 1 %)',
+        lauf.trades.length > 10 && lauf.trades.every((t) => t.risikoAnteil > 0 && t.risikoAnteil < 0.005),
+        JSON.stringify(lauf.trades.slice(0, 3).map((t) => t.risikoAnteil)))
+    check('Monte Carlo „original" trifft den Endstand des Backtests (±1 %) trotz Deckel',
+        Math.abs(mc.original.endEquity - ende) / ende < 0.01,
+        `MC ${mc.original.endEquity.toFixed(2)} gegen Backtest ${ende.toFixed(2)}`)
+    check('… und seinen Rückgang',
+        Math.abs(mc.original.maxDrawdownPct - lauf.stats.maxDrawdownPct) < 0.5,
+        `MC ${mc.original.maxDrawdownPct.toFixed(2)} % gegen Backtest ${lauf.stats.maxDrawdownPct.toFixed(2)} %`)
 }
 
 // ── Plateau-Urteil ───────────────────────────────────────────────────────
@@ -205,9 +257,11 @@ console.log('\nWalk-forward')
         return { trades, stats: { expectancyR: gut ? 0.5 : -1, trades: trades.length, returnPct: gut ? 1.5 : -1 } }
     }
 
+    // minTrades 1: die Attrappe liefert 1–3 Trades je Fenster; hier geht es
+    // um die Kurve, nicht um die Mindestzahl (die prüft der Fall danach).
     const r = await walkForward(
         { fromTs: von, toTs: bis, params: {}, startEquity: 1000 },
-        'stufe', [5, 9], { fenster: 3, backtest: gefaelscht },
+        'stufe', [5, 9], { fenster: 3, backtest: gefaelscht, minTrades: 1 },
     )
 
     check('Walk-forward läuft ohne echten Backtest', !r.fehler && r.abschnitte.length === 2,
@@ -226,6 +280,44 @@ console.log('\nWalk-forward')
         Math.abs(r.gesamt.maxDrawdownPct - ((1300 - 1050) / 1300) * 100) < 1e-9,
         String(r.gesamt.maxDrawdownPct))
     check('der Backtest wurde wirklich eingespeist (kein Netzzugriff)', ruf > 0, String(ruf))
+
+    // Mit der Vorgabe (10 Trades) trägt kein Wert der Attrappe eine Auswahl:
+    // dann wird nichts gewählt und nichts geprüft — statt den Glückstreffer
+    // mit drei Trades zum Sieger zu erklären.
+    const streng = await walkForward(
+        { fromTs: von, toTs: bis, params: {}, startEquity: 1000 },
+        'stufe', [5, 9], { fenster: 3, backtest: gefaelscht },
+    )
+    check('ohne genug Trades wird kein Wert gewählt',
+        streng.ohneAuswahl === 2 && streng.gewaehlteWerte.length === 0 && streng.gesamt.trades === 0,
+        JSON.stringify({ ohne: streng.ohneAuswahl, gewaehlt: streng.gewaehlteWerte }))
+    check('… und das gilt nicht als stabile Auswahl', streng.auswahlStabil === false)
+
+    // Audit 4.3.4, FUN-L5-002: Mischfall — nur einer von drei Abschnitten hat
+    // eine Auswahl. Das ist kein „stabil", und die leeren Prüfabschnitte
+    // tragen kein Ergebnis von 0 R, sondern keins.
+    const TAG = 86400000
+    const wfVon = Date.UTC(2026, 0, 1)
+    const misch = await walkForward(
+        { fromTs: wfVon, toTs: wfVon + 120 * TAG, params: {}, startEquity: 1000 }, 's', [5, 7],
+        {
+            fenster: 4,
+            backtest: ({ params, fromTs }) => {
+                const viele = fromTs >= wfVon + 30 * TAG && fromTs < wfVon + 60 * TAG
+                const n = viele ? 12 : 3
+                const trades = Array.from({ length: n }, (_, i) => machTrade(params.s === 7 ? 1 : -1, fromTs + (i + 1) * STUNDE))
+                return { trades, stats: { trades: n, expectancyR: params.s === 7 ? 0.3 : -0.2, returnPct: 0 } }
+            },
+        },
+    )
+    check('eine einzige Auswahl unter drei Abschnitten gilt NICHT als stabil',
+        misch.ohneAuswahl === 2 && misch.gewaehlteWerte.length === 1 && misch.auswahlStabil === false,
+        JSON.stringify({ ohne: misch.ohneAuswahl, gewaehlt: misch.gewaehlteWerte, stabil: misch.auswahlStabil }))
+    check('… das Urteil heisst „zu wenige Auswahlen"', misch.auswahlUrteil === 'zu_wenige', String(misch.auswahlUrteil))
+    check('… und Abschnitte ohne Auswahl tragen kein Ergebnis (null statt 0 R)',
+        misch.abschnitte.filter((a) => a.keineAuswahl).every((a) => a.pruefExpectancyR === null),
+        JSON.stringify(misch.abschnitte.map((a) => a.pruefExpectancyR)))
+    check('zwei gleiche Auswahlen aus zwei Abschnitten heissen „stabil"', r.auswahlUrteil === 'stabil', String(r.auswahlUrteil))
 
     const zuKurz = await walkForward({ fromTs: von, toTs: bis, params: {} }, 'stufe', [5], { backtest: gefaelscht })
     check('unter zwei Stufen gibt es nichts auszuwählen', !!zuKurz.fehler, JSON.stringify(zuKurz))

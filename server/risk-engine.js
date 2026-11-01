@@ -3,14 +3,15 @@
  *
  * Diese Prüfungen sind CODE, keine Prompt-Anweisung an ein Sprachmodell. Ein
  * LLM kann sie damit weder überreden noch übersehen. Sie laufen vor JEDER
- * Ausführung — im Backtest, im Paper-Betrieb und live — und zwar identisch.
+ * Ausführung — im Backtest, im Papier- und im Schattenbetrieb — und zwar
+ * identisch. (Orders sendet AutarkTrade seit S13 keine.)
  *
  * Rein: alle Zustände (Kontostand, offene Positionen, Tages-PnL) kommen als
  * Argumente rein. Die Engine holt sie aus der DB, der Backtest aus seiner
  * Simulation. Nur so rechnen beide gleich.
  */
 
-import { satzFuer, einstiegsSorte, MARKT } from './fill-simulator.js'
+import { satzFuer, einstiegsSorte, MARKT, LIMIT } from './fill-simulator.js'
 
 /** Warum eine Ausführung abgelehnt wurde — landet in `strategy_runs.reason`. */
 export const RISK_REASONS = {
@@ -23,8 +24,6 @@ export const RISK_REASONS = {
     SIZE_TOO_SMALL: 'size_too_small',
     NO_EQUITY: 'no_equity',
     BAD_LEVELS: 'invalid_levels',
-    PRICE_DEVIATION: 'price_deviation',
-    NOTIONAL_CAP: 'notional_cap',
 }
 
 /**
@@ -39,8 +38,8 @@ export const RISK_REASONS = {
  */
 export function computePositionSize({
     equity, riskPerTradePct, entry, stopLoss, leverage = 1,
-    maxNotionalUsdt = Infinity, stepSize = 0, minQty = 0, minNotional = 0,
-    costs = {},
+    maxNotionalUsdt = Infinity, stepSize = 0, minQty = 0, minNotional = 0, maxQty = 0,
+    costs = {}, setup = null,
 }) {
     const abstand = Math.abs(entry - stopLoss)
     if (!(equity > 0)) return { qty: 0, reason: RISK_REASONS.NO_EQUITY }
@@ -56,7 +55,11 @@ export function computePositionSize({
     // der Einstieg zu seiner Ordersorte, der Ausstieg als Stop-Market. Das ist
     // die teurere der beiden Seiten — und die Positionsgrösse soll sich am
     // schlechten Ausgang bemessen, nicht am guten.
-    const ein = satzFuer(costs, einstiegsSorte(costs))
+    // Mit dem Setup: ein Stop- oder Markt-Einstieg zahlt Taker und Slippage,
+    // auch wenn die Vorgabe Limit ist. Bis 01.11.2026 wurde hier ohne Setup
+    // gefragt — die Grösse war mit Maker-Kosten bemessen, gefüllt wurde mit
+    // Taker, und das echte Risiko lag über dem eingestellten Prozentsatz.
+    const ein = satzFuer(costs, einstiegsSorte(costs, setup))
     const aus = satzFuer(costs, MARKT)
     const kostenBps = ein.feeBps + ein.slippageBps + aus.feeBps + aus.slippageBps
     const kostenJeEinheit = entry * kostenBps / 10000
@@ -77,14 +80,12 @@ export function computePositionSize({
         capped = true
     }
 
-    if (stepSize > 0) {
-        const dec = Math.max(0, Math.round(-Math.log10(stepSize)))
-        qty = Number((Math.floor(qty / stepSize) * stepSize).toFixed(dec))
-    }
-
+    const gerundet = rundeMenge(qty, entry, { stepSize, minQty, minNotional, maxQty })
+    if (gerundet.capped) capped = true
+    qty = gerundet.qty
     const notionalUsdt = qty * entry
-    if (qty <= 0 || (minQty > 0 && qty < minQty) || (minNotional > 0 && notionalUsdt < minNotional)) {
-        return { qty: 0, notionalUsdt, marginUsdt: 0, riskUsd, capped, reason: RISK_REASONS.SIZE_TOO_SMALL }
+    if (!qty) {
+        return { qty: 0, notionalUsdt, marginUsdt: 0, riskUsd, capped, reason: gerundet.reason }
     }
 
     return {
@@ -94,6 +95,68 @@ export function computePositionSize({
         riskUsd: abstand * qty,
         capped,
     }
+}
+
+/**
+ * Mengengrenzen der Börse für eine Ordersorte. Pionex führt getrennte Grenzen
+ * für Limit- und Marktorders (`maxSizeMarket` ist bei BTC ein Fünftel von
+ * `maxSizeLimit`, siehe pionex-meta.js); die übrigen Quellen kennen nur eine.
+ */
+export function grenzenFuer(meta = {}, sorte = MARKT) {
+    const limit = sorte === LIMIT
+    return {
+        stepSize: Number(meta.stepSize) || 0,
+        minQty: Number(limit ? meta.minQtyLimit : 0) || Number(meta.minQty) || 0,
+        maxQty: Number(limit ? meta.maxQtyLimit : 0) || Number(meta.maxQty) || 0,
+        minNotional: Number(meta.minNotional) || 0,
+    }
+}
+
+/**
+ * Eine Menge auf die Börsenregeln bringen: höchstens `maxQty`, auf `stepSize`
+ * abgerundet, mindestens `minQty` und `minNotional`. Liefert `qty: 0` mit
+ * Grund, wenn nichts Zulässiges übrig bleibt.
+ *
+ * Eigene Funktion, weil die Engine eine Menge nach dem Faktor des
+ * Veto-Agenten NOCHMALS bringen muss — bis 01.11.2026 ging die verkleinerte
+ * Menge ungerundet und ungeprüft in den Schattenbetrieb, dessen Zweck gerade
+ * die zulässige Menge ist.
+ *
+ * Gerechnet wird in GANZEN Schritten, die Nachkommastellen kommen aus der
+ * Schrittweite selbst. Bis 31.10.2026 leitete `-log10(stepSize)` sie ab — für
+ * 0,5 oder 0,25 ergab das 0 bzw. 1 Stelle, und `toFixed` rundete die schon
+ * abgerundete Menge wieder AUF (2,5 → 3, auch über `maxQty` hinaus).
+ */
+export function rundeMenge(qty, entry, { stepSize = 0, minQty = 0, minNotional = 0, maxQty = 0 } = {}) {
+    let menge = Number(qty) || 0
+    let capped = false
+    if (maxQty > 0 && menge > maxQty) { menge = maxQty; capped = true }
+    if (stepSize > 0) {
+        const schritte = Math.floor(menge / stepSize + 1e-9)
+        menge = Number((schritte * stepSize).toFixed(stellenVon(stepSize)))
+        // Sicherheitsnetz: die Rundung darf nie über die Höchstmenge führen.
+        if (maxQty > 0 && menge > maxQty) {
+            menge = Number(((schritte - 1) * stepSize).toFixed(stellenVon(stepSize)))
+        }
+    }
+    const notional = menge * entry
+    if (!(menge > 0) || (minQty > 0 && menge < minQty) || (minNotional > 0 && notional < minNotional)) {
+        return { qty: 0, capped, reason: RISK_REASONS.SIZE_TOO_SMALL }
+    }
+    return { qty: menge, capped }
+}
+
+/** Nachkommastellen einer Schrittweite: 0,25 → 2, 5 → 0, 1e-8 → 8. */
+export function stellenVon(schritt) {
+    const s = String(Number(schritt))
+    const exp = s.match(/e-(\d+)$/)
+    if (exp) {
+        const mantisse = s.slice(0, s.indexOf('e'))
+        const punkt = mantisse.indexOf('.')
+        return Math.min(20, Number(exp[1]) + (punkt < 0 ? 0 : mantisse.length - punkt - 1))
+    }
+    const punkt = s.indexOf('.')
+    return punkt < 0 ? 0 : Math.min(20, s.length - punkt - 1)
 }
 
 /**
@@ -107,8 +170,7 @@ export function computePositionSize({
  * @param {number} ctx.todayNetPnl      heute realisierter Netto-PnL (negativ = Verlust)
  * @param {object} ctx.lastExitBySymbol { symbol: exitTime } für den Cooldown
  * @param {number} ctx.now              Zeitstempel des Auslösers
- * @param {object} [ctx.marketMeta]     { stepSize, minQty, minNotional }
- * @param {number} [ctx.referencePrice] Preis der Handelsbörse (Abweichungs-Check)
+ * @param {object} [ctx.marketMeta]     { stepSize, minQty, minNotional, maxQty }
  * @param {boolean}[ctx.killSwitch]
  *
  * @returns {{ ok: boolean, reason?: string, detail?: string, size?: object }}
@@ -116,7 +178,7 @@ export function computePositionSize({
 export function evaluateRisk(ctx) {
     const {
         setup, risk, equity, openPositions = [], todayNetPnl = 0,
-        lastExitBySymbol = {}, now = 0, marketMeta = {}, referencePrice = 0,
+        lastExitBySymbol = {}, now = 0, marketMeta = {},
         killSwitch = false,
     } = ctx
 
@@ -140,8 +202,11 @@ export function evaluateRisk(ctx) {
         if (!zielOk) return { ok: false, reason: RISK_REASONS.BAD_LEVELS }
     }
 
-    // Tagesverlust-Limit: gilt VOR jeder neuen Order, nicht erst danach
-    const limit = equity * (risk.maxDailyLossPct / 100)
+    // Tagesverlust-Limit: gilt VOR jeder neuen Order, nicht erst danach.
+    // Bemessen am Kontostand zu TAGESBEGINN — am laufenden Stand schrumpfte
+    // das Limit mit jedem Verlust des Tages und griff früher als eingestellt.
+    const tagesBeginn = equity - todayNetPnl
+    const limit = tagesBeginn * (risk.maxDailyLossPct / 100)
     if (limit > 0 && todayNetPnl <= -limit) {
         return {
             ok: false, reason: RISK_REASONS.DAILY_LOSS,
@@ -192,16 +257,10 @@ export function evaluateRisk(ctx) {
         }
     }
 
-    // Signalquelle und Handelsbörse dürfen nicht auseinanderlaufen
-    if (referencePrice > 0 && risk.maxPriceDeviationPct > 0) {
-        const abw = Math.abs(referencePrice - setup.entry) / setup.entry * 100
-        if (abw > risk.maxPriceDeviationPct) {
-            return {
-                ok: false, reason: RISK_REASONS.PRICE_DEVIATION,
-                detail: `${abw.toFixed(2)} % Abweichung`,
-            }
-        }
-    }
+    // Die Prüfung „Signalquelle und Handelsbörse laufen auseinander" galt
+    // einer echten Marktorder; seit S13 sendet die Engine keine mehr, und der
+    // Referenzkurs war immer 0. Mit dem Parameter `maxPriceDeviationPct` am
+    // 01.11.2026 entfernt — beim Zurückholen des scharfen Handels neu bauen.
 
     const size = computePositionSize({
         equity,
@@ -210,10 +269,9 @@ export function evaluateRisk(ctx) {
         stopLoss: setup.stopLoss,
         leverage: risk.leverage,
         maxNotionalUsdt: risk.maxNotionalUsdt,
-        stepSize: marketMeta.stepSize || 0,
-        minQty: marketMeta.minQty || 0,
-        minNotional: marketMeta.minNotional || 0,
+        ...grenzenFuer(marketMeta, einstiegsSorte(risk, setup)),
         costs: risk,
+        setup,
     })
     if (!size.qty) return { ok: false, reason: size.reason || RISK_REASONS.SIZE_TOO_SMALL }
 

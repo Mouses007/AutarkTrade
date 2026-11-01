@@ -12,15 +12,23 @@
  * Vorschläge belegen muss, statt zu behaupten.
  */
 
-import { getStrategy, validateParams, validateRisk } from './strategies/index.js'
-import { sichtBedarfKerzen } from './strategies/rule-engine.js'
-import { getHistoricalCandles, timeframeMs, currentCandleOpen } from './market-data.js'
+import { getStrategy, validateParams, validateRisk, validateAgainstSchema, htfBedarf, sichtFensterKerzen } from './strategies/index.js'
+import { getHistoricalCandles, timeframeMs, currentCandleOpen, getFundingHistory, getSymbolMeta } from './market-data.js'
+import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { evaluateRisk, startOfDayUtc } from './risk-engine.js'
-import { wartungsmargePctFuer } from './margin-rates.js'
-import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis } from './fill-simulator.js'
+import { wartungsmargeMitQuelle } from './margin-rates.js'
+import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, riskPerUnit, fundingFor } from './fill-simulator.js'
 
-/** Obergrenze, damit ein versehentlicher 5-Jahres-Lauf den Server nicht blockiert. */
-export const MAX_BACKTEST_CANDLES = 20000
+/**
+ * Obergrenze, damit ein versehentlicher 5-Jahres-Lauf den Server nicht blockiert.
+ *
+ * Zwei Jahre 15m plus Vorlauf. Bis 01.11.2026 waren es 20 000 — auf 15m
+ * keine sieben Monate, zu wenig für eine Aussage. Gemessen 01.11.2026 auf
+ * BTCUSDT 15m über zwei Jahre (70 080 Kerzen): Abruf 15 s, LSOB 3 s, Set and
+ * Forget 10–25 s, Heap +100 MB. Die Schleife gibt die Ereignisschleife
+ * zwischendurch frei (`ATEMPAUSE_MS`), der Server bleibt bedienbar.
+ */
+export const MAX_BACKTEST_CANDLES = 75000
 
 /**
  * Nach so vielen Millisekunden Rechnen gibt die Backtest-Schleife die
@@ -47,6 +55,15 @@ const ATEMPAUSE_MS = 25
 
 /** Einmal die Ereignisschleife durchlassen. */
 const atemholen = () => new Promise((fertig) => setImmediate(fertig))
+
+/**
+ * Rechenzeit, nach der ein Entwurf-Backtest abbricht (Audit 4.3.4,
+ * SEC-S4-001). Die Atempausen halten die Bedienung frei, aber ein Entwurf
+ * mit ATH-VWAP und einem nie gefüllten Limit rechnete auf 90 Tagen 15m schon
+ * 85 s, auf 20 000 Kerzen eine Viertelstunde — und weitere Klicks stapelten
+ * sich darauf. Gespeicherte Strategien laufen ohne diese Grenze.
+ */
+export const ENTWURF_ZEITBUDGET_MS = 120000
 
 /**
  * Ab so vielen abgeschlossenen Trades gilt ein Ergebnis als belastbar.
@@ -98,14 +115,18 @@ function leeresErgebnis(grund) {
 }
 
 function emptyFunnel() {
+    // Zähler ohne Prototyp: die Schlüssel sind Codes aus Regelwerken, und ein
+    // Code wie `constructor` oder `__proto__` griff sonst auf geerbte
+    // Eigenschaften (Audit 4.3.4, BUG-S4-004). JSON und Spread sehen keinen
+    // Unterschied.
     return {
         sweepsFound: 0,
         setupsDetected: 0,
         triggered: 0,
         executed: 0,
-        invalidated: {},     // warum ein Setup vor dem Einstieg starb
-        riskRejected: {},    // warum die Risk-Engine den Einstieg verweigerte
-        entrySkipped: {},    // warum der Fill nicht zustande kam
+        invalidated: Object.create(null),     // warum ein Setup vor dem Einstieg starb
+        riskRejected: Object.create(null),    // warum die Risk-Engine den Einstieg verweigerte
+        entrySkipped: Object.create(null),    // warum der Fill nicht zustande kam
     }
 }
 
@@ -156,16 +177,26 @@ export function floatingEquitySchritt(zustand, equity, offenePositionen, kerze) 
  * @param {string} opts.symbol
  * @param {string} opts.timeframe
  * @param {number} opts.fromTs / opts.toTs
- * @param {number} [opts.startEquity=1000]
+ * @param {number} [opts.startEquity] Startkapital; ohne Angabe `risk.startEquityUsdt` (Vorgabe 1000)
  * @param {Array}  [opts.candles]   vorgeladene Kerzen (spart den Abruf)
  * @param {Array}  [opts.htfCandles] vorgeladene Kerzen der höheren Zeiteinheit
  * @param {number} [opts.maxLeverage] globaler Hebeldeckel wie im Betrieb
+ * @param {number} [opts.zeitBudgetMs] Rechenzeit, nach der der Lauf abbricht
+ *                 (Entwürfe, `ENTWURF_ZEITBUDGET_MS`); Ergebnis ohne Trades,
+ *                 `stats.abgebrochen = 'zeit'`
+ * @param {Function} [opts.abbrechen] liefert `true`, wenn niemand mehr auf das
+ *                 Ergebnis wartet (Verbindung zu); `stats.abgebrochen = 'abbruch'`
  */
 export async function runBacktest(opts) {
-    const strategie = getStrategy(opts.strategyId)
+    // `opts.strategie`: ein Manifest, das nicht in der Registry steht — der
+    // ungespeicherte Entwurf aus dem Regel-Editor (alsManifest). Ohne diesen Weg
+    // rechnete der Test im Editor den GESPEICHERTEN Stand (bis 01.11.2026).
+    const strategie = opts.strategie || getStrategy(opts.strategyId)
     if (!strategie) return leeresErgebnis(`Unbekannte Strategie: ${opts.strategyId}`)
 
-    const { values: params } = validateParams(opts.strategyId, opts.params)
+    const { values: params } = opts.strategie
+        ? validateAgainstSchema(strategie.params, opts.params || {})
+        : validateParams(opts.strategyId, opts.params)
     const { values: risk } = validateRisk(opts.risk)
 
     // Derselbe Hebeldeckel wie im Betrieb.
@@ -184,7 +215,15 @@ export async function runBacktest(opts) {
     const symbol = String(opts.symbol || '').toUpperCase()
     const timeframe = opts.timeframe
     const market = opts.market === 'spot' ? 'spot' : 'futures'
-    const startEquity = Number(opts.startEquity) > 0 ? Number(opts.startEquity) : 1000
+    // Startkapital: ausdrücklich übergeben, sonst `risk.startEquityUsdt` —
+    // dasselbe Feld, mit dem eine Instanz im Papierbetrieb rechnet. Was hier
+    // gerechnet wird, steht danach auch in `meta.risk`: ein gespeicherter Lauf
+    // übergibt beim „Als Instanz starten" genau das Kapital, mit dem er
+    // entstand. Bis 31.10.2026 rechnete das Labor immer mit 1000 und speicherte
+    // daneben das angezeigte Startkapital (FUN-L5-001).
+    const startEquity = Number(opts.startEquity) > 0 ? Number(opts.startEquity)
+        : Number(risk.startEquityUsdt) > 0 ? Number(risk.startEquityUsdt) : 1000
+    risk.startEquityUsdt = startEquity
 
     const candles = opts.candles || await getHistoricalCandles(
         symbol, timeframe, opts.fromTs, opts.toTs,
@@ -209,13 +248,29 @@ export async function runBacktest(opts) {
     let htfAlle = []
     if (htfVerlangt) {
         try {
+            // Mit Vorlauf: die Strategie sieht im Betrieb immer ihr volles
+            // HTF-Fenster (`htfKerzen`). Ohne Vorlauf wäre die EMA in den
+            // ersten Monaten eines Laufs nicht eingeschwungen.
+            const vorlauf = htfBedarf(strategie, params) * timeframeMs(params.htfTimeframe)
             htfAlle = opts.htfCandles || await getHistoricalCandles(
-                symbol, params.htfTimeframe, opts.fromTs, opts.toTs,
+                symbol, params.htfTimeframe, opts.fromTs - vorlauf, opts.toTs,
                 { market, maxCandles: MAX_BACKTEST_CANDLES },
             )
         } catch (e) {
             htfAlle = []
             htfFilter.grund = 'abruf_fehlgeschlagen'
+        }
+        // Reicht die Reihe vorn weit genug zurück? Vorgeladene HTF-Kerzen
+        // (Robustheit, Messskript) ab Laufbeginn statt ab Laufbeginn minus
+        // Bedarf liessen die Strategie die ersten Monate ohne HTF-Lage und
+        // danach mit verkürztem Fenster rechnen — so geschehen im Messskript
+        // bis 31.10.2026 (Audit 4.3.4, BUG-L4-003). Der Lauf rechnet trotzdem,
+        // trägt die Lücke aber mit.
+        const htfVorlaufMs = htfBedarf(strategie, params) * timeframeMs(params.htfTimeframe)
+        if (htfAlle.length && htfVorlaufMs > 0
+            && htfAlle[0].t > Number(opts.fromTs) - htfVorlaufMs + 1.5 * timeframeMs(params.htfTimeframe)) {
+            htfFilter.vorlaufFehlt = true
+            htfFilter.vorlaufAb = htfAlle[0].t
         }
         // Eine Handvoll Kerzen reicht nicht: der Trendfilter braucht seine EMA,
         // sonst greift er erst weit im Zeitraum und misst vorher nichts.
@@ -247,19 +302,56 @@ export async function runBacktest(opts) {
     // Hundert wäre seine Linie unbekannt, und der Interpreter liefert dann
     // bewusst `null` statt einer erfundenen Linie. Deshalb fragt der Backtest
     // das Regelwerk, wie weit es zurücksehen muss. `Infinity` (ATH/ATL) heisst:
-    // die ganze geladene Historie, also kein Ausschnitt.
-    const ankerBedarf = strategie.regeln ? sichtBedarfKerzen(strategie.regeln, ltfMs) : 0
-    const volleHistorie = ankerBedarf === Infinity
-    const fenster = Math.max(
-        warmup + (params.scanWindowCandles || 200) + (params.retestMaxCandles || 40) + 10,
-        volleHistorie ? 0 : ankerBedarf,
-    )
+    // die ganze geladene Historie, also kein Ausschnitt. Dieselbe Rechnung wie
+    // in der Engine (`sichtFensterKerzen`): Indikatorperioden und das eigene
+    // Fenster einer Strategie (`ltfKerzen`) zählen seit 31.10.2026 mit.
+    const sichtBedarf = sichtFensterKerzen(strategie, params, ltfMs)
+    const volleHistorie = sichtBedarf === Infinity
+    const fenster = volleHistorie ? 0 : sichtBedarf
 
     const costs = kostenAus(risk)
+
+    // Rundung und Mindestmengen der Marktdatenquelle — dieselben, die der
+    // Papierbetrieb anlegt. Ohne sie gab es `size_too_small` nur im Papier,
+    // und der Backtest handelte Mengen, die es dort nicht gab.
+    let marketMeta = opts.marketMeta
+    if (marketMeta === undefined) {
+        try { marketMeta = await getSymbolMeta(symbol, { market }) } catch { marketMeta = null }
+    }
+    marketMeta = marketMeta || {}
+
+    // Funding aus dem ECHTEN Verlauf, wie der Zwischenstand offener Positionen
+    // und der Papierbetrieb beim Schliessen. Die Annahme `fundingBpsPer8h`
+    // (Vorgabe 0) gilt nur noch, wenn kein Verlauf zu haben ist — bis
+    // 01.11.2026 rechnete jeder Lauf mit ihr, also meist ohne Funding.
+    let fundingVerlauf = null
+    if (market === 'futures') {
+        try {
+            fundingVerlauf = opts.fundingVerlauf !== undefined
+                ? opts.fundingVerlauf
+                : await getFundingHistory(symbol, opts.fromTs, opts.toTs)
+        } catch { fundingVerlauf = null }
+    }
+    const mitFundingVerlauf = Array.isArray(fundingVerlauf) && fundingVerlauf.length > 0
+
+    // Deckt der Verlauf den gehandelten Zeitraum überhaupt ab?
+    //
+    // Bitget liefert nur rund 90 Tage zurück (270 Abrechnungen), egal wie weit
+    // man blättert. Bis 31.10.2026 bekam jeder Trade davor Funding 0, und der
+    // Lauf meldete trotzdem „aus dem Verlauf" (Audit 4.3.4, FUN-F1-007). Jetzt
+    // gilt für den ungedeckten Teil dieselbe Annahme wie ganz ohne Verlauf
+    // (`fundingBpsPer8h`, Vorgabe 0), und die Quelle heisst 'teilweise' samt
+    // Datum, ab dem echte Sätze vorliegen. Gemessen wird ab dem ersten
+    // gehandelten Zeitpunkt (nach dem Warmup), mit anderthalb Takten Toleranz.
+    const fundingTaktMs = (Number(risk.fundingIntervalH) > 0 ? Number(risk.fundingIntervalH) : 8) * 3600000
+    const handelAb = Math.max(Number(opts.fromTs) || 0, candles[warmup]?.t || 0)
+    const fundingAbdeckungAb = mitFundingVerlauf ? Number(fundingVerlauf[0].t) || 0 : 0
+    const fundingTeilweise = mitFundingVerlauf && fundingAbdeckungAb > handelAb + fundingTaktMs * 1.5
+
     // Wartungsmarge je Symbol von der Börse, sofern nicht bewusst überschrieben.
     // Eine Pauschale für alle Coins liess Alt-Coin-Positionen im Backtest weit
     // über den Punkt hinaus laufen, an dem die Börse geschlossen hätte.
-    const wartungsmargePct = await wartungsmargePctFuer(symbol, risk.maintenanceMarginPct)
+    const { pct: wartungsmargePct, quelle: wartungsmargeQuelle } = await wartungsmargeMitQuelle(symbol, risk.maintenanceMarginPct)
     // Zeitausstieg in Millisekunden — der Detector zählt in Kerzen
     // Regelstrategien tragen Break-Even/Zeitausstieg in der Regelwurzel —
     // dieselbe Auflösung wie in der Engine, sonst schliesst der Papierbetrieb
@@ -272,6 +364,7 @@ export async function runBacktest(opts) {
         partialTpR: params.partialTpR,
         partialTpPct: params.partialTpPct,
         maintenanceMarginPct: wartungsmargePct,
+        kerzeMs: timeframeMs(timeframe),
         costs,
     }
     const funnel = emptyFunnel()
@@ -299,7 +392,32 @@ export async function runBacktest(opts) {
     const lastExitBySymbol = {}
 
     const abschliessen = (pos, exit) => {
-        const trade = closePosition(pos, exit, costs, { symbol, timeframe })
+        const extra = { symbol, timeframe }
+        if (mitFundingVerlauf) {
+            extra.funding = fundingAusVerlauf(fundingVerlauf, {
+                qty: pos.qty, direction: pos.direction, entryTime: pos.entryTime,
+                bis: exit.time, ersatzPreis: pos.entryPrice,
+            })
+            // Abrechnungen VOR dem ersten Verlaufseintrag kennt der Verlauf
+            // nicht — für sie gilt die Annahme, wie ohne Verlauf. Die
+            // Abrechnung genau am Verlaufsbeginn steckt schon oben drin.
+            if (fundingTeilweise && pos.entryTime < fundingAbdeckungAb) {
+                extra.funding += fundingFor(pos.notionalUsdt, pos.entryTime,
+                    Math.min(exit.time, fundingAbdeckungAb - 1), risk.fundingBpsPer8h, risk.fundingIntervalH)
+            }
+        }
+        const trade = closePosition(pos, exit, costs, extra)
+        // Welcher Anteil des Kontos stand bei diesem Trade WIRKLICH im Risiko?
+        // Nicht zwingend `riskPerTradePct`: der Notional-Deckel, die Marge und
+        // die Mengenrundung verkleinern die Position, und `rMultiple` bezieht
+        // sich auf das so verkleinerte Risiko. Monte Carlo rechnete bis
+        // 31.10.2026 jedes R mit dem vollen Prozentsatz — bei einem Deckel, der
+        // das Risiko auf ein Viertel drückte, waren Rückgang und Streuung dort
+        // rund viermal zu gross (Audit 4.3.4, FUN-F1-002).
+        if (pos.equityBeimEinstieg > 0) {
+            const mengeAmEinstieg = Number(pos.initialQty) || Number(pos.qty) || 0
+            trade.risikoAnteil = (riskPerUnit(pos) * mengeAmEinstieg) / pos.equityBeimEinstieg
+        }
         trades.push(trade)
         // Eine am Testende zwangsweise bewertete Position ist KEIN Ergebnis,
         // sondern eine Momentaufnahme. Sie darf die Kapitalkurve nicht
@@ -320,6 +438,8 @@ export async function runBacktest(opts) {
     }
 
     let letzteAtempause = Date.now()
+    const laufBeginn = Date.now()
+    const zeitBudget = Number(opts.zeitBudgetMs) > 0 ? Number(opts.zeitBudgetMs) : Infinity
 
     for (let i = warmup; i < candles.length; i++) {
         // Luft holen, damit Engine-Takt, laufende Anfragen und vor allem der
@@ -327,6 +447,17 @@ export async function runBacktest(opts) {
         if (Date.now() - letzteAtempause >= ATEMPAUSE_MS) {
             await atemholen()
             letzteAtempause = Date.now()
+            // Nur an den Atempausen geprüft — dort kostet es nichts, und
+            // zwischen zwei Pausen liegen höchstens 25 ms Rechnen.
+            const grund = Date.now() - laufBeginn > zeitBudget ? 'zeit'
+                : (typeof opts.abbrechen === 'function' && opts.abbrechen()) ? 'abbruch' : null
+            if (grund) {
+                const leer = leeresErgebnis(grund === 'zeit'
+                    ? `Abgebrochen nach ${Math.round(zeitBudget / 1000)} s Rechenzeit (Kerze ${i - warmup} von ${candles.length - warmup})`
+                    : 'Abgebrochen: niemand wartet mehr auf das Ergebnis')
+                leer.stats.abgebrochen = grund
+                return leer
+            }
         }
 
         const kerze = candles[i]
@@ -377,11 +508,16 @@ export async function runBacktest(opts) {
         }
 
         for (const s of setups) {
-            const setup = { ...s, id: nextSetupId++, symbol, timeframe, strategyId: opts.strategyId }
+            // `erkanntT`: die Kerze, mit deren Schluss das Setup bekannt wurde —
+            // früher kann kein Einstieg liegen (Selbsttest Lookahead).
+            const setup = { ...s, id: nextSetupId++, symbol, timeframe, strategyId: opts.strategyId, erkanntT: kerze.t }
             offeneSetups.push(setup)
             setupsGesamt.push(setup)
             bekannteSchluessel.add(`${s.direction}|${s.obCandleTime}`)
             funnel.setupsDetected++
+            // Gefunden ist jeder Kandidat — angelegt ODER abgelehnt. Bis
+            // 01.11.2026 zählten hier nur die abgelehnten.
+            funnel.sweepsFound++
         }
 
         // 3. Ereignisse auswerten
@@ -394,6 +530,7 @@ export async function runBacktest(opts) {
             if (ev.invalidReason) setup.invalidReason = ev.invalidReason
 
             if (ev.status !== 'triggered') {
+                setup.endeT = Number(ev.candleTime) || 0
                 bump(funnel.invalidated, ev.invalidReason || ev.status)
                 continue
             }
@@ -413,14 +550,25 @@ export async function runBacktest(opts) {
                 ? Math.abs(setup.takeProfit - setup.entry) / risiko
                 : 0
 
-            // Der Retest muss nicht in der aktuellen Kerze liegen: ein frisch
-            // erkanntes Setup wird ab seinem Impuls geprüft, und der Rücklauf
-            // kann schon ein paar Kerzen zurückliegen. Fill und Einstiegszeit
-            // gehören deshalb an die Kerze des Ereignisses, nicht an die
-            // Schleifenkerze — sonst schlägt der Fill grundlos fehl.
+            // Gehandelt wird nur auf der Kerze, auf der das Setup bekannt war.
+            //
+            // Bis 01.11.2026 wurde ein Auslöser auf einer ÄLTEREN Kerze
+            // nachgebucht („der Rücklauf kann schon ein paar Kerzen
+            // zurückliegen") und die Kerzen dazwischen nachgeholt. Das ist ein
+            // Blick in die Zukunft: Ein Setup, das erst bei Kerze i erkannt
+            // wird, konnte bei Kerze j < i niemand handeln. Getroffen hat es
+            // jede Strategie, die spät erkennt — LSOB v1, Set and Forget, den
+            // ersten Lauf über ein Scanfenster. Dieselbe Regel gilt in der
+            // Engine (`zu_spaet_erkannt`).
             const triggerVersatz = sicht.findIndex((c) => c.t === ev.candleTime)
             const triggerIdx = triggerVersatz >= 0 ? von + triggerVersatz : i
-            const triggerKerze = candles[triggerIdx]
+            if (triggerIdx !== i) {
+                bump(funnel.entrySkipped, 'zu_spaet_erkannt')
+                setup.status = 'rejected'
+                setup.rejectReason = 'zu_spaet_erkannt'
+                continue
+            }
+            const triggerKerze = kerze
 
             // 3a. Fill überhaupt möglich? Ein nie berührter Einstieg wird
             //     verworfen. Ein Stop in der Auslösekerze dagegen wird als
@@ -432,8 +580,11 @@ export async function runBacktest(opts) {
             }
             const sameBarStop = !fill.ok
 
-            // 3b. Risiko-Gates — dieselben wie im Live-Betrieb
-            const heuteBeginn = startOfDayUtc(triggerKerze.t)
+            // 3b. Risiko-Gates — dieselben wie im Live-Betrieb, zum selben
+            //     Stichtag: dem Schluss der Auslösekerze (`risikoStichtag` in
+            //     der Engine). Die Position beginnt trotzdem bei `triggerKerze.t`.
+            const stichtag = triggerKerze.t + timeframeMs(timeframe)
+            const heuteBeginn = startOfDayUtc(stichtag)
             const heutePnl = trades
                 .filter((t) => t.exitTime >= heuteBeginn)
                 .reduce((sum, t) => sum + t.netPnl, 0)
@@ -443,7 +594,8 @@ export async function runBacktest(opts) {
                 openPositions: offenePositionen,
                 todayNetPnl: heutePnl,
                 lastExitBySymbol,
-                now: triggerKerze.t,
+                now: stichtag,
+                marketMeta,
             })
             if (!pruefung.ok) {
                 bump(funnel.riskRejected, pruefung.reason)
@@ -457,6 +609,7 @@ export async function runBacktest(opts) {
                     entryPrice: einstiegsPreis(setup, triggerKerze),
                     entryTime: triggerKerze.t, leverage: risk.leverage, costs,
                 })
+                posSofort.equityBeimEinstieg = equity
                 const gap = setup.direction === 'long'
                     ? Math.min(setup.stopLoss, triggerKerze.o)
                     : Math.max(setup.stopLoss, triggerKerze.o)
@@ -472,25 +625,24 @@ export async function runBacktest(opts) {
                 // Stop-Einstiege füllen bei einer Eröffnungslücke schlechter
                 // als am Wunschpreis — `einstiegsPreis` bildet das ab.
                 entryPrice: einstiegsPreis(setup, triggerKerze),
-                entryTime: triggerKerze.t,
+                // Ein Einstieg zum SCHLUSS (LSOB-Ablehnungs-/Richtungskerze)
+                // beginnt mit dem Ende der Auslösekerze (`einstiegsZeit`).
+                entryTime: einstiegsZeit(ev, setup, triggerKerze.t, timeframeMs(timeframe)),
                 leverage: risk.leverage,
                 costs,
             })
+            // Bezug für den echten Risikoanteil des Trades (siehe `abschliessen`)
+            position.equityBeimEinstieg = equity
             funnel.executed++
 
-            // Liegt der Einstieg vor der aktuellen Kerze, müssen die Kerzen
-            // dazwischen SOFORT nachgeholt werden. Ohne das würde die Position
-            // genau die Bars überspringen, in denen sie hätte ausgestoppt
-            // werden können — ein Lookahead, der die Statistik schönrechnet.
-            // Liegt der Einstieg auf der ERÖFFNUNG der Trigger-Kerze, muss
-            // diese Kerze selbst mitgeprüft werden — ihr Hoch und Tief können
-            // Stop oder Ziel bereits berühren. Bei einem Einstieg mitten in
-            // der Kerze (z. B. Limit an einer Zone) beginnt der Nachlauf
-            // dagegen erst mit der Folgekerze.
+            // Liegt der Einstieg auf der ERÖFFNUNG der Auslösekerze, muss diese
+            // Kerze selbst mitgeprüft werden — ihr Hoch und Tief können Stop
+            // oder Ziel bereits berühren. Bei einem Einstieg mitten in der
+            // Kerze (z. B. Limit an einer Zone) ist die Reihenfolge darin
+            // unbekannt; bewertet wird ab der Folgekerze (Schritt 1).
             let ueberlebt = true
-            const abKerze = ev.entryAtOpen ? triggerIdx : triggerIdx + 1
-            for (let j = abKerze; j <= i && ueberlebt; j++) {
-                const { exit } = stepCandle(position, candles[j], schrittOpts)
+            if (ev.entryAtOpen) {
+                const { exit } = stepCandle(position, kerze, schrittOpts)
                 if (exit) { abschliessen(position, exit); ueberlebt = false }
             }
             if (ueberlebt) offenePositionen.push(position)
@@ -515,14 +667,19 @@ export async function runBacktest(opts) {
         // Die erkannten Setups gehören zum Ergebnis, nicht nur die Trades:
         // gerade die VERWORFENEN erklären, warum eine Strategie selten handelt.
         // Gedeckelt, weil ein Jahreslauf sonst Tausende zurückschickt.
+        // `strategyId` und die Sweep-Felder braucht die Chart-Ebene: ohne sie
+        // zeichnete das Labor Swing Game als Zone statt als Ausbruchslinie,
+        // und die Sweep-Marke fehlte bei allen Strategien (BUG-L5-004).
         setups: setupsGesamt.slice(-300).map((s) => ({
-            id: s.id, direction: s.direction, status: s.status,
+            id: s.id, strategyId: s.strategyId, direction: s.direction, status: s.status,
             symbol: s.symbol, timeframe: s.timeframe,
+            sweepLevel: s.sweepLevel, sweepPrice: s.sweepPrice,
             sweepCandleTime: s.sweepCandleTime, obCandleTime: s.obCandleTime,
             obHigh: s.obHigh, obLow: s.obLow, watchFrom: s.watchFrom, tradeableFrom: s.tradeableFrom || 0,
             entry: s.entry, stopLoss: s.stopLoss, takeProfit: s.takeProfit, rr: s.rr,
-            triggeredAt: s.triggeredAt || 0,
+            triggeredAt: s.triggeredAt || 0, erkanntT: s.erkanntT || 0, endeT: s.endeT || 0,
             invalidReason: s.invalidReason || '', rejectReason: s.rejectReason || '',
+            confirmations: s.confirmations || {},
         })),
         stats: {
             ...statsRoh,
@@ -549,14 +706,22 @@ export async function runBacktest(opts) {
             // Formular ist nicht zwingend die, die gewirkt hat.
             leverageEffektiv: hebelEffektiv,
             leverageGekappt: hebelGekappt,
-            fundingModelliert: Number(risk.fundingBpsPer8h) > 0,
+            fundingModelliert: mitFundingVerlauf || Number(risk.fundingBpsPer8h) > 0,
+            // 'verlauf' = echte Funding-Sätze der Börse, 'teilweise' = echte
+            // Sätze erst ab `fundingAbdeckungAb`, davor die Annahme,
+            // 'annahme' = Pauschale aus den Risiko-Einstellungen, 'keins' =
+            // weder noch.
+            fundingQuelle: mitFundingVerlauf
+                ? (fundingTeilweise ? 'teilweise' : 'verlauf')
+                : (Number(risk.fundingBpsPer8h) > 0 ? 'annahme' : 'keins'),
+            fundingAbdeckungAb: fundingTeilweise ? fundingAbdeckungAb : null,
             fundingBpsPer8h: Number(risk.fundingBpsPer8h) || 0,
             // Mit welcher Wartungsmarge wurde die Zwangsliquidation gerechnet?
             // Auch das ist eine Annahme und gehört ausgewiesen.
             wartungsmargePct,
             // Kam die Zahl aus dem Formular oder von der Börse? Eine Annahme
             // ohne ihre Herkunft ist im Nachhinein nicht mehr zu beurteilen.
-            wartungsmargeQuelle: Number(risk.maintenanceMarginPct) > 0 ? 'vorgabe' : 'boerse',
+            wartungsmargeQuelle,
             unrealisiertPnl: unrealisiert,
             endEquityMitOffenen: equity + unrealisiert,
             // Gehört zu den Kennzahlen, nicht in die Metadaten: ein Ergebnis zu

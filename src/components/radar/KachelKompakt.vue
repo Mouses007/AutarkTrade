@@ -26,7 +26,6 @@ import { liveSymbol } from '../../stores/live.js'
 import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { boerseUrl, boersenLinksVon, BOERSE_KURZ, BOERSE_NAME } from '../../utils/boersenLinks.js'
 import Symbol from '@/components/basis/Symbol.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -278,8 +277,6 @@ function waehle(symbol) { liveSymbol.value = symbol }
                 <span class="kpNeben">{{ alter(gesamtlage.stand) }}</span>
             </span>
         </div>
-        <!-- S12: die beiden Sätze darüber sind KI-Text — Pflichtlabel. -->
-        <KiHinweis v-if="(handelslage && !handelslage.leer) || gesamtlage" klein />
     </div>
 </template>
 

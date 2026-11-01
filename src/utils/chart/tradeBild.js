@@ -70,7 +70,7 @@ export async function erzeugeTradeBild({ symbol, interval, richtung, einstiegT, 
     if (strategie && STRATEGIE_TF.includes(interval)) {
         try {
             const { data } = await axios.get('/api/chart/signale', { params: { strategie, symbol: sym, interval, markt: 'futures' } })
-            signale = data
+            signale = data?.aus ? null : data   // `{aus: true}`: Marktdatenquelle ohne diese Kerzen
         } catch { signale = null }   // ohne Signale trotzdem ein Bild
     }
 

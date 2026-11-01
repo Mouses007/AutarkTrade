@@ -501,8 +501,11 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [] }) {
                 sweepLevel: anker.price,                      // Ankerpunkt der Linie
                 sweepPrice: waagerecht ? anker.price : close, // zweiter Punkt
                 sweepCandleTime: candles[anker.index].t,
-                obHigh: emaF[i],
-                obLow: emaS[i],
+                // Bereich zwischen den beiden EMAs, oben immer über unten —
+                // im Short liegt die schnelle EMA darunter (bis 01.11.2026
+                // stand dann obHigh < obLow, und der Chart zeichnete verkehrt).
+                obHigh: Math.max(emaF[i], emaS[i]),
+                obLow: Math.min(emaF[i], emaS[i]),
                 obCandleTime: candles[i].t,
                 impulseExtreme: anker.price,
                 entry: 0,

@@ -103,6 +103,15 @@ export const AI_TASKS = {
         recommendedModels: ['anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5-5'],
         requiresToolCalling: false,
     },
+    flash_news: {
+        id: 'flash-news',
+        name: 'Chart-Flash-News',
+        description: 'Fasst zusammen, was X und das Web zum Coin im Chart gerade melden — mit Belegnummern, von Hand ausgelöst',
+        importance: 'medium',
+        maxTokens: 1500,
+        recommendedModels: ['anthropic/claude-haiku-5-5', 'anthropic/claude-sonnet-5-5'],
+        requiresToolCalling: false,
+    },
     coin_radar: {
         id: 'coin-radar',
         name: 'Coin-Radar-Einordnung',

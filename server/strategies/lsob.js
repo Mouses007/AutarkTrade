@@ -24,10 +24,15 @@ import {
     pivotHighs, pivotLows, rsi, atr, ema, fibLevel,
     isBull, isBear, bodyHigh, bodyLow, range, hasRejectionCandle, tagGesperrt,
 } from './indicators.js'
+import { htfFensterEma, htfAusschnitt } from './htf.js'
 
 // 2 (07.10.2026): Sweep-Suche ab dem Pivot statt ab dem Fensteranfang —
 // Version 1 erzeugte Setups aus längst verbrauchten Levels (siehe Phase A).
-export const DETECTOR_VERSION = 2
+// 3 (01.11.2026): Box-Regeln gelten ab der Kerze nach dem Sweep, nicht erst
+// ab dem Impulsende; Docht durch die ganze Box nach einem Schluss ausserhalb
+// macht ungültig; ein Filter, der an der Zone sperrt, heisst nicht mehr
+// »Zone nicht erreicht«.
+export const DETECTOR_VERSION = 3
 
 /** Gründe, aus denen ein Setup ungültig wird — 1:1 die Fälle aus PDF 1. */
 export const INVALID_REASONS = {
@@ -39,6 +44,19 @@ export const INVALID_REASONS = {
     NO_OPPOSITE: 'no_opposite_candles',
     NO_IMPULSE: 'no_impulse',
     BAD_ZONE: 'invalid_zone',
+    // Bis 01.11.2026 lief dieser Fall unter `equal_highs_no_sweep` — im
+    // Trichter sah ein zu kleiner Docht aus wie ein egalisiertes Hoch.
+    WEAK_WICK: 'weak_wick',
+    // Eine Kerze hat ausserhalb der Box geschlossen, eine spätere sticht mit
+    // dem Docht über die ferne Kante: die Box ist abgeholt.
+    BOX_PIERCED: 'box_pierced',
+    // Die Zone wurde erreicht, aber ein Filter hat den Einstieg gesperrt, bis
+    // die Frist ablief. Bis 01.11.2026 stand dafür »Zone nicht erreicht«.
+    FILTER_HTF: 'filter_htf',
+    FILTER_RSI: 'filter_rsi',
+    FILTER_FIB: 'filter_fib',
+    FILTER_WEEKDAY: 'filter_weekday',
+    FILTER_REJECTION: 'filter_rejection',
 }
 
 const params = [
@@ -177,6 +195,45 @@ function touchesZone(candle, zone) {
     return candle.h >= zone.low && candle.l <= zone.high
 }
 
+/** Schliesst die Kerze ausserhalb der Box, auf der Seite des Impulses? */
+function schliesstDraussen(candle, zone, direction) {
+    return direction === 'short' ? candle.c < zone.low : candle.c > zone.high
+}
+
+/**
+ * Macht diese Kerze die Box ungültig? Gilt ab der Kerze nach dem Sweep — also
+ * auch für Reaktion und Impuls, nicht erst ab Beginn der Beobachtung.
+ *
+ *  - Schluss jenseits der fernen Kante: Zone durchbrochen.
+ *  - Docht über das Sweep-Extrem: neuer Liquidity Sweep (PDF 1).
+ *  - Docht über die ferne Kante, nachdem schon eine Kerze ausserhalb
+ *    geschlossen hat (`draussen`): die Box ist abgeholt. Bei einer Docht-Box
+ *    auf der Sweep-Kerze ist die ferne Kante das Sweep-Extrem, dann greift
+ *    schon die Regel davor; bei Körper-Boxen und `lastOpposite` liegt sie
+ *    tiefer.
+ *
+ * Bis 01.11.2026 galten diese Regeln erst ab dem Impulsende. BTCUSDT 15m am
+ * 31.10.2026: Box 11:45 UTC, Schluss darunter 12:15, Docht durch die ganze
+ * Box 12:30 — das Setup blieb gültig, wurde 13:45 gefüllt und kostete 1,28 R.
+ *
+ * @returns {string|null} Grund aus INVALID_REASONS oder null
+ */
+function boxGebrochen(candle, setup, zone, direction, draussen) {
+    if (direction === 'short' ? candle.c > zone.high : candle.c < zone.low) return INVALID_REASONS.ZONE_BROKEN
+    if (direction === 'short' ? candle.h > setup.sweepPrice : candle.l < setup.sweepPrice) return INVALID_REASONS.NEW_SWEEP
+    if (draussen && (direction === 'short' ? candle.h > zone.high : candle.l < zone.low)) return INVALID_REASONS.BOX_PIERCED
+    return null
+}
+
+/** Welcher aktivierte Filter hat gesperrt? Erster in fester Reihenfolge. */
+function filterGrund(conf) {
+    if (conf.htf === false) return INVALID_REASONS.FILTER_HTF
+    if (conf.rsi === false) return INVALID_REASONS.FILTER_RSI
+    if (conf.fib === false) return INVALID_REASONS.FILTER_FIB
+    if (conf.wochentag === false) return INVALID_REASONS.FILTER_WEEKDAY
+    return INVALID_REASONS.FILTER_REJECTION
+}
+
 /**
  * Sucht die Order-Block-Kerze: die letzte gegenläufige Kerze bei/vor dem Sweep.
  * Für einen Short ist das die letzte bullische Kerze (das Kauflevel, das gleich
@@ -274,7 +331,11 @@ function computeTakeProfit(direction, entry, stopLoss, p, pivotsOpposite, sweepT
 }
 
 /** Bestätigungen zum Zeitpunkt des Retests. `null` = nicht geprüft. */
-function evaluateConfirmations({ candles, idx, direction, setup, p, rsiSeries, htfBias }) {
+/**
+ * `vorKerze`: Stand beim PLATZIEREN eines ruhenden Limits — der RSI der Kerze
+ * davor, denn der Schluss der Füllkerze ist beim Füllen noch nicht bekannt.
+ */
+function evaluateConfirmations({ candles, idx, direction, setup, p, rsiSeries, htfBias, vorKerze = false }) {
     const conf = { rejection: null, fib: null, rsi: null, htf: null, wochentag: null }
 
     if (p.requireRejectionCandle || p.entryMode === 'rejection_confirmed') {
@@ -290,7 +351,7 @@ function evaluateConfirmations({ candles, idx, direction, setup, p, rsiSeries, h
     }
 
     if (p.useRsi) {
-        const v = rsiSeries[idx]
+        const v = rsiSeries[vorKerze ? idx - 1 : idx]
         conf.rsi = v === null || v === undefined
             ? null
             : (direction === 'short' ? v >= p.rsiOverbought : v <= p.rsiOversold)
@@ -368,7 +429,10 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
 
     const atrSeries = atr(candles, 14)
     const rsiSeries = p.useRsi ? rsi(candles, p.rsiPeriod) : []
-    const htfBias = p.htfTrendFilter ? higherTimeframeBias(htfCandles, p.htfEmaPeriod) : null
+    // Dasselbe HTF-Fenster wie im Betrieb (`htfKerzen`), siehe htf.js
+    const htfBias = p.htfTrendFilter
+        ? higherTimeframeBias(htfAusschnitt(htfCandles, htfFensterEma(p.htfEmaPeriod)), p.htfEmaPeriod)
+        : null
 
     const highs = pivotHighs(candles, p.swingLookback, p.swingConfirmBars)
     const lows = pivotLows(candles, p.swingLookback, p.swingConfirmBars)
@@ -428,7 +492,7 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
                 // Der Docht muss ein echter Docht sein, kein Körperbruch
                 const kRange = range(k)
                 if (kRange > 0 && (exceeded / kRange) * 100 < p.sweepMinWickPct) {
-                    if (imFenster) reject(INVALID_REASONS.EQUAL_HIGHS, rkey)
+                    if (imFenster) reject(INVALID_REASONS.WEAK_WICK, rkey)
                     continue
                 }
 
@@ -494,10 +558,34 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
         const dir = s.direction
         const startFrom = Number(s.watchFrom || s.obCandleTime) || 0
         const idxStart = candles.findIndex((c) => c.t > startFrom)
+
+        // Bildung: Reaktion und Impuls zwischen Sweep und Beginn der
+        // Beobachtung. Eine Order liegt da noch nicht; geprüft wird nur, ob die
+        // Box dabei schon ungültig wurde (`boxGebrochen`) — auch dann, wenn
+        // nach dem Impuls noch keine Kerze da ist.
+        const sweepT = Number(s.sweepCandleTime) || 0
+        const bildungBis = idxStart === -1 ? candles.length : idxStart
+        let draussen = false
+        let bruch = null
+        for (let i = 0; sweepT > 0 && i < bildungBis && !bruch; i++) {
+            const k = candles[i]
+            if (k.t <= sweepT) continue
+            const grund = boxGebrochen(k, s, zone, dir, draussen)
+            if (grund) bruch = { grund, t: k.t }
+            else if (schliesstDraussen(k, zone, dir)) draussen = true
+        }
+        if (bruch) {
+            events.push({ id: s.id, status: 'invalidated', invalidReason: bruch.grund, candleTime: bruch.t })
+            continue
+        }
         if (idxStart === -1) continue
 
         let candlesWaited = 0
         let handled = false
+        // Bestätigungen der letzten Berührung, an der ein Filter den Einstieg
+        // gesperrt hat — läuft die Frist ab, ist das der Grund, nicht
+        // »Zone nicht erreicht«.
+        let gesperrt = null
         // `direction_confirmed`: Index der Kerze, die die Zone berührt und das
         // Setup damit scharf gestellt hat. Gehandelt wird erst danach.
         let scharfAb = -1
@@ -518,9 +606,54 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
                 : retestExtrem * (1 - p.slBufferPct / 100)
         }
 
-        for (let i = idxStart; i < candles.length && !handled; i++) {
+        // Ein ruhendes Limit an der Zonenkante gibt es nur bei `zone_touch`
+        // ohne verlangte Ablehnungskerze — die braucht den Schluss.
+        const limitRuht = p.entryMode === 'zone_touch' && !p.requireRejectionCandle
+
+        // Höchstens `retestMaxCandles` Kerzen. Im laufenden Betrieb läuft das
+        // Setup genau nach N Kerzen ab; nach einem Ausfall (Deploy, Pause) holt
+        // der Takt aber viele Kerzen auf einmal nach, und bis 01.11.2026 wurden
+        // dann auch Kerzen nach der Frist geprüft — eine Berührung auf der
+        // jüngsten Kerze hätte ein längst abgelaufenes Setup ausgelöst.
+        const fristBis = Math.min(candles.length, idxStart + p.retestMaxCandles)
+        for (let i = idxStart; i < fristBis && !handled; i++) {
             const k = candles[i]
             candlesWaited++
+
+            // (0) Ruhendes Limit: berührt die Kerze die Zone, ist es GEFÜLLT.
+            //     Was sie danach noch tut — durchbrechen, neuer Sweep, zu tiefer
+            //     Schluss —, ist das Schicksal des Trades (ein Stop in derselben
+            //     Kerze wird als Verlust gebucht), kein Grund, ihn nicht zu
+            //     buchen. Bis 01.11.2026 wurden diese Fälle ZUERST geprüft und
+            //     das Setup als ungültig verworfen: genau die schlechtesten
+            //     Füllungen fehlten in der Statistik. Die Filter gelten mit dem
+            //     Stand, der beim Platzieren bekannt war (`vorKerze`).
+            if (limitRuht && touchesZone(k, zone)) {
+                const conf = evaluateConfirmations({
+                    candles, idx: i, direction: dir, setup: s, p, rsiSeries, htfBias, vorKerze: true,
+                })
+                if (!confirmationsBlock(conf, p)) {
+                    events.push({
+                        id: s.id,
+                        status: 'triggered',
+                        triggeredAt: k.t,
+                        entry: s.entry,
+                        stopLoss: s.stopLoss,
+                        takeProfit: s.takeProfit,
+                        confirmations: conf,
+                        candleTime: k.t,
+                    })
+                    handled = true
+                    break
+                }
+                // Ein Filter verbietet das Limit gerade — dann wird die Kerze
+                // geprüft, als läge keine Order im Markt.
+                gesperrt = conf
+            }
+
+            // Ausserhalb geschlossen zählt erst für die FOLGENDEN Kerzen.
+            const warDraussen = draussen
+            if (schliesstDraussen(k, zone, dir)) draussen = true
 
             // (a) Zone komplett durchbrochen — Schlusskurs jenseits der fernen Kante.
             //     PDF: »Zone wird nicht respektiert«
@@ -564,25 +697,31 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
                             entry: k.c,
                             stopLoss: neuerStopp,
                             takeProfit: neuesZiel,
-                            confirmations: conf,
+                            // Marktorder zum Schluss: was die Kerze VOR ihrem
+                            // Schluss tat, betrifft den Trade nicht mehr. Die
+                            // Position beginnt mit dem Kerzenende
+                            // (`einstiegsZeit` in fill-simulator.js).
+                            entryTrigger: 'market',
+                            entryAtClose: true,
+                            confirmations: { ...conf, entryTrigger: 'market', entryAtClose: true },
                             candleTime: k.t,
                         })
                         handled = true
                         break
                     }
+                    gesperrt = conf
                 }
             }
 
             if (!touchesZone(k, zone)) continue
 
             // (b) Neuer Liquidity Sweep: Docht schiesst über das alte Extrem
-            //     hinaus, Kerze schliesst aber zurück (PDF 1, INVALID)
-            const wickBeyondSweep = dir === 'short' ? k.h > s.sweepPrice : k.l < s.sweepPrice
-            if (wickBeyondSweep) {
-                events.push({
-                    id: s.id, status: 'invalidated',
-                    invalidReason: INVALID_REASONS.NEW_SWEEP, candleTime: k.t,
-                })
+            //     hinaus, Kerze schliesst aber zurück (PDF 1, INVALID) — oder
+            //     nach einem Schluss ausserhalb über die ferne Kante: die Box
+            //     ist abgeholt. Den Schluss jenseits prüfte schon (a).
+            const grund = boxGebrochen(k, s, zone, dir, warDraussen)
+            if (grund) {
+                events.push({ id: s.id, status: 'invalidated', invalidReason: grund, candleTime: k.t })
                 handled = true
                 break
             }
@@ -617,35 +756,50 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
                 continue
             }
 
-            // (d) Gültiger Retest → Bestätigungen prüfen
+            // (d) Ruhendes Limit, das ein Filter gerade verbietet: kein Einstieg,
+            //     das Setup darf beim nächsten Antippen erneut antreten.
+            if (limitRuht) continue
+
+            // (e) Ablehnungskerze verlangt: sie ist erst mit ihrem SCHLUSS
+            //     bekannt, also wird zum Schluss eingestiegen, per Marktorder.
+            //     Bis 01.11.2026 lag der Einstieg trotzdem an der Zonenkante —
+            //     ein Preis, den die Kerze vor ihrem Schluss hatte, als noch
+            //     niemand wusste, dass sie eine Ablehnung wird.
             const conf = evaluateConfirmations({
                 candles, idx: i, direction: dir, setup: s, p, rsiSeries, htfBias,
             })
-            if (confirmationsBlock(conf, p)) {
-                // Nicht ungültig — das Setup darf beim nächsten Antippen erneut
-                // antreten, solange die Zone hält.
-                continue
-            }
+            if (confirmationsBlock(conf, p)) { gesperrt = conf; continue }
 
+            const neuerStopp = stoppFuerAuslöser()
+            let neuesZiel = s.takeProfit
+            if (p.tpMode === 'rr') {
+                const risiko = Math.abs(k.c - neuerStopp)
+                neuesZiel = dir === 'short' ? k.c - risiko * p.tpRR : k.c + risiko * p.tpRR
+            }
             events.push({
                 id: s.id,
                 status: 'triggered',
                 triggeredAt: k.t,
-                entry: s.entry,
-                stopLoss: stoppFuerAuslöser(),
-                takeProfit: s.takeProfit,
-                confirmations: conf,
+                entry: k.c,
+                stopLoss: neuerStopp,
+                takeProfit: neuesZiel,
+                entryTrigger: 'market',
+                entryAtClose: true,
+                confirmations: { ...conf, entryTrigger: 'market', entryAtClose: true },
                 candleTime: k.t,
             })
             handled = true
         }
 
-        // (e) Zone wurde nie erreicht (PDF: »Zone wird nicht getroffen«)
-        if (!handled && candlesWaited > p.retestMaxCandles) {
+        // (f) Frist abgelaufen: Zone nie erreicht (PDF: »Zone wird nicht
+        //     getroffen«) — oder erreicht, aber ein Filter hat gesperrt.
+        if (!handled && candlesWaited >= p.retestMaxCandles) {   // N Kerzen, nicht N+1
             events.push({
                 id: s.id, status: 'expired',
-                invalidReason: INVALID_REASONS.ZONE_NOT_REACHED,
-                candleTime: candles[candles.length - 1].t,
+                invalidReason: gesperrt ? filterGrund(gesperrt) : INVALID_REASONS.ZONE_NOT_REACHED,
+                // Die letzte Kerze der Frist, nicht die jüngste: davon hängt
+                // `endeT` ab, und damit, wie weit der Chart die Box zeichnet.
+                candleTime: candles[fristBis - 1].t,
             })
         }
     }
@@ -660,6 +814,7 @@ export default {
     version: DETECTOR_VERSION,
     supportedTimeframes: ['5m', '15m', '30m', '1h', '4h', '1d'],
     warmupCandles: 300,
+    htfKerzen: (p) => htfFensterEma(p.htfEmaPeriod),
     params,
     paramGroups,
     detect,

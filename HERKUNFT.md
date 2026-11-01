@@ -12,15 +12,15 @@ Vergleichsquelle: <https://github.com/Eleven-Trading/TradeNote>
 
 ## Ergebnis
 
-| | 19.10.2026 vorher (Bestandsaufnahme) | 19.10.2026 nachher (S11) | 20.10.2026 nachher (F3) |
-|---|---|---|---|
-| Vergleichsstand | `56eb096` (14.04.2025) | `56eb096` (14.04.2025, unverändert der neueste) | `56eb096`, **ohne** dessen Fremdbibliothek `codemirror-graphql` |
-| Zeilen ≥ 20 Zeichen (js/mjs/vue/css/html) | 125 372 | 129 464 | 131 665 |
-| davon wörtlich im Vergleichsstand | 6 438 (5,1 %) | **1 419 (1,10 %)** | **1 426 (1,08 %)** |
-| davon **nicht** generisch | ≈ 6 000, Schwerpunkt Journal-Kern | **0** | **0** |
-| Zeilen übriger Textdateien (md, json, sh, bat, yml, txt …) | – | – | 20 746, davon 15 gleich: 8 `package.json` (npm-Skript, Versionsangabe), 7× Schluss eines Apache-Lizenztexts Dritter |
-| Namen: im Vergleichsstand deklariert / bei uns vorhanden | – | – (S11: 107 umbenannt) | 1 066 / 189, **alle gesichtet** (Audit A3: 313, davon 55 `use…`- und ~60 Zustandsnamen eigen) |
-| Token-Läufe (umformulierte Kopien) über der Schwelle | – | – | 130 streng, 50 normalisiert, **alle gesichtet**; keiner trägt eigene Logik des Ursprungs |
+| | 19.10.2026 vorher (Bestandsaufnahme) | 19.10.2026 nachher (S11) | 20.10.2026 nachher (F3) | 31.10.2026 (Audit 4.3.4) |
+|---|---|---|---|---|
+| Vergleichsstand | `56eb096` (14.04.2025) | `56eb096` (14.04.2025, unverändert der neueste) | `56eb096`, **ohne** dessen Fremdbibliothek `codemirror-graphql` | `56eb096` (unverändert der neueste), ohne `codemirror-graphql` |
+| Zeilen ≥ 20 Zeichen (js/mjs/vue/css/html) | 125 372 | 129 464 | 131 665 | 158 442 |
+| davon wörtlich im Vergleichsstand | 6 438 (5,1 %) | **1 419 (1,10 %)** | **1 426 (1,08 %)** | **1 562 (0,99 %)** |
+| davon **nicht** generisch | ≈ 6 000, Schwerpunkt Journal-Kern | **0** | **0** | **0** |
+| Zeilen übriger Textdateien (md, json, sh, bat, yml, txt …) | – | – | 20 746, davon 15 gleich: 8 `package.json` (npm-Skript, Versionsangabe), 7× Schluss eines Apache-Lizenztexts Dritter | 21 345, davon 16 gleich: 8 `package.json`, 8× Schluss eines Apache-Lizenztexts Dritter |
+| Namen: im Vergleichsstand deklariert / bei uns vorhanden | – | – (S11: 107 umbenannt) | 1 066 / 189, **alle gesichtet** (Audit A3: 313, davon 55 `use…`- und ~60 Zustandsnamen eigen) | 1 066 / 188, **alle gesichtet** |
+| Token-Läufe (umformulierte Kopien) über der Schwelle | – | – | 130 streng, 50 normalisiert, **alle gesichtet**; keiner trägt eigene Logik des Ursprungs | 129 streng, 62 normalisiert, **alle gesichtet** (drei normalisierte erst sichtbar seit FUN-F6-001); keine veraltete Ausnahme |
 
 Alle verbleibenden Zeilentreffer gehören zu einer der sechs Arten unten; keiner ist
 eine Zeile, die eine eigene schöpferische Entscheidung des Ursprungsprojekts trägt.
@@ -51,8 +51,19 @@ gegen umformulierte Kopien: Kommentare fallen weg, Zeichenketten und Zahlen werd
 Platzhalter; *streng* (Namen bleiben, Fenster 10, gemeldet ab 14 Tokens mit ≥ 6
 eigenen Wörtern) und *normalisiert* (auch Namen werden Platzhalter, Fenster 12,
 gemeldet ab 30 Tokens mit ≥ 2 Kontrollfluss-Schlüsselwörtern, ohne HTML-/CSS-Rahmen).
+Die Zerlegung (`scripts/herkunft-tokens.mjs`, Selbsttest
+`server/__selftest-herkunft-tokens.mjs`) erkennt verschachtelte Vorlagen
+(`${a ? `x` : `y`}`) und Regex-Literale; bis zum Audit 4.3.4 (FUN-F6-001) endete eine
+Vorlage am ersten inneren Backtick, und `server/database.js` war ab Zeile 338 für die
+Token-Fenster unsichtbar. Endet eine Datei trotzdem in einer offenen Zeichenkette,
+zählt das als ungesichtet („blind"); liegen mehr als 70 % ihrer Zeilen in
+Zeichenketten, gibt das Skript einen Hinweis aus.
 Jeder Treffer der Prüfungen 2–4, der nicht mit Begründung in
 `scripts/herkunft-akzeptiert.json` steht, lässt das Skript ebenfalls mit Code 1 enden.
+Umgekehrt meldet es jede Ausnahme dort, zu der kein Treffer mehr gehört (Code
+gelöscht oder verschoben), als **veraltet**, und endet auch dann mit Code 1
+(Audit 4.3.4, FUN-F6-002). Veraltete Einträge werden gelöscht: kehrt dieselbe
+Tokenfolge zurück, soll sie neu gesichtet werden.
 
 ```bash
 node scripts/herkunft-pruefen.mjs              # klont frisch, zeigt Zusammenfassung

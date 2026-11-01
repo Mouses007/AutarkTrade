@@ -11,10 +11,10 @@
  */
 import { ref, computed } from 'vue'
 import {
-    linieAlsZeichnung, zoneAlsZeichnung, profileAlsZeichnungen, istProfilLinie, istProfilZone,
+    linieAlsZeichnung, zoneAlsZeichnung, profileAlsZeichnungen, istProfilLinie, istProfilZone, dreieckAlsZeichnungen,
     leereMarken, markenSchluessel, anzeigeAnalyse, vorschauAnalyse,
 } from '../utils/chart/kiZeichnungen.js'
-import { legeAn } from './chartZeichnungen.js'
+import { legeAn, aendere } from './chartZeichnungen.js'
 import { letzterStil } from './zeichenStil.js'
 
 const SPEICHER = 'chartKiMarken'
@@ -68,8 +68,12 @@ export function kiVorschlag(schluessel) {
         const j = (a.zonen || []).findIndex(istProfilZone)
         return j >= 0 ? { art: 'zone', i: j, eintrag: a.zonen[j], profil: true } : null
     }
-    const m = /^(linie|zone)(\d+)$/.exec(schluessel)
+    const m = /^(linie|zone|korr)(\d+)$/.exec(schluessel)
     if (!m) return null
+    if (m[1] === 'korr') {
+        const k = a.korrekturen?.[Number(m[2])]
+        return k ? { art: 'korr', i: Number(m[2]), eintrag: k, profil: false } : null
+    }
     const eintrag = (m[1] === 'linie' ? a.linien : a.zonen)?.[Number(m[2])]
     return eintrag ? { art: m[1], i: Number(m[2]), eintrag, profil: m[1] === 'linie' ? istProfilLinie(eintrag) : istProfilZone(eintrag) } : null
 }
@@ -82,6 +86,12 @@ export async function uebernimmKi(schluessel, panelSymbol = null) {
     const v = kiVorschlag(schluessel)
     if (!a || !v || kiIstUebernommen(schluessel)) return false
     const symbol = a.symbol || panelSymbol     // unter dem Symbol der ANALYSE, nicht des Panels
+    if (v.art === 'korr') {
+        // Korrektur: die EIGENE Zeichnung wandert auf die Punkte des Kandidaten (Rückgängig wie jede Änderung)
+        if (!await aendere(symbol, v.eintrag.zid, { punkte: v.eintrag.punkte })) return false
+        setzeMarken({ uebernommen: [...kiMarken.value.uebernommen, schluessel] })
+        return true
+    }
     if (v.profil) {
         // V-Marken: EIN Profil über den Bereich — einmal anlegen, alle V-Einträge gelten dann als übernommen
         if (!kiIstUebernommen('profil')) {
@@ -91,6 +101,17 @@ export async function uebernimmKi(schluessel, panelSymbol = null) {
         }
         const alleV = [...(a.linien || []).map((l, j) => (istProfilLinie(l) ? `linie${j}` : null)), ...(a.zonen || []).map((z, j) => (istProfilZone(z) ? `zone${j}` : null))].filter(Boolean)
         setzeMarken({ uebernommen: [...new Set([...kiMarken.value.uebernommen, 'profil', ...alleV])], geloescht: kiMarken.value.geloescht.filter((k) => !alleV.includes(k)) })
+        return true
+    }
+    if (v.art === 'linie' && v.eintrag.art === 'dreieck') {
+        // Zwei Kanten → zwei eigene Trendlinien, gleich als Gruppe mit dem Namen des Musters (Objekte-Reiter)
+        const gruppe = String(v.eintrag.labelKurz || v.eintrag.label || 'Dreieck').slice(0, 80)
+        for (const roh of dreieckAlsZeichnungen({ ...v.eintrag, id: null })) {
+            const stil = { ...roh.stil, strich: 'voll' }
+            delete stil.textPos
+            if (!await legeAn({ symbol, ...roh, stil, gruppe, sichtbarAuf: null, gesperrt: false, versteckt: false })) return false
+        }
+        setzeMarken({ uebernommen: [...kiMarken.value.uebernommen, schluessel], geloescht: kiMarken.value.geloescht.filter((k) => k !== schluessel) })
         return true
     }
     const roh = v.art === 'linie' ? linieAlsZeichnung({ ...v.eintrag, id: null }) : zoneAlsZeichnung({ ...v.eintrag, ids: [] }, a.kerzenVon, a.kerzenBis)
@@ -119,7 +140,7 @@ export async function alleKiUebernehmen(panelSymbol = null) {
     laeuftUebernahme.value = true
     try {
         const offen = vorschauAnalyse(kiAnalyse.value, kiMarken.value)
-        for (const x of [...(offen?.linien || []), ...(offen?.zonen || [])]) await uebernimmKi(x._key, panelSymbol)
+        for (const x of [...(offen?.linien || []), ...(offen?.zonen || []), ...(offen?.korrekturen || [])]) await uebernimmKi(x._key, panelSymbol)
     } finally { laeuftUebernahme.value = false }
 }
 

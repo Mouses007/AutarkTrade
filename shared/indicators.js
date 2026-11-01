@@ -489,6 +489,35 @@ export function vwap(candles, { anchor = 'session', period = 20, pivot = 20, nth
 }
 
 /**
+ * Verankerter VWAP ab Kerze `ab` (Anchored VWAP, Zeichenwerkzeug im Chart).
+ * Vor dem Anker `null`. `baender` 0–2: σ-Bänder aus den gewichteten Momenten
+ * (Σw·tp² / Σw − vwap²), nicht gegen den wandernden VWAP — siehe `vwapBand`.
+ * Ohne Volumen zählt jede Kerze 1, wie in `vwap`.
+ *
+ * @returns {{vwap: Array, oben1: Array, unten1: Array, oben2: Array, unten2: Array}}
+ */
+export function ankerVwap(candles, ab, { baender = 0 } = {}) {
+    const n = candles.length
+    const leer = () => new Array(n).fill(null)
+    const aus = { vwap: leer(), oben1: leer(), unten1: leer(), oben2: leer(), unten2: leer() }
+    if (!Number.isInteger(ab) || ab < 0 || ab >= n) return aus
+    let sw = 0, swp = 0, swp2 = 0
+    for (let i = ab; i < n; i++) {
+        const w = candles[i].v > 0 ? candles[i].v : 1
+        const tp = typischerPreis(candles[i])
+        sw += w; swp += w * tp; swp2 += w * tp * tp
+        const m = swp / sw
+        aus.vwap[i] = m
+        if (baender > 0) {
+            const sigma = Math.sqrt(Math.max(0, swp2 / sw - m * m))
+            aus.oben1[i] = m + sigma; aus.unten1[i] = m - sigma
+            if (baender > 1) { aus.oben2[i] = m + 2 * sigma; aus.unten2[i] = m - 2 * sigma }
+        }
+    }
+    return aus
+}
+
+/**
  * VWAP-Band: VWAP plus `mult` volumengewichtete Standardabweichungen.
  * Negatives `mult` ergibt das untere Band. Bänder sind bei VWAP-Strategien
  * meist wichtiger als die Linie selbst — dort liegen Überdehnung und Umkehr.

@@ -15,7 +15,7 @@ import { getKnex } from '../database.js'
 import { decrypt } from '../crypto.js'
 import { beansprucheAufgabe } from '../db-claim.js'
 import { holeBitget, holeBitunix, holePionex, holeBitpanda, holeEvm, holeBtc, holeSol, holeXrp, NichtEingerichtet } from './quellen.js'
-import { ordneTransfers } from './normal.js'
+import { ordneTransfers, ordneSparplaene } from './normal.js'
 import { fxAm, tagesKursUsd } from './kurse.js'
 import { istKanon, gegenKontraktVon } from './token-id.js'
 import { berechneUebersicht } from './uebersicht.js'
@@ -121,11 +121,29 @@ async function merkeFehler(quelle, e) {
     }).onConflict('quelle').merge(['letzterAbruf', 'status', 'meldung'])
 }
 
+/**
+ * Sparplan-Lastschrift und ihren Kauf paaren (nur noch ungepaarte Zeilen).
+ * Läuft VOR den Transfers: eine gepaarte Lastschrift ist Geld vom eigenen
+ * Bankkonto und nie die Gegenseite eines Transfers.
+ */
+async function paareSparplaene() {
+    const k = getKnex()
+    const zeilen = await k('portfolio_bewegungen')
+        .whereIn('art', ['einzahlung', 'kauf']).whereNull('sparplanMit').where('roh', 'like', '%savings_plan%')
+        .select('id', 'quelle as ort', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'zeit', 'roh')
+    const paare = ordneSparplaene(zeilen)
+    for (const p of paare) {
+        await k('portfolio_bewegungen').where('id', p.einzahlung).update({ sparplanMit: p.kauf })
+        await k('portfolio_bewegungen').where('id', p.kauf).update({ sparplanMit: p.einzahlung })
+    }
+    return paare.length
+}
+
 /** Transfers zwischen eigenen Orten paaren (nur noch ungepaarte Zeilen). */
 async function paareTransfers() {
     const k = getKnex()
     const zeilen = await k('portfolio_bewegungen')
-        .whereIn('art', ['auszahlung', 'einzahlung']).whereNull('transferMit').whereNull('einordnung')
+        .whereIn('art', ['auszahlung', 'einzahlung']).whereNull('transferMit').whereNull('einordnung').whereNull('sparplanMit')
         .select('id', 'quelle as ort', 'art', 'asset', 'menge', 'zeit', 'txHash', 'kontrakt', 'kette')
     const paare = ordneTransfers(zeilen)
     for (const p of paare) {
@@ -257,6 +275,7 @@ export async function rufeAb({ nur = null } = {}) {
         }
         laeuft.quelle = null
         laeuft.schritt = 'transfers'
+        ergebnis.sparplaene = await paareSparplaene()
         ergebnis.transfers = await paareTransfers()
         laeuft.schritt = 'bewertung'
         ergebnis.bewertet = await bewerteBewegungen()

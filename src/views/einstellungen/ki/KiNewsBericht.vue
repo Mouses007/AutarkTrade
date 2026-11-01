@@ -16,7 +16,7 @@ import { useKostenAnzeige, useKostenZahl } from '../../../utils/journal/format.j
 import { empfaengerPruefung, EMPFAENGER_MAX } from '../../../../shared/empfaenger.js'
 import { kiSpeichern } from '../gemeinsam/speichern.js'
 import { useKiAnbieter } from '../gemeinsam/useKiAnbieter.js'
-import { browserNotifications, kanalAn, setzeKanal, mail } from '../gemeinsam/useBenachrichtigungen.js'
+import { mail } from '../gemeinsam/useBenachrichtigungen.js'
 import {
     radarNewsAufloesung, radarNewsBerichtAufbewahrung, radarNewsBerichtModell, radarNewsBerichtProvider,
     radarNewsChartFrische, radarNewsLaenge, radarNewsLagenAn, radarNewsLagenSymbol, radarNewsLayout,
@@ -462,23 +462,9 @@ async function berichtJetzt() {
                  Benachrichtigungs-Tabelle. -->
             <p class="einleitung">{{ t('settings.ki.news.sendIntro') }}</p>
 
-            <!-- Der Browser-Hinweis stand bisher in der
-                 Benachrichtigungs-Tabelle. Er zieht mit um, sonst wäre
-                 er nach dem Umbau nirgends mehr erreichbar. Gespeichert
-                 wird er weiterhin in derselben Kanalwahl. -->
-            <Feld :label="t('settings.ki.news.browserLabel')" :hilfe="t('settings.ki.news.browserHint')">
-                <div class="reihe">
-                    <Schalter :model-value="kanalAn('lageberichtFertig', 'browser')"
-                        :disabled="!browserNotifications"
-                        :label="kanalAn('lageberichtFertig', 'browser')
-                            ? t('settings.ki.news.browserOn') : t('settings.ki.news.browserOff')"
-                        @change="v => setzeKanal('lageberichtFertig', 'browser', v)" />
-                    <span v-if="!browserNotifications" class="leise">
-                        {{ t('settings.ki.news.browserGlobalOff') }}
-                    </span>
-                </div>
-            </Feld>
-
+            <!-- Kein Schalter „Hinweis im Browser" (FUN-F5-003): der Lagebericht
+                 entsteht im Server-Takt, das Frontend erfährt nichts davon —
+                 der Schalter stand hier, bewirkte aber nie etwas. -->
             <Feld :label="t('settings.ki.news.mailOnLabel')" :hilfe="t('settings.ki.news.mailOnHint')">
                 <div class="reihe">
                     <Schalter v-model="radarNewsMailAktiv"

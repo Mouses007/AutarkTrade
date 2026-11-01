@@ -106,6 +106,9 @@ console.log('\nZeichenrichtung\n')
     check('ordnePunkte: Strahl bleibt, wie gezeichnet', ordnePunkte('strahl', rueck)[0].t === T + 10 * M)
     check('ordnePunkte: Kanal tauscht nur a/b, c bleibt dritter',
         ordnePunkte('kanal', [rueck[0], rueck[1], { t: T + 5 * M, p: 90 }])[2].p === 90)
+    const drei = [{ t: T + 10 * M, p: 100 }, { t: T, p: 120 }, { t: T + 5 * M, p: 110 }]
+    check('ordnePunkte: Pfeil, Fib-Extension und Pinsel bleiben, wie gezeichnet (Reihenfolge = Richtung)',
+        ['pfeil', 'pinsel'].every((typ) => ordnePunkte(typ, rueck)[0].t === T + 10 * M) && ordnePunkte('fibExt', drei).map((q) => q.p).join() === '100,120,110')
     const tl = (pk) => ({ typ: 'trendlinie', punkte: pk, stil: { rechts: true } })
     check('Trendlinie rückwärts gezeichnet, „rechts" → gilt in der Zukunft', nahe(linienPreis(tl(rueck), T + 20 * M), 120))
     check('Gegenprobe: dieselbe Linie links vom Anfang → null', linienPreis(tl(rueck), T - M) === null)
@@ -160,6 +163,23 @@ console.log('\nVolumenprofil (POC/VAH/VAL)\n')
     check('Signatur: anderer Bereich ändert sie', profilSignatur({ ...vp, punkte: [{ t: T, p: 90 }, { t: T + 61 * M, p: 110 }] }) !== sig)
     check('Signatur: andere Zeilenzahl ändert sie', profilSignatur({ ...vp, stil: { zeilen: 40 } }) !== sig)
     check('Signatur: Vorgabe 24 Zeilen = ausdrücklich 24', profilSignatur({ ...vp, stil: {} }) === sig)
+}
+
+console.log('\nNeue Zeichnungstypen am Server\n')
+{
+    const { pruefeZeichnung, ZEICHEN_TYPEN, MAX_PINSEL_PUNKTE } = await import('./chart-api.js')
+    const zug = (n) => Array.from({ length: n }, (_, i) => ({ t: T + i * M, p: 100 + (i % 7) }))
+    check('Typen fibExt, pfeil, ellipse, pinsel sind speicherbar', ['fibExt', 'pfeil', 'ellipse', 'pinsel'].every((t) => ZEICHEN_TYPEN.includes(t)))
+    check('Pinsel: 200 Punkte gehen durch', !pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'pinsel', punkte: zug(200) }).fehler)
+    check('Pinsel: mehr als MAX_PINSEL_PUNKTE abgelehnt', !!pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'pinsel', punkte: zug(MAX_PINSEL_PUNKTE + 1) }).fehler)
+    check('Andere Typen bleiben bei höchstens 4 Punkten', !!pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'pfeil', punkte: zug(5) }).fehler)
+    check('Pfad und Smiley sind speicherbar', ['pfad', 'emoji'].every((t) => ZEICHEN_TYPEN.includes(t)))
+    check('Pfad: 30 Punkte gehen durch, 31 nicht', !pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'pfad', punkte: zug(30) }).fehler && !!pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'pfad', punkte: zug(31) }).fehler)
+    check('Pfad braucht zwei Punkte, Smiley einen', !!pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'pfad', punkte: zug(1) }).fehler && !pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'emoji', punkte: zug(1) }).fehler)
+    check('Pfad behält die gezeichnete Reihenfolge', ordnePunkte('pfad', [...zug(3)].reverse())[0].t === zug(3)[2].t)
+    check('Pinsel verschieben (nur Punkte, Typ aus der Zeile)', !pruefeZeichnung({ punkte: zug(150) }, { teilweise: true, typ: 'pinsel' }).fehler)
+    const pf = pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'pfeil', punkte: [{ t: T + M, p: 1 }, { t: T, p: 2 }] })
+    check('Pfeil von rechts nach links bleibt so gespeichert', JSON.parse(pf.daten.punkte)[0].t === T + M)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

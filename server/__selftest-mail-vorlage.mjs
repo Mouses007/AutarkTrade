@@ -7,7 +7,7 @@
  * Farben, die Outlook verwirft, und die Textfassung für Clients ohne HTML.
  */
 
-import { baueMail, baueKoerper, logoAnhang, zeitStempel, TOENE, STUFEN, STUFE_VORGABE, groessen } from './mail-vorlage.js'
+import { baueMail, baueKoerper, logoAnhang, zeitStempel, TOENE, STUFEN, STUFE_VORGABE, groessen, KARTE_MAX } from './mail-vorlage.js'
 
 let ok = 0, fehler = 0
 function pruefe(name, bedingung, detail = '') {
@@ -181,6 +181,20 @@ function pruefe(name, bedingung, detail = '') {
         const m = baueMail({ titel: 'T', text: 'x', zeit: t, zeitzone: 'Europe/Brussels' })
         return m.html.includes('06.09.2026, 10:07') && m.text.includes('06.09.2026, 10:07')
     })())
+}
+
+// ── Breite ───────────────────────────────────────────────────────────────
+// Bis 01.11.2026 war die Karte fest 600 px — am Desktop ein schmaler Streifen.
+// Jetzt füllt sie das Fenster bis KARTE_MAX; Outlook (kein max-width) bekommt
+// einen festen Rahmen in einem MSO-Kommentar.
+{
+    const { html } = baueMail({ titel: 'T', text: 'x' })
+    pruefe('Karte fliessend bis KARTE_MAX', html.includes(`width:100%;max-width:${KARTE_MAX}px`))
+    pruefe('keine feste Breite von 600 px mehr', !/width="600"|width:600px/.test(html))
+    pruefe('Outlook-Rahmen öffnet und schliesst', html.includes(`<!--[if mso]><table role="presentation" width="${KARTE_MAX}"`)
+        && html.includes('<!--[if mso]></td></tr></table><![endif]-->'))
+    const auf = (html.match(/<table\b/g) || []).length, zu = (html.match(/<\/table>/g) || []).length
+    pruefe('gleich viele <table> wie </table>', auf === zu, `${auf} / ${zu}`)
 }
 
 console.log(`mail-vorlage: ${ok} ok, ${fehler} Fehler`)

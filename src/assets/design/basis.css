@@ -210,8 +210,11 @@ legend + * {
     opacity: 1;
 }
 
-/* Datumsfelder: eigene Randfarbe; das Kalender-Symbol des Browsers ist
-   schwarz und wird auf dem dunklen Grund umgekehrt. */
+/* Datumsfelder: eigene Randfarbe. Das Kalender-Symbol zeichnet der Browser
+   wegen `color-scheme: dark` (tokens.css) schon hell — bis 01.11.2026 stand
+   hier zusätzlich `filter: invert(1)`, das machte es wieder dunkel und auf dem
+   dunklen Feld unsichtbar. Ein Klick ins Feld öffnet den Kalender
+   (src/utils/datumsfeld.js). */
 input[type='date'],
 input[type='month'],
 input[type='datetime-local'] {
@@ -222,7 +225,8 @@ input[type='datetime-local'] {
 input[type='date']::-webkit-calendar-picker-indicator,
 input[type='month']::-webkit-calendar-picker-indicator,
 input[type='datetime-local']::-webkit-calendar-picker-indicator {
-    filter: invert(1);
+    cursor: pointer;
+    opacity: 0.85;
 }
 
 :where(input[type='checkbox'], input[type='radio'], input[type='range'], progress) {

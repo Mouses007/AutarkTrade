@@ -26,8 +26,8 @@ android {
         applicationId = "com.autarktrade.widget"
         minSdk = 31
         targetSdk = 35
-        versionCode = 28
-        versionName = "4.2.0-28"
+        versionCode = 29
+        versionName = "4.2.0-29"
     }
 
     signingConfigs {

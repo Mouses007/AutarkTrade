@@ -1,7 +1,8 @@
 /**
  * Kerzen für den Chart: Historie per REST, laufende Kerze per Websocket.
  *
- * Normalform im ganzen Chart ist `{t, o, h, l, c, v}` mit `t` in
+ * Normalform im ganzen Chart ist `{t, o, h, l, c, v}` (Binance zusätzlich `vb`,
+ * das Kaufvolumen der Aggressoren — CVD und Delta-Volumen) mit `t` in
  * MILLISEKUNDEN (wie überall im Projekt, Strategie-Schicht und Indikatoren
  * eingeschlossen). Erst `ChartPanel.vue` rechnet beim Übergeben an Lightweight
  * Charts in Sekunden um — an genau einer Stelle, damit Zeichnungen, Journal-
@@ -105,7 +106,7 @@ export async function ladeKerzen({ markt, symbol, interval, endTime, limit = 100
     const { data } = await axios.get('/api/chart/kerzen', { params })
     // `{ aus: true }`: die Marktdatenquelle hat diese Kerzen nicht — als Fehler weiterreichen.
     if (data?.aus) throw Object.assign(new Error(data.meldung || 'Marktdaten aus'), { aus: data })
-    const kerzen = (data?.kerzen || []).map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }))
+    const kerzen = (data?.kerzen || []).map(([t, o, h, l, c, v, vb]) => (Number.isFinite(vb) ? { t, o, h, l, c, v, vb } : { t, o, h, l, c, v }))
     return mitLauf ? { kerzen, lauf: data?.lauf || null } : kerzen
 }
 
@@ -194,6 +195,7 @@ export class LiveKerze {
                 if (!k) return
                 onKerze({
                     t: Number(k.t), o: Number(k.o), h: Number(k.h), l: Number(k.l), c: Number(k.c), v: Number(k.v),
+                    ...(Number.isFinite(Number(k.V)) && k.V !== undefined ? { vb: Number(k.V) } : {}),
                     geschlossen: k.x === true,
                 })
             },

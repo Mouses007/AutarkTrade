@@ -110,16 +110,13 @@ export const PAGES = [
     // Abverkaufs-Wache: gepumpte Perps, die zu kippen beginnen (`server/coin-radar/abverkauf.js`).
     { id: 'coinAbverkauf', mode: 'research', path: '/coin-radar/abverkauf', symbol: 'pfeilSchraegAb', titleKey: 'coinradar.tab_abverkauf', group: 'coinGruppe' },
 
-    // ── Agent-Trading ───────────────────────────────────────
-    { id: 'agentStrategies', mode: 'agent', path: '/agent/strategies', symbol: 'agent', titleKey: 'nav.agentStrategies', group: 'agentRun' },
-    { id: 'agentSetups', mode: 'agent', path: '/agent/setups', symbol: 'fadenkreuz', titleKey: 'nav.agentSetups', group: 'agentRun' },
-    { id: 'agentEditor', mode: 'agent', path: '/agent/editor', symbol: 'wuerfel', titleKey: 'nav.agentEditor', group: 'agentBuild' },
-    { id: 'agentBuilder', mode: 'agent', path: '/agent/builder', symbol: 'dokument', titleKey: 'nav.agentBuilder', group: 'agentBuild' },
-    { id: 'agentPerformance', mode: 'agent', path: '/agent/performance', symbol: 'torte', titleKey: 'nav.agentPerformance', group: 'agentReview' },
-    { id: 'agentLab', mode: 'agent', path: '/agent/lab', symbol: 'test', titleKey: 'nav.agentLab', group: 'agentReview' },
-    // Die Coin-Rangliste ist eine Auswertung, kein Labor: sie testet eine
-    // fertige Strategie gegen viele Münzen, statt an ihr zu schrauben.
-    { id: 'coinRangliste', mode: 'agent', path: '/agent/rangliste', symbol: 'listeNummer', titleKey: 'nav.coinRangliste', group: 'agentReview' },
+    // ── Strategien ──────────────────────────────────────────
+    // In der Reihenfolge der Arbeit: Strategie → prüfen → laufen lassen.
+    { id: 'strategieBibliothek', mode: 'agent', path: '/strategien/bibliothek', symbol: 'buch', titleKey: 'nav.strategieBibliothek', group: 'strategienGruppe' },
+    // Labor: Test, Viele Coins (Rangliste, Parametervergleich), Läufe — ein
+    // Eintrag, denn alle drei prüfen dieselbe Strategie gegen Marktdaten.
+    { id: 'strategieLabor', mode: 'agent', path: '/strategien/labor', symbol: 'test', titleKey: 'nav.strategieLabor', group: 'strategienGruppe' },
+    { id: 'strategieInstanzen', mode: 'agent', path: '/strategien/instanzen', symbol: 'agent', titleKey: 'nav.strategieInstanzen', group: 'strategienGruppe' },
 
     // ── Lernen ──────────────────────────────────────────────
     // Leitner-Karteikasten für Fachbegriffe. Drei Einträge auf einer Route,
@@ -134,7 +131,9 @@ export const PAGES = [
     // und Hardware-Wallets an einem Ort. Drei Einträge auf einer Route wie
     // beim Lernen — der Wechsel zwischen den Ansichten lädt nichts neu.
     { id: 'portfolio', mode: 'portfolio', path: '/portfolio', symbol: 'torte', titleKey: 'nav.portfolio', menuKey: 'portfolio.menuUebersicht', menuSymbol: 'torte', group: 'portfolioGruppe' },
+    { id: 'portfolioDca', mode: 'portfolio', path: '/portfolio/dca', symbol: 'wiederholen', titleKey: 'portfolio.menuDca', group: 'portfolioGruppe' },
     { id: 'portfolioBewegungen', mode: 'portfolio', path: '/portfolio/bewegungen', symbol: 'verlauf', titleKey: 'portfolio.menuBewegungen', group: 'portfolioGruppe' },
+    { id: 'portfolioStaking', mode: 'portfolio', path: '/portfolio/staking', symbol: 'schloss', titleKey: 'portfolio.menuStaking', group: 'portfolioGruppe' },
     { id: 'portfolioSteuer', mode: 'portfolio', path: '/portfolio/steuer', symbol: 'waage', titleKey: 'portfolio.menuSteuer', group: 'portfolioGruppe' },
     { id: 'portfolioTotalverluste', mode: 'portfolio', path: '/portfolio/totalverluste', symbol: 'archiv', titleKey: 'portfolio.menuTotalverluste', group: 'portfolioGruppe' },
     { id: 'portfolioQuellen', mode: 'portfolio', path: '/portfolio/quellen', symbol: 'geldboerse', titleKey: 'portfolio.menuQuellen', group: 'portfolioGruppe' },
@@ -182,7 +181,7 @@ export const MODES = [
     // `BetaHinweis.vue` auf jeder seiner Seiten, und der scharfe Betrieb hängt
     // zusätzlich an der dreifachen Freigabekette (globaler Schalter, Freigabe je
     // Instanz, Mindestzahl Papier-Trades).
-    { id: 'agent', titleKey: 'modes.agent', symbol: 'agent', home: '/agent/strategies', enabled: true, beta: true, flag: 'modusStrategieAn' },
+    { id: 'agent', titleKey: 'modes.agent', symbol: 'agent', home: '/strategien/instanzen', enabled: true, beta: true, flag: 'modusStrategieAn' },
     // Leitner-Karteikasten: Fachbegriffe und Marktzusammenhänge lernen, die im
     // Journal selbst laufend vorkommen. Kein Betrieb, keine Live-Daten — darf
     // deshalb auch am Telefon voll bedient werden.

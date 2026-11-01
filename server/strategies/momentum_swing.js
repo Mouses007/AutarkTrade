@@ -33,6 +33,7 @@
  */
 
 import { ema } from './indicators.js'
+import { htfFensterEma, htfAusschnitt } from './htf.js'
 import { welle, signale } from '../momentum-radar.js'
 
 export const DETECTOR_VERSION = 1
@@ -69,10 +70,9 @@ const params = [
     { key: 'stopKerzen', type: 'integer', default: 5, min: 1, max: 30, step: 1, group: 'exit' },
     { key: 'slBufferPct', type: 'number', default: 0.2, min: 0, max: 3, step: 0.05, group: 'exit' },
     { key: 'tpRR', type: 'number', default: 2, min: 0.5, max: 10, step: 0.25, group: 'exit' },
-    // Zehn Tage auf 4h. Die Engine schliesst zum Schluss der Kerze, deren
-    // Beginn `maxHoldCandles` Kerzen nach dem Einstieg liegt — 59 heisst also
-    // „Schluss der 60. Kerze ab der Füllkerze".
-    { key: 'maxHoldCandles', type: 'integer', default: 59, min: 0, max: 2000, step: 1, group: 'exit' },
+    // Zehn Tage auf 4h: Schluss der 60. Kerze ab der Füllkerze. (Bis
+    // 01.11.2026 stand hier 59, weil der Zeitausstieg eine Kerze zu spät kam.)
+    { key: 'maxHoldCandles', type: 'integer', default: 60, min: 0, max: 2000, step: 1, group: 'exit' },
     { key: 'breakEvenAtR', type: 'number', default: 0, min: 0, max: 10, step: 0.1, group: 'exit' },
 ]
 
@@ -128,7 +128,9 @@ export function trendBei(htfKerzen, emaSerie, htfMs, zeit) {
  * @param {Array}  [input.htfCandles]     geschlossene Kerzen der höheren Zeiteinheit
  * @returns {{ setups: Array, events: Array, diagnostics: object }}
  */
-function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfCandles = null }) {
+function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfCandles: htfRoh = null }) {
+    // Dasselbe HTF-Fenster wie im Betrieb (`htfKerzen`), siehe htf.js
+    const htfCandles = htfAusschnitt(htfRoh, htfFensterEma(p.htfEmaPeriod))
     const setups = []
     const events = []
     const diagnostics = { sweepsFound: 0, setupsCreated: 0, rejected: {}, rejections: [] }
@@ -243,13 +245,16 @@ export default {
     name: 'Momentum Swing',
     description: 'Signalpunkt des Momentum Radars in Richtung des Tagestrends, Einstieg per Limit im Rücksetzer, kein Wochenende.',
     version: DETECTOR_VERSION,
-    supportedTimeframes: ['1h', '4h', '1d'],
+    // Nur 4h: Limit-Frist (6 Kerzen) und Zeitausstieg (60 Kerzen) sind für 4h
+    // gemessen (Forschung F). Auf 1h hiessen sie ein Viertel der Zeit, auf 1d
+    // fehlt die höhere Zeiteinheit für den Tagestrend.
+    supportedTimeframes: ['4h'],
     // WaveTrend glättet mit EMAs — 300 Kerzen Vorlauf, damit der Fensterbeginn
     // die Werte am rechten Rand nicht mehr verschiebt.
     warmupCandles: 300,
     // Tageskerzen für die EMA des Trendfilters: genug, dass der Startwert der
-    // EMA ausgeschwungen ist (Engine und Backtest rechnen sonst verschieden).
-    htfKerzen: 300,
+    // EMA ausgeschwungen ist — detect() schneidet auf genau dieses Fenster zu.
+    htfKerzen: (p) => htfFensterEma(p.htfEmaPeriod),
     params,
     paramGroups,
     detect,

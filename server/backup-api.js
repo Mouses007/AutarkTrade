@@ -5,6 +5,7 @@ import { SETTINGS_SENSITIVE_FIELDS, isAllowedDbHost } from './api-routes.js'
 import { BEHALTEN_BEIM_IMPORT, BOERSEN_GEHEIMNISSE, PORTFOLIO_GEHEIMNISSE } from './geheimnisse.js'
 import { loadAuthConfig } from './auth.js'
 import { migriereKiAufgaben } from './migrationen/einstellungen-ordnung.js'
+import { migriereStrategien } from './migrationen/strategien.js'
 
 /*
  * Sensible Felder, die im Export unkenntlich gemacht werden.
@@ -91,6 +92,13 @@ const BACKUP_TABLES = [
     // sich nicht wiederholen lässt — er hing an echten Kursen zu echten Zeiten.
     'strategy_instances',
     'strategy_param_history',
+    // Positionen gehören zu den Trades: jeder Trade zeigt mit `positionId`
+    // auf seine Position. Bis 31.10.2026 fehlten sie hier — eine Rücksicherung
+    // ersetzte die Trades und liess die Positionen stehen. Nach dem Backup
+    // geschlossene Positionen standen dann ohne Trade da und sperrten die
+    // Instanz, und in einer frischen DB trafen neue Positions-Nummern auf die
+    // alten der Trades (FUN-L3-001). Vor `strategy_trades`, wie die Instanzen.
+    'strategy_positions',
     'strategy_trades',
     // ── Marktradar-Nachrichten ──────────────────────────────────────────
     // Die Kanalliste ist Handarbeit des Nutzers. Die Lageberichte sind der
@@ -165,10 +173,11 @@ const BACKUP_TABLES = [
 ]
 
 /**
- * Bewusst NICHT im Backup: `strategy_setups`, `strategy_positions`,
- * `strategy_runs`, `strategy_backtests`, `rangliste_laeufe` und
- * `rangliste_zeilen`. Die ersten drei sind Zwischenstände
- * in grosser Zahl — aus Instanzen und Kerzen jederzeit neu erzeugbar. Backtests
+ * Bewusst NICHT im Backup: `strategy_setups`, `strategy_runs`,
+ * `strategy_backtests`, `rangliste_laeufe` und `rangliste_zeilen`. Die ersten
+ * beiden sind Zwischenstände in grosser Zahl — aus Instanzen und Kerzen
+ * jederzeit neu erzeugbar (`strategy_positions` stand bis 31.10.2026 auch
+ * hier, siehe oben bei BACKUP_TABLES). Backtests
  * sind zwar die Experiment-Registry, tragen aber je Lauf bis zu 500 Trades im
  * JSON; sie würden die Sicherungsdatei dominieren. Wer sie braucht, exportiert
  * die Strategie einzeln (`/api/strategies/rules/:id/export`).
@@ -209,6 +218,7 @@ const DELETE_ORDER = [
     // auf `rule_strategies`, die Trades auf `strategy_instances`.
     'rule_strategy_history',
     'strategy_trades',
+    'strategy_positions',
     'strategy_param_history',
     'strategy_instances',
     'rule_strategies',
@@ -339,6 +349,7 @@ export function setupBackupRoutes(app) {
             const dbConfig = loadDbConfig()
             const isPg = dbConfig?.client === 'pg' || dbConfig?.client === 'postgresql' || dbConfig?.type === 'postgresql'
             const imported = {}
+            let verworfen = []
 
             // Alle Tabellen in einer Transaktion leeren und neu befüllen
             await knex.transaction(async (trx) => {
@@ -357,6 +368,10 @@ export function setupBackupRoutes(app) {
                         preservedHype = await trx('hype_settings').whereIn('schluessel', HYPE_BEHALTEN)
                     }
                 } catch (e) { /* ignore */ }
+                // Offene Positionen, die das Backup nicht kennt (nach ihm
+                // eröffnet), gehen mit dem Ersetzen der Tabelle verloren — so
+                // wie die Trades seither. Nicht still: die Antwort nennt sie.
+                verworfen = await offeneOhneBackup(trx, tables.strategy_positions)
 
                 // 1. Tabellen in Abhängigkeitsreihenfolge leeren
                 for (const table of DELETE_ORDER) {
@@ -431,6 +446,10 @@ export function setupBackupRoutes(app) {
                     }
                 }
 
+                // 2b. Setups stehen nicht im Backup, Positionen schon: deren
+                //     `setupId` darf auf kein fremdes Setup zeigen.
+                await setupBezuegeLoesen(trx)
+
                 // 3. Gesicherte sensible/Auth-Settings wiederherstellen (nicht aus Backup)
                 if (preservedSettings) {
                     const restore = {}
@@ -456,6 +475,31 @@ export function setupBackupRoutes(app) {
             if (isPg) {
                 await fixSequencesAfterImport(knex)
             }
+            if (verworfen.length) {
+                imported['offene Positionen verworfen (nach dem Backup eröffnet)'] = verworfen.length
+                console.warn('Backup import: offene Positionen verworfen:', verworfen.map((p) => `#${p.id} ${p.symbol} (Instanz ${p.instanceId})`).join(', '))
+            }
+            // Strategien-Migration auf den zurückgespielten Stand: ein älteres
+            // Backup bringt seinen eigenen `strategienStand` mit (FUN-L3-002).
+            // Gleich nachziehen statt erst beim nächsten Start — bis dahin
+            // liefen alte Instanzen ungestartet, gespiegelte Agenten-Trades
+            // stünden wieder im Journal; die Waisen-Bereinigung läuft mit.
+            if (tables.strategy_instances || tables.settings) {
+                try {
+                    await migriereStrategien(knex, spalteDazu(knex))
+                } catch (e) {
+                    console.warn('Backup import: Strategien-Migration fehlgeschlagen (läuft beim nächsten Start):', e.message)
+                }
+            }
+            // Offene Positionen ohne Instanz (Backup ohne Positionen, oder ihre
+            // Instanz fehlt im Backup): melden, und keine neue Instanz darf
+            // ihre Nummer erben.
+            const waisen = await offeneWaisen(knex)
+            if (waisen.length) {
+                imported['offene Positionen ohne Instanz (ausbuchen unter Strategien › Instanzen)'] = waisen.length
+            }
+            await instanzZaehlerAnheben(knex, isPg)
+            await setupZaehlerAnheben(knex, isPg)
 
             // 4. db-config.json wiederherstellen — NUR mit ausdrücklicher Bestätigung
             //    und gültiger Struktur. Das Überschreiben der DB-Verbindung ist
@@ -507,6 +551,123 @@ export function setupBackupRoutes(app) {
             res.status(500).json({ ok: false, error: e.message || 'Import fehlgeschlagen' })
         }
     })
+}
+
+/** Wie `addColumnIfNotExists` beim Start — die Spalten stehen zur Laufzeit längst. */
+function spalteDazu(knex) {
+    return async (tabelle, spalte, bauen) => {
+        if (!(await knex.schema.hasTable(tabelle))) return
+        if (!(await knex.schema.hasColumn(tabelle, spalte))) await knex.schema.alterTable(tabelle, bauen)
+    }
+}
+
+const OFFEN = ['open', 'closing', 'pending']
+
+/**
+ * Offene Positionen der jetzigen DB, die das Backup nicht enthält. Nur wenn
+ * das Backup Positionen trägt (ab 31.10.2026) — sonst bleibt die Tabelle, wie
+ * sie ist. Erkannt an Nummer UND `clientOrderId` (eindeutig je Position).
+ */
+async function offeneOhneBackup(trx, backupPositionen) {
+    if (!Array.isArray(backupPositionen)) return []
+    if (!(await trx.schema.hasTable('strategy_positions'))) return []
+    const imBackup = new Set(backupPositionen.map((p) => `${p.id}|${p.clientOrderId ?? ''}`))
+    const offen = await trx('strategy_positions').whereIn('status', OFFEN)
+        .select('id', 'instanceId', 'symbol', 'clientOrderId')
+    return offen.filter((p) => !imBackup.has(`${p.id}|${p.clientOrderId ?? ''}`))
+}
+
+/** Offene Positionen, deren Instanz es nicht gibt. */
+async function offeneWaisen(knex) {
+    if (!(await knex.schema.hasTable('strategy_positions')) || !(await knex.schema.hasTable('strategy_instances'))) return []
+    return knex('strategy_positions').whereIn('status', OFFEN)
+        .whereNotIn('instanceId', knex('strategy_instances').select('id'))
+        .select('id', 'instanceId', 'symbol')
+}
+
+/**
+ * Der Zähler der Instanz-Nummern muss über jeder Nummer liegen, auf die noch
+ * eine Zeile zeigt (FUN-L3-002). Sonst erbt die nächste neue Instanz Waisen
+ * mit ihrer Nummer — unter PostgreSQL setzt der Import die Sequenz auf
+ * MAX(id)+1, und in einer frischen SQLite beginnt der Zähler beim Backup.
+ */
+async function instanzZaehlerAnheben(knex, isPg) {
+    try {
+        if (!(await knex.schema.hasTable('strategy_instances'))) return
+        let hoechste = Number((await knex('strategy_instances').max({ m: 'id' }).first())?.m) || 0
+        for (const t of ['strategy_positions', 'strategy_trades', 'strategy_setups', 'strategy_runs', 'strategy_suggestions', 'strategy_param_history']) {
+            if (!(await knex.schema.hasTable(t))) continue
+            hoechste = Math.max(hoechste, Number((await knex(t).max({ m: 'instanceId' }).first())?.m) || 0)
+        }
+        if (isPg) {
+            // Läuft nach `fixSequencesAfterImport` (MAX(id)+1) und nach der
+            // Migration; `hoechste` enthält MAX(id), senkt also nie.
+            await knex.raw(`SELECT setval(pg_get_serial_sequence('strategy_instances', 'id'), ?, false)`, [hoechste + 1])
+            return
+        }
+        // SQLite (AUTOINCREMENT): `sqlite_sequence` hält die höchste je vergebene Nummer.
+        const z = await knex('sqlite_sequence').where('name', 'strategy_instances').first()
+        if (!z) await knex('sqlite_sequence').insert({ name: 'strategy_instances', seq: hoechste })
+        else if (Number(z.seq) < hoechste) await knex('sqlite_sequence').where('name', 'strategy_instances').update({ seq: hoechste })
+    } catch (e) {
+        console.warn('Backup import: Instanz-Zähler nicht angehoben:', e.message)
+    }
+}
+
+/*
+ * `strategy_setups` steht nicht im Backup, `strategy_positions` und
+ * `strategy_trades` schon — beide tragen eine `setupId`. Das Schliessen einer
+ * Position setzt ihr Setup auf 'closed' (execution/paper.js). In einer
+ * frischen DB zählen die Setup-Nummern aber wieder ab 1: eine zurückgespielte
+ * Position mit `setupId` 37 hätte beim Schliessen das neue, fremde Setup #37
+ * einer anderen Instanz still auf 'closed' gesetzt und dessen Einstieg
+ * verworfen (Nachbesserung FUN-L3-001). Zwei Riegel:
+ *   - offene Positionen, deren Setup fehlt oder nicht zu ihnen passt (andere
+ *     Instanz oder anderes Symbol), verlieren den Bezug (`setupId` 0, wie
+ *     Altbestand ohne Setup);
+ *   - der Setup-Zähler wird über jede `setupId` gehoben, auf die noch eine
+ *     Zeile zeigt, damit kein neues Setup eine alte Nummer erbt.
+ */
+async function setupBezuegeLoesen(trx) {
+    if (!(await trx.schema.hasTable('strategy_positions')) || !(await trx.schema.hasTable('strategy_setups'))) return
+    const offen = await trx('strategy_positions').whereIn('status', OFFEN).where('setupId', '>', 0)
+        .select('id', 'instanceId', 'symbol', 'setupId')
+    if (!offen.length) return
+    const setups = new Map((await trx('strategy_setups').whereIn('id', [...new Set(offen.map((p) => p.setupId))])
+        .select('id', 'instanceId', 'symbol')).map((s) => [Number(s.id), s]))
+    const fremd = offen.filter((p) => {
+        const s = setups.get(Number(p.setupId))
+        return !s || Number(s.instanceId) !== Number(p.instanceId) || s.symbol !== p.symbol
+    }).map((p) => p.id)
+    for (let i = 0; i < fremd.length; i += 100) {
+        await trx('strategy_positions').whereIn('id', fremd.slice(i, i + 100)).update({ setupId: 0 })
+    }
+}
+
+async function setupZaehlerAnheben(knex, isPg) {
+    try {
+        if (!(await knex.schema.hasTable('strategy_setups'))) return
+        let hoechste = 0
+        for (const t of ['strategy_positions', 'strategy_trades', 'strategy_runs']) {
+            if (!(await knex.schema.hasTable(t))) continue
+            hoechste = Math.max(hoechste, Number((await knex(t).max({ m: 'setupId' }).first())?.m) || 0)
+        }
+        if (hoechste <= 0) return
+        if (isPg) {
+            // Nie senken: der Zähler kann über MAX(id) stehen (gelöschte Setups).
+            const seq = (await knex.raw(`SELECT pg_get_serial_sequence('strategy_setups', 'id') AS s`)).rows?.[0]?.s
+            if (!seq) return
+            const z = (await knex.raw(`SELECT last_value, is_called FROM ${seq}`)).rows?.[0]
+            const naechste = z ? Number(z.last_value) + (z.is_called ? 1 : 0) : 1
+            if (naechste <= hoechste) await knex.raw(`SELECT setval(?::regclass, ?, false)`, [seq, hoechste + 1])
+            return
+        }
+        const z = await knex('sqlite_sequence').where('name', 'strategy_setups').first()
+        if (!z) await knex('sqlite_sequence').insert({ name: 'strategy_setups', seq: hoechste })
+        else if (Number(z.seq) < hoechste) await knex('sqlite_sequence').where('name', 'strategy_setups').update({ seq: hoechste })
+    } catch (e) {
+        console.warn('Backup import: Setup-Zähler nicht angehoben:', e.message)
+    }
 }
 
 /**

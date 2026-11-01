@@ -16,7 +16,9 @@
 import {
     createPosition, stepCandle, closePosition, riskPerUnit, fundingFor, liquidationPrice,
     satzFuer, ordersorte, breakEvenAufschlag, LIMIT, MARKT,
+    entryIsValid, istSchlussEinstieg, einstiegsSorte, einstiegsZeit,
 } from '../fill-simulator.js'
+import { runBacktest } from '../strategy-backtest.js'
 
 let passed = 0
 let failed = 0
@@ -417,6 +419,103 @@ console.log('\nZwangsliquidation')
     })
     stepCandle(kurz, k(100, 101, 88, 89, 1), { breakEvenAtR: 1, costs: { ...c, breakEvenCoversCosts: true } })
     check('Short zieht den BE-Stopp nach unten', kurz.stopLoss < 100 && kurz.breakEvenDone)
+}
+
+// ── Einstieg zum Schluss (01.11.2026) ─────────────────────────────────────
+// Eine Bestätigung, die erst mit dem Schluss feststeht (Richtungs- oder
+// Ablehnungskerze), steigt ZUM Schluss ein. Der Docht davor war vor dem
+// Einstieg — bis dahin buchte `entryIsValid` ihn als sofortigen Verlust.
+console.log('\nEinstieg zum Schluss')
+{
+    const kerze = k(100, 103, 95, 102, 0)        // Docht bis 95, Schluss 102
+    const amSchluss = { direction: 'long', entry: 102, stopLoss: 96, confirmations: { entryTrigger: 'market', entryAtClose: true } }
+    check('Schluss-Einstieg wird erkannt (auch über confirmations als JSON-Text)',
+        istSchlussEinstieg(amSchluss) && istSchlussEinstieg({ ...amSchluss, confirmations: JSON.stringify(amSchluss.confirmations) }))
+    check('Docht unter dem Stop VOR dem Schluss bucht keinen Verlust', entryIsValid(amSchluss, kerze).ok === true)
+    check('… und zahlt als Marktorder Taker', einstiegsSorte({ entryOrder: 'limit' }, amSchluss) === MARKT)
+    const limit = { direction: 'long', entry: 99, stopLoss: 96 }
+    check('Gegenprobe: ein Limit in derselben Kerze IST ein Stop in der Füllkerze',
+        entryIsValid(limit, kerze).reason === 'stop_in_entry_candle')
+}
+
+// ── Zeitausstieg: N Kerzen heisst N Kerzen (01.11.2026) ───────────────────
+console.log('\nZeitausstieg')
+{
+    const H = 3600000
+    const c = { feeMakerBps: 2, feeTakerBps: 6, slippageBps: 0 }
+    const pos = createPosition({
+        setup: { direction: 'long', symbol: 'X', timeframe: '1h', stopLoss: 90, takeProfit: 0 },
+        qty: 1, entryPrice: 100, entryTime: 0, leverage: 1, costs: c,
+    })
+    // Einstieg in Kerze 0; zwei Kerzen Haltedauer → Schluss von Kerze 1 (Zeit 2h)
+    const erste = stepCandle(pos, k(100, 101, 99, 100.5, 1 * H), { maxHoldMs: 2 * H, kerzeMs: H, costs: c })
+    check('Zeitausstieg zum Schluss der 2. Kerze ab der Einstiegskerze',
+        erste.exit?.reason === 'timeout' && erste.exit.time === 2 * H && erste.exit.price === 100.5,
+        JSON.stringify(erste.exit))
+    const frueh = createPosition({
+        setup: { direction: 'long', symbol: 'X', timeframe: '1h', stopLoss: 90, takeProfit: 0 },
+        qty: 1, entryPrice: 100, entryTime: 0, leverage: 1, costs: c,
+    })
+    check('… und nicht schon nach einer Kerze',
+        !stepCandle(frueh, k(100, 101, 99, 100.5, 1 * H), { maxHoldMs: 3 * H, kerzeMs: H, costs: c }).exit)
+}
+
+// ── Schluss-Einstieg: die Position beginnt mit dem Ende der Auslösekerze ──
+// (Audit 4.3.4, FUN-F1-005). Vorher: Kerzenbeginn — maxHold 3 hielt 2 Kerzen,
+// auf 1d zählten zwei Funding-Abrechnungen vor dem Einstieg mit.
+console.log('\nSchluss-Einstieg: Einstiegszeit')
+{
+    const H = 3600000
+    check('Einstiegszeit: Schluss-Einstieg = Kerzenende', einstiegsZeit({ entryAtClose: true }, {}, 5 * H, H) === 6 * H)
+    check('… auch nur über confirmations erkannt',
+        einstiegsZeit({}, { confirmations: { entryAtClose: true } }, 5 * H, H) === 6 * H)
+    check('… sonst der Kerzenbeginn', einstiegsZeit({ entryAtOpen: true }, { confirmations: {} }, 5 * H, H) === 5 * H)
+
+    // LSOB mit Richtungsbestätigung: Einstieg zum Schluss der bärischen Kerze.
+    const baue = (tfMs, nach) => {
+        const rows = []
+        for (let i = 0; i < 325; i++) { const b = 104 - (324 - i) * 0.05; rows.push([b, b + 0.03, b - 0.02, b + 0.025]) }
+        rows.push(
+            [104.5, 110.0, 104.2, 109.0], [109.0, 109.5, 107.0, 107.5], [107.5, 108.0, 106.0, 106.5],
+            [106.5, 107.5, 105.5, 106.0], [106.0, 108.0, 105.8, 107.5], [107.5, 109.0, 107.0, 108.5],
+            [108.0, 111.0, 107.8, 109.0], [109.0, 109.2, 106.0, 106.5], [106.5, 106.8, 103.0, 103.5],
+            [103.5, 104.0, 100.0, 100.5], [100.5, 103.0, 100.0, 102.5],
+            [102.5, 108.2, 102.0, 106.0],   // Berührung der Zone
+            [106.0, 106.2, 104.0, 104.5],   // bärisch: Einstieg zum Schluss
+        )
+        const ausloese = rows.length - 1
+        for (let j = 0; j < nach; j++) rows.push([104.5, 104.8, 104.2, 104.5])
+        const start = Date.UTC(2026, 0, 1)
+        return { ausloese, candles: rows.map((r, i) => ({ t: start + i * tfMs, o: r[0], h: r[1], l: r[2], c: r[3], v: 100, closeTime: start + (i + 1) * tfMs - 1 })) }
+    }
+    const params = { entryMode: 'direction_confirmed', obCandle: 'lastOpposite', obSource: 'body', tpMode: 'rr', tpRR: 2,
+        breakEvenAtR: 0, allowLong: false, allowShort: true, htfTrendFilter: false }
+    const risk = { maintenanceMarginPct: 0.5, fundingBpsPer8h: 0, leverage: 1 }
+
+    const h = baue(H, 10)
+    const r1 = await runBacktest({ strategyId: 'lsob', symbol: 'TESTUSDT', timeframe: '1h', market: 'spot',
+        params: { ...params, maxHoldCandles: 3 }, risk, candles: h.candles, htfCandles: [], marketMeta: {}, fundingVerlauf: null,
+        fromTs: h.candles[0].t, toTs: h.candles.at(-1).t + H })
+    const t1 = (r1.trades || []).find((x) => x.exitReason !== 'open_at_end')
+    const schluss = h.candles[h.ausloese].t + H
+    check('1h, maxHold 3: Einstieg zum Kerzenschluss, Ausstieg drei Kerzen später',
+        t1 && t1.entryTime === schluss && t1.exitTime === schluss + 3 * H && t1.exitReason === 'timeout',
+        t1 ? `entry ${new Date(t1.entryTime).toISOString()}, exit ${new Date(t1.exitTime).toISOString()}` : 'kein Trade')
+
+    const D = 86400000
+    const d = baue(D, 3)
+    const verlauf = []
+    for (let t = d.candles[0].t; t <= d.candles.at(-1).t + D; t += 8 * H) verlauf.push({ t, rate: 0.0001, markPrice: 100 })
+    const r2 = await runBacktest({ strategyId: 'lsob', symbol: 'TESTUSDT', timeframe: '1d', market: 'futures',
+        params: { ...params, maxHoldCandles: 1 }, risk, candles: d.candles, htfCandles: [], marketMeta: {}, fundingVerlauf: verlauf,
+        fromTs: d.candles[0].t, toTs: d.candles.at(-1).t + D })
+    const t2 = r2.trades?.[0]
+    const einD = d.candles[d.ausloese].t + D
+    // Short mit positivem Satz erhält Funding: drei Abrechnungen à qty·100·0,0001
+    const erwartet = t2 ? t2.qty * 100 * 0.0001 * 3 : NaN
+    check('1d: nur Funding-Abrechnungen nach dem Einstieg zum Schluss',
+        t2 && t2.entryTime === einD && Math.abs(t2.funding - erwartet) < 1e-9,
+        t2 ? `entry ${new Date(t2.entryTime).toISOString()}, funding ${t2.funding} statt ${erwartet}` : 'kein Trade')
 }
 
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen\n`)

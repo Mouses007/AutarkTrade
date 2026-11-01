@@ -9,7 +9,14 @@
  *      KEINE einzige bullische Kerze darf dazwischenkommen
  *   4. Berührt der Kurs die EMA50, ist das der Einstieg
  *   5. Optional bestätigt durch ein Fibonacci-Level nahe der EMA50
- *   6. Erstes Ziel ist die EMA21, Stop unter dem Korrekturtief
+ *   6. Erstes Ziel ist die EMA21; der Stop wird beim Einstieg gesetzt, unter
+ *      das letzte Tief (S. 12: „Anfangs Stop Loss bei Tief" am Impulsbeginn)
+ *
+ * Seit Version 2 (01.11.2026) so, wie es sich real handeln lässt: das Limit
+ * liegt auf der EMA50 der Vorkerze, der Stop unter dem letzten BESTÄTIGTEN
+ * Tief. Version 1 nahm die EMA der Füllkerze und den Stop unter deren Tief —
+ * beides erst mit ihrem Schluss bekannt, ein Stop in der Füllkerze war so
+ * unmöglich.
  *
  * Die namensgebende Bedingung ist Punkt 3. Eine einzige grüne Kerze macht das
  * Setup ungültig — das ist ein sehr scharfer Filter, der wenige, dafür saubere
@@ -40,7 +47,9 @@
 
 import { pivotHighs, pivotLows, ema, isBull, atr, tagGesperrt } from './indicators.js'
 
-export const DETECTOR_VERSION = 1
+// 2 (01.11.2026): Limit auf der EMA der Vorkerze, Stop unter dem letzten
+// bestätigten Tief, Berührung vor jedem Abbruch per Schluss.
+export const DETECTOR_VERSION = 2
 
 /** Abbruchgründe. Die Auswertung gruppiert danach — Codes stabil halten. */
 export const INVALID_REASONS = {
@@ -55,6 +64,7 @@ export const INVALID_REASONS = {
     NO_FIB_CONFLUENCE: 'no_fib_confluence',
     ENTRY_BEFORE_CONFIRM: 'entry_before_confirm',
     WOCHENTAG_GESPERRT: 'weekday_blocked',
+    INVALID_STOP: 'invalid_stop',
 }
 
 const params = [
@@ -291,64 +301,45 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [] }) {
         // Bis einschliesslich dieser Kerze war das Hoch noch nicht bestätigt.
         const handelbarAb = Number(s.tradeableFrom || 0) || 0
 
+        // Das letzte bestätigte Pivot-Tief VOR einer Kerze — dort steht der
+        // Stop (PDF S. 12: „Setze schon beim Einstieg einen SL, z. B. unter dem
+        // letzten Tief", im Bild „Anfangs Stop Loss bei Tief" am Startpunkt des
+        // Impulses). Dieselbe Definition wie der Anker `lastSwingLow` des
+        // Regel-Interpreters, damit Code und Vorlage gleich rechnen.
+        const letztesTief = (vor) => {
+            let treffer = null
+            for (const t of tiefs) {
+                if (t.index + p.swingConfirmBars > vor || t.index >= vor) break
+                treffer = t.price
+            }
+            return treffer
+        }
+
         let gewartet = 0
-        let korrekturTief = Infinity
         let erledigt = false
         let gegenkerzenFolge = 0
 
-        for (let i = start; i < candles.length && !erledigt; i++) {
+        for (let i = Math.max(start, 1); i < candles.length && !erledigt; i++) {
             const k = candles[i]
             const f = emaFast[i]
             const e = emaEntry[i]
-            if (f === null || e === null) continue
+            // Das Limit liegt auf der EMA50, wie sie beim PLATZIEREN stand —
+            // also nach dem Schluss der Kerze davor. Die EMA dieser Kerze kennt
+            // man erst mit ihrem Schluss.
+            const fVor = emaFast[i - 1]
+            const eVor = emaEntry[i - 1]
+            if (f === null || e === null || fVor === null || eVor === null) continue
 
             gewartet++
-            if (k.l < korrekturTief) korrekturTief = k.l
 
-            // (a) Die Guss-Bedingung — aber NICHT auf der Berührungskerze:
-            //     die beendet die Korrektur, und die Umkehrkerze am Einstieg
-            //     ist naturgemäss oft bullisch. Sie hier zu verwerfen hiesse,
-            //     genau die gewollten Einstiege zu töten (Audit-Befund).
-            const beruehrt = k.l <= e
-            if (!beruehrt && giltAlsBullisch(k, p.bullishToleranceBodyPct)) {
-                gegenkerzenFolge++
-                // Toleranz nach GUSS-Indikator: bis zu N kleine Gegenkerzen in
-                // Folge. Zu viele — oder ein zu grosser Körper — beenden alles.
-                const koerperOk = !atrSerie || p.maxGegenkerzenAtr <= 0
-                    || !(atrSerie[i] > 0)
-                    || (k.c - k.o) <= p.maxGegenkerzenAtr * atrSerie[i]
-                if (gegenkerzenFolge > p.maxGegenkerzen || !koerperOk) {
-                    events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.BULLISH_CANDLE, candleTime: k.t })
-                    erledigt = true; break
-                }
-            } else if (!beruehrt) {
-                gegenkerzenFolge = 0
-            }
-
-            // (b) Trend gebrochen
-            if (f < e) {
-                events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.EMA_CROSS, candleTime: k.t })
-                erledigt = true; break
-            }
-
-            // (c) Optionaler Filter der langsamen EMA
-            if (p.useEma200Filter) {
-                const l = emaSlow[i]
-                if (l !== null && l !== undefined && (k.c < l || e < l)) {
-                    events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.EMA200_FILTER, candleTime: k.t })
-                    erledigt = true; break
-                }
-            }
-
-            // (d) Die ganze Kerze liegt unter der Einstiegs-EMA — der Kurs ist
-            //     daran vorbeigesprungen, ein Einstieg dort war nie möglich.
-            if (k.h < e) {
-                events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.PRICE_BELOW_EMA50, candleTime: k.t })
-                erledigt = true; break
-            }
-
-            // (e) Berührung der Einstiegs-EMA → Einstieg
-            if (k.l <= e) {
+            // (1) Berührung des ruhenden Limits → Einstieg. ZUERST geprüft: was
+            //     die Kerze danach noch tut (grün schliessen, unter die EMA
+            //     fallen, den Stop reissen), trifft den Trade, nicht die Frage,
+            //     ob es ihn gab. Bis 01.11.2026 lag das Limit auf der EMA der
+            //     Füllkerze selbst und der Stop unter deren Tief — beides erst
+            //     mit ihrem Schluss bekannt, und ein Stop in der Füllkerze war
+            //     so unmöglich.
+            if (k.l <= eVor) {
                 // Berührung vor der Bestätigung des Hochs: die Korrektur war
                 // schon an der EMA, bevor das Setup überhaupt existierte. Auf
                 // eine zweite Berührung zu warten wäre geschönt.
@@ -356,31 +347,34 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [] }) {
                     events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.ENTRY_BEFORE_CONFIRM, candleTime: k.t })
                     erledigt = true; break
                 }
-                // Die Korrektur endet HIER, ob gehandelt wird oder nicht — anders
-                // als bei LSOB gibt es keine zweite Berührung, auf die man warten
-                // könnte. Eigener Status statt „invalidated": der Markt hat das
-                // Setup nicht widerlegt, wir wollten am gesperrten Tag nicht.
+                // Die Korrektur endet HIER, ob gehandelt wird oder nicht — es gibt
+                // keine zweite Berührung, auf die man warten könnte. Eigener
+                // Status statt „invalidated": der Markt hat das Setup nicht
+                // widerlegt, wir wollten am gesperrten Tag nicht.
                 if ((p.sperreSamstag || p.sperreSonntag || p.sperreMontag) && tagGesperrt(k.t, p)) {
                     events.push({ id: s.id, status: 'rejected', invalidReason: INVALID_REASONS.WOCHENTAG_GESPERRT, candleTime: k.t })
                     erledigt = true; break
                 }
+                const entry = eVor
+                let fibLevelTreffer = null
                 if (p.requireFib) {
-                    const treffer = fibTrifft(e, s.impulseExtreme, s.sweepPrice, p, k.c)
+                    const treffer = fibTrifft(entry, s.impulseExtreme, s.sweepPrice, p, entry)
                     if (!treffer.ok) {
                         events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.NO_FIB_CONFLUENCE, candleTime: k.t })
                         erledigt = true; break
                     }
+                    fibLevelTreffer = treffer.level
                 }
 
-                const tief = Math.min(korrekturTief, k.l)
-                const stopLoss = tief * (1 - p.slBufferPct / 100)
-                const entry = e
-                if (!(stopLoss < entry)) {
-                    events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.PRICE_BELOW_EMA50, candleTime: k.t })
+                const tief = letztesTief(i - 1)
+                const stopLoss = tief === null ? 0 : tief * (1 - p.slBufferPct / 100)
+                if (!(stopLoss > 0) || !(stopLoss < entry)) {
+                    events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.INVALID_STOP, candleTime: k.t })
                     erledigt = true; break
                 }
 
-                const takeProfit = berechneZiel(p, entry, stopLoss, f)
+                // Ziel 1 laut PDF: die EMA21 — wie sie beim Platzieren stand.
+                const takeProfit = berechneZiel(p, entry, stopLoss, fVor)
                 // `ema21` liefert 0, wenn die EMA21 unter dem Einstieg liegt.
                 // Ohne Ziel gäbe es nur noch den Stop als Ausgang — dann lieber
                 // gar nicht handeln (dieselbe Regel wie im Regel-Interpreter).
@@ -395,10 +389,7 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [] }) {
                 }
 
                 const conf = { ...(s.confirmations || {}) }
-                if (p.requireFib) {
-                    const treffer = fibTrifft(e, s.impulseExtreme, s.sweepPrice, p, k.c)
-                    conf.fib = treffer.level
-                }
+                if (fibLevelTreffer !== null) conf.fib = fibLevelTreffer
                 conf.correctionCandles = gewartet
 
                 events.push({
@@ -409,8 +400,42 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [] }) {
                 break
             }
 
-            // (f) Zu lange gewartet
-            if (gewartet > p.maxCorrectionCandles) {
+            // Ab hier: das Limit wurde in dieser Kerze NICHT gefüllt. Was ihr
+            // Schluss zeigt, entscheidet, ob das Setup weiterlebt.
+
+            // (2) Die Guss-Bedingung: keine bullische Kerze vor der Berührung.
+            if (giltAlsBullisch(k, p.bullishToleranceBodyPct)) {
+                gegenkerzenFolge++
+                // Toleranz nach GUSS-Indikator: bis zu N kleine Gegenkerzen in
+                // Folge. Zu viele — oder ein zu grosser Körper — beenden alles.
+                const koerperOk = !atrSerie || p.maxGegenkerzenAtr <= 0
+                    || !(atrSerie[i] > 0)
+                    || (k.c - k.o) <= p.maxGegenkerzenAtr * atrSerie[i]
+                if (gegenkerzenFolge > p.maxGegenkerzen || !koerperOk) {
+                    events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.BULLISH_CANDLE, candleTime: k.t })
+                    erledigt = true; break
+                }
+            } else {
+                gegenkerzenFolge = 0
+            }
+
+            // (3) Trend gebrochen
+            if (f < e) {
+                events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.EMA_CROSS, candleTime: k.t })
+                erledigt = true; break
+            }
+
+            // (4) Optionaler Filter der langsamen EMA
+            if (p.useEma200Filter) {
+                const l = emaSlow[i]
+                if (l !== null && l !== undefined && (k.c < l || e < l)) {
+                    events.push({ id: s.id, status: 'invalidated', invalidReason: INVALID_REASONS.EMA200_FILTER, candleTime: k.t })
+                    erledigt = true; break
+                }
+            }
+
+            // (5) Zu lange gewartet
+            if (gewartet >= p.maxCorrectionCandles) {   // N Kerzen, nicht N+1 (wie Swing Game)
                 events.push({ id: s.id, status: 'expired', invalidReason: INVALID_REASONS.CORRECTION_TIMEOUT, candleTime: k.t })
                 erledigt = true; break
             }

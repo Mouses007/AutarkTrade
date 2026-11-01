@@ -99,7 +99,7 @@ export const VALID_SETTINGS_KEYS = [
     'radarNewsLagenAn', 'radarNewsLagenSymbol',
     'radarNewsPromptZusatz', 'radarNewsFokusAn', 'radarNewsFokusWoerter', 'radarNewsAktivesProfil',
     'livetradingAn', 'livetradingMobil', 'startseiteAn',
-    'erweiterteInfos', 'chartKerzeSteigend', 'chartKerzeFallend', 'momentumGrenze', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
+    'erweiterteInfos', 'chartKerzeSteigend', 'chartKerzeFallend', 'chartIndikatorStandard', 'momentumGrenze', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
     // Spot-Portfolio
     'modusPortfolioAn', 'portfolioBoersen', 'portfolioStaubChf', 'portfolioPaare',
     // Anbieter/Modell je KI-Funktion; leer = global
@@ -185,7 +185,7 @@ const TABLE_COLUMNS = {
     strategy_backtests: ['id', 'strategyId', 'instanceId', 'label', 'symbol', 'timeframe', 'market', 'fromTs', 'toTs', 'params', 'stats', 'trades', 'createdAt'],
     strategy_suggestions: ['id', 'instanceId', 'source', 'title', 'rationale', 'proposedParams', 'backtestId', 'status', 'decidedAt', 'createdAt'],
     rule_strategies: ['id', 'strategyId', 'name', 'description', 'enabled', 'rules', 'source', 'createdAt', 'updatedAt'],
-    strategy_drafts: ['id', 'title', 'slug', 'sourceName', 'status', 'spec', 'messages', 'generatedPath', 'provider', 'model', 'costUsd', 'createdAt', 'updatedAt'],
+    strategy_drafts: ['id', 'title', 'slug', 'sourceName', 'status', 'strategyId', 'spec', 'messages', 'generatedPath', 'provider', 'model', 'costUsd', 'createdAt', 'updatedAt'],
 }
 
 // JSON columns per table that should be parsed on read and stringified on write
@@ -193,7 +193,7 @@ const JSON_COLUMNS = {
     trades: ['executions', 'trades', 'blotter', 'pAndL', 'cashJournal'],
     screenshots: ['maState'],
     tags: ['tags', 'closingTags'],
-    settings: ['accounts', 'tags', 'apis', 'layoutStyle', 'tradeTimeframes', 'customTimeframes', 'balances', 'strategyHiddenTemplates', 'benachrichtigungen'],
+    settings: ['accounts', 'tags', 'apis', 'layoutStyle', 'tradeTimeframes', 'customTimeframes', 'balances', 'strategyHiddenTemplates', 'benachrichtigungen', 'chartIndikatorStandard'],
     incoming_positions: ['bitunixData', 'tags', 'closingTags', 'historyData', 'tpslHistory'],
     notes: ['tradingMetadata'],
     quiz_fortschritt: ['historie'],

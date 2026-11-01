@@ -14,7 +14,6 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Symbol from '@/components/basis/Symbol.vue'
-import KiHinweis from '@/components/quellen/KiHinweis.vue'
 
 const props = defineProps({
     daten: { type: Object, default: null },
@@ -148,8 +147,6 @@ watch(() => props.daten?.state, () => { erklaerung.value = null; erklaerungFehle
                 <p v-if="erklaerungFehler" class="mxKiFehler">{{ erklaerungFehler }}</p>
                 <template v-if="erklaerung">
                     <p class="mxKiText" data-ki-generiert="true">{{ erklaerung.text }}</p>
-                    <!-- S12: Pflichtlabel an der KI-Erklärung. -->
-                    <KiHinweis klein :anbieter="erklaerung.provider || ''" />
                     <p class="mxKiHinweis">{{ t('marktradar.mechanik.erklaerungHinweis') }}
                         <span v-if="erklaerung.model" class="mxKiModell">· {{ erklaerung.model }}</span>
                     </p>

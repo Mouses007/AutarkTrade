@@ -202,6 +202,45 @@ export function ausPionexFills(fills) {
  *   - `operation_type` ist freier Text; die gesehenen Werte stehen in
  *     BITPANDA_ART. Unbekanntes landet als `sonstiges` in der Prüfliste.
  */
+/**
+ * Bitpandas eigene Token, in denen eine Gebühr bezahlt werden kann. Dann trägt
+ * ein Kauf ein DRITTES Asset: Feb.–Juni 2026 hatten acht Sparplan-Käufe
+ * CHF −50, BTC + und VSN − (≈ 0,40 CHF) — bis 01.11.2026 drei „Tausch“-Zeilen
+ * ohne Gegenseite statt eines Kaufs mit Gebühr.
+ */
+const BITPANDA_GEBUEHR = new Set(['VSN', 'BEST'])
+
+/**
+ * Handel aus den Netto-Deltas einer Operation (rein): genau ein Zugang und ein
+ * Abgang, dazu höchstens ein Abgang in einem Gebühren-Token. Alles andere
+ * (Index, Umschichtung) ist kein einzelner Handel → null.
+ * @param {[string, number][]} teile  Asset → Netto-Menge (≠ 0)
+ * @returns {{ plus: [string, number], minus: [string, number], gebuehr: [string, number]|null }|null}
+ *   `gebuehr` mit positiver Menge.
+ */
+export function bitpandaHandel(teile) {
+    const plus = teile.filter(([, v]) => v > 0)
+    const minus = teile.filter(([, v]) => v < 0)
+    if (plus.length !== 1) return null
+    if (minus.length === 1) return { plus: plus[0], minus: minus[0], gebuehr: null }
+    if (minus.length !== 2) return null
+    const g = minus.filter(([a]) => BITPANDA_GEBUEHR.has(gross(a)))
+    if (g.length !== 1) return null
+    return { plus: plus[0], minus: minus.find((t) => t !== g[0]), gebuehr: [g[0][0], -g[0][1]] }
+}
+
+/** Felder einer Handelszeile aus `bitpandaHandel` — Kauf/Verkauf/Tausch nach `handelsArt`. */
+export function handelsZeile({ plus, minus, gebuehr }) {
+    const art = handelsArt(minus[0], plus[0])
+    const verkauf = art === 'verkauf'
+    return {
+        art,
+        asset: verkauf ? minus[0] : plus[0], menge: verkauf ? minus[1] : plus[1],
+        gegenAsset: verkauf ? plus[0] : minus[0], gegenMenge: verkauf ? plus[1] : minus[1],
+        gebuehrAsset: gebuehr?.[0] || null, gebuehrMenge: gebuehr?.[1] || null,
+    }
+}
+
 const BITPANDA_ART = {
     reward: 'staking', passive_earn_reward: 'staking',
     best_reward: 'belohnung', onetime_reward: 'belohnung', instant_trade_bonus: 'belohnung', giveaway: 'belohnung',
@@ -242,16 +281,9 @@ export function ausBitpandaOperationen(ops, symbole) {
         // selbst sagt `deposit` — die Transaktion weiss es genauer.
         const tTypen = new Set((op.transactions || []).map((t) => t.transaction_type).filter(Boolean))
         const art = BITPANDA_ART[typ] || (tTypen.size === 1 ? BITPANDA_ART[[...tTypen][0]] : undefined)
-        if (teile.length === 2 && Math.sign(teile[0][1]) !== Math.sign(teile[1][1])) {
-            const [plus, minus] = teile[0][1] > 0 ? teile : [teile[1], teile[0]]
-            const hArt = handelsArt(minus[0], plus[0])
-            const verkauf = hArt === 'verkauf'
-            aus.push(bewegung({
-                externeId: op.operation_id, zeit, art: hArt,
-                asset: verkauf ? minus[0] : plus[0], menge: verkauf ? minus[1] : plus[1],
-                gegenAsset: verkauf ? plus[0] : minus[0], gegenMenge: verkauf ? plus[1] : minus[1],
-                roh,
-            }))
+        const handel = bitpandaHandel(teile)
+        if (handel) {
+            aus.push(bewegung({ externeId: op.operation_id, zeit, ...handelsZeile(handel), roh }))
             continue
         }
         if (teile.length === 1) {
@@ -459,6 +491,54 @@ export function ordneTransfers(zeilen) {
         if (best) {
             paare.push({ raus: o.id, rein: best.id, sicher: false })
             vergeben.add(best.id); vergeben.add(o.id)
+        }
+    }
+    return paare
+}
+
+// ── Sparpläne (Bitpanda) ─────────────────────────────────────────────────
+
+/** Trägt die Zeile Bitpandas Kennzeichen eines Sparplans? `roh` als Text (DB) oder Objekt. */
+export function istSparplan(z) {
+    let roh = z?.roh
+    if (typeof roh === 'string') { try { roh = JSON.parse(roh) } catch { roh = null } }
+    return roh?.operation_type === 'savings_plan'
+}
+
+/**
+ * Paart die Lastschrift eines Sparplans (Fiat-Einzahlung) mit dem Kauf, den
+ * sie bezahlt. Geraten wird nichts: Bitpanda kennzeichnet BEIDE Operationen
+ * mit `savings_plan`, hier wird nur zugeordnet — gleicher Ort, Kauf in der
+ * Währung der Einzahlung zum gleichen Betrag (±1 Rappen), 0–15 min danach,
+ * bei mehreren der zeitlich nächste.
+ *
+ * Gemessen 01.11.2026: 126 Lastschriften seit 2019 (BTC 50 CHF jeden zweiten
+ * Sonntag, ETH 40 CHF am Ersten), jede mit genau einem Kauf 0–113 s später.
+ * Eine gewöhnliche Einzahlung, auf die gleich ein Kauf folgt (`deposit` →
+ * `buy`), ist KEIN Sparplan und bleibt ungepaart.
+ *
+ * @param {Array<{id, ort, art, asset, menge, gegenAsset, gegenMenge, zeit, roh}>} zeilen
+ * @returns {Array<{ einzahlung: id, kauf: id }>}
+ */
+export function ordneSparplaene(zeilen) {
+    const plan = zeilen.filter(istSparplan)
+    const rein = plan.filter((z) => z.art === 'einzahlung' && FIAT.includes(gross(z.asset)) && Number(z.menge) > 0)
+    const kaeufe = plan.filter((z) => z.art === 'kauf' && z.gegenAsset && Number(z.gegenMenge) < 0)
+    const vergeben = new Set()
+    const paare = []
+    for (const e of [...rein].sort((a, b) => Number(a.zeit) - Number(b.zeit))) {
+        let best = null, bestDt = Infinity
+        for (const k of kaeufe) {
+            if (vergeben.has(k.id) || k.ort !== e.ort || gross(k.gegenAsset) !== gross(e.asset)) continue
+            const dt = Number(k.zeit) - Number(e.zeit)
+            if (dt < 0 || dt > 15 * 60e3 || dt >= bestDt) continue
+            if (Math.abs(-Number(k.gegenMenge) - Number(e.menge)) > 0.01) continue
+            best = k
+            bestDt = dt
+        }
+        if (best) {
+            paare.push({ einzahlung: e.id, kauf: best.id })
+            vergeben.add(best.id)
         }
     }
     return paare

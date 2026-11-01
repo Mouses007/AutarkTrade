@@ -10,11 +10,13 @@ import { seedDefaultLernkarten } from './default-lernkarten.js'
 import { istGewinn } from '../shared/gewinn.js'
 import { migriereS12 } from './migrationen/s12.js'
 import { migriereS13 } from './migrationen/s13.js'
+import { migriereStrategien } from './migrationen/strategien.js'
 import { migriereS15 } from './migrationen/s15.js'
 import { migrierePortfolio } from './migrationen/portfolio.js'
 import { migriereCoinMUsdt } from './migrationen/coinm-usdt.js'
 import { migriereDouble } from './migrationen/double.js'
 import { migriereTls } from './migrationen/tls.js'
+import { migriereZweifaktor } from './migrationen/zweifaktor.js'
 import { migriereTradePopups } from './migrationen/trade-popups.js'
 import { migriereKiAufgaben, migriereProfil, migriereKartenName, migriereLiveFelder } from './migrationen/einstellungen-ordnung.js'
 
@@ -250,7 +252,9 @@ async function fixPostgresSequences(knex) {
 // Installationen gelten als gefragt, neue starten mit dem Schalter aus.
 // v34: `settings.esp32PushGeraete` (Sofort-Zustellung der Chart-Alarme ans
 // Android-Widget über UnifiedPush). Rein additiv.
-const SCHEMA_VERSION = 34
+// v35: `chart_zeichnungen.gruppe` — eigene Gruppen von Zeichnungen (Objekte-Reiter),
+// gemeinsam ein-/ausblenden. Rein additiv; ein älterer Codestand zeigt sie ungruppiert.
+const SCHEMA_VERSION = 35
 
 async function runMigrations(knex, client) {
     const isPg = client === 'pg'
@@ -1685,6 +1689,27 @@ async function runMigrations(knex, client) {
     // die Zeile beansprucht (sl | tp | be | timeout | manual | extern).
     await addColumnIfNotExists('strategy_positions', 'exitGrund', (t) => t.text('exitGrund').defaultTo(''))
 
+    // Unter welchem Parametersatz und welcher Regelfassung eine Position
+    // ENTSTAND. Der Trade wird damit gebucht, nicht mit der Version beim
+    // Schliessen — sonst landet ein v1-Trade nach einer Änderung unter v2
+    // (FUN-L2-002), und der Trade-Kontext zeigte die falsche Regelfassung
+    // (BUG-L2-004). 0 = unbekannt (Altbestand).
+    await addColumnIfNotExists('strategy_positions', 'paramsVersion', (t) => t.integer('paramsVersion').defaultTo(0))
+    await addColumnIfNotExists('strategy_positions', 'ruleVersion', (t) => t.integer('ruleVersion').defaultTo(0))
+    await addColumnIfNotExists('strategy_trades', 'ruleVersion', (t) => t.integer('ruleVersion').defaultTo(0))
+    // Altbestand offener Positionen: Version aus dem Setup, das sie auslöste
+    // (dort steht sie seit jeher). Idempotent, trifft nur Zeilen mit 0.
+    if (await knex.schema.hasTable('strategy_setups')) {
+        await knex('strategy_positions').where('paramsVersion', 0).whereIn('status', ['open', 'closing'])
+            .update({
+                paramsVersion: knex('strategy_setups').select('paramsVersion')
+                    .where('strategy_setups.id', knex.ref('strategy_positions.setupId')).limit(1),
+            })
+            .catch((e) => console.warn('[DB] paramsVersion offener Positionen nicht nachgetragen:', e.message))
+        // Ohne Setup bleibt die Unterabfrage leer (NULL) — zurück auf „unbekannt".
+        await knex('strategy_positions').whereNull('paramsVersion').update({ paramsVersion: 0 }).catch(() => {})
+    }
+
     // Spiegelt diese Instanz ihre geschlossenen Trades ins Journal? Bewusst je
     // Instanz und standardmässig AUS: es sind Papier-Trades, und ob sie im
     // Journal auftauchen sollen, ist eine Entscheidung des Nutzers.
@@ -1958,6 +1983,8 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('settings', 'chartKerzeFallend', (t) => t.string('chartKerzeFallend'))
     // Grenzlinie des Momentum Radars (server/momentum-radar.js grenzeAus); leer = 50
     await addColumnIfNotExists('settings', 'momentumGrenze', (t) => t.integer('momentumGrenze'))
+    // Eigener Standard je Indikatortyp {typ: {params, farben}} (IndikatorDialog „Als Standard speichern“)
+    await addColumnIfNotExists('settings', 'chartIndikatorStandard', (t) => t.text('chartIndikatorStandard'))
 
     /*
      * Spenden (server/spenden.js): Menüeintrag und zwei Nachfragen (50 / 200
@@ -3577,6 +3604,22 @@ async function runMigrations(knex, client) {
     await addColumnIfNotExists('chart_alarme', 'punktgroesse', (t) => t.string('punktgroesse'))
     await addColumnIfNotExists('chart_alarme', 'stand', (t) => t.text('stand'))
 
+    // ── Grund der Selbstabschaltung (Audit FUN-F2B-003, additiv, ohne SCHEMA_VERSION) ──
+    // `selbstAus`: 'ausgeloest' | Hinweis des Verlaufs | null (aktiv oder von Hand aus).
+    // „Ausgelöste entfernen" löscht nur 'ausgeloest' — vorher auch pausierte wiederholende.
+    // Bestand einmal nachtragen, nur wo es sicher ist: einmalig, aus, und die letzte
+    // Messung IST die Auslösung (Wiedereinschalten setzt `letzteZeit` auf 0 zurück).
+    const hatteSelbstAus = await knex.schema.hasColumn('chart_alarme', 'selbstAus')
+    await addColumnIfNotExists('chart_alarme', 'selbstAus', (t) => t.string('selbstAus', 20))
+    if (!hatteSelbstAus) {
+        await knex('chart_alarme').where({ einmalig: 1, aktiv: 0 }).where('ausgeloestAm', '>', 0)
+            .where('letzteZeit', knex.ref('ausgeloestAm')).update({ selbstAus: 'ausgeloest' })
+    }
+
+    // ── v35 ─────────────────────────────────────────────────────────────
+    // Gruppe einer Zeichnung (Name, frei gewählt; null = keine). Gruppen gelten je Symbol.
+    await addColumnIfNotExists('chart_zeichnungen', 'gruppe', (t) => t.string('gruppe', 80))
+
     // ── v27 ─────────────────────────────────────────────────────────────
     /*
      * Indikator-Vorlagen: benannte Indikatorlisten, auf jeden Chart anwendbar.
@@ -3655,6 +3698,11 @@ async function runMigrations(knex, client) {
     // ── v29: Scharfen Handel auslagern (S13) ───────────────────────────
     await migriereS13(knex, addColumnIfNotExists)
 
+    // ── Strategien-Umbau (01.11.2026) ─────────────────────────────────
+    // Waisen gelöschter Instanzen, Einmal-Schritte über `strategienStand`,
+    // siehe `server/migrationen/strategien.js`. Additiv.
+    await migriereStrategien(knex, addColumnIfNotExists)
+
     // ── Analysequellen zurück (S15) ────────────────────────────────────
     // Schalter `quellenOhneFreigabe` (Vorgabe an) und Rückführung der
     // S12-Einstellungen, siehe `server/migrationen/s15.js`. Additiv.
@@ -3669,6 +3717,10 @@ async function runMigrations(knex, client) {
     // ── HTTPS in der App + ESP32-Anzeige-Schlüssel (additiv, ohne SCHEMA_VERSION) ──
     // Tabelle `tls_zertifikat` (eigene CA, Server-Zertifikat), `settings.esp32AnzeigeKey`.
     await migriereTls(knex, addColumnIfNotExists)
+
+    // ── Zweiter Faktor beim Anmelden (additiv, ohne SCHEMA_VERSION) ──
+    // TOTP-Spalten in `settings`, Tabelle `auth_schluessel` (YubiKey/WebAuthn).
+    await migriereZweifaktor(knex, addColumnIfNotExists)
 
     // PostgreSQL: `real` (Float32 aus t.float) → double precision (Audit FUN-DB-001).
     // Nach allen Tabellen, damit auch eben angelegte erfasst sind. Ohne SCHEMA_VERSION.

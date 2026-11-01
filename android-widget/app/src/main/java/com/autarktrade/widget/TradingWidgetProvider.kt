@@ -55,6 +55,7 @@ class TradingWidgetProvider : AppWidgetProvider() {
     companion object {
         const val ACTION_REFRESH = "com.autarktrade.widget.ACTION_REFRESH"
         const val ACTION_TOGGLE_BALANCE = "com.autarktrade.widget.ACTION_TOGGLE_BALANCE"
+        const val ACTION_TOGGLE_SPRACHE = "com.autarktrade.widget.ACTION_TOGGLE_SPRACHE"
         const val ACTION_ALARM = "com.autarktrade.widget.ACTION_ALARM"
         const val EXTRA_BROKER = "broker"
         private const val PERIODIC_WORK = "trading_refresh_periodic"
@@ -101,6 +102,13 @@ class TradingWidgetProvider : AppWidgetProvider() {
             awm.partiallyUpdateAppWidget(id, rv)
         }
 
+
+        /** Zeichnet alle Widgets neu (ohne Netz) — nach einem Schalter, der für alle gilt. */
+        fun updateAll(context: Context) {
+            val awm = AppWidgetManager.getInstance(context)
+            for (id in awm.getAppWidgetIds(ComponentName(context, TradingWidgetProvider::class.java)))
+                updateWidget(context, awm, id)
+        }
 
         /** Builds + pushes the RemoteViews for one widget instance (header, KPIs, list adapter). */
         fun updateWidget(context: Context, awm: AppWidgetManager, id: Int) {
@@ -152,6 +160,21 @@ class TradingWidgetProvider : AppWidgetProvider() {
             rv.setImageViewResource(
                 R.id.btn_eye,
                 if (Prefs.hideBalance(context, id)) R.drawable.ic_eye_off else R.drawable.ic_eye
+            )
+            // Lautsprecher → Sprachausgabe der Chart-Alarme an/aus. Gilt fürs ganze Gerät
+            // (Prefs.spracheAn, derselbe Schalter wie in der App), daher ohne Widget-id.
+            val spracheIntent = Intent(context, WidgetAktionReceiver::class.java)
+                .setAction(ACTION_TOGGLE_SPRACHE)
+            rv.setOnClickPendingIntent(
+                R.id.btn_sprache,
+                PendingIntent.getBroadcast(
+                    context, 0, spracheIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+            rv.setImageViewResource(
+                R.id.btn_sprache,
+                if (Prefs.spracheAn(context)) R.drawable.ic_sprache else R.drawable.ic_sprache_aus
             )
             // Refresh-Ruhezustand (Spinner aus) — setRefreshing() schaltet ihn beim Tap an.
             rv.setViewVisibility(R.id.refreshing, View.GONE)

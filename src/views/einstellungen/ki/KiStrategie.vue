@@ -90,7 +90,7 @@ loadAgentSettings()
             <p class="einleitung">
                 <!-- Link nur, wenn der Strategien-Modus an ist — sonst führt er auf
                      eine Route, die die Wache im Layout sofort wieder abprallen lässt. -->
-                {{ t('settings.ki.strat.intro') }} <router-link v-if="modusStrategieAn" to="/agent/strategies">{{ t('settings.ki.strat.link') }}</router-link><span v-else>{{ t('settings.ki.strat.link') }}</span>. {{ t('settings.ki.strat.intro2') }}
+                {{ t('settings.ki.strat.intro') }} <router-link v-if="modusStrategieAn" to="/strategien/instanzen">{{ t('settings.ki.strat.link') }}</router-link><span v-else>{{ t('settings.ki.strat.link') }}</span>. {{ t('settings.ki.strat.intro2') }}
             </p>
 
             <Feld :label="t('settings.ki.strat.kill')">

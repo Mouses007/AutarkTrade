@@ -30,7 +30,7 @@
  * (Invalidierung, früherer Retest) im Fenster.
  */
 import { lsobCv, LSOB_VORGABEN } from '../shared/lsobCv.js'
-import { nurGeschlossene, juengsteKerze, MOMENTUM_ZEITEBENEN, TF_MS } from './chart-alarm-momentum.js'
+import { nurGeschlossene, juengsteKerze, MOMENTUM_ZEITEBENEN, TF_MS, tfText } from './chart-alarm-momentum.js'
 
 export const LSOB_ZEITEBENEN = MOMENTUM_ZEITEBENEN
 export const LSOB_EREIGNISSE = ['retest', 'box', 'beide']
@@ -172,7 +172,7 @@ export function ereignisText(e, zahl = String, mitBox = true) {
 
 /** Text einer (gebündelten) Auslösung — derselbe für Push, Handy, Mail und die Meldung im Browser. */
 export function lsobText(alarm, treffer, zahl = String) {
-    const ort = (tr) => `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tr.tf}`
+    const ort = (tr) => `${tr.symbol}${tr.markt === 'spot' ? ' Spot' : ''} ${tfText(tr.tf)}`
     const zeile = (tr) => `${ort(tr)}: ${tr.ereignisse.map((e) => ereignisText(e, zahl)).join(', ')} — Kurs ${zahl(tr.preis)}`
     const titel = treffer.length === 1
         ? `LSOB ${ort(treffer[0])}: ${treffer[0].ereignisse.map((e) => ereignisText(e, zahl, false)).join(', ')}`

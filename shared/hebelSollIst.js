@@ -96,9 +96,20 @@ export function sollIstZonen(hist, events, { mid, spannePct = 3, baender = 12, m
             }
         })
         .sort((a, b) => a.preis - b.preis)
+    /*
+     * Ansicht „nur Erwartetes“ (Schalter „Abgeholte“ aus, 31.10.2026): allein die
+     * Masse, die laut Modell JETZT noch offen ist — eigener Massstab, damit die
+     * grösste offene Zone voll lang ist und nichts Abgeräumtes mitzählt.
+     */
+    const maxOffen = Math.max(0, ...alle.map((z) => z.offen))
+    const erwartet = maxOffen > 0 ? alle
+        .filter((z) => z.offen >= maxOffen * minAnteil)
+        .map((z) => ({ preis: z.preis, seite: z.seite, anteil: z.offen / maxOffen }))
+        .sort((a, b) => a.preis - b.preis) : []
     const zaehlen = aus.filter((z) => (z.status === 'bestaetigt' || z.status === 'leer' || z.status === 'teils') && z.zaehlt)
     return {
         zonen: aus,
+        erwartet,
         erfasst,
         treffer: k ? { bestaetigt: zaehlen.filter((z) => z.status === 'bestaetigt').length, durchlaufen: zaehlen.length } : null,
         stunden: von ? Math.round((jetzt - von) / 3_600_000) : null,

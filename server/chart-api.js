@@ -19,6 +19,7 @@
  *   GET  /api/chart/journal      eigene Trades eines Symbols im sichtbaren Zeitraum
  *   GET  /api/chart/hebelzonen   modellierte Liquidationszonen (Hebelkarte, verdichtet)
  *   GET  /api/chart/funding      Funding-Verlauf eines Perpetuals
+ *   GET  /api/chart/signale      Signalverlauf der Indikatoren „LSOB" (alt) und „GUSS"
  */
 
 import axios from 'axios'
@@ -29,13 +30,56 @@ import { ladeListungen } from './hype-radar/listungen.js'
 import { logWarn } from './logger.js'
 import { tradesAusZeilen, mitNotizen } from './chart-journal.js'
 import { holeHebelzonen } from './hebelzonen.js'
-import { getFundingHistory } from './market-data.js'
+import { getFundingHistory, getClosedCandles, timeframeMs } from './market-data.js'
 import { ausCache } from './marktradar-api.js'
 import { saubereVorlage } from './chart-vorlagen.js'
 import { ordnePunkte } from './chart-alarm-regeln.js'
+import { getStrategy, validateParams } from './strategies/index.js'
+import { signalVerlauf, fensterFuer } from './chart-signale.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 const HTTP_TIMEOUT = 10000
+
+// ── Signalverlauf für die Chart-Indikatoren ─────────────────────────────
+// Lag bis 31.10.2026 in `chart-strategie.js` und ging mit der Strategie-Schicht
+// verloren, obwohl der Indikator GUSS und die Trade-Bilder ihn weiter abrufen.
+// Je Strategie+Symbol+Zeiteinheit+Markt+Parameter 60 s, gleichzeitige Abrufe
+// geteilt — mehrere Panels und der 60-s-Takt fragen sonst jeder ~1000 Kerzen.
+const SIGNALE_TTL_MS = 60_000
+const SIGNAL_STRATEGIEN = ['lsob', 'ema_touch']
+const SIGNALE_MAX_KERZEN = 1500
+const signalCache = new Map()   // schluessel → { t, daten } | { laeuft }
+
+async function holeSignale(strategyId, symbol, timeframe, market, rohParams = {}) {
+    // Parameter aus dem Indikator-Dialog, geprüft wie bei Instanzen; der Schlüssel enthält die GEPRÜFTEN Werte
+    const params = validateParams(strategyId, rohParams || {}).values
+    const schluessel = `${strategyId}|${symbol}|${timeframe}|${market}|${JSON.stringify(params)}`
+    const c = signalCache.get(schluessel)
+    if (c?.daten && Date.now() - c.t < SIGNALE_TTL_MS) return c.daten
+    if (c?.laeuft) return c.laeuft
+    const laeuft = (async () => {
+        const strategie = getStrategy(strategyId)
+        const anzeigen = 500
+        const candles = await getClosedCandles(symbol, timeframe,
+            Math.min(SIGNALE_MAX_KERZEN, fensterFuer(strategie, params) + anzeigen), { market })
+        let htfCandles = null
+        if (params.htfTrendFilter && params.htfTimeframe && params.htfTimeframe !== timeframe) {
+            try { htfCandles = await getClosedCandles(symbol, params.htfTimeframe, 500, { market }) } catch { htfCandles = null }
+        }
+        const r = signalVerlauf({
+            strategie, candles, params, htfCandles, anzeigen,
+            ltfMs: timeframeMs(timeframe), htfMs: htfCandles ? timeframeMs(params.htfTimeframe) : 0,
+        })
+        return { strategyId, strategieName: strategie.name || strategyId, symbol, timeframe, ...r }
+    })()
+    signalCache.set(schluessel, { laeuft })
+    try {
+        const daten = await laeuft
+        signalCache.set(schluessel, { t: Date.now(), daten })
+        if (signalCache.size > 60) signalCache.delete(signalCache.keys().next().value)
+        return daten
+    } catch (e) { signalCache.delete(schluessel); throw e }
+}
 
 /** Binance-Zeiteinheiten; dieselbe Liste kennt das Frontend (`kerzenQuelle.js`). */
 export const INTERVALLE = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h', '12h', '1d', '3d', '1w', '1M']
@@ -160,7 +204,11 @@ export function kerzenAusBinance(roh) {
     for (const k of roh) {
         if (!Array.isArray(k) || k.length < 6) continue
         const zeile = [Number(k[0]), Number(k[1]), Number(k[2]), Number(k[3]), Number(k[4]), Number(k[5])]
-        if (zeile.every(Number.isFinite)) aus.push(zeile)
+        if (!zeile.every(Number.isFinite)) continue
+        // Feld 9 = Kaufvolumen der Aggressoren (taker buy base) — Grundlage von CVD und Delta-Volumen
+        const kauf = Number(k[9])
+        if (k.length > 9 && Number.isFinite(kauf)) zeile.push(kauf)
+        aus.push(zeile)
     }
     aus.sort((a, b) => a[0] - b[0])
     return aus
@@ -243,8 +291,23 @@ export function saubereSymbole(eingabe) {
 }
 
 /** Werkzeuge, die gespeichert werden dürfen (`messen` ist flüchtig). */
-export const ZEICHEN_TYPEN = ['horizontale', 'strahlH', 'vertikale', 'trendlinie', 'strahl', 'kanal', 'rechteck', 'fib', 'position', 'text', 'volprofil']
+export const ZEICHEN_TYPEN = ['horizontale', 'strahlH', 'vertikale', 'trendlinie', 'strahl', 'kanal', 'rechteck', 'fib', 'position', 'text', 'volprofil', 'avwap',
+    'fibExt', 'pfeil', 'ellipse', 'pinsel', 'pfad', 'emoji']
 const MAX_PUNKTE = 4
+/**
+ * Mindestpunkte je Typ — wie `mindestPunkte()` in src/utils/chart/zeichnungen/werkzeuge.js
+ * (Klicks; Position 3, Pinsel 2; der Selbsttest vergleicht beide). Eine Ellipse oder ein
+ * Pfeil mit einem Punkt legte vorher das Zeichnen und den Treffertest der ganzen Ebene lahm.
+ */
+export const MIN_PUNKTE = {
+    horizontale: 1, strahlH: 1, vertikale: 1, avwap: 1, text: 1, emoji: 1,
+    trendlinie: 2, strahl: 2, rechteck: 2, fib: 2, volprofil: 2, pfeil: 2, ellipse: 2, pinsel: 2, pfad: 2,
+    kanal: 3, fibExt: 3, position: 3,
+}
+/** Pinselstrich: der Browser dünnt auf höchstens 200 Punkte aus (`duenneStrich`), hier mit Luft. */
+export const MAX_PINSEL_PUNKTE = 250
+// Pfad: so viele Klicks wie PFAD_MAX in werkzeuge.js
+export const MAX_PFAD_PUNKTE = 30
 const MAX_STIL_BYTES = 4096
 
 /**
@@ -264,7 +327,10 @@ export function pruefeZeichnung(roh, { teilweise = false, typ: altTyp = null } =
         aus.typ = roh.typ
     }
     if (!teilweise || roh.punkte !== undefined) {
-        if (!Array.isArray(roh.punkte) || !roh.punkte.length || roh.punkte.length > MAX_PUNKTE) return { fehler: 'punkte ungültig' }
+        const typ = aus.typ || roh.typ || altTyp
+        const max = typ === 'pinsel' ? MAX_PINSEL_PUNKTE : typ === 'pfad' ? MAX_PFAD_PUNKTE : MAX_PUNKTE
+        if (!Array.isArray(roh.punkte) || !roh.punkte.length || roh.punkte.length > max) return { fehler: 'punkte ungültig' }
+        if (roh.punkte.length < (MIN_PUNKTE[typ] || 1)) return { fehler: `${typ} braucht mindestens ${MIN_PUNKTE[typ]} Punkte` }
         const punkte = []
         for (const x of roh.punkte) {
             const t = Number(x?.t)
@@ -288,6 +354,8 @@ export function pruefeZeichnung(roh, { teilweise = false, typ: altTyp = null } =
     }
     if (roh.gesperrt !== undefined) aus.gesperrt = roh.gesperrt ? 1 : 0
     if (roh.versteckt !== undefined) aus.versteckt = roh.versteckt ? 1 : 0
+    // Eigene Gruppe (Objekte-Reiter); leer = keine
+    if (roh.gruppe !== undefined) aus.gruppe = String(roh.gruppe ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || null
     return { daten: aus }
 }
 
@@ -297,7 +365,7 @@ function zeichnungZeile(r) {
         // ältere Zeichnungen (vor der Ordnung beim Speichern) beim Lesen ordnen
         punkte: ordnePunkte(r.typ, parse(r.punkte, [])), stil: parse(r.stil, {}),
         sichtbarAuf: parse(r.sichtbarAuf, null),
-        gesperrt: Number(r.gesperrt) === 1, versteckt: Number(r.versteckt) === 1,
+        gesperrt: Number(r.gesperrt) === 1, versteckt: Number(r.versteckt) === 1, gruppe: r.gruppe || null,
         erstelltAm: Number(r.erstelltAm) || 0, geaendertAm: Number(r.geaendertAm) || 0,
     }
 }
@@ -344,6 +412,35 @@ const TIEFE_TTL_MS = 4000
 const tiefeCache = new Map()     // quelle|markt|symbol → { t, daten, laeuft }
 
 export function setupChartRoutes(app) {
+
+    /**
+     * GET /api/chart/signale?strategie=lsob|ema_touch&symbol=&interval=&markt=&params=
+     * Signalverlauf für die Indikatoren „LSOB" (alt) und „GUSS" und die Trade-Bilder.
+     */
+    app.get('/api/chart/signale', async (req, res) => {
+        try {
+            const strategyId = String(req.query.strategie || '')
+            if (!SIGNAL_STRATEGIEN.includes(strategyId)) return res.status(400).json({ error: 'strategie unbekannt' })
+            const symbol = String(req.query.symbol || '').toUpperCase()
+            if (!SYMBOL_RE.test(symbol)) return res.status(400).json({ error: 'symbol ungültig' })
+            const timeframe = String(req.query.interval || '')
+            const strategie = getStrategy(strategyId)
+            if (!strategie.supportedTimeframes.includes(timeframe)) {
+                return res.status(400).json({ error: `${strategie.name || strategyId} läuft nur auf ${strategie.supportedTimeframes.join(', ')}` })
+            }
+            let roh = {}
+            try { roh = req.query.params ? JSON.parse(String(req.query.params)) : {} } catch { return res.status(400).json({ error: 'params kein JSON' }) }
+            if (!roh || typeof roh !== 'object' || Array.isArray(roh)) roh = {}
+            res.json(await holeSignale(strategyId, symbol, timeframe, req.query.markt === 'spot' ? 'spot' : 'futures', roh))
+        } catch (e) {
+            if (marktdaten.sendeWennAus(res, e)) return
+            const st = e.response?.status || e.status
+            if (st === 400 || /invalid symbol|-1121/i.test(String(e.response?.data?.msg || e.message))) {
+                return res.status(400).json({ error: `${req.query.symbol || 'Symbol'} gibt es bei der Marktdatenquelle nicht` })
+            }
+            res.status(500).json({ error: e.message })
+        }
+    })
 
     /**
      * GET /api/chart/tiefe?symbol=BTCUSDT&markt=futures

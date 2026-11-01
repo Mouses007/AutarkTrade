@@ -20,7 +20,7 @@
  * Zeit: Perioden (Tag, Woche, Monat) in UTC, wie `timeframe.change` bei einer
  * Börse in UTC. Kerzen sind `{t,o,h,l,c,v}` mit `t` in ms.
  */
-import { ema, atr, vwap, swingAnker, pivotHighs, pivotLows } from '../../../shared/indicators.js'
+import { ema, atr, vwap, swingAnker, pivotHighs, pivotLows, ankerVwap } from '../../../shared/indicators.js'
 
 const TAG = 86_400_000
 const MIN = 60_000
@@ -90,16 +90,7 @@ export function swingFaecher(kerzen, { seite, staerke = 20, anzahl = 1, minSepAt
     for (let nth = 1; nth <= anzahl; nth++) {
         const anker = swingAnker(kerzen, { seite, staerke, nth, minSepAtr })[n - 1]
         if (anker == null) continue
-        const werte = new Array(n).fill(null)
-        let pv = 0, vol = 0
-        for (let i = anker; i < n; i++) {
-            const k = kerzen[i]
-            const w = k.v > 0 ? k.v : 1
-            pv += ((k.h + k.l + k.c) / 3) * w
-            vol += w
-            werte[i] = pv / vol
-        }
-        linien.push({ nth, anker, werte })
+        linien.push({ nth, anker, werte: ankerVwap(kerzen, anker).vwap })
     }
     return linien
 }

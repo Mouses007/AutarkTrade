@@ -13,7 +13,7 @@ import {
     pvsra, emaHoehereTf, periodenPoc, vektorZonen, swingFaecher, dochtLevel, dailyOpen, engulfing, zigzag,
     candlePocs, periodeVon, rechneVwapVector,
 } from './chart/vwapVector.js'
-import { swingAnker, ema, atr } from '../../shared/indicators.js'
+import { swingAnker, ema, atr, ankerVwap } from '../../shared/indicators.js'
 import { vorgaben, rechneIndikator, ausgabenVon, vwapVectorQuellen, saubereParams, intrabarTf } from './chart/indikatorRegister.js'
 
 let bestanden = 0
@@ -162,6 +162,23 @@ console.log('\nRegister\n')
     check('ohne nachgeladene Kerzen: MTF-Linien leer, Rest gerechnet', w.mtf1.every((x) => x === null) && w.ema21[299] != null && w._vv.stufen.length === 300)
     check('ATR für den POC-Abstandsfilter vorhanden', Number.isFinite(w._vv.atrLetzte) && w._vv.atrLetzte === atr(r, 14)[299])
     check('rechneVwapVector ohne Kerzen bricht nicht', rechneVwapVector([], p, {}).n === 0)
+}
+
+// ── Anchored VWAP (Zeichenwerkzeug) ─────────────────────────────────────
+{
+    const flach = Array.from({ length: 10 }, (_, i) => k(i, 100, 101, 99, 100, 50))
+    const a = ankerVwap(flach, 3, { baender: 2 })
+    check('AVWAP: vor dem Anker leer', a.vwap.slice(0, 3).every((x) => x === null))
+    check('AVWAP: gleiche Kerzen → konstante Linie, σ = 0', a.vwap.slice(3).every((x) => Math.abs(x - 100) < 1e-12) && a.oben2[9] === a.vwap[9])
+    const r = [k(0, 10, 12, 8, 10, 100), k(1, 10, 20, 14, 17, 300), k(2, 17, 9, 3, 6, 0)]
+    const b = ankerVwap(r, 0, { baender: 1 })
+    check('AVWAP: am Anker = typischer Preis', Math.abs(b.vwap[0] - 10) < 1e-12)
+    // tp = 10 (w 100), 17 (w 300), 6 (w 1, Volumen 0 zählt 1)
+    const m = (10 * 100 + 17 * 300 + 6) / 401
+    check('AVWAP: volumengewichtet, Volumen 0 zählt 1', Math.abs(b.vwap[2] - m) < 1e-9)
+    const sig = Math.sqrt((100 * 100 + 300 * 289 + 36) / 401 - m * m)
+    check('AVWAP: 1σ-Band aus gewichteten Momenten', Math.abs(b.oben1[2] - (m + sig)) < 1e-9 && b.oben2[2] === null)
+    check('AVWAP: Anker ausserhalb → alles leer', ankerVwap(r, 5).vwap.every((x) => x === null) && ankerVwap(r, -1).vwap.every((x) => x === null))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

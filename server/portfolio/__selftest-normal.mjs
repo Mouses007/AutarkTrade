@@ -11,10 +11,13 @@
  *   - Bitget-Tausch kommt als zwei Zeilen und muss EINE Bewegung werden.
  *   - Transfer-Paarung in beide Richtungen: was zusammengehört, wird gepaart;
  *     was nur ähnlich aussieht, bleibt getrennt.
+ *   - Bitpanda-Kauf mit Gebühr in VSN: EIN Kauf mit Gebühr, nicht drei Tausche.
+ *   - Sparplan: Lastschrift ↔ Kauf nur bei Bitpandas Kennzeichen, gleichem
+ *     Betrag und Ort; Einzahlung + sofortiger Kauf ohne Kennzeichen bleibt frei.
  *   - Eingabefeld: Seeds und private Schlüssel werden abgelehnt.
  * Die Bitget-Zeilen sind die echten Antworten vom 22.10.2026 (gekürzt).
  */
-import { ausBitgetSteuer, ausBitunixOrders, ausPionexFills, ausBitpandaOperationen, ausEvm, ausBtc, saldiere, ordneTransfers } from './normal.js'
+import { ausBitgetSteuer, ausBitunixOrders, ausPionexFills, ausBitpandaOperationen, ausEvm, ausBtc, saldiere, ordneTransfers, bitpandaHandel, ordneSparplaene, istSparplan } from './normal.js'
 import { erkenneEingabe } from '../../shared/portfolio-adresse.js'
 
 let bestanden = 0, fehlgeschlagen = 0
@@ -106,6 +109,89 @@ console.log('\nBitpanda Operationen (Form der echten Antwort vom 23.10.2026)')
     check('Sparplan-Lastschrift = Einzahlung', b.find((x) => x.externeId === 'l1').art === 'einzahlung')
     check('Saldo CHF = +50 − 50 − 100', nah(s.get('CHF'), -100))
     check('Saldo ALGO = Staking netto − Prämie + 2', nah(s.get('ALGO'), 1.10803044 - 0.22160609 - 0.5 + 2))
+}
+
+console.log('\nBitpanda: Gebühr in VSN (Form der Sparplan-Käufe Feb.–Juni 2026)')
+{
+    const sym = new Map([['btc', 'BTC'], ['chf', 'CHF'], ['vsn', 'VSN'], ['link', 'LINK'], ['ltc', 'LTC'], ['uni', 'UNI']])
+    const tx = (asset, flow, value, extra = {}) => ({ asset_id: asset === 'chf' ? undefined : asset, currency_id: asset === 'chf' ? 'chf' : undefined, flow, asset_amount: { value: String(value) }, credited_at: '2026-05-24T01:03:00Z', ...extra })
+    const b = ausBitpandaOperationen([
+        // als eigene Transaktion …
+        { operation_id: 'v1', operation_type: 'savings_plan', transactions: [tx('chf', 'OUTGOING', '50'), tx('btc', 'INCOMING', '0.00081739'), tx('vsn', 'OUTGOING', '11.50014174')] },
+        // … und als fee_amount an der CHF-Transaktion: dasselbe Ergebnis
+        { operation_id: 'v2', operation_type: 'buy', transactions: [tx('chf', 'OUTGOING', '50', { fee_amount: { value: '11.5', asset_id: 'vsn' } }), tx('btc', 'INCOMING', '0.0008')] },
+        // Verkauf mit Gebühr in VSN
+        { operation_id: 'v3', operation_type: 'sell', transactions: [tx('btc', 'OUTGOING', '0.001'), tx('chf', 'INCOMING', '60'), tx('vsn', 'OUTGOING', '3')] },
+        // Index-Umschichtung mit drei Coins: kein Gebühren-Token → je Asset eine Zeile
+        { operation_id: 'i1', operation_type: 'index_rebalancing', transactions: [tx('link', 'OUTGOING', '1'), tx('ltc', 'OUTGOING', '0.1'), tx('uni', 'INCOMING', '3')] },
+    ], sym)
+    const v1 = b.filter((x) => x.externeId.startsWith('v1'))
+    check('Sparplan mit VSN: genau eine Zeile', v1.length === 1, JSON.stringify(v1))
+    check('… Kauf BTC gegen 50 CHF, externeId = Operation', v1[0]?.art === 'kauf' && v1[0].asset === 'BTC' && v1[0].gegenAsset === 'CHF' && v1[0].gegenMenge === -50 && v1[0].externeId === 'v1')
+    check('… Gebühr 11.50014174 VSN', v1[0]?.gebuehrAsset === 'VSN' && nah(v1[0].gebuehrMenge, 11.50014174))
+    const v2 = b.find((x) => x.externeId === 'v2')
+    check('Gebühr als fee_amount in VSN: ebenfalls Kauf + Gebühr', v2?.art === 'kauf' && v2.gebuehrAsset === 'VSN' && nah(v2.gebuehrMenge, 11.5))
+    const v3 = b.find((x) => x.externeId === 'v3')
+    check('Verkauf mit VSN-Gebühr', v3?.art === 'verkauf' && v3.asset === 'BTC' && v3.menge === -0.001 && v3.gegenMenge === 60 && v3.gebuehrAsset === 'VSN')
+    check('Index mit drei Coins bleibt je Asset', b.filter((x) => x.externeId.startsWith('i1:')).length === 3)
+    const s = saldiere(b)
+    check('Saldo VSN = alle Gebühren', nah(s.get('VSN'), -(11.50014174 + 11.5 + 3)))
+    check('Saldo CHF = −50 −50 +60', nah(s.get('CHF'), -40))
+    // die reine Regel
+    check('Zwei Abgänge ohne Gebühren-Token → kein Handel', bitpandaHandel([['LINK', -1], ['LTC', -1], ['UNI', 2]]) === null)
+    check('Zwei Gebühren-Token als Abgang → kein Handel', bitpandaHandel([['VSN', -1], ['BEST', -1], ['BTC', 2]]) === null)
+    check('VSN gekauft (Zugang), Gebühr in BEST', bitpandaHandel([['CHF', -10], ['VSN', 300], ['BEST', -1]])?.gebuehr?.[0] === 'BEST')
+    check('Zwei Zugänge → kein Handel', bitpandaHandel([['CHF', -10], ['BTC', 1], ['ETH', 1]]) === null)
+}
+
+console.log('\nSparplan: Lastschrift ↔ Kauf (Muster der echten Zeilen)')
+{
+    const T = (s) => Date.parse(s)
+    const sp = JSON.stringify({ operation_type: 'savings_plan' })
+    const z = [
+        // BTC-Plan: 50 CHF, Kauf 81 s später
+        { id: 1, ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 50, zeit: T('2026-10-25T02:02:00Z'), roh: sp },
+        { id: 2, ort: 'bitpanda', art: 'kauf', asset: 'BTC', menge: 0.0007365, gegenAsset: 'CHF', gegenMenge: -50, zeit: T('2026-10-25T02:03:21Z'), roh: sp },
+        // ETH-Plan: 40 CHF in derselben Sekunde
+        { id: 3, ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 40, zeit: T('2026-11-01T02:34:00Z'), roh: { operation_type: 'savings_plan' } },
+        { id: 4, ort: 'bitpanda', art: 'kauf', asset: 'ETH', menge: 0.0207, gegenAsset: 'CHF', gegenMenge: -40, zeit: T('2026-11-01T02:34:00Z'), roh: { operation_type: 'savings_plan' } },
+        // EUR-Plan (bis 2025)
+        { id: 5, ort: 'bitpanda', art: 'einzahlung', asset: 'EUR', menge: 40, zeit: T('2025-03-01T00:00:00Z'), roh: sp },
+        { id: 6, ort: 'bitpanda', art: 'kauf', asset: 'ETH', menge: 0.018, gegenAsset: 'EUR', gegenMenge: -40, zeit: T('2025-03-01T00:00:00Z'), roh: sp },
+        // gewöhnliche Einzahlung + Kauf 1 min später (WIF, 03.02.2025): kein Sparplan
+        { id: 7, ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 500, zeit: T('2025-02-03T09:49:00Z'), roh: JSON.stringify({ operation_type: 'deposit' }) },
+        { id: 8, ort: 'bitpanda', art: 'kauf', asset: 'WIF', menge: 717, gegenAsset: 'CHF', gegenMenge: -500, zeit: T('2025-02-03T09:50:00Z'), roh: JSON.stringify({ operation_type: 'buy' }) },
+        // Sparplan-Lastschrift, aber der Kauf liegt VOR ihr
+        { id: 9, ort: 'bitpanda', art: 'kauf', asset: 'BTC', menge: 0.001, gegenAsset: 'CHF', gegenMenge: -50, zeit: T('2026-03-01T02:03:00Z'), roh: sp },
+        { id: 10, ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 50, zeit: T('2026-03-01T02:04:00Z'), roh: sp },
+        // anderer Betrag
+        { id: 11, ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 50, zeit: T('2026-04-01T02:04:00Z'), roh: sp },
+        { id: 12, ort: 'bitpanda', art: 'kauf', asset: 'BTC', menge: 0.001, gegenAsset: 'CHF', gegenMenge: -45, zeit: T('2026-04-01T02:05:00Z'), roh: sp },
+        // anderer Ort
+        { id: 13, ort: 'i:Andere', art: 'kauf', asset: 'BTC', menge: 0.001, gegenAsset: 'CHF', gegenMenge: -50, zeit: T('2026-04-01T02:05:00Z'), roh: sp },
+        // zu spät (20 min)
+        { id: 14, ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 50, zeit: T('2026-05-01T02:00:00Z'), roh: sp },
+        { id: 15, ort: 'bitpanda', art: 'kauf', asset: 'BTC', menge: 0.001, gegenAsset: 'CHF', gegenMenge: -50, zeit: T('2026-05-01T02:20:00Z'), roh: sp },
+    ]
+    const p = ordneSparplaene(z)
+    const hat = (e, k) => p.some((x) => x.einzahlung === e && x.kauf === k)
+    check('BTC-Plan gepaart', hat(1, 2))
+    check('ETH-Plan in derselben Sekunde gepaart', hat(3, 4))
+    check('EUR-Plan gepaart', hat(5, 6))
+    check('Einzahlung + Kauf ohne Kennzeichen: frei', !p.some((x) => x.einzahlung === 7 || x.kauf === 8))
+    check('Kauf vor der Lastschrift: frei', !p.some((x) => x.einzahlung === 10 || x.kauf === 9))
+    check('Anderer Betrag oder Ort: frei', !p.some((x) => x.einzahlung === 11 || x.kauf === 12 || x.kauf === 13))
+    check('20 min später: frei', !p.some((x) => x.einzahlung === 14))
+    check('genau drei Paare', p.length === 3, JSON.stringify(p))
+    // Zwei Pläne am selben Morgen: jede Lastschrift bekommt ihren eigenen, nächsten Kauf
+    const zwei = ordneSparplaene([
+        { id: 'a', ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 50, zeit: 1000, roh: sp },
+        { id: 'b', ort: 'bitpanda', art: 'einzahlung', asset: 'CHF', menge: 50, zeit: 2000, roh: sp },
+        { id: 'k1', ort: 'bitpanda', art: 'kauf', asset: 'BTC', menge: 1, gegenAsset: 'CHF', gegenMenge: -50, zeit: 1500, roh: sp },
+        { id: 'k2', ort: 'bitpanda', art: 'kauf', asset: 'ETH', menge: 1, gegenAsset: 'CHF', gegenMenge: -50, zeit: 2500, roh: sp },
+    ])
+    check('zwei Pläne: je ein Kauf, keiner doppelt', zwei.length === 2 && new Set(zwei.map((x) => x.kauf)).size === 2 && zwei.some((x) => x.einzahlung === 'a' && x.kauf === 'k1'))
+    check('istSparplan: kaputtes roh → nein', !istSparplan({ roh: '{kaputt' }) && !istSparplan({}))
 }
 
 console.log('\nEVM')

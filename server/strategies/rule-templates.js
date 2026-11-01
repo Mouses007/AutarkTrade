@@ -1,5 +1,5 @@
 /**
- * Startvorlagen für den Strategie-Editor.
+ * Startvorlagen für eigene Regel-Strategien (Bibliothek › Neue Strategie › Vorlage).
  *
  * Vor einem leeren Regelformular zu sitzen ist der sicherste Weg, es nie zu
  * benutzen. Diese Vorlagen sind lauffähige Beispiele zum Umbauen — bewusst
@@ -89,7 +89,7 @@ export const VORLAGEN = [
                 { type: 'condition', code: 'vwap_verloren', when: { left: 'close', op: 'lt', right: 'vwap' } },
                 { type: 'timeout', code: 'kein_ruecklauf', candles: { param: 'wartefrist' } },
             ],
-            stopLoss: { anchor: 'correctionLow', offsetPct: { param: 'stopPuffer' } },
+            stopLoss: { anchor: 'lastSwingLow', offsetPct: { param: 'stopPuffer' } },
             takeProfit: { mode: 'rr', rr: { param: 'ziel' } },
             breakEvenAtR: 1,
         },
@@ -205,7 +205,7 @@ export const VORLAGEN = [
                 { type: 'condition', code: 'trend_gebrochen', when: { left: 'emaFast', op: 'lt', right: 'emaEntry' } },
                 { type: 'timeout', code: 'zu_lang', candles: { param: 'maxKerzen' } },
             ],
-            stopLoss: { anchor: 'correctionLow', offsetPct: { param: 'stopPuffer' } },
+            stopLoss: { anchor: 'lastSwingLow', offsetPct: { param: 'stopPuffer' } },
             takeProfit: { mode: 'rr', rr: { param: 'ziel' } },
             breakEvenAtR: 1,
         },
@@ -237,7 +237,7 @@ export const VORLAGEN = [
                 { type: 'condition', code: 'kreuzung_zurueck', when: { left: 'schnell', op: 'lt', right: 'langsam' } },
                 { type: 'timeout', code: 'kein_ruecklauf', candles: { param: 'wartefrist' } },
             ],
-            stopLoss: { anchor: 'correctionLow', offsetPct: 0.3 },
+            stopLoss: { anchor: 'lastSwingLow', offsetPct: 0.3 },
             takeProfit: { mode: 'rr', rr: { param: 'ziel' } },
             breakEvenAtR: 1,
         },

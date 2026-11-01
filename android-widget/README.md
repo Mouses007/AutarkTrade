@@ -159,7 +159,7 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## Versioning
 
-`versionName` tracks the AutarkTrade version plus the build number (currently **4.2.0-28**);
+`versionName` tracks the AutarkTrade version plus the build number (currently **4.2.0-29**);
 the APK file carries it in its name.
 
 Since 4.2.0-28: HTTPS with the paired AutarkTrade CA as the only trust anchor (default for
@@ -170,7 +170,7 @@ older debug-signed app once before installing.
 Since 4.1.0-27 (audit D): the device key and the push secret are stored AES-GCM encrypted
 with a key from the Android KeyStore (older plaintext values are migrated on first read),
 `allowBackup` is off and nothing goes into cloud backup or device transfer; the widget's
-own actions (refresh, eye, 15-min alarm) go to a non-exported receiver; alarm notifications
+own actions (refresh, eye, speaker, 15-min alarm) go to a non-exported receiver; alarm notifications
 show only „AutarkTrade: Chart-Alarm" on the lock screen (speech output is unchanged);
 the settings screen blocks screenshots; a WebAPK only receives links when its address,
 install source (Google Play or its browser) and pinned signing certificate check out;

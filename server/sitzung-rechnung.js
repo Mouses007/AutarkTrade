@@ -61,7 +61,7 @@ export function berechneSitzung({ offen = [], geschlossen = [], planMaxVerlustUs
         gebuehren += z(p.fee)
         funding += z(p.funding)
         // 0 zählt als Gewinner — derselbe Kanon wie im Journal
-        // (`totals-kern.js`, `journal-bridge.js`). Vorher fiel ein
+        // (`totals-kern.js`). Vorher fiel ein
         // Break-even-Trade durch beide Raster und die Trefferquote der Sitzung
         // wich von der des Journals desselben Tages ab.
         if (pnl >= 0) gewinner++

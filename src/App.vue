@@ -11,6 +11,8 @@ const authChecked = ref(false)
 const needsLogin = ref(false)
 const setupRequired = ref(false)
 const codeNoetig = ref(false)
+// Status für das Login-Fenster (zweiter Faktor, YubiKey, Mindestlänge)
+const loginStatus = ref({})
 
 onMounted(async () => {
     try {
@@ -19,6 +21,7 @@ onMounted(async () => {
         // verteilt keine Cookies, zuerst muss ein Passwort festgelegt werden.
         setupRequired.value = !!data.setupRequired
         codeNoetig.value = !!data.codeNoetig
+        loginStatus.value = data
         needsLogin.value = setupRequired.value || (!!data.authEnabled && !data.loggedIn)
     } catch (e) {
         // Im Zweifel App normal laden (Gate ist optional)
@@ -29,7 +32,7 @@ onMounted(async () => {
 })
 </script>
 <template>
-    <LoginGate v-if="authChecked && needsLogin" :setup="setupRequired" :code-noetig="codeNoetig" />
+    <LoginGate v-if="authChecked && needsLogin" :setup="setupRequired" :code-noetig="codeNoetig" :status="loginStatus" />
     <!-- Seiten mit `meta.rahmen` (alle ausser Setup und Update-Assistent)
          stehen im Rahmen aus Kopfleiste und Seitenmenü. -->
     <Rahmen v-else-if="authChecked && $route.meta.rahmen">

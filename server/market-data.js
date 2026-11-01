@@ -11,8 +11,8 @@
  * (`server/marktdaten/index.js`, Einstellung `marktdatenQuelle`): Binance oder
  * Bitget, bei `aus` wirft jeder Abruf `MarktdatenAus`.
  *
- * ACHTUNG Backtests: Die bisherigen Freigaben (Robustheit, Live-Gates) beruhen
- * auf Binance-Historie. Bitget reicht je nach Zeiteinheit deutlich weniger weit
+ * ACHTUNG Backtests: Die bisherigen Robustheitsprüfungen beruhen auf
+ * Binance-Historie. Bitget reicht je nach Zeiteinheit deutlich weniger weit
  * zurück (`history-candles`, 200 je Seite; BTC 1D bis 2020, kleine Coins und
  * kurze Zeiteinheiten weniger) und kennt kein 8h — ein Backtest über Bitget ist
  * ein anderer Datensatz, keine Wiederholung. `getHistoricalCandles` meldet es,
@@ -26,7 +26,7 @@
  */
 
 import { logWarn } from './logger.js'
-import { warteAufGewicht, istWiederholbar, WIEDERHOLUNGEN } from './binance-takt.js'
+import { warteAufGewicht, istWiederholbar, WIEDERHOLUNGEN, pausiertBis } from './binance-takt.js'
 import * as marktdaten from './marktdaten/index.js'
 
 /** Von Binance unterstützte Intervalle → Länge in Millisekunden. */
@@ -77,7 +77,7 @@ export function currentCandleOpen(tf, now = Date.now()) {
 // Kerzenlänge gekoppelt: innerhalb einer laufenden Kerze kann sich am Satz
 // geschlossener Kerzen nichts ändern, also ist ein erneuter Abruf sinnlos.
 const cache = new Map()      // key -> { candles, fetchedAt, lastOpen }
-const inFlight = new Map()   // key -> Promise (Dedup paralleler Abrufe)
+const inFlight = new Map()   // key -> { promise, limit } (Dedup paralleler Abrufe)
 
 // Die Wahl gehört in den Schlüssel: nach einem Wechsel der Marktdatenquelle
 // darf der Cache keine Kerzen der alten Börse weiterreichen.
@@ -148,17 +148,41 @@ export async function getClosedCandles(symbol, interval, limit = 300, opts = {})
 
     // Paralleler Abruf desselben Schlüssels wird zusammengelegt — bei mehreren
     // Instanzen auf demselben Symbol sonst n identische Requests pro Takt.
-    if (inFlight.has(key)) {
-        const shared = await inFlight.get(key)
-        return shared.slice(-limit)
+    // Geteilt wird nur, was reicht: läuft ein KLEINERER Abruf (Momentum-Alarm
+    // 300, Coin-Radar 200), bekam ein grösserer bis 31.10.2026 still dessen
+    // Kerzen — die Engine rechnete mit verkürztem Fenster und merkte die
+    // Kerze als verarbeitet. Jetzt: abwarten und selbst nachladen.
+    const laufend = inFlight.get(key)
+    if (laufend) {
+        if (laufend.limit >= limit) {
+            const shared = await laufend.promise
+            return shared.slice(-limit)
+        }
+        await laufend.promise.catch(() => {})
+        if (inFlight.get(key) === laufend) inFlight.delete(key)
+        return getClosedCandles(symbol, interval, limit, opts)
     }
 
     // +1, weil die laufende Kerze mitkommt und gleich wieder wegfällt
     const promise = (async () => {
-        const rows = await fetchKlines({
-            symbol: sym, interval, market,
-            limit: Math.min(limit + 1, anbieter.KERZEN_MAX[market]),
-        })
+        // Mehr, als ein Abruf hergibt (Binance-Futures 1500, Bitget 1000):
+        // rückwärts blättern statt kappen. Ein Monats-VWAP auf 15m braucht ~2900
+        // Kerzen; gekappt rechnete der Papierbetrieb eine andere Linie als der
+        // Backtest, und der Cache traf nie (`length >= limit`).
+        //
+        // `bremse: false`: das ist der Livepfad. Er wartet nicht auf das
+        // Gewichtsbudget des Labors (sonst stand der serielle Engine-Takt bis
+        // zum Ende einer Strafe still, Minuten lang, und die Führung verfiel);
+        // bei laufender Binance-Strafe bricht er sofort ab, und die Engine
+        // versucht dieselbe Kerze beim nächsten Takt erneut.
+        const rows = limit + 1 > anbieter.KERZEN_MAX[market]
+            ? await getHistoricalCandles(sym, interval,
+                openOfRunning - limit * timeframeMs(interval), openOfRunning,
+                { market, maxCandles: limit, now, bremse: false })
+            : await fetchKlines({
+                symbol: sym, interval, market,
+                limit: limit + 1,
+            })
         const closed = rows.filter((k) => k.t < openOfRunning)
         cache.set(key, { candles: closed, fetchedAt: now, lastOpen: openOfRunning })
 
@@ -169,12 +193,13 @@ export async function getClosedCandles(symbol, interval, limit = 300, opts = {})
         return closed
     })()
 
-    inFlight.set(key, promise)
+    const eintrag = { promise, limit }
+    inFlight.set(key, eintrag)
     try {
         const closed = await promise
         return closed.slice(-limit)
     } finally {
-        inFlight.delete(key)
+        if (inFlight.get(key) === eintrag) inFlight.delete(key)
     }
 }
 
@@ -189,7 +214,7 @@ export async function getClosedCandles(symbol, interval, limit = 300, opts = {})
  * Coin als Fehlerzeile ab (gesehen bei ONDOUSDT am 16.08.2026) — obwohl der
  * Abruf eine Sekunde später fehlerfrei durchlief.
  */
-async function mitWiederholung(abruf, was, bremse = true) {
+async function mitWiederholung(abruf, was, bremse = true, livepfad = false) {
     let letzter
     for (let versuch = 0; versuch <= WIEDERHOLUNGEN.length; versuch++) {
         try {
@@ -198,6 +223,8 @@ async function mitWiederholung(abruf, was, bremse = true) {
             letzter = e
             const status = e?.response?.status
             if (!istWiederholbar(status) || versuch === WIEDERHOLUNGEN.length) throw e
+            // Der Livepfad wiederholt nicht in eine laufende Strafe hinein.
+            if (livepfad) pruefeStrafe(was)
             const pause = WIEDERHOLUNGEN[versuch]
             logWarn('market-data', `${was}: ${e.message} — Versuch ${versuch + 2} in ${pause / 1000}s`)
             await new Promise((f) => setTimeout(f, pause))
@@ -207,6 +234,16 @@ async function mitWiederholung(abruf, was, bremse = true) {
         }
     }
     throw letzter
+}
+
+/**
+ * Livepfad bei laufender Binance-Strafe (429/418): sofort Fehler statt warten.
+ * Weitere Abrufe würden die Sperre nur verlängern, und Warten hielte den
+ * seriellen Engine-Takt für alle Instanzen an.
+ */
+function pruefeStrafe(was) {
+    const bis = pausiertBis()
+    if (bis) throw new Error(`${was}: Binance-Strafe läuft bis ${new Date(bis).toISOString()} — Kerzenabruf übersprungen`)
 }
 
 /** Einmal je Symbol/Zeiteinheit/Quelle melden, dass die Historie kürzer ist als verlangt. */
@@ -222,6 +259,9 @@ const kurzGemeldet = new Set()
  * `history-candles` reicht weniger weit zurück als Binance; beginnt die Reihe
  * später als `fromTs`, steht das einmal im Log. Backtest-Freigaben, die auf
  * Binance-Historie beruhen, gelten für eine Bitget-Reihe nicht ungeprüft.
+ *
+ * `opts.bremse === false` (nur der Livepfad `getClosedCandles`): kein Warten
+ * auf das Gewichtsbudget, bei laufender Binance-Strafe sofort ein Fehler.
  *
  * @returns {Promise<Array>} lückenlos aufsteigend sortiert, ohne laufende Kerze
  */
@@ -263,17 +303,21 @@ export async function getHistoricalCandles(symbol, interval, fromTs, toTs, opts 
     const gewicht = anbieter.seitenGewicht(market, pageSize)
     const out = []
     let guard = 0
+    // `bremse: false` setzt nur `getClosedCandles` (Livepfad, blättert über
+    // KERZEN_MAX hinaus): kein Warten auf das Budget, bei Strafe sofort Fehler.
+    const bremse = opts.bremse !== false
 
     while (cursor < end && out.length < maxCandles) {
         if (++guard > 500) break   // Sicherheitsnetz gegen Endlosschleifen
         // NUR hier wird gewartet: Historie ist Laborarbeit und darf sich
         // gedulden. `getClosedCandles` — der Weg des Livebetriebs — bleibt
-        // ungebremst und überholt jederzeit.
-        await warteAufGewicht(gewicht)
+        // ungebremst und überholt jederzeit, auch wenn es blättert.
+        if (bremse) await warteAufGewicht(gewicht)
+        else pruefeStrafe(`${sym} ${interval}`)
         const rows = await mitWiederholung(() => fetchKlines({
             symbol: sym, interval, market,
             limit: pageSize, startTime: cursor, endTime: end,
-        }), `${sym} ${interval}`)
+        }), `${sym} ${interval}`, bremse, !bremse)
         if (!rows.length) break
 
         for (const k of rows) {

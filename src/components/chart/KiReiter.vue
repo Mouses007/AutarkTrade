@@ -21,8 +21,9 @@ import {
     uebernimmKi, verwirfKi, alleKiUebernehmen, schalteKiAlle, kiErledigt, kiZuruecksetzen,
 } from '../../stores/chartKi.js'
 import KiChat from './KiChat.vue'
+import InfoTipp from '../InfoTipp.vue'
+import QuelleAus from '../quellen/QuelleAus.vue'
 import { Symbol, Knopf } from '../basis'
-import KiHinweis from '../quellen/KiHinweis.vue'
 
 const props = defineProps({
     panel: { type: Object, required: true },
@@ -33,7 +34,8 @@ const props = defineProps({
     // Leinwand mit dem Bild des Charts — geht als Gegenprüfung an die KI (siehe bildFuerKi)
     bild: { type: Function, default: null },
 })
-const { t } = useI18n()
+const { t, te } = useI18n()
+const emit = defineEmits(['waehle'])
 
 /*
  * Analyse oder Chat — eine Frage des Bildschirms, nicht des Layouts, daher im
@@ -46,41 +48,30 @@ const modus = ref(leseModus())
 function setzeModus(m) { modus.value = m; try { localStorage.setItem(MODUS_SCHLUESSEL, m) } catch { /* kein Speicher */ } }
 
 /*
- * Was die Analyse liefern soll (Kästchen) — eine Vorliebe, kein Layout-Teil,
- * daher im Browser gemerkt. Abgewähltes bekommt die KI gar nicht zu sehen.
- * Bedingungen und Liquidationszonen sind seit 24.10.2026 fest dabei (ohne
- * Kästchen). Beim Volumenprofil wählt man, worüber es gerechnet wird:
- * Konsolidierungen (Vorgabe), Tage oder Wochen.
+ * Zwei Knöpfe statt Kästchen (31.10.2026): „KI-Zeichnungen setzen" — der Code
+ * vermisst alles (Niveaus, Trendlinien, Zonen, Volumenprofile je Phase/Tag/Woche,
+ * Kanäle, höhere Zeiteinheit), die KI zeichnet nur, was für ein Setup zählt
+ * (höchstens 6, auch keine). „Meine Zeichnungen analysieren" — die KI liest den
+ * Chart anhand der eigenen Zeichnungen, auf Wunsch mit Korrekturen und Fehlendem.
  */
-const OPTIONEN = ['niveaus', 'trend', 'zonen', 'volumen', 'htf', 'kanal']
-const PROFIL_ARTEN = ['konsolidierung', 'tag', 'woche']
-const optionen = ref((() => {
-    const a = { ...Object.fromEntries(OPTIONEN.map((k) => [k, true])), profilArt: 'konsolidierung' }
-    try {
-        const roh = JSON.parse(localStorage.getItem('chartKiOptionen') || '{}') || {}
-        for (const k of OPTIONEN) if (typeof roh[k] === 'boolean') a[k] = roh[k]
-        if (PROFIL_ARTEN.includes(roh.profilArt)) a.profilArt = roh.profilArt
-    } catch { /* Vorgabe */ }
-    return a
-})())
-watch(optionen, (v) => { try { localStorage.setItem('chartKiOptionen', JSON.stringify(v)) } catch { /* kein Speicher */ } }, { deep: true })
+const ERGAENZEN_SCHLUESSEL = 'chartKiErgaenzen'
+const ergaenzen = ref((() => { try { return localStorage.getItem(ERGAENZEN_SCHLUESSEL) !== 'aus' } catch { return true } })())
+watch(ergaenzen, (v) => { try { localStorage.setItem(ERGAENZEN_SCHLUESSEL, v ? 'an' : 'aus') } catch { /* kein Speicher */ } })
 
 /*
- * Bildprüfung (Versuch seit 27.10.2026): ein Bild des sichtbaren Charts geht mit, und die
- * KI legt Einspruch ein, wo ein gemessener Kanal oder eine Trendlinie im Bild nicht zu
- * sehen ist. Kostet je Analyse etwas mehr (ein Bild ≈ 1–2 Tsd. Eingabe-Tokens), daher
- * abschaltbar und im Browser gemerkt.
+ * Ein Bild des sichtbaren Charts geht immer mit (seit 31.10.2026 ohne Schalter): die
+ * KI legt damit Einspruch ein, wo ein gemessener Kanal oder eine Trendlinie im Bild
+ * nicht zu sehen ist. Der Server nimmt es nur, wenn der Anbieter Bilder versteht.
+ * Das Bild entsteht ohne Kontowerte (`ohneKontowerte`, seit 01.11.2026): der
+ * Positionsrechner zeigt darin nur Liq-Linie und Warnung, Journal-Trades nur R —
+ * vorher stand „Einsatz 2.5 % vom Konto" samt USDT-Beträgen im Bild an den Anbieter.
  */
-const BILD_SCHLUESSEL = 'chartKiBild'
-const mitBild = ref((() => { try { return localStorage.getItem(BILD_SCHLUESSEL) !== 'aus' } catch { return true } })())
-watch(mitBild, (v) => { try { localStorage.setItem(BILD_SCHLUESSEL, v ? 'an' : 'aus') } catch { /* kein Speicher */ } })
 const BILD_BREITE = 1280
 
 /** Leinwand → JPEG (höchstens 1280 px breit), als {mediaType, base64}; ohne Bild null. */
 function bildFuerKi() {
-    if (!mitBild.value || !(optionen.value.kanal || optionen.value.trend)) return null
     try {
-        const quelle = props.bild?.()
+        const quelle = props.bild?.({ ohneKontowerte: true })
         if (!quelle?.width) return null
         const f = Math.min(1, BILD_BREITE / quelle.width)
         const l = document.createElement('canvas')
@@ -92,9 +83,6 @@ function bildFuerKi() {
         return i > 0 ? { mediaType: 'image/jpeg', base64: url.slice(i + 1) } : null
     } catch { return null }
 }
-const keineQuelle = computed(() => !optionen.value.niveaus && !optionen.value.trend && !optionen.value.volumen && !optionen.value.htf && !optionen.value.kanal)
-// Zonen entstehen aus Niveaus, Volumenprofil oder höherer Zeiteinheit
-const zonenMoeglich = computed(() => optionen.value.niveaus || optionen.value.volumen || optionen.value.htf)
 
 /*
  * Analyse und Zustand der Vorschläge liegen im Speicher `stores/chartKi.js` —
@@ -102,8 +90,10 @@ const zonenMoeglich = computed(() => optionen.value.niveaus || optionen.value.vo
  * Übernehmen/Verwerfen) und zeichnet die Vorschau daraus.
  */
 const analyse = kiAnzeige
-const laeuft = ref(false)
+const laeuft = ref(null)       // null | 'setzen' | 'eigene'
 const fehler = ref('')
+// Marktdaten aus: die Route antwortet 200 `{aus: true, …}` — ein Zustand, keine Analyse (QuelleAus)
+const quelleAus = ref(null)
 const alle = kiAlle
 const uebernimmtAlle = kiUebernimmtAlle
 const offen = computed(() => !kiMarken.value.erledigt)
@@ -122,6 +112,7 @@ async function ladeLetzte() {
     const meine = ++nr
     const fuer = stand()
     fehler.value = ''
+    quelleAus.value = null
     try {
         const { data } = await axios.get('/api/chart/ki-analyse', { params: { symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt } })
         if (meine !== nr || fuer !== stand()) return
@@ -137,22 +128,27 @@ function sichtbarFenster() {
     } catch { return null }
 }
 
-async function erstelle() {
+async function erstelle(modus) {
     const meine = ++nr
     const fuer = stand()
-    laeuft.value = true
+    laeuft.value = modus
     fehler.value = ''
+    quelleAus.value = null
     const beginn = Date.now()
     try {
         const { data } = await axios.post('/api/chart/ki-analyse', {
             symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt,
-            auswahl: { ...optionen.value, zonen: optionen.value.zonen && zonenMoeglich.value, bedingungen: true, hebel: true },
+            modus, ergaenzen: ergaenzen.value,
             fenster: sichtbarFenster(),
             bild: bildFuerKi(),
         })
         // Inzwischen anderes Symbol: verwerfen. Der Server hat sie abgelegt — zurück
         // auf dem alten Symbol zeigt der Reiter sie wieder, ohne neu zu bezahlen.
         if (meine !== nr || fuer !== stand()) return
+        // `aus: true` streng: bis 01.11.2026 trug auch die Erfolgsantwort ein `aus` ('neu'|'sperre', jetzt
+        // `herkunft`), und `{aus: true}` stand als Analyse da („Die KI hat nichts eingezeichnet …").
+        // Die vorige Analyse bleibt stehen — die KI wurde gar nicht gefragt.
+        if (data?.aus === true) { quelleAus.value = data; return }
         setzeKiAnalyse(data)
     } catch (e) {
         // Brach nur der Browser ab, rechnet der Server weiter und legt das Ergebnis ab —
@@ -160,10 +156,20 @@ async function erstelle() {
         if (e.code === 'ECONNABORTED' && meine === nr && fuer === stand()) {
             if (await warteAufErgebnis(beginn, meine, fuer)) return
         }
-        if (meine === nr && fuer === stand()) fehler.value = e.response?.data?.error || e.message
+        if (meine === nr && fuer === stand()) fehler.value = fehlerText(e)
     } finally {
-        laeuft.value = false
+        if (meine === nr) laeuft.value = null
     }
+}
+
+/** Zeichnungsarten als „1× Pfeil, 2× Kreis / Ellipse" (Namen wie in der Zeichenleiste). */
+const artenText = (liste) => (liste || []).map((x) => `${x.anzahl}× ${te('chart.wz.' + x.typ) ? t('chart.wz.' + x.typ) : x.typ}`).join(', ')
+
+function fehlerText(e) {
+    const d = e.response?.data
+    if (d?.code === 'keineZeichnungen') return t('chart.ki.keineZeichnungen')
+    if (d?.code === 'nurUngemessene') return t('chart.ki.nurUngemessene', { arten: artenText(d.uebergangen) })
+    return d?.error || e.message
 }
 
 /** Nach einem Abbruch im Browser bis zu 5 Minuten im Server-Cache nachsehen. */
@@ -202,6 +208,24 @@ const struktur = (a) => {
 }
 
 const zeit = (ms) => (ms ? new Date(ms).toLocaleString() : '')
+// Eigene Zeichnungen: gemessener Stand (Code) und Bewertung (KI) in einer Zeile, Wichtiges zuerst
+const RANG = { hoch: 0, mittel: 1, gering: 2 }
+const eigeneZeilen = computed(() => {
+    const a = analyse.value
+    if (a?.modus !== 'eigene') return []
+    const bew = new Map((a.bewertungen || []).map((b) => [b.u, b]))
+    return (a.nutzer || []).map((u) => ({ ...u, bewertung: bew.get(u.id) || null }))
+        .sort((x, y) => (RANG[x.bewertung?.wichtig] ?? 3) - (RANG[y.bewertung?.wichtig] ?? 3))
+})
+// Eigene Zeichnungen, die NICHT in der Analyse sind: über 20 hinaus und Arten, die der Code nicht misst
+const ausserListe = computed(() => {
+    const a = analyse.value
+    if (a?.modus !== 'eigene') return ''
+    const teile = []
+    if (a.nutzerWeggelassen > 0) teile.push(t('chart.ki.weggelassen', { n: a.nutzerWeggelassen }))
+    if (a.nutzerUebergangen?.length) teile.push(t('chart.ki.uebergangen', { arten: artenText(a.nutzerUebergangen) }))
+    return teile.join(' ')
+})
 const preis = (p) => (Math.abs(p) >= 1000 ? p.toFixed(1) : Math.abs(p) >= 1 ? p.toFixed(3) : p.toPrecision(4))
 
 watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeLetzte, { immediate: true })
@@ -217,37 +241,61 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
         </div>
         <KiChat v-if="modus === 'chat'" class="chatFlaeche" :panel="panel" :sichtbar-bis="sichtbarBis" />
         <template v-else>
-        <Knopf klein symbol="ki" :laedt="laeuft" :disabled="keineQuelle" class="erstellen" @click="erstelle">
-            <template v-if="!laeuft">{{ t('chart.ki.erstellen', { symbol: panel.symbol, tf: panel.interval }) }}</template>
-        </Knopf>
-        <div class="optionen">
-            <label v-for="o in OPTIONEN" :key="o" class="option" :class="{ aus: o === 'zonen' && !zonenMoeglich }" :title="t('chart.ki.optTipp.' + o)">
-                <input v-model="optionen[o]" type="checkbox" :disabled="o === 'zonen' && !zonenMoeglich" />
-                {{ t('chart.ki.opt.' + o) }}
-            </label>
+        <div class="knoepfe">
+            <Knopf klein symbol="ki" :laedt="laeuft === 'setzen'" :disabled="!!laeuft" class="erstellen" @click="erstelle('setzen')">
+                {{ t('chart.ki.setzen', { symbol: panel.symbol, tf: panel.interval }) }}</Knopf>
+            <Knopf klein symbol="stift" :laedt="laeuft === 'eigene'" :disabled="!!laeuft" class="erstellen" @click="erstelle('eigene')">
+                {{ t('chart.ki.eigene') }}</Knopf>
+            <div class="optionZeile">
+                <label class="option" :title="t('chart.ki.ergaenzenTipp')">
+                    <input v-model="ergaenzen" type="checkbox" /> {{ t('chart.ki.ergaenzen') }}
+                </label>
+                <InfoTipp schluessel="chart.ki.hinweis" breit />
+            </div>
         </div>
-        <div v-if="optionen.volumen" class="profilArt" role="group" :aria-label="t('chart.ki.profilArt.titel')">
-            <span>{{ t('chart.ki.profilArt.titel') }}</span>
-            <button v-for="p in PROFIL_ARTEN" :key="p" type="button" :class="{ an: optionen.profilArt === p }" :aria-pressed="optionen.profilArt === p"
-                :title="t('chart.ki.profilArt.tipp.' + p)" @click="optionen.profilArt = p">{{ t('chart.ki.profilArt.' + p) }}</button>
-        </div>
-        <label class="option bildOption" :class="{ aus: !optionen.kanal && !optionen.trend }" :title="t('chart.ki.bildTipp')">
-            <input v-model="mitBild" type="checkbox" :disabled="!optionen.kanal && !optionen.trend" />
-            {{ t('chart.ki.bild') }}
-        </label>
-        <div v-if="keineQuelle" class="fehler">{{ t('chart.ki.optLeer') }}</div>
-        <div class="hinweis">{{ t('chart.ki.hinweis') }}</div>
         <div v-if="fehler" class="fehler">{{ fehler }}</div>
+        <QuelleAus v-if="quelleAus" :aus="quelleAus" klein />
 
         <template v-if="analyse">
             <div class="kopf">
                 <small>{{ zeit(analyse.stand) }} · {{ analyse.provider }}/{{ analyse.model }}<template v-if="analyse.costUsd != null">
                         · {{ analyse.costUsd.toFixed(4) }} $</template></small>
             </div>
-            <!-- S12: Pflichtlabel an der KI-Analyse (Text, Bedingungen, Vorschläge). -->
-            <KiHinweis klein />
             <div v-if="analyse.auswahl" class="struktur">{{ struktur(analyse) }}</div>
+            <div class="artZeile">{{ t(analyse.modus === 'eigene' ? 'chart.ki.artEigene' : 'chart.ki.artSetzen') }}</div>
             <p v-if="analyse.text" class="text" data-ki-generiert="true">{{ analyse.text }}</p>
+            <template v-if="eigeneZeilen.length">
+                <div class="abschnitt">{{ t('chart.ki.meineZeichnungen') }}</div>
+                <div v-if="ausserListe" class="hinweis">{{ ausserListe }}</div>
+                <button v-for="u in eigeneZeilen" :key="u.id" type="button" class="eigene" data-ki-generiert="true"
+                    :title="t('chart.ki.markieren')" @click="u.zid != null && emit('waehle', u.zid)">
+                    <span class="zeile">
+                        <span class="id" :class="u.bewertung?.wichtig === 'hoch' ? 'stark' : u.bewertung?.wichtig === 'gering' ? 'schwach' : 'mittel'">{{ u.id }}</span>
+                        <span class="label">{{ u.name }}</span>
+                        <span v-if="u.zustand" class="zustand" :class="u.zustand">{{ t('chart.ki.zustandU.' + u.zustand) }}<template
+                            v-if="u.zustand === 'gebrochen' && u.rolle"> · {{ t('chart.ki.rolleU.' + u.rolle) }}</template></span>
+                    </span>
+                    <small v-if="u.bewertung">{{ u.bewertung.text }}</small>
+                    <small v-else class="leise">{{ t('chart.ki.ohneBewertung') }}</small>
+                    <!-- Fehler oder Unstimmigkeit: was die KI dazu sagt, sonst was der Code gemessen hat -->
+                    <small v-if="u.bewertung?.hinweis || u.auffaellig?.length" class="achtung">
+                        {{ t('chart.ki.achtung') }} {{ u.bewertung?.hinweis || u.auffaellig.join(' · ') }}</small>
+                </button>
+            </template>
+            <div v-if="analyse.korrekturen?.length" class="abschnitt">{{ t('chart.ki.korrekturen') }}</div>
+            <div v-for="k in analyse.korrekturen" :key="k._key" class="vorschlag" data-ki-generiert="true">
+                <div class="zeile">
+                    <span class="art">{{ t('chart.ki.korrektur') }}</span>
+                    <span class="id">{{ k.u }} → {{ k.id }}</span>
+                    <span class="label">{{ k.name }}</span>
+                    <span v-if="istUebernommen(k)" class="erledigtMarke" :title="t('chart.ki.uebernommenTitel')">✓</span>
+                    <template v-else-if="offen">
+                        <button type="button" class="textKnopf" @click="uebernimm(k)">{{ t('chart.ki.korrigieren') }}</button>
+                        <button type="button" class="textKnopf" :title="t('chart.ki.verwerfenTitel')" :aria-label="t('chart.ki.verwerfenTitel')" @click="verwirf(k)">✕</button>
+                    </template>
+                </div>
+                <small>{{ k.grund }}<template v-if="k.abstandAtr != null"> ({{ t('chart.ki.daneben', { atr: k.abstandAtr.toFixed(1) }) }})</template></small>
+            </div>
             <div v-if="analyse.einwaende?.length" class="abschnitt">{{ t('chart.ki.einwaende') }}</div>
             <div v-for="e in analyse.einwaende" :key="'e' + e.id" class="einwand" data-ki-generiert="true">
                 <span class="id">{{ e.id }}</span> <s>{{ e.name }}</s><small v-if="e.grund"> — {{ e.grund }}</small>
@@ -260,7 +308,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
             </div>
 
             <div v-if="analyse.linien?.length || analyse.zonen?.length" class="abschnitt">
-                {{ t(offen ? 'chart.ki.vorschlaege' : 'chart.ki.eingezeichnet') }}
+                {{ t(offen ? (analyse.modus === 'eigene' ? 'chart.ki.fehlend' : 'chart.ki.vorschlaege') : 'chart.ki.eingezeichnet') }}
                 <template v-if="offen">
                     <button type="button" class="textKnopf abstandLinks" :disabled="uebernimmtAlle" @click="alleUebernehmen">{{ t('chart.ki.alleUebernehmen') }}</button>
                     <button v-if="analyse.auswahl" class="textKnopf abstandLinks" :class="{ an: alle }" @click="schalteAlle">{{ t(alle ? 'chart.ki.kandidatenAus' : 'chart.ki.kandidatenZeigen') }}</button>
@@ -296,6 +344,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                 <small>{{ z.grund }}</small>
             </div>
             <div v-if="!offen && !analyse.linien?.length && !analyse.zonen?.length" class="hinweis">{{ t('chart.ki.nichtsEingezeichnet') }}</div>
+            <div v-if="offen && analyse.modus !== 'eigene' && !analyse.linien?.length && !analyse.zonen?.length" class="hinweis">{{ t('chart.ki.keinSetup') }}</div>
             <div v-if="analyse.verworfen?.length" class="verworfen">{{ t('chart.ki.verworfen', { n: analyse.verworfen.length }) }}</div>
             <div class="schluss">
                 <button v-if="offen" type="button" class="textKnopf" @click="kiErledigt">{{ t('chart.ki.vorschauErledigt') }}</button>
@@ -307,9 +356,6 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 </template>
 
 <style scoped>
-.bildOption {
-    margin-top: 2px;
-}
 .einwand {
     font-size: 12px;
     color: var(--muted);
@@ -318,28 +364,69 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 .einwand s {
     color: var(--text);
 }
-.profilArt {
+.knoepfe {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 4px;
-    color: var(--muted);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
-.profilArt button {
-    padding: 1px 8px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-pille);
-    background: transparent;
+.artZeile {
     color: var(--muted);
     font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.eigene {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    width: 100%;
+    padding: 4px 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
     cursor: pointer;
 }
 
-.profilArt button.an {
+.eigene:hover {
     border-color: var(--accent);
-    background: var(--accent-schwach);
-    color: var(--text);
+}
+
+.eigene .zeile {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.eigene .zustand {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--muted);
+}
+
+.eigene .zustand.gebrochen {
+    color: var(--warn);
+}
+
+.eigene .zustand.haelt {
+    color: var(--good);
+}
+
+.eigene .zustand.drehpunkt {
+    color: var(--muted);
+}
+
+.eigene .achtung {
+    color: var(--warn);
+}
+
+.eigene .leise {
+    color: var(--muted);
 }
 
 .kiReiter {
@@ -356,11 +443,11 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
     overflow: hidden;
 }
 
-.optionen {
+.optionZeile {
     display: flex;
-    flex-wrap: wrap;
-    gap: 2px 10px;
-    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
 }
 
 .option {

@@ -10,8 +10,8 @@
  * Vorzeichen-Konventionen (Journal-Kanon):
  *   - fundingFee: + = erhalten (erhöht Netto), − = bezahlt (senkt Netto)
  *     → aufgeteilt via `splitFunding` aus funding.js
- *   - Break-even (0) zählt als GEWINNER — wie in server/journal-bridge.js
- *     dokumentiert. Die Zählung selbst passiert beim Import (netWinsCount);
+ *   - Break-even (0) zählt als GEWINNER (Journal-Kanon, auch in
+ *     server/sitzung-rechnung.js). Die Zählung selbst passiert beim Import (netWinsCount);
  *     hier wird nur summiert.
  */
 

@@ -71,7 +71,8 @@ export const ZEITEBENEN = [
 const TF_MS = Object.fromEntries(ZEITEBENEN.map(z => [z.tf, z.ms]))
 
 /** Zeitebenen, die als Chart-Zeitebene der Kachel wählbar sind. */
-export const CHART_ZEITEBENEN = ['5m', '15m', '1h', '4h']
+// 1d/1w seit 31.10.2026 auch im Chart (die Momentum-Alarme rechneten dort schon); auf 1w gibt es keine höhere Ebene, also keine grossen Punkte.
+export const CHART_ZEITEBENEN = ['5m', '15m', '1h', '4h', '1d', '1w']
 
 /** Auf diesen Zeitebenen erscheinen Signale auf den Schienen (Vorlage: use1/4/D/W). */
 const SCHIENEN_TF = ['1h', '4h', '1d', '1w']

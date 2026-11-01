@@ -39,6 +39,12 @@
  * Preis ist an ein Symbol gebunden (65 000 heisst bei SOL nichts), eine
  * Zeichnung liegt auf genau einem Symbol, und Kreuzen prüft der 5-s-Takt am
  * laufenden Kurs — dafür gibt es keine Zeiteinheit.
+ *
+ * Schaltet sich ein Alarm selbst ab, steht der Grund in `selbstAus`:
+ * `ausgeloest` (einmalig ausgelöst, LSOB-Box gebrochen) oder der Hinweis im
+ * Verlauf (`geometrieEndet`, `profilGeaendert`, `watchlistLeer`,
+ * `boxUngueltig`, `zeichnungWeg`). Nur `ausgeloest` räumt „Ausgelöste
+ * entfernen" ab; Wiedereinschalten löscht den Grund (Audit FUN-F2B-003).
  */
 import { leseMomentumGrenze } from './momentum-grenze.js'
 import { getKnex } from './database.js'
@@ -88,6 +94,7 @@ function alarmZeile(r) {
         letzterPreis: r.letzterPreis == null ? null : Number(r.letzterPreis), letzteZeit: Number(r.letzteZeit) || 0,
         ausgeloestAm: Number(r.ausgeloestAm) || 0, anzahlAusgeloest: Number(r.anzahlAusgeloest) || 0,
         verlauf: parse(r.verlauf, []), notiz: r.notiz || '', erstelltAm: Number(r.erstelltAm) || 0,
+        selbstAus: r.selbstAus || null,
         watchlistIds: parse(r.watchlistIds, []), zeiteinheiten: parse(r.zeiteinheiten, []),
         punktgroesse: r.punktgroesse === 'alle' ? 'alle' : 'gross', stand: parse(r.stand, {}),
     }
@@ -391,13 +398,13 @@ async function einTakt() {
             const z = a.zeichnungId ? zeichnungen.get(a.zeichnungId) : null
             if ((a.art === 'linie' || a.art === 'zone') && !z) {
                 // Die Zeichnung ist weg — der Alarm hätte nie wieder etwas zu prüfen.
-                await knex('chart_alarme').where('id', a.id).update({ aktiv: 0 })
+                await knex('chart_alarme').where('id', a.id).update({ aktiv: 0, selbstAus: 'zeichnungWeg' })
                 continue
             }
             if (z?.typ === 'volprofil' && a.bedingung?.profil !== profilSignatur(z)) {
                 // Bereich oder Zeilenzahl geändert: die gemerkte Höhe gilt nicht mehr.
                 await knex('chart_alarme').where('id', a.id).update({
-                    aktiv: 0, verlauf: JSON.stringify([...a.verlauf, { t, p, hinweis: 'profilGeaendert' }].slice(-MAX_VERLAUF)),
+                    aktiv: 0, selbstAus: 'profilGeaendert', verlauf: JSON.stringify([...a.verlauf, { t, p, hinweis: 'profilGeaendert' }].slice(-MAX_VERLAUF)),
                 })
                 messung.delete(a.id)
                 continue
@@ -406,7 +413,7 @@ async function einTakt() {
                 // Linie/Zone ohne Verlängerung ist zu Ende: abschalten und sagen, warum —
                 // vorher lief der Alarm still weiter und konnte nie mehr auslösen.
                 await knex('chart_alarme').where('id', a.id).update({
-                    aktiv: 0, verlauf: JSON.stringify([...a.verlauf, { t, p, hinweis: 'geometrieEndet' }].slice(-MAX_VERLAUF)),
+                    aktiv: 0, selbstAus: 'geometrieEndet', verlauf: JSON.stringify([...a.verlauf, { t, p, hinweis: 'geometrieEndet' }].slice(-MAX_VERLAUF)),
                 })
                 messung.delete(a.id)
                 continue
@@ -423,7 +430,8 @@ async function einTakt() {
                 if (!(await verlaengereFuehrung(FUEHRUNG_KEY))) break
                 const patch = {
                     letzterPreis: p, letzteZeit: t, ausgeloestAm: t, anzahlAusgeloest: a.anzahlAusgeloest + 1,
-                    ...(a.einmalig ? { aktiv: 0 } : {}),
+                    // `selbstAus` sagt „Ausgelöste entfernen", dass er WEGEN der Auslösung aus ist
+                    ...(a.einmalig ? { aktiv: 0, selbstAus: 'ausgeloest' } : {}),
                 }
                 // Nur melden, wenn niemand die Zeile seit dem Lesen geändert hat.
                 const getroffen = await knex('chart_alarme').where({ id: a.id, letzteZeit: a.letzteZeit }).update(patch)
@@ -539,7 +547,7 @@ export async function momentumTakt() {
                 if (a.watchlistIds.length) {
                     // Watchlists gelöscht oder geleert: abschalten und sagen, warum.
                     await knex('chart_alarme').where('id', a.id).update({
-                        aktiv: 0, verlauf: JSON.stringify([...a.verlauf, { t: jetzt, hinweis: 'watchlistLeer' }].slice(-MAX_VERLAUF)),
+                        aktiv: 0, selbstAus: 'watchlistLeer', verlauf: JSON.stringify([...a.verlauf, { t: jetzt, hinweis: 'watchlistLeer' }].slice(-MAX_VERLAUF)),
                     })
                 }
                 continue
@@ -606,7 +614,7 @@ export async function momentumTakt() {
                 // Box ungültig geworden, ohne dass es eine Kerze gemeldet hätte (Server war aus): still aus.
                 if (abschalten) {
                     await knex('chart_alarme').where('id', a.id).update({
-                        aktiv: 0, verlauf: JSON.stringify([...a.verlauf, { t: jetzt, hinweis: 'boxUngueltig' }].slice(-MAX_VERLAUF)),
+                        aktiv: 0, selbstAus: 'boxUngueltig', verlauf: JSON.stringify([...a.verlauf, { t: jetzt, hinweis: 'boxUngueltig' }].slice(-MAX_VERLAUF)),
                     })
                 }
                 continue
@@ -618,7 +626,7 @@ export async function momentumTakt() {
                 stand: JSON.stringify(neuerStand(a.stand, treffer, alle)),
                 letzteZeit: t, ausgeloestAm: t, anzahlAusgeloest: a.anzahlAusgeloest + treffer.length,
                 // Box gebrochen: der Alarm hat nichts mehr zu bewachen
-                ...(a.einmalig || treffer.some((tr) => tr.abschalten) ? { aktiv: 0 } : {}),
+                ...(a.einmalig || treffer.some((tr) => tr.abschalten) ? { aktiv: 0, selbstAus: 'ausgeloest' } : {}),
             }
             // Nur melden, wenn niemand die Zeile seit dem Lesen geändert hat (letzteZeit ist der Stempel).
             const getroffen = await knex('chart_alarme').where({ id: a.id, letzteZeit: a.letzteZeit }).update(patch)
@@ -726,6 +734,8 @@ export function setupChartAlarmRoutes(app) {
             // die niemand gesehen hat.
             if (daten.aktiv === 1 && Number(alt.aktiv) !== 1) {
                 daten.letzterPreis = null; daten.letzteZeit = 0; messung.delete(id)
+                // Wieder scharf: der Grund der Selbstabschaltung gilt nicht mehr.
+                daten.selbstAus = null
                 // Momentum: erst Kerzen, die nach dem Wiedereinschalten schliessen.
                 if (MEHRFACH.includes(alt.art)) daten.stand = JSON.stringify({ ...parse(alt.stand, {}), ab: Date.now() })
             }

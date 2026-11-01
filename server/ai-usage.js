@@ -45,6 +45,9 @@ export const FUNKTIONEN = {
     X_SUCHE: 'x-suche',                    // Grok durchsucht X
     HYPE_X: 'hype-x',                      // Grok sucht X nach Token der Hype-Frühphase
     RECHERCHE: 'recherche',                // Perplexity Sonar
+    FLASH_NEWS: 'flash-news',              // Chart-Reiter Flash-News: Zusammenfassung
+    FLASH_NEWS_X: 'flash-news-x',          // … deren X-Suche (Grok)
+    FLASH_NEWS_WEB: 'flash-news-web',      // … deren Web-Suche (Perplexity)
     LAGE: 'lage',                          // Marktradar-Gesamtlage
     MECHANIK: 'mechanik',                  // Marktmechanik-Einordnung
     STRATEGIE_VETO: 'strategie-veto',      // Sentiment-/Portfolio-Agent

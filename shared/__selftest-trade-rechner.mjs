@@ -3,7 +3,7 @@
  *
  *   node shared/__selftest-trade-rechner.mjs
  */
-import { rechnePosition, rechnerEingabe } from './tradeRechner.js'
+import { rechnePosition, rechnerEingabe, betragUmrechnen } from './tradeRechner.js'
 import { liqPreisLong, liqPreisShort } from './liquidation.js'
 
 let bestanden = 0
@@ -59,10 +59,42 @@ const falsch = rechnePosition({ einstieg: 100, stop: 102, ziel: 104, eingabe: oh
 check('Stop über Long-Einstieg: nicht stimmig, kein Stop-Verlust', !falsch.stimmig && falsch.verlustStop === null)
 check('ohne Einstieg: null', rechnePosition({ einstieg: 0, stop: 1, ziel: 2, eingabe: ohne }) === null)
 
+// Betrag in % vom Konto
+const konto = 1000
+const pRisiko = rechnePosition({ einstieg: 100, stop: 98, ziel: 104, eingabe: { ...ohne, betrag: 2, einheit: 'prozent', konto } })
+check('Max. Verlust 2 % von 1000 = 20 USDT am Stop', nah(pRisiko.verlustStop, -20) && nah(pRisiko.betragUsdt, 20), pRisiko.verlustStop)
+const pRisiko20 = rechnePosition({ einstieg: 100, stop: 98, ziel: 104, eingabe: { ...ohne, betrag: 2, einheit: 'prozent', konto, hebel: 20 } })
+check('Max. Verlust in %: Hebel ändert die Grösse nicht, nur die Marge', nah(pRisiko20.nominal, pRisiko.nominal) && nah(pRisiko20.marge, pRisiko.marge / 2))
+const pMarge = rechnePosition({ einstieg: 100, stop: 98, ziel: 104, eingabe: { ...ohne, modus: 'marge', betrag: 2, einheit: 'prozent', konto } })
+const pMarge20 = rechnePosition({ einstieg: 100, stop: 98, ziel: 104, eingabe: { ...ohne, modus: 'marge', betrag: 2, einheit: 'prozent', konto, hebel: 20 } })
+check('Marge 2 % = 20 USDT, Nominal = Marge × Hebel', nah(pMarge.marge, 20) && nah(pMarge.nominal, 200) && nah(pMarge20.nominal, 400))
+const pGroesse = rechnePosition({ einstieg: 100, stop: 98, ziel: 104, eingabe: { ...ohne, modus: 'groesse', betrag: 50, einheit: 'prozent', konto } })
+check('Positionsgrösse 50 % von 1000 = 500 Nominal', nah(pGroesse.nominal, 500))
+const ohneKonto = rechnePosition({ einstieg: 100, stop: 98, ziel: 104, eingabe: { ...ohne, betrag: 2, einheit: 'prozent' } })
+check('% ohne Kontostand: Menge 0, kontoFehlt', ohneKonto.menge === 0 && ohneKonto.kontoFehlt === true)
+check('USDT-Betrag: kontoFehlt false, betragUsdt = Betrag', a.kontoFehlt === false && nah(a.betragUsdt, 50))
+
+// USDT ↔ % umschalten (Audit FUN-F2B-004): die Position bleibt gleich gross
+{
+    const pos = (betrag, einheit, k) => rechnePosition({ einstieg: 100, stop: 95, ziel: 110, eingabe: { ...ohne, betrag, einheit, konto: k } }).menge
+    let ok = true
+    const schlecht = []
+    for (const [b, k] of [[15, 200000], [9, 200000], [12, 50000], [45, 100000], [20, 623], [1000, 200000]]) {
+        const pr = betragUmrechnen(b, k, true)
+        const zurueck = betragUmrechnen(pr, k, false)
+        const abw = Math.abs(pos(pr, 'prozent', k) / pos(b, 'usdt', k) - 1)
+        if (!(pr > 0) || abw > 1e-5 || Math.abs(zurueck - b) > 1e-6 * b) { ok = false; schlecht.push(`${b}@${k}→${pr}→${zurueck}`) }
+    }
+    check('Umschalten USDT → % → USDT: Menge gleich, Betrag zurück, nie 0', ok, schlecht.join(', '))
+    check('Umschalten ohne Kontostand: Zahl bleibt', betragUmrechnen(20, 0, true) === 20)
+}
+
 // Eingaben säubern
 const e = rechnerEingabe({ modus: 'x', betrag: -5, hebel: 999, gebuehrPct: 'a' })
 check('Eingabe: unbekannter Modus, negativer Betrag, Hebel gedeckelt', e.modus === 'risiko' && e.betrag === 50 && e.hebel === 200 && e.gebuehrPct === 0.06, JSON.stringify(e))
 check('Eingabe: Hebel unter 1 → Vorgabe', rechnerEingabe({ hebel: 0.5 }).hebel === 10)
+check('Eingabe: unbekannte Einheit → USDT, alte Zeichnungen ohne Einheit → USDT',
+    rechnerEingabe({ einheit: 'eur' }).einheit === 'usdt' && rechnerEingabe({ modus: 'risiko', betrag: 20 }).einheit === 'usdt')
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 process.exit(fehlgeschlagen ? 1 : 0)

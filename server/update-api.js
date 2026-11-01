@@ -2,7 +2,7 @@
  * Update API — prüft die private Paketquelle auf neue Fassungen und installiert sie.
  *
  * GET  /api/update/check    → lokale Fassung gegen das neueste Release vergleichen
- * POST /api/update/install  → git fetch + reset + npm install (bzw. docker pull) + Neustart
+ * POST /api/update/install  → git fetch des Release-Tags + reset + npm install (bzw. docker pull) + Neustart
  *
  * Kanal: das Repo `Mouses007/AutarkTrade` (Releases und Quelltext) bzw. das Image
  * `ghcr.io/mouses007/autarktrade`. Seit 22.10.2026 steht AutarkTrade unter der
@@ -30,7 +30,7 @@ function updateZugang() {
     const token = umgebung('UPDATE_TOKEN')
     return token ? { benutzer: umgebung('UPDATE_BENUTZER') || 'x-access-token', token } : null
 }
-import { macheFlach, FETCH_FLACH } from './update-flach.js'
+import { macheFlach, holeRelease, TAG_MUSTER } from './update-flach.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -387,7 +387,7 @@ const GRUND_TEXT = {
 
 // Get local version from package.json. Cached: an update always ends in
 // process.exit() (see installGitUpdate/installDockerUpdate below), so the
-// version cannot change without a process restart — no need to re-read the
+// version changes only through update/rollback (both clear the cache and restart) — no need to re-read the
 // file from disk on every call, which matters now that /api/setup/status
 // (a public, unauthenticated endpoint) calls this on every request.
 let localVersionCache = null
@@ -484,10 +484,14 @@ export async function pruefeAufUpdate(forceRefresh = false) {
     }
     try {
         const release = await httpsGetJson(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, zugang?.token)
-        const remoteVersion = (release.tag_name || '').replace(/^v/, '') || localVersion
+        // Nur ein Tag nach TAG_MUSTER gilt als Release: der Name geht später als
+        // Refspec an git (FUN-S3-002). Ein anderes zählt wie „kein Release".
+        const remoteTag = TAG_MUSTER.test(release.tag_name || '') ? release.tag_name : null
+        const remoteVersion = remoteTag ? remoteTag.replace(/^v/, '') : localVersion
         lastCheck = {
             ...basis,
             remoteVersion,
+            remoteTag,
             updateAvailable: compareSemver(remoteVersion, localVersion) > 0,
             releaseName: release.name || '',
             releaseNotes: release.body || '',
@@ -569,20 +573,19 @@ export function setupUpdateRoutes(app) {
             // deren origin noch auf das alte, öffentliche Repo zeigt, aus dem neuen Kanal.
             // `--depth 1` (Audit A3-28): beim Kunden landet nur der ausgelieferte Stand,
             // keine Historie; `macheFlach` unten schneidet einen alten, vollen Klon ab.
-            const fetchOutput = execSync(`git fetch ${FETCH_FLACH.join(' ')} ${GIT_URL} master`, {
-                cwd: PROJECT_ROOT,
-                encoding: 'utf8',
-                timeout: 60000,
-                env: gitUmgebung(zugang)
-            }).trim()
-            steps.push({ step: 'git fetch', output: fetchOutput || 'OK' })
-
-            const pullOutput = execSync('git reset --hard FETCH_HEAD', {
-                cwd: PROJECT_ROOT,
-                encoding: 'utf8',
-                timeout: 60000
-            }).trim()
-            steps.push({ step: 'git reset', output: pullOutput })
+            // Geholt wird das gemeldete Release-Tag, nicht master (Audit FUN-S3-002):
+            // master kann nach dem Release schon unfertige Commits tragen. Passt die
+            // Fassung danach nicht zur gemeldeten, setzt `holeRelease` zurück und wirft.
+            const geholt = holeRelease(PROJECT_ROOT, {
+                url: GIT_URL,
+                tag: stand.remoteTag,
+                fassung: stand.remoteVersion,
+                zurueck: preUpdateCommit,
+                env: gitUmgebung(zugang),
+            })
+            steps.push({ step: `git fetch ${stand.remoteTag}`, output: geholt.fetch || 'OK' })
+            steps.push({ step: 'git reset', output: geholt.reset })
+            localVersionCache = null
 
             // Alte Historie entfernen, den Stand vor dem Update für den Rollback behalten.
             // Scheitert das, läuft das Update trotzdem weiter — der neue Stand ist da.
@@ -593,7 +596,7 @@ export function setupUpdateRoutes(app) {
                 steps.push({ step: 'git flach', output: 'übersprungen: ' + e.message })
             }
 
-            // Read new version (from git reset — package.json ist schon aktuell)
+            // Neue Fassung — `holeRelease` hat sie gegen die gemeldete geprüft
             const newVersion = getLocalVersion()
 
             // Clear cache
@@ -674,6 +677,7 @@ export function setupUpdateRoutes(app) {
             }).trim()
             steps.push({ step: 'git checkout', output: checkoutOutput || 'OK' })
 
+            localVersionCache = null // package.json ist jetzt die des alten Stands
             const restoredVersion = getLocalVersion()
             preUpdateCommit = null // Rollback-Punkt verbraucht
             lastCheck = null

@@ -12,6 +12,12 @@
  *  - `chartKiMarken` — Symbol, Intervall und übernommene/verworfene Marken der
  *    KI-Chartanalyse
  *  - `positionsWarnungWeg` — weggeklickte Warnungen, je Position und Art
+ *  - `chartTeilenAn` — Mail-Empfänger des Teilen-Dialogs (der Dialog füllte sie
+ *    nach einer neuen Anmeldung vor, Audit SEC-S6-001)
+ *  - in `at.chart.zeichenStil` nur der Kontostand des Positionsrechners
+ *    (`<werkzeug>.rechner.konto`): der Rest sind Stil-Vorlieben, und die
+ *    Rechner-Vorgabe einer neuen Position (`ChartPanel.vue` `oeffneRechner`)
+ *    braucht Modus, Betrag und Hebel weiter (Audit SEC-S6-001)
  *
  * Bewusst NICHT gelöscht (Einstellungen dieses Bildschirms, keine Beträge):
  * Layout, Kachelreihenfolge, Filter wie `at.journal.konten` (nur Börsennamen),
@@ -20,8 +26,29 @@
  * der Datenbank, nicht mehr hier.)
  */
 
-export const FINANZ_SCHLUESSEL = ['chartKiMarken', 'positionsWarnungWeg']
+export const FINANZ_SCHLUESSEL = ['chartKiMarken', 'positionsWarnungWeg', 'chartTeilenAn']
 export const FINANZ_PRAEFIXE = ['tpsl_history_']
+/** Schlüssel, aus denen nur ein Teil geht: Schlüssel → Funktion (Text → Text oder null = nichts zu tun). */
+export const FINANZ_TEILE = { 'at.chart.zeichenStil': ohneKontostand }
+
+/**
+ * Gemerkte Zeichenstile ohne Kontostand des Positionsrechners.
+ * @param {string} text  JSON `{ <werkzeug>: { …, rechner: { konto, … } } }`
+ * @returns {string|null} der bereinigte Text, oder null, wenn kein Kontostand darin stand
+ */
+export function ohneKontostand(text) {
+    let a
+    try { a = JSON.parse(text) } catch { return null }
+    if (!a || typeof a !== 'object') return null
+    let geaendert = false
+    for (const stil of Object.values(a)) {
+        if (stil?.rechner && typeof stil.rechner === 'object' && 'konto' in stil.rechner) {
+            delete stil.rechner.konto
+            geaendert = true
+        }
+    }
+    return geaendert ? JSON.stringify(a) : null
+}
 
 /**
  * Gehört der Schlüssel zu den Finanzdaten, die beim Abmelden gehen?
@@ -35,7 +62,7 @@ export function istFinanzSchluessel(k) {
  * Finanz-Schlüssel aus einem Storage löschen.
  *
  * @param {Storage} [speicher]  Vorgabe `localStorage`; der Selbsttest gibt einen Ersatz
- * @returns {string[]} die gelöschten Schlüssel
+ * @returns {string[]} die gelöschten (bzw. um den Kontostand bereinigten) Schlüssel
  */
 export function loescheFinanzdaten(speicher = globalThis.localStorage) {
     const weg = []
@@ -46,6 +73,9 @@ export function loescheFinanzdaten(speicher = globalThis.localStorage) {
             if (k != null && istFinanzSchluessel(k)) {
                 speicher.removeItem(k)
                 weg.push(k)
+            } else if (k != null && FINANZ_TEILE[k]) {
+                const neu = FINANZ_TEILE[k](speicher.getItem(k))
+                if (neu != null) { speicher.setItem(k, neu); weg.push(k) }
             }
         }
     } catch { /* kein Speicher (privater Modus) — dann liegt auch nichts darin */ }

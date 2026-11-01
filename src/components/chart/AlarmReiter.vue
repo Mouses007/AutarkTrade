@@ -1,14 +1,17 @@
 <script setup>
 /**
- * Seitenleiste „Alarme": die Alarme des aktiven Symbols (oder aller), neuer
- * Preis-Alarm zum aktuellen Kurs, Ein/Aus, Ändern, Löschen, Verlauf der
- * Auslösungen und ein Test der Push-Kanäle. Momentum-Alarme über Watchlists
- * gehören keinem Symbol und stehen deshalb immer in der Liste.
+ * Seitenleiste „Alarme": zuerst die eingestellten Alarme des aktiven Symbols
+ * (oder aller) — Ein/Aus, Ändern, Löschen, Verlauf der Auslösungen —, darüber
+ * EIN Knopf „Alarm hinzufügen" mit der Auswahl der Arten (31.10.2026; vorher
+ * drei Knöpfe und ein Hinweistext über der Liste). Momentum- und LSOB-Alarme
+ * über Watchlists gehören keinem Symbol und stehen deshalb immer in der Liste.
+ * Unten ein Test der Push-Kanäle.
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { alarme, beschreibe, trefferText, aendereAlarm, loescheAlarm } from '../../stores/chartAlarme.js'
+import { wischbar } from '../../utils/chart/alarmHinweise.js'
 import { Symbol, Knopf } from '../basis'
 
 const props = defineProps({
@@ -21,6 +24,19 @@ const emit = defineEmits(['neu', 'neuMomentum', 'neuLsob', 'bearbeite'])
 const { t } = useI18n()
 
 const alle = ref(false)
+// Auswahl „Alarm hinzufügen": klappt unter dem Knopf auf, Klick daneben oder Esc schliesst
+const auswahl = ref(false)
+const auswahlEl = ref(null)
+function waehle(art) {
+    auswahl.value = false
+    if (art === 'preis') emit('neu', props.kurs)
+    else if (art === 'momentum') emit('neuMomentum')
+    else if (art === 'lsob') emit('neuLsob')
+}
+const zu = (e) => { if (auswahl.value && !auswahlEl.value?.contains(e.target)) auswahl.value = false }
+const taste = (e) => { if (e.key === 'Escape') auswahl.value = false }
+onMounted(() => { document.addEventListener('pointerdown', zu, true); document.addEventListener('keydown', taste) })
+onBeforeUnmount(() => { document.removeEventListener('pointerdown', zu, true); document.removeEventListener('keydown', taste) })
 const offen = ref(null)
 const testStand = ref('')
 
@@ -48,6 +64,25 @@ async function test() {
     }
 }
 
+/*
+ * „Ausgelöste entfernen": Alarme, die gefeuert und sich DESHALB selbst abgeschaltet
+ * haben (einmalige, LSOB-Box nach dem Bruch) — der Server vermerkt das in `selbstAus`.
+ * Wiederholende bleiben, auch von Hand pausierte, die früher schon ausgelöst haben
+ * (Audit FUN-F2B-003), ebenso Alarme, die sich aus einem anderen Grund abgeschaltet
+ * haben (Linie zu Ende, Watchlist leer …). Die Rückfrage nennt jeden beim Namen.
+ */
+const ausgeloest = computed(() => liste.value.filter(wischbar))
+const raeumt = ref(false)
+const NAMEN_MAX = 10
+async function wische() {
+    const weg = ausgeloest.value
+    const namen = weg.slice(0, NAMEN_MAX).map((a) => `• ${ziel(a)} ${beschreibe(a)}`)
+    if (weg.length > NAMEN_MAX) namen.push('…')
+    if (!weg.length || !window.confirm(t('chart.alarm.wischenFrage', { n: weg.length, namen: namen.join('\n') }, weg.length))) return
+    raeumt.value = true
+    try { for (const a of weg) await loescheAlarm(a.id) } finally { raeumt.value = false }
+}
+
 function loesche(a) {
     if (window.confirm(t('chart.alarm.loeschenFrage', { was: `${a.symbol} ${beschreibe(a)}` }))) loescheAlarm(a.id)
 }
@@ -55,18 +90,27 @@ function loesche(a) {
 
 <template>
     <div class="alarmReiter">
-        <Knopf klein symbol="glocke" class="neuKnopf" @click="emit('neu', kurs)">
-            {{ t('chart.alarm.neuPreis', { symbol }) }}
-        </Knopf>
-        <Knopf klein symbol="glocke" class="neuKnopf" @click="emit('neuMomentum')">
-            {{ t('chart.alarm.neuMomentum') }}
-        </Knopf>
-        <Knopf klein symbol="glocke" class="neuKnopf" @click="emit('neuLsob')">
-            {{ t('chart.alarm.neuLsob') }}
-        </Knopf>
-        <div class="tipp">{{ t('chart.alarm.tipp') }}</div>
-        <label class="alle"><input v-model="alle" type="checkbox" /> {{ t('chart.alarm.alleSymbole') }}</label>
-        <div v-if="!liste.length" class="leer">{{ t('chart.alarm.leer') }}</div>
+        <div ref="auswahlEl" class="kopf">
+            <Knopf klein symbol="plus" :aria-expanded="auswahl" @click="auswahl = !auswahl">{{ t('chart.alarm.hinzufuegen') }}</Knopf>
+            <button v-if="ausgeloest.length" type="button" class="wischen" :disabled="raeumt" :title="t('chart.alarm.wischenTitel')" @click="wische">
+                <Symbol name="muell" /> {{ t('chart.alarm.wischen', { n: ausgeloest.length }) }}</button>
+            <label class="alle" :title="t('chart.alarm.alleSymbole')"><input v-model="alle" type="checkbox" /> {{ t('chart.alarm.alleKurz') }}</label>
+            <div v-if="auswahl" class="auswahl" role="menu">
+                <button type="button" role="menuitem" @click="waehle('preis')">
+                    <span class="titel"><Symbol name="glocke" /> {{ t('chart.alarm.neuPreis', { symbol }) }}</span>
+                    <small>{{ t('chart.alarm.wahl.preis') }}</small></button>
+                <button type="button" role="menuitem" @click="waehle('momentum')">
+                    <span class="titel"><Symbol name="tacho" /> {{ t('chart.alarm.wahl.momentumTitel') }}</span>
+                    <small>{{ t('chart.alarm.wahl.momentum') }}</small></button>
+                <button type="button" role="menuitem" @click="waehle('lsob')">
+                    <span class="titel"><Symbol name="quadrat" /> {{ t('chart.alarm.wahl.lsobTitel') }}</span>
+                    <small>{{ t('chart.alarm.wahl.lsob') }}</small></button>
+                <div class="hinweis">
+                    <span class="titel"><Symbol name="linie" /> {{ t('chart.alarm.wahl.linieTitel') }}</span>
+                    <small>{{ t('chart.alarm.wahl.linie') }}</small></div>
+            </div>
+        </div>
+        <div v-if="!liste.length" class="leer">{{ t(alle ? 'chart.alarm.leerAlle' : 'chart.alarm.leerSymbol', { symbol }) }}</div>
         <div v-for="a in liste" :key="a.id" class="alarm" :class="{ aus: !a.aktiv }">
             <div class="zeile" @click="offen = offen === a.id ? null : a.id">
                 <span class="sym" :class="{ listen: aufListen(a) }">{{ ziel(a) }}<small v-if="a.markt === 'spot' && !aufListen(a)"> Spot</small></span>
@@ -103,7 +147,94 @@ function loesche(a) {
     font-size: 12px;
 }
 
-.tipp,
+.kopf {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px 8px;
+    flex-shrink: 0;
+}
+
+.kopf > :first-child {
+    white-space: nowrap;
+}
+
+.wischen {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-klein);
+    background: transparent;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.wischen:hover {
+    color: var(--text);
+    border-color: var(--line-stark);
+}
+
+/* Klappt IM Reiter auf (der Reiter scrollt; schwebend würde sie abgeschnitten) */
+.auswahl {
+    flex-basis: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px;
+    background: var(--panel);
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-klein);
+    box-shadow: var(--schatten);
+}
+
+.auswahl button,
+.auswahl .hinweis {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 8px;
+    border: none;
+    border-radius: var(--radius-klein);
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    font: inherit;
+}
+
+.auswahl button {
+    cursor: pointer;
+}
+
+.auswahl button:hover,
+.auswahl button:focus-visible {
+    background: var(--panel-soft);
+}
+
+.auswahl .hinweis {
+    border-top: 1px solid var(--line);
+    margin-top: 2px;
+    color: var(--muted);
+}
+
+.auswahl .titel {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.auswahl small {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+    padding-left: 20px;
+}
+
 .leer {
     color: var(--muted);
     font-size: 11px;
@@ -111,8 +242,11 @@ function loesche(a) {
 
 .alle {
     display: flex;
-    gap: 6px;
+    gap: 4px;
     align-items: center;
+    color: var(--muted);
+    font-size: 11px;
+    white-space: nowrap;
 }
 
 .alarm {
@@ -169,10 +303,6 @@ function loesche(a) {
     padding: 2px 8px 6px 14px;
     color: var(--muted);
     font-size: 11px;
-}
-
-.neuKnopf {
-    align-self: flex-start;
 }
 
 .textKnopf {

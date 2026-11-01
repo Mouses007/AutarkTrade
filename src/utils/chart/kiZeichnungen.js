@@ -41,6 +41,23 @@ export function kanalAlsZeichnung(l) {
 }
 
 /*
+ * Dreieck bzw. Keil (`art: 'dreieck'`, server/chart-dreiecke.js): zwei Kanten
+ * vom Beginn bis zur Spitze (höchstens ein Stück über die letzte Kerze), als
+ * zwei Trendlinien; der Name steht an der oberen. Grün für Formen, die nach
+ * oben aufgelöst werden (aufsteigendes Dreieck, fallender Keil), rot für die
+ * Gegenstücke, symmetrisch im KI-Lila — die Farbe sagt, welche Kante die
+ * Lehrbuchseite ist, nicht wohin es geht.
+ */
+const DREIECK_FARBE = { aufsteigend: KI_FARBEN.unterstuetzung, fallenderKeil: KI_FARBEN.unterstuetzung, absteigend: KI_FARBEN.widerstand, steigenderKeil: KI_FARBEN.widerstand }
+export function dreieckAlsZeichnungen(l) {
+    const stil = { farbe: DREIECK_FARBE[l.form] || FARBE, breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt' }
+    return [
+        { typ: 'trendlinie', punkte: [{ t: l.tA, p: l.obenA }, { t: l.tE, p: l.obenE }], stil: { ...stil, text: mitId(l.labelKurz || l.label, l.id), textPos: 'ende' } },
+        { typ: 'trendlinie', punkte: [{ t: l.tA, p: l.untenA }, { t: l.tE, p: l.untenE }], stil: { ...stil } },
+    ]
+}
+
+/*
  * Trendlinie vom ersten Anker bis `tEnde` (letzte Kerze plus ein Teil der
  * Spanne, server/chart-trendlinien.js) — bis 20.10.2026 lief sie ohne Ende
  * nach rechts und stand auf BTC 15m 3 000 USD über dem Kurs. Ältere Analysen
@@ -73,7 +90,7 @@ export function kandidatenVorschau(analyse) {
     const stil = (text) => ({ farbe: '#8a9199', breite: 1, strich: 'gepunktet', text })
     // V-Kandidaten gehören zum Profil, nicht als einzelne graue Linien
     // Kanäle zeichnet der Code ohnehin ein — kein grauer Doppelgänger
-    return k.filter((x) => !gewaehlt.has(x.id) && x.quelle !== 'volumenprofil' && x.quelle !== 'kanal').map((x, i) => {
+    return k.filter((x) => !gewaehlt.has(x.id) && x.quelle !== 'volumenprofil' && x.quelle !== 'kanal' && x.quelle !== 'dreieck').map((x, i) => {
         if (x.quelle === 'trend') return { id: -300 - i, typ: 'trendlinie', ...trendPunkte(x), stil: { ...stil(x.id), textPos: 'ende', rechts: !Number.isFinite(x.tEnde) } }
         return { id: -300 - i, typ: 'strahlH', punkte: [{ t: x.t1 ?? analyse.kerzenVon, p: x.preis }], stil: { ...stil(x.name ? `${x.id} ${x.name}` : x.id), textPos: 'rechts' } }
     })
@@ -111,6 +128,18 @@ export function profileAlsZeichnungen(analyse, basis = {}) {
     return [...bereiche.values()].map(([t1, t2]) => ({ typ: 'volprofil', punkte: [{ t: t1, p: 0 }, { t: t2, p: 0 }], stil: { ...stil } }))
 }
 
+/*
+ * Korrektur einer EIGENEN Zeichnung („Meine Zeichnungen analysieren"): dieselbe
+ * Zeichnungsart mit den Punkten des Kandidaten, gestrichelt im KI-Lila neben der
+ * eigenen. Übernehmen verschiebt die eigene Zeichnung dorthin (chartKi.js).
+ */
+export function korrekturAlsZeichnung(k) {
+    const stil = { farbe: FARBE, breite: 1, strich: 'gestrichelt', text: `${k.u} → ${k.id}` }
+    if (k.typ === 'strahlH' || k.typ === 'horizontale') return { typ: k.typ, punkte: k.punkte, stil: { ...stil, textPos: 'rechts' } }
+    if (k.typ === 'kanal') return { typ: 'kanal', punkte: k.punkte, stil: { ...stil, fuellung: false } }
+    return { typ: k.typ, punkte: k.punkte, stil: { ...stil, textPos: 'ende' } }
+}
+
 /**
  * Alles aus einer Analyse als Vorschau (negative ids: nie verwechselbar mit gespeicherten).
  * `ki` trägt den Schlüssel des Vorschlags (`linie3`, `zone1`, `profil`) — daran erkennt
@@ -123,9 +152,12 @@ export function kiVorschau(analyse, { profilStil = {} } = {}) {
     const bis = analyse.kerzenBis
     const schluessel = (x, art, i) => x._key || `${art}${i}`
     return [
-        ...(analyse.linien || []).map((l, i) => (istProfilLinie(l) ? null : { id: -100 - i, ki: schluessel(l, 'linie', i), ...linieAlsZeichnung(l) })).filter(Boolean),
+        ...(analyse.linien || []).flatMap((l, i) => (istProfilLinie(l) ? []
+            : l.art === 'dreieck' ? dreieckAlsZeichnungen(l).map((z, j) => ({ id: -600 - 2 * i - j, ki: schluessel(l, 'linie', i), ...z }))
+                : [{ id: -100 - i, ki: schluessel(l, 'linie', i), ...linieAlsZeichnung(l) }])),
         ...(analyse.zonen || []).map((z, i) => (istProfilZone(z) ? null : { id: -200 - i, ki: schluessel(z, 'zone', i), ...zoneAlsZeichnung(z, ab, bis) })).filter(Boolean),
         ...(hatProfil(analyse) ? profileAlsZeichnungen(analyse, profilStil).map((z, j) => ({ id: -150 - j, ki: 'profil', ...z })) : []),
+        ...(analyse.korrekturen || []).map((k, i) => ({ id: -400 - i, ki: schluessel(k, 'korr', i), ...korrekturAlsZeichnung(k) })),
         ...(analyse._alle ? kandidatenVorschau(analyse) : []),
     ]
 }
@@ -134,7 +166,8 @@ export function kiVorschau(analyse, { profilStil = {} } = {}) {
  * Was mit den Vorschlägen einer Analyse geschehen ist — je Analyse (Symbol,
  * Zeiteinheit, Markt, Zeitpunkt) gemerkt, damit ein Neuladen oder ein Wechsel
  * des Reiters die übernommenen Linien nicht wieder gestrichelt daneben zeigt.
- *   uebernommen  Schlüssel (`linie3`, `zone1`, `profil`), jetzt eigene Zeichnungen
+ *   uebernommen  Schlüssel (`linie3`, `zone1`, `profil`, `korr0`), jetzt eigene Zeichnungen
+ *                (bei `korr…`: die eigene Zeichnung wurde dorthin verschoben)
  *   geloescht    im Chart oder im Reiter verworfen
  *   erledigt     „Vorschau erledigt": keine gestrichelten Linien mehr, im Reiter
  *                bleibt die Analyse mit den übernommenen Vorschlägen stehen
@@ -147,7 +180,8 @@ export const markenSchluessel = (a) => (a ? `${a.symbol}|${a.interval}|${a.markt
 function gefiltert(analyse, behalte) {
     const linien = (analyse.linien || []).map((l, i) => ({ ...l, _key: `linie${i}` })).filter((l) => behalte(l._key, istProfilLinie(l)))
     const zonen = (analyse.zonen || []).map((z, i) => ({ ...z, _key: `zone${i}` })).filter((z) => behalte(z._key, istProfilZone(z)))
-    return { ...analyse, linien, zonen }
+    const korrekturen = (analyse.korrekturen || []).map((k, i) => ({ ...k, _key: `korr${i}` })).filter((k) => behalte(k._key, false))
+    return { ...analyse, linien, zonen, korrekturen }
 }
 
 /**

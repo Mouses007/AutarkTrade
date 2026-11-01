@@ -124,17 +124,17 @@ check('Box: dieselbe Kerze nicht zweimal', pruefeLsobBox({ box: boxR, tf: '1h', 
 check('Box-Eingabe: Tief ≥ Hoch, falsche Seite → null', boxEingabe({ seite: 'long', t: 1, tief: 2, hoch: 2 }) === null && boxEingabe({ seite: 'x', t: 1, tief: 1, hoch: 2 }) === null)
 check('Box-Eingabe: gültig', JSON.stringify(boxEingabe({ seite: 'short', t: 5, tief: '1', hoch: 2, foo: 1 })) === '{"seite":"short","t":5,"tief":1,"hoch":2}')
 const bt = lsobText({}, [{ symbol: 'ETHUSDT', markt: 'futures', tf: '15m', preis: 2500, ereignisse: [{ typ: 'beruehrt', seite: 'long', tief: 2490, hoch: 2510 }] }])
-check('Box-Text', bt.titel === 'LSOB ETHUSDT 15m: Long-Box berührt' && bt.text.startsWith('ETHUSDT 15m: Long-Box 2490–2510 berührt'), bt.titel + ' | ' + bt.text)
+check('Box-Text', bt.titel === 'LSOB ETHUSDT 15 Min: Long-Box berührt' && bt.text.startsWith('ETHUSDT 15 Min: Long-Box 2490–2510 berührt'), bt.titel + ' | ' + bt.text)
 
 // ── Text ────────────────────────────────────────────────────────────────────
 const { titel, text } = lsobText({ notiz: 'Plan A' }, [{ symbol: 'ETHUSDT', markt: 'futures', tf: '1h', preis: 2500, ereignisse: [{ typ: 'retest', seite: 'short', tief: 2490, hoch: 2510 }] }])
-check('Titel nennt Symbol, Zeiteinheit, Ereignis', titel === 'LSOB ETHUSDT 1h: Retest Short-Box', titel)
-check('Text nennt Box, Kurs und Notiz', text === 'ETHUSDT 1h: Retest Short-Box 2490–2510 — Kurs 2500\nPlan A', text)
+check('Titel nennt Symbol, Zeiteinheit, Ereignis', titel === 'LSOB ETHUSDT 1 Std: Retest Short-Box', titel)
+check('Text nennt Box, Kurs und Notiz', text === 'ETHUSDT 1 Std: Retest Short-Box 2490–2510 — Kurs 2500\nPlan A', text)
 const zwei = lsobText({}, [
     { symbol: 'A', markt: 'futures', tf: '1h', preis: 1, ereignisse: [{ typ: 'box', seite: 'long', tief: 1, hoch: 2 }] },
     { symbol: 'B', markt: 'spot', tf: '4h', preis: 2, ereignisse: [{ typ: 'retest', seite: 'long', tief: 1, hoch: 2 }] },
 ])
-check('mehrere Treffer gebündelt', zwei.titel === 'LSOB: 2 Signale' && zwei.text.split('\n').length === 2 && zwei.text.includes('B Spot 4h'))
+check('mehrere Treffer gebündelt', zwei.titel === 'LSOB: 2 Signale' && zwei.text.split('\n').length === 2 && zwei.text.includes('B Spot 4 Std'))
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
 process.exit(fehlgeschlagen ? 1 : 0)

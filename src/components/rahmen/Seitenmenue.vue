@@ -41,7 +41,7 @@ const GRUPPEN = {
     journal: ['analyze', 'reflect', 'add'],
     live: ['liveAnalyze', 'liveTrade'],
     research: ['hypeGruppe', 'coinGruppe'],
-    agent: ['agentRun', 'agentBuild', 'agentReview'],
+    agent: ['strategienGruppe'],
     lernen: ['lernenGruppe'],
     portfolio: ['portfolioGruppe'],
 }

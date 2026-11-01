@@ -20,8 +20,11 @@
  * Anbieter und Modell dürfen genannt werden (als Text), Anbieter-Logos nie —
  * die Anbieter verbieten ihre Marken ohne Zustimmung (2.8).
  *
- * Nie ausblendbar, auch nicht über `erweiterteInfos`: eine Kennzeichnung, die
- * man abschalten kann, ist keine.
+ * Seit 30.10.2026 steht das Label auf Wunsch des Eigentümers nur noch EINMAL,
+ * in Einstellungen › KI › Zugang, statt an jedem Ergebnis (es nahm in Kacheln
+ * und Reitern nur Platz weg; `data-ki-generiert` bleibt an jedem KI-Text, das
+ * Teilen-Bild und PDF-Exporte tragen es weiter, weil sie die App verlassen).
+ * Eine Verkaufsversion setzt es wieder an jedes Ergebnis.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'

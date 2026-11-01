@@ -9,6 +9,7 @@
  * niemand merkte es, weil „nichts" bei einem Orderbuch plausibel aussieht.
  */
 import { waendeAusBuch, liqJeKerze, platziereSchilder } from './chart/overlays/MarktEbene.js'
+import { radarTfFuer } from './chart/radarTf.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -76,6 +77,13 @@ console.log('\nLiquidationen je Kerze\n')
     check('isBuy = Short liquidiert (grün), nicht Long', b.some((x) => x.i === 0 && !x.long && x.usd === 210))
     check('Ereignis vor der ersten Kerze fällt weg', !b.some((x) => x.preis === 90))
     check('ohne Kerzen leer statt Absturz', liqJeKerze(liq, []).length === 0)
+}
+
+console.log('\nZeitebene des Momentum Radars (Audit FUN-F2B-005)\n')
+{
+    const erwartet = { '1m': '5m', '3m': '5m', '5m': '5m', '15m': '15m', '30m': '1h', '1h': '1h', '2h': '4h', '4h': '4h', '6h': '4h', '12h': '4h', '1d': '1d', '3d': '1d', '1w': '1w', '1M': '1w' }
+    const falsch = Object.entries(erwartet).filter(([iv, tf]) => radarTfFuer(iv) !== tf).map(([iv]) => `${iv}→${radarTfFuer(iv)}`)
+    check('Teilen-Bild und Momentum-Box rechnen auf derselben Zeitebene (1d → 1d, nicht 4h)', !falsch.length, falsch.join(', '))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

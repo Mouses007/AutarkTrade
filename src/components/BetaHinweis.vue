@@ -1,10 +1,10 @@
 <script setup>
 /**
- * Warnbanner für den Agent-Modus.
+ * Warnbanner für den Strategien-Modus (Modus-ID `agent`).
  *
- * Der Modus handelt selbstständig — auch wenn zunächst nur auf dem Papier.
- * Wer ihn öffnet, muss ohne Nachfragen wissen, woran er ist: unfertig, keine
- * Anlageberatung, Live nur über die dreifache Freigabekette.
+ * Der Modus simuliert Handel selbstständig — nur auf dem Papier, seit S13
+ * ohne jede Order an eine Börse. Wer ihn öffnet, muss ohne Nachfragen wissen,
+ * woran er ist: unfertig, keine Anlageberatung, Backtests kein Versprechen.
  *
  * Das Zuklappen wird pro Browser gemerkt (localStorage), aber bewusst NICHT
  * dauerhaft weggeklickt: bei jedem neuen Sitzungsstart erscheint der Hinweis

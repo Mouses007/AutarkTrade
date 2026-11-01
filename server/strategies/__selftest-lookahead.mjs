@@ -328,6 +328,55 @@ check(`LSOB hat überhaupt gehandelt (${lsobEinstiege} Einstiege)`, lsobEinstieg
 check(`LSOB hat überhaupt Setups erkannt (${lsobSetups})`, lsobSetups > 0)
 check(`Set and Forget hat überhaupt gehandelt (${safEinstiege} Einstiege)`, safEinstiege > 0)
 
+// ── Set and Forget: Ziel und Chancen/Risiko ohne die Auslösekerze ─────────
+// Störtest (Audit 4.3.4, FUN-L4-001): eingestiegen wird zur ERÖFFNUNG von k.
+// Ersetzt man Hoch, Tief und Schluss von k bei gleicher Eröffnung, darf sich
+// am Entscheid (Status, Grund, Ziel) nichts ändern. Bis 31.10.2026 kamen die
+// Zielzonen aus dem Fenster samt k — `keine Zielzone`, `unter minRR` und das
+// Ziel hingen dann am späteren Verlauf der Kerze.
+console.log('\nSet and Forget — Zielzone und minRR ohne die Auslösekerze')
+{
+    const zonenParams = { ...safParams, tpQuelle: 'zone', minRR: 2 }
+    const sig = (e) => (e ? `${e.status}|${e.invalidReason || ''}|${e.takeProfit ? Number(e.takeProfit).toFixed(6) : ''}` : 'kein')
+    let entscheide = 0
+    let abhaengig = 0
+    let beispiel = ''
+    for (const seed of [42, 1337, 20260816, 7, 99]) {
+        const serie = zufallsSerie(600, seed)
+        let offen = []
+        const bekannt = new Set()
+        let id = 1
+        for (let i = 60; i < serie.length; i++) {
+            const sicht = serie.slice(Math.max(0, i + 1 - 500), i + 1)
+            const k = serie[i]
+            const r = setAndForget.detect({ candles: sicht, params: zonenParams, openSetups: offen, knownSetupKeys: [...bekannt] })
+            for (const ev of r.events) {
+                if (ev.status === 'expired') continue
+                entscheide++
+                const setup = offen.find((x) => x.id === ev.id)
+                const flach = { ...k, h: k.o, l: k.o, c: k.o }
+                const gegen = { ...k, c: k.o * (k.c > k.o ? 0.97 : 1.03) }
+                gegen.h = Math.max(gegen.o, gegen.c, k.h)
+                gegen.l = Math.min(gegen.o, gegen.c, k.l)
+                for (const kk of [flach, gegen]) {
+                    const alt = setAndForget.detect({ candles: [...sicht.slice(0, -1), kk], params: zonenParams,
+                        openSetups: [setup], knownSetupKeys: [...bekannt] }).events.find((x) => x.id === ev.id)
+                    if (sig(alt) !== sig(ev)) {
+                        abhaengig++
+                        if (!beispiel) beispiel = `Seed ${seed}, Kerze ${i}: ${sig(ev)} ↔ ${sig(alt)}`
+                        break
+                    }
+                }
+            }
+            const erledigt = new Set(r.events.map((e) => e.id))
+            offen = offen.filter((x) => !erledigt.has(x.id))
+            for (const neu of r.setups) { offen.push({ ...neu, id: id++ }); bekannt.add(`${neu.direction}|${neu.obCandleTime}`) }
+        }
+    }
+    check(`Set and Forget hatte Entscheide mit Zielzone zu prüfen (${entscheide})`, entscheide > 0)
+    check(`… keiner hängt am Verlauf der Auslösekerze nach ihrer Eröffnung (${abhaengig})`, abhaengig === 0, beispiel)
+}
+
 // ── 3. EMA Touch: gebauter Fall ──────────────────────────────────────────
 // Die Guss-Bedingung muss weiter über die Bestätigungslücke hinweg gelten —
 // eine bullische Kerze DORT darf das Setup weiterhin töten. Sonst hätte der
@@ -443,6 +492,103 @@ console.log('\nTrendlinien-Ausbruch — Anker bestätigt, Order erst auf der Fol
         ? Number(s.entry) <= Number(s.sweepPrice)
         : Number(s.entry) >= Number(s.sweepPrice))
     check('Ausbruch zeigt in die Richtung des Setups', verdreht.length === 0, `${verdreht.length} verdreht`)
+}
+
+// ── 6. Backtest: kein Einstieg vor der Erkennung — alle Strategien ───────
+// Die Prüfungen oben fragen je Detektor nach seiner eigenen Bestätigung. Die
+// allgemeine Behauptung steht eine Ebene höher: Ein Setup, das mit dem
+// Schluss von Kerze c bekannt wird, kann frühestens auf Kerze c+1 gefüllt
+// werden. Bis 01.11.2026 buchte der Backtest Auslöser auf ÄLTEREN Kerzen nach
+// und holte die Kerzen dazwischen nach — Set and Forget erzeugte so 70–80 %
+// seiner Setups verspätet, und der Papierbetrieb füllte die ersten Trades
+// einer Instanz aus dem Scanfenster vor ihrer Anlage.
+console.log('\nBacktest — kein Einstieg vor der Erkennung (alle Strategien und Vorlagen)')
+{
+    const { runBacktest } = await import('../strategy-backtest.js')
+    const { getStrategy, ladeRegelStrategien, defaultsFromSchema, EINGEBAUT } = await import('./index.js')
+    const { VORLAGEN } = await import('./rule-templates.js')
+    ladeRegelStrategien(VORLAGEN.map((v) => ({ strategyId: v.key, name: v.titel, description: '', rules: v.rules })))
+
+    const STUNDE = 3600000
+    const TAG = 24 * STUNDE
+    const reihe = (n, seed, tfMs, t0) => zufallsSerie(n, seed).map((k, i) => ({
+        ...k, t: t0 + i * tfMs, closeTime: t0 + (i + 1) * tfMs - 1, v: 100 + ((i * 7919 + seed) % 400),
+    }))
+    const T_START = Date.UTC(2025, 0, 6)
+    const tagesKerzen = reihe(400, 7, TAG, T_START - 300 * TAG)
+
+    const ids = [...EINGEBAUT, ...VORLAGEN.map((v) => v.key)]
+    let geprueft = 0
+    let einstiegeGesamt = 0
+    for (const id of ids) {
+        const strategie = getStrategy(id)
+        if (!strategie) { check(`${id} ist registriert`, false); continue }
+        const tf = strategie.supportedTimeframes.includes('1h') ? '1h' : strategie.supportedTimeframes[0]
+        const tfMs = { '15m': 900000, '1h': STUNDE, '4h': 4 * STUNDE, '1d': TAG }[tf] || STUNDE
+        const params = defaultsFromSchema(strategie.params)
+        // Set and Forget braucht sonst zwei höhere Ebenen, die eine Zufallsreihe
+        // nicht trägt; der geprüfte Weg (Erkennen → Füllen) bleibt derselbe.
+        if (id === 'set_and_forget') Object.assign(params, safParams)
+        let einstiege = 0
+        let zuFrueh = 0
+        let beispiel = ''
+        for (const seed of [42, 1337]) {
+            const candles = reihe(1200, seed, tfMs, T_START)
+            const e = await runBacktest({
+                strategyId: id, params,
+                risk: { maintenanceMarginPct: 0.5, minRR: 0.1, cooldownMinutes: 0, maxConcurrentPositions: 20 },
+                symbol: 'TESTUSDT', timeframe: tf, fromTs: candles[0].t, toTs: candles.at(-1).t + tfMs,
+                candles, htfCandles: tagesKerzen,
+            })
+            const erkannt = new Map((e.setups || []).map((s) => [s.id, s.erkanntT]))
+            for (const t of e.trades || []) {
+                const et = erkannt.get(t.setupId)
+                if (et == null) continue
+                einstiege++
+                if (!(Number(t.entryTime) > Number(et))) {
+                    zuFrueh++
+                    if (!beispiel) beispiel = `erkannt ${new Date(et).toISOString()} → Einstieg ${new Date(Number(t.entryTime)).toISOString()}`
+                }
+            }
+        }
+        einstiegeGesamt += einstiege
+        geprueft++
+        check(`${id} (${tf}) — ${einstiege} Einstiege, keiner auf oder vor der Erkennungskerze`, zuFrueh === 0,
+            zuFrueh ? `${zuFrueh} zu früh, z. B. ${beispiel}` : '')
+    }
+    check(`Backtest-Prüfung hat überhaupt gehandelt (${geprueft} Strategien, ${einstiegeGesamt} Einstiege)`,
+        geprueft === ids.length && einstiegeGesamt > 20)
+
+    // Entwurf aus dem Regel-Editor (opts.strategie): rechnet wie die registrierte
+    // Fassung derselben Regeln, ohne in die Registry zu kommen.
+    const { alsManifest } = await import('./rule-engine.js')
+    const { pruefeRegeln } = await import('./rule-validate.js')
+    const vorlage = VORLAGEN.find((v) => v.key === 'rsi_umkehr') || VORLAGEN[0]
+    const g = pruefeRegeln({ ...vorlage.rules, id: 'entwurf_selbsttest', name: 'Entwurf' })
+    check('Entwurf besteht die Regelprüfung', g.ok, (g.fehler || []).join('; '))
+    if (g.ok) {
+        const entwurf = alsManifest(g.regeln)
+        const tf = entwurf.supportedTimeframes.includes('1h') ? '1h' : entwurf.supportedTimeframes[0]
+        const tfMs = { '15m': 900000, '1h': STUNDE, '4h': 4 * STUNDE, '1d': TAG }[tf] || STUNDE
+        let candles = []
+        const lauf = (o) => runBacktest({
+            params: defaultsFromSchema(entwurf.params),
+            risk: { maintenanceMarginPct: 0.5, minRR: 0.1, cooldownMinutes: 0, maxConcurrentPositions: 20 },
+            symbol: 'TESTUSDT', timeframe: tf, fromTs: candles[0].t, toTs: candles.at(-1).t + tfMs,
+            candles, htfCandles: tagesKerzen, ...o,
+        })
+        const zuege = (e) => (e.trades || []).map((x) => `${x.entryTime}|${x.exitTime}|${Number(x.netPnl).toFixed(6)}`)
+        let za = []
+        let zb = []
+        for (const seed of [42, 1337]) {
+            candles = reihe(1200, seed, tfMs, T_START)
+            za = za.concat(zuege(await lauf({ strategyId: 'entwurf_selbsttest', strategie: entwurf })))
+            zb = zb.concat(zuege(await lauf({ strategyId: vorlage.key })))
+        }
+        check(`Entwurf rechnet wie die registrierte Vorlage (${za.length} Trades)`,
+            za.length > 0 && za.join(',') === zb.join(','))
+        check('Entwurf steht danach nicht in der Registry', !getStrategy('entwurf_selbsttest'))
+    }
 }
 
 // ── Ergebnis ─────────────────────────────────────────────────────────────

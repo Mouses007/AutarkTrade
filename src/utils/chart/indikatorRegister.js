@@ -39,7 +39,8 @@ import {
     atrKennzahlen, adxKennzahlen, mfiKennzahlen, obvKennzahlen, oiKennzahlen, rsiKennzahlen, stochKennzahlen,
     macdKennzahlen, fundingKennzahlen, longAnteilKennzahlen, volumenKennzahlen,
 } from './fensterKennzahlen.js'
-import { adxFarben, atrFarben, obvFarben, volumenFarben, fundingFarben, longAnteilFarben, divergenzen } from './fensterFarben.js'
+import { deltaJeKerze, kaufVerkauf, zoneAus, cvdKerzen, maJeAbschnitt, preisDivergenzen } from './orderflow.js'
+import { adxFarben, atrFarben, obvFarben, volumenFarben, fundingFarben, longAnteilFarben, divergenzen, divArtenAus } from './fensterFarben.js'
 
 /*
  * Tabelle im Fenster (alle Oszillatoren und Datenfenster ausser dem Momentum
@@ -49,7 +50,15 @@ import { adxFarben, atrFarben, obvFarben, volumenFarben, fundingFarben, longAnte
  */
 const P_TABELLE = { key: 'tabelle', typ: 'schalter', vorgabe: true }
 // Divergenz-Linien zwischen Kurs und Oszillator (`divergenzen` in fensterFarben.js)
-const P_DIVERGENZ = { key: 'divergenzen', typ: 'schalter', vorgabe: true }
+// Hauptschalter in der Gruppenüberschrift, darunter die Arten einzeln (31.10.2026): regulär
+// (Wende) ab Werk an, versteckt (Fortsetzung) und übertrieben (Doppelhoch/-tief) auf Wunsch.
+const P_DIVERGENZ = { key: 'divergenzen', typ: 'schalter', vorgabe: true, gruppe: 'divergenz', haupt: true }
+const P_DIV_ARTEN = [
+    { key: 'divRegulaer', typ: 'schalter', vorgabe: true, gruppe: 'divergenz' },
+    { key: 'divVersteckt', typ: 'schalter', vorgabe: false, gruppe: 'divergenz' },
+    { key: 'divUebertrieben', typ: 'schalter', vorgabe: false, gruppe: 'divergenz' },
+]
+const divFuer = (k, werte, p, o = {}) => (p.divergenzen ? divergenzen(k, werte, { ...o, arten: divArtenAus(p) }) : null)
 const ivAus = (k) => (k.length > 1 ? k[k.length - 1].t - k[k.length - 2].t : 0)
 
 /** Preisquelle — wie bei TradingView wählbar. */
@@ -479,7 +488,7 @@ export const INDIKATOREN = {
         params: [P_LAENGE(14), P_QUELLE,
             { key: 'maAn', typ: 'schalter', vorgabe: true },
             // Nicht im Legendennamen: „RSI 14 14" liest sich wie ein Tippfehler.
-            { key: 'maLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 200, schritt: 1, nichtImNamen: true }, P_TABELLE, P_DIVERGENZ],
+            { key: 'maLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 200, schritt: 1, nichtImNamen: true }, P_TABELLE, P_DIVERGENZ, ...P_DIV_ARTEN],
         tabelle: true,
         ausgaben: [
             { key: 'wert', art: 'linie', farbe: '#7e57c2', breite: 1 },
@@ -496,7 +505,7 @@ export const INDIKATOREN = {
         rechne: (k, p) => {
             const wert = rsi(mitQuelle(k, p.quelle), p.laenge)
             const ma = p.maAn ? smaSerie(wert, p.maLaenge) : null
-            return { wert, ...(ma ? { ma } : {}), _tab: p.tabelle ? rsiKennzahlen(k, wert, ma) : null, _div: p.divergenzen ? divergenzen(k, wert) : null }
+            return { wert, ...(ma ? { ma } : {}), _tab: p.tabelle ? rsiKennzahlen(k, wert, ma) : null, _div: divFuer(k, wert, p) }
         },
     },
     macd: {
@@ -506,6 +515,8 @@ export const INDIKATOREN = {
             { key: 'langsam', typ: 'zahl', vorgabe: 26, min: 1, max: 400, schritt: 1 },
             { key: 'signal', typ: 'zahl', vorgabe: 9, min: 1, max: 100, schritt: 1 },
             P_QUELLE, P_TABELLE,
+            // Divergenzen am MACD (31.10.2026): an der MACD-Linie (Vorgabe) oder am Histogramm
+            P_DIVERGENZ, { key: 'divBasis', typ: 'wahl', vorgabe: 'macd', optionen: ['macd', 'hist'], gruppe: 'divergenz' }, ...P_DIV_ARTEN,
         ],
         tabelle: true,
         ausgaben: [
@@ -522,7 +533,8 @@ export const INDIKATOREN = {
                 signal: macd(kk, { ...o, line: 'signal' }),
                 hist: macd(kk, { ...o, line: 'hist' }),
             }
-            return { ...aus, _tab: p.tabelle ? macdKennzahlen(aus.macd, aus.signal, aus.hist) : null }
+            // MACD skaliert mit dem Kurs: Mindestunterschied relativ zum typischen Betrag statt 1 Punkt
+            return { ...aus, _tab: p.tabelle ? macdKennzahlen(aus.macd, aus.signal, aus.hist) : null, _div: divFuer(k, p.divBasis === 'hist' ? aus.hist : aus.macd, p, { minDiffRel: 0.05 }) }
         },
     },
     stoch: {
@@ -530,7 +542,7 @@ export const INDIKATOREN = {
         // Vorgabe wie TradingView: %K 14, %K-Glättung 1, %D 3 (vorher 3 — eine „Slow"-Stochastik
         // unter dem Namen der normalen, und die Werte wichen vom TradingView-Chart ab).
         params: [P_LAENGE(14), { key: 'glaettK', typ: 'zahl', vorgabe: 1, min: 1, max: 20, schritt: 1 },
-            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE, P_DIVERGENZ],
+            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE, P_DIVERGENZ, ...P_DIV_ARTEN],
         ausgaben: [
             { key: 'k', art: 'linie', farbe: '#2962ff', breite: 1 },
             { key: 'd', art: 'linie', farbe: '#ff6d00', breite: 1 },
@@ -541,7 +553,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const r = stochastic(k, { period: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD })
-            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null, _div: p.divergenzen ? divergenzen(k, r.k) : null }
+            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null, _div: divFuer(k, r.k, p) }
         },
     },
     stochRsi: {
@@ -550,7 +562,7 @@ export const INDIKATOREN = {
             { key: 'rsiLaenge', typ: 'zahl', vorgabe: 14, min: 1, max: 100, schritt: 1 },
             P_LAENGE(14, 100),
             { key: 'glaettK', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 },
-            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE, P_DIVERGENZ],
+            { key: 'glaettD', typ: 'zahl', vorgabe: 3, min: 1, max: 20, schritt: 1 }, P_TABELLE, P_DIVERGENZ, ...P_DIV_ARTEN],
         ausgaben: [
             { key: 'k', art: 'linie', farbe: '#2962ff', breite: 1 },
             { key: 'd', art: 'linie', farbe: '#ff6d00', breite: 1 },
@@ -561,7 +573,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const r = stochRsi(k, { rsiPeriod: p.rsiLaenge, stochPeriod: p.laenge, smoothK: p.glaettK, smoothD: p.glaettD })
-            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null, _div: p.divergenzen ? divergenzen(k, r.k) : null }
+            return { ...r, _tab: p.tabelle ? stochKennzahlen(k, r.k, r.d) : null, _div: divFuer(k, r.k, p) }
         },
     },
     atr: {
@@ -594,7 +606,7 @@ export const INDIKATOREN = {
     },
     mfi: {
         ort: 'eigen',
-        params: [P_LAENGE(14), P_TABELLE, P_DIVERGENZ],
+        params: [P_LAENGE(14), P_TABELLE, P_DIVERGENZ, ...P_DIV_ARTEN],
         ausgaben: [{ key: 'wert', art: 'linie', farbe: '#00bcd4', breite: 1 }],
         linien: [80, 20],
         band: { oben: 80, unten: 20, linie: 'wert' },
@@ -602,7 +614,7 @@ export const INDIKATOREN = {
         tabelle: true,
         rechne: (k, p) => {
             const wert = mfi(k, p.laenge)
-            return { wert, _tab: p.tabelle ? mfiKennzahlen(k, wert) : null, _div: p.divergenzen ? divergenzen(k, wert) : null }
+            return { wert, _tab: p.tabelle ? mfiKennzahlen(k, wert) : null, _div: divFuer(k, wert, p) }
         },
     },
     obv: {
@@ -805,6 +817,125 @@ export const INDIKATOREN = {
         ausgaben: [],
         rechne: () => ({}),
     },
+    // ── Orderflow (31.10.2026) ───────────────────────────────────────────
+    // CVD und Delta-Volumen aus dem Kaufvolumen der Kerzen (`vb`, nur Binance) —
+    // volle Historie ohne Aufzeichnung. Ohne `vb` bleiben die Fenster leer.
+    cvd: {
+        ort: 'eigen',
+        // Echtes Delta aus dem Kaufvolumen (Binance), als Kerzen oder Linie; ausgebaut nach
+        // dem TradingView-Skript des Nutzers (31.10.2026) — dessen Fehler nicht übernommen,
+        // siehe cvdKerzen/maJeAbschnitt/preisDivergenzen in orderflow.js.
+        extern: 'cvd',
+        params: [
+            S('binance', true, 'cvdQuelle'),
+            W('reset', 'keiner', ['keiner', 'tag', 'woche'], 'cvdQuelle'),
+            W('zone', 'utc', ['utc', 'lokal'], 'cvdQuelle'),
+            S('resetMarke', true, 'cvdQuelle'),
+            W('skala', 'usd', ['usd', 'coins'], 'cvdQuelle'),
+            W('modus', 'kerzen', ['kerzen', 'linie'], 'cvdAnzeige'),
+            W('intra', 'auto', ['auto', '1m', '5m', '15m', 'aus'], 'cvdAnzeige', true),
+            F('cAuf', '#26a69a', 'cvdAnzeige'), M(F('cAb', '#ef5350', 'cvdAnzeige')),
+            H(S('signalMa', true, 'cvdMa')),
+            W('maTyp', 'ema', ['ema', 'sma'], 'cvdMa'), M(Z('maLaenge', 14, 1, 500, 1, 'cvdMa')), M(F('cMa', '#ffb300', 'cvdMa')),
+            P_DIVERGENZ, ...P_DIV_ARTEN,
+            Z('divLinks', 10, 1, 50, 1, 'divergenz'), Z('divRechts', 3, 1, 20, 1, 'divergenz'),
+            Z('divMinAtr', 0.5, 0, 10, 0.1, 'divergenz'), Z('divMinCvd', 5, 0, 100, 1, 'divergenz'),
+            Z('divMaxAbstand', 60, 5, 500, 1, 'divergenz'),
+        ],
+        ausgaben: [
+            { key: 'cvd', art: 'kerzen', farbe: '#26a69a' },
+            { key: 'ma', art: 'linie', farbe: '#ffb300', breite: 1 },
+        ],
+        ausgabenFuer: (p) => [
+            p.modus === 'linie' ? { key: 'cvd', art: 'linie', farbe: p.cAuf || '#26a69a', breite: 2 } : { key: 'cvd', art: 'kerzen', farbe: p.cAuf || '#26a69a' },
+            ...(p.signalMa ? [{ key: 'ma', art: 'linie', farbe: p.cMa || '#ffb300', breite: 1 }] : []),
+        ],
+        linien: [0],
+        kurz: (p, name) => `${name}${p.reset === 'keiner' ? '' : p.reset === 'tag' ? ' D' : ' W'}${p.skala === 'usd' ? ' $' : ''}`,
+        rechne: (k, p, ext) => {
+            // `ext` ist schon extern.cvd (rechneIndikator reicht nur den eigenen Teil weiter)
+            const x = ext || null
+            const r = cvdKerzen(k, {
+                anker: p.reset, zone: zoneAus(p.zone), usd: p.skala === 'usd',
+                quelle: x?.kerzen || null, quelleMs: x?.quelleMs || 0, intra: p.modus === 'kerzen' ? x?.intra || null : null,
+                ivMs: x?.ivMs || 0, interval: x?.interval || '',
+            })
+            const auf = p.cAuf || '#26a69a', ab = p.cAb || '#ef5350'
+            // Linien springen am Abschnittsbeginn auf 0 — das Stück dorthin unsichtbar. Lightweight Charts färbt
+            // ein Linienstück nach seinem ANFANGSpunkt, also der letzte Punkt vor dem neuen Abschnitt.
+            const neu = (i) => i + 1 < r.seg.length && r.seg[i + 1] !== r.seg[i] && r.seg[i] >= 0
+            const farbe = r.c.map((c, i) => (c == null ? null : p.modus === 'linie' && neu(i) ? 'rgba(0,0,0,0)' : c >= r.o[i] ? auf : ab))
+            return {
+                cvd: r.c, cvd_o: r.o, cvd_h: r.h, cvd_l: r.l, _farbe_cvd: farbe,
+                ...(p.signalMa ? { ma: maJeAbschnitt(r.c, r.seg, p.maLaenge, p.maTyp), _farbe_ma: r.c.map((_, i) => (neu(i) ? 'rgba(0,0,0,0)' : null)) } : {}),
+                _spalten: p.resetMarke && p.reset !== 'keiner' ? r.start.map((s, i) => (s ? i : -1)).filter((i) => i >= 0) : [],
+                _div: p.divergenzen ? preisDivergenzen(k, r, {
+                    links: p.divLinks, rechts: p.divRechts, minAtr: p.divMinAtr, minProzent: p.divMinCvd, maxAbstand: p.divMaxAbstand, arten: divArtenAus(p),
+                }) : null,
+            }
+        },
+    },
+    deltaVol: {
+        ort: 'eigen',
+        params: [S('deltaLinie', true)],
+        ausgaben: [
+            { key: 'kauf', art: 'histogramm', farbe: 'rgba(38,166,154,0.75)' },
+            { key: 'verkauf', art: 'histogramm', farbe: 'rgba(239,83,80,0.75)' },
+            { key: 'delta', art: 'linie', farbe: '#f5c542', breite: 1 },
+        ],
+        ausgabenFuer: (p) => [
+            { key: 'kauf', art: 'histogramm', farbe: 'rgba(38,166,154,0.75)' },
+            { key: 'verkauf', art: 'histogramm', farbe: 'rgba(239,83,80,0.75)' },
+            ...(p.deltaLinie ? [{ key: 'delta', art: 'linie', farbe: '#f5c542', breite: 1 }] : []),
+        ],
+        linien: [0],
+        kurzOhneParams: true,
+        rechne: (k, p) => ({ ...kaufVerkauf(k), ...(p.deltaLinie ? { delta: deltaJeKerze(k) } : {}) }),
+    },
+    // Ein Volumenprofil je Session (Tag oder Woche), über ihren Kerzen gezeichnet
+    sessionVp: {
+        ort: 'preis',
+        zeichner: 'sessionVp',
+        params: [
+            W('art', 'tag', ['tag', 'woche']),
+            W('zone', 'utc', ['utc', 'lokal']),
+            Z('anzahl', 5, 1, 30, 1),
+            Z('zeilen', 48, 8, 300, 1),
+            Z('va', 70, 0, 100, 1),
+            Z('breite', 60, 10, 100, 5, 'vrvpStil'),
+            F('cAuf', '#5b9cf6', 'vrvpStil'),
+            Z('vaDeck', 55, 0, 100, 5, 'vrvpStil'), Z('aussenDeck', 20, 0, 100, 5, 'vrvpStil'),
+            S('zeigePoc', true, 'vrvpStil'), M(F('cPoc', '#ff5252', 'vrvpStil')),
+            S('zeigeVa', true, 'vrvpStil'), M(F('cVa', '#9598a1', 'vrvpStil')),
+            S('verlaengern', true, 'vrvpStil'),
+        ],
+        kurz: (p, name) => `${name} ${p.art === 'woche' ? 'W' : 'D'}`,
+        ausgaben: [],
+        rechne: () => ({}),
+    },
+    // Käufe/Verkäufe je Preisstufe in jeder Kerze — aus der eigenen aggTrade-Aufzeichnung
+    footprint: {
+        ort: 'preis',
+        zeichner: 'footprint',
+        extern: 'footprint',
+        params: [
+            W('darstellung', 'profil', ['profil', 'zellen', 'delta']),
+            W('stufeArt', 'auto', ['auto', 'ticks']),
+            Z('ticks', 10, 1, 10000, 1),
+            Z('faktor', 3, 1.5, 10, 0.5),
+            S('imbalance', true),
+            S('zonen', true),
+            S('zahlen', true),
+            S('valueArea', true),
+            S('poc', true),
+            S('kennzahlen', true),
+            S('delta', true),
+            S('usd', false),
+        ],
+        kurzOhneParams: true,
+        ausgaben: [],
+        rechne: () => ({}),
+    },
     volSma: {
         ort: 'eigen',
         params: [P_LAENGE(20), P_TABELLE],
@@ -887,8 +1018,20 @@ export function kurzname(typ, params, name) {
 }
 
 let laufNr = 0
-/** Neue Instanz für ein Layout. `id` nur innerhalb des Panels eindeutig. */
-export function neueInstanz(typ) {
+/**
+ * Neue Instanz für ein Layout. `id` nur innerhalb des Panels eindeutig.
+ * `eigen` = der gespeicherte Standard des Nutzers für diesen Typ
+ * ({params, farben}, `settings.chartIndikatorStandard[typ]`) — er geht vor
+ * den Werksvorgaben, wird aber gesäubert (er kann von einem älteren Stand sein).
+ */
+export function neueInstanz(typ, eigen = null) {
     // `neu`: Vorgaben nur für neu angelegte Instanzen (gespeicherte behalten ihr Bild)
-    return { id: `${typ}-${Date.now().toString(36)}-${(laufNr++).toString(36)}`, typ, params: { ...vorgaben(typ), ...(INDIKATOREN[typ]?.neu || {}) }, farben: {}, sichtbar: true }
+    const werk = { ...vorgaben(typ), ...(INDIKATOREN[typ]?.neu || {}) }
+    const params = eigen?.params ? saubereParams(typ, { ...werk, ...eigen.params }) : werk
+    return { id: `${typ}-${Date.now().toString(36)}-${(laufNr++).toString(36)}`, typ, params, farben: { ...(eigen?.farben || {}) }, sichtbar: true }
+}
+
+/** Was „Als Standard speichern“ von einer Instanz ablegt: gesäuberte Parameter und Farben, keine ID. */
+export function standardVon(instanz) {
+    return { params: saubereParams(instanz.typ, instanz.params), farben: { ...(instanz.farben || {}) } }
 }

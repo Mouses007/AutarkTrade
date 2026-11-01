@@ -71,6 +71,14 @@
  * angepasst.
  *
  * ── Was die Vorgaben messbar bringen ──
+ * ACHTUNG (01.11.2026): Alle Zahlen dieses Abschnitts sind mit Blick in die
+ * Zukunft gerechnet. Bis Detector-Version 2 prüfte Phase A die letzten 200
+ * Kerzen gegen die HEUTIGEN Zonen und den heutigen Trend, und der Backtest
+ * füllte die so verspätet erkannten Setups rückwirkend — 70–80 % der Setups.
+ * Mit der Korrektur blieben auf BTC/ETH/SOL 4h über zwei Jahre von 80
+ * Trades 21 übrig (scripts/strategien-messung.mjs, docs/strategien/2026-11-korrekturen.md).
+ * Die Tabelle bleibt als Beleg stehen, nicht als Aussage über die Strategie.
+ *
  * Gemessen am 14.09.2026, drei Jahre bis 14.09.2026, Zeiteinheit 4h mit Zonen
  * und Trend aus Tages- und Wochenkerzen, 2 % Risiko je Trade, Hebel 5, eine
  * Position gleichzeitig, Taker 6 bp + 2 bp Slippage (der Einstieg IST eine
@@ -232,7 +240,9 @@ import {
     isDragonflyDoji, isGravestoneDoji, isMorningStar, isEveningStar,
 } from './indicators.js'
 
-export const DETECTOR_VERSION = 1
+// 2 (01.11.2026): nur noch die jüngste Kerze als Kandidat, HTF aus festem
+// Fenster, Einstieg zur Eröffnung mit Prüfung der Einstiegskerze.
+export const DETECTOR_VERSION = 2
 
 /** Abbruchgründe. Die Auswertung gruppiert danach — Codes stabil halten. */
 export const INVALID_REASONS = {
@@ -365,7 +375,6 @@ const params = [
     },
 
     // ── Einstieg ──────────────────────────────────────────────────
-    { key: 'scanWindowCandles', type: 'integer', default: 200, min: 30, max: 1000, step: 10, group: 'entry' },
     { key: 'sperreSamstag', type: 'boolean', default: false, group: 'entry' },
     { key: 'sperreSonntag', type: 'boolean', default: false, group: 'entry' },
     { key: 'sperreMontag', type: 'boolean', default: false, group: 'entry' },
@@ -738,6 +747,10 @@ export function zonenTreffer(zone, kerze, long, naehePct) {
 /**
  * Welche der erlaubten Umkehrformationen liegt auf Kerze `i`?
  *
+ * Für Short gilt die Liste gespiegelt: Shooting Star ↔ Inverted Hammer,
+ * Gravestone ↔ Dragonfly, Evening ↔ Morning Star — und als Gegenstück zum
+ * Hammer der Hanging Man, den das Video nicht eigens nennt.
+ *
  * Die Liste ist abschliessend: was das Video durchstreicht (Spinning Top,
  * gewöhnlicher Doji, Piercing Line, Dark Cloud Cover, Three Soldiers/Crows),
  * fehlt hier auch. Der gewöhnliche Doji ist der wichtigste Ausschluss — er ist
@@ -820,6 +833,34 @@ export function kerzenAbstand(kerzen) {
  *
  * @returns {{ htfFehlt?: true, basis?: Array, trend1?: number, trend2?: number, masse?: object, zonen?: Array }}
  */
+/**
+ * HTF-Kerzen, die Zonen und Trend sehen: das Zonenfenster, und für die zweite
+ * Ebene 40 aggregierte Kerzen (bei Faktor 7: 280 Tage).
+ */
+export function snfHtfFenster(p) {
+    return Math.max(p.zonenFensterHtf || 250, p.zweiteEbene ? (p.zweiteEbeneFaktor || 7) * 40 : 0)
+}
+
+/**
+ * Kerzen der HANDELSzeiteinheit, die der Detector ohne HTF-Filter mit zweiter
+ * Ebene braucht: dieselbe Rechnung wie `snfHtfFenster`, nur auf den eigenen
+ * Kerzen (Manifest-Feld `ltfKerzen`, siehe `sichtFensterKerzen`).
+ *
+ * Bis 31.10.2026 bekam der Detector dort fest 550 Kerzen — `zonenFensterHtf`
+ * 800, 1000 und 1500 lieferten dasselbe wie 550, auch in Optimierung und
+ * Stabilität (Audit 4.3.4, FUN-L4-004). Mit Filter liegen Zonen und Trend auf
+ * den HTF-Kerzen (`htfKerzen`), dann braucht es hier nichts.
+ *
+ * Ohne HTF-Filter UND ohne zweite Ebene sucht `zonenLage` seit jeher auf dem
+ * ganzen Sichtfenster, der Regler wirkt dort nicht. Das bleibt bewusst so:
+ * ihn dort wirksam zu machen, verkleinerte schon bei der Vorgabe 250 das
+ * Zonenfenster laufender Instanzen von 550 auf 250 Kerzen.
+ */
+export function snfLtfFenster(p) {
+    if (p.htfTrendFilter || !p.zweiteEbene) return 0
+    return snfHtfFenster(p) + 10
+}
+
 export function zonenLage({ candles, params: p, htfCandles = null }) {
     let basis = candles
     let zweite = null
@@ -827,12 +868,18 @@ export function zonenLage({ candles, params: p, htfCandles = null }) {
         const noetigHtf = Math.max(p.pivotLinks + p.pivotRechts + 10,
             p.zweiteEbene ? (p.pivotLinks + p.pivotRechts + 4) * p.zweiteEbeneFaktor : 0)
         if (!Array.isArray(htfCandles) || htfCandles.length < noetigHtf) return { htfFehlt: true }
-        basis = htfCandles.slice(-p.zonenFensterHtf)
+        // Beide Ebenen aus demselben festen Fenster wie im Betrieb
+        // (`htfKerzen`): der Backtest hatte die ganze Historie, die Engine
+        // nur 70 Tageskerzen — und damit neun Wochenkerzen für Ebene 2.
+        const htf = htfCandles.slice(-snfHtfFenster(p))
+        basis = htf.slice(-p.zonenFensterHtf)
         if (p.zweiteEbene) {
-            const ms = kerzenAbstand(htfCandles)
-            zweite = aggregiereKerzen(htfCandles, ms, p.zweiteEbeneFaktor)
+            const ms = kerzenAbstand(htf)
+            zweite = aggregiereKerzen(htf, ms, p.zweiteEbeneFaktor)
         }
     } else if (p.zweiteEbene) {
+        // Ohne HTF-Filter auf den eigenen Kerzen; das Sichtfenster ist dafür
+        // gross genug (`ltfKerzen` = `snfLtfFenster`).
         const ms = kerzenAbstand(candles)
         zweite = aggregiereKerzen(candles, ms, p.zweiteEbeneFaktor)
         basis = candles.slice(-p.zonenFensterHtf)
@@ -896,7 +943,13 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
 
     // ══ Phase A: neue Setups ══════════════════════════════════════════════
     const richtungen = p.direction === 'both' ? ['long', 'short'] : [p.direction]
-    const scanAb = Math.max(2, candles.length - p.scanWindowCandles)
+    // Nur die JÜNGSTE Kerze ist ein Kandidat. Bis Version 1 wurden die
+    // letzten 200 Kerzen gegen die HEUTIGEN Zonen und den heutigen Trend
+    // geprüft: Zonen entstehen aus später bestätigten Wendepunkten, und ein
+    // Trend, der heute passt, passte damals nicht. 70–80 % der Setups
+    // entstanden so verspätet (Median 15–48 Kerzen) und wurden rückwirkend
+    // gefüllt — die Messungen im Kopf dieser Datei stammen daraus.
+    const scanAb = Math.max(2, candles.length - 1)
 
     for (const dir of richtungen) {
         const long = dir === 'long'
@@ -956,6 +1009,28 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
     }
 
     // ══ Phase B: laufende Setups ══════════════════════════════════════════
+    // Ziel und Chancen/Risiko hängen an den Zonen. Eingestiegen wird zur
+    // ERÖFFNUNG von k — die Zonen dürfen also nur aus Kerzen VOR k stammen
+    // (und aus HTF-Kerzen, die bis zur Eröffnung von k geschlossen sind).
+    // Bis 31.10.2026 kamen sie aus dem ganzen Fenster samt k bzw. der mit k
+    // schliessenden Tageskerze: bei gleichem k.o hing die Entscheidung am
+    // späteren Verlauf von k (Audit 4.3.4, FUN-L4-001). Je Index einmal.
+    const zonenVorK = new Map()
+    const zielZonenBis = (i) => {
+        if (zonenVorK.has(i)) return zonenVorK.get(i)
+        const kT = candles[i].t
+        let htfVorK = htfCandles
+        if (Array.isArray(htfCandles)) {
+            const htfMs = kerzenAbstand(htfCandles)
+            htfVorK = htfCandles.filter((h) => h.t + htfMs <= kT)
+        }
+        const l = zonenLage({ candles: candles.slice(0, i), params: p, htfCandles: htfVorK })
+        // Reicht die Datenlage ohne k nicht, gibt es kein Ziel — geraten wird nicht.
+        const z = l.htfFehlt ? [] : l.zonen
+        zonenVorK.set(i, z)
+        return z
+    }
+
     for (const s of openSetups) {
         if (s.status !== 'waiting_retest' && s.status !== 'armed') continue
         const long = s.direction === 'long'
@@ -996,7 +1071,7 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
         const risiko = Math.abs(entry - stopLoss)
         let takeProfit = long ? entry + risiko * p.tpRR : entry - risiko * p.tpRR
         if (p.tpQuelle === 'zone') {
-            const ziel = zielZone(zonen, entry, long)
+            const ziel = zielZone(zielZonenBis(i), entry, long)
             if (!ziel) {
                 events.push({ id: s.id, status: 'rejected', invalidReason: INVALID_REASONS.KEINE_ZIELZONE, candleTime: k.t })
                 reject(INVALID_REASONS.KEINE_ZIELZONE, key)
@@ -1021,6 +1096,9 @@ function detect({ candles, params: p, openSetups = [], knownSetupKeys = [], htfC
             id: s.id, status: 'triggered', triggeredAt: k.t, candleTime: k.t,
             entry, stopLoss, takeProfit, rr,
             entryTrigger: 'market',
+            // Eingestiegen wird zur Eröffnung: Hoch und Tief DIESER Kerze
+            // können Stop oder Ziel schon berühren.
+            entryAtOpen: true,
             confirmations: { ...(s.confirmations || {}), entryTrigger: 'market', rr: Number(rr.toFixed(2)) },
         })
     }
@@ -1035,6 +1113,8 @@ export default {
     version: DETECTOR_VERSION,
     supportedTimeframes: ['15m', '30m', '1h', '4h', '1d'],
     warmupCandles: 300,
+    htfKerzen: (p) => snfHtfFenster(p) + 10,
+    ltfKerzen: snfLtfFenster,
     params,
     paramGroups,
     detect,

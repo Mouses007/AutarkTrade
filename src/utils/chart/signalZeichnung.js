@@ -62,7 +62,15 @@ export class SignalZeichnung {
     }
     Y(p) { return p == null || !Number.isFinite(p) ? null : this.serie.priceToCoordinate(p) }
 
+    /** Schild zeichnen und seine Fläche merken (Klick darauf öffnet die Einstellungen). */
+    schild(ctx, o) {
+        const b = zeichneSchild(ctx, o)
+        this.schilder.push(b)
+        return b
+    }
+
     zeichne(ctx, groesse) {
+        this.schilder = []
         const setups = this.daten?.setups
         if (!Array.isArray(setups) || !setups.length) return
         ctx.save()
@@ -106,7 +114,7 @@ export class SignalZeichnung {
             if (long) { ctx.moveTo(xe, ye + 2); ctx.lineTo(xe - 6, ye + 12); ctx.lineTo(xe + 6, ye + 12) }
             else { ctx.moveTo(xe, ye - 2); ctx.lineTo(xe - 6, ye - 12); ctx.lineTo(xe + 6, ye - 12) }
             ctx.closePath(); ctx.fill()
-            zeichneSchild(ctx, { text: long ? 'Long' : 'Short', x: xe, y: long ? ye + 12 : ye - 12, farbe, art: 'kontur', seite: long ? 'unten' : 'oben', abstand: 4 })
+            this.schild(ctx, { text: long ? 'Long' : 'Short', x: xe, y: long ? ye + 12 : ye - 12, farbe, art: 'kontur', seite: long ? 'unten' : 'oben', abstand: 4 })
             // Einstieg, Stop, Ziel bis zum Ausgang
             const xa = s.exitT ? (this.X(s.exitT) ?? rechts) : rechts
             const linie = (p, f, strich) => {
@@ -126,7 +134,7 @@ export class SignalZeichnung {
                 const risiko = Math.abs(s.entry - s.stopLoss)
                 const r = risiko > 0 && s.exitP > 0 ? ((long ? s.exitP - s.entry : s.entry - s.exitP) / risiko) : null
                 if (yt != null) {
-                    zeichneSchild(ctx, {
+                    this.schild(ctx, {
                         text: ziel ? '✓ Ziel' : '✕ Stop', zeile2: r != null ? `${r >= 0 ? '+' : '−'}${Math.abs(r).toFixed(2)} R` : '',
                         x: xa, y: yt, farbe: ziel ? GRUEN : ROT, art: 'voll', seite: 'rechts', abstand: 4,
                     })

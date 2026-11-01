@@ -27,6 +27,7 @@ export class VwapVectorZeichnung {
         this.r = null
         this.p = {}
         this.kerzen = []
+        this.schilder = []      // belegte Flächen der Schilder (Klick öffnet die Einstellungen)
         this.requestUpdate = () => {}
         const ansicht = (z, fn) => ({
             zOrder: () => z,
@@ -84,6 +85,7 @@ export class VwapVectorZeichnung {
         ctx.fillStyle = farbe
         ctx.textBaseline = 'middle'
         ctx.fillText(text, xx, y)
+        this.schilder.push({ x: xx - 2, y: y - 8, w: b + 4, h: 16 })
     }
 
     strich(stil, breite) {
@@ -93,6 +95,7 @@ export class VwapVectorZeichnung {
     }
 
     unten(ctx, groesse) {
+        this.schilder = []      // unten zeichnet zuerst, oben danach — beide sammeln
         const r = this.r, p = this.p
         if (!r || !this.kerzen.length) return
         const n = this.kerzen.length

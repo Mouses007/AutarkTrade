@@ -35,9 +35,27 @@ paketquelle_einrichten() {
     paketquelle_zugang
 }
 
+# Was geholt wird: das neueste Release-Tag vX.Y.Z der Quelle — dasselbe, das die
+# Update-Prüfung der Software meldet und aus dem Docker baut (Audit FUN-S3-002).
+# master-HEAD kann nach einem Release schon unfertige Commits tragen. Vorabversionen
+# (Tag mit „-") zählen nicht. Hat die Quelle kein Release-Tag (etwa ein eigener Fork),
+# bleibt es master. Ist die Quelle nicht erreichbar: Fehler, kein stiller Rückfall.
+paketquelle_ziel() {
+    _at_refs=$(git ls-remote --tags --refs origin 'v*') || { unset _at_refs; return 1; }
+    _at_tag=$(printf '%s\n' "$_at_refs" \
+        | sed -n 's#^[0-9a-f]*[[:space:]]*refs/tags/v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$#\1#p' \
+        | sort -t. -k1,1n -k2,2n -k3,3n | tail -n 1)
+    if [ -n "$_at_tag" ]; then echo "refs/tags/v$_at_tag"; else echo master; fi
+    unset _at_refs _at_tag
+}
+
 # Stand holen: nur der eine Commit, keine Historie, keine Tags (Audit A3-28).
 paketquelle_holen() {
-    git fetch --depth 1 --no-tags origin master
+    _at_ziel=$(paketquelle_ziel) || return 1
+    git fetch --depth 1 --no-tags origin "$_at_ziel"
+    _at_rc=$?
+    unset _at_ziel
+    return $_at_rc
 }
 
 # Nach dem reset: alte Historie entfernen (Klone von vor F4 haben sie noch ganz).

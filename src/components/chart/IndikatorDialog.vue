@@ -6,7 +6,9 @@
  */
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { INDIKATOREN, saubereParams, kurzname } from '../../utils/chart/indikatorRegister.js'
+import { INDIKATOREN, saubereParams, kurzname, neueInstanz, standardVon } from '../../utils/chart/indikatorRegister.js'
+import { appEinstellungen } from '@/stores/settings.js'
+import { dbUpdateSettings } from '@/utils/db.js'
 import FarbWahl from './FarbWahl.vue'
 import { Symbol, Knopf } from '../basis'
 
@@ -96,9 +98,48 @@ function speichere() {
     emit('speichere', entwurf.value)
 }
 
-function standard() {
-    entwurf.value.params = saubereParams(entwurf.value.typ, {})
+/*
+ * Eigener Standard je Typ in `settings.chartIndikatorStandard` (DB, gilt auf
+ * jedem Gerät): ein neu hinzugefügter Indikator startet damit. „Als Standard
+ * speichern“ legt den Entwurf ab UND übernimmt ihn in diese Instanz;
+ * „Werkseinstellung“ setzt nur den Entwurf zurück, „Standard löschen“ den
+ * gespeicherten Standard.
+ */
+const alleStandards = () => appEinstellungen.value?.chartIndikatorStandard || {}
+const eigenerStandard = computed(() => (entwurf.value ? alleStandards()[entwurf.value.typ] || null : null))
+const standardMeldung = ref('')
+async function schreibeStandards(neu) {
+    if (appEinstellungen.value) appEinstellungen.value.chartIndikatorStandard = neu
+    await dbUpdateSettings({ chartIndikatorStandard: neu })
+}
+async function alsStandard() {
+    entwurf.value.params = saubereParams(entwurf.value.typ, entwurf.value.params)
+    try {
+        await schreibeStandards({ ...alleStandards(), [entwurf.value.typ]: standardVon(entwurf.value) })
+        emit('speichere', entwurf.value)
+    } catch {
+        standardMeldung.value = t('chart.standardFehler')
+    }
+}
+async function standardLoeschen() {
+    const neu = { ...alleStandards() }
+    delete neu[entwurf.value.typ]
+    try {
+        await schreibeStandards(neu)
+        standardMeldung.value = t('chart.standardGeloescht')
+    } catch {
+        standardMeldung.value = t('chart.standardFehler')
+    }
+}
+function werk() {
+    const w = neueInstanz(entwurf.value.typ)
+    entwurf.value.params = w.params
     entwurf.value.farben = {}
+}
+function meinStandard() {
+    const w = neueInstanz(entwurf.value.typ, eigenerStandard.value)
+    entwurf.value.params = w.params
+    entwurf.value.farben = w.farben
 }
 
 onMounted(async () => {
@@ -181,8 +222,17 @@ onMounted(async () => {
                         <FarbWahl :model-value="hexFuer(farbeVon(a))" :titel="t('chart.indAusgabe.' + a.key)" @update:model-value="(f) => setzeFarbe(a.key, f)" />
                     </div>
                 </div>
+                <div v-if="eigenerStandard || standardMeldung" class="standardZeile">
+                    <span v-if="standardMeldung">{{ standardMeldung }}</span>
+                    <template v-else>
+                        <span>{{ t('chart.standardEigen') }}</span>
+                        <button type="button" class="link" @click="meinStandard">{{ t('chart.standardLaden') }}</button>
+                        <button type="button" class="link" @click="standardLoeschen">{{ t('chart.standardLoeschen') }}</button>
+                    </template>
+                </div>
                 <div class="fuss">
-                    <Knopf art="leise" klein @click="standard">{{ t('chart.standard') }}</Knopf>
+                    <Knopf art="leise" klein :titel="t('chart.werkTitel')" @click="werk">{{ t('chart.werk') }}</Knopf>
+                    <Knopf art="leise" klein :titel="t('chart.alsStandardTitel')" @click="alsStandard">{{ t('chart.alsStandard') }}</Knopf>
                     <Knopf art="haupt" klein @click="speichere">{{ t('chart.uebernehmen') }}</Knopf>
                 </div>
             </template>
@@ -469,6 +519,25 @@ onMounted(async () => {
 .fuss {
     display: flex;
     justify-content: flex-end;
+    flex-wrap: wrap;
     gap: 8px;
 }
+.standardZeile {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+}
+.standardZeile .link {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+}
+.standardZeile .link:hover { text-decoration: underline; }
 </style>

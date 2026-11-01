@@ -46,8 +46,10 @@ console.log('\nRegeln als Sätze — Selbsttest\n')
         /Schlusskurs über ema20/.test(text(s, 'Bedingungen')), text(s, 'Bedingungen'))
     check('Einstieg nennt Anker und Richtung',
         /ema20 berührt/.test(text(s, 'Einstieg')) && /von oben/.test(text(s, 'Einstieg')), text(s, 'Einstieg'))
+    // „Korrekturtief" mit einem Limit von oben rechnet die Prüfung seit
+    // 01.11.2026 als letztes Swing-Tief (rule-validate) — der Satz sagt das.
     check('Stop nennt Prozent und Anker — bei Long UNTER, im Dativ',
-        /0\.3 % unter dem Korrekturtief/.test(text(s, 'Stop')), text(s, 'Stop'))
+        /0\.3 % unter dem letzten Swing-Tief/.test(text(s, 'Stop')), text(s, 'Stop'))
     check('Ziel zeigt den Parameterbezug', /«ziel»/.test(text(s, 'Ziel')), text(s, 'Ziel'))
     check('Abbruch nennt die Frist', /20 Kerzen/.test(text(s, 'Abbruch')), text(s, 'Abbruch'))
     check('Break-Even und Mindest-CRV stehen unter „Unterwegs"',

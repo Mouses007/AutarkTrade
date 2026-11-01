@@ -52,14 +52,15 @@ export const LANGSAME_PFADE = [
     { muster: /\/api\/(coin-radar|hype-radar)\//, ms: 15 * MIN },
     // KI-Berichte, Rückfragen, Agent, Baukasten
     { muster: /\/api\/(ai|ollama)\//, ms: 10 * MIN },
-    { muster: /\/api\/strategies\/(builder|backtest)/, ms: 15 * MIN },
+    // Robustheit rechnet mehrere Backtests hintereinander — seit 01.11.2026 bis
+    // zwei Jahre 15m je Lauf; mit der Hausvorgabe von 20 s brach der Browser ab
+    { muster: /\/api\/strategies\/(builder|backtest|robustness)/, ms: 15 * MIN },
     { muster: /\/api\/rangliste\/(ki-vorschlag|laeufe)/, ms: 10 * MIN },
     { muster: /\/api\/flux\//, ms: 5 * MIN },
     // Chart-KI: maxTokens 3000, bei abgeschnittener Antwort ein zweiter Aufruf mit 6000 —
     // fehlte bis 18.10.2026, der Browser brach nach 20 s ab, während der Server bezahlt weiterrechnete
     { muster: /\/api\/chart\/ki-analyse/, ms: 5 * MIN },
     // Live-Erkennung: Kerzen holen plus detect() über das ganze Fenster
-    { muster: /\/api\/chart\/strategie\/erkennen/, ms: 2 * MIN },
 ]
 
 /**

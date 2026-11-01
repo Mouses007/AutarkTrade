@@ -101,15 +101,30 @@ export function longAnteilFarben(werte, fenster = 200) {
  * Divergenzen zwischen Kurs und Oszillator (wie die RSI-Divergenz von
  * TradingView): Pivot-Hochs/-Tiefs im OSZILLATOR mit `L` Kerzen zu beiden
  * Seiten; zwei aufeinanderfolgende Pivots im Abstand `minAbstand`–`maxAbstand`
- * Kerzen —
- *   bärisch  Kurs-Hoch höher, Oszillator-Hoch tiefer
- *   bullisch Kurs-Tief tiefer, Oszillator-Tief höher
+ * Kerzen. Drei Arten (`arten`, seit 31.10.2026 einzeln wählbar), je Seite:
+ *   regulaer      Wende: Kurs höheres Hoch / Oszillator tieferes (bärisch),
+ *                 Kurs tieferes Tief / Oszillator höheres (bullisch)
+ *   versteckt     Fortsetzung: Kurs tieferes Hoch / Oszillator höheres (bärisch),
+ *                 Kurs höheres Tief / Oszillator tieferes (bullisch)
+ *   uebertrieben  Doppelhoch/-tief: Kurs gleich hoch (± `gleichTol`), Oszillator
+ *                 schwächer — tieferes Hoch (bärisch), höheres Tief (bullisch)
+ * „Gleich" heisst höchstens `gleichTol` auseinander (Vorgabe 15 % der mittleren
+ * Kerzenspanne); dieselbe Grenze trennt die Arten, sodass ein Paar nie zwei hat.
+ * `minDiffRel` (statt `minDiff`) misst den Oszillator-Unterschied relativ zum
+ * Median seines Betrags — für den MACD, dessen Werte mit dem Kurs skalieren.
  * Ein Pivot ist erst `L` Kerzen später bestätigt; die Linie erscheint also
  * mit dieser Verzögerung, nie vorher (kein Blick in die Zukunft).
- * @returns {Array<{art: 'baerisch'|'bullisch', i1, i2, v1, v2}>}
+ * @returns {Array<{art: 'baerisch'|'bullisch', typ: 'regulaer'|'versteckt'|'uebertrieben', i1, i2, v1, v2}>}
  */
-export function divergenzen(kerzen, werte, { L = 5, minAbstand = 5, maxAbstand = 60, minDiff = 1 } = {}) {
+export const DIV_ARTEN = ['regulaer', 'versteckt', 'uebertrieben']
+const medianVon = (a) => { const b = a.filter(Number.isFinite).sort((x, y) => x - y); return b.length ? b[b.length >> 1] : 0 }
+
+export function divergenzen(kerzen, werte, { L = 5, minAbstand = 5, maxAbstand = 60, minDiff = 1, minDiffRel = null, arten = ['regulaer'], gleichTol = null } = {}) {
     const n = Math.min(kerzen?.length || 0, werte?.length || 0)
+    const an = new Set(arten)
+    if (!an.size || n < 2 * L + 2) return []
+    const tol = gleichTol ?? 0.15 * medianVon(kerzen.slice(0, n).map((k) => k.h - k.l))
+    const dMin = minDiffRel != null ? minDiffRel * medianVon(werte.slice(0, n).map(Math.abs)) : minDiff
     const pivots = (hoch) => {
         const aus = []
         for (let i = L; i < n - L; i++) {
@@ -118,13 +133,17 @@ export function divergenzen(kerzen, werte, { L = 5, minAbstand = 5, maxAbstand =
             let ok = true
             for (let j = i - L; j <= i + L && ok; j++) {
                 if (j === i || !Number.isFinite(werte[j])) continue
-                ok = hoch ? werte[j] < v : werte[j] > v
+                // Gleichstand: der erste von zwei gleichen Werten ist der Pivot. Streng nach
+                // beiden Seiten fiel ein Doppel-Tief ganz weg (RENDERUSDT 1h, 30.10.2026: RSI
+                // zweimal 24.1915), und die Divergenz wurde über das echte Tief hinweg gezogen.
+                ok = j < i ? (hoch ? werte[j] < v : werte[j] > v) : (hoch ? werte[j] <= v : werte[j] >= v)
             }
             if (ok) aus.push(i)
         }
         return aus
     }
     const aus = []
+    const nimm = (typ, art, a, b) => { if (an.has(typ)) aus.push({ art, typ, i1: a, i2: b, v1: werte[a], v2: werte[b] }) }
     for (const hoch of [true, false]) {
         const p = pivots(hoch)
         for (let k = 1; k < p.length; k++) {
@@ -132,9 +151,23 @@ export function divergenzen(kerzen, werte, { L = 5, minAbstand = 5, maxAbstand =
             if (b - a < minAbstand || b - a > maxAbstand) continue
             const kursA = hoch ? kerzen[a].h : kerzen[a].l, kursB = hoch ? kerzen[b].h : kerzen[b].l
             const wa = werte[a], wb = werte[b]
-            if (hoch && kursB > kursA && wb < wa - minDiff) aus.push({ art: 'baerisch', i1: a, i2: b, v1: wa, v2: wb })
-            if (!hoch && kursB < kursA && wb > wa + minDiff) aus.push({ art: 'bullisch', i1: a, i2: b, v1: wa, v2: wb })
+            const kursHoeher = kursB > kursA + tol, kursTiefer = kursB < kursA - tol, kursGleich = !kursHoeher && !kursTiefer
+            const oszHoeher = wb > wa + dMin, oszTiefer = wb < wa - dMin
+            if (hoch) {
+                if (kursHoeher && oszTiefer) nimm('regulaer', 'baerisch', a, b)
+                else if (kursTiefer && oszHoeher) nimm('versteckt', 'baerisch', a, b)
+                else if (kursGleich && oszTiefer) nimm('uebertrieben', 'baerisch', a, b)
+            } else {
+                if (kursTiefer && oszHoeher) nimm('regulaer', 'bullisch', a, b)
+                else if (kursHoeher && oszTiefer) nimm('versteckt', 'bullisch', a, b)
+                else if (kursGleich && oszHoeher) nimm('uebertrieben', 'bullisch', a, b)
+            }
         }
     }
     return aus.sort((x, y) => x.i2 - y.i2)
+}
+
+/** Die gewählten Arten aus den Indikator-Parametern (`divRegulaer`/`divVersteckt`/`divUebertrieben`). */
+export function divArtenAus(p) {
+    return [p.divRegulaer !== false && 'regulaer', p.divVersteckt && 'versteckt', p.divUebertrieben && 'uebertrieben'].filter(Boolean)
 }

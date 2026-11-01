@@ -21,12 +21,11 @@
 import { vetoFaktor } from './strategy-agents-regeln.js'
 import { getKnex } from './database.js'
 import { logError, logWarn } from './logger.js'
-import { getStrategy, validateParams, validateRisk, AGENT_DEFAULTS, normalisiereTimeframes } from './strategies/index.js'
+import { getStrategy, validateParams, validateRisk, AGENT_DEFAULTS, normalisiereTimeframes, htfBedarf, ladeRegelStrategien, sichtFensterKerzen } from './strategies/index.js'
 import { getClosedCandles, getSymbolMeta, getLastPrice, timeframeMs, isValidTimeframe } from './market-data.js'
-import { sichtBedarfKerzen } from './strategies/rule-engine.js'
-import { evaluateRisk, startOfDayUtc, RISK_REASONS } from './risk-engine.js'
+import { evaluateRisk, startOfDayUtc, RISK_REASONS, rundeMenge, grenzenFuer } from './risk-engine.js'
 import { openPaperPosition, stepPaperPositions, getPaperEquity, closePaperPositionManually } from './execution/paper.js'
-import { entryIsValid, kostenAus, einstiegsPreis } from './fill-simulator.js'
+import { entryIsValid, kostenAus, einstiegsPreis, einstiegsSorte, einstiegsZeit } from './fill-simulator.js'
 import { agentenVeto } from './strategy-agents.js'
 // `instance.broker` nennt die Börse, deren Rundungsregeln der Schattenbetrieb
 // anlegt. Orders sendet die Engine seit S13 keine mehr (docs/SPAETER-SCHARFER-HANDEL.md).
@@ -72,6 +71,12 @@ let engineStopped = false
 const running = new Map()
 /** `${instanceId}|${symbol}|${timeframe}` → Zeit der zuletzt verarbeiteten Kerze. */
 const lastProcessed = new Map()
+/**
+ * Gleicher Schlüssel → Kerzenzeit, für die schon frisch (force) nachgefragt
+ * wurde. Eigene Map, weil `lastProcessed` bei mancher Kerze nie gesetzt wird
+ * (unter 50 Kerzen, HTF fehlt) — sonst kehrte die Nachfrage jeden Takt wieder.
+ */
+const nachgefragt = new Map()
 /** Hält DIESER Prozess gerade die Führung? Nur zur Anzeige. */
 let hatFuehrung = false
 /** Kurzstatistik für den Status-Endpunkt. */
@@ -127,6 +132,59 @@ export function ladeInstanz(row) {
     }
 }
 
+// ── Eigene Regelstrategien mit der DB abgleichen ─────────────────────────
+
+/**
+ * Fingerabdruck der Tabelle `rule_strategies` beim letzten Laden.
+ *
+ * Die Registry lebt im Prozess. Ändert ein ZWEITER Prozess an derselben DB
+ * eine Regel (Entwicklungsserver mit AT_NO_ENGINE=1, NAS führt die Engine),
+ * lud der führende Prozess sie bis zum Neustart nicht nach: er rechnete mit
+ * den alten Regeln weiter, buchte aber unter der neuen paramsVersion, und eine
+ * dort neu angelegte Strategie übersprang er still (Audit 4.3.4, FUN-L2-003).
+ * Jetzt vergleicht jeder Takt einen billigen Fingerabdruck und lädt bei
+ * Abweichung neu.
+ */
+let regelStand = null
+
+async function regelFingerabdruck(knex) {
+    const z = await knex('rule_strategies')
+        .count({ n: '*' }).sum({ v: 'version' }).sum({ e: 'enabled' })
+        .max({ u: 'updatedAt' }).max({ i: 'id' }).first()
+    return JSON.stringify([Number(z?.n) || 0, Number(z?.v) || 0, Number(z?.e) || 0, String(z?.u ?? ''), Number(z?.i) || 0])
+}
+
+/**
+ * Alle aktiven Regelstrategien aus der DB in die Registry laden und den
+ * Fingerabdruck merken. `ladeAlleRegelStrategien` (strategy-api.js) ruft das
+ * nach jeder eigenen Änderung auf, der Takt nur bei fremder.
+ */
+export async function ladeRegelStrategienAusDb() {
+    const knex = getKnex()
+    const stand = await regelFingerabdruck(knex)
+    const rows = await knex('rule_strategies').where('enabled', 1)
+    const r = ladeRegelStrategien(rows)
+    regelStand = stand
+    return r
+}
+
+/** true, wenn neu geladen wurde (dann ist auch der Kerzen-Cache geleert). */
+async function gleicheRegelStrategienAb() {
+    const stand = await regelFingerabdruck(getKnex())
+    if (stand === regelStand) return false
+    const erstes = regelStand === null
+    const r = await ladeRegelStrategienAusDb()
+    for (const f of r.fehlerhaft) {
+        logWarn('strategy-engine', `Regelstrategie "${f.strategyId}" nicht ladbar: ${f.fehler.join('; ')}`)
+    }
+    if (!erstes) {
+        logWarn('strategy-engine', 'Regelstrategien in der DB geändert (anderer Prozess?) — neu geladen')
+        lastProcessed.clear()
+        nachgefragt.clear()
+    }
+    return true
+}
+
 /** Globale Schalter aus den Einstellungen. */
 async function ladeSchalter() {
     const knex = getKnex()
@@ -155,8 +213,17 @@ export const BETRIEBSARTEN = ['paper', 'shadow']
  *
  * ALLE DREI SIND ZUM ZEITPUNKT `now` GESTELLT, nicht „jetzt gerade".
  *
- * `now` ist die Kerzenzeit des Auslösers (`ev.triggeredAt`), nicht die
- * Systemzeit. Beim ersten Lauf über ein Symbol wertet die Strategie ihr ganzes
+ * `now` ist der SCHLUSS der Auslösekerze (`risikoStichtag`), nicht die
+ * Systemzeit. Bis 31.10.2026 war es ihr Beginn (`ev.triggeredAt`): seit der
+ * Regel `zu_spaet_erkannt` liegt der Auslöser immer auf der jüngsten
+ * geschlossenen Kerze, der Stichtag lag damit genau eine Kerze VOR dem
+ * Entscheid. Bei mehreren Zeiteinheiten sah ein 4h-Auslöser um 12:00 den Stand
+ * von 08:00 — eine 15m-Position von 09:15 galt als nicht offen (zweite
+ * Position trotz Deckel und Duplikat-Sperre), 15m-Verluste und -Ausstiege seit
+ * 08:00 zählten weder für Tageslimit noch für Sperrfrist (Audit 4.3.4,
+ * FUN-F1-001). Der Backtest rechnet mit demselben Stichtag.
+ *
+ * Geschichte: Beim ersten Lauf über ein Symbol wertete die Strategie ihr ganzes
  * Scan-Fenster aus — bei LSOB 200 Kerzen, auf 4h also fünf Wochen — und löst
  * dabei Setups auf Kerzen aus, die längst vergangen sind. Die Abfragen lasen
  * dagegen den JETZIGEN Stand. Drei Folgen, alle in dieselbe Richtung:
@@ -175,32 +242,51 @@ export const BETRIEBSARTEN = ['paper', 'shadow']
  *      möglich, ohne dass ein Tor es merkt.
  *
  * Im laufenden Betrieb ist `now` die Gegenwart; dann sind alle drei Schranken
- * wirkungslos und es ändert sich nichts. Der Fix betrifft ausschliesslich den
- * Rücklauf — dort aber die Datenbasis, auf der später Optimierungen fussen.
+ * wirkungslos und es ändert sich nichts. Der Fix betraf damals den Rücklauf,
+ * den es seit `zu_spaet_erkannt` nicht mehr gibt; die Schranken bleiben, weil
+ * sie Einträge nach dem Stichtag (andere Zeiteinheit, späterer Takt) sauber
+ * ausschliessen.
  */
 export function risikoKontextAbfragen(knex, instanceId, now) {
     const tagesBeginn = startOfDayUtc(now)
+    // Der Trade GENAU dieser Position: gleiche Positions-Nummer, gleiche
+    // Instanz, gleicher Einstieg. Die Nummer allein reicht nicht — nach einer
+    // Rücksicherung in eine frische DB zählen die Positions-Nummern wieder ab
+    // 1, während die zurückgespielten Trades die alten Nummern tragen; eine
+    // neue Position galt dann sofort als geschlossen (FUN-L3-001).
+    // Bezeichner über ?? binden, nicht blank in whereRaw: PostgreSQL faltet
+    // ungequotetes camelCase zu Kleinbuchstaben.
+    const tradeDerPosition = (q) => q
+        .select(knex.raw('1'))
+        .from('strategy_trades')
+        .whereRaw('?? = ??', ['strategy_trades.positionId', 'strategy_positions.id'])
+        .whereRaw('?? = ??', ['strategy_trades.instanceId', 'strategy_positions.instanceId'])
+        .whereRaw('?? = ??', ['strategy_trades.entryTime', 'strategy_positions.entryTime'])
     return {
         // Offen ZUM ZEITPUNKT now = eingestiegen bis dahin und bis dahin nicht
-        // wieder geschlossen. `whereNotExists` statt Join, damit eine Position
+        // wieder geschlossen. `whereExists` statt Join, damit eine Position
         // nicht doppelt in der Liste landet.
+        //
+        // 'open' und 'closing' zählen immer ('closing': Altbestand des
+        // Stop-Wächters vor S13, eine Position, deren Schliessung hängen-
+        // geblieben sein kann — fiele sie raus, sähe die Engine einen freien
+        // Platz). 'closed' zählt nur, wenn ihr Trade erst NACH now endet. Bis
+        // 31.10.2026 zählte eine geschlossene Position ohne Trade für immer
+        // als offen — so sieht jede Position aus, die nach dem letzten Backup
+        // geschlossen wurde, wenn das Backup zurückgespielt wird: die Instanz
+        // sperrte das Symbol und nahm ab dem Deckel nichts mehr an, während
+        // Liste und Überblick 0 offen zeigten (FUN-L3-001).
         //
         // `pending` bleibt draussen wie bisher: das war die Reservierung VOR
         // einer Live-Order (Altbestand vor S13), keine Position.
         offen: knex('strategy_positions')
             .where({ instanceId })
-            // 'closing' zaehlt mit: Altbestand des Stop-Waechters (vor S13),
-            // eine Position, deren Schliessung haengengeblieben sein kann.
-            // Faellt sie raus, saehe die Engine einen freien Platz.
-            .whereIn('status', ['open', 'closing', 'closed'])
             .where('entryTime', '<=', now)
-            .whereNotExists((q) => q
-                .select(knex.raw('1'))
-                .from('strategy_trades')
-                // Bezeichner über ?? binden, nicht blank in whereRaw:
-                // PostgreSQL faltet ungequotetes camelCase zu Kleinbuchstaben.
-                .whereRaw('?? = ??', ['strategy_trades.positionId', 'strategy_positions.id'])
-                .where('strategy_trades.exitTime', '<=', now)),
+            .where((q) => q
+                .whereIn('status', ['open', 'closing'])
+                .orWhere((g) => g
+                    .where('status', 'closed')
+                    .whereExists((t) => tradeDerPosition(t).where('strategy_trades.exitTime', '>', now)))),
         heute: knex('strategy_trades')
             .where({ instanceId })
             .whereBetween('exitTime', [tagesBeginn, now])
@@ -212,6 +298,15 @@ export function risikoKontextAbfragen(knex, instanceId, now) {
             .select('symbol', 'timeframe')
             .max({ exitTime: 'exitTime' }),
     }
+}
+
+/**
+ * Stichtag der Risikoprüfung: Schluss der Auslösekerze. Ohne Kerzenzeit (alte
+ * Detektoren) die Systemzeit — so meldeten sie den Auslöser schon immer.
+ */
+export function risikoStichtag(ev, tfMs) {
+    const beginn = Number(ev?.candleTime ?? ev?.triggeredAt) || 0
+    return beginn > 0 ? beginn + (tfMs || 0) : Date.now()
 }
 
 async function ladeRisikoKontext(instance, now) {
@@ -245,7 +340,7 @@ async function ladeKontostand(instance) {
 /**
  * Rundungsregeln der AUSFÜHRUNGSbörse, wo sie gebraucht werden.
  *
- * Der Papierbetrieb behält Binance — genau wie der Backtest, sonst runden
+ * Der Papierbetrieb behält die Marktdatenquelle — genau wie der Backtest, sonst runden
  * dieselben Regeln in Labor und Papier unterschiedlich und die Ergebnisse sind
  * nicht mehr vergleichbar. Der Schatten bekommt die echten Werte der
  * Börse: sein Zweck ist zu zeigen, welche Menge dort zulässig wäre.
@@ -265,6 +360,21 @@ async function marktMetaFuer(instance, symbol) {
 
 // ── Ein Symbol verarbeiten ───────────────────────────────────────────────
 
+/** Zustände eines Setups, die noch auf den Auslöser warten. */
+const WARTEND = ['armed', 'waiting_retest']
+
+/**
+ * Ist die Instanz JETZT noch aktiv und nicht archiviert? Frisch aus der DB,
+ * nicht aus der Zeile vom Taktbeginn: `neustartInstanz` (oder Pausieren) kann
+ * mitten in einem Takt kommen, während die Engine auf Kerzen oder das
+ * Agenten-Veto wartet.
+ */
+async function instanzNochAktiv(instanceId) {
+    const z = await getKnex()('strategy_instances').where('id', instanceId)
+        .select('enabled', 'archiviert').first()
+    return Boolean(z && Number(z.enabled) && !Number(z.archiviert))
+}
+
 async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     const knex = getKnex()
     const p = instance.params
@@ -275,20 +385,32 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     // während sie im Backtest gerechnet wurde — dieselbe Strategie würde live
     // schweigen und niemand wüsste, warum. ATH/ATL (`Infinity`) kann die Engine
     // nicht halten; dort bleibt die Linie bewusst leer, der Interpreter erfährt
-    // das über `historieVerkuerzt`.
-    const ankerBedarf = sichtBedarfKerzen(instance.strategie.regeln, timeframeMs(timeframe))
-    const bedarf = Math.max(
-        (instance.strategie.warmupCandles || 200)
-            + (p.scanWindowCandles || 200)
-            + (p.retestMaxCandles || 40) + 10,
-        Number.isFinite(ankerBedarf) ? ankerBedarf : 0,
-    )
+    // das über `historieVerkuerzt`. Dieselbe Rechnung wie im Backtest
+    // (`sichtFensterKerzen`), samt Indikatorperioden und `ltfKerzen`.
+    const bedarf = sichtFensterKerzen(instance.strategie, p, timeframeMs(timeframe), { endlich: true })
 
-    const candles = await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market })
+    let candles = await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market })
+    if (!candles.length) return { skipped: 'zu wenige Kerzen' }
+    const key = `${instance.id}|${symbol}|${timeframe}`
+    if (lastProcessed.get(key) === candles[candles.length - 1].t) return { skipped: 'keine neue Kerze' }
+
+    // Deutlich weniger als verlangt: einmal frisch nachfragen, bevor die Kerze
+    // als verarbeitet gilt. Ein verkürztes Fenster (leerer Anker-VWAP, nicht
+    // eingeschwungene EMA) würde sonst nie korrekt nachgerechnet. Bleibt es
+    // kurz, ist die Historie wirklich so kurz (junger Coin, Quelle) — dann
+    // wird damit gearbeitet wie bisher. Erst NACH der Prüfung auf eine neue
+    // Kerze und höchstens einmal je Kerze: bei dauerhaft kurzer Historie
+    // brächte die Nachfrage nichts und verdoppelte nur die Abrufe je Takt.
+    const kurzVon = candles[candles.length - 1].t
+    if (candles.length < bedarf * 0.9 && nachgefragt.get(key) !== kurzVon) {
+        nachgefragt.set(key, kurzVon)
+        const frisch = await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true })
+        if (frisch.length > candles.length) candles = frisch
+    }
     if (candles.length < 50) return { skipped: 'zu wenige Kerzen' }
 
+    // Neu lesen: die frische Reihe kann eine Kerze weiter reichen.
     const neueste = candles[candles.length - 1].t
-    const key = `${instance.id}|${symbol}|${timeframe}`
     if (lastProcessed.get(key) === neueste) return { skipped: 'keine neue Kerze' }
 
     // ── 1. Offene Positionen fortschreiben ───────────────────────────────
@@ -311,7 +433,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     const [offeneSetups, bekannte] = await Promise.all([
         knex('strategy_setups')
             .where({ instanceId: instance.id, symbol, timeframe })
-            .whereIn('status', ['armed', 'waiting_retest']),
+            .whereIn('status', WARTEND),
         // Statusunabhängig: sonst wird ein bereits abgeschlossenes Setup bei
         // jedem Takt neu erzeugt, solange sein Sweep im Fenster liegt.
         knex('strategy_setups')
@@ -342,11 +464,11 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     let htfCandles = null
     if (p.htfTrendFilter && p.htfTimeframe && p.htfTimeframe !== timeframe) {
         const noetig = (p.htfEmaPeriod || 50) + 5
-        // `htfKerzen` im Manifest: eine Strategie, deren EMA ausgeschwungen sein
-        // muss, holt mehr als die knappe Vorgabe. Der Backtest reicht die ganze
-        // Historie durch — mit nur Periode + 20 Kerzen rechnete der Papierbetrieb
-        // eine andere EMA als das Labor.
-        const anzahl = Math.max((p.htfEmaPeriod || 50) + 20, Number(instance.strategie.htfKerzen) || 0)
+        // `htfKerzen` im Manifest: so viele HTF-Kerzen, wie die Strategie selbst
+        // sieht — sie schneidet im Backtest auf dasselbe Fenster zu. Mit nur
+        // Periode + 20 Kerzen rechnete der Papierbetrieb eine andere EMA (und
+        // Set and Forget eine andere Wochenebene) als das Labor.
+        const anzahl = Math.max((p.htfEmaPeriod || 50) + 20, htfBedarf(instance.strategie, p))
         try {
             htfCandles = await getClosedCandles(
                 symbol, p.htfTimeframe, anzahl, { market: instance.market },
@@ -375,6 +497,12 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         // Die Engine hält immer nur ein Fenster, nie die ganze Historie.
         historieVerkuerzt: true,
     })
+
+    // Zwischen Taktbeginn und hier liegen Netzabrufe. Wurde die Instanz in
+    // der Zeit neu gestartet (archiviert) oder pausiert, legt sie nichts mehr
+    // an: ein neues Setup bliebe im Archiv für immer „scharf" (Audit 4.3.4,
+    // FUN-S4-005). Offene Positionen sind oben schon fortgeschrieben.
+    if (!(await instanzNochAktiv(instance.id))) return { skipped: 'instanz_inaktiv' }
 
     // ── 3. Neue Setups sichern ───────────────────────────────────────────
     if (setups.length) {
@@ -415,10 +543,14 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         const setup = openSetups.find((s) => s.id === ev.id)
         if (!setup) continue
 
+        // Statuswechsel nur aus einem wartenden Zustand: ein Neustart kann das
+        // Setup inzwischen mit `archiviert` abgeschlossen haben, und das darf
+        // kein später Takt mehr überschreiben.
         if (ev.status !== 'triggered') {
-            await knex('strategy_setups').where('id', ev.id).update({
+            await knex('strategy_setups').where('id', ev.id).whereIn('status', WARTEND).update({
                 status: ev.status,
                 invalidReason: ev.invalidReason || '',
+                endeT: Number(ev.candleTime) || 0,
                 updatedAt: knex.fn.now(),
             })
             continue
@@ -442,7 +574,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
             : 0
 
         const ergebnis = await fuehreAus({ instance, setup, ev, candles, schalter, costs })
-        await knex('strategy_setups').where('id', ev.id).update({
+        await knex('strategy_setups').where('id', ev.id).whereIn('status', WARTEND).update({
             status: ergebnis.ok ? 'open' : 'rejected',
             rejectReason: ergebnis.ok ? '' : (ergebnis.reason || ''),
             triggeredAt: ev.triggeredAt || 0,
@@ -461,12 +593,29 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
 }
 
 /**
+ * Wie viele Kerzen liegt der Auslöser hinter der jüngsten geschlossenen Kerze?
+ * 0 heisst: er liegt auf ihr und darf gehandelt werden. Ohne Zeitangabe am
+ * Ereignis gilt er als aktuell — so meldeten es die Detektoren schon immer.
+ */
+export function ausloeserAlter(ev, candles, tfMs) {
+    const neuesteT = candles?.[candles.length - 1]?.t || 0
+    const ausloeserT = Number(ev?.candleTime ?? ev?.triggeredAt) || 0
+    if (!(ausloeserT > 0) || !(neuesteT > ausloeserT)) return 0
+    return Math.max(1, Math.round((neuesteT - ausloeserT) / (tfMs || 1)))
+}
+
+/**
  * Ein getriggertes Setup durch Veto, Risiko und Ausführung schicken.
  * Jeder Ausgang — auch jede Ablehnung — landet in `strategy_runs`.
  */
 async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     const knex = getKnex()
+    // Zwei Zeitpunkte: `now` ist der Beginn der Auslösekerze und bleibt die
+    // Einstiegszeit der Position (wie im Backtest). Der Risiko-Kontext wird
+    // dagegen zum SCHLUSS der Auslösekerze gestellt (`stichtag`) — erst dann
+    // fällt die Entscheidung. Siehe `risikoKontextAbfragen`.
     const now = ev.triggeredAt || Date.now()
+    const stichtag = risikoStichtag(ev, timeframeMs(setup.timeframe))
 
     const lauf = {
         instanceId: instance.id,
@@ -504,6 +653,16 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
         return beenden('reject_risk', 'mode_ausgelagert', `Betriebsart ${instance.mode} ist ausgelagert`)
     }
 
+    // (a2) Zu spät erkannt: gehandelt wird nur ein Auslöser auf der jüngsten
+    // geschlossenen Kerze. Ein älterer ist ein Signal, das zum Zeitpunkt
+    // seiner Kerze niemand kannte — der erste Scan über das Fenster nach dem
+    // Anlegen, ein Neustart, eine Pause oder ein Detektor, der spät erkennt.
+    // Bis 01.11.2026 wurde so etwas als Papier-Trade nachgebucht (bei #15
+    // waren es alle drei ersten Trades). Dieselbe Regel gilt im Backtest; der
+    // scharfe Betrieb vor S13 nannte sie `stale_trigger`.
+    const alter = ausloeserAlter(ev, candles, timeframeMs(setup.timeframe))
+    if (alter > 0) return beenden('reject_risk', 'zu_spaet_erkannt', `Auslöser ${alter} Kerzen alt`)
+
     // (b) Agenten-Veto — optional, darf NUR ablehnen oder verkleinern
     let sizeFactor = 1
     if (agentHook) {
@@ -540,11 +699,12 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     // liegen. Ohne diese Prüfung war der Papierbetrieb optimistischer als der Backtest.
     const ausloeseKerze = candles.find((k) => k.t === ev.candleTime) || candles[candles.length - 1]
     const einstiegOk = entryIsValid(setup, ausloeseKerze)
-    // 'entry_not_touched' ist endgültig. 'stop_in_entry_candle' dagegen wird im
-    // Papierbetrieb NICHT verworfen, sondern unten pessimistisch als Verlust
-    // gebucht — sonst verschwinden genau die schlechtesten Fills aus der
-    // Statistik und Trefferquote wie Erwartungswert sehen besser aus, als sie
-    // sind. Der Schatten bucht so ein Setup schlicht nicht.
+    // 'entry_not_touched' ist endgültig. 'stop_in_entry_candle' dagegen wird
+    // NICHT verworfen, sondern unten pessimistisch als Verlust gebucht — sonst
+    // verschwinden genau die schlechtesten Fills aus der Statistik und
+    // Trefferquote wie Erwartungswert sehen besser aus, als sie sind. Bis
+    // 01.11.2026 liess der Schatten solche Setups weg; jetzt bucht er sie wie
+    // Papier und Backtest.
     if (!einstiegOk.ok && einstiegOk.reason !== 'stop_in_entry_candle') {
         return beenden('reject_risk', einstiegOk.reason, '')
     }
@@ -553,13 +713,9 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     // (c) Risiko-Gates
     const [equity, kontext, meta] = await Promise.all([
         ladeKontostand(instance),
-        ladeRisikoKontext(instance, now),
+        ladeRisikoKontext(instance, stichtag),
         marktMetaFuer(instance, setup.symbol),
     ])
-
-    // Kein Referenzkurs: die Kursabweichungs-Prüfung gilt einer echten
-    // Marktorder, und die sendet die Engine nicht mehr.
-    const referencePrice = 0
 
     // Hebel: der eingestellte, gedeckelt durch die Einstellung.
     const risk = {
@@ -571,26 +727,38 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
         openPositions: kontext.openPositions,
         todayNetPnl: kontext.todayNetPnl,
         lastExitBySymbol: kontext.lastExitBySymbol,
-        now,
+        now: stichtag,
         marketMeta: meta || {},
-        referencePrice,
         killSwitch: schalter.killSwitch,
     })
     lauf.riskOutput = JSON.stringify({ equity, todayNetPnl: kontext.todayNetPnl, ...pruefung })
     if (!pruefung.ok) return beenden('reject_risk', pruefung.reason, pruefung.detail)
 
-    // (d) Ausführung. Der Agenten-Faktor verkleinert die Größe, nie umgekehrt.
-    const size = { ...pruefung.size, qty: pruefung.size.qty * sizeFactor }
+    // (d) Ausführung. Der Agenten-Faktor verkleinert die Größe, nie umgekehrt —
+    // und die kleinere Menge muss wieder auf die Börsenregeln (Schrittweite,
+    // Mindest- und Höchstmenge), sonst zeigt der Schatten eine Menge, die es
+    // dort nicht gibt.
+    let size = pruefung.size
+    if (sizeFactor < 1) {
+        const r = rundeMenge(size.qty * sizeFactor, setup.entry,
+            grenzenFuer(meta || {}, einstiegsSorte(costs, setup)))
+        if (!r.qty) return beenden('reject_risk', r.reason || RISK_REASONS.SIZE_TOO_SMALL)
+        size = { ...size, qty: r.qty, notionalUsdt: r.qty * setup.entry }
+    }
     if (!(size.qty > 0)) return beenden('reject_risk', RISK_REASONS.SIZE_TOO_SMALL)
 
     // Deterministische Order-Kennung: ein zweiter Versuch mit demselben Setup
     // läuft in den Unique-Index und kann keine zweite Position öffnen.
     const clientOrderId = `ctj-${instance.id}-${setup.id}`
 
+    // Vor dem Eröffnen die Instanz frisch prüfen: das Agenten-Veto und die
+    // Abrufe oben können Sekunden dauern. Eine inzwischen archivierte Instanz
+    // eröffnet keine Position mehr (Audit 4.3.4, FUN-S4-005).
+    if (!(await instanzNochAktiv(instance.id))) return beenden('reject_risk', 'instanz_inaktiv')
+
     // Same-Bar-Stop: kein Broker-Aufruf, sondern pessimistische Papier-Buchung
     // (Einstieg an der Zonenkante, Ausstieg am Stop derselben Kerze).
     if (sameBarStop) {
-        if (instance.mode !== 'paper') return beenden('reject_risk', 'stop_in_entry_candle', '')
         const eroeff = await openPaperPosition({
             instance, setup, size, entryPrice: einstiegsPreis(setup, ausloeseKerze),
             entryTime: now, costs, clientOrderId,
@@ -625,9 +793,16 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
             // Eine Stop-Order füllt zur Eröffnung, wenn die Kerze schon
             // jenseits des Niveaus aufmacht — siehe `einstiegsPreis`.
             entryPrice: einstiegsPreis(setup, ausloeseKerze),
-            entryTime: now,
+            // Einstieg zum Schluss: die Position beginnt mit dem Ende der
+            // Auslösekerze (wie im Backtest, `einstiegsZeit`); der Nachlauf
+            // setzt trotzdem erst nach ihr an (`abKerze` = ihr Beginn).
+            entryTime: einstiegsZeit(ev, setup, now, timeframeMs(setup.timeframe)),
             costs, clientOrderId,
-            status: 'open',
+            // Einstieg zur Eröffnung: die Auslösekerze selbst gehört schon zur
+            // Position (Ziel, Liquidation, Break-Even) — der Nachlauf beginnt
+            // deshalb VOR ihr, wie im Backtest. Den Stop darin hat
+            // `entryIsValid` oben schon geprüft.
+            abKerze: ev.entryAtOpen ? now - 1 : now,
         })
     } catch (err) {
         eroeffnet = { ok: false, reason: 'open_failed', detail: err.message }
@@ -652,7 +827,20 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
 
 async function verarbeiteInstanz(row, schalter) {
     const instance = ladeInstanz(row)
-    if (!instance || !instance.enabled || !instance.symbols.length) return
+    if (!instance) {
+        // Aktiv, aber hier nicht ausführbar: das muss die Oberfläche sehen.
+        // Bis 31.10.2026 blieb `lastError` leer und die Instanz stand als
+        // „aktiv" da, obwohl die Engine sie in jedem Takt übersprang.
+        const grund = !getStrategy(row.strategyId)
+            ? `Strategie „${row.strategyId}" ist in diesem Prozess nicht geladen`
+            : `Ungültige Zeiteinheit ${row.timeframe}`
+        if (Number(row.enabled) && row.lastError !== grund) {
+            await getKnex()('strategy_instances').where('id', row.id)
+                .update({ lastError: grund }).catch(() => {})
+        }
+        return
+    }
+    if (!instance.enabled || !instance.symbols.length) return
 
     if (running.get(instance.id)) return          // Guard je Instanz
     running.set(instance.id, true)
@@ -662,8 +850,18 @@ async function verarbeiteInstanz(row, schalter) {
         // Zeiteinheit AUSSEN, Symbol innen: die Liste ist von fein nach grob
         // sortiert, und bei knappem Risikobudget soll nicht die Reihenfolge der
         // Symbole entscheiden, welche Zeiteinheit noch einen Platz bekommt.
+        let erstes = true
         for (const timeframe of instance.timeframes) {
             for (const symbol of instance.symbols) {
+                // Auch zwischen den Symbolen verlängern: ein Abruf über viele
+                // Seiten (Monats-VWAP) oder eine lange Instanz kann die TTL
+                // sonst innerhalb EINER Instanz überschreiten.
+                if (!erstes && !(await verlaengereFuehrung(FUEHRUNG_KEY))) {
+                    hatFuehrung = false
+                    logWarn('strategy-engine', `Führung während Instanz ${instance.id} verloren — Durchgang abgebrochen`)
+                    return
+                }
+                erstes = false
                 await verarbeiteSymbol(instance, symbol, timeframe, schalter)
             }
         }
@@ -687,6 +885,21 @@ async function verarbeiteInstanz(row, schalter) {
     } finally {
         running.delete(instance.id)
     }
+}
+
+/**
+ * Regeln einer archivierten Instanz: die Fassung, die beim Archivieren galt
+ * (jüngste in `rule_strategy_history` bis `archiviertAm`). `null` bei
+ * eingebauten Strategien oder ohne passende Fassung — dann gilt die aktuelle.
+ */
+async function regelnZumArchiv(knex, row) {
+    const am = Number(row.archiviertAm) || 0
+    if (!am || !getStrategy(row.strategyId)?.istRegelStrategie) return null
+    const z = await knex('rule_strategy_history')
+        .where('strategyId', row.strategyId).where('createdAt', '<=', am)
+        .orderBy('version', 'desc').first('rules')
+    const regeln = parseJson(z?.rules, null)
+    return regeln && typeof regeln === 'object' ? regeln : null
 }
 
 /**
@@ -732,11 +945,17 @@ async function pflegeOffenePositionen() {
                 logWarn('strategy-engine', `Kerzenlücke ${symbol}: Abdeckung beginnt erst ${new Date(candles[0].t).toISOString()} — Nachlauf ausgesetzt, um keine Stops zu überspringen`)
                 continue
             }
+            // Ein Archiv behält die Regeln vom Archivieren: eine spätere
+            // Regeländerung soll seine offenen Positionen nicht mehr umstellen
+            // (FUN-L2-001). Aktive Instanzen erben Änderungen — so gewollt.
+            const regeln = Number(row.archiviert)
+                ? (await regelnZumArchiv(knex, row)) || instance.strategie?.regeln
+                : instance.strategie?.regeln
             await stepPaperPositions({
                 instance, symbol, timeframe: pflegeTf, candles,
                 costs: kostenAus(instance.risk),
-                breakEvenAtR: instance.params.breakEvenAtR ?? instance.strategie?.regeln?.breakEvenAtR ?? 0,
-                maxHoldMs: ((instance.params.maxHoldCandles ?? instance.strategie?.regeln?.maxHoldCandles ?? 0) || 0) * timeframeMs(pflegeTf),
+                breakEvenAtR: instance.params.breakEvenAtR ?? regeln?.breakEvenAtR ?? 0,
+                maxHoldMs: ((instance.params.maxHoldCandles ?? regeln?.maxHoldCandles ?? 0) || 0) * timeframeMs(pflegeTf),
                 partialTpR: instance.params.partialTpR,
                 partialTpPct: instance.params.partialTpPct,
                 maintenanceMarginPct: await wartungsmargePctFuer(symbol, instance.risk.maintenanceMarginPct),
@@ -776,6 +995,9 @@ export async function tick({ vorher = null } = {}) {
         stats.ticks++
         const knex = getKnex()
         const schalter = await ladeSchalter()
+        // Regeln aus einem anderen Prozess übernehmen, bevor gerechnet wird.
+        await gleicheRegelStrategienAb().catch((e) =>
+            logWarn('strategy-engine', `Abgleich der Regelstrategien fehlgeschlagen: ${e.message}`))
 
         // Ausstiege IMMER pflegen — auch bei Not-Aus und für deaktivierte
         // Instanzen. Nur neue Einstiege hängen an den Schaltern.
@@ -817,9 +1039,13 @@ export function engineStatus() {
 
 /** Erzwingt beim nächsten Takt eine Neuauswertung (nach Parameteränderung). */
 export function resetSymbolCache(instanceId = null) {
-    if (instanceId === null) { lastProcessed.clear(); return }
-    for (const key of [...lastProcessed.keys()]) {
-        if (key.startsWith(`${instanceId}|`)) lastProcessed.delete(key)
+    // Auch die Nachfrage-Merker: nach einer Parameteränderung kann der
+    // Kerzenbedarf ein anderer sein.
+    if (instanceId === null) { lastProcessed.clear(); nachgefragt.clear(); return }
+    for (const map of [lastProcessed, nachgefragt]) {
+        for (const key of [...map.keys()]) {
+            if (key.startsWith(`${instanceId}|`)) map.delete(key)
+        }
     }
 }
 
@@ -889,7 +1115,14 @@ export async function killSwitch({ closePositions = false } = {}) {
         for (const row of offen) {
             const instRow = await knex('strategy_instances').where('id', row.instanceId).first()
             const instance = instRow ? ladeInstanz(instRow) : null
-            if (!instance) continue
+            // Ohne (lauffähige) Instanz keine Kosten und kein Konto — schliessen
+            // geht nicht. Bis 31.10.2026 übersprang der Not-Aus sie still und
+            // meldete vollen Erfolg, während Waisen einer Rücksicherung weiter
+            // offen standen (FUN-L3-002). Ausbuchen geht in der Instanzenliste.
+            if (!instance) {
+                fehlgeschlagen.push({ id: row.id, symbol: row.symbol, grund: instRow ? 'instanz_nicht_lauffaehig' : 'instanz_fehlt' })
+                continue
+            }
             const preis = await getLastPrice(row.symbol, { market: instance.market }).catch(() => Number(row.entryPrice))
             const r = await schliessePositionManuell({
                 instance, positionRow: row, price: preis, time: Date.now(),

@@ -28,6 +28,9 @@ import { fileURLToPath } from 'url'
 
 const HIER = path.dirname(fileURLToPath(import.meta.url))
 
+/** Grösste Breite der Mail-Karte in px — darunter füllt sie das Fenster. */
+export const KARTE_MAX = 860
+
 /** Farbtöne nach Dringlichkeit — nicht nach Gruppe: ein Not-Aus ist rot,
  *  auch wenn er in derselben Gruppe sitzt wie eine harmlose Meldung. */
 export const TOENE = {
@@ -283,8 +286,13 @@ export function baueMail({ titel, text, symbol, ton, bereich, marke = 'AutarkTra
         + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"`
         + ` bgcolor="${FARBEN.seite}" style="background:${FARBEN.seite};padding:24px 10px;">`
         + `<tr><td align="center">`
-        + `<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"`
-        + ` bgcolor="${FARBEN.karte}" style="width:600px;max-width:100%;background:${FARBEN.karte};`
+        // Die Karte wächst mit dem Fenster bis KARTE_MAX: am Handy füllt sie die
+        // Breite, am Desktop wird sie breiter als die früheren festen 600 px,
+        // aber nicht so breit, dass die Zeilen unlesbar lang werden. Outlook
+        // (Word-Engine) kennt kein max-width und bekommt einen festen Rahmen.
+        + `<!--[if mso]><table role="presentation" width="${KARTE_MAX}" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->`
+        + `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"`
+        + ` bgcolor="${FARBEN.karte}" style="width:100%;max-width:${KARTE_MAX}px;background:${FARBEN.karte};`
         + `border:1px solid ${FARBEN.rand};border-radius:14px;font-family:${SCHRIFT};">`
         // Akzentstreifen: Dringlichkeit noch vor dem ersten Wort
         + `<tr><td bgcolor="${stil.akzent}" style="height:4px;line-height:4px;font-size:0;`
@@ -307,7 +315,9 @@ export function baueMail({ titel, text, symbol, ton, bereich, marke = 'AutarkTra
         + `color:${FARBEN.sehrLeise};font-size:${g.fuss}px;line-height:1.6;">`
         + `Automatische Nachricht aus AutarkTrade.<br>`
         + `Welche Ereignisse per Mail kommen, steht unter Einstellungen → Benachrichtigungen.`
-        + `</td></tr></table></td></tr></table></body></html>`
+        + `</td></tr></table>`
+        + `<!--[if mso]></td></tr></table><![endif]-->`
+        + `</td></tr></table></body></html>`
 
     // In der Nur-Text-Fassung wird aus „## Kapitel" eine unterstrichene Zeile —
     // die Marke selbst hat dort nichts zu suchen.

@@ -16,16 +16,21 @@
  *   V…  Volumenprofile je Abschnitt (POC, VAH, VAL) — Abschnitte zwischen den
  *       grossen Wendepunkten, wie man ein Fixed-Range-Profil von Hand setzt
  *   T…  ungebrochene Trendlinien beider Seiten (chart-trendlinien.js)
+ *   M…  Dreiecke und Keile (chart-dreiecke.js): zusammenlaufende Kanten mit Spitze
  *   D…  Niveaus der höheren Zeiteinheit (Abstand in DEREN ATR gemessen —
  *       mit der ATR der Chart-Zeiteinheit blieb auf ETH 1h nur eins übrig)
- *   U…  eigene Linien des Nutzers, nur als Bezug
+ *   U…  eigene Zeichnungen des Nutzers im sichtbaren Bereich (und auf dieser
+ *       Zeiteinheit sichtbar, höchstens `NUTZER_MAX`, Auswahl `waehleNutzer`), an
+ *       den Kerzen gemessen (`messeNutzerZeichnungen`): Berührungen, Durchquerungen,
+ *       Zustand, nächster Kandidat — Grundlage von „Meine Zeichnungen analysieren"
  *
  * Gleiche Kerzen → gleiche IDs (deterministisch, im Selbsttest geprüft).
  */
-import { atr, pivotHighs, pivotLows } from '../shared/indicators.js'
+import { atr, pivotHighs, pivotLows, ankerVwap } from '../shared/indicators.js'
 import { volumenprofil } from '../shared/volumenprofil.js'
 import { alleTrendlinien, istGegenlinie, verlaengerung, TOL_ATR, MIN_ABSTAND } from './chart-trendlinien.js'
 import { trendZustand, durchquerungen } from './strategies/set_and_forget.js'
+import { kandidatenDreiecke, dreieckName } from './chart-dreiecke.js'
 
 export const KAND = {
     PIVOT_K: 3,
@@ -634,7 +639,7 @@ export function kandidatenTrendlinien(kerzen, atrWert, { jeSeite = KAND.TREND_JE
                 t1: kerzen[c.i1].t, p1: c.p1, t2: kerzen[c.i2].t, p2: c.p2,
                 beruehrungen: c.beruehrungen, beruehrT: c.beruehrIdx.map((i) => kerzen[i].t),
                 letzteBeruehrungT: kerzen[c.beruehrIdx[c.beruehrIdx.length - 1]].t,
-                wertJetzt, abstandAtr,
+                wertJetzt, abstandAtr, steigungAtr: steigung / atrWert,
                 tEnde: kerzen[n - 1].t + ext * iv, pEnde: wertJetzt + steigung * ext,
             })
         }
@@ -683,7 +688,468 @@ export function spanneLetzte(kerzen, n, atrWert) {
 }
 
 /** Alles zusammen, mit stabilen IDs. */
-export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, intervalHtf = null, zeichnungen = [], zeitzone = 'UTC', profilArt = 'konsolidierung' }) {
+// ── Eigene Zeichnungen ───────────────────────────────────────────────────
+export const NUTZER_TYPEN = ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'kanal', 'rechteck', 'volprofil', 'fib', 'avwap']
+export const NUTZER_MAX = 20
+const WAAGERECHT = ['horizontale', 'strahlH']
+const SCHRAEG = ['trendlinie', 'strahl']
+const NUTZER_NAME = {
+    horizontale: 'Horizontale', strahlH: 'Horizontaler Strahl', trendlinie: 'Trendlinie', strahl: 'Strahl', kanal: 'Kanal',
+    rechteck: 'Zone', volprofil: 'Volumenprofil', fib: 'Fibonacci', avwap: 'Anchored VWAP',
+    // nicht gemessen, nur für den Hinweis „nicht in der Liste"
+    fibExt: 'Fib-Extension', pfeil: 'Pfeil', ellipse: 'Ellipse', pinsel: 'Pinsel', position: 'Long/Short-Position', text: 'Text', vertikale: 'Vertikale',
+}
+const FIB = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
+// Korrektur nur, wenn der Kandidat höchstens so weit daneben liegt (Chart-ATR)
+export const KORREKTUR_ATR = 1.5
+
+/**
+ * Gilt die Zeichnung auf dieser Zeiteinheit? Dieselbe Regel wie im Chart
+ * (`ChartPanel.vue`, `sichtbareZeichnungen`): `sichtbarAuf` leer oder null = auf
+ * allen. Aus der DB kommt das Feld als JSON-Text, vom Browser als Liste.
+ * Ohne `interval` (alte Aufrufe) gilt jede.
+ */
+export function sichtbarAufTf(z, interval) {
+    if (!interval) return true
+    let auf = z?.sichtbarAuf
+    if (typeof auf === 'string') { try { auf = JSON.parse(auf) } catch { auf = null } }
+    return !Array.isArray(auf) || !auf.length || auf.includes(interval)
+}
+
+/** Liegt die Zeichnung zeitlich im Bild (waagerechte immer, sofern schon begonnen)? */
+function imBild(z, vonT, bisT) {
+    const ts = (z.punkte || []).map((q) => Number(q.t)).filter(Number.isFinite)
+    if (!ts.length || Math.min(...ts) > bisT) return false
+    if (z.typ === 'horizontale' || z.typ === 'strahlH' || z.typ === 'strahl' || z.typ === 'avwap') return true
+    if (z.stil?.rechts || z.stil?.fortlaufend) return true
+    return Math.max(...ts) >= vonT
+}
+
+/** Grober Preisabstand einer Zeichnung zum Kurs, nur zum Ordnen (Schräge: Wert am rechten Rand). */
+function nutzerAbstand(z, kurs, bisT) {
+    const pk = (z.punkte || []).map((q) => ({ t: Number(q.t), p: Number(q.p) })).filter((q) => Number.isFinite(q.p) && Number.isFinite(q.t))
+    if (!pk.length || !Number.isFinite(kurs)) return Infinity
+    let preise = pk.map((q) => q.p)
+    if ((SCHRAEG.includes(z.typ) || z.typ === 'kanal') && pk.length >= 2 && pk[0].t !== pk[1].t) {
+        const g = gerade(pk[0], pk[1])
+        preise = [g(bisT)]
+        if (z.typ === 'kanal' && pk[2]) preise.push(g(bisT) + pk[2].p - g(pk[2].t))
+    }
+    const lo = Math.min(...preise), hi = Math.max(...preise)
+    return kurs < lo ? lo - kurs : kurs > hi ? kurs - hi : 0
+}
+
+/**
+ * Welche eigenen Zeichnungen in die Analyse kommen — rein.
+ *
+ * Gezählt wird nur, was der Nutzer im Chart SIEHT: nicht versteckt, auf dieser
+ * Zeiteinheit sichtbar (`sichtbarAuf`, bis 01.11.2026 nicht beachtet — eine
+ * Horizontale „nur 4h" stand in der 1h-Analyse und wurde dort „korrigiert"),
+ * zeitlich im Bild. Sind es mehr als `NUTZER_MAX`, entscheidet die Reihenfolge
+ * (bis 01.11.2026 die der Datenbank: 20 alte Horizontalen verdrängten Trendlinie,
+ * Zone und Kanal, die gerade gezeichnet waren): Punkte im Analysefenster zuerst,
+ * dann Nähe zum Kurs, dann zuletzt geändert.
+ *
+ * Typen, die der Code nicht misst (Fib-Extension, Pfeil, Ellipse, Pinsel …),
+ * fallen weg, werden aber je Typ gezählt (`uebergangen`) — sonst hiesse es
+ * „keine eigene Zeichnung", obwohl welche im Bild stehen.
+ *
+ * @returns {{ liste: object[], weggelassen: number, uebergangen: {typ: string, anzahl: number}[] }}
+ */
+export function waehleNutzer(zeichnungen, vonT, bisT, { interval = null, kurs = null } = {}) {
+    const sichtbar = (zeichnungen || []).filter((z) => z && !z.versteckt && sichtbarAufTf(z, interval) && imBild(z, vonT, bisT))
+    const uebergangen = new Map()
+    for (const z of sichtbar) if (!NUTZER_TYPEN.includes(z.typ)) uebergangen.set(z.typ, (uebergangen.get(z.typ) || 0) + 1)
+    const messbar = sichtbar.filter((z) => NUTZER_TYPEN.includes(z.typ))
+    const imFenster = (z) => (z.punkte || []).some((q) => Number(q.t) >= vonT && Number(q.t) <= bisT)
+    const geordnet = messbar.map((z, i) => ({ z, i, fenster: imFenster(z) ? 0 : 1, abstand: nutzerAbstand(z, kurs, bisT), geaendert: Number(z.geaendertAm) || 0 }))
+        .sort((a, b) => a.fenster - b.fenster || a.abstand - b.abstand || b.geaendert - a.geaendert || a.i - b.i)
+        .map((x) => x.z)
+    return {
+        liste: geordnet.slice(0, NUTZER_MAX),
+        weggelassen: Math.max(0, geordnet.length - NUTZER_MAX),
+        uebergangen: [...uebergangen].map(([typ, anzahl]) => ({ typ, anzahl })),
+    }
+}
+
+/** Eigene Zeichnungen, die in die Analyse kommen (nur die Liste, siehe `waehleNutzer`). */
+export function sichtbareNutzer(zeichnungen, vonT, bisT, optionen = {}) {
+    return waehleNutzer(zeichnungen, vonT, bisT, optionen).liste
+}
+
+/** Gerade durch zwei Punkte, als Preis zur Zeit t. */
+const gerade = (a, b) => (t) => (b.t === a.t ? a.p : a.p + (b.p - a.p) * (t - a.t) / (b.t - a.t))
+
+/**
+ * Berührungen (eigene Wellen: mindestens 3 Kerzen ohne Berührung dazwischen),
+ * Durchquerungen (Schluss wechselt die Seite) und Reaktion nach einer Berührung
+ * (grösste Entfernung in den 10 Kerzen danach, in ATR) — für eine Linie, deren
+ * Preis `wert(i)` je Kerze liefert (null = dort gilt sie nicht).
+ */
+export function zaehleAnLinie(kerzen, wert, A, tol = 0.25 * A) {
+    let beruehrungen = 0, durchquerungen = 0, letzteT = null, letzteI = -99, seite = 0, reaktion = 0, kreuzI = null, erstes = null
+    const beruehrI = []
+    for (let i = 0; i < kerzen.length; i++) {
+        const w = wert(i)
+        if (w == null || !Number.isFinite(w)) continue
+        if (erstes == null) erstes = i
+        const k = kerzen[i]
+        if (k.l <= w + tol && k.h >= w - tol) {
+            if (i - letzteI > 3) {
+                beruehrungen++
+                beruehrI.push(i)
+                let weit = 0
+                for (let j = i + 1; j < Math.min(kerzen.length, i + 11); j++) {
+                    const wj = wert(j)
+                    if (wj == null) break
+                    weit = Math.max(weit, Math.abs(kerzen[j].c - wj))
+                }
+                reaktion = Math.max(reaktion, weit / A)
+            }
+            letzteI = i
+            letzteT = k.t
+        }
+        const sg = Math.sign(k.c - w)
+        if (sg && seite && sg !== seite) { durchquerungen++; kreuzI = i }
+        if (sg) seite = sg
+    }
+    const n = kerzen.length
+    const jetzt = wert(n - 1)
+    /*
+     * Gebrochen bleibt gebrochen, solange der Kurs auf der anderen Seite steht —
+     * bis 01.11.2026 galt eine Linie schon 6 Kerzen nach dem Bruch wieder als
+     * „hält" (BTC 1h: untere Kanallinie am 29.10. gebrochen, am 31.10. „hält").
+     * Dreimal und öfter durchquert ist sie ein Drehpunkt, keine Grenze.
+     */
+    // Drehpunkt nur, solange der Kurs an der Linie klebt (≤ 1 ATR) — steht er klar auf der
+    // anderen Seite, ist die Linie gebrochen, auch wenn sie vorher ein paarmal durchstochen wurde.
+    const klebt = jetzt != null && Math.abs(kerzen[n - 1].c - jetzt) <= A
+    const zustand = jetzt == null ? 'endet'
+        : kreuzI == null ? (beruehrungen ? 'haelt' : 'unberuehrt')
+            : durchquerungen >= 3 && klebt ? 'drehpunkt' : 'gebrochen'
+    const bruch = kreuzI == null ? null : {
+        t: kerzen[kreuzI].t, vorKerzen: n - 1 - kreuzI,
+        // Berührungen vor dem Bruch (hat die Linie vorher gegolten?) und Tests danach (Rücktest von der anderen Seite)
+        vorher: beruehrI.filter((i) => i < kreuzI).length, tests: beruehrI.filter((i) => i > kreuzI).length,
+        nach: kerzen[kreuzI].c > (wert(kreuzI) ?? kerzen[kreuzI].c) ? 'oben' : 'unten',
+    }
+    return { beruehrungen, durchquerungen, letzteT, reaktionMaxAtr: reaktion, zustand, jetzt, bruch, kerzenSeitAnfang: erstes == null ? 0 : n - erstes }
+}
+
+/** Kerze, in der die Zeit t liegt (Index), oder -1. */
+function kerzeBei(kerzen, t) {
+    for (let i = kerzen.length - 1; i >= 0; i--) if (kerzen[i].t <= t) return t - kerzen[i].t < 2 * ((kerzen[1]?.t ?? kerzen[0].t + 1) - kerzen[0].t) ? i : -1
+    return -1
+}
+
+/**
+ * Wie gut sitzt ein Ankerpunkt? Abstand zum nächsten Hoch/Tief der Kerzen
+ * rundum (±2), in ATR. Ein Anker mitten im Nichts ist kein Wendepunkt — eine
+ * Linie, die an keinem echten Hoch oder Tief hängt, misst nichts.
+ */
+export function ankerSitz(kerzen, pt, A) {
+    const i = kerzeBei(kerzen, pt.t)
+    if (i < 0) return null
+    let best = Infinity
+    for (let j = Math.max(0, i - 2); j <= Math.min(kerzen.length - 1, i + 2); j++) best = Math.min(best, Math.abs(kerzen[j].h - pt.p), Math.abs(kerzen[j].l - pt.p))
+    return best / A
+}
+
+/**
+ * Schneidet die Strecke zwischen den Ankern durch Kerzenkörper? Zählt Kerzen,
+ * deren Körper (Eröffnung–Schluss) die Linie um mehr als 0,15 ATR auf beiden
+ * Seiten umschliesst — eine Trendlinie gehört an Hochs oder Tiefs, nicht quer
+ * durch die Kerzen.
+ */
+export function koerperSchnitte(kerzen, von, bis, wert, A) {
+    let n = 0, gesamt = 0
+    for (let i = Math.max(0, von); i <= Math.min(kerzen.length - 1, bis); i++) {
+        const w = wert(i)
+        if (w == null) continue
+        gesamt++
+        const k = kerzen[i]
+        if (Math.min(k.o, k.c) < w - 0.15 * A && Math.max(k.o, k.c) > w + 0.15 * A) n++
+    }
+    return { schnitte: n, kerzen: gesamt }
+}
+
+/**
+ * Zone ab ihrem linken Rand: lag dort ein Wendepunkt (Tief/Hoch der Umgebung in
+ * der Zone), wie weit lief der Kurs danach weg, bevor er zurückkam, und wann war
+ * er zuletzt drin — das, was eine gezeichnete Zone BEGRÜNDET, nicht nur, ob sie berührt wurde.
+ */
+export function zonenUrsprung(kerzen, vonI, tief, hoch, A) {
+    if (vonI < 0 || vonI >= kerzen.length) return null
+    const rund = kerzen.slice(Math.max(0, vonI - 10), Math.min(kerzen.length, vonI + 11))
+    const tiefRund = Math.min(...rund.map((k) => k.l)), hochRund = Math.max(...rund.map((k) => k.h))
+    const wende = tiefRund >= tief - 0.25 * A && tiefRund <= hoch + 0.25 * A ? 'tief'
+        : hochRund >= tief - 0.25 * A && hochRund <= hoch + 0.25 * A ? 'hoch' : null
+    // Bewegung weg von der Zone bis zur ersten Rückkehr
+    let extrem = null, extremI = -1, weg = false, zurueckI = -1
+    for (let i = vonI; i < kerzen.length; i++) {
+        const k = kerzen[i]
+        const drin = k.l <= hoch && k.h >= tief
+        if (!drin) weg = true
+        else if (weg) { zurueckI = i; break }
+        const d = wende === 'hoch' ? tief - k.l : k.h - hoch
+        if (d > 0 && (extrem == null || d > extrem)) { extrem = d; extremI = i }
+    }
+    const basis = wende === 'hoch' ? tief : hoch
+    // Seit dem letzten Besuch: wie weit lief der Kurs von der Zone weg (die Bewegung, die sie „verteidigt" hat)
+    let letzteI = -1
+    for (let i = kerzen.length - 1; i >= vonI; i--) if (kerzen[i].l <= hoch && kerzen[i].h >= tief) { letzteI = i; break }
+    let seit = null
+    if (letzteI >= 0 && letzteI < kerzen.length - 1) {
+        let best = 0, bestI = -1
+        for (let i = letzteI + 1; i < kerzen.length; i++) {
+            const k = kerzen[i]
+            const d = Math.max(k.h - hoch, tief - k.l)
+            if (d > best) { best = d; bestI = i }
+        }
+        if (bestI >= 0) seit = { atr: best / A, pct: (best / (kerzen[bestI].h - hoch > tief - kerzen[bestI].l ? hoch : tief)) * 100, t: kerzen[bestI].t, richtung: kerzen[bestI].h - hoch > tief - kerzen[bestI].l ? 'aufwaerts' : 'abwaerts' }
+    }
+    return {
+        wende, bewegungAtr: extrem != null ? extrem / A : null, bewegungPct: extrem != null && basis > 0 ? (extrem / basis) * 100 : null,
+        extremT: extremI >= 0 ? kerzen[extremI].t : null, zurueckT: zurueckI >= 0 ? kerzen[zurueckI].t : null,
+        letzterBesuchT: letzteI >= 0 ? kerzen[letzteI].t : null, seitBesuch: seit,
+    }
+}
+
+/** Beschriftung, die nicht zur Lage passt: „Support" über dem Kurs, „Widerstand" darunter. */
+export function beschriftungPasst(text, kursUeber) {
+    const t = String(text || '').toLowerCase()
+    if (!t || kursUeber == null) return true
+    if (/support|unterst|demand|nachfrage|boden/.test(t) && kursUeber === false) return false
+    if (/resist|widerst|supply|angebot|deckel/.test(t) && kursUeber === true) return false
+    return true
+}
+
+/** Zone (Rechteck): Eintritte, Austritte nach oben/unten, wo der Kurs jetzt steht. */
+function zaehleInZone(kerzen, vonI, tief, hoch) {
+    let eintritte = 0, drin = false, letzteT = null
+    for (let i = vonI; i < kerzen.length; i++) {
+        const k = kerzen[i]
+        const beruehrt = k.l <= hoch && k.h >= tief
+        if (beruehrt && !drin) { eintritte++; letzteT = k.t }
+        drin = beruehrt
+    }
+    return { beruehrungen: eintritte, letzteT }
+}
+
+/**
+ * Jede eigene Zeichnung an den Kerzen messen — rein. Liefert die U-Einträge des
+ * Pakets: `name` (Typ und Preis), `preis`/`jetzt` (Wert am letzten Schluss),
+ * Zählungen, `zustand` (haelt | gebrochen | unberuehrt | endet), `seite`
+ * (Kurs darüber/darunter/drin), `abstandAtr` und `naechster` — der Kandidat des
+ * Codes, der dieselbe Marke misst (Grundlage einer Korrektur).
+ */
+export function messeNutzerZeichnungen(kerzen, zeichnungen, A, kandidaten = []) {
+    const n = kerzen.length
+    const kurs = kerzen[n - 1].c
+    const ivMs = n > 1 ? kerzen[n - 1].t - kerzen[n - 2].t : 1
+    const ab = (t) => { const i = kerzen.findIndex((k) => k.t >= t); return i < 0 ? n : i }
+    return zeichnungen.map((z, i) => {
+        const pk = (z.punkte || []).map((q) => ({ t: Number(q.t), p: Number(q.p) }))
+        const s = z.stil || {}
+        const u = { id: `U${i + 1}`, zid: z.id ?? null, typ: z.typ, punkte: pk, text: s.text || '', name: NUTZER_NAME[z.typ] || z.typ, auffaellig: [] }
+        try {
+            if (WAAGERECHT.includes(z.typ)) {
+                const p = pk[0].p
+                const von = z.typ === 'strahlH' ? ab(pk[0].t) : 0
+                Object.assign(u, zaehleAnLinie(kerzen, (j) => (j >= von ? p : null), A), { preis: p })
+                u.name += ` ${zahl(p)}`
+            } else if (SCHRAEG.includes(z.typ) && pk.length >= 2) {
+                const [a, b] = pk[0].t <= pk[1].t ? [pk[0], pk[1]] : [pk[1], pk[0]]
+                const g = gerade(a, b)
+                const rechts = z.typ === 'strahl' || s.rechts || s.fortlaufend
+                const von = s.links ? 0 : ab(a.t)
+                const bis = rechts ? n - 1 : ab(b.t + 1) - 1
+                Object.assign(u, zaehleAnLinie(kerzen, (j) => (j >= von && j <= bis ? g(kerzen[j].t) : null), A))
+                u.steigungAtr = ((b.p - a.p) / Math.max(1, (b.t - a.t) / ivMs)) / A
+                u.name += ` ${zahl(a.p)} → ${zahl(b.p)}`
+                // Sitzen die Anker an Hochs/Tiefs, und läuft die Strecke durch Kerzenkörper?
+                // Anker frei gesetzt ist nur dann ein Fehler, wenn die Linie auch sonst kaum an Kerzen liegt
+                const sitz = [ankerSitz(kerzen, a, A), ankerSitz(kerzen, b, A)]
+                if (u.beruehrungen < 2 && sitz.some((x) => x != null && x > 0.5)) u.auffaellig.push(`liegt an ${u.beruehrungen} Hochs/Tiefs an, Anker ${sitz.map((x) => (x == null ? '—' : x.toFixed(1))).join(' / ')} ATR neben dem nächsten Hoch/Tief`)
+                const ks = koerperSchnitte(kerzen, ab(a.t), ab(b.t + 1) - 1, (j) => g(kerzen[j].t), A)
+                if (ks.kerzen && ks.schnitte / ks.kerzen > 0.1) u.auffaellig.push(`schneidet zwischen den Ankern ${ks.schnitte} von ${ks.kerzen} Kerzenkörpern`)
+            } else if (z.typ === 'kanal' && pk.length >= 3) {
+                const g = gerade(pk[0], pk[1])
+                const d = pk[2].p - g(pk[2].t)
+                const [lo, hi] = d >= 0 ? [0, d] : [d, 0]
+                const von = ab(Math.min(pk[0].t, pk[1].t))
+                const bis = s.rechts || s.fortlaufend ? n - 1 : ab(Math.max(pk[0].t, pk[1].t) + 1) - 1
+                const kante = (off) => (j) => (j >= von && j <= bis ? g(kerzen[j].t) + off : null)
+                const unten = zaehleAnLinie(kerzen, kante(lo), A), oben = zaehleAnLinie(kerzen, kante(hi), A)
+                u.untenJetzt = unten.jetzt
+                u.obenJetzt = oben.jetzt
+                u.beruehrungen = unten.beruehrungen + oben.beruehrungen
+                u.beruehrungenUnten = unten.beruehrungen
+                u.beruehrungenOben = oben.beruehrungen
+                u.durchquerungen = unten.durchquerungen + oben.durchquerungen
+                u.zustand = unten.jetzt == null ? 'endet' : kurs > oben.jetzt ? 'darueber' : kurs < unten.jetzt ? 'darunter' : 'drin'
+                u.steigungAtr = ((pk[1].p - pk[0].p) / Math.max(1, Math.abs(pk[1].t - pk[0].t) / ivMs)) / A * Math.sign(pk[1].t - pk[0].t || 1)
+                u.name += ` ${zahl(g(pk[0].t) + lo)}–${zahl(g(pk[0].t) + hi)}`
+            } else if (z.typ === 'rechteck' && pk.length >= 2) {
+                const tief = Math.min(pk[0].p, pk[1].p), hoch = Math.max(pk[0].p, pk[1].p)
+                const start = Math.min(pk[0].t, pk[1].t)
+                if (start < kerzen[0].t) u.auffaellig.push('beginnt vor den geladenen Kerzen — Ursprung nicht messbar')
+                Object.assign(u, zaehleInZone(kerzen, ab(start), tief, hoch), { tief, hoch, breiteAtr: (hoch - tief) / A })
+                u.ursprung = start >= kerzen[0].t ? zonenUrsprung(kerzen, ab(start), tief, hoch, A) : null
+                u.zustand = kurs > hoch ? 'darueber' : kurs < tief ? 'darunter' : 'drin'
+                u.name += ` ${zahl(tief)}–${zahl(hoch)}`
+                if (u.breiteAtr > 4) u.auffaellig.push(`sehr breit (${u.breiteAtr.toFixed(1)} ATR)`)
+                if (u.ursprung && !u.ursprung.wende) u.auffaellig.push('am linken Rand liegt kein Hoch oder Tief in der Zone')
+                if (!beschriftungPasst(s.text, kurs > hoch ? true : kurs < tief ? false : null)) u.auffaellig.push(`Beschriftung „${s.text}" passt nicht zur Lage (Kurs ${kurs > hoch ? 'darüber' : 'darunter'})`)
+            } else if (z.typ === 'volprofil' && pk.length >= 2) {
+                // Beginnt das Profil vor den geladenen Kerzen, wäre es aus fremden Kerzen gerechnet
+                // (01.11.2026: ein Profil vom August bekam POC/VAH/VAL von Ende September) — dann ehrlich „ausserhalb".
+                const von = ab(Math.min(pk[0].t, pk[1].t)), bis = ab(Math.max(pk[0].t, pk[1].t) + 1) - 1
+                const vorher = Math.min(pk[0].t, pk[1].t) < kerzen[0].t - ivMs
+                const vp = !vorher && bis > von ? volumenprofil(kerzen.slice(von, bis + 1), { zeilen: s.zeilen || 24 }) : null
+                if (vp) {
+                    Object.assign(u, { poc: vp.poc, vah: vp.vah, val: vp.val, preis: vp.poc, zustand: kurs > vp.vah ? 'darueber' : kurs < vp.val ? 'darunter' : 'drin' })
+                    u.name += ` ${zahl(vp.val)}–${zahl(vp.vah)}`
+                } else u.zustand = 'ausserhalb'
+            } else if (z.typ === 'fib' && pk.length >= 2) {
+                const stufen = FIB.map((f) => ({ f, preis: pk[1].p + (pk[0].p - pk[1].p) * f }))
+                const nah = stufen.reduce((m, x) => (Math.abs(x.preis - kurs) < Math.abs(m.preis - kurs) ? x : m))
+                Object.assign(u, { fibNah: nah.f, preis: nah.preis })
+                u.name += ` ${zahl(pk[0].p)} → ${zahl(pk[1].p)}`
+                const sitz = [ankerSitz(kerzen, pk[0], A), ankerSitz(kerzen, pk[1], A)]
+                if (sitz.some((x) => x != null && x > 0.5)) u.auffaellig.push(`Anker ${sitz.map((x) => (x == null ? '—' : x.toFixed(1))).join(' / ')} ATR neben dem nächsten Hoch/Tief — Fibonacci gehört an Hoch und Tief des Impulses`)
+            } else if (z.typ === 'avwap' && pk.length) {
+                let anker = -1
+                for (let j = n - 1; j >= 0; j--) if (kerzen[j].t <= pk[0].t) { anker = j; break }
+                if (anker < 0) u.zustand = 'ausserhalb'
+                else {
+                    const reihe = ankerVwap(kerzen, anker).vwap
+                    Object.assign(u, zaehleAnLinie(kerzen, (j) => reihe[j], A))
+                    u.name += ` ab ${zahl(kerzen[anker].c)}`
+                }
+            }
+        } catch { u.zustand = 'unlesbar' }
+        const bezug = u.jetzt ?? u.preis ?? null
+        if (Number.isFinite(bezug)) {
+            u.abstandAtr = (kurs - bezug) / A
+            // Auch eine gebrochene Linie hat eine Rolle: die Seite, auf der der Kurs jetzt steht
+            if (u.zustand !== 'endet' && u.zustand !== 'drehpunkt' && u.typ !== 'volprofil') u.rolle = kurs >= bezug ? 'unterstuetzung' : 'widerstand'
+            if ((WAAGERECHT.includes(u.typ) || SCHRAEG.includes(u.typ)) && !beschriftungPasst(u.text, kurs >= bezug)) {
+                u.auffaellig.push(`Beschriftung „${u.text}" passt nicht zur Lage (Kurs ${kurs >= bezug ? 'darüber' : 'darunter'})`)
+            }
+        }
+        u.naechster = naechsterKandidat(u, kandidaten, A)
+        return u
+    })
+}
+
+/**
+ * Die eigenen Marken als Leiter um den Kurs und wo zwei eigene Zeichnungen
+ * dieselbe Höhe markieren (≤ 0,5 ATR) — damit das Modell die Zeichnungen
+ * ZUSAMMEN liest statt jede für sich.
+ */
+export function nutzerBeziehungen(nutzer, kurs, A) {
+    const marken = []
+    const dazu = (u, art, preis) => { if (Number.isFinite(preis)) marken.push({ u: u.id, art, preis, abstandAtr: (preis - kurs) / A }) }
+    for (const u of nutzer) {
+        if (u.typ === 'rechteck') { dazu(u, 'Oberkante', u.hoch); dazu(u, 'Unterkante', u.tief) }
+        else if (u.typ === 'volprofil') { dazu(u, 'VAH', u.vah); dazu(u, 'POC', u.poc); dazu(u, 'VAL', u.val) }
+        else if (u.typ === 'kanal') { dazu(u, 'Kante oben', u.obenJetzt); dazu(u, 'Kante unten', u.untenJetzt) }
+        else if (u.typ === 'fib') dazu(u, `Fib ${u.fibNah}`, u.preis)
+        else dazu(u, 'Linie', u.jetzt ?? u.preis)
+    }
+    marken.sort((a, b) => b.preis - a.preis)
+    const decken = []
+    for (let i = 0; i < marken.length; i++) {
+        for (let j = i + 1; j < marken.length; j++) {
+            const a = marken[i], b = marken[j]
+            if (a.u !== b.u && Math.abs(a.preis - b.preis) <= 0.5 * A) decken.push({ a, b, abstandAtr: Math.abs(a.preis - b.preis) / A })
+        }
+    }
+    return { marken, decken: decken.slice(0, 8) }
+}
+
+/** Der Kandidat des Codes, der zur eigenen Zeichnung passt (gleiche Art, ≤ KORREKTUR_ATR daneben). */
+export function naechsterKandidat(u, kandidaten, A) {
+    let best = null
+    for (const k of kandidaten) {
+        const d = korrekturAbstand(u, k, A)
+        if (d != null && (!best || d < best.abstandAtr)) best = { id: k.id, abstandAtr: d }
+    }
+    return best
+}
+
+/**
+ * Abstand einer eigenen Zeichnung zu einem Kandidaten in ATR — oder null, wenn er
+ * keine Korrektur für sie sein kann (andere Art, andere Neigung, zu weit weg).
+ */
+export function korrekturAbstand(u, k, A) {
+    if (WAAGERECHT.includes(u.typ) && ['niveau', 'htf', 'volumenprofil'].includes(k.quelle) && Number.isFinite(u.preis)) {
+        const d = Math.abs(k.preis - u.preis) / A
+        return d <= KORREKTUR_ATR ? d : null
+    }
+    if (SCHRAEG.includes(u.typ) && k.quelle === 'trend' && Number.isFinite(u.jetzt) && Number.isFinite(u.steigungAtr)) {
+        const kSteig = k.steigungAtr ?? null
+        if (kSteig != null && Math.abs(kSteig - u.steigungAtr) > 0.15) return null
+        const d = Math.abs(k.wertJetzt - u.jetzt) / A
+        return d <= KORREKTUR_ATR ? d : null
+    }
+    if (u.typ === 'kanal' && k.quelle === 'kanal' && Number.isFinite(u.untenJetzt)) {
+        const d = Math.max(Math.abs(k.untenJetzt - u.untenJetzt), Math.abs(k.obenJetzt - u.obenJetzt)) / A
+        return d <= KORREKTUR_ATR ? d : null
+    }
+    return null
+}
+
+/*
+ * Profile ALLER Arten auf einmal (31.10.2026, KI-Analyse ohne Kästchen): der Code
+ * rechnet sie, das Modell nimmt das aussagekräftigste. Je Art nur die jüngsten —
+ * sonst stünden 15 Profile mit 45 Marken in der Eingabe.
+ */
+export const PROFIL_ARTEN_ALLE = [['konsolidierung', 2], ['tag', 2], ['woche', 1]]
+const ABSCHNITT_NAME = { konsolidierung: 'Phase', abschnitt: 'Phase', tag: 'Tag', woche: 'Woche' }
+
+/**
+ * Überblick über das GANZE Fenster (01.11.2026): Anfang → Ende in %, Hoch und Tief
+ * mit Zeit und die grossen Wellen. Ohne ihn sah das Modell nur Spanne, Struktur und
+ * Kerzen der letzten Stunden — und zeichnete auf RENDERUSDT 1h nach einem Absturz
+ * von 2.00 auf 1.45 nur drei kleine Marken am rechten Rand.
+ *
+ * Wellen: Zickzack über den Median-ATR des Fensters; der Schritt wächst, bis
+ * höchstens `maxWellen` Wendepunkte übrig sind — sonst listet ein ruhiges
+ * Fenster dutzende Zacken, ein wildes zu wenige.
+ */
+export function fensterUeberblick(kerzen, { maxWellen = 8 } = {}) {
+    const n = kerzen?.length || 0
+    if (n < 2) return null
+    const a = atr(kerzen, 14).filter((v) => v > 0).sort((x, y) => x - y)
+    const A = a[Math.floor(a.length / 2)]
+    let hI = 0, lI = 0
+    for (let i = 1; i < n; i++) { if (kerzen[i].h > kerzen[hI].h) hI = i; if (kerzen[i].l < kerzen[lI].l) lI = i }
+    const zickzack = (S) => {
+        const wende = []
+        let richtung = 0, h = 0, l = 0
+        for (let i = 1; i < n; i++) {
+            const x = kerzen[i]
+            if (x.h >= kerzen[h].h) h = i
+            if (x.l <= kerzen[l].l) l = i
+            if (richtung >= 0 && kerzen[h].h - x.l >= S && h < i) { wende.push({ i: h, p: kerzen[h].h, hoch: true }); richtung = -1; l = i; h = i }
+            else if (richtung <= 0 && x.h - kerzen[l].l >= S && l < i) { wende.push({ i: l, p: kerzen[l].l, hoch: false }); richtung = 1; h = i; l = i }
+        }
+        return wende
+    }
+    let wellen = []
+    if (A > 0) for (let f = 6; f <= 200; f *= 1.4) { wellen = zickzack(f * A); if (wellen.length <= maxWellen) break }
+    const start = kerzen[0].o, ende = kerzen[n - 1].c
+    return {
+        vonT: kerzen[0].t, bisT: kerzen[n - 1].t, kerzen: n, start, ende,
+        aenderungPct: start > 0 ? (ende / start - 1) * 100 : null,
+        hoch: { p: kerzen[hI].h, t: kerzen[hI].t }, tief: { p: kerzen[lI].l, t: kerzen[lI].t },
+        wellen: wellen.map((w) => ({ t: kerzen[w.i].t, p: w.p, hoch: w.hoch })),
+    }
+}
+
+export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, intervalHtf = null, zeichnungen = [], zeitzone = 'UTC', profilArt = 'konsolidierung', profilArten = null, nutzerKerzen = null, nutzerVonT = null }) {
     const n = kerzen.length
     if (n < 30) return null
     const A = letzteAtr(kerzen)
@@ -701,26 +1167,34 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
     // Seitwärtsphasen (Vorgabe, `seitwaertsPhasen`), Tage oder Wochen. Ohne Phase die
     // Abschnitte zwischen den grossen Wendepunkten, ohne die ein Profil über alles.
     let v = 1
-    let bereich = profilArt === 'tag' || profilArt === 'woche' ? profilArt : 'konsolidierung'
-    // Ein Band enger als der Zickzack (3 ATR) hat keine Wendepunkte: dann die enge Konsolidierung
-    let gefunden = bereich === 'konsolidierung' ? seitwaertsPhasen(kerzen) : periodenAbschnitte(kerzen, bereich)
-    if (!gefunden.length && bereich === 'konsolidierung') gefunden = konsolidierungen(kerzen, A)
-    if (!gefunden.length && bereich === 'konsolidierung') { gefunden = profilAbschnitte(kerzen, A); bereich = 'abschnitt' }
-    const abschnitte = (gefunden.length ? gefunden : [{ von: 0, bis: n - 1 }]).reverse()
-    abschnitte.forEach((ab, j) => {
-        const vp = volumenprofil(kerzen.slice(ab.von, ab.bis + 1), { zeilen: 48 })
-        if (!vp) return
-        for (const [name, preis] of [['POC', vp.poc], ['VAH', vp.vah], ['VAL', vp.val]]) {
-            const deckt = nahAnN(preis, nListe)
-            kandidaten.push({
-                id: `V${v++}`, quelle: 'volumenprofil', name, abschnitt: `A${j + 1}`, bereich, preis, tief: preis - KAND.BAND_MIN_ATR * A, hoch: preis + KAND.BAND_MIN_ATR * A,
-                t1: kerzen[ab.von].t, t2: kerzen[ab.bis].t, abstandAtr: (preis - kurs) / A, deckt: deckt?.id || null,
-            })
-        }
-    })
+    const arten = Array.isArray(profilArten) ? profilArten : [[profilArt, KAND.PROFIL_MAX]]
+    for (const [art, max] of arten) {
+        let bereich = art === 'tag' || art === 'woche' ? art : 'konsolidierung'
+        // Ein Band enger als der Zickzack (3 ATR) hat keine Wendepunkte: dann die enge Konsolidierung
+        let gefunden = bereich === 'konsolidierung' ? seitwaertsPhasen(kerzen) : periodenAbschnitte(kerzen, bereich)
+        if (!gefunden.length && bereich === 'konsolidierung') gefunden = konsolidierungen(kerzen, A)
+        if (!gefunden.length && bereich === 'konsolidierung') { gefunden = profilAbschnitte(kerzen, A); bereich = 'abschnitt' }
+        // Bei Tag/Woche ohne Treffer kein Ersatzprofil über alles — das liefert die Phase schon
+        if (!gefunden.length && arten.length > 1 && bereich !== 'konsolidierung' && bereich !== 'abschnitt') continue
+        const abschnitte = (gefunden.length ? gefunden : [{ von: 0, bis: n - 1 }]).reverse().slice(0, max)
+        abschnitte.forEach((ab, j) => {
+            const vp = volumenprofil(kerzen.slice(ab.von, ab.bis + 1), { zeilen: 48 })
+            if (!vp) return
+            // Eine Art allein (KI-Chat, alte Aufrufe): A1, A2 … wie bisher; mehrere: „Phase 1", „Tag 1" …
+            const abschnitt = arten.length > 1 ? `${ABSCHNITT_NAME[bereich]} ${j + 1}` : `A${j + 1}`
+            for (const [name, preis] of [['POC', vp.poc], ['VAH', vp.vah], ['VAL', vp.val]]) {
+                const deckt = nahAnN(preis, nListe)
+                kandidaten.push({
+                    id: `V${v++}`, quelle: 'volumenprofil', name, abschnitt, bereich, preis, tief: preis - KAND.BAND_MIN_ATR * A, hoch: preis + KAND.BAND_MIN_ATR * A,
+                    t1: kerzen[ab.von].t, t2: kerzen[ab.bis].t, abstandAtr: (preis - kurs) / A, deckt: deckt?.id || null,
+                })
+            }
+        })
+    }
 
     kandidatenTrendlinien(kerzen, A).forEach((x, i) => kandidaten.push({ id: `T${i + 1}`, quelle: 'trend', ...x }))
     kandidatenKanaele(kerzen, A).forEach((x, i) => kandidaten.push({ id: `K${i + 1}`, ...x }))
+    kandidatenDreiecke(kerzen, A).forEach((x, i) => kandidaten.push({ id: `M${i + 1}`, ...x }))
 
     if (Array.isArray(kerzenHtf) && kerzenHtf.length >= 30) {
         const Ah = letzteAtr(kerzenHtf)
@@ -733,17 +1207,58 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
         }))
     }
 
-    const nutzer = (zeichnungen || []).filter((z) => ['horizontale', 'strahlH', 'trendlinie', 'strahl', 'rechteck', 'volprofil'].includes(z.typ))
-        .slice(0, 12).map((z, i) => ({ id: `U${i + 1}`, typ: z.typ, punkte: z.punkte || [], text: z.stil?.text || '' }))
+    // Eigene Zeichnungen: gemessen an den Kerzen ab der ältesten Zeichnung (`nutzerKerzen`,
+    // bis 01.11.2026 nur das Analysefenster — eine Zone vom September hatte dann „keinen Eintritt"),
+    // sichtbar ist, was im Bild des Nutzers liegt (`nutzerVonT`), nicht nur in den letzten 1000 Kerzen.
+    // Nur, was auf DIESER Zeiteinheit sichtbar ist, und bei mehr als NUTZER_MAX die wichtigsten (`waehleNutzer`).
+    const nk = Array.isArray(nutzerKerzen) && nutzerKerzen.length > n ? nutzerKerzen : kerzen
+    const wahl = waehleNutzer(zeichnungen, Math.min(vonT, nutzerVonT ?? vonT), bisT, { interval, kurs })
+    const nutzer = messeNutzerZeichnungen(nk, wahl.liste, A, kandidaten)
+    const beziehungen = nutzerBeziehungen(nutzer, kurs, A)
 
     return {
-        kurs, atr: A, vonT, bisT, interval, intervalHtf, zeitzone,
+        kurs, atr: A, vonT, bisT, interval, intervalHtf, zeitzone, ivMs: n > 1 ? kerzen[n - 1].t - kerzen[n - 2].t : null,
         spanne: spanneLetzte(kerzen, KAND.SPANNE_KERZEN, A),
+        ueberblick: fensterUeberblick(kerzen),
         struktur: marktstruktur(kerzen),
-        kandidaten, nutzer,
+        kandidaten, nutzer, beziehungen,
+        // Was von den eigenen Zeichnungen nicht drin ist: über NUTZER_MAX hinaus und ungemessene Typen
+        nutzerWeggelassen: wahl.weggelassen, nutzerUebergangen: wahl.uebergangen,
         roh: kerzen.slice(-KAND.ROH_KERZEN),
         volMedian: (() => { const v = kerzen.slice(-50).map((x) => x.v).sort((a, b) => a - b); return v[Math.floor(v.length / 2)] || null })(),
     }
+}
+
+const ZUSTAND_NUTZER = {
+    haelt: 'nie durchschlossen', gebrochen: 'gebrochen', drehpunkt: 'vielfach durchquert (Drehpunkt, keine Grenze)', unberuehrt: 'nicht berührt',
+    endet: 'endet vor der letzten Kerze', darueber: 'Kurs darüber', darunter: 'Kurs darunter', drin: 'Kurs innerhalb', ausserhalb: 'liegt ausserhalb der geladenen Kerzen', unlesbar: 'nicht messbar',
+}
+/** Eine Zeile je eigener Zeichnung für das Modell. */
+export function nutzerZeile(u, zeit = (ms) => zeitText(ms)) {
+    const m = []
+    if (u.typ === 'kanal') m.push(`Kanten jetzt ${zahl(u.untenJetzt)} / ${zahl(u.obenJetzt)}, Berührungen unten ${u.beruehrungenUnten ?? 0} / oben ${u.beruehrungenOben ?? 0}`)
+    else if (u.typ === 'volprofil') m.push(Number.isFinite(u.poc) ? `POC ${zahl(u.poc)}, VAH ${zahl(u.vah)}, VAL ${zahl(u.val)}` : 'ohne Kerzen')
+    else if (u.typ === 'fib') m.push(`Kurs am nächsten bei ${u.fibNah} (${zahl(u.preis)})`)
+    else if (u.typ === 'rechteck') {
+        m.push(`Eintritte ${u.beruehrungen ?? 0}${u.letzteT ? `, letzter Eintritt ${zeit(u.letzteT)}` : ''}, Breite ${Number.isFinite(u.breiteAtr) ? u.breiteAtr.toFixed(1) : '—'} ATR`)
+        const o = u.ursprung
+        if (o) {
+            const wende = o.wende === 'tief' ? 'am linken Rand ein Tief in der Zone' : o.wende === 'hoch' ? 'am linken Rand ein Hoch in der Zone' : 'am linken Rand kein Wendepunkt'
+            const weg = Number.isFinite(o.bewegungAtr) ? `, danach ${o.wende === 'hoch' ? 'abwärts' : 'aufwärts'} ${o.bewegungAtr.toFixed(1)} ATR (${o.bewegungPct.toFixed(1)} %) bis ${zeit(o.extremT)}` : ''
+            m.push(`${wende}${weg}${o.zurueckT ? `, erste Rückkehr ${zeit(o.zurueckT)}` : ', seither nicht zurück'}`)
+            if (o.seitBesuch) m.push(`seit dem letzten Besuch (${zeit(o.letzterBesuchT)}) ${o.seitBesuch.richtung === 'aufwaerts' ? 'aufwärts' : 'abwärts'} bis ${o.seitBesuch.atr.toFixed(1)} ATR (${o.seitBesuch.pct.toFixed(1)} %) entfernt, am weitesten ${zeit(o.seitBesuch.t)}`)
+        }
+    }
+    else if (Number.isFinite(u.beruehrungen)) {
+        m.push(`Berührungen ${u.beruehrungen}, Durchquerungen ${u.durchquerungen}${u.letzteT ? `, zuletzt ${zeit(u.letzteT)}` : ''}${u.beruehrungen ? `, max. Reaktion ${u.reaktionMaxAtr.toFixed(1)} ATR` : ''}`)
+        if (Number.isFinite(u.jetzt) && u.typ !== 'horizontale' && u.typ !== 'strahlH') m.push(`Wert jetzt ${zahl(u.jetzt)}`)
+        if (u.bruch) m.push(`${u.zustand === 'drehpunkt' ? 'zuletzt durchschlossen' : 'gebrochen'} ${zeit(u.bruch.t)} nach ${u.bruch.nach} (vor ${u.bruch.vorKerzen} Kerzen; davor ${u.bruch.vorher} Berührungen, seither ${u.bruch.tests} Tests von der anderen Seite)`)
+    }
+    if (Number.isFinite(u.abstandAtr)) m.push(`Kurs ${Math.abs(u.abstandAtr).toFixed(1)} ATR ${u.abstandAtr >= 0 ? 'darüber' : 'darunter'}`)
+    const text = u.text ? ` „${u.text}"` : ''
+    const naechster = u.naechster ? `${u.naechster.id} (${u.naechster.abstandAtr.toFixed(1)} ATR daneben)` : '—'
+    const auff = u.auffaellig?.length ? ` | AUFFÄLLIG: ${u.auffaellig.join('; ')}` : ''
+    return `${u.id} | ${u.name}${text} | ${m.join('; ') || '—'} | ${ZUSTAND_NUTZER[u.zustand] || '—'}${u.rolle ? `, liegt jetzt als ${u.rolle === 'widerstand' ? 'Widerstand über' : 'Unterstützung unter'} dem Kurs` : ''} | ${naechster}${auff}`
 }
 
 // ── Text für das Modell ─────────────────────────────────────────────────
@@ -777,25 +1292,40 @@ const ZUSTAND = { 1: 'aufwärts', '-1': 'abwärts', 0: 'unbestimmt' }
 /** Preis eines Kandidaten (bei Trendlinien der Wert jetzt). */
 export const preisVon = (k) => (k.quelle === 'trend' ? k.wertJetzt : k.preis)
 
-export function kandidatenText(paket) {
+/**
+ * `eigene` („Meine Zeichnungen analysieren"): die eigenen Zeichnungen stehen VOR
+ * allem anderen, die Kandidaten des Codes nur mit `mitKandidaten` (Ergänzen) und
+ * ausdrücklich als Prüfmassstab für Korrekturen und Fehlendes.
+ */
+export function kandidatenText(paket, { eigene = false, mitKandidaten = true } = {}) {
     const z = []
     const { kurs, atr: A, spanne, struktur } = paket
     const tz = paket.zeitzone || 'UTC'
     const zeit = (ms) => zeitText(ms, tz)
     z.push(`ZEITEN in Ortszeit (${tz}).`)
     z.push(`KURS ${zahl(kurs)} (letzter Schluss ${zeit(paket.bisT)}), ATR(14) ${zahl(A)} = ${(A / kurs * 100).toFixed(2)} %`)
+    const ub = paket.ueberblick
+    if (ub) {
+        const pct = Number.isFinite(ub.aenderungPct) ? `${ub.aenderungPct >= 0 ? '+' : ''}${ub.aenderungPct.toFixed(1)} %` : '?'
+        z.push(`GANZES FENSTER (so viel sieht der Nutzer im Chart): ${zeit(ub.vonT)} → ${zeit(ub.bisT)} (${ub.kerzen} Kerzen); Anfang ${zahl(ub.start)} → jetzt ${zahl(ub.ende)} = ${pct}; Hoch ${zahl(ub.hoch.p)} (${zeit(ub.hoch.t)}), Tief ${zahl(ub.tief.p)} (${zeit(ub.tief.t)})`)
+        if (ub.wellen.length) z.push(`GROSSE WELLEN: ${ub.wellen.map((w) => `${w.hoch ? 'Hoch' : 'Tief'} ${zahl(w.p)} (${zeit(w.t)})`).join(' → ')} → jetzt ${zahl(ub.ende)}`)
+    }
     if (spanne) z.push(`SPANNE der letzten ${spanne.kerzen} Kerzen ${zahl(spanne.tief)}–${zahl(spanne.hoch)} = ${spanne.breiteAtr.toFixed(1)} ATR; Kurs bei ${spanne.positionPct.toFixed(0)} % der Spanne`)
+    const uBlock = []
+    if (eigene) { nutzerBlock(uBlock, paket, zeit); z.push(...uBlock) }
+    const kandAb = z.length
     const n = paket.kandidaten.filter((k) => k.quelle === 'niveau')
     if (n.length) {
         z.push('', 'NIVEAUS (id | Preis | Band | Berührungen gesamt (an Hochs/an Tiefs) | letzte Berührung | max. Reaktion in ATR | Durchquerungen seit der ersten Berührung | Abstand zum Kurs in ATR):')
         for (const x of n) z.push(`${x.id} | ${zahl(x.preis)} | ${zahl(x.tief)}–${zahl(x.hoch)} | ${x.beruehrungen} (${x.hochs}/${x.tiefs}) | ${zeit(x.letzteT)} | ${x.reaktionMaxAtr.toFixed(1)} | ${x.durchquerungen} | ${atrText(x.abstandAtr)}${x.extrem ? ` | ${x.extrem === 'hoch' ? 'Hoch' : 'Tief'} des Bereichs` : ''}${x.rolle === 'wechsel' ? ' | Drehpunkt (mal Unterstützung, mal Widerstand)' : ''}`)
     }
     const v = paket.kandidaten.filter((k) => k.quelle === 'volumenprofil')
-    if (v.length) {
-        const ueber = { konsolidierung: 'je Konsolidierung (Seitwärtsphase)', tag: 'je Tag (UTC)', woche: 'je Woche (UTC, ab Montag)', abschnitt: 'je Abschnitt zwischen den grossen Wendepunkten' }[v[0].bereich] || 'je Abschnitt'
-        z.push('', `VOLUMENPROFILE ${ueber} (A1 = der jüngste):`)
-        for (const ab of [...new Set(v.map((x) => x.abschnitt))]) {
-            const xs = v.filter((x) => x.abschnitt === ab)
+    const UEBER = { konsolidierung: 'je Konsolidierung (Seitwärtsphase)', tag: 'je Tag (UTC)', woche: 'je Woche (UTC, ab Montag)', abschnitt: 'je Abschnitt zwischen den grossen Wendepunkten' }
+    for (const bereich of [...new Set(v.map((x) => x.bereich))]) {
+        const vb = v.filter((x) => x.bereich === bereich)
+        z.push('', `VOLUMENPROFILE ${UEBER[bereich] || 'je Abschnitt'} (1 bzw. A1 = der jüngste):`)
+        for (const ab of [...new Set(vb.map((x) => x.abschnitt))]) {
+            const xs = vb.filter((x) => x.abschnitt === ab)
             z.push(`${ab} ${zeit(xs[0].t1)} → ${zeit(xs[0].t2)}: ` + xs.map((x) => `${x.id} ${x.name} ${zahl(x.preis)} (${atrText(x.abstandAtr)} ATR${x.deckt ? `, deckt sich mit ${x.deckt}` : ''})`).join(' | '))
         }
     }
@@ -813,6 +1343,11 @@ export function kandidatenText(paket) {
         z.push('', 'KANÄLE — vom Code gemessen und eingezeichnet (id | Name | von → bis | Breite in ATR | Kante unten jetzt / oben jetzt | Abstand der Mitte in ATR):')
         for (const x of kk) z.push(`${x.id} | ${kanalName(x)}${x.stangeAtr ? `, Fahnenstange ${x.stangeAtr.toFixed(1)} ATR in ${x.stangeKerzen} Kerzen` : ''} | ${zeit(x.t1)} → ${zeit(x.t2)} | ${x.breiteAtr.toFixed(1)} | ${zahl(x.untenJetzt)} / ${zahl(x.obenJetzt)} | ${atrText(x.abstandAtr)}`)
     }
+    const mm = paket.kandidaten.filter((k) => k.quelle === 'dreieck')
+    if (mm.length) {
+        z.push('', 'DREIECKE UND KEILE — vom Code gemessen, zusammenlaufende Kanten (id | Name | Beginn → Spitze | Höhe am Anfang in ATR | noch übrig | Kante oben jetzt / unten jetzt | Abstand der Mitte in ATR):')
+        for (const x of mm) z.push(`${x.id} | ${dreieckName(x)} | ${zeit(x.tA)} → ${zeit(x.spitzeT)} | ${x.hoeheAtr.toFixed(1)} | ${Math.round(x.restPct)} % | ${zahl(x.obenJetzt)} / ${zahl(x.untenJetzt)} | ${atrText(x.abstandAtr)}`)
+    }
     if (struktur) {
         const folge = (l) => l.map((p) => `${zahl(p.p)}${p.art ? ` ${p.art}` : ''} (${zeit(p.t)})`).join(' → ')
         z.push('', `STRUKTUR: Hochs ${folge(struktur.hochs) || '—'}; Tiefs ${folge(struktur.tiefs) || '—'}; Zustand ${ZUSTAND[struktur.zustand]}${struktur.bruch ? `; letzter Bruch ${struktur.bruch.richtung === 'auf' ? 'aufwärts über' : 'abwärts unter'} ${zahl(struktur.bruch.marke)} am ${zeit(struktur.bruch.t)}` : ''}`)
@@ -822,18 +1357,45 @@ export function kandidatenText(paket) {
         z.push('', `HÖHERE ZEITEINHEIT ${paket.intervalHtf} (id | Preis | Band | Berührungen | Abstand in ATR der Chart-Zeiteinheit):`)
         for (const x of d) z.push(`${x.id} | ${zahl(x.preis)} | ${zahl(x.tief)}–${zahl(x.hoch)} | ${x.beruehrungen} | ${atrText(x.abstandAtr)}${x.deckt ? ` | deckt sich mit ${x.deckt}` : ''}${kurs >= x.tief && kurs <= x.hoch ? ' | Kurs liegt im Band' : ''}`)
     }
-    if (paket.nutzer.length) {
-        z.push('', 'EIGENE LINIEN DES NUTZERS (nur als Bezug — nicht als Linie auswählbar):')
-        for (const u of paket.nutzer) {
-            const p = u.punkte
-            const text = u.text ? ` „${u.text}"` : ''
-            if (u.typ === 'rechteck') z.push(`${u.id} | Zone ${zahl(Math.min(p[0]?.p, p[1]?.p))}–${zahl(Math.max(p[0]?.p, p[1]?.p))}${text}`)
-            else if (u.typ === 'volprofil') z.push(`${u.id} | Volumenprofil ${zeit(Math.min(p[0]?.t, p[1]?.t))} → ${zeit(Math.max(p[0]?.t, p[1]?.t))}`)
-            else if (p.length > 1) z.push(`${u.id} | ${u.typ} ${zeit(p[0].t)} ${zahl(p[0].p)} → ${zeit(p[1].t)} ${zahl(p[1].p)}${text}`)
-            else if (p.length) z.push(`${u.id} | ${u.typ} bei ${zahl(p[0].p)}${text}`)
-        }
-    }
+    if (eigene) {
+        // Struktur bleibt (sie beschreibt den Chart, keine Marke), die Kandidaten nur mit Ergänzen
+        const kand = z.splice(kandAb)
+        const struktur = kand.filter((x) => x.startsWith('STRUKTUR'))
+        if (mitKandidaten) z.push('', '=== KANDIDATEN DES CODES — nur Prüfmassstab für "korrekturen" und "fehlend". Im Text und in den Bedingungen nicht verwenden. ===', ...kand)
+        else z.push('', ...struktur)
+    } else nutzerBlock(z, paket, zeit)
     z.push('', `LETZTE ${paket.roh.length} KERZEN (Zeit,Eröffnung,Hoch,Tief,Schluss,Volumen relativ zum Median der letzten 50):`)
     for (const x of paket.roh) z.push([zeit(x.t), zahl(x.o), zahl(x.h), zahl(x.l), zahl(x.c), paket.volMedian ? (x.v / paket.volMedian).toFixed(1) : '—'].join(','))
     return z.join('\n')
+}
+
+function nutzerBlock(z, paket, zeit) {
+    const kurs = paket.kurs
+    if (paket.nutzer.length) {
+        z.push('', 'EIGENE ZEICHNUNGEN DES NUTZERS — vom Code an den Kerzen gemessen (id | Zeichnung | Messung | Zustand | nächster Kandidat des Codes | Auffälligkeiten):')
+        for (const u of paket.nutzer) z.push(nutzerZeile(u, zeit))
+        const bz = paket.beziehungen
+        if (bz?.marken.length) {
+            z.push('', 'LEITER DER EIGENEN MARKEN (von oben nach unten, Abstand zum Kurs in ATR):')
+            let kursDa = false
+            for (const x of bz.marken) {
+                if (!kursDa && x.preis < kurs) { z.push(`— KURS ${zahl(kurs)} —`); kursDa = true }
+                z.push(`${x.u} ${x.art} ${zahl(x.preis)} (${atrText(x.abstandAtr)})`)
+            }
+            if (!kursDa) z.push(`— KURS ${zahl(kurs)} —`)
+        }
+        if (bz?.decken.length) {
+            z.push('', 'EIGENE ZEICHNUNGEN AUF GLEICHER HÖHE (≤ 0,5 ATR):')
+            for (const d of bz.decken) z.push(`${d.a.u} ${d.a.art} ${zahl(d.a.preis)} ≈ ${d.b.u} ${d.b.art} ${zahl(d.b.preis)}`)
+        }
+    }
+    // Was fehlt, sagen — sonst hält das Modell die Liste für vollständig
+    const weg = paket.nutzerWeggelassen || 0
+    const ueb = paket.nutzerUebergangen || []
+    if (weg || ueb.length) {
+        const teile = []
+        if (weg) teile.push(`${weg} weitere (weiter weg vom Kurs oder ausserhalb des Fensters, nicht gemessen)`)
+        if (ueb.length) teile.push(`nicht messbar: ${ueb.map((x) => `${x.anzahl}× ${NUTZER_NAME[x.typ] || x.typ}`).join(', ')}`)
+        z.push('', `NICHT IN DER LISTE: ${teile.join('; ')}. Diese Zeichnungen nicht bewerten und nicht so tun, als gäbe es sie nicht.`)
+    }
 }

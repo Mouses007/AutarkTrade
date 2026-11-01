@@ -87,7 +87,21 @@ export function einstandFuer(e, p) {
     }
 }
 
-export async function berechneUebersicht({ ohneVerlauf = false } = {}) {
+/**
+ * Gleichzeitige Aufrufe teilen EINE Rechnung (je mit/ohne Verlauf): die Seite
+ * Staking fragt die Übersicht im selben Moment wie das Portfolio selbst, und
+ * mit kaltem Kurs-Cache lief die doppelte Rechnung über das 20-s-Limit des
+ * Browsers. Kein Zwischenspeicher darüber hinaus — nach einem Abruf zählt der
+ * neue Stand sofort. Aufrufer dürfen das Ergebnis nur lesen.
+ */
+const laufend = new Map()
+export function berechneUebersicht({ ohneVerlauf = false } = {}) {
+    const key = ohneVerlauf ? 'ohne' : 'mit'
+    if (!laufend.has(key)) laufend.set(key, rechneUebersicht({ ohneVerlauf }).finally(() => laufend.delete(key)))
+    return laufend.get(key)
+}
+
+async function rechneUebersicht({ ohneVerlauf }) {
     const k = getKnex()
     const [alleBestaende, quellenStand, wallets, adressen, settings] = await Promise.all([
         k('portfolio_bestaende').select('*'),

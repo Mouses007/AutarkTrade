@@ -13,7 +13,7 @@ import {
     zeitZuLogisch, logischZuZeit, logischZuX, abstandZuStrecke, verlaengere, preisAufGerade,
     fibPreise, positionWerte, magnet, imRechteck, messung, dauerText,
 } from './chart/zeichnungen/geometrie.js'
-import { WERKZEUGE, stilFuer, STANDARD_STIL } from './chart/zeichnungen/werkzeuge.js'
+import { PFAD_MAX, SMILEY_LISTE, WERKZEUGE, stilFuer, STANDARD_STIL } from './chart/zeichnungen/werkzeuge.js'
 import { ereignisZuLogisch, kreuzVerschoben, istTipp, freieZeile } from './chart/zeichnungen/geometrie.js'
 
 let bestanden = 0
@@ -100,7 +100,8 @@ console.log('\nFibonacci, Position, Magnet, Messen\n')
 
 console.log('\nWerkzeuge\n')
 {
-    const gespeichert = ['horizontale', 'strahlH', 'vertikale', 'trendlinie', 'strahl', 'kanal', 'rechteck', 'fib', 'position', 'text', 'volprofil']
+    const gespeichert = ['horizontale', 'strahlH', 'vertikale', 'trendlinie', 'strahl', 'kanal', 'rechteck', 'fib', 'position', 'text', 'volprofil', 'avwap',
+        'fibExt', 'pfeil', 'ellipse', 'pinsel', 'pfad', 'emoji']
     const fluechtig = WERKZEUGE.filter((w) => w.fluechtig).map((w) => w.typ)
     const alle = WERKZEUGE.map((w) => w.typ)
     check('Jedes speicherbare Werkzeug hat eine Vorgabe-Gestaltung', gespeichert.every((t) => STANDARD_STIL[t]))
@@ -210,6 +211,46 @@ console.log('\nEreignisse in ihrer Kerze (Journal)\n')
     check('ohne Gesperrte: wie bisher die jüngste', e.trefferTest(10, 10)?.z.id === 4)
 }
 
+// ── Zeichnung mit zu wenigen Punkten (BUG-F2A-005) ──────────────────────────
+{
+    const werkzeuge = await import('./chart/zeichnungen/werkzeuge.js')
+    const { pruefeZeichnung, ZEICHEN_TYPEN, MIN_PUNKTE } = await import('../../server/chart-api.js')
+    const mp = werkzeuge.mindestPunkte || (() => 1)
+    const abweichend = (ZEICHEN_TYPEN || []).filter((typ) => !MIN_PUNKTE || MIN_PUNKTE[typ] !== mp(typ))
+    check('Server-Mindestpunkte = Werkzeuge (Klicks; Position 3, Pinsel 2)', MIN_PUNKTE && !abweichend.length && mp('ellipse') === 2 && mp('position') === 3 && mp('kanal') === 3, abweichend.join(', '))
+    const t = 1_700_000_000_000
+    check('Server: Ellipse mit einem Punkt abgelehnt', !!pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'ellipse', punkte: [{ t, p: 1 }] }).fehler)
+    check('Server: Pfeil mit einem Punkt auch beim Ändern (PUT) abgelehnt', !!pruefeZeichnung({ punkte: [{ t, p: 1 }] }, { teilweise: true, typ: 'pfeil' }).fehler)
+    check('Gegenprobe: Ellipse mit zwei Punkten und Horizontale mit einem gehen durch', !pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'ellipse', punkte: [{ t, p: 1 }, { t: t + 1, p: 2 }] }).fehler
+        && !pruefeZeichnung({ symbol: 'BTCUSDT', typ: 'horizontale', punkte: [{ t, p: 1 }] }).fehler)
+
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    Object.assign(e, {
+        vorschau: new Map(), zeiten: [], temporaer: [], auswahlId: null, entwurf: null, messErgebnis: null, fang: null, kreuz: null,
+        chart: { timeScale: () => ({ width: () => 800 }) }, zuX: (t) => t, zuY: (p) => p,
+    })
+    const linie = { id: 1, typ: 'trendlinie', stil: {}, punkte: [{ t: 0, p: 0 }, { t: 100, p: 100 }] }
+    const kaputt = { id: 2, typ: 'ellipse', stil: {}, punkte: [{ t: 50, p: 50 }] }
+    e.zeichnungen = [linie, kaputt]
+    let treffer = null
+    try { treffer = e.trefferTest(50, 50) } catch { treffer = 'Ausnahme' }
+    check('Treffertest: die ältere Linie bleibt anklickbar trotz jüngerer Ellipse mit einem Punkt', treffer?.z?.id === 1, String(treffer))
+    const gezeichnet = []
+    e.zeichneInhalt = (ctx, z, pk) => { if (pk.length < 2) throw new TypeError('pk[1] undefined'); gezeichnet.push(z.id) }
+    e.zeichnungen = [kaputt, linie]
+    const ctx = { save() {}, restore() {}, font: '' }
+    let geworfen = false
+    try { e.zeichne(ctx, { width: 800, height: 400 }) } catch { geworfen = true }
+    check('Zeichnen: kaputte Zeichnung wirft nicht, die nächste wird gezeichnet', !geworfen && gezeichnet.join() === '1', `${geworfen} ${gezeichnet}`)
+    e.zeichneInhalt = (ctx, z) => { if (z.id === 1) throw new Error('kaputt'); gezeichnet.push(z.id) }
+    gezeichnet.length = 0
+    e.zeichnungen = [linie, { ...linie, id: 3 }]
+    geworfen = false
+    try { e.zeichne(ctx, { width: 800, height: 400 }) } catch { geworfen = true }
+    check('Zeichnen: Fehler in einer Zeichnung, die übrigen werden trotzdem gezeichnet', !geworfen && gezeichnet.join() === '3', `${geworfen} ${gezeichnet}`)
+}
+
 // ── Fadenkreuz-Zeichnen per Touch ──
 {
     check('Fadenkreuz wandert um den Weg des Fingers', JSON.stringify(kreuzVerschoben({ x: 100, y: 100 }, 30, -20, 400, 300)) === '{"x":130,"y":80}')
@@ -293,6 +334,131 @@ console.log('\nEreignisse in ihrer Kerze (Journal)\n')
     e.setzeWerkzeug('alarm')
     e.zeigerUnten(ev('pointerdown', 200, 40))
     check('Werkzeug „Alarm": Klick gibt den Preis an den Dialog, keine Zeichnung', log.length === 1 && log[0][0] === 'preis' && log[0][1] === 960, JSON.stringify(log))
+}
+
+console.log('\nFib-Extension, Pfeil, Ellipse, Pinsel\n')
+{
+    const { fibExtPreise, FIB_EXT_STUFEN, fibStufenAus, pfeilSpitze, ellipseLage, duenneStrich, abstandZuZug, PINSEL_MAX } = await import('./chart/zeichnungen/geometrie.js')
+    // Impuls 100 → 120, Rücksetzer 110: Stufe s liegt bei 110 + 20·s
+    const ext = fibExtPreise(100, 120, 110)
+    check('Extension: Stufen 0 / 0,618 / 1 / 1,272 / 1,618 / 2 / 2,618', ext.map((f) => f.stufe).join() === FIB_EXT_STUFEN.join())
+    check('Extension: 0 am Rücksetzer, 1 = eine Impulslänge darüber, 1,618 = 142,36',
+        ext[0].preis === 110 && ext[2].preis === 130 && nahe(ext[4].preis, 142.36))
+    const ab = fibExtPreise(120, 100, 105)
+    check('Extension abwärts: projiziert nach unten (1 → 85)', ab[2].preis === 85 && ab[6].preis < ab[2].preis)
+    const st = fibStufenAus([{ w: 1.618, farbe: '#ff0000' }, { w: 0, an: false }, { w: 'x' }, { w: 0.5 }, { w: 0.5 }, { w: 99 }], FIB_EXT_STUFEN)
+    check('Eigene Stufen: aus, unsinnig und doppelt fallen weg, sortiert', st.map((f) => f.w).join() === '0.5,1.618' && st[1].farbe === '#ff0000')
+    check('Ohne eigene Stufen gelten die Vorgaben mit Farbe', fibStufenAus(undefined, FIB_EXT_STUFEN).length === 7 && fibStufenAus([], FIB_EXT_STUFEN).every((f) => /^#/.test(f.farbe)))
+
+    const [f1, f2] = pfeilSpitze(0, 0, 100, 0, 2)
+    check('Pfeilspitze: beide Flügel hinter der Spitze, symmetrisch', f1.x < 100 && f2.x < 100 && nahe(f1.y, -f2.y) && nahe(f1.x, f2.x))
+    const [g1] = pfeilSpitze(0, 0, 100, 0, 4)
+    check('Dickerer Pfeil, längere Spitze', g1.x < f1.x)
+
+    // Kreis um (50,50) mit Radius 50
+    check('Ellipse: Punkt auf dem Umriss trifft', ellipseLage(100, 50, 0, 0, 100, 100).abstand < 1e-9)
+    check('Ellipse: Mittelpunkt ist innen, 50 px vom Umriss', ellipseLage(50, 50, 0, 0, 100, 100).innen && nahe(ellipseLage(50, 50, 0, 0, 100, 100).abstand, 50))
+    check('Ellipse: Ecke des Rechtecks liegt aussen, nicht auf dem Umriss', !ellipseLage(2, 2, 0, 0, 100, 100).innen && ellipseLage(2, 2, 0, 0, 100, 100).abstand > 6)
+    const flach = ellipseLage(100, 25, 0, 0, 200, 50)
+    check('Flache Ellipse: Scheitel oben trifft', ellipseLage(100, 0, 0, 0, 200, 50).abstand < 1e-9 && flach.innen)
+
+    const gerade = Array.from({ length: 50 }, (_, i) => ({ x: i * 2, y: 10 }))
+    check('Ausdünnen: gerader Strich → Anfang und Ende', duenneStrich(gerade).join() === '0,49')
+    const ecke = [...Array.from({ length: 20 }, (_, i) => ({ x: i, y: 0 })), ...Array.from({ length: 20 }, (_, i) => ({ x: 19, y: i + 1 }))]
+    check('Ausdünnen: die Ecke bleibt', duenneStrich(ecke).join() === '0,19,39')
+    const welle = Array.from({ length: 3000 }, (_, i) => ({ x: i, y: 40 * Math.sin(i / 3) }))
+    const w = duenneStrich(welle)
+    check(`Ausdünnen: langer Zick-Zack bleibt unter ${PINSEL_MAX} Punkten, Anfang und Ende bleiben`, w.length <= PINSEL_MAX && w[0] === 0 && w[w.length - 1] === 2999, String(w.length))
+    check('Ausdünnen: Indizes aufsteigend (Zeit/Preis-Punkte bleiben in Strichfolge)', w.every((v, i) => i === 0 || v > w[i - 1]))
+    check('Abstand zum Linienzug', nahe(abstandZuZug(5, 3, [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }]), 3))
+}
+
+// Pinsel: Ziehen malt, Loslassen speichert ausgedünnt — auch mit dem Finger im Fadenkreuz-Modus
+{
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    const achse = { width: () => 400, coordinateToLogical: (x) => x / 10, logicalToCoordinate: (L) => L * 10 }
+    const neu = []
+    Object.assign(e, {
+        chart: { timeScale: () => achse, panes: () => [{ getHeight: () => 300 }] },
+        serie: { coordinateToPrice: (y) => 1000 - y, priceToCoordinate: (p) => 1000 - p },
+        huelle: { getBoundingClientRect: () => ({ left: 0, top: 0, height: 300 }), setPointerCapture() {}, releasePointerCapture() {} },
+        zeiten: Array.from({ length: 40 }, (_, i) => t0 + i * H), kerzen: [], iv: H,
+        zeichnungen: [], vorschau: new Map(), temporaer: [], magnetAn: false, requestUpdate() {},
+        fadenkreuzAn: true, touchGeraet: true, alarme: [], finger: null,
+        rueckruf: { neu: (z) => neu.push(z), werkzeugFertig() {} },
+    })
+    const ev = (type, x, y) => ({ type, pointerId: 3, pointerType: 'touch', clientX: x, clientY: y, button: 0, stopPropagation() {}, preventDefault() {} })
+    e.setzeWerkzeug('pinsel')
+    check('Pinsel: kein Fadenkreuz, der Finger malt direkt', e.kreuz === null)
+    e.zeigerUnten(ev('pointerdown', 100, 100))
+    for (let x = 101; x <= 200; x++) e.zeigerBewegt(ev('pointermove', x, 100))
+    for (let y = 101; y <= 150; y++) e.zeigerBewegt(ev('pointermove', 200, y))
+    check('Während des Malens ist der Strich ein Entwurf', e.entwurf?.typ === 'pinsel' && e.entwurf.punkte.length > 50)
+    e.zeigerOben(ev('pointerup', 200, 150))
+    const z = neu[0]
+    check('Loslassen speichert einen Pinselstrich mit 3 Punkten (Start, Ecke, Ende)', neu.length === 1 && z.typ === 'pinsel' && z.punkte.length === 3, JSON.stringify(z?.punkte))
+    check('Punkte als Zeit + Preis, Zeit zwischen Kerzen nicht gerundet', z.punkte[0].p === 900 && z.punkte[0].t === t0 + 10 * H && z.punkte[2].p === 850)
+    neu.length = 0
+    e.setzeWerkzeug('pinsel')
+    e.zeigerUnten(ev('pointerdown', 50, 50)); e.zeigerOben(ev('pointerup', 50, 50))
+    check('Nur getippt: kein Strich', neu.length === 0 && !e.entwurf)
+    e.zeigerUnten(ev('pointerdown', 50, 50)); e.zeigerBewegt(ev('pointermove', 90, 50)); e.zeigerOben(ev('pointercancel', 90, 50))
+    check('Abgebrochen (pointercancel): kein Strich', neu.length === 0 && !e.entwurf)
+
+    // Pfad: beliebig viele Klicks, Klick auf den letzten Punkt beendet, Esc/Enter auch
+    e.touchGeraet = false
+    e.setzeWerkzeug('pfad')
+    e.klick(50, 200); e.klick(100, 100); e.klick(150, 180); e.klick(220, 60)
+    check('Pfad: nach vier Klicks noch im Entwurf (4 feste + 1 beweglicher Punkt)', neu.length === 0 && e.entwurf?.punkte.length === 5)
+    e.klick(221, 61)
+    check('Pfad: Klick auf den letzten Punkt beendet — vier Punkte gespeichert', neu.length === 1 && neu[0].typ === 'pfad' && neu[0].punkte.length === 4, JSON.stringify(neu[0]?.punkte))
+    neu.length = 0
+    e.setzeWerkzeug('pfad')
+    e.klick(50, 200); e.klick(50, 200)
+    check('Pfad: zweiter Klick auf den ersten Punkt beendet nicht (zu wenig Punkte)', neu.length === 0 && e.entwurf?.punkte.length === 2)
+    e.klick(120, 120)
+    check('Pfad: Esc mit zwei festen Punkten speichert ihn statt ihn zu verwerfen', e.abbrechen() === true && neu.length === 1 && neu[0].punkte.length === 2)
+    neu.length = 0
+    e.setzeWerkzeug('pfad')
+    e.klick(50, 200)
+    check('Pfad: Enter mit nur einem Punkt tut nichts', e.pfadFertig() === false && !!e.entwurf)
+    e.abbrechen()
+    e.setzeWerkzeug('pfad')
+    for (let i = 0; i < PFAD_MAX + 3; i++) e.klick(10 + i * 12, i % 2 ? 100 : 200)
+    check('Pfad: höchstens PFAD_MAX Punkte, dann fertig', neu.length === 1 && neu[0].punkte.length === PFAD_MAX, String(neu[0]?.punkte.length))
+    neu.length = 0
+    e.setzeWerkzeug('emoji')
+    e.klick(80, 80)
+    check('Smiley: ein Klick setzt es', neu.length === 1 && neu[0].typ === 'emoji' && neu[0].punkte.length === 1)
+    check('Smiley-Auswahl: 18 Zeichen, keines doppelt', SMILEY_LISTE.length === 18 && new Set(SMILEY_LISTE).size === 18)
+    neu.length = 0
+}
+
+// Treffer und Anker der neuen Typen
+{
+    const { ZeichenEbene } = await import('./chart/zeichnungen/ZeichenEbene.js')
+    const e = Object.create(ZeichenEbene.prototype)
+    const achse = { width: () => 400, coordinateToLogical: (x) => x / 10, logicalToCoordinate: (L) => L * 10 }
+    Object.assign(e, {
+        chart: { timeScale: () => achse, panes: () => [{ getHeight: () => 300 }] },
+        serie: { coordinateToPrice: (y) => 1000 - y, priceToCoordinate: (p) => 1000 - p },
+        zeiten: Array.from({ length: 40 }, (_, i) => t0 + i * H), kerzen: [], iv: H, vorschau: new Map(),
+    })
+    const T = (i) => t0 + i * H
+    const pfeil = { id: 1, typ: 'pfeil', punkte: [{ t: T(5), p: 900 }, { t: T(15), p: 900 }] }
+    check('Pfeil: Schaft trifft, daneben nicht', e.trifft(pfeil, 100, 102, 400) && !e.trifft(pfeil, 100, 120, 400))
+    const ell = { id: 2, typ: 'ellipse', punkte: [{ t: T(10), p: 900 }, { t: T(20), p: 800 }], stil: { fuellung: false } }
+    check('Ellipse ohne Füllung: Umriss trifft, Mitte nicht', e.trifft(ell, 202, 150, 400) && !e.trifft(ell, 150, 150, 400))
+    check('Ellipse mit Füllung: Mitte trifft', e.trifft({ ...ell, stil: { fuellung: true } }, 150, 150, 400))
+    const ext = { id: 3, typ: 'fibExt', punkte: [{ t: T(2), p: 800 }, { t: T(8), p: 900 }, { t: T(12), p: 850 }] }
+    // Stufe 1 = 850 + 100 = 950 → y 50, von x 120 bis 120 + 60
+    check('Fib-Extension: Stufe 1 trifft rechts vom Rücksetzer', e.trifft(ext, 150, 50, 400) && !e.trifft(ext, 250, 50, 400))
+    check('Fib-Extension: ausgeschaltete Stufe trifft nicht', !e.trifft({ ...ext, stil: { stufen: [{ w: 0 }, { w: 1, an: false }] } }, 150, 50, 400))
+    const pin = { id: 4, typ: 'pinsel', punkte: [{ t: T(1), p: 900 }, { t: T(10), p: 900 }, { t: T(10), p: 800 }] }
+    check('Pinsel: Strich trifft, Innenfläche nicht', e.trifft(pin, 100, 150, 400) && !e.trifft(pin, 50, 150, 400))
+    check('Pinsel hat keine Anfasspunkte (nur als Ganzes verschieben)', e.ankerVon(pin, 400).length === 0)
+    check('Fib-Extension: drei Anfasspunkte', e.ankerVon(ext, 400).length === 3)
 }
 
 console.log('\nBeschriftungen weichen einander aus\n')

@@ -26,6 +26,12 @@
  *     zählt ab 14 Tokens mit ≥ 6 eigenen Wörtern) und **normalisiert** (auch
  *     Namen werden Platzhalter, Fenster 12; ein Lauf zählt ab 30 Tokens mit
  *     ≥ 2 Kontrollfluss-Schlüsselwörtern und ohne HTML-/CSS-Rahmen).
+ *     Die Zerlegung steht in `scripts/herkunft-tokens.mjs` (Selbsttest
+ *     `server/__selftest-herkunft-tokens.mjs`): verschachtelte Vorlagen und
+ *     Regex-Literale werden erkannt (Audit 4.3.4, FUN-F6-001 — vorher war
+ *     server/database.js ab Zeile 338 blind). Endet eine Datei trotzdem in einer
+ *     offenen Zeichenkette, zählt das als ungesichtet („blind"); liegen mehr als
+ *     70 % ihrer Zeilen in Zeichenketten, gibt es einen Hinweis.
  *
  * Verglichen wird gegen den Vergleichsstand OHNE dessen mitgelieferte
  * Fremdbibliothek `codemirror-graphql` — deren Zeilen sind nicht vom
@@ -38,10 +44,18 @@
  * enden — so fällt eine neu hereinkopierte Zeile, ein übernommener Name oder
  * eine umformulierte Stelle beim nächsten Lauf auf.
  *
+ * Auch die Gegenrichtung wird geprüft (Audit 4.3.4, FUN-F6-002): eine Ausnahme in
+ * `herkunft-akzeptiert.json`, zu der es keinen Treffer mehr gibt (Code gelöscht
+ * oder verschoben), wird als „veraltet" gemeldet und lässt das Skript ebenfalls
+ * mit Code 1 enden. Sonst wirkte die Liste grösser, als sie ist, und kehrte
+ * dieselbe Tokenfolge zurück, gälte sie ohne neue Sichtung — eine blosse Warnung
+ * überliest man; Exit 0 heisst deshalb: nichts ungesichtet, nichts veraltet.
+ *
  * Die Adresse des Vergleichsstands steht nur in HERKUNFT.md (Zeile
  * „Vergleichsquelle:") und wird von dort gelesen.
  *
- * Braucht Netz (git clone) nur ohne --vergleich; deshalb kein Selbsttest.
+ * Braucht Netz (git clone) nur ohne --vergleich; deshalb hat nur die Zerlegung
+ * einen Selbsttest.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -50,6 +64,7 @@ import { mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync, rmSync
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { zerlege, tokens, laeufe, normal, istName, SCHLUESSELWORT, KONTROLLE, veralteteAusnahmen } from './herkunft-tokens.mjs'
 
 const CODE = new Set(['.js', '.mjs', '.vue', '.css', '.html'])
 const TEXT = new Set(['.md', '.json', '.sh', '.bat', '.yml', '.yaml', '.txt', '.command', '.vbs', '.example'])
@@ -169,63 +184,7 @@ function zeilenVergleich(fremdListe, eigeneListe, arten, gesichtet) {
 const code = zeilenVergleich(fremdCode, eigeneCode, AKZEPTIERT, null)
 const text = zeilenVergleich(fremdText, eigeneText, AKZEPTIERT_TEXT, GESICHTET.textZeilen)
 
-// ── Tokens ─────────────────────────────────────────────────────────────────
-const SCHLUESSELWORT = new Set(('await break case catch class const continue debugger default delete do else export extends false finally for from function if import in instanceof let new null of return static super switch this throw true try typeof undefined var void while with yield async').split(' '))
-const KONTROLLE = new Set(['if', 'for', 'while', 'switch', 'case', 'return', 'else', 'try', 'catch', 'break', 'continue', 'throw'])
-
-/** Zerlegt Quelltext in Tokens; Kommentare fallen weg, Literale werden S bzw. N. */
-function tokens(quelle) {
-    const aus = []
-    const s = quelle
-    let i = 0
-    while (i < s.length) {
-        const c = s[i]
-        if (/\s/.test(c)) { i++; continue }
-        if (s.startsWith('<!--', i)) { const e = s.indexOf('-->', i + 4); i = e < 0 ? s.length : e + 3; continue }
-        if (s.startsWith('/*', i)) { const e = s.indexOf('*/', i + 2); i = e < 0 ? s.length : e + 2; continue }
-        if (s.startsWith('//', i) && s[i - 1] !== ':') { const e = s.indexOf('\n', i); i = e < 0 ? s.length : e; continue }
-        if (c === '"' || c === "'" || c === '`') {
-            let j = i + 1
-            while (j < s.length && s[j] !== c) { if (s[j] === '\\') j++; if (c !== '`' && s[j] === '\n') break; j++ }
-            aus.push('S'); i = j + 1; continue
-        }
-        const m = /^[A-Za-z_$][\w$-]*/.exec(s.slice(i, i + 80))
-        if (m) {
-            // Bindestrich nur in Vorlagen-/CSS-Namen; in JS wäre es ein Minus.
-            let w = m[0]
-            if (w.includes('-') && !/^[a-z][\w-]*[a-z\d]$/.test(w)) w = w.split('-')[0]
-            aus.push(w); i += w.length; continue
-        }
-        const z = /^\d[\d._a-zA-Z]*/.exec(s.slice(i, i + 40))
-        if (z) { aus.push('N'); i += z[0].length; continue }
-        const op = /^(===|!==|=>|\.\.\.|&&|\|\||\?\?|\?\.|==|!=|<=|>=|\+\+|--|\+=|-=)/.exec(s.slice(i, i + 3))
-        if (op) { aus.push(op[0]); i += op[0].length; continue }
-        aus.push(c); i++
-    }
-    return aus
-}
-const istName = (t) => /^[A-Za-z_$]/.test(t) && t !== 'S' && t !== 'N'
-const normal = (t) => (istName(t) && !SCHLUESSELWORT.has(t) ? 'I' : t)
-
-/** Gemeinsame Läufe von ≥ fenster Tokens zwischen unserer Datei und dem Vergleichsstand. */
-function laeufe(eigen, fremdIndex, fenster, abbilden) {
-    const reihe = eigen.map(abbilden)
-    const gedeckt = new Uint8Array(reihe.length)
-    const quelle = new Array(reihe.length)
-    for (let i = 0; i + fenster <= reihe.length; i++) {
-        const k = reihe.slice(i, i + fenster).join(' ')
-        const wo = fremdIndex.get(k)
-        if (wo) { for (let j = i; j < i + fenster; j++) gedeckt[j] = 1; quelle[i] = wo }
-    }
-    const aus = []
-    let a = -1
-    for (let i = 0; i <= reihe.length; i++) {
-        if (i < reihe.length && gedeckt[i]) { if (a < 0) a = i; continue }
-        if (a >= 0) { aus.push({ von: a, bis: i, wo: quelle[a] }); a = -1 }
-    }
-    return aus
-}
-
+// ── Tokens (Zerlegung in scripts/herkunft-tokens.mjs, mit Selbsttest) ──────
 function fremdIndexAus(abbilden, fenster) {
     const index = new Map()
     for (const f of fremdCode) {
@@ -246,8 +205,14 @@ const idxStreng = fremdIndexAus((t) => t, STRENG.fenster)
 const idxNormal = fremdIndexAus(normal, NORMAL.fenster)
 
 const laufTreffer = []
+/** Dateien, in denen die Token-Fenster ganz oder grösstenteils blind sind (FUN-F6-001). */
+const blind = []
+const BLIND_ANTEIL = 0.7
 for (const f of eigeneCode.filter(f => SKRIPT.has(path.extname(f)))) {
-    const tk = tokens(lies(wurzel, f) || '')
+    const z = zerlege(lies(wurzel, f) || '')
+    const tk = z.tokens
+    if (z.offen) blind.push({ datei: f, grund: 'endet in einer offenen Zeichenkette', offen: true })
+    else if (z.zeichenketteAnteil > BLIND_ANTEIL) blind.push({ datei: f, grund: `${Math.round(100 * z.zeichenketteAnteil)} % der Zeilen in Zeichenketten`, offen: false })
     for (const l of laeufe(tk, idxStreng, STRENG.fenster, (t) => t)) {
         const teil = tk.slice(l.von, l.bis)
         const woerter = new Set(teil.filter(t => istName(t) && !SCHLUESSELWORT.has(t)))
@@ -315,6 +280,27 @@ for (const l of (zeigt('--laeufe') ? laufTreffer : laeufeOffen)) {
     console.log(`      ${l.text.slice(0, 220)}`)
 }
 
+// Eine Datei, die in einer offenen Zeichenkette endet, ist ab dort für Prüfung 4
+// unsichtbar — das zählt wie ein ungesichteter Treffer. Ein hoher Anteil an
+// Zeilen in Zeichenketten ist nur ein Hinweis (Hilfetexte, Attrappen).
+const blindOffen = blind.filter(b => b.offen)
+if (blind.length) {
+    console.log(`\n  Blinde Stellen der Token-Fenster: ${blindOffen.length} offen, ${blind.length - blindOffen.length} Hinweise (> ${BLIND_ANTEIL * 100} % in Zeichenketten)`)
+    for (const b of blind) console.log(`  ${b.offen ? 'BLIND  ' : 'Hinweis'} ${b.datei}: ${b.grund}`)
+}
+
+// ── Gegenrichtung: Ausnahmen ohne Treffer (FUN-F6-002) ──────────────────────
+const gefunden = {
+    textZeilen: new Set(text.treffer.map(t => t.text)),
+    namen: new Set(namenTreffer.map(n => n.name)),
+    laeufe: new Set(laufTreffer.map(l => `${l.datei}|${l.sig}`)),
+}
+const veraltet = veralteteAusnahmen(GESICHTET, gefunden)
+if (veraltet.length) {
+    console.log(`\nVeraltete Ausnahmen in scripts/herkunft-akzeptiert.json: ${veraltet.length} (kein Treffer mehr — löschen)`)
+    for (const v of veraltet) console.log(`  ${v.art.padEnd(10)} ${v.schluessel.slice(0, 120)}`)
+}
+
 const codeOffen = code.treffer.filter(t => !t.art)
 const textOffen = text.treffer.filter(t => !t.art)
 if (zeigt('--treffer') || codeOffen.length) {
@@ -330,8 +316,9 @@ if (zeigt('--vorschlag')) {
     }, null, 2))
 }
 const json = wert('--json')
-if (json) writeFileSync(json, JSON.stringify({ quelle: QUELLE, stand, code, text, namen: namenTreffer, laeufe: laufTreffer }, null, 2))
+if (json) writeFileSync(json, JSON.stringify({ quelle: QUELLE, stand, code, text, namen: namenTreffer, laeufe: laufTreffer, blind, veraltet }, null, 2))
 if (aufraeumen) rmSync(aufraeumen, { recursive: true, force: true })
-const offen = codeOffen.length + textOffen.length + namenOffen.length + laeufeOffen.length
-console.log(`\nUngesichtet: ${offen} (Zeilen ${codeOffen.length}, Text ${textOffen.length}, Namen ${namenOffen.length}, Läufe ${laeufeOffen.length})`)
-process.exitCode = offen ? 1 : 0
+const offen = codeOffen.length + textOffen.length + namenOffen.length + laeufeOffen.length + blindOffen.length
+console.log(`\nUngesichtet: ${offen} (Zeilen ${codeOffen.length}, Text ${textOffen.length}, Namen ${namenOffen.length}, Läufe ${laeufeOffen.length}, blind ${blindOffen.length})`)
+if (veraltet.length) console.log(`Veraltete Ausnahmen: ${veraltet.length} (aus scripts/herkunft-akzeptiert.json löschen)`)
+process.exitCode = offen || veraltet.length ? 1 : 0

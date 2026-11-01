@@ -1,10 +1,19 @@
 /**
  * Strategien im Gespräch bauen.
  *
- * Der Unterschied zum älteren `strategy-builder.js`: dort entstand eine
- * Entwurfsdatei, deren `detect()` ein Mensch noch schreiben musste. Hier
- * entsteht eine REGELBESCHREIBUNG für den Interpreter — sie ist sofort
- * lauffähig, backtestbar und im Editor weiterzubearbeiten.
+ * Es entsteht eine REGELBESCHREIBUNG für den Interpreter — sofort lauffähig,
+ * backtestbar und im Regel-Editor der Bibliothek weiterzubearbeiten. (Der
+ * ältere Code-Baukasten `strategy-builder.js`, der Entwurfsdateien mit leerem
+ * `detect()` schrieb, ist am 01.11.2026 entfallen.)
+ *
+ * ── Entwürfe ────────────────────────────────────────────────────────────
+ * `strategy_drafts` hält den Gesprächsverlauf. Ein Entwurf ohne `strategyId`
+ * ist ein angefangenes Gespräch; sobald daraus eine Strategie gespeichert
+ * wird (POST /api/strategies/rules mit `entwurfId`), hängt er an ihr, und
+ * jede weitere Frage im Editor schreibt in DENSELBEN Entwurf. Bis 01.11.2026
+ * legte jede Editor-Sitzung einen neuen, verwaisten Entwurf an. Gespeichert
+ * wird nur noch über POST /api/strategies/rules — damit steht auch die erste
+ * Fassung in der Historie.
  *
  * ── Warum das sicher ist ────────────────────────────────────────────────
  * Das Modell schreibt keinen Code und wählt nichts frei. Es füllt eine
@@ -25,8 +34,6 @@ import { ladeStrategieLlmConfig, callLLMJson, pruefeAnhaenge } from './llm.js'
 import { BAUSTEINE } from './strategies/rule-engine.js'
 import { pruefeRegeln } from './strategies/rule-validate.js'
 import { VORLAGEN } from './strategies/rule-templates.js'
-import { istEingebaut } from './strategies/index.js'
-import { ladeAlleRegelStrategien } from './strategy-api.js'
 import { logError } from './logger.js'
 
 const MAX_VERSUCHE = 3
@@ -209,7 +216,54 @@ Gib die vollständige Beschreibung erneut aus — nicht nur den geänderten Teil
     return { antwort: letzte, regeln: null, fehler: [], versuche }
 }
 
+/** Angefangene Gespräche (ohne Strategie) oder der Entwurf einer Strategie. */
+function entwurfAus(r) {
+    return {
+        id: r.id, title: r.title, sourceName: r.sourceName, status: r.status,
+        strategyId: r.strategyId || '', costUsd: Number(r.costUsd) || 0,
+        updatedAt: r.updatedAt, spec: parseJson(r.spec, null), messages: parseJson(r.messages, []),
+    }
+}
+
 export function setupRuleBuilderRoutes(app) {
+    /** Welche Anhänge kann der eingestellte Anbieter? Steuert die UI. */
+    app.get('/api/strategies/builder/capabilities', async (req, res) => {
+        try {
+            const cfg = await ladeStrategieLlmConfig()
+            const { ok: pdf } = pruefeAnhaenge(cfg.provider, [{ kind: 'pdf' }])
+            const { ok: image } = pruefeAnhaenge(cfg.provider, [{ kind: 'image' }])
+            res.json({ provider: cfg.provider, model: cfg.model, pdf, image, text: true })
+        } catch (e) {
+            res.status(500).json({ error: e.message })
+        }
+    })
+
+    /** `?strategyId=` → der Entwurf dieser Strategie, sonst die angefangenen Gespräche. */
+    app.get('/api/strategies/builder/drafts', async (req, res) => {
+        try {
+            const knex = getKnex()
+            const sid = String(req.query.strategyId || '')
+            const rows = sid
+                ? await knex('strategy_drafts').where('strategyId', sid).orderBy('id', 'desc').limit(1)
+                : await knex('strategy_drafts').where((q) => q.where('strategyId', '').orWhereNull('strategyId'))
+                    .where('status', 'draft').orderBy('id', 'desc').limit(50)
+            res.json(rows.map(entwurfAus))
+        } catch (e) {
+            logError('rule-builder', 'Entwürfe laden fehlgeschlagen', e)
+            res.status(500).json({ error: 'Entwürfe konnten nicht geladen werden' })
+        }
+    })
+
+    app.delete('/api/strategies/builder/drafts/:id', async (req, res) => {
+        try {
+            const n = await getKnex()('strategy_drafts').where('id', req.params.id).delete()
+            if (!n) return res.status(404).json({ error: 'Nicht gefunden' })
+            res.json({ ok: true })
+        } catch (e) {
+            res.status(500).json({ error: 'Entwurf konnte nicht gelöscht werden' })
+        }
+    })
+
     /**
      * Ein Gesprächsschritt: Beschreibung und/oder Datei rein, geprüfte
      * Regelstrategie raus.
@@ -229,8 +283,16 @@ export function setupRuleBuilderRoutes(app) {
             const textDateien = anhaenge.filter((a) => a.kind === 'text')
             const modellAnhaenge = anhaenge.filter((a) => a.kind !== 'text')
 
-            const draftId = Number(req.body?.draftId) || 0
-            const vorhanden = draftId ? await knex('strategy_drafts').where('id', draftId).first() : null
+            // Eine gespeicherte Strategie hat höchstens EINEN Entwurf; ihn findet
+            // auch eine neue Editor-Sitzung, die die draftId nicht kennt.
+            const strategyId = String(req.body?.strategyId || '').slice(0, 40)
+            let vorhanden = Number(req.body?.draftId)
+                ? await knex('strategy_drafts').where('id', Number(req.body.draftId)).first()
+                : null
+            if (!vorhanden && strategyId) {
+                vorhanden = await knex('strategy_drafts').where('strategyId', strategyId).orderBy('id', 'desc').first()
+            }
+            const draftId = vorhanden?.id || 0
             const verlauf = vorhanden ? parseJson(vorhanden.messages, []) : []
 
             const cfg = await ladeStrategieLlmConfig()
@@ -311,6 +373,7 @@ export function setupRuleBuilderRoutes(app) {
                 costUsd: (Number(vorhanden?.costUsd) || 0) + antwort.costUsd,
                 updatedAt: knex.fn.now(),
             }
+            if (strategyId) Object.assign(datensatz, { strategyId, status: 'generated' })
 
             const isPg = knex.client.config.client === 'pg'
             let id = draftId
@@ -339,66 +402,6 @@ export function setupRuleBuilderRoutes(app) {
             })
         } catch (e) {
             logError('rule-builder', 'Chat fehlgeschlagen', e)
-            res.status(500).json({ error: e.message })
-        }
-    })
-
-    /**
-     * Aus dem Entwurf eine echte Strategie machen.
-     * Erst hier wird registriert — vorher kann nichts davon handeln.
-     */
-    app.post('/api/strategies/builder/rules/:id/save', async (req, res) => {
-        try {
-            const knex = getKnex()
-            const row = await knex('strategy_drafts').where('id', req.params.id).first()
-            if (!row) return res.status(404).json({ error: 'Nicht gefunden' })
-
-            const roh = parseJson(row.spec, null)
-            if (!roh) return res.status(400).json({ error: 'Dieser Entwurf hat noch keine Beschreibung' })
-
-            // Erneut prüfen statt der gespeicherten Fassung zu vertrauen: zwischen
-            // Erzeugen und Speichern kann sich das Vokabular geändert haben.
-            const geprueft = pruefeRegeln(roh)
-            if (!geprueft.ok) return res.status(400).json({ error: geprueft.fehler.join('; ') })
-
-            const regeln = geprueft.regeln
-            if (istEingebaut(regeln.id)) {
-                return res.status(409).json({
-                    error: `"${regeln.id}" ist von einer eingebauten Strategie belegt — bitte umbenennen.`,
-                })
-            }
-            const doppelt = await knex('rule_strategies').where('strategyId', regeln.id).first()
-            if (doppelt) {
-                return res.status(409).json({
-                    error: `"${regeln.id}" gibt es schon. Bitte im Entwurf umbenennen.`,
-                })
-            }
-
-            const isPg = knex.client.config.client === 'pg'
-            const datensatz = {
-                strategyId: regeln.id,
-                name: regeln.name || regeln.id,
-                description: String(roh.description || '').slice(0, 1000),
-                enabled: true,
-                rules: JSON.stringify(regeln),
-                source: 'chat',
-                createdAt: knex.fn.now(),
-                updatedAt: knex.fn.now(),
-            }
-            const id = isPg
-                ? (await knex('rule_strategies').insert(datensatz).returning('id'))[0]?.id
-                : (await knex('rule_strategies').insert(datensatz))[0]
-
-            await knex('strategy_drafts').where('id', row.id)
-                .update({ status: 'generated', updatedAt: knex.fn.now() })
-            await ladeAlleRegelStrategien()
-
-            res.json({
-                ok: true, id, strategyId: regeln.id,
-                hinweise: geprueft.hinweise,
-            })
-        } catch (e) {
-            logError('rule-builder', 'Speichern fehlgeschlagen', e)
             res.status(500).json({ error: e.message })
         }
     })

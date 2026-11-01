@@ -20,6 +20,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import { Kreisel } from '../basis'
+import { radarTfFuer } from '../../utils/chart/radarTf.js'
 
 const props = defineProps({
     symbol: { type: String, required: true },
@@ -28,15 +29,7 @@ const props = defineProps({
 })
 const { t } = useI18n()
 
-const RADAR_TF = ['5m', '15m', '1h', '4h']
-const MIN = { '1m': 1, '3m': 3, '5m': 5, '15m': 15, '30m': 30, '1h': 60, '2h': 120, '4h': 240 }
-const radarTf = computed(() => {
-    if (RADAR_TF.includes(props.interval)) return props.interval
-    const m = MIN[props.interval]
-    if (m == null || m > 240) return '4h'
-    if (m < 5) return '5m'
-    return m <= 15 ? '15m' : m <= 60 ? '1h' : '4h'
-})
+const radarTf = computed(() => radarTfFuer(props.interval))
 
 const daten = ref(null)
 const fehler = ref('')

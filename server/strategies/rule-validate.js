@@ -21,6 +21,43 @@ const TIMEFRAMES = ['1m', '3m', '5m', '15m', '30m', '1h', '2h', '4h', '6h', '8h'
 const MAX_INDIKATOREN = 12
 const MAX_BEDINGUNGEN = 20
 
+/**
+ * Codes für Abbrüche und Filter werden Schlüssel in den Zählern des Trichters.
+ * Namen, die jedes Objekt schon von `Object.prototype` erbt, verfälschten dort
+ * die Zahlen: `constructor` ergab „function Object() { [native code] }111…",
+ * `__proto__` liess alle Ablehnungen verschwinden (Audit 4.3.4, BUG-S4-004).
+ * Solche Codes bekommen ein Präfix statt eines Fehlers — eine gespeicherte
+ * Strategie mit so einem Namen lädt weiter.
+ */
+function sichererCode(roh) {
+    const code = String(roh).toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40)
+    return (code in Object.prototype || code === 'prototype') ? `code_${code}`.slice(0, 40) : code
+}
+
+/**
+ * Komplexitätsgrenzen für Regelwerke (Audit 4.3.4, SEC-S4-001).
+ *
+ * Ein Entwurf aus dem Editor oder vom Agenten kann sonst einen Backtest
+ * bauen, der den Prozess stundenlang beschäftigt: Stochastik und Bollinger
+ * rechnen je Kerze über ihre ganze Periode, Pivots über ihr ganzes Fenster —
+ * eine Stochastik mit Periode 10 000 blockierte die Ereignisschleife je Takt
+ * über eine Sekunde, und das Sichtfenster wächst seit FUN-S4-003 mit der
+ * Periode mit. Die Zahl der Bausteine ist schon gedeckelt (12 Indikatoren, je
+ * 20 Bedingungen); verschachteln lassen sich Bedingungen nicht. Begrenzt
+ * werden deshalb die Längen — auch die Obergrenze eines Parameters, auf den
+ * eine Länge zeigt, weil Optimierung und Stabilität bis dorthin variieren.
+ *
+ * Die eingebauten Vorlagen bleiben weit darunter (längste Periode 400,
+ * längstes Rückblickfenster 1000).
+ */
+export const KOMPLEXITAET = {
+    periode: 1000,       // Indikatorperioden (EMA, SMA, MACD langsam, Bollinger, ADX, Stochastik …)
+    glaettung: 100,      // MACD-Signal, Stochastik-Glättungen
+    pivot: 100,          // Pivot-Stärke links/rechts des Auslösers
+    fenster: 1000,       // Rückblick der Berührungszähler
+    zeitablauf: 10000,   // Zeitablauf eines wartenden Setups
+}
+
 /** Erlaubte Referenzen: Anker, bekannte Indikator-Id, Zahl, Parameter. */
 function pruefeRef(ref, indikatorIds, paramKeys, wo, fehler) {
     if (typeof ref === 'number') return ref
@@ -50,7 +87,7 @@ function pruefeBedingung(b, indikatorIds, paramKeys, wo, fehler) {
     }
 
     const raus = { op: b.op }
-    if (b.code) raus.code = String(b.code).toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40)
+    if (b.code) raus.code = sichererCode(b.code)
 
     // Diese Vergleiche brauchen keine Seiten
     const ohneSeiten = ['isBullish', 'isBearish', 'higherThanPrevSignal', 'lowerThanPrevSignal',
@@ -113,7 +150,66 @@ export function regelnUnterscheidenSich(a, b) {
     return kern(a) !== kern(b)
 }
 
-export function pruefeRegeln(roh) {
+/**
+ * Prüft die Komplexitätsgrenzen (`KOMPLEXITAET`) einer bereits bereinigten
+ * Regelbeschreibung. Eine Länge, die auf einen Parameter zeigt, zählt mit
+ * dessen Obergrenze.
+ *
+ * @returns {string[]} Fehlertexte, leer wenn alles im Rahmen liegt
+ */
+export function pruefeKomplexitaet(regeln) {
+    const fehler = []
+    const params = new Map((regeln?.params || []).map((p) => [p.key, p]))
+    const groesster = (wert) => {
+        if (wert && typeof wert === 'object' && wert.param !== undefined) {
+            const p = params.get(wert.param)
+            return p && p.type !== 'boolean' ? Math.max(Number(p.max) || 0, Number(p.default) || 0) : 0
+        }
+        return Number(wert) || 0
+    }
+    const grenze = (wert, max, wo) => {
+        const n = groesster(wert)
+        if (n > max) {
+            const viaParam = wert && typeof wert === 'object' && wert.param !== undefined
+            fehler.push(`${wo}: ${n} liegt über der Grenze von ${max}`
+                + (viaParam ? ` (Obergrenze von Parameter "${wert.param}")` : ''))
+        }
+    }
+    for (const ind of regeln?.indicators || []) {
+        const wo = `Indikator ${ind.id}`
+        grenze(ind.period, KOMPLEXITAET.periode, `${wo}: Periode`)
+        if (ind.slow !== undefined) grenze(ind.slow, KOMPLEXITAET.periode, `${wo}: langsame Periode`)
+        if (ind.fast !== undefined) grenze(ind.fast, KOMPLEXITAET.periode, `${wo}: schnelle Periode`)
+        if (ind.signal !== undefined) grenze(ind.signal, KOMPLEXITAET.glaettung, `${wo}: Signalglättung`)
+        if (ind.smoothK !== undefined) grenze(ind.smoothK, KOMPLEXITAET.glaettung, `${wo}: Glättung %K`)
+        if (ind.smoothD !== undefined) grenze(ind.smoothD, KOMPLEXITAET.glaettung, `${wo}: Glättung %D`)
+        if (ind.pivot !== undefined) grenze(ind.pivot, KOMPLEXITAET.pivot * 2, `${wo}: Pivot-Stärke`)
+    }
+    const sig = regeln?.signal || {}
+    if (sig.left !== undefined) grenze(sig.left, KOMPLEXITAET.pivot, 'Auslöser: Kerzen links')
+    if (sig.right !== undefined) grenze(sig.right, KOMPLEXITAET.pivot, 'Auslöser: Kerzen rechts')
+    if (sig.window !== undefined) grenze(sig.window, KOMPLEXITAET.fenster, 'Auslöser: Rückblick')
+    if (sig.prevOpposite !== undefined) grenze(sig.prevOpposite, KOMPLEXITAET.pivot, 'Auslöser: Gegenkerzen')
+    for (const b of [...(regeln?.signalFilters || []), ...(regeln?.entryFilters || []),
+        ...(regeln?.invalidations || []).map((v) => v.when || v)]) {
+        if (b?.op === 'priorTouchesGte') grenze(b.window, KOMPLEXITAET.fenster, 'Berührungszähler: Rückblick')
+    }
+    for (const v of regeln?.invalidations || []) {
+        if (v.type === 'timeout') grenze(v.candles, KOMPLEXITAET.zeitablauf, 'Zeitablauf')
+    }
+    grenze(regeln?.maxHoldCandles, KOMPLEXITAET.zeitablauf, 'Maximale Haltedauer')
+    return fehler
+}
+
+/**
+ * @param {object} roh
+ * @param {object} [opts]  `komplexitaet: false` lässt die Komplexitätsgrenzen
+ *                         aus — nur für das Laden schon GESPEICHERTER
+ *                         Strategien, die vor den Grenzen entstanden sind und
+ *                         weiterlaufen sollen. Neues (Entwurf, Speichern,
+ *                         Agent) wird immer geprüft.
+ */
+export function pruefeRegeln(roh, { komplexitaet = true } = {}) {
     const fehler = []
     if (!roh || typeof roh !== 'object') return { ok: false, fehler: ['Keine Regelbeschreibung'] }
 
@@ -282,7 +378,7 @@ export function pruefeRegeln(roh) {
 
     const invalidations = []
     for (const [n, v] of (Array.isArray(roh.invalidations) ? roh.invalidations : []).slice(0, MAX_BEDINGUNGEN).entries()) {
-        const code = String(v?.code || `invalid_${n}`).toLowerCase().replace(/[^a-z0-9_]/g, '_').slice(0, 40)
+        const code = sichererCode(v?.code || `invalid_${n}`)
         if (v?.type === 'timeout') {
             invalidations.push({
                 type: 'timeout', code,
@@ -321,6 +417,27 @@ export function pruefeRegeln(roh) {
     // Ohne Signalfilter feuert die Strategie auf JEDEM Signal. Das ist selten
     // gewollt und im Backtest teuer — deshalb ein Hinweis, kein Fehler.
     const hinweise = []
+
+    // Stop am Korrekturtief UND ein Limit, das der Kurs von oben anläuft: das
+    // geht real nicht. Bis zur Füllung liegt das Korrekturtief über dem Limit,
+    // und das Tief der Füllkerze kennt man erst mit ihrem Schluss. Bis
+    // 01.11.2026 nahm der Interpreter genau dieses Tief — ein Stop in der
+    // Füllkerze war damit unmöglich. Gerechnet wird mit dem letzten
+    // bestätigten Swing-Tief (GUSS-PDF S. 12: Stop beim Einstieg „unter dem
+    // letzten Tief"). Bei „beide Richtungen" ist immer eine Seite ein Limit.
+    const KORREKTUR_ERSATZ = { correctionLow: 'lastSwingLow', correctionHigh: 'lastSwingHigh' }
+    if (entry.type === 'touch' && typeof stopLoss.anchor === 'string' && KORREKTUR_ERSATZ[stopLoss.anchor]) {
+        const longLimit = entry.from !== 'below'
+        const betroffen = direction === 'both'
+            || (direction === 'long' && longLimit && stopLoss.anchor === 'correctionLow')
+            || (direction === 'short' && !longLimit && stopLoss.anchor === 'correctionHigh')
+        if (betroffen) {
+            stopLoss.anchor = KORREKTUR_ERSATZ[stopLoss.anchor]
+            hinweise.push('Stop am Korrekturtief geht mit einem Limit-Einstieg nicht: das Tief steht erst nach '
+                + 'der Füllung fest. Gerechnet wird mit dem letzten bestätigten Swing-Tief bzw. -Hoch.')
+        }
+    }
+
     if (!signalFilters.length) hinweise.push('Ohne Signalfilter entsteht bei jedem Signal ein Setup.')
     if (!invalidations.length) hinweise.push('Ohne Abbruchbedingung wartet ein Setup unbegrenzt auf den Einstieg.')
     // Lange Anker brauchen ein Sichtfenster, das die Engine im Live-Betrieb
@@ -370,6 +487,8 @@ export function pruefeRegeln(roh) {
         maxHoldCandles: Math.max(0, Math.round(Number(roh.maxHoldCandles) || 0)),
         paramGroups: [{ id: 'rules', labelKey: 'strategies.groups.rules' }],
     }
+
+    if (komplexitaet) fehler.push(...pruefeKomplexitaet(regeln))
 
     return { ok: fehler.length === 0, fehler, hinweise, regeln }
 }

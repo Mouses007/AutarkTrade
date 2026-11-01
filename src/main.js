@@ -7,6 +7,7 @@ import App from './App.vue'
 import router from './router'
 import i18n, { starteSprache } from './i18n'
 import { starteLabelVerknuepfung } from './utils/labelVerknuepfung.js'
+import { starteDatumsfelder } from './utils/datumsfeld.js'
 
 // Seit S9 ohne Bootstrap: Grundstil und Reset stehen in basis.css, Symbole
 // zeichnet src/components/basis/Symbol.vue. Quill laden Bewertungen.vue und
@@ -38,4 +39,6 @@ starteSprache().finally(() => {
     app.mount('#app')
     // Beschriftungen ohne `for` mit ihrem Feld verknüpfen (Audit A4-22)
     starteLabelVerknuepfung()
+    // Klick ins Datumsfeld öffnet den Kalender, nicht nur das Symbol
+    starteDatumsfelder()
 })

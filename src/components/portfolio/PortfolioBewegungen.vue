@@ -7,6 +7,11 @@
  * eigener Transfer (zählt nicht), Kauf extern, Einkommen, ignorieren. Das ist
  * steuerlich der wichtigste Handgriff: ohne ihn wird ein Umzug vom Börsen-
  * konto auf den Ledger zum Einkommen.
+ *
+ * Fiat-Eingänge fragt die Liste nicht: Geld vom eigenen Bankkonto zählt ohne
+ * Einordnung richtig. Sparplan-Lastschrift und Kauf (Bitpanda) paart der
+ * Abruf selbst und zeigt sie als „Sparplan“; als DCA markierte Käufe anderer
+ * Orte (Crypto.com-Karte) tragen „DCA“.
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -77,7 +82,8 @@ const tage = computed(() => {
 })
 
 const SYMBOL = { kauf: 'plus', verkauf: 'minus', tausch: 'tausch', einzahlung: 'pfeilSchraegAb', auszahlung: 'pfeilHochRechts', umbuchung: 'pfeilKreisRechts', staking: 'wachstum', airdrop: 'stern', belohnung: 'stern', gebuehr: 'prozent', sonstiges: 'frage' }
-const istOffen = (z) => !z.einordnung && !z.transferMit && ['einzahlung', 'auszahlung', 'sonstiges'].includes(z.art)
+// `pruefbar` setzt der Server nach derselben Regel wie „Zu prüfen“ (ohne Fiat, ohne Sparplan).
+const istOffen = (z) => z.pruefbar && !z.einordnung
 // In „Alle" stehen die Knöpfe hinter einem kleinen „Einordnen" — sonst trägt jede zweite Zeile vier Knöpfe.
 const aufgeklappt = ref(new Set())
 const knoepfeSichtbar = (z) => filter.value === 'offen' || aufgeklappt.value.has(z.id)
@@ -148,6 +154,10 @@ const zeitText = (ms) => new Date(Number(ms)).toLocaleTimeString('de-CH', { hour
                         <Pille v-if="z.transferMit" ton="neutral" symbol="pfeilKreisRechts" :title="partner(z) ? quellenName(partner(z).quelle) : ''">
                             {{ z.transferSicher ? t('portfolio.transferSicher') : t('portfolio.transferVermutet') }}
                         </Pille>
+                        <Pille v-if="z.sparplanMit" ton="neutral" symbol="wiederholen" :title="t('portfolio.sparplanTitel')">
+                            {{ z.art === 'kauf' || !z.sparplan ? t('portfolio.sparplan') : t('portfolio.sparplanCoin', { coin: z.sparplan }) }}
+                        </Pille>
+                        <Pille v-else-if="z.dca" ton="neutral" symbol="wiederholen" :title="t('portfolio.dcaTitel', { a: z.dca })">{{ t('portfolio.dca') }}</Pille>
                         <Pille v-if="z.einordnung" ton="akzent">{{ t('portfolio.ein_' + z.einordnung) }}</Pille>
                     </div>
                     <div class="pb-unter at-gedaempft">

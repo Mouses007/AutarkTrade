@@ -5,7 +5,8 @@
  * Verbindungslinie in der Farbe des Ergebnisses, Stop und Ziel als Stufen
  * über die Laufzeit — mit jedem Setzen, Verschieben und Entfernen aus dem
  * Bitunix-Verlauf (`tpslStufen`), ausgelöste als ✕ —, Teil-Fills als kleine Punkte und am Ausstieg
- * das Ergebnis in R (wenn ein Stop bekannt ist) und in USDT.
+ * das Ergebnis in R (wenn ein Stop bekannt ist) und in USDT — im Fotomodus für
+ * die Chart-KI (`setzeFoto`) nur in R.
  *
  * Offene Positionen: die Preislinien (Achsenbeschriftung für Einstieg, Stop,
  * Ziel, Liquidation) setzt das Panel; diese Ebene zeichnet dazu den Trade
@@ -76,6 +77,12 @@ export class JournalEbene {
 
     setzeOffene(liste) {
         this.offene = (liste || []).filter((p) => p.einstiegT && p.einstieg)
+        this.requestUpdate()
+    }
+
+    /** Foto für die KI (`ChartPanel.bildschirmfoto({ ohneKontowerte })`): Ergebnis nur in R, ohne USDT. */
+    setzeFoto(an) {
+        this.foto = !!an
         this.requestUpdate()
     }
 
@@ -206,7 +213,7 @@ export class JournalEbene {
             ctx.strokeStyle = '#131722'; ctx.stroke()
             const teile = []
             if (tr.r != null) teile.push(`${tr.r >= 0 ? '+' : ''}${tr.r.toFixed(2)}R`)
-            if (tr.netto != null) teile.push(`${tr.netto >= 0 ? '+' : ''}${tr.netto.toFixed(2)}`)
+            if (tr.netto != null && !this.foto) teile.push(`${tr.netto >= 0 ? '+' : ''}${tr.netto.toFixed(2)}`)
             const text = teile.join(' · ')
             if (text) {
                 const b = ctx.measureText(text).width

@@ -1,7 +1,7 @@
 <script setup>
 /**
- * Spot-Portfolio (Beta): Ansichten auf einer Route — Übersicht, Bewegungen,
- * Steuern, Totalverluste, Quellen. Das Seitenmenü schaltet über den Pfad; die Seite
+ * Spot-Portfolio (Beta): Ansichten auf einer Route — Übersicht, DCA-Portfolio,
+ * Bewegungen, Staking, Steuern, Totalverluste, Quellen. Das Seitenmenü schaltet über den Pfad; die Seite
  * bleibt stehen, ein laufender Abruf auch.
  */
 import { computed, onMounted } from 'vue'
@@ -10,6 +10,8 @@ import { useI18n } from 'vue-i18n'
 import { ladeUebersicht, uebersicht, laedt, ladeFehler } from '../stores/portfolio.js'
 import PortfolioUebersicht from '../components/portfolio/PortfolioUebersicht.vue'
 import PortfolioBewegungen from '../components/portfolio/PortfolioBewegungen.vue'
+import PortfolioStaking from '../components/portfolio/PortfolioStaking.vue'
+import PortfolioDca from '../components/portfolio/PortfolioDca.vue'
 import PortfolioQuellen from '../components/portfolio/PortfolioQuellen.vue'
 import PortfolioSteuer from '../components/portfolio/PortfolioSteuer.vue'
 import PortfolioTotalverluste from '../components/portfolio/PortfolioTotalverluste.vue'
@@ -17,7 +19,7 @@ import { Hinweis, Kreisel } from '../components/basis/index.js'
 
 const { t } = useI18n()
 const route = useRoute()
-const reiter = computed(() => (['bewegungen', 'quellen', 'steuer', 'totalverluste'].includes(route.params.reiter) ? route.params.reiter : 'uebersicht'))
+const reiter = computed(() => (['dca', 'bewegungen', 'staking', 'quellen', 'steuer', 'totalverluste'].includes(route.params.reiter) ? route.params.reiter : 'uebersicht'))
 
 onMounted(ladeUebersicht)
 </script>
@@ -28,7 +30,9 @@ onMounted(ladeUebersicht)
         <div v-if="laedt && !uebersicht" class="at-mittig at-py-5"><Kreisel /></div>
         <template v-else>
             <PortfolioUebersicht v-if="reiter === 'uebersicht'" />
+            <PortfolioDca v-else-if="reiter === 'dca'" />
             <PortfolioBewegungen v-else-if="reiter === 'bewegungen'" />
+            <PortfolioStaking v-else-if="reiter === 'staking'" />
             <PortfolioSteuer v-else-if="reiter === 'steuer'" />
             <PortfolioTotalverluste v-else-if="reiter === 'totalverluste'" />
             <PortfolioQuellen v-else />

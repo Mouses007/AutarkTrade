@@ -15,9 +15,11 @@ import {
     zeitZuLogisch, logischZuZeit, logischZuX, abstandZuStrecke, verlaengere, preisAufGerade,
     fibPreise, positionWerte, magnet, imRechteck, messung, dauerText, fortlaufendePunkte,
     textInBox, textAnLinie, freieZeile, rechteckGezogen, kreuzVerschoben, istTipp,
+    FIB_STUFEN, FIB_EXT_STUFEN, fibExtPreise, fibStufenAus, pfeilSpitze, ellipseLage, abstandZuZug, duenneStrich,
 } from './geometrie.js'
-import { werkzeug, stilFuer } from './werkzeuge.js'
+import { werkzeug, stilFuer, mindestPunkte, PFAD_MAX } from './werkzeuge.js'
 import { volumenprofil } from '../../../../shared/volumenprofil.js'
+import { ankerVwap } from '../../../../shared/indicators.js'
 import { rechnePosition } from '../../../../shared/tradeRechner.js'
 
 const ANKER = 5
@@ -73,6 +75,7 @@ export class ZeichenEbene {
         this.alarme = []              // Preis-Alarme als Linien: [{ id, preis, gesperrt }] — ziehbar, Tipp öffnet ihr Menü
         this.alarmZug = null          // { id, pointerId, y0, preis, gesperrt, bewegt }
         this.ziehen = null            // { id, anker, x0, y0, L0, p0, orig }
+        this.strich = null            // Pinsel: { id, px: [{x, y}], punkte: [{t, p}] } solange gemalt wird
         this.vorschau = new Map()     // id → punkte während des Ziehens
         this.temporaer = []           // Vorschau (KI-Analyse): gezeichnet, nur anklickbar (rueckruf.kiKlick), nicht verschiebbar
         this.verschlucke = false
@@ -167,7 +170,8 @@ export class ZeichenEbene {
         this.entwurf = null
         this.finger = null
         // Auf dem Handy steht das Fadenkreuz sofort in der Mitte — man sieht, wo der erste Punkt landet.
-        this.kreuz = typ && this.fadenkreuzAn && this.touchGeraet ? this.mitte() : null
+        this.strich = null
+        this.kreuz = typ && !werkzeug(typ)?.frei && this.fadenkreuzAn && this.touchGeraet ? this.mitte() : null
         if (!typ) this.fang = null
         if (typ) this.auswahlId = null
         this.requestUpdate()
@@ -193,9 +197,12 @@ export class ZeichenEbene {
     }
 
     abbrechen() {
+        // Ein Pfad mit schon zwei festen Punkten wird mit Esc fertig, nicht verworfen
+        if (this.pfadFertig()) return true
         const etwas = !!(this.entwurf || this.messErgebnis || this.werkzeugTyp)
         this.entwurf = null
         this.finger = null
+        this.strich = null
         if (this.kreuz) this.kreuz = this.werkzeugTyp && this.touchGeraet ? this.kreuz : null
         this.messErgebnis = null
         this.requestUpdate()
@@ -240,6 +247,26 @@ export class ZeichenEbene {
 
     aufKerze(L) { return L >= 0 && L < this.kerzen.length }
 
+    /** Punkt ohne Einrasten (Pinsel): die Zeit folgt dem Zeiger auch zwischen zwei Kerzen. */
+    freierPunkt(x, y) {
+        const L = this.chart.timeScale().coordinateToLogical(x)
+        const p = this.vonY(y)
+        if (L == null || p == null) return null
+        const t = logischZuZeit(L, this.zeiten, this.iv)
+        return t == null ? null : { t: Math.round(t), p }
+    }
+
+    /**
+     * Waagrechte Ausdehnung der Fib-Extension in Pixeln: vom Rücksetzer so weit
+     * nach rechts, wie der Impuls breit ist (mindestens 40 px), oder mit
+     * „verlängern" bis zum Rand.
+     */
+    fibExtSpanne(pz, s, breite) {
+        const links = pz[2].x
+        const rechts = s.rechts ? breite : links + Math.max(40, Math.abs(pz[1].x - pz[0].x))
+        return [Math.min(links, rechts), Math.max(links, rechts)]
+    }
+
     /** Fangpunkt unter dem Zeiger zeigen, solange gezeichnet wird und der Magnet wirkt. */
     merkeFang(x, y, e) {
         this.letzterZeiger = { x, y }
@@ -275,6 +302,18 @@ export class ZeichenEbene {
 
     punkteVon(z) { return this.vorschau.get(z.id) || z.punkte }
 
+    /*
+     * Hat die Zeichnung genug Punkte für ihren Typ? Eine Ellipse mit einem
+     * Punkt (direkter API-Aufruf, veränderte Sicherung) warf in jedem Frame —
+     * danach fehlten alle späteren Zeichnungen, Entwurf und Fadenkreuz, und
+     * ältere waren nicht mehr anklickbar. Unvollständige werden übersprungen
+     * (in der Objektliste bleiben sie und lassen sich dort löschen).
+     */
+    vollstaendig(z) {
+        const pk = this.punkteVon(z)
+        return Array.isArray(pk) && pk.length >= mindestPunkte(z.typ) && pk.every((q) => q && Number.isFinite(q.t) && Number.isFinite(q.p))
+    }
+
     /** Punkte, wie sie gezeichnet und getroffen werden: „fortlaufend" bis zur aktuellen Kerze verlängert. */
     bildPunkte(z, pk) {
         const s = z.stil || {}
@@ -293,6 +332,10 @@ export class ZeichenEbene {
             case 'horizontale': return [{ x: mitte(X(pk[0].t)), y: Y(pk[0].p) }]
             case 'strahlH': return [{ x: X(pk[0].t), y: Y(pk[0].p) }]
             case 'vertikale': return [{ x: X(pk[0].t), y: 40 }]
+            case 'avwap': {
+                const av = this.avwapFuer(pk, stilFuer(z))
+                return [{ x: X(pk[0].t), y: av?.ab != null ? Y(av.vwap[av.ab]) : Y(pk[0].p) }]
+            }
             case 'position': {
                 const x0 = X(pk[0].t)
                 const x1 = X(pk[1].t)
@@ -314,6 +357,10 @@ export class ZeichenEbene {
                     { x: xa, y: ym }, { x: xb, y: ym }, { x: xm, y: ya }, { x: xm, y: yb },
                 ]
             }
+            // Pinsel: keine Anfasspunkte (bis zu 200 Punkte) — er wird nur als Ganzes verschoben
+            case 'pinsel': return []
+            // Smiley: kein Anker (er verdeckte das Gesicht) — gezogen wird es als Ganzes
+            case 'emoji': return []
             case 'kanal': {
                 // Ecken der Grundlinie, dazu je Kante ein Mittelpunkt: daran verschiebt man
                 // die Kante parallel. Der dritte Punkt bleibt unsichtbar, er trägt nur den Abstand.
@@ -341,7 +388,7 @@ export class ZeichenEbene {
         const offen = [...this.zeichnungen].reverse()
         const reihe = [...offen.filter((z) => !z.gesperrt), ...offen.filter((z) => z.gesperrt)]
         const ausgewaehlt = reihe.find((z) => z.id === this.auswahlId)
-        if (ausgewaehlt && !ausgewaehlt.gesperrt) {
+        if (ausgewaehlt && !ausgewaehlt.gesperrt && this.vollstaendig(ausgewaehlt)) {
             const a = this.ankerVon(ausgewaehlt, breite).findIndex((q) => q.x != null && q.y != null && Math.hypot(q.x - x, q.y - y) <= ANKER + 3)
             if (a >= 0) return { z: ausgewaehlt, anker: a }
         }
@@ -358,6 +405,12 @@ export class ZeichenEbene {
     }
 
     trifft(z, x, y, breite) {
+        // Eine kaputte Zeichnung darf den Treffertest der übrigen nicht abbrechen
+        if (!this.vollstaendig(z)) return false
+        try { return this.trifftRoh(z, x, y, breite) } catch { return false }
+    }
+
+    trifftRoh(z, x, y, breite) {
         const pk = this.bildPunkte(z, this.punkteVon(z))
         const s = stilFuer(z)
         const X = (t) => this.zuX(t)
@@ -366,6 +419,18 @@ export class ZeichenEbene {
             case 'horizontale': { const yy = Y(pk[0].p); return yy != null && Math.abs(y - yy) <= TREFFER }
             case 'strahlH': { const yy = Y(pk[0].p); const xx = X(pk[0].t); return yy != null && xx != null && x >= xx - TREFFER && Math.abs(y - yy) <= TREFFER }
             case 'vertikale': { const xx = X(pk[0].t); return xx != null && Math.abs(x - xx) <= TREFFER }
+            case 'avwap': {
+                const av = this.avwapFuer(pk, s)
+                if (!av || av.ab == null) return false
+                let vx = null, vy = null
+                for (let i = av.ab; i < this.kerzen.length; i++) {
+                    const kx = X(this.kerzen[i].t), ky = Y(av.vwap[i])
+                    if (kx == null || ky == null) continue
+                    if (vx != null && abstandZuStrecke(x, y, vx, vy, kx, ky) <= TREFFER) return true
+                    vx = kx; vy = ky
+                }
+                return vx != null && Math.hypot(x - vx, y - vy) <= TREFFER
+            }
             case 'trendlinie':
             case 'strahl': {
                 const [a, b] = pk.map((q) => ({ x: X(q.t), y: Y(q.p) }))
@@ -393,7 +458,39 @@ export class ZeichenEbene {
                 const x1 = X(pk[0].t), x2 = s.rechts ? breite : X(pk[1].t)
                 if (x1 == null || x2 == null) return false
                 if (x < Math.min(x1, x2) - TREFFER || x > Math.max(x1, x2) + TREFFER) return false
-                return fibPreise(pk[0].p, pk[1].p).some((f) => Math.abs(Y(f.preis) - y) <= TREFFER)
+                return fibPreise(pk[0].p, pk[1].p, fibStufenAus(s.stufen, FIB_STUFEN).map((f) => f.w)).some((f) => Math.abs(Y(f.preis) - y) <= TREFFER)
+            }
+            case 'fibExt': {
+                if (pk.length < 3) return false
+                const pz = pk.map((q) => ({ x: X(q.t), y: Y(q.p) }))
+                if (pz.some((q) => q.x == null || q.y == null)) return false
+                if (abstandZuZug(x, y, pz) <= TREFFER) return true
+                const [links, rechts] = this.fibExtSpanne(pz, s, breite)
+                if (x < links - TREFFER || x > rechts + TREFFER) return false
+                return fibExtPreise(pk[0].p, pk[1].p, pk[2].p, fibStufenAus(s.stufen, FIB_EXT_STUFEN).map((f) => f.w))
+                    .some((f) => Math.abs(Y(f.preis) - y) <= TREFFER)
+            }
+            case 'pfeil': {
+                const ax = X(pk[0].t), ay = Y(pk[0].p), bx = X(pk[1].t), by = Y(pk[1].p)
+                if ([ax, ay, bx, by].some((v) => v == null)) return false
+                return abstandZuStrecke(x, y, ax, ay, bx, by) <= TREFFER + (s.breite || 1) / 2
+            }
+            case 'ellipse': {
+                const x1 = X(pk[0].t), y1 = Y(pk[0].p), x2 = X(pk[1].t), y2 = Y(pk[1].p)
+                if ([x1, y1, x2, y2].some((v) => v == null)) return false
+                const l = ellipseLage(x, y, x1, y1, x2, y2)
+                return l.abstand <= TREFFER || (s.fuellung && l.innen)
+            }
+            case 'pinsel':
+            case 'pfad': {
+                const zug = pk.map((q) => ({ x: X(q.t), y: Y(q.p) })).filter((q) => q.x != null && q.y != null)
+                return abstandZuZug(x, y, zug) <= TREFFER + (s.breite || 2) / 2
+            }
+            case 'emoji': {
+                const xx = X(pk[0].t), yy = Y(pk[0].p)
+                if (xx == null || yy == null) return false
+                const h = (s.groesse || 28) / 2 + 2
+                return Math.abs(x - xx) <= h && Math.abs(y - yy) <= h
             }
             case 'position': {
                 const x1 = X(pk[0].t), x2 = X(pk[1].t)
@@ -454,7 +551,7 @@ export class ZeichenEbene {
         this.fadenkreuzAn = !!an
         this.touchGeraet = !!touchGeraet
         if (!this.fadenkreuzAn) { this.kreuz = null; this.finger = null }
-        else if (this.werkzeugTyp && this.touchGeraet && !this.kreuz) this.kreuz = this.mitte()
+        else if (this.werkzeugTyp && !werkzeug(this.werkzeugTyp)?.frei && this.touchGeraet && !this.kreuz) this.kreuz = this.mitte()
         this.requestUpdate()
     }
 
@@ -479,6 +576,21 @@ export class ZeichenEbene {
     zeigerUnten(e) {
         if (e.button !== undefined && e.button !== 0) return
         const { x, y, innen } = this.lokal(e)
+        if (this.werkzeugTyp && werkzeug(this.werkzeugTyp)?.frei) {
+            // Pinsel: Maus und Finger malen direkt, auch im Fadenkreuz-Modus. Ein Strich lebt vom
+            // Ziehen; ein Fadenkreuz, das man erst schiebt und dann antippt, setzt nur Einzelpunkte.
+            if (!innen) return
+            this.verschlucke = true
+            e.stopPropagation()
+            e.preventDefault()
+            const pt = this.freierPunkt(x, y)
+            if (!pt) return
+            this.strich = { id: e.pointerId, px: [{ x, y }], punkte: [pt] }
+            this.entwurf = { typ: this.werkzeugTyp, punkte: this.strich.punkte }
+            try { this.huelle.setPointerCapture(e.pointerId) } catch { /* egal */ }
+            this.requestUpdate()
+            return
+        }
         if (this.werkzeugTyp && this.fadenkreuzAn && e.pointerType === 'touch') {
             // Fadenkreuz-Modus: die Berührung setzt nichts, erst das Loslassen entscheidet (Tippen oder Schieben).
             // Wo der Finger liegt, ist egal (auch auf der Preisachse) — gezeichnet wird am Fadenkreuz.
@@ -540,6 +652,19 @@ export class ZeichenEbene {
 
     zeigerBewegt(e) {
         const { x, y, innen } = this.lokal(e)
+        if (this.strich) {
+            if (e.pointerId !== this.strich.id) return
+            e.stopPropagation()
+            const letzter = this.strich.px[this.strich.px.length - 1]
+            // Erst ab 2 px Abstand ein neuer Punkt — gedünnt wird beim Loslassen
+            if (Math.hypot(x - letzter.x, y - letzter.y) < 2) return
+            const pt = this.freierPunkt(x, y)
+            if (!pt) return
+            this.strich.px.push({ x, y })
+            this.strich.punkte.push(pt)
+            this.requestUpdate()
+            return
+        }
         if (this.alarmZug) {
             const z = this.alarmZug
             if (e.pointerId !== z.pointerId) return
@@ -588,6 +713,16 @@ export class ZeichenEbene {
 
     zeigerOben(e) {
         this.verschlucke = false
+        if (this.strich) {
+            const st = this.strich
+            if (e.pointerId !== st.id) return
+            this.strich = null
+            try { this.huelle.releasePointerCapture(e.pointerId) } catch { /* egal */ }
+            // Abbruch oder nur getippt: kein Strich. Sonst ausdünnen (Pixel) und die Zeit/Preis-Punkte speichern.
+            if (e.type === 'pointercancel' || st.punkte.length < 2) { this.entwurf = null; this.requestUpdate(); return }
+            this.fertig(duenneStrich(st.px).map((i) => st.punkte[i]))
+            return
+        }
         if (this.alarmZug) {
             const z = this.alarmZug
             if (e.pointerId !== z.pointerId) return
@@ -625,9 +760,11 @@ export class ZeichenEbene {
 
     doppelklick(e) {
         const { x, y, innen } = this.lokal(e)
+        // Der Doppelklick, der einen Pfad beendet hat, gehört dem Zeichnen — nicht dem Vollbild des Charts
+        if (innen && Date.now() - (this._fertigZeit || 0) < 700) { e.stopPropagation(); return }
         if (!innen || this.werkzeugTyp) return
         const t = this.trefferTest(x, y)
-        if (t && ['text', 'horizontale', 'strahlH', 'rechteck', 'trendlinie', 'kanal'].includes(t.z.typ)) {
+        if (t && ['text', 'horizontale', 'strahlH', 'rechteck', 'trendlinie', 'kanal', 'avwap', 'volprofil', 'pfeil'].includes(t.z.typ)) {
             e.stopPropagation()
             this.rueckruf.textBearbeiten?.(t.z.id)
         } else if (t?.z.typ === 'position') {
@@ -688,6 +825,15 @@ export class ZeichenEbene {
         return neu
     }
 
+    /** Pfad im Entwurf mit mindestens zwei festen Punkten abschliessen (Enter, Esc). */
+    pfadFertig() {
+        if (!this.entwurf || !werkzeug(this.entwurf.typ)?.mehr) return false
+        const fest = this.entwurf.punkte.slice(0, -1)
+        if (fest.length < 2) return false
+        this.fertig(fest)
+        return true
+    }
+
     klick(x, y, magnetAn = this.magnetAn) {
         const pt = this.punktAus(x, y, magnetAn)
         if (!pt) return
@@ -701,12 +847,26 @@ export class ZeichenEbene {
         }
         const pk = this.entwurf.punkte
         pk[pk.length - 1] = pt
+        if (def.mehr) {
+            // Klick auf den letzten festen Punkt (auch der zweite Klick eines Doppelklicks) beendet
+            const fest = pk.slice(0, -1)
+            const letzter = fest[fest.length - 1]
+            const lx = this.zuX(letzter.t), ly = this.zuY(letzter.p)
+            const aufLetztem = lx != null && ly != null && Math.hypot(x - lx, y - ly) <= 8
+            if (aufLetztem && fest.length >= def.klicks) { this.fertig(fest); return }
+            if (aufLetztem) return
+            pk.push({ ...pt })
+            if (pk.length > PFAD_MAX) { this.fertig(pk.slice(0, PFAD_MAX)); return }
+            this.requestUpdate()
+            return
+        }
         if (pk.length < def.klicks) { pk.push({ ...pt }); this.requestUpdate(); return }
         this.fertig(pk)
     }
 
     fertig(punkte) {
         const typ = this.werkzeugTyp
+        this._fertigZeit = Date.now()
         this.entwurf = null
         this.kreuz = null
         if (typ === 'alarm') {
@@ -722,7 +882,7 @@ export class ZeichenEbene {
                 // Ziel = zweiter Klick; Stop gespiegelt bei 1R — wird danach gezogen.
                 pk = [e, { t: ende, p: z.p }, { t: ende, p: e.p - (z.p - e.p) }]
             }
-            if (typ === 'rechteck' || typ === 'fib' || typ === 'trendlinie' || typ === 'strahl') {
+            if (typ === 'rechteck' || typ === 'fib' || typ === 'trendlinie' || typ === 'strahl' || typ === 'pfeil' || typ === 'ellipse') {
                 if (pk[0].t === pk[1].t && pk[0].p === pk[1].p) { this.rueckruf.werkzeugFertig?.(); this.requestUpdate(); return }
             }
             // Auf einer Log-Skala gezeichnet: der Alarm rechnet die Linie dann ebenfalls im
@@ -747,6 +907,7 @@ export class ZeichenEbene {
         this._belegt = null
         // Gesperrte zuerst — sie liegen im Hintergrund, die offenen darüber
         for (const z of [...this.zeichnungen.filter((x) => x.gesperrt), ...this.zeichnungen.filter((x) => !x.gesperrt)]) {
+            if (!this.vollstaendig(z)) continue
             this.zeichneEine(ctx, z, this.punkteVon(z), breite, hoehe, z.id === this.auswahlId)
         }
         if (this.entwurf) this.zeichneEine(ctx, { id: -1, typ: this.entwurf.typ, stil: {} }, this.entwurfPunkte(), breite, hoehe, true)
@@ -840,6 +1001,19 @@ export class ZeichenEbene {
         ctx.font = SCHRIFT
     }
 
+    /** Fibonacci-Stufen (Retracement und Extension): Linie, Fläche zur Nachbarstufe, „Stufe (Preis)". */
+    zeichneFibStufen(ctx, stufen, links, rechts) {
+        let yv = null
+        for (const f of stufen) {
+            const y = this.zuY(f.preis)
+            if (y == null || !Number.isFinite(y)) { yv = null; continue }
+            if (yv != null) { ctx.fillStyle = mitAlpha(f.farbe, 0.08); ctx.fillRect(links, Math.min(y, yv), rechts - links, Math.abs(y - yv)) }
+            this.linie(ctx, links, y, rechts, y, { farbe: f.farbe, breite: 1, strich: 'voll' })
+            this.beschriftung(ctx, `${f.stufe} (${this.formatPreis(f.preis)})`, links + 4, y - 3, f.farbe)
+            yv = y
+        }
+    }
+
     /** Volumenprofil der geladenen Kerzen zwischen den beiden Zeitpunkten (zwischengespeichert). */
     profilFuer(pk, s) {
         const von = Math.min(pk[0].t, pk[1].t), bis = Math.max(pk[0].t, pk[1].t)
@@ -854,6 +1028,43 @@ export class ZeichenEbene {
     }
 
     /**
+     * Anchored VWAP ab dem Anker (zwischengespeichert). `ab` = Index der Kerze, in der
+     * der Anker liegt; `null`, wenn er vor den geladenen Kerzen liegt (`vor: true`) —
+     * dann gäbe es nur eine falsche Linie ab der ersten geladenen Kerze.
+     */
+    avwapFuer(pk, s) {
+        const k = this.kerzen
+        if (!k.length) return null
+        const t0 = pk[0].t
+        const letzte = k[k.length - 1]
+        const schluessel = `av|${t0}|${s.baender || 0}|${k.length}|${k[0].t}|${letzte.t}|${letzte.c}|${letzte.v}`
+        this._avCache ??= new Map()
+        if (this._avCache.has(schluessel)) return this._avCache.get(schluessel)
+        let ab = null
+        for (let i = k.length - 1; i >= 0; i--) if (k[i].t <= t0) { ab = i; break }
+        const av = ab == null ? { ab: null, vor: true } : { ab, ...ankerVwap(k, ab, { baender: Number(s.baender) || 0 }) }
+        if (this._avCache.size > 50) this._avCache.clear()
+        this._avCache.set(schluessel, av)
+        return av
+    }
+
+    /** Polylinie über die Kerzen ab `ab` (Werte je Kerze, `null` = Lücke). */
+    kurve(ctx, werte, ab, s) {
+        ctx.beginPath()
+        ctx.strokeStyle = s.farbe
+        ctx.lineWidth = s.breite || 1
+        ctx.setLineDash(strichMuster(s.strich, s.breite || 1))
+        let offen = false
+        for (let i = ab; i < this.kerzen.length; i++) {
+            const x = this.zuX(this.kerzen[i].t), y = werte[i] == null ? null : this.zuY(werte[i])
+            if (x == null || y == null) { offen = false; continue }
+            if (offen) ctx.lineTo(x, y); else { ctx.moveTo(x, y); offen = true }
+        }
+        ctx.stroke()
+        ctx.setLineDash([])
+    }
+
+    /**
      * Eine Zeichnung mit ihrer Deckkraft (`stil.deckkraft`, 0,1–1; ohne = voll).
      * Gilt für alles der Zeichnung — Linien, Flächen, Beschriftungen —, nicht für
      * die Anker der Auswahl: die bleiben voll sichtbar, sonst fände man sie nicht.
@@ -862,8 +1073,9 @@ export class ZeichenEbene {
         const d = Number(z.stil?.deckkraft)
         ctx.save()
         if (Number.isFinite(d) && d > 0 && d < 1) ctx.globalAlpha *= d
-        try { this.zeichneInhalt(ctx, z, pk, breite, hoehe, ausgewaehlt) } finally { ctx.restore() }
-        if (ausgewaehlt) this.zeichneAnker(ctx, z, breite)
+        // Je Zeichnung abgefangen: ein Fehler in einer soll die übrigen, den Entwurf und das Fadenkreuz nicht mitnehmen
+        try { this.zeichneInhalt(ctx, z, pk, breite, hoehe, ausgewaehlt) } catch { /* diese eine fehlt im Bild */ } finally { ctx.restore() }
+        if (ausgewaehlt) { try { this.zeichneAnker(ctx, z, breite) } catch { /* ohne Anker */ } }
     }
 
     zeichneInhalt(ctx, z, pk, breite, hoehe, ausgewaehlt) {
@@ -893,6 +1105,35 @@ export class ZeichenEbene {
                 const x = X(pk[0].t)
                 if (fehlt(x)) return
                 this.linie(ctx, x, 0, x, hoehe, s)
+                break
+            }
+            case 'avwap': {
+                const av = this.avwapFuer(pk, s)
+                if (!av) return
+                if (av.ab == null) {
+                    // Anker liegt vor den geladenen Kerzen: lieber sagen als falsch zeichnen
+                    this.beschriftung(ctx, 'AVWAP: Anker vor den geladenen Kerzen — weiter zurückscrollen', 6, 16, s.farbe, { hinten: 'rgba(0,0,0,0.55)' })
+                    return
+                }
+                const band = { ...s, breite: 1, strich: 'gestrichelt' }
+                if (s.baender > 0) {
+                    ctx.save(); ctx.globalAlpha *= 0.7
+                    this.kurve(ctx, av.oben1, av.ab, band); this.kurve(ctx, av.unten1, av.ab, band)
+                    if (s.baender > 1) { ctx.globalAlpha *= 0.7; this.kurve(ctx, av.oben2, av.ab, band); this.kurve(ctx, av.unten2, av.ab, band) }
+                    ctx.restore()
+                }
+                this.kurve(ctx, av.vwap, av.ab, s)
+                // Beschriftung am rechten Ende: wo der Einstand der Käufer seit dem Anker jetzt liegt
+                const i = this.kerzen.length - 1, ex = X(this.kerzen[i].t), ey = Y(av.vwap[i])
+                if (!fehlt(ex, ey)) {
+                    // Eigener Text (Stil-Leiste „T" oder Doppelklick) ersetzt „AVWAP", der Preis bleibt dahinter
+                    const text = `${s.text || 'AVWAP'} ${this.formatPreis(av.vwap[i])}`
+                    const g = Number(s.groesse) > 0 ? Number(s.groesse) : 11
+                    ctx.font = `${g}px -apple-system, "Segoe UI", Roboto, sans-serif`
+                    const w = ctx.measureText(text).width
+                    this.beschriftung(ctx, text, ex + 6 + w <= breite - 4 ? ex + 6 : Math.max(4, ex - w - 6), ey - 5, s.farbe, { hinten: 'rgba(0,0,0,0.45)', groesse: g })
+                    ctx.font = SCHRIFT
+                }
                 break
             }
             case 'trendlinie':
@@ -983,27 +1224,83 @@ export class ZeichenEbene {
                     marke(vp.vah, '#8a9199', 'VAH', 'gestrichelt')
                     marke(vp.val, '#8a9199', 'VAL', 'gestrichelt')
                 }
+                // Eigene Beschriftung (Stil-Leiste „T" oder Doppelklick) über der linken oberen Ecke des Profils
+                if (s.text) {
+                    const g = Number(s.groesse) > 0 ? Number(s.groesse) : 11
+                    ctx.font = `${g}px -apple-system, "Segoe UI", Roboto, sans-serif`
+                    this.beschriftung(ctx, s.text, x1 + 2, Math.max(g + 2, Math.min(yo, yu) - 5), farbe, { hinten: 'rgba(0,0,0,0.45)', groesse: g })
+                    ctx.font = SCHRIFT
+                }
                 break
             }
             case 'fib': {
                 const x1 = X(pk[0].t), x2 = s.rechts ? breite : X(pk[1].t)
                 if (fehlt(x1, x2)) return
                 const links = Math.min(x1, x2), rechts = Math.max(x1, x2)
-                const stufen = fibPreise(pk[0].p, pk[1].p)
-                const FARBEN = ['#787b86', '#f23645', '#ff9800', '#4caf50', '#089981', '#00bcd4', '#787b86', '#2962ff']
-                for (let i = 0; i < stufen.length; i++) {
-                    const y = Y(stufen[i].preis)
-                    if (fehlt(y)) continue
-                    const farbe = FARBEN[i % FARBEN.length]
-                    if (i > 0) {
-                        const yv = Y(stufen[i - 1].preis)
-                        if (!fehlt(yv)) { ctx.fillStyle = mitAlpha(farbe, 0.08); ctx.fillRect(links, Math.min(y, yv), rechts - links, Math.abs(y - yv)) }
-                    }
-                    this.linie(ctx, links, y, rechts, y, { farbe, breite: 1, strich: 'voll' })
-                    this.beschriftung(ctx, `${stufen[i].stufe} (${this.formatPreis(stufen[i].preis)})`, links + 4, y - 3, farbe)
-                }
+                const st = fibStufenAus(s.stufen, FIB_STUFEN)
+                const preise = fibPreise(pk[0].p, pk[1].p, st.map((f) => f.w))
+                this.zeichneFibStufen(ctx, preise.map((f, i) => ({ ...f, farbe: st[i].farbe })), links, rechts)
                 const ay = Y(pk[0].p), by = Y(pk[1].p)
                 if (!fehlt(ay, by)) this.linie(ctx, X(pk[0].t), ay, X(pk[1].t), by, { farbe: 'rgba(255,255,255,0.3)', breite: 1, strich: 'gestrichelt' })
+                break
+            }
+            case 'fibExt': {
+                const pz = pk.map((q) => ({ x: X(q.t), y: Y(q.p) }))
+                if (pz.some((q) => fehlt(q.x, q.y))) return
+                // Hilfslinien Impuls → Rücksetzer (beim Zeichnen mit zwei Punkten nur der Impuls)
+                ctx.save()
+                ctx.globalAlpha *= 0.6
+                for (let i = 1; i < pz.length; i++) this.linie(ctx, pz[i - 1].x, pz[i - 1].y, pz[i].x, pz[i].y, { farbe: s.farbe, breite: 1, strich: 'gestrichelt' })
+                ctx.restore()
+                if (pk.length < 3) break
+                const [links, rechts] = this.fibExtSpanne(pz, s, breite)
+                const st = fibStufenAus(s.stufen, FIB_EXT_STUFEN)
+                const preise = fibExtPreise(pk[0].p, pk[1].p, pk[2].p, st.map((f) => f.w))
+                this.zeichneFibStufen(ctx, preise.map((f, i) => ({ ...f, farbe: st[i].farbe })), links, rechts)
+                break
+            }
+            case 'pfeil': {
+                const ax = X(pk[0].t), ay = Y(pk[0].p), bx = X(pk[1].t), by = Y(pk[1].p)
+                if (fehlt(ax, ay, bx, by)) return
+                const b = s.breite || 2
+                const [f1, f2] = pfeilSpitze(ax, ay, bx, by, b)
+                // Schaft endet an der Spitzenbasis — sonst ragt ein dicker Strich vorne heraus
+                const mx = (f1.x + f2.x) / 2, my = (f1.y + f2.y) / 2
+                const kurz = Math.hypot(bx - ax, by - ay) > Math.hypot(bx - mx, by - my)
+                this.linie(ctx, ax, ay, kurz ? mx : bx, kurz ? my : by, s)
+                ctx.beginPath()
+                ctx.moveTo(bx, by); ctx.lineTo(f1.x, f1.y); ctx.lineTo(f2.x, f2.y); ctx.closePath()
+                ctx.fillStyle = s.farbe
+                ctx.fill()
+                this.eigenerText(ctx, s, (w, g) => ({ x: bx + 6, y: by + (by >= ay ? g + 2 : -4) }))
+                break
+            }
+            case 'ellipse': {
+                const x1 = X(pk[0].t), y1 = Y(pk[0].p), x2 = X(pk[1].t), y2 = Y(pk[1].p)
+                if (fehlt(x1, y1, x2, y2)) return
+                ctx.beginPath()
+                ctx.ellipse((x1 + x2) / 2, (y1 + y2) / 2, Math.abs(x2 - x1) / 2, Math.abs(y2 - y1) / 2, 0, 0, Math.PI * 2)
+                if (s.fuellung) { ctx.fillStyle = mitAlpha(s.farbe, 0.15); ctx.fill() }
+                ctx.strokeStyle = s.farbe
+                ctx.lineWidth = s.breite || 1
+                ctx.setLineDash(strichMuster(s.strich, s.breite || 1))
+                ctx.stroke()
+                ctx.setLineDash([])
+                break
+            }
+            case 'pinsel': {
+                const zug = pk.map((q) => ({ x: X(q.t), y: Y(q.p) })).filter((q) => !fehlt(q.x, q.y))
+                if (zug.length < 2) return
+                ctx.beginPath()
+                ctx.strokeStyle = s.farbe
+                ctx.lineWidth = s.breite || 2
+                ctx.lineCap = 'round'
+                ctx.lineJoin = 'round'
+                ctx.setLineDash(strichMuster(s.strich, s.breite || 2))
+                ctx.moveTo(zug[0].x, zug[0].y)
+                for (let i = 1; i < zug.length; i++) ctx.lineTo(zug[i].x, zug[i].y)
+                ctx.stroke()
+                ctx.setLineDash([])
                 break
             }
             case 'position': {
@@ -1022,6 +1319,46 @@ export class ZeichenEbene {
                 this.beschriftung(ctx, `Ziel ${this.formatPreis(pk[1].p)} (${pct(w.zielPct)})`, l + 4, yz + (yz < ye ? 13 : -4), '#26a69a', { hinten: 'rgba(0,0,0,0.55)' })
                 this.beschriftung(ctx, `Stop ${this.formatPreis(pk[2].p)} (${pct(w.stopPct)})`, l + 4, ys + (ys < ye ? 13 : -4), '#ff6960', { hinten: 'rgba(0,0,0,0.55)' })
                 if (s.rechner) this.zeichneRechner(ctx, pk, s.rechner, l, b, ye, ys, hoehe, ausgewaehlt)
+                break
+            }
+            case 'pfad': {
+                const zug = pk.map((q) => ({ x: X(q.t), y: Y(q.p) })).filter((q) => !fehlt(q.x, q.y))
+                if (zug.length < 2) return
+                const b = s.breite || 2
+                const n = zug.length
+                const a = zug[n - 2], e = zug[n - 1]
+                const spitze = s.spitze !== false && Math.hypot(e.x - a.x, e.y - a.y) > 4
+                const [f1, f2] = spitze ? pfeilSpitze(a.x, a.y, e.x, e.y, b) : [null, null]
+                ctx.beginPath()
+                ctx.strokeStyle = s.farbe
+                ctx.lineWidth = b
+                ctx.lineCap = 'round'
+                ctx.lineJoin = 'round'
+                ctx.setLineDash(strichMuster(s.strich, b))
+                ctx.moveTo(zug[0].x, zug[0].y)
+                for (let i = 1; i < n - 1; i++) ctx.lineTo(zug[i].x, zug[i].y)
+                // letztes Stück endet an der Spitzenbasis — sonst ragt ein dicker Strich vorne heraus
+                if (spitze) ctx.lineTo((f1.x + f2.x) / 2, (f1.y + f2.y) / 2); else ctx.lineTo(e.x, e.y)
+                ctx.stroke()
+                ctx.setLineDash([])
+                if (spitze) {
+                    ctx.beginPath()
+                    ctx.moveTo(e.x, e.y); ctx.lineTo(f1.x, f1.y); ctx.lineTo(f2.x, f2.y); ctx.closePath()
+                    ctx.fillStyle = s.farbe
+                    ctx.fill()
+                }
+                break
+            }
+            case 'emoji': {
+                const x = X(pk[0].t), y = Y(pk[0].p)
+                if (fehlt(x, y)) return
+                ctx.font = `${s.groesse || 28}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`
+                ctx.textAlign = 'center'
+                ctx.textBaseline = 'middle'
+                ctx.fillText(s.zeichen || '🙂', x, y)
+                ctx.textAlign = 'left'
+                ctx.textBaseline = 'alphabetic'
+                ctx.font = SCHRIFT
                 break
             }
             case 'text': {
@@ -1060,11 +1397,19 @@ export class ZeichenEbene {
         this.requestUpdate()
     }
 
+    /** Foto für die KI (`ChartPanel.bildschirmfoto({ ohneKontowerte })`): Rechner ohne Beträge und Kontoanteile. */
+    setzeFoto(an) {
+        this.foto = !!an
+        this.requestUpdate()
+    }
+
     /**
      * Positionsrechner (`shared/tradeRechner.js`): Liq-Linie gestrichelt über die
      * Box, daneben Menge, Nominal, Marge, Verlust/Gewinn — unter der Stop-Seite.
      * Ausgewählt steht das alles im Rechner-Feld (`PositionsRechner.vue`), im
-     * Chart dann nur die Liq-Linie und eine Warnung.
+     * Chart dann nur die Liq-Linie und eine Warnung. Ebenso im Foto für die KI
+     * (`foto`) — dort auch die Warnung ohne Betrag: aus Einsatz und Verlust in
+     * % vom Konto liess sich der Kontostand der Börse zurückrechnen.
      */
     zeichneRechner(ctx, pk, eingabe, l, b, ye, ys, hoehe, ausgewaehlt = false) {
         const mitKonto = eingabe.konto > 0 || !this.konto ? eingabe : { ...eingabe, konto: this.konto }
@@ -1081,11 +1426,11 @@ export class ZeichenEbene {
         const menge = r.menge >= 100 ? zahl(r.menge, 0) : r.menge >= 1 ? zahl(r.menge, 3) : zahl(r.menge, 6)
         const zeilen = [
             `Menge ${menge} · Nominal ${zahl(r.nominal)} USDT`,
-            `Marge ${zahl(r.marge)} USDT · ${r.hebel}×${r.margeKontoPct != null ? ` (${zahl(r.margeKontoPct, 1)} % Konto)` : ''}`,
+            `Marge ${zahl(r.marge)} USDT · ${r.hebel}×${r.margeKontoPct != null ? ` (Einsatz ${zahl(r.margeKontoPct, 1)} % vom Konto)` : ''}`,
             `Stop ${vz(r.verlustStop)} USDT${r.kontoRisikoPct != null ? ` (${zahl(r.kontoRisikoPct, 2)} % Konto)` : ''} · Ziel ${vz(r.gewinnZiel)} USDT`,
         ]
-        if (ausgewaehlt) zeilen.length = 0
-        if (r.liqVorStop) zeilen.push(r.haltbar ? `⚠ Liq vor dem Stop — Verlust ${vz(r.verlustLiq)} USDT` : '⚠ Hebel nicht haltbar (Wartungsmarge)')
+        if (ausgewaehlt || this.foto) zeilen.length = 0
+        if (r.liqVorStop) zeilen.push(r.haltbar ? `⚠ Liq vor dem Stop${this.foto ? '' : ` — Verlust ${vz(r.verlustLiq)} USDT`}` : '⚠ Hebel nicht haltbar (Wartungsmarge)')
         // Unter die Stop-Seite der Box; reicht der Platz nicht, darüber.
         const zh = 15
         const unten = ys > ye
@@ -1098,6 +1443,21 @@ export class ZeichenEbene {
     }
 
     zeichneAnker(ctx, z, breite) {
+        if (z.typ === 'pinsel') return
+        if (z.typ === 'emoji') {
+            // Ausgewählt: gestrichelter Rahmen statt Anker
+            const q = this.punkteVon(z)[0]
+            const x = q && this.zuX(q.t), y = q && this.zuY(q.p)
+            if (x == null || y == null) return
+            const h = (stilFuer(z).groesse || 28) / 2 + 4
+            ctx.save()
+            ctx.setLineDash([3, 3])
+            ctx.strokeStyle = '#29b6f6'
+            ctx.lineWidth = 1
+            ctx.strokeRect(Math.round(x - h) + 0.5, Math.round(y - h) + 0.5, Math.round(2 * h), Math.round(2 * h))
+            ctx.restore()
+            return
+        }
         const anker = z.id === -1 ? (this.entwurf?.punkte || []).map((q) => ({ x: this.zuX(q.t), y: this.zuY(q.p) })) : this.ankerVon(z, breite)
         for (const a of anker) {
             if (a.x == null || a.y == null) continue
@@ -1123,12 +1483,13 @@ export class ZeichenEbene {
             tickVisible: () => true,
         })
         for (const z of this.zeichnungen) {
+            if (!this.vollstaendig(z)) continue
             const s = stilFuer(z)
             const pk = this.punkteVon(z)
             if (z.typ === 'horizontale' || z.typ === 'strahlH') aus.push(etikett(pk[0].p, s.farbe))
             else if (z.id === this.auswahlId) {
                 if (z.typ === 'position') { aus.push(etikett(pk[1].p, '#26a69a')); aus.push(etikett(pk[2].p, '#ff6960')); aus.push(etikett(pk[0].p, '#787b86')) }
-                else if (z.typ !== 'vertikale') for (const q of pk) aus.push(etikett(q.p, '#29b6f6'))
+                else if (z.typ !== 'vertikale' && z.typ !== 'pinsel' && z.typ !== 'emoji') for (const q of pk) aus.push(etikett(q.p, '#29b6f6'))
             }
         }
         // Fadenkreuz (Touch): sein Preis an der Achse — mit Magnet der Fangpreis, an dem der Punkt landet

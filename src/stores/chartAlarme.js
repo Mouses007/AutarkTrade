@@ -10,6 +10,7 @@
 import { ref } from 'vue'
 import axios from 'axios'
 import { sendNotification } from '../utils/notify.js'
+import { abrufFolge, findeNeue, hinweisSchluessel } from '../utils/chart/alarmHinweise.js'
 
 export const alarme = ref([])
 // Bis zu 50 Hinweise gemerkt; die Leiste zeigt fünf, der Rest ist darunter scrollbar.
@@ -18,33 +19,63 @@ export const neueAusloesungen = ref([])     // [{ id, symbol, titel, text, t, zi
 
 let uhr = null
 let nutzer = 0
-let gesehenBis = Date.now()
+/*
+ * Welche Auslösungen als Hinweis erscheinen (31.10.2026): JEDER neue Eintrag im
+ * Verlauf eines Alarms, nicht nur der letzte — ein Watchlist-Alarm meldete
+ * BNB und später SOL, im Browser stand nur SOL. Nach dem Öffnen der Seite auch
+ * die der letzten `RUECKBLICK_MS`, solange sie nicht geschlossen wurden (das
+ * Schliessen wird im Browser gemerkt). Desktop-Meldungen nur für Auslösungen
+ * nach dem Öffnen — ältere hat das Handy schon gemeldet. Was neu ist, entscheidet
+ * `findeNeue` (`utils/chart/alarmHinweise.js`) je Eintrag, nicht über eine
+ * gemeinsame Zeitmarke; Selbstabschaltungen (`hinweis`) sind nie eine Auslösung.
+ * Eine Antwort, die ein später gestarteter Abruf überholt hat, wird verworfen
+ * (`abrufFolge`), damit ihr älterer Stand keine Auslösung ein zweites Mal meldet.
+ */
+const START = Date.now()
+const RUECKBLICK_MS = 6 * 3_600_000
+const QUITT_SCHLUESSEL = 'chartAlarmQuittiert'
+const QUITT_MAX = 300
+const AB = START - RUECKBLICK_MS
+let gesehen = new Set()
+// Überholte Antworten (älterer Stand, später angekommen) zählen nicht — sonst doppelte Hinweise.
+const folge = abrufFolge()
+const quittiert = (() => { try { return new Set(JSON.parse(localStorage.getItem(QUITT_SCHLUESSEL) || '[]')) } catch { return new Set() } })()
+function merkeQuittiert(schluessel) {
+    for (const k of schluessel) quittiert.add(k)
+    const liste = [...quittiert].slice(-QUITT_MAX)
+    quittiert.clear(); liste.forEach((k) => quittiert.add(k))
+    try { localStorage.setItem(QUITT_SCHLUESSEL, JSON.stringify(liste)) } catch { /* kein Speicher */ }
+}
+
+/** Ein Verlaufseintrag als Hinweis (Leiste und Desktop-Meldung sagen dasselbe wie Push und Handy). */
+function alsHinweis(a, v) {
+    const mehrfach = MEHRFACH.includes(a.art)
+    const symbol = a.symbol || v?.treffer?.[0]?.symbol || (a.art === 'lsob' ? 'LSOB' : 'Momentum')
+    const kurz = mehrfach && v?.treffer?.length
+        ? v.treffer.map(trefferText).join(' · ')
+        : `${a.symbol}: ${beschreibe(a)}${v?.p != null ? ` — ${v.p}` : ''}`
+    // Text vom Server (seit 22.10.2026 im Verlauf); ältere Einträge ohne Text: die Kurzform.
+    const text = v?.text ? v.text.split('\n').filter(Boolean).join(' · ') : kurz
+    // Wohin ein Klick führt: Momentum/LSOB → der (erste) Treffer mit seiner Zeiteinheit;
+    // Preis/Linie/Zone → das Symbol des Alarms (Zeiteinheit bleibt).
+    const tr = mehrfach ? v?.treffer?.[0] : null
+    const ziel = tr ? { symbol: tr.symbol, markt: tr.markt || 'futures', tf: tr.tf || null }
+        : a.symbol ? { symbol: a.symbol, markt: a.markt || 'futures', tf: null } : null
+    return { id: a.id, symbol, titel: v?.titel || `Alarm ${symbol}`, text, t: v.t, ziel, meldung: v?.text || kurz }
+}
 
 export async function ladeAlarme() {
+    const nummer = folge.beginne()
     try {
         const { data } = await axios.get('/api/chart/alarme')
-        const neu = data.filter((a) => a.ausgeloestAm > gesehenBis)
+        if (!folge.uebernimm(nummer)) return
+        const erg = findeNeue(data, gesehen, AB)
+        gesehen = erg.gesehen
+        const neu = erg.neu.filter(({ a, v }) => !quittiert.has(hinweisSchluessel(a.id, v.t))).map(({ a, v }) => alsHinweis(a, v))
         if (neu.length) {
-            gesehenBis = Math.max(...neu.map((a) => a.ausgeloestAm))
-            for (const a of neu) {
-                const letzte = a.verlauf[a.verlauf.length - 1]
-                const mehrfach = MEHRFACH.includes(a.art)
-                const symbol = a.symbol || letzte?.treffer?.[0]?.symbol || (a.art === 'lsob' ? 'LSOB' : 'Momentum')
-                const kurz = mehrfach && letzte?.treffer?.length
-                    ? letzte.treffer.map(trefferText).join(' · ')
-                    : `${a.symbol}: ${beschreibe(a)}${letzte ? ` — ${letzte.p}` : ''}`
-                // Leiste und Desktop-Meldung sagen dasselbe wie Push und Handy (Text vom Server, seit 22.10.2026
-                // im Verlauf); ältere Einträge ohne Text: die Kurzform.
-                const text = letzte?.text ? letzte.text.split('\n').filter(Boolean).join(' · ') : kurz
-                // Wohin ein Klick auf den Hinweis führt: Momentum/LSOB → der (erste) Treffer mit
-                // seiner Zeiteinheit; Preis/Linie/Zone → das Symbol des Alarms (Zeiteinheit bleibt).
-                const tr = mehrfach ? letzte?.treffer?.[0] : null
-                const ziel = tr ? { symbol: tr.symbol, markt: tr.markt || 'futures', tf: tr.tf || null }
-                    : a.symbol ? { symbol: a.symbol, markt: a.markt || 'futures', tf: null } : null
-                const titel = letzte?.titel || `Alarm ${symbol}`
-                neueAusloesungen.value = [...neueAusloesungen.value, { id: a.id, symbol, titel, text, t: a.ausgeloestAm, ziel }].slice(-MAX_HINWEISE)
-                sendNotification('chartAlarm', titel, letzte?.text || kurz, { tag: `chartAlarm-${a.id}-${a.ausgeloestAm}` })
-            }
+            neu.sort((x, y) => x.t - y.t)
+            neueAusloesungen.value = [...neueAusloesungen.value, ...neu].slice(-MAX_HINWEISE)
+            for (const n of neu) if (n.t > START) sendNotification('chartAlarm', n.titel, n.meldung, { tag: `chartAlarm-${n.id}-${n.t}` })
         }
         alarme.value = data
     } catch { /* nächster Versuch in zehn Sekunden */ }
@@ -122,9 +153,12 @@ export async function loescheAlarm(id) {
 
 /** Einen Hinweis schliessen — mit `t` genau diesen (ein wiederholender Alarm kann mehrere haben), ohne alle des Alarms. */
 export function quittiere(id, t = null) {
-    neueAusloesungen.value = neueAusloesungen.value.filter((x) => !(x.id === id && (t == null || x.t === t)))
+    const weg = neueAusloesungen.value.filter((x) => x.id === id && (t == null || x.t === t))
+    merkeQuittiert(weg.map((x) => hinweisSchluessel(x.id, x.t)))
+    neueAusloesungen.value = neueAusloesungen.value.filter((x) => !weg.includes(x))
 }
 
 export function alleQuittieren() {
+    merkeQuittiert(neueAusloesungen.value.map((x) => hinweisSchluessel(x.id, x.t)))
     neueAusloesungen.value = []
 }

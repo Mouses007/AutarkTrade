@@ -82,8 +82,11 @@ console.log('\nBausteine')
     // Anker schon in dieser Lücke berührt wird, gilt seither als nie handelbar
     // (`entry_before_confirm`). Hier soll die Stop-/Ziel-Rechnung geprüft
     // werden, nicht diese Grenze — also bleibt der Kurs so lange oben.
+    // Kerze 32 sticht nach unten: ein bestätigtes Swing-Tief im Anlauf. Der
+    // Stop „Korrekturtief" wird bei einem Limit von oben zum letzten Swing-Tief
+    // (siehe rule-validate) — ohne ein solches gäbe es keinen ehrlichen Stop.
     const rows = []
-    for (let i = 0; i < 40; i++) { const b = 100 + i * 0.3; rows.push([b, b + 0.15, b - 0.1, b + 0.12]) }
+    for (let i = 0; i < 40; i++) { const b = 100 + i * 0.3; rows.push([b, b + 0.15, i === 32 ? b - 1.6 : b - 0.1, b + 0.12]) }
     for (let i = 0; i < 3; i++) { const b = 112 - i * 0.05; rows.push([b, b + 0.05, b - 0.08, b - 0.04]) }
     for (let i = 0; i < 10; i++) { const b = 111.8 - i * 0.5; rows.push([b, b + 0.05, b - 0.55, b - 0.5]) }
     for (let i = 0; i < 30; i++) { const b = 107 + i * 0.3; rows.push([b, b + 0.15, b - 0.1, b + 0.12]) }
@@ -166,7 +169,7 @@ const emaTouchAlsRegeln = {
         { type: 'condition', code: 'ema_cross_negative', when: { left: 'emaFast', op: 'lt', right: 'emaEntry' } },
         { type: 'timeout', code: 'correction_timeout', candles: { param: 'maxKerzen' } },
     ],
-    stopLoss: { anchor: 'correctionLow', offsetPct: { param: 'stopPuffer' } },
+    stopLoss: { anchor: 'lastSwingLow', offsetPct: { param: 'stopPuffer' } },
     takeProfit: { mode: 'rr', rr: { param: 'ziel' } },
 }
 
@@ -248,6 +251,82 @@ const emaTouchAlsRegeln = {
 
     check('manifest.params trägt die drei Schalter für JEDE Regelstrategie',
         ['sperreSamstag', 'sperreSonntag', 'sperreMontag'].every((k) => manifest.params.some((p) => p.key === k)))
+
+    // Die Reihe oben erreicht die EMA50 nie — beide Fassungen brechen nur ab,
+    // und „dieselben Einstiegskurse" war ein Vergleich zweier leerer Listen.
+    // Diese hier korrigiert tiefer (8 × −1,0 nach 8 × +1,2): dort wird
+    // eingestiegen, und Kurs UND Stop müssen übereinstimmen — beide nehmen
+    // das Limit auf der EMA der Vorkerze und den Stop unter dem letzten
+    // bestätigten Tief (EMA Bounce v2 = Anker `lastSwingLow`).
+    const tiefRows = []
+    let p2 = 100
+    for (let block = 0; block < 12; block++) {
+        for (let i = 0; i < 8; i++) { tiefRows.push([p2, p2 + 1.44, p2 - 0.2, p2 + 1.2]); p2 += 1.2 }
+        for (let i = 0; i < 8; i++) { tiefRows.push([p2, p2 + 0.1, p2 - 1.1, p2 - 1.0]); p2 -= 1.0 }
+        for (let i = 0; i < 6; i++) { tiefRows.push([p2, p2 + 0.3, p2 - 0.3, p2 + 0.05]); p2 += 0.05 }
+    }
+    const tief = series(tiefRows)
+    const lauf2 = (detect, params) => {
+        let offen = []
+        const gesehen = new Set()
+        let id = 1
+        const ev = []
+        for (let i = 120; i < tief.length; i++) {
+            const r = detect({ candles: tief.slice(0, i + 1), params, openSetups: offen, knownSetupKeys: [...gesehen] })
+            for (const s of r.setups) { gesehen.add(`${s.direction}|${s.obCandleTime}`); offen.push({ ...s, id: id++ }) }
+            for (const e of r.events) {
+                ev.push(`${e.status}:${e.invalidReason || ''}:${e.entry ? e.entry.toFixed(4) : ''}:${e.stopLoss ? e.stopLoss.toFixed(4) : ''}`)
+                offen = offen.filter((x) => x.id !== e.id)
+            }
+        }
+        return ev
+    }
+    const c2 = lauf2(emaTouch.detect, { ...pCode, maxGegenkerzen: 0 })
+    const r2 = lauf2(manifest.detect, pRegeln)
+    const einstiege2 = c2.filter((x) => x.startsWith('triggered')).length
+    check(`tiefere Korrekturen: der Code steigt überhaupt ein (${einstiege2}×)`, einstiege2 > 0)
+    check('tiefere Korrekturen: Code und Regeln steigen zu denselben Kursen mit denselben Stops ein',
+        JSON.stringify(c2) === JSON.stringify(r2),
+        `Code=${JSON.stringify(c2.slice(0, 2))} Regeln=${JSON.stringify(r2.slice(0, 2))}`)
+}
+
+// ── Frist: N Kerzen heisst N Kerzen (01.11.2026) ───────────────────────────
+// Bis dahin lief ein Setup mit Frist 3 vier Kerzen lang (`>` statt `>=`);
+// Swing Game war schon korrigiert, Regeln, EMA Bounce und LSOB nicht.
+console.log('\nFrist (Regel-Interpreter)')
+{
+    // 80 Kerzen Anlauf: der Interpreter braucht mindestens warmupCandles/4.
+    const rows = []
+    for (let i = 0; i < 80; i++) { const b = 100 + i * 0.15; rows.push([b, b + 0.08, b - 0.05, b + 0.06]) }
+    rows.push([112, 113, 111.9, 112.5])          // 80: Hoch
+    rows.push([112.5, 112.6, 112.2, 112.3])      // 81
+    rows.push([112.3, 112.4, 112.1, 112.2])      // 82: Hoch bestätigt (right 2)
+    for (let i = 0; i < 8; i++) rows.push([112.2, 112.3, 112.1, 112.2])   // seitwärts, weit über dem Anker
+    const kerzen = series(rows)
+    const regeln = pruefeRegeln({
+        id: 'frist', timeframes: ['1h'],
+        params: [], indicators: [],
+        signal: { type: 'pivotHigh', left: 4, right: 2 },
+        signalFilters: [],
+        entry: { type: 'touch', anchor: 'signalLow', from: 'above' },
+        invalidations: [{ type: 'timeout', code: 'zu_lang', candles: 3 }],
+        stopLoss: { anchor: 'lastSwingLow', offsetPct: 0.3 },
+        takeProfit: { mode: 'rr', rr: 2 },
+    }).regeln
+    let offen = []
+    let id = 1
+    let ablauf = null
+    for (let n = 83; n <= kerzen.length && !ablauf; n++) {
+        const r = detectMitRegeln(regeln, { candles: kerzen.slice(0, n), params: {}, openSetups: offen, knownSetupKeys: offen.map((s) => `${s.direction}|${s.obCandleTime}`) })
+        for (const s of r.setups) offen.push({ ...s, id: id++ })
+        for (const e of r.events) { if (e.status === 'expired') ablauf = e; offen = offen.filter((s) => s.id !== e.id) }
+    }
+    const setupT = kerzen[80].t
+    const schritt = kerzen[1].t - kerzen[0].t
+    const ablaufNach = ablauf ? Math.round((ablauf.candleTime - setupT) / schritt) : null
+    // Beobachtet wird ab der Kerze nach dem Signal (81); drei Kerzen → Ablauf mit Kerze 83.
+    check('Frist 3 läuft mit der dritten Kerze ab, nicht der vierten',
+        ablauf?.invalidReason === 'zu_lang' && ablaufNach === 3, `Ablauf ${ablaufNach} Kerzen nach dem Signal`)
 }
 
 // ── Wochentagssperre: universeller Baustein aus alsManifest() ──────────────
@@ -842,8 +921,10 @@ console.log('\nAngeschnittene Historie')
         sichtBedarfKerzen(regeln('month'), 900000) > 3000)
     check('Sichtbedarf: ATH verlangt die ganze Historie',
         sichtBedarfKerzen(regeln('ath'), 900000) === Infinity)
-    check('Sichtbedarf: gleitender Anker verlangt nichts',
-        sichtBedarfKerzen(regeln('rolling'), 900000) === 0)
+    // Seit 31.10.2026 zählen Perioden und Rückblickfenster mit (FUN-S4-003):
+    // ein gleitender Anker verlangt nicht MEHR als das Grundfenster von 550.
+    check('Sichtbedarf: gleitender Anker bleibt im Grundfenster',
+        sichtBedarfKerzen(regeln('rolling'), 900000) <= 550, String(sichtBedarfKerzen(regeln('rolling'), 900000)))
 
     // Reihe mit Berührungen einer ATH-verankerten Linie; im Ausschnitt darf
     // daraus KEIN Signal entstehen.

@@ -44,6 +44,14 @@ import { versandGesperrt, versandSperrFehler } from './testbetrieb.js'
  * angestossen hat — eine Mail darüber erreicht ihn genau dann, wenn er ohnehin
  * vor dem Rechner sitzt.
  *
+ * `browser: false` heisst umgekehrt „kein Sender im Browser": das Ereignis
+ * entsteht nur auf dem Server, und das Frontend erfährt nichts davon (kein
+ * Ereignisprotokoll). Bis zum Audit 4.3.4 (FUN-F5-003) standen „Neue Version",
+ * „Aufzeichnung stumm" und „Lagebericht fertig" mit einem Browser-Häkchen da,
+ * das nie etwas auslöste; jetzt zeigt die Matrix „—" und `kanalWahl` liefert
+ * `browser: false`. Ohne Angabe gilt: es gibt einen Browser-Sender
+ * (`sendNotification` mit dieser Kennung — der Selbsttest prüft beide Richtungen).
+ *
  * `schwelleSpalte` verweist auf die Einstellungsspalte, die den Auslösepunkt
  * bestimmt. Die Kanalwahl steht getrennt davon in `settings.benachrichtigungen`.
  *
@@ -68,7 +76,7 @@ export const REGISTER = [
     // Ballast. Schalter und Empfaenger stehen deshalb bei den
     // Nachrichten-Einstellungen; hier steht nur, WO sie stehen.
     {
-        id: 'lageberichtFertig', gruppe: 'system', email: true,
+        id: 'lageberichtFertig', gruppe: 'system', email: true, browser: false,
         symbol: '\u{1F4F0}', ton: 'gut', bereich: 'System · Nachrichten',
         eigeneStelle: 'nachrichten',
         mailSchalter: 'radarNewsMailAktiv',
@@ -77,8 +85,8 @@ export const REGISTER = [
     { id: 'kiBerichtFertig', gruppe: 'system', email: false, symbol: '\u{1F4C4}', ton: 'gut', bereich: 'System · KI' },
     { id: 'kiGuthabenLeer', gruppe: 'system', email: true, symbol: '\u{1F4B3}', ton: 'warnung', bereich: 'System · KI' },
     { id: 'boerseKeinZugang', gruppe: 'system', email: true, symbol: '\u{1F511}', ton: 'warnung', bereich: 'System · Börsen' },
-    { id: 'neueVersion', gruppe: 'system', email: true, symbol: '\u{1F195}', ton: 'gut', bereich: 'System · Update' },
-    { id: 'aufzeichnungStumm', gruppe: 'system', email: true, symbol: '\u{1F4E1}', ton: 'warnung', bereich: 'System · Aufzeichnung' },
+    { id: 'neueVersion', gruppe: 'system', email: true, browser: false, symbol: '\u{1F195}', ton: 'gut', bereich: 'System · Update' },
+    { id: 'aufzeichnungStumm', gruppe: 'system', email: true, browser: false, symbol: '\u{1F4E1}', ton: 'warnung', bereich: 'System · Aufzeichnung' },
     { id: 'importFertig', gruppe: 'system', email: false, symbol: '\u{1F4E5}', ton: 'gut', bereich: 'System · Import' },
 ]
 
@@ -144,7 +152,8 @@ export function kanalWahl(settings, id) {
         // Server nicht halten kann.
         : (eintrag?.email ? Boolean(eigen.email) : false)
     return {
-        browser: eigen.browser !== undefined ? Boolean(eigen.browser) : true,
+        // Ohne Browser-Sender (`browser: false`) nie „an", egal was gespeichert ist.
+        browser: eintrag?.browser === false ? false : (eigen.browser !== undefined ? Boolean(eigen.browser) : true),
         email,
     }
 }
@@ -176,6 +185,34 @@ export function empfaengerFuer(settings, id) {
  */
 export function mailKonfigVollstaendig(s) {
     return Boolean(s && Number(s.mailAktiv) === 1 && s.mailHost && s.mailPort && s.mailVon)
+}
+
+/**
+ * Ein Bild aus dem Chart (Teilen-Dialog) als Anhang verschicken — an eine vom
+ * Nutzer eingegebene Adresse, über den eingestellten SMTP-Zugang. Eingaben sind
+ * schon geprüft (`pruefeTeilenMail` in `chart-teilen-kern.js`).
+ */
+export async function sendeBildMail({ an, betreff, text, png, dateiname }) {
+    const s = await ladeSettings()
+    if (!mailKonfigVollstaendig(s)) {
+        const e = new Error('mailFehlt')
+        e.code = 'mailFehlt'
+        throw e
+    }
+    const logo = logoAnhang(s)
+    const mail = baueMail({
+        titel: betreff,
+        text: text || 'Chart-Bild im Anhang.',
+        symbol: '\u{1F4C8}',
+        ton: 'info',
+        bereich: 'Chart · Teilen',
+        nutzer: s?.username || '',
+        zeitzone: zeitzoneAus(s?.timeZone),
+        mitLogo: Boolean(logo),
+        groesse: schriftStufe(s),
+    })
+    const bild = { filename: dateiname, content: png, contentType: dateiname.endsWith('.jpg') ? 'image/jpeg' : 'image/png' }
+    await sendeMail(s, { ...mail, anhaenge: [...(logo ? [logo] : []), bild], an })
 }
 
 /**

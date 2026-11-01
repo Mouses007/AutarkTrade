@@ -7,7 +7,7 @@ import android.content.Context
 import android.content.Intent
 
 /**
- * Die eigenen Widget-Aktionen (Aktualisieren, Auge, 15-min-Wecker).
+ * Die eigenen Widget-Aktionen (Aktualisieren, Auge, Sprachausgabe, 15-min-Wecker).
  *
  * Bis 4.1.0-26 lagen sie im exportierten [TradingWidgetProvider]: jede fremde App
  * konnte das Auge umschalten oder einen Refresh ohne Entprellung in Schleife
@@ -35,6 +35,10 @@ class WidgetAktionReceiver : BroadcastReceiver() {
                     Prefs.setHideBalance(context, id, !Prefs.hideBalance(context, id))
                     TradingWidgetProvider.updateWidget(context, awm, id)   // kein Netz nötig, nur Re-Render
                 }
+            }
+            TradingWidgetProvider.ACTION_TOGGLE_SPRACHE -> {
+                Prefs.setSpracheAn(context, !Prefs.spracheAn(context))
+                TradingWidgetProvider.updateAll(context)   // gilt fürs Gerät → alle Widgets
             }
             TradingWidgetProvider.ACTION_ALARM -> {
                 // 15-min-Auto-Refresh: jetzt aktualisieren + nächsten Alarm planen

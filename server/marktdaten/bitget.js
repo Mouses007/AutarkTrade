@@ -226,7 +226,15 @@ export async function funding(symbol) {
         : null
 }
 
-/** Abgerechnete Funding-Sätze, älteste zuerst (Bitget blättert seitenweise rückwärts). */
+/**
+ * Abgerechnete Funding-Sätze, älteste zuerst (Bitget blättert seitenweise rückwärts).
+ *
+ * Achtung: Bitget hält nur rund 90 Tage vor (etwa 270 Abrechnungen bei 8 h),
+ * unabhängig von der Seitengrenze — danach kommen leere Seiten. Ein längerer
+ * Zeitraum ist also nur am Ende gedeckt. Der Backtest prüft die Abdeckung
+ * selbst und weist den Rest als 'teilweise' aus (Audit 4.3.4, FUN-F1-007);
+ * wer diesen Verlauf anderswo nutzt, muss dasselbe tun.
+ */
 export async function fundingVerlauf(symbol, von, bis) {
     const out = []
     for (let seite = 1; seite <= 20; seite++) {

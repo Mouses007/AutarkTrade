@@ -39,7 +39,7 @@ const FX_TTL = 60 * 60e3
 const MARKT_TTL = 60e3
 
 /** Umbenennungen und verpackte Coins → das Symbol, unter dem es einen Kurs gibt. */
-const ALIAS = { BTT: 'BTTC', MIOTA: 'IOTA', WETH: 'ETH', WBTC: 'BTC', WBNB: 'BNB', WPOL: 'POL', WMATIC: 'POL', MATIC: 'POL', WAVAX: 'AVAX', WSOL: 'SOL', BTCB: 'BTC', CHSB: 'BORG' }
+export const ALIAS = { BTT: 'BTTC', MIOTA: 'IOTA', WETH: 'ETH', WBTC: 'BTC', WBNB: 'BNB', WPOL: 'POL', WMATIC: 'POL', MATIC: 'POL', WAVAX: 'AVAX', WSOL: 'SOL', BTCB: 'BTC', CHSB: 'BORG' }
 
 /** DexScreener-Namen der Ketten. */
 export const DEX_KETTE = { 'evm:1': 'ethereum', 'evm:42161': 'arbitrum', 'evm:8453': 'base', 'evm:10': 'optimism', 'evm:56': 'bsc', 'evm:137': 'polygon', 'evm:43114': 'avalanche', sol: 'solana' }

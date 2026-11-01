@@ -20,7 +20,7 @@ import trendlinienBreakout from './trendlinien_breakout.js'
 import setAndForget from './set_and_forget.js'
 import momentumSwing from './momentum_swing.js'
 import liqKerze from './liq_kerze.js'
-import { alsManifest } from './rule-engine.js'
+import { alsManifest, sichtBedarfKerzen } from './rule-engine.js'
 import { pruefeRegeln } from './rule-validate.js'
 import { TIMEFRAME_MS } from '../market-data.js'
 
@@ -100,7 +100,6 @@ export const RISK_PARAMS = [
     // Handvoll Coins, Alt-Coins liegen bei 1–5 % und wurden im Backtest
     // deutlich zu spät liquidiert. Ein eingetragener Wert gilt als Vorrang.
     { key: 'maintenanceMarginPct', type: 'number', default: 0, min: 0, max: 5, step: 0.1, group: 'costs' },
-    { key: 'maxPriceDeviationPct', type: 'number', default: 0.5, min: 0.01, max: 10, step: 0.01, group: 'quality' },
 ]
 
 /** Agent-Konfiguration je Rolle. Beide Rollen sind optional abschaltbar. */
@@ -171,11 +170,16 @@ export function ladeRegelStrategien(zeilen) {
         try { roh = typeof z.rules === 'object' ? z.rules : JSON.parse(z.rules || '{}') }
         catch { fehlerhaft.push({ strategyId: z.strategyId, fehler: ['Regelbeschreibung ist kein gültiges JSON'] }); continue }
 
-        const g = pruefeRegeln({ ...roh, id: z.strategyId, name: z.name, description: z.description })
+        // Ohne Komplexitätsgrenzen: eine schon gespeicherte Strategie, die vor
+        // den Grenzen entstanden ist, soll weiterlaufen (SEC-S4-001).
+        const g = pruefeRegeln({ ...roh, id: z.strategyId, name: z.name, description: z.description }, { komplexitaet: false })
         if (!g.ok) { fehlerhaft.push({ strategyId: z.strategyId, fehler: g.fehler }); continue }
 
         try {
-            registerStrategy(alsManifest(g.regeln))
+            // `regelFassung`: die gespeicherte Version der Regeln. Positionen
+            // und Trades merken sie sich, damit der Trade-Kontext die Fassung
+            // zeigt, unter der sie entstanden (BUG-L2-004).
+            registerStrategy({ ...alsManifest(g.regeln), regelFassung: Number(z.version) || 1 })
             geladen.push(z.strategyId)
         } catch (e) {
             fehlerhaft.push({ strategyId: z.strategyId, fehler: [e.message] })
@@ -185,6 +189,46 @@ export function ladeRegelStrategien(zeilen) {
 }
 
 /** Manifeste ohne die Funktionen — genau das, was das Frontend braucht. */
+/**
+ * Wie viele Kerzen der höheren Zeiteinheit die Engine für eine Strategie holen
+ * muss. `htfKerzen` im Manifest ist eine Zahl oder eine Funktion der
+ * Parameter; die Strategie schneidet ihre HTF-Kerzen auf genau dieses Fenster
+ * zu, damit Backtest und Betrieb dieselbe Datenlage sehen (siehe htf.js).
+ */
+export function htfBedarf(strategie, params = {}) {
+    const f = strategie?.htfKerzen
+    const n = typeof f === 'function' ? f(params) : Number(f)
+    return Number.isFinite(n) && n > 0 ? Math.ceil(n) : 0
+}
+
+/**
+ * Wie viele Kerzen der eigenen Zeiteinheit Backtest und Engine dem Detector
+ * je Takt zeigen. EINE Stelle für beide — zwei Rechnungen liefen früher oder
+ * später auseinander, und dann sähe der Papierbetrieb etwas anderes als das
+ * Labor.
+ *
+ * Grundfenster: Warmup + Scan-Fenster + Retest-Frist + Reserve. Dazu:
+ *   - bei Regelstrategien der Bedarf aus `sichtBedarfKerzen` (verankerte
+ *     Linien, Indikatorperioden, Rückblickfenster; FUN-S4-003),
+ *   - `ltfKerzen` im Manifest — eine Zahl oder Funktion der Parameter, für
+ *     Strategien mit eigenem Fenster auf der Handelszeiteinheit (Set and
+ *     Forget ohne HTF-Filter, FUN-L4-004).
+ *
+ * @param {object} [opts] `endlich: true` (Engine) lässt ATH/ATL aus, statt
+ *                        `Infinity` („ganze geladene Historie") zu melden
+ * @returns {number} Kerzen oder `Infinity`
+ */
+export function sichtFensterKerzen(strategie, params = {}, timeframeMs = 0, { endlich = false } = {}) {
+    const grund = (strategie?.warmupCandles || 200)
+        + (params.scanWindowCandles || 200)
+        + (params.retestMaxCandles || 40) + 10
+    const regel = strategie?.regeln ? sichtBedarfKerzen(strategie.regeln, timeframeMs, params, { endlich }) : 0
+    if (regel === Infinity) return Infinity
+    const f = strategie?.ltfKerzen
+    const ltf = typeof f === 'function' ? Number(f(params)) : Number(f)
+    return Math.max(grund, regel, Number.isFinite(ltf) && ltf > 0 ? Math.ceil(ltf) : 0)
+}
+
 export function listStrategies() {
     return [...registry.values()].map((m) => ({
         id: m.id,
@@ -266,6 +310,28 @@ export function validateAgainstSchema(schema, input) {
 }
 
 /** Kurzform für Strategie-Parameter. */
+/**
+ * Liegt die Zeiteinheit des Trendfilters wirklich ÜBER der gehandelten?
+ *
+ * Ist sie gleich oder kleiner, laden Backtest und Engine keine HTF-Kerzen,
+ * und je nach Strategie verwirft der Filter dann alles (Momentum Swing,
+ * Liquidations-Kerze, Set and Forget) oder er schaltet still ab (LSOB). Bis
+ * 01.11.2026 meldete der Backtest dazu nur „Filter aus". Liefert einen
+ * Fehlertext oder null.
+ */
+export function htfZeiteinheitFehler(strategyId, params, timeframes) {
+    const s = getStrategy(strategyId)
+    if (!s) return null
+    const p = validateAgainstSchema(s.params, params || {}).values
+    if (!p.htfTrendFilter || !p.htfTimeframe) return null
+    const htfMs = TIMEFRAME_MS[p.htfTimeframe] || 0
+    const zuKlein = (Array.isArray(timeframes) ? timeframes : [timeframes])
+        .filter((tf) => TIMEFRAME_MS[tf] && TIMEFRAME_MS[tf] >= htfMs)
+    if (!zuKlein.length) return null
+    return `Der Trendfilter nutzt ${p.htfTimeframe}, gehandelt wird auf ${zuKlein.join(', ')}. `
+        + 'Die Filter-Zeiteinheit muss höher sein als die gehandelte.'
+}
+
 export function validateParams(strategyId, input) {
     const s = getStrategy(strategyId)
     if (!s) return { values: {}, errors: [`Unbekannte Strategie: ${strategyId}`], clamped: [] }

@@ -224,21 +224,22 @@ console.log('\nWeitere Abbruchgründe')
 }
 
 {
-    // Absturz weit unter die Einstiegs-EMA. Welcher Abbruchgrund zuerst greift,
-    // hängt davon ab, wie schnell die EMAs nachziehen — entscheidend ist allein,
-    // dass KEIN Einstieg zu einem Preis entsteht, den der Markt nie bot.
+    // Absturz weit unter die Einstiegs-EMA. Die Kerze eröffnet ÜBER dem Limit
+    // und fällt durch es hindurch — der Markt hat den Preis geboten, das
+    // ruhende Kauflimit ist gefüllt. Bis Version 1 galt das als „kein
+    // Einstieg", und genau der schlimmste Fall fehlte in der Statistik.
     const sturz = [
         [117.8, 117.9, 116.0, 116.2],
         [116.2, 116.3, 95.0, 95.5],
     ]
     const { zweit } = lauf(fall(sturz))
     const ev = zweit.events[0]
-    check('Absturz an der EMA vorbei erzeugt keinen Einstieg',
-        ev?.status === 'invalidated' && ev.status !== 'triggered',
+    const kerze = { o: 116.2, l: 95.0 }
+    check('Absturz durch das Limit füllt es — zu einem Preis, den der Markt bot',
+        ev?.status === 'triggered' && ev.entry <= kerze.o && ev.entry >= kerze.l,
         JSON.stringify(ev))
-    check('und nennt einen nachvollziehbaren Grund',
-        [INVALID_REASONS.PRICE_BELOW_EMA50, INVALID_REASONS.EMA_CROSS].includes(ev?.invalidReason),
-        ev?.invalidReason)
+    check('und der Stop liegt in derselben Kerze (wird als Verlust gebucht)',
+        ev?.stopLoss > kerze.l && ev?.stopLoss < ev?.entry, String(ev?.stopLoss))
 }
 
 // ── Fibonacci ────────────────────────────────────────────────────────────

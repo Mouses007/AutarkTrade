@@ -15,7 +15,6 @@
  *   gebuehren.js    Gebühren je Symbol
  *   performance.js  Equity, HWM, Drawdown, PnL je Trade
  *   kerzen.js       Kerzenchart eines Trades
- *   strategie.js    Setup und Zeitstrahl der Strategie-Schicht
  *   auswertung.js   Auswertungsseite
  *
  * ECharts zieht das ganze Bundle nach: Aufrufer ausserhalb lazy geladener
@@ -32,6 +31,5 @@ export { useHeatmapChart } from './heatmap.js'
 export { useFeesChart } from './gebuehren.js'
 export { usePerfChart } from './performance.js'
 export { kerzenDiagramm } from './kerzen.js'
-export { useSetupChart, useAgentTimelineChart } from './strategie.js'
 export { useGaugeChart, useHorizontalBarChart, useSplitBarChart, useStressLineChart, useRadarChart } from './auswertung.js'
 export { farbeText, farbeGedaempft, farbeLinie, farbeFlaeche, greenColor, redColor } from './gestaltung.js'

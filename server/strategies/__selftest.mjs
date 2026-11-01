@@ -206,29 +206,81 @@ bothDirections('Equal Highs ohne echten Sweep', [
         `setups=${first.setups.length} gründe=${JSON.stringify(first.diagnostics.rejected)}`)
 })
 
-bothDirections('Schluss zu weit in der Zone', [...shortBase(),
-    [102.5, 108.6, 102.0, 108.5],   // Schluss bei 50 % Eindringtiefe (max 25 %)
-], (label, { second }) => {
+// Die drei Fälle unten gelten für einen BESTÄTIGTEN Einstieg (Ablehnungskerze):
+// dort entscheidet erst der Schluss, und eine Kerze, die so schliesst, ist kein
+// Einstieg. Mit einem RUHENDEN Limit (`zone_touch`, Vorgabe) ist die Berührung
+// dagegen schon die Füllung — was die Kerze danach tut, trifft den Trade (ein
+// Stop in derselben Kerze wird als Verlust gebucht). Bis 01.11.2026 wurde auch
+// dort zuerst „ungültig" geprüft, und genau die schlechtesten Füllungen
+// verschwanden aus der Statistik.
+const BESTAETIGT = { entryMode: 'rejection_confirmed' }
+const gefuellt = (label, ev, long) => check(`${label} — ruhendes Limit ist gefüllt`,
+    ev?.status === 'triggered' && Math.abs(ev.entry - (long ? 92 : 108)) < 1e-9, JSON.stringify(ev))
+
+const tiefRows = [...shortBase(), [102.5, 108.6, 102.0, 108.5]]   // Schluss bei 50 % Eindringtiefe (max 25 %)
+bothDirections('Schluss zu weit in der Zone', tiefRows, (label, { second }) => {
     const ev = second.events[0]
     check(label, ev?.status === 'invalidated' && ev.invalidReason === INVALID_REASONS.CLOSED_TOO_DEEP,
         JSON.stringify(ev))
-})
+}, BESTAETIGT)
+bothDirections('Schluss zu weit in der Zone', tiefRows, (label, { second }, long) => gefuellt(label, second.events[0], long))
 
-bothDirections('Zone wird nicht respektiert', [...shortBase(),
-    [107.0, 110.0, 106.0, 109.5],   // Schluss oberhalb der Zone
-], (label, { second }) => {
+const bruchRows = [...shortBase(), [107.0, 110.0, 106.0, 109.5]]   // Schluss oberhalb der Zone
+bothDirections('Zone wird nicht respektiert', bruchRows, (label, { second }) => {
     const ev = second.events[0]
     check(label, ev?.status === 'invalidated' && ev.invalidReason === INVALID_REASONS.ZONE_BROKEN,
         JSON.stringify(ev))
-})
+}, BESTAETIGT)
+bothDirections('Zone wird nicht respektiert', bruchRows, (label, { second }, long) => gefuellt(label, second.events[0], long))
 
-bothDirections('neuer Liquidity Sweep durch die Zone', [...shortBase(),
-    [107.0, 111.5, 106.5, 108.2],   // Docht über das alte Sweep-Extrem hinaus
-], (label, { second }) => {
+const sweepRows = [...shortBase(), [107.0, 111.5, 106.5, 108.2]]   // Docht über das alte Sweep-Extrem hinaus
+bothDirections('neuer Liquidity Sweep durch die Zone', sweepRows, (label, { second }) => {
     const ev = second.events[0]
     check(label, ev?.status === 'invalidated' && ev.invalidReason === INVALID_REASONS.NEW_SWEEP,
         JSON.stringify(ev))
+}, BESTAETIGT)
+bothDirections('neuer Liquidity Sweep durch die Zone', sweepRows, (label, { second }, long) => {
+    const ev = second.events[0]
+    gefuellt(label, ev, long)
+    // Der Docht über das Sweep-Extrem reisst den Stop in derselben Kerze —
+    // das bucht der Simulator als Verlust (`entryIsValid` → stop_in_entry_candle).
+    const stopGetroffen = long ? 88.5 <= ev?.stopLoss : 111.5 >= ev?.stopLoss
+    check(`${label} — der Stop liegt in der Füllkerze (Verlust, nicht verworfen)`, stopGetroffen, String(ev?.stopLoss))
 })
+
+// Box abgeholt: nach einem Schluss unter der Box (Kerze 32) sticht ein Docht
+// über die ferne Kante (109), aber nicht über das Sweep-Extrem (111).
+const durchRows = [...shortBase(), [103.0, 110.0, 102.8, 104.0]]
+bothDirections('Docht durch die ganze Box nach Schluss ausserhalb', durchRows, (label, { second }) => {
+    const ev = second.events[0]
+    check(label, ev?.status === 'invalidated' && ev.invalidReason === INVALID_REASONS.BOX_PIERCED,
+        JSON.stringify(ev))
+}, BESTAETIGT)
+bothDirections('Docht durch die ganze Box nach Schluss ausserhalb', durchRows, (label, { second }, long) => gefuellt(label, second.events[0], long))
+
+// Dieselben Regeln schon zwischen Sweep und Impulsende (BTCUSDT 15m,
+// 31.10.2026): dort liegt noch keine Order, also gibt es auch keine Füllung.
+const bildung = (zeile33) => { const r = shortBase(); r[33] = zeile33; return r }
+bothDirections('Box in der Bildung durchstochen', bildung([106.5, 109.6, 103.0, 103.5]), (label, { second, candles }) => {
+    const ev = second.events[0]
+    check(label, ev?.status === 'invalidated' && ev.invalidReason === INVALID_REASONS.BOX_PIERCED
+        && ev.candleTime === candles[33].t, JSON.stringify(ev))
+})
+bothDirections('neuer Sweep in der Bildung', bildung([106.5, 111.4, 103.0, 103.5]), (label, { second }) => {
+    const ev = second.events[0]
+    check(label, ev?.status === 'invalidated' && ev.invalidReason === INVALID_REASONS.NEW_SWEEP, JSON.stringify(ev))
+})
+
+// Zone erreicht, Filter dagegen, Frist abgelaufen: das ist nicht »Zone nicht
+// erreicht« (BTCUSDT 15m, 31.10.2026 — der 4h-Trend sperrte den Long).
+bothDirections('Frist abgelaufen, Filter hat an der Zone gesperrt', [...shortBase(),
+    [102.5, 108.2, 102.0, 106.0],
+    [105.0, 106.0, 104.0, 105.0],
+    [105.0, 106.0, 104.0, 105.0],
+], (label, { second }) => {
+    const ev = second.events[0]
+    check(label, ev?.status === 'expired' && ev.invalidReason === INVALID_REASONS.FILTER_RSI, JSON.stringify(ev))
+}, { useRsi: true, rsiOverbought: 65, rsiOversold: 35, retestMaxCandles: 3 })
 
 bothDirections('Zone wird nicht getroffen', [...shortBase(),
     [102.5, 103.0, 102.0, 102.5],
@@ -236,10 +288,25 @@ bothDirections('Zone wird nicht getroffen', [...shortBase(),
     [102.5, 103.0, 102.0, 102.5],
     [102.5, 103.0, 102.0, 102.5],
     [102.5, 103.0, 102.0, 102.5],
-], (label, { second }) => {
+], (label, { second, candles }) => {
     const ev = second.events[0]
     check(label, ev?.status === 'expired' && ev.invalidReason === INVALID_REASONS.ZONE_NOT_REACHED,
         JSON.stringify(ev))
+    // Ende ist die letzte Kerze der Frist (36–38), nicht die jüngste (40)
+    check(`${label} — Ende am Fristende`, ev?.candleTime === candles[38].t, String(ev?.candleTime))
+}, { retestMaxCandles: 3 })
+
+// Nach einem Ausfall holt der Takt viele Kerzen auf einmal nach. Eine Berührung
+// NACH der Frist (Kerze 39, Frist 36–38) ist kein Einstieg mehr.
+bothDirections('Berührung nach Ablauf der Frist löst nicht aus', [...shortBase(),
+    [102.5, 103.0, 102.0, 102.5],
+    [102.5, 103.0, 102.0, 102.5],
+    [102.5, 103.0, 102.0, 102.5],
+    [103.0, 108.4, 102.8, 104.0],
+], (label, { second, candles }) => {
+    const ev = second.events[0]
+    check(label, second.events.length === 1 && ev?.status === 'expired' && ev.candleTime === candles[38].t,
+        JSON.stringify(second.events))
 }, { retestMaxCandles: 3 })
 
 bothDirections('keine Gegenkerzen nach dem Sweep', [
