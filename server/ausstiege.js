@@ -52,6 +52,12 @@
  *     und die deshalb als Verlust zählen. Ihre Zahl sagt, wie viel eine
  *     feinere Auflösung (1m-Kerzen) überhaupt ändern könnte.
  *
+ * Mehrere Symbole: `kerzen` darf statt einer Reihe ein Objekt Symbol → Reihe
+ * sein, dann spielt jeder Trade auf den Kerzen seines `symbol` (eine Instanz
+ * über zwölf Coins hat je Coin zu wenige Trades für ein Urteil, zusammen aber
+ * genug). Die Aufteilung 70/30 läuft über die Zeit aller Trades,
+ * Zufallseinstiege ziehen Coin und Richtung aus den Trades.
+ *
  * Rein: keine DB, kein Netz. Kerzen, Trades, Kosten und Funding kommen von
  * aussen (`ausstiegsPruefung` in `robustness.js`).
  */
@@ -362,45 +368,55 @@ const quote = (mfe, mae) => {
  * bewertet (beim Limit mitten in der Kerze also ab der Folgekerze); die
  * Zufallseinstiege liegen auf der Eröffnung und zählen ihre Kerze mit.
  *
- * @param {Array<{trade, i0}>} gespielt
+ * @param {Array<{trade, i0, kerzen?}>} gespielt  `kerzen` je Trade (mehrere
+ *        Symbole), sonst gilt die gemeinsame Reihe `kerzen`
  */
-export function einstiegsKante(gespielt, kerzen, { horizonte = KANTE_HORIZONTE, aussaat = 1 } = {}) {
-    const atrReihe = atr(kerzen, 14)
+export function einstiegsKante(gespielt, kerzen = null, { horizonte = KANTE_HORIZONTE, aussaat = 1 } = {}) {
+    // Je Kerzenreihe ihre ATR und die Spanne der Einstiege darin
+    const reihen = new Map()
+    const reiheVon = (g) => {
+        const ks = g.kerzen || kerzen
+        let x = reihen.get(ks)
+        if (!x) { x = { kerzen: ks, atr: atr(ks, 14), lo: Infinity, hi: -Infinity }; reihen.set(ks, x) }
+        return x
+    }
     const strat = horizonte.map(() => ({ mfe: [], mae: [] }))
-    let lo = Infinity
-    let hi = -Infinity
-    for (const { trade, i0 } of gespielt) {
-        const a = atrReihe[i0 - 1]
+    for (const g of gespielt) {
+        const { trade, i0 } = g
+        const x = reiheVon(g)
+        const a = x.atr[i0 - 1]
         const erste = trade.einstiegsArt === 'kerze' ? i0 + 1 : i0
         horizonte.forEach((h, k) => {
-            const r = ausschlag(kerzen, erste, h, Number(trade.entryPrice), trade.direction === 'long', a)
+            const r = ausschlag(x.kerzen, erste, h, Number(trade.entryPrice), trade.direction === 'long', a)
             if (r) { strat[k].mfe.push(r.mfe); strat[k].mae.push(r.mae) }
         })
-        if (i0 < lo) lo = i0
-        if (i0 > hi) hi = i0
+        if (i0 < x.lo) x.lo = i0
+        if (i0 > x.hi) x.hi = i0
     }
     const n = gespielt.length
     const richtungen = gespielt.map((g) => g.trade.direction)
     const raus = { horizonte: [], urteil: 'zuWenig' }
-    if (n < MIN_TRADES || !(hi >= lo)) {
+    if (n < MIN_TRADES) {
         raus.horizonte = horizonte.map((h, k) => ({ h, n: strat[k].mfe.length, strategie: runde(quote(strat[k].mfe, strat[k].mae), 3) }))
         return raus
     }
 
-    // Zufallseinstiege im Zeitraum der Trades, mit ATR davor
+    // Zufallseinstiege im Zeitraum der Trades, mit ATR davor. Die Reihe (bei
+    // mehreren Symbolen der Coin) kommt von einem zufälligen Trade, die
+    // Richtung von einem anderen — so bleiben Coin- und Long/Short-Mischung.
     const rnd = zufall(aussaat)
-    const unten = Math.max(lo, 15)
     const pool = horizonte.map(() => ({ mfe: [], mae: [] }))
     const anzahl = Math.min(ZUFALL_MAX, n * ZUFALL_JE_TRADE)
-    if (hi >= unten) {
-        for (let k = 0; k < anzahl; k++) {
-            const i = unten + Math.floor(rnd() * (hi - unten + 1))
-            const long = richtungen[Math.floor(rnd() * richtungen.length)] === 'long'
-            horizonte.forEach((h, x) => {
-                const r = ausschlag(kerzen, i, h, kerzen[i].o, long, atrReihe[i - 1])
-                if (r) { pool[x].mfe.push(r.mfe); pool[x].mae.push(r.mae) }
-            })
-        }
+    for (let k = 0; k < anzahl; k++) {
+        const x = reiheVon(gespielt[Math.floor(rnd() * n)])
+        const unten = Math.max(x.lo, 15)
+        if (!(x.hi >= unten)) continue
+        const i = unten + Math.floor(rnd() * (x.hi - unten + 1))
+        const long = richtungen[Math.floor(rnd() * richtungen.length)] === 'long'
+        horizonte.forEach((h, y) => {
+            const r = ausschlag(x.kerzen, i, h, x.kerzen[i].o, long, x.atr[i - 1])
+            if (r) { pool[y].mfe.push(r.mfe); pool[y].mae.push(r.mae) }
+        })
     }
 
     // Verteilung der Edge Ratio bei Zufall für Stichproben so gross wie die der Strategie
@@ -583,11 +599,13 @@ const kurz = (k) => ({ n: k.n, mittel: runde(k.mittel), treffer: runde(k.treffer
 
 /**
  * @param {Array} trades   Backtest-Trades (`einstiegsArt`, `einstiegsGebuehrBps`, …)
- * @param {Array} kerzen   dieselben Kerzen, auf denen der Backtest lief
+ * @param {Array|object} kerzen  dieselben Kerzen, auf denen der Backtest lief —
+ *                       oder Symbol → Kerzen, wenn die Trades mehrere Symbole haben
  * @param {object} o
  * @param {object} o.costs              `kostenAus(risk)` des Laufs
  * @param {number} o.kerzeMs            Länge einer Kerze
- * @param {number} [o.wartungsmargePct] Wartungsmarge in PROZENT (wie im Lauf)
+ * @param {number|object} [o.wartungsmargePct] Wartungsmarge in PROZENT (wie im
+ *                                      Lauf), bei mehreren Symbolen je Symbol
  * @param {Function} [o.funding]        (pos, bis) → Funding je Stück; ohne
  *                                      rechnet `closePosition` mit der Annahme
  * @param {Function} [o.atempause]      async, wird alle ~25 ms abgewartet
@@ -597,6 +615,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
     const raster = { stops: o.stops || STOP_FAKTOREN, ziele: o.ziele || ZIELE_R, halten: o.halten || HALTEN }
     const kerzeMs = Number(o.kerzeMs) || 0
     const variante = varianteAus(o.variante)
+    const wartung = o.wartungsmargePct && typeof o.wartungsmargePct === 'object' ? o.wartungsmargePct : null
     const opts = { costs: o.costs || {}, kerzeMs, wartungsmargePct: o.wartungsmargePct, funding: o.funding || null, variante }
 
     const kandidaten = (Array.isArray(trades) ? trades : []).filter(spielbar)
@@ -604,9 +623,10 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
     const gespielt = []
     let ohneKerze = 0
     for (const t of kandidaten) {
-        const i0 = kerzeBei(kerzen, Number(t.entryTime))
+        const ks = Array.isArray(kerzen) ? kerzen : (kerzen?.[t.symbol] || [])
+        const i0 = kerzeBei(ks, Number(t.entryTime))
         if (i0 < 0) { ohneKerze++; continue }
-        gespielt.push({ trade: t, i0 })
+        gespielt.push({ trade: t, i0, kerzen: ks })
     }
     const ausgelassen = (Array.isArray(trades) ? trades.length : 0) - gespielt.length
     const n = gespielt.length
@@ -620,12 +640,13 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
     let pause = Date.now()
     for (let k = 0; k < n; k++) {
         if (o.atempause && Date.now() - pause > ATEM_MS) { await o.atempause(); pause = Date.now() }
-        const { trade, i0 } = gespielt[k]
+        const { trade, i0, kerzen: ks } = gespielt[k]
+        const optsTrade = wartung === null ? opts : { ...opts, wartungsmargePct: wartung[trade.symbol] }
         const erste = trade.einstiegsArt === 'kerze' ? i0 + 1 : i0
-        const zeitIdx = zeitKerzen(kerzen, erste, Number(trade.entryTime), kerzeMs, raster.halten)
+        const zeitIdx = zeitKerzen(ks, erste, Number(trade.entryTime), kerzeMs, raster.halten)
         for (let s = 0; s < S; s++) {
             for (let z = 0; z < Z; z++) {
-                const je = spieleTrade(trade, kerzen, i0, raster.stops[s], raster.ziele[z], zeitIdx, opts)
+                const je = spieleTrade(trade, ks, i0, raster.stops[s], raster.ziele[z], zeitIdx, optsTrade)
                 for (let h = 0; h < H; h++) {
                     r[s][z][h][k] = je[h].r
                     if (je[h].amEnde) amEnde[s][z][h]++
@@ -662,7 +683,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
         zellen,
         gewaehlt: null,
         besteZelle: null,
-        einstieg: einstiegsKante(gespielt, kerzen),
+        einstieg: einstiegsKante(gespielt),
         ueberanpassung: ueberanpassung(r, n),
         ueberanpassungAb: CSCV_BLOECKE * CSCV_MIN_JE_BLOCK,
         urteil: 'zuWenig',

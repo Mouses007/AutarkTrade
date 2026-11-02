@@ -365,6 +365,21 @@ console.log('\nDieselben Zahlen wie der Backtest')
     check('Nachziehen ändert das Ergebnis ohne Ziel (der Stop wandert mit)', festZelle.alle.summe !== trZelle.alle.summe,
         `${festZelle.alle.summe} / ${trZelle.alle.summe}`)
 
+    // Mehrere Symbole: ein Symbol als Objekt rechnet wie die Reihe selbst,
+    // zwei Symbole spielen jeden Trade auf seinen eigenen Kerzen.
+    const alsObjekt = await ausstiegsRaster(ohneSchlupf.trades, { TESTUSDT: kerzen }, { ...opts, wartungsmargePct: { TESTUSDT: opts.wartungsmargePct } })
+    check('Kerzen je Symbol: ein Symbol ergibt dasselbe wie die Reihe',
+        JSON.stringify(alsObjekt.zellen) === JSON.stringify(e.zellen) && JSON.stringify(alsObjekt.einstieg) === JSON.stringify(e.einstieg))
+    const kopie = ohneSchlupf.trades.map((t) => ({ ...t, symbol: 'ZWEIUSDT' }))
+    const zwei = await ausstiegsRaster([...ohneSchlupf.trades, ...kopie], { TESTUSDT: kerzen, ZWEIUSDT: kerzen }, opts)
+    const eigene2 = zwei.zellen.find((c) => c.s === s1 && c.z === z2 && c.h === h16)
+    check('zwei Symbole: doppelt so viele Trades, gleiches Ø R je Zelle',
+        zwei.trades.gespielt === 2 * e.trades.gespielt && nah(eigene2.alle.mittel, eigene.alle.mittel, 1e-6),
+        `${zwei.trades.gespielt} / ${eigene2.alle.mittel} gegen ${eigene.alle.mittel}`)
+    const fehltSymbol = await ausstiegsRaster(kopie, { TESTUSDT: kerzen }, opts)
+    check('Trades ohne Kerzen ihres Symbols werden ausgelassen, nicht falsch gespielt',
+        fehltSymbol.trades.gespielt === 0 && fehltSymbol.trades.ohneKerze === kopie.filter((t) => t.exitReason !== 'open_at_end').length)
+
     const wenige = await ausstiegsRaster(ohneSchlupf.trades.slice(0, 20), kerzen, opts)
     check('unter 30 Trades: Urteil „zu wenig"', wenige.urteil === 'zuWenig', wenige.urteil)
     const leer = await ausstiegsRaster([], kerzen, opts)
