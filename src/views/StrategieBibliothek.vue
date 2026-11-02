@@ -440,7 +440,7 @@ const kurzSatz = (s) => s.description || s.saetze?.find((x) => x.titel === 'Ausl
 </template>
 
 <style scoped>
-.bibliothekSeite { padding: 16px 16px 24px; max-width: 1400px; margin: 0 auto; }
+.bibliothekSeite { padding: 16px 16px 24px; max-width: 1400px; margin: 0; }   /* linksbündig wie Instanzen */
 .kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .kopf .platz { flex: 1; }
 .seitentitel { margin: 0; }

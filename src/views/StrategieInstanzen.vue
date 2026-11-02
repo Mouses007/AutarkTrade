@@ -351,7 +351,9 @@ const oeffne = (i) => router.push(`/strategien/instanzen/${i.id}`)
 </template>
 
 <style scoped>
-.instanzenSeite { padding: 16px 16px 0; max-width: 1400px; margin: 0 auto; }
+/* Linksbündig wie der Beta-Hinweis darüber; zentriert stand die Liste auf
+   breiten Bildschirmen frei in der Mitte (01.11.2026). */
+.instanzenSeite { padding: 16px 16px 0; max-width: 1400px; margin: 0; }
 .kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .kopf .platz { flex: 1; }
 .seitentitel { margin: 0; }

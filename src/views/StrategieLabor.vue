@@ -225,7 +225,7 @@ watch(() => [route.query.lauf, route.query.instanz, route.query.strategie].join(
 </template>
 
 <style scoped>
-.laborSeite { padding: 16px 16px 24px; max-width: 1500px; margin: 0 auto; }
+.laborSeite { padding: 16px 16px 24px; max-width: 1500px; margin: 0; }   /* linksbündig wie Instanzen */
 .kopf { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 4px; }
 .seitentitel { margin: 0; }
 .abstand { margin-top: 12px; }
