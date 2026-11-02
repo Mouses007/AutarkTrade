@@ -7003,7 +7003,9 @@
       "stimmung": "Stimmung",
       "markt": "Markt",
       "markierung": "Markierung"
-    }
+    },
+    "einpassenAlles": "Auto-Einpassen mit Indikatoren",
+    "einpassenAllesInfo": "Aus (Vorgabe): „Auto“ passt die Preisachse nur an die Kerzen (und eigene offene Positionen) an — eine Indikatorlinie weit weg vom Kurs drückt die Kerzen nicht mehr zusammen. An: auch die Linien der Indikatoren im Kursfenster passen ins Bild."
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade ist freie Software (AGPL-3.0). Den Quellcode dieser Fassung gibt es hier:",

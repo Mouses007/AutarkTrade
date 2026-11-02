@@ -355,6 +355,8 @@ export class IndikatorZeichner {
         this.kerzenSerie = o.kerzenSerie || null
         this.faerbeKerzen = o.faerbeKerzen || (() => {})
         // Footprint: Kerzenfarben und Rückmeldung, wenn er die Kerzen selbst zeichnet
+        // () => true: Indikatoren im Kursfenster zählen beim automatischen Einpassen nicht mit
+        this.nurKursEinpassen = o.nurKursEinpassen || (() => false)
         this.kerzenStil = o.kerzenStil || null
         this.footprintZellen = o.footprintZellen || null
         // (typ, kennzahlen) → Tabellenzeilen; ohne (Prüfskripte) keine Tabellen
@@ -416,6 +418,10 @@ export class IndikatorZeichner {
                     // ohne sie zoomt das Pane auf 48–52 und jede Delle sieht
                     // wie ein Ausschlag aus.
                     ...(def.bereich ? { autoscaleInfoProvider: () => ({ priceRange: { minValue: def.bereich[0], maxValue: def.bereich[1] } }) } : {}),
+                    // Im Kursfenster: eine Linie weit weg vom Kurs (EMA der höheren Zeiteinheit, Fächer)
+                    // drückte die Kerzen auf einen Streifen (HBARUSDT 15m, 02.11.2026) — eingepasst
+                    // wird nach den Kerzen, ausser das Panel will es anders (`panel.einpassenAlles`)
+                    ...(pane === 0 && !def.bereich ? { autoscaleInfoProvider: (basis) => (this.nurKursEinpassen() ? null : basis()) } : {}),
                 }
                 const format = def.kompakt
                     ? { priceFormat: { type: 'custom', formatter: kompakt, minMove: 0.01 } }

@@ -305,7 +305,7 @@ function baueChart() {
     volumenSerie.value = vs
     zeichner = new IndikatorZeichner(c, zuLwc, (ind) => kurzname(ind.typ, ind.params, t('chart.ind.' + ind.typ + '.name')),
         { kerzenSerie: ks, faerbeKerzen, tabellenText: (typ, kz) => tabellenZeilen(typ, kz, t),
-            kerzenStil: () => kerzenStil.value, footprintZellen: (an) => { footprintZellen.value = an } })
+            kerzenStil: () => kerzenStil.value, nurKursEinpassen: () => props.panel.einpassenAlles !== true, footprintZellen: (an) => { footprintZellen.value = an } })
     ebene = new ZeichenEbene({
         huelle: huelle.value,
         chart: c,
@@ -406,6 +406,8 @@ watch(kerzenSelbst, () => {
     if (kerzenSerie.value && kerzen.value.length) kerzenSerie.value.setData(kerzen.value.map(kerzenPunkt))
 })
 watch(volumenBreite, (an) => volumenKerzen?.setzeAn(an))
+// Einpassen umgestellt: die Preisachse neu rechnen lassen (die Serien fragen den Schalter bei jedem Einpassen)
+watch(() => props.panel.einpassenAlles, () => { if (autoSkala.value) autoEinpassen(true) })
 
 /*
  * Vektorkerzen (VWAP Vector): Farbe je Kerze für Körper, Rand und Docht —
@@ -1960,6 +1962,8 @@ defineExpose({
             <button @click="zeichnungHier('horizontale')"><Symbol name="minus" /> {{ t('chart.wz.horizontale') }}</button>
             <button @click="zeichnungHier('strahlH')"><Symbol name="pfeilRechts" /> {{ t('chart.wz.strahlH') }}</button>
             <button @click="kerzenWahl = { x: kontext.x, y: kontext.y }; kontext = null"><Symbol name="palette" /> {{ t('chart.kerzenFarbenMenue') }}</button>
+            <button :title="t('chart.einpassenAllesInfo')" @click="emit('indikator', { aktion: 'einpassenAlles' }); kontext = null">
+                <Symbol :name="panel.einpassenAlles ? 'haken' : 'quadrat'" /> {{ t('chart.einpassenAlles') }}</button>
             <hr />
             <!-- Fragt nach (Chart.vue) und lässt gesperrte Zeichnungen stehen — wie der Mülleimer in der Werkzeugleiste. -->
             <button class="gefahr" @click="kontext = null; emit('alleLoeschen')"><Symbol name="muell" /> {{ t('chart.wzKurz.alleZeichnungenLoeschen') }}</button>

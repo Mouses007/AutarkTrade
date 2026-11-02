@@ -7003,7 +7003,9 @@
       "stimmung": "Mood",
       "markt": "Market",
       "markierung": "Marker"
-    }
+    },
+    "einpassenAlles": "Auto-fit including indicators",
+    "einpassenAllesInfo": "Off (default): “Auto” fits the price scale to the candles (and own open positions) only — an indicator line far from the price no longer squeezes the candles. On: indicator lines in the price pane are fitted too."
   },
   "rechtliches": {
     "quellcodeText": "AutarkTrade is free software (AGPL-3.0). The source code of this version is available here:",

@@ -995,6 +995,7 @@ function indikatorAktion(i, { aktion, id }) {
     const p = daten.value.panels[i]
     if (aktion === 'volumen') { p.volumen = p.volumen === false; return }
     if (aktion === 'volumenBreite') { p.volumenBreite = !p.volumenBreite; return }
+    if (aktion === 'einpassenAlles') { p.einpassenAlles = !p.einpassenAlles; return }
     const inst = (p.indikatoren || []).find((x) => x.id === id)
     if (!inst) return
     if (aktion === 'entfernen') p.indikatoren = p.indikatoren.filter((x) => x.id !== id)
