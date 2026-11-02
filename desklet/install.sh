@@ -9,6 +9,24 @@ DESKLET_SRC="$(cd "$(dirname "$0")" && pwd)/${DESKLET_UUID}"
 DESKLET_DIR="${HOME}/.local/share/cinnamon/desklets"
 DEST="${DESKLET_DIR}/${DESKLET_UUID}"
 
+# --stimme: Piper (MIT) und die Stimmen „Thorsten“ (CC0, deutsch) und „Jenny (Dioco)“ (englisch) für die Alarm-Ansage
+# nach ~/.local/share/piper holen (~225 MB). Ohne sie liest das Desklet mit spd-say vor.
+if [ "${1:-}" = "--stimme" ]; then
+    PIPER_ORDNER="${HOME}/.local/share/piper"
+    STIMME_URL="https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/de/de_DE/thorsten/high/de_DE-thorsten-high.onnx"
+    mkdir -p "${PIPER_ORDNER}/stimmen"
+    echo "==> Piper und Stimme laden nach ${PIPER_ORDNER}"
+    curl -fL https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz \
+        | tar xz -C "${PIPER_ORDNER}"
+    curl -fL -o "${PIPER_ORDNER}/stimmen/de_DE-thorsten-high.onnx" "${STIMME_URL}"
+    curl -fL -o "${PIPER_ORDNER}/stimmen/de_DE-thorsten-high.onnx.json" "${STIMME_URL}.json"
+    # Englisch, weiblich: „Jenny (Dioco)“ — Namensnennung ist Lizenzbedingung (Desklet-Einstellungen)
+    JENNY_URL="https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium.onnx"
+    curl -fL -o "${PIPER_ORDNER}/stimmen/en_GB-jenny_dioco-medium.onnx" "${JENNY_URL}"
+    curl -fL -o "${PIPER_ORDNER}/stimmen/en_GB-jenny_dioco-medium.onnx.json" "${JENNY_URL}.json"
+    echo ""
+fi
+
 echo "==> AutarkTrade-Desklet (Positionen) installieren"
 echo "    Quelle: ${DESKLET_SRC}"
 echo "    Ziel:   ${DEST}"
@@ -24,6 +42,20 @@ fi
 
 cp -r "${DESKLET_SRC}" "${DEST}"
 echo "    Dateien kopiert."
+
+# Übersetzungen: Cinnamon baut die .mo nur bei Installation aus dem Spices-Store.
+if command -v msgfmt >/dev/null 2>&1; then
+    for PO in "${DEST}"/po/*.po; do
+        [ -f "${PO}" ] || continue
+        SPRACHE="$(basename "${PO}" .po)"
+        MO_DIR="${HOME}/.local/share/locale/${SPRACHE}/LC_MESSAGES"
+        mkdir -p "${MO_DIR}"
+        msgfmt -o "${MO_DIR}/${DESKLET_UUID}.mo" "${PO}"
+        echo "    Übersetzung installiert: ${SPRACHE}"
+    done
+else
+    echo "    msgfmt fehlt (Paket gettext) — Desklet bleibt englisch."
+fi
 
 # Die Einstellungen enthalten den Geräteschlüssel im Klartext. Cinnamon legt sie
 # gruppenlesbar an (0664) — nur der eigene Benutzer soll sie lesen (Audit SEC-DSK-001).

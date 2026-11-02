@@ -9,6 +9,8 @@ const Gio       = imports.gi.Gio;
 const Mainloop  = imports.mainloop;
 const Settings  = imports.ui.settings;
 const Gettext   = imports.gettext;
+const Cairo     = imports.cairo;
+const Tooltips  = imports.ui.tooltips;
 
 // Soup version detection: Cinnamon < 5.8 uses Soup 2, newer ones Soup 3
 let Soup;
@@ -210,6 +212,104 @@ function soupGet(session, url, callback, headers) {
 }
 // ---- TLS-Kopplung (Ende) ----
 
+// ---- Kurs-Chart: Kerzen direkt von Binance-Futures (öffentlich, ohne Schlüssel) ----
+// Die Kerzen-Route des Servers verlangt eine Browser-Sitzung; das Desklet hat nur
+// den Geräteschlüssel. Je Spanne: Kerzenlänge, Anzahl, Abrufabstand (s).
+const CHART_SPANNEN = {
+    '1h':  { interval: '1m',  limit: 60,  takt: 30 },
+    '24h': { interval: '15m', limit: 96,  takt: 60 },
+    '7d':  { interval: '1h',  limit: 168, takt: 60 },
+    '30d': { interval: '4h',  limit: 180, takt: 120 },
+};
+const CHART_URL = 'https://fapi.binance.com/fapi/v1/klines';
+
+/** „btc" → „BTCUSDT"; nur Buchstaben und Ziffern. */
+function chartSymbol(roh) {
+    let s = String(roh || '').toUpperCase().replace(/[^A-Z0-9]/g, '') || 'BTCUSDT';
+    return /(USDT|USDC)$/.test(s) ? s : s + 'USDT';
+}
+
+// ---- Links je Coin: Chart in AutarkTrade (wie `/chart?symbol=…` der Web-App,
+// src/utils/boersenLinks.js) und „BX" zur Bitunix-Handelsseite ----
+const BITUNIX_HANDEL = 'https://www.bitunix.com/contract-trade/';
+const CHART_BOERSEN  = ['bitunix', 'bitget'];   // als Kursquelle im Chart wählbar (kerzenQuelle.js)
+
+/** Positions-Symbol → Handelspaar wie in der App: „BTCUSDT"; Coin-M „SOLUSD" → „SOLUSDT". */
+function paarSymbol(roh) {
+    let s = String(roh || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (!s) return '';
+    if (/USD$/.test(s)) s += 'T';
+    return /(USDT|USDC)$/.test(s) ? s : s + 'USDT';
+}
+
+function chartPreis(n) {
+    return n >= 1000 ? n.toLocaleString('de-DE', { maximumFractionDigits: 1 })
+         : n >= 1    ? n.toFixed(3)
+                     : n.toPrecision(4);
+}
+
+/** Runde Achsenschritte (1-2-2.5-5 × 10^n) für rund 4 Linien über [min, max]. */
+function achsenStufen(min, max) {
+    let roh = (max - min) / 4 || Math.abs(max) / 100 || 1;
+    let basis = Math.pow(10, Math.floor(Math.log10(roh)));
+    // der nächste runde Schritt (Verhältnis), nicht der nächstgrössere — sonst oft nur zwei Linien
+    let schritt = [1, 2, 2.5, 5, 10].map(f => f * basis)
+        .reduce((best, w) => Math.abs(Math.log(w / roh)) < Math.abs(Math.log(best / roh)) ? w : best);
+    let stufen = [];
+    for (let v = Math.ceil(min / schritt) * schritt; v <= max + schritt * 1e-9; v += schritt) stufen.push(v);
+    return { stufen, schritt };
+}
+
+function achsenText(v, schritt) {
+    let stellen = Math.max(0, Math.min(8, -Math.floor(Math.log10(schritt) + 1e-9)));
+    if (schritt * Math.pow(10, stellen) % 1 > 1e-6) stellen++;   // 2.5er-Schritte
+    return v.toLocaleString('de-DE', { minimumFractionDigits: stellen, maximumFractionDigits: stellen });
+}
+
+// ---- Alarme: Ansage wie im Android-Widget (Sprache.kt) ----
+const ALARM_UEBERLAPPUNG_MS = 3 * 60 * 1000;
+const RANG        = { info: 0, warnung: 1, einstieg: 2 };
+const MAX_SAETZE  = 3;    // mehr am Stück wäre zu lang
+const MAX_ZEILEN  = 4;    // Alarmzeilen im Desklet
+const TON_ORDNER  = '/usr/share/sounds/freedesktop/stereo/';
+
+/** „Trade-Einstieg. BTC Zonenalarm bei 65000" — ohne USDT und Tausender-Zeichen, die stören beim Vorlesen. */
+function ansageSatz(schwere, titel, englisch) {
+    let vorne = englisch
+        ? (schwere === 'einstieg' ? 'Trade entry. ' : schwere === 'warnung' ? 'Warning. ' : '')
+        : (schwere === 'einstieg' ? 'Trade-Einstieg. ' : schwere === 'warnung' ? 'Warnung. ' : '');
+    let rein = String(titel)
+        .replace(/\b([A-Z0-9]{2,}?)USDT\b/g, '$1')
+        .replace(/(\d)['\u2019](?=\d)/g, '$1')
+        .replace(/\u2014/g, ',');
+    if (englisch) {
+        rein = rein.replace(/\b(Long|Short)-/g, '$1 ');
+        for (let [de, en] of AUF_ENGLISCH) rein = rein.replace(new RegExp(`(^|[^\\wäöü])${de}(?![\\wäöü])`, 'g'), `$1${en}`);
+    }
+    return vorne + rein;
+}
+
+// Die Alarmtexte kommen deutsch vom Server; für die englische Stimme die
+// festen Wörter übersetzen (Wortlaut aus chart-alarme.js, -momentum.js, -lsob.js,
+// esp32-alarme.js). Längere Wendungen zuerst.
+const AUF_ENGLISCH = [
+    ['steigt über', 'rises above'], ['fällt unter', 'falls below'],
+    ['läuft in die Zone', 'enters the zone'], ['verlässt die Zone', 'leaves the zone'],
+    ['mit Divergenz', 'with divergence'], ['Preisalarm', 'price alert'], ['Linienalarm', 'line alert'],
+    ['Zonenalarm', 'zone alert'], ['Alarm', 'alert'], ['Signale', 'signals'], ['kreuzt', 'crosses'],
+    ['grosser', 'large'], ['kleiner', 'small'], ['Punkt', 'dot'], ['neue', 'new'], ['Box', 'box'],
+    ['bei', 'at'], ['jetzt', 'now'], ['Kurs', 'price'],
+];
+
+/** Programm ohne Shell starten (Text vom Server landet nur als Argument hinter `--`). */
+function starte(argv) {
+    try {
+        GLib.spawn_async(null, argv, null, GLib.SpawnFlags.SEARCH_PATH, null);
+    } catch (e) {
+        global.logWarning('[' + UUID + '] ' + argv[0] + ': ' + e.message);
+    }
+}
+
 function _(str) {
     let translation = Gettext.dgettext(UUID, str);
     if (translation !== str && translation !== "") return translation;
@@ -236,17 +336,45 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         this._settings.bind("show-mark-price",  "showMarkPrice",   this._onSettingChanged.bind(this));
         this._settings.bind("show-realized-pnl","showRealizedPnl", this._onSettingChanged.bind(this));
         this._settings.bind("show-bots",        "showBots",        this._onSettingChanged.bind(this));
+        this._settings.bind("bot-usdt",         "botUsdt",         () => this._zeigeProzent());
+        this._settings.bind("pnl-prozent",      "pnlProzent",      () => this._zeigeProzent());
         this._settings.bind("show-github-link", "showGithubLink",  this._onFooterChanged.bind(this));
+        this._settings.bind("bitunix-link",     "bitunixLink",     this._onStyleChanged.bind(this));
         this._settings.bind("font-size",        "fontSize",        this._onStyleChanged.bind(this));
         this._settings.bind("font-size-ui",    "fontSizeUi",      this._onStyleChanged.bind(this));
         this._settings.bind("bg-opacity",       "bgOpacity",       this._onStyleChanged.bind(this));
         this._settings.bind("min-width",        "minWidth",        this._onStyleChanged.bind(this));
+        for (let [schluessel, name] of [
+                ["alarme-an", "alarmeAn"], ["alarm-intervall", "alarmIntervall"],
+                ["alarm-preis", "alarmPreis"], ["alarm-linie", "alarmLinie"], ["alarm-zone", "alarmZone"],
+                ["alarm-momentum", "alarmMomentum"], ["alarm-lsob", "alarmLsob"]]) {
+            this._settings.bind(schluessel, name, () => this._startAlarme());
+        }
+        this._settings.bind("alarm-ton",        "alarmTon");
+        this._settings.bind("sprache-an",       "spracheAn",       () => this._zeigeSprachKnopf());
+        this._settings.bind("sprache-ab",       "spracheAb");
+        this._settings.bind("stimme",           "stimme");
+        this._settings.bind("ruhe-an",          "ruheAn");
+        this._settings.bind("ruhe-von",         "ruheVon");
+        this._settings.bind("ruhe-bis",         "ruheBis");
+        for (let [schluessel, name] of [["chart-an", "chartAn"], ["chart-symbol", "chartSymbolRoh"],
+                                        ["chart-spanne", "chartSpanne"], ["chart-hoehe", "chartHoehe"],
+                                        ["chart-art", "chartArt"]]) {
+            this._settings.bind(schluessel, name, () => this._startChart());
+        }
 
         this._cookieAcquired = false;
         this._timeoutId      = null;
         this._appVersion     = null;
         this._deskletId      = desklet_id;
         this._caOffen        = null;   // abgeholte, noch nicht bestätigte CA {pem, fp, host}
+        this._alarmTimer     = null;
+        this._alarmSeit      = 0;          // Serverzeit (ms) des letzten Abrufs, 0 = noch keiner
+        this._alarmGesehen   = new Set();  // Kennungen `alarmId-t` gegen Doppelte aus der Überlappung
+        this._chartTimer     = null;
+        this._chartKurs      = [];         // Schlusskurse der Kerzen, älteste zuerst
+        this._chartKerzen    = [];         // [o, h, l, c] je Kerze, für die Kerzendarstellung
+        this._marktSession   = neueSession(null);   // System-CAs, getrennt von der Server-Kopplung
 
         schuetzeEinstellungen();
         this._initSoup();
@@ -254,12 +382,53 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         this._buildUI();
         this._applyStyle();
         this._startPolling();
+        this._startAlarme();
+        this._startChart();
     }
 
     get _baseUrl() {
         let host = (this.serverHost || 'localhost').trim();
         if (this.useHttps) return `https://${host}:${this.httpsPort || 8443}`;
         return `http://${host}:${this.serverPort}`;
+    }
+
+    /** Coin im Chart der Web-App; bei Bitunix/Bitget-Positionen mit dieser Börse als Kursquelle. */
+    _chartLink(paar, broker) {
+        let boerse = CHART_BOERSEN.includes(broker) ? `&boerse=${broker}` : '';
+        return `${this._baseUrl}/chart?symbol=${encodeURIComponent(paar)}${boerse}`;
+    }
+
+    _oeffne(url) {
+        try {
+            Gio.AppInfo.launch_default_for_uri(url, null);
+        } catch (e) {
+            global.logWarning('[' + UUID + '] ' + url + ': ' + e.message);
+        }
+    }
+
+    /** Symbol-Zelle: Klick auf den Coin öffnet den AutarkTrade-Chart, „BX" die Bitunix-Handelsseite. */
+    _symbolZelle(pos, width, fs) {
+        let box  = new St.BoxLayout({ style_class: 'symbol-box' });
+        box.set_style(`min-width: ${width}px;`);
+        let name = new St.Label({ text: pos.symbol || '-', style_class: 'symbol-cell' });
+        name.set_style(`font-size: ${fs}px;`);
+        let paar = paarSymbol(pos.symbol);
+        if (!paar) {
+            box.add_child(name);
+            return box;
+        }
+        let knopf = new St.Button({ child: name, style_class: 'symbol-link', reactive: true, track_hover: true });
+        knopf.connect('clicked', () => this._oeffne(this._chartLink(paar, pos.broker)));
+        new Tooltips.Tooltip(knopf, _("Open in the AutarkTrade chart"));
+        box.add_child(knopf);
+        if (pos.broker === 'bitunix' && this.bitunixLink !== false) {
+            let bx = new St.Button({ label: 'BX', style_class: 'bitunix-link', reactive: true, track_hover: true });
+            bx.set_style(`font-size: ${Math.max(8, Math.round(fs * 0.7))}px;`);
+            bx.connect('clicked', () => this._oeffne(BITUNIX_HANDEL + paar));
+            new Tooltips.Tooltip(bx, _("Open on Bitunix"));
+            box.add_child(bx);
+        }
+        return box;
     }
 
     /** Klartext-Adresse — nur zum Abholen der CA beim Koppeln (und ohne HTTPS). */
@@ -330,6 +499,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         this.caPending = '';
         this._ladeKopplung();
         this._startPolling();
+        this._startAlarme();
     }
 
     // ------------------------------------------------------------------ Style
@@ -346,7 +516,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         // Scaling factor for column widths (base: fs=12)
         let scale = fs / 12;
         this._colWidths = {
-            symbol:   Math.round(90  * scale),
+            symbol:   Math.round((this.bitunixLink !== false ? 112 : 90) * scale),   // + Platz für „BX"
             side:     Math.round(55  * scale),
             leverage: Math.round(36  * scale),
             price:    Math.round(78  * scale),
@@ -419,10 +589,55 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         titleBox.add_child(titleRow);
         titleBox.add_child(this._subtitleLabel);
         headerRow.add_child(titleBox);
+
+        // Schnellschalter Sprachausgabe (schreibt dieselbe Einstellung wie der Dialog)
+        headerRow.add_child(new St.Widget({ x_expand: true }));
+        // Schnellschalter PnL: Betrag ↔ Prozent der Marge (dieselbe Einstellung wie im Dialog)
+        this._prozentKnopf = new St.Button({ style_class: 'prozent-knopf', reactive: true, can_focus: true,
+                                             y_align: St.Align.MIDDLE, label: '%' });
+        this._prozentKnopf.connect('clicked', () => {
+            this.pnlProzent = !this.pnlProzent;
+            this._zeigeProzent();
+        });
+        headerRow.add_child(this._prozentKnopf);
+        this._sprachKnopf = new St.Button({ style_class: 'sprach-knopf', reactive: true, can_focus: true,
+                                            y_align: St.Align.MIDDLE });
+        this._sprachSymbol = new St.Icon({ icon_size: 18 });
+        this._sprachKnopf.set_child(this._sprachSymbol);
+        this._sprachKnopf.connect('clicked', () => {
+            this.spracheAn = !this.spracheAn;
+            this._zeigeSprachKnopf();
+        });
+        headerRow.add_child(this._sprachKnopf);
+        this._zeigeSprachKnopf();
+        this._prozentKnopf.style_class = 'prozent-knopf' + (this.pnlProzent ? '' : ' prozent-aus');
         outer.add_child(headerRow);
 
         // Separator after header
         outer.add_child(linie('linie'));
+
+        // --- Alarme (leer = unsichtbar) ---
+        this._alarmBox = new St.BoxLayout({ vertical: true, style_class: 'alarm-box' });
+        this._alarmBox.hide();
+        outer.add_child(this._alarmBox);
+
+        // --- Kurs-Chart (aus = unsichtbar) ---
+        this._chartBox = new St.BoxLayout({ vertical: true, style_class: 'chart-box' });
+        let chartKopf = new St.BoxLayout({ style_class: 'chart-kopf' });
+        this._chartTitel = new St.Label({ text: '', style_class: 'chart-titel' });
+        this._chartWert  = new St.Label({ text: '', style_class: 'chart-wert' });
+        chartKopf.add_child(this._chartTitel);
+        chartKopf.add_child(new St.Widget({ x_expand: true }));
+        chartKopf.add_child(this._chartWert);
+        this._chartBox.add_child(chartKopf);
+        this._chartFlaeche = new St.DrawingArea({ style_class: 'chart-flaeche', x_expand: true });
+        this._chartFlaeche.connect('repaint', (flaeche) => this._zeichneChart(flaeche));
+        this._chartBox.add_child(this._chartFlaeche);
+        this._chartSpanneLabel = new St.Label({ text: '', style_class: 'chart-spanne' });
+        this._chartBox.add_child(this._chartSpanneLabel);
+        this._chartBox.add_child(linie('linie-duenn'));
+        this._chartBox.hide();
+        outer.add_child(this._chartBox);
 
         // --- Content area (positions / status) ---
         this._content = new St.BoxLayout({ vertical: true, style_class: 'desklet-content' });
@@ -503,6 +718,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
             }
             this._futures = data.openPositions || [];
             let bots = (this.showBots !== false) ? (data.bots || []) : [];
+            this._letzteDaten = [this._futures, bots];   // für den %-Schalter ohne neuen Abruf
             this._renderAll(this._futures, bots);
             this._updateFooterTime();
         }, { 'X-ESP32-Key': this.apiKey });
@@ -587,6 +803,26 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         return u || '-';
     }
 
+    _zeigeProzent() {
+        this._prozentKnopf.style_class = 'prozent-knopf' + (this.pnlProzent ? '' : ' prozent-aus');
+        if (this._letzteDaten) this._renderAll(...this._letzteDaten);
+    }
+
+    /** Eingesetzte Marge einer Position: Einstieg × Menge / Hebel (wie die Börse für den ROE). */
+    _marge(pos) {
+        let m = parseFloat(pos.margin);
+        if (m > 0) return m;
+        let e = parseFloat(pos.entryPrice), q = Math.abs(parseFloat(pos.qty)), l = parseFloat(pos.leverage);
+        return e > 0 && q > 0 && l > 0 ? e * q / l : 0;
+    }
+
+    /** „+12.34 %" bezogen auf die Marge, „-" ohne Marge. */
+    _prozentText(betrag, marge) {
+        if (!(marge > 0)) return '-';
+        let p = betrag / marge * 100;
+        return (p >= 0 ? '+' : '') + p.toFixed(2) + ' %';
+    }
+
     _renderFuturesSection(positions, brokerLabel) {
         // Total PnL
         let totalPnl   = positions.reduce((sum, p) => sum + (parseFloat(p.unrealizedPNL) || 0), 0);
@@ -595,8 +831,11 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         let totalRow   = new St.BoxLayout({ style_class: 'total-row' });
         let posWord = positions.length === 1 ? _("position") : _("positions");
         let prefix = brokerLabel ? brokerLabel + '  ' : _("Total:") + '  ';
+        let totalMarge = positions.reduce((sum, p) => sum + this._marge(p), 0);
+        let totalText  = this.pnlProzent ? this._prozentText(totalPnl, totalMarge)
+                                         : `${totalSign}${totalPnl.toFixed(2)} USDT`;
         let totalLbl = new St.Label({
-            text: prefix + `${totalSign}${totalPnl.toFixed(2)} USDT   (${positions.length} ${posWord})`,
+            text: prefix + `${totalText}   (${positions.length} ${posWord})`,
             style_class: 'total-label ' + totalClass
         });
         if (this._totalStyle) totalLbl.set_style(this._totalStyle);
@@ -642,6 +881,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         if (this.showLeverage) headerCells.push({ text: _('Lvg'), width: this._colWidths.leverage });
         headerCells.push({ text: _('Ø Entry'), width: this._colWidths.price });
         headerCells.push({ text: _('Liq'),     width: this._colWidths.price });
+        headerCells.push({ text: _('Grid'),    width: this._colWidths.pnl });
         headerCells.push({ text: _('PnL'),     width: this._colWidths.pnl });
         this._content.add_child(this._makeHeaderRow(headerCells));
 
@@ -652,11 +892,20 @@ class TradingPositionsDesklet extends Desklet.Desklet {
 
     _makeBotRow(pos) {
         let coin     = pos.marginCoin || 'USDT';
+        // Coin-M auf Wunsch in USDT: Beträge × aktueller Kurs (Prozente bleiben gleich)
+        let kurs     = parseFloat(pos.markPrice) || 0;
+        let faktor   = 1;
+        if (this.botUsdt && coin !== 'USDT' && kurs > 0) { faktor = kurs; coin = 'USDT'; }
         let dec      = coin === 'USDT' ? 2 : 4;
-        let pnl      = parseFloat(pos.unrealizedPNL) || 0;
+        let pnl      = (parseFloat(pos.unrealizedPNL) || 0) * faktor;
         let isProfit = pnl >= 0;
         let pnlClass = isProfit ? 'pnl-profit' : 'pnl-loss';
-        let pnlText  = (isProfit ? '+' : '') + pnl.toFixed(dec) + ' ' + coin;
+        let pnlText  = this.pnlProzent ? this._prozentText(pnl, (parseFloat(pos.margin) || 0) * faktor)
+                                       : (isProfit ? '+' : '') + pnl.toFixed(dec) + ' ' + coin;
+        // Bisher realisierter Grid-Gewinn — fehlt bei älterem Server oder Bots ohne Grid
+        let grid     = Number.isFinite(pos.gridProfit) ? pos.gridProfit * faktor : null;
+        let gridText = grid === null ? '-' : (grid >= 0 ? '+' : '') + grid.toFixed(dec) + ' ' + coin;
+        let gridClass = grid === null ? '' : grid >= 0 ? 'pnl-profit' : 'pnl-loss';
         let sideLower = (pos.side || '').toLowerCase();
         let sideClass = (sideLower === 'long' || sideLower === 'buy') ? 'side-long'
                       : (sideLower === 'neutral') ? 'side-neutral' : 'side-short';
@@ -681,17 +930,18 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         };
 
         let cw = this._colWidths;
-        let cells = [
-            { text: pos.symbol || '-', cls: 'symbol-cell',            width: cw.symbol },
+        let cells = [   // Symbol kommt als Link-Zelle davor (_symbolZelle)
             { text: this._displaySide(pos.side), cls: 'side-cell ' + sideClass, width: cw.side },
         ];
         if (this.showLeverage) cells.push({ text: (pos.leverage ? pos.leverage + 'x' : '-'), cls: 'leverage-cell', width: cw.leverage });
         cells.push({ text: fmt(pos.entryPrice), cls: 'price-cell', width: cw.price });
         cells.push({ text: fmt(liq),            cls: 'price-cell', width: cw.price });
+        cells.push({ text: gridText, cls: 'pnl-cell ' + gridClass, width: cw.pnl });
         cells.push({ text: pnlText, cls: 'pnl-cell ' + pnlClass, width: cw.pnl });
 
         let fs  = this._posFs || 12;
         let row = new St.BoxLayout({ style_class: 'position-row' });
+        row.add_child(this._symbolZelle(pos, cw.symbol, fs));
         for (let c of cells) {
             let lbl = new St.Label({ text: c.text, style_class: c.cls });
             lbl.set_style(`font-size: ${fs}px; min-width: ${c.width}px;`);
@@ -704,7 +954,9 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         let pnl       = parseFloat(pos.unrealizedPNL) || 0;
         let isProfit  = pnl >= 0;
         let pnlClass  = isProfit ? 'pnl-profit' : 'pnl-loss';
-        let pnlText   = (isProfit ? '+' : '') + pnl.toFixed(2) + ' USDT';
+        let marge     = this._marge(pos);
+        let pnlText   = this.pnlProzent ? this._prozentText(pnl, marge)
+                                        : (isProfit ? '+' : '') + pnl.toFixed(2) + ' USDT';
         let sideLower = (pos.side || '').toLowerCase();
         let sideClass = (sideLower === 'long' || sideLower === 'buy') ? 'side-long'
                       : (sideLower === 'neutral') ? 'side-neutral' : 'side-short';
@@ -729,8 +981,7 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         };
 
         let cw = this._colWidths;
-        let cells = [
-            { text: pos.symbol || '-', cls: 'symbol-cell',            width: cw.symbol },
+        let cells = [   // Symbol kommt als Link-Zelle davor (_symbolZelle)
             { text: this._displaySide(pos.side), cls: 'side-cell ' + sideClass, width: cw.side },
         ];
         if (this.showLeverage)  cells.push({ text: (pos.leverage ? pos.leverage + 'x' : '-'), cls: 'leverage-cell', width: cw.leverage });
@@ -743,12 +994,14 @@ class TradingPositionsDesklet extends Desklet.Desklet {
                 pos.realizedPNL ?? pos.realized_pnl ?? pos.realizedPnl ?? pos.realizedPL ?? 0
             ) || 0;
             let realClass = realized >= 0 ? 'pnl-profit' : 'pnl-loss';
-            let realText  = (realized >= 0 ? '+' : '') + realized.toFixed(2) + ' USDT';
+            let realText  = this.pnlProzent ? this._prozentText(realized, marge)
+                                            : (realized >= 0 ? '+' : '') + realized.toFixed(2) + ' USDT';
             cells.push({ text: realText, cls: 'pnl-cell ' + realClass, width: cw.realized });
         }
 
         let fs  = this._posFs || 12;
         let row = new St.BoxLayout({ style_class: 'position-row' });
+        row.add_child(this._symbolZelle(pos, cw.symbol, fs));
         for (let c of cells) {
             let lbl = new St.Label({ text: c.text, style_class: c.cls });
             lbl.set_style(`font-size: ${fs}px; min-width: ${c.width}px;`);
@@ -773,6 +1026,310 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         this._content.add_child(new St.Label({ text, style_class: 'status-label' }));
     }
 
+    // ------------------------------------------------------------------ Alarme
+    // Wie das Android-Widget: GET /api/esp32/alarme?seit=… mit dem Hauptschlüssel.
+    // Der erste Abruf nach dem Start meldet nichts (sonst käme der ganze Verlauf),
+    // danach mit Überlappung fragen und Doppelte über die Kennung aussortieren —
+    // der Verlaufseintrag kann eine Zeit tragen, die vor dem letzten Abruf liegt.
+
+    _startAlarme() {
+        this._stopAlarme();
+        this._zeigeSprachKnopf();
+        if (!this.alarmeAn) {
+            this._alarmBox.destroy_all_children();
+            this._alarmBox.hide();
+            return;
+        }
+        this._holeAlarme();
+        this._alarmTimer = Mainloop.timeout_add_seconds(Math.max(5, this.alarmIntervall || 15), () => {
+            this._holeAlarme();
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopAlarme() {
+        if (this._alarmTimer) {
+            Mainloop.source_remove(this._alarmTimer);
+            this._alarmTimer = null;
+        }
+    }
+
+    get _alarmArten() {
+        let arten = [];
+        if (this.alarmPreis)    arten.push('preis');
+        if (this.alarmLinie)    arten.push('linie');
+        if (this.alarmZone)     arten.push('zone');
+        if (this.alarmMomentum) arten.push('momentum');
+        if (this.alarmLsob)     arten.push('lsob');
+        return arten;
+    }
+
+    _holeAlarme() {
+        if (!this.apiKey || (this.useHttps && !this._tlsSession)) return;
+        let arten = this._alarmArten;
+        if (!arten.length) return;   // leer hiesse beim Server „alle"
+        let erster = this._alarmSeit === 0;
+        let seit = erster ? 0 : Math.max(0, this._alarmSeit - ALARM_UEBERLAPPUNG_MS);
+        let url = `${this._baseUrl}/api/esp32/alarme?seit=${seit}&arten=${arten.join(',')}`;
+        this._soupGet(url, (status, body) => {
+            if (status === 401 || status === 429) {
+                // Meist der Anzeige-Schlüssel statt des Hauptschlüssels: Positionen gehen,
+                // Alarme nicht. Aufhören — jeder Fehlversuch zählt beim Server zur Sperre,
+                // die dann auch die Positionen träfe. Neuer Versuch nach Änderung der Einstellungen.
+                this._stopAlarme();
+                this._zeigeAlarmZeile({ titel: _("Alarms need the main key, not the display key"), schwere: 'info' }, false);
+                return;
+            }
+            if (status !== 200) return;
+            let daten;
+            try { daten = JSON.parse(body); } catch (e) { return; }
+            let liste = Array.isArray(daten.alarme) ? daten.alarme : [];
+            let neu = liste.filter(a => a && a.id && !this._alarmGesehen.has(a.id));
+            for (let a of liste) if (a && a.id) this._alarmGesehen.add(a.id);
+            if (this._alarmGesehen.size > 500) this._alarmGesehen = new Set(liste.map(a => a.id));
+            if (Number.isFinite(daten.jetzt)) this._alarmSeit = daten.jetzt;
+            if (erster || !neu.length) return;
+            neu.sort((a, b) => a.zeit - b.zeit);   // älteste zuerst ansagen
+            this._melde(neu, false);
+        }, { 'X-ESP32-Key': this.apiKey });
+    }
+
+    _ruhezeit() {
+        if (!this.ruheAn) return false;
+        let h = new Date().getHours(), von = this.ruheVon, bis = this.ruheBis;
+        if (von === bis) return false;
+        return von < bis ? (h >= von && h < bis) : (h >= von || h < bis);
+    }
+
+    /** Anzeige, Benachrichtigung, Ton, Sprache. `test` übergeht die Ruhezeit. */
+    _melde(alarme, test) {
+        for (let a of alarme) {
+            this._zeigeAlarmZeile(a, true);
+            starte(['notify-send', '-a', 'AutarkTrade', '-i', this._metadata.path + '/icon.png',
+                    '-u', a.schwere === 'einstieg' ? 'critical' : 'normal',
+                    '--', a.titel || a.symbol || _("Alarm"), (a.text && a.text !== a.titel) ? a.text : '']);
+        }
+        if (this._ruhezeit() && !test) return;
+        let hoechste = alarme.some(a => a.schwere === 'einstieg') ? 'einstieg'
+                     : alarme.some(a => a.schwere === 'warnung') ? 'warnung' : 'info';
+        if (this.alarmTon) {
+            starte(['paplay', TON_ORDNER + (hoechste === 'info' ? 'message-new-instant.oga' : 'alarm-clock-elapsed.oga')]);
+        }
+        if (this.spracheAn) {
+            let ab = RANG[this.spracheAb] ?? 1;
+            let faellig = alarme.filter(a => (RANG[a.schwere] ?? 1) >= ab);
+            if (!faellig.length) return;
+            let englisch = this.stimme === 'jenny';
+            let saetze = faellig.slice(0, MAX_SAETZE).map(a => ansageSatz(a.schwere, a.titel || a.symbol || '', englisch));
+            if (faellig.length > MAX_SAETZE) {
+                let rest = faellig.length - MAX_SAETZE;
+                saetze.push(englisch ? `and ${rest} more alerts` : `und ${rest} weitere Alarme`);
+            }
+            // Erst den Ton ausklingen lassen.
+            Mainloop.timeout_add(this.alarmTon ? 1200 : 0, () => {
+                starte([this._metadata.path + '/sprechen.sh', saetze.join('. '), this.stimme || 'thorsten']);
+                return GLib.SOURCE_REMOVE;
+            });
+        }
+    }
+
+    /** Zeile oben im Desklet; Klick entfernt sie. Höchstens MAX_ZEILEN, neueste oben. */
+    _zeigeAlarmZeile(a, mitZeit) {
+        let zeit = '';
+        if (mitZeit) {
+            let d = Number.isFinite(a.zeit) ? new Date(a.zeit) : new Date();
+            zeit = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}  `;
+        }
+        let knopf = new St.Button({ style_class: 'alarm-zeile alarm-' + (a.schwere || 'warnung'), x_expand: true, reactive: true });
+        let reihe = new St.BoxLayout();
+        reihe.add_child(new St.Label({ text: zeit + (a.titel || a.symbol || _("Alarm")), style_class: 'alarm-text', x_expand: true }));
+        reihe.add_child(new St.Label({ text: '✕', style_class: 'alarm-weg' }));
+        knopf.set_child(reihe);
+        knopf.connect('clicked', () => {
+            knopf.destroy();
+            if (this._alarmBox.get_n_children() === 0) this._alarmBox.hide();
+        });
+        this._alarmBox.insert_child_at_index(knopf, 0);
+        while (this._alarmBox.get_n_children() > MAX_ZEILEN) {
+            this._alarmBox.get_child_at_index(this._alarmBox.get_n_children() - 1).destroy();
+        }
+        this._alarmBox.show();
+    }
+
+    _zeigeSprachKnopf() {
+        if (!this._sprachKnopf) return;
+        // Ohne Alarme gibt es nichts vorzulesen — dann kein Knopf.
+        this._sprachKnopf.visible = !!this.alarmeAn;
+        let an = !!this.spracheAn;
+        this._sprachSymbol.icon_name = an ? 'audio-volume-high-symbolic' : 'audio-volume-muted-symbolic';
+        this._sprachKnopf.set_style_class_name('sprach-knopf' + (an ? '' : ' sprach-aus'));
+    }
+
+    onAlarmTest() {
+        this._melde([{ id: 'test', zeit: Date.now(), symbol: 'BTCUSDT', schwere: this.spracheAb || 'warnung',
+                       titel: "BTCUSDT Zonenalarm bei 65'000", text: _("Test alarm from the desklet settings") }], true);
+    }
+
+    // ------------------------------------------------------------------ Kurs-Chart
+
+    _startChart() {
+        this._stopChart();
+        if (!this.chartAn) { this._chartBox.hide(); return; }
+        let spanne = CHART_SPANNEN[this.chartSpanne] || CHART_SPANNEN['24h'];
+        this._chartFlaeche.set_height(Math.max(60, this.chartHoehe || 110));
+        this._chartKurs = [];
+        this._chartKerzen = [];
+        this._chartTitel.set_text(chartSymbol(this.chartSymbolRoh) + '  ·  ' + (this.chartSpanne || '24h'));
+        this._chartWert.set_text('…');
+        this._chartSpanneLabel.set_text('');
+        this._chartBox.show();
+        this._chartFlaeche.queue_repaint();
+        this._holeChart();
+        this._chartTimer = Mainloop.timeout_add_seconds(spanne.takt, () => {
+            this._holeChart();
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopChart() {
+        if (this._chartTimer) {
+            Mainloop.source_remove(this._chartTimer);
+            this._chartTimer = null;
+        }
+    }
+
+    _holeChart() {
+        let symbol = chartSymbol(this.chartSymbolRoh);
+        let spanne = CHART_SPANNEN[this.chartSpanne] || CHART_SPANNEN['24h'];
+        let url = `${CHART_URL}?symbol=${symbol}&interval=${spanne.interval}&limit=${spanne.limit}`;
+        soupGet(this._marktSession, url, (status, body) => {
+            if (symbol !== chartSymbol(this.chartSymbolRoh)) return;   // Einstellung inzwischen geändert
+            if (status !== 200) {
+                this._chartWert.set_text(status === 400 ? _("Unknown symbol") : _("No data"));
+                this._chartWert.style_class = 'chart-wert';
+                return;
+            }
+            let kerzen;
+            try { kerzen = JSON.parse(body); } catch (e) { return; }
+            if (!Array.isArray(kerzen) || kerzen.length < 2) return;
+            this._chartKerzen = kerzen.map(k => [1, 2, 3, 4].map(i => parseFloat(k[i])))
+                                      .filter(k => k.every(Number.isFinite));
+            this._chartKurs = this._chartKerzen.map(k => k[3]);
+            let hoch = Math.max(...kerzen.map(k => parseFloat(k[2])));
+            let tief = Math.min(...kerzen.map(k => parseFloat(k[3])));
+            let start = parseFloat(kerzen[0][1]);
+            let jetzt = this._chartKurs[this._chartKurs.length - 1];
+            let proz = start > 0 ? (jetzt - start) / start * 100 : 0;
+            this._chartWert.set_text(`${chartPreis(jetzt)}   ${proz >= 0 ? '+' : ''}${proz.toFixed(2)} %`);
+            this._chartWert.style_class = 'chart-wert ' + (proz >= 0 ? 'pnl-profit' : 'pnl-loss');
+            this._chartSpanneLabel.set_text(`${_("Low")} ${chartPreis(tief)}   ${_("High")} ${chartPreis(hoch)}`);
+            this._chartFlaeche.queue_repaint();
+        });
+    }
+
+    /** Linie der Schlusskurse mit leichter Fläche darunter, gestrichelt der Startkurs,
+     *  rechts eine Preisachse mit runden Stufen und dem letzten Kurs als Marke. */
+    _zeichneChart(flaeche) {
+        let cr = flaeche.get_context();
+        let [gesamtB, h] = flaeche.get_surface_size();
+        let kurs = this._chartKurs;
+        if (kurs.length >= 2 && gesamtB > 0 && h > 0) {
+            let kerzenArt = this.chartArt === 'kerzen' && this._chartKerzen.length === kurs.length;
+            let min = kerzenArt ? Math.min(...this._chartKerzen.map(k => k[2])) : Math.min(...kurs);
+            let max = kerzenArt ? Math.max(...this._chartKerzen.map(k => k[1])) : Math.max(...kurs);
+            let rand = 8, spann = (max - min) || 1;
+            let steigt = kurs[kurs.length - 1] >= kurs[0];
+            let [r, g, bl] = steigt ? [0.247, 0.749, 0.561] : [0.878, 0.341, 0.298];   // good / bad
+            let jetzt = kurs[kurs.length - 1];
+
+            // Achse: Breite nach dem längsten Text, damit die Linie nie darunter läuft
+            let { stufen, schritt } = achsenStufen(min, max);
+            let texte = stufen.map(v => achsenText(v, schritt));
+            let jetztText = chartPreis(jetzt);
+            cr.selectFontFace('Sans', Cairo.FontSlant.NORMAL, Cairo.FontWeight.NORMAL);
+            cr.setFontSize(Math.max(8, (this.fontSizeUi ?? 11) - 1));
+            let textB = Math.max(...texte.concat([jetztText]).map(t => cr.textExtents(t).xAdvance));
+            let b = Math.max(40, gesamtB - textB - 12);
+            // Linie: Punkte von Rand zu Rand; Kerzen: je Kerze ein Fach, Mitte darin
+            let fach = b / kurs.length;
+            let x = kerzenArt ? (i => (i + 0.5) * fach) : (i => i / (kurs.length - 1) * b);
+            let y = v => rand + (1 - (v - min) / spann) * (h - 2 * rand);
+
+            // Gitter und Beschriftung
+            cr.setLineWidth(1);
+            stufen.forEach((v, i) => {
+                let yy = Math.round(y(v)) + 0.5;
+                cr.setSourceRGBA(0.557, 0.647, 0.686, 0.12);
+                cr.moveTo(0, yy);
+                cr.lineTo(b, yy);
+                cr.stroke();
+                cr.setSourceRGBA(0.557, 0.647, 0.686, 0.75);
+                cr.moveTo(b + 8, yy + 3.5);
+                cr.showText(texte[i]);
+            });
+
+            // Startkurs
+            cr.setSourceRGBA(0.557, 0.647, 0.686, 0.45);
+            cr.setLineWidth(1);
+            cr.setDash([3, 3], 0);
+            cr.moveTo(0, Math.round(y(kurs[0])) + 0.5);
+            cr.lineTo(b, Math.round(y(kurs[0])) + 0.5);
+            cr.stroke();
+            cr.setDash([], 0);
+
+            if (kerzenArt) {
+                // Kerzen: grün steigend, rot fallend; Docht 1px, Körper ~70 % des Fachs
+                let koerperB = Math.max(1, Math.min(9, fach * 0.7));
+                this._chartKerzen.forEach(([o, hh, l, c], i) => {
+                    let mitte = Math.round(x(i)) + 0.5;
+                    if (c >= o) cr.setSourceRGBA(0.247, 0.749, 0.561, 1);
+                    else        cr.setSourceRGBA(0.878, 0.341, 0.298, 1);
+                    cr.setLineWidth(1);
+                    cr.moveTo(mitte, y(hh));
+                    cr.lineTo(mitte, y(l));
+                    cr.stroke();
+                    let oben = y(Math.max(o, c));
+                    cr.rectangle(mitte - koerperB / 2, oben, koerperB, Math.max(1, y(Math.min(o, c)) - oben));
+                    cr.fill();
+                });
+                cr.setSourceRGBA(r, g, bl, 1);
+            } else {
+                // Fläche
+                cr.moveTo(x(0), h);
+                kurs.forEach((v, i) => cr.lineTo(x(i), y(v)));
+                cr.lineTo(x(kurs.length - 1), h);
+                cr.closePath();
+                let verlauf = new Cairo.LinearGradient(0, 0, 0, h);
+                verlauf.addColorStopRGBA(0, r, g, bl, 0.28);
+                verlauf.addColorStopRGBA(1, r, g, bl, 0.0);
+                cr.setSource(verlauf);
+                cr.fill();
+
+                // Linie
+                cr.setSourceRGBA(r, g, bl, 1);
+                cr.setLineWidth(1.6);
+                cr.setLineJoin(Cairo.LineJoin.ROUND);
+                kurs.forEach((v, i) => i === 0 ? cr.moveTo(x(i), y(v)) : cr.lineTo(x(i), y(v)));
+                cr.stroke();
+
+                // Letzter Kurs als Punkt
+                cr.arc(x(kurs.length - 1), y(jetzt), 2.6, 0, 2 * Math.PI);
+                cr.fill();
+            }
+
+            // Letzter Kurs als Marke auf der Achse
+            let yj = y(jetzt);
+            let markeH = Math.max(8, (this.fontSizeUi ?? 11) - 1) + 5;
+            let my = Math.max(0, Math.min(h - markeH, yj - markeH / 2));
+            cr.rectangle(b + 4, my, gesamtB - b - 4, markeH);
+            cr.fill();
+            cr.setSourceRGBA(0.047, 0.071, 0.086, 1);   // panel
+            cr.moveTo(b + 8, my + markeH - 4);
+            cr.showText(jetztText);
+        }
+        cr.$dispose();
+    }
+
     // ------------------------------------------------------------------ Lifecycle
 
     _onSettingChanged() {
@@ -781,10 +1338,13 @@ class TradingPositionsDesklet extends Desklet.Desklet {
         this._appVersion     = null;  // server change → fetch version again
         this._ladeKopplung();
         this._startPolling();
+        this._startAlarme();
     }
 
     on_desklet_removed() {
         this._stopPolling();
+        this._stopAlarme();
+        this._stopChart();
     }
 }
 

@@ -97,6 +97,18 @@
     color: #e8f4f6;
     font-weight: bold;
 }
+/* Coin als Link in den AutarkTrade-Chart, „BX" zur Bitunix-Handelsseite (wie .kpBx in der Web-App) */
+.symbol-link { padding: 0; }
+.symbol-link:hover .symbol-cell { color: #1fd6c4; }
+.bitunix-link {
+    color: rgb(90, 156, 255);
+    background-color: rgba(90, 156, 255, 0.14);
+    font-weight: bold;
+    padding: 0 3px;
+    margin-left: 5px;
+    border-radius: 2px;
+}
+.bitunix-link:hover { color: rgb(140, 185, 255); background-color: rgba(90, 156, 255, 0.3); }
 .side-cell {
     font-weight: bold;
 }
@@ -126,3 +138,70 @@
 .footer-right {
     color: #5e7580;
 }
+
+/* ---- Alarme ---- */
+.alarm-box {
+    padding-bottom: 4px;
+}
+.alarm-zeile {
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin-bottom: 3px;
+    background-color: rgba(216, 163, 58, 0.18);
+    border-left: 3px solid #d8a33a;
+}
+.alarm-zeile:hover { background-color: rgba(216, 163, 58, 0.30); }
+.alarm-einstieg {
+    background-color: rgba(31, 214, 196, 0.18);
+    border-left-color: #1fd6c4;
+}
+.alarm-einstieg:hover { background-color: rgba(31, 214, 196, 0.30); }
+.alarm-info {
+    background-color: rgba(142, 165, 175, 0.15);
+    border-left-color: #8ea5af;
+}
+.alarm-text {
+    color: #e8f4f6;
+    font-weight: bold;
+}
+.alarm-weg {
+    color: #8ea5af;
+    padding-left: 10px;
+}
+
+/* ---- Schnellschalter Sprachausgabe ---- */
+.sprach-knopf {
+    padding: 6px;
+    border-radius: 6px;
+    color: #1fd6c4;
+}
+.sprach-knopf:hover { background-color: rgba(31, 214, 196, 0.15); }
+.sprach-aus { color: #5e7580; }
+
+/* ---- Kurs-Chart ---- */
+.chart-box {
+    spacing: 2px;
+    padding-bottom: 4px;
+}
+.chart-titel {
+    color: #e8f4f6;
+    font-weight: bold;
+}
+.chart-wert {
+    color: #8ea5af;
+    font-weight: bold;
+}
+.chart-spanne {
+    color: #5e7580;
+    font-size: 0.9em;
+}
+
+/* ---- Schnellschalter PnL in Prozent ---- */
+.prozent-knopf {
+    color: #1fd6c4;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+.prozent-knopf:hover { background-color: rgba(31, 214, 196, 0.15); }
+.prozent-aus { color: #5e7580; }
