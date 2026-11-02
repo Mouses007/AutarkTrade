@@ -30,12 +30,30 @@
  *   - vergleicht ein Vorzeichentest auf dem Prüfteil Trade für Trade mit den
  *     eigenen Ausstiegen der Strategie.
  *
+ * Dazu drei Fragen, die das Raster allein nicht beantwortet (02.11.2026):
+ *
+ *   - `einstiegsKante`: Taugt der EINSTIEG überhaupt etwas? Edge Ratio — wie
+ *     weit läuft der Kurs nach dem Einstieg für den Trade, wie weit gegen ihn,
+ *     in ATR beim Einstieg — gegen Zufallseinstiege mit derselben Long/Short-
+ *     Mischung. Ganz ohne Ausstiege und ohne Auswahl, also ohne die Gefahr
+ *     der Überanpassung.
+ *   - `ueberanpassung`: Wie wahrscheinlich ist die gewählte Zone nur das Glück
+ *     der Aufteilung? Probability of Backtest Overfitting nach Bailey,
+ *     Borwein, López de Prado und Zhu (CSCV): die Trades in 8 Blöcke, jede
+ *     Hälfte einmal Auswahl, die andere Prüfung — 70 Aufteilungen statt der
+ *     einen 70/30.
+ *   - `zweifel` je Zelle: Trades, deren Ausstiegskerze Stop UND Ziel berührte
+ *     und die deshalb als Verlust zählen. Ihre Zahl sagt, wie viel eine
+ *     feinere Auflösung (1m-Kerzen) überhaupt ändern könnte.
+ *
  * Rein: keine DB, kein Netz. Kerzen, Trades, Kosten und Funding kommen von
  * aussen (`ausstiegsPruefung` in `robustness.js`).
  */
 
 import { stepCandle, closePosition } from './fill-simulator.js'
 import { vorzeichenTest } from './radar-guete.js'
+import { atr } from '../shared/indicators.js'
+import { zufall } from '../shared/statistik.js'
 
 /** Stop als Vielfaches des Strategie-Stops. */
 export const STOP_FAKTOREN = [0.5, 0.75, 1, 1.25, 1.5, 2]
@@ -52,6 +70,18 @@ export const MIN_PRUEF_TRADES = 10
 export const PRUEF_ANTEIL = 0.3
 /** Ab diesem p-Wert gilt ein Vorsprung als nicht gesichert. */
 export const P_GRENZE = 0.05
+
+/** Horizonte (Kerzen) der Einstiegs-Kante. */
+export const KANTE_HORIZONTE = [4, 16, 64]
+/** Zufallseinstiege je Trade der Strategie, höchstens `ZUFALL_MAX`. */
+export const ZUFALL_JE_TRADE = 40
+export const ZUFALL_MAX = 6000
+/** Ziehungen für die Verteilung der Edge Ratio bei Zufall. */
+export const ZUFALL_ZIEHUNGEN = 1000
+/** Blöcke der Überanpassungs-Prüfung (CSCV); je Hälfte die Hälfte davon. */
+export const CSCV_BLOECKE = 8
+/** Mindestens so viele Trades je Block, sonst keine Überanpassungs-Prüfung. */
+export const CSCV_MIN_JE_BLOCK = 5
 
 /** Wie der Einstieg eines Trades in seiner Kerze lag (Backtest: `einstiegsArt`). */
 const ARTEN = new Set(['kerze', 'eroeffnung', 'schluss'])
@@ -165,7 +195,9 @@ function zeitKerzen(kerzen, erste, entryTime, kerzeMs, halten) {
 
 /**
  * Einen Trade mit Stop × Faktor und Ziel in R neu spielen — für ALLE
- * Haltedauern in einem Durchlauf. Liefert je Haltedauer `{ r, amEnde }`.
+ * Haltedauern in einem Durchlauf. Liefert je Haltedauer `{ r, amEnde, zweifel }`;
+ * `zweifel`: der Stop schloss in einer Kerze, die auch das Ziel berührte (die
+ * Reihenfolge darin ist unbekannt, gezählt wird der Stop).
  */
 function spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, o) {
     const long = trade.direction === 'long'
@@ -199,6 +231,7 @@ function spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, o) {
         if (long ? k.l <= stop : k.h >= stop) {
             natuerlich = { j: i0, exit: { price: long ? Math.min(stop, k.o) : Math.max(stop, k.o), reason: 'sl', time: k.t } }
         }
+        if (natuerlich) natuerlich.zweifel = ziel > 0 && beruehrtZiel(k, ziel, stop, long)
         erste = i0 + 1
     }
     const letzteZeit = zeitIdx[zeitIdx.length - 1]
@@ -206,14 +239,19 @@ function spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, o) {
     const schritt = { maintenanceMarginPct: o.wartungsmargePct, kerzeMs: o.kerzeMs }
     for (let j = erste; !natuerlich && j <= bis; j++) {
         const { exit } = stepCandle(pos, kerzen[j], schritt)
-        if (exit) natuerlich = { j, exit }
+        if (exit) {
+            natuerlich = { j, exit }
+            natuerlich.zweifel = ziel > 0 && (exit.reason === 'sl' || exit.reason === 'liquidation')
+                && beruehrtZiel(kerzen[j], ziel, stop, long)
+        }
     }
 
     const letzte = kerzen[kerzen.length - 1]
     return zeitIdx.map((J) => {
         let exit
         let amEnde = false
-        if (natuerlich && (J < 0 || natuerlich.j <= J)) exit = natuerlich.exit
+        let zweifel = false
+        if (natuerlich && (J < 0 || natuerlich.j <= J)) { exit = natuerlich.exit; zweifel = natuerlich.zweifel === true }
         else if (J >= 0) exit = { price: kerzen[J].c, reason: 'timeout', time: kerzen[J].t + o.kerzeMs }
         else {
             // Die Daten enden vor Stop, Ziel und Haltedauer: zum letzten
@@ -223,8 +261,18 @@ function spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, o) {
             amEnde = true
         }
         const extra = o.funding ? { funding: o.funding(pos, exit.time) } : {}
-        return { r: closePosition(pos, exit, o.costs, extra).rMultiple, amEnde }
+        return { r: closePosition(pos, exit, o.costs, extra).rMultiple, amEnde, zweifel }
     })
+}
+
+/**
+ * Hat die Kerze das Ziel berührt, ohne schon jenseits des Stops zu eröffnen?
+ * Eine Eröffnung jenseits des Stops ist kein Zweifel: der erste Kurs der
+ * Kerze lag dort, der Stop kam zuerst.
+ */
+function beruehrtZiel(k, ziel, stop, long) {
+    if (long ? k.o <= stop : k.o >= stop) return false
+    return long ? k.h >= ziel : k.l <= ziel
 }
 
 /**
@@ -240,6 +288,218 @@ export function spieleEinzeln(trade, kerzen, { faktor = 1, zielR = 0, halten }, 
     const zeitIdx = zeitKerzen(kerzen, erste, Number(trade.entryTime), kerzeMs, [halten])
     const opts = { costs: o.costs || {}, kerzeMs, wartungsmargePct: o.wartungsmargePct, funding: o.funding || null }
     return spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, opts)[0]
+}
+
+/**
+ * Weg in Handelsrichtung (MFE) und dagegen (MAE) über `h` Kerzen ab `erste`,
+ * gemessen vom Einstiegspreis, in ATR. `null`, wenn die Daten vorher enden.
+ */
+function ausschlag(kerzen, erste, h, preis, long, atrWert) {
+    if (erste + h > kerzen.length || !(atrWert > 0)) return null
+    let hoch = -Infinity
+    let tief = Infinity
+    for (let j = erste; j < erste + h; j++) {
+        if (kerzen[j].h > hoch) hoch = kerzen[j].h
+        if (kerzen[j].l < tief) tief = kerzen[j].l
+    }
+    const fuer = long ? hoch - preis : preis - tief
+    const gegen = long ? preis - tief : hoch - preis
+    return { mfe: Math.max(0, fuer) / atrWert, mae: Math.max(0, gegen) / atrWert }
+}
+
+const mittel = (w) => (w.length ? w.reduce((a, b) => a + b, 0) / w.length : null)
+const quote = (mfe, mae) => {
+    const a = mittel(mfe)
+    const b = mittel(mae)
+    return a === null || !(b > 0) ? null : a / b
+}
+
+/**
+ * Einstiegs-Kante: Edge Ratio der Strategie gegen Zufallseinstiege.
+ *
+ * Edge Ratio = Ø MFE / Ø MAE in ATR(14) beim Einstieg — die ATR aus den
+ * Kerzen VOR der Einstiegskerze. Bei Zufall liegt sie um 1 (Trend und
+ * Long/Short-Mischung verschieben sie), deshalb wird nicht gegen 1 gemessen,
+ * sondern gegen Zufallseinstiege im selben Zeitraum, deren Richtung aus den
+ * Richtungen der Strategie gezogen ist. `p`: Anteil der Zufallsstichproben
+ * gleicher Grösse, die mindestens so gut sind.
+ *
+ * Gemessen ab der ersten Kerze, die auch der Simulator für den Trade
+ * bewertet (beim Limit mitten in der Kerze also ab der Folgekerze); die
+ * Zufallseinstiege liegen auf der Eröffnung und zählen ihre Kerze mit.
+ *
+ * @param {Array<{trade, i0}>} gespielt
+ */
+export function einstiegsKante(gespielt, kerzen, { horizonte = KANTE_HORIZONTE, aussaat = 1 } = {}) {
+    const atrReihe = atr(kerzen, 14)
+    const strat = horizonte.map(() => ({ mfe: [], mae: [] }))
+    let lo = Infinity
+    let hi = -Infinity
+    for (const { trade, i0 } of gespielt) {
+        const a = atrReihe[i0 - 1]
+        const erste = trade.einstiegsArt === 'kerze' ? i0 + 1 : i0
+        horizonte.forEach((h, k) => {
+            const r = ausschlag(kerzen, erste, h, Number(trade.entryPrice), trade.direction === 'long', a)
+            if (r) { strat[k].mfe.push(r.mfe); strat[k].mae.push(r.mae) }
+        })
+        if (i0 < lo) lo = i0
+        if (i0 > hi) hi = i0
+    }
+    const n = gespielt.length
+    const richtungen = gespielt.map((g) => g.trade.direction)
+    const raus = { horizonte: [], urteil: 'zuWenig' }
+    if (n < MIN_TRADES || !(hi >= lo)) {
+        raus.horizonte = horizonte.map((h, k) => ({ h, n: strat[k].mfe.length, strategie: runde(quote(strat[k].mfe, strat[k].mae), 3) }))
+        return raus
+    }
+
+    // Zufallseinstiege im Zeitraum der Trades, mit ATR davor
+    const rnd = zufall(aussaat)
+    const unten = Math.max(lo, 15)
+    const pool = horizonte.map(() => ({ mfe: [], mae: [] }))
+    const anzahl = Math.min(ZUFALL_MAX, n * ZUFALL_JE_TRADE)
+    if (hi >= unten) {
+        for (let k = 0; k < anzahl; k++) {
+            const i = unten + Math.floor(rnd() * (hi - unten + 1))
+            const long = richtungen[Math.floor(rnd() * richtungen.length)] === 'long'
+            horizonte.forEach((h, x) => {
+                const r = ausschlag(kerzen, i, h, kerzen[i].o, long, atrReihe[i - 1])
+                if (r) { pool[x].mfe.push(r.mfe); pool[x].mae.push(r.mae) }
+            })
+        }
+    }
+
+    // Verteilung der Edge Ratio bei Zufall für Stichproben so gross wie die der Strategie
+    raus.horizonte = horizonte.map((h, k) => {
+        const s = strat[k]
+        const z = pool[k]
+        const e = quote(s.mfe, s.mae)
+        const m = s.mfe.length
+        let mindestens = 0
+        let ziehungen = 0
+        if (e !== null && m > 0 && z.mfe.length >= m) {
+            for (let b = 0; b < ZUFALL_ZIEHUNGEN; b++) {
+                let sf = 0
+                let sg = 0
+                for (let x = 0; x < m; x++) {
+                    const w = Math.floor(rnd() * z.mfe.length)
+                    sf += z.mfe[w]
+                    sg += z.mae[w]
+                }
+                ziehungen++
+                if (sg > 0 && sf / sg >= e) mindestens++
+            }
+        }
+        return {
+            h, n: m,
+            strategie: runde(e, 3),
+            zufall: runde(quote(z.mfe, z.mae), 3),
+            mfe: runde(mittel(s.mfe), 3), mae: runde(mittel(s.mae), 3),
+            p: ziehungen ? runde((mindestens + 1) / (ziehungen + 1), 4) : null,
+        }
+    })
+    // Drei Horizonte, drei Versuche: Grenze nach Bonferroni.
+    const grenze = P_GRENZE / horizonte.length
+    const gemessen = raus.horizonte.filter((x) => x.p !== null)
+    raus.urteil = !gemessen.length ? 'zuWenig'
+        : gemessen.some((x) => x.p < grenze && x.strategie > x.zufall) ? 'schlaegtZufall' : 'wieZufall'
+    raus.zufallseinstiege = anzahl
+    return raus
+}
+
+/** Alle Teilmengen der Grösse k aus 0..n-1 (für 8 über 4: 70). */
+function teilmengen(n, k) {
+    const raus = []
+    const wahl = []
+    const weiter = (ab) => {
+        if (wahl.length === k) { raus.push([...wahl]); return }
+        for (let i = ab; i < n; i++) { wahl.push(i); weiter(i + 1); wahl.pop() }
+    }
+    weiter(0)
+    return raus
+}
+
+/**
+ * Überanpassung der Auswahl (CSCV, Bailey/Borwein/López de Prado/Zhu).
+ *
+ * Die Trades (in Einstiegsreihenfolge) kommen in `bloecke` gleich grosse
+ * Blöcke. Für jede Wahl der halben Blöcke als Auswahl wird die Zone so
+ * gewählt wie im Hauptlauf (`waehleZone`) und auf den übrigen Blöcken
+ * eingeordnet: Rang unter allen Zellen, ω = Rang / (Zellen + 1).
+ *   - `pbo`: Anteil der Aufteilungen, in denen die gewählte Zelle ausserhalb
+ *     höchstens im Median landet (ω ≤ ½) — die Wahrscheinlichkeit, dass die
+ *     Auswahl nur das Glück der Stichprobe gefunden hat;
+ *   - `verlust`: Anteil, in denen sie ausserhalb im Minus liegt;
+ *   - `innen`/`aussen`: Ø R der gewählten Zelle in der Auswahl und ausserhalb.
+ *
+ * @param {Float64Array[][][]} r  r[s][z][h][k] = R des Trades k
+ */
+export function ueberanpassung(r, n, { bloecke = CSCV_BLOECKE } = {}) {
+    if (n < bloecke * CSCV_MIN_JE_BLOCK) return null
+    const S = r.length
+    const Z = r[0].length
+    const H = r[0][0].length
+    const zellen = S * Z * H
+    const grenzen = Array.from({ length: bloecke + 1 }, (_, b) => Math.round((b * n) / bloecke))
+    const anzahl = grenzen.slice(1).map((g, b) => g - grenzen[b])
+    // summen[c * bloecke + b]
+    const summen = new Float64Array(zellen * bloecke)
+    let c = 0
+    for (let s = 0; s < S; s++) for (let z = 0; z < Z; z++) for (let h = 0; h < H; h++, c++) {
+        const reihe = r[s][z][h]
+        for (let b = 0; b < bloecke; b++) {
+            let summe = 0
+            for (let k = grenzen[b]; k < grenzen[b + 1]; k++) summe += reihe[k]
+            summen[c * bloecke + b] = summe
+        }
+    }
+    const mittelUeber = (bl) => {
+        const nb = bl.reduce((a, b) => a + anzahl[b], 0)
+        const werte = new Float64Array(zellen)
+        for (let x = 0; x < zellen; x++) {
+            let summe = 0
+            for (const b of bl) summe += summen[x * bloecke + b]
+            werte[x] = summe / nb
+        }
+        return werte
+    }
+    const alsRaster = (werte) => Array.from({ length: S }, (_, s) => Array.from({ length: Z }, (__, z) =>
+        Array.from({ length: H }, (___, h) => werte[(s * Z + z) * H + h])))
+
+    let ueberangepasst = 0
+    let verlust = 0
+    let innen = 0
+    let aussen = 0
+    const kombis = teilmengen(bloecke, bloecke / 2)
+    for (const auswahl of kombis) {
+        const rest = [...Array(bloecke).keys()].filter((b) => !auswahl.includes(b))
+        const wIn = mittelUeber(auswahl)
+        const wAus = mittelUeber(rest)
+        const zone = waehleZone(alsRaster(wIn))
+        const x = (zone.s * Z + zone.z) * H + zone.h
+        const v = wAus[x]
+        // Mittelrang bei Gleichstand: viele Ziele werden von keinem Trade
+        // erreicht und liefern dieselbe Reihe.
+        let darunter = 0
+        let gleich = 0
+        for (let y = 0; y < zellen; y++) {
+            if (wAus[y] < v - EPS) darunter++
+            else if (Math.abs(wAus[y] - v) <= EPS) gleich++
+        }
+        const omega = (darunter + (gleich + 1) / 2) / (zellen + 1)
+        if (omega <= 0.5) ueberangepasst++
+        if (v < 0) verlust++
+        innen += wIn[x]
+        aussen += v
+    }
+    const m = kombis.length
+    return {
+        bloecke, aufteilungen: m,
+        pbo: runde(ueberangepasst / m, 4),
+        verlust: runde(verlust / m, 4),
+        innen: runde(innen / m),
+        aussen: runde(aussen / m),
+    }
 }
 
 /** Nachbarn im Raster (je Achse ±1), samt der Zelle selbst. */
@@ -320,6 +580,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
     // r[s][z][h] = R je Trade (Einstiegsreihenfolge)
     const r = raster.stops.map(() => raster.ziele.map(() => raster.halten.map(() => new Float64Array(n))))
     const amEnde = raster.stops.map(() => raster.ziele.map(() => raster.halten.map(() => 0)))
+    const zweifel = raster.stops.map(() => raster.ziele.map(() => raster.halten.map(() => 0)))
     let pause = Date.now()
     for (let k = 0; k < n; k++) {
         if (o.atempause && Date.now() - pause > ATEM_MS) { await o.atempause(); pause = Date.now() }
@@ -332,6 +593,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
                 for (let h = 0; h < H; h++) {
                     r[s][z][h][k] = je[h].r
                     if (je[h].amEnde) amEnde[s][z][h]++
+                    if (je[h].zweifel) zweifel[s][z][h]++
                 }
             }
         }
@@ -349,7 +611,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
     const auswahlMittel = raster.stops.map(() => raster.ziele.map(() => raster.halten.map(() => null)))
     for (let s = 0; s < S; s++) for (let z = 0; z < Z; z++) for (let h = 0; h < H; h++) {
         const reihe = r[s][z][h]
-        const zelle = { s, z, h, amEnde: amEnde[s][z][h] }
+        const zelle = { s, z, h, amEnde: amEnde[s][z][h], zweifel: zweifel[s][z][h] }
         for (const [name, grenzen] of Object.entries(teile)) zelle[name] = kurz(kennzahlen(teil(reihe, grenzen)))
         auswahlMittel[s][z][h] = zelle.auswahl.mittel
         zellen.push(zelle)
@@ -363,6 +625,9 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
         zellen,
         gewaehlt: null,
         besteZelle: null,
+        einstieg: einstiegsKante(gespielt, kerzen),
+        ueberanpassung: ueberanpassung(r, n),
+        ueberanpassungAb: CSCV_BLOECKE * CSCV_MIN_JE_BLOCK,
         urteil: 'zuWenig',
         hinweise: [],
     }
@@ -391,6 +656,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
         ergebnis.gewaehlt = {
             s: zone.s, z: zone.z, h: zone.h, zonenwert: runde(zone.zonenwert),
             auswahl: z.auswahl, pruefung: z.pruefung, alle: z.alle, vergleich: vergleich(zone),
+            zweifel: z.zweifel,
         }
     }
     if (einzel) {

@@ -22,6 +22,7 @@ import { runBacktest, berechneStatistik, MIN_TRADES_BELASTBAR, MAX_BACKTEST_CAND
 import { getStrategy, validateParams, htfBedarf } from './strategies/index.js'
 import { getHistoricalCandles, getFundingHistory, getSymbolMeta, timeframeMs } from './market-data.js'
 import { kostenAus, fundingFor } from './fill-simulator.js'
+import { zufall } from '../shared/statistik.js'
 import { ausstiegsRaster, fundingRechner } from './ausstiege.js'
 
 /** Mindestzahl Trades, ab der ein Wert im Walk-forward überhaupt gewählt wird. */
@@ -133,23 +134,10 @@ export const MAX_STUFEN = 25
 export const MAX_MC_LAEUFE = 5000
 export const MAX_WF_FENSTER = 12
 
-/**
- * Kleiner, aussaatfähiger Zufall (mulberry32).
- *
- * Bewusst nicht `Math.random`: eine Robustheitsprüfung, die bei jedem Aufruf
- * andere Zahlen liefert, lässt sich weder testen noch nachvollziehen. Mit
- * derselben Aussaat kommt dasselbe Ergebnis — das ist bei einer Kennzahl, auf
- * die jemand eine Entscheidung stützt, keine Spielerei.
- */
-export function zufall(aussaat = 1) {
-    let a = aussaat >>> 0
-    return function () {
-        a |= 0; a = (a + 0x6D2B79F5) | 0
-        let t = Math.imul(a ^ (a >>> 15), 1 | a)
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-    }
-}
+// `zufall` (aussaatfähiger Zufall) steht seit 02.11.2026 in
+// `shared/statistik.js` — die Ausstiegs-Prüfung braucht ihn ohne die
+// Abhängigkeiten dieser Datei. Hier weitergereicht für bisherige Importe.
+export { zufall }
 
 /** Perzentil einer unsortierten Zahlenreihe (lineare Interpolation). */
 export function perzentil(werte, p) {

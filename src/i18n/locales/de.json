@@ -8010,7 +8010,29 @@
       "teil_auswahl": "Auswahl (70 %)",
       "teil_pruefung": "Prüfung (30 %)",
       "fuss": "{n} Trades neu gespielt: {auswahl} zur Auswahl, {pruefung} zur Prüfung ab {ab}. Werte: Ø R je Trade in R des jeweiligen Stops, nach Gebühren und Funding. Der Rahmen markiert die gewählte Zone.",
-      "ausgelassen": "{n} Trades nicht neu gespielt (am Testende noch offen)."
+      "ausgelassen": "{n} Trades nicht neu gespielt (am Testende noch offen).",
+      "zweifel": "Gewählte Zone: {k} von {n} Trades endeten in einer Kerze, die Stop und Ziel berührte. Sie zählen als Verlust, weil die Reihenfolge in der Kerze unbekannt ist — mit feineren Kerzen könnte ein Teil davon ein Gewinn sein.",
+      "zweifelKeine": "Gewählte Zone: Kein Trade endete in einer Kerze, die Stop und Ziel zugleich berührte — feinere Kerzen würden an ihr nichts ändern.",
+      "einstiegTitel": "Gegenprobe: Einstieg gegen Zufall (Edge Ratio)",
+      "einstieg_schlaegtZufall": "Besser als Zufall",
+      "einstieg_wieZufall": "Wie Zufall",
+      "einstieg_zuWenig": "Zu wenig",
+      "einstiegText_schlaegtZufall": "Nach den Einstiegen läuft der Kurs gesichert öfter in Richtung des Trades als nach Zufallseinstiegen.",
+      "einstiegText_wieZufall": "Die Einstiege sind von Zufallseinstiegen nicht zu unterscheiden — in keinem Horizont gesichert besser.",
+      "einstiegText_zuWenig": "Zu wenige Trades für einen Vergleich mit dem Zufall (mindestens 30).",
+      "nachKerzen": "nach {n} Kerzen",
+      "zeileStrategie": "Edge Ratio der Strategie",
+      "zeileZufall": "Edge Ratio Zufall",
+      "zeileMfeMae": "Ø für / gegen (ATR)",
+      "zeileP": "p (Zufall mindestens so gut)",
+      "einstiegErklaerung": "Edge Ratio = wie weit der Kurs nach dem Einstieg im Schnitt für den Trade lief, geteilt durch wie weit gegen ihn, beides in ATR beim Einstieg. Über 1 heisst: mehr für als gegen. Verglichen mit {n} Zufallseinstiegen im selben Zeitraum und mit derselben Long/Short-Mischung; gesichert heisst p unter 0,05 / 3 (drei Horizonte). Ohne Ausstiege und ohne Auswahl — hier kann nichts überangepasst sein.",
+      "ueberTitel": "Gegenprobe: Überanpassung der Auswahl (CSCV)",
+      "ueber_gering": "Überanpassung gering",
+      "ueber_mittel": "Überanpassung mittel",
+      "ueber_hoch": "Überanpassung hoch",
+      "ueberText": "Die Trades in {bloecke} Blöcke geteilt, jede Hälfte einmal zur Auswahl, die andere zur Prüfung ({m} Aufteilungen). In {pbo} % davon landete die so gewählte Zone ausserhalb höchstens im Mittelfeld aller Zellen, in {verlust} % im Minus. Ø R in der Auswahl {innen}, ausserhalb {aussen}.",
+      "ueberFehlt": "Zu wenige Trades für die Prüfung auf Überanpassung (mindestens {n}).",
+      "karteTitel": "Karte: Ø R je Trade nach Stop und Ziel"
     }
   }
 }

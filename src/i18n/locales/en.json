@@ -8010,7 +8010,29 @@
       "teil_auswahl": "Selection (70 %)",
       "teil_pruefung": "Check (30 %)",
       "fuss": "{n} trades replayed: {auswahl} for selection, {pruefung} for the check from {ab}. Values: average R per trade in R of the respective stop, after fees and funding. The frame marks the chosen zone.",
-      "ausgelassen": "{n} trades not replayed (still open at the end of the test)."
+      "ausgelassen": "{n} trades not replayed (still open at the end of the test).",
+      "zweifel": "Chosen zone: {k} of {n} trades ended in a candle that touched both stop and target. They count as losses because the order inside the candle is unknown — with finer candles some of them might be wins.",
+      "zweifelKeine": "Chosen zone: no trade ended in a candle that touched stop and target at once — finer candles would not change it.",
+      "einstiegTitel": "Cross-check: entry against chance (edge ratio)",
+      "einstieg_schlaegtZufall": "Better than chance",
+      "einstieg_wieZufall": "Like chance",
+      "einstieg_zuWenig": "Too few",
+      "einstiegText_schlaegtZufall": "After the entries the price runs significantly more often in the trade's direction than after random entries.",
+      "einstiegText_wieZufall": "The entries cannot be told apart from random entries — not significantly better at any horizon.",
+      "einstiegText_zuWenig": "Too few trades for a comparison with chance (at least 30).",
+      "nachKerzen": "after {n} candles",
+      "zeileStrategie": "Strategy edge ratio",
+      "zeileZufall": "Random edge ratio",
+      "zeileMfeMae": "Avg for / against (ATR)",
+      "zeileP": "p (chance at least as good)",
+      "einstiegErklaerung": "Edge ratio = how far the price ran in the trade's favour after the entry on average, divided by how far against it, both in ATR at entry. Above 1 means more for than against. Compared with {n} random entries in the same period with the same long/short mix; significant means p below 0.05 / 3 (three horizons). No exits and no selection — nothing can be overfitted here.",
+      "ueberTitel": "Cross-check: overfitting of the selection (CSCV)",
+      "ueber_gering": "Overfitting low",
+      "ueber_mittel": "Overfitting medium",
+      "ueber_hoch": "Overfitting high",
+      "ueberText": "Trades split into {bloecke} blocks, each half used once for selection and the other for checking ({m} splits). In {pbo} % of them the zone chosen this way landed at most mid-field among all cells outside the selection, in {verlust} % below zero. Avg R in the selection {innen}, outside {aussen}.",
+      "ueberFehlt": "Too few trades for the overfitting check (at least {n}).",
+      "karteTitel": "Map: avg R per trade by stop and target"
     }
   }
 }

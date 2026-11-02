@@ -90,3 +90,21 @@ export function spearman(xs, ys, minPaare = 3) {
     if (!(sx > 0) || !(sy > 0)) return null
     return Math.max(-1, Math.min(1, oben / Math.sqrt(sx * sy)))
 }
+
+/**
+ * Kleiner, aussaatfähiger Zufall (mulberry32).
+ *
+ * Bewusst nicht `Math.random`: eine Robustheitsprüfung, die bei jedem Aufruf
+ * andere Zahlen liefert, lässt sich weder testen noch nachvollziehen. Mit
+ * derselben Aussaat kommt dasselbe Ergebnis — das ist bei einer Kennzahl, auf
+ * die jemand eine Entscheidung stützt, keine Spielerei.
+ */
+export function zufall(aussaat = 1) {
+    let a = aussaat >>> 0
+    return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0
+        let t = Math.imul(a ^ (a >>> 15), 1 | a)
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+}

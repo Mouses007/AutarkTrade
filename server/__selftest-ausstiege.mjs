@@ -15,8 +15,10 @@ import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { kostenAus } from './fill-simulator.js'
 import {
     ausstiegsRaster, spieleEinzeln, fundingRechner, waehleZone, kennzahlen, kerzeBei,
+    einstiegsKante, ueberanpassung,
     STOP_FAKTOREN, ZIELE_R, HALTEN,
 } from './ausstiege.js'
+import { zufall } from '../shared/statistik.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -81,6 +83,15 @@ console.log('Einzelfälle')
     check('Gebühren gehen in R ein (Einstieg 2 bps, Stop als Taker 5 bps)',
         nah(mitGebuehr, -1 - (100 * 2 / 10000 + 99 * 5 / 10000) / 1), String(mitGebuehr))
 
+    check('Stop und Ziel in derselben Kerze ist ein Zweifelsfall',
+        spieleEinzeln(trade('kerze'), beides, { zielR: 2, halten: 8 }, o).zweifel === true)
+    check('Eröffnung jenseits des Stops ist kein Zweifelsfall',
+        spieleEinzeln(trade('kerze'), [kerze(0, 100.5, 101, 99.5, 100.5), kerze(1, 98, 102.5, 97.5, 98)], { zielR: 2, halten: 8 }, o).zweifel === false)
+    check('ein sauberer Stop ohne Ziel in der Kerze ist kein Zweifelsfall',
+        spieleEinzeln(trade('kerze'), luecke, { zielR: 2, halten: 8 }, o).zweifel === false)
+    check('Limit-Einstieg: Stop und Ziel in der Einstiegskerze ist ein Zweifelsfall',
+        spieleEinzeln(trade('kerze'), [kerze(0, 100, 103, 98.9, 100), flach(1)], { zielR: 2, halten: 8 }, o).zweifel === true)
+
     const fehlt = spieleEinzeln(trade('kerze', { entryTime: T0 + 99 * H }), ziel, { zielR: 2, halten: 8 }, o)
     check('fehlt die Einstiegskerze, gibt es kein Ergebnis statt einer Zahl', fehlt === null)
     check('unbekannte Einstiegsart wird nicht gespielt',
@@ -138,6 +149,68 @@ console.log('\nAuswahl')
     check('Kennzahlen: Mittel, Treffer, Summe, Rückgang', nah(k.mittel, 0) && nah(k.treffer, 40) && nah(k.summe, 0) && nah(k.dd, 2),
         JSON.stringify(k))
     check('leere Reihe ergibt kein Mittel statt 0', kennzahlen([]).mittel === null)
+}
+
+// ── Einstiegs-Kante gegen Zufall ────────────────────────────────────────
+console.log('\nEinstieg gegen Zufall')
+{
+    const rnd = zufall(21)
+    const kerzen = []
+    let preis = 100
+    for (let i = 0; i < 4000; i++) {
+        const o = preis
+        const c = o * (1 + (rnd() - 0.5) * 0.01)
+        kerzen.push({ t: T0 + i * H, o, h: Math.max(o, c) * (1 + rnd() * 0.003), l: Math.min(o, c) * (1 - rnd() * 0.003), c, v: 1 })
+        preis = c
+    }
+    const alsTrade = (i, long) => ({
+        trade: { direction: long ? 'long' : 'short', entryPrice: kerzen[i].o, entryTime: kerzen[i].t, einstiegsArt: 'eroeffnung' },
+        i0: i,
+    })
+    // Zufällige Einstiege: keine Kante
+    const blind = Array.from({ length: 120 }, (_, k) => alsTrade(100 + k * 30, k % 2 === 0))
+    const b = einstiegsKante(blind, kerzen)
+    check('blinde Einstiege: nicht besser als Zufall', b.urteil === 'wieZufall', JSON.stringify(b.horizonte))
+    check('Edge Ratio bei Zufall liegt um 1', b.horizonte.every((x) => x.zufall > 0.8 && x.zufall < 1.25),
+        b.horizonte.map((x) => x.zufall).join(' '))
+    // Hellseher: Richtung nach dem Kurs 16 Kerzen später — muss auffallen
+    const hell = Array.from({ length: 120 }, (_, k) => {
+        const i = 100 + k * 30
+        return alsTrade(i, kerzen[i + 16].c > kerzen[i].o)
+    })
+    const e = einstiegsKante(hell, kerzen)
+    const h16 = e.horizonte.find((x) => x.h === 16)
+    check('Einstiege mit Blick nach vorn schlagen den Zufall', e.urteil === 'schlaegtZufall' && h16.strategie > 1.5 && h16.p < 0.01,
+        JSON.stringify(h16))
+    check('gleiche Aussaat, gleiches Ergebnis', JSON.stringify(einstiegsKante(hell, kerzen)) === JSON.stringify(e))
+    check('unter 30 Trades kein Urteil', einstiegsKante(hell.slice(0, 10), kerzen).urteil === 'zuWenig')
+}
+
+// ── Überanpassung (CSCV) ─────────────────────────────────────────────────
+console.log('\nÜberanpassung')
+{
+    const n = 160
+    const baue = (plateau, aussaat) => {
+        const rnd = zufall(aussaat)
+        const gauss = () => Math.sqrt(-2 * Math.log(rnd() + 1e-12)) * Math.cos(2 * Math.PI * rnd())
+        return Array.from({ length: 4 }, (_, s) => Array.from({ length: 4 }, (__, z) => Array.from({ length: 3 }, () => {
+            const reihe = new Float64Array(n)
+            for (let k = 0; k < n; k++) reihe[k] = gauss() + (plateau && s >= 2 && z >= 2 ? 0.5 : 0)
+            return reihe
+        })))
+    }
+    // Eine einzelne Rauschprobe kann weit von ½ liegen (die 70 Aufteilungen
+    // teilen sich dieselben Trades) — im Mittel über viele liegt sie dort.
+    const proben = Array.from({ length: 24 }, (_, i) => ueberanpassung(baue(false, i + 1), n))
+    const schnitt = (f) => proben.reduce((a, x) => a + f(x), 0) / proben.length
+    check('reines Rauschen: Überanpassung im Mittel um die Hälfte', schnitt((x) => x.pbo) > 0.35 && schnitt((x) => x.pbo) < 0.65,
+        String(schnitt((x) => x.pbo)))
+    check('reines Rauschen: ausserhalb im Mittel schlechter als innen (Auswahlglück)',
+        schnitt((x) => x.innen) > schnitt((x) => x.aussen), `${schnitt((x) => x.innen)} / ${schnitt((x) => x.aussen)}`)
+    check('70 Aufteilungen aus 8 Blöcken', proben[0].aufteilungen === 70 && proben[0].bloecke === 8)
+    const echt = ueberanpassung(baue(true, 99), n)
+    check('echter Vorteil: kaum Überanpassung, ausserhalb positiv', echt.pbo < 0.1 && echt.aussen > 0.2, JSON.stringify(echt))
+    check('zu wenige Trades für 8 Blöcke → keine Aussage', ueberanpassung(baue(false, 1), 30) === null)
 }
 
 // ── Gegen den echten Backtest ────────────────────────────────────────────
@@ -253,6 +326,11 @@ console.log('\nDieselben Zahlen wie der Backtest')
         `${eigene.alle.summe} gegen ${e.original.alle.summe}`)
     check('eine Zone ist gewählt, mit Vergleich auf dem Prüfteil',
         e.gewaehlt && Number.isFinite(e.gewaehlt.zonenwert) && e.gewaehlt.vergleich.besser + e.gewaehlt.vergleich.schlechter <= e.trades.pruefung)
+    check('Einstiegs-Kante und Überanpassung sind dabei',
+        ['wieZufall', 'schlaegtZufall', 'zuWenig'].includes(e.einstieg.urteil) && e.ueberanpassung && e.ueberanpassung.aufteilungen === 70,
+        JSON.stringify({ einstieg: e.einstieg.urteil, pbo: e.ueberanpassung }))
+    check('Zweifelsfälle je Zelle gezählt', e.zellen.every((c) => Number.isInteger(c.zweifel) && c.zweifel <= c.alle.n)
+        && e.zellen.some((c) => c.zweifel > 0))
     check('Urteil ist einer der bekannten Werte', ['zuWenig', 'besser', 'nichtGesichert', 'keinVorteil'].includes(e.urteil), e.urteil)
     // Ein Zufallsweg hat keine Kante — kein Ausstieg darf ihm eine gesichert andichten.
     check('auf einem Zufallsweg kein gesicherter Vorteil', e.urteil !== 'besser', `${e.urteil} p=${e.gewaehlt?.vergleich.p}`)

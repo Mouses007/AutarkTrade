@@ -9,6 +9,10 @@
  * Gezeigt wird zuerst das Urteil auf den ungesehenen 30 % der Trades, dann
  * die Karte. Die Karte allein verleitet dazu, die grünste Zelle zu nehmen —
  * genau die, die im Prüfteil am ehesten zusammenbricht.
+ *
+ * Dazwischen zwei Gegenproben ohne eigene Auswahl: die Einstiege gegen
+ * Zufallseinstiege (Edge Ratio) und die Überanpassung der Zonenwahl über
+ * 70 Aufteilungen (CSCV).
  */
 import { ref, computed } from 'vue'
 import axios from 'axios'
@@ -113,6 +117,14 @@ const istZone = (s, z) => a.value?.gewaehlt && a.value.gewaehlt.s === s && a.val
 const urteilTon = (u) => (u === 'besser' ? (a.value?.hinweise?.includes('ohneKante') ? 'warn' : 'gut')
     : u === 'keinVorteil' ? 'schlecht' : u === 'zuWenig' ? 'neutral' : 'warn')
 
+// Grün nur, wenn gesichert besser — ein Wert knapp über dem Zufall ist keiner.
+const gesichert = (x) => x.p !== null && x.p < 0.05 / (a.value?.einstieg?.horizonte?.length || 1) && x.strategie > x.zufall
+const einstiegTon = (u) => (u === 'schlaegtZufall' ? 'gut' : u === 'wieZufall' ? 'schlecht' : 'neutral')
+const prozent = (v) => (v === null || v === undefined ? '–' : Math.round(Number(v) * 100))
+/** Überanpassung: unter einem Viertel gering, bis zur Hälfte mittel, darüber hoch. */
+const ueberStufe = (pbo) => (pbo < 0.25 ? 'gering' : pbo < 0.5 ? 'mittel' : 'hoch')
+const ueberTon = (pbo) => ({ gering: 'gut', mittel: 'warn', hoch: 'schlecht' })[ueberStufe(pbo)]
+
 /** Vergleichszeilen: eigene Ausstiege, gewählte Zone, beste Einzelzelle. */
 const zeilen = computed(() => {
     if (!a.value) return []
@@ -178,7 +190,7 @@ const zeilen = computed(() => {
                 </li>
             </ul>
 
-            <div class="at-tabelle-huelle abstandUnten3">
+            <div class="at-tabelle-huelle abstandUnten">
                 <table class="at-tabelle dicht">
                     <thead><tr>
                         <th></th>
@@ -216,7 +228,72 @@ const zeilen = computed(() => {
                 </table>
             </div>
 
+            <p v-if="a.gewaehlt" class="fein at-gedaempft abstandUnten3">
+                <Symbol name="info" class="vorSymbol" />
+                {{ a.gewaehlt.zweifel
+                    ? t('strategien.ausstiege.zweifel', { k: a.gewaehlt.zweifel, n: a.trades.gespielt })
+                    : t('strategien.ausstiege.zweifelKeine') }}
+            </p>
+
+            <!-- Gegenprobe 1: der Einstieg allein, gegen Zufallseinstiege -->
+            <div class="unterTitel">{{ t('strategien.ausstiege.einstiegTitel') }}</div>
+            <div class="zeileMitSymbol">
+                <Pille :ton="einstiegTon(a.einstieg.urteil)">{{ t('strategien.ausstiege.einstieg_' + a.einstieg.urteil) }}</Pille>
+                <span class="fein">{{ t('strategien.ausstiege.einstiegText_' + a.einstieg.urteil) }}</span>
+            </div>
+            <div v-if="a.einstieg.horizonte?.length" class="at-tabelle-huelle">
+                <table class="at-tabelle dicht">
+                    <thead><tr>
+                        <th></th>
+                        <th v-for="x in a.einstieg.horizonte" :key="x.h" class="zahl">
+                            {{ t('strategien.ausstiege.nachKerzen', { n: x.h }) }}
+                        </th>
+                    </tr></thead>
+                    <tbody>
+                        <tr>
+                            <td>{{ t('strategien.ausstiege.zeileStrategie') }}</td>
+                            <td v-for="x in a.einstieg.horizonte" :key="x.h" class="zahl"
+                                :class="{ gewinnWert: gesichert(x) }">
+                                <strong>{{ zahl(x.strategie) }}</strong>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>{{ t('strategien.ausstiege.zeileZufall') }}</td>
+                            <td v-for="x in a.einstieg.horizonte" :key="x.h" class="zahl">{{ zahl(x.zufall) }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ t('strategien.ausstiege.zeileMfeMae') }}</td>
+                            <td v-for="x in a.einstieg.horizonte" :key="x.h" class="zahl">{{ zahl(x.mfe) }} / {{ zahl(x.mae) }}</td>
+                        </tr>
+                        <tr>
+                            <td>{{ t('strategien.ausstiege.zeileP') }}</td>
+                            <td v-for="x in a.einstieg.horizonte" :key="x.h" class="zahl">{{ pWert(x.p) }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="fussnote abstandUnten3">
+                {{ t('strategien.ausstiege.einstiegErklaerung', { n: a.einstieg.zufallseinstiege || 0 }) }}
+            </p>
+
+            <!-- Gegenprobe 2: wie viel der Zonenwahl ist Glück der Aufteilung? -->
+            <div class="unterTitel">{{ t('strategien.ausstiege.ueberTitel') }}</div>
+            <div v-if="a.ueberanpassung" class="zeileMitSymbol abstandUnten3">
+                <Pille :ton="ueberTon(a.ueberanpassung.pbo)">
+                    {{ t('strategien.ausstiege.ueber_' + ueberStufe(a.ueberanpassung.pbo)) }}
+                </Pille>
+                <span class="fein">
+                    {{ t('strategien.ausstiege.ueberText', {
+                        bloecke: a.ueberanpassung.bloecke, m: a.ueberanpassung.aufteilungen,
+                        pbo: prozent(a.ueberanpassung.pbo), verlust: prozent(a.ueberanpassung.verlust),
+                        innen: zahl(a.ueberanpassung.innen), aussen: zahl(a.ueberanpassung.aussen),
+                    }) }}
+                </span>
+            </div>
+            <p v-else class="fein at-gedaempft abstandUnten3">{{ t('strategien.ausstiege.ueberFehlt', { n: a.ueberanpassungAb }) }}</p>
+
             <!-- Karte: Stop × Ziel bei einer Haltedauer -->
+            <div class="unterTitel">{{ t('strategien.ausstiege.karteTitel') }}</div>
             <div class="kartenKopf">
                 <div class="knopfZeile">
                     <span class="fein at-gedaempft">{{ t('strategien.ausstiege.haltenTitel') }}</span>
@@ -310,6 +387,13 @@ const zeilen = computed(() => {
 .punkte {
     margin: 0 0 var(--abstand-2);
     padding-left: var(--abstand-4);
+}
+
+.unterTitel {
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-top: var(--abstand-3);
+    margin-bottom: var(--abstand-1);
 }
 
 .zoneZeile td {
