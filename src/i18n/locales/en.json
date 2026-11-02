@@ -7523,7 +7523,7 @@
     "menuTotalverluste": "Total losses",
     "wachtAn": "New movements are reported – click to switch off",
     "wachtAus": "Report new movements of this account",
-    "wachtHinweis": "Bell = report new movements of this account (push to phone, mail if wanted). Checked with every fetch, about every 15 minutes. Staking rewards and spam airdrops stay silent; an outflow to an unknown address comes as an urgent alert.",
+    "wachtHinweis": "Bell = report new movements of this account (push to phone, mail if wanted). Checked with every fetch, about every 15 minutes. Staking rewards and spam airdrops stay silent; an outflow to an unknown address comes as an urgent alert. Where the app cannot read a history (XRP, BNB Chain), it reports every change of the holding.",
     "wachtKanaele": "Set up channels →",
     "menuDca": "DCA portfolio",
     "dcaErkl": "Only the regular purchases: Bitpanda savings plans since 2019 and the Crypto.com card purchases 2022–2024. Everything bought this way counts, even if it was later moved to the Ledger or sold – the page measures the strategy. The overview still shows the whole holding.",

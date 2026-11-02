@@ -410,13 +410,16 @@ async function rpcSaldo(chainId, adresse) {
 export async function holeEvm(adresse, netze) {
     const key = await schluessel('etherscan')
     const bestand = [], bewegungen = [], hinweise = [], nurNativ = [], abgeschnitten = []
+    // Netze, die dieser Abruf wirklich gelesen hat. Ein Netzfehler wird geschluckt und das
+    // Netz fehlt dann im Bestand — die Kontoüberwachung darf das nicht für „leer“ halten.
+    const gelesen = []
     let vollstaendig = true
     for (const id of netze) {
         const netz = EVM_NETZE.find((n) => n.id === Number(id))
         if (!netz) continue
         const ort = `evm:${netz.id}`
         if (netz.nurBestand) {
-            try { bestand.push(...(await holeVechain(adresse))) } catch (e) { hinweise.push(`${netz.name}: ${e.message}`) }
+            try { bestand.push(...(await holeVechain(adresse))); gelesen.push(ort) } catch (e) { hinweise.push(`${netz.name}: ${e.message}`) }
             vollstaendig = false
             continue
         }
@@ -446,6 +449,7 @@ export async function holeEvm(adresse, netze) {
                     const [asset, kontrakt] = k.split('|')
                     bestand.push({ ort, asset, kontrakt, menge })
                 }
+                gelesen.push(ort)
                 continue
             } catch (e) {
                 // Gemessen 23.10.2026: der Gratis-Tarif von Etherscan deckt BNB Chain nicht ab.
@@ -457,6 +461,7 @@ export async function holeEvm(adresse, netze) {
         try {
             const saldo = await rpcSaldo(netz.id, adresse)
             if (saldo > 0) bestand.push({ ort, asset: netz.nativ, menge: saldo })
+            gelesen.push(ort)
             vollstaendig = false
             if (!key) nurNativ.push(netz.name)
         } catch (e) {
@@ -465,7 +470,7 @@ export async function holeEvm(adresse, netze) {
         }
     }
     if (nurNativ.length) hinweise.unshift(`Ohne Etherscan-Schlüssel nur die Hauptwährung (${nurNativ.join(', ')}) — keine Token, keine Historie.`)
-    return { bestand, bewegungen, vollstaendig, hinweis: hinweise.join(' · ') || null, stand: abgeschnitten.length ? { abgeschnitten } : undefined }
+    return { bestand, bewegungen, vollstaendig, gelesen, hinweis: hinweise.join(' · ') || null, stand: abgeschnitten.length ? { abgeschnitten } : undefined }
 }
 
 // ── VeChain (nur Bestand) ────────────────────────────────────────────────

@@ -19,7 +19,7 @@ import { ordneTransfers, ordneSparplaene } from './normal.js'
 import { fxAm, tagesKursUsd } from './kurse.js'
 import { istKanon, gegenKontraktVon } from './token-id.js'
 import { berechneUebersicht } from './uebersicht.js'
-import { wachtAus, meldenswert, meldungFuer } from './wacht.js'
+import { wachtAus, meldenswert, meldungFuer, bestandsAenderungen } from './wacht.js'
 import { spamPruefer } from './spam.js'
 import { stelleZu } from '../hype-radar/zustellung.js'
 import { leseEinstellungen } from '../hype-radar/einstellungen.js'
@@ -87,15 +87,17 @@ async function holeQuelle(q, seit, altStand = {}) {
 }
 
 /**
- * Bestand ersetzen, Bewegungen einfügen. Gibt die ids der Bewegungen zurück,
- * die es vorher NICHT gab (für die Kontoüberwachung) — gezählt über die
- * externeId, damit es in SQLite und PostgreSQL gleich geht.
+ * Bestand ersetzen, Bewegungen einfügen. Gibt für die Kontoüberwachung zurück,
+ * welche Bewegungen es vorher NICHT gab (gezählt über die externeId, damit es
+ * in SQLite und PostgreSQL gleich geht) und wie der Bestand VOR dem Ersetzen war.
  */
 async function speichere(quelle, erg) {
     const k = getKnex()
     const jetzt = Date.now()
     const neueIds = []
+    let altBestand = []
     await k.transaction(async (trx) => {
+        altBestand = await trx('portfolio_bestaende').where('quelle', quelle).select('ort', 'asset', 'kontrakt', 'menge')
         await trx('portfolio_bestaende').where('quelle', quelle).del()
         if (erg.bestand.length) {
             await trx('portfolio_bestaende').insert(erg.bestand.map((b) => ({
@@ -123,10 +125,10 @@ async function speichere(quelle, erg) {
         letzteBewegung: Math.max(juengste, Number(alt?.letzteBewegung) || 0) || null,
         status: 'ok',
         meldung: erg.hinweis || null,
-        stand: JSON.stringify({ ...(erg.stand || {}), vollstaendig: !!erg.vollstaendig }),
+        stand: JSON.stringify({ ...(erg.stand || {}), vollstaendig: !!erg.vollstaendig, ...(erg.gelesen ? { gelesen: erg.gelesen } : {}) }),
     }
     await k('portfolio_quellen').insert(zeile).onConflict('quelle').merge()
-    return neueIds
+    return { neueIds, altBestand }
 }
 
 async function merkeFehler(quelle, e) {
@@ -281,31 +283,45 @@ async function ortNamen() {
  * Instanzen an derselben Datenbank melden also nicht doppelt.
  * @returns {Promise<number>} Anzahl gemeldeter Konten
  */
-export async function meldeKontoBewegungen(ids) {
-    if (!ids?.length) return 0
+export async function meldeKontoBewegungen(ids = [], bestandsWechsel = []) {
+    const wechsel = bestandsWechsel || []
+    if (!ids?.length && !wechsel.length) return 0
     const k = getKnex()
     const s = await k('settings').where('id', 1).first('portfolioWacht').catch(() => null)
     const wacht = wachtAus(s?.portfolioWacht)
     if (!Object.values(wacht).some(Boolean)) return 0
-    const zeilen = (await k('portfolio_bewegungen').whereIn('id', ids)
-        .select('id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'kontrakt', 'transferMit', 'einordnung', 'chfWert'))
-        .filter((z) => wacht[z.quelle])
-    if (!zeilen.length) return 0
+    const zeilen = ids?.length ? (await k('portfolio_bewegungen').whereIn('id', ids)
+        .select('id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'gebuehrAsset', 'gebuehrMenge', 'kontrakt', 'transferMit', 'einordnung', 'chfWert'))
+        .filter((z) => wacht[z.quelle]) : []
+    const beobachtet = wechsel.filter((w) => wacht[w.quelle])
+    if (!zeilen.length && !beobachtet.length) return 0
     const istSpam = await spamPruefer()
     const jetzt = Date.now()
     const melden = zeilen.filter((z) => meldenswert(z, { jetzt, istSpam }))
-    if (!melden.length) return 0
+    // Bestand ohne Bewegung: erklärt wird mit ALLEN neuen Zeilen des Kontos (auch Routine).
+    const bestandJeOrt = new Map()
+    for (const w of beobachtet) {
+        const aenderungen = bestandsAenderungen(w.alt, w.neu, zeilen.filter((z) => z.quelle === w.quelle), { gelesen: w.gelesen, gelesenVorher: w.gelesenVorher })
+            .filter((a) => !istSpam(a.asset, a.kontrakt))
+        if (aenderungen.length) bestandJeOrt.set(w.quelle, aenderungen)
+    }
+    if (!melden.length && !bestandJeOrt.size) return 0
     const name = await ortNamen()
     const partnerIds = melden.map((z) => z.transferMit).filter(Boolean)
     const partnerOrt = new Map(partnerIds.length ? (await k('portfolio_bewegungen').whereIn('id', partnerIds).select('id', 'quelle')).map((p) => [p.id, p.quelle]) : [])
     const einst = await leseEinstellungen()
     const jeOrt = new Map()
     for (const z of melden) { if (!jeOrt.has(z.quelle)) jeOrt.set(z.quelle, []); jeOrt.get(z.quelle).push(z) }
+    for (const quelle of bestandJeOrt.keys()) if (!jeOrt.has(quelle)) jeOrt.set(quelle, [])
     let n = 0
     for (const [quelle, liste] of jeOrt) {
         const ort = name(quelle)
-        const { titel, text, schwere } = meldungFuer(ort, liste, { partnerName: (z) => (z.transferMit && partnerOrt.has(z.transferMit) ? name(partnerOrt.get(z.transferMit)) : null) })
-        const idListe = liste.map((z) => z.id)
+        const { titel, text, schwere } = meldungFuer(ort, liste, {
+            bestand: bestandJeOrt.get(quelle) || [],
+            partnerName: (z) => (z.transferMit && partnerOrt.has(z.transferMit) ? name(partnerOrt.get(z.transferMit)) : null),
+        })
+        // Sperrschlüssel: Zeilen-ids, bei reinen Bestandsänderungen der neue Stand.
+        const idListe = liste.length ? liste.map((z) => z.id) : (bestandJeOrt.get(quelle) || []).map((a) => `${a.asset}:${a.neu}`)
         try {
             await stelleZu({ regel: 'portfolioBewegung', schwere, meldung: text, titel, quelle: 'portfolio', daten: { quelle, ids: idListe } }, { symbol: ort, chain: quelle }, einst)
         } catch (e) { console.warn(' -> Portfolio-Überwachung Push:', e.message) }
@@ -327,7 +343,7 @@ export async function rufeAb({ nur = null } = {}) {
     try {
         const k = getKnex()
         const quellen = (await aktiveQuellen()).filter((q) => !nur || q.quelle === nur)
-        const neueBewegungen = []
+        const neueBewegungen = [], bestandsWechsel = []
         for (const q of quellen) {
             laeuft.quelle = q.quelle
             const stand = await k('portfolio_quellen').where('quelle', q.quelle).first()
@@ -342,11 +358,14 @@ export async function rufeAb({ nur = null } = {}) {
                 // nur, was danach geschah, sonst wäre jede alte Bewegung doppelt.
                 const liveAb = Number(q.adresse?.liveAb) || 0
                 if (liveAb) erg.bewegungen = erg.bewegungen.filter((b) => Number(b.zeit) > liveAb)
-                const neu = await speichere(q.quelle, erg)
+                const { neueIds, altBestand } = await speichere(q.quelle, erg)
                 // Erster gelungener Abruf eines Kontos = Grundstand, nichts melden (sonst
                 // käme die ganze Historie als „neu“). Ein Konto, das schon einmal ok war
                 // oder Bewegungen hat, meldet ab dem zweiten Abruf.
-                if (stand && (stand.status === 'ok' || stand.letzteBewegung)) neueBewegungen.push(...neu)
+                if (stand && (stand.status === 'ok' || stand.letzteBewegung)) {
+                    neueBewegungen.push(...neueIds)
+                    bestandsWechsel.push({ quelle: q.quelle, alt: altBestand, neu: erg.bestand, ids: neueIds, gelesen: erg.gelesen || null, gelesenVorher: altStand.gelesen || null })
+                }
                 ergebnis.ok.push(q.quelle)
             } catch (e) {
                 console.warn(` -> Portfolio ${q.quelle}: ${e.message}`)
@@ -362,7 +381,7 @@ export async function rufeAb({ nur = null } = {}) {
         ergebnis.bewertet = await bewerteBewegungen()
         // Nach Paarung und Bewertung: die Meldung kennt dann Gegenort und CHF-Wert.
         laeuft.schritt = 'ueberwachung'
-        ergebnis.gemeldet = await meldeKontoBewegungen(neueBewegungen).catch((e) => { console.warn(' -> Portfolio-Überwachung:', e.message); return 0 })
+        ergebnis.gemeldet = await meldeKontoBewegungen(neueBewegungen, bestandsWechsel).catch((e) => { console.warn(' -> Portfolio-Überwachung:', e.message); return 0 })
         laeuft.schritt = 'tageswert'
         await merkeTageswert()
     } finally {

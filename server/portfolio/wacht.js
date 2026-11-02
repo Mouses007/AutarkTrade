@@ -16,6 +16,11 @@
  * Ein Abgang ohne eigenes Gegenstück („an unbekannte Adresse“) geht mit der
  * höchsten Schwere hinaus — so erreicht er auch einen Telegram-Kanal, der nur
  * Warnungen durchlässt. Das ist der Fall „alles geklaut“.
+ *
+ * Orte ohne Historie (XRP, BNB Chain ausserhalb des Etherscan-Gratistarifs,
+ * VeChain, Börsen ohne Ein-/Auszahlungen) liefern keine Bewegungen — dort
+ * meldet `bestandsAenderungen`, was sich am Bestand geändert hat, ohne dass
+ * eine neue Bewegung es erklärt.
  */
 
 export const ROUTINE = new Set(['staking', 'belohnung'])
@@ -85,20 +90,97 @@ export function zeileText(z, { partnerName = () => null, zeitText = zeitVorgabe 
 }
 
 /**
- * Meldung für die neuen Bewegungen EINES Kontos (gebündelt je Abruf).
+ * Meldung für die neuen Bewegungen EINES Kontos (gebündelt je Abruf);
+ * `opt.bestand` = Bestandsänderungen ohne Bewegung (`bestandsAenderungen`).
  * @returns {{ titel, text, schwere }}
  */
 export function meldungFuer(ortName, zeilen, opt = {}) {
     const liste = [...zeilen].sort((a, b) => Number(a.zeit) - Number(b.zeit))
-    const fremd = liste.some(unbekannterAbgang)
-    const kopf = liste.length === 1
+    const bestand = opt.bestand || []
+    // Ein Bestand, der ohne Bewegung SINKT, ist so ernst wie ein Abgang an eine fremde Adresse.
+    const fremd = liste.some(unbekannterAbgang) || bestand.some((a) => a.delta < 0)
+    const kopf = liste.length === 1 && !bestand.length
         ? `${ART_WORT[liste[0].art] || 'Bewegung'} ${mengeText(liste[0].menge)} ${liste[0].asset}`
-        : `${liste.length} neue Bewegungen`
+        : !liste.length && bestand.length === 1
+            ? `Bestand ${bestand[0].asset} ${mengeText(bestand[0].delta)}`
+            : `${liste.length + bestand.length} neue Bewegungen`
     const titel = `${fremd ? '⚠ ' : ''}${ortName}: ${kopf}`
     const MAX = 8
-    const zeilenText = liste.slice(0, MAX).map((z) => `• ${zeileText(z, opt)}`)
+    const zeilenText = [...bestand.map((a) => `• ${bestandText(a)}`), ...liste.slice(0, MAX).map((z) => `• ${zeileText(z, opt)}`)]
     if (liste.length > MAX) zeilenText.push(`… und ${liste.length - MAX} weitere`)
     // Telegram zeigt nur den Text, nicht den Titel — deshalb steht er als erste Zeile mit drin.
     const text = [titel, ...zeilenText].join('\n')
     return { titel, text, schwere: fremd ? 'einstieg' : 'warnung' }
+}
+
+// ── Bestand ohne Bewegung ────────────────────────────────────────────────
+
+/** Assets, die ohne Bewegung von selbst wachsen: VeChain erzeugt VTHO aus gehaltenem VET. */
+export const ZUWACHS_ROUTINE = new Set(['VTHO'])
+/** Pionex-Bots handeln laufend: ihr Gesamtwert ist kein Bestand, der sich „bewegt“. */
+const OHNE_VERGLEICH = new Set(['bots'])
+
+const schluessel = (b) => (b.kontrakt ? `${String(b.asset).toUpperCase()}|${String(b.kontrakt).toLowerCase()}` : String(b.asset).toUpperCase())
+
+/**
+ * Bestandsänderung, die keine neue Bewegung erklärt (rein).
+ *
+ * @param {Array<{ort, asset, kontrakt?, menge}>} alt   Bestand vor dem Abruf
+ * @param {Array<{ort, asset, kontrakt?, menge}>} neu   Bestand nach dem Abruf
+ * @param {Array} bewegungen  ALLE in diesem Abruf neu eingefügten Zeilen des Kontos —
+ *   auch Routine und Nachgeladenes: was eine Zeile erklärt, ist keine Meldung wert.
+ * @param {{ gelesen?: string[]|null, gelesenVorher?: string[]|null }} opt
+ *   `gelesen`: Orte, die dieser Abruf wirklich gelesen hat (EVM schluckt einen
+ *   Netzfehler und liefert das Netz dann gar nicht — das ist kein leerer Bestand).
+ *   `gelesenVorher`: Orte des Grundstands; ein Ort ohne Grundstand (neu
+ *   zugeschaltetes Netz) wird nicht verglichen.
+ * @returns {Array<{ asset, kontrakt, alt, neu, delta, orte }>}  `delta` = unerklärter Teil
+ */
+export function bestandsAenderungen(alt = [], neu = [], bewegungen = [], { gelesen = null, gelesenVorher = null } = {}) {
+    const vorher = new Set([...(gelesenVorher || []), ...alt.map((b) => b.ort)])
+    const zaehlt = (ort) => !OHNE_VERGLEICH.has(ort) && (!gelesen || gelesen.includes(ort)) && vorher.has(ort)
+    const je = new Map()
+    const posten = (b) => {
+        const k = schluessel(b)
+        if (!je.has(k)) je.set(k, { asset: String(b.asset).toUpperCase(), kontrakt: b.kontrakt || null, alt: 0, neu: 0, bewegt: 0, orte: new Map() })
+        return je.get(k)
+    }
+    for (const [liste, feld] of [[alt, 'alt'], [neu, 'neu']]) {
+        for (const b of liste) {
+            if (!zaehlt(b.ort)) continue
+            const p = posten(b)
+            p[feld] += Number(b.menge) || 0
+            const o = p.orte.get(b.ort) || { alt: 0, neu: 0 }
+            o[feld] += Number(b.menge) || 0
+            p.orte.set(b.ort, o)
+        }
+    }
+    for (const z of bewegungen) {
+        if (z.einordnung === 'ignorieren') continue
+        const seiten = [[z.asset, Number(z.menge) || 0, z.kontrakt], [z.gegenAsset, Number(z.gegenMenge) || 0, null], [z.gebuehrAsset, -(Number(z.gebuehrMenge) || 0), null]]
+        for (const [asset, m, kontrakt] of seiten) {
+            if (!asset || !m) continue
+            const k = schluessel({ asset, kontrakt })
+            if (je.has(k)) je.get(k).bewegt += m
+        }
+    }
+    const aus = []
+    for (const p of je.values()) {
+        const delta = (p.neu - p.alt) - p.bewegt
+        const tol = Math.max(1e-9, 1e-6 * Math.max(Math.abs(p.alt), Math.abs(p.neu)))
+        if (Math.abs(delta) <= tol) continue
+        if (delta > 0 && ZUWACHS_ROUTINE.has(p.asset)) continue
+        const orte = [...p.orte].filter(([, o]) => Math.abs(o.neu - o.alt) > tol).map(([ort]) => ort)
+        aus.push({ asset: p.asset, kontrakt: p.kontrakt, alt: p.alt, neu: p.neu, delta, orte })
+    }
+    return aus.sort((a, b) => a.delta - b.delta)
+}
+
+const ORT_NAME = { 'evm:1': 'Ethereum', 'evm:56': 'BNB Chain', 'evm:137': 'Polygon', 'evm:42161': 'Arbitrum', 'evm:8453': 'Base', 'evm:10': 'Optimism', 'evm:43114': 'Avalanche', 'evm:100009': 'VeChain', xrp: 'XRP Ledger', btc: 'Bitcoin', sol: 'Solana' }
+const mengeOhne = (m) => mengeText(m).slice(1)
+
+/** Eine Zeile für eine Bestandsänderung ohne Bewegung. */
+export function bestandText(a) {
+    const wo = a.orte.map((o) => ORT_NAME[o] || o).join(', ')
+    return `Bestand ${a.asset} ${mengeOhne(a.alt)} → ${mengeOhne(a.neu)} (${mengeText(a.delta)})${wo ? ` · ${wo}` : ''} · ohne Bewegungsdaten${a.delta < 0 ? ' ⚠' : ''}`
 }

@@ -7523,7 +7523,7 @@
     "menuTotalverluste": "Totalverluste",
     "wachtAn": "Neue Bewegungen werden gemeldet – klicken zum Ausschalten",
     "wachtAus": "Neue Bewegungen dieses Kontos melden",
-    "wachtHinweis": "Glocke = neue Bewegungen dieses Kontos melden (Push aufs Handy, auf Wunsch Mail). Geprüft wird mit jedem Abruf, etwa alle 15 Minuten. Staking-Erträge und Spam-Airdrops bleiben still; ein Abgang an eine fremde Adresse kommt als dringende Meldung.",
+    "wachtHinweis": "Glocke = neue Bewegungen dieses Kontos melden (Push aufs Handy, auf Wunsch Mail). Geprüft wird mit jedem Abruf, etwa alle 15 Minuten. Staking-Erträge und Spam-Airdrops bleiben still; ein Abgang an eine fremde Adresse kommt als dringende Meldung. Wo die App keine Historie lesen kann (XRP, BNB Chain), meldet sie jede Änderung des Bestands.",
     "wachtKanaele": "Kanäle einrichten →",
     "menuDca": "DCA-Portfolio",
     "dcaErkl": "Nur die regelmässigen Käufe: Bitpanda-Sparpläne seit 2019 und die Crypto.com-Kartenkäufe 2022–2024. Gezählt wird alles so Gekaufte, auch wenn es später auf den Ledger verschoben oder verkauft wurde – die Seite misst die Strategie. Die Übersicht zeigt weiterhin den ganzen Bestand.",

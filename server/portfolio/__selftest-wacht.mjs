@@ -9,9 +9,11 @@
  *   - ein Abgang an eine fremde Adresse ist dringend, ein eigener Transfer nicht;
  *   - die Meldung nennt den Gegenort eines Transfers und steht auch im Text
  *     (Telegram zeigt den Titel nicht);
- *   - Schalter: aus entfernt den Eintrag, Importe sind nicht überwachbar.
+ *   - Schalter: aus entfernt den Eintrag, Importe sind nicht überwachbar;
+ *   - Bestand ohne Bewegung (XRP, BNB Chain): ein nicht gelesenes Netz ist
+ *     KEIN leergeräumtes, ein neu zugeschaltetes kein Eingang, VTHO wächst still.
  */
-import { wachtAus, setzeWacht, wachtbar, meldenswert, meldungFuer, zeileText, mengeText, unbekannterAbgang, NACHGELADEN_MS } from './wacht.js'
+import { wachtAus, setzeWacht, wachtbar, meldenswert, meldungFuer, zeileText, mengeText, unbekannterAbgang, NACHGELADEN_MS, bestandsAenderungen } from './wacht.js'
 
 let bestanden = 0, fehlgeschlagen = 0
 function check(name, ok, detail) {
@@ -72,6 +74,45 @@ console.log('\nMeldung je Konto')
     const v = meldungFuer('Ledger X · Bitcoin', viele, { zeitText: zeit })
     check('viele: gebündelt, gekürzt', v.titel.endsWith('11 neue Bewegungen') && v.text.includes('… und 3 weitere') && v.text.split('\n').length === 10)
     check('viele: älteste zuerst', v.text.split('\n')[1].includes(zeit(JETZT - 10 * 60e3)))
+}
+
+console.log('\nBestand ohne Bewegung (XRP, BNB Chain, VeChain)')
+{
+    const xrp = bestandsAenderungen([{ ort: 'xrp', asset: 'XRP', menge: 100 }], [{ ort: 'xrp', asset: 'XRP', menge: 120 }], [])
+    check('Spende auf XRP: +20 erkannt', xrp.length === 1 && xrp[0].delta === 20 && xrp[0].orte[0] === 'xrp', JSON.stringify(xrp))
+    const leer = bestandsAenderungen([{ ort: 'evm:56', asset: 'BNB', menge: 0.0094 }, { ort: 'evm:1', asset: 'ETH', menge: 1 }],
+        [{ ort: 'evm:1', asset: 'ETH', menge: 1 }], [], { gelesen: ['evm:1', 'evm:56'] })
+    check('BNB Chain leergeräumt (gelesen, Saldo 0 → fehlt im Bestand): −0.0094', leer.length === 1 && leer[0].asset === 'BNB' && Math.abs(leer[0].delta + 0.0094) < 1e-12)
+    const nichtGelesen = bestandsAenderungen([{ ort: 'evm:56', asset: 'BNB', menge: 0.0094 }], [], [], { gelesen: ['evm:1'] })
+    check('Netzfehler (BNB Chain nicht gelesen) ist KEIN Abgang', nichtGelesen.length === 0)
+    const neuesNetz = bestandsAenderungen([{ ort: 'evm:1', asset: 'ETH', menge: 1 }], [{ ort: 'evm:1', asset: 'ETH', menge: 1 }, { ort: 'evm:137', asset: 'POL', menge: 91 }], [], { gelesen: ['evm:1', 'evm:137'], gelesenVorher: ['evm:1'] })
+    check('neu zugeschaltetes Netz ohne Grundstand: keine Meldung', neuesNetz.length === 0)
+    const leerVorher = bestandsAenderungen([], [{ ort: 'evm:56', asset: 'BNB', menge: 0.5 }], [], { gelesen: ['evm:56'], gelesenVorher: ['evm:56'] })
+    check('Netz war gelesen und leer, jetzt Eingang: gemeldet', leerVorher.length === 1 && leerVorher[0].delta === 0.5)
+    const erklaert = bestandsAenderungen([{ ort: 'btc', asset: 'BTC', menge: 1 }], [{ ort: 'btc', asset: 'BTC', menge: 1.5 }], [{ art: 'einzahlung', asset: 'BTC', menge: 0.5 }])
+    check('von einer neuen Bewegung erklärt: still', erklaert.length === 0)
+    const teils = bestandsAenderungen([{ ort: 'btc', asset: 'BTC', menge: 1 }], [{ ort: 'btc', asset: 'BTC', menge: 1.6 }], [{ art: 'einzahlung', asset: 'BTC', menge: 0.5 }])
+    check('nur teilweise erklärt: der Rest', teils.length === 1 && Math.abs(teils[0].delta - 0.1) < 1e-12)
+    const gebuehr = bestandsAenderungen([{ ort: 'evm:1', asset: 'ETH', menge: 1 }], [{ ort: 'evm:1', asset: 'ETH', menge: 0.499 }], [{ art: 'auszahlung', asset: 'ETH', menge: -0.5, gebuehrAsset: 'ETH', gebuehrMenge: 0.001 }])
+    check('Abgang samt Netzgebühr erklärt', gebuehr.length === 0)
+    const vtho = bestandsAenderungen([{ ort: 'evm:100009', asset: 'VTHO', menge: 100 }], [{ ort: 'evm:100009', asset: 'VTHO', menge: 101 }], [])
+    check('VTHO wächst von selbst: still', vtho.length === 0)
+    const vthoWeg = bestandsAenderungen([{ ort: 'evm:100009', asset: 'VTHO', menge: 100 }], [{ ort: 'evm:100009', asset: 'VTHO', menge: 10 }], [])
+    check('VTHO sinkt: gemeldet', vthoWeg.length === 1 && vthoWeg[0].delta === -90)
+    const bots = bestandsAenderungen([{ ort: 'bots', asset: 'USDT', menge: 100 }], [{ ort: 'bots', asset: 'USDT', menge: 104 }], [])
+    check('Pionex-Bots (handeln laufend): still', bots.length === 0)
+    const rauschen = bestandsAenderungen([{ ort: 'evm:1', asset: 'ETH', menge: 1.234567 }], [{ ort: 'evm:1', asset: 'ETH', menge: 1.2345670000000001 }], [])
+    check('Rechenrauschen: still', rauschen.length === 0)
+    const token = bestandsAenderungen([{ ort: 'evm:1', asset: 'ilv', kontrakt: '0xABC', menge: 21 }], [{ ort: 'evm:1', asset: 'ILV', kontrakt: '0xabc', menge: 21 }], [])
+    check('Gross/Klein bei Kürzel und Vertrag zählt nicht', token.length === 0)
+
+    const m = meldungFuer('Ledger X · ETH MR', [], { bestand: leer, zeitText: zeit })
+    check('nur Bestand: Titel „Bestand BNB −0.0094“, dringend', m.titel === '⚠ Ledger X · ETH MR: Bestand BNB −0.0094' && m.schwere === 'einstieg', m.titel)
+    check('Zeile nennt Netz und „ohne Bewegungsdaten“', m.text.includes('Bestand BNB 0.0094 → 0 (−0.0094) · BNB Chain · ohne Bewegungsdaten ⚠'), m.text)
+    const plus = meldungFuer('Ledger X · XRP', [], { bestand: xrp, zeitText: zeit })
+    check('Spende ohne Bewegung: nicht dringend', plus.schwere === 'warnung' && !plus.titel.startsWith('⚠'))
+    const beides = meldungFuer('Ledger X · EVM', [{ id: 1, art: 'einzahlung', zeit: JETZT, asset: 'ETH', menge: 0.1 }], { bestand: xrp, zeitText: zeit })
+    check('Bewegung und Bestand zusammen: „2 neue Bewegungen“', beides.titel.endsWith('2 neue Bewegungen') && beides.text.split('\n').length === 3)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
