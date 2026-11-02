@@ -155,6 +155,24 @@ export class ZeichenEbene {
         this.requestUpdate()
     }
 
+    /**
+     * Kerzen für ein Volumenprofil, dessen Bereich vor den geladenen Kerzen
+     * beginnt (auf 1h gezeichnet, auf 15m angesehen: 1000 Viertelstunden
+     * reichen zehn Tage zurück). Die Chart-Historie bleibt unberührt.
+     */
+    setzeProfilKerzen(von, bis, kerzen) {
+        this._profilKerzen ??= new Map()
+        if (this._profilKerzen.size > 20) this._profilKerzen.clear()
+        this._profilKerzen.set(`${von}|${bis}`, kerzen || [])
+        this.requestUpdate()
+    }
+
+    leereProfilKerzen() {
+        this._profilKerzen?.clear()
+        this._profilAngefragt?.clear()
+        this._vpCache?.clear()
+    }
+
     setzeZeichnungen(liste) {
         this.zeichnungen = liste
         // Eine Vorschau gilt nur, bis der gespeicherte Stand zurückkommt.
@@ -1017,11 +1035,24 @@ export class ZeichenEbene {
     /** Volumenprofil der geladenen Kerzen zwischen den beiden Zeitpunkten (zwischengespeichert). */
     profilFuer(pk, s) {
         const von = Math.min(pk[0].t, pk[1].t), bis = Math.max(pk[0].t, pk[1].t)
-        const letzte = this.kerzen[this.kerzen.length - 1]
-        const schluessel = `${von}|${bis}|${s.zeilen}|${this.kerzen.length}|${letzte?.t}|${letzte?.v}`
+        // Beginnt der Bereich vor den geladenen Kerzen, rechnet ein Teil davon
+        // ein falsches Profil — dann eigene Kerzen für genau diesen Bereich.
+        let quelle = this.kerzen
+        if (!this.kerzen.length || this.kerzen[0].t > von) {
+            const extra = this._profilKerzen?.get(`${von}|${bis}`)
+            if (!extra) {
+                this._profilAngefragt ??= new Set()
+                const k = `${von}|${bis}`
+                if (!this._profilAngefragt.has(k)) { this._profilAngefragt.add(k); this.rueckruf.profilKerzen?.(von, bis) }
+                return null
+            }
+            quelle = extra
+        }
+        const letzte = quelle[quelle.length - 1]
+        const schluessel = `${quelle === this.kerzen ? 'c' : 'x'}|${von}|${bis}|${s.zeilen}|${quelle.length}|${letzte?.t}|${letzte?.v}`
         this._vpCache ??= new Map()
         if (this._vpCache.has(schluessel)) return this._vpCache.get(schluessel)
-        const vp = volumenprofil(this.kerzen.filter((k) => k.t >= von && k.t <= bis), { zeilen: s.zeilen || 24 })
+        const vp = volumenprofil(quelle.filter((k) => k.t >= von && k.t <= bis), { zeilen: s.zeilen || 24 })
         if (this._vpCache.size > 50) this._vpCache.clear()
         this._vpCache.set(schluessel, vp)
         return vp

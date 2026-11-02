@@ -328,6 +328,7 @@ function baueChart() {
             },
             alarmVerschoben: (id, p) => { alarmMenue.value = null; emit('alarmVerschieben', { id, preis: Number(p.toFixed(preisStellen.value)) }) },
             alarmKlick: (id, x, y) => { kontext.value = null; alarmMenue.value = { id, x, y } },
+            profilKerzen: ladeProfilKerzen,
         },
     })
     zeigeKi()
@@ -1561,6 +1562,7 @@ async function ladeNeu() {
     live?.stop()
     live = null
     historieZuEnde = false
+    ebene?.leereProfilKerzen()
     fehler.value = ''
     laedt.value = true
     const { symbol, markt, interval } = props.panel
@@ -1596,6 +1598,39 @@ async function ladeNeu() {
         fehler.value = e.response?.data?.error || e.message
     } finally {
         if (nr === ladeNummer) laedt.value = false
+    }
+}
+
+/**
+ * Kerzen für ein Volumenprofil vor den geladenen Kerzen (`ZeichenEbene.profilFuer`).
+ * Zeiteinheit des Charts, wenn der Bereich in höchstens 1500 Kerzen passt, sonst
+ * die feinste, bei der er das tut — ein über Wochen gezogenes Profil auf 1m
+ * wären zehntausende Kerzen.
+ */
+const PROFIL_TF = ['1m', '5m', '15m', '1h', '4h', '1d']
+async function ladeProfilKerzen(von, bis) {
+    const nr = ladeNummer
+    const { symbol, markt, interval } = props.panel
+    const boerse = boerseVon()
+    const max = QUELLEN_MAX[boerse] || 1000
+    const ivChart = INTERVALL_MS[interval] || 60000
+    const tf = (bis - von) / ivChart <= 1500 ? interval
+        : PROFIL_TF.find((x) => INTERVALL_MS[x] >= ivChart && (bis - von) / INTERVALL_MS[x] <= 1500) || '1d'
+    const iv = INTERVALL_MS[tf] || ivChart
+    try {
+        let liste = []
+        let ende = bis + iv - 1
+        for (let i = 0; i < 12; i++) {
+            const seite = await ladeKerzen({ symbol, markt, interval: tf, endTime: ende, limit: max, boerse })
+            if (nr !== ladeNummer) return
+            if (!seite.length) break
+            liste = fuegeZusammen(seite, liste)
+            if (liste[0].t <= von) break
+            ende = liste[0].t - 1
+        }
+        ebene?.setzeProfilKerzen(von, bis, liste.filter((k) => k.t >= von && k.t <= bis))
+    } catch {
+        // Ohne Kerzen bleibt das Profil auf dieser Zeiteinheit leer, wie bisher.
     }
 }
 
