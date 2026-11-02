@@ -33,7 +33,7 @@ const mailKonfigRef = ref(null)
 const meldungenOffen = ref(true)   // der Hauptteil der Seite
 
 /** Reihenfolge der Gruppen in der Anzeige. */
-const MELDE_GRUPPEN = ['markt', 'system']
+const MELDE_GRUPPEN = ['markt', 'portfolio', 'system']
 /*
  * Ereignisse mit `eigeneStelle` stehen NICHT in dieser Tabelle.
  *

@@ -70,6 +70,10 @@ export const REGISTER = [
     // Sperrfrist hängt am einzelnen Alarm (`schluessel` = Alarm-Id + Auslösung),
     // nicht am Typ: zwei Linien auf zwei Coins sind zwei Meldungen.
     { id: 'chartAlarm', gruppe: 'markt', email: true, symbol: '\u23F0', ton: 'warnung', bereich: 'Markt · Chart-Alarm' },
+    // ── Portfolio ────────────────────────────────────────────────────────
+    // Neue Bewegungen überwachter Konten (Schalter je Konto unter Portfolio ›
+    // Börsen & Wallets). Erkannt im Portfolio-Abruf, Sperre je Konto + Zeilen.
+    { id: 'portfolioBewegung', gruppe: 'portfolio', email: true, browser: false, symbol: '\u{1F514}', ton: 'warnung', bereich: 'Portfolio · Kontoüberwachung' },
     // ── System ───────────────────────────────────────────────────────────
     // Einziger Eintrag mit EIGENER Stelle: Der Lagebericht geht oft an mehrere
     // Leser, und ein Empfängerfeld je Ereignis waere fuer die anderen zehn

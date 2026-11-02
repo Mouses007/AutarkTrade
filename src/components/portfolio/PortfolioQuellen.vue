@@ -6,6 +6,7 @@
  * API-Einstellungen), Stand des letzten Abrufs, Abgleich.
  * Wallets — gruppiert nach Gerät/App mit eigenem Namen; darunter die Ketten.
  * Neue Wallet: Typ antippen, Namen bestätigen, Adresse einfügen — fertig.
+ * Glocke je Konto: neue Bewegungen melden (Kontoüberwachung, `server/portfolio/wacht.js`).
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -27,6 +28,17 @@ async function schalteSpot(b, an) {
     await setzeBoersenMarkt(b, 'spot', an)
     if (an) starteAbruf(b)
     else ladeUebersicht()
+}
+
+// ── Kontoüberwachung: Glocke je Konto ──
+const wacht = ref({})
+async function ladeWacht() {
+    try { wacht.value = (await axios.get('/api/portfolio/wacht')).data.wacht || {} } catch { wacht.value = {} }
+}
+async function schalteWacht(quelle) {
+    const an = !wacht.value[quelle]
+    wacht.value = { ...wacht.value, [quelle]: an }
+    try { wacht.value = (await axios.put('/api/portfolio/wacht', { quelle, an })).data.wacht } catch { await ladeWacht() }
 }
 
 // ── Zusätzliche Paare (Bitunix/Pionex) ──
@@ -58,7 +70,7 @@ async function ladeWallets() {
     typen.value = data.typen
     netzNamen.value = Object.fromEntries(data.netze.map((n) => [n.id, n.name]))
 }
-onMounted(() => { ladeWallets(); ladeSchluessel() })
+onMounted(() => { ladeWallets(); ladeSchluessel(); ladeWacht() })
 
 function waehleTyp(typ) {
     neuTyp.value = typ
@@ -186,10 +198,17 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
                             <span v-if="stand(b.id).letzterAbruf" class="at-gedaempft pq-wert">{{ chf(stand(b.id).chf) }}</span>
                         </template>
                     </div>
-                    <label class="pq-schalter">
-                        <input type="checkbox" :checked="maerkte[b.id].spot" @change="schalteSpot(b.id, $event.target.checked)" />
-                        <span>{{ t('portfolio.spotInsPortfolio') }}</span>
-                    </label>
+                    <div class="pq-boerse-rechts">
+                        <button v-if="maerkte[b.id].spot" type="button" class="pq-glocke" :class="{ an: wacht[b.id] }"
+                            :title="wacht[b.id] ? t('portfolio.wachtAn') : t('portfolio.wachtAus')" :aria-label="wacht[b.id] ? t('portfolio.wachtAn') : t('portfolio.wachtAus')"
+                            :aria-pressed="!!wacht[b.id]" @click="schalteWacht(b.id)">
+                            <Symbol :name="wacht[b.id] ? 'glocke' : 'glockeAus'" :groesse="15" />
+                        </button>
+                        <label class="pq-schalter">
+                            <input type="checkbox" :checked="maerkte[b.id].spot" @change="schalteSpot(b.id, $event.target.checked)" />
+                            <span>{{ t('portfolio.spotInsPortfolio') }}</span>
+                        </label>
+                    </div>
                     <p v-if="maerkte[b.id].spot && stand(b.id)?.status === 'nichtEingerichtet'" class="pq-hinweis">
                         {{ t('portfolio.schluesselFehlt') }} <router-link to="/einstellungen/journal">{{ t('portfolio.zuDenApiEinstellungen') }} →</router-link>
                     </p>
@@ -229,6 +248,10 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
                 <p class="pq-sicher"><Symbol name="schildHaken" :groesse="15" />{{ t('portfolio.nurOeffentlich') }}</p>
             </Karte>
 
+            <p class="at-gedaempft pq-klein pq-wacht-hinweis">
+                <Symbol name="glocke" :groesse="13" /> {{ t('portfolio.wachtHinweis') }}
+                <router-link to="/einstellungen/benachrichtigungen">{{ t('portfolio.wachtKanaele') }}</router-link>
+            </p>
             <p v-if="!wallets.length && !neuOffen" class="at-gedaempft pq-klein">{{ t('portfolio.keineWallets') }}</p>
 
             <Karte v-for="w in wallets" :key="w.id" dicht class="pq-wallet">
@@ -282,6 +305,11 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
                         <span v-if="stand('a' + a.id)?.letzterAbruf">{{ chf(stand('a' + a.id).chf) }}</span>
                         <Pille v-if="stand('a' + a.id)" :ton="statusTon(stand('a' + a.id).status)">{{ stand('a' + a.id).status === 'ok' ? vorZeit(stand('a' + a.id).letzterAbruf) : (abrufLaeuft && stand('a' + a.id).status === 'neu' ? t('portfolio.wirdGelesen') : t('portfolio.status_' + stand('a' + a.id).status)) }}</Pille>
                         <Pille v-else-if="abrufLaeuft" ton="neutral">{{ t('portfolio.wirdGelesen') }}</Pille>
+                        <button type="button" class="pq-glocke" :class="{ an: wacht['a' + a.id] }"
+                            :title="wacht['a' + a.id] ? t('portfolio.wachtAn') : t('portfolio.wachtAus')" :aria-label="wacht['a' + a.id] ? t('portfolio.wachtAn') : t('portfolio.wachtAus')"
+                            :aria-pressed="!!wacht['a' + a.id]" @click="schalteWacht('a' + a.id)">
+                            <Symbol :name="wacht['a' + a.id] ? 'glocke' : 'glockeAus'" :groesse="15" />
+                        </button>
                         <Knopf art="leise" klein nur-symbol :symbol="loeschFrage === 'a' + a.id ? 'warnung' : 'muell'"
                             :titel="loeschFrage === 'a' + a.id ? t('portfolio.nochmalLoeschen') : t('portfolio.adresseLoeschen')" @click="loescheAdresse(a)" />
                     </div>
@@ -322,6 +350,11 @@ const hatEvm = computed(() => wallets.value.some((w) => w.adressen.some((a) => a
 
 .pq-boerse { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.25rem 1rem; padding: 0.65rem 0; border-bottom: 1px solid var(--line); align-items: center; }
 .pq-boerse-name { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.pq-boerse-rechts { display: flex; gap: 0.6rem; align-items: center; }
+.pq-glocke { background: none; border: 1px solid transparent; border-radius: var(--radius-knopf); color: var(--leise); cursor: pointer; padding: 0.2rem 0.3rem; display: inline-grid; place-items: center; }
+.pq-glocke:hover { border-color: var(--line-stark); color: var(--text); }
+.pq-glocke.an { color: var(--accent); border-color: var(--accent-schwach); }
+.pq-wacht-hinweis { display: flex; flex-wrap: wrap; gap: 0.3rem; align-items: baseline; margin: 0 0 0.6rem; }
 .pq-wert { font-size: 0.85rem; }
 .pq-schalter { display: inline-flex; gap: 0.45rem; align-items: center; font-size: 0.85rem; cursor: pointer; color: var(--muted); }
 .pq-schalter input { accent-color: var(--accent); width: 1rem; height: 1rem; }

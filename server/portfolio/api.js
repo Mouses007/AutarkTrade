@@ -7,6 +7,8 @@
  *   GET    /bewegungen       ?quelle&asset&arten&offen&vor&limit
  *   GET    /staking                    Staking-Produkte je Ort und Coin (Einsatz, Erträge, gemessene Rendite)
  *   GET    /dca                        DCA-Portfolio: nur Sparplan-/DCA-Käufe, je Coin und Plan
+ *   GET    /wacht                      überwachte Konten { quelle: true }
+ *   PUT    /wacht            {quelle, an}  neue Bewegungen dieses Kontos melden (Push/Mail)
  *   GET    /dca/verlauf                dasselbe als Monatsverlauf (eingesetzt ↔ Wert), 6 h im Speicher
  *   PUT    /bewegungen/:id   {einordnung}
  *   POST   /bewegungen/sammel {quelle, einordnung, art?}
@@ -49,6 +51,7 @@ import { setzeTotalverlust } from './totalverlust.js'
 import { setzeSpam } from './spam.js'
 import { totalverlustUebersicht } from './totalverlust-seite.js'
 import { stakingUebersicht } from './staking.js'
+import { wachtAus, setzeWacht, wachtbar } from './wacht.js'
 import { istDcaKauf, dcaArt, dcaUebersicht, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon } from './dca.js'
 import { kerzen as marktKerzen } from '../marktdaten/index.js'
 import { steuerBerichtHtml, berichtCss, BERICHT_JS } from './steuer-bericht.js'
@@ -273,6 +276,25 @@ export function setupPortfolioRoutes(app) {
             const punkte = dcaVerlauf(kaeufe, monatsKurse, { umstellungen })
             dcaVerlaufSpeicher = { schluessel, zeit: Date.now(), punkte, ohneKerzen }
             res.json({ ok: true, punkte, ohneKerzen })
+        } catch (e) { fehler(res, e) }
+    })
+
+    // Kontoüberwachung: je Konto ein Schalter (gemeldet wird im Abruf, `meldeKontoBewegungen`).
+    app.get('/api/portfolio/wacht', async (req, res) => {
+        try {
+            const s = await getKnex()('settings').where('id', 1).first('portfolioWacht')
+            res.json({ ok: true, wacht: wachtAus(s?.portfolioWacht) })
+        } catch (e) { fehler(res, e) }
+    })
+    app.put('/api/portfolio/wacht', async (req, res) => {
+        try {
+            const quelle = String(req.body?.quelle || '')
+            if (!wachtbar(quelle)) return fehler(res, 'Dieses Konto lässt sich nicht überwachen', 400)
+            const k = getKnex()
+            const s = await k('settings').where('id', 1).first('portfolioWacht')
+            const neu = setzeWacht(s?.portfolioWacht, quelle, !!req.body?.an)
+            await k('settings').where('id', 1).update({ portfolioWacht: neu })
+            res.json({ ok: true, wacht: wachtAus(neu) })
         } catch (e) { fehler(res, e) }
     })
 

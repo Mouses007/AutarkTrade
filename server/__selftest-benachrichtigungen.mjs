@@ -34,7 +34,7 @@ console.log('Benachrichtigungen')
 // ── 1) Register ──────────────────────────────────────────────────────────
 pruefe('Register ist nicht leer', REGISTER.length > 0)
 pruefe('Kennungen sind eindeutig', new Set(REGISTER.map(e => e.id)).size === REGISTER.length)
-pruefe('jede Kennung hat eine Gruppe', REGISTER.every(e => ['markt', 'system'].includes(e.gruppe)))
+pruefe('jede Kennung hat eine Gruppe', REGISTER.every(e => ['markt', 'portfolio', 'system'].includes(e.gruppe)))
 pruefe('Import und KI-Bericht können NICHT mailen',
     REGISTER.find(e => e.id === 'importFertig')?.email === false
     && REGISTER.find(e => e.id === 'kiBerichtFertig')?.email === false)

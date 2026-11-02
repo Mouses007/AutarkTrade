@@ -167,6 +167,8 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
             await knex(tabelle).where('kontrakt', echt.toLowerCase()).update({ kontrakt: echt }).catch(() => {})
         }
     }
+    // { quelle: true } — Konten, deren neue Bewegungen gemeldet werden (`wacht.js`).
+    await addColumnIfNotExists('settings', 'portfolioWacht', (t) => t.text('portfolioWacht'))
     // Sparplan: id der Gegenzeile (Lastschrift ↔ Kauf), gesetzt vom Abruf (`ordneSparplaene`).
     await addColumnIfNotExists('portfolio_bewegungen', 'sparplanMit', (t) => t.integer('sparplanMit'))
     await spamJeVertrag(knex)

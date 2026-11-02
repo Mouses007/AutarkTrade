@@ -19,6 +19,12 @@ import { ordneTransfers, ordneSparplaene } from './normal.js'
 import { fxAm, tagesKursUsd } from './kurse.js'
 import { istKanon, gegenKontraktVon } from './token-id.js'
 import { berechneUebersicht } from './uebersicht.js'
+import { wachtAus, meldenswert, meldungFuer } from './wacht.js'
+import { spamPruefer } from './spam.js'
+import { stelleZu } from '../hype-radar/zustellung.js'
+import { leseEinstellungen } from '../hype-radar/einstellungen.js'
+import { melde } from '../benachrichtigungen.js'
+import { KETTEN } from '../../shared/portfolio-adresse.js'
 
 export const BOERSEN = ['bitunix', 'bitget', 'pionex', 'bitpanda']
 const TAKT_MS = 15 * 60e3
@@ -80,9 +86,15 @@ async function holeQuelle(q, seit, altStand = {}) {
     throw new Error(`Unbekannte Kette ${a.kette}`)
 }
 
+/**
+ * Bestand ersetzen, Bewegungen einfügen. Gibt die ids der Bewegungen zurück,
+ * die es vorher NICHT gab (für die Kontoüberwachung) — gezählt über die
+ * externeId, damit es in SQLite und PostgreSQL gleich geht.
+ */
 async function speichere(quelle, erg) {
     const k = getKnex()
     const jetzt = Date.now()
+    const neueIds = []
     await k.transaction(async (trx) => {
         await trx('portfolio_bestaende').where('quelle', quelle).del()
         if (erg.bestand.length) {
@@ -98,7 +110,10 @@ async function speichere(quelle, erg) {
                 txHash: b.txHash, kette: b.kette, kontrakt: b.kontrakt,
                 roh: b.roh ? JSON.stringify(b.roh).slice(0, 20000) : null, createdAt: jetzt,
             }))
+            const da = new Set((await trx('portfolio_bewegungen').where('quelle', quelle).whereIn('externeId', teil.map((b) => b.externeId)).select('externeId')).map((z) => z.externeId))
             await trx('portfolio_bewegungen').insert(teil).onConflict(['quelle', 'externeId']).ignore()
+            const neu = teil.filter((b) => !da.has(b.externeId)).map((b) => b.externeId)
+            if (neu.length) neueIds.push(...(await trx('portfolio_bewegungen').where('quelle', quelle).whereIn('externeId', neu).select('id')).map((z) => z.id))
         }
     })
     const juengste = erg.bewegungen.reduce((m, b) => Math.max(m, b.zeit || 0), 0)
@@ -111,6 +126,7 @@ async function speichere(quelle, erg) {
         stand: JSON.stringify({ ...(erg.stand || {}), vollstaendig: !!erg.vollstaendig }),
     }
     await k('portfolio_quellen').insert(zeile).onConflict('quelle').merge()
+    return neueIds
 }
 
 async function merkeFehler(quelle, e) {
@@ -240,6 +256,66 @@ async function merkeTageswert() {
         .onConflict('datum').merge()
 }
 
+const BOERSEN_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', bitpanda: 'Bitpanda' }
+
+/** Anzeigenamen aller Orte: Börse, „Wallet · Adresse“, Import ohne „i:“. */
+async function ortNamen() {
+    const k = getKnex()
+    const [adressen, wallets] = await Promise.all([
+        k('portfolio_adressen').select('id', 'walletId', 'kette', 'label'),
+        k('portfolio_wallets').select('id', 'name'),
+    ])
+    const namen = new Map(Object.entries(BOERSEN_NAME))
+    for (const a of adressen) {
+        const w = wallets.find((x) => x.id === a.walletId)
+        namen.set(`a${a.id}`, `${w?.name || 'Wallet'} · ${a.label || KETTEN[a.kette]?.name || a.kette}`)
+    }
+    return (quelle) => namen.get(quelle) || (String(quelle).startsWith('i:') ? quelle.slice(2) : quelle)
+}
+
+/**
+ * Kontoüberwachung: neue Bewegungen überwachter Konten melden (`wacht.js`).
+ * Eine Meldung je Konto und Lauf, über die Push-Kanäle (ntfy/Telegram/Webhook)
+ * und — wenn in den Benachrichtigungen eingeschaltet — per Mail. Nur die
+ * Instanz, die eine Zeile tatsächlich eingefügt hat, kennt sie als neu: zwei
+ * Instanzen an derselben Datenbank melden also nicht doppelt.
+ * @returns {Promise<number>} Anzahl gemeldeter Konten
+ */
+export async function meldeKontoBewegungen(ids) {
+    if (!ids?.length) return 0
+    const k = getKnex()
+    const s = await k('settings').where('id', 1).first('portfolioWacht').catch(() => null)
+    const wacht = wachtAus(s?.portfolioWacht)
+    if (!Object.values(wacht).some(Boolean)) return 0
+    const zeilen = (await k('portfolio_bewegungen').whereIn('id', ids)
+        .select('id', 'quelle', 'zeit', 'art', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'kontrakt', 'transferMit', 'einordnung', 'chfWert'))
+        .filter((z) => wacht[z.quelle])
+    if (!zeilen.length) return 0
+    const istSpam = await spamPruefer()
+    const jetzt = Date.now()
+    const melden = zeilen.filter((z) => meldenswert(z, { jetzt, istSpam }))
+    if (!melden.length) return 0
+    const name = await ortNamen()
+    const partnerIds = melden.map((z) => z.transferMit).filter(Boolean)
+    const partnerOrt = new Map(partnerIds.length ? (await k('portfolio_bewegungen').whereIn('id', partnerIds).select('id', 'quelle')).map((p) => [p.id, p.quelle]) : [])
+    const einst = await leseEinstellungen()
+    const jeOrt = new Map()
+    for (const z of melden) { if (!jeOrt.has(z.quelle)) jeOrt.set(z.quelle, []); jeOrt.get(z.quelle).push(z) }
+    let n = 0
+    for (const [quelle, liste] of jeOrt) {
+        const ort = name(quelle)
+        const { titel, text, schwere } = meldungFuer(ort, liste, { partnerName: (z) => (z.transferMit && partnerOrt.has(z.transferMit) ? name(partnerOrt.get(z.transferMit)) : null) })
+        const idListe = liste.map((z) => z.id)
+        try {
+            await stelleZu({ regel: 'portfolioBewegung', schwere, meldung: text, titel, quelle: 'portfolio', daten: { quelle, ids: idListe } }, { symbol: ort, chain: quelle }, einst)
+        } catch (e) { console.warn(' -> Portfolio-Überwachung Push:', e.message) }
+        await melde('portfolioBewegung', { betreff: titel, text, schluessel: `${quelle}|${idListe.join(',')}`, ttlMs: 7 * 86400e3 })
+        n++
+    }
+    if (n) console.log(` -> Portfolio-Überwachung: ${n} Konten mit neuen Bewegungen gemeldet`)
+    return n
+}
+
 /**
  * Ein Lauf über alle (oder eine) Quelle. Läuft schon einer, wird kein
  * zweiter gestartet.
@@ -251,6 +327,7 @@ export async function rufeAb({ nur = null } = {}) {
     try {
         const k = getKnex()
         const quellen = (await aktiveQuellen()).filter((q) => !nur || q.quelle === nur)
+        const neueBewegungen = []
         for (const q of quellen) {
             laeuft.quelle = q.quelle
             const stand = await k('portfolio_quellen').where('quelle', q.quelle).first()
@@ -265,7 +342,11 @@ export async function rufeAb({ nur = null } = {}) {
                 // nur, was danach geschah, sonst wäre jede alte Bewegung doppelt.
                 const liveAb = Number(q.adresse?.liveAb) || 0
                 if (liveAb) erg.bewegungen = erg.bewegungen.filter((b) => Number(b.zeit) > liveAb)
-                await speichere(q.quelle, erg)
+                const neu = await speichere(q.quelle, erg)
+                // Erster gelungener Abruf eines Kontos = Grundstand, nichts melden (sonst
+                // käme die ganze Historie als „neu“). Ein Konto, das schon einmal ok war
+                // oder Bewegungen hat, meldet ab dem zweiten Abruf.
+                if (stand && (stand.status === 'ok' || stand.letzteBewegung)) neueBewegungen.push(...neu)
                 ergebnis.ok.push(q.quelle)
             } catch (e) {
                 console.warn(` -> Portfolio ${q.quelle}: ${e.message}`)
@@ -279,6 +360,9 @@ export async function rufeAb({ nur = null } = {}) {
         ergebnis.transfers = await paareTransfers()
         laeuft.schritt = 'bewertung'
         ergebnis.bewertet = await bewerteBewegungen()
+        // Nach Paarung und Bewertung: die Meldung kennt dann Gegenort und CHF-Wert.
+        laeuft.schritt = 'ueberwachung'
+        ergebnis.gemeldet = await meldeKontoBewegungen(neueBewegungen).catch((e) => { console.warn(' -> Portfolio-Überwachung:', e.message); return 0 })
         laeuft.schritt = 'tageswert'
         await merkeTageswert()
     } finally {
