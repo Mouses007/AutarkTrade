@@ -11,6 +11,7 @@ import Knopf from '@/components/basis/Knopf.vue'
 import Pille from '@/components/basis/Pille.vue'
 import Tabelle from '@/components/basis/Tabelle.vue'
 import Symbol from '@/components/basis/Symbol.vue'
+import Esp32Flashen from './Esp32Flashen.vue'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
@@ -34,6 +35,7 @@ const boardSpalten = computed(() => [
 const boardZeilen = computed(() => [
     { board: 'ESP32-2432S028', zusatz: 'Cheap Yellow Display', display: 'ILI9341 2.8"', touch: t('settings.esp32Resistiv') + ' (XPT2046)', mcu: 'ESP32', ordner: 'ESP32-2432S028/' },
     { board: 'Waveshare ESP32-S3', zusatz: 'Touch-LCD-2.8', display: 'ST7789T3 2.8"', touch: t('settings.esp32Kapazitiv') + ' (CST328)', mcu: 'ESP32-S3', ordner: 'ESP32-Waveshare/' },
+    { board: 'Waveshare ESP32-S3', zusatz: 'ePaper-3.97', display: 'ePaper 3.97" 800×480', touch: '—', mcu: 'ESP32-S3', ordner: 'ESP32-Waveshare-ePaper/' },
 ])
 
 /* Klartext-Key ist nur direkt nach dem Erzeugen sichtbar, sonst Punkte. */
@@ -133,6 +135,50 @@ async function kopiereKey() {
     }
 }
 
+/*
+ * Gespeicherten Schlüssel kopieren, ohne ihn anzuzeigen: der Server gibt ihn
+ * nur gegen das aktuelle Passwort heraus (ohne Passwortschutz direkt), und er
+ * landet nur in der Zwischenablage, nie im Feld.
+ */
+const passwortAktiv = ref(false)
+const kopierArt = ref(null)          // 'haupt' | 'anzeige' | null = Abfrage zu
+const kopierPasswort = ref('')
+const kopierLaedt = ref(false)
+
+async function ladeAuthStatus() {
+    try { passwortAktiv.value = !!(await axios.get('/api/auth/status')).data?.authEnabled } catch { passwortAktiv.value = true }
+}
+
+function kopieren(art) {
+    // Direkt nach dem Erzeugen steht der Klartext noch im Feld
+    if (art === 'haupt' && keySichtbar.value) return kopiereKey()
+    if (art === 'anzeige' && anzeigeSichtbar.value) return kopiereAnzeigeKey()
+    if (!passwortAktiv.value) return holeUndKopiere(art)
+    kopierArt.value = art
+    kopierPasswort.value = ''
+}
+
+function kopierenAbbrechen() {
+    kopierArt.value = null
+    kopierPasswort.value = ''
+}
+
+async function holeUndKopiere(art = kopierArt.value) {
+    kopierLaedt.value = true
+    esp32SaveResult.value = null
+    try {
+        const { data } = await axios.post('/api/esp32/key/kopieren', { art, currentPassword: kopierPasswort.value })
+        await navigator.clipboard.writeText(data.key)
+        kopierenAbbrechen()
+        esp32SaveResult.value = { success: true, message: t('settings.esp32Kopiert') }
+        setTimeout(() => esp32SaveResult.value = null, 3000)
+    } catch (e) {
+        esp32SaveResult.value = { success: false, message: e.response?.data?.error || e.message }
+    }
+    kopierPasswort.value = ''
+    kopierLaedt.value = false
+}
+
 async function clearEsp32Key() {
     try {
         await axios.delete('/api/esp32/key')
@@ -187,7 +233,7 @@ async function entfernePushGeraet(zeile) {
 }
 
 esp32Filter.value = appEinstellungen.value?.esp32Filter || 'month'
-onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
+onMounted(() => { loadEsp32Settings(); ladePushGeraete(); ladeAuthStatus() })
 </script>
 
 <template>
@@ -210,7 +256,7 @@ onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
             </Tabelle>
             <p class="leise">
                 {{ t('settings.esp32Flash') }}
-                <code>cd &lt;firmware-ordner&gt;</code> → <code>pio run -e esp32dev --target upload</code>
+                <code>cd &lt;firmware-ordner&gt;</code> → <code>pio run --target upload</code>
             </p>
             <div class="clients">
                 <p class="clients-titel">{{ t('settings.esp32WeitereClients') }}</p>
@@ -219,6 +265,7 @@ onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
                     <li><strong>Linux-Desklet</strong> — {{ t('settings.esp32Desklet') }} (<code>desklet/</code>)</li>
                 </ul>
             </div>
+            <Esp32Flashen />
         </div>
 
         <!-- API-Info -->
@@ -234,7 +281,14 @@ onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
                     :value="esp32ApiKeyDisplay"
                     readonly
                     :placeholder="esp32KeySet ? t('settings.esp32KeyGesetzt') : t('settings.esp32KeinKey')" />
-                <Knopf v-if="keySichtbar" @click="kopiereKey">{{ t('settings.esp32Kopieren') }}</Knopf>
+                <Knopf v-if="esp32KeySet" @click="kopieren('haupt')">{{ t('settings.esp32Kopieren') }}</Knopf>
+            </div>
+            <div v-if="kopierArt === 'haupt'" class="reihe kopier-passwort">
+                <input type="password" class="eingabe" autocomplete="current-password" v-model="kopierPasswort"
+                    :placeholder="t('settings.esp32KopierPasswort')" :aria-label="t('settings.esp32KopierPasswort')"
+                    @keyup.enter="holeUndKopiere()" />
+                <Knopf art="haupt" :laedt="kopierLaedt" :disabled="!kopierPasswort" @click="holeUndKopiere()">{{ t('settings.esp32Kopieren') }}</Knopf>
+                <Knopf art="leise" @click="kopierenAbbrechen">{{ t('common.cancel') }}</Knopf>
             </div>
         </Feld>
 
@@ -268,7 +322,14 @@ onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
                         :value="anzeigeKeyAnzeige"
                         readonly
                         :placeholder="anzeigeKeySet ? t('settings.esp32KeyGesetzt') : t('settings.esp32KeinKey')" />
-                    <Knopf v-if="anzeigeSichtbar" @click="kopiereAnzeigeKey">{{ t('settings.esp32Kopieren') }}</Knopf>
+                    <Knopf v-if="anzeigeKeySet" @click="kopieren('anzeige')">{{ t('settings.esp32Kopieren') }}</Knopf>
+                </div>
+                <div v-if="kopierArt === 'anzeige'" class="reihe kopier-passwort">
+                    <input type="password" class="eingabe" autocomplete="current-password" v-model="kopierPasswort"
+                        :placeholder="t('settings.esp32KopierPasswort')" :aria-label="t('settings.esp32KopierPasswort')"
+                        @keyup.enter="holeUndKopiere()" />
+                    <Knopf art="haupt" :laedt="kopierLaedt" :disabled="!kopierPasswort" @click="holeUndKopiere()">{{ t('settings.esp32Kopieren') }}</Knopf>
+                    <Knopf art="leise" @click="kopierenAbbrechen">{{ t('common.cancel') }}</Knopf>
                 </div>
             </Feld>
             <div class="aktionen">
@@ -342,6 +403,7 @@ onMounted(() => { loadEsp32Settings(); ladePushGeraete() })
     gap: var(--abstand-2);
     align-items: center;
 }
+.kopier-passwort { margin-top: var(--abstand-2); }
 .eingabe {
     flex: 1 1 auto;
     min-width: 0;

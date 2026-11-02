@@ -1,0 +1,89 @@
+{
+  "id": "cyd",
+  "name": "ESP32-2432S028 (Cheap Yellow Display)",
+  "chip": "ESP32",
+  "ordner": "ESP32-2432S028",
+  "version": "3.8.2-CYD",
+  "gebaut": "2026-11-02T14:06:42.400Z",
+  "commit": "7e68dc0",
+  "ungespeicherteAenderungen": true,
+  "flash": {
+    "modus": "dio",
+    "frequenz": "40m",
+    "groesse": "4MB"
+  },
+  "nvs": {
+    "offset": 36864,
+    "groesse": 20480
+  },
+  "partitionen": [
+    {
+      "name": "nvs",
+      "typ": 1,
+      "untertyp": 2,
+      "offset": 36864,
+      "groesse": 20480
+    },
+    {
+      "name": "otadata",
+      "typ": 1,
+      "untertyp": 0,
+      "offset": 57344,
+      "groesse": 8192
+    },
+    {
+      "name": "app0",
+      "typ": 0,
+      "untertyp": 16,
+      "offset": 65536,
+      "groesse": 1310720
+    },
+    {
+      "name": "app1",
+      "typ": 0,
+      "untertyp": 17,
+      "offset": 1376256,
+      "groesse": 1310720
+    },
+    {
+      "name": "spiffs",
+      "typ": 1,
+      "untertyp": 130,
+      "offset": 2686976,
+      "groesse": 1441792
+    },
+    {
+      "name": "coredump",
+      "typ": 1,
+      "untertyp": 3,
+      "offset": 4128768,
+      "groesse": 65536
+    }
+  ],
+  "dateien": [
+    {
+      "datei": "bootloader.bin",
+      "offset": 4096,
+      "groesse": 17536,
+      "sha256": "0f65515a7e0dfe9cc4bc78c01bef79c941af1b2deb34d01ddd500ee3d465eedf"
+    },
+    {
+      "datei": "partitions.bin",
+      "offset": 32768,
+      "groesse": 3072,
+      "sha256": "148b959cbff1c38aa8e1d5c0ba9d612c54997b945e56a63f41223eef650653a1"
+    },
+    {
+      "datei": "boot_app0.bin",
+      "offset": 57344,
+      "groesse": 8192,
+      "sha256": "f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0"
+    },
+    {
+      "datei": "firmware.bin",
+      "offset": 65536,
+      "groesse": 1098432,
+      "sha256": "642f4512f09f434e7ea6099257f44201b3c4bd9f24b938e0ad31f1429f9ae8dc"
+    }
+  ]
+}

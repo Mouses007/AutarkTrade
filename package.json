@@ -26,6 +26,7 @@
     "dayjs": "^1.11.21",
     "dompurify": "^3.4.11",
     "echarts": "^6.1.0",
+    "esptool-js": "0.7.1",
     "express": "^4.19.2",
     "html2canvas": "^1.4.1",
     "http-proxy": "^1.18.1",

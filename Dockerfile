@@ -45,6 +45,9 @@ COPY --from=builder /app/THIRD-PARTY-NOTICES ./
 COPY server/ ./server/
 # Von Server und Frontend gemeinsam genutzte Logik (Orderbuch-Sync, Preis-Binning)
 COPY shared/ ./shared/
+# Vorgebaute Firmware der ESP32-Anzeigen (scripts/esp32-firmware-bauen.mjs) für
+# „Board flashen" in den Einstellungen — im Image gibt es kein PlatformIO.
+COPY firmware/ ./firmware/
 COPY src/assets/icon.png ./src/assets/icon.png
 COPY index.mjs ./
 COPY docker-entrypoint.sh ./

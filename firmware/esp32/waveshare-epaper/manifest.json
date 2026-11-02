@@ -1,0 +1,89 @@
+{
+  "id": "waveshare-epaper",
+  "name": "Waveshare ESP32-S3-ePaper-3.97",
+  "chip": "ESP32-S3",
+  "ordner": "ESP32-Waveshare-ePaper",
+  "version": "1.4.1-EP",
+  "gebaut": "2026-11-02T13:35:35.703Z",
+  "commit": "e3b7854",
+  "ungespeicherteAenderungen": true,
+  "flash": {
+    "modus": "dio",
+    "frequenz": "80m",
+    "groesse": "8MB"
+  },
+  "nvs": {
+    "offset": 36864,
+    "groesse": 20480
+  },
+  "partitionen": [
+    {
+      "name": "nvs",
+      "typ": 1,
+      "untertyp": 2,
+      "offset": 36864,
+      "groesse": 20480
+    },
+    {
+      "name": "otadata",
+      "typ": 1,
+      "untertyp": 0,
+      "offset": 57344,
+      "groesse": 8192
+    },
+    {
+      "name": "app0",
+      "typ": 0,
+      "untertyp": 16,
+      "offset": 65536,
+      "groesse": 3342336
+    },
+    {
+      "name": "app1",
+      "typ": 0,
+      "untertyp": 17,
+      "offset": 3407872,
+      "groesse": 3342336
+    },
+    {
+      "name": "spiffs",
+      "typ": 1,
+      "untertyp": 130,
+      "offset": 6750208,
+      "groesse": 1572864
+    },
+    {
+      "name": "coredump",
+      "typ": 1,
+      "untertyp": 3,
+      "offset": 8323072,
+      "groesse": 65536
+    }
+  ],
+  "dateien": [
+    {
+      "datei": "bootloader.bin",
+      "offset": 0,
+      "groesse": 15104,
+      "sha256": "175df8bcabaee9bb1027381153f0398226266162a32c2a04c1cf0253dbe87987"
+    },
+    {
+      "datei": "partitions.bin",
+      "offset": 32768,
+      "groesse": 3072,
+      "sha256": "1d9cca96de0fe07ad7fc0648b9878ddecd9ce565e38b589ad20fea698ed4c80c"
+    },
+    {
+      "datei": "boot_app0.bin",
+      "offset": 57344,
+      "groesse": 8192,
+      "sha256": "f94c5d786a7a8fab06ac5d10e33bf37711a6697636dc037559ea19cc410a17f0"
+    },
+    {
+      "datei": "firmware.bin",
+      "offset": 65536,
+      "groesse": 1008336,
+      "sha256": "001a25211c8fa18c0ebe1c76f86973426ee0d3776b31bb0de6fcace5f4f70fee"
+    }
+  ]
+}

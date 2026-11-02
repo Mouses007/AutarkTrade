@@ -1366,6 +1366,18 @@ async function passwortFuerAenderung(req, res) {
 }
 
 /**
+ * Aktuelles Passwort für eine heikle Aktion ausserhalb von auth.js (z. B. einen
+ * gespeicherten Schlüssel herausgeben). Ohne Passwort-Gate gibt es nichts zu
+ * prüfen. Fehlversuche zählen wie beim Login.
+ *
+ * @returns {Promise<boolean>} false = Antwort ist schon gesendet
+ */
+export async function passwortBestaetigen(req, res) {
+    if (!authConfig.enabled) return true
+    return passwortFuerAenderung(req, res)
+}
+
+/**
  * Nach dem Einschalten eines zweiten Faktors: alle Sitzungen entwerten,
  * dem Aufrufer ein frisches Cookie. Sonst gälten alte 30-Tage-Cookies weiter,
  * die nur mit dem Passwort entstanden sind — genau das soll der zweite

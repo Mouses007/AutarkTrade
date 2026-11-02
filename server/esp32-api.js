@@ -39,8 +39,10 @@ import { getCurrentPositions as getBitgetCurrentPositions } from './bitget-api.j
 import { getRunningBotPositions } from './pionex-api.js'
 import { ausCache } from './marktradar-api.js'
 import { ausloesungenAus, leseArten } from './esp32-alarme.js'
+import { KURS_SPANNEN, kursSymbol, kursSpanne, kursN, kursAntwort } from './esp32-kurs.js'
+import * as marktdaten from './marktdaten/index.js'
 import { pruefeGeraet, mitGeraet, ohneGeraet, ladeGeraete, speichereGeraete, geraeteUebersicht, geraeteId, MAX_GERAETE } from './esp32-push.js'
-import { clientIp } from './auth.js'
+import { clientIp, passwortBestaetigen } from './auth.js'
 import dayjs from 'dayjs'
 import dayjsUtc from 'dayjs/plugin/utc.js'
 import dayjsTimezone from 'dayjs/plugin/timezone.js'
@@ -360,6 +362,8 @@ export function setupEsp32Routes(app) {
                     markPrice:     parseFloat(b.markPrice     || 0),
                     qty:           parseFloat(b.qty           || 0),
                     unrealizedPNL: parseFloat(b.unrealizedPNL || 0),
+                    gridProfit:    Number.isFinite(b.gridProfit) ? b.gridProfit : null,
+                    margin:        parseFloat(b.margin        || 0),
                     marginCoin:    b.marginCoin || 'USDT',
                     liqPrice:      parseFloat(b.liqPrice      || 0),
                     coinM:         !!b.coinM,
@@ -426,6 +430,39 @@ export function setupEsp32Routes(app) {
         }
     })
 
+    /*
+     * Kursverlauf für den kleinen Chart der Displays (Anzeige-Schlüssel genügt).
+     * `symbol` (BTC, SOLUSDT …), `spanne` 1h|24h|7d|30d, `n` = höchstens so viele
+     * Kerzen (das Board schickt seine Chart-Breite). Über die Marktdatenquelle
+     * der App; die Rohkerzen teilen sich alle Boards 30 s lang.
+     */
+    app.get('/api/esp32/kurs', async (req, res) => {
+        try {
+            if (!(await zugangGeprueft(req, res, { anzeige: true }))) return
+            const symbol = kursSymbol(req.query.symbol || 'BTC')
+            if (!symbol) return res.status(400).json({ error: 'symbol ungültig' })
+            const spanne = kursSpanne(String(req.query.spanne || ''))
+            const { interval, limit } = KURS_SPANNEN[spanne]
+            let roh
+            try {
+                // ausCache verteilt das Ergebnis per Spread — darum eingepackt
+                roh = (await ausCache(`esp32kurs|${symbol}|${spanne}`, 30 * 1000, async () =>
+                    ({ kerzen: await marktdaten.kerzen(symbol, interval, { markt: 'futures', limit }) }))).kerzen
+            } catch (e) {
+                if (marktdaten.sendeWennAus(res, e)) return
+                const status = e.response?.status
+                if (status === 400) return res.status(400).json({ error: 'Symbol unbekannt' })
+                throw e
+            }
+            const antwort = kursAntwort(symbol, spanne, roh || [], kursN(req.query.n, limit))
+            if (!antwort) return res.status(502).json({ error: 'Keine Kerzen' })
+            res.json(antwort)
+        } catch (e) {
+            console.error('ESP32 kurs error:', e)
+            res.status(500).json({ error: 'Internal server error' })
+        }
+    })
+
     // Sofort-Zustellung: das Widget trägt hier die Adresse ein, die ihm der
     // UnifiedPush-Verteiler (ntfy) gegeben hat, samt Web-Push-Schlüssel.
     app.post('/api/esp32/push', async (req, res) => {
@@ -459,7 +496,7 @@ export function setupEsp32Routes(app) {
         }
     })
 
-    console.log(' -> ESP32 display route initialized (GET /api/esp32/display, /api/esp32/alarme, /api/esp32/push)')
+    console.log(' -> ESP32 display route initialized (GET /api/esp32/display, /api/esp32/alarme, /api/esp32/kurs, /api/esp32/push)')
 }
 
 // ============================================================
@@ -549,6 +586,27 @@ export function setupEsp32AdminRoutes(app) {
     })
 
     // DELETE /api/esp32/key — remove key
+    /*
+     * Gespeicherten Schlüssel für die Zwischenablage herausgeben — nur mit dem
+     * aktuellen Passwort (Fehlversuche zählen wie beim Login). Die Oberfläche
+     * zeigt ihn nicht an, sie legt ihn nur in die Zwischenablage. Ohne diese
+     * Route war ein Schlüssel nach dem Neuladen nicht mehr zu holen, nur neu
+     * zu erzeugen — und dann mussten alle Geräte nachgeführt werden.
+     */
+    app.post('/api/esp32/key/kopieren', async (req, res) => {
+        try {
+            if (!(await passwortBestaetigen(req, res))) return
+            const spalte = req.body?.art === 'anzeige' ? 'esp32AnzeigeKey' : 'esp32ApiKey'
+            const row = await getKnex()('settings').where('id', 1).select(spalte).first()
+            if (!row?.[spalte]) return res.status(404).json({ error: 'Kein Schlüssel gespeichert.' })
+            res.setHeader('Cache-Control', 'no-store')
+            res.json({ key: decrypt(row[spalte]) })
+        } catch (e) {
+            console.error('ESP32 key kopieren error:', e.message)
+            res.status(500).json({ error: 'Interner Serverfehler' })
+        }
+    })
+
     app.delete('/api/esp32/key', async (req, res) => {
         try {
             const knex = getKnex()

@@ -289,6 +289,8 @@ async function normalizeRunningBot(o) {
         unrealizedPNL: profit,
         realizedPart: realized,
         floatingPart: floating,
+        // Bisher realisierter Grid-Gewinn (Pionex „Grid-Gewinn"), Margin-Münze; fehlt = null
+        gridProfit: d.gridProfit == null || d.gridProfit === '' ? null : parseFloat(d.gridProfit),
         // Investment in der Margin-Münze (coin-M: SOL, linear: USDT) — analog
         // Pionex „Tatsächliche Investition". Frontend zeigt es als „Marge".
         margin: startInv,

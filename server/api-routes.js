@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { getKnex } from './database.js'
 import { loadDbConfig, saveDbConfig } from './db-config.js'
 import { setupEsp32AdminRoutes } from './esp32-api.js'
+import { setupEsp32FirmwareRoutes } from './esp32-firmware.js'
 import { encrypt, maskKey, isEncrypted } from './crypto.js'
 import { isLocalRequest, getLocalVersion, compareSemver } from './update-api.js'
 import { logError } from './logger.js'
@@ -885,5 +886,6 @@ function numerischeId(id) {
     })
 
     setupEsp32AdminRoutes(app)
+    setupEsp32FirmwareRoutes(app)
     console.log(' -> DB-REST-Routen eingerichtet')
 }
