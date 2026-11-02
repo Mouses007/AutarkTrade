@@ -38,6 +38,7 @@ _autarktrade_update.bat
 # PlatformIO build artifacts
 ESP32-Waveshare/.pio/
 ESP32-2432S028/.pio/
+ESP32-Waveshare-ePaper/.pio/
 
 # Erzeugte Share-Cards (die gepflegten Vorlagen heissen loss-*/win-*)
 server/templates/sharecard-*.png
