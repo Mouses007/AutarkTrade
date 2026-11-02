@@ -17,7 +17,7 @@ import { getHistoricalCandles, timeframeMs, currentCandleOpen, getFundingHistory
 import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { evaluateRisk, startOfDayUtc } from './risk-engine.js'
 import { wartungsmargeMitQuelle } from './margin-rates.js'
-import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, riskPerUnit, fundingFor } from './fill-simulator.js'
+import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, istSchlussEinstieg, riskPerUnit, fundingFor } from './fill-simulator.js'
 
 /**
  * Obergrenze, damit ein versehentlicher 5-Jahres-Lauf den Server nicht blockiert.
@@ -392,7 +392,15 @@ export async function runBacktest(opts) {
     const lastExitBySymbol = {}
 
     const abschliessen = (pos, exit) => {
-        const extra = { symbol, timeframe }
+        // `einstiegsArt` und der bezahlte Einstiegssatz: damit spielt die
+        // Ausstiegs-Prüfung (`server/ausstiege.js`) denselben Einstieg mit
+        // anderen Ausstiegen neu — ab derselben Kerze, mit derselben Gebühr.
+        const bezug = Math.abs(pos.entryPrice * (Number(pos.initialQty) || pos.qty))
+        const extra = {
+            symbol, timeframe,
+            einstiegsArt: pos.einstiegsArt || 'kerze',
+            einstiegsGebuehrBps: bezug > 0 ? (Number(pos.feeOpen) || 0) / bezug * 10000 : 0,
+        }
         if (mitFundingVerlauf) {
             extra.funding = fundingAusVerlauf(fundingVerlauf, {
                 qty: pos.qty, direction: pos.direction, entryTime: pos.entryTime,
@@ -579,6 +587,11 @@ export async function runBacktest(opts) {
                 bump(funnel.entrySkipped, fill.reason); continue
             }
             const sameBarStop = !fill.ok
+            // Wo in der Kerze der Einstieg liegt — bestimmt, ab wann Stop und
+            // Ziel zählen: 'schluss' ab der Folgekerze ganz, 'eroeffnung' ab
+            // dieser ganz, 'kerze' (Limit/Stop mitten drin) hier nur der Stop.
+            const einstiegsArt = ev.entryAtClose === true || istSchlussEinstieg(setup) ? 'schluss'
+                : ev.entryAtOpen ? 'eroeffnung' : 'kerze'
 
             // 3b. Risiko-Gates — dieselben wie im Live-Betrieb, zum selben
             //     Stichtag: dem Schluss der Auslösekerze (`risikoStichtag` in
@@ -610,6 +623,7 @@ export async function runBacktest(opts) {
                     entryTime: triggerKerze.t, leverage: risk.leverage, costs,
                 })
                 posSofort.equityBeimEinstieg = equity
+                posSofort.einstiegsArt = einstiegsArt
                 const gap = setup.direction === 'long'
                     ? Math.min(setup.stopLoss, triggerKerze.o)
                     : Math.max(setup.stopLoss, triggerKerze.o)
@@ -633,6 +647,7 @@ export async function runBacktest(opts) {
             })
             // Bezug für den echten Risikoanteil des Trades (siehe `abschliessen`)
             position.equityBeimEinstieg = equity
+            position.einstiegsArt = einstiegsArt
             funnel.executed++
 
             // Liegt der Einstieg auf der ERÖFFNUNG der Auslösekerze, muss diese

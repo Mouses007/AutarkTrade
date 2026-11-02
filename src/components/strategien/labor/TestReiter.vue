@@ -8,6 +8,9 @@
  * hier wie im Papierbetrieb, damit die Zahlen übertragbar sind. Strategie und
  * Werte kommen aus dem gemeinsamen Formular der Labor-Seite (`form`).
  *
+ * Darunter die Ausstiegs-Prüfung (`AusstiegsPruefung.vue`): dieselben
+ * Einstiege mit anderen Ausstiegen neu gespielt.
+ *
  * Robustheit bewusst am SELBEN Formular: Strategie, Symbol, Zeitraum und
  * Parameter sollen für alle Prüfungen dieselben sein, sonst vergleicht man
  * hinterher Äpfel mit Birnen.
@@ -16,6 +19,7 @@ import { ref, computed } from 'vue'
 import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import StrategieChart from '../StrategieChart.vue'
+import AusstiegsPruefung from './AusstiegsPruefung.vue'
 import QuelleAus from '../../quellen/QuelleAus.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../../basis'
 import { formGeldStellen } from '../../../utils/journal/format.js'
@@ -445,6 +449,11 @@ const urteilKlasse = (u) => (u === 'plateau' ? 'gut'
                 </div>
             </template>
         </div>
+
+        <!-- ══ Ausstiegs-Prüfung ══
+             Dieselben Einstiege, andere Ausstiege — liegt es am Einstieg
+             oder am Ausstieg? Gleiches Formular wie der Backtest. -->
+        <AusstiegsPruefung :form="form" />
 
         <!-- ══ Robustheit ══
              Drei Stufen zwischen „guter Backtest" und „belastbar". Sie

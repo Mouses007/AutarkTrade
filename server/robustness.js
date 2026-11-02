@@ -21,6 +21,8 @@
 import { runBacktest, berechneStatistik, MIN_TRADES_BELASTBAR, MAX_BACKTEST_CANDLES } from './strategy-backtest.js'
 import { getStrategy, validateParams, htfBedarf } from './strategies/index.js'
 import { getHistoricalCandles, getFundingHistory, getSymbolMeta, timeframeMs } from './market-data.js'
+import { kostenAus, fundingFor } from './fill-simulator.js'
+import { ausstiegsRaster, fundingRechner } from './ausstiege.js'
 
 /** Mindestzahl Trades, ab der ein Wert im Walk-forward überhaupt gewählt wird. */
 export const WF_MIN_TRADES = 10
@@ -563,4 +565,63 @@ export async function walkForward(basis, paramKey, werte, { fenster = 4, backtes
         // 'stabil' | 'springt' | 'zu_wenige' (zu wenige Abschnitte mit Auswahl)
         auswahlUrteil: !genugAuswahl ? 'zu_wenige' : (auswahlStabil ? 'stabil' : 'springt'),
     }
+}
+
+const atemholen = () => new Promise((fertig) => setImmediate(fertig))
+
+/**
+ * Ausstiegs-Prüfung (`server/ausstiege.js`) auf einem frisch gerechneten
+ * Backtest: dieselben Einstiege, andere Ausstiege.
+ *
+ * Kerzen, Börsenregeln und Funding werden hier EINMAL geholt und dem Backtest
+ * mitgegeben — genau so, wie er sie selbst geholt hätte. Damit spielt die
+ * Prüfung die Trades auf denselben Kerzen neu, auf denen sie entstanden; ein
+ * zweiter Abruf könnte eine Kerze mehr oder weniger liefern.
+ *
+ * Funding wie im Lauf: aus dem Verlauf, für den ungedeckten Anfang (Bitget
+ * reicht ~90 Tage zurück) mit der Annahme `fundingBpsPer8h`.
+ */
+export async function ausstiegsPruefung(basis) {
+    const market = basis.market === 'spot' ? 'spot' : 'futures'
+    const candles = await getHistoricalCandles(basis.symbol, basis.timeframe, basis.fromTs, basis.toTs,
+        { market, maxCandles: MAX_BACKTEST_CANDLES })
+    let marketMeta = null
+    try { marketMeta = await getSymbolMeta(basis.symbol, { market }) } catch { marketMeta = null }
+    let fundingVerlauf = null
+    if (market === 'futures') {
+        try { fundingVerlauf = await getFundingHistory(basis.symbol, basis.fromTs, basis.toTs) } catch { fundingVerlauf = null }
+    }
+    const lauf = await runBacktest({ ...basis, candles, marketMeta, fundingVerlauf })
+    const stats = lauf.stats || {}
+    const kopf = {
+        trades: stats.trades || 0,
+        expectancyR: stats.expectancyR ?? null,
+        von: lauf.meta?.von || null,
+        bis: lauf.meta?.bis || null,
+        fundingQuelle: stats.fundingQuelle || null,
+        hinweis: stats.hinweis || null,
+    }
+    if (!Array.isArray(lauf.trades) || !lauf.trades.length) return { lauf: kopf, ausstiege: null }
+
+    const risk = lauf.meta?.risk || {}
+    let funding = null
+    if (Array.isArray(fundingVerlauf) && fundingVerlauf.length) {
+        const rechner = fundingRechner(fundingVerlauf)
+        const ab = stats.fundingQuelle === 'teilweise' ? Number(stats.fundingAbdeckungAb) || 0 : 0
+        funding = (pos, bis) => {
+            let summe = rechner(pos.direction, pos.entryTime, bis, pos.entryPrice)
+            if (ab && pos.entryTime < ab) {
+                summe += fundingFor(pos.notionalUsdt, pos.entryTime, Math.min(bis, ab - 1), risk.fundingBpsPer8h, risk.fundingIntervalH)
+            }
+            return summe
+        }
+    }
+    const ausstiege = await ausstiegsRaster(lauf.trades, candles, {
+        costs: kostenAus(risk),
+        kerzeMs: timeframeMs(basis.timeframe),
+        wartungsmargePct: stats.wartungsmargePct,
+        funding,
+        atempause: atemholen,
+    })
+    return { lauf: kopf, ausstiege }
 }

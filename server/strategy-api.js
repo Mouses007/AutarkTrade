@@ -29,7 +29,7 @@ import {
     runBacktest, berechneStatistik, MAX_BACKTEST_CANDLES, schaetzeKerzen,
     berechneBuyHoldBaseline, schaetzeFloatingDrawdownAusTrades, ENTWURF_ZEITBUDGET_MS,
 } from './strategy-backtest.js'
-import { monteCarlo, parameterStabilitaet, stabilitaetsMatrix, walkForward, MAX_STUFEN } from './robustness.js'
+import { monteCarlo, parameterStabilitaet, stabilitaetsMatrix, walkForward, ausstiegsPruefung, MAX_STUFEN } from './robustness.js'
 import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliessePositionManuell, BETRIEBSARTEN, ladeRegelStrategienAusDb } from './strategy-engine.js'
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
 import { neustartInstanz } from './strategie-neustart.js'
@@ -803,6 +803,34 @@ export function setupStrategyRoutes(app) {
             if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Walk-forward fehlgeschlagen', e)
             res.status(500).json({ error: `Walk-forward fehlgeschlagen: ${e.message}` })
+        }
+    })
+
+    /**
+     * Ausstiegs-Prüfung: die Einstiege eines frisch gerechneten Backtests mit
+     * anderen Ausstiegen neu gespielt (Stop × Faktor, Ziel in R, Haltedauer),
+     * ausgewählt auf den ersten 70 % der Trades, geprüft auf den letzten 30 %.
+     * Höchstens eine gleichzeitig: sie rechnet je Trade über 300 Ausstiege.
+     */
+    let ausstiegLaeuft = false
+    app.post('/api/strategies/robustness/ausstiege', async (req, res) => {
+        if (ausstiegLaeuft) return res.status(429).json({ error: 'Es läuft schon eine Ausstiegs-Prüfung' })
+        ausstiegLaeuft = true
+        try {
+            const b = req.body || {}
+            const { basis, fehler } = await robustBasis(b)
+            if (fehler) return res.status(400).json({ error: fehler })
+            const geschaetzt = schaetzeKerzen(basis.fromTs, basis.toTs, basis.timeframe)
+            if (geschaetzt > MAX_BACKTEST_CANDLES) {
+                return res.status(400).json({ error: `Zeitraum zu gross: ~${geschaetzt} Kerzen` })
+            }
+            res.json(await ausstiegsPruefung(basis))
+        } catch (e) {
+            if (sendeWennAus(res, e)) return
+            logError('strategy-api', 'Ausstiegs-Prüfung fehlgeschlagen', e)
+            res.status(500).json({ error: `Ausstiegs-Prüfung fehlgeschlagen: ${e.message}` })
+        } finally {
+            ausstiegLaeuft = false
         }
     })
 
