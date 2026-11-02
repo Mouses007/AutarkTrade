@@ -518,5 +518,58 @@ console.log('\nSchluss-Einstieg: Einstiegszeit')
         t2 ? `entry ${new Date(t2.entryTime).toISOString()}, funding ${t2.funding} statt ${erwartet}` : 'kein Trade')
 }
 
+// ── Nachziehen (Trailing) ────────────────────────────────────────────────
+console.log('\nNachziehen')
+{
+    // Long 100, Stopp 90 → 1 R = 10. Abstand 1 R, sofort.
+    const pos = long()
+    let e = stepCandle(pos, k(100, 115, 99, 114, 1), { trailR: 1, trailAbR: 0, costs })
+    check('Nachziehen: Stopp folgt dem Hoch im Abstand 1 R (115 − 10)', !e.exit && pos.stopLoss === 105, String(pos.stopLoss))
+    e = stepCandle(pos, k(114, 116, 108, 109, 2), { trailR: 1, trailAbR: 0, costs })
+    check('… und nur nach oben (116 → 106)', !e.exit && pos.stopLoss === 106, String(pos.stopLoss))
+    e = stepCandle(pos, k(109, 110, 104, 105, 3), { trailR: 1, trailAbR: 0, costs })
+    check('Treffer heisst „trail", zum nachgezogenen Stopp', e.exit?.reason === 'trail' && e.exit.price === 106,
+        JSON.stringify(e.exit))
+    check('„trail" ist eine Marktorder (Taker)', ordersorte('trail') === MARKT)
+}
+{
+    // Erst ab 1 R (Schluss ≥ 110)
+    const pos = long()
+    stepCandle(pos, k(100, 112, 99, 108, 1), { trailR: 1, trailAbR: 1, costs })
+    check('ab 1 R: Hoch 112 bei Schluss 108 zieht noch nicht nach', pos.stopLoss === 90, String(pos.stopLoss))
+    stepCandle(pos, k(108, 113, 107, 111, 2), { trailR: 1, trailAbR: 1, costs })
+    check('ab 1 R: Schluss 111 schaltet ein, Stopp 113 − 10', pos.stopLoss === 103, String(pos.stopLoss))
+}
+{
+    // Hoch und Rücklauf in einer Kerze: Stopp über dem Schluss, nächste Eröffnung darunter
+    const pos = long()
+    stepCandle(pos, k(100, 125, 99, 112, 1), { trailR: 1, trailAbR: 0, costs })
+    check('Stopp darf über dem Schluss liegen (125 − 10 = 115 > 112)', pos.stopLoss === 115, String(pos.stopLoss))
+    const e = stepCandle(pos, k(112, 113, 111, 112, 2), { trailR: 1, trailAbR: 0, costs })
+    check('… dann schliesst die nächste Kerze zur Eröffnung (Lücke)', e.exit?.price === 112 && e.exit.reason === 'trail',
+        JSON.stringify(e.exit))
+}
+{
+    // Short: folgt dem Tief
+    const pos = createPosition({
+        setup: { direction: 'short', symbol: 'X', timeframe: '1h', stopLoss: 110, takeProfit: 0 },
+        qty: 1, entryPrice: 100, entryTime: 0, leverage: 1, costs,
+    })
+    stepCandle(pos, k(100, 101, 88, 90, 1), { trailR: 1, trailAbR: 0, costs })
+    check('Short: Stopp folgt dem Tief (88 + 10)', pos.stopLoss === 98, String(pos.stopLoss))
+}
+{
+    // Break-Even nimmt einen weiter nachgezogenen Stopp nicht zurück
+    // Kerze 1 zieht auf 115 nach (Schluss 105 < 1 R, Break-Even noch nicht),
+    // Kerze 2 schliesst über 1 R und löst Break-Even aus.
+    const pos = long()
+    const o = { trailR: 1, trailAbR: 0, breakEvenAtR: 1, costs }
+    stepCandle(pos, k(100, 125, 99, 105, 1), o)
+    check('Nachziehen vor Break-Even: Stopp 115', pos.stopLoss === 115 && !pos.breakEvenDone, String(pos.stopLoss))
+    const e = stepCandle(pos, k(118, 119, 116, 118, 2), o)
+    check('Break-Even danach nimmt den Stopp nicht auf den Einstieg zurück', !e.exit && pos.stopLoss === 115 && pos.breakEvenDone,
+        String(pos.stopLoss))
+}
+
 console.log(`\n${passed} bestanden, ${failed} fehlgeschlagen\n`)
 process.exit(failed ? 1 : 0)

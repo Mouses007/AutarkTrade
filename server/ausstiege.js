@@ -11,6 +11,12 @@
  *   - Ziel in R DIESES Stops (0,5 … 5 R, oder keins),
  *   - höchstens N Kerzen halten, dann Ausstieg zum Schluss.
  *
+ * Wahlweise mit Break-even oder Nachziehen (`varianteAus`): ab N R im Plus
+ * (Schlusskurs) rückt der Stop auf den Einstieg bzw. folgt dem günstigsten
+ * Kurs im Abstand des Stops der jeweiligen Zeile. Vorgabe ist der feste
+ * Ausstieg — jede weitere Art ist ein weiterer Versuch, und mehr Versuche
+ * heisst mehr Gelegenheit, Zufall zu finden.
+ *
  * Gerechnet wird in R des jeweiligen Stops — bei festem Risiko je Trade ist
  * das die Grösse, die zählt. Gebühren und Funding gehen mit: ein engerer Stop
  * heisst grössere Position und damit mehr Gebühren je R, das darf ihn nicht
@@ -70,6 +76,31 @@ export const MIN_PRUEF_TRADES = 10
 export const PRUEF_ANTEIL = 0.3
 /** Ab diesem p-Wert gilt ein Vorsprung als nicht gesichert. */
 export const P_GRENZE = 0.05
+
+/** Ausstiegsarten: fest (Stop/Ziel/Zeit), Break-even, Nachziehen. */
+export const AUSSTIEGSARTEN = ['fest', 'breakeven', 'trailing']
+
+/**
+ * Ausstiegsart aus einer Eingabe — Unbekanntes wird zum festen Ausstieg.
+ * `abR`: ab wie viel R im Plus (Schlusskurs) Break-even bzw. Nachziehen
+ * greift; Break-even 0,25–5 (Vorgabe 1), Nachziehen 0–5 (0 = sofort,
+ * Vorgabe 1).
+ */
+export function varianteAus(eingabe) {
+    const art = AUSSTIEGSARTEN.includes(eingabe?.art) ? eingabe.art : 'fest'
+    if (art === 'fest') return { art }
+    const roh = Number(eingabe?.abR)
+    const min = art === 'breakeven' ? 0.25 : 0
+    const abR = Number.isFinite(roh) && eingabe?.abR !== '' && eingabe?.abR !== null ? Math.min(5, Math.max(min, roh)) : 1
+    return { art, abR: Math.round(abR * 100) / 100 }
+}
+
+/** Optionen für `stepCandle` je Ausstiegsart. Abstand beim Nachziehen: 1 R des Zeilen-Stops. */
+function schrittOptionen(variante) {
+    if (variante?.art === 'breakeven') return { breakEvenAtR: variante.abR }
+    if (variante?.art === 'trailing') return { trailR: 1, trailAbR: variante.abR }
+    return {}
+}
 
 /** Horizonte (Kerzen) der Einstiegs-Kante. */
 export const KANTE_HORIZONTE = [4, 16, 64]
@@ -236,13 +267,13 @@ function spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, o) {
     }
     const letzteZeit = zeitIdx[zeitIdx.length - 1]
     const bis = letzteZeit >= 0 ? letzteZeit : kerzen.length - 1
-    const schritt = { maintenanceMarginPct: o.wartungsmargePct, kerzeMs: o.kerzeMs }
+    const schritt = { maintenanceMarginPct: o.wartungsmargePct, kerzeMs: o.kerzeMs, costs: o.costs, ...schrittOptionen(o.variante) }
     for (let j = erste; !natuerlich && j <= bis; j++) {
         const { exit } = stepCandle(pos, kerzen[j], schritt)
         if (exit) {
             natuerlich = { j, exit }
-            natuerlich.zweifel = ziel > 0 && (exit.reason === 'sl' || exit.reason === 'liquidation')
-                && beruehrtZiel(kerzen[j], ziel, stop, long)
+            natuerlich.zweifel = ziel > 0 && STOP_GRUENDE.has(exit.reason)
+                && beruehrtZiel(kerzen[j], ziel, pos.stopLoss, long)
         }
     }
 
@@ -265,6 +296,9 @@ function spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, o) {
     })
 }
 
+/** Ausstiegsgründe, die ein Stop sind (auch ein nachgezogener). */
+const STOP_GRUENDE = new Set(['sl', 'be', 'trail', 'liquidation'])
+
 /**
  * Hat die Kerze das Ziel berührt, ohne schon jenseits des Stops zu eröffnen?
  * Eine Eröffnung jenseits des Stops ist kein Zweifel: der erste Kurs der
@@ -286,7 +320,7 @@ export function spieleEinzeln(trade, kerzen, { faktor = 1, zielR = 0, halten }, 
     const kerzeMs = Number(o.kerzeMs) || 0
     const erste = trade.einstiegsArt === 'kerze' ? i0 + 1 : i0
     const zeitIdx = zeitKerzen(kerzen, erste, Number(trade.entryTime), kerzeMs, [halten])
-    const opts = { costs: o.costs || {}, kerzeMs, wartungsmargePct: o.wartungsmargePct, funding: o.funding || null }
+    const opts = { costs: o.costs || {}, kerzeMs, wartungsmargePct: o.wartungsmargePct, funding: o.funding || null, variante: varianteAus(o.variante) }
     return spieleTrade(trade, kerzen, i0, faktor, zielR, zeitIdx, opts)[0]
 }
 
@@ -557,11 +591,13 @@ const kurz = (k) => ({ n: k.n, mittel: runde(k.mittel), treffer: runde(k.treffer
  * @param {Function} [o.funding]        (pos, bis) → Funding je Stück; ohne
  *                                      rechnet `closePosition` mit der Annahme
  * @param {Function} [o.atempause]      async, wird alle ~25 ms abgewartet
+ * @param {object} [o.variante]         Ausstiegsart, siehe `varianteAus`
  */
 export async function ausstiegsRaster(trades, kerzen, o = {}) {
     const raster = { stops: o.stops || STOP_FAKTOREN, ziele: o.ziele || ZIELE_R, halten: o.halten || HALTEN }
     const kerzeMs = Number(o.kerzeMs) || 0
-    const opts = { costs: o.costs || {}, kerzeMs, wartungsmargePct: o.wartungsmargePct, funding: o.funding || null }
+    const variante = varianteAus(o.variante)
+    const opts = { costs: o.costs || {}, kerzeMs, wartungsmargePct: o.wartungsmargePct, funding: o.funding || null, variante }
 
     const kandidaten = (Array.isArray(trades) ? trades : []).filter(spielbar)
         .sort((a, b) => Number(a.entryTime) - Number(b.entryTime))
@@ -619,6 +655,7 @@ export async function ausstiegsRaster(trades, kerzen, o = {}) {
 
     const ergebnis = {
         raster,
+        variante,
         trades: { gespielt: n, auswahl: nAuswahl, pruefung: n - nAuswahl, ausgelassen, ohneKerze },
         pruefAb: n > nAuswahl ? Number(gespielt[nAuswahl].trade.entryTime) : null,
         original: Object.fromEntries(Object.entries(teile).map(([name, g]) => [name, kurz(kennzahlen(original.slice(g[0], g[1])))])),

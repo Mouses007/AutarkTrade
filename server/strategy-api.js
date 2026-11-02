@@ -30,6 +30,7 @@ import {
     berechneBuyHoldBaseline, schaetzeFloatingDrawdownAusTrades, ENTWURF_ZEITBUDGET_MS,
 } from './strategy-backtest.js'
 import { monteCarlo, parameterStabilitaet, stabilitaetsMatrix, walkForward, ausstiegsPruefung, MAX_STUFEN } from './robustness.js'
+import { varianteAus } from './ausstiege.js'
 import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliessePositionManuell, BETRIEBSARTEN, ladeRegelStrategienAusDb } from './strategy-engine.js'
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
 import { neustartInstanz } from './strategie-neustart.js'
@@ -824,7 +825,7 @@ export function setupStrategyRoutes(app) {
             if (geschaetzt > MAX_BACKTEST_CANDLES) {
                 return res.status(400).json({ error: `Zeitraum zu gross: ~${geschaetzt} Kerzen` })
             }
-            res.json(await ausstiegsPruefung(basis))
+            res.json(await ausstiegsPruefung(basis, { variante: varianteAus(b.variante) }))
         } catch (e) {
             if (sendeWennAus(res, e)) return
             logError('strategy-api', 'Ausstiegs-Prüfung fehlgeschlagen', e)

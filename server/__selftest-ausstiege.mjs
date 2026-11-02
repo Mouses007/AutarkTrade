@@ -15,7 +15,7 @@ import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { kostenAus } from './fill-simulator.js'
 import {
     ausstiegsRaster, spieleEinzeln, fundingRechner, waehleZone, kennzahlen, kerzeBei,
-    einstiegsKante, ueberanpassung,
+    einstiegsKante, ueberanpassung, varianteAus,
     STOP_FAKTOREN, ZIELE_R, HALTEN,
 } from './ausstiege.js'
 import { zufall } from '../shared/statistik.js'
@@ -91,6 +91,17 @@ console.log('Einzelfälle')
         spieleEinzeln(trade('kerze'), luecke, { zielR: 2, halten: 8 }, o).zweifel === false)
     check('Limit-Einstieg: Stop und Ziel in der Einstiegskerze ist ein Zweifelsfall',
         spieleEinzeln(trade('kerze'), [kerze(0, 100, 103, 98.9, 100), flach(1)], { zielR: 2, halten: 8 }, o).zweifel === true)
+
+    const steigt = [kerze(0, 100, 100.4, 99.8, 100.2), kerze(1, 100.2, 103, 100.1, 102.5), kerze(2, 102.5, 102.6, 101.5, 101.8), flach(3)]
+    const tr = spieleEinzeln(trade('kerze'), steigt, { zielR: 0, halten: 8 }, { ...o, variante: { art: 'trailing', abR: 0 } })
+    check('Nachziehen: Stop folgt dem Hoch 103 im Abstand 1 R → Ausstieg 102 (+2 R)', nah(tr.r, 2), String(tr.r))
+    const be = spieleEinzeln(trade('kerze'), [...steigt.slice(0, 2), kerze(2, 102.5, 102.6, 99.9, 100.5), flach(3)],
+        { zielR: 0, halten: 8 }, { ...o, variante: { art: 'breakeven', abR: 1 } })
+    check('Break-even ab 1 R: Rücklauf unter den Einstieg endet bei 0 R', nah(be.r, 0), String(be.r))
+    check('Ausstiegsart: Unbekanntes wird „fest", Grenzen greifen',
+        varianteAus({ art: 'x' }).art === 'fest' && varianteAus({ art: 'breakeven', abR: 0 }).abR === 0.25
+        && varianteAus({ art: 'trailing', abR: 0 }).abR === 0 && varianteAus({ art: 'trailing', abR: 99 }).abR === 5
+        && varianteAus({ art: 'breakeven' }).abR === 1)
 
     const fehlt = spieleEinzeln(trade('kerze', { entryTime: T0 + 99 * H }), ziel, { zielR: 2, halten: 8 }, o)
     check('fehlt die Einstiegskerze, gibt es kein Ergebnis statt einer Zahl', fehlt === null)
@@ -270,11 +281,11 @@ console.log('\nDieselben Zahlen wie der Backtest')
             return { setups, events, diagnostics: {} }
         },
     }
-    const lauf = async (slippageBps) => runBacktest({
-        strategyId: 'ausstieg_test', strategie: manifest, symbol: 'TESTUSDT', timeframe: '1h', market: 'futures',
+    const lauf = async (slippageBps, { regeln = manifest.regeln, breakEvenCoversCosts = false } = {}) => runBacktest({
+        strategyId: 'ausstieg_test', strategie: { ...manifest, regeln }, symbol: 'TESTUSDT', timeframe: '1h', market: 'futures',
         risk: {
             riskPerTradePct: 1, maxNotionalUsdt: 100000, leverage: 5, minRR: 1, maintenanceMarginPct: 0.5,
-            cooldownMinutes: 0, feeMakerBps: 2, feeTakerBps: 5, slippageBps,
+            cooldownMinutes: 0, feeMakerBps: 2, feeTakerBps: 5, slippageBps, breakEvenCoversCosts,
         },
         startEquity: 10000, candles: kerzen, marketMeta: {}, fundingVerlauf: verlauf, fromTs: T0, toTs: T0 + 3000 * H,
     })
@@ -334,6 +345,25 @@ console.log('\nDieselben Zahlen wie der Backtest')
     check('Urteil ist einer der bekannten Werte', ['zuWenig', 'besser', 'nichtGesichert', 'keinVorteil'].includes(e.urteil), e.urteil)
     // Ein Zufallsweg hat keine Kante — kein Ausstieg darf ihm eine gesichert andichten.
     check('auf einem Zufallsweg kein gesicherter Vorteil', e.urteil !== 'besser', `${e.urteil} p=${e.gewaehlt?.vergleich.p}`)
+
+    // Break-even: dieselbe Rechnung wie eine Strategie mit Break-even ab 1 R
+    const mitBe = await lauf(0, { regeln: { maxHoldCandles: 16, breakEvenAtR: 1 }, breakEvenCoversCosts: true })
+    const optsBe = { ...opts, costs: kostenAus(mitBe.meta.risk), variante: { art: 'breakeven', abR: 1 } }
+    const fertigBe = mitBe.trades.filter((t) => t.exitReason !== 'open_at_end')
+    let abwBe = null
+    for (const t of fertigBe) {
+        const r = spieleEinzeln(t, kerzen, { faktor: 1, zielR: 2, halten: 16 }, optsBe)?.r
+        if (r === undefined || !nah(r, t.rMultiple, 1e-7)) { abwBe = `${t.einstiegsArt} ${t.exitReason}: ${r} gegen ${t.rMultiple}`; break }
+    }
+    check(`Break-even ab 1 R (deckt Kosten) = Backtest mit Break-even, Trade für Trade (${fertigBe.length} Trades, ${fertigBe.filter((t) => t.exitReason === 'be').length} am Break-even)`,
+        abwBe === null && fertigBe.some((t) => t.exitReason === 'be'), abwBe)
+    const rasterBe = await ausstiegsRaster(mitBe.trades, kerzen, optsBe)
+    check('das Raster trägt seine Ausstiegsart', rasterBe.variante.art === 'breakeven' && rasterBe.variante.abR === 1)
+    const rasterTr = await ausstiegsRaster(ohneSchlupf.trades, kerzen, { ...opts, variante: { art: 'trailing', abR: 0 } })
+    const festZelle = e.zellen.find((c) => c.s === s1 && c.z === ZIELE_R.indexOf(0) && c.h === HALTEN.length - 1)
+    const trZelle = rasterTr.zellen.find((c) => c.s === s1 && c.z === ZIELE_R.indexOf(0) && c.h === HALTEN.length - 1)
+    check('Nachziehen ändert das Ergebnis ohne Ziel (der Stop wandert mit)', festZelle.alle.summe !== trZelle.alle.summe,
+        `${festZelle.alle.summe} / ${trZelle.alle.summe}`)
 
     const wenige = await ausstiegsRaster(ohneSchlupf.trades.slice(0, 20), kerzen, opts)
     check('unter 30 Trades: Urteil „zu wenig"', wenige.urteil === 'zuWenig', wenige.urteil)

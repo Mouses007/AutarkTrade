@@ -569,7 +569,7 @@ const atemholen = () => new Promise((fertig) => setImmediate(fertig))
  * Funding wie im Lauf: aus dem Verlauf, für den ungedeckten Anfang (Bitget
  * reicht ~90 Tage zurück) mit der Annahme `fundingBpsPer8h`.
  */
-export async function ausstiegsPruefung(basis) {
+export async function ausstiegsPruefung(basis, { variante = null } = {}) {
     const market = basis.market === 'spot' ? 'spot' : 'futures'
     const candles = await getHistoricalCandles(basis.symbol, basis.timeframe, basis.fromTs, basis.toTs,
         { market, maxCandles: MAX_BACKTEST_CANDLES })
@@ -610,6 +610,7 @@ export async function ausstiegsPruefung(basis) {
         wartungsmargePct: stats.wartungsmargePct,
         funding,
         atempause: atemholen,
+        variante,
     })
     return { lauf: kopf, ausstiege }
 }

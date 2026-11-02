@@ -15,7 +15,8 @@
  *     was auf Kerzenbasis nicht abbildbar ist.
  *   - Gebühren nach Ordersorte: Ziel und Einstieg liegen als Limit im Buch
  *     (Maker), Stop, Liquidation und Zeitausstieg reissen ab (Taker).
- *   - Break-Even wird erst am Kerzenschluss nachgezogen, nie rückwirkend.
+ *   - Break-Even und Nachziehen (Trailing) erst am Kerzenschluss, nie
+ *     rückwirkend.
  *
  * Alle Funktionen sind rein: Kerze rein, Ergebnis raus, kein Zustand aussen.
  */
@@ -52,7 +53,7 @@ export const MARKT = 'market'
  * von 0,34 % (5m-Instanz) entscheidet die Differenz Maker/Taker über rund ein
  * Sechstel des eingegangenen Risikos JE TRADE.
  */
-const MARKT_AUSSTIEG = new Set(['sl', 'be', 'liquidation', 'timeout', 'manual', 'reverse'])
+const MARKT_AUSSTIEG = new Set(['sl', 'be', 'trail', 'liquidation', 'timeout', 'manual', 'reverse'])
 
 export function ordersorte(reason) {
     return MARKT_AUSSTIEG.has(reason) ? MARKT : LIMIT
@@ -412,6 +413,13 @@ export function bucheTeilausstieg(pos, price, anteilPct, costs, time) {
 /**
  * Verarbeitet eine Kerze für eine offene Position.
  *
+ * `opts`: `breakEvenAtR`, `partialTpR`/`partialTpPct`, `maxHoldMs`/`kerzeMs`,
+ * `maintenanceMarginPct`, `costs`, und fürs Nachziehen `trailR` (Abstand in R
+ * des Ursprungsstops) mit `trailAbR` (ab wie viel R im Plus, Schlusskurs;
+ * 0 = sofort). Nachziehen nutzt bisher nur die Ausstiegs-Prüfung
+ * (`server/ausstiege.js`); eine Strategie, die es im Papierbetrieb nutzt,
+ * müsste `trailAktiv` mit der Position speichern.
+ *
  * @returns {{ exit: null | { price, reason, time } }}
  *   Die Position wird dabei in place fortgeschrieben (SL-Nachzug, MAE/MFE).
  */
@@ -451,7 +459,7 @@ export function stepCandle(pos, candle, opts = {}) {
         // zum Stop-Preis, sondern zur Eröffnung (Gap).
         const gap = long ? candle.o < pos.stopLoss : candle.o > pos.stopLoss
         const price = gap ? candle.o : pos.stopLoss
-        return { exit: { price, reason: pos.breakEvenDone ? 'be' : 'sl', time: candle.t } }
+        return { exit: { price, reason: pos.trailDone ? 'trail' : pos.breakEvenDone ? 'be' : 'sl', time: candle.t } }
     }
 
     // Teilausstieg VOR dem vollen Ziel prüfen: er liegt näher am Einstieg, wird
@@ -513,8 +521,38 @@ export function stepCandle(pos, candle, opts = {}) {
                 // Einstiegskurs, der gegenüber dem Ursprungsstop immer noch
                 // die Verbesserung ist.
                 const zuNah = long ? neu >= candle.c : neu <= candle.c
-                pos.stopLoss = zuNah ? pos.entryPrice : neu
+                const ziel = zuNah ? pos.entryPrice : neu
+                // Nie zurück: ein schon weiter nachgezogener Stop bleibt.
+                if (long ? ziel > pos.stopLoss : ziel < pos.stopLoss) pos.stopLoss = ziel
                 pos.breakEvenDone = true
+            }
+        }
+    }
+
+    // Nachziehen (Trailing): ab `trailAbR` im Plus (Schlusskurs) folgt der
+    // Stop dem günstigsten Kurs seit dem Einstieg (Long: höchstes Hoch, Short:
+    // tiefstes Tief — `mfePrice`) im Abstand `trailR` R. Wie Break-Even erst
+    // am Kerzenschluss: was die Kerze tat, kennt man erst an ihrem Ende. Liegt
+    // der neue Stop schon jenseits des Schlusses (Hoch und Rücklauf in einer
+    // Kerze), gilt er trotzdem — die nächste Kerze eröffnet dann jenseits und
+    // schliesst zur Eröffnung, schlechter als ein echter Trailing-Stop, der in
+    // der Kerze gegriffen hätte. Der Stop wandert nur in Gewinnrichtung.
+    const trailR = Number(opts.trailR) || 0
+    if (trailR > 0) {
+        const r = riskPerUnit(pos)
+        if (r > 0) {
+            const abR = Math.max(0, Number(opts.trailAbR) || 0)
+            if (!pos.trailAktiv) {
+                pos.trailAktiv = abR === 0 || (long
+                    ? candle.c >= pos.entryPrice + r * abR
+                    : candle.c <= pos.entryPrice - r * abR)
+            }
+            if (pos.trailAktiv) {
+                const neu = long ? pos.mfePrice - r * trailR : pos.mfePrice + r * trailR
+                if (long ? neu > pos.stopLoss : neu < pos.stopLoss) {
+                    pos.stopLoss = neu
+                    pos.trailDone = true
+                }
             }
         }
     }

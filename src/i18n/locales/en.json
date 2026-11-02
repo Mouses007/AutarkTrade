@@ -8032,7 +8032,16 @@
       "ueber_hoch": "Overfitting high",
       "ueberText": "Trades split into {bloecke} blocks, each half used once for selection and the other for checking ({m} splits). In {pbo} % of them the zone chosen this way landed at most mid-field among all cells outside the selection, in {verlust} % below zero. Avg R in the selection {innen}, outside {aussen}.",
       "ueberFehlt": "Too few trades for the overfitting check (at least {n}).",
-      "karteTitel": "Map: avg R per trade by stop and target"
+      "karteTitel": "Map: avg R per trade by stop and target",
+      "artTitel": "Exit type:",
+      "art_fest": "Fixed (stop, target, time)",
+      "art_breakeven": "With break-even",
+      "art_trailing": "With trailing stop",
+      "abR": "from",
+      "artHinweis_breakeven": "Once a candle closes this many R in profit, the stop moves to the entry — plus costs if “break-even covers costs” is on in the risk values. Stop, target and holding time still apply.",
+      "artHinweis_trailing": "From this many R in profit (close; 0 = immediately) the stop follows the highest high (short: lowest low) since the entry, at the distance of the row's stop. It moves only at candle close and only in the profit direction; target and holding time still apply, “no target” is the classic trailing stop.",
+      "variante_breakeven": "break-even from {r} R",
+      "variante_trailing": "trailing from {r} R"
     }
   }
 }

@@ -8032,7 +8032,16 @@
       "ueber_hoch": "Überanpassung hoch",
       "ueberText": "Die Trades in {bloecke} Blöcke geteilt, jede Hälfte einmal zur Auswahl, die andere zur Prüfung ({m} Aufteilungen). In {pbo} % davon landete die so gewählte Zone ausserhalb höchstens im Mittelfeld aller Zellen, in {verlust} % im Minus. Ø R in der Auswahl {innen}, ausserhalb {aussen}.",
       "ueberFehlt": "Zu wenige Trades für die Prüfung auf Überanpassung (mindestens {n}).",
-      "karteTitel": "Karte: Ø R je Trade nach Stop und Ziel"
+      "karteTitel": "Karte: Ø R je Trade nach Stop und Ziel",
+      "artTitel": "Ausstiegsart:",
+      "art_fest": "Fest (Stop, Ziel, Zeit)",
+      "art_breakeven": "Mit Break-even",
+      "art_trailing": "Mit Nachziehen (Trailing)",
+      "abR": "ab",
+      "artHinweis_breakeven": "Schliesst eine Kerze so viele R im Plus, rückt der Stop auf den Einstieg — mit Kostenaufschlag, wenn „Break-even deckt Kosten“ in den Risiko-Werten an ist. Stop, Ziel und Haltedauer gelten weiter.",
+      "artHinweis_trailing": "Ab so vielen R im Plus (Schlusskurs; 0 = sofort) folgt der Stop dem höchsten Hoch (Short: tiefsten Tief) seit dem Einstieg, im Abstand des Stops der jeweiligen Zeile. Nachgezogen wird erst am Kerzenschluss und nur in Gewinnrichtung; Ziel und Haltedauer gelten weiter, „ohne Ziel“ ist der klassische Trailing-Stop.",
+      "variante_breakeven": "Break-even ab {r} R",
+      "variante_trailing": "Nachziehen ab {r} R"
     }
   }
 }

@@ -35,6 +35,9 @@ const aus = ref(null)
 // Haltedauer der Karte (Index); null = die der gewählten Zone
 const haltWahl = ref(null)
 const teil = ref('alle')
+// Ausstiegsart: fest (Vorgabe), Break-even oder Nachziehen, je ab N R im Plus
+const art = ref('fest')
+const abR = ref(1)
 
 // Ohne Vorzeichen bei null: „-0.00" sähe nach einem Verlust aus.
 const zahl = (v, n = 2) => {
@@ -58,6 +61,7 @@ async function starten() {
         const r = await axios.post('/api/strategies/robustness/ausstiege', {
             strategyId: f.strategyId, symbol: f.symbol.toUpperCase(), timeframe: f.timeframe,
             ...zeitraum, params: f.params, risk: f.risk,
+            variante: { art: art.value, abR: Number(String(abR.value).replace(',', '.')) },
         })
         if (r.data?.aus) aus.value = r.data
         else antwort.value = r.data
@@ -81,6 +85,12 @@ const zielLang = (i) => (raster.value.ziele[i] > 0
     ? t('strategien.ausstiege.zielLang', { r: raster.value.ziele[i] })
     : t('strategien.ausstiege.ohneZiel'))
 const zelleText = (c) => (c ? t('strategien.ausstiege.zelle', { stop: stopText(c.s), ziel: zielLang(c.z), halten: haltText(c.h) }) : '–')
+/** Die Ausstiegsart, mit der gerechnet WURDE (aus der Antwort, nicht aus dem Formular). */
+const varianteText = computed(() => {
+    const v = a.value?.variante
+    if (!v || v.art === 'fest') return ''
+    return t('strategien.ausstiege.variante_' + v.art, { r: v.abR })
+})
 
 function zelleBei(s, z, h) {
     const Z = raster.value.ziele.length
@@ -131,7 +141,8 @@ const zeilen = computed(() => {
     const raus = [{ name: t('strategien.ausstiege.zeileEigene'), auswahl: a.value.original.auswahl, pruefung: a.value.original.pruefung }]
     if (a.value.gewaehlt) {
         raus.push({
-            name: t('strategien.ausstiege.zeileZone'), zelle: zelleText(a.value.gewaehlt),
+            name: t('strategien.ausstiege.zeileZone'),
+            zelle: [zelleText(a.value.gewaehlt), varianteText.value].filter(Boolean).join(' · '),
             auswahl: a.value.gewaehlt.auswahl, pruefung: a.value.gewaehlt.pruefung, vergleich: a.value.gewaehlt.vergleich, zone: true,
         })
     }
@@ -139,7 +150,8 @@ const zeilen = computed(() => {
     const g = a.value.gewaehlt
     if (e && !(g && e.s === g.s && e.z === g.z && e.h === g.h)) {
         raus.push({
-            name: t('strategien.ausstiege.zeileSpitze'), zelle: zelleText(e),
+            name: t('strategien.ausstiege.zeileSpitze'),
+            zelle: [zelleText(e), varianteText.value].filter(Boolean).join(' · '),
             auswahl: e.auswahl, pruefung: e.pruefung, vergleich: e.vergleich,
         })
     }
@@ -153,6 +165,19 @@ const zeilen = computed(() => {
             <Symbol name="waage" class="vorSymbol" />{{ t('strategien.ausstiege.titel') }}
         </div>
         <p class="fein at-gedaempft">{{ t('strategien.ausstiege.erklaerung') }}</p>
+
+        <div class="knopfZeile abstandUnten">
+            <label class="fein at-gedaempft" for="ausstiegsArt">{{ t('strategien.ausstiege.artTitel') }}</label>
+            <select id="ausstiegsArt" v-model="art" class="ctl-select" :disabled="laeuft">
+                <option v-for="x in ['fest', 'breakeven', 'trailing']" :key="x" :value="x">{{ t('strategien.ausstiege.art_' + x) }}</option>
+            </select>
+            <template v-if="art !== 'fest'">
+                <label class="fein at-gedaempft" for="ausstiegAbR">{{ t('strategien.ausstiege.abR') }}</label>
+                <input id="ausstiegAbR" v-model="abR" class="at-feld klein abFeld" inputmode="decimal" :disabled="laeuft" />
+                <span class="fein at-gedaempft">R</span>
+            </template>
+        </div>
+        <p v-if="art !== 'fest'" class="fussnote abstandUnten">{{ t('strategien.ausstiege.artHinweis_' + art) }}</p>
 
         <div class="knopfZeile abstandUnten">
             <Knopf klein :disabled="laeuft || !form.strategyId" @click="starten">
@@ -387,6 +412,10 @@ const zeilen = computed(() => {
 .punkte {
     margin: 0 0 var(--abstand-2);
     padding-left: var(--abstand-4);
+}
+
+.abFeld {
+    width: 4.5rem;
 }
 
 .unterTitel {
