@@ -19,7 +19,7 @@ import { useI18n } from 'vue-i18n'
 import { WERKZEUGE } from '../../utils/chart/zeichnungen/werkzeuge.js'
 import { Symbol } from '../basis'
 import { macheRueckgaengig, macheWiederholen, verlaufStand } from '../../stores/chartZeichnungen.js'
-import { fadenkreuzTouch, istTouchGeraet } from '../../stores/chartBedienung.js'
+import { fadenkreuzTouch, istTouchGeraet, autoSperre } from '../../stores/chartBedienung.js'
 
 const props = defineProps({
     symbol: { type: String, default: '' },
@@ -73,6 +73,7 @@ function lese() {
 /** Schalter fürs Fadenkreuz-Zeichnen nur, wo es Touch gibt (Handy-Schublade oder Finger als Zeiger). */
 const touch = computed(() => props.immerOffen || istTouchGeraet())
 function schalteFadenkreuz() { fadenkreuzTouch.value = !fadenkreuzTouch.value }
+function schalteAutoSperre() { autoSperre.value = !autoSperre.value }
 
 const offenGemerkt = ref(lese())
 const offen = computed(() => props.immerOffen || offenGemerkt.value)
@@ -120,6 +121,10 @@ function umschalten() {
         <button v-if="touch" class="w" :class="{ an: fadenkreuzTouch }" :title="t('chart.wz.fadenkreuz')" @click="schalteFadenkreuz" :aria-label="t('chart.wz.fadenkreuz')">
             <Symbol name="fadenkreuz" class="zeichen" />
             <span v-if="offen" class="name">{{ t('chart.wzKurz.fadenkreuz') }}</span>
+        </button>
+        <button class="w" :class="{ an: autoSperre }" :aria-pressed="autoSperre" :title="t('chart.wz.autoSperre')" @click="schalteAutoSperre" :aria-label="t('chart.wz.autoSperre')">
+            <Symbol :name="autoSperre ? 'schloss' : 'schlossOffen'" class="zeichen" />
+            <span v-if="offen" class="name">{{ t('chart.wzKurz.autoSperre') }}</span>
         </button>
         <button class="w" :class="{ an: versteckt }" :title="t('chart.wz.allesVerstecken')" @click="emit('versteckt')" :aria-label="t('chart.wz.allesVerstecken')">
             <Symbol :name="versteckt ? 'augeAus' : 'auge'" class="zeichen" />

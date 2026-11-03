@@ -23,6 +23,7 @@
 import { ref } from 'vue'
 import axios from 'axios'
 import { alarme, legeAlarmAn } from './chartAlarme.js'
+import { autoSperre, AUTO_SPERRE_MS } from './chartBedienung.js'
 
 const bestand = new Map()        // symbol → ref([...])
 const laedt = new Map()          // symbol → Promise
@@ -83,6 +84,13 @@ export async function legeAn(daten, { merken = true } = {}) {
         const { data } = await axios.post('/api/chart/zeichnungen', felder(daten))
         ersetze(data)
         if (merken) merke({ art: 'neu', nachher: data })
+        // Auto-Sperre: nur neu Gesetztes (nicht Rückgängig/Wiederholen); gelöscht oder schon gesperrt → nichts
+        if (merken && autoSperre.value && !data.gesperrt) {
+            setTimeout(() => {
+                const z = liste(data.symbol).value.find((x) => x.id === data.id)
+                if (z && !z.gesperrt) aendere(data.symbol, data.id, { gesperrt: true }, { merken: false })
+            }, AUTO_SPERRE_MS)
+        }
         return data
     } catch (e) {
         fehlerMeldung.value = e.response?.data?.error || e.message

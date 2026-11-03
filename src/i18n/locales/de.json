@@ -6213,7 +6213,8 @@
       "einblenden": "Alle einblenden",
       "alleLoeschen": "Alle löschen",
       "fadenkreuz": "Fadenkreuz",
-      "alarm": "Alarm"
+      "alarm": "Alarm",
+      "autoSperre": "Auto-Sperre"
     },
     "wz": {
       "zurueck": "Zurück (Strg+Z) — letzte Änderung an einer Zeichnung rückgängig",
@@ -6242,7 +6243,8 @@
       "ellipse": "Kreis / Ellipse",
       "pinsel": "Pinsel (frei malen)",
       "pfad": "Pfad mit Pfeil",
-      "emoji": "Smiley / Symbol"
+      "emoji": "Smiley / Symbol",
+      "autoSperre": "Auto-Sperre: jede neu gesetzte Zeichnung wird nach 5 Sekunden gesperrt"
     },
     "tab": {
       "steigt": "steigt",

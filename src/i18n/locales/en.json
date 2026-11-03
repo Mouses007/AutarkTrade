@@ -6213,7 +6213,8 @@
       "einblenden": "Show all",
       "alleLoeschen": "Delete all",
       "fadenkreuz": "Crosshair",
-      "alarm": "Alert"
+      "alarm": "Alert",
+      "autoSperre": "Auto-lock"
     },
     "wz": {
       "zurueck": "Back (Ctrl+Z) — undo the last change to a drawing",
@@ -6242,7 +6243,8 @@
       "ellipse": "Circle / ellipse",
       "pinsel": "Brush (freehand)",
       "pfad": "Path with arrow",
-      "emoji": "Smiley / symbol"
+      "emoji": "Smiley / symbol",
+      "autoSperre": "Auto-lock: every new drawing is locked after 5 seconds"
     },
     "tab": {
       "steigt": "rising",
