@@ -194,7 +194,7 @@ export function systemText(englisch, { mitBild = false, modus = 'setzen', ergaen
         `  2. Was JETZT am Kurs zählt: die nächsten Marken darüber und darunter, mehrfach berührt, deutliche Reaktion, wenig Durchquerungen, oder wo zwei Quellen übereinstimmen.`,
         `  Höchstens ${MAX_ZEICHNUNGEN} Zeichnungen insgesamt: jede Linie, Zone und jeder Kanal zählt eins; mehrere V-Marken desselben Profils zählen zusammen eins. Nur kleine Marken am rechten Rand zu wählen, während der Chart links einen grossen Trend oder Absturz zeigt, ist FALSCH. Der Text beginnt mit der übergeordneten Lage des Fensters (Richtung, grosse Bewegung) und kommt dann zum Kurs. Gibt der Chart nichts her, ist eine leere Auswahl richtig — dann sag das im Text.`,
         '- Linien ("linien"): "id" aus N, V, D (waagerecht) oder T (Trendlinie).',
-        '- Volumenprofile gibt es je Seitwärtsphase, je Tag und je Woche. Nimm das aussagekräftigste (für die Struktur meist das einer längeren Seitwärtsphase, für den Kurs das, dessen POC/VAH/VAL nahe am Kurs liegen oder sich mit N/D decken), nicht mehrere Arten für dieselbe Aussage.',
+        '- Volumenprofile (V) gibt es nur über ein vom Code nachgewiesenes Rechteck (K, Seitwärts-Range) — dieselben Kerzen. Gibt es keins, gibt es kein Profil: dann keins erwähnen. Wählst du das Rechteck, ist sein Profil oft die bessere Aussage über die Lage in der Range (POC = meistgehandelter Preis).',
         '- Zonen ("zonen"): "ids" mit einer ID (deren Band) oder zwei benachbarten N/D-IDs (Bereich dazwischen). Nur wo der Kurs mehrfach reagiert hat. Eine Marke ist entweder Linie oder Zone, nicht beides.',
         '- Kanäle und Flaggen (K) hat der Code gemessen (Richtung, Kanten, Muster). Wählst du einen, trage ihn in "muster" ein — nicht in "linien". Eine Seitwärts-Range ist waagerecht: nicht als steigenden oder fallenden Kanal beschreiben.',
         '- Dreiecke, Keile und Wimpel (M) hat der Code ebenfalls gemessen (Form, Kanten, Spitze, Berührungen — der Kurs pendelt nachweislich zwischen den Kanten). Auch sie gehören in "muster". Nenne die Form so, wie der Code sie benennt, und beschreibe, was ein Schluss jenseits der oberen bzw. unteren Kante bedeuten würde — ohne Kursziel aus der Dreieckshöhe. Sind die beiden Kanten zugleich als Trendlinien (T) gelistet, wähle das Muster statt der zwei Linien.',
@@ -221,7 +221,7 @@ export function systemText(englisch, { mitBild = false, modus = 'setzen', ergaen
         ' "bedingungen": [{"id": "N4", "richtung": "ueber|unter", "dann": "...", "ziel": "N2"}]',
     ]
     schema.push(mitBild ? ' ,"einwaende": [{"id": "K1", "grund": "..."}]}' : '}')
-    const auftrag = 'Der Code hat den Chart bereits vermessen: Niveaus (N…), Volumenprofile (V…), ungebrochene Trendlinien (T…), Kanäle und Flaggen (K…), Marken der höheren Zeiteinheit (D…), dazu Marktstruktur und Spanne. Jede Marke ist an den Kerzen geprüft. Deine Aufgabe: AUSWÄHLEN, GEWICHTEN, ERKLÄREN — nicht vermessen.'
+    const auftrag = 'Der Code hat den Chart bereits vermessen: Niveaus (N…), Volumenprofile (V…), ungebrochene Trendlinien (T…), Kanäle, Flaggen und Rechtecke (K…), Dreiecke/Keile/Wimpel (M…), Umkehrmuster (R…), Marken der höheren Zeiteinheit (D…), dazu Marktstruktur und Spanne. Jede Marke ist an den Kerzen geprüft. Deine Aufgabe: AUSWÄHLEN, GEWICHTEN, ERKLÄREN — nicht vermessen.'
     return `Du bist ein nüchterner technischer Analyst. ${auftrag}
 
 Regeln:

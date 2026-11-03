@@ -161,10 +161,14 @@ console.log('\nZwei Arten, gemeinsame Grenze (31.10.2026)\n')
     const ohneHebel = baueChartEingabe({ symbol: 'X', interval: '1h', kerzen, hebelzonen: null })
     check('ohne Liquidationszonen → nicht in der Eingabe', !ohneHebel.includes('LIQUIDATIONSZONEN'))
     const alle = baueKandidaten({ kerzen: Array.from({ length: 200 }, (_, i) => ({ t: T0 + i * H, o: 100, h: 101 + (i % 7) * 0.1, l: 99, c: 100 + Math.sin(i / 5), v: 100 })), interval: '1h', profilArten: PROFIL_ARTEN_ALLE })
-    const bereiche = new Set(alle.kandidaten.filter((k) => k.quelle === 'volumenprofil').map((k) => k.bereich))
-    check('Profile aller Arten im Paket (Phase/Abschnitt, Tag, Woche)', bereiche.has('tag') && bereiche.has('woche') && (bereiche.has('konsolidierung') || bereiche.has('abschnitt')), [...bereiche].join())
-    const vAb = new Set(alle.kandidaten.filter((k) => k.quelle === 'volumenprofil').map((k) => k.abschnitt))
-    check('je Art nur die jüngsten (höchstens 2 + 2 + 1 Profile)', vAb.size <= 5, [...vAb].join())
+    // Seit 03.11.2026: Profile nur über nachgewiesene Rechtecke, genau über deren Kerzen
+    const zick = (i) => { const p = i % 20; return (p < 10 ? p : 20 - p) - 5 }
+    const box = baueKandidaten({ kerzen: Array.from({ length: 200 }, (_, i) => ({ t: T0 + i * H, o: 100 + zick(i), h: 100.3 + zick(i), l: 99.7 + zick(i), c: 100 + zick(i), v: 100 })), interval: '1h', profilArten: PROFIL_ARTEN_ALLE })
+    const vs = box.kandidaten.filter((k) => k.quelle === 'volumenprofil')
+    const ks = box.kandidaten.filter((k) => k.quelle === 'kanal' && k.form === 'range')
+    check('Profile nur über Rechtecke, gleiche Kerzen wie das K-Rechteck', vs.length > 0 && vs.every((v) => v.bereich === 'rechteck' && ks.some((k) => k.id === v.rechteck && k.t1 === v.t1)), JSON.stringify(vs.map((v) => [v.bereich, v.rechteck, v.t1])) + ' ' + JSON.stringify(ks.map((k) => [k.id, k.t1])))
+    const trend = baueKandidaten({ kerzen: Array.from({ length: 200 }, (_, i) => ({ t: T0 + i * H, o: 100 + i * 0.5, h: 101 + i * 0.5, l: 99 + i * 0.5, c: 100.3 + i * 0.5, v: 100 })), interval: '1h', profilArten: PROFIL_ARTEN_ALLE })
+    check('ohne Rechteck kein Profil (kein Tages-, Wochen- oder Phasenprofil als Ersatz)', !trend.kandidaten.some((k) => k.quelle === 'volumenprofil'))
 }
 
 console.log('\nMeine Zeichnungen (31.10.2026)\n')

@@ -1150,12 +1150,16 @@ export function korrekturAbstand(u, k, A) {
 }
 
 /*
- * Profile ALLER Arten auf einmal (31.10.2026, KI-Analyse ohne Kästchen): der Code
- * rechnet sie, das Modell nimmt das aussagekräftigste. Je Art nur die jüngsten —
- * sonst stünden 15 Profile mit 45 Marken in der Eingabe.
+ * Profile der KI-Analyse (seit 03.11.2026): NUR über ein vom Code nachgewiesenes
+ * Rechteck bzw. eine Range (K mit `form: 'range'`, der Kurs pendelte zwischen den
+ * waagerechten Kanten) — von der ersten Berührung bis jetzt. Gibt es keins, gibt es
+ * kein Profil. Bis dahin bot der Code je zwei Phasen-, Tages- und ein Wochenprofil
+ * an; auf AVAXUSDT 15m wählte die KI das Wochenprofil (Beginn Montag 01:00, mitten
+ * in der Bewegung), und die „Phase" umfasste Absturz und Erholung zusammen — keins
+ * davon war eine Range. Phase/Tag/Woche bleiben für den KI-Chat und ältere Aufrufe.
  */
-export const PROFIL_ARTEN_ALLE = [['konsolidierung', 2], ['tag', 2], ['woche', 1]]
-const ABSCHNITT_NAME = { konsolidierung: 'Phase', abschnitt: 'Phase', tag: 'Tag', woche: 'Woche' }
+export const PROFIL_ARTEN_ALLE = [['rechteck', 2]]
+const ABSCHNITT_NAME = { konsolidierung: 'Phase', abschnitt: 'Phase', tag: 'Tag', woche: 'Woche', rechteck: 'Rechteck' }
 
 /**
  * Überblick über das GANZE Fenster (01.11.2026): Anfang → Ende in %, Hoch und Tief
@@ -1216,7 +1220,27 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
     // Abschnitte zwischen den grossen Wendepunkten, ohne die ein Profil über alles.
     let v = 1
     const arten = Array.isArray(profilArten) ? profilArten : [[profilArt, KAND.PROFIL_MAX]]
+    const kanaele = kandidatenKanaele(kerzen, A)
+    const kIndex = (t) => { const i = kerzen.findIndex((k) => k.t >= t); return i < 0 ? n - 1 : i }
     for (const [art, max] of arten) {
+        if (art === 'rechteck') {
+            // Je nachgewiesenem Rechteck ein Profil, genau über seine Länge; keins → nichts
+            kanaele.forEach((k, j) => {
+                if (k.form !== 'range' || j >= max) return
+                const von = kIndex(k.t1), bis = kIndex(k.t2)
+                const vp = volumenprofil(kerzen.slice(von, bis + 1), { zeilen: 48 })
+                if (!vp) return
+                for (const [name, preis] of [['POC', vp.poc], ['VAH', vp.vah], ['VAL', vp.val]]) {
+                    const deckt = nahAnN(preis, nListe)
+                    kandidaten.push({
+                        id: `V${v++}`, quelle: 'volumenprofil', name, abschnitt: `Rechteck K${j + 1}`, bereich: 'rechteck', rechteck: `K${j + 1}`, preis,
+                        tief: preis - KAND.BAND_MIN_ATR * A, hoch: preis + KAND.BAND_MIN_ATR * A,
+                        t1: kerzen[von].t, t2: kerzen[bis].t, abstandAtr: (preis - kurs) / A, deckt: deckt?.id || null,
+                    })
+                }
+            })
+            continue
+        }
         let bereich = art === 'tag' || art === 'woche' ? art : 'konsolidierung'
         // Ein Band enger als der Zickzack (3 ATR) hat keine Wendepunkte: dann die enge Konsolidierung
         let gefunden = bereich === 'konsolidierung' ? seitwaertsPhasen(kerzen) : periodenAbschnitte(kerzen, bereich)
@@ -1241,7 +1265,7 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
     }
 
     kandidatenTrendlinien(kerzen, A).forEach((x, i) => kandidaten.push({ id: `T${i + 1}`, quelle: 'trend', ...x }))
-    kandidatenKanaele(kerzen, A).forEach((x, i) => kandidaten.push({ id: `K${i + 1}`, ...x }))
+    kanaele.forEach((x, i) => kandidaten.push({ id: `K${i + 1}`, ...x }))
     kandidatenDreiecke(kerzen, A).forEach((x, i) => kandidaten.push({ id: `M${i + 1}`, ...wimpel(kerzen, x, A) }))
     kandidatenUmkehr(kerzen, A).forEach((x, i) => kandidaten.push({ id: `R${i + 1}`, ...x }))
 
@@ -1369,7 +1393,7 @@ export function kandidatenText(paket, { eigene = false, mitKandidaten = true } =
         for (const x of n) z.push(`${x.id} | ${zahl(x.preis)} | ${zahl(x.tief)}–${zahl(x.hoch)} | ${x.beruehrungen} (${x.hochs}/${x.tiefs}) | ${zeit(x.letzteT)} | ${x.reaktionMaxAtr.toFixed(1)} | ${x.durchquerungen} | ${atrText(x.abstandAtr)}${x.extrem ? ` | ${x.extrem === 'hoch' ? 'Hoch' : 'Tief'} des Bereichs` : ''}${x.rolle === 'wechsel' ? ' | Drehpunkt (mal Unterstützung, mal Widerstand)' : ''}`)
     }
     const v = paket.kandidaten.filter((k) => k.quelle === 'volumenprofil')
-    const UEBER = { konsolidierung: 'je Konsolidierung (Seitwärtsphase)', tag: 'je Tag (UTC)', woche: 'je Woche (UTC, ab Montag)', abschnitt: 'je Abschnitt zwischen den grossen Wendepunkten' }
+    const UEBER = { rechteck: 'je Rechteck (vom Code nachgewiesene Range, gleiche Kerzen wie das K-Rechteck)', konsolidierung: 'je Konsolidierung (Seitwärtsphase)', tag: 'je Tag (UTC)', woche: 'je Woche (UTC, ab Montag)', abschnitt: 'je Abschnitt zwischen den grossen Wendepunkten' }
     for (const bereich of [...new Set(v.map((x) => x.bereich))]) {
         const vb = v.filter((x) => x.bereich === bereich)
         z.push('', `VOLUMENPROFILE ${UEBER[bereich] || 'je Abschnitt'} (1 bzw. A1 = der jüngste):`)
