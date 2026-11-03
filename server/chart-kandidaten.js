@@ -16,7 +16,8 @@
  *   V…  Volumenprofile je Abschnitt (POC, VAH, VAL) — Abschnitte zwischen den
  *       grossen Wendepunkten, wie man ein Fixed-Range-Profil von Hand setzt
  *   T…  ungebrochene Trendlinien beider Seiten (chart-trendlinien.js)
- *   M…  Dreiecke und Keile (chart-dreiecke.js): zusammenlaufende Kanten mit Spitze
+ *   M…  Dreiecke, Keile und Wimpel (chart-dreiecke.js): zusammenlaufende Kanten mit Spitze
+ *   R…  Umkehrmuster (chart-umkehr.js): Doppeltop/-boden, Kopf-Schulter (normal, invers)
  *   D…  Niveaus der höheren Zeiteinheit (Abstand in DEREN ATR gemessen —
  *       mit der ATR der Chart-Zeiteinheit blieb auf ETH 1h nur eins übrig)
  *   U…  eigene Zeichnungen des Nutzers im sichtbaren Bereich (und auf dieser
@@ -31,6 +32,7 @@ import { volumenprofil } from '../shared/volumenprofil.js'
 import { alleTrendlinien, istGegenlinie, verlaengerung, TOL_ATR, MIN_ABSTAND } from './chart-trendlinien.js'
 import { trendZustand, durchquerungen } from './strategies/set_and_forget.js'
 import { kandidatenDreiecke, dreieckName, pendel } from './chart-dreiecke.js'
+import { kandidatenUmkehr, umkehrName } from './chart-umkehr.js'
 
 export const KAND = {
     PIVOT_K: 3,
@@ -1231,6 +1233,7 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
     kandidatenTrendlinien(kerzen, A).forEach((x, i) => kandidaten.push({ id: `T${i + 1}`, quelle: 'trend', ...x }))
     kandidatenKanaele(kerzen, A).forEach((x, i) => kandidaten.push({ id: `K${i + 1}`, ...x }))
     kandidatenDreiecke(kerzen, A).forEach((x, i) => kandidaten.push({ id: `M${i + 1}`, ...wimpel(kerzen, x, A) }))
+    kandidatenUmkehr(kerzen, A).forEach((x, i) => kandidaten.push({ id: `R${i + 1}`, ...x }))
 
     if (Array.isArray(kerzenHtf) && kerzenHtf.length >= 30) {
         const Ah = letzteAtr(kerzenHtf)
@@ -1381,8 +1384,13 @@ export function kandidatenText(paket, { eigene = false, mitKandidaten = true } =
     }
     const mm = paket.kandidaten.filter((k) => k.quelle === 'dreieck')
     if (mm.length) {
-        z.push('', 'DREIECKE UND KEILE — vom Code gemessen, zusammenlaufende Kanten (id | Name | Beginn → Spitze | Höhe am Anfang in ATR | noch übrig | Kante oben jetzt / unten jetzt | Abstand der Mitte in ATR):')
+        z.push('', 'DREIECKE, KEILE UND WIMPEL — vom Code gemessen, zusammenlaufende Kanten, der Kurs pendelt zwischen ihnen (id | Name | Beginn → Spitze | Höhe am Anfang in ATR | noch übrig | Kante oben jetzt / unten jetzt | Abstand der Mitte in ATR):')
         for (const x of mm) z.push(`${x.id} | ${dreieckName(x)} | ${zeit(x.tA)} → ${zeit(x.spitzeT)} | ${x.hoeheAtr.toFixed(1)} | ${Math.round(x.restPct)} % | ${zahl(x.obenJetzt)} / ${zahl(x.untenJetzt)} | ${atrText(x.abstandAtr)}`)
+    }
+    const rr = paket.kandidaten.filter((k) => k.quelle === 'umkehr')
+    if (rr.length) {
+        z.push('', 'UMKEHRMUSTER — vom Code gemessen aus bestätigten Wendepunkten (id | Name | Wendepunkte | Nackenlinie jetzt | Abstand der Nackenlinie in ATR):')
+        for (const x of rr) z.push(`${x.id} | ${umkehrName(x)} | ${x.punkte.slice(1).map((p) => `${zahl(p.p)} (${zeit(p.t)})`).join(' → ')} | ${zahl(x.nackenJetzt)} | ${atrText(x.abstandAtr)}`)
     }
     if (struktur) {
         const folge = (l) => l.map((p) => `${zahl(p.p)}${p.art ? ` ${p.art}` : ''} (${zeit(p.t)})`).join(' → ')

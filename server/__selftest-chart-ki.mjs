@@ -316,7 +316,7 @@ console.log('\nDreiecke und Keile (31.10.2026)\n')
     }
     const pd = baueKandidaten({ kerzen: kz, interval: '1h' })
     const m = pd.kandidaten.find((k) => k.quelle === 'dreieck')
-    check('Dreieck als M-Kandidat im Paket und in der Eingabe', m?.id === 'M1' && m.form === 'symmetrisch' && baueChartEingabe({ symbol: 'X', interval: '1h', kerzen: kz, paket: pd }).includes('DREIECKE UND KEILE'), JSON.stringify(m))
+    check('Dreieck als M-Kandidat im Paket und in der Eingabe', m?.id === 'M1' && m.form === 'symmetrisch' && baueChartEingabe({ symbol: 'X', interval: '1h', kerzen: kz, paket: pd }).includes('DREIECKE, KEILE UND WIMPEL'), JSON.stringify(m))
     const r = pruefeChartAuswahl({ text: 'Das symmetrische Dreieck [M1] läuft zur Spitze.', muster: [{ id: 'M1', grund: 'sauber' }], bedingungen: [{ id: 'M1', richtung: 'ueber', dann: 'x' }] }, pd, {})
     const l = r.linien.find((x) => x.art === 'dreieck')
     check('gewählt über „muster": Eintrag mit beiden Kanten, Name vom Code', l && l.label.startsWith('Symmetrisches Dreieck (') && l.obenA > l.untenA && l.tE > l.tA, JSON.stringify(l))
@@ -325,7 +325,30 @@ console.log('\nDreiecke und Keile (31.10.2026)\n')
     check('Gegenprobe: nicht gewählt → nichts gezeichnet', !pruefeChartAuswahl({ text: 'x' }, pd, {}).linien.some((x) => x.art === 'dreieck'))
     const e = pruefeChartAuswahl({ text: 'y', muster: [{ id: 'M1' }], einwaende: [{ id: 'M1', grund: 'im Bild ein Kanal' }] }, pd, { mitBild: true })
     check('Bild-Einwand gilt auch für Dreiecke, mit Dreiecksnamen', !e.linien.some((x) => x.art === 'dreieck') && e.einwaende[0]?.id === 'M1' && e.einwaende[0].name.startsWith('Symmetrisches Dreieck'))
-    check('Prompt nennt Dreiecke und Keile', systemText(false).includes('Dreiecke und Keile (M)'))
+    check('Prompt nennt Dreiecke, Keile und Wimpel', systemText(false).includes('Dreiecke, Keile und Wimpel (M)'))
+}
+
+console.log('\nUmkehrmuster (03.11.2026)\n')
+{
+    // Doppeltop: Anstieg 90 → 110, Rücksetzer 100, zweites Top 110, Bruch unter 100
+    const zug = (punkte) => {
+        const k = []
+        for (let j = 1; j < punkte.length; j++) {
+            const [l, a] = punkte[j - 1], [, b] = punkte[j]
+            for (let i = 0; i < l; i++) { const v = a + (b - a) * (i / l) + Math.sin(k.length * 1.7) * 0.15; k.push({ t: k.length * H, o: v, h: v + 0.2, l: v - 0.2, c: v, v: 100 }) }
+        }
+        return k
+    }
+    const kz = zug([[30, 100], [25, 90], [20, 110], [20, 100], [20, 110], [8, 98], [1, 98]])
+    const pd = baueKandidaten({ kerzen: kz, interval: '1h' })
+    const rk = pd.kandidaten.find((k) => k.quelle === 'umkehr' && k.form === 'doppeltop')
+    check('Doppeltop als R-Kandidat im Paket und in der Eingabe', /^R\d$/.test(rk?.id || '') && baueChartEingabe({ symbol: 'X', interval: '1h', kerzen: kz, paket: pd }).includes('UMKEHRMUSTER'), JSON.stringify(pd.kandidaten.filter((k) => k.quelle === 'umkehr').map((k) => k.form)))
+    const r = pruefeChartAuswahl({ text: `Das Doppeltop [${rk.id}] ist bestätigt.`, muster: [{ id: rk.id, grund: 'zwei gleich hohe Tops' }], bedingungen: [{ id: rk.id, richtung: 'ueber', dann: 'Muster hinfällig' }] }, pd, {})
+    const l = r.linien.find((x) => x.art === 'umkehr')
+    check('gewählt über „muster": Wendepunkte und Nackenlinie, Name vom Code', l && l.label.startsWith('Doppeltop, Nackenlinie gebrochen') && l.punkte.length === 4 && Number.isFinite(l.nacken.p1), JSON.stringify(l))
+    check('Text: Name mit Nackenlinie', new RegExp(`Doppeltop, Nackenlinie gebrochen \\(.*\\) ${rk.id} \\(Nackenlinie jetzt`).test(r.text), r.text)
+    check('Bedingung an der Nackenlinie erlaubt', r.bedingungen.length === 1 && Math.abs(r.bedingungen[0].schwelle - rk.nackenJetzt) < 1e-9, JSON.stringify(r.bedingungen))
+    check('Prompt nennt Umkehrmuster (R)', systemText(false).includes('Umkehrmuster (R:'))
 }
 
 console.log('\nBeschriftung, Länge, Ortszeit (20.10.2026)\n')

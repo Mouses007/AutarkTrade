@@ -11,7 +11,7 @@
  */
 import { ref, computed } from 'vue'
 import {
-    linieAlsZeichnung, zoneAlsZeichnung, profileAlsZeichnungen, istProfilLinie, istProfilZone, dreieckAlsZeichnungen,
+    linieAlsZeichnung, zoneAlsZeichnung, profileAlsZeichnungen, istProfilLinie, istProfilZone, dreieckAlsZeichnungen, umkehrAlsZeichnungen,
     leereMarken, markenSchluessel, anzeigeAnalyse, vorschauAnalyse,
 } from '../utils/chart/kiZeichnungen.js'
 import { legeAn, aendere } from './chartZeichnungen.js'
@@ -103,10 +103,12 @@ export async function uebernimmKi(schluessel, panelSymbol = null) {
         setzeMarken({ uebernommen: [...new Set([...kiMarken.value.uebernommen, 'profil', ...alleV])], geloescht: kiMarken.value.geloescht.filter((k) => !alleV.includes(k)) })
         return true
     }
-    if (v.art === 'linie' && v.eintrag.art === 'dreieck') {
-        // Zwei Kanten → zwei eigene Trendlinien, gleich als Gruppe mit dem Namen des Musters (Objekte-Reiter)
-        const gruppe = String(v.eintrag.labelKurz || v.eintrag.label || 'Dreieck').slice(0, 80)
-        for (const roh of dreieckAlsZeichnungen({ ...v.eintrag, id: null })) {
+    if (v.art === 'linie' && (v.eintrag.art === 'dreieck' || v.eintrag.art === 'umkehr')) {
+        // Zwei Kanten (Dreieck) bzw. Pfad + Nackenlinie (Umkehrmuster) → eigene Zeichnungen,
+        // gleich als Gruppe mit dem Namen des Musters (Objekte-Reiter)
+        const umkehr = v.eintrag.art === 'umkehr'
+        const gruppe = String(v.eintrag.labelKurz || v.eintrag.label || (umkehr ? 'Umkehrmuster' : 'Dreieck')).slice(0, 80)
+        for (const roh of (umkehr ? umkehrAlsZeichnungen : dreieckAlsZeichnungen)({ ...v.eintrag, id: null })) {
             const stil = { ...roh.stil, strich: 'voll' }
             delete stil.textPos
             if (!await legeAn({ symbol, ...roh, stil, gruppe, sichtbarAuf: null, gesperrt: false, versteckt: false })) return false

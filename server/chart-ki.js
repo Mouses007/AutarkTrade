@@ -52,6 +52,7 @@ import { ohneUnsichtbares } from '../shared/unsichtbar.js'
 import { uebergeordneterTrend, htfTrendKandidaten, htfTrendLabel, htfTrendZeile, HTF_TREND_KERZEN } from './chart-htf-trend.js'
 import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText, kanalName, kanalKurz, kanalBeschriftung, korrekturAbstand, PROFIL_ARTEN_ALLE, waehleNutzer } from './chart-kandidaten.js'
 import { dreieckName, dreieckKurz, dreieckBeschriftung } from './chart-dreiecke.js'
+import { umkehrName, umkehrKurz, umkehrBeschriftung } from './chart-umkehr.js'
 
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
 /*
@@ -74,7 +75,7 @@ const HTF_KERZEN = 120
 const BILD_MAX_ZEICHEN = 3_000_000
 const BILD_TYPEN = ['image/jpeg', 'image/png']
 // Einspruch nur gegen gemessene GEOMETRIE — Niveaus sind gezählte Berührungen, da sieht das Bild nicht mehr
-const EINSPRUCH_QUELLEN = ['kanal', 'trend', 'dreieck']
+const EINSPRUCH_QUELLEN = ['kanal', 'trend', 'dreieck', 'umkehr']
 
 /** Bild aus dem Request prüfen — rein. Ungültig → null (die Analyse läuft dann ohne Bild). */
 export function pruefeBild(roh) {
@@ -157,7 +158,7 @@ function systemTextEigene(englisch, { mitBild = false, ergaenzen = true } = {}) 
         '- Bewertungen ("bewertungen"): für JEDE eigene Zeichnung eine — "wichtig" hoch|mittel|gering für die Lage jetzt, "text" ≤ 220 Zeichen: was sie zeigt und ob sie noch gilt, "hinweis" ≤ 200 Zeichen oder leer. Berührungen, Durchquerungen, Bruch und Zustand sind GEMESSEN — übernimm sie, zähle nicht selbst.',
         '- Bedingungen: an eine U-ID gebunden ("id": "U3"). "richtung" ueber/unter meint einen Schluss der Zeiteinheit jenseits der Zeichnung — bei einer Zone/einem Profil/Kanal die obere Kante (VAH) für ueber, die untere (VAL) für unter. "ziel" (optional) ist die nächste eigene Zeichnung in dieser Richtung.',
         ergaenzen ? `- Korrekturen ("korrekturen"): steht bei einer eigenen Zeichnung ein „nächster Kandidat", und misst der die Marke klar besser (mehr Berührungen, sauberer), dann {"u": "U2", "id": "N3", "grund": "…"}. Nur bei deutlichem Gewinn.` : null,
-        ergaenzen ? `- Fehlendes ("fehlend"): höchstens ${MAX_FEHLEND} wichtige Marken aus den Kandidaten des Codes, die KEINE eigene Zeichnung abdeckt und die für die Lage zählen (nahe am Kurs, mehrfach berührt). Hier — und nur hier und in "korrekturen" — darfst du Kandidaten-IDs (N, V, T, K, M, D) verwenden. Linien: {"id": "N4", "label": "...", "grund": "..."}; Zonen: {"ids": ["N3"], …}; Kanäle/Dreiecke in "muster".` : '- Keine Korrekturen, keine neuen Marken: "korrekturen": [] und "fehlend": {}.',
+        ergaenzen ? `- Fehlendes ("fehlend"): höchstens ${MAX_FEHLEND} wichtige Marken aus den Kandidaten des Codes, die KEINE eigene Zeichnung abdeckt und die für die Lage zählen (nahe am Kurs, mehrfach berührt). Hier — und nur hier und in "korrekturen" — darfst du Kandidaten-IDs (N, V, T, K, M, R, D) verwenden. Linien: {"id": "N4", "label": "...", "grund": "..."}; Zonen: {"ids": ["N3"], …}; Kanäle/Dreiecke/Umkehrmuster in "muster".` : '- Keine Korrekturen, keine neuen Marken: "korrekturen": [] und "fehlend": {}.',
         mitBild ? '- Bild: Du bekommst ein Bild des sichtbaren Charts mit den Zeichnungen. Nutze es, um die Zeichnungen zu verstehen (wo sie liegen, wie sie zum Kursverlauf stehen). Preise liest du NICHT aus dem Bild ab.' : null,
         '- Stütze dich NUR auf die Eingabe. Keine Nachrichten, kein Allgemeinwissen über den Coin.',
         '- KEINE Prognose, KEIN Kursziel, KEINE Handelsempfehlung, kein "dürfte", kein "wird steigen/fallen", kein "kaufen/verkaufen". Beschreibe, was ein Schluss jenseits einer Zeichnung bedeuten würde.',
@@ -196,7 +197,8 @@ export function systemText(englisch, { mitBild = false, modus = 'setzen', ergaen
         '- Volumenprofile gibt es je Seitwärtsphase, je Tag und je Woche. Nimm das aussagekräftigste (für die Struktur meist das einer längeren Seitwärtsphase, für den Kurs das, dessen POC/VAH/VAL nahe am Kurs liegen oder sich mit N/D decken), nicht mehrere Arten für dieselbe Aussage.',
         '- Zonen ("zonen"): "ids" mit einer ID (deren Band) oder zwei benachbarten N/D-IDs (Bereich dazwischen). Nur wo der Kurs mehrfach reagiert hat. Eine Marke ist entweder Linie oder Zone, nicht beides.',
         '- Kanäle und Flaggen (K) hat der Code gemessen (Richtung, Kanten, Muster). Wählst du einen, trage ihn in "muster" ein — nicht in "linien". Eine Seitwärts-Range ist waagerecht: nicht als steigenden oder fallenden Kanal beschreiben.',
-        '- Dreiecke und Keile (M) hat der Code ebenfalls gemessen (Form, Kanten, Spitze, Berührungen). Auch sie gehören in "muster". Nenne die Form so, wie der Code sie benennt, und beschreibe, was ein Schluss jenseits der oberen bzw. unteren Kante bedeuten würde — ohne Kursziel aus der Dreieckshöhe. Sind die beiden Kanten zugleich als Trendlinien (T) gelistet, wähle das Muster statt der zwei Linien.',
+        '- Dreiecke, Keile und Wimpel (M) hat der Code ebenfalls gemessen (Form, Kanten, Spitze, Berührungen — der Kurs pendelt nachweislich zwischen den Kanten). Auch sie gehören in "muster". Nenne die Form so, wie der Code sie benennt, und beschreibe, was ein Schluss jenseits der oberen bzw. unteren Kante bedeuten würde — ohne Kursziel aus der Dreieckshöhe. Sind die beiden Kanten zugleich als Trendlinien (T) gelistet, wähle das Muster statt der zwei Linien.',
+        '- Umkehrmuster (R: Doppeltop/-boden, Kopf-Schulter, inverse Kopf-Schulter) hat der Code aus bestätigten Wendepunkten gemessen, mit Nackenlinie. Auch sie gehören in "muster". Ob die Nackenlinie gebrochen ist, steht im Namen — erst ein Schluss jenseits der Nackenlinie bestätigt das Muster; nicht gebrochen ist es nur eine mögliche Umkehr. Kein Kursziel aus der Musterhöhe. Eine Bedingung darf an der Nackenlinie hängen (die ID des Musters).',
         '- Gewicht: eine Trendlinie mit nur 2 Berührungen ist unbestätigt — höchstens "mittel". "stark" nur bei ≥ 3 Berührungen oder Übereinstimmung zweier Quellen (z. B. N und T, N und V oder N und D nahe beieinander). Nenne die Übereinstimmung im Grund.',
         '- Niveaus mit vielen Durchquerungen sind Drehpunkte der Spanne, keine harte Grenze — sag das.',
         '- Bedingungen: an eine N/V/D/T/K-ID gebunden; "richtung" ueber/unter meint einen Schluss der Zeiteinheit jenseits der Marke — bei einem Kanal (K) jenseits der oberen Kante für ueber, der unteren für unter, nie der Mitte; "ziel" (optional) ist die nächste ID in dieser Richtung.',
@@ -294,7 +296,7 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
         const grund = wort(String(e?.grund ?? '').replace(ID_RE, '$1'), 200)
         if (grund && !textOk(grund)) continue
         eingewandt.add(id)
-        einwaende.push({ id, art: k.quelle, name: k.quelle === 'kanal' ? kanalName(k, englisch) : k.quelle === 'dreieck' ? dreieckName(k, englisch) : trendLabel(k, englisch), grund })
+        einwaende.push({ id, art: k.quelle, name: k.quelle === 'kanal' ? kanalName(k, englisch) : k.quelle === 'dreieck' ? dreieckName(k, englisch) : k.quelle === 'umkehr' ? umkehrName(k, englisch) : trendLabel(k, englisch), grund })
     }
 
     // [ID] → Preis. Unbekannte ID: `null` (der Aufrufer entscheidet, was dann geschieht).
@@ -314,6 +316,11 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
                 if (genannt.has(k.id)) return `${dreieckKurz(k, englisch)} ${k.id}`
                 genannt.add(k.id)
                 return `${dreieckName(k, englisch)} ${k.id} (${englisch ? 'edges now' : 'Kanten jetzt'} ${zahl(k.untenJetzt)} / ${zahl(k.obenJetzt)})`
+            }
+            if (k?.quelle === 'umkehr') {
+                if (genannt.has(k.id)) return `${umkehrKurz(k, englisch)} ${k.id}`
+                genannt.add(k.id)
+                return `${umkehrName(k, englisch)} ${k.id} (${englisch ? 'neckline now' : 'Nackenlinie jetzt'} ${zahl(k.nackenJetzt)})`
             }
             if (k?.quelle === 'kanal') {
                 if (genannt.has(k.id)) return `${kanalKurz(k, englisch)} ${k.id}`
@@ -338,7 +345,8 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
     }
     // Zahlen, die zu keiner Marke passen — protokollieren
     const marken = [...paket.kandidaten.flatMap((k) => (k.quelle === 'trend' ? [k.wertJetzt, k.p1, k.p2] : k.quelle === 'kanal' ? [k.untenJetzt, k.obenJetzt, k.p1, k.p2]
-        : k.quelle === 'dreieck' ? [k.untenJetzt, k.obenJetzt, k.obenA, k.untenA, k.spitzeP] : [k.preis, k.tief, k.hoch])),
+        : k.quelle === 'dreieck' ? [k.untenJetzt, k.obenJetzt, k.obenA, k.untenA, k.spitzeP]
+        : k.quelle === 'umkehr' ? [k.nackenJetzt, k.nacken.p1, k.nacken.p2, ...k.punkte.map((p) => p.p)] : [k.preis, k.tief, k.hoch])),
         ...paket.roh.flatMap((r) => [r.h, r.l]), paket.spanne?.tief, paket.spanne?.hoch].filter(Number.isFinite)
     const pruefeZahlen = (t, wo) => {
         for (const m of String(t).matchAll(/\d[\d'’ ]*(?:[.,]\d+)?/g)) {
@@ -372,7 +380,7 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
         const label = ohneZeit(z?.label)
         const ks = ids.map((id) => karte.get(id))
         if (!ids.length || ids.length > 2 || ks.some((k) => !k)) { verworfen.push({ art: 'zone', grund: 'unbekannteId', inhalt: ids.join('+') || label }); continue }
-        if (ks.some((k) => k.quelle === 'trend' || k.quelle === 'kanal' || k.quelle === 'dreieck')) { verworfen.push({ art: 'zone', grund: 'zoneAusTrend', inhalt: ids.join('+') }); continue }
+        if (ks.some((k) => k.quelle === 'trend' || k.quelle === 'kanal' || k.quelle === 'dreieck' || k.quelle === 'umkehr')) { verworfen.push({ art: 'zone', grund: 'zoneAusTrend', inhalt: ids.join('+') }); continue }
         if (ks.length === 2) {
             const [a, b] = [...ks].sort((x, y) => x.preis - y.preis)
             const nb = ks.every((k) => k.quelle === 'niveau' || k.quelle === 'htf')
@@ -407,7 +415,7 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
         // das Modell schrieb „3 Berührungen", wo zwei davon dieselbe Welle waren.
         const label = k?.quelle === 'trend' ? trendLabel(k, englisch) : ohneZeit(l?.label)
         if (!k) { verworfen.push({ art: 'linie', grund: 'unbekannteId', inhalt: id || label }); continue }
-        if (k.quelle === 'kanal' || k.quelle === 'dreieck') { musterWahl.push(l); continue }     // gehört zu den Mustern (unten)
+        if (k.quelle === 'kanal' || k.quelle === 'dreieck' || k.quelle === 'umkehr') { musterWahl.push(l); continue }     // gehört zu den Mustern (unten)
         if (eingewandt.has(id)) { verworfen.push({ art: 'linie', grund: 'bildEinwand', inhalt: id }); continue }
         if (linien.some((x) => x.id === id)) continue
         if (zonenIds.has(id)) { verworfen.push({ art: 'linie', grund: 'doppelt', inhalt: id }); continue }
@@ -432,12 +440,27 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
     for (const m of musterWahl) {
         const id = idVon(m?.id)
         const k = karte.get(id)
-        if (!k || (k.quelle !== 'kanal' && k.quelle !== 'dreieck')) { verworfen.push({ art: 'muster', grund: 'unbekannteId', inhalt: id }); continue }
+        if (!k || (k.quelle !== 'kanal' && k.quelle !== 'dreieck' && k.quelle !== 'umkehr')) { verworfen.push({ art: 'muster', grund: 'unbekannteId', inhalt: id }); continue }
         if (eingewandt.has(id)) { verworfen.push({ art: 'muster', grund: 'bildEinwand', inhalt: id }); continue }
         if (kanalIds.has(id)) continue
         if (voll(id)) { verworfen.push({ art: 'muster', grund: 'zuViele', inhalt: id }); continue }
         const warum = m?.grund ? setzeEin(m.grund) : ''
         if (warum && !textOk(warum)) { verworfen.push({ art: 'muster', grund: 'prognose', inhalt: id }); continue }
+        if (k.quelle === 'umkehr') {
+            // Wendepunkte als Pfad, Nackenlinie als Trendlinie (kiZeichnungen.js)
+            const gemessenR = englisch
+                ? `Measured: height ${k.hoeheAtr.toFixed(1)} ATR; neckline now ${zahl(k.nackenJetzt)}${k.bruch ? ', closed beyond it' : ', not broken'}.`
+                : `Gemessen: Höhe ${k.hoeheAtr.toFixed(1)} ATR; Nackenlinie jetzt ${zahl(k.nackenJetzt)}${k.bruch ? ', Schluss jenseits davon' : ', nicht gebrochen'}.`
+            kanalIds.add(id)
+            belegt.add(id)
+            linien.push({
+                id: k.id, quelle: 'umkehr', art: 'umkehr', form: k.form, label: umkehrName(k, englisch), labelKurz: umkehrBeschriftung(k, englisch),
+                grund: wort(warum ? `${warum} ${gemessenR}` : gemessenR, 300), gewicht: k.bruch ? 'stark' : 'mittel',
+                punkte: k.punkte, nacken: k.nacken, bruch: k.bruch,
+                p1: k.nacken.p1, p2: k.nacken.p2, t1: k.nacken.t1, t2: k.nacken.t2,
+            })
+            continue
+        }
         if (k.quelle === 'dreieck') {
             // Zwei Kanten bis zur Spitze; gezeichnet als zwei Trendlinien (kiZeichnungen.js)
             const gemessenD = englisch
@@ -607,6 +630,7 @@ export function kandidatenKurz(paket) {
             breite: k.breite ?? null, muster: k.muster ?? null, richtung: k.richtung ?? null, form: k.form ?? null,
             tA: k.tA ?? null, obenA: k.obenA ?? null, untenA: k.untenA ?? null, tE: k.tE ?? null, obenE: k.obenE ?? null, untenE: k.untenE ?? null,
             tOA: k.tOA ?? null, obenOA: k.obenOA ?? null, tUA: k.tUA ?? null, untenUA: k.untenUA ?? null,
+            punkte: k.punkte ?? null, nacken: k.nacken ?? null, nackenJetzt: k.nackenJetzt ?? null,
         })),
     }
 }

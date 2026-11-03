@@ -6,7 +6,7 @@
  * Ältere Analysen (vor dem Umbau auf IDs, 18.10.2026) liegen bis zu 30 min im
  * Cache und müssen genauso gezeichnet werden wie bisher.
  */
-import { dreieckAlsZeichnungen, kanalAlsZeichnung, linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil, anzeigeAnalyse, vorschauAnalyse, leereMarken, markenSchluessel } from './chart/kiZeichnungen.js'
+import { dreieckAlsZeichnungen, umkehrAlsZeichnungen, kanalAlsZeichnung, linieAlsZeichnung, zoneAlsZeichnung, kiVorschau, kandidatenVorschau, KI_FARBEN, hatProfil, anzeigeAnalyse, vorschauAnalyse, leereMarken, markenSchluessel } from './chart/kiZeichnungen.js'
 
 let bestanden = 0
 let fehlgeschlagen = 0
@@ -138,6 +138,19 @@ console.log('\nKanal-Beschriftung\n')
     const v = kiVorschau({ linien: [d], zonen: [], kerzenVon: 0, kerzenBis: 9000 })
     check('Vorschau: zwei Zeichnungen, ein Schlüssel, eindeutige ids', v.length === 2 && v.every((z) => z.ki === 'linie0') && new Set(v.map((z) => z.id)).size === 2)
     check('grauer Kandidat: Dreiecke nicht doppelt', !kandidatenVorschau({ auswahl: { kandidaten: [{ id: 'M2', quelle: 'dreieck' }] }, linien: [], zonen: [] }).length)
+}
+
+// Umkehrmuster: Wendepunkte als Pfad, Nackenlinie mit Namen; Boden grün, Top rot
+{
+    const r = { id: 'R1', art: 'umkehr', form: 'doppelboden', label: 'Doppelboden, Nackenlinie gebrochen (Höhe 4.0 ATR)', labelKurz: 'Doppelboden, Nackenlinie gebrochen', gewicht: 'stark',
+        punkte: [{ t: 1000, p: 120 }, { t: 2000, p: 100 }, { t: 3000, p: 110 }, { t: 4000, p: 100.5 }], nacken: { t1: 2000, p1: 110, t2: 6000, p2: 110 } }
+    const zz = umkehrAlsZeichnungen(r)
+    check('Umkehrmuster: Pfad durch alle Wendepunkte, ohne Pfeil', zz[0].typ === 'pfad' && zz[0].punkte.length === 4 && zz[0].stil.spitze === false)
+    check('Umkehrmuster: Nackenlinie als Trendlinie mit Namen und ID', zz[1].typ === 'trendlinie' && zz[1].stil.text === 'Doppelboden, Nackenlinie gebrochen (R1)' && zz[1].punkte[1].t === 6000)
+    check('Umkehrmuster: Boden grün, Top rot', zz[0].stil.farbe === KI_FARBEN.unterstuetzung && umkehrAlsZeichnungen({ ...r, form: 'kopfSchulter' })[0].stil.farbe === KI_FARBEN.widerstand)
+    const v = kiVorschau({ linien: [r], zonen: [], kerzenVon: 0, kerzenBis: 9000 })
+    check('Vorschau: zwei Zeichnungen, ein Schlüssel', v.length === 2 && v.every((z) => z.ki === 'linie0'))
+    check('grauer Kandidat: Umkehrmuster nicht doppelt', !kandidatenVorschau({ auswahl: { kandidaten: [{ id: 'R2', quelle: 'umkehr' }] }, linien: [], zonen: [] }).length)
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

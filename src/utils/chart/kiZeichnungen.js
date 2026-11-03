@@ -59,6 +59,22 @@ export function dreieckAlsZeichnungen(l) {
 }
 
 /*
+ * Umkehrmuster (`art: 'umkehr'`, server/chart-umkehr.js): die Wendepunkte als
+ * Pfad (wie im Lehrbuch: Anlauf, Top, Tief, Top bzw. Schulter, Kopf, Schulter)
+ * und die Nackenlinie als Trendlinie mit dem Namen. Rot für Top-Muster, grün für
+ * Boden-Muster — die Seite, von der die Umkehr kommt.
+ */
+export function umkehrAlsZeichnungen(l) {
+    const boden = l.form === 'doppelboden' || l.form === 'inverseKopfSchulter'
+    const farbe = boden ? KI_FARBEN.unterstuetzung : KI_FARBEN.widerstand
+    const breite = l.gewicht === 'stark' ? 2 : 1
+    return [
+        { typ: 'pfad', punkte: (l.punkte || []).map((p) => ({ t: p.t, p: p.p })), stil: { farbe, breite, strich: 'gestrichelt', spitze: false } },
+        { typ: 'trendlinie', punkte: [{ t: l.nacken.t1, p: l.nacken.p1 }, { t: l.nacken.t2, p: l.nacken.p2 }], stil: { farbe, breite, strich: 'gestrichelt', text: mitId(l.labelKurz || l.label, l.id), textPos: 'ende' } },
+    ]
+}
+
+/*
  * Trendlinie vom ersten Anker bis `tEnde` (letzte Kerze plus ein Teil der
  * Spanne, server/chart-trendlinien.js) — bis 20.10.2026 lief sie ohne Ende
  * nach rechts und stand auf BTC 15m 3 000 USD über dem Kurs. Ältere Analysen
@@ -91,7 +107,7 @@ export function kandidatenVorschau(analyse) {
     const stil = (text) => ({ farbe: '#8a9199', breite: 1, strich: 'gepunktet', text })
     // V-Kandidaten gehören zum Profil, nicht als einzelne graue Linien
     // Kanäle zeichnet der Code ohnehin ein — kein grauer Doppelgänger
-    return k.filter((x) => !gewaehlt.has(x.id) && x.quelle !== 'volumenprofil' && x.quelle !== 'kanal' && x.quelle !== 'dreieck').map((x, i) => {
+    return k.filter((x) => !gewaehlt.has(x.id) && x.quelle !== 'volumenprofil' && x.quelle !== 'kanal' && x.quelle !== 'dreieck' && x.quelle !== 'umkehr').map((x, i) => {
         if (x.quelle === 'trend') return { id: -300 - i, typ: 'trendlinie', ...trendPunkte(x), stil: { ...stil(x.id), textPos: 'ende', rechts: !Number.isFinite(x.tEnde) } }
         return { id: -300 - i, typ: 'strahlH', punkte: [{ t: x.t1 ?? analyse.kerzenVon, p: x.preis }], stil: { ...stil(x.name ? `${x.id} ${x.name}` : x.id), textPos: 'rechts' } }
     })
@@ -155,6 +171,7 @@ export function kiVorschau(analyse, { profilStil = {} } = {}) {
     return [
         ...(analyse.linien || []).flatMap((l, i) => (istProfilLinie(l) ? []
             : l.art === 'dreieck' ? dreieckAlsZeichnungen(l).map((z, j) => ({ id: -600 - 2 * i - j, ki: schluessel(l, 'linie', i), ...z }))
+            : l.art === 'umkehr' ? umkehrAlsZeichnungen(l).map((z, j) => ({ id: -700 - 2 * i - j, ki: schluessel(l, 'linie', i), ...z }))
                 : [{ id: -100 - i, ki: schluessel(l, 'linie', i), ...linieAlsZeichnung(l) }])),
         ...(analyse.zonen || []).map((z, i) => (istProfilZone(z) ? null : { id: -200 - i, ki: schluessel(z, 'zone', i), ...zoneAlsZeichnung(z, ab, bis) })).filter(Boolean),
         ...(hatProfil(analyse) ? profileAlsZeichnungen(analyse, profilStil).map((z, j) => ({ id: -150 - j, ki: 'profil', ...z })) : []),
