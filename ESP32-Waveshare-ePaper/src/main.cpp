@@ -15,6 +15,13 @@
 // Fehler zählen nie als WLAN- oder Serverausfall (ältere Server kennen /kurs
 // nicht). Chart-Alarme zeigen die Displays bewusst nicht (seit 1.2.0): der
 // Anzeige-Schlüssel öffnet /alarme nicht, und dafür gibt es Desklet und Handy.
+//
+// Seit 1.5.0 im Akkubetrieb (keine USB-Spannung) Tiefschlaf zwischen den
+// Abrufen: aufwachen, WLAN, abrufen, zeichnen, schlafen. Das ePaper hält das
+// Bild ohne Strom. Am USB bleibt alles wie zuvor (wach, CFG über das Kabel).
+// Was über den Schlaf hinaus gelten muss, liegt im RTC-Speicher (RTC_DATA_ATTR).
+// 1.5.1: kein Serial.flush() mehr — ohne PC am Kabel hing es endlos (siehe seriellAusgeben).
+// 1.5.2: Fusszeile zeigt die Uhrzeit des Abrufs (aus dem HTTP-Kopf „Date“) statt „vor X s“.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WebServer.h>
@@ -32,6 +39,11 @@
 #include <array>
 #include <algorithm>
 #include "EPD_3in97.h"
+#include <esp_sleep.h>
+#include <driver/gpio.h>
+#include <driver/rtc_io.h>
+#include <sys/time.h>
+#include <time.h>
 
 #define AP_SSID            "AutarkTrade-Setup"
 #define ACTIVE_INTERVAL    60        // Sekunden zwischen Abrufen (ePaper: kein Grund für öfter)
@@ -48,13 +60,17 @@
 #define WIPPE_HOCH_PIN      6
 #define WIPPE_RUNTER_PIN    4
 #define WIPPE_DRUCK_PIN     5
+const uint8_t WECK_PINS[] = {BOOT_TASTE_PIN, WIPPE_DRUCK_PIN, WIPPE_HOCH_PIN, WIPPE_RUNTER_PIN};   // wecken aus dem Tiefschlaf
 #define VERALTET_AB_MS      (3UL * ACTIVE_INTERVAL * 1000UL)   // drei Abrufintervalle ohne Erfolg
 #define WIFI_TIMEOUT_MS    12000
-#define FW_VERSION         "1.4.1-EP"
+#define FW_VERSION         "1.5.2-EP"
 #define ZUSATZ_TIMEOUT_MS  6000      // /kurs: kürzer als /display, er ist Beiwerk
 #define ZUSATZ_PAUSE_MS    (30UL * 60UL * 1000UL)   // nach 401/404/400: so lange nicht mehr fragen
 #define KURS_ALT_MS        (10UL * 60UL * 1000UL)   // Chart bei Zeitüberschreitung so lange weiter zeigen
 #define KURS_30D_MS        115000    // 30 Tage: alle 2 Takte reicht
+#define WACH_NACH_TASTE_MS 20000     // Akkubetrieb: nach einem Tastendruck so lange wach (weitere Drücke)
+#define WLAN_SCHNELL_MS    5000      // Aufwachen: so lange mit gemerktem Kanal/BSSID versuchen
+// Zum Testen am Rechner: mit -DSCHLAF_AM_USB schläft das Board auch am Kabel.
 
 // Im Puffer: 1 = weiss, 0 = schwarz — so erwartet ihn der Controller.
 #define WEISS   1
@@ -84,7 +100,15 @@ String cfgChartArt = "linie";  // linie | kerzen
 String cfgFilter = "month";       // "month", "week", "year", "all"
 bool   configMode  = false;
 unsigned long lastUpdate   = 0;
-unsigned long lastOkMs     = 0;      // millis() des letzten erfolgreichen Abrufs (0 = noch keiner)
+RTC_DATA_ATTR unsigned long lastOkMs = 0;   // millis() des letzten erfolgreichen Abrufs (0 = noch keiner)
+RTC_DATA_ATTR time_t        standZeit = 0;  // Uhrzeit dieses Abrufs (0 = Server lieferte keine)
+// Tiefschlaf (Akkubetrieb). Zeitstempel im RTC-Speicher verschiebt schlafe()
+// um die verschlafene Zeit, damit millis() - ts nach dem Aufwachen stimmt.
+RTC_DATA_ATTR bool    veraltetGezeigt = false;   // „Server nicht erreicht" steht schon da
+RTC_DATA_ATTR bool    wlanMerk  = false;         // Kanal und BSSID des letzten Verbindens
+RTC_DATA_ATTR int32_t wlanKanal = 0;
+RTC_DATA_ATTR uint8_t wlanBssid[6];
+volatile unsigned long letzteTasteMs = 0;         // millis() des letzten Tastendrucks (0 = keiner)
 
 // Setup-Portal (SEC-ESP-001/002): läuft NUR im Setup-Modus, nie im Heimnetz.
 String formToken;                     // pro Boot zufällig, Pflicht für POST /save und /reset
@@ -133,10 +157,10 @@ struct KursDaten {
   std::vector<std::array<float, 4>> kerzen;
 };
 KursDaten     kurs;
-KursZustand   kursZustand = KURS_NICHTS;
+RTC_DATA_ATTR KursZustand   kursZustand = KURS_NICHTS;
 unsigned long kursOkMs    = 0;      // millis() des letzten guten Abrufs (0 = keiner)
-unsigned long kursPauseAb = 0;      // nach 400/401/404 eine Weile nicht fragen
-bool          kursPause   = false;
+RTC_DATA_ATTR unsigned long kursPauseAb = 0;   // nach 400/401/404 eine Weile nicht fragen
+RTC_DATA_ATTR bool          kursPause   = false;
 
 struct TradeData {
   float todayPnL    = 0;
@@ -258,6 +282,20 @@ void schreibeFehlversuche(uint8_t n) {
 // verlässliche Uhr des Geräts.
 bool datenVeraltet() {
   return lastOkMs == 0 || millis() - lastOkMs > VERALTET_AB_MS;
+}
+
+String alterText();
+
+// „Stand 18:04" (an einem anderen Tag mit Datum). Ein Alter wie „vor 13 s"
+// sagt auf dem ePaper nichts: es bleibt stehen, bis das nächste Bild kommt.
+String standText() {
+  if (!standZeit) return "Stand vor " + alterText();
+  tm st, jetzt; time_t n = time(nullptr);
+  localtime_r(&standZeit, &st); localtime_r(&n, &jetzt);
+  char b[24];
+  strftime(b, sizeof b, st.tm_yday == jetzt.tm_yday && st.tm_year == jetzt.tm_year
+                        ? "Stand %H:%M" : "Stand %d.%m. %H:%M", &st);
+  return b;
 }
 
 String alterText() {
@@ -552,6 +590,25 @@ void setupRoutes() {
 
 // ── Daten holen ──────────────────────────────────────────
 
+// Uhr aus dem HTTP-Kopf „Date" (RFC 7231, immer GMT: „Tue, 03 Nov 2026 17:04:05 GMT").
+// Das Board hat kein NTP; die Systemuhr läuft über den Tiefschlaf weiter und
+// wird bei jedem Abruf neu gestellt, die Abweichung bleibt so unter Sekunden.
+void uhrAusDatum(const String& datum) {
+  int tag, jahr, h, m, sek; char mon[4] = {0};
+  if (sscanf(datum.c_str(), "%*3s, %d %3s %d %d:%d:%d", &tag, mon, &jahr, &h, &m, &sek) != 6) return;
+  static const char* MONATE = "JanFebMarAprMayJunJulAugSepOctNovDec";
+  const char* f = strstr(MONATE, mon);
+  if (!f || jahr < 2024) return;
+  int mo = (f - MONATE) / 3 + 1;
+  // Tage seit 1970 (Kalenderformel nach H. Hinnant, ohne Zeitzone)
+  int y = jahr - (mo <= 2);
+  int era = y / 400, yoe = y - era * 400;
+  int doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + tag - 1;
+  long tage = era * 146097L + yoe * 365L + yoe / 4 - yoe / 100 + doy - 719468L;
+  timeval tv = {(time_t)(tage * 86400L + h * 3600L + m * 60L + sek), 0};
+  settimeofday(&tv, nullptr);
+}
+
 // GET auf den AutarkTrade-Server mit Geräteschlüssel. Antwort nur bei 200 in
 // `body`; Rückgabe = HTTP-Code (negativ = Verbindungsfehler/Zeitüberschreitung).
 int httpHole(const String& pfad, String& body, uint32_t timeoutMs) {
@@ -562,8 +619,10 @@ int httpHole(const String& pfad, String& body, uint32_t timeoutMs) {
   http.addHeader("X-ESP32-Key", cfgKey);
   http.setConnectTimeout(timeoutMs < 5000 ? timeoutMs : 5000);
   http.setTimeout(timeoutMs);
+  const char* koepfe[] = {"Date"};
+  http.collectHeaders(koepfe, 1);
   int code = http.GET();
-  if (code == 200) body = http.getString();
+  if (code == 200) { body = http.getString(); uhrAusDatum(http.header("Date")); }
   http.end();
   return code;
 }
@@ -664,8 +723,10 @@ bool fetchData() {
   }
 
   data.valid = true;
+  veraltetGezeigt = false;
   lastOkMs = millis();
   if (lastOkMs == 0) lastOkMs = 1;
+  standZeit = time(nullptr) > 1700000000 ? time(nullptr) : 0;
   return true;
 }
 
@@ -749,9 +810,11 @@ void holeZusatz() {
 
 // ── Display ──────────────────────────────────────────────
 
-bool     epdBereit    = false;
-uint32_t letzterInhalt = 0;     // Prüfsumme des zuletzt gezeigten Bildes
-int      teilSeitVoll = 0;
+// Im RTC-Speicher: das Panel behält Bild und RAM über den Tiefschlaf, also
+// geht es danach mit Teilauffrischung weiter, und ein gleiches Bild bleibt stehen.
+RTC_DATA_ATTR bool     epdBereit    = false;
+RTC_DATA_ATTR uint32_t letzterInhalt = 0;     // Prüfsumme des zuletzt gezeigten Bildes
+RTC_DATA_ATTR int      teilSeitVoll = 0;
 
 uint32_t pruefsumme(const uint8_t* p, size_t n) {
   uint32_t h = 2166136261u;                 // FNV-1a
@@ -836,7 +899,7 @@ const char* filterText() {
 #define PMU_SCL      42
 #define PMU_ADR      0x34
 #define PMU_STATUS1  0x00   // Bit 3: Akku angeschlossen, Bit 5: USB-Spannung gut
-#define PMU_STATUS2  0x01   // Bit 6..5: 01 lädt, 10 entlädt
+#define PMU_STATUS2  0x01   // Bit 6..5: 01 lädt, 10 entlädt; Bit 2..0: 100 Laden beendet
 #define PMU_GAUGE    0x18   // Bit 3: Ladestandsschätzung an
 #define PMU_ADC      0x30   // Bit 0: Akkuspannung messen
 #define PMU_BAT_DET  0x68   // Bit 0: Akku-Erkennung an
@@ -889,6 +952,13 @@ int prozentAusSpannung(int mv) {
   return 100;
 }
 
+// USB-Spannung da? Ohne antwortenden Power-Chip: ja — dann wird nie geschlafen.
+bool usbStrom() {
+  if (!pmuDa) return true;
+  int s1 = pmuLies(PMU_STATUS1);
+  return s1 < 0 || (s1 & 0x20);
+}
+
 void akkuLesen() {
   if (!pmuDa) return;
   int s1 = pmuLies(PMU_STATUS1), s2 = pmuLies(PMU_STATUS2);
@@ -897,10 +967,19 @@ void akkuLesen() {
   int p = pmuLies(PMU_PROZENT);
   int h = pmuLies(PMU_VBAT_H), l = pmuLies(PMU_VBAT_L);
   akkuMv = (h >= 0 && l >= 0) ? ((h & 0x1F) << 8) | l : 0;
-  akkuProzent = akkuMv > 2500 ? prozentAusSpannung(akkuMv) : -1;
+  int ausV = akkuMv > 2500 ? prozentAusSpannung(akkuMv) : -1;
   akkuLaedt = ((s2 >> 5) & 0x03) == 0x01;
-  Serial.printf("[AKKU] %d %% aus %d mV (Chip-Schaetzung %d %%)%s\n",
-                akkuProzent, akkuMv, p, akkuLaedt ? " (laedt)" : "");
+  bool voll = (s2 & 0x07) == 0x04;   // Ladezustand 100: Laden beendet
+  // Nach dem Volladen sinkt die Spannung von 4,20 auf ~4,17 V — die Kurve
+  // allein zeigte dann dauerhaft 97 %. „Laden beendet" heisst voll. Sonst
+  // gilt die Schätzung des Chips, sobald sie zur Spannung passt (eingelernt,
+  // siehe prozentAusSpannung); weicht sie stark ab, die Spannung.
+  akkuProzent = ausV < 0 ? -1
+              : voll ? 100
+              : (p >= 0 && p <= 100 && abs(p - ausV) <= 15) ? p : ausV;
+  Serial.printf("[AKKU] %d %% (Spannung %d mV = %d %%, Chip %d %%)%s%s%s\n",
+                akkuProzent, akkuMv, ausV, p, akkuLaedt ? " laedt" : "", voll ? " voll" : "",
+                usbStrom() ? " USB" : " Akkubetrieb");
 }
 
 // Akku-Symbol mit Füllstand und Prozent, mittig um cx in der Fusszeile.
@@ -1325,11 +1404,11 @@ void zeichneDashboard() {
   if (datenVeraltet()) {
     bild.fillRect(0, fy, BREITE, 26, SCHWARZ);
     String w = lastOkMs == 0 ? "OFFLINE - keine Daten vom Server"
-                             : "VERALTET - Stand vor " + alterText() + ", Server nicht erreicht";
+                             : "VERALTET - " + standText() + ", Server nicht erreicht";
     text(16, HOEHE - 8, w, &FreeSansBold9pt7b, WEISS);
   } else {
     bild.drawFastHLine(0, fy, BREITE, SCHWARZ);
-    text(16, HOEHE - 8, "Stand vor " + alterText(), &FreeSans9pt7b);
+    text(16, HOEHE - 8, standText(), &FreeSans9pt7b);
     zeichneAkku(BREITE / 2 + (hoch ? 10 : 0), HOEHE - 8);
     textRechts(BREITE - 16, HOEHE - 8, "v" FW_VERSION, &FreeSans9pt7b);
   }
@@ -1440,7 +1519,7 @@ void tastenTask(void*) {
     for (auto& t : tasten) {
       bool unten = digitalRead(t.pin) == LOW;
       if (unten) {
-        if (!t.ab) t.ab = millis();
+        if (!t.ab) { t.ab = millis(); letzteTasteMs = t.ab ? t.ab : 1; }
         if (!t.spanne && !t.gemeldet && millis() - t.ab >= SETUP_HALTEN_MS) { tasteSetup = true; t.gemeldet = true; }
       } else {
         unsigned long d = t.ab ? millis() - t.ab : 0;
@@ -1489,10 +1568,72 @@ void sendeBild() {
 
 // ── Setup ────────────────────────────────────────────────
 
+// Taste beim Aufwachen schon gedrückt: SETUP_HALTEN_MS weiter gehalten?
+bool weiterGehalten(uint8_t pin) {
+  pinMode(pin, INPUT_PULLUP);
+  unsigned long h0 = millis();
+  while (digitalRead(pin) == LOW) {
+    if (millis() - h0 >= SETUP_HALTEN_MS) return true;
+    delay(30);
+  }
+  return false;
+}
+
+// WLAN verbinden. Nach dem Aufwachen zuerst mit gemerktem Kanal und BSSID:
+// das spart den Kanal-Scan, also Wachzeit (Akku).
+bool verbindeWlan() {
+  WiFi.mode(WIFI_STA);
+  unsigned long t0 = millis();
+  if (wlanMerk) {
+    WiFi.begin(cfgSSID.c_str(), cfgPass.c_str(), wlanKanal, wlanBssid);
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WLAN_SCHNELL_MS) delay(50);
+    if (WiFi.status() != WL_CONNECTED) {
+      wlanMerk = false;            // Router gewechselt oder Kanal neu: normal suchen
+      WiFi.disconnect();
+      t0 = millis();
+    }
+  }
+  if (WiFi.status() != WL_CONNECTED) {
+    WiFi.begin(cfgSSID.c_str(), cfgPass.c_str());
+    while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) delay(100);
+  }
+  if (WiFi.status() != WL_CONNECTED) return false;
+  const uint8_t* b = WiFi.BSSID();
+  if (b) { memcpy(wlanBssid, b, 6); wlanKanal = WiFi.channel(); wlanMerk = true; }
+  Serial.printf("[WiFi] %s nach %lu ms\n", WiFi.localIP().toString().c_str(), millis() - t0);
+  return true;
+}
+
+// Aufgewacht, aber keine Daten: Daten aus dem letzten Wachsein gibt es nicht
+// mehr, also bleibt das alte Bild stehen. Erst wenn es veraltet ist, einmal
+// eine Meldung statt des Dashboards.
+void ohneDatenNachSchlaf() {
+  if (!datenVeraltet() || veraltetGezeigt) return;
+  String det = lastOkMs == 0 ? String("Pruefen: Host, Port und Anzeige-Schluessel")
+                             : "Letzte Daten: " + standText() + " - versucht es jede Minute";
+  zeichneMeldung("Server nicht erreicht", det.c_str());
+  veraltetGezeigt = true;
+}
+
 void setup() {
+  esp_sleep_wakeup_cause_t grund = esp_sleep_get_wakeup_cause();
+  const bool geweckt = grund == ESP_SLEEP_WAKEUP_TIMER || grund == ESP_SLEEP_WAKEUP_EXT1;
+  const uint64_t weckPins = grund == ESP_SLEEP_WAKEUP_EXT1 ? esp_sleep_get_ext1_wakeup_status() : 0;
+  // Gehaltene Pegel aus dem Schlaf (CS des Panels) wieder freigeben
+  // Ortszeit Schweiz/Mitteleuropa mit Sommerzeit (nach dem Schlaf neu setzen)
+  setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1); tzset();
+  gpio_deep_sleep_hold_dis();       // von 1.5.0 vor der Korrektur noch gesetzt
+  gpio_hold_dis((gpio_num_t)EPD_CS_PIN);
+  gpio_hold_dis((gpio_num_t)EPD_RST_PIN);
+  // Weck-Tasten können noch RTC-Pins sein — zurück an GPIO, sonst liest
+  // digitalRead nichts. Bei JEDEM Start: der RTC-Teil hängt am Akku und
+  // übersteht auch Neustart und Flashen, nicht nur das Aufwachen.
+  for (uint8_t pin : WECK_PINS) rtc_gpio_deinit((gpio_num_t)pin);
+
   Serial.begin(115200);
-  delay(1500);  // ESP32-S3 USB CDC: warten bis Host verbunden
-  Serial.println("[BOOT] Start " FW_VERSION);
+  if (!geweckt) delay(1500);  // ESP32-S3 USB CDC: warten bis Host verbunden (aus dem Schlaf: Akku, kein Host)
+  Serial.printf("[BOOT] Start " FW_VERSION "%s\n",
+                grund == ESP_SLEEP_WAKEUP_TIMER ? " (Takt)" : grund == ESP_SLEEP_WAKEUP_EXT1 ? " (Taste)" : "");
 
   DEV_Module_Init();
   akkuStart();
@@ -1504,17 +1645,30 @@ void setup() {
     starteSetupModus(nullptr);
     return;
   }
-  if (setupGesteBeimStart()) {
+  // Aus dem Schlaf gibt es kein Fenster nach dem Boot: die weckende Taste
+  // selbst zählt. BOOT bzw. Wippe gedrückt 3 s halten → Setup, wie im Betrieb.
+  const bool druckTaste = weckPins & ((1ULL << BOOT_TASTE_PIN) | (1ULL << WIPPE_DRUCK_PIN));
+  if (geweckt ? (druckTaste && (weiterGehalten(BOOT_TASTE_PIN) || weiterGehalten(WIPPE_DRUCK_PIN)))
+              : setupGesteBeimStart()) {
     starteSetupModus("Per BOOT-Taste geoeffnet");
     return;
   }
+  if (weckPins) {
+    letzteTasteMs = millis() ? millis() : 1;   // wach bleiben für weitere Drücke
+    if (cfgChart && (weckPins & (1ULL << WIPPE_HOCH_PIN)))   wechsleSpanne(+1);
+    if (cfgChart && (weckPins & (1ULL << WIPPE_RUNTER_PIN))) wechsleSpanne(-1);
+  }
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(cfgSSID.c_str(), cfgPass.c_str());
-  unsigned long t0 = millis();
-  while (WiFi.status() != WL_CONNECTED && millis() - t0 < WIFI_TIMEOUT_MS) delay(200);
-
-  if (WiFi.status() != WL_CONNECTED) {
+  if (!verbindeWlan()) {
+    if (geweckt) {
+      // Akkubetrieb: kein Neustart und kein Zähler zum Setup-WLAN — ein Router,
+      // der kurz weg ist, soll die Anzeige nicht ins Setup schicken.
+      Serial.println("[WiFi] nicht verbunden, naechster Takt");
+      ohneDatenNachSchlaf();
+      xTaskCreate(tastenTask, "taste", 2048, nullptr, 1, nullptr);
+      lastUpdate = millis();
+      return;
+    }
     // Nach WIFI_MAX_FEHLVERSUCHE Boots ohne WLAN in den Setup-AP, statt
     // endlos neu zu starten (falsche SSID wäre sonst nur per USB zu lösen).
     uint8_t fehl = leseFehlversuche() + 1;
@@ -1531,17 +1685,22 @@ void setup() {
     ESP.restart();
     return;
   }
-  schreibeFehlversuche(0);
+  // Weckgrund erst hier: nach dem Aufwachen ist ein USB-Host vorher noch nicht wieder verbunden
+  if (geweckt) Serial.printf("[WECK] %s, Pins 0x%llx\n", weckPins ? "Taste" : "Takt", (unsigned long long)weckPins);
+  if (!geweckt) schreibeFehlversuche(0);   // aus dem Schlaf: NVS nicht jede Minute beschreiben
   xTaskCreate(tastenTask, "taste", 2048, nullptr, 1, nullptr);
 
-  Serial.printf("[WiFi] %s\n", WiFi.localIP().toString().c_str());
   WiFi.setSleep(true);   // Modem Sleep zwischen den Abrufen
   // Kein Webserver im Heimnetz (SEC-ESP-001) — Setup nur per Geste beim Boot.
 
   if (fetchData()) {
     holeZusatz();          // Chart vor dem ersten Bild, nicht danach
     zeichneDashboard();
-    zeige(true);
+    // Takt aus dem Schlaf: Teilauffrischung wie im Wachbetrieb; Einschalten
+    // oder Taste: voll (räumt Geisterbilder weg, wie ein Druck im Betrieb)
+    zeige(grund != ESP_SLEEP_WAKEUP_TIMER);
+  } else if (geweckt) {
+    ohneDatenNachSchlaf();
   } else {
     zeichneMeldung("Keine Daten", "Pruefen: Host, Port und Anzeige-Schluessel");
   }
@@ -1566,6 +1725,11 @@ static void ensureWiFi() {
 // lokal wie die Setup-Geste (SEC-ESP-001). „CFG?" fragt, ob die Firmware es kann.
 // „CFG SCAN" sucht WLANs. Antwort: [CFG] BEREIT <version> | [CFG] NETZE <json> |
 // [CFG] OK (dann Neustart) | [CFG] FEHLER <grund>.
+// Serial.flush() (HWCDC, Arduino 2.0.14) wartet ohne Zeitlimit, bis ein PC die
+// Ausgabe abgeholt hat — am Akku gibt es keinen, das Board hing dann vor dem
+// Schlaf für immer (kein neues Bild, Tasten tot). Darum nur kurz warten.
+void seriellAusgeben() { delay(30); }
+
 void seriellCfg(const String& zeile) {
   if (zeile == "CFG?") { Serial.println("[CFG] BEREIT " FW_VERSION); return; }
   // Der Browser kann keine WLANs suchen, das Board schon: eine Zeile JSON
@@ -1605,7 +1769,7 @@ void seriellCfg(const String& zeile) {
   if (!isValidPort(port)) { Serial.println("[CFG] FEHLER port"); return; }
   saveConfig(ssid, pass, host, port, key, cfgKonto);
   Serial.println("[CFG] OK");
-  Serial.flush();
+  seriellAusgeben();
   delay(500);
   ESP.restart();
 }
@@ -1626,8 +1790,60 @@ bool cfgZeichen(char c) {
   return true;
 }
 
+// ── Tiefschlaf (Akkubetrieb) ─────────────────────────────
+// Am USB nie (dort laufen CFG und Bildabruf über das Kabel, und Strom ist da).
+// Sonst nach dem Takt schlafen bis zum nächsten, ausser kurz nach einem
+// Tastendruck oder solange eine Taste noch gedrückt ist.
+bool schlafenErlaubt() {
+  if (configMode || tasteJetzt || tasteSpanne || tasteSetup) return false;
+  if (letzteTasteMs && millis() - letzteTasteMs < WACH_NACH_TASTE_MS) return false;
+  for (uint8_t pin : WECK_PINS) {
+    pinMode(pin, INPUT_PULLUP);
+    if (digitalRead(pin) == LOW) return false;
+  }
+#ifndef SCHLAF_AM_USB
+  if (usbStrom()) return false;
+#endif
+  return true;
+}
+
+void schlafe() {
+  const unsigned long takt = (unsigned long)ACTIVE_INTERVAL * 1000UL;
+  const unsigned long seit = millis() - lastUpdate;
+  const unsigned long ms = seit < takt - 1000 ? takt - seit : 1000;
+  Serial.printf("[SCHLAF] %lu s bis zum naechsten Takt\n", ms / 1000);
+  seriellAusgeben();
+
+  // Zeitstempel um die Wach- plus Schlafzeit zurücksetzen: nach dem Aufwachen
+  // beginnt millis() bei 0, millis() - ts ergibt so weiter das wahre Alter.
+  const unsigned long dt = millis() + ms;
+  if (lastOkMs) { lastOkMs -= dt; if (!lastOkMs) lastOkMs = 1; }
+  if (kursPause) kursPauseAb -= dt;
+
+  WiFi.disconnect(true);
+  if (epdBereit) EPD_3IN97_Sleep();          // Tiefschlaf des Panels, RAM bleibt (Modus 1)
+  // CS des Panels hoch halten (RTC-Pin, Halten geht im Tiefschlaf). Kein
+  // gpio_deep_sleep_hold_en(): das friert ALLE digitalen Pads ein, auch die
+  // Tasten — ext1 kann sie dann nicht auf RTC umschalten, keine Taste weckt.
+  // RST (GPIO46, kein RTC-Pin) bleibt frei: vor jedem Bild kommt ohnehin ein Reset.
+  digitalWrite(EPD_CS_PIN, HIGH);
+  gpio_hold_en((gpio_num_t)EPD_CS_PIN);
+
+  // Tasten wecken (aktiv LOW); Pull-ups auch im Schlaf
+  uint64_t maske = 0;
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+  for (uint8_t pin : WECK_PINS) {
+    rtc_gpio_pullup_en((gpio_num_t)pin);
+    rtc_gpio_pulldown_dis((gpio_num_t)pin);
+    maske |= 1ULL << pin;
+  }
+  esp_sleep_enable_ext1_wakeup(maske, ESP_EXT1_WAKEUP_ANY_LOW);
+  esp_sleep_enable_timer_wakeup((uint64_t)ms * 1000ULL);
+  esp_deep_sleep_start();
+}
+
 void loop() {
-  // Seriell (nur am USB-Kabel, also lokal): „B" schickt das Bild, „D0".."D3"
+  // Seriell (nur am USB-Kabel, also lokal): „B" schickt das Bild, „T" die Tasten-Pegel, „D0".."D3"
   // stellt die Ausrichtung um und zeichnet neu — für die Kontrolle am Rechner;
   // „CFG …" richtet WLAN, Server und Schlüssel ein (siehe seriellCfg).
   // Alles Anstehende auf einmal lesen: eine CFG-Zeile hat ein paar hundert Zeichen.
@@ -1635,6 +1851,11 @@ void loop() {
     int c = Serial.read();
     if (cfgZeichen((char)c)) continue;
     if (c == 'B' || c == 'b') sendeBild();
+    if (c == 'T' || c == 't') {                 // Tasten-Pegel (1 = offen, 0 = gedrückt)
+      Serial.printf("[TASTEN] BOOT %d  Druck %d  hoch %d  runter %d\n",
+                    digitalRead(BOOT_TASTE_PIN), digitalRead(WIPPE_DRUCK_PIN),
+                    digitalRead(WIPPE_HOCH_PIN), digitalRead(WIPPE_RUNTER_PIN));
+    }
     if ((c == 'D' || c == 'd') && !configMode) {
       unsigned long t = millis();
       while (!Serial.available() && millis() - t < 500) delay(5);
@@ -1699,5 +1920,6 @@ void loop() {
     zeige(jetzt);         // Tastendruck: volle Auffrischung (räumt Geisterbilder weg)
     lastUpdate = millis();
   }
+  if (schlafenErlaubt()) schlafe();
   delay(200);
 }

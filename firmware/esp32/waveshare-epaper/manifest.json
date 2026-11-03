@@ -3,9 +3,9 @@
   "name": "Waveshare ESP32-S3-ePaper-3.97",
   "chip": "ESP32-S3",
   "ordner": "ESP32-Waveshare-ePaper",
-  "version": "1.4.1-EP",
-  "gebaut": "2026-11-02T13:35:35.703Z",
-  "commit": "e3b7854",
+  "version": "1.5.2-EP",
+  "gebaut": "2026-11-03T17:16:46.016Z",
+  "commit": "368c2bc",
   "ungespeicherteAenderungen": true,
   "flash": {
     "modus": "dio",
@@ -82,8 +82,8 @@
     {
       "datei": "firmware.bin",
       "offset": 65536,
-      "groesse": 1008336,
-      "sha256": "001a25211c8fa18c0ebe1c76f86973426ee0d3776b31bb0de6fcace5f4f70fee"
+      "groesse": 1040960,
+      "sha256": "ebbb06603913c8dda0ae347cdef69b1a7a9a75dd57650b8ed7424d05ac58410c"
     }
   ]
 }
