@@ -26,6 +26,7 @@
  * Bruch (`bruch` oben/unten).
  */
 import { pivotHighs, pivotLows } from '../shared/indicators.js'
+import { ausbruchAb, volumenImMuster } from './chart-volumen.js'
 
 export const DREIECK = {
     FENSTER: [240, 180, 140, 110, 90, 70, 55, 40, 30],
@@ -221,6 +222,7 @@ export function kandidatenDreiecke(kerzen, A) {
                     // Jede Kante ab ihrer eigenen ersten Berührung gezeichnet — nicht 0.3 unter jeder Kerze
                     tOA: kerzen[iO].t, obenOA: ok.g(iO), tUA: kerzen[iU].t, untenUA: uk.g(iU),
                     tE: zeit(ende), obenE: ok.g(ende), untenE: uk.g(ende),
+                    volumen: volumenImMuster(kerzen, anfang, ausbruchAb(kerzen, ok.g, uk.g, tol)),
                     pendelPunkte: pen.map((x) => ({ t: kerzen[x.i].t, p: x.oben ? kerzen[x.i].h : kerzen[x.i].l, oben: x.oben })),
                     obenJetzt: ok.g(n - 1), untenJetzt: uk.g(n - 1),
                     spitzeT: zeit(spitze), spitzeP: ok.g(spitze),

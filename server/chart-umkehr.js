@@ -1,5 +1,5 @@
 /**
- * Umkehrmuster — Doppeltop/-boden und Kopf-Schulter (normal und invers), vom
+ * Umkehrmuster — Doppeltop/-boden, Dreifach-Top/-Boden und Kopf-Schulter (normal und invers), vom
  * Code gemessen wie Kanäle und Dreiecke, damit die KI sie nur noch auswählt.
  * Rein (03.11.2026).
  *
@@ -13,6 +13,9 @@
  *                 ≥ `MIN_ABSTAND` Kerzen, davor ein Anstieg von mindestens der Tiefe
  *                 (`VORLAUF`), beide Hälften ähnlich lang (`ZEIT_VERHAELTNIS`). Doppelboden
  *                 gespiegelt.
+ *   Dreifach-Top  wie das Doppeltop mit drei gleich hohen Tops (Spanne ≤ `DOPPEL_GLEICH` ×
+ *                 Tiefe), die beiden Tiefs ähnlich (`DREIFACH_TIEFS`), Nackenlinie am
+ *                 tieferen; Dreifach-Boden gespiegelt.
  *   Kopf-Schulter Schulter S1, Tief N1, Kopf K, Tief N2, Schulter S2: der Kopf steht
  *                 über beiden Schultern (≥ `KOPF_UEBER` der Kopfhöhe), die Schultern sind
  *                 ähnlich hoch (≤ `SCHULTER_GLEICH`), liegen deutlich über der Nackenlinie
@@ -27,6 +30,8 @@
  * Kein Kursziel: die Höhe steht als Messung da (`hoeheAtr`), ein „Ziel = Nacken −
  * Höhe" gibt es bewusst nicht (keine Kursziele, S12).
  */
+import { volumenImMuster } from './chart-volumen.js'
+
 export const UMKEHR = {
     STUFEN_ATR: [1.5, 2.5, 4, 6],
     DOPPEL_GLEICH: 0.2,
@@ -38,6 +43,7 @@ export const UMKEHR = {
     SCHULTER_HOEHE: 0.3,
     NACKEN_SCHRAEG: 0.4,
     ZEIT_VERHAELTNIS: 3,
+    DREIFACH_TIEFS: 0.35,     // die beiden Tiefs zwischen den drei Tops höchstens so viel der Tiefe auseinander
     MIN_KOPF_ATR: 2.5,
     MAX_ALTER: 0.6,
     BRUCH_MAX_ALTER: 0.4,
@@ -52,19 +58,22 @@ export function zickzack(kerzen, S) {
     const n = kerzen.length
     const aus = []
     if (n < 3) return aus
-    let richtung = 0, hI = 0, lI = 0
-    for (let i = 1; i < n; i++) {
-        const x = kerzen[i]
-        if (x.h >= kerzen[hI].h) hI = i
-        if (x.l <= kerzen[lI].l) lI = i
-        if (richtung >= 0 && kerzen[hI].h - x.l >= S && hI < i) {
-            if (richtung === 0 || !aus.length || !aus[aus.length - 1].hoch) aus.push({ i: hI, p: kerzen[hI].h, hoch: true })
-            richtung = -1; lI = i
-        } else if (richtung <= 0 && x.h - kerzen[lI].l >= S && lI < i) {
-            if (richtung === 0 || !aus.length || aus[aus.length - 1].hoch) aus.push({ i: lI, p: kerzen[lI].l, hoch: false })
-            richtung = 1; hI = i
+    // Richtung: 0 offen, 1 aufwärts (sucht das nächste Hoch), -1 abwärts. hoch/tief: Index des
+    // Extrems seit dem letzten Wendepunkt.
+    let richtung = 0, hoch = 0, tief = 0
+    kerzen.forEach(({ h, l }, i) => {
+        if (!i) return
+        if (h >= kerzen[hoch].h) hoch = i
+        if (l <= kerzen[tief].l) tief = i
+        const letzt = aus[aus.length - 1]
+        if (richtung >= 0 && hoch < i && kerzen[hoch].h - l >= S) {
+            if (!letzt || !letzt.hoch) aus.push({ i: hoch, p: kerzen[hoch].h, hoch: true })
+            richtung = -1; tief = i
+        } else if (richtung <= 0 && tief < i && h - kerzen[tief].l >= S) {
+            if (!letzt || letzt.hoch) aus.push({ i: tief, p: kerzen[tief].l, hoch: false })
+            richtung = 1; hoch = i
         }
-    }
+    })
     // Erste Wendepunkte können doppelt dieselbe Seite tragen, wenn die Richtung am Anfang kippt
     return aus.filter((w, j) => !j || w.hoch !== aus[j - 1].hoch)
 }
@@ -108,6 +117,26 @@ function suche(kerzen, A, art) {
                 if (z.bruch != null && n - 1 - z.bruch > Math.max(6, UMKEHR.BRUCH_MAX_ALTER * laenge)) continue
                 funde.push({ punkte: [l0, h1, nk, h2], nacken: [{ i: h1.i, p: nk.p }, { i: h2.i, p: nk.p }], steig: 0, hoehe: tiefe, bruch: z.bruch, laenge, stufe })
             }
+            // Dreifach-Top: L0 → H1 → N1 → H2 → N2 → H3, drei gleich hohe Tops, Nackenlinie am tieferen Tief
+            if (art === 'dreifach' && j >= 5 && w[j].hoch) {
+                const [l0, h1, n1, h2, n2, h3] = w.slice(j - 5, j + 1)
+                if (l0.hoch || !h1.hoch || n1.hoch || !h2.hoch || n2.hoch) continue
+                const tops = [h1.p, h2.p, h3.p]
+                const nackenP = Math.min(n1.p, n2.p)
+                const tiefe = Math.min(...tops) - Math.max(n1.p, n2.p)
+                if (tiefe < UMKEHR.MIN_TIEFE_ATR * A) continue
+                if (Math.max(...tops) - Math.min(...tops) > UMKEHR.DOPPEL_GLEICH * tiefe) continue
+                if (Math.abs(n1.p - n2.p) > UMKEHR.DREIFACH_TIEFS * tiefe) continue
+                if (h2.i - h1.i < UMKEHR.MIN_ABSTAND || h3.i - h2.i < UMKEHR.MIN_ABSTAND) continue
+                if (h2.i - h1.i > UMKEHR.ZEIT_VERHAELTNIS * (h3.i - h2.i) || h3.i - h2.i > UMKEHR.ZEIT_VERHAELTNIS * (h2.i - h1.i)) continue
+                if (h1.p - l0.p < UMKEHR.VORLAUF * tiefe) continue
+                const z = zustand(kerzen, h3.i, () => nackenP, Math.max(...tops), tol)
+                if (!z) continue
+                const laenge = h3.i - h1.i
+                if (n - 1 - h3.i > Math.max(10, UMKEHR.MAX_ALTER * laenge) && z.bruch == null) continue
+                if (z.bruch != null && n - 1 - z.bruch > Math.max(6, UMKEHR.BRUCH_MAX_ALTER * laenge)) continue
+                funde.push({ punkte: [l0, h1, n1, h2, n2, h3], nacken: [{ i: h1.i, p: nackenP }, { i: h3.i, p: nackenP }], steig: 0, hoehe: tiefe, bruch: z.bruch, laenge, stufe })
+            }
             // Kopf-Schulter: L0 → S1 → N1 → K → N2 → S2
             if (art === 'ks' && j >= 5 && w[j].hoch) {
                 const [l0, s1, n1, kopf, n2, s2] = w.slice(j - 5, j + 1)
@@ -146,13 +175,13 @@ export function kandidatenUmkehr(kerzen, A) {
     const kurs = kerzen[n - 1].c
     const spiegel = gespiegelt(kerzen)
     const alle = []
-    for (const [art, oben] of [['doppel', true], ['doppel', false], ['ks', true], ['ks', false]]) {
+    for (const [art, oben] of [['doppel', true], ['doppel', false], ['dreifach', true], ['dreifach', false], ['ks', true], ['ks', false]]) {
         for (const f of suche(oben ? kerzen : spiegel, A, art)) alle.push({ ...f, art, oben })
     }
     const aus = alle.map((f) => {
         const s = f.oben ? 1 : -1
         const p = (x) => s * x
-        const form = f.art === 'doppel' ? (f.oben ? 'doppeltop' : 'doppelboden') : (f.oben ? 'kopfSchulter' : 'inverseKopfSchulter')
+        const form = f.art === 'doppel' ? (f.oben ? 'doppeltop' : 'doppelboden') : f.art === 'dreifach' ? (f.oben ? 'dreifachtop' : 'dreifachboden') : (f.oben ? 'kopfSchulter' : 'inverseKopfSchulter')
         const letzter = f.punkte[f.punkte.length - 1].i
         const nackenBei = (i) => p(f.nacken[0].p + f.steig * (i - f.nacken[0].i))
         // Nackenlinie bis zum Bruch bzw. bis jetzt, ein Stück darüber hinaus
@@ -165,23 +194,27 @@ export function kandidatenUmkehr(kerzen, A) {
             punkte: f.punkte.map((w) => ({ t: kerzen[w.i].t, p: p(w.p) })),
             nacken: { t1: kerzen[f.nacken[0].i].t, p1: nackenBei(f.nacken[0].i), t2: zeit(bis), p2: nackenBei(bis) },
             nackenJetzt: jetzt, hoeheAtr: f.hoehe / A, laenge: f.laenge,
+            volumen: volumenImMuster(kerzen, f.punkte[1].i, f.bruch),
             bruch: f.bruch != null, bruchT: f.bruch != null ? kerzen[f.bruch].t : null,
             tA: kerzen[f.punkte[0].i].t, tE: kerzen[letzter].t,
             preis: jetzt, abstandAtr: (jetzt - kurs) / A,
-            // jünger, grösser, Kopf-Schulter vor Doppel bei Gleichstand
-            wert: letzter / n * 10 + Math.min(f.hoehe / A, 10) * 0.3 + (f.art === 'ks' ? 0.5 : 0),
+            // jünger, grösser; bei Gleichstand Dreifach vor Kopf-Schulter vor Doppel (das Dreifach-Top
+            // enthält ein Doppeltop aus seinen letzten zwei Tops)
+            wert: letzter / n * 10 + Math.min(f.hoehe / A, 10) * 0.3 + (f.art === 'dreifach' ? 0.7 : f.art === 'ks' ? 0.5 : 0),
         }
     })
     // Je Richtung (Top/Boden) das beste; dieselben Punkte aus mehreren Stufen nur einmal
     aus.sort((a, b) => b.wert - a.wert)
-    const oben = aus.find((x) => x.form === 'doppeltop' || x.form === 'kopfSchulter')
-    const unten = aus.find((x) => x.form === 'doppelboden' || x.form === 'inverseKopfSchulter')
+    const oben = aus.find((x) => x.form === 'doppeltop' || x.form === 'dreifachtop' || x.form === 'kopfSchulter')
+    const unten = aus.find((x) => x.form === 'doppelboden' || x.form === 'dreifachboden' || x.form === 'inverseKopfSchulter')
     return [oben, unten].filter(Boolean).sort((a, b) => b.wert - a.wert).map(({ wert, ...x }) => x)
 }
 
 const NAMEN = {
     doppeltop: ['Doppeltop', 'Double top'],
     doppelboden: ['Doppelboden', 'Double bottom'],
+    dreifachtop: ['Dreifach-Top', 'Triple top'],
+    dreifachboden: ['Dreifach-Boden', 'Triple bottom'],
     kopfSchulter: ['Kopf-Schulter', 'Head and shoulders'],
     inverseKopfSchulter: ['Inverse Kopf-Schulter', 'Inverse head and shoulders'],
 }

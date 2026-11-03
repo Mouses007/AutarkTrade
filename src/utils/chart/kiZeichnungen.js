@@ -65,7 +65,7 @@ export function dreieckAlsZeichnungen(l) {
  * Boden-Muster — die Seite, von der die Umkehr kommt.
  */
 export function umkehrAlsZeichnungen(l) {
-    const boden = l.form === 'doppelboden' || l.form === 'inverseKopfSchulter'
+    const boden = l.form === 'doppelboden' || l.form === 'dreifachboden' || l.form === 'inverseKopfSchulter'
     const farbe = boden ? KI_FARBEN.unterstuetzung : KI_FARBEN.widerstand
     const breite = l.gewicht === 'stark' ? 2 : 1
     return [

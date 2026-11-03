@@ -33,6 +33,7 @@ import { alleTrendlinien, istGegenlinie, verlaengerung, TOL_ATR, MIN_ABSTAND } f
 import { trendZustand, durchquerungen } from './strategies/set_and_forget.js'
 import { kandidatenDreiecke, dreieckName, pendel } from './chart-dreiecke.js'
 import { kandidatenUmkehr, umkehrName } from './chart-umkehr.js'
+import { ausbruchAb, volumenImMuster, volumenText } from './chart-volumen.js'
 
 export const KAND = {
     PIVOT_K: 3,
@@ -266,6 +267,9 @@ export function periodenAbschnitte(kerzen, art, { max = KAND.PROFIL_MAX, minKerz
  *               ≥ 4 (je Kante 2) Berührungen; Umkehrer in der Mitte höchstens so viele
  *               wie Berührungen. Vorher reichten Wendepunkte nahe zwei
  *               Parallelen — auch ein durchlaufender Trend mit Zitterern.
+ *   Rechteck    dasselbe waagerecht OHNE Fahnenstange (03.11.2026): eine Range
+ *               zwischen zwei waagerechten Kanten, `form: 'range'`, `muster: null`,
+ *               Name „Rechteck"; Pendel wie beim Kanal (≥ 6, je Kante 3).
  *   Bruch       schliesst die jüngste Kerze schon jenseits einer Kante, sagt
  *               es der Name (`bruch` oben/unten).
  *
@@ -339,10 +343,13 @@ export function kandidatenKanaele(kerzen, A) {
                     const steig = m * (n - 1 - anfang)
                     const st = fahnenstange(kerzen, anfang, A, W, steig, Aw)
                     const muster = st?.muster || null
-                    if (!muster && Math.abs(steig) < KAND.KANAL_MIN_STEIG_ATR * Aw) continue
-                    // Kaum Steigung: waagerecht neu anlegen statt eine Schräge zu zeichnen, die nicht da ist
+                    // Kaum Steigung: waagerecht neu anlegen statt eine Schräge zu zeichnen, die nicht da ist —
+                    // nach einer Stange eine Range, ohne Stange ein Rechteck (03.11.2026; vorher fiel ein
+                    // flacher Kanal ohne Stange ganz weg, die häufigste Formation im Krypto-Chart)
+                    const flach = Math.abs(steig) < KAND.RANGE_STEIG_ATR * Aw
+                    if (!muster && !flach && Math.abs(steig) < KAND.KANAL_MIN_STEIG_ATR * Aw) continue
                     let form = 'kanal', untenF = lo, obenF = hi, Wf = W, bO = bOben, bU = bUnten, aus = aussen
-                    if (muster && Math.abs(steig) < KAND.RANGE_STEIG_ATR * Aw) {
+                    if (flach) {
                         const r = waagerecht(kerzen, anfang, H, T, lo, hi, tol, ueber, docht)
                         if (!r || r.W < KAND.KANAL_MIN_BREITE_ATR * Aw || r.W > KAND.KANAL_MAX_BREITE_ATR * Aw) continue
                         form = 'range'; untenF = () => r.unten; obenF = () => r.oben; Wf = r.W; bO = r.bOben; bU = r.bUnten; aus = r.aussen
@@ -366,6 +373,7 @@ export function kandidatenKanaele(kerzen, A) {
                         preis: mitte, abstandAtr: (mitte - kurs) / A,
                         stangeAtr: st ? st.groesse / A : null, stangeKerzen: st?.kerzen ?? null,
                         ruecklaufPct: st ? st.ruecklauf * 100 : null, bruch,
+                        volumen: volumenImMuster(kerzen, anfang, ausbruchAb(kerzen, obenF, untenF, tol)),
                         pendelPunkte: pen.map((x) => ({ t: kerzen[x.i].t, p: x.oben ? kerzen[x.i].h : kerzen[x.i].l, oben: x.oben })),
                         wert: bO + bU + (muster ? 4 : 0) - aus * 0.5 + spanne / 200,
                     })
@@ -478,6 +486,7 @@ const BRUCH_TEXT = {
 
 /** Kurzer Name ohne Zahlen („Bear-Flagge", „aufsteigender Kanal") — für jede weitere Nennung im Text. */
 export function kanalKurz(k, englisch = false) {
+    if (k.form === 'range' && !k.muster) return englisch ? 'rectangle' : 'Rechteck'
     if (k.form === 'range') return englisch ? 'sideways range' : 'Seitwärts-Range'
     if (k.muster === 'bullFlagge') return englisch ? 'bull flag' : 'Bull-Flagge'
     if (k.muster === 'bearFlagge') return englisch ? 'bear flag' : 'Bear-Flagge'
@@ -496,6 +505,7 @@ export function kanalBeschriftung(k, englisch = false) {
 export function kanalName(k, englisch = false) {
     const b = `${k.beruehrOben}/${k.beruehrUnten}`
     const br = k.bruch ? BRUCH_TEXT[k.muster && k.form !== 'range' ? 'flagge' : 'kanal'][k.bruch][englisch ? 1 : 0] : ''
+    if (k.form === 'range' && !k.muster) return englisch ? `Rectangle (sideways range, ${b} touches${br})` : `Rechteck (Seitwärts-Range, ${b} Berührungen${br})`
     if (k.form === 'range') {
         const nach = k.muster === 'bullFlagge' ? (englisch ? ' after an up impulse' : ' nach Aufwärts-Impuls') : k.muster === 'bearFlagge' ? (englisch ? ' after a down impulse' : ' nach Abwärts-Impuls') : ''
         return englisch ? `Sideways range${nach} (${b} touches${br})` : `Seitwärts-Range${nach} (${b} Berührungen${br})`
@@ -1379,18 +1389,18 @@ export function kandidatenText(paket, { eigene = false, mitKandidaten = true } =
     } else z.push('', 'TRENDLINIEN: keine ungebrochene Linie mit genug Berührungen.')
     const kk = paket.kandidaten.filter((k) => k.quelle === 'kanal')
     if (kk.length) {
-        z.push('', 'KANÄLE — vom Code gemessen und eingezeichnet (id | Name | von → bis | Breite in ATR | Kante unten jetzt / oben jetzt | Abstand der Mitte in ATR):')
-        for (const x of kk) z.push(`${x.id} | ${kanalName(x)}${x.stangeAtr ? `, Fahnenstange ${x.stangeAtr.toFixed(1)} ATR in ${x.stangeKerzen} Kerzen` : ''} | ${zeit(x.t1)} → ${zeit(x.t2)} | ${x.breiteAtr.toFixed(1)} | ${zahl(x.untenJetzt)} / ${zahl(x.obenJetzt)} | ${atrText(x.abstandAtr)}`)
+        z.push('', 'KANÄLE — vom Code gemessen und eingezeichnet (id | Name | von → bis | Breite in ATR | Kante unten jetzt / oben jetzt | Abstand der Mitte in ATR | Volumen):')
+        for (const x of kk) z.push(`${x.id} | ${kanalName(x)}${x.stangeAtr ? `, Fahnenstange ${x.stangeAtr.toFixed(1)} ATR in ${x.stangeKerzen} Kerzen` : ''} | ${zeit(x.t1)} → ${zeit(x.t2)} | ${x.breiteAtr.toFixed(1)} | ${zahl(x.untenJetzt)} / ${zahl(x.obenJetzt)} | ${atrText(x.abstandAtr)} | ${volumenText(x.volumen)}`)
     }
     const mm = paket.kandidaten.filter((k) => k.quelle === 'dreieck')
     if (mm.length) {
-        z.push('', 'DREIECKE, KEILE UND WIMPEL — vom Code gemessen, zusammenlaufende Kanten, der Kurs pendelt zwischen ihnen (id | Name | Beginn → Spitze | Höhe am Anfang in ATR | noch übrig | Kante oben jetzt / unten jetzt | Abstand der Mitte in ATR):')
-        for (const x of mm) z.push(`${x.id} | ${dreieckName(x)} | ${zeit(x.tA)} → ${zeit(x.spitzeT)} | ${x.hoeheAtr.toFixed(1)} | ${Math.round(x.restPct)} % | ${zahl(x.obenJetzt)} / ${zahl(x.untenJetzt)} | ${atrText(x.abstandAtr)}`)
+        z.push('', 'DREIECKE, KEILE UND WIMPEL — vom Code gemessen, zusammenlaufende Kanten, der Kurs pendelt zwischen ihnen (id | Name | Beginn → Spitze | Höhe am Anfang in ATR | noch übrig | Kante oben jetzt / unten jetzt | Abstand der Mitte in ATR | Volumen):')
+        for (const x of mm) z.push(`${x.id} | ${dreieckName(x)} | ${zeit(x.tA)} → ${zeit(x.spitzeT)} | ${x.hoeheAtr.toFixed(1)} | ${Math.round(x.restPct)} % | ${zahl(x.obenJetzt)} / ${zahl(x.untenJetzt)} | ${atrText(x.abstandAtr)} | ${volumenText(x.volumen)}`)
     }
     const rr = paket.kandidaten.filter((k) => k.quelle === 'umkehr')
     if (rr.length) {
-        z.push('', 'UMKEHRMUSTER — vom Code gemessen aus bestätigten Wendepunkten (id | Name | Wendepunkte | Nackenlinie jetzt | Abstand der Nackenlinie in ATR):')
-        for (const x of rr) z.push(`${x.id} | ${umkehrName(x)} | ${x.punkte.slice(1).map((p) => `${zahl(p.p)} (${zeit(p.t)})`).join(' → ')} | ${zahl(x.nackenJetzt)} | ${atrText(x.abstandAtr)}`)
+        z.push('', 'UMKEHRMUSTER — vom Code gemessen aus bestätigten Wendepunkten (id | Name | Wendepunkte | Nackenlinie jetzt | Abstand der Nackenlinie in ATR | Volumen):')
+        for (const x of rr) z.push(`${x.id} | ${umkehrName(x)} | ${x.punkte.slice(1).map((p) => `${zahl(p.p)} (${zeit(p.t)})`).join(' → ')} | ${zahl(x.nackenJetzt)} | ${atrText(x.abstandAtr)} | ${volumenText(x.volumen)}`)
     }
     if (struktur) {
         const folge = (l) => l.map((p) => `${zahl(p.p)}${p.art ? ` ${p.art}` : ''} (${zeit(p.t)})`).join(' → ')

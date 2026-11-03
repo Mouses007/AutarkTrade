@@ -185,7 +185,9 @@ console.log('\nKonsolidierungen, Tage/Wochen, Kanäle und Flaggen (24.10.2026)\n
     check('kurzes Überschiessen am mittleren Kontakt: Kanal besteht weiter (über den Ausreisser hinweg)', ue && ue.laenge >= 40 && ue.ausserhalb >= 1 && kerzenIndex(k5, ue.t1) < 45, JSON.stringify(ue && { L: ue.laenge, a: ue.ausserhalb }))
     const k6 = k2.map((x, i) => (i >= 70 ? { ...x, o: x.o + 5, c: x.c + 5, h: x.h + 5, l: x.l + 5 } : x))
     check('Gegenprobe: Kurs bleibt 5 ATR draussen → gebrochen, kein Kanal', kandidatenKanaele(k6, 1).length === 0)
-    check('Gegenprobe: flache Spanne ist kein Kanal', kandidatenKanaele(Array.from({ length: 80 }, (_, i) => kerze(i, 100 + zick(i))), 1).length === 0)
+    // Seit 03.11.2026: eine flache Spanne ohne Stange ist ein Rechteck (waagerecht), kein schräger Kanal
+    const flach = kandidatenKanaele(Array.from({ length: 80 }, (_, i) => kerze(i, 100 + zick(i))), 1)
+    check('flache Spanne ohne Stange: Rechteck, waagerecht, kein Kanal', flach.length >= 1 && flach.every((x) => x.form === 'range' && !x.muster && x.p1 === x.p2) && kanalName(flach[0]).startsWith('Rechteck (Seitwärts-Range,') && kanalKurz(flach[0]) === 'Rechteck', JSON.stringify(flach.map((x) => [x.form, x.muster, kanalName(x)])))
     check('Kanal im Paket als K1', baueKandidaten({ kerzen: k, interval: '1h' }).kandidaten.some((x) => x.id === 'K1' && x.quelle === 'kanal'))
 }
 

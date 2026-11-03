@@ -72,6 +72,15 @@ check('Zickzack: abwechselnd, nur bestätigte Punkte', (() => {
     const schief = zug([[30, 95], [20, 88], [20, 104], [15, 100], [20, 116], [20, 100], [15, 112], [15, 97]])
     check('Schultern sehr ungleich (104 / 112): keine Kopf-Schulter', !finde(schief).some((x) => x.form === 'kopfSchulter'))
 }
+// Dreifach-Top: drei Tops bei 110, Tiefs bei 100, Bruch unter 100 — vor dem Doppeltop aus den letzten zwei
+{
+    const k = zug([[30, 100], [25, 90], [20, 110], [15, 100], [15, 110], [15, 100.5], [15, 110], [8, 98]])
+    const f = finde(k)
+    const d = f.find((x) => x.form === 'dreifachtop')
+    check('Dreifach-Top erkannt und statt des Doppeltops gewählt', !!d && !f.some((x) => x.form === 'doppeltop'), JSON.stringify(f.map((x) => x.form)))
+    check('Dreifach-Top: sechs Punkte, Nackenlinie am tieferen Tief, gebrochen', d?.punkte.length === 6 && Math.abs(d.nackenJetzt - Math.min(d.punkte[2].p, d.punkte[4].p)) < 1e-9 && d.bruch && umkehrKurz(d) === 'Dreifach-Top')
+    check('gespiegelt: Dreifach-Boden', finde(spiegel(k)).some((x) => x.form === 'dreifachboden'))
+}
 check('zu wenig Kerzen: nichts', !kandidatenUmkehr(zug([[10, 100], [10, 110]]), 1).length)
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
