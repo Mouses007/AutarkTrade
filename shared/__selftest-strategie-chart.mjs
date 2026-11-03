@@ -6,7 +6,7 @@
  * PostgreSQL liefert bigint als Zeichenkette — im Chart muss es eine Zahl
  * sein, sonst landet eine Zone bei x = NaN und ist einfach nicht da.
  */
-import { setupAus, positionAus, tradeAus, ausBacktest, n } from './strategieChart.js'
+import { setupAus, positionAus, tradeAus, aussortiertAus, ausBacktest, n } from './strategieChart.js'
 
 let bestanden = 0
 let fehler = 0
@@ -32,6 +32,9 @@ pruefe('Setup: ohne Auslöser kein Auslösezeitpunkt', setupAus({ triggeredAt: 0
 const p = positionAus({ id: 1, instanceId: 15, direction: 'long', entryPrice: '100', entryTime: '3000', stopLoss: '95', initialStopLoss: '95', takeProfit: '110', status: 'open', mode: 'paper' })
 pruefe('Position: Einstieg, Stop, Ziel', p.einstieg === 100 && p.einstiegT === 3000 && p.stop === 95 && p.ziel === 110 && p.status === 'open')
 
+const a = aussortiertAus({ id: 4, instanceId: '24', symbol: 'SOLUSDT', timeframe: '4h', direction: 'long', candleTime: '1793678400000', grund: 'trend_against' })
+pruefe('Aussortiert: Kerze als Zahl (PostgreSQL liefert bigint als Text), Richtung, Grund',
+    a.t === 1793678400000 && a.instanceId === 24 && a.richtung === 'long' && a.grund === 'trend_against' && a.symbol === 'SOLUSDT')
 const t = tradeAus({ id: 3, setupId: 7, direction: 'long', entryTime: 3000, entryPrice: 100, exitTime: 9000, exitPrice: 104, rMultiple: 0.8, netPnl: 8, exitReason: 'tp' })
 pruefe('Trade: Ein- und Ausstieg mit R', t.einstieg.t === 3000 && t.ausstieg.p === 104 && t.r === 0.8 && t.setupId === 7)
 pruefe('Trade ohne Ausstieg hat keinen Ausstieg', tradeAus({ entryTime: 1, entryPrice: 1, exitTime: 0 }).ausstieg === null)

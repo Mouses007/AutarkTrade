@@ -221,6 +221,51 @@ console.log('\nGespeicherter Lauf: Stand der Strategie heute')
         && liste.d.some((l) => l.id === weg && l.strategieBekannt === false))
 }
 
+// ── Aussortierte Signale (03.11.2026) ────────────────────────────────────
+console.log('\nAussortierte Signale: Trichter, Liste, Löschen')
+{
+    const [id] = await knex('strategy_instances').insert({ strategyId: 'momentum_swing', name: 'A', symbols: '["BTCUSDT","ETHUSDT"]', timeframe: '4h',
+        params: '{}', risk: '{}', mode: 'paper', enabled: 0 })
+    const t0 = Date.UTC(2026, 10, 3)
+    await knex('strategy_aussortiert').insert([
+        { instanceId: id, symbol: 'BTCUSDT', timeframe: '4h', direction: 'long', candleTime: t0, grund: 'trend_against' },
+        { instanceId: id, symbol: 'ETHUSDT', timeframe: '4h', direction: 'long', candleTime: t0, grund: 'trend_against' },
+        { instanceId: id, symbol: 'ETHUSDT', timeframe: '4h', direction: 'short', candleTime: t0 - 4 * 3600e3, grund: 'weekday_blocked', paramsVersion: 2 },
+    ])
+    // Dasselbe Signal im nächsten Takt: der Unique-Index hält es bei einer Zeile
+    await knex('strategy_aussortiert').insert({ instanceId: id, symbol: 'BTCUSDT', timeframe: '4h', direction: 'long', candleTime: t0, grund: 'trend_against' })
+        .onConflict(['instanceId', 'symbol', 'timeframe', 'direction', 'candleTime']).ignore()
+    await knex('strategy_setups').insert({ instanceId: id, strategyId: 'momentum_swing', symbol: 'BTCUSDT', timeframe: '4h',
+        direction: 'short', status: 'expired', invalidReason: 'limit_expired', obCandleTime: t0 - 8 * 3600e3 })
+
+    const d = await ladePerformance({ instanceId: String(id) })
+    pruefe('Trichter: 4 Signale = 3 aussortiert + 1 Setup', d.funnel.signale === 4 && d.funnel.aussortiert === 3 && d.funnel.erkannt === 1,
+        JSON.stringify({ s: d.funnel.signale, a: d.funnel.aussortiert, e: d.funnel.erkannt }))
+    pruefe('Trichter: Gründe der Aussortierten', d.funnel.byFilterReason.trend_against === 2 && d.funnel.byFilterReason.weekday_blocked === 1,
+        JSON.stringify(d.funnel.byFilterReason))
+    const nurEth = await ladePerformance({ instanceId: String(id), symbol: 'ethusdt' })
+    pruefe('Trichter: Symbolfilter gilt auch für Aussortierte', nurEth.funnel.aussortiert === 2, `aussortiert ${nurEth.funnel.aussortiert}`)
+    const v2 = await ladePerformance({ instanceId: String(id), paramsVersion: '2' })
+    pruefe('Trichter: Versionsfilter gilt auch für Aussortierte', v2.funnel.aussortiert === 1, `aussortiert ${v2.funnel.aussortiert}`)
+    const ab = await ladePerformance({ instanceId: String(id), from: String(t0) })
+    pruefe('Trichter: Zeitraum gilt für die Signalkerze', ab.funnel.aussortiert === 2, `aussortiert ${ab.funnel.aussortiert}`)
+
+    const l = await rufe('get', `/api/strategies/aussortiert?instanceId=${id}`)
+    pruefe('Liste: drei Zeilen, jüngste Kerze zuerst, Zeit als Zahl',
+        l.s === 200 && l.d.length === 3 && l.d[0].candleTime === t0 && l.d[2].candleTime === t0 - 4 * 3600e3, JSON.stringify(l.d.map((z) => z.candleTime)))
+    const lb = await rufe('get', `/api/strategies/aussortiert?instanceId=${id}&symbol=btcusdt`)
+    pruefe('Liste: Symbolfilter', lb.d.length === 1 && lb.d[0].symbol === 'BTCUSDT')
+
+    const ch = await rufe('get', `/api/strategies/instances/${id}/chart?symbol=ETHUSDT&timeframe=4h&von=${t0 - 86400e3}&bis=${t0 + 3600e3}`)
+    pruefe('Chart-Daten: aussortierte Signale des Symbols in der Ebenen-Form',
+        ch.s === 200 && ch.d.aussortiert?.length === 2 && ch.d.aussortiert.every((a) => a.symbol === 'ETHUSDT' && a.t > 0 && a.grund),
+        JSON.stringify(ch.d.aussortiert))
+
+    const weg = await rufe('delete', `/api/strategies/instances/${id}`)
+    const rest = await knex('strategy_aussortiert').where('instanceId', id).count({ n: '*' }).first()
+    pruefe('Instanz löschen nimmt ihre aussortierten Signale mit', weg.s === 200 && Number(rest.n) === 0, `Status ${weg.s}, Rest ${rest.n}`)
+}
+
 await stopStrategyEngine?.().catch(() => {})
 await knex.destroy()
 console.log(`\n${fehler === 0 ? '✓' : '✗'} ${bestanden} bestanden, ${fehler} fehlgeschlagen\n`)

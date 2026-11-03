@@ -1,7 +1,7 @@
 <script setup>
 /**
  * Überblick einer Instanz: Kennzahlen, Kapitalkurve, Trichter („wo gehen
- * Setups verloren") und je Symbol ein Kurzstand — ein Klick führt in den Chart.
+ * Signale verloren") und je Symbol ein Kurzstand — ein Klick führt in den Chart.
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -24,17 +24,23 @@ const schwebend = computed(() => props.positionen.reduce((s, p) => s + (Number(p
 const kurve = computed(() => kapitalkurve(props.perf?.equityCurve))
 
 const trichter = computed(() => props.perf?.funnel || {})
+// Oben alles, was der Detector gesehen hat — auch Signale, die schon am
+// Filter scheiterten und nie ein Setup wurden (seit 03.11.2026 erfasst).
+const gesehen = computed(() => trichter.value.signale ?? trichter.value.erkannt ?? 0)
 const stufen = computed(() => [
+    { key: 'signale', wert: gesehen.value },
     { key: 'erkannt', wert: trichter.value.erkannt || 0 },
     { key: 'getriggert', wert: trichter.value.getriggert || 0 },
     { key: 'ausgefuehrt', wert: trichter.value.ausgefuehrt || 0 },
     { key: 'gewonnen', wert: trichter.value.gewonnen || 0 },
 ])
-const anteil = (w) => (trichter.value.erkannt > 0 ? Math.min(100, (w / trichter.value.erkannt) * 100) : 0)
-/** Die häufigsten Gründe, warum aus einem Setup kein Trade wurde — beide Quellen zusammen. */
+const anteil = (w) => (gesehen.value > 0 ? Math.min(100, (w / gesehen.value) * 100) : 0)
+/** Die häufigsten Gründe, warum aus einem Signal kein Trade wurde — alle drei Quellen zusammen. */
 const gruende = computed(() => {
-    const alle = { ...(trichter.value.byInvalidReason || {}) }
-    for (const [k, n] of Object.entries(trichter.value.byRejectReason || {})) alle[k] = (alle[k] || 0) + n
+    const alle = { ...(trichter.value.byFilterReason || {}) }
+    for (const quelle of [trichter.value.byInvalidReason, trichter.value.byRejectReason]) {
+        for (const [k, n] of Object.entries(quelle || {})) alle[k] = (alle[k] || 0) + n
+    }
     return Object.entries(alle).sort((a, b) => b[1] - a[1]).slice(0, 6)
 })
 
@@ -77,6 +83,7 @@ const symbole = computed(() => {
                     <span class="balken"><span :style="{ width: anteil(s.wert) + '%' }"></span></span>
                     <span class="wert">{{ s.wert }}</span>
                 </div>
+                <p v-if="perf && !gesehen" class="at-gedaempft klein">{{ t('strategien.ueberblick.keinSignal') }}</p>
                 <template v-if="gruende.length">
                     <div class="untertitel">{{ t('strategien.ueberblick.warumNicht') }}</div>
                     <div v-for="[code, n] in gruende" :key="code" class="grund">
@@ -109,11 +116,12 @@ const symbole = computed(() => {
 .kachel span { color: var(--muted); font-size: 0.8rem; }
 .kachel strong { font-size: 1.15rem; }
 .zwei { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
-.stufe { display: grid; grid-template-columns: 110px 1fr 48px; gap: 8px; align-items: center; margin: 6px 0; }
+.stufe { display: grid; grid-template-columns: 120px 1fr 48px; gap: 8px; align-items: center; margin: 6px 0; }
 .balken { background: var(--panel-soft); border-radius: 4px; height: 10px; overflow: hidden; }
 .balken span { display: block; height: 100%; background: var(--accent); }
 .wert { text-align: right; }
 .untertitel { margin-top: 12px; font-weight: 600; font-size: 0.85rem; }
+.klein { font-size: 0.85rem; margin: 8px 0 0; }
 .grund { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; padding: 2px 0; }
 .symbole { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
 .symbol { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; background: var(--panel-soft); border: 1px solid var(--line); border-radius: var(--radius-knopf); color: var(--text); padding: 8px 12px; cursor: pointer; min-width: 110px; }

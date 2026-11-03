@@ -35,7 +35,7 @@ import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliess
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
 import { neustartInstanz } from './strategie-neustart.js'
 import { sendeWennAus } from './quellen/aus.js'
-import { setupAus, positionAus, tradeAus } from '../shared/strategieChart.js'
+import { setupAus, positionAus, tradeAus, aussortiertAus } from '../shared/strategieChart.js'
 
 const MAX_SYMBOLS = 20
 const SYMBOL_RE = /^[A-Z0-9]{2,20}$/
@@ -379,7 +379,7 @@ export function setupStrategyRoutes(app) {
             const von = Number(req.query.von) || (bis - 30 * 86400000)
             const tfFilter = (q) => (timeframe ? q.where('timeframe', timeframe) : q)
 
-            const [setups, positionen, trades] = await Promise.all([
+            const [setups, positionen, trades, aussortiert] = await Promise.all([
                 tfFilter(knex('strategy_setups').where({ instanceId: id, symbol }))
                     .where((q) => q.whereBetween('obCandleTime', [von, bis])
                         .orWhereBetween('triggeredAt', [von, bis])
@@ -390,11 +390,15 @@ export function setupStrategyRoutes(app) {
                 tfFilter(knex('strategy_trades').where({ instanceId: id, symbol }))
                     .where((q) => q.where('exitTime', '>=', von).orWhereBetween('entryTime', [von, bis]))
                     .orderBy('entryTime').limit(2000),
+                tfFilter(knex('strategy_aussortiert').where({ instanceId: id, symbol }))
+                    .whereBetween('candleTime', [von, bis])
+                    .orderBy('candleTime').limit(2000),
             ])
             res.json({
                 setups: setups.map(setupAus),
                 positionen: positionen.map(positionAus),
                 trades: trades.map((t) => tradeAus(t)),
+                aussortiert: aussortiert.map(aussortiertAus),
             })
         } catch (e) {
             // Kein `sendeWennAus`: die Route liest nur aus der DB, Marktdaten
@@ -495,7 +499,7 @@ export function setupStrategyRoutes(app) {
             // Instanzfilter weiter auf (123 Trades der gelöschten #8).
             await knex.transaction(async (trx) => {
                 for (const tabelle of ['strategy_trades', 'strategy_setups', 'strategy_runs',
-                    'strategy_positions', 'strategy_param_history', 'strategy_suggestions']) {
+                    'strategy_positions', 'strategy_param_history', 'strategy_suggestions', 'strategy_aussortiert']) {
                     await trx(tabelle).where('instanceId', id).delete()
                 }
                 await trx('strategy_instances').where('id', id).delete()
@@ -1192,6 +1196,26 @@ export function setupStrategyRoutes(app) {
             })))
         } catch (e) {
             res.status(500).json({ error: 'Setups konnten nicht geladen werden' })
+        }
+    })
+
+    // Signale, die schon am Filter scheiterten und nie ein Setup wurden
+    // (server/strategie-aussortiert.js). Jüngste Signalkerze zuerst.
+    app.get('/api/strategies/aussortiert', async (req, res) => {
+        try {
+            const knex = getKnex()
+            let q = knex('strategy_aussortiert').orderBy('candleTime', 'desc').orderBy('id', 'desc')
+                .limit(begrenzeLimit(req.query.limit, 100, 500))
+            if (req.query.instanceId) q = q.where('instanceId', Number(req.query.instanceId))
+            if (req.query.symbol) q = q.where('symbol', String(req.query.symbol).toUpperCase())
+            if (req.query.timeframe) q = q.where('timeframe', String(req.query.timeframe))
+            const rows = await q
+            res.json(rows.map((r) => ({
+                ...r, candleTime: Number(r.candleTime) || 0, paramsVersion: Number(r.paramsVersion) || 1,
+            })))
+        } catch (e) {
+            logError('strategy-api', 'Aussortierte Signale konnten nicht geladen werden', e)
+            res.status(500).json({ error: 'Aussortierte Signale konnten nicht geladen werden' })
         }
     })
 
@@ -2037,7 +2061,27 @@ export async function ladePerformance(filter = {}) {
     const erkannt = Object.values(statusMap).reduce((a, b) => a + b, 0)
     const gewonnen = normiert.filter((t) => t.netPnl > 0).length
 
+    // Signale, die schon am Filter scheiterten (seit 03.11.2026 erfasst) —
+    // dieselben Filter, der Zeitraum gilt für die Signalkerze.
+    let aussortiertQ = knex('strategy_aussortiert')
+    if (filter.instanceId) aussortiertQ = aussortiertQ.where('instanceId', Number(filter.instanceId))
+    if (filter.symbol) aussortiertQ = aussortiertQ.where('symbol', String(filter.symbol).toUpperCase())
+    if (filter.timeframe) aussortiertQ = aussortiertQ.where('timeframe', String(filter.timeframe))
+    if (filter.paramsVersion) aussortiertQ = aussortiertQ.where('paramsVersion', Number(filter.paramsVersion))
+    if (filter.from) aussortiertQ = aussortiertQ.where('candleTime', '>=', Number(filter.from))
+    if (filter.to) aussortiertQ = aussortiertQ.where('candleTime', '<=', Number(filter.to))
+    if (filter.mode) {
+        aussortiertQ = aussortiertQ.whereIn('instanceId', knex('strategy_instances')
+            .whereIn('mode', String(filter.mode).split(',')).select('id'))
+    }
+    const filterGruende = await aussortiertQ.select('grund').count({ n: '*' }).groupBy('grund')
+    const byFilterReason = Object.fromEntries(filterGruende.map((r) => [r.grund, Number(r.n)]))
+    const aussortiert = Object.values(byFilterReason).reduce((a, b) => a + b, 0)
+
     const funnel = {
+        // Alles, was der Detector gesehen hat: aussortiert ODER als Setup angelegt
+        signale: aussortiert + erkannt,
+        aussortiert,
         erkannt,
         wartend: (statusMap.waiting_retest || 0) + (statusMap.armed || 0),
         getriggert: (statusMap.open || 0) + (statusMap.closed || 0) + (statusMap.rejected || 0),
@@ -2045,6 +2089,7 @@ export async function ladePerformance(filter = {}) {
         gewonnen,
         byInvalidReason: Object.fromEntries(invalidGruende.map((r) => [r.invalidReason, Number(r.n)])),
         byRejectReason: Object.fromEntries(rejectGruende.map((r) => [r.rejectReason, Number(r.n)])),
+        byFilterReason,
     }
 
     // ── Hinweise für die Optimierung ─────────────────────────────────

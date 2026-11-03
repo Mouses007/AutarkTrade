@@ -35,6 +35,8 @@ import { wartungsmargePctFuer } from './margin-rates.js'
 import { umgebungAn } from './umgebung.js'
 import { istTestbetrieb } from './umgebung.js'
 import { istAus as marktdatenAus } from './marktdaten/index.js'
+import { aussortierteZeilen } from './strategie-aussortiert.js'
+import { zeitpunkt } from '../shared/strategieChart.js'
 
 // Instanzen, deren „Marktdaten aus" schon im Log steht: alle 15 s dieselbe
 // Zeile wäre Lärm, der echte Fehler verdeckt (S12). `lastError` sagt es der
@@ -128,6 +130,8 @@ export function ladeInstanz(row) {
         // bisherige Betrieb.
         timeframes: normalisiereTimeframes(row.timeframes, row.timeframe, strategie),
         paramsVersion: Number(row.paramsVersion) || 1,
+        // Start der Instanz — aussortierte Signale davor hat sie nie gesehen
+        seit: zeitpunkt(row.createdAt) || 0,
         symbols, params, risk, agents, strategie,
     }
 }
@@ -488,7 +492,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
         }
     }
 
-    const { setups, events } = instance.strategie.detect({
+    const { setups, events, diagnostics } = instance.strategie.detect({
         candles,
         params: p,
         openSetups,
@@ -503,6 +507,29 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     // an: ein neues Setup bliebe im Archiv für immer „scharf" (Audit 4.3.4,
     // FUN-S4-005). Offene Positionen sind oben schon fortgeschrieben.
     if (!(await instanzNochAktiv(instance.id))) return { skipped: 'instanz_inaktiv' }
+
+    // ── 2b. Aussortierte Signale sichern ─────────────────────────────────
+    // Was schon am Filter scheiterte, wird nie ein Setup. Ohne diese Zeilen
+    // sah eine Instanz, deren Signale alle am Tagestrend scheiterten, aus wie
+    // eine stehende Engine. Ein Fehler hier darf den Takt nicht kosten: es
+    // geht um Sichtbarkeit, nicht um den Handel.
+    if (diagnostics?.rejections?.length) {
+        const zeilen = aussortierteZeilen(diagnostics.rejections, {
+            instanceId: instance.id, symbol, timeframe,
+            paramsVersion: instance.paramsVersion,
+            abT: instance.seit, tfMs: timeframeMs(timeframe),
+            setupSchluessel: [
+                ...bekannte.map((r) => `${r.direction}|${Number(r.obCandleTime)}`),
+                ...openSetups.map((s) => `${s.direction}|${Number(s.obCandleTime)}`),
+                ...setups.map((s) => `${s.direction}|${Number(s.obCandleTime)}`),
+            ],
+        })
+        if (zeilen.length) {
+            await knex('strategy_aussortiert').insert(zeilen)
+                .onConflict(['instanceId', 'symbol', 'timeframe', 'direction', 'candleTime']).ignore()
+                .catch((e) => logWarn('strategy-engine', `Aussortierte Signale für ${symbol} nicht gespeichert: ${e.message}`))
+        }
+    }
 
     // ── 3. Neue Setups sichern ───────────────────────────────────────────
     if (setups.length) {

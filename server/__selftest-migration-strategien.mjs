@@ -334,6 +334,22 @@ const zaehle = async (k) => {
     await Promise.all([migriereStrategien(k, dazu), migriereStrategien(k, dazu)])
     const z = await zaehle(k)
     pruefe('zugleich: genau drei Kopien, Stand 5', z.alle === 6 && z.aktiv === 3 && z.stand === 5, JSON.stringify(z))
+    pruefe('zugleich: Tabelle der aussortierten Signale angelegt, ohne Fehler', await k.schema.hasTable('strategy_aussortiert'))
+    await k.destroy()
+}
+// Aussortierte Signale: alte gehen beim Start, die von gelöschten Instanzen auch
+{
+    const { k, dazu } = await frischeDb()
+    await migriereStrategien(k, dazu)
+    const jetzt = Date.now()
+    await k('strategy_aussortiert').insert([
+        { instanceId: 1, symbol: 'BTCUSDT', candleTime: jetzt - 3600e3, grund: 'frisch' },
+        { instanceId: 1, symbol: 'BTCUSDT', candleTime: jetzt - 200 * 86400e3, grund: 'alt' },
+        { instanceId: 999, symbol: 'BTCUSDT', candleTime: jetzt - 3600e3, grund: 'waise' },
+    ])
+    await migriereStrategien(k, dazu)
+    const rest = (await k('strategy_aussortiert').select('grund')).map((r) => r.grund)
+    pruefe('aussortiert: älter als 180 Tage und Waisen weg, frische bleiben', rest.join() === 'frisch', rest.join())
     await k.destroy()
 }
 

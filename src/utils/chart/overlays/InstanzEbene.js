@@ -9,6 +9,8 @@
  *              (obT, sweepPrice), verlängert bis zur Auslösung.
  *   Positionen offene Papier-/Schattenpositionen: Einstieg, Stop, Ziel, Liq
  *   Trades     Raute am Einstieg, Quadrat am Ausstieg, Ergebnis in R
+ *   Aussortiert Signale, die schon am Filter scheiterten (nie ein Setup):
+ *              graues × unter (Long) bzw. über (Short) der Signalkerze
  *
  * Bewusst andere Formen als die Journal-Trades (Dreieck/Kreis): im selben Bild
  * soll man auf einen Blick sehen, was man selbst getan hat und was die
@@ -26,6 +28,7 @@ const SHORT = '255,105,96'
 const LILA = '#7e57c2'
 const ORANGE = '#ff9800'
 const SCHRIFT = '10px -apple-system, "Segoe UI", Roboto, sans-serif'
+const GRAU = 'rgba(160,166,178,0.75)'
 const AKTIV = ['armed', 'waiting_retest']
 const VERWORFEN = ['invalidated', 'expired', 'rejected']
 
@@ -35,9 +38,10 @@ export class InstanzEbene {
         this.serie = serie
         this.formatPreis = formatPreis
         this.zeiten = []
+        this.kerzenJe = new Map()       // Zeit → Kerze, für die Lage der aussortierten Signale
         this.iv = 3_600_000
-        this.daten = { setups: [], positionen: [], trades: [] }
-        this.hervor = null              // 'setup:<id>' | 'trade:<id>'
+        this.daten = { setups: [], positionen: [], trades: [], aussortiert: [] }
+        this.hervor = null              // 'setup:<id>' | 'trade:<id>' | 'aussortiert:<id>'
         this.requestUpdate = () => {}
         this._ansichten = [{
             zOrder: () => 'bottom',
@@ -67,10 +71,16 @@ export class InstanzEbene {
         return t ? { cursorStyle: 'pointer', externalId: t.art + ':' + t.id, zOrder: 'normal' } : null
     }
 
-    setzeKerzen(kerzen, iv) { this.zeiten = kerzen.map((k) => k.t); this.iv = iv; this.requestUpdate() }
+    setzeKerzen(kerzen, iv) {
+        this.zeiten = kerzen.map((k) => k.t)
+        this.kerzenJe = new Map(kerzen.map((k) => [k.t, k]))
+        this.iv = iv
+        this.requestUpdate()
+    }
     setzeDaten(daten) {
         this.daten = {
             setups: daten?.setups || [], positionen: daten?.positionen || [], trades: daten?.trades || [],
+            aussortiert: daten?.aussortiert || [],
         }
         this.requestUpdate()
     }
@@ -81,7 +91,17 @@ export class InstanzEbene {
     ereignisX(t) { return logischZuX(this.chart.timeScale(), ereignisZuLogisch(t, this.zeiten, this.iv)) }
     zuY(p) { return p == null ? null : this.serie.priceToCoordinate(p) }
 
-    /** Trade oder Setup unter (x, y) — `{ art: 'trade'|'setup', id }`. */
+    /** Lage des × eines aussortierten Signals: unter dem Tief (Long) bzw. über dem Hoch (Short). */
+    aussortiertPunkt(a) {
+        const k = this.kerzenJe.get(a.t)
+        if (!k) return null
+        const x = this.ereignisX(a.t)
+        const y = this.zuY(a.richtung === 'short' ? k.h : k.l)
+        if (x == null || y == null) return null
+        return { x, y: y + (a.richtung === 'short' ? -9 : 9) }
+    }
+
+    /** Trade, aussortiertes Signal oder Setup unter (x, y) — `{ art, id }`. */
     trefferTest(x, y) {
         const trades = this.daten.trades
         for (let i = trades.length - 1; i >= 0; i--) {
@@ -94,6 +114,10 @@ export class InstanzEbene {
                 if (ax == null || ay == null) continue
                 if (Math.hypot(x - ax, y - ay) <= 9 || abstandZuStrecke(x, y, ex, ey, ax, ay) <= 4) return { art: 'trade', id: tr.id }
             }
+        }
+        for (const a of this.daten.aussortiert) {
+            const pkt = this.aussortiertPunkt(a)
+            if (pkt && Math.hypot(x - pkt.x, y - pkt.y) <= 7) return { art: 'aussortiert', id: a.id }
         }
         const breite = this.chart.timeScale().width()
         const setups = this.daten.setups
@@ -113,6 +137,7 @@ export class InstanzEbene {
         const breite = groesse.width
         ctx.save()
         ctx.font = SCHRIFT
+        for (const a of this.daten.aussortiert) this.zeichneAussortiert(ctx, a, breite)
         for (const s of this.daten.setups) this.zeichneSetup(ctx, s, breite)
         for (const p of this.daten.positionen) if (p.status !== 'closed') this.zeichnePosition(ctx, p, breite)
         for (const t of this.daten.trades) this.zeichneTrade(ctx, t, this.hervor === 'trade:' + t.id ? '#ffffff' : LILA, 5)
@@ -200,6 +225,25 @@ export class InstanzEbene {
                 this.text(ctx, `${s.richtung === 'short' ? 'Short' : 'Long'} · ${s.statusText || s.status}`,
                     Math.max(2, xa + 2), y + (s.richtung === 'short' ? -4 : 12), `rgb(${rgb})`)
             }
+        }
+    }
+
+    zeichneAussortiert(ctx, a, breite) {
+        const pkt = this.aussortiertPunkt(a)
+        if (!pkt) return
+        const hervor = this.hervor === 'aussortiert:' + a.id
+        const g = hervor ? 4.5 : 3
+        ctx.strokeStyle = hervor ? '#ffffff' : GRAU
+        ctx.lineWidth = hervor ? 2 : 1.5
+        ctx.beginPath()
+        ctx.moveTo(pkt.x - g, pkt.y - g); ctx.lineTo(pkt.x + g, pkt.y + g)
+        ctx.moveTo(pkt.x + g, pkt.y - g); ctx.lineTo(pkt.x - g, pkt.y + g)
+        ctx.stroke()
+        if (hervor && a.grundText) {
+            // Am rechten Rand (das jüngste Signal) links neben das ×, sonst abgeschnitten
+            const b = ctx.measureText(a.grundText).width
+            const x = pkt.x + 7 + b + 4 > breite ? pkt.x - 7 - b : pkt.x + 7
+            this.text(ctx, a.grundText, Math.max(2, x), pkt.y + 4, '#ffffff')
         }
     }
 

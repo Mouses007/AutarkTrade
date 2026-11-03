@@ -174,8 +174,8 @@ const BACKUP_TABLES = [
 
 /**
  * Bewusst NICHT im Backup: `strategy_setups`, `strategy_runs`,
- * `strategy_backtests`, `rangliste_laeufe` und `rangliste_zeilen`. Die ersten
- * beiden sind Zwischenstände in grosser Zahl — aus Instanzen und Kerzen
+ * `strategy_aussortiert`, `strategy_backtests`, `rangliste_laeufe` und
+ * `rangliste_zeilen`. Die ersten drei sind Zwischenstände in grosser Zahl — aus Instanzen und Kerzen
  * jederzeit neu erzeugbar (`strategy_positions` stand bis 31.10.2026 auch
  * hier, siehe oben bei BACKUP_TABLES). Backtests
  * sind zwar die Experiment-Registry, tragen aber je Lauf bis zu 500 Trades im

@@ -22,8 +22,8 @@ const zeiteinheiten = computed(() => (props.instanz.timeframes?.length ? props.i
 const symbol = ref(props.fokus?.symbol || props.instanz.symbols[0])
 const timeframe = ref(props.fokus?.timeframe && zeiteinheiten.value.includes(props.fokus.timeframe) ? props.fokus.timeframe : props.instanz.timeframe)
 
-const daten = ref({ setups: [], positionen: [], trades: [] })
-const gewaehlt = ref(null)    // 'setup:<id>' | 'trade:<id>'
+const daten = ref({ setups: [], positionen: [], trades: [], aussortiert: [] })
+const gewaehlt = ref(null)    // 'setup:<id>' | 'trade:<id>' | 'aussortiert:<id>'
 const chart = ref(null)
 let takt = null
 
@@ -33,8 +33,12 @@ async function laden() {
         const { data } = await axios.get(`/api/strategies/instances/${props.instanz.id}/chart`, {
             params: { symbol: symbol.value, timeframe: timeframe.value, von: Date.now() - 1500 * tfMs },
         })
-        // Der Status steht im Chart in Worten, nicht als Code.
-        daten.value = { ...data, setups: data.setups.map((s) => ({ ...s, statusText: statusText(t, s.status) })) }
+        // Status und Grund stehen im Chart in Worten, nicht als Code.
+        daten.value = {
+            ...data,
+            setups: data.setups.map((s) => ({ ...s, statusText: statusText(t, s.status) })),
+            aussortiert: (data.aussortiert || []).map((a) => ({ ...a, grundText: grundText(t, te, a.grund) })),
+        }
     } catch (e) {
         logError('ChartReiter', 'Chart-Daten laden fehlgeschlagen', e)
     }
@@ -50,38 +54,51 @@ watch([symbol, timeframe], laden)
 async function fokusAnwenden() {
     const f = props.fokus
     if (!f) return
-    if (f.symbol && f.symbol !== symbol.value) symbol.value = f.symbol
-    if (f.timeframe && zeiteinheiten.value.includes(f.timeframe) && f.timeframe !== timeframe.value) timeframe.value = f.timeframe
+    // Nach einem Wechsel lädt der Chart neue Kerzen — erst danach hinspringen.
+    let nachLaden = false
+    if (f.symbol && f.symbol !== symbol.value) { symbol.value = f.symbol; nachLaden = true }
+    if (f.timeframe && zeiteinheiten.value.includes(f.timeframe) && f.timeframe !== timeframe.value) { timeframe.value = f.timeframe; nachLaden = true }
     if (f.art && f.id != null) {
         await laden()
         await nextTick()
-        zeige({ art: f.art, id: f.id, t: f.t })
+        zeige({ art: f.art, id: f.id, t: f.t, nachLaden })
     }
 }
 watch(() => props.fokus?.n, fokusAnwenden)
 
-/** Signale dieses Symbols: Setups mit ihrem Ausgang, jüngste zuerst. */
+/** Signale dieses Symbols: Setups mit ihrem Ausgang und aussortierte Signale, jüngste zuerst. */
 const signale = computed(() => {
     const trades = new Map(daten.value.trades.filter((tr) => tr.setupId != null).map((tr) => [tr.setupId, tr]))
-    return [...daten.value.setups].sort((a, b) => (b.obT || 0) - (a.obT || 0)).map((s) => ({ ...s, trade: trades.get(s.id) || null }))
+    const setups = daten.value.setups.map((s) => ({ ...s, schluessel: String(s.id), trade: trades.get(s.id) || null }))
+    const aussortiert = (daten.value.aussortiert || []).map((a) => ({
+        ...a, schluessel: 'a' + a.id, aussortiert: true, obT: a.t, status: 'aussortiert', trade: null,
+    }))
+    return [...setups, ...aussortiert].sort((a, b) => (b.obT || 0) - (a.obT || 0))
 })
+/** Was ein Klick auf die Zeile im Chart zeigt. */
+const ziel = (s) => (s.aussortiert ? { art: 'aussortiert', id: s.id, t: s.t }
+    : s.trade ? { art: 'trade', id: s.trade.id } : { art: 'setup', id: s.id })
 
-function zeige({ art, id, t: zeitpunkt }) {
+function zeige({ art, id, t: zeitpunkt, nachLaden = false }) {
     gewaehlt.value = art + ':' + id
     let ziel = zeitpunkt
-    if (!ziel) {
+    if (!ziel && art === 'aussortiert') {
+        ziel = daten.value.aussortiert.find((x) => x.id === id)?.t
+    } else if (!ziel) {
         const s = art === 'setup' ? daten.value.setups.find((x) => x.id === id) : daten.value.trades.find((x) => x.id === id)
         ziel = art === 'setup' ? (s?.ausgeloestT || s?.obT) : s?.einstieg?.t
     }
-    chart.value?.zeige({ art, id, t: ziel, intervalMs: TF_MS[timeframe.value] || 3600000 })
+    chart.value?.zeige({ art, id, t: ziel, intervalMs: TF_MS[timeframe.value] || 3600000, nachLaden })
 }
 function imChartGeklickt(st) {
     gewaehlt.value = st.art + ':' + st.id
     // In der Liste sichtbar machen: ein Trade gehört zu seinem Setup.
-    const id = st.art === 'trade' ? daten.value.trades.find((x) => x.id === st.id)?.setupId : st.id
-    nextTick(() => document.getElementById('signal-' + id)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
+    const schluessel = st.art === 'trade' ? daten.value.trades.find((x) => x.id === st.id)?.setupId
+        : st.art === 'aussortiert' ? 'a' + st.id : st.id
+    nextTick(() => document.getElementById('signal-' + schluessel)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }))
 }
-const istGewaehlt = (s) => gewaehlt.value === 'setup:' + s.id || (s.trade && gewaehlt.value === 'trade:' + s.trade.id)
+const istGewaehlt = (s) => (s.aussortiert ? gewaehlt.value === 'aussortiert:' + s.id
+    : gewaehlt.value === 'setup:' + s.id || (s.trade && gewaehlt.value === 'trade:' + s.trade.id))
 </script>
 
 <template>
@@ -105,12 +122,11 @@ const istGewaehlt = (s) => gewaehlt.value === 'setup:' + s.id || (s.trade && gew
             <div v-else class="at-tabelle-huelle liste">
                 <table class="at-tabelle dicht">
                     <tbody>
-                        <tr v-for="s in signale" :id="'signal-' + s.id" :key="s.id" class="klickZeile" :class="{ gewaehlt: istGewaehlt(s) }"
-                            tabindex="0" @click="zeige({ art: s.trade ? 'trade' : 'setup', id: s.trade ? s.trade.id : s.id })"
-                            @keydown.enter="zeige({ art: s.trade ? 'trade' : 'setup', id: s.trade ? s.trade.id : s.id })">
+                        <tr v-for="s in signale" :id="'signal-' + s.schluessel" :key="s.schluessel" class="klickZeile" :class="{ gewaehlt: istGewaehlt(s) }"
+                            tabindex="0" @click="zeige(ziel(s))" @keydown.enter="zeige(ziel(s))">
                             <td class="at-gedaempft">{{ zeit(s.obT) }}</td>
                             <td :class="s.richtung === 'short' ? 'verlustWert' : 'gewinnWert'">{{ s.richtung === 'short' ? 'Short' : 'Long' }}</td>
-                            <td>{{ statusText(t, s.status) }}</td>
+                            <td :class="{ 'at-gedaempft': s.aussortiert }">{{ s.aussortiert ? t('strategien.status.aussortiert') : statusText(t, s.status) }}</td>
                             <td class="at-gedaempft">{{ s.grund ? grundText(t, te, s.grund) : '' }}</td>
                             <td class="zahl" :class="tonVon(s.trade?.r)">{{ s.trade ? rText(s.trade.r) : '' }}</td>
                         </tr>

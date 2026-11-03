@@ -46,11 +46,14 @@
  *
  * Bei jedem Start: Entwürfe des entfallenen Code-Baukastens
  * (`strategy-builder.js`, Feld `slug`/`supportedTimeframes` statt eines
- * Regelwerks) löschen — sie lassen sich weder öffnen noch speichern.
+ * Regelwerks) löschen — sie lassen sich weder öffnen noch speichern. Und
+ * aussortierte Signale (`strategy_aussortiert`, 03.11.2026) nach
+ * `AUFBEWAHRUNG_TAGE` wegräumen.
  */
 
 import { neustartInstanz } from '../strategie-neustart.js'
 import { tagesSummen } from '../../shared/coinM.js'
+import { AUFBEWAHRUNG_TAGE } from '../strategie-aussortiert.js'
 
 function parse(text, ersatz) {
     if (text == null || text === '') return ersatz
@@ -63,7 +66,7 @@ async function waisenAufraeumen(knex) {
     if (!(await knex.schema.hasTable('strategy_instances'))) return
     const vorhanden = knex('strategy_instances').select('id')
     let summe = 0
-    for (const tabelle of ['strategy_trades', 'strategy_setups', 'strategy_runs', 'strategy_param_history', 'strategy_suggestions']) {
+    for (const tabelle of ['strategy_trades', 'strategy_setups', 'strategy_runs', 'strategy_param_history', 'strategy_suggestions', 'strategy_aussortiert']) {
         if (!(await knex.schema.hasTable(tabelle))) continue
         summe += await knex(tabelle).whereNotIn('instanceId', vorhanden).whereNot('instanceId', 0).delete()
     }
@@ -268,8 +271,34 @@ export async function migriereStrategien(knex, addColumnIfNotExists) {
     if (await knex.schema.hasTable('strategy_drafts')) {
         await addColumnIfNotExists('strategy_drafts', 'strategyId', (t) => t.text('strategyId').defaultTo(''))
     }
+    // Signale, die schon am Filter scheiterten (server/strategie-aussortiert.js).
+    // Eine Zeile je Signal, das kein Setup wurde — ohne sie sah eine Instanz,
+    // deren Signale alle am Tagestrend scheiterten, aus wie eine stehende Engine.
+    if (!(await knex.schema.hasTable('strategy_aussortiert'))) {
+        // Zwei Prozesse an einer DB können beide „fehlt" sehen; der zweite
+        // scheitert dann am Anlegen, und das ist kein Fehler.
+        await knex.schema.createTable('strategy_aussortiert', (t) => {
+            t.increments('id').primary()
+            t.integer('instanceId').notNullable()
+            t.text('symbol').notNullable()
+            t.text('timeframe').defaultTo('')
+            t.text('direction').defaultTo('')
+            t.bigInteger('candleTime').defaultTo(0)     // Signalkerze
+            t.text('grund').defaultTo('')
+            t.integer('paramsVersion').defaultTo(1)
+            t.timestamp('createdAt').defaultTo(knex.fn.now())
+            // Dasselbe Signal sieht der Detector in jedem Takt erneut
+            t.unique(['instanceId', 'symbol', 'timeframe', 'direction', 'candleTime'], 'uq_strategy_aussortiert')
+            t.index(['instanceId', 'candleTime'], 'idx_strategy_aussortiert_instanz')
+        }).then(() => console.log(' -> Created table: strategy_aussortiert'), async (e) => {
+            if (!(await knex.schema.hasTable('strategy_aussortiert'))) throw e
+        })
+    }
     await waisenAufraeumen(knex)
     await alteEntwuerfeLoeschen(knex)
+    const grenze = Date.now() - AUFBEWAHRUNG_TAGE * 86400000
+    const alt = await knex('strategy_aussortiert').where('candleTime', '<', grenze).delete()
+    if (alt) console.log(` -> Strategien: ${alt} aussortierte(s) Signal(e) älter als ${AUFBEWAHRUNG_TAGE} Tage gelöscht`)
 
     const zeile = await knex('settings').where('id', 1).select('strategienStand').first()
     if (!zeile) return

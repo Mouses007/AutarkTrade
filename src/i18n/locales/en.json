@@ -2641,7 +2641,7 @@
     "mfeReached": "Peak reached",
     "funnel": "Funnel",
     "funnelHint": "Where setups are lost — the biggest step is the most worthwhile place to start.",
-    "funnel_erkannt": "detected",
+    "funnel_erkannt": "setup created",
     "funnel_getriggert": "triggered",
     "funnel_ausgefuehrt": "executed",
     "funnel_gewonnen": "won",
@@ -3161,7 +3161,14 @@
       "maxHoldCandles": "Max. holding time (candles)",
       "breakEvenAtR": "Break-even from (R)"
     },
-    "reason_archiviert": "Instance archived (restarted) before the setup triggered"
+    "reason_archiviert": "Instance archived (restarted) before the setup triggered",
+    "funnel_signale": "signal seen",
+    "reason_counter_trend": "Against the trend of the higher timeframes",
+    "reason_no_trend_alignment": "Higher timeframes without a common trend",
+    "reason_htf_data_missing": "Higher-timeframe candles missing",
+    "reason_no_zone_at_price": "No zone at the price",
+    "reason_no_target_zone": "No target zone in the trade direction",
+    "reason_entry_before_confirm": "Entry before confirmation"
   },
   "levmap": {
     "title": "Liquidation zones",
@@ -7749,7 +7756,8 @@
       "verworfen": "discarded",
       "laeuft": "running",
       "pausiert": "paused",
-      "archiviert": "Archive"
+      "archiviert": "Archive",
+      "aussortiert": "filtered out"
     },
     "reiter": {
       "ueberblick": "Overview",
@@ -7798,10 +7806,11 @@
       "zuWenig": "Only {n} trades — win rate and avg R start to mean something from about {mindestens}.",
       "kapitalkurve": "Equity curve",
       "nochKeineTrades": "No closed trades yet.",
-      "trichter": "Where setups get lost",
-      "trichterInfo": "Of all detected setups: how many were triggered, executed and won — and below the most frequent reasons why not.",
+      "trichter": "Where signals are lost",
+      "trichterInfo": "All signals the strategy has seen: how many became a setup, were triggered, executed and won — and below the most frequent reasons why not. Signals that already failed a filter (e.g. against the daily trend) count since 3 Nov 2026.",
       "warumNicht": "Most frequent reasons",
-      "symbolHinweis": "Click to show the symbol in the chart."
+      "symbolHinweis": "Click to show the symbol in the chart.",
+      "keinSignal": "No signal seen yet — the strategy is waiting for its conditions."
     },
     "signale": {
       "netto": "Net now",
@@ -7817,7 +7826,8 @@
       "fassung": "Parameter version v{v}",
       "regelFassung": "Rule version v{v}",
       "regelFassungUnsicher": "Rule version v{v} (assumed: the trade is older than any stored version)",
-      "klickHinweis": "Click a row to show the signal in the chart."
+      "klickHinweis": "Click a row to show the signal in the chart.",
+      "aussortiertInfo": "\"Filtered out\" are signals that already failed one of the strategy's filters (e.g. against the daily trend or on the weekend) and therefore never became a setup. Recorded since 3 Nov 2026."
     },
     "auswertung": {
       "alleSymbole": "All symbols",

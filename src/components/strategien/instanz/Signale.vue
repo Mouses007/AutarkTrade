@@ -2,7 +2,9 @@
 /**
  * Signale einer Instanz — EINE Liste für den ganzen Lebenslauf: erkanntes
  * Setup → wartet → ausgelöst → Trade mit Ergebnis, oder verworfen mit Grund.
- * Oben die offenen Positionen mit ihrem Zwischenstand.
+ * Dazu die Signale, die schon am Filter scheiterten und nie ein Setup wurden
+ * („aussortiert", seit 03.11.2026 erfasst). Oben die offenen Positionen mit
+ * ihrem Zwischenstand.
  *
  * Ersetzt die Seite „Setups", die Tabelle offener Positionen, den Coin-Ausblick
  * und die Trade-Liste der früheren Auswertung (bis 01.11.2026 vier Orte).
@@ -25,9 +27,10 @@ const { t, te } = useI18n()
 
 const setups = ref([])
 const trades = ref([])
+const aussortiert = ref([])
 const laedt = ref(false)
 const fehler = ref('')
-const filter = ref('')   // '' | wartend | offen | geschlossen | verworfen
+const filter = ref('')   // '' | wartend | offen | geschlossen | verworfen | aussortiert
 
 const STATUS = {
     wartend: 'waiting_retest,armed',
@@ -36,15 +39,24 @@ const STATUS = {
     verworfen: 'invalidated,expired,rejected',
 }
 
+/** Aussortierte gehören zu „alle", „verworfen" und ihrem eigenen Filter. */
+const MIT_AUSSORTIERTEN = ['', 'verworfen', 'aussortiert']
+
 async function laden() {
     laedt.value = true
     try {
-        const [s, tr] = await Promise.all([
-            axios.get('/api/strategies/setups', { params: { instanceId: props.instanz.id, status: STATUS[filter.value] || undefined, limit: 500 } }),
-            axios.get('/api/strategies/trades', { params: { instanceId: props.instanz.id, limit: 2000 } }),
+        const id = props.instanz.id
+        const [s, tr, a] = await Promise.all([
+            filter.value === 'aussortiert' ? { data: [] }
+                : axios.get('/api/strategies/setups', { params: { instanceId: id, status: STATUS[filter.value] || undefined, limit: 500 } }),
+            axios.get('/api/strategies/trades', { params: { instanceId: id, limit: 2000 } }),
+            MIT_AUSSORTIERTEN.includes(filter.value)
+                ? axios.get('/api/strategies/aussortiert', { params: { instanceId: id, limit: 500 } })
+                : { data: [] },
         ])
         setups.value = s.data
         trades.value = tr.data
+        aussortiert.value = a.data
         fehler.value = ''
     } catch (e) {
         logError('Signale', 'Laden fehlgeschlagen', e)
@@ -58,15 +70,21 @@ watch(filter, laden)
 
 const zeilen = computed(() => {
     const je = new Map(trades.value.map((tr) => [Number(tr.setupId), tr]))
+    const ausSetups = setups.value.map((s) => ({ ...s, schluessel: 's' + s.id, grund: s.invalidReason || s.rejectReason, trade: je.get(Number(s.id)) || null }))
+    const ausFilter = aussortiert.value.map((a) => ({
+        schluessel: 'a' + a.id, aussortiert: true, aussortiertId: a.id, symbol: a.symbol, timeframe: a.timeframe, direction: a.direction,
+        obCandleTime: a.candleTime, status: 'aussortiert', grund: a.grund, trade: null,
+    }))
     // Jüngstes Signal zuerst — nach seiner Kerze, nicht nach der Reihenfolge des Anlegens.
-    return setups.value.map((s) => ({ ...s, trade: je.get(Number(s.id)) || null }))
-        .sort((a, b) => Number(b.obCandleTime) - Number(a.obCandleTime))
+    return [...ausSetups, ...ausFilter].sort((a, b) => Number(b.obCandleTime) - Number(a.obCandleTime))
 })
 
 function zumChart(s) {
-    emit('zumChart', s.trade
-        ? { symbol: s.symbol, timeframe: s.timeframe, art: 'trade', id: s.trade.id, t: Number(s.trade.entryTime) }
-        : { symbol: s.symbol, timeframe: s.timeframe, art: 'setup', id: s.id, t: Number(s.triggeredAt) || Number(s.obCandleTime) })
+    emit('zumChart', s.aussortiert
+        ? { symbol: s.symbol, timeframe: s.timeframe, art: 'aussortiert', id: s.aussortiertId, t: Number(s.obCandleTime) }
+        : s.trade
+            ? { symbol: s.symbol, timeframe: s.timeframe, art: 'trade', id: s.trade.id, t: Number(s.trade.entryTime) }
+            : { symbol: s.symbol, timeframe: s.timeframe, art: 'setup', id: s.id, t: Number(s.triggeredAt) || Number(s.obCandleTime) })
 }
 
 // ── Kontext eines Trades: nach welcher Fassung er entstand ──────────────
@@ -160,7 +178,9 @@ const dauer = (ms) => {
                     <option value="offen">{{ t('strategien.status.offen') }}</option>
                     <option value="geschlossen">{{ t('strategien.status.geschlossen') }}</option>
                     <option value="verworfen">{{ t('strategien.status.verworfen') }}</option>
+                    <option value="aussortiert">{{ t('strategien.status.aussortiert') }}</option>
                 </select>
+                <InfoTipp :text="t('strategien.signale.aussortiertInfo')" />
                 <Kreisel v-if="laedt" />
             </div>
             <p v-if="!laedt && !zeilen.length" class="at-gedaempft">{{ t('strategien.chart.keineSignale') }}</p>
@@ -179,13 +199,13 @@ const dauer = (ms) => {
                         </tr>
                     </thead>
                     <tbody>
-                        <template v-for="s in zeilen" :key="s.id">
+                        <template v-for="s in zeilen" :key="s.schluessel">
                             <tr class="klickZeile" tabindex="0" @click="zumChart(s)" @keydown.enter="zumChart(s)">
                                 <td class="at-gedaempft">{{ zeit(s.obCandleTime) }}</td>
                                 <td>{{ s.symbol }} <span class="at-gedaempft klein">{{ s.timeframe }}</span></td>
                                 <td :class="s.direction === 'short' ? 'verlustWert' : 'gewinnWert'">{{ s.direction === 'short' ? 'Short' : 'Long' }}</td>
-                                <td>{{ statusText(t, s.status) }}</td>
-                                <td class="at-gedaempft">{{ grundText(t, te, s.invalidReason || s.rejectReason) }}</td>
+                                <td :class="{ 'at-gedaempft': s.aussortiert }">{{ s.aussortiert ? t('strategien.status.aussortiert') : statusText(t, s.status) }}</td>
+                                <td class="at-gedaempft">{{ grundText(t, te, s.grund) }}</td>
                                 <td class="zahl" :class="tonVon(s.trade?.rMultiple)">{{ s.trade ? rText(s.trade.rMultiple) : '' }}</td>
                                 <td class="zahl" :class="tonVon(s.trade?.netPnl)">{{ s.trade ? geld(s.trade.netPnl) : '' }}</td>
                                 <td class="rechts">

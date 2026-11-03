@@ -2641,7 +2641,7 @@
     "mfeReached": "Höchststand erreicht",
     "funnel": "Trichter",
     "funnelHint": "Wo Setups verloren gehen — die grösste Stufe ist der lohnendste Ansatzpunkt.",
-    "funnel_erkannt": "erkannt",
+    "funnel_erkannt": "Setup angelegt",
     "funnel_getriggert": "ausgelöst",
     "funnel_ausgefuehrt": "ausgeführt",
     "funnel_gewonnen": "gewonnen",
@@ -3161,7 +3161,14 @@
       "maxHoldCandles": "Max. Haltedauer (Kerzen)",
       "breakEvenAtR": "Break-Even ab (R)"
     },
-    "reason_archiviert": "Instanz archiviert (neu gestartet), bevor das Setup auslöste"
+    "reason_archiviert": "Instanz archiviert (neu gestartet), bevor das Setup auslöste",
+    "funnel_signale": "Signal gesehen",
+    "reason_counter_trend": "Gegen den Trend der höheren Zeiteinheiten",
+    "reason_no_trend_alignment": "Höhere Zeiteinheiten ohne gemeinsamen Trend",
+    "reason_htf_data_missing": "Kerzen der höheren Zeiteinheit fehlen",
+    "reason_no_zone_at_price": "Keine Zone am Kurs",
+    "reason_no_target_zone": "Keine Zielzone in Handelsrichtung",
+    "reason_entry_before_confirm": "Einstieg vor der Bestätigung"
   },
   "levmap": {
     "title": "Liquidationszonen",
@@ -7749,7 +7756,8 @@
       "verworfen": "verworfen",
       "laeuft": "läuft",
       "pausiert": "pausiert",
-      "archiviert": "Archiv"
+      "archiviert": "Archiv",
+      "aussortiert": "aussortiert"
     },
     "reiter": {
       "ueberblick": "Überblick",
@@ -7798,10 +7806,11 @@
       "zuWenig": "Erst {n} Trades — ab etwa {mindestens} sagen Trefferquote und Ø R etwas.",
       "kapitalkurve": "Kapitalkurve",
       "nochKeineTrades": "Noch keine abgeschlossenen Trades.",
-      "trichter": "Wo Setups verloren gehen",
-      "trichterInfo": "Von allen erkannten Setups: wie viele ausgelöst, ausgeführt und gewonnen wurden — und darunter die häufigsten Gründe, warum nicht.",
+      "trichter": "Wo Signale verloren gehen",
+      "trichterInfo": "Alle Signale, die die Strategie gesehen hat: wie viele ein Setup wurden, ausgelöst, ausgeführt und gewonnen — und darunter die häufigsten Gründe, warum nicht. Signale, die schon an einem Filter scheiterten (z. B. gegen den Tagestrend), zählen seit dem 03.11.2026 mit.",
       "warumNicht": "Häufigste Gründe",
-      "symbolHinweis": "Ein Klick zeigt das Symbol im Chart."
+      "symbolHinweis": "Ein Klick zeigt das Symbol im Chart.",
+      "keinSignal": "Noch kein Signal gesehen — die Strategie wartet auf ihre Bedingungen."
     },
     "signale": {
       "netto": "Netto jetzt",
@@ -7817,7 +7826,8 @@
       "fassung": "Parameter-Version v{v}",
       "regelFassung": "Regelfassung v{v}",
       "regelFassungUnsicher": "Regelfassung v{v} (vermutet: der Trade ist älter als jede gespeicherte Fassung)",
-      "klickHinweis": "Ein Klick auf eine Zeile zeigt das Signal im Chart."
+      "klickHinweis": "Ein Klick auf eine Zeile zeigt das Signal im Chart.",
+      "aussortiertInfo": "„Aussortiert\" sind Signale, die schon an einem Filter der Strategie scheiterten (z. B. gegen den Tagestrend oder am Wochenende) und darum nie ein Setup wurden. Erfasst seit dem 03.11.2026."
     },
     "auswertung": {
       "alleSymbole": "Alle Symbole",

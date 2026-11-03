@@ -8,7 +8,7 @@
  * Browser gemerkt, damit z. B. die EMAs einer EMA-Strategie beim nächsten
  * Öffnen wieder da sind. Gezeichnet wird im Arbeitsplatz — „Im Chart öffnen".
  */
-import { reactive, ref, watch } from 'vue'
+import { nextTick, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import ChartPanel from '../chart/ChartPanel.vue'
@@ -63,10 +63,30 @@ function aktion({ aktion: was, id }) {
 
 // ── Von aussen: hervorheben und hinspringen ──────────────────────────────
 const chartRef = ref(null)
+// Ein Sprung, bevor die richtigen Kerzen da sind, verpuffte: `setzeZeitraum`
+// braucht Kerzen, und nach dem Laden setzt das Panel seine Startansicht (die
+// jüngsten 150 Kerzen). Bis 03.11.2026 landete darum jeder Klick aus der
+// Signal-Liste am rechten Rand statt beim Signal. Der Zeitraum wartet jetzt
+// auf die nächsten Kerzen (`nachLaden`: Symbol oder Zeiteinheit wurde eben
+// gewechselt) und kommt NACH der Startansicht.
+let wartenderZeitraum = null
 /** Hebt ein Setup/einen Trade hervor und rückt ihn ins Bild. */
-function zeige({ art, id, t: zeit, intervalMs }) {
-    chartRef.value?.hebeStrategieHervor(art + ':' + id)
-    if (zeit > 0 && intervalMs > 0) chartRef.value?.setzeZeitraum(zeit - 60 * intervalMs, zeit + 30 * intervalMs)
+function zeige({ art, id, t: zeit, intervalMs, nachLaden = false }) {
+    chartRef.value?.hebeStrategieHervor(art ? art + ':' + id : null)
+    if (!(zeit > 0 && intervalMs > 0)) return
+    const bereich = [zeit - 60 * intervalMs, zeit + 30 * intervalMs]
+    if (!nachLaden && chartRef.value?.kerzen?.length) {
+        wartenderZeitraum = null
+        chartRef.value.setzeZeitraum(...bereich)
+    } else {
+        wartenderZeitraum = bereich
+    }
+}
+function kerzenDa() {
+    if (!wartenderZeitraum) return
+    const bereich = wartenderZeitraum
+    wartenderZeitraum = null
+    nextTick(() => chartRef.value?.setzeZeitraum(...bereich))
 }
 defineExpose({ zeige })
 
@@ -84,7 +104,7 @@ function imArbeitsplatz() {
         </div>
         <div class="flaeche" :style="{ height: hoehe + 'px' }">
             <ChartPanel ref="chartRef" :panel="panel" ansicht :strategie-daten="daten" aktiv
-                @indikator="aktion" @strategie-klick="(st) => emit('klick', st)" />
+                @indikator="aktion" @strategie-klick="(st) => emit('klick', st)" @kerzen="kerzenDa" />
         </div>
         <IndikatorDialog v-if="dialog" :key="dialog.instanz?.id || 'neu'" :instanz="dialog.instanz"
             :aktive="panel.indikatoren" @hinzu="hinzu" @speichere="speichere"

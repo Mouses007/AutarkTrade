@@ -20,7 +20,7 @@ export const n = (v) => {
  * Zeitpunkt in ms aus einer DB-Zeitspalte: PostgreSQL liefert ein Date,
  * SQLite `CURRENT_TIMESTAMP` als 'YYYY-MM-DD HH:MM:SS' in UTC ohne Zone.
  */
-function zeitpunkt(v) {
+export function zeitpunkt(v) {
     if (v instanceof Date) return Number.isFinite(v.getTime()) ? v.getTime() : null
     if (typeof v === 'string' && /^\d{4}-\d\d-\d\d[ T]\d\d:\d\d/.test(v)) {
         const t = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : `${v.replace(' ', 'T')}Z`)
@@ -72,6 +72,18 @@ export function tradeAus(r, index = 0) {
         ausstieg: n(r.exitTime) ? { t: n(r.exitTime), p: n(r.exitPrice) } : null,
         stop: n(r.stopLoss), ziel: n(r.takeProfit), r: n(r.rMultiple), netto: n(r.netPnl),
         grund: r.exitReason || null,
+    }
+}
+
+/**
+ * Aussortiertes Signal (`strategy_aussortiert`, server/strategie-aussortiert.js):
+ * schon am Filter gescheitert, nie ein Setup — darum nur Kerze, Richtung und
+ * Grund, kein Preis.
+ */
+export function aussortiertAus(r) {
+    return {
+        id: r.id, instanceId: n(r.instanceId), symbol: r.symbol || '', timeframe: r.timeframe || '',
+        richtung: r.direction, t: n(r.candleTime), grund: r.grund || null,
     }
 }
 
