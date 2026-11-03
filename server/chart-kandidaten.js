@@ -30,7 +30,7 @@ import { atr, pivotHighs, pivotLows, ankerVwap } from '../shared/indicators.js'
 import { volumenprofil } from '../shared/volumenprofil.js'
 import { alleTrendlinien, istGegenlinie, verlaengerung, TOL_ATR, MIN_ABSTAND } from './chart-trendlinien.js'
 import { trendZustand, durchquerungen } from './strategies/set_and_forget.js'
-import { kandidatenDreiecke, dreieckName } from './chart-dreiecke.js'
+import { kandidatenDreiecke, dreieckName, pendel } from './chart-dreiecke.js'
 
 export const KAND = {
     PIVOT_K: 3,
@@ -94,7 +94,11 @@ export const KAND = {
     KANAL_DOCHT_ATR: 1,        // ein Schluss weiter draussen bricht den Kanal (ein Docht nicht)
     KANAL_MAX_FOLGE: 2,        // Schlüsse ausserhalb hintereinander, danach gilt der Kanal als gebrochen
     KANAL_MAX_AUSSEN: 0.1,     // Anteil der Schlüsse ausserhalb im ganzen Kanal
-    KANAL_MIN_SUMME: 6,        // Berührungen beider Kanten zusammen (je Kante ≥ 2)
+    KANAL_MIN_SUMME: 6,        // Wendepunkte nahe beiden Kanten zusammen (Vorauswahl, je Kante ≥ 2)
+    // Pendel (03.11.2026, wie bei den Dreiecken): der Kurs läuft abwechselnd von Kante zu Kante,
+    // jeder Schwung über mindestens die halbe Breite — sonst sind es zwei Parallelen, kein Kanal
+    KANAL_MIN_PENDEL: 6,       // Kanal: 3 + 3 abwechselnde Berührungen
+    FLAGGE_MIN_PENDEL: 4,      // Flagge und Range nach einem Impuls sind kurz: 2 + 2
 }
 
 /**
@@ -254,6 +258,12 @@ export function periodenAbschnitte(kerzen, art, { max = KAND.PROFIL_MAX, minKerz
  *               schräge Suche als Berührung zählte, dann neu geprüft (`form:
  *               'range'`). Bis 27.10.2026 stand HBARUSDT 4h — 22 Kerzen seitwärts
  *               nach dem Abverkauf — als schräg steigender Kanal im Chart.
+ *   Pendel      (03.11.2026) der Kurs läuft abwechselnd von Kante zu Kante, jeder
+ *               Schwung über mindestens die halbe Breite und an seiner Kante endend
+ *               (`pendel` aus chart-dreiecke.js): Kanal ≥ 6 (je Kante 3), Flagge/Range
+ *               ≥ 4 (je Kante 2) Berührungen; Umkehrer in der Mitte höchstens so viele
+ *               wie Berührungen. Vorher reichten Wendepunkte nahe zwei
+ *               Parallelen — auch ein durchlaufender Trend mit Zitterern.
  *   Bruch       schliesst die jüngste Kerze schon jenseits einer Kante, sagt
  *               es der Name (`bruch` oben/unten).
  *
@@ -335,6 +345,11 @@ export function kandidatenKanaele(kerzen, A) {
                         if (!r || r.W < KAND.KANAL_MIN_BREITE_ATR * Aw || r.W > KAND.KANAL_MAX_BREITE_ATR * Aw) continue
                         form = 'range'; untenF = () => r.unten; obenF = () => r.oben; Wf = r.W; bO = r.bOben; bU = r.bUnten; aus = r.aussen
                     }
+                    // Pendelt der Kurs zwischen den Kanten? Abwechselnd oben/unten, jeder Schwung an seiner Kante.
+                    const pen = pendel(kerzen, anfang, obenF, untenF, A, { jenseits: true, luecken: true })
+                    const pO = pen.filter((x) => x.oben).length, pU = pen.length - pO
+                    if (pen.length < (muster ? KAND.FLAGGE_MIN_PENDEL : KAND.KANAL_MIN_PENDEL) || Math.min(pO, pU) < (muster ? 2 : 3)) continue
+                    bO = pO; bU = pU
                     const c = kerzen[n - 1].c
                     const bruch = c < untenF(n - 1) - tol ? 'unten' : c > obenF(n - 1) + tol ? 'oben' : null
                     const ext = Math.max(3, Math.round(spanne * 0.25))
@@ -349,6 +364,7 @@ export function kandidatenKanaele(kerzen, A) {
                         preis: mitte, abstandAtr: (mitte - kurs) / A,
                         stangeAtr: st ? st.groesse / A : null, stangeKerzen: st?.kerzen ?? null,
                         ruecklaufPct: st ? st.ruecklauf * 100 : null, bruch,
+                        pendelPunkte: pen.map((x) => ({ t: kerzen[x.i].t, p: x.oben ? kerzen[x.i].h : kerzen[x.i].l, oben: x.oben })),
                         wert: bO + bU + (muster ? 4 : 0) - aus * 0.5 + spanne / 200,
                     })
                 }

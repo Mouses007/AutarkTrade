@@ -58,7 +58,7 @@ export const DREIECK = {
  * Kante schon erreicht hat (oder durchbricht: das ist der Bruch, keine Berührung).
  * Rein; liefert die Berührungen in zeitlicher Folge.
  */
-export function pendel(kerzen, ab, go, gu, A) {
+export function pendel(kerzen, ab, go, gu, A, { jenseits = false, luecken = false } = {}) {
     const n = kerzen.length
     // Alles an der Höhe gemessen, nur ein kleiner Boden in ATR: eine Toleranz in ATR
     // allein ist bei einer schmalen Formation so breit wie die Formation selbst
@@ -68,9 +68,12 @@ export function pendel(kerzen, ab, go, gu, A) {
     const ueber = (i) => DREIECK.PENDEL_BODEN_ATR * A + DREIECK.PENDEL_UEBER * hoehe(i)
     // An der Kante: knapp davor oder höchstens `ueber` darüber hinaus — ein Docht weit
     // jenseits heisst, die Kante stimmt dort nicht
+    // `jenseits` (Kanäle): ein Schwung darf über die Kante hinausschiessen — ob das zu weit
+    // oder zu lange war, entscheiden dort die Schlüsse draussen; ein Dreieck läuft zusammen,
+    // dort heisst ein weiter Stich, dass die Kante nicht stimmt
     const anKante = (s) => s.oben
-        ? kerzen[s.i].h >= go(s.i) - nah(s.i) && kerzen[s.i].h <= go(s.i) + ueber(s.i)
-        : kerzen[s.i].l <= gu(s.i) + nah(s.i) && kerzen[s.i].l >= gu(s.i) - ueber(s.i)
+        ? kerzen[s.i].h >= go(s.i) - nah(s.i) && (jenseits || kerzen[s.i].h <= go(s.i) + ueber(s.i))
+        : kerzen[s.i].l <= gu(s.i) + nah(s.i) && (jenseits || kerzen[s.i].l >= gu(s.i) - ueber(s.i))
     // Zickzack: Richtung aus der ersten Kerze, die näher an einer Kante liegt
     const schwuenge = []
     let oben = kerzen[ab].h - gu(ab) > go(ab) - kerzen[ab].l   // näher oben: erster Schwung ist ein Hoch
@@ -87,6 +90,23 @@ export function pendel(kerzen, ab, go, gu, A) {
     const offen = { i: ext, oben, offen: true }
     // Längste Folge, in der jeder Schwung an seiner Kante endet; sie muss bis jetzt reichen
     const alle = [...schwuenge, offen]
+    const imKanal = (s) => !(s.offen && (s.oben ? kerzen[s.i].c > go(s.i) + nah(s.i) : kerzen[s.i].c < gu(s.i) - nah(s.i)))
+    if (luecken) {
+        // Kanäle (`luecken`): ein Schwung, der in der Mitte umkehrt, unterbricht nicht — es zählen
+        // die Berührungen, die abwechselnd oben und unten liegen (je Seite der äusserste)
+        // Ein laufender Schwung jenseits der Kante ist der Ausbruch, keine Berührung; mehr
+        // Umkehrer in der Mitte als Berührungen: dann pendelt der Kurs nicht von Kante zu Kante
+        const aus = []
+        let mitte = 0
+        for (const s of alle) {
+            const jenseitsJetzt = s.offen && (s.oben ? kerzen[s.i].h > go(s.i) + ueber(s.i) : kerzen[s.i].l < gu(s.i) - ueber(s.i))
+            if (!anKante(s) || !imKanal(s) || jenseitsJetzt) { if (!s.offen) mitte++; continue }
+            const v = aus[aus.length - 1]
+            if (v && v.oben === s.oben) { if (s.oben ? kerzen[s.i].h > kerzen[v.i].h : kerzen[s.i].l < kerzen[v.i].l) aus[aus.length - 1] = s }
+            else aus.push(s)
+        }
+        return mitte > aus.length ? [] : aus
+    }
     let start = alle.length - 1
     if (!anKante(offen)) start = alle.length - 2
     const ende = start
