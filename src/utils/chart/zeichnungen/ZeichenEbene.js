@@ -24,6 +24,8 @@ import { rechnePosition } from '../../../../shared/tradeRechner.js'
 
 const ANKER = 5
 const TREFFER = 6
+// Zeichnungen mit eigener Beschriftung: Doppelklick oder Klick aufs Label öffnet den Textstil
+const TEXT_TYPEN = ['text', 'horizontale', 'strahlH', 'rechteck', 'trendlinie', 'kanal', 'avwap', 'volprofil', 'pfeil']
 const SCHRIFT = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
 /** Türkis der App (tokens.css `--accent`) — Vorgabe des Volumenprofils. */
 const HAUSFARBE = '#1fd6c4'
@@ -645,18 +647,27 @@ export class ZeichenEbene {
             return
         }
         if (this.messErgebnis) { this.messErgebnis = null; this.requestUpdate() }
-        const t = this.trefferTest(x, y)
+        let t = this.trefferTest(x, y)
+        // Klick auf eine Beschriftung: dieselbe Zeichnung, beim Loslassen ohne Ziehen öffnen sich ihre Einstellungen
+        if (!t || t.anker == null) {
+            const sz = this.schildTreffer(x, y)
+            if (sz && this.zeichnungen.includes(sz)) t = { z: sz, anker: null, schild: true }
+        }
         if (!t) {
             if (this.auswahlId != null) { this.auswahlId = null; this.rueckruf.auswahl?.(null); this.requestUpdate() }
-            // Gestrichelter KI-Vorschlag: anklicken öffnet Übernehmen/Verwerfen, verschieben lässt er sich nicht.
-            const ki = this.kiTreffer(x, y)
+            // Gestrichelter KI-Vorschlag (Linie oder Beschriftung): anklicken öffnet Übernehmen/Verwerfen, verschieben lässt er sich nicht.
+            const sk = this.schildTreffer(x, y)
+            const ki = this.kiTreffer(x, y) || (sk?.ki ? sk : null)
             this.rueckruf.kiKlick?.(ki ? ki.ki : null, x, y)
             if (ki) { this.verschlucke = true; e.stopPropagation(); e.preventDefault() }
             return
         }
         this.rueckruf.kiKlick?.(null)
         if (this.auswahlId !== t.z.id) { this.auswahlId = t.z.id; this.rueckruf.auswahl?.(t.z.id); this.requestUpdate() }
-        if (t.z.gesperrt) return
+        if (t.z.gesperrt) {
+            if (t.schild) { this.verschlucke = true; e.stopPropagation(); e.preventDefault(); this.oeffneEinstellungen(t.z) }
+            return
+        }
         this.verschlucke = true
         e.stopPropagation()
         e.preventDefault()
@@ -664,7 +675,7 @@ export class ZeichenEbene {
         this.ziehen = {
             id: t.z.id, anker: t.anker, typ: t.z.typ,
             L0: this.chart.timeScale().coordinateToLogical(x), p0: this.vonY(y),
-            orig: this.punkteVon(t.z).map((q) => ({ ...q })), bewegt: false,
+            orig: this.punkteVon(t.z).map((q) => ({ ...q })), bewegt: false, schild: !!t.schild, x0: x, y0: y,
         }
     }
 
@@ -770,8 +781,17 @@ export class ZeichenEbene {
         const neu = this.vorschau.get(z.id)
         // pointercancel (Touch-Geste vom Browser übernommen, Fenster verliert den Fokus)
         // ist ein Abbruch, kein Loslassen — die halbe Ziehvorschau wurde sonst gespeichert.
-        if (z.bewegt && neu && e.type !== 'pointercancel') this.rueckruf.aendern?.(z.id, { punkte: neu })
-        else this.vorschau.delete(z.id)
+        // Ein Klick aufs Label (kaum bewegt) ist kein Verschieben — sonst schöbe ein Zittern die Zeichnung
+        const { x: ux, y: uy } = this.lokal(e)
+        const nurGeklickt = z.schild && Math.hypot(ux - z.x0, uy - z.y0) < 4
+        if (z.bewegt && neu && e.type !== 'pointercancel' && !nurGeklickt) this.rueckruf.aendern?.(z.id, { punkte: neu })
+        else {
+            this.vorschau.delete(z.id)
+            if (nurGeklickt && e.type !== 'pointercancel') {
+                const zz = this.zeichnungen.find((q) => q.id === z.id)
+                if (zz) this.oeffneEinstellungen(zz)
+            }
+        }
         this.rueckruf.ziehen?.(z.id, null)
         this.requestUpdate()
     }
@@ -782,7 +802,7 @@ export class ZeichenEbene {
         if (innen && Date.now() - (this._fertigZeit || 0) < 700) { e.stopPropagation(); return }
         if (!innen || this.werkzeugTyp) return
         const t = this.trefferTest(x, y)
-        if (t && ['text', 'horizontale', 'strahlH', 'rechteck', 'trendlinie', 'kanal', 'avwap', 'volprofil', 'pfeil'].includes(t.z.typ)) {
+        if (t && TEXT_TYPEN.includes(t.z.typ)) {
             e.stopPropagation()
             this.rueckruf.textBearbeiten?.(t.z.id)
         } else if (t?.z.typ === 'position') {
@@ -921,13 +941,17 @@ export class ZeichenEbene {
         // senkrecht aus (HBAR 4h, 29.10.2026: fünf Labels übereinander, keines lesbar).
         this._belegt = []
         this._hoehe = hoehe
-        for (const z of this.temporaer) this.zeichneEine(ctx, z, z.punkte, breite, hoehe, false)
+        // Beschriftungen merken, damit ein Klick darauf die Einstellungen der Zeichnung öffnet
+        this._schilder = []
+        for (const z of this.temporaer) { this._schildVon = z; this.zeichneEine(ctx, z, z.punkte, breite, hoehe, false) }
         this._belegt = null
         // Gesperrte zuerst — sie liegen im Hintergrund, die offenen darüber
         for (const z of [...this.zeichnungen.filter((x) => x.gesperrt), ...this.zeichnungen.filter((x) => !x.gesperrt)]) {
             if (!this.vollstaendig(z)) continue
+            this._schildVon = z
             this.zeichneEine(ctx, z, this.punkteVon(z), breite, hoehe, z.id === this.auswahlId)
         }
+        this._schildVon = null
         if (this.entwurf) this.zeichneEine(ctx, { id: -1, typ: this.entwurf.typ, stil: {} }, this.entwurfPunkte(), breite, hoehe, true)
         if (this.messErgebnis) this.zeichneEine(ctx, { id: -2, typ: 'messen', stil: {} }, this.messErgebnis, breite, hoehe, false)
         if (this.fang) {
@@ -1004,6 +1028,23 @@ export class ZeichenEbene {
         }
         ctx.fillStyle = farbe
         ctx.fillText(text, xx, y)
+        if (this._schildVon && this._schilder) this._schilder.push({ z: this._schildVon, x: xx - 3, y: y - groesse, w: b + 6, h: groesse + 4 })
+    }
+
+    /** Zeichnung, deren Beschriftung unter (x, y) liegt — die zuletzt gezeichnete zuerst. */
+    schildTreffer(x, y) {
+        const l = this._schilder || []
+        for (let i = l.length - 1; i >= 0; i--) {
+            const b = l[i]
+            if (x >= b.x - 2 && x <= b.x + b.w + 2 && y >= b.y - 2 && y <= b.y + b.h + 2) return b.z
+        }
+        return null
+    }
+
+    /** Einstellungen einer Zeichnung öffnen: Textstil, Positionsrechner — sonst reicht die Auswahl (Stilleiste). */
+    oeffneEinstellungen(z) {
+        if (z.typ === 'position') this.rueckruf.positionOeffnen?.(z.id)
+        else if (TEXT_TYPEN.includes(z.typ)) this.rueckruf.textBearbeiten?.(z.id)
     }
 
     /**

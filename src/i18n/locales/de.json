@@ -6520,10 +6520,6 @@
       "liquidationen": "Liquidationen (aufgezeichnet)",
       "hebelzonen": "Hebelzonen (Modell)",
       "orderbuch": "Orderbuch-Wände",
-      "kurz": {
-        "hebelzonen": "Geschätzte Preise, an denen gehebelte Positionen zwangsgeschlossen würden. Rot unter dem Kurs: Longs (erzwungene Verkäufe), grün darüber: Shorts (erzwungene Käufe). Ein Modell, keine Messung.",
-        "liquidationen": "Tatsächlich passierte Zwangsschliessungen in USD je Kerze, aus der eigenen Aufzeichnung. Nach oben Shorts, nach unten Longs."
-      },
       "info": {
         "hebelzonen": "Hebelzonen sind ein MODELL: Aus dem Verlauf des Open Interest (offene Kontrakte) schätzt der Code, wo Positionen eröffnet wurden und bei welchem Kurs sie mit üblichem Hebel liquidiert würden. Unter dem Kurs liegen Long-Liquidationen — erreicht der Kurs sie, wird zwangsweise verkauft. Darüber liegen Short-Liquidationen — dort wird zwangsweise gekauft. Dichte Zonen ziehen den Kurs oft an und beschleunigen Bewegungen. Nur mit Binance als Marktdatenquelle.",
         "liquidationen": "Liquidationen sind GEMESSEN: Zwangsschliessungen, die die Börse tatsächlich gemeldet hat, in USD je Kerze. Balken nach oben = Shorts wurden liquidiert (Kurs stieg), nach unten = Longs (Kurs fiel). Grosse Ausschläge markieren oft Erschöpfung einer Bewegung. Nur Futures, nur so weit zurück, wie die Aufzeichnung lief (höchstens 7 Tage)."
@@ -6798,7 +6794,15 @@
         "widerstand": "jetzt Widerstand",
         "unterstuetzung": "jetzt Unterstützung"
       },
-      "achtung": "Achtung:"
+      "achtung": "Achtung:",
+      "htfTrend": "Übergeordneten Trend einschliessen",
+      "htfTrendTipp": "Zeichnet zusätzlich höchstens eine Trendlinie des übergeordneten Trends: bevorzugt aus dem Tageschart, aus dem 4h- oder Wochenchart, wenn dort die Richtung besser belegt ist. Vom Code gemessen, passend zur Struktur (Aufwärtstrend → steigende Unterstützung, Abwärtstrend → fallender Widerstand).",
+      "htfOhneLinie": "Übergeordneter Trend ({tf}): {richtung} — keine dazu passende Trendlinie, nichts eingezeichnet.",
+      "htfRichtung": {
+        "auf": "Aufwärtstrend",
+        "ab": "Abwärtstrend",
+        "keine": "keine bestätigte Richtung"
+      }
     },
     "indAktiv": "Aktiv in diesem Chart",
     "indHinzu": "Hinzufügen",

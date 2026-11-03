@@ -19,6 +19,7 @@ import { ladeHandelbar, boersenFuerSymbol } from '../../utils/chart/handelbar.js
 import { appEinstellungen } from '../../stores/app/rahmen.js'
 import { aktivierteBoersen } from '../../utils/boersenLinks.js'
 import { ladeMarktdaten } from '../../utils/marktdaten.js'
+import { watchlistWahl } from '../../stores/chartWatchlistWahl.js'
 
 const props = defineProps({
     watchlists: { type: Array, default: () => [] },
@@ -28,7 +29,7 @@ const props = defineProps({
 const emit = defineEmits(['waehle', 'neuerTab', 'aendere', 'neu', 'loesche'])
 const { t } = useI18n()
 
-const listeId = ref(null)
+const listeId = watchlistWahl
 /*
  * `${markt}|${symbol}` → { c, o }. `reactive` statt `ref({...})` (Audit
  * FUN-WEB-004): vorher kopierte jeder Stream-Tick die ganze Map, und jede Zeile
@@ -44,8 +45,9 @@ const liste = computed(() => props.watchlists.find((w) => w.id === listeId.value
 const symbole = computed(() => liste.value?.symbole || [])
 const enthaeltAktives = computed(() => symbole.value.some((s) => s.symbol === props.aktivesSymbol && s.markt === props.aktiverMarkt))
 
+// Erst umstellen, wenn Listen da sind — die leere Liste vor dem Laden darf die gemerkte Wahl nicht löschen.
 watch(() => props.watchlists, (w) => {
-    if (!w.find((x) => x.id === listeId.value)) listeId.value = w[0]?.id ?? null
+    if (w.length && !w.find((x) => x.id === listeId.value)) listeId.value = w[0].id
 }, { immediate: true })
 
 /** Startkurse (und ohne Stream: laufende Kurse) per REST. */

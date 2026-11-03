@@ -49,6 +49,7 @@ import { pruefeEinordnung } from './coin-radar/einordnung.js'
 import { tradesAusZeilen } from './chart-journal.js'
 import { sendeWennAus, istAus } from './quellen/aus.js'
 import { ohneUnsichtbares } from '../shared/unsichtbar.js'
+import { uebergeordneterTrend, htfTrendKandidaten, htfTrendLabel, htfTrendZeile, HTF_TREND_KERZEN } from './chart-htf-trend.js'
 import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText, kanalName, kanalKurz, kanalBeschriftung, korrekturAbstand, PROFIL_ARTEN_ALLE, waehleNutzer } from './chart-kandidaten.js'
 import { dreieckName, dreieckKurz, dreieckBeschriftung } from './chart-dreiecke.js'
 
@@ -92,7 +93,7 @@ export function pruefeBild(roh) {
  * eigene Trades. Ohne `paket` wird es aus den Kerzen gebaut (KI-Chat).
  * @returns {string}
  */
-export function baueChartEingabe({ symbol, interval, kerzen, kerzenHtf = null, zeichnungen = [], hebelzonen = null, trades = [], paket = null, zeitzone = 'UTC', modus = 'setzen', ergaenzen = false }) {
+export function baueChartEingabe({ symbol, interval, kerzen, kerzenHtf = null, zeichnungen = [], hebelzonen = null, trades = [], paket = null, zeitzone = 'UTC', modus = 'setzen', ergaenzen = false, htfTrend = null, englisch = false }) {
     const eigene = modus === 'eigene'
     const pk = paket || baueKandidaten({ kerzen, kerzenHtf, interval, intervalHtf: HTF_VON[interval] || null, zeichnungen, zeitzone })
     const tz = pk?.zeitzone || zeitzone
@@ -100,6 +101,7 @@ export function baueChartEingabe({ symbol, interval, kerzen, kerzenHtf = null, z
     const zeilen = [`SYMBOL: ${symbol}`, `ZEITEINHEIT: ${interval}`, `JETZT: ${zeit(Date.now())}`, '']
     if (pk) zeilen.push(kandidatenText(pk, { eigene, mitKandidaten: !eigene || ergaenzen }))
     else zeilen.push('Zu wenige Kerzen für eine Vermessung.')
+    if (htfTrend && pk) zeilen.push('', htfTrendZeile(htfTrend, pk.kurs, englisch))
     // Bei „Meine Zeichnungen" geht es um die Zeichnungen — die Liquidationsschätzung lenkt nur ab
     if (!eigene && hebelzonen && (hebelzonen.oben?.length || hebelzonen.unten?.length)) {
         zeilen.push('', 'GESCHÄTZTE LIQUIDATIONSZONEN (Modell aus Open Interest, keine Messung; nur zur Einordnung, nicht als Linie auswählbar):')
@@ -132,7 +134,7 @@ const WICHTIG = ['hoch', 'mittel', 'gering']
 
 export function normModus(roh) {
     const modus = MODI.includes(roh?.modus) ? roh.modus : 'setzen'
-    return { modus, ergaenzen: modus === 'eigene' ? roh?.ergaenzen !== false : false }
+    return { modus, ergaenzen: modus === 'eigene' ? roh?.ergaenzen !== false : false, htf: roh?.htf === true }
 }
 
 /**
@@ -565,6 +567,19 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
     return { modus, ergaenzen, text, linien, zonen, bedingungen, bewertungen, korrekturen, nutzer, verworfen, warnungen, leer, einwaende }
 }
 
+/** Die Linie des übergeordneten Trends als KI-Linie (gestrichelt, übernehmbar wie die übrigen). */
+export function htfTrendLinie(h, englisch = false) {
+    const l = h.linie
+    const grund = englisch
+        ? `Measured on the ${h.tf} chart: ${l.beruehrungen} touches, matches the ${h.zustand === 1 ? 'uptrend' : 'downtrend'} structure there.`
+        : `Gemessen im ${h.tf}-Chart: ${l.beruehrungen} Berührungen, passt zur ${h.zustand === 1 ? 'Aufwärts' : 'Abwärts'}struktur dort.`
+    return {
+        id: 'H1', quelle: 'htfTrend', art: 'trend', rolle: l.rolle, tf: h.tf, label: htfTrendLabel(h, englisch), grund,
+        gewicht: l.beruehrungen >= 3 ? 'stark' : 'mittel', beruehrungen: l.beruehrungen,
+        t1: l.t1, p1: l.p1, t2: l.t2, p2: l.p2, ...(Number.isFinite(l.tEnde) ? { tEnde: l.tEnde, pEnde: l.pEnde } : {}),
+    }
+}
+
 /** Neue Punkte einer eigenen Zeichnung aus dem Kandidaten — gleicher Typ, gleiche Punktzahl. */
 export function korrekturPunkte(u, k) {
     if (u.typ === 'horizontale' || u.typ === 'strahlH') return [{ t: u.punkte[0].t, p: k.preis }]
@@ -693,8 +708,8 @@ export function fensterAus(fenster, ivMs, jetzt = Date.now()) {
     return { anzahl, bisT: bisT < jetzt - ivMs ? bisT : null }
 }
 
-export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures', modus: modusRoh = 'setzen', ergaenzen: ergaenzenRoh = true, fenster = null, bild = null }) {
-    const wahl = normModus({ modus: modusRoh, ergaenzen: ergaenzenRoh })
+export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures', modus: modusRoh = 'setzen', ergaenzen: ergaenzenRoh = true, htf: htfRoh = false, fenster = null, bild = null }) {
+    const wahl = normModus({ modus: modusRoh, ergaenzen: ergaenzenRoh, htf: htfRoh })
     const fen = fensterAus(fenster, TIMEFRAME_MS[interval])
     // Anderer Ausschnitt oder andere Art = andere Analyse: die Sperre gilt nur für dieselbe Art UND dasselbe Fenster
     const wahlText = JSON.stringify({ ...wahl, fenster: fen })
@@ -703,7 +718,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
     // wer ein Kästchen umstellt, will eine andere Analyse, nicht die eben bezahlte.
     const alt = cache.get(schluessel)
     // `herkunft` (bis 01.11.2026 `aus`): `aus` heisst bei allen anderen Routen „Quelle abgeschaltet" (`{aus: true}`)
-    if (alt && Date.now() - alt.ts < SPERRE_MS && JSON.stringify({ modus: alt.payload.modus || 'setzen', ergaenzen: !!alt.payload.ergaenzen, fenster: alt.payload.fenster || null }) === wahlText) return { ...alt.payload, stand: alt.ts, alterMs: Date.now() - alt.ts, herkunft: 'sperre' }
+    if (alt && Date.now() - alt.ts < SPERRE_MS && JSON.stringify({ modus: alt.payload.modus || 'setzen', ergaenzen: !!alt.payload.ergaenzen, htf: !!alt.payload.htf, fenster: alt.payload.fenster || null }) === wahlText) return { ...alt.payload, stand: alt.ts, alterMs: Date.now() - alt.ts, herkunft: 'sperre' }
     const laufSchluessel = `${schluessel}|${wahlText}`
     if (laufend.has(laufSchluessel)) return laufend.get(laufSchluessel)
     const fehl = fehlschlaege.get(schluessel)
@@ -715,9 +730,12 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
 
     const lauf = (async () => {
         const intervalHtf = HTF_VON[interval] || null
-        const [{ kerzen, zeichnungen, hebel, trades, englisch, zeitzone }, kerzenHtf] = await Promise.all([
+        // Übergeordneter Trend (Häkchen): Tages-, 4h- und Wochenkerzen, je nach Chart (chart-htf-trend.js)
+        const trendTfs = wahl.htf ? htfTrendKandidaten(interval) : []
+        const [{ kerzen, zeichnungen, hebel, trades, englisch, zeitzone }, kerzenHtf, ...trendSerien] = await Promise.all([
             ladeChartDaten({ symbol, interval, markt, anzahl: fen.anzahl, bisT: fen.bisT }),
             intervalHtf ? getClosedCandles(symbol, intervalHtf, HTF_KERZEN, { market: markt }).catch(() => null) : null,
+            ...trendTfs.map((tf) => getClosedCandles(symbol, tf, HTF_TREND_KERZEN, { market: markt }).catch(() => null)),
         ])
         if (kerzen.length < 30) throw new Error('Zu wenige Kerzen für eine Analyse')
         const vonT = kerzen[0].t
@@ -731,6 +749,9 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
             nutzerKerzen, nutzerVonT: Number(fenster?.vonT) || null,
         })
         if (!paket) throw new Error('Zu wenige Kerzen für eine Vermessung')
+        const htfTrend = wahl.htf
+            ? uebergeordneterTrend(Object.fromEntries(trendTfs.map((tf, i) => [tf, trendSerien[i]])), interval, { bisT, ivMs: TIMEFRAME_MS[interval] })
+            : null
         // Ohne eigene Zeichnung im Bild gibt es nichts zu analysieren — Bescheid statt bezahltem Aufruf.
         // Stehen nur Zeichnungen im Bild, die der Code nicht misst (Fib-Extension, Pfeil …), sagt der Code das (`nurUngemessene`).
         if (wahl.modus === 'eigene' && !paket.nutzer.length) {
@@ -751,7 +772,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         // Bei „Meine Zeichnungen" dient das Bild dem Verständnis der Zeichnungen, nicht der Prüfung von Kandidaten
         const zuPruefen = wahl.modus === 'eigene' || paket.kandidaten.some((k) => EINSPRUCH_QUELLEN.includes(k.quelle))
         let bildPruefung = !bild ? 'ohneBild' : !kannBilder(cfg.provider) ? 'anbieterOhneBild' : !zuPruefen ? 'nichtsZuPruefen' : 'an'
-        const user = baueChartEingabe({ symbol, interval, paket, hebelzonen: hebel, trades, ...wahl })
+        const user = baueChartEingabe({ symbol, interval, paket, hebelzonen: hebel, trades, ...wahl, htfTrend, englisch })
         const buchung = { zweck: wahl.modus === 'eigene' ? 'chart-analyse-eigene' : 'chart-analyse', ausloeser: 'manuell', bezug: { typ: 'symbol', id: symbol } }
         const frage = () => {
             const mitBild = bildPruefung === 'an'
@@ -778,9 +799,11 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         for (const v of ergebnis.verworfen) logWarn('chart-ki', `${symbol} ${interval}: ${v.art} verworfen (${v.grund}) — ${v.inhalt}`)
         for (const w of ergebnis.warnungen) logWarn('chart-ki', `${symbol} ${interval}: Zahl ${w.zahl} in ${w.wo} passt zu keiner Marke`)
         if (ergebnis.leer) throw new Error('Die KI hat keine verwertbare Analyse geliefert')
+        // Die Linie des übergeordneten Trends zeichnet der Code selbst — zusätzlich, nicht gegen die 6 Zeichnungen gezählt
+        if (htfTrend?.linie) ergebnis.linien.push(htfTrendLinie(htfTrend, englisch))
 
         const payload = {
-            symbol, interval, ...ergebnis, kerzenVon: vonT, kerzenBis: bisT, auswahl: kandidatenKurz(paket), fenster: fen,
+            symbol, interval, ...ergebnis, htf: wahl.htf, htfTrend: htfTrend ? { tf: htfTrend.tf, zustand: htfTrend.zustand, linie: !!htfTrend.linie } : null, kerzenVon: vonT, kerzenBis: bisT, auswahl: kandidatenKurz(paket), fenster: fen,
             nutzerWeggelassen: paket.nutzerWeggelassen || 0, nutzerUebergangen: paket.nutzerUebergangen || [],
             markt, provider: cfg.provider, model: cfg.model, costUsd: kosten, bildPruefung,
             kiGeneriert: true,
@@ -816,7 +839,7 @@ export function setupChartKiRoutes(app) {
         if (!isValidTimeframe(interval)) return res.status(400).json({ error: `Zeiteinheit ${interval} wird nicht unterstützt` })
         try {
             res.json(await erzeugeChartAnalyse({
-                symbol, interval, markt: req.body?.markt === 'spot' ? 'spot' : 'futures', modus: req.body?.modus, ergaenzen: req.body?.ergaenzen !== false,
+                symbol, interval, markt: req.body?.markt === 'spot' ? 'spot' : 'futures', modus: req.body?.modus, ergaenzen: req.body?.ergaenzen !== false, htf: req.body?.htf === true,
                 fenster: req.body?.fenster, bild: pruefeBild(req.body?.bild),
             }))
         } catch (e) {

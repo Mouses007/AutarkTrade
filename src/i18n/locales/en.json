@@ -6520,10 +6520,6 @@
       "liquidationen": "Liquidations (recorded)",
       "hebelzonen": "Leverage zones (model)",
       "orderbuch": "Order book walls",
-      "kurz": {
-        "hebelzonen": "Estimated prices where leveraged positions would be force-closed. Red below price: longs (forced selling), green above: shorts (forced buying). A model, not a measurement.",
-        "liquidationen": "Forced closures that actually happened, in USD per candle, from our own recording. Up: shorts, down: longs."
-      },
       "info": {
         "hebelzonen": "Leverage zones are a MODEL: from the open-interest history the code estimates where positions were opened and at which price they would be liquidated at common leverage. Below the price sit long liquidations — reaching them forces selling. Above sit short liquidations — forced buying. Dense zones often attract the price and speed up moves. Binance market data only.",
         "liquidationen": "Liquidations are MEASURED: forced closures the exchange actually reported, in USD per candle. Bars up = shorts liquidated (price rose), down = longs (price fell). Large spikes often mark exhaustion of a move. Futures only, only as far back as the recording ran (at most 7 days)."
@@ -6798,7 +6794,15 @@
         "widerstand": "now resistance",
         "unterstuetzung": "now support"
       },
-      "achtung": "Note:"
+      "achtung": "Note:",
+      "htfTrend": "Include higher-timeframe trend",
+      "htfTrendTipp": "Also draws at most one trendline of the higher-timeframe trend: preferably from the daily chart, from the 4h or weekly chart when the direction is better established there. Measured by the code and matching the structure (uptrend → rising support, downtrend → falling resistance).",
+      "htfOhneLinie": "Higher trend ({tf}): {richtung} — no matching trendline, nothing drawn.",
+      "htfRichtung": {
+        "auf": "uptrend",
+        "ab": "downtrend",
+        "keine": "no confirmed direction"
+      }
     },
     "indAktiv": "Active in this chart",
     "indHinzu": "Add",

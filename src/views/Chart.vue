@@ -35,6 +35,7 @@ import VorlagenMenue from '../components/chart/VorlagenMenue.vue'
 import { OVERLAYS, overlayAn } from '../utils/chart/overlays/liste.js'
 import OffeneReiter from '../components/chart/OffeneReiter.vue'
 import { Symbol, Hinweis, Kreisel } from '../components/basis'
+import InfoTipp from '../components/InfoTipp.vue'
 import { alarme, abonniereAlarme, neueAusloesungen, quittiere, alleQuittieren, aendereAlarm, loescheAlarm, ladeAlarme } from '../stores/chartAlarme.js'
 import { zeichnungenVon, aendere as zeichnungAendern, loesche as zeichnungLoeschen, macheRueckgaengig, macheWiederholen, fehlerMeldung } from '../stores/chartZeichnungen.js'
 import { neueInstanz, saubereParams, INDIKATOREN } from '../utils/chart/indikatorRegister.js'
@@ -1356,11 +1357,14 @@ watch(sichtbareAnzahl, async () => {
                             <div class="schubGruppe">
                                 <div class="schubTitel">{{ t('chart.schublade.imChart') }}</div>
                                 <div class="schubChips">
-                                    <button v-for="o in OVERLAYS" :key="o.id" type="button" class="schubChip"
-                                        :class="{ an: overlayAn(aktivesPanel, o.id) }" :aria-pressed="overlayAn(aktivesPanel, o.id)"
-                                        @click="aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), [o.id]: !overlayAn(aktivesPanel, o.id) }">
-                                        {{ t('chart.overlay.' + o.id) }}
-                                        <span v-if="te('chart.overlay.kurz.' + o.id)" class="chipErklaerung">{{ t('chart.overlay.kurz.' + o.id) }}</span></button>
+                                    <div v-for="o in OVERLAYS" :key="o.id" class="schubChipZeile">
+                                        <button type="button" class="schubChip"
+                                            :class="{ an: overlayAn(aktivesPanel, o.id) }" :aria-pressed="overlayAn(aktivesPanel, o.id)"
+                                            @click="aktivesPanel.overlays = { ...(aktivesPanel.overlays || {}), [o.id]: !overlayAn(aktivesPanel, o.id) }">
+                                            {{ t('chart.overlay.' + o.id) }}</button>
+                                        <!-- Erklärung als kleines „i" statt Fliesstext im Chip (Wunsch 03.11.2026) -->
+                                        <InfoTipp v-if="te('chart.overlay.info.' + o.id)" :schluessel="'chart.overlay.info.' + o.id" breit />
+                                    </div>
                                 </div>
                             </div>
                         </aside>
@@ -2162,16 +2166,13 @@ watch(sichtbareAnzahl, async () => {
     gap: 6px;
 }
 
-.schubChip .chipErklaerung {
-    display: block;
-    margin-top: 2px;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: normal;
-    line-height: 1.35;
-    text-align: left;
-    white-space: normal;
+.schubChipZeile {
+    display: flex;
+    align-items: center;
+    gap: 6px;
 }
+
+.schubChipZeile .schubChip { flex: 1; }
 
 .schubChip {
     text-align: left;

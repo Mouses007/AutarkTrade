@@ -57,6 +57,10 @@ function setzeModus(m) { modus.value = m; try { localStorage.setItem(MODUS_SCHLU
 const ERGAENZEN_SCHLUESSEL = 'chartKiErgaenzen'
 const ergaenzen = ref((() => { try { return localStorage.getItem(ERGAENZEN_SCHLUESSEL) !== 'aus' } catch { return true } })())
 watch(ergaenzen, (v) => { try { localStorage.setItem(ERGAENZEN_SCHLUESSEL, v ? 'an' : 'aus') } catch { /* kein Speicher */ } })
+// Übergeordneten Trend einschliessen: höchstens eine Trendlinie aus 1D (oder 4h/1W), vom Code gemessen (server/chart-htf-trend.js)
+const HTF_SCHLUESSEL = 'chartKiHtfTrend'
+const htfTrend = ref((() => { try { return localStorage.getItem(HTF_SCHLUESSEL) === 'an' } catch { return false } })())
+watch(htfTrend, (v) => { try { localStorage.setItem(HTF_SCHLUESSEL, v ? 'an' : 'aus') } catch { /* kein Speicher */ } })
 
 /*
  * Ein Bild des sichtbaren Charts geht immer mit (seit 31.10.2026 ohne Schalter): die
@@ -138,7 +142,7 @@ async function erstelle(modus) {
     try {
         const { data } = await axios.post('/api/chart/ki-analyse', {
             symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt,
-            modus, ergaenzen: ergaenzen.value,
+            modus, ergaenzen: ergaenzen.value, htf: htfTrend.value,
             fenster: sichtbarFenster(),
             bild: bildFuerKi(),
         })
@@ -250,6 +254,9 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                 <label class="option" :title="t('chart.ki.ergaenzenTipp')">
                     <input v-model="ergaenzen" type="checkbox" /> {{ t('chart.ki.ergaenzen') }}
                 </label>
+                <label class="option" :title="t('chart.ki.htfTrendTipp')">
+                    <input v-model="htfTrend" type="checkbox" /> {{ t('chart.ki.htfTrend') }}
+                </label>
                 <InfoTipp schluessel="chart.ki.hinweis" breit />
             </div>
         </div>
@@ -264,6 +271,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
             <div v-if="analyse.auswahl" class="struktur">{{ struktur(analyse) }}</div>
             <div class="artZeile">{{ t(analyse.modus === 'eigene' ? 'chart.ki.artEigene' : 'chart.ki.artSetzen') }}</div>
             <p v-if="analyse.text" class="text" data-ki-generiert="true">{{ analyse.text }}</p>
+            <div v-if="analyse.htfTrend && !analyse.htfTrend.linie" class="hinweis">{{ t('chart.ki.htfOhneLinie', { tf: analyse.htfTrend.tf, richtung: t('chart.ki.htfRichtung.' + (analyse.htfTrend.zustand === 1 ? 'auf' : analyse.htfTrend.zustand === -1 ? 'ab' : 'keine')) }) }}</div>
             <template v-if="eigeneZeilen.length">
                 <div class="abschnitt">{{ t('chart.ki.meineZeichnungen') }}</div>
                 <div v-if="ausserListe" class="hinweis">{{ ausserListe }}</div>
