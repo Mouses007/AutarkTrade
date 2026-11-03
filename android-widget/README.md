@@ -66,12 +66,14 @@ The package name `com.autarktrade.widget` stays the same.
    with a warning) — cleartext therefore stays allowed in `network_security_config.xml`.
 4. Tap a coin to open its chart in AutarkTrade; tap an exchange header to show that exchange's
    KPIs at the top. Links go to the **installed web app** if you enter its address under
-   „Adresse der installierten Web-App" (e.g. `https://192.168.178.100:8443`); left empty they
+   „Adresse der Web-App für Links" (e.g. `https://192.168.178.100:8443`); left empty they
    go to `https://host:8443` with HTTPS on (`http://host:port` with it off). Install
    AutarkTrade in Chrome over HTTPS with „Installieren" (a WebAPK — over http it is only a
    shortcut, which cannot receive links). The status line below the field says whether such
-   an app was found; without one, links open in the browser. Alarm notifications use the
-   same address.
+   an app was found; without one (e.g. Brave or Chrome only created a shortcut), links open
+   in the app's own **built-in view** (since 4.2.0-30; before: the browser). It trusts only
+   the paired AutarkTrade CA and checks the host name; with the password gate on you sign in
+   there once. Alarm notifications use the same address.
 5. The widget refreshes automatically (~every 15 min, Android's minimum for background
    widget updates) and on demand via the **↻ button**. Tap the **title** to reopen config.
 
@@ -136,8 +138,11 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
   (e.g. SOL for Coin-M), never force-converted to USDT.
 - `WidgetConfigActivity` — host/port/key/filter, „test connection", saved per widget; also the
   chart-alarm card (global settings). Opens from the launcher without a widget, too.
+- `WebAnsichtActivity` — built-in WebView for links when no verified WebAPK takes them:
+  TLS only against the paired CA (checked in `onReceivedSslError`, plus host name), navigation
+  limited to the start origin, other links go to the browser. Not exported.
 - `WidgetKlickActivity` — invisible trampoline for list taps: a coin row opens
-  `/chart?symbol=…&boerse=…` in the browser, a section header switches the KPI strip to that
+  `/chart?symbol=…&boerse=…` (WebAPK or built-in view), a section header switches the KPI strip to that
   exchange. A collection has only one click template, and a broadcast may not start the browser.
 - `PushDienst` — UnifiedPush `PushService`: stores the address from ntfy, enters it at the
   server, hands decrypted messages to `ChartAlarme.empfangen` (connector 3.0.10 — the last one
@@ -159,7 +164,7 @@ The widget's 15-minute refresh re-arms the polling chain if the system dropped i
 
 ## Versioning
 
-`versionName` tracks the AutarkTrade version plus the build number (currently **4.2.0-29**);
+`versionName` tracks the AutarkTrade version plus the build number (currently **4.2.0-30**);
 the APK file carries it in its name.
 
 Since 4.2.0-28: HTTPS with the paired AutarkTrade CA as the only trust anchor (default for

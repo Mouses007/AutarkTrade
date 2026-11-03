@@ -332,7 +332,7 @@ class WidgetConfigActivity : AppCompatActivity() {
         }
     }
 
-    /** Öffnen Links in einer installierten App oder im Browser? (für die eingetragene bzw. API-Adresse) */
+    /** Öffnen Links in einer installierten App oder in der eingebauten Ansicht? (für die eingetragene bzw. API-Adresse) */
     private fun zeigeWebStand() {
         if (!::web.isInitialized) return
         val eingabe = web.text.toString().trim().trimEnd('/')

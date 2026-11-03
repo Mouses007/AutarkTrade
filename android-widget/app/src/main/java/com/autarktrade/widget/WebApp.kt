@@ -18,11 +18,13 @@ import java.security.MessageDigest
  *
  * Android 12+ öffnet Web-Links ohne Domain-Prüfung im Standard-Browser, auch wenn
  * eine WebAPK passt. Darum wird die WebAPK gezielt gesucht und der Link an sie
- * adressiert; gibt es keine, öffnet wie bisher der Browser.
+ * adressiert; gibt es keine, öffnet die eingebaute Ansicht ([WebAnsichtActivity]) —
+ * Brave und Chrome legen beim „Installieren" oft nur eine Verknüpfung an, die keine
+ * Links annimmt.
  *
  * Der Paketname allein beweist nichts (Audit SEC-AND-003): jede App kann sich
  * `org.chromium.webapk.x` nennen und einen http(s)-Filter anmelden. Darum muss
- * ein Kandidat zusätzlich [echteWebApk] bestehen, sonst öffnet der Browser.
+ * ein Kandidat zusätzlich [echteWebApk] bestehen, sonst öffnet die eingebaute Ansicht.
  */
 object WebApp {
 
@@ -58,7 +60,7 @@ object WebApp {
      *     App fällt durch.
      *  4. Das Signaturzertifikat wird beim ersten Treffer gemerkt (Prefs) und muss danach
      *     gleich bleiben: eine später untergeschobene Ersatz-App fällt durch.
-     * Jede fehlende Angabe heisst „nein" — dann öffnet der Browser, das ist nur unbequemer.
+     * Jede fehlende Angabe heisst „nein" — dann öffnet die eingebaute Ansicht.
      */
     private fun echteWebApk(ctx: Context, paket: String, uri: Uri): Boolean = try {
         val pm = ctx.packageManager
@@ -98,9 +100,12 @@ object WebApp {
         return gemerkt == hash
     }
 
-    /** VIEW-Intent für [uri], an die WebAPK adressiert, wenn es eine geprüfte gibt. */
-    fun oeffnen(ctx: Context, uri: Uri): Intent =
-        Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).apply {
-            webApk(ctx, uri)?.let { setPackage(it) }
-        }
+    /**
+     * Intent für [uri]: an die WebAPK adressiert, wenn es eine geprüfte gibt, sonst die
+     * eingebaute [WebAnsichtActivity] (seit 4.2.0-30; vorher der Browser).
+     */
+    fun oeffnen(ctx: Context, uri: Uri): Intent {
+        val paket = webApk(ctx, uri) ?: return WebAnsichtActivity.intent(ctx, uri)
+        return Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK).setPackage(paket)
+    }
 }

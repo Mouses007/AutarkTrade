@@ -86,6 +86,17 @@
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
+        <!-- Eingebaute Ansicht der Web-App für Links aus Benachrichtigungen und Widget, wenn
+             keine installierte WebAPK sie annimmt (WebAnsichtActivity). Nur aus der App. -->
+        <activity
+            android:name=".WebAnsichtActivity"
+            android:exported="false"
+            android:label="AutarkTrade"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.autarktrade.widget.web"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode|density"
+            android:theme="@style/Theme.TradingWidget" />
+
         <!-- Sofort-Zustellung: Nachrichten des UnifiedPush-Verteilers (ntfy) -->
         <service
             android:name=".PushDienst"

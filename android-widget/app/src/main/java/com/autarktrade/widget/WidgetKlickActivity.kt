@@ -48,7 +48,7 @@ class WidgetKlickActivity : Activity() {
             .appendQueryParameter("symbol", sauber)
             .apply { if (!broker.isNullOrBlank()) appendQueryParameter("boerse", broker.lowercase()) }
             .build()
-        android.util.Log.d("TJWidget", "Chart öffnen: $url → ${WebApp.webApk(this, url) ?: "Browser"}")
+        android.util.Log.d("TJWidget", "Chart öffnen: $url → ${WebApp.webApk(this, url) ?: "eingebaute Ansicht"}")
         try {
             startActivity(WebApp.oeffnen(this, url))
         } catch (e: Exception) {

@@ -227,7 +227,7 @@ object ChartAlarme {
         Sprache.vorlesen(ctx, neu)
     }
 
-    /** Tipp → Web-App im Browser auf /chart?symbol=…; ohne Symbol der Chart-Arbeitsplatz. */
+    /** Tipp → Web-App (WebAPK oder eingebaute Ansicht) auf /chart?symbol=…; ohne Symbol der Chart-Arbeitsplatz. */
     private fun chartLink(ctx: Context, a: Ausloesung?): PendingIntent {
         val basis = WebApp.basis(ctx, Prefs.alarmHost(ctx), Prefs.alarmPort(ctx)) + "/chart"
         val url = if (a == null || a.symbol.isBlank()) basis
