@@ -1289,6 +1289,8 @@ export class ZeichenEbene {
                     const y = Y(p)
                     if (fehlt(y)) return
                     this.linie(ctx, x1, y, ende, y, { farbe, breite: 1, strich })
+                    // Die Linie selbst ist auch Klickfläche: ein Klick ohne Ziehen öffnet die Einstellungen wie ihre Beschriftung
+                    if (this._schildVon && this._schilder) this._schilder.push({ z: this._schildVon, x: Math.min(x1, ende), y: y - TREFFER, w: Math.abs(ende - x1), h: 2 * TREFFER })
                     this.beschriftung(ctx, `${text} ${this.formatPreis(p)}`, Math.min(ende, breite) - 4, y - 3, farbe, { rechtsbuendig: true, hinten: 'rgba(0,0,0,0.45)' })
                 }
                 if (s.marken !== false) {
