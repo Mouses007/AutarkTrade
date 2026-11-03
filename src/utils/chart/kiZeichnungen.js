@@ -52,8 +52,9 @@ const DREIECK_FARBE = { aufsteigend: KI_FARBEN.unterstuetzung, fallenderKeil: KI
 export function dreieckAlsZeichnungen(l) {
     const stil = { farbe: DREIECK_FARBE[l.form] || FARBE, breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt' }
     return [
-        { typ: 'trendlinie', punkte: [{ t: l.tA, p: l.obenA }, { t: l.tE, p: l.obenE }], stil: { ...stil, text: mitId(l.labelKurz || l.label, l.id), textPos: 'ende' } },
-        { typ: 'trendlinie', punkte: [{ t: l.tA, p: l.untenA }, { t: l.tE, p: l.untenE }], stil: { ...stil } },
+        // Jede Kante ab ihrer eigenen ersten Berührung (seit 03.11.2026); ältere Analysen ab dem gemeinsamen Anfang
+        { typ: 'trendlinie', punkte: [{ t: l.tOA ?? l.tA, p: l.obenOA ?? l.obenA }, { t: l.tE, p: l.obenE }], stil: { ...stil, text: mitId(l.labelKurz || l.label, l.id), textPos: 'ende' } },
+        { typ: 'trendlinie', punkte: [{ t: l.tUA ?? l.tA, p: l.untenUA ?? l.untenA }, { t: l.tE, p: l.untenE }], stil: { ...stil, ...(l.id ? { text: `${l.id} unten`, textPos: 'ende' } : {}) } },
     ]
 }
 

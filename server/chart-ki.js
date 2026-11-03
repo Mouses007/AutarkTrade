@@ -449,6 +449,7 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
                 id: k.id, quelle: 'dreieck', art: 'dreieck', form: k.form, label: dreieckName(k, englisch), labelKurz: dreieckBeschriftung(k, englisch),
                 grund: wort(warum ? `${warum} ${gemessenD}` : gemessenD, 300), gewicht: k.beruehrOben + k.beruehrUnten >= 7 ? 'stark' : 'mittel',
                 tA: k.tA, obenA: k.obenA, untenA: k.untenA, tE: k.tE, obenE: k.obenE, untenE: k.untenE,
+                tOA: k.tOA ?? null, obenOA: k.obenOA ?? null, tUA: k.tUA ?? null, untenUA: k.untenUA ?? null,
                 p1: k.untenJetzt, p2: k.obenJetzt, t1: k.tA, t2: k.tE, bruch: k.bruch,
             })
             continue
@@ -605,6 +606,7 @@ export function kandidatenKurz(paket) {
             abstandAtr: k.abstandAtr ?? null, rolle: k.rolle ?? null, deckt: k.deckt ?? null, abschnitt: k.abschnitt ?? null, bereich: k.bereich ?? null,
             breite: k.breite ?? null, muster: k.muster ?? null, richtung: k.richtung ?? null, form: k.form ?? null,
             tA: k.tA ?? null, obenA: k.obenA ?? null, untenA: k.untenA ?? null, tE: k.tE ?? null, obenE: k.obenE ?? null, untenE: k.untenE ?? null,
+            tOA: k.tOA ?? null, obenOA: k.obenOA ?? null, tUA: k.tUA ?? null, untenUA: k.untenUA ?? null,
         })),
     }
 }

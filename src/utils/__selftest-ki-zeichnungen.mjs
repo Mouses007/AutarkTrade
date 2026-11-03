@@ -131,8 +131,10 @@ console.log('\nKanal-Beschriftung\n')
     const d = { id: 'M1', art: 'dreieck', form: 'fallenderKeil', label: 'Fallender Keil (3/4 Berührungen)', labelKurz: 'Fallender Keil', gewicht: 'stark',
         tA: 1000, obenA: 120, untenA: 100, tE: 9000, obenE: 104, untenE: 98, p1: 99, p2: 105, t1: 1000, t2: 9000 }
     const zz = dreieckAlsZeichnungen(d)
-    check('Dreieck: zwei Trendlinien, obere mit Namen, grün (fallender Keil)', zz.length === 2 && zz.every((z) => z.typ === 'trendlinie') && zz[0].stil.text.includes('Fallender Keil') && !zz[1].stil.text && zz[0].stil.farbe === KI_FARBEN.unterstuetzung)
+    check('Dreieck: zwei Trendlinien, obere mit Namen, untere „M1 unten“, grün (fallender Keil)', zz.length === 2 && zz.every((z) => z.typ === 'trendlinie') && zz[0].stil.text.includes('Fallender Keil') && zz[1].stil.text === 'M1 unten' && zz[0].stil.farbe === KI_FARBEN.unterstuetzung)
     check('Dreieck: Kanten vom Beginn bis zum Ende', zz[0].punkte[0].p === 120 && zz[0].punkte[1].p === 104 && zz[1].punkte[1].t === 9000)
+    const ze = dreieckAlsZeichnungen({ ...d, tOA: 2000, obenOA: 118, tUA: 3000, untenUA: 99.5 })
+    check('Dreieck: jede Kante ab ihrer eigenen ersten Berührung', ze[0].punkte[0].t === 2000 && ze[0].punkte[0].p === 118 && ze[1].punkte[0].t === 3000 && ze[1].punkte[0].p === 99.5)
     const v = kiVorschau({ linien: [d], zonen: [], kerzenVon: 0, kerzenBis: 9000 })
     check('Vorschau: zwei Zeichnungen, ein Schlüssel, eindeutige ids', v.length === 2 && v.every((z) => z.ki === 'linie0') && new Set(v.map((z) => z.id)).size === 2)
     check('grauer Kandidat: Dreiecke nicht doppelt', !kandidatenVorschau({ auswahl: { kandidaten: [{ id: 'M2', quelle: 'dreieck' }] }, linien: [], zonen: [] }).length)

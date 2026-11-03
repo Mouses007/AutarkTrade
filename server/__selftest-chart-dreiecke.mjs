@@ -6,6 +6,7 @@
  *   node server/__selftest-chart-dreiecke.mjs
  */
 import { kandidatenDreiecke, dreieckForm, dreieckName } from './chart-dreiecke.js'
+import fs from 'node:fs'
 import { atr } from '../shared/indicators.js'
 
 let bestanden = 0
@@ -64,6 +65,28 @@ check('auseinanderlaufend ist kein Dreieck', !formen(formation((x) => 105 + 8 * 
     const ausbruch = [...k, ...[1, 2].map((j) => ({ t: letzte.t + j * H, o: 104, h: 108, l: 103.5, c: 107.5, v: 100 }))]
     const d = finde(ausbruch).find((x) => x.form === 'symmetrisch')
     check('Schluss über der oberen Kante am Ende = Bruch oben', d && d.bruch === 'oben', JSON.stringify(finde(ausbruch).map((x) => [x.form, x.bruch])))
+}
+
+// Echte Kerzen (03.11.2026): ein V nach oben ist kein Keil — Doppelhoch und Doppeltief
+// zählten je zweimal, zwischen den Kanten pendelte nichts. Ein Lehrbuch-Dreieck bleibt.
+const echt = (datei) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${datei}`, import.meta.url))).kerzen
+    .map(([t, o, h, l, c, v]) => ({ t, o, h, l, c, v }))
+{
+    const f = finde(echt('chart-avax-15m-kein-keil.json'))
+    check('AVAXUSDT 15m: das V ist kein steigender Keil', !f.length, JSON.stringify(f.map((d) => [d.form, d.beruehrOben, d.beruehrUnten])))
+}
+{
+    const f = finde(echt('chart-btc-4h-dreieck.json'))
+    const d = f.find((x) => x.form === 'symmetrisch')
+    check('BTCUSDT 4h: symmetrisches Dreieck erkannt', !!d, JSON.stringify(f.map((x) => x.form)))
+    const p = d?.pendelPunkte || []
+    check('Berührungen wechseln oben/unten ab, ≥ 5, je Kante ≥ 2', p.length >= 5 && p.every((x, i) => !i || x.oben !== p[i - 1].oben) && d.beruehrOben >= 2 && d.beruehrUnten >= 2, JSON.stringify(p))
+    check('Formation beginnt an der ersten Berührung, jede Kante an ihrer eigenen', d && d.tA === p[0].t && d.tOA === p.find((x) => x.oben).t && d.tUA === p.find((x) => !x.oben).t)
+}
+{
+    // Ein V: hinunter, einmal hinauf, kurz zurück — zwei Kanten lassen sich hineinlegen, ein Pendel ist es nicht
+    const k = formation((x) => 110 - 7 * x, (x) => 90 + 7 * x, { N: 100, P: 100 })
+    check('ein einziger Schwung ist kein Dreieck', !formen(k).length, JSON.stringify(formen(k)))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

@@ -13,8 +13,13 @@
  *   fallenderKeil   beide fallend, die obere steiler (läuft zusammen)
  * „Waagerecht" heisst: weniger als `DREIECK.FLACH_ATR` über die Länge.
  *
- * Bedingungen: jede Kante durch zwei echte Wendepunkte, je Kante ≥ 2 und
- * zusammen ≥ `MIN_SUMME` (6) Berührungen; die Höhe schrumpft bis jetzt auf
+ * Bedingungen: jede Kante durch zwei echte Wendepunkte; der Kurs PENDELT
+ * zwischen den Kanten (`pendel`): Schwünge, die mindestens `PENDEL_SCHWUNG` der
+ * Höhe an ihrer Stelle umkehren, abwechselnd oben und unten, und jeder davon
+ * endet an seiner Kante — mindestens `MIN_PENDEL` (5) solche Berührungen, je
+ * Kante ≥ 2. Seit 03.11.2026: vorher reichten ≥ 6 Wendepunkte nahe den Kanten,
+ * und AVAXUSDT 15m wurde ein „steigender Keil" aus einem einzigen V — Doppelhoch
+ * und Doppeltief zählten je zweimal, zwischen den Kanten pendelte nichts. Die Höhe schrumpft bis jetzt auf
  * höchstens `MAX_RESTHOEHE` der Anfangshöhe, die Spitze liegt noch vor oder
  * höchstens kurz hinter der letzten Kerze; Schlüsse draussen wie beim Kanal
  * (kurze Ausflüge ja, weit draussen nein) — ausser am Ende: dort ist es ein
@@ -30,7 +35,12 @@ export const DREIECK = {
     DOCHT_ATR: 1,
     MAX_FOLGE: 2,
     MAX_AUSSEN: 0.1,
-    MIN_SUMME: 6,             // wie beim Kanal; mit 5 fand sich auf fast jedem Chart ein „Dreieck" mit 2/3 Berührungen
+    MIN_SUMME: 6,             // Vorauswahl der Kanten: Wendepunkte nahe beiden Kanten zusammen
+    MIN_PENDEL: 5,            // abwechselnde Berührungen (3 + 2), wie im Lehrbuch
+    PENDEL_SCHWUNG: 0.5,      // ein Schwung kehrt um mindestens diesen Teil der Höhe an seiner Stelle um
+    PENDEL_NAH: 0.12,         // … und endet höchstens so viel der Höhe vor seiner Kante
+    PENDEL_UEBER: 0.08,       // … oder so viel darüber hinaus (ein Docht weit jenseits: die Kante stimmt dort nicht)
+    PENDEL_BODEN_ATR: 0.1,    // kleiner Boden in ATR für alle drei, damit eine fast fertige Spitze nicht an Nullen scheitert
     FLACH_ATR: 0.75,          // Kante über die Länge weniger geneigt: waagerecht
     MIN_HOEHE_ATR: 1.5,       // Höhe am Anfang: kleiner ist es Rauschen
     MAX_HOEHE_ATR: 14,
@@ -38,6 +48,50 @@ export const DREIECK = {
     SPITZE_NACH: 0.15,        // Spitze darf höchstens so viel der Länge HINTER der letzten Kerze schon erreicht sein
     SPITZE_VOR: 2,            // … und höchstens so viele Längen voraus liegen
     MAX_KANTEN: 6,            // je Seite die besten so vielen Kanten kombinieren
+}
+
+/**
+ * Pendel zwischen zwei Kanten ab `ab`: Zickzack, dessen Umkehrschwelle mit der
+ * Höhe schrumpft (`PENDEL_SCHWUNG` × Höhe). Jeder fertige Schwung muss an
+ * seiner Kante enden (`PENDEL_NAH` davor bis `PENDEL_UEBER` darüber), sonst
+ * reisst die Folge ab. Der letzte, noch laufende Schwung zählt nur, wenn er die
+ * Kante schon erreicht hat (oder durchbricht: das ist der Bruch, keine Berührung).
+ * Rein; liefert die Berührungen in zeitlicher Folge.
+ */
+export function pendel(kerzen, ab, go, gu, A) {
+    const n = kerzen.length
+    // Alles an der Höhe gemessen, nur ein kleiner Boden in ATR: eine Toleranz in ATR
+    // allein ist bei einer schmalen Formation so breit wie die Formation selbst
+    const hoehe = (i) => Math.max(go(i) - gu(i), 0)
+    const schwelle = (i) => Math.max(DREIECK.PENDEL_BODEN_ATR * A, DREIECK.PENDEL_SCHWUNG * hoehe(i))
+    const nah = (i) => DREIECK.PENDEL_BODEN_ATR * A + DREIECK.PENDEL_NAH * hoehe(i)
+    const ueber = (i) => DREIECK.PENDEL_BODEN_ATR * A + DREIECK.PENDEL_UEBER * hoehe(i)
+    // An der Kante: knapp davor oder höchstens `ueber` darüber hinaus — ein Docht weit
+    // jenseits heisst, die Kante stimmt dort nicht
+    const anKante = (s) => s.oben
+        ? kerzen[s.i].h >= go(s.i) - nah(s.i) && kerzen[s.i].h <= go(s.i) + ueber(s.i)
+        : kerzen[s.i].l <= gu(s.i) + nah(s.i) && kerzen[s.i].l >= gu(s.i) - ueber(s.i)
+    // Zickzack: Richtung aus der ersten Kerze, die näher an einer Kante liegt
+    const schwuenge = []
+    let oben = kerzen[ab].h - gu(ab) > go(ab) - kerzen[ab].l   // näher oben: erster Schwung ist ein Hoch
+    let ext = ab
+    for (let i = ab + 1; i < n; i++) {
+        if (oben) {
+            if (kerzen[i].h >= kerzen[ext].h) ext = i
+            else if (kerzen[ext].h - kerzen[i].l >= schwelle(i)) { schwuenge.push({ i: ext, oben: true }); oben = false; ext = i }
+        } else {
+            if (kerzen[i].l <= kerzen[ext].l) ext = i
+            else if (kerzen[i].h - kerzen[ext].l >= schwelle(i)) { schwuenge.push({ i: ext, oben: false }); oben = true; ext = i }
+        }
+    }
+    const offen = { i: ext, oben, offen: true }
+    // Längste Folge, in der jeder Schwung an seiner Kante endet; sie muss bis jetzt reichen
+    const alle = [...schwuenge, offen]
+    let start = alle.length - 1
+    if (!anKante(offen)) start = alle.length - 2
+    const ende = start
+    while (start >= 0 && anKante(alle[start])) start--
+    return alle.slice(start + 1, ende + 1).filter((s) => !(s.offen && (s.oben ? kerzen[s.i].c > go(s.i) + nah(s.i) : kerzen[s.i].c < gu(s.i) - nah(s.i))))
 }
 
 /** Form aus den Steigungen (Preis über die ganze Länge, in ATR). */
@@ -103,13 +157,21 @@ export function kandidatenDreiecke(kerzen, A) {
         const obenK = kanten(true), untenK = kanten(false)
         for (const ok of obenK) {
             for (const uk of untenK) {
-                const anfang = Math.min(ok.i1, uk.i1)
+                if (!(ok.m < uk.m)) continue                               // läuft nicht zusammen
+                if (ok.ber + uk.ber < DREIECK.MIN_SUMME) continue
+                // Pendelt der Kurs wirklich zwischen den Kanten? Die Formation beginnt an
+                // ihrer ersten Berührung — nicht am ersten Anker, sonst hängt ein Dreieck
+                // aus den letzten 20 Kerzen an einer Länge von 230.
+                const pen = pendel(kerzen, Math.min(ok.i1, uk.i1), ok.g, uk.g, A)
+                const bO = pen.filter((x) => x.oben).length, bU = pen.length - bO
+                if (pen.length < DREIECK.MIN_PENDEL || bO < 2 || bU < 2) continue
+                const iO = pen.find((x) => x.oben).i, iU = pen.find((x) => !x.oben).i
+                const anfang = pen[0].i
                 const laenge = n - anfang
                 if (laenge < L * 0.6) continue
                 const hoehe0 = ok.g(anfang) - uk.g(anfang)
                 const hoeheJ = ok.g(n - 1) - uk.g(n - 1)
                 if (!(hoehe0 >= DREIECK.MIN_HOEHE_ATR * Aw) || hoehe0 > DREIECK.MAX_HOEHE_ATR * Aw) continue
-                if (!(ok.m < uk.m)) continue                               // läuft nicht zusammen
                 const spitze = anfang + hoehe0 / (uk.m - ok.m)             // dort treffen sich die Kanten
                 if (spitze < n - 1 - DREIECK.SPITZE_NACH * laenge || spitze > n - 1 + DREIECK.SPITZE_VOR * laenge) continue
                 if (hoeheJ > DREIECK.MAX_RESTHOEHE * hoehe0) continue
@@ -125,8 +187,6 @@ export function kandidatenDreiecke(kerzen, A) {
                     if (raus) { aussen++; folge++ } else { maxFolge = Math.max(maxFolge, folge); folge = 0 }
                 }
                 if (maxFolge > DREIECK.MAX_FOLGE || aussen > DREIECK.MAX_AUSSEN * laenge + folge) continue
-                const bO = ok.ber, bU = uk.ber
-                if (bO + bU < DREIECK.MIN_SUMME) continue
                 const c = kerzen[n - 1].c
                 const bruch = c > ok.g(n - 1) + tol ? 'oben' : c < uk.g(n - 1) - tol ? 'unten' : null
                 if (folge > DREIECK.MAX_FOLGE && !bruch) continue
@@ -138,7 +198,10 @@ export function kandidatenDreiecke(kerzen, A) {
                 funde.push({
                     quelle: 'dreieck', form: f, laenge,
                     tA: kerzen[anfang].t, obenA: ok.g(anfang), untenA: uk.g(anfang),
+                    // Jede Kante ab ihrer eigenen ersten Berührung gezeichnet — nicht 0.3 unter jeder Kerze
+                    tOA: kerzen[iO].t, obenOA: ok.g(iO), tUA: kerzen[iU].t, untenUA: uk.g(iU),
                     tE: zeit(ende), obenE: ok.g(ende), untenE: uk.g(ende),
+                    pendelPunkte: pen.map((x) => ({ t: kerzen[x.i].t, p: x.oben ? kerzen[x.i].h : kerzen[x.i].l, oben: x.oben })),
                     obenJetzt: ok.g(n - 1), untenJetzt: uk.g(n - 1),
                     spitzeT: zeit(spitze), spitzeP: ok.g(spitze),
                     hoeheAtr: hoehe0 / A, restPct: (hoeheJ / hoehe0) * 100,
