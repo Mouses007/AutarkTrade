@@ -446,7 +446,7 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
             kanalIds.add(id)
             belegt.add(id)
             linien.push({
-                id: k.id, quelle: 'dreieck', art: 'dreieck', form: k.form, label: dreieckName(k, englisch), labelKurz: dreieckBeschriftung(k, englisch),
+                id: k.id, quelle: 'dreieck', art: 'dreieck', form: k.form, muster: k.muster ?? null, label: dreieckName(k, englisch), labelKurz: dreieckBeschriftung(k, englisch),
                 grund: wort(warum ? `${warum} ${gemessenD}` : gemessenD, 300), gewicht: k.beruehrOben + k.beruehrUnten >= 7 ? 'stark' : 'mittel',
                 tA: k.tA, obenA: k.obenA, untenA: k.untenA, tE: k.tE, obenE: k.obenE, untenE: k.untenE,
                 tOA: k.tOA ?? null, obenOA: k.obenOA ?? null, tUA: k.tUA ?? null, untenUA: k.untenUA ?? null,

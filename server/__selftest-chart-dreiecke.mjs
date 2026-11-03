@@ -5,7 +5,8 @@
  *
  *   node server/__selftest-chart-dreiecke.mjs
  */
-import { kandidatenDreiecke, dreieckForm, dreieckName } from './chart-dreiecke.js'
+import { kandidatenDreiecke, dreieckForm, dreieckName, dreieckKurz } from './chart-dreiecke.js'
+import { wimpel } from './chart-kandidaten.js'
 import fs from 'node:fs'
 import { atr } from '../shared/indicators.js'
 
@@ -87,6 +88,25 @@ const echt = (datei) => JSON.parse(fs.readFileSync(new URL(`./fixtures/${datei}`
     // Ein V: hinunter, einmal hinauf, kurz zurück — zwei Kanten lassen sich hineinlegen, ein Pendel ist es nicht
     const k = formation((x) => 110 - 7 * x, (x) => 90 + 7 * x, { N: 100, P: 100 })
     check('ein einziger Schwung ist kein Dreieck', !formen(k).length, JSON.stringify(formen(k)))
+}
+
+{
+    // Wimpel: Fahnenstange 100 → 130 in 10 Kerzen, danach ein kurzes symmetrisches Dreieck
+    const k = []
+    for (let i = 0; i < 40; i++) { const v = 100 + Math.sin(i / 3) * 0.3; k.push({ o: v, h: v + 0.2, l: v - 0.2, c: v }) }
+    for (let i = 1; i <= 10; i++) { const v = 100 + 3 * i; k.push({ o: v - 3, h: v + 0.2, l: v - 3.2, c: v }) }
+    const N = 32, P = 8
+    for (let i = 0; i < N; i++) {
+        const x = i / (N - 1), ph = (i % P) / P, w = 1 - Math.abs(2 * ph - 1)
+        const o = 130 - 4 * x, u = 122 + 4 * x, v = o - (o - u) * w
+        k.push({ o: v, h: v + 0.08, l: v - 0.08, c: v })
+    }
+    const kz = k.map((x, i) => ({ ...x, t: i * H, v: 100 }))
+    const A = atr(kz, 14).at(-1)
+    const d = kandidatenDreiecke(kz, A).map((x) => wimpel(kz, x, A)).find((x) => x.form === 'symmetrisch')
+    check('symmetrisches Dreieck nach Fahnenstange auf = Bull-Wimpel', d?.muster === 'bullWimpel' && dreieckKurz(d) === 'Bull-Wimpel', JSON.stringify(d && { m: d.muster, L: d.laenge }))
+    const ohne = kandidatenDreiecke(formation((x) => 110 - 7 * x, (x) => 90 + 7 * x), 1).map((x) => wimpel([], x, 1))
+    check('ohne Stange bleibt es ein Dreieck', ohne.every((x) => !x.muster))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

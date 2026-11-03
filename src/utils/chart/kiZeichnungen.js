@@ -50,7 +50,7 @@ export function kanalAlsZeichnung(l) {
  */
 const DREIECK_FARBE = { aufsteigend: KI_FARBEN.unterstuetzung, fallenderKeil: KI_FARBEN.unterstuetzung, absteigend: KI_FARBEN.widerstand, steigenderKeil: KI_FARBEN.widerstand }
 export function dreieckAlsZeichnungen(l) {
-    const stil = { farbe: DREIECK_FARBE[l.form] || FARBE, breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt' }
+    const stil = { farbe: (l.muster === 'bullWimpel' ? KI_FARBEN.unterstuetzung : l.muster === 'bearWimpel' ? KI_FARBEN.widerstand : DREIECK_FARBE[l.form]) || FARBE, breite: l.gewicht === 'stark' ? 2 : 1, strich: 'gestrichelt' }
     return [
         // Jede Kante ab ihrer eigenen ersten Berührung (seit 03.11.2026); ältere Analysen ab dem gemeinsamen Anfang
         { typ: 'trendlinie', punkte: [{ t: l.tOA ?? l.tA, p: l.obenOA ?? l.obenA }, { t: l.tE, p: l.obenE }], stil: { ...stil, text: mitId(l.labelKurz || l.label, l.id), textPos: 'ende' } },

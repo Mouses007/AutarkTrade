@@ -247,11 +247,14 @@ const NAMEN = {
     absteigend: ['Absteigendes Dreieck', 'Descending triangle'],
     steigenderKeil: ['Steigender Keil', 'Rising wedge'],
     fallenderKeil: ['Fallender Keil', 'Falling wedge'],
+    // Wimpel (`wimpel` in chart-kandidaten.js): symmetrisches Dreieck nach einer Fahnenstange
+    bullWimpel: ['Bull-Wimpel', 'Bull pennant'],
+    bearWimpel: ['Bear-Wimpel', 'Bear pennant'],
 }
 const BRUCH = { oben: [', nach oben gebrochen', ', broken up'], unten: [', nach unten gebrochen', ', broken down'] }
 
 /** Kurzer Name („Fallender Keil") — für jede weitere Nennung. */
-export const dreieckKurz = (k, englisch = false) => NAMEN[k.form]?.[englisch ? 1 : 0] || (englisch ? 'Triangle' : 'Dreieck')
+export const dreieckKurz = (k, englisch = false) => NAMEN[k.muster]?.[englisch ? 1 : 0] || NAMEN[k.form]?.[englisch ? 1 : 0] || (englisch ? 'Triangle' : 'Dreieck')
 /** Beschriftung im Chart: Name plus Bruch. */
 export const dreieckBeschriftung = (k, englisch = false) => dreieckKurz(k, englisch) + (k.bruch ? BRUCH[k.bruch][englisch ? 1 : 0] : '')
 /** Name mit gemessenen Berührungen, vom Code vergeben. */

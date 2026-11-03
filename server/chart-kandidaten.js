@@ -380,6 +380,26 @@ export function kandidatenKanaele(kerzen, A) {
     return [kurz, lang].filter(Boolean).map(({ wert, ...k }) => k)
 }
 
+/**
+ * Wimpel: ein kurzes symmetrisches Dreieck direkt nach einer Fahnenstange — dieselbe
+ * Stange wie bei der Flagge (`fahnenstange`, Höhe am Anfang statt Kanalbreite).
+ * Stange auf = Bull-Wimpel, ab = Bear-Wimpel; die erste Berührung ist das Ende der Stange.
+ * Sonst bleibt das Dreieck, was es ist.
+ */
+export function wimpel(kerzen, d, A) {
+    if (d.form !== 'symmetrisch') return d
+    const anfang = kerzen.findIndex((k) => k.t >= d.tA)
+    if (anfang < 0) return d
+    const steig = ((d.obenJetzt + d.untenJetzt) - (d.obenA + d.untenA)) / 2
+    const st = fahnenstange(kerzen, anfang, A, d.obenA - d.untenA, steig)
+    if (!st) return d
+    // Die Stange endet an der ersten Berührung — oben bei Bull, unten bei Bear. Sonst gehört die
+    // Stange selbst zur Formation (HBARUSDT 1h: die untere Kante begann am Fuss der Stange).
+    const erste = d.pendelPunkte?.[0]
+    if (!erste || erste.oben !== (st.muster === 'bullFlagge')) return d
+    return { ...d, muster: st.muster === 'bullFlagge' ? 'bullWimpel' : 'bearWimpel', stangeAtr: st.groesse / A, stangeKerzen: st.kerzen }
+}
+
 const median = (a) => { const b = [...a].sort((x, y) => x - y); const m = b.length >> 1; return b.length % 2 ? b[m] : (b[m - 1] + b[m]) / 2 }
 
 /**
@@ -1210,7 +1230,7 @@ export function baueKandidaten({ kerzen, kerzenHtf = null, interval = null, inte
 
     kandidatenTrendlinien(kerzen, A).forEach((x, i) => kandidaten.push({ id: `T${i + 1}`, quelle: 'trend', ...x }))
     kandidatenKanaele(kerzen, A).forEach((x, i) => kandidaten.push({ id: `K${i + 1}`, ...x }))
-    kandidatenDreiecke(kerzen, A).forEach((x, i) => kandidaten.push({ id: `M${i + 1}`, ...x }))
+    kandidatenDreiecke(kerzen, A).forEach((x, i) => kandidaten.push({ id: `M${i + 1}`, ...wimpel(kerzen, x, A) }))
 
     if (Array.isArray(kerzenHtf) && kerzenHtf.length >= 30) {
         const Ah = letzteAtr(kerzenHtf)
