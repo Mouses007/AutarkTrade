@@ -6,7 +6,8 @@
  *
  * Gezählt wird alles so Gekaufte, auch wenn es später auf den Ledger verschoben
  * oder verkauft wurde: die Seite misst die Strategie. Wo der Coin heute liegt,
- * steht je Coin darunter (aus der Übersicht, für den ganzen Bestand des Coins).
+ * steht je Coin darunter (aus der Übersicht, für den ganzen Bestand des Coins),
+ * und „noch da“ sagt, wie viel der gekauften Menge höchstens davon übrig ist.
  */
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -86,9 +87,14 @@ const kurve = computed(() => {
                     <small class="at-gedaempft">{{ t('portfolio.dcaKaeufeSeit', { n: summe.kaeufe, d: datum(summe.von) }) }}<template v-if="summe.ohneChf"> · {{ t('portfolio.dcaOhneChf', { n: summe.ohneChf }) }}</template></small>
                 </Karte>
                 <Karte class="dca-kachel">
-                    <span class="dca-etikett">{{ t('portfolio.dcaWertHeute') }}</span>
+                    <span class="dca-etikett">{{ t('portfolio.dcaWertOhne') }}</span>
                     <b class="dca-zahl">{{ chf(summe.wertHeuteChf) }}</b>
-                    <small class="at-gedaempft">{{ t('portfolio.dcaWertHeuteInfo') }}<template v-if="summe.ohneKurs.length"> · {{ t('portfolio.dcaOhneKurs', { c: summe.ohneKurs.join(', ') }) }}</template></small>
+                    <small class="at-gedaempft">{{ t('portfolio.dcaWertOhneInfo') }}<template v-if="summe.ohneKurs.length"> · {{ t('portfolio.dcaOhneKurs', { c: summe.ohneKurs.join(', ') }) }}</template></small>
+                </Karte>
+                <Karte class="dca-kachel">
+                    <span class="dca-etikett">{{ t('portfolio.dcaNochDa') }}</span>
+                    <b class="dca-zahl">{{ chf(summe.nochDaChf) }}</b>
+                    <small class="at-gedaempft">{{ t('portfolio.dcaNochDaInfo', { p: prozent(summe.nochDaAnteil) }) }}</small>
                 </Karte>
                 <Karte class="dca-kachel">
                     <span class="dca-etikett">{{ t('portfolio.dcaGewinn') }}</span>
@@ -113,7 +119,7 @@ const kurve = computed(() => {
                     </svg>
                     <div class="dca-achse at-gedaempft"><span>{{ kurve.von }}</span><span>max. {{ chf(kurve.max) }}</span><span>{{ kurve.bis }}</span></div>
                     <div class="dca-legende">
-                        <span><i class="strich wert" :class="{ minus: !kurve.im_plus }" />{{ t('portfolio.dcaWert') }}</span>
+                        <span><i class="strich wert" :class="{ minus: !kurve.im_plus }" />{{ t('portfolio.dcaWertOhne') }}</span>
                         <span><i class="strich eingesetzt" />{{ t('portfolio.dcaEingesetzt') }}</span>
                         <span v-if="kurve.geschaetzt.length" class="at-gedaempft">{{ t('portfolio.dcaGeschaetzt', { c: kurve.geschaetzt.join(', ') }) }}</span>
                     </div>
@@ -126,7 +132,7 @@ const kurve = computed(() => {
                 <div class="dca-tabelle">
                     <div class="dca-zeile kopf">
                         <span>Coin</span><span>{{ t('portfolio.dcaEingesetzt') }}</span><span>{{ t('portfolio.stMenge') }}</span>
-                        <span>{{ t('portfolio.dcaSchnitt') }}</span><span>{{ t('portfolio.dcaWertHeute') }}</span><span>{{ t('portfolio.dcaGewinn') }}</span>
+                        <span>{{ t('portfolio.dcaSchnitt') }}</span><span>{{ t('portfolio.dcaWertOhne') }}</span><span>{{ t('portfolio.dcaNochDa') }}</span><span>{{ t('portfolio.dcaGewinn') }}</span>
                     </div>
                     <template v-for="c in coins" :key="c.asset">
                         <button type="button" class="dca-zeile" :class="{ beendet: !c.aktiv, auf: offen.has(c.asset) }" :aria-expanded="offen.has(c.asset)" @click="klappe(c.asset)">
@@ -139,7 +145,8 @@ const kurve = computed(() => {
                             <span :data-titel="t('portfolio.dcaEingesetzt')">{{ chf(c.investiertChf) }}<small v-if="c.ohneChf" class="at-warn">{{ t('portfolio.dcaOhneChf', { n: c.ohneChf }) }}</small></span>
                             <span :data-titel="t('portfolio.stMenge')">{{ menge(c.menge) }}<small v-if="c.umgestellt" class="at-gedaempft">= {{ menge(c.menge * c.faktor) }} {{ c.heuteAsset }}</small></span>
                             <span :data-titel="t('portfolio.dcaSchnitt')">{{ chfKurs(c.schnittChf) }}<small class="at-gedaempft">{{ t('portfolio.dcaKursHeute', { k: chfKurs(c.kursChf != null ? c.kursChf * c.faktor : null) }) }}</small></span>
-                            <span :data-titel="t('portfolio.dcaWertHeute')">{{ chf(c.wertHeuteChf) }}</span>
+                            <span :data-titel="t('portfolio.dcaWertOhne')">{{ chf(c.wertHeuteChf) }}</span>
+                            <span :data-titel="t('portfolio.dcaNochDa')">{{ chf(c.nochDa.wertChf) }}<small class="at-gedaempft">{{ menge(c.nochDa.menge) }} {{ c.heuteAsset }}</small></span>
                             <span :data-titel="t('portfolio.dcaGewinn')" :class="ton(c.gewinnChf)">
                                 {{ chf(c.gewinnChf, { vorzeichen: true }) }}<small>{{ c.gewinnPct != null ? (c.gewinnPct >= 0 ? '+' : '') + prozent(c.gewinnPct) : '' }}</small>
                             </span>
@@ -158,6 +165,7 @@ const kurve = computed(() => {
                                 <template v-for="(o, i) in c.heuteImPortfolio.orte" :key="i"><span v-if="i"> · </span>{{ o.name }} {{ menge(o.menge) }}</template>
                             </p>
                             <p v-else class="at-gedaempft dca-orte">{{ t('portfolio.dcaNichtMehrGehalten', { c: c.heuteAsset }) }}</p>
+                            <p v-if="c.nochDa.wegMenge" class="dca-orte">{{ t('portfolio.dcaMindestensWeg', { m: menge(c.nochDa.wegMenge), c: c.heuteAsset }) }}</p>
                             <p class="at-gedaempft dca-klein">{{ t('portfolio.dcaOrteInfo') }}</p>
                         </div>
                     </template>
@@ -173,7 +181,7 @@ const kurve = computed(() => {
 .dca-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0.75rem; }
 .dca-kachel { display: flex; flex-direction: column; gap: 0.2rem; }
 .dca-etikett { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--leise); }
-.dca-zahl { font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.dca-zahl { font-size: 1.4rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dca-abschnitt { margin-top: 1.25rem; border-top: 1px solid var(--line); padding-top: 0.75rem; }
 .dca-abschnitt h3 { font-size: 1rem; margin: 0 0 0.6rem; }
 .dca-klein { font-size: 0.78rem; }
@@ -190,7 +198,7 @@ const kurve = computed(() => {
 .strich.eingesetzt { border-top: 2px dashed var(--muted); }
 .dca-tabelle { display: flex; flex-direction: column; }
 .dca-zeile {
-    display: grid; grid-template-columns: minmax(10rem, 1.6fr) repeat(5, minmax(0, 1fr)); gap: 0.6rem; align-items: start;
+    display: grid; grid-template-columns: minmax(10rem, 1.6fr) repeat(6, minmax(0, 1fr)); gap: 0.6rem; align-items: start;
     padding: 0.55rem 0; border: 0; border-bottom: 1px dashed var(--line); background: none; color: inherit; font: inherit;
     font-size: 0.86rem; font-variant-numeric: tabular-nums; text-align: left; width: 100%; cursor: pointer;
 }

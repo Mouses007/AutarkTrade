@@ -122,6 +122,40 @@ console.log('\nSummen')
     check('ohne Kurs: Coin fällt aus Wert und Gewinn, wird genannt', ohne.summe.ohneKurs.includes('ETH') && nah(ohne.summe.investiertMitKursChf, 600))
 }
 
+console.log('\nNoch da')
+{
+    const e = coin('ETH'), b = coin('BTC'), a = coin('AGIX')
+    check('Bestand über der DCA-Menge: alles da, nichts weg', nah(e.nochDa.menge, 0.18) && e.nochDa.wegMenge === 0 && nah(e.nochDa.anteil, 1))
+    check('kein Bestand: nichts da, alles weg', b.nochDa.menge === 0 && nah(b.nochDa.wegMenge, 0.0095) && b.nochDa.anteil === 0 && b.nochDa.wertChf === 0)
+    check('Summe nur über das Vorhandene', nah(summe.nochDaChf, 0.18 * 3000))
+    check('Anteil an dem Wert ohne Auszahlungen', nah(summe.nochDaAnteil, summe.nochDaChf / summe.wertHeuteChf))
+
+    const reihe = (asset, m, roh = sp) => [kauf('bitpanda', '2026-10-01T00:00:00Z', asset, m, 50, 'CHF', 50, roh)]
+    const rechne = (kaeufe, bestand, kurs = () => 100) => dcaUebersicht(kaeufe, {
+        jetzt: JETZT, umstellungen: umst, kursChfVon: kurs,
+        bestandVon: (x) => (bestand[x] != null ? { menge: bestand[x], chf: null, orte: [] } : null),
+    })
+
+    const teil = rechne(reihe('BTC', 1), { BTC: 0.25 }).coins[0]
+    check('Bestand unter der DCA-Menge: Rest gilt als weg', nah(teil.nochDa.menge, 0.25) && nah(teil.nochDa.wegMenge, 0.75) && nah(teil.nochDa.anteil, 0.25))
+    check('Wert von „noch da“ zum heutigen Kurs', nah(teil.nochDa.wertChf, 25))
+    check('Wert ohne Auszahlungen bleibt die ganze Menge', nah(teil.wertHeuteChf, 100))
+
+    const rausch = rechne(reihe('BTC', 0.1 + 0.2), { BTC: 0.3 }).coins[0]
+    check('Rechenrauschen ist keine Auszahlung', rausch.nochDa.wegMenge === 0)
+
+    const ohneKurs = rechne(reihe('BTC', 1), { BTC: 0.5 }, () => null)
+    check('ohne Kurs: Menge ja, Wert unbekannt, Summe 0', nah(ohneKurs.coins[0].nochDa.menge, 0.5) && ohneKurs.coins[0].nochDa.wertChf === null && ohneKurs.summe.nochDaChf === 0 && ohneKurs.summe.nochDaAnteil === null)
+
+    const f = umst.AGIX.faktor
+    const um = rechne(reihe('AGIX', 100), { FET: 10 }).coins[0]
+    check('umgestellter Coin: in heutigen Stücken', nah(um.nochDa.menge, 10) && nah(um.nochDa.wegMenge, 100 * f - 10) && nah(um.nochDa.anteil, 10 / (100 * f)))
+
+    const zwei = rechne([...reihe('AGIX', 100), ...reihe('FET', 40)], { FET: 50 })
+    check('zwei Pläne, ein heutiger Coin: Bestand zählt einmal', nah(zwei.coins.reduce((s, c) => s + c.nochDa.menge, 0), 50) && nah(zwei.summe.nochDaChf, 5000))
+    check('AGIX bleibt wie vorher', nah(a.nochDa.menge, 0) && nah(a.nochDa.wegMenge, 180 * f))
+}
+
 console.log('\nVerlauf')
 {
     check('Monate über den Jahreswechsel', monate('2025-11', '2026-02').join() === '2025-11,2025-12,2026-01,2026-02')

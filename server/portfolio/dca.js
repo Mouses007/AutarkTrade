@@ -13,6 +13,11 @@
  * Strategie, nicht der heutige Ort. Wo der Coin heute liegt, steht daneben —
  * aus der Übersicht, ohne zu behaupten, welche Stücke davon DCA-Stücke sind.
  *
+ * „Noch da“ (08.11.2026) = das Kleinere aus DCA-Menge und heutigem Bestand,
+ * also eine Obergrenze. Auszahlungen werden bewusst nicht den DCA-Käufen
+ * zugeordnet: eine Auszahlung nennt nicht ihre Stücke, und gemessen ging
+ * insgesamt mehr weg, als je per DCA kam (0.345 BTC gegen 0.159 BTC).
+ *
  * Eingestellte Coins gehen über ihre Umstellung in den Wert ein (aus Bitpandas
  * `merger_crypto`, z. B. AGIX → FET × 0.43335, BEST → VSN × 4.91): ein
  * AGIX-Sparplan ist heute FET wert, nicht nichts.
@@ -138,11 +143,27 @@ export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => n
     }
     liste.sort((a, b) => (b.aktiv - a.aktiv) || b.investiertChf - a.investiertChf || a.asset.localeCompare(b.asset))
 
+    // Ein AGIX- und ein FET-Plan teilen sich EINEN FET-Bestand — sonst zählte er doppelt.
+    const frei = new Map()
+    for (const c of liste) {
+        if (!frei.has(c.heuteAsset)) frei.set(c.heuteAsset, Math.max(0, Number(c.heuteImPortfolio?.menge) || 0))
+        const gekauft = c.menge * c.faktor
+        const da = Math.min(gekauft, frei.get(c.heuteAsset))
+        frei.set(c.heuteAsset, frei.get(c.heuteAsset) - da)
+        const weg = gekauft - da
+        c.nochDa = {
+            menge: da, anteil: gekauft > 0 ? da / gekauft : null,
+            wertChf: c.kursChf != null ? da * c.kursChf : null,
+            wegMenge: weg > gekauft * 1e-6 ? weg : 0,   // Rechenrauschen ist keine Auszahlung
+        }
+    }
+
     const mitWert = liste.filter((c) => c.gewinnChf != null)
     const summe = {
         kaeufe: liste.reduce((s, c) => s + c.anzahl, 0),
         investiertChf: liste.reduce((s, c) => s + c.investiertChf, 0),
         wertHeuteChf: liste.reduce((s, c) => s + (c.wertHeuteChf || 0), 0),
+        nochDaChf: liste.reduce((s, c) => s + (c.nochDa.wertChf || 0), 0),
         // Gewinn über dieselben Käufe wie der Einsatz: Coins ohne Kurs heute fallen aus beiden heraus.
         gewinnChf: mitWert.reduce((s, c) => s + c.gewinnChf, 0),
         investiertMitKursChf: mitWert.reduce((s, c) => s + c.investiertChf, 0),
@@ -152,6 +173,7 @@ export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => n
         von: liste.length ? Math.min(...liste.map((c) => c.von)) : null,
     }
     summe.gewinnPct = summe.investiertMitKursChf > 0 ? summe.gewinnChf / summe.investiertMitKursChf : null
+    summe.nochDaAnteil = summe.wertHeuteChf > 0 ? summe.nochDaChf / summe.wertHeuteChf : null
     return { coins: liste, summe }
 }
 
