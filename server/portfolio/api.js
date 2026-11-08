@@ -52,7 +52,7 @@ import { setzeSpam } from './spam.js'
 import { totalverlustUebersicht } from './totalverlust-seite.js'
 import { stakingUebersicht } from './staking.js'
 import { wachtAus, setzeWacht, wachtbar } from './wacht.js'
-import { istDcaKauf, dcaArt, dcaUebersicht, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon } from './dca.js'
+import { istDcaKauf, dcaArt, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monatVon } from './dca.js'
 import { kerzen as marktKerzen } from '../marktdaten/index.js'
 import { steuerBerichtHtml, berichtCss, BERICHT_JS } from './steuer-bericht.js'
 import fs from 'fs'
@@ -109,7 +109,7 @@ async function dcaUmstellungen(k) {
     return umstellungenAus(await k('portfolio_bewegungen').where('art', 'tausch').where('roh', 'like', '%merger_crypto%')
         .select('zeit', 'asset', 'menge', 'gegenAsset', 'gegenMenge', 'roh'))
 }
-let dcaVerlaufSpeicher = null   // { schluessel, zeit, punkte }
+let dcaVerlaufSpeicher = null   // { schluessel, zeit, monatsKurse, ohneKerzen }
 
 export function setupPortfolioRoutes(app) {
     app.get('/api/portfolio/uebersicht', async (req, res) => {
@@ -214,7 +214,7 @@ export function setupPortfolioRoutes(app) {
             res.json({
                 ok: true,
                 ...dcaUebersicht(kaeufe, {
-                    umstellungen, quelleName: ortName,
+                    umstellungen, quelleName: ortName, nurLaufende: req.query.nurLaufende === '1',
                     kursChfVon: (a) => kurs.get(a) ?? null,
                     bestandVon: (a) => {
                         const p = posten.get(a)
@@ -233,48 +233,48 @@ export function setupPortfolioRoutes(app) {
         try {
             const k = getKnex()
             const [kaeufe, umstellungen] = await Promise.all([dcaKaeufe(k), dcaUmstellungen(k)])
-            const schluessel = `${kaeufe.length}|${Math.max(0, ...kaeufe.map((z) => Number(z.zeit)))}`
-            if (dcaVerlaufSpeicher?.schluessel === schluessel && Date.now() - dcaVerlaufSpeicher.zeit < 6 * 3600e3) {
-                return res.json({ ok: true, punkte: dcaVerlaufSpeicher.punkte, ohneKerzen: dcaVerlaufSpeicher.ohneKerzen })
-            }
             if (!kaeufe.length) return res.json({ ok: true, punkte: [], ohneKerzen: [] })
-            const start = Date.parse(monatVon(Math.min(...kaeufe.map((z) => Number(z.zeit)))) + '-01T00:00:00Z')
-            const assets = new Set()
-            for (const z of kaeufe) {
-                const a = String(z.asset).toUpperCase()
-                assets.add(a)
-                if (umstellungen[a]) assets.add(umstellungen[a].nach)
-            }
-            // USD → CHF am Monatsende (für den laufenden Monat: heute). Fehlt einer (EZB nicht
-            // erreichbar), gilt der des Vormonats — ein fehlender Kurs liesse sonst den Coin auf
-            // „geschätzt“ fallen, obwohl die Kerze da ist.
-            const fxMonat = new Map()
-            let letzteFx = null
-            const heute = new Date().toISOString().slice(0, 10)
-            const monatsKurse = new Map()
-            const ohneKerzen = []
-            for (const a of assets) {
-                const sym = KURS_ALIAS[a] || a
-                let kz = []
-                try { kz = await marktKerzen(`${sym}USDT`, '1M', { markt: 'spot', start, ende: Date.now(), limit: 200 }) } catch { kz = [] }
-                if (!kz?.length) { ohneKerzen.push(a); continue }
-                const m = new Map()
-                for (const c of kz) {
-                    const monat = monatVon(c.t)
-                    if (!fxMonat.has(monat)) {
-                        const [j, mo] = monat.split('-').map(Number)
-                        const ende = new Date(Date.UTC(j, mo, 0)).toISOString().slice(0, 10)
-                        const fx = await fxAm(ende < heute ? ende : heute, 'CHF').catch(() => null)
-                        fxMonat.set(monat, fx || letzteFx)
-                    }
-                    letzteFx = fxMonat.get(monat) || letzteFx
-                    const fx = fxMonat.get(monat)
-                    if (Number.isFinite(c.c) && fx) m.set(monat, c.c * fx)
+            const schluessel = `${kaeufe.length}|${Math.max(0, ...kaeufe.map((z) => Number(z.zeit)))}`
+            if (dcaVerlaufSpeicher?.schluessel !== schluessel || Date.now() - dcaVerlaufSpeicher.zeit >= 6 * 3600e3) {
+                const start = Date.parse(monatVon(Math.min(...kaeufe.map((z) => Number(z.zeit)))) + '-01T00:00:00Z')
+                const assets = new Set()
+                for (const z of kaeufe) {
+                    const a = String(z.asset).toUpperCase()
+                    assets.add(a)
+                    if (umstellungen[a]) assets.add(umstellungen[a].nach)
                 }
-                monatsKurse.set(a, m)
+                // USD → CHF am Monatsende (für den laufenden Monat: heute). Fehlt einer (EZB nicht
+                // erreichbar), gilt der des Vormonats — ein fehlender Kurs liesse sonst den Coin auf
+                // „geschätzt“ fallen, obwohl die Kerze da ist.
+                const fxMonat = new Map()
+                let letzteFx = null
+                const heute = new Date().toISOString().slice(0, 10)
+                const monatsKurse = new Map()
+                const ohneKerzen = []
+                for (const a of assets) {
+                    const sym = KURS_ALIAS[a] || a
+                    let kz = []
+                    try { kz = await marktKerzen(`${sym}USDT`, '1M', { markt: 'spot', start, ende: Date.now(), limit: 200 }) } catch { kz = [] }
+                    if (!kz?.length) { ohneKerzen.push(a); continue }
+                    const m = new Map()
+                    for (const c of kz) {
+                        const monat = monatVon(c.t)
+                        if (!fxMonat.has(monat)) {
+                            const [j, mo] = monat.split('-').map(Number)
+                            const ende = new Date(Date.UTC(j, mo, 0)).toISOString().slice(0, 10)
+                            const fx = await fxAm(ende < heute ? ende : heute, 'CHF').catch(() => null)
+                            fxMonat.set(monat, fx || letzteFx)
+                        }
+                        letzteFx = fxMonat.get(monat) || letzteFx
+                        const fx = fxMonat.get(monat)
+                        if (Number.isFinite(c.c) && fx) m.set(monat, c.c * fx)
+                    }
+                    monatsKurse.set(a, m)
+                }
+                dcaVerlaufSpeicher = { schluessel, zeit: Date.now(), monatsKurse, ohneKerzen }
             }
-            const punkte = dcaVerlauf(kaeufe, monatsKurse, { umstellungen })
-            dcaVerlaufSpeicher = { schluessel, zeit: Date.now(), punkte, ohneKerzen }
+            const { monatsKurse, ohneKerzen } = dcaVerlaufSpeicher
+            const punkte = dcaVerlauf(req.query.nurLaufende === '1' ? laufendeKaeufe(kaeufe) : kaeufe, monatsKurse, { umstellungen })
             res.json({ ok: true, punkte, ohneKerzen })
         } catch (e) { fehler(res, e) }
     })

@@ -21,18 +21,34 @@ const verlauf = ref(null)
 const laedt = ref(false)
 const fehler = ref('')
 const offen = ref(new Set())
+const NUR_LAUFENDE = 'at.portfolio.dcaNurLaufende'
+const nurLaufende = ref((() => { try { return localStorage.getItem(NUR_LAUFENDE) !== '0' } catch { return true } })())
+function schalteLaufende(an) {
+    nurLaufende.value = an
+    try { localStorage.setItem(NUR_LAUFENDE, an ? '1' : '0') } catch { /* kein Speicher */ }
+    lade()
+}
 
+let abruf = 0
 async function lade() {
+    const dieser = ++abruf     // Beim schnellen Umschalten gewinnt der letzte Abruf, nicht der langsamste.
+    const params = nurLaufende.value ? { nurLaufende: 1 } : {}
     laedt.value = true
     fehler.value = ''
-    try { daten.value = (await axios.get('/api/portfolio/dca')).data } catch (e) { fehler.value = e.response?.data?.error || e.message } finally { laedt.value = false }
+    try {
+        const d = (await axios.get('/api/portfolio/dca', { params })).data
+        if (dieser === abruf) daten.value = d
+    } catch (e) { if (dieser === abruf) fehler.value = e.response?.data?.error || e.message } finally { if (dieser === abruf) laedt.value = false }
     // Der Verlauf holt beim ersten Mal Monatskerzen je Coin — eigener Abruf mit mehr Zeit, die Seite wartet nicht darauf.
-    try { verlauf.value = (await axios.get('/api/portfolio/dca/verlauf', { timeout: 90000 })).data } catch { verlauf.value = { punkte: [] } }
+    let v
+    try { v = (await axios.get('/api/portfolio/dca/verlauf', { params, timeout: 90000 })).data } catch { v = { punkte: [] } }
+    if (dieser === abruf) verlauf.value = v
 }
 onMounted(lade)
 
 const summe = computed(() => daten.value?.summe)
 const coins = computed(() => daten.value?.coins || [])
+const ausgeblendet = computed(() => daten.value?.ausgeblendet || { coins: [], investiertChf: 0 })
 function klappe(a) { const s = new Set(offen.value); s.has(a) ? s.delete(a) : s.add(a); offen.value = s }
 
 const datum = (ms) => (ms ? new Date(ms).toLocaleDateString('de-CH', { timeZone: 'Europe/Zurich' }) : '—')
@@ -77,9 +93,13 @@ const kurve = computed(() => {
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
         <div v-if="laedt && !daten" class="at-mittig at-py-5"><Kreisel /></div>
 
-        <Leerzustand v-else-if="daten && !coins.length" class="at-mo-4" symbol="wiederholen" :titel="t('portfolio.dcaLeerTitel')" :text="t('portfolio.dcaLeerText')" />
+        <Leerzustand v-else-if="daten && !coins.length && !ausgeblendet.coins.length" class="at-mo-4" symbol="wiederholen" :titel="t('portfolio.dcaLeerTitel')" :text="t('portfolio.dcaLeerText')" />
 
         <template v-else-if="daten">
+            <div class="dca-leiste">
+                <label><input type="checkbox" :checked="nurLaufende" @change="schalteLaufende($event.target.checked)" /> {{ t('portfolio.dcaNurLaufende') }}</label>
+                <span v-if="ausgeblendet.coins.length" class="at-gedaempft">{{ t('portfolio.dcaAusgeblendet', { c: ausgeblendet.coins.join(', '), b: chf(ausgeblendet.investiertChf) }) }}</span>
+            </div>
             <div class="dca-kacheln">
                 <Karte class="dca-kachel">
                     <span class="dca-etikett">{{ t('portfolio.dcaEingesetzt') }}</span>
@@ -104,7 +124,7 @@ const kurve = computed(() => {
                 <Karte class="dca-kachel">
                     <span class="dca-etikett">{{ t('portfolio.dcaPlaene') }}</span>
                     <b class="dca-zahl">{{ summe.aktivePlaene }}</b>
-                    <small class="at-gedaempft">{{ t('portfolio.dcaPlaeneInfo', { n: coins.length }) }}</small>
+                    <small class="at-gedaempft">{{ t('portfolio.dcaPlaeneInfo', { n: coins.length + ausgeblendet.coins.length }) }}</small>
                 </Karte>
             </div>
 
@@ -178,6 +198,8 @@ const kurve = computed(() => {
 
 <style scoped>
 .dca-erkl { font-size: 0.85rem; color: var(--muted); max-width: 62rem; margin: 0.5rem 0 1rem; }
+.dca-leiste { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; align-items: center; font-size: 0.82rem; margin-bottom: 0.75rem; }
+.dca-leiste label { display: inline-flex; gap: 0.4rem; align-items: center; cursor: pointer; }
 .dca-kacheln { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: 0.75rem; }
 .dca-kachel { display: flex; flex-direction: column; gap: 0.2rem; }
 .dca-etikett { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--leise); }

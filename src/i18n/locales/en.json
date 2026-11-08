@@ -7546,6 +7546,8 @@
     "dcaWertOhne": "Value without payouts",
     "dcaWertOhneInfo": "all DCA coins at today's price",
     "dcaNochDa": "Still there",
+    "dcaNurLaufende": "Hide finished coins",
+    "dcaAusgeblendet": "Hidden: {c} ({b} invested)",
     "dcaNochDaInfo": "at most · {p} of the value without payouts",
     "dcaMindestensWeg": "Of the DCA purchases, at least {m} {c} are no longer in the portfolio (paid out, sold or swapped).",
     "dcaOhneKurs": "no price: {c}",

@@ -14,7 +14,7 @@
  *   - der Rhythmus folgt den letzten Käufen, nicht dem Plan von 2019;
  *   - im Verlauf knickt ein Coin ohne Monatskurs nicht auf null.
  */
-import { istDcaKauf, dcaUebersicht, umstellungenAus, heutigerCoin, dcaVerlauf, monate } from './dca.js'
+import { istDcaKauf, dcaUebersicht, laufendeKaeufe, umstellungenAus, heutigerCoin, dcaVerlauf, monate } from './dca.js'
 
 let bestanden = 0, fehlgeschlagen = 0
 function check(name, ok, detail) {
@@ -154,6 +154,29 @@ console.log('\nNoch da')
     const zwei = rechne([...reihe('AGIX', 100), ...reihe('FET', 40)], { FET: 50 })
     check('zwei Pläne, ein heutiger Coin: Bestand zählt einmal', nah(zwei.coins.reduce((s, c) => s + c.nochDa.menge, 0), 50) && nah(zwei.summe.nochDaChf, 5000))
     check('AGIX bleibt wie vorher', nah(a.nochDa.menge, 0) && nah(a.nochDa.wegMenge, 180 * f))
+}
+
+console.log('\nNur laufende')
+{
+    const opt = { jetzt: JETZT, umstellungen: umst, kursChfVon: (a) => KURS[a] ?? null, bestandVon: (a) => (a === 'ETH' ? { menge: 0.5, chf: 1500, orte: [] } : null) }
+    const alle = dcaUebersicht(zeilen, opt), lf = dcaUebersicht(zeilen, { ...opt, nurLaufende: true })
+    check('ohne Filter: alles da, nichts ausgeblendet', alle.coins.length === 3 && alle.ausgeblendet.coins.length === 0 && alle.ausgeblendet.investiertChf === 0)
+    check('beendeter Coin fällt weg', lf.coins.map((c) => c.asset).join() === 'ETH,BTC' || lf.coins.map((c) => c.asset).join() === 'BTC,ETH')
+    check('ausgeblendet nennt Coin und Einsatz', lf.ausgeblendet.coins.join() === 'AGIX' && nah(lf.ausgeblendet.investiertChf, 48))
+    check('Summen nur über das Gezeigte', lf.summe.kaeufe === 20 && nah(lf.summe.investiertChf, alle.summe.investiertChf - 48))
+    check('Wert und „noch da“ ohne den beendeten Coin', nah(lf.summe.wertHeuteChf, alle.summe.wertHeuteChf - coin('AGIX').wertHeuteChf) && nah(lf.summe.nochDaChf, alle.summe.nochDaChf))
+    check('beendeter Plan eines laufenden Coins bleibt', lf.coins.find((c) => c.asset === 'BTC').plaene.some((p) => !p.aktiv) && lf.coins.find((c) => c.asset === 'BTC').anzahl === 12)
+    check('laufende Pläne unverändert', lf.summe.aktivePlaene === alle.summe.aktivePlaene)
+
+    const nurAlt = dcaUebersicht(zeilen.filter((z) => z.asset === 'AGIX'), { ...opt, nurLaufende: true })
+    check('alles beendet: leere Liste, Summen 0, kein Beginn', nurAlt.coins.length === 0 && nurAlt.summe.kaeufe === 0 && nurAlt.summe.von === null && nurAlt.summe.gewinnPct === null && nurAlt.ausgeblendet.coins.join() === 'AGIX')
+
+    const frisch = kauf('bitpanda', '2026-10-20T00:00:00Z', 'FET', 40, 50, 'CHF', 50)
+    const geteilt = dcaUebersicht([...zeilen.filter((z) => z.asset === 'AGIX'), frisch], { jetzt: JETZT, umstellungen: umst, kursChfVon: () => 1, bestandVon: () => ({ menge: 50, chf: 50, orte: [] }), nurLaufende: true })
+    check('geteilter Bestand: der laufende Plan bekommt zuerst', geteilt.coins.length === 1 && nah(geteilt.coins[0].nochDa.menge, 40))
+
+    const lk = laufendeKaeufe(zeilen.filter(istDcaKauf), { jetzt: JETZT })
+    check('Verlauf: nur Käufe laufender Coins', lk.length === 20 && !lk.some((z) => z.asset === 'AGIX'))
 }
 
 console.log('\nVerlauf')

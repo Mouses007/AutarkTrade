@@ -7546,6 +7546,8 @@
     "dcaWertOhne": "Wert ohne Auszahlungen",
     "dcaWertOhneInfo": "alle DCA-Coins zum heutigen Kurs",
     "dcaNochDa": "Noch da",
+    "dcaNurLaufende": "Beendete Coins ausblenden",
+    "dcaAusgeblendet": "Ausgeblendet: {c} ({b} eingesetzt)",
     "dcaNochDaInfo": "höchstens so viel · {p} vom Wert ohne Auszahlungen",
     "dcaMindestensWeg": "Von den DCA-Käufen sind mindestens {m} {c} nicht mehr im Portfolio (ausgezahlt, verkauft oder getauscht).",
     "dcaOhneKurs": "ohne Kurs: {c}",

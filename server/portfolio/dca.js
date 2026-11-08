@@ -78,9 +78,11 @@ export function heutigerCoin(asset, umstellungen = {}) {
 /**
  * @param {Array} kaeufe  Käufe (`istDcaKauf`), mit quelle, zeit, asset, menge, gegenAsset, gegenMenge, chfWert, roh
  * @param {{ jetzt?, kursChfVon?: (asset) => number|null, bestandVon?: (asset) => object|null,
- *           umstellungen?: object, quelleName?: (quelle) => string }} opt
+ *           umstellungen?: object, quelleName?: (quelle) => string, nurLaufende?: boolean }} opt
+ *        `nurLaufende`: Coins ohne laufenden Plan fallen aus Liste und Summen; ein beendeter
+ *        Plan eines Coins mit laufendem Plan bleibt, er gehört zu dessen Zahlen.
  */
-export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => null, bestandVon = () => null, umstellungen = {}, quelleName = (q) => q } = {}) {
+export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => null, bestandVon = () => null, umstellungen = {}, quelleName = (q) => q, nurLaufende = false } = {}) {
     const coins = new Map()
     for (const z of kaeufe) {
         if (!istDcaKauf(z)) continue
@@ -158,23 +160,31 @@ export function dcaUebersicht(kaeufe, { jetzt = Date.now(), kursChfVon = () => n
         }
     }
 
-    const mitWert = liste.filter((c) => c.gewinnChf != null)
+    const gezeigt = nurLaufende ? liste.filter((c) => c.aktiv) : liste
+    const versteckt = nurLaufende ? liste.filter((c) => !c.aktiv) : []
+    const mitWert = gezeigt.filter((c) => c.gewinnChf != null)
     const summe = {
-        kaeufe: liste.reduce((s, c) => s + c.anzahl, 0),
-        investiertChf: liste.reduce((s, c) => s + c.investiertChf, 0),
-        wertHeuteChf: liste.reduce((s, c) => s + (c.wertHeuteChf || 0), 0),
-        nochDaChf: liste.reduce((s, c) => s + (c.nochDa.wertChf || 0), 0),
+        kaeufe: gezeigt.reduce((s, c) => s + c.anzahl, 0),
+        investiertChf: gezeigt.reduce((s, c) => s + c.investiertChf, 0),
+        wertHeuteChf: gezeigt.reduce((s, c) => s + (c.wertHeuteChf || 0), 0),
+        nochDaChf: gezeigt.reduce((s, c) => s + (c.nochDa.wertChf || 0), 0),
         // Gewinn über dieselben Käufe wie der Einsatz: Coins ohne Kurs heute fallen aus beiden heraus.
         gewinnChf: mitWert.reduce((s, c) => s + c.gewinnChf, 0),
         investiertMitKursChf: mitWert.reduce((s, c) => s + c.investiertChf, 0),
-        ohneKurs: liste.filter((c) => c.kursChf == null).map((c) => c.asset),
-        ohneChf: liste.reduce((s, c) => s + c.ohneChf, 0),
-        aktivePlaene: liste.reduce((s, c) => s + c.plaene.filter((p) => p.aktiv).length, 0),
-        von: liste.length ? Math.min(...liste.map((c) => c.von)) : null,
+        ohneKurs: gezeigt.filter((c) => c.kursChf == null).map((c) => c.asset),
+        ohneChf: gezeigt.reduce((s, c) => s + c.ohneChf, 0),
+        aktivePlaene: gezeigt.reduce((s, c) => s + c.plaene.filter((p) => p.aktiv).length, 0),
+        von: gezeigt.length ? Math.min(...gezeigt.map((c) => c.von)) : null,
     }
     summe.gewinnPct = summe.investiertMitKursChf > 0 ? summe.gewinnChf / summe.investiertMitKursChf : null
     summe.nochDaAnteil = summe.wertHeuteChf > 0 ? summe.nochDaChf / summe.wertHeuteChf : null
-    return { coins: liste, summe }
+    return { coins: gezeigt, summe, ausgeblendet: { coins: versteckt.map((c) => c.asset), investiertChf: versteckt.reduce((s, c) => s + c.investiertChf, 0) } }
+}
+
+/** Die Käufe der Coins mit laufendem Plan — für den Verlauf, passend zu `nurLaufende`. */
+export function laufendeKaeufe(kaeufe, { jetzt = Date.now() } = {}) {
+    const laufend = new Set(dcaUebersicht(kaeufe, { jetzt, nurLaufende: true }).coins.map((c) => c.asset))
+    return kaeufe.filter((z) => laufend.has(String(z.asset).toUpperCase()))
 }
 
 /** 'YYYY-MM' eines Zeitpunkts (UTC). */
