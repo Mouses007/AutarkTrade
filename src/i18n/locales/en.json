@@ -6769,23 +6769,12 @@
         "fehlgeschlagen": "The model rejected the image — analysis without image check."
       },
       "setzen": "Set AI drawings ({symbol} {tf})",
-      "eigene": "Analyse my drawings",
-      "ergaenzen": "Suggest missing marks and corrections",
-      "ergaenzenTipp": "With “Analyse my drawings”: the AI may correct your lines onto a better measured mark and suggest up to 4 missing important marks.",
-      "keineZeichnungen": "There is no drawing of yours in the visible range — draw something first (or move the range). Nothing was computed.",
-      "nurUngemessene": "The visible range only holds drawings the code does not measure ({arten}) — measured are horizontal line, horizontal ray, trendline, ray, channel, zone, volume profile, Fibonacci retracement and anchored VWAP. Nothing was computed.",
       "weggelassen": "{n} more of your drawings not analysed (at most 20; drawings in the window and close to the price first).",
       "uebergangen": "Not measurable and not analysed: {arten}.",
       "artSetzen": "AI drawings",
-      "artEigene": "Analysis of your drawings",
       "meineZeichnungen": "My drawings",
       "markieren": "Select in chart",
       "ohneBewertung": "Not rated by the AI (not important for the situation).",
-      "korrekturen": "Corrections",
-      "korrektur": "Correction",
-      "korrigieren": "Correct",
-      "daneben": "{atr} ATR off",
-      "fehlend": "Missing marks",
       "keinSetup": "The AI drew nothing: nothing on the chart is important enough for a setup right now.",
       "zustandU": {
         "haelt": "holds",
@@ -6811,7 +6800,31 @@
         "auf": "uptrend",
         "ab": "downtrend",
         "keine": "no confirmed direction"
-      }
+      },
+      "zeitrahmen": "Situation across timeframes",
+      "artZeitrahmen": "Situation across timeframes",
+      "spalteStruktur": "Structure",
+      "spalteLage": "In range",
+      "spalteMomentum": "Momentum",
+      "unbekannt": "no data",
+      "richtung": {
+        "auf": "up",
+        "ab": "down",
+        "offen": "open"
+      },
+      "momentum": {
+        "long": "oversold",
+        "fastLong": "near oversold",
+        "neutral": "neutral",
+        "fastShort": "near overbought",
+        "short": "overbought"
+      },
+      "tagesbewegung": "{pct} % of the usual daily range used today.",
+      "bestimmend": "{tf} leads:",
+      "treffen": "Levels coincide",
+      "quelleEigene": "yours",
+      "befunde": "{n} with findings",
+      "kippt": "Picture flips:"
     },
     "indAktiv": "Active in this chart",
     "indHinzu": "Add",

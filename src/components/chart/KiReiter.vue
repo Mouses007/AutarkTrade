@@ -48,15 +48,10 @@ const modus = ref(leseModus())
 function setzeModus(m) { modus.value = m; try { localStorage.setItem(MODUS_SCHLUESSEL, m) } catch { /* kein Speicher */ } }
 
 /*
- * Zwei Knöpfe statt Kästchen (31.10.2026): „KI-Zeichnungen setzen" — der Code
- * vermisst alles (Niveaus, Trendlinien, Zonen, Volumenprofile je Phase/Tag/Woche,
- * Kanäle, höhere Zeiteinheit), die KI zeichnet nur, was für ein Setup zählt
- * (höchstens 6, auch keine). „Meine Zeichnungen analysieren" — die KI liest den
- * Chart anhand der eigenen Zeichnungen, auf Wunsch mit Korrekturen und Fehlendem.
+ * Zwei Knöpfe: „KI-Zeichnungen setzen" — der Code vermisst alles, die KI zeichnet nur,
+ * was für ein Setup zählt (höchstens 6, auch keine). „Lage über alle Zeitrahmen" — der
+ * Code misst 1w bis 15m, die KI ordnet ein und prüft die eigenen Zeichnungen dagegen.
  */
-const ERGAENZEN_SCHLUESSEL = 'chartKiErgaenzen'
-const ergaenzen = ref((() => { try { return localStorage.getItem(ERGAENZEN_SCHLUESSEL) !== 'aus' } catch { return true } })())
-watch(ergaenzen, (v) => { try { localStorage.setItem(ERGAENZEN_SCHLUESSEL, v ? 'an' : 'aus') } catch { /* kein Speicher */ } })
 // Übergeordneten Trend einschliessen: höchstens eine Trendlinie aus 1D (oder 4h/1W), vom Code gemessen (server/chart-htf-trend.js)
 const HTF_SCHLUESSEL = 'chartKiHtfTrend'
 const htfTrend = ref((() => { try { return localStorage.getItem(HTF_SCHLUESSEL) === 'an' } catch { return false } })())
@@ -142,7 +137,7 @@ async function erstelle(modus) {
     try {
         const { data } = await axios.post('/api/chart/ki-analyse', {
             symbol: props.panel.symbol, interval: props.panel.interval, markt: props.panel.markt,
-            modus, ergaenzen: ergaenzen.value, htf: htfTrend.value,
+            modus, htf: htfTrend.value,
             fenster: sichtbarFenster(),
             bild: bildFuerKi(),
         })
@@ -171,8 +166,6 @@ const artenText = (liste) => (liste || []).map((x) => `${x.anzahl}× ${te('chart
 
 function fehlerText(e) {
     const d = e.response?.data
-    if (d?.code === 'keineZeichnungen') return t('chart.ki.keineZeichnungen')
-    if (d?.code === 'nurUngemessene') return t('chart.ki.nurUngemessene', { arten: artenText(d.uebergangen) })
     return d?.error || e.message
 }
 
@@ -216,7 +209,7 @@ const zeit = (ms) => (ms ? new Date(ms).toLocaleString() : '')
 const RANG = { hoch: 0, mittel: 1, gering: 2 }
 const eigeneZeilen = computed(() => {
     const a = analyse.value
-    if (a?.modus !== 'eigene') return []
+    if (a?.modus !== 'zeitrahmen') return []
     const bew = new Map((a.bewertungen || []).map((b) => [b.u, b]))
     return (a.nutzer || []).map((u) => ({ ...u, bewertung: bew.get(u.id) || null }))
         .sort((x, y) => (RANG[x.bewertung?.wichtig] ?? 3) - (RANG[y.bewertung?.wichtig] ?? 3))
@@ -224,12 +217,13 @@ const eigeneZeilen = computed(() => {
 // Eigene Zeichnungen, die NICHT in der Analyse sind: über 20 hinaus und Arten, die der Code nicht misst
 const ausserListe = computed(() => {
     const a = analyse.value
-    if (a?.modus !== 'eigene') return ''
+    if (a?.modus !== 'zeitrahmen') return ''
     const teile = []
     if (a.nutzerWeggelassen > 0) teile.push(t('chart.ki.weggelassen', { n: a.nutzerWeggelassen }))
     if (a.nutzerUebergangen?.length) teile.push(t('chart.ki.uebergangen', { arten: artenText(a.nutzerUebergangen) }))
     return teile.join(' ')
 })
+const befunde = computed(() => eigeneZeilen.value.filter((u) => u.bewertung).length)
 const preis = (p) => (Math.abs(p) >= 1000 ? p.toFixed(1) : Math.abs(p) >= 1 ? p.toFixed(3) : p.toPrecision(4))
 
 watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeLetzte, { immediate: true })
@@ -248,12 +242,9 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
         <div class="knoepfe">
             <Knopf klein symbol="ki" :laedt="laeuft === 'setzen'" :disabled="!!laeuft" class="erstellen" @click="erstelle('setzen')">
                 {{ t('chart.ki.setzen', { symbol: panel.symbol, tf: panel.interval }) }}</Knopf>
-            <Knopf klein symbol="stift" :laedt="laeuft === 'eigene'" :disabled="!!laeuft" class="erstellen" @click="erstelle('eigene')">
-                {{ t('chart.ki.eigene') }}</Knopf>
+            <Knopf klein symbol="ebenen" :laedt="laeuft === 'zeitrahmen'" :disabled="!!laeuft" class="erstellen" @click="erstelle('zeitrahmen')">
+                {{ t('chart.ki.zeitrahmen') }}</Knopf>
             <div class="optionZeile">
-                <label class="option" :title="t('chart.ki.ergaenzenTipp')">
-                    <input v-model="ergaenzen" type="checkbox" /> {{ t('chart.ki.ergaenzen') }}
-                </label>
                 <label class="option" :title="t('chart.ki.htfTrendTipp')">
                     <input v-model="htfTrend" type="checkbox" /> {{ t('chart.ki.htfTrend') }}
                 </label>
@@ -269,11 +260,33 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                         · {{ analyse.costUsd.toFixed(4) }} $</template></small>
             </div>
             <div v-if="analyse.auswahl" class="struktur">{{ struktur(analyse) }}</div>
-            <div class="artZeile">{{ t(analyse.modus === 'eigene' ? 'chart.ki.artEigene' : 'chart.ki.artSetzen') }}</div>
+            <div class="artZeile">{{ t(analyse.modus === 'zeitrahmen' ? 'chart.ki.artZeitrahmen' : 'chart.ki.artSetzen') }}</div>
+            <table v-if="analyse.zeitrahmen?.length" class="zeitrahmen">
+                <thead><tr><th></th><th>{{ t('chart.ki.spalteStruktur') }}</th><th>{{ t('chart.ki.spalteLage') }}</th><th>{{ t('chart.ki.spalteMomentum') }}</th></tr></thead>
+                <tbody class="zeilen">
+                    <tr v-for="z in analyse.zeitrahmen" :key="z.tf" :class="{ bestimmend: z.tf === analyse.bestimmend?.tf }">
+                        <th>{{ z.tf }}</th>
+                        <template v-if="z.unbekannt"><td colspan="3" class="leise">{{ t('chart.ki.unbekannt') }}</td></template>
+                        <template v-else>
+                            <td :class="z.zustand === 1 ? 'auf' : z.zustand === -1 ? 'ab' : ''">{{ t('chart.ki.richtung.' + (z.zustand === 1 ? 'auf' : z.zustand === -1 ? 'ab' : 'offen')) }}</td>
+                            <td>{{ z.lagePct == null ? '—' : z.lagePct.toFixed(0) + ' %' }}</td>
+                            <td>{{ z.momentum ? t('chart.ki.momentum.' + z.momentum) : '—' }}</td>
+                        </template>
+                    </tr>
+                </tbody>
+            </table>
+            <div v-if="analyse.tagesbewegung" class="hinweis">{{ t('chart.ki.tagesbewegung', { pct: analyse.tagesbewegung.genutztPct.toFixed(0) }) }}</div>
             <p v-if="analyse.text" class="text" data-ki-generiert="true">{{ analyse.text }}</p>
+            <div v-if="analyse.bestimmend" class="bestimmendZeile" data-ki-generiert="true"><b>{{ t('chart.ki.bestimmend', { tf: analyse.bestimmend.tf }) }}</b> {{ analyse.bestimmend.grund }}</div>
+            <template v-if="analyse.treffen?.length">
+                <div class="abschnitt">{{ t('chart.ki.treffen') }}</div>
+                <div v-for="c in analyse.treffen" :key="c.id" class="bedingung" data-ki-generiert="true">
+                    <b>{{ preis(c.preis) }}</b> <span class="id">{{ c.quellen.map((q) => q === 'eigene' ? t('chart.ki.quelleEigene') : q).join(' · ') }}</span><br>{{ c.text }}
+                </div>
+            </template>
             <div v-if="analyse.htfTrend && !analyse.htfTrend.linie" class="hinweis">{{ t('chart.ki.htfOhneLinie', { tf: analyse.htfTrend.tf, richtung: t('chart.ki.htfRichtung.' + (analyse.htfTrend.zustand === 1 ? 'auf' : analyse.htfTrend.zustand === -1 ? 'ab' : 'keine')) }) }}</div>
-            <template v-if="eigeneZeilen.length">
-                <div class="abschnitt">{{ t('chart.ki.meineZeichnungen') }}</div>
+            <details v-if="eigeneZeilen.length" class="meine">
+                <summary class="abschnitt">{{ t('chart.ki.meineZeichnungen') }}<template v-if="befunde"> · {{ t('chart.ki.befunde', { n: befunde }) }}</template></summary>
                 <div v-if="ausserListe" class="hinweis">{{ ausserListe }}</div>
                 <button v-for="u in eigeneZeilen" :key="u.id" type="button" class="eigene" data-ki-generiert="true"
                     :title="t('chart.ki.markieren')" @click="u.zid != null && emit('waehle', u.zid)">
@@ -284,26 +297,11 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                             v-if="u.zustand === 'gebrochen' && u.rolle"> · {{ t('chart.ki.rolleU.' + u.rolle) }}</template></span>
                     </span>
                     <small v-if="u.bewertung">{{ u.bewertung.text }}</small>
-                    <small v-else class="leise">{{ t('chart.ki.ohneBewertung') }}</small>
                     <!-- Fehler oder Unstimmigkeit: was die KI dazu sagt, sonst was der Code gemessen hat -->
                     <small v-if="u.bewertung?.hinweis || u.auffaellig?.length" class="achtung">
                         {{ t('chart.ki.achtung') }} {{ u.bewertung?.hinweis || u.auffaellig.join(' · ') }}</small>
                 </button>
-            </template>
-            <div v-if="analyse.korrekturen?.length" class="abschnitt">{{ t('chart.ki.korrekturen') }}</div>
-            <div v-for="k in analyse.korrekturen" :key="k._key" class="vorschlag" data-ki-generiert="true">
-                <div class="zeile">
-                    <span class="art">{{ t('chart.ki.korrektur') }}</span>
-                    <span class="id">{{ k.u }} → {{ k.id }}</span>
-                    <span class="label">{{ k.name }}</span>
-                    <span v-if="istUebernommen(k)" class="erledigtMarke" :title="t('chart.ki.uebernommenTitel')">✓</span>
-                    <template v-else-if="offen">
-                        <button type="button" class="textKnopf" @click="uebernimm(k)">{{ t('chart.ki.korrigieren') }}</button>
-                        <button type="button" class="textKnopf" :title="t('chart.ki.verwerfenTitel')" :aria-label="t('chart.ki.verwerfenTitel')" @click="verwirf(k)">✕</button>
-                    </template>
-                </div>
-                <small>{{ k.grund }}<template v-if="k.abstandAtr != null"> ({{ t('chart.ki.daneben', { atr: k.abstandAtr.toFixed(1) }) }})</template></small>
-            </div>
+            </details>
             <div v-if="analyse.einwaende?.length" class="abschnitt">{{ t('chart.ki.einwaende') }}</div>
             <div v-for="e in analyse.einwaende" :key="'e' + e.id" class="einwand" data-ki-generiert="true">
                 <span class="id">{{ e.id }}</span> <s>{{ e.name }}</s><small v-if="e.grund"> — {{ e.grund }}</small>
@@ -312,11 +310,11 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
 
             <div v-if="analyse.bedingungen?.length" class="abschnitt">{{ t('chart.ki.bedingungen') }}</div>
             <div v-for="(b, i) in analyse.bedingungen" :key="'b' + i" class="bedingung" data-ki-generiert="true">
-                <b>{{ t('chart.ki.wenn') }}</b> {{ b.wenn }} → {{ b.dann }}<span v-if="b.zielId" class="id">→ {{ b.zielId }}</span>
+                <span v-if="b.kippt" class="kippt">{{ t('chart.ki.kippt') }}</span> <b>{{ t('chart.ki.wenn') }}</b> {{ b.wenn }} → {{ b.dann }}<span v-if="b.zielId && !b.zielId.startsWith('Z')" class="id">→ {{ b.zielId }}</span>
             </div>
 
             <div v-if="analyse.linien?.length || analyse.zonen?.length" class="abschnitt">
-                {{ t(offen ? (analyse.modus === 'eigene' ? 'chart.ki.fehlend' : 'chart.ki.vorschlaege') : 'chart.ki.eingezeichnet') }}
+                {{ t(offen ? 'chart.ki.vorschlaege' : 'chart.ki.eingezeichnet') }}
                 <template v-if="offen">
                     <button type="button" class="textKnopf abstandLinks" :disabled="uebernimmtAlle" @click="alleUebernehmen">{{ t('chart.ki.alleUebernehmen') }}</button>
                     <button v-if="analyse.auswahl" class="textKnopf abstandLinks" :class="{ an: alle }" @click="schalteAlle">{{ t(alle ? 'chart.ki.kandidatenAus' : 'chart.ki.kandidatenZeigen') }}</button>
@@ -352,7 +350,7 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
                 <small>{{ z.grund }}</small>
             </div>
             <div v-if="!offen && !analyse.linien?.length && !analyse.zonen?.length" class="hinweis">{{ t('chart.ki.nichtsEingezeichnet') }}</div>
-            <div v-if="offen && analyse.modus !== 'eigene' && !analyse.linien?.length && !analyse.zonen?.length" class="hinweis">{{ t('chart.ki.keinSetup') }}</div>
+            <div v-if="offen && analyse.modus !== 'zeitrahmen' && !analyse.linien?.length && !analyse.zonen?.length" class="hinweis">{{ t('chart.ki.keinSetup') }}</div>
             <div v-if="analyse.verworfen?.length" class="verworfen">{{ t('chart.ki.verworfen', { n: analyse.verworfen.length }) }}</div>
             <div class="schluss">
                 <button v-if="offen" type="button" class="textKnopf" @click="kiErledigt">{{ t('chart.ki.vorschauErledigt') }}</button>
@@ -609,6 +607,16 @@ watch(() => [props.panel.symbol, props.panel.interval, props.panel.markt], ladeL
     margin-top: 6px;
 }
 
+table.zeitrahmen { width: 100%; border-collapse: collapse; font-size: 12px; margin: 6px 0; }
+table.zeitrahmen th, table.zeitrahmen td { padding: 3px 6px; text-align: left; border-bottom: 1px solid var(--line); font-weight: normal; }
+table.zeitrahmen thead th { opacity: 0.65; }
+table.zeitrahmen tbody th { font-weight: 600; white-space: nowrap; }
+table.zeitrahmen tr.bestimmend th { color: var(--accent); }
+table.zeitrahmen td.auf { color: var(--good); }
+table.zeitrahmen td.ab { color: var(--bad); }
+.bestimmendZeile { margin: 6px 0; font-size: 12px; }
+.kippt { font-size: 11px; font-weight: 600; color: var(--warn); margin-right: 4px; }
+details.meine summary { cursor: pointer; }
 .bedingung {
     line-height: 1.4;
 }

@@ -145,18 +145,6 @@ export function profileAlsZeichnungen(analyse, basis = {}) {
     return [...bereiche.values()].map(([t1, t2]) => ({ typ: 'volprofil', punkte: [{ t: t1, p: 0 }, { t: t2, p: 0 }], stil: { ...stil } }))
 }
 
-/*
- * Korrektur einer EIGENEN Zeichnung („Meine Zeichnungen analysieren"): dieselbe
- * Zeichnungsart mit den Punkten des Kandidaten, gestrichelt im KI-Lila neben der
- * eigenen. Übernehmen verschiebt die eigene Zeichnung dorthin (chartKi.js).
- */
-export function korrekturAlsZeichnung(k) {
-    const stil = { farbe: FARBE, breite: 1, strich: 'gestrichelt', text: `${k.u} → ${k.id}` }
-    if (k.typ === 'strahlH' || k.typ === 'horizontale') return { typ: k.typ, punkte: k.punkte, stil: { ...stil, textPos: 'rechts' } }
-    if (k.typ === 'kanal') return { typ: 'kanal', punkte: k.punkte, stil: { ...stil, fuellung: false } }
-    return { typ: k.typ, punkte: k.punkte, stil: { ...stil, textPos: 'ende' } }
-}
-
 /**
  * Alles aus einer Analyse als Vorschau (negative ids: nie verwechselbar mit gespeicherten).
  * `ki` trägt den Schlüssel des Vorschlags (`linie3`, `zone1`, `profil`) — daran erkennt
@@ -175,7 +163,6 @@ export function kiVorschau(analyse, { profilStil = {} } = {}) {
                 : [{ id: -100 - i, ki: schluessel(l, 'linie', i), ...linieAlsZeichnung(l) }])),
         ...(analyse.zonen || []).map((z, i) => (istProfilZone(z) ? null : { id: -200 - i, ki: schluessel(z, 'zone', i), ...zoneAlsZeichnung(z, ab, bis) })).filter(Boolean),
         ...(hatProfil(analyse) ? profileAlsZeichnungen(analyse, profilStil).map((z, j) => ({ id: -150 - j, ki: 'profil', ...z })) : []),
-        ...(analyse.korrekturen || []).map((k, i) => ({ id: -400 - i, ki: schluessel(k, 'korr', i), ...korrekturAlsZeichnung(k) })),
         ...(analyse._alle ? kandidatenVorschau(analyse) : []),
     ]
 }
@@ -184,8 +171,7 @@ export function kiVorschau(analyse, { profilStil = {} } = {}) {
  * Was mit den Vorschlägen einer Analyse geschehen ist — je Analyse (Symbol,
  * Zeiteinheit, Markt, Zeitpunkt) gemerkt, damit ein Neuladen oder ein Wechsel
  * des Reiters die übernommenen Linien nicht wieder gestrichelt daneben zeigt.
- *   uebernommen  Schlüssel (`linie3`, `zone1`, `profil`, `korr0`), jetzt eigene Zeichnungen
- *                (bei `korr…`: die eigene Zeichnung wurde dorthin verschoben)
+ *   uebernommen  Schlüssel (`linie3`, `zone1`, `profil`), jetzt eigene Zeichnungen
  *   geloescht    im Chart oder im Reiter verworfen
  *   erledigt     „Vorschau erledigt": keine gestrichelten Linien mehr, im Reiter
  *                bleibt die Analyse mit den übernommenen Vorschlägen stehen
@@ -198,8 +184,7 @@ export const markenSchluessel = (a) => (a ? `${a.symbol}|${a.interval}|${a.markt
 function gefiltert(analyse, behalte) {
     const linien = (analyse.linien || []).map((l, i) => ({ ...l, _key: `linie${i}` })).filter((l) => behalte(l._key, istProfilLinie(l)))
     const zonen = (analyse.zonen || []).map((z, i) => ({ ...z, _key: `zone${i}` })).filter((z) => behalte(z._key, istProfilZone(z)))
-    const korrekturen = (analyse.korrekturen || []).map((k, i) => ({ ...k, _key: `korr${i}` })).filter((k) => behalte(k._key, false))
-    return { ...analyse, linien, zonen, korrekturen }
+    return { ...analyse, linien, zonen }
 }
 
 /**

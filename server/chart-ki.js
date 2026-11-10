@@ -45,12 +45,14 @@ import { ladeLlmConfigFuerAufgabe, callLLMJson } from './llm.js'
 import { kannBilder } from './ai-models.js'
 import { getClosedCandles, getHistoricalCandles, isValidTimeframe, TIMEFRAME_MS } from './market-data.js'
 import { holeHebelzonen } from './hebelzonen.js'
+import { baueZeitrahmen, zeitrahmenText, zeitrahmenTabelle, zeitrahmenFuer, ZEITRAHMEN_KERZEN } from './chart-zeitrahmen.js'
+import { leseMomentumGrenze } from './momentum-grenze.js'
 import { pruefeEinordnung } from './coin-radar/einordnung.js'
 import { tradesAusZeilen } from './chart-journal.js'
 import { sendeWennAus, istAus } from './quellen/aus.js'
 import { ohneUnsichtbares } from '../shared/unsichtbar.js'
 import { uebergeordneterTrend, htfTrendKandidaten, htfTrendLabel, htfTrendZeile, HTF_TREND_KERZEN } from './chart-htf-trend.js'
-import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText, kanalName, kanalKurz, kanalBeschriftung, korrekturAbstand, PROFIL_ARTEN_ALLE, waehleNutzer } from './chart-kandidaten.js'
+import { baueKandidaten, kandidatenText, HTF_VON, KAND, zahl, preisVon, zeitText, kanalName, kanalKurz, kanalBeschriftung, PROFIL_ARTEN_ALLE, waehleNutzer } from './chart-kandidaten.js'
 import { dreieckName, dreieckKurz, dreieckBeschriftung } from './chart-dreiecke.js'
 import { umkehrName, umkehrKurz, umkehrBeschriftung } from './chart-umkehr.js'
 
@@ -94,17 +96,17 @@ export function pruefeBild(roh) {
  * eigene Trades. Ohne `paket` wird es aus den Kerzen gebaut (KI-Chat).
  * @returns {string}
  */
-export function baueChartEingabe({ symbol, interval, kerzen, kerzenHtf = null, zeichnungen = [], hebelzonen = null, trades = [], paket = null, zeitzone = 'UTC', modus = 'setzen', ergaenzen = false, htfTrend = null, englisch = false }) {
-    const eigene = modus === 'eigene'
+export function baueChartEingabe({ symbol, interval, kerzen, kerzenHtf = null, zeichnungen = [], hebelzonen = null, trades = [], paket = null, zeitzone = 'UTC', modus = 'setzen', htfTrend = null, zeitrahmen = null, englisch = false }) {
+    const lage = modus === 'zeitrahmen'
     const pk = paket || baueKandidaten({ kerzen, kerzenHtf, interval, intervalHtf: HTF_VON[interval] || null, zeichnungen, zeitzone })
     const tz = pk?.zeitzone || zeitzone
     const zeit = (ms) => zeitText(ms, tz)
     const zeilen = [`SYMBOL: ${symbol}`, `ZEITEINHEIT: ${interval}`, `JETZT: ${zeit(Date.now())}`, '']
-    if (pk) zeilen.push(kandidatenText(pk, { eigene, mitKandidaten: !eigene || ergaenzen }))
+    if (lage && zeitrahmen) zeilen.push(zeitrahmenText(zeitrahmen, zeit), '')
+    if (pk) zeilen.push(kandidatenText(pk, { eigene: lage }))
     else zeilen.push('Zu wenige Kerzen für eine Vermessung.')
     if (htfTrend && pk) zeilen.push('', htfTrendZeile(htfTrend, pk.kurs, englisch))
-    // Bei „Meine Zeichnungen" geht es um die Zeichnungen — die Liquidationsschätzung lenkt nur ab
-    if (!eigene && hebelzonen && (hebelzonen.oben?.length || hebelzonen.unten?.length)) {
+    if (hebelzonen && (hebelzonen.oben?.length || hebelzonen.unten?.length)) {
         zeilen.push('', 'GESCHÄTZTE LIQUIDATIONSZONEN (Modell aus Open Interest, keine Messung; nur zur Einordnung, nicht als Linie auswählbar):')
         for (const z of (hebelzonen.oben || []).slice(0, 3)) zeilen.push(`- darüber ${zahl(z.preis)} (~${Math.round(z.usd / 1e6)} Mio USD Shorts)`)
         for (const z of (hebelzonen.unten || []).slice(0, 3)) zeilen.push(`- darunter ${zahl(z.preis)} (~${Math.round(z.usd / 1e6)} Mio USD Longs)`)
@@ -119,61 +121,62 @@ export function baueChartEingabe({ symbol, interval, kerzen, kerzenHtf = null, z
 }
 
 /*
- * Zwei Arten der Analyse (31.10.2026 — die Kästchen sind weg, der Code baut
- * immer alle Kandidaten):
- *   setzen   „KI-Zeichnungen setzen": das Modell wählt nur, was für ein Setup
- *            JETZT zählt — höchstens `MAX_ZEICHNUNGEN`, gern weniger, auch keine.
- *   eigene   „Meine Zeichnungen analysieren": der Code hat die eigenen Zeichnungen
- *            gemessen (U…), das Modell bewertet sie und — mit `ergaenzen` —
- *            schlägt Korrekturen und höchstens `MAX_FEHLEND` fehlende Marken vor.
+ * Zwei Arten der Analyse:
+ *   setzen      „KI-Zeichnungen setzen": das Modell wählt nur, was für ein Setup
+ *               JETZT zählt — höchstens `MAX_ZEICHNUNGEN`, gern weniger, auch keine.
+ *   zeitrahmen  „Lage über alle Zeitrahmen" (10.11.2026, ersetzt „Meine Zeichnungen
+ *               analysieren"): der Code misst jeden Zeitrahmen, das Modell ordnet ein,
+ *               die eigenen Zeichnungen werden dagegen geprüft (chart-zeitrahmen.js).
  * Bedingungen und Liquidationszonen sind in beiden dabei.
  */
-export const MODI = ['setzen', 'eigene']
+export const MODI = ['setzen', 'zeitrahmen']
 export const MAX_ZEICHNUNGEN = 6
-export const MAX_FEHLEND = 4
+const MAX_TREFFEN = 3
 const WICHTIG = ['hoch', 'mittel', 'gering']
 
 export function normModus(roh) {
-    const modus = MODI.includes(roh?.modus) ? roh.modus : 'setzen'
-    return { modus, ergaenzen: modus === 'eigene' ? roh?.ergaenzen !== false : false, htf: roh?.htf === true }
+    // „eigene" kann noch aus einem offenen Tab kommen
+    const wunsch = roh?.modus === 'eigene' ? 'zeitrahmen' : roh?.modus
+    const modus = MODI.includes(wunsch) ? wunsch : 'setzen'
+    return { modus, htf: modus === 'setzen' && roh?.htf === true }
 }
 
 /**
- * „Meine Zeichnungen analysieren" (umgebaut 01.11.2026): das Thema sind die
- * Zeichnungen des Nutzers, nicht der Chart. Vorher schrieb das Modell seine
- * eigene Analyse mit den Kandidaten des Codes und hängte die Zeichnungen als
- * Randnotiz an; jetzt bekommt es die Kandidaten nur zum Korrigieren/Ergänzen,
- * Text und Bedingungen dürfen nur U-IDs nennen (`pruefeChartAuswahl` setzt das
- * durch), und es soll sagen, wo eine Zeichnung falsch oder unlogisch ist.
+ * Lage über alle Zeitrahmen. Bis 10.11.2026 stand hier der Auftrag „analysiere SEINE
+ * Zeichnungen, keine eigene Analyse daneben", und jeder Satz mit einer anderen Marke
+ * wurde verworfen — heraus kam eine Beschreibung der Zeichnungen. Jetzt sind feste
+ * Fragen gestellt, und die Zeichnungen sind nur noch eine Quelle unter mehreren.
  */
-function systemTextEigene(englisch, { mitBild = false, ergaenzen = true } = {}) {
+function systemTextZeitrahmen(englisch, { mitBild = false } = {}) {
     const sprache = englisch ? 'Write all texts in English.' : 'Schreibe alle Texte auf Deutsch.'
     const regeln = [
-        '- THEMA sind die Zeichnungen des Nutzers (U…). Analysiere SIE: was jede einzelne aussagt, ob sie an den Kerzen stimmt, wie sie zusammenspielen und was sie gemeinsam über die Lage sagen. Keine eigene Chart-Analyse daneben.',
-        '- Im Text und in den Bedingungen nennst du NUR U-IDs, als [U1] usw.; der Code setzt Name und Preis ein. Schreibe keine eigenen Kurszahlen. Ein Satz mit einer anderen ID wird verworfen.',
-        '- Lies die Zeichnungen ZUSAMMEN: die Leiter der eigenen Marken zeigt, was über und unter dem Kurs liegt; „gleiche Höhe" heisst, zwei Zeichnungen bestätigen einander. Sag, welche Zeichnung die nächste Hürde nach oben und die nächste Auffangmarke nach unten ist.',
-        '- Zu einer Zone sag, warum sie dort liegt, wenn die Messung es hergibt (Ursprung: Wendepunkt am linken Rand, Bewegung danach, Rückkehr seither) — nicht nur, ob sie berührt wurde.',
-        '- Gebrochene Linien: sag, wann sie gebrochen wurden, ob sie vorher gegolten haben (Berührungen davor) und ob der Kurs sie seither von der anderen Seite getestet hat. „Nie durchschlossen" mit grossem Abstand heisst: weit weg, gerade nicht im Spiel.',
-        '- Fehler und Unlogisches: Steht bei einer Zeichnung „AUFFÄLLIG", nimm es ernst und erkläre es in "hinweis" (z. B. Linie schneidet durch Kerzenkörper, Anker nicht an einem Hoch/Tief, Beschriftung passt nicht zur Lage, Zone ohne Wendepunkt, Profil vor den geladenen Kerzen). Auch ein logischer Widerspruch zwischen zwei Zeichnungen gehört dorthin. Erfinde keine Fehler: ohne Befund bleibt "hinweis" leer.',
-        '- Bewertungen ("bewertungen"): für JEDE eigene Zeichnung eine — "wichtig" hoch|mittel|gering für die Lage jetzt, "text" ≤ 220 Zeichen: was sie zeigt und ob sie noch gilt, "hinweis" ≤ 200 Zeichen oder leer. Berührungen, Durchquerungen, Bruch und Zustand sind GEMESSEN — übernimm sie, zähle nicht selbst.',
-        '- Bedingungen: an eine U-ID gebunden ("id": "U3"). "richtung" ueber/unter meint einen Schluss der Zeiteinheit jenseits der Zeichnung — bei einer Zone/einem Profil/Kanal die obere Kante (VAH) für ueber, die untere (VAL) für unter. "ziel" (optional) ist die nächste eigene Zeichnung in dieser Richtung.',
-        ergaenzen ? `- Korrekturen ("korrekturen"): steht bei einer eigenen Zeichnung ein „nächster Kandidat", und misst der die Marke klar besser (mehr Berührungen, sauberer), dann {"u": "U2", "id": "N3", "grund": "…"}. Nur bei deutlichem Gewinn.` : null,
-        ergaenzen ? `- Fehlendes ("fehlend"): höchstens ${MAX_FEHLEND} wichtige Marken aus den Kandidaten des Codes, die KEINE eigene Zeichnung abdeckt und die für die Lage zählen (nahe am Kurs, mehrfach berührt). Hier — und nur hier und in "korrekturen" — darfst du Kandidaten-IDs (N, V, T, K, M, R, D) verwenden. Linien: {"id": "N4", "label": "...", "grund": "..."}; Zonen: {"ids": ["N3"], …}; Kanäle/Dreiecke/Umkehrmuster in "muster".` : '- Keine Korrekturen, keine neuen Marken: "korrekturen": [] und "fehlend": {}.',
-        mitBild ? '- Bild: Du bekommst ein Bild des sichtbaren Charts mit den Zeichnungen. Nutze es, um die Zeichnungen zu verstehen (wo sie liegen, wie sie zum Kursverlauf stehen). Preise liest du NICHT aus dem Bild ab.' : null,
+        '- Beschreibe nicht, was gemessen wurde (das sieht der Nutzer in einer Tabelle). Beantworte diese Fragen:',
+        '  1. Welche Zeitrahmen laufen gleich, welche widersprechen sich?',
+        '  2. Welcher Zeitrahmen bestimmt die Lage gerade, und warum? ("bestimmend")',
+        '  3. Wo treffen Marken mehrerer Zeitrahmen zusammen, und was heisst das für die Lage? ("treffen")',
+        '  4. Was müsste geschehen, damit das Bild kippt? (eine Bedingung mit "kippt": true)',
+        '- Ein Widerspruch ist eine Aussage: etwa 1h abwärts im Aufwärtstrend von 4h und 1d ist ein Rücklauf, kein Trendwechsel, solange die grössere Struktur nicht bricht. Nenne ihn, statt ihn zu glätten.',
+        '- Momentum: überkauft/überverkauft allein ist kein Signal. Sag, ob es zur Struktur desselben Zeitrahmens passt oder ihr widerspricht.',
+        '- Tagesbewegung: Über 100 % ist der übliche Tag schon gelaufen; sag es, wenn es die Lage verändert.',
+        '- Liquidationszonen sind ein Modell, keine Messung; erwähne sie nur, wenn sie an einem Zusammentreffen oder einer Bedingung liegen.',
+        '- Marken nennst du NUR als [Z…], [C…] oder [U…]; der Code setzt Name und Preis ein. Schreibe keine eigenen Kurszahlen. Zeitrahmen nennst du beim Namen (4h, 1d).',
+        '- Eigene Zeichnungen (U…) prüfst du gegen die Zeitrahmen. In "bewertungen" kommen NUR Zeichnungen, zu denen es etwas zu sagen gibt: sie treffen mit einer Marke eines höheren Zeitrahmens zusammen, oder sie haben keine Stütze, widersprechen der grösseren Struktur, oder sind gebrochen und noch im Spiel. Zeichnungen weit weg vom Kurs oder ohne Befund lässt du weg; keine Bewertung ist die Regel, nicht die Ausnahme. Steht „AUFFÄLLIG" bei einer Zeichnung, erkläre es in "hinweis".',
+        '- Gibt es keine eigenen Zeichnungen, bleibt "bewertungen" leer.',
+        '- Bedingungen: "id" ist eine Z- oder U-ID, "richtung" ueber/unter meint einen Schluss jenseits der Marke im Zeitrahmen dieser Marke — bei einer eigenen Zone oder einem Profil die obere Kante für ueber, die untere für unter. "ziel" (optional) ist die nächste Z- oder U-ID in dieser Richtung, kein Kursziel. Genau eine Bedingung trägt "kippt": true.',
+        mitBild ? '- Bild: Du bekommst ein Bild des sichtbaren Charts. Es hilft beim Verständnis der Zeichnungen. Preise liest du NICHT aus dem Bild ab.' : null,
         '- Stütze dich NUR auf die Eingabe. Keine Nachrichten, kein Allgemeinwissen über den Coin.',
-        '- KEINE Prognose, KEIN Kursziel, KEINE Handelsempfehlung, kein "dürfte", kein "wird steigen/fallen", kein "kaufen/verkaufen". Beschreibe, was ein Schluss jenseits einer Zeichnung bedeuten würde.',
-        `- Höchstens ${MAX_BEDINGUNGEN} Bedingungen.`,
+        '- KEINE Prognose, KEIN Kursziel, KEINE Handelsempfehlung, kein "dürfte", kein "wird steigen/fallen", kein "kaufen/verkaufen". Beschreibe, was ein Schluss jenseits einer Marke bedeuten würde.',
+        `- Höchstens ${MAX_TREFFEN} Einträge in "treffen", höchstens ${MAX_BEDINGUNGEN} Bedingungen.`,
         `- ${sprache}`,
     ].filter(Boolean)
-    const zeichnungen = '"linien": [{"id": "N4", "label": "...", "grund": "...", "gewicht": "stark|mittel|schwach"}], "zonen": [{"ids": ["N3"], "label": "...", "grund": "..."}], "muster": [{"id": "K1", "grund": "..."}]'
     const schema = [
-        '{"text": "3–5 Sätze: was die Zeichnungen zusammen zeigen, nur [U…]",',
+        '{"text": "3–5 Sätze: Gleichlauf und Widersprüche der Zeitrahmen, Marken als [Z…]/[C…]/[U…]",',
+        ' "bestimmend": {"tf": "4h", "grund": "ein Satz"},',
+        ' "treffen": [{"id": "C1", "text": "ein Satz: was dieses Zusammentreffen für die Lage heisst"}],',
         ' "bewertungen": [{"u": "U1", "wichtig": "hoch|mittel|gering", "text": "...", "hinweis": ""}],',
-        ' "bedingungen": [{"id": "U1", "richtung": "ueber|unter", "dann": "...", "ziel": "U2"}],',
-        ergaenzen ? ' "korrekturen": [{"u": "U2", "id": "N3", "grund": "..."}],' : ' "korrekturen": [],',
-        ergaenzen ? ` "fehlend": {${zeichnungen}}}` : ' "fehlend": {}}',
+        ' "bedingungen": [{"id": "Z3", "richtung": "ueber|unter", "dann": "...", "ziel": "Z2", "kippt": true}]}',
     ]
-    return `Du bist ein nüchterner technischer Analyst und prüfst die Chart-Zeichnungen eines Traders. Der Code hat jede seiner Zeichnungen (U…) an den Kerzen gemessen. Deine Aufgabe: SEINE Zeichnungen analysieren — einzeln und zusammen — und ehrlich sagen, wo eine Zeichnung nicht stimmt.
+    return `Du bist ein nüchterner technischer Analyst. Der Code hat den Chart über alle Zeitrahmen gemessen (Struktur, Lage in der Spanne, Momentum, Marken je Zeitrahmen, Zusammentreffen) und die Zeichnungen des Traders (U…) an den Kerzen geprüft. Deine Aufgabe: EINORDNEN, nicht messen und nicht nacherzählen.
 
 Regeln:
 ${regeln.join('\n')}
@@ -182,8 +185,8 @@ Antworte NUR mit JSON:
 ${schema.join('\n')}`
 }
 
-export function systemText(englisch, { mitBild = false, modus = 'setzen', ergaenzen = true } = {}) {
-    if (modus === 'eigene') return systemTextEigene(englisch, { mitBild, ergaenzen })
+export function systemText(englisch, { mitBild = false, modus = 'setzen' } = {}) {
+    if (modus === 'zeitrahmen') return systemTextZeitrahmen(englisch, { mitBild })
     const sprache = englisch ? 'Write all texts in English.' : 'Schreibe alle Texte auf Deutsch.'
     const regeln = [
         '- Verwende NUR IDs aus der Liste. Erfinde keine Preise, keine Zeiten, keine Linien. Eine Marke, die nicht in der Liste steht, gibt es nicht.',
@@ -265,12 +268,12 @@ const ID_RE = /\[([A-Za-z]\d{1,2})\]/g
  * zu keiner Marke passen, kommen nur in `warnungen` (erst beobachten, dann
  * scharf schalten).
  */
-export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = false, modus: modusRoh = 'setzen', ergaenzen: ergaenzenRoh = true } = {}) {
-    const { modus, ergaenzen } = normModus({ modus: modusRoh, ergaenzen: ergaenzenRoh })
-    const eigene = modus === 'eigene'
-    // Woher die Zeichnungen kommen: bei „setzen" die Antwort selbst, bei „eigene" nur `fehlend` (mit Ergänzen)
-    const quelle = !eigene ? (json || {}) : ergaenzen && json?.fehlend && typeof json.fehlend === 'object' ? json.fehlend : {}
-    const MAX = eigene ? MAX_FEHLEND : MAX_ZEICHNUNGEN
+export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = false, modus: modusRoh = 'setzen', zeitrahmen = null } = {}) {
+    const { modus } = normModus({ modus: modusRoh })
+    const lage = modus === 'zeitrahmen'
+    // Die Lage über alle Zeitrahmen setzt keine Zeichnungen
+    const quelle = lage ? {} : (json || {})
+    const MAX = MAX_ZEICHNUNGEN
     // Zeichnungen zählen gemeinsam: Linie, Zone, Kanal je eins, ein Profil eins (egal wie viele V-Marken)
     const belegt = new Set()
     const voll = (schl) => !belegt.has(schl) && belegt.size >= MAX
@@ -284,6 +287,8 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
     const ohneZeit = (x) => wort(x, 80).replace(/\s*(?:\b(?:seit|ab|um|von|bis|since|from|at|until)\s+)?\d{1,2}:\d{2}(?::\d{2})?\s*(?:Z\b|UTC\b)?/gi, '').replace(/\(\s*\)/g, '').replace(/\s+/g, ' ').trim().slice(0, 40)
     const A = paket.atr, kurs = paket.kurs
     const karte = new Map(paket.kandidaten.map((k) => [k.id, k]))
+    const zMarken = new Map((zeitrahmen?.marken || []).map((m) => [m.id, m]))
+    const cMarken = new Map((zeitrahmen?.treffen || []).map((c) => [c.id, c]))
     const nutzerMap = new Map(paket.nutzer.map((u) => [u.id, u]))
 
     // Einwände aus dem Bild (nur mit Bild, nur gegen Kanäle und Trendlinien): diese IDs
@@ -305,13 +310,20 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
     // danach kurz — vorher stand „Bear-Flagge (3/3 Berührungen) K1 (Kanten jetzt …)" bis zu
     // viermal in einem Absatz (27.10.2026). Über alle Texte einer Antwort hinweg.
     const genannt = new Set()
-    // `nurU`: bei „Meine Zeichnungen" dürfen Text, Bewertungen und Bedingungen nur eigene Zeichnungen nennen
-    const setzeEin = (t, { nurU = false } = {}) => {
+    // Lage über alle Zeitrahmen: Text, Bewertungen und Bedingungen nennen nur Z- und U-Marken
+    const setzeEin = (t) => {
         let unbekannt = false
         // Erst unsichtbare Zeichen weg — „[U1]" mit Nullbreite-Zeichen darin passte sonst nicht auf ID_RE und blieb wörtlich stehen
         const aus = ohneUnsichtbares(t).replace(ID_RE, (_, id) => {
-            if (nurU && !/^U\d/i.test(id)) { unbekannt = true; return '' }
-            const k = karte.get(id.toUpperCase())
+            const gross = id.toUpperCase()
+            if (lage) {
+                const z = zMarken.get(gross)
+                if (z) return `${z.tf}-Marke ${zahl(z.preis)}`
+                const c = cMarken.get(gross)
+                if (c) return `${englisch ? 'confluence' : 'Zusammentreffen'} ${zahl(c.preis)}`
+                if (!/^U\d/.test(gross)) { unbekannt = true; return '' }
+            }
+            const k = karte.get(gross)
             if (k && eingewandt.has(k.id)) { unbekannt = true; return '' }
             if (k?.quelle === 'dreieck') {
                 if (genannt.has(k.id)) return `${dreieckKurz(k, englisch)} ${k.id}`
@@ -337,6 +349,8 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
             // „die Zone [U3]" → nicht „die Zone Zone 74910–75600 (U3)"; „Unterstützungslinie Trendlinie T1" → „Unterstützungslinie T1"
             .replace(/(^|[^\p{L}])(\p{L}+)\s+(?=\2\b[^()]*\(U\d+\))/giu, '$1')
             .replace(/(\p{L}*linie)\s+Trendlinie\s+(?=T\d)/giu, '$1 ')
+            // „die 1w-Marke [Z3]" → nicht „die 1w-Marke 1w-Marke 72890"; „die Marke [Z3]" → nicht „die Marke 1w-Marke 72890"
+            .replace(/(\b\d+[mhdwM]-Marke)\s+(?=\1\b)/g, '').replace(/\bMarke\s+(?=\d+[mhdwM]-Marke\b)/g, '')
         // „die Trendlinie [T1]" → nicht „die Trendlinie Trendlinie T1 (…)"
         // „die Bear-Flagge [K1]" → nicht „die Bear-Flagge Bear-Flagge (…)"
         return unbekannt ? null : aus.replace(/\b(?:Trendlinie|trend ?line)\s+(?=Trendlinie T\d)/gi, '')
@@ -348,7 +362,8 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
     const marken = [...paket.kandidaten.flatMap((k) => (k.quelle === 'trend' ? [k.wertJetzt, k.p1, k.p2] : k.quelle === 'kanal' ? [k.untenJetzt, k.obenJetzt, k.p1, k.p2]
         : k.quelle === 'dreieck' ? [k.untenJetzt, k.obenJetzt, k.obenA, k.untenA, k.spitzeP]
         : k.quelle === 'umkehr' ? [k.nackenJetzt, k.nacken.p1, k.nacken.p2, ...k.punkte.map((p) => p.p)] : [k.preis, k.tief, k.hoch])),
-        ...paket.roh.flatMap((r) => [r.h, r.l]), paket.spanne?.tief, paket.spanne?.hoch].filter(Number.isFinite)
+        ...paket.roh.flatMap((r) => [r.h, r.l]), paket.spanne?.tief, paket.spanne?.hoch, ...(zeitrahmen?.marken || []).map((m) => m.preis),
+        ...(zeitrahmen?.zeilen || []).flatMap((z) => [z.tief, z.hoch, z.bruch?.marke])].filter(Number.isFinite)
     const pruefeZahlen = (t, wo) => {
         for (const m of String(t).matchAll(/\d[\d'’ ]*(?:[.,]\d+)?/g)) {
             const z = Number(m[0].replace(/['’ ]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'))
@@ -361,8 +376,8 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
     let text = ''
     if (json?.text) {
         const saetze = ohneUnsichtbares(json.text).split(/(?<=[.!?])\s+/).map((x) => {
-            const t = setzeEin(x, { nurU: eigene })
-            if (t == null && eigene) verworfen.push({ art: 'text', grund: 'fremdeId', inhalt: x.slice(0, 120) })
+            const t = setzeEin(x)
+            if (t == null && lage) verworfen.push({ art: 'text', grund: 'fremdeId', inhalt: x.slice(0, 120) })
             return t
         }).filter((x) => x != null)
         text = wort(saetze.join(' '), 1200)
@@ -496,16 +511,18 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
 
     const bedingungen = []
     const iv = paket.interval || ''
-    // „Meine Zeichnungen": Bedingungen nur an eigenen Zeichnungen; die Schwelle hängt an der Richtung (Zone: Ober-/Unterkante)
+    // Lage über alle Zeitrahmen: Bedingungen an Z- und U-Marken; bei einer Zeichnung hängt die Schwelle an der Richtung (Zone: Ober-/Unterkante)
     // Kanal (K): ebenso die Kante in der Richtung — bis 01.11.2026 die Mitte (`k.preis`), dann galt
     // ein Kurs in der oberen Kanalhälfte schon als „über K1" und ein Ziel im Kanal als erreichbar.
     const markeVon = (id, richtung) => {
-        if (!eigene) {
+        if (!lage) {
             const k = karte.get(id) || null
             if (k?.quelle !== 'kanal') return k
             const oben = richtung !== 'unter'
             return { ...k, preis: oben ? k.obenJetzt : k.untenJetzt, kante: oben ? 'oben' : 'unten' }
         }
+        const zm = zMarken.get(id)
+        if (zm) return { id, quelle: 'zeitrahmen', preis: zm.preis, name: `${zm.tf}-Marke`, tf: zm.tf }
         const u = nutzerMap.get(id)
         const p = u ? uSchwelle(u, richtung) : null
         return Number.isFinite(p) ? { id, quelle: 'nutzer', preis: p, name: u.name } : null
@@ -514,13 +531,13 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
         const id = idVon(b?.id)
         const richtungRoh = b?.richtung === 'unter' ? 'unter' : b?.richtung === 'ueber' ? 'ueber' : null
         const k = markeVon(id, richtungRoh || 'ueber')
-        if (!k) { verworfen.push({ art: 'bedingung', grund: eigene && !/^U\d/.test(id) ? 'fremdeId' : 'unbekannteId', inhalt: id }); continue }
+        if (!k) { verworfen.push({ art: 'bedingung', grund: lage && !/^[UZ]\d/.test(id) ? 'fremdeId' : 'unbekannteId', inhalt: id }); continue }
         // Ein Dreieck hat zwei Kanten, keine einzelne Schwelle — Bedingungen an seine Kanten nur über die Trendlinien
         if (k.quelle === 'dreieck') { verworfen.push({ art: 'bedingung', grund: 'musterOhneSchwelle', inhalt: id }); continue }
         if (eingewandt.has(id) || eingewandt.has(idVon(b?.ziel))) { verworfen.push({ art: 'bedingung', grund: 'bildEinwand', inhalt: id }); continue }
         const richtung = b?.richtung === 'unter' ? 'unter' : b?.richtung === 'ueber' ? 'ueber' : null
         if (!richtung) { verworfen.push({ art: 'bedingung', grund: 'richtung', inhalt: id }); continue }
-        const schwelle = eigene ? k.preis : preisVon(k)
+        const schwelle = lage ? k.preis : preisVon(k)
         let zielId = null
         if (b?.ziel) {
             zielId = idVon(b.ziel)
@@ -532,54 +549,60 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
                 if (richtung === 'ueber' ? !(z.preis > schwelle) : !(z.preis < schwelle)) z = andere
             }
             if (!z) { verworfen.push({ art: 'bedingung', grund: 'unbekannteId', inhalt: zielId }); continue }
-            const zp = eigene ? z.preis : preisVon(z)
+            const zp = lage ? z.preis : preisVon(z)
             if (richtung === 'ueber' ? !(zp > schwelle) : !(zp < schwelle)) { verworfen.push({ art: 'bedingung', grund: 'zielGegenRichtung', inhalt: `${id}→${zielId}` }); continue }
         }
         if (bedingungen.length >= MAX_BEDINGUNGEN) { verworfen.push({ art: 'bedingung', grund: 'zuViele', inhalt: id }); continue }
-        const dann = setzeEin(b?.dann, { nurU: eigene })
-        if (dann == null || !wort(dann, 200)) { verworfen.push({ art: 'bedingung', grund: eigene ? 'fremdeId' : 'unbekannteId', inhalt: id }); continue }
+        const dann = setzeEin(b?.dann)
+        if (dann == null || !wort(dann, 200)) { verworfen.push({ art: 'bedingung', grund: lage ? 'fremdeId' : 'unbekannteId', inhalt: id }); continue }
         // Den „wenn"-Teil baut der Code — mit der Zahl, an die die Bedingung gebunden ist.
         const seiteJetzt = kurs >= schwelle ? 'ueber' : 'unter'
+        // Eine Marke eines Zeitrahmens gilt mit Schlüssen DIESES Zeitrahmens
+        const ivB = k.quelle === 'zeitrahmen' ? k.tf : iv
         const zusatz = k.quelle === 'trend' ? ', Trendlinie' : k.quelle === 'nutzer' ? `, ${k.name}` : k.quelle === 'kanal' ? (k.kante === 'oben' ? ', Oberkante' : ', Unterkante') : ''
-        const marke = `${zahl(schwelle)} (${id}${zusatz})`
+        // Z-IDs sieht der Nutzer nirgends: dort genügt die Zahl
+        const marke = k.quelle === 'zeitrahmen' ? zahl(schwelle) : `${zahl(schwelle)} (${id}${zusatz})`
         const wenn = seiteJetzt === richtung
-            ? `solange ${iv}-Schlüsse ${richtung === 'ueber' ? 'über' : 'unter'} ${marke} bleiben`
-            : `${iv}-Schluss ${richtung === 'ueber' ? 'über' : 'unter'} ${marke}`
+            ? `solange ${ivB}-Schlüsse ${richtung === 'ueber' ? 'über' : 'unter'} ${marke} bleiben`
+            : `${ivB}-Schluss ${richtung === 'ueber' ? 'über' : 'unter'} ${marke}`
         if (!textOk(`Wenn ${wenn}, dann ${dann}.`)) { verworfen.push({ art: 'bedingung', grund: 'prognose', inhalt: id }); continue }
         pruefeZahlen(dann, `bedingung ${id}`)
-        bedingungen.push({ wenn, dann: wort(dann, 200), id, richtung, schwelle, zielId })
+        bedingungen.push({ wenn, dann: wort(dann, 200), id, richtung, schwelle, zielId, kippt: lage && b?.kippt === true && !bedingungen.some((x) => x.kippt) })
     }
 
-    // Eigene Zeichnungen: Bewertungen des Modells und Korrekturen (nur mit „ergänzen")
+    // Lage über alle Zeitrahmen: was bestimmt, was zusammentrifft, und nur die Zeichnungen mit Befund
     const bewertungen = []
-    const korrekturen = []
-    if (eigene) {
+    const treffen = []
+    let bestimmend = null
+    if (lage) {
+        const gueltigeTf = new Set((zeitrahmen?.zeilen || []).filter((z) => !z.unbekannt).map((z) => z.tf))
+        if (gueltigeTf.has(json?.bestimmend?.tf)) {
+            const g = setzeEin(json.bestimmend.grund)
+            if (g != null && wort(g, 240) && textOk(g)) bestimmend = { tf: json.bestimmend.tf, grund: wort(g, 240) }
+            else verworfen.push({ art: 'bestimmend', grund: g == null ? 'fremdeId' : 'prognose', inhalt: json.bestimmend.tf })
+        }
+        const cKarte = new Map((zeitrahmen?.treffen || []).map((c) => [c.id, c]))
+        for (const e of Array.isArray(json?.treffen) ? json.treffen : []) {
+            const c = cKarte.get(idVon(e?.id))
+            if (!c || treffen.some((x) => x.id === c.id)) { verworfen.push({ art: 'treffen', grund: 'unbekannteId', inhalt: String(e?.id ?? '') }); continue }
+            if (treffen.length >= MAX_TREFFEN) { verworfen.push({ art: 'treffen', grund: 'zuViele', inhalt: c.id }); continue }
+            const t = setzeEin(e?.text)
+            if (t == null || !wort(t, 240)) { verworfen.push({ art: 'treffen', grund: 'fremdeId', inhalt: c.id }); continue }
+            if (!textOk(t)) { verworfen.push({ art: 'treffen', grund: 'prognose', inhalt: c.id }); continue }
+            pruefeZahlen(t, `treffen ${c.id}`)
+            treffen.push({ id: c.id, preis: c.preis, quellen: c.quellen, text: wort(t, 240) })
+        }
         for (const b of Array.isArray(json?.bewertungen) ? json.bewertungen : []) {
             const u = nutzerMap.get(idVon(b?.u))
             if (!u || bewertungen.some((x) => x.u === u.id)) { verworfen.push({ art: 'bewertung', grund: 'unbekannteId', inhalt: String(b?.u ?? '') }); continue }
-            const t = setzeEin(b?.text, { nurU: true })
+            const t = setzeEin(b?.text)
             if (t == null || !wort(t, 220)) { verworfen.push({ art: 'bewertung', grund: 'unbekannteId', inhalt: u.id }); continue }
             if (!textOk(t)) { verworfen.push({ art: 'bewertung', grund: 'prognose', inhalt: u.id }); continue }
             pruefeZahlen(t, `bewertung ${u.id}`)
             // Hinweis auf einen Fehler in der Zeichnung — fällt allein weg, wenn er nicht durchgeht
-            let hinweis = b?.hinweis ? setzeEin(b.hinweis, { nurU: true }) : ''
+            let hinweis = b?.hinweis ? setzeEin(b.hinweis) : ''
             if (hinweis == null || (hinweis && !textOk(hinweis))) { verworfen.push({ art: 'hinweis', grund: hinweis == null ? 'fremdeId' : 'prognose', inhalt: u.id }); hinweis = '' }
             bewertungen.push({ u: u.id, zid: u.zid, wichtig: WICHTIG.includes(b?.wichtig) ? b.wichtig : 'mittel', text: wort(t, 220), hinweis: wort(hinweis, 200) })
-        }
-        for (const k of ergaenzen && Array.isArray(json?.korrekturen) ? json.korrekturen : []) {
-            const u = nutzerMap.get(idVon(k?.u))
-            const kand = karte.get(idVon(k?.id))
-            if (!u || !kand || u.zid == null) { verworfen.push({ art: 'korrektur', grund: 'unbekannteId', inhalt: `${k?.u}→${k?.id}` }); continue }
-            if (korrekturen.some((x) => x.u === u.id)) continue
-            const d = korrekturAbstand(u, kand, A)
-            if (d == null) { verworfen.push({ art: 'korrektur', grund: 'passtNicht', inhalt: `${u.id}→${kand.id}` }); continue }
-            if (d < 0.05) { verworfen.push({ art: 'korrektur', grund: 'decktSich', inhalt: `${u.id}→${kand.id}` }); continue }
-            if (eingewandt.has(kand.id)) { verworfen.push({ art: 'korrektur', grund: 'bildEinwand', inhalt: `${u.id}→${kand.id}` }); continue }
-            const grund = setzeEin(k?.grund) ?? ''
-            if (grund && !textOk(grund)) { verworfen.push({ art: 'korrektur', grund: 'prognose', inhalt: u.id }); continue }
-            const punkte = korrekturPunkte(u, kand)
-            if (!punkte) continue
-            korrekturen.push({ u: u.id, zid: u.zid, id: kand.id, typ: u.typ, punkte, abstandAtr: d, grund: wort(grund, 200), name: u.name, label: `${englisch ? 'Correct' : 'Korrektur'} ${u.name}` })
         }
     }
     const nutzer = paket.nutzer.map((u) => ({
@@ -588,8 +611,8 @@ export function pruefeChartAuswahl(json, paket, { englisch = false, mitBild = fa
         bruchT: u.bruch?.t ?? null, auffaellig: u.auffaellig || [],
     }))
 
-    const leer = !text && !linien.length && !zonen.length && !bedingungen.length && !bewertungen.length && !korrekturen.length
-    return { modus, ergaenzen, text, linien, zonen, bedingungen, bewertungen, korrekturen, nutzer, verworfen, warnungen, leer, einwaende }
+    const leer = !text && !linien.length && !zonen.length && !bedingungen.length && !bewertungen.length && !treffen.length
+    return { modus, text, linien, zonen, bedingungen, bewertungen, bestimmend, treffen, nutzer, verworfen, warnungen, leer, einwaende }
 }
 
 /** Die Linie des übergeordneten Trends als KI-Linie (gestrichelt, übernehmbar wie die übrigen). */
@@ -603,17 +626,6 @@ export function htfTrendLinie(h, englisch = false) {
         gewicht: l.beruehrungen >= 3 ? 'stark' : 'mittel', beruehrungen: l.beruehrungen,
         t1: l.t1, p1: l.p1, t2: l.t2, p2: l.p2, ...(Number.isFinite(l.tEnde) ? { tEnde: l.tEnde, pEnde: l.pEnde } : {}),
     }
-}
-
-/** Neue Punkte einer eigenen Zeichnung aus dem Kandidaten — gleicher Typ, gleiche Punktzahl. */
-export function korrekturPunkte(u, k) {
-    if (u.typ === 'horizontale' || u.typ === 'strahlH') return [{ t: u.punkte[0].t, p: k.preis }]
-    if (u.typ === 'trendlinie' || u.typ === 'strahl') return [{ t: k.t1, p: k.p1 }, { t: k.t2, p: k.p2 }]
-    if (u.typ === 'kanal') {
-        const t2 = Number.isFinite(k.tEnde) ? k.tEnde : k.t2, p2 = Number.isFinite(k.pEnde) ? k.pEnde : k.p2
-        return [{ t: k.t1, p: k.p1 }, { t: t2, p: p2 }, { t: k.t1, p: k.p1 + (k.breite || 0) }]
-    }
-    return null
 }
 
 /** Kompakte Kandidatenliste für den Reiter (was zur Wahl stand). */
@@ -735,8 +747,8 @@ export function fensterAus(fenster, ivMs, jetzt = Date.now()) {
     return { anzahl, bisT: bisT < jetzt - ivMs ? bisT : null }
 }
 
-export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures', modus: modusRoh = 'setzen', ergaenzen: ergaenzenRoh = true, htf: htfRoh = false, fenster = null, bild = null }) {
-    const wahl = normModus({ modus: modusRoh, ergaenzen: ergaenzenRoh, htf: htfRoh })
+export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures', modus: modusRoh = 'setzen', htf: htfRoh = false, fenster = null, bild = null }) {
+    const wahl = normModus({ modus: modusRoh, htf: htfRoh })
     const fen = fensterAus(fenster, TIMEFRAME_MS[interval])
     // Anderer Ausschnitt oder andere Art = andere Analyse: die Sperre gilt nur für dieselbe Art UND dasselbe Fenster
     const wahlText = JSON.stringify({ ...wahl, fenster: fen })
@@ -745,7 +757,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
     // wer ein Kästchen umstellt, will eine andere Analyse, nicht die eben bezahlte.
     const alt = cache.get(schluessel)
     // `herkunft` (bis 01.11.2026 `aus`): `aus` heisst bei allen anderen Routen „Quelle abgeschaltet" (`{aus: true}`)
-    if (alt && Date.now() - alt.ts < SPERRE_MS && JSON.stringify({ modus: alt.payload.modus || 'setzen', ergaenzen: !!alt.payload.ergaenzen, htf: !!alt.payload.htf, fenster: alt.payload.fenster || null }) === wahlText) return { ...alt.payload, stand: alt.ts, alterMs: Date.now() - alt.ts, herkunft: 'sperre' }
+    if (alt && Date.now() - alt.ts < SPERRE_MS && JSON.stringify({ modus: alt.payload.modus || 'setzen', htf: !!alt.payload.htf, fenster: alt.payload.fenster || null }) === wahlText) return { ...alt.payload, stand: alt.ts, alterMs: Date.now() - alt.ts, herkunft: 'sperre' }
     const laufSchluessel = `${schluessel}|${wahlText}`
     if (laufend.has(laufSchluessel)) return laufend.get(laufSchluessel)
     const fehl = fehlschlaege.get(schluessel)
@@ -767,9 +779,9 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         if (kerzen.length < 30) throw new Error('Zu wenige Kerzen für eine Analyse')
         const vonT = kerzen[0].t
         const bisT = kerzen[kerzen.length - 1].t
-        // „Meine Zeichnungen": gemessen wird ab der ältesten Zeichnung, nicht nur im Analysefenster
+        // Eigene Zeichnungen: gemessen wird ab der ältesten Zeichnung, nicht nur im Analysefenster
         // (bis 01.11.2026 bekam eine Zone vom September „ohne Eintritt", ein Profil vom August fremde Zahlen).
-        const nutzerKerzen = wahl.modus === 'eigene' ? await ladeNutzerKerzen({ symbol, interval, markt, kerzen, zeichnungen, vonT: Number(fenster?.vonT) || null }) : null
+        const nutzerKerzen = wahl.modus === 'zeitrahmen' ? await ladeNutzerKerzen({ symbol, interval, markt, kerzen, zeichnungen, vonT: Number(fenster?.vonT) || null }) : null
         // Der Code vermisst, das Modell wählt aus (chart-kandidaten.js).
         const paket = baueKandidaten({
             kerzen, kerzenHtf, interval, intervalHtf, zeichnungen, zeitzone, profilArten: PROFIL_ARTEN_ALLE,
@@ -779,13 +791,17 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         const htfTrend = wahl.htf
             ? uebergeordneterTrend(Object.fromEntries(trendTfs.map((tf, i) => [tf, trendSerien[i]])), interval, { bisT, ivMs: TIMEFRAME_MS[interval] })
             : null
-        // Ohne eigene Zeichnung im Bild gibt es nichts zu analysieren — Bescheid statt bezahltem Aufruf.
-        // Stehen nur Zeichnungen im Bild, die der Code nicht misst (Fib-Extension, Pfeil …), sagt der Code das (`nurUngemessene`).
-        if (wahl.modus === 'eigene' && !paket.nutzer.length) {
-            const nur = paket.nutzerUebergangen?.length > 0
-            const e = new Error(nur ? 'nurUngemessene' : 'keineZeichnungen'); e.status = 400; e.code = e.message
-            if (nur) e.uebergangen = paket.nutzerUebergangen
-            throw e
+        // Lage über alle Zeitrahmen: jede Reihe einzeln; ein fehlender Zeitrahmen kostet eine Zeile, nicht die Analyse
+        let zeitrahmen = null
+        if (wahl.modus === 'zeitrahmen') {
+            const tfs = zeitrahmenFuer(interval)
+            const [grenze, ...reihen] = await Promise.all([
+                leseMomentumGrenze().catch(() => undefined),
+                ...tfs.map((tf) => getClosedCandles(symbol, tf, ZEITRAHMEN_KERZEN, { market: markt }).catch(() => null)),
+            ])
+            // Zurückgescrollter Chart: nur, was damals schon geschlossen war
+            const serien = Object.fromEntries(tfs.map((tf, i) => [tf, fen.bisT && reihen[i] ? reihen[i].filter((k) => k.t <= fen.bisT) : reihen[i]]))
+            zeitrahmen = baueZeitrahmen({ serien, interval, kurs: paket.kurs, atrChart: paket.atr, eigene: paket.beziehungen?.marken || [], grenze })
         }
 
         const cfg = await ladeLlmConfigFuerAufgabe('chart-analyse')
@@ -796,11 +812,11 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
         cfg.maxTokens = 3000
         // Bildprüfung: nur wenn der Browser ein Bild schickte, der Anbieter Bilder versteht
         // und es überhaupt Geometrie zu prüfen gibt (Kanäle oder Trendlinien im Paket).
-        // Bei „Meine Zeichnungen" dient das Bild dem Verständnis der Zeichnungen, nicht der Prüfung von Kandidaten
-        const zuPruefen = wahl.modus === 'eigene' || paket.kandidaten.some((k) => EINSPRUCH_QUELLEN.includes(k.quelle))
+        // Bei der Lage über alle Zeitrahmen dient das Bild dem Verständnis der Zeichnungen, nicht der Prüfung von Kandidaten
+        const zuPruefen = wahl.modus === 'zeitrahmen' || paket.kandidaten.some((k) => EINSPRUCH_QUELLEN.includes(k.quelle))
         let bildPruefung = !bild ? 'ohneBild' : !kannBilder(cfg.provider) ? 'anbieterOhneBild' : !zuPruefen ? 'nichtsZuPruefen' : 'an'
-        const user = baueChartEingabe({ symbol, interval, paket, hebelzonen: hebel, trades, ...wahl, htfTrend, englisch })
-        const buchung = { zweck: wahl.modus === 'eigene' ? 'chart-analyse-eigene' : 'chart-analyse', ausloeser: 'manuell', bezug: { typ: 'symbol', id: symbol } }
+        const user = baueChartEingabe({ symbol, interval, paket, hebelzonen: hebel, trades, ...wahl, htfTrend, zeitrahmen, englisch })
+        const buchung = { zweck: wahl.modus === 'zeitrahmen' ? 'chart-analyse-zeitrahmen' : 'chart-analyse', ausloeser: 'manuell', bezug: { typ: 'symbol', id: symbol } }
         const frage = () => {
             const mitBild = bildPruefung === 'an'
             return callLLMJson(cfg, { system: systemText(englisch, { mitBild, ...wahl }), user, timeoutMs: 90000, anhaenge: mitBild ? [bild] : [], ...buchung })
@@ -821,7 +837,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
             antwort = await frage()
             if (antwort.costUsd != null) kosten = (kosten ?? 0) + antwort.costUsd
         }
-        const ergebnis = pruefeChartAuswahl(antwort.json, paket, { ...wahl, englisch, mitBild: bildPruefung === 'an' })
+        const ergebnis = pruefeChartAuswahl(antwort.json, paket, { ...wahl, englisch, mitBild: bildPruefung === 'an', zeitrahmen })
         for (const e of ergebnis.einwaende) logWarn('chart-ki', `${symbol} ${interval}: Bild widerspricht ${e.id} (${e.name}) — ${e.grund}`)
         for (const v of ergebnis.verworfen) logWarn('chart-ki', `${symbol} ${interval}: ${v.art} verworfen (${v.grund}) — ${v.inhalt}`)
         for (const w of ergebnis.warnungen) logWarn('chart-ki', `${symbol} ${interval}: Zahl ${w.zahl} in ${w.wo} passt zu keiner Marke`)
@@ -831,6 +847,7 @@ export async function erzeugeChartAnalyse({ symbol, interval, markt = 'futures',
 
         const payload = {
             symbol, interval, ...ergebnis, htf: wahl.htf, htfTrend: htfTrend ? { tf: htfTrend.tf, zustand: htfTrend.zustand, linie: !!htfTrend.linie } : null, kerzenVon: vonT, kerzenBis: bisT, auswahl: kandidatenKurz(paket), fenster: fen,
+            zeitrahmen: zeitrahmen ? zeitrahmenTabelle(zeitrahmen) : null, gleichlauf: zeitrahmen?.gleichlauf ?? null, tagesbewegung: zeitrahmen?.tagesbewegung ?? null,
             nutzerWeggelassen: paket.nutzerWeggelassen || 0, nutzerUebergangen: paket.nutzerUebergangen || [],
             markt, provider: cfg.provider, model: cfg.model, costUsd: kosten, bildPruefung,
             kiGeneriert: true,
@@ -866,12 +883,11 @@ export function setupChartKiRoutes(app) {
         if (!isValidTimeframe(interval)) return res.status(400).json({ error: `Zeiteinheit ${interval} wird nicht unterstützt` })
         try {
             res.json(await erzeugeChartAnalyse({
-                symbol, interval, markt: req.body?.markt === 'spot' ? 'spot' : 'futures', modus: req.body?.modus, ergaenzen: req.body?.ergaenzen !== false, htf: req.body?.htf === true,
+                symbol, interval, markt: req.body?.markt === 'spot' ? 'spot' : 'futures', modus: req.body?.modus, htf: req.body?.htf === true,
                 fenster: req.body?.fenster, bild: pruefeBild(req.body?.bild),
             }))
         } catch (e) {
             if (sendeWennAus(res, e)) return
-            if (e.code === 'keineZeichnungen' || e.code === 'nurUngemessene') return res.status(400).json({ error: e.message, code: e.code, ...(e.uebergangen ? { uebergangen: e.uebergangen } : {}) })
             logWarn('chart-ki', `${symbol} ${interval}: ${e.message}`)
             res.status(e.status === 429 || e.status === 400 ? e.status : 502).json({ error: e.message })
         }

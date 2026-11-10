@@ -94,7 +94,7 @@ export const KI_FUNKTIONEN = [
     },
     {
         id: 'chart', titelKey: 'kiUebersicht.fn.chart', bereich: 'allgemein', abschnitt: 'ki-aufgaben',
-        rolle: '', aufgabe: 'chart-analyse', funktionen: ['chart-analyse', 'chart-analyse-eigene'],
+        rolle: '', aufgabe: 'chart-analyse', funktionen: ['chart-analyse', 'chart-analyse-zeitrahmen', 'chart-analyse-eigene'],
     },
     {
         id: 'flashNews', titelKey: 'kiUebersicht.fn.flashNews', bereich: 'allgemein', abschnitt: 'ki-aufgaben',

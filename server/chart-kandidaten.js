@@ -23,7 +23,7 @@
  *   U…  eigene Zeichnungen des Nutzers im sichtbaren Bereich (und auf dieser
  *       Zeiteinheit sichtbar, höchstens `NUTZER_MAX`, Auswahl `waehleNutzer`), an
  *       den Kerzen gemessen (`messeNutzerZeichnungen`): Berührungen, Durchquerungen,
- *       Zustand, nächster Kandidat — Grundlage von „Meine Zeichnungen analysieren"
+ *       Zustand, nächster Kandidat — Grundlage der Prüfung gegen die Zeitrahmen
  *
  * Gleiche Kerzen → gleiche IDs (deterministisch, im Selbsttest geprüft).
  */
@@ -1367,10 +1367,10 @@ export const preisVon = (k) => (k.quelle === 'trend' ? k.wertJetzt : k.preis)
 
 /**
  * `eigene` („Meine Zeichnungen analysieren"): die eigenen Zeichnungen stehen VOR
- * allem anderen, die Kandidaten des Codes nur mit `mitKandidaten` (Ergänzen) und
+ * allem anderen, die Kandidaten des Codes gar nicht und
  * ausdrücklich als Prüfmassstab für Korrekturen und Fehlendes.
  */
-export function kandidatenText(paket, { eigene = false, mitKandidaten = true } = {}) {
+export function kandidatenText(paket, { eigene = false } = {}) {
     const z = []
     const { kurs, atr: A, spanne, struktur } = paket
     const tz = paket.zeitzone || 'UTC'
@@ -1385,7 +1385,7 @@ export function kandidatenText(paket, { eigene = false, mitKandidaten = true } =
     }
     if (spanne) z.push(`SPANNE der letzten ${spanne.kerzen} Kerzen ${zahl(spanne.tief)}–${zahl(spanne.hoch)} = ${spanne.breiteAtr.toFixed(1)} ATR; Kurs bei ${spanne.positionPct.toFixed(0)} % der Spanne`)
     const uBlock = []
-    if (eigene) { nutzerBlock(uBlock, paket, zeit); z.push(...uBlock) }
+    if (eigene) { nutzerBlock(uBlock, { ...paket, nutzer: paket.nutzer.map((u) => ({ ...u, naechster: null })) }, zeit); z.push(...uBlock) }
     const kandAb = z.length
     const n = paket.kandidaten.filter((k) => k.quelle === 'niveau')
     if (n.length) {
@@ -1436,11 +1436,9 @@ export function kandidatenText(paket, { eigene = false, mitKandidaten = true } =
         for (const x of d) z.push(`${x.id} | ${zahl(x.preis)} | ${zahl(x.tief)}–${zahl(x.hoch)} | ${x.beruehrungen} | ${atrText(x.abstandAtr)}${x.deckt ? ` | deckt sich mit ${x.deckt}` : ''}${kurs >= x.tief && kurs <= x.hoch ? ' | Kurs liegt im Band' : ''}`)
     }
     if (eigene) {
-        // Struktur bleibt (sie beschreibt den Chart, keine Marke), die Kandidaten nur mit Ergänzen
+        // Struktur bleibt (sie beschreibt den Chart, keine Marke), die Kandidaten fallen weg
         const kand = z.splice(kandAb)
-        const struktur = kand.filter((x) => x.startsWith('STRUKTUR'))
-        if (mitKandidaten) z.push('', '=== KANDIDATEN DES CODES — nur Prüfmassstab für "korrekturen" und "fehlend". Im Text und in den Bedingungen nicht verwenden. ===', ...kand)
-        else z.push('', ...struktur)
+        z.push('', ...kand.filter((x) => x.startsWith('STRUKTUR')))
     } else nutzerBlock(z, paket, zeit)
     z.push('', `LETZTE ${paket.roh.length} KERZEN (Zeit,Eröffnung,Hoch,Tief,Schluss,Volumen relativ zum Median der letzten 50):`)
     for (const x of paket.roh) z.push([zeit(x.t), zahl(x.o), zahl(x.h), zahl(x.l), zahl(x.c), paket.volMedian ? (x.v / paket.volMedian).toFixed(1) : '—'].join(','))

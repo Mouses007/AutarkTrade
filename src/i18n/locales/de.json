@@ -6769,23 +6769,12 @@
         "fehlgeschlagen": "Das Modell hat das Bild abgelehnt — Analyse ohne Bildprüfung."
       },
       "setzen": "KI-Zeichnungen setzen ({symbol} {tf})",
-      "eigene": "Meine Zeichnungen analysieren",
-      "ergaenzen": "Fehlendes und Korrekturen vorschlagen",
-      "ergaenzenTipp": "Bei „Meine Zeichnungen analysieren“: die KI darf eigene Linien auf eine besser gemessene Marke korrigieren und bis zu 4 fehlende wichtige Marken vorschlagen.",
-      "keineZeichnungen": "Im sichtbaren Bereich gibt es keine eigene Zeichnung — erst etwas einzeichnen (oder den Bereich verschieben). Es wurde nichts berechnet.",
-      "nurUngemessene": "Im sichtbaren Bereich stehen nur Zeichnungen, die der Code nicht misst ({arten}) — gemessen werden Horizontale, Strahl, Trendlinie, Kanal, Zone, Volumenprofil, Fibonacci-Retracement und Anchored VWAP. Es wurde nichts berechnet.",
       "weggelassen": "{n} weitere eigene Zeichnungen nicht analysiert (höchstens 20; Zeichnungen im Fenster und nahe am Kurs zuerst).",
       "uebergangen": "Nicht messbar und nicht analysiert: {arten}.",
       "artSetzen": "KI-Zeichnungen",
-      "artEigene": "Analyse der eigenen Zeichnungen",
       "meineZeichnungen": "Meine Zeichnungen",
       "markieren": "Im Chart markieren",
       "ohneBewertung": "Von der KI nicht bewertet (für die Lage nicht wichtig).",
-      "korrekturen": "Korrekturen",
-      "korrektur": "Korrektur",
-      "korrigieren": "Korrigieren",
-      "daneben": "{atr} ATR daneben",
-      "fehlend": "Fehlende Marken",
       "keinSetup": "Die KI hat nichts eingezeichnet: nichts im Chart ist für ein Setup gerade wichtig genug.",
       "zustandU": {
         "haelt": "hält",
@@ -6811,7 +6800,31 @@
         "auf": "Aufwärtstrend",
         "ab": "Abwärtstrend",
         "keine": "keine bestätigte Richtung"
-      }
+      },
+      "zeitrahmen": "Lage über alle Zeitrahmen",
+      "artZeitrahmen": "Lage über alle Zeitrahmen",
+      "spalteStruktur": "Struktur",
+      "spalteLage": "Lage in Spanne",
+      "spalteMomentum": "Momentum",
+      "unbekannt": "keine Daten",
+      "richtung": {
+        "auf": "aufwärts",
+        "ab": "abwärts",
+        "offen": "offen"
+      },
+      "momentum": {
+        "long": "überverkauft",
+        "fastLong": "nahe überverkauft",
+        "neutral": "neutral",
+        "fastShort": "nahe überkauft",
+        "short": "überkauft"
+      },
+      "tagesbewegung": "Heute {pct} % der üblichen Tagesspanne genutzt.",
+      "bestimmend": "{tf} bestimmt:",
+      "treffen": "Marken treffen zusammen",
+      "quelleEigene": "eigene",
+      "befunde": "{n} mit Befund",
+      "kippt": "Kippt das Bild:"
     },
     "indAktiv": "Aktiv in diesem Chart",
     "indHinzu": "Hinzufügen",

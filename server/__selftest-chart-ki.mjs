@@ -10,7 +10,7 @@
  * jede Ablehnung steht deshalb eine Gegenprobe daneben, die durchgehen MUSS.
  */
 import fs from 'node:fs'
-import { baueChartEingabe, pruefeChartAuswahl, systemText, normModus, pruefeBild, korrekturPunkte, sperrtNachFehler, MAX_ZEICHNUNGEN, MAX_FEHLEND } from './chart-ki.js'
+import { baueChartEingabe, pruefeChartAuswahl, systemText, normModus, pruefeBild, sperrtNachFehler, MAX_ZEICHNUNGEN } from './chart-ki.js'
 import { zeitText, baueKandidaten, PROFIL_ARTEN_ALLE, messeNutzerZeichnungen, zaehleAnLinie, nutzerBeziehungen, kandidatenText, zonenUrsprung, waehleNutzer, sichtbarAufTf, NUTZER_MAX, fensterUeberblick } from './chart-kandidaten.js'
 import { parseJsonOhneUnsichtbare, parseJsonAntwort, istGrok } from './llm.js'
 import { MarktdatenAus } from './marktdaten/index.js'
@@ -146,14 +146,14 @@ console.log('\nAuswahl abbilden\n')
 
 console.log('\nZwei Arten, gemeinsame Grenze (31.10.2026)\n')
 {
-    check('Modus: Vorgabe setzen ohne Ergänzen, eigene mit Ergänzen', normModus(null).modus === 'setzen' && !normModus(null).ergaenzen && normModus({ modus: 'eigene' }).ergaenzen && !normModus({ modus: 'eigene', ergaenzen: false }).ergaenzen && normModus({ modus: 'x' }).modus === 'setzen')
+    check('Modus: Vorgabe setzen, „eigene" aus einem alten Tab wird zur Zeitrahmen-Lage, Unbekanntes setzen', normModus(null).modus === 'setzen' && normModus({ modus: 'eigene' }).modus === 'zeitrahmen' && normModus({ modus: 'zeitrahmen' }).modus === 'zeitrahmen' && normModus({ modus: 'x' }).modus === 'setzen')
+    check('Häkchen „übergeordneter Trend" gilt nur fürs Setzen', normModus({ modus: 'setzen', htf: true }).htf && !normModus({ modus: 'zeitrahmen', htf: true }).htf)
     const sys = systemText(false)
     check('„setzen": höchstens 6 insgesamt, leere Auswahl erlaubt, keine Pflicht über/unter', sys.includes(`Höchstens ${MAX_ZEICHNUNGEN} Zeichnungen insgesamt`) && sys.includes('leere Auswahl richtig') && !sys.includes('über und unter dem Kurs'))
     check('„setzen": Kanäle wählbar über „muster"', sys.includes('"muster"'))
-    const eig = systemText(false, { modus: 'eigene', ergaenzen: true })
-    check('„eigene": Bewertungen, Korrekturen, höchstens 4 fehlende', eig.includes('"bewertungen"') && eig.includes('"korrekturen"') && eig.includes(`höchstens ${MAX_FEHLEND} wichtige Marken`))
-    const eigOhne = systemText(false, { modus: 'eigene', ergaenzen: false })
-    check('„eigene" ohne Ergänzen: keine Auswahlregel, leere Korrekturen', !eigOhne.includes('Höchstens 4 Zeichnungen') && eigOhne.includes('"korrekturen": []'))
+    const eig = systemText(false, { modus: 'zeitrahmen' })
+    check('„zeitrahmen": feste Fragen, keine Korrekturen, nichts Fehlendes mehr', eig.includes('Welcher Zeitrahmen bestimmt') && eig.includes('"treffen"') && eig.includes('"kippt"') && !eig.includes('"korrekturen"') && !eig.includes('"fehlend"'))
+    check('„zeitrahmen": Beschreiben ist ausdrücklich nicht der Auftrag', eig.includes('Beschreibe nicht') && eig.includes('keine Bewertung ist die Regel'))
     const viele = pruefeChartAuswahl({ linien: ['N1', 'N2', 'N4', 'N5', 'T1', 'D1'].map((id) => ({ id, label: id })), zonen: [{ ids: ['N3'], label: 'z' }] }, paket)
     check('Linien und Zonen zählen gemeinsam: höchstens 6', viele.linien.length + viele.zonen.length === 6 && viele.verworfen.some((v) => v.grund === 'zuViele'), JSON.stringify(viele.verworfen))
     const leerOk = pruefeChartAuswahl({ text: 'Kein Setup: der Kurs liegt mitten in der Spanne.', linien: [] }, paket)
@@ -184,30 +184,19 @@ console.log('\nMeine Zeichnungen (31.10.2026)\n')
     const [u] = messeNutzerZeichnungen(kz, [{ id: 7, typ: 'horizontale', punkte: [{ t: T0, p: 103.2 }], stil: {} }], 1, [{ id: 'N1', quelle: 'niveau', preis: 103 }, { id: 'N2', quelle: 'niveau', preis: 110 }])
     check('Messung trägt DB-ID, Name, nächsten Kandidaten', u.zid === 7 && u.name === 'Horizontale 103.2' && u.naechster?.id === 'N1' && Math.abs(u.naechster.abstandAtr - 0.2) < 1e-9, JSON.stringify(u.naechster))
     const r = pruefeChartAuswahl({
-        text: 'Die eigene Linie [U1] liegt knapp über [N3].',
+        text: 'Die eigene Linie [U1] hält.',
         bewertungen: [{ u: 'U1', wichtig: 'hoch', text: '[U1] wirkt als Widerstand.' }, { u: 'U9', text: 'gibt es nicht' }],
-        korrekturen: [{ u: 'U1', id: 'N3', grund: '[N3] hat mehr Berührungen' }, { u: 'U1', id: 'T1', grund: 'falsche Art' }],
-        fehlend: { linien: [{ id: 'N4', label: 'Boden' }], zonen: [], muster: [] },
-        linien: [{ id: 'N1', label: 'oben ausserhalb von fehlend' }],
-    }, paket, { modus: 'eigene' })
+        linien: [{ id: 'N1', label: 'die Lage setzt keine Zeichnungen' }],
+    }, paket, { modus: 'zeitrahmen' })
     check('Bewertung mit Name und DB-ID, unbekannte U verworfen', r.bewertungen.length === 1 && r.bewertungen[0].zid === 41 && r.bewertungen[0].text.includes('Horizontale 103 (U1)') && r.verworfen.some((v) => v.art === 'bewertung'), JSON.stringify(r.bewertungen))
-    check('Korrektur nur zum passenden Kandidaten (N3 0,5 ATR daneben), mit neuen Punkten', r.korrekturen.length === 1 && r.korrekturen[0].id === 'N3' && r.korrekturen[0].punkte[0].p === 103.5 && r.korrekturen[0].zid === 41, JSON.stringify(r.korrekturen))
-    check('„eigene": Linien nur aus „fehlend", nicht aus der Wurzel', r.linien.length === 1 && r.linien[0].id === 'N4')
-    const ohne = pruefeChartAuswahl({ text: 'x', korrekturen: [{ u: 'U1', id: 'N3' }], fehlend: { linien: [{ id: 'N4', label: 'b' }] } }, paket, { modus: 'eigene', ergaenzen: false })
-    check('ohne Ergänzen: keine Korrektur, nichts Fehlendes', !ohne.korrekturen.length && !ohne.linien.length)
-    const weit = pruefeChartAuswahl({ korrekturen: [{ u: 'U1', id: 'N1' }] }, paket, { modus: 'eigene' })
-    check('Korrektur 7 ATR daneben verworfen', !weit.korrekturen.length && weit.verworfen.some((v) => v.grund === 'passtNicht'))
-    const prog = pruefeChartAuswahl({ bewertungen: [{ u: 'U1', text: 'Der Kurs dürfte hier steigen.' }] }, paket, { modus: 'eigene' })
+    check('„zeitrahmen": setzt keine Linien', r.linien.length === 0)
+    const prog = pruefeChartAuswahl({ bewertungen: [{ u: 'U1', text: 'Der Kurs dürfte hier steigen.' }] }, paket, { modus: 'zeitrahmen' })
     check('Prognose-Wächter auch in Bewertungen', !prog.bewertungen.length && prog.verworfen.some((v) => v.art === 'bewertung' && v.grund === 'prognose'))
-    check('korrekturPunkte: Trendlinie bekommt die Anker des Kandidaten', JSON.stringify(korrekturPunkte({ typ: 'trendlinie' }, { t1: 1, p1: 2, t2: 3, p2: 4 })) === '[{"t":1,"p":2},{"t":3,"p":4}]')
 }
 
 console.log('\nMeine Zeichnungen: die Zeichnungen sind das Thema (01.11.2026)\n')
 {
     const { uSchwelle } = await import('./chart-ki.js')
-    const eig = systemText(false, { modus: 'eigene', ergaenzen: false })
-    check('Auftrag: Zeichnungen des Nutzers sind das Thema, Fehler ehrlich benennen', eig.includes('THEMA sind die Zeichnungen') && eig.includes('"hinweis"') && eig.includes('Erfinde keine Fehler'))
-    check('Ohne Ergänzen keine Kandidaten-IDs erlaubt', eig.includes('"fehlend": {}') && !eig.includes('Kandidaten-IDs (N, V'))
 
     // Bruch bleibt Bruch (BTC 1h: untere Kanallinie am 29.10. gebrochen, am 31.10. stand „hält")
     const kz = Array.from({ length: 80 }, (_, i) => ({ t: T0 + i * H, o: 101, h: 101.4, l: 100.6, c: i < 30 ? 101 : 98.5 }))
@@ -248,17 +237,15 @@ console.log('\nMeine Zeichnungen: die Zeichnungen sind das Thema (01.11.2026)\n'
         text: 'Der Kurs steht zwischen [U1] und der Zone [U2]. Darunter liegt [N4].',
         bewertungen: [{ u: 'U2', wichtig: 'hoch', text: 'Die Zone [U2] fing das letzte Tief.', hinweis: 'Die Beschriftung passt nicht.' }],
         bedingungen: [{ id: 'U2', richtung: 'unter', dann: 'Dann wäre [U2] verloren.' }, { id: 'N4', richtung: 'unter', dann: 'x' }, { id: 'U1', richtung: 'ueber', dann: 'Dann liegt [N1] offen.' }],
-    }, pk2, { modus: 'eigene', ergaenzen: false })
+    }, pk2, { modus: 'zeitrahmen' })
     check('Text: Satz mit Kandidaten-ID fällt weg, „Zone Zone" nicht doppelt', r.text.includes('Zone 95–96 (U2)') && !r.text.includes('Zone Zone') && !r.text.includes('N4') && r.verworfen.some((v) => v.grund === 'fremdeId'), r.text)
     check('Bedingung an Zone „unter" hängt an der Unterkante', r.bedingungen.length === 1 && r.bedingungen[0].schwelle === 95 && r.bedingungen[0].wenn.includes('Zone 95–96'), JSON.stringify(r.bedingungen))
     check('Bedingungen an Kandidaten oder mit Kandidaten im „dann" verworfen', r.verworfen.filter((v) => v.art === 'bedingung' && v.grund === 'fremdeId').length === 2)
     check('Hinweis auf einen Fehler bleibt bei der Bewertung', r.bewertungen[0].hinweis === 'Die Beschriftung passt nicht.')
 
     const pkEcht = baueKandidaten({ kerzen: rally, interval: '1h', zeichnungen: [{ id: 9, typ: 'horizontale', punkte: [{ t: rally[0].t, p: 80 }], stil: {} }] })
-    const ohneK = kandidatenText(pkEcht, { eigene: true, mitKandidaten: false })
-    const mitK = kandidatenText(pkEcht, { eigene: true, mitKandidaten: true })
-    check('Eingabe „eigene" ohne Ergänzen: keine Kandidaten, Zeichnungen und Leiter da', !ohneK.includes('NIVEAUS') && ohneK.includes('EIGENE ZEICHNUNGEN') && ohneK.includes('LEITER'))
-    check('Mit Ergänzen: Zeichnungen zuerst, Kandidaten danach als Prüfmassstab', mitK.indexOf('EIGENE ZEICHNUNGEN') < mitK.indexOf('KANDIDATEN DES CODES'))
+    const ohneK = kandidatenText(pkEcht, { eigene: true })
+    check('Eingabe der Lage: keine Kandidaten, Zeichnungen und Leiter da', !ohneK.includes('NIVEAUS') && ohneK.includes('EIGENE ZEICHNUNGEN') && ohneK.includes('LEITER'))
 }
 
 console.log('\nKanäle wählt das Modell (31.10.2026; vorher zeichnete der Code sie immer)\n')
@@ -453,7 +440,7 @@ console.log('\nAudit 4.3.4 (01.11.2026)\n')
     check('istGrok: xAI und Grok über Vermittler, sonst nicht', istGrok({ provider: 'xai' }) && istGrok({ provider: 'openrouter', model: 'x-ai/grok-4' }) && !istGrok({ provider: 'anthropic', model: 'claude-sonnet' }))
     const pu = { atr: 1, kurs: 100, roh: [], kandidaten: [{ id: 'N2', quelle: 'niveau', preis: 105, tief: 104.8, hoch: 105.2, t1: T0 }],
         nutzer: [{ id: 'U1', zid: 41, typ: 'horizontale', name: 'Horizontale 103', preis: 103, punkte: [{ t: T0, p: 103 }], text: '' }] }
-    const ru = pruefeChartAuswahl({ text: 'Die Linie [U1' + ZW + '] hält.', bewertungen: [{ u: 'U1' + ZW, text: '[U1] wirkt als Widerstand.' }] }, pu, { modus: 'eigene', ergaenzen: false })
+    const ru = pruefeChartAuswahl({ text: 'Die Linie [U1' + ZW + '] hält.', bewertungen: [{ u: 'U1' + ZW, text: '[U1] wirkt als Widerstand.' }] }, pu, { modus: 'zeitrahmen' })
     check('Chart-KI: [U1+Nullbreite] wird ersetzt, ID mit Zeichen erkannt', ru.text === 'Die Linie Horizontale 103 (U1) hält.' && ru.bewertungen.length === 1, ru.text)
     check('Chart-KI: Kandidaten-ID mit Zeichen wird gezeichnet', pruefeChartAuswahl({ text: 'x', linien: [{ id: 'N2' + ZW, label: 'y' }] }, pu).linien.length === 1)
 
