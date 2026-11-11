@@ -4,6 +4,8 @@
  *   GET /api/bots          laufende und beendete Pionex-Bots, normalisiert, mit aktuellem Kurs
  *   GET /api/bots/wissen   das Wissen über die Bot-Typen (pionex-wissen.js)
  *   GET /api/bots/:id/verlauf eigene Schnappschüsse (bot_verlauf, Takt in verlauf.js)
+ *   POST /api/bots/:id/simulation {varianten:[{unten,oben,anzahl,art}]} — Rückblick
+ *                          heutige Einstellung gegen Varianten (simulation.js)
  *   GET /api/bots/:id/markt Kerzen der Laufzeit (Marktdaten-Quelle), Zeit im Band,
  *                          ATR des Tages und die Kennzahlen damit
  *
@@ -17,8 +19,10 @@ import { normalisiereBot, holeAlleSeiten } from './pionex-bots.js'
 import { TYPEN, GEBUEHREN, STAND } from './pionex-wissen.js'
 import { logWarn } from '../logger.js'
 import { kennzahlen, atrTag } from './kennzahlen.js'
-import { kerzen as holeKerzen } from '../marktdaten/index.js'
+import { kerzen as holeKerzen, fundingVerlauf } from '../marktdaten/index.js'
+import { wartungsmargeMitQuelle } from '../margin-rates.js'
 import { sendeWennAus } from '../quellen/aus.js'
+import { vergleiche, pruefeVariante, SIMULIERBAR, MAX_VARIANTEN } from './simulation.js'
 
 const CACHE_MS = 60_000
 let cache = null          // { zeit, antwort }
@@ -94,7 +98,70 @@ async function marktFuer(bot) {
     return daten
 }
 
+// ── Simulation: feine Kerzen der ganzen Laufzeit ─────────────────────────
+const SIM_MS = 10 * 60_000
+const MAX_SIM_KERZEN = 60_000
+const simCache = new Map()   // id → { zeit, tf, kerzen }
+const TF_MS = { '1m': 60_000, '5m': 300_000, '15m': 900_000, '1h': 3_600_000 }
+
+/** Feinster Zeitrahmen, mit dem die Laufzeit in MAX_SIM_KERZEN passt (1m wäre am genausten). */
+export function simZeitrahmen(ms) {
+    for (const tf of ['1m', '5m', '15m', '1h']) if (ms / TF_MS[tf] <= MAX_SIM_KERZEN) return tf
+    return '1h'
+}
+
+async function simKerzen(bot) {
+    const c = simCache.get(bot.id)
+    if (c && Date.now() - c.zeit < SIM_MS) return c
+    const ende = bot.beendet || Date.now()
+    const start = bot.erstellt
+    if (!start) return { tf: null, kerzen: [] }
+    const tf = simZeitrahmen(ende - start)
+    const schritt = TF_MS[tf]
+    const kerzen = []
+    for (let von = Math.floor(start / schritt) * schritt, runde = 0; von < ende && runde < 80; runde++) {
+        const bis = Math.min(ende, von + 1000 * schritt)
+        const teil = await holeKerzen(bot.symbol, tf, { markt: 'futures', start: von, ende: bis, limit: 1000 })
+        for (const k of teil) if (k.t >= start - schritt && k.t <= ende && (!kerzen.length || k.t > kerzen.at(-1).t)) kerzen.push({ t: k.t, o: k.o, h: k.h, l: k.l, c: k.c })
+        von = bis
+    }
+    // Funding-Verlauf der Marktdatenquelle (Pionex veröffentlicht keinen); fehlt er, rechnet die Simulation ohne
+    let funding = null
+    if (bot.typ !== 'spot_grid') {
+        try { funding = await fundingVerlauf(bot.symbol, start, ende) } catch { funding = null }
+    }
+    const daten = { zeit: Date.now(), tf, kerzen, funding }
+    simCache.set(bot.id, daten)
+    return daten
+}
+
 export function setupBotRoutes(app) {
+    app.post('/api/bots/:id/simulation', async (req, res) => {
+        try {
+            const alle = await holeBots()
+            const bot = alle.bots?.find((b) => b.id === String(req.params.id))
+            if (!bot) return res.status(404).json({ ok: false, error: 'Bot nicht gefunden' })
+            if (!SIMULIERBAR.has(bot.typ)) return res.status(400).json({ ok: false, code: 'typ' })
+            const roh = Array.isArray(req.body?.varianten) ? req.body.varianten.slice(0, MAX_VARIANTEN) : []
+            const varianten = []
+            for (const [i, v] of roh.entries()) {
+                const g = pruefeVariante(v, bot)
+                if (g.fehler === 'leer') continue
+                if (g.fehler) return res.status(400).json({ ok: false, code: g.fehler, variante: i })
+                varianten.push(g)
+            }
+            const { tf, kerzen, funding } = await simKerzen(bot)
+            const marge = await wartungsmargeMitQuelle(bot.symbol).catch(() => null)
+            const mmr = marge?.pct > 0 ? marge.pct / 100 : undefined
+            const ergebnis = vergleiche(bot, kerzen, varianten, { funding, mmr })
+            if (ergebnis.fehler) return res.status(400).json({ ok: false, code: ergebnis.fehler })
+            res.json({ ok: true, zeitrahmen: tf, mmrQuelle: marge?.quelle || 'pauschal', ...ergebnis })
+        } catch (e) {
+            if (sendeWennAus(res, e)) return
+            res.status(502).json({ ok: false, error: fehlerText(e) })
+        }
+    })
+
     app.get('/api/bots', async (req, res) => {
         try {
             res.json(await holeBots({ frisch: req.query.frisch === '1' }))

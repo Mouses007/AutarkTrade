@@ -16,6 +16,7 @@ export function preis(v) {
 export function betrag(v, muenze = 'USDT', { vorzeichen = false } = {}) {
     if (!ok(v)) return LEER
     const stellen = muenze === 'USDT' ? 2 : 4
+    if (Math.abs(v) < 0.5 * 10 ** -stellen) v = 0   // kein „−0.0000"
     const s = new Intl.NumberFormat('de-CH', { maximumFractionDigits: stellen, minimumFractionDigits: stellen }).format(v)
     return `${vorzeichen && v > 0 ? '+' : ''}${s} ${muenze}`
 }
@@ -45,6 +46,6 @@ export function dauer(tage) {
 
 /** Ton für eine Zahl mit Vorzeichen: gut / schlecht / neutral. */
 export function ton(v) {
-    if (!ok(v) || v === 0) return 'neutral'
+    if (!ok(v) || Math.abs(v) < 1e-9) return 'neutral'
     return v > 0 ? 'gut' : 'schlecht'
 }

@@ -18,6 +18,10 @@ import Kreisel from '@/components/basis/Kreisel.vue'
 import Symbol from '@/components/basis/Symbol.vue'
 import { palette, mitDeckkraft, tooltipStil, schrift, grundOption, wertAchse } from '@/utils/journal/diagramme/gestaltung.js'
 import { preis, betrag, prozent, zahl, datum, dauer, ton } from './format.js'
+import BotSimulation from './BotSimulation.vue'
+
+// Typen mit festem Band, die die Simulation rechnen kann (wie SIMULIERBAR im Server)
+const SIMULIERBAR = ['futures_grid', 'coinm_grid', 'spot_grid', 'leveraged_grid']
 
 const props = defineProps({
     bot: { type: Object, required: true },
@@ -243,6 +247,10 @@ const rohZeilen = computed(() => Object.entries(props.bot.roh || {})
             <Hinweis v-else-if="marktFehler" art="fehler">{{ marktFehler }}</Hinweis>
             <div v-show="markt?.kerzen?.length" ref="chartEl" class="chart"></div>
             <p v-if="markt?.zeitrahmen" class="fuss">{{ t('bots.chartHinweis', { tf: markt.zeitrahmen }) }}</p>
+        </Karte>
+
+        <Karte v-if="SIMULIERBAR.includes(bot.typ)" :titel="t('bots.abschnitt.simulation')">
+            <BotSimulation :bot="bot" />
         </Karte>
 
         <Karte v-if="bot.laufend || verlauf.length" :titel="t('bots.abschnitt.verlauf')">
