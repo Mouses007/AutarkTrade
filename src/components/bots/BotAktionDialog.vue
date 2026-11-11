@@ -80,7 +80,7 @@ const meldung = (e) => {
 async function pruefen() {
     laedt.value = true; fehler.value = ''; ergebnis.value = null
     try {
-        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/aktion/pruefen`, { aktion: props.aktion, eingabe: eingabeFuerServer() })
+        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/aktion/pruefen`, { aktion: props.aktion, eingabe: eingabeFuerServer() }, { timeout: 60_000 })
         pruefung.value = data
         haken.value = false
     } catch (e) { fehler.value = meldung(e) } finally { laedt.value = false }
@@ -91,11 +91,15 @@ async function senden() {
     try {
         const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/aktion/senden`, {
             aktion: props.aktion, eingabe: eingabeFuerServer(), token: pruefung.value.token, haken: true, hakenText: props.steuerung?.haken,
-        })
+        }, { timeout: 120_000 })
         ergebnis.value = data
         // Auch bei „unklar" neu laden: Pionex kann ausgeführt haben
         if (data.zustand !== 'abgelehnt') emit('gesendet')
-    } catch (e) { fehler.value = meldung(e) } finally { laedt.value = false }
+    } catch (e) {
+        // Keine Antwort (Zeitlimit, Netz): der Server kann gesendet haben → wie „unklar", nie erneut senden
+        if (!e?.response) { ergebnis.value = { ok: false, zustand: 'unklar', antwort: { message: e.message } }; emit('gesendet') }
+        else fehler.value = meldung(e)
+    } finally { laedt.value = false }
 }
 
 const vergleich = computed(() => {

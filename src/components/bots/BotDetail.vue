@@ -73,7 +73,7 @@ async function ladeMarkt() {
     marktFehler.value = ''
     marktAus.value = false
     try {
-        const { data } = await axios.get(`/api/bots/${encodeURIComponent(props.bot.id)}/markt`)
+        const { data } = await axios.get(`/api/bots/${encodeURIComponent(props.bot.id)}/markt`, { timeout: 60_000 })
         if (data?.aus) { marktAus.value = true; return }
         markt.value = data
         await nextTick()

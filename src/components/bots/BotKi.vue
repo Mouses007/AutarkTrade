@@ -35,10 +35,12 @@ async function erzeuge() {
     laedt.value = true
     fehler.value = ''
     try {
-        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/ki`, { sprache: locale.value })
+        const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/ki`, { sprache: locale.value }, { timeout: 180_000 })
         if (data?.aus) { fehler.value = t('bots.marktAus'); return }
         erg.value = data.ergebnis
     } catch (e) {
+        // Ohne Antwort (Zeitlimit) kann der Server trotzdem fertig geworden sein: Cache lesen
+        if (!e?.response) { await ladeCache(); if (erg.value) return }
         const d = e?.response?.data
         fehler.value = d?.code === 'kiWarten' ? t('bots.ki.warten', { s: d.sekunden }) : (d?.error || e.message)
     } finally {

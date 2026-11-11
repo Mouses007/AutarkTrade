@@ -62,7 +62,7 @@ async function rechne() {
             if (z.art) v.art = z.art
             return v
         })
-        const { data } = await axios.post(`/api/bots/${encodeURIComponent(b.value.id)}/simulation`, { varianten })
+        const { data } = await axios.post(`/api/bots/${encodeURIComponent(b.value.id)}/simulation`, { varianten }, { timeout: 180_000 })
         gerechnet.value = varianten.map((v) => Object.fromEntries(Object.entries(v).filter(([, x]) => x !== '' && x != null)))
         if (data?.aus) { fehler.value = t('bots.marktAus'); return }
         erg.value = data
