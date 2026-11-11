@@ -25,7 +25,9 @@ import { kerzen as holeKerzen, fundingVerlauf } from '../marktdaten/index.js'
 import { wartungsmargeMitQuelle } from '../margin-rates.js'
 import { sendeWennAus } from '../quellen/aus.js'
 import { vergleiche, pruefeVariante, SIMULIERBAR, MAX_VARIANTEN } from './simulation.js'
-import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich } from './bot-ki.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, hoheZeitrahmen, BOT_ZEITRAHMEN } from './bot-ki.js'
+import { zeitrahmenTabelle } from '../chart-zeitrahmen.js'
+import { getClosedCandles } from '../market-data.js'
 import { ladeLlmConfigFuerAufgabe, callLLMJson } from '../llm.js'
 
 const CACHE_MS = 60_000
@@ -160,13 +162,16 @@ async function kiFuer(bot, englisch) {
     const mmr = marge?.pct > 0 ? marge.pct / 100 : undefined
     const lage = marktLage(tag, bot.kurs)
     if (lage) lage.atr = atr
-    const liste = kandidaten(bot, bot.kurs, atr)
+    // Hohe Zeitrahmen wie die Chart-KI: nur geschlossene Kerzen, fehlt einer, bleibt er „unbekannt"
+    const reihen = await Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(bot.symbol, tf, 300, { market: 'futures' }).catch(() => null)))
+    const zr = hoheZeitrahmen(Object.fromEntries(BOT_ZEITRAHMEN.map((tf, i) => [tf, reihen[i]])), bot.kurs)
+    const liste = kandidaten(bot, bot.kurs, atr, zr)
     const gerechnet = rechneKandidaten(bot, kerzen, liste, { funding, mmr })
     if (gerechnet.fehler) throw new Error(`Simulation: ${gerechnet.fehler}`)
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
     cfg.maxTokens = 2500
     const antwort = await callLLMJson(cfg, {
-        system: systemText(), user: bauePrompt(bot, lage, gerechnet, englisch), timeoutMs: 90000,
+        system: systemText(), user: bauePrompt(bot, lage, gerechnet, englisch, zr), timeoutMs: 90000,
         zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: bot.symbol },
     })
     const geprueft = pruefeKiAntwort(antwort.json, gerechnet)
@@ -175,6 +180,7 @@ async function kiFuer(bot, englisch) {
     return {
         ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model,
         kostenUsd: antwort.costUsd ?? null, kurs: bot.kurs, markt: lage, eichung: gerechnet.eichung,
+        zeitrahmen: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,
         lage: geprueft.lage, hinweis: geprueft.hinweis, verworfen: geprueft.verworfen.length,
         vorschlaege: geprueft.vorschlaege.map((v) => ({ ...v, rueckblick: ohneKurve(v.rueckblick) })),
         kandidaten: gerechnet.kandidaten.map((c) => ({ ...c, rueckblick: ohneKurve(c.rueckblick) })),

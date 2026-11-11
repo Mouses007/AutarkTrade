@@ -8295,7 +8295,12 @@
       "passtNicht": "Passt nicht, wenn",
       "inSimulation": "In der Simulation ansehen",
       "umsetzen": "Bei Pionex umsetzen …",
-      "alleKandidaten": "Alle {n} gerechneten Varianten"
+      "alleKandidaten": "Alle {n} gerechneten Varianten",
+      "zrTitel": "Lage auf hohen Zeitrahmen (vom Code gemessen, Grundlage der KI)",
+      "zrBruch": "Letzter Bruch",
+      "zrNiveaus": "Niveaus",
+      "zrTreffen": "Zusammentreffen mehrerer Zeitrahmen",
+      "zrErklaerung": "Die KI bekommt zusätzlich die Lage auf 1w, 1d und 4h: Struktur, letzter Bruch, Lage in der Spanne, Momentum und die nächsten Niveaus. Untergrenzen und Stop-Loss werden auch knapp jenseits dieser Niveaus durchgerechnet."
     },
     "st": {
       "titel": "Bot-Steuerung (Pionex)",

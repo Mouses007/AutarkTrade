@@ -16,6 +16,10 @@
  */
 import { wissenAlsText, TYPEN } from './pionex-wissen.js'
 import { vergleiche, MAX_VARIANTEN } from './simulation.js'
+import { messeZeitrahmen, findeTreffen, zeitrahmenText } from '../chart-zeitrahmen.js'
+
+/** Höhere Zeitrahmen für die Bot-Vorschläge (dieselbe Messung wie die Chart-KI „Lage über alle Zeitrahmen"). */
+export const BOT_ZEITRAHMEN = ['1w', '1d', '4h']
 
 const istZahl = (v) => typeof v === 'number' && Number.isFinite(v)
 const runde = (v, stellen = 6) => (istZahl(v) ? Number(v.toPrecision(stellen)) : v)
@@ -45,16 +49,54 @@ export function marktLage(tagesKerzen, kurs) {
 }
 
 /**
+ * Lage auf hohen Zeitrahmen (rein): Struktur, letzter Bruch, Lage in der Spanne,
+ * Momentum und die nächsten Niveaus je Zeitrahmen, dazu Zusammentreffen von
+ * Niveaus verschiedener Zeitrahmen (Toleranz ½ ATR des 4h-Charts).
+ * `serien` = { '1w': [...], '1d': [...], '4h': [...] } geschlossene Kerzen.
+ */
+export function hoheZeitrahmen(serien, kurs) {
+    const zeilen = BOT_ZEITRAHMEN.map((tf) => messeZeitrahmen(serien?.[tf], tf) || { tf, unbekannt: true })
+    const bekannt = zeilen.filter((z) => !z.unbekannt)
+    if (!bekannt.length) return null
+    const marken = []
+    for (const z of bekannt) for (const m of z.marken) marken.push({ ...m, id: `Z${marken.length + 1}`, tf: z.tf })
+    const atr4h = bekannt.find((z) => z.tf === '4h')?.atr ?? bekannt[bekannt.length - 1].atr
+    const p = istZahl(kurs) ? kurs : bekannt[bekannt.length - 1].kurs
+    const treffen = findeTreffen(marken.map((m) => ({ id: m.id, preis: m.preis, quelle: m.tf })), 0.5 * atr4h, p)
+    const gleichlauf = { auf: bekannt.filter((z) => z.zustand === 1).length, ab: bekannt.filter((z) => z.zustand === -1).length, offen: bekannt.filter((z) => z.zustand === 0).length }
+    return { kurs: p, zeilen, marken, treffen, gleichlauf, tagesbewegung: null }
+}
+
+/**
+ * Stärkste Niveaus unter und über dem Kurs: zuerst Zusammentreffen mehrerer
+ * Zeitrahmen, sonst die nächste Marke des grössten Zeitrahmens. Rein.
+ */
+export function niveausAusZeitrahmen(zr, kurs) {
+    if (!zr) return { unten: [], oben: [] }
+    const gewicht = { '1w': 3, '1d': 2, '4h': 1 }
+    const liste = [
+        ...zr.treffen.map((t) => ({ preis: t.preis, name: `${t.id} (${t.quellen.join('+')})`, rang: 10 + t.quellen.length })),
+        ...zr.marken.map((m) => ({ preis: m.preis, name: `${m.id} (${m.tf})`, rang: gewicht[m.tf] || 0 })),
+    ]
+    const sortiert = (a) => a.sort((x, y) => y.rang - x.rang || Math.abs(x.preis - kurs) - Math.abs(y.preis - kurs))
+    return {
+        unten: sortiert(liste.filter((n) => n.preis < kurs)).slice(0, 2),
+        oben: sortiert(liste.filter((n) => n.preis > kurs)).slice(0, 2),
+    }
+}
+
+/**
  * Kandidaten aus der Lage. Preise in USDT je Coin, Beträge in der Margin-Münze.
  * Nur, was die Simulation rechnen kann; jeder Kandidat mit Code-Beschreibung.
  */
-export function kandidaten(bot, kurs, atr) {
+export function kandidaten(bot, kurs, atr, zr = null) {
     const liste = []
     const neu = (titel, v) => { if (Object.keys(v).length) liste.push({ id: `K${liste.length + 1}`, titel, variante: v }) }
     const einsatz = bot.coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell)
     const long = bot.richtung !== 'SHORT'
     const u = bot.grid?.unten, o = bot.grid?.oben
     const hatAtr = istZahl(atr) && atr > 0 && istZahl(kurs)
+    const liq = long ? bot.liquidation?.unten ?? bot.liquidation?.preis : bot.liquidation?.oben ?? bot.liquidation?.preis
 
     if (istZahl(einsatz) && einsatz > 0) {
         for (const f of [0.25, 0.5, 1]) neu(`Extra-Marge +${Math.round(f * 100)} % des Einsatzes`, { extraMarge: runde(einsatz * f, 4) })
@@ -74,13 +116,26 @@ export function kandidaten(bot, kurs, atr) {
         if (long && kurs < u) { const a = kurs - 6 * atr; if (a > 0) neu(`Untergrenze auf ${runde(a, 4)} senken`, { unten: runde(a, 5), oben: o }) }
         if (!long && kurs > o) { const b = kurs + 6 * atr; neu(`Obergrenze auf ${runde(b, 4)} heben`, { unten: u, oben: runde(b, 5) }) }
     }
-    const liq = long ? bot.liquidation?.unten ?? bot.liquidation?.preis : bot.liquidation?.oben ?? bot.liquidation?.preis
     if (hatAtr && istZahl(liq) && bot.richtung !== 'NEUTRAL') {
         const sl1 = long ? liq + atr : liq - atr
         const sl2 = long ? kurs - 2 * atr : kurs + 2 * atr
         for (const sl of [sl1, sl2]) {
             const ok = long ? sl > liq && sl < kurs : sl < liq && sl > kurs
             if (ok && sl > 0) neu(`Stop-Loss bei ${runde(sl, 4)}`, { stopLoss: runde(sl, 5) })
+        }
+    }
+    // An gemessenen Niveaus der hohen Zeitrahmen: Untergrenze bzw. Stop-Loss knapp jenseits
+    // einer Unterstützung (Long) / eines Widerstands (Short), Abstand ½ Tages-ATR.
+    if (hatAtr && zr && bot.richtung !== 'NEUTRAL') {
+        const nv = niveausAusZeitrahmen(zr, kurs)
+        const stuetze = long ? nv.unten : nv.oben
+        for (const n of stuetze) {
+            const jenseits = long ? n.preis - 0.5 * atr : n.preis + 0.5 * atr
+            if (!(jenseits > 0)) continue
+            if (long && istZahl(o) && jenseits < kurs) neu(`Untergrenze unter Niveau ${n.name} auf ${runde(jenseits, 4)}`, { unten: runde(jenseits, 5), oben: o })
+            if (!long && istZahl(u) && jenseits > kurs) neu(`Obergrenze über Niveau ${n.name} auf ${runde(jenseits, 4)}`, { unten: u, oben: runde(jenseits, 5) })
+            const ok = istZahl(liq) ? (long ? jenseits > liq && jenseits < kurs : jenseits < liq && jenseits > kurs) : (long ? jenseits < kurs : jenseits > kurs)
+            if (ok) neu(`Stop-Loss jenseits Niveau ${n.name} bei ${runde(jenseits, 4)}`, { stopLoss: runde(jenseits, 5) })
         }
     }
     // Kombinationen: halber Hebel + breites Band; Extra-Marge 50 % + Stop-Loss
@@ -118,34 +173,38 @@ const pz = (v, s = 1) => (istZahl(v) ? `${(v * 100).toFixed(s)} %` : '—')
 const zl = (v, s = 4) => (istZahl(v) ? Number(v).toFixed(s) : '—')
 
 /** Prompt-Zeilen: Bot, Markt, heutige Simulation, Kandidaten. */
-export function bauePrompt(bot, lage, gerechnet, englisch = false) {
+export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null) {
     const mc = bot.marginCoin
     const k = bot.kennzahlen || {}
-    const z = []
-    z.push(wissenAlsText(bot.typ))
-    z.push('')
-    z.push(`BOT ${bot.coin} ${bot.typName}, Richtung ${bot.richtung}, Hebel ${bot.hebel}x, läuft seit ${zl(k.tage, 1)} Tagen`)
-    z.push(`Band ${zl(bot.grid?.unten)}–${zl(bot.grid?.oben)} USD, ${bot.grid?.anzahl} Grids ${bot.grid?.art}, Netto je Zyklus ${pz(bot.grid?.nettoJeZyklus, 3)}`)
-    z.push(`Einsatz ${zl(k.gewinn?.basis)} ${mc}, Extra-Marge ${zl(bot.einsatz?.extraMarge)} ${mc}, Gewinn gesamt ${zl(k.gewinn?.gesamt)} ${mc} (realisiert ${zl(k.gewinn?.realisiert)}, schwebend ${zl(k.gewinn?.schwebend)}), Grid-Gewinn ${zl(bot.ergebnis?.gridGewinn)}, Funding ${zl(bot.ergebnis?.funding)}`)
-    z.push(`Kurs ${zl(bot.kurs)} USD, Lage ${k.band?.lage || '—'}, Liquidation (Pionex) ${zl(bot.liquidation?.unten ?? bot.liquidation?.oben ?? bot.liquidation?.preis, 2)} USD, Abstand ${pz(k.liquidation?.abstand)}, Stop-Loss ${bot.stops?.stopLoss?.wert ?? 'keiner'}, Take-Profit ${bot.stops?.takeProfit?.wert ?? 'keiner'}`)
-    if (lage) {
-        z.push(`MARKT: 7 Tage ${pz(lage.aenderung7)}, 30 Tage ${pz(lage.aenderung30)}, 30-Tage-Hoch ${zl(lage.hoch30, 2)}, -Tief ${zl(lage.tief30, 2)}, Tagesspanne Median ${pz(lage.spanneMedian)} / max ${pz(lage.spanneMax)}, grösster 7-Tage-Fall ${pz(lage.maxFall7)}, Tages-ATR ${zl(lage.atr, 2)}`)
-    }
     const e = gerechnet.eichung
-    z.push(`SIMULATION heute (Rückblick seit Start): ${zl(gerechnet.basis?.gesamt)} ${mc}; Pionex echt ${zl(e?.echt)} ${mc}; Abweichung ${pz(e?.abweichungAnteil)} des Einsatzes${e?.unsicher ? ' — UNSICHER' : ''}`)
-    z.push('')
-    z.push(`KANDIDATEN (vom Code gerechnet; Rückblick = über die ganze Laufzeit seit Start; jetzt = Folgen eines Umstellens zum heutigen Kurs):`)
-    z.push('id | Änderung | Rückblick Ergebnis | Rückblick grösster Verlust | Rückblick Ende | jetzt: nachschiessen | jetzt: geschlossen | jetzt: realisiert | jetzt: Liquidation neu | Abstand neu')
-    for (const c of gerechnet.kandidaten) {
+    const liqHeute = bot.liquidation?.unten ?? bot.liquidation?.oben ?? bot.liquidation?.preis
+    const kopf = [
+        wissenAlsText(bot.typ),
+        '',
+        `BOT ${bot.coin} ${bot.typName}, Richtung ${bot.richtung}, Hebel ${bot.hebel}x, läuft seit ${zl(k.tage, 1)} Tagen`,
+        `Band ${zl(bot.grid?.unten)}–${zl(bot.grid?.oben)} USD, ${bot.grid?.anzahl} Grids ${bot.grid?.art}, Netto je Zyklus ${pz(bot.grid?.nettoJeZyklus, 3)}`,
+        `Einsatz ${zl(k.gewinn?.basis)} ${mc}, Extra-Marge ${zl(bot.einsatz?.extraMarge)} ${mc}, Gewinn gesamt ${zl(k.gewinn?.gesamt)} ${mc} (realisiert ${zl(k.gewinn?.realisiert)}, schwebend ${zl(k.gewinn?.schwebend)}), Grid-Gewinn ${zl(bot.ergebnis?.gridGewinn)}, Funding ${zl(bot.ergebnis?.funding)}`,
+        `Kurs ${zl(bot.kurs)} USD, Lage ${k.band?.lage || '—'}, Liquidation (Pionex) ${zl(liqHeute, 2)} USD, Abstand ${pz(k.liquidation?.abstand)}, Stop-Loss ${bot.stops?.stopLoss?.wert ?? 'keiner'}, Take-Profit ${bot.stops?.takeProfit?.wert ?? 'keiner'}`,
+    ]
+    const markt = lage ? [`MARKT: 7 Tage ${pz(lage.aenderung7)}, 30 Tage ${pz(lage.aenderung30)}, 30-Tage-Hoch ${zl(lage.hoch30, 2)}, -Tief ${zl(lage.tief30, 2)}, Tagesspanne Median ${pz(lage.spanneMedian)} / max ${pz(lage.spanneMax)}, grösster 7-Tage-Fall ${pz(lage.maxFall7)}, Tages-ATR ${zl(lage.atr, 2)}`] : []
+    const hoch = zr ? ['', zeitrahmenText(zr, (t) => new Date(t).toISOString().slice(0, 10)).replace('ZEITRAHMEN — vom Code gemessen', 'HOHE ZEITRAHMEN — vom Code gemessen')] : []
+    const tabelle = gerechnet.kandidaten.map((c) => {
         const r = c.rueckblick, a = c.abJetzt
         const ende = r?.liquidation ? 'LIQUIDIERT' : r?.ausstieg ? r.ausstieg.art : 'läuft'
         const abstand = istZahl(a?.liqNeu) && istZahl(bot.kurs) ? Math.abs(bot.kurs - a.liqNeu) / bot.kurs : null
         const nach = (a?.zusatz || 0) + (c.variante.extraMarge || 0)
-        z.push(`${c.id} | ${c.titel} | ${zl(r?.gesamt)} | ${zl(r?.maxVerlust)} | ${ende} | ${nach > 0 ? zl(nach) + ' ' + bot.marginCoin : '—'} | ${pz(a?.geschlossenAnteil, 0)} | ${zl(a?.realisiertCa)} | ${zl(a?.liqNeu, 2)} | ${pz(abstand)}`)
-    }
-    z.push('')
-    z.push(englisch ? 'Answer in English.' : 'Antworte auf Deutsch (Schweizer Schreibweise, ss statt ß).')
-    return z.join('\n')
+        return [c.id, c.titel, zl(r?.gesamt), zl(r?.maxVerlust), ende, nach > 0 ? `${zl(nach)} ${mc}` : '—', pz(a?.geschlossenAnteil, 0), zl(a?.realisiertCa), zl(a?.liqNeu, 2), pz(abstand)].join(' | ')
+    })
+    return [
+        ...kopf, ...markt, ...hoch,
+        `SIMULATION heute (Rückblick seit Start): ${zl(gerechnet.basis?.gesamt)} ${mc}; Pionex echt ${zl(e?.echt)} ${mc}; Abweichung ${pz(e?.abweichungAnteil)} des Einsatzes${e?.unsicher ? ' — UNSICHER' : ''}`,
+        '',
+        'KANDIDATEN (vom Code gerechnet; Rückblick = über die ganze Laufzeit seit Start; jetzt = Folgen eines Umstellens zum heutigen Kurs):',
+        'id | Änderung | Rückblick Ergebnis | Rückblick grösster Verlust | Rückblick Ende | jetzt: nachschiessen | jetzt: geschlossen | jetzt: realisiert | jetzt: Liquidation neu | Abstand neu',
+        ...tabelle,
+        '',
+        englisch ? 'Answer in English.' : 'Antworte auf Deutsch (Schweizer Schreibweise, ss statt ß).',
+    ].join('\n')
 }
 
 export function systemText() {
@@ -155,6 +214,7 @@ export function systemText() {
         'Wähle aus den KANDIDATEN höchstens drei, die du vorschlägst, und begründe sie mit den Zahlen. Wenn keiner sinnvoll ist, wähle keinen und sag warum.',
         'Beachte: Der Rückblick ist mit dem Wissen um den vergangenen Kursverlauf gerechnet — gewichte die Spalten „jetzt" (Liquidationsabstand, realisierter Verlust) mindestens so stark.',
         'So setzt Pionex Änderungen um: Band/Grids ändern behält die heutige Position (nichts wird realisiert), ein Band weiter nach unten (Long) bringt die Liquidation NÄHER. Hebel senken behält die Position und verlangt mehr Einsatz (Spalte „nachschiessen"). Extra-Marge lässt die Position gleich und schiebt die Liquidation weg. Nachschiessen braucht freies Guthaben auf dem Konto.',
+        'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, und ob Bandgrenzen, Stop-Loss und Liquidation an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…) liegen. Nenne Niveaus nur mit ihrer ID und dem Preis aus der Eingabe.',
         'Nenne bei jedem Vorschlag das wichtigste Risiko und wann er nicht passt. Kein Gewinnversprechen, keine Kursprognose als Tatsache, nicht „garantiert", nicht „risikolos", nicht „optimal".',
         'Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage des Bots", "vorschlaege": [{"id": "K3", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}',
     ].join('\n')

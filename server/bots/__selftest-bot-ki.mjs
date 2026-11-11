@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
 import { kennzahlen } from './kennzahlen.js'
-import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE } from './bot-ki.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE, hoheZeitrahmen, niveausAusZeitrahmen } from './bot-ki.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -79,6 +79,28 @@ p('Vorschlag trägt die nachgerechneten Zahlen des Codes', r.vorschlaege[0].vari
 p('Lage und Hinweis übernommen', r.lage.startsWith('Der Bot') && r.hinweis.length > 0)
 p('Lage mit „optimal" wird geleert', pruefeKiAntwort({ lage: 'Das ist optimal.', vorschlaege: [] }, g).lage === '')
 p('kein JSON → null', pruefeKiAntwort(null, g) === null)
+
+console.log('Hohe Zeitrahmen')
+// Pendelnder Abwärtsmarkt mit klaren Tiefs: genug geschlossene Kerzen je Zeitrahmen
+const serie = (n, schritt, start, amp, per) => Array.from({ length: n }, (_, i) => {
+    const m = start - i * schritt + Math.sin(i / per) * amp
+    return { t: i * 1000, o: m + amp * 0.2, h: m + amp * 0.5, l: m - amp * 0.5, c: m - amp * 0.2 }
+})
+const serien = { '1w': serie(120, 0.3, 120, 12, 4), '1d': serie(300, 0.12, 120, 6, 5), '4h': serie(300, 0.03, 92, 3, 6) }
+const zr = hoheZeitrahmen(serien, 83)
+p('drei Zeitrahmen gemessen, Marken mit IDs Z…', zr && zr.zeilen.length === 3 && zr.zeilen.every((z) => !z.unbekannt) && zr.marken.every((m, i) => m.id === `Z${i + 1}`))
+p('Gleichlauf zählt Strukturen', zr.gleichlauf.auf + zr.gleichlauf.ab + zr.gleichlauf.offen === 3)
+const ohne = hoheZeitrahmen({ '1w': null, '1d': serien['1d'], '4h': null }, 83)
+p('fehlender Zeitrahmen bleibt „unbekannt", nie erfunden', ohne.zeilen.find((z) => z.tf === '1w').unbekannt && !ohne.zeilen.find((z) => z.tf === '1d').unbekannt)
+p('gar keine Kerzen → null', hoheZeitrahmen({}, 83) === null)
+const nv = niveausAusZeitrahmen(zr, 83)
+p('Niveaus unter und über dem Kurs getrennt', nv.unten.every((n) => n.preis < 83) && nv.oben.every((n) => n.preis > 83))
+const mitZr = kandidaten(bot, bot.kurs, 4.3, zr)
+const anNiveau = mitZr.filter((k) => /Niveau Z|Niveau C/.test(k.titel))
+p('Kandidaten an gemessenen Niveaus, Stops zwischen Liquidation und Kurs', anNiveau.length > 0 && anNiveau.filter((k) => k.variante.stopLoss).every((k) => k.variante.stopLoss > bot.liquidation.unten && k.variante.stopLoss < bot.kurs))
+const promptZr = bauePrompt({ ...bot, kennzahlen: bot.kennzahlen }, { ...lage, atr: 4.3 }, g, false, zr)
+p('Prompt enthält HOHE ZEITRAHMEN mit 1w/1d/4h', promptZr.includes('HOHE ZEITRAHMEN') && ['1w:', '1d:', '4h:'].every((x) => promptZr.includes(x)))
+p('Systemtext verlangt den Bezug auf Niveaus', systemText().includes('HOHEN ZEITRAHMEN'))
 
 console.log('Wann möglich')
 p('laufender Coin-M-Bot ja', kiMoeglich(bot))

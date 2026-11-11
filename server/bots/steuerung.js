@@ -152,9 +152,8 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs } = {})
     const trend = String(roh.trend || 'long')
     const { base, quote } = basisQuote(bot)
     const daten = { top, bottom, row: anzahl, grid_type: art, trend, leverage: hebel, quoteInvestment: String(einsatz) }
-    if (roh.investCoin) daten.investCoin = roh.investCoin
-    if (roh.cateType) daten.cateType = roh.cateType
-    if (roh.uiExtraData) daten.uiExtraData = roh.uiExtraData
+    // Art des Bots übernehmen (Coin-M: cateType, Margin-Münze, UI-Kennung), soweit vorhanden
+    for (const feld of ['investCoin', 'cateType', 'uiExtraData']) if (roh[feld]) daten[feld] = roh[feld]
     const pruefDaten = { top, bottom, row: anzahl, grid_type: art, trend, leverage: hebel, quote_investment: String(einsatz), extra_margin: false }
     return {
         aktion,

@@ -376,6 +376,9 @@
     "src/components/bots/BotSimulation.vue|247e3d868258": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/bots/BotSimulation.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/components/bots/BotSimulation.vue|6c1aa738e3ea": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/components/bots/BotSimulation.vue|cbd0519d9ca9": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
+    "src/components/bots/BotSimulation.vue|cbd0519d9ca9": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotAktionDialog.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotKi.vue|5dbe7d0069c0": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotKi.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
   }
 }

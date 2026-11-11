@@ -8295,7 +8295,12 @@
       "passtNicht": "Does not fit if",
       "inSimulation": "View in simulation",
       "umsetzen": "Apply at Pionex …",
-      "alleKandidaten": "All {n} computed variants"
+      "alleKandidaten": "All {n} computed variants",
+      "zrTitel": "Situation on higher timeframes (measured by the code, basis for the AI)",
+      "zrBruch": "Last break",
+      "zrNiveaus": "Levels",
+      "zrTreffen": "Confluence of several timeframes",
+      "zrErklaerung": "The AI also receives the situation on 1w, 1d and 4h: structure, last break, position in the range, momentum and the nearest levels. Lower bounds and stop losses are also computed just beyond these levels."
     },
     "st": {
       "titel": "Bot control (Pionex)",

@@ -63,6 +63,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
         </Hinweis>
 
         <p class="leise">{{ t('bots.ki.erklaerung') }}</p>
+        <p class="leise">{{ t('bots.ki.zrErklaerung') }}</p>
         <div class="knoepfe">
             <span v-if="erg" class="leise">{{ t('bots.ki.stand', { zeit: datum(erg.zeit), modell: erg.modell || erg.anbieter }) }}</span>
             <Knopf art="haupt" symbol="ki" :laedt="laedt" @click="erzeuge">{{ erg ? t('bots.ki.neu') : t('bots.ki.erzeugen') }}</Knopf>
@@ -76,6 +77,35 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <span v-if="erg.kurs" class="leise">{{ t('bots.ki.kursStand', { kurs: preis(erg.kurs) }) }}</span>
             </div>
             <p v-if="erg.lage" class="lage">{{ erg.lage }}</p>
+
+            <div v-if="erg.zeitrahmen" class="zr">
+                <h5>{{ t('bots.ki.zrTitel') }}</h5>
+                <div class="tabelleRahmen">
+                    <table class="tabelle">
+                        <thead><tr><th></th><th>{{ t('chart.ki.spalteStruktur') }}</th><th>{{ t('bots.ki.zrBruch') }}</th><th>{{ t('chart.ki.spalteLage') }}</th><th>{{ t('chart.ki.spalteMomentum') }}</th></tr></thead>
+                        <tbody>
+                            <tr v-for="z in erg.zeitrahmen.tabelle" :key="z.tf">
+                                <th>{{ z.tf }}</th>
+                                <template v-if="z.unbekannt"><td colspan="4" class="leise">{{ t('chart.ki.unbekannt') }}</td></template>
+                                <template v-else>
+                                    <td :class="z.zustand === 1 ? 'gut' : z.zustand === -1 ? 'schlecht' : ''">{{ t('chart.ki.richtung.' + (z.zustand === 1 ? 'auf' : z.zustand === -1 ? 'ab' : 'offen')) }}</td>
+                                    <td>{{ z.bruchRichtung ? `${z.bruchRichtung === 'auf' ? '↑' : '↓'} ${preis(z.bruchMarke)}` : '—' }}</td>
+                                    <td>{{ z.lagePct == null ? '—' : z.lagePct.toFixed(0) + ' %' }}</td>
+                                    <td>{{ z.momentum ? t('chart.ki.momentum.' + z.momentum) : '—' }}</td>
+                                </template>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p v-if="erg.zeitrahmen.marken.length" class="leise niveaus">
+                    {{ t('bots.ki.zrNiveaus') }}:
+                    <span v-for="m in erg.zeitrahmen.marken" :key="m.id" :class="{ treffen: erg.zeitrahmen.treffen.some((c) => c.ids.includes(m.id)) }">{{ m.id }} {{ m.tf }} {{ preis(m.preis) }}</span>
+                </p>
+                <p v-if="erg.zeitrahmen.treffen.length" class="leise niveaus">
+                    {{ t('bots.ki.zrTreffen') }}:
+                    <span v-for="c in erg.zeitrahmen.treffen" :key="c.id" class="treffen">{{ c.id }} {{ preis(c.preis) }} ({{ c.quellen.join(' + ') }})</span>
+                </p>
+            </div>
 
             <p v-if="!erg.vorschlaege.length" class="leise">{{ t('bots.ki.keine') }}</p>
             <article v-for="(v, i) in erg.vorschlaege" :key="v.id" class="vorschlag">
@@ -133,6 +163,10 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 .knoepfe { display: flex; gap: var(--abstand-2); justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .kopf { display: flex; gap: var(--abstand-2); align-items: center; flex-wrap: wrap; }
 .lage { margin: 0; line-height: 1.5; }
+.zr { display: flex; flex-direction: column; gap: var(--abstand-2); }
+.zr h5 { margin: 0; color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.niveaus { display: flex; flex-wrap: wrap; gap: 4px 10px; }
+.niveaus .treffen { color: var(--accent); }
 .vorschlag { border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius); padding: var(--abstand-3); display: flex; flex-direction: column; gap: var(--abstand-2); }
 .vorschlag header { display: flex; flex-direction: column; gap: 2px; }
 .vorschlag .nr { color: var(--muted); font-size: 0.75rem; font-weight: 600; }
