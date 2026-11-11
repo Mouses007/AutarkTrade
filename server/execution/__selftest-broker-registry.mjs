@@ -90,6 +90,24 @@ console.log('\nKein Order-Endpunkt im Server\n')
         for (const re of VERBOTEN) if (re.test(text)) treffer.push(`${f} ${re}`)
     }
     check('kein Order-Pfad von Bitunix/Pionex in Server und Skripten', treffer.length === 0, treffer.join('; '))
+
+    // Bot-Steuerung (11.11.2026, Entscheid des Entwicklers): schreibende Bot-Pfade
+    // von Pionex gibt es — aber nur in EINER Datei, hinter Prüfung, Einwilligung und Haken.
+    const BOT_PFAD = /bot\/orders\/(futuresGrid|spotGrid|smartCopy)/
+    const ERLAUBT = path.join('server', 'bots', 'steuerung.js')
+    const botTreffer = []
+    const suche = (dir) => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, e.name)
+            if (e.isDirectory()) { if (!['node_modules', 'fixtures'].includes(e.name)) suche(p) }
+            else if (/\.(m?js|vue)$/.test(e.name) && !e.name.startsWith('__selftest')) {
+                if (BOT_PFAD.test(fs.readFileSync(p, 'utf8')) && path.relative(wurzel, p) !== ERLAUBT) botTreffer.push(path.relative(wurzel, p))
+            }
+        }
+    }
+    for (const d of ['server', 'shared', 'scripts', 'src']) suche(path.join(wurzel, d))
+    check('schreibende Bot-Pfade nur in server/bots/steuerung.js', botTreffer.length === 0, botTreffer.join('; '))
+    check('server/bots/steuerung.js nennt die Bot-Pfade', BOT_PFAD.test(fs.readFileSync(path.join(wurzel, ERLAUBT), 'utf8')))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)

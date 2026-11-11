@@ -16,9 +16,11 @@ import Leerzustand from '@/components/basis/Leerzustand.vue'
 import Kreisel from '@/components/basis/Kreisel.vue'
 import BotKarte from '@/components/bots/BotKarte.vue'
 import BotDetail from '@/components/bots/BotDetail.vue'
+import BotSteuerungEinrichtung from '@/components/bots/BotSteuerungEinrichtung.vue'
+import Karte from '@/components/basis/Karte.vue'
 import { datum } from '@/components/bots/format.js'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -29,6 +31,10 @@ const fehler = ref('')
 const nichtEingerichtet = ref(false)
 const wissen = ref(null)
 const ansicht = ref('laufend')
+const steuerung = ref(null)
+async function ladeSteuerung() {
+    try { steuerung.value = (await axios.get('/api/bots/steuerung', { params: { sprache: locale.value } })).data } catch { steuerung.value = null }
+}
 
 async function lade(frisch = false) {
     laedt.value = true
@@ -50,7 +56,7 @@ async function ladeWissen() {
     try { wissen.value = (await axios.get('/api/bots/wissen')).data } catch { wissen.value = null }
 }
 
-onMounted(() => { lade(); ladeWissen() })
+onMounted(() => { lade(); ladeWissen(); ladeSteuerung() })
 
 const laufende = computed(() => bots.value.filter((b) => b.laufend))
 const beendete = computed(() => bots.value.filter((b) => !b.laufend).sort((a, b) => (b.beendet || 0) - (a.beendet || 0)))
@@ -82,7 +88,7 @@ const oeffnen = (id) => router.push(`/bots/${encodeURIComponent(id)}`)
         <div v-else-if="laedt && !bots.length" class="mitte"><Kreisel :groesse="28" /> {{ t('bots.laden') }}</div>
 
         <template v-else-if="route.params.id">
-            <BotDetail v-if="gewaehlt" :bot="gewaehlt" :wissen="wissen?.typen?.[gewaehlt.typ] || null" :wissen-stand="wissen?.stand || ''" />
+            <BotDetail v-if="gewaehlt" :bot="gewaehlt" :wissen="wissen?.typen?.[gewaehlt.typ] || null" :wissen-stand="wissen?.stand || ''" :steuerung="steuerung" @gesendet="lade(true)" />
             <Leerzustand v-else :titel="t('bots.keine')" />
         </template>
 
@@ -93,6 +99,9 @@ const oeffnen = (id) => router.push(`/bots/${encodeURIComponent(id)}`)
             </div>
             <Leerzustand v-else :titel="t('bots.keine')" />
             <p class="fuss">{{ t('bots.nurPionex') }}</p>
+            <Karte :titel="t('bots.st.titel')">
+                <BotSteuerungEinrichtung :steuerung="steuerung" @geaendert="ladeSteuerung" />
+            </Karte>
         </template>
     </div>
 </template>

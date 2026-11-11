@@ -85,6 +85,8 @@ export const BOERSEN_GEHEIMNISSE = {
     bitunix_config: ['apiKey', 'secretKey'],
     bitget_config: ['apiKey', 'secretKey', 'passphrase'],
     pionex_config: ['apiKey', 'secretKey'],
+    // Zweiter Pionex-Schlüssel mit „Bot Trading" (Bot-Seite, Schritt 5)
+    bot_steuerung: ['apiKey', 'secretKey'],
 }
 
 /**
@@ -168,6 +170,8 @@ export const OHNE_GEHEIMNIS = new Map([
     ['ai_agent_messages.sessionId', 'Gesprächs-Kennung des KI-Agenten, keine Anmeldung'],
     ['api_cache.key', 'Name des Zwischenspeicher-Eintrags'],
     ['radar_fetch_state.key', 'Name der periodischen Aufgabe'],
+    ['bot_aenderungen.fassungHash', 'SHA-256 des öffentlichen Einwilligungstexts (Nachweis, welche Fassung galt)'],
+    ['bot_aenderungen.hakenHash', 'SHA-256 des öffentlichen Haken-Texts (Nachweis der Bestätigung)'],
     ['coinradar_settings.schluessel', 'Name der Einstellung (Schlüssel-Wert-Tabelle)'],
     ['hype_settings.schluessel', 'Name der Einstellung; Zustellgeheimnisse liegen in settings.hype*'],
     ['hype_projekt.schluessel', 'chain|contract bzw. sym|SYMBOL, öffentlich'],

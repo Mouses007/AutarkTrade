@@ -19,10 +19,15 @@ import Hinweis from '@/components/basis/Hinweis.vue'
 import { palette, tooltipStil, schrift, grundOption, wertAchse } from '@/utils/journal/diagramme/gestaltung.js'
 import { preis, betrag, prozent, zahl, datum, ton } from './format.js'
 
-const props = defineProps({ bot: { type: Object, required: true } })
+const props = defineProps({
+    bot: { type: Object, required: true },
+    steuerungAktiv: { type: Boolean, default: false },
+})
+const emit = defineEmits(['umsetzen'])
+const gerechnet = ref([])   // die Varianten, wie sie zuletzt gerechnet wurden (nur gesetzte Felder)
 const { t, te } = useI18n()
 
-const neu = () => ({ unten: '', oben: '', anzahl: '', art: '', hebel: '', einsatz: '', stopLoss: '', takeProfit: '' })
+const neu = () => ({ unten: '', oben: '', anzahl: '', art: '', hebel: '', einsatz: '', extraMarge: '', stopLoss: '', takeProfit: '' })
 const zeilen = ref([neu()])
 const laedt = ref(false)
 const fehler = ref('')
@@ -41,7 +46,7 @@ const platzhalter = computed(() => ({
     stopLoss: stopHeute(b.value.stops?.stopLoss) != null ? preis(stopHeute(b.value.stops.stopLoss)) : t('bots.feld.keiner'),
     takeProfit: stopHeute(b.value.stops?.takeProfit) != null ? preis(stopHeute(b.value.stops.takeProfit)) : t('bots.feld.keiner'),
 }))
-const FELDER = ['unten', 'oben', 'anzahl', 'hebel', 'einsatz', 'stopLoss', 'takeProfit']
+const FELDER = ['unten', 'oben', 'anzahl', 'hebel', 'einsatz', 'extraMarge', 'stopLoss', 'takeProfit']
 const zahlAus = (s) => (s === '' || s == null ? '' : Number(String(s).replace(/['\s]/g, '').replace(',', '.')))
 
 function plus() { if (zeilen.value.length < 3) zeilen.value.push(neu()) }
@@ -58,6 +63,7 @@ async function rechne() {
             return v
         })
         const { data } = await axios.post(`/api/bots/${encodeURIComponent(b.value.id)}/simulation`, { varianten })
+        gerechnet.value = varianten.map((v) => Object.fromEntries(Object.entries(v).filter(([, x]) => x !== '' && x != null)))
         if (data?.aus) { fehler.value = t('bots.marktAus'); return }
         erg.value = data
         await nextTick()
@@ -78,6 +84,7 @@ function name(e, basis = false) {
     const teile = [`${preis(e.unten)} – ${preis(e.oben)}`, `${e.anzahl}${e.art === 'geometric' ? ' geo' : ''}`]
     if (basis || e.hebel !== b.value.hebel) teile.push(`${zahl(e.hebel, 1)}x`)
     if (!basis && e.einsatz != null && einsatzHeute.value != null && Math.abs(e.einsatz - einsatzHeute.value) > 1e-9) teile.push(betrag(e.einsatz, mc.value))
+    if (e.extraMarge > 0) teile.push(`+${betrag(e.extraMarge, mc.value)} ${t('bots.sim.margeKurz')}`)
     if (e.stopLoss != null) teile.push(`SL ${preis(e.stopLoss)}`)
     if (e.takeProfit != null) teile.push(`TP ${preis(e.takeProfit)}`)
     return teile.join(' · ')
@@ -116,6 +123,16 @@ function zeichne() {
         })),
     }, true)
 }
+/** Eine Variante von aussen übernehmen (KI-Vorschlag) und gleich rechnen. */
+function uebernehme(v) {
+    const z = neu()
+    for (const f of FELDER) if (v?.[f] != null) z[f] = String(v[f])
+    if (v?.art) z.art = v.art
+    zeilen.value = [z]
+    rechne()
+}
+defineExpose({ uebernehme })
+
 const groesse = () => chart?.resize()
 window.addEventListener('resize', groesse)
 onBeforeUnmount(() => { window.removeEventListener('resize', groesse); chart?.dispose(); chart = null })
@@ -143,6 +160,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', groesse); chart?.di
                 </label>
                 <label><span>{{ t('bots.feld.hebel') }}</span><input v-model="z.hebel" class="at-feld" inputmode="decimal" :placeholder="platzhalter.hebel"></label>
                 <label><span>{{ t('bots.feld.einsatz') }} ({{ b.marginCoin }})</span><input v-model="z.einsatz" class="at-feld" inputmode="decimal" :placeholder="platzhalter.einsatz"></label>
+                <label><span>{{ t('bots.sim.extraMargePlus') }} ({{ b.marginCoin }})</span><input v-model="z.extraMarge" class="at-feld" inputmode="decimal" placeholder="0"></label>
                 <label><span>{{ t('bots.feld.stopLoss') }}</span><input v-model="z.stopLoss" class="at-feld" inputmode="decimal" :placeholder="platzhalter.stopLoss" :disabled="neutral"></label>
                 <label><span>{{ t('bots.feld.takeProfit') }}</span><input v-model="z.takeProfit" class="at-feld" inputmode="decimal" :placeholder="platzhalter.takeProfit" :disabled="neutral"></label>
             </div>
@@ -190,6 +208,10 @@ onBeforeUnmount(() => { window.removeEventListener('resize', groesse); chart?.di
                         </tr>
                     </tbody>
                 </table>
+            </div>
+
+            <div v-if="steuerungAktiv && erg.varianten.length" class="knoepfe">
+                <Knopf v-for="(v, i) in erg.varianten" :key="i" klein symbol="hochladen" @click="emit('umsetzen', gerechnet.filter((x) => Object.keys(x).length)[i] || {})">{{ t('bots.sim.umsetzen', { n: i + 1 }) }}</Knopf>
             </div>
 
             <div ref="chartEl" class="chart"></div>
@@ -253,7 +275,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', groesse); chart?.di
 .erklaerung { margin: 0; color: var(--muted); font-size: 0.9rem; }
 .variante { border: 1px solid var(--line); border-radius: var(--radius); padding: var(--abstand-2) var(--abstand-3) var(--abstand-3); }
 .varKopf { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; color: var(--muted); font-weight: 600; margin-bottom: var(--abstand-2); min-height: 28px; }
-.felder { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--abstand-2) var(--abstand-3); }
+.felder { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--abstand-2) var(--abstand-3); }
 .felder label { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); min-width: 0; }
 .felder .at-feld { width: 100%; min-width: 0; }
 .knoepfe { display: flex; gap: var(--abstand-2); justify-content: flex-end; flex-wrap: wrap; }

@@ -42,6 +42,9 @@ p('Tippfehler 7500–15000 bei Kurs 83 → weitWeg', pv({ unten: 7500, oben: 150
 p('Text → band', pv({ unten: 'x', oben: 150 }).fehler === 'band')
 p('Hebel 0 und 200 → hebel', pv({ hebel: 0 }).fehler === 'hebel' && pv({ hebel: 200 }).fehler === 'hebel')
 p('Einsatz ≤ 0 → einsatz', pv({ einsatz: -1 }).fehler === 'einsatz')
+p('Extra-Marge < 0 → extraMarge, 0 wird weggelassen', pv({ extraMarge: -1 }).fehler === 'extraMarge' && pv({ extraMarge: 0 }).fehler === 'leer')
+const em = vergleiche(bot, kerzen, [{ extraMarge: 1 }]).abJetzt[0]
+p('Extra-Marge ab jetzt: Position gleich, nichts realisiert, Liquidation weiter weg', em.geschlossenAnteil === 0 && em.liqNeu < em.liqHeute)
 p('Long: Stop-Loss über dem Kurs → stopLoss', pv({ stopLoss: 90 }).fehler === 'stopLoss')
 p('Long: Take-Profit unter dem Kurs → takeProfit', pv({ takeProfit: 80 }).fehler === 'takeProfit')
 p('Long: SL 70 und TP 120 gültig', pv({ stopLoss: 70, takeProfit: 120 }).stopLoss === 70)
@@ -68,14 +71,16 @@ p('laufender Bot: Liquidationsschätzung unter dem Kurs', vf2.eichung.liqSim > 0
 
 console.log('Umstellen zum heutigen Kurs')
 const a = v.abJetzt[0]
-p('Zielposition kleiner als heute (Long der Coin, Band bis 150)', Math.abs(a.ziel) < Math.abs(a.aktuell) && Math.sign(a.ziel) === Math.sign(a.aktuell))
-p('geschlossener Anteil = 1 − |Ziel| / |heute|', nahe(a.geschlossenAnteil, 1 - Math.abs(a.ziel) / Math.abs(a.aktuell)))
-p('realisiert ≈ Anteil × schwebender Gewinn (negativ)', a.realisiertCa < 0)
+p('Band ändern wie Pionex „Direkt bearbeiten": Position bleibt', nahe(a.ziel, a.aktuell, 1e-9))
+p('nichts geschlossen, nichts realisiert', a.geschlossenAnteil === 0 && a.realisiertCa === 0)
+p('Band nach unten verlängert: Liquidation rückt näher (Pionex-App: 70,928 → 72,523)', a.liqNeu > a.liqHeute)
 p('neue Liquidationsschätzung unter dem Kurs, heutige mitgeliefert', a.liqNeu > 0 && a.liqNeu < bot.kurs && nahe(a.liqHeute, bot.liquidation.unten))
 const mehr = vergleiche(bot, kerzen, [{ unten: 75, oben: 150, einsatz: bot.einsatz.aktuell * 2 }]).abJetzt[0]
 p('doppelter Einsatz: doppelte Zielposition, Liquidation nicht näher', nahe(Math.abs(mehr.ziel), 2 * Math.abs(a.ziel), 1e-6) && mehr.liqNeu <= a.liqNeu + 1e-9 && mehr.zusatz > 0)
 const hebel = vergleiche(bot, kerzen, [{ unten: 75, oben: 150, hebel: bot.hebel * 2 }]).abJetzt[0]
-p('doppelter Hebel: doppelte Position, Liquidation näher am Kurs', nahe(Math.abs(hebel.ziel), 2 * Math.abs(a.ziel), 1e-6) && hebel.liqNeu > a.liqNeu)
+p('doppelter Hebel wie Pionex: Position gleich, frei werdende Investition bleibt als dynamische Marge, Liquidation unverändert', nahe(Math.abs(hebel.ziel), Math.abs(a.ziel), 1e-6) && hebel.zusatz === 0 && nahe(hebel.liqNeu, a.liqNeu, 1e-9))
+const halb = vergleiche(bot, kerzen, [{ hebel: bot.hebel / 2 }]).abJetzt[0]
+p('halber Hebel: Position bleibt, nichts realisiert, Einsatz nachschiessen, Liquidation weiter weg', halb.geschlossenAnteil < 0.01 && halb.zusatz > 0 && halb.liqNeu < halb.liqHeute)
 const sl = vergleiche(bot, kerzen, [{ stopLoss: 100 }])
 p('Stop-Loss 100 im Fall von 109 auf 83: Ausstieg bei 100, Position 0', sl.varianten[0].ausstieg?.art === 'stopLoss' && nahe(sl.varianten[0].ausstieg.preis, 100, 1e-9) && sl.varianten[0].position === 0)
 const gleich = vergleiche(bot, kerzen, [{ unten: bot.grid.unten, oben: bot.grid.oben, anzahl: bot.grid.anzahl, art: 'arithmetic' }])

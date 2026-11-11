@@ -19,16 +19,33 @@ import Symbol from '@/components/basis/Symbol.vue'
 import { palette, mitDeckkraft, tooltipStil, schrift, grundOption, wertAchse } from '@/utils/journal/diagramme/gestaltung.js'
 import { preis, betrag, prozent, zahl, datum, dauer, ton } from './format.js'
 import BotSimulation from './BotSimulation.vue'
+import BotKi from './BotKi.vue'
+import BotAktionen from './BotAktionen.vue'
 
 // Typen mit festem Band, die die Simulation rechnen kann (wie SIMULIERBAR im Server)
 const SIMULIERBAR = ['futures_grid', 'coinm_grid', 'spot_grid', 'leveraged_grid']
 
 const props = defineProps({
     bot: { type: Object, required: true },
+    steuerung: { type: Object, default: null },
     wissen: { type: Object, default: null },   // TYPEN-Eintrag
     wissenStand: { type: String, default: '' },
 })
 const { t, te } = useI18n()
+const emit = defineEmits(['gesendet'])
+const steuerungAktiv = computed(() => !!(props.steuerung?.schluessel && props.steuerung?.freigeschaltet && ['futures_grid', 'coinm_grid'].includes(props.bot.typ)))
+const vorschlag = ref(null)
+const aktKarte = ref(null)
+function umsetzen(v) {
+    vorschlag.value = { ...v }
+    nextTick(() => aktKarte.value?.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }))
+}
+const simulation = ref(null)
+const simKarte = ref(null)
+function inSimulation(v) {
+    simulation.value?.uebernehme(v)
+    simKarte.value?.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+}
 
 const markt = ref(null)
 const marktFehler = ref('')
@@ -249,8 +266,16 @@ const rohZeilen = computed(() => Object.entries(props.bot.roh || {})
             <p v-if="markt?.zeitrahmen" class="fuss">{{ t('bots.chartHinweis', { tf: markt.zeitrahmen }) }}</p>
         </Karte>
 
-        <Karte v-if="SIMULIERBAR.includes(bot.typ)" :titel="t('bots.abschnitt.simulation')">
-            <BotSimulation :bot="bot" />
+        <Karte v-if="steuerungAktiv" ref="aktKarte" :titel="t('bots.abschnitt.aktionen')">
+            <BotAktionen :bot="bot" :steuerung="steuerung" :vorschlag="vorschlag" @gesendet="emit('gesendet')" @vorschlag-weg="vorschlag = null" />
+        </Karte>
+
+        <Karte v-if="bot.laufend && ['futures_grid', 'coinm_grid', 'spot_grid'].includes(bot.typ)" :titel="t('bots.abschnitt.ki')">
+            <BotKi :bot="bot" :steuerung-aktiv="steuerungAktiv" @in-simulation="inSimulation" @umsetzen="umsetzen" />
+        </Karte>
+
+        <Karte v-if="SIMULIERBAR.includes(bot.typ)" ref="simKarte" :titel="t('bots.abschnitt.simulation')">
+            <BotSimulation ref="simulation" :bot="bot" :steuerung-aktiv="steuerungAktiv && bot.laufend" @umsetzen="umsetzen" />
         </Karte>
 
         <Karte v-if="bot.laufend || verlauf.length" :titel="t('bots.abschnitt.verlauf')">

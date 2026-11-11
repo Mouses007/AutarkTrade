@@ -101,6 +101,10 @@ export const KI_FUNKTIONEN = [
         rolle: '', aufgabe: 'flash-news', funktionen: ['flash-news', 'flash-news-x', 'flash-news-web'],
     },
     {
+        id: 'botOptimierung', titelKey: 'kiUebersicht.fn.botOptimierung', bereich: 'allgemein', abschnitt: 'ki-aufgaben',
+        rolle: '', aufgabe: 'bot-optimierung', funktionen: ['bot-optimierung'],
+    },
+    {
         // Hing bis 18.10.2026 nur an der Editor-Rolle des Hype-Radars — und
         // fehlte hier ganz, obwohl er der grösste Einzelposten im Verbrauch war.
         id: 'coinRadar', titelKey: 'kiUebersicht.fn.coinRadar', bereich: 'allgemein', abschnitt: 'ki-aufgaben',

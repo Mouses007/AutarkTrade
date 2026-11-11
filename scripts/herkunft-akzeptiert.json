@@ -372,6 +372,10 @@
     "src/views/StrategieInstanzen.vue|04f7d2b711c2": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/StrategieInstanzen.vue|386210bfa88a": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
     "src/views/StrategieInstanzen.vue|39d459ac4a84": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
-    "src/utils/chart/indikatorZeichner.js|2069f6cfa5f0": "Teile eines Indikators mit Werten versorgen (if (e.teil) e.teil.setze(e.werte.x), je Teil eine Zeile) — Allerwelts-Form wie „Optionen weiterreichen“; eigener Zusammenhang: Divergenzen, Spalten, Band im Chart-Arbeitsplatz"
+    "src/utils/chart/indikatorZeichner.js|2069f6cfa5f0": "Teile eines Indikators mit Werten versorgen (if (e.teil) e.teil.setze(e.werte.x), je Teil eine Zeile) — Allerwelts-Form wie „Optionen weiterreichen“; eigener Zusammenhang: Divergenzen, Spalten, Band im Chart-Arbeitsplatz",
+    "src/components/bots/BotSimulation.vue|247e3d868258": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotSimulation.vue|f31178feba94": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotSimulation.vue|6c1aa738e3ea": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)",
+    "src/components/bots/BotSimulation.vue|cbd0519d9ca9": "Vorlagen-Gerüst (HTML-Rahmen aus Elementen, v-for/v-if, class/style; keine Logik)"
   }
 }

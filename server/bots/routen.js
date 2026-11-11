@@ -6,6 +6,8 @@
  *   GET /api/bots/:id/verlauf eigene Schnappschüsse (bot_verlauf, Takt in verlauf.js)
  *   POST /api/bots/:id/simulation {varianten:[{unten,oben,anzahl,art}]} — Rückblick
  *                          heutige Einstellung gegen Varianten (simulation.js)
+ *   GET /api/bots/:id/ki    letzte KI-Vorschläge (nur Speicher, kostet nichts)
+ *   POST /api/bots/:id/ki   KI-Vorschläge erzeugen (kostet; bot-ki.js)
  *   GET /api/bots/:id/markt Kerzen der Laufzeit (Marktdaten-Quelle), Zeit im Band,
  *                          ATR des Tages und die Kennzahlen damit
  *
@@ -23,6 +25,8 @@ import { kerzen as holeKerzen, fundingVerlauf } from '../marktdaten/index.js'
 import { wartungsmargeMitQuelle } from '../margin-rates.js'
 import { sendeWennAus } from '../quellen/aus.js'
 import { vergleiche, pruefeVariante, SIMULIERBAR, MAX_VARIANTEN } from './simulation.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich } from './bot-ki.js'
+import { ladeLlmConfigFuerAufgabe, callLLMJson } from '../llm.js'
 
 const CACHE_MS = 60_000
 let cache = null          // { zeit, antwort }
@@ -54,6 +58,14 @@ async function baueAntwort() {
     }
     merkeBoersenStatus('pionex').catch(() => { })
     return { ok: true, bots, stand: Date.now() }
+}
+
+/** Nach einer Änderung an Pionex: alles Zwischengespeicherte zu diesem Bot verwerfen. */
+export function vergesseBot(id) {
+    cache = null
+    marktCache.delete(String(id))
+    simCache.delete(String(id))
+    kiCache.delete(String(id))
 }
 
 export async function holeBots({ frisch = false } = {}) {
@@ -135,7 +147,65 @@ async function simKerzen(bot) {
     return daten
 }
 
+// ── KI-Vorschläge ────────────────────────────────────────────────────────
+const kiCache = new Map()    // id → Ergebnis (bis zum Neustart; GET liest nur)
+const kiLaeuft = new Map()   // id → Promise (zweiter Klick wartet mit)
+const ohneKurve = (r) => (r ? { ...r, kurve: undefined } : r)
+
+async function kiFuer(bot, englisch) {
+    const { kerzen, funding } = await simKerzen(bot)
+    const tag = await holeKerzen(bot.symbol, '1d', { markt: 'futures', limit: 45 })
+    const atr = atrTag(tag)
+    const marge = await wartungsmargeMitQuelle(bot.symbol).catch(() => null)
+    const mmr = marge?.pct > 0 ? marge.pct / 100 : undefined
+    const lage = marktLage(tag, bot.kurs)
+    if (lage) lage.atr = atr
+    const liste = kandidaten(bot, bot.kurs, atr)
+    const gerechnet = rechneKandidaten(bot, kerzen, liste, { funding, mmr })
+    if (gerechnet.fehler) throw new Error(`Simulation: ${gerechnet.fehler}`)
+    const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
+    cfg.maxTokens = 2500
+    const antwort = await callLLMJson(cfg, {
+        system: systemText(), user: bauePrompt(bot, lage, gerechnet, englisch), timeoutMs: 90000,
+        zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: bot.symbol },
+    })
+    const geprueft = pruefeKiAntwort(antwort.json, gerechnet)
+    if (!geprueft) throw new Error('Die KI hat keine verwertbare Antwort geliefert')
+    for (const v of geprueft.verworfen) logWarn('bots', `KI-Vorschlag verworfen (${v.grund}): ${v.id}`)
+    return {
+        ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model,
+        kostenUsd: antwort.costUsd ?? null, kurs: bot.kurs, markt: lage, eichung: gerechnet.eichung,
+        lage: geprueft.lage, hinweis: geprueft.hinweis, verworfen: geprueft.verworfen.length,
+        vorschlaege: geprueft.vorschlaege.map((v) => ({ ...v, rueckblick: ohneKurve(v.rueckblick) })),
+        kandidaten: gerechnet.kandidaten.map((c) => ({ ...c, rueckblick: ohneKurve(c.rueckblick) })),
+    }
+}
+
 export function setupBotRoutes(app) {
+    app.get('/api/bots/:id/ki', (req, res) => {
+        res.json({ ok: true, ergebnis: kiCache.get(String(req.params.id)) || null })
+    })
+
+    app.post('/api/bots/:id/ki', async (req, res) => {
+        const id = String(req.params.id)
+        try {
+            const alle = await holeBots()
+            const bot = alle.bots?.find((b) => b.id === id)
+            if (!bot) return res.status(404).json({ ok: false, error: 'Bot nicht gefunden' })
+            if (!kiMoeglich(bot)) return res.status(400).json({ ok: false, code: 'typ' })
+            if (!kiLaeuft.has(id)) {
+                kiLaeuft.set(id, kiFuer(bot, req.body?.sprache === 'en').finally(() => kiLaeuft.delete(id)))
+            }
+            const ergebnis = await kiLaeuft.get(id)
+            kiCache.set(id, ergebnis)
+            res.json({ ok: true, ergebnis })
+        } catch (e) {
+            if (sendeWennAus(res, e)) return
+            logWarn('bots', `KI-Vorschläge ${id}: ${e.message}`)
+            res.status(502).json({ ok: false, error: fehlerText(e) })
+        }
+    })
+
     app.post('/api/bots/:id/simulation', async (req, res) => {
         try {
             const alle = await holeBots()

@@ -295,7 +295,7 @@ export function simuliereGrid(p) {
  * Simulation für einen Bot aus `normalisiereBot` (Preise in USDT je Coin) mit
  * optional geänderten Einstellungen. Coin-M wird invers gerechnet, Ergebnisse
  * dann in der Coin. `aenderung` = { unten, oben, anzahl, art, hebel, einsatz,
- * stopLoss, takeProfit } (Preise in USDT je Coin, Einsatz in der Margin-Münze).
+ * extraMarge (zusätzlich, gleiche Position), stopLoss, takeProfit } (Preise in USDT je Coin, Einsatz in der Margin-Münze).
  * Ohne Angabe gilt die heutige Einstellung; Stop-Loss/Take-Profit nur, wenn
  * angegeben (die heutigen Pionex-Werte setzt der Aufrufer selbst ein).
  *
@@ -307,7 +307,7 @@ export function simuliereGrid(p) {
  * zählte die Simulation 16 % zu viele Zyklen. Beim laufenden SOL-Coin-M-Bot
  * traf die Liquidationsschätzung 71,45 gegen 70,92 USD bei Pionex.
  */
-export function simuliereBot(bot, kerzenUsd, { aenderung = {}, gebuehr = 0.0002, gebuehrMarkt = gebuehr, mmr = 0.005, ab, bis, startPreis, funding = null, durchstich = 0, marge = null } = {}) {
+export function simuliereBot(bot, kerzenUsd, { aenderung = {}, gebuehr = 0.0002, gebuehrMarkt = gebuehr, mmr = 0.005, ab, bis, startPreis, funding = null, durchstich = 0, marge = null, mengeFest = null } = {}) {
     const d = bot.roh || {}
     const coinM = !!bot.coinM
     const richtungApi = String(d.trend || '').toLowerCase()
@@ -326,18 +326,31 @@ export function simuliereBot(bot, kerzenUsd, { aenderung = {}, gebuehr = 0.0002,
     const neuAnzahl = aenderung.anzahl ?? altAnzahl
 
     const einsatzAlt = (coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell)) ?? null
-    const einsatzNeu = aenderung.einsatz ?? einsatzAlt
     const hebelAlt = bot.hebel || 1
     const hebelNeu = aenderung.hebel ?? hebelAlt
+    // Pionex „Hebel anpassen" behält die Position und verlangt die Investition
+    // Einsatz × alter Hebel ÷ neuer Hebel (gesehen 11.11.2026 in der App: 4x → 3x
+    // bei 3,068 SOL verlangte +1,022 SOL, Liquidation 70,928 → 65,964). Ohne
+    // eigene Angabe folgt der Einsatz also dem Hebel; das Nominal bleibt.
+    const einsatzNeu = aenderung.einsatz ?? (aenderung.hebel != null && einsatzAlt != null ? einsatzAlt * hebelAlt / hebelNeu : einsatzAlt)
     const mengeAlt = bot.grid.mengeJeGrid
     let menge = (bandNeu || aenderung.anzahl != null || aenderung.art)
         ? mengeFuerGleichesKapital(mengeAlt, gridLinien(altUnten, altOben, altAnzahl, bot.grid.art), gridLinien(neuUnten, neuOben, neuAnzahl, art))
         : mengeAlt
-    // Mehr Einsatz oder Hebel = proportional grössere Menge je Grid (Pionex: Nominal = Einsatz × Hebel)
-    if (menge != null && einsatzAlt > 0 && einsatzNeu > 0) menge *= einsatzNeu / einsatzAlt
-    if (menge != null && hebelAlt > 0 && hebelNeu > 0) menge *= hebelNeu / hebelAlt
+    // Nominal = Einsatz × Hebel: die Menge je Grid folgt diesem Produkt. Ein reiner
+    // Hebelwechsel ändert es nicht (der Einsatz gleicht aus), mehr Einsatz bei
+    // gleichem Hebel vergrössert die Position (Pionex „Investition erhöhen").
+    if (menge != null && einsatzAlt > 0 && einsatzNeu > 0 && hebelAlt > 0 && hebelNeu > 0) {
+        menge *= (einsatzNeu * hebelNeu) / (einsatzAlt * hebelAlt)
+    }
 
-    const extra = bot.einsatz?.extraMarge || 0
+    // Extra-Marge (Pionex addMargin): mehr Marge, gleiche Position. Ein höherer
+    // Hebel gibt Investition frei, Pionex schiebt sie in die dynamische Marge
+    // (App 11.11.2026: 4x → 8x „Ausstieg 1,534 in dynamische Marge", Liquidation
+    // unverändert 70,928) — die Marge insgesamt sinkt also nie durch den Hebel.
+    const freiDurchHebel = aenderung.hebel != null && aenderung.einsatz == null && einsatzAlt != null && einsatzNeu < einsatzAlt ? einsatzAlt - einsatzNeu : 0
+    if (mengeFest != null) menge = mengeFest
+    const extra = (bot.einsatz?.extraMarge || 0) + (aenderung.extraMarge || 0) + freiDurchHebel
     const kerzen = coinM ? inverseKerzen(kerzenUsd) : kerzenUsd
     const start = startPreis != null ? (coinM ? inv(startPreis) : startPreis) : undefined
 
@@ -357,7 +370,7 @@ export function simuliereBot(bot, kerzenUsd, { aenderung = {}, gebuehr = 0.0002,
         kerzen, unten: neuUnten, oben: neuOben, anzahl: neuAnzahl, art, richtung, menge,
         // `marge` setzt die Marge direkt (Umstellen zum heutigen Kurs: das Eigenkapital
         // bleibt, die Position wird neu eröffnet), sonst Einsatz + Extra-Marge.
-        startPreis: start, einsatz: marge != null ? marge : einsatzNeu != null ? einsatzNeu + extra : null, gebuehr, gebuehrMarkt, mmr, ab, bis,
+        startPreis: start, einsatz: marge != null ? marge + (aenderung.extraMarge || 0) : einsatzNeu != null ? einsatzNeu + extra : null, gebuehr, gebuehrMarkt, mmr, ab, bis,
         funding, fundingFaktor: coinM ? -1 : 1, ausstiegUnten, ausstiegOben, durchstich,
     })
     if (!r) return null
@@ -366,7 +379,7 @@ export function simuliereBot(bot, kerzenUsd, { aenderung = {}, gebuehr = 0.0002,
     const liqO = zuUsd(coinM ? r.liqSchaetzung.unten : r.liqSchaetzung.oben)
     return {
         ...r,
-        einstellung: { unten: usdUnten, oben: usdOben, anzahl: neuAnzahl, art, menge, richtung, hebel: hebelNeu, einsatz: einsatzNeu, stopLoss: sl, takeProfit: tp },
+        einstellung: { unten: usdUnten, oben: usdOben, anzahl: neuAnzahl, art, menge, richtung, hebel: hebelNeu, einsatz: einsatzNeu, extraMarge: aenderung.extraMarge || 0, stopLoss: sl, takeProfit: tp },
         liquidation: r.liquidation ? { t: r.liquidation.t, preis: zuUsd(r.liquidation.preis) } : null,
         ausstieg: r.ausstieg ? { t: r.ausstieg.t, preis: zuUsd(r.ausstieg.preis), art: (coinM ? { unten: 'oben', oben: 'unten' }[r.ausstieg.art] : r.ausstieg.art) === 'unten' ? (richtungCoin === 'short' ? 'takeProfit' : 'stopLoss') : (richtungCoin === 'short' ? 'stopLoss' : 'takeProfit') } : null,
         liqSchaetzung: { unten: liqU, oben: liqO },

@@ -112,6 +112,15 @@ export const AI_TASKS = {
         recommendedModels: ['anthropic/claude-haiku-5-5', 'anthropic/claude-sonnet-5-5'],
         requiresToolCalling: false,
     },
+    bot_optimierung: {
+        id: 'bot-optimierung',
+        name: 'Bot-Vorschläge',
+        description: 'Wählt aus vom Code nachgerechneten Varianten eines Pionex-Bots bis zu drei Vorschläge und begründet sie — von Hand ausgelöst',
+        importance: 'high',
+        maxTokens: 2500,
+        recommendedModels: ['anthropic/claude-opus-5-5', 'anthropic/claude-sonnet-5-5'],
+        requiresToolCalling: false,
+    },
     coin_radar: {
         id: 'coin-radar',
         name: 'Coin-Radar-Einordnung',
