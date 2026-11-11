@@ -11,7 +11,7 @@
  */
 import crypto from 'node:crypto'
 
-export const FASSUNG = '1.0 vom 11.11.2026'
+export const FASSUNG = '1.1 vom 11.11.2026'
 
 const TEXT = {
     de: [
@@ -27,7 +27,7 @@ const TEXT = {
         '5. KI-Vorschläge sind KI-generiert. KI kann Fehler machen und Dinge erfinden; KI-Verwendung kann zu Verlusten führen. Vorschläge sind keine Anlageberatung.',
         '6. Die Verbindung zu Pionex kann ausfallen oder verzögert sein, und Pionex kann seine Schnittstelle ändern. Darauf hat AutarkTrade keinen Einfluss.',
         '7. Du bist für deinen API-Schlüssel verantwortlich. Lege ihn ohne Auszahlungsrecht und mit IP-Freigabe an.',
-        '8. Du prüfst jede Änderung selbst und triffst jede Entscheidung selbst. Die Nutzung erfolgt auf eigenes Risiko. Die Entwickler von AutarkTrade haften für Verluste aus der Bot-Steuerung nicht, soweit das Gesetz es zulässt.',
+        '8. Du prüfst jede Änderung selbst und triffst jede Entscheidung selbst. Die Nutzung erfolgt auf eigenes Risiko. Verlierst du dabei Geld, haften die Entwickler von AutarkTrade nicht dafür. Ausgenommen sind nur Schäden, die sie absichtlich oder grob fahrlässig verursachen, und Schäden an Leben, Körper oder Gesundheit.',
         '',
         'AutarkTrade ist freie Software (AGPL-3.0-or-later) ohne Gewährleistung, siehe Haftungsausschluss.',
     ],
@@ -44,7 +44,7 @@ const TEXT = {
         '5. AI suggestions are AI-generated. AI can make mistakes and invent things; using AI can lead to losses. Suggestions are not investment advice.',
         '6. The connection to Pionex can fail or be delayed, and Pionex can change its interface. AutarkTrade has no influence on this.',
         '7. You are responsible for your API key. Create it without withdrawal permission and with an IP whitelist.',
-        '8. You check every change yourself and make every decision yourself. Use is at your own risk. The developers of AutarkTrade are not liable for losses from bot control, to the extent the law permits.',
+        '8. You check every change yourself and make every decision yourself. Use is at your own risk. If you lose money, the developers of AutarkTrade are not liable for it. The only exceptions are damage they cause intentionally or through gross negligence, and injury to life, body or health.',
         '',
         'AutarkTrade is free software (AGPL-3.0-or-later) without warranty, see the disclaimer.',
     ],
@@ -52,8 +52,8 @@ const TEXT = {
 
 /** Haken vor jeder einzelnen Änderung (nie vorausgefüllt). */
 const HAKEN = {
-    de: 'Ich habe diese Änderung geprüft und will sie jetzt an Pionex senden. Ich trage die volle Verantwortung dafür; die Entwickler von AutarkTrade haften nicht, soweit das Gesetz es zulässt.',
-    en: 'I have checked this change and want to send it to Pionex now. I bear full responsibility for it; the developers of AutarkTrade are not liable, to the extent the law permits.',
+    de: 'Ich habe diese Änderung geprüft und will sie jetzt an Pionex senden. Ich trage die volle Verantwortung dafür. Verliere ich Geld, haften die Entwickler von AutarkTrade nicht, ausser bei Absicht oder grober Fahrlässigkeit.',
+    en: 'I have checked this change and want to send it to Pionex now. I bear full responsibility for it. If I lose money, the developers of AutarkTrade are not liable, except for intent or gross negligence.',
 }
 
 /** Warnblock im Wortlaut des Entwicklers, vor jedem Senden. */
