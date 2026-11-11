@@ -19,7 +19,7 @@ export async function getBalances(apiKey, secretKey) {
  * Aktueller Marktpreis fuer ein Symbol (z.B. SOL_USDT). Public, keine Auth.
  * Liefert die letzte Close-Notierung in USDT.
  */
-async function fetchTickerPrice(symbol) {
+export async function fetchTickerPrice(symbol) {
     try {
         const r = await fetch(`${BASE_URL}/api/v1/market/tickers?symbol=${encodeURIComponent(symbol)}`, {
             signal: AbortSignal.timeout(15000),   // wie Bitunix (SEC-SRV-005)

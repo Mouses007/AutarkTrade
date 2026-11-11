@@ -1,0 +1,102 @@
+{
+  "hinweis": "GET futuresGrid/aiStrategy (SOL Coin-M) und spotGrid/aiStrategy (BTC), 11.11.2026",
+  "futures": {
+    "options": [
+      {
+        "leverage": "5",
+        "annualized": "1.14159111",
+        "low": "0.0096206",
+        "gridCount": 181,
+        "maxDrawDown": "0.22096936",
+        "period": 30,
+        "suitabilityMin": 30,
+        "suitabilityMax": 50,
+        "gridType": "arithmetic",
+        "riskType": "conservative",
+        "totalApr": "0.00000000",
+        "high": "0.0144308",
+        "volatility": "0"
+      },
+      {
+        "period": 14,
+        "totalApr": "0.00000000",
+        "high": "0.0132283",
+        "suitabilityMax": 20,
+        "maxDrawDown": "0.23583982",
+        "gridType": "arithmetic",
+        "riskType": "robust",
+        "leverage": "10",
+        "annualized": "4.32810772",
+        "gridCount": 90,
+        "low": "0.0108231",
+        "volatility": "0",
+        "suitabilityMin": 14
+      },
+      {
+        "period": 7,
+        "totalApr": "0.00000000",
+        "high": "0.0128274",
+        "annualized": "10.80048421",
+        "gridCount": 60,
+        "maxDrawDown": "0.24972088",
+        "volatility": "0",
+        "suitabilityMin": 7,
+        "riskType": "radical",
+        "leverage": "15",
+        "suitabilityMax": 10,
+        "low": "0.011224",
+        "gridType": "arithmetic"
+      }
+    ],
+    "strategyId": "ai-aa30f360-7540-449a-9475-1ff8126be537",
+    "trend": "short"
+  },
+  "spot": {
+    "strategyId": "ai-ed89ba92-049a-45a7-8a11-fdeb3dd8af8a",
+    "totalApr": "0",
+    "annualized": "0.4773904198",
+    "maxDrawDown": "0.0245855246",
+    "high": "80140.6",
+    "low": "67953.87",
+    "volatility": "0",
+    "options": [
+      {
+        "totalApr": "0",
+        "maxDrawDown": "0.0245855246",
+        "suitabilityMin": 7,
+        "period": 7,
+        "annualized": "0.4773904198",
+        "high": "80140.6",
+        "low": "67953.87",
+        "gridCount": 65,
+        "volatility": "0",
+        "suitabilityMax": 20
+      },
+      {
+        "high": "80751.45",
+        "gridCount": 29,
+        "maxDrawDown": "0.0247330913",
+        "suitabilityMax": 50,
+        "period": 30,
+        "volatility": "0",
+        "suitabilityMin": 30,
+        "totalApr": "0",
+        "low": "67439.82",
+        "annualized": "0.1777813929"
+      },
+      {
+        "low": "59185.7",
+        "annualized": "0.1288935431",
+        "gridCount": 72,
+        "maxDrawDown": "0.1960210369",
+        "suitabilityMax": 200,
+        "period": 180,
+        "totalApr": "0.0244697473",
+        "high": "92013.17",
+        "suitabilityMin": 160,
+        "volatility": "0"
+      }
+    ],
+    "gridCount": 65
+  }
+}

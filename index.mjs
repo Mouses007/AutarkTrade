@@ -8,6 +8,7 @@ import { setupSpendenRoutes } from './server/spenden.js'
 import { setupTradePopupRoutes } from './server/trade-popups.js'
 import { setupBitgetRoutes } from './server/bitget-api.js'
 import { setupPionexRoutes } from './server/pionex-api.js'
+import { setupBotRoutes } from './server/bots/routen.js'
 import { setupBinanceRoutes } from './server/binance-api.js'
 import { setupQuellenRoutes } from './server/quellen/routen.js'
 import { setupMarginRateRoutes } from './server/margin-rates.js'
@@ -228,6 +229,7 @@ async function starteServer() {
     setupBitunixRoutes(app);
     setupBitgetRoutes(app);
     setupPionexRoutes(app);
+    setupBotRoutes(app);
     setupQuellenRoutes(app);
     setupSpendenRoutes(app);
     // Bewertungs-Popup: was neu ist und was quittiert, steht in der DB
