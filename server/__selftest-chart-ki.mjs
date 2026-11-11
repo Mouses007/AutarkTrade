@@ -414,6 +414,8 @@ console.log('\nAudit 4.3.4 (01.11.2026)\n')
     check('Weggelassene werden gezählt', w.weggelassen === 3, String(w.weggelassen))
     const fern = waehleNutzer(alte.concat(hz(50, 100.2, null, { punkte: [{ t: alt, p: 100.2 }] })), T0, T0 + 59 * H, { interval: '1h', kurs: 100 })
     check('ausserhalb des Fensters: näher am Kurs zuerst', fern.liste.some((z) => z.id === 50) && !fern.liste.some((z) => z.id === 20), fern.liste.map((z) => z.id).join(','))
+    const rsi = { id: 60, typ: 'trendlinie', punkte: [{ t: T0 + 10 * H, p: 30 }, { t: T0 + 50 * H, p: 45 }], stil: { fenster: 'rsi' }, geaendertAm: 3 }
+    check('Zeichnung im RSI-Fenster kommt nicht in die Analyse (Wert ist kein Preis)', !waehleNutzer([...neue, rsi], T0, T0 + 59 * H, { interval: '1h', kurs: 100 }).liste.some((z) => z.id === 60))
     const pw = baueKandidaten({ kerzen, interval: '1h', zeichnungen: [...alte, ...neue] })
     check('Paket meldet nutzerWeggelassen, Eingabe sagt es dem Modell', pw.nutzerWeggelassen === 3 && /NICHT IN DER LISTE: 3 weitere/.test(baueChartEingabe({ symbol: 'X', interval: '1h', paket: pw, modus: 'eigene' })))
 

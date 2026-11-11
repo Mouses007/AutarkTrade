@@ -8,6 +8,12 @@
  * Chart-Behälter in der CAPTURE-Phase: nur dort lässt sich verhindern, dass
  * die Bibliothek denselben Mausdruck als Verschieben des Charts versteht.
  *
+ * Indikator-Fenster (RSI, MACD …): dieselbe Ebene zeichnet dort mit. Je Fenster hängt
+ * ein kleines Primitive an der ersten Serie des Indikators (`setzeFenster`); eine
+ * Zeichnung dort trägt `stil.fenster` = Indikator-Typ, und ihr „Preis" ist der Wert
+ * des Indikators. `this.fenster` ist das Fenster, in dem gerade umgerechnet wird
+ * (null = Kerzen), `this.geste` das, in dem bedient wird.
+ *
  * Gespeichert wird hier nichts. Alles, was bleibt, geht über Rückrufe an die
  * Vue-Seite (`neu`, `aendern`, `auswahl`, `werkzeugFertig`, `textBearbeiten`).
  */
@@ -26,6 +32,8 @@ const ANKER = 5
 const TREFFER = 6
 // Zeichnungen mit eigener Beschriftung: Doppelklick oder Klick aufs Label öffnet den Textstil
 const TEXT_TYPEN = ['text', 'horizontale', 'strahlH', 'rechteck', 'trendlinie', 'kanal', 'avwap', 'volprofil', 'pfeil']
+/** Werkzeuge, die mit Kerzenpreisen rechnen — im Indikator-Fenster gesperrt. */
+export const NUR_KURS = ['position', 'avwap', 'volprofil', 'alarm', 'messen']
 const SCHRIFT = '11px -apple-system, "Segoe UI", Roboto, sans-serif'
 /** Türkis der App (tokens.css `--accent`) — Vorgabe des Volumenprofils. */
 const HAUSFARBE = '#1fd6c4'
@@ -57,7 +65,16 @@ export class ZeichenEbene {
         this.chart = chart
         this.serie = serie
         this.rueckruf = rueckruf
-        this.formatPreis = formatPreis || ((p) => String(p))
+        this._formatKurs = formatPreis || ((p) => String(p))
+        this.formatPreis = (p) => {
+            if (this.fenster == null) return this._formatKurs(p)
+            try { return this.aktSerie()?.priceFormatter().format(p) ?? String(p) } catch { return String(p) }
+        }
+        this.fenster = null           // Fenster der Umrechnung (null = Kerzen-Pane, sonst Indikator-Typ)
+        this.geste = null             // Fenster, in dem gerade bedient wird
+        this.fensterListe = new Map() // Typ → { serie, prim }
+        this._req = new Map()         // Fenster → requestUpdate seines Primitives
+        this._schilderJe = new Map()
         this.mmr = 0.004
         this.konto = 0
         this.zeiten = []
@@ -82,12 +99,12 @@ export class ZeichenEbene {
         this.temporaer = []           // Vorschau (KI-Analyse): gezeichnet, nur anklickbar (rueckruf.kiKlick), nicht verschiebbar
         this.verschlucke = false
         this.preisAchsen = []
-        this.requestUpdate = () => {}
+        this.requestUpdate = () => { for (const f of this._req.values()) f() }
 
         const ansicht = {
             zOrder: () => 'top',
             renderer: () => ({
-                draw: (ziel) => ziel.useMediaCoordinateSpace(({ context, mediaSize }) => this.zeichne(context, mediaSize)),
+                draw: (ziel) => ziel.useMediaCoordinateSpace(({ context, mediaSize }) => this.imFenster(null, () => this.zeichne(context, mediaSize))),
             }),
         }
         this._ansichten = [ansicht]
@@ -115,11 +132,70 @@ export class ZeichenEbene {
     }
 
     // ── Primitive-Schnittstelle ──────────────────────────────────────────
-    attached({ requestUpdate }) { this.requestUpdate = requestUpdate }
-    detached() { this.requestUpdate = () => {} }
+    attached({ requestUpdate }) { this._req.set(null, requestUpdate) }
+    detached() { this._req.delete(null) }
     paneViews() { return this._ansichten }
-    updateAllViews() { this.preisAchsen = this.baueAchsen() }
+    updateAllViews() { this.preisAchsen = this.imFenster(null, () => this.baueAchsen()) }
     priceAxisViews() { return this.preisAchsen }
+
+    /** `fn` mit Umrechnung im Fenster `key` (null = Kerzen) — für Zeichnen und Achsen der Fenster-Primitives. */
+    imFenster(key, fn) {
+        const alt = this.fenster
+        this.fenster = key
+        try { return fn() } finally { this.fenster = alt }
+    }
+
+    /** Serie, an der im aktuellen Fenster umgerechnet wird — null, wenn das Fenster weg ist. */
+    aktSerie() { return this.fenster == null ? this.serie : this.fensterListe?.get(this.fenster)?.serie ?? null }
+
+    /** Gehört die Zeichnung ins aktuelle Fenster? */
+    meins(z) { return (z?.stil?.fenster ?? null) === (this.fenster ?? null) }
+
+    /** Höhe des Panes, in dem umgerechnet wird. */
+    paneHoehe() {
+        if (this.fenster == null) return this.chart.panes()[0]?.getHeight() ?? 0
+        try { return this.aktSerie()?.getPane().getHeight() ?? 0 } catch { return 0 }
+    }
+
+    /**
+     * Indikator-Fenster, in denen gezeichnet werden kann: [{ key, serie }] (key = Indikator-Typ).
+     * Neue bekommen ein Primitive, verschwundene (oder neu aufgebaute Serien) verlieren es.
+     */
+    setzeFenster(liste) {
+        const neu = new Map((liste || []).filter((f) => f?.key && f.serie).map((f) => [f.key, f.serie]))
+        for (const [key, f] of [...this.fensterListe]) {
+            if (neu.get(key) === f.serie) continue
+            try { f.serie.detachPrimitive(f.prim) } catch { /* Serie schon weg */ }
+            this._req.delete(key)
+            this.fensterListe.delete(key)
+        }
+        for (const [key, serie] of neu) {
+            if (this.fensterListe.has(key)) continue
+            const prim = this.fensterPrimitive(key)
+            this.fensterListe.set(key, { serie, prim })
+            try { serie.attachPrimitive(prim) } catch { this.fensterListe.delete(key) }
+        }
+        if (this.geste != null && !this.fensterListe.has(this.geste)) { this.geste = this.fenster = null; this.entwurf = null; this.ziehen = null }
+        this.requestUpdate()
+    }
+
+    fensterPrimitive(key) {
+        let achsen = []
+        const ansicht = {
+            zOrder: () => 'top',
+            renderer: () => ({
+                draw: (ziel) => ziel.useMediaCoordinateSpace(({ context, mediaSize }) => this.imFenster(key, () => this.zeichne(context, mediaSize))),
+            }),
+        }
+        return {
+            attached: ({ requestUpdate }) => { this._req.set(key, requestUpdate) },
+            detached: () => { this._req.delete(key) },
+            paneViews: () => [ansicht],
+            updateAllViews: () => { achsen = this.imFenster(key, () => this.baueAchsen()) },
+            priceAxisViews: () => achsen,
+            hitTest: (x, y) => this.imFenster(key, () => this.hitTest(x, y)),
+        }
+    }
 
     /** Zeiger-Symbol: die Bibliothek setzt es, wenn hier etwas getroffen wird. */
     hitTest(x, y) {
@@ -147,6 +223,8 @@ export class ZeichenEbene {
         window.removeEventListener('keydown', this._taste)
         window.removeEventListener('keyup', this._taste)
         try { this.serie.detachPrimitive(this) } catch { /* Chart schon weg */ }
+        for (const f of this.fensterListe.values()) { try { f.serie.detachPrimitive(f.prim) } catch { /* Chart schon weg */ } }
+        this.fensterListe.clear()
     }
 
     // ── Zustand von aussen ───────────────────────────────────────────────
@@ -232,18 +310,20 @@ export class ZeichenEbene {
     // ── Koordinaten ──────────────────────────────────────────────────────
     zuL(t) { return zeitZuLogisch(t, this.zeiten, this.iv) }
     zuX(t) { return logischZuX(this.chart.timeScale(), this.zuL(t)) }
-    zuY(p) { return this.serie.priceToCoordinate(p) }
+    zuY(p) { const s = this.aktSerie(); return s ? s.priceToCoordinate(p) : null }
     vonX(x) {
         const L = this.chart.timeScale().coordinateToLogical(x)
         return L == null ? null : logischZuZeit(L, this.zeiten, this.iv)
     }
-    vonY(y) { return this.serie.coordinateToPrice(y) }
+    vonY(y) { const s = this.aktSerie(); return s ? s.coordinateToPrice(y) : null }
 
     /**
      * Magnet für dieses Ereignis: Strg (Mac: ⌘) kehrt den Schalter um, solange
      * die Taste gehalten wird — wie bei TradingView.
      */
     magnetFuer(e) {
+        // Der Magnet rastet auf Kerzenpreise — in einem Indikator-Fenster gibt es keine
+        if (this.fenster != null) return false
         const strg = !!(e && (e.ctrlKey || e.metaKey))
         return this.magnetAn !== strg
     }
@@ -261,7 +341,7 @@ export class ZeichenEbene {
         const t = logischZuZeit(L, this.zeiten, this.iv)
         let p = this.vonY(y)
         if (p == null) return null
-        if (magnetAn && this.aufKerze(L)) p = magnet(p, this.kerzen[L], Infinity)
+        if (magnetAn && this.fenster == null && this.aufKerze(L)) p = magnet(p, this.kerzen[L], Infinity)
         return { t, p }
     }
 
@@ -311,13 +391,63 @@ export class ZeichenEbene {
         }
     }
 
+    /**
+     * Zeigerposition relativ zum Pane, in dem bedient wird. Läuft eine Geste (ziehen,
+     * Entwurf, Pinsel, Finger, Alarm), bleibt ihr Pane — sonst das Pane unter dem Zeiger.
+     * `key` ist dessen Fenster (null = Kerzen, undefined = ein Pane ohne Zeichnen).
+     */
     lokal(e) {
         const r = this.huelle.getBoundingClientRect()
         const x = e.clientX - r.left
-        const y = e.clientY - r.top
+        const yGes = e.clientY - r.top
         const breite = this.chart.timeScale().width()
-        const hoehe = this.chart.panes()[0]?.getHeight() ?? r.height
-        return { x, y, innen: x >= 0 && x < breite && y >= 0 && y < hoehe }
+        const laeuft = !!(this.ziehen || this.entwurf || this.strich || this.finger || this.alarmZug)
+        const pane = laeuft ? this.paneVon(this.geste) : this.paneBei(yGes)
+        if (!pane) return { x, y: yGes, innen: false, key: undefined }
+        const y = yGes - pane.oben
+        return { x, y, innen: x >= 0 && x < breite && y >= 0 && y < pane.hoehe, key: pane.key }
+    }
+
+    /** Oberkante und Höhe der Panes (1 px Trennlinie dazwischen). */
+    paneRahmen() {
+        const aus = []
+        let oben = 0
+        for (const p of this.chart.panes()) { const h = p.getHeight(); aus.push({ oben, hoehe: h }); oben += h + 1 }
+        return aus
+    }
+
+    paneIndexVon(key) {
+        if (key == null) return 0
+        try { return this.fensterListe?.get(key)?.serie.getPane().paneIndex() ?? -1 } catch { return -1 }
+    }
+
+    paneVon(key) {
+        const r = this.paneRahmen()[this.paneIndexVon(key)]
+        return r ? { ...r, key: key ?? null } : null
+    }
+
+    /** Pane unter y — mit Fenster-Schlüssel, oder `key: undefined`, wenn dort nicht gezeichnet wird. */
+    paneBei(yGes) {
+        const rahmen = this.paneRahmen()
+        const i = rahmen.findIndex((r, j) => yGes < r.oben + r.hoehe + (j < rahmen.length - 1 ? 1 : 0))
+        if (i <= 0) return { ...(rahmen[0] || { oben: 0, hoehe: 0 }), key: null }
+        for (const key of this.fensterListe?.keys() || []) if (this.paneIndexVon(key) === i) return { ...rahmen[i], key }
+        return null
+    }
+
+    /** Fenster des Panes mit Index i (0 = Kerzen → null), undefined = dort wird nicht gezeichnet. */
+    fensterBeiIndex(i) {
+        if (!i) return null
+        for (const key of this.fensterListe?.keys() || []) if (this.paneIndexVon(key) === i) return key
+        return undefined
+    }
+
+    /** Pane für eine neue Geste festlegen (aus `lokal`). */
+    setzeGeste(key) {
+        if (key === undefined || key === (this.geste ?? null)) return
+        this.geste = this.fenster = key
+        this.fang = null
+        this.requestUpdate()
     }
 
     punkteVon(z) { return this.vorschau.get(z.id) || z.punkte }
@@ -405,7 +535,7 @@ export class ZeichenEbene {
         const breite = this.chart.timeScale().width()
         // Gesperrte liegen hinten: erst alle offenen (jüngste zuerst), dann die gesperrten —
         // ein gesperrter grosser Kanal mit Füllung schluckte sonst jeden Klick auf die Zeichnungen in ihm.
-        const offen = [...this.zeichnungen].reverse()
+        const offen = this.zeichnungen.filter((z) => this.meins(z)).reverse()
         const reihe = [...offen.filter((z) => !z.gesperrt), ...offen.filter((z) => z.gesperrt)]
         const ausgewaehlt = reihe.find((z) => z.id === this.auswahlId)
         if (ausgewaehlt && !ausgewaehlt.gesperrt && this.vollstaendig(ausgewaehlt)) {
@@ -418,7 +548,7 @@ export class ZeichenEbene {
 
     /** KI-Vorschlag (gestrichelt, mit `ki`-Schlüssel) unter (x, y) — der zuletzt gezeichnete zuerst. */
     kiTreffer(x, y) {
-        if (!this.temporaer.length) return null
+        if (!this.temporaer.length || this.fenster != null) return null
         const breite = this.chart.timeScale().width()
         for (const z of [...this.temporaer].reverse()) if (z.ki && this.trifft(z, x, y, breite)) return z
         return null
@@ -557,6 +687,7 @@ export class ZeichenEbene {
 
     /** Alarmlinie auf Höhe y (Maus ±6 px, Finger ±14 px) — die nächste. */
     alarmTreffer(y, toleranz = 6) {
+        if (this.fenster != null) return null
         let best = null
         for (const a of this.alarme) {
             const ay = this.zuY(a.preis)
@@ -577,7 +708,7 @@ export class ZeichenEbene {
 
     mitte() {
         const breite = this.chart.timeScale().width()
-        const hoehe = this.chart.panes()[0]?.getHeight() ?? 0
+        const hoehe = this.paneHoehe()
         return breite > 0 && hoehe > 0 ? { x: Math.round(breite / 2), y: Math.round(hoehe / 2) } : null
     }
 
@@ -595,7 +726,11 @@ export class ZeichenEbene {
     // ── Bedienung ────────────────────────────────────────────────────────
     zeigerUnten(e) {
         if (e.button !== undefined && e.button !== 0) return
-        const { x, y, innen } = this.lokal(e)
+        const { x, y, innen, key } = this.lokal(e)
+        if (key === undefined) return
+        this.setzeGeste(key)
+        // Werkzeuge, die mit Kerzenpreisen rechnen, gibt es im Indikator-Fenster nicht
+        if (this.werkzeugTyp && this.fenster != null && NUR_KURS.includes(this.werkzeugTyp)) return
         if (this.werkzeugTyp && werkzeug(this.werkzeugTyp)?.frei) {
             // Pinsel: Maus und Finger malen direkt, auch im Fadenkreuz-Modus. Ein Strich lebt vom
             // Ziehen; ein Fadenkreuz, das man erst schiebt und dann antippt, setzt nur Einzelpunkte.
@@ -618,7 +753,7 @@ export class ZeichenEbene {
             e.stopPropagation()
             e.preventDefault()
             if (!this.kreuz) {
-                this.kreuz = kreuzVerschoben({ x, y }, 0, 0, this.chart.timeScale().width(), this.chart.panes()[0]?.getHeight() ?? 0)
+                this.kreuz = kreuzVerschoben({ x, y }, 0, 0, this.chart.timeScale().width(), this.paneHoehe())
                 this.folgeKreuz(e)
             }
             this.finger = { id: e.pointerId, x0: x, y0: y, start: { ...this.kreuz }, seit: performance.now() }
@@ -627,7 +762,7 @@ export class ZeichenEbene {
         }
         // Preis-Alarmlinie greifen — im Kerzenbereich (wenn dort keine Zeichnung liegt) und auf der Preisskala
         if (!this.werkzeugTyp && this.alarme.length) {
-            const hoehe = this.chart.panes()[0]?.getHeight() ?? 0
+            const hoehe = this.paneHoehe()
             const al = y >= 0 && y < hoehe && x >= 0 && !(innen && this.trefferTest(x, y)) ? this.alarmTreffer(y, e.pointerType === 'touch' ? 14 : 6) : null
             if (al) {
                 this.verschlucke = true
@@ -680,7 +815,11 @@ export class ZeichenEbene {
     }
 
     zeigerBewegt(e) {
-        const { x, y, innen } = this.lokal(e)
+        const { x, y, innen, key } = this.lokal(e)
+        if (!this.strich && !this.alarmZug && !this.finger && !this.ziehen && !this.entwurf) {
+            if (key === undefined) { if (this.fang) { this.fang = null; this.requestUpdate() } return }
+            this.setzeGeste(key)
+        }
         if (this.strich) {
             if (e.pointerId !== this.strich.id) return
             e.stopPropagation()
@@ -711,7 +850,7 @@ export class ZeichenEbene {
             if (e.pointerId !== this.finger.id) return
             e.stopPropagation()
             const breite = this.chart.timeScale().width()
-            const hoehe = this.chart.panes()[0]?.getHeight() ?? 0
+            const hoehe = this.paneHoehe()
             this.kreuz = kreuzVerschoben(this.finger.start, x - this.finger.x0, y - this.finger.y0, breite, hoehe)
             this.folgeKreuz(e)
             return
@@ -797,7 +936,9 @@ export class ZeichenEbene {
     }
 
     doppelklick(e) {
-        const { x, y, innen } = this.lokal(e)
+        const { x, y, innen, key } = this.lokal(e)
+        if (key === undefined) return
+        this.setzeGeste(key)
         // Der Doppelklick, der einen Pfad beendet hat, gehört dem Zeichnen — nicht dem Vollbild des Charts
         if (innen && Date.now() - (this._fertigZeit || 0) < 700) { e.stopPropagation(); return }
         if (!innen || this.werkzeugTyp) return
@@ -925,7 +1066,9 @@ export class ZeichenEbene {
             }
             // Auf einer Log-Skala gezeichnet: der Alarm rechnet die Linie dann ebenfalls im
             // Logarithmus, so wie sie im Bild gerade ist (chart-alarm-regeln.js geradePreis).
-            this.rueckruf.neu?.({ typ, punkte: pk, ...(this.skala === 'log' ? { stil: { skala: 'log' } } : {}) })
+            // Im Indikator-Fenster: der „Preis" ist der Wert des Indikators — die Zeichnung merkt sich ihr Fenster
+            const stil = this.fenster != null ? { fenster: this.fenster } : this.skala === 'log' ? { skala: 'log' } : null
+            this.rueckruf.neu?.({ typ, punkte: pk, ...(stil ? { stil } : {}) })
         }
         this.rueckruf.werkzeugFertig?.()
         this.requestUpdate()
@@ -943,18 +1086,22 @@ export class ZeichenEbene {
         this._hoehe = hoehe
         // Beschriftungen merken, damit ein Klick darauf die Einstellungen der Zeichnung öffnet
         this._schilder = []
-        for (const z of this.temporaer) { this._schildVon = z; this.zeichneEine(ctx, z, z.punkte, breite, hoehe, false) }
+        ;(this._schilderJe ||= new Map()).set(this.fenster ?? null, this._schilder)
+        // Was zur Geste gehört (Entwurf, Messung, Fangpunkt, Fadenkreuz), steht nur in deren Pane
+        const geste = (this.fenster ?? null) === (this.geste ?? null)
+        if (this.fenster == null) for (const z of this.temporaer) { this._schildVon = z; this.zeichneEine(ctx, z, z.punkte, breite, hoehe, false) }
         this._belegt = null
+        const hier = this.zeichnungen.filter((z) => this.meins(z))
         // Gesperrte zuerst — sie liegen im Hintergrund, die offenen darüber
-        for (const z of [...this.zeichnungen.filter((x) => x.gesperrt), ...this.zeichnungen.filter((x) => !x.gesperrt)]) {
+        for (const z of [...hier.filter((x) => x.gesperrt), ...hier.filter((x) => !x.gesperrt)]) {
             if (!this.vollstaendig(z)) continue
             this._schildVon = z
             this.zeichneEine(ctx, z, this.punkteVon(z), breite, hoehe, z.id === this.auswahlId)
         }
         this._schildVon = null
-        if (this.entwurf) this.zeichneEine(ctx, { id: -1, typ: this.entwurf.typ, stil: {} }, this.entwurfPunkte(), breite, hoehe, true)
-        if (this.messErgebnis) this.zeichneEine(ctx, { id: -2, typ: 'messen', stil: {} }, this.messErgebnis, breite, hoehe, false)
-        if (this.fang) {
+        if (geste && this.entwurf) this.zeichneEine(ctx, { id: -1, typ: this.entwurf.typ, stil: {} }, this.entwurfPunkte(), breite, hoehe, true)
+        if (geste && this.messErgebnis) this.zeichneEine(ctx, { id: -2, typ: 'messen', stil: {} }, this.messErgebnis, breite, hoehe, false)
+        if (geste && this.fang) {
             // Fangpunkt: hier landet der nächste Klick, wenn der Magnet wirkt.
             const x = this.zuX(this.fang.t), y = this.zuY(this.fang.p)
             if (x != null && y != null) {
@@ -967,7 +1114,7 @@ export class ZeichenEbene {
                 ctx.stroke()
             }
         }
-        if (this.kreuz && this.werkzeugTyp) this.zeichneKreuz(ctx, breite, hoehe)
+        if (geste && this.kreuz && this.werkzeugTyp) this.zeichneKreuz(ctx, breite, hoehe)
         ctx.restore()
     }
 
@@ -1033,7 +1180,7 @@ export class ZeichenEbene {
 
     /** Zeichnung, deren Beschriftung unter (x, y) liegt — die zuletzt gezeichnete zuerst. */
     schildTreffer(x, y) {
-        const l = this._schilder || []
+        const l = this._schilderJe?.get(this.fenster ?? null) || this._schilder || []
         for (let i = l.length - 1; i >= 0; i--) {
             const b = l[i]
             if (x >= b.x - 2 && x <= b.x + b.w + 2 && y >= b.y - 2 && y <= b.y + b.h + 2) return b.z
@@ -1548,16 +1695,17 @@ export class ZeichenEbene {
     /** Preisbeschriftung an der Achse: Horizontalen immer, Auswahl an ihren Punkten. */
     baueAchsen() {
         const aus = []
+        const serie = this.aktSerie()
         const etikett = (p, farbe) => ({
-            coordinate: () => this.zuY(p) ?? -100,
-            text: () => this.formatPreis(p),
+            coordinate: () => serie?.priceToCoordinate(p) ?? -100,
+            text: ((tx) => () => tx)(this.formatPreis(p)),
             textColor: () => '#ffffff',
             backColor: () => farbe,
             visible: () => true,
             tickVisible: () => true,
         })
         for (const z of this.zeichnungen) {
-            if (!this.vollstaendig(z)) continue
+            if (!this.meins(z) || !this.vollstaendig(z)) continue
             const s = stilFuer(z)
             const pk = this.punkteVon(z)
             if (z.typ === 'horizontale' || z.typ === 'strahlH') aus.push(etikett(pk[0].p, s.farbe))
@@ -1567,7 +1715,7 @@ export class ZeichenEbene {
             }
         }
         // Fadenkreuz (Touch): sein Preis an der Achse — mit Magnet der Fangpreis, an dem der Punkt landet
-        if (this.kreuz && this.werkzeugTyp) {
+        if (this.kreuz && this.werkzeugTyp && (this.fenster ?? null) === (this.geste ?? null)) {
             const p = this.fang?.p ?? this.vonY(this.kreuz.y)
             if (p != null) aus.push(etikett(p, '#1fd6c4'))
         }

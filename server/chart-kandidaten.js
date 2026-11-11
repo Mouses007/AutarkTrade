@@ -805,7 +805,8 @@ function nutzerAbstand(z, kurs, bisT) {
  * @returns {{ liste: object[], weggelassen: number, uebergangen: {typ: string, anzahl: number}[] }}
  */
 export function waehleNutzer(zeichnungen, vonT, bisT, { interval = null, kurs = null } = {}) {
-    const sichtbar = (zeichnungen || []).filter((z) => z && !z.versteckt && sichtbarAufTf(z, interval) && imBild(z, vonT, bisT))
+    // Zeichnungen in einem Indikator-Fenster (`stil.fenster`) messen Indikatorwerte, keine Preise
+    const sichtbar = (zeichnungen || []).filter((z) => z && !z.versteckt && !z.stil?.fenster && sichtbarAufTf(z, interval) && imBild(z, vonT, bisT))
     const uebergangen = new Map()
     for (const z of sichtbar) if (!NUTZER_TYPEN.includes(z.typ)) uebergangen.set(z.typ, (uebergangen.get(z.typ) || 0) + 1)
     const messbar = sichtbar.filter((z) => NUTZER_TYPEN.includes(z.typ))

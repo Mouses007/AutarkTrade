@@ -163,6 +163,8 @@ async function pruefeEingabe(roh, knex, teilweise = false) {
         if (!erlaubt.includes(z.typ)) return { fehler: `ein ${aus.art}-Alarm geht nicht auf ${z.typ}` }
         if (z.symbol !== aus.symbol) return { fehler: 'zeichnung gehört zu einem anderen Symbol' }
         const geo = { ...z, punkte: parse(z.punkte, []), stil: parse(z.stil, {}) }
+        // Eine Zeichnung im RSI-/MACD-Fenster misst Indikatorwerte, keinen Preis
+        if (geo.stil?.fenster) return { fehler: 'Zeichnungen in einem Indikator-Fenster können keinen Preis-Alarm tragen' }
         if (z.typ === 'volprofil') {
             const bed = parse(aus.bedingung, {})
             if (!PROFIL_LINIEN.includes(bed.kante)) return { fehler: 'Linie des Volumenprofils fehlt (POC, VAH oder VAL)' }

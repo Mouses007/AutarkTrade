@@ -346,7 +346,9 @@ function baueChart() {
         const pane = p.paneIndex ?? 0
         // Klick auf ein Indikator-Schild (z. B. „EMA 21", „POC 1D", „LSOB ▲", „Div ▼"): dessen Einstellungen öffnen —
         // ausser es liegt eine eigene Zeichnung darunter, die geht vor
-        const zeichnungDa = pane === 0 && ebene?.trefferTest(p.point.x, p.point.y)?.z
+        // (auch in einem Indikator-Fenster: dort stehen die Zeichnungen mit `stil.fenster`)
+        const fensterKey = ebene?.fensterBeiIndex(pane)
+        const zeichnungDa = fensterKey !== undefined && ebene?.imFenster(fensterKey, () => ebene.trefferTest(p.point.x, p.point.y))?.z
         const ind = !zeichnungDa && zeichner?.instanzBeiSchild(pane, p.point.x, p.point.y)
         if (ind) { emit('indikator', { aktion: 'bearbeiten', id: ind }); return }
         // Ein Setup oder Trade der Strategie: die Seite zeigt ihn in ihrer Liste.
@@ -434,6 +436,7 @@ function setzeDaten(liste) {
     volumenSerie.value?.setData(liste.map(volumenBalken))
     legende.value = letzteLegende()
     zeichner?.setze(mitLiqFenster(props.panel.indikatoren), liste)
+    ebene?.setzeFenster(zeichner?.fensterSerien())
     if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
     ebene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
     journalEbene?.setzeKerzen(liste, INTERVALL_MS[props.panel.interval])
@@ -464,6 +467,7 @@ function mitLiqFenster(inst) {
 async function ladeLiquidationen() {
     if (!marktEbene) return
     zeichner?.setze(mitLiqFenster(props.panel.indikatoren), kerzen.value)
+    ebene?.setzeFenster(zeichner?.fensterSerien())
     if (!overlayAn('liquidationen') || props.panel.markt === 'spot' || !kerzen.value.length) {
         marktEbene.setzeLiquidationen([]); zeichner?.setzeExtern('liquidationen', null); hinweis('liquidationen', null); return
     }
@@ -960,7 +964,7 @@ function rechtsklick(e) {
     let zeichnung = null
     try {
         const l = ebene?.lokal(e)
-        const tr = l?.innen ? ebene.trefferTest(l.x, l.y) : null
+        const tr = l?.innen && l.key === null ? ebene.imFenster(null, () => ebene.trefferTest(l.x, l.y)) : null
         if (tr?.z) zeichnung = { id: tr.z.id, gesperrt: !!tr.z.gesperrt, alarm: ALARM_TYPEN.includes(tr.z.typ), z: tr.z }
     } catch { /* ohne Treffer */ }
     // Zeit unter dem Zeiger (für „Position hier"); rechts der Daten null → letzte Kerze
@@ -1791,6 +1795,7 @@ watch(() => [props.panel.symbol, props.panel.markt, props.panel.interval], () =>
 watch(() => props.panel.skala, wendeSkalaAn)
 watch(() => props.panel.indikatoren, (inst) => {
     zeichner?.setze(mitLiqFenster(inst), kerzen.value)
+    ebene?.setzeFenster(zeichner?.fensterSerien())
     if (zeichner) indikatorWerte.value = zeichner.werteBei(kreuzZeit)
 }, { deep: true })
 
@@ -1937,7 +1942,7 @@ defineExpose({
         </span>
 
         <ZeichnungStil v-if="ausgewaehlt" :zeichnung="ausgewaehlt" :interval="panel.interval"
-            :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ)" :rechner-offen="rechnerFenster?.id === ausgewaehlt.id"
+            :alarm-moeglich="ALARM_TYPEN.includes(ausgewaehlt.typ) && !ausgewaehlt.stil?.fenster" :rechner-offen="rechnerFenster?.id === ausgewaehlt.id"
             @rechner="rechnerFenster?.id === ausgewaehlt.id ? (rechnerFenster = null) : oeffneRechner(ausgewaehlt.id)"
             @aendere="aendereAuswahl" @loesche="loescheAuswahl" @text="textOffen = textOffen === ausgewaehlt.id ? null : ausgewaehlt.id"
             @alarm="emit('alarmAufZeichnung', fuerAlarm(ausgewaehlt))" />

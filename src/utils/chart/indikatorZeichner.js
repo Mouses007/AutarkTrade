@@ -512,6 +512,21 @@ export class IndikatorZeichner {
         return aus
     }
 
+    /**
+     * Indikator-Fenster, in denen man zeichnen kann: je Typ das erste mit eigenem Pane,
+     * mit seiner ersten Serie (an ihr rechnet die Zeichenebene Wert ↔ Höhe um).
+     * @returns {{ key: string, serie: object }[]}
+     */
+    fensterSerien() {
+        const aus = new Map()
+        for (const e of this.eintraege) {
+            if (e.def.ort !== 'eigen' || aus.has(e.instanz.typ)) continue
+            const s = Object.values(e.serien)[0]
+            if (s) aus.set(e.instanz.typ, s)
+        }
+        return [...aus].map(([key, serie]) => ({ key, serie }))
+    }
+
     /** Zeiger im Kerzen-Pane an den Footprint (Tooltip einer Zeile); null = weg. */
     footprintZeiger(punkt) {
         for (const e of this.eintraege) if (e.def.zeichner === 'footprint') e.zeichnung?.setzeZeiger?.(punkt)
