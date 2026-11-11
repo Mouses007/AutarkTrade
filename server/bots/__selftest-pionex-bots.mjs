@@ -10,7 +10,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { TYPEN, typVon, zyklusGebuehr, wissenAlsText, GEBUEHREN } from './pionex-wissen.js'
-import { normalisiereBot, gridAbstand, zahl, holeAlleSeiten } from './pionex-bots.js'
+import { normalisiereBot, gridAbstand, zahl, holeAlleSeiten, liqRisiko } from './pionex-bots.js'
+import { kennzahlen } from './kennzahlen.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -90,6 +91,18 @@ console.log('Beendeter Coin-M-Bot neutral')
 const neutral = normalisiereBot(rohNeutral)
 p('no_trend = NEUTRAL', neutral.richtung === 'NEUTRAL')
 p('Untergrenze < Obergrenze nach Umrechnung', neutral.grid.unten < neutral.grid.oben)
+
+console.log('Liquidationsseite aus dem Feld (Audit FUN-01)')
+const shortRoh = { ...rohSui, buOrderData: { ...rohSui.buOrderData, trend: 'short', status: 'running', estimateLiquidationPriceUp: '190', estimateLiquidationPriceDown: '0', liquidationPrice: '0' } }
+const kurzBot = { ...normalisiereBot(shortRoh), kurs: 150 }
+p('USDT-M Short: „Up" = oben, unten leer', kurzBot.liquidation.oben === 190 && kurzBot.liquidation.unten === null)
+const kk = kennzahlen(kurzBot, { kurs: 150 })
+p('Short hat jetzt einen Liquidationsabstand (oben, 26,7 %)', kk.liquidation?.seite === 'oben' && nahe(kk.liquidation.abstand, 40 / 150))
+p('linearer Long: „Down" = unten', normalisiereBot({ ...rohSui, buOrderData: { ...rohSui.buOrderData, estimateLiquidationPriceUp: '0', estimateLiquidationPriceDown: '0.9' } }).liquidation.unten === 0.9)
+p('Coin-M Long: „Up" des Instruments = unten in USD (wie bisher)', nahe(lauf.liquidation.unten, 1 / 0.0141000087195626) && lauf.liquidation.oben === null)
+p('liqRisiko: Long unten, Short oben, Neutral die nähere Seite', liqRisiko('LONG', { unten: 70, oben: 120 }) === 70 && liqRisiko('SHORT', { unten: 70, oben: 120 }) === 120 && liqRisiko('NEUTRAL', { unten: 70, oben: 120 }, 110) === 120)
+p('liqRisiko: nur Einzelpreis → Einzelpreis', liqRisiko('SHORT', { preis: 5 }) === 5 && liqRisiko('LONG', null) === null)
+p('Einsatz-Basis: Coin-M in der Coin, linear USDT-Investment (Audit FUN-09)', lauf.einsatz.basis === lauf.einsatz.aktuell && sui.einsatz.basis === sui.einsatz.usdt)
 
 console.log('Hilfsfunktionen')
 p('zahl: leer/null → null, "0" → 0', zahl('') === null && zahl(null) === null && zahl('0') === 0 && zahl('x') === null)

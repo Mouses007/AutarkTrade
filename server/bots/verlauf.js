@@ -10,7 +10,7 @@
 import { getKnex } from '../database.js'
 import { beansprucheAufgabe } from '../db-claim.js'
 import { logWarn } from '../logger.js'
-import { holeBots } from './routen.js'
+import { holeLaufendeBots } from './routen.js'
 
 export const RASTER_MS = 15 * 60_000
 const AUFBEWAHRUNG_MS = 365 * 86_400_000
@@ -38,9 +38,9 @@ export function verlaufsZeile(bot, jetzt = Date.now()) {
 
 export async function schreibeVerlauf() {
     if (!(await beansprucheAufgabe('bots_verlauf', RASTER_MS - 60_000))) return 0
-    const antwort = await holeBots({ frisch: true })
-    if (!antwort?.ok) return 0
-    const zeilen = antwort.bots.filter((b) => b.laufend).map((b) => verlaufsZeile(b))
+    // Nur die laufenden Bots (Audit FUN-03): beendete ändern sich nicht
+    const bots = await holeLaufendeBots().catch(() => [])
+    const zeilen = bots.filter((b) => b.laufend).map((b) => verlaufsZeile(b))
     if (!zeilen.length) return 0
     const knex = getKnex()
     await knex('bot_verlauf').insert(zeilen).onConflict(['botId', 't']).ignore()

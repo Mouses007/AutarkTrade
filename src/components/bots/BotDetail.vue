@@ -171,7 +171,13 @@ onBeforeUnmount(() => {
 })
 watch(() => props.bot.id, () => { markt.value = null; chart?.clear(); verlaufChart?.clear(); ladeMarkt(); ladeVerlauf() })
 
-const rohZeilen = computed(() => Object.entries(props.bot.roh || {})
+const roh = ref(null)
+async function ladeRoh(e) {
+    if (!e?.target?.open || roh.value) return
+    try { roh.value = (await axios.get(`/api/bots/${encodeURIComponent(props.bot.id)}/roh`)).data?.roh || {} } catch { roh.value = {} }
+}
+watch(() => props.bot.id, () => { roh.value = null })
+const rohZeilen = computed(() => Object.entries(roh.value || props.bot.roh || {})
     .filter(([, v]) => v !== null && v !== '' && typeof v !== 'object')
     .sort(([a], [b]) => a.localeCompare(b)))
 </script>
@@ -310,7 +316,7 @@ const rohZeilen = computed(() => Object.entries(props.bot.roh || {})
             </div>
         </Karte>
 
-        <details class="roh">
+        <details class="roh" @toggle="ladeRoh">
             <summary>{{ t('bots.abschnitt.roh') }}</summary>
             <dl class="liste roh-liste">
                 <template v-for="[f, v] in rohZeilen" :key="f"><dt>{{ f }}</dt><dd>{{ v }}</dd></template>

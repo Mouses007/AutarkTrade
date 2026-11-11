@@ -22,6 +22,7 @@ const gelesen = ref(false)
 const laedt = ref(false)
 const fehler = ref('')
 const zeigeText = ref(false)
+const rechte = ref(null)
 
 const meldung = (e) => {
     const d = e?.response?.data
@@ -32,7 +33,8 @@ async function lauf(fn) {
     try { await fn(); emit('geaendert') } catch (e) { fehler.value = meldung(e) } finally { laedt.value = false }
 }
 const speichern = () => lauf(async () => {
-    await axios.put('/api/bots/steuerung/schluessel', { apiKey: apiKey.value, secretKey: secretKey.value })
+    const { data } = await axios.put('/api/bots/steuerung/schluessel', { apiKey: apiKey.value, secretKey: secretKey.value })
+    rechte.value = data
     apiKey.value = ''; secretKey.value = ''
 })
 const entfernen = () => lauf(() => axios.delete('/api/bots/steuerung/schluessel'))
@@ -80,6 +82,9 @@ const sperren = () => lauf(() => axios.post('/api/bots/steuerung/sperren', {}))
         </div>
         <pre v-if="zeigeText && steuerung.freigeschaltet" class="text">{{ steuerung.text }}</pre>
 
+        <Hinweis v-if="rechte?.rechte === 'ok'" art="gut">{{ t('bots.st.rechteOk') }}</Hinweis>
+        <Hinweis v-else-if="rechte?.rechte === 'fehlt'" art="fehler">{{ t('bots.st.rechteFehlt') }} {{ rechte.rechteText }}</Hinweis>
+        <Hinweis v-else-if="rechte" art="info">{{ t('bots.st.rechteUnbekannt') }} {{ rechte.rechteText }}</Hinweis>
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
     </div>
 </template>

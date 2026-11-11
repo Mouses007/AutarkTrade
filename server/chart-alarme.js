@@ -403,6 +403,15 @@ async function einTakt() {
                 await knex('chart_alarme').where('id', a.id).update({ aktiv: 0, selbstAus: 'zeichnungWeg' })
                 continue
             }
+            if (z?.stil?.fenster) {
+                // Die Zeichnung liegt (inzwischen) in einem Indikator-Fenster: ihre Werte sind
+                // Indikatorwerte, keine Preise — der Alarm hätte nichts Sinnvolles zu prüfen (Audit FUN-11).
+                await knex('chart_alarme').where('id', a.id).update({
+                    aktiv: 0, selbstAus: 'indikatorFenster', verlauf: JSON.stringify([...a.verlauf, { t, p, hinweis: 'indikatorFenster' }].slice(-MAX_VERLAUF)),
+                })
+                messung.delete(a.id)
+                continue
+            }
             if (z?.typ === 'volprofil' && a.bedingung?.profil !== profilSignatur(z)) {
                 // Bereich oder Zeilenzahl geändert: die gemerkte Höhe gilt nicht mehr.
                 await knex('chart_alarme').where('id', a.id).update({

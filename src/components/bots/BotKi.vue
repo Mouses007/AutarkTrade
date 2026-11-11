@@ -39,7 +39,8 @@ async function erzeuge() {
         if (data?.aus) { fehler.value = t('bots.marktAus'); return }
         erg.value = data.ergebnis
     } catch (e) {
-        fehler.value = e?.response?.data?.error || e.message
+        const d = e?.response?.data
+        fehler.value = d?.code === 'kiWarten' ? t('bots.ki.warten', { s: d.sekunden }) : (d?.error || e.message)
     } finally {
         laedt.value = false
     }
@@ -77,6 +78,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <span v-if="erg.kurs" class="leise">{{ t('bots.ki.kursStand', { kurs: preis(erg.kurs) }) }}</span>
             </div>
             <p v-if="erg.lage" class="lage">{{ erg.lage }}</p>
+            <p v-if="erg.lageUnbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: erg.lageUnbelegt.join(', ') }) }}</p>
 
             <div v-if="erg.zeitrahmen" class="zr">
                 <h5>{{ t('bots.ki.zrTitel') }}</h5>
@@ -125,6 +127,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
                 <p>{{ v.begruendung }}</p>
                 <p class="risiko"><strong>{{ t('bots.ki.risiko') }}:</strong> {{ v.risiko }}</p>
                 <p class="risiko"><strong>{{ t('bots.ki.passtNicht') }}:</strong> {{ v.passtNichtWenn }}</p>
+                <p v-if="v.unbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: v.unbelegt.join(', ') }) }}</p>
                 <div class="knoepfe">
                     <Knopf art="leise" symbol="rechner" klein @click="emit('inSimulation', v.variante)">{{ t('bots.ki.inSimulation') }}</Knopf>
                     <Knopf v-if="steuerungAktiv" symbol="hochladen" klein @click="emit('umsetzen', v.variante)">{{ t('bots.ki.umsetzen') }}</Knopf>
@@ -174,6 +177,7 @@ const abstand = (a) => (a?.liqNeu != null && props.bot.kurs ? Math.abs(props.bot
 .vorschlag .code { color: var(--muted); font-size: 0.8rem; }
 .vorschlag p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 .risiko { color: var(--muted); }
+.unbelegt { color: var(--warn); font-size: 0.82rem; margin: 0; }
 .zahlen { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: var(--abstand-2) var(--abstand-3); margin: 0; }
 .zahlen dt { color: var(--muted); font-size: 0.75rem; }
 .zahlen dd { margin: 0; font-variant-numeric: tabular-nums; }

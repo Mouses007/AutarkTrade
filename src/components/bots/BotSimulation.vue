@@ -38,7 +38,7 @@ let chart = null
 const b = computed(() => props.bot)
 const mc = computed(() => erg.value?.einheit || b.value.marginCoin)
 const neutral = computed(() => b.value.richtung === 'NEUTRAL')
-const einsatzHeute = computed(() => (b.value.coinM ? b.value.einsatz?.aktuell : (b.value.einsatz?.usdt ?? b.value.einsatz?.aktuell)))
+const einsatzHeute = computed(() => b.value.einsatz?.basis ?? b.value.einsatz?.aktuell ?? null)
 const stopHeute = (s) => (s && /price/.test(s.art || '') ? s.wert : null)
 const platzhalter = computed(() => ({
     unten: preis(b.value.grid?.unten), oben: preis(b.value.grid?.oben), anzahl: String(b.value.grid?.anzahl ?? ''),
@@ -179,7 +179,7 @@ onBeforeUnmount(() => { window.removeEventListener('resize', groesse); chart?.di
 
             <p class="leise">
                 {{ t('bots.sim.zeitraum', { von: datum(erg.von), bis: datum(erg.bis), tf: erg.zeitrahmen, n: zahl(erg.kerzenAnzahl) }) }}
-                · {{ erg.hinweise.fundingSimuliert ? t('bots.sim.mitFunding') : t('bots.sim.ohneFunding') }}
+                · {{ erg.hinweise.fundingSimuliert ? t('bots.sim.mitFunding') : t('bots.sim.ohneFunding') }}<template v-if="erg.hinweise.fundingSimuliert && b.coinM"> {{ t('bots.sim.fundingGenaehert') }}</template>
                 · {{ t('bots.sim.mmr', { mmr: prozent(erg.mmr, { stellen: 2 }), quelle: t(`bots.sim.mmrQuelle.${erg.mmrQuelle || 'pauschal'}`) }) }}
             </p>
 

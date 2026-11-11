@@ -15,13 +15,24 @@
  * Coin-M ist invers: Eingaben in USD je Coin werden in den Instrument-Preis
  * (Coin je USDT) umgerechnet, Unter- und Obergrenze tauschen dabei die Plätze.
  */
+import { liqRisiko } from './pionex-bots.js'
+
 const PFAD = '/api/v1/bot/orders/futuresGrid'
 export const AKTIONEN = ['band', 'investieren', 'margeDazu', 'margeWeg', 'stops', 'pausieren', 'fortsetzen', 'beenden', 'starten']
 export const STEUERBAR = new Set(['futures_grid', 'coinm_grid'])
 
 const istZahl = (v) => typeof v === 'number' && Number.isFinite(v)
 const leer = (v) => v === undefined || v === null || v === ''
-const zahl = (v) => (leer(v) ? null : Number(String(v).replace(',', '.')))
+/**
+ * Zahl aus einer Eingabe: nur Dezimalschreibweise (Komma oder Punkt), sonst NaN.
+ * Audit SEC-04: `Number()` nahm „0x10" als 16 und „1e3" als 1000 an.
+ */
+const zahl = (v) => {
+    if (leer(v)) return null
+    if (typeof v === 'number') return Number.isFinite(v) && v >= 0 ? v : NaN
+    const t = String(v).trim()
+    return /^\d+([.,]\d+)?$/.test(t) ? Number(t.replace(',', '.')) : NaN
+}
 
 /** Nachkommastellen eines API-Preises („0.0105263" → 7). */
 export function stellenVon(...texte) {
@@ -31,16 +42,40 @@ export function stellenVon(...texte) {
         const i = s.indexOf('.')
         if (i >= 0) n = Math.max(n, s.length - i - 1)
     }
-    return Math.min(n || 8, 12)
+    return Math.min(n, 12)
 }
 
-/** Preis in USD je Coin → Preis-Text des Instruments, gerundet auf die Stellen des Bots. */
-export function instrumentPreis(bot, usd) {
+/**
+ * Preis in USD je Coin → Preis-Text des Instruments. Gerundet auf die
+ * Preispräzision des Kontrakts (`stellen`, aus Pionex' Symboltabelle:
+ * `quotePrecision`, z. B. USDT_SOL_PERP 7, USDT_BTC_PERP 11). Ohne Tabelle
+ * Rückfall auf die Stellen der heutigen API-Preise des Bots, mindestens
+ * 6 signifikante Stellen (Audit SEC-03: aus 95 000 USD wurde sonst 95 238).
+ */
+export function instrumentPreis(bot, usd, stellen = null) {
     if (!istZahl(usd) || usd <= 0) return null
-    const roh = bot.roh || {}
-    const stellen = stellenVon(roh.top, roh.bottom)
     const p = bot.coinM ? 1 / usd : usd
-    return p.toFixed(stellen).replace(/0+$/, '').replace(/\.$/, '')
+    let n = Number.isInteger(stellen) && stellen >= 0 ? stellen : null
+    if (n == null) {
+        const roh = bot.roh || {}
+        const ausBand = stellenVon(roh.top, roh.bottom)
+        n = ausBand > 0 ? ausBand : Math.min(12, Math.max(0, 6 - Math.floor(Math.log10(p)) - 1))
+    }
+    return p.toFixed(n).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '')
+}
+
+/** Der tatsächlich gesendete Preis zurück in USD je Coin (für die Anzeige „nachher"). */
+export function usdAusInstrument(bot, text) {
+    const n = Number(text)
+    if (!(n > 0)) return null
+    return bot.coinM ? 1 / n : n
+}
+
+/** Weicht der gerundete Preis um mehr als 0,05 % von der Eingabe ab? */
+function gerundetWarnung(eingaben, warnungen) {
+    for (const [ein, aus] of eingaben) {
+        if (istZahl(ein) && istZahl(aus) && Math.abs(aus - ein) / ein > 0.0005) { warnungen.push('gerundet'); return }
+    }
 }
 
 function basisQuote(bot) {
@@ -59,9 +94,9 @@ function seitenPruefung(bot, sl, tp, kurs) {
 export function einstellungVon(bot) {
     return {
         unten: bot.grid?.unten ?? null, oben: bot.grid?.oben ?? null, anzahl: bot.grid?.anzahl ?? null, art: bot.grid?.art ?? null,
-        hebel: bot.hebel ?? null, einsatz: bot.einsatz?.aktuell ?? null, extraMarge: bot.einsatz?.extraMarge ?? null,
+        hebel: bot.hebel ?? null, einsatz: bot.einsatz?.basis ?? bot.einsatz?.aktuell ?? null, extraMarge: bot.einsatz?.extraMarge ?? null,
         stopLoss: bot.stops?.stopLoss?.wert ?? null, takeProfit: bot.stops?.takeProfit?.wert ?? null,
-        status: bot.status, liquidation: bot.liquidation?.unten ?? bot.liquidation?.oben ?? bot.liquidation?.preis ?? null,
+        status: bot.status, liquidation: liqRisiko(bot.richtung, bot.liquidation, bot.kurs),
     }
 }
 
@@ -69,13 +104,15 @@ export function einstellungVon(bot) {
  * Anfrage für eine Aktion bauen.
  * @returns {{fehler}} oder {aktion, pruefen: {pfad, body}|null, senden: {pfad, body}, nachher, warnungen}
  */
-export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs } = {}) {
+export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stellen = null } = {}) {
     if (!bot || !STEUERBAR.has(bot.typ)) return { fehler: 'typ' }
     if (!AKTIONEN.includes(aktion)) return { fehler: 'aktion' }
     if (aktion !== 'starten' && !bot.laufend) return { fehler: 'nichtLaufend' }
     const id = bot.id
     const warnungen = []
-    const openPrice = istZahl(kurs) && kurs > 0 ? Number(instrumentPreis(bot, kurs)) : null
+    const ip = (usd) => instrumentPreis(bot, usd, stellen)
+    const openPrice = istZahl(kurs) && kurs > 0 ? Number(ip(kurs)) : null
+    const basis = bot.einsatz?.basis ?? bot.einsatz?.aktuell ?? null
 
     if (aktion === 'band') {
         const unten = zahl(eingabe.unten) ?? bot.grid?.unten, oben = zahl(eingabe.oben) ?? bot.grid?.oben
@@ -84,11 +121,16 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs } = {})
         if (!Number.isInteger(anzahl) || anzahl < 2 || anzahl > 500) return { fehler: 'anzahl' }
         if (istZahl(kurs) && (oben < kurs / 5 || unten > kurs * 5)) return { fehler: 'weitWeg' }
         if (openPrice == null) return { fehler: 'kurs' }
-        const top = instrumentPreis(bot, bot.coinM ? unten : oben), bottom = instrumentPreis(bot, bot.coinM ? oben : unten)
+        const top = ip(bot.coinM ? unten : oben), bottom = ip(bot.coinM ? oben : unten)
         const body = { buOrderId: id, type: 'adjust_params', extraMargin: false, openPrice, top, bottom, row: anzahl, keepInvestment: true }
+        // Anzeige: was wirklich gesendet wird, in USD zurückgerechnet
+        const untenGesendet = usdAusInstrument(bot, bot.coinM ? top : bottom), obenGesendet = usdAusInstrument(bot, bot.coinM ? bottom : top)
         warnungen.push('marktpreis')
+        gerundetWarnung([[unten, untenGesendet], [oben, obenGesendet]], warnungen)
         if (istZahl(kurs) && (kurs < unten || kurs > oben)) warnungen.push('kursAusserhalb')
-        return { aktion, pruefen: { pfad: `${PFAD}/adjustParamsCheck`, body }, senden: { pfad: `${PFAD}/adjustParams`, body }, nachher: { unten, oben, anzahl }, warnungen }
+        if (bot.richtung !== 'SHORT' && istZahl(bot.grid?.unten) && unten < bot.grid.unten) warnungen.push('liqNaeherBand')
+        if (bot.richtung === 'SHORT' && istZahl(bot.grid?.oben) && oben > bot.grid.oben) warnungen.push('liqNaeherBand')
+        return { aktion, pruefen: { pfad: `${PFAD}/adjustParamsCheck`, body }, senden: { pfad: `${PFAD}/adjustParams`, body }, nachher: { unten: untenGesendet, oben: obenGesendet, anzahl }, warnungen }
     }
     if (aktion === 'investieren') {
         const betrag = zahl(eingabe.betrag)
@@ -96,13 +138,17 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs } = {})
         if (openPrice == null) return { fehler: 'kurs' }
         const body = { buOrderId: id, type: 'invest_in', extraMargin: false, openPrice, quoteInvestment: betrag }
         warnungen.push('positionGroesser')
-        return { aktion, pruefen: { pfad: `${PFAD}/adjustParamsCheck`, body }, senden: { pfad: `${PFAD}/adjustParams`, body }, nachher: { einsatz: (bot.einsatz?.aktuell || 0) + betrag }, warnungen }
+        if (istZahl(basis) && betrag > basis) warnungen.push('grosserBetrag')
+        return { aktion, pruefen: { pfad: `${PFAD}/adjustParamsCheck`, body }, senden: { pfad: `${PFAD}/adjustParams`, body }, nachher: { einsatz: (basis ?? 0) + betrag }, warnungen }
     }
     if (aktion === 'margeDazu' || aktion === 'margeWeg') {
         const betrag = zahl(eingabe.betrag)
         if (!istZahl(betrag) || betrag <= 0) return { fehler: 'betrag' }
         const dazu = aktion === 'margeDazu'
+        const extra = bot.einsatz?.extraMarge
+        if (!dazu && istZahl(extra) && betrag > extra) return { fehler: 'zuViel' }
         if (!dazu) warnungen.push('liqNaeher')
+        if (dazu && istZahl(basis) && betrag > basis) warnungen.push('grosserBetrag')
         return {
             aktion,
             pruefen: { pfad: `${PFAD}/${dazu ? 'addMarginCheck' : 'reduceMarginCheck'}`, body: { buOrderId: id, amount: betrag } },
@@ -119,13 +165,17 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs } = {})
         const seite = seitenPruefung(bot, sl, tp, kurs)
         if (seite) return { fehler: seite }
         const liste = []
-        if (slAn) liste.push({ type: 'stop_loss', stop_type: 'price', value: sl == null ? '' : instrumentPreis(bot, sl), stop_delay: 0 })
-        if (tpAn) liste.push({ type: 'stop_profit', stop_type: 'price', value: tp == null ? '' : instrumentPreis(bot, tp), stop_delay: 0 })
+        if (slAn && sl != null && !istZahl(sl)) return { fehler: 'stopLoss' }
+        if (tpAn && tp != null && !istZahl(tp)) return { fehler: 'takeProfit' }
+        const slText = slAn && sl != null ? ip(sl) : '', tpText = tpAn && tp != null ? ip(tp) : ''
+        if (slAn) liste.push({ type: 'stop_loss', stop_type: 'price', value: slText, stop_delay: 0 })
+        if (tpAn) liste.push({ type: 'stop_profit', stop_type: 'price', value: tpText, stop_delay: 0 })
+        gerundetWarnung([[sl, usdAusInstrument(bot, slText)], [tp, usdAusInstrument(bot, tpText)]], warnungen)
         if (slAn && sl == null && bot.stops?.stopLoss) warnungen.push('stopEntfernt')
-        const liq = bot.liquidation?.unten ?? bot.liquidation?.oben
+        const liq = liqRisiko(bot.richtung, bot.liquidation, kurs)
         if (sl != null && istZahl(liq) && (bot.richtung !== 'SHORT' ? sl <= liq : sl >= liq)) warnungen.push('stopHinterLiq')
         warnungen.push('ohnePruefung')
-        return { aktion, pruefen: null, senden: { pfad: `${PFAD}/updateTriggerProfitLoss`, body: { bu_order_id: id, list: liste } }, nachher: { stopLoss: slAn ? sl : undefined, takeProfit: tpAn ? tp : undefined }, warnungen }
+        return { aktion, pruefen: null, senden: { pfad: `${PFAD}/updateTriggerProfitLoss`, body: { bu_order_id: id, list: liste } }, nachher: { stopLoss: slAn ? (sl == null ? null : usdAusInstrument(bot, slText)) : undefined, takeProfit: tpAn ? (tp == null ? null : usdAusInstrument(bot, tpText)) : undefined }, warnungen }
     }
     if (aktion === 'pausieren') {
         return { aktion, pruefen: { pfad: `${PFAD}/pauseCheck`, body: { buOrderId: id, mode: 'immediate' } }, senden: { pfad: `${PFAD}/pause`, body: { buOrderId: id, mode: 'immediate', stopLossEnabled: true, stopProfitEnabled: true } }, nachher: { status: 'paused' }, warnungen: ['pausiert'] }
@@ -141,14 +191,16 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs } = {})
     const unten = zahl(eingabe.unten) ?? bot.grid?.unten, oben = zahl(eingabe.oben) ?? bot.grid?.oben
     const anzahl = zahl(eingabe.anzahl) ?? bot.grid?.anzahl
     const hebel = zahl(eingabe.hebel) ?? bot.hebel
-    const einsatz = zahl(eingabe.einsatz) ?? bot.einsatz?.aktuell
+    const einsatz = zahl(eingabe.einsatz) ?? bot.einsatz?.basis ?? bot.einsatz?.aktuell
     const art = eingabe.art === 'geometric' ? 'geometric' : eingabe.art === 'arithmetic' ? 'arithmetic' : (bot.grid?.art || 'arithmetic')
     if (!istZahl(unten) || !istZahl(oben) || unten <= 0 || oben <= unten) return { fehler: 'band' }
     if (!Number.isInteger(anzahl) || anzahl < 2 || anzahl > 500) return { fehler: 'anzahl' }
     if (!istZahl(hebel) || hebel < 1 || hebel > 125 || !Number.isInteger(hebel)) return { fehler: 'hebel' }
     if (!istZahl(einsatz) || einsatz <= 0) return { fehler: 'betrag' }
-    if (istZahl(kurs) && (oben < kurs / 5 || unten > kurs * 5)) return { fehler: 'weitWeg' }
-    const top = instrumentPreis(bot, bot.coinM ? unten : oben), bottom = instrumentPreis(bot, bot.coinM ? oben : unten)
+    // Ohne Kurs keine Plausibilitätsprüfung — dann gar nicht (Audit FUN-07)
+    if (!istZahl(kurs) || kurs <= 0) return { fehler: 'kurs' }
+    if (oben < kurs / 5 || unten > kurs * 5) return { fehler: 'weitWeg' }
+    const top = ip(bot.coinM ? unten : oben), bottom = ip(bot.coinM ? oben : unten)
     const trend = String(roh.trend || 'long')
     const { base, quote } = basisQuote(bot)
     const daten = { top, bottom, row: anzahl, grid_type: art, trend, leverage: hebel, quoteInvestment: String(einsatz) }
@@ -159,8 +211,8 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs } = {})
         aktion,
         pruefen: { pfad: `${PFAD}/checkParams`, body: { base, quote, buOrderData: pruefDaten } },
         senden: { pfad: `${PFAD}/create`, body: { base, quote, buOrderData: daten } },
-        nachher: { unten, oben, anzahl, art, hebel, einsatz },
-        warnungen: ['neuerBot', 'marktpreis'],
+        nachher: { unten: usdAusInstrument(bot, bot.coinM ? top : bottom), oben: usdAusInstrument(bot, bot.coinM ? bottom : top), anzahl, art, hebel, einsatz },
+        warnungen: ['neuerBot', 'marktpreis', ...(istZahl(basis) && einsatz > 2 * basis ? ['grosserBetrag'] : [])],
     }
 }
 

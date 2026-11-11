@@ -172,6 +172,7 @@ export const OHNE_GEHEIMNIS = new Map([
     ['radar_fetch_state.key', 'Name der periodischen Aufgabe'],
     ['bot_aenderungen.fassungHash', 'SHA-256 des öffentlichen Einwilligungstexts (Nachweis, welche Fassung galt)'],
     ['bot_aenderungen.hakenHash', 'SHA-256 des öffentlichen Haken-Texts (Nachweis der Bestätigung)'],
+    ['bot_aenderungen.tokenHash', 'SHA-256 eines verbrauchten Einmal-Tokens (macht die Wiederverwendung unmöglich; der Token selbst ist danach wertlos)'],
     ['coinradar_settings.schluessel', 'Name der Einstellung (Schlüssel-Wert-Tabelle)'],
     ['hype_settings.schluessel', 'Name der Einstellung; Zustellgeheimnisse liegen in settings.hype*'],
     ['hype_projekt.schluessel', 'chain|contract bzw. sym|SYMBOL, öffentlich'],

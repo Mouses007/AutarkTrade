@@ -6668,7 +6668,8 @@
       },
       "wischen": "Ausgelöste entfernen ({n})",
       "wischenTitel": "Alle Alarme löschen, die ausgelöst und sich deshalb selbst abgeschaltet haben (einmalige, LSOB-Box nach dem Bruch). Wiederholende und von Hand ausgeschaltete bleiben.",
-      "wischenFrage": "Diesen ausgelösten Alarm löschen?\n{namen} | Diese {n} ausgelösten Alarme löschen?\n{namen}"
+      "wischenFrage": "Diesen ausgelösten Alarm löschen?\n{namen} | Diese {n} ausgelösten Alarme löschen?\n{namen}",
+      "indikatorFenster": "Zeichnung liegt im Indikator-Fenster — kein Preis-Alarm möglich"
     },
     "quelle": {
       "titel": "Kursquelle: Binance (live per Websocket, tiefe Historie — nur mit Marktdatenquelle Binance) oder die Kurse deiner Handelsbörse (per Abfrage)",
@@ -8270,7 +8271,8 @@
       "laedtKerzen": "Beim ersten Mal lädt die App die Minutenkerzen der ganzen Laufzeit – das kann rund 20 Sekunden dauern, danach geht es schnell.",
       "extraMargePlus": "Extra-Marge dazu",
       "margeKurz": "Marge",
-      "umsetzen": "Variante {n} umsetzen …"
+      "umsetzen": "Variante {n} umsetzen …",
+      "fundingGenaehert": "(Coin-M: Funding-Sätze des linearen Kontrakts, genähert)"
     },
     "ki": {
       "warnTitel": "Bevor du KI-Vorschläge nutzt",
@@ -8300,7 +8302,9 @@
       "zrBruch": "Letzter Bruch",
       "zrNiveaus": "Niveaus",
       "zrTreffen": "Zusammentreffen mehrerer Zeitrahmen",
-      "zrErklaerung": "Die KI bekommt zusätzlich die Lage auf 1w, 1d und 4h: Struktur, letzter Bruch, Lage in der Spanne, Momentum und die nächsten Niveaus. Untergrenzen und Stop-Loss werden auch knapp jenseits dieser Niveaus durchgerechnet."
+      "zrErklaerung": "Die KI bekommt zusätzlich die Lage auf 1w, 1d und 4h: Struktur, letzter Bruch, Lage in der Spanne, Momentum und die nächsten Niveaus. Untergrenzen und Stop-Loss werden auch knapp jenseits dieser Niveaus durchgerechnet.",
+      "warten": "Bitte {s} Sekunden warten — jeder Aufruf kostet.",
+      "unbelegt": "Diese Zahlen stehen nicht in den gerechneten Daten — nachprüfen: {zahlen}"
     },
     "st": {
       "titel": "Bot-Steuerung (Pionex)",
@@ -8360,7 +8364,9 @@
         "pausieren": "Pausieren",
         "fortsetzen": "Fortsetzen",
         "beenden": "Bot beenden",
-        "starten": "Neuer Bot mit diesen Einstellungen"
+        "starten": "Neuer Bot mit diesen Einstellungen",
+        "freischalten": "Freigeschaltet",
+        "sperren": "Gesperrt"
       },
       "aktionText": {
         "band": "Pionex stellt die Position sofort zum Marktpreis auf das neue Band ein («Direkt bearbeiten», Investition bleibt). Die heutige Position bleibt; ein Band weiter nach unten bringt die Liquidation näher.",
@@ -8383,7 +8389,10 @@
         "ohnePruefung": "Keine Prüfabfrage bei Pionex möglich.",
         "pausiert": "Während der Pause entstehen keine Grid-Gewinne, das Kursrisiko bleibt.",
         "beenden": "Beenden ist endgültig. Der heutige Verlust oder Gewinn wird realisiert.",
-        "neuerBot": "Es entsteht ein zusätzlicher Bot mit eigenem Kapital."
+        "neuerBot": "Es entsteht ein zusätzlicher Bot mit eigenem Kapital.",
+        "gerundet": "Die Preise werden auf die Preisschritte von Pionex gerundet — massgeblich ist die Spalte «Nachher».",
+        "grosserBetrag": "Der Betrag ist grösser als der heutige Einsatz — bitte auf Tippfehler prüfen.",
+        "liqNaeherBand": "Das Band reicht weiter in die Verlustrichtung: die Position kann dort weiter wachsen, die Liquidation rückt näher."
       },
       "fehler": {
         "schluessel": "API-Key und Secret eingeben.",
@@ -8408,7 +8417,30 @@
         "haken": "Bitte den Haken setzen.",
         "neuPruefen": "Die Eingabe hat sich seit der Prüfung geändert oder die Prüfung ist älter als 5 Minuten — bitte neu prüfen.",
         "zuSchnell": "Bitte 10 Sekunden warten.",
-        "testbetrieb": "Im Testbetrieb wird nicht gesendet."
+        "testbetrieb": "Im Testbetrieb wird nicht gesendet.",
+        "laeuft": "Für diesen Bot läuft gerade eine Sendung.",
+        "verbraucht": "Diese Prüfung wurde schon gesendet — für eine weitere Änderung neu prüfen.",
+        "zuViel": "Mehr Extra-Marge abziehen als vorhanden ist nicht möglich.",
+        "leseschluessel": "Kein Pionex-Leseschlüssel eingerichtet (Einstellungen › Börsen).",
+        "keinGeheimnis": "Der Server hat kein Hauptgeheimnis — Bot-Steuerung nicht möglich."
+      },
+      "unklarTitel": "Ausgang unklar",
+      "unklarText": "Die Verbindung zu Pionex brach ab oder antwortete nicht eindeutig. Pionex kann die Änderung ausgeführt haben. Nicht erneut senden — zuerst den Bot bei Pionex (oder hier nach dem Neuladen) ansehen.",
+      "neuPruefenText": "Für einen neuen Versuch zuerst neu prüfen.",
+      "istTitel": "Stand bei Pionex kurz nach dem Senden:",
+      "istBeendet": "Der Bot läuft bei Pionex nicht mehr.",
+      "istFehler": "Der Stand danach konnte nicht gelesen werden.",
+      "soll": "Soll",
+      "ist": "Ist",
+      "rechteOk": "Pionex hat eine Prüfabfrage mit diesem Schlüssel angenommen — «Bot Trading» ist freigegeben.",
+      "rechteFehlt": "Pionex lehnt eine Prüfabfrage mit diesem Schlüssel ab — vermutlich fehlt das Recht «Bot Trading».",
+      "rechteUnbekannt": "Ob der Schlüssel «Bot Trading» darf, liess sich nicht prüfen (kein laufender Futures-Grid oder unklare Antwort).",
+      "zustand": {
+        "laeuft": "läuft",
+        "ausgefuehrt": "ausgeführt",
+        "abgelehnt": "abgelehnt",
+        "unklar": "unklar",
+        "abgewiesen": "abgewiesen"
       }
     }
   }

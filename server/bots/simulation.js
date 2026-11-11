@@ -18,6 +18,7 @@
 import { simuliereBot } from '../../shared/grid-simulation.js'
 import { GEBUEHREN } from './pionex-wissen.js'
 import { gewinn } from './kennzahlen.js'
+import { liqRisiko } from './pionex-bots.js'
 
 export const MAX_VARIANTEN = 3
 /** Typen, die die Simulation rechnen kann (Grids mit festem Band). */
@@ -106,13 +107,8 @@ function kurz(r) {
     }
 }
 
-/** Die für die Risikoseite massgebliche Liquidationsschätzung (USD). */
-function liqRisiko(bot, liq) {
-    if (!liq) return null
-    if (bot.richtung === 'SHORT') return liq.oben
-    if (bot.richtung === 'LONG') return liq.unten
-    return liq.unten ?? liq.oben
-}
+/** Die für die Risikoseite massgebliche Liquidationsschätzung (USD) — gemeinsame Regel aus pionex-bots.js. */
+function liqRisikoVon(bot, liq) { return liqRisiko(bot.richtung, liq, bot.kurs) }
 
 /**
  * @param bot    aus normalisiereBot (+ kurs)
@@ -120,12 +116,13 @@ function liqRisiko(bot, liq) {
  * @param varianten bereinigte Varianten (pruefeVariante)
  * @param opt    { kurs, funding: [{t, rate}], mmr }
  */
-export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, funding = null, mmr = MMR_VORGABE } = {}) {
+export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, funding = null, mmr = MMR_VORGABE, basis: basisVorgabe = null } = {}) {
     if (!SIMULIERBAR.has(bot.typ)) return { fehler: 'typ' }
     if (!kerzen?.length) return { fehler: 'kerzen' }
     const heute = heutigeStops(bot)
     const opt = { ...gebuehrenFuer(bot), mmr, funding, durchstich: DURCHSTICH, startPreis: bot.position?.startPreis ?? undefined }
-    const basis = simuliereBot(bot, kerzen, { ...opt, aenderung: { ...heute } })
+    // Mehrere Aufrufe für denselben Bot (KI-Kandidaten) teilen sich die Basis (Audit FUN-02)
+    const basis = basisVorgabe ?? simuliereBot(bot, kerzen, { ...opt, aenderung: { ...heute } })
     if (!basis) return { fehler: 'simulation' }
 
     const g = gewinn(bot, kurs)
@@ -146,8 +143,8 @@ export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, fundi
         fundingSim: funding ? basis.funding : null,
         positionEcht: bot.laufend ? bot.position?.menge ?? null : null,
         positionSim: bot.laufend ? basis.position : null,
-        liqEcht: bot.laufend ? liqRisiko(bot, bot.liquidation) : null,
-        liqSim: bot.laufend ? liqRisiko(bot, basis.liqSchaetzung) : null,
+        liqEcht: bot.laufend ? liqRisikoVon(bot, bot.liquidation) : null,
+        liqSim: bot.laufend ? liqRisikoVon(bot, basis.liqSchaetzung) : null,
     }
     eichung.unsicher = !istZahl(eichung.abweichungAnteil) || Math.abs(eichung.abweichungAnteil) > EICHUNG_GRENZE
 
@@ -162,7 +159,7 @@ export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, fundi
         const posJetzt = bot.position?.menge ?? null
         const extra = bot.einsatz?.extraMarge || 0
         const eigenkapital = istZahl(einsatz) && istZahl(g.gesamt) ? einsatz + extra + g.gesamt : null
-        const liqHeute = liqRisiko(bot, bot.liquidation)
+        const liqHeute = liqRisikoVon(bot, bot.liquidation)
         abJetzt = varianten.slice(0, MAX_VARIANTEN).map((v) => {
             // Nachzuschiessen: ausdrücklicher Einsatz, sonst bei Hebelwechsel Einsatz × alt/neu (wie Pionex)
             const einsatzNeu = istZahl(v.einsatz) ? v.einsatz : (istZahl(v.hebel) && istZahl(einsatz) && bot.hebel > 0 ? einsatz * bot.hebel / v.hebel : einsatz)
@@ -193,7 +190,7 @@ export function vergleiche(bot, kerzen, varianten = [], { kurs = bot.kurs, fundi
                 if (geschlossenAnteil < 1e-9) geschlossenAnteil = 0   // Rundungsrest, keine Teilschliessung
                 realisiertCa = istZahl(g.schwebend) ? g.schwebend * geschlossenAnteil : null
             }
-            return { ziel, aktuell: posJetzt, geschlossenAnteil, realisiertCa, liqNeu: r ? liqRisiko(bot, r.liqSchaetzung) : null, liqHeute, zusatz }
+            return { ziel, aktuell: posJetzt, geschlossenAnteil, realisiertCa, liqNeu: r ? liqRisikoVon(bot, r.liqSchaetzung) : null, liqHeute, zusatz }
         })
     }
 

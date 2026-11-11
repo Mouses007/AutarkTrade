@@ -173,10 +173,15 @@ export function simuliereGrid(p) {
 
     const zellen = startZellen(L, richtung, start)
     let kasse = 0, gridGewinn = 0, gridBrutto = 0, gebuehren = 0, funding = 0, zyklen = 0, ausfuehrungen = 0
-    for (const z of zellen) if (z.offen) { gebuehren += gebuehrMarkt * q * start; ausfuehrungen++ }
+    // Laufende Summen statt jedes Mal über alle Zellen (Audit FUN-02): Anzahl offener
+    // Long-/Short-Zellen und die Summe ihrer Einstiege genügen für Position und Schwebendes.
+    let nL = 0, sumL = 0, nS = 0, sumS = 0
+    const oeffne = (z, preis) => { z.offen = true; z.einstieg = preis; if (z.art === 'L') { nL++; sumL += preis } else { nS++; sumS += preis } }
+    const schliesse = (z) => { if (z.art === 'L') { nL--; sumL -= z.einstieg } else { nS--; sumS -= z.einstieg } z.offen = false; z.einstieg = null }
+    for (const z of zellen) if (z.offen) { if (z.art === 'L') { nL++; sumL += z.einstieg } else { nS++; sumS += z.einstieg } gebuehren += gebuehrMarkt * q * start; ausfuehrungen++ }
 
-    const position = () => positionVon(zellen, q)
-    const schwebend = (preis) => schwebendVon(zellen, q, preis)
+    const position = () => q * (nL - nS)
+    const schwebend = (preis) => q * (nL * preis - sumL) + q * (sumS - nS * preis)
     const fuelle = (preis) => { gebuehren += gebuehr * q * preis; ausfuehrungen++ }
     const zyklus = (i) => {
         const brutto = q * (L[i + 1] - L[i])
@@ -190,27 +195,36 @@ export function simuliereGrid(p) {
     // (Anteil) überschreitet: ein Berühren genau am Kerzenextrem füllt an der
     // Börse oft nicht, und die Kerzen stammen von einer anderen Börse.
     const eps = p.durchstich ?? 0
+    // Erster Index mit L[i] >= x (bzw. > x) — Binärsuche über die aufsteigenden Linien
+    const abIndex = (x, streng) => {
+        let lo = 0, hi = L.length
+        while (lo < hi) { const m = (lo + hi) >> 1; if (streng ? L[m] > x : L[m] >= x) hi = m; else lo = m + 1 }
+        return lo
+    }
+    // Nur die Linien zwischen a und b anfassen (Audit FUN-02), dieselben Bedingungen wie zuvor
     function bewege(a, b) {
         if (b < a) {
-            for (let i = n - 1; i >= 0; i--) {
+            const bis = Math.min(abIndex(a, false) - 1, n - 1)
+            for (let i = bis; i >= 0; i--) {
                 const lv = L[i]
-                if (lv >= a || lv * (1 - eps) < b) continue
+                if (lv * (1 - eps) < b) break
                 const z = zellen[i]
-                if (z.art === 'L' && !z.offen) { z.offen = true; z.einstieg = lv; fuelle(lv) }
+                if (z.art === 'L' && !z.offen) { oeffne(z, lv); fuelle(lv) }
                 else if (z.art === 'S' && z.offen) {
                     kasse += q * (z.einstieg - lv); zyklus(i)
-                    z.offen = false; z.einstieg = null; fuelle(lv)
+                    schliesse(z); fuelle(lv)
                 }
             }
         } else if (b > a) {
-            for (let i = 0; i < n; i++) {
-                const lv = L[i + 1]
-                if (lv <= a || lv * (1 + eps) > b) continue
+            for (let j = Math.max(abIndex(a, true), 1); j <= n; j++) {
+                const lv = L[j]
+                if (lv * (1 + eps) > b) break
+                const i = j - 1
                 const z = zellen[i]
                 if (z.art === 'L' && z.offen) {
                     kasse += q * (lv - z.einstieg); zyklus(i)
-                    z.offen = false; z.einstieg = null; fuelle(lv)
-                } else if (z.art === 'S' && !z.offen) { z.offen = true; z.einstieg = lv; fuelle(lv) }
+                    schliesse(z); fuelle(lv)
+                } else if (z.art === 'S' && !z.offen) { oeffne(z, lv); fuelle(lv) }
             }
         }
     }
@@ -227,7 +241,7 @@ export function simuliereGrid(p) {
             if (!z.offen) continue
             kasse += z.art === 'L' ? q * (preis - z.einstieg) : q * (z.einstieg - preis)
             gebuehren += gebuehrMarkt * q * preis; ausfuehrungen++
-            z.offen = false; z.einstieg = null
+            schliesse(z)
         }
     }
 
@@ -325,7 +339,7 @@ export function simuliereBot(bot, kerzenUsd, { aenderung = {}, gebuehr = 0.0002,
     const neuOben = bandNeu ? (coinM ? inv(usdUnten) : usdOben) : altOben
     const neuAnzahl = aenderung.anzahl ?? altAnzahl
 
-    const einsatzAlt = (coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell)) ?? null
+    const einsatzAlt = (bot.einsatz?.basis ?? (coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell))) ?? null
     const hebelAlt = bot.hebel || 1
     const hebelNeu = aenderung.hebel ?? hebelAlt
     // Pionex „Hebel anpassen" behält die Position und verlangt die Investition

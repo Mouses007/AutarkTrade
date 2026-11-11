@@ -54,7 +54,7 @@ watch(eingabe, () => { pruefung.value = null; haken.value = false }, { deep: tru
 
 const platzhalter = computed(() => ({
     unten: preis(props.bot.grid?.unten), oben: preis(props.bot.grid?.oben), anzahl: String(props.bot.grid?.anzahl ?? ''),
-    hebel: String(props.bot.hebel ?? ''), einsatz: String(props.bot.einsatz?.aktuell ?? ''), betrag: '0',
+    hebel: String(props.bot.hebel ?? ''), einsatz: String(props.bot.einsatz?.basis ?? props.bot.einsatz?.aktuell ?? ''), betrag: '0',
     stopLoss: props.bot.stops?.stopLoss?.wert != null ? preis(props.bot.stops.stopLoss.wert) : t('bots.feld.keiner'),
     takeProfit: props.bot.stops?.takeProfit?.wert != null ? preis(props.bot.stops.takeProfit.wert) : t('bots.feld.keiner'),
 }))
@@ -93,7 +93,8 @@ async function senden() {
             aktion: props.aktion, eingabe: eingabeFuerServer(), token: pruefung.value.token, haken: true, hakenText: props.steuerung?.haken,
         })
         ergebnis.value = data
-        if (data.ok) emit('gesendet')
+        // Auch bei „unklar" neu laden: Pionex kann ausgeführt haben
+        if (data.zustand !== 'abgelehnt') emit('gesendet')
     } catch (e) { fehler.value = meldung(e) } finally { laedt.value = false }
 }
 
@@ -117,7 +118,19 @@ const vergleich = computed(() => {
     }
     return z
 })
-const kannSenden = computed(() => pruefung.value?.bestanden && pruefung.value?.token && haken.value && !pruefung.value?.testbetrieb && !ergebnis.value?.ok)
+// Nach einem Sendeversuch (egal welcher Ausgang) nie mit demselben Token erneut — Audit SEC-02
+const kannSenden = computed(() => pruefung.value?.bestanden && pruefung.value?.token && haken.value && !pruefung.value?.testbetrieb && !ergebnis.value)
+const istZeilen = computed(() => {
+    const r = ergebnis.value
+    if (!r?.ist || r.ist.fehler || r.ist.status === 'nichtMehrLaufend') return []
+    const soll = r.soll || {}
+    const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['status', 'Status', (x) => x]]
+    return felder.filter(([k]) => soll[k] !== undefined).map(([k, titel, f]) => {
+        const s = soll[k], i = r.ist[k]
+        const gleich = s == null ? i == null : (typeof s === 'number' && typeof i === 'number' ? Math.abs(s - i) <= Math.abs(s) * 0.001 : String(s) === String(i))
+        return { titel, soll: s == null ? '—' : f(s), ist: i == null ? '—' : f(i), gleich }
+    })
+})
 </script>
 
 <template>
@@ -176,8 +189,16 @@ const kannSenden = computed(() => pruefung.value?.bestanden && pruefung.value?.t
                 </div>
             </template>
 
-            <Hinweis v-if="ergebnis?.ok" art="gut" :titel="t('bots.st.gesendet')">{{ t('bots.st.gesendetText') }}</Hinweis>
-            <Hinweis v-else-if="ergebnis" art="fehler" :titel="t('bots.st.nichtAusgefuehrt')">{{ ergebnis.antwort?.message || '' }}</Hinweis>
+            <Hinweis v-if="ergebnis?.zustand === 'ausgefuehrt'" art="gut" :titel="t('bots.st.gesendet')">{{ t('bots.st.gesendetText') }}</Hinweis>
+            <Hinweis v-else-if="ergebnis?.zustand === 'unklar'" art="warn" :titel="t('bots.st.unklarTitel')">{{ t('bots.st.unklarText') }} {{ ergebnis.antwort?.message || '' }}</Hinweis>
+            <Hinweis v-else-if="ergebnis" art="fehler" :titel="t('bots.st.nichtAusgefuehrt')">{{ ergebnis.antwort?.message || '' }} {{ t('bots.st.neuPruefenText') }}</Hinweis>
+            <template v-if="ergebnis?.ist">
+                <p class="leise">{{ ergebnis.ist.status === 'nichtMehrLaufend' ? t('bots.st.istBeendet') : ergebnis.ist.fehler ? t('bots.st.istFehler') : t('bots.st.istTitel') }}</p>
+                <table v-if="istZeilen.length" class="tabelle">
+                    <thead><tr><th></th><th>{{ t('bots.st.soll') }}</th><th>{{ t('bots.st.ist') }}</th></tr></thead>
+                    <tbody><tr v-for="z in istZeilen" :key="z.titel" :class="{ abweichung: !z.gleich }"><th>{{ z.titel }}</th><td>{{ z.soll }}</td><td>{{ z.ist }}{{ z.gleich ? '' : ' ⚠' }}</td></tr></tbody>
+                </table>
+            </template>
             <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
         </div>
     </Dialog>
@@ -196,6 +217,7 @@ const kannSenden = computed(() => pruefung.value?.bestanden && pruefung.value?.t
 .tabelle th:first-child { text-align: left; color: var(--muted); font-weight: 500; }
 .tabelle thead th { color: var(--muted); font-weight: 500; font-size: 0.75rem; }
 .tabelle tr.pionex td { font-weight: 600; }
+.tabelle tr.abweichung td { color: var(--warn); }
 .warnungen { margin: 0; padding-left: 0; list-style: none; color: var(--warn); font-size: 0.88rem; display: flex; flex-direction: column; gap: 3px; }
 .warnliste { margin: 0; padding-left: 1.1em; }
 .anfrage summary { cursor: pointer; color: var(--muted); font-size: 0.8rem; }

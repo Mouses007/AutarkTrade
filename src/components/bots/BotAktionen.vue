@@ -20,7 +20,7 @@ const props = defineProps({
     vorschlag: { type: Object, default: null },   // Variante aus KI oder Simulation
 })
 const emit = defineEmits(['gesendet', 'vorschlagWeg'])
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const dialog = ref(false)
 const aktion = ref('')
@@ -39,7 +39,7 @@ const schritte = computed(() => {
     const v = props.vorschlag
     if (!v) return []
     const s = []
-    const einsatzHeute = props.bot.einsatz?.aktuell ?? 0
+    const einsatzHeute = props.bot.einsatz?.basis ?? props.bot.einsatz?.aktuell ?? 0
     if (v.hebel != null && v.hebel !== props.bot.hebel) {
         const noetig = v.einsatz == null && props.bot.hebel ? einsatzHeute * props.bot.hebel / v.hebel - einsatzHeute : null
         s.push({ hebel: true, text: t('bots.st.schrittHebel', { von: props.bot.hebel, auf: v.hebel, betrag: noetig > 0 ? betrag(noetig, props.bot.marginCoin) : '—' }) })
@@ -86,10 +86,10 @@ function gesendet() { ladeProtokoll(); emit('gesendet') }
         <details v-if="protokoll.length" class="protokoll">
             <summary>{{ t('bots.st.protokoll', { n: protokoll.length }) }}</summary>
             <ul>
-                <li v-for="p in protokoll" :key="p.id" :class="{ fehler: !p.ok }">
+                <li v-for="p in protokoll" :key="p.id" :class="p.zustand">
                     <span>{{ datum(p.zeit) }}</span>
-                    <strong>{{ t(`bots.st.aktion.${p.aktion}`) }}</strong>
-                    <span>{{ p.ok ? t('bots.st.ok') : (p.antwort?.message || t('bots.st.nichtAusgefuehrt')) }}</span>
+                    <strong>{{ te(`bots.st.aktion.${p.aktion}`) ? t(`bots.st.aktion.${p.aktion}`) : p.aktion }}</strong>
+                    <span>{{ t(`bots.st.zustand.${p.zustand}`) }}<template v-if="p.code"> ({{ te(`bots.st.fehler.${p.code}`) ? t(`bots.st.fehler.${p.code}`) : p.code }})</template><template v-else-if="!p.ok && p.antwort?.message"> — {{ p.antwort.message }}</template></span>
                 </li>
             </ul>
         </details>
@@ -110,5 +110,6 @@ function gesendet() { ladeProtokoll(); emit('gesendet') }
 .protokoll summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
 .protokoll ul { list-style: none; margin: var(--abstand-2) 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
 .protokoll li { display: flex; gap: var(--abstand-2); flex-wrap: wrap; }
-.protokoll li.fehler { color: var(--bad); }
+.protokoll li.abgelehnt, .protokoll li.abgewiesen { color: var(--bad); }
+.protokoll li.unklar, .protokoll li.laeuft { color: var(--warn); }
 </style>

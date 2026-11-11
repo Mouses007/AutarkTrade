@@ -17,6 +17,7 @@
 import { wissenAlsText, TYPEN } from './pionex-wissen.js'
 import { vergleiche, MAX_VARIANTEN } from './simulation.js'
 import { messeZeitrahmen, findeTreffen, zeitrahmenText } from '../chart-zeitrahmen.js'
+import { liqRisiko } from './pionex-bots.js'
 
 /** Höhere Zeitrahmen für die Bot-Vorschläge (dieselbe Messung wie die Chart-KI „Lage über alle Zeitrahmen"). */
 export const BOT_ZEITRAHMEN = ['1w', '1d', '4h']
@@ -92,11 +93,11 @@ export function niveausAusZeitrahmen(zr, kurs) {
 export function kandidaten(bot, kurs, atr, zr = null) {
     const liste = []
     const neu = (titel, v) => { if (Object.keys(v).length) liste.push({ id: `K${liste.length + 1}`, titel, variante: v }) }
-    const einsatz = bot.coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell)
+    const einsatz = bot.einsatz?.basis ?? (bot.coinM ? bot.einsatz?.aktuell : (bot.einsatz?.usdt ?? bot.einsatz?.aktuell))
     const long = bot.richtung !== 'SHORT'
     const u = bot.grid?.unten, o = bot.grid?.oben
     const hatAtr = istZahl(atr) && atr > 0 && istZahl(kurs)
-    const liq = long ? bot.liquidation?.unten ?? bot.liquidation?.preis : bot.liquidation?.oben ?? bot.liquidation?.preis
+    const liq = liqRisiko(bot.richtung, bot.liquidation, kurs)
 
     if (istZahl(einsatz) && einsatz > 0) {
         for (const f of [0.25, 0.5, 1]) neu(`Extra-Marge +${Math.round(f * 100)} % des Einsatzes`, { extraMarge: runde(einsatz * f, 4) })
@@ -160,7 +161,7 @@ export function rechneKandidaten(bot, kerzen, liste, opt) {
     let basis = null, eichung = null
     for (let i = 0; i < liste.length; i += MAX_VARIANTEN) {
         const teil = liste.slice(i, i + MAX_VARIANTEN)
-        const r = vergleiche(bot, kerzen, teil.map((k) => k.variante), opt)
+        const r = vergleiche(bot, kerzen, teil.map((k) => k.variante), { ...opt, basis })
         if (r.fehler) return { fehler: r.fehler }
         basis = basis || r.basis
         eichung = eichung || r.eichung
@@ -177,7 +178,7 @@ export function bauePrompt(bot, lage, gerechnet, englisch = false, zr = null) {
     const mc = bot.marginCoin
     const k = bot.kennzahlen || {}
     const e = gerechnet.eichung
-    const liqHeute = bot.liquidation?.unten ?? bot.liquidation?.oben ?? bot.liquidation?.preis
+    const liqHeute = liqRisiko(bot.richtung, bot.liquidation, bot.kurs)
     const kopf = [
         wissenAlsText(bot.typ),
         '',
@@ -220,11 +221,33 @@ export function systemText() {
     ].join('\n')
 }
 
-const VERBOTEN = /\b(garantiert|risikolos|sicherer?\s+gewinn|ohne\s+risiko|optimal\w*|empfehl\w*|anlageberatung)\b/i
+// Deutsch und Englisch (Audit FUN-05: englische Antworten gingen ungeprüft durch)
+const VERBOTEN = /\b(garantiert|risikolos|sicherer?\s+gewinn|ohne\s+risiko|optimal\w*|empfehl\w*|anlageberatung|guarantee\w*|risk[-\s]?free|riskless|no\s+risk|recommend\w*|investment\s+advice|financial\s+advice|sure\s+profit)\b/i
+
+/**
+ * Zahlen im Text der KI, die in der Eingabe nicht vorkommen (Audit FUN-05).
+ * Eine Zahl gilt als belegt, wenn eine Zahl der Eingabe auf ihre Stellen
+ * gerundet gleich ist (70.93 ist durch 70.9219 belegt). Kleine ganze Zahlen
+ * (Aufzählungen, „3 Vorschläge") werden nicht geprüft. Rein.
+ */
+export function unbelegteZahlen(text, eingabe) {
+    const zahlen = (t) => [...String(t || '').matchAll(/-?\d+(?:[.,]\d+)?/g)].map((m) => m[0].replace(',', '.'))
+    const belegt = zahlen(eingabe).map(Number)
+    const aus = []
+    for (const roh of zahlen(text)) {
+        const x = Number(roh)
+        const stellen = roh.includes('.') ? roh.split('.')[1].length : 0
+        if (!stellen && Math.abs(x) < 10) continue
+        const f = 10 ** stellen
+        const ok = belegt.some((y) => Math.round(y * f) === Math.round(x * f) || Math.round(Math.abs(y) * f) === Math.round(Math.abs(x) * f))
+        if (!ok && !aus.includes(roh)) aus.push(roh)
+    }
+    return aus
+}
 const kuerze = (s, n) => String(s || '').trim().slice(0, n)
 
 /** Antwort der KI prüfen: nur bekannte IDs, Längen begrenzt, verbotene Wörter verwerfen. */
-export function pruefeKiAntwort(json, gerechnet) {
+export function pruefeKiAntwort(json, gerechnet, eingabe = '') {
     if (!json || typeof json !== 'object') return null
     const nachId = new Map(gerechnet.kandidaten.map((c) => [c.id, c]))
     const verworfen = []
@@ -235,14 +258,15 @@ export function pruefeKiAntwort(json, gerechnet) {
         if (vorschlaege.some((x) => x.id === c.id)) continue
         const texte = { titel: kuerze(v.titel, 80) || c.titel, begruendung: kuerze(v.begruendung, 600), risiko: kuerze(v.risiko, 300), passtNichtWenn: kuerze(v.passtNichtWenn, 300) }
         if (Object.values(texte).some((t) => VERBOTEN.test(t))) { verworfen.push({ id: c.id, grund: 'wortwahl' }); continue }
-        vorschlaege.push({ id: c.id, ...texte, variante: c.variante, codeTitel: c.titel, rueckblick: c.rueckblick, abJetzt: c.abJetzt })
+        const unbelegt = eingabe ? unbelegteZahlen(`${texte.begruendung} ${texte.risiko} ${texte.passtNichtWenn}`, eingabe) : []
+        vorschlaege.push({ id: c.id, ...texte, variante: c.variante, codeTitel: c.titel, rueckblick: c.rueckblick, abJetzt: c.abJetzt, unbelegt })
         if (vorschlaege.length >= MAX_VORSCHLAEGE) break
     }
     let lage = kuerze(json.lage, 900)
     if (VERBOTEN.test(lage)) { verworfen.push({ id: 'lage', grund: 'wortwahl' }); lage = '' }
     let hinweis = kuerze(json.hinweis, 300)
     if (VERBOTEN.test(hinweis)) hinweis = ''
-    return { lage, vorschlaege, hinweis, verworfen }
+    return { lage, vorschlaege, hinweis, verworfen, lageUnbelegt: eingabe && lage ? unbelegteZahlen(lage, eingabe) : [] }
 }
 
 /** Kann dieser Bot KI-Vorschläge bekommen? */

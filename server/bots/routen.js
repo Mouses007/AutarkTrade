@@ -70,6 +70,43 @@ export function vergesseBot(id) {
     kiCache.delete(String(id))
 }
 
+/**
+ * Nur die LAUFENDEN Bots frisch von Pionex (Steuerung, Verlauf-Takt). Audit FUN-03:
+ * bis 11.11.2026 holte jede Prüfung und jede Sendung auch bis zu 20 Seiten beendeter Bots.
+ * Fehlt der Leseschlüssel, wirft sie mit `code = 'leseschluessel'` (Audit FUN-08).
+ */
+export async function holeLaufendeBots() {
+    const cfg = await getDecryptedPionexConfig()
+    if (!cfg?.apiKey || !cfg?.secretKey) {
+        const e = new Error('Kein Pionex-Leseschlüssel eingerichtet')
+        e.code = 'leseschluessel'
+        throw e
+    }
+    const lauf = await holeAlleSeiten((opt) => getBotOrders(cfg.apiKey, cfg.secretKey, opt), 'running', 2)
+    const bots = lauf.map(normalisiereBot).filter(Boolean)
+    const kurse = await holeKurse(bots)
+    for (const b of bots) {
+        b.kurs = kurse[b.coin] ?? null
+        b.kennzahlen = kennzahlen(b, { kurs: b.kurs })
+    }
+    return bots
+}
+
+/** Ein Bot für die Steuerung: laufend frisch; beendete (nur „Neuer Bot") aus dem Cache, mit frischem Kurs. */
+export async function holeBot(id, { auchBeendete = false } = {}) {
+    const lauf = await holeLaufendeBots()
+    const bot = lauf.find((b) => b.id === String(id))
+    if (bot || !auchBeendete) return bot || null
+    const alle = await holeBots()
+    const alt = alle.bots?.find((b) => b.id === String(id))
+    if (!alt) return null
+    const p = await fetchTickerPrice(`${alt.coin}_USDT_PERP`) || await fetchTickerPrice(`${alt.coin}_USDT`)
+    return { ...alt, kurs: p > 0 ? p : null }
+}
+
+/** Ohne `roh` (rund 120 Pionex-Felder je Bot) an den Browser — Audit SEC-12. */
+const fuerBrowser = (antwort) => (antwort?.bots ? { ...antwort, bots: antwort.bots.map(({ roh, ...b }) => ({ ...b, hatRoh: !!roh })) } : antwort)
+
 export async function holeBots({ frisch = false } = {}) {
     if (!frisch && cache && Date.now() - cache.zeit < CACHE_MS) return cache.antwort
     if (!laufend) {
@@ -151,7 +188,10 @@ async function simKerzen(bot) {
 
 // ── KI-Vorschläge ────────────────────────────────────────────────────────
 const kiCache = new Map()    // id → Ergebnis (bis zum Neustart; GET liest nur)
-const kiLaeuft = new Map()   // id → Promise (zweiter Klick wartet mit)
+const kiLaeuft = new Map()   // id|sprache → Promise (zweiter Klick wartet mit)
+const kiZuletzt = new Map()  // id → { zeit, fehler } — Abklingzeit (Audit FUN-06)
+export const KI_PAUSE_MS = 60_000
+export const KI_FEHLER_PAUSE_MS = 45_000
 const ohneKurve = (r) => (r ? { ...r, kurve: undefined } : r)
 
 async function kiFuer(bot, englisch) {
@@ -170,18 +210,19 @@ async function kiFuer(bot, englisch) {
     if (gerechnet.fehler) throw new Error(`Simulation: ${gerechnet.fehler}`)
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
     cfg.maxTokens = 2500
+    const user = bauePrompt(bot, lage, gerechnet, englisch, zr)
     const antwort = await callLLMJson(cfg, {
-        system: systemText(), user: bauePrompt(bot, lage, gerechnet, englisch, zr), timeoutMs: 90000,
+        system: systemText(), user, timeoutMs: 90000,
         zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: bot.symbol },
     })
-    const geprueft = pruefeKiAntwort(antwort.json, gerechnet)
+    const geprueft = pruefeKiAntwort(antwort.json, gerechnet, user)
     if (!geprueft) throw new Error('Die KI hat keine verwertbare Antwort geliefert')
     for (const v of geprueft.verworfen) logWarn('bots', `KI-Vorschlag verworfen (${v.grund}): ${v.id}`)
     return {
         ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model,
         kostenUsd: antwort.costUsd ?? null, kurs: bot.kurs, markt: lage, eichung: gerechnet.eichung,
         zeitrahmen: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,
-        lage: geprueft.lage, hinweis: geprueft.hinweis, verworfen: geprueft.verworfen.length,
+        lage: geprueft.lage, lageUnbelegt: geprueft.lageUnbelegt, hinweis: geprueft.hinweis, verworfen: geprueft.verworfen.length,
         vorschlaege: geprueft.vorschlaege.map((v) => ({ ...v, rueckblick: ohneKurve(v.rueckblick) })),
         kandidaten: gerechnet.kandidaten.map((c) => ({ ...c, rueckblick: ohneKurve(c.rueckblick) })),
     }
@@ -199,10 +240,19 @@ export function setupBotRoutes(app) {
             const bot = alle.bots?.find((b) => b.id === id)
             if (!bot) return res.status(404).json({ ok: false, error: 'Bot nicht gefunden' })
             if (!kiMoeglich(bot)) return res.status(400).json({ ok: false, code: 'typ' })
-            if (!kiLaeuft.has(id)) {
-                kiLaeuft.set(id, kiFuer(bot, req.body?.sprache === 'en').finally(() => kiLaeuft.delete(id)))
+            const sprache = req.body?.sprache === 'en' ? 'en' : 'de'
+            const schluessel = `${id}|${sprache}`
+            if (!kiLaeuft.has(schluessel)) {
+                // Jeder Lauf kostet: nach Erfolg 60 s, nach Fehler 45 s Pause je Bot
+                const z = kiZuletzt.get(id)
+                const pause = z ? (z.fehler ? KI_FEHLER_PAUSE_MS : KI_PAUSE_MS) - (Date.now() - z.zeit) : 0
+                if (pause > 0) return res.status(429).json({ ok: false, code: 'kiWarten', sekunden: Math.ceil(pause / 1000) })
+                kiLaeuft.set(schluessel, kiFuer(bot, sprache === 'en')
+                    .then((e) => { kiZuletzt.set(id, { zeit: Date.now(), fehler: false }); return e },
+                        (e) => { kiZuletzt.set(id, { zeit: Date.now(), fehler: true }); throw e })
+                    .finally(() => kiLaeuft.delete(schluessel)))
             }
-            const ergebnis = await kiLaeuft.get(id)
+            const ergebnis = await kiLaeuft.get(schluessel)
             kiCache.set(id, ergebnis)
             res.json({ ok: true, ergebnis })
         } catch (e) {
@@ -240,7 +290,7 @@ export function setupBotRoutes(app) {
 
     app.get('/api/bots', async (req, res) => {
         try {
-            res.json(await holeBots({ frisch: req.query.frisch === '1' }))
+            res.json(fuerBrowser(await holeBots({ frisch: req.query.frisch === '1' })))
         } catch (e) {
             const text = fehlerText(e)
             logWarn('bots', `Abruf der Pionex-Bots fehlgeschlagen: ${text}`)
@@ -267,6 +317,18 @@ export function setupBotRoutes(app) {
             res.json({ ok: true, punkte: await leseVerlauf(req.params.id) })
         } catch (e) {
             res.status(500).json({ ok: false, error: fehlerText(e) })
+        }
+    })
+
+    // Rohfelder eines Bots erst auf Wunsch (Detailansicht „Alle Felder von Pionex")
+    app.get('/api/bots/:id/roh', async (req, res) => {
+        try {
+            const alle = await holeBots()
+            const bot = alle.bots?.find((b) => b.id === String(req.params.id))
+            if (!bot) return res.status(404).json({ ok: false, error: 'Bot nicht gefunden' })
+            res.json({ ok: true, roh: bot.roh || {} })
+        } catch (e) {
+            res.status(502).json({ ok: false, error: fehlerText(e) })
         }
     })
 

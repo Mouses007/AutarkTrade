@@ -6668,7 +6668,8 @@
       },
       "wischen": "Remove triggered ({n})",
       "wischenTitel": "Delete every alert that fired and therefore switched itself off (one-time, LSOB box after the break). Repeating and manually paused ones stay.",
-      "wischenFrage": "Delete this triggered alert?\n{namen} | Delete these {n} triggered alerts?\n{namen}"
+      "wischenFrage": "Delete this triggered alert?\n{namen} | Delete these {n} triggered alerts?\n{namen}",
+      "indikatorFenster": "Drawing is in an indicator pane — no price alert possible"
     },
     "quelle": {
       "titel": "Price source: Binance (live via websocket, deep history — only with market data source Binance) or your trading exchange's prices (polled)",
@@ -8270,7 +8271,8 @@
       "laedtKerzen": "The first run loads the minute candles of the whole runtime – this can take about 20 seconds, then it is fast.",
       "extraMargePlus": "Add extra margin",
       "margeKurz": "margin",
-      "umsetzen": "Apply variant {n} …"
+      "umsetzen": "Apply variant {n} …",
+      "fundingGenaehert": "(Coin-M: funding rates of the linear contract, approximated)"
     },
     "ki": {
       "warnTitel": "Before you use AI suggestions",
@@ -8300,7 +8302,9 @@
       "zrBruch": "Last break",
       "zrNiveaus": "Levels",
       "zrTreffen": "Confluence of several timeframes",
-      "zrErklaerung": "The AI also receives the situation on 1w, 1d and 4h: structure, last break, position in the range, momentum and the nearest levels. Lower bounds and stop losses are also computed just beyond these levels."
+      "zrErklaerung": "The AI also receives the situation on 1w, 1d and 4h: structure, last break, position in the range, momentum and the nearest levels. Lower bounds and stop losses are also computed just beyond these levels.",
+      "warten": "Please wait {s} seconds — every run costs.",
+      "unbelegt": "These numbers are not in the computed data — check them: {zahlen}"
     },
     "st": {
       "titel": "Bot control (Pionex)",
@@ -8360,7 +8364,9 @@
         "pausieren": "Pause",
         "fortsetzen": "Resume",
         "beenden": "Close bot",
-        "starten": "New bot with these settings"
+        "starten": "New bot with these settings",
+        "freischalten": "Enabled",
+        "sperren": "Disabled"
       },
       "aktionText": {
         "band": "Pionex immediately adjusts the position to the new range at market price (\"edit directly\", investment unchanged). Today's position stays; a range further down brings liquidation closer.",
@@ -8383,7 +8389,10 @@
         "ohnePruefung": "No check request at Pionex possible.",
         "pausiert": "No grid profit while paused; the price risk stays.",
         "beenden": "Closing is final. Today's loss or gain is realised.",
-        "neuerBot": "An additional bot with its own capital is created."
+        "neuerBot": "An additional bot with its own capital is created.",
+        "gerundet": "Prices are rounded to Pionex's price steps — the \"After\" column is what counts.",
+        "grosserBetrag": "The amount is larger than today's investment — please check for typos.",
+        "liqNaeherBand": "The range reaches further in the losing direction: the position can grow there and liquidation moves closer."
       },
       "fehler": {
         "schluessel": "Enter API key and secret.",
@@ -8408,7 +8417,30 @@
         "haken": "Please tick the box.",
         "neuPruefen": "The input changed since the check or the check is older than 5 minutes — please check again.",
         "zuSchnell": "Please wait 10 seconds.",
-        "testbetrieb": "Nothing is sent in test mode."
+        "testbetrieb": "Nothing is sent in test mode.",
+        "laeuft": "A send is in progress for this bot.",
+        "verbraucht": "This check was already sent — check again for another change.",
+        "zuViel": "Cannot remove more extra margin than there is.",
+        "leseschluessel": "No Pionex read key set up (Settings › Exchanges).",
+        "keinGeheimnis": "The server has no main secret — bot control not possible."
+      },
+      "unklarTitel": "Outcome unclear",
+      "unklarText": "The connection to Pionex broke off or the answer was ambiguous. Pionex may have executed the change. Do not send again — first look at the bot at Pionex (or here after reloading).",
+      "neuPruefenText": "Check again before another attempt.",
+      "istTitel": "State at Pionex shortly after sending:",
+      "istBeendet": "The bot is no longer running at Pionex.",
+      "istFehler": "The state afterwards could not be read.",
+      "soll": "Expected",
+      "ist": "Actual",
+      "rechteOk": "Pionex accepted a check request with this key — \"Bot Trading\" is enabled.",
+      "rechteFehlt": "Pionex rejects a check request with this key — the \"Bot Trading\" permission is probably missing.",
+      "rechteUnbekannt": "Could not verify whether the key may use \"Bot Trading\" (no running futures grid or unclear answer).",
+      "zustand": {
+        "laeuft": "running",
+        "ausgefuehrt": "executed",
+        "abgelehnt": "rejected",
+        "unklar": "unclear",
+        "abgewiesen": "refused"
       }
     }
   }

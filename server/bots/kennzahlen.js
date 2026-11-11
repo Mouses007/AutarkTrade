@@ -29,7 +29,7 @@ export const ZYKLUS_KNAPP = 0.001
 /** Gewinn in der Margin-Münze: realisiert, schwebend, gesamt. */
 export function gewinn(bot, kurs) {
     const e = bot.einsatz || {}
-    const basis = bot.coinM ? e.aktuell : (e.usdt ?? e.aktuell)
+    const basis = e.basis ?? (bot.coinM ? e.aktuell : (e.usdt ?? e.aktuell))
     if (!bot.laufend) {
         // Beendet: linear ist totalRealizedProfit das Wallet-Delta; Coin-M aus der Marge.
         if (bot.coinM && istZahl(e.marge) && istZahl(basis)) {

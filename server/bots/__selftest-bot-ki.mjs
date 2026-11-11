@@ -9,7 +9,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
 import { kennzahlen } from './kennzahlen.js'
-import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE, hoheZeitrahmen, niveausAusZeitrahmen } from './bot-ki.js'
+import { kandidaten, rechneKandidaten, marktLage, bauePrompt, systemText, pruefeKiAntwort, kiMoeglich, MAX_VORSCHLAEGE, hoheZeitrahmen, niveausAusZeitrahmen, unbelegteZahlen } from './bot-ki.js'
 
 let ok = 0, fehl = 0
 const p = (name, bed, zusatz = '') => {
@@ -79,6 +79,11 @@ p('Vorschlag trägt die nachgerechneten Zahlen des Codes', r.vorschlaege[0].vari
 p('Lage und Hinweis übernommen', r.lage.startsWith('Der Bot') && r.hinweis.length > 0)
 p('Lage mit „optimal" wird geleert', pruefeKiAntwort({ lage: 'Das ist optimal.', vorschlaege: [] }, g).lage === '')
 p('kein JSON → null', pruefeKiAntwort(null, g) === null)
+p('englische Versprechen werden verworfen (guaranteed, risk-free, recommend)', ['guaranteed profit', 'risk-free', 'I recommend this'].every((w) => pruefeKiAntwort({ vorschlaege: [{ id: 'K1', titel: 'x', begruendung: w }] }, g).vorschlaege.length === 0))
+p('englischer Normaltext geht durch', pruefeKiAntwort({ vorschlaege: [{ id: 'K1', titel: 'More margin', begruendung: 'Liquidation moves away.' }] }, g).vorschlaege.length === 1)
+p('Zahlen: 70.92 ist durch 70.9219 belegt, 64.5 nicht', JSON.stringify(unbelegteZahlen('Liq 70.92, neu 64.5, 3 Varianten', 'Liquidation 70.9219 und 63.7100')) === '["64.5"]')
+const mitText = pruefeKiAntwort({ vorschlaege: [{ id: 'K1', titel: 'x', begruendung: 'Liquidation auf 12345.6 USD' }] }, g, 'nur 1.0 und 2.5')
+p('unbelegte Zahl im Vorschlag wird markiert', mitText.vorschlaege[0].unbelegt.includes('12345.6'))
 
 console.log('Hohe Zeitrahmen')
 // Pendelnder Abwärtsmarkt mit klaren Tiefs: genug geschlossene Kerzen je Zeitrahmen

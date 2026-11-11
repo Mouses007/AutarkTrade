@@ -61,4 +61,15 @@ export async function migriereBots(knex) {
             t.index(['botId', 'zeit'])
         })
     }
+    // Audit 11.11.2026 (SEC-01/02/06): Einmal-Token prozessübergreifend (eindeutiger Hash,
+    // die Zeile entsteht VOR dem Senden), Ausgang in drei Zuständen, Stand danach.
+    const spalten = [
+        ['tokenHash', (t) => t.string('tokenHash', 64).unique()],
+        ['zustand', (t) => t.string('zustand', 16)],   // laeuft | ausgefuehrt | abgelehnt | unklar | abgewiesen
+        ['ist', (t) => t.text('ist')],                 // JSON: Stand des Bots bei Pionex nach dem Senden
+        ['code', (t) => t.string('code', 32)],         // Grund einer Abweisung
+    ]
+    for (const [name, def] of spalten) {
+        if (!(await knex.schema.hasColumn('bot_aenderungen', name))) await knex.schema.alterTable('bot_aenderungen', def)
+    }
 }

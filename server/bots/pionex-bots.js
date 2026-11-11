@@ -14,6 +14,21 @@
  */
 import { typVon, TYPEN, zyklusGebuehr } from './pionex-wissen.js'
 
+/**
+ * Die für die Richtung massgebliche Liquidation (USD je Coin): Long unten,
+ * Short oben, Neutral die nähere bekannte Seite (sonst unten vor oben).
+ * Eine Stelle für Kennzahlen, KI, Simulation und Steuerung (Audit FUN-01).
+ */
+export function liqRisiko(richtung, liq, kurs = null) {
+    if (!liq) return null
+    if (richtung === 'LONG') return liq.unten ?? liq.preis ?? null
+    if (richtung === 'SHORT') return liq.oben ?? liq.preis ?? null
+    const kandidaten = [liq.unten, liq.oben].filter((v) => v != null)
+    if (!kandidaten.length) return liq.preis ?? null
+    if (kurs != null && kandidaten.length > 1) return kandidaten.sort((a, b) => Math.abs(a - kurs) - Math.abs(b - kurs))[0]
+    return kandidaten[0]
+}
+
 /** Zahl aus einem API-Feld; '', null, nicht endlich → null. */
 export function zahl(v) {
     if (v === null || v === undefined || v === '') return null
@@ -76,8 +91,13 @@ export function normalisiereBot(o) {
     const anzahl = zahl(d.row)
     const art = d.gridType || null
 
-    const liqA = p(d.estimateLiquidationPriceUp), liqB = p(d.estimateLiquidationPriceDown)
-    const liqWerte = [liqA, liqB].filter((v) => v != null)
+    // Liquidation: die Seite kommt aus dem FELD, nicht aus min/max — gerichtete Bots melden nur
+    // eine Seite (die andere 0). Linear: Up = über dem Kurs, Down = darunter; Coin-M invers
+    // getauscht (ein steigender Instrument-Kurs ist ein fallender Coin-Kurs). Audit FUN-01:
+    // bis 11.11.2026 landete ein USDT-M-Short mit nur „Up" in `unten`.
+    const liqUp = p(d.estimateLiquidationPriceUp), liqDown = p(d.estimateLiquidationPriceDown)
+    const liqUnten = coinM ? liqUp : liqDown
+    const liqOben = coinM ? liqDown : liqUp
 
     // TP/SL: nur Preis-Arten sind Preise; Betrags- und Quoten-Arten bleiben Zahlen.
     const stopWert = (typAngabe, wert) => {
@@ -128,6 +148,9 @@ export function normalisiereBot(o) {
         },
         hebel: zahl(d.leverage),
         einsatz: {
+            // Die eine Basis für Rendite, Simulation und Schritte (Audit FUN-09):
+            // Coin-M in der Coin, sonst USDT-Investment, Rückfall auf quoteInvestment
+            basis: coinM ? zahl(d.quoteInvestment) : (zahl(d.usdtInvestment ?? d.initUsdtInvestment) ?? zahl(d.quoteInvestment)),
             aktuell: zahl(d.quoteInvestment),
             start: zahl(d.initQuoteInvestment),
             usdt: zahl(d.usdtInvestment ?? d.initUsdtInvestment),
@@ -156,8 +179,8 @@ export function normalisiereBot(o) {
         },
         liquidation: {
             preis: p(d.liquidationPrice),
-            unten: liqWerte.length ? Math.min(...liqWerte) : null,
-            oben: liqWerte.length > 1 ? Math.max(...liqWerte) : null,
+            unten: liqUnten,
+            oben: liqOben,
         },
         stops: {
             stopLoss: d.stopLossEnabled === false ? null : stopWert(d.lossStopType, d.lossStop),

@@ -93,7 +93,8 @@ console.log('\nKein Order-Endpunkt im Server\n')
 
     // Bot-Steuerung (11.11.2026, Entscheid des Entwicklers): schreibende Bot-Pfade
     // von Pionex gibt es — aber nur in EINER Datei, hinter Prüfung, Einwilligung und Haken.
-    const BOT_PFAD = /bot\/orders\/(futuresGrid|spotGrid|smartCopy)/
+    // Jeder Pfad unter bot/orders/<Typ>/ (Audit SEC-11: auch künftige Bot-Typen)
+    const BOT_PFAD = /bot\/orders\/[A-Za-z]+/
     const ERLAUBT = path.join('server', 'bots', 'steuerung.js')
     const botTreffer = []
     const suche = (dir) => {
@@ -108,6 +109,21 @@ console.log('\nKein Order-Endpunkt im Server\n')
     for (const d of ['server', 'shared', 'scripts', 'src']) suche(path.join(wurzel, d))
     check('schreibende Bot-Pfade nur in server/bots/steuerung.js', botTreffer.length === 0, botTreffer.join('; '))
     check('server/bots/steuerung.js nennt die Bot-Pfade', BOT_PFAD.test(fs.readFileSync(path.join(wurzel, ERLAUBT), 'utf8')))
+    // Schreibende Pionex-Aufrufe (POST/DELETE) nur in den Steuerungs-Routen
+    const SCHREIBT = /pionexRequest\(\s*['"](POST|DELETE)['"]/
+    const ERLAUBT_SCHREIBEN = path.join('server', 'bots', 'steuerung-routen.js')
+    const schreiber = []
+    const suche2 = (dir) => {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+            const p = path.join(dir, e.name)
+            if (e.isDirectory()) { if (!['node_modules', 'fixtures'].includes(e.name)) suche2(p) }
+            else if (/\.(m?js)$/.test(e.name) && !e.name.startsWith('__selftest')) {
+                if (SCHREIBT.test(fs.readFileSync(p, 'utf8')) && path.relative(wurzel, p) !== ERLAUBT_SCHREIBEN) schreiber.push(path.relative(wurzel, p))
+            }
+        }
+    }
+    for (const d of ['server', 'shared', 'scripts']) suche2(path.join(wurzel, d))
+    check('schreibende Pionex-Aufrufe nur in server/bots/steuerung-routen.js', schreiber.length === 0, schreiber.join('; '))
 }
 
 console.log(`\n${bestanden} bestanden, ${fehlgeschlagen} fehlgeschlagen`)
