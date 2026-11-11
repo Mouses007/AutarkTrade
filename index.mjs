@@ -10,6 +10,7 @@ import { setupBitgetRoutes } from './server/bitget-api.js'
 import { setupPionexRoutes } from './server/pionex-api.js'
 import { setupBotRoutes } from './server/bots/routen.js'
 import { setupBotSteuerungRoutes } from './server/bots/steuerung-routen.js'
+import { setupBotPlanerRoutes } from './server/bots/planer-routen.js'
 import { startBotVerlaufTakt } from './server/bots/verlauf.js'
 import { setupBinanceRoutes } from './server/binance-api.js'
 import { setupQuellenRoutes } from './server/quellen/routen.js'
@@ -231,6 +232,7 @@ async function starteServer() {
     setupBitunixRoutes(app);
     setupBitgetRoutes(app);
     setupPionexRoutes(app);
+    setupBotPlanerRoutes(app);
     setupBotSteuerungRoutes(app);
     setupBotRoutes(app);
     setupQuellenRoutes(app);

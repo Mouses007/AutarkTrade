@@ -19,6 +19,8 @@ const props = defineProps({
     aktion: { type: String, default: '' },
     vorgabe: { type: Object, default: () => ({}) },
     steuerung: { type: Object, default: null },
+    // Bot-Planer: feste Planwerte (Coin, Coin-M, Richtung, Art), gehen mit jeder Anfrage mit
+    feste: { type: Object, default: null },
 })
 const emit = defineEmits(['update:modelValue', 'gesendet'])
 const { t, te } = useI18n()
@@ -70,7 +72,7 @@ function eingabeFuerServer() {
         if (k === 'stopLossWeg' || k === 'takeProfitWeg') continue
         if (v !== '') e[k] = v
     }
-    return e
+    return props.feste ? { ...e, ...props.feste } : e
 }
 const meldung = (e) => {
     const d = e?.response?.data
@@ -126,7 +128,7 @@ const vergleich = computed(() => {
 const kannSenden = computed(() => pruefung.value?.bestanden && pruefung.value?.token && haken.value && !pruefung.value?.testbetrieb && !ergebnis.value)
 const istZeilen = computed(() => {
     const r = ergebnis.value
-    if (!r?.ist || r.ist.fehler || r.ist.status === 'nichtMehrLaufend') return []
+    if (!r?.ist || r.ist.fehler || r.ist.status === 'nichtMehrLaufend' || r.ist.status === 'nichtGefunden') return []
     const soll = r.soll || {}
     const felder = [['unten', t('bots.sim.unten'), preis], ['oben', t('bots.sim.oben'), preis], ['anzahl', t('bots.feld.grids'), (x) => zahl(x)], ['einsatz', t('bots.feld.einsatz'), (x) => betrag(x, mc.value)], ['extraMarge', t('bots.feld.extraMarge'), (x) => betrag(x, mc.value)], ['stopLoss', t('bots.feld.stopLoss'), preis], ['takeProfit', t('bots.feld.takeProfit'), preis], ['status', 'Status', (x) => x]]
     return felder.filter(([k]) => soll[k] !== undefined).map(([k, titel, f]) => {
@@ -140,7 +142,7 @@ const istZeilen = computed(() => {
 <template>
     <Dialog v-model="offen" :titel="t(`bots.st.aktion.${aktion}`)" breite="40rem">
         <div class="dlg">
-            <p class="leise">{{ t(`bots.st.aktionText.${aktion}`) }}</p>
+            <p class="leise">{{ t(`bots.st.aktionText.${bot.plan ? 'planStarten' : aktion}`) }}</p>
 
             <div v-if="(FELDER[aktion] || []).length" class="felder">
                 <label v-for="f in FELDER[aktion]" :key="f"><span>{{ feldName(f) }}</span>
@@ -197,7 +199,7 @@ const istZeilen = computed(() => {
             <Hinweis v-else-if="ergebnis?.zustand === 'unklar'" art="warn" :titel="t('bots.st.unklarTitel')">{{ t('bots.st.unklarText') }} {{ ergebnis.antwort?.message || '' }}</Hinweis>
             <Hinweis v-else-if="ergebnis" art="fehler" :titel="t('bots.st.nichtAusgefuehrt')">{{ ergebnis.antwort?.message || '' }} {{ t('bots.st.neuPruefenText') }}</Hinweis>
             <template v-if="ergebnis?.ist">
-                <p class="leise">{{ ergebnis.ist.status === 'nichtMehrLaufend' ? t('bots.st.istBeendet') : ergebnis.ist.fehler ? t('bots.st.istFehler') : t('bots.st.istTitel') }}</p>
+                <p class="leise">{{ ergebnis.ist.status === 'nichtMehrLaufend' ? t('bots.st.istBeendet') : ergebnis.ist.status === 'nichtGefunden' ? t('bots.st.istNeuFehlt') : ergebnis.ist.fehler ? t('bots.st.istFehler') : ergebnis.ist.neueId ? t('bots.st.istNeu', { id: ergebnis.ist.neueId }) : t('bots.st.istTitel') }}</p>
                 <table v-if="istZeilen.length" class="tabelle">
                     <thead><tr><th></th><th>{{ t('bots.st.soll') }}</th><th>{{ t('bots.st.ist') }}</th></tr></thead>
                     <tbody><tr v-for="z in istZeilen" :key="z.titel" :class="{ abweichung: !z.gleich }"><th>{{ z.titel }}</th><td>{{ z.soll }}</td><td>{{ z.ist }}{{ z.gleich ? '' : ' ⚠' }}</td></tr></tbody>

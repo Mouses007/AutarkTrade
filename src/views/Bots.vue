@@ -17,6 +17,7 @@ import Kreisel from '@/components/basis/Kreisel.vue'
 import BotKarte from '@/components/bots/BotKarte.vue'
 import BotDetail from '@/components/bots/BotDetail.vue'
 import BotSteuerungEinrichtung from '@/components/bots/BotSteuerungEinrichtung.vue'
+import BotPlaner from '@/components/bots/BotPlaner.vue'
 import Karte from '@/components/basis/Karte.vue'
 import { datum } from '@/components/bots/format.js'
 
@@ -67,7 +68,8 @@ const reiter = computed(() => [
     { id: 'alle', titel: t('bots.alle'), zahl: bots.value.length },
 ])
 
-const gewaehlt = computed(() => (route.params.id ? bots.value.find((b) => b.id === String(route.params.id)) : null))
+const imPlaner = computed(() => route.params.id === 'plan')
+const gewaehlt = computed(() => (route.params.id && !imPlaner.value ? bots.value.find((b) => b.id === String(route.params.id)) : null))
 const oeffnen = (id) => router.push(`/bots/${encodeURIComponent(id)}`)
 </script>
 
@@ -76,11 +78,13 @@ const oeffnen = (id) => router.push(`/bots/${encodeURIComponent(id)}`)
         <Seitenkopf :titel="t('bots.titel')" :unter="stand ? t('bots.stand', { zeit: datum(stand) }) : t('bots.unter')">
             <template #aktionen>
                 <Knopf v-if="route.params.id" art="leise" symbol="pfeilLinks" to="/bots">{{ t('bots.zurueck') }}</Knopf>
+                <Knopf v-else art="normal" symbol="plus" to="/bots/plan">{{ t('bots.plan.knopf') }}</Knopf>
                 <Knopf symbol="aktualisieren" :laedt="laedt" @click="lade(true)">{{ t('bots.aktualisieren') }}</Knopf>
             </template>
         </Seitenkopf>
 
-        <Hinweis v-if="fehler" art="fehler" :titel="t('bots.fehler')">{{ fehler }}</Hinweis>
+        <BotPlaner v-if="imPlaner" :steuerung="steuerung" @gestartet="lade(true)" />
+        <Hinweis v-else-if="fehler" art="fehler" :titel="t('bots.fehler')">{{ fehler }}</Hinweis>
         <Leerzustand v-else-if="nichtEingerichtet" :titel="t('bots.nichtEingerichtet')" :text="t('bots.nichtEingerichtetText')">
             <Knopf art="haupt" to="/einstellungen/boersen">{{ t('nav.settings') }}</Knopf>
         </Leerzustand>

@@ -8304,7 +8304,8 @@
       "zrTreffen": "Confluence of several timeframes",
       "zrErklaerung": "The AI also receives the situation on 1w, 1d and 4h: structure, last break, position in the range, momentum and the nearest levels. Lower bounds and stop losses are also computed just beyond these levels.",
       "warten": "Please wait {s} seconds — every run costs.",
-      "unbelegt": "These numbers are not in the computed data — check them: {zahlen}"
+      "unbelegt": "These numbers are not in the computed data — check them: {zahlen}",
+      "titelPlan": "AI selection"
     },
     "st": {
       "titel": "Bot control (Pionex)",
@@ -8377,7 +8378,8 @@
         "pausieren": "The bot places no new grid orders, the position stays open. Stop loss and take profit stay active.",
         "fortsetzen": "The bot resumes grid trading immediately.",
         "beenden": "Pionex closes the position at market price and releases the margin. The floating loss or gain becomes final.",
-        "starten": "Starts a new bot with this bot's type, direction and coin; empty fields take today's values."
+        "starten": "Starts a new bot with this bot's type, direction and coin; empty fields take today's values.",
+        "planStarten": "Starts the planned bot at Pionex with the plan's coin, type, direction and grid type. Pionex checks the request first (checkParams) and states the estimated liquidation."
       },
       "warn": {
         "marktpreis": "Executed at market price.",
@@ -8422,7 +8424,12 @@
         "verbraucht": "This check was already sent — check again for another change.",
         "zuViel": "Cannot remove more extra margin than there is.",
         "leseschluessel": "No Pionex read key set up (Settings › Exchanges).",
-        "keinGeheimnis": "The server has no main secret — bot control not possible."
+        "keinGeheimnis": "The server has no main secret — bot control not possible.",
+        "kursAusserhalb": "The price must lie between the lower and upper limit.",
+        "coin": "Coin missing or invalid.",
+        "richtung": "Direction missing.",
+        "einsatz": "Investment must be greater than 0.",
+        "tage": "Invalid period."
       },
       "unklarTitel": "Outcome unclear",
       "unklarText": "The connection to Pionex broke off or the answer was ambiguous. Pionex may have executed the change. Do not send again — first look at the bot at Pionex (or here after reloading).",
@@ -8441,6 +8448,75 @@
         "abgelehnt": "rejected",
         "unklar": "unclear",
         "abgewiesen": "refused"
+      },
+      "istNeu": "New bot at Pionex ({id}):",
+      "istNeuFehlt": "The app has not found the new bot at Pionex yet — check the bot list before starting again."
+    },
+    "plan": {
+      "knopf": "Plan a new bot",
+      "titel": "Plan a new bot",
+      "erklaerung": "Plans a new Pionex futures grid bot from scratch. The app measures the situation (price, daily ATR, levels on 1w/1d/4h), builds bands and grid densities from it and runs every variant: how it would have done over the chosen period and what starting today means. Running the numbers costs nothing; only the AI selection is billed by the configured provider.",
+      "coin": "Coin",
+      "art": "Type",
+      "linear": "USDT-M (margin in USDT)",
+      "coinM": "Coin-M (margin in the coin)",
+      "richtung": "Direction",
+      "zeitraum": "Look back over",
+      "tage": "{n} days",
+      "coinUnbekannt": "Pionex does not list this coin as a perpetual.",
+      "rechnen": "Run the numbers",
+      "laedt": "Calculating … the first time the app loads the minute candles, which can take up to a minute.",
+      "lageTitel": "Situation {coin}",
+      "tage7": "7 days",
+      "tage30": "30 days",
+      "spanne30": "30-day range",
+      "kandidatenTitel": "Variants ({n})",
+      "kandidatenText": "Look back: the same band in percent around the price, started {tage} days ago ({von}), simulated on {tf} candles of the market-data source including fees.",
+      "sortieren": "Sort",
+      "sort": {
+        "id": "Order",
+        "ergebnis": "Look back",
+        "verlust": "smallest loss",
+        "liq": "Distance to liquidation"
+      },
+      "beschreibung": "Variant",
+      "rueckblick": "Look back",
+      "liqStart": "Liquidation if started today",
+      "uebernehmen": "Use",
+      "rueckblickHinweis": "The look back only shows how the same setting would have done in the past. It says nothing about the future. The quantity per grid is estimated from investment × leverage (calibrated on 168 real bots); Pionex states the real liquidation in the check before the start.",
+      "kiErklaerung": "The AI gets the situation, the higher timeframes and all calculated variants and picks at most three; every figure comes from the simulation. A call is billed by the configured AI provider (AI › Tasks: “Bots: suggestions”).",
+      "eigenTitel": "Plan",
+      "eigenText": "Take band and grids from a variant or enter them yourself, recalculate and start at Pionex. Coin, type, direction, investment and leverage come from above.",
+      "eigenRechnen": "Recalculate",
+      "starten": "Start at Pionex …",
+      "ohneSteuerung": "Starting requires the bot control to be set up (key with “Bot Trading” and consent, bot overview below).",
+      "stopsNachStart": "The app does not set stop-loss and take-profit at the start. Set them on the new bot via “Stop-loss / Take-profit” afterwards.",
+      "startPosition": "Starting position",
+      "warn": {
+        "gridsGekuerzt": "Fewer grids: with this investment the quantity per grid would be below Pionex's minimum.",
+        "liqImBand": "The estimated liquidation lies inside the band — the bot would be liquidated before reaching the other edge.",
+        "liqNah": "Liquidation less than 10 % away from the price.",
+        "stopHinterLiq": "The stop-loss lies beyond the estimated liquidation and would never trigger.",
+        "gebuehrFrisst": "The grid spacing does not cover the fees."
+      },
+      "fehler": {
+        "coin": "Enter a coin (e.g. SOL).",
+        "coinNichtHandelbar": "Pionex does not offer this coin in this type (USDT-M / Coin-M).",
+        "richtung": "Choose a direction.",
+        "einsatz": "Investment must be greater than 0.",
+        "hebel": "Leverage as a whole number between 1 and 125.",
+        "tage": "Period 30, 60 or 90 days.",
+        "keinKurs": "Pionex has no price for this coin.",
+        "keineKandidaten": "No variant could be calculated — run the numbers first.",
+        "einsatzZuKlein": "The investment is not enough for two grids at Pionex's minimum quantity.",
+        "kursAusserhalb": "The price must lie between the lower and upper limit.",
+        "kiLaeuft": "An AI selection for another input is running — please wait a moment.",
+        "band": "Lower limit must be below the upper limit.",
+        "anzahl": "Number of grids between 2 and 500.",
+        "weitWeg": "The band is very far from the price – typo?",
+        "stopLoss": "Stop-loss must be on the losing side of the price.",
+        "takeProfit": "Take-profit must be on the winning side of the price.",
+        "neutralStop": "Not possible for neutral bots."
       }
     }
   }

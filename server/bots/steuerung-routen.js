@@ -39,6 +39,8 @@ import { logWarn, logInfo } from '../logger.js'
 import { fehlerText } from '../boersen-status.js'
 import { holeBot, holeLaufendeBots, vergesseBot } from './routen.js'
 import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, STEUERBAR } from './steuerung.js'
+import { PLAN_ID, planBot, pruefePlanEingabe, pruefePlanVariante } from './planer.js'
+import { fetchTickerPrice } from '../pionex-api.js'
 import { FASSUNG, einwilligungsText, hakenText, warnung, fassungHash, hakenHash, zustimmungGueltig, hakenGueltig } from './einwilligung.js'
 
 const TOKEN_MS = 5 * 60_000
@@ -152,6 +154,32 @@ async function stellenFuer(bot) {
     } catch { return null }
 }
 
+/**
+ * Der Bot, an dem eine Aktion hängt. `plan` (Bot-Planer) ist kein Pionex-Bot: er
+ * entsteht aus der Eingabe selbst (Coin, Art, Richtung, Band, Grids, Hebel,
+ * Einsatz) und kann nur gestartet werden. Alles, was ihn ausmacht, steht damit
+ * im gebundenen Anfragekörper des Tokens.
+ */
+async function botFuer(id, aktion, eingabe) {
+    if (id !== PLAN_ID) return holeBot(id, { auchBeendete: aktion === 'starten' })
+    if (aktion !== 'starten') return { fehler: 'aktion' }
+    const e = pruefePlanEingabe({ ...eingabe, coinM: eingabe?.coinM === true || eingabe?.coinM === 'true', tage: 30 })
+    if (e.fehler) return { fehler: e.fehler }
+    const kurs = await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`)
+    if (!(kurs > 0)) return { fehler: 'kurs' }
+    const v = pruefePlanVariante({ unten: eingabe?.unten, oben: eingabe?.oben, anzahl: eingabe?.anzahl, art: eingabe?.art }, kurs, e.richtung)
+    if (v.fehler) return { fehler: v.fehler }
+    return planBot({ ...e, ...v, startKurs: kurs, kurs })
+}
+
+/** Nach einem Start: der neue Bot (ID aus der Antwort, sonst der jüngste laufende derselben Coin und Art). */
+export function findeNeuenBot(lauf, bot, seit, antwort) {
+    const id = antwort?.data?.buOrderId ?? antwort?.data?.bu_order_id
+    if (id != null) { const b = lauf.find((x) => x.id === String(id)); if (b) return b }
+    return lauf.filter((b) => b.coin === bot.coin && !!b.coinM === !!bot.coinM && Number(b.erstellt) >= seit - 60_000)
+        .sort((a, b) => Number(b.erstellt) - Number(a.erstellt))[0] || null
+}
+
 function fehlerAntwort(res, e) {
     if (e?.code === 'leseschluessel') return res.status(409).json({ ok: false, code: 'leseschluessel' })
     if (e?.code === 'keinGeheimnis') return res.status(500).json({ ok: false, code: 'keinGeheimnis' })
@@ -242,8 +270,9 @@ export function setupBotSteuerungRoutes(app) {
             if (Date.now() - (zuletztGeprueft.get(id) || 0) < PRUEF_PAUSE_MS) return res.status(429).json({ ok: false, code: 'zuSchnell' })
             zuletztGeprueft.set(id, Date.now())
             const aktion = String(req.body?.aktion || '')
-            const bot = await holeBot(id, { auchBeendete: aktion === 'starten' })
+            const bot = await botFuer(id, aktion, req.body?.eingabe || {})
             if (!bot) return res.status(404).json({ ok: false, code: 'nichtGefunden' })
+            if (bot.fehler) return res.status(400).json({ ok: false, code: bot.fehler })
             if (!STEUERBAR.has(bot.typ)) return res.status(400).json({ ok: false, code: 'typ' })
             const a = baueAktion(bot, aktion, req.body?.eingabe || {}, { stellen: await stellenFuer(bot) })
             if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
@@ -256,7 +285,7 @@ export function setupBotSteuerungRoutes(app) {
                 ok: true, aktion, bestanden, ohnePruefung: !a.pruefen,
                 pruefung: pruefung ? { result: pruefung.result, message: pruefung.message || null, code: pruefung.code || null, data: pruefung.data || null } : null,
                 liq: pruefung?.data ? liqAusPruefung(bot, pruefung.data) : null,
-                vorher: einstellungVon(bot), nachher: a.nachher, warnungen: a.warnungen,
+                vorher: bot.plan ? null : einstellungVon(bot), nachher: a.nachher, warnungen: a.warnungen,
                 anfrage: a.senden, token: t, testbetrieb: istTestbetrieb(),
             })
         } catch (e) {
@@ -283,8 +312,9 @@ export function setupBotSteuerungRoutes(app) {
             const k = await schluessel()
             if (!k) return res.status(403).json({ ok: false, code: 'keinSchluessel' })
             if (Date.now() - (zuletztGesendet.get(id) || 0) < SPERRE_MS) return res.status(429).json({ ok: false, code: 'zuSchnell' })
-            const bot = await holeBot(id, { auchBeendete: aktion === 'starten' })
+            const bot = await botFuer(id, String(aktion || ''), eingabe || {})
             if (!bot) return res.status(404).json({ ok: false, code: 'nichtGefunden' })
+            if (bot.fehler) return res.status(400).json({ ok: false, code: bot.fehler })
             const a = baueAktion(bot, String(aktion || ''), eingabe || {}, { stellen: await stellenFuer(bot) })
             if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
             // Der Token beweist, dass GENAU diese Anfrage geprüft wurde (Kurs ausgenommen).
@@ -308,14 +338,17 @@ export function setupBotSteuerungRoutes(app) {
                 throw e
             }
             zuletztGesendet.set(id, Date.now())
+            const sendeZeit = Date.now()
             const s = await sende(k, a.senden.pfad, a.senden.body)
             // Soll/Ist (Audit SEC-06): Pionex verarbeitet asynchron — kurz warten, dann frisch lesen.
             let ist = null
             if (s.zustand !== 'abgelehnt') {
                 await new Promise((ok) => setTimeout(ok, NACHLESEN_MS))
                 try {
-                    const neu = (await holeLaufendeBots()).find((b) => b.id === bot.id)
-                    ist = neu ? einstellungVon(neu) : { status: 'nichtMehrLaufend' }
+                    const lauf = await holeLaufendeBots()
+                    // Ein Start erzeugt einen NEUEN Bot — der alte (oder der Plan) ist nicht gemeint
+                    const neu = a.aktion === 'starten' ? findeNeuenBot(lauf, bot, sendeZeit, s.antwort) : lauf.find((b) => b.id === bot.id)
+                    ist = neu ? { ...einstellungVon(neu), ...(a.aktion === 'starten' ? { neueId: neu.id } : {}) } : { status: a.aktion === 'starten' ? 'nichtGefunden' : 'nichtMehrLaufend' }
                 } catch (e) { ist = { fehler: fehlerText(e) } }
             }
             await getKnex()('bot_aenderungen').where('id', zeileId).update({

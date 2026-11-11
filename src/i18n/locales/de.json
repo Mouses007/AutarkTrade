@@ -8304,7 +8304,8 @@
       "zrTreffen": "Zusammentreffen mehrerer Zeitrahmen",
       "zrErklaerung": "Die KI bekommt zusätzlich die Lage auf 1w, 1d und 4h: Struktur, letzter Bruch, Lage in der Spanne, Momentum und die nächsten Niveaus. Untergrenzen und Stop-Loss werden auch knapp jenseits dieser Niveaus durchgerechnet.",
       "warten": "Bitte {s} Sekunden warten — jeder Aufruf kostet.",
-      "unbelegt": "Diese Zahlen stehen nicht in den gerechneten Daten — nachprüfen: {zahlen}"
+      "unbelegt": "Diese Zahlen stehen nicht in den gerechneten Daten — nachprüfen: {zahlen}",
+      "titelPlan": "KI-Auswahl"
     },
     "st": {
       "titel": "Bot-Steuerung (Pionex)",
@@ -8377,7 +8378,8 @@
         "pausieren": "Der Bot stellt keine neuen Grid-Orders, die Position bleibt offen. Stop-Loss und Take-Profit bleiben aktiv.",
         "fortsetzen": "Der Bot nimmt den Grid-Handel sofort wieder auf.",
         "beenden": "Pionex schliesst die Position zum Marktpreis und gibt die Marge frei. Der schwebende Verlust oder Gewinn wird damit fest.",
-        "starten": "Startet einen neuen Bot mit Typ, Richtung und Coin dieses Bots; leere Felder übernehmen die heutigen Werte."
+        "starten": "Startet einen neuen Bot mit Typ, Richtung und Coin dieses Bots; leere Felder übernehmen die heutigen Werte.",
+        "planStarten": "Startet den geplanten Bot bei Pionex mit Coin, Art, Richtung und Grid-Art des Plans. Pionex prüft die Anfrage vorher (checkParams) und nennt die geschätzte Liquidation."
       },
       "warn": {
         "marktpreis": "Ausführung zum Marktpreis.",
@@ -8422,7 +8424,12 @@
         "verbraucht": "Diese Prüfung wurde schon gesendet — für eine weitere Änderung neu prüfen.",
         "zuViel": "Mehr Extra-Marge abziehen als vorhanden ist nicht möglich.",
         "leseschluessel": "Kein Pionex-Leseschlüssel eingerichtet (Einstellungen › Börsen).",
-        "keinGeheimnis": "Der Server hat kein Hauptgeheimnis — Bot-Steuerung nicht möglich."
+        "keinGeheimnis": "Der Server hat kein Hauptgeheimnis — Bot-Steuerung nicht möglich.",
+        "kursAusserhalb": "Der Kurs muss zwischen Unter- und Obergrenze liegen.",
+        "coin": "Coin fehlt oder ist ungültig.",
+        "richtung": "Richtung fehlt.",
+        "einsatz": "Einsatz muss grösser als 0 sein.",
+        "tage": "Ungültiger Zeitraum."
       },
       "unklarTitel": "Ausgang unklar",
       "unklarText": "Die Verbindung zu Pionex brach ab oder antwortete nicht eindeutig. Pionex kann die Änderung ausgeführt haben. Nicht erneut senden — zuerst den Bot bei Pionex (oder hier nach dem Neuladen) ansehen.",
@@ -8441,6 +8448,75 @@
         "abgelehnt": "abgelehnt",
         "unklar": "unklar",
         "abgewiesen": "abgewiesen"
+      },
+      "istNeu": "Neuer Bot bei Pionex ({id}):",
+      "istNeuFehlt": "Den neuen Bot hat die App bei Pionex noch nicht gefunden — bitte in der Bot-Liste nachsehen, bevor du erneut startest."
+    },
+    "plan": {
+      "knopf": "Neuen Bot planen",
+      "titel": "Neuen Bot planen",
+      "erklaerung": "Plant einen neuen Futures-Grid-Bot bei Pionex von Grund auf. Die App misst die Lage (Kurs, Tages-ATR, Niveaus auf 1w/1d/4h), baut daraus Bänder und Grid-Dichten und rechnet jede Variante durch: wie sie sich über den gewählten Zeitraum geschlagen hätte und was ein Start heute bedeutet. Durchrechnen kostet nichts; nur die KI-Auswahl kostet beim eingestellten Anbieter.",
+      "coin": "Coin",
+      "art": "Art",
+      "linear": "USDT-M (Marge in USDT)",
+      "coinM": "Coin-M (Marge in der Coin)",
+      "richtung": "Richtung",
+      "zeitraum": "Rückblick über",
+      "tage": "{n} Tage",
+      "coinUnbekannt": "Diese Coin führt Pionex nicht als Perpetual.",
+      "rechnen": "Durchrechnen",
+      "laedt": "Rechnet … beim ersten Mal lädt die App die Minutenkerzen, das kann bis zu einer Minute dauern.",
+      "lageTitel": "Lage {coin}",
+      "tage7": "7 Tage",
+      "tage30": "30 Tage",
+      "spanne30": "30-Tage-Spanne",
+      "kandidatenTitel": "Varianten ({n})",
+      "kandidatenText": "Rückblick: dasselbe Band in Prozent um den Kurs, gestartet vor {tage} Tagen ({von}), simuliert auf {tf}-Kerzen der Marktdatenquelle mit Gebühren.",
+      "sortieren": "Sortieren",
+      "sort": {
+        "id": "Reihenfolge",
+        "ergebnis": "Rückblick",
+        "verlust": "kleinster Verlust",
+        "liq": "Abstand Liquidation"
+      },
+      "beschreibung": "Variante",
+      "rueckblick": "Rückblick",
+      "liqStart": "Liquidation bei Start heute",
+      "uebernehmen": "Übernehmen",
+      "rueckblickHinweis": "Der Rückblick zeigt nur, wie sich dieselbe Einstellung in der Vergangenheit geschlagen hätte. Über die Zukunft sagt er nichts. Die Menge je Grid ist aus Einsatz × Hebel geschätzt (an 168 echten Bots geeicht); die echte Liquidation nennt Pionex bei der Prüfung vor dem Start.",
+      "kiErklaerung": "Die KI bekommt die Lage, die hohen Zeitrahmen und alle gerechneten Varianten und wählt höchstens drei aus; jede Zahl stammt aus der Simulation. Ein Aufruf kostet beim eingestellten KI-Anbieter (KI › Aufgaben: «Bots: Vorschläge»).",
+      "eigenTitel": "Plan",
+      "eigenText": "Band und Grids aus einer Variante übernehmen oder selbst eingeben, nachrechnen und bei Pionex starten. Coin, Art, Richtung, Einsatz und Hebel kommen von oben.",
+      "eigenRechnen": "Nachrechnen",
+      "starten": "Bei Pionex starten …",
+      "ohneSteuerung": "Starten geht erst mit eingerichteter Bot-Steuerung (Schlüssel mit «Bot Trading» und Einwilligung, Bot-Übersicht unten).",
+      "stopsNachStart": "Stop-Loss und Take-Profit setzt die App nicht beim Start. Nach dem Start beim neuen Bot über «Stop-Loss / Take-Profit» setzen.",
+      "startPosition": "Startposition",
+      "warn": {
+        "gridsGekuerzt": "Weniger Grids: mit diesem Einsatz läge die Menge je Grid unter der Mindestmenge von Pionex.",
+        "liqImBand": "Die geschätzte Liquidation liegt im Band — der Bot würde liquidiert, bevor er die Gegengrenze erreicht.",
+        "liqNah": "Liquidation weniger als 10 % vom Kurs entfernt.",
+        "stopHinterLiq": "Der Stop-Loss liegt hinter der geschätzten Liquidation und würde nie auslösen.",
+        "gebuehrFrisst": "Der Abstand je Grid deckt die Gebühren nicht."
+      },
+      "fehler": {
+        "coin": "Coin eingeben (z. B. SOL).",
+        "coinNichtHandelbar": "Diese Coin gibt es bei Pionex nicht in dieser Art (USDT-M / Coin-M).",
+        "richtung": "Richtung wählen.",
+        "einsatz": "Einsatz muss grösser als 0 sein.",
+        "hebel": "Hebel als ganze Zahl zwischen 1 und 125.",
+        "tage": "Zeitraum 30, 60 oder 90 Tage.",
+        "keinKurs": "Pionex liefert für diese Coin keinen Kurs.",
+        "keineKandidaten": "Keine rechenbare Variante — zuerst «Durchrechnen».",
+        "einsatzZuKlein": "Der Einsatz reicht nicht für zwei Grids mit der Mindestmenge von Pionex.",
+        "kursAusserhalb": "Der Kurs muss zwischen Unter- und Obergrenze liegen.",
+        "kiLaeuft": "Gerade läuft eine KI-Auswahl für eine andere Eingabe — kurz warten.",
+        "band": "Untergrenze muss kleiner sein als die Obergrenze.",
+        "anzahl": "Anzahl Grids zwischen 2 und 500.",
+        "weitWeg": "Das Band liegt sehr weit vom Kurs weg – Tippfehler?",
+        "stopLoss": "Stop-Loss muss auf der Verlustseite des Kurses liegen.",
+        "takeProfit": "Take-Profit muss auf der Gewinnseite des Kurses liegen.",
+        "neutralStop": "Für Neutral-Bots nicht möglich."
       }
     }
   }

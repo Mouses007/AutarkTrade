@@ -167,23 +167,28 @@ async function simKerzen(bot) {
     const ende = bot.beendet || Date.now()
     const start = bot.erstellt
     if (!start) return { tf: null, kerzen: [] }
+    const daten = await ladeSimKerzen(bot.symbol, start, ende, { funding: bot.typ !== 'spot_grid' })
+    simCache.set(bot.id, daten)
+    return daten
+}
+
+/** Feine Futures-Kerzen [start, ende] (USD je Coin) und der Funding-Verlauf — auch für den Bot-Planer. */
+export async function ladeSimKerzen(symbol, start, ende, { funding: mitFunding = true } = {}) {
     const tf = simZeitrahmen(ende - start)
     const schritt = TF_MS[tf]
     const kerzen = []
     for (let von = Math.floor(start / schritt) * schritt, runde = 0; von < ende && runde < 80; runde++) {
         const bis = Math.min(ende, von + 1000 * schritt)
-        const teil = await holeKerzen(bot.symbol, tf, { markt: 'futures', start: von, ende: bis, limit: 1000 })
+        const teil = await holeKerzen(symbol, tf, { markt: 'futures', start: von, ende: bis, limit: 1000 })
         for (const k of teil) if (k.t >= start - schritt && k.t <= ende && (!kerzen.length || k.t > kerzen.at(-1).t)) kerzen.push({ t: k.t, o: k.o, h: k.h, l: k.l, c: k.c })
         von = bis
     }
     // Funding-Verlauf der Marktdatenquelle (Pionex veröffentlicht keinen); fehlt er, rechnet die Simulation ohne
     let funding = null
-    if (bot.typ !== 'spot_grid') {
-        try { funding = await fundingVerlauf(bot.symbol, start, ende) } catch { funding = null }
+    if (mitFunding) {
+        try { funding = await fundingVerlauf(symbol, start, ende) } catch { funding = null }
     }
-    const daten = { zeit: Date.now(), tf, kerzen, funding }
-    simCache.set(bot.id, daten)
-    return daten
+    return { zeit: Date.now(), tf, kerzen, funding }
 }
 
 // ── KI-Vorschläge ────────────────────────────────────────────────────────

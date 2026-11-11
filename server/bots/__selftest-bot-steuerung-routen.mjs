@@ -50,7 +50,8 @@ globalThis.__botTest = {
         if (pionex.modus === 'zeit') throw new Error('The operation was aborted due to timeout')
         if (pionex.modus === 'abgelehnt') throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] nein')
         if (pionex.modus === 'gateway') throw new Error('Pionex API: 502 Bad Gateway')
-        return { result: true, data: {} }
+        pionex.letzte = { pfad, body }
+        return { result: true, data: pionex.neueId ? { buOrderId: pionex.neueId } : {} }
     },
 }
 
@@ -122,6 +123,26 @@ try {
     const s7 = await sende((await pruefe()).token)
     p('Testbetrieb → 403, keine Sendung', s7.status === 403 && s7.d.code === 'testbetrieb' && pionex.sendungen === vorher)
     delete process.env.AT_TESTBETRIEB
+
+    console.log('Bot-Planer: Start aus einem Plan')
+    globalThis.__botTest.kurs = 160
+    const plan = { coin: 'SOL', coinM: true, richtung: 'LONG', unten: '120', oben: '200', anzahl: '100', art: 'arithmetic', hebel: '4', einsatz: '1' }
+    const falsch = await post('/api/bots/plan/aktion/pruefen', { aktion: 'band', eingabe: plan })
+    p('Plan kennt nur „starten"', falsch.status === 400 && falsch.d.code === 'aktion')
+    const ausserhalb = await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: { ...plan, unten: '170' } })
+    p('Kurs ausserhalb des Bands → 400', ausserhalb.status === 400 && ausserhalb.d.code === 'kursAusserhalb')
+    const pp = (await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: plan })).d
+    const bd = pp.anfrage?.body?.buOrderData
+    p('Prüfung über checkParams, Token da, kein „vorher"', pp.bestanden && !!pp.token && pp.vorher === null)
+    p('Coin-M: base USDT.PERP, quote SOL, Long der Coin = trend short, Band invers', pp.anfrage.body.base === 'USDT.PERP' && pp.anfrage.body.quote === 'SOL' && bd.trend === 'short' && Math.abs(Number(bd.top) - 1 / 120) < 1e-6 && Math.abs(Number(bd.bottom) - 1 / 200) < 1e-6 && bd.cateType === 'FUTURE_GRID_COIN_MARGINED' && bd.row === 100 && bd.leverage === 4)
+    const vor = pionex.sendungen
+    pionex.neueId = bot.id
+    const sp = await post('/api/bots/plan/aktion/senden', { aktion: 'starten', eingabe: plan, token: pp.token, haken: true, hakenText: haken })
+    pionex.neueId = null
+    p('Start gesendet (create), genau eine Sendung', sp.d.zustand === 'ausgefuehrt' && pionex.sendungen === vor + 1 && /\/create$/.test(pionex.letzte.pfad))
+    p('Ist = der neue Bot (ID aus der Antwort)', sp.d.ist?.neueId === bot.id)
+    const anders = await post('/api/bots/plan/aktion/senden', { aktion: 'starten', eingabe: { ...plan, hebel: '5' }, token: (await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: plan })).d.token, haken: true, hakenText: haken })
+    p('anderer Hebel als geprüft → 409 neuPruefen', anders.status === 409 && anders.d.code === 'neuPruefen')
 
     console.log('Protokoll')
     const prot = await (await fetch(`${basis}/api/bots/${bot.id}/aenderungen`)).json()
