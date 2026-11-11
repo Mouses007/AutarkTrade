@@ -9,6 +9,7 @@ import { setupTradePopupRoutes } from './server/trade-popups.js'
 import { setupBitgetRoutes } from './server/bitget-api.js'
 import { setupPionexRoutes } from './server/pionex-api.js'
 import { setupBotRoutes } from './server/bots/routen.js'
+import { startBotVerlaufTakt } from './server/bots/verlauf.js'
 import { setupBinanceRoutes } from './server/binance-api.js'
 import { setupQuellenRoutes } from './server/quellen/routen.js'
 import { setupMarginRateRoutes } from './server/margin-rates.js'
@@ -317,6 +318,8 @@ async function starteServer() {
         ['Benachrichtigungen', startBenachrichtigungsTakt],
         // HTTPS-Zertifikat: täglich prüfen/erneuern, Wechsel anderer Prozesse nachladen.
         ['TLS', startTlsTakt],
+        // Bot-Seite: alle 15 min ein Schnappschuss je laufendem Pionex-Bot.
+        ['Bot-Verlauf', startBotVerlaufTakt],
     ]);
 
     // Strategie-Engine: der Takt läuft immer, gearbeitet wird nur für Instanzen,

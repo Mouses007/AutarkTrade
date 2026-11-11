@@ -399,6 +399,7 @@ watch([allBots, betragArt], renderAll, { deep: false })
 
 <template>
     <div class="bot">
+        <router-link v-if="!comingSoon" to="/bots" class="bot-seite-link">{{ t('bots.imJournal') }} →</router-link>
         <!-- Börse ohne Bot-Unterstützung → kommt bald -->
         <Karte v-if="comingSoon" class="bot-leer">
             <Symbol name="agent" :groesse="36" class="bot-leer-symbol" />
@@ -863,4 +864,5 @@ watch([allBots, betragArt], renderAll, { deep: false })
     font-size: 0.72rem;
     color: var(--muted);
 }
+.bot-seite-link { align-self: flex-end; font-size: 0.85rem; color: var(--accent); }
 </style>

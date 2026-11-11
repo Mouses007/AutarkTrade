@@ -298,6 +298,13 @@ times of day and week do I trade well, and does it turn with session length or
 trade count. Groups with fewer than four sessions are greyed out rather than
 presented as a finding — three sessions on a Tuesday are noise.
 
+### Bots (Pionex)
+
+- **Own page** (Journal › Bots) for running and finished Pionex bots, read only: everything the Pionex bot API delivers — grid range, number of grids, arithmetic/geometric, direction, leverage, investment and extra margin, grid profit (total and 24 h), completed cycles, funding, fees, position, average entry, estimated liquidation, stop loss / take profit, trigger and trailing.
+- **Own figures**: profit realised and floating in the margin coin, return and annualised return, grid spacing and net profit per cycle after fees, where the price sits relative to the range, distance to liquidation (also in daily ATR), time spent inside the range over the runtime. Hints state facts only (e.g. "price below the range"), never advice. Coin-M bots are converted to USD per coin.
+- **Detail view**: price over the runtime with the grid range and liquidation line (candles from the chosen market-data source), an own history curve recorded every 15 minutes (Pionex keeps no history), what the bot type does and what Pionex itself advises for its parameters (with sources), and all raw fields.
+- Pionex exposes only Spot Grid, Futures Grid (incl. Coin-M and Leveraged) and Smart Copy through its API; other bot types cannot be read.
+
 ### Calendar & Daily View
 - **Calendar Heatmap** — visual overview of daily P&L across months
 - **Daily Summary** — per-day performance with candlestick charts (OHLCV)

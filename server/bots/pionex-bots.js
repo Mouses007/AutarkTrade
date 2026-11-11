@@ -90,7 +90,14 @@ export function normalisiereBot(o) {
     const laufend = status === 'running' || status === 'open' || ['paused', 'condition_lock', 'prepare'].includes(status)
 
     const gebuehrZyklus = zyklusGebuehr(typ)
-    const abstand = gridAbstand(unten, oben, anzahl, art)
+    // Coin-M: Pionex verteilt die Grids auf dem INVERSEN Preis (Coin je USDT).
+    // Arithmetisch dort heisst in USD unten dichter, oben weiter (Pionex-Hilfe
+    // „Coin-M Futures Grid") — also auf den Rohwerten rechnen und die Enden tauschen.
+    let abstand = null
+    if (coinM) {
+        const a = gridAbstand(preisOderNull(d.bottom), preisOderNull(d.top), anzahl, art)
+        abstand = a ? { unten: a.oben, oben: a.unten, mitte: a.mitte } : null
+    } else abstand = gridAbstand(unten, oben, anzahl, art)
 
     return {
         id: String(o.buOrderId),

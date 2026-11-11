@@ -2012,6 +2012,7 @@ function getPositionDate(pos) {
                         <div class="abschnitt-kopf">
                             <Symbol name="ki" :groesse="18" class="kopf-symbol" />
                             <span class="abschnitt-titel">{{ t('incoming.botEvaluation') }}</span>
+                            <router-link to="/bots" class="bot-seite-link">{{ t('bots.imJournal') }}</router-link>
                         </div>
 
                         <!-- Notiz (Quill Editor) -->
@@ -2052,6 +2053,7 @@ function getPositionDate(pos) {
                         <div class="abschnitt-kopf">
                             <Symbol name="ki" :groesse="18" class="kopf-symbol" />
                             <span class="abschnitt-titel">{{ t('incoming.botEvaluation') }}</span>
+                            <router-link to="/bots" class="bot-seite-link">{{ t('bots.imJournal') }}</router-link>
                         </div>
 
                         <!-- Notiz (Quill Editor) -->
@@ -2673,4 +2675,5 @@ function getPositionDate(pos) {
         font-size: 1.05rem;
     }
 }
+.bot-seite-link { margin-left: auto; font-size: 0.8rem; color: var(--accent); }
 </style>

@@ -110,6 +110,7 @@ export const routen = [
 
     // ── Journal ─────────────────────────────────────────────
     seite('/journal', 'journalUebersicht', () => import('../views/JournalUebersicht.vue'), { title: 'Dashboard', titleKey: 'nav.dashboard' }),
+    seite('/bots/:id?', 'bots', () => import('../views/Bots.vue'), { title: 'Bots', titleKey: 'nav.bots' }),
     seite('/accounts', 'accounts', () => import('../views/Accounts.vue'), { title: 'Konten', titleKey: 'nav.accounts' }),
     seite('/kalender', 'kalender', () => import('../views/Kalender.vue'), { title: 'Kalender', titleKey: 'nav.calendar' }),
     seite('/tagesansicht', 'tagesansicht', () => import('../views/Tagesansicht.vue'), { title: 'Tagesansicht', titleKey: 'nav.dailyView' }),

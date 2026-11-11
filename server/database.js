@@ -16,6 +16,7 @@ import { migrierePortfolio } from './migrationen/portfolio.js'
 import { migriereCoinMUsdt } from './migrationen/coinm-usdt.js'
 import { migriereDouble } from './migrationen/double.js'
 import { migriereTls } from './migrationen/tls.js'
+import { migriereBots } from './migrationen/bots.js'
 import { migriereZweifaktor } from './migrationen/zweifaktor.js'
 import { migriereTradePopups } from './migrationen/trade-popups.js'
 import { migriereKiAufgaben, migriereProfil, migriereKartenName, migriereLiveFelder } from './migrationen/einstellungen-ordnung.js'
@@ -3717,6 +3718,7 @@ async function runMigrations(knex, client) {
     // ── HTTPS in der App + ESP32-Anzeige-Schlüssel (additiv, ohne SCHEMA_VERSION) ──
     // Tabelle `tls_zertifikat` (eigene CA, Server-Zertifikat), `settings.esp32AnzeigeKey`.
     await migriereTls(knex, addColumnIfNotExists)
+    await migriereBots(knex)
 
     // ── Zweiter Faktor beim Anmelden (additiv, ohne SCHEMA_VERSION) ──
     // TOTP-Spalten in `settings`, Tabelle `auth_schluessel` (YubiKey/WebAuthn).

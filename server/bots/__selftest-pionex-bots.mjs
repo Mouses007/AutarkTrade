@@ -72,6 +72,11 @@ p('Zähler bleiben echt (2356 Zyklen, 0 Trades in 24 h)', lauf.ergebnis.zyklen =
 p('kein Trigger, kein Trailing', lauf.trigger === null && lauf.trailing === null)
 p('Stop-Loss ohne Wert = null', lauf.stops.stopLoss === null && lauf.stops.takeProfit === null)
 p('Netto je Zyklus = Abstand − 2 × Futures-Maker', nahe(lauf.grid.nettoJeZyklus, lauf.grid.abstand.mitte - 0.0004))
+// Inverse arithmetische Grids: Schritt in Coin je USDT, relativ am USD-Unterende kleiner
+const schrittInv = (0.0105263 - 0.005) / 320
+p('Coin-M: Abstand unten (USD 95) ≈ Schritt / 0.0105263 ≈ 0,156 %', nahe(lauf.grid.abstand.unten, schrittInv / (0.0105263 - schrittInv), 1e-9))
+p('Coin-M: Abstand oben (USD 200) ≈ Schritt / 0.005 ≈ 0,33 %', nahe(lauf.grid.abstand.oben, schrittInv / 0.005, 1e-9))
+p('Coin-M: unten dichter als oben', lauf.grid.abstand.unten < lauf.grid.abstand.oben)
 
 console.log('Beendeter linearer Bot (SUI, liquidiert)')
 const sui = normalisiereBot(rohSui)

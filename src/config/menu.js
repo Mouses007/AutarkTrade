@@ -42,6 +42,7 @@ export const PAGES = [
 
     // ── Journal ─────────────────────────────────────────────
     { id: 'journalUebersicht', mode: 'journal', path: '/journal', symbol: 'raster', titleKey: 'nav.dashboard', group: 'analyze' },
+    { id: 'bots', mode: 'journal', path: '/bots', symbol: 'agent', titleKey: 'nav.bots', group: 'analyze' },
     { id: 'tagesansicht', mode: 'journal', path: '/tagesansicht', symbol: 'balken', titleKey: 'nav.dailyView', group: 'analyze' },
     { id: 'kalender', mode: 'journal', path: '/kalender', symbol: 'kalender', titleKey: 'nav.calendar', group: 'analyze' },
     { id: 'bewertungen', mode: 'journal', path: '/bewertungen', symbol: 'kompass', titleKey: 'nav.playbook', group: 'reflect' },
