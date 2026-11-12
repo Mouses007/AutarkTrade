@@ -109,7 +109,7 @@ p('linear: Down = unten, checkParams-Felder als „nachher"', nahe(ll.vorher.unt
 p('heutige Einstellung lesbar', einstellungVon(coinm).anzahl === 320 && einstellungVon(coinm).hebel === 4)
 
 console.log('Einwilligung und Haken')
-p('Fassung im Text, Haftung mit Ausnahme (Art. 100 OR)', einwilligungsText().includes(FASSUNG) && einwilligungsText().includes('grober Fahrlässigkeit') && !/niemals haft/i.test(einwilligungsText()))
+p('Fassung im Text, Haftung ausgeschlossen', einwilligungsText().includes(FASSUNG) && einwilligungsText().includes('haften die Entwickler von AutarkTrade nicht') && !/niemals haft/i.test(einwilligungsText()))
 p('Text nennt Totalverlust, Unwiderruflichkeit, KI, Schlüssel ohne Auszahlung', ['Totalverlust', 'unwiderruflich', 'KI', 'Auszahlungsrecht'].every((w) => einwilligungsText().includes(w)))
 p('Warnblock im Wortlaut (Kaffee)', warnung().length === 4 && warnung()[3].includes('Kaffee'))
 p('Zustimmung gilt nur für die heutige Fassung', zustimmungGueltig({ fassung: FASSUNG, hash: fassungHash(), zeit: 1 }) && !zustimmungGueltig({ fassung: '0.9', hash: fassungHash(), zeit: 1 }) && !zustimmungGueltig({ fassung: FASSUNG, hash: 'x', zeit: 1 }) && !zustimmungGueltig(null))

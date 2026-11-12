@@ -11,7 +11,7 @@
  */
 import crypto from 'node:crypto'
 
-export const FASSUNG = '1.2 vom 11.11.2026'
+export const FASSUNG = '1.3 vom 12.11.2026'
 
 /**
  * Gegliedert, damit die Oberfläche die Punkte einzeln zeigen kann; Fassung und
@@ -26,7 +26,7 @@ const TEXT = {
             { symbol: 'blitz', titel: 'Sofort und endgültig', text: 'Pionex führt jede Änderung sofort und unwiderruflich aus. Beim Ändern des Bands oder Beenden wird zum Marktpreis gehandelt. Mit Hebel ist ein Totalverlust möglich.' },
             { symbol: 'ki', titel: 'Rückblick und KI sind keine Prognose', text: 'Simulationen rechnen mit vergangenen Kursen, KI-Vorschläge können falsch sein. Beides ist keine Anlageberatung.' },
             { symbol: 'schluessel', titel: 'Dein Schlüssel', text: 'Lege den API-Schlüssel ohne Auszahlungsrecht und mit IP-Freigabe an.' },
-            { symbol: 'waage', titel: 'Dein Risiko', text: 'Du entscheidest selbst. Für Verluste haften die Entwickler von AutarkTrade nicht, ausser bei Absicht oder grober Fahrlässigkeit.' },
+            { symbol: 'waage', titel: 'Dein Risiko', text: 'Du entscheidest selbst und trägst das Risiko. Für Verluste haften die Entwickler von AutarkTrade nicht.' },
         ],
     },
     en: {
@@ -37,7 +37,7 @@ const TEXT = {
             { symbol: 'blitz', titel: 'Immediate and final', text: 'Pionex executes every change immediately and irrevocably. Changing the range or closing trades at market price. With leverage a total loss is possible.' },
             { symbol: 'ki', titel: 'Hindsight and AI are no forecast', text: 'Simulations use past prices, AI suggestions can be wrong. Neither is investment advice.' },
             { symbol: 'schluessel', titel: 'Your key', text: 'Create the API key without withdrawal permission and with an IP whitelist.' },
-            { symbol: 'waage', titel: 'Your risk', text: 'You decide yourself. The developers of AutarkTrade are not liable for losses, except for intent or gross negligence.' },
+            { symbol: 'waage', titel: 'Your risk', text: 'You decide yourself and bear the risk. The developers of AutarkTrade are not liable for losses.' },
         ],
     },
 }
