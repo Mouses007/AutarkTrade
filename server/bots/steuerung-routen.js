@@ -41,7 +41,7 @@ import { holeBot, holeLaufendeBots, vergesseBot } from './routen.js'
 import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, STEUERBAR } from './steuerung.js'
 import { PLAN_ID, planBot, pruefePlanEingabe, pruefePlanVariante } from './planer.js'
 import { fetchTickerPrice } from '../pionex-api.js'
-import { FASSUNG, einwilligungsText, hakenText, warnung, fassungHash, hakenHash, zustimmungGueltig, hakenGueltig } from './einwilligung.js'
+import { FASSUNG, einwilligungsText, einwilligungsTeile, hakenText, warnung, fassungHash, hakenHash, zustimmungGueltig, hakenGueltig } from './einwilligung.js'
 
 const TOKEN_MS = 5 * 60_000
 let SPERRE_MS = 10_000
@@ -199,7 +199,7 @@ export function setupBotSteuerungRoutes(app) {
                 freigeschaltet: zustimmungGueltig(zust),
                 zustimmung: zust,
                 fassung: FASSUNG, hash: fassungHash(),
-                text: einwilligungsText(sprache), haken: hakenText(sprache), warnung: warnung(sprache),
+                text: einwilligungsText(sprache), teile: einwilligungsTeile(sprache), haken: hakenText(sprache), warnung: warnung(sprache),
                 testbetrieb: istTestbetrieb(),
             })
         } catch (e) {

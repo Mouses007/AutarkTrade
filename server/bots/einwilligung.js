@@ -11,49 +11,41 @@
  */
 import crypto from 'node:crypto'
 
-export const FASSUNG = '1.1 vom 11.11.2026'
+export const FASSUNG = '1.2 vom 11.11.2026'
 
+/**
+ * Gegliedert, damit die Oberfläche die Punkte einzeln zeigen kann; Fassung und
+ * Hash laufen über den daraus gebauten Klartext (`einwilligungsText`).
+ */
 const TEXT = {
-    de: [
-        'Bot-Steuerung in AutarkTrade — Einwilligung',
-        `Fassung ${FASSUNG}`,
-        '',
-        'Mit der Bot-Steuerung kann diese App Einstellungen deiner Pionex-Bots über deinen eigenen API-Schlüssel ändern, Marge hinzufügen oder abziehen, Stop-Loss und Take-Profit setzen, Bots pausieren, fortsetzen, beenden und neu starten.',
-        '',
-        '1. Jede Änderung führt die App nur aus, wenn du sie im Einzelfall auslöst und vorher bestätigst. Nichts läuft automatisch.',
-        '2. Pionex führt eine gesendete Änderung sofort und unwiderruflich aus. Beim Ändern des Bands oder Beenden wird zum Marktpreis gehandelt; dabei können Verluste realisiert werden.',
-        '3. Grid-Bots mit Hebel können bis zur Liquidation verlieren. Ein Totalverlust des eingesetzten Kapitals ist möglich.',
-        '4. Simulationen sind Rückblicke auf vergangene Kurse und Modelle mit Näherungen (Gebühren, Funding, Ausführung). Sie sagen nicht voraus, was der Kurs macht.',
-        '5. KI-Vorschläge sind KI-generiert. KI kann Fehler machen und Dinge erfinden; KI-Verwendung kann zu Verlusten führen. Vorschläge sind keine Anlageberatung.',
-        '6. Die Verbindung zu Pionex kann ausfallen oder verzögert sein, und Pionex kann seine Schnittstelle ändern. Darauf hat AutarkTrade keinen Einfluss.',
-        '7. Du bist für deinen API-Schlüssel verantwortlich. Lege ihn ohne Auszahlungsrecht und mit IP-Freigabe an.',
-        '8. Du prüfst jede Änderung selbst und triffst jede Entscheidung selbst. Die Nutzung erfolgt auf eigenes Risiko. Verlierst du dabei Geld, haften die Entwickler von AutarkTrade nicht dafür. Ausgenommen sind nur Schäden, die sie absichtlich oder grob fahrlässig verursachen, und Schäden an Leben, Körper oder Gesundheit.',
-        '',
-        'AutarkTrade ist freie Software (AGPL-3.0-or-later) ohne Gewährleistung, siehe Haftungsausschluss.',
-    ],
-    en: [
-        'Bot control in AutarkTrade — consent',
-        `Version ${FASSUNG}`,
-        '',
-        'With bot control this app can change settings of your Pionex bots through your own API key, add or remove margin, set stop loss and take profit, pause, resume, close and start bots.',
-        '',
-        '1. The app carries out a change only when you trigger it individually and confirm it beforehand. Nothing runs automatically.',
-        '2. Pionex executes a sent change immediately and irrevocably. Changing the range or closing trades at market price; losses can be realised.',
-        '3. Leveraged grid bots can lose up to liquidation. A total loss of the capital used is possible.',
-        '4. Simulations look back at past prices and are models with approximations (fees, funding, execution). They do not predict what the price will do.',
-        '5. AI suggestions are AI-generated. AI can make mistakes and invent things; using AI can lead to losses. Suggestions are not investment advice.',
-        '6. The connection to Pionex can fail or be delayed, and Pionex can change its interface. AutarkTrade has no influence on this.',
-        '7. You are responsible for your API key. Create it without withdrawal permission and with an IP whitelist.',
-        '8. You check every change yourself and make every decision yourself. Use is at your own risk. If you lose money, the developers of AutarkTrade are not liable for it. The only exceptions are damage they cause intentionally or through gross negligence, and injury to life, body or health.',
-        '',
-        'AutarkTrade is free software (AGPL-3.0-or-later) without warranty, see the disclaimer.',
-    ],
+    de: {
+        titel: 'Bot-Steuerung in AutarkTrade — Einwilligung',
+        einleitung: 'Mit der Bot-Steuerung ändert AutarkTrade deine Pionex-Bots über deinen eigenen API-Schlüssel: Einstellungen, Marge, Stop-Loss und Take-Profit, Pausieren, Beenden und Neustart.',
+        punkte: [
+            { symbol: 'hakenKreis', titel: 'Nur auf deinen Klick', text: 'Die App tut nur, was du im Einzelfall auslöst und bestätigst. Nichts läuft automatisch.' },
+            { symbol: 'blitz', titel: 'Sofort und endgültig', text: 'Pionex führt jede Änderung sofort und unwiderruflich aus. Beim Ändern des Bands oder Beenden wird zum Marktpreis gehandelt. Mit Hebel ist ein Totalverlust möglich.' },
+            { symbol: 'ki', titel: 'Rückblick und KI sind keine Prognose', text: 'Simulationen rechnen mit vergangenen Kursen, KI-Vorschläge können falsch sein. Beides ist keine Anlageberatung.' },
+            { symbol: 'schluessel', titel: 'Dein Schlüssel', text: 'Lege den API-Schlüssel ohne Auszahlungsrecht und mit IP-Freigabe an.' },
+            { symbol: 'waage', titel: 'Dein Risiko', text: 'Du entscheidest selbst. Für Verluste haften die Entwickler von AutarkTrade nicht, ausser bei Absicht oder grober Fahrlässigkeit.' },
+        ],
+    },
+    en: {
+        titel: 'Bot control in AutarkTrade — consent',
+        einleitung: 'With bot control AutarkTrade changes your Pionex bots through your own API key: settings, margin, stop loss and take profit, pausing, closing and starting.',
+        punkte: [
+            { symbol: 'hakenKreis', titel: 'Only on your click', text: 'The app only does what you trigger and confirm yourself, one change at a time. Nothing runs automatically.' },
+            { symbol: 'blitz', titel: 'Immediate and final', text: 'Pionex executes every change immediately and irrevocably. Changing the range or closing trades at market price. With leverage a total loss is possible.' },
+            { symbol: 'ki', titel: 'Hindsight and AI are no forecast', text: 'Simulations use past prices, AI suggestions can be wrong. Neither is investment advice.' },
+            { symbol: 'schluessel', titel: 'Your key', text: 'Create the API key without withdrawal permission and with an IP whitelist.' },
+            { symbol: 'waage', titel: 'Your risk', text: 'You decide yourself. The developers of AutarkTrade are not liable for losses, except for intent or gross negligence.' },
+        ],
+    },
 }
 
 /** Haken vor jeder einzelnen Änderung (nie vorausgefüllt). */
 const HAKEN = {
-    de: 'Ich habe diese Änderung geprüft und will sie jetzt an Pionex senden. Ich trage die volle Verantwortung dafür. Verliere ich Geld, haften die Entwickler von AutarkTrade nicht, ausser bei Absicht oder grober Fahrlässigkeit.',
-    en: 'I have checked this change and want to send it to Pionex now. I bear full responsibility for it. If I lose money, the developers of AutarkTrade are not liable, except for intent or gross negligence.',
+    de: 'Ich habe diese Änderung geprüft, will sie jetzt an Pionex senden und trage das Risiko selbst.',
+    en: 'I have checked this change, want to send it to Pionex now and bear the risk myself.',
 }
 
 /** Warnblock im Wortlaut des Entwicklers, vor jedem Senden. */
@@ -64,12 +56,16 @@ const WARNUNG = {
 
 const sha = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('hex')
 
-export function einwilligungsText(sprache = 'de') { return (TEXT[sprache] || TEXT.de).join('\n') }
+const klartext = (t) => [t.titel, `${t === TEXT.en ? 'Version' : 'Fassung'} ${FASSUNG}`, '', t.einleitung, '', ...t.punkte.map((p, i) => `${i + 1}. ${p.titel}: ${p.text}`)].join('\n')
+
+export function einwilligungsText(sprache = 'de') { return klartext(TEXT[sprache] || TEXT.de) }
+/** Dasselbe gegliedert für die Anzeige: {titel, einleitung, punkte:[{symbol, titel, text}]}. */
+export function einwilligungsTeile(sprache = 'de') { return { ...(TEXT[sprache] || TEXT.de), fassung: FASSUNG } }
 export function hakenText(sprache = 'de') { return HAKEN[sprache] || HAKEN.de }
 export function warnung(sprache = 'de') { return WARNUNG[sprache] || WARNUNG.de }
 
 /** Hash über BEIDE Sprachfassungen: eine Zustimmung gilt für die Fassung, nicht für eine Übersetzung. */
-export function fassungHash() { return sha(TEXT.de.join('\n') + '\n---\n' + TEXT.en.join('\n')) }
+export function fassungHash() { return sha(klartext(TEXT.de) + '\n---\n' + klartext(TEXT.en)) }
 export function hakenHash(text) { return sha(String(text || '')) }
 
 /** Ist eine gespeicherte Zustimmung {fassung, hash, zeit} für den heutigen Text gültig? */
