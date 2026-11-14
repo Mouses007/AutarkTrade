@@ -72,6 +72,23 @@ export const STANDARD_HUERDEN = {
 }
 
 /**
+ * Hürden des Aktien-Radars (Aktien-Futures der Marktdatenquelle).
+ *
+ * Das Feld ist ein anderes. Gemessen am 15.11.2026 (ein Sonntag, also bei
+ * geschlossenen Börsen) an den 227 Aktien-Futures von Binance: Umsatz-Median
+ * 0,74 Mio., p75 4,0 Mio.; Spread-Median 5,8 bp, p75 12 bp. Mit den
+ * Coin-Hürden (10 Mio., 5 bp) blieben rund 40 übrig, mit diesen 87 — davon
+ * scheiterten 132 am Umsatz und nur 8 am Spread. An einem Handelstag dürfte
+ * das Feld grösser sein; nachgemessen ist das nicht.
+ */
+export const STANDARD_HUERDEN_AKTIEN = {
+    minUmsatz24hUsd: 1_000_000,
+    maxSpreadBp: 10,
+    minTiefeUsd: 0,
+    minKerzen: 30,
+}
+
+/**
  * Kennwerte, ab denen eine Teilnote voll ausschlägt.
  *
  * Bewusst als Konstanten mit Begründung statt als magische Zahlen im Code:

@@ -441,7 +441,7 @@ const fmtZahl = v => (v === null || v === undefined ? '?' : Number(v).toFixed(2)
 // mit knappen Textzeilen statt Rohdaten, damit der Agent nicht ~100 Zeilen mit
 // allen Spalten in den Kontext bekommt.
 async function toolQueryCoinRadar(knex, params) {
-    const letzterLauf = await knex('coinradar_laeufe').where('status', 'fertig').orderBy('id', 'desc').first()
+    const letzterLauf = await knex('coinradar_laeufe').where({ status: 'fertig', anlageklasse: 'krypto' }).orderBy('id', 'desc').first()
     if (!letzterLauf) return { error: 'Noch kein fertiger Coin-Radar-Lauf vorhanden.' }
 
     const rohZeilen = await knex('coinradar_zeilen')

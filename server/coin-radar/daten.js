@@ -59,9 +59,15 @@ export const KERZEN_ANZAHL = 200
  *
  * @returns {Promise<{jeSymbol: Map<string, object>, quellenStand: object}>}
  */
-export async function holeMarktweit() {
+export async function holeMarktweit({ alle = false } = {}) {
     // Die Quelle gehört zum Stand: nach einem Wechsel gilt der alte nicht mehr.
     const anbieter = await marktdaten.fordere('ticker', { markt: 'futures' })
+    /*
+     * `alle` (Aktien-Radar): auch die Kontrakte, die keine Coins sind. Binance
+     * liefert sie in denselben Abrufen ohnehin mit; Bitget filtert sie im
+     * gemeinsamen Ticker heraus und braucht deshalb einen eigenen Stand.
+     */
+    if (alle && anbieter.id !== 'binance') return holeMarktweitAllgemein(anbieter, { alle: true })
     if (letzterStand && letzterStand.quelle === anbieter.id && Date.now() - letzterStand.ts < MARKTWEIT_FRISCH_MS) return letzterStand.wert
     if (laufenderAbruf?.quelle === anbieter.id) return laufenderAbruf.p
     const p = (anbieter.id === 'binance' ? holeMarktweitFrisch() : holeMarktweitAllgemein(anbieter))
@@ -215,10 +221,11 @@ async function fundingTaktAllgemein(anbieter) {
  * Ticker (`naechsteZahlung: null`); ein unbekannter Funding-Takt ergibt wie
  * bei Binance eine unbekannte Jahresrate, keine 8-h-Annahme.
  */
-async function holeMarktweitAllgemein(anbieter) {
+async function holeMarktweitAllgemein(anbieter, { alle = false } = {}) {
     const [ticker, intervalle] = await Promise.allSettled([
-        anbieter.ticker24h({ markt: 'futures' }),
-        fundingTaktAllgemein(anbieter),
+        anbieter.ticker24h({ markt: 'futures', alle }),
+        // Der Takt aus den Kontraktregeln kennt nur Coins; für Aktien bleibt er unbekannt.
+        alle ? Promise.resolve({}) : fundingTaktAllgemein(anbieter),
     ])
     const takt = intervalle.status === 'fulfilled' ? intervalle.value : null
     const quellenStand = {}

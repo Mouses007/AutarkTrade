@@ -33,8 +33,10 @@ import { vergleicheMitBtc, BTC_REFERENZ, BTC_ZEITEINHEIT } from './btc-vergleich
 import { rechneAlle, fundingJahresRate } from './kennzahlen.js'
 import {
     bewerte, pruefeHuerden, vergibRaenge, rangkorrelation,
-    STANDARD_GEWICHTE, STANDARD_HUERDEN,
+    STANDARD_GEWICHTE, STANDARD_HUERDEN, STANDARD_HUERDEN_AKTIEN,
 } from './bewertung.js'
+import * as marktdaten from '../marktdaten/index.js'
+import { ladeAktienUniversum, waehleReferenz, boersenFelder } from './aktien-universum.js'
 
 /**
  * Obergrenze der zu vermessenden Coins.
@@ -69,6 +71,10 @@ const UNGEMESSEN = {
 /**
  * Einen Lauf durchführen.
  *
+ * Mit `lauf.anlageklasse === 'aktien'` läuft dieselbe Pipeline über die
+ * Aktien-Futures der Marktdatenquelle (`aktien-universum.js`): eigenes
+ * Universum, eigene Hürden, Kopplung gegen einen Index-ETF statt gegen BTC.
+ *
  * @param {object} lauf   Zeile aus `coinradar_laeufe`
  * @param {object} einst  Einstellungen
  * @param {function} melde Fortschritt
@@ -82,14 +88,24 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
 
     // ── Stufe 1: Universum ──────────────────────────────────────────────
     melde({ schritt: 'universum' })
-    const [handelbar, testbar] = await Promise.all([holeHandelbar(), holeTestbar()])
+    const aktien = lauf.anlageklasse === 'aktien'
+    let aktienTitel = null
+    if (aktien) {
+        // Wirft `MarktdatenAus`, bevor ein leerer Stamm als Grund herhalten muss.
+        const quelle = (await marktdaten.fordere('ticker', { markt: 'futures' })).id
+        aktienTitel = await ladeAktienUniversum(knex, quelle)
+        if (!aktienTitel.size) {
+            throw new Error('Im Stamm steht kein Aktien-Future der Marktdatenquelle. Zuerst unter «Handelbare Titel» den Abgleich laufen lassen.')
+        }
+    }
+    const [handelbar, testbar] = aktien ? [null, null] : await Promise.all([holeHandelbar(), holeTestbar()])
     /*
      * Die Schnittmenge, nicht die Vereinigung: Ein Coin, den Bitunix führt,
      * bei Binance aber keine Kerzen hat, lässt sich nicht bewerten. Und einer
      * mit Kerzen, den Bitunix nicht führt, nützt hier nichts — gehandelt wird
      * auf Bitunix.
      */
-    const universum = [...handelbar.keys()].filter((s) => testbar.has(s))
+    const universum = aktien ? [...aktienTitel.keys()] : [...handelbar.keys()].filter((s) => testbar.has(s))
     melde({ schritt: 'universum', anzahl: universum.length })
 
     // ── Stufe 2: marktweite Hürden ──────────────────────────────────────
@@ -102,8 +118,9 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
      * die sonst leer bliebe, weil sie vor Stufe 3 geschrieben werden.
      */
     const [{ jeSymbol, quellenStand }, listen] = await Promise.all([
-        holeMarktweit(),
-        ladeListungen().catch((e) => {
+        holeMarktweit({ alle: aktien }),
+        // Aktien: «handelbar bei» steht im Stamm, die Coin-Listungen braucht es nicht.
+        aktien ? null : ladeListungen().catch((e) => {
             logWarn('coin-radar', `Börsenlistungen nicht abrufbar: ${e.message}`)
             return null
         }),
@@ -118,12 +135,18 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
      * `pruefeListung` prüft die Gegenrichtung ohnehin mit.
      */
     const listungFuer = (symbol) => {
+        if (aktien) return boersenFelder(aktienTitel.get(symbol))
         if (!listen) return {}
         const basis = String(symbol || '').replace(/USDT$/, '').replace(/^1000+/, '')
         const { liste, unbekannt } = pruefeListung(basis, listen)
         return { liste, unbekannt }
     }
-    const huerden = { ...STANDARD_HUERDEN, ...(einst.huerden || {}) }
+    const huerden = aktien
+        ? { ...STANDARD_HUERDEN_AKTIEN, ...(einst.huerdenAktien || {}) }
+        : { ...STANDARD_HUERDEN, ...(einst.huerden || {}) }
+    // Woran die Kopplung gemessen wird — steht im Lauf, damit die Seite es nennen kann.
+    const referenz = aktien ? waehleReferenz(aktienTitel) : { symbol: BTC_REFERENZ, ticker: 'BTC' }
+    if (aktien) quellenStand.referenz = referenz
 
     /*
      * Ohne Umsatz oder Orderbuch-Spitze gibt es keine Hürdenprüfung — dann
@@ -225,6 +248,10 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
             ausfuehrung = await holeAusfuehrungGebremst(
                 offen.map((a) => a.symbol),
                 (f) => melde({ schritt: 'ausfuehrung', ...f }),
+                aktien
+                    ? (symbol, boerse) => aktienTitel.get(symbol)?.listungen
+                        .find((l) => l.handelsplatz === boerse && l.art === 'perp')?.symbol || null
+                    : undefined,
             )
         } catch (e) {
             // Ohne Ausführungsdaten bleibt die Gelegenheits-Note stehen — sie
@@ -249,11 +276,11 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
      * Stunden gar nichts mehr.
      */
     const btcVergleich = new Map()
-    if (!abbruch()) {
+    if (!abbruch() && referenz) {
         melde({ schritt: 'btc', gesamt: offen.length })
         try {
-            const btcKerzen = (await holeKerzenGebremst([BTC_REFERENZ], BTC_ZEITEINHEIT))
-                .get(BTC_REFERENZ)
+            const btcKerzen = (await holeKerzenGebremst([referenz.symbol], BTC_ZEITEINHEIT))
+                .get(referenz.symbol)
             if (btcKerzen?.length) {
                 const jeSymbol4h = await holeKerzenGebremst(
                     offen.map((a) => a.symbol), BTC_ZEITEINHEIT,
@@ -270,7 +297,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
                  * Gelegenheit und Ausführung stehen bereits und sind für sich
                  * brauchbar.
                  */
-                logWarn('coin-radar', `${BTC_REFERENZ} ${BTC_ZEITEINHEIT}: keine Kerzen, BTC-Vergleich entfällt`)
+                logWarn('coin-radar', `${referenz.symbol} ${BTC_ZEITEINHEIT}: keine Kerzen, Vergleich entfällt`)
             }
         } catch (e) {
             logWarn('coin-radar', `BTC-Vergleich nicht möglich: ${e.message}`)
@@ -364,7 +391,7 @@ export async function fuehreLaufAus(lauf, einst, melde = () => {}, abbruch = () 
     // ── Stufe 5: Beharrlichkeit ─────────────────────────────────────────
     // Über ALLE Zeilen des Laufs, nicht nur die dieses Durchgangs — sonst
     // vergliche eine Wiederaufnahme eine halbe Rangfolge mit einer ganzen.
-    const vergleich = await beharrlichkeit(knex, lauf.id, alleZeilen)
+    const vergleich = await beharrlichkeit(knex, lauf.id, alleZeilen, aktien ? 'aktien' : 'krypto')
 
     await knex('coinradar_laeufe').where('id', lauf.id).update({
         status: 'fertig',
@@ -480,10 +507,11 @@ async function schreibeZeilen(knex, laufId, zeilen) {
  * halbe Rangfolge, und die zu vergleichen ergäbe eine Zahl, die nur aussagt,
  * wie weit er gekommen ist.
  */
-async function beharrlichkeit(knex, laufId, neueZeilen) {
+async function beharrlichkeit(knex, laufId, neueZeilen, anlageklasse = 'krypto') {
     try {
+        // Nur gegen einen Lauf desselben Markts: Coins und Aktien teilen kein Symbol.
         const vorher = await knex('coinradar_laeufe')
-            .where('status', 'fertig').andWhere('id', '<', laufId)
+            .where('status', 'fertig').andWhere('anlageklasse', anlageklasse).andWhere('id', '<', laufId)
             .orderBy('id', 'desc').first()
         if (!vorher) return { wert: null, gemeinsam: 0, laufId: 0 }
 

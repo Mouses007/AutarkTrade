@@ -171,7 +171,7 @@ export const BOERSEN = { bitunix, bitget }
  * @param {function} melde  Fortschritt
  * @returns {Promise<Map<string, object>>} Symbol → { jeBoerse, beste }
  */
-export async function holeAusfuehrungGebremst(symbole, melde = () => {}) {
+export async function holeAusfuehrungGebremst(symbole, melde = () => {}, symbolBei = (symbol) => symbol) {
     const { ausfuehrungsGuete, noteAusfuehrung } = await import('./ausfuehrung.js')
     const raus = new Map()
     const HAEPPCHEN = 4
@@ -182,8 +182,11 @@ export async function holeAusfuehrungGebremst(symbole, melde = () => {}) {
         await Promise.all(teil.map(async (symbol) => {
             const jeBoerse = {}
             for (const [name, b] of Object.entries(BOERSEN)) {
+                // Aktien heissen je Börse anders (Bitget `ACNSTOCKUSDT`); `null` = dort nicht geführt.
+                const dort = symbolBei(symbol, name)
+                if (!dort) continue
                 try {
-                    const g = ausfuehrungsGuete(await b.holeTiefe(symbol))
+                    const g = ausfuehrungsGuete(await b.holeTiefe(dort))
                     if (!g) continue
                     jeBoerse[name] = {
                         spreadBp: g.spreadBp,

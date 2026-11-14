@@ -48,6 +48,12 @@ const KONSTANTEN = {
 /** Gegen den Doppelklick im selben Prozess. */
 let laufAktiv = false
 
+/**
+ * Welcher Markt ist gemeint? `?markt=aktien` wählt den Aktien-Radar; alles
+ * andere ist Krypto — so bleibt jeder bestehende Aufruf, was er war.
+ */
+const klasseAus = (wert) => (String(wert || '').toLowerCase() === 'aktien' ? 'aktien' : 'krypto')
+
 const FUEHRUNG_KEY = 'coinradar_lauf'
 /*
  * Die Führung muss länger halten als ein Lauf dauert, sonst übernimmt der
@@ -98,6 +104,7 @@ export function setupCoinRadarRoutes(app) {
     app.get('/api/coin-radar/laeufe', async (req, res) => {
         try {
             const zeilen = await getKnex()('coinradar_laeufe')
+                .where('anlageklasse', klasseAus(req.query.markt))
                 .select('id', 'erstelltAm', 'beendetAm', 'status', 'ausloeser', 'gesamt',
                     'fortschritt', 'geprueft', 'verworfenHuerde', 'rangkorrelation',
                     'vergleichslauf', 'einordnung', 'kostenUsd', 'fehler')
@@ -137,7 +144,8 @@ export function setupCoinRadarRoutes(app) {
             let laufId = Number(req.query.laufId) || 0
             if (!laufId) {
                 const letzter = await knex('coinradar_laeufe')
-                    .where('status', 'fertig').orderBy('id', 'desc').first()
+                    .where({ status: 'fertig', anlageklasse: klasseAus(req.query.markt) })
+                    .orderBy('id', 'desc').first()
                 if (!letzter) return res.json({ lauf: null, zeilen: [] })
                 laufId = letzter.id
             }
@@ -296,12 +304,13 @@ export function setupCoinRadarRoutes(app) {
 
     async function berechneDauerhaft() {
         const knex = getKnex()
-        const moeglich = Number(await knex('coinradar_laeufe').where('status', 'fertig').count('id as n').first().then((r) => r?.n) || 0)
+        const moeglich = Number(await knex('coinradar_laeufe').where({ status: 'fertig', anlageklasse: 'krypto' }).count('id as n').first().then((r) => r?.n) || 0)
         if (moeglich < 2) return { dauerhaft: [], moeglich }
 
         const treffer = await knex('coinradar_zeilen as z')
             .join('coinradar_laeufe as l', 'l.id', 'z.laufId')
             .where('l.status', 'fertig')
+            .andWhere('l.anlageklasse', 'krypto')
             .andWhere('z.status', 'bewertet')
             .andWhere('z.rang', '<=', 10)
             .andWhere('z.rang', '>', 0)
@@ -412,7 +421,8 @@ export function setupCoinRadarRoutes(app) {
             await laufeMitZustand(einst, 'manuell',
                 (stand) => sende({ type: 'fortschritt', ...stand }),
                 istAbgebrochen,
-                (fertig) => sende({ type: 'fertig', ...fertig }))
+                (fertig) => sende({ type: 'fertig', ...fertig }),
+                klasseAus(req.query.markt))
         } catch (e) {
             logWarn('coin-radar', `Lauf fehlgeschlagen: ${e.message}`)
             // Ohne Marktdaten (Einstellungen › Datenquellen) ist das kein Fehler, sondern ein Zustand.
@@ -451,7 +461,7 @@ function fuehrungHalten() {
  * dastehen, wenn der Prozess mitten im Lauf stirbt — sonst wäre nach einem
  * Absturz nicht erkennbar, dass überhaupt etwas versucht wurde.
  */
-async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => false, fertigMelden = () => {}) {
+async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => false, fertigMelden = () => {}, anlageklasse = 'krypto') {
     const knex = getKnex()
 
     /*
@@ -470,6 +480,8 @@ async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => f
      */
     const verwaist = await knex('coinradar_laeufe')
         .where('status', 'laeuft')
+        // Nur ein liegen gebliebener Lauf DESSELBEN Markts wird fortgesetzt.
+        .andWhere('anlageklasse', anlageklasse)
         .andWhere('erstelltAm', '<', Date.now() - FUEHRUNG_TTL_MS)
         .orderBy('id', 'desc').first()
 
@@ -484,13 +496,14 @@ async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => f
             erstelltAm: Date.now(),
             status: 'laeuft',
             ausloeser,
+            anlageklasse,
             zeiteinheiten: JSON.stringify(einst.zeiteinheiten || []),
         }).returning('id')
         laufId = typeof eingefuegt === 'object' ? eingefuegt.id : eingefuegt
     }
 
     try {
-        const ergebnis = await fuehreLaufAus({ id: laufId }, einst, melde, istAbgebrochen)
+        const ergebnis = await fuehreLaufAus({ id: laufId, anlageklasse }, einst, melde, istAbgebrochen)
 
         if (ergebnis?.abgebrochen) {
             await knex('coinradar_laeufe').where('id', laufId)
@@ -507,6 +520,16 @@ async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => f
          * fehl, ist der Lauf trotzdem gültig — die Kontrolle ist eine
          * Beobachtung über den Lauf, nicht Teil von ihm.
          */
+        /*
+         * Aktien-Lauf: hier ist Schluss. Erfolgskontrolle und KI-Einordnung
+         * sind auf Coins gebaut (eigene Stichprobe, eigener Anstoss) und
+         * mischten sonst Aktien in die Güte-Auswertung des Coin-Radars.
+         */
+        if (anlageklasse === 'aktien') {
+            fertigMelden({ laufId, ...ergebnis })
+            return { laufId, ...ergebnis }
+        }
+
         await legeAnCoinRadar(laufId).catch((e) =>
             logWarn('coin-radar', `Erfolgskontrolle nicht angemeldet: ${e.message}`))
 

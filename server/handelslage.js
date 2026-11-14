@@ -182,7 +182,7 @@ async function holeSitzung() {
 async function holeCoinRadar() {
     const knex = getKnex()
     const lauf = await knex('coinradar_laeufe')
-        .where('status', 'fertig').orderBy('id', 'desc').first()
+        .where({ status: 'fertig', anlageklasse: 'krypto' }).orderBy('id', 'desc').first()
     if (!lauf) return null
     const alterMs = Date.now() - Number(lauf.erstelltAm || lauf.beendetAm || 0)
     if (!Number.isFinite(alterMs) || alterMs > 12 * 3600 * 1000) return null

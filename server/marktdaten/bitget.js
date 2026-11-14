@@ -190,9 +190,10 @@ async function rwaSymbole() {
     return menge
 }
 
-export async function ticker24h({ markt: m } = {}) {
+export async function ticker24h({ markt: m, alle = false } = {}) {
     const zeilen = ((await tickerRoh(m)) || []).map(tickerAus)
-    if (markt(m) === 'spot') return zeilen
+    // `alle`: der Aktien-Radar will genau die Kontrakte, die hier sonst wegfallen.
+    if (markt(m) === 'spot' || alle) return zeilen
     let rwa = new Set()
     try { rwa = await rwaSymbole() } catch { /* ohne Liste lieber ungefiltert als gar nichts */ }
     return zeilen.filter((z) => !rwa.has(z.symbol))
