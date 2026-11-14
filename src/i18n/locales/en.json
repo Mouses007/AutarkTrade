@@ -8367,7 +8367,8 @@
         "beenden": "Close bot",
         "starten": "New bot with these settings",
         "freischalten": "Enabled",
-        "sperren": "Disabled"
+        "sperren": "Disabled",
+        "reduzieren": "Reduce position"
       },
       "aktionText": {
         "band": "Pionex immediately adjusts the position to the new range at market price (\"edit directly\", investment unchanged). Today's position stays; a range further down brings liquidation closer.",
@@ -8379,7 +8380,8 @@
         "fortsetzen": "The bot resumes grid trading immediately.",
         "beenden": "Pionex closes the position at market price and releases the margin. The floating loss or gain becomes final.",
         "starten": "Starts a new bot with this bot's type, direction and coin; empty fields take today's values.",
-        "planStarten": "Starts the planned bot at Pionex with the plan's coin, type, direction and grid type. Pionex checks the request first (checkParams) and states the estimated liquidation."
+        "planStarten": "Starts the planned bot at Pionex with the plan's coin, type, direction and grid type. Pionex checks the request first (checkParams) and states the estimated liquidation.",
+        "reduzieren": "Sells part of the position at market and so realises part of the profit or loss. The bot keeps running. You enter the share in %; Pionex states beforehand how much is sold and what it yields."
       },
       "warn": {
         "marktpreis": "Executed at market price.",
@@ -8396,7 +8398,8 @@
         "grosserBetrag": "The amount is larger than today's investment — please check for typos.",
         "liqNaeherBand": "The range reaches further in the losing direction: the position can grow there and liquidation moves closer.",
         "spotKauf": "At start Pionex buys the coin at market for every line above the price.",
-        "spotBehaelt": "On stopping the coins stay in the account (not sold). You can sell them yourself at Pionex afterwards."
+        "spotBehaelt": "On stopping the coins stay in the account (not sold). You can sell them yourself at Pionex afterwards.",
+        "teilverkauf": "Part of the position is sold at market. Afterwards the bot holds less; if the price rises it earns correspondingly less."
       },
       "fehler": {
         "schluessel": "Enter API key and secret.",
@@ -8432,7 +8435,8 @@
         "richtung": "Direction missing.",
         "einsatz": "Investment must be greater than 0.",
         "tage": "Invalid period.",
-        "nichtFuerSpot": "For a spot grid the app can only stop it and start a new one."
+        "nichtFuerSpot": "For a spot grid the app can only stop it and start a new one.",
+        "anteil": "Enter a share between 1 and 100 %."
       },
       "unklarTitel": "Outcome unclear",
       "unklarText": "The connection to Pionex broke off or the answer was ambiguous. Pionex may have executed the change. Do not send again — first look at the bot at Pionex (or here after reloading).",
@@ -8465,7 +8469,13 @@
         "einsatzZuKlein": "The investment is too small for Pionex. Increase it and check again.",
         "einsatzZuKleinMin": "The investment is too small for Pionex. It accepts from about {betrag}."
       },
-      "minUebernehmen": "Set investment to {betrag}"
+      "minUebernehmen": "Set investment to {betrag}",
+      "anteil": "Share of the position (%)",
+      "redMenge": "Amount sold (Pionex estimate)",
+      "redPnl": "Realised profit/loss (Pionex estimate)",
+      "redGrid": "Of which grid profit (Pionex estimate)",
+      "redEinsatz": "Investment released (Pionex estimate)",
+      "redGebuehr": "Fee (Pionex estimate)"
     },
     "plan": {
       "knopf": "Plan a new bot",

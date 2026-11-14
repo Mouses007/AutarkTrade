@@ -31,9 +31,9 @@ const protokoll = ref([])
 const AKTIONEN = computed(() => (props.bot.typ === 'spot_grid'
     ? (props.bot.laufend ? ['beenden', 'starten'] : ['starten'])
     : props.bot.laufend
-        ? ['band', 'margeDazu', 'margeWeg', 'investieren', 'stops', props.bot.status === 'paused' ? 'fortsetzen' : 'pausieren', 'beenden', 'starten']
+        ? ['band', 'margeDazu', 'margeWeg', 'investieren', 'stops', 'reduzieren', props.bot.status === 'paused' ? 'fortsetzen' : 'pausieren', 'beenden', 'starten']
         : ['starten']))
-const SYMBOL = { band: 'regler', margeDazu: 'plusKreis', margeWeg: 'minus', investieren: 'muenzen', stops: 'schildWarnung', pausieren: 'pause', fortsetzen: 'play', beenden: 'stopp', starten: 'rakete' }
+const SYMBOL = { band: 'regler', margeDazu: 'plusKreis', margeWeg: 'minus', investieren: 'muenzen', stops: 'schildWarnung', reduzieren: 'minus', pausieren: 'pause', fortsetzen: 'play', beenden: 'stopp', starten: 'rakete' }
 
 function oeffne(a, v = {}) { aktion.value = a; vorgabe.value = v; dialog.value = true }
 

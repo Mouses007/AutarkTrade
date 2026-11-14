@@ -8367,7 +8367,8 @@
         "beenden": "Bot beenden",
         "starten": "Neuer Bot mit diesen Einstellungen",
         "freischalten": "Freigeschaltet",
-        "sperren": "Gesperrt"
+        "sperren": "Gesperrt",
+        "reduzieren": "Position reduzieren"
       },
       "aktionText": {
         "band": "Pionex stellt die Position sofort zum Marktpreis auf das neue Band ein («Direkt bearbeiten», Investition bleibt). Die heutige Position bleibt; ein Band weiter nach unten bringt die Liquidation näher.",
@@ -8379,7 +8380,8 @@
         "fortsetzen": "Der Bot nimmt den Grid-Handel sofort wieder auf.",
         "beenden": "Pionex schliesst die Position zum Marktpreis und gibt die Marge frei. Der schwebende Verlust oder Gewinn wird damit fest.",
         "starten": "Startet einen neuen Bot mit Typ, Richtung und Coin dieses Bots; leere Felder übernehmen die heutigen Werte.",
-        "planStarten": "Startet den geplanten Bot bei Pionex mit Coin, Art, Richtung und Grid-Art des Plans. Pionex prüft die Anfrage vorher (checkParams) und nennt die geschätzte Liquidation."
+        "planStarten": "Startet den geplanten Bot bei Pionex mit Coin, Art, Richtung und Grid-Art des Plans. Pionex prüft die Anfrage vorher (checkParams) und nennt die geschätzte Liquidation.",
+        "reduzieren": "Verkauft einen Teil der Position zum Marktpreis und realisiert so einen Teil des Gewinns oder Verlusts. Der Bot läuft weiter. Du gibst den Anteil in % an, Pionex nennt vorab, wie viel verkauft wird und was dabei herauskommt."
       },
       "warn": {
         "marktpreis": "Ausführung zum Marktpreis.",
@@ -8396,7 +8398,8 @@
         "grosserBetrag": "Der Betrag ist grösser als der heutige Einsatz — bitte auf Tippfehler prüfen.",
         "liqNaeherBand": "Das Band reicht weiter in die Verlustrichtung: die Position kann dort weiter wachsen, die Liquidation rückt näher.",
         "spotKauf": "Beim Start kauft Pionex zum Marktpreis die Coin für alle Linien über dem Kurs.",
-        "spotBehaelt": "Beim Beenden bleiben die Coins im Konto (nicht verkauft). Verkaufen kannst du sie danach selbst bei Pionex."
+        "spotBehaelt": "Beim Beenden bleiben die Coins im Konto (nicht verkauft). Verkaufen kannst du sie danach selbst bei Pionex.",
+        "teilverkauf": "Ein Teil der Position wird zum Marktpreis verkauft. Danach hält der Bot weniger Position, steigt der Kurs, verdient er entsprechend weniger."
       },
       "fehler": {
         "schluessel": "API-Key und Secret eingeben.",
@@ -8432,7 +8435,8 @@
         "richtung": "Richtung fehlt.",
         "einsatz": "Einsatz muss grösser als 0 sein.",
         "tage": "Ungültiger Zeitraum.",
-        "nichtFuerSpot": "Bei einem Spot-Grid kann die App nur beenden und einen neuen starten."
+        "nichtFuerSpot": "Bei einem Spot-Grid kann die App nur beenden und einen neuen starten.",
+        "anteil": "Anteil zwischen 1 und 100 % eingeben."
       },
       "unklarTitel": "Ausgang unklar",
       "unklarText": "Die Verbindung zu Pionex brach ab oder antwortete nicht eindeutig. Pionex kann die Änderung ausgeführt haben. Nicht erneut senden — zuerst den Bot bei Pionex (oder hier nach dem Neuladen) ansehen.",
@@ -8465,7 +8469,13 @@
         "einsatzZuKlein": "Der Einsatz ist zu klein für Pionex. Erhöhe ihn und prüfe erneut.",
         "einsatzZuKleinMin": "Der Einsatz ist zu klein für Pionex. Angenommen wird ab etwa {betrag}."
       },
-      "minUebernehmen": "Einsatz auf {betrag} setzen"
+      "minUebernehmen": "Einsatz auf {betrag} setzen",
+      "anteil": "Anteil der Position (%)",
+      "redMenge": "Verkaufte Menge (Schätzung Pionex)",
+      "redPnl": "Realisierter Gewinn/Verlust (Schätzung Pionex)",
+      "redGrid": "Davon Grid-Gewinn (Schätzung Pionex)",
+      "redEinsatz": "Frei werdende Investition (Schätzung Pionex)",
+      "redGebuehr": "Gebühr (Schätzung Pionex)"
     },
     "plan": {
       "knopf": "Neuen Bot planen",

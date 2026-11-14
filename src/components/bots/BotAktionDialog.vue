@@ -31,6 +31,7 @@ const FELDER = {
     margeDazu: ['betrag'],
     margeWeg: ['betrag'],
     stops: ['stopLoss', 'takeProfit'],
+    reduzieren: ['anteil'],
     pausieren: [], fortsetzen: [], beenden: [],
     starten: ['unten', 'oben', 'anzahl', 'hebel', 'einsatz'],
 }
@@ -62,7 +63,7 @@ const platzhalter = computed(() => ({
     stopLoss: props.bot.stops?.stopLoss?.wert != null ? preis(props.bot.stops.stopLoss.wert) : t('bots.feld.keiner'),
     takeProfit: props.bot.stops?.takeProfit?.wert != null ? preis(props.bot.stops.takeProfit.wert) : t('bots.feld.keiner'),
 }))
-const feldName = (f) => ({ unten: t('bots.sim.unten'), oben: t('bots.sim.oben'), anzahl: t('bots.feld.grids'), hebel: t('bots.feld.hebel'), einsatz: `${t('bots.feld.einsatz')} (${mc.value})`, betrag: `${t('bots.st.betrag')} (${mc.value})`, stopLoss: t('bots.feld.stopLoss'), takeProfit: t('bots.feld.takeProfit') }[f])
+const feldName = (f) => ({ unten: t('bots.sim.unten'), oben: t('bots.sim.oben'), anzahl: t('bots.feld.grids'), hebel: t('bots.feld.hebel'), einsatz: `${t('bots.feld.einsatz')} (${mc.value})`, betrag: `${t('bots.st.betrag')} (${mc.value})`, anteil: t('bots.st.anteil'), stopLoss: t('bots.feld.stopLoss'), takeProfit: t('bots.feld.takeProfit') }[f])
 
 /** Eingabe für den Server: Stops „leer" heisst entfernen nur, wenn das Feld angefasst wurde. */
 function eingabeFuerServer() {
@@ -94,7 +95,8 @@ async function senden() {
     laedt.value = true; fehler.value = ''
     try {
         const { data } = await axios.post(`/api/bots/${encodeURIComponent(props.bot.id)}/aktion/senden`, {
-            aktion: props.aktion, eingabe: eingabeFuerServer(), token: pruefung.value.token, haken: true, hakenText: props.steuerung?.haken,
+            // Reduzieren: genau die vom Server umgerechnete Menge senden (an sie ist der Token gebunden)
+            aktion: props.aktion, eingabe: { ...eingabeFuerServer(), ...(pruefung.value.eingabe || {}) }, token: pruefung.value.token, haken: true, hakenText: props.steuerung?.haken,
         }, { timeout: 120_000 })
         ergebnis.value = data
         // Auch bei „unklar" neu laden: Pionex kann ausgeführt haben
@@ -120,6 +122,15 @@ const vergleich = computed(() => {
     zeile(t('bots.feld.extraMarge'), v.extraMarge, n.extraMarge, (x) => betrag(x, mc.value))
     zeile(t('bots.feld.stopLoss'), v.stopLoss, n.stopLoss, preis)
     zeile(t('bots.feld.takeProfit'), v.takeProfit, n.takeProfit, preis)
+    if (p.reduzieren) {
+        const r = p.reduzieren
+        const zeig = (titel, wert, f) => { if (wert != null) z.push({ titel, vorher: '', nachher: f(wert), pionex: true }) }
+        zeig(t('bots.st.redMenge'), r.menge, (x) => zahl(x, 6))
+        zeig(t('bots.st.redPnl'), r.pnl, (x) => betrag(x, mc.value, { vorzeichen: true }))
+        zeig(t('bots.st.redGrid'), r.gridGewinn, (x) => betrag(x, mc.value, { vorzeichen: true }))
+        zeig(t('bots.st.redEinsatz'), r.einsatz, (x) => betrag(x, mc.value))
+        zeig(t('bots.st.redGebuehr'), r.gebuehr, (x) => betrag(x, mc.value))
+    }
     if (p.liq?.vorher || p.liq?.nachher) {
         const l = (x) => preis(x?.unten ?? x?.oben)
         // Neuer Bot: Pionex' checkParams nennt nur EINE Schätzung (ohne Before/After) — die gehört zum neuen

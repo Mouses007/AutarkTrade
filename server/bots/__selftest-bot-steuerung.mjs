@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
-import { baueAktion, instrumentPreis, stellenVon, liqAusPruefung, pruefungBestanden, einstellungVon, AKTIONEN, pruefGrund, rundeEinsatzAuf, sucheMindestEinsatz, minAusPruefung, SPOT_AKTIONEN } from './steuerung.js'
+import { baueAktion, instrumentPreis, stellenVon, liqAusPruefung, pruefungBestanden, einstellungVon, AKTIONEN, pruefGrund, rundeEinsatzAuf, sucheMindestEinsatz, minAusPruefung, SPOT_AKTIONEN, reduzierAusPruefung } from './steuerung.js'
 import { planBot } from './planer.js'
 import { FASSUNG, fassungHash, zustimmungGueltig, hakenGueltig, hakenText, einwilligungsText, warnung, hakenHash } from './einwilligung.js'
 
@@ -95,6 +95,14 @@ p('linear: base COIN.PERP, quote USDT', baueAktion(linear, 'starten', {}).senden
 console.log('Schranken')
 p('beendeter Bot: keine Änderung', baueAktion({ ...coinm, laufend: false }, 'band', { unten: 60 }).fehler === 'nichtLaufend')
 p('beendeter Bot: neu starten geht (mit Kurs)', !baueAktion({ ...coinm, laufend: false }, 'starten', {}).fehler)
+console.log('Position reduzieren')
+const red = baueAktion(coinm, 'reduzieren', { reduceNum: '12' }, { stellen: 7 })
+p('reduzieren: reduceCheck/reduce, ganze Zahl, openPrice als Text im Instrument (Coin-M invers)', /futuresGrid\/reduceCheck$/.test(red.pruefen.pfad) && /futuresGrid\/reduce$/.test(red.senden.pfad) && red.senden.body.reduceNum === 12 && red.senden.body.buOrderId === coinm.id && Math.abs(Number(red.senden.body.openPrice) - 1 / 83.035) < 1e-6 && red.warnungen.includes('teilverkauf'), JSON.stringify(red.senden.body))
+p('reduzieren: 0, 1.5, leer → abgewiesen', ['0', '1.5', ''].every((x) => baueAktion(coinm, 'reduzieren', { reduceNum: x }).fehler === 'betrag'))
+p('reduzieren bei Spot nicht', baueAktion({ ...normalisiereBot({ buOrderId: 'S9', buOrderType: 'spot_grid', base: 'X', quote: 'USDT', buOrderData: { top: '2', bottom: '1', row: 5, status: 'running' } }), kurs: 1.5 }, 'reduzieren', { reduceNum: '1' }).fehler === 'nichtFuerSpot')
+const ra = reduzierAusPruefung({ maxReduceNum: 40, reduceAmount: '0.5', reducePnl: '-1.2', reduceFee: '0.01', reason: 'REDUCE_TOO_MUCH' })
+p('Schätzungen aus reduceCheck gelesen', ra.max === 40 && ra.menge === 0.5 && ra.pnl === -1.2 && ra.grund === 'REDUCE_TOO_MUCH')
+
 console.log('Spot-Grid')
 const spotLauf = { ...normalisiereBot({ buOrderId: 'S1', buOrderType: 'spot_grid', base: 'NVDAX', quote: 'USDT', buOrderData: { top: '190', bottom: '140', row: 50, gridType: 'arithmetic', quoteTotalInvestment: '100', status: 'running' } }), kurs: 162.2 }
 p('Spot: nur Beenden und Starten, Band/Marge/Stops abgewiesen', SPOT_AKTIONEN.join() === 'beenden,starten' && ['band', 'investieren', 'margeDazu', 'stops', 'pausieren'].every((a) => baueAktion(spotLauf, a, { unten: '150', oben: '180', anzahl: '20', betrag: '10' }).fehler === 'nichtFuerSpot'))
@@ -111,7 +119,7 @@ p('Spot starten: Warnung Kauf zum Marktpreis', ss.warnungen.includes('spotKauf')
 p('Spot starten: mehr als 200 Grids abgewiesen', baueAktion(sp, 'starten', { unten: '140', oben: '190', anzahl: '201', einsatz: '100' }).fehler === 'anzahl')
 p('Spot: Mindesteinsatz aus der Prüfantwort, Absage erkannt', minAusPruefung({ result: false, message: 'investment too small', data: { min_investment: '23.5' } }) === 23.5 && pruefGrund({ result: false, message: 'quote investment invalid', data: { min_investment: '23.5' } }) === 'einsatzZuKlein' && minAusPruefung({ result: true, data: {} }) === null)
 p('unbekannte Aktion', baueAktion(coinm, 'hebel', { hebel: 2 }).fehler === 'aktion')
-p(`${AKTIONEN.length} Aktionen`, AKTIONEN.length === 9)
+p(`${AKTIONEN.length} Aktionen (mit reduzieren)`, AKTIONEN.length === 10 && AKTIONEN.includes("reduzieren"))
 
 console.log('Prüfantworten')
 p('checkResult false → nicht bestanden', !pruefungBestanden({ result: true, data: { checkResult: false, reason: 'X' } }))

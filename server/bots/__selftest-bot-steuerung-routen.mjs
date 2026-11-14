@@ -50,6 +50,11 @@ globalThis.__botTest = {
             if (body.base !== 'USDT.PERP' && !/^\d+(\.\d{1,2})?$/.test(String(body.buOrderData.quote_investment))) throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] quote_total_investment not match quote precision: max 2 decimal places')
             if (Number(body.buOrderData.quote_investment) < pionex.minEinsatz) throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] less than min investment')
         }
+        if (/reduceCheck$/.test(pfad)) {
+            pionex.reduzierPruefungen = (pionex.reduzierPruefungen || 0) + 1
+            if (body.reduceNum > 200) return { result: true, data: { checkResult: false, reason: 'REDUCE_TOO_MUCH', maxReduceNum: 200 } }
+            return { result: true, data: { checkResult: true, maxReduceNum: 200, reduceAmount: String(body.reduceNum * 0.01), reducePnl: '1.25', reduceGridprofit: '0.4', reduceInvestment: '3', reduceFee: '0.01', estimateLiquidationPriceDown: '0.6', estimateLiquidationPriceDownAfter: '0.55' } }
+        }
         if (/Check$|checkParams$/.test(pfad)) return { result: true, data: { checkResult: true } }
         pionex.sendungen++
         if (pionex.verzoegerung) await warte(pionex.verzoegerung)
@@ -149,6 +154,18 @@ try {
     p('Ist = der neue Bot (ID aus der Antwort)', sp.d.ist?.neueId === bot.id)
     const anders = await post('/api/bots/plan/aktion/senden', { aktion: 'starten', eingabe: { ...plan, hebel: '5' }, token: (await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: plan })).d.token, haken: true, hakenText: haken })
     p('anderer Hebel als geprüft → 409 neuPruefen', anders.status === 409 && anders.d.code === 'neuPruefen')
+
+    console.log('Position reduzieren')
+    const vorR = pionex.sendungen
+    const rp = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '25' } })).d
+    p('25 % → reduceNum 50 von Pionex-Höchstmenge 200, Schätzungen von Pionex', rp.bestanden && rp.eingabe?.reduceNum === '50' && rp.reduzieren?.max === 200 && rp.reduzieren?.pnl === 1.25 && rp.anfrage.pfad.endsWith('/reduce') && rp.anfrage.body.reduceNum === 50 && rp.warnungen.includes('teilverkauf'), JSON.stringify(rp))
+    p('Prüfen sendet nichts', pionex.sendungen === vorR)
+    const rs = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion: 'reduzieren', eingabe: { anteil: '25', ...rp.eingabe }, token: rp.token, haken: true, hakenText: haken })
+    p('Senden mit der geprüften Menge: ausgeführt, reduce mit reduceNum 50', rs.d.ok && rs.d.zustand === 'ausgefuehrt' && pionex.letzte.pfad.endsWith('/reduce') && pionex.letzte.body.reduceNum === 50, JSON.stringify(rs.d))
+    const r2 = (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '25' } })).d
+    const rAnders = await post(`/api/bots/${bot.id}/aktion/senden`, { aktion: 'reduzieren', eingabe: { reduceNum: '60' }, token: r2.token, haken: true, hakenText: haken })
+    p('andere Menge als geprüft → abgewiesen, nichts gesendet', rAnders.status >= 400 && pionex.sendungen === vorR + 1)
+    p('Anteil 0 oder über 100 → 400', (await post(`/api/bots/${bot.id}/aktion/pruefen`, { aktion: 'reduzieren', eingabe: { anteil: '150' } })).status === 400)
 
     console.log('Bot-Planer: Mindesteinsatz')
     pionex.minEinsatz = 37.3; pionex.pruefungen = 0

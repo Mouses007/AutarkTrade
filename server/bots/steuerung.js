@@ -19,7 +19,7 @@ import { liqRisiko } from './pionex-bots.js'
 
 const PFAD = '/api/v1/bot/orders/futuresGrid'
 const SPOT_PFAD = '/api/v1/bot/orders/spotGrid'
-export const AKTIONEN = ['band', 'investieren', 'margeDazu', 'margeWeg', 'stops', 'pausieren', 'fortsetzen', 'beenden', 'starten']
+export const AKTIONEN = ['band', 'investieren', 'margeDazu', 'margeWeg', 'stops', 'reduzieren', 'pausieren', 'fortsetzen', 'beenden', 'starten']
 export const STEUERBAR = new Set(['futures_grid', 'coinm_grid', 'spot_grid'])
 /**
  * Spot-Grid (14.11.2026): nur Starten (mit checkParams) und Beenden. Für Band,
@@ -122,6 +122,17 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     const ip = (usd) => instrumentPreis(bot, usd, stellen)
     const openPrice = istZahl(kurs) && kurs > 0 ? Number(ip(kurs)) : null
     const basis = bot.einsatz?.basis ?? bot.einsatz?.aktuell ?? null
+
+    if (aktion === 'reduzieren') {
+        // Position teilweise zum Marktpreis verkaufen, der Bot läuft weiter (Teilgewinn). reduceNum ist
+        // eine ganze Zahl in Pionex' Mengen-Schritten; welcher Anteil das ist, sagt reduceCheck mit
+        // `maxReduceNum` — die Route rechnet den Anteil in % darauf um (Doku 14.11.2026).
+        const n = zahl(eingabe.reduceNum)
+        if (!Number.isInteger(n) || n < 1) return { fehler: 'betrag' }
+        if (openPrice == null) return { fehler: 'kurs' }
+        const body = { buOrderId: id, openPrice: String(openPrice), reduceNum: n }
+        return { aktion, pruefen: { pfad: `${PFAD}/reduceCheck`, body }, senden: { pfad: `${PFAD}/reduce`, body }, nachher: { reduceNum: n }, warnungen: ['marktpreis', 'teilverkauf'] }
+    }
 
     if (aktion === 'band') {
         const unten = zahl(eingabe.unten) ?? bot.grid?.unten, oben = zahl(eingabe.oben) ?? bot.grid?.oben
@@ -258,6 +269,17 @@ function baueSpotAktion(bot, aktion, eingabe, { kurs, stellen }) {
         senden: { pfad: `${SPOT_PFAD}/create`, body: { base, quote, buOrderData: { top, bottom, row: anzahl, gridType: art, quoteTotalInvestment: String(einsatz) } } },
         nachher: { unten: Number(bottom), oben: Number(top), anzahl, art, einsatz },
         warnungen,
+    }
+}
+
+/** Schätzungen aus der reduceCheck-Antwort (Pionex nennt sie selbst). */
+export function reduzierAusPruefung(data) {
+    if (!data || typeof data !== 'object') return null
+    const z = (v) => { const n = Number(v); return Number.isFinite(n) ? n : null }
+    return {
+        max: Number.isInteger(Number(data.maxReduceNum)) ? Number(data.maxReduceNum) : null,
+        menge: z(data.reduceAmount), einsatz: z(data.reduceInvestment), gridGewinn: z(data.reduceGridprofit),
+        pnl: z(data.reducePnl), gebuehr: z(data.reduceFee), grund: data.reason || null,
     }
 }
 

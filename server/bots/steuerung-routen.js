@@ -39,7 +39,7 @@ import { istTestbetrieb } from '../testbetrieb.js'
 import { logWarn, logInfo } from '../logger.js'
 import { fehlerText } from '../boersen-status.js'
 import { holeBot, holeLaufendeBots, vergesseBot } from './routen.js'
-import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, pruefGrund, sucheMindestEinsatz, rundeEinsatzAuf, minAusPruefung, STEUERBAR } from './steuerung.js'
+import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, pruefGrund, sucheMindestEinsatz, rundeEinsatzAuf, minAusPruefung, reduzierAusPruefung, STEUERBAR } from './steuerung.js'
 import { pionexSpotSymbole } from './pionex-kerzen.js'
 import { PLAN_ID, planBot, pruefePlanEingabe, pruefePlanVariante } from './planer.js'
 import { fetchTickerPrice } from '../pionex-api.js'
@@ -368,7 +368,21 @@ export function setupBotSteuerungRoutes(app) {
             if (!bot) return res.status(404).json({ ok: false, code: 'nichtGefunden' })
             if (bot.fehler) return res.status(400).json({ ok: false, code: bot.fehler })
             if (!STEUERBAR.has(bot.typ)) return res.status(400).json({ ok: false, code: 'typ' })
-            const a = baueAktion(bot, aktion, req.body?.eingabe || {}, { stellen: await stellenFuer(bot) })
+            let eingabe = req.body?.eingabe || {}
+            const stellen = await stellenFuer(bot)
+            // Reduzieren: Anteil in % → reduceNum. Erst eine Prüfung mit 1 Schritt, die Pionex' Höchstmenge
+            // (maxReduceNum) nennt; die umgerechnete Eingabe geht an den Browser zurück und wird so gesendet.
+            if (aktion === 'reduzieren' && eingabe.reduceNum == null) {
+                const anteil = Number(String(eingabe.anteil ?? '').replace(',', '.'))
+                if (!(anteil > 0 && anteil <= 100)) return res.status(400).json({ ok: false, code: 'anteil' })
+                const probe = baueAktion(bot, aktion, { ...eingabe, reduceNum: 1 }, { stellen })
+                if (probe.fehler) return res.status(400).json({ ok: false, code: probe.fehler })
+                const vor = await frage(k, probe.pruefen.pfad, probe.pruefen.body)
+                const max = reduzierAusPruefung(vor?.data)?.max
+                if (!(max >= 1)) return res.json({ ok: true, aktion, bestanden: false, grund: null, pruefung: { result: vor?.result ?? false, message: vor?.message || 'Pionex nennt keine Höchstmenge zum Reduzieren', code: null, data: vor?.data || null }, nachher: {}, warnungen: [], token: null, testbetrieb: istTestbetrieb() })
+                eingabe = { ...eingabe, reduceNum: String(Math.max(1, Math.min(max, Math.round(max * anteil / 100)))) }
+            }
+            const a = baueAktion(bot, aktion, eingabe, { stellen })
             if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
             const pruefung = a.pruefen ? await frage(k, a.pruefen.pfad, a.pruefen.body) : null
             const bestanden = a.pruefen ? pruefungBestanden(pruefung) : true
@@ -388,6 +402,8 @@ export function setupBotSteuerungRoutes(app) {
                 ok: true, aktion, bestanden, ohnePruefung: !a.pruefen, grund, minEinsatz,
                 pruefung: pruefung ? { result: pruefung.result, message: pruefung.message || null, code: pruefung.code || null, data: pruefung.data || null } : null,
                 liq: pruefung?.data ? liqAusPruefung(bot, pruefung.data) : null,
+                reduzieren: aktion === 'reduzieren' ? reduzierAusPruefung(pruefung?.data) : undefined,
+                eingabe: aktion === 'reduzieren' ? eingabe : undefined,
                 vorher: bot.plan ? null : einstellungVon(bot), nachher: a.nachher, warnungen: a.warnungen,
                 anfrage: a.senden, token: t, testbetrieb: istTestbetrieb(),
             })
