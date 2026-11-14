@@ -17,7 +17,7 @@ import { fetchTickerPrice } from '../pionex-api.js'
 import { holeSymbolTabelle } from '../execution/pionex-meta.js'
 import { fehlerText } from '../boersen-status.js'
 import { logWarn } from '../logger.js'
-import { sendeWennAus } from '../quellen/aus.js'
+import { sendeWennAus, istAus } from '../quellen/aus.js'
 import { kerzen as holeKerzen } from '../marktdaten/index.js'
 import { wartungsmargeMitQuelle } from '../margin-rates.js'
 import { getClosedCandles } from '../market-data.js'
@@ -91,6 +91,34 @@ async function ladeZeichnungen(symbol) {
     } catch { return [] }
 }
 
+/**
+ * Kerzen für einen Futures-Plan: zuerst die Marktdatenquelle (Binance/Bitget, mit Funding);
+ * kennt sie das Symbol nicht — etwa xStocks wie NVDAX, die nur Pionex als Perp führt
+ * (gesehen 14.11.2026: „Invalid symbol") —, die Perp-Kerzen von Pionex selbst, ohne Funding.
+ */
+async function futuresDaten(e, symbol, start, ende) {
+    try {
+        const tag = await holeKerzen(symbol, '1d', { markt: 'futures', limit: 45 })
+        if (!tag?.length) throw new Error('keine Kerzen')
+        return await Promise.all([
+            tag,
+            ladeSimKerzen(symbol, start, ende),
+            wartungsmargeMitQuelle(symbol).catch(() => null),
+            Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(symbol, tf, 300, { market: 'futures' }).catch(() => null))),
+        ])
+    } catch (err) {
+        if (istAus(err)) throw err
+        logWarn('bots', `Planer ${symbol}: Marktdatenquelle ohne Kerzen (${err.message}), nehme Pionex-Perp-Kerzen`)
+        const paar = `${e.coin}_USDT_PERP`
+        return Promise.all([
+            pionexLetzte(paar, '1d', 45),
+            pionexSimKerzen(paar, start, ende),
+            wartungsmargeMitQuelle(symbol).catch(() => null),
+            Promise.all(BOT_ZEITRAHMEN.map((tf) => pionexLetzte(paar, tf, 300).catch(() => null))),
+        ])
+    }
+}
+
 async function rechne(e, coins) {
     const symbol = `${e.coin}USDT`
     const kurs = e.spot ? await fetchTickerPrice(`${e.coin}_USDT`) : (await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`))
@@ -105,12 +133,7 @@ async function rechne(e, coins) {
             null,
             Promise.all(BOT_ZEITRAHMEN.map((tf) => pionexLetzte(paar, tf, 300).catch(() => null))),
         ])
-        : await Promise.all([
-            holeKerzen(symbol, '1d', { markt: 'futures', limit: 45 }),
-            ladeSimKerzen(symbol, start, ende),
-            wartungsmargeMitQuelle(symbol).catch(() => null),
-            Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(symbol, tf, 300, { market: 'futures' }).catch(() => null))),
-        ])
+        : await futuresDaten(e, symbol, start, ende)
     if (!sim?.kerzen?.length) throw Object.assign(new Error('Keine Kerzen für den Rückblick'), { code: 'keineKerzen' })
     const zeichnungen = await ladeZeichnungen(symbol)
     const atr = atrTag(tag)
@@ -144,7 +167,7 @@ async function rechne(e, coins) {
     }
     return {
         ok: true, zeit: Date.now(), kurs, eingabe: { coin: e.coin, coinM: e.coinM, spot: e.spot, richtung: e.richtung, einsatz: e.einsatz, hebel: e.hebel, tage: e.tage },
-        einheit: e.coinM ? e.coin : 'USDT', markt: lage, trend, chart, spot: e.spot, zeitrahmen: sim.tf, kerzenAnzahl: sim.kerzen.length,
+        einheit: e.coinM ? e.coin : 'USDT', markt: lage, trend, chart, spot: e.spot, zeitrahmen: sim.tf, kerzenQuelle: sim.quelle || 'marktdaten', kerzenAnzahl: sim.kerzen.length,
         von: sim.kerzen[0]?.t ?? null, bis: sim.kerzen.at(-1)?.t ?? null, mmr: mmr ?? null, mmrQuelle: marge?.quelle || 'pauschal',
         fundingSimuliert: !!sim.funding, minMenge: minMenge ?? null, grids: { sinnvoll: SINNVOLLE_GRIDS, wenig: WENIG_GRIDS },
         hohe: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,

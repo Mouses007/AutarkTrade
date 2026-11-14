@@ -96,7 +96,7 @@ export async function pionexLetzte(paar, tf, anzahl = 300) {
 export async function pionexSimKerzen(paar, von, bis = Date.now()) {
     const tf = bis - von <= 35 * 86_400_000 ? '5M' : '15M'
     const kerzen = await pionexKerzen(paar, tf, { von, bis })
-    return { kerzen: nurGeschlossen(kerzen, IV_MS[tf]), tf: tf.toLowerCase(), funding: null }
+    return { kerzen: nurGeschlossen(kerzen, IV_MS[tf]), tf: tf.toLowerCase(), funding: null, quelle: 'pionex' }
 }
 
 /** Spot-Symbole: Map coin → { minAmount (USDT je Order), minTradeSize (Coin), quotePrecision }. */

@@ -46,6 +46,7 @@ globalThis.__botTest = {
         if (method === 'GET') return { result: true, data: { results: [] } }
         if (/checkParams$/.test(pfad) && pionex.minEinsatz) {
             pionex.pruefungen = (pionex.pruefungen || 0) + 1
+            if (pionex.bremse > 0) { pionex.bremse--; throw new Error('Pionex API: [TOO_MANY_REQUESTS] rate limit') }
             if (Number(body.buOrderData.quote_investment) < pionex.minEinsatz) throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] less than min investment')
         }
         if (/Check$|checkParams$/.test(pfad)) return { result: true, data: { checkResult: true } }
@@ -63,7 +64,7 @@ let server
 try {
     await initDb()
     const knex = getKnex()
-    _testZeiten({ sperre: 0, pruefPause: 0, nachlesen: 0 })
+    _testZeiten({ sperre: 0, pruefPause: 0, nachlesen: 0, minPause: 0 })
     const app = express()
     app.use(express.json())
     setupBotSteuerungRoutes(app)
@@ -165,6 +166,16 @@ try {
     p('Einsatz reicht: eine Abfrage, kein Minimum', m3.reichtAus === true && m3.min === null && pionex.pruefungen === 1)
     const m4 = await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, unten: '170' } })
     p('ungültiger Plan → 400', m4.status === 400 && m4.d.code === 'kursAusserhalb')
+    // Pionex bremst mitten in der Suche (gesehen 14.11.2026): nochmal fragen statt abbrechen
+    pionex.pruefungen = 0
+    const erste = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '70', einsatz: '5' } })).d
+    pionex.bremse = 1
+    const m5 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '71', einsatz: '5' } })).d
+    p('Bremse während der Suche: nochmal gefragt, Minimum trotzdem gefunden', erste.min >= 37.3 && m5.reichtAus === false && m5.min >= 37.3 && m5.min <= 40, JSON.stringify(m5))
+    pionex.bremse = 99
+    const m6 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '72', einsatz: '5' } })).d
+    p('Pionex bremst dauernd: unbekannt statt „zu klein"', m6.ok && m6.reichtAus !== false && m6.min === null, JSON.stringify(m6))
+    pionex.bremse = 0
     pionex.minEinsatz = 0
 
     console.log('Protokoll')

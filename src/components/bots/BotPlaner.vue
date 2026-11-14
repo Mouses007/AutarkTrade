@@ -357,6 +357,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
         <Karte v-if="erg" :titel="t('bots.plan.kandidatenTitel', { n: gueltig.length })">
             <p class="leise">{{ t('bots.plan.kandidatenText', { tage: erg.eingabe.tage, tf: erg.zeitrahmen || '—', von: datum(erg.von) }) }}
                 {{ erg.fundingSimuliert ? t('bots.sim.mitFunding') : t('bots.sim.ohneFunding') }}</p>
+            <p v-if="erg.kerzenQuelle === 'pionex'" class="leise">{{ t('bots.plan.kerzenPionex') }}</p>
             <div class="sortierung">
                 <span class="leise">{{ t('bots.plan.sortieren') }}:</span>
                 <button v-for="s in ['id', 'ergebnis', 'verlust', 'liq']" :key="s" type="button" class="chip" :class="{ an: sortierung === s }" @click="sortierung = s">{{ t(`bots.plan.sort.${s}`) }}</button>

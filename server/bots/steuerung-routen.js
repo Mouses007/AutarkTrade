@@ -49,7 +49,7 @@ const TOKEN_MS = 5 * 60_000
 let SPERRE_MS = 10_000
 let PRUEF_PAUSE_MS = 3_000
 let NACHLESEN_MS = 2_500
-let MIN_PAUSE_MS = 250
+let MIN_PAUSE_MS = 300
 const MIN_CACHE_MS = 10 * 60_000
 
 /** Nur für den Selbsttest: Wartezeiten verkürzen. */
@@ -152,15 +152,30 @@ async function sende(k, pfad, body) {
 }
 
 /**
+ * Prüfabfrage für die Mindesteinsatz-Suche: eine andere Antwort als „bestanden" oder „zu
+ * wenig Einsatz" ist oft nur Pionex' Bremse bei vielen Abfragen (gesehen 14.11.2026 im
+ * Planer: die Suche brach ab, direkt aufgerufen fand sie 240 USDT) — dann kurz warten und
+ * höchstens zweimal nachfragen. Sendet nie etwas.
+ */
+async function frageGeduldig(k, pfad, body) {
+    let p = null
+    for (let versuch = 0; versuch < 3; versuch++) {
+        if (MIN_PAUSE_MS) await new Promise((r) => setTimeout(r, versuch ? MIN_PAUSE_MS * 6 : MIN_PAUSE_MS))
+        p = await frage(k, pfad, body)
+        if (pruefungBestanden(p) || pruefGrund(p) === 'einsatzZuKlein') return p
+    }
+    return p
+}
+
+/**
  * Mindesteinsatz eines neuen Bots bei Pionex suchen (nur Prüfabfragen, gesendet
  * wird nichts). Höchstens 14 Abfragen mit Pause, damit Pionex nicht bremst.
  */
 async function mindestEinsatzFuer(k, bot, eingabe, stellen, { start, lo }) {
     const pruefe = async (x) => {
-        if (MIN_PAUSE_MS) await new Promise((r) => setTimeout(r, MIN_PAUSE_MS))
         const a = baueAktion(bot, 'starten', { ...eingabe, einsatz: String(x) }, { stellen })
         if (a.fehler || !a.pruefen) return 'anders'
-        const p = await frage(k, a.pruefen.pfad, a.pruefen.body)
+        const p = await frageGeduldig(k, a.pruefen.pfad, a.pruefen.body)
         return pruefungBestanden(p) ? 'ok' : pruefGrund(p) === 'einsatzZuKlein' ? 'zuKlein' : 'anders'
     }
     return sucheMindestEinsatz(pruefe, { start, lo })
@@ -313,7 +328,7 @@ export function setupBotSteuerungRoutes(app) {
                 const stellen = await stellenFuer(bot)
                 const a = baueAktion(bot, 'starten', eingabe, { stellen })
                 if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
-                const erste = await frage(k, a.pruefen.pfad, a.pruefen.body)
+                const erste = await frageGeduldig(k, a.pruefen.pfad, a.pruefen.body)
                 if (pruefungBestanden(erste)) return res.json({ ok: true, min: null, reichtAus: true })
                 // Spot: Pionex nennt den Mindesteinsatz selbst, kein Herantasten nötig
                 if (bot.typ === 'spot_grid' && minAusPruefung(erste)) {
@@ -324,7 +339,8 @@ export function setupBotSteuerungRoutes(app) {
                 if (pruefGrund(erste) !== 'einsatzZuKlein') return res.json({ ok: true, min: null, reichtAus: null, text: erste?.message || erste?.data?.reason || '' })
                 const schaetzung = Number(req.body?.schaetzung)
                 const m = await mindestEinsatzFuer(k, bot, eingabe, stellen, { lo: einsatz, start: schaetzung > einsatz ? schaetzung : einsatz * 2 })
-                if (m.min == null) return res.json({ ok: true, min: null, reichtAus: false })
+                // Suche ohne Ergebnis: nicht „zu klein" behaupten, sondern unbekannt
+                if (m.min == null) return res.json({ ok: true, min: null, reichtAus: null, text: `Mindesteinsatz nicht ermittelt (${m.fehler || 'unbekannt'})` })
                 mindestCache.set(schluesselPlan, { min: m.min, zeit: Date.now() })
                 for (const [s2, w] of mindestCache) if (Date.now() - w.zeit > MIN_CACHE_MS) mindestCache.delete(s2)
                 res.json({ ok: true, min: m.min, reichtAus: false })
