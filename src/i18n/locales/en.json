@@ -6504,7 +6504,7 @@
       "spitze": "Arrowhead at the end"
     },
     "textEingeben": "Text:",
-    "alleLoeschenFrage": "Delete one drawing on {symbol}? Locked ones stay. | Delete {n} drawings on {symbol}? Locked ones stay.",
+    "alleLoeschenFrage": "Delete one drawing on {symbol} (locked ones too, with their alerts)? | Delete {n} drawings on {symbol} (locked ones too, with their alerts)?",
     "objekteLeer": "No drawings on {symbol} yet.",
     "zeichnungFehler": "Drawing not saved",
     "trade": {

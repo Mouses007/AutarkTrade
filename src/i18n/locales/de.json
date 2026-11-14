@@ -6504,7 +6504,7 @@
       "spitze": "Pfeilspitze am Ende"
     },
     "textEingeben": "Text:",
-    "alleLoeschenFrage": "Eine Zeichnung auf {symbol} löschen? Gesperrte bleiben stehen. | {n} Zeichnungen auf {symbol} löschen? Gesperrte bleiben stehen.",
+    "alleLoeschenFrage": "Eine Zeichnung auf {symbol} löschen (auch gesperrte, mit ihren Alarmen)? | {n} Zeichnungen auf {symbol} löschen (auch gesperrte, mit ihren Alarmen)?",
     "objekteLeer": "Noch keine Zeichnungen auf {symbol}.",
     "zeichnungFehler": "Zeichnung nicht gespeichert",
     "trade": {

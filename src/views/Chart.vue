@@ -793,7 +793,8 @@ function fehlerSchliessen() {
 
 function alleLoeschen() {
     const symbol = aktivesPanel.value.symbol
-    const liste = aktiveZeichnungen.value.filter((z) => !z.gesperrt)
+    // Auch gesperrte: der Knopf ist für den Neuanfang, und die Auto-Sperre sperrt neue Zeichnungen von selbst.
+    const liste = [...aktiveZeichnungen.value]
     if (!liste.length) return
     if (!window.confirm(t('chart.alleLoeschenFrage', { n: liste.length, symbol }, liste.length))) return
     for (const z of liste) zeichnungLoeschen(symbol, z.id)
