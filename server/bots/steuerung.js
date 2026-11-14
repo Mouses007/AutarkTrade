@@ -338,9 +338,11 @@ export async function sucheMindestEinsatz(pruefe, { start, lo = null, hi = null,
         }
     }
     while (hi / lo > 1 + genau && n < maxSchritte) {
-        const mitte = Math.sqrt(lo * hi)
-        const r = await pruefe(Number(mitte.toFixed(2))); n++
-        if (r === 'ok') hi = Number(mitte.toFixed(2)); else lo = mitte
+        // Auf 4 gültige Stellen: toFixed(2) war für Coin-M-Einsätze (0.02 SOL) viel zu grob
+        const mitte = Number(Math.sqrt(lo * hi).toPrecision(4))
+        if (!(mitte > lo && mitte < hi)) break
+        const r = await pruefe(mitte); n++
+        if (r === 'ok') hi = mitte; else lo = mitte
     }
     return { min: rundeEinsatzAuf(hi), genau: hi, schritte: n }
 }

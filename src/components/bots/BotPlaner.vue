@@ -130,7 +130,7 @@ async function pruefeMindest() {
     for (const c of [...gueltig.value]) {
         if (lauf !== mindestLauf) return
         mindest.value = { ...mindest.value, [c.id]: { laedt: true } }
-        const schaetzung = letzte ? letzte.min * c.variante.anzahl / letzte.anzahl : undefined
+        const schaetzung = letzte ? Number((letzte.min * c.variante.anzahl / letzte.anzahl).toPrecision(4)) : undefined
         let r = null
         for (let versuch = 0; versuch < 3 && !r; versuch++) {
             try {

@@ -172,8 +172,11 @@ async function frageGeduldig(k, pfad, body) {
  * wird nichts). Höchstens 14 Abfragen mit Pause, damit Pionex nicht bremst.
  */
 async function mindestEinsatzFuer(k, bot, eingabe, stellen, { start, lo }) {
+    // Pionex nimmt USDT-Beträge nur mit höchstens 2 Nachkommastellen („quote_total_investment not
+    // match quote precision", gesehen 14.11.2026 bei einem Schätzwert 194.1176…); Coin-M in der Coin feiner
+    const betragText = (x) => String(bot.coinM ? Number(Number(x).toPrecision(6)) : Number(Number(x).toFixed(2)))
     const pruefe = async (x) => {
-        const a = baueAktion(bot, 'starten', { ...eingabe, einsatz: String(x) }, { stellen })
+        const a = baueAktion(bot, 'starten', { ...eingabe, einsatz: betragText(x) }, { stellen })
         if (a.fehler || !a.pruefen) return 'anders'
         const p = await frageGeduldig(k, a.pruefen.pfad, a.pruefen.body)
         return pruefungBestanden(p) ? 'ok' : pruefGrund(p) === 'einsatzZuKlein' ? 'zuKlein' : 'anders'

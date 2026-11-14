@@ -47,6 +47,7 @@ globalThis.__botTest = {
         if (/checkParams$/.test(pfad) && pionex.minEinsatz) {
             pionex.pruefungen = (pionex.pruefungen || 0) + 1
             if (pionex.bremse > 0) { pionex.bremse--; throw new Error('Pionex API: [TOO_MANY_REQUESTS] rate limit') }
+            if (body.base !== 'USDT.PERP' && !/^\d+(\.\d{1,2})?$/.test(String(body.buOrderData.quote_investment))) throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] quote_total_investment not match quote precision: max 2 decimal places')
             if (Number(body.buOrderData.quote_investment) < pionex.minEinsatz) throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] less than min investment')
         }
         if (/Check$|checkParams$/.test(pfad)) return { result: true, data: { checkResult: true } }
@@ -172,6 +173,9 @@ try {
     pionex.bremse = 1
     const m5 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '71', einsatz: '5' } })).d
     p('Bremse während der Suche: nochmal gefragt, Minimum trotzdem gefunden', erste.min >= 37.3 && m5.reichtAus === false && m5.min >= 37.3 && m5.min <= 40, JSON.stringify(m5))
+    pionex.pruefungen = 0
+    const m7 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, coinM: false, anzahl: '73', einsatz: '5' }, schaetzung: 19.411764705882354 })).d
+    p('Schätzwert mit vielen Nachkommastellen: auf 2 gerundet geprüft, Minimum gefunden', m7.reichtAus === false && m7.min >= 37.3 && m7.min <= 40, JSON.stringify(m7))
     pionex.bremse = 99
     const m6 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '72', einsatz: '5' } })).d
     p('Pionex bremst dauernd: unbekannt statt „zu klein"', m6.ok && m6.reichtAus !== false && m6.min === null, JSON.stringify(m6))
