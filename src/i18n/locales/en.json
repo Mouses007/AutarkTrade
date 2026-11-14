@@ -8593,7 +8593,10 @@
       "chartKeine": "None found: no sideways phase on the weekly chart and no own drawings.",
       "spot": "Spot (no leverage)",
       "nurSpot": "Pionex lists this coin as spot only, e.g. a tokenised stock. A spot grid is planned instead.",
-      "spotHinweis": "Spot grid: no leverage, no liquidation, no funding. At start Pionex buys the coin for the lines above the price, so it acts like a long. At most 200 grids, started without a stop-loss. Candles and minimum investment come straight from Pionex."
+      "spotHinweis": "Spot grid: no leverage, no liquidation, no funding. At start Pionex buys the coin for the lines above the price, so it acts like a long. At most 200 grids, started without a stop-loss. Candles and minimum investment come straight from Pionex.",
+      "randSpalte": "Path to edge",
+      "randTitel": "What it costs if the price runs from today straight to the danger edge: long to the lower edge (with a stop, to the stop), short to the upper edge, neutral the worse side. With fees, without funding, an order of magnitude.",
+      "randZeile": "Result if the price runs from today straight to {preis}"
     }
   }
 }

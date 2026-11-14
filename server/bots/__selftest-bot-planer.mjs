@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
     planBot, trendFuer, mengeJeGrid, pruefePlanEingabe, pruefePlanVariante, planKandidaten, anzahlFuerSchritt,
     rechnePlanVariante, rechnePlan, bauePlanPrompt, planSystemText, PLAN_ID, MAX_PLAN_GRIDS, MAX_KANDIDATEN,
-    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS,
+    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS, LANG,
 } from './planer.js'
 import { normalisiereBot } from './pionex-bots.js'
 import { pruefeKiAntwort } from './bot-ki.js'
@@ -179,6 +179,24 @@ const wo = pk.wochenAusTagen(tageK)
 p('Wochen aus Tagen: Montag 00:00 UTC, Hoch/Tief/Schluss', wo.length === 2 && wo[0].t === Date.UTC(2026, 10, 2) && wo[0].h === 8 && wo[0].l === 0 && wo[0].c === 7.5 && wo[1].o === 8)
 const sm = pk.spotAusTabelle([{ symbol: 'NVDAX_USDT', type: 'SPOT', baseCurrency: 'NVDAX', quoteCurrency: 'USDT', minAmount: '10', minTradeSize: '0.0001', quotePrecision: 2, enable: true }, { symbol: 'X_BTC', type: 'SPOT', baseCurrency: 'X', quoteCurrency: 'BTC', enable: true }, { symbol: 'Y_USDT', type: 'SPOT', baseCurrency: 'Y', quoteCurrency: 'USDT', enable: false }])
 p('Spot-Symbole: nur aktive USDT-Paare mit Mindestwerten', sm.size === 1 && sm.get('NVDAX').minTradeSize === 0.0001 && sm.get('NVDAX').quotePrecision === 2)
+
+console.log('Langfrist')
+const zrW = { treffen: [], marken: [{ id: 'Z1', tf: '1w', preis: 120 }, { id: 'Z2', tf: '1d', preis: 150 }, { id: 'Z3', tf: '1w', preis: 230 }] }
+const lk = planKandidaten({ kurs: 160, atr: 6, zr: zrW, richtung: 'LONG', chart: [{ name: 'VAL Profil', preis: 140 }] })
+const lang = lk.filter((c) => c.titel.startsWith('Langfrist'))
+p('Long Langfrist: ab tiefer Unterstützung (≥ 8 % unter dem Kurs, ½ ATR darunter), geometrisch, oben ≥ +40 %', lang.length >= 2 && lang.some((c) => c.variante.unten === 137) && lang.every((c) => c.variante.art === 'geometric' && c.variante.oben >= 160 * LANG.oben - 1e-9), JSON.stringify(lang.map((c) => [c.titel, c.variante.unten, c.variante.oben])))
+p('Long Langfrist: oben bis zum Wochen-Widerstand, wenn der höher liegt (≤ +60 %)', lang.every((c) => Math.abs(c.variante.oben - 233) < 1e-9))
+p('Langfrist: je Band eine Variante ohne Stop und eine mit Notbremse', lang.filter((c) => c.stopNahLiq).length === lang.filter((c) => !c.stopNahLiq).length && lang.every((c) => c.variante.stopLoss == null))
+p('Ohne tiefe Niveaus: −25 % bis +40 %', planKandidaten({ kurs: 100, atr: 3, zr: null, richtung: 'LONG' }).some((c) => c.titel.startsWith('Langfrist −25 %') && c.variante.unten === 75 && c.variante.oben === 140))
+p('Spot Langfrist ohne Notbremse', planKandidaten({ kurs: 160, atr: 6, zr: zrW, richtung: 'LONG', ohneStop: true }).filter((c) => c.titel.startsWith('Langfrist')).every((c) => !c.stopNahLiq))
+const eL = { coin: 'TST', coinM: false, richtung: 'LONG', einsatz: 100, hebel: 5, tage: 30 }
+const lr = rechnePlan(eL, kerzen, [{ id: 'P1', titel: 'Langfrist x', variante: { unten: 150, oben: 260, anzahl: 40, art: 'geometric' }, stopNahLiq: true }, { id: 'P2', titel: 'Langfrist y', variante: { unten: 150, oben: 260, anzahl: 40, art: 'geometric' } }], { kurs: 200 })
+const nb = lr.find((c) => c.id === 'P1'), ohne = lr.find((c) => c.id === 'P2')
+p('Notbremse: Stop-Loss 2 % über der Liquidation der Variante, unter dem Band', !!nb && Math.abs(nb.variante.stopLoss - ohne.start.liq * (1 + LANG.notbremse)) / nb.variante.stopLoss < 1e-4 && nb.variante.stopLoss < 150 && nb.titel.includes('Stop-Loss'), JSON.stringify([nb?.variante, ohne?.start?.liq]))
+p('Weg zur Kante: Long ohne Stop bis zur Unterkante (Verlust), mit Stop bis zum Stop (mehr Verlust, nicht liquidiert)', ohne.start.verlustRand.preis === 150 && ohne.start.verlustRand.betrag < 0 && nb.start.verlustRand.betrag < ohne.start.verlustRand.betrag && !nb.start.verlustRand.liquidiert && nb.start.verlustRand.ausstieg === 'stopLoss', JSON.stringify([ohne.start.verlustRand, nb.start.verlustRand]))
+p('Notbremse ohne Liquidation (Spot) entfällt', rechnePlan({ ...eL, spot: true, hebel: 1 }, kerzen, [{ id: 'P1', titel: 'x', variante: { unten: 150, oben: 260, anzahl: 40, art: 'geometric' }, stopNahLiq: true }], { kurs: 200 }).length === 0)
+const ws = rechnePlanVariante({ ...eL, richtung: 'SHORT' }, { unten: 150, oben: 260, anzahl: 40 }, kerzen, { kurs: 200 })
+p('Weg zur Kante: Short bis zur Oberkante', ws.start.verlustRand.preis === 260 && ws.start.verlustRand.betrag < 0)
 
 console.log('Start über die Steuerung')
 const a = baueAktion(pm, 'starten', { unten: '120', oben: '200', anzahl: '100', hebel: '4', einsatz: '3', art: 'arithmetic' }, { stellen: 7 })

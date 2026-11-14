@@ -48,6 +48,8 @@ export const MAX_PLAN_GRIDS = 500
 export const MAX_HEBEL = 125
 export const MAX_KANDIDATEN = 24
 export const MAX_EIGENE = 3
+/** Langfrist-Bänder: Unterstützung/Widerstand mindestens 8 % entfernt, oben +40 % (bis +60 % an einem Widerstand), Notbremse 2 % vor der Liquidation. */
+export const LANG = { abstand_min_unten: 0.92, abstand_min_oben: 1.08, oben: 1.4, oben_max: 1.6, notbremse: 0.02 }
 /** Ab so vielen Grids ist es ein Grid; darunter warnt der Planer oben (Einsatz zu klein). */
 export const SINNVOLLE_GRIDS = 20
 export const WENIG_GRIDS = 10
@@ -266,11 +268,11 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
     const a = atr
     const long = richtung === 'LONG', neutral = richtung === 'NEUTRAL'
     const baender = []
-    const band = (titel, u, o) => {
+    const band = (titel, u, o, lang = false) => {
         if (!(u > 0) || !(o > u) || !(u < kurs && kurs < o)) return
         // Fast gleiche Bänder nur einmal
         if (baender.some((b) => Math.abs(b.unten - u) < 0.5 * a && Math.abs(b.oben - o) < 0.5 * a)) return
-        baender.push({ titel, unten: runde(u, 5), oben: runde(o, 5) })
+        baender.push({ titel, unten: runde(u, 5), oben: runde(o, 5), lang })
     }
     // Abstände in Tages-ATR unter/über dem Kurs; gerichtet mehr Raum in Gewinnrichtung.
     // Im Testcontainer 11.11.2026 gegen SOL/BTC/ETH: 4/6 und 14 ATR ergaben bei 5 % ATR
@@ -279,6 +281,32 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
         ? [['eng', 4, 4], ['mittel', 7, 7], ['breit', 11, 11]]
         : long ? [['eng', 3, 4], ['mittel', 6, 8], ['breit', 10, 12]] : [['eng', 4, 3], ['mittel', 8, 6], ['breit', 12, 10]]
     for (const [name, unter, ueber] of um) band(`Band ${name} um den Kurs`, kurs - unter * a, kurs + ueber * a)
+    // Langfrist (14.11.2026, Wunsch des Entwicklers): ein Bot soll Schwankungen abernten und
+    // nicht beim ersten Rücksetzer unter ein enges Band ausgestoppt werden. Breites Band von
+    // einer tiefen Unterstützung (≥ 8 % unter dem Kurs: Chart-Niveaus, Wochen-Niveaus) bis
+    // +40 % bzw. zum nächsten grossen Widerstand; geometrisch, weil die Prozentabstände über
+    // so eine Spanne sonst unten doppelt so gross wären wie oben. Gerichtet ohne Stop und mit
+    // einer Notbremse knapp vor der Liquidation (rechnePlan, `stopNahLiq`).
+    const tiefe = [...(chart || []), ...((zr?.marken || []).filter((m) => m.tf === '1w').map((m) => ({ name: `${m.id} (1w)`, preis: m.preis })))]
+    const unterstuetzung = tiefe.filter((n) => n.preis < kurs * LANG.abstand_min_unten).sort((x, y) => y.preis - x.preis)
+    const widerstand = tiefe.filter((n) => n.preis > kurs * LANG.abstand_min_oben).sort((x, y) => x.preis - y.preis)
+    const grossOben = (max) => widerstand.filter((n) => n.preis <= kurs * max).at(-1)
+    if (long) {
+        const ziele = unterstuetzung.slice(0, 2)
+        const o = Math.max(kurs * LANG.oben, (grossOben(LANG.oben_max)?.preis ?? 0) + 0.5 * a)
+        for (const nu of ziele) band(`Langfrist ab ${nu.name}`, nu.preis - 0.5 * a, o, true)
+        if (!ziele.length) band('Langfrist −25 % bis +40 %', kurs * 0.75, o, true)
+    } else if (neutral) {
+        const u = unterstuetzung[0] ? unterstuetzung[0].preis - 0.5 * a : kurs * 0.75
+        const o = widerstand[0] ? widerstand[0].preis + 0.5 * a : kurs * 1.3
+        band(`Langfrist ${unterstuetzung[0]?.name || '−25 %'} bis ${widerstand[0]?.name || '+30 %'}`, u, Math.max(o, kurs * 1.15), true)
+    } else {
+        const ziele = widerstand.slice(0, 2)
+        const tiefst = unterstuetzung.filter((n) => n.preis >= kurs * 0.5).at(-1)
+        const u = Math.min(kurs * 0.65, tiefst ? tiefst.preis - 0.5 * a : Infinity)
+        for (const no of ziele) band(`Langfrist bis ${no.name}`, u, no.preis + 0.5 * a, true)
+        if (!ziele.length) band('Langfrist −35 % bis +25 %', u, kurs * 1.25, true)
+    }
     // An Chart-Niveaus (Volumenprofile 1w, eigene Zeichnungen): Long mit der Untergrenze knapp
     // unter einer Unterstützung (der Stop-Loss liegt dann 1 Tages-ATR unter der Grenze, also
     // deutlich unter dem Niveau), Short spiegelbildlich, Neutral zwischen zwei Niveaus.
@@ -305,6 +333,14 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohn
     // Unter ~0,1 % fressen die Gebühren (2 × Maker 0,02 %) den Zyklus.
     const dichten = [['dichte Grids', Math.max(0.0025, 0.1 * atrAnteil)], ['weite Grids', Math.max(0.006, 0.25 * atrAnteil)]]
     for (const b of baender) {
+        if (b.lang) {
+            // Langfrist: weite Grids, geometrisch; gerichtet zusätzlich mit Notbremse vor der Liquidation
+            const anzahl = anzahlFuerSchritt(b.unten, b.oben, dichten[1][1], 'geometric')
+            if (anzahl == null) continue
+            neu(`${b.titel}, weite Grids, ohne Stop`, { unten: b.unten, oben: b.oben, anzahl, art: 'geometric' })
+            if (!neutral && !ohneStop) liste.length < MAX_KANDIDATEN && liste.push({ id: `P${liste.length + 1}`, titel: `${b.titel}, weite Grids, Notbremse vor der Liquidation`, variante: { unten: b.unten, oben: b.oben, anzahl, art: 'geometric' }, stopNahLiq: true })
+            continue
+        }
         const gesehen = new Set()
         for (const [dName, schritt] of dichten) {
             const anzahl = anzahlFuerSchritt(b.unten, b.oben, schritt)
@@ -434,12 +470,28 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
     if (istZahl(liqAbstand) && liqAbstand < 0.1) warnungen.push('liqNah')
     if (istZahl(variante.stopLoss) && istZahl(liq) && (e.richtung === 'LONG' ? variante.stopLoss <= liq : variante.stopLoss >= liq)) warnungen.push('stopHinterLiq')
     if (istZahl(heute.grid.nettoJeZyklus) && heute.grid.nettoJeZyklus <= 0) warnungen.push('gebuehrFrisst')
+    // Was es kostet, wenn der Kurs ohne Umweg zur Gefahren-Kante läuft: Long nach unten (bis
+    // zur Unterkante, mit Stop bis zum Stop), Short nach oben, Neutral das Schlechtere beider.
+    // Ein Weg von heute aus, mit Gebühren, ohne Funding — Grössenordnung, keine Vorhersage.
+    const stops = {}
+    if (istZahl(variante.stopLoss)) stops.stopLoss = variante.stopLoss
+    const wegNach = (ziel) => {
+        const k = [{ t: Date.now(), o: kurs, h: Math.max(kurs, ziel), l: Math.min(kurs, ziel), c: ziel }]
+        const r = simuliereBot(heute, k, { ...geb, mmr, startPreis: kurs, aenderung: stops })
+        return r ? { preis: runde(ziel, 6), betrag: r.gesamt, liquidiert: !!r.liquidation, ausstieg: r.ausstieg?.art || null } : null
+    }
+    const sl = variante.stopLoss
+    const runter = wegNach(istZahl(sl) && e.richtung === 'LONG' ? sl * 0.995 : variante.unten)
+    const rauf = wegNach(istZahl(sl) && e.richtung === 'SHORT' ? sl * 1.005 : variante.oben)
+    const verlustRand = e.richtung === 'LONG' ? runter : e.richtung === 'SHORT' ? rauf
+        : [runter, rauf].filter(Boolean).sort((x, y) => x.betrag - y.betrag)[0] || null
     const start = {
         menge: heute.grid.mengeJeGrid, position: probe?.position ?? null, liq, liqAbstand,
         // Startposition in USD, Vorzeichen = Richtung der Coin (Coin-M: Instrument „USDT in Coin" invers)
         nominalUsd: istZahl(probe?.position) ? (e.coinM ? -probe.position : probe.position * kurs) : null,
         abstand: heute.grid.abstand, nettoJeZyklus: heute.grid.nettoJeZyklus,
         startGebuehr: probe?.gebuehren ?? null,
+        verlustRand,
         // Einsatz, ab dem SINNVOLLE_GRIDS Grids die Mindestmenge von Pionex erreichen (Menge je Grid ist linear im Einsatz)
         einsatzFuerGrids: einsatzFuerGrids(e, variante, kurs, minMenge),
     }
@@ -467,9 +519,18 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
 export function rechnePlan(e, kerzen, liste, opt = {}) {
     const aus = []
     const gesehen = new Set()
-    for (const c of liste) {
+    for (let c of liste) {
         const richtung = RICHTUNGEN.includes(c.richtung) ? c.richtung : e.richtung
-        const r = rechnePlanVariante({ ...e, richtung }, c.variante, kerzen, opt)
+        let r = rechnePlanVariante({ ...e, richtung }, c.variante, kerzen, opt)
+        // Notbremse: Stop-Loss knapp VOR der Liquidation dieser Variante (nicht am Band) — greift nur,
+        // wenn der Bot sonst ohnehin den ganzen Einsatz verlöre. Ohne Liquidation (Spot, 1x) keine.
+        if (c.stopNahLiq) {
+            const liq = r.start?.liq
+            if (!istZahl(liq) || !(richtung === 'LONG' ? liq < c.variante.unten : liq > c.variante.oben)) continue
+            const sl = runde(richtung === 'LONG' ? liq * (1 + LANG.notbremse) : liq * (1 - LANG.notbremse), 5)
+            r = rechnePlanVariante({ ...e, richtung }, { ...c.variante, stopLoss: sl }, kerzen, opt)
+            c = { ...c, titel: `${c.titel} (Stop-Loss ${runde(sl, 4)})` }
+        }
         if (r.fehler) { aus.push({ ...c, richtung, fehler: r.fehler }); continue }
         if (gegenTrend(opt.trend, richtung)) r.warnungen.push('gegenTrend')
         // Nach dem Kürzen auf die Mindestmenge können Varianten gleich werden — nur einmal zeigen
@@ -510,14 +571,14 @@ export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandi
     const zeilen = kandidaten.filter((c) => !c.fehler).map((c) => {
         const r = c.rueckblick, s = c.start, v = c.variante
         const ende = r?.liquidation ? 'LIQUIDIERT' : r?.ausstieg ? r.ausstieg.art : 'läuft'
-        return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), (c.warnungen || []).join(',') || '—'].join(' | ')
+        return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), s?.verlustRand ? `${zl(s.verlustRand.betrag, 2)} bei ${zl(s.verlustRand.preis, 2)}${s.verlustRand.liquidiert ? ' LIQUIDIERT' : s.verlustRand.ausstieg ? ' (Stop)' : ''}` : '—', (c.warnungen || []).join(',') || '—'].join(' | ')
     })
     return [
         ...kopf, ...markt, ...(zrText ? ['', zrText] : []),
         ...(chart.length ? ['', 'CHART-NIVEAUS (vom Code gemessen: Volumenprofile der Seitwärtsphasen auf 1w und die eigenen Zeichnungen des Nutzers; Varianten „Band ab/bis Chart …" sind daran gebaut):', ...chart.map((n) => `${n.id} | ${n.name} | ${zl(n.preis, 2)} | ${n.preis < (lage?.kurs ?? 0) ? 'unter' : 'über'} dem Kurs`)] : []),
         '',
         `KANDIDATEN (vom Code gerechnet). Rückblick = dasselbe Band RELATIV zum Kurs (gleiche Prozente), gestartet vor ${e.tage} Tagen, simuliert auf ${tf || '?'}-Kerzen mit Gebühren${kandidaten.some((c) => c.rueckblick?.funding) ? ' und Funding' : ''}. Start heute = beim heutigen Kurs gestartet.`,
-        `id | Richtung | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Warnungen`,
+        `id | Richtung | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Weg zur Gefahren-Kante (Ergebnis bei Preis) | Warnungen`,
         ...zeilen,
         '',
         englisch ? 'Answer in English.' : 'Antworte auf Deutsch (Schweizer Schreibweise, ss statt ß).',
@@ -536,6 +597,7 @@ export function planSystemText({ alle = false } = {}) {
             : 'Der LANGFRIST-TREND (1w/1d-Struktur, 200-Tage-Schnitt) hat Vorrang vor kurzen Bewegungen: Ein Vorschlag gegen ihn (Warnung gegenTrend) braucht eine ausdrückliche Begründung aus den Zahlen und ein klar benanntes Risiko; ein Grid gegen den Trend kann lange gegen sich laufen.',
         'Der Rückblick zeigt nur, wie sich dieselbe Einstellung in den letzten Wochen geschlagen hätte; er sagt nichts über die Zukunft. Gewichte den Liquidationsabstand beim Start heute und den grössten Verlust mindestens so stark wie das Ergebnis.',
         'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, ob die Bandgrenzen und der Stop-Loss an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…, CHART-NIVEAUS V…/U…) liegen und ob die gewählte Richtung zur Struktur passt. Nenne Niveaus nur mit ID und Preis aus der Eingabe.',
+        'Varianten „Langfrist …" sind für lange Laufzeit gebaut: breites Band von einer tiefen Unterstützung bis weit nach oben, ohne Stop oder mit einer Notbremse knapp vor der Liquidation statt eines Stops knapp unter dem Band, der schon bei einem normalen Rücksetzer auslöst. „Weg zur Gefahren-Kante" sagt, was es kostet, wenn der Kurs von heute ohne Umweg zur Unterkante (Long), Oberkante (Short) bzw. zum Stop läuft — nenne diese Zahl beim Risiko. Ein Stop knapp unter dem Band beendet einen Grid-Bot oft bei einer normalen Schwankung; sag das, wenn du so eine Variante vorschlägst.',
         'Nenne bei jedem Vorschlag das wichtigste Risiko und wann er nicht passt. Kein Gewinnversprechen, keine Kursprognose als Tatsache, nicht „garantiert", nicht „risikolos", nicht „optimal".',
         `Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage für diesen Bot", "vorschlaege": [{"id": "${alle ? 'L3' : 'P3'}", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}`,
     ].join('\n')

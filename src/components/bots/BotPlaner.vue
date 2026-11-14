@@ -376,7 +376,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                     <thead><tr>
                         <th>ID</th><th v-if="imErgAlle">{{ t('bots.plan.spalteRichtung') }}</th><th>{{ t('bots.plan.beschreibung') }}</th><th>{{ t('bots.feld.band') }}</th><th>{{ t('bots.feld.grids') }}</th><th>{{ t('bots.feld.nettoZyklus') }}</th>
                         <th>{{ t('bots.plan.rueckblick') }}</th><th>{{ t('bots.sim.maxVerlust') }}</th><th>{{ t('bots.sim.ende') }}</th><th>{{ t('bots.feld.zeitImBand') }}</th>
-                        <th>{{ t('bots.plan.liqStart') }}</th><th v-if="steuerung?.schluessel">{{ t('bots.plan.minSpalte') }}</th><th></th>
+                        <th>{{ t('bots.plan.liqStart') }}</th><th :title="t('bots.plan.randTitel')">{{ t('bots.plan.randSpalte') }}</th><th v-if="steuerung?.schluessel">{{ t('bots.plan.minSpalte') }}</th><th></th>
                     </tr></thead>
                     <tbody>
                         <tr v-for="c in sortiert" :key="c.id" :class="{ gewaehlt: kiPasst && ki.vorschlaege.some((v) => v.id === c.id) }">
@@ -391,6 +391,10 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                             <td :class="{ schlecht: c.rueckblick?.liquidation }">{{ ende(c.rueckblick) }}</td>
                             <td>{{ prozent(c.rueckblick?.zeitImBand, { stellen: 0 }) }}</td>
                             <td>{{ preis(c.start?.liq) }} <span class="leise">{{ prozent(c.start?.liqAbstand, { stellen: 0 }) }}</span></td>
+                            <td :class="c.start?.verlustRand?.liquidiert ? 'schlecht' : ton(c.start?.verlustRand?.betrag)" :title="c.start?.verlustRand ? t('bots.plan.randZeile', { preis: preis(c.start.verlustRand.preis) }) : ''">
+                                <template v-if="c.start?.verlustRand">{{ betrag(c.start.verlustRand.betrag, erg.einheit, { vorzeichen: true }) }} <span class="leise">{{ c.start.verlustRand.liquidiert ? t('bots.sim.liquidiert') : '@ ' + preis(c.start.verlustRand.preis) }}</span></template>
+                                <span v-else class="leise">—</span>
+                            </td>
                             <td v-if="steuerung?.schluessel" class="min" :title="mindest[c.id]?.fehler || mindest[c.id]?.text || ''">
                                 <span v-if="mindest[c.id]?.laedt" class="leise">…</span>
                                 <span v-else-if="mindest[c.id]?.reichtAus === true" class="gut">✓</span>
@@ -445,6 +449,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                             <div><dt>{{ t('bots.feld.grids') }}</dt><dd>{{ zahl(v.variante.anzahl) }}</dd></div>
                             <div v-if="v.variante.stopLoss"><dt>{{ t('bots.feld.stopLoss') }}</dt><dd>{{ preis(v.variante.stopLoss) }}</dd></div>
                             <div><dt>{{ t('bots.plan.liqStart') }}</dt><dd>{{ preis(v.start?.liq) }} <span class="leise">({{ prozent(v.start?.liqAbstand) }})</span></dd></div>
+                            <div v-if="v.start?.verlustRand"><dt>{{ t('bots.plan.randSpalte') }}</dt><dd :class="ton(v.start.verlustRand.betrag)">{{ betrag(v.start.verlustRand.betrag, erg.einheit, { vorzeichen: true }) }} <span class="leise">@ {{ preis(v.start.verlustRand.preis) }}</span></dd></div>
                             <div><dt>{{ t('bots.plan.rueckblick') }}</dt><dd :class="ton(v.rueckblick?.gesamt)">{{ betrag(v.rueckblick?.gesamt, erg.einheit, { vorzeichen: true }) }}</dd></div>
                         </dl>
                         <p>{{ v.begruendung }}</p>

@@ -8593,7 +8593,10 @@
       "chartKeine": "Keine gefunden: weder eine Seitwärtsphase auf dem Wochenchart noch eigene Zeichnungen.",
       "spot": "Spot (ohne Hebel)",
       "nurSpot": "Diese Coin gibt es bei Pionex nur als Spot, zum Beispiel eine tokenisierte Aktie. Geplant wird dann ein Spot-Grid.",
-      "spotHinweis": "Spot-Grid: kein Hebel, keine Liquidation, kein Funding. Beim Start kauft Pionex die Coin für die Linien über dem Kurs, darum wirkt es wie Long. Höchstens 200 Grids, gestartet wird ohne Stop-Loss. Kerzen und Mindesteinsatz kommen direkt von Pionex."
+      "spotHinweis": "Spot-Grid: kein Hebel, keine Liquidation, kein Funding. Beim Start kauft Pionex die Coin für die Linien über dem Kurs, darum wirkt es wie Long. Höchstens 200 Grids, gestartet wird ohne Stop-Loss. Kerzen und Mindesteinsatz kommen direkt von Pionex.",
+      "randSpalte": "Weg zur Kante",
+      "randTitel": "Was es kostet, wenn der Kurs von heute ohne Umweg bis zur Gefahren-Kante läuft: Long bis zur Unterkante (mit Stop bis zum Stop), Short bis zur Oberkante, Neutral die schlechtere Seite. Mit Gebühren, ohne Funding, eine Grössenordnung.",
+      "randZeile": "Ergebnis, wenn der Kurs von heute direkt bis {preis} läuft"
     }
   }
 }
