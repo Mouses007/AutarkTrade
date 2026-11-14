@@ -122,7 +122,10 @@ const vergleich = computed(() => {
     zeile(t('bots.feld.takeProfit'), v.takeProfit, n.takeProfit, preis)
     if (p.liq?.vorher || p.liq?.nachher) {
         const l = (x) => preis(x?.unten ?? x?.oben)
-        z.push({ titel: t('bots.st.liqPionex'), vorher: l(p.liq.vorher) || preis(v.liquidation), nachher: l(p.liq.nachher), pionex: true })
+        // Neuer Bot: Pionex' checkParams nennt nur EINE Schätzung (ohne Before/After) — die gehört zum neuen
+        // Bot, also unter „Nachher" (gesehen 14.11.2026 beim ersten echten Start: stand unter „Vorher")
+        if (props.aktion === 'starten') z.push({ titel: t('bots.st.liqPionex'), vorher: '—', nachher: l(p.liq.nachher) || l(p.liq.vorher), pionex: true })
+        else z.push({ titel: t('bots.st.liqPionex'), vorher: l(p.liq.vorher) || preis(v.liquidation), nachher: l(p.liq.nachher), pionex: true })
     }
     return z
 })

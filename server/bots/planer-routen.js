@@ -191,13 +191,25 @@ async function rechneGemerkt(e, coins) {
 const ohneIntern = ({ _zr, ...d }) => d
 const ohneKurve = (c) => (c?.rueckblick ? { ...c, rueckblick: { ...c.rueckblick, kurve: undefined } } : c)
 
-async function kiFuer(e, coins, englisch) {
+/** Mindesteinsatz je Variante aus der Spalte «Pionex» (Browser): nur IDs und Zahlen, alles andere fällt weg. */
+export function mindestAus(roh) {
+    const aus = {}
+    if (!roh || typeof roh !== 'object') return aus
+    for (const [id, m] of Object.entries(roh).slice(0, 200)) {
+        if (!/^[PLSNE]\d{1,3}$/.test(id) || !m || typeof m !== 'object') continue
+        const min = Number(m.min)
+        aus[id] = { min: Number.isFinite(min) && min > 0 ? min : null, reichtAus: m.reichtAus === true ? true : m.reichtAus === false ? false : null }
+    }
+    return aus
+}
+
+async function kiFuer(e, coins, englisch, mindest = {}) {
     const d = await rechneGemerkt(e, coins)
     const gueltig = d.kandidaten.filter((c) => !c.fehler)
     if (!gueltig.length) throw Object.assign(new Error('Keine rechenbaren Kandidaten'), { code: 'keineKandidaten' })
     const typ = e.spot ? 'spot_grid' : e.coinM ? 'coinm_grid' : 'futures_grid'
     const zrText = d._zr ? zeitrahmenText(d._zr, (t) => new Date(t).toISOString().slice(0, 10)).replace('ZEITRAHMEN — vom Code gemessen', 'HOHE ZEITRAHMEN — vom Code gemessen') : ''
-    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend, chart: d.chart || [] })
+    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend, chart: d.chart || [], mindest })
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
     cfg.maxTokens = 2500
     const antwort = await callLLMJson(cfg, {
@@ -266,7 +278,7 @@ export function setupBotPlanerRoutes(app) {
             if (!kiLaeuft) {
                 const pause = (kiZuletzt.fehler ? 45_000 : PLAN_KI_PAUSE_MS) - (Date.now() - kiZuletzt.zeit)
                 if (pause > 0) return res.status(429).json({ ok: false, code: 'kiWarten', sekunden: Math.ceil(pause / 1000) })
-                const promise = kiFuer(e, coins, englisch)
+                const promise = kiFuer(e, coins, englisch, mindestAus(req.body?.mindest))
                     .then((r) => { kiZuletzt = { zeit: Date.now(), fehler: false }; kiLetzte = r; return r },
                         (err) => { kiZuletzt = { zeit: Date.now(), fehler: true }; throw err })
                     .finally(() => { kiLaeuft = null })

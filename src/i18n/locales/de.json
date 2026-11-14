@@ -8597,7 +8597,10 @@
       "randSpalte": "Weg zur Kante",
       "randTitel": "Was es kostet, wenn der Kurs von heute ohne Umweg bis zur Gefahren-Kante läuft: Long bis zur Unterkante (mit Stop bis zum Stop), Short bis zur Oberkante, Neutral die schlechtere Seite. Mit Gebühren, ohne Funding, eine Grössenordnung.",
       "randZeile": "Ergebnis, wenn der Kurs von heute direkt bis {preis} läuft",
-      "kerzenPionex": "Die Kerzen kommen hier direkt von Pionex, weil die Marktdatenquelle diese Coin nicht führt (etwa tokenisierte Aktien). Darum ohne Funding, und der Satz oben «der Marktdatenquelle» gilt für diesen Rückblick nicht."
+      "kerzenPionex": "Die Kerzen kommen hier direkt von Pionex, weil die Marktdatenquelle diese Coin nicht führt (etwa tokenisierte Aktien). Darum ohne Funding, und der Satz oben «der Marktdatenquelle» gilt für diesen Rückblick nicht.",
+      "minKarte": "Mindesteinsatz bei Pionex",
+      "minReicht": "reicht ({betrag})",
+      "minPruefe": "wird geprüft …"
     }
   }
 }

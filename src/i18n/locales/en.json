@@ -8597,7 +8597,10 @@
       "randSpalte": "Path to edge",
       "randTitel": "What it costs if the price runs from today straight to the danger edge: long to the lower edge (with a stop, to the stop), short to the upper edge, neutral the worse side. With fees, without funding, an order of magnitude.",
       "randZeile": "Result if the price runs from today straight to {preis}",
-      "kerzenPionex": "The candles come straight from Pionex here because the market-data source does not list this coin (e.g. tokenised stocks). Hence no funding, and \"of the market-data source\" above does not apply to this look-back."
+      "kerzenPionex": "The candles come straight from Pionex here because the market-data source does not list this coin (e.g. tokenised stocks). Hence no funding, and \"of the market-data source\" above does not apply to this look-back.",
+      "minKarte": "Minimum at Pionex",
+      "minReicht": "enough ({betrag})",
+      "minPruefe": "being checked …"
     }
   }
 }

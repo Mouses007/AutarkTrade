@@ -557,7 +557,7 @@ export function trendText(trend) {
     return `LANGFRIST-TREND (vom Code gemessen): ${trend.richtung === 'auf' ? 'AUFWÄRTS' : trend.richtung === 'ab' ? 'ABWÄRTS' : 'SEITWÄRTS'}, Punkte ${trend.punkte} von ±${trend.max}; dazu passt ${trend.passend}. Zeichen: ${z}`
 }
 
-export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false, trend = null, chart = [] } = {}) {
+export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false, trend = null, chart = [], mindest = {} } = {}) {
     const einheit = e.coinM ? e.coin : 'USDT'
     const kopf = [
         wissen, '',
@@ -570,15 +570,17 @@ export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandi
     const markt = lage ? [`MARKT: 7 Tage ${pz(lage.aenderung7)}, 30 Tage ${pz(lage.aenderung30)}, 30-Tage-Hoch ${zl(lage.hoch30, 2)}, -Tief ${zl(lage.tief30, 2)}, Tagesspanne Median ${pz(lage.spanneMedian)} / max ${pz(lage.spanneMax)}, grösster 7-Tage-Fall ${pz(lage.maxFall7)}, Tages-ATR ${zl(lage.atr, 2)}`] : []
     const zeilen = kandidaten.filter((c) => !c.fehler).map((c) => {
         const r = c.rueckblick, s = c.start, v = c.variante
+        const m = mindest[c.id]
+        const pionexMin = !m ? 'nicht geprüft' : m.reichtAus === true ? `reicht (${zl(e.einsatz, 2)} ${einheit})` : istZahl(m.min) ? `ab ${zl(m.min, 2)} ${einheit}` : m.reichtAus === false ? 'Einsatz zu klein, Minimum unbekannt' : 'unbekannt'
         const ende = r?.liquidation ? 'LIQUIDIERT' : r?.ausstieg ? r.ausstieg.art : 'läuft'
-        return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), s?.verlustRand ? `${zl(s.verlustRand.betrag, 2)} bei ${zl(s.verlustRand.preis, 2)}${s.verlustRand.liquidiert ? ' LIQUIDIERT' : s.verlustRand.ausstieg ? ' (Stop)' : ''}` : '—', (c.warnungen || []).join(',') || '—'].join(' | ')
+        return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), s?.verlustRand ? `${zl(s.verlustRand.betrag, 2)} bei ${zl(s.verlustRand.preis, 2)}${s.verlustRand.liquidiert ? ' LIQUIDIERT' : s.verlustRand.ausstieg ? ' (Stop)' : ''}` : '—', pionexMin, (c.warnungen || []).join(',') || '—'].join(' | ')
     })
     return [
         ...kopf, ...markt, ...(zrText ? ['', zrText] : []),
         ...(chart.length ? ['', 'CHART-NIVEAUS (vom Code gemessen: Volumenprofile der Seitwärtsphasen auf 1w und die eigenen Zeichnungen des Nutzers; Varianten „Band ab/bis Chart …" sind daran gebaut):', ...chart.map((n) => `${n.id} | ${n.name} | ${zl(n.preis, 2)} | ${n.preis < (lage?.kurs ?? 0) ? 'unter' : 'über'} dem Kurs`)] : []),
         '',
         `KANDIDATEN (vom Code gerechnet). Rückblick = dasselbe Band RELATIV zum Kurs (gleiche Prozente), gestartet vor ${e.tage} Tagen, simuliert auf ${tf || '?'}-Kerzen mit Gebühren${kandidaten.some((c) => c.rueckblick?.funding) ? ' und Funding' : ''}. Start heute = beim heutigen Kurs gestartet.`,
-        `id | Richtung | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Weg zur Gefahren-Kante (Ergebnis bei Preis) | Warnungen`,
+        `id | Richtung | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Weg zur Gefahren-Kante (Ergebnis bei Preis) | Pionex-Mindesteinsatz (von Pionex geprüft) | Warnungen`,
         ...zeilen,
         '',
         englisch ? 'Answer in English.' : 'Antworte auf Deutsch (Schweizer Schreibweise, ss statt ß).',
@@ -598,6 +600,7 @@ export function planSystemText({ alle = false } = {}) {
         'Der Rückblick zeigt nur, wie sich dieselbe Einstellung in den letzten Wochen geschlagen hätte; er sagt nichts über die Zukunft. Gewichte den Liquidationsabstand beim Start heute und den grössten Verlust mindestens so stark wie das Ergebnis.',
         'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, ob die Bandgrenzen und der Stop-Loss an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…, CHART-NIVEAUS V…/U…) liegen und ob die gewählte Richtung zur Struktur passt. Nenne Niveaus nur mit ID und Preis aus der Eingabe.',
         'Varianten „Langfrist …" sind für lange Laufzeit gebaut: breites Band von einer tiefen Unterstützung bis weit nach oben, ohne Stop oder mit einer Notbremse knapp vor der Liquidation statt eines Stops knapp unter dem Band, der schon bei einem normalen Rücksetzer auslöst. „Weg zur Gefahren-Kante" sagt, was es kostet, wenn der Kurs von heute ohne Umweg zur Unterkante (Long), Oberkante (Short) bzw. zum Stop läuft — nenne diese Zahl beim Risiko. Ein Stop knapp unter dem Band beendet einen Grid-Bot oft bei einer normalen Schwankung; sag das, wenn du so eine Variante vorschlägst.',
+        'Die Spalte „Pionex-Mindesteinsatz" hat Pionex selbst geprüft. Nenne bei jedem Vorschlag den Mindesteinsatz, wenn er dort steht, und sag klar, wenn der gewählte Einsatz NICHT reicht („ab X") — mit dem gewählten Einsatz lässt sich so ein Vorschlag gar nicht starten. Steht dort „nicht geprüft" oder „unbekannt", sag das statt eine Zahl zu nennen.',
         'Nenne bei jedem Vorschlag das wichtigste Risiko und wann er nicht passt. Kein Gewinnversprechen, keine Kursprognose als Tatsache, nicht „garantiert", nicht „risikolos", nicht „optimal".',
         `Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage für diesen Bot", "vorschlaege": [{"id": "${alle ? 'L3' : 'P3'}", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}`,
     ].join('\n')

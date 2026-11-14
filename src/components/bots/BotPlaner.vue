@@ -200,7 +200,9 @@ const kiFehler = ref('')
 async function kiErzeugen() {
     kiLaedt.value = true; kiFehler.value = ''
     try {
-        ki.value = (await axios.post('/api/bots/plan/ki', anfrage({ sprache: locale.value }), { timeout: 180_000 })).data?.ergebnis || null
+        // Die schon geprüften Mindesteinsätze gehen mit, damit die KI sie nennen kann
+        const geprueft = Object.fromEntries(Object.entries(mindest.value).filter(([, m]) => m && !m.laedt && !m.fehler).map(([id, m]) => [id, { min: m.min ?? null, reichtAus: m.reichtAus ?? null }]))
+        ki.value = (await axios.post('/api/bots/plan/ki', anfrage({ sprache: locale.value, mindest: geprueft }), { timeout: 180_000 })).data?.ergebnis || null
     } catch (e) {
         // Ohne Antwort (Zeitlimit) kann der Server fertig geworden sein
         if (!e?.response) { try { ki.value = (await axios.get('/api/bots/plan/ki')).data?.ergebnis || null } catch { /* bleibt */ } }
@@ -450,6 +452,12 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                             <div><dt>{{ t('bots.feld.grids') }}</dt><dd>{{ zahl(v.variante.anzahl) }}</dd></div>
                             <div v-if="v.variante.stopLoss"><dt>{{ t('bots.feld.stopLoss') }}</dt><dd>{{ preis(v.variante.stopLoss) }}</dd></div>
                             <div><dt>{{ t('bots.plan.liqStart') }}</dt><dd>{{ preis(v.start?.liq) }} <span class="leise">({{ prozent(v.start?.liqAbstand) }})</span></dd></div>
+                            <div v-if="steuerung?.schluessel"><dt>{{ t('bots.plan.minKarte') }}</dt>
+                                <dd v-if="mindest[v.id]?.laedt" class="leise">{{ t('bots.plan.minPruefe') }}</dd>
+                                <dd v-else-if="mindest[v.id]?.reichtAus === true" class="gut">✓ {{ t('bots.plan.minReicht', { betrag: betrag(Number(erg.eingabe.einsatz), erg.einheit) }) }}</dd>
+                                <dd v-else-if="mindest[v.id]?.min" class="schlecht">{{ t('bots.plan.minAb', { betrag: betrag(mindest[v.id].min, erg.einheit) }) }}</dd>
+                                <dd v-else class="leise">—</dd>
+                            </div>
                             <div v-if="v.start?.verlustRand"><dt>{{ t('bots.plan.randSpalte') }}</dt><dd :class="ton(v.start.verlustRand.betrag)">{{ betrag(v.start.verlustRand.betrag, erg.einheit, { vorzeichen: true }) }} <span class="leise">@ {{ preis(v.start.verlustRand.preis) }}</span></dd></div>
                             <div><dt>{{ t('bots.plan.rueckblick') }}</dt><dd :class="ton(v.rueckblick?.gesamt)">{{ betrag(v.rueckblick?.gesamt, erg.einheit, { vorzeichen: true }) }}</dd></div>
                         </dl>
@@ -457,7 +465,10 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                         <p class="risiko"><strong>{{ t('bots.ki.risiko') }}:</strong> {{ v.risiko }}</p>
                         <p class="risiko"><strong>{{ t('bots.ki.passtNicht') }}:</strong> {{ v.passtNichtWenn }}</p>
                         <p v-if="v.unbelegt?.length" class="unbelegt">⚠ {{ t('bots.ki.unbelegt', { zahlen: v.unbelegt.join(', ') }) }}</p>
-                        <div class="knoepfe"><Knopf art="leise" symbol="rechner" klein @click="uebernehmen(v.variante, v.richtung)">{{ t('bots.plan.uebernehmen') }}</Knopf></div>
+                        <div class="knoepfe">
+                            <Knopf v-if="mindest[v.id]?.min && mindest[v.id]?.reichtAus === false" art="leise" klein @click="eingabe.einsatz = String(mindest[v.id].min); rechnen()">{{ t('bots.plan.minSetzen', { betrag: betrag(mindest[v.id].min, erg.einheit) }) }}</Knopf>
+                            <Knopf art="leise" symbol="rechner" klein @click="uebernehmen(v.variante, v.richtung)">{{ t('bots.plan.uebernehmen') }}</Knopf>
+                        </div>
                     </article>
                     <p v-if="ki.hinweis" class="leise">{{ ki.hinweis }}</p>
                 </template>

@@ -198,6 +198,15 @@ p('Notbremse ohne Liquidation (Spot) entfällt', rechnePlan({ ...eL, spot: true,
 const ws = rechnePlanVariante({ ...eL, richtung: 'SHORT' }, { unten: 150, oben: 260, anzahl: 40 }, kerzen, { kurs: 200 })
 p('Weg zur Kante: Short bis zur Oberkante', ws.start.verlustRand.preis === 260 && ws.start.verlustRand.betrag < 0)
 
+console.log('Mindesteinsatz für die KI')
+const { mindestAus } = await import('./planer-routen.js')
+const ma = mindestAus({ P1: { min: 29, reichtAus: false }, L2: { reichtAus: true, min: null }, 'x;drop': { min: 1 }, N3: 'kaputt', S4: { min: -5, reichtAus: 'ja' } })
+p('mindestAus: nur gültige IDs und Zahlen', JSON.stringify(ma) === JSON.stringify({ P1: { min: 29, reichtAus: false }, L2: { min: null, reichtAus: true }, S4: { min: null, reichtAus: null } }), JSON.stringify(ma))
+const lm = rechnePlan(e, kerzen, planKandidaten({ kurs: 200, atr: 8, zr: null, richtung: 'LONG' }).slice(0, 3), { kurs: 200 })
+const pmin = bauePlanPrompt(e, { lage: { kurs: 200 }, kandidaten: lm, mindest: { [lm[0].id]: { min: 29, reichtAus: false }, [lm[1].id]: { min: null, reichtAus: true } } })
+p('Prompt: Spalte Pionex-Mindesteinsatz mit „ab 29", „reicht" und „nicht geprüft"', pmin.includes('Pionex-Mindesteinsatz') && pmin.includes(`${lm[0].id} |`) && pmin.includes('ab 29.00 USDT') && pmin.includes('reicht (100.00 USDT)') && pmin.includes('nicht geprüft'))
+p('Systemtext verlangt den Mindesteinsatz im Vorschlag', planSystemText().includes('Pionex-Mindesteinsatz') && planSystemText({ alle: true }).includes('NICHT reicht'))
+
 console.log('Start über die Steuerung')
 const a = baueAktion(pm, 'starten', { unten: '120', oben: '200', anzahl: '100', hebel: '4', einsatz: '3', art: 'arithmetic' }, { stellen: 7 })
 p('baueAktion: create mit Coin-M-Feldern des Plans', !a.fehler && /\/create$/.test(a.senden.pfad) && a.senden.body.base === 'USDT.PERP' && a.senden.body.buOrderData.cateType === 'FUTURE_GRID_COIN_MARGINED' && a.senden.body.buOrderData.trend === 'short' && a.warnungen.includes('neuerBot'))
