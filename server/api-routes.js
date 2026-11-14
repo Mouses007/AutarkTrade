@@ -103,6 +103,8 @@ export const VALID_SETTINGS_KEYS = [
     'erweiterteInfos', 'chartKerzeSteigend', 'chartKerzeFallend', 'chartIndikatorStandard', 'momentumGrenze', 'modusLiveAn', 'modusResearchAn', 'modusStrategieAn', 'modusLernenAn',
     // Spot-Portfolio
     'modusPortfolioAn', 'portfolioBoersen', 'portfolioStaubChf', 'portfolioPaare',
+    // Aktien-Integration: Modus und Markt-Umschalter (krypto | aktien)
+    'modusAktienAn', 'aktiverMarkt',
     // Anbieter/Modell je KI-Funktion; leer = global
     'aiBerichtProvider', 'aiBerichtModell', 'aiAgentProvider', 'aiAgentModell',
     'aiAgentTokenBudget',

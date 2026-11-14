@@ -1,0 +1,583 @@
+{
+ "stand": "2026-11-14",
+ "hinweis": "Gekürzte Aufnahme der öffentlichen Symbol-Listen (nur die Felder, die die Einordnung liest).",
+ "binance": [
+  {
+   "symbol": "BTCUSDT",
+   "baseAsset": "BTC",
+   "quoteAsset": "USDT",
+   "contractType": "PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "COIN",
+   "underlyingSubType": [
+    "PoW",
+    "Crypto"
+   ],
+   "onboardDate": 1567965300000
+  },
+  {
+   "symbol": "ETHUSDT",
+   "baseAsset": "ETH",
+   "quoteAsset": "USDT",
+   "contractType": "PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "COIN",
+   "underlyingSubType": [
+    "Layer-1",
+    "Crypto"
+   ],
+   "onboardDate": 1574840700000
+  },
+  {
+   "symbol": "DEFIUSDT",
+   "baseAsset": "DEFI",
+   "quoteAsset": "USDT",
+   "contractType": "PERPETUAL",
+   "status": "SETTLING",
+   "underlyingType": "INDEX",
+   "underlyingSubType": [
+    "Index"
+   ],
+   "onboardDate": 1598598000000
+  },
+  {
+   "symbol": "BTCDOMUSDT",
+   "baseAsset": "BTCDOM",
+   "quoteAsset": "USDT",
+   "contractType": "PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "INDEX",
+   "underlyingSubType": [
+    "Index",
+    "Crypto"
+   ],
+   "onboardDate": 1623913200000
+  },
+  {
+   "symbol": "1000PEPEUSDT",
+   "baseAsset": "1000PEPE",
+   "quoteAsset": "USDT",
+   "contractType": "PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "COIN",
+   "underlyingSubType": [
+    "Meme",
+    "Crypto"
+   ],
+   "onboardDate": 1683244800000
+  },
+  {
+   "symbol": "ALLUSDT",
+   "baseAsset": "ALL",
+   "quoteAsset": "USDT",
+   "contractType": "PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "INDEX",
+   "underlyingSubType": [
+    "Index",
+    "Crypto"
+   ],
+   "onboardDate": 1754472600000
+  },
+  {
+   "symbol": "XAUUSDT",
+   "baseAsset": "XAU",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "COMMODITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1765440300000
+  },
+  {
+   "symbol": "TSLAUSDT",
+   "baseAsset": "TSLA",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "EQUITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1769610600000
+  },
+  {
+   "symbol": "NVDAUSDT",
+   "baseAsset": "NVDA",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "EQUITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1774536000000
+  },
+  {
+   "symbol": "CLUSDT",
+   "baseAsset": "CL",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "COMMODITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1775034000000
+  },
+  {
+   "symbol": "QQQUSDT",
+   "baseAsset": "QQQ",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "EQUITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1775482200000
+  },
+  {
+   "symbol": "BRKBUSDT",
+   "baseAsset": "BRKB",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "EQUITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1779112200000
+  },
+  {
+   "symbol": "OPENAIUSDT",
+   "baseAsset": "OPENAI",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "PREMARKET",
+   "underlyingSubType": [
+    "Pre-IPO",
+    "TradFi"
+   ],
+   "onboardDate": 1779784200000
+  },
+  {
+   "symbol": "SAMSUNGUSDT",
+   "baseAsset": "SAMSUNG",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "KR_EQUITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1780369800000
+  },
+  {
+   "symbol": "ANTHROPICUSDT",
+   "baseAsset": "ANTHROPIC",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "PREMARKET",
+   "underlyingSubType": [
+    "Pre-IPO",
+    "TradFi"
+   ],
+   "onboardDate": 1780374600000
+  },
+  {
+   "symbol": "HK0700USDT",
+   "baseAsset": "HK0700",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "HK_EQUITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1784689200000
+  },
+  {
+   "symbol": "BYDUSDT",
+   "baseAsset": "BYD",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "HK_EQUITY",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1788746400000
+  },
+  {
+   "symbol": "USDBRLUSDT",
+   "baseAsset": "USDBRL",
+   "quoteAsset": "USDT",
+   "contractType": "TRADIFI_PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "FX",
+   "underlyingSubType": [
+    "TradFi"
+   ],
+   "onboardDate": 1789999200000
+  },
+  {
+   "symbol": "PREDICTUSDT",
+   "baseAsset": "PREDICT",
+   "quoteAsset": "USDT",
+   "contractType": "PERPETUAL",
+   "status": "TRADING",
+   "underlyingType": "PREMARKET",
+   "underlyingSubType": [
+    "Pre-Market"
+   ],
+   "onboardDate": 1792916100000
+  }
+ ],
+ "bitget": [
+  {
+   "symbol": "BTCUSDT",
+   "baseCoin": "BTC",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "NO",
+   "maxLever": "150",
+   "fundInterval": "8",
+   "openTime": "",
+   "launchTime": ""
+  },
+  {
+   "symbol": "ETHUSDT",
+   "baseCoin": "ETH",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "NO",
+   "maxLever": "150",
+   "fundInterval": "8",
+   "openTime": "",
+   "launchTime": ""
+  },
+  {
+   "symbol": "AVAXUSDT",
+   "baseCoin": "AVAX",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "NO",
+   "maxLever": "75",
+   "fundInterval": "8",
+   "openTime": "",
+   "launchTime": ""
+  },
+  {
+   "symbol": "PAXGUSDT",
+   "baseCoin": "PAXG",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "50",
+   "fundInterval": "4",
+   "openTime": "1719652800000",
+   "launchTime": ""
+  },
+  {
+   "symbol": "TSLAUSDT",
+   "baseCoin": "TSLA",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "100",
+   "fundInterval": "8",
+   "openTime": "1769994062288",
+   "launchTime": ""
+  },
+  {
+   "symbol": "NVDAUSDT",
+   "baseCoin": "NVDA",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "100",
+   "fundInterval": "8",
+   "openTime": "1769994062273",
+   "launchTime": ""
+  },
+  {
+   "symbol": "ASMLUSDT",
+   "baseCoin": "ASML",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "20",
+   "fundInterval": "8",
+   "openTime": "1769994064220",
+   "launchTime": ""
+  },
+  {
+   "symbol": "QQQUSDT",
+   "baseCoin": "QQQ",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "20",
+   "fundInterval": "8",
+   "openTime": "1769994064394",
+   "launchTime": ""
+  },
+  {
+   "symbol": "ACNSTOCKUSDT",
+   "baseCoin": "ACNSTOCK",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "20",
+   "fundInterval": "8",
+   "openTime": "1790759421299",
+   "launchTime": ""
+  },
+  {
+   "symbol": "XAUUSDT",
+   "baseCoin": "XAU",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "100",
+   "fundInterval": "4",
+   "openTime": "1765533622558",
+   "launchTime": ""
+  },
+  {
+   "symbol": "COPPERUSDT",
+   "baseCoin": "COPPER",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "100",
+   "fundInterval": "4",
+   "openTime": "1773027080544",
+   "launchTime": ""
+  },
+  {
+   "symbol": "NATGASUSDT",
+   "baseCoin": "NATGAS",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "100",
+   "fundInterval": "4",
+   "openTime": "1775029106557",
+   "launchTime": ""
+  },
+  {
+   "symbol": "SOXSUSDT",
+   "baseCoin": "SOXS",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "20",
+   "fundInterval": "8",
+   "openTime": "1775640633481",
+   "launchTime": ""
+  },
+  {
+   "symbol": "EURUSDUSDT",
+   "baseCoin": "EURUSD",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "100",
+   "fundInterval": "8",
+   "openTime": "1788932426542",
+   "launchTime": ""
+  },
+  {
+   "symbol": "CSTOCKUSDT",
+   "baseCoin": "CSTOCK",
+   "quoteCoin": "USDT",
+   "symbolType": "perpetual",
+   "symbolStatus": "normal",
+   "isRwa": "YES",
+   "maxLever": "20",
+   "fundInterval": "8",
+   "openTime": "1792136589497",
+   "launchTime": ""
+  }
+ ],
+ "bitunix": [
+  {
+   "symbol": "BTCUSDT",
+   "base": "BTC",
+   "quote": "USDT",
+   "maxLeverage": 200,
+   "symbolStatus": "OPEN",
+   "launchTime": "1719403200000"
+  },
+  {
+   "symbol": "DOGEUSDT",
+   "base": "DOGE",
+   "quote": "USDT",
+   "maxLeverage": 75,
+   "symbolStatus": "OPEN",
+   "launchTime": "1719403200000"
+  },
+  {
+   "symbol": "AVAXUSDT",
+   "base": "AVAX",
+   "quote": "USDT",
+   "maxLeverage": 75,
+   "symbolStatus": "OPEN",
+   "launchTime": "1719403200000"
+  },
+  {
+   "symbol": "AAPLUSDT",
+   "base": "AAPL",
+   "quote": "USDT",
+   "maxLeverage": 50,
+   "symbolStatus": "OPEN",
+   "launchTime": "1773921600000"
+  },
+  {
+   "symbol": "NVDAUSDT",
+   "base": "NVDA",
+   "quote": "USDT",
+   "maxLeverage": 50,
+   "symbolStatus": "OPEN",
+   "launchTime": "1773921600000"
+  },
+  {
+   "symbol": "BRKBUSDT",
+   "base": "BRKB",
+   "quote": "USDT",
+   "maxLeverage": 20,
+   "symbolStatus": "OPEN",
+   "launchTime": "1779192000000"
+  },
+  {
+   "symbol": "ANTHROPICUSDT",
+   "base": "ANTHROPIC",
+   "quote": "USDT",
+   "maxLeverage": 20,
+   "symbolStatus": "OPEN",
+   "launchTime": "1780466400000"
+  }
+ ],
+ "pionex": [
+  {
+   "symbol": "AAPLX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "AAPLX",
+   "quoteCurrency": "USDT",
+   "enable": true
+  },
+  {
+   "symbol": "AVAX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "AVAX",
+   "quoteCurrency": "USDT",
+   "enable": true
+  },
+  {
+   "symbol": "BRKBX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "BRKBX",
+   "quoteCurrency": "USDT",
+   "enable": false
+  },
+  {
+   "symbol": "BTC_USDT",
+   "type": "SPOT",
+   "baseCurrency": "BTC",
+   "quoteCurrency": "USDT",
+   "enable": true
+  },
+  {
+   "symbol": "DYDX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "DYDX",
+   "quoteCurrency": "USDT",
+   "enable": true
+  },
+  {
+   "symbol": "IMX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "IMX",
+   "quoteCurrency": "USDT",
+   "enable": true
+  },
+  {
+   "symbol": "NVDAX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "NVDAX",
+   "quoteCurrency": "USDT",
+   "enable": true
+  },
+  {
+   "symbol": "QQQX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "QQQX",
+   "quoteCurrency": "USDT",
+   "enable": true
+  },
+  {
+   "symbol": "TRX_USDT",
+   "type": "SPOT",
+   "baseCurrency": "TRX",
+   "quoteCurrency": "USDT",
+   "enable": true
+  }
+ ],
+ "bitpanda": [
+  {
+   "pid": "b86c88d4-efe3-11eb-b56f-0691764446a7",
+   "id": "28",
+   "name": "Gold",
+   "symbol": "XAU",
+   "group": "metal"
+  },
+  {
+   "pid": "b86d0b87-efe3-11eb-b56f-0691764446a7",
+   "id": "75",
+   "name": "Apple",
+   "symbol": "AAPL",
+   "group": "stock"
+  },
+  {
+   "pid": "b86d1670-efe3-11eb-b56f-0691764446a7",
+   "id": "80",
+   "name": "Nvidia",
+   "symbol": "NVDA",
+   "group": "stock"
+  },
+  {
+   "pid": "b86c034b-efe3-11eb-b56f-0691764446a7",
+   "id": "1",
+   "name": "Bitcoin",
+   "symbol": "BTC",
+   "group": "coin"
+  },
+  {
+   "pid": "fa6d0e35-b0f3-11ec-a6ac-0a686dc2c129",
+   "id": "1221",
+   "name": "European Consumer Discretionary Stocks",
+   "symbol": "EUROCDIS",
+   "group": "etf"
+  }
+ ]
+}

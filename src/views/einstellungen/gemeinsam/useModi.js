@@ -20,6 +20,8 @@ export let modusStrategieAn = ref(true)
 export let modusLernenAn = ref(true)
 // Portfolio (Beta): Vorgabe an wie die Spalte (`migrationen/portfolio.js`)
 export let modusPortfolioAn = ref(true)
+// Aktien (im Aufbau): Vorgabe aus wie die Spalte (`migrationen/aktien.js`)
+export let modusAktienAn = ref(false)
 
 /** Stand aus den gerade geladenen Einstellungen übernehmen. */
 export function ladeModi() {
@@ -29,6 +31,7 @@ export function ladeModi() {
         modusStrategieAn.value = Number(settings.modusStrategieAn ?? 1) === 1
         modusLernenAn.value = Number(settings.modusLernenAn ?? 1) === 1
         modusPortfolioAn.value = Number(settings.modusPortfolioAn ?? 1) === 1
+        modusAktienAn.value = Number(settings.modusAktienAn ?? 0) === 1
 }
 
 /**

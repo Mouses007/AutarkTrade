@@ -216,6 +216,8 @@ export async function holeBitunixPaare() {
                 basis: p.base,
                 maxLeverage: Number(p.maxLeverage) || 0,
                 minMenge: Number(p.minTradeVolume) || 0,
+                // Handelsstart laut Börse (ms) — für den Instrument-Stamm der Aktien.
+                launchTime: Number(p.launchTime) || null,
             }))
         // Eine leere Liste ist immer ein Fehler, nie ein Ergebnis: sie würde
         // sonst als „nichts handelbar" durchgereicht und jede Rangliste leeren.

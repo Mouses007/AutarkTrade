@@ -26,6 +26,10 @@
  * „Hype-Radar". Der zweite Eintrag trägt deshalb auch eine `id`, die kein
  * Routenname ist — das Menü hebt nach `path` hervor, nicht nach `seitenId`.
  *
+ * `markt` (krypto | aktien) bindet eine Seite an eine Seite des Markt-
+ * Umschalters (`config/markt.js`): das Seitenmenü zeigt sie nur dort. Fehlt
+ * das Feld, gilt die Seite in beiden Märkten.
+ *
  * `nurDesktop` blendet die Seite auf Telefonen aus. Kein Geschmacksurteil,
  * sondern eine Platzfrage: ein Arbeitsplatz aus elf Kacheln, Orderbuch und
  * Kerzenchart lässt sich auf 375 Pixeln nicht bedienen, und ein Werkzeug, das
@@ -89,16 +93,16 @@ export const PAGES = [
      * hiesse, unterwegs gar nichts zu sehen; und unterwegs ist genau die Zeit,
      * in der ein Liquiditätsabfluss auffallen soll.
      */
-    { id: 'hypeRadar', mode: 'research', path: '/hype-radar', symbol: 'entdecken', titleKey: 'nav.hypeRadar', menuKey: 'hype.tab_dashboard', menuSymbol: 'tacho', group: 'hypeGruppe' },
+    { id: 'hypeRadar', mode: 'research', path: '/hype-radar', symbol: 'entdecken', titleKey: 'nav.hypeRadar', menuKey: 'hype.tab_dashboard', menuSymbol: 'tacho', group: 'hypeGruppe', markt: 'krypto' },
     /*
      * Die Frühphase: Token, die die Hauptprüfung noch nicht sieht (jünger als
      * zwölf Stunden oder unter 50 000 USD Liquidität). Zwischen Übersicht und
      * Berichten, weil sie der Übersicht VORAUS läuft.
      */
-    { id: 'hypeFrueh', mode: 'research', path: '/hype-radar/fruehphase', symbol: 'blitz', titleKey: 'hype.tab_fruehphase', group: 'hypeGruppe' },
+    { id: 'hypeFrueh', mode: 'research', path: '/hype-radar/fruehphase', symbol: 'blitz', titleKey: 'hype.tab_fruehphase', group: 'hypeGruppe', markt: 'krypto' },
     // Börsen-Beobachter: neue Listungen und die Leiter Alpha → mittlere → grosse Börsen.
-    { id: 'hypeBoersen', mode: 'research', path: '/hype-radar/boersen', symbol: 'gebaeude', titleKey: 'hype.tab_boersen', group: 'hypeGruppe' },
-    { id: 'hypeBerichte', mode: 'research', path: '/hype-radar/berichte', symbol: 'dokument', titleKey: 'hype.tab_berichte', group: 'hypeGruppe' },
+    { id: 'hypeBoersen', mode: 'research', path: '/hype-radar/boersen', symbol: 'gebaeude', titleKey: 'hype.tab_boersen', group: 'hypeGruppe', markt: 'krypto' },
+    { id: 'hypeBerichte', mode: 'research', path: '/hype-radar/berichte', symbol: 'dokument', titleKey: 'hype.tab_berichte', group: 'hypeGruppe', markt: 'krypto' },
     /*
      * Der Coin-Radar steht daneben und nicht darunter: Es sind zwei Fragen,
      * nicht eine Frage mit zwei Ansichten. Der Hype-Radar sucht draussen nach
@@ -106,10 +110,18 @@ export const PAGES = [
      * Ebenfalls nicht `nurDesktop` — eine Rangliste mit Kennzahlen liest sich
      * auf 375 Pixeln als Kartenliste einwandfrei.
      */
-    { id: 'coinRadar', mode: 'research', path: '/coin-radar', symbol: 'live', titleKey: 'nav.coinRadar', menuKey: 'coinradar.tab_rangliste', menuSymbol: 'listeNummer', group: 'coinGruppe' },
-    { id: 'coinVerlauf', mode: 'research', path: '/coin-radar/verlauf', symbol: 'verlauf', titleKey: 'coinradar.tab_verlauf', group: 'coinGruppe' },
+    { id: 'coinRadar', mode: 'research', path: '/coin-radar', symbol: 'live', titleKey: 'nav.coinRadar', menuKey: 'coinradar.tab_rangliste', menuSymbol: 'listeNummer', group: 'coinGruppe', markt: 'krypto' },
+    { id: 'coinVerlauf', mode: 'research', path: '/coin-radar/verlauf', symbol: 'verlauf', titleKey: 'coinradar.tab_verlauf', group: 'coinGruppe', markt: 'krypto' },
     // Abverkaufs-Wache: gepumpte Perps, die zu kippen beginnen (`server/coin-radar/abverkauf.js`).
-    { id: 'coinAbverkauf', mode: 'research', path: '/coin-radar/abverkauf', symbol: 'pfeilSchraegAb', titleKey: 'coinradar.tab_abverkauf', group: 'coinGruppe' },
+    { id: 'coinAbverkauf', mode: 'research', path: '/coin-radar/abverkauf', symbol: 'pfeilSchraegAb', titleKey: 'coinradar.tab_abverkauf', group: 'coinGruppe', markt: 'krypto' },
+    /*
+     * Aktien (Aufbau, `docs/PLAN-AKTIEN.md`): was an den angebundenen
+     * Handelsplätzen als Aktie kaufbar ist, Spot oder Future. Nur mit
+     * `modusAktienAn` und nur im Markt «Aktien».
+     */
+    // Newcomer-Radar zuerst: er ist die Frage, der Stamm das Nachschlagewerk dazu.
+    { id: 'newcomerRadar', mode: 'research', path: '/newcomer-radar', symbol: 'entdecken', titleKey: 'nav.newcomerRadar', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
+    { id: 'aktienStamm', mode: 'research', path: '/aktien', symbol: 'gebaeude', titleKey: 'nav.aktienStamm', group: 'aktienGruppe', flag: 'modusAktienAn', markt: 'aktien' },
 
     // ── Strategien ──────────────────────────────────────────
     // In der Reihenfolge der Arbeit: Strategie → prüfen → laufen lassen.
@@ -177,7 +189,7 @@ export const MODES = [
      * Abschaltbar bleibt er, aber aus dem anderen Grund: Wer nur sein Journal
      * führt, braucht den Modus nicht.
      */
-    { id: 'research', titleKey: 'modes.research', symbol: 'entdecken', home: '/hype-radar', enabled: true, flag: 'modusResearchAn' },
+    { id: 'research', titleKey: 'modes.research', symbol: 'entdecken', home: '/hype-radar', homeJeMarkt: { aktien: '/newcomer-radar' }, enabled: true, flag: 'modusResearchAn' },
     // Freigegeben als Beta. Der Modus handelt selbstständig, deshalb warnt
     // `BetaHinweis.vue` auf jeder seiner Seiten, und der scharfe Betrieb hängt
     // zusätzlich an der dreifachen Freigabekette (globaler Schalter, Freigabe je
@@ -216,7 +228,11 @@ export const pageById = (id) => PAGES.find(p => p.id === id) || null
 
 export const pagesForMode = (mode) => PAGES.filter(p => p.mode === mode && p.group)
 
-export const modeHome = (mode) => MODES.find(m => m.id === mode)?.home || '/journal'
+/** Startadresse eines Modus; mit `markt` die des Markts, wo der Modus eine eigene hat. */
+export const modeHome = (mode, markt) => {
+    const m = MODES.find(x => x.id === mode)
+    return m?.homeJeMarkt?.[markt] || m?.home || '/journal'
+}
 
 /**
  * Ist dieser Modus eingeschaltet?

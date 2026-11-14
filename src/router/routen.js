@@ -160,6 +160,8 @@ export const routen = [
     // Seite nicht neu aufgebaut, ein laufender Scan (SSE) überlebt.
     seite('/hype-radar/:reiter?', 'hypeRadar', () => import('../views/HypeRadar.vue'), { title: 'Hype-Radar', titleKey: 'nav.hypeRadar', mode: 'research' }),
     seite('/coin-radar/:reiter?', 'coinRadar', () => import('../views/CoinRadar.vue'), { title: 'Coin-Radar', titleKey: 'nav.coinRadar', mode: 'research' }),
+    seite('/newcomer-radar', 'newcomerRadar', () => import('../views/NewcomerRadar.vue'), { title: 'Newcomer-Radar', titleKey: 'nav.newcomerRadar', mode: 'research' }),
+    seite('/aktien', 'aktienStamm', () => import('../views/AktienStamm.vue'), { title: 'Aktien', titleKey: 'nav.aktienStamm', mode: 'research' }),
 
     // ── Strategien ──────────────────────────────────────────
     // Strategie → prüfen → laufen lassen: Bibliothek, Labor, Instanzen.

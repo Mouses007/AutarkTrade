@@ -201,6 +201,8 @@ export async function symbole({ markt: m } = {}) {
             minQty: lf ? Number(lf.minQty) : 0,
             minNotional: mn ? Number(mn.notional ?? mn.minNotional) : 0,
             underlyingType: s.underlyingType,
+            // TradFi / Pre-IPO — trennt eine Firma vor dem Börsengang von einem Coin vor dem Start.
+            underlyingSubType: s.underlyingSubType,
             onboardDate: s.onboardDate,
             // Quartalskontrakte haben eigene Symbole; Listen für Perpetuals
             // (Live-Symbolwahl) filtern darauf.

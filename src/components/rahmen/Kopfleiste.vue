@@ -25,6 +25,8 @@ import Titelzeile from './Titelzeile.vue'
 import { appMode, seitenId } from '../../stores/ui.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { MODES, modeHome, pageById, istModusAn, modiGeordnet } from '../../config/menu.js'
+import { MAERKTE } from '../../config/markt.js'
+import { aktienAn, aktiverMarkt, speichereMarkt } from '../../stores/markt.js'
 
 defineProps({
     /** Seitentitel samt Titelzeilen-Knöpfen rechts einblenden (Desktop mit Menü). */
@@ -56,6 +58,26 @@ function wechsle(m, e) {
     // Kein preventDefault: der Link lädt die Seite voll neu.
 }
 
+/*
+ * Markt-Umschalter Krypto ↔ Aktien (nur mit `modusAktienAn`). Wie beim
+ * Moduswechsel ein voller Seitenaufruf, damit Abrufe und Timer des alten
+ * Markts enden. Steht man auf einer Seite, die nur der andere Markt hat
+ * (Hype-Radar ↔ Aktien), geht es zur Startseite des Modus im neuen Markt.
+ */
+const marktWechselt = ref(false)
+async function waehleMarkt(markt) {
+    if (markt === aktiverMarkt.value || marktWechselt.value) return
+    marktWechselt.value = true
+    try {
+        await speichereMarkt(markt)
+        const seite = pageById(seitenId.value)
+        if (seite?.markt && seite.markt !== markt) window.location.href = modeHome(seite.mode, markt)
+        else window.location.reload()
+    } catch {
+        marktWechselt.value = false
+    }
+}
+
 // Abmelden gibt es nur, wenn das Passwort-Gate aktiv ist.
 const mitAnmeldung = ref(false)
 async function abmelden() {
@@ -82,7 +104,7 @@ onMounted(async () => {
         <nav class="modi" :aria-label="t('app.modi')">
             <template v-for="(m, i) in modi" :key="m.id">
             <span v-if="i > 0 && modi[i - 1].gruppe !== m.gruppe" class="trenner" aria-hidden="true"></span>
-            <a :href="modeHome(m.id)" :class="{ aktiv: aktiverModus === m.id }"
+            <a :href="modeHome(m.id, aktiverMarkt)" :class="{ aktiv: aktiverModus === m.id }"
                 :aria-current="aktiverModus === m.id ? 'page' : undefined" :aria-label="beschriftung(m)"
                 :title="beschriftung(m)" @click="wechsle(m, $event)">
                 <Symbol :name="SYMBOL[m.id] || 'info'" :groesse="18" />
@@ -91,6 +113,12 @@ onMounted(async () => {
             </template>
         </nav>
         <div class="rechts">
+            <div v-if="aktienAn" class="markt" role="group" :aria-label="t('markt.umschalter')">
+                <button v-for="m in MAERKTE" :key="m" type="button" :class="{ aktiv: aktiverMarkt === m }"
+                    :aria-pressed="aktiverMarkt === m" :disabled="marktWechselt" @click="waehleMarkt(m)">
+                    {{ t('markt.' + m) }}
+                </button>
+            </div>
             <Titelzeile v-if="mitTitel" in-kopf />
             <span v-if="mitTitel" class="trenner" aria-hidden="true"></span>
             <a class="knopf" href="/einstellungen" :class="{ aktiv: seitenId === 'einstellungen' }" :title="t('nav.settings')"
@@ -181,6 +209,39 @@ onMounted(async () => {
     align-items: center;
     gap: 0.6rem;
     flex: 0 0 auto;
+}
+
+/* Markt-Umschalter: zwei verbundene Knöpfe, der aktive in der Hausfarbe. */
+.markt {
+    display: inline-flex;
+    flex: 0 0 auto;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-knopf);
+    overflow: hidden;
+}
+
+.markt button {
+    padding: 0.3rem 0.7rem;
+    border: 0;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.markt button:hover {
+    color: var(--text);
+}
+
+.markt button.aktiv {
+    background: var(--accent-flaeche);
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.markt button:disabled {
+    cursor: progress;
 }
 
 /*

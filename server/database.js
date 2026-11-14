@@ -17,6 +17,7 @@ import { migriereCoinMUsdt } from './migrationen/coinm-usdt.js'
 import { migriereDouble } from './migrationen/double.js'
 import { migriereTls } from './migrationen/tls.js'
 import { migriereBots } from './migrationen/bots.js'
+import { migriereAktien } from './migrationen/aktien.js'
 import { migriereZweifaktor } from './migrationen/zweifaktor.js'
 import { migriereTradePopups } from './migrationen/trade-popups.js'
 import { migriereKiAufgaben, migriereProfil, migriereKartenName, migriereLiveFelder } from './migrationen/einstellungen-ordnung.js'
@@ -3719,6 +3720,10 @@ async function runMigrations(knex, client) {
     // Tabelle `tls_zertifikat` (eigene CA, Server-Zertifikat), `settings.esp32AnzeigeKey`.
     await migriereTls(knex, addColumnIfNotExists)
     await migriereBots(knex)
+
+    // ── Aktien-Integration, Phase 1 (additiv, ohne SCHEMA_VERSION) ──
+    // Instrument-Stamm, Spalte `anlageklasse`, `settings.aktiverMarkt`; siehe `server/migrationen/aktien.js`.
+    await migriereAktien(knex, addColumnIfNotExists)
 
     // ── Zweiter Faktor beim Anmelden (additiv, ohne SCHEMA_VERSION) ──
     // TOTP-Spalten in `settings`, Tabelle `auth_schluessel` (YubiKey/WebAuthn).

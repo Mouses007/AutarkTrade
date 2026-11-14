@@ -57,6 +57,10 @@ import { setupRuleBuilderRoutes } from './server/rule-builder.js'
 import { startStrategyEngine, stopStrategyEngine } from './server/strategy-engine.js'
 import { setupRanglisteRoutes, startRanglisteTakt, stopRanglisteTakt } from './server/rangliste-api.js'
 import { setupPortfolioRoutes } from './server/portfolio/api.js'
+import { setupAktienRoutes } from './server/aktien/api.js'
+import { starteStammTakt } from './server/aktien/stamm.js'
+import { setupNewcomerRoutes } from './server/newcomer-radar/api.js'
+import { starteNewcomerTakt } from './server/newcomer-radar/lauf.js'
 import { startePortfolioTakt, stoppePortfolioTakt } from './server/portfolio/abruf.js'
 import { startSicherungsTakt, stoppeSicherungsTakt } from './server/sicherung.js'
 import { logError } from './server/logger.js'
@@ -296,6 +300,8 @@ async function starteServer() {
     setupRuleBuilderRoutes(app);
     setupRanglisteRoutes(app);
     setupPortfolioRoutes(app);
+    setupAktienRoutes(app);
+    setupNewcomerRoutes(app);
     // Eigene Regelstrategien aus der DB in die Registry holen — sie sind ab
     // jetzt von eingebauten nicht mehr zu unterscheiden.
     await ladeAlleRegelStrategien();
@@ -352,6 +358,12 @@ async function starteServer() {
     // jeder Takt — dort holt die Seite beim Öffnen selbst nach, wenn der
     // letzte Abruf älter als 15 min ist (`stores/portfolio.js`).
     starteTakte([['Portfolio', startePortfolioTakt]]);
+
+    // Instrument-Stamm der Aktien: alle 12 h die Symbol-Listen der Handelsplätze,
+    // nur mit eingeschaltetem Aktien-Modus (`server/aktien/stamm.js`).
+    starteTakte([['Aktien-Stamm', starteStammTakt]]);
+    // Newcomer-Radar: einmal am Tag Kurse und Noten aller Aktien-Titel (`server/newcomer-radar/lauf.js`).
+    starteTakte([['Newcomer', starteNewcomerTakt]]);
 
     // Tägliche Sicherung (Audit FUN-BAK-001): SQLite per VACUUM INTO, PostgreSQL
     // als JSON-Export, 14 Tage. Ziel AT_SICHERUNG_ORDNER; im Container ohne

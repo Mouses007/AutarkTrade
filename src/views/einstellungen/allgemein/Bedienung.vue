@@ -15,7 +15,7 @@ import { appEinstellungen } from '@/stores/settings.js'
 import { merkeErweiterteInfos } from '@/composables/useErweiterteInfos.js'
 import { kiSpeichern } from '../gemeinsam/speichern.js'
 import {
-    modusLiveAn, modusResearchAn, modusStrategieAn, modusLernenAn, modusPortfolioAn, modusSpeichern,
+    modusLiveAn, modusResearchAn, modusStrategieAn, modusLernenAn, modusPortfolioAn, modusAktienAn, modusSpeichern,
 } from '../gemeinsam/useModi.js'
 
 const { t } = useI18n()
@@ -77,6 +77,8 @@ ausEinstellungen()
             @change="(v) => modusSpeichern('modusLernenAn', v)" />
         <Schalter v-model="modusPortfolioAn" :label="t('modes.portfolio') + ' (Beta)'" info="settings.modePortfolioInfo"
             @change="(v) => modusSpeichern('modusPortfolioAn', v)" />
+        <Schalter v-model="modusAktienAn" :label="t('settings.modeAktien')" info="settings.modeAktienInfo"
+            @change="(v) => modusSpeichern('modusAktienAn', v)" />
         <p class="hinweis">{{ t('settings.modesJournalFix') }}</p>
 
         <!-- Erweiterte Infos: das kleine „i" an Werten und Bedienelementen -->

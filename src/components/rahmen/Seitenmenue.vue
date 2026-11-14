@@ -25,6 +25,8 @@ import { appMode, seitenId, bildschirmTyp } from '../../stores/ui.js'
 import { sideMenuEingeklappt, schalteSideMenu } from '../../stores/app/rahmen.js'
 import { appEinstellungen } from '../../stores/settings.js'
 import { PAGES, pagesForMode, istModusAn } from '../../config/menu.js'
+import { seiteImMarkt } from '../../config/markt.js'
+import { aktiverMarkt } from '../../stores/markt.js'
 import { useIstTelefon } from '../../utils/geraet.js'
 
 const LiveSymbolPicker = defineAsyncComponent(() => import('../LiveSymbolPicker.vue'))
@@ -40,7 +42,7 @@ const schmal = computed(() => desktop.value && sideMenuEingeklappt.value)
 const GRUPPEN = {
     journal: ['analyze', 'reflect', 'add'],
     live: ['liveAnalyze', 'liveTrade'],
-    research: ['hypeGruppe', 'coinGruppe'],
+    research: ['hypeGruppe', 'coinGruppe', 'aktienGruppe'],
     agent: ['strategienGruppe'],
     lernen: ['lernenGruppe'],
     portfolio: ['portfolioGruppe'],
@@ -63,6 +65,7 @@ function sichtbar(seite) {
     const u = appEinstellungen.value
     const v = seite.flag ? u?.[seite.flag] : undefined
     if (v === 0 || v === '0' || v === false) return false
+    if (!seiteImMarkt(seite, aktiverMarkt.value)) return false
     if (seite.nurDesktop && istTelefon.value && Number(u?.[seite.mobilFlag]) !== 1) return false
     if (seite.id === 'kiAgent' && !kiAn.value) return false
     return true
