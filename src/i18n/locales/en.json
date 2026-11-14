@@ -8564,7 +8564,27 @@
         "offen": "open"
       },
       "trendErklaerung": "Measured on weekly and daily candles. Variants against the trend are marked ⚠.",
-      "planRichtung": "Plan direction"
+      "planRichtung": "Plan direction",
+      "wenigTitel": "Investment only covers a few grids",
+      "wenigText": "With this investment the variants average {n} grids. That is hardly a grid bot, the numbers below say little. The reason is Pionex's minimum order size.",
+      "wenigNoetig": "About {g} grids need roughly {betrag}.",
+      "wenigSetzen": "Recalculate with {betrag}",
+      "kurzTitel": "Summary",
+      "kurzTrend": "Long-term trend: {trend}, fits {r}.",
+      "kurzOhneTrend": "Long-term trend: not measurable.",
+      "kurzVarianten": "Variants",
+      "kurzBestes": "Best look-back result",
+      "kurzTrendSpalte": "Vs trend",
+      "kurzPasst": "fits",
+      "kurzGegen": "against the trend",
+      "kurzNeutral": "neutral",
+      "kurzKeine": "none without liquidation",
+      "kurzEinig": "Look-back and trend point the same way: {r}.",
+      "kurzSpannung": "In the look-back {a} came out ahead, the long-term trend fits {b}. The look-back shows what would have worked over the last {tage} days, the trend where the market is heading. You have to weigh that yourself.",
+      "kurzHinweis": "Per direction the variant with the best look-back, without liquidation. Not a recommendation: largest loss and distance to liquidation count at least as much.",
+      "chartNiveaus": "Chart levels",
+      "chartErklaerung": "Volume profiles of sideways phases on the weekly chart and your own drawings for this coin. Variants “Band ab/bis Chart …” put the band edge just beyond them and the stop-loss one daily ATR further.",
+      "chartKeine": "None found: no sideways phase on the weekly chart and no own drawings."
     }
   }
 }

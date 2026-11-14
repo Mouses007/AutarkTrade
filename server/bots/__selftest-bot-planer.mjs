@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
     planBot, trendFuer, mengeJeGrid, pruefePlanEingabe, pruefePlanVariante, planKandidaten, anzahlFuerSchritt,
     rechnePlanVariante, rechnePlan, bauePlanPrompt, planSystemText, PLAN_ID, MAX_PLAN_GRIDS, MAX_KANDIDATEN,
-    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE,
+    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile,
 } from './planer.js'
 import { normalisiereBot } from './pionex-bots.js'
 import { pruefeKiAntwort } from './bot-ki.js'
@@ -84,6 +84,10 @@ const klein = rechnePlanVariante(e, { unten: 140, oben: 220, anzahl: 400 }, kerz
 p('Mindestmenge: zu viele Grids werden gekürzt', klein.warnungen.includes('gridsGekuerzt') && klein.variante.anzahl < 400 && klein.start.menge >= 0.1 * 0.999)
 const doppelt = rechnePlan(e, kerzen, [{ id: 'P1', titel: 'a', variante: { unten: 140, oben: 220, anzahl: 400 } }, { id: 'P2', titel: 'b', variante: { unten: 140, oben: 220, anzahl: 300 } }], { kurs: 200, minMenge: 0.1 })
 p('Nach dem Kürzen gleiche Varianten nur einmal', doppelt.length === 1 && doppelt[0].id === 'P1')
+const fuer = rechnePlanVariante(e, { unten: 140, oben: 220, anzahl: 40 }, kerzen, { kurs: 200, minMenge: 0.1 })
+const nachgerechnet = rechnePlanVariante({ ...e, einsatz: fuer.start.einsatzFuerGrids }, { unten: 140, oben: 220, anzahl: SINNVOLLE_GRIDS }, kerzen, { kurs: 200, minMenge: 0.1 })
+p(`Nötiger Einsatz für ${SINNVOLLE_GRIDS} Grids: damit liegt die Menge je Grid knapp über der Mindestmenge (bis +1 %)`, fuer.start.einsatzFuerGrids > 0 && nachgerechnet.start.menge >= 0.1 * 0.999 && nachgerechnet.start.menge < 0.1 * 1.01 && nachgerechnet.variante.anzahl === SINNVOLLE_GRIDS, `${nachgerechnet.start.menge} ${nachgerechnet.variante.anzahl} ${fuer.start.einsatzFuerGrids}`)
+p('Ohne Mindestmenge kein nötiger Einsatz', r.start.einsatzFuerGrids === null)
 p('Einsatz zu klein für 2 Grids', rechnePlanVariante(e, { unten: 140, oben: 220, anzahl: 40 }, kerzen, { kurs: 200, minMenge: 1000 }).fehler === 'einsatzZuKlein')
 const cm = rechnePlanVariante({ ...e, coin: 'SOL', coinM: true, einsatz: 1 }, { unten: 140, oben: 220, anzahl: 40 }, kerzen, { kurs: 200 })
 p('Coin-M Long: Nominal positiv (Long der Coin), Liquidation unter dem Kurs', cm.start.nominalUsd > 0 && cm.start.liq < 200)
@@ -125,6 +129,35 @@ p('Prompt ALLE: Richtung offen, Trend-Zeile, Richtungsspalte', pa.includes('OFFE
 p('Systemtext ALLE: alle Richtungen, Trend hat Vorrang, Beispiel-ID L3', planSystemText({ alle: true }).includes('Long (L…)') && planSystemText({ alle: true }).includes('"L3"') && planSystemText().includes('LANGFRIST-TREND'))
 const ga = pruefeKiAntwort({ lage: 'x', vorschlaege: [{ id: shorts[0].id, titel: 'a', begruendung: 'b', risiko: 'c', passtNichtWenn: 'd' }] }, { kandidaten: gerechnet.filter((c) => !c.fehler) }, pa)
 p('KI-Prüfung nimmt S-IDs an', ga.vorschlaege.length === 1 && ga.vorschlaege[0].id === shorts[0].id)
+
+console.log('Chart-Niveaus')
+// Wochenkerzen: 60 Wochen Anstieg 20→60, 40 Wochen seitwärts 58–64, dann 40 Wochen Anstieg auf 100
+const woche = []
+let wp = 20
+for (let i = 0; i < 140; i++) {
+    const ziel = i < 60 ? 20 + i * 0.67 : i < 100 ? 61 + 3 * Math.sin(i * 0.9) : 61 + (i - 100) * 1
+    woche.push({ t: Date.UTC(2023, 0, 2) + i * 7 * 864e5, o: wp, h: Math.max(wp, ziel) + 1.2, l: Math.min(wp, ziel) - 1.2, c: ziel, v: 1000 }); wp = ziel
+}
+const wpf = wochenProfile(woche)
+p('Wochen-Profil: Seitwärtsphase gefunden, VAL/POC/VAH darin (57–65)', wpf.length >= 3 && wpf.some((x) => x.name === 'POC' && x.preis > 57 && x.preis < 65), JSON.stringify(wpf.slice(0, 3).map((x) => [x.name, x.preis.toFixed(1)])))
+p('Wochen-Profil: zu wenig Kerzen → keins', wochenProfile(woche.slice(0, 20)).length === 0)
+const nutzer = [
+    { id: 'U1', typ: 'volprofil', poc: 63, vah: 69, val: 59, text: '2024' },
+    { id: 'U2', typ: 'rechteck', tief: 50, hoch: 52 },
+    { id: 'U3', typ: 'horizontale', preis: 80 },
+    { id: 'U4', typ: 'trendlinie', preis: 70 },
+]
+const cn = chartNiveaus({ nutzer, kandidaten: [{ id: 'V1', quelle: 'volumenprofil', name: 'POC', preis: 63.05, t1: Date.UTC(2024, 1, 19), t2: Date.UTC(2024, 10, 4) }, { id: 'V2', quelle: 'volumenprofil', name: 'VAL', preis: 40, t1: 0, t2: 0 }] }, 67)
+p('Chart-Niveaus: eigene Linien, Zonenkanten, Profil-Werte; Schräge nicht', ['U1-VAL', 'U1-POC', 'U1-VAH', 'U2-u', 'U2-o', 'U3'].every((id) => cn.some((n) => n.id === id)) && !cn.some((n) => n.id === 'U4'))
+p('Chart-Niveaus: doppelter Preis nur einmal, eigene Zeichnung gewinnt', !cn.some((n) => n.id === 'V1') && cn.find((n) => n.id === 'U1-POC')?.quelle === 'zeichnung')
+p('Chart-Niveaus: je Seite höchstens 4, aufsteigend', cn.filter((n) => n.preis < 67).length <= 4 && cn.every((n, i) => i === 0 || cn[i - 1].preis <= n.preis))
+const mitChart = planKandidaten({ kurs: 67, atr: 2, zr: null, richtung: 'LONG', chart: cn })
+const ab59 = mitChart.find((c) => c.titel.includes('VAL deines Volumenprofils') && c.variante.stopLoss != null)
+p('Long ab Chart-Niveau: Untergrenze ½ ATR unter dem VAL, Stop-Loss 1 ATR tiefer', !!ab59 && Math.abs(ab59.variante.unten - 58) < 1e-6 && Math.abs(ab59.variante.stopLoss - 56) < 1e-6 && ab59.variante.oben > 67)
+const shortChart = planKandidaten({ kurs: 67, atr: 2, zr: null, richtung: 'SHORT', chart: cn })
+p('Short bis Chart-Niveau: Obergrenze ½ ATR über dem VAH, Stop darüber', shortChart.some((c) => c.titel.includes('VAH') && Math.abs(c.variante.oben - 70) < 1e-6 && Math.abs(c.variante.stopLoss - 72) < 1e-6))
+p('Neutral zwischen zwei Chart-Niveaus', planKandidaten({ kurs: 67, atr: 2, zr: null, richtung: 'NEUTRAL', chart: cn }).some((c) => c.titel.startsWith('Band Chart')))
+p('Prompt nennt Chart-Niveaus, Systemtext ALLE: je Richtung höchstens einen', bauePlanPrompt(e, { lage: { kurs: 67 }, kandidaten: [], chart: cn }).includes('CHART-NIVEAUS') && planSystemText({ alle: true }).includes('JE RICHTUNG HÖCHSTENS EINEN'))
 
 console.log('Start über die Steuerung')
 const a = baueAktion(pm, 'starten', { unten: '120', oben: '200', anzahl: '100', hebel: '4', einsatz: '3', art: 'arithmetic' }, { stellen: 7 })

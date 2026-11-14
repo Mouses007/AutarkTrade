@@ -77,6 +77,33 @@ const sortiert = computed(() => {
     return l
 })
 
+// ── Zu wenig Grids (Einsatz unter der Mindestmenge) ─────────────────────
+const median = (l) => { const a = l.filter((x) => Number.isFinite(x)).sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : null }
+const mittelGrids = computed(() => median(gueltig.value.map((c) => c.variante.anzahl)))
+const zuWenigGrids = computed(() => mittelGrids.value != null && mittelGrids.value < (erg.value?.grids?.wenig ?? 10))
+// Nötiger Einsatz für ein echtes Grid, aufgerundet auf zwei Stellen
+const aufrunden = (x) => { if (!(x > 0)) return null; const f = 10 ** (Math.floor(Math.log10(x)) - 1); return Math.ceil(x / f) * f }
+const noetigerEinsatz = computed(() => aufrunden(median(gueltig.value.map((c) => c.start?.einsatzFuerGrids))))
+function einsatzAufNoetig() { eingabe.value.einsatz = String(noetigerEinsatz.value); rechnen() }
+
+// ── Kurzfassung je Richtung ──────────────────────────────────────────────
+const besteJeRichtung = computed(() => {
+    const reihe = erg.value?.trend ? [erg.value.trend.passend, ...['LONG', 'SHORT', 'NEUTRAL'].filter((r) => r !== erg.value.trend.passend)] : ['LONG', 'SHORT', 'NEUTRAL']
+    return reihe.map((r) => {
+        const l = gueltig.value.filter((c) => (c.richtung || erg.value?.eingabe?.richtung) === r)
+        if (!l.length) return null
+        const ohneLiq = l.filter((c) => !c.rueckblick?.liquidation && c.rueckblick?.gesamt != null)
+        const beste = ohneLiq.sort((a, b) => b.rueckblick.gesamt - a.rueckblick.gesamt)[0] || null
+        const zumTrend = !erg.value?.trend ? null : r === erg.value.trend.passend ? 'passt' : r === 'NEUTRAL' ? 'neutral' : (r === 'LONG' && erg.value.trend.richtung === 'ab') || (r === 'SHORT' && erg.value.trend.richtung === 'auf') ? 'gegen' : 'neutral'
+        return { richtung: r, anzahl: l.length, beste, zumTrend }
+    }).filter(Boolean)
+})
+const rueckblickVorn = computed(() => {
+    const l = besteJeRichtung.value.filter((x) => x.beste)
+    if (l.length < 2) return null
+    return l.reduce((a, b) => (b.beste.rueckblick.gesamt > a.beste.rueckblick.gesamt ? b : a)).richtung
+})
+
 // ── Mindesteinsatz bei Pionex ────────────────────────────────────────────
 // Pionex nennt ihn nicht; der Server grenzt ihn mit Prüfabfragen ein (sendet
 // nichts). Eine Variante nach der anderen, die nächste startet beim Wert der
@@ -265,6 +292,53 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 {{ t('bots.ki.zrNiveaus') }}:
                 <span v-for="m in erg.hohe.marken" :key="m.id" :class="{ treffen: erg.hohe.treffen.some((c) => c.ids.includes(m.id)) }">{{ m.id }} {{ m.tf }} {{ preis(m.preis) }}</span>
             </p>
+            <div v-if="erg.chart" class="trend">
+                <h4>{{ t('bots.plan.chartNiveaus') }}</h4>
+                <ul v-if="erg.chart.length" class="trendZeichen">
+                    <li v-for="n in [...erg.chart].sort((x, y) => y.preis - x.preis)" :key="n.id">
+                        <span :class="{ eigen: n.quelle === 'zeichnung' }">{{ n.id }} · {{ n.name }}</span>
+                        <span :class="n.preis < erg.kurs ? 'gut' : 'schlecht'">{{ preis(n.preis) }}</span>
+                    </li>
+                </ul>
+                <p class="leise">{{ erg.chart.length ? t('bots.plan.chartErklaerung') : t('bots.plan.chartKeine') }}</p>
+            </div>
+        </Karte>
+
+        <Karte v-if="erg && gueltig.length" :titel="t('bots.plan.kurzTitel')">
+            <Hinweis v-if="zuWenigGrids" art="warn" :titel="t('bots.plan.wenigTitel')">
+                <p class="grund">{{ t('bots.plan.wenigText', { n: mittelGrids }) }}<template v-if="noetigerEinsatz"> {{ t('bots.plan.wenigNoetig', { g: erg.grids?.sinnvoll ?? 20, betrag: betrag(noetigerEinsatz, erg.einheit) }) }}</template></p>
+                <Knopf v-if="noetigerEinsatz" art="normal" klein @click="einsatzAufNoetig">{{ t('bots.plan.wenigSetzen', { betrag: betrag(noetigerEinsatz, erg.einheit) }) }}</Knopf>
+            </Hinweis>
+            <p class="kurzTrend">
+                <template v-if="erg.trend">{{ t('bots.plan.kurzTrend', { trend: t(`bots.plan.trend.${erg.trend.richtung}`), r: t(`bots.richtung.${erg.trend.passend}`) }) }}</template>
+                <template v-else>{{ t('bots.plan.kurzOhneTrend') }}</template>
+            </p>
+            <div class="tabelleRahmen" :class="{ blass: zuWenigGrids }">
+                <table class="tabelle">
+                    <thead><tr>
+                        <th>{{ t('bots.plan.spalteRichtung') }}</th><th>{{ t('bots.plan.kurzVarianten') }}</th><th class="links">{{ t('bots.plan.kurzBestes') }}</th>
+                        <th>{{ t('bots.plan.rueckblick') }}</th><th>{{ t('bots.sim.maxVerlust') }}</th><th>{{ t('bots.plan.liqStart') }}</th><th v-if="erg.trend">{{ t('bots.plan.kurzTrendSpalte') }}</th><th></th>
+                    </tr></thead>
+                    <tbody>
+                        <tr v-for="z in besteJeRichtung" :key="z.richtung">
+                            <th class="richtung" :class="z.richtung">{{ t(`bots.richtung.${z.richtung}`) }}</th>
+                            <td>{{ z.anzahl }}</td>
+                            <template v-if="z.beste">
+                                <td class="text">{{ z.beste.id }} · {{ z.beste.titel }}</td>
+                                <td :class="ton(z.beste.rueckblick.gesamt)">{{ betrag(z.beste.rueckblick.gesamt, erg.einheit, { vorzeichen: true }) }} <span class="leise">{{ prozent(ergebnisPct(z.beste), { vorzeichen: true }) }}</span></td>
+                                <td :class="ton(z.beste.rueckblick.maxVerlust)">{{ betrag(z.beste.rueckblick.maxVerlust, erg.einheit) }}</td>
+                                <td>{{ prozent(z.beste.start?.liqAbstand, { stellen: 0 }) }}</td>
+                            </template>
+                            <td v-else colspan="4" class="leise text">{{ t('bots.plan.kurzKeine') }}</td>
+                            <td v-if="erg.trend" :class="{ gut: z.zumTrend === 'passt', warnText: z.zumTrend === 'gegen' }">{{ t(`bots.plan.kurz${z.zumTrend === 'passt' ? 'Passt' : z.zumTrend === 'gegen' ? 'Gegen' : 'Neutral'}`) }}</td>
+                            <td><Knopf v-if="z.beste" art="leise" klein @click="uebernehmen(z.beste.variante, z.beste.richtung || erg.eingabe.richtung)">{{ t('bots.plan.uebernehmen') }}</Knopf></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p v-if="erg.trend && rueckblickVorn && rueckblickVorn !== erg.trend.passend" class="spannung">{{ t('bots.plan.kurzSpannung', { a: t(`bots.richtung.${rueckblickVorn}`), b: t(`bots.richtung.${erg.trend.passend}`), tage: erg.eingabe.tage }) }}</p>
+            <p v-else-if="erg.trend && rueckblickVorn" class="leise">{{ t('bots.plan.kurzEinig', { r: t(`bots.richtung.${rueckblickVorn}`) }) }}</p>
+            <p class="leise">{{ t('bots.plan.kurzHinweis') }}</p>
         </Karte>
 
         <Karte v-if="erg" :titel="t('bots.plan.kandidatenTitel', { n: gueltig.length })">
@@ -284,7 +358,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 <p class="grund">{{ kleinstesMin ? t('bots.plan.minKeine', { betrag: betrag(kleinstesMin, erg.einheit) }) : t('bots.plan.minKeineOhne') }}</p>
                 <Knopf v-if="kleinstesMin" art="normal" klein @click="einsatzAufMin">{{ t('bots.plan.minSetzen', { betrag: betrag(kleinstesMin, erg.einheit) }) }}</Knopf>
             </Hinweis>
-            <div class="tabelleRahmen">
+            <div class="tabelleRahmen" :class="{ blass: zuWenigGrids }">
                 <table class="tabelle">
                     <thead><tr>
                         <th>ID</th><th v-if="imErgAlle">{{ t('bots.plan.spalteRichtung') }}</th><th>{{ t('bots.plan.beschreibung') }}</th><th>{{ t('bots.feld.band') }}</th><th>{{ t('bots.feld.grids') }}</th><th>{{ t('bots.feld.nettoZyklus') }}</th>
@@ -464,6 +538,12 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
 .vorschlag p { margin: 0; font-size: 0.9rem; line-height: 1.5; }
 .risiko { color: var(--muted); }
 .min { white-space: nowrap; }
+.blass { opacity: 0.5; }
+.kurzTrend { margin: 0 0 var(--abstand-2); font-weight: 600; }
+.spannung { margin: var(--abstand-2) 0 0; color: var(--warn); font-size: 0.88rem; line-height: 1.5; }
+.warnText { color: var(--warn); }
+.eigen { color: var(--accent); }
+.tabelle th.links { text-align: left; }
 .trend { margin-top: var(--abstand-3); display: flex; flex-direction: column; gap: var(--abstand-1); }
 .trend h4 { margin: 0; font-size: 0.85rem; color: var(--muted); font-weight: 600; }
 .trendKopf { margin: 0; display: flex; gap: var(--abstand-2); align-items: baseline; flex-wrap: wrap; }

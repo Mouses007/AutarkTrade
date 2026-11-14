@@ -8564,7 +8564,27 @@
         "offen": "offen"
       },
       "trendErklaerung": "Gemessen auf Wochen- und Tageskerzen. Varianten gegen den Trend sind mit ⚠ markiert.",
-      "planRichtung": "Richtung des Plans"
+      "planRichtung": "Richtung des Plans",
+      "wenigTitel": "Einsatz reicht nur für wenige Grids",
+      "wenigText": "Mit diesem Einsatz kommen die Varianten im Mittel auf {n} Grids. Das ist kaum ein Grid-Bot, die Zahlen unten sagen wenig. Grund ist die Mindestmenge je Order bei Pionex.",
+      "wenigNoetig": "Für etwa {g} Grids braucht es ungefähr {betrag}.",
+      "wenigSetzen": "Mit {betrag} neu rechnen",
+      "kurzTitel": "Kurzfassung",
+      "kurzTrend": "Langfristiger Trend: {trend}, passt zu {r}.",
+      "kurzOhneTrend": "Langfristiger Trend: nicht messbar.",
+      "kurzVarianten": "Varianten",
+      "kurzBestes": "Bestes Rückblick-Ergebnis",
+      "kurzTrendSpalte": "Zum Trend",
+      "kurzPasst": "passt",
+      "kurzGegen": "gegen den Trend",
+      "kurzNeutral": "neutral",
+      "kurzKeine": "keine ohne Liquidation",
+      "kurzEinig": "Rückblick und Trend zeigen in dieselbe Richtung: {r}.",
+      "kurzSpannung": "Im Rückblick lag {a} vorn, der langfristige Trend passt zu {b}. Der Rückblick zeigt, was in den letzten {tage} Tagen funktioniert hätte, der Trend, wohin der Markt läuft. Das musst du selbst abwägen.",
+      "kurzHinweis": "Je Richtung die Variante mit dem besten Rückblick, ohne Liquidation. Das ist keine Empfehlung: Grösster Verlust und Abstand zur Liquidation zählen mindestens so viel.",
+      "chartNiveaus": "Chart-Niveaus",
+      "chartErklaerung": "Volumenprofile der Seitwärtsphasen auf dem Wochenchart und deine eigenen Zeichnungen zu diesem Coin. Varianten «Band ab/bis Chart …» setzen die Bandgrenze knapp jenseits davon, den Stop-Loss eine Tages-ATR weiter.",
+      "chartKeine": "Keine gefunden: weder eine Seitwärtsphase auf dem Wochenchart noch eigene Zeichnungen."
     }
   }
 }

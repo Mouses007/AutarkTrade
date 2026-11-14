@@ -30,6 +30,9 @@ import { gridLinien, simuliereBot } from '../../shared/grid-simulation.js'
 import { GEBUEHREN } from './pionex-wissen.js'
 import { niveausAusZeitrahmen } from './bot-ki.js'
 import { DURCHSTICH, MMR_VORGABE } from './simulation.js'
+import { konsolidierungen } from '../chart-kandidaten.js'
+import { volumenprofil } from '../../shared/volumenprofil.js'
+import { atr as atrReihe } from '../../shared/indicators.js'
 
 export const PLAN_ID = 'plan'
 export const PLAN_RESERVE = 0.93
@@ -41,6 +44,9 @@ export const MAX_PLAN_GRIDS = 500
 export const MAX_HEBEL = 125
 export const MAX_KANDIDATEN = 24
 export const MAX_EIGENE = 3
+/** Ab so vielen Grids ist es ein Grid; darunter warnt der Planer oben (Einsatz zu klein). */
+export const SINNVOLLE_GRIDS = 20
+export const WENIG_GRIDS = 10
 
 const istZahl = (v) => typeof v === 'number' && Number.isFinite(v)
 const leer = (v) => v === undefined || v === null || v === ''
@@ -162,10 +168,73 @@ export function anzahlFuerSchritt(unten, oben, schritt, art = 'arithmetic') {
 }
 
 /**
+ * Volumenprofile der Seitwärtsphasen auf dem Wochenchart (rein), so wie man sie
+ * von Hand als Fixed-Range-Profil setzt. Die Phasensuche der Chart-KI ist auf
+ * kurze Zeiteinheiten eingestellt und fand auf 1w nichts (dann ein Profil über
+ * fünf Jahre). Mit 5 Wochen-ATR Bandbreite und mindestens 12 Wochen traf sie am
+ * 14.11.2026 auf BTC genau die Phase 19.02.–04.11.2024 (POC 63 585, VAL 58 458).
+ * @returns Liste im Format von baueKandidaten: {id, quelle:'volumenprofil', name, preis, t1, t2}
+ */
+export const WOCHEN_PHASE = { breite: 5, minKerzen: 12, max: 5 }
+export function wochenProfile(woche) {
+    if (!Array.isArray(woche) || woche.length < 30) return []
+    const a = atrReihe(woche, 14), A = a[a.length - 1]
+    if (!istZahl(A) || A <= 0) return []
+    const aus = []
+    const phasen = konsolidierungen(woche, A, WOCHEN_PHASE).sort((x, y) => y.bis - x.bis)
+    for (const ph of phasen) {
+        const vp = volumenprofil(woche.slice(ph.von, ph.bis + 1), { zeilen: 48 })
+        if (!vp) continue
+        for (const [name, preis] of [['VAL', vp.val], ['POC', vp.poc], ['VAH', vp.vah]]) {
+            aus.push({ id: `V${aus.length + 1}`, quelle: 'volumenprofil', name, preis, t1: woche[ph.von].t, t2: woche[ph.bis].t })
+        }
+    }
+    return aus
+}
+
+/**
+ * Waagerechte Niveaus aus dem Chart (rein): Volumenprofile der Seitwärtsphasen
+ * (POC/VAH/VAL, `paket.kandidaten` quelle volumenprofil) und die eigenen
+ * Zeichnungen (`paket.nutzer`: Linien, Zonen-Kanten, eigene Volumenprofile).
+ * Je Seite des Kurses die nächsten `max`; eigene Zeichnungen zuerst.
+ * @param paket baueKandidaten(...) auf Wochenkerzen
+ */
+export function chartNiveaus(paket, kurs, { max = 4 } = {}) {
+    if (!paket || !istZahl(kurs)) return []
+    const liste = []
+    const dazu = (id, quelle, name, preis, zusatz = {}) => { if (istZahl(preis) && preis > 0) liste.push({ id, quelle, name, preis: runde(preis, 6), ...zusatz }) }
+    for (const u of paket.nutzer || []) {
+        const text = u.text ? ` „${String(u.text).slice(0, 40)}"` : ''
+        if (u.typ === 'volprofil' && istZahl(u.poc)) {
+            dazu(`${u.id}-VAL`, 'zeichnung', `VAL deines Volumenprofils${text}`, u.val)
+            dazu(`${u.id}-POC`, 'zeichnung', `POC deines Volumenprofils${text}`, u.poc)
+            dazu(`${u.id}-VAH`, 'zeichnung', `VAH deines Volumenprofils${text}`, u.vah)
+        } else if (u.typ === 'rechteck' && istZahl(u.tief)) {
+            dazu(`${u.id}-u`, 'zeichnung', `Unterkante deiner Zone${text}`, u.tief)
+            dazu(`${u.id}-o`, 'zeichnung', `Oberkante deiner Zone${text}`, u.hoch)
+        } else if (['horizontale', 'strahlH'].includes(u.typ) && istZahl(u.preis)) {
+            dazu(u.id, 'zeichnung', `deine Linie${text}`, u.preis)
+        }
+    }
+    for (const k of paket.kandidaten || []) {
+        if (k.quelle !== 'volumenprofil') continue
+        const tag = (t) => { if (!istZahl(t)) return '?'; const [j, m, d] = new Date(t).toISOString().slice(0, 10).split('-'); return `${d}.${m}.${j.slice(2)}` }
+        dazu(k.id, 'profil', `${k.name} 1w-Profil ${tag(k.t1)}–${tag(k.t2)}`, k.preis)
+    }
+    // Doppelte (fast gleicher Preis) nur einmal, die eigene Zeichnung gewinnt
+    const eindeutig = []
+    for (const n of liste) if (!eindeutig.some((m) => Math.abs(m.preis - n.preis) / kurs < 0.003)) eindeutig.push(n)
+    const seite = (unter) => eindeutig.filter((n) => (unter ? n.preis < kurs : n.preis > kurs))
+        .sort((a, b) => (a.quelle === b.quelle ? Math.abs(a.preis - kurs) - Math.abs(b.preis - kurs) : a.quelle === 'zeichnung' ? -1 : 1))
+        .slice(0, max)
+    return [...seite(true), ...seite(false)].sort((a, b) => a.preis - b.preis)
+}
+
+/**
  * Kandidaten aus der Lage (rein). Preise USD je Coin.
  * Bänder um den Kurs in Tages-ATR und an gemessenen Niveaus; je zwei Dichten.
  */
-export function planKandidaten({ kurs, atr, zr = null, richtung }) {
+export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [] }) {
     if (!istZahl(kurs) || kurs <= 0 || !istZahl(atr) || atr <= 0) return []
     const a = atr
     const long = richtung === 'LONG', neutral = richtung === 'NEUTRAL'
@@ -183,6 +252,18 @@ export function planKandidaten({ kurs, atr, zr = null, richtung }) {
         ? [['eng', 4, 4], ['mittel', 7, 7], ['breit', 11, 11]]
         : long ? [['eng', 3, 4], ['mittel', 6, 8], ['breit', 10, 12]] : [['eng', 4, 3], ['mittel', 8, 6], ['breit', 12, 10]]
     for (const [name, unter, ueber] of um) band(`Band ${name} um den Kurs`, kurs - unter * a, kurs + ueber * a)
+    // An Chart-Niveaus (Volumenprofile 1w, eigene Zeichnungen): Long mit der Untergrenze knapp
+    // unter einer Unterstützung (der Stop-Loss liegt dann 1 Tages-ATR unter der Grenze, also
+    // deutlich unter dem Niveau), Short spiegelbildlich, Neutral zwischen zwei Niveaus.
+    const cu = (chart || []).filter((n) => n.preis < kurs).sort((x, y) => y.preis - x.preis).slice(0, 3)
+    const co = (chart || []).filter((n) => n.preis > kurs).sort((x, y) => x.preis - y.preis).slice(0, 3)
+    if (neutral) {
+        for (const nu of cu.slice(0, 2)) for (const no of co.slice(0, 2)) if (no.preis - nu.preis >= 3 * a) band(`Band Chart ${nu.name} bis ${no.name}`, nu.preis - 0.5 * a, no.preis + 0.5 * a)
+    } else if (long) {
+        for (const nu of cu) band(`Band ab Chart ${nu.name}`, nu.preis - 0.5 * a, Math.max(kurs + 6 * a, (co[0]?.preis ?? 0) + 0.5 * a))
+    } else {
+        for (const no of co) band(`Band bis Chart ${no.name}`, Math.min(kurs - 6 * a, (cu[0]?.preis ?? Infinity) - 0.5 * a), no.preis + 0.5 * a)
+    }
     // An Niveaus der hohen Zeitrahmen: Grenzen ½ Tages-ATR jenseits, mindestens 3 ATR breit
     const nv = niveausAusZeitrahmen(zr, kurs)
     for (const nu of nv.unten) for (const no of nv.oben) {
@@ -257,11 +338,11 @@ export function gegenTrend(trend, richtung) {
  * Kandidaten für alle drei Richtungen (rein). Die zum Trend passende Richtung
  * zuerst; IDs mit Buchstaben der Richtung (L1, S1, N1), jeder trägt seine Richtung.
  */
-export function planKandidatenAlle({ kurs, atr, zr = null, trend = null }) {
+export function planKandidatenAlle({ kurs, atr, zr = null, trend = null, chart = [] }) {
     const reihe = trend ? [trend.passend, ...RICHTUNGEN.filter((r) => r !== trend.passend)] : RICHTUNGEN
     const liste = []
     for (const richtung of reihe) {
-        for (const [i, c] of planKandidaten({ kurs, atr, zr, richtung }).entries()) {
+        for (const [i, c] of planKandidaten({ kurs, atr, zr, richtung, chart }).entries()) {
             liste.push({ ...c, id: `${richtung[0]}${i + 1}`, richtung })
         }
     }
@@ -282,6 +363,13 @@ function kurz(r) {
         startPreis: r.startPreis, endPreis: r.endPreis,
         kurve: (r.kurve || []).filter((_, i, a) => i % Math.max(1, Math.ceil(a.length / 200)) === 0 || i === a.length - 1),
     }
+}
+
+/** Einsatz, mit dem SINNVOLLE_GRIDS Grids im Band der Variante gerade die Mindestmenge erreichen (rein). */
+export function einsatzFuerGrids(e, v, kurs, minMenge) {
+    if (!istZahl(minMenge) || minMenge <= 0 || !istZahl(kurs) || kurs <= 0) return null
+    const q = planBot({ ...e, ...v, anzahl: SINNVOLLE_GRIDS, startKurs: kurs, kurs }).grid.mengeJeGrid
+    return istZahl(q) && q > 0 ? Number((e.einsatz * minMenge / q * 1.001).toPrecision(4)) : null
 }
 
 /**
@@ -322,6 +410,8 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
         nominalUsd: istZahl(probe?.position) ? (e.coinM ? -probe.position : probe.position * kurs) : null,
         abstand: heute.grid.abstand, nettoJeZyklus: heute.grid.nettoJeZyklus,
         startGebuehr: probe?.gebuehren ?? null,
+        // Einsatz, ab dem SINNVOLLE_GRIDS Grids die Mindestmenge von Pionex erreichen (Menge je Grid ist linear im Einsatz)
+        einsatzFuerGrids: einsatzFuerGrids(e, variante, kurs, minMenge),
     }
 
     // Rückblick relativ zum Kurs: Band, Stops in Prozent um den Kurs, gestartet beim ersten Kerzenkurs
@@ -376,7 +466,7 @@ export function trendText(trend) {
     return `LANGFRIST-TREND (vom Code gemessen): ${trend.richtung === 'auf' ? 'AUFWÄRTS' : trend.richtung === 'ab' ? 'ABWÄRTS' : 'SEITWÄRTS'}, Punkte ${trend.punkte} von ±${trend.max}; dazu passt ${trend.passend}. Zeichen: ${z}`
 }
 
-export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false, trend = null } = {}) {
+export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false, trend = null, chart = [] } = {}) {
     const einheit = e.coinM ? e.coin : 'USDT'
     const kopf = [
         wissen, '',
@@ -392,6 +482,7 @@ export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandi
     })
     return [
         ...kopf, ...markt, ...(zrText ? ['', zrText] : []),
+        ...(chart.length ? ['', 'CHART-NIVEAUS (vom Code gemessen: Volumenprofile der Seitwärtsphasen auf 1w und die eigenen Zeichnungen des Nutzers; Varianten „Band ab/bis Chart …" sind daran gebaut):', ...chart.map((n) => `${n.id} | ${n.name} | ${zl(n.preis, 2)} | ${n.preis < (lage?.kurs ?? 0) ? 'unter' : 'über'} dem Kurs`)] : []),
         '',
         `KANDIDATEN (vom Code gerechnet). Rückblick = dasselbe Band RELATIV zum Kurs (gleiche Prozente), gestartet vor ${e.tage} Tagen, simuliert auf ${tf || '?'}-Kerzen mit Gebühren${kandidaten.some((c) => c.rueckblick?.funding) ? ' und Funding' : ''}. Start heute = beim heutigen Kurs gestartet.`,
         `id | Richtung | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Warnungen`,
@@ -406,11 +497,13 @@ export function planSystemText({ alle = false } = {}) {
         'Du bist der Bot-Assistent von AutarkTrade. Der Nutzer plant einen NEUEN Pionex-Futures-Grid-Bot und hat dafür ausdrücklich konkrete Vorschläge freigegeben.',
         'Du bekommst Zahlen, die der Code gerechnet hat. Du rechnest NICHT selbst und nennst KEINE Zahl, die nicht in der Eingabe steht.',
         alle
-            ? 'Die Richtung ist OFFEN: Die KANDIDATEN enthalten Long (L…), Short (S…) und Neutral (N…). Wähle aus allen höchstens drei, die zur Lage am besten passen — mehrere aus derselben Richtung sind erlaubt, wenn die Lage eindeutig ist. Nenne bei jedem Vorschlag die Richtung und warum sie zur Lage passt. Wenn keiner sinnvoll ist, wähle keinen und sag warum.'
+            ? 'Die Richtung ist OFFEN: Die KANDIDATEN enthalten Long (L…), Short (S…) und Neutral (N…). Wähle JE RICHTUNG HÖCHSTENS EINEN — den besten Long, den besten Short, den besten Neutral —, damit der Nutzer die Richtungen nebeneinander sieht und selbst entscheidet. Lass eine Richtung nur weg, wenn dort kein Kandidat vertretbar ist (z. B. alle liquidiert), und sag das im Hinweis. Sag bei jedem, ob er zum LANGFRIST-TREND passt. Bevorzuge Varianten, deren Grenzen und Stop-Loss an gemessenen Niveaus oder CHART-NIVEAUS liegen.'
             : 'Wähle aus den KANDIDATEN höchstens drei und begründe sie mit den Zahlen. Wenn keiner sinnvoll ist (z. B. alle liquidiert oder die Lage passt nicht zur gewählten Richtung), wähle keinen und sag warum.',
-        'Der LANGFRIST-TREND (1w/1d-Struktur, 200-Tage-Schnitt) hat Vorrang vor kurzen Bewegungen: Ein Vorschlag gegen ihn (Warnung gegenTrend) braucht eine ausdrückliche Begründung aus den Zahlen und ein klar benanntes Risiko; ein Grid gegen den Trend kann lange gegen sich laufen.',
+        alle
+            ? 'Der LANGFRIST-TREND (1w/1d-Struktur, 200-Tage-Schnitt) ist die wichtigste Einordnung: Beim Vorschlag gegen ihn (Warnung gegenTrend) nenne ausdrücklich, dass er gegen den Trend läuft, auf welches Niveau er setzt (z. B. ein CHART-NIVEAU als Unterstützung) und was passiert, wenn es bricht.'
+            : 'Der LANGFRIST-TREND (1w/1d-Struktur, 200-Tage-Schnitt) hat Vorrang vor kurzen Bewegungen: Ein Vorschlag gegen ihn (Warnung gegenTrend) braucht eine ausdrückliche Begründung aus den Zahlen und ein klar benanntes Risiko; ein Grid gegen den Trend kann lange gegen sich laufen.',
         'Der Rückblick zeigt nur, wie sich dieselbe Einstellung in den letzten Wochen geschlagen hätte; er sagt nichts über die Zukunft. Gewichte den Liquidationsabstand beim Start heute und den grössten Verlust mindestens so stark wie das Ergebnis.',
-        'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, ob die Bandgrenzen und der Stop-Loss an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…) liegen und ob die gewählte Richtung zur Struktur passt. Nenne Niveaus nur mit ID und Preis aus der Eingabe.',
+        'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, ob die Bandgrenzen und der Stop-Loss an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…, CHART-NIVEAUS V…/U…) liegen und ob die gewählte Richtung zur Struktur passt. Nenne Niveaus nur mit ID und Preis aus der Eingabe.',
         'Nenne bei jedem Vorschlag das wichtigste Risiko und wann er nicht passt. Kein Gewinnversprechen, keine Kursprognose als Tatsache, nicht „garantiert", nicht „risikolos", nicht „optimal".',
         `Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage für diesen Bot", "vorschlaege": [{"id": "${alle ? 'L3' : 'P3'}", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}`,
     ].join('\n')

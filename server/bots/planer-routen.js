@@ -27,9 +27,11 @@ import { wissenAlsText } from './pionex-wissen.js'
 import { atrTag } from './kennzahlen.js'
 import { marktLage, hoheZeitrahmen, pruefeKiAntwort, BOT_ZEITRAHMEN } from './bot-ki.js'
 import { ladeSimKerzen } from './routen.js'
+import { getKnex } from '../database.js'
+import { baueKandidaten } from '../chart-kandidaten.js'
 import {
     pruefePlanEingabe, pruefePlanVariante, planKandidaten, planKandidatenAlle, rechnePlan, bauePlanPrompt, planSystemText,
-    langfristTrend, MAX_EIGENE, RICHTUNGEN, ALLE,
+    langfristTrend, chartNiveaus, wochenProfile, MAX_EIGENE, RICHTUNGEN, ALLE, SINNVOLLE_GRIDS, WENIG_GRIDS,
 } from './planer.js'
 
 const COINS_MS = 30 * 60_000
@@ -76,6 +78,15 @@ function eingabeAus(body, coins) {
 }
 
 /** Lage messen, Kandidaten bauen und rechnen. Ohne KI, kostet nichts. */
+/** Eigene Chart-Zeichnungen zum Symbol (wie die Chart-KI sie liest). Fehler → keine. */
+async function ladeZeichnungen(symbol) {
+    const liste = (x) => { try { const v = typeof x === 'string' ? JSON.parse(x) : x; return Array.isArray(v) ? v : null } catch { return null } }
+    try {
+        const roh = await getKnex()('chart_zeichnungen').where('symbol', symbol).orderBy('geaendertAm', 'desc').orderBy('id', 'desc')
+        return roh.map((z) => ({ ...z, punkte: JSON.parse(z.punkte || '[]'), stil: JSON.parse(z.stil || '{}'), sichtbarAuf: liste(z.sichtbarAuf) }))
+    } catch { return [] }
+}
+
 async function rechne(e, coins) {
     const symbol = `${e.coin}USDT`
     const kurs = await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`)
@@ -87,16 +98,25 @@ async function rechne(e, coins) {
         wartungsmargeMitQuelle(symbol).catch(() => null),
         Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(symbol, tf, 300, { market: 'futures' }).catch(() => null))),
     ])
+    const zeichnungen = await ladeZeichnungen(symbol)
     const atr = atrTag(tag)
     const lage = marktLage(tag, kurs)
     if (lage) lage.atr = atr
     const zr = hoheZeitrahmen(Object.fromEntries(BOT_ZEITRAHMEN.map((tf, i) => [tf, reihen[i]])), kurs)
     const trend = langfristTrend({ zr, tagKerzen: reihen[BOT_ZEITRAHMEN.indexOf('1d')] || [], kurs })
+    // Chart-Niveaus auf dem Wochenchart: Volumenprofile der Seitwärtsphasen und eigene Zeichnungen
+    let chart = []
+    try {
+        const woche = reihen[BOT_ZEITRAHMEN.indexOf('1w')]
+        // Eigene Zeichnungen messen (ohne die Profilsuche der Chart-KI), Profile aus wochenProfile
+        const paket = woche?.length >= 30 ? baueKandidaten({ kerzen: woche, interval: '1w', zeichnungen, profilArten: [['rechteck', 0]] }) : null
+        chart = chartNiveaus({ nutzer: paket?.nutzer || [], kandidaten: wochenProfile(woche) }, kurs)
+    } catch (err) { logWarn('bots', `Planer Chart-Niveaus: ${err.message}`) }
     const mmr = marge?.pct > 0 ? marge.pct / 100 : undefined
     const c = coins.get(e.coin)
     const minMenge = e.coinM ? c?.minCoinM : c?.minLinear
     const opt = { kurs, funding: sim.funding, mmr, minMenge, trend }
-    const liste = e.richtung === ALLE ? planKandidatenAlle({ kurs, atr, zr, trend }) : planKandidaten({ kurs, atr, zr, richtung: e.richtung })
+    const liste = e.richtung === ALLE ? planKandidatenAlle({ kurs, atr, zr, trend, chart }) : planKandidaten({ kurs, atr, zr, richtung: e.richtung, chart })
     const kandidaten = rechnePlan(e, sim.kerzen, liste, opt)
     const eigene = []
     for (const [i, roh] of e.eigeneRoh.entries()) {
@@ -109,9 +129,9 @@ async function rechne(e, coins) {
     }
     return {
         ok: true, zeit: Date.now(), kurs, eingabe: { coin: e.coin, coinM: e.coinM, richtung: e.richtung, einsatz: e.einsatz, hebel: e.hebel, tage: e.tage },
-        einheit: e.coinM ? e.coin : 'USDT', markt: lage, trend, zeitrahmen: sim.tf, kerzenAnzahl: sim.kerzen.length,
+        einheit: e.coinM ? e.coin : 'USDT', markt: lage, trend, chart, zeitrahmen: sim.tf, kerzenAnzahl: sim.kerzen.length,
         von: sim.kerzen[0]?.t ?? null, bis: sim.kerzen.at(-1)?.t ?? null, mmr: mmr ?? null, mmrQuelle: marge?.quelle || 'pauschal',
-        fundingSimuliert: !!sim.funding, minMenge: minMenge ?? null,
+        fundingSimuliert: !!sim.funding, minMenge: minMenge ?? null, grids: { sinnvoll: SINNVOLLE_GRIDS, wenig: WENIG_GRIDS },
         hohe: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,
         kandidaten, eigene,
         _zr: zr,
@@ -139,7 +159,7 @@ async function kiFuer(e, coins, englisch) {
     if (!gueltig.length) throw Object.assign(new Error('Keine rechenbaren Kandidaten'), { code: 'keineKandidaten' })
     const typ = e.coinM ? 'coinm_grid' : 'futures_grid'
     const zrText = d._zr ? zeitrahmenText(d._zr, (t) => new Date(t).toISOString().slice(0, 10)).replace('ZEITRAHMEN — vom Code gemessen', 'HOHE ZEITRAHMEN — vom Code gemessen') : ''
-    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend })
+    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend, chart: d.chart || [] })
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
     cfg.maxTokens = 2500
     const antwort = await callLLMJson(cfg, {
@@ -148,8 +168,17 @@ async function kiFuer(e, coins, englisch) {
     })
     const geprueft = pruefeKiAntwort(antwort.json, { kandidaten: gueltig }, user)
     if (!geprueft) throw new Error('Die KI hat keine verwertbare Antwort geliefert')
-    for (const v of geprueft.verworfen) logWarn('bots', `Planer: KI-Vorschlag verworfen (${v.grund}): ${v.id}`)
     const nachId = new Map(gueltig.map((c) => [c.id, c]))
+    // Alle Richtungen: je Richtung höchstens ein Vorschlag (der erste zählt)
+    if (e.richtung === ALLE) {
+        const gesehen = new Set()
+        geprueft.vorschlaege = geprueft.vorschlaege.filter((v) => {
+            const r = nachId.get(v.id)?.richtung
+            if (gesehen.has(r)) { geprueft.verworfen.push({ id: v.id, grund: 'zweiterJeRichtung' }); return false }
+            gesehen.add(r); return true
+        })
+    }
+    for (const v of geprueft.verworfen) logWarn('bots', `Planer: KI-Vorschlag verworfen (${v.grund}): ${v.id}`)
     return {
         ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model, kostenUsd: antwort.costUsd ?? null,
         eingabe: d.eingabe, kurs: d.kurs, trend: d.trend,
