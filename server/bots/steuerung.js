@@ -237,3 +237,57 @@ export function pruefungBestanden(antwort) {
     const d = antwort.data
     return !(d && d.checkResult === false)
 }
+
+/**
+ * Warum hat Pionex eine Prüfung abgelehnt? Ein Code für die Oberfläche, wo der
+ * Grund bekannt ist, sonst null (dann zeigt sie den Text von Pionex).
+ * Gesehen 12.11.2026: „[BOT_INVALID_ARGUMENT] less than min investment".
+ */
+export function pruefGrund(antwort) {
+    if (!antwort || pruefungBestanden(antwort)) return null
+    const text = [antwort.message, antwort.code, antwort.data?.reason, antwort.data?.message].filter(Boolean).join(' ')
+    if (/less than min(imum)?[ _]?invest/i.test(text)) return 'einsatzZuKlein'
+    return null
+}
+
+/** Rundet einen Einsatz auf eine handliche Zahl nach OBEN (nie unter das Gemessene). */
+export function rundeEinsatzAuf(x) {
+    if (!(x > 0)) return null
+    const schritt = x < 10 ? 0.1 : x < 100 ? 1 : x < 1000 ? 5 : 10 ** (Math.floor(Math.log10(x)) - 1)
+    return Number((Math.ceil(x / schritt - 1e-9) * schritt).toFixed(2))
+}
+
+/**
+ * Mindesteinsatz suchen, den Pionex für einen neuen Bot annimmt. Pionex nennt
+ * ihn nicht; also prüfen (checkParams sendet nichts) und eingrenzen: vom Start
+ * aus verdoppeln bzw. halbieren, bis ein abgelehnter und ein angenommener
+ * Betrag bekannt sind, dann geometrisch halbieren bis auf `genau` (5 %).
+ *
+ * `pruefe(einsatz)` → 'ok' | 'zuKlein' | 'anders'. „anders" (ein anderer Grund)
+ * beendet die Suche, solange noch kein Betrag angenommen wurde — darüber kann
+ * die Suche nichts sagen. `lo` = schon bekannt zu klein.
+ * Ergebnis: {min, genau, schritte} oder {fehler: 'anders'|'grenze'|'schritte', schritte}.
+ */
+export async function sucheMindestEinsatz(pruefe, { start, lo = null, hi = null, max = 100_000, genau = 0.05, maxSchritte = 14 } = {}) {
+    let n = 0
+    let x = start > 0 ? start : lo > 0 ? lo * 2 : 10
+    while (lo == null || hi == null) {
+        if (n >= maxSchritte) return { fehler: 'schritte', schritte: n }
+        if (x > max) return { fehler: 'grenze', schritte: n }
+        const r = await pruefe(x); n++
+        if (r === 'ok') hi = x
+        else if (r === 'zuKlein' || (r === 'anders' && hi != null)) lo = x
+        else return { fehler: 'anders', schritte: n }
+        if (hi == null) x = x * 2
+        else if (lo == null) {
+            if (x / 2 < 0.5) return { min: rundeEinsatzAuf(hi), genau: hi, schritte: n }
+            x = x / 2
+        }
+    }
+    while (hi / lo > 1 + genau && n < maxSchritte) {
+        const mitte = Math.sqrt(lo * hi)
+        const r = await pruefe(Number(mitte.toFixed(2))); n++
+        if (r === 'ok') hi = Number(mitte.toFixed(2)); else lo = mitte
+    }
+    return { min: rundeEinsatzAuf(hi), genau: hi, schritte: n }
+}

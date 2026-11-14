@@ -44,6 +44,10 @@ globalThis.__botTest = {
     bot,
     async pionex(method, pfad, body) {
         if (method === 'GET') return { result: true, data: { results: [] } }
+        if (/checkParams$/.test(pfad) && pionex.minEinsatz) {
+            pionex.pruefungen = (pionex.pruefungen || 0) + 1
+            if (Number(body.buOrderData.quote_investment) < pionex.minEinsatz) throw new Error('Pionex API: [BOT_INVALID_ARGUMENT] less than min investment')
+        }
         if (/Check$|checkParams$/.test(pfad)) return { result: true, data: { checkResult: true } }
         pionex.sendungen++
         if (pionex.verzoegerung) await warte(pionex.verzoegerung)
@@ -143,6 +147,25 @@ try {
     p('Ist = der neue Bot (ID aus der Antwort)', sp.d.ist?.neueId === bot.id)
     const anders = await post('/api/bots/plan/aktion/senden', { aktion: 'starten', eingabe: { ...plan, hebel: '5' }, token: (await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: plan })).d.token, haken: true, hakenText: haken })
     p('anderer Hebel als geprüft → 409 neuPruefen', anders.status === 409 && anders.d.code === 'neuPruefen')
+
+    console.log('Bot-Planer: Mindesteinsatz')
+    pionex.minEinsatz = 37.3; pionex.pruefungen = 0
+    const zuKlein = (await post('/api/bots/plan/aktion/pruefen', { aktion: 'starten', eingabe: { ...plan, einsatz: '5' } })).d
+    p('zu kleiner Einsatz: nicht bestanden, Grund erkannt, kein Token', !zuKlein.bestanden && zuKlein.grund === 'einsatzZuKlein' && !zuKlein.token)
+    p('Prüfung nennt den Mindesteinsatz (aufgerundet, nie darunter)', zuKlein.minEinsatz >= 37.3 && zuKlein.minEinsatz <= 40, String(zuKlein.minEinsatz))
+    p('Suche bleibt bei wenigen Abfragen', pionex.pruefungen <= 15, String(pionex.pruefungen))
+    const vorM = pionex.sendungen
+    const m1 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, einsatz: '5' } })).d
+    p('Planer: 5 USDT reichen nicht, Minimum genannt', m1.reichtAus === false && m1.min >= 37.3 && m1.min <= 40)
+    p('Planer-Suche sendet nichts', pionex.sendungen === vorM)
+    pionex.pruefungen = 0
+    const m2 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, einsatz: '50' } })).d
+    p('gleicher Plan, anderer Einsatz: aus dem Speicher, ohne Abfrage', m2.reichtAus === true && m2.min === m1.min && pionex.pruefungen === 0)
+    const m3 = (await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, anzahl: '80', einsatz: '100' } })).d
+    p('Einsatz reicht: eine Abfrage, kein Minimum', m3.reichtAus === true && m3.min === null && pionex.pruefungen === 1)
+    const m4 = await post('/api/bots/plan/mindesteinsatz', { eingabe: { ...plan, unten: '170' } })
+    p('ungültiger Plan → 400', m4.status === 400 && m4.d.code === 'kursAusserhalb')
+    pionex.minEinsatz = 0
 
     console.log('Protokoll')
     const prot = await (await fetch(`${basis}/api/bots/${bot.id}/aenderungen`)).json()

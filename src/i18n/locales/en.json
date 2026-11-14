@@ -8112,7 +8112,7 @@
     "feld": {
       "band": "Grid range",
       "grids": "Grids",
-      "art": "Type",
+      "art": "Grid spacing",
       "abstand": "Spacing per grid",
       "nettoZyklus": "Net per cycle",
       "hebel": "Leverage",
@@ -8208,8 +8208,8 @@
       "erklaerung": "Recomputes today's settings and up to three others over the same runtime, on minute candles from the market-data source. Empty fields take today's value (grey in the field).",
       "unten": "Lower bound",
       "oben": "Upper bound",
-      "arithmetisch": "arithmetic",
-      "geometrisch": "geometric",
+      "arithmetisch": "equal in price (arithmetic)",
+      "geometrisch": "equal in percent (geometric)",
       "entfernen": "Remove variant",
       "weitere": "Another variant",
       "rechnen": "Recompute",
@@ -8327,7 +8327,7 @@
       "betrag": "Amount",
       "pruefen": "Check at Pionex",
       "bestanden": "Pionex checked the change",
-      "abgelehnt": "Pionex rejects the change",
+      "abgelehnt": "Pionex rejects",
       "ohnePruefung": "Pionex offers no check request for this action. Review the values especially carefully.",
       "vorher": "Before",
       "nachher": "After",
@@ -8457,7 +8457,12 @@
       "schluesselP2": "no withdrawal permission",
       "schluesselP3": "IP whitelist with your address",
       "zuerstSchluessel": "Add the key first.",
-      "textVerbergen": "Hide consent"
+      "textVerbergen": "Hide consent",
+      "grund": {
+        "einsatzZuKlein": "The investment is too small for Pionex. Increase it and check again.",
+        "einsatzZuKleinMin": "The investment is too small for Pionex. It accepts from about {betrag}."
+      },
+      "minUebernehmen": "Set investment to {betrag}"
     },
     "plan": {
       "knopf": "Plan a new bot",
@@ -8504,7 +8509,8 @@
         "liqImBand": "The estimated liquidation lies inside the band — the bot would be liquidated before reaching the other edge.",
         "liqNah": "Liquidation less than 10 % away from the price.",
         "stopHinterLiq": "The stop-loss lies beyond the estimated liquidation and would never trigger.",
-        "gebuehrFrisst": "The grid spacing does not cover the fees."
+        "gebuehrFrisst": "The grid spacing does not cover the fees.",
+        "gegenTrend": "Against the long-term trend: a grid in this direction can run against you for a long time."
       },
       "fehler": {
         "coin": "Enter a coin (e.g. SOL).",
@@ -8524,7 +8530,41 @@
         "stopLoss": "Stop-loss must be on the losing side of the price.",
         "takeProfit": "Take-profit must be on the winning side of the price.",
         "neutralStop": "Not possible for neutral bots."
-      }
+      },
+      "minSpalte": "Pionex",
+      "minAb": "from {betrag}",
+      "minZuKlein": "too small",
+      "minLaeuft": "Checking the minimum investment at Pionex ({n}/{von}) …",
+      "minOhneSchluessel": "With a bot control key stored, the app also checks here whether Pionex accepts the investment.",
+      "minKeineTitel": "Investment too small for Pionex",
+      "minKeine": "Pionex accepts none of the variants at this investment. The cheapest starts at about {betrag}.",
+      "minKeineOhne": "Pionex accepts none of the variants at this investment.",
+      "minSetzen": "Recalculate with {betrag}",
+      "alleRichtungen": "All directions",
+      "spalteRichtung": "Direction",
+      "filterAlle": "all",
+      "trendTitel": "Long-term trend",
+      "trend": {
+        "auf": "up",
+        "ab": "down",
+        "seitwaerts": "sideways"
+      },
+      "trendPasst": "fits {r}",
+      "trendPunkte": "{p} of ±{max} points",
+      "trendUnbekannt": "Not measurable, too few candles.",
+      "trendZeichen": {
+        "struktur1w": "Weekly structure (×2)",
+        "struktur1d": "Daily structure",
+        "kursSma200": "Price vs 200-day average",
+        "sma50Sma200": "50- vs 200-day average"
+      },
+      "trendWert": {
+        "auf": "up",
+        "ab": "down",
+        "offen": "open"
+      },
+      "trendErklaerung": "Measured on weekly and daily candles. Variants against the trend are marked ⚠.",
+      "planRichtung": "Plan direction"
     }
   }
 }

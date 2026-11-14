@@ -4,7 +4,9 @@
  * Bot-ID der allgemeinen Routen gelesen wird.
  *
  *   GET  /api/bots/plan/coins     handelbare Coins (USDT-M / Coin-M) aus Pionex' Symboltabelle
- *   POST /api/bots/plan/rechnen   {coin, coinM, richtung, einsatz, hebel, tage, eigene?} → Lage + Kandidaten (kostet nichts)
+ *   POST /api/bots/plan/rechnen   {coin, coinM, richtung, einsatz, hebel, tage, eigene?} → Lage + Trend + Kandidaten (kostet nichts)
+ *                                 richtung „ALLE": Long, Short und Neutral zusammen (IDs L…/S…/N…, jeder
+ *                                 Kandidat trägt `richtung`; eigene Varianten bringen ihre `richtung` mit)
  *   POST /api/bots/plan/ki        dieselbe Eingabe + {sprache} → KI wählt höchstens drei (kostet)
  *   GET  /api/bots/plan/ki        letzte KI-Auswahl (nur Speicher)
  *
@@ -26,8 +28,8 @@ import { atrTag } from './kennzahlen.js'
 import { marktLage, hoheZeitrahmen, pruefeKiAntwort, BOT_ZEITRAHMEN } from './bot-ki.js'
 import { ladeSimKerzen } from './routen.js'
 import {
-    pruefePlanEingabe, pruefePlanVariante, planKandidaten, rechnePlan, bauePlanPrompt, planSystemText,
-    MAX_EIGENE,
+    pruefePlanEingabe, pruefePlanVariante, planKandidaten, planKandidatenAlle, rechnePlan, bauePlanPrompt, planSystemText,
+    langfristTrend, MAX_EIGENE, RICHTUNGEN, ALLE,
 } from './planer.js'
 
 const COINS_MS = 30 * 60_000
@@ -63,7 +65,7 @@ async function holeCoins() {
 }
 
 function eingabeAus(body, coins) {
-    const e = pruefePlanEingabe(body, coins)
+    const e = pruefePlanEingabe(body, coins, { alle: true })
     if (e.fehler) return e
     const eigene = []
     for (const v of (Array.isArray(body?.eigene) ? body.eigene : []).slice(0, MAX_EIGENE)) {
@@ -89,20 +91,25 @@ async function rechne(e, coins) {
     const lage = marktLage(tag, kurs)
     if (lage) lage.atr = atr
     const zr = hoheZeitrahmen(Object.fromEntries(BOT_ZEITRAHMEN.map((tf, i) => [tf, reihen[i]])), kurs)
+    const trend = langfristTrend({ zr, tagKerzen: reihen[BOT_ZEITRAHMEN.indexOf('1d')] || [], kurs })
     const mmr = marge?.pct > 0 ? marge.pct / 100 : undefined
     const c = coins.get(e.coin)
     const minMenge = e.coinM ? c?.minCoinM : c?.minLinear
-    const opt = { kurs, funding: sim.funding, mmr, minMenge }
-    const kandidaten = rechnePlan(e, sim.kerzen, planKandidaten({ kurs, atr, zr, richtung: e.richtung }), opt)
+    const opt = { kurs, funding: sim.funding, mmr, minMenge, trend }
+    const liste = e.richtung === ALLE ? planKandidatenAlle({ kurs, atr, zr, trend }) : planKandidaten({ kurs, atr, zr, richtung: e.richtung })
+    const kandidaten = rechnePlan(e, sim.kerzen, liste, opt)
     const eigene = []
     for (const [i, roh] of e.eigeneRoh.entries()) {
-        const v = pruefePlanVariante(roh, kurs, e.richtung)
-        if (v.fehler) { eigene.push({ id: `E${i + 1}`, titel: 'Eigene Variante', fehler: v.fehler }); continue }
-        eigene.push(...rechnePlan(e, sim.kerzen, [{ id: `E${i + 1}`, titel: 'Eigene Variante', variante: v }], opt))
+        // Im Modus ALLE bringt die eigene Variante ihre Richtung mit
+        const richtung = e.richtung === ALLE ? String(roh?.richtung || '').toUpperCase() : e.richtung
+        if (!RICHTUNGEN.includes(richtung)) { eigene.push({ id: `E${i + 1}`, titel: 'Eigene Variante', fehler: 'richtung' }); continue }
+        const v = pruefePlanVariante(roh, kurs, richtung)
+        if (v.fehler) { eigene.push({ id: `E${i + 1}`, titel: 'Eigene Variante', richtung, fehler: v.fehler }); continue }
+        eigene.push(...rechnePlan(e, sim.kerzen, [{ id: `E${i + 1}`, titel: 'Eigene Variante', richtung, variante: v }], opt))
     }
     return {
         ok: true, zeit: Date.now(), kurs, eingabe: { coin: e.coin, coinM: e.coinM, richtung: e.richtung, einsatz: e.einsatz, hebel: e.hebel, tage: e.tage },
-        einheit: e.coinM ? e.coin : 'USDT', markt: lage, zeitrahmen: sim.tf, kerzenAnzahl: sim.kerzen.length,
+        einheit: e.coinM ? e.coin : 'USDT', markt: lage, trend, zeitrahmen: sim.tf, kerzenAnzahl: sim.kerzen.length,
         von: sim.kerzen[0]?.t ?? null, bis: sim.kerzen.at(-1)?.t ?? null, mmr: mmr ?? null, mmrQuelle: marge?.quelle || 'pauschal',
         fundingSimuliert: !!sim.funding, minMenge: minMenge ?? null,
         hohe: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,
@@ -132,11 +139,11 @@ async function kiFuer(e, coins, englisch) {
     if (!gueltig.length) throw Object.assign(new Error('Keine rechenbaren Kandidaten'), { code: 'keineKandidaten' })
     const typ = e.coinM ? 'coinm_grid' : 'futures_grid'
     const zrText = d._zr ? zeitrahmenText(d._zr, (t) => new Date(t).toISOString().slice(0, 10)).replace('ZEITRAHMEN — vom Code gemessen', 'HOHE ZEITRAHMEN — vom Code gemessen') : ''
-    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch })
+    const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend })
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
     cfg.maxTokens = 2500
     const antwort = await callLLMJson(cfg, {
-        system: planSystemText(), user, timeoutMs: 90000,
+        system: planSystemText({ alle: e.richtung === ALLE }), user, timeoutMs: 90000,
         zweck: 'bot-optimierung', ausloeser: 'manuell', bezug: { typ: 'symbol', id: `${e.coin}USDT` },
     })
     const geprueft = pruefeKiAntwort(antwort.json, { kandidaten: gueltig }, user)
@@ -145,9 +152,9 @@ async function kiFuer(e, coins, englisch) {
     const nachId = new Map(gueltig.map((c) => [c.id, c]))
     return {
         ok: true, kiGeneriert: true, zeit: Date.now(), anbieter: cfg.provider, modell: cfg.model, kostenUsd: antwort.costUsd ?? null,
-        eingabe: d.eingabe, kurs: d.kurs,
+        eingabe: d.eingabe, kurs: d.kurs, trend: d.trend,
         lage: geprueft.lage, lageUnbelegt: geprueft.lageUnbelegt, hinweis: geprueft.hinweis, verworfen: geprueft.verworfen.length,
-        vorschlaege: geprueft.vorschlaege.map((v) => ({ ...ohneKurve(v), start: nachId.get(v.id)?.start || null, warnungen: nachId.get(v.id)?.warnungen || [] })),
+        vorschlaege: geprueft.vorschlaege.map((v) => ({ ...ohneKurve(v), richtung: nachId.get(v.id)?.richtung || e.richtung, start: nachId.get(v.id)?.start || null, warnungen: nachId.get(v.id)?.warnungen || [] })),
     }
 }
 

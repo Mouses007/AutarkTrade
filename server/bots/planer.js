@@ -34,6 +34,8 @@ import { DURCHSTICH, MMR_VORGABE } from './simulation.js'
 export const PLAN_ID = 'plan'
 export const PLAN_RESERVE = 0.93
 export const RICHTUNGEN = ['LONG', 'SHORT', 'NEUTRAL']
+/** „Alle Richtungen": der Planer rechnet Long, Short und Neutral und vergleicht sie. */
+export const ALLE = 'ALLE'
 export const PLAN_TAGE = [30, 60, 90]
 export const MAX_PLAN_GRIDS = 500
 export const MAX_HEBEL = 125
@@ -106,8 +108,11 @@ export function planBot(e) {
     return b
 }
 
-/** Eingabe des Planers prüfen. `coins` = Map coin → {linear, coinM} (aus der Symboltabelle). */
-export function pruefePlanEingabe(e, coins = null) {
+/**
+ * Eingabe des Planers prüfen. `coins` = Map coin → {linear, coinM} (aus der Symboltabelle).
+ * `alle`: „ALLE" als Richtung zulassen (nur zum Rechnen; ein Start hat immer eine Richtung).
+ */
+export function pruefePlanEingabe(e, coins = null, { alle = false } = {}) {
     const coin = String(e?.coin || '').trim().toUpperCase()
     if (!/^[A-Z0-9]{1,15}$/.test(coin)) return { fehler: 'coin' }
     const coinM = e?.coinM === true
@@ -116,7 +121,7 @@ export function pruefePlanEingabe(e, coins = null) {
         if (!c || !(coinM ? c.coinM : c.linear)) return { fehler: 'coinNichtHandelbar' }
     }
     const richtung = String(e?.richtung || '').toUpperCase()
-    if (!RICHTUNGEN.includes(richtung)) return { fehler: 'richtung' }
+    if (!RICHTUNGEN.includes(richtung) && !(alle && richtung === ALLE)) return { fehler: 'richtung' }
     const einsatz = zahlAus(e?.einsatz)
     if (!istZahl(einsatz) || einsatz <= 0) return { fehler: 'einsatz' }
     const hebel = zahlAus(e?.hebel)
@@ -209,6 +214,60 @@ export function planKandidaten({ kurs, atr, zr = null, richtung }) {
     return liste
 }
 
+// ── Langfristiger Trend ──────────────────────────────────────────────────
+const schnitt = (werte, n) => (werte.length >= n ? werte.slice(-n).reduce((s, v) => s + v, 0) / n : null)
+
+/**
+ * Langfristiger Trend aus Wochen- und Tageskerzen (rein). Vier Zeichen, jedes
+ * mit Gewicht; fehlt eines (junger Coin), zählt es nicht:
+ *   - Struktur 1w (höhere Hochs/Tiefs bzw. tiefere)          ±2
+ *   - Struktur 1d                                           ±1
+ *   - Kurs über/unter dem 200-Tage-Schnitt                  ±1
+ *   - 50-Tage- über/unter dem 200-Tage-Schnitt              ±1
+ * Summe ≥ 2 → aufwärts, ≤ −2 → abwärts, sonst seitwärts. Daraus die Richtung,
+ * die zum Trend passt: aufwärts Long, abwärts Short, seitwärts Neutral.
+ * @param zr        hoheZeitrahmen(...) (zeilen mit tf/zustand)
+ * @param tagKerzen geschlossene 1d-Kerzen, aufsteigend ({c})
+ */
+export function langfristTrend({ zr = null, tagKerzen = [], kurs = null } = {}) {
+    const zeichen = []
+    const zeile = (tf) => zr?.zeilen?.find((z) => z.tf === tf && !z.unbekannt)
+    const w = zeile('1w'), d = zeile('1d')
+    if (w && istZahl(w.zustand)) zeichen.push({ id: 'struktur1w', wert: Math.sign(w.zustand), gewicht: 2 })
+    if (d && istZahl(d.zustand)) zeichen.push({ id: 'struktur1d', wert: Math.sign(d.zustand), gewicht: 1 })
+    const schluss = (tagKerzen || []).map((k) => k?.c).filter(istZahl)
+    const p = istZahl(kurs) ? kurs : schluss.at(-1)
+    const s200 = schnitt(schluss, 200), s50 = schnitt(schluss, 50)
+    if (istZahl(s200) && istZahl(p)) zeichen.push({ id: 'kursSma200', wert: p > s200 ? 1 : p < s200 ? -1 : 0, gewicht: 1, sma200: runde(s200, 6), abstand: p / s200 - 1 })
+    if (istZahl(s200) && istZahl(s50)) zeichen.push({ id: 'sma50Sma200', wert: s50 > s200 ? 1 : s50 < s200 ? -1 : 0, gewicht: 1, sma50: runde(s50, 6) })
+    if (!zeichen.length) return null
+    const punkte = zeichen.reduce((s, z) => s + z.wert * z.gewicht, 0)
+    const max = zeichen.reduce((s, z) => s + z.gewicht, 0)
+    const richtung = punkte >= 2 ? 'auf' : punkte <= -2 ? 'ab' : 'seitwaerts'
+    return { richtung, punkte, max, passend: richtung === 'auf' ? 'LONG' : richtung === 'ab' ? 'SHORT' : 'NEUTRAL', zeichen }
+}
+
+/** Läuft die Richtung gegen den langfristigen Trend? Neutral nie. */
+export function gegenTrend(trend, richtung) {
+    if (!trend) return false
+    return (richtung === 'LONG' && trend.richtung === 'ab') || (richtung === 'SHORT' && trend.richtung === 'auf')
+}
+
+/**
+ * Kandidaten für alle drei Richtungen (rein). Die zum Trend passende Richtung
+ * zuerst; IDs mit Buchstaben der Richtung (L1, S1, N1), jeder trägt seine Richtung.
+ */
+export function planKandidatenAlle({ kurs, atr, zr = null, trend = null }) {
+    const reihe = trend ? [trend.passend, ...RICHTUNGEN.filter((r) => r !== trend.passend)] : RICHTUNGEN
+    const liste = []
+    for (const richtung of reihe) {
+        for (const [i, c] of planKandidaten({ kurs, atr, zr, richtung }).entries()) {
+            liste.push({ ...c, id: `${richtung[0]}${i + 1}`, richtung })
+        }
+    }
+    return liste
+}
+
 /** Gebühren für einen neuen Bot: Grid-Orders Maker, Start/Schluss Taker. */
 export function planGebuehren() {
     return { gebuehr: GEBUEHREN.futures.maker, gebuehrMarkt: GEBUEHREN.futures.taker }
@@ -280,20 +339,26 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
     return { variante, start, rueckblick, warnungen }
 }
 
-/** Alle Kandidaten (und eigene Varianten) rechnen. */
-export function rechnePlan(e, kerzen, liste, opt) {
+/**
+ * Alle Kandidaten (und eigene Varianten) rechnen. Ein Kandidat mit eigener
+ * `richtung` (Modus ALLE) rechnet in dieser, sonst in der der Eingabe.
+ * `opt.trend` (langfristTrend) markiert Varianten gegen den Trend.
+ */
+export function rechnePlan(e, kerzen, liste, opt = {}) {
     const aus = []
     const gesehen = new Set()
     for (const c of liste) {
-        const r = rechnePlanVariante(e, c.variante, kerzen, opt)
-        if (r.fehler) { aus.push({ ...c, fehler: r.fehler }); continue }
+        const richtung = RICHTUNGEN.includes(c.richtung) ? c.richtung : e.richtung
+        const r = rechnePlanVariante({ ...e, richtung }, c.variante, kerzen, opt)
+        if (r.fehler) { aus.push({ ...c, richtung, fehler: r.fehler }); continue }
+        if (gegenTrend(opt.trend, richtung)) r.warnungen.push('gegenTrend')
         // Nach dem Kürzen auf die Mindestmenge können Varianten gleich werden — nur einmal zeigen
         const v = r.variante
-        const schluessel = [v.unten, v.oben, v.anzahl, v.art, v.stopLoss ?? '', v.takeProfit ?? ''].join('|')
+        const schluessel = [richtung, v.unten, v.oben, v.anzahl, v.art, v.stopLoss ?? '', v.takeProfit ?? ''].join('|')
         if (gesehen.has(schluessel)) continue
         gesehen.add(schluessel)
         // `abJetzt` trägt „Start heute" für die gemeinsame KI-Prüfung (pruefeKiAntwort)
-        aus.push({ ...c, variante: r.variante, start: r.start, abJetzt: r.start, rueckblick: r.rueckblick, warnungen: r.warnungen })
+        aus.push({ ...c, richtung, variante: r.variante, start: r.start, abJetzt: r.start, rueckblick: r.rueckblick, warnungen: r.warnungen })
     }
     return aus
 }
@@ -303,38 +368,50 @@ const pz = (v, s = 1) => (istZahl(v) ? `${(v * 100).toFixed(s)} %` : '—')
 const zl = (v, s = 4) => (istZahl(v) ? Number(v).toFixed(s) : '—')
 
 /** Prompt für die Auswahl unter den Plan-Kandidaten. `wissen` = wissenAlsText(typ), `zrText` = Zeitrahmen-Block. */
-export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false } = {}) {
+/** Langfrist-Trend als Promptzeile (rein). */
+export function trendText(trend) {
+    if (!trend) return 'LANGFRIST-TREND: nicht messbar (zu wenig Kerzen)'
+    const namen = { struktur1w: 'Struktur 1w', struktur1d: 'Struktur 1d', kursSma200: 'Kurs vs. 200-Tage-Schnitt', sma50Sma200: '50- vs. 200-Tage-Schnitt' }
+    const z = trend.zeichen.map((x) => `${namen[x.id] || x.id} ${x.wert > 0 ? 'auf' : x.wert < 0 ? 'ab' : 'offen'} (×${x.gewicht})${istZahl(x.sma200) ? ` SMA200 ${zl(x.sma200, 2)}` : ''}`).join(', ')
+    return `LANGFRIST-TREND (vom Code gemessen): ${trend.richtung === 'auf' ? 'AUFWÄRTS' : trend.richtung === 'ab' ? 'ABWÄRTS' : 'SEITWÄRTS'}, Punkte ${trend.punkte} von ±${trend.max}; dazu passt ${trend.passend}. Zeichen: ${z}`
+}
+
+export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandidaten = [], tf = null, englisch = false, trend = null } = {}) {
     const einheit = e.coinM ? e.coin : 'USDT'
     const kopf = [
         wissen, '',
-        `NEUER BOT (Plan, noch nicht gestartet): ${e.coin} ${e.coinM ? 'Coin-M' : 'USDT-M'} Futures-Grid, Richtung ${e.richtung}, Hebel ${e.hebel}x, Einsatz ${zl(e.einsatz)} ${einheit}`,
+        `NEUER BOT (Plan, noch nicht gestartet): ${e.coin} ${e.coinM ? 'Coin-M' : 'USDT-M'} Futures-Grid, Richtung ${e.richtung === ALLE ? 'OFFEN — Long, Short und Neutral werden verglichen' : e.richtung}, Hebel ${e.hebel}x, Einsatz ${zl(e.einsatz)} ${einheit}`,
         `Kurs ${zl(lage?.kurs)} USD`,
+        trendText(trend),
     ]
     const markt = lage ? [`MARKT: 7 Tage ${pz(lage.aenderung7)}, 30 Tage ${pz(lage.aenderung30)}, 30-Tage-Hoch ${zl(lage.hoch30, 2)}, -Tief ${zl(lage.tief30, 2)}, Tagesspanne Median ${pz(lage.spanneMedian)} / max ${pz(lage.spanneMax)}, grösster 7-Tage-Fall ${pz(lage.maxFall7)}, Tages-ATR ${zl(lage.atr, 2)}`] : []
     const zeilen = kandidaten.filter((c) => !c.fehler).map((c) => {
         const r = c.rueckblick, s = c.start, v = c.variante
         const ende = r?.liquidation ? 'LIQUIDIERT' : r?.ausstieg ? r.ausstieg.art : 'läuft'
-        return [c.id, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), (c.warnungen || []).join(',') || '—'].join(' | ')
+        return [c.id, c.richtung || e.richtung, c.titel, `${zl(v.unten, 2)}–${zl(v.oben, 2)}`, v.anzahl, pz(s?.nettoJeZyklus, 2), zl(r?.gesamt), pz(istZahl(r?.gesamt) ? r.gesamt / e.einsatz : null), zl(r?.maxVerlust), ende, pz(r?.zeitImBand, 0), r?.zyklen ?? '—', zl(s?.liq, 2), pz(s?.liqAbstand), (c.warnungen || []).join(',') || '—'].join(' | ')
     })
     return [
         ...kopf, ...markt, ...(zrText ? ['', zrText] : []),
         '',
         `KANDIDATEN (vom Code gerechnet). Rückblick = dasselbe Band RELATIV zum Kurs (gleiche Prozente), gestartet vor ${e.tage} Tagen, simuliert auf ${tf || '?'}-Kerzen mit Gebühren${kandidaten.some((c) => c.rueckblick?.funding) ? ' und Funding' : ''}. Start heute = beim heutigen Kurs gestartet.`,
-        `id | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Warnungen`,
+        `id | Richtung | Beschreibung | Band USD | Grids | netto je Zyklus | Rückblick Ergebnis ${einheit} | in % des Einsatzes | Rückblick grösster Verlust | Rückblick Ende | Zeit im Band | Zyklen | Start heute: Liquidation | Abstand | Warnungen`,
         ...zeilen,
         '',
         englisch ? 'Answer in English.' : 'Antworte auf Deutsch (Schweizer Schreibweise, ss statt ß).',
     ].join('\n')
 }
 
-export function planSystemText() {
+export function planSystemText({ alle = false } = {}) {
     return [
         'Du bist der Bot-Assistent von AutarkTrade. Der Nutzer plant einen NEUEN Pionex-Futures-Grid-Bot und hat dafür ausdrücklich konkrete Vorschläge freigegeben.',
         'Du bekommst Zahlen, die der Code gerechnet hat. Du rechnest NICHT selbst und nennst KEINE Zahl, die nicht in der Eingabe steht.',
-        'Wähle aus den KANDIDATEN höchstens drei und begründe sie mit den Zahlen. Wenn keiner sinnvoll ist (z. B. alle liquidiert oder die Lage passt nicht zur gewählten Richtung), wähle keinen und sag warum.',
+        alle
+            ? 'Die Richtung ist OFFEN: Die KANDIDATEN enthalten Long (L…), Short (S…) und Neutral (N…). Wähle aus allen höchstens drei, die zur Lage am besten passen — mehrere aus derselben Richtung sind erlaubt, wenn die Lage eindeutig ist. Nenne bei jedem Vorschlag die Richtung und warum sie zur Lage passt. Wenn keiner sinnvoll ist, wähle keinen und sag warum.'
+            : 'Wähle aus den KANDIDATEN höchstens drei und begründe sie mit den Zahlen. Wenn keiner sinnvoll ist (z. B. alle liquidiert oder die Lage passt nicht zur gewählten Richtung), wähle keinen und sag warum.',
+        'Der LANGFRIST-TREND (1w/1d-Struktur, 200-Tage-Schnitt) hat Vorrang vor kurzen Bewegungen: Ein Vorschlag gegen ihn (Warnung gegenTrend) braucht eine ausdrückliche Begründung aus den Zahlen und ein klar benanntes Risiko; ein Grid gegen den Trend kann lange gegen sich laufen.',
         'Der Rückblick zeigt nur, wie sich dieselbe Einstellung in den letzten Wochen geschlagen hätte; er sagt nichts über die Zukunft. Gewichte den Liquidationsabstand beim Start heute und den grössten Verlust mindestens so stark wie das Ergebnis.',
         'Beziehe die HOHEN ZEITRAHMEN ein: Struktur und Bruch auf 1w/1d/4h, wo der Kurs in seiner Spanne steht, ob die Bandgrenzen und der Stop-Loss an, über oder unter gemessenen Niveaus (Z…, Zusammentreffen C…) liegen und ob die gewählte Richtung zur Struktur passt. Nenne Niveaus nur mit ID und Preis aus der Eingabe.',
         'Nenne bei jedem Vorschlag das wichtigste Risiko und wann er nicht passt. Kein Gewinnversprechen, keine Kursprognose als Tatsache, nicht „garantiert", nicht „risikolos", nicht „optimal".',
-        'Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage für diesen Bot", "vorschlaege": [{"id": "P3", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}',
+        `Antworte NUR mit JSON: {"lage": "2–4 Sätze zur Lage für diesen Bot", "vorschlaege": [{"id": "${alle ? 'L3' : 'P3'}", "titel": "kurz", "begruendung": "2–3 Sätze", "risiko": "1 Satz", "passtNichtWenn": "1 Satz"}], "hinweis": "optional, 1 Satz"}`,
     ].join('\n')
 }

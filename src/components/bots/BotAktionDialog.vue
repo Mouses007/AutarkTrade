@@ -162,6 +162,11 @@ const istZeilen = computed(() => {
             <template v-if="pruefung">
                 <Hinweis v-if="pruefung.ohnePruefung" art="warn">{{ t('bots.st.ohnePruefung') }}</Hinweis>
                 <Hinweis v-else-if="pruefung.bestanden" art="gut" :titel="t('bots.st.bestanden')">{{ pruefung.pruefung?.data?.reason || '' }}</Hinweis>
+                <Hinweis v-else-if="pruefung.grund === 'einsatzZuKlein'" art="fehler" :titel="t('bots.st.abgelehnt')">
+                    <p class="grund">{{ pruefung.minEinsatz ? t('bots.st.grund.einsatzZuKleinMin', { betrag: betrag(pruefung.minEinsatz, mc) }) : t('bots.st.grund.einsatzZuKlein') }}</p>
+                    <Knopf v-if="pruefung.minEinsatz && (FELDER[aktion] || []).includes('einsatz')" art="normal" klein @click="eingabe.einsatz = String(pruefung.minEinsatz)">{{ t('bots.st.minUebernehmen', { betrag: betrag(pruefung.minEinsatz, mc) }) }}</Knopf>
+                    <p class="leise klein">Pionex: {{ pruefung.pruefung?.message || '' }}</p>
+                </Hinweis>
                 <Hinweis v-else art="fehler" :titel="t('bots.st.abgelehnt')">{{ pruefung.pruefung?.data?.reason || pruefung.pruefung?.message || '' }}</Hinweis>
 
                 <table v-if="vergleich.length" class="tabelle">
@@ -230,4 +235,6 @@ const istZeilen = computed(() => {
 .anfrage pre { font-family: var(--schrift-mono); font-size: 0.75rem; background: var(--panel-soft); padding: var(--abstand-2); border-radius: var(--radius-klein); overflow: auto; margin: var(--abstand-1) 0 0; }
 .haken { display: flex; gap: var(--abstand-2); align-items: flex-start; font-size: 0.9rem; cursor: pointer; padding: var(--abstand-2); border: 1px solid var(--warn); border-radius: var(--radius); }
 .haken input { margin-top: 3px; }
+.grund { margin: 0 0 var(--abstand-2); }
+.klein { font-size: 0.75rem; margin: var(--abstand-2) 0 0; }
 </style>

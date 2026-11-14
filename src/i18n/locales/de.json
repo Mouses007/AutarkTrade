@@ -8112,7 +8112,7 @@
     "feld": {
       "band": "Grid-Band",
       "grids": "Grids",
-      "art": "Art",
+      "art": "Grid-Abstand",
       "abstand": "Abstand je Grid",
       "nettoZyklus": "Netto je Zyklus",
       "hebel": "Hebel",
@@ -8208,8 +8208,8 @@
       "erklaerung": "Rechnet die heutige Einstellung und bis zu drei andere über dieselbe Laufzeit nach, auf Minutenkerzen der Marktdatenquelle. Leer gelassene Felder übernehmen den heutigen Wert (grau im Feld).",
       "unten": "Untergrenze",
       "oben": "Obergrenze",
-      "arithmetisch": "arithmetisch",
-      "geometrisch": "geometrisch",
+      "arithmetisch": "gleich in Preis (arithmetisch)",
+      "geometrisch": "gleich in Prozent (geometrisch)",
       "entfernen": "Variante entfernen",
       "weitere": "Weitere Variante",
       "rechnen": "Nachrechnen",
@@ -8327,7 +8327,7 @@
       "betrag": "Betrag",
       "pruefen": "Bei Pionex prüfen",
       "bestanden": "Pionex hat die Änderung geprüft",
-      "abgelehnt": "Pionex lehnt die Änderung ab",
+      "abgelehnt": "Pionex lehnt ab",
       "ohnePruefung": "Für diese Aktion bietet Pionex keine Prüfabfrage an. Kontrolliere die Werte besonders sorgfältig.",
       "vorher": "Vorher",
       "nachher": "Nachher",
@@ -8457,7 +8457,12 @@
       "schluesselP2": "ohne Auszahlungsrecht",
       "schluesselP3": "mit IP-Freigabe auf deine Adresse",
       "zuerstSchluessel": "Zuerst den Schlüssel hinterlegen.",
-      "textVerbergen": "Einwilligung ausblenden"
+      "textVerbergen": "Einwilligung ausblenden",
+      "grund": {
+        "einsatzZuKlein": "Der Einsatz ist zu klein für Pionex. Erhöhe ihn und prüfe erneut.",
+        "einsatzZuKleinMin": "Der Einsatz ist zu klein für Pionex. Angenommen wird ab etwa {betrag}."
+      },
+      "minUebernehmen": "Einsatz auf {betrag} setzen"
     },
     "plan": {
       "knopf": "Neuen Bot planen",
@@ -8504,7 +8509,8 @@
         "liqImBand": "Die geschätzte Liquidation liegt im Band — der Bot würde liquidiert, bevor er die Gegengrenze erreicht.",
         "liqNah": "Liquidation weniger als 10 % vom Kurs entfernt.",
         "stopHinterLiq": "Der Stop-Loss liegt hinter der geschätzten Liquidation und würde nie auslösen.",
-        "gebuehrFrisst": "Der Abstand je Grid deckt die Gebühren nicht."
+        "gebuehrFrisst": "Der Abstand je Grid deckt die Gebühren nicht.",
+        "gegenTrend": "Gegen den langfristigen Trend: Ein Grid in dieser Richtung kann lange gegen sich laufen."
       },
       "fehler": {
         "coin": "Coin eingeben (z. B. SOL).",
@@ -8524,7 +8530,41 @@
         "stopLoss": "Stop-Loss muss auf der Verlustseite des Kurses liegen.",
         "takeProfit": "Take-Profit muss auf der Gewinnseite des Kurses liegen.",
         "neutralStop": "Für Neutral-Bots nicht möglich."
-      }
+      },
+      "minSpalte": "Pionex",
+      "minAb": "ab {betrag}",
+      "minZuKlein": "zu klein",
+      "minLaeuft": "Mindesteinsatz bei Pionex wird geprüft ({n}/{von}) …",
+      "minOhneSchluessel": "Mit hinterlegtem Bot-Steuerungs-Schlüssel prüft die App hier auch, ob Pionex den Einsatz annimmt.",
+      "minKeineTitel": "Einsatz zu klein für Pionex",
+      "minKeine": "Bei diesem Einsatz nimmt Pionex keine Variante an. Die günstigste geht ab etwa {betrag}.",
+      "minKeineOhne": "Bei diesem Einsatz nimmt Pionex keine Variante an.",
+      "minSetzen": "Mit {betrag} neu rechnen",
+      "alleRichtungen": "Alle Richtungen",
+      "spalteRichtung": "Richtung",
+      "filterAlle": "alle",
+      "trendTitel": "Langfristiger Trend",
+      "trend": {
+        "auf": "aufwärts",
+        "ab": "abwärts",
+        "seitwaerts": "seitwärts"
+      },
+      "trendPasst": "passt zu {r}",
+      "trendPunkte": "{p} von ±{max} Punkten",
+      "trendUnbekannt": "Nicht messbar, zu wenig Kerzen.",
+      "trendZeichen": {
+        "struktur1w": "Struktur Woche (×2)",
+        "struktur1d": "Struktur Tag",
+        "kursSma200": "Kurs zum 200-Tage-Schnitt",
+        "sma50Sma200": "50- zum 200-Tage-Schnitt"
+      },
+      "trendWert": {
+        "auf": "auf",
+        "ab": "ab",
+        "offen": "offen"
+      },
+      "trendErklaerung": "Gemessen auf Wochen- und Tageskerzen. Varianten gegen den Trend sind mit ⚠ markiert.",
+      "planRichtung": "Richtung des Plans"
     }
   }
 }

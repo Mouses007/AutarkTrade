@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
     planBot, trendFuer, mengeJeGrid, pruefePlanEingabe, pruefePlanVariante, planKandidaten, anzahlFuerSchritt,
     rechnePlanVariante, rechnePlan, bauePlanPrompt, planSystemText, PLAN_ID, MAX_PLAN_GRIDS, MAX_KANDIDATEN,
+    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE,
 } from './planer.js'
 import { normalisiereBot } from './pionex-bots.js'
 import { pruefeKiAntwort } from './bot-ki.js'
@@ -94,6 +95,36 @@ p('Prompt nennt alle Kandidaten-IDs und den Rückblick relativ', liste.every((c)
 p('Systemtext verlangt JSON mit P-IDs, kein Versprechen', planSystemText().includes('"P3"') && planSystemText().includes('garantiert'))
 const g = pruefeKiAntwort({ lage: 'x', vorschlaege: [{ id: 'P1', titel: 'a', begruendung: 'b', risiko: 'c', passtNichtWenn: 'd' }, { id: 'P99' }, { id: 'P2', titel: 'optimal' }] }, { kandidaten: liste }, prompt)
 p('KI: unbekannte ID und „optimal" verworfen, P1 bleibt mit Start heute', g.vorschlaege.length === 1 && g.vorschlaege[0].id === 'P1' && g.verworfen.length === 2 && g.vorschlaege[0].abJetzt?.menge > 0)
+
+console.log('Langfristiger Trend und alle Richtungen')
+const tage = (start, schritt, n = 260) => Array.from({ length: n }, (_, i) => ({ c: start + schritt * i }))
+const zrAuf = { zeilen: [{ tf: '1w', zustand: 1 }, { tf: '1d', zustand: 1 }, { tf: '4h', zustand: -1 }] }
+const zrAb = { zeilen: [{ tf: '1w', zustand: -1 }, { tf: '1d', zustand: -1 }] }
+const tAuf = langfristTrend({ zr: zrAuf, tagKerzen: tage(50, 0.5), kurs: 180 })
+p('Aufwärts: Struktur 1w/1d auf, Kurs über SMA200, 50 über 200 → auf, Punkte 5/5, passt Long', tAuf.richtung === 'auf' && tAuf.punkte === 5 && tAuf.max === 5 && tAuf.passend === 'LONG' && tAuf.zeichen.length === 4)
+const tAb = langfristTrend({ zr: zrAb, tagKerzen: tage(200, -0.5), kurs: 60 })
+p('Abwärts → ab, passt Short', tAb.richtung === 'ab' && tAb.passend === 'SHORT' && tAb.punkte === -5)
+const tGemischt = langfristTrend({ zr: zrAb, tagKerzen: tage(50, 0.5), kurs: 180 })
+p('Woche ab, Schnitte auf → seitwärts, passt Neutral', tGemischt.richtung === 'seitwaerts' && tGemischt.passend === 'NEUTRAL' && tGemischt.punkte === -1)
+const tJung = langfristTrend({ zr: zrAuf, tagKerzen: tage(50, 0.5, 60), kurs: 80 })
+p('Junger Coin (60 Tage): ohne SMA200 nur die Strukturen, max 3', tJung.zeichen.length === 2 && tJung.max === 3 && tJung.richtung === 'auf')
+p('Ohne Daten kein Trend', langfristTrend({}) === null && trendText(null).includes('nicht messbar'))
+p('Gegen den Trend: Long im Abwärtstrend, Short im Aufwärtstrend, Neutral nie', gegenTrend(tAb, 'LONG') && gegenTrend(tAuf, 'SHORT') && !gegenTrend(tAuf, 'LONG') && !gegenTrend(tAb, 'NEUTRAL') && !gegenTrend(null, 'LONG'))
+p('Eingabe ALLE nur mit Freigabe (Rechnen ja, Start nein)', pruefePlanEingabe({ coin: 'SOL', richtung: 'alle', einsatz: 1, hebel: 2 }, null, { alle: true }).richtung === ALLE && pruefePlanEingabe({ coin: 'SOL', richtung: 'ALLE', einsatz: 1, hebel: 2 }).fehler === 'richtung')
+const ka = planKandidatenAlle({ kurs: 160, atr: 6, zr, trend: tAb })
+const rs = [...new Set(ka.map((c) => c.richtung))]
+p('Alle: drei Richtungen, passende (Short) zuerst, IDs eindeutig mit Buchstaben', rs.join() === 'SHORT,LONG,NEUTRAL' && new Set(ka.map((c) => c.id)).size === ka.length && ka.every((c) => c.id[0] === c.richtung[0]))
+p('Alle: Stop-Loss je Richtung richtig, Neutral ohne', ka.every((c) => c.variante.stopLoss == null ? true : c.richtung === 'LONG' ? c.variante.stopLoss < c.variante.unten : c.richtung === 'SHORT' ? c.variante.stopLoss > c.variante.oben : false))
+const eAlle = { coin: 'TST', coinM: false, richtung: ALLE, einsatz: 100, hebel: 3, tage: 30 }
+const gerechnet = rechnePlan(eAlle, kerzen, planKandidatenAlle({ kurs: 200, atr: 8, zr: null, trend: tAb }), { kurs: 200, trend: tAb })
+const longs = gerechnet.filter((c) => c.richtung === 'LONG' && !c.fehler), shorts = gerechnet.filter((c) => c.richtung === 'SHORT' && !c.fehler)
+p('Alle gerechnet: jede Variante in ihrer Richtung (Long-Position positiv, Short negativ)', longs.length > 0 && shorts.length > 0 && longs.every((c) => c.start.nominalUsd > 0) && shorts.every((c) => c.start.nominalUsd < 0))
+p('Alle gerechnet: Long im Abwärtstrend als gegenTrend markiert, Short nicht', longs.every((c) => c.warnungen.includes('gegenTrend')) && shorts.every((c) => !c.warnungen.includes('gegenTrend')))
+const pa = bauePlanPrompt(eAlle, { lage: { kurs: 200 }, kandidaten: gerechnet, tf: '1m', trend: tAb })
+p('Prompt ALLE: Richtung offen, Trend-Zeile, Richtungsspalte', pa.includes('OFFEN') && pa.includes('LANGFRIST-TREND') && pa.includes('ABWÄRTS') && pa.includes('| Richtung |') && gerechnet.filter((c) => !c.fehler).every((c) => pa.includes(`${c.id} | ${c.richtung} |`)))
+p('Systemtext ALLE: alle Richtungen, Trend hat Vorrang, Beispiel-ID L3', planSystemText({ alle: true }).includes('Long (L…)') && planSystemText({ alle: true }).includes('"L3"') && planSystemText().includes('LANGFRIST-TREND'))
+const ga = pruefeKiAntwort({ lage: 'x', vorschlaege: [{ id: shorts[0].id, titel: 'a', begruendung: 'b', risiko: 'c', passtNichtWenn: 'd' }] }, { kandidaten: gerechnet.filter((c) => !c.fehler) }, pa)
+p('KI-Prüfung nimmt S-IDs an', ga.vorschlaege.length === 1 && ga.vorschlaege[0].id === shorts[0].id)
 
 console.log('Start über die Steuerung')
 const a = baueAktion(pm, 'starten', { unten: '120', oben: '200', anzahl: '100', hebel: '4', einsatz: '3', art: 'arithmetic' }, { stellen: 7 })

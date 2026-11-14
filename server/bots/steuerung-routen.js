@@ -8,6 +8,7 @@
  *   POST   /api/bots/steuerung/freischalten     {fassung, hash, bestaetigt: true}
  *   POST   /api/bots/steuerung/sperren
  *   POST   /api/bots/:id/aktion/pruefen         {aktion, eingabe} → Prüfabfrage bei Pionex + Token
+ *   POST   /api/bots/plan/mindesteinsatz        {eingabe, schaetzung} → reicht der Einsatz eines Plans? (nur Prüfabfragen)
  *   POST   /api/bots/:id/aktion/senden          {aktion, eingabe, token, haken: true, hakenText}
  *   GET    /api/bots/:id/aenderungen            Protokoll
  *
@@ -38,7 +39,7 @@ import { istTestbetrieb } from '../testbetrieb.js'
 import { logWarn, logInfo } from '../logger.js'
 import { fehlerText } from '../boersen-status.js'
 import { holeBot, holeLaufendeBots, vergesseBot } from './routen.js'
-import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, STEUERBAR } from './steuerung.js'
+import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, pruefGrund, sucheMindestEinsatz, STEUERBAR } from './steuerung.js'
 import { PLAN_ID, planBot, pruefePlanEingabe, pruefePlanVariante } from './planer.js'
 import { fetchTickerPrice } from '../pionex-api.js'
 import { FASSUNG, einwilligungsText, einwilligungsTeile, hakenText, warnung, fassungHash, hakenHash, zustimmungGueltig, hakenGueltig } from './einwilligung.js'
@@ -47,9 +48,12 @@ const TOKEN_MS = 5 * 60_000
 let SPERRE_MS = 10_000
 let PRUEF_PAUSE_MS = 3_000
 let NACHLESEN_MS = 2_500
+let MIN_PAUSE_MS = 250
+const MIN_CACHE_MS = 10 * 60_000
 
 /** Nur für den Selbsttest: Wartezeiten verkürzen. */
-export function _testZeiten({ sperre, pruefPause, nachlesen } = {}) {
+export function _testZeiten({ sperre, pruefPause, nachlesen, minPause } = {}) {
+    if (minPause != null) MIN_PAUSE_MS = minPause
     if (sperre != null) SPERRE_MS = sperre
     if (pruefPause != null) PRUEF_PAUSE_MS = pruefPause
     if (nachlesen != null) NACHLESEN_MS = nachlesen
@@ -58,6 +62,8 @@ const zuletztGesendet = new Map()   // botId → Zeit
 const zuletztGeprueft = new Map()   // botId → Zeit
 const laeuft = new Set()            // botId — Sperre, synchron gesetzt
 const pruefungen = new Map()        // tokenHash → { zeit, pruefung } (für das Protokoll)
+const mindestCache = new Map()      // Plan ohne Einsatz → { min, zeit }
+let mindestLaeuft = false
 
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex')
 const json = (s) => { try { return s ? JSON.parse(s) : null } catch { return null } }
@@ -142,6 +148,21 @@ async function sende(k, pfad, body) {
     } catch (e) {
         return { ...deuteSendung(null, e), antwort: null }
     }
+}
+
+/**
+ * Mindesteinsatz eines neuen Bots bei Pionex suchen (nur Prüfabfragen, gesendet
+ * wird nichts). Höchstens 14 Abfragen mit Pause, damit Pionex nicht bremst.
+ */
+async function mindestEinsatzFuer(k, bot, eingabe, stellen, { start, lo }) {
+    const pruefe = async (x) => {
+        if (MIN_PAUSE_MS) await new Promise((r) => setTimeout(r, MIN_PAUSE_MS))
+        const a = baueAktion(bot, 'starten', { ...eingabe, einsatz: String(x) }, { stellen })
+        if (a.fehler || !a.pruefen) return 'anders'
+        const p = await frage(k, a.pruefen.pfad, a.pruefen.body)
+        return pruefungBestanden(p) ? 'ok' : pruefGrund(p) === 'einsatzZuKlein' ? 'zuKlein' : 'anders'
+    }
+    return sucheMindestEinsatz(pruefe, { start, lo })
 }
 
 /** Preispräzision des Kontrakts aus Pionex' Symboltabelle (Audit SEC-03). */
@@ -259,6 +280,45 @@ export function setupBotSteuerungRoutes(app) {
         res.json({ ok: true })
     })
 
+    /**
+     * Bot-Planer: reicht der Einsatz einer Variante für Pionex? Braucht nur den
+     * Schlüssel (Prüfabfragen senden nichts). Eine Suche zur Zeit; Minimum je
+     * Variante (ohne Einsatz) 10 min im Speicher. `schaetzung` = Startwert aus
+     * einer schon gemessenen Variante.
+     */
+    app.post('/api/bots/plan/mindesteinsatz', async (req, res) => {
+        try {
+            const k = await schluessel()
+            if (!k) return res.status(403).json({ ok: false, code: 'keinSchluessel' })
+            const eingabe = req.body?.eingabe || {}
+            const einsatz = Number(eingabe.einsatz)
+            const schluesselPlan = JSON.stringify(['coin', 'coinM', 'richtung', 'hebel', 'unten', 'oben', 'anzahl', 'art'].map((f) => String(eingabe[f] ?? '')))
+            const gemerkt = mindestCache.get(schluesselPlan)
+            if (gemerkt && Date.now() - gemerkt.zeit < MIN_CACHE_MS) return res.json({ ok: true, min: gemerkt.min, reichtAus: einsatz >= gemerkt.min })
+            if (mindestLaeuft) return res.status(429).json({ ok: false, code: 'zuSchnell' })
+            mindestLaeuft = true
+            try {
+                const bot = await botFuer(PLAN_ID, 'starten', eingabe)
+                if (!bot) return res.status(404).json({ ok: false, code: 'nichtGefunden' })
+                if (bot.fehler) return res.status(400).json({ ok: false, code: bot.fehler })
+                const stellen = await stellenFuer(bot)
+                const a = baueAktion(bot, 'starten', eingabe, { stellen })
+                if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
+                const erste = await frage(k, a.pruefen.pfad, a.pruefen.body)
+                if (pruefungBestanden(erste)) return res.json({ ok: true, min: null, reichtAus: true })
+                if (pruefGrund(erste) !== 'einsatzZuKlein') return res.json({ ok: true, min: null, reichtAus: null, text: erste?.message || erste?.data?.reason || '' })
+                const schaetzung = Number(req.body?.schaetzung)
+                const m = await mindestEinsatzFuer(k, bot, eingabe, stellen, { lo: einsatz, start: schaetzung > einsatz ? schaetzung : einsatz * 2 })
+                if (m.min == null) return res.json({ ok: true, min: null, reichtAus: false })
+                mindestCache.set(schluesselPlan, { min: m.min, zeit: Date.now() })
+                for (const [s2, w] of mindestCache) if (Date.now() - w.zeit > MIN_CACHE_MS) mindestCache.delete(s2)
+                res.json({ ok: true, min: m.min, reichtAus: false })
+            } finally { mindestLaeuft = false }
+        } catch (e) {
+            fehlerAntwort(res, e)
+        }
+    })
+
     app.post('/api/bots/:id/aktion/pruefen', async (req, res) => {
         const id = String(req.params.id)
         try {
@@ -278,11 +338,18 @@ export function setupBotSteuerungRoutes(app) {
             if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
             const pruefung = a.pruefen ? await frage(k, a.pruefen.pfad, a.pruefen.body) : null
             const bestanden = a.pruefen ? pruefungBestanden(pruefung) : true
+            const grund = bestanden ? null : pruefGrund(pruefung)
+            let minEinsatz = null
+            if (grund === 'einsatzZuKlein' && aktion === 'starten') {
+                const einsatz = Number(req.body?.eingabe?.einsatz) || Number(a.nachher?.einsatz) || null
+                const m = await mindestEinsatzFuer(k, bot, req.body?.eingabe || {}, await stellenFuer(bot), { lo: einsatz, start: einsatz ? einsatz * 2 : 10 })
+                minEinsatz = m.min ?? null
+            }
             const t = bestanden ? token(bot.id, aktion, a.senden, Date.now()) : null
             if (t) pruefungen.set(sha(t), { zeit: Date.now(), pruefung })
             for (const [h, p] of pruefungen) if (Date.now() - p.zeit > TOKEN_MS) pruefungen.delete(h)
             res.json({
-                ok: true, aktion, bestanden, ohnePruefung: !a.pruefen,
+                ok: true, aktion, bestanden, ohnePruefung: !a.pruefen, grund, minEinsatz,
                 pruefung: pruefung ? { result: pruefung.result, message: pruefung.message || null, code: pruefung.code || null, data: pruefung.data || null } : null,
                 liq: pruefung?.data ? liqAusPruefung(bot, pruefung.data) : null,
                 vorher: bot.plan ? null : einstellungVon(bot), nachher: a.nachher, warnungen: a.warnungen,

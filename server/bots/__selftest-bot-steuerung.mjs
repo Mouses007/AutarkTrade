@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
-import { baueAktion, instrumentPreis, stellenVon, liqAusPruefung, pruefungBestanden, einstellungVon, AKTIONEN } from './steuerung.js'
+import { baueAktion, instrumentPreis, stellenVon, liqAusPruefung, pruefungBestanden, einstellungVon, AKTIONEN, pruefGrund, rundeEinsatzAuf, sucheMindestEinsatz } from './steuerung.js'
 import { FASSUNG, fassungHash, zustimmungGueltig, hakenGueltig, hakenText, einwilligungsText, warnung, hakenHash } from './einwilligung.js'
 
 let ok = 0, fehl = 0
@@ -115,6 +115,19 @@ p('Warnblock im Wortlaut (Kaffee)', warnung().length === 4 && warnung()[3].inclu
 p('Zustimmung gilt nur für die heutige Fassung', zustimmungGueltig({ fassung: FASSUNG, hash: fassungHash(), zeit: 1 }) && !zustimmungGueltig({ fassung: '0.9', hash: fassungHash(), zeit: 1 }) && !zustimmungGueltig({ fassung: FASSUNG, hash: 'x', zeit: 1 }) && !zustimmungGueltig(null))
 p('Haken: nur der echte Text (de/en) gilt', hakenGueltig(hakenText('de')) && hakenGueltig(hakenText('en')) && !hakenGueltig('ok') && !hakenGueltig(''))
 p('Haken-Hash stabil', hakenHash('a') === hakenHash('a') && hakenHash('a') !== hakenHash('b'))
+
+console.log('Mindesteinsatz')
+p('Grund „less than min investment" erkannt (Text, wie Pionex ihn sendet)', pruefGrund({ result: false, message: 'Pionex API: [BOT_INVALID_ARGUMENT] less than min investment' }) === 'einsatzZuKlein')
+p('anderer Grund → null, bestanden → null', pruefGrund({ result: false, message: 'Pionex API: [BOT_INVALID_ARGUMENT] nein' }) === null && pruefGrund({ result: true, data: { checkResult: true } }) === null)
+p('Aufrunden nie unter den Wert', rundeEinsatzAuf(37.31) === 38 && rundeEinsatzAuf(4.12) === 4.2 && rundeEinsatzAuf(38) === 38 && rundeEinsatzAuf(412) === 415 && rundeEinsatzAuf(0) === null)
+for (const echt of [0.8, 7, 37.3, 260, 4100]) {
+    let n = 0
+    const r = await sucheMindestEinsatz(async (x) => { n++; return x >= echt ? 'ok' : 'zuKlein' }, { start: 10 })
+    p(`Suche findet ${echt} (≥ echt, ≤ +10 %, ≤ 14 Abfragen)`, r.min >= echt && r.min <= echt * 1.1 + 0.1 && n <= 14, JSON.stringify(r) + ' n=' + n)
+}
+p('anderer Grund vor dem ersten „ok" bricht ab', (await sucheMindestEinsatz(async () => 'anders', { start: 10 })).fehler === 'anders')
+p('über der Grenze: fehler grenze', (await sucheMindestEinsatz(async () => 'zuKlein', { start: 10, max: 1000 })).fehler === 'grenze')
+p('bekannter zu kleiner Betrag wird nicht noch einmal geprüft', await (async () => { const gesehen = []; await sucheMindestEinsatz(async (x) => { gesehen.push(x); return x >= 30 ? 'ok' : 'zuKlein' }, { lo: 5, start: 10 }); return !gesehen.includes(5) })())
 
 console.log(`\n${ok} bestanden, ${fehl} fehlgeschlagen`)
 process.exit(fehl ? 1 : 0)
