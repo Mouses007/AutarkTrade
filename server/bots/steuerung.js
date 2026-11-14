@@ -18,8 +18,16 @@
 import { liqRisiko } from './pionex-bots.js'
 
 const PFAD = '/api/v1/bot/orders/futuresGrid'
+const SPOT_PFAD = '/api/v1/bot/orders/spotGrid'
 export const AKTIONEN = ['band', 'investieren', 'margeDazu', 'margeWeg', 'stops', 'pausieren', 'fortsetzen', 'beenden', 'starten']
-export const STEUERBAR = new Set(['futures_grid', 'coinm_grid'])
+export const STEUERBAR = new Set(['futures_grid', 'coinm_grid', 'spot_grid'])
+/**
+ * Spot-Grid (14.11.2026): nur Starten (mit checkParams) und Beenden. Für Band,
+ * Nachschiessen und Gewinn-Entnahme hat Pionex keine Prüfabfrage — ungeprüft
+ * senden wir dort nichts. `create` nimmt höchstens 200 Grids.
+ */
+export const SPOT_AKTIONEN = ['beenden', 'starten']
+export const SPOT_MAX_GRIDS = 200
 
 const istZahl = (v) => typeof v === 'number' && Number.isFinite(v)
 const leer = (v) => v === undefined || v === null || v === ''
@@ -108,6 +116,7 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     if (!bot || !STEUERBAR.has(bot.typ)) return { fehler: 'typ' }
     if (!AKTIONEN.includes(aktion)) return { fehler: 'aktion' }
     if (aktion !== 'starten' && !bot.laufend) return { fehler: 'nichtLaufend' }
+    if (bot.typ === 'spot_grid') return baueSpotAktion(bot, aktion, eingabe, { kurs, stellen })
     const id = bot.id
     const warnungen = []
     const ip = (usd) => instrumentPreis(bot, usd, stellen)
@@ -216,6 +225,48 @@ export function baueAktion(bot, aktion, eingabe = {}, { kurs = bot?.kurs, stelle
     }
 }
 
+/**
+ * Spot-Grid: Starten und Beenden (rein). Preise sind USDT je Coin, ohne Umrechnung.
+ * checkParams verlangt snake_case, create camelCase (Pionex-Doku, gesehen 14.11.2026).
+ * Beenden mit `closeSellModel: NOT_SELL` (Vorgabe von Pionex): die Coins bleiben im
+ * Konto, es wird nichts zum Marktpreis verkauft.
+ */
+function baueSpotAktion(bot, aktion, eingabe, { kurs, stellen }) {
+    if (!SPOT_AKTIONEN.includes(aktion)) return { fehler: 'nichtFuerSpot' }
+    if (aktion === 'beenden') {
+        return { aktion, pruefen: null, senden: { pfad: `${SPOT_PFAD}/cancel`, body: { buOrderId: bot.id, closeSellModel: 'NOT_SELL' } }, nachher: { status: 'canceled' }, warnungen: ['beenden', 'spotBehaelt', 'ohnePruefung'] }
+    }
+    const unten = zahl(eingabe.unten) ?? bot.grid?.unten, oben = zahl(eingabe.oben) ?? bot.grid?.oben
+    const anzahl = zahl(eingabe.anzahl) ?? bot.grid?.anzahl
+    const einsatz = zahl(eingabe.einsatz) ?? bot.einsatz?.basis ?? bot.einsatz?.aktuell
+    const art = eingabe.art === 'geometric' ? 'geometric' : eingabe.art === 'arithmetic' ? 'arithmetic' : (bot.grid?.art || 'arithmetic')
+    if (!istZahl(unten) || !istZahl(oben) || unten <= 0 || oben <= unten) return { fehler: 'band' }
+    if (!Number.isInteger(anzahl) || anzahl < 2 || anzahl > SPOT_MAX_GRIDS) return { fehler: 'anzahl' }
+    if (!istZahl(einsatz) || einsatz <= 0) return { fehler: 'betrag' }
+    if (!istZahl(kurs) || kurs <= 0) return { fehler: 'kurs' }
+    if (oben < kurs / 5 || unten > kurs * 5) return { fehler: 'weitWeg' }
+    const ip = (usd) => instrumentPreis({ ...bot, coinM: false }, usd, stellen)
+    const top = ip(oben), bottom = ip(unten)
+    const base = bot.coin, quote = 'USDT'
+    const basis = bot.plan ? null : (bot.einsatz?.basis ?? bot.einsatz?.aktuell ?? null)
+    const warnungen = ['neuerBot', 'spotKauf', ...(istZahl(basis) && einsatz > 2 * basis ? ['grosserBetrag'] : [])]
+    if (kurs < unten || kurs > oben) warnungen.push('kursAusserhalb')
+    gerundetWarnung([[unten, Number(bottom)], [oben, Number(top)]], warnungen)
+    return {
+        aktion,
+        pruefen: { pfad: `${SPOT_PFAD}/checkParams`, body: { base, quote, buOrderData: { top, bottom, row: anzahl, grid_type: art, quote_total_investment: String(einsatz) } } },
+        senden: { pfad: `${SPOT_PFAD}/create`, body: { base, quote, buOrderData: { top, bottom, row: anzahl, gridType: art, quoteTotalInvestment: String(einsatz) } } },
+        nachher: { unten: Number(bottom), oben: Number(top), anzahl, art, einsatz },
+        warnungen,
+    }
+}
+
+/** Mindesteinsatz aus einer Spot-Prüfantwort (Pionex nennt ihn dort: `min_investment`). */
+export function minAusPruefung(antwort) {
+    const n = Number(antwort?.data?.min_investment ?? antwort?.data?.minInvestment)
+    return Number.isFinite(n) && n > 0 ? n : null
+}
+
 /** Liquidationsschätzungen einer Prüfantwort in USD je Coin (Coin-M: invers, Seiten getauscht). */
 export function liqAusPruefung(bot, data) {
     if (!data || typeof data !== 'object') return null
@@ -247,6 +298,8 @@ export function pruefGrund(antwort) {
     if (!antwort || pruefungBestanden(antwort)) return null
     const text = [antwort.message, antwort.code, antwort.data?.reason, antwort.data?.message].filter(Boolean).join(' ')
     if (/less than min(imum)?[ _]?invest/i.test(text)) return 'einsatzZuKlein'
+    // Spot-Grid: Pionex nennt min_investment in der Antwort; der Wortlaut der Absage ist noch nicht gesehen
+    if (/invest/i.test(text) && minAusPruefung(antwort)) return 'einsatzZuKlein'
     return null
 }
 

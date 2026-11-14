@@ -9,7 +9,8 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { normalisiereBot } from './pionex-bots.js'
-import { baueAktion, instrumentPreis, stellenVon, liqAusPruefung, pruefungBestanden, einstellungVon, AKTIONEN, pruefGrund, rundeEinsatzAuf, sucheMindestEinsatz } from './steuerung.js'
+import { baueAktion, instrumentPreis, stellenVon, liqAusPruefung, pruefungBestanden, einstellungVon, AKTIONEN, pruefGrund, rundeEinsatzAuf, sucheMindestEinsatz, minAusPruefung, SPOT_AKTIONEN } from './steuerung.js'
+import { planBot } from './planer.js'
 import { FASSUNG, fassungHash, zustimmungGueltig, hakenGueltig, hakenText, einwilligungsText, warnung, hakenHash } from './einwilligung.js'
 
 let ok = 0, fehl = 0
@@ -94,7 +95,21 @@ p('linear: base COIN.PERP, quote USDT', baueAktion(linear, 'starten', {}).senden
 console.log('Schranken')
 p('beendeter Bot: keine Änderung', baueAktion({ ...coinm, laufend: false }, 'band', { unten: 60 }).fehler === 'nichtLaufend')
 p('beendeter Bot: neu starten geht (mit Kurs)', !baueAktion({ ...coinm, laufend: false }, 'starten', {}).fehler)
-p('Spot-Grid nicht steuerbar', baueAktion({ ...coinm, typ: 'spot_grid' }, 'band', {}).fehler === 'typ')
+console.log('Spot-Grid')
+const spotLauf = { ...normalisiereBot({ buOrderId: 'S1', buOrderType: 'spot_grid', base: 'NVDAX', quote: 'USDT', buOrderData: { top: '190', bottom: '140', row: 50, gridType: 'arithmetic', quoteTotalInvestment: '100', status: 'running' } }), kurs: 162.2 }
+p('Spot: nur Beenden und Starten, Band/Marge/Stops abgewiesen', SPOT_AKTIONEN.join() === 'beenden,starten' && ['band', 'investieren', 'margeDazu', 'stops', 'pausieren'].every((a) => baueAktion(spotLauf, a, { unten: '150', oben: '180', anzahl: '20', betrag: '10' }).fehler === 'nichtFuerSpot'))
+const sb = baueAktion(spotLauf, 'beenden', {})
+p('Spot beenden: cancel, Coins bleiben (NOT_SELL), ohne Prüfung', /spotGrid\/cancel$/.test(sb.senden.pfad) && sb.senden.body.closeSellModel === 'NOT_SELL' && sb.senden.body.buOrderId === 'S1' && sb.pruefen === null && sb.warnungen.includes('spotBehaelt'))
+const sp = planBot({ coin: 'NVDAX', spot: true, richtung: 'LONG', unten: 140, oben: 190, anzahl: 50, art: 'geometric', hebel: 1, einsatz: 100, startKurs: 162.2, kurs: 162.2 })
+p('Spot-Plan: spot_grid, Einsatz in USDT, Menge je Grid, kein Hebel', sp.typ === 'spot_grid' && sp.marginCoin === 'USDT' && sp.einsatz.basis === 100 && sp.grid.mengeJeGrid > 0 && sp.hebel === 1 && !sp.coinM)
+const ss = baueAktion(sp, 'starten', { unten: '140', oben: '190', anzahl: '50', einsatz: '100', art: 'geometric' }, { stellen: 2 })
+const pd = ss.pruefen?.body?.buOrderData, cd = ss.senden?.body?.buOrderData
+p('Spot starten: checkParams snake_case, create camelCase (Doku 14.11.2026)', /spotGrid\/checkParams$/.test(ss.pruefen.pfad) && /spotGrid\/create$/.test(ss.senden.pfad) && pd.grid_type === 'geometric' && pd.quote_total_investment === '100' && cd.gridType === 'geometric' && cd.quoteTotalInvestment === '100' && !('leverage' in cd) && !('trend' in cd))
+const sr = baueAktion(sp, 'starten', { unten: '140.123', oben: '190.456', anzahl: '50', einsatz: '100' }, { stellen: 2 })
+p('Spot starten: base/quote, Preise als Text, auf die Spot-Präzision gerundet', ss.senden.body.base === 'NVDAX' && ss.senden.body.quote === 'USDT' && pd.top === '190' && pd.bottom === '140' && pd.row === 50 && sr.senden.body.buOrderData.top === '190.46' && sr.senden.body.buOrderData.bottom === '140.12', JSON.stringify(sr.senden.body.buOrderData))
+p('Spot starten: Warnung Kauf zum Marktpreis', ss.warnungen.includes('spotKauf') && ss.warnungen.includes('neuerBot'))
+p('Spot starten: mehr als 200 Grids abgewiesen', baueAktion(sp, 'starten', { unten: '140', oben: '190', anzahl: '201', einsatz: '100' }).fehler === 'anzahl')
+p('Spot: Mindesteinsatz aus der Prüfantwort, Absage erkannt', minAusPruefung({ result: false, message: 'investment too small', data: { min_investment: '23.5' } }) === 23.5 && pruefGrund({ result: false, message: 'quote investment invalid', data: { min_investment: '23.5' } }) === 'einsatzZuKlein' && minAusPruefung({ result: true, data: {} }) === null)
 p('unbekannte Aktion', baueAktion(coinm, 'hebel', { hebel: 2 }).fehler === 'aktion')
 p(`${AKTIONEN.length} Aktionen`, AKTIONEN.length === 9)
 

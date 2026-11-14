@@ -36,6 +36,10 @@ import { atr as atrReihe } from '../../shared/indicators.js'
 
 export const PLAN_ID = 'plan'
 export const PLAN_RESERVE = 0.93
+/** Spot-Grid: Pionex setzt die ganze Investition ein (USDT für die Linien unter dem Kurs, Coin darüber). Schätzung; checkParams nennt die echte Menge. */
+export const SPOT_RESERVE = 1
+/** Spot-Grid: `create` nimmt 2–200 Grids an (checkParams bis 1000) — es gilt das Kleinere. */
+export const SPOT_MAX_GRIDS = 200
 export const RICHTUNGEN = ['LONG', 'SHORT', 'NEUTRAL']
 /** „Alle Richtungen": der Planer rechnet Long, Short und Neutral und vergleicht sie. */
 export const ALLE = 'ALLE'
@@ -88,6 +92,7 @@ export function mengeJeGrid({ L, trend, start, einsatz, hebel, reserve = PLAN_RE
  * @param e { coin, coinM, richtung, unten, oben, anzahl, art, hebel, einsatz, startKurs, start, kurs }
  */
 export function planBot(e) {
+    if (e.spot) return planSpotBot(e)
     const coinM = !!e.coinM
     const art = e.art === 'geometric' ? 'geometric' : 'arithmetic'
     const iu = coinM ? 1 / e.oben : e.unten, io = coinM ? 1 / e.unten : e.oben
@@ -114,6 +119,24 @@ export function planBot(e) {
     return b
 }
 
+/** Ein Spot-Grid-Plan als Bot (Form von normalisiereBot): kein Hebel, keine Liquidation, Einsatz in USDT. */
+function planSpotBot(e) {
+    const art = e.art === 'geometric' ? 'geometric' : 'arithmetic'
+    const q = mengeJeGrid({ L: gridLinien(e.unten, e.oben, e.anzahl, art), trend: 'long', start: e.startKurs, einsatz: e.einsatz, hebel: 1, reserve: SPOT_RESERVE })
+    const d = {
+        top: String(e.oben), bottom: String(e.unten), row: e.anzahl, gridType: art, trend: 'long',
+        quoteTotalInvestment: String(e.einsatz), quoteInvestment: String(e.einsatz), initQuoteInvestment: String(e.einsatz),
+        perVolume: q != null ? String(q) : '', status: 'plan', initPrice: String(e.startKurs),
+    }
+    const b = normalisiereBot({ buOrderId: PLAN_ID, buOrderType: 'spot_grid', createTime: e.start ?? Date.now(), base: e.coin, quote: 'USDT', buOrderData: d })
+    b.plan = true
+    b.laufend = false
+    b.kurs = e.kurs ?? null
+    b.name = null
+    b.hebel = 1
+    return b
+}
+
 /**
  * Eingabe des Planers prüfen. `coins` = Map coin → {linear, coinM} (aus der Symboltabelle).
  * `alle`: „ALLE" als Richtung zulassen (nur zum Rechnen; ein Start hat immer eine Richtung).
@@ -121,35 +144,39 @@ export function planBot(e) {
 export function pruefePlanEingabe(e, coins = null, { alle = false } = {}) {
     const coin = String(e?.coin || '').trim().toUpperCase()
     if (!/^[A-Z0-9]{1,15}$/.test(coin)) return { fehler: 'coin' }
-    const coinM = e?.coinM === true
+    // Spot-Grid: ohne Hebel und nur „Long" (kauft beim Start die Coin für die Linien über dem Kurs)
+    const spot = e?.spot === true || e?.spot === 'true'
+    const coinM = !spot && e?.coinM === true
     if (coins) {
         const c = coins.get(coin)
-        if (!c || !(coinM ? c.coinM : c.linear)) return { fehler: 'coinNichtHandelbar' }
+        if (!c || !(spot ? c.spot : coinM ? c.coinM : c.linear)) return { fehler: 'coinNichtHandelbar' }
     }
-    const richtung = String(e?.richtung || '').toUpperCase()
+    let richtung = String(e?.richtung || '').toUpperCase()
     if (!RICHTUNGEN.includes(richtung) && !(alle && richtung === ALLE)) return { fehler: 'richtung' }
+    if (spot) richtung = 'LONG'
     const einsatz = zahlAus(e?.einsatz)
     if (!istZahl(einsatz) || einsatz <= 0) return { fehler: 'einsatz' }
-    const hebel = zahlAus(e?.hebel)
+    const hebel = spot ? 1 : zahlAus(e?.hebel)
     if (!Number.isInteger(hebel) || hebel < 1 || hebel > MAX_HEBEL) return { fehler: 'hebel' }
     const tage = Number(e?.tage ?? 30)
     if (!PLAN_TAGE.includes(tage)) return { fehler: 'tage' }
-    return { coin, coinM, richtung, einsatz, hebel, tage }
+    return { coin, coinM, spot, richtung, einsatz, hebel, tage }
 }
 
 /** Eine Band-Variante prüfen (eigene Eingabe oder Übernahme). Preise USD. */
-export function pruefePlanVariante(v, kurs, richtung) {
+export function pruefePlanVariante(v, kurs, richtung, { spot = false } = {}) {
     const unten = zahlAus(v?.unten), oben = zahlAus(v?.oben), anzahl = zahlAus(v?.anzahl)
     if (!istZahl(unten) || !istZahl(oben) || unten <= 0 || oben <= unten) return { fehler: 'band' }
     if (istZahl(kurs) && kurs > 0) {
         if (oben < kurs / 5 || unten > kurs * 5) return { fehler: 'weitWeg' }
         if (!(unten < kurs && kurs < oben)) return { fehler: 'kursAusserhalb' }
     }
-    if (!Number.isInteger(anzahl) || anzahl < 2 || anzahl > MAX_PLAN_GRIDS) return { fehler: 'anzahl' }
+    if (!Number.isInteger(anzahl) || anzahl < 2 || anzahl > (spot ? SPOT_MAX_GRIDS : MAX_PLAN_GRIDS)) return { fehler: 'anzahl' }
     const aus = { unten, oben, anzahl, art: v?.art === 'geometric' ? 'geometric' : 'arithmetic' }
     const sl = zahlAus(v?.stopLoss), tp = zahlAus(v?.takeProfit)
     if (Number.isNaN(sl) || Number.isNaN(tp)) return { fehler: Number.isNaN(sl) ? 'stopLoss' : 'takeProfit' }
     if (sl != null || tp != null) {
+        if (spot) return { fehler: 'spotStop' }
         if (richtung === 'NEUTRAL') return { fehler: 'neutralStop' }
         const long = richtung === 'LONG'
         if (sl != null && (sl <= 0 || (istZahl(kurs) && (long ? sl >= kurs : sl <= kurs)))) return { fehler: 'stopLoss' }
@@ -234,7 +261,7 @@ export function chartNiveaus(paket, kurs, { max = 4 } = {}) {
  * Kandidaten aus der Lage (rein). Preise USD je Coin.
  * Bänder um den Kurs in Tages-ATR und an gemessenen Niveaus; je zwei Dichten.
  */
-export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [] }) {
+export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [], ohneStop = false }) {
     if (!istZahl(kurs) || kurs <= 0 || !istZahl(atr) || atr <= 0) return []
     const a = atr
     const long = richtung === 'LONG', neutral = richtung === 'NEUTRAL'
@@ -286,7 +313,7 @@ export function planKandidaten({ kurs, atr, zr = null, richtung, chart = [] }) {
             neu(`${b.titel}, ${dName}`, { unten: b.unten, oben: b.oben, anzahl, art: 'arithmetic' })
         }
         // Gerichtet: dieselbe dichte Variante mit Stop-Loss 1 Tages-ATR jenseits der Gegengrenze
-        if (!neutral) {
+        if (!neutral && !ohneStop) {
             const sl = long ? b.unten - a : b.oben + a
             const anzahl = anzahlFuerSchritt(b.unten, b.oben, dichten[0][1])
             if (sl > 0 && anzahl != null) neu(`${b.titel}, dichte Grids, Stop-Loss ${runde(sl, 4)}`, { unten: b.unten, oben: b.oben, anzahl, art: 'arithmetic', stopLoss: runde(sl, 5) })
@@ -349,9 +376,10 @@ export function planKandidatenAlle({ kurs, atr, zr = null, trend = null, chart =
     return liste
 }
 
-/** Gebühren für einen neuen Bot: Grid-Orders Maker, Start/Schluss Taker. */
-export function planGebuehren() {
-    return { gebuehr: GEBUEHREN.futures.maker, gebuehrMarkt: GEBUEHREN.futures.taker }
+/** Gebühren für einen neuen Bot: Grid-Orders Maker, Start/Schluss Taker (Spot oder Futures). */
+export function planGebuehren(spot = false) {
+    const g = spot ? GEBUEHREN.spot : GEBUEHREN.futures
+    return { gebuehr: g.maker, gebuehrMarkt: g.taker }
 }
 
 function kurz(r) {
@@ -380,9 +408,10 @@ export function einsatzFuerGrids(e, v, kurs, minMenge) {
  * @param opt { kurs, funding, mmr, minMenge }
  */
 export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = MMR_VORGABE, minMenge = null } = {}) {
-    const geb = planGebuehren()
+    const geb = planGebuehren(!!e.spot)
     const warnungen = []
     let anzahl = v.anzahl
+    if (e.spot && anzahl > SPOT_MAX_GRIDS) { anzahl = SPOT_MAX_GRIDS; warnungen.push('spotMax') }
     // Pionex verlangt eine Mindestmenge je Order: zu viele Grids für den Einsatz → weniger Grids
     if (istZahl(minMenge) && minMenge > 0) {
         const probe = planBot({ ...e, ...v, anzahl, startKurs: kurs, kurs })
@@ -398,7 +427,8 @@ export function rechnePlanVariante(e, v, kerzen, { kurs, funding = null, mmr = M
     const heute = planBot({ ...e, ...variante, startKurs: kurs, kurs })
     const jetzt = [{ t: Date.now(), o: kurs, h: kurs, l: kurs, c: kurs }]
     const probe = simuliereBot(heute, jetzt, { ...geb, mmr, startPreis: kurs })
-    const liq = probe ? liqRisiko(e.richtung, probe.liqSchaetzung, kurs) : null
+    // Spot: kein Hebel, keine Liquidation
+    const liq = probe && !e.spot ? liqRisiko(e.richtung, probe.liqSchaetzung, kurs) : null
     const liqAbstand = istZahl(liq) ? Math.abs(kurs - liq) / kurs : null
     if (istZahl(liq) && (e.richtung === 'LONG' ? liq > variante.unten : e.richtung === 'SHORT' ? liq < variante.oben : (liq > variante.unten && liq < variante.oben))) warnungen.push('liqImBand')
     if (istZahl(liqAbstand) && liqAbstand < 0.1) warnungen.push('liqNah')
@@ -470,7 +500,9 @@ export function bauePlanPrompt(e, { wissen = '', lage = null, zrText = '', kandi
     const einheit = e.coinM ? e.coin : 'USDT'
     const kopf = [
         wissen, '',
-        `NEUER BOT (Plan, noch nicht gestartet): ${e.coin} ${e.coinM ? 'Coin-M' : 'USDT-M'} Futures-Grid, Richtung ${e.richtung === ALLE ? 'OFFEN — Long, Short und Neutral werden verglichen' : e.richtung}, Hebel ${e.hebel}x, Einsatz ${zl(e.einsatz)} ${einheit}`,
+        e.spot
+            ? `NEUER BOT (Plan, noch nicht gestartet): ${e.coin}/USDT Spot-Grid — kein Hebel, keine Liquidation, kein Funding; kauft beim Start die Coin für die Linien über dem Kurs (wirkt wie Long), gestartet ohne Stop-Loss. Einsatz ${zl(e.einsatz)} USDT`
+            : `NEUER BOT (Plan, noch nicht gestartet): ${e.coin} ${e.coinM ? 'Coin-M' : 'USDT-M'} Futures-Grid, Richtung ${e.richtung === ALLE ? 'OFFEN — Long, Short und Neutral werden verglichen' : e.richtung}, Hebel ${e.hebel}x, Einsatz ${zl(e.einsatz)} ${einheit}`,
         `Kurs ${zl(lage?.kurs)} USD`,
         trendText(trend),
     ]

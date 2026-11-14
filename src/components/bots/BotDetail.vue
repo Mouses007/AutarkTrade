@@ -33,7 +33,7 @@ const props = defineProps({
 })
 const { t, te } = useI18n()
 const emit = defineEmits(['gesendet'])
-const steuerungAktiv = computed(() => !!(props.steuerung?.schluessel && props.steuerung?.freigeschaltet && ['futures_grid', 'coinm_grid'].includes(props.bot.typ)))
+const steuerungAktiv = computed(() => !!(props.steuerung?.schluessel && props.steuerung?.freigeschaltet && ['futures_grid', 'coinm_grid', 'spot_grid'].includes(props.bot.typ)))
 const vorschlag = ref(null)
 const aktKarte = ref(null)
 function umsetzen(v) {

@@ -29,6 +29,7 @@ import { marktLage, hoheZeitrahmen, pruefeKiAntwort, BOT_ZEITRAHMEN } from './bo
 import { ladeSimKerzen } from './routen.js'
 import { getKnex } from '../database.js'
 import { baueKandidaten } from '../chart-kandidaten.js'
+import { pionexLetzte, pionexSimKerzen, pionexSpotSymbole } from './pionex-kerzen.js'
 import {
     pruefePlanEingabe, pruefePlanVariante, planKandidaten, planKandidatenAlle, rechnePlan, bauePlanPrompt, planSystemText,
     langfristTrend, chartNiveaus, wochenProfile, MAX_EIGENE, RICHTUNGEN, ALLE, SINNVOLLE_GRIDS, WENIG_GRIDS,
@@ -60,7 +61,10 @@ export function coinsAusTabelle(liste) {
 
 async function holeCoins() {
     if (coinsCache && Date.now() - coinsCache.zeit < COINS_MS) return coinsCache.coins
-    const coins = coinsAusTabelle(await holeSymbolTabelle())
+    const [perp, spot] = await Promise.all([holeSymbolTabelle(), pionexSpotSymbole().catch((e) => { logWarn('bots', `Planer Spot-Symbole: ${e.message}`); return new Map() })])
+    const coins = coinsAusTabelle(perp)
+    // Spot-Paare (auch xStocks wie NVDAX, die es nur bei Pionex Spot gibt)
+    for (const [coin, info] of spot) { const c = coins.get(coin) || { linear: false, coinM: false }; c.spot = true; c.spotInfo = info; coins.set(coin, c) }
     if (!coins.size) throw new Error('Pionex lieferte keine Perp-Symbole')
     coinsCache = { zeit: Date.now(), coins }
     return coins
@@ -89,15 +93,25 @@ async function ladeZeichnungen(symbol) {
 
 async function rechne(e, coins) {
     const symbol = `${e.coin}USDT`
-    const kurs = await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`)
+    const kurs = e.spot ? await fetchTickerPrice(`${e.coin}_USDT`) : (await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`))
     if (!(kurs > 0)) throw Object.assign(new Error('Kein Kurs bei Pionex'), { code: 'keinKurs' })
     const ende = Date.now(), start = ende - e.tage * 86_400_000
-    const [tag, sim, marge, reihen] = await Promise.all([
-        holeKerzen(symbol, '1d', { markt: 'futures', limit: 45 }),
-        ladeSimKerzen(symbol, start, ende),
-        wartungsmargeMitQuelle(symbol).catch(() => null),
-        Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(symbol, tf, 300, { market: 'futures' }).catch(() => null))),
-    ])
+    // Spot: Kerzen vom Pionex-Spotmarkt selbst (xStocks gibt es bei Binance/Bitget nicht), kein Funding, keine Wartungsmarge
+    const paar = `${e.coin}_USDT`
+    const [tag, sim, marge, reihen] = e.spot
+        ? await Promise.all([
+            pionexLetzte(paar, '1d', 45),
+            pionexSimKerzen(paar, start, ende),
+            null,
+            Promise.all(BOT_ZEITRAHMEN.map((tf) => pionexLetzte(paar, tf, 300).catch(() => null))),
+        ])
+        : await Promise.all([
+            holeKerzen(symbol, '1d', { markt: 'futures', limit: 45 }),
+            ladeSimKerzen(symbol, start, ende),
+            wartungsmargeMitQuelle(symbol).catch(() => null),
+            Promise.all(BOT_ZEITRAHMEN.map((tf) => getClosedCandles(symbol, tf, 300, { market: 'futures' }).catch(() => null))),
+        ])
+    if (!sim?.kerzen?.length) throw Object.assign(new Error('Keine Kerzen für den Rückblick'), { code: 'keineKerzen' })
     const zeichnungen = await ladeZeichnungen(symbol)
     const atr = atrTag(tag)
     const lage = marktLage(tag, kurs)
@@ -114,22 +128,23 @@ async function rechne(e, coins) {
     } catch (err) { logWarn('bots', `Planer Chart-Niveaus: ${err.message}`) }
     const mmr = marge?.pct > 0 ? marge.pct / 100 : undefined
     const c = coins.get(e.coin)
-    const minMenge = e.coinM ? c?.minCoinM : c?.minLinear
+    const minMenge = e.spot ? c?.spotInfo?.minTradeSize : e.coinM ? c?.minCoinM : c?.minLinear
     const opt = { kurs, funding: sim.funding, mmr, minMenge, trend }
-    const liste = e.richtung === ALLE ? planKandidatenAlle({ kurs, atr, zr, trend, chart }) : planKandidaten({ kurs, atr, zr, richtung: e.richtung, chart })
+    const liste = e.spot ? planKandidaten({ kurs, atr, zr, richtung: 'LONG', chart, ohneStop: true })
+        : e.richtung === ALLE ? planKandidatenAlle({ kurs, atr, zr, trend, chart }) : planKandidaten({ kurs, atr, zr, richtung: e.richtung, chart })
     const kandidaten = rechnePlan(e, sim.kerzen, liste, opt)
     const eigene = []
     for (const [i, roh] of e.eigeneRoh.entries()) {
         // Im Modus ALLE bringt die eigene Variante ihre Richtung mit
         const richtung = e.richtung === ALLE ? String(roh?.richtung || '').toUpperCase() : e.richtung
         if (!RICHTUNGEN.includes(richtung)) { eigene.push({ id: `E${i + 1}`, titel: 'Eigene Variante', fehler: 'richtung' }); continue }
-        const v = pruefePlanVariante(roh, kurs, richtung)
+        const v = pruefePlanVariante(roh, kurs, richtung, { spot: e.spot })
         if (v.fehler) { eigene.push({ id: `E${i + 1}`, titel: 'Eigene Variante', richtung, fehler: v.fehler }); continue }
         eigene.push(...rechnePlan(e, sim.kerzen, [{ id: `E${i + 1}`, titel: 'Eigene Variante', richtung, variante: v }], opt))
     }
     return {
-        ok: true, zeit: Date.now(), kurs, eingabe: { coin: e.coin, coinM: e.coinM, richtung: e.richtung, einsatz: e.einsatz, hebel: e.hebel, tage: e.tage },
-        einheit: e.coinM ? e.coin : 'USDT', markt: lage, trend, chart, zeitrahmen: sim.tf, kerzenAnzahl: sim.kerzen.length,
+        ok: true, zeit: Date.now(), kurs, eingabe: { coin: e.coin, coinM: e.coinM, spot: e.spot, richtung: e.richtung, einsatz: e.einsatz, hebel: e.hebel, tage: e.tage },
+        einheit: e.coinM ? e.coin : 'USDT', markt: lage, trend, chart, spot: e.spot, zeitrahmen: sim.tf, kerzenAnzahl: sim.kerzen.length,
         von: sim.kerzen[0]?.t ?? null, bis: sim.kerzen.at(-1)?.t ?? null, mmr: mmr ?? null, mmrQuelle: marge?.quelle || 'pauschal',
         fundingSimuliert: !!sim.funding, minMenge: minMenge ?? null, grids: { sinnvoll: SINNVOLLE_GRIDS, wenig: WENIG_GRIDS },
         hohe: zr ? { tabelle: zeitrahmenTabelle(zr), marken: zr.marken.map((m) => ({ id: m.id, tf: m.tf, preis: m.preis })), treffen: zr.treffen } : null,
@@ -139,7 +154,7 @@ async function rechne(e, coins) {
 }
 
 async function rechneGemerkt(e, coins) {
-    const schluessel = JSON.stringify([e.coin, e.coinM, e.richtung, e.einsatz, e.hebel, e.tage, e.eigeneRoh])
+    const schluessel = JSON.stringify([e.coin, e.coinM, e.spot, e.richtung, e.einsatz, e.hebel, e.tage, e.eigeneRoh])
     const c = rechnenCache.get(schluessel)
     if (c && Date.now() - c.zeit < RECHNEN_MS) return c.daten
     if (!laeuft.has(schluessel)) {
@@ -157,7 +172,7 @@ async function kiFuer(e, coins, englisch) {
     const d = await rechneGemerkt(e, coins)
     const gueltig = d.kandidaten.filter((c) => !c.fehler)
     if (!gueltig.length) throw Object.assign(new Error('Keine rechenbaren Kandidaten'), { code: 'keineKandidaten' })
-    const typ = e.coinM ? 'coinm_grid' : 'futures_grid'
+    const typ = e.spot ? 'spot_grid' : e.coinM ? 'coinm_grid' : 'futures_grid'
     const zrText = d._zr ? zeitrahmenText(d._zr, (t) => new Date(t).toISOString().slice(0, 10)).replace('ZEITRAHMEN — vom Code gemessen', 'HOHE ZEITRAHMEN — vom Code gemessen') : ''
     const user = bauePlanPrompt(e, { wissen: wissenAlsText(typ), lage: d.markt ? { ...d.markt, kurs: d.kurs } : { kurs: d.kurs }, zrText, kandidaten: gueltig, tf: d.zeitrahmen, englisch, trend: d.trend, chart: d.chart || [] })
     const cfg = await ladeLlmConfigFuerAufgabe('bot-optimierung')
@@ -197,7 +212,7 @@ export function setupBotPlanerRoutes(app) {
     app.get('/api/bots/plan/coins', async (req, res) => {
         try {
             const coins = await holeCoins()
-            res.json({ ok: true, coins: [...coins].map(([coin, c]) => ({ coin, linear: c.linear, coinM: c.coinM })).sort((a, b) => a.coin.localeCompare(b.coin)) })
+            res.json({ ok: true, coins: [...coins].map(([coin, c]) => ({ coin, linear: c.linear, coinM: c.coinM, spot: !!c.spot })).sort((a, b) => a.coin.localeCompare(b.coin)) })
         } catch (e) { fehler(res, e) }
     })
 
@@ -222,7 +237,7 @@ export function setupBotPlanerRoutes(app) {
             const e = eingabeAus({ ...req.body, eigene: [] }, coins)
             if (e.fehler) return res.status(400).json({ ok: false, code: e.fehler })
             const englisch = req.body?.sprache === 'en'
-            const schluessel = JSON.stringify([e.coin, e.coinM, e.richtung, e.einsatz, e.hebel, e.tage, englisch])
+            const schluessel = JSON.stringify([e.coin, e.coinM, e.spot, e.richtung, e.einsatz, e.hebel, e.tage, englisch])
             // Ein Lauf zur Zeit; ein zweiter Klick mit derselben Eingabe wartet mit, eine andere Eingabe nicht
             if (kiLaeuft && kiLaeuft.schluessel !== schluessel) return res.status(429).json({ ok: false, code: 'kiLaeuft' })
             if (!kiLaeuft) {

@@ -23,13 +23,19 @@ const SPEICHER = 'at.bots.plan'
 const lies = () => { try { return JSON.parse(localStorage.getItem(SPEICHER) || 'null') || {} } catch { return {} } }
 const alt = lies()
 // Ab Fassung 2 ist „Alle Richtungen" die Vorgabe; eine früher gespeicherte Richtung gilt nicht mehr
-const eingabe = ref({ coin: alt.coin || 'SOL', coinM: alt.coinM === true, richtung: (alt.v === 2 && alt.richtung) || 'ALLE', einsatz: alt.einsatz || '', hebel: alt.hebel || '3', tage: alt.tage || 30 })
+const eingabe = ref({ coin: alt.coin || 'SOL', coinM: alt.coinM === true, spot: alt.spot === true, richtung: (alt.v === 2 && alt.richtung) || 'ALLE', einsatz: alt.einsatz || '', hebel: alt.hebel || '3', tage: alt.tage || 30 })
 watch(eingabe, (e) => { try { localStorage.setItem(SPEICHER, JSON.stringify({ ...e, v: 2 })) } catch { /* ohne Speicher */ } }, { deep: true })
 const alle = computed(() => eingabe.value.richtung === 'ALLE')
 
 const coins = ref([])
 const coinInfo = computed(() => coins.value.find((c) => c.coin === String(eingabe.value.coin || '').trim().toUpperCase()) || null)
-const einheit = computed(() => (eingabe.value.coinM ? String(eingabe.value.coin || '').toUpperCase() || 'Coin' : 'USDT'))
+const einheit = computed(() => (eingabe.value.coinM && !eingabe.value.spot ? String(eingabe.value.coin || '').toUpperCase() || 'Coin' : 'USDT'))
+// Art als ein Feld: USDT-M, Coin-M oder Spot (Spot-Grid: ohne Hebel, nur Long, ohne Stop-Loss beim Start)
+const artWahl = computed({
+    get: () => (eingabe.value.spot ? 'spot' : eingabe.value.coinM ? 'coinM' : 'linear'),
+    set: (v) => { eingabe.value.spot = v === 'spot'; eingabe.value.coinM = v === 'coinM' },
+})
+const spot = computed(() => eingabe.value.spot === true)
 onMounted(async () => {
     try { coins.value = (await axios.get('/api/bots/plan/coins', { timeout: 60_000 })).data?.coins || [] } catch { coins.value = [] }
     try { ki.value = (await axios.get('/api/bots/plan/ki')).data?.ergebnis || null } catch { ki.value = null }
@@ -37,8 +43,9 @@ onMounted(async () => {
 // Gibt es die gewählte Art für die Coin nicht, auf die andere wechseln
 watch(coinInfo, (c) => {
     if (!c) return
-    if (eingabe.value.coinM && !c.coinM && c.linear) eingabe.value.coinM = false
-    if (!eingabe.value.coinM && !c.linear && c.coinM) eingabe.value.coinM = true
+    const geht = { linear: c.linear, coinM: c.coinM, spot: c.spot }
+    if (geht[artWahl.value]) return
+    artWahl.value = c.linear ? 'linear' : c.coinM ? 'coinM' : 'spot'
 })
 
 const meldung = (e, ns = 'bots.plan.fehler') => {
@@ -48,7 +55,7 @@ const meldung = (e, ns = 'bots.plan.fehler') => {
     if (d?.code && te(`bots.st.fehler.${d.code}`)) return t(`bots.st.fehler.${d.code}`)
     return d?.error || e.message
 }
-const anfrage = (extra = {}) => ({ ...eingabe.value, coin: String(eingabe.value.coin || '').trim().toUpperCase(), tage: Number(eingabe.value.tage), ...extra })
+const anfrage = (extra = {}) => ({ ...eingabe.value, coin: String(eingabe.value.coin || '').trim().toUpperCase(), tage: Number(eingabe.value.tage), ...(eingabe.value.spot ? { hebel: '1', richtung: 'LONG' } : {}), ...extra })
 
 // ── Rechnen ──────────────────────────────────────────────────────────────
 const erg = ref(null)
@@ -111,7 +118,7 @@ const rueckblickVorn = computed(() => {
 const mindest = ref({})
 let mindestLauf = 0
 const variantenEingabe = (v, e, richtung) => ({
-    coin: e.coin, coinM: e.coinM, richtung: richtung || e.richtung, hebel: String(e.hebel), einsatz: String(e.einsatz),
+    coin: e.coin, coinM: e.coinM, spot: !!e.spot, richtung: richtung || e.richtung, hebel: String(e.hebel), einsatz: String(e.einsatz),
     unten: textZahl(v.unten), oben: textZahl(v.oben), anzahl: String(v.anzahl), art: v.art || 'arithmetic',
 })
 async function pruefeMindest() {
@@ -150,7 +157,7 @@ function einsatzAufMin() { eingabe.value.einsatz = String(kleinstesMin.value); r
 // ── Eigener Plan ─────────────────────────────────────────────────────────
 const plan = ref({ unten: '', oben: '', anzahl: '', art: 'arithmetic', stopLoss: '', takeProfit: '', richtung: 'LONG' })
 // Richtung des Plans: bei „Alle Richtungen" die der übernommenen Variante (oder selbst gewählt)
-const planRichtung = computed(() => (alle.value ? plan.value.richtung : eingabe.value.richtung))
+const planRichtung = computed(() => (spot.value ? 'LONG' : alle.value ? plan.value.richtung : eingabe.value.richtung))
 const eigenErg = ref(null)
 const eigenLaedt = ref(false)
 const eigenFehler = ref('')
@@ -178,13 +185,13 @@ const planVollstaendig = computed(() => plan.value.unten !== '' && plan.value.ob
 const steuerungAktiv = computed(() => !!(props.steuerung?.schluessel && props.steuerung?.freigeschaltet))
 const dialogOffen = ref(false)
 const planBot = computed(() => ({
-    id: 'plan', plan: true, richtung: planRichtung.value, coin: String(eingabe.value.coin || '').toUpperCase(), coinM: eingabe.value.coinM,
-    marginCoin: einheit.value, typ: eingabe.value.coinM ? 'coinm_grid' : 'futures_grid',
+    id: 'plan', plan: true, richtung: planRichtung.value, coin: String(eingabe.value.coin || '').toUpperCase(), coinM: eingabe.value.coinM && !spot.value,
+    marginCoin: einheit.value, typ: spot.value ? 'spot_grid' : eingabe.value.coinM ? 'coinm_grid' : 'futures_grid',
     grid: { unten: Number(plan.value.unten), oben: Number(plan.value.oben), anzahl: Number(plan.value.anzahl) },
-    hebel: Number(eingabe.value.hebel), einsatz: { basis: Number(eingabe.value.einsatz) }, stops: {},
+    hebel: spot.value ? 1 : Number(eingabe.value.hebel), einsatz: { basis: Number(eingabe.value.einsatz) }, stops: {},
 }))
 const vorgabe = computed(() => ({ unten: plan.value.unten, oben: plan.value.oben, anzahl: plan.value.anzahl, hebel: eingabe.value.hebel, einsatz: eingabe.value.einsatz }))
-const feste = computed(() => ({ coin: planBot.value.coin, coinM: eingabe.value.coinM, richtung: planRichtung.value, art: plan.value.art }))
+const feste = computed(() => ({ coin: planBot.value.coin, coinM: eingabe.value.coinM && !spot.value, spot: spot.value, richtung: planRichtung.value, art: plan.value.art, ...(spot.value ? { hebel: '1' } : {}) }))
 
 // ── KI ───────────────────────────────────────────────────────────────────
 const ki = ref(null)
@@ -202,9 +209,11 @@ async function kiErzeugen() {
 }
 const kiPasst = computed(() => {
     const k = ki.value?.eingabe, e = anfrage()
-    return !!k && k.coin === e.coin && k.coinM === e.coinM && k.richtung === e.richtung && Number(k.einsatz) === Number(e.einsatz) && Number(k.hebel) === Number(e.hebel) && Number(k.tage) === e.tage
+    return !!k && k.coin === e.coin && k.coinM === e.coinM && !!k.spot === !!e.spot && k.richtung === e.richtung && Number(k.einsatz) === Number(e.einsatz) && Number(k.hebel) === Number(e.hebel) && Number(k.tage) === e.tage
 })
-const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Number(eingabe.value.einsatz) > 0 && Number(eingabe.value.hebel) >= 1)
+// Gibt es die Coin in der gewählten Art nicht bei Pionex, gar nicht erst rechnen (sonst „Invalid symbol")
+const artGeht = computed(() => !coins.value.length || !!(coinInfo.value && { linear: coinInfo.value.linear, coinM: coinInfo.value.coinM, spot: coinInfo.value.spot }[artWahl.value]))
+const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Number(eingabe.value.einsatz) > 0 && (spot.value || Number(eingabe.value.hebel) >= 1) && artGeht.value)
 </script>
 
 <template>
@@ -217,13 +226,15 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                     <datalist id="planCoins"><option v-for="c in coins" :key="c.coin" :value="c.coin" /></datalist>
                 </label>
                 <label><span>{{ t('bots.plan.art') }}</span>
-                    <select v-model="eingabe.coinM" class="at-feld">
-                        <option :value="false" :disabled="coinInfo && !coinInfo.linear">{{ t('bots.plan.linear') }}</option>
-                        <option :value="true" :disabled="coinInfo && !coinInfo.coinM">{{ t('bots.plan.coinM') }}</option>
+                    <select v-model="artWahl" class="at-feld">
+                        <option value="linear" :disabled="coinInfo && !coinInfo.linear">{{ t('bots.plan.linear') }}</option>
+                        <option value="coinM" :disabled="coinInfo && !coinInfo.coinM">{{ t('bots.plan.coinM') }}</option>
+                        <option value="spot" :disabled="coinInfo && !coinInfo.spot">{{ t('bots.plan.spot') }}</option>
                     </select>
                 </label>
                 <label><span>{{ t('bots.plan.richtung') }}</span>
-                    <select v-model="eingabe.richtung" class="at-feld">
+                    <select v-if="spot" class="at-feld" disabled><option>{{ t('bots.richtung.LONG') }}</option></select>
+                    <select v-else v-model="eingabe.richtung" class="at-feld">
                         <option value="ALLE">{{ t('bots.plan.alleRichtungen') }}</option>
                         <option value="LONG">{{ t('bots.richtung.LONG') }}</option>
                         <option value="SHORT">{{ t('bots.richtung.SHORT') }}</option>
@@ -231,7 +242,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                     </select>
                 </label>
                 <label><span>{{ t('bots.feld.einsatz') }} ({{ einheit }})</span><input v-model="eingabe.einsatz" class="at-feld" inputmode="decimal"></label>
-                <label><span>{{ t('bots.feld.hebel') }}</span><input v-model="eingabe.hebel" class="at-feld" inputmode="numeric"></label>
+                <label><span>{{ t('bots.feld.hebel') }}</span><input v-if="spot" class="at-feld" value="1" disabled><input v-else v-model="eingabe.hebel" class="at-feld" inputmode="numeric"></label>
                 <label><span>{{ t('bots.plan.zeitraum') }}</span>
                     <select v-model.number="eingabe.tage" class="at-feld">
                         <option v-for="n in [30, 60, 90]" :key="n" :value="n">{{ t('bots.plan.tage', { n }) }}</option>
@@ -239,6 +250,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                 </label>
             </div>
             <p v-if="coins.length && eingabe.coin && !coinInfo" class="warn">{{ t('bots.plan.coinUnbekannt') }}</p>
+            <p v-else-if="coinInfo && coinInfo.spot && !coinInfo.linear && !coinInfo.coinM" class="leise">{{ t('bots.plan.nurSpot') }}</p>
+            <p v-if="spot" class="leise">{{ t('bots.plan.spotHinweis') }}</p>
             <div class="knoepfe">
                 <Knopf art="haupt" symbol="rechner" :laedt="laedt" :disabled="!eingabeOk" @click="rechnen">{{ t('bots.plan.rechnen') }}</Knopf>
             </div>
@@ -448,7 +461,7 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
         <Karte ref="planKarte" :titel="t('bots.plan.eigenTitel')">
             <p class="leise">{{ t('bots.plan.eigenText') }}</p>
             <div class="felder">
-                <label v-if="alle"><span>{{ t('bots.plan.planRichtung') }}</span>
+                <label v-if="alle && !spot"><span>{{ t('bots.plan.planRichtung') }}</span>
                     <select v-model="plan.richtung" class="at-feld">
                         <option value="LONG">{{ t('bots.richtung.LONG') }}</option>
                         <option value="SHORT">{{ t('bots.richtung.SHORT') }}</option>
@@ -464,8 +477,8 @@ const eingabeOk = computed(() => !!String(eingabe.value.coin || '').trim() && Nu
                         <option value="geometric">{{ t('bots.sim.geometrisch') }}</option>
                     </select>
                 </label>
-                <label v-if="planRichtung !== 'NEUTRAL'"><span>{{ t('bots.feld.stopLoss') }}</span><input v-model="plan.stopLoss" class="at-feld" inputmode="decimal" :placeholder="t('bots.feld.keiner')"></label>
-                <label v-if="planRichtung !== 'NEUTRAL'"><span>{{ t('bots.feld.takeProfit') }}</span><input v-model="plan.takeProfit" class="at-feld" inputmode="decimal" :placeholder="t('bots.feld.keiner')"></label>
+                <label v-if="planRichtung !== 'NEUTRAL' && !spot"><span>{{ t('bots.feld.stopLoss') }}</span><input v-model="plan.stopLoss" class="at-feld" inputmode="decimal" :placeholder="t('bots.feld.keiner')"></label>
+                <label v-if="planRichtung !== 'NEUTRAL' && !spot"><span>{{ t('bots.feld.takeProfit') }}</span><input v-model="plan.takeProfit" class="at-feld" inputmode="decimal" :placeholder="t('bots.feld.keiner')"></label>
             </div>
             <div class="knoepfe">
                 <Knopf art="normal" symbol="rechner" :laedt="eigenLaedt" :disabled="!planVollstaendig || !eingabeOk" @click="eigenRechnen">{{ t('bots.plan.eigenRechnen') }}</Knopf>

@@ -39,7 +39,8 @@ import { istTestbetrieb } from '../testbetrieb.js'
 import { logWarn, logInfo } from '../logger.js'
 import { fehlerText } from '../boersen-status.js'
 import { holeBot, holeLaufendeBots, vergesseBot } from './routen.js'
-import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, pruefGrund, sucheMindestEinsatz, STEUERBAR } from './steuerung.js'
+import { baueAktion, einstellungVon, liqAusPruefung, pruefungBestanden, pruefGrund, sucheMindestEinsatz, rundeEinsatzAuf, minAusPruefung, STEUERBAR } from './steuerung.js'
+import { pionexSpotSymbole } from './pionex-kerzen.js'
 import { PLAN_ID, planBot, pruefePlanEingabe, pruefePlanVariante } from './planer.js'
 import { fetchTickerPrice } from '../pionex-api.js'
 import { FASSUNG, einwilligungsText, einwilligungsTeile, hakenText, warnung, fassungHash, hakenHash, zustimmungGueltig, hakenGueltig } from './einwilligung.js'
@@ -165,8 +166,16 @@ async function mindestEinsatzFuer(k, bot, eingabe, stellen, { start, lo }) {
     return sucheMindestEinsatz(pruefe, { start, lo })
 }
 
-/** Preispräzision des Kontrakts aus Pionex' Symboltabelle (Audit SEC-03). */
+/** Preispräzision des Kontrakts aus Pionex' Symboltabelle (Audit SEC-03). Spot: aus der Spot-Tabelle. */
+let spotCache = null
 async function stellenFuer(bot) {
+    if (bot.typ === 'spot_grid') {
+        try {
+            if (!spotCache || Date.now() - spotCache.zeit > 30 * 60_000) spotCache = { zeit: Date.now(), m: await pionexSpotSymbole() }
+            const n = spotCache.m.get(bot.coin)?.quotePrecision
+            return Number.isInteger(n) ? n : null
+        } catch { return null }
+    }
     try {
         const name = bot.coinM ? `USDT_${bot.coin}_PERP` : `${bot.coin}_USDT_PERP`
         const e = (await holeSymbolTabelle()).find((x) => x.symbol === name)
@@ -186,9 +195,9 @@ async function botFuer(id, aktion, eingabe) {
     if (aktion !== 'starten') return { fehler: 'aktion' }
     const e = pruefePlanEingabe({ ...eingabe, coinM: eingabe?.coinM === true || eingabe?.coinM === 'true', tage: 30 })
     if (e.fehler) return { fehler: e.fehler }
-    const kurs = await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`)
+    const kurs = e.spot ? await fetchTickerPrice(`${e.coin}_USDT`) : (await fetchTickerPrice(`${e.coin}_USDT_PERP`) || await fetchTickerPrice(`${e.coin}_USDT`))
     if (!(kurs > 0)) return { fehler: 'kurs' }
-    const v = pruefePlanVariante({ unten: eingabe?.unten, oben: eingabe?.oben, anzahl: eingabe?.anzahl, art: eingabe?.art }, kurs, e.richtung)
+    const v = pruefePlanVariante({ unten: eingabe?.unten, oben: eingabe?.oben, anzahl: eingabe?.anzahl, art: eingabe?.art }, kurs, e.richtung, { spot: e.spot })
     if (v.fehler) return { fehler: v.fehler }
     return planBot({ ...e, ...v, startKurs: kurs, kurs })
 }
@@ -197,7 +206,7 @@ async function botFuer(id, aktion, eingabe) {
 export function findeNeuenBot(lauf, bot, seit, antwort) {
     const id = antwort?.data?.buOrderId ?? antwort?.data?.bu_order_id
     if (id != null) { const b = lauf.find((x) => x.id === String(id)); if (b) return b }
-    return lauf.filter((b) => b.coin === bot.coin && !!b.coinM === !!bot.coinM && Number(b.erstellt) >= seit - 60_000)
+    return lauf.filter((b) => b.coin === bot.coin && !!b.coinM === !!bot.coinM && (b.typ === 'spot_grid') === (bot.typ === 'spot_grid') && Number(b.erstellt) >= seit - 60_000)
         .sort((a, b) => Number(b.erstellt) - Number(a.erstellt))[0] || null
 }
 
@@ -292,7 +301,7 @@ export function setupBotSteuerungRoutes(app) {
             if (!k) return res.status(403).json({ ok: false, code: 'keinSchluessel' })
             const eingabe = req.body?.eingabe || {}
             const einsatz = Number(eingabe.einsatz)
-            const schluesselPlan = JSON.stringify(['coin', 'coinM', 'richtung', 'hebel', 'unten', 'oben', 'anzahl', 'art'].map((f) => String(eingabe[f] ?? '')))
+            const schluesselPlan = JSON.stringify(['coin', 'coinM', 'spot', 'richtung', 'hebel', 'unten', 'oben', 'anzahl', 'art'].map((f) => String(eingabe[f] ?? '')))
             const gemerkt = mindestCache.get(schluesselPlan)
             if (gemerkt && Date.now() - gemerkt.zeit < MIN_CACHE_MS) return res.json({ ok: true, min: gemerkt.min, reichtAus: einsatz >= gemerkt.min })
             if (mindestLaeuft) return res.status(429).json({ ok: false, code: 'zuSchnell' })
@@ -306,6 +315,12 @@ export function setupBotSteuerungRoutes(app) {
                 if (a.fehler) return res.status(400).json({ ok: false, code: a.fehler })
                 const erste = await frage(k, a.pruefen.pfad, a.pruefen.body)
                 if (pruefungBestanden(erste)) return res.json({ ok: true, min: null, reichtAus: true })
+                // Spot: Pionex nennt den Mindesteinsatz selbst, kein Herantasten nötig
+                if (bot.typ === 'spot_grid' && minAusPruefung(erste)) {
+                    const min = rundeEinsatzAuf(minAusPruefung(erste))
+                    mindestCache.set(schluesselPlan, { min, zeit: Date.now() })
+                    return res.json({ ok: true, min, reichtAus: einsatz >= min })
+                }
                 if (pruefGrund(erste) !== 'einsatzZuKlein') return res.json({ ok: true, min: null, reichtAus: null, text: erste?.message || erste?.data?.reason || '' })
                 const schaetzung = Number(req.body?.schaetzung)
                 const m = await mindestEinsatzFuer(k, bot, eingabe, stellen, { lo: einsatz, start: schaetzung > einsatz ? schaetzung : einsatz * 2 })
@@ -340,7 +355,9 @@ export function setupBotSteuerungRoutes(app) {
             const bestanden = a.pruefen ? pruefungBestanden(pruefung) : true
             const grund = bestanden ? null : pruefGrund(pruefung)
             let minEinsatz = null
-            if (grund === 'einsatzZuKlein' && aktion === 'starten') {
+            if (grund === 'einsatzZuKlein' && aktion === 'starten' && bot.typ === 'spot_grid') {
+                minEinsatz = rundeEinsatzAuf(minAusPruefung(pruefung))
+            } else if (grund === 'einsatzZuKlein' && aktion === 'starten') {
                 const einsatz = Number(req.body?.eingabe?.einsatz) || Number(a.nachher?.einsatz) || null
                 const m = await mindestEinsatzFuer(k, bot, req.body?.eingabe || {}, await stellenFuer(bot), { lo: einsatz, start: einsatz ? einsatz * 2 : 10 })
                 minEinsatz = m.min ?? null

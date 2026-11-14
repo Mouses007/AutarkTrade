@@ -8394,7 +8394,9 @@
         "neuerBot": "An additional bot with its own capital is created.",
         "gerundet": "Prices are rounded to Pionex's price steps — the \"After\" column is what counts.",
         "grosserBetrag": "The amount is larger than today's investment — please check for typos.",
-        "liqNaeherBand": "The range reaches further in the losing direction: the position can grow there and liquidation moves closer."
+        "liqNaeherBand": "The range reaches further in the losing direction: the position can grow there and liquidation moves closer.",
+        "spotKauf": "At start Pionex buys the coin at market for every line above the price.",
+        "spotBehaelt": "On stopping the coins stay in the account (not sold). You can sell them yourself at Pionex afterwards."
       },
       "fehler": {
         "schluessel": "Enter API key and secret.",
@@ -8429,7 +8431,8 @@
         "coin": "Coin missing or invalid.",
         "richtung": "Direction missing.",
         "einsatz": "Investment must be greater than 0.",
-        "tage": "Invalid period."
+        "tage": "Invalid period.",
+        "nichtFuerSpot": "For a spot grid the app can only stop it and start a new one."
       },
       "unklarTitel": "Outcome unclear",
       "unklarText": "The connection to Pionex broke off or the answer was ambiguous. Pionex may have executed the change. Do not send again — first look at the bot at Pionex (or here after reloading).",
@@ -8467,7 +8470,7 @@
     "plan": {
       "knopf": "Plan a new bot",
       "titel": "Plan a new bot",
-      "erklaerung": "Plans a new Pionex futures grid bot from scratch. The app measures the situation (price, daily ATR, levels on 1w/1d/4h), builds bands and grid densities from it and runs every variant: how it would have done over the chosen period and what starting today means. Running the numbers costs nothing; only the AI selection is billed by the configured provider.",
+      "erklaerung": "Plans a new Pionex futures or spot grid bot from scratch. The app measures the situation (price, daily ATR, levels on 1w/1d/4h), builds bands and grid densities from it and runs every variant: how it would have done over the chosen period and what starting today means. Running the numbers costs nothing; only the AI selection is billed by the configured provider.",
       "coin": "Coin",
       "art": "Type",
       "linear": "USDT-M (margin in USDT)",
@@ -8510,7 +8513,8 @@
         "liqNah": "Liquidation less than 10 % away from the price.",
         "stopHinterLiq": "The stop-loss lies beyond the estimated liquidation and would never trigger.",
         "gebuehrFrisst": "The grid spacing does not cover the fees.",
-        "gegenTrend": "Against the long-term trend: a grid in this direction can run against you for a long time."
+        "gegenTrend": "Against the long-term trend: a grid in this direction can run against you for a long time.",
+        "spotMax": "Cut to 200 grids: Pionex accepts no more for a spot grid."
       },
       "fehler": {
         "coin": "Enter a coin (e.g. SOL).",
@@ -8529,7 +8533,9 @@
         "weitWeg": "The band is very far from the price – typo?",
         "stopLoss": "Stop-loss must be on the losing side of the price.",
         "takeProfit": "Take-profit must be on the winning side of the price.",
-        "neutralStop": "Not possible for neutral bots."
+        "neutralStop": "Not possible for neutral bots.",
+        "spotStop": "The app starts a spot grid without stop-loss and take-profit.",
+        "keineKerzen": "Pionex returns no candles for this period."
       },
       "minSpalte": "Pionex",
       "minAb": "from {betrag}",
@@ -8584,7 +8590,10 @@
       "kurzHinweis": "Per direction the variant with the best look-back, without liquidation. Not a recommendation: largest loss and distance to liquidation count at least as much.",
       "chartNiveaus": "Chart levels",
       "chartErklaerung": "Volume profiles of sideways phases on the weekly chart and your own drawings for this coin. Variants “Band ab/bis Chart …” put the band edge just beyond them and the stop-loss one daily ATR further.",
-      "chartKeine": "None found: no sideways phase on the weekly chart and no own drawings."
+      "chartKeine": "None found: no sideways phase on the weekly chart and no own drawings.",
+      "spot": "Spot (no leverage)",
+      "nurSpot": "Pionex lists this coin as spot only, e.g. a tokenised stock. A spot grid is planned instead.",
+      "spotHinweis": "Spot grid: no leverage, no liquidation, no funding. At start Pionex buys the coin for the lines above the price, so it acts like a long. At most 200 grids, started without a stop-loss. Candles and minimum investment come straight from Pionex."
     }
   }
 }

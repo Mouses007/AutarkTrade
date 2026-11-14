@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import {
     planBot, trendFuer, mengeJeGrid, pruefePlanEingabe, pruefePlanVariante, planKandidaten, anzahlFuerSchritt,
     rechnePlanVariante, rechnePlan, bauePlanPrompt, planSystemText, PLAN_ID, MAX_PLAN_GRIDS, MAX_KANDIDATEN,
-    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile,
+    langfristTrend, gegenTrend, planKandidatenAlle, trendText, ALLE, SINNVOLLE_GRIDS, chartNiveaus, wochenProfile, SPOT_MAX_GRIDS,
 } from './planer.js'
 import { normalisiereBot } from './pionex-bots.js'
 import { pruefeKiAntwort } from './bot-ki.js'
@@ -158,6 +158,27 @@ const shortChart = planKandidaten({ kurs: 67, atr: 2, zr: null, richtung: 'SHORT
 p('Short bis Chart-Niveau: Obergrenze ½ ATR über dem VAH, Stop darüber', shortChart.some((c) => c.titel.includes('VAH') && Math.abs(c.variante.oben - 70) < 1e-6 && Math.abs(c.variante.stopLoss - 72) < 1e-6))
 p('Neutral zwischen zwei Chart-Niveaus', planKandidaten({ kurs: 67, atr: 2, zr: null, richtung: 'NEUTRAL', chart: cn }).some((c) => c.titel.startsWith('Band Chart')))
 p('Prompt nennt Chart-Niveaus, Systemtext ALLE: je Richtung höchstens einen', bauePlanPrompt(e, { lage: { kurs: 67 }, kandidaten: [], chart: cn }).includes('CHART-NIVEAUS') && planSystemText({ alle: true }).includes('JE RICHTUNG HÖCHSTENS EINEN'))
+
+console.log('Spot-Grid')
+const se = pruefePlanEingabe({ coin: 'nvdax', spot: true, richtung: 'ALLE', einsatz: '50', hebel: '7' }, new Map([['NVDAX', { linear: false, coinM: false, spot: true }]]), { alle: true })
+p('Spot-Eingabe: Richtung immer Long, Hebel 1, kein Coin-M', se.spot === true && se.richtung === 'LONG' && se.hebel === 1 && se.coinM === false)
+p('Spot nur, wenn Pionex das Spot-Paar führt', pruefePlanEingabe({ coin: 'SOL', spot: true, richtung: 'LONG', einsatz: 1 }, new Map([['SOL', { linear: true, coinM: true }]])).fehler === 'coinNichtHandelbar')
+p('Spot-Variante: höchstens 200 Grids, keine Stops', pruefePlanVariante({ unten: 100, oben: 200, anzahl: 201 }, 160, 'LONG', { spot: true }).fehler === 'anzahl' && pruefePlanVariante({ unten: 100, oben: 200, anzahl: 50, stopLoss: 90 }, 160, 'LONG', { spot: true }).fehler === 'spotStop')
+const sv = rechnePlanVariante({ ...e, spot: true, hebel: 1, einsatz: 100 }, { unten: 140, oben: 220, anzahl: 400 }, kerzen, { kurs: 200 })
+p('Spot rechnen: auf 200 Grids gekürzt, keine Liquidation, Startposition Long', sv.variante.anzahl === SPOT_MAX_GRIDS && sv.warnungen.includes('spotMax') && sv.start.liq === null && sv.start.nominalUsd > 0 && !sv.warnungen.some((w) => w.startsWith('liq')))
+const fv = rechnePlanVariante({ ...e, hebel: 1, einsatz: 100 }, { unten: 140, oben: 220, anzahl: 40 }, kerzen, { kurs: 200 })
+const sv2 = rechnePlanVariante({ ...e, spot: true, hebel: 1, einsatz: 100 }, { unten: 140, oben: 220, anzahl: 40 }, kerzen, { kurs: 200 })
+p('Spot rechnet mit Spot-Gebühren (höher als Futures-Maker)', sv2.start.nettoJeZyklus < fv.start.nettoJeZyklus)
+p('Kandidaten ohne Stop-Loss für Spot', planKandidaten({ kurs: 160, atr: 6, zr, richtung: 'LONG', ohneStop: true }).every((c) => c.variante.stopLoss == null))
+p('Prompt Spot: Spot-Grid ohne Hebel', bauePlanPrompt({ ...se, tage: 30 }, { lage: { kurs: 160 }, kandidaten: [] }).includes('Spot-Grid — kein Hebel'))
+const pk = await import('./pionex-kerzen.js')
+const roh = { data: { klines: [{ time: 2000, open: '2', high: '3', low: '1', close: '2.5', volume: '5' }, { time: 1000, open: '1', high: '2', low: '0.5', close: '2', volume: '1' }, { time: 3000, open: '0', high: '1', low: '1', close: '1' }] } }
+p('Pionex-Kerzen: aufsteigend, Zahlen, kaputte weg', JSON.stringify(pk.kerzenAusPionex(roh).map((k) => k.t)) === '[1000,2000]')
+const tageK = Array.from({ length: 10 }, (_, i) => ({ t: Date.UTC(2026, 10, 2) + i * 864e5, o: i + 1, h: i + 2, l: i, c: i + 1.5, v: 1 }))   // ab Montag 2.11.
+const wo = pk.wochenAusTagen(tageK)
+p('Wochen aus Tagen: Montag 00:00 UTC, Hoch/Tief/Schluss', wo.length === 2 && wo[0].t === Date.UTC(2026, 10, 2) && wo[0].h === 8 && wo[0].l === 0 && wo[0].c === 7.5 && wo[1].o === 8)
+const sm = pk.spotAusTabelle([{ symbol: 'NVDAX_USDT', type: 'SPOT', baseCurrency: 'NVDAX', quoteCurrency: 'USDT', minAmount: '10', minTradeSize: '0.0001', quotePrecision: 2, enable: true }, { symbol: 'X_BTC', type: 'SPOT', baseCurrency: 'X', quoteCurrency: 'BTC', enable: true }, { symbol: 'Y_USDT', type: 'SPOT', baseCurrency: 'Y', quoteCurrency: 'USDT', enable: false }])
+p('Spot-Symbole: nur aktive USDT-Paare mit Mindestwerten', sm.size === 1 && sm.get('NVDAX').minTradeSize === 0.0001 && sm.get('NVDAX').quotePrecision === 2)
 
 console.log('Start über die Steuerung')
 const a = baueAktion(pm, 'starten', { unten: '120', oben: '200', anzahl: '100', hebel: '4', einsatz: '3', art: 'arithmetic' }, { stellen: 7 })

@@ -8394,7 +8394,9 @@
         "neuerBot": "Es entsteht ein zusätzlicher Bot mit eigenem Kapital.",
         "gerundet": "Die Preise werden auf die Preisschritte von Pionex gerundet — massgeblich ist die Spalte «Nachher».",
         "grosserBetrag": "Der Betrag ist grösser als der heutige Einsatz — bitte auf Tippfehler prüfen.",
-        "liqNaeherBand": "Das Band reicht weiter in die Verlustrichtung: die Position kann dort weiter wachsen, die Liquidation rückt näher."
+        "liqNaeherBand": "Das Band reicht weiter in die Verlustrichtung: die Position kann dort weiter wachsen, die Liquidation rückt näher.",
+        "spotKauf": "Beim Start kauft Pionex zum Marktpreis die Coin für alle Linien über dem Kurs.",
+        "spotBehaelt": "Beim Beenden bleiben die Coins im Konto (nicht verkauft). Verkaufen kannst du sie danach selbst bei Pionex."
       },
       "fehler": {
         "schluessel": "API-Key und Secret eingeben.",
@@ -8429,7 +8431,8 @@
         "coin": "Coin fehlt oder ist ungültig.",
         "richtung": "Richtung fehlt.",
         "einsatz": "Einsatz muss grösser als 0 sein.",
-        "tage": "Ungültiger Zeitraum."
+        "tage": "Ungültiger Zeitraum.",
+        "nichtFuerSpot": "Bei einem Spot-Grid kann die App nur beenden und einen neuen starten."
       },
       "unklarTitel": "Ausgang unklar",
       "unklarText": "Die Verbindung zu Pionex brach ab oder antwortete nicht eindeutig. Pionex kann die Änderung ausgeführt haben. Nicht erneut senden — zuerst den Bot bei Pionex (oder hier nach dem Neuladen) ansehen.",
@@ -8467,7 +8470,7 @@
     "plan": {
       "knopf": "Neuen Bot planen",
       "titel": "Neuen Bot planen",
-      "erklaerung": "Plant einen neuen Futures-Grid-Bot bei Pionex von Grund auf. Die App misst die Lage (Kurs, Tages-ATR, Niveaus auf 1w/1d/4h), baut daraus Bänder und Grid-Dichten und rechnet jede Variante durch: wie sie sich über den gewählten Zeitraum geschlagen hätte und was ein Start heute bedeutet. Durchrechnen kostet nichts; nur die KI-Auswahl kostet beim eingestellten Anbieter.",
+      "erklaerung": "Plant einen neuen Futures- oder Spot-Grid-Bot bei Pionex von Grund auf. Die App misst die Lage (Kurs, Tages-ATR, Niveaus auf 1w/1d/4h), baut daraus Bänder und Grid-Dichten und rechnet jede Variante durch: wie sie sich über den gewählten Zeitraum geschlagen hätte und was ein Start heute bedeutet. Durchrechnen kostet nichts; nur die KI-Auswahl kostet beim eingestellten Anbieter.",
       "coin": "Coin",
       "art": "Art",
       "linear": "USDT-M (Marge in USDT)",
@@ -8510,7 +8513,8 @@
         "liqNah": "Liquidation weniger als 10 % vom Kurs entfernt.",
         "stopHinterLiq": "Der Stop-Loss liegt hinter der geschätzten Liquidation und würde nie auslösen.",
         "gebuehrFrisst": "Der Abstand je Grid deckt die Gebühren nicht.",
-        "gegenTrend": "Gegen den langfristigen Trend: Ein Grid in dieser Richtung kann lange gegen sich laufen."
+        "gegenTrend": "Gegen den langfristigen Trend: Ein Grid in dieser Richtung kann lange gegen sich laufen.",
+        "spotMax": "Auf 200 Grids gekürzt: mehr nimmt Pionex für ein Spot-Grid nicht an."
       },
       "fehler": {
         "coin": "Coin eingeben (z. B. SOL).",
@@ -8529,7 +8533,9 @@
         "weitWeg": "Das Band liegt sehr weit vom Kurs weg – Tippfehler?",
         "stopLoss": "Stop-Loss muss auf der Verlustseite des Kurses liegen.",
         "takeProfit": "Take-Profit muss auf der Gewinnseite des Kurses liegen.",
-        "neutralStop": "Für Neutral-Bots nicht möglich."
+        "neutralStop": "Für Neutral-Bots nicht möglich.",
+        "spotStop": "Ein Spot-Grid startet die App ohne Stop-Loss und Take-Profit.",
+        "keineKerzen": "Pionex liefert für diesen Zeitraum keine Kerzen."
       },
       "minSpalte": "Pionex",
       "minAb": "ab {betrag}",
@@ -8584,7 +8590,10 @@
       "kurzHinweis": "Je Richtung die Variante mit dem besten Rückblick, ohne Liquidation. Das ist keine Empfehlung: Grösster Verlust und Abstand zur Liquidation zählen mindestens so viel.",
       "chartNiveaus": "Chart-Niveaus",
       "chartErklaerung": "Volumenprofile der Seitwärtsphasen auf dem Wochenchart und deine eigenen Zeichnungen zu diesem Coin. Varianten «Band ab/bis Chart …» setzen die Bandgrenze knapp jenseits davon, den Stop-Loss eine Tages-ATR weiter.",
-      "chartKeine": "Keine gefunden: weder eine Seitwärtsphase auf dem Wochenchart noch eigene Zeichnungen."
+      "chartKeine": "Keine gefunden: weder eine Seitwärtsphase auf dem Wochenchart noch eigene Zeichnungen.",
+      "spot": "Spot (ohne Hebel)",
+      "nurSpot": "Diese Coin gibt es bei Pionex nur als Spot, zum Beispiel eine tokenisierte Aktie. Geplant wird dann ein Spot-Grid.",
+      "spotHinweis": "Spot-Grid: kein Hebel, keine Liquidation, kein Funding. Beim Start kauft Pionex die Coin für die Linien über dem Kurs, darum wirkt es wie Long. Höchstens 200 Grids, gestartet wird ohne Stop-Loss. Kerzen und Mindesteinsatz kommen direkt von Pionex."
     }
   }
 }

@@ -40,12 +40,14 @@ const ergebnis = ref(null)
 const haken = ref(false)
 const laedt = ref(false)
 const fehler = ref('')
+// Spot-Grid hat keinen Hebel
+const felderFuer = computed(() => (FELDER[props.aktion] || []).filter((f) => !(f === 'hebel' && props.bot.typ === 'spot_grid')))
 const offen = computed({ get: () => props.modelValue, set: (v) => emit('update:modelValue', v) })
 const mc = computed(() => props.bot.marginCoin)
 
 function zuruecksetzen() {
     const e = {}
-    for (const f of FELDER[props.aktion] || []) e[f] = props.vorgabe?.[f] != null ? String(props.vorgabe[f]) : ''
+    for (const f of felderFuer.value) e[f] = props.vorgabe?.[f] != null ? String(props.vorgabe[f]) : ''
     if (props.aktion === 'stops') { e.stopLossWeg = false; e.takeProfitWeg = false }
     eingabe.value = e
     pruefung.value = null; ergebnis.value = null; haken.value = false; fehler.value = ''
@@ -144,8 +146,8 @@ const istZeilen = computed(() => {
         <div class="dlg">
             <p class="leise">{{ t(`bots.st.aktionText.${bot.plan ? 'planStarten' : aktion}`) }}</p>
 
-            <div v-if="(FELDER[aktion] || []).length" class="felder">
-                <label v-for="f in FELDER[aktion]" :key="f"><span>{{ feldName(f) }}</span>
+            <div v-if="felderFuer.length" class="felder">
+                <label v-for="f in felderFuer" :key="f"><span>{{ feldName(f) }}</span>
                     <input v-model="eingabe[f]" class="at-feld" inputmode="decimal" :placeholder="platzhalter[f]">
                 </label>
             </div>
@@ -164,7 +166,7 @@ const istZeilen = computed(() => {
                 <Hinweis v-else-if="pruefung.bestanden" art="gut" :titel="t('bots.st.bestanden')">{{ pruefung.pruefung?.data?.reason || '' }}</Hinweis>
                 <Hinweis v-else-if="pruefung.grund === 'einsatzZuKlein'" art="fehler" :titel="t('bots.st.abgelehnt')">
                     <p class="grund">{{ pruefung.minEinsatz ? t('bots.st.grund.einsatzZuKleinMin', { betrag: betrag(pruefung.minEinsatz, mc) }) : t('bots.st.grund.einsatzZuKlein') }}</p>
-                    <Knopf v-if="pruefung.minEinsatz && (FELDER[aktion] || []).includes('einsatz')" art="normal" klein @click="eingabe.einsatz = String(pruefung.minEinsatz)">{{ t('bots.st.minUebernehmen', { betrag: betrag(pruefung.minEinsatz, mc) }) }}</Knopf>
+                    <Knopf v-if="pruefung.minEinsatz && felderFuer.includes('einsatz')" art="normal" klein @click="eingabe.einsatz = String(pruefung.minEinsatz)">{{ t('bots.st.minUebernehmen', { betrag: betrag(pruefung.minEinsatz, mc) }) }}</Knopf>
                     <p class="leise klein">Pionex: {{ pruefung.pruefung?.message || '' }}</p>
                 </Hinweis>
                 <Hinweis v-else art="fehler" :titel="t('bots.st.abgelehnt')">{{ pruefung.pruefung?.data?.reason || pruefung.pruefung?.message || '' }}</Hinweis>
