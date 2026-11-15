@@ -13,7 +13,7 @@ import { useI18n } from 'vue-i18n'
 import StrategyParamForm from '../StrategyParamForm.vue'
 import { Knopf, Pille, Symbol, Hinweis, Reiter } from '../basis'
 import SymbolSuche from '../chart/SymbolSuche.vue'
-import { strategieMarkt, ladeStrategieMarkt } from '../../utils/strategien/markt.js'
+import { strategieMarkt, ladeStrategieMarkt, strategienImMarkt } from '../../utils/strategien/markt.js'
 
 const entwurf = defineModel({ type: Object, required: true })
 const props = defineProps({
@@ -23,6 +23,9 @@ const props = defineProps({
 const { t } = useI18n()
 
 const strategie = computed(() => props.registry.strategies.find((s) => s.id === entwurf.value.strategyId) || null)
+// Im Aktien-Markt ohne Strategien nur für Krypto (FACH-H-001); die Strategie einer
+// bestehenden Instanz bleibt in der (dann gesperrten) Auswahl sichtbar.
+const waehlbar = computed(() => strategienImMarkt(props.registry.strategies, strategieMarkt.value, props.istNeu ? '' : entwurf.value.strategyId))
 
 /** Strategiewechsel: Parameter auf die Vorgaben der neuen, Zeiteinheiten auf ihre. */
 function strategieGewechselt() {
@@ -81,7 +84,7 @@ const reiterListe = computed(() => [
             <label class="feld breit">
                 <span class="at-label">{{ t('strategies.strategy') }}</span>
                 <select v-model="entwurf.strategyId" class="at-feld klein" :disabled="!istNeu" @change="strategieGewechselt">
-                    <option v-for="s in registry.strategies" :key="s.id" :value="s.id">{{ s.name }}</option>
+                    <option v-for="s in waehlbar" :key="s.id" :value="s.id">{{ s.name }}</option>
                 </select>
                 <small v-if="strategie" class="at-gedaempft">{{ strategie.description }}</small>
             </label>

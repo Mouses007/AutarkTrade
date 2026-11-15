@@ -28,7 +28,7 @@ import { logError } from '../utils/logger.js'
 import { apiFehlerText } from '../utils/apiError.js'
 import dayjs from '../utils/journal/zeit.js'
 import { Hinweis, Reiter } from '../components/basis'
-import { ladeStrategieMarkt, marktParams, KRYPTO } from '../utils/strategien/markt.js'
+import { ladeStrategieMarkt, marktParams, KRYPTO, strategieMarkt, imMarktWaehlbar, strategienImMarkt } from '../utils/strategien/markt.js'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -68,8 +68,10 @@ const form = ref({
 })
 
 const strategie = computed(() => registry.value.strategies.find((s) => s.id === form.value.strategyId) || null)
-const eigene = computed(() => registry.value.strategies.filter((s) => !s.eingebaut))
-const eingebaute = computed(() => registry.value.strategies.filter((s) => s.eingebaut))
+// Im Aktien-Markt ohne die Strategien, die es nur für Krypto gibt (FACH-H-001).
+const waehlbar = computed(() => strategienImMarkt(registry.value.strategies, strategieMarkt.value))
+const eigene = computed(() => waehlbar.value.filter((s) => !s.eingebaut))
+const eingebaute = computed(() => waehlbar.value.filter((s) => s.eingebaut))
 const aktiveInstanzen = computed(() => instanzen.value.filter((i) => !Number(i.archiviert)))
 
 function strategieGewechselt() {
@@ -86,6 +88,12 @@ function strategieGewechselt() {
 function vonInstanz(id) {
     const inst = instanzen.value.find((i) => i.id === Number(id))
     if (!inst) return
+    // Alt-Instanz einer Nur-Krypto-Strategie auf Aktien: nicht ins Labor laden.
+    if (inst.anlageklasse === 'aktien' && !imMarktWaehlbar(registry.value.strategies.find((s) => s.id === inst.strategyId), 'aktien')) {
+        form.value.instanceId = ''
+        fehler.value = t('strategies.nurKrypto')
+        return
+    }
     form.value.strategyId = inst.strategyId
     form.value.instanceId = inst.id
     form.value.timeframe = inst.timeframe
@@ -110,6 +118,7 @@ async function vonLauf(id) {
             fehler.value = t('strategien.labor.laufStrategieFehlt', { id: data.id, strategie: data.strategyId })
             return
         }
+        if (!waehlbar.value.some((s) => s.id === data.strategyId)) { fehler.value = t('strategies.nurKrypto'); return }
         form.value.strategyId = data.strategyId
         strategieGewechselt()
         Object.assign(form.value, {
@@ -140,6 +149,7 @@ async function direktlinks() {
     if (q.lauf) await vonLauf(q.lauf)
     else if (q.instanz) vonInstanz(q.instanz)
     else if (q.strategie && registry.value.strategies.some((s) => s.id === q.strategie)) {
+        if (!waehlbar.value.some((s) => s.id === q.strategie)) { fehler.value = t('strategies.nurKrypto'); return }
         form.value.strategyId = String(q.strategie)
         strategieGewechselt()
     }
@@ -156,8 +166,8 @@ async function laden() {
         registry.value = reg.data
         instanzen.value = inst.data
         if (form.value.symbol === KRYPTO.symbol) form.value.symbol = markt.symbol
-        if (!form.value.strategyId && reg.data.strategies.length) {
-            form.value.strategyId = reg.data.strategies[0].id
+        if (!form.value.strategyId && waehlbar.value.length) {
+            form.value.strategyId = waehlbar.value[0].id
             strategieGewechselt()
         }
     } catch (e) {

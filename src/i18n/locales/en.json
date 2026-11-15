@@ -2813,6 +2813,8 @@
     "backtest": "Backtest",
     "backtestNow": "Backtest now",
     "backtestFailed": "The backtest failed.",
+    "nurKrypto": "This strategy is crypto only: its signal (liquidations) has no counterpart on stock futures – there it would mostly catch the hour of the US open. Existing instances are kept but can no longer be switched on.",
+    "nurKryptoKurz": "Crypto only – not available in the stock market.",
     "runDone": "Run finished.",
     "runFailed": "Run failed.",
     "previousRuns": "Previous runs",

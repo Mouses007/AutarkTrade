@@ -24,7 +24,7 @@ import { apiFehlerText } from '../utils/apiError.js'
 import { logError } from '../utils/logger.js'
 import { geld, rText, prozent, tonVon } from '../utils/strategien/format.js'
 import { Knopf, Pille, Symbol, Hinweis } from '../components/basis'
-import { ladeStrategieMarkt, marktParams } from '../utils/strategien/markt.js'
+import { ladeStrategieMarkt, marktParams, strategienImMarkt, imMarktWaehlbar } from '../utils/strategien/markt.js'
 
 const { t, te } = useI18n()
 const route = useRoute()
@@ -103,7 +103,14 @@ const laufWarnung = ref('')
 async function neuVorbereiten() {
     const q = route.query
     laufWarnung.value = ''
-    const s = registry.value.strategies.find((x) => x.id === q.strategie) || registry.value.strategies[0]
+    // Im Aktien-Markt ohne Strategien nur für Krypto (FACH-H-001) — auch nicht per Direktlink.
+    const gewuenscht = registry.value.strategies.find((x) => x.id === q.strategie)
+    if (gewuenscht && !imMarktWaehlbar(gewuenscht, marktVorgaben.markt)) {
+        fehler.value = t('strategies.nurKrypto')
+        entwurf.value = null
+        return
+    }
+    const s = gewuenscht || strategienImMarkt(registry.value.strategies, marktVorgaben.markt)[0]
     if (!s) return
     const basis = {
         strategyId: s.id, name: '', mode: 'paper',
@@ -122,6 +129,11 @@ async function neuVorbereiten() {
             const strat = registry.value.strategies.find((x) => x.id === data.strategyId)
             if (!strat) {
                 fehler.value = t('strategien.labor.laufStrategieFehlt', { id: data.id, strategie: data.strategyId })
+                entwurf.value = null
+                return
+            }
+            if (!imMarktWaehlbar(strat, marktVorgaben.markt)) {
+                fehler.value = t('strategies.nurKrypto')
                 entwurf.value = null
                 return
             }

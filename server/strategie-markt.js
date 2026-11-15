@@ -11,6 +11,26 @@
  * `?markt=` fehlt oder ist unbekannt → kein Filter (alles, wie vor der Trennung).
  */
 
+/** Kennung der Ablehnung — die Oberfläche übersetzt sie (`strategies.nurKrypto`). */
+export const NUR_KRYPTO = 'nur_krypto'
+
+/**
+ * Darf diese Strategie auf diesem Markt laufen? Eine Strategie mit `nurKrypto`
+ * im Manifest stützt sich auf etwas, das es nur bei Coins gibt (FACH-H-001:
+ * die «Liquidations-Kerze» erkennt auf Aktien-Futures die Börseneröffnung).
+ *
+ * @param {object|null} strategie  Manifest
+ * @param {boolean|string} aktie   `true`/`'aktien'` = Aktien-Future
+ * @returns {{code: string, error: string}|null}  null = erlaubt (Krypto immer)
+ */
+export function marktSperre(strategie, aktie) {
+    if (!strategie?.nurKrypto || !(aktie === true || aktie === 'aktien')) return null
+    return {
+        code: NUR_KRYPTO,
+        error: `«${strategie.name || strategie.id}» gibt es nur für Krypto: ihr Signal (Liquidationen) hat bei Aktien-Futures keine Entsprechung.`,
+    }
+}
+
 /** `krypto` | `aktien` | null (kein Filter). Bewusst nicht `normMarkt`: Unbekanntes filtert nicht. */
 export function marktFilter(wert) {
     return wert === 'krypto' || wert === 'aktien' ? wert : null

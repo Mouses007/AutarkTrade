@@ -190,6 +190,13 @@ export default {
     // Nur 1h: Volumen- und Spannenschwelle und der Ausstieg nach 48 Kerzen sind
     // für 1h gemessen (Forschung K2).
     supportedTimeframes: ['1h'],
+    // Nur Krypto (FACH-H-001): Die Schwellen sind an Liquidations-Aufnahmen von
+    // Coins geeicht. Auf einem Aktien-Future trifft «Volumen ≥ 4× Mittel und
+    // Spanne ≥ 2× ATR» fast nur die Stunde der US-Eröffnung (gemessen NVDAUSDT:
+    // 12 von 20 Signalen in der Kerze 09:00–10:00 New Yorker Zeit, 5 am
+    // Sonntagabend) — das wäre «kaufe nach grüner Eröffnungsstunde» unter dem
+    // Namen einer Liquidations-Strategie.
+    nurKrypto: true,
     warmupCandles: 100,
     htfKerzen: (p) => htfFensterEma(p.htfEmaPeriod),
     params,

@@ -36,7 +36,7 @@ import { engineStatus, resetSymbolCache, killSwitch, ladeInstanz, tick, schliess
 import { holeAdapterListe, kenntBroker } from './execution/index.js'
 import { neustartInstanz } from './strategie-neustart.js'
 import { anlageklasseVon } from './aktien/kontext.js'
-import { marktFilter, laeufeImMarkt, nurInstanzenImMarkt } from './strategie-markt.js'
+import { marktFilter, laeufeImMarkt, nurInstanzenImMarkt, marktSperre } from './strategie-markt.js'
 import { normMarkt } from './migrationen/aktien.js'
 import { sendeWennAus } from './quellen/aus.js'
 import { setupAus, positionAus, tradeAus, aussortiertAus } from '../shared/strategieChart.js'
@@ -353,6 +353,9 @@ export function setupStrategyRoutes(app) {
             // Markt der Instanz aus ihren Symbolen: lauter Aktien-Futures oder keiner.
             const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols))
             if (markt.gemischt) return res.status(400).json({ error: GEMISCHT_FEHLER(markt.aktien) })
+            // Strategie nur für Krypto (FACH-H-001): keine Instanz auf Aktien-Futures.
+            const sperre = marktSperre(strategie, markt.klasse)
+            if (sperre) return res.status(400).json(sperre)
 
             const knex = getKnex()
             const isPg = knex.client.config.client === 'pg'
@@ -467,6 +470,15 @@ export function setupStrategyRoutes(app) {
             // Ändern sich die Symbole, kann sich der Markt ändern — gemischt bleibt verboten.
             const markt = await anlageklasseVon(JSON.parse(geprueft.werte.symbols))
             if (markt.gemischt) return res.status(400).json({ error: GEMISCHT_FEHLER(markt.aktien) })
+            // Strategie nur für Krypto (FACH-H-001): Aktien-Symbole lassen sich
+            // nicht mehr eintragen. Eine Instanz, die schon vorher auf Aktien
+            // stand, bleibt mit unveränderten Symbolen änderbar (Name, Werte) —
+            // sie wird nicht gelöscht, nur nicht mehr eingeschaltet.
+            const symboleGeaendert = geprueft.werte.symbols !== JSON.stringify(parseJson(vorhanden.symbols, []))
+            if (normMarkt(vorhanden.anlageklasse) !== 'aktien' || symboleGeaendert) {
+                const sperre = marktSperre(getStrategy(geprueft.werte.strategyId), markt.klasse)
+                if (sperre) return res.status(400).json(sperre)
+            }
             const aktualisierung = {
                 ...geprueft.werte,
                 anlageklasse: markt.klasse,
@@ -555,6 +567,10 @@ export function setupStrategyRoutes(app) {
                 if (!BETRIEBSARTEN.includes(instance.mode)) {
                     return res.status(409).json({ error: 'Der scharfe Handel ist ausgelagert — Instanz auf Papier oder Schatten stellen' })
                 }
+                // Strategie nur für Krypto (FACH-H-001): eine bestehende
+                // Aktien-Instanz bleibt erhalten, startet aber nicht mehr.
+                const sperre = marktSperre(getStrategy(row.strategyId), normMarkt(row.anlageklasse))
+                if (sperre) return res.status(409).json(sperre)
                 // Der Not-Aus wird hier NICHT aufgehoben. Er ist eine bewusste
                 // Entscheidung und darf nur dort zurückgenommen werden, wo er
                 // gesetzt wurde — sonst hebt ein beiläufiger Start-Klick den
@@ -689,6 +705,17 @@ export function setupStrategyRoutes(app) {
         }
     }
 
+    /**
+     * Strategie nur für Krypto (FACH-H-001) und ein Aktien-Future unter den
+     * Symbolen? Dann `{code, error}` für die Antwort, sonst null. Strategien
+     * ohne das Kennzeichen fragen den Stamm gar nicht erst.
+     */
+    async function sperreFuerSymbole(strategie, symbole) {
+        if (!strategie?.nurKrypto) return null
+        const markt = await anlageklasseVon(symbole)
+        return marktSperre(strategie, markt.aktien.length > 0)
+    }
+
     async function robustBasis(b) {
         const strategie = getStrategy(b.strategyId)
         if (!strategie) return { fehler: `Unbekannte Strategie: ${b.strategyId}` }
@@ -698,6 +725,8 @@ export function setupStrategyRoutes(app) {
         }
         const symbol = String(b.symbol || '').toUpperCase()
         if (!SYMBOL_RE.test(symbol)) return { fehler: 'Ungültiges Symbol' }
+        const sperre = await sperreFuerSymbole(strategie, [symbol])
+        if (sperre) return { fehler: sperre.error, code: sperre.code }
         const htfFehler = htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
         if (htfFehler) return { fehler: htfFehler }
         const toTs = Number(b.toTs) || Date.now()
@@ -725,8 +754,8 @@ export function setupStrategyRoutes(app) {
     app.post('/api/strategies/robustness/montecarlo', async (req, res) => {
         try {
             const b = req.body || {}
-            const { basis, fehler } = await robustBasis(b)
-            if (fehler) return res.status(400).json({ error: fehler })
+            const { basis, fehler, code } = await robustBasis(b)
+            if (fehler) return res.status(400).json({ error: fehler, ...(code ? { code } : {}) })
             const geschaetzt = schaetzeKerzen(basis.fromTs, basis.toTs, basis.timeframe)
             if (geschaetzt > MAX_BACKTEST_CANDLES) {
                 return res.status(400).json({ error: `Zeitraum zu gross: ~${geschaetzt} Kerzen` })
@@ -759,8 +788,8 @@ export function setupStrategyRoutes(app) {
     app.post('/api/strategies/robustness/stability', async (req, res) => {
         try {
             const b = req.body || {}
-            const { basis, fehler } = await robustBasis(b)
-            if (fehler) return res.status(400).json({ error: fehler })
+            const { basis, fehler, code } = await robustBasis(b)
+            if (fehler) return res.status(400).json({ error: fehler, ...(code ? { code } : {}) })
 
             const werte = Array.isArray(b.werte) ? b.werte.slice(0, MAX_STUFEN) : []
             if (werte.length < 3) return res.status(400).json({ error: 'Mindestens drei Werte angeben' })
@@ -786,8 +815,8 @@ export function setupStrategyRoutes(app) {
     app.post('/api/strategies/robustness/stability-matrix', async (req, res) => {
         try {
             const b = req.body || {}
-            const { basis, fehler } = await robustBasis(b)
-            if (fehler) return res.status(400).json({ error: fehler })
+            const { basis, fehler, code } = await robustBasis(b)
+            if (fehler) return res.status(400).json({ error: fehler, ...(code ? { code } : {}) })
             const werte = Array.isArray(b.werte) ? b.werte.slice(0, MAX_STUFEN) : []
             if (werte.length < 3) return res.status(400).json({ error: 'Mindestens drei Werte angeben' })
 
@@ -813,8 +842,8 @@ export function setupStrategyRoutes(app) {
     app.post('/api/strategies/robustness/walkforward', async (req, res) => {
         try {
             const b = req.body || {}
-            const { basis, fehler } = await robustBasis(b)
-            if (fehler) return res.status(400).json({ error: fehler })
+            const { basis, fehler, code } = await robustBasis(b)
+            if (fehler) return res.status(400).json({ error: fehler, ...(code ? { code } : {}) })
             const werte = Array.isArray(b.werte) ? b.werte.slice(0, MAX_STUFEN) : []
             if (werte.length < 2) return res.status(400).json({ error: 'Mindestens zwei Werte angeben' })
 
@@ -848,8 +877,8 @@ export function setupStrategyRoutes(app) {
         ausstiegLaeuft = true
         try {
             const b = req.body || {}
-            const { basis, fehler } = await robustBasis(b)
-            if (fehler) return res.status(400).json({ error: fehler })
+            const { basis, fehler, code } = await robustBasis(b)
+            if (fehler) return res.status(400).json({ error: fehler, ...(code ? { code } : {}) })
             const geschaetzt = schaetzeKerzen(basis.fromTs, basis.toTs, basis.timeframe)
             if (geschaetzt > MAX_BACKTEST_CANDLES) {
                 return res.status(400).json({ error: `Zeitraum zu gross: ~${geschaetzt} Kerzen` })
@@ -890,6 +919,9 @@ export function setupStrategyRoutes(app) {
             if (!strategie.supportedTimeframes.includes(b.timeframe)) {
                 return res.status(400).json({ error: `${strategie.name} unterstützt ${b.timeframe} nicht` })
             }
+
+            const sperre = await sperreFuerSymbole(strategie, [symbol])
+            if (sperre) return res.status(400).json(sperre)
 
             const htfFehler = entwurf ? null : htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
             if (htfFehler) return res.status(400).json({ error: htfFehler })
@@ -1013,6 +1045,8 @@ export function setupStrategyRoutes(app) {
             // Jeder Lauf holt Kerzen und rechnet sie durch; ohne Deckel wartet
             // der Nutzer minutenlang auf eine Antwort, die längst abgebrochen ist.
             if (symbole.length > 6) return res.status(400).json({ error: 'Höchstens 6 Symbole je Durchlauf' })
+            const sperre = await sperreFuerSymbole(strategie, symbole)
+            if (sperre) return res.status(400).json(sperre)
             const htfFehler = htfZeiteinheitFehler(b.strategyId, b.params, b.timeframe)
             if (htfFehler) return res.status(400).json({ error: htfFehler })
 

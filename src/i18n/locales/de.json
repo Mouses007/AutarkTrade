@@ -2813,6 +2813,8 @@
     "backtest": "Backtest",
     "backtestNow": "Jetzt backtesten",
     "backtestFailed": "Der Backtest ist fehlgeschlagen.",
+    "nurKrypto": "Diese Strategie gibt es nur für Krypto: ihr Signal (Liquidationen) hat bei Aktien-Futures keine Entsprechung – dort träfe es vor allem die Stunde der US-Eröffnung. Bestehende Instanzen bleiben erhalten, lassen sich aber nicht mehr einschalten.",
+    "nurKryptoKurz": "Nur Krypto – im Aktien-Markt nicht wählbar.",
     "runDone": "Durchlauf fertig.",
     "runFailed": "Durchlauf fehlgeschlagen.",
     "previousRuns": "Frühere Durchläufe",

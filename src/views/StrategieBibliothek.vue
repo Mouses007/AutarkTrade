@@ -24,7 +24,7 @@ import RegelEditor from '../components/strategien/RegelEditor.vue'
 import StrategyParamForm from '../components/StrategyParamForm.vue'
 import { apiFehlerText } from '../utils/apiError.js'
 import { logError } from '../utils/logger.js'
-import { ladeStrategieMarkt, zaehleInstanzen } from '../utils/strategien/markt.js'
+import { ladeStrategieMarkt, zaehleInstanzen, strategieMarkt, imMarktWaehlbar } from '../utils/strategien/markt.js'
 import { Knopf, Pille, Symbol, Hinweis } from '../components/basis'
 
 const { t } = useI18n()
@@ -102,6 +102,9 @@ const eingebaute = computed(() => registry.value.strategies.filter((s) => s.eing
 const marktFilterWert = ref('')
 const instanzenVon = (sid) => zaehleInstanzen(instanzen.value, sid, marktFilterWert.value).eigene.length
 const instanzenAndere = (sid) => zaehleInstanzen(instanzen.value, sid, marktFilterWert.value).andere.length
+// Strategien nur für Krypto (FACH-H-001) bleiben in der Bibliothek sichtbar, im
+// Aktien-Markt aber ohne «Im Labor»/«Instanz anlegen» und mit Vermerk.
+const imMarkt = (s) => imMarktWaehlbar(s, strategieMarkt.value)
 const andererMarktName = computed(() => t('markt.' + (marktFilterWert.value === 'aktien' ? 'krypto' : 'aktien')))
 
 // ── Was ist offen? ──────────────────────────────────────────────────────
@@ -344,10 +347,13 @@ const kurzSatz = (s) => s.description || s.saetze?.find((x) => x.titel === 'Ausl
                                             <span v-if="instanzenAndere(s.id)">{{ t('aktienTrennung.instanzenAndererMarkt', { n: instanzenAndere(s.id), markt: andererMarktName }) }}</span>
                                         </div>
                                         <div v-if="s.description" class="at-gedaempft klein">{{ s.description }}</div>
+                                        <div v-if="!imMarkt(s)" class="at-gedaempft klein">{{ t('strategies.nurKryptoKurz') }}</div>
                                     </td>
                                     <td class="zahl aktionen" @click.stop @keydown.enter.stop>
-                                        <Knopf klein :to="`${LABOR}?strategie=${s.id}`">{{ t('strategien.bibliothek.imLabor') }}</Knopf>
-                                        <Knopf klein :to="`/strategien/instanzen/neu?strategie=${s.id}`">{{ t('strategien.bibliothek.instanzAnlegen') }}</Knopf>
+                                        <template v-if="imMarkt(s)">
+                                            <Knopf klein :to="`${LABOR}?strategie=${s.id}`">{{ t('strategien.bibliothek.imLabor') }}</Knopf>
+                                            <Knopf klein :to="`/strategien/instanzen/neu?strategie=${s.id}`">{{ t('strategien.bibliothek.instanzAnlegen') }}</Knopf>
+                                        </template>
                                     </td>
                                 </tr>
                             </tbody>
@@ -365,9 +371,10 @@ const kurzSatz = (s) => s.description || s.saetze?.find((x) => x.titel === 'Ausl
                     <Pille ton="neutral">{{ t('strategien.bibliothek.instanzen', { n: instanzenVon(eingebauteOffen.id) }) }}</Pille>
                     <Pille v-if="instanzenAndere(eingebauteOffen.id)" ton="neutral">{{ t('aktienTrennung.instanzenAndererMarkt', { n: instanzenAndere(eingebauteOffen.id), markt: andererMarktName }) }}</Pille>
                 </div>
+                <Hinweis v-if="!imMarkt(eingebauteOffen)" art="warn" class="abstandUnten">{{ t('strategies.nurKrypto') }}</Hinweis>
                 <div class="knopfzeile abstandUnten">
-                    <Knopf klein art="haupt" :to="`${LABOR}?strategie=${eingebauteOffen.id}`">{{ t('strategien.bibliothek.imLabor') }}</Knopf>
-                    <Knopf klein :to="`/strategien/instanzen/neu?strategie=${eingebauteOffen.id}`">{{ t('strategien.bibliothek.instanzAnlegen') }}</Knopf>
+                    <Knopf v-if="imMarkt(eingebauteOffen)" klein art="haupt" :to="`${LABOR}?strategie=${eingebauteOffen.id}`">{{ t('strategien.bibliothek.imLabor') }}</Knopf>
+                    <Knopf v-if="imMarkt(eingebauteOffen)" klein :to="`/strategien/instanzen/neu?strategie=${eingebauteOffen.id}`">{{ t('strategien.bibliothek.instanzAnlegen') }}</Knopf>
                     <Knopf v-if="ALS_VORLAGE[eingebauteOffen.id]" klein symbol="kopieren"
                         :to="`${PFAD}/neu?vorlage=${ALS_VORLAGE[eingebauteOffen.id]}`">{{ t('strategien.bibliothek.alsKopie') }}</Knopf>
                 </div>

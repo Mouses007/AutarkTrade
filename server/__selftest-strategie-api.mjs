@@ -266,6 +266,57 @@ console.log('\nAussortierte Signale: Trichter, Liste, Löschen')
     pruefe('Instanz löschen nimmt ihre aussortierten Signale mit', weg.s === 200 && Number(rest.n) === 0, `Status ${weg.s}, Rest ${rest.n}`)
 }
 
+// ── FACH-H-001 ───────────────────────────────────────────────────────────
+console.log('\nStrategie nur für Krypto: im Aktien-Markt abgelehnt')
+{
+    const [instrumentId] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'NVDA', unterart: 'aktie', name: 'NVIDIA' })
+    await knex('instrument_listungen').insert({ instrumentId, handelsplatz: 'binance', art: 'perp', symbol: 'NVDAUSDT', aktiv: 1 })
+    const reg = (await rufe('get', '/api/strategies/registry')).d.strategies
+    pruefe('Registry: nur die Liquidations-Kerze trägt nurKrypto',
+        reg.filter((s) => s.nurKrypto).map((s) => s.id).join() === 'liq_kerze' && reg.every((s) => typeof s.nurKrypto === 'boolean'))
+
+    const neu = (symbols, strategyId = 'liq_kerze') => rufe('post', '/api/strategies/instances', { strategyId, name: 'LK', mode: 'paper', timeframe: '1h', symbols, market: 'futures' })
+    const aktie = await neu(['NVDAUSDT'])
+    pruefe('Anlegen auf einem Aktien-Future: 400 mit Kennung', aktie.s === 400 && aktie.d.code === 'nur_krypto' && /nur für Krypto/.test(aktie.d.error), JSON.stringify(aktie))
+    const coin = await neu(['BTCUSDT'])
+    pruefe('Anlegen auf einem Coin: wie bisher', coin.s === 201 && coin.d.anlageklasse === 'krypto', JSON.stringify(coin.d).slice(0, 200))
+    const andere = await neu(['NVDAUSDT'], 'ema_touch')
+    pruefe('Gegenprobe: andere Strategie auf dem Aktien-Future geht', andere.s === 201 && andere.d.anlageklasse === 'aktien', JSON.stringify(andere.d).slice(0, 200))
+
+    const um = await rufe('put', `/api/strategies/instances/${coin.d.id}`, { symbols: ['NVDAUSDT'] })
+    pruefe('Speichern: Coin-Instanz lässt sich nicht auf einen Aktien-Future umstellen', um.s === 400 && um.d.code === 'nur_krypto', JSON.stringify(um))
+    const name = await rufe('put', `/api/strategies/instances/${coin.d.id}`, { name: 'LK neu' })
+    pruefe('Speichern: Coin-Instanz sonst wie bisher', name.s === 200 && name.d.name === 'LK neu', JSON.stringify(name).slice(0, 200))
+
+    // Bestand von vor der Sperre: bleibt, lässt sich ändern und ausschalten, aber nicht einschalten.
+    const [altId] = await knex('strategy_instances').insert({ strategyId: 'liq_kerze', name: 'Alt', symbols: '["NVDAUSDT"]', timeframe: '1h',
+        params: '{}', risk: '{}', mode: 'paper', enabled: 1, anlageklasse: 'aktien' })
+    const altName = await rufe('put', `/api/strategies/instances/${altId}`, { name: 'Alt 2' })
+    pruefe('Bestand: bleibt mit unveränderten Symbolen änderbar', altName.s === 200 && altName.d.name === 'Alt 2', JSON.stringify(altName).slice(0, 200))
+    const aus = await rufe('post', `/api/strategies/instances/${altId}/enabled`, { enabled: false })
+    const an = await rufe('post', `/api/strategies/instances/${altId}/enabled`, { enabled: true })
+    pruefe('Bestand: ausschalten geht, einschalten 409 mit Kennung', aus.s === 200 && an.s === 409 && an.d.code === 'nur_krypto', JSON.stringify([aus, an]))
+    pruefe('Bestand: nicht gelöscht', Boolean(await knex('strategy_instances').where('id', altId).first()))
+
+    const zeitraum = { timeframe: '1h', fromTs: Date.UTC(2026, 8, 1), toTs: Date.UTC(2026, 9, 1) }
+    const bt = await rufe('post', '/api/strategies/backtest', { strategyId: 'liq_kerze', symbol: 'NVDAUSDT', ...zeitraum })
+    pruefe('Backtest auf dem Aktien-Future: 400 mit Kennung, nichts gespeichert',
+        bt.s === 400 && bt.d.code === 'nur_krypto' && !(await knex('strategy_backtests').where({ strategyId: 'liq_kerze' }).first()), JSON.stringify(bt))
+    const mc = await rufe('post', '/api/strategies/robustness/montecarlo', { strategyId: 'liq_kerze', symbol: 'NVDAUSDT', ...zeitraum })
+    pruefe('Robustheit: ebenso', mc.s === 400 && mc.d.code === 'nur_krypto', JSON.stringify(mc))
+    const mx = await rufe('post', '/api/strategies/backtest-matrix', { strategyId: 'liq_kerze', symbols: ['BTCUSDT', 'NVDAUSDT'], ...zeitraum })
+    pruefe('Parameter-Vergleich: ein Aktien-Future unter den Symbolen genügt', mx.s === 400 && mx.d.code === 'nur_krypto', JSON.stringify(mx))
+
+    // Rückhalt in runBacktest selbst (Rangliste, KI-Werkzeug): leeres Ergebnis mit Kennung.
+    const kerzen = Array.from({ length: 300 }, (_, i) => ({ t: Date.UTC(2026, 8, 1) + i * 3600e3, o: 100, h: 101, l: 99, c: 100, v: 10 }))
+    const basis = { strategyId: 'liq_kerze', symbol: 'XUSDT', timeframe: '1h', candles: kerzen, htfCandles: [], marketMeta: {}, fundingVerlauf: [],
+        fromTs: kerzen[0].t, toTs: kerzen.at(-1).t + 3600e3 }
+    const gesperrt = await runBacktest({ ...basis, aktie: { ticker: 'X', boerse: 'binance', splits: [] } })
+    pruefe('runBacktest mit Aktien-Kontext: leer, Kennung nur_krypto', gesperrt.trades.length === 0 && gesperrt.stats.hinweisCode === 'nur_krypto' && /nur für Krypto/.test(gesperrt.stats.hinweis))
+    const frei = await runBacktest({ ...basis, aktie: null })
+    pruefe('runBacktest ohne Aktien-Kontext: rechnet wie bisher', frei.stats.hinweisCode === undefined && frei.stats.aktien === null && Boolean(frei.funnel), JSON.stringify(frei.stats).slice(0, 200))
+}
+
 await stopStrategyEngine?.().catch(() => {})
 await knex.destroy()
 console.log(`\n${fehler === 0 ? '✓' : '✗'} ${bestanden} bestanden, ${fehler} fehlgeschlagen\n`)

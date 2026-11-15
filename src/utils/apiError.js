@@ -20,6 +20,8 @@ export function apiFehlerText(e, fallback, t) {
     const status = e?.response?.status
     const vomServer = e?.response?.data?.error
 
+    // Ablehnungen mit Kennung übersetzt die Oberfläche selbst (de + en).
+    if (e?.response?.data?.code === 'nur_krypto') return t('strategies.nurKrypto')
     if (vomServer) return vomServer
     if (status === 404) return t('common.endpointMissing')
     if (status === 401) return t('common.sessionExpired')

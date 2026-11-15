@@ -40,6 +40,19 @@ export function marktParams(filter) {
     return filter === 'krypto' || filter === 'aktien' ? { markt: filter } : {}
 }
 
+/**
+ * Ist die Strategie in diesem Markt wählbar? Strategien mit `nurKrypto`
+ * (Signal aus Liquidationen o. Ä., FACH-H-001) gibt es im Aktien-Markt nicht.
+ */
+export function imMarktWaehlbar(strategie, markt) {
+    return !(markt === 'aktien' && strategie?.nurKrypto)
+}
+
+/** Strategien, die der Markt anbietet; `behalte` (id) bleibt immer drin — die Strategie einer bestehenden Instanz. */
+export function strategienImMarkt(strategien, markt, behalte = '') {
+    return (strategien || []).filter((s) => s.id === behalte || imMarktWaehlbar(s, markt))
+}
+
 /** Gehört die Instanz zum ANDEREN Markt? Ohne Filter nie; ohne Angabe ist sie Krypto. */
 export function istAndererMarkt(instanz, filter) {
     if (filter !== 'krypto' && filter !== 'aktien') return false

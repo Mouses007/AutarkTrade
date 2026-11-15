@@ -18,6 +18,7 @@ import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { evaluateRisk, startOfDayUtc } from './risk-engine.js'
 import { wartungsmargeMitQuelle } from './margin-rates.js'
 import { aktienKontext } from './aktien/kontext.js'
+import { marktSperre } from './strategie-markt.js'
 import { bereinigeSplits, bereinigeFunding, verdaechtigeSpruenge } from './aktien/splits.js'
 import { sitzungVon, handelstagBeginn, sitzungsBilanz, regimeWechsel } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, beruehrtZahlen, zahlenBilanz, terminListe } from '../shared/aktien-zahlen.js'
@@ -240,6 +241,15 @@ export async function runBacktest(opts) {
     // bisher. Robustheit und Messskripte reichen `opts.aktie` durch, damit
     // nicht jeder Teillauf neu fragt.
     const aktie = opts.aktie !== undefined ? opts.aktie : await aktienKontext(symbol)
+    // Strategie nur für Krypto (FACH-H-001): auf einem Aktien-Future nicht
+    // rechnen — auch nicht über Rangliste, Robustheit oder das KI-Werkzeug,
+    // die an den Routen-Prüfungen vorbei hierher kommen.
+    const sperre = marktSperre(strategie, Boolean(aktie))
+    if (sperre) {
+        const leer = leeresErgebnis(sperre.error)
+        leer.stats.hinweisCode = sperre.code
+        return leer
+    }
     let splitBericht = []
     let sprungVerdacht = []
     if (aktie) {

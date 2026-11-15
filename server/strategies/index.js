@@ -258,6 +258,9 @@ export function listStrategies() {
         warmupCandles: m.warmupCandles || 200,
         params: m.params,
         paramGroups: m.paramGroups || [],
+        // Strategie, deren Signal es nur bei Coins gibt (Liquidationen, Funding):
+        // im Aktien-Markt nicht wählbar (`server/strategie-markt.js`).
+        nurKrypto: m.nurKrypto === true,
     }))
 }
 

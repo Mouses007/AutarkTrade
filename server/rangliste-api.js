@@ -28,6 +28,7 @@ import { schaetzeKerzen, MAX_BACKTEST_CANDLES } from './strategy-backtest.js'
 import { beansprucheFuehrung, verlaengereFuehrung, gibFuehrungFrei, INSTANZ_ID } from './db-claim.js'
 import { loeseUniversumAuf, quellenUebersicht, normalisiereSymbole, UNIVERSUM_ARTEN } from './coin-universum.js'
 import { normMarkt } from './migrationen/aktien.js'
+import { marktSperre } from './strategie-markt.js'
 import { leiteZeiteinheitAb } from './rangliste-zeiteinheit.js'
 import { bearbeiteCoin, schaetzeAufwand } from './rangliste-lauf.js'
 import { vergibRaenge, beurteileRangliste, ranglisteSatz } from './rangliste-rang.js'
@@ -412,6 +413,9 @@ export function setupRanglisteRoutes(app) {
                 ? await knex()('coin_universen').where('id', b.universumId).first()
                 : { art: b.art || 'manuell', n: b.n, symbole: b.symbole, nurHandelbar: b.nurHandelbar, name: b.name, anlageklasse: normMarkt(b.markt) }
             if (!universum) return res.status(400).json({ error: 'Universum nicht gefunden' })
+            // Strategie nur für Krypto (FACH-H-001): keine Rangliste über Aktien-Futures.
+            const sperre = marktSperre(strategie, normMarkt(universum.anlageklasse))
+            if (sperre) return res.status(400).json(sperre)
 
             const aufgeloest = await loeseUniversumAuf({
                 ...universum, symbole: parse(universum.symbole, universum.symbole),

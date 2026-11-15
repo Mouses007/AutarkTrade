@@ -15,7 +15,7 @@ import assert from 'node:assert/strict'
 import { titelVon, schreibweisen, gleicherTitel, symbolFuerPanel, listenSymbol, vorzug, standardAktien } from './chart/aktienSymbole.js'
 import { teilePositionen, andererMarkt, alarmImMarkt } from './chart/marktTrennung.js'
 import { OVERLAYS, overlaysFuer, istNurKrypto, overlayAn } from './chart/overlays/liste.js'
-import { marktParams, istAndererMarkt, zaehleInstanzen, vorgabenFuer, KRYPTO } from './strategien/markt.js'
+import { marktParams, istAndererMarkt, zaehleInstanzen, vorgabenFuer, KRYPTO, imMarktWaehlbar, strategienImMarkt } from './strategien/markt.js'
 import { baueKlassenNachschlag } from '../../shared/anlageklasse.js'
 
 let n = 0
@@ -114,6 +114,17 @@ gleich(ids(zaehleInstanzen(INST, 'lsob', 'aktien')), { eigene: [2], andere: [1, 
 gleich(ids(zaehleInstanzen(INST, 'lsob', '')), { eigene: [1, 2, 3], andere: [] }, 'Aktien-Teil aus: alle zusammen wie bisher')
 gleich(ids(zaehleInstanzen(INST, 'gibtsNicht', 'aktien')), { eigene: [], andere: [] }, 'Strategie ohne Instanz')
 gleich(ids(zaehleInstanzen(null, 'lsob', 'aktien')), { eigene: [], andere: [] }, 'keine Liste')
+
+// Strategien nur für Krypto (FACH-H-001): im Aktien-Markt nicht in der Auswahl
+{
+    const REG = [{ id: 'lsob' }, { id: 'liq_kerze', nurKrypto: true }, { id: 'ema_touch', nurKrypto: false }]
+    const idsVon = (l) => l.map((s) => s.id)
+    gleich(idsVon(strategienImMarkt(REG, 'krypto')), ['lsob', 'liq_kerze', 'ema_touch'], 'Krypto-Markt: alle Strategien wie bisher')
+    gleich(idsVon(strategienImMarkt(REG, 'aktien')), ['lsob', 'ema_touch'], 'Aktien-Markt: ohne die Nur-Krypto-Strategie')
+    gleich(idsVon(strategienImMarkt(REG, 'aktien', 'liq_kerze')), ['lsob', 'liq_kerze', 'ema_touch'], 'bestehende Instanz: ihre Strategie bleibt sichtbar')
+    gleich([imMarktWaehlbar(REG[1], 'aktien'), imMarktWaehlbar(REG[1], 'krypto'), imMarktWaehlbar(null, 'aktien')], [false, true, true], 'imMarktWaehlbar')
+    gleich(strategienImMarkt(null, 'aktien'), [], 'keine Liste')
+}
 gleich([istAndererMarkt(INST[0], 'aktien'), istAndererMarkt(INST[1], 'aktien'), istAndererMarkt(INST[2], 'aktien'), istAndererMarkt(INST[1], '')],
     [true, false, true, false], 'anderer Markt')
 // Krypto-Vorgaben unverändert
