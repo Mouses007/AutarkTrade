@@ -37,6 +37,15 @@
 
 export const ANLAGEKLASSEN = ['krypto', 'aktien', 'sonstige']
 
+/** Börsen, die selbst sagen, was Aktie und was Coin ist — aus ihnen entsteht `bekannteBasen`. */
+export const KENNZEICHEN_PLAETZE = ['binance', 'bitget']
+/**
+ * Börsen ohne Kennzeichen: ihre Einordnung hängt an den Listen der Börsen
+ * oben. Fehlt eine davon, ist «kein Aktien-Ticker» hier keine Aussage über
+ * die Börse selbst (Audit FUN-F-005, Regel 4 in `stamm.js`).
+ */
+export const ABGLEICH_PLAETZE = ['bitunix', 'pionex']
+
 /** Unterart → Anlageklasse. */
 const KLASSE = {
     coin: 'krypto', aktie: 'aktien', etf: 'aktien', vorboerslich: 'aktien',

@@ -8,7 +8,7 @@
  * Kryptowährungen bleiben draussen: ihr «wo handelbar» pflegen Coin-Radar und
  * Börsenwacht schon.
  *
- * Drei Regeln, die still Falsches verhindern:
+ * Vier Regeln, die still Falsches verhindern:
  *
  *   1. Jede Liste darf einzeln ausfallen. Eine ausgefallene oder leere Liste
  *      ändert an den Listungen dieses Handelsplatzes NICHTS — «nicht gefragt»
@@ -18,6 +18,13 @@
  *   3. Der erste Abgleich eines Handelsplatzes ist die Ausgangslage: seine
  *      Listungen sind nicht «neu». Erst ab dem zweiten Lauf meldet `neu`,
  *      was hinzugekommen ist (Grundlage für den Listungs-Alarm, Phase 4).
+ *   4. Bitunix und Pionex kennzeichnen Aktien nicht; was dort Aktie ist, sagen
+ *      die Listen von Binance und Bitget. Fällt eine davon aus (oder bricht
+ *      ein, Regel 2), bleiben Bitunix und Pionex für diesen Lauf unberührt —
+ *      sonst gälten ihre Aktien als delistet und beim nächsten Lauf als «neu
+ *      handelbar». Kommt eine Kennzeichen-Liste dazu, die der vorige Lauf
+ *      nicht hatte, wird für Bitunix/Pionex gespeichert, aber nichts gemeldet
+ *      (Audit FUN-F-005). Eine nicht gewählte Quelle ist kein Ausfall.
  *
  * Binance wird nur gelesen, wenn es die gewählte Marktdaten-Quelle ist —
  * Binance-Adressen stehen ausschliesslich in `server/marktdaten/binance.js`.
@@ -29,7 +36,7 @@ import { holeJson } from '../hype-radar/quellen.js'
 import { holeBitunixPaare } from '../bitunix-api.js'
 import * as marktdaten from '../marktdaten/index.js'
 import { ordneAlle } from './einordnung.js'
-import { holeListen, speichereStamm } from './stamm-speicher.js'
+import { holeListen, speichereStamm, ausgefalleneListen } from './stamm-speicher.js'
 import { meldeNeueListungen } from './meldungen.js'
 
 export { leseStamm, stammZahlen, HANDELSPLAETZE } from './stamm-speicher.js'
@@ -102,7 +109,7 @@ export function gleicheAb() {
             letzter = { ok: false, zeit: beginn, stand, grund: 'keineListe' }
             return letzter
         }
-        const ergebnis = await speichereStamm(getKnex(), ordneAlle(roh), gelesen, beginn)
+        const ergebnis = await speichereStamm(getKnex(), ordneAlle(roh), gelesen, beginn, { ausgefallen: ausgefalleneListen(stand) })
         letzter = { ok: true, zeit: beginn, dauerMs: Date.now() - beginn, stand, ...ergebnis }
         // Neue Listungen melden (gebündelt, nur wenn eingeschaltet; Regel 3 hält den
         // ersten Abgleich eines Handelsplatzes aus `neu` heraus). Hält den Abgleich nicht auf.
@@ -128,7 +135,7 @@ export function starteStammTakt() {
             if (Number(s?.modusAktienAn ?? 0) !== 1) return
             if (!(await beansprucheAufgabe('aktien_stamm', TAKT_MS - 60e3))) return
             const r = await gleicheAb()
-            if (r.ok) console.log(` -> Aktien-Stamm: ${r.titel} Titel, ${r.listungen} Listungen, ${r.neu.length} neu, ${r.weg.length} weg`)
+            if (r.ok) console.log(` -> Aktien-Stamm: ${r.titel} Titel, ${r.listungen} Listungen, ${r.neu.length} neu, ${r.weg.length} weg${r.eingefroren?.length ? `, unverändert gelassen (Kennzeichen-Liste fehlt): ${r.eingefroren.join(', ')}` : ''}`)
             else console.warn(' -> Aktien-Stamm: keine Liste abrufbar')
         } catch (e) {
             console.warn(' -> Aktien-Stamm-Takt:', e.message)

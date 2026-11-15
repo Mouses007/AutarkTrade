@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 import knexLib from 'knex'
 import { migriereAktien } from '../migrationen/aktien.js'
 import { ordneAlle } from './einordnung.js'
-import { speichereStamm, leseStamm, stammZahlen, holeListen } from './stamm-speicher.js'
+import { speichereStamm, leseStamm, stammZahlen, holeListen, ausgefalleneListen } from './stamm-speicher.js'
 
 const hier = path.dirname(fileURLToPath(import.meta.url))
 const roh = JSON.parse(fs.readFileSync(path.join(hier, '../fixtures/aktien-listungen.json'), 'utf8'))
@@ -122,6 +122,81 @@ const { roh: geholt, stand } = await holeListen({
 })
 gleich(Object.keys(geholt).sort(), ['bitget', 'bitpanda'], 'nur gelungene Listen zählen als gelesen')
 gleich([stand.binance.grund, stand.bitunix.grund, stand.pionex.grund], ['nichtGewaehlt', 'HTTP 502', 'leer'], 'Gründe je Handelsplatz')
+gleich(ausgefalleneListen(stand), ['bitunix', 'pionex'], 'ausgefallen = Fehler oder leer; eine nicht gewählte Quelle ist kein Ausfall')
+
+// ── 10. Fällt eine Kennzeichen-Liste aus, bleiben Bitunix und Pionex unberührt (Regel 4, Audit FUN-F-005) ──
+{
+    const frisch = async () => {
+        const k = knexLib({ client: 'better-sqlite3', connection: { filename: ':memory:' }, useNullAsDefault: true })
+        await k.schema.createTable('settings', (t) => { t.increments('id').primary() })
+        await migriereAktien(k, async () => {})
+        return k
+    }
+    const aktiv = async (k, platz) => Number((await k('instrument_listungen').where({ handelsplatz: platz, aktiv: 1 }).count({ n: '*' }).first()).n)
+    // 20 Aktien: Binance kennt 12, Bitget alle; Bitunix und Pionex führen alle 20 ohne Kennzeichen.
+    const T = Array.from({ length: 20 }, (_, i) => 'AK' + String.fromCharCode(65 + i))
+    const welt = {
+        binance: T.slice(0, 12).map((t) => ({ symbol: t + 'USDT', baseAsset: t, quoteAsset: 'USDT', underlyingType: 'EQUITY', underlyingSubType: [] })),
+        bitget: T.map((t) => ({ symbol: t + 'USDT', baseCoin: t, quoteCoin: 'USDT', isRwa: 'YES', maxLever: '10', symbolStatus: 'normal' })),
+        bitunix: T.map((t) => ({ symbol: t + 'USDT', base: t, quote: 'USDT', maxLeverage: 10 })),
+        pionex: T.map((t) => ({ symbol: t + 'X_USDT', baseCurrency: t + 'X', quoteCurrency: 'USDT' })),
+    }
+    const P = ['binance', 'bitget', 'bitunix', 'pionex']
+    const ohneBitget = P.filter((p) => p !== 'bitget')
+    const ausfall = { ausgefallen: ['bitget'] }
+
+    // a) Bitget fällt einen Lauf lang aus
+    let k = await frisch()
+    let e = await speichereStamm(k, ordneAlle(welt), P, 1000)
+    gleich([e.neu.length, e.eingefroren], [0, []], 'Ausgangslage, nichts eingefroren')
+    e = await speichereStamm(k, ordneAlle({ ...welt, bitget: [] }), ohneBitget, 2000, ausfall)
+    gleich(e.weg, [], 'Bitget ausgefallen: keine Bitunix-/Pionex-Listung abgeschaltet')
+    gleich(e.eingefroren, ['bitunix', 'pionex'], 'Bitunix und Pionex für diesen Lauf unberührt')
+    gleich([await aktiv(k, 'bitunix'), await aktiv(k, 'pionex'), await aktiv(k, 'bitget')], [20, 20, 20], 'alle Listungen bleiben aktiv')
+    e = await speichereStamm(k, ordneAlle(welt), P, 3000)
+    gleich([e.neu, e.weg, e.eingefroren], [[], [], []], 'Bitget wieder da: nichts «neu handelbar», nichts weg')
+    // Danach meldet der Abgleich wieder — bei vollständigem Vorlauf ist neu wirklich neu
+    const mehr = { ...welt, bitget: [...welt.bitget, { symbol: 'NEUUSDT', baseCoin: 'NEU', quoteCoin: 'USDT', isRwa: 'YES', symbolStatus: 'normal' }], bitunix: [...welt.bitunix, { symbol: 'NEUUSDT', base: 'NEU', quote: 'USDT' }] }
+    e = await speichereStamm(k, ordneAlle(mehr), P, 4000)
+    gleich(e.neu.map((l) => `${l.handelsplatz}:${l.ticker}`).sort(), ['bitget:NEU', 'bitunix:NEU'], 'echte Neulistung bei Bitunix wird weiter gemeldet')
+    // Echte Delistung bei Bitunix wird weiter erkannt, wenn alle Kennzeichen-Listen da sind
+    e = await speichereStamm(k, ordneAlle({ ...mehr, bitunix: welt.bitunix }), P, 5000)
+    gleich(e.weg.map((l) => `${l.handelsplatz}:${l.symbol}`), ['bitunix:NEUUSDT'], 'echte Delistung bei Bitunix erkannt')
+    // Ohne den Hinweis «ausgefallen» (alter Aufruf) galt: 16 weg, danach 16 «wieder» — der Beleg des Audits
+    await k.destroy()
+
+    // b) Bitget ist beim ALLERERSTEN Abgleich aus: der zweite Lauf meldet keine Nachzügler
+    k = await frisch()
+    e = await speichereStamm(k, ordneAlle({ ...welt, bitget: [] }), ohneBitget, 1000, ausfall)
+    gleich([await aktiv(k, 'binance'), await aktiv(k, 'bitunix'), await aktiv(k, 'pionex')], [12, 0, 0], 'erster Lauf ohne Bitget: Binance gespeichert, Bitunix/Pionex noch nicht')
+    e = await speichereStamm(k, ordneAlle(welt), P, 2000)
+    gleich(e.neu, [], 'zweiter Lauf mit Bitget: Ausgangslage, keine Neulistungs-Meldung')
+    gleich([await aktiv(k, 'bitunix'), await aktiv(k, 'pionex')], [20, 20], 'Bitunix/Pionex jetzt vollständig')
+    await k.destroy()
+
+    // c) Eine Kennzeichen-Liste kommt dazu, die der vorige Lauf nicht hatte (Binance neu als Marktdaten-Quelle):
+    //    was sie bei Bitunix/Pionex zusätzlich einordnet, ist nicht neu gelistet.
+    k = await frisch()
+    const spaet = T.slice(15).map((t) => ({ symbol: t + 'USDT', baseAsset: t, quoteAsset: 'USDT', underlyingType: 'EQUITY', underlyingSubType: [] }))
+    await speichereStamm(k, ordneAlle({ ...welt, binance: [], bitget: welt.bitget.slice(0, 15) }), ['bitget', 'bitunix', 'pionex'], 1000)
+    gleich(await aktiv(k, 'bitunix'), 15, 'nur Bitget gelesen: 15 Bitunix-Aktien bekannt')
+    e = await speichereStamm(k, ordneAlle({ ...welt, binance: spaet, bitget: welt.bitget.slice(0, 15) }), P, 2000)
+    gleich([e.neu, await aktiv(k, 'bitunix'), await aktiv(k, 'pionex')], [[], 20, 20], 'Binance kommt dazu und kennt fünf weitere: bei Bitunix/Pionex gespeichert, nicht gemeldet')
+    e = await speichereStamm(k, ordneAlle({ ...welt, binance: spaet, bitget: welt.bitget.slice(0, 15), bitunix: [...welt.bitunix, { symbol: 'AKPUSDT2', base: 'AKP', quote: 'USDT' }] }), P, 3000)
+    gleich(e.neu.map((l) => `${l.handelsplatz}:${l.symbol}`), ['bitunix:AKPUSDT2'], 'im Lauf danach wird wieder gemeldet')
+    await k.destroy()
+
+    // d) Eine EINGEBROCHENE Kennzeichen-Liste (Regel 2) friert die Abgleich-Plätze ebenso ein
+    k = await frisch()
+    await speichereStamm(k, ordneAlle({ ...welt, binance: [] }), ['bitget', 'bitunix', 'pionex'], 1000)
+    e = await speichereStamm(k, ordneAlle({ ...welt, binance: [], bitget: welt.bitget.slice(0, 4) }), ['bitget', 'bitunix', 'pionex'], 2000)
+    gleich([e.gebremst, e.eingefroren, e.weg], [['bitget'], ['bitunix', 'pionex'], []], 'Bitget auf 4 von 20 eingebrochen: Störung, Bitunix/Pionex unberührt')
+    gleich(await aktiv(k, 'bitunix'), 20, 'Bitunix behält alle 20')
+    // Bitpanda oder Pionex fallen aus: das berührt die Einordnung von Bitunix nicht
+    e = await speichereStamm(k, ordneAlle({ ...welt, binance: [] }), ['bitget', 'bitunix'], 3000, { ausgefallen: ['pionex', 'bitpanda'] })
+    gleich(e.eingefroren, [], 'Ausfall eines Platzes ohne Kennzeichen friert nichts ein')
+    await k.destroy()
+}
 
 await knex.destroy()
 console.log(`✓ Stamm-Abgleich: ${n} Prüfungen`)

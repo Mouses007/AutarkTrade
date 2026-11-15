@@ -3,10 +3,10 @@
  * hereingereicht), speichern, lesen. Getrennt von `stamm.js`, damit der
  * Selbsttest ohne Börsen-Clients und ohne Schlüsseldatei läuft.
  *
- * Die drei Regeln stehen im Kopf von `stamm.js`.
+ * Die vier Regeln stehen im Kopf von `stamm.js`.
  */
 
-import { buendle } from './einordnung.js'
+import { buendle, KENNZEICHEN_PLAETZE, ABGLEICH_PLAETZE } from './einordnung.js'
 
 export const HANDELSPLAETZE = ['binance', 'bitget', 'bitunix', 'pionex', 'bitpanda']
 
@@ -30,6 +30,16 @@ export async function holeListen(abrufe) {
     return { roh, stand }
 }
 
+/**
+ * Welche Listen sind in diesem Lauf AUSGEFALLEN (Fehler oder leer)? Eine
+ * bewusst nicht gewählte Quelle (`nichtGewaehlt`: Binance ist nicht die
+ * Marktdaten-Quelle) ist kein Ausfall — sie fehlt auf Dauer, nicht aus Versehen.
+ * @param {Record<string, {ok: boolean, grund?: string}>} stand  aus `holeListen`
+ */
+export function ausgefalleneListen(stand = {}) {
+    return HANDELSPLAETZE.filter((p) => stand[p] && !stand[p].ok && stand[p].grund !== 'nichtGewaehlt')
+}
+
 /* ── Speichern ── */
 
 const stuecke = (liste, n) => {
@@ -46,13 +56,42 @@ const lSchluessel = (l) => `${l.handelsplatz}|${l.symbol}|${l.art}`
  * @param {object[]} listungen   Ergebnis von `ordneAlle`
  * @param {string[]} gelesen     Handelsplätze, deren Liste diesmal vollständig kam
  * @param {number}   jetzt
- * @returns {{titel: number, listungen: number, neu: object[], weg: object[], gebremst: string[]}}
+ * @param {{ausgefallen?: string[]}} [o]  Handelsplätze, deren Abruf diesmal scheiterte (`ausgefalleneListen`)
+ * @returns {{titel: number, listungen: number, neu: object[], weg: object[], gebremst: string[], eingefroren: string[]}}
+ *          `eingefroren`: Abgleich-Plätze, die dieser Lauf nicht angefasst hat (Regel 4)
  */
-export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now()) {
-    const relevant = listungen.filter((l) => l.anlageklasse !== 'krypto' && gelesen.includes(l.handelsplatz))
-    const titel = buendle(relevant)
-
+export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(), { ausgefallen = [] } = {}) {
     return knex.transaction(async (trx) => {
+        const alt = await trx('instrument_listungen').select()
+        const gelesenRelevant = listungen.filter((l) => l.anlageklasse !== 'krypto' && gelesen.includes(l.handelsplatz))
+
+        // 0. Regel 4: Bitunix und Pionex werden nur über die Kennzeichen-Listen
+        // eingeordnet. Ist eine davon ausgefallen oder eingebrochen (Regel 2),
+        // kennt `ordneAlle` ihre Aktien-Ticker nicht — und ihre Coins auch nicht.
+        // Was dann bei Bitunix/Pionex «fehlt» oder «dazukommt», ist die Lücke der
+        // anderen Liste. Diese Plätze bleiben für den Lauf, wie sie sind.
+        const roheSchluessel = new Set(gelesenRelevant.map(lSchluessel))
+        const bricht = (platz) => {
+            const vorher = alt.filter((z) => z.handelsplatz === platz && z.aktiv)
+            return vorher.length >= 10 && vorher.filter((z) => !roheSchluessel.has(lSchluessel(z))).length > vorher.length / 2
+        }
+        const gestoert = KENNZEICHEN_PLAETZE.some((p) => ausgefallen.includes(p) || (gelesen.includes(p) && bricht(p)))
+        const eingefroren = gestoert ? ABGLEICH_PLAETZE.filter((p) => gelesen.includes(p)) : []
+        const wirksam = gelesen.filter((p) => !eingefroren.includes(p))
+        const relevant = gelesenRelevant.filter((l) => wirksam.includes(l.handelsplatz))
+        const titel = buendle(relevant)
+
+        // Kommt eine Kennzeichen-Liste dazu, die der VORIGE Lauf nicht hatte (nach
+        // einem Ausfall, oder Binance neu als Marktdaten-Quelle), ordnet sie
+        // Bitunix-/Pionex-Titel ein, die es dort längst gibt. Das sind keine
+        // Neulistungen: sie werden gespeichert, aber nicht gemeldet. Der vorige
+        // Lauf ist an der jüngsten `letzteSichtung` zu erkennen.
+        const juengste = (zeilen) => zeilen.reduce((m, z) => Math.max(m, Number(z.letzteSichtung) || 0), 0)
+        const vorigerLauf = juengste(alt)
+        const dazugekommen = KENNZEICHEN_PLAETZE.some((p) => wirksam.includes(p) && relevant.some((l) => l.handelsplatz === p)
+            && juengste(alt.filter((z) => z.handelsplatz === p)) < vorigerLauf)
+        const still = (platz) => dazugekommen && ABGLEICH_PLAETZE.includes(platz)
+
         // 1. Instrumente: fehlende anlegen, bekannte nur dort ergänzen, wo wir jetzt mehr wissen.
         const iSchluessel = (z) => `${z.anlageklasse}|${z.ticker}`
         let vorhanden = new Map((await trx('instrumente').select()).map((z) => [iSchluessel(z), z]))
@@ -75,7 +114,6 @@ export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(
         }
 
         // 2. Listungen.
-        const alt = await trx('instrument_listungen').select()
         const altKarte = new Map(alt.map((z) => [lSchluessel(z), z]))
         const bekanntePlaetze = new Set(alt.map((z) => z.handelsplatz))
         const gesehen = new Set()
@@ -94,10 +132,10 @@ export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(
                         gelistetSeit: l.gelistetSeit,
                     })
                     // Regel 3: der erste Abgleich eines Handelsplatzes ist die Ausgangslage.
-                    if (bekanntePlaetze.has(l.handelsplatz)) neu.push({ ...l, ticker: t.basis, name: t.name })
+                    if (bekanntePlaetze.has(l.handelsplatz) && !still(l.handelsplatz)) neu.push({ ...l, ticker: t.basis, name: t.name })
                 } else {
                     auffrischen.push(z.id)
-                    if (!z.aktiv) neu.push({ ...l, ticker: t.basis, name: t.name, wieder: true })
+                    if (!z.aktiv && !still(l.handelsplatz)) neu.push({ ...l, ticker: t.basis, name: t.name, wieder: true })
                     const seit = l.gelistetSeit ?? (z.gelistetSeit != null ? Number(z.gelistetSeit) : null)
                     if (z.instrumentId !== instrumentId || (z.maxHebel ?? null) !== (l.maxHebel ?? null) || !!z.sicher !== l.sicher
                         || (z.gelistetSeit != null ? Number(z.gelistetSeit) : null) !== seit) {
@@ -114,7 +152,7 @@ export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(
 
         // 3. Abschalten, was eine vollständig gelesene Liste nicht mehr führt (Regeln 1 und 2).
         const weg = [], gebremst = []
-        for (const platz of gelesen) {
+        for (const platz of wirksam) {
             const vorher = alt.filter((z) => z.handelsplatz === platz && z.aktiv)
             const fehlt = vorher.filter((z) => !gesehen.has(lSchluessel(z)))
             if (!fehlt.length) continue
@@ -125,7 +163,7 @@ export async function speichereStamm(knex, listungen, gelesen, jetzt = Date.now(
             weg.push(...fehlt.map((z) => ({ handelsplatz: z.handelsplatz, symbol: z.symbol, art: z.art })))
         }
 
-        return { titel: titel.length, listungen: gesehen.size, neu, weg, gebremst }
+        return { titel: titel.length, listungen: gesehen.size, neu, weg, gebremst, eingefroren }
     })
 }
 
