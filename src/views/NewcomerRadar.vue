@@ -22,6 +22,8 @@ const { t, locale } = useI18n()
 /* Übliche Haltefrist nach dem Börsengang (180 Tage), gerechnet aus dem Alter — eine Schätzung, kein Prospektdatum. */
 const fristVon = (z) => (z.kennzahlen?.alterTage == null ? null : haltefrist(Date.now() - z.kennzahlen.alterTage * 86_400_000))
 
+/* Deckel der Note bei dünn gemessenem Momentum — derselbe Wert wie `DECKEL_DUENN` in `server/newcomer-radar/bewertung.js`. */
+const DECKEL_DUENN = 49
 const KATEGORIEN = ['boersengang', 'vorboerslich', 'neuGelistet', 'etabliert', 'unbekannt']
 const PLATZ = { binance: 'Binance', bitget: 'Bitget', bitunix: 'Bitunix', pionex: 'Pionex', bitpanda: 'Bitpanda' }
 const TON = { perp: 'akzent', 'token-spot': 'gut', 'broker-spot': 'neutral' }
@@ -151,13 +153,14 @@ const notenText = (n) => t('newcomer.teilnoten', { neuheit: n?.neuheit ?? '—',
                 </thead>
                 <tbody>
                     <tr v-for="z in titel" :key="z.id">
-                        <td class="rechts note" :title="notenText(z.noten)">{{ z.note == null ? '—' : zahl(z.note, 0) }}</td>
+                        <td class="rechts note" :title="notenText(z.noten)">{{ z.kennzahlen.gedeckelt ? '≤ ' : '' }}{{ z.note == null ? '—' : zahl(z.note, 0) }}</td>
                         <td class="ticker">
                             <router-link :to="{ path: '/aktien', query: { titel: z.ticker } }" :title="t('titel.oeffnen')">{{ z.ticker }}</router-link>
                             <span v-if="z.zuordnung === 'sucheFremd'" class="frage" :title="t('newcomer.zuordnung_sucheFremd')">?</span>
                         </td>
                         <td class="name">
                             {{ z.name || '—' }}
+                            <div v-if="z.kennzahlen.gedeckelt" class="vermerk warn" :title="t('newcomer.gedeckeltInfo', { deckel: DECKEL_DUENN })">{{ t('newcomer.gedeckelt') }}</div>
                             <div v-if="z.huerden.length || z.grund" class="vermerk">
                                 <span v-for="h in z.huerden" :key="h">{{ t('newcomer.huerde_' + h) }}</span>
                                 <span v-if="z.grund">{{ t('newcomer.grund_' + z.grund) }}</span>

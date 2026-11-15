@@ -181,7 +181,7 @@ export async function toolQueryNewcomerRadar(knex, params = {}) {
         count: titel.length,
         kategorien: Object.entries(zaehlung).map(([k, z]) => `${sauber(k, 20)}: ${z.zugelassen} von ${z.gesamt} in der Rangliste`),
         hinweis: 'Die Note ordnet nach Handelbarkeit und Auffälligkeit, sie ist keine Kursprognose und keine Empfehlung. Firmennamen stehen als Zitat.',
-        zeilen: titel.map((z) => [sauber(z.ticker, 12), zitatZeile(z.name, 40), sauber(z.kategorie, 20), `Note ${z.note ?? '?'}`,
+        zeilen: titel.map((z) => [sauber(z.ticker, 12), zitatZeile(z.name, 40), sauber(z.kategorie, 20), `Note ${z.note ?? '?'}${z.kennzahlen?.gedeckelt ? ' (gedeckelt, Momentum erst an einem Mass gemessen)' : ''}`,
             z.ipoDatum ? `Börsengang ${new Date(z.ipoDatum).toISOString().slice(0, 10)}` : null, z.heimatboerse ? sauber(z.heimatboerse, 16) : null,
             z.listungen?.length ? `handelbar bei ${z.listungen.slice(0, 4).map((l) => sauber(l.handelsplatz, 12)).join('/')}` : 'bei keiner eigenen Börse'].filter(Boolean).join(', ')),
     }

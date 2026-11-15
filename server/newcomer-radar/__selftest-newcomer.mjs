@@ -11,8 +11,9 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { kennzahlen, rendite } from './kennzahlen.js'
-import { bewerte, noteNeuheit, noteMomentum, noteBeteiligung, kategorie, huerden, juengsteListung, fruehesteListung } from './bewertung.js'
+import { kennzahlen, rendite, MIN_TAGE_HOCH } from './kennzahlen.js'
+import { bewerte, noteNeuheit, noteMomentum, momentumTeile, noteBeteiligung, kategorie, huerden, juengsteListung, fruehesteListung, DECKEL_DUENN, MIN_MOMENTUM_TEILE } from './bewertung.js'
+import { waehrungsEinheit, wechselkursSymbol, usdFaktor, ausWechselkurs, renditeInUsd } from './waehrung.js'
 import { kursSymbolKandidaten, nameGleich, nameAehnlich, tickerStamm, namensWoerter, ausChart, ausSuche } from './kursquelle-kern.js'
 
 const hier = path.dirname(fileURLToPath(import.meta.url))
@@ -35,7 +36,9 @@ nah(rendite(reihe([100, 110]), 1), 10, 'Rendite über einen Tag')
 
 let k = kennzahlen(flach(15))
 gleich([k.perf1m, k.perf3m, k.perf6m, k.ueberSma50, k.rvol, k.relStaerke3m], [null, null, null, null, null, null], 'drei Wochen Historie: nichts davon messbar')
-gleich(k.abstandHochPct, 0, 'am Hoch der kurzen Historie')
+gleich(k.abstandHochPct, null, 'drei Wochen Historie: «am Hoch» ist noch keine Aussage')
+gleich(k.hoch52w, 100, 'das Hoch selbst bleibt sichtbar')
+gleich([kennzahlen(flach(MIN_TAGE_HOCH - 1)).abstandHochPct, kennzahlen(flach(MIN_TAGE_HOCH)).abstandHochPct], [null, 0], `Nähe zum Hoch ab ${MIN_TAGE_HOCH} Handelstagen`)
 gleich(k.seitStartPct, 0, 'seit Start')
 
 // 300 Tage steigend von 100 auf 399: am Hoch, über dem Schnitt
@@ -84,24 +87,108 @@ gleich(kategorie({ alterTage: 5000 }, 10), 'neuGelistet', 'alt, aber frisch geli
 gleich(kategorie({ alterTage: 5000 }, 200), 'etabliert', 'etabliert')
 gleich(kategorie({ alterTage: null }, null), 'unbekannt', 'ohne Alter unbekannt')
 gleich(kategorie({ alterTage: 5000 }, 200, 'vorboerslich'), 'vorboerslich', 'vorbörslich geht vor')
-gleich(huerden({ kurs: 0.4, umsatz20: 5e6 }), ['kursUnter1'], 'Pennystock')
-gleich(huerden({ kurs: 20, umsatz20: 2e5 }), ['umsatzZuKlein'], 'zu wenig Umsatz')
-gleich(huerden({ kurs: 20, umsatz20: null }), ['umsatzUnbekannt'], 'unbekannter Umsatz ist eine Hürde')
-gleich(huerden({ kurs: 20, umsatz20: 5e6 }), [], 'keine Hürde')
+const USD = { waehrung: 'USD' }
+gleich(huerden({ kurs: 0.4, umsatz20: 5e6 }, USD), ['kursUnter1'], 'Pennystock')
+gleich(huerden({ kurs: 20, umsatz20: 2e5 }, USD), ['umsatzZuKlein'], 'zu wenig Umsatz')
+gleich(huerden({ kurs: 20, umsatz20: null }, USD), ['umsatzUnbekannt'], 'unbekannter Umsatz ist eine Hürde')
+gleich(huerden({ kurs: 20, umsatz20: 5e6 }, USD), [], 'keine Hürde')
+gleich(huerden({ kurs: 20, umsatz20: 0.9e6 }, USD), ['umsatzZuKlein'], 'US-Titel mit 0,9 Mio. USD reisst die Hürde wie bisher')
+
+// ── Währung (FUN-H-007): die Hürden gelten in US-Dollar ──
+gleich([waehrungsEinheit('USD'), waehrungsEinheit('GBp'), waehrungsEinheit('GBX'), waehrungsEinheit('GBP'), waehrungsEinheit('ILA'), waehrungsEinheit('ZAc')],
+    [{ code: 'USD', teiler: 1 }, { code: 'GBP', teiler: 100 }, { code: 'GBP', teiler: 100 }, { code: 'GBP', teiler: 1 }, { code: 'ILS', teiler: 100 }, { code: 'ZAR', teiler: 100 }], 'Währungsangaben, Pence sind Hundertstel')
+gleich([waehrungsEinheit(null), waehrungsEinheit(''), waehrungsEinheit('usd'), waehrungsEinheit('Yen'), waehrungsEinheit('US$')], [null, null, null, null, null], 'Unlesbares bleibt unbekannt')
+gleich([wechselkursSymbol('JPY'), wechselkursSymbol('GBp'), wechselkursSymbol('USD'), wechselkursSymbol(null)], ['JPYUSD=X', 'GBPUSD=X', null, null], 'Symbol des Wechselkurses')
+gleich(usdFaktor('USD'), { faktor: 1, grund: null }, 'US-Dollar braucht keinen Wechselkurs')
+gleich(usdFaktor('JPY', 0.0065), { faktor: 0.0065, grund: null }, 'Yen')
+nah(usdFaktor('GBp', 1.3).faktor, 0.013, 'Pence: Pfundkurs ÷ 100')
+gleich([usdFaktor(null).grund, usdFaktor('??', 1).grund, usdFaktor('JPY').grund, usdFaktor('JPY', 0).grund, usdFaktor('JPY', NaN).grund],
+    ['waehrungUnbekannt', 'waehrungUnbekannt', 'wechselkursFehlt', 'wechselkursFehlt', 'wechselkursFehlt'], 'ohne Währung oder Kurs: ein Grund, kein Faktor')
+{
+    // Tokio: 900 Yen × 1500 Stück = 1,35 Mio. Yen ≈ 8 800 USD — bestand ohne Umrechnung beide Hürden.
+    const tokio = kennzahlen(reihe(Array(80).fill(900), 1500))
+    gleich(tokio.umsatz20, 1_350_000, 'Umsatz in Yen')
+    gleich(huerden(tokio, { waehrung: 'JPY', usdKurs: 0.0065 }), ['umsatzZuKlein'], 'Tokio 900 JPY × 1500 Stück fällt durch')
+    let t = bewerte(tokio, { waehrung: 'JPY', usdKurs: 0.0065 })
+    gleich([t.zugelassen, t.kursUsd, t.umsatz20Usd], [false, 5.85, 8775], 'nicht zugelassen; gerechnet wurde in Dollar')
+    gleich(huerden(kennzahlen(reihe(Array(80).fill(120), 2e6)), { waehrung: 'JPY', usdKurs: 0.0065 }), ['kursUnter1'], '120 Yen sind ein Pennystock (0,78 USD), bei 1,56 Mio. USD Umsatz')
+    gleich(huerden(kennzahlen(reihe(Array(80).fill(3000), 1e6)), { waehrung: 'JPY', usdKurs: 0.0065 }), [], 'liquider Tokio-Titel besteht')
+    t = bewerte(tokio, { waehrung: 'JPY' })
+    gleich([t.huerden, t.zugelassen, t.kursUsd, t.umsatz20Usd], [['wechselkursFehlt'], false, null, null], 'ohne Wechselkurs: nicht bestanden, mit Grund, nichts geraten')
+    gleich(bewerte(tokio, {}).huerden, ['waehrungUnbekannt'], 'ohne Währung: nicht bestanden, mit Grund')
+    gleich(huerden({ kurs: 5, umsatz20: null }, {}), ['waehrungUnbekannt', 'umsatzUnbekannt'], 'beide Gründe stehen da')
+
+    // London in Pence: 250 GBp × 400 000 Stück = 100 Mio. Pence = 1 Mio. Pfund = 1,3 Mio. USD
+    const london = kennzahlen(reihe(Array(80).fill(250), 4e5))
+    gleich(huerden(london, { waehrung: 'GBp', usdKurs: 1.3 }), [], 'London in Pence: 1,3 Mio. USD Umsatz, Kurs 3.25 USD')
+    t = bewerte(london, { waehrung: 'GBp', usdKurs: 1.3 })
+    gleich([t.kursUsd, t.umsatz20Usd, t.zugelassen], [3.25, 1_300_000, true], 'Pence richtig umgerechnet')
+    gleich(huerden(kennzahlen(reihe(Array(80).fill(60), 4e6)), { waehrung: 'GBp', usdKurs: 1.3 }), ['kursUnter1'], '60 Pence sind 0,78 USD — Pennystock trotz «Kurs 60»')
+    gleich(huerden(kennzahlen(reihe(Array(80).fill(250), 4e4)), { waehrung: 'GBX', usdKurs: 1.3 }), ['umsatzZuKlein'], '10 Mio. Pence sind 130 000 USD')
+
+    // US-Titel: unverändert, mit und ohne mitgegebenen Kurs
+    const us = kennzahlen(reihe(Array(80).fill(20), 1e5))
+    t = bewerte(us, { waehrung: 'USD' })
+    gleich([t.huerden, t.kursUsd, t.umsatz20Usd, t.zugelassen], [[], 20, 2_000_000, true], 'US-Titel unverändert')
+    gleich(bewerte(us, { waehrung: 'USD', usdKurs: 0.5 }).umsatz20Usd, 2_000_000, 'ein mitgegebener Kurs ändert an Dollar nichts')
+}
+gleich(ausWechselkurs([]), null, 'Wechselkurs ohne Kerzen')
+gleich(ausWechselkurs([{ c: 0 }]), null, 'Wechselkurs 0 ist keiner')
+gleich(ausWechselkurs(reihe([0.007, 0.0065])), { kurs: 0.0065, perf3m: null }, 'Wechselkurs ohne drei Monate Historie: Stand ja, Veränderung unbekannt')
+nah(ausWechselkurs(reihe([...Array(63).fill(0.007), 0.0063])).perf3m, -10, 'Veränderung der Währung über 63 Handelstage')
+nah(renditeInUsd(20, -10), 8, 'Rendite in Dollar: +20 % in Yen, Yen −10 %')
+gleich([renditeInUsd(null, 1), renditeInUsd(1, null)], [null, null], 'unbekannt bleibt unbekannt')
+{
+    // Stärke gegen SPY: nicht Yen-Rendite minus Dollar-Rendite
+    const o = { referenz: { perf3m: 5 } }
+    const lokal = kennzahlen(steigend, o)
+    nah(kennzahlen(steigend, { ...o, waehrungPerf3m: 0 }).relStaerke3m, lokal.relStaerke3m, 'Währung unverändert = wie ein US-Titel')
+    nah(kennzahlen(steigend, { ...o, waehrungPerf3m: -10 }).relStaerke3m, renditeInUsd(lokal.perf3m, -10) - 5, 'Stärke gegen den Index in Dollar', 0.011)
+    gleich(kennzahlen(steigend, { ...o, waehrungPerf3m: null }).relStaerke3m, null, 'Währungsveränderung unbekannt: keine Stärke gegen den Index')
+    nah(kennzahlen(steigend, { ...o, waehrungPerf3m: -10 }).perf3m, lokal.perf3m, 'die gezeigte 3-Monats-Rendite bleibt in der Kurswährung')
+}
 gleich([fruehesteListung([{ gelistetSeit: 5 }, { gelistetSeit: null }, { gelistetSeit: 3 }]), juengsteListung([{ gelistetSeit: 5 }, { gelistetSeit: 3 }]), juengsteListung([{}])], [3, 5, null], 'Listungsdaten')
 
 // ── Gesamt ──
 let b = bewerte(kennzahlen(flach(15), { jetzt: 1.7e12 + 40 * TAG, ipoDatum: 1.7e12 }), { jetzt: 1.7e12 + 40 * TAG })
 gleich(b.kategorie, 'boersengang', 'drei Wochen alt: Börsengang')
-gleich([b.noten.neuheit, b.noten.momentum, b.noten.beteiligung], [100, 100, null], 'Momentum nur aus der Nähe zum Hoch')
-ok(b.belastbar && b.note === 100, 'zwei Teil-Noten reichen')
+gleich([b.noten.neuheit, b.noten.momentum, b.belastbar, b.note], [100, null, false, null], 'drei Wochen: kein Momentum messbar, also keine Note')
+
+// ── Junge Börsengänge (FACH-H-004): keine Spitzennote, solange fast nichts gemessen ist ──
+{
+    const jetzt = 1.7e12 + 40 * TAG
+    const jung = (tage, unterHoch) => {
+        const kerzen = reihe([...Array(tage - 1).fill(100), 100 * (1 - unterHoch / 100)], 1e6)
+        return bewerte(kennzahlen(kerzen, { jetzt, ipoDatum: jetzt - tage * TAG, referenz: { perf3m: 2 } }), { jetzt, waehrung: 'USD' })
+    }
+    // Der Fall aus dem Audit: 5 Handelstage, Schluss 3 % unter dem Hoch → war Note 94,4
+    let j = jung(5, 3)
+    gleich([j.note, j.belastbar, j.zugelassen, j.momentumTeile, j.gedeckelt], [null, false, false, 0, false], '5 Handelstage: keine Note, nicht in der Rangliste')
+    j = jung(15, 10)
+    gleich([j.note, j.zugelassen], [null, false], '15 Handelstage (war 81,3): keine Note')
+    for (const tage of [1, 2, 5, 10, 15, 20, 21, 25, 30, 40, 49]) {
+        for (const unter of [0, 3, 10]) {
+            const x = jung(tage, unter)
+            ok(x.note == null || x.note <= DECKEL_DUENN, `${tage} Tage, ${unter} % unter dem Hoch: Note ${x.note} bleibt unter dem Deckel`)
+            ok(x.momentumTeile < MIN_MOMENTUM_TEILE, `${tage} Tage: Momentum auf weniger als ${MIN_MOMENTUM_TEILE} Teilmassen`)
+        }
+    }
+    j = jung(30, 0)
+    gleich([j.noten.neuheit, j.noten.momentum, j.momentumTeile, j.note, j.gedeckelt, j.zugelassen], [100, 100, 1, DECKEL_DUENN, true, true], '30 Tage am Hoch: Teil-Noten 100/100, Gesamtnote gedeckelt und so gekennzeichnet')
+    j = jung(30, 30)
+    ok(j.note < DECKEL_DUENN && !j.gedeckelt, 'eine schwache Note wird nicht angehoben und nicht als gedeckelt gezeigt')
+    j = jung(60, 0)
+    gleich([j.momentumTeile, j.gedeckelt], [2, false], '60 Tage: Hoch und 50-Tage-Linie — zwei Teilmasse, kein Deckel')
+    ok(j.note > DECKEL_DUENN, 'ab zwei Teilmassen gilt die Note ungedeckelt')
+    gleich([momentumTeile({}), momentumTeile({ abstandHochPct: -5 }), momentumTeile({ abstandHochPct: 0, perf3m: 1, relStaerke3m: 1, ueberSma50: false })], [0, 1, 4], 'Teilmasse zählen')
+}
 b = bewerte({ tage: 0, alterTage: 30 })
 gleich([b.note, b.belastbar, b.zugelassen, b.noten.neuheit], [null, false, false, 100], 'Neuheit allein ergibt keine Note')
 b = bewerte(kennzahlen(steigend, { ipoDatum: null }))
 gleich(b.kategorie, 'unbekannt', 'ohne Börsengangs-Datum')
 ok(b.belastbar && b.noten.neuheit === null, 'fehlende Neuheit fällt aus dem Nenner')
 nah(b.note, (b.noten.momentum * 45 + b.noten.beteiligung * 20) / 65, 'gewichtet nur über Gemessenes (Teil-Noten sind gerundet)', 0.5)
-b = bewerte(kennzahlen(reihe(Array(300).fill(0.5))), {})
+b = bewerte(kennzahlen(reihe(Array(300).fill(0.5))), USD)
 gleich([b.huerden.includes('kursUnter1'), b.zugelassen], [true, false], 'gerissene Hürde: nicht in der Rangliste')
 b = bewerte(kennzahlen(steigend, { jetzt: 2e12, ipoDatum: 1e12 }), { jetzt: 2e12, listungen: [{ gelistetSeit: 2e12 - 5 * TAG }, { gelistetSeit: 1.9e12 }] })
 gleich([b.kategorie, b.listungVorTagen, b.noten.neuheit], ['neuGelistet', 5, 70], 'die JÜNGSTE Listung zählt')
@@ -184,8 +271,18 @@ for (const [stamm, quelle, ticker] of [
 k = kennzahlen(rddt.kerzen, { jetzt: nachSchluss, ipoDatum: rddt.meta.ipoDatum, referenz: { perf3m: 3 } })
 ok(k.alterTage > 900 && k.alterTage < 1000, 'Reddit: gut 2,6 Jahre an der Börse')
 ok(k.abstandHochPct < -50 && k.hoch52w > 250, 'Reddit: weit unter dem 52-Wochen-Hoch')
-b = bewerte(k, { jetzt: nachSchluss })
+b = bewerte(k, { jetzt: nachSchluss, waehrung: rddt.meta.waehrung })
 gleich([b.kategorie, b.zugelassen], ['etabliert', true], 'Reddit ist kein «junger Börsengang» mehr, aber liquide')
 ok(b.note != null && b.noten.momentum < 40, 'Reddit: schwaches Momentum')
+
+
+// ── Verdrahtung: der Lauf holt den Wechselkurs und reicht Währung und Kurs an die Bewertung ──
+{
+    const lauf = fs.readFileSync(path.join(hier, 'lauf.js'), 'utf8')
+    ok(/holeWechselkurs\(waehrung, wechselkurse, jetzt\)/.test(lauf) && /bewerte\(k, \{[^}]*waehrung, usdKurs:/.test(lauf), 'Lauf: Währung und Wechselkurs gehen an die Bewertung')
+    ok(/kennzahlen\(chart\.kerzen, \{[^}]*waehrungPerf3m/.test(lauf), 'Lauf: Währungsveränderung geht an die Kennzahlen')
+    ok(/momentumTeile: b\.momentumTeile, gedeckelt: b\.gedeckelt/.test(lauf), 'Lauf: Teilmasse und Deckel stehen im gespeicherten Stand (für Rangliste und Mail)')
+    ok(/const wechselkurse = new Map\(\)/.test(lauf), 'Lauf: Wechselkurse je Lauf gemerkt')
+}
 
 console.log(`✓ Newcomer-Radar: ${n} Prüfungen`)

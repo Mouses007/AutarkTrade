@@ -12,19 +12,31 @@
  *   - Eine Gesamtnote gibt es nur, wenn das Momentum gemessen ist und
  *     mindestens eine weitere Teil-Note (`belastbar`). Eine Note aus der
  *     Neuheit allein wäre für jeden frischen Börsengang 100.
+ *   - Steht das Momentum auf einem einzigen Teilmass (in den ersten Wochen:
+ *     nur die Nähe zum Hoch), ist die Gesamtnote bei `DECKEL_DUENN` gedeckelt
+ *     — wie im Aktien-Radar: über wen man wenig weiss, der steht nicht oben.
  *   - Liquidität ist eine Hürde, keine Teil-Note. Wer sie reisst, behält
  *     seine Kennzahlen, steht aber nicht in der Rangliste (`zugelassen`).
+ *     Die Hürden gelten in US-Dollar (`waehrung.js`); ohne lesbare Währung
+ *     oder ohne Wechselkurs ist die Hürde nicht bestanden.
  *
  * Bewusst keine Wachstums- und keine Qualitäts-Note: dafür fehlen in der
  * kostenlosen Fassung die Fundamentaldaten (`docs/PLAN-AKTIEN.md`).
  */
+
+import { usdFaktor } from './waehrung.js'
 
 const TAG_MS = 86400e3
 
 export const GEWICHTE = { neuheit: 35, momentum: 45, beteiligung: 20 }
 export const BOERSENGANG_TAGE = 730        // «junger Börsengang» = höchstens zwei Jahre
 export const NEU_GELISTET_TAGE = 45        // frisch an einer unserer Börsen
+/** Beide in US-Dollar. */
 export const HUERDEN = { minKurs: 1, minUmsatz20: 1_000_000 }
+/** Ab so vielen Momentum-Teilmassen gilt die Note ungedeckelt (und darf eine Mail auslösen). */
+export const MIN_MOMENTUM_TEILE = 2
+/** Höchste Gesamtnote, solange das Momentum dünner gemessen ist — derselbe Wert wie im Aktien-Radar. */
+export const DECKEL_DUENN = 49
 
 const klemme = (x) => Math.max(0, Math.min(100, x))
 /** Gerade durch zwei Punkte, auf 0–100 begrenzt. */
@@ -59,13 +71,20 @@ export function noteNeuheit(alterTage, listungVorTagen, unterart) {
     return note
 }
 
+const momentumMasse = (k) => [
+    k.abstandHochPct != null ? linie(k.abstandHochPct, -30, 0, 0, 100) : null,
+    k.perf3m != null ? linie(k.perf3m, -20, 0, 40, 100) : null,
+    k.relStaerke3m != null ? linie(k.relStaerke3m, -15, 0, 25, 100) : null,
+    k.ueberSma50 != null ? (k.ueberSma50 ? 100 : 0) : null,
+]
+
 export function noteMomentum(k) {
-    return schnitt([
-        k.abstandHochPct != null ? linie(k.abstandHochPct, -30, 0, 0, 100) : null,
-        k.perf3m != null ? linie(k.perf3m, -20, 0, 40, 100) : null,
-        k.relStaerke3m != null ? linie(k.relStaerke3m, -15, 0, 25, 100) : null,
-        k.ueberSma50 != null ? (k.ueberSma50 ? 100 : 0) : null,
-    ])
+    return schnitt(momentumMasse(k))
+}
+
+/** Auf wie vielen der vier Teilmasse das Momentum steht (0–4). */
+export function momentumTeile(k) {
+    return momentumMasse(k).filter((w) => w != null).length
 }
 
 export function noteBeteiligung(rvol) {
@@ -82,18 +101,30 @@ export function kategorie(k, listungVorTagen, unterart) {
     return k.alterTage != null ? 'etabliert' : 'unbekannt'
 }
 
-/** Gerissene Hürden; unbekannte Liquidität ist auch eine. */
-export function huerden(k) {
+/**
+ * Gerissene Hürden, in US-Dollar gerechnet. Unbekannte Liquidität ist auch
+ * eine — und ebenso eine Währung, die sich nicht lesen oder nicht umrechnen
+ * lässt: dann steht der Grund da, und Kurs und Umsatz werden nicht geraten.
+ *
+ * @param {object} k  Ergebnis von `kennzahlen` (Kurs und Umsatz in der Währung der Kerzen)
+ * @param {{waehrung?: string|null, usdKurs?: number|null}} [opt]
+ *        `waehrung` wie die Kursquelle sie nennt (`USD`, `JPY`, `GBp`), `usdKurs` = US-Dollar je Einheit
+ *        der Hauptwährung (für `USD` nicht nötig)
+ */
+export function huerden(k, opt = {}) {
     const liste = []
-    if (k.kurs != null && k.kurs < HUERDEN.minKurs) liste.push('kursUnter1')
+    const { faktor, grund } = usdFaktor(opt.waehrung, opt.usdKurs)
+    if (grund) liste.push(grund)
+    if (faktor != null && k.kurs != null && k.kurs * faktor < HUERDEN.minKurs) liste.push('kursUnter1')
     if (k.umsatz20 == null) liste.push('umsatzUnbekannt')
-    else if (k.umsatz20 < HUERDEN.minUmsatz20) liste.push('umsatzZuKlein')
+    else if (faktor != null && k.umsatz20 * faktor < HUERDEN.minUmsatz20) liste.push('umsatzZuKlein')
     return liste
 }
 
 /**
  * @param {object} k            Ergebnis von `kennzahlen`
- * @param {{listungen?: object[], unterart?: string, jetzt?: number}} [opt]
+ * @param {{listungen?: object[], unterart?: string, jetzt?: number, waehrung?: string|null, usdKurs?: number|null}} [opt]
+ *        `waehrung`/`usdKurs` siehe `huerden`
  */
 export function bewerte(k, opt = {}) {
     const jetzt = opt.jetzt ?? Date.now()
@@ -111,13 +142,23 @@ export function bewerte(k, opt = {}) {
         const gewicht = gemessen.reduce((s, n) => s + GEWICHTE[n], 0)
         note = gemessen.reduce((s, n) => s + noten[n] * GEWICHTE[n], 0) / gewicht
     }
-    const gerissen = k.tage ? huerden(k) : []
+    // Gedeckelt, nicht abgewertet: eine schwache Note bleibt, wie sie ist.
+    const teile = momentumTeile(k)
+    const gedeckelt = note != null && teile < MIN_MOMENTUM_TEILE && note > DECKEL_DUENN
+    if (gedeckelt) note = DECKEL_DUENN
+    const gerissen = k.tage ? huerden(k, opt) : []
+    const { faktor } = usdFaktor(opt.waehrung, opt.usdKurs)
     for (const n of Object.keys(noten)) if (noten[n] != null) noten[n] = Math.round(noten[n])
     return {
         kategorie: kategorie(k, listungVorTagen, opt.unterart),
         note: note != null ? Math.round(note * 10) / 10 : null,
         noten,
         belastbar,
+        momentumTeile: teile,
+        gedeckelt,
+        // Womit die Hürden gerechnet haben — `null`, wenn die Umrechnung fehlt.
+        kursUsd: faktor != null && k.kurs != null ? Number((k.kurs * faktor).toFixed(4)) : null,
+        umsatz20Usd: faktor != null && k.umsatz20 != null ? Math.round(k.umsatz20 * faktor) : null,
         huerden: gerissen,
         zugelassen: belastbar && !gerissen.length,
         listungVorTagen,

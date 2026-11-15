@@ -19,6 +19,7 @@ import { quelleErlaubt } from '../quellen/freigabe.js'
 import { leseStamm } from '../aktien/stamm-speicher.js'
 import { kennzahlen, rendite } from './kennzahlen.js'
 import { bewerte } from './bewertung.js'
+import { wechselkursSymbol, ausWechselkurs } from './waehrung.js'
 import { kursSymbolKandidaten, nameAehnlich } from './kursquelle-kern.js'
 import { holeChart, sucheSymbol, NichtGefunden, Gebremst } from './kursquelle.js'
 
@@ -83,7 +84,28 @@ async function speichere(knex, instrumentId, zeile) {
     else await knex('newcomer_titel').insert({ instrumentId, ...zeile })
 }
 
-async function bearbeite(knex, titel, gespeichert, referenz, jetzt) {
+/**
+ * Wechselkurs der Kurswährung gegen den Dollar: `{kurs, perf3m}` oder `null`.
+ * Je Währung EIN Abruf im Lauf (`merk` hält das Versprechen, auch für die
+ * parallelen Arbeiter). US-Dollar braucht keinen. Kennt die Quelle das Paar
+ * nicht, gilt das für den ganzen Lauf; ein Netzfehler wird beim nächsten Titel
+ * neu versucht. `Gebremst` geht nach oben und beendet den Lauf.
+ */
+function holeWechselkurs(waehrung, merk, jetzt) {
+    const symbol = wechselkursSymbol(waehrung)
+    if (!symbol) return Promise.resolve(null)
+    if (!merk.has(symbol)) {
+        merk.set(symbol, holeChart(symbol, jetzt).then((c) => ausWechselkurs(c.kerzen), (e) => {
+            if (e instanceof NichtGefunden) return null
+            merk.delete(symbol)
+            if (e instanceof Gebremst) throw e
+            return null
+        }))
+    }
+    return merk.get(symbol)
+}
+
+async function bearbeite(knex, titel, gespeichert, referenz, jetzt, wechselkurse = new Map()) {
     const kopf = { stand: jetzt }
     if (titel.unterart === 'vorboerslich') {
         const b = bewerte({ tage: 0, alterTage: null }, { unterart: titel.unterart, listungen: titel.listungen, jetzt })
@@ -111,12 +133,17 @@ async function bearbeite(knex, titel, gespeichert, referenz, jetzt) {
     }
     // Bei einer Zweitlistung ist das Datum des ersten Handels nicht der Börsengang der Firma.
     const ipoDatum = zuordnung === 'sucheFremd' ? null : chart.meta.ipoDatum
-    const k = kennzahlen(chart.kerzen, { jetzt, ipoDatum, referenz })
-    const b = bewerte(k, { unterart: titel.unterart, listungen: titel.listungen, jetzt })
+    // Hürden und Stärke gegen den Index gelten in US-Dollar; die Kerzen stehen in der Währung der Börse.
+    const waehrung = chart.meta.waehrung
+    const fx = await holeWechselkurs(waehrung, wechselkurse, jetzt)
+    const waehrungPerf3m = wechselkursSymbol(waehrung) ? fx?.perf3m ?? null : waehrung === 'USD' ? 0 : null
+    const k = kennzahlen(chart.kerzen, { jetzt, ipoDatum, referenz, waehrungPerf3m })
+    const b = bewerte(k, { unterart: titel.unterart, listungen: titel.listungen, jetzt, waehrung, usdKurs: fx?.kurs ?? null })
     await speichere(knex, titel.id, {
         ...kopf, kursSymbol: chart.meta.symbol, zuordnung, kategorie: b.kategorie, note: b.note,
         noten: JSON.stringify(b.noten),
-        kennzahlen: JSON.stringify({ ...k, listungVorTagen: b.listungVorTagen, waehrung: chart.meta.waehrung, boerse: chart.meta.boerse }),
+        kennzahlen: JSON.stringify({ ...k, listungVorTagen: b.listungVorTagen, waehrung, boerse: chart.meta.boerse,
+            kursUsd: b.kursUsd, umsatz20Usd: b.umsatz20Usd, momentumTeile: b.momentumTeile, gedeckelt: b.gedeckelt }),
         huerden: JSON.stringify(b.huerden), grund: null,
     })
     // Was die Kursquelle über die Firma weiss, gehört in den Stamm.
@@ -155,13 +182,14 @@ export async function starteLauf(opt = {}) {
         } catch (e) {
             if (e instanceof Gebremst) meiner.abbruch = 'gebremst'
         }
+        const wechselkurse = new Map()
         let naechster = 0, inFolge = 0
         const arbeiter = async () => {
             while (!meiner.abbruch) {
                 const t = titel[naechster++]
                 if (!t) return
                 try {
-                    const art = await bearbeite(knex, t, gespeichert.get(t.id), referenz, jetzt)
+                    const art = await bearbeite(knex, t, gespeichert.get(t.id), referenz, jetzt, wechselkurse)
                     meiner[art]++
                     inFolge = 0
                 } catch (e) {

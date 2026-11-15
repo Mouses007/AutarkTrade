@@ -7,9 +7,17 @@
  * hat keine 3-Monats-Rendite, auch keine von null Prozent.
  */
 
+import { renditeInUsd } from './waehrung.js'
+
 const TAG_MS = 86400e3
 export const TAGE_JAHR = 252
 const TAGE_MONAT = 21
+/**
+ * So viele Handelstage braucht die Nähe zum Hoch. Fünf Tage nach dem Börsengang
+ * ist «3 % unter dem Hoch» keine Stärke, sondern die ganze Geschichte der Aktie
+ * (Audit 15.11.2026, FACH-H-004: daraus wurde Note 94 und eine Mail).
+ */
+export const MIN_TAGE_HOCH = TAGE_MONAT
 
 const mittel = (liste) => (liste.length ? liste.reduce((s, x) => s + x, 0) / liste.length : null)
 const runde = (x, stellen = 2) => (x == null || !Number.isFinite(x) ? null : Number(x.toFixed(stellen)))
@@ -24,7 +32,10 @@ export function rendite(kerzen, n) {
 
 /**
  * @param {{t:number,o:number,h:number,l:number,c:number,v:number}[]} kerzen
- * @param {{jetzt?: number, ipoDatum?: number|null, referenz?: {perf3m: number|null}|null}} [opt]
+ * @param {{jetzt?: number, ipoDatum?: number|null, referenz?: {perf3m: number|null}|null, waehrungPerf3m?: number|null}} [opt]
+ *        `waehrungPerf3m` = Veränderung der Kurswährung gegen die Währung der Referenz über drei Monate (%).
+ *        Weggelassen = dieselbe Währung (US-Titel gegen SPY); `null` = unbekannt, dann gibt es keine Stärke
+ *        gegen den Index — Yen-Rendite minus Dollar-Rendite wäre keine.
  */
 export function kennzahlen(kerzen, opt = {}) {
     const jetzt = opt.jetzt ?? Date.now()
@@ -39,10 +50,11 @@ export function kennzahlen(kerzen, opt = {}) {
     const fenster = kerzen.slice(-TAGE_JAHR)
     let hoch = -Infinity, hochIndex = 0
     fenster.forEach((k, i) => { if (k.h >= hoch) { hoch = k.h; hochIndex = i } })
-    const abstandHochPct = hoch > 0 ? (kurs / hoch - 1) * 100 : null
+    const abstandHochPct = n >= MIN_TAGE_HOCH && hoch > 0 ? (kurs / hoch - 1) * 100 : null
 
     const perf3m = rendite(kerzen, 3 * TAGE_MONAT)
     const refPerf = opt.referenz?.perf3m
+    const perf3mRef = opt.waehrungPerf3m === undefined ? perf3m : renditeInUsd(perf3m, opt.waehrungPerf3m)
     const sma50 = n >= 50 ? mittel(kerzen.slice(-50).map((k) => k.c)) : null
 
     // Relatives Volumen: die letzten 5 Tage gegen die 50 davor. Die 5 Tage
@@ -69,7 +81,7 @@ export function kennzahlen(kerzen, opt = {}) {
         perf12m: runde(rendite(kerzen, TAGE_JAHR)),
         // Seit der ersten Kerze — nur aussagekräftig, solange die Historie kürzer als ein Jahr ist.
         seitStartPct: n >= 2 && n < TAGE_JAHR && kerzen[0].o > 0 ? runde((kurs / kerzen[0].o - 1) * 100) : null,
-        relStaerke3m: perf3m != null && refPerf != null ? runde(perf3m - refPerf) : null,
+        relStaerke3m: perf3mRef != null && refPerf != null ? runde(perf3mRef - refPerf) : null,
         ueberSma50: sma50 != null ? kurs > sma50 : null,
         rvol: runde(rvol),
         umsatz20: umsatz20 != null ? Math.round(umsatz20) : null,

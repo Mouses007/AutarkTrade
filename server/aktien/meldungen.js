@@ -23,6 +23,7 @@ import { getKnex } from '../database.js'
 import { beansprucheAufgabe, gibAufgabeFrei } from '../db-claim.js'
 import { logWarn } from '../logger.js'
 import { zeitzoneAus } from '../../shared/zeitzone.js'
+import { MIN_MOMENTUM_TEILE } from '../newcomer-radar/bewertung.js'
 
 /* ── Rein ─────────────────────────────────────────────────────────── */
 
@@ -120,13 +121,18 @@ export function zahlenMeldung(liste = [], zeitzone = 'Europe/Zurich') {
 
 /**
  * Newcomer mit hoher Note: zugelassen (keine gerissene Hürde), jung, Note ab
- * der Schwelle. Beste zuerst.
- * @param {{ticker, name, note, kategorie, huerden: string[]}[]} titel
+ * der Schwelle, Momentum auf mindestens zwei Teilmassen gemessen. Beste zuerst.
+ *
+ * Das Letzte hält die allerjüngsten Börsengänge aus der Mail: in den ersten
+ * Wochen gibt es weder 3-Monats-Rendite noch 50-Tage-Linie (Audit 15.11.2026,
+ * FACH-H-004). Fehlt die Angabe (Stand eines älteren Laufs), wird nicht gemeldet.
+ * @param {{ticker, name, note, kategorie, huerden: string[], kennzahlen: {momentumTeile?: number}}[]} titel
  */
 export function newcomerKandidaten(titel = [], schwelle = NEWCOMER_SCHWELLE) {
     return titel
         .filter((t) => t && t.ticker && typeof t.note === 'number' && t.note >= schwelle
-            && NEWCOMER_KATEGORIEN.includes(t.kategorie) && Array.isArray(t.huerden) && !t.huerden.length)
+            && NEWCOMER_KATEGORIEN.includes(t.kategorie) && Array.isArray(t.huerden) && !t.huerden.length
+            && Number(t.kennzahlen?.momentumTeile) >= MIN_MOMENTUM_TEILE)
         .sort((a, b) => b.note - a.note || a.ticker.localeCompare(b.ticker))
 }
 

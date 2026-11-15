@@ -20,6 +20,8 @@ import {
     listungsMeldung, faelligeZahlen, zahlenMeldung, zahlenTag, newcomerKandidaten, newcomerMeldung, watchlistSymbole,
     MAX_ZEILEN, MAX_NEWCOMER, NEWCOMER_SCHWELLE, ZAHLEN_VORLAUF_MS,
 } from './meldungen.js'
+import { kennzahlen } from '../newcomer-radar/kennzahlen.js'
+import { bewerte } from '../newcomer-radar/bewertung.js'
 import { REGISTER, kanalWahl, sichtbareTypen } from '../benachrichtigungen.js'
 
 const hier = path.dirname(fileURLToPath(import.meta.url))
@@ -164,14 +166,35 @@ gleich(watchlistSymbole([
 
 // ── 4. Newcomer ─────────────────────────────────────────────────────────
 {
-    const t = (ticker, note, kategorie = 'boersengang', huerden = []) => ({ ticker, name: ticker + ' Inc.', note, kategorie, huerden, listungen: [{ handelsplatz: 'bitget' }, { handelsplatz: 'bitget' }, { handelsplatz: 'bitpanda' }] })
+    const t = (ticker, note, kategorie = 'boersengang', huerden = [], momentumTeile = 3) => ({ ticker, name: ticker + ' Inc.', note, kategorie, huerden, kennzahlen: { momentumTeile }, listungen: [{ handelsplatz: 'bitget' }, { handelsplatz: 'bitget' }, { handelsplatz: 'bitpanda' }] })
     const k = newcomerKandidaten([
         t('AAA', 91), t('BBB', 79.9), t('CCC', 95, 'etabliert'), t('DDD', 88, 'neuGelistet'),
         t('EEE', 99, 'boersengang', ['umsatz']), { ticker: 'FFF', note: null, kategorie: 'boersengang', huerden: [] },
         t('GGG', 85, 'vorboerslich'), t('HHH', NEWCOMER_SCHWELLE),
+        // FACH-H-004: Momentum nur an einem Mass gemessen (die ersten Wochen nach dem Börsengang) → keine Mail
+        t('III', 94, 'boersengang', [], 1), t('JJJ', 94, 'boersengang', [], 0),
+        { ticker: 'KKK', note: 94, kategorie: 'boersengang', huerden: [] }, { ticker: 'LLL', note: 94, kategorie: 'boersengang', huerden: [], kennzahlen: {} },
+        t('MMM', 90, 'boersengang', ['wechselkursFehlt']),
     ])
     gleich(k.map((x) => x.ticker), ['AAA', 'DDD', 'HHH'], 'nur junge, zugelassene Titel ab der Schwelle, beste zuerst')
     gleich(newcomerMeldung([]), null, 'kein Kandidat: keine Meldung')
+    gleich(newcomerKandidaten([t('ZWEI', 81, 'boersengang', [], 2)]).length, 1, 'zwei Momentum-Teilmasse reichen')
+    {
+        // Durch die echte Kette: ein Börsengang von vor fünf Handelstagen, 3 % unter dem Hoch (war Note 94 und eine Mail)
+        const TAG = 86400e3, jetzt = 1.7e12 + 40 * TAG
+        const kette = (tage) => {
+            const kerzen = Array.from({ length: tage }, (_, i) => { const c = i === tage - 1 ? 97 : 100; return { t: 1.7e12 + i * TAG, o: c, h: c, l: c, c, v: 1e6 } })
+            const kz = kennzahlen(kerzen, { jetzt, ipoDatum: jetzt - tage * TAG, referenz: { perf3m: 2 } })
+            const b = bewerte(kz, { jetzt, waehrung: 'USD' })
+            return { ticker: 'IPO' + tage, note: b.note, kategorie: b.kategorie, huerden: b.huerden, kennzahlen: { ...kz, momentumTeile: b.momentumTeile } }
+        }
+        for (const tage of [5, 15, 30]) {
+            const z = kette(tage)
+            ok(z.kategorie === 'boersengang' && !(z.note >= NEWCOMER_SCHWELLE), `${tage} Handelstage: Note ${z.note} bleibt unter ${NEWCOMER_SCHWELLE}`)
+            gleich(newcomerKandidaten([z]), [], `${tage} Handelstage: keine Mail`)
+            gleich(newcomerKandidaten([{ ...z, note: 94 }]), [], `${tage} Handelstage: auch mit hoher Note keine Mail (ein Teilmass)`)
+        }
+    }
     const m = newcomerMeldung(k)
     ok(m.betreff === `Newcomer-Radar: 3 Titel mit Note ab ${NEWCOMER_SCHWELLE}`, 'Betreff')
     ok(m.text.includes('AAA — AAA Inc.: Note 91 (junger Börsengang), handelbar bei Bitget, Bitpanda'), 'Zeile mit Note, Kategorie und Plätzen ohne Doppelte')
@@ -190,6 +213,7 @@ gleich(watchlistSymbole([
     const meldungen = lies('meldungen.js')
     ok(/meldeNeueListungen\(ergebnis\.neu\)/.test(lies('stamm.js')), 'Stamm-Abgleich meldet neue Listungen')
     ok(/meldeNewcomer\(meiner\.beginn\)/.test(lies('../newcomer-radar/lauf.js')), 'Newcomer-Lauf meldet nach dem Lauf')
+    ok(/momentumTeile: b\.momentumTeile/.test(lies('../newcomer-radar/lauf.js')), 'Newcomer-Lauf speichert die Zahl der Momentum-Teilmasse, nach der die Mail fragt')
     ok(/pruefeZahlentermine\(\)/.test(lies('../benachrichtigungen.js')), 'Benachrichtigungs-Takt prüft Zahlentermine')
     // Jeder Weg geht durch `bereit` (Aktien-Modus + Mail an + Versand eingerichtet) und durch `melde`
     for (const fn of ['meldeNeueListungen', 'pruefeZahlentermine', 'meldeNewcomer']) {
