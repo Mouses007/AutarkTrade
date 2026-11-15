@@ -37,6 +37,8 @@ import { istTestbetrieb } from './umgebung.js'
 import { istAus as marktdatenAus } from './marktdaten/index.js'
 import { aussortierteZeilen } from './strategie-aussortiert.js'
 import { zeitpunkt } from '../shared/strategieChart.js'
+import { aktienKontext } from './aktien/kontext.js'
+import { sitzungVon, handelstagBeginn } from '../shared/aktien-sitzung.js'
 
 // Instanzen, deren „Marktdaten aus" schon im Log steht: alle 15 s dieselbe
 // Zeile wäre Lärm, der echte Fehler verdeckt (S12). `lastError` sagt es der
@@ -251,8 +253,9 @@ export const BETRIEBSARTEN = ['paper', 'shadow']
  * sie Einträge nach dem Stichtag (andere Zeiteinheit, späterer Takt) sauber
  * ausschliessen.
  */
-export function risikoKontextAbfragen(knex, instanceId, now) {
-    const tagesBeginn = startOfDayUtc(now)
+export function risikoKontextAbfragen(knex, instanceId, now, tagesBeginn = startOfDayUtc(now)) {
+    // `tagesBeginn`: Coins Mitternacht UTC (Vorgabe), Aktien-Futures der New
+    // Yorker Handelstag (`handelstagBeginn`) — wie im Backtest.
     // Der Trade GENAU dieser Position: gleiche Positions-Nummer, gleiche
     // Instanz, gleicher Einstieg. Die Nummer allein reicht nicht — nach einer
     // Rücksicherung in eine frische DB zählen die Positions-Nummern wieder ab
@@ -313,8 +316,8 @@ export function risikoStichtag(ev, tfMs) {
     return beginn > 0 ? beginn + (tfMs || 0) : Date.now()
 }
 
-async function ladeRisikoKontext(instance, now) {
-    const abfragen = risikoKontextAbfragen(getKnex(), instance.id, now)
+async function ladeRisikoKontext(instance, now, tagesBeginn) {
+    const abfragen = risikoKontextAbfragen(getKnex(), instance.id, now, tagesBeginn)
     const [offen, heute, letzte] = await Promise.all([
         abfragen.offen, abfragen.heute, abfragen.letzte,
     ])
@@ -690,6 +693,15 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     const alter = ausloeserAlter(ev, candles, timeframeMs(setup.timeframe))
     if (alter > 0) return beenden('reject_risk', 'zu_spaet_erkannt', `Auslöser ${alter} Kerzen alt`)
 
+    // (a3) Aktien-Futures: Börsensitzung statt UTC-Tag. Auf Wunsch nur in der
+    // regulären US-Sitzung einsteigen — massgebend ist der Beginn der
+    // Auslösekerze, wie im Backtest (`ausserhalb_sitzung`).
+    const aktie = await aktienKontext(setup.symbol)
+    if (aktie && instance.risk?.nurRegulaereSitzung) {
+        const sitzung = sitzungVon(Number(ev?.candleTime ?? ev?.triggeredAt) || now)
+        if (sitzung !== 'regulaer') return beenden('reject_risk', 'ausserhalb_sitzung', `Sitzung ${sitzung}`)
+    }
+
     // (b) Agenten-Veto — optional, darf NUR ablehnen oder verkleinern
     let sizeFactor = 1
     if (agentHook) {
@@ -740,7 +752,7 @@ async function fuehreAus({ instance, setup, ev, candles, schalter, costs }) {
     // (c) Risiko-Gates
     const [equity, kontext, meta] = await Promise.all([
         ladeKontostand(instance),
-        ladeRisikoKontext(instance, stichtag),
+        ladeRisikoKontext(instance, stichtag, aktie ? handelstagBeginn(stichtag) : undefined),
         marktMetaFuer(instance, setup.symbol),
     ])
 

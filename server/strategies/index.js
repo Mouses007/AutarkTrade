@@ -41,6 +41,11 @@ export const RISK_PARAMS = [
     { key: 'maxNotionalUsdt', type: 'number', default: 500, min: 5, max: 1000000, step: 5, group: 'limits' },
     { key: 'leverage', type: 'number', default: 3, min: 1, max: 125, step: 1, group: 'size' },
     { key: 'cooldownMinutes', type: 'integer', default: 60, min: 0, max: 10080, step: 5, group: 'limits' },
+    // Nur Aktien-Futures: Einstiege ausserhalb der regulären US-Sitzung
+    // (09:30–16:00 New Yorker Zeit, Handelstage) sperren. Der Future handelt
+    // rund um die Uhr, ist dort aber dünn — am Wochenende etwa ein Zehntel des
+    // Stundenvolumens (`shared/aktien-sitzung.js`). Bei Coins ohne Wirkung.
+    { key: 'nurRegulaereSitzung', type: 'boolean', default: false, group: 'limits' },
     // Fährt eine Instanz mehrere Zeiteinheiten, konkurrieren sie um dasselbe
     // Symbol: `symbol` (Standard, sicher) lässt nur EINE Position je Coin zu —
     // die schnellste Zeiteinheit gewinnt und die langsameren kommen kaum zum

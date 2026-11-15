@@ -20,6 +20,7 @@ import axios from 'axios'
 import { useI18n } from 'vue-i18n'
 import StrategieChart from '../StrategieChart.vue'
 import AusstiegsPruefung from './AusstiegsPruefung.vue'
+import AktienHinweise from './AktienHinweise.vue'
 import QuelleAus from '../../quellen/QuelleAus.vue'
 import { Knopf, Pille, Hinweis, Kreisel, Symbol } from '../../basis'
 import { formGeldStellen } from '../../../utils/journal/format.js'
@@ -307,6 +308,9 @@ const urteilKlasse = (u) => (u === 'plateau' ? 'gut'
                      tut es seit dem Audit auch. Wer das nicht sieht,
                      vergleicht ein Laborergebnis mit einem Papierlauf, der
                      andere Positionsgrössen hatte. -->
+                <!-- Aktien-Future: Sitzungen, Splits, Stichtage der Börse, Ergebnis je Sitzung. -->
+                <AktienHinweise :aktien="ergebnis.stats.aktien" :geld="(v) => formGeldStellen(v, 2)" />
+
                 <Hinweis v-if="ergebnis.stats.leverageGekappt" art="warn" class="abstandUnten">
                     {{ t('strategies.hebelGekappt', { hebel: ergebnis.stats.leverageEffektiv }) }}
                 </Hinweis>

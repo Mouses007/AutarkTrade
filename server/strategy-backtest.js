@@ -17,6 +17,9 @@ import { getHistoricalCandles, timeframeMs, currentCandleOpen, getFundingHistory
 import { fundingAusVerlauf } from './execution/zwischenstand.js'
 import { evaluateRisk, startOfDayUtc } from './risk-engine.js'
 import { wartungsmargeMitQuelle } from './margin-rates.js'
+import { aktienKontext } from './aktien/kontext.js'
+import { bereinigeSplits, verdaechtigeSpruenge } from './aktien/splits.js'
+import { sitzungVon, handelstagBeginn, sitzungsBilanz, regimeWechsel } from '../shared/aktien-sitzung.js'
 import { createPosition, stepCandle, closePosition, entryIsValid, kostenAus, einstiegsPreis, einstiegsZeit, istSchlussEinstieg, riskPerUnit, fundingFor } from './fill-simulator.js'
 
 /**
@@ -225,10 +228,29 @@ export async function runBacktest(opts) {
         : Number(risk.startEquityUsdt) > 0 ? Number(risk.startEquityUsdt) : 1000
     risk.startEquityUsdt = startEquity
 
-    const candles = opts.candles || await getHistoricalCandles(
+    let candles = opts.candles || await getHistoricalCandles(
         symbol, timeframe, opts.fromTs, opts.toTs,
         { market, maxCandles: MAX_BACKTEST_CANDLES },
     )
+
+    // Aktien-Future? Dann gelten Börsensitzungen statt UTC-Tagen, und die
+    // Kerzen müssen vor jedem Split umgerechnet werden — die Börsen liefern
+    // sie unbereinigt (`server/aktien/splits.js`). `null` = Krypto, alles wie
+    // bisher. Robustheit und Messskripte reichen `opts.aktie` durch, damit
+    // nicht jeder Teillauf neu fragt.
+    const aktie = opts.aktie !== undefined ? opts.aktie : await aktienKontext(symbol)
+    let splitBericht = []
+    let sprungVerdacht = []
+    if (aktie) {
+        if (aktie.splits) {
+            const b = bereinigeSplits(candles, aktie.splits)
+            candles = b.kerzen
+            splitBericht = b.splits
+        } else {
+            sprungVerdacht = verdaechtigeSpruenge(candles).slice(0, 5)
+        }
+    }
+    const nurRegulaer = Boolean(aktie && risk.nurRegulaereSitzung)
 
     // Kerzen der höheren Zeiteinheit — nur laden, wenn der Filter auch an ist.
     //
@@ -260,6 +282,7 @@ export async function runBacktest(opts) {
             htfAlle = []
             htfFilter.grund = 'abruf_fehlgeschlagen'
         }
+        if (aktie?.splits) htfAlle = bereinigeSplits(htfAlle, aktie.splits).kerzen
         // Reicht die Reihe vorn weit genug zurück? Vorgeladene HTF-Kerzen
         // (Robustheit, Messskript) ab Laufbeginn statt ab Laufbeginn minus
         // Bedarf liessen die Strategie die ersten Monate ohne HTF-Lage und
@@ -415,6 +438,8 @@ export async function runBacktest(opts) {
             }
         }
         const trade = closePosition(pos, exit, costs, extra)
+        // Aktien: in welcher Börsensitzung wurde eingestiegen? (Auswertung je Sitzung)
+        if (aktie) trade.sitzung = sitzungVon(pos.entryTime)
         // Welcher Anteil des Kontos stand bei diesem Trade WIRKLICH im Risiko?
         // Nicht zwingend `riskPerTradePct`: der Notional-Deckel, die Marge und
         // die Mengenrundung verkleinern die Position, und `rMultiple` bezieht
@@ -578,6 +603,16 @@ export async function runBacktest(opts) {
             }
             const triggerKerze = kerze
 
+            // Aktien: auf Wunsch nur in der regulären US-Sitzung einsteigen.
+            // Massgebend ist der BEGINN der Auslösekerze — eine Stundenkerze ab
+            // 09:00 New Yorker Zeit zählt noch als vorbörslich.
+            if (nurRegulaer && sitzungVon(triggerKerze.t) !== 'regulaer') {
+                bump(funnel.entrySkipped, 'ausserhalb_sitzung')
+                setup.status = 'rejected'
+                setup.rejectReason = 'ausserhalb_sitzung'
+                continue
+            }
+
             // 3a. Fill überhaupt möglich? Ein nie berührter Einstieg wird
             //     verworfen. Ein Stop in der Auslösekerze dagegen wird als
             //     Verlust GEBUCHT — verwerfen würde genau die schlechtesten
@@ -597,7 +632,9 @@ export async function runBacktest(opts) {
             //     Stichtag: dem Schluss der Auslösekerze (`risikoStichtag` in
             //     der Engine). Die Position beginnt trotzdem bei `triggerKerze.t`.
             const stichtag = triggerKerze.t + timeframeMs(timeframe)
-            const heuteBeginn = startOfDayUtc(stichtag)
+            // Tagesgrenze: Coins um Mitternacht UTC, Aktien am New Yorker
+            // Handelstag (Beginn 20:00 des Vorabends).
+            const heuteBeginn = aktie ? handelstagBeginn(stichtag) : startOfDayUtc(stichtag)
             const heutePnl = trades
                 .filter((t) => t.exitTime >= heuteBeginn)
                 .reduce((sum, t) => sum + t.netPnl, 0)
@@ -737,6 +774,23 @@ export async function runBacktest(opts) {
             // Kam die Zahl aus dem Formular oder von der Börse? Eine Annahme
             // ohne ihre Herkunft ist im Nachhinein nicht mehr zu beurteilen.
             wartungsmargeQuelle,
+            // Nur bei Aktien-Futures, sonst null: was die Simulation anders
+            // gerechnet hat und worauf das Ergebnis steht.
+            aktien: aktie ? {
+                ticker: aktie.ticker, boerse: aktie.boerse,
+                nurRegulaer,
+                // Ergebnis je Sitzung des Einstiegs
+                sitzungen: sitzungsBilanz(trades),
+                // Splits im Zeitraum; `angewendet: false` = Sprung nicht in den Kerzen gefunden
+                splits: splitBericht,
+                // false = die Kursquelle war nicht zu fragen — dann sind Splits UNBEKANNT
+                splitsBekannt: Array.isArray(aktie.splits),
+                splitsGrund: aktie.splitsGrund || null,
+                // nur ohne Split-Angaben: Stellen, die wie ein Split aussehen
+                sprungVerdacht,
+                // Der Zeitraum reicht vor den Tag, ab dem die Börse am Wochenende frei handelt
+                regime: regimeWechsel(aktie.boerse, candles[warmup]?.t ?? candles[0].t, letzte.t),
+            } : null,
             unrealisiertPnl: unrealisiert,
             endEquityMitOffenen: equity + unrealisiert,
             // Gehört zu den Kennzahlen, nicht in die Metadaten: ein Ergebnis zu

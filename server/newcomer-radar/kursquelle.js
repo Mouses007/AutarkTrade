@@ -7,6 +7,7 @@
  */
 import { fordereQuelle } from '../quellen/freigabe.js'
 import { ausChart, ausSuche } from './kursquelle-kern.js'
+import { ausSplits } from '../aktien/splits.js'
 
 const CHART = 'https://query1.finance.yahoo.com/v8/finance/chart/'
 const SUCHE = 'https://query2.finance.yahoo.com/v1/finance/search'
@@ -100,4 +101,14 @@ export async function holeZusammenfassung(symbol) {
         return await antwort.json()
     }
     throw new Error('Yahoo: Sitzung abgewiesen')
+}
+
+/**
+ * Splits eines Titels der letzten zehn Jahre: `[{t, faktor, text}]` (leer = keine).
+ * Für die Split-Wache der Simulation (`server/aktien/splits.js`).
+ */
+export async function holeSplits(symbol) {
+    const json = await hole(`${CHART}${encodeURIComponent(symbol)}?range=10y&interval=1mo&events=split`)
+    if (json?.chart?.error) throw new NichtGefunden(json.chart.error.description || 'Fehlerantwort')
+    return ausSplits(json)
 }
