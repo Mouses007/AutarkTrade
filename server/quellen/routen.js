@@ -7,6 +7,8 @@
  *   PUT  /api/quellen/coingecko     { schluessel?, tarif? } leer = löschen
  *   POST /api/quellen/coingecko/test                        prüft /ping mit Schlüssel
  *   GET/PUT /api/quellen/ohne-freigabe  { an }             Schalter (S15, freigabe.js)
+ *   PUT  /api/quellen/edgar         { kontakt }            Kontaktangabe für die SEC, leer = EDGAR aus
+ *   POST /api/quellen/edgar/test                           ein Abruf mit der hinterlegten Angabe
  *
  * Schlüssel verlassen den Server nie im Klartext; die Antwort nennt nur, ob
  * einer hinterlegt ist, und seine letzten vier Zeichen.
@@ -18,6 +20,7 @@ import { encrypt } from '../crypto.js'
 import { beschreibung, setupMarktdatenRoutes } from '../marktdaten/index.js'
 import * as coingecko from './coingecko.js'
 import * as freigabe from './freigabe.js'
+import * as edgar from '../aktien/edgar.js'
 
 async function cgStatus() {
     const z = await coingecko.eigenerZugang()
@@ -29,7 +32,7 @@ export function setupQuellenRoutes(app) {
     setupMarktdatenRoutes(app)
 
     app.get('/api/quellen', async (req, res) => {
-        res.json({ marktdaten: await beschreibung(), coingecko: await cgStatus(), ohneFreigabe: await freigabe.freigabeStand() })
+        res.json({ marktdaten: await beschreibung(), coingecko: await cgStatus(), ohneFreigabe: await freigabe.freigabeStand(), edgar: await edgar.kontaktStand() })
     })
 
     // Schalter „Quellen mit eingeschränkten Nutzungsbedingungen" (S15, `freigabe.js`).
@@ -47,6 +50,23 @@ export function setupQuellenRoutes(app) {
             res.json(await freigabe.freigabeStand())
         } catch (e) {
             res.status(500).json({ error: e.message })
+        }
+    })
+
+    // SEC EDGAR: die Kontaktangabe, mit der sich die App ausweist (kein Schlüssel — siehe `geheimnisse.js`).
+    app.put('/api/quellen/edgar', async (req, res) => {
+        try {
+            res.json(await edgar.setzeKontakt(req.body?.kontakt))
+        } catch (e) {
+            res.status(e.grund ? 400 : 500).json({ error: e.message, grund: e.grund })
+        }
+    })
+
+    app.post('/api/quellen/edgar/test', async (req, res) => {
+        try {
+            res.json(await edgar.pruefeZugang())
+        } catch (e) {
+            res.json({ ok: false, grund: e.grund === 'kontaktFehlt' ? 'kontaktFehlt' : 'fehler', fehler: e.message })
         }
     })
 

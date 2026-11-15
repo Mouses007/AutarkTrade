@@ -20,6 +20,9 @@
  * 4. Einstellungen: `aktiverMarkt` (krypto | aktien, der Umschalter in der
  *    Kopfleiste) und `modusAktienAn` (Vorgabe aus — solange der Aktien-Teil
  *    im Bau ist, sieht niemand einen Schalter ohne Wirkung).
+ *
+ * 5. `edgarKontakt` — womit sich die App bei der SEC ausweist (`server/aktien/edgar.js`).
+ *    Trägt der Nutzer selbst ein; leer = EDGAR aus.
  */
 
 /** Tabellen, deren Zeilen eine Anlageklasse tragen. */
@@ -104,4 +107,5 @@ export async function migriereAktien(knex, addColumnIfNotExists) {
 
     await addColumnIfNotExists('settings', 'aktiverMarkt', (t) => t.string('aktiverMarkt').defaultTo('krypto'))
     await addColumnIfNotExists('settings', 'modusAktienAn', (t) => t.boolean('modusAktienAn').defaultTo(false))
+    await addColumnIfNotExists('settings', 'edgarKontakt', (t) => t.string('edgarKontakt').defaultTo(''))
 }

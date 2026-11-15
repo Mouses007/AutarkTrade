@@ -27,6 +27,7 @@ import Kreisel from '../basis/Kreisel.vue'
 import Diagramm from '../strategien/Diagramm.vue'
 import QuelleAus from '../quellen/QuelleAus.vue'
 import Kaufzettel from './Kaufzettel.vue'
+import EdgarKarte from './EdgarKarte.vue'
 import { marktdaten, ladeMarktdaten } from '../../utils/marktdaten.js'
 import { symbolBei, vorzug } from '../../utils/chart/aktienSymbole.js'
 import { vorgabeBoerse, waehlbareBoersen } from '../../utils/chart/kerzenQuelle.js'
@@ -272,6 +273,8 @@ const grundText = computed(() => {
         <Kaufzettel v-if="seite" v-model="zettelOffen" :ticker="ticker" :seite="seite" />
 
         <QuelleAus v-if="aus" :aus="aus" />
+        <!-- Ist Yahoo aus, bleiben die Einreichungen der SEC trotzdem lesbar. -->
+        <EdgarKarte v-if="aus" :ticker="ticker" />
         <Hinweis v-if="fehler" art="fehler">{{ fehler }}</Hinweis>
         <Kreisel v-if="laedt && !seite" />
         <Hinweis v-if="seite && grundText" art="warn">{{ grundText }}</Hinweis>
@@ -421,6 +424,9 @@ const grundText = computed(() => {
                     <p v-if="jung" class="klein fuss">{{ t('titel.jungHinweis') }}</p>
                 </Karte>
             </div>
+
+            <!-- Einreichungen bei der SEC (lädt für sich, `EdgarKarte.vue`) -->
+            <EdgarKarte :ticker="ticker" :ipo-datum="seite.ipoDatum" />
 
             <!-- Einstufungen · Recherche -->
             <div class="reihe zwei">

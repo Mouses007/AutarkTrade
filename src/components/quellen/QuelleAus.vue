@@ -6,7 +6,8 @@
  *
  *   <QuelleAus v-if="daten?.aus" :aus="daten" />
  *
- * Gründe: schluesselFehlt (nur mit eigenem API-Schlüssel), entfernt (aus
+ * Gründe: schluesselFehlt (nur mit eigenem API-Schlüssel), kontaktFehlt (die
+ * Quelle verlangt eine Kontaktangabe — SEC EDGAR), entfernt (aus
  * Lizenzgründen nicht mehr angebunden), aus (abgeschaltet), marktdaten
  * (die gewählte Marktdatenquelle kann das nicht). Wo man selbst etwas tun
  * kann, verlinkt der Kasten auf Einstellungen › Datenquellen.
@@ -53,7 +54,7 @@ const text = computed(() => {
     const k = `datenquellen.aus.${grund.value}Text`
     return te(k) ? t(k, { quelle: props.aus?.quelle || '' }) : ''
 })
-const zuEinstellungen = computed(() => ['schluesselFehlt', 'marktdaten', 'aus', 'ohneFreigabe'].includes(grund.value))
+const zuEinstellungen = computed(() => ['schluesselFehlt', 'kontaktFehlt', 'marktdaten', 'aus', 'ohneFreigabe'].includes(grund.value))
 </script>
 
 <template>

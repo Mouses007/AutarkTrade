@@ -1,0 +1,8 @@
+{
+  "_hinweis": "NACHGEBAUT, keine echte Antwort: https://www.sec.gov/files/company_tickers.json lehnt Abrufe ohne Kontaktangabe im User-Agent ab (403, geprüft am 15.11.2026). Form nach der Dokumentation der SEC (Objekt mit laufenden Nummern, je cik_str/ticker/title). Die CIK von NVIDIA und CoreWeave stammen aus den echten Antworten von data.sec.gov; BRK-B und XYZQ sind erfunden, um Schreibweisen zu prüfen.",
+  "0": { "cik_str": 1045810, "ticker": "NVDA", "title": "NVIDIA CORP" },
+  "1": { "cik_str": 1769628, "ticker": "CRWV", "title": "CoreWeave, Inc." },
+  "2": { "cik_str": 9000001, "ticker": "BRK-B", "title": "Beispiel Holding (Klasse B)" },
+  "3": { "cik_str": 9000002, "ticker": "XYZQ", "title": "Beispiel AG" },
+  "4": { "cik_str": 9000003, "ticker": "BRKB", "title": "Späterer Doppelgänger" }
+}

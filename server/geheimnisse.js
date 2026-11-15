@@ -73,9 +73,28 @@ export const ZIEL_SETTINGS = [...new Set([
 // `schluesselDirekt` (SEC-S1-002): passwortloser YubiKey-Login, nur über seine eigene Route mit Passwort.
 export const ZUGANGS_SETTINGS = ['authEnabled', 'rechtlichesZustimmung', 'quellenOhneFreigabe', 'totpAn', 'schluesselDirekt']
 
+/**
+ * Kontaktangaben, mit denen sich die App bei einem fremden Dienst AUSWEIST
+ * (`edgarKontakt`: Name und Mailadresse im User-Agent an sec.gov,
+ * `server/aktien/edgar.js`). Eingeordnet am 15.11.2026:
+ *
+ * - KEIN Geheimnis: nichts, womit jemand Zugang bekäme. Die Angabe steht
+ *   deshalb weder in `GEHEIME_SETTINGS` (die Einstellungsseite zeigt sie
+ *   offen — der Nutzer soll sehen, was hinausgeht) noch wird sie
+ *   verschlüsselt, und sie geht wie `mailAn` unverändert ins eigene Backup.
+ * - KEIN Ziel im Sinn von `ZIEL_SETTINGS`: sie bestimmt nicht, wohin
+ *   Geheimnisse gehen.
+ * - Aber sie ist eine Identität. Käme sie aus einem fremden «Vorlagen»-Backup,
+ *   wiese sich diese Installation bei der SEC als jemand anderes aus, und
+ *   eine Sperre träfe ihn. Darum: beim Import bleibt der bestehende Wert, und
+ *   geschrieben wird nur über `PUT /api/quellen/edgar` (prüft die Form), nie
+ *   über die allgemeine Einstellungs-Route.
+ */
+export const KONTAKT_SETTINGS = ['edgarKontakt']
+
 /** Beim Backup-Import immer den bestehenden Wert behalten. */
 export const BEHALTEN_BEIM_IMPORT = [...new Set([
-    ...GEHEIME_SETTINGS, ...ZIEL_SETTINGS, ...ZUGANGS_SETTINGS,
+    ...GEHEIME_SETTINGS, ...ZIEL_SETTINGS, ...ZUGANGS_SETTINGS, ...KONTAKT_SETTINGS,
     // Polygon-/Databento-Schlüssel stehen in `apis` (JSON).
     'apis',
 ])]

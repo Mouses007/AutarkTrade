@@ -12,6 +12,8 @@
  *                                     Dollar, Breite im eigenen Feld (Yahoo, 30 min im Speicher)
  *   GET  /api/aktien/titel/:ticker    Titel-Seite: Profil, Kurs, Kennzahlen, Analysten, Ertragsverlauf
  *                                     (Yahoo, hinter dem Quellen-Schalter; 15 min im Speicher)
+ *   GET  /api/aktien/titel/:ticker/einreichungen   Einreichungen bei der SEC (EDGAR): Börsenprospekt, Angebote,
+ *                                     Insider-Meldungen; nur mit eigener Kontaktangabe, 6 h im Speicher
  *   GET  /api/aktien/titel/:ticker/bewegung   gemerkte Recherche «was hat den Kurs bewegt» (liest nur)
  *   POST /api/aktien/titel/:ticker/bewegung   Recherche jetzt holen (Perplexity, kostet — nur auf Knopfdruck)
  */
@@ -28,6 +30,7 @@ import { ladeLlmConfig, merkeKiGuthaben, istGuthabenFehler } from '../llm.js'
 import { rechercheThema } from '../news-recherche.js'
 import { pruefeEinordnung } from '../coin-radar/einordnung.js'
 import { logWarn } from '../logger.js'
+import { holeEinreichungen, EdgarAbgelehnt, EdgarGebremst } from './edgar.js'
 
 const TICKER_RE = /^[A-Z0-9][A-Z0-9.\-]{0,14}$/
 const TITEL_MS = 15 * 60_000
@@ -161,6 +164,24 @@ export function setupAktienRoutes(app) {
         } catch (e) {
             if (sendeWennAus(res, e)) return
             logWarn('aktien', `Titel ${ticker}: ${e.message}`)
+            res.status(502).json({ ok: false, error: String(e?.message || e) })
+        }
+    })
+
+    // Eigene Route, getrennt von den Yahoo-Daten: fällt EDGAR aus, bleibt die Titel-Seite stehen.
+    app.get('/api/aktien/titel/:ticker/einreichungen', async (req, res) => {
+        const ticker = String(req.params.ticker || '').toUpperCase()
+        if (!TICKER_RE.test(ticker)) return res.status(400).json({ ok: false, error: 'ungültiger Ticker' })
+        try {
+            const gefunden = await ladeTitel(getKnex(), ticker)
+            if (!gefunden) return res.json({ ok: false, grund: 'unbekannt' })
+            // Das Kurssymbol trägt bei Nicht-US-Titeln den Börsen-Anhang (ASML.AS) — daran erkennt EDGAR sie.
+            res.json(await holeEinreichungen(gefunden.kursSymbol || ticker, { neu: req.query.neu === '1' }))
+        } catch (e) {
+            if (sendeWennAus(res, e)) return
+            if (e instanceof EdgarGebremst) return res.json({ ok: false, grund: 'gebremst' })
+            if (e instanceof EdgarAbgelehnt) return res.json({ ok: false, grund: 'abgelehnt' })
+            logWarn('aktien', `Einreichungen ${ticker}: ${e.message}`)
             res.status(502).json({ ok: false, error: String(e?.message || e) })
         }
     })

@@ -30,6 +30,7 @@ import Abschnitt from './gemeinsam/Abschnitt.vue'
 import Schalter from './gemeinsam/Schalter.vue'
 import CryptoQuant from './datenquellen/CryptoQuant.vue'
 import KerzenSchluessel from './datenquellen/KerzenSchluessel.vue'
+import Edgar from './datenquellen/Edgar.vue'
 
 const { t } = useI18n()
 
@@ -215,6 +216,9 @@ async function cgSpeichern(loeschen = false) {
 
         <!-- Kerzen für die Exkursionen (MFE-Preise) -->
         <KerzenSchluessel />
+
+        <!-- Aktien: Kontaktangabe für die Einreichungen der SEC -->
+        <Edgar />
 
         <!-- Wo die übrigen Schlüssel stehen — als Verweise, nicht als Text -->
         <Abschnitt kennung="weitere-schluessel" :titel="t('datenquellen.andere.titel')" symbol="verknuepfung">

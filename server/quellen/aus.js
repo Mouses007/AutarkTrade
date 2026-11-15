@@ -9,6 +9,8 @@
  *   ohneFreigabe     Quelle mit eingeschränkten Nutzungsbedingungen, Schalter
  *                    „Quellen mit eingeschränkten Nutzungsbedingungen" ist aus (S15, `freigabe.js`)
  *   marktdaten       Marktdatenquelle hat die Fähigkeit nicht (`marktdaten/index.js`)
+ *   kontaktFehlt     Quelle verlangt, dass sich die App mit einer Kontaktangabe ausweist
+ *                    (SEC EDGAR, `aktien/edgar.js`), und es ist keine eingetragen
  *
  * Routen antworten darauf mit HTTP 200 und `{ aus: true, grund, quelle,
  * meldung, faehigkeit? }` — kein Fehler, sondern ein Zustand, den die
@@ -17,7 +19,7 @@
 
 import { istAus as istMarktdatenAus, ausAntwort as marktdatenAntwort } from '../marktdaten/index.js'
 
-export const GRUENDE = ['schluesselFehlt', 'entfernt', 'aus', 'ohneFreigabe', 'marktdaten']
+export const GRUENDE = ['schluesselFehlt', 'entfernt', 'aus', 'ohneFreigabe', 'marktdaten', 'kontaktFehlt']
 
 export class QuelleAus extends Error {
     /**
@@ -36,6 +38,7 @@ export class QuelleAus extends Error {
 
 function standardMeldung(quelle, grund) {
     if (grund === 'schluesselFehlt') return `${quelle}: nur mit eigenem API-Schlüssel (Einstellungen › Datenquellen)`
+    if (grund === 'kontaktFehlt') return `${quelle}: nur mit eigener Kontaktangabe (Einstellungen › Datenquellen)`
     if (grund === 'entfernt') return `${quelle} ist aus Lizenzgründen nicht mehr angebunden`
     if (grund === 'aus') return `${quelle} ist ausgeschaltet`
     if (grund === 'ohneFreigabe') return `${quelle} ist aus (Einstellungen › Datenquellen › Quellen mit eingeschränkten Nutzungsbedingungen)`
