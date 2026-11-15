@@ -251,6 +251,28 @@ const BITPANDA_ART = {
 }
 
 /**
+ * Bestand aus `GET /v1/portfolio` (rein). `currency_balance` ist Bitpandas
+ * eigene Bewertung der Position (in der Währung `currency_id`, gemessen: EUR);
+ * daraus ein Kurs je Einheit in USD — Ersatz für Coins ohne Börsenpaar und
+ * DER Kurs für Aktien und ETFs. `klasseVon(asset_id)` nennt `aktie`/`etf`
+ * oder null (Coin, Metall, Fiat).
+ */
+export function ausBitpandaPortfolio(portfolio, symbole, { usdJeEur = null, klasseVon = () => null } = {}) {
+    return (portfolio || [])
+        .map((p) => {
+            const menge = Number(p.balance?.value || 0)
+            const wert = Number(p.currency_balance?.value)
+            const waehrung = symbole.get(p.currency_balance?.currency_id)
+            let kursUsd = null
+            if (menge > 0 && wert > 0 && waehrung === 'EUR' && usdJeEur) kursUsd = (wert / menge) * usdJeEur
+            else if (menge > 0 && wert > 0 && ['USD', 'USDT', 'USDC'].includes(waehrung)) kursUsd = wert / menge
+            const klasse = p.asset_id ? klasseVon(p.asset_id) : null
+            return { ort: 'konto', asset: symbole.get(p.asset_id || p.currency_id) || p.asset_id || p.currency_id, menge, kursUsd, ...(klasse ? { klasse } : {}) }
+        })
+        .filter((b) => b.menge > 0)
+}
+
+/**
  * @param {Array} ops
  * @param {Map<string,string>} symbole  asset_id bzw. currency_id → Symbol
  */

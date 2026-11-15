@@ -139,6 +139,8 @@ export async function migrierePortfolio(knex, addColumnIfNotExists) {
     }
     // Kurs, den die Quelle selbst nennt (Bitpanda `currency_balance` / Menge) — Ersatz, wenn keine Börse den Coin führt.
     await addColumnIfNotExists('portfolio_bestaende', 'kursUsd', (t) => t.double('kursUsd'))
+    // Aktien und ETFs (Bitpanda) als eigene Art: `aktie` | `etf`, sonst leer = Coin (`aktien-art.js`).
+    await addColumnIfNotExists('portfolio_bestaende', 'klasse', (t) => t.string('klasse'))
     await addColumnIfNotExists('settings', 'modusPortfolioAn', (t) => t.integer('modusPortfolioAn').defaultTo(1))
     // { bitunix: { futures: 1, spot: 0 }, … } — fehlt ein Eintrag: Futures an, Spot aus.
     await addColumnIfNotExists('settings', 'portfolioBoersen', (t) => t.text('portfolioBoersen'))

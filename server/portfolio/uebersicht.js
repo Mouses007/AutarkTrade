@@ -24,6 +24,7 @@ import { boersenWahl, laufStand, BOERSEN } from './abruf.js'
 import { WALLET_TYPEN, EVM_NETZE, KETTEN } from '../../shared/portfolio-adresse.js'
 import { uebergaben, ohneUebernommene } from './uebergabe.js'
 import { tokenIdentitaet, ladeGegenKontrakte } from './token-id.js'
+import { aktienZeilenKurs, stammKurseUsd } from './aktien-art.js'
 
 const BOERSEN_NAME = { bitunix: 'Bitunix', bitget: 'Bitget', pionex: 'Pionex', bitpanda: 'Bitpanda' }
 
@@ -121,13 +122,19 @@ async function rechneUebersicht({ ohneVerlauf }) {
     const wahl = await boersenWahl()
 
     // Kurse für alles, was im Bestand liegt
-    const posten = bestaende.map((b) => ({ asset: b.asset, kontrakt: b.kontrakt, kette: b.kontrakt ? (b.ort === 'sol' ? 'sol' : b.ort) : null, menge: b.menge }))
+    // Aktien und ETFs (Bitpanda, `klasse`) gehen NICHT in die Kursabfrage über
+    // das Kürzel: sie werden je Zeile bewertet (`aktien-art.js`).
+    const posten = bestaende.filter((b) => !b.klasse).map((b) => ({ asset: b.asset, kontrakt: b.kontrakt, kette: b.kontrakt ? (b.ort === 'sol' ? 'sol' : b.ort) : null, menge: b.menge }))
     const { kurse, fx, marktFehler } = await kurseFuer(posten)
+    // Ersatzkurs über den Titel-Stamm nur für Aktien, die Bitpanda nicht selbst bewertet.
+    const ohneBewertung = bestaende.filter((b) => b.klasse && !(Number(b.kursUsd) > 0)).map((b) => b.asset)
+    const stammKurse = ohneBewertung.length ? await stammKurseUsd(k, ohneBewertung) : new Map()
 
     const keyVon = (b) => (b.kontrakt ? `${b.asset}|${b.kontrakt}` : b.asset)
     const quellKurs = new Map()
     for (const b of bestaende) {
-        if (Number(b.kursUsd) > 0 && !quellKurs.has(keyVon(b))) {
+        // Die Bewertung einer Aktie gilt nur für diese Aktie, nie für einen gleichnamigen Coin an anderem Ort.
+        if (!b.klasse && Number(b.kursUsd) > 0 && !quellKurs.has(keyVon(b))) {
             quellKurs.set(keyVon(b), { usd: Number(b.kursUsd), quelle: `Bewertung ${b.quelle === 'bitpanda' ? 'Bitpanda' : b.quelle}` })
         }
     }
@@ -138,19 +145,20 @@ async function rechneUebersicht({ ohneVerlauf }) {
         const key = keyVon(b)
         // Totalverlust: gehört nicht mehr ins Portfolio, sondern auf die eigene Seite.
         if (tot.has(String(b.asset).toUpperCase())) continue
-        const spam = istSpam(b.asset, b.kontrakt)
+        const spam = b.klasse ? null : istSpam(b.asset, b.kontrakt)
         // Spam hat keinen Wert, auch wenn ein Fantasie-Pool einen Preis nennt.
-        let kurs = spam ? { usd: null, quelle: 'Spam' } : (kurse.get(key) || { usd: null, quelle: 'kein Kurs' })
+        let kurs = b.klasse ? aktienZeilenKurs(b, stammKurse)
+            : spam ? { usd: null, quelle: 'Spam' } : (kurse.get(key) || { usd: null, quelle: 'kein Kurs' })
         // Rechenreste aus Importen (CHSB 6e-12, OCC 4e-6) sind kein Bestand: ohne
         // Kurs würden sie als „0 · kein Kurs" in der Liste stehen.
-        if (kurs.usd == null && !quellKurs.has(key) && Math.abs(b.menge) < 1e-5) continue
+        if (kurs.usd == null && (b.klasse || !quellKurs.has(key)) && Math.abs(b.menge) < 1e-5) continue
         // Ohne Börsenkurs: den Kurs, den eine Quelle selbst nennt (Bitpanda) —
         // für ALLE Orte dieses Coins, denn derselbe Coin hat überall denselben
         // Wert (CSPR bei Bitget ohne Kurs, bei Bitpanda bewertet).
-        if (kurs.usd == null && quellKurs.has(key)) kurs = quellKurs.get(key)
+        if (!b.klasse && kurs.usd == null && quellKurs.has(key)) kurs = quellKurs.get(key)
         // Zweite Regel: ohne Kurs und ohne eigene Herkunft (nie gekauft, getauscht,
         // selbst geschickt) ist ein Token ungefragt zugeschickt.
-        const ungefragt = !spam && kurs.usd == null ? istSpam(b.asset, b.kontrakt, { ohneKurs: true }) : null
+        const ungefragt = !b.klasse && !spam && kurs.usd == null ? istSpam(b.asset, b.kontrakt, { ohneKurs: true }) : null
         if (ungefragt) kurs = { usd: null, quelle: 'Spam' }
         const spamGrund = spam || ungefragt
         const usd = kurs.usd != null ? b.menge * kurs.usd : null
@@ -160,7 +168,12 @@ async function rechneUebersicht({ ohneVerlauf }) {
         const p = jeAsset.get(key) || {
             schluessel: key, asset: anzeigeName, kontrakt: b.kontrakt, kette: b.kontrakt ? b.ort : null,
             menge: 0, usdKurs: kurs.usd, kursQuelle: kurs.quelle, usd: 0, chf: 0, ohneKurs: kurs.usd == null, spam: spamGrund, orte: [],
+            klasse: b.klasse || null,
         }
+        // Liegt dasselbe Kürzel als Coin UND als Aktie vor (bewusste Grenze: eine
+        // Zeile je Kürzel), zählt die Zeile als bewertet, sobald ein Teil es ist.
+        if (b.klasse) p.klasse = b.klasse
+        if (p.klasse && kurs.usd != null) p.ohneKurs = false
         p.menge += b.menge
         if (usd != null) { p.usd += usd; p.chf += chf }
         p.orte.push({ quelle: b.quelle, ort: b.ort, ortName: b.name && b.name !== 'ohneSymbol' ? b.name : kettenName(b.ort), menge: b.menge, chf })
@@ -168,7 +181,7 @@ async function rechneUebersicht({ ohneVerlauf }) {
 
         const q = jeQuelle.get(b.quelle) || { chf: 0, usd: 0, posten: [] }
         if (usd != null) { q.chf += chf; q.usd += usd }
-        q.posten.push({ schluessel: key, asset: anzeigeName, ort: b.ort, ortName: kettenName(b.ort) || b.name, menge: b.menge, chf, ohneKurs: usd == null, spam: spamGrund })
+        q.posten.push({ schluessel: key, asset: anzeigeName, ort: b.ort, ortName: kettenName(b.ort) || b.name, menge: b.menge, chf, ohneKurs: usd == null, spam: spamGrund, klasse: b.klasse || null })
         jeQuelle.set(b.quelle, q)
     }
     const gesamtChf = gesamtUsd * fx.chf

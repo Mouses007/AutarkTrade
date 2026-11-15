@@ -21,6 +21,7 @@ import { istKanon, gegenKontraktVon } from './token-id.js'
 import { berechneUebersicht } from './uebersicht.js'
 import { wachtAus, meldenswert, meldungFuer, bestandsAenderungen } from './wacht.js'
 import { spamPruefer } from './spam.js'
+import { bitpandaAktienKuerzel } from './aktien-art.js'
 import { stelleZu } from '../hype-radar/zustellung.js'
 import { leseEinstellungen } from '../hype-radar/einstellungen.js'
 import { melde } from '../benachrichtigungen.js'
@@ -102,7 +103,7 @@ async function speichere(quelle, erg) {
         if (erg.bestand.length) {
             await trx('portfolio_bestaende').insert(erg.bestand.map((b) => ({
                 quelle, ort: b.ort || null, asset: String(b.asset).toUpperCase(), kontrakt: b.kontrakt || null,
-                menge: b.menge, name: b.name || (b.ohneSymbol ? 'ohneSymbol' : null), kursUsd: b.kursUsd ?? null, zeit: jetzt,
+                menge: b.menge, name: b.name || (b.ohneSymbol ? 'ohneSymbol' : null), kursUsd: b.kursUsd ?? null, klasse: b.klasse || null, zeit: jetzt,
             })))
         }
         for (let i = 0; i < erg.bewegungen.length; i += 200) {
@@ -205,6 +206,10 @@ async function bewerteBewegungen(max = 400) {
     const k = getKnex()
     const offen = await k('portfolio_bewegungen').whereNull('chfQuelle').orderBy('zeit', 'desc').limit(max)
     let n = 0
+    // Aktien und ETFs bei Bitpanda: nie über das Kürzel bewerten — `NVDAUSDT`
+    // im Spot gibt es nicht, und ein gleichnamiger Coin wäre der falsche Kurs.
+    const aktien = await bitpandaAktienKuerzel(k)
+    const istAktie = (b, asset) => b.quelle === 'bitpanda' && aktien.has(String(asset).toUpperCase())
     for (const b of offen) {
         const datum = new Date(Number(b.zeit)).toISOString().slice(0, 10)
         const usdChf = await fxAm(datum, 'CHF')
@@ -222,11 +227,12 @@ async function bewerteBewegungen(max = 400) {
                 const usdEur = await fxAm(datum, 'EUR')
                 if (usdEur && usdChf) { wert = betrag / usdEur * usdChf; quelle = 'Betrag in EUR · EZB' }
             } else if (usdChf) { wert = betrag * usdChf; quelle = 'Handelsbetrag · EZB' }
-        } else if (kurs) {
+        } else if (kurs && !istAktie(b, kurs[0])) {
             const t = await tagesKursUsd(kurs[0], datum)
             if (t.usd != null && usdChf) { wert = Math.abs(Number(kurs[1])) * t.usd * usdChf; quelle = `${t.quelle} · EZB` }
         }
-        const ohneKurs = !geld && !kurs && Number(b.menge) ? 'kein Kurs (Token, Vertrag nicht belegt)' : 'kein Kurs'
+        const ohneKurs = !geld && kurs && istAktie(b, kurs[0]) ? 'kein Kurs (Aktie ohne Handelsbetrag)'
+            : !geld && !kurs && Number(b.menge) ? 'kein Kurs (Token, Vertrag nicht belegt)' : 'kein Kurs'
         await k('portfolio_bewegungen').where('id', b.id).update({ chfWert: wert, chfQuelle: wert == null ? ohneKurs : quelle })
         n++
     }

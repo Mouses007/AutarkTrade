@@ -230,7 +230,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                     <button type="button" class="pf-zeile-kopf" @click="klappe(p.schluessel)">
                         <span class="pf-coin" :style="{ '--f': farbeVon(p.asset) }">{{ p.asset.slice(0, 1) }}</span>
                         <span class="pf-name">
-                            <b>{{ p.asset }}</b>
+                            <b>{{ p.asset }}<span v-if="p.klasse" class="pf-klasse">{{ t('aktien.art_' + p.klasse) }}</span></b>
                             <small class="at-gedaempft">{{ menge(p.menge) }}<template v-if="p.orte.length > 1"> · {{ t('portfolio.anOrten', { n: p.orte.length }) }}</template><template v-if="p.kaufkurs != null"> · Ø {{ chfKurs(p.kaufkurs) }}</template></small>
                         </span>
                         <span class="pf-anteil" :title="prozent(p.anteil)"><span :style="{ width: Math.max(2, p.anteil * 100) + '%', background: farbeVon(p.asset) }" /></span>
@@ -290,7 +290,7 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
                             <b class="at-ml-auto">{{ chf(q.chf) }}</b>
                         </div>
                         <div v-for="p in postenSichtbar(sortiert(q.posten))" :key="p.schluessel + p.ort" class="pf-ort">
-                            <span><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}<span v-if="p.ort === 'bots'" class="at-gedaempft"> · Bots</span></span>
+                            <span><span class="punkt" :style="{ background: farbeVon(p.asset) }" />{{ p.asset }}<span v-if="p.klasse" class="pf-klasse">{{ t('aktien.art_' + p.klasse) }}</span><span v-if="p.ort === 'bots'" class="at-gedaempft"> · Bots</span></span>
                             <span class="at-gedaempft">{{ menge(p.menge) }}</span>
                             <span>{{ p.ohneKurs ? t('portfolio.keinKurs') : chf(p.chf) }}</span>
                         </div>
@@ -447,6 +447,17 @@ const statusTon = (s) => (s === 'ok' ? 'gut' : s === 'fehler' ? 'schlecht' : s =
 .pf-ort-fuss { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; font-size: 0.75rem; margin-top: 0.35rem; }
 .pf-ort-fuss a { color: var(--accent); text-decoration: none; margin-left: auto; }
 .pf-kontrakt { font-family: var(--schrift-mono); }
+/* Aktie/ETF (Bitpanda): eigene Art, nicht als Coin bewertet */
+.pf-klasse {
+    margin-left: 0.4rem;
+    padding: 0.05rem 0.4rem;
+    border: 1px solid var(--line-stark);
+    border-radius: var(--radius-pille);
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 500;
+    vertical-align: middle;
+}
 @media (max-width: 560px) {
     .pf-zeile-kopf { grid-template-columns: 2rem minmax(0, 1fr) auto 1rem; }
     .pf-anteil { display: none; }

@@ -216,7 +216,7 @@ Als Push aufs Handy (ntfy/Telegram) gibt es diese drei noch nicht.
 
 Anzeigen (ESP32-Displays, Android-Widget): Als Chart-Symbol lässt sich auch ein Aktien-Ticker eintragen (z. B. NVDA); der Server findet den passenden Future der Marktdatenquelle. Die Antwort trägt die Sitzung der US-Börse — „Börse zu" ist ein Zustand und kein Fehler. Geräte mit älterer Firmware zeigen den Chart wie bisher und den Zustand noch nicht an.
 
-Was es für Aktien (noch) nicht gibt: einen eigenen Marktradar mit Kacheln und eigene Nachrichten (beides ist Krypto und im Aktien-Markt nicht erreichbar; das Umfeld steht auf der Marktlage), ein Live-Trading-Fenster für Aktien, Aktien und ETFs von Bitpanda als eigene Art im Portfolio (sie laufen dort wie Coins), Dividenden und Steuerbericht für Aktien, geprüfte Haltefristen (die Karte zeigt nur den Link und einen automatisch gelesenen Fund) und die Beträge von Kapitalerhöhungen.`,
+Was es für Aktien (noch) nicht gibt: einen eigenen Marktradar mit Kacheln und eigene Nachrichten (beides ist Krypto und im Aktien-Markt nicht erreichbar; das Umfeld steht auf der Marktlage), ein Live-Trading-Fenster für Aktien, Dividenden und Steuerbericht für Aktien, geprüfte Haltefristen (die Karte zeigt nur den Link und einen automatisch gelesenen Fund) und die Beträge von Kapitalerhöhungen.`,
     },
     livetrading: {
         titel: 'Live-Trading: Sessions, Cockpit, Archiv, Auswertung',
@@ -244,6 +244,8 @@ Trades der Strategie-Instanzen stehen NICHT im normalen Journal (das Spiegeln in
     portfolio: {
         titel: 'Portfolio (Beta): Bestände, Sparpläne, Staking, Spam, Totalverluste, Steuern',
         text: `Das Portfolio zeigt, was auf allen Börsen und Wallets liegt — in CHF. Es **liest nur**: es wird nie gehandelt oder etwas verschoben. Quellen sind die Börsen-APIs (Bitunix, Bitget, Pionex, Bitpanda, Spot), öffentliche Wallet-Adressen bzw. xpub (Ledger, SafePal, MetaMask: Bitcoin, EVM-Ketten, XRP, Solana, VeChain) und Datei-Importe für Konten ohne volle Historie. Eingefügt werden nur öffentliche Schlüssel; eine Wiederherstellungsphrase (Seed) lehnt das Feld ab.
+
+Aktien und ETFs bei Bitpanda stehen als eigene Art in der Übersicht (Marke „Aktie“ bzw. „ETF“ neben dem Kürzel). Sie werden nie wie ein Coin über ein Börsenpaar bewertet, sondern mit dem Wert, den Bitpanda selbst für die Position nennt; fehlt der, mit dem Kurs des Aktien-Futures aus der Titel-Liste (als Näherung gekennzeichnet), sonst steht „kein Kurs“. Erkannt wird eine Aktie an Bitpandas Angabe oder an ihrer Kennung in der Titel-Liste, nie am Kürzel allein. Käufe und Verkäufe zählen mit dem bezahlten Betrag. Dividenden und der Steuerbericht kennen Aktien noch nicht.
 
 Seiten: **Übersicht** (Gesamtvermögen inkl. Futures-Konten, je Coin Menge, Wert, **Ø-Kaufkurs**, Einstand und unrealisierter Gewinn/Verlust; aufgeklappt die einzelnen Käufe mit Kaufkurs), **DCA-Portfolio**, **Bewegungen**, **Staking**, **Steuern**, **Totalverluste**, **Börsen & Wallets**.
 
