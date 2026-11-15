@@ -12,7 +12,9 @@
  */
 
 import { getKnex } from '../database.js'
-import { STANDARD_GEWICHTE, STANDARD_HUERDEN } from './bewertung.js'
+import { STANDARD_GEWICHTE, STANDARD_HUERDEN, STANDARD_HUERDEN_AKTIEN } from './bewertung.js'
+import { GEWICHTE_AKTIEN } from './aktien-kennzahlen.js'
+import { ZEITPLAN_VORGABE } from './aktien-zeitplan.js'
 
 export const VORGABEN = {
     /*
@@ -43,6 +45,17 @@ export const VORGABEN = {
      * Verbrauch ist klein (rund zwanzig Coins alle zehn Minuten).
      */
     abverkauf: { an: true, intervallMin: 10, minAnstieg: 20, minUmsatz: 10_000_000, schwelle: 45, maxKandidaten: 20, vorwarnung: false },
+    /*
+     * Aktien-Radar (`lauf.js` mit `anlageklasse: 'aktien'`). Eigene Schlüssel,
+     * damit die Coin-Einstellungen bleiben, was sie sind. Bis 15.11.2026 las
+     * der Lauf `huerdenAktien`/`gewichteAktien`, ohne dass sie hier standen —
+     * ein gespeicherter Wert wäre nie angekommen (nur bekannte Schlüssel
+     * werden gelesen). Geprüft werden sie in `aktien-einstellungen.js`.
+     */
+    huerdenAktien: STANDARD_HUERDEN_AKTIEN,
+    gewichteAktien: GEWICHTE_AKTIEN,
+    // Zeitplan nach US-Börsenzeit (`aktien-zeitplan.js`), ab Werk aus.
+    aktienZeitplan: ZEITPLAN_VORGABE,
 }
 
 /** Alle Einstellungen, mit Vorgaben aufgefüllt. */

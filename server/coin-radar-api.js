@@ -12,7 +12,7 @@
 import { getKnex } from './database.js'
 import { beobachteAbbruch, sseSender } from './sse.js'
 import { logWarn, logError } from './logger.js'
-import { beansprucheAufgabe, beansprucheFuehrung, verlaengereFuehrung, gibFuehrungFrei, meldeFehler } from './db-claim.js'
+import { beansprucheAufgabe, beansprucheFuehrung, verlaengereFuehrung, gibFuehrungFrei, meldeFehler, leseAufgabe } from './db-claim.js'
 import { leseEinstellungen, schreibeEinstellungen, VORGABEN } from './coin-radar/einstellungen.js'
 import { ANKER } from './coin-radar/bewertung.js'
 import { KOPPLUNG_FEST, KOPPLUNG_LOSE, BTC_ZEITEINHEIT } from './coin-radar/btc-vergleich.js'
@@ -22,7 +22,11 @@ import { holeCoinInfo } from './coin-radar/coin-info.js'
 import { tiefensuche, tiefensucheVertrag } from './coin-radar/tiefensuche.js'
 import { pruefeEinzeln } from './coin-radar/einzel.js'
 import { sendeWennAus, istAus, ausAntwort } from './quellen/aus.js'
-import { legeAnCoinRadar, HORIZONTE } from './radar-ergebnisse.js'
+import { legeAnCoinRadar, legeAnAktienRadar, HORIZONTE } from './radar-ergebnisse.js'
+import { bereinigeAktienEinstellungen, fehlerText, HUERDEN_GRENZEN, GEWICHT_GRENZEN } from './coin-radar/aktien-einstellungen.js'
+import { faelligerPlatz, naechsterPlatz, leseZeitplan, ZEITPLAN_GRENZEN } from './coin-radar/aktien-zeitplan.js'
+import { ART_AKTIEN, HORIZONTE_AKTIEN, werteAusAktien } from './coin-radar/aktien-erfolg.js'
+import { sitzungVon } from '../shared/aktien-sitzung.js'
 import { werteAus } from './radar-guete.js'
 import { raeumeRadarAuf } from './radar-aufraeumen.js'
 import { abverkaufLauf, abverkaufUebersicht, abverkaufStand } from './coin-radar/abverkauf.js'
@@ -92,6 +96,12 @@ export function setupCoinRadarRoutes(app) {
                 return res.status(400).json({ error: 'Mindestens eine Zeiteinheit wird gebraucht.' })
             }
             if (neu.abverkauf) neu.abverkauf = bereinigeAbverkauf(neu.abverkauf, (await leseEinstellungen()).abverkauf)
+            // Aktien-Radar: Hürden, Gewichte, Zeitplan — geprüft, `null` = Vorgabe (`aktien-einstellungen.js`).
+            const aktien = bereinigeAktienEinstellungen(neu)
+            if (aktien.fehler) {
+                return res.status(400).json({ error: fehlerText(aktien), code: aktien.fehler, feld: aktien.feld || null, block: aktien.block })
+            }
+            Object.assign(neu, aktien.neu)
             await schreibeEinstellungen(neu)
             res.json({ ...(await leseEinstellungen()), vorgaben: VORGABEN, konstanten: KONSTANTEN })
         } catch (e) {
@@ -337,6 +347,17 @@ export function setupCoinRadarRoutes(app) {
     app.get('/api/coin-radar/guete', async (req, res) => {
         try {
             const knex = getKnex()
+            if (klasseAus(req.query.markt) === 'aktien') {
+                // Aktien: Mehrrendite gegen den Index über Tage und Wochen — längerer Rückblick.
+                const tage = Math.min(365, Math.max(7, Number(req.query.tage) || 120))
+                const seit = Date.now() - tage * 24 * 3600e3
+                const zeilen = await knex('radar_ergebnisse')
+                    .where('art', ART_AKTIEN).andWhere('erstelltAm', '>=', seit)
+                return res.json({
+                    seit, tage, gesamt: zeilen.length,
+                    jeHorizont: Object.keys(HORIZONTE_AKTIEN).map((h) => werteAusAktien(zeilen.filter((z) => z.horizont === h), h)),
+                })
+            }
             const tage = Math.min(90, Math.max(1, Number(req.query.tage) || 14))
             const seit = Date.now() - tage * 24 * 3600e3
             const zeilen = await knex('radar_ergebnisse')
@@ -353,6 +374,37 @@ export function setupCoinRadarRoutes(app) {
         } catch (e) {
             logWarn('coin-radar', `Güte lesen: ${e.message}`)
             res.status(500).json({ error: 'Erfolgskontrolle konnte nicht geladen werden' })
+        }
+    })
+
+    // ── Aktien-Radar: Einstellungen und Zeitplan ────────────────────────
+    /**
+     * Was die Einstell-Oberfläche des Aktien-Radars braucht, in einem Abruf:
+     * die drei Blöcke mit ihren Vorgaben und Grenzen, der nächste Platz des
+     * Zeitplans und der Stand der letzten automatischen Läufe.
+     */
+    app.get('/api/coin-radar/aktien-einstellungen', async (req, res) => {
+        try {
+            const e = await leseEinstellungen()
+            const jetzt = Date.now()
+            const plan = leseZeitplan(e.aktienZeitplan)
+            const [eroeffnung, schluss] = await Promise.all(
+                ['eroeffnung', 'schluss'].map((p) => leseAufgabe(ZEITPLAN_KEY(p))))
+            const stempel = (z) => (z && Number(z.fetchedAt) > 0 ? { zeit: Number(z.fetchedAt), fehler: z.lastError || '' } : null)
+            res.json({
+                huerden: e.huerdenAktien,
+                gewichte: e.gewichteAktien,
+                zeitplan: plan,
+                vorgaben: { huerden: VORGABEN.huerdenAktien, gewichte: VORGABEN.gewichteAktien, zeitplan: VORGABEN.aktienZeitplan },
+                grenzen: { huerden: HUERDEN_GRENZEN, gewichte: GEWICHT_GRENZEN, zeitplan: ZEITPLAN_GRENZEN },
+                modusAktienAn: await aktienModusAn(),
+                sitzung: sitzungVon(jetzt),
+                naechster: naechsterPlatz(jetzt, plan),
+                letzte: { eroeffnung: stempel(eroeffnung), schluss: stempel(schluss) },
+            })
+        } catch (e) {
+            logWarn('coin-radar', `Aktien-Einstellungen lesen: ${e.message}`)
+            res.status(500).json({ error: 'Einstellungen konnten nicht geladen werden' })
         }
     })
 
@@ -521,11 +573,15 @@ async function laufeMitZustand(einst, ausloeser, melde, istAbgebrochen = () => f
          * Beobachtung über den Lauf, nicht Teil von ihm.
          */
         /*
-         * Aktien-Lauf: hier ist Schluss. Erfolgskontrolle und KI-Einordnung
-         * sind auf Coins gebaut (eigene Stichprobe, eigener Anstoss) und
-         * mischten sonst Aktien in die Güte-Auswertung des Coin-Radars.
+         * Aktien-Lauf: hier ist Schluss. Die Erfolgskontrolle des Coin-Radars
+         * und die KI-Einordnung sind auf Coins gebaut (eigene Stichprobe,
+         * eigener Anstoss) und mischten sonst Aktien in dessen Güte-Auswertung.
          */
         if (anlageklasse === 'aktien') {
+            // Eigene Erfolgskontrolle (Art `aktienradar`): Mehrrendite gegen den
+            // Index über Tage und Wochen, getrennt von der Güte des Coin-Radars.
+            await legeAnAktienRadar(laufId).catch((e) =>
+                logWarn('coin-radar', `Aktien-Erfolgskontrolle nicht angemeldet: ${e.message}`))
             fertigMelden({ laufId, ...ergebnis })
             return { laufId, ...ergebnis }
         }
@@ -643,6 +699,109 @@ export function startCoinRadarTakt() {
         } finally {
             if (halteFuehrung) clearInterval(halteFuehrung)
             if (hatFuehrung) await gibFuehrungFrei(FUEHRUNG_KEY).catch(() => {})
+            laufAktiv = false
+        }
+    }, TAKT_MS)
+
+    uhr.unref?.()
+    return () => clearInterval(uhr)
+}
+
+/* ── Aktien-Radar: Zeitplan nach US-Börsenzeit ───────────────────────── */
+
+/** Anspruch je Platz — `eroeffnung` und `schluss` sperren einander nicht. */
+const ZEITPLAN_KEY = (platz) => `aktienradar_lauf_${platz}`
+/** Ein Platz läuft höchstens einmal am Handelstag; zwölf Stunden reichen über sein Fenster hinaus. */
+const ZEITPLAN_SPERRE_MS = 12 * 3600e3
+
+async function aktienModusAn() {
+    try {
+        const s = await getKnex()('settings').select('modusAktienAn').where('id', 1).first()
+        return Number(s?.modusAktienAn ?? 0) === 1
+    } catch {
+        return false
+    }
+}
+
+/**
+ * Ein Takt des Aktien-Zeitplans. Ausgelagert und mit hereingereichten
+ * Abhängigkeiten, damit der Selbsttest die Reihenfolge prüfen kann, ohne
+ * Datenbank und ohne Börse: erst «ist überhaupt etwas fällig» (rein), dann
+ * die Führung, dann der Anspruch auf den Platz, dann der Lauf.
+ *
+ * Führung VOR dem Anspruch: Hält ein anderer Rechner gerade die Führung (dort
+ * läuft der Coin-Radar), bleibt der Platz frei und der nächste Takt versucht
+ * es erneut — das Fenster ist eine halbe Stunde und länger.
+ *
+ * @returns {Promise<string>} was geschah (`aus`, `nichtFaellig`, `belegt`, `vergeben`, `gelaufen`, …)
+ */
+export async function aktienZeitplanTakt(d) {
+    if (!(await d.modusAn())) return 'modusAus'
+    const einst = await d.leseEinstellungen()
+    const faellig = faelligerPlatz(d.jetzt(), einst.aktienZeitplan)
+    if (!faellig) return leseZeitplan(einst.aktienZeitplan).an ? 'nichtFaellig' : 'aus'
+    if (!(await d.beansprucheFuehrung())) return 'belegt'
+    const schluessel = ZEITPLAN_KEY(faellig.platz)
+    try {
+        if (!(await d.beansprucheAufgabe(schluessel, ZEITPLAN_SPERRE_MS))) return 'vergeben'
+        try {
+            await d.lauf(einst, faellig)
+            await d.meldeFehler(schluessel, '')
+            return 'gelaufen'
+        } catch (e) {
+            // Der Platz bleibt verbraucht: ein Lauf, der an fehlenden Marktdaten
+            // scheitert, scheitert zwei Minuten später wieder. Der Grund steht in der Oberfläche.
+            await d.meldeFehler(schluessel, e.message)
+            throw e
+        }
+    } finally {
+        await d.gibFuehrungFrei()
+    }
+}
+
+/**
+ * Zeitplan des Aktien-Radars: an US-Handelstagen kurz nach der Eröffnung und
+ * kurz vor dem Schluss (`coin-radar/aktien-zeitplan.js`). Ab Werk aus, nur mit
+ * eingeschaltetem Aktien-Modus. Teilt die Prozess-Sperre und die Führung mit
+ * dem Coin-Radar — die beiden laufen nie gleichzeitig.
+ */
+export function startAktienRadarTakt() {
+    const TAKT_MS = 2 * 60 * 1000
+    let gemeldet = ''
+
+    const uhr = setInterval(async () => {
+        if (laufAktiv) return
+        laufAktiv = true
+        let halteFuehrung = null
+        try {
+            const was = await aktienZeitplanTakt({
+                jetzt: () => Date.now(),
+                modusAn: aktienModusAn,
+                leseEinstellungen,
+                beansprucheFuehrung: async () => {
+                    const ok = await beansprucheFuehrung(FUEHRUNG_KEY, FUEHRUNG_TTL_MS)
+                    if (ok) halteFuehrung = fuehrungHalten()
+                    return ok
+                },
+                gibFuehrungFrei: () => gibFuehrungFrei(FUEHRUNG_KEY).catch(() => {}),
+                beansprucheAufgabe,
+                meldeFehler,
+                lauf: async (einst, faellig) => {
+                    const { laufId, bewertet } = await laufeMitZustand(einst, 'auto', () => {}, () => false, () => {}, 'aktien')
+                    console.log(` -> Aktien-Radar (${faellig.platz}, ${faellig.handelstag}): Lauf ${laufId} fertig, ${bewertet} Titel bewertet`)
+                },
+            })
+            if (was === 'gelaufen') gemeldet = ''
+        } catch (e) {
+            // Ohne Marktdaten ist das ein Zustand — einmal melden, nicht bei jedem Platz.
+            if (istAus(e)) {
+                if (gemeldet !== 'aus') logWarn('coin-radar', `Aktien-Zeitplan: ${e.message}`)
+                gemeldet = 'aus'
+            } else {
+                logError('coin-radar', 'Aktien-Zeitplan fehlgeschlagen', e)
+            }
+        } finally {
+            if (halteFuehrung) clearInterval(halteFuehrung)
             laufAktiv = false
         }
     }, TAKT_MS)

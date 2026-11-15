@@ -40,7 +40,7 @@ import { setupAiUebersichtRoutes } from './server/ai-uebersicht.js'
 import { setupHypeRadarRoutes, startHypeTakt, startWachhundTakt } from './server/hype-radar-api.js'
 import { startFruehTakt } from './server/hype-radar/fruehphase.js'
 import { startBoersenTakt } from './server/hype-radar/boersenwacht.js'
-import { setupCoinRadarRoutes, startCoinRadarTakt } from './server/coin-radar-api.js'
+import { setupCoinRadarRoutes, startCoinRadarTakt, startAktienRadarTakt } from './server/coin-radar-api.js'
 import { startErgebnisTakt } from './server/radar-ergebnisse.js'
 import { startAbverkaufTakt } from './server/coin-radar/abverkauf.js'
 import { startOiArchivTakt, stopOiArchivTakt } from './server/oi-archiv.js'
@@ -366,6 +366,8 @@ async function starteServer() {
     starteTakte([['Aktien-Stamm', starteStammTakt]]);
     // Newcomer-Radar: einmal am Tag Kurse und Noten aller Aktien-Titel (`server/newcomer-radar/lauf.js`).
     starteTakte([['Newcomer', starteNewcomerTakt]]);
+    // Aktien-Radar nach US-Börsenzeit (nach Eröffnung, vor Schluss) — ab Werk aus (`coin-radar/aktien-zeitplan.js`).
+    starteTakte([['Aktien-Radar', startAktienRadarTakt]]);
 
     // Tägliche Sicherung (Audit FUN-BAK-001): SQLite per VACUUM INTO, PostgreSQL
     // als JSON-Export, 14 Tage. Ziel AT_SICHERUNG_ORDNER; im Container ohne

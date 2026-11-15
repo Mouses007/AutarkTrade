@@ -13,6 +13,8 @@ import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Knopf from '../components/basis/Knopf.vue'
 import Kaufzettel from '../components/aktien/Kaufzettel.vue'
+import AktienRadarEinstellungen from '../components/aktien/AktienRadarEinstellungen.vue'
+import AktienRadarGuete from '../components/aktien/AktienRadarGuete.vue'
 import Pille from '../components/basis/Pille.vue'
 import Hinweis from '../components/basis/Hinweis.vue'
 import Leerzustand from '../components/basis/Leerzustand.vue'
@@ -39,6 +41,9 @@ const mitHuerden = ref(false)
 const laedt = ref(true)
 const laeuft = ref(false)
 const zettelTicker = ref('')
+// Einstellungen (Zeitplan, Hürden, Gewichte) und Erfolgskontrolle: erst auf Wunsch geladen.
+const zeigeEinstellungen = ref(false)
+const zeigeGuete = ref(false)
 const fortschritt = ref(null)
 const fehler = ref('')
 
@@ -144,8 +149,15 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
     <div class="aktienradar-seite">
         <div class="leiste">
             <label class="haken"><input v-model="mitHuerden" type="checkbox" /> {{ t('aktienradar.zeigeHuerden') }}</label>
-            <Knopf klein symbol="aktualisieren" :laedt="laeuft" @click="starteLauf">{{ t('aktienradar.lauf') }}</Knopf>
+            <div class="knoepfe">
+                <Knopf klein art="leise" symbol="waage" :aria-expanded="zeigeGuete" @click="zeigeGuete = !zeigeGuete">{{ t('aktienAlltag.guete.knopf') }}</Knopf>
+                <Knopf klein art="leise" symbol="einstellungen" :aria-expanded="zeigeEinstellungen" @click="zeigeEinstellungen = !zeigeEinstellungen">{{ t('aktienAlltag.einst.knopf') }}</Knopf>
+                <Knopf klein symbol="aktualisieren" :laedt="laeuft" @click="starteLauf">{{ t('aktienradar.lauf') }}</Knopf>
+            </div>
         </div>
+
+        <AktienRadarEinstellungen v-if="zeigeEinstellungen" />
+        <AktienRadarGuete v-if="zeigeGuete" />
 
         <p v-if="laeuft" class="leise" role="status">{{ schrittText }}</p>
         <p v-else-if="lauf" class="leise">
@@ -261,6 +273,12 @@ const sitzung = computed(() => lauf.value?.quellenStand?.sitzung || null)
     align-items: center;
     justify-content: space-between;
     gap: 0.7rem 1rem;
+}
+
+.knoepfe {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
 }
 
 .haken {

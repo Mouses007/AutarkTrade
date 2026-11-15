@@ -25,6 +25,7 @@ import { getHistoricalCandles, timeframeMs } from './market-data.js'
 import { beansprucheAufgabe } from './db-claim.js'
 import { FRUEH_REGEL_AUSWERTUNG, FRUEH_REGEL_OHNE_FREIGABE, fruehRegelFuer } from './radar-guete.js'
 import { freigabeAn, quelleErlaubt } from './quellen/freigabe.js'
+import { ART_AKTIEN, HORIZONTE_AKTIEN, KERZEN_AKTIEN, waehleAktienRadar } from './coin-radar/aktien-erfolg.js'
 
 /**
  * Wann gemessen wird.
@@ -40,6 +41,8 @@ export const HORIZONTE = {
     frueh: { '1d': 24 * 3600e3, '3d': 3 * 24 * 3600e3, '7d': 7 * 24 * 3600e3 },
     // Abverkaufs-Wache: kippt der Coin, zeigt es sich in Stunden (siehe `coin-radar/abverkauf.js`).
     abverkauf: { '1h': 3600e3, '4h': 4 * 3600e3, '24h': 24 * 3600e3 },
+    // Aktien-Radar: Mehrrendite gegen den Index über Tage und Wochen (`coin-radar/aktien-erfolg.js`).
+    [ART_AKTIEN]: HORIZONTE_AKTIEN,
 }
 
 /** Wie viele Spitzenplätze je Lauf verfolgt werden. */
@@ -116,6 +119,59 @@ export async function legeAnCoinRadar(laufId) {
                 laufId,
                 symbol: z.symbol,
                 rang: z.rang,
+                note: z.note,
+                noteAusfuehrung: z.noteAusfuehrung,
+                atrPct: zahl(z.atrPct),
+                gruppe: z.gruppe,
+                horizont,
+                erstelltAm: jetzt,
+                faelligAm: jetzt + ms,
+                status: 'offen',
+            })
+        }
+    }
+    return schreibe(knex, auftraege)
+}
+
+/*
+ * Aktien-Radar: höchstens EIN verfolgter Lauf in zwanzig Stunden. Der Zeitplan
+ * läuft zweimal am Handelstag, die Horizonte sind Tage und Wochen — zwei
+ * Läufe desselben Tags teilen fast das ganze Messfenster.
+ */
+const AKTIEN_ANLAGE_MS = 20 * 3600e3
+
+/**
+ * Aufträge für einen Aktien-Radar-Lauf anlegen: Spitze, Kontrolle und die
+ * Referenz (SPY) als eigener Auftrag — gemessen wird die Mehrrendite gegen
+ * sie. Ohne Referenz im Lauf werden Spitze und Kontrolle trotzdem verfolgt.
+ */
+export async function legeAnAktienRadar(laufId) {
+    const knex = getKnex()
+    const lauf = await knex('coinradar_laeufe').where('id', laufId).first()
+    if (!lauf || lauf.anlageklasse !== 'aktien') return 0
+    const zeilen = await knex('coinradar_zeilen')
+        .select('symbol', 'rang', 'note', 'noteAusfuehrung', 'atrPct')
+        .where({ laufId, status: 'bewertet' })
+        .orderBy('rang', 'asc')
+    // Erst prüfen, dann beanspruchen: ein leerer Lauf soll den Tag nicht verbrauchen.
+    if (zeilen.length < 10) return 0
+    if (!(await beansprucheAufgabe('radar_ergebnisse_aktienradar', AKTIEN_ANLAGE_MS))) return 0
+
+    let referenz = null
+    try {
+        const stand = typeof lauf.quellenStand === 'string' ? JSON.parse(lauf.quellenStand || '{}') : lauf.quellenStand
+        referenz = stand?.referenz?.symbol || null
+    } catch { referenz = null }
+    const jetzt = Date.now()
+    const auftraege = []
+    for (const z of waehleAktienRadar(zeilen, referenz)) {
+        for (const [horizont, ms] of Object.entries(HORIZONTE_AKTIEN)) {
+            auftraege.push({
+                art: ART_AKTIEN,
+                anlageklasse: 'aktien',
+                laufId,
+                symbol: z.symbol,
+                rang: z.rang || 0,
                 note: z.note,
                 noteAusfuehrung: z.noteAusfuehrung,
                 atrPct: zahl(z.atrPct),
@@ -357,7 +413,7 @@ const WIEDERHOLUNG_MS = 30 * 60 * 1000
  */
 // Frühphase knapp: jede Messung kostet bis zu drei CoinGecko-Abrufe (Pools,
 // Kerzen), und das Demo-Kontingent (30/min) teilt sie mit dem Durchgang.
-export const DECKEL_JE_ART = { frueh: 4, hype: 20, coinradar: 40, abverkauf: 10 }
+export const DECKEL_JE_ART = { frueh: 4, hype: 20, coinradar: 40, abverkauf: 10, [ART_AKTIEN]: 20 }
 
 /** Ein Durchgang hört nach so langer Zeit auf; der Rest wartet auf den nächsten. */
 const DURCHGANG_MS = 150e3
@@ -403,7 +459,7 @@ export async function messeFaellige(deckel = DECKEL_JE_ART) {
             continue
         }
         try {
-            const werte = a.art === 'coinradar' || a.art === 'abverkauf'
+            const werte = a.art === 'coinradar' || a.art === 'abverkauf' || a.art === ART_AKTIEN
                 ? await messeCoin(a)
                 : (a.art === 'frueh' ? await messeFrueh(a) : await messeHype(a))
             await knex('radar_ergebnisse').where('id', a.id).update({
@@ -526,13 +582,15 @@ export function rechneFenster(kerzen, von, bis, schrittMs) {
  * wie eine pünktliche.
  */
 async function messeCoin(a) {
-    // Dieselbe Messung für den Coin-Radar und die Abverkaufs-Wache — beide sind Binance-Perps.
+    // Dieselbe Messung für den Coin-Radar, die Abverkaufs-Wache und den Aktien-Radar —
+    // alle drei sind Perpetuals der Marktdatenquelle.
     const dauer = (HORIZONTE[a.art] || HORIZONTE.coinradar)[a.horizont]
     if (!dauer) throw new Error(`unbekannter Horizont ${a.horizont}`)
     const von = Number(a.erstelltAm)
     const bis = von + dauer
-    // Feine Auflösung für kurze Horizonte, gröbere für lange.
-    const ze = dauer <= 3600e3 ? '1m' : '5m'
+    // Feine Auflösung für kurze Horizonte, gröbere für lange. Der Aktien-Radar
+    // misst über Tage und Wochen — dort je Horizont eine eigene Kerzenlänge.
+    const ze = a.art === ART_AKTIEN ? KERZEN_AKTIEN[a.horizont] : (dauer <= 3600e3 ? '1m' : '5m')
     const schritt = timeframeMs(ze)
     const kerzen = await getHistoricalCandles(a.symbol, ze, von, bis,
         { seite: Math.ceil(dauer / schritt) + 2 })
