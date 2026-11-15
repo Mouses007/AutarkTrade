@@ -73,7 +73,8 @@ const monat = computed(() => fenster(gesamt.value?.fluss30))
 
 function zeichne() {
     starteChart()
-    zeichnePremium()
+    // Erst nach dem Hauptdiagramm, und ohne es mitreissen zu können
+    queueMicrotask(zeichnePremium)
     if (!chart || !sicht.value?.reihe?.length) return
     const reihe = sicht.value.reihe
 
@@ -142,7 +143,7 @@ function zeichne() {
 }
 
 /**
- * Verlauf des Coinbase-Premium, nur gross. Flächen über und unter der Null in
+ * Verlauf des Coinbase-Premium, nur gross. Balken über und unter der Null in
  * den Farben von Zu- und Abfluss: das Vorzeichen ist die Aussage.
  */
 function zeichnePremium() {
@@ -176,13 +177,11 @@ function zeichnePremium() {
             axisLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 11, formatter: (v) => `${v} %` },
             splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
         },
-        visualMap: {
-            show: false, dimension: 1,
-            pieces: [{ lt: 0, color: 'rgba(255,95,86,0.85)' }, { gte: 0, color: 'rgba(38,190,150,0.85)' }],
-        },
         series: [{
-            type: 'line', showSymbol: false, data: premium.value.reihe,
-            lineStyle: { width: 1.4 }, areaStyle: { opacity: 0.18 },
+            type: 'bar', data: premium.value.reihe, barMaxWidth: 14,
+            itemStyle: {
+                color: (p) => (p.data[1] >= 0 ? 'rgba(38,190,150,0.85)' : 'rgba(255,95,86,0.85)'),
+            },
         }],
     }, true)
 }
@@ -275,7 +274,7 @@ watch([() => props.daten, markt], zeichne, { flush: 'post' })
                 <template v-if="premium">
                     <span :title="t('marktradar.etf.premiumTitel')">{{ t('marktradar.etf.premium') }}</span>
                     <b :class="klasse(premium.wert)">{{ pct(premium.wert) }}</b>
-                    <span class="etfLeise">({{ t('marktradar.etf.woche') }} {{ pct(premium.mittel7) }})</span>
+                    <span v-if="gross" class="etfLeise">({{ t('marktradar.etf.woche') }} {{ pct(premium.mittel7) }})</span>
                 </template>
             </div>
 
