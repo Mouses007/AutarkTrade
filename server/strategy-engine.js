@@ -38,7 +38,7 @@ import { istAus as marktdatenAus } from './marktdaten/index.js'
 import { aussortierteZeilen } from './strategie-aussortiert.js'
 import { zeitpunkt } from '../shared/strategieChart.js'
 import { aktienKontext } from './aktien/kontext.js'
-import { bereinigeSplits, positionUeberSplit, faelligeSplits, leseSplitVermerk } from './aktien/splits.js'
+import { bereinigeSplits, positionUeberSplit, faelligeSplits, leseSplitVermerk, verdaechtigeSpruenge } from './aktien/splits.js'
 import { sitzungVon, handelstagBeginn } from '../shared/aktien-sitzung.js'
 import { imZahlenFenster, terminListe } from '../shared/aktien-zahlen.js'
 
@@ -104,7 +104,7 @@ export function setAgentHook(fn) { agentHook = fn }
  */
 let kontextQuelle = aktienKontext
 export function setAktienKontext(fn) { kontextQuelle = typeof fn === 'function' ? fn : aktienKontext }
-const kontextVon = async (symbol) => kontextQuelle(symbol)
+const kontextVon = async (symbol, opt) => kontextQuelle(symbol, opt)
 
 // ── Instanz laden ────────────────────────────────────────────────────────
 
@@ -330,13 +330,61 @@ export function risikoKontextAbfragen(knex, instanceId, now, tagesBeginn = start
  * `bericht` nennt die Splits, deren Sprung in diesem Fenster steht
  * (`angewendet`, `bei` = erste Kerze im neuen Massstab). Damit rechnet
  * `rechneUeberSplitsUm` offene Positionen um.
+ *
+ * `verdacht` (nur Aktien-Futures, sonst `null`): ein junger Sprung ≥ 1,8×
+ * zwischen zwei Schlusskursen, den auch die FRISCH geholten Splits nicht
+ * erklären (`verdaechtigeSpruenge` — dieselbe Prüfung wie im Backtest). Die
+ * Kursquelle führt einen Split womöglich noch nicht, und der Speicher in
+ * `aktien/kontext.js` hält auch eine leere Liste zwölf Stunden für bekannt;
+ * ohne diese Wache träfe die erste Kerze nach dem Sprung unbereinigt den Stop
+ * eines Longs, und ein Trade mit −95 % stünde endgültig in `strategy_trades`
+ * (Audit 15.11.2026, FUN-F-006). Die Aufrufer setzen bei Verdacht die Runde
+ * aus; der nächste Takt fragt wieder.
  */
 async function mitSplits(symbol, candles) {
-    if (!candles?.length) return { kerzen: candles, bericht: [], aktie: null }
-    const aktie = await kontextVon(symbol)
-    if (!aktie?.splits?.length) return { kerzen: candles, bericht: [], aktie }
-    const b = bereinigeSplits(candles, aktie.splits)
-    return { kerzen: b.kerzen, bericht: b.splits.filter((x) => x.angewendet), aktie }
+    if (!candles?.length) return { kerzen: candles, bericht: [], aktie: null, verdacht: null }
+    let aktie = await kontextVon(symbol)
+    // Coin: unverändert, und kein Blick auf Sprünge — dort gibt es keine Splits.
+    if (!aktie) return { kerzen: candles, bericht: [], aktie, verdacht: null }
+    const rechne = (a) => (a.splits?.length ? bereinigeSplits(candles, a.splits) : { kerzen: candles, splits: [] })
+    let b = rechne(aktie)
+    let verdacht = jungerSprung(b.kerzen)
+    if (verdacht) {
+        // Am Speicher vorbei nachfragen (dort gebremst auf einmal je zehn Minuten und Symbol).
+        const frisch = await kontextVon(symbol, { splitsFrisch: true }).catch(() => null)
+        if (frisch) {
+            aktie = frisch
+            b = rechne(aktie)
+            verdacht = jungerSprung(b.kerzen)
+        }
+    }
+    return { kerzen: b.kerzen, bericht: b.splits.filter((x) => x.angewendet), aktie, verdacht }
+}
+
+/**
+ * So lange nach einem unerklärten Sprung wartet der Papierbetrieb auf die
+ * Split-Angabe der Kursquelle (drei Tage — ein Wochenende). Danach gilt der
+ * Sprung als Kursbewegung und wird gebucht wie jede andere: eine Position
+ * endlos einzufrieren, weil ein Titel wirklich um die Hälfte gefallen ist,
+ * wäre der grössere Fehler. Gemessen an der jüngsten Kerze, nicht an der Uhr.
+ */
+const SPLIT_VERDACHT_MS = 72 * 3600_000
+
+/** Der jüngste verdächtige Sprung innerhalb der Wartezeit — oder `null`. */
+function jungerSprung(kerzen) {
+    const ab = kerzen[kerzen.length - 1].t - SPLIT_VERDACHT_MS
+    const liste = verdaechtigeSpruenge(kerzen).filter((x) => x.t > ab)
+    return liste.length ? liste[liste.length - 1] : null
+}
+
+/** Einmal je Sprung ins Log, nicht je Takt. */
+const verdachtGemeldet = new Map()
+function meldeSplitVerdacht(schluessel, symbol, verdacht) {
+    if (verdachtGemeldet.get(schluessel) === verdacht.t) return
+    verdachtGemeldet.set(schluessel, verdacht.t)
+    logWarn('strategy-engine', `${symbol}: Kurssprung ×${kurz(verdacht.verhaeltnis >= 1 ? verdacht.verhaeltnis : 1 / verdacht.verhaeltnis)} `
+        + `${verdacht.verhaeltnis >= 1 ? 'nach unten' : 'nach oben'} am ${new Date(verdacht.t).toISOString()}, den kein bekannter Split erklärt — `
+        + 'Runde ausgesetzt, Splits werden neu geholt (längstens drei Tage, danach zählt der Sprung als Kursbewegung)')
 }
 
 async function splitBereinigt(symbol, candles) {
@@ -525,7 +573,7 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     // (`sichtFensterKerzen`), samt Indikatorperioden und `ltfKerzen`.
     const bedarf = sichtFensterKerzen(instance.strategie, p, timeframeMs(timeframe), { endlich: true })
 
-    let { kerzen: candles, bericht: splitBericht, aktie } = await mitSplits(symbol,
+    let { kerzen: candles, bericht: splitBericht, aktie, verdacht: splitVerdacht } = await mitSplits(symbol,
         await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market }))
     // Für Aktien-Futures reist der Rutsch-Aufschlag ausserhalb der regulären
     // Sitzung mit (Vorgabe 0); bei Coins nie.
@@ -545,13 +593,21 @@ async function verarbeiteSymbol(instance, symbol, timeframe, schalter) {
     if (candles.length < bedarf * 0.9 && nachgefragt.get(key) !== kurzVon) {
         nachgefragt.set(key, kurzVon)
         const frisch = await mitSplits(symbol, await getClosedCandles(symbol, timeframe, bedarf, { market: instance.market, force: true }))
-        if (frisch.kerzen.length > candles.length) { candles = frisch.kerzen; splitBericht = frisch.bericht }
+        if (frisch.kerzen.length > candles.length) { candles = frisch.kerzen; splitBericht = frisch.bericht; splitVerdacht = frisch.verdacht }
     }
     if (candles.length < 50) return { skipped: 'zu wenige Kerzen' }
 
     // Neu lesen: die frische Reihe kann eine Kerze weiter reichen.
     const neueste = candles[candles.length - 1].t
     if (lastProcessed.get(key) === neueste) return { skipped: 'keine neue Kerze' }
+
+    // Unerklärter Sprung (nur Aktien-Futures): diese Runde nichts fortschreiben,
+    // nichts erkennen. Die Kerze gilt NICHT als verarbeitet — der nächste Takt
+    // fragt die Splits erneut und holt sie nach.
+    if (splitVerdacht) {
+        meldeSplitVerdacht(key, symbol, splitVerdacht)
+        return { skipped: 'split_verdacht' }
+    }
 
     // ── 0. Split im Fenster: offene Positionen umrechnen, alte Setups beenden ──
     // VOR dem Fortschreiben — die Kerzen sind ab dem Sprung im neuen Massstab.
@@ -1132,9 +1188,14 @@ async function pflegeOffenePositionen() {
             const pflegeTf = isValidTimeframe(posTf) ? posTf : instance.timeframe
             const tfMs = timeframeMs(pflegeTf)
             const bedarf = Math.min(990, Math.max(60, Math.ceil((Date.now() - minAb) / tfMs) + 3))
-            const { kerzen: candles, bericht: splitBericht, aktie } = await mitSplits(symbol,
+            const { kerzen: candles, bericht: splitBericht, aktie, verdacht: splitVerdacht } = await mitSplits(symbol,
                 await getClosedCandles(symbol, pflegeTf, bedarf, { market: instance.market }))
             if (!candles?.length) continue
+            // Unerklärter Sprung, über den die Position noch nicht fortgeschrieben ist: aussetzen (siehe `mitSplits`).
+            if (splitVerdacht && splitVerdacht.t > minAb) {
+                meldeSplitVerdacht(`pflege|${key}`, symbol, splitVerdacht)
+                continue
+            }
             if (candles[0].t > minAb + tfMs * 1.5) {
                 logWarn('strategy-engine', `Kerzenlücke ${symbol}: Abdeckung beginnt erst ${new Date(candles[0].t).toISOString()} — Nachlauf ausgesetzt, um keine Stops zu überspringen`)
                 continue

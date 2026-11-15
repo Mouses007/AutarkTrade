@@ -22,7 +22,10 @@ import { ladeTermine } from './termine.js'
 
 const KONTEXT_MS = 10 * 60_000
 const SPLITS_MS = 12 * 60 * 60_000
+/** So oft höchstens darf ein Aufrufer die Splits eines Symbols am Speicher vorbei holen (`splitsFrisch`). */
+const FRISCH_MS = 10 * 60_000
 const kontextCache = new Map()   // symbol → { zeit, wert }
+const frischGeholt = new Map()   // symbol → Zeit des letzten Abrufs am Speicher vorbei
 const splitsCache = new Map()    // kursSymbol → { zeit, splits, grund }
 
 async function ladeSplits(kursSymbol) {
@@ -93,13 +96,23 @@ async function baue(symbol) {
 
 /**
  * @param {string} symbol  wie die Marktdatenquelle es nennt (`NVDAUSDT`)
+ * @param {{splitsFrisch?: boolean}} [opt]  `splitsFrisch`: die Splits NICHT aus dem Speicher nehmen.
+ *        Dort gilt auch eine leere Liste zwölf Stunden als bekannt — ein Split von heute fehlt
+ *        dann so lange (Audit 15.11.2026, FUN-F-006). Für den Papierbetrieb, wenn in den Kerzen
+ *        ein Sprung steht, den die bekannten Splits nicht erklären; höchstens alle zehn Minuten
+ *        je Symbol, dazwischen gilt der Speicher.
  * @returns {Promise<null | {ticker, name, unterart, boerse, kursSymbol, splits: object[]|null, splitsGrund: string|null,
  *           termine: {naechster, vergangene}|null, termineGrund: string|null}>}
  */
-export async function aktienKontext(symbol) {
+export async function aktienKontext(symbol, { splitsFrisch = false } = {}) {
     const sym = String(symbol || '').toUpperCase()
     const c = kontextCache.get(sym)
-    if (c && Date.now() - c.zeit < KONTEXT_MS) return c.wert
+    const frisch = splitsFrisch && !(Date.now() - (frischGeholt.get(sym) || 0) < FRISCH_MS)
+    if (c && !frisch && Date.now() - c.zeit < KONTEXT_MS) return c.wert
+    if (frisch) {
+        frischGeholt.set(sym, Date.now())
+        if (c?.wert?.kursSymbol) splitsCache.delete(c.wert.kursSymbol)
+    }
     let wert = null
     try { wert = await baue(sym) } catch { wert = null }
     kontextCache.set(sym, { zeit: Date.now(), wert })
@@ -107,4 +120,4 @@ export async function aktienKontext(symbol) {
 }
 
 /** Nur für Selbsttests. */
-export function leereKontextCache() { kontextCache.clear(); splitsCache.clear() }
+export function leereKontextCache() { kontextCache.clear(); splitsCache.clear(); frischGeholt.clear() }

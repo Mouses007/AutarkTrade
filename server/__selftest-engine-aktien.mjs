@@ -18,7 +18,10 @@
  *      Rutsch-Aufschlag ausserhalb der regulären Sitzung;
  *   4. offene Position über einen Split (vorwärts und rückwärts): umgerechnet,
  *      genau einmal, im Verlauf vermerkt; wartende Setups aus der Zeit davor
- *      beendet; Funding über den Split im richtigen Massstab.
+ *      beendet; Funding über den Split im richtigen Massstab;
+ *   5. ein Sprung, den die bekannten Splits NICHT erklären (Audit 15.11.2026,
+ *      FUN-F-006): Runde ausgesetzt, Splits am Speicher vorbei neu geholt,
+ *      kein Trade — bis die Kursquelle den Split führt oder drei Tage um sind.
  * Jede Gruppe hat ihre Gegenprobe (Coin bzw. unbekannte Splits/Termine).
  */
 
@@ -55,8 +58,14 @@ const { sitzungVon } = await import('../shared/aktien-sitzung.js')
 engine.setAgentHook(null)
 
 // Gestellter Aktien-Kontext: Symbol → Kontext; alles andere ist ein Coin (null).
+// `frische`: was die Kursquelle am Speicher vorbei (`splitsFrisch`) antwortet; `abrufe` zählt diese Nachfragen.
 const kontexte = {}
-engine.setAktienKontext(async (symbol) => kontexte[symbol] ?? null)
+const frische = {}
+const abrufe = []
+engine.setAktienKontext(async (symbol, opt) => {
+    if (opt?.splitsFrisch) { abrufe.push(symbol); if (frische[symbol]) return frische[symbol] }
+    return kontexte[symbol] ?? null
+})
 const AKTIE = { ticker: 'NVDA', name: 'NVIDIA', unterart: 'aktie', boerse: 'binance', kursSymbol: 'NVDA', splits: [], splitsGrund: null, termine: null, termineGrund: null }
 
 const FLACH = { o: 100, h: 101, l: 99, c: 100 }
@@ -79,6 +88,8 @@ async function leeren() {
     }
     engine.resetSymbolCache()
     for (const k of Object.keys(kontexte)) delete kontexte[k]
+    for (const k of Object.keys(frische)) delete frische[k]
+    abrufe.length = 0
 }
 
 // Löst jedes wartende Setup auf der jüngsten Kerze aus — mit den Marken des Setups.
@@ -337,12 +348,60 @@ console.log('\nSplit: offene Papier-Position und wartende Setups')
     const KORU = { ...AKTIE, ticker: 'KORU', splits: [SPLIT20] }
 
     // Gegenprobe zuerst: ohne Split-Angaben reisst der Sprung den Stop — der Fehler, um den es geht.
-    await stelle({ aktie: { ...KORU, splits: null, splitsGrund: 'quelleAus' }, form: reihe(ALT20, NEU20) })
+    // Gebucht wird er erst, wenn die Wartezeit (drei Tage ab dem Sprung) ohne Erklärung verstrichen ist.
+    await stelle({ aktie: { ...KORU, splits: null, splitsGrund: 'quelleAus' }, form: reihe(ALT20, NEU20), ende: S + 80 * H })
     await engine.tick()
     let z = await lies()
-    pruefe('Gegenprobe (Splits unbekannt): der Sprung 480 → 24 «reisst» den Stop, Verlust von 95 %',
+    pruefe('Gegenprobe (Splits unbekannt, Sprung älter als drei Tage): der Sprung 480 → 24 «reisst» den Stop, Verlust von 95 %',
         z.trade?.exitReason === 'sl' && Number(z.trade.exitPrice) < 25 && Number(z.trade.netPnl) < -900 && z.vermerke.length === 0,
         `${z.trade?.exitReason} @ ${z.trade?.exitPrice}, netto ${z.trade?.netPnl}`)
+
+    // ── 5. Unerklärter Sprung: aussetzen und Splits frisch holen (FUN-F-006) ──
+    const unveraendert = (p) => p?.status === 'open' && nah(p.qty, 2) && nah(p.entryPrice, 480) && nah(p.stopLoss, 470) && Number(p.lastCandleTime) === S - 2 * H
+    for (const [name, aktie] of [['unbekannt (Quelle aus)', { ...KORU, splits: null, splitsGrund: 'quelleAus' }], ['leere Liste aus dem Speicher', { ...KORU, splits: [] }],
+        ['nur ein anderer Split bekannt', { ...KORU, splits: [{ t: S, faktor: 2, text: '2:1' }] }]]) {
+        await stelle({ aktie, form: reihe(ALT20, NEU20) })
+        await engine.tick()
+        z = await lies()
+        pruefe(`Splits ${name}, Sprung 480 → 24 vor zwei Stunden: kein Trade, Position unberührt und nicht fortgeschrieben`,
+            !z.trade && unveraendert(z.p) && z.vermerke.length === 0, `Trade ${z.trade?.exitReason}, Stand ${z.p?.lastCandleTime}`)
+        pruefe(`…und die Splits wurden am Speicher vorbei nachgefragt (${name})`, abrufe.includes('KORUUSDT'), `${abrufe.length} Nachfragen`)
+    }
+    // Der nächste Takt (eine Kerze weiter) setzt weiter aus — die Kursquelle kennt den Split noch nicht.
+    globalThis.__engineMarkt = markt(S + 3 * H, reihe(ALT20, NEU20))
+    engine.resetSymbolCache()
+    await engine.tick()
+    z = await lies()
+    pruefe('nächster Takt, Split weiter unbekannt: weiter ausgesetzt', !z.trade && unveraendert(z.p))
+    // Jetzt führt die Kursquelle den Split (frisch geholt): umrechnen statt Verlust buchen.
+    frische.KORUUSDT = KORU
+    globalThis.__engineMarkt = markt(S + 4 * H, reihe(ALT20, NEU20))
+    engine.resetSymbolCache()
+    await engine.tick()
+    z = await lies()
+    pruefe('frisch geholte Splits erklären den Sprung: Position umgerechnet und fortgeschrieben, kein Trade',
+        !z.trade && z.p?.status === 'open' && nah(z.p.qty, 40) && nah(z.p.entryPrice, 24) && nah(z.p.stopLoss, 23.5) && z.vermerke.length === 1 && Number(z.p.lastCandleTime) === S + 3 * H,
+        `Trade ${z.trade?.exitReason}, Menge ${z.p?.qty}, Stand ${z.p?.lastCandleTime}`)
+    // Aktive Instanz (Erkennen + Fortschreiben im selben Lauf): ebenfalls ausgesetzt, die Kerze gilt nicht als verarbeitet.
+    await stelle({ aktie: { ...KORU, splits: [] }, form: reihe(ALT20, NEU20), enabled: 1 })
+    await engine.tick()
+    z = await lies()
+    pruefe('aktive Instanz mit unerklärtem Sprung: kein Trade, nichts fortgeschrieben', !z.trade && unveraendert(z.p))
+    frische.KORUUSDT = KORU
+    await engine.tick()
+    z = await lies()
+    pruefe('…und derselbe Kerzenschluss wird nachgeholt, sobald der Split bekannt ist', !z.trade && nah(z.p?.qty, 40) && Number(z.p?.lastCandleTime) === S + H, `Menge ${z.p?.qty}, Stand ${z.p?.lastCandleTime}`)
+    // Position, die erst nach dem Sprung entstand: der Nachlauf einer inaktiven Instanz schreibt sie weiter fort.
+    await stelle({ aktie: { ...KORU, splits: [] }, form: reihe(ALT20, NEU20), ende: S + 4 * H,
+        pos: position({ qty: 40, initialQty: 40, entryPrice: 24, stopLoss: 23.5, initialStopLoss: 23.5, takeProfit: 26, maePrice: 24, mfePrice: 24, entryTime: S + H, lastCandleTime: S + H }) })
+    await engine.tick()
+    z = await lies()
+    pruefe('Position nach dem unerklärten Sprung eröffnet: Nachlauf schreibt sie fort', !z.trade && Number(z.p?.lastCandleTime) === S + 3 * H, `Stand ${z.p?.lastCandleTime}`)
+    // Aktie ohne Sprung: es wird nichts am Speicher vorbei geholt.
+    await stelle({ aktie: { ...KORU, splits: [] }, form: () => ALT20 })
+    await engine.tick()
+    z = await lies()
+    pruefe('Aktie ohne Sprung: fortgeschrieben, keine Nachfrage an der Kursquelle', Number(z.p?.lastCandleTime) === S + H && abrufe.length === 0, `${abrufe.length} Nachfragen`)
 
     // Vorwärts-Split 20:1
     await stelle({ aktie: KORU, form: reihe(ALT20, NEU20) })
@@ -400,11 +459,16 @@ console.log('\nSplit: offene Papier-Position und wartende Setups')
     const ALT10 = { o: 2, h: 2.02, l: 1.98, c: 2 }
     const NEU10 = { o: 20, h: 20.2, l: 19.8, c: 20 }
     const penny = position({ qty: 100, initialQty: 100, entryPrice: 2, stopLoss: 1.8, initialStopLoss: 1.8, takeProfit: 2.4, notionalUsdt: 200, marginUsdt: 40, feeOpen: 0.04, maePrice: 1.98, mfePrice: 2.02 })
+    await stelle({ aktie: { ...KORU, splits: null }, pos: penny, form: reihe(ALT10, NEU10), ende: S + 80 * H })
+    await engine.tick()
+    z = await lies()
+    pruefe('Gegenprobe (Splits unbekannt, Sprung älter als drei Tage): der Sprung 2 → 20 «erreicht» das Ziel, Scheingewinn',
+        z.trade?.exitReason === 'tp' && Number(z.trade.netPnl) > 1500, `${z.trade?.exitReason}, netto ${z.trade?.netPnl}`)
     await stelle({ aktie: { ...KORU, splits: null }, pos: penny, form: reihe(ALT10, NEU10) })
     await engine.tick()
     z = await lies()
-    pruefe('Gegenprobe (Splits unbekannt): der Sprung 2 → 20 «erreicht» das Ziel, Scheingewinn',
-        z.trade?.exitReason === 'tp' && Number(z.trade.netPnl) > 1500, `${z.trade?.exitReason}, netto ${z.trade?.netPnl}`)
+    pruefe('Zusammenlegung, Splits unbekannt, Sprung jung: kein Scheingewinn, Position unberührt',
+        !z.trade && z.p?.status === 'open' && nah(z.p.qty, 100) && Number(z.p.lastCandleTime) === S - 2 * H, `${z.trade?.exitReason}`)
     await stelle({ aktie: { ...KORU, splits: [{ t: S, faktor: 0.1, text: '1:10' }] }, pos: penny, form: reihe(ALT10, NEU10) })
     await engine.tick()
     z = await lies()
@@ -479,8 +543,8 @@ console.log('\nSplit: offene Papier-Position und wartende Setups')
         }
     }
     let sf = await setupFall({ ...KORU, splits: null })
-    pruefe('Gegenprobe (Splits unbekannt): das alte Setup wird im neuen Massstab «ausgelöst» und als Verlust gebucht',
-        sf.trades.length === 1 && Number(sf.trades[0].netPnl) < 0, `${sf.trades.length} Trades, Setup ${sf.alt?.status}`)
+    pruefe('Splits unbekannt, Sprung jung: das alte Setup wird NICHT im neuen Massstab «ausgelöst» — die Runde ist ausgesetzt',
+        sf.trades.length === 0 && sf.positionen.length === 0 && sf.alt?.status === 'armed', `${sf.trades.length} Trades, Setup ${sf.alt?.status}`)
     sf = await setupFall(KORU)
     pruefe('wartendes Setup aus der Zeit vor dem Split: beendet mit Grund `split`, kein Einstieg',
         sf.alt?.status === 'invalidated' && sf.alt.invalidReason === 'split' && Number(sf.alt.endeT) === S && sf.trades.length === 0 && sf.positionen.length === 0,
@@ -488,6 +552,46 @@ console.log('\nSplit: offene Papier-Position und wartende Setups')
     pruefe('Setup, das auf bereinigten Kerzen entstand: Marken im neuen Massstab, trägt den Split im Vermerk und bleibt über den nächsten Takt',
         sf.neu?.status === 'armed' && nah(sf.neu.entry, 478 / 20) && JSON.parse(sf.neu.splitsAngewendet || '[]')[0]?.t === S,
         `${sf.neu?.status}, Einstieg ${sf.neu?.entry}, Vermerk ${sf.neu?.splitsAngewendet}`)
+}
+
+// ── 6. `aktienKontext({ splitsFrisch })`: am Zwölf-Stunden-Speicher vorbei ──
+console.log('\nAktien-Kontext: Splits frisch holen')
+{
+    const { aktienKontext, leereKontextCache } = await import('./aktien/kontext.js')
+    const [iid] = await knex('instrumente').insert({ anlageklasse: 'aktien', ticker: 'KORU', unterart: 'etf', name: 'Korea Bull 3X' })
+    await knex('instrument_listungen').insert({ instrumentId: iid, handelsplatz: 'binance', symbol: 'KORUUSDT', art: 'perp', aktiv: 1 })
+    // Gestellte Kursquelle: nur der Split-Abruf antwortet, alles andere (Zahlentermine) scheitert ohne Netz.
+    // Die Kursquelle läuft nur mit dem Schalter «Quellen ohne Freigabe» — in der frischen Wegwerf-Datenbank steht er aus.
+    ;(await import('./quellen/freigabe.js'))._setzeLeser(async () => 1)
+    const fetchEcht = globalThis.fetch
+    let splitAbrufe = 0
+    let antwort = {}
+    globalThis.fetch = async (url) => {
+        if (!String(url).includes('events=split')) throw new Error('kein Netz im Selbsttest')
+        splitAbrufe++
+        return { status: 200, ok: true, json: async () => ({ chart: { result: [{ events: { splits: antwort } }] } }) }
+    }
+    try {
+        leereKontextCache()
+        const erster = await aktienKontext('KORUUSDT')
+        pruefe('Kontext aus dem Stamm, Splits geholt: leere Liste', erster?.ticker === 'KORU' && Array.isArray(erster.splits) && erster.splits.length === 0 && splitAbrufe === 1,
+            `${JSON.stringify(erster?.splits)}, ${splitAbrufe} Abrufe`)
+        // Die Kursquelle führt den Split jetzt — der Speicher weiss davon nichts.
+        antwort = { 1: { date: 1784125800, numerator: 20, denominator: 1, splitRatio: '20:1' } }
+        const gemerkt = await aktienKontext('KORUUSDT')
+        pruefe('ohne `splitsFrisch`: Antwort aus dem Speicher, der Split fehlt (die Lücke aus FUN-F-006)', gemerkt.splits.length === 0 && splitAbrufe === 1)
+        const frisch = await aktienKontext('KORUUSDT', { splitsFrisch: true })
+        pruefe('`splitsFrisch`: am Speicher vorbei geholt, der Split ist da', frisch?.splits?.length === 1 && frisch.splits[0].faktor === 20 && splitAbrufe === 2,
+            `${JSON.stringify(frisch?.splits)}, ${splitAbrufe} Abrufe`)
+        pruefe('…und gilt danach auch für gewöhnliche Aufrufer', (await aktienKontext('KORUUSDT')).splits.length === 1 && splitAbrufe === 2)
+        antwort = {}
+        const gebremst = await aktienKontext('KORUUSDT', { splitsFrisch: true })
+        pruefe('zweite Nachfrage innerhalb von zehn Minuten: gebremst, kein weiterer Abruf', gebremst.splits.length === 1 && splitAbrufe === 2, `${splitAbrufe} Abrufe`)
+        pruefe('Coin bleibt Coin, auch mit `splitsFrisch` — kein Abruf', (await aktienKontext('BTCUSDT', { splitsFrisch: true })) === null && splitAbrufe === 2)
+    } finally {
+        globalThis.fetch = fetchEcht
+        leereKontextCache()
+    }
 }
 
 console.warn = warnEcht
