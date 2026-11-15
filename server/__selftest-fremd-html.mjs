@@ -23,6 +23,7 @@ import {
 import { sichtbarerText, leseWebseite } from './hype-radar/projekt-bewertung.js'
 import { leseFeed, leseTelegram } from './feed-parser.js'
 import { leseBizKatalog } from './hype-radar/fruehphase-bewertung.js'
+import { textAusHtml, leseHaltefrist, PROSPEKT_HOECHSTENS } from './aktien/edgar-kern.js'
 
 const wurzel = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -215,6 +216,45 @@ for (const [name, s] of Object.entries(boese)) {
     schnell(`leseFeed(${name})`, () => leseFeed(s))
     schnell(`leseTelegram(${name})`, () => leseTelegram(s))
     schnell(`ohneTags(${name})`, () => ohneTags(s))
+    schnell(`EDGAR textAusHtml(${name})`, () => leseHaltefrist(textAusHtml(s)))
+}
+
+// ── EDGAR-Prospekt (Audit 15.11.2026, SEC-S-001) ─────────────────────────
+// Vorher: `/<(script|style)[\s\S]*?<\/\1>/gi` und `/<[^>]*>/g` — 400 kB `<` ohne `>` = 53 s.
+{
+    const t0 = performance.now()
+    const aus = textAusHtml('<'.repeat(400 * 1024))
+    const ms = performance.now() - t0
+    pruefe('EDGAR: 400 kB «<» ohne «>» in deutlich unter einer Sekunde', ms < 200, `${ms.toFixed(0)} ms`)
+    pruefe('EDGAR: ohne schliessendes «>» bleibt der Text stehen (wie der alte Regex)', aus.length === 400 * 1024)
+    for (const [name, s] of Object.entries({
+        '<script ohne Ende': '<script'.repeat(6e4), '<style> ohne Ende': '<style>'.repeat(6e4),
+        '&#': '&#'.repeat(2e5), '&a': '&a'.repeat(2e5), 'Leerraum': ' \n'.repeat(2e5), '<p ': '<p '.repeat(1.4e5),
+    })) schnell(`EDGAR textAusHtml(${name}, 400 kB)`, () => textAusHtml(s))
+    schnell('EDGAR leseHaltefrist(«180 » × 800 kB)', () => leseHaltefrist('180 '.repeat(2e5)))
+    schnell('EDGAR leseHaltefrist(«180-day a a a …» 800 kB)', () => leseHaltefrist('180-day ' + 'a '.repeat(4e5)))
+    pruefe('EDGAR: Obergrenze für den Prospekt gesenkt (war 40 MB)', PROSPEKT_HOECHSTENS <= 16 * 1024 * 1024 && PROSPEKT_HOECHSTENS >= 4 * 1024 * 1024, PROSPEKT_HOECHSTENS)
+
+    // Gegenprobe: auf gewöhnlichem Prospekt-HTML derselbe Text wie der alte Weg (wörtlich).
+    const textAlt = (html) => String(html || '')
+        .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
+        .replace(/<[^>]*>/g, ' ')
+        .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+        .replace(/&#8217;|&#x2019;|&rsquo;|&#39;|&apos;/gi, "'")
+        .replace(/&#8220;|&#8221;|&ldquo;|&rdquo;|&quot;/gi, '"')
+        .replace(/&#8211;|&#8212;|&ndash;|&mdash;|&#173;|&shy;/gi, '-')
+        .replace(/&amp;/gi, '&')
+        .replace(/&[a-z]+;|&#x?[0-9a-f]+;/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    const prospekt = `<html><head><STYLE type="text/css">p { margin:0 } a > b { color:red }</STYLE><script>if (a < b) { x() }</script></head><body>
+<div style="font:10pt 'Times New Roman'"><p>We, our directors and the holders of substantially all of our securities have entered into lock&#8209;up agreements
+and have agreed that we and they will not offer, sell or otherwise dispose of any shares <b>for a period of 180&nbsp;days after the date of this prospectus</b>
+without the prior written consent of Goldman&nbsp;Sachs &amp; Co. LLC &#8212; the &#8220;representatives&#8221;.</p><br/><>
+<table><tr><td colspan="2">1 &lt; 2</td><td>Smith&rsquo;s</td></tr></table><!-- Kommentar --><script type="x">y()</script><p>Ende</p></div></body></html>`
+    const neu = textAusHtml(prospekt)
+    pruefe('EDGAR Gegenprobe: derselbe Text wie der alte Regex-Weg', neu === textAlt(prospekt), neu.slice(0, 200))
+    pruefe('EDGAR Gegenprobe: Stil und Skript sind weg, die Frist wird gefunden', !/margin|x\(\)|y\(\)/.test(neu) && leseHaltefrist(neu + ' ' + 'Further information is set out elsewhere in this prospectus. '.repeat(4))?.tage === 180, neu.slice(0, 200))
 }
 schnell('Biz-Katalog mit 2 MB <', () => leseBizKatalog([{ threads: [{ com: '<'.repeat(2e6) }] }]))
 pruefe('über 2 MB wird nicht angefasst', MB2 > HTML_MAX)

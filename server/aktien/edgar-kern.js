@@ -21,6 +21,7 @@
  * «kein Börsenprospekt gefunden» nicht «es gibt keinen» — `vollstaendig` und
  * `reichtBis` sagen, wie weit der Blick reicht.
  */
+import { ohneTags, ohneBloecke } from '../html-zerlegen.js'
 
 const TAG = 86_400_000
 
@@ -218,11 +219,21 @@ export function werteAus(roh, zusatz = [], jetzt = Date.now()) {
 
 // ── Haltefrist aus dem Prospekttext ───────────────────────────────────────
 
-/** HTML → Fliesstext: Tags weg, die gängigen Zeichenverweise aufgelöst, Leerraum zusammengezogen. */
+/**
+ * Obergrenze für einen Prospekt. Gemessen an echten 424B4 sind es wenige MB;
+ * 40 MB (bis Audit SEC-S-001) hiessen 1,5 s Stillstand schon bei harmlosem HTML.
+ */
+export const PROSPEKT_HOECHSTENS = 12 * 1024 * 1024
+
+/**
+ * HTML → Fliesstext: Tags weg, die gängigen Zeichenverweise aufgelöst, Leerraum zusammengezogen.
+ *
+ * Zerlegt wird LINEAR über `html-zerlegen.js`. Bis Audit SEC-S-001 standen hier
+ * `/<(script|style)[\s\S]*?<\/\1>/gi` und `/<[^>]*>/g` — auf einem Dokument mit
+ * vielen `<` ohne `>` quadratisch (400 kB = 53 s Stillstand des Servers).
+ */
 export function textAusHtml(html) {
-    return String(html || '')
-        .replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ')
-        .replace(/<[^>]*>/g, ' ')
+    return ohneTags(ohneBloecke(String(html || ''), ['script', 'style'], ' '), ' ', { leer: true })
         .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
         .replace(/&#8217;|&#x2019;|&rsquo;|&#39;|&apos;/gi, "'")
         .replace(/&#8220;|&#8221;|&ldquo;|&rdquo;|&quot;/gi, '"')

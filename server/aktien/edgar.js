@@ -22,7 +22,7 @@ import axios from 'axios'
 import { getKnex } from '../database.js'
 import { QuelleAus } from '../quellen/aus.js'
 import { logWarn } from '../logger.js'
-import { usTicker, tickerVerzeichnis, zusatzDateien, werteAus, textAusHtml, leseHaltefrist, userAgentAus, pruefeKontakt } from './edgar-kern.js'
+import { usTicker, tickerVerzeichnis, zusatzDateien, werteAus, textAusHtml, leseHaltefrist, userAgentAus, pruefeKontakt, PROSPEKT_HOECHSTENS } from './edgar-kern.js'
 
 const NAME = 'SEC EDGAR'
 const TAG = 86_400_000
@@ -33,7 +33,6 @@ const EINREICHUNGEN_MS = 6 * 60 * 60_000
 const PROSPEKT_MS = 30 * TAG
 /** Nur für Firmen, deren Börsengang höchstens so lange zurückliegt, wird der Prospekt gelesen. */
 const PROSPEKT_LESEN_BIS_TAGE = 800
-const PROSPEKT_HOECHSTENS = 40 * 1024 * 1024
 const CACHE_GRENZE = 300
 
 export class EdgarAbgelehnt extends Error {}
